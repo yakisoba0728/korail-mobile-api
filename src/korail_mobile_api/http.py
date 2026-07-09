@@ -6,7 +6,7 @@ from typing import Any, Mapping
 import httpx
 
 from .config import KorailConfig
-from .dynapath import DynapathRequestContext
+from .dynapath import DynapathRequestContext, generate_dynapath_token
 from .errors import KorailAppError, KorailProtocolError, KorailTransportError
 from .models import BaseKorailResponse
 from .safety import EXCLUDED_API_DOMAINS
@@ -46,7 +46,9 @@ class KorailHttpClient:
 
     def _dynapath_headers(self, method: str, path: str) -> dict[str, str]:
         dynapath = self.config.dynapath
-        if not dynapath.enabled or dynapath.token_provider is None:
+        if not dynapath.enabled:
+            return {}
+        if dynapath.token_provider is None and dynapath.token_settings is None:
             return {}
         if not any(allowlisted in path for allowlisted in dynapath.allowlist_paths):
             return {}
@@ -62,7 +64,18 @@ class KorailHttpClient:
             os_version=dynapath.os_version,
         )
         try:
-            token = dynapath.token_provider(context)
+            if dynapath.token_provider is not None:
+                token = dynapath.token_provider(context)
+            elif dynapath.token_settings is not None:
+                timestamp_ms = dynapath.timestamp_ms_provider() if dynapath.timestamp_ms_provider else None
+                random_text = dynapath.random_text_provider() if dynapath.random_text_provider else None
+                token = generate_dynapath_token(
+                    dynapath.token_settings,
+                    timestamp_ms=timestamp_ms,
+                    random_text=random_text,
+                )
+            else:
+                token = None
         except Exception as exc:
             raise KorailProtocolError("KORAIL DynaPath token provider failed") from exc
         if not token:
