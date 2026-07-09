@@ -32,14 +32,23 @@ class KorailClient:
         return self.http.get_json(
             "/classes/com.korail.mobile.common.stationinfo",
             {"Device": device},
+            include_common=True,
             raise_on_fail=False,
         )
 
     def get_station_data(self) -> BaseKorailResponse:
-        return self.http.get_json("/classes/com.korail.mobile.common.stationdata", raise_on_fail=False)
+        return self.http.get_json(
+            "/classes/com.korail.mobile.common.stationdata",
+            include_common=True,
+            raise_on_fail=False,
+        )
 
     def get_train_calendar(self) -> BaseKorailResponse:
-        return self.http.get_json("/classes/com.korail.mobile.schedule.runDt", raise_on_fail=False)
+        return self.http.get_json(
+            "/classes/com.korail.mobile.schedule.runDt",
+            include_common=True,
+            raise_on_fail=False,
+        )
 
     def search_trains(self, query: TrainSearchQuery) -> TrainSearchResult:
         response = self.http.post_form(
