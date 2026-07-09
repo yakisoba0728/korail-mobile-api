@@ -1,4 +1,7 @@
+import pytest
+
 from korail_mobile_api.crypto import generate_sid, transform_login_password
+from korail_mobile_api.errors import KorailProtocolError
 from korail_mobile_api.models import LoginCryptoInfo
 
 
@@ -21,3 +24,11 @@ def test_generate_sid_is_deterministic_with_epoch_ms():
     assert isinstance(sid, str)
     assert sid == generate_sid(epoch_ms=1710000000000)
     assert sid != generate_sid(epoch_ms=1710000000001)
+
+
+@pytest.mark.parametrize("key", ["", "short", "1234567890abcdefX"])
+def test_transform_login_password_aes_invalid_key_raises_protocol_error(key: str):
+    info = LoginCryptoInfo(idx="IDX", key=key, pwd_aes_cphd="Y")
+
+    with pytest.raises(KorailProtocolError):
+        transform_login_password("pw123", info)

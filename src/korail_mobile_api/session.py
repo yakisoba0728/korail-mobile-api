@@ -43,6 +43,8 @@ class KorailSessionClient:
         if response.str_result == "FAIL":
             raise KorailAuthError(response.h_msg_txt or "KORAIL login failed")
         jsessionid = self.http.cookies.get("JSESSIONID")
+        if not jsessionid:
+            raise KorailAuthError("KORAIL login did not return a usable session")
         self.current = KorailSession(jsessionid=jsessionid, member_no=member_no, raw=response.raw)
         return self.current
 
