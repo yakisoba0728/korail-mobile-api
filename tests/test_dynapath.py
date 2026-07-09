@@ -2,7 +2,13 @@ import httpx
 
 from korail_mobile_api import KorailConfig
 from korail_mobile_api.constants import DYNAPATH_HEADER_NAME
-from korail_mobile_api.dynapath import DynapathConfig, DynapathTokenSettings, generate_dynapath_token
+from korail_mobile_api.dynapath import (
+    DynapathConfig,
+    DynapathTokenSettings,
+    build_dynapath_prefix,
+    generate_dynapath_encoding_table,
+    generate_dynapath_token,
+)
 from korail_mobile_api.http import KorailHttpClient
 
 
@@ -10,13 +16,20 @@ def make_settings() -> DynapathTokenSettings:
     return DynapathTokenSettings(
         app_id="com.korail.talk",
         device_id="DEVICE-1234",
-        as_value="%5B38ff229cb34c7dda8e28220a2d750cce%5D",
+        as_value="[38ff229cb34c7dda8e28220a2d750cce]",
         app_start_ts="1712345600000",
         os_version="13",
         device_model="SM-S928N",
         os_type="Android",
-        sdk_version="v1",
+        sdk_version="v1.0.3",
     )
+
+
+def test_encoding_table_is_generated_from_original_sdk_permutation():
+    table = generate_dynapath_encoding_table(1)
+
+    assert table == "3FE9jgRD4KdCyuawklqGJYmvfMn15P7US8XbxeLQtWT6OicBAopINs2Vh0HZrz"
+    assert build_dynapath_prefix(table=table, table_index=1, i11=2, i12=30) == "bEeEP"
 
 
 def test_generate_dynapath_token_uses_user_supplied_runtime_constants():
@@ -27,10 +40,10 @@ def test_generate_dynapath_token_uses_user_supplied_runtime_constants():
     )
 
     assert token == (
-        "bEeEPSYj1Dm54Mg4Pv4ff4fGKguKkDK1FdDwFGkG9fwdEuJYJ3EuakG9EfldmgE34vnYDmC1qqa3u1jFY5lR"
-        "wjRJJkG1JKDRCER4kDJPRwwJRvkkER1fRKakunJ5nRwvRwwYdmRjdRFKYdnkPdvdJ1vvdy9fwgkG4ddCvnYkEffwg"
-        "kG4ddCvnREDFfwgkG4ddCvn1EvYDJEE33D5RDnfJuwRFPRwjRJmRy1YEvYEvvnPdEvYPPYPER43RCqRnjJqaYPq"
-        "dadJKuvnEdEvYPdvnYEkwGKwYlYJqkJ5lvngdPkfMaDwGEuvknKdy5fjRjE"
+        "bEeEPLYj144a44lDm54Mg4Pv4ff4fGKguKkDK1FdDwFGP4Gdlqujn5nfujYP4GudEqyRufK9v5Jy1aggYfjaDF"
+        "53EmlDmnnP4ankJm1umKPJnCmllnm9PPumadmkYPjvn3vml9mll5qymDqmFk5qvPCq9qna99qwGdlRP4Kqq"
+        "19v5PuddlRP4Kqq19vmuJFdlRP4Kqq19vau95JnuuffJ3mJvdnjlmFCmlDmnymwa5u95u99vCqu95CC5CumK"
+        "fm1gmvDngY5CgqYqnkj9vuqu95Cq9v5uPl4kl5E5ngPn3E9vRqCPdMYJl4uj9Pvkqw3dDm5CY5uEDw"
     )
 
 

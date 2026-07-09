@@ -10,7 +10,14 @@ from .constants import (
     KORAIL_DEFAULT_OS_VERSION,
     KORAIL_DEVICE_ANDROID,
 )
-from .dynapath import DynapathConfig, DynapathRequestContext, DynapathTokenSettings, generate_dynapath_token
+from .dynapath import (
+    DynapathConfig,
+    DynapathRequestContext,
+    DynapathTokenSettings,
+    build_dynapath_prefix,
+    generate_dynapath_encoding_table,
+    generate_dynapath_token,
+)
 from .errors import KorailApiError, KorailAuthError, KorailProtocolError
 from .http import parse_base_response
 from .models import BaseKorailResponse, KorailSession, TrainSearchQuery, TrainSearchResult, TrainSummary
@@ -37,6 +44,8 @@ __all__ = [
     "KorailProtocolError",
     "KorailSession",
     "EXCLUDED_API_DOMAINS",
+    "build_dynapath_prefix",
+    "generate_dynapath_encoding_table",
     "generate_dynapath_token",
     "parse_base_response",
     "redact_mapping",

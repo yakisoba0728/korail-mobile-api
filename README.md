@@ -130,13 +130,13 @@ client = KorailClient(
                 os_version="<caller-android-os-version>",
                 device_model="<caller-device-model>",
                 os_type="Android",
-                sdk_version="v1",
+                sdk_version="v1.0.3",
             ),
         )
     )
 )
 ```
 
-When enabled, the client generates and attaches `DYNAPATH_HEADER_NAME` only for the documented DynaPath allowlist paths. A custom `token_provider` can still be supplied instead of `token_settings`.
+When enabled, the client generates and attaches `DYNAPATH_HEADER_NAME` only for the documented DynaPath allowlist paths. The DynaPath base table is generated from the original SDK-style prime/permutation routine rather than stored as a raw magic string. A custom `token_provider` can still be supplied instead of `token_settings`.
 
 Reservation, payment, refund, check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
