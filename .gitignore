@@ -2,3 +2,4 @@ analysis/
 .DS_Store
 *.apk
 .worktrees/
+.superpowers/
