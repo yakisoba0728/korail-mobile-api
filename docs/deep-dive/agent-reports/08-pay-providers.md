@@ -1,6 +1,6 @@
 # 08. PayService 및 간편결제 Provider 연동 정적 분석
 
-분석 범위는 `PayService`와 NaverPay, Payco, Toss 자동결제, Samsung/Monimo, STBK, provider별 EasyPay WebView handoff 및 관련 request/response model이다. 본 문서는 APK에서 추출된 JADX/apktool 산출물을 근거로 한 정적 분석이며, 실제 서버 호출이나 응답 샘플 생성은 수행하지 않았다. 서버가 반환하는 구체 JSON 예시는 소스에 없으므로 작성하지 않는다.
+분석 범위는 `PayService`와 NaverPay, Payco, Toss 자동결제, `spayOrdNo` 기반 provider, Monimo, STBK, provider별 EasyPay WebView handoff 및 관련 request/response model이다. 본 문서는 APK에서 추출된 JADX/apktool 산출물을 근거로 한 정적 분석이며, 실제 서버 호출이나 응답 샘플 생성은 수행하지 않았다. 서버가 반환하는 구체 JSON 예시는 소스에 없으므로 작성하지 않는다.
 
 ## 1. 공통 전제
 
@@ -15,7 +15,7 @@ EasyPay 승인 callback의 기준 scheme은 `korailtalk://approve`이다. `Payme
 | `getPaycoResult` | `/classes/com.korail.mobile.payment.reserve.payco.do` | `Device`, `Version`, `Key`, `ticketPrice`, `ticketName` | `PaycoDao.PaycoPaymentResponse` | Payco 주문서 URL 조회 |
 | `getSpayCphdDatVal` | `/classes/com.korail.mobile.pay.spayCphdDatVal.do` | `Device`, `Version`, `Key`, `spayDvCd`, `data` | `SpayCphdDatValDao.SpayCphdDatValResponse` | Payco/Kakao/Paybooc 등 provider 승인값 검증/변환 |
 | `getSpayCphdDatValMonimo` | `/classes/com.korail.mobile.pay.monimoDecrypt.do` | `Device`, `Version`, `Key`, `otcNo` | `SpayCphdDatValMonimoDao.SpayCphdDatValMonimoResponse` | Monimo OTC 복호/카드번호 조회 |
-| `getSpayOdrNo` | `/classes/com.korail.mobile.pay.spayOrdNo.do` | `Device`, `Version`, `Key`, `spayDvCd`, `totTxnAmt`, `tgtCnt`, `encTotTxnAmt`, `idx`, `lumpStlTgtNo` | `SpayOdrNoDao.SpayOdrNoResponse` | Samsung/Monimo/Toss 일반결제 사전 주문번호/연동 URL 생성 |
+| `getSpayOdrNo` | `/classes/com.korail.mobile.pay.spayOrdNo.do` | `Device`, `Version`, `Key`, `spayDvCd`, `totTxnAmt`, `tgtCnt`, `encTotTxnAmt`, `idx`, `lumpStlTgtNo` | `SpayOdrNoDao.SpayOdrNoResponse` | `spayOrdNo` 기반 provider, Monimo, Toss 일반결제 사전 주문번호/연동 URL 생성 |
 | `intgStl` | `/classes/com.korail.mobile.pay.intgStl.do` | `Device`, `Version`, `Key`, `ctlDvCd`, `stlPrsJobId`, `cart_LumpStlTgtNo`, `FieldMap` | `BaseResponse` | 장바구니/통합결제 처리 |
 | `naverPayMoneyRsv` | `/classes/com.korail.mobile.pay.naverPayMoneyRsv.do` | `Device`, `Version`, `Key`, `productCount`, `productAmount` | `NaverPayRsvDao.NaverPayRsvResponse` | NaverPay Money 결제 화면 URL 조회 |
 | `naverPayRsv` | `/classes/com.korail.mobile.pay.naverPayRsv.do` | `Device`, `Version`, `Key`, `productCount`, `productAmount` | `NaverPayRsvDao.NaverPayRsvResponse` | NaverPay 결제 화면 URL 조회 |
@@ -49,9 +49,9 @@ NaverPay와 NaverPay Money 모두 `stlScnUrl`을 `EasyPayWebViewActivity`에 넘
 
 최종 `PaymentMethod` mapping은 NaverPay가 카드성 결제: `hidStlMnsCd1="02"`, `spayDvCd_1_1="05"`, `spayCphdDatVal_1_1=paymentId`; NaverPay Money가 현금성 결제: `hidStlMnsCd1="14"`, `spayDvCd_1_1="16"`, `spayCphdDatVal_1_1=paymentId`이다. decompiler 상수 `CHECKIN_STATUS_USING`은 `"05"`, `CHECKIN_STATUS_EXCEED`는 `"14"`이다. [`v4/a.java:187`](../../../analysis/jadx/sources/v4/a.java), [`TicketSelfCheckinStatusActivity.java:40`](../../../analysis/jadx/sources/com/korail/talk/ui/ticket/confirm/TicketSelfCheckinStatusActivity.java)
 
-### 3.3 Samsung Pay / Monimo
+### 3.3 `spayOrdNo` provider / Monimo
 
-Samsung/Monimo 계열은 두 단계로 보인다. 먼저 `spayOrdNo`로 사전 주문/연동값을 만들고, provider callback 후 `spayCphdDatVal` 또는 `monimoDecrypt`로 결제 데이터를 검증/복호한다.
+`spayOrdNo` provider와 Monimo 계열은 두 단계로 보인다. 먼저 `spayOrdNo`로 사전 주문/연동값을 만들고, provider callback 후 `spayCphdDatVal` 또는 `monimoDecrypt`로 결제 데이터를 검증/복호한다.
 
 `SpayOdrNoRequest` 필드는 `spayDvCd`, `totTxnAmt`, `tgtCnt`, `encTotTxnAmt`, `idx`, `lumpStlTgtNo`, 그리고 local-only flag로 보이는 `isMonimo`이다. 실제 service field에는 `isMonimo`가 없고, `spayDvCd`, `totTxnAmt`, `tgtCnt`, `encTotTxnAmt`, `idx`, `lumpStlTgtNo`가 전송된다. 응답은 `fllwScnAppUrlAdr`, `prprNo`, `spayTid`를 가진다. [`SpayOdrNoDao.java:12`](../../../analysis/jadx/sources/com/korail/talk/network/dao/pay/SpayOdrNoDao.java), [`SpayOdrNoDao.java:85`](../../../analysis/jadx/sources/com/korail/talk/network/dao/pay/SpayOdrNoDao.java), [`PayService.java:34`](../../../analysis/jadx/sources/com/korail/talk/network/dao/pay/PayService.java)
 
@@ -134,10 +134,18 @@ URL override 시 superclass가 override하겠다고 판단한 URL에 대해 다�
 |---|---|---|
 | Payco | server response `recvData.result.orderSheetUrl` | `EasyPayWebViewActivity` `WEB_GET_URL` |
 | NaverPay / Money | server response `stlScnUrl` | `EasyPayWebViewActivity` `WEB_GET_URL`; `nidlogin` scheme은 외부 앱 실행 |
-| Samsung/Toss 일반 | server response `fllwScnAppUrlAdr` from `spayOrdNo` | `EasyPayWebViewActivity` `WEB_GET_URL` |
+| `spayOrdNo`/Toss 일반 | server response `fllwScnAppUrlAdr` from `spayOrdNo` | `EasyPayWebViewActivity` `WEB_GET_URL` |
 | Monimo | resource `payment_monimo_scheme` | `monimopay://?xid={prprNo}&mrcType=KRT&callbackUrl=korailtalk://approve?type=monimopay`, package `net.ib.android.smcard` |
 | STBK 내통장결제 | UI-assembled URL | `{webHost}/classes/com.korail.mobile.pay.stbkAcntStlR.do?{COMMON_PARAMETER}&trPrice={receivedAmount}` |
 | STBK 계좌 비밀번호 결제 | resource `payment_scheme` | `korailtalk://approve?type=stbk&bankCode={stlBankCd}&password={password}` via `ACTION_VIEW` |
 | Toss 자동결제 등록 | server response `checkoutUri` | `EasyPayWebViewActivity` `WEB_GET_URL`, result requestCode `131` |
 
 근거: [`AbstractC1269e.java:370`](../../../analysis/jadx/sources/B6/AbstractC1269e.java), [`AbstractC1269e.java:1236`](../../../analysis/jadx/sources/B6/AbstractC1269e.java), [`AbstractC1269e.java:1240`](../../../analysis/jadx/sources/B6/AbstractC1269e.java), [`StbkRegisterAccountListActivity.java:319`](../../../analysis/jadx/sources/com/korail/talk/ui/stbk/StbkRegisterAccountListActivity.java), [`strings.xml:1176`](../../../analysis/jadx/resources/res/values/strings.xml)
+
+## 20-agent follow-up audit 보강
+
+- `spayOrdNo` launch branch를 Samsung Pay로 일반화하면 안 된다. 이 스코프에서 확인된 branch는 Kakao-like `spayDvCd="01"`, Monimo `"19"`, Toss normal `"12"`다. 별도 Samsung source가 확인되기 전까지는 `spayOrdNo` flow로 표기한다.
+- Toss는 normal `spayOrdNo` flow와 auto saved-key flow가 분리된다. 저장된 one-click key가 있으면 `stlKeyQry.spayStlKeyVal`로 `tosspay_auto` bundle을 만들고, key가 없으면 checkout selection flow를 먼저 만든다.
+- provider dispatch는 `payType` 기준으로 `3 -> Payco`, `6 -> naverPayRsv`, `12 -> naverPayMoneyRsv`, `13 -> Monimo`, `10 -> Toss normal`, `9 -> Toss auto saved key`, `5/7 -> STBK`로 분기한다.
+- STBK 등록은 `regPsbList`가 약관 동의 이후 `StbkUnRegisterAccountListActivity`에서 소비된다. `StbkRegisterAccountActivity`는 먼저 `StbkArsCertificationActivity`를 열고, `jobDvCd="2"` 호출 뒤 `StbkArsVerificationActivity`로 넘어간다.
+- `PaymentActivity`는 `singleTask`라 기존 task의 approve callback은 `onNewIntent()`에서 처리된다. fresh approve-scheme launch는 DEV branch가 아니면 `onCreate()`에서 종료되므로, production callback은 기존 task 전제를 가진다.

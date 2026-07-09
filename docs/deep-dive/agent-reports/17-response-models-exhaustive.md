@@ -1753,7 +1753,6 @@
 | `dptTm` | `String` | - | `getDptTm()` |
 | `jrnySqno` | `String` | - | `getJrnySqno()` |
 | `pnrNo` | `String` | - | `getPnrNo()` |
-| `arrayList` | `return` | - | `getAddSrvList()` |
 
 중첩 payload:
 
@@ -2044,6 +2043,42 @@
 
 - `data.addService.ExtraProductInfo`: `com/korail/talk/network/data/addService/ExtraProductInfo.java:10`
 - `response.delay.RefundResponse`: `com/korail/talk/network/response/delay/RefundResponse.java:9`
+
+## 20-agent follow-up audit 보강
+
+다음 response class는 endpoint mapping이 확인되었으나 본 보고서의 최초 생성본에 누락되었으므로 별도 보강 항목으로 둔다.
+
+### `CompensateRefundListResponse`
+
+- 소스: `analysis/jadx/sources/com/korail/talk/network/dao/compensate/CompensateRefundListDao.java:45`
+- API contract: `docs/deep-dive/api-contracts.md`의 `/classes/com.korail.mobile.compensate.ticketList.do`
+- 용도: 운행중지 보상 목록 조회 response. `CompensateService.executeCompensateRefundList()`의 return model이다.
+
+### `DelayRefundListResponse`
+
+- 소스: `analysis/jadx/sources/com/korail/talk/network/dao/delay/DelayRefundListDao.java:45`
+- API contract: `docs/deep-dive/api-contracts.md`의 `/classes/com.korail.mobile.delay.ticketList.do`
+- 용도: 지연 보상 목록 조회 response. `DelayService.executeDelayRefundList()`의 return model이다.
+
+### `DptnBankResponse`
+
+- 소스: `analysis/jadx/sources/com/korail/talk/network/dao/delay/DptnBankDao.java:29`
+- API contract: `docs/deep-dive/api-contracts.md`의 `/classes/com.korail.mobile.dlay.dptnBank.do`
+- 용도: 지연보상 입금은행 목록 response. `dptnBank[]` 하위에 은행 코드/명칭 model을 가진다.
+
+### `SeatAssignReservationResponse`
+
+- 소스: `analysis/jadx/sources/com/korail/talk/network/dao/reservation/SeatAssignReservationDao.java:131`
+- API contract: `docs/deep-dive/api-contracts.md`의 `/classes/com.korail.mobile.reservation.seatAssign.do`
+- 용도: seat assignment reservation response. `ReservationResponse` 계열과 함께 신형 `RJrny`/`RSrcar`/`RSeat`/`RPsg`/`ROrtg` FieldMap flow에서 사용된다.
+
+추가 정정:
+
+- 기존 `data.addService.ExtraProductInfo`의 `arrayList` 행은 model field가 아니라 `getAddSrvList()` 내부 local variable이므로 제거했다.
+- 일부 legacy generated source line reference는 inner class 선언부 기준으로 한 줄 낮을 수 있다. 고위험 endpoint 검증 시에는 `analysis/jadx/sources` 원문과 `docs/deep-dive/network-model-fields.md`를 함께 확인한다.
+- `response.delay.RefundResponse`는 missing concrete return model들의 superclass 성격이다. `api-contracts.md`의 duplicate `RefundResponse` 표기는 `returnTicket`의 `RefundDao.RefundResponse`와 delay refund superclass가 섞일 수 있으므로 사용처별 DAO 소스를 우선한다.
+- `ReservationResponse` endpoint mapping은 2개 path에 4개 overload가 있다. `CertificationService.java:48,52,56,60`을 함께 봐야 한다.
+- `MaasMenuListResponse` source에는 package-private URL field가 있어 TSV/API catalog에서 빠질 수 있다.
 
 ## 검증 메모
 

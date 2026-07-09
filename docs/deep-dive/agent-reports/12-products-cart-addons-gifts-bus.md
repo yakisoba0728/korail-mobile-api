@@ -525,3 +525,14 @@
 - Retrofit/Gson 매핑은 필드명 기반으로 보이며, 별도 `@c` annotation이 없는 대부분의 inner class는 Java field name이 JSON key로 쓰인다고 추정된다. 서버의 실제 key alias는 미확인이다.
 - `BusReservationService`의 취소확인/예약변경 선언은 존재하지만, 실제 DAO는 `ReservationCancelService`를 사용한다. 따라서 문서에는 “서비스 선언”과 “실제 caller flow”를 분리했다.
 - `GifticketReturnDao.getId()`와 caller가 기대하는 id가 불일치한다. 정적 분석 결과로 기록하되, 실제 런타임 동작 여부는 확인하지 않았다.
+
+## 20-agent follow-up audit 보강
+
+- product detail handoff에서 `VR_RSV_SQ_NO`를 항상 넘긴다고 보면 안 된다. list-to-detail path에서 `txtVrRsvSqNo`가 unset/unknown으로 남을 수 있다.
+- `AdditionalServiceDao`의 wheelchair/help-service caller를 추가한다. `WheelchairRequestActivity`는 `jobDbCd="N"`, `addSrvId="0020000001"`, `reqQnty=1`, `helpSrvTgtCnt=1`, `rcpSqno`로 생성하고, `WheelchairConfirmActivity`는 `jobDbCd="C"`, sale fields, `jrnySqno="1"`, `addSrvReqNo`로 취소한다.
+- `GifticketListDao`의 payment UI caller는 `B6/AbstractC1269e` 계열이다. `qryDvCd="F"`, `qryVal="E"`로 조회한 결과가 `GifticketView`를 채운다.
+- `AddCartDao` additional UI path는 예약 응답 이후 로그인 상태에서 `a6/x.H0()`와 `a6/C1042B.O1()` 경로로 이어진다.
+- WebView handoff는 분리해서 봐야 한다. `PRODUCT_URL` POST는 `ExtraProductWebViewActivity`, dynamic `reservationUrl`과 tour/voucher는 `IntegrationWebViewActivity`를 사용한다.
+- bus cancel-check field는 `txtJrnySqno`, `txtJrnyCnt`다. bare `jrnySqno`/`jrnyCnt`로 표기하면 endpoint field와 맞지 않는다.
+- legacy `LimousineActivity`도 bus/limousine reservation creation path에 포함한다.
+- `GiftInfo` FieldMap의 선택 티켓 indexing은 첫 선택 항목부터 1-based suffix를 붙인다.

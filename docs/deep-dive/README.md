@@ -10,7 +10,7 @@
 4. `@Field("literal")`/`@Query("literal")`뿐 아니라 `@Field(CONSTANT)`/`@Query(CONSTANT)` 형태도 compile-time string constant를 resolve했다.
 5. request/response class field는 decompiled Java field와 Gson annotation 기준으로 카탈로그화했다.
 6. WebView JavaScript interface, URL/scheme 문자열, SharedPreferences literal key, ORMLite DB model을 별도 기계 추출했다.
-7. 20개 병렬 에이전트가 독립 영역별로 flow-level 분석 보고서를 작성했고, 각 보고서는 정적 source path를 근거로 한다.
+7. 20개 병렬 에이전트 보고서를 업무 영역별 상세 분석으로 관리한다. 라이브러리 구현용 요약은 `../library-build-guide.md`에 별도 정리한다.
 
 ## 핵심 수치
 
@@ -59,6 +59,13 @@
 | 18 | [nonretrofit-urls-resources-smali](agent-reports/18-nonretrofit-urls-resources-smali.md) | Non-Retrofit URLs, resources/assets, smali fallback, external intents |
 | 19 | [ui-flow-to-api-map](agent-reports/19-ui-flow-to-api-map.md) | UI event -> DAO/service -> response callback -> navigation maps |
 | 20 | [doc-quality-gap-audit](agent-reports/20-doc-quality-gap-audit.md) | Documentation gaps, count terminology, generator issues, next improvements |
+
+## 라이브러리 구현용 문서
+
+| Report | Scope |
+|---|---|
+| [library-build-guide](../library-build-guide.md) | 라이브러리 모듈 분리, 공통 런타임 계약, 안전 가드, 숨은 surface 요약 |
+| [api-status-by-service](../api-status-by-service.md) | 실제 안전 테스트 기준 endpoint별 성공/실패/미실행 상태 |
 
 ## Cross-Cutting Facts
 

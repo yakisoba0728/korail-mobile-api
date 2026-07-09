@@ -3,7 +3,7 @@
 ## 분석 범위와 전제
 
 - 대상 APK: `korail.apk`
-- 분석 방식: 로컬 정적 분석. JADX로 `/tmp/korail-jadx`에 디컴파일한 Java 소스를 기준으로 확인했다.
+- 분석 방식: 로컬 정적 분석. JADX로 `analysis/jadx/sources`에 디컴파일한 Java 소스를 기준으로 확인했다.
 - 범위: ORMLite DB helper/model, `SharedPreferences` 키와 사용처, 로컬 AES helper, 저장 승차권/카드/역/로그인 데이터, 사용자 식별자, 캐시 삭제 및 마이그레이션.
 - 한계: 실제 단말의 `/data/data/com.korail.talk/` 파일 권한, 백업 정책, 런타임 DB 내용은 실행 분석을 하지 않아 확인하지 않았다.
 
@@ -279,22 +279,29 @@
 
 | 주제 | 파일/라인 |
 |---|---|
-| DB helper 생성자, DAO, create/upgrade | `/tmp/korail-jadx/sources/J4/a.java:55`, `:73`, `:140`, `:158` |
-| DB facade CRUD | `/tmp/korail-jadx/sources/J4/b.java:62`, `:78`, `:134`, `:195`, `:232`, `:252`, `:272`, `:326`, `:359`, `:400`, `:461`, `:469` |
-| DB 모델 | `/tmp/korail-jadx/sources/com/korail/talk/database/model/*.java` |
-| 로컬 AES helper | `/tmp/korail-jadx/sources/F4/a.java:13`, `:17`, `:32`, `:43` |
-| 서버 AES/CBC helper | `/tmp/korail-jadx/sources/S4/C0812l.java:18`, `:26`, `:43` |
-| Preferences helper | `/tmp/korail-jadx/sources/S4/H.java:13`, `:34`, `:38`, `:59`, `:68` |
-| 로그인 저장/자동로그인 | `/tmp/korail-jadx/sources/K5/b.java:102`, `:124`, `:211`, `:445` |
-| 로그인 화면 저장값 복호화 | `/tmp/korail-jadx/sources/K5/a.java:35`, `/tmp/korail-jadx/sources/K5/c.java:35`, `/tmp/korail-jadx/sources/K5/d.java:35` |
-| BaseActivity 자동로그인 | `/tmp/korail-jadx/sources/com/korail/talk/view/base/BaseActivity.java:145`, `:214`, `:385` |
-| 로그인 메모리 상태와 초기화 | `/tmp/korail-jadx/sources/S4/u.java:138`, `/tmp/korail-jadx/sources/b5/h.java:182` |
-| common-code prefs와 팝업 캐시 | `/tmp/korail-jadx/sources/com/korail/talk/ui/intro/IntroActivity.java:614`, `:667` |
-| 역 데이터 갱신 | `/tmp/korail-jadx/sources/com/korail/talk/ui/intro/IntroActivity.java:119`, `:433`, `:720` |
-| 즐겨찾기 카드 | `/tmp/korail-jadx/sources/com/korail/talk/ui/setting/favoriteCards/a.java:179`, `/tmp/korail-jadx/sources/com/korail/talk/ui/setting/favoriteCards/b.java:197` |
-| 즐겨찾기 구간 | `/tmp/korail-jadx/sources/com/korail/talk/ui/setting/favoriteSections/a.java:112`, `:284`, `/tmp/korail-jadx/sources/com/korail/talk/ui/setting/favoriteSections/b.java:94` |
-| 최근 구간 | `/tmp/korail-jadx/sources/com/korail/talk/ui/booking/mainBooking/MainBookingActivity.java:390`, `/tmp/korail-jadx/sources/com/korail/talk/ui/booking/option/station/StationSearch.java:265` |
-| 승차권 캐시 | `/tmp/korail-jadx/sources/com/korail/talk/ui/ticket/confirm/TicketListActivity.java:333`, `:1386`, `:1634`, `/tmp/korail-jadx/sources/H4/a.java:26`, `:40` |
-| SMS 번호 캐시 | `/tmp/korail-jadx/sources/com/korail/talk/ui/ticket/confirm/TicketListActivity.java:1129`, `/tmp/korail-jadx/sources/com/korail/talk/ui/service/sms/GuardianReliefSmsActivity.java:126` |
-| DoNotLookAgain | `/tmp/korail-jadx/sources/S4/C0811k.java:59`, `:161`, `/tmp/korail-jadx/sources/J4/b.java:242`, `:336` |
-| 사용자 식별자 prefs 사용 | `/tmp/korail-jadx/sources/com/korail/talk/ui/scheme/DataActivity.java:23`, `/tmp/korail-jadx/sources/com/korail/talk/provider/WidgetReceiver.java:52`, `/tmp/korail-jadx/sources/com/korail/talk/ui/menu/BasketTicketActivity.java:590` |
+| DB helper 생성자, DAO, create/upgrade | `analysis/jadx/sources/J4/a.java:55`, `:73`, `:140`, `:158` |
+| DB facade CRUD | `analysis/jadx/sources/J4/b.java:62`, `:78`, `:134`, `:195`, `:232`, `:252`, `:272`, `:326`, `:359`, `:400`, `:461`, `:469` |
+| DB 모델 | `analysis/jadx/sources/com/korail/talk/database/model/*.java` |
+| 로컬 AES helper | `analysis/jadx/sources/F4/a.java:13`, `:17`, `:32`, `:43` |
+| 서버 AES/CBC helper | `analysis/jadx/sources/S4/C0812l.java:18`, `:26`, `:43` |
+| Preferences helper | `analysis/jadx/sources/S4/H.java:13`, `:34`, `:38`, `:59`, `:68` |
+| 로그인 저장/자동로그인 | `analysis/jadx/sources/K5/b.java:102`, `:124`, `:211`, `:445` |
+| 로그인 화면 저장값 복호화 | `analysis/jadx/sources/K5/a.java:35`, `analysis/jadx/sources/K5/c.java:35`, `analysis/jadx/sources/K5/d.java:35` |
+| BaseActivity 자동로그인 | `analysis/jadx/sources/com/korail/talk/view/base/BaseActivity.java:145`, `:214`, `:385` |
+| 로그인 메모리 상태와 초기화 | `analysis/jadx/sources/S4/u.java:138`, `analysis/jadx/sources/b5/h.java:182` |
+| common-code prefs와 팝업 캐시 | `analysis/jadx/sources/com/korail/talk/ui/intro/IntroActivity.java:614`, `:667` |
+| 역 데이터 갱신 | `analysis/jadx/sources/com/korail/talk/ui/intro/IntroActivity.java:119`, `:433`, `:720` |
+| 즐겨찾기 카드 | `analysis/jadx/sources/com/korail/talk/ui/setting/favoriteCards/a.java:179`, `analysis/jadx/sources/com/korail/talk/ui/setting/favoriteCards/b.java:197` |
+| 즐겨찾기 구간 | `analysis/jadx/sources/com/korail/talk/ui/setting/favoriteSections/a.java:112`, `:284`, `analysis/jadx/sources/com/korail/talk/ui/setting/favoriteSections/b.java:94` |
+| 최근 구간 | `analysis/jadx/sources/com/korail/talk/ui/booking/mainBooking/MainBookingActivity.java:390`, `analysis/jadx/sources/com/korail/talk/ui/booking/option/station/StationSearch.java:265` |
+| 승차권 캐시 | `analysis/jadx/sources/com/korail/talk/ui/ticket/confirm/TicketListActivity.java:333`, `:1386`, `:1634`, `analysis/jadx/sources/H4/a.java:26`, `:40` |
+| SMS 번호 캐시 | `analysis/jadx/sources/com/korail/talk/ui/ticket/confirm/TicketListActivity.java:1129`, `analysis/jadx/sources/com/korail/talk/ui/service/sms/GuardianReliefSmsActivity.java:126` |
+| DoNotLookAgain | `analysis/jadx/sources/S4/C0811k.java:59`, `:161`, `analysis/jadx/sources/J4/b.java:242`, `:336` |
+| 사용자 식별자 prefs 사용 | `analysis/jadx/sources/com/korail/talk/ui/scheme/DataActivity.java:23`, `analysis/jadx/sources/com/korail/talk/provider/WidgetReceiver.java:52`, `analysis/jadx/sources/com/korail/talk/ui/menu/BasketTicketActivity.java:590` |
+
+## 20-agent follow-up audit 보강
+
+- payment UI card read path는 `B6.AbstractC1269e.I1()`에서 시작한다. 이 경로가 `H4.a.getCreditCardList()`를 호출해 nickname/cardNumber/month/year/type/businessNum을 복호화하고 `CreditCardView.setCreditCardList()`로 넘긴다.
+- `H4.a.getCreditCardList()`의 filter는 nickname/cardNumber/month/year 복호화 성공 여부에 걸려 있다. type/businessNum 복호화 실패는 같은 방식으로 row를 걸러내는 조건으로 보이지 않는다.
+- SharedPreferences 범위는 `S4.H`/default prefs 중심이다. 추가 key로 `BOOKING_TOGGLE_OPTION`, `TrainType`, `IS_ACCUMULATING_KTX_MILEAGE`, `REQUIRED_PERMISSIONS`가 있다.
+- named prefs 중 SmartAlimi `info`, Firebase/Kakao/Google/WorkManager 계열은 이 리포트의 `S4.H` scope 밖이다. 별도 storage pass가 필요하다.

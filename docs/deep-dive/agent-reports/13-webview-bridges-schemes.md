@@ -346,8 +346,15 @@ EasyPay와 SRT 특수 경로는 third-party cookie를 명시적으로 허용한�
 - `addJavascriptInterface`는 로드된 모든 페이지 origin에 `korailtalk` 객체를 제공한다. URL host allowlist가 WebView wrapper에 없으므로, intent extra로 임의 URL이 들어올 수 있는 exported activity에서는 bridge 노출 범위가 핵심 위험면이다. 근거: `BaseWebViewActivity.java:1103`, `AndroidManifest.xml:643-665`.
 - `korailtalk` bridge에는 결제 이동, 로그인 결과 반환, 본인확인 결과 반환, 앱 종료, 외부 activity 이동, preferences 변경, Toast 표시 등이 포함된다. 웹 컨텐츠가 신뢰된 origin이라는 전제가 필요하다. 근거: `BaseWebViewActivity.java:303-503`.
 - `GovernmentCertificationActivity`는 exported이고 `JOURNEY_INFO`를 받아 화면에 표시한 뒤 외부 `bmc://verify_vp`/`kr.go.id.bmc.VERIFY_VP` flow를 시작한다. 실제 인증 서버 token은 DAO에서 받아오지만, activity entry 자체는 외부 호출 가능하다. 근거: `AndroidManifest.xml:674-678`, `GovernmentCertificationActivity.java:50-57`, `141-165`.
-- `GeolocationPermissions`는 prompt origin별 판단 없이 항상 허용한다. 위치 권한 자체는 Android permission에 따르겠지만, WebView origin boundary는 코드상 약하다. 근거: `BaseWebViewActivity.java:140-144`.
+- default `WebChromeClient` 경로의 `GeolocationPermissions`는 prompt origin별 판단 없이 허용한다. 다만 주요 WebView activity는 별도 `BaseWebViewActivity.d` client로 교체되므로, 자동 허용은 default client가 남는 경로로 한정한다. 위치 권한 자체는 Android permission에 따르겠지만, WebView origin boundary는 계속 핵심 확인 지점이다. 근거: `BaseWebViewActivity.java:140-144`.
 - file chooser는 `GET_CONTENT */*`를 허용한다. 웹 origin이 파일 선택 UI를 열 수 있고 결과 URI가 WebView로 돌아간다. 근거: `BaseWebViewActivity.java:656-668`.
 - mixed content mode가 공통 설정에서 `2`, EasyPay에서 `0`으로 설정된다. 상수 의미는 SDK별 API 값에 의존하지만, 결제/WebView별 mixed content 정책이 서로 다르다. 근거: `BaseWebViewActivity.java:1128`, `EasyPayWebViewActivity.java:61`.
 - network security config는 `teapp.srail.kr`, `app.srail.kr` 등에 cleartext를 허용한다. SRT WebView 코드는 HTTP SRT URL을 HTTPS로 치환하지만, 앱 전체 network policy에는 cleartext 허용 도메인이 남아 있다. 근거: `network_security_config.xml:3-11`, `BaseWebViewActivity.java:921-926`, `955-956`.
 - Maum `m2uWebViewNative.getPhoneNumber()`는 전화번호를 웹에 반환한다. Android/통신사 환경에 따라 빈 문자열일 수 있지만, WebView origin 신뢰가 중요하다. 근거: `JavaScriptReceiver.java:43-50`.
+
+## 20-agent follow-up audit 보강
+
+- MaumAI init order는 `onCreate()`에서 `CdkNative(K(), webView, f30621w)`가 먼저 만들어지고, permission callback이 `f30621w`를 이후 설정하는 구조다. `CdkNative.initWebView()`가 `m2uWebViewNative` 등록과 `initUrl` load를 intended URL 설정보다 먼저 실행할 수 있다.
+- exported surface에는 `ExtraProductWebViewActivity`도 포함한다. 이 activity는 `BaseWebViewActivity`를 상속하고 `korailtalk` bridge를 등록하며 `V0()`을 호출한다.
+- scheme handler는 overload별 기능 차이가 있다. `korailtalk://payment`, `supermove`, `approve`, Naver 등 activity-specific handler는 String overload에 있고, `WebResourceRequest` path는 SRT HTTPS correction 중심이다.
+- Maum callback은 bare global 함수가 아니라 `javaScript:<notifyObjectPrefix>.…` 형태로 emit될 수 있다.

@@ -570,3 +570,10 @@ Base 공통 오류:
 - 필드 의미는 Java field명, setter/getter명, UI 사용처에서 추론 가능한 범위까지만 적었다.
 - 난독화된 enum/유틸의 일부 값은 코드에서 직접 확인된 값만 기록했다.
 - Retrofit 1의 list field 직렬화 방식은 라이브 트래픽 없이 코드 구조 기준으로만 해석했다.
+
+## 20-agent follow-up audit 보강
+
+- 근거 소스에는 `docs/deep-dive/api-contracts.md`도 포함한다. endpoint별 request/return type mirror는 해당 문서를 canonical generated contract로 둔다.
+- normal direct/transfer train-to-`ReservationRequest` mapper로 `analysis/jadx/sources/C5/a.java`를 추가한다. `C5.a.N0()`는 `OJrny`와 `OSeat`를 채우고 `OSrcar`를 비우는 경로를 만든다.
+- 비회원 일반 예약 flow는 `moveToLogin(... !isNonmemberNotEnable ...)` 이후 `onNonMemberLoginSuccess()`가 request를 clone하고 `x2()`에서 `txtCustNm`, `txtCpNo`, `txtCustPw`를 채운다.
+- `PBEP_INFO`는 `onActivityResult()`에서 저장되고, 다음 회원 예약 호출의 `pbepInfo` 필드로 포함된다.

@@ -1,6 +1,6 @@
 # 07. 결제 코어 및 영수증 정적 분석
 
-분석 기준: `korail.apk`를 로컬에서 JADX로 디컴파일한 정적 소스. 운영 호출/동적 트래픽 캡처는 수행하지 않았다. 아래 `sources/...` 경로는 `/tmp/korail-mobile-api-jadx/sources` 기준이다. 런타임 서버 응답값, 외부 결제 앱/웹 콜백값, 세션 쿠키 값은 정적 분석만으로 확정하지 않고 `unknown`으로 둔다.
+분석 기준: `korail.apk`를 로컬에서 JADX로 디컴파일한 정적 소스. 운영 호출/동적 트래픽 캡처는 수행하지 않았다. 아래 `sources/...` 경로는 `analysis/jadx/sources` 기준이다. 런타임 서버 응답값, 외부 결제 앱/웹 콜백값, 세션 쿠키 값은 정적 분석만으로 확정하지 않고 `unknown`으로 둔다.
 
 ## 1. 코어 결제 엔드포인트
 
@@ -244,3 +244,9 @@ RailPlus 결제(`spayDvCd_1_1=00`)가 성공하면 `C0804d.syncRailPlus()`를 �
 - 외부 결제 앱/웹이 반환하는 `paymentId`, `spayTid`, `spayCphdDatVal`, `otcNo`, `ordNo`, `authNo`, 카드 token 등 런타임 값은 `unknown`이다.
 - `B1()` 후속 화면 이동은 JADX가 완전히 복원하지 못했으므로 정확한 완료 화면/intent 결과는 `unknown`이다.
 - RailPlus sync의 내부 상태 갱신 범위는 이 스코프에서 추적하지 않았다.
+
+## 20-agent follow-up audit 보강
+
+- 결제 완료 응답의 `h_im_flg=Y` branch는 주의가 필요하다. `P1()` 호출 뒤 즉시 return하며, `tk_coupon_info == null`이면 `B1()`로 fallback하지만 빈 list이면 `B1()` 없이 return하는 정적 gap이 있다.
+- receipt UI는 첫 `ReceiptInfo`를 summary/title/date/passenger/amount/fees/refund 및 `stl_info` 표시의 기준으로 쓰고, route/train/station string은 `receipt_info` 전체를 순회해 만든다. direct ticket은 전체 결제수단을, transfer ticket은 first half를 중심으로 표시한다.
+- macro/DynaPath 403은 core payment에서도 화면별 null response 처리 gap으로 남는다. negative DynaPath는 macro dialog 후 `base.onReceive()`까지 이어질 수 있으므로 receipt/payment 화면의 null guard를 별도 확인해야 한다.

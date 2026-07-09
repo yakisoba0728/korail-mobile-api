@@ -518,3 +518,12 @@
 - `StationDataResponse`, `CommonCodeResponse` 등은 Java field와 getter 기준의 추론 schema다. 실제 서버가 항상 모든 필드를 내려주는지는 이 분석만으로 확정할 수 없다.
 - `BaseResponse`의 `h_msg_cd`, `h_msg_txt`, `strResult`는 상속 구조상 공통 필드로 존재하지만, endpoint별 사용 여부는 호출처마다 다르다.
 - `CommonService.getMaasStationList()`는 `StationDataDao.StationDataResponse`를 반환하므로 MAAS station 전용 response class가 따로 보이지 않는다. `MaasStationListDao`는 request wrapper 역할만 한다.
+
+## 20-agent follow-up audit 보강
+
+- `DecryptRequest.easyPayType` 필드는 선언되어 있지만 로컬 Java caller는 확인되지 않았다. post-response routing에 실제로 유지되는 값은 `mAutoChargeRequestType`이다.
+- station DB 변환은 서버 필드만 저장하지 않는다. local-only 값으로 loop index 기반 `id`, `doNotLookADay=""`, `doNotLookAgain=false`가 insert 전에 채워진다.
+- MAAS station list는 API의 `STN` list가 display/search를 만들지만, 최종 선택 역 코드는 이름을 기준으로 local `J4.b` station DB에서 다시 resolve한다.
+- Sid consumer는 `TrainInquiryDao`, `LimousineTrainInquiryDao`, `SearchCarListDao`, `SearchSeatListDao`에서 명시적으로 확인된다.
+- `DataActivity`의 encrypt helper는 서버에 보내기 전 Base64 login payload와 서버가 돌려준 `encValue`를 debug log path에 남긴다.
+- `CommonCodeDao.Login` 처리는 password AES/key뿐 아니라 auto/manual login 및 payment order-number flow에서 `idx`를 함께 보낸다.

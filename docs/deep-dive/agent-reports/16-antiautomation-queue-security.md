@@ -218,3 +218,10 @@ WebView URL 로드는 intent extra `WEB_GET_URL`/`WEB_POST_URL` 및 `WEB_GET_PAR
 클라이언트는 예약/조회/결제처럼 트래픽 집중과 자동화 가능성이 큰 구간에 두 층의 제어를 둔다. NetFunnel은 사용자가 특정 업무 플로우에 진입할 때 대기열 action id를 적용하는 UI 플로우 방어이고, DynaPath는 서버 feature flag가 켜진 상태에서 일부 민감 API 요청에 매크로 탐지 토큰 헤더를 붙이는 HTTP 요청 방어다.
 
 방어 효과는 최종적으로 서버 검증에 달려 있다. 클라이언트 코드에서 확인되는 역할은 초기화, feature flag 반영, 헤더 부착, 403/DynaPath 오류 메시지 표시, NetFunnel 시작/종료 UI 제어다. 따라서 운영 방어 검토 시에는 서버가 위 action id와 토큰 헤더를 어떤 정책으로 검증하는지, DynaPath 대상 외 민감 API가 별도 서버 통제를 갖는지, WebView 로드 URL이 신뢰된 출처로 제한되는지를 함께 확인해야 한다.
+
+## 20-agent follow-up audit 보강
+
+- `NetfunnelTestActivity`는 release manifest에서도 exported true와 MAIN intent-filter를 가진다. 버튼 동작은 `BEGIN(service_1, act_8, ...)`를 100회 반복하는 테스트 성격이라 외부 explicit intent entry risk로 별도 표시해야 한다.
+- Sid는 `BaseRequest` default field가 아니다. 조회/좌석 DAO가 `S4.C0812l.getSid()`를 호출하며, `AD` + timestamp를 key `2485dd54d9deaa36`로 AES/CBC 처리하는 값이다. DynaPath header와 별개다.
+- pay endpoint coverage에는 `/classes/com.korail.mobile.payment.reserve.payco.do`와 `/classes/com.korail.mobile.pay.*` 계열을 함께 둔다.
+- debug token logging path가 있다. `ExecuteDao`는 token 생성 뒤 debug log에 값을 남길 수 있으며, release `IS_DEBUG_LOG=false` 전제에서는 출력되지 않지만 debug/log variant에서는 민감 token 노출 가능성이 있다.

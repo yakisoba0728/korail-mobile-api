@@ -71,14 +71,14 @@
 | 서버 응답 `easyPayData.linkUrl` | 간편결제 이벤트/안내 링크 | `jadx:sources/C6/d.java:162` | linkType이 외부/내부에 따라 외부 브라우저 또는 WebView | 내부/외부 동적 | common-code 응답에 의해 결정. |
 | Payco `orderSheetUrl` | Payco 결제 sheet | `jadx:sources/B6/AbstractC1269e.java:1174` | 서버 응답 URL을 WebView로 로드 | 외부/결제 | 정확한 host/path는 런타임 응답 필요. |
 | NaverPay `stlScnUrl` | NaverPay 결제 화면 | `jadx:sources/B6/AbstractC1269e.java:1189` | 서버 응답 URL을 WebView로 로드 | 외부/결제 | 정확한 URL은 런타임 응답 필요. |
-| Samsung/Monimo `fllwScnAppUrlAdr` | Samsung Pay류 후속 결제 화면 | `jadx:sources/B6/AbstractC1269e.java:1180` | 서버 응답 URL 또는 app scheme 실행 | 외부/결제 | Monimo는 별도 app scheme 사용. |
+| `spayOrdNo`/Monimo `fllwScnAppUrlAdr` | `spayOrdNo` provider 후속 결제 화면 | `jadx:sources/B6/AbstractC1269e.java:1180` | 서버 응답 URL 또는 app scheme 실행 | 외부/결제 | Monimo는 별도 app scheme 사용. |
 
 ## 지도, 위치, 고객지원, 안내 외부 URL
 
 | URL/scheme | 목적 | 소스 | 송수신 추정 | 내부/외부 | 비고 |
 |---|---|---|---|---|---|
 | `https://gis.korail.com/korailTalk/entrance` | 열차 지도/역 안내 WebView | `jadx:sources/K4/g.java:83`, `jadx:sources/com/korail/talk/ui/web/BaseWebViewActivity.java:899` | 지도 URL 로드, WebView location 사용 가능 | 내부/계열 | BaseWebView가 이 URL을 특수 처리. |
-| `https://gis.korail.com/korailTalk/entrance?route=ticket&trnNo=...&stnCd=...&date=...&lon=...&lat=...` | 승차권 열차 위치/지도 | `jadx:sources/com/korail/talk/ui/web/TrainServiceInfoWebViewActivity.java:415`, `apktool:smali/com/korail/talk/ui/web/TrainServiceInfoWebViewActivity.smali:3788` | 열차번호, 출발역코드, 날짜, 단말 위경도 전송 가능 | 내부/계열 | 위치 권한/last known location 사용. |
+| `https://gis.korail.com/korailTalk/entrance?route=ticket&trnNo=...&stnCd=...&date=...&lon=...&lat=...` | 승차권 열차 위치/지도 | `jadx:sources/com/korail/talk/ui/web/TrainServiceInfoWebViewActivity.java:602`, `apktool:smali/com/korail/talk/ui/web/TrainServiceInfoWebViewActivity.smali:3788` | 열차번호, 출발역코드, 날짜, 단말 위경도 전송 가능 | 내부/계열 | 위치 권한/last known location 사용. |
 | `https://railbot.korail.com/#/chatbot`, `#/voiceChatbot` | KORAIL chatbot/voice chatbot | `jadx:sources/t5/e.java:80`, `apktool:smali/t5.1/e.smali:503` | `custMgNo`, `mbCrdNo`, `hdcpFlg`, `custClCd`, `custLeadFlg`, `theme` query 전송 | 내부/계열 | DEV는 `https://dev-railbot.korail.com/...`. |
 | `https://customer.happytalk.io/public_v1/chat_v4/public_point?...&uid=%1$s` | 청각장애/고객상담 채팅 | `apktool:res/values/strings.xml:906`, `jadx:sources/X5/f.java:552`, `jadx:sources/com/korail/talk/ui/booking/mainBooking/MainBookingActivity.java:853` | 암호화된 회원카드번호로 보이는 `uid` 전송 | 외부/상담 SaaS | 외부 브라우저 실행. |
 | `letskorail.com/happy_talk/initChat.html` | WebView 내 해피톡 예외 처리 | `apktool:smali/com/korail/talk/ui/web/BaseWebViewActivity$f.smali:421` | URL override 예외 | 내부/상담 | smali에서 문자열 확인. |
@@ -206,8 +206,17 @@
 |---|---|---|
 | push `MSGVo.url` | 내부 WebView path 또는 외부 브라우저 URL이 서버 payload로 결정된다. 정적 APK만으로 전체 URL 목록을 확정할 수 없다. | FCM/H2O push payload 샘플 또는 런타임 notification intent 캡처. |
 | common-code 동적 URL | `easyPayData.linkUrl`, `lotteglogisURL`, 결제 이벤트 링크가 서버 응답으로 내려온다. | `/classes/com.korail.mobile.common.code.do` 응답 샘플 확인. |
-| 외부 결제 후속 URL | Payco `orderSheetUrl`, NaverPay `stlScnUrl`, Samsung Pay `fllwScnAppUrlAdr`는 결제 API 응답 기반이다. | 결제 sandbox/운영 응답 캡처 없이 host/path 확정 불가. |
+| 외부 결제 후속 URL | Payco `orderSheetUrl`, NaverPay `stlScnUrl`, `spayOrdNo` 계열 `fllwScnAppUrlAdr`는 결제 API 응답 기반이다. | 결제 sandbox/운영 응답 캡처 없이 host/path 확정 불가. |
 | WebView intent extra `WEB_GET_URL`/`WEB_POST_URL` | 여러 Activity가 intent extra로 임의 URL을 받아 WebView에 로드한다. 모든 caller의 동적 값은 정적 분석만으로 완전 열거하기 어렵다. | `WEB_GET_URL`, `WEB_POST_URL` runtime intent 생성 로그/트래픽 수집. |
 | `korailtalk://approve` cold-start 처리 | 운영 REAL에서는 approve scheme으로 새로 열린 `PaymentActivity`가 즉시 finish한다. 실제 결제 callback은 기존 singleTask instance의 `onNewIntent` 경로로 보인다. | 실제 외부 결제 app callback lifecycle 확인. |
 | package query 중 미사용/난독화 호출 | `kvp.jjy.MispAndroid320`, `com.lottemembers.android`, `com.ahnlab.v3mobileplus` 등은 manifest query로 확인되지만 직접 호출 지점은 일부 난독화/조건부 흐름일 수 있다. | package name 전체 `PackageManager` 호출 trace 또는 동적 UI flow 확인. |
 | cleartext 허용 도메인 | 정책에는 SRT/test/naverncp cleartext가 허용되어 있지만 코드가 대부분 HTTPS 치환을 한다. 실제 HTTP 요청 여부는 미확인. | 네트워크 캡처 또는 WebView request log 확인. |
+
+## 20-agent follow-up audit 보강
+
+- 추가 확인된 concrete WebView POST path: `/ebizprd/EbizPrdSrvcListView.do`는 extra product/add-on WebView POST, `/ebizprd/EbizPrdTicketPr13500w_pr13571_new.do`는 product/MAAS receipt WebView POST에 쓰인다.
+- dynamic URL gap에는 `Report.url`, `KorailBoss.terms`, `KnDelivery`, `KnParkingLot`, `SrHistoryUrl`, `MainPopup.linkUrl/imageUrl`, MAAS menu URLs, login redirect URL, extra-product reservation URLs도 포함한다.
+- outbound package visibility는 manifest `<queries>`에 직접 없는 package가 있다. `com.mic.set.hce.railpluscardserviceandroid`, `com.railpoint`, `com.korail.futuretech.userservice`, `kr.co.srail.newapp`, `com.dho.mobilefax`는 Android 11+ visibility를 runtime에서 확인해야 한다. broad VIEW query가 일부 scheme을 덮을 수 있지만 `getLaunchIntentForPackage` 전부를 보장하지는 않는다.
+- `tel:` flow는 `ACTION_DIAL` 또는 generic `ACTION_VIEW`로 확인된다. `CALL_PHONE` permission은 manifest에 있으나 이 스코프에서 `ACTION_CALL`은 확인되지 않았다.
+- SRT cleartext는 `Y0()`이 `http://*.srail.kr`을 HTTPS로 바꾸고, `b1()`이 response HTML의 `http://teapp.srail.kr`, `http://app.srail.kr`를 HTTPS로 치환한다. policy상 cleartext 허용은 남아 있다.
+- generated TSV의 `ExecuteDao` URL 문자열은 별도 non-Retrofit destination이 아니라 Retrofit/client hook metadata로 분류한다.

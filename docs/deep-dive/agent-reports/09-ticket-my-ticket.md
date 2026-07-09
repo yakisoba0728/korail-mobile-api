@@ -402,3 +402,11 @@
 - 일부 플래그의 정확한 서버 값 의미는 앱에 명시 enum/주석이 없어 필드명과 UI 분기로만 제한적으로 해석했다.
 - `TicketService`의 MAAS 결제 전체 취소 `getMaasCancel()`은 인터페이스/DAO는 확인했지만, 이번 범위의 주요 `TicketListActivity` 흐름에서는 서비스 취소 수수료 조회/취소가 중심이었다.
 - `docs/api-endpoints.md`의 자동 추출 표는 상수 기반 `@Field` 일부를 생략해 보일 수 있어, 최종 request field는 서비스 인터페이스 원문을 우선했다.
+
+## 20-agent follow-up audit 보강
+
+- `TicketListActivity`의 MAAS cancel request는 `pnrNo`를 채우지 않는다. 확인된 값은 `cncTgtCnt=0001`, `cncAddSrvReqNo`, `cncRetFee`다.
+- MAAS detail routing은 `MAAS_PNR_NUM`이 있으면 `ExtraProductListActivity(TICKET_PNR_NUMBER)`로 가고, PNR 없이 `rsvSpecUrl`만 있으면 `IntegrationWebViewActivity`의 `WEB_GET_URL`로 간다.
+- local DB model에는 `IssueList`도 포함한다. `id`는 local generated value이고, `issueList`에는 전체 `TicketListResponse` JSON이 AES ciphertext로 저장된다.
+- offline restore와 Guardian SMS reuse는 별도다. offline restore는 `IssueList.issueList`와 `TicketDetail.ticketDetail`을 복호화하고, Guardian SMS reuse는 `SMSData.phoneNumber`를 복호화한다.
+- `TicketDetailResponse.ticket_infos.ticket_info[]`에는 `h_ddck_scar_no`도 포함된다.

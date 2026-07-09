@@ -25,7 +25,7 @@ Important committed entry points:
 - Unresolved annotation parameters after constant resolution: `0`
 - `FieldMap` or `QueryMap` endpoint rows: `21`
 - Agent reports: `20 / 20`
-- Documentation lines at handoff: `22,260`
+- Documentation lines at handoff: `22,517`
 
 ## What Changed During Final Integration
 

@@ -192,8 +192,8 @@ UI 흐름:
 - KTX 마일리지 조회는 `PointInquiryRequest.pointDvCd="0"`으로 `PointInquiryDao`를 호출한다. 응답에서 `h_korail_point`와 `h_corp_use_point`를 각각 KTX 마일리지와 Samsung KTX 마일리지로 보관한다. 근거: `AbstractC1269e.java`, `PointInquiryDao.java`.
 - `KTXMileageView`는 `queryBtn`, `applyBtn`, `allApplyBtn`을 통해 `onRequestQuery(0)`, `onRequestApply(0)`, `onRequestAllApply(0)`를 호출한다. 입력 포인트는 `INPUT_POINT`, 가능 포인트는 `ENABLE_POINT`, 적용 포인트는 `USE_POINT` 번들 키로 전달된다. 근거: `view/payment/point/KTXMileageView.java`.
 - 적용 규칙은 코드상 최소 100포인트, 100단위 사용, 결제 잔액 초과 불가로 검사된다. Samsung KTX 마일리지는 일반 KTX 마일리지 부족분을 채우는 방식으로 `useingKTXMileage`, `useingKTXSamsungMileage`에 분리된다. 근거: `AbstractC1269e.java`.
-- `V4.a.getPointRequest()`가 실제 결제 FieldMap을 만든다. KTX 마일리지는 `hidStlMnsCd{n}=12`, `hidCrdInpWayCd{n}=P`, `hidPontDvCd{n}=0` 또는 Samsung 분리 시 `4`, `hidPontInpDvCd{n}=1`, `hidPontCrdPwd{n}=****`, `hidMnsStlAmt{n}`로 들어간다. 근거: `analysis/jadx/sources/V4/a.java`, `PaymentMethod.java`.
-- 다른 포인트 구분도 같은 `PointInquiryDao`/`PaymentMethod` 체계를 공유한다: Rail point `pointType=1`, Woori `2`, City `3`, OKCashbag `5` 계열, L.Point `4` 계열, Gifticket `6`. 정확한 외부 서비스 의미는 코드명과 UI명 기준으로만 적었다. 근거: `V4/a.java`, `AbstractC1269e.java`.
+- `V4.a.getPointRequest()`가 실제 결제 FieldMap을 만든다. KTX 마일리지는 `hidStlMnsCd{n}=12`, `hidCrdInpWayCd{n}=P`, `hidPontDvCd{n}=0` 또는 Samsung KTX 마일리지 분리 시 `5`, `hidPontInpDvCd{n}=1`, `hidPontCrdPwd{n}=****`, `hidMnsStlAmt{n}`로 들어간다. 근거: `analysis/jadx/sources/V4/a.java`, `PaymentMethod.java`.
+- 다른 포인트 구분도 같은 `PointInquiryDao`/`PaymentMethod` 체계를 공유한다: Rail point `pointType=1`, Woori `2`, City `3`, OKCashbag `4`, L.Point `5`, Gifticket `6`. 정확한 외부 서비스 의미는 코드명과 UI명 기준으로만 적었다. 근거: `V4/a.java`, `AbstractC1269e.java`.
 
 ## RailPlusService와 외부 Rail+ 앱 연동
 
@@ -246,3 +246,11 @@ RailPlus 결제와 외부 handoff:
 - 실제 서버 응답 payload, 메시지 코드, 오류 코드별 의미는 정적 코드만으로 확정하지 않았다.
 - 패스/정기권의 사용 처리에 대응하는 별도 `PassService` endpoint는 확인되지 않았다. 티켓 목록/표시 모델에서 패스 타입을 다루는 것은 확인되지만, 서버 상태 전환은 추정하지 않는다.
 - `jobDvCd`의 사람이 읽는 명칭은 일부 상수명이 난독화되어 있어 코드상 값 흐름만 기록했다.
+
+## 20-agent follow-up audit 보강
+
+- 일반 패스 booking step에는 `GangneungPassBookingActivity`도 포함된다.
+- `PaymentActivity.isCommPaymentRequest()`는 JADX상 `CommPaymentResponse`를 검사하지만 실제 flow는 `CommPaymentRequest`를 넘긴다. 해당 discriminator는 정상 동작 근거로 단정하지 않는다.
+- commuter valid flag 위치는 `TicketListDao.ReservationList.cmtrVlidFlg`가 아니라 `TicketListDao.TrainInfo.cmtrVlidFlg`다.
+- RailPlus auto-charge `jobDvCd` 값은 lookup `R`, register `I`, delete `D`로 확인된다.
+- `DiscountMenuDao` response에는 `afterDay`, `dtlDsc`, 그리고 `GoodInfo`/`PsgInfos`/`PsgInfo` 하위 필드가 더 있다.

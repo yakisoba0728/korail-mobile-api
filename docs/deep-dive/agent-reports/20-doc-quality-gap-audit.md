@@ -35,9 +35,9 @@
 - `Total Retrofit endpoints found` 같은 표현을 `Retrofit method entries: 165 / distinct HTTP+path: 159`처럼 분리한다.
 - 같은 path를 공유하는 overload는 별도 "호출 시나리오"로 묶고, endpoint 자체 수와 Java method 수를 혼용하지 않는다.
 
-### 2. `korail-apk-analysis.md`의 영역별 count 합계가 166
+### 2. `korail-apk-analysis.md`의 영역별 count 합계와 endpoint total 혼동
 
-초기 Network Architecture 표의 Count 합계는 `21 + 20 + 33 + 39 + 21 + 23 + 9 = 166`이었다. 후속 통합에서 총계 표현은 `165 method entries`로 고치고, 영역별 표는 cross-cutting service가 겹칠 수 있는 업무 태깅이라고 명시했다.
+초기 Network Architecture 표의 Count 합계는 historical snapshot에서 `166`으로 기록되었고, 후속 통합 뒤 현재 표 기준 합계는 `167`이다. 이 값은 `165 method entries`와 비교 가능한 endpoint total이 아니라 cross-cutting service가 겹칠 수 있는 업무 태깅 수다.
 
 수정 제안:
 
@@ -95,11 +95,11 @@
 
 - endpoint generator가 annotation argument AST를 읽어 literal과 static final constant를 모두 resolve해야 한다.
 - resolve 실패 시 `@Field(C1262b.DPT_DT)`처럼 원문 expression을 그대로 남기고, 별도 `unresolved_params` column을 둔다.
-- `api-endpoints.md`에는 `return_type`, `form_urlencoded`, `source line`, `constant-resolved?` 정보를 추가한다. 현재 TSV에는 `return_type`과 `form_urlencoded`가 있으나 checked-in markdown에는 빠져 있다.
+- `api-endpoints.md`에는 현재 `Return Type`과 `Source`가 들어 있다. `FormUrlEncoded`와 constant-resolution 상태는 `api-contracts.md`와 generated TSV를 함께 본다.
 
 ### 3. `FieldMap` / `QueryMap`이 "필드 미상"으로 남아 있음
 
-20개 TSV row에 `FieldMap` 또는 `QueryMap`이 있다. 현재 문서는 `FieldMap`이라고만 표시해 실제 wire key를 알 수 없다.
+현재 endpoint 추출 기준 `FieldMap` 또는 `QueryMap` row는 21개다. 문서에는 map 존재와 대표 schema를 표시했고, branch별 실제 wire key 조합은 각 flow report와 `api-contracts.md`에서 추적한다.
 
 필수로 풀어야 하는 source:
 
@@ -124,7 +124,7 @@
 
 ### 1. 응답 schema 문서
 
-현재 문서는 request endpoint/field 중심이다. 그러나 실제 사용 가능한 매뉴얼에는 response schema가 필요하다.
+초기 문서는 request endpoint/field 중심이었다. 현재는 static DTO/getter 기반 response model catalog가 존재하지만, 실제 서버 JSON body, nullable/required 규칙, runtime-only 값은 아직 응답 샘플 없이 확정할 수 없다.
 
 우선 문서화할 source:
 
@@ -312,4 +312,11 @@
 
 - 실제 서버가 double slash path를 normalize하는지, 일부 optional field를 생략해도 수용하는지는 정적 분석만으로 확정할 수 없다.
 - `FieldMap`에 들어가는 모든 조합은 UI flow와 DAO execute method를 추가 추적해야 한다. 현재 감사는 대표 구조와 누락 범주를 식별한 수준이다.
-- response schema는 아직 전체 DTO를 완전 열거하지 않았다. 다음 단계에서 `@c(...)` Gson annotation과 getter를 기준으로 별도 추출해야 한다.
+- response schema는 static DTO/getter catalog로 보강되었다. 남은 작업은 실제 서버 JSON body, nullable/required 규칙, runtime-only 값 검증이다.
+
+## 20-agent follow-up audit 보강
+
+- follow-up audit 기준 현재 endpoint/문서 mirror는 `165` method entries, `159` distinct HTTP+path, `21` FieldMap/QueryMap rows로 정리한다.
+- `api-endpoints.md`에는 `Return Type`과 `Source`가 들어 있으므로, 이전 “return_type/source 누락” 항목은 완료된 상태로 본다.
+- response schema는 `17-response-models-exhaustive.md`와 `network-model-fields.md`로 보강되었다. 남은 gap은 실제 서버 응답 샘플, nullable/required, runtime-only field 검증이다.
+- stale path scan 기준 오래된 임시 JADX 경로와 lowercase G6 package 참조는 정정 대상이며, 현재 문서에서는 canonical local analysis source path와 uppercase `G6` package 경로를 사용한다.

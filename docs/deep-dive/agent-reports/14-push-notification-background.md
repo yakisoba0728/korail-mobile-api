@@ -503,3 +503,12 @@ String resources define these URIs. `NavigationActivity` is exported for `korail
 - `analysis/jadx/sources/com/korail/talk/ui/setting/VersionActivity.java`
 - `analysis/jadx/sources/com/korail/talk/ui/ticket/confirm/TicketListActivity.java`
 - `analysis/jadx/sources/com/korail/talk/view/base/BaseActivity.java`
+
+## 20-agent follow-up audit 보강
+
+- WorkManager component는 library manifest를 통해 존재한다(`SystemJobService`, diagnostics receiver). 하지만 Korail/SmartAlimi push flow에서 직접 worker enqueue path는 확인되지 않았다.
+- exported component caveat: `MessageManager`는 exported/no-permission AIDL binder이고, `RestartReceiver`와 `FCMListenerServiceHandler`도 exported다. `PushBroadcastReceiver`는 exported지만 signature permission으로 보호된다.
+- notification channel badge 결론은 “시도/선언”으로만 둔다. receiver는 normal false/emergency true를 시도하지만, `KTApplication`이 같은 channel을 `setShowBadge` 없이 먼저 만들 수 있어 최종 badge 보장은 런타임 상태에 의존한다.
+- `SpecialRoomUpgradeActivity`는 activity와 `msg_vo` extra는 확인되지만 push routing에서 정적 entrypoint가 확인되지 않았다.
+- `CashRfnDao.f28877I`는 unknown이 아니라 `"I"`다.
+- `PushHistoryActivity.P0()`는 type `22`를 mapping하지만, list click normal route는 `25`, `21`, `35`, `36` 중심이고 time-change/URL path가 별도로 override한다.

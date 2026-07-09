@@ -324,3 +324,11 @@ IntegrationWebViewActivity.onCreate()
 | Refund | `TicketListActivity`, `TicketReturnActivity` | `RefundCommissionDao`, `RefundDao` | `/classes/com.korail.mobile.refunds.CommissionView`, `/classes/com.korail.mobile.refunds.RefundsRequest` | commission dialog, RailPlus sync, completion dialog |
 | Pass | `APassBookingActivity`, `CommutationInquiryActivity` | `PassReservationDao`, `CommRsvInquiryDao`, `CommReservationDao`, `PassPaymentDao`, `CommPaymentDao` | `/classes/com.korail.mobile.pass.*` | pass/commutation confirmation then payment |
 | WebView | `BaseWebViewActivity`, `IntegrationWebViewActivity` | URL extras, JS bridge, `ProductPaymentCheckDao`, `TourTrainInfoDao` | Web URLs plus product/tour APIs | native payment/tour/login/SRT search navigation |
+
+## 20-agent follow-up audit 보강
+
+- Payment row는 endpoint별로 더 세분화해야 한다. `RsvPaymentDao -> /classes/com.korail.mobile.payment.ReservationPayment`, `CommPaymentDao -> /classes/com.korail.mobile.pass.passPayIssue`, `PassPaymentDao -> /classes/com.korail.mobile.pass.passOtrPayIssue`, `IntgStlDao -> /classes/com.korail.mobile.pay.intgStl.do`다. `IntgStlDao.getId()`는 `dao_cart_payment`를 반환한다.
+- Search row에서 product inquiry는 `/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial`을 사용한다. normal/product는 `InquiryDao` 계열 callback id `dao_train_inquiry`를 공유한다.
+- Refund callback id는 `dao_ticket_commition`과 `dao_ticket_return`으로 구분된다.
+- 공통 callback contract는 `com.korail.talk.view.base.a.executeDao()`를 쓰는 fragment caller도 포함해야 한다. 이 경우 `base.onReceive()`가 `K5.b`, `AbstractC1269e` 같은 fragment로 도착한다.
+- 표에 없는 core flow도 별도 coverage 대상이다: PayService provider handoff(08), delay/compensation/reservation-cancel(10), XPoint/mileage/RailPlus(11), product/cart/add-service/gifticket/bus(12).

@@ -842,3 +842,9 @@
 - Firebase/Google Ads SDK provider 초기화가 실제로 언제 어떤 네트워크 요청을 보내는지는 SDK 내부 조건과 런타임 환경에 의존한다. 로컬 manifest/코드로는 가능한 초기화 경로만 확인했다.
 - `network_security_config`에 cleartext 허용된 SRT/개발 호스트가 실제 코드 경로에서 HTTP로 사용되는지는 추가 전수 검색/동적 확인이 필요하다. 본 작업에서는 라이브 호출을 하지 않았다.
 - exported true이지만 intent-filter가 없는 Activity들의 외부 시작 입력 검증은 각 Activity별 추가 분석이 필요하다.
+
+## 20-agent follow-up audit 보강
+
+- Manifest metadata에는 split/runtime 초기화 단서도 포함된다. 확인된 값은 `requiredSplitTypes=base__abi,base__density`, `com.android.vending.splits=@xml/splits0`, optional uses-library `org.apache.http.legacy`, `androidx.camera.extensions.impl`, `android.ext.adservices`, `com.google.android.gms.version`, CameraX `MetadataHolderService.DEFAULT_CONFIG_PROVIDER`, DataTransport `CctBackendFactory`다.
+- `KTApplication`의 superclass gap은 닫을 수 있다. `G0.b.attachBaseContext()`는 legacy MultiDex 설치용 `G0.a.install(this)`를 호출하며, bootstrap network/config side effect는 확인되지 않았다.
+- SRT cleartext caveat은 더 좁게 봐야 한다. 예약 상수는 HTTPS이고 `BaseWebViewActivity`는 `http://*.srail.kr` main-frame URL 및 `http://teapp.srail.kr`, `http://app.srail.kr` body link를 HTTPS로 치환한다. 다만 SDK/runtime 생성 subresource URL은 정적 분석만으로 배제할 수 없다.

@@ -314,3 +314,10 @@ NetFunnel은 코어 Retrofit client에 자동 삽입되는 header 방식이 아�
 - 로그인 후 Java `CookieHandler`의 `JSESSIONID`를 Android WebView `CookieManager`로 복사해 native API 세션과 WebView 세션을 연결한다.
 - DynaPath는 모든 요청에 붙는 것이 아니라 서버 플래그와 특정 path 배열 조건을 통과한 요청에만 `x-dynapath-m-token`을 붙인다.
 - NetFunnel은 Retrofit interceptor가 아니라 화면 레벨의 선행 queue/callback hook이며, 일부 DAO 완료 후 `NetfunnelDao`가 dialog 종료와 `T6.g.END()`를 수행한다.
+
+## 20-agent follow-up audit 보강
+
+- 오류 callback은 공통적으로 `base.onReceiveError()`로 수렴한다고 보면 안 된다. `R4.b`, `R4.c`, `R4.d`는 dialog/login/session flow에서 소비되고, generic `R4.a`만 기본 error callback으로 떨어진다. 특수하게 `dao_verify_maas_status`의 `S198`은 `base.onReceiveError(iBaseDao, null)`을 직접 호출한다.
+- DynaPath 403에서 `DynaPath-Result`가 음수이면 `mException=R4.b`와 `macroShowDialog`가 저장되고 response가 비어 있을 수 있다. `BaseActivity`가 macro dialog를 표시하고 exception을 지운 뒤 null response DAO를 `base.onReceive(dao)`로 넘길 수 있어, 실제 null 처리 여부는 화면별 gap이다. 403 body가 malformed/non-JSON이면 `RuntimeException`으로 재던져진다.
+- NetFunnel message callback은 `N4.e`가 `g.e.netfunnelMessage()`로 dialog/progress를 갱신하고, 실제 업무 재개는 화면의 `Handler.handleMessage()` overload에서 이어진다. `BaseDaoHelper`는 `NetfunnelDao.runRunner()` 호출 직후 `onIntegrationResult()`를 부르지만, `runRunner()` 자체가 `Handler`에 일을 post하므로 정리는 비동기다.
+- 네트워크 lifecycle 세부값: 앱은 `http.keepAlive=false`를 설정한다. `clearCookie()`는 WebView cookie를 제거하고 Java `CookieManager`를 새로 만든다. `setSessionId()`에는 null guard가 없다. endpoint URL은 default builder가 아니라 `getRestAdapterBuilder()` 호출 때 결정된다. `BaseDao.isPending()`은 loading show/dismiss 제어값이고 `executeDao()` 실행 여부를 막는 값은 아니다.

@@ -484,3 +484,9 @@ Response fields:
 - `getTicketOriginalInquiry`: 좌석변경 원권 조회와 연결될 수 있으나 열차 검색 endpoint가 아니라 ticket 원권 조회
 
 근거: `analysis/jadx/sources/com/korail/talk/network/dao/research/ResearchService.java:39-45`, `analysis/jadx/sources/com/korail/talk/network/dao/research/ResearchService.java:51-52`, `analysis/jadx/sources/com/korail/talk/network/dao/research/ResearchService.java:61-70`.
+
+## 20-agent follow-up audit 보강
+
+- `StbkAcntDao.ACCOUNT_REGISTER`는 확인된 값이 `"4"`다. `isForSaleDate()`는 `saleDdDvCd=="5"` 또는 `"4"`일 때 true다.
+- `RsvInquiryResponse.TrainInfo`는 기존 요약보다 넓다. exhaustive catalog 기준 주요 필드는 운행/역/시간, 좌석/실, 할인/요금, 우회/지연, 대기예약, 추천상품까지 포함하며 `rcmdGdList`, `totPsgCnt`, `txtGdNo`도 함께 노출된다. 전체 필드 열거는 `17-response-models-exhaustive.md`의 `response.seatMovie.RsvInquiryResponse` 섹션을 canonical source로 둔다.
+- query/search 쪽 Sid는 `S4.C0812l.getSid()` 결과를 쓰며, DynaPath header와 별개인 AES/CBC 기반 파라미터다.
