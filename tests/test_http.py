@@ -3,6 +3,7 @@ import httpx
 from korail_mobile_api import KorailConfig
 from korail_mobile_api.errors import KorailAppError, KorailProtocolError
 from korail_mobile_api.http import KorailHttpClient, parse_base_response
+from conftest import load_json_fixture
 
 
 def test_post_form_adds_common_fields_and_form_encoding():
@@ -26,6 +27,22 @@ def test_post_form_adds_common_fields_and_form_encoding():
     assert response.h_msg_cd == "IRG000000"
 
 
+def test_get_json_returns_parsed_response():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["query"] = request.url.query.decode()
+        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+
+    client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    response = client.get_json("/classes/example.json", {"custom": "value"})
+
+    assert captured["url"] == "https://smart.letskorail.com/classes/example.json?custom=value"
+    assert captured["query"] == "custom=value"
+    assert response.str_result == "SUCC"
+
+
 def test_parse_base_response_raises_app_error_for_fail():
     try:
         parse_base_response({"h_msg_cd": "WRG000000", "h_msg_txt": "조회 결과 없음", "strResult": "FAIL"})
@@ -39,6 +56,43 @@ def test_parse_base_response_raises_app_error_for_fail():
 def test_parse_base_response_requires_dict():
     try:
         parse_base_response(["not", "a", "dict"])
+    except KorailProtocolError:
+        pass
+    else:
+        raise AssertionError("KorailProtocolError was not raised")
+
+
+def test_parse_base_response_requires_korail_envelope_fields():
+    try:
+        parse_base_response(load_json_fixture("dynapath_403.json"))
+    except KorailProtocolError:
+        pass
+    else:
+        raise AssertionError("KorailProtocolError was not raised")
+
+
+def test_post_form_raises_protocol_error_for_non_json_response():
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="<html>not json</html>")
+
+    client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
+
+    try:
+        client.post_form("/classes/example.do")
+    except KorailProtocolError:
+        pass
+    else:
+        raise AssertionError("KorailProtocolError was not raised")
+
+
+def test_get_json_raises_protocol_error_for_non_json_response():
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="plain text")
+
+    client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
+
+    try:
+        client.get_json("/classes/example.json")
     except KorailProtocolError:
         pass
     else:

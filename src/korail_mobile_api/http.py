@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Mapping
 
 import httpx
@@ -57,7 +58,11 @@ class KorailHttpClient:
             response.raise_for_status()
         except httpx.HTTPError as exc:
             raise KorailTransportError(str(exc)) from exc
-        return parse_base_response(response.json(), raise_on_fail=raise_on_fail)
+        try:
+            payload = response.json()
+        except json.JSONDecodeError as exc:
+            raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
+        return parse_base_response(payload, raise_on_fail=raise_on_fail)
 
     def get_json(
         self,
@@ -77,4 +82,8 @@ class KorailHttpClient:
             response.raise_for_status()
         except httpx.HTTPError as exc:
             raise KorailTransportError(str(exc)) from exc
-        return parse_base_response(response.json(), raise_on_fail=raise_on_fail)
+        try:
+            payload = response.json()
+        except json.JSONDecodeError as exc:
+            raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
+        return parse_base_response(payload, raise_on_fail=raise_on_fail)

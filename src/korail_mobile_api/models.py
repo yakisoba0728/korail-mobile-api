@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from .errors import KorailProtocolError
+
 
 @dataclass(frozen=True)
 class KorailSession:
@@ -18,6 +20,9 @@ class BaseKorailResponse:
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
+        missing = [field_name for field_name in ("h_msg_cd", "h_msg_txt", "strResult") if field_name not in raw]
+        if missing:
+            raise KorailProtocolError(f"KORAIL response missing required envelope fields: {', '.join(missing)}")
         return cls(
             h_msg_cd=raw.get("h_msg_cd"),
             h_msg_txt=raw.get("h_msg_txt"),
