@@ -2,7 +2,7 @@ import pytest
 import httpx
 
 from korail_mobile_api import KorailClient, KorailConfig
-from korail_mobile_api.errors import KorailAuthError
+from korail_mobile_api.errors import KorailAppError, KorailAuthError, KorailProtocolError
 
 
 def test_login_posts_transformed_password_and_tracks_cookie(load_json_fixture):
@@ -59,3 +59,50 @@ def test_login_fail_response_raises_auth_error(load_json_fixture):
 
     with pytest.raises(KorailAuthError):
         client.login("member1", "pw123")
+
+
+def test_login_crypto_bootstrap_app_failure_raises_library_error_without_login_post():
+    called_paths = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        called_paths.append(request.url.path)
+        if request.url.path == "/classes/com.korail.mobile.common.code.do":
+            return httpx.Response(
+                200,
+                json={"h_msg_cd": "ERR", "h_msg_txt": "bootstrap failed", "strResult": "FAIL"},
+            )
+        raise AssertionError(f"unexpected path {request.url.path}")
+
+    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+
+    with pytest.raises(KorailAppError):
+        client.login("member1", "pw123")
+
+    assert called_paths == ["/classes/com.korail.mobile.common.code.do"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"},
+        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "", "key": "KEY", "pwdAESCphd": "N"},
+        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "IDX", "key": "", "pwdAESCphd": "N"},
+        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "IDX", "key": "KEY", "pwdAESCphd": ""},
+        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "IDX", "key": "KEY", "pwdAESCphd": "maybe"},
+    ],
+)
+def test_login_crypto_bootstrap_requires_complete_metadata(payload):
+    called_paths = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        called_paths.append(request.url.path)
+        if request.url.path == "/classes/com.korail.mobile.common.code.do":
+            return httpx.Response(200, json=payload)
+        raise AssertionError(f"unexpected path {request.url.path}")
+
+    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+
+    with pytest.raises(KorailProtocolError):
+        client.login("member1", "pw123")
+
+    assert called_paths == ["/classes/com.korail.mobile.common.code.do"]

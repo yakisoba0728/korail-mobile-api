@@ -97,13 +97,6 @@ class KorailClient:
             raise_on_fail=False,
         )
 
-    def get_reservation_history(self) -> BaseKorailResponse:
-        return self.http.get_json(
-            "/classes/com.korail.mobile.reservation.ReservationView",
-            include_common=True,
-            raise_on_fail=False,
-        )
-
     def get_ticket_list(self, page_no: int = 0) -> BaseKorailResponse:
         return self.http.post_form(
             "/classes/com.korail.mobile.myTicket.MyTicketList",

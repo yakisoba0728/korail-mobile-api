@@ -1,8 +1,10 @@
 import httpx
+import pytest
 
 from korail_mobile_api import KorailConfig
 from korail_mobile_api.errors import KorailAppError, KorailProtocolError
 from korail_mobile_api.http import KorailHttpClient, parse_base_response
+from korail_mobile_api.safety import EXCLUDED_API_DOMAINS
 from conftest import load_json_fixture
 
 
@@ -97,3 +99,37 @@ def test_get_json_raises_protocol_error_for_non_json_response():
         pass
     else:
         raise AssertionError("KorailProtocolError was not raised")
+
+
+@pytest.mark.parametrize("blocked_domain", sorted(EXCLUDED_API_DOMAINS))
+def test_http_client_blocks_excluded_domains_before_post(blocked_domain: str):
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+
+    client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
+
+    with pytest.raises(KorailProtocolError):
+        client.post_form(f"/classes/com.korail.mobile.{blocked_domain}.Example")
+
+    assert called is False
+
+
+@pytest.mark.parametrize("blocked_domain", sorted(EXCLUDED_API_DOMAINS))
+def test_http_client_blocks_excluded_domains_before_get(blocked_domain: str):
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+
+    client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
+
+    with pytest.raises(KorailProtocolError):
+        client.get_json(f"/classes/com.korail.mobile.{blocked_domain}.Example")
+
+    assert called is False

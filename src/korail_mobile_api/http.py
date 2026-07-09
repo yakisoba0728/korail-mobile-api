@@ -8,6 +8,7 @@ import httpx
 from .config import KorailConfig
 from .errors import KorailAppError, KorailProtocolError, KorailTransportError
 from .models import BaseKorailResponse
+from .safety import EXCLUDED_API_DOMAINS
 
 
 def parse_base_response(data: Any, *, raise_on_fail: bool = True) -> BaseKorailResponse:
@@ -39,6 +40,12 @@ class KorailHttpClient:
     def common_fields(self) -> dict[str, str]:
         return {"Device": self.config.device, "Version": self.config.version, "Key": self.config.key}
 
+    def _assert_safe_path(self, path: str) -> None:
+        lowered_path = path.lower()
+        for domain in EXCLUDED_API_DOMAINS:
+            if domain in lowered_path:
+                raise KorailProtocolError(f"KORAIL path is excluded by MVP safety policy: {path}")
+
     def post_form(
         self,
         path: str,
@@ -47,6 +54,7 @@ class KorailHttpClient:
         include_common: bool = True,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
+        self._assert_safe_path(path)
         form: dict[str, Any] = {}
         if include_common:
             form.update(self.common_fields())
@@ -72,6 +80,7 @@ class KorailHttpClient:
         include_common: bool = False,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
+        self._assert_safe_path(path)
         query: dict[str, Any] = {}
         if include_common:
             query.update(self.common_fields())

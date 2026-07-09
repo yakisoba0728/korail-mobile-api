@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .crypto import transform_login_password
-from .errors import KorailAuthError
+from .errors import KorailAuthError, KorailProtocolError
 from .http import KorailHttpClient
 from .models import KorailSession, LoginCryptoInfo
 
@@ -15,14 +15,18 @@ class KorailSessionClient:
         response = self.http.post_form(
             "/classes/com.korail.mobile.common.code.do",
             {"code": "login"},
-            raise_on_fail=False,
         )
         raw = response.raw
-        return LoginCryptoInfo(
-            idx=str(raw.get("idx") or ""),
-            key=str(raw.get("key") or ""),
-            pwd_aes_cphd=str(raw.get("pwdAESCphd") or "N"),
-        )
+        idx = raw.get("idx")
+        key = raw.get("key")
+        pwd_aes_cphd = raw.get("pwdAESCphd")
+        if not isinstance(idx, str) or not idx:
+            raise KorailProtocolError("KORAIL login crypto metadata missing valid idx")
+        if not isinstance(key, str) or not key:
+            raise KorailProtocolError("KORAIL login crypto metadata missing valid key")
+        if pwd_aes_cphd not in {"Y", "N"}:
+            raise KorailProtocolError("KORAIL login crypto metadata missing valid pwdAESCphd")
+        return LoginCryptoInfo(idx=idx, key=key, pwd_aes_cphd=pwd_aes_cphd)
 
     def login(self, member_no: str, password: str, *, input_flag: str = "2") -> KorailSession:
         crypto_info = self.get_login_crypto_info()

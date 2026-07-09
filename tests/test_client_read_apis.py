@@ -78,16 +78,15 @@ def test_search_trains_maps_rows(load_json_fixture):
     assert "txtGoEnd=0020" in posted_body
 
 
-def test_history_and_ticket_list_are_read_only(load_json_fixture):
+def test_ticket_list_is_read_only_and_reservation_history_api_is_absent(load_json_fixture):
     client, _ = make_client(
         load_json_fixture,
         {
-            "/classes/com.korail.mobile.reservation.ReservationView": "reservation_history_empty.json",
             "/classes/com.korail.mobile.myTicket.MyTicketList": "ticket_list_empty.json",
         },
     )
 
-    assert client.get_reservation_history().raw["reservations"] == []
+    assert not hasattr(client, "get_reservation_history")
     assert client.get_ticket_list().raw["tickets"] == []
 
 
