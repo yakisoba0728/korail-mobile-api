@@ -79,6 +79,7 @@ class KorailHttpClient:
         *,
         include_common: bool = False,
         raise_on_fail: bool = True,
+        require_envelope: bool = True,
     ) -> BaseKorailResponse:
         self._assert_safe_path(path)
         query: dict[str, Any] = {}
@@ -95,4 +96,8 @@ class KorailHttpClient:
             payload = response.json()
         except json.JSONDecodeError as exc:
             raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
+        if not require_envelope:
+            if not isinstance(payload, dict):
+                raise KorailProtocolError("KORAIL response must be a JSON object")
+            return BaseKorailResponse(raw=payload)
         return parse_base_response(payload, raise_on_fail=raise_on_fail)

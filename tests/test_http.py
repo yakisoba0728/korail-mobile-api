@@ -45,6 +45,17 @@ def test_get_json_returns_parsed_response():
     assert response.str_result == "SUCC"
 
 
+def test_get_json_can_return_raw_object_without_korail_envelope():
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"count": "281", "map_version": "260608002"})
+
+    client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    response = client.get_json("/classes/example.json", require_envelope=False)
+
+    assert response.h_msg_cd is None
+    assert response.raw["map_version"] == "260608002"
+
+
 def test_parse_base_response_raises_app_error_for_fail():
     try:
         parse_base_response({"h_msg_cd": "WRG000000", "h_msg_txt": "조회 결과 없음", "strResult": "FAIL"})

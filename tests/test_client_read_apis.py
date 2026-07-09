@@ -35,8 +35,8 @@ def test_station_and_calendar_read_methods(load_json_fixture):
         },
     )
 
-    assert client.get_station_data().raw["stations"][0]["stnNm"] == "서울"
-    assert client.get_station_info().raw["stationInfo"][0]["stnCd"] == "0001"
+    assert client.get_station_data().raw["stns"]["stn"][0]["stn_nm"] == "서울"
+    assert client.get_station_info().raw["map_version"] == "260608002"
     assert client.get_train_calendar().raw["days"][0]["runDt"] == "20260710"
     assert client.get_common_code("login").raw["idx"] == "IDX-N"
     station_data_request = captured[0]

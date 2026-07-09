@@ -36,10 +36,7 @@ def test_run_live_smoke_calls_only_login_station_data_and_calendar(monkeypatch):
         def get_station_data(self) -> BaseKorailResponse:
             calls.append(("get_station_data",))
             return BaseKorailResponse(
-                h_msg_cd="IRG000000",
-                h_msg_txt="OK",
-                str_result="SUCC",
-                raw={},
+                raw={"stns": {"stn": [{"stn_cd": "0001"}]}},
             )
 
         def get_train_calendar(self) -> BaseKorailResponse:
@@ -63,7 +60,7 @@ def test_run_live_smoke_calls_only_login_station_data_and_calendar(monkeypatch):
 
     assert result == {
         "loggedIn": True,
-        "stationDataCode": "IRG000000",
+        "stationDataCount": 1,
         "calendarCode": "IRG000000",
     }
     assert calls == [

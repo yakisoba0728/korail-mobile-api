@@ -1,1 +1,1 @@
-{"h_msg_cd":"API.I00000","h_msg_txt":"Success","strResult":"SUCC","stations":[{"stnCd":"0001","stnNm":"서울"}]}
+{"stns":{"stn":[{"stn_cd":"0001","stn_nm":"서울"}]}}

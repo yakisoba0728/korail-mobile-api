@@ -28,9 +28,10 @@ def run_live_smoke_from_env() -> dict[str, Any]:
         session = client.login(member_no, password)
         station_data = client.get_station_data()
         calendar = client.get_train_calendar()
+        stations = (station_data.raw.get("stns") or {}).get("stn")
         return {
             "loggedIn": bool(session.jsessionid),
-            "stationDataCode": station_data.h_msg_cd,
+            "stationDataCount": len(stations) if isinstance(stations, list) else None,
             "calendarCode": calendar.h_msg_cd,
         }
     finally:

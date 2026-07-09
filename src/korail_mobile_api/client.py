@@ -34,6 +34,7 @@ class KorailClient:
             {"Device": device},
             include_common=True,
             raise_on_fail=False,
+            require_envelope=False,
         )
 
     def get_station_data(self) -> BaseKorailResponse:
@@ -41,6 +42,7 @@ class KorailClient:
             "/classes/com.korail.mobile.common.stationdata",
             include_common=True,
             raise_on_fail=False,
+            require_envelope=False,
         )
 
     def get_train_calendar(self) -> BaseKorailResponse:

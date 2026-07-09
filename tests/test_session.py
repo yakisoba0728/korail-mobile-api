@@ -30,6 +30,29 @@ def test_login_posts_transformed_password_and_tracks_cookie(load_json_fixture):
     assert session.member_no == "member1"
 
 
+def test_login_accepts_live_no_aes_bootstrap_without_idx_or_key(load_json_fixture):
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/classes/com.korail.mobile.common.code.do":
+            return httpx.Response(200, json=load_json_fixture("common_code_login_crypto_live_n.json"))
+        if request.url.path == "/classes/com.korail.mobile.login.Login":
+            captured["body"] = request.content.decode()
+            return httpx.Response(
+                200,
+                json=load_json_fixture("login_success.json"),
+                headers={"Set-Cookie": "JSESSIONID=session-live-n; Path=/; HttpOnly"},
+            )
+        raise AssertionError(f"unexpected path {request.url.path}")
+
+    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    session = client.login("member1", "pw123")
+
+    assert "txtPwd=cHcxMjM%3D" in captured["body"]
+    assert "idx=" in captured["body"]
+    assert session.jsessionid == "session-live-n"
+
+
 def test_login_success_without_jsessionid_raises_auth_error(load_json_fixture):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/classes/com.korail.mobile.common.code.do":
@@ -85,10 +108,10 @@ def test_login_crypto_bootstrap_app_failure_raises_library_error_without_login_p
     "payload",
     [
         {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"},
-        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "", "key": "KEY", "pwdAESCphd": "N"},
-        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "IDX", "key": "", "pwdAESCphd": "N"},
         {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "IDX", "key": "KEY", "pwdAESCphd": ""},
         {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "IDX", "key": "KEY", "pwdAESCphd": "maybe"},
+        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "", "key": "KEY", "pwdAESCphd": "Y"},
+        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "IDX", "key": "", "pwdAESCphd": "Y"},
     ],
 )
 def test_login_crypto_bootstrap_requires_complete_metadata(payload):
