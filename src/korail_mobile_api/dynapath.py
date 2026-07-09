@@ -19,6 +19,9 @@ DYNAPATH_RANDOM_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 DYNAPATH_DEFAULT_I8 = 161
 DYNAPATH_DEFAULT_I9 = 30
 DYNAPATH_DEFAULT_I10 = 2
+KORAIL_DYNAPATH_APP_ID = "com.korail.talk"
+KORAIL_DYNAPATH_OS_TYPE = "Android"
+KORAIL_DYNAPATH_SDK_VERSION = "v1.0.3"
 
 
 def _prime_table(count: int = 100) -> list[int]:
@@ -117,14 +120,14 @@ RandomTextProvider = Callable[[], str]
 
 @dataclass(frozen=True)
 class DynapathTokenSettings:
-    app_id: str
     device_id: str
     as_value: str
     app_start_ts: str
     os_version: str
     device_model: str
-    os_type: str
-    sdk_version: str
+    app_id: str = KORAIL_DYNAPATH_APP_ID
+    os_type: str = KORAIL_DYNAPATH_OS_TYPE
+    sdk_version: str = KORAIL_DYNAPATH_SDK_VERSION
     table_index: int = DYNAPATH_TABLE_INDEX
     table: str = field(default_factory=lambda: generate_dynapath_encoding_table(DYNAPATH_TABLE_INDEX))
     i8: int = DYNAPATH_DEFAULT_I8

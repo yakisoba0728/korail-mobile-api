@@ -5,6 +5,9 @@ from korail_mobile_api.constants import DYNAPATH_HEADER_NAME
 from korail_mobile_api.dynapath import (
     DynapathConfig,
     DynapathTokenSettings,
+    KORAIL_DYNAPATH_APP_ID,
+    KORAIL_DYNAPATH_OS_TYPE,
+    KORAIL_DYNAPATH_SDK_VERSION,
     build_dynapath_prefix,
     generate_dynapath_encoding_table,
     generate_dynapath_token,
@@ -14,14 +17,11 @@ from korail_mobile_api.http import KorailHttpClient
 
 def make_settings() -> DynapathTokenSettings:
     return DynapathTokenSettings(
-        app_id="com.korail.talk",
         device_id="DEVICE-1234",
         as_value="[38ff229cb34c7dda8e28220a2d750cce]",
         app_start_ts="1712345600000",
         os_version="13",
         device_model="SM-S928N",
-        os_type="Android",
-        sdk_version="v1.0.3",
     )
 
 
@@ -30,6 +30,14 @@ def test_encoding_table_is_generated_from_original_sdk_permutation():
 
     assert table == "3FE9jgRD4KdCyuawklqGJYmvfMn15P7US8XbxeLQtWT6OicBAopINs2Vh0HZrz"
     assert build_dynapath_prefix(table=table, table_index=1, i11=2, i12=30) == "bEeEP"
+
+
+def test_token_settings_default_to_korail_source_hardcoded_values():
+    settings = make_settings()
+
+    assert settings.app_id == KORAIL_DYNAPATH_APP_ID == "com.korail.talk"
+    assert settings.os_type == KORAIL_DYNAPATH_OS_TYPE == "Android"
+    assert settings.sdk_version == KORAIL_DYNAPATH_SDK_VERSION == "v1.0.3"
 
 
 def test_generate_dynapath_token_uses_user_supplied_runtime_constants():

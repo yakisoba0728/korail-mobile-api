@@ -111,7 +111,7 @@ export KORAIL_PASSWORD="<password>"
 python -c "from korail_mobile_api.live import run_live_smoke_from_env; print(run_live_smoke_from_env())"
 ```
 
-DynaPath is supported for the documented allowlist paths. Runtime constants such as `Device`, API version, app key, DynaPath header name, allowlist paths, and default device metadata are importable from the package. DynaPath token constants are caller-supplied through `DynapathTokenSettings`:
+DynaPath is supported for the documented allowlist paths. Runtime constants such as `Device`, API version, app key, DynaPath header name, allowlist paths, and default device metadata are importable from the package. KORAIL source-hardcoded DynaPath values (`app_id`, `os_type`, `sdk_version`) default to the APK values; device/runtime values are caller-supplied through `DynapathTokenSettings`:
 
 ```python
 from korail_mobile_api import KorailClient, KorailConfig
@@ -123,14 +123,11 @@ client = KorailClient(
         dynapath=DynapathConfig(
             enabled=True,
             token_settings=DynapathTokenSettings(
-                app_id="com.korail.talk",
                 device_id="<caller-device-id>",
                 as_value="<caller-as-value>",
                 app_start_ts="<caller-app-start-ms>",
                 os_version="<caller-android-os-version>",
                 device_model="<caller-device-model>",
-                os_type="Android",
-                sdk_version="v1.0.3",
             ),
         )
     )
