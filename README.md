@@ -90,3 +90,25 @@ Not performed:
 - Runtime WebView execution
 
 Actual server response values, feature flags, redirect behavior, and nullable/required server-side validation rules remain runtime-only unknowns unless captured in a controlled authorized environment.
+
+## Python Package MVP
+
+This repository now contains an installable Python client package under `src/korail_mobile_api`.
+
+Default tests are offline:
+
+```bash
+pip install -e ".[test]"
+pytest
+```
+
+Live smoke is opt-in and limited to login plus read/query calls:
+
+```bash
+export KORAIL_MOBILE_API_LIVE=1
+export KORAIL_MEMBER_NO="<member-no>"
+export KORAIL_PASSWORD="<password>"
+python -c "from korail_mobile_api.live import run_live_smoke_from_env; print(run_live_smoke_from_env())"
+```
+
+Reservation, payment, refund, check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
