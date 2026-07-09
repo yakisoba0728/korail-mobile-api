@@ -16,6 +16,15 @@ class BaseKorailResponse:
     str_result: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
+        return cls(
+            h_msg_cd=raw.get("h_msg_cd"),
+            h_msg_txt=raw.get("h_msg_txt"),
+            str_result=raw.get("strResult"),
+            raw=raw,
+        )
+
 
 @dataclass(frozen=True)
 class LoginCryptoInfo:
