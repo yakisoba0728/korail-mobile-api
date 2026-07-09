@@ -60,6 +60,19 @@ class TrainSummary:
     arrival_time: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
+        return cls(
+            train_no=str(raw.get("h_trn_no") or raw.get("trnNo") or ""),
+            train_group_code=raw.get("h_trn_gp_cd") or raw.get("trnGpCd"),
+            departure_station_code=raw.get("h_dpt_rs_stn_cd") or raw.get("dptRsStnCd"),
+            arrival_station_code=raw.get("h_arv_rs_stn_cd") or raw.get("arvRsStnCd"),
+            departure_date=raw.get("h_dpt_dt") or raw.get("dptDt"),
+            departure_time=raw.get("h_dpt_tm") or raw.get("dptTm"),
+            arrival_time=raw.get("h_arv_tm") or raw.get("arvTm"),
+            raw=raw,
+        )
+
 
 @dataclass(frozen=True)
 class TrainSearchResult:
