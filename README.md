@@ -111,4 +111,34 @@ export KORAIL_PASSWORD="<password>"
 python -c "from korail_mobile_api.live import run_live_smoke_from_env; print(run_live_smoke_from_env())"
 ```
 
+DynaPath is supported as an optional token-provider hook. Runtime constants such as `Device`, API version, app key, DynaPath header name, allowlist paths, and default device metadata are importable from the package:
+
+```python
+from korail_mobile_api import (
+    DYNAPATH_HEADER_NAME,
+    KORAIL_DEFAULT_DEVICE_NAME,
+    KorailClient,
+    KorailConfig,
+)
+from korail_mobile_api.dynapath import DynapathConfig
+
+
+def provide_dynapath_token(context):
+    assert context.device_name == KORAIL_DEFAULT_DEVICE_NAME
+    return obtain_token_from_authorized_adapter(context)
+
+
+client = KorailClient(
+    KorailConfig(
+        dynapath=DynapathConfig(
+            enabled=True,
+            token_provider=provide_dynapath_token,
+            device_name=KORAIL_DEFAULT_DEVICE_NAME,
+        )
+    )
+)
+```
+
+The package does not implement DynaPath token generation; the APK analysis identified that as SDK-opaque. When enabled, the client attaches the provider's token as `DYNAPATH_HEADER_NAME` only for the documented DynaPath allowlist paths.
+
 Reservation, payment, refund, check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.

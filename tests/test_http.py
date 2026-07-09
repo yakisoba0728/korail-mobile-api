@@ -1,7 +1,16 @@
 import httpx
 import pytest
 
-from korail_mobile_api import KorailConfig
+from korail_mobile_api import (
+    DYNAPATH_ALLOWLIST_PATHS,
+    DYNAPATH_HEADER_NAME,
+    KORAIL_API_VERSION,
+    KORAIL_APP_KEY,
+    KORAIL_DEFAULT_DEVICE_NAME,
+    KORAIL_DEVICE_ANDROID,
+    KorailConfig,
+)
+from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import KorailAppError, KorailProtocolError
 from korail_mobile_api.http import KorailHttpClient, parse_base_response
 from korail_mobile_api.safety import EXCLUDED_API_DOMAINS
@@ -27,6 +36,59 @@ def test_post_form_adds_common_fields_and_form_encoding():
     assert "Key=korail1234567890" in captured["body"]
     assert "custom=value" in captured["body"]
     assert response.h_msg_cd == "IRG000000"
+
+
+def test_korail_runtime_constants_are_importable():
+    assert KORAIL_DEVICE_ANDROID == "AD"
+    assert KORAIL_API_VERSION == "250601003"
+    assert KORAIL_APP_KEY == "korail1234567890"
+    assert KORAIL_DEFAULT_DEVICE_NAME
+    assert DYNAPATH_HEADER_NAME == "x-dynapath-m-token"
+    assert "/classes/com.korail.mobile.login.Login" in DYNAPATH_ALLOWLIST_PATHS
+
+
+def test_post_form_adds_dynapath_header_for_allowlisted_path():
+    captured = {}
+    contexts = []
+
+    def token_provider(context):
+        contexts.append(context)
+        return "dynapath-token"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["token"] = request.headers.get(DYNAPATH_HEADER_NAME)
+        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+
+    config = KorailConfig(dynapath=DynapathConfig(enabled=True, token_provider=token_provider))
+    client = KorailHttpClient(config, transport=httpx.MockTransport(handler))
+    response = client.post_form("/classes/com.korail.mobile.login.Login")
+
+    assert response.str_result == "SUCC"
+    assert captured["token"] == "dynapath-token"
+    assert len(contexts) == 1
+    assert contexts[0].method == "POST"
+    assert contexts[0].path == "/classes/com.korail.mobile.login.Login"
+    assert contexts[0].device == KORAIL_DEVICE_ANDROID
+    assert contexts[0].device_name == KORAIL_DEFAULT_DEVICE_NAME
+
+
+def test_dynapath_provider_is_not_called_for_non_allowlisted_path():
+    called = False
+
+    def token_provider(_context):
+        nonlocal called
+        called = True
+        return "dynapath-token"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers.get(DYNAPATH_HEADER_NAME) is None
+        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+
+    config = KorailConfig(dynapath=DynapathConfig(enabled=True, token_provider=token_provider))
+    client = KorailHttpClient(config, transport=httpx.MockTransport(handler))
+    client.post_form("/classes/com.korail.mobile.common.code.do")
+
+    assert called is False
 
 
 def test_get_json_returns_parsed_response():
