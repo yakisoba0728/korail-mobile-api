@@ -1,0 +1,248 @@
+# KORAIL Public API Stabilization Design
+
+Date: 2026-07-10
+Status: Draft for user review
+
+## Goal
+
+Make every currently exposed read-only KORAIL client operation behave consistently with the observed mobile-app and live-server contracts before adding more API methods.
+
+This phase is stabilization, not endpoint expansion. It fixes request construction, response parsing, session state, DynaPath runtime state, error classification, redaction, and safety boundaries while preserving the existing caller-facing API wherever practical.
+
+## Relationship To The SRT Package
+
+KORAIL and SRT remain independent distributions. They do not share a runtime base package.
+
+They do share these behavioral rules:
+
+- configuration is explicit and owned by one client instance;
+- a login attempt commits session state only after every required step succeeds;
+- successful responses return models and failed responses raise typed exceptions;
+- application failures are never converted into empty successful results;
+- raw responses remain available for compatibility but are never logged automatically;
+- all network requests cross one read-only endpoint policy;
+- live verification reads credentials from ignored local environment files only.
+
+## Evidence Authority
+
+Resolve conflicting documentation in this order:
+
+1. controlled live-server observations;
+2. APK/JADX/smali source evidence;
+3. consolidated contract and library-guide documents;
+4. deep-dive flow reports;
+5. generated endpoint and model catalogs;
+6. historical design and implementation plans;
+7. synthetic fixtures.
+
+Historical statements that the repository contains static analysis only, or that DynaPath generation is opaque and out of scope, are stale.
+
+## In Scope
+
+Current `KorailClient` operations:
+
+- `login`
+- `logout`
+- `clear_session`
+- `close`
+- `get_common_code`
+- `get_station_info`
+- `get_station_data`
+- `get_train_calendar`
+- `search_trains`
+- `get_train_schedule`
+- `get_transfer_stations`
+- `get_ticket_list`
+
+Also in scope:
+
+- currently exported DynaPath configuration and token-generation behavior;
+- request and result models used by the methods above;
+- package-level exceptions, redaction, live-smoke helpers, and safety enforcement.
+
+## Out Of Scope
+
+- new reservation-history or receipt methods;
+- reservation creation, change, cancellation, or wait-list operations;
+- payment, refund, check-in, member mutation, push/SMS, point, mileage, and RailPlus mutation;
+- automatic re-login or storage of user passwords;
+- implementation of additional documented read-only endpoints.
+
+Those read-only endpoints are considered only after this stabilization gate passes.
+
+## Compatibility Policy
+
+- Keep current public method names and their ordinary calling forms.
+- Keep existing result attributes, including `raw`.
+- Add specialized result types only when they remain compatible with existing attributes.
+- Do not silently reinterpret application failures as successful empty values.
+- Keep legacy probe DynaPath exports importable during this phase, but do not use probe values as live defaults.
+- Treat accidental low-level access such as `client.http` as non-public, while still enforcing safety if callers reach it.
+
+## Architecture
+
+The request path is:
+
+```text
+KorailConfig
+  -> KorailClient public method
+  -> session or payload construction
+  -> read-only endpoint policy
+  -> KorailHttpClient
+  -> envelope and protocol validation
+  -> typed result or typed exception
+```
+
+Responsibilities:
+
+- `config.py`: immutable app, device, timeout, and DynaPath configuration;
+- `client.py`: public facade and endpoint-specific orchestration;
+- `session.py`: transactional login and cookie/current/pending state;
+- `crypto.py`: Android-compatible login and Sid transforms;
+- `dynapath.py`: SDK-compatible table, payload, key/body encoding, and runtime state;
+- `http.py`: common fields, allowed routes, headers, transport, and envelope parsing;
+- `models.py`: caller input and response models;
+- `errors.py`: stable exception hierarchy;
+- `redaction.py`: recursive secret filtering;
+- `safety.py`: explicit read-only route registry;
+- `live.py`: non-destructive live verification.
+
+## Configuration And DynaPath State
+
+Device identity values come from the caller's configuration snapshot. The client must not mix caller values with hidden probe defaults.
+
+When DynaPath is enabled, required values include the device model, OS value, Android/device identifier, app identity, signature-derived value, and SDK version required by the reconstructed payload. Missing required live values fail before the request.
+
+One stateful token generator belongs to one client instance. It owns:
+
+- SDK initialization time;
+- current request timestamp;
+- recent request-delta queue;
+- injected time and random providers for deterministic tests.
+
+The state survives login/logout because it models app-process lifetime. It resets when a new client/generator is created. The encoding table is generated by the reconstructed permutation algorithm rather than treated as an unexplained live constant.
+
+DynaPath headers are attached only to the configured allowlisted KORAIL paths. A DynaPath rejection response is classified separately from generic transport and application errors.
+
+## Login And Session Transaction
+
+Login follows this state machine:
+
+```text
+clear old authenticated and pending state
+  -> service availability check
+  -> login crypto metadata fetch
+  -> Android-compatible password transform
+  -> login request
+  -> success-cookie validation
+  -> commit current session
+```
+
+Rules:
+
+- infer email, phone, or member-number input type when the caller does not provide it;
+- match Android Base64 behavior, including line wrapping where the APK uses `Base64.DEFAULT`;
+- clear cookies and current state after authentication, protocol, or transport failure;
+- represent a required external authentication step as pending, not authenticated;
+- retain only the new pending-flow cookie context needed for continuation;
+- clear pending state on `clear_session` and `logout`;
+- never preserve a previous authenticated session after a failed re-login;
+- never store the password for automatic re-login.
+
+`logout` remains a local session clear in this phase; no new server-side mutation endpoint is introduced.
+
+## Request And Response Contracts
+
+### Common And Station Data
+
+Common fields are endpoint-specific. Do not assume every endpoint accepts the same `Device`, `Version`, and `Key` set. Build each request from APK evidence and contract tests.
+
+Raw station-data shapes are validated as objects. Public methods preserve their existing generic response form during this phase.
+
+### Train Search
+
+The existing `TrainSearchQuery` field names remain source-compatible even though the current `*_station_code` names are misleading for `ScheduleView`.
+
+Before sending the request:
+
+- accept a known station code and resolve it to its station name;
+- accept an already-known station name directly;
+- reject an unresolvable station reference before issuing the search request;
+- send station names in `txtGoStart` and `txtGoEnd`;
+- preserve the remaining app fields and passenger counts exactly.
+
+Parse trains from the observed nested `trn_infos.trn_info[]` shape, while retaining compatibility with any separately evidenced legacy shape. Each `TrainSummary` preserves both normalized fields and the original row.
+
+### Schedule, Transfer, And Ticket List
+
+- `get_train_schedule` sends the exact endpoint-specific device/version fields evidenced by the app; it does not inject an unsupported common key.
+- `get_transfer_stations` continues to use station codes as required by that endpoint.
+- `get_ticket_list` sends the full evidenced device, member/session, index, page, and date fields rather than the current abbreviated payload.
+- authenticated endpoints classify logged-out/session-expired responses instead of returning raw failures as success.
+
+## Error Contract
+
+The package exposes one coherent hierarchy:
+
+```text
+KorailApiError
+  KorailTransportError
+  KorailProtocolError
+  KorailAppError
+  KorailAuthError
+    KorailAuthContinuationRequired
+    KorailSessionExpiredError
+  KorailDynaPathError
+```
+
+- HTTP, timeout, DNS, and connection failures are transport errors.
+- Invalid JSON, invalid envelopes, and missing required fields are protocol errors.
+- A valid envelope with an application failure code is an app error.
+- Invalid credentials and incomplete login are auth errors.
+- evidenced session-expiry codes such as `P058` are session-expired errors.
+- DynaPath rejection evidence is a DynaPath error.
+
+No public endpoint opts out of failure classification merely to return the server payload.
+
+## Safety And Redaction
+
+Replace substring-only exclusion with an explicit `method + host + path` registry for every current read-only request. The transport rejects unregistered paths before network I/O, including calls made through a reachable low-level client object.
+
+The registry does not include any mutation endpoint.
+
+Redaction is recursive and case-insensitive. It covers mappings, sequences, dataclasses, exception formatting, and URL query strings. Passwords, cookies, session IDs, DynaPath tokens, PNR/ticket identifiers, and card-shaped values must not appear in logs or `repr` output.
+
+Raw response objects remain caller-accessible but are not automatically persisted or emitted by live helpers.
+
+## Test Strategy
+
+Use test-driven changes with offline tests as the default suite.
+
+Required layers:
+
+1. model and configuration validation;
+2. exact method/path/header/form tests through `httpx.MockTransport`;
+3. success, empty, failure, malformed, and session-expiry parser tests;
+4. login commit/rollback/pending state tests;
+5. stateful DynaPath deterministic and multi-request tests;
+6. route allowlist and bypass-attempt tests;
+7. recursive redaction and exception-leak tests;
+8. package build and isolated install/import tests;
+9. explicitly enabled, read-only live smoke tests.
+
+Live verification covers login, common code, station information/data, calendar, train search, train schedule, transfer stations, and ticket list. It records only status/classification and bounded counts, never raw account data or credentials.
+
+## Completion Gate
+
+Stabilization is complete only when:
+
+- the full offline suite passes;
+- every current public method has a request-contract test;
+- known failure and session-expiry responses raise the intended exception;
+- package build and isolated import succeed;
+- live login succeeds with environment-provided credentials;
+- safe live reads succeed or return accurately classified server errors;
+- captured request paths contain no mutation endpoint;
+- repository and test output contain no credential, cookie, or token leak.
+
+Only after this gate passes may implementation planning begin for additional read-only KORAIL APIs.
