@@ -1,7 +1,7 @@
 # KORAIL Public API Stabilization Design
 
 Date: 2026-07-10
-Status: Draft for user review
+Status: Approved for implementation planning
 
 ## Goal
 
