@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-13
 
-**Status:** Approved for implementation planning
+**Status:** Approved, including the 2026-07-13 live-contract correction
 
 ## Goal
 
@@ -25,6 +25,14 @@ but that evidence did not retain a bounded result code, a usable station count,
 or a safe `addSrvDvCd` value. The app obtains `addSrvDvCd` dynamically from a
 MAAS menu response and forwards it unchanged. There is no evidenced empty or
 fixed default, so the library must require a non-empty caller-supplied value.
+
+A bounded 2026-07-13 live observation refined the UUID response contract without
+retaining or printing its value or raw mapping. The successful top-level JSON
+object contained two fields: a non-empty string verification field and exactly
+one of the three common-envelope fields. It contained no nested mapping. APK
+inheritance therefore does not guarantee that all common-envelope keys are
+serialized by this route. The user approved a UUID-only relaxed-envelope read;
+the parser still requires the verification field to be a non-empty string.
 
 Neither path belongs to `DYNAPATH_ALLOWLIST_PATHS`. The implementation must not
 attach or generate a DynaPath token for either request.
@@ -94,10 +102,13 @@ from repr.
 
 ## Request And Response Flow
 
-`get_uuid()` uses `KorailHttpClient.get_json()` with no parameters and no common
-fields. It requires the normal KORAIL response envelope, parses
-`mutMrkVrfCd` as a non-empty string on a successful response, and retains the
-original mapping in the repr-hidden `raw` field.
+`get_uuid()` uses `KorailHttpClient.get_json()` with no parameters, no common
+fields, and `require_envelope=False`. This is a route-specific exception backed
+by the bounded live structure above; it does not weaken the default transport
+behavior. The UUID parser still requires `mutMrkVrfCd` to be a non-empty string
+and retains the original mapping in the repr-hidden `raw` field. A response
+without that valid field remains a typed protocol failure. A complete recognized
+failure envelope continues through the transport's existing typed-error path.
 
 `get_maas_station_data()` posts exactly:
 
@@ -164,6 +175,8 @@ Offline TDD coverage must prove:
 
 - the two routes and only those routes increase the registry to 14;
 - UUID uses exact GET, an empty query, the canonical origin, and no DynaPath;
+- UUID accepts the live-evidenced partial common envelope while still rejecting
+  a missing, blank, or non-string verification field;
 - MAAS uses exact POST and the single evidenced form field;
 - empty/non-string service codes fail before transport I/O;
 - envelope and envelope-free station responses parse into typed models;

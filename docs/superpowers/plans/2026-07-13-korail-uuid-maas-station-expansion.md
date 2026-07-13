@@ -4,7 +4,7 @@
 
 **Goal:** Add typed, account-neutral KORAIL UUID and MAAS station reads with exact route/form enforcement, repr-safe output, and bounded live evidence.
 
-**Architecture:** Keep `KorailClient` as the only public request facade. Add small frozen result models and parsers, extend the exact route registry by two, and add an opt-in live summary that always tests UUID but calls MAAS only when a private `KORAIL_MAAS_SERVICE_CODE` exists. Preserve strict response envelopes by default and opt out only for the evidenced MAAS station call.
+**Architecture:** Keep `KorailClient` as the only public request facade. Add small frozen result models and parsers, extend the exact route registry by two, and add an opt-in live summary that always tests UUID but calls MAAS only when a private `KORAIL_MAAS_SERVICE_CODE` exists. Preserve strict response envelopes by default and opt out only for the live-evidenced partial UUID response and the envelope-free MAAS station call.
 
 **Tech Stack:** Python 3.11+, `httpx>=0.27,<1`, `cryptography>=42,<47`, frozen dataclasses, `pytest>=8,<10`, setuptools.
 
@@ -14,6 +14,9 @@
 - Implement only `GET /ebizcross/getUUID.do` and `POST /ebizmaas/EbizMaasStationList.do` on `https://smart.letskorail.com`.
 - Require a non-empty caller-supplied MAAS additional-service code; never invent an empty, fixed, or guessed default.
 - Send only `addSrvDvCd` to the MAAS route; do not add `Device`, `Version`, or `Key`.
+- Permit relaxed envelope decoding only at the UUID and MAAS public call sites.
+  UUID must still contain a non-empty string `mutMrkVrfCd`; no general transport
+  default or existing caller may be weakened.
 - Do not change `DYNAPATH_ALLOWLIST_PATHS`, the fixed `rt=0` token engine, or any existing token behavior.
 - Never add or call MAAS menu, cart, reservation, payment, cancellation, refund, check-in, member, point, mileage, or cross-package orchestration APIs.
 - Keep raw mappings and `mutMrkVrfCd` caller-accessible where designed but absent from repr, rendered exceptions, logs, docs examples, and live output.
@@ -1026,3 +1029,152 @@ Skip this commit when Task 4 already contains the exact final evidence.
 - [ ] UUID bounded live verification passes.
 - [ ] MAAS live verification either passes with a private supplied code or is explicitly pending.
 - [ ] Progress documentation matches actual evidence.
+
+---
+
+### Task 6: Correct The Live UUID Partial-Envelope Contract
+
+**Files:**
+
+- Modify: `tests/test_uuid_maas_read_apis.py`
+- Modify: `src/korail_mobile_api/client.py`
+
+**Interfaces:**
+
+- Consumes: the existing default-strict `get_json(..., require_envelope=True)`
+  transport and strict `parse_uuid_response()` verification-field validation.
+- Produces: a UUID-only `require_envelope=False` call-site exception without any
+  transport-default, POST, route, DynaPath, parser, model, or public-API change.
+
+- [ ] **Step 1: Add the failing partial-envelope client regression test**
+
+Append to `tests/test_uuid_maas_read_apis.py`:
+
+```python
+def test_client_uuid_accepts_live_evidenced_partial_common_envelope():
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "strResult": "SUCC",
+                "mutMrkVrfCd": "fixture-partial-code",
+            },
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    try:
+        result = client.get_uuid()
+    finally:
+        client.close()
+
+    assert result.verification_code == "fixture-partial-code"
+    assert result.raw["strResult"] == "SUCC"
+    assert "fixture-partial-code" not in repr(result)
+    assert len(captured) == 1
+    assert captured[0].method == "GET"
+    assert captured[0].url.path == "/ebizcross/getUUID.do"
+    assert captured[0].url.query == b""
+```
+
+Run:
+
+```bash
+PYTHONPATH=src python3 -m pytest tests/test_uuid_maas_read_apis.py -q
+```
+
+Expected RED: `KorailProtocolError` reports missing common-envelope fields.
+
+- [ ] **Step 2: Apply the minimal UUID-only transport option**
+
+Change only `KorailClient.get_uuid()`:
+
+```python
+def get_uuid(self) -> UuidResponse:
+    return self._run_read(
+        lambda: parse_uuid_response(
+            self.http.get_json(
+                "/ebizcross/getUUID.do",
+                require_envelope=False,
+            )
+        )
+    )
+```
+
+Do not change `KorailHttpClient`, `parse_uuid_response()`, route registration,
+DynaPath settings, any POST call, or any public signature.
+
+- [ ] **Step 3: Run the focused contract tests**
+
+Run exactly:
+
+```bash
+PYTHONPATH=src python3 -m pytest tests/test_uuid_maas_read_apis.py tests/test_http.py tests/test_public_contract.py -q
+```
+
+Expected: all focused tests pass; default-strict transport and complete failure
+envelopes remain covered.
+
+- [ ] **Step 4: Commit the correction**
+
+```bash
+git add src/korail_mobile_api/client.py tests/test_uuid_maas_read_apis.py
+git commit -m "fix: accept live korail uuid partial envelope"
+```
+
+---
+
+### Task 7: Reverify And Record The Corrected Live UUID Contract
+
+**Files:**
+
+- Verify all changed files.
+- Modify: `README.md`
+- Modify: `docs/IMPLEMENTATION_PROGRESS.md`
+
+**Interfaces:**
+
+- Consumes: the Task 6 UUID-only correction and all prior KORAIL read-only work.
+- Produces: fresh offline/build/import/static/review/live evidence, an explicit
+  pending MAAS gate when no private code exists, and a clean handoff.
+
+- [ ] **Step 1: Run final non-live gates on the corrected HEAD**
+
+Run the complete offline suite once with live/credential variables removed,
+then build wheel and sdist, install the wheel in a fresh venv, import
+`KorailClient`, `UuidResponse`, `KorailStation`, and `StationDataResponse`, and
+repeat the exact 14-route/two-new-route/no-new-DynaPath static assertions from
+Task 5.
+
+- [ ] **Step 2: Request independent read-only review**
+
+Review the Task 6 diff against the approved live correction. Require the exact
+no-parameter GET, UUID-only relaxed option, unchanged strict defaults and POST
+behavior, non-empty verification validation, repr/redaction safety, and no
+route/DynaPath/public-surface change. Resolve every finding before live.
+
+- [ ] **Step 3: Run one bounded corrected live verification**
+
+Source the ignored local environment silently and invoke only
+`run_live_smoke_from_env()` once. Never print exceptions with raw data. Require
+`uuidLoaded is True`. Because the current safe observation established that
+`KORAIL_MAAS_SERVICE_CODE` is absent, require `maasStationTested is False` and
+`maasStationCount == 0`; do not invent a code or call MAAS. Confirm the existing
+bounded login/cache/station/calendar/train/schedule/transfer/ticket fields remain
+valid without emitting raw data or secrets.
+
+- [ ] **Step 4: Record evidence, clean artifacts, and commit**
+
+Document the partial-envelope correction, actual offline/build/import/static
+results, independent review, successful bounded UUID live result, and pending
+MAAS live gate in `README.md` and `docs/IMPLEMENTATION_PROGRESS.md`. Do not record
+the UUID value, raw mapping, credentials, cookies, identifiers, or service code.
+Remove `dist/` and `build/`, run `git diff --check`, confirm only intended docs
+are staged, and commit:
+
+```bash
+git add README.md docs/IMPLEMENTATION_PROGRESS.md
+git commit -m "docs: record corrected korail uuid live result"
+```
