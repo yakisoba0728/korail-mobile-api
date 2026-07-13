@@ -46,8 +46,8 @@ mutation routes are not callable.
   contract, and bounded live-helper tests are implemented.
 - Task 4 live-helper tests pass for both the absent-code and supplied-code
   branches; the live-service test remains an explicit offline skip.
-- Complete offline suite on corrected HEAD: `242 passed, 1 skipped`; the only
-  skip was the explicit live-service opt-in.
+- Final complete offline suite after whole-feature DynaPath hardening:
+  `247 passed, 1 skipped`; the only skip was the explicit live-service opt-in.
 - Package verification: one wheel and one source distribution built
   successfully; a fresh virtual environment installed the wheel and imported
   `KorailClient`, `UuidResponse`, `KorailStation`, and `StationDataResponse`.
@@ -57,8 +57,14 @@ mutation routes are not callable.
 - Independent review confirmed the UUID-only correction changed no routes,
   DynaPath behavior or allowlist, existing POST/default behavior, or public API
   surface.
-- Final cleanup removed generated package/build artifacts and the temporary
-  isolated-install environment; the normal Git working tree was clean.
+- Final whole-feature hardening added a default-preserving per-request DynaPath
+  opt-out for UUID and MAAS. Custom-allowlist regressions prove neither call can
+  generate or attach a token, while the token engine and default allowlist are
+  unchanged. The final package build, isolated imports, and `14/2/0` static
+  boundary were reverified after this fix.
+- Final cleanup removed generated package/build artifacts, ignored package
+  metadata, and the temporary isolated-install environment; the normal Git
+  working tree was clean.
 - Corrected bounded live verification: `appDataLoaded=true`,
   `noticeLoaded=true`, `uuidLoaded=true`, `loggedIn=true`,
   `commonCode=API.I00000`, `stationInfoLoaded=true`, `stationDataCount=281`,
