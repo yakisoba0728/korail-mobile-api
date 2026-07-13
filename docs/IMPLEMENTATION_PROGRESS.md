@@ -11,8 +11,13 @@ Last updated: 2026-07-13 KST
   committed on `main`.
 - The account-neutral UUID and optional MAAS station read methods, their bounded
   live summaries, and focused offline tests are implemented.
-- The complete suite, package build and isolated import, and bounded live gates
-  for this expansion remain pending for Task 5.
+- The UUID-specific partial-envelope correction is complete: only `get_uuid()`
+  opts out of strict common-envelope decoding. Transport defaults, existing
+  POST behavior, and all other callers remain strict.
+- The complete suite, package build, isolated import, static safety checks,
+  independent review, and corrected bounded UUID live gate are complete.
+- The optional MAAS live gate remains pending because no caller-owned private
+  service code was available; no MAAS request was made.
 
 ## Implemented Public Operations
 
@@ -40,9 +45,27 @@ mutation routes are not callable.
   contract, and bounded live-helper tests are implemented.
 - Task 4 live-helper tests pass for both the absent-code and supplied-code
   branches; the live-service test remains an explicit offline skip.
-- Complete offline suite: pending Task 5.
-- Wheel/sdist build and fresh-venv install/import: pending Task 5.
-- Bounded live verification: pending Task 5.
+- Complete offline suite on corrected HEAD: `242 passed, 1 skipped`; the only
+  skip was the explicit live-service opt-in.
+- Package verification: one wheel and one source distribution built
+  successfully; a fresh virtual environment installed the wheel and imported
+  `KorailClient`, `UuidResponse`, `KorailStation`, and `StationDataResponse`.
+- Static safety verification: 14 registered routes, both UUID/MAAS routes
+  present, and neither new route in the DynaPath allowlist.
+- Independent Task 6 review: spec pass and quality pass, with no findings.
+- Corrected bounded live verification: `appDataLoaded=true`,
+  `noticeLoaded=true`, `uuidLoaded=true`, `loggedIn=true`,
+  `commonCode=API.I00000`, `stationInfoLoaded=true`, `stationDataCount=281`,
+  `calendarCode=API.I00000`, `trainCount=10`,
+  `scheduleCode=IRZ000001`, `transferCode=IRZ000001`, and
+  `ticketCode=WRT300005`.
+- MAAS was not called: the ignored live environment contained no private
+  service code, so the bounded result was `maasStationTested=false` and
+  `maasStationCount=0`. The MAAS live gate remains pending.
+- Historical context: the first pre-correction live attempt stopped at UUID
+  envelope validation. The resulting correction was limited to UUID's
+  live-evidenced partial envelope; no sensitive value or raw response was
+  recorded.
 
 The local credential file remains ignored and is not tracked. No credential,
 cookie, session token, or generated DynaPath token is stored in the repository.
@@ -61,10 +84,10 @@ reservation, or account state.
 
 ## Next Required Step
 
-Task 5 must run the complete offline suite, build/import checks, and bounded
-opt-in live verification, then replace the pending statements above with the
-actual evidence. Keep all local credentials and runtime-sensitive values
-ignored and out of documentation.
+Complete the optional bounded MAAS live gate only when a legitimate,
+caller-owned private service code is supplied through the ignored environment.
+Do not invent or persist a code. Keep all local credentials and
+runtime-sensitive values ignored and out of documentation.
 
 See the shared [next-session prompt](../../NEXT_SESSION_PROMPT.md) for the
 combined KORAIL/SRT orchestration instructions.

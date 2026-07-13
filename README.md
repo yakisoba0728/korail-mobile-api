@@ -130,6 +130,12 @@ the official app obtains dynamically; the library has no empty or fixed default.
 Neither request uses DynaPath, and neither method starts a reservation or passes
 the UUID value to SRT automatically.
 
+Controlled live evidence showed that the UUID success response can contain a
+valid non-empty verification field with only a partial common envelope.
+`get_uuid()` therefore opts into relaxed common-envelope decoding for this
+request only. The transport default, existing POST behavior, and every other
+caller's strict-envelope behavior remain unchanged.
+
 Set `KORAIL_MAAS_SERVICE_CODE` only in the ignored live environment to include
 the MAAS endpoint in bounded live verification. Without it, the helper reports
 `maasStationTested=false` and performs no MAAS request.
@@ -153,6 +159,27 @@ The helper performs both cache reads before login and emits only booleans,
 status codes, and bounded counts. Its cache metadata is limited to
 `appDataLoaded` and `noticeLoaded`; it does not return raw account, session,
 ticket, station, app-data, or notice response bodies.
+
+The corrected UUID contract was reverified on the tracked Task 6 result. The
+complete offline suite reported `242 passed, 1 skipped`; the only skip was the
+explicit live-service opt-in. One wheel and one source distribution built
+successfully, and a fresh virtual environment imported `KorailClient`,
+`UuidResponse`, `KorailStation`, and `StationDataResponse` from the wheel. Static
+safety checks confirmed 14 registered routes, both UUID/MAAS routes present,
+and neither new route in the DynaPath allowlist. Independent Task 6 spec and
+quality reviews both passed with no findings.
+
+The single corrected bounded live invocation succeeded with
+`appDataLoaded=true`, `noticeLoaded=true`, `uuidLoaded=true`,
+`loggedIn=true`, `commonCode=API.I00000`, `stationInfoLoaded=true`,
+`stationDataCount=281`, `calendarCode=API.I00000`, `trainCount=10`,
+`scheduleCode=IRZ000001`, `transferCode=IRZ000001`, and
+`ticketCode=WRT300005`. No private MAAS service code was available, so the
+helper reported `maasStationTested=false` and `maasStationCount=0` and made no
+MAAS request; that optional live gate remains pending. An earlier
+pre-correction live attempt stopped at UUID envelope validation, which led to
+the endpoint-specific partial-envelope correction above. No sensitive value or
+raw response is recorded here.
 
 DynaPath is supported for the documented allowlist paths. Runtime constants
 such as `Device`, API version, app key, DynaPath header name, and allowlist paths
