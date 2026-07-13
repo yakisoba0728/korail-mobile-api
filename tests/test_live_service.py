@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from korail_mobile_api.live import live_enabled, run_live_smoke_from_env
@@ -16,3 +18,10 @@ def test_read_only_live_smoke():
     assert result["stationDataCount"] > 0
     assert result["trainCount"] >= 0
     assert "raw" not in result
+    assert result["uuidLoaded"] is True
+    if os.environ.get("KORAIL_MAAS_SERVICE_CODE"):
+        assert result["maasStationTested"] is True
+        assert result["maasStationCount"] >= 0
+    else:
+        assert result["maasStationTested"] is False
+        assert result["maasStationCount"] == 0

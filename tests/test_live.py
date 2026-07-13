@@ -5,11 +5,14 @@ from korail_mobile_api.live import live_enabled, read_credentials_from_env
 from korail_mobile_api.models import (
     AppDataResponse,
     BaseKorailResponse,
+    KorailStation,
     KorailSession,
     NoticeResponse,
+    StationDataResponse,
     TrainSearchQuery,
     TrainSearchResult,
     TrainSummary,
+    UuidResponse,
 )
 
 
@@ -74,7 +77,16 @@ def test_build_config_from_env_defaults_advertising_id_to_empty(monkeypatch):
     assert config.advertising_id == ""
 
 
-def test_run_live_smoke_calls_every_current_read_without_raw_output(monkeypatch):
+@pytest.mark.parametrize(
+    ("maas_code", "maas_tested", "maas_count"),
+    [(None, False, 0), ("M10", True, 1)],
+)
+def test_run_live_smoke_calls_every_current_read_without_raw_output(
+    monkeypatch,
+    maas_code,
+    maas_tested,
+    maas_count,
+):
     import korail_mobile_api.live as live
 
     calls: list[tuple[object, ...]] = []
@@ -109,6 +121,25 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(monkeypatch)
                 h_msg_cd="S000",
                 str_result="SUCC",
                 raw={"ptwtTtl": "must not leak"},
+            )
+
+        def get_uuid(self) -> UuidResponse:
+            calls.append(("get_uuid",))
+            return UuidResponse(
+                h_msg_cd="API.I00000",
+                str_result="SUCC",
+                verification_code="uuid-secret",
+                raw={"mutMrkVrfCd": "uuid-secret"},
+            )
+
+        def get_maas_station_data(
+            self,
+            additional_service_code: str,
+        ) -> StationDataResponse:
+            calls.append(("get_maas_station_data", additional_service_code))
+            return StationDataResponse(
+                stations=(KorailStation(code="0001", name="서울"),),
+                raw={"stns": {"stn": [{"stn_cd": "0001", "stn_nm": "서울"}]}},
             )
 
         def login(self, member_no: str, password: str) -> KorailSession:
@@ -192,6 +223,10 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(monkeypatch)
     monkeypatch.setenv("KORAIL_MOBILE_API_LIVE", "1")
     monkeypatch.setenv("KORAIL_MEMBER_NO", "member")
     monkeypatch.setenv("KORAIL_PASSWORD", "password")
+    if maas_code is None:
+        monkeypatch.delenv("KORAIL_MAAS_SERVICE_CODE", raising=False)
+    else:
+        monkeypatch.setenv("KORAIL_MAAS_SERVICE_CODE", maas_code)
     monkeypatch.setattr(live, "KorailClient", FakeClient)
     monkeypatch.setattr(live, "build_config_from_env", KorailConfig)
     result = live.run_live_smoke_from_env()
@@ -199,6 +234,9 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(monkeypatch)
     assert result == {
         "appDataLoaded": True,
         "noticeLoaded": True,
+        "uuidLoaded": True,
+        "maasStationTested": maas_tested,
+        "maasStationCount": maas_count,
         "loggedIn": True,
         "commonCode": "API.I00000",
         "stationInfoLoaded": True,
@@ -211,11 +249,24 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(monkeypatch)
     }
     assert "password" not in repr(result).lower()
     assert "must not leak" not in repr(result)
+    assert "uuid-secret" not in repr(result)
+    assert "M10" not in repr(result)
+    assert "mutMrkVrfCd" not in repr(result)
+    assert "stn_cd" not in repr(result)
+    assert "stn_nm" not in repr(result)
+    assert "0001" not in repr(result)
+    assert "서울" not in repr(result)
     assert "raw" not in result
-    assert [call[0] for call in calls] == [
+    expected_calls = [
         "init",
         "get_app_data",
         "get_notice",
+        "get_uuid",
+    ]
+    if maas_code is not None:
+        expected_calls.append("get_maas_station_data")
+        assert ("get_maas_station_data", maas_code) in calls
+    expected_calls.extend([
         "login",
         "get_common_code",
         "get_station_info",
@@ -226,4 +277,5 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(monkeypatch)
         "get_transfer_stations",
         "get_ticket_list",
         "close",
-    ]
+    ])
+    assert [call[0] for call in calls] == expected_calls

@@ -9,6 +9,10 @@ Last updated: 2026-07-13 KST
   isolated import are complete, including bounded live verification.
 - The fixed `rt=0` DynaPath replacement and empty advertising-ID default are
   committed on `main`.
+- The account-neutral UUID and optional MAAS station read methods, their bounded
+  live summaries, and focused offline tests are implemented.
+- The complete suite, package build and isolated import, and bounded live gates
+  for this expansion remain pending for Task 5.
 
 ## Implemented Public Operations
 
@@ -16,6 +20,8 @@ Last updated: 2026-07-13 KST
 - Common-code lookup
 - Account-neutral app-main cache lookup
 - Account-neutral notice cache lookup
+- Account-neutral UUID lookup
+- MAAS station-data lookup with a caller-supplied dynamic service code
 - Station information and station-data lookup
 - Train calendar lookup
 - Train search with station-code resolution
@@ -24,24 +30,19 @@ Last updated: 2026-07-13 KST
 - Ticket-list lookup
 - Fixed `rt=0` DynaPath generation and exact-path attachment
 
-The transport currently allows 12 exact read/login routes. Reservation,
+The transport currently allows 14 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
 mutation routes are not callable.
 
 ## Verification
 
-- Offline tests: `197 passed, 1 skipped`
-- Wheel and sdist build: passed after the cache expansion
-- Fresh-venv wheel install/import: passed for `KorailClient`,
-  `AppDataResponse`, `AppVersionInfo`, and `NoticeResponse`
-- Cache parser, exact-route, timestamp, malformed-response, public-contract,
-  pre-login ordering, raw-output, and fixed-RT DynaPath tests: passed
-- The official bounded live helper completed successfully with the promoted
-  fixed `rt=0` engine: app-data and notice caches loaded, login succeeded,
-  common code returned `API.I00000`, 281 stations loaded, the calendar returned
-  33 days, and train search returned 10 rows
-- Schedule and transfer reads returned `IRZ000001`; the member ticket-list
-  request used `txtDeviceId=""` and returned `WRT300005`
+- Focused offline UUID/MAAS route, request, parser, model, redaction, public
+  contract, and bounded live-helper tests are implemented.
+- Task 4 live-helper tests pass for both the absent-code and supplied-code
+  branches; the live-service test remains an explicit offline skip.
+- Complete offline suite: pending Task 5.
+- Wheel/sdist build and fresh-venv install/import: pending Task 5.
+- Bounded live verification: pending Task 5.
 
 The local credential file remains ignored and is not tracked. No credential,
 cookie, session token, or generated DynaPath token is stored in the repository.
@@ -50,20 +51,20 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
 - Previously live-successful inventory entries: 24
-- Currently implemented underlying routes: 12
+- Currently implemented underlying routes: 14
 - Therefore the complete APK endpoint inventory is not yet implemented
 
-Previously successful read candidates still outside the package include UUID
-lookup, product and reservation history, cart lookup, delay bank data, pass
-information, discount/delay coupons, receipt lookup, and MAAS station data.
-Some require valid ticket, reservation, or account state.
+Previously successful read candidates still outside the package include product
+and reservation history, cart lookup, delay bank data, pass information,
+discount/delay coupons, and receipt lookup. Some require valid ticket,
+reservation, or account state.
 
 ## Next Required Step
 
-Keep the stored login-success device profile local and ignored. Expand only
-previously evidenced read-only APIs in small TDD batches. Update the exact route
-registry, request builder, parser/model, offline fixtures, public exports, and
-opt-in live smoke together. Keep mutation APIs out of scope.
+Task 5 must run the complete offline suite, build/import checks, and bounded
+opt-in live verification, then replace the pending statements above with the
+actual evidence. Keep all local credentials and runtime-sensitive values
+ignored and out of documentation.
 
 See the shared [next-session prompt](../../NEXT_SESSION_PROMPT.md) for the
 combined KORAIL/SRT orchestration instructions.

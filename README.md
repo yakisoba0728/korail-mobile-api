@@ -122,6 +122,18 @@ the repr-hidden `raw` field. Supplying `timestamp_ms` gives callers a
 deterministic cache key; omitting it uses the current Unix epoch in
 milliseconds.
 
+### UUID and MAAS station reads
+
+`get_uuid()` performs the parameter-free account-neutral UUID read.
+`get_maas_station_data(additional_service_code)` requires the service code that
+the official app obtains dynamically; the library has no empty or fixed default.
+Neither request uses DynaPath, and neither method starts a reservation or passes
+the UUID value to SRT automatically.
+
+Set `KORAIL_MAAS_SERVICE_CODE` only in the ignored live environment to include
+the MAAS endpoint in bounded live verification. Without it, the helper reports
+`maasStationTested=false` and performs no MAAS request.
+
 Live smoke is opt-in and limited to login plus read/query calls. DynaPath
 device identity values must be supplied explicitly.
 KORAIL_ADVERTISING_ID is optional and defaults to an empty string:
