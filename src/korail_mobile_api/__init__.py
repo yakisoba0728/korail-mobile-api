@@ -44,11 +44,14 @@ from .models import (
     AppDataResponse,
     AppVersionInfo,
     BaseKorailResponse,
+    KorailStation,
     KorailSession,
     NoticeResponse,
+    StationDataResponse,
     TrainSearchQuery,
     TrainSearchResult,
     TrainSummary,
+    UuidResponse,
 )
 from .redaction import redact_mapping
 from .safety import EXCLUDED_API_DOMAINS
@@ -87,6 +90,7 @@ __all__ = [
     "KorailConfig",
     "KorailDynaPathError",
     "KorailProtocolError",
+    "KorailStation",
     "KorailSession",
     "KorailSessionExpiredError",
     "KorailTransportError",
@@ -97,7 +101,9 @@ __all__ = [
     "generate_dynapath_token",
     "parse_base_response",
     "redact_mapping",
+    "StationDataResponse",
     "TrainSearchQuery",
     "TrainSearchResult",
     "TrainSummary",
+    "UuidResponse",
 ]

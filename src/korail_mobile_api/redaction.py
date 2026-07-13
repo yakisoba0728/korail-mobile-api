@@ -20,6 +20,8 @@ SENSITIVE_KEYS = frozenset(
         "hidPnrNo",
         "tkRetPwd",
         "x-dynapath-m-token",
+        "mutMrkVrfCd",
+        "verification_code",
     }
 )
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")

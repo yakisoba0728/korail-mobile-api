@@ -3,7 +3,12 @@ import inspect
 import korail_mobile_api
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
-from korail_mobile_api.models import KorailSession, TrainSummary
+from korail_mobile_api.models import (
+    KorailSession,
+    StationDataResponse,
+    TrainSummary,
+    UuidResponse,
+)
 
 
 def test_client_public_method_set_is_stable():
@@ -20,6 +25,7 @@ def test_client_public_method_set_is_stable():
         "close",
         "get_app_data",
         "get_common_code",
+        "get_maas_station_data",
         "get_notice",
         "get_station_data",
         "get_station_info",
@@ -27,10 +33,25 @@ def test_client_public_method_set_is_stable():
         "get_train_calendar",
         "get_train_schedule",
         "get_transfer_stations",
+        "get_uuid",
         "login",
         "logout",
         "search_trains",
     }
+
+
+def test_uuid_maas_signatures_types_and_exports_are_stable():
+    assert list(inspect.signature(KorailClient.get_uuid).parameters) == ["self"]
+    assert list(
+        inspect.signature(KorailClient.get_maas_station_data).parameters
+    ) == ["self", "additional_service_code"]
+    assert KorailClient.get_uuid.__annotations__["return"] is UuidResponse
+    assert (
+        KorailClient.get_maas_station_data.__annotations__["return"]
+        is StationDataResponse
+    )
+    for name in ("UuidResponse", "KorailStation", "StationDataResponse"):
+        assert getattr(korail_mobile_api, name)
 
 
 def test_completed_errors_are_exported():

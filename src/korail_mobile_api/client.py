@@ -12,19 +12,24 @@ from .models import (
     BaseKorailResponse,
     KorailSession,
     NoticeResponse,
+    StationDataResponse,
     TrainSearchQuery,
     TrainSearchResult,
+    UuidResponse,
 )
 from .parsers import (
     parse_app_data_response,
     parse_notice_response,
+    parse_station_data_response,
     parse_station_name_map,
     parse_train_rows,
+    parse_uuid_response,
     resolve_station_name,
 )
 from .payloads import (
     build_cache_query,
     build_common_code_form,
+    build_maas_station_form,
     build_ticket_list_form,
     build_train_schedule_form,
     build_train_search_form,
@@ -108,6 +113,29 @@ class KorailClient:
                 self.http.get_json(
                     "/file/CACHE/prdMobilePlusNotice.cache",
                     build_cache_query(timestamp_ms),
+                    require_envelope=False,
+                )
+            )
+        )
+
+    def get_uuid(self) -> UuidResponse:
+        return self._run_read(
+            lambda: parse_uuid_response(
+                self.http.get_json("/ebizcross/getUUID.do")
+            )
+        )
+
+    def get_maas_station_data(
+        self,
+        additional_service_code: str,
+    ) -> StationDataResponse:
+        form = build_maas_station_form(additional_service_code)
+        return self._run_read(
+            lambda: parse_station_data_response(
+                self.http.post_form(
+                    "/ebizmaas/EbizMaasStationList.do",
+                    form,
+                    include_common=False,
                     require_envelope=False,
                 )
             )

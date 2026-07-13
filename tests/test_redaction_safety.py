@@ -20,6 +20,8 @@ def test_redact_mapping_masks_sensitive_values():
         "txtPwd": "secret-password",
         "JSESSIONID": "abc",
         "pnrNo": "123456789012",
+        "mutMrkVrfCd": "server-secret",
+        "verification_code": "model-secret",
         "safe": "value",
     }
     redacted = redact_mapping(data)
@@ -27,6 +29,8 @@ def test_redact_mapping_masks_sensitive_values():
     assert redacted["txtPwd"] == "[REDACTED]"
     assert redacted["JSESSIONID"] == "[REDACTED]"
     assert redacted["pnrNo"] == "[REDACTED]"
+    assert redacted["mutMrkVrfCd"] == "[REDACTED]"
+    assert redacted["verification_code"] == "[REDACTED]"
     assert redacted["safe"] == "value"
 
 
@@ -65,12 +69,31 @@ def test_redaction_is_recursive_case_insensitive_and_url_safe():
         "hidPnrNo",
         "tkRetPwd",
         "x-dynapath-m-token",
+        "mutMrkVrfCd",
+        "verification_code",
     ],
 )
 def test_redact_text_masks_sensitive_key_value_pairs(key):
     redacted = redact_text(f"prefix {key}=secret-value suffix")
     assert "secret-value" not in redacted
     assert "[REDACTED]" in redacted
+
+
+def test_uuid_verification_names_are_redacted_case_insensitively():
+    value = {
+        "mutMrkVrfCd": "server-secret",
+        "VERIFICATION_CODE": "model-secret",
+    }
+    redacted = redact_mapping(value)
+    assert redacted == {
+        "mutMrkVrfCd": "[REDACTED]",
+        "VERIFICATION_CODE": "[REDACTED]",
+    }
+    rendered = redact_text(
+        'mutMrkVrfCd="server-secret" verification_code=model-secret'
+    )
+    assert "server-secret" not in rendered
+    assert "model-secret" not in rendered
 
 
 def public_errors(message):

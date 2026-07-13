@@ -1,5 +1,9 @@
+from urllib.parse import parse_qs
+
+import httpx
 import pytest
 
+from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.errors import KorailProtocolError
 from korail_mobile_api.models import BaseKorailResponse
 from korail_mobile_api.parsers import (
@@ -80,3 +84,57 @@ def test_uuid_parser_rejects_missing_or_malformed_code(value):
     }
     with pytest.raises(KorailProtocolError, match="mutMrkVrfCd"):
         parse_uuid_response(BaseKorailResponse.from_raw(raw))
+
+
+def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        if request.url.path == "/ebizcross/getUUID.do":
+            return httpx.Response(
+                200,
+                json=load_json_fixture("uuid_success.json"),
+            )
+        if request.url.path == "/ebizmaas/EbizMaasStationList.do":
+            return httpx.Response(
+                200,
+                json=load_json_fixture("maas_station_data.json"),
+            )
+        raise AssertionError(request.url.path)
+
+    client = KorailClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        uuid = client.get_uuid()
+        stations = client.get_maas_station_data("M10")
+    finally:
+        client.close()
+    assert uuid.verification_code == "fixture-verification-code"
+    assert len(stations.stations) == 2
+    assert captured[0].method == "GET"
+    assert captured[0].url.path == "/ebizcross/getUUID.do"
+    assert captured[0].url.query == b""
+    assert captured[1].method == "POST"
+    assert captured[1].url.path == "/ebizmaas/EbizMaasStationList.do"
+    assert parse_qs(captured[1].content.decode()) == {"addSrvDvCd": ["M10"]}
+
+
+@pytest.mark.parametrize("value", [None, "", "   ", 10, False])
+def test_client_rejects_invalid_maas_code_before_io(value):
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(500)
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(ValueError, match="additional_service_code"):
+            client.get_maas_station_data(value)
+    finally:
+        client.close()
+    assert called is False
