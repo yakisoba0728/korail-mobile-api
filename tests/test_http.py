@@ -310,10 +310,12 @@ def test_read_only_route_registry_has_exact_expanded_count():
 
 def test_post_form_can_accept_one_envelope_free_object_without_weakening_default():
     calls = 0
+    captured: list[httpx.Request] = []
 
-    def handler(_: httpx.Request) -> httpx.Response:
+    def handler(request: httpx.Request) -> httpx.Response:
         nonlocal calls
         calls += 1
+        captured.append(request)
         if calls == 1:
             return httpx.Response(200, json={"stns": {"stn": []}})
         return httpx.Response(200, json={"stns": {"stn": []}})
@@ -329,11 +331,36 @@ def test_post_form_can_accept_one_envelope_free_object_without_weakening_default
         require_envelope=False,
     )
     assert relaxed.raw == {"stns": {"stn": []}}
+    assert captured[0].content == b"addSrvDvCd=M10"
     with pytest.raises(KorailProtocolError, match="envelope"):
         client.post_form(
             "/ebizmaas/EbizMaasStationList.do",
             {"addSrvDvCd": "M10"},
             include_common=False,
+        )
+
+
+def test_relaxed_post_still_raises_for_a_session_expiry_envelope():
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "P058",
+                "h_msg_txt": "logged out",
+                "strResult": "FAIL",
+            },
+        )
+
+    client = KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(KorailSessionExpiredError):
+        client.post_form(
+            "/ebizmaas/EbizMaasStationList.do",
+            {"addSrvDvCd": "M10"},
+            include_common=False,
+            require_envelope=False,
         )
 
 

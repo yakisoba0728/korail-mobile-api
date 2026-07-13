@@ -1,9 +1,11 @@
 import inspect
+from typing import get_type_hints
 
 import korail_mobile_api
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.models import (
+    KorailStation,
     KorailSession,
     StationDataResponse,
     TrainSummary,
@@ -41,17 +43,30 @@ def test_client_public_method_set_is_stable():
 
 
 def test_uuid_maas_signatures_types_and_exports_are_stable():
-    assert list(inspect.signature(KorailClient.get_uuid).parameters) == ["self"]
-    assert list(
-        inspect.signature(KorailClient.get_maas_station_data).parameters
-    ) == ["self", "additional_service_code"]
-    assert KorailClient.get_uuid.__annotations__["return"] is UuidResponse
+    uuid_signature = inspect.signature(KorailClient.get_uuid)
+    maas_signature = inspect.signature(KorailClient.get_maas_station_data)
+    assert list(uuid_signature.parameters) == ["self"]
+    assert list(maas_signature.parameters) == [
+        "self",
+        "additional_service_code",
+    ]
+    uuid_hints = get_type_hints(KorailClient.get_uuid)
+    maas_hints = get_type_hints(KorailClient.get_maas_station_data)
+    assert uuid_hints["return"] is UuidResponse
+    assert maas_hints["additional_service_code"] is str
+    assert maas_hints["return"] is StationDataResponse
     assert (
-        KorailClient.get_maas_station_data.__annotations__["return"]
-        is StationDataResponse
+        maas_signature.parameters["additional_service_code"].default
+        is inspect.Parameter.empty
     )
-    for name in ("UuidResponse", "KorailStation", "StationDataResponse"):
-        assert getattr(korail_mobile_api, name)
+    expected_models = {
+        "UuidResponse": UuidResponse,
+        "KorailStation": KorailStation,
+        "StationDataResponse": StationDataResponse,
+    }
+    for name, model in expected_models.items():
+        assert name in korail_mobile_api.__all__
+        assert getattr(korail_mobile_api, name) is model
 
 
 def test_completed_errors_are_exported():

@@ -1,5 +1,3 @@
-from urllib.parse import parse_qs
-
 import httpx
 import pytest
 
@@ -115,11 +113,16 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     assert uuid.verification_code == "fixture-verification-code"
     assert len(stations.stations) == 2
     assert captured[0].method == "GET"
+    assert captured[0].url.scheme == "https"
+    assert captured[0].url.host == "smart.letskorail.com"
     assert captured[0].url.path == "/ebizcross/getUUID.do"
     assert captured[0].url.query == b""
     assert captured[1].method == "POST"
+    assert captured[1].url.scheme == "https"
+    assert captured[1].url.host == "smart.letskorail.com"
     assert captured[1].url.path == "/ebizmaas/EbizMaasStationList.do"
-    assert parse_qs(captured[1].content.decode()) == {"addSrvDvCd": ["M10"]}
+    assert captured[1].url.query == b""
+    assert captured[1].content == b"addSrvDvCd=M10"
 
 
 @pytest.mark.parametrize("value", [None, "", "   ", 10, False])
