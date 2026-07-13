@@ -107,7 +107,10 @@ original mapping in the repr-hidden `raw` field.
 
 It sets `include_common=False`; `Device`, `Version`, and `Key` must not be
 silently added. Because retained evidence permits envelope-free station data,
-the transport accepts either the common envelope or a top-level station payload.
+the call sets `require_envelope=False`. `KorailHttpClient.post_form()` gains that
+keyword with a default of `True`, preserving strict behavior for every existing
+caller while accepting either the common envelope or a top-level station payload
+for this one method.
 The parser requires `stns.stn` to be a list, rejects non-object rows, and requires
 each exposed station to contain non-empty `stn_cd` and `stn_nm`. Coordinates are
 optional strings. Other server fields remain available only through repr-hidden
@@ -181,6 +184,7 @@ as the only remaining gate rather than bypassed with an invented value.
 - `src/korail_mobile_api/models.py`
 - `src/korail_mobile_api/parsers.py`
 - `src/korail_mobile_api/payloads.py`
+- `src/korail_mobile_api/http.py`
 - `src/korail_mobile_api/client.py`
 - `src/korail_mobile_api/redaction.py`
 - `src/korail_mobile_api/live.py`
@@ -188,4 +192,3 @@ as the only remaining gate rather than bypassed with an invented value.
 - focused fixtures and tests under `tests/`
 - `README.md`
 - `docs/IMPLEMENTATION_PROGRESS.md`
-
