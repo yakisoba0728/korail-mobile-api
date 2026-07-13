@@ -97,6 +97,10 @@ def test_config_preserves_baseline_positional_constructor_order():
     assert config.device_width == 1080
 
 
+def test_config_defaults_advertising_id_to_empty_string():
+    assert KorailConfig().advertising_id == ""
+
+
 def test_session_preserves_baseline_raw_positional_argument():
     raw = {"legacy": "session"}
     session = KorailSession("cookie", "member", raw)

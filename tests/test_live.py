@@ -61,6 +61,19 @@ def test_build_config_from_env_builds_sdk_settings(monkeypatch):
     assert config.advertising_id == "ad-id"
 
 
+def test_build_config_from_env_defaults_advertising_id_to_empty(monkeypatch):
+    import korail_mobile_api.live as live
+
+    monkeypatch.setenv("KORAIL_DYNAPATH_DEVICE_ID", "device-1")
+    monkeypatch.setenv("KORAIL_DYNAPATH_OS_VERSION", "14")
+    monkeypatch.setenv("KORAIL_DYNAPATH_DEVICE_MODEL", "SM-S911N")
+    monkeypatch.delenv("KORAIL_ADVERTISING_ID", raising=False)
+
+    config = live.build_config_from_env()
+
+    assert config.advertising_id == ""
+
+
 def test_run_live_smoke_calls_every_current_read_without_raw_output(monkeypatch):
     import korail_mobile_api.live as live
 

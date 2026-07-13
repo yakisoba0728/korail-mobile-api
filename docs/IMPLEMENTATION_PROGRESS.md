@@ -32,29 +32,23 @@ mutation routes are not callable.
 
 ## Verification
 
-- Offline tests: `194 passed, 1 skipped`
+- Offline tests: `197 passed, 1 skipped`
 - Wheel and sdist build: passed after the cache expansion
 - Fresh-venv wheel install/import: passed for `KorailClient`,
   `AppDataResponse`, `AppVersionInfo`, and `NoticeResponse`
 - Cache parser, exact-route, timestamp, malformed-response, public-contract,
   pre-login ordering, raw-output, and fixed-RT DynaPath tests: passed
-- Cache expansion bounded live verification: pending. The ignored environment
-  now stores the device profile used by the previous `IRZ000001` login-success
-  probe flow, but `KORAIL_ADVERTISING_ID` remains intentionally unset because
-  it was not part of that login request. The full live-smoke preflight therefore
-  still stops before client construction or network I/O and does not satisfy
-  the approved live completion criterion
-- Historical live probe evidence, collected before promotion of the current
-  fixed `rt=0` engine, includes a successful login with the provided account
-  and valid responses for common code, 281 stations, calendar, 10 train rows,
-  schedule, transfer stations, and ticket list
-- That historical ticket-list probe returned `WRT300005`, meaning there was no
-  matching data. It used the source probe device ID as a temporary advertising
-  ID; parity with a real device advertising ID remains unverified
-- The promoted fixed `rt=0` engine has only offline reference-vector and
-  mock-header evidence in this change. No generated token was submitted live in
-  this change; live server acceptance remains unverified, and no request-delta
-  state is retained
+- The promoted fixed `rt=0` engine completed bounded live login and train-search
+  requests without a DynaPath rejection. The same run returned valid common
+  code, 281 stations, a 33-day calendar, 10 train rows, schedule, and transfer
+  responses
+- A member ticket-list request with `txtDeviceId=""` returned `WRT300005` and
+  `SUCC`, so an advertising ID is no longer a client or live-preflight
+  requirement
+- Full helper completion remains pending because the live app-data and notice
+  cache responses omit the common response envelope that the current cache
+  client requires. This cache contract mismatch is independent of DynaPath and
+  advertising-ID handling
 
 The local credential file remains ignored and is not tracked. No credential,
 cookie, session token, or generated DynaPath token is stored in the repository.
@@ -73,11 +67,11 @@ Some require valid ticket, reservation, or account state.
 
 ## Next Required Step
 
-Keep the stored login-success device profile local and ignored. Supply a real
-caller-provided `KORAIL_ADVERTISING_ID` before rerunning the full bounded
-live-smoke verification. Do not mark the cache-read expansion phase complete or
-begin another KORAIL expansion batch until that verification passes without
-exposing raw or sensitive data.
+Keep the stored login-success device profile local and ignored. Align the two
+cache readers with the observed envelope-free live responses before rerunning
+the full bounded live helper. Do not mark the cache-read expansion phase
+complete or begin another KORAIL expansion batch until that verification passes
+without exposing raw or sensitive data.
 
 After that gate passes, expand only previously evidenced read-only APIs in
 small TDD batches. Update the exact route registry, request builder,

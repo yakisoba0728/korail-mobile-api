@@ -27,4 +27,4 @@ class KorailConfig:
     device_width: int = KORAIL_DEFAULT_DEVICE_WIDTH
     device_height: int = KORAIL_DEFAULT_DEVICE_HEIGHT
     android_sdk_int: int = KORAIL_DEFAULT_ANDROID_SDK_INT
-    advertising_id: str | None = None
+    advertising_id: str = ""

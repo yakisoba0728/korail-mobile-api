@@ -37,7 +37,7 @@ def build_config_from_env() -> KorailConfig:
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
     device_model = _required_env("KORAIL_DYNAPATH_DEVICE_MODEL")
-    advertising_id = _required_env("KORAIL_ADVERTISING_ID")
+    advertising_id = os.environ.get("KORAIL_ADVERTISING_ID", "")
     settings = DynapathTokenSettings(
         device_id=device_id,
         as_value=os.environ.get(

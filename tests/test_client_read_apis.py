@@ -151,6 +151,25 @@ def test_ticket_list_sends_complete_member_form(load_json_fixture):
     assert not hasattr(client, "get_reservation_history")
 
 
+def test_ticket_list_defaults_to_empty_device_id(load_json_fixture):
+    client, captured = make_client(
+        load_json_fixture,
+        {
+            "/classes/com.korail.mobile.myTicket.MyTicketList": (
+                "ticket_list_empty.json"
+            ),
+        },
+    )
+    client.session.current = KorailSession(
+        jsessionid="session",
+        member_no="member",
+    )
+
+    client.get_ticket_list()
+
+    assert "txtDeviceId=" in captured[0]["body"]
+
+
 def test_train_schedule_sends_device_and_version_without_key(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,

@@ -122,8 +122,9 @@ the repr-hidden `raw` field. Supplying `timestamp_ms` gives callers a
 deterministic cache key; omitting it uses the current Unix epoch in
 milliseconds.
 
-Live smoke is opt-in and limited to login plus read/query calls. Device and
-advertising identity values must be supplied explicitly:
+Live smoke is opt-in and limited to login plus read/query calls. DynaPath
+device identity values must be supplied explicitly.
+KORAIL_ADVERTISING_ID is optional and defaults to an empty string:
 
 ```bash
 export KORAIL_MOBILE_API_LIVE=1
@@ -132,7 +133,7 @@ export KORAIL_PASSWORD="<password>"
 export KORAIL_DYNAPATH_DEVICE_ID="<android-id>"
 export KORAIL_DYNAPATH_OS_VERSION="<android-version>"
 export KORAIL_DYNAPATH_DEVICE_MODEL="<device-model>"
-export KORAIL_ADVERTISING_ID="<advertising-id>"
+export KORAIL_ADVERTISING_ID=""
 python3 -c "from korail_mobile_api.live import run_live_smoke_from_env; print(run_live_smoke_from_env())"
 ```
 

@@ -1,7 +1,6 @@
 import time
 
 from .config import KorailConfig
-from .errors import KorailProtocolError
 from .models import TrainSearchQuery
 
 
@@ -88,10 +87,6 @@ def build_ticket_list_form(
     config: KorailConfig,
     page_no: int,
 ) -> dict[str, str]:
-    if not config.advertising_id:
-        raise KorailProtocolError(
-            "KORAIL advertising_id is required for ticket list"
-        )
     page = max(1, page_no)
     return {
         "txtDeviceId": config.advertising_id,
