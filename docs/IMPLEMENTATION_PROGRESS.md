@@ -11,9 +11,10 @@ Last updated: 2026-07-13 KST
   committed on `main`.
 - The account-neutral UUID and optional MAAS station read methods, their bounded
   live summaries, and focused offline tests are implemented.
-- The UUID-specific partial-envelope correction is complete: only `get_uuid()`
-  opts out of strict common-envelope decoding. Transport defaults, existing
-  POST behavior, and all other callers remain strict.
+- The UUID-specific partial-envelope correction is complete: `get_uuid()` alone
+  changed in that correction to route-specific relaxed common-envelope
+  decoding. Pre-existing relaxed cache and station callers remain unchanged,
+  as do strict transport defaults and existing strict callers.
 - The complete suite, package build, isolated import, static safety checks,
   independent review, and corrected bounded UUID live gate are complete.
 - The optional MAAS live gate remains pending because no caller-owned private

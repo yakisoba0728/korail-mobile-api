@@ -1,8 +1,13 @@
 import httpx
 import pytest
 
-from korail_mobile_api import KorailClient, KorailConfig
-from korail_mobile_api.errors import KorailProtocolError
+from korail_mobile_api import DYNAPATH_HEADER_NAME, KorailClient, KorailConfig
+from korail_mobile_api.dynapath import DynapathConfig
+from korail_mobile_api.errors import (
+    KorailAppError,
+    KorailProtocolError,
+    KorailSessionExpiredError,
+)
 from korail_mobile_api.models import BaseKorailResponse
 from korail_mobile_api.parsers import (
     parse_station_data_response,
@@ -125,6 +130,59 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     assert captured[1].content == b"addSrvDvCd=M10"
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "fixture_name"),
+    [
+        ("GET", "/ebizcross/getUUID.do", "uuid_success.json"),
+        (
+            "POST",
+            "/ebizmaas/EbizMaasStationList.do",
+            "maas_station_data.json",
+        ),
+    ],
+)
+def test_client_uuid_maas_never_use_dynapath_when_custom_allowlisted(
+    method,
+    path,
+    fixture_name,
+    load_json_fixture,
+):
+    provider_contexts = []
+    captured: list[httpx.Request] = []
+
+    def token_provider(context):
+        provider_contexts.append(context)
+        return "must-not-be-used"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(200, json=load_json_fixture(fixture_name))
+
+    client = KorailClient(
+        KorailConfig(
+            dynapath=DynapathConfig(
+                enabled=True,
+                token_provider=token_provider,
+                allowlist_paths=frozenset({path}),
+            )
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        if method == "GET":
+            client.get_uuid()
+        else:
+            client.get_maas_station_data("M10")
+    finally:
+        client.close()
+
+    assert provider_contexts == []
+    assert len(captured) == 1
+    assert captured[0].method == method
+    assert captured[0].url.path == path
+    assert DYNAPATH_HEADER_NAME not in captured[0].headers
+
+
 @pytest.mark.parametrize("value", [None, "", "   ", 10, False])
 def test_client_rejects_invalid_maas_code_before_io(value):
     called = False
@@ -169,3 +227,45 @@ def test_client_uuid_accepts_live_evidenced_partial_common_envelope():
     assert captured[0].method == "GET"
     assert captured[0].url.path == "/ebizcross/getUUID.do"
     assert captured[0].url.query == b""
+
+
+@pytest.mark.parametrize(
+    ("code", "error_type"),
+    [
+        ("UUID.FAIL", KorailAppError),
+        ("P058", KorailSessionExpiredError),
+    ],
+)
+def test_client_uuid_complete_failure_envelopes_raise_safe_errors(
+    code,
+    error_type,
+):
+    raw_marker = "uuid-raw-verification-marker"
+    message_marker = "uuid-message-verification-marker"
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": code,
+                "h_msg_txt": (
+                    f"request failed mutMrkVrfCd={message_marker}"
+                ),
+                "strResult": "FAIL",
+                "mutMrkVrfCd": raw_marker,
+            },
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(error_type) as exc_info:
+            client.get_uuid()
+    finally:
+        client.close()
+
+    rendered = f"{exc_info.value!s} {exc_info.value!r}"
+    assert code in rendered
+    assert "request failed" in rendered
+    assert "[REDACTED]" in rendered
+    assert message_marker not in rendered
+    assert raw_marker not in rendered

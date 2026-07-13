@@ -123,6 +123,7 @@ class KorailClient:
             lambda: parse_uuid_response(
                 self.http.get_json(
                     "/ebizcross/getUUID.do",
+                    include_dynapath=False,
                     require_envelope=False,
                 )
             )
@@ -139,6 +140,7 @@ class KorailClient:
                     "/ebizmaas/EbizMaasStationList.do",
                     form,
                     include_common=False,
+                    include_dynapath=False,
                     require_envelope=False,
                 )
             )

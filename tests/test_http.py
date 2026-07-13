@@ -121,6 +121,47 @@ def test_dynapath_provider_is_not_called_for_non_allowlisted_path():
     assert called is False
 
 
+def test_get_json_adds_dynapath_header_for_allowlisted_path_by_default():
+    captured = {}
+    contexts = []
+    path = "/classes/com.korail.mobile.common.stationinfo"
+
+    def token_provider(context):
+        contexts.append(context)
+        return "dynapath-token"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["token"] = request.headers.get(DYNAPATH_HEADER_NAME)
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "IRG000000",
+                "h_msg_txt": "OK",
+                "strResult": "SUCC",
+            },
+        )
+
+    config = KorailConfig(
+        dynapath=DynapathConfig(
+            enabled=True,
+            token_provider=token_provider,
+            allowlist_paths=frozenset({path}),
+        )
+    )
+    client = KorailHttpClient(
+        config,
+        transport=httpx.MockTransport(handler),
+    )
+
+    response = client.get_json(path)
+
+    assert response.str_result == "SUCC"
+    assert captured["token"] == "dynapath-token"
+    assert len(contexts) == 1
+    assert contexts[0].method == "GET"
+    assert contexts[0].path == path
+
+
 def test_get_json_returns_parsed_response():
     captured = {}
 

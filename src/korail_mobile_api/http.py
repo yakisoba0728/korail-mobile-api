@@ -135,6 +135,7 @@ class KorailHttpClient:
         data: Mapping[str, Any] | None = None,
         *,
         include_common: bool = True,
+        include_dynapath: bool = True,
         raise_on_fail: bool = True,
         require_envelope: bool = True,
     ) -> BaseKorailResponse:
@@ -146,7 +147,8 @@ class KorailHttpClient:
         if data:
             form.update(data)
         headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
-        headers.update(self._dynapath_headers("POST", path))
+        if include_dynapath:
+            headers.update(self._dynapath_headers("POST", path))
         try:
             response = self._client.post(path, data=form, headers=headers)
         except httpx.HTTPError as exc:
@@ -180,6 +182,7 @@ class KorailHttpClient:
         params: Mapping[str, Any] | None = None,
         *,
         include_common: bool = False,
+        include_dynapath: bool = True,
         raise_on_fail: bool = True,
         require_envelope: bool = True,
     ) -> BaseKorailResponse:
@@ -190,7 +193,11 @@ class KorailHttpClient:
             query.update(self.common_fields())
         if params:
             query.update(params)
-        headers = self._dynapath_headers("GET", path)
+        headers = (
+            self._dynapath_headers("GET", path)
+            if include_dynapath
+            else {}
+        )
         try:
             response = self._client.get(path, params=query, headers=headers)
         except httpx.HTTPError as exc:
