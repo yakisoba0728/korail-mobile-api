@@ -141,3 +141,31 @@ def test_client_rejects_invalid_maas_code_before_io(value):
     finally:
         client.close()
     assert called is False
+
+
+def test_client_uuid_accepts_live_evidenced_partial_common_envelope():
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "strResult": "SUCC",
+                "mutMrkVrfCd": "fixture-partial-code",
+            },
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    try:
+        result = client.get_uuid()
+    finally:
+        client.close()
+
+    assert result.verification_code == "fixture-partial-code"
+    assert result.raw["strResult"] == "SUCC"
+    assert "fixture-partial-code" not in repr(result)
+    assert len(captured) == 1
+    assert captured[0].method == "GET"
+    assert captured[0].url.path == "/ebizcross/getUUID.do"
+    assert captured[0].url.query == b""

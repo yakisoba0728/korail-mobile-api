@@ -121,7 +121,10 @@ class KorailClient:
     def get_uuid(self) -> UuidResponse:
         return self._run_read(
             lambda: parse_uuid_response(
-                self.http.get_json("/ebizcross/getUUID.do")
+                self.http.get_json(
+                    "/ebizcross/getUUID.do",
+                    require_envelope=False,
+                )
             )
         )
 
