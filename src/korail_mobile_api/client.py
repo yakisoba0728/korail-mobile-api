@@ -1,10 +1,37 @@
+from collections.abc import Callable
+from typing import TypeVar
+
 import httpx
 
 from .config import KorailConfig
 from .crypto import generate_sid
+from .errors import KorailAuthError, KorailSessionExpiredError
 from .http import KorailHttpClient
-from .models import BaseKorailResponse, KorailSession, TrainSearchQuery, TrainSearchResult, TrainSummary
+from .models import (
+    AppDataResponse,
+    BaseKorailResponse,
+    KorailSession,
+    NoticeResponse,
+    TrainSearchQuery,
+    TrainSearchResult,
+)
+from .parsers import (
+    parse_app_data_response,
+    parse_notice_response,
+    parse_station_name_map,
+    parse_train_rows,
+    resolve_station_name,
+)
+from .payloads import (
+    build_cache_query,
+    build_common_code_form,
+    build_ticket_list_form,
+    build_train_schedule_form,
+    build_train_search_form,
+)
 from .session import KorailSessionClient
+
+T = TypeVar("T")
 
 
 class KorailClient:
@@ -12,12 +39,29 @@ class KorailClient:
         self.config = config or KorailConfig()
         self.http = KorailHttpClient(self.config, transport=transport)
         self.session = KorailSessionClient(self.http)
+        self._station_names: dict[str, str] | None = None
 
     def close(self) -> None:
         self.http.close()
 
-    def login(self, member_no: str, password: str, *, input_flag: str = "2") -> KorailSession:
-        return self.session.login(member_no, password, input_flag=input_flag)
+    def login(
+        self,
+        member_no: str,
+        password: str,
+        *,
+        input_flag: str | None = None,
+        check_valid_pw: str = "Y",
+        cust_id: str | None = "",
+        etr_path: str | None = "",
+    ) -> KorailSession:
+        return self.session.login(
+            member_no,
+            password,
+            input_flag=input_flag,
+            check_valid_pw=check_valid_pw,
+            cust_id=cust_id,
+            etr_path=etr_path,
+        )
 
     def clear_session(self) -> None:
         self.session.clear_session()
@@ -25,83 +69,143 @@ class KorailClient:
     def logout(self) -> None:
         self.clear_session()
 
+    def _run_read(self, operation: Callable[[], T]) -> T:
+        try:
+            return operation()
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+
     def get_common_code(self, code: str = "") -> BaseKorailResponse:
-        return self.http.post_form("/classes/com.korail.mobile.common.code.do", {"code": code}, raise_on_fail=False)
+        return self._run_read(
+            lambda: self.http.post_form(
+                "/classes/com.korail.mobile.common.code.do",
+                build_common_code_form(self.config, code),
+                include_common=False,
+            )
+        )
+
+    def get_app_data(
+        self,
+        timestamp_ms: int | None = None,
+    ) -> AppDataResponse:
+        return self._run_read(
+            lambda: parse_app_data_response(
+                self.http.get_json(
+                    "/file/CACHE/prdMobilePlusMain.cache",
+                    build_cache_query(timestamp_ms),
+                )
+            )
+        )
+
+    def get_notice(
+        self,
+        timestamp_ms: int | None = None,
+    ) -> NoticeResponse:
+        return self._run_read(
+            lambda: parse_notice_response(
+                self.http.get_json(
+                    "/file/CACHE/prdMobilePlusNotice.cache",
+                    build_cache_query(timestamp_ms),
+                )
+            )
+        )
 
     def get_station_info(self, device: str = "AD") -> BaseKorailResponse:
-        return self.http.get_json(
-            "/classes/com.korail.mobile.common.stationinfo",
-            {"Device": device},
-            include_common=True,
-            raise_on_fail=False,
-            require_envelope=False,
+        return self._run_read(
+            lambda: self.http.get_json(
+                "/classes/com.korail.mobile.common.stationinfo",
+                {"Device": device},
+                require_envelope=False,
+            )
         )
 
     def get_station_data(self) -> BaseKorailResponse:
-        return self.http.get_json(
-            "/classes/com.korail.mobile.common.stationdata",
-            include_common=True,
-            raise_on_fail=False,
-            require_envelope=False,
+        return self._run_read(
+            lambda: self.http.get_json(
+                "/classes/com.korail.mobile.common.stationdata",
+                require_envelope=False,
+            )
         )
 
     def get_train_calendar(self) -> BaseKorailResponse:
-        return self.http.get_json(
-            "/classes/com.korail.mobile.schedule.runDt",
-            include_common=True,
-            raise_on_fail=False,
+        return self._run_read(
+            lambda: self.http.get_json(
+                "/classes/com.korail.mobile.schedule.runDt"
+            )
         )
 
     def search_trains(self, query: TrainSearchQuery) -> TrainSearchResult:
+        return self._run_read(lambda: self._search_trains(query))
+
+    def _search_trains(self, query: TrainSearchQuery) -> TrainSearchResult:
+        departure_name = self._resolve_station_reference(
+            query.departure_station_code
+        )
+        arrival_name = self._resolve_station_reference(
+            query.arrival_station_code
+        )
+        current = self.session.current
+        form = build_train_search_form(
+            self.config,
+            query,
+            departure_name=departure_name,
+            arrival_name=arrival_name,
+            sid=generate_sid(),
+            member_card_no=current.member_card_no if current else None,
+        )
         response = self.http.post_form(
             "/classes/com.korail.mobile.seatMovie.ScheduleView",
-            {
-                "Sid": generate_sid(),
-                "txtMenuId": "11",
-                "radJobId": "1",
-                "selGoTrain": query.train_group_code,
-                "txtTrnGpCd": query.train_group_code,
-                "txtGoTrnNo": "",
-                "txtGoStart": query.departure_station_code,
-                "txtGoEnd": query.arrival_station_code,
-                "txtGoAbrdDt": query.departure_date,
-                "txtGoHour": query.departure_time,
-                "txtPsgFlg_1": str(query.passengers),
-                "txtPsgFlg_2": "0",
-                "txtPsgFlg_3": "0",
-                "txtPsgFlg_4": "0",
-                "txtPsgFlg_5": "0",
-                "txtSeatAttCd_2": "000",
-                "txtSeatAttCd_3": "000",
-                "txtSeatAttCd_4": "015",
-                "txtJobDv": "",
-                "etrPath": "",
-                "srtCheckYn": "Y" if query.include_srt else "N",
-            },
-            raise_on_fail=False,
+            form,
+            include_common=False,
         )
-        rows = response.raw.get("trn_infos") or response.raw.get("trnInfos") or []
-        trains = [TrainSummary.from_raw(row) for row in rows if isinstance(row, dict)]
-        return TrainSearchResult(trains=trains, response=response, raw=response.raw)
+        return TrainSearchResult(
+            trains=parse_train_rows(response.raw),
+            response=response,
+            raw=response.raw,
+        )
+
+    def _resolve_station_reference(self, reference: str) -> str:
+        if not reference.strip().isdigit():
+            return resolve_station_name(reference, {})
+        if self._station_names is None:
+            self._station_names = parse_station_name_map(
+                self.get_station_data().raw
+            )
+        return resolve_station_name(reference, self._station_names)
 
     def get_train_schedule(self, run_date: str, train_no: str) -> BaseKorailResponse:
-        return self.http.post_form(
-            "/classes/com.korail.mobile.research.actualTrainSchedule.do",
-            {"runDt": run_date, "trnNo": train_no},
-            include_common=False,
-            raise_on_fail=False,
+        return self._run_read(
+            lambda: self.http.post_form(
+                "/classes/com.korail.mobile.research.actualTrainSchedule.do",
+                build_train_schedule_form(
+                    self.config,
+                    run_date,
+                    train_no,
+                ),
+                include_common=False,
+            )
         )
 
     def get_transfer_stations(self, departure_station_code: str, arrival_station_code: str) -> BaseKorailResponse:
-        return self.http.post_form(
-            "/classes/com.korail.mobile.qry.chtnStn.do",
-            {"dptRsStnCd": departure_station_code, "arvRsStnCd": arrival_station_code},
-            raise_on_fail=False,
+        return self._run_read(
+            lambda: self.http.post_form(
+                "/classes/com.korail.mobile.qry.chtnStn.do",
+                {
+                    "dptRsStnCd": departure_station_code,
+                    "arvRsStnCd": arrival_station_code,
+                },
+            )
         )
 
     def get_ticket_list(self, page_no: int = 0) -> BaseKorailResponse:
-        return self.http.post_form(
-            "/classes/com.korail.mobile.myTicket.MyTicketList",
-            {"txtIndex": str(page_no), "h_page_no": str(page_no)},
-            raise_on_fail=False,
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL ticket list requires an authenticated session"
+            )
+        return self._run_read(
+            lambda: self.http.post_form(
+                "/classes/com.korail.mobile.myTicket.MyTicketList",
+                build_ticket_list_form(self.config, page_no),
+            )
         )

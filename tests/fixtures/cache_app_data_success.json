@@ -1,0 +1,14 @@
+{
+  "h_msg_cd": "S000",
+  "h_msg_txt": "",
+  "strResult": "SUCC",
+  "disability_certification_msg": "synthetic certification guidance",
+  "forSeatIntg": "Y",
+  "airportBusMsg": "synthetic airport bus guidance",
+  "railplus_cardinfo": "synthetic railplus guidance",
+  "version": {
+    "AMESSAGE": "synthetic update guidance",
+    "NEWDVERSION": "999999999"
+  },
+  "unknownField": "preserved"
+}

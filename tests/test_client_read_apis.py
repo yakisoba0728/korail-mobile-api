@@ -1,10 +1,18 @@
 import httpx
+import pytest
+from urllib.parse import parse_qs
 
 from korail_mobile_api import KorailClient, KorailConfig
-from korail_mobile_api.models import TrainSearchQuery
+from korail_mobile_api.errors import KorailAppError, KorailSessionExpiredError
+from korail_mobile_api.models import KorailSession, TrainSearchQuery
 
 
-def make_client(load_json_fixture, paths):
+def make_client(
+    load_json_fixture,
+    paths,
+    *,
+    config: KorailConfig | None = None,
+):
     captured = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -21,91 +29,140 @@ def make_client(load_json_fixture, paths):
             raise AssertionError(f"unexpected path {request.url.path}")
         return httpx.Response(200, json=load_json_fixture(fixture))
 
-    return KorailClient(KorailConfig(), transport=httpx.MockTransport(handler)), captured
+    return (
+        KorailClient(
+            config or KorailConfig(),
+            transport=httpx.MockTransport(handler),
+        ),
+        captured,
+    )
 
 
-def test_station_and_calendar_read_methods(load_json_fixture):
+def client_returning_failure_for(path: str, *, code: str = "ERR") -> KorailClient:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path != path:
+            raise AssertionError(f"unexpected path {request.url.path}")
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": code,
+                "h_msg_txt": "request failed",
+                "strResult": "FAIL",
+            },
+        )
+
+    return KorailClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+
+
+def test_common_station_and_calendar_use_exact_endpoint_fields(
+    load_json_fixture,
+):
+    client, captured = make_client(
+        load_json_fixture,
+        {
+            "/classes/com.korail.mobile.common.code.do": "common_code_login_crypto_n.json",
+            "/classes/com.korail.mobile.common.stationinfo": "station_info.json",
+            "/classes/com.korail.mobile.common.stationdata": "station_data.json",
+            "/classes/com.korail.mobile.schedule.runDt": "train_calendar.json",
+        },
+    )
+    client.get_common_code("login")
+    client.get_station_info()
+    client.get_station_data()
+    client.get_train_calendar()
+    common_body = parse_qs(captured[0]["body"])
+    assert common_body["Device"] == ["AD"]
+    assert common_body["Version"] == ["250601003"]
+    assert common_body["Key"] == ["korail1234567890"]
+    assert common_body["deviceWidth"] == ["1080"]
+    assert common_body["deviceHeight"] == ["2400"]
+    assert common_body["OSVersion"] == ["35"]
+    assert captured[1]["query"] == "Device=AD"
+    assert captured[2]["query"] == ""
+    assert captured[3]["query"] == ""
+
+
+def test_search_resolves_codes_to_names_and_parses_nested_rows(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
         {
             "/classes/com.korail.mobile.common.stationdata": "station_data.json",
-            "/classes/com.korail.mobile.common.stationinfo": "station_info.json",
-            "/classes/com.korail.mobile.schedule.runDt": "train_calendar.json",
-            "/classes/com.korail.mobile.common.code.do": "common_code_login_crypto_n.json",
+            "/classes/com.korail.mobile.seatMovie.ScheduleView": (
+                "schedule_view_success.json"
+            ),
         },
     )
-
-    assert client.get_station_data().raw["stns"]["stn"][0]["stn_nm"] == "서울"
-    assert client.get_station_info().raw["map_version"] == "260608002"
-    assert client.get_train_calendar().raw["days"][0]["runDt"] == "20260710"
-    assert client.get_common_code("login").raw["idx"] == "IDX-N"
-    station_data_request = captured[0]
-    station_info_request = captured[1]
-    train_calendar_request = captured[2]
-    common_code_request = captured[3]
-    assert "Device=AD" in station_data_request["query"]
-    assert "Version=250601003" in station_data_request["query"]
-    assert "Key=korail1234567890" in station_data_request["query"]
-    assert "Device=AD" in station_info_request["query"]
-    assert "Version=250601003" in station_info_request["query"]
-    assert "Key=korail1234567890" in station_info_request["query"]
-    assert "Device=AD" in train_calendar_request["query"]
-    assert "Version=250601003" in train_calendar_request["query"]
-    assert "Key=korail1234567890" in train_calendar_request["query"]
-    assert common_code_request["path"] == "/classes/com.korail.mobile.common.code.do"
+    result = client.search_trains(
+        TrainSearchQuery("0001", "0020", "20260710", departure_time="060000")
+    )
+    search_request = captured[1]
+    assert "txtGoStart=%EC%84%9C%EC%9A%B8" in search_request["body"]
+    assert "txtGoEnd=%EB%B6%80%EC%82%B0" in search_request["body"]
+    assert "Device=AD" in search_request["body"]
+    assert "Version=250601003" in search_request["body"]
+    assert "Key=" not in search_request["body"]
+    assert result.trains[0].train_no == "00123"
+    assert result.trains[0].departure_station_name == "서울"
 
 
-def test_search_trains_maps_rows(load_json_fixture):
+def test_search_accepts_names_without_station_catalog_request(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
-        {"/classes/com.korail.mobile.seatMovie.ScheduleView": "schedule_view_success.json"},
+        {
+            "/classes/com.korail.mobile.seatMovie.ScheduleView": (
+                "schedule_view_success.json"
+            )
+        },
     )
-
-    result = client.search_trains(
-        TrainSearchQuery(
-            departure_station_code="0001",
-            arrival_station_code="0020",
-            departure_date="20260710",
-            departure_time="060000",
-        )
-    )
-
-    assert result.response.h_msg_cd == "IRG000000"
-    assert result.trains[0].train_no == "00123"
-    posted_body = captured[0]["body"]
-    assert "Sid=" in posted_body
-    assert "txtGoStart=0001" in posted_body
-    assert "txtGoEnd=0020" in posted_body
+    client.search_trains(TrainSearchQuery("서울", "부산", "20260710"))
+    assert [request["path"] for request in captured] == [
+        "/classes/com.korail.mobile.seatMovie.ScheduleView"
+    ]
 
 
-def test_ticket_list_is_read_only_and_reservation_history_api_is_absent(load_json_fixture):
-    client, _ = make_client(
+def test_ticket_list_sends_complete_member_form(load_json_fixture):
+    client, captured = make_client(
         load_json_fixture,
         {
             "/classes/com.korail.mobile.myTicket.MyTicketList": "ticket_list_empty.json",
         },
+        config=KorailConfig(advertising_id="ad-id"),
     )
-
+    client.session.current = KorailSession(
+        jsessionid="session",
+        member_no="member",
+    )
+    client.get_ticket_list()
+    body = captured[0]["body"]
+    for expected in (
+        "txtDeviceId=ad-id",
+        "txtIndex=1",
+        "h_page_no=1",
+        "h_abrd_dt_from=",
+        "h_abrd_dt_to=",
+        "hiduserYn=Y",
+    ):
+        assert expected in body
+    for nonmember_only in ("hidName", "hidTeleNo", "hidPwd", "tsRsStnCd"):
+        assert nonmember_only not in body
     assert not hasattr(client, "get_reservation_history")
-    assert client.get_ticket_list().raw["tickets"] == []
 
 
-def test_train_schedule_request_shape(load_json_fixture):
+def test_train_schedule_sends_device_and_version_without_key(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
         {"/classes/com.korail.mobile.research.actualTrainSchedule.do": "train_schedule_success.json"},
     )
 
-    response = client.get_train_schedule("20260710", "00123")
-
-    assert response.raw["stops"][0]["trnNo"] == "00123"
-    request = captured[0]
-    assert request["query"] == ""
-    assert "runDt=20260710" in request["body"]
-    assert "trnNo=00123" in request["body"]
-    assert "Device=" not in request["body"]
-    assert "Version=" not in request["body"]
-    assert "Key=" not in request["body"]
+    client.get_train_schedule("20260710", "123")
+    body = captured[0]["body"]
+    assert "Device=AD" in body
+    assert "Version=250601003" in body
+    assert "Key=" not in body
+    assert "trnNo=00123" in body
 
 
 def test_transfer_stations_request_shape(load_json_fixture):
@@ -120,3 +177,27 @@ def test_transfer_stations_request_shape(load_json_fixture):
     request = captured[0]
     assert "dptRsStnCd=0001" in request["body"]
     assert "arvRsStnCd=0020" in request["body"]
+
+
+def test_public_read_method_raises_application_failure():
+    client = client_returning_failure_for(
+        "/classes/com.korail.mobile.schedule.runDt"
+    )
+    with pytest.raises(KorailAppError):
+        client.get_train_calendar()
+
+
+def test_session_expiry_clears_client_state_before_raising():
+    client = client_returning_failure_for(
+        "/classes/com.korail.mobile.schedule.runDt",
+        code="P058",
+    )
+    client.session.current = KorailSession(
+        jsessionid="stale",
+        member_no="member",
+    )
+    client.http.cookies.set("JSESSIONID", "stale")
+    with pytest.raises(KorailSessionExpiredError):
+        client.get_train_calendar()
+    assert client.session.current is None
+    assert "JSESSIONID" not in client.http.cookies

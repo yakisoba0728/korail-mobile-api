@@ -6,9 +6,10 @@ from .errors import KorailProtocolError
 
 @dataclass(frozen=True)
 class KorailSession:
-    jsessionid: str | None = None
-    member_no: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict)
+    jsessionid: str | None = field(default=None, repr=False)
+    member_no: str | None = field(default=None, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    member_card_no: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -16,19 +17,59 @@ class BaseKorailResponse:
     h_msg_cd: str | None = None
     h_msg_txt: str | None = None
     str_result: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
-        missing = [field_name for field_name in ("h_msg_cd", "h_msg_txt", "strResult") if field_name not in raw]
+        if not isinstance(raw, dict):
+            raise KorailProtocolError("KORAIL response must be a JSON object")
+        envelope_fields = ("h_msg_cd", "h_msg_txt", "strResult")
+        missing = [
+            field_name
+            for field_name in envelope_fields
+            if field_name not in raw
+        ]
         if missing:
             raise KorailProtocolError(f"KORAIL response missing required envelope fields: {', '.join(missing)}")
+        invalid = [
+            field_name
+            for field_name in envelope_fields
+            if raw[field_name] is not None
+            and not isinstance(raw[field_name], str)
+        ]
+        if invalid:
+            raise KorailProtocolError(
+                "KORAIL response envelope fields must be strings or null: "
+                f"{', '.join(invalid)}"
+            )
         return cls(
             h_msg_cd=raw.get("h_msg_cd"),
             h_msg_txt=raw.get("h_msg_txt"),
             str_result=raw.get("strResult"),
             raw=raw,
         )
+
+
+@dataclass(frozen=True)
+class AppVersionInfo:
+    message: str | None = None
+    new_version: str | None = None
+
+
+@dataclass(frozen=True)
+class AppDataResponse(BaseKorailResponse):
+    disability_certification_msg: str | None = None
+    for_seat_intg: str | None = None
+    airport_bus_msg: str | None = None
+    railplus_cardinfo: str | None = None
+    version: AppVersionInfo | None = None
+
+
+@dataclass(frozen=True)
+class NoticeResponse(BaseKorailResponse):
+    board_id: str | None = None
+    post_sequence: str | None = None
+    post_title: str | None = None
 
 
 @dataclass(frozen=True)
@@ -58,7 +99,9 @@ class TrainSummary:
     departure_date: str | None = None
     departure_time: str | None = None
     arrival_time: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    departure_station_name: str | None = None
+    arrival_station_name: str | None = None
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -67,6 +110,8 @@ class TrainSummary:
             train_group_code=raw.get("h_trn_gp_cd") or raw.get("trnGpCd"),
             departure_station_code=raw.get("h_dpt_rs_stn_cd") or raw.get("dptRsStnCd"),
             arrival_station_code=raw.get("h_arv_rs_stn_cd") or raw.get("arvRsStnCd"),
+            departure_station_name=raw.get("h_dpt_rs_stn_nm") or raw.get("dptRsStnNm"),
+            arrival_station_name=raw.get("h_arv_rs_stn_nm") or raw.get("arvRsStnNm"),
             departure_date=raw.get("h_dpt_dt") or raw.get("dptDt"),
             departure_time=raw.get("h_dpt_tm") or raw.get("dptTm"),
             arrival_time=raw.get("h_arv_tm") or raw.get("arvTm"),
@@ -78,4 +123,4 @@ class TrainSummary:
 class TrainSearchResult:
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: dict[str, Any] = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)

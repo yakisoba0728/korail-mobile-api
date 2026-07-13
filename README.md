@@ -1,8 +1,12 @@
 # KORAIL Mobile API APK Analysis
 
-This repository contains a static reverse-engineering report for `korail.apk`, the Android app package `com.korail.talk` version `6.5.0`.
+This repository combines a static reverse-engineering report for `korail.apk`,
+the Android app package `com.korail.talk` version `6.5.0`, with an installable
+read-only Python client derived from that evidence.
 
-The committed material is documentation and reproducible inventory output derived from local APK decompilation. The original APK and generated decompile directories are intentionally not committed.
+The original APK and generated decompile directories are intentionally not
+committed. Documentation, reproducible inventory output, client source, and
+offline contract tests are committed.
 
 ## Quick Start
 
@@ -78,18 +82,20 @@ JADX may report decompilation warnings for some library/UI classes. The network 
 
 ## Scope and Limits
 
-This work is static analysis only.
+Static analysis remains the evidence source for the APK inventory. The Python
+client additionally supports explicitly opted-in live login and read-only smoke
+verification using caller-supplied credentials and device identity.
 
-Not performed:
+The project does not provide:
 
-- Live production API calls
-- Login attempts
-- Dynamic traffic capture
 - Authentication bypass
 - NetFunnel or DynaPath bypass
-- Runtime WebView execution
+- Reservation, payment, cancellation, refund, check-in, or member mutation APIs
+- General-purpose runtime WebView automation
 
-Actual server response values, feature flags, redirect behavior, and nullable/required server-side validation rules remain runtime-only unknowns unless captured in a controlled authorized environment.
+Server response values, feature flags, redirect behavior, and server-side
+nullable/required rules remain unknown unless evidenced by a controlled,
+authorized live observation.
 
 ## Python Package MVP
 
@@ -102,38 +108,66 @@ pip install -e ".[test]"
 pytest
 ```
 
-Live smoke is opt-in and limited to login plus read/query calls:
+### Account-neutral cache reads
+
+`KorailClient.get_app_data()` and `KorailClient.get_notice()` expose the two
+evidenced account-neutral cache reads:
+
+- `GET /file/CACHE/prdMobilePlusMain.cache`
+- `GET /file/CACHE/prdMobilePlusNotice.cache`
+
+Both methods can run before login and send only a `timeStamp` query parameter.
+They return frozen typed responses while retaining the original mapping through
+the repr-hidden `raw` field. Supplying `timestamp_ms` gives callers a
+deterministic cache key; omitting it uses the current Unix epoch in
+milliseconds.
+
+Live smoke is opt-in and limited to login plus read/query calls. Device and
+advertising identity values must be supplied explicitly:
 
 ```bash
 export KORAIL_MOBILE_API_LIVE=1
-export KORAIL_MEMBER_NO="<member-no>"
+export KORAIL_MEMBER_NO="<member-id>"
 export KORAIL_PASSWORD="<password>"
-python -c "from korail_mobile_api.live import run_live_smoke_from_env; print(run_live_smoke_from_env())"
+export KORAIL_DYNAPATH_DEVICE_ID="<android-id>"
+export KORAIL_DYNAPATH_OS_VERSION="<android-version>"
+export KORAIL_DYNAPATH_DEVICE_MODEL="<device-model>"
+export KORAIL_ADVERTISING_ID="<advertising-id>"
+python3 -c "from korail_mobile_api.live import run_live_smoke_from_env; print(run_live_smoke_from_env())"
 ```
 
-DynaPath is supported for the documented allowlist paths. Runtime constants such as `Device`, API version, app key, DynaPath header name, allowlist paths, and default device metadata are importable from the package. KORAIL source-hardcoded DynaPath values (`app_id`, `os_type`, `sdk_version`) default to the APK values; device/runtime values are caller-supplied through `DynapathTokenSettings`:
+The helper performs both cache reads before login and emits only booleans,
+status codes, and bounded counts. Its cache metadata is limited to
+`appDataLoaded` and `noticeLoaded`; it does not return raw account, session,
+ticket, station, app-data, or notice response bodies.
+
+DynaPath is supported for the documented allowlist paths. Runtime constants
+such as `Device`, API version, app key, DynaPath header name, and allowlist paths
+are importable from the package. Live smoke constructs stateful DynaPath
+settings only from required caller-supplied environment values and fails before
+request construction when any required identity value is missing.
+
+The legacy probe provider remains available for compatibility-only token tests
+and integrations. It is not used by `build_config_from_env()` and is not a live
+default:
 
 ```python
 from korail_mobile_api import KorailClient, KorailConfig
-from korail_mobile_api.dynapath import DynapathConfig, DynapathTokenSettings
+from korail_mobile_api.dynapath import DynapathConfig, KorailProbeDynapathTokenProvider
 
 
 client = KorailClient(
     KorailConfig(
+        base_url="https://smart.letskorail.com:443",
+        user_agent="Dalvik/2.1.0 (Linux; U; Android 13; SM-S928N Build/TP1A.220624.014)",
         dynapath=DynapathConfig(
             enabled=True,
-            token_settings=DynapathTokenSettings(
-                device_id="<caller-device-id>",
-                as_value="<caller-as-value>",
-                app_start_ts="<caller-app-start-ms>",
-                os_version="<caller-android-os-version>",
-                device_model="<caller-device-model>",
-            ),
+            token_provider=KorailProbeDynapathTokenProvider(),
         )
     )
 )
 ```
 
-When enabled, the client generates and attaches `DYNAPATH_HEADER_NAME` only for the documented DynaPath allowlist paths. The DynaPath base table is generated from the original SDK-style prime/permutation routine rather than stored as a raw magic string. A custom `token_provider` can still be supplied instead of `token_settings`.
+When enabled, the client attaches `DYNAPATH_HEADER_NAME` only for the documented DynaPath allowlist paths. `KorailProbeDynapathTokenProvider` and related probe exports remain compatibility helpers, but live configuration does not use probe values as defaults. `DynapathTokenGenerator` provides SDK-style stateful token generation from caller-supplied settings. Login follows the app sequence and treats only `IRZ000001` or `S200` as final success.
 
 Reservation, payment, refund, check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.

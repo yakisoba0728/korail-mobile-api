@@ -6,28 +6,83 @@ from typing import Any, Mapping
 import httpx
 
 from .config import KorailConfig
-from .dynapath import DynapathRequestContext, generate_dynapath_token
-from .errors import KorailAppError, KorailProtocolError, KorailTransportError
+from .constants import DYNAPATH_ALLOWLIST_PATHS
+from .dynapath import DynapathRequestContext, DynapathTokenGenerator
+from .errors import (
+    KorailAppError,
+    KorailDynaPathError,
+    KorailProtocolError,
+    KorailSessionExpiredError,
+    KorailTransportError,
+)
 from .models import BaseKorailResponse
-from .safety import EXCLUDED_API_DOMAINS
+from .safety import assert_korail_origin, assert_read_only_route
 
 
 def parse_base_response(data: Any, *, raise_on_fail: bool = True) -> BaseKorailResponse:
     if not isinstance(data, dict):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     response = BaseKorailResponse.from_raw(data)
-    if raise_on_fail and response.str_result == "FAIL":
+    if response.h_msg_cd == "P058":
+        raise KorailSessionExpiredError(
+            response.h_msg_cd,
+            response.h_msg_txt,
+            raw=data,
+        )
+    if raise_on_fail and (
+        response.str_result == "FAIL"
+        or response.h_msg_cd == "WRC000288"
+    ):
         raise KorailAppError(response.h_msg_cd, response.h_msg_txt, raw=data)
     return response
 
 
+def _raise_for_status(response: httpx.Response, *, path: str) -> None:
+    dynapath_result = response.headers.get("DynaPath-Result")
+    try:
+        dynapath_rejected = (
+            dynapath_result is not None and int(dynapath_result) < 0
+        )
+    except ValueError:
+        dynapath_rejected = False
+    if (
+        response.status_code == 403
+        and path in DYNAPATH_ALLOWLIST_PATHS
+        and dynapath_rejected
+    ):
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        message = payload.get("message") if isinstance(payload, dict) else None
+        raise KorailDynaPathError(
+            str(message or "KORAIL DynaPath request rejected"),
+            raw=payload,
+        )
+    if response.is_error:
+        raise KorailTransportError(
+            f"KORAIL HTTP {response.status_code} for "
+            f"{response.request.method} {response.request.url.path}"
+        )
+
+
 class KorailHttpClient:
     def __init__(self, config: KorailConfig, *, transport: httpx.BaseTransport | None = None) -> None:
+        assert_korail_origin(config.base_url)
         self.config = config
+        self._dynapath_generator = (
+            DynapathTokenGenerator(
+                config.dynapath.token_settings,
+                timestamp_ms_provider=config.dynapath.timestamp_ms_provider,
+                random_text_provider=config.dynapath.random_text_provider,
+            )
+            if config.dynapath.token_settings is not None
+            else None
+        )
         self._client = httpx.Client(
             base_url=config.base_url,
             timeout=config.timeout,
-            headers={"User-Agent": config.user_agent},
+            headers={"User-Agent": config.user_agent, "Connection": "close"},
             transport=transport,
         )
 
@@ -48,9 +103,7 @@ class KorailHttpClient:
         dynapath = self.config.dynapath
         if not dynapath.enabled:
             return {}
-        if dynapath.token_provider is None and dynapath.token_settings is None:
-            return {}
-        if not any(allowlisted in path for allowlisted in dynapath.allowlist_paths):
+        if path not in dynapath.allowlist_paths:
             return {}
         context = DynapathRequestContext(
             method=method,
@@ -66,14 +119,8 @@ class KorailHttpClient:
         try:
             if dynapath.token_provider is not None:
                 token = dynapath.token_provider(context)
-            elif dynapath.token_settings is not None:
-                timestamp_ms = dynapath.timestamp_ms_provider() if dynapath.timestamp_ms_provider else None
-                random_text = dynapath.random_text_provider() if dynapath.random_text_provider else None
-                token = generate_dynapath_token(
-                    dynapath.token_settings,
-                    timestamp_ms=timestamp_ms,
-                    random_text=random_text,
-                )
+            elif self._dynapath_generator is not None:
+                token = self._dynapath_generator(context)
             else:
                 token = None
         except Exception as exc:
@@ -81,12 +128,6 @@ class KorailHttpClient:
         if not token:
             return {}
         return {dynapath.header_name: token}
-
-    def _assert_safe_path(self, path: str) -> None:
-        lowered_path = path.lower()
-        for domain in EXCLUDED_API_DOMAINS:
-            if domain in lowered_path:
-                raise KorailProtocolError(f"KORAIL path is excluded by MVP safety policy: {path}")
 
     def post_form(
         self,
@@ -96,7 +137,8 @@ class KorailHttpClient:
         include_common: bool = True,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
-        self._assert_safe_path(path)
+        assert_korail_origin(str(self._client.base_url))
+        assert_read_only_route("POST", path)
         form: dict[str, Any] = {}
         if include_common:
             form.update(self.common_fields())
@@ -106,12 +148,14 @@ class KorailHttpClient:
         headers.update(self._dynapath_headers("POST", path))
         try:
             response = self._client.post(path, data=form, headers=headers)
-            response.raise_for_status()
         except httpx.HTTPError as exc:
-            raise KorailTransportError(str(exc)) from exc
+            raise KorailTransportError(
+                f"KORAIL transport failed for POST {path}"
+            ) from exc
+        _raise_for_status(response, path=path)
         try:
             payload = response.json()
-        except json.JSONDecodeError as exc:
+        except (json.JSONDecodeError, ValueError) as exc:
             raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
         return parse_base_response(payload, raise_on_fail=raise_on_fail)
 
@@ -124,7 +168,8 @@ class KorailHttpClient:
         raise_on_fail: bool = True,
         require_envelope: bool = True,
     ) -> BaseKorailResponse:
-        self._assert_safe_path(path)
+        assert_korail_origin(str(self._client.base_url))
+        assert_read_only_route("GET", path)
         query: dict[str, Any] = {}
         if include_common:
             query.update(self.common_fields())
@@ -133,15 +178,25 @@ class KorailHttpClient:
         headers = self._dynapath_headers("GET", path)
         try:
             response = self._client.get(path, params=query, headers=headers)
-            response.raise_for_status()
         except httpx.HTTPError as exc:
-            raise KorailTransportError(str(exc)) from exc
+            raise KorailTransportError(
+                f"KORAIL transport failed for GET {path}"
+            ) from exc
+        _raise_for_status(response, path=path)
         try:
             payload = response.json()
-        except json.JSONDecodeError as exc:
+        except (json.JSONDecodeError, ValueError) as exc:
             raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
         if not require_envelope:
             if not isinstance(payload, dict):
                 raise KorailProtocolError("KORAIL response must be a JSON object")
+            if all(
+                key in payload
+                for key in ("h_msg_cd", "h_msg_txt", "strResult")
+            ):
+                return parse_base_response(
+                    payload,
+                    raise_on_fail=raise_on_fail,
+                )
             return BaseKorailResponse(raw=payload)
         return parse_base_response(payload, raise_on_fail=raise_on_fail)
