@@ -34,6 +34,8 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ),
         ("POST", "/classes/com.korail.mobile.qry.chtnStn.do"),
         ("POST", "/classes/com.korail.mobile.myTicket.MyTicketList"),
+        ("GET", "/ebizcross/getUUID.do"),
+        ("POST", "/ebizmaas/EbizMaasStationList.do"),
     }
 )
 

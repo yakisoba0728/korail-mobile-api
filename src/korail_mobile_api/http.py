@@ -136,6 +136,7 @@ class KorailHttpClient:
         *,
         include_common: bool = True,
         raise_on_fail: bool = True,
+        require_envelope: bool = True,
     ) -> BaseKorailResponse:
         assert_korail_origin(str(self._client.base_url))
         assert_read_only_route("POST", path)
@@ -157,6 +158,20 @@ class KorailHttpClient:
             payload = response.json()
         except (json.JSONDecodeError, ValueError) as exc:
             raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
+        if not require_envelope:
+            if not isinstance(payload, dict):
+                raise KorailProtocolError(
+                    "KORAIL response must be a JSON object"
+                )
+            if all(
+                name in payload
+                for name in ("h_msg_cd", "h_msg_txt", "strResult")
+            ):
+                return parse_base_response(
+                    payload,
+                    raise_on_fail=raise_on_fail,
+                )
+            return BaseKorailResponse(raw=payload)
         return parse_base_response(payload, raise_on_fail=raise_on_fail)
 
     def get_json(

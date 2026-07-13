@@ -296,6 +296,8 @@ def test_http_client_blocks_excluded_domains_before_get(blocked_domain: str):
         ),
         ("POST", "/classes/com.korail.mobile.qry.chtnStn.do"),
         ("POST", "/classes/com.korail.mobile.myTicket.MyTicketList"),
+        ("GET", "/ebizcross/getUUID.do"),
+        ("POST", "/ebizmaas/EbizMaasStationList.do"),
     ],
 )
 def test_read_only_route_registry_accepts_current_public_requests(method, path):
@@ -303,7 +305,90 @@ def test_read_only_route_registry_accepts_current_public_requests(method, path):
 
 
 def test_read_only_route_registry_has_exact_expanded_count():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 12
+    assert len(KORAIL_READ_ONLY_ROUTES) == 14
+
+
+def test_post_form_can_accept_one_envelope_free_object_without_weakening_default():
+    calls = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(200, json={"stns": {"stn": []}})
+        return httpx.Response(200, json={"stns": {"stn": []}})
+
+    client = KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+    relaxed = client.post_form(
+        "/ebizmaas/EbizMaasStationList.do",
+        {"addSrvDvCd": "M10"},
+        include_common=False,
+        require_envelope=False,
+    )
+    assert relaxed.raw == {"stns": {"stn": []}}
+    with pytest.raises(KorailProtocolError, match="envelope"):
+        client.post_form(
+            "/ebizmaas/EbizMaasStationList.do",
+            {"addSrvDvCd": "M10"},
+            include_common=False,
+        )
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("POST", "/ebizcross/getUUID.do"),
+        ("GET", "/ebizmaas/EbizMaasStationList.do"),
+        ("GET", "/ebizcross/%67etUUID.do"),
+        ("POST", "/ebizmaas/EbizMaasStationList.do/extra"),
+    ],
+)
+def test_uuid_maas_route_bypasses_are_rejected(method, path):
+    with pytest.raises(KorailProtocolError):
+        assert_read_only_route(method, path)
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/ebizcross/getUUID.do"),
+        ("POST", "/ebizmaas/EbizMaasStationList.do"),
+    ],
+)
+def test_uuid_maas_routes_never_generate_dynapath(method, path):
+    provider_called = False
+
+    def provider(_context):
+        nonlocal provider_called
+        provider_called = True
+        return "must-not-be-used"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert DYNAPATH_HEADER_NAME not in request.headers
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "API.I00000",
+                "h_msg_txt": "Success",
+                "strResult": "SUCC",
+                "mutMrkVrfCd": "fixture-code",
+            },
+        )
+
+    client = KorailHttpClient(
+        KorailConfig(
+            dynapath=DynapathConfig(enabled=True, token_provider=provider)
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    if method == "GET":
+        client.get_json(path)
+    else:
+        client.post_form(path, {"addSrvDvCd": "M10"}, include_common=False)
+    assert provider_called is False
 
 
 @pytest.mark.parametrize(
