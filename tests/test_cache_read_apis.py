@@ -185,7 +185,6 @@ def test_cache_client_rejects_invalid_timestamp_before_io(
     ("response_kind", "error_type"),
     [
         ("malformed-json", KorailProtocolError),
-        ("missing-envelope", KorailProtocolError),
         ("application-failure", KorailAppError),
     ],
 )
@@ -197,8 +196,6 @@ def test_cache_client_preserves_strict_response_classification(
     def handler(_: httpx.Request) -> httpx.Response:
         if response_kind == "malformed-json":
             return httpx.Response(200, text="not json")
-        if response_kind == "missing-envelope":
-            return httpx.Response(200, json={"forSeatIntg": "Y"})
         return httpx.Response(
             200,
             json={
@@ -214,3 +211,24 @@ def test_cache_client_preserves_strict_response_classification(
             getattr(client, method_name)(1)
     finally:
         client.close()
+
+
+@pytest.mark.parametrize(
+    ("method_name", "payload"),
+    [
+        ("get_app_data", {"forSeatIntg": "Y"}),
+        ("get_notice", {"bbrdId": "SYNTHETIC"}),
+    ],
+)
+def test_cache_client_accepts_envelope_free_objects(method_name, payload):
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    try:
+        result = getattr(client, method_name)(1)
+    finally:
+        client.close()
+
+    assert result.h_msg_cd is None
+    assert result.raw == payload

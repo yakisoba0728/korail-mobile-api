@@ -145,7 +145,7 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(monkeypatch)
             return BaseKorailResponse(
                 h_msg_cd="IRG000000",
                 str_result="SUCC",
-                raw={"days": [{"runDt": "20260710"}]},
+                raw={"runningCalendar": [{"runDt": "20260710"}]},
             )
 
         def search_trains(self, query: TrainSearchQuery) -> TrainSearchResult:

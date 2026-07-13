@@ -85,8 +85,8 @@ def run_live_smoke_from_env() -> dict[str, Any]:
         station_data = client.get_station_data()
         calendar = client.get_train_calendar()
         days = (
-            calendar.raw.get("days")
-            if isinstance(calendar.raw.get("days"), list)
+            calendar.raw.get("runningCalendar")
+            if isinstance(calendar.raw.get("runningCalendar"), list)
             else []
         )
         departure_date = os.environ.get("KORAIL_TEST_DATE") or (

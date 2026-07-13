@@ -94,6 +94,7 @@ class KorailClient:
                 self.http.get_json(
                     "/file/CACHE/prdMobilePlusMain.cache",
                     build_cache_query(timestamp_ms),
+                    require_envelope=False,
                 )
             )
         )
@@ -107,6 +108,7 @@ class KorailClient:
                 self.http.get_json(
                     "/file/CACHE/prdMobilePlusNotice.cache",
                     build_cache_query(timestamp_ms),
+                    require_envelope=False,
                 )
             )
         )

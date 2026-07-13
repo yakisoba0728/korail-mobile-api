@@ -6,11 +6,9 @@ Last updated: 2026-07-13 KST
 
 - The read-only public API stabilization phase is complete.
 - The cache-read expansion implementation, offline tests, package build, and
-  isolated import are complete, but the phase remains pending its required
-  bounded live verification.
-- The fixed `rt=0` DynaPath replacement is committed on its isolated feature
-  branch, and the original main worktree remains untouched.
-- Do not reset or discard the existing working-tree changes.
+  isolated import are complete, including bounded live verification.
+- The fixed `rt=0` DynaPath replacement and empty advertising-ID default are
+  committed on `main`.
 
 ## Implemented Public Operations
 
@@ -38,17 +36,12 @@ mutation routes are not callable.
   `AppDataResponse`, `AppVersionInfo`, and `NoticeResponse`
 - Cache parser, exact-route, timestamp, malformed-response, public-contract,
   pre-login ordering, raw-output, and fixed-RT DynaPath tests: passed
-- The promoted fixed `rt=0` engine completed bounded live login and train-search
-  requests without a DynaPath rejection. The same run returned valid common
-  code, 281 stations, a 33-day calendar, 10 train rows, schedule, and transfer
-  responses
-- A member ticket-list request with `txtDeviceId=""` returned `WRT300005` and
-  `SUCC`, so an advertising ID is no longer a client or live-preflight
-  requirement
-- Full helper completion remains pending because the live app-data and notice
-  cache responses omit the common response envelope that the current cache
-  client requires. This cache contract mismatch is independent of DynaPath and
-  advertising-ID handling
+- The official bounded live helper completed successfully with the promoted
+  fixed `rt=0` engine: app-data and notice caches loaded, login succeeded,
+  common code returned `API.I00000`, 281 stations loaded, the calendar returned
+  33 days, and train search returned 10 rows
+- Schedule and transfer reads returned `IRZ000001`; the member ticket-list
+  request used `txtDeviceId=""` and returned `WRT300005`
 
 The local credential file remains ignored and is not tracked. No credential,
 cookie, session token, or generated DynaPath token is stored in the repository.
@@ -67,16 +60,10 @@ Some require valid ticket, reservation, or account state.
 
 ## Next Required Step
 
-Keep the stored login-success device profile local and ignored. Align the two
-cache readers with the observed envelope-free live responses before rerunning
-the full bounded live helper. Do not mark the cache-read expansion phase
-complete or begin another KORAIL expansion batch until that verification passes
-without exposing raw or sensitive data.
-
-After that gate passes, expand only previously evidenced read-only APIs in
-small TDD batches. Update the exact route registry, request builder,
-parser/model, offline fixtures, public exports, and opt-in live smoke together.
-Keep mutation APIs out of scope.
+Keep the stored login-success device profile local and ignored. Expand only
+previously evidenced read-only APIs in small TDD batches. Update the exact route
+registry, request builder, parser/model, offline fixtures, public exports, and
+opt-in live smoke together. Keep mutation APIs out of scope.
 
 See the shared [next-session prompt](../../NEXT_SESSION_PROMPT.md) for the
 combined KORAIL/SRT orchestration instructions.
