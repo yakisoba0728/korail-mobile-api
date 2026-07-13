@@ -17,7 +17,7 @@
 - Keep the custom `token_provider`, exact-path allowlist, DynaPath header name, and DynaPath-specific 403 handling unchanged.
 - Remove `recent_request_deltas`, the rolling timestamp queue, and all probe-only functions, classes, constants, and package exports.
 - Do not add ticket lookup, reservation, payment, NetFunnel, Sid, or unrelated API changes.
-- The worktree already contains substantial uncommitted user work in every relevant source and test file. Do not discard it, stage those whole files, or create implementation commits that would silently absorb it. Use scoped diffs and leave the implementation changes unstaged for user review.
+- The original `main` worktree contains substantial uncommitted user work. Work only in the isolated `codex/fixed-rt-dynapath` worktree after checkpoint commit `b7eb529`; create scoped task commits there and do not modify the original `main` worktree.
 
 ---
 
@@ -151,7 +151,7 @@ assert config.dynapath.token_settings.as_value == (
 Run:
 
 ```bash
-python -m pytest tests/test_dynapath.py tests/test_http.py tests/test_live.py -q
+python3 -m pytest tests/test_dynapath.py tests/test_http.py tests/test_live.py -q
 ```
 
 Expected: FAIL because settings still accept `recent_request_deltas`, the default SDK version is still `v1.0.3`, the generator still accumulates deltas, and probe-only exports still exist. Fix test syntax or setup errors until failures are only those intended behavior differences.
@@ -236,21 +236,23 @@ Do not modify `src/korail_mobile_api/http.py` or `src/korail_mobile_api/live.py`
 Run:
 
 ```bash
-python -m pytest tests/test_dynapath.py tests/test_http.py tests/test_live.py -q
+python3 -m pytest tests/test_dynapath.py tests/test_http.py tests/test_live.py -q
 ```
 
 Expected: all tests in the three files pass with no warnings or import errors.
 
-- [ ] **Step 5: Review the scoped runtime diff without staging user work**
+- [ ] **Step 5: Review and commit the scoped runtime replacement**
 
 Run:
 
 ```bash
 git diff -- src/korail_mobile_api/dynapath.py src/korail_mobile_api/__init__.py tests/test_dynapath.py tests/test_http.py tests/test_live.py
 git diff --check
+git add src/korail_mobile_api/dynapath.py src/korail_mobile_api/__init__.py tests/test_dynapath.py tests/test_http.py tests/test_live.py
+git commit -m "fix: replace korail dynapath with fixed rt engine"
 ```
 
-Expected: the scoped diff contains only the fixed-RT replacement on top of the existing worktree edits; `git diff --check` exits 0. Do not run `git add` for these already-dirty files.
+Expected: the scoped diff contains only the fixed-RT replacement on top of checkpoint `b7eb529`; `git diff --check` exits 0; the task commit contains only the five listed files.
 
 ### Task 2: Update Current Documentation Contract
 
@@ -293,7 +295,7 @@ def test_readme_describes_fixed_rt_dynapath_consistently():
 Run:
 
 ```bash
-python -m pytest tests/test_readme.py -q
+python3 -m pytest tests/test_readme.py -q
 ```
 
 Expected: FAIL because the README still describes a stateful generator and a compatibility-only probe provider.
@@ -343,21 +345,23 @@ Change “DynaPath non-regression tests” to “fixed-RT DynaPath tests.” Do 
 Run:
 
 ```bash
-python -m pytest tests/test_readme.py -q
+python3 -m pytest tests/test_readme.py -q
 ```
 
 Expected: the README test passes.
 
-- [ ] **Step 5: Review the scoped documentation diff without staging user work**
+- [ ] **Step 5: Review and commit the scoped documentation update**
 
 Run:
 
 ```bash
 git diff -- README.md tests/test_readme.py docs/IMPLEMENTATION_PROGRESS.md
 git diff --check
+git add README.md tests/test_readme.py docs/IMPLEMENTATION_PROGRESS.md
+git commit -m "docs: describe fixed rt dynapath engine"
 ```
 
-Expected: only current behavior wording changes; historical documents remain untouched; whitespace check exits 0.
+Expected: only current behavior wording changes; historical documents remain untouched; whitespace check exits 0; the task commit contains only the three listed files.
 
 ### Task 3: Full Verification and Handoff
 
@@ -390,7 +394,7 @@ Expected: no matches. Matches in historical `docs/superpowers/specs` and `docs/s
 Run:
 
 ```bash
-python -m pytest tests/test_dynapath.py tests/test_http.py tests/test_live.py tests/test_readme.py -q
+python3 -m pytest tests/test_dynapath.py tests/test_http.py tests/test_live.py tests/test_readme.py -q
 ```
 
 Expected: all focused tests pass with zero failures.
@@ -400,7 +404,7 @@ Expected: all focused tests pass with zero failures.
 Run:
 
 ```bash
-python -m pytest -q
+python3 -m pytest -q
 ```
 
 Expected: zero failures. The existing opt-in live test may remain skipped when live credentials/flags are absent.
@@ -410,7 +414,7 @@ Expected: zero failures. The existing opt-in live test may remain skipped when l
 Run:
 
 ```bash
-python -m build
+python3 -m build
 ```
 
 Expected: wheel and source distribution build successfully with exit code 0.
@@ -425,7 +429,7 @@ git status --short
 git diff -- src/korail_mobile_api/dynapath.py src/korail_mobile_api/__init__.py tests/test_dynapath.py tests/test_http.py tests/test_live.py tests/test_readme.py README.md docs/IMPLEMENTATION_PROGRESS.md
 ```
 
-Expected: no whitespace errors; the design-spec commit remains separate; all pre-existing unrelated worktree changes remain present; implementation files remain unstaged.
+Expected: no whitespace errors; the original `main` worktree remains untouched; the isolated branch is clean after its scoped task commits.
 
 - [ ] **Step 6: Report the handoff without claiming live verification**
 
