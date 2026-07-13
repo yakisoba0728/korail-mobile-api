@@ -1,11 +1,11 @@
 import httpx
+import korail_mobile_api as api
 import pytest
 
 from korail_mobile_api import (
     DYNAPATH_ALLOWLIST_PATHS,
     DYNAPATH_HEADER_NAME,
     DynapathTokenGenerator,
-    KorailProbeDynapathTokenProvider,
     KORAIL_API_VERSION,
     KORAIL_APP_KEY,
     KORAIL_COMMON_CODE_BOOTSTRAP_CODES,
@@ -13,8 +13,7 @@ from korail_mobile_api import (
     KORAIL_DEFAULT_DEVICE_NAME,
     KORAIL_DEVICE_ANDROID,
     KORAIL_DYNAPATH_AS_VALUE,
-    KORAIL_PROBE_DYNAPATH_DEVICE_ID,
-    KORAIL_PROBE_DYNAPATH_SDK_VERSION,
+    KORAIL_DYNAPATH_SDK_VERSION,
     KorailConfig,
 )
 from korail_mobile_api.dynapath import DynapathConfig
@@ -69,12 +68,12 @@ def test_korail_runtime_constants_are_importable():
     assert KORAIL_DEFAULT_ANDROID_SDK_INT == 35
     assert "app.login.cphd" in KORAIL_COMMON_CODE_BOOTSTRAP_CODES
     assert KORAIL_DYNAPATH_AS_VALUE == "[38ff229cb34c7dda8e28220a2d750cce]"
-    assert KORAIL_PROBE_DYNAPATH_DEVICE_ID == "7f000001-android-probe"
-    assert KORAIL_PROBE_DYNAPATH_SDK_VERSION == "v1"
+    assert KORAIL_DYNAPATH_SDK_VERSION == "v1"
     assert KORAIL_DEFAULT_DEVICE_NAME
     assert DYNAPATH_HEADER_NAME == "x-dynapath-m-token"
     assert DynapathTokenGenerator
-    assert KorailProbeDynapathTokenProvider
+    assert not hasattr(api, "KorailProbeDynapathTokenProvider")
+    assert not hasattr(api, "generate_korail_probe_dynapath_token")
     assert "/classes/com.korail.mobile.login.Login" in DYNAPATH_ALLOWLIST_PATHS
 
 

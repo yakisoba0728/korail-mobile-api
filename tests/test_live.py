@@ -54,7 +54,10 @@ def test_build_config_from_env_builds_sdk_settings(monkeypatch):
     assert config.dynapath.token_provider is None
     assert config.dynapath.token_settings.device_id == "device-1"
     assert config.dynapath.token_settings.app_start_ts == "1712345600000"
-    assert config.dynapath.token_settings.sdk_version == "v1.0.3"
+    assert config.dynapath.token_settings.sdk_version == "v1"
+    assert config.dynapath.token_settings.as_value == (
+        "[38ff229cb34c7dda8e28220a2d750cce]"
+    )
     assert config.advertising_id == "ad-id"
 
 
