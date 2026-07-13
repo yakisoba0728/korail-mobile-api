@@ -90,6 +90,26 @@ def test_generate_dynapath_token_matches_successful_fixed_rt_reference():
     )
 
 
+def test_generate_dynapath_token_uses_uppercase_alphanumeric_random_text(monkeypatch):
+    calls = []
+
+    def fake_choices(population, *, k):
+        calls.append((population, k))
+        return "AZ09"
+
+    monkeypatch.setattr("korail_mobile_api.dynapath.random.choices", fake_choices)
+    settings = make_settings()
+
+    generated = generate_dynapath_token(settings, timestamp_ms=1712345678901)
+
+    assert calls == [("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 4)]
+    assert generated == generate_dynapath_token(
+        settings,
+        timestamp_ms=1712345678901,
+        random_text="AZ09",
+    )
+
+
 def test_http_client_generates_dynapath_header_from_token_settings():
     captured = {}
     settings = make_settings()

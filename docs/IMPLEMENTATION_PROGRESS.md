@@ -8,8 +8,8 @@ Last updated: 2026-07-13 KST
 - The cache-read expansion implementation, offline tests, package build, and
   isolated import are complete, but the phase remains pending its required
   bounded live verification.
-- The implementation is present in the working tree but is not committed.
-- Current HEAD: `d5ac440`.
+- The fixed `rt=0` DynaPath replacement is committed on its isolated feature
+  branch, and the original main worktree remains untouched.
 - Do not reset or discard the existing working-tree changes.
 
 ## Implemented Public Operations
@@ -32,7 +32,7 @@ mutation routes are not callable.
 
 ## Verification
 
-- Offline tests: `195 passed, 1 skipped`
+- Offline tests: `194 passed, 1 skipped`
 - Wheel and sdist build: passed after the cache expansion
 - Fresh-venv wheel install/import: passed for `KorailClient`,
   `AppDataResponse`, `AppVersionInfo`, and `NoticeResponse`
@@ -44,14 +44,17 @@ mutation routes are not callable.
   it was not part of that login request. The full live-smoke preflight therefore
   still stops before client construction or network I/O and does not satisfy
   the approved live completion criterion
-- Live login with the provided account: passed
-- Live reads: common code, 281 stations, calendar, 10 train rows, schedule,
-  transfer stations, and ticket list all returned valid responses
-- Ticket list returned `WRT300005`, meaning there was no matching data. This
-  read-only test used the source probe device ID as a temporary advertising ID;
-  parity with a real device advertising ID remains unverified
-- Fixed `rt=0` DynaPath generated tokens for login and train search using the
-  successful `v1` token contract; no request-delta state is retained
+- Historical live probe evidence, collected before promotion of the current
+  fixed `rt=0` engine, includes a successful login with the provided account
+  and valid responses for common code, 281 stations, calendar, 10 train rows,
+  schedule, transfer stations, and ticket list
+- That historical ticket-list probe returned `WRT300005`, meaning there was no
+  matching data. It used the source probe device ID as a temporary advertising
+  ID; parity with a real device advertising ID remains unverified
+- The promoted fixed `rt=0` engine is verified in this change only by offline
+  reference-vector and mock-header tests for login and train search. No token
+  produced by this engine was submitted to the live server in this change, so
+  live server acceptance remains unverified; no request-delta state is retained
 
 The local credential file remains ignored and is not tracked. No credential,
 cookie, session token, or generated DynaPath token is stored in the repository.
