@@ -24,7 +24,7 @@ Last updated: 2026-07-13 KST
 - Actual train schedule lookup
 - Transfer-station lookup
 - Ticket-list lookup
-- Stateful DynaPath generation and exact-path attachment
+- Fixed `rt=0` DynaPath generation and exact-path attachment
 
 The transport currently allows 12 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
@@ -37,7 +37,7 @@ mutation routes are not callable.
 - Fresh-venv wheel install/import: passed for `KorailClient`,
   `AppDataResponse`, `AppVersionInfo`, and `NoticeResponse`
 - Cache parser, exact-route, timestamp, malformed-response, public-contract,
-  pre-login ordering, raw-output, and DynaPath non-regression tests: passed
+  pre-login ordering, raw-output, and fixed-RT DynaPath tests: passed
 - Cache expansion bounded live verification: pending. The ignored environment
   now stores the device profile used by the previous `IRZ000001` login-success
   probe flow, but `KORAIL_ADVERTISING_ID` remains intentionally unset because
@@ -50,8 +50,8 @@ mutation routes are not callable.
 - Ticket list returned `WRT300005`, meaning there was no matching data. This
   read-only test used the source probe device ID as a temporary advertising ID;
   parity with a real device advertising ID remains unverified
-- Stateful DynaPath generated tokens for login and train search and advanced
-  its runtime delta state
+- Fixed `rt=0` DynaPath generated tokens for login and train search using the
+  successful `v1` token contract; no request-delta state is retained
 
 The local credential file remains ignored and is not tracked. No credential,
 cookie, session token, or generated DynaPath token is stored in the repository.

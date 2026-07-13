@@ -143,31 +143,21 @@ ticket, station, app-data, or notice response bodies.
 
 DynaPath is supported for the documented allowlist paths. Runtime constants
 such as `Device`, API version, app key, DynaPath header name, and allowlist paths
-are importable from the package. Live smoke constructs stateful DynaPath
-settings only from required caller-supplied environment values and fails before
-request construction when any required identity value is missing.
+are importable from the package. Live smoke constructs `DynapathTokenSettings`
+only from required caller-supplied environment values and fails before request
+construction when any required identity value is missing.
 
-The legacy probe provider remains available for compatibility-only token tests
-and integrations. It is not used by `build_config_from_env()` and is not a live
-default:
+The built-in generator follows the successful fixed `rt=0` contract: SDK version `v1`,
+four uppercase-letter-or-digit random characters, and exactly one
+`rt=0` field in each token payload. The app-start timestamp is captured once
+when live configuration is built; request history is not accumulated. The raw
+application-signature setting is form-encoded exactly once during token
+construction.
 
-```python
-from korail_mobile_api import KorailClient, KorailConfig
-from korail_mobile_api.dynapath import DynapathConfig, KorailProbeDynapathTokenProvider
-
-
-client = KorailClient(
-    KorailConfig(
-        base_url="https://smart.letskorail.com:443",
-        user_agent="Dalvik/2.1.0 (Linux; U; Android 13; SM-S928N Build/TP1A.220624.014)",
-        dynapath=DynapathConfig(
-            enabled=True,
-            token_provider=KorailProbeDynapathTokenProvider(),
-        )
-    )
-)
-```
-
-When enabled, the client attaches `DYNAPATH_HEADER_NAME` only for the documented DynaPath allowlist paths. `KorailProbeDynapathTokenProvider` and related probe exports remain compatibility helpers, but live configuration does not use probe values as defaults. `DynapathTokenGenerator` provides SDK-style stateful token generation from caller-supplied settings. Login follows the app sequence and treats only `IRZ000001` or `S200` as final success.
+When enabled, the client attaches `DYNAPATH_HEADER_NAME` only for the documented
+DynaPath allowlist paths. Callers that need an external implementation may
+still provide a custom `DynapathConfig.token_provider`; the package contains no
+separate probe generator or rolling-delta mode. Login follows the app sequence
+and treats only `IRZ000001` or `S200` as final success.
 
 Reservation, payment, refund, check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
