@@ -384,17 +384,17 @@ Expected: only current behavior wording changes; historical documents remain unt
 Run:
 
 ```bash
-rg -n "recent_request_deltas|KorailProbeDynapathTokenProvider|generate_korail_probe_dynapath_token|KORAIL_PROBE_DYNAPATH|v1\.0\.3|stateful DynaPath|rolling-delta" src tests README.md docs/IMPLEMENTATION_PROGRESS.md
+rg -n "recent_request_deltas|KorailProbeDynapathTokenProvider|generate_korail_probe_dynapath_token|KORAIL_PROBE_DYNAPATH|v1\.0\.3|stateful DynaPath|rolling-delta" src README.md docs/IMPLEMENTATION_PROGRESS.md
 ```
 
-Expected: no matches. Matches in historical `docs/superpowers/specs` and `docs/superpowers/plans` are intentionally excluded from this command.
+Expected: no matches. Tests intentionally contain negative assertions for removed names, and historical `docs/superpowers/specs` and `docs/superpowers/plans` retain superseded context, so both are intentionally excluded.
 
 - [ ] **Step 2: Run focused regression tests**
 
 Run:
 
 ```bash
-python3 -m pytest tests/test_dynapath.py tests/test_http.py tests/test_live.py tests/test_readme.py -q
+PYTHONPATH=src python3 -m pytest tests/test_dynapath.py tests/test_http.py tests/test_live.py tests/test_readme.py -q
 ```
 
 Expected: all focused tests pass with zero failures.
@@ -404,7 +404,7 @@ Expected: all focused tests pass with zero failures.
 Run:
 
 ```bash
-python3 -m pytest -q
+PYTHONPATH=src python3 -m pytest -q
 ```
 
 Expected: zero failures. The existing opt-in live test may remain skipped when live credentials/flags are absent.
