@@ -51,10 +51,10 @@ mutation routes are not callable.
 - That historical ticket-list probe returned `WRT300005`, meaning there was no
   matching data. It used the source probe device ID as a temporary advertising
   ID; parity with a real device advertising ID remains unverified
-- The promoted fixed `rt=0` engine is verified in this change only by offline
-  reference-vector and mock-header tests for login and train search. No token
-  produced by this engine was submitted to the live server in this change, so
-  live server acceptance remains unverified; no request-delta state is retained
+- The promoted fixed `rt=0` engine has only offline reference-vector and
+  mock-header evidence in this change. No generated token was submitted live in
+  this change; live server acceptance remains unverified, and no request-delta
+  state is retained
 
 The local credential file remains ignored and is not tracked. No credential,
 cookie, session token, or generated DynaPath token is stored in the repository.
