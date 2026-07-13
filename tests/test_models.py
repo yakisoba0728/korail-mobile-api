@@ -15,10 +15,13 @@ from korail_mobile_api.models import (
     AppVersionInfo,
     BaseKorailResponse,
     KorailSession,
+    KorailStation,
     NoticeResponse,
+    StationDataResponse,
     TrainSearchQuery,
     TrainSearchResult,
     TrainSummary,
+    UuidResponse,
 )
 
 
@@ -71,3 +74,23 @@ def test_cache_response_models_are_frozen_dataclasses():
     response = AppDataResponse(for_seat_intg="Y")
     with pytest.raises(FrozenInstanceError):
         response.for_seat_intg = "N"
+
+
+def test_uuid_and_station_models_are_frozen_and_repr_safe():
+    station = KorailStation(
+        code="0001",
+        name="서울",
+        raw={"secret": "station-raw-secret"},
+    )
+    uuid = UuidResponse(
+        verification_code="uuid-secret",
+        raw={"mutMrkVrfCd": "uuid-secret"},
+    )
+    response = StationDataResponse(stations=(station,))
+    assert is_dataclass(UuidResponse)
+    assert is_dataclass(KorailStation)
+    assert is_dataclass(StationDataResponse)
+    assert "uuid-secret" not in repr(uuid)
+    assert "station-raw-secret" not in repr(station)
+    with pytest.raises(FrozenInstanceError):
+        response.stations = ()

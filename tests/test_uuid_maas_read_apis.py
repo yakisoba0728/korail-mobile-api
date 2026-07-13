@@ -1,0 +1,82 @@
+import pytest
+
+from korail_mobile_api.errors import KorailProtocolError
+from korail_mobile_api.models import BaseKorailResponse
+from korail_mobile_api.parsers import (
+    parse_station_data_response,
+    parse_uuid_response,
+)
+from korail_mobile_api.payloads import build_maas_station_form
+
+
+def test_uuid_parser_returns_repr_safe_typed_code(load_json_fixture):
+    raw = load_json_fixture("uuid_success.json")
+    result = parse_uuid_response(BaseKorailResponse.from_raw(raw))
+    assert result.verification_code == "fixture-verification-code"
+    assert result.h_msg_cd == "API.I00000"
+    assert result.raw is raw
+    assert "fixture-verification-code" not in repr(result)
+
+
+def test_station_parser_returns_typed_rows_from_envelope_free_payload(load_json_fixture):
+    raw = load_json_fixture("maas_station_data.json")
+    result = parse_station_data_response(BaseKorailResponse(raw=raw))
+    assert [(item.code, item.name) for item in result.stations] == [
+        ("0001", "서울"),
+        ("0020", "부산"),
+    ]
+    assert result.stations[0].longitude == "126.9708"
+    assert result.raw is raw
+
+
+def test_station_parser_preserves_a_present_common_envelope(load_json_fixture):
+    raw = load_json_fixture("maas_station_data.json")
+    raw.update(
+        {
+            "h_msg_cd": "API.I00000",
+            "h_msg_txt": "Success",
+            "strResult": "SUCC",
+        }
+    )
+    result = parse_station_data_response(BaseKorailResponse.from_raw(raw))
+    assert result.h_msg_cd == "API.I00000"
+    assert len(result.stations) == 2
+
+
+@pytest.mark.parametrize("value", [None, "", "   ", 101, False])
+def test_maas_station_form_rejects_missing_or_nonstring_code(value):
+    with pytest.raises(ValueError, match="additional_service_code"):
+        build_maas_station_form(value)
+
+
+def test_maas_station_form_preserves_exact_nonempty_code():
+    assert build_maas_station_form(" M10 ") == {"addSrvDvCd": " M10 "}
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {"stns": None},
+        {"stns": {}},
+        {"stns": {"stn": "not-a-list"}},
+        {"stns": {"stn": ["not-an-object"]}},
+        {"stns": {"stn": [{"stn_cd": "", "stn_nm": "서울"}]}},
+        {"stns": {"stn": [{"stn_cd": "0001", "stn_nm": None}]}},
+        {"stns": {"stn": [{"stn_cd": "0001", "stn_nm": "서울", "latitude": 37.5}]}},
+    ],
+)
+def test_station_parser_rejects_malformed_known_structure(raw):
+    with pytest.raises(KorailProtocolError):
+        parse_station_data_response(BaseKorailResponse(raw=raw))
+
+
+@pytest.mark.parametrize("value", [None, "", "   ", 123, [], {}])
+def test_uuid_parser_rejects_missing_or_malformed_code(value):
+    raw = {
+        "h_msg_cd": "API.I00000",
+        "h_msg_txt": "Success",
+        "strResult": "SUCC",
+        "mutMrkVrfCd": value,
+    }
+    with pytest.raises(KorailProtocolError, match="mutMrkVrfCd"):
+        parse_uuid_response(BaseKorailResponse.from_raw(raw))

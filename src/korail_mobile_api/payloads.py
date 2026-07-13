@@ -96,3 +96,9 @@ def build_ticket_list_form(
         "h_abrd_dt_to": "",
         "hiduserYn": "Y",
     }
+
+
+def build_maas_station_form(additional_service_code: str) -> dict[str, str]:
+    if not isinstance(additional_service_code, str) or not additional_service_code.strip():
+        raise ValueError("additional_service_code must be a non-empty string")
+    return {"addSrvDvCd": additional_service_code}

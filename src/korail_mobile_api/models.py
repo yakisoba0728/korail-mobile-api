@@ -73,6 +73,25 @@ class NoticeResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
+class UuidResponse(BaseKorailResponse):
+    verification_code: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class KorailStation:
+    code: str
+    name: str
+    longitude: str | None = None
+    latitude: str | None = None
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class StationDataResponse(BaseKorailResponse):
+    stations: tuple[KorailStation, ...] = ()
+
+
+@dataclass(frozen=True)
 class LoginCryptoInfo:
     idx: str = ""
     key: str = ""
