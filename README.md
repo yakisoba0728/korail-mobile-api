@@ -157,7 +157,7 @@ construction.
 When enabled, the client attaches `DYNAPATH_HEADER_NAME` only for the documented
 DynaPath allowlist paths. Callers that need an external implementation may
 still provide a custom `DynapathConfig.token_provider`; the package contains no
-separate probe generator or rolling-delta mode. Login follows the app sequence
-and treats only `IRZ000001` or `S200` as final success.
+separate probe generator and does not retain request history. Login follows the
+app sequence and treats only `IRZ000001` or `S200` as final success.
 
 Reservation, payment, refund, check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.

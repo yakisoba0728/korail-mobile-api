@@ -14,6 +14,7 @@ def test_readme_describes_fixed_rt_dynapath_consistently():
     assert "DynapathTokenSettings" in text
     assert "compatibility-only" not in text
     assert "KorailProbeDynapathTokenProvider" not in text
+    assert "rolling-delta" not in text
     assert "KORAIL_DYNAPATH_DEVICE_ID" in text
     assert "KORAIL_ADVERTISING_ID" in text
     assert "get_app_data()" in text
