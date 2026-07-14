@@ -33,7 +33,8 @@ Last updated: 2026-07-14 KST
 - A separate evidence command enforces a four-operation ceiling and writes only
   fixed statuses, 0/1 call counters, bounded counts, type-presence booleans, and
   a sufficiency category after a secret scan. It is not part of broad live
-  smoke, and no seat-inventory live result is claimed before its bounded gate.
+  smoke. The one bounded attempt stopped at its fixed setup gate before any
+  login, search, car-list, or seat-list operation.
 - The one independent final whole-feature review is complete. Its two Important
   findings were fixed together, and no Critical or Important finding remains
   open.
@@ -83,8 +84,16 @@ mutation routes are not callable.
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
   verifier accepted both artifacts, `git diff --check` passed, and all
   generated build, metadata, and temporary distribution paths were removed.
-- The bounded seat-inventory live gate remains the only pending verification
-  at this point in the recorded sequence.
+- After offline verification, exactly one bounded seat-inventory attempt was
+  made through the separate evidence command.
+- Bounded seat-inventory result: `status=setup_failed`,
+  `calls.login=0`, `calls.search=0`, `calls.car_list=0`, and
+  `calls.seat_list=0`; `train_count=0`, `car_count=0`, `seat_count=0`, and
+  `window_count=0`; all six documented field/type-presence booleans were
+  `false`; `sufficiency=insufficient_setup`. The helper persisted no raw
+  mapping, response message, identifier, date, station value, Sid, credential,
+  cookie, token, URL, or exception text. The temporary sanitized JSON was
+  deleted after inspection. The attempt was not retried or broadened.
 - Fresh internal release gate: the focused contract test reported `1 passed`;
   the complete offline suite reported `436 passed, 1 skipped in 0.30s`, with
   only the explicit live-service opt-in skipped.
@@ -175,13 +184,12 @@ or state-changing operations.
 
 ## Next Required Step
 
-The full offline `0.2.0` release and distribution gate is complete. Execute
-only the separately authorized bounded seat-inventory evidence command. Record
-only its fixed status, four operation counts, bounded counts, and sufficiency;
-do not retry or broaden a rejected static contract. Any additional
-reservation-linked route requires its own safety review and caller-owned data.
-Keep all local credentials and runtime-sensitive values ignored and out of
-documentation.
+The full offline `0.2.0` release and distribution gate is complete. The single
+authorized bounded seat-inventory attempt stopped with
+`sufficiency=insufficient_setup` before any live operation, and it must not be
+retried or broadened under this task. Any additional reservation-linked route
+requires its own safety review and caller-owned data. Keep all local
+credentials and runtime-sensitive values ignored and out of documentation.
 
 See the shared [next-session prompt](../../NEXT_SESSION_PROMPT.md) for the
 combined KORAIL/SRT orchestration instructions.
