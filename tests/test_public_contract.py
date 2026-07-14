@@ -39,6 +39,8 @@ def test_client_public_method_set_is_stable():
         "get_product_detail",
         "get_product_reservations",
         "get_reservation_history",
+        "get_seat_cars",
+        "get_seat_inventory",
         "get_service_status",
         "get_station_data",
         "get_station_info",
@@ -53,6 +55,53 @@ def test_client_public_method_set_is_stable():
         "logout",
         "search_trains",
     }
+
+
+def test_seat_inventory_signatures_types_and_exports_are_public():
+    cars_signature = inspect.signature(KorailClient.get_seat_cars)
+    inventory_signature = inspect.signature(
+        KorailClient.get_seat_inventory
+    )
+    assert list(cars_signature.parameters) == [
+        "self",
+        "train",
+        "passenger_count",
+    ]
+    assert list(inventory_signature.parameters) == [
+        "self",
+        "train",
+        "car_no",
+        "passenger_count",
+    ]
+    assert cars_signature.parameters["passenger_count"].kind is (
+        inspect.Parameter.KEYWORD_ONLY
+    )
+    assert inventory_signature.parameters["passenger_count"].kind is (
+        inspect.Parameter.KEYWORD_ONLY
+    )
+    cars_hints = get_type_hints(KorailClient.get_seat_cars)
+    inventory_hints = get_type_hints(KorailClient.get_seat_inventory)
+    assert cars_hints == {
+        "train": TrainSummary,
+        "passenger_count": int,
+        "return": models.SeatCarListResponse,
+    }
+    assert inventory_hints == {
+        "train": TrainSummary,
+        "car_no": int,
+        "passenger_count": int,
+        "return": models.SeatInventoryResponse,
+    }
+    for name in (
+        "SeatAttribute",
+        "SeatCar",
+        "SeatCarListResponse",
+        "PhysicalSeat",
+        "SeatWindow",
+        "SeatInventoryResponse",
+    ):
+        assert name in korail_mobile_api.__all__
+        assert getattr(korail_mobile_api, name) is getattr(models, name)
 
 
 def test_uuid_maas_signatures_types_and_exports_are_stable():

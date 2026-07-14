@@ -14,10 +14,12 @@
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
 
-Package coverage: 25 exact login/read routes. The package now exposes the ten
+Package coverage: 27 exact login/read routes. The package now exposes the ten
 previously successful but unwrapped reads plus the already registered service
-status cache as 11 public methods. This is package coverage only; the runtime
-status table and historical endpoint outcomes below are unchanged.
+status cache as 11 public methods, plus the two statically contracted typed car
+and physical-seat reads. This is package coverage only; the runtime status
+table and historical endpoint outcomes below are unchanged pending the
+separate bounded seat-inventory gate.
 No live replay was performed for this expansion.
 
 ## Service Index

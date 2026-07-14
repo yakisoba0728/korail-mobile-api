@@ -290,7 +290,7 @@ def _mark_zip_encrypted(path: Path) -> None:
 
 def test_source_release_metadata_is_exact() -> None:
     assert PROJECT["name"] == PROJECT_NAME
-    assert PROJECT["version"] == "0.1.0"
+    assert PROJECT["version"] == "0.2.0"
     assert PROJECT["requires-python"] == ">=3.11"
     assert PROJECT["keywords"] == EXPECTED_KEYWORDS
     assert set(PROJECT["classifiers"]) == EXPECTED_CLASSIFIERS
@@ -819,9 +819,9 @@ def test_repository_truth_and_full_mutation_policy() -> None:
     readme = (ROOT / "README.md").read_text()
     handoff = (ROOT / "docs/NEXT_SESSION.md").read_text()
     for document in (readme, handoff):
-        assert "25 routes" in document
-        assert "28 public methods" in document
-        assert "435 passed" in document and "1 skipped" in document
+        assert "27 routes" in document
+        assert "30 public methods" in document
+        assert "725 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
 
     policy = (ROOT / "docs/library-build-guide.md").read_text().casefold()

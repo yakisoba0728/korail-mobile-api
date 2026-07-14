@@ -55,6 +55,11 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
             "GET",
             "/classes/com.korail.mobile.reservation.ReservationView",
         ),
+        ("POST", "/classes/com.korail.mobile.research.TrainResearch"),
+        (
+            "POST",
+            "/classes/com.korail.mobile.research.TResidualSeatsResearch.do",
+        ),
     }
 )
 
@@ -110,6 +115,53 @@ KORAIL_EXACT_REQUEST_FIELDS = {
     "/classes/com.korail.mobile.copt.gdMenuLt.do": frozenset(
         {"Device", "Version"}
     ),
+    "/classes/com.korail.mobile.research.TrainResearch": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "Sid",
+            "txtMenuId",
+            "txtPsrmClCd",
+            "txtRunDt",
+            "txtDptDt",
+            "txtTrnClsfCd",
+            "txtTrnNo",
+            "txtDptRsStnCd",
+            "txtArvRsStnCd",
+            "txtDptStnRunOrdr",
+            "txtArvStnRunOrdr",
+            "txtTrnGpCd",
+            "txtTotPsgCnt",
+            "txtSeatAttCd",
+            "txtGdNo",
+        }
+    ),
+    "/classes/com.korail.mobile.research.TResidualSeatsResearch.do": (
+        frozenset(
+            {
+                "Device",
+                "Version",
+                "Key",
+                "trnClsfCd",
+                "trnGpCd",
+                "runDt",
+                "trnNo",
+                "srcarNo",
+                "psrmClCd",
+                "dptRsStnCd",
+                "arvRsStnCd",
+                "seatAttCd",
+                "dptStnRunOrdr",
+                "arvStnRunOrdr",
+                "totPsgCnt",
+                "gdNo",
+                "isArrow",
+                "Sid",
+                "ctlDvCd",
+            }
+        )
+    ),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 
@@ -157,7 +209,12 @@ def assert_read_only_request_fields(
     allowed = KORAIL_EXACT_REQUEST_FIELDS.get(urlsplit(path).path)
     if allowed is None:
         return
-    if set(values) != allowed:
+    field_names = list(values)
+    if len(field_names) != len(set(field_names)):
+        raise KorailProtocolError(
+            "KORAIL request fields must not contain duplicate names"
+        )
+    if set(field_names) != allowed:
         raise KorailProtocolError(
             "KORAIL request fields must exactly match the registered "
             "read-only contract"

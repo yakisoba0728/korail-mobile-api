@@ -5,9 +5,9 @@ evidenced KORAIL mobile API surface. It also retains the static
 reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
-The reviewed package boundary contains 25 routes and 28 public methods. Its
-pre-release-readiness offline baseline is `435 passed, 1 skipped`; the skip is
-the explicitly opted-in live-service test.
+The reviewed package boundary contains 27 routes and 30 public methods. The
+current `0.2.0` offline release gate is `725 passed, 1 deselected`; the
+deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
 committed. Documentation, reproducible inventory output, client source, and
@@ -184,6 +184,43 @@ def get_owned_product_detail(
 The reservation, payment, and mutation routes remain excluded. The package
 does not create, change, cancel, pay for, refund, or check in a reservation as
 part of any read.
+
+### Typed car and physical-seat inventory reads
+
+Version `0.2.0` adds `get_seat_cars(train, *, passenger_count=1)` and
+`get_seat_inventory(train, car_no, *, passenger_count=1)`. Both methods require
+an authenticated session and consume only server-owned schedule fields already
+present on `TrainSummary`. Caller counts and every required train field are
+validated before Sid generation or transport.
+
+This first increment is deliberately fixed to main menu `11`, general room
+class `1`, seat attribute `015`, an empty product number, and an empty control
+division. Each method generates one fresh Sid and issues one exact POST. The
+forms omit `sidTest`, pass `Device`, `Version`, and `Key` explicitly, and force
+`include_common=False` plus `include_dynapath=False`. No custom field map,
+generic route escape hatch, seat selection, hold, or reservation action is
+exposed.
+
+The returned car, seat, and window collections are immutable tuples. Raw
+mappings, response messages, train and seat identifiers, and the documented
+banner URL are repr-hidden. The banner URL remains inert response data and is
+never followed by the client.
+
+The separately opted-in evidence command is not part of the broad live smoke:
+
+```bash
+KORAIL_MOBILE_API_LIVE=1 PYTHONPATH="$PWD/src" \
+  python3 scripts/capture_seat_inventory_evidence.py \
+  --output /tmp/korail-seat-inventory-result.json --force
+```
+
+It permits at most one login operation, one minimum train search, one car-list
+call, and one first-car seat-list call. Its atomically written JSON is limited
+to fixed statuses, 0/1 operation counters, counts capped at 10,000, documented
+field/type-presence booleans, and a sufficiency category. It suppresses raw
+responses, messages, identifiers, dates, stations, credentials, session data,
+Sid values, tokens, and URLs. The offline contract is complete; no seat-read
+live result is claimed here before the separate bounded gate runs.
 
 ### UUID and MAAS station reads
 

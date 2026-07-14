@@ -12,10 +12,10 @@ but does not change runtime requests, routes, credentials, or live behavior.
 
 The current implementation evidence establishes:
 
-- 25 routes at the exact login/read transport boundary.
-- 28 public methods on `KorailClient`.
-- A reviewed offline baseline of `435 passed, 1 skipped`; the only skip is the
-  explicitly opted-in live-service test.
+- 27 routes at the exact login/read transport boundary.
+- 30 public methods on `KorailClient`.
+- A reviewed `0.2.0` offline gate of `725 passed, 1 deselected`; the deselected
+  test is the explicitly opted-in live-service test.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.
 
@@ -24,11 +24,17 @@ The current implementation evidence establishes:
 The successful-read expansion is complete. Eleven public read methods were
 added with frozen typed models, exact payloads, strict parsing, synthetic
 fixtures, and no adjacent or fallback requests. Independent review findings
-were corrected before the `435 passed, 1 skipped` baseline.
+were corrected before the historical `435 passed, 1 skipped` baseline.
 
 The earlier cache, DynaPath, UUID, generic MAAS menu, and MAAS station phases
 are also complete at current `HEAD`. The release-readiness change does not
 repeat production traffic and does not alter their established contracts.
+
+The `0.2.0` typed seat-inventory increment adds two authenticated,
+DynaPath-disabled reads with closed general-room forms, strict frozen response
+models, and pre-Sid validation. Its offline contract and sanitized four-step
+evidence helper are implemented; the separately authorized bounded live result
+must be recorded without identifiers or raw response data.
 
 Use [docs/RELEASE.md](RELEASE.md) for the internal-only offline test, build,
 distribution verifier, fresh-wheel install, and cleanup gate.
@@ -52,11 +58,14 @@ artifacts. They are not inputs to the internal release gate.
 
 1. Internal release preparation is completed by this handoff; rerun
    [docs/RELEASE.md](RELEASE.md) whenever package contents change.
-2. Any new KORAIL read requires separate sanitized evidence, a concrete design,
+2. Complete the separately bounded seat-inventory live gate after the offline
+   release gate; do not route it through the broad live smoke or retry a static
+   contract rejection.
+3. Any new KORAIL read requires separate sanitized evidence, a concrete design,
    offline contract tests, and an independent safety review.
-3. Mutation endpoints remain excluded unless a separate safety design and
+4. Mutation endpoints remain excluded unless a separate safety design and
    explicit authorization establish a new scope.
-4. A public release remains blocked by the four items listed in
+5. A public release remains blocked by the four items listed in
    [docs/RELEASE.md](RELEASE.md).
 
 Do not run live KORAIL requests as part of release verification. Do not load or

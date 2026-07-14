@@ -13,15 +13,20 @@ from .models import (
     KorailSession,
     MaasMenuListResponse,
     NoticeResponse,
+    SeatCarListResponse,
+    SeatInventoryResponse,
     StationDataResponse,
     TrainSearchQuery,
     TrainSearchResult,
+    TrainSummary,
     UuidResponse,
 )
 from .parsers import (
     parse_app_data_response,
     parse_maas_menu_list_response,
     parse_notice_response,
+    parse_seat_car_list_response,
+    parse_seat_inventory_response,
     parse_station_data_response,
     parse_station_name_map,
     parse_train_rows,
@@ -33,9 +38,12 @@ from .payloads import (
     build_common_code_form,
     build_maas_menu_form,
     build_maas_station_form,
+    build_seat_car_form,
+    build_seat_inventory_form,
     build_ticket_list_form,
     build_train_schedule_form,
     build_train_search_form,
+    validate_seat_inventory_inputs,
 )
 from .read_models import (
     CartListResponse,
@@ -126,6 +134,62 @@ class KorailClient:
             raise KorailAuthError(
                 "KORAIL account read requires an authenticated session"
             )
+
+    def get_seat_cars(
+        self,
+        train: TrainSummary,
+        *,
+        passenger_count: int = 1,
+    ) -> SeatCarListResponse:
+        self._require_session()
+        validate_seat_inventory_inputs(train, passenger_count)
+        form = build_seat_car_form(
+            self.config,
+            train,
+            passenger_count=passenger_count,
+            sid=generate_sid(),
+        )
+        return self._run_read(
+            lambda: parse_seat_car_list_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.research.TrainResearch",
+                    form,
+                    include_common=False,
+                    include_dynapath=False,
+                )
+            )
+        )
+
+    def get_seat_inventory(
+        self,
+        train: TrainSummary,
+        car_no: int,
+        *,
+        passenger_count: int = 1,
+    ) -> SeatInventoryResponse:
+        self._require_session()
+        validate_seat_inventory_inputs(
+            train,
+            passenger_count,
+            car_no=car_no,
+        )
+        form = build_seat_inventory_form(
+            self.config,
+            train,
+            car_no,
+            passenger_count=passenger_count,
+            sid=generate_sid(),
+        )
+        return self._run_read(
+            lambda: parse_seat_inventory_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.research.TResidualSeatsResearch.do",
+                    form,
+                    include_common=False,
+                    include_dynapath=False,
+                )
+            )
+        )
 
     def get_service_status(
         self,

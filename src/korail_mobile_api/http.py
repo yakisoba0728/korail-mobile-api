@@ -146,6 +146,8 @@ class KorailHttpClient:
         assert_korail_origin(str(self._client.base_url))
         assert_read_only_route("POST", path)
         form: dict[str, Any] = {}
+        if not include_common and data is not None:
+            assert_read_only_request_fields(path, data)
         if include_common:
             form.update(self.common_fields())
         if data:

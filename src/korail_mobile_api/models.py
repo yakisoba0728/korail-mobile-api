@@ -162,6 +162,10 @@ class TrainSummary:
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
     departure_station_name: str | None = None
     arrival_station_name: str | None = None
+    run_date: str | None = None
+    train_class_code: str | None = None
+    departure_run_order: str | None = None
+    arrival_run_order: str | None = None
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -175,8 +179,74 @@ class TrainSummary:
             departure_date=raw.get("h_dpt_dt") or raw.get("dptDt"),
             departure_time=raw.get("h_dpt_tm") or raw.get("dptTm"),
             arrival_time=raw.get("h_arv_tm") or raw.get("arvTm"),
+            run_date=raw.get("h_run_dt") or raw.get("runDt"),
+            train_class_code=(
+                raw.get("h_trn_clsf_cd") or raw.get("trnClsfCd")
+            ),
+            departure_run_order=(
+                raw.get("h_dpt_stn_run_ordr")
+                or raw.get("dptStnRunOrdr")
+            ),
+            arrival_run_order=(
+                raw.get("h_arv_stn_run_ordr")
+                or raw.get("arvStnRunOrdr")
+            ),
             raw=raw,
         )
+
+
+@dataclass(frozen=True)
+class SeatAttribute:
+    name: str
+
+
+@dataclass(frozen=True)
+class SeatCar:
+    car_no: int
+    room_class_name: str
+    remaining_seat_count: int
+    attributes: tuple[SeatAttribute, ...]
+
+
+@dataclass(frozen=True)
+class SeatCarListResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    recommended_car_no: int | None = None
+    train_no: str | None = field(default=None, repr=False)
+    cars: tuple[SeatCar, ...] = ()
+
+
+@dataclass(frozen=True)
+class PhysicalSeat:
+    seat_no: str = field(repr=False)
+    sale_possible: str
+    direction_code: str
+    other_attribute_code: str
+    requested_attribute_code: str
+    floor: str
+    specification: str
+    sequence_no: str
+    message_code: str
+    message: str = field(repr=False)
+    visual_message_division_code: str
+
+
+@dataclass(frozen=True)
+class SeatWindow:
+    start_location_ratio: float
+    close_location_ratio: float
+
+
+@dataclass(frozen=True)
+class SeatInventoryResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    layout_type: int = 0
+    arrangement_code: str = ""
+    remaining_count: int = 0
+    total_count: int = 0
+    seats: tuple[PhysicalSeat, ...] = ()
+    windows: tuple[SeatWindow, ...] = ()
+    vr_banner_url: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)

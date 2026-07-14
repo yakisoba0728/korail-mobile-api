@@ -66,7 +66,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "| 성공 | 25 |" in status
     assert "| 실패 | 8 |" in status
     assert "| 미실행 | 132 |" in status
-    assert "Package coverage: 25 exact login/read routes" in status
+    assert "Package coverage: 27 exact login/read routes" in status
     assert "No live replay was performed for this expansion." in status
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
@@ -74,6 +74,19 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "성공 24 / 실패 8 / 미실행 133" not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
-    assert "25 exact login/read routes" in progress
-    assert "28 public methods" in progress
+    assert "27 exact login/read routes" in progress
+    assert "30 public methods" in progress
     assert "No live replay was performed for this expansion." in progress
+
+
+def test_readme_documents_typed_seat_inventory_scope_and_live_boundary():
+    text = README.read_text(encoding="utf-8")
+    assert "get_seat_cars(" in text
+    assert "get_seat_inventory(" in text
+    assert "main menu `11`" in text
+    assert "general room" in text
+    assert "seat attribute `015`" in text
+    assert "include_dynapath=False" in text
+    assert "capture_seat_inventory_evidence.py" in text
+    assert "at most one login operation" in text
+    assert "never followed" in text

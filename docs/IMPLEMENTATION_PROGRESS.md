@@ -26,11 +26,19 @@ Last updated: 2026-07-14 KST
 - Eleven successful-read expansion methods are implemented with frozen models,
   strict parsers, exact payload builders, synthetic fixtures, and no adjacent
   or fallback requests.
+- The `0.2.0` seat-inventory increment implements typed authenticated car and
+  physical-seat reads for the fixed main-menu/general-room contract. Both
+  exact POST routes validate before Sid generation, issue one request, and
+  force DynaPath off. The banner URL is inert and never followed.
+- A separate evidence command enforces a four-operation ceiling and writes only
+  fixed statuses, 0/1 call counters, bounded counts, type-presence booleans, and
+  a sufficiency category after a secret scan. It is not part of broad live
+  smoke, and no seat-inventory live result is claimed before its bounded gate.
 - The one independent final whole-feature review is complete. Its two Important
   findings were fixed together, and no Critical or Important finding remains
   open.
-- The transport now allows 25 exact login/read routes and the client exposes
-  28 public methods. No new route was added to the DynaPath allowlist.
+- The transport now allows 27 exact login/read routes and the client exposes
+  30 public methods. No new route was added to the DynaPath allowlist.
 - No live replay was performed for this expansion. The preceding bounded UUID
   and MAAS evidence remains historical context and was not repeated.
 
@@ -55,13 +63,28 @@ Last updated: 2026-07-14 KST
 - Authenticated cart, delay-discount, and discount-coupon lookup
 - Authenticated product reservation list and caller-owned product detail lookup
 - Authenticated ticket receipt and reservation-history lookup
+- Authenticated general-room car-list and physical-seat inventory lookup
 
-The transport currently allows 25 exact read/login routes. Reservation,
+The transport currently allows 27 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
 mutation routes are not callable.
 
 ## Verification
 
+- Seat-inventory TDD RED: the focused test command stopped during collection on
+  the missing `PhysicalSeat` public interface, as expected before production
+  code existed.
+- Seat-inventory focused GREEN: `142 passed`; the cross-cutting seat, HTTP,
+  public-contract, and legacy-model gate reports `263 passed`. All tests are
+  synthetic or mocked and perform no live I/O.
+- The full `0.2.0` offline release gate reports `725 passed, 1 deselected in
+  0.66s`; only the explicitly opted-in live-service test was deselected.
+- Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
+  `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
+  verifier accepted both artifacts, `git diff --check` passed, and all
+  generated build, metadata, and temporary distribution paths were removed.
+- The bounded seat-inventory live gate remains the only pending verification
+  at this point in the recorded sequence.
 - Fresh internal release gate: the focused contract test reported `1 passed`;
   the complete offline suite reported `436 passed, 1 skipped in 0.30s`, with
   only the explicit live-service opt-in skipped.
@@ -143,7 +166,7 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
 - Live-successful inventory entries: 25
-- Currently implemented exact login/read routes: 25
+- Currently implemented exact login/read routes: 27
 - Therefore the complete APK endpoint inventory is not yet implemented
 
 All recorded successful read entries now have an exact package route. The
@@ -152,10 +175,13 @@ or state-changing operations.
 
 ## Next Required Step
 
-No required work remains in the successful-read expansion. Any additional
-reservation-linked route requires its own safety review and caller-owned data;
-do not infer or persist identifiers. Keep all local credentials and
-runtime-sensitive values ignored and out of documentation.
+The full offline `0.2.0` release and distribution gate is complete. Execute
+only the separately authorized bounded seat-inventory evidence command. Record
+only its fixed status, four operation counts, bounded counts, and sufficiency;
+do not retry or broaden a rejected static contract. Any additional
+reservation-linked route requires its own safety review and caller-owned data.
+Keep all local credentials and runtime-sensitive values ignored and out of
+documentation.
 
 See the shared [next-session prompt](../../NEXT_SESSION_PROMPT.md) for the
 combined KORAIL/SRT orchestration instructions.

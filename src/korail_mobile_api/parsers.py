@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -12,6 +13,12 @@ from .models import (
     MaasMenuItem,
     MaasMenuListResponse,
     NoticeResponse,
+    PhysicalSeat,
+    SeatAttribute,
+    SeatCar,
+    SeatCarListResponse,
+    SeatInventoryResponse,
+    SeatWindow,
     StationDataResponse,
     TrainSummary,
     UuidResponse,
@@ -253,4 +260,276 @@ def parse_station_data_response(
         str_result=response.str_result,
         raw=response.raw,
         stations=tuple(stations),
+    )
+
+
+def _inventory_required_mapping(
+    data: Mapping[str, Any],
+    key: str,
+) -> Mapping[str, Any]:
+    value = data.get(key)
+    if not isinstance(value, Mapping):
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be an object"
+        )
+    return value
+
+
+def _inventory_required_list(
+    data: Mapping[str, Any],
+    key: str,
+) -> list[Any]:
+    value = data.get(key)
+    if not isinstance(value, list):
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be a list"
+        )
+    return value
+
+
+def _inventory_required_string(
+    data: Mapping[str, Any],
+    key: str,
+) -> str:
+    if key not in data or not isinstance(data[key], str):
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be a string"
+        )
+    return data[key]
+
+
+def _inventory_optional_string(
+    data: Mapping[str, Any],
+    key: str,
+) -> str | None:
+    if key not in data:
+        raise KorailProtocolError(
+            f"KORAIL seat inventory response missing field {key}"
+        )
+    value = data[key]
+    if value is not None and not isinstance(value, str):
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be a string or null"
+        )
+    return value
+
+
+def _inventory_required_int(
+    data: Mapping[str, Any],
+    key: str,
+    *,
+    non_negative: bool = False,
+) -> int:
+    if key not in data or type(data[key]) is not int:
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be an integer"
+        )
+    value = data[key]
+    if non_negative and value < 0:
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must not be negative"
+        )
+    return value
+
+
+def _inventory_optional_int(
+    data: Mapping[str, Any],
+    key: str,
+) -> int | None:
+    if key not in data:
+        raise KorailProtocolError(
+            f"KORAIL seat inventory response missing field {key}"
+        )
+    value = data[key]
+    if value is not None and type(value) is not int:
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be an integer or null"
+        )
+    if isinstance(value, int) and value < 0:
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must not be negative"
+        )
+    return value
+
+
+def parse_seat_car_list_response(
+    response: BaseKorailResponse,
+) -> SeatCarListResponse:
+    raw = response.raw
+    container = _inventory_required_mapping(raw, "srcar_infos")
+    rows = _inventory_required_list(container, "srcar_info")
+    cars: list[SeatCar] = []
+    car_numbers: set[int] = set()
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError(
+                "KORAIL seat car list contained a non-object row"
+            )
+        car_no = _inventory_required_int(
+            row,
+            "h_srcar_no",
+            non_negative=True,
+        )
+        if car_no in car_numbers:
+            raise KorailProtocolError(
+                "KORAIL seat car list contained a duplicate car number"
+            )
+        car_numbers.add(car_no)
+        attributes_raw = _inventory_required_list(row, "seatAttInfos")
+        attributes: list[SeatAttribute] = []
+        for attribute_raw in attributes_raw:
+            if not isinstance(attribute_raw, Mapping):
+                raise KorailProtocolError(
+                    "KORAIL seat attribute list contained a non-object row"
+                )
+            attributes.append(
+                SeatAttribute(
+                    name=_inventory_required_string(
+                        attribute_raw,
+                        "seatAttNm",
+                    )
+                )
+            )
+        cars.append(
+            SeatCar(
+                car_no=car_no,
+                room_class_name=_inventory_required_string(
+                    row,
+                    "h_psrm_cl_nm",
+                ),
+                remaining_seat_count=_inventory_required_int(
+                    row,
+                    "h_rest_seat_cnt",
+                    non_negative=True,
+                ),
+                attributes=tuple(attributes),
+            )
+        )
+    return SeatCarListResponse(
+        h_msg_cd=response.h_msg_cd,
+        h_msg_txt=response.h_msg_txt,
+        str_result=response.str_result,
+        raw=raw,
+        recommended_car_no=_inventory_optional_int(
+            raw,
+            "h_rcmd_srcar_no",
+        ),
+        train_no=_inventory_optional_string(raw, "h_trn_no"),
+        cars=tuple(cars),
+    )
+
+
+def _inventory_ratio(data: Mapping[str, Any], key: str) -> float:
+    value = data.get(key)
+    if type(value) not in {int, float}:
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be numeric"
+        )
+    ratio = float(value)
+    if not math.isfinite(ratio):
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be finite"
+        )
+    return ratio
+
+
+def parse_seat_inventory_response(
+    response: BaseKorailResponse,
+) -> SeatInventoryResponse:
+    raw = response.raw
+    layout_type = _inventory_required_int(raw, "layout_type")
+    arrangement_code = _inventory_required_string(raw, "seat_ary_cd")
+    remaining_count = _inventory_required_int(
+        raw,
+        "seat_remain_count",
+        non_negative=True,
+    )
+    total_count = _inventory_required_int(
+        raw,
+        "seat_total_count",
+        non_negative=True,
+    )
+    if remaining_count > total_count:
+        raise KorailProtocolError(
+            "KORAIL seat inventory remaining count exceeds total count"
+        )
+
+    seat_rows = _inventory_required_list(raw, "seatList")
+    seats: list[PhysicalSeat] = []
+    seat_numbers: set[str] = set()
+    for row in seat_rows:
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError(
+                "KORAIL seat inventory contained a non-object seat row"
+            )
+        seat_no = _inventory_required_string(row, "seat_no")
+        if seat_no and seat_no in seat_numbers:
+            raise KorailProtocolError(
+                "KORAIL seat inventory contained a duplicate seat number"
+            )
+        if seat_no:
+            seat_numbers.add(seat_no)
+        seats.append(
+            PhysicalSeat(
+                seat_no=seat_no,
+                sale_possible=_inventory_required_string(
+                    row,
+                    "sale_psb_flg",
+                ),
+                direction_code=_inventory_required_string(
+                    row,
+                    "dir_seat_att_cd",
+                ),
+                other_attribute_code=_inventory_required_string(
+                    row,
+                    "etc_seat_att_cd",
+                ),
+                requested_attribute_code=_inventory_required_string(
+                    row,
+                    "rq_seat_att_cd",
+                ),
+                floor=_inventory_required_string(row, "floor"),
+                specification=_inventory_required_string(
+                    row,
+                    "seat_spec",
+                ),
+                sequence_no=_inventory_required_string(row, "sqr_no"),
+                message_code=_inventory_required_string(
+                    row,
+                    "intg_msg_cd",
+                ),
+                message=_inventory_required_string(row, "intg_msg"),
+                visual_message_division_code=_inventory_required_string(
+                    row,
+                    "vz_msg_dv_cd",
+                ),
+            )
+        )
+
+    window_rows = _inventory_required_list(raw, "windowList")
+    windows: list[SeatWindow] = []
+    for row in window_rows:
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError(
+                "KORAIL seat inventory contained a non-object window row"
+            )
+        windows.append(
+            SeatWindow(
+                start_location_ratio=_inventory_ratio(row, "st_loc_rt"),
+                close_location_ratio=_inventory_ratio(row, "cls_loc_rt"),
+            )
+        )
+
+    return SeatInventoryResponse(
+        h_msg_cd=response.h_msg_cd,
+        h_msg_txt=response.h_msg_txt,
+        str_result=response.str_result,
+        raw=raw,
+        layout_type=layout_type,
+        arrangement_code=arrangement_code,
+        remaining_count=remaining_count,
+        total_count=total_count,
+        seats=tuple(seats),
+        windows=tuple(windows),
+        vr_banner_url=_inventory_optional_string(raw, "vrBnrUrl"),
     )

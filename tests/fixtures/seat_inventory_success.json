@@ -1,0 +1,43 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic-seat-envelope-message-secret",
+  "strResult": "SUCC",
+  "layout_type": 7,
+  "seat_ary_cd": "Z9-UNKNOWN",
+  "seat_remain_count": 1,
+  "seat_total_count": 8,
+  "seatList": [
+    {
+      "dir_seat_att_cd": "DIRECTION-UNKNOWN",
+      "etc_seat_att_cd": "OTHER-UNKNOWN",
+      "floor": "1",
+      "intg_msg": "synthetic-seat-message-secret",
+      "intg_msg_cd": "MESSAGE-UNKNOWN",
+      "rq_seat_att_cd": "REQUEST-UNKNOWN",
+      "sale_psb_flg": "Y",
+      "seat_no": "SYNTHETIC-SEAT-01",
+      "seat_spec": "SPEC-UNKNOWN",
+      "sqr_no": "001",
+      "vz_msg_dv_cd": "VISUAL-UNKNOWN"
+    },
+    {
+      "dir_seat_att_cd": "BACKWARD-UNKNOWN",
+      "etc_seat_att_cd": "NONE-UNKNOWN",
+      "floor": "1",
+      "intg_msg": "synthetic-second-seat-message-secret",
+      "intg_msg_cd": "MESSAGE-SECOND",
+      "rq_seat_att_cd": "REQUEST-SECOND",
+      "sale_psb_flg": "N",
+      "seat_no": "SYNTHETIC-SEAT-02",
+      "seat_spec": "SPEC-SECOND",
+      "sqr_no": "002",
+      "vz_msg_dv_cd": "VISUAL-SECOND"
+    }
+  ],
+  "windowList": [
+    {"st_loc_rt": 0.125, "cls_loc_rt": 0.375},
+    {"st_loc_rt": 0.625, "cls_loc_rt": 0.875}
+  ],
+  "vrBnrUrl": "https://example.invalid/inert-only?marker=synthetic-url-secret",
+  "synthetic_raw_marker": "synthetic-seat-raw-secret"
+}
