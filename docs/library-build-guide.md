@@ -23,7 +23,7 @@
 | Distinct HTTP+path pairs | 159 |
 | Annotated service interfaces | 35 |
 | HTTP method mix | POST 136 / GET 29 |
-| Runtime test status | 성공 24 / 실패 8 / 미실행 133 |
+| Runtime test status | 성공 25 / 실패 8 / 미실행 132 |
 
 ## Runtime Contract
 
@@ -79,7 +79,7 @@
 | `CartService` | 3 | 1 | 0 | 2 |
 | `CashReceipt` | 1 | 0 | 0 | 1 |
 | `CertificationService` | 12 | 0 | 0 | 12 |
-| `CommonService` | 11 | 5 | 0 | 6 |
+| `CommonService` | 11 | 6 | 0 | 5 |
 | `CompensateService` | 3 | 0 | 1 | 2 |
 | `CustService` | 1 | 0 | 0 | 1 |
 | `DelayService` | 9 | 1 | 1 | 7 |

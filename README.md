@@ -122,6 +122,50 @@ the repr-hidden `raw` field. Supplying `timestamp_ms` gives callers a
 deterministic cache key; omitting it uses the current Unix epoch in
 milliseconds.
 
+### Successful read expansion
+
+The package now exposes 11 new public read methods across the 25 exact login/read routes
+registered by the transport boundary:
+
+- Account-neutral: `get_service_status()`, `get_deposit_banks()`,
+  `get_pass_available_dates()`, and `get_trip_menu()`.
+- Authenticated account or reservation reads: `get_cart_list()`,
+  `get_delay_discount_tickets()`, `get_discount_coupons()`,
+  `get_product_reservations()`, `get_product_detail()`,
+  `get_ticket_receipt()`, and `get_reservation_history()`.
+
+All requests use exact GET query or POST form field sets and issue one request
+without a fallback. No new DynaPath route was added, and every method above
+explicitly disables DynaPath. No live replay was performed for this expansion.
+The request and parser coverage uses only synthetic fixtures and
+`httpx.MockTransport`.
+
+`WRG000000` from the coupon list and `P100` from reservation history are the
+only evidenced no-data application codes converted to typed empty results.
+Other failures retain the package's typed error behavior, including `P058`
+session expiry and local session clearing.
+
+Product, receipt, cart, and ticket reads accept only caller-owned identifiers.
+For example, an already authenticated client can obtain one product detail
+without deriving an identifier from another response or making an adjacent
+request:
+
+```python
+def get_owned_product_detail(
+    client,
+    reservation_no,
+    reservation_sequence,
+):
+    return client.get_product_detail(
+        reservation_no=reservation_no,
+        reservation_sequence=reservation_sequence,
+    )
+```
+
+The reservation, payment, and mutation routes remain excluded. The package
+does not create, change, cancel, pay for, refund, or check in a reservation as
+part of any read.
+
 ### UUID and MAAS station reads
 
 `get_uuid()` performs the parameter-free account-neutral UUID read.
@@ -169,14 +213,18 @@ is limited to fields such as `appDataLoaded`, `noticeLoaded`, and
 `maasMenuCount`; it does not return raw account, session, ticket, station,
 menu, app-data, or notice response bodies.
 
-The corrected UUID contract was reverified on the tracked Task 6 result. The
-complete offline suite reported `275 passed, 1 skipped`; the only skip was the
-explicit live-service opt-in. One wheel and one source distribution built
-successfully, and a fresh virtual environment imported `KorailClient`,
-`MaasMenuItem`, and `MaasMenuListResponse` from the wheel. Static safety checks
-confirmed 15 registered routes, and UUID plus both MAAS reads explicitly
-disable DynaPath. Independent Task 6 spec and quality reviews for the preceding
-UUID/station phase both passed with no findings.
+For the successful-read expansion, the complete offline suite reported
+`427 passed, 1 skipped`; the only skip was the explicit live-service opt-in.
+One wheel and one source distribution built in temporary paths, and a fresh
+temporary virtual environment imported `KorailClient` plus all 11 new response
+types from `site-packages`. The installed package reported 25 routes and 28
+public methods.
+
+Before this expansion, the corrected UUID contract's tracked Task 6 result was
+`275 passed, 1 skipped`, 15 registered routes, and successful isolated imports
+of `KorailClient`, `MaasMenuItem`, and `MaasMenuListResponse`. Independent Task
+6 spec and quality reviews for that preceding UUID/station phase passed with no
+findings.
 
 Independent review confirmed the UUID-only correction changed no routes,
 DynaPath behavior or allowlist, existing POST/default behavior, or public API

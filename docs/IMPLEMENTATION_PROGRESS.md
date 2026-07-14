@@ -18,9 +18,13 @@ Last updated: 2026-07-14 KST
 - Generic MAAS menu discovery replaces the former requirement to supply or
   invent a fixed service code. The environment value remains an explicit
   override only.
-- The complete suite, package build, isolated import, static safety checks,
-  bounded UUID verification, and bounded MAAS menu-to-station live gate are
-  complete.
+- Eleven successful-read expansion methods are implemented with frozen models,
+  strict parsers, exact payload builders, synthetic fixtures, and no adjacent
+  or fallback requests.
+- The transport now allows 25 exact login/read routes and the client exposes
+  28 public methods. No new route was added to the DynaPath allowlist.
+- No live replay was performed for this expansion. The preceding bounded UUID
+  and MAAS evidence remains historical context and was not repeated.
 
 ## Implemented Public Operations
 
@@ -38,8 +42,13 @@ Last updated: 2026-07-14 KST
 - Transfer-station lookup
 - Ticket-list lookup
 - Fixed `rt=0` DynaPath generation and exact-path attachment
+- Account-neutral service-status and deposit-bank lookup
+- Account-neutral pass available-date and trip-menu lookup
+- Authenticated cart, delay-discount, and discount-coupon lookup
+- Authenticated product reservation list and caller-owned product detail lookup
+- Authenticated ticket receipt and reservation-history lookup
 
-The transport currently allows 15 exact read/login routes. Reservation,
+The transport currently allows 25 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
 mutation routes are not callable.
 
@@ -47,16 +56,34 @@ mutation routes are not callable.
 
 - Focused offline UUID/MAAS route, request, parser, model, redaction, public
   contract, and bounded live-helper tests are implemented.
+- The successful-read expansion's consolidated request, parser, redaction,
+  public-contract, and existing read regression gate reported `367 passed`.
+- The expanded tests cover exact method/path/fields, validation before I/O,
+  local authentication boundaries, session-expiry clearing, typed empty
+  `WRG000000` and `P100` results, wrapper and numeric shape validation, raw
+  identity, immutable tuples, and sensitive repr exclusion.
 - Live-helper tests cover server-discovered code, explicit override, and no
   eligible menu branches; the live-service test remains an explicit offline
   skip unless the caller opts in.
-- Current complete offline suite: `275 passed, 1 skipped`; the only skip was
+- Current complete offline suite: `427 passed, 1 skipped`; the only skip was
   the explicit live-service opt-in.
 - Package verification: one wheel and one source distribution built
-  successfully; a fresh virtual environment installed the wheel and imported
-  `KorailClient`, `MaasMenuItem`, and `MaasMenuListResponse`.
-- Static safety verification: 15 registered routes. UUID, MAAS menu, and MAAS
-  station calls explicitly disable DynaPath even under a custom allowlist.
+  successfully in temporary paths; a fresh temporary virtual environment
+  installed the wheel and imported `KorailClient` plus all 11 new response
+  types from `site-packages`. The installed wheel reported `routes=25` and
+  `public_methods=28`.
+- Static safety verification: 25 registered routes. UUID, MAAS menu, MAAS
+  station, and all 11 expansion calls explicitly disable DynaPath even under a
+  custom allowlist.
+- The final static source scan inspected 27 literal `get_json`/`post_form`
+  targets across `src/` (and `scripts/` when present) and reported zero
+  excluded mutation calls and zero excluded mutation routes. `git diff
+  --check` passed.
+- The implementation self-check found all 22 new dataclasses frozen, all raw
+  and sensitive fields repr-hidden, and the pre-existing DynaPath code and
+  constants unchanged. No confirmed Critical or Important implementation
+  concern remained; the separate independent integration review is not
+  represented as part of this implementation check.
 - Independent Task 6 review: spec pass and quality pass, with no findings.
 - Independent review confirmed the UUID-only correction changed no routes,
   DynaPath behavior or allowlist, existing POST/default behavior, or public API
@@ -92,21 +119,19 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
 - Live-successful inventory entries: 25
-- Currently implemented underlying routes: 15
+- Currently implemented exact login/read routes: 25
 - Therefore the complete APK endpoint inventory is not yet implemented
 
-Previously successful read candidates still outside the package include product
-and reservation history, cart lookup, delay bank data, pass information,
-discount/delay coupons, and receipt lookup. Some require valid ticket,
-reservation, or account state.
+All recorded successful read entries now have an exact package route. The
+remaining APK inventory is outside this read expansion and includes unverified
+or state-changing operations.
 
 ## Next Required Step
 
-No required work remains in the generic MAAS menu-to-station phase. Any
-reservation-linked menu variant using `pnrNo`, `tkRetNo`, or `addSrvReqNo`
-requires its own safety review and caller-owned data; do not infer or persist
-those identifiers. Keep all local credentials and runtime-sensitive values
-ignored and out of documentation.
+No required work remains in the successful-read expansion. Any additional
+reservation-linked route requires its own safety review and caller-owned data;
+do not infer or persist identifiers. Keep all local credentials and
+runtime-sensitive values ignored and out of documentation.
 
 See the shared [next-session prompt](../../NEXT_SESSION_PROMPT.md) for the
 combined KORAIL/SRT orchestration instructions.
