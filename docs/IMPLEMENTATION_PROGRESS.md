@@ -35,9 +35,9 @@ Last updated: 2026-07-14 KST
   a sufficiency category after a secret scan. It is not part of broad live
   smoke. The one bounded attempt stopped at its fixed setup gate before any
   login, search, car-list, or seat-list operation.
-- The one independent final whole-feature review is complete. Its two Important
-  findings were fixed together, and no Critical or Important finding remains
-  open.
+- The consolidated final review is complete. Its two Important and one Minor
+  KORAIL findings were fixed together; re-review found no remaining Critical,
+  Important, or Minor issue.
 - The transport now allows 27 exact login/read routes and the client exposes
   30 public methods. No new route was added to the DynaPath allowlist.
 - No live replay was performed for this expansion. The preceding bounded UUID
@@ -75,11 +75,11 @@ mutation routes are not callable.
 - Seat-inventory TDD RED: the focused test command stopped during collection on
   the missing `PhysicalSeat` public interface, as expected before production
   code existed.
-- Seat-inventory focused GREEN: `142 passed`; the cross-cutting seat, HTTP,
-  public-contract, and legacy-model gate reports `263 passed`. All tests are
+- Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
+  public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full `0.2.0` offline release gate reports `725 passed, 1 deselected in
-  0.66s`; only the explicitly opted-in live-service test was deselected.
+- The full `0.2.0` offline release gate reports `733 passed, 1 deselected`;
+  only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
   verifier accepted both artifacts, `git diff --check` passed, and all
