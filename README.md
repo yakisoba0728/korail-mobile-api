@@ -213,12 +213,20 @@ is limited to fields such as `appDataLoaded`, `noticeLoaded`, and
 `maasMenuCount`; it does not return raw account, session, ticket, station,
 menu, app-data, or notice response bodies.
 
-For the successful-read expansion, the complete offline suite reported
-`427 passed, 1 skipped`; the only skip was the explicit live-service opt-in.
-One wheel and one source distribution built in temporary paths, and a fresh
-temporary virtual environment imported `KorailClient` plus all 11 new response
-types from `site-packages`. The installed package reported 25 routes and 28
-public methods.
+For the successful-read expansion, the pre-review complete offline suite result
+of `427 passed, 1 skipped` is historical. The independent final whole-feature
+review reported Critical 0, Important 2, and Minor 0. Both Important findings
+were fixed together in `6b25341`, with `192 passed` focused coverage; no open
+Critical or Important finding remains. Fresh post-fix verification reported
+`435 passed, 1 skipped`; the only skip was the explicit live-service opt-in.
+
+A fresh isolated build produced one wheel and one source distribution, and a
+temporary environment installed the wheel and imported `KorailClient` plus all
+11 new response types from `site-packages`. The installed package reported
+`routes=25`, `public_methods=28`, and `response_types=11`. A fresh static scan
+reported `request_literals=27` and `excluded_mutation_routes=0`; the full
+feature diff passed `git diff --check`, and the DynaPath files remained
+unchanged.
 
 Before this expansion, the corrected UUID contract's tracked Task 6 result was
 `275 passed, 1 skipped`, 15 registered routes, and successful isolated imports

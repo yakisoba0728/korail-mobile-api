@@ -21,6 +21,9 @@ Last updated: 2026-07-14 KST
 - Eleven successful-read expansion methods are implemented with frozen models,
   strict parsers, exact payload builders, synthetic fixtures, and no adjacent
   or fallback requests.
+- The one independent final whole-feature review is complete. Its two Important
+  findings were fixed together, and no Critical or Important finding remains
+  open.
 - The transport now allows 25 exact login/read routes and the client exposes
   28 public methods. No new route was added to the DynaPath allowlist.
 - No live replay was performed for this expansion. The preceding bounded UUID
@@ -56,8 +59,9 @@ mutation routes are not callable.
 
 - Focused offline UUID/MAAS route, request, parser, model, redaction, public
   contract, and bounded live-helper tests are implemented.
-- The successful-read expansion's consolidated request, parser, redaction,
-  public-contract, and existing read regression gate reported `367 passed`.
+- Historical pre-review evidence: the successful-read expansion's consolidated
+  request, parser, redaction, public-contract, and existing read regression
+  gate reported `367 passed`.
 - The expanded tests cover exact method/path/fields, validation before I/O,
   local authentication boundaries, session-expiry clearing, typed empty
   `WRG000000` and `P100` results, wrapper and numeric shape validation, raw
@@ -65,25 +69,29 @@ mutation routes are not callable.
 - Live-helper tests cover server-discovered code, explicit override, and no
   eligible menu branches; the live-service test remains an explicit offline
   skip unless the caller opts in.
-- Current complete offline suite: `427 passed, 1 skipped`; the only skip was
-  the explicit live-service opt-in.
-- Package verification: one wheel and one source distribution built
+- Historical pre-review complete-suite evidence: `427 passed, 1 skipped`.
+- Fresh post-fix complete offline suite: `435 passed, 1 skipped in 0.27s`; the
+  only skip was the explicit live-service opt-in.
+- Fresh package verification: one wheel and one source distribution built
   successfully in temporary paths; a fresh temporary virtual environment
   installed the wheel and imported `KorailClient` plus all 11 new response
-  types from `site-packages`. The installed wheel reported `routes=25` and
-  `public_methods=28`.
+  types from `site-packages`. The installed wheel reported `routes=25`,
+  `public_methods=28`, and `response_types=11`.
 - Static safety verification: 25 registered routes. UUID, MAAS menu, MAAS
   station, and all 11 expansion calls explicitly disable DynaPath even under a
   custom allowlist.
-- The final static source scan inspected 27 literal `get_json`/`post_form`
-  targets across `src/` (and `scripts/` when present) and reported zero
-  excluded mutation calls and zero excluded mutation routes. `git diff
-  --check` passed.
+- The fresh final static scan reported `request_literals=27` and
+  `excluded_mutation_routes=0`. `git diff --check a331d63..HEAD` passed, and
+  the DynaPath implementation and constants remained unchanged.
 - The implementation self-check found all 22 new dataclasses frozen, all raw
   and sensitive fields repr-hidden, and the pre-existing DynaPath code and
-  constants unchanged. No confirmed Critical or Important implementation
-  concern remained; the separate independent integration review is not
-  represented as part of this implementation check.
+  constants unchanged.
+- The independent final whole-feature review reported Critical 0, Important 2,
+  and Minor 0. Both Important findings were fixed together in `6b25341`: the
+  central redaction boundary now covers the missing typed/trip-menu keys, and
+  reservation history stores its flattened tuple in `items`. Focused post-fix
+  coverage reported `192 passed`, and no Critical or Important finding remains
+  open.
 - Independent Task 6 review: spec pass and quality pass, with no findings.
 - Independent review confirmed the UUID-only correction changed no routes,
   DynaPath behavior or allowlist, existing POST/default behavior, or public API
