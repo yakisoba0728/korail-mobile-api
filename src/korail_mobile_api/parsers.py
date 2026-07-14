@@ -306,7 +306,13 @@ def _inventory_integer_value(value: object, key: str) -> int:
         and value
         and all("0" <= char <= "9" for char in value)
     ):
-        parsed = int(value)
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise KorailProtocolError(
+                f"KORAIL seat inventory field {key} has an unsupported "
+                "ASCII-decimal length"
+            ) from exc
     else:
         raise KorailProtocolError(
             f"KORAIL seat inventory field {key} must be a non-negative "

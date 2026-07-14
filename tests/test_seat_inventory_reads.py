@@ -366,7 +366,7 @@ def test_live_shape_missing_floor_and_empty_windows_are_typed(
 )
 @pytest.mark.parametrize(
     "value",
-    [True, -1, "-1", " 1", "1 ", "1.0", "１", ""],
+    [True, -1, "-1", " 1", "1 ", "1.0", "１", "", "9" * 5_000],
 )
 def test_live_shape_car_decimal_strings_reject_invalid_values(
     load_json_fixture,

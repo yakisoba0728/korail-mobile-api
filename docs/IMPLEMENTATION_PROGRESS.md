@@ -79,7 +79,7 @@ mutation routes are not callable.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full `0.2.0` offline release gate reports `797 passed, 1 deselected`;
+- The full `0.2.0` offline release gate reports `800 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
@@ -177,7 +177,7 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 ## Analysis Inventory Versus Implementation
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
-- Live-successful inventory entries: 25
+- Live-successful inventory entries: 27
 - Currently implemented exact login/read routes: 27
 - Therefore the complete APK endpoint inventory is not yet implemented
 
