@@ -62,11 +62,14 @@
 | `KorailCrypto` | 공통 | login password encryption, `Sid` generation, local helper wrappers |
 | `CommonApi` | `CacheService`, `CommonService`, `CalendarService` | common-code, station data, config/cache, encrypt/decrypt helper |
 | `SearchApi` | `SeatMovieService`, `ResearchService`, `TrainsInfoService` | train inquiry, schedule, fare, seat map, train/car info |
-| `ReservationApi` | `ReservationService`, `ReservationCancelService`, `ReservationWaitService`, `BusReservationService` | reservation/check/wait/cancel/change; default guarded |
-| `TicketApi` | `TicketService`, `MyTicketService`, `ReceiptService` | my tickets, purchase history, receipt, issue/check-in related flows |
-| `PaymentApi` | `PayService`, `PaymentService`, `CashReceipt` | payment provider prep/callback, reservation payment, cash receipt; default disabled |
-| `RefundApi` | `RefundService`, `DelayService`, `CompensateService` | refund/delay/compensate; default guarded |
-| `AncillaryApi` | pass, mileage, XPoint, RailPlus, product, cart, gift, push, add-service | secondary products, points, pass/card, push, gifts, add-ons |
+| `TicketApi` | `MyTicketService`, `ReceiptService` | read-only ticket, purchase-history, and receipt retrieval only |
+| `AncillaryApi` | pass, mileage, XPoint, RailPlus, product, push | read-only secondary-product, balance, status, and catalog views only |
+
+Reservation, payment, refund, cancellation, issuance, check-in, and other
+mutation endpoint facts in this guide are historical, non-implementable
+evidence. No flag, no dry-run marker, and no confirmation token authorizes
+mutation. Any future mutation interface requires a separate safety design, new
+evidence, independent review, and explicit user authorization.
 
 ## Service Runtime Status
 
@@ -126,9 +129,7 @@
 | 분류 | 기본 동작 |
 |---|---|
 | 조회성 API | 실제 호출 허용 가능. 단, 계정/티켓 개인정보 로그 마스킹 |
-| 예약 생성/취소/변경 | 기본 비활성화. 명시적 opt-in과 dry-run marker 필요 |
-| 결제/포인트/현금영수증 발급 | 기본 비활성화. 테스트 카드라도 운영 PG endpoint 직접 호출 금지 |
-| 환불/반환/체크인/회원탈퇴 | 기본 비활성화. 별도 confirmation token 필요 |
+| 모든 mutation endpoint | 현재 라이브러리에서 구현하거나 호출하지 않으며, 위의 비허용 정책을 예외 없이 적용 |
 | PNR/발권번호/N카드 기반 API | 실제 값 없으면 schema-only 테스트만 수행 |
 
 ## Hidden/Non-Retrofit Surface
@@ -162,5 +163,5 @@ Retrofit annotation 기준 165개 endpoint는 `analysis/reports/api-endpoints.ts
 2. `CommonApi.getCommonCode`, station/cache/config 조회를 구현해 기본 통신을 검증한다.
 3. 로그인은 common-code 기반 암호화와 cookie persistence까지 하나의 integration test로 묶는다.
 4. 열차 조회, 구매이력, 영수증처럼 현재 성공한 조회성 API부터 typed wrapper를 만든다.
-5. Do not expose mutation methods or DTO stubs at all without a separate safety design and explicit authorization.
+5. Do not expose mutation methods or DTO stubs. A future interface requires a separate safety design, new evidence, independent review, and explicit user authorization.
 6. WebView/provider/NetFunnel/DynaPath는 core API와 분리해 optional adapter로 둔다.

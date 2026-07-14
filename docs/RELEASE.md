@@ -15,9 +15,26 @@ a public release or any production-service request.
 Run from the repository root:
 
 ```bash
+set -euo pipefail
+
+artifact_dir=""
+venv_dir=""
+outside_dir=""
+checkout="$PWD"
+
+cleanup() {
+  cd "$checkout" 2>/dev/null || true
+  if [[ -n "$artifact_dir" ]]; then rm -rf "$artifact_dir"; fi
+  if [[ -n "$venv_dir" ]]; then rm -rf "$venv_dir"; fi
+  if [[ -n "$outside_dir" ]]; then rm -rf "$outside_dir"; fi
+  rm -rf "$checkout/build" "$checkout/dist"
+  find "$checkout" -type d -name '*.egg-info' -prune -exec rm -rf {} +
+}
+trap cleanup EXIT
+
 python -m pip install -e ".[test]"
 python -m pip install build
-PYTHONPATH="$PWD/src" pytest -q
+PYTHONPATH="$PWD/src" pytest -q -m "not live"
 
 artifact_dir="$(mktemp -d)"
 venv_dir="$(mktemp -d)"
@@ -43,6 +60,8 @@ assert Path("$checkout").resolve() not in package_path.parents
 print(KorailClient.__name__, package_path)
 PY
 cd "$checkout"
+cleanup
+trap - EXIT
 ```
 
 The verifier must receive exactly one wheel and one source distribution. The
@@ -50,13 +69,9 @@ fresh import must resolve from `site-packages`, outside the checkout.
 
 ## Cleanup
 
-After recording the bounded results, remove every generated artifact:
-
-```bash
-rm -rf "$artifact_dir" "$venv_dir" "$outside_dir"
-rm -rf build dist
-find . -type d -name '*.egg-info' -prune -exec rm -rf {} +
-```
+The `EXIT` trap removes temporary directories and local build metadata on both
+success and failure. The explicit final cleanup disarms that trap only after all
+checks pass.
 
 Finish with `git status --short` and `git diff --check`.
 

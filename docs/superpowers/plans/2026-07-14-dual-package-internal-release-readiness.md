@@ -4,7 +4,7 @@
 
 **Goal:** Make the existing KORAIL and SRT `0.1.0` packages reproducibly testable, typed, artifact-audited, and documentation-accurate for internal distribution without publishing them or inventing legal/owner metadata.
 
-**Architecture:** Treat both repositories as one coordinated release-readiness bundle while preserving separate commits and package artifacts. Add the same small release contract to each package—typed marker, metadata classifiers, release files, artifact verifier, CI workflow, and contract tests—then correct only the stale repository-specific documentation. Existing API, route, live-helper, authentication, DynaPath, NetFunnel, and safety code remains unchanged.
+**Architecture:** Treat both repositories as one coordinated release-readiness bundle while preserving separate commits and package artifacts. Apply the same behavioral release contract to each package: adversarial wheel/sdist fixtures, canonical archive and metadata validation, a fixed CLI error boundary, structurally offline gates, fail-fast cleanup, typed markers, and accurate repository policy. Presence-only checks supplement this contract but cannot satisfy it. Existing API, route, live-helper, authentication, DynaPath, NetFunnel, and safety code remains unchanged.
 
 **Tech Stack:** Python 3.11+, setuptools, `tomllib`, `zipfile`, `tarfile`, pytest, GitHub Actions.
 
@@ -55,9 +55,27 @@
 - Produces offline CI matrix for quoted Python versions `3.11`, `3.12`, `3.13`, and `3.14` plus one package job.
 - Does not produce a publishing/upload interface.
 
-- [ ] **Step 1: Write one failing release contract test per repository**
+- [ ] **Step 1: Write split behavioral release verification suites**
 
-Create `tests/test_release_readiness.py` using only the standard library and pytest. It must load `pyproject.toml` with `tomllib` and assert all of the following:
+Create `tests/test_release_readiness.py` using only the standard library and
+pytest. Build meaningful temporary wheel and sdist fixtures and exercise the
+verifier through `main()`. The behavioral matrix must cover canonical member
+paths, normalized duplicate names, forbidden backup variants, ZIP symlink and
+special-file modes, encrypted/unsupported ZIP members, TAR links/devices/FIFOs
+and special forms, strict gzip `r:gz`, one exact sdist root, exact regular paths,
+and zero-byte typed markers.
+
+Generate valid and mutated metadata for both archives. Require singleton exact
+Name, Version, and Requires-Python values, the exact classifier set without
+duplicates, normalized runtime Requires-Dist equality with `pyproject.toml`,
+forbidden owner/license/URL header rejection, the exact versioned dist-info
+path, and validated sdist PKG-INFO. Prove malformed or unsupported input yields
+one fixed stderr line, while success basenames are sanitized and bounded.
+
+Add structural tests for `pytest -q -m "not live"` in CI and release docs, an
+ambient live-env regression proving the live test is deselected, `set -euo
+pipefail` plus EXIT cleanup, and the complete mutation-policy boundary. Then
+load `pyproject.toml` with `tomllib` and retain these source-contract assertions:
 
 ```python
 EXPECTED_CLASSIFIERS = {
@@ -78,7 +96,7 @@ For each repository assert:
 ```text
 project.version == "0.1.0"
 project.requires-python == ">=3.11"
-EXPECTED_CLASSIFIERS is a subset of project.classifiers
+EXPECTED_CLASSIFIERS equals project.classifiers as a duplicate-free set
 project.license is absent
 project.authors is absent
 project.maintainers is absent
@@ -91,7 +109,13 @@ MANIFEST.in, CHANGELOG.md, SECURITY.md, docs/RELEASE.md,
 scripts/verify_distribution.py, and .github/workflows/ci.yml exist
 ```
 
-Read the workflow text and assert quoted `3.11`, `3.12`, `3.13`, `3.14`, `pytest -q`, `python -m build`, `verify_distribution.py`, and a fresh-venv wheel import are present. Read `docs/RELEASE.md` and assert it identifies the workflow as internal-only, names the four public-release blockers (license, owner metadata, canonical URL, explicit authorization), forbids live tests during the release gate, and contains no `twine upload` or publish command.
+Read the workflow text and assert quoted `3.11`, `3.12`, `3.13`, `3.14`, the
+exact `pytest -q -m "not live"` selection, `python -m build`,
+`verify_distribution.py`, and a fresh-venv wheel import are present. Read
+`docs/RELEASE.md` and assert it identifies the workflow as internal-only, names
+the four public-release blockers (license, owner metadata, canonical URL,
+explicit authorization), forbids live tests during the release gate, uses
+fail-fast cleanup, and contains no `twine upload` or publish command.
 
 Add repository-specific truth assertions:
 
@@ -114,7 +138,9 @@ Run in each worktree:
 PYTHONPATH="$PWD/src" pytest -q tests/test_release_readiness.py
 ```
 
-Expected: failures for missing metadata classifiers, package-data, `py.typed`, release files, workflow, verifier, and stale documentation. Fix only import/test setup errors until these are the failure reasons.
+Expected: adversarial fixtures fail across canonical path/type, exact metadata,
+CLI-boundary, offline-gate, cleanup, and mutation-policy categories. Fix only
+fixture/import setup errors until those behavioral failures are proven.
 
 - [ ] **Step 3: Add exact typed-package and metadata contracts**
 
@@ -136,19 +162,25 @@ Create the empty PEP 561 markers `src/korail_mobile_api/py.typed` and `src/srt_m
 Create `scripts/verify_distribution.py` with a command-line `main()` that accepts exactly one wheel and one sdist in any argument order. It must:
 
 ```text
-read project name/version/Python requirement and package-data name from pyproject.toml
+read the full expected artifact contract from pyproject.toml
 reject missing, duplicate, or unexpected artifact types
-inspect wheel ZIP and sdist TAR without extracting them
-require package py.typed in both artifacts
-require README.md, CHANGELOG.md, SECURITY.md, docs/RELEASE.md in the sdist
-read wheel METADATA and require exact Name, Version, Requires-Python, and Typing :: Typed
-reject any member containing .local-live-smoke.env, .apk, .DS_Store,
-.worktrees, .git, analysis, build, dist, .pytest_cache, __pycache__, or *.pyc
-print only bounded artifact names and a success summary; never print archive contents
-exit nonzero with a local fixed error message on contract failure
+inspect wheel ZIP and gzip sdist TAR with r:gz without extracting them
+apply the canonical path, duplicate, forbidden-family/backup, ZIP type and
+compression, TAR type/root, exact regular-file, and zero-byte rules from Step 1
+validate both wheel METADATA and sdist PKG-INFO using exact singleton fields,
+the exact classifier set, normalized runtime Requires-Dist, and forbidden headers
+require only the exact versioned dist-info/METADATA location
+catch every ordinary archive/parser exception at the CLI boundary and print one
+fixed stderr line; never print a path, traceback, archive member, or exception
+print only allowlisted, bounded artifact basenames in the success summary
 ```
 
-The GitHub Actions workflow must use read-only contents permission, run offline pytest on Python `3.11` through `3.14`, build wheel/sdist once on `3.14`, invoke the verifier, install the wheel into a fresh venv, change outside the checkout, and import the package/client from `site-packages`. It must not define live environment variables, publish permissions, attestations, release triggers, tags, or upload steps.
+The GitHub Actions workflow must use read-only contents permission, run
+`pytest -q -m "not live"` on Python `3.11` through `3.14`, build wheel/sdist once
+on `3.14`, invoke the verifier, install the wheel into a fresh venv, change
+outside the checkout, and import the package/client from `site-packages`. It must
+not define live environment variables, publish permissions, attestations,
+release triggers, tags, or upload steps.
 
 - [ ] **Step 5: Add internal release and security documentation**
 
@@ -160,7 +192,8 @@ SECURITY.md: require private reporting through the owner's existing private
 channel; forbid public disclosure of credentials, cookies, tokens, PNRs,
 raw responses, or production identifiers; state that mutation endpoints are excluded.
 docs/RELEASE.md: exact internal test/build/verifier/fresh-install commands,
-artifact cleanup, version policy, no-live rule, and explicit public blockers.
+set -euo pipefail, an EXIT cleanup trap installed before build, cleanup on both
+success and failure, version policy, no-live rule, and explicit public blockers.
 README.md: lead with the installable read-only Python package, retain the
 analysis/evidence map, link the release/security/changelog documents, and
 show editable internal installation without implying PyPI availability.
@@ -178,9 +211,11 @@ evidence, 25 routes, 28 public methods, 435 passed / 1 skipped, the completed
 successful-read expansion, and the next candidates (internal release completed;
 new KORAIL reads require separate evidence). Preserve the static-analysis map
 as historical evidence, not the current implementation state.
-Change library-build-guide Implementation Order item 5 so mutation methods and
-DTO stubs are not exposed at all without a separate safety design and explicit
-authorization.
+Remove mutation module/method/DTO execution recommendations from the library
+guide. Retain endpoint facts only as historical, non-implementable evidence and
+state that no flag, no dry-run marker, and no confirmation token authorizes
+mutation. Any future interface requires separate safety design, new evidence,
+independent review, and explicit user authorization.
 Mark only completed designs as implemented/verified; do not edit speculative
 or superseded design content beyond its status line.
 ```
@@ -191,7 +226,9 @@ SRT:
 Replace the root analysis-only description with the current installable
 read-only package state while retaining APK evidence context.
 Correct spec section 12 so its retained-file description matches the current
-source/tests/docs/specs/plans/progress/smoke repository.
+source/tests/docs/specs/plans/progress/smoke repository. Remove reservation and
+payment execution/module recommendations while retaining endpoint observations
+as historical, non-implementable evidence under the same no-flag/no-token rule.
 Mark only completed selector, mutual, and seat-page designs as
 implemented/verified; do not mark pagination or physical-seat schemas complete.
 ```
@@ -201,7 +238,7 @@ implemented/verified; do not mark pagination or physical-seat schemas complete.
 Run both focused tests and confirm they pass. Then, independently in each worktree:
 
 ```bash
-PYTHONPATH="$PWD/src" pytest -q
+PYTHONPATH="$PWD/src" pytest -q -m "not live"
 artifact_dir="$(mktemp -d)"
 venv_dir="$(mktemp -d)"
 python -m build --wheel --sdist --outdir "$artifact_dir" .
@@ -212,7 +249,12 @@ python -m venv "$venv_dir"
 "$venv_dir/bin/python" -m pip install "$wheel_path"
 ```
 
-Change to a temporary directory, unset `PYTHONPATH`, import the package and its client, and assert the import path contains `site-packages` and not either source worktree. Run `git diff --check`. Remove all temporary paths and generated `build/`, `dist/`, and `*.egg-info` directories. Do not invoke live helpers.
+Change to a temporary directory, unset `PYTHONPATH`, import the package and its
+client, and assert the import path contains `site-packages` and not either source
+worktree. Run `git diff --check`. The shell transcript must start with `set -euo
+pipefail` and install an EXIT cleanup trap before building. Remove all temporary
+paths and generated `build/`, `dist/`, and `*.egg-info` directories. Do not invoke
+live helpers.
 
 - [ ] **Step 8: Commit once per repository and report**
 
