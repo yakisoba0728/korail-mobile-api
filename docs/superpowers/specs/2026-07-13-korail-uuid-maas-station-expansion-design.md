@@ -4,6 +4,12 @@
 
 **Status:** Approved, including the 2026-07-13 live-contract correction
 
+> Historical scope note: this design governed the completed UUID/station-only
+> phase. Its exclusion of generic MAAS menu discovery was superseded by the
+> user's 2026-07-14 follow-up request and the current implementation documented
+> in `docs/IMPLEMENTATION_PROGRESS.md`. Reservation-linked MAAS flows remain
+> excluded.
+
 ## Goal
 
 Add the two previously runtime-reached, account-neutral KORAIL reads for the

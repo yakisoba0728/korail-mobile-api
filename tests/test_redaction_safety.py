@@ -22,6 +22,8 @@ def test_redact_mapping_masks_sensitive_values():
         "pnrNo": "123456789012",
         "mutMrkVrfCd": "server-secret",
         "verification_code": "model-secret",
+        "addSrvDvCd": "maas-wire-secret",
+        "additional_service_code": "maas-model-secret",
         "safe": "value",
     }
     redacted = redact_mapping(data)
@@ -31,6 +33,8 @@ def test_redact_mapping_masks_sensitive_values():
     assert redacted["pnrNo"] == "[REDACTED]"
     assert redacted["mutMrkVrfCd"] == "[REDACTED]"
     assert redacted["verification_code"] == "[REDACTED]"
+    assert redacted["addSrvDvCd"] == "[REDACTED]"
+    assert redacted["additional_service_code"] == "[REDACTED]"
     assert redacted["safe"] == "value"
 
 
@@ -71,6 +75,10 @@ def test_redaction_is_recursive_case_insensitive_and_url_safe():
         "x-dynapath-m-token",
         "mutMrkVrfCd",
         "verification_code",
+        "addSrvDvCd",
+        "additional_service_code",
+        "tkRetNo",
+        "addSrvReqNo",
     ],
 )
 def test_redact_text_masks_sensitive_key_value_pairs(key):

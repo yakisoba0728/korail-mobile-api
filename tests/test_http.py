@@ -338,6 +338,7 @@ def test_http_client_blocks_excluded_domains_before_get(blocked_domain: str):
         ("POST", "/classes/com.korail.mobile.qry.chtnStn.do"),
         ("POST", "/classes/com.korail.mobile.myTicket.MyTicketList"),
         ("GET", "/ebizcross/getUUID.do"),
+        ("POST", "/classes/com.korail.mobile.copt.gdMenuLt.do"),
         ("POST", "/ebizmaas/EbizMaasStationList.do"),
     ],
 )
@@ -346,7 +347,65 @@ def test_read_only_route_registry_accepts_current_public_requests(method, path):
 
 
 def test_read_only_route_registry_has_exact_expanded_count():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 14
+    assert len(KORAIL_READ_ONLY_ROUTES) == 15
+
+
+@pytest.mark.parametrize(
+    "extra_field",
+    ["Key", "pnrNo", "tkRetNo", "addSrvReqNo", "unexpected"],
+)
+def test_maas_menu_route_rejects_non_generic_form_fields_before_io(
+    extra_field,
+):
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(KorailProtocolError, match="form fields"):
+        client.post_form(
+            "/classes/com.korail.mobile.copt.gdMenuLt.do",
+            {
+                "Device": "AD",
+                "Version": "250601003",
+                extra_field: "blocked-value",
+            },
+            include_common=False,
+        )
+
+    assert called is False
+
+
+@pytest.mark.parametrize(
+    "form",
+    [{}, {"Device": "AD"}, {"Version": "250601003"}],
+)
+def test_maas_menu_route_requires_exact_generic_form_fields(form):
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(KorailProtocolError, match="form fields"):
+        client.post_form(
+            "/classes/com.korail.mobile.copt.gdMenuLt.do",
+            form,
+            include_common=False,
+        )
+
+    assert called is False
 
 
 def test_post_form_can_accept_one_envelope_free_object_without_weakening_default():

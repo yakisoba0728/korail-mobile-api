@@ -78,6 +78,47 @@ class UuidResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
+class MaasMenuItem:
+    active: str | None = None
+    additional_service_code: str | None = field(default=None, repr=False)
+    app_data: str | None = None
+    icon_off: str | None = field(default=None, repr=False)
+    icon_on: str | None = field(default=None, repr=False)
+    info: str | None = None
+    login_required: str | None = None
+    name: str | None = None
+    popup_image: str | None = field(default=None, repr=False)
+    menu_type: str | None = None
+    url: str | None = field(default=None, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @property
+    def uses_station_selection(self) -> bool:
+        return (
+            self.active == "Y"
+            and self.menu_type != "N"
+            and self.app_data in {"Y", "M10", "M30"}
+            and isinstance(self.additional_service_code, str)
+            and bool(self.additional_service_code.strip())
+        )
+
+
+@dataclass(frozen=True)
+class MaasMenuListResponse(BaseKorailResponse):
+    items: tuple[MaasMenuItem, ...] = ()
+    departure_elevator_url: str | None = field(default=None, repr=False)
+    departure_navigation_url: str | None = field(default=None, repr=False)
+    departure_parking_url: str | None = field(default=None, repr=False)
+    arrival_elevator_url: str | None = field(default=None, repr=False)
+    arrival_bus_info_url: str | None = field(default=None, repr=False)
+    arrival_parking_url: str | None = field(default=None, repr=False)
+    arrival_baggage_transfer_robot_url: str | None = field(
+        default=None,
+        repr=False,
+    )
+
+
+@dataclass(frozen=True)
 class KorailStation:
     code: str
     name: str

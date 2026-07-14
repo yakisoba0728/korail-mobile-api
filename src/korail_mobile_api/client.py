@@ -11,6 +11,7 @@ from .models import (
     AppDataResponse,
     BaseKorailResponse,
     KorailSession,
+    MaasMenuListResponse,
     NoticeResponse,
     StationDataResponse,
     TrainSearchQuery,
@@ -19,6 +20,7 @@ from .models import (
 )
 from .parsers import (
     parse_app_data_response,
+    parse_maas_menu_list_response,
     parse_notice_response,
     parse_station_data_response,
     parse_station_name_map,
@@ -29,6 +31,7 @@ from .parsers import (
 from .payloads import (
     build_cache_query,
     build_common_code_form,
+    build_maas_menu_form,
     build_maas_station_form,
     build_ticket_list_form,
     build_train_schedule_form,
@@ -125,6 +128,19 @@ class KorailClient:
                     "/ebizcross/getUUID.do",
                     include_dynapath=False,
                     require_envelope=False,
+                )
+            )
+        )
+
+    def get_maas_menu_list(self) -> MaasMenuListResponse:
+        form = build_maas_menu_form(self.config)
+        return self._run_read(
+            lambda: parse_maas_menu_list_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.copt.gdMenuLt.do",
+                    form,
+                    include_common=False,
+                    include_dynapath=False,
                 )
             )
         )

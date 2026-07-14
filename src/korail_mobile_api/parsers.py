@@ -9,6 +9,8 @@ from .models import (
     AppVersionInfo,
     BaseKorailResponse,
     KorailStation,
+    MaasMenuItem,
+    MaasMenuListResponse,
     NoticeResponse,
     StationDataResponse,
     TrainSummary,
@@ -151,6 +153,72 @@ def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
         str_result=response.str_result,
         raw=response.raw,
         verification_code=value,
+    )
+
+
+def _maas_optional_string(
+    data: Mapping[str, Any],
+    key: str,
+) -> str | None:
+    value = data.get(key)
+    if value is not None and not isinstance(value, str):
+        raise KorailProtocolError(
+            f"KORAIL MAAS menu field {key} must be a string or null"
+        )
+    return value
+
+
+def parse_maas_menu_list_response(
+    response: BaseKorailResponse,
+) -> MaasMenuListResponse:
+    rows = response.raw.get("menuList")
+    if rows is None:
+        rows = []
+    if not isinstance(rows, list):
+        raise KorailProtocolError("KORAIL MAAS menuList must be a list or null")
+    items: list[MaasMenuItem] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError(
+                "KORAIL MAAS menuList contained a non-object row"
+            )
+        raw = dict(row)
+        items.append(
+            MaasMenuItem(
+                active=_maas_optional_string(row, "active"),
+                additional_service_code=_maas_optional_string(
+                    row,
+                    "addSrvDvCd",
+                ),
+                app_data=_maas_optional_string(row, "appData"),
+                icon_off=_maas_optional_string(row, "iconOff"),
+                icon_on=_maas_optional_string(row, "iconOn"),
+                info=_maas_optional_string(row, "info"),
+                login_required=_maas_optional_string(row, "login"),
+                name=_maas_optional_string(row, "name"),
+                popup_image=_maas_optional_string(row, "poppImg"),
+                menu_type=_maas_optional_string(row, "type"),
+                url=_maas_optional_string(row, "url"),
+                raw=raw,
+            )
+        )
+    raw = response.raw
+    return MaasMenuListResponse(
+        h_msg_cd=response.h_msg_cd,
+        h_msg_txt=response.h_msg_txt,
+        str_result=response.str_result,
+        raw=raw,
+        items=tuple(items),
+        departure_elevator_url=_maas_optional_string(raw, "dElevatorUrl"),
+        departure_navigation_url=_maas_optional_string(raw, "dLeadNaviUrl"),
+        departure_parking_url=_maas_optional_string(raw, "dParkingLotUrl"),
+        arrival_elevator_url=_maas_optional_string(raw, "aElevatorUrl"),
+        arrival_bus_info_url=_maas_optional_string(raw, "aBisInfoUrl"),
+        arrival_parking_url=_maas_optional_string(raw, "aParkingLotUrl"),
+        arrival_baggage_transfer_robot_url=_maas_optional_string(
+            raw,
+            "aBggTrsfRbtUrl",
+        ),
     )
 
 

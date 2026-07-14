@@ -1,12 +1,15 @@
 # KORAIL Mobile API Status by Service
 
-기준: `analysis/reports/api-endpoints.tsv`와 2026-07-09에 수행한 안전 범위 실제 호출 결과 스냅샷. 결제/예약 생성/취소/환불/체크인/회원탈퇴처럼 운영 상태를 바꿀 수 있는 API는 실행하지 않았다.
+기준: `analysis/reports/api-endpoints.tsv`, 2026-07-09 안전 범위 실제 호출
+스냅샷, 2026-07-14 MAAS 메뉴·역 목록 읽기 검증. 결제/예약
+생성/취소/환불/체크인/회원탈퇴처럼 운영 상태를 바꿀 수 있는 API는
+실행하지 않았다.
 
 | 상태 | 건수 |
 |---|---:|
-| 성공 | 24 |
+| 성공 | 25 |
 | 실패 | 8 |
-| 미실행 | 133 |
+| 미실행 | 132 |
 | 전체 | 165 |
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
@@ -22,7 +25,7 @@
 | `CartService` | 장바구니 및 MAAS 예약 상태 | 3 | 1 | 0 | 2 |
 | `CashReceipt` | 현금영수증 발급 | 1 | 0 | 0 | 1 |
 | `CertificationService` | 할인/자격 인증 및 증빙 | 12 | 0 | 0 | 12 |
-| `CommonService` | 공통코드, 약관, 앱 설정, QR 위치 인증 | 11 | 5 | 0 | 6 |
+| `CommonService` | 공통코드, 약관, 앱 설정, QR 위치 인증 | 11 | 6 | 0 | 5 |
 | `CompensateService` | 보상 환불 대상 조회 및 실행 | 3 | 0 | 1 | 2 |
 | `CustService` | 고객 할인 대상 조회 | 1 | 0 | 0 | 1 |
 | `DelayService` | 지연증명, 지연료, 지연환불 조회/신청 | 9 | 1 | 1 | 7 |
@@ -139,7 +142,7 @@
 ## CommonService
 
 - 역할: 공통코드, 약관, 앱 설정, QR 위치 인증
-- 상태: 총 11개 / 성공 5 / 실패 0 / 미실행 6
+- 상태: 총 11개 / 성공 6 / 실패 0 / 미실행 5
 
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
@@ -149,8 +152,8 @@
 | 32 | `getDecrypt` | POST | `/classes/com.korail.mobile.common.decrypt.do` | 공통 복호화 | 미실행 | 미검증 | Device, Version, Key, type, values | `DecryptDao.DecryptResponse` |
 | 33 | `getEncrypt` | POST | `/classes/com.korail.mobile.common.encrypt.do` | 공통 암호화 | 미실행 | 미검증 | Device, Version, Key, type, values | `EncryptDao.EncryptResponse` |
 | 34 | `getKBPayEncrypt` | POST | `/classes/com.korail.mobile.common.encrypt.do` | KBPay 암호화 | 미실행 | 결제/간편결제/포인트/금전성 API | Device, Version, Key, type, values | `KBPayEncryptDao.KBpayEncryptResponse` |
-| 35 | `getMaasMenuList` | POST | `/classes/com.korail.mobile.copt.gdMenuLt.do` | MAAS 메뉴 조회 | 미실행 | PNR/티켓/N카드/상품 등 실데이터 필요 | Device, Version, pnrNo, tkRetNo, addSrvReqNo | `MaasMenuListDao.MaasMenuListResponse` |
-| 36 | `getMaasStationList` | POST | `/ebizmaas/EbizMaasStationList.do` | MAAS 역 목록 조회 | 성공 | HTTP 200(비JSON/캐시성 응답 포함) | addSrvDvCd | `StationDataDao.StationDataResponse` |
+| 35 | `getMaasMenuList` | POST | `/classes/com.korail.mobile.copt.gdMenuLt.do` | MAAS 메뉴 조회 | 성공 | 일반 메뉴 조회 HTTP 200, 엄격 envelope, 메뉴 11개 | Device, Version, pnrNo, tkRetNo, addSrvReqNo | `MaasMenuListDao.MaasMenuListResponse` |
+| 36 | `getMaasStationList` | POST | `/ebizmaas/EbizMaasStationList.do` | MAAS 역 목록 조회 | 성공 | 메뉴 응답의 동적 addSrvDvCd로 HTTP 200, 역 101개 | addSrvDvCd | `StationDataDao.StationDataResponse` |
 | 37 | `getStationData` | GET | `/classes/com.korail.mobile.common.stationdata` | 역 데이터 조회 | 성공 | HTTP 200(비JSON/캐시성 응답 포함) |  | `StationDataDao.StationDataResponse` |
 | 38 | `getStationInfo` | GET | `/classes/com.korail.mobile.common.stationinfo` | 역 정보 조회 | 성공 | HTTP 200(비JSON/캐시성 응답 포함) | Device | `StationInfoDao.StationInfoResponse` |
 | 39 | `seedEncrypt` | POST | `/classes/com.korail.mobile.shinhan.Encrypt.do` | 신한/SEED 암호화 | 미실행 | 미검증 | Device, Version, Key, value | `SeedEncryptDao.SeedEncryptResponse` |

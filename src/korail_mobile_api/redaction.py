@@ -22,6 +22,10 @@ SENSITIVE_KEYS = frozenset(
         "x-dynapath-m-token",
         "mutMrkVrfCd",
         "verification_code",
+        "addSrvDvCd",
+        "additional_service_code",
+        "tkRetNo",
+        "addSrvReqNo",
     }
 )
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")

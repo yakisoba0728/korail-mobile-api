@@ -1,5 +1,6 @@
 import pytest
 
+import korail_mobile_api.models as models
 from korail_mobile_api import KorailConfig
 from korail_mobile_api.live import live_enabled, read_credentials_from_env
 from korail_mobile_api.models import (
@@ -78,12 +79,24 @@ def test_build_config_from_env_defaults_advertising_id_to_empty(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("maas_code", "maas_tested", "maas_count"),
-    [(None, False, 0), ("M10", True, 1)],
+    (
+        "maas_override",
+        "menu_code",
+        "expected_code",
+        "maas_tested",
+        "maas_count",
+    ),
+    [
+        (None, "dynamic-code", "dynamic-code", True, 1),
+        ("override-code", "dynamic-code", "override-code", True, 1),
+        (None, None, None, False, 0),
+    ],
 )
 def test_run_live_smoke_calls_every_current_read_without_raw_output(
     monkeypatch,
-    maas_code,
+    maas_override,
+    menu_code,
+    expected_code,
     maas_tested,
     maas_count,
 ):
@@ -130,6 +143,41 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(
                 str_result="SUCC",
                 verification_code="uuid-secret",
                 raw={"mutMrkVrfCd": "uuid-secret"},
+            )
+
+        def get_maas_menu_list(self) -> models.MaasMenuListResponse:
+            calls.append(("get_maas_menu_list",))
+            items = (
+                (
+                    models.MaasMenuItem(
+                        active="N",
+                        additional_service_code="inactive-code",
+                        app_data="Y",
+                    ),
+                    models.MaasMenuItem(
+                        active="Y",
+                        additional_service_code="web-code",
+                        app_data="N",
+                    ),
+                    models.MaasMenuItem(
+                        active="Y",
+                        additional_service_code=" ",
+                        app_data="Y",
+                    ),
+                    models.MaasMenuItem(
+                        active="Y",
+                        additional_service_code=menu_code,
+                        app_data="Y",
+                        login_required="Y",
+                        name="Dynamic station service",
+                    ),
+                )
+                if menu_code is not None
+                else ()
+            )
+            return models.MaasMenuListResponse(
+                items=items,
+                raw={"menuList": []},
             )
 
         def get_maas_station_data(
@@ -223,10 +271,10 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(
     monkeypatch.setenv("KORAIL_MOBILE_API_LIVE", "1")
     monkeypatch.setenv("KORAIL_MEMBER_NO", "member")
     monkeypatch.setenv("KORAIL_PASSWORD", "password")
-    if maas_code is None:
+    if maas_override is None:
         monkeypatch.delenv("KORAIL_MAAS_SERVICE_CODE", raising=False)
     else:
-        monkeypatch.setenv("KORAIL_MAAS_SERVICE_CODE", maas_code)
+        monkeypatch.setenv("KORAIL_MAAS_SERVICE_CODE", maas_override)
     monkeypatch.setattr(live, "KorailClient", FakeClient)
     monkeypatch.setattr(live, "build_config_from_env", KorailConfig)
     result = live.run_live_smoke_from_env()
@@ -235,6 +283,7 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(
         "appDataLoaded": True,
         "noticeLoaded": True,
         "uuidLoaded": True,
+        "maasMenuCount": 4 if menu_code is not None else 0,
         "maasStationTested": maas_tested,
         "maasStationCount": maas_count,
         "loggedIn": True,
@@ -250,7 +299,8 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(
     assert "password" not in repr(result).lower()
     assert "must not leak" not in repr(result)
     assert "uuid-secret" not in repr(result)
-    assert "M10" not in repr(result)
+    assert "dynamic-code" not in repr(result)
+    assert "override-code" not in repr(result)
     assert "mutMrkVrfCd" not in repr(result)
     assert "stn_cd" not in repr(result)
     assert "stn_nm" not in repr(result)
@@ -262,12 +312,13 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(
         "get_app_data",
         "get_notice",
         "get_uuid",
-    ]
-    if maas_code is not None:
-        expected_calls.append("get_maas_station_data")
-        assert ("get_maas_station_data", maas_code) in calls
-    expected_calls.extend([
+        "get_maas_menu_list",
         "login",
+    ]
+    if expected_code is not None:
+        expected_calls.append("get_maas_station_data")
+        assert ("get_maas_station_data", expected_code) in calls
+    expected_calls.extend([
         "get_common_code",
         "get_station_info",
         "get_station_data",

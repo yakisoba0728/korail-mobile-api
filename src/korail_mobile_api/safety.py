@@ -35,11 +35,18 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ("POST", "/classes/com.korail.mobile.qry.chtnStn.do"),
         ("POST", "/classes/com.korail.mobile.myTicket.MyTicketList"),
         ("GET", "/ebizcross/getUUID.do"),
+        ("POST", "/classes/com.korail.mobile.copt.gdMenuLt.do"),
         ("POST", "/ebizmaas/EbizMaasStationList.do"),
     }
 )
 
 KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
+
+KORAIL_EXACT_FORM_FIELDS = {
+    "/classes/com.korail.mobile.copt.gdMenuLt.do": frozenset(
+        {"Device", "Version"}
+    ),
+}
 
 
 def assert_korail_origin(base_url: str) -> None:
@@ -76,6 +83,16 @@ def assert_read_only_route(method: str, path: str) -> None:
         raise KorailProtocolError(
             f"KORAIL request route is not allowed: {route[0]} {route[1]}"
         )
+
+
+def assert_read_only_form_fields(path: str, fields: set[str]) -> None:
+    allowed = KORAIL_EXACT_FORM_FIELDS.get(urlsplit(path).path)
+    if allowed is None or fields == allowed:
+        return
+    raise KorailProtocolError(
+        "KORAIL request form fields must exactly match the registered "
+        f"read-only contract for {urlsplit(path).path}"
+    )
 
 SAFETY_DEFAULTS = {
     "조회성 API": "실제 호출 허용 가능. 단, 계정/티켓 개인정보 로그 마스킹",

@@ -1,0 +1,36 @@
+{
+  "h_msg_cd": "API.I00000",
+  "h_msg_txt": "Success",
+  "strResult": "SUCC",
+  "menuList": [
+    {
+      "active": "Y",
+      "addSrvDvCd": "fixture-station-service",
+      "appData": "Y",
+      "iconOff": "https://example.invalid/station-off.png",
+      "iconOn": "https://example.invalid/station-on.png",
+      "info": "Station service information",
+      "login": "N",
+      "name": "Fixture station service",
+      "poppImg": "https://example.invalid/station-popup.png",
+      "type": "Y",
+      "url": "https://example.invalid/station"
+    },
+    {
+      "active": "Y",
+      "addSrvDvCd": "fixture-web-service",
+      "appData": "N",
+      "login": "N",
+      "name": "Fixture web service",
+      "type": "Y",
+      "url": "https://example.invalid/web"
+    }
+  ],
+  "dElevatorUrl": "https://example.invalid/departure/elevator",
+  "dLeadNaviUrl": "https://example.invalid/departure/navigation",
+  "dParkingLotUrl": "https://example.invalid/departure/parking",
+  "aElevatorUrl": "https://example.invalid/arrival/elevator",
+  "aBisInfoUrl": "https://example.invalid/arrival/bus",
+  "aParkingLotUrl": "https://example.invalid/arrival/parking",
+  "aBggTrsfRbtUrl": "https://example.invalid/arrival/baggage"
+}

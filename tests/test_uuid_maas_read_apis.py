@@ -1,6 +1,8 @@
 import httpx
 import pytest
 
+import korail_mobile_api.parsers as parsers
+import korail_mobile_api.payloads as payloads
 from korail_mobile_api import DYNAPATH_HEADER_NAME, KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -14,6 +16,64 @@ from korail_mobile_api.parsers import (
     parse_uuid_response,
 )
 from korail_mobile_api.payloads import build_maas_station_form
+
+
+def test_maas_menu_parser_returns_typed_server_items(load_json_fixture):
+    raw = load_json_fixture("maas_menu_success.json")
+
+    result = parsers.parse_maas_menu_list_response(
+        BaseKorailResponse.from_raw(raw)
+    )
+
+    assert len(result.items) == 2
+    station_item = result.items[0]
+    assert station_item.name == "Fixture station service"
+    assert station_item.additional_service_code == "fixture-station-service"
+    assert station_item.app_data == "Y"
+    assert station_item.uses_station_selection is True
+    assert result.items[1].uses_station_selection is False
+    assert result.departure_elevator_url.endswith("/departure/elevator")
+    assert result.arrival_bus_info_url.endswith("/arrival/bus")
+    assert result.raw is raw
+
+
+def test_maas_menu_parser_treats_missing_menu_list_as_empty():
+    raw = {
+        "h_msg_cd": "API.I00000",
+        "h_msg_txt": "Success",
+        "strResult": "SUCC",
+    }
+
+    result = parsers.parse_maas_menu_list_response(
+        BaseKorailResponse.from_raw(raw)
+    )
+
+    assert result.items == ()
+
+
+@pytest.mark.parametrize(
+    "menu_list",
+    ["not-a-list", ["not-an-object"], [{"addSrvDvCd": 10}]],
+)
+def test_maas_menu_parser_rejects_malformed_known_structure(menu_list):
+    raw = {
+        "h_msg_cd": "API.I00000",
+        "h_msg_txt": "Success",
+        "strResult": "SUCC",
+        "menuList": menu_list,
+    }
+
+    with pytest.raises(KorailProtocolError, match="MAAS menu"):
+        parsers.parse_maas_menu_list_response(BaseKorailResponse.from_raw(raw))
+
+
+def test_maas_menu_form_matches_generic_app_request():
+    config = KorailConfig()
+
+    assert payloads.build_maas_menu_form(config) == {
+        "Device": config.device,
+        "Version": config.version,
+    }
 
 
 def test_uuid_parser_returns_repr_safe_typed_code(load_json_fixture):
@@ -99,6 +159,11 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
                 200,
                 json=load_json_fixture("uuid_success.json"),
             )
+        if request.url.path == "/classes/com.korail.mobile.copt.gdMenuLt.do":
+            return httpx.Response(
+                200,
+                json=load_json_fixture("maas_menu_success.json"),
+            )
         if request.url.path == "/ebizmaas/EbizMaasStationList.do":
             return httpx.Response(
                 200,
@@ -112,10 +177,12 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     )
     try:
         uuid = client.get_uuid()
+        menu = client.get_maas_menu_list()
         stations = client.get_maas_station_data("M10")
     finally:
         client.close()
     assert uuid.verification_code == "fixture-verification-code"
+    assert menu.items[0].additional_service_code == "fixture-station-service"
     assert len(stations.stations) == 2
     assert captured[0].method == "GET"
     assert captured[0].url.scheme == "https"
@@ -125,9 +192,69 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     assert captured[1].method == "POST"
     assert captured[1].url.scheme == "https"
     assert captured[1].url.host == "smart.letskorail.com"
-    assert captured[1].url.path == "/ebizmaas/EbizMaasStationList.do"
+    assert captured[1].url.path == "/classes/com.korail.mobile.copt.gdMenuLt.do"
     assert captured[1].url.query == b""
-    assert captured[1].content == b"addSrvDvCd=M10"
+    assert captured[1].content == (
+        f"Device={client.config.device}&Version={client.config.version}".encode()
+    )
+    assert b"Key=" not in captured[1].content
+    assert captured[2].method == "POST"
+    assert captured[2].url.scheme == "https"
+    assert captured[2].url.host == "smart.letskorail.com"
+    assert captured[2].url.path == "/ebizmaas/EbizMaasStationList.do"
+    assert captured[2].url.query == b""
+    assert captured[2].content == b"addSrvDvCd=M10"
+
+
+def test_client_maas_menu_requires_complete_common_envelope():
+    client = KorailClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"menuList": []})
+        )
+    )
+    try:
+        with pytest.raises(KorailProtocolError, match="envelope"):
+            client.get_maas_menu_list()
+    finally:
+        client.close()
+
+
+def test_client_maas_menu_never_uses_dynapath_when_custom_allowlisted(
+    load_json_fixture,
+):
+    path = "/classes/com.korail.mobile.copt.gdMenuLt.do"
+    provider_contexts = []
+    captured: list[httpx.Request] = []
+
+    def token_provider(context):
+        provider_contexts.append(context)
+        return "must-not-be-used"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(
+            200,
+            json=load_json_fixture("maas_menu_success.json"),
+        )
+
+    client = KorailClient(
+        KorailConfig(
+            dynapath=DynapathConfig(
+                enabled=True,
+                token_provider=token_provider,
+                allowlist_paths=frozenset({path}),
+            )
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        client.get_maas_menu_list()
+    finally:
+        client.close()
+
+    assert provider_contexts == []
+    assert len(captured) == 1
+    assert DYNAPATH_HEADER_NAME not in captured[0].headers
 
 
 @pytest.mark.parametrize(

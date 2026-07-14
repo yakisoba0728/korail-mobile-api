@@ -16,7 +16,11 @@ from .errors import (
     KorailTransportError,
 )
 from .models import BaseKorailResponse
-from .safety import assert_korail_origin, assert_read_only_route
+from .safety import (
+    assert_korail_origin,
+    assert_read_only_form_fields,
+    assert_read_only_route,
+)
 
 
 def parse_base_response(data: Any, *, raise_on_fail: bool = True) -> BaseKorailResponse:
@@ -146,6 +150,7 @@ class KorailHttpClient:
             form.update(self.common_fields())
         if data:
             form.update(data)
+        assert_read_only_form_fields(path, set(form))
         headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))

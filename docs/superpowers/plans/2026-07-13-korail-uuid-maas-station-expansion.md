@@ -1,5 +1,11 @@
 # KORAIL UUID And MAAS Station Expansion Implementation Plan
 
+> Historical scope note: this plan governed the completed UUID/station-only
+> phase. Its generic-menu exclusion was superseded by the user's 2026-07-14
+> follow-up request and the current implementation documented in
+> `docs/IMPLEMENTATION_PROGRESS.md`. Reservation-linked MAAS flows remain
+> excluded.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add typed, account-neutral KORAIL UUID and MAAS station reads with exact route/form enforcement, repr-safe output, and bounded live evidence.

@@ -24,3 +24,6 @@ def test_readme_describes_fixed_rt_dynapath_consistently():
     assert "/file/CACHE/prdMobilePlusNotice.cache" in text
     assert "appDataLoaded" in text
     assert "noticeLoaded" in text
+    assert "get_maas_menu_list()" in text
+    assert "menuList[].addSrvDvCd" in text
+    assert "explicit override" in text

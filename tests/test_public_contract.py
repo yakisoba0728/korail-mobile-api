@@ -2,6 +2,7 @@ import inspect
 from typing import get_type_hints
 
 import korail_mobile_api
+import korail_mobile_api.models as models
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.models import (
@@ -27,6 +28,7 @@ def test_client_public_method_set_is_stable():
         "close",
         "get_app_data",
         "get_common_code",
+        "get_maas_menu_list",
         "get_maas_station_data",
         "get_notice",
         "get_station_data",
@@ -44,15 +46,19 @@ def test_client_public_method_set_is_stable():
 
 def test_uuid_maas_signatures_types_and_exports_are_stable():
     uuid_signature = inspect.signature(KorailClient.get_uuid)
+    menu_signature = inspect.signature(KorailClient.get_maas_menu_list)
     maas_signature = inspect.signature(KorailClient.get_maas_station_data)
     assert list(uuid_signature.parameters) == ["self"]
+    assert list(menu_signature.parameters) == ["self"]
     assert list(maas_signature.parameters) == [
         "self",
         "additional_service_code",
     ]
     uuid_hints = get_type_hints(KorailClient.get_uuid)
+    menu_hints = get_type_hints(KorailClient.get_maas_menu_list)
     maas_hints = get_type_hints(KorailClient.get_maas_station_data)
     assert uuid_hints["return"] is UuidResponse
+    assert menu_hints["return"] is models.MaasMenuListResponse
     assert maas_hints["additional_service_code"] is str
     assert maas_hints["return"] is StationDataResponse
     assert (
@@ -61,6 +67,8 @@ def test_uuid_maas_signatures_types_and_exports_are_stable():
     )
     expected_models = {
         "UuidResponse": UuidResponse,
+        "MaasMenuItem": models.MaasMenuItem,
+        "MaasMenuListResponse": models.MaasMenuListResponse,
         "KorailStation": KorailStation,
         "StationDataResponse": StationDataResponse,
     }

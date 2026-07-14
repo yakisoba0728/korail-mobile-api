@@ -80,13 +80,23 @@ def run_live_smoke_from_env() -> dict[str, Any]:
         app_data = client.get_app_data()
         notice = client.get_notice()
         uuid = client.get_uuid()
+        maas_menu = client.get_maas_menu_list()
         maas_service_code = os.environ.get("KORAIL_MAAS_SERVICE_CODE")
+        if not maas_service_code:
+            maas_service_code = next(
+                (
+                    item.additional_service_code
+                    for item in maas_menu.items
+                    if item.uses_station_selection
+                ),
+                None,
+            )
+        session = client.login(member_no, password)
         maas_stations = (
             client.get_maas_station_data(maas_service_code)
             if maas_service_code
             else None
         )
-        session = client.login(member_no, password)
         common = client.get_common_code("")
         station_info = client.get_station_info()
         station_data = client.get_station_data()
@@ -139,6 +149,7 @@ def run_live_smoke_from_env() -> dict[str, Any]:
             "appDataLoaded": bool(app_data.raw),
             "noticeLoaded": bool(notice.raw),
             "uuidLoaded": bool(uuid.verification_code),
+            "maasMenuCount": len(maas_menu.items),
             "maasStationTested": maas_stations is not None,
             "maasStationCount": (
                 len(maas_stations.stations) if maas_stations is not None else 0
