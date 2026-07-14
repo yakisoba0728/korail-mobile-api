@@ -614,15 +614,30 @@ def test_seat_parser_rejects_non_finite_window_ratios(
         _parse_seat(raw)
 
 
-def test_seat_parser_rejects_duplicate_nonempty_seats_and_impossible_counts(
+def test_seat_parser_preserves_repeated_seat_labels(
     load_json_fixture,
 ):
-    duplicate = load_json_fixture("seat_inventory_success.json")
-    duplicate["seatList"][1]["seat_no"] = "SYNTHETIC-SEAT-01"
+    raw = load_json_fixture("seat_inventory_success.json")
+    raw["windowList"] = []
+    raw["seatList"][0]["seat_no"] = "SYNTHETIC-REPEATED-LABEL"
+    raw["seatList"][0]["sqr_no"] = "SYNTHETIC-SEQUENCE-1"
+    raw["seatList"][1]["seat_no"] = "SYNTHETIC-REPEATED-LABEL"
+    raw["seatList"][1]["sqr_no"] = "SYNTHETIC-SEQUENCE-2"
+
+    parsed = _parse_seat(raw)
+
+    assert len(parsed.seats) == len(raw["seatList"])
+    assert [
+        (seat.seat_no, seat.sequence_no) for seat in parsed.seats
+    ] == [
+        ("SYNTHETIC-REPEATED-LABEL", "SYNTHETIC-SEQUENCE-1"),
+        ("SYNTHETIC-REPEATED-LABEL", "SYNTHETIC-SEQUENCE-2"),
+    ]
+
+
+def test_seat_parser_rejects_impossible_counts(load_json_fixture):
     impossible = load_json_fixture("seat_inventory_success.json")
     impossible["seat_remain_count"] = 9
-    with pytest.raises(KorailProtocolError, match="duplicate"):
-        _parse_seat(duplicate)
     with pytest.raises(KorailProtocolError, match="remaining"):
         _parse_seat(impossible)
 

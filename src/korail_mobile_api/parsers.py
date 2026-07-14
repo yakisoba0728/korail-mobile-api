@@ -450,19 +450,12 @@ def parse_seat_inventory_response(
 
     seat_rows = _inventory_required_list(raw, "seatList")
     seats: list[PhysicalSeat] = []
-    seat_numbers: set[str] = set()
     for row in seat_rows:
         if not isinstance(row, Mapping):
             raise KorailProtocolError(
                 "KORAIL seat inventory contained a non-object seat row"
             )
         seat_no = _inventory_required_string(row, "seat_no")
-        if seat_no and seat_no in seat_numbers:
-            raise KorailProtocolError(
-                "KORAIL seat inventory contained a duplicate seat number"
-            )
-        if seat_no:
-            seat_numbers.add(seat_no)
         seats.append(
             PhysicalSeat(
                 seat_no=seat_no,
