@@ -263,18 +263,6 @@ def parse_station_data_response(
     )
 
 
-def _inventory_required_mapping(
-    data: Mapping[str, Any],
-    key: str,
-) -> Mapping[str, Any]:
-    value = data.get(key)
-    if not isinstance(value, Mapping):
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be an object"
-        )
-    return value
-
-
 def _inventory_required_list(
     data: Mapping[str, Any],
     key: str,
@@ -302,11 +290,7 @@ def _inventory_optional_string(
     data: Mapping[str, Any],
     key: str,
 ) -> str | None:
-    if key not in data:
-        raise KorailProtocolError(
-            f"KORAIL seat inventory response missing field {key}"
-        )
-    value = data[key]
+    value = data.get(key)
     if value is not None and not isinstance(value, str):
         raise KorailProtocolError(
             f"KORAIL seat inventory field {key} must be a string or null"
@@ -314,50 +298,67 @@ def _inventory_optional_string(
     return value
 
 
-def _inventory_required_int(
-    data: Mapping[str, Any],
-    key: str,
-    *,
-    non_negative: bool = False,
-) -> int:
-    if key not in data or type(data[key]) is not int:
+def _inventory_integer_value(value: object, key: str) -> int:
+    if type(value) is int:
+        parsed = value
+    elif (
+        isinstance(value, str)
+        and value
+        and all("0" <= char <= "9" for char in value)
+    ):
+        parsed = int(value)
+    else:
         raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be an integer"
+            f"KORAIL seat inventory field {key} must be a non-negative "
+            "integer or ASCII-decimal string"
         )
-    value = data[key]
-    if non_negative and value < 0:
+    if parsed < 0:
         raise KorailProtocolError(
             f"KORAIL seat inventory field {key} must not be negative"
         )
-    return value
+    return parsed
+
+
+def _inventory_required_int(
+    data: Mapping[str, Any],
+    key: str,
+) -> int:
+    return _inventory_integer_value(data.get(key), key)
 
 
 def _inventory_optional_int(
     data: Mapping[str, Any],
     key: str,
 ) -> int | None:
-    if key not in data:
-        raise KorailProtocolError(
-            f"KORAIL seat inventory response missing field {key}"
-        )
-    value = data[key]
-    if value is not None and type(value) is not int:
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be an integer or null"
-        )
-    if isinstance(value, int) and value < 0:
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must not be negative"
-        )
-    return value
+    value = data.get(key)
+    if value is None:
+        return None
+    return _inventory_integer_value(value, key)
 
 
 def parse_seat_car_list_response(
     response: BaseKorailResponse,
 ) -> SeatCarListResponse:
     raw = response.raw
-    container = _inventory_required_mapping(raw, "srcar_infos")
-    rows = _inventory_required_list(container, "srcar_info")
+    container = raw.get("srcar_infos")
+    if container is None:
+        rows = []
+    elif isinstance(container, Mapping):
+        rows_value = container.get("srcar_info")
+        if rows_value is None:
+            rows = []
+        elif isinstance(rows_value, list):
+            rows = rows_value
+        else:
+            raise KorailProtocolError(
+                "KORAIL seat inventory field srcar_info must be a list or "
+                "null"
+            )
+    else:
+        raise KorailProtocolError(
+            "KORAIL seat inventory field srcar_infos must be an object or "
+            "null"
+        )
     cars: list[SeatCar] = []
     car_numbers: set[int] = set()
     for row in rows:
@@ -365,11 +366,7 @@ def parse_seat_car_list_response(
             raise KorailProtocolError(
                 "KORAIL seat car list contained a non-object row"
             )
-        car_no = _inventory_required_int(
-            row,
-            "h_srcar_no",
-            non_negative=True,
-        )
+        car_no = _inventory_required_int(row, "h_srcar_no")
         if car_no in car_numbers:
             raise KorailProtocolError(
                 "KORAIL seat car list contained a duplicate car number"
@@ -400,7 +397,6 @@ def parse_seat_car_list_response(
                 remaining_seat_count=_inventory_required_int(
                     row,
                     "h_rest_seat_cnt",
-                    non_negative=True,
                 ),
                 attributes=tuple(attributes),
             )
@@ -442,12 +438,10 @@ def parse_seat_inventory_response(
     remaining_count = _inventory_required_int(
         raw,
         "seat_remain_count",
-        non_negative=True,
     )
     total_count = _inventory_required_int(
         raw,
         "seat_total_count",
-        non_negative=True,
     )
     if remaining_count > total_count:
         raise KorailProtocolError(
@@ -488,7 +482,7 @@ def parse_seat_inventory_response(
                     row,
                     "rq_seat_att_cd",
                 ),
-                floor=_inventory_required_string(row, "floor"),
+                floor=_inventory_optional_string(row, "floor"),
                 specification=_inventory_required_string(
                     row,
                     "seat_spec",

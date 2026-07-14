@@ -32,6 +32,7 @@ _STATUSES = frozenset(
         "login_failed",
         "search_failed",
         "no_trains",
+        "no_eligible_train",
         "car_list_failed",
         "no_cars",
         "seat_list_failed",
@@ -44,6 +45,7 @@ _SUFFICIENCY = frozenset(
         "insufficient_login",
         "insufficient_search",
         "insufficient_no_trains",
+        "insufficient_no_eligible_train",
         "insufficient_car_list",
         "insufficient_no_cars",
         "insufficient_seat_list",
@@ -118,6 +120,19 @@ def _bounded_count(values: Sequence[object]) -> int:
     return min(len(values), 10_000)
 
 
+def _first_eligible_general_seat_train(
+    trains: Sequence[TrainSummary],
+) -> TrainSummary | None:
+    for train in trains:
+        if train.general_reservation_code in {"12", "13"}:
+            continue
+        flag = train.seat_map_flag
+        if flag and flag[0] == "N":
+            continue
+        return train
+    return None
+
+
 def _train_fields_present(train: TrainSummary) -> bool:
     values = (
         train.train_no,
@@ -147,7 +162,7 @@ def _car_fields_typed(response: SeatCarListResponse) -> bool:
         or not isinstance(response.cars, tuple)
     ):
         return False
-    cars_typed = all(
+    return bool(response.cars) and all(
         isinstance(car, SeatCar)
         and type(car.car_no) is int
         and isinstance(car.room_class_name, str)
@@ -160,9 +175,6 @@ def _car_fields_typed(response: SeatCarListResponse) -> bool:
         )
         for car in response.cars
     )
-    if not cars_typed:
-        return False
-    return any(car.attributes for car in response.cars)
 
 
 def _seat_fields_typed(response: SeatInventoryResponse) -> bool:
@@ -180,6 +192,10 @@ def _seat_fields_typed(response: SeatInventoryResponse) -> bool:
 def _physical_seat_fields_typed(seats: tuple[PhysicalSeat, ...]) -> bool:
     return bool(seats) and all(
         isinstance(seat, PhysicalSeat)
+        and (
+            seat.floor is None
+            or isinstance(seat.floor, str)
+        )
         and all(
             isinstance(value, str)
             for value in (
@@ -188,7 +204,6 @@ def _physical_seat_fields_typed(seats: tuple[PhysicalSeat, ...]) -> bool:
                 seat.direction_code,
                 seat.other_attribute_code,
                 seat.requested_attribute_code,
-                seat.floor,
                 seat.specification,
                 seat.sequence_no,
                 seat.message_code,
@@ -201,7 +216,7 @@ def _physical_seat_fields_typed(seats: tuple[PhysicalSeat, ...]) -> bool:
 
 
 def _window_fields_typed(windows: tuple[SeatWindow, ...]) -> bool:
-    return bool(windows) and all(
+    return all(
         isinstance(window, SeatWindow)
         and type(window.start_location_ratio) is float
         and type(window.close_location_ratio) is float
@@ -265,7 +280,13 @@ def capture_evidence() -> dict[str, Any]:
         result["train_count"] = _bounded_count(search.trains)
         if not search.trains:
             return _stop(result, "no_trains", "insufficient_no_trains")
-        train = search.trains[0]
+        train = _first_eligible_general_seat_train(search.trains)
+        if train is None:
+            return _stop(
+                result,
+                "no_eligible_train",
+                "insufficient_no_eligible_train",
+            )
         result["fields"]["train_fields_present"] = (
             _train_fields_present(train)
         )

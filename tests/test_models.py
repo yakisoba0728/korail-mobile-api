@@ -41,6 +41,19 @@ def test_core_models_are_dataclasses():
     assert is_dataclass(TrainSearchResult)
 
 
+def test_train_summary_exposes_seat_map_flag_and_general_reservation_code():
+    train = TrainSummary.from_raw(
+        {
+            "h_trn_no": "00001",
+            "h_rd_seat_map_flg": "Y",
+            "h_gen_rsv_cd": "11",
+        }
+    )
+
+    assert train.seat_map_flag == "Y"
+    assert train.general_reservation_code == "11"
+
+
 def test_config_defaults_match_design():
     config = KorailConfig()
     assert config.base_url == "https://smart.letskorail.com"

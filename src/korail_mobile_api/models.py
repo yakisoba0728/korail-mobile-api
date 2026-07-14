@@ -166,6 +166,8 @@ class TrainSummary:
     train_class_code: str | None = None
     departure_run_order: str | None = None
     arrival_run_order: str | None = None
+    seat_map_flag: str | None = None
+    general_reservation_code: str | None = None
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -191,6 +193,8 @@ class TrainSummary:
                 raw.get("h_arv_stn_run_ordr")
                 or raw.get("arvStnRunOrdr")
             ),
+            seat_map_flag=raw.get("h_rd_seat_map_flg"),
+            general_reservation_code=raw.get("h_gen_rsv_cd"),
             raw=raw,
         )
 
@@ -223,7 +227,7 @@ class PhysicalSeat:
     direction_code: str
     other_attribute_code: str
     requested_attribute_code: str
-    floor: str
+    floor: str | None
     specification: str
     sequence_no: str
     message_code: str

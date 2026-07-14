@@ -236,11 +236,13 @@ def test_train_summary_appends_inventory_fields_and_parses_both_key_styles():
             "arvStnRunOrdr": "000020",
         }
     )
-    assert list(inspect.signature(TrainSummary).parameters)[-4:] == [
+    assert list(inspect.signature(TrainSummary).parameters)[-6:] == [
         "run_date",
         "train_class_code",
         "departure_run_order",
         "arrival_run_order",
+        "seat_map_flag",
+        "general_reservation_code",
     ]
     assert (
         train.run_date,
@@ -338,12 +340,112 @@ def test_seat_parser_maps_all_fields_preserves_unknown_codes_and_hides_secrets(
         assert secret not in rendered
 
 
+def test_live_shape_car_decimal_strings_are_normalized(load_json_fixture):
+    parsed = parse_seat_car_list_response(
+        _base(load_json_fixture("seat_car_list_live_shape.json"))
+    )
+    assert parsed.recommended_car_no == 2
+    assert parsed.cars[0].car_no == 2
+    assert parsed.cars[0].remaining_seat_count == 3
+    assert parsed.cars[0].attributes == ()
+
+
+def test_live_shape_missing_floor_and_empty_windows_are_typed(
+    load_json_fixture,
+):
+    parsed = parse_seat_inventory_response(
+        _base(load_json_fixture("seat_inventory_live_shape.json"))
+    )
+    assert parsed.seats[0].floor is None
+    assert parsed.windows == ()
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["h_rcmd_srcar_no", "h_srcar_no", "h_rest_seat_cnt"],
+)
+@pytest.mark.parametrize(
+    "value",
+    [True, -1, "-1", " 1", "1 ", "1.0", "１", ""],
+)
+def test_live_shape_car_decimal_strings_reject_invalid_values(
+    load_json_fixture,
+    field_name,
+    value,
+):
+    raw = load_json_fixture("seat_car_list_live_shape.json")
+    target = (
+        raw
+        if field_name == "h_rcmd_srcar_no"
+        else raw["srcar_infos"]["srcar_info"][0]
+    )
+    target[field_name] = value
+
+    with pytest.raises(KorailProtocolError):
+        _parse_car(raw)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["layout_type", "seat_remain_count", "seat_total_count"],
+)
+@pytest.mark.parametrize(
+    "value",
+    [True, -1, "-1", " 1", "1 ", "1.0", "１", ""],
+)
+def test_live_shape_seat_decimal_strings_reject_invalid_values(
+    load_json_fixture,
+    field_name,
+    value,
+):
+    raw = load_json_fixture("seat_inventory_live_shape.json")
+    raw[field_name] = value
+
+    with pytest.raises(KorailProtocolError):
+        _parse_seat(raw)
+
+
+@pytest.mark.parametrize(
+    "container_state",
+    [
+        "missing_srcar_infos",
+        "null_srcar_infos",
+        "missing_srcar_info",
+        "null_srcar_info",
+    ],
+)
+def test_live_shape_missing_or_null_car_containers_are_empty(
+    load_json_fixture,
+    container_state,
+):
+    raw = load_json_fixture("seat_car_list_live_shape.json")
+    if container_state == "missing_srcar_infos":
+        raw.pop("srcar_infos")
+    elif container_state == "null_srcar_infos":
+        raw["srcar_infos"] = None
+    elif container_state == "missing_srcar_info":
+        raw["srcar_infos"].pop("srcar_info")
+    else:
+        raw["srcar_infos"]["srcar_info"] = None
+
+    assert _parse_car(raw).cars == ()
+
+
+def test_live_shape_missing_optional_car_fields_are_none(load_json_fixture):
+    raw = load_json_fixture("seat_car_list_live_shape.json")
+    raw.pop("h_rcmd_srcar_no")
+    raw.pop("h_trn_no")
+
+    parsed = _parse_car(raw)
+
+    assert parsed.recommended_car_no is None
+    assert parsed.train_no is None
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda raw: raw.pop("srcar_infos"),
         lambda raw: raw.__setitem__("srcar_infos", []),
-        lambda raw: raw["srcar_infos"].pop("srcar_info"),
         lambda raw: raw["srcar_infos"].__setitem__("srcar_info", {}),
         lambda raw: raw["srcar_infos"]["srcar_info"].__setitem__(0, []),
         lambda raw: raw["srcar_infos"]["srcar_info"][0].pop(
@@ -371,7 +473,7 @@ def test_car_parser_rejects_malformed_containers(
     "mutation",
     [
         lambda raw: raw.__setitem__("h_rcmd_srcar_no", True),
-        lambda raw: raw.__setitem__("h_rcmd_srcar_no", "2"),
+        lambda raw: raw.__setitem__("h_rcmd_srcar_no", 2.0),
         lambda raw: raw.__setitem__("h_trn_no", 99123),
         lambda raw: raw["srcar_infos"]["srcar_info"][0].__setitem__(
             "h_srcar_no", False
@@ -380,7 +482,7 @@ def test_car_parser_rejects_malformed_containers(
             "h_psrm_cl_nm", 1
         ),
         lambda raw: raw["srcar_infos"]["srcar_info"][0].__setitem__(
-            "h_rest_seat_cnt", "4"
+            "h_rest_seat_cnt", 4.0
         ),
         lambda raw: raw["srcar_infos"]["srcar_info"][0][
             "seatAttInfos"
@@ -436,10 +538,11 @@ def test_seat_parser_rejects_malformed_containers(
     [
         lambda raw: raw.__setitem__("layout_type", True),
         lambda raw: raw.__setitem__("seat_ary_cd", 7),
-        lambda raw: raw.__setitem__("seat_remain_count", "1"),
+        lambda raw: raw.__setitem__("seat_remain_count", 1.0),
         lambda raw: raw.__setitem__("seat_total_count", False),
         lambda raw: raw.__setitem__("vrBnrUrl", 1),
         lambda raw: raw["seatList"][0].__setitem__("sale_psb_flg", 1),
+        lambda raw: raw["seatList"][0].__setitem__("floor", 1),
         lambda raw: raw["windowList"][0].__setitem__("st_loc_rt", "0.1"),
     ],
 )
@@ -458,7 +561,6 @@ def test_seat_parser_rejects_wrong_scalar_types(
     [
         "dir_seat_att_cd",
         "etc_seat_att_cd",
-        "floor",
         "intg_msg",
         "intg_msg_cd",
         "rq_seat_att_cd",
@@ -1121,6 +1223,70 @@ def test_client_inventory_methods_pass_both_disabled_inclusion_flags(
     )
 
 
+def test_first_eligible_general_train_skips_app_ineligible_rows():
+    blocked_by_map = TrainSummary(
+        train_no="1",
+        seat_map_flag="N",
+        general_reservation_code="11",
+    )
+    blocked_by_code = TrainSummary(
+        train_no="2",
+        seat_map_flag="Y",
+        general_reservation_code="12",
+    )
+    eligible = TrainSummary(
+        train_no="3",
+        seat_map_flag="Y",
+        general_reservation_code="11",
+    )
+    assert evidence._first_eligible_general_seat_train(
+        [blocked_by_map, blocked_by_code, eligible]
+    ) is eligible
+
+
+@pytest.mark.parametrize("seat_map_flag", [None, "", "Y"])
+def test_first_eligible_general_train_accepts_non_n_map_flags(
+    seat_map_flag,
+):
+    train = TrainSummary(
+        train_no="1",
+        seat_map_flag=seat_map_flag,
+        general_reservation_code="11",
+    )
+
+    assert evidence._first_eligible_general_seat_train([train]) is train
+
+
+@pytest.mark.parametrize("general_reservation_code", ["12", "13"])
+def test_first_eligible_general_train_rejects_blocked_reservation_codes(
+    general_reservation_code,
+):
+    train = TrainSummary(
+        train_no="1",
+        seat_map_flag="Y",
+        general_reservation_code=general_reservation_code,
+    )
+
+    assert evidence._first_eligible_general_seat_train([train]) is None
+
+
+def test_first_eligible_general_train_returns_none_without_eligible_row():
+    trains = [
+        TrainSummary(
+            train_no="1",
+            seat_map_flag="N",
+            general_reservation_code="11",
+        ),
+        TrainSummary(
+            train_no="2",
+            seat_map_flag="Y",
+            general_reservation_code="13",
+        ),
+    ]
+
+    assert evidence._first_eligible_general_seat_train(trains) is None
+
+
 class _EvidenceFakeClient:
     scenario = "completed"
     calls: list[str] = []
@@ -1141,7 +1307,23 @@ class _EvidenceFakeClient:
         self.calls.append("search")
         if self.scenario == "search_failed":
             raise RuntimeError("synthetic-search-message-secret")
-        trains = [] if self.scenario == "no_trains" else [self.train]
+        if self.scenario == "no_trains":
+            trains = []
+        elif self.scenario == "ineligible_trains":
+            trains = [
+                replace(
+                    self.train,
+                    seat_map_flag="N",
+                    general_reservation_code="11",
+                ),
+                replace(
+                    self.train,
+                    seat_map_flag="Y",
+                    general_reservation_code="12",
+                ),
+            ]
+        else:
+            trains = [self.train]
         return TrainSearchResult(
             trains=trains,
             response=BaseKorailResponse(),
@@ -1204,7 +1386,7 @@ class _EvidenceFakeClient:
                     direction_code="UNKNOWN-DIRECTION",
                     other_attribute_code="UNKNOWN-OTHER",
                     requested_attribute_code="UNKNOWN-REQUEST",
-                    floor="1",
+                    floor=None,
                     specification="UNKNOWN-SPEC",
                     sequence_no="1",
                     message_code="UNKNOWN-MESSAGE",
@@ -1289,6 +1471,13 @@ def configured_evidence(monkeypatch, complete_train):
             "no_trains",
             "no_trains",
             "insufficient_no_trains",
+            {"login": 1, "search": 1, "car_list": 0, "seat_list": 0},
+            ["init", "login", "search", "close"],
+        ),
+        (
+            "ineligible_trains",
+            "no_eligible_train",
+            "insufficient_no_eligible_train",
             {"login": 1, "search": 1, "car_list": 0, "seat_list": 0},
             ["init", "login", "search", "close"],
         ),
@@ -1411,24 +1600,42 @@ def test_completed_evidence_contains_only_bounded_counts_and_type_presence(
     }
 
 
-@pytest.mark.parametrize(
-    ("scenario", "unobserved_field"),
-    [
-        ("empty_attributes", "car_fields_typed"),
-        ("empty_seats", "physical_seat_fields_typed"),
-        ("empty_windows", "window_fields_typed"),
-    ],
-)
-def test_evidence_requires_observed_item_fields_for_sufficiency(
+@pytest.mark.parametrize("scenario", ["empty_attributes", "empty_windows"])
+def test_evidence_accepts_valid_empty_optional_collections(
     configured_evidence,
     scenario,
-    unobserved_field,
 ):
     configured_evidence.scenario = scenario
     result = evidence.capture_evidence()
     assert result["status"] == "completed"
-    assert result["fields"][unobserved_field] is False
+    assert result["sufficiency"] == "sufficient"
+
+
+def test_evidence_still_requires_at_least_one_physical_seat(
+    configured_evidence,
+):
+    configured_evidence.scenario = "empty_seats"
+    result = evidence.capture_evidence()
+    assert result["fields"]["physical_seat_fields_typed"] is False
     assert result["sufficiency"] == "insufficient_fields"
+
+
+def test_physical_seat_fields_typed_accepts_missing_floor():
+    seat = PhysicalSeat(
+        seat_no="synthetic-seat",
+        sale_possible="Y",
+        direction_code="SYNTHETIC-DIRECTION",
+        other_attribute_code="SYNTHETIC-OTHER",
+        requested_attribute_code="SYNTHETIC-REQUEST",
+        floor=None,
+        specification="SYNTHETIC-SPECIFICATION",
+        sequence_no="1",
+        message_code="SYNTHETIC-MESSAGE",
+        message="synthetic",
+        visual_message_division_code="SYNTHETIC-VISUAL",
+    )
+
+    assert evidence._physical_seat_fields_typed((seat,)) is True
 
 
 def test_car_evidence_type_checks_every_observed_attribute():
