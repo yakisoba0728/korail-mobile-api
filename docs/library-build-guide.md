@@ -23,7 +23,7 @@
 | Distinct HTTP+path pairs | 159 |
 | Annotated service interfaces | 35 |
 | HTTP method mix | POST 136 / GET 29 |
-| Runtime test status | 성공 25 / 실패 8 / 미실행 132 |
+| Runtime test status | 성공 27 / 실패 8 / 미실행 130 |
 
 ## Runtime Contract
 

@@ -1,6 +1,6 @@
 # Current KORAIL Package Handoff
 
-Last updated: 2026-07-14 KST
+Last updated: 2026-07-15 KST
 
 ## Head and base evidence
 
@@ -14,7 +14,7 @@ The current implementation evidence establishes:
 
 - 27 routes at the exact login/read transport boundary.
 - 30 public methods on `KorailClient`.
-- A reviewed `0.2.0` offline gate of `733 passed, 1 deselected`; the deselected
+- A reviewed `0.2.0` offline gate of `797 passed, 1 deselected`; the deselected
   test is the explicitly opted-in live-service test.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.
@@ -33,11 +33,13 @@ repeat production traffic and does not alter their established contracts.
 The `0.2.0` typed seat-inventory increment adds two authenticated,
 DynaPath-disabled reads with closed general-room forms, strict frozen response
 models, and pre-Sid validation. Its offline contract and sanitized four-step
-evidence helper are implemented. The sole authorized attempt was spent: it
-stopped at setup with `status=setup_failed`, operation calls `0/0/0/0`, and
-`sufficiency=insufficient_setup`, so it produced no live endpoint evidence. It
-must not be retried under this task. Any future attempt requires
-separate explicit authorization.
+evidence helper are implemented. A bounded structural run received
+`IRG000000`/`SUCC` from both routes with 5 cars and 75 seat rows, while
+retaining no raw values or identifiers. That run proved that floor may be
+absent, windows may be empty, and repeated seat labels are valid; the parser
+now preserves every row. A later post-fix confirmation stopped at the
+service-status preflight before login transport and therefore made no search,
+car-list, or seat-list call.
 
 Use [docs/RELEASE.md](RELEASE.md) for the internal-only offline test, build,
 distribution verifier, fresh-wheel install, and cleanup gate.
@@ -61,9 +63,9 @@ artifacts. They are not inputs to the internal release gate.
 
 1. Internal release preparation is completed by this handoff; rerun
    [docs/RELEASE.md](RELEASE.md) whenever package contents change.
-2. Do not retry the spent seat-inventory live gate under this task. Any future
-   attempt requires separate explicit authorization and must remain outside the
-   broad live smoke.
+2. Do not bypass the service-status preflight. A future bounded confirmation,
+   if separately authorized while the service is available, must remain
+   outside the broad live smoke.
 3. Any new KORAIL read requires separate sanitized evidence, a concrete design,
    offline contract tests, and an independent safety review.
 4. Mutation endpoints remain excluded unless a separate safety design and

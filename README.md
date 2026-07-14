@@ -6,7 +6,7 @@ reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
 The reviewed package boundary contains 27 routes and 30 public methods. The
-current `0.2.0` offline release gate is `733 passed, 1 deselected`; the
+current `0.2.0` offline release gate is `797 passed, 1 deselected`; the
 deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
@@ -219,12 +219,16 @@ call, and one first-car seat-list call. Its atomically written JSON is limited
 to fixed statuses, 0/1 operation counters, counts capped at 10,000, documented
 field/type-presence booleans, and a sufficiency category. It suppresses raw
 responses, messages, identifiers, dates, stations, credentials, session data,
-Sid values, tokens, and URLs. The offline contract is complete; no seat-read
-live result is claimed. The sole authorized attempt was spent: it stopped at
-setup with `status=setup_failed`, operation calls `0/0/0/0`, and
-`sufficiency=insufficient_setup`, so it produced no live endpoint evidence. It
-must not be retried under this task. Any future attempt requires
-separate explicit authorization.
+Sid values, tokens, and URLs. A bounded live structural run selected the first
+app-eligible general-room result and received `IRG000000`/`SUCC` from both
+read routes: 5 cars and 75 seat rows. The response used the documented field
+types, allowed a missing floor and an empty window collection, and contained
+repeated seat labels; the client preserves those repeated rows and their
+original order. The evidence retained no raw response, identifier, message,
+station, date, credential, cookie, Sid, token, or URL. A later post-fix helper
+confirmation stopped at the service-status preflight before login transport,
+so it made no search, car-list, or seat-list request and was not rapidly
+retried.
 
 ### UUID and MAAS station reads
 

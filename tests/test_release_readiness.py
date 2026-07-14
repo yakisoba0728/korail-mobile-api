@@ -821,14 +821,12 @@ def test_repository_truth_and_full_mutation_policy() -> None:
     for document in (readme, handoff):
         assert "27 routes" in document
         assert "30 public methods" in document
-        assert "733 passed" in document and "1 deselected" in document
+        assert "797 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
-        assert "sole authorized attempt was spent" in document
-        assert "0/0/0/0" in document
-        assert "insufficient_setup" in document
-        assert "no live endpoint evidence" in document
-        assert "must not be retried under this task" in document
-        assert "separate explicit authorization" in document
+        assert "5 cars" in document
+        assert "75 seat rows" in document
+        assert "IRG000000" in document
+        assert "service-status preflight" in document
 
     policy = (ROOT / "docs/library-build-guide.md").read_text().casefold()
     forbidden_recommendations = (

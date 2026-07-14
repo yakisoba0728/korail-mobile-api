@@ -63,20 +63,21 @@ def test_readme_documents_every_successful_read_expansion_method_and_boundary():
 
 def test_status_and_progress_documents_match_current_inventory_and_coverage():
     status = STATUS.read_text(encoding="utf-8")
-    assert "| 성공 | 25 |" in status
+    assert "| 성공 | 27 |" in status
     assert "| 실패 | 8 |" in status
-    assert "| 미실행 | 132 |" in status
+    assert "| 미실행 | 130 |" in status
     assert "Package coverage: 27 exact login/read routes" in status
-    assert "No live replay was performed for this expansion." in status
+    assert "bounded live structural evidence" in status
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
-    assert "성공 25 / 실패 8 / 미실행 132" in guide
-    assert "성공 24 / 실패 8 / 미실행 133" not in guide
+    assert "성공 27 / 실패 8 / 미실행 130" in guide
+    assert "성공 25 / 실패 8 / 미실행 132" not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
     assert "27 exact login/read routes" in progress
     assert "30 public methods" in progress
-    assert "No live replay was performed for this expansion." in progress
+    assert "75" in progress
+    assert "IRG000000" in progress
 
 
 def test_readme_documents_typed_seat_inventory_scope_and_live_boundary():
@@ -90,9 +91,8 @@ def test_readme_documents_typed_seat_inventory_scope_and_live_boundary():
     assert "capture_seat_inventory_evidence.py" in text
     assert "at most one login operation" in text
     assert "never followed" in text
-    assert "sole authorized attempt was spent" in text
-    assert "0/0/0/0" in text
-    assert "insufficient_setup" in text
-    assert "no live endpoint evidence" in text
-    assert "must not be retried under this task" in text
-    assert "separate explicit authorization" in text
+    assert "5 cars" in text
+    assert "75 seat rows" in text
+    assert "IRG000000" in text
+    assert "repeated seat labels" in text
+    assert "service-status preflight" in text

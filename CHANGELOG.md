@@ -9,6 +9,9 @@
 - Added frozen repr-safe response models, strict synthetic-fixture parsers, and
   a separately opted-in bounded evidence command that persists sanitized
   statuses, call counts, bounded counts, and type-presence booleans only.
+- Accepted live-evidenced missing floor values, empty window collections, and
+  repeated seat labels, plus statically evidenced empty car containers and
+  strict numeric strings, while preserving response order.
 
 ## 0.1.0 - 2026-07-14
 

@@ -1,6 +1,6 @@
 # KORAIL Python Package Implementation Progress
 
-Last updated: 2026-07-14 KST
+Last updated: 2026-07-15 KST
 
 ## Current State
 
@@ -33,15 +33,16 @@ Last updated: 2026-07-14 KST
 - A separate evidence command enforces a four-operation ceiling and writes only
   fixed statuses, 0/1 call counters, bounded counts, type-presence booleans, and
   a sufficiency category after a secret scan. It is not part of broad live
-  smoke. The one bounded attempt stopped at its fixed setup gate before any
-  login, search, car-list, or seat-list operation.
+  smoke. Bounded live structural evidence now covers both seat-inventory read
+  routes without retaining raw response values or identifiers.
 - The consolidated final review is complete. Its two Important and one Minor
   KORAIL findings were fixed together; re-review found no remaining Critical,
   Important, or Minor issue.
 - The transport now allows 27 exact login/read routes and the client exposes
   30 public methods. No new route was added to the DynaPath allowlist.
 - No live replay was performed for this expansion. The preceding bounded UUID
-  and MAAS evidence remains historical context and was not repeated.
+  and MAAS evidence remains historical context and was not repeated. The later
+  seat-inventory structural run was isolated from that eleven-method expansion.
 
 ## Implemented Public Operations
 
@@ -78,22 +79,24 @@ mutation routes are not callable.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full `0.2.0` offline release gate reports `733 passed, 1 deselected`;
+- The full `0.2.0` offline release gate reports `797 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
   verifier accepted both artifacts, `git diff --check` passed, and all
   generated build, metadata, and temporary distribution paths were removed.
-- After offline verification, exactly one bounded seat-inventory attempt was
-  made through the separate evidence command.
-- Bounded seat-inventory result: `status=setup_failed`,
-  `calls.login=0`, `calls.search=0`, `calls.car_list=0`, and
-  `calls.seat_list=0`; `train_count=0`, `car_count=0`, `seat_count=0`, and
-  `window_count=0`; all six documented field/type-presence booleans were
-  `false`; `sufficiency=insufficient_setup`. The helper persisted no raw
+- Bounded seat-inventory structural result: the eligible search contained 10
+  rows, the car route returned `IRG000000`/`SUCC` with 5 cars, and the seat
+  route returned `IRG000000`/`SUCC` with 75 seat rows. Every documented field
+  type matched. Live data also proved that `floor` may be absent, windows may
+  be empty, and non-empty seat labels may repeat; the parser now accepts those
+  shapes while preserving row order and cardinality. The run persisted no raw
   mapping, response message, identifier, date, station value, Sid, credential,
-  cookie, token, URL, or exception text. The temporary sanitized JSON was
-  deleted after inspection. The attempt was not retried or broadened.
+  cookie, token, URL, or exception text.
+- A post-fix evidence-helper confirmation later stopped at the service-status
+  preflight before the login POST. Its search, car-list, and seat-list counts
+  were all zero. A combined read gate observed the same preflight state and
+  made no endpoint calls, so no rapid retry or bypass was attempted.
 - Fresh internal release gate: the focused contract test reported `1 passed`;
   the complete offline suite reported `436 passed, 1 skipped in 0.30s`, with
   only the explicit live-service opt-in skipped.
@@ -184,12 +187,12 @@ or state-changing operations.
 
 ## Next Required Step
 
-The full offline `0.2.0` release and distribution gate is complete. The single
-authorized bounded seat-inventory attempt stopped with
-`sufficiency=insufficient_setup` before any live operation, and it must not be
-retried or broadened under this task. Any additional reservation-linked route
-requires its own safety review and caller-owned data. Keep all local
-credentials and runtime-sensitive values ignored and out of documentation.
+The typed seat-inventory contract now has bounded live structural evidence for
+both read routes. The final post-fix confirmation was unavailable because the
+service-status preflight blocked login; do not bypass that gate. Any additional
+reservation-linked route requires its own safety review and caller-owned data.
+Keep all local credentials and runtime-sensitive values ignored and out of
+documentation.
 
 See the shared [next-session prompt](../../NEXT_SESSION_PROMPT.md) for the
 combined KORAIL/SRT orchestration instructions.
