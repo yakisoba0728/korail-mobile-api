@@ -155,9 +155,16 @@ registered by the transport boundary:
 
 All requests use exact GET query or POST form field sets and issue one request
 without a fallback. No new DynaPath route was added, and every method above
-explicitly disables DynaPath. No live replay was performed for this expansion.
-The request and parser coverage uses only synthetic fixtures and
-`httpx.MockTransport`.
+explicitly disables DynaPath. A bounded 2026-07-15 one-session replay called
+only these read methods. Five methods parsed successfully: service status,
+deposit banks, discount coupons, trip menu, and reservation history. The cart,
+delay-discount, pass-available-date, and product-reservation reads reached
+their response parsers but four stopped at `KorailProtocolError`; two
+identifier-dependent calls were not issued because the account returned no
+owned product or ticket identifiers. No raw response, identifier, message,
+credential, cookie, or token was printed or persisted. Those four parser
+contracts remain live-incomplete; their response shapes must not be guessed
+from the fixed status-only result.
 
 `WRG000000` from the coupon list and `P100` from reservation history are the
 only evidenced no-data application codes converted to typed empty results.

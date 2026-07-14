@@ -40,9 +40,11 @@ Last updated: 2026-07-15 KST
   Important, or Minor issue.
 - The transport now allows 27 exact login/read routes and the client exposes
   30 public methods. No new route was added to the DynaPath allowlist.
-- No live replay was performed for this expansion. The preceding bounded UUID
-  and MAAS evidence remains historical context and was not repeated. The later
-  seat-inventory structural run was isolated from that eleven-method expansion.
+- A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
+  without raw output. Five wrappers parsed successfully, four stopped at
+  `KorailProtocolError`, and two identifier-dependent reads were not issued
+  because no caller-owned identifiers were available. The four parser shapes
+  remain unresolved rather than being weakened without sanitized evidence.
 
 ## Implemented Public Operations
 
@@ -97,6 +99,15 @@ mutation routes are not callable.
   preflight before the login POST. Its search, car-list, and seat-list counts
   were all zero. A combined read gate observed the same preflight state and
   made no endpoint calls, so no rapid retry or bypass was attempted.
+- The final 2026-07-15 combined gate later logged in successfully with an empty
+  advertising ID. The seat chain again returned 10 eligible search rows, 5
+  cars, 75 seats, and zero windows. Of the eleven expansion reads, service
+  status, deposit banks (56 rows), discount coupons (typed empty), trip menu (5
+  rows), and reservation history (typed empty) parsed successfully. Cart,
+  delay-discount tickets, pass available dates, and product reservations ended
+  in `KorailProtocolError`; product detail and ticket receipt were not called
+  without owned identifiers. Only fixed statuses and bounded counts were
+  emitted, and the session was closed after this single combined run.
 - Fresh internal release gate: the focused contract test reported `1 passed`;
   the complete offline suite reported `436 passed, 1 skipped in 0.30s`, with
   only the explicit live-service opt-in skipped.
@@ -187,12 +198,13 @@ or state-changing operations.
 
 ## Next Required Step
 
-The typed seat-inventory contract now has bounded live structural evidence for
-both read routes. The final post-fix confirmation was unavailable because the
-service-status preflight blocked login; do not bypass that gate. Any additional
-reservation-linked route requires its own safety review and caller-owned data.
-Keep all local credentials and runtime-sensitive values ignored and out of
-documentation.
+The typed seat-inventory contract now has repeated bounded live structural
+evidence for both read routes. Four successful-read expansion parsers remain
+live-incomplete after fixed-status protocol failures; obtain a separately
+reviewed, sanitized shape-only capture before changing them. Do not infer raw
+response structure from exception classes. Any additional reservation-linked
+route requires its own safety review and caller-owned data. Keep all local
+credentials and runtime-sensitive values ignored and out of documentation.
 
 See the shared [next-session prompt](../../NEXT_SESSION_PROMPT.md) for the
 combined KORAIL/SRT orchestration instructions.

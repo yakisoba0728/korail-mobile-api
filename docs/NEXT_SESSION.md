@@ -24,7 +24,11 @@ The current implementation evidence establishes:
 The successful-read expansion is complete. Eleven public read methods were
 added with frozen typed models, exact payloads, strict parsing, synthetic
 fixtures, and no adjacent or fallback requests. Independent review findings
-were corrected before the historical `435 passed, 1 skipped` baseline.
+were corrected before the historical `435 passed, 1 skipped` baseline. A
+bounded 2026-07-15 replay parsed five methods, stopped four at
+`KorailProtocolError`, and skipped product detail plus ticket receipt because
+no owned identifiers were returned. The four live parser shapes remain an open
+compatibility task and must not be guessed from the fixed status-only summary.
 
 The earlier cache, DynaPath, UUID, generic MAAS menu, and MAAS station phases
 are also complete at current `HEAD`. The release-readiness change does not
@@ -39,7 +43,8 @@ retaining no raw values or identifiers. That run proved that floor may be
 absent, windows may be empty, and repeated seat labels are valid; the parser
 now preserves every row. A later post-fix confirmation stopped at the
 service-status preflight before login transport and therefore made no search,
-car-list, or seat-list call.
+car-list, or seat-list call. The final combined run later logged in and again
+returned 5 cars and 75 seat rows, with zero windows.
 
 Use [docs/RELEASE.md](RELEASE.md) for the internal-only offline test, build,
 distribution verifier, fresh-wheel install, and cleanup gate.
@@ -66,11 +71,14 @@ artifacts. They are not inputs to the internal release gate.
 2. Do not bypass the service-status preflight. A future bounded confirmation,
    if separately authorized while the service is available, must remain
    outside the broad live smoke.
-3. Any new KORAIL read requires separate sanitized evidence, a concrete design,
+3. Before changing cart, delay-discount, pass-date, or product-reservation
+   parsing, capture only a separately reviewed sanitized field/type shape; the
+   current evidence contains exception classes but no response structure.
+4. Any new KORAIL read requires separate sanitized evidence, a concrete design,
    offline contract tests, and an independent safety review.
-4. Mutation endpoints remain excluded unless a separate safety design and
+5. Mutation endpoints remain excluded unless a separate safety design and
    explicit authorization establish a new scope.
-5. A public release remains blocked by the four items listed in
+6. A public release remains blocked by the four items listed in
    [docs/RELEASE.md](RELEASE.md).
 
 Do not run live KORAIL requests as part of release verification. Do not load or

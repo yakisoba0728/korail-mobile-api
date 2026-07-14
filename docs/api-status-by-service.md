@@ -20,7 +20,10 @@ previously successful but unwrapped reads plus the already registered service
 status cache as 11 public methods, plus the two typed car and physical-seat
 reads. The latter now have bounded live structural evidence: both returned
 `IRG000000`/`SUCC`, with 5 cars and 75 seat rows, without retaining raw values
-or identifiers. The eleven-method expansion itself had no live replay.
+or identifiers. A later eleven-method wrapper replay parsed five reads, stopped
+four at `KorailProtocolError`, and omitted two identifier-dependent calls. The
+runtime rows below remain route-level historical outcomes; the four current
+wrapper parser mismatches are tracked in `docs/IMPLEMENTATION_PROGRESS.md`.
 
 ## Service Index
 
