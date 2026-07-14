@@ -4,6 +4,11 @@ Last updated: 2026-07-14 KST
 
 ## Current State
 
+- Internal release preparation is complete at current `HEAD`: typed-package
+  metadata, source-manifest contents, an archive verifier, Python 3.11-3.14
+  offline CI, and internal release/security/changelog guidance are present.
+  This preparation changed no runtime request, route, credential, or live
+  behavior and made no live request.
 - The read-only public API stabilization phase is complete.
 - The cache-read expansion implementation, offline tests, package build, and
   isolated import are complete, including bounded live verification.
@@ -57,6 +62,17 @@ mutation routes are not callable.
 
 ## Verification
 
+- Fresh internal release gate: the focused contract test reported `1 passed`;
+  the complete offline suite reported `436 passed, 1 skipped in 0.30s`, with
+  only the explicit live-service opt-in skipped.
+- Python 3.14 built `korail_mobile_api-0.1.0-py3-none-any.whl` and
+  `korail_mobile_api-0.1.0.tar.gz` in a temporary artifact directory. The
+  distribution verifier accepted both, including `py.typed`, metadata,
+  required source documents, and forbidden-member checks.
+- A fresh temporary virtual environment installed the wheel and imported
+  `KorailClient` from `site-packages` outside both source worktrees. All
+  temporary paths plus generated `build/`, `dist/`, and `src/*.egg-info`
+  directories were removed.
 - Focused offline UUID/MAAS route, request, parser, model, redaction, public
   contract, and bounded live-helper tests are implemented.
 - Historical pre-review evidence: the successful-read expansion's consolidated

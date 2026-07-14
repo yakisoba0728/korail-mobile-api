@@ -1,6 +1,7 @@
 # KORAIL Python Client Library Design
 
 Date: 2026-07-09
+Status: Implemented and verified
 
 ## Goal
 

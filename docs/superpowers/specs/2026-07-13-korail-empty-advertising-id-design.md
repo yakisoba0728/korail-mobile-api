@@ -1,5 +1,7 @@
 # KORAIL Empty Advertising ID Design
 
+**Status:** Implemented and bounded-live-verified on 2026-07-13
+
 ## Context
 
 The ticket-list client currently requires a non-empty `advertising_id` before

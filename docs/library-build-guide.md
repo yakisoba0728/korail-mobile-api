@@ -162,5 +162,5 @@ Retrofit annotation 기준 165개 endpoint는 `analysis/reports/api-endpoints.ts
 2. `CommonApi.getCommonCode`, station/cache/config 조회를 구현해 기본 통신을 검증한다.
 3. 로그인은 common-code 기반 암호화와 cookie persistence까지 하나의 integration test로 묶는다.
 4. 열차 조회, 구매이력, 영수증처럼 현재 성공한 조회성 API부터 typed wrapper를 만든다.
-5. 예약/결제/환불/체크인 계열은 method와 DTO만 먼저 노출하고 실행은 guard 뒤에 둔다.
+5. Do not expose mutation methods or DTO stubs at all without a separate safety design and explicit authorization.
 6. WebView/provider/NetFunnel/DynaPath는 core API와 분리해 optional adapter로 둔다.

@@ -1,0 +1,60 @@
+name: Offline CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install test dependencies
+        run: python -m pip install -e ".[test]"
+      - name: Run offline tests
+        run: pytest -q
+
+  package:
+    name: Verify internal distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install build tooling
+        run: python -m pip install build
+      - name: Build wheel and source distribution
+        run: python -m build --wheel --sdist --outdir "$RUNNER_TEMP/artifacts" .
+      - name: Verify distribution contents
+        run: python scripts/verify_distribution.py "$RUNNER_TEMP"/artifacts/*.tar.gz "$RUNNER_TEMP"/artifacts/*.whl
+      - name: Fresh-venv wheel import outside checkout
+        run: |
+          venv_dir="$RUNNER_TEMP/release-venv"
+          python -m venv "$venv_dir"
+          "$venv_dir/bin/python" -m pip install "$RUNNER_TEMP"/artifacts/*.whl
+          cd "$RUNNER_TEMP"
+          unset PYTHONPATH
+          "$venv_dir/bin/python" - <<'PY'
+          import os
+          from pathlib import Path
+          import korail_mobile_api
+          from korail_mobile_api import KorailClient
+
+          package_path = Path(korail_mobile_api.__file__).resolve()
+          checkout = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          assert "site-packages" in package_path.parts
+          assert checkout not in package_path.parents
+          print("KorailClient", package_path)
+          PY

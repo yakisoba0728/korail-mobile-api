@@ -1,74 +1,64 @@
-# Next Session Handoff
+# Current KORAIL Package Handoff
 
-## Current State
+Last updated: 2026-07-14 KST
 
-The repository now contains a complete static-analysis documentation set for `korail.apk`. The APK itself remains local and ignored by git.
+## Head and base evidence
 
-Important committed entry points:
+The internal release-readiness work is based on
+`259553bbb930c51d8bc28d1144baa49d17372e3c`. Compare that base's
+`docs/IMPLEMENTATION_PROGRESS.md` with the same file at current `HEAD`: the
+release work changes package metadata, artifact checks, CI, and documentation,
+but does not change runtime requests, routes, credentials, or live behavior.
 
-- Root overview: [../README.md](../README.md)
-- Main analysis summary: [korail-apk-analysis.md](korail-apk-analysis.md)
-- Endpoint inventory: [api-endpoints.md](api-endpoints.md)
-- Deep-dive index: [deep-dive/README.md](deep-dive/README.md)
-- API contracts: [deep-dive/api-contracts.md](deep-dive/api-contracts.md)
-- Exhaustive response model report: [deep-dive/agent-reports/17-response-models-exhaustive.md](deep-dive/agent-reports/17-response-models-exhaustive.md)
-- Documentation gap audit and integration status: [deep-dive/agent-reports/20-doc-quality-gap-audit.md](deep-dive/agent-reports/20-doc-quality-gap-audit.md)
+The current implementation evidence establishes:
 
-## Verified Counts
+- 25 routes at the exact login/read transport boundary.
+- 28 public methods on `KorailClient`.
+- A reviewed offline baseline of `435 passed, 1 skipped`; the only skip is the
+  explicitly opted-in live-service test.
+- No callable reservation, payment, cancellation, refund, check-in, membership,
+  or other mutation route.
 
-- Retrofit method entries: `165`
-- Distinct HTTP+path pairs: `159`
-- Annotated interfaces: `35`
-- Method mix: `POST 136`, `GET 29`
-- Endpoint rows mirrored into `docs/api-endpoints.md`: `165 / 165`
-- Endpoint request sections mirrored into `docs/deep-dive/api-contracts.md`: `165 / 165`
-- Unresolved annotation parameters after constant resolution: `0`
-- `FieldMap` or `QueryMap` endpoint rows: `21`
-- Agent reports: `20 / 20`
-- Documentation lines at handoff: `22,517`
+## Completed read package
 
-## What Changed During Final Integration
+The successful-read expansion is complete. Eleven public read methods were
+added with frozen typed models, exact payloads, strict parsing, synthetic
+fixtures, and no adjacent or fallback requests. Independent review findings
+were corrected before the `435 passed, 1 skipped` baseline.
 
-The first extractor counted `164` endpoint rows because it only scanned `*Service.java`. Final extraction scans Retrofit annotations directly and includes `cashReceipt/CashReceipt.java`, producing `165` method entries.
+The earlier cache, DynaPath, UUID, generic MAAS menu, and MAAS station phases
+are also complete at current `HEAD`. The release-readiness change does not
+repeat production traffic and does not alter their established contracts.
 
-The extractor also now resolves compile-time string constants in annotations such as `@Field(C1262b.DPT_DT)` and `@Query(OJrny.TRN_NO)`. Final verification found `0` unresolved annotation parameters.
+Use [docs/RELEASE.md](RELEASE.md) for the internal-only offline test, build,
+distribution verifier, fresh-wheel install, and cleanup gate.
 
-## Local Generated Artifacts
+## Historical analysis map
 
-The following are intentionally ignored and not committed:
+The static APK inventory remains historical evidence rather than a statement
+that every discovered endpoint is implemented. Its committed entry points are:
 
-- `korail.apk`
-- `analysis/raw/`
-- `analysis/apktool/`
-- `analysis/jadx/`
-- `analysis/reports/`
-- `analysis/generated/`
+- [README.md](../README.md)
+- [docs/korail-apk-analysis.md](korail-apk-analysis.md)
+- [docs/api-endpoints.md](api-endpoints.md)
+- [docs/deep-dive/README.md](deep-dive/README.md)
+- [docs/deep-dive/api-contracts.md](deep-dive/api-contracts.md)
+- [docs/deep-dive/network-model-fields.md](deep-dive/network-model-fields.md)
 
-If a future session needs to re-run extraction, make sure `korail.apk` exists at repo root, then regenerate `analysis/` as described in [../README.md](../README.md).
+The original APK and generated `analysis/` trees remain ignored local
+artifacts. They are not inputs to the internal release gate.
 
-## Suggested Next Work
+## Next candidates
 
-1. If authorized, capture controlled runtime traffic to compare actual JSON response bodies against the static response model catalog.
-2. Build a checked-in extractor script from the ad hoc Python extraction logic if regeneration will be repeated often.
-3. Add a field dictionary for business meaning and value domains, especially reservation/payment/refund codes.
-4. Validate ambiguous JADX output against smali for any endpoint with high business impact.
-5. Consider a separate security review pass for exported WebView activities and bridge trust boundaries.
+1. Internal release preparation is completed by this handoff; rerun
+   [docs/RELEASE.md](RELEASE.md) whenever package contents change.
+2. Any new KORAIL read requires separate sanitized evidence, a concrete design,
+   offline contract tests, and an independent safety review.
+3. Mutation endpoints remain excluded unless a separate safety design and
+   explicit authorization establish a new scope.
+4. A public release remains blocked by the four items listed in
+   [docs/RELEASE.md](RELEASE.md).
 
-## Verification Commands Used
-
-```bash
-python3 - <<'PY'
-from pathlib import Path
-import csv
-rows=list(csv.DictReader(Path('analysis/reports/api-endpoints.tsv').open(), delimiter='\t'))
-api=Path('docs/api-endpoints.md').read_text()
-contracts=Path('docs/deep-dive/api-contracts.md').read_text()
-print(len(rows))
-print(len({(r["http_method"], r["endpoint"]) for r in rows}))
-print(sum(1 for r in rows if f"| {r['http_method']} | `{r['endpoint']}` | `{r['java_method']}` | `{r['return_type']}` |" not in api))
-print(sum(1 for r in rows if f"- Request: `{r['http_method']}` `{r['endpoint']}`" not in contracts))
-PY
-
-```
-
-A stale-count and placeholder scan was also run over `docs/`; it returned no matches.
+Do not run live KORAIL requests as part of release verification. Do not load or
+inspect local credentials, APKs, caches, generated analysis, or raw production
+data.

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-13
 
-**Status:** Approved, including the 2026-07-13 live-contract correction
+**Status:** Implemented and bounded-live-verified, including the 2026-07-13 live-contract correction
 
 > Historical scope note: this design governed the completed UUID/station-only
 > phase. Its exclusion of generic MAAS menu discovery was superseded by the

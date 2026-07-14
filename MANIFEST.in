@@ -1,0 +1,5 @@
+include README.md
+include CHANGELOG.md
+include SECURITY.md
+include docs/RELEASE.md
+include src/korail_mobile_api/py.typed

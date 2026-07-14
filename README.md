@@ -1,8 +1,13 @@
-# KORAIL Mobile API APK Analysis
+# KORAIL Mobile API
 
-This repository combines a static reverse-engineering report for `korail.apk`,
-the Android app package `com.korail.talk` version `6.5.0`, with an installable
-read-only Python client derived from that evidence.
+This repository provides an installable read-only Python package for the
+evidenced KORAIL mobile API surface. It also retains the static
+reverse-engineering report for `korail.apk`, Android package
+`com.korail.talk` version `6.5.0`, as the package's historical evidence map.
+
+The reviewed package boundary contains 25 routes and 28 public methods. Its
+pre-release-readiness offline baseline is `435 passed, 1 skipped`; the skip is
+the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
 committed. Documentation, reproducible inventory output, client source, and
@@ -16,6 +21,20 @@ Start here:
 2. [docs/api-endpoints.md](docs/api-endpoints.md) - complete Retrofit endpoint table.
 3. [docs/deep-dive/README.md](docs/deep-dive/README.md) - deep-dive manual index and reading order.
 4. [docs/NEXT_SESSION.md](docs/NEXT_SESSION.md) - current handoff state for the next analysis session.
+5. [docs/RELEASE.md](docs/RELEASE.md) - internal-only test, build, distribution, and fresh-install gate.
+
+Internal editable installation and offline verification:
+
+```bash
+python -m pip install -e ".[test]"
+PYTHONPATH="$PWD/src" pytest -q
+```
+
+Release and handling documents:
+
+- [docs/RELEASE.md](docs/RELEASE.md)
+- [SECURITY.md](SECURITY.md)
+- [CHANGELOG.md](CHANGELOG.md)
 
 ## Current Findings
 

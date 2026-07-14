@@ -1,5 +1,7 @@
 # KORAIL Fixed-RT DynaPath Design
 
+**Status:** Implemented and bounded-live-verified on 2026-07-13
+
 ## Context
 
 The repository currently contains two DynaPath generation paths. The normal
