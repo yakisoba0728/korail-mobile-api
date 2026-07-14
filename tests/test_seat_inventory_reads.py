@@ -1158,6 +1158,11 @@ class _EvidenceFakeClient:
         self.calls.append("car_list")
         if self.scenario == "car_list_failed":
             raise RuntimeError("synthetic-car-list-message-secret")
+        attributes: tuple[SeatAttribute, ...] = (
+            ()
+            if self.scenario == "empty_attributes"
+            else (SeatAttribute(name="Synthetic attribute"),)
+        )
         cars = (
             ()
             if self.scenario == "no_cars"
@@ -1166,7 +1171,7 @@ class _EvidenceFakeClient:
                     car_no=7,
                     room_class_name="Synthetic General",
                     remaining_seat_count=1,
-                    attributes=(SeatAttribute(name="Synthetic attribute"),),
+                    attributes=attributes,
                 ),
             )
         )
@@ -1189,12 +1194,10 @@ class _EvidenceFakeClient:
         self.calls.append("seat_list")
         if self.scenario == "seat_list_failed":
             raise RuntimeError("synthetic-seat-list-message-secret")
-        return SeatInventoryResponse(
-            layout_type=3,
-            arrangement_code="UNKNOWN-CODE",
-            remaining_count=1,
-            total_count=9,
-            seats=(
+        seats = (
+            ()
+            if self.scenario == "empty_seats"
+            else (
                 PhysicalSeat(
                     seat_no="synthetic-seat-identifier-secret",
                     sale_possible="Y",
@@ -1208,13 +1211,25 @@ class _EvidenceFakeClient:
                     message="synthetic-seat-message-secret",
                     visual_message_division_code="UNKNOWN-VISUAL",
                 ),
-            ),
-            windows=(
+            )
+        )
+        windows = (
+            ()
+            if self.scenario == "empty_windows"
+            else (
                 SeatWindow(
                     start_location_ratio=0.1,
                     close_location_ratio=0.2,
                 ),
-            ),
+            )
+        )
+        return SeatInventoryResponse(
+            layout_type=3,
+            arrangement_code="UNKNOWN-CODE",
+            remaining_count=1,
+            total_count=9,
+            seats=seats,
+            windows=windows,
             vr_banner_url=(
                 "https://example.invalid/?secret=synthetic-banner-secret"
             ),
@@ -1394,6 +1409,43 @@ def test_completed_evidence_contains_only_bounded_counts_and_type_presence(
         },
         "sufficiency": "sufficient",
     }
+
+
+@pytest.mark.parametrize(
+    ("scenario", "unobserved_field"),
+    [
+        ("empty_attributes", "car_fields_typed"),
+        ("empty_seats", "physical_seat_fields_typed"),
+        ("empty_windows", "window_fields_typed"),
+    ],
+)
+def test_evidence_requires_observed_item_fields_for_sufficiency(
+    configured_evidence,
+    scenario,
+    unobserved_field,
+):
+    configured_evidence.scenario = scenario
+    result = evidence.capture_evidence()
+    assert result["status"] == "completed"
+    assert result["fields"][unobserved_field] is False
+    assert result["sufficiency"] == "insufficient_fields"
+
+
+def test_car_evidence_type_checks_every_observed_attribute():
+    response = SeatCarListResponse(
+        cars=(
+            SeatCar(
+                car_no=1,
+                room_class_name="Synthetic",
+                remaining_seat_count=1,
+                attributes=(
+                    SeatAttribute(name="Observed"),
+                    object(),
+                ),
+            ),
+        )
+    )
+    assert evidence._car_fields_typed(response) is False
 
 
 def test_evidence_setup_failures_are_fixed_and_do_not_create_a_client(
@@ -1634,3 +1686,63 @@ def test_evidence_main_writes_only_the_sanitized_capture(
     monkeypatch.setattr(evidence, "capture_evidence", lambda: result)
     assert evidence.main(["--output", str(output)]) == 0
     assert json.loads(output.read_text(encoding="utf-8")) == result
+
+
+def test_evidence_main_rejects_existing_output_before_capture(
+    tmp_path,
+    monkeypatch,
+):
+    output = tmp_path / "existing.json"
+    output.write_text("preserve-existing", encoding="utf-8")
+    capture_calls = 0
+
+    def capture() -> dict[str, Any]:
+        nonlocal capture_calls
+        capture_calls += 1
+        return _safe_completed_result()
+
+    monkeypatch.setattr(evidence, "capture_evidence", capture)
+    with pytest.raises(FileExistsError):
+        evidence.main(["--output", str(output)])
+    assert capture_calls == 0
+    assert output.read_text(encoding="utf-8") == "preserve-existing"
+
+
+@pytest.mark.parametrize(
+    ("destination_kind", "expected_error", "force"),
+    [
+        ("missing_parent", FileNotFoundError, False),
+        ("non_directory_parent", NotADirectoryError, False),
+        ("directory_output", IsADirectoryError, True),
+    ],
+)
+def test_evidence_main_validates_output_parent_and_type_before_capture(
+    tmp_path,
+    monkeypatch,
+    destination_kind,
+    expected_error,
+    force,
+):
+    if destination_kind == "missing_parent":
+        output = tmp_path / "missing" / "result.json"
+    elif destination_kind == "non_directory_parent":
+        parent = tmp_path / "parent-file"
+        parent.write_text("not-a-directory", encoding="utf-8")
+        output = parent / "result.json"
+    else:
+        output = tmp_path / "output-directory"
+        output.mkdir()
+    capture_calls = 0
+
+    def capture() -> dict[str, Any]:
+        nonlocal capture_calls
+        capture_calls += 1
+        return _safe_completed_result()
+
+    monkeypatch.setattr(evidence, "capture_evidence", capture)
+    arguments = ["--output", str(output)]
+    if force:
+        arguments.append("--force")
+    with pytest.raises(expected_error):
+        evidence.main(arguments)
+    assert capture_calls == 0

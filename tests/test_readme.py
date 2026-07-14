@@ -90,3 +90,9 @@ def test_readme_documents_typed_seat_inventory_scope_and_live_boundary():
     assert "capture_seat_inventory_evidence.py" in text
     assert "at most one login operation" in text
     assert "never followed" in text
+    assert "sole authorized attempt was spent" in text
+    assert "0/0/0/0" in text
+    assert "insufficient_setup" in text
+    assert "no live endpoint evidence" in text
+    assert "must not be retried under this task" in text
+    assert "separate explicit authorization" in text

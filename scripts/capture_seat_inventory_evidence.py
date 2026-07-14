@@ -147,7 +147,7 @@ def _car_fields_typed(response: SeatCarListResponse) -> bool:
         or not isinstance(response.cars, tuple)
     ):
         return False
-    return all(
+    cars_typed = all(
         isinstance(car, SeatCar)
         and type(car.car_no) is int
         and isinstance(car.room_class_name, str)
@@ -160,6 +160,9 @@ def _car_fields_typed(response: SeatCarListResponse) -> bool:
         )
         for car in response.cars
     )
+    if not cars_typed:
+        return False
+    return any(car.attributes for car in response.cars)
 
 
 def _seat_fields_typed(response: SeatInventoryResponse) -> bool:
@@ -175,7 +178,7 @@ def _seat_fields_typed(response: SeatInventoryResponse) -> bool:
 
 
 def _physical_seat_fields_typed(seats: tuple[PhysicalSeat, ...]) -> bool:
-    return all(
+    return bool(seats) and all(
         isinstance(seat, PhysicalSeat)
         and all(
             isinstance(value, str)
@@ -198,7 +201,7 @@ def _physical_seat_fields_typed(seats: tuple[PhysicalSeat, ...]) -> bool:
 
 
 def _window_fields_typed(windows: tuple[SeatWindow, ...]) -> bool:
-    return all(
+    return bool(windows) and all(
         isinstance(window, SeatWindow)
         and type(window.start_location_ratio) is float
         and type(window.close_location_ratio) is float
@@ -423,6 +426,18 @@ def write_evidence(
             temporary_path.unlink(missing_ok=True)
 
 
+def _validate_output_destination(output: Path, *, force: bool) -> None:
+    parent = output.parent
+    if not parent.exists():
+        raise FileNotFoundError(parent)
+    if not parent.is_dir():
+        raise NotADirectoryError(parent)
+    if output.exists() and output.is_dir():
+        raise IsADirectoryError(output)
+    if os.path.lexists(output) and not force:
+        raise FileExistsError(output)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Capture bounded sanitized KORAIL seat inventory evidence"
@@ -430,6 +445,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--force", action="store_true")
     arguments = parser.parse_args(argv)
+    _validate_output_destination(
+        arguments.output,
+        force=arguments.force,
+    )
     write_evidence(
         arguments.output,
         capture_evidence(),

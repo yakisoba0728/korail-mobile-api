@@ -33,8 +33,11 @@ repeat production traffic and does not alter their established contracts.
 The `0.2.0` typed seat-inventory increment adds two authenticated,
 DynaPath-disabled reads with closed general-room forms, strict frozen response
 models, and pre-Sid validation. Its offline contract and sanitized four-step
-evidence helper are implemented; the separately authorized bounded live result
-must be recorded without identifiers or raw response data.
+evidence helper are implemented. The sole authorized attempt was spent: it
+stopped at setup with `status=setup_failed`, operation calls `0/0/0/0`, and
+`sufficiency=insufficient_setup`, so it produced no live endpoint evidence. It
+must not be retried under this task. Any future attempt requires
+separate explicit authorization.
 
 Use [docs/RELEASE.md](RELEASE.md) for the internal-only offline test, build,
 distribution verifier, fresh-wheel install, and cleanup gate.
@@ -58,9 +61,9 @@ artifacts. They are not inputs to the internal release gate.
 
 1. Internal release preparation is completed by this handoff; rerun
    [docs/RELEASE.md](RELEASE.md) whenever package contents change.
-2. Complete the separately bounded seat-inventory live gate after the offline
-   release gate; do not route it through the broad live smoke or retry a static
-   contract rejection.
+2. Do not retry the spent seat-inventory live gate under this task. Any future
+   attempt requires separate explicit authorization and must remain outside the
+   broad live smoke.
 3. Any new KORAIL read requires separate sanitized evidence, a concrete design,
    offline contract tests, and an independent safety review.
 4. Mutation endpoints remain excluded unless a separate safety design and

@@ -220,7 +220,11 @@ to fixed statuses, 0/1 operation counters, counts capped at 10,000, documented
 field/type-presence booleans, and a sufficiency category. It suppresses raw
 responses, messages, identifiers, dates, stations, credentials, session data,
 Sid values, tokens, and URLs. The offline contract is complete; no seat-read
-live result is claimed here before the separate bounded gate runs.
+live result is claimed. The sole authorized attempt was spent: it stopped at
+setup with `status=setup_failed`, operation calls `0/0/0/0`, and
+`sufficiency=insufficient_setup`, so it produced no live endpoint evidence. It
+must not be retried under this task. Any future attempt requires
+separate explicit authorization.
 
 ### UUID and MAAS station reads
 

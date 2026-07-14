@@ -823,6 +823,12 @@ def test_repository_truth_and_full_mutation_policy() -> None:
         assert "30 public methods" in document
         assert "725 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
+        assert "sole authorized attempt was spent" in document
+        assert "0/0/0/0" in document
+        assert "insufficient_setup" in document
+        assert "no live endpoint evidence" in document
+        assert "must not be retried under this task" in document
+        assert "separate explicit authorization" in document
 
     policy = (ROOT / "docs/library-build-guide.md").read_text().casefold()
     forbidden_recommendations = (
