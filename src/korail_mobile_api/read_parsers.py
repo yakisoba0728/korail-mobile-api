@@ -744,6 +744,6 @@ def parse_reservation_history_response(
                 )
             )
     return ReservationHistoryResponse(
-        trains=tuple(trains),
+        items=tuple(trains),
         **_response_fields(raw),
     )

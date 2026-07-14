@@ -240,4 +240,8 @@ class ReservationHistoryTrain:
 
 @dataclass(frozen=True)
 class ReservationHistoryResponse(BaseKorailResponse):
-    trains: tuple[ReservationHistoryTrain, ...] = ()
+    items: tuple[ReservationHistoryTrain, ...] = ()
+
+    @property
+    def trains(self) -> tuple[ReservationHistoryTrain, ...]:
+        return self.items

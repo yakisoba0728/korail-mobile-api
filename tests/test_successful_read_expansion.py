@@ -930,7 +930,8 @@ def test_history_parser_flattens_trains_and_preserves_original_raw_nesting(
     result = parse_reservation_history_response(raw)
     assert isinstance(result, ReservationHistoryResponse)
     assert result.raw is raw
-    train = result.trains[0]
+    train = result.items[0]
+    assert result.trains is result.items
     assert train.departure_station == "Synthetic Departure"
     assert train.departure_time == "090000"
     assert train.arrival_station == "Synthetic Arrival"
@@ -966,7 +967,7 @@ def test_all_read_models_are_frozen_and_collection_fields_are_tuples(
         trip.items[0].contents,
         receipt.items,
         receipt.items[0].payments,
-        history.trains,
+        history.items,
     ):
         assert isinstance(value, tuple)
     with pytest.raises(FrozenInstanceError):
@@ -1022,7 +1023,7 @@ def test_sensitive_typed_fields_and_raw_values_are_accessible_but_repr_hidden(
         parsed[4].items[0],
         parsed[6].items[0],
         parsed[6].items[0].payments[0],
-        parsed[7].trains[0],
+        parsed[7].items[0],
     )
     for item in items:
         for sentinel in SECRET_SENTINELS:
@@ -1117,7 +1118,7 @@ def test_known_numeric_fields_accept_integers_and_ascii_decimal_strings(value):
         (parse_trip_menu_response, "items"),
         (parse_product_reservation_list_response, "items"),
         (parse_ticket_receipt_response, "items"),
-        (parse_reservation_history_response, "trains"),
+        (parse_reservation_history_response, "items"),
     ],
 )
 def test_missing_nested_collections_normalize_to_typed_empty_tuples(
@@ -1161,7 +1162,7 @@ def test_missing_nested_collections_normalize_to_typed_empty_tuples(
         (
             parse_reservation_history_response,
             {"jrny_infos": None},
-            "trains",
+            "items",
         ),
     ],
 )
@@ -1198,7 +1199,7 @@ def test_history_no_data_is_typed_empty():
             "strResult": "FAIL",
         }
     )
-    assert result.trains == ()
+    assert result.items == ()
 
 
 def test_unexpected_application_failures_and_p058_remain_typed_errors():
@@ -1286,7 +1287,7 @@ def test_every_sensitive_typed_field_is_accessible_but_hidden_from_item_repr(
             receipts.items[0].payments[0],
             ("account_no", "approval_no", "card_no", "point_no"),
         ),
-        (history.trains[0], ("pnr_no",)),
+        (history.items[0], ("pnr_no",)),
     )
     for model, field_names in cases:
         rendered = repr(model)

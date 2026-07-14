@@ -11,6 +11,10 @@ from korail_mobile_api.errors import (
     KorailTransportError,
 )
 from korail_mobile_api.redaction import redact_mapping, redact_text, redact_url
+from korail_mobile_api.read_parsers import (
+    parse_reservation_history_response,
+    parse_trip_menu_response,
+)
 from korail_mobile_api.safety import EXCLUDED_API_DOMAINS
 
 
@@ -53,11 +57,71 @@ def test_redaction_is_recursive_case_insensitive_and_url_safe():
     }
     redacted = redact_mapping(value)
     assert redacted["outer"][0]["TXTPWD"] == "[REDACTED]"
-    assert "abc" not in redacted["outer"][0]["url"]
-    assert "safe=1" in redacted["outer"][0]["url"]
+    assert redacted["outer"][0]["url"] == "[REDACTED]"
+    assert "safe=1" in redact_url(
+        "https://host/path?JSESSIONID=abc&safe=1"
+    )
     assert "token-value" not in redact_url(
         "https://host/path?x-dynapath-m-token=token-value"
     )
+
+
+def test_parsed_history_and_trip_models_redact_sensitive_fields_without_mutation(
+    load_json_fixture,
+):
+    history = parse_reservation_history_response(
+        load_json_fixture("reservation_history_success.json")
+    )
+    trip = parse_trip_menu_response(
+        load_json_fixture("trip_menu_success.json")
+    )
+    train = history.trains[0]
+    menu = trip.items[0]
+    content = menu.contents[0]
+    original_values = (
+        train.pnr_no,
+        menu.url,
+        content.url,
+        content.image,
+    )
+
+    redacted = redact_mapping({"history": history, "trip": trip})
+    redacted_history = redacted["history"]
+    redacted_trains = redacted_history.get(
+        "items", redacted_history.get("trains")
+    )
+    assert redacted_trains[0]["pnr_no"] == "[REDACTED]"
+    assert redacted["trip"]["items"][0]["url"] == "[REDACTED]"
+    redacted_content = redacted["trip"]["items"][0]["contents"][0]
+    assert redacted_content["url"] == "[REDACTED]"
+    assert redacted_content["image"] == "[REDACTED]"
+
+    assert train.pnr_no == original_values[0]
+    assert menu.url == original_values[1]
+    assert content.url == original_values[2]
+    assert content.image == original_values[3]
+
+
+def test_raw_trip_menu_wire_values_are_redacted_without_mutation(
+    load_json_fixture,
+):
+    raw = load_json_fixture("trip_menu_success.json")
+    menu = raw["menuList"][0]
+    content = menu["contList"][0]
+    original_values = (
+        menu["menuUrl"],
+        content["contUrl"],
+        content["contImage"],
+    )
+
+    redacted = redact_mapping({"menu": menu})["menu"]
+    assert redacted["menuUrl"] == "[REDACTED]"
+    assert redacted["contList"][0]["contUrl"] == "[REDACTED]"
+    assert redacted["contList"][0]["contImage"] == "[REDACTED]"
+
+    assert menu["menuUrl"] == original_values[0]
+    assert content["contUrl"] == original_values[1]
+    assert content["contImage"] == original_values[2]
 
 
 @pytest.mark.parametrize(
@@ -115,6 +179,12 @@ def test_redaction_is_recursive_case_insensitive_and_url_safe():
         "h_orgtk_sale_dt",
         "h_orgtk_wct_no",
         "h_orgtk_sale_sqno",
+        "pnr_no",
+        "url",
+        "image",
+        "menuUrl",
+        "contUrl",
+        "contImage",
     ],
 )
 def test_redact_text_masks_sensitive_key_value_pairs(key):
@@ -161,7 +231,8 @@ def test_every_public_exception_formatter_redacts_free_text_secrets():
     message = (
         "txtPwd=password-secret "
         "x-dynapath-m-token=token-secret "
-        "pnrNo=pnr-secret"
+        "pnrNo=pnr-secret "
+        "pnr_no=typed-reservation-secret"
     )
     errors = public_errors(message)
     for error in errors:
@@ -169,6 +240,7 @@ def test_every_public_exception_formatter_redacts_free_text_secrets():
         assert "password-secret" not in formatted
         assert "token-secret" not in formatted
         assert "pnr-secret" not in formatted
+        assert "typed-reservation-secret" not in formatted
 
 
 @pytest.mark.parametrize("quote", ['"', "'"])
