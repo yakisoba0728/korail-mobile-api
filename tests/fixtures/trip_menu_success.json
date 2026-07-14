@@ -1,0 +1,27 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic trip menu",
+  "strResult": "SUCC",
+  "poppMsg": "Synthetic popup",
+  "menuList": [
+    {
+      "menuBtn": "Synthetic Button",
+      "menuDetail": "Synthetic menu detail",
+      "menuTitle": "Synthetic Menu",
+      "menuType": "SYNTHETIC-MENU-TYPE",
+      "menuUrl": "https://synthetic.invalid/menu/SYNTHETIC-RAW-SECRET",
+      "contList": [
+        {
+          "contDetail": "Synthetic content detail",
+          "contImage": "https://synthetic.invalid/image/SYNTHETIC-RAW-SECRET",
+          "contTitle": "Synthetic Content",
+          "contUrl": "https://synthetic.invalid/content/SYNTHETIC-RAW-SECRET",
+          "detailType": "SYNTHETIC-CONTENT-TYPE",
+          "passActive": "Y",
+          "passAgree": "N",
+          "passInfo": "Synthetic pass info"
+        }
+      ]
+    }
+  ]
+}

@@ -26,6 +26,8 @@ from korail_mobile_api.errors import (
 from korail_mobile_api.http import KorailHttpClient, parse_base_response
 from korail_mobile_api.safety import (
     EXCLUDED_API_DOMAINS,
+    KORAIL_EXACT_FORM_FIELDS,
+    KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_READ_ONLY_ROUTES,
     assert_korail_origin,
     assert_read_only_route,
@@ -347,7 +349,74 @@ def test_read_only_route_registry_accepts_current_public_requests(method, path):
 
 
 def test_read_only_route_registry_has_exact_expanded_count():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 15
+    assert len(KORAIL_READ_ONLY_ROUTES) == 25
+
+
+def test_exact_form_field_mapping_remains_a_compatibility_alias():
+    assert KORAIL_EXACT_FORM_FIELDS is KORAIL_EXACT_REQUEST_FIELDS
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"pnrNo": ""},
+        {"pnrNo": "", "addSrvReqNo": "", "unexpected": "blocked"},
+        {"pnrNo": "", "addSrvReqNo": ["blocked"]},
+        {"pnrNo": "", "addSrvReqNo": True},
+    ],
+)
+def test_exact_post_request_fields_and_scalar_values_fail_before_io(data):
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(KorailProtocolError, match="request (fields|values)"):
+        client.post_form(
+            "/classes/com.korail.mobile.cart.showCartList",
+            data,
+        )
+    assert called is False
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"txtSelPage": "1"},
+        {
+            "txtSelPage": "1",
+            "txtCntPerPage": "20",
+            "unexpected": "blocked",
+        },
+        {"txtSelPage": "1", "txtCntPerPage": ["20"]},
+        {"txtSelPage": "1", "txtCntPerPage": False},
+    ],
+)
+def test_exact_get_request_fields_and_scalar_values_fail_before_io(params):
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(KorailProtocolError, match="request (fields|values)"):
+        client.get_json(
+            "/classes/com.korail.mobile.product.ReservationList",
+            params,
+            include_common=True,
+        )
+    assert called is False
 
 
 @pytest.mark.parametrize(
@@ -368,7 +437,7 @@ def test_maas_menu_route_rejects_non_generic_form_fields_before_io(
         KorailConfig(),
         transport=httpx.MockTransport(handler),
     )
-    with pytest.raises(KorailProtocolError, match="form fields"):
+    with pytest.raises(KorailProtocolError, match="request fields"):
         client.post_form(
             "/classes/com.korail.mobile.copt.gdMenuLt.do",
             {
@@ -398,7 +467,7 @@ def test_maas_menu_route_requires_exact_generic_form_fields(form):
         KorailConfig(),
         transport=httpx.MockTransport(handler),
     )
-    with pytest.raises(KorailProtocolError, match="form fields"):
+    with pytest.raises(KorailProtocolError, match="request fields"):
         client.post_form(
             "/classes/com.korail.mobile.copt.gdMenuLt.do",
             form,

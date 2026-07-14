@@ -1,0 +1,18 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic pass availability",
+  "strResult": "SUCC",
+  "pass_info": [
+    {"h_use_open_dt": "20990101"},
+    {"h_use_open_dt": "20990102"}
+  ],
+  "ticket_info": [
+    {"h_ise_dt2": "20981231"}
+  ],
+  "wct_info": [
+    {
+      "eng_cd_val": "SYNTHETIC-OFFICE",
+      "kor_cd_val": "Synthetic Office"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlsplit
 
 from .constants import KORAIL_BASE_URL
@@ -37,16 +39,79 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ("GET", "/ebizcross/getUUID.do"),
         ("POST", "/classes/com.korail.mobile.copt.gdMenuLt.do"),
         ("POST", "/ebizmaas/EbizMaasStationList.do"),
+        ("POST", "/classes/com.korail.mobile.cart.showCartList"),
+        ("POST", "/classes/com.korail.mobile.dlay.dptnBank.do"),
+        (
+            "POST",
+            "/classes/com.korail.mobile.passCard.DelayDiscountView",
+        ),
+        ("POST", "/classes/com.korail.mobile.passCard.CouponView"),
+        ("POST", "/classes/com.korail.mobile.pass.passInfoList"),
+        ("POST", "/classes/com.korail.mobile.pass.trGdMenuLt.do"),
+        ("GET", "/classes/com.korail.mobile.product.ReservationList"),
+        ("GET", "/classes/com.korail.mobile.product.ReservationDetail"),
+        ("POST", "/classes/com.korail.mobile.receipt.ReceiptInfo"),
+        (
+            "GET",
+            "/classes/com.korail.mobile.reservation.ReservationView",
+        ),
     }
 )
 
 KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
 
-KORAIL_EXACT_FORM_FIELDS = {
+KORAIL_EXACT_REQUEST_FIELDS = {
+    "/file/CACHE/MobileService.cache": frozenset({"timeStamp"}),
+    "/classes/com.korail.mobile.cart.showCartList": frozenset(
+        {"Device", "Version", "Key", "pnrNo", "addSrvReqNo"}
+    ),
+    "/classes/com.korail.mobile.dlay.dptnBank.do": frozenset(
+        {"Device", "Version", "Key"}
+    ),
+    "/classes/com.korail.mobile.passCard.DelayDiscountView": frozenset(
+        {"Device", "Version", "Key", "dptDtTo"}
+    ),
+    "/classes/com.korail.mobile.passCard.CouponView": frozenset(
+        {"Device", "Version", "Key", "txtSelPage", "pnrNo"}
+    ),
+    "/classes/com.korail.mobile.pass.passInfoList": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "txtCmtrKndCd",
+            "txtCmtrUtlTrmCd",
+            "txtCmtrUtlAgeCd",
+        }
+    ),
+    "/classes/com.korail.mobile.pass.trGdMenuLt.do": frozenset(
+        {"Device", "Version"}
+    ),
+    "/classes/com.korail.mobile.product.ReservationList": frozenset(
+        {"Device", "Version", "Key", "txtSelPage", "txtCntPerPage"}
+    ),
+    "/classes/com.korail.mobile.product.ReservationDetail": frozenset(
+        {"Device", "Version", "Key", "txtVrRsNo", "txtVrRsvSqNo"}
+    ),
+    "/classes/com.korail.mobile.receipt.ReceiptInfo": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "h_orgtk_sale_dt",
+            "h_orgtk_wct_no",
+            "h_orgtk_sale_sqno",
+            "h_orgtk_tk_ret_pwd",
+        }
+    ),
+    "/classes/com.korail.mobile.reservation.ReservationView": frozenset(
+        {"Device", "Version", "Key"}
+    ),
     "/classes/com.korail.mobile.copt.gdMenuLt.do": frozenset(
         {"Device", "Version"}
     ),
 }
+KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 
 
 def assert_korail_origin(base_url: str) -> None:
@@ -85,14 +150,26 @@ def assert_read_only_route(method: str, path: str) -> None:
         )
 
 
-def assert_read_only_form_fields(path: str, fields: set[str]) -> None:
-    allowed = KORAIL_EXACT_FORM_FIELDS.get(urlsplit(path).path)
-    if allowed is None or fields == allowed:
+def assert_read_only_request_fields(
+    path: str,
+    values: Mapping[str, Any],
+) -> None:
+    allowed = KORAIL_EXACT_REQUEST_FIELDS.get(urlsplit(path).path)
+    if allowed is None:
         return
-    raise KorailProtocolError(
-        "KORAIL request form fields must exactly match the registered "
-        f"read-only contract for {urlsplit(path).path}"
-    )
+    if set(values) != allowed:
+        raise KorailProtocolError(
+            "KORAIL request fields must exactly match the registered "
+            "read-only contract"
+        )
+    if any(type(value) not in {str, int} for value in values.values()):
+        raise KorailProtocolError(
+            "KORAIL request values must be scalar strings or integers"
+        )
+
+
+def assert_read_only_form_fields(path: str, fields: set[str]) -> None:
+    assert_read_only_request_fields(path, {field: "" for field in fields})
 
 SAFETY_DEFAULTS = {
     "조회성 API": "실제 호출 허용 가능. 단, 계정/티켓 개인정보 로그 마스킹",

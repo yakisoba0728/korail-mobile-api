@@ -1,0 +1,28 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic cart list",
+  "strResult": "SUCC",
+  "cart_infos": {
+    "cart_info": [
+      {
+        "addSrvDvCd": "SYNTHETIC-SERVICE-CODE",
+        "coptEntRsvNo": "SYNTHETIC-PARTNER-RESERVATION",
+        "h_add_srv_mrk_ent_nm": "Synthetic Provider",
+        "h_cust_no": "SYNTHETIC-CUSTOMER-NUMBER",
+        "h_dpt_dt": "20991231",
+        "h_gd_nm": "Synthetic Product",
+        "h_item_dv_nm": "Synthetic Item Type",
+        "h_lump_stl_tgt_no": "SYNTHETIC-LUMP-SUM-NUMBER",
+        "h_pnr_no": "SYNTHETIC-PNR-SECRET",
+        "h_rcvd_amt": "12345",
+        "h_rsv_rcp_dt": "20990101",
+        "h_tk_cnt": "2",
+        "h_vr_rsv_no": "SYNTHETIC-VIRTUAL-RESERVATION",
+        "utlStDt": "20990201",
+        "utlStTm": "090000",
+        "utlClsTm": "180000",
+        "synthetic_unknown": "SYNTHETIC-RAW-SECRET"
+      }
+    ]
+  }
+}

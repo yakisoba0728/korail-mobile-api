@@ -18,7 +18,7 @@ from .errors import (
 from .models import BaseKorailResponse
 from .safety import (
     assert_korail_origin,
-    assert_read_only_form_fields,
+    assert_read_only_request_fields,
     assert_read_only_route,
 )
 
@@ -150,7 +150,7 @@ class KorailHttpClient:
             form.update(self.common_fields())
         if data:
             form.update(data)
-        assert_read_only_form_fields(path, set(form))
+        assert_read_only_request_fields(path, form)
         headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
@@ -198,6 +198,7 @@ class KorailHttpClient:
             query.update(self.common_fields())
         if params:
             query.update(params)
+        assert_read_only_request_fields(path, query)
         headers = (
             self._dynapath_headers("GET", path)
             if include_dynapath

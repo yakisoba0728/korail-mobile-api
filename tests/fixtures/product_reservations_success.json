@@ -1,0 +1,17 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic product reservations",
+  "strResult": "SUCC",
+  "mainInfo": {
+    "strTotCnt": "1",
+    "entity": [
+      {
+        "strGdNm": "Synthetic Product Reservation",
+        "strRsvSttNm": "Synthetic Reserved",
+        "strStlDlnDt": "20991231",
+        "strStlSttCd": "SYNTHETIC-PAID",
+        "strVrRsvNo": "SYNTHETIC-RESERVATION-NUMBER"
+      }
+    ]
+  }
+}

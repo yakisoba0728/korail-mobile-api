@@ -1,0 +1,47 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic ticket receipt",
+  "strResult": "SUCC",
+  "receipt_infos": {
+    "receipt_info": [
+      {
+        "h_abrd_dt": "20990102",
+        "h_arv_rs_stn_nm": "Synthetic Arrival",
+        "h_arv_tm": "120000",
+        "h_cmtr_knd_cd": "SYNTHETIC-PASS",
+        "h_crd_ret_amt": "300",
+        "h_dpt_rs_stn_nm": "Synthetic Departure",
+        "h_dpt_tm": "090000",
+        "h_jrny_tp_cd": "SYNTHETIC-JOURNEY",
+        "h_prt_disc_knd_nm": "Synthetic Discount",
+        "h_prt_type": "SYNTHETIC-PRINT",
+        "h_psg_type1_cnt": 1,
+        "h_psg_type2_cnt": "2",
+        "h_psg_type3_cnt": 0,
+        "h_psrm_cl_nm": "Synthetic Seat Class",
+        "h_rcvd_amt": "12300",
+        "h_ret_fee": 100,
+        "h_ret_rcvd_amt": "200",
+        "h_stl_mb_crd_no": "SYNTHETIC-MEMBER-CARD",
+        "h_tk_knd_cd": "SYNTHETIC-TICKET-KIND",
+        "h_tk_stt_cd": "SYNTHETIC-TICKET-STATUS",
+        "h_trn_clsf_cd": "SYNTHETIC-TRAIN-CLASS",
+        "h_trn_clsf_nm": "Synthetic Train Class",
+        "h_trn_no": "00999",
+        "h_xpoint_ret_amt": "50",
+        "stl_info": [
+          {
+            "h_acnt_no": "SYNTHETIC-ACCOUNT-NUMBER",
+            "h_apv_dt": "20990101",
+            "h_apv_no": "SYNTHETIC-APPROVAL-NUMBER",
+            "h_ismt_mnth_num": "3",
+            "h_stl_amt": 12300,
+            "h_stl_crd_no": "SYNTHETIC-CARD-NUMBER",
+            "h_stl_way_nm": "Synthetic Card",
+            "h_xpot_no": "SYNTHETIC-POINT-NUMBER"
+          }
+        ]
+      }
+    ]
+  }
+}

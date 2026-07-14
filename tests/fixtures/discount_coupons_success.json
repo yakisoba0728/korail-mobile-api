@@ -1,0 +1,24 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic discount coupons",
+  "strResult": "SUCC",
+  "h_page_no": "2",
+  "h_tot_page_cnt": 5,
+  "coupon_infos": {
+    "coupon_info": [
+      {
+        "guide": "Synthetic coupon guide",
+        "h_cpn_no": "SYNTHETIC-COUPON-NUMBER",
+        "h_disc_rt_amt_dv_cd": "SYNTHETIC-DISCOUNT-TYPE",
+        "h_fdcert_mg_cls_dt": "20991231",
+        "h_inwk_fare_disc_rt_amt": "10",
+        "h_inwk_prc_disc_rt_amt": "1000",
+        "h_rmk_1_cont": "Synthetic remark one",
+        "h_rmk_2_cont": "Synthetic remark two",
+        "h_rmk_3_cont": "Synthetic remark three",
+        "h_wknd_fare_disc_rt_amt": "20",
+        "h_wknd_prc_disc_rt_amt": "2000"
+      }
+    ]
+  }
+}

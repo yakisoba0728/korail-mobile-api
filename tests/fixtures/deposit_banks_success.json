@@ -1,0 +1,11 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic deposit banks",
+  "strResult": "SUCC",
+  "dptnBank": [
+    {
+      "dptnBankCd": "SYNTHETIC-BANK",
+      "dptnBankNm": "Synthetic Bank"
+    }
+  ]
+}

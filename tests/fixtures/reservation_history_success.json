@@ -1,0 +1,32 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic reservation history",
+  "strResult": "SUCC",
+  "jrny_infos": {
+    "jrny_info": [
+      {
+        "train_infos": {
+          "train_info": [
+            {
+              "h_acpt_ps_flg": "Y",
+              "h_arv_rs_stn_nm": "Synthetic Arrival",
+              "h_arv_tm": "120000",
+              "h_dpt_rs_stn_nm": "Synthetic Departure",
+              "h_dpt_tm": "090000",
+              "h_payment_flg": "Y",
+              "h_pnr_no": "SYNTHETIC-PNR-SECRET",
+              "h_rsv_tp_cd": "SYNTHETIC-RESERVATION-TYPE",
+              "h_run_dt": "20990102",
+              "h_stl_flg": "Y",
+              "h_tot_seat_cnt": "2",
+              "h_tot_stnd_cnt": 0,
+              "h_trn_clsf_cd": "SYNTHETIC-TRAIN-CLASS",
+              "h_trn_clsf_nm": "Synthetic Train Class",
+              "h_trn_no": "00999"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

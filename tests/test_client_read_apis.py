@@ -148,7 +148,6 @@ def test_ticket_list_sends_complete_member_form(load_json_fixture):
         assert expected in body
     for nonmember_only in ("hidName", "hidTeleNo", "hidPwd", "tsRsStnCd"):
         assert nonmember_only not in body
-    assert not hasattr(client, "get_reservation_history")
 
 
 def test_ticket_list_defaults_to_empty_device_id(load_json_fixture):

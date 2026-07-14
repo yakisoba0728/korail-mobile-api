@@ -1,0 +1,20 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic product detail",
+  "strResult": "SUCC",
+  "mainInfo": {
+    "strCncDlnDt": "20991231",
+    "strCncRetAmt": "9000",
+    "strCncRetFee": "1000",
+    "strGdNm": "Synthetic Product Detail",
+    "strRcvdAmt": "10000",
+    "strRsvSttNm": "Synthetic Reserved",
+    "strTotStlAmt": "10000",
+    "strUtlTrmCont": "20990101 through 20991231",
+    "strVrRsvNo": "SYNTHETIC-RESERVATION-NUMBER",
+    "entityOne": [
+      {"strGdConsItmNm": "Synthetic Included Item One"},
+      {"strGdConsItmNm": "Synthetic Included Item Two"}
+    ]
+  }
+}

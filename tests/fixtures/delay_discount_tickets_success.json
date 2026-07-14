@@ -1,0 +1,17 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic delay discount tickets",
+  "strResult": "SUCC",
+  "disc_infos": {
+    "disc_info": [
+      {
+        "h_dlay_fare": "1234",
+        "h_orgtk_ret_pwd": "SYNTHETIC-RETURN-PASSWORD",
+        "h_orgtk_ret_sale_dt": "20990101",
+        "h_orgtk_sale_sqno": "SYNTHETIC-SALE-SEQUENCE",
+        "h_orgtk_wct_no": "SYNTHETIC-WINDOW-NUMBER",
+        "h_use_psb_dt": "20991231"
+      }
+    ]
+  }
+}
