@@ -32,18 +32,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-python -m pip install -e ".[test]"
-python -m pip install build
+python3 -m pip install -e ".[test]"
+python3 -m pip install build
 PYTHONPATH="$PWD/src" pytest -q -m "not live"
 
 artifact_dir="$(mktemp -d)"
 venv_dir="$(mktemp -d)"
 outside_dir="$(mktemp -d)"
-python -m build --wheel --sdist --outdir "$artifact_dir" .
+python3 -m build --wheel --sdist --outdir "$artifact_dir" .
 wheel_path="$(find "$artifact_dir" -maxdepth 1 -name '*.whl' -print -quit)"
 sdist_path="$(find "$artifact_dir" -maxdepth 1 -name '*.tar.gz' -print -quit)"
-python scripts/verify_distribution.py "$wheel_path" "$sdist_path"
-python -m venv "$venv_dir"
+python3 scripts/verify_distribution.py "$wheel_path" "$sdist_path"
+python3 -m venv "$venv_dir"
 "$venv_dir/bin/python" -m pip install "$wheel_path"
 
 checkout="$PWD"

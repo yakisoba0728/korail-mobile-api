@@ -768,7 +768,9 @@ def test_ci_and_manual_release_gates_are_structurally_offline_and_fail_fast() ->
     assert "cleanup()" in release
     assert "trap cleanup EXIT" in release
     assert release.index("set -euo pipefail") < release.index("artifact_dir=")
-    assert release.index("trap cleanup EXIT") < release.index("python -m build")
+    assert "\npython -m " not in release
+    assert "\npython scripts/" not in release
+    assert release.index("trap cleanup EXIT") < release.index("python3 -m build")
     for forbidden in (
         "twine upload",
         "publish",
