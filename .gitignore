@@ -1,5 +1,6 @@
 analysis/
 .DS_Store
+/.env
 .local-live-smoke.env
 *.apk
 .worktrees/

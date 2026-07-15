@@ -753,6 +753,21 @@ def test_success_output_sanitizes_controls_and_bounds_basenames(
     assert all(character.isprintable() for character in wheel_display)
 
 
+def test_only_the_repo_root_dotenv_is_ignored() -> None:
+    result = subprocess.run(
+        ["git", "check-ignore", "--stdin"],
+        cwd=ROOT,
+        input=".env\nnested/.env\n.env.backup\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert result.stdout.splitlines() == [".env"]
+
+
 def test_ci_and_manual_release_gates_are_structurally_offline_and_fail_fast() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
     release = (ROOT / "docs/RELEASE.md").read_text()
