@@ -115,7 +115,7 @@ mutation routes are not callable.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full offline release gate reports `866 passed, 1 deselected`;
+- The full offline release gate reports `874 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution

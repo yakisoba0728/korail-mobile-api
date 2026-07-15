@@ -841,3 +841,137 @@ def test_client_rejects_wrong_request_type_before_transport(
     finally:
         client.close()
     assert calls == 0
+
+
+@pytest.mark.parametrize(
+    (
+        "method_name",
+        "request_type_name",
+        "request_factory",
+        "invalid_field",
+        "invalid_value",
+    ),
+    (
+        (
+            "get_free_seat_car_info",
+            "FreeSeatCarRequest",
+            _free_seat_request,
+            "run_date",
+            "invalid",
+        ),
+        (
+            "get_guide_seat_condition",
+            "GuideSeatConditionRequest",
+            _guide_seat_request,
+            "seat_attribute_code",
+            "",
+        ),
+        (
+            "get_seat_assignment_schedule",
+            "SeatAssignmentScheduleRequest",
+            _assignment_request,
+            "departure_date",
+            "invalid",
+        ),
+        (
+            "get_merge_seats_inquiry",
+            "MergeSeatsInquiryRequest",
+            _merge_request,
+            "boarding_datetime",
+            "invalid",
+        ),
+    ),
+)
+def test_client_rejects_request_subclass_validator_bypass_before_transport(
+    method_name,
+    request_type_name,
+    request_factory,
+    invalid_field,
+    invalid_value,
+):
+    request_type = _require(read_payloads, request_type_name)
+
+    class ValidationBypass(request_type):
+        def _validate(self) -> None:
+            pass
+
+    valid_request = request_factory()
+    values = {
+        definition.name: getattr(valid_request, definition.name)
+        for definition in fields(valid_request)
+    }
+    values[invalid_field] = invalid_value
+    bypass_request = ValidationBypass(**values)
+    calls = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=_success_envelope())
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(TypeError):
+            _require(client, method_name)(bypass_request)
+    finally:
+        client.close()
+    assert calls == 0
+
+
+@pytest.mark.parametrize(
+    (
+        "method_name",
+        "request_factory",
+        "invalid_field",
+        "invalid_value",
+    ),
+    (
+        (
+            "get_free_seat_car_info",
+            _free_seat_request,
+            "run_date",
+            "invalid",
+        ),
+        (
+            "get_guide_seat_condition",
+            _guide_seat_request,
+            "seat_attribute_code",
+            "",
+        ),
+        (
+            "get_seat_assignment_schedule",
+            _assignment_request,
+            "departure_date",
+            "invalid",
+        ),
+        (
+            "get_merge_seats_inquiry",
+            _merge_request,
+            "boarding_datetime",
+            "invalid",
+        ),
+    ),
+)
+def test_client_runs_expected_class_validator_before_transport(
+    method_name,
+    request_factory,
+    invalid_field,
+    invalid_value,
+):
+    request = request_factory()
+    object.__setattr__(request, invalid_field, invalid_value)
+    object.__setattr__(request, "_validate", lambda: None)
+    calls = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=_success_envelope())
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(ValueError):
+            _require(client, method_name)(request)
+    finally:
+        client.close()
+    assert calls == 0

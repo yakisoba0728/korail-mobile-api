@@ -201,9 +201,9 @@ class MergeSeatsInquiryRequest:
 def build_free_seat_car_form(
     request: FreeSeatCarRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, FreeSeatCarRequest):
+    if type(request) is not FreeSeatCarRequest:
         raise TypeError("request must be a FreeSeatCarRequest")
-    request._validate()
+    FreeSeatCarRequest._validate(request)
     return {
         "runDt": request.run_date,
         "trnNo": request.train_no.zfill(5),
@@ -217,18 +217,18 @@ def build_free_seat_car_form(
 def build_guide_seat_condition_form(
     request: GuideSeatConditionRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, GuideSeatConditionRequest):
+    if type(request) is not GuideSeatConditionRequest:
         raise TypeError("request must be a GuideSeatConditionRequest")
-    request._validate()
+    GuideSeatConditionRequest._validate(request)
     return {"rqSeatAttCd": request.seat_attribute_code}
 
 
 def build_seat_assignment_schedule_form(
     request: SeatAssignmentScheduleRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, SeatAssignmentScheduleRequest):
+    if type(request) is not SeatAssignmentScheduleRequest:
         raise TypeError("request must be a SeatAssignmentScheduleRequest")
-    request._validate()
+    SeatAssignmentScheduleRequest._validate(request)
     return {
         "menuId": request.menu_id,
         "dptDt": request.departure_date,
@@ -248,9 +248,9 @@ def build_seat_assignment_schedule_form(
 def build_merge_seats_inquiry_form(
     request: MergeSeatsInquiryRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, MergeSeatsInquiryRequest):
+    if type(request) is not MergeSeatsInquiryRequest:
         raise TypeError("request must be a MergeSeatsInquiryRequest")
-    request._validate()
+    MergeSeatsInquiryRequest._validate(request)
     return {
         "abrdDt": request.boarding_datetime,
         "runDt": request.run_datetime,

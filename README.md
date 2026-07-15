@@ -6,7 +6,7 @@ reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
 The reviewed package boundary contains 31 routes and 34 public methods. The
-current offline release gate is `866 passed, 1 deselected`; the
+current offline release gate is `874 passed, 1 deselected`; the
 deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
