@@ -222,11 +222,13 @@ class KorailClient:
                     "/classes/com.korail.mobile.cart.showCartList",
                     form,
                     include_dynapath=False,
+                    require_envelope=False,
                 ).raw
             )
         )
 
     def get_deposit_banks(self) -> DepositBankListResponse:
+        self._require_session()
         return self._run_read(
             lambda: parse_deposit_bank_response(
                 self.http.post_form(
@@ -248,6 +250,7 @@ class KorailClient:
                     "/classes/com.korail.mobile.passCard.DelayDiscountView",
                     form,
                     include_dynapath=False,
+                    require_envelope=False,
                 ).raw
             )
         )
@@ -292,6 +295,7 @@ class KorailClient:
         )
 
     def get_trip_menu(self) -> TripMenuResponse:
+        self._require_session()
         form = build_trip_menu_form(self.config)
         return self._run_read(
             lambda: parse_trip_menu_response(
@@ -318,6 +322,7 @@ class KorailClient:
                     query,
                     include_common=True,
                     include_dynapath=False,
+                    require_envelope=False,
                 ).raw
             )
         )

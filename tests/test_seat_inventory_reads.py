@@ -543,7 +543,6 @@ def test_seat_parser_rejects_malformed_containers(
         lambda raw: raw.__setitem__("vrBnrUrl", 1),
         lambda raw: raw["seatList"][0].__setitem__("sale_psb_flg", 1),
         lambda raw: raw["seatList"][0].__setitem__("floor", 1),
-        lambda raw: raw["windowList"][0].__setitem__("st_loc_rt", "0.1"),
     ],
 )
 def test_seat_parser_rejects_wrong_scalar_types(

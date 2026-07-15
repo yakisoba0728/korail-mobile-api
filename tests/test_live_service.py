@@ -13,6 +13,8 @@ def test_read_only_live_smoke():
     assert result["appDataLoaded"] is True
     assert result["noticeLoaded"] is True
     assert result["loggedIn"] is True
+    assert result["depositBankCount"] >= 0
+    assert result["tripMenuCount"] >= 0
     assert result["stationDataCount"] > 0
     assert result["trainCount"] >= 0
     assert "raw" not in result

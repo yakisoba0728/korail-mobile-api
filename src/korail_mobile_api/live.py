@@ -92,6 +92,8 @@ def run_live_smoke_from_env() -> dict[str, Any]:
                 None,
             )
         session = client.login(member_no, password)
+        deposit_banks = client.get_deposit_banks()
+        trip_menu = client.get_trip_menu()
         maas_stations = (
             client.get_maas_station_data(maas_service_code)
             if maas_service_code
@@ -155,6 +157,8 @@ def run_live_smoke_from_env() -> dict[str, Any]:
                 len(maas_stations.stations) if maas_stations is not None else 0
             ),
             "loggedIn": bool(session.jsessionid),
+            "depositBankCount": len(deposit_banks.items),
+            "tripMenuCount": len(trip_menu.items),
             "commonCode": common.h_msg_cd,
             "stationInfoLoaded": bool(station_info.raw),
             "stationDataCount": (

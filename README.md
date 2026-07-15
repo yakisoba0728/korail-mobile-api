@@ -146,9 +146,9 @@ milliseconds.
 The package now exposes 11 new public read methods across the 25 exact login/read routes
 registered by the transport boundary:
 
-- Account-neutral: `get_service_status()`, `get_deposit_banks()`,
-  `get_pass_available_dates()`, and `get_trip_menu()`.
-- Authenticated account or reservation reads: `get_cart_list()`,
+- Account-neutral: `get_service_status()` and `get_pass_available_dates()`.
+- Authenticated account or reservation reads: `get_deposit_banks()`,
+  `get_trip_menu()`, `get_cart_list()`,
   `get_delay_discount_tickets()`, `get_discount_coupons()`,
   `get_product_reservations()`, `get_product_detail()`,
   `get_ticket_receipt()`, and `get_reservation_history()`.
@@ -162,9 +162,17 @@ delay-discount, pass-available-date, and product-reservation reads reached
 their response parsers but four stopped at `KorailProtocolError`; two
 identifier-dependent calls were not issued because the account returned no
 owned product or ticket identifiers. No raw response, identifier, message,
-credential, cookie, or token was printed or persisted. Those four parser
-contracts remain live-incomplete; their response shapes must not be guessed
-from the fixed status-only result.
+credential, cookie, or token was printed or persisted. Subsequent sanitized
+shape-only analysis established endpoint-local result-only success envelopes
+for cart, delay-discount, and product-reservation lists. Those three routes now
+accept only that exact partial-success form while all strict-route, complete
+failure, and complete session-expiry behavior stays unchanged. The available
+capture did not contain a pass-availability body, so that contract is unchanged.
+
+Deposit-bank and trip-menu reads require an authenticated session. Their
+pre-login server responses were complete session-expiry envelopes, so both
+public methods now fail locally before transport without a session and the
+bounded smoke helper calls them only after its single login.
 
 `WRG000000` from the coupon list and `P100` from reservation history are the
 only evidenced no-data application codes converted to typed empty results.
@@ -279,10 +287,11 @@ python3 -c "from korail_mobile_api.live import run_live_smoke_from_env; print(ru
 ```
 
 The helper performs both cache reads and the generic MAAS menu read before
-login, then emits only booleans, status codes, and bounded counts. Its metadata
-is limited to fields such as `appDataLoaded`, `noticeLoaded`, and
-`maasMenuCount`; it does not return raw account, session, ticket, station,
-menu, app-data, or notice response bodies.
+login, then performs the session-coupled deposit-bank and trip-menu reads after
+its single login. It emits only booleans, status codes, and bounded counts. Its
+metadata is limited to fields such as `appDataLoaded`, `noticeLoaded`,
+`maasMenuCount`, `depositBankCount`, and `tripMenuCount`; it does not return raw
+account, session, ticket, station, menu, app-data, or notice response bodies.
 
 For the successful-read expansion, the pre-review complete offline suite result
 of `427 passed, 1 skipped` is historical. The independent final whole-feature

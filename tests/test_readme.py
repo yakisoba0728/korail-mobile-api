@@ -58,6 +58,8 @@ def test_readme_documents_every_successful_read_expansion_method_and_boundary():
     assert "WRG000000" in text
     assert "P100" in text
     assert "typed empty" in text
+    assert "Deposit-bank and trip-menu reads require an authenticated session" in text
+    assert "result-only success envelopes" in text
     assert "caller-owned identifiers" in text
     assert "reservation, payment, and mutation routes remain excluded" in text
     assert "reservation_no=reservation_no" in text

@@ -1,0 +1,20 @@
+{
+  "strResult": "SUCC",
+  "main_info": {
+    "h_cg_ps_id": "SYNTHETIC-PROCESS",
+    "h_job_id": "SYNTHETIC-JOB",
+    "h_last_page_yn": "SYNTHETIC-FLAG",
+    "h_msg_cd": "SYNTHETIC-NESTED-CODE",
+    "h_page_no": "SYNTHETIC-PAGE",
+    "h_row_cnt": "SYNTHETIC-COUNT",
+    "h_tot_cnt": "SYNTHETIC-COUNT",
+    "h_tot_page_cnt": "SYNTHETIC-COUNT",
+    "h_ver_no": "SYNTHETIC-VERSION",
+    "h_wct_no": "SYNTHETIC-WINDOW",
+    "h_work_dt": "SYNTHETIC-DATE",
+    "h_work_tm": "SYNTHETIC-TIME"
+  },
+  "disc_infos": {
+    "disc_info": []
+  }
+}

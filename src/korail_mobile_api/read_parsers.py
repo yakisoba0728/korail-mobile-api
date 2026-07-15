@@ -38,21 +38,38 @@ def _validate_envelope(
     raw: Mapping[str, Any],
     *,
     accepted_empty_codes: frozenset[str] = frozenset(),
+    allow_result_only_success: bool = False,
 ) -> bool:
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     required = ("h_msg_cd", "h_msg_txt", "strResult")
     missing = [name for name in required if name not in raw]
+    invalid = [
+        name
+        for name in required
+        if name in raw
+        and raw[name] is not None
+        and not isinstance(raw[name], str)
+    ]
     if missing:
+        if allow_result_only_success:
+            if invalid:
+                raise KorailProtocolError(
+                    "KORAIL response envelope fields must be strings or "
+                    "null: "
+                    + ", ".join(invalid)
+                )
+            if set(missing) == {"h_msg_cd", "h_msg_txt"}:
+                if raw.get("strResult") != "SUCC":
+                    raise KorailProtocolError(
+                        "KORAIL result-only envelope requires the exact "
+                        "success result"
+                    )
+                return False
         raise KorailProtocolError(
             "KORAIL response missing required envelope fields: "
             + ", ".join(missing)
         )
-    invalid = [
-        name
-        for name in required
-        if raw[name] is not None and not isinstance(raw[name], str)
-    ]
     if invalid:
         raise KorailProtocolError(
             "KORAIL response envelope fields must be strings or null: "
@@ -171,7 +188,7 @@ def parse_service_status_response(
 
 
 def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
-    _validate_envelope(raw)
+    _validate_envelope(raw, allow_result_only_success=True)
     items = []
     for value in _nested_rows(raw, "cart_infos", "cart_info", "cart list"):
         item = _row(value, "cart list cart_info")
@@ -252,7 +269,7 @@ def parse_deposit_bank_response(
 def parse_delay_discount_ticket_response(
     raw: Mapping[str, Any],
 ) -> DelayDiscountTicketListResponse:
-    _validate_envelope(raw)
+    _validate_envelope(raw, allow_result_only_success=True)
     items = []
     rows = _nested_rows(
         raw,
@@ -449,7 +466,7 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
 def parse_product_reservation_list_response(
     raw: Mapping[str, Any],
 ) -> ProductReservationListResponse:
-    _validate_envelope(raw)
+    _validate_envelope(raw, allow_result_only_success=True)
     main = _optional_mapping(raw, "mainInfo", "product reservation list")
     if main is None:
         return ProductReservationListResponse(**_response_fields(raw))

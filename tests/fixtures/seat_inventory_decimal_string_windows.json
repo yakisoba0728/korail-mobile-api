@@ -1,0 +1,17 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic seat inventory",
+  "strResult": "SUCC",
+  "layout_type": 11,
+  "seat_ary_cd": "SYNTHETIC-ARRANGEMENT",
+  "seat_remain_count": 0,
+  "seat_total_count": 0,
+  "seatList": [],
+  "windowList": [
+    {
+      "st_loc_rt": "00012.500",
+      "cls_loc_rt": "-0003.250"
+    }
+  ],
+  "vrBnrUrl": null
+}

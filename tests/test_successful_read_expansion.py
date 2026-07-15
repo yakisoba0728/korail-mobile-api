@@ -210,7 +210,7 @@ REQUEST_CASES = (
         "POST",
         "/classes/com.korail.mobile.dlay.dptnBank.do",
         {},
-        False,
+        True,
     ),
     (
         "get_delay_discount_tickets",
@@ -246,7 +246,7 @@ REQUEST_CASES = (
         "POST",
         "/classes/com.korail.mobile.pass.trGdMenuLt.do",
         {},
-        False,
+        True,
     ),
     (
         "get_product_reservations",
@@ -299,11 +299,13 @@ INVALID_CALLS = (
 
 AUTH_CALLS = (
     ("get_cart_list", ()),
+    ("get_deposit_banks", ()),
     ("get_delay_discount_tickets", ("20260714",)),
     ("get_discount_coupons", ()),
     ("get_product_reservations", ()),
     ("get_product_detail", ("SYNTHETIC-RESERVATION", "1")),
     ("get_ticket_receipt", ("20260714", "001", "1", "pw")),
+    ("get_trip_menu", ()),
     ("get_reservation_history", ()),
 )
 
@@ -661,9 +663,7 @@ def test_p058_clears_session_for_every_new_authenticated_read(
     ("method_name", "args"),
     (
         ("get_service_status", (1,)),
-        ("get_deposit_banks", ()),
         ("get_pass_available_dates", ("K", "P", "A")),
-        ("get_trip_menu", ()),
     ),
 )
 def test_account_neutral_reads_do_not_require_a_local_session(

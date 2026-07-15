@@ -43,8 +43,10 @@ Last updated: 2026-07-15 KST
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
-  because no caller-owned identifiers were available. The four parser shapes
-  remain unresolved rather than being weakened without sanitized evidence.
+  because no caller-owned identifiers were available. Later sanitized
+  shape-only evidence resolved cart, delay-discount, and product-reservation
+  list envelopes without weakening the remaining strict routes. The same
+  evidence established finite ASCII decimal strings for seat-window ratios.
 
 ## Implemented Public Operations
 
@@ -62,8 +64,8 @@ Last updated: 2026-07-15 KST
 - Transfer-station lookup
 - Ticket-list lookup
 - Fixed `rt=0` DynaPath generation and exact-path attachment
-- Account-neutral service-status and deposit-bank lookup
-- Account-neutral pass available-date and trip-menu lookup
+- Account-neutral service-status and pass available-date lookup
+- Authenticated deposit-bank and trip-menu lookup
 - Authenticated cart, delay-discount, and discount-coupon lookup
 - Authenticated product reservation list and caller-owned product detail lookup
 - Authenticated ticket receipt and reservation-history lookup
@@ -199,12 +201,13 @@ or state-changing operations.
 ## Next Required Step
 
 The typed seat-inventory contract now has repeated bounded live structural
-evidence for both read routes. Four successful-read expansion parsers remain
-live-incomplete after fixed-status protocol failures; obtain a separately
-reviewed, sanitized shape-only capture before changing them. Do not infer raw
-response structure from exception classes. Any additional reservation-linked
-route requires its own safety review and caller-owned data. Keep all local
-credentials and runtime-sensitive values ignored and out of documentation.
+evidence for both read routes, including finite ASCII decimal-string window
+ratios. Pass availability still has no body in the current shape-only capture;
+obtain separately reviewed evidence before changing that parser. Do not infer
+raw response structure from exception classes. Any additional
+reservation-linked route requires its own safety review and caller-owned data.
+Keep all local credentials and runtime-sensitive values ignored and out of
+documentation.
 
 See the shared [next-session prompt](../../NEXT_SESSION_PROMPT.md) for the
 combined KORAIL/SRT orchestration instructions.

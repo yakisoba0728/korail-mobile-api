@@ -1,0 +1,26 @@
+{
+  "strResult": "SUCC",
+  "main_info": {
+    "h_abrd_dt_from": "SYNTHETIC-DATE-FROM",
+    "h_abrd_dt_to": "SYNTHETIC-DATE-TO",
+    "h_cg_ps_id": "SYNTHETIC-PROCESS",
+    "h_cust_no": "SYNTHETIC-CUSTOMER",
+    "h_dv_cd": "SYNTHETIC-DIVISION",
+    "h_filler": "SYNTHETIC-FILLER",
+    "h_intSelectPageNo": "SYNTHETIC-PAGE",
+    "h_job_id": "SYNTHETIC-JOB",
+    "h_msg_cd": "SYNTHETIC-NESTED-CODE",
+    "h_page_no": "SYNTHETIC-PAGE",
+    "h_row_cnt": "SYNTHETIC-COUNT",
+    "h_spbk_whl_cnt": "SYNTHETIC-COUNT",
+    "h_stl_scsn_flg": "SYNTHETIC-FLAG",
+    "h_tot_page_cnt": "SYNTHETIC-COUNT",
+    "h_ver_no": "SYNTHETIC-VERSION",
+    "h_wct_no": "SYNTHETIC-WINDOW",
+    "h_work_dt": "SYNTHETIC-DATE",
+    "h_work_tm": "SYNTHETIC-TIME"
+  },
+  "cart_infos": {
+    "cart_info": []
+  }
+}

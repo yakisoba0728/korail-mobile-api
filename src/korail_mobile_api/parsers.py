@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -423,11 +424,22 @@ def parse_seat_car_list_response(
 
 def _inventory_ratio(data: Mapping[str, Any], key: str) -> float:
     value = data.get(key)
-    if type(value) not in {int, float}:
+    is_number = type(value) in {int, float}
+    is_ascii_decimal = (
+        isinstance(value, str)
+        and re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value) is not None
+    )
+    if not is_number and not is_ascii_decimal:
         raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be numeric"
+            f"KORAIL seat inventory field {key} must be numeric or an "
+            "ASCII decimal string"
         )
-    ratio = float(value)
+    try:
+        ratio = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be finite"
+        ) from exc
     if not math.isfinite(ratio):
         raise KorailProtocolError(
             f"KORAIL seat inventory field {key} must be finite"

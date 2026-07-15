@@ -15,6 +15,12 @@ from korail_mobile_api.models import (
     TrainSummary,
     UuidResponse,
 )
+from korail_mobile_api.read_models import (
+    DepositBank,
+    DepositBankListResponse,
+    TripMenuItem,
+    TripMenuResponse,
+)
 
 
 def test_live_disabled_by_default(monkeypatch):
@@ -194,6 +200,14 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(
             calls.append(("login", member_no, password))
             return KorailSession(jsessionid="session", member_no=member_no)
 
+        def get_deposit_banks(self) -> DepositBankListResponse:
+            calls.append(("get_deposit_banks",))
+            return DepositBankListResponse(items=(DepositBank(),), raw={})
+
+        def get_trip_menu(self) -> TripMenuResponse:
+            calls.append(("get_trip_menu",))
+            return TripMenuResponse(items=(TripMenuItem(),), raw={})
+
         def get_common_code(self, code: str = "") -> BaseKorailResponse:
             calls.append(("get_common_code", code))
             return BaseKorailResponse(
@@ -287,6 +301,8 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(
         "maasStationTested": maas_tested,
         "maasStationCount": maas_count,
         "loggedIn": True,
+        "depositBankCount": 1,
+        "tripMenuCount": 1,
         "commonCode": "API.I00000",
         "stationInfoLoaded": True,
         "stationDataCount": 2,
@@ -314,6 +330,8 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(
         "get_uuid",
         "get_maas_menu_list",
         "login",
+        "get_deposit_banks",
+        "get_trip_menu",
     ]
     if expected_code is not None:
         expected_calls.append("get_maas_station_data")
