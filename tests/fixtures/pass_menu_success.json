@@ -18,6 +18,21 @@
       "title": "Synthetic Pass Menu",
       "trnGpCd": "SYNTHETIC-TRAIN-GROUP",
       "type": "SYNTHETIC-MENU-TYPE",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "SYNTHETIC-RAW-SECRET",
+        "psg_infos": {
+          "h_chtn_allw_flg": "Y",
+          "h_max_cnt": "4",
+          "h_min_cnt": "1",
+          "psg_info": [
+            {
+              "h_cls_prnb": 3,
+              "h_dcnt_knd_cd": "SYNTHETIC-SERVER-DISCOUNT-KIND",
+              "h_st_prnb": 1
+            }
+          ]
+        }
+      },
       "passData": {
         "h_cmtr_knd_cd": "SYNTHETIC-SERVER-KIND",
         "h_select_station": "Y",
@@ -38,8 +53,7 @@
       },
       "webData": {
         "url": "https://example.invalid/SYNTHETIC-RAW-SECRET"
-      },
-      "ignoredSyntheticSecret": "SYNTHETIC-RAW-SECRET"
+      }
     }
   ]
 }

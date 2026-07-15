@@ -358,6 +358,30 @@ class PassMenuData:
 
 
 @dataclass(frozen=True)
+class PassPassengerInfo:
+    h_cls_prnb: int | None = None
+    h_dcnt_knd_cd: str | None = None
+    h_st_prnb: int | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PassPassengerInfos:
+    h_chtn_allw_flg: str | None = None
+    h_max_cnt: str | None = None
+    h_min_cnt: str | None = None
+    psg_info: tuple[PassPassengerInfo, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PassGoodsInfo:
+    h_cnd_flg_disc_no: str | None = field(default=None, repr=False)
+    psg_infos: PassPassengerInfos | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
 class PassMenuItem:
     after_day: int | None = None
     agreement: str | None = None
@@ -373,6 +397,7 @@ class PassMenuItem:
     title: str | None = None
     train_group_code: str | None = None
     item_type: str | None = None
+    goods_data: PassGoodsInfo | None = None
     pass_data: PassMenuData | None = None
     url: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)

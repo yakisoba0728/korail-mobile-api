@@ -15,7 +15,7 @@ The current implementation evidence establishes:
 
 - 34 routes at the exact login/read transport boundary.
 - 37 public methods on `KorailClient`.
-- A reviewed offline gate of `1076 passed, 1 deselected`; the deselected
+- A reviewed offline gate of `1080 passed, 1 deselected`; the deselected
   test is the explicitly opted-in live-service test.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.
@@ -47,7 +47,8 @@ repeat production traffic and does not alter their established contracts.
 The static P0 menu/reference increment adds `get_pass_menu()`,
 `get_crew_request_list()`, and `get_commuter_kind_menu()` with exact fields,
 required caller-supplied runtime discriminator codes, frozen typed responses,
-and synthetic fixtures. No live call was made. The similarly named
+and synthetic fixtures. The routes are session-unverified; any live
+verification must start only after login. No live call was made. The similarly named
 `/classes/com.korail.mobile.push.callCrew.do` mutation remains unregistered and
 has no public client method.
 

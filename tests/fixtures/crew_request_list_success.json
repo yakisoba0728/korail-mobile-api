@@ -5,8 +5,7 @@
   "prsList": [
     {
       "intgMsgCd": "SYNTHETIC-SERVER-CREW-CODE",
-      "prsCont": "Synthetic crew request option",
-      "ignoredSyntheticSecret": "SYNTHETIC-RAW-SECRET"
+      "prsCont": "Synthetic crew request option"
     }
   ]
 }

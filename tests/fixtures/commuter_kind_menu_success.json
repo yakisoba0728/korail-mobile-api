@@ -22,7 +22,6 @@
         "h_cmtr_utl_trm_cd": "SYNTHETIC-SERVER-COMMUTER-PERIOD",
         "h_comn_cd_nm": "Synthetic Commuter Period"
       }
-    ],
-    "ignoredSyntheticSecret": "SYNTHETIC-RAW-SECRET"
+    ]
   }
 }

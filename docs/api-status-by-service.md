@@ -19,7 +19,8 @@ Package coverage: 34 exact login/read routes. The package now exposes the ten
 previously successful but unwrapped reads plus the already registered service
 status cache as 11 public methods, plus the two typed car and physical-seat
 reads and three static P0 menu/reference reads. The latter P0 reads use only
-APK/source evidence and synthetic fixtures; no live result is claimed. The
+APK/source evidence and synthetic fixtures; they are session-unverified, any
+live verification starts only after login, and no live result is claimed. The
 seat reads now have bounded live structural evidence: both returned
 `IRG000000`/`SUCC`, with 5 cars and 75 seat rows, without retaining raw values
 or identifiers. A later eleven-method wrapper replay parsed five reads, stopped

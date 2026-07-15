@@ -5,6 +5,8 @@ README = Path(__file__).parents[1] / "README.md"
 STATUS = Path(__file__).parents[1] / "docs" / "api-status-by-service.md"
 BUILD_GUIDE = Path(__file__).parents[1] / "docs" / "library-build-guide.md"
 PROGRESS = Path(__file__).parents[1] / "docs" / "IMPLEMENTATION_PROGRESS.md"
+HANDOFF = Path(__file__).parents[1] / "docs" / "NEXT_SESSION.md"
+CHANGELOG = Path(__file__).parents[1] / "CHANGELOG.md"
 
 
 def test_readme_describes_fixed_rt_dynapath_consistently():
@@ -88,6 +90,9 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
 def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     readme = README.read_text(encoding="utf-8")
     progress = PROGRESS.read_text(encoding="utf-8")
+    status = STATUS.read_text(encoding="utf-8")
+    handoff = HANDOFF.read_text(encoding="utf-8")
+    changelog = CHANGELOG.read_text(encoding="utf-8")
     for method_name in (
         "get_pass_menu",
         "get_crew_request_list",
@@ -105,6 +110,12 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     assert "remains excluded" in readme
     assert "static APK evidence and synthetic fixtures only" in readme
     assert "34 exact read/login routes" in progress
+    for document in (readme, progress, status, handoff, changelog):
+        assert "session-unverified" in document
+    assert "live verification only after login" in readme
+    assert "Three account-neutral reference methods" not in readme
+    assert "Account-neutral pass-menu" not in progress
+    assert "typed account-neutral pass-menu" not in changelog
 
 
 def test_readme_documents_typed_seat_inventory_scope_and_live_boundary():

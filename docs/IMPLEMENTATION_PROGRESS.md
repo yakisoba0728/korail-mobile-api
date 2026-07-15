@@ -26,10 +26,11 @@ Last updated: 2026-07-15 KST
 - Eleven successful-read expansion methods are implemented with frozen models,
   strict parsers, exact payload builders, synthetic fixtures, and no adjacent
   or fallback requests.
-- Three additional P0 menu/reference methods are implemented from static APK
-  evidence and synthetic fixtures: pass menu, commuter-kind menu, and crew
-  request options. Their runtime discriminator codes are required caller
-  inputs; the separate state-changing crew-call route remains excluded.
+- Three additional session-unverified P0 menu/reference methods are implemented
+  from static APK evidence and synthetic fixtures: pass menu,
+  commuter-kind menu, and crew request options. Their runtime discriminator
+  codes are required caller inputs; any live verification starts only after
+  login, and the separate state-changing crew-call route remains excluded.
 - The `0.2.0` seat-inventory increment implements typed authenticated car and
   physical-seat reads for the fixed main-menu/general-room contract. Both
   exact POST routes validate before Sid generation, issue one request, and
@@ -87,7 +88,8 @@ Last updated: 2026-07-15 KST
 - Fixed `rt=0` DynaPath generation and exact-path attachment
 - Account-neutral service-status and pass available-date lookup
 - Authenticated deposit-bank and trip-menu lookup
-- Account-neutral pass-menu, commuter-kind-menu, and crew-request-option lookup
+- Session-unverified pass-menu, commuter-kind-menu, and crew-request-option
+  lookup; any live verification requires prior login
 - Authenticated cart, delay-discount, and discount-coupon lookup
 - Authenticated product reservation list and caller-owned product detail lookup
 - Authenticated ticket receipt and reservation-history lookup
@@ -123,7 +125,7 @@ mutation routes are not callable.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full offline release gate reports `1076 passed, 1 deselected`;
+- The full offline release gate reports `1080 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution

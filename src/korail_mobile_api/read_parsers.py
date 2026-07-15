@@ -26,10 +26,13 @@ from .read_models import (
     MergeSeatsInquiryResponse,
     PassAvailabilityResponse,
     PassAgeOption,
+    PassGoodsInfo,
     PassMenuData,
     PassMenuItem,
     PassMenuResponse,
     PassOffice,
+    PassPassengerInfo,
+    PassPassengerInfos,
     PassPeriodOption,
     ProductDetailResponse,
     ProductReservation,
@@ -202,6 +205,19 @@ def _optional_integer(
     )
 
 
+def _optional_json_integer(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+) -> int | None:
+    value = data.get(key)
+    if value is None or type(value) is int:
+        return value
+    raise KorailProtocolError(
+        f"KORAIL {context} field {key} must be an integer or null"
+    )
+
+
 def _parse_pass_menu_data(
     data: Mapping[str, Any] | None,
     context: str,
@@ -267,6 +283,72 @@ def _parse_pass_menu_data(
         ),
         age_options=tuple(age_options),
         period_options=tuple(period_options),
+        raw=data,
+    )
+
+
+def _parse_pass_goods_info(
+    data: Mapping[str, Any] | None,
+    context: str,
+) -> PassGoodsInfo | None:
+    if data is None:
+        return None
+    passenger_infos_data = _optional_mapping(data, "psg_infos", context)
+    passenger_infos = None
+    if passenger_infos_data is not None:
+        passengers = []
+        for value in _optional_list(
+            passenger_infos_data,
+            "psg_info",
+            "pass passenger infos",
+        ):
+            item = _row(value, "pass passenger infos psg_info")
+            passengers.append(
+                PassPassengerInfo(
+                    h_cls_prnb=_optional_json_integer(
+                        item,
+                        "h_cls_prnb",
+                        "pass passenger info",
+                    ),
+                    h_dcnt_knd_cd=_optional_string(
+                        item,
+                        "h_dcnt_knd_cd",
+                        "pass passenger info",
+                    ),
+                    h_st_prnb=_optional_json_integer(
+                        item,
+                        "h_st_prnb",
+                        "pass passenger info",
+                    ),
+                    raw=item,
+                )
+            )
+        passenger_infos = PassPassengerInfos(
+            h_chtn_allw_flg=_optional_string(
+                passenger_infos_data,
+                "h_chtn_allw_flg",
+                "pass passenger infos",
+            ),
+            h_max_cnt=_optional_string(
+                passenger_infos_data,
+                "h_max_cnt",
+                "pass passenger infos",
+            ),
+            h_min_cnt=_optional_string(
+                passenger_infos_data,
+                "h_min_cnt",
+                "pass passenger infos",
+            ),
+            psg_info=tuple(passengers),
+            raw=passenger_infos_data,
+        )
+    return PassGoodsInfo(
+        h_cnd_flg_disc_no=_optional_string(
+            data,
+            "h_cnd_flg_disc_no",
+            context,
+        ),
+        psg_infos=passenger_infos,
         raw=data,
     )
 
@@ -348,6 +430,14 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
                     item,
                     "type",
                     "pass menu item",
+                ),
+                goods_data=_parse_pass_goods_info(
+                    _optional_mapping(
+                        item,
+                        "goodsData",
+                        "pass menu item",
+                    ),
+                    "pass goods info",
                 ),
                 pass_data=_parse_pass_menu_data(
                     _optional_mapping(

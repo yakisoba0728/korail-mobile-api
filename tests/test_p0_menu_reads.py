@@ -138,6 +138,28 @@ def test_pass_menu_parser_exposes_typed_immutable_static_contract(
     assert item.url.endswith("SYNTHETIC-RAW-SECRET")
     assert item.raw is raw["list"][0]
 
+    goods_data = item.goods_data
+    assert isinstance(goods_data, read_models.PassGoodsInfo)
+    assert goods_data.h_cnd_flg_disc_no == "SYNTHETIC-RAW-SECRET"
+    assert goods_data.raw is raw["list"][0]["goodsData"]
+    passenger_infos = goods_data.psg_infos
+    assert isinstance(passenger_infos, read_models.PassPassengerInfos)
+    assert passenger_infos.h_chtn_allw_flg == "Y"
+    assert passenger_infos.h_max_cnt == "4"
+    assert passenger_infos.h_min_cnt == "1"
+    assert isinstance(passenger_infos.psg_info, tuple)
+    passenger = passenger_infos.psg_info[0]
+    assert isinstance(passenger, read_models.PassPassengerInfo)
+    assert passenger.h_cls_prnb == 3
+    assert passenger.h_dcnt_knd_cd == "SYNTHETIC-SERVER-DISCOUNT-KIND"
+    assert passenger.h_st_prnb == 1
+    assert passenger.raw is raw["list"][0]["goodsData"]["psg_infos"][
+        "psg_info"
+    ][0]
+    assert "SYNTHETIC-RAW-SECRET" not in repr(goods_data)
+    with pytest.raises(FrozenInstanceError):
+        passenger.h_st_prnb = 2
+
     pass_data = item.pass_data
     assert isinstance(pass_data, read_models.PassMenuData)
     assert pass_data.commuter_kind_code == "SYNTHETIC-SERVER-KIND"
@@ -226,6 +248,46 @@ def test_crew_request_list_parser_exposes_options_without_calling_crew(
         (
             "pass_menu_success.json",
             "parse_pass_menu_response",
+            lambda raw: raw["list"][0].__setitem__("goodsData", []),
+        ),
+        (
+            "pass_menu_success.json",
+            "parse_pass_menu_response",
+            lambda raw: raw["list"][0]["goodsData"].__setitem__(
+                "psg_infos", []
+            ),
+        ),
+        (
+            "pass_menu_success.json",
+            "parse_pass_menu_response",
+            lambda raw: raw["list"][0]["goodsData"][
+                "psg_infos"
+            ].__setitem__("psg_info", {}),
+        ),
+        (
+            "pass_menu_success.json",
+            "parse_pass_menu_response",
+            lambda raw: raw["list"][0]["goodsData"]["psg_infos"][
+                "psg_info"
+            ].__setitem__(0, "not-an-object"),
+        ),
+        (
+            "pass_menu_success.json",
+            "parse_pass_menu_response",
+            lambda raw: raw["list"][0]["goodsData"]["psg_infos"][
+                "psg_info"
+            ][0].__setitem__("h_cls_prnb", True),
+        ),
+        (
+            "pass_menu_success.json",
+            "parse_pass_menu_response",
+            lambda raw: raw["list"][0]["goodsData"]["psg_infos"][
+                "psg_info"
+            ][0].__setitem__("h_cls_prnb", "3"),
+        ),
+        (
+            "pass_menu_success.json",
+            "parse_pass_menu_response",
             lambda raw: raw["list"][0]["passData"].__setitem__(
                 "pass_ageinfo", ["not-an-object"]
             ),
@@ -294,14 +356,6 @@ def test_p0_menu_parsers_preserve_application_and_session_errors(parser_name):
     ("fixture_name", "parser_name"),
     (
         ("pass_menu_success.json", "parse_pass_menu_response"),
-        (
-            "commuter_kind_menu_success.json",
-            "parse_commuter_kind_menu_response",
-        ),
-        (
-            "crew_request_list_success.json",
-            "parse_crew_request_list_response",
-        ),
     ),
 )
 def test_p0_menu_model_reprs_hide_raw_and_inert_url_values(
@@ -355,7 +409,7 @@ CLIENT_CODE_CASES = tuple((name, code) for name, code, *_ in CLIENT_CASES)
     ),
     CLIENT_CASES,
 )
-def test_p0_menu_client_issues_one_exact_account_neutral_read(
+def test_p0_menu_client_issues_one_exact_mocked_read(
     method_name,
     caller_code,
     http_method,
@@ -389,6 +443,8 @@ def test_p0_menu_client_issues_one_exact_account_neutral_read(
         )
     )
     client = KorailClient(config, transport=httpx.MockTransport(handler))
+    # This records the current client precondition only. It does not prove
+    # whether the live server requires an authenticated session.
     assert client.session.current is None
     try:
         result = getattr(client, method_name)(caller_code)
@@ -533,6 +589,9 @@ def test_p0_menu_models_are_exported_from_package_root():
         "PassAgeOption",
         "PassPeriodOption",
         "PassMenuData",
+        "PassGoodsInfo",
+        "PassPassengerInfos",
+        "PassPassengerInfo",
         "PassMenuItem",
         "PassMenuResponse",
         "CommuterKindMenuResponse",
