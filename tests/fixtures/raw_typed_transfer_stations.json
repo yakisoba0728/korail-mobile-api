@@ -1,0 +1,13 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic-transfer-message-secret",
+  "strResult": "SUCC",
+  "chtnList": [
+    {
+      "chtnRsStnCd": "SYNTHETIC-TRANSFER-STATION-CODE",
+      "chtnRsStnNm": "Synthetic Transfer Station Name",
+      "synthetic_raw_marker": "synthetic-transfer-row-raw-secret"
+    }
+  ],
+  "synthetic_raw_marker": "synthetic-transfer-raw-secret"
+}

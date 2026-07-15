@@ -21,7 +21,15 @@ from .models import (
     SeatInventoryResponse,
     SeatWindow,
     StationDataResponse,
+    StationInfoResponse,
+    TrainCalendarDay,
+    TrainCalendarResponse,
+    TrainScheduleResponse,
+    TrainScheduleStop,
+    TrainSearchMetadata,
     TrainSummary,
+    TransferStation,
+    TransferStationListResponse,
     UuidResponse,
 )
 
@@ -33,6 +41,101 @@ def _optional_string(data: Mapping[str, Any], key: str) -> str | None:
             f"KORAIL cache field {key} must be a string or null"
         )
     return value
+
+
+def _typed_optional_string(
+    data: Mapping[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> str | None:
+    value = data.get(key)
+    if value is not None and not isinstance(value, str):
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be a string or null"
+        )
+    return value
+
+
+def _typed_required_string(
+    data: Mapping[str, Any],
+    key: str,
+    *,
+    context: str,
+    non_empty: bool = False,
+) -> str:
+    if key not in data or not isinstance(data[key], str):
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be a string"
+        )
+    value = data[key]
+    if non_empty and not value.strip():
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be a non-empty string"
+        )
+    return value
+
+
+def _typed_required_non_empty_list(
+    data: Mapping[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> list[Any]:
+    value = data.get(key)
+    if not isinstance(value, list) or not value:
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be a non-empty list"
+        )
+    return value
+
+
+def _typed_optional_int(
+    data: Mapping[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> int | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    if type(value) is not int:
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be an integer or null"
+        )
+    return value
+
+
+def _typed_non_negative_integer_value(
+    value: object,
+    key: str,
+    *,
+    context: str,
+) -> int:
+    if type(value) is int:
+        parsed = value
+    elif (
+        isinstance(value, str)
+        and value
+        and all("0" <= character <= "9" for character in value)
+    ):
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise KorailProtocolError(
+                f"KORAIL {context} field {key} has an unsupported "
+                "ASCII-decimal length"
+            ) from exc
+    else:
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be a non-negative integer "
+            "or ASCII-decimal string"
+        )
+    if parsed < 0:
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must not be negative"
+        )
+    return parsed
 
 
 def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
@@ -129,6 +232,39 @@ def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
         for row in rows
         if isinstance(row, Mapping)
     ]
+
+
+def parse_train_search_metadata(
+    raw: Mapping[str, Any],
+) -> TrainSearchMetadata:
+    optional = lambda key: _typed_optional_string(
+        raw,
+        key,
+        context="train search metadata",
+    )
+    train_container = raw.get("trn_infos")
+    if isinstance(train_container, Mapping):
+        merge_reservation_available_flag = _typed_optional_string(
+            train_container,
+            "h_merge_rsv_psb_flg",
+            context="train search metadata",
+        )
+    else:
+        merge_reservation_available_flag = None
+    return TrainSearchMetadata(
+        menu_id=optional("h_menu_id"),
+        job_id=optional("strJobId"),
+        product_no=optional("h_gd_no"),
+        next_page_flag=optional("h_next_pg_flg"),
+        next_query_station_no=optional("h_qry_st_no_next"),
+        next_train_no=optional("h_trn_no_next"),
+        result_count=optional("h_rslt_cnt"),
+        first_seat_count=optional("h_seat_cnt_first"),
+        second_seat_count=optional("h_seat_cnt_second"),
+        first_departure_time=optional("txtGoHour_first"),
+        merge_reservation_available_flag=merge_reservation_available_flag,
+        raw=dict(raw),
+    )
 
 
 def _station_optional_string(row: Mapping[str, Any], key: str) -> str | None:
@@ -253,6 +389,25 @@ def parse_station_data_response(
                 longitude=_station_optional_string(row, "longitude"),
                 latitude=_station_optional_string(row, "latitude"),
                 raw=raw,
+                group=_station_optional_string(row, "group"),
+                major=_station_optional_string(row, "major"),
+                popup_type=_typed_optional_int(
+                    row,
+                    "popupType",
+                    context="station",
+                ),
+                popup_message=_station_optional_string(
+                    row,
+                    "popupMessage",
+                ),
+                popup_link_title=_station_optional_string(
+                    row,
+                    "popupLinkTitle",
+                ),
+                popup_link_url=_station_optional_string(
+                    row,
+                    "popupLinkUrl",
+                ),
             )
         )
     return StationDataResponse(
@@ -260,6 +415,333 @@ def parse_station_data_response(
         h_msg_txt=response.h_msg_txt,
         str_result=response.str_result,
         raw=response.raw,
+        stations=tuple(stations),
+    )
+
+
+def parse_station_info_response(
+    response: BaseKorailResponse,
+) -> StationInfoResponse:
+    raw = response.raw
+    return StationInfoResponse(
+        h_msg_cd=response.h_msg_cd,
+        h_msg_txt=response.h_msg_txt,
+        str_result=response.str_result,
+        raw=raw,
+        count=_typed_non_negative_integer_value(
+            raw.get("count"),
+            "count",
+            context="station info",
+        ),
+        map_version=_typed_required_string(
+            raw,
+            "map_version",
+            context="station info",
+            non_empty=True,
+        ),
+    )
+
+
+def parse_train_calendar_response(
+    response: BaseKorailResponse,
+) -> TrainCalendarResponse:
+    raw = response.raw
+    rows = _typed_required_non_empty_list(
+        raw,
+        "runningCalendar",
+        context="train calendar",
+    )
+    days: list[TrainCalendarDay] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError(
+                "KORAIL train calendar contained a non-object row"
+            )
+        days.append(
+            TrainCalendarDay(
+                run_date=_typed_required_string(
+                    row,
+                    "runDt",
+                    context="train calendar",
+                ),
+                business_day_stage_code=_typed_required_string(
+                    row,
+                    "bizDdStgCd",
+                    context="train calendar",
+                ),
+                day_division_code=_typed_required_string(
+                    row,
+                    "dayDvCd",
+                    context="train calendar",
+                ),
+                holiday_division_code=_typed_required_string(
+                    row,
+                    "hldyDvCd",
+                    context="train calendar",
+                ),
+                sale_day_division_code=_typed_required_string(
+                    row,
+                    "saleDdDvCd",
+                    context="train calendar",
+                ),
+                a_train_operation_flag=_typed_required_string(
+                    row,
+                    "aTrnOpFlg",
+                    context="train calendar",
+                ),
+                d_train_operation_flag=_typed_required_string(
+                    row,
+                    "dTrnOpFlg",
+                    context="train calendar",
+                ),
+                g_train_operation_flag=_typed_required_string(
+                    row,
+                    "gTrnOpFlg",
+                    context="train calendar",
+                ),
+                o_train_operation_flag=_typed_required_string(
+                    row,
+                    "oTrnOpFlg",
+                    context="train calendar",
+                ),
+                s_train_operation_flag=_typed_required_string(
+                    row,
+                    "sTrnOpFlg",
+                    context="train calendar",
+                ),
+                v_train_operation_flag=_typed_required_string(
+                    row,
+                    "vTrnOpFlg",
+                    context="train calendar",
+                ),
+                x_train_operation_flag=_typed_required_string(
+                    row,
+                    "xTrnOpFlg",
+                    context="train calendar",
+                ),
+                raw=dict(row),
+            )
+        )
+    return TrainCalendarResponse(
+        h_msg_cd=response.h_msg_cd,
+        h_msg_txt=response.h_msg_txt,
+        str_result=response.str_result,
+        raw=raw,
+        days=tuple(days),
+    )
+
+
+def parse_train_schedule_response(
+    response: BaseKorailResponse,
+) -> TrainScheduleResponse:
+    raw = response.raw
+    rows = _typed_required_non_empty_list(
+        raw,
+        "dlayList",
+        context="train schedule",
+    )
+    stops: list[TrainScheduleStop] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError(
+                "KORAIL train schedule contained a non-object stop"
+            )
+        stops.append(
+            TrainScheduleStop(
+                station_code=_typed_required_string(
+                    row,
+                    "stopRsStnCd",
+                    context="train schedule stop",
+                    non_empty=True,
+                ),
+                station_name=_typed_required_string(
+                    row,
+                    "stopStnNm",
+                    context="train schedule stop",
+                    non_empty=True,
+                ),
+                station_construction_order=_typed_required_string(
+                    row,
+                    "stnConsOrdr",
+                    context="train schedule stop",
+                    non_empty=True,
+                ),
+                run_order=_typed_required_string(
+                    row,
+                    "runOrdr",
+                    context="train schedule stop",
+                    non_empty=True,
+                ),
+                actual_arrival_delay_count=_typed_optional_int(
+                    row,
+                    "actArvDlayTnum",
+                    context="train schedule stop",
+                ),
+                actual_arrival_date=_typed_optional_string(
+                    row,
+                    "actArvDt",
+                    context="train schedule stop",
+                ),
+                actual_arrival_time=_typed_optional_string(
+                    row,
+                    "actArvTm",
+                    context="train schedule stop",
+                ),
+                actual_departure_date=_typed_optional_string(
+                    row,
+                    "actDptDt",
+                    context="train schedule stop",
+                ),
+                actual_departure_time=_typed_optional_string(
+                    row,
+                    "actDptTm",
+                    context="train schedule stop",
+                ),
+                planned_arrival_date=_typed_optional_string(
+                    row,
+                    "arvDt",
+                    context="train schedule stop",
+                ),
+                planned_arrival_time=_typed_optional_string(
+                    row,
+                    "arvTm",
+                    context="train schedule stop",
+                ),
+                planned_departure_date=_typed_optional_string(
+                    row,
+                    "dptDt",
+                    context="train schedule stop",
+                ),
+                planned_departure_time=_typed_optional_string(
+                    row,
+                    "dptTm",
+                    context="train schedule stop",
+                ),
+                delay_fare_return_division_code=_typed_optional_string(
+                    row,
+                    "dlayFareRetDvCd",
+                    context="train schedule stop",
+                ),
+                delay_fare_return_division_name=_typed_optional_string(
+                    row,
+                    "dlayFareRetDvCdNm",
+                    context="train schedule stop",
+                ),
+                solo_operation_delay_flag=_typed_optional_string(
+                    row,
+                    "dlaySoloOprFlg",
+                    context="train schedule stop",
+                ),
+                detour_driver_delay_count=_typed_optional_string(
+                    row,
+                    "dturDrvDlayTnum",
+                    context="train schedule stop",
+                ),
+                expected_arrival_delay_count=_typed_optional_string(
+                    row,
+                    "expnArvDlayTnum",
+                    context="train schedule stop",
+                ),
+                expected_departure_delay_count=_typed_optional_string(
+                    row,
+                    "expnDptDlayTnum",
+                    context="train schedule stop",
+                ),
+                regular_flag=_typed_optional_string(
+                    row,
+                    "rgulFlg",
+                    context="train schedule stop",
+                ),
+                service_flag=_typed_optional_string(
+                    row,
+                    "saodFlg",
+                    context="train schedule stop",
+                ),
+                raw=dict(row),
+            )
+        )
+    optional = lambda key: _typed_optional_string(
+        raw,
+        key,
+        context="train schedule",
+    )
+    return TrainScheduleResponse(
+        h_msg_cd=response.h_msg_cd,
+        h_msg_txt=response.h_msg_txt,
+        str_result=response.str_result,
+        raw=raw,
+        delay_detail_reason_content=optional("dlayDtlRsnCont"),
+        stops=tuple(stops),
+        delay_station_construction_order=optional("dlayStnConsOrdr"),
+        integrated_message_code=optional("intgMsgCd"),
+        message_code=optional("msgCd"),
+        message_content=optional("msgCont"),
+        message_text=optional("msgTxt"),
+        origin_station_code=optional("orgRsStnCd"),
+        origin_station_name=optional("orgRsStnNm"),
+        route_code=optional("routCd"),
+        route_name=optional("routNm"),
+        run_date=_typed_required_string(
+            raw,
+            "runDt1",
+            context="train schedule",
+            non_empty=True,
+        ),
+        run_segment_order=optional("runSegOrdr"),
+        regular_sale_flag=optional("saleRgulFlg"),
+        standard_train_class_code=optional("stlbTrnClsfCd"),
+        terminal_station_code=optional("tmnRsStnCd"),
+        terminal_station_name=optional("tmnRsStnNm"),
+        train_attribute_code=optional("trnAttCd"),
+        train_departure_flag=optional("trnDptFlg"),
+        train_no=_typed_required_string(
+            raw,
+            "trnNo1",
+            context="train schedule",
+            non_empty=True,
+        ),
+        special_train_flag=optional("trnSpsFlg"),
+        up_down_division_code=optional("upDnDvCd"),
+    )
+
+
+def parse_transfer_station_list_response(
+    response: BaseKorailResponse,
+) -> TransferStationListResponse:
+    raw = response.raw
+    rows = _typed_required_non_empty_list(
+        raw,
+        "chtnList",
+        context="transfer station",
+    )
+    stations: list[TransferStation] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError(
+                "KORAIL transfer station list contained a non-object row"
+            )
+        stations.append(
+            TransferStation(
+                station_code=_typed_required_string(
+                    row,
+                    "chtnRsStnCd",
+                    context="transfer station",
+                    non_empty=True,
+                ),
+                station_name=_typed_required_string(
+                    row,
+                    "chtnRsStnNm",
+                    context="transfer station",
+                    non_empty=True,
+                ),
+                raw=dict(row),
+            )
+        )
+    return TransferStationListResponse(
+        h_msg_cd=response.h_msg_cd,
+        h_msg_txt=response.h_msg_txt,
+        str_result=response.str_result,
+        raw=raw,
         stations=tuple(stations),
     )
 
@@ -391,8 +873,24 @@ def parse_seat_car_list_response(
                     name=_inventory_required_string(
                         attribute_raw,
                         "seatAttNm",
-                    )
+                    ),
+                    code=_inventory_optional_string(
+                        attribute_raw,
+                        "seatAttCd",
+                    ),
                 )
+            )
+        total_seat_count = _inventory_optional_int(row, "h_seat_cnt")
+        remaining_seat_count = _inventory_required_int(
+            row,
+            "h_rest_seat_cnt",
+        )
+        if (
+            total_seat_count is not None
+            and remaining_seat_count > total_seat_count
+        ):
+            raise KorailProtocolError(
+                "KORAIL seat car remaining count exceeds total count"
             )
         cars.append(
             SeatCar(
@@ -401,11 +899,13 @@ def parse_seat_car_list_response(
                     row,
                     "h_psrm_cl_nm",
                 ),
-                remaining_seat_count=_inventory_required_int(
-                    row,
-                    "h_rest_seat_cnt",
-                ),
+                remaining_seat_count=remaining_seat_count,
                 attributes=tuple(attributes),
+                room_class_code=_inventory_optional_string(
+                    row,
+                    "h_psrm_cl_cd",
+                ),
+                total_seat_count=total_seat_count,
             )
         )
     return SeatCarListResponse(
@@ -419,6 +919,8 @@ def parse_seat_car_list_response(
         ),
         train_no=_inventory_optional_string(raw, "h_trn_no"),
         cars=tuple(cars),
+        train_class_code=_inventory_optional_string(raw, "h_trn_clsf_cd"),
+        train_group_code=_inventory_optional_string(raw, "h_trn_gp_cd"),
     )
 
 
@@ -537,4 +1039,10 @@ def parse_seat_inventory_response(
         seats=tuple(seats),
         windows=tuple(windows),
         vr_banner_url=_inventory_optional_string(raw, "vrBnrUrl"),
+        car_type_code=_inventory_optional_string(raw, "car_tp_cd"),
+        car_no=_inventory_optional_int(raw, "scar_no"),
+        up_down_division_code=_inventory_optional_string(
+            raw,
+            "up_dn_dv_cd",
+        ),
     )

@@ -125,11 +125,133 @@ class KorailStation:
     longitude: str | None = None
     latitude: str | None = None
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    group: str | None = field(default=None, repr=False)
+    major: str | None = field(default=None, repr=False)
+    popup_type: int | None = None
+    popup_message: str | None = field(default=None, repr=False)
+    popup_link_title: str | None = field(default=None, repr=False)
+    popup_link_url: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
 class StationDataResponse(BaseKorailResponse):
     stations: tuple[KorailStation, ...] = ()
+
+
+@dataclass(frozen=True)
+class StationInfoResponse(BaseKorailResponse):
+    count: int = 0
+    map_version: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class TrainCalendarDay:
+    run_date: str | None = None
+    business_day_stage_code: str | None = None
+    day_division_code: str | None = None
+    holiday_division_code: str | None = None
+    sale_day_division_code: str | None = None
+    a_train_operation_flag: str | None = None
+    d_train_operation_flag: str | None = None
+    g_train_operation_flag: str | None = None
+    o_train_operation_flag: str | None = None
+    s_train_operation_flag: str | None = None
+    v_train_operation_flag: str | None = None
+    x_train_operation_flag: str | None = None
+    raw: dict[str, Any] = field(
+        default_factory=dict,
+        repr=False,
+        compare=False,
+    )
+
+
+@dataclass(frozen=True)
+class TrainCalendarResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    days: tuple[TrainCalendarDay, ...] = ()
+
+
+@dataclass(frozen=True)
+class TrainScheduleStop:
+    station_code: str | None = field(default=None, repr=False)
+    station_name: str | None = field(default=None, repr=False)
+    station_construction_order: str | None = field(default=None, repr=False)
+    run_order: str | None = field(default=None, repr=False)
+    actual_arrival_delay_count: int | None = None
+    actual_arrival_date: str | None = field(default=None, repr=False)
+    actual_arrival_time: str | None = field(default=None, repr=False)
+    actual_departure_date: str | None = field(default=None, repr=False)
+    actual_departure_time: str | None = field(default=None, repr=False)
+    planned_arrival_date: str | None = field(default=None, repr=False)
+    planned_arrival_time: str | None = field(default=None, repr=False)
+    planned_departure_date: str | None = field(default=None, repr=False)
+    planned_departure_time: str | None = field(default=None, repr=False)
+    delay_fare_return_division_code: str | None = field(
+        default=None,
+        repr=False,
+    )
+    delay_fare_return_division_name: str | None = field(
+        default=None,
+        repr=False,
+    )
+    solo_operation_delay_flag: str | None = None
+    detour_driver_delay_count: str | None = None
+    expected_arrival_delay_count: str | None = None
+    expected_departure_delay_count: str | None = None
+    regular_flag: str | None = None
+    service_flag: str | None = None
+    raw: dict[str, Any] = field(
+        default_factory=dict,
+        repr=False,
+        compare=False,
+    )
+
+
+@dataclass(frozen=True)
+class TrainScheduleResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    delay_detail_reason_content: str | None = field(default=None, repr=False)
+    stops: tuple[TrainScheduleStop, ...] = ()
+    delay_station_construction_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    integrated_message_code: str | None = field(default=None, repr=False)
+    message_code: str | None = field(default=None, repr=False)
+    message_content: str | None = field(default=None, repr=False)
+    message_text: str | None = field(default=None, repr=False)
+    origin_station_code: str | None = field(default=None, repr=False)
+    origin_station_name: str | None = field(default=None, repr=False)
+    route_code: str | None = field(default=None, repr=False)
+    route_name: str | None = field(default=None, repr=False)
+    run_date: str | None = field(default=None, repr=False)
+    run_segment_order: str | None = field(default=None, repr=False)
+    regular_sale_flag: str | None = None
+    standard_train_class_code: str | None = field(default=None, repr=False)
+    terminal_station_code: str | None = field(default=None, repr=False)
+    terminal_station_name: str | None = field(default=None, repr=False)
+    train_attribute_code: str | None = field(default=None, repr=False)
+    train_departure_flag: str | None = None
+    train_no: str | None = field(default=None, repr=False)
+    special_train_flag: str | None = None
+    up_down_division_code: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class TransferStation:
+    station_code: str | None = field(default=None, repr=False)
+    station_name: str | None = None
+    raw: dict[str, Any] = field(
+        default_factory=dict,
+        repr=False,
+        compare=False,
+    )
+
+
+@dataclass(frozen=True)
+class TransferStationListResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    stations: tuple[TransferStation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -150,6 +272,30 @@ class TrainSearchQuery:
     include_srt: bool = False
 
 
+def _train_optional_string(
+    raw: dict[str, Any],
+    key: str,
+) -> str | None:
+    value = raw.get(key)
+    if value is not None and not isinstance(value, str):
+        raise KorailProtocolError(
+            f"KORAIL train field {key} must be a string or null"
+        )
+    return value
+
+
+def _train_optional_int(
+    raw: dict[str, Any],
+    key: str,
+) -> int | None:
+    value = raw.get(key)
+    if value is not None and type(value) is not int:
+        raise KorailProtocolError(
+            f"KORAIL train field {key} must be an integer or null"
+        )
+    return value
+
+
 @dataclass(frozen=True)
 class TrainSummary:
     train_no: str
@@ -168,6 +314,46 @@ class TrainSummary:
     arrival_run_order: str | None = None
     seat_map_flag: str | None = None
     general_reservation_code: str | None = None
+    departure_construction_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    arrival_construction_order: str | None = field(default=None, repr=False)
+    seat_attribute_code: str | None = field(default=None, repr=False)
+    car_type_code: str | None = field(default=None, repr=False)
+    car_type_name: str | None = field(default=None, repr=False)
+    train_class_name: str | None = field(default=None, repr=False)
+    train_group_name: str | None = field(default=None, repr=False)
+    general_room_class_name: str | None = field(default=None, repr=False)
+    special_room_class_name: str | None = field(default=None, repr=False)
+    secondary_general_reservation_code: str | None = field(
+        default=None,
+        repr=False,
+    )
+    special_reservation_code: str | None = field(default=None, repr=False)
+    secondary_special_reservation_code: str | None = field(
+        default=None,
+        repr=False,
+    )
+    free_reservation_code: str | None = field(default=None, repr=False)
+    standing_reservation_code: str | None = field(default=None, repr=False)
+    general_availability_name: str | None = field(default=None, repr=False)
+    special_availability_name: str | None = field(default=None, repr=False)
+    wait_reservation_flag: str | None = field(default=None, repr=False)
+    standard_remaining_seat_count: str | None = field(
+        default=None,
+        repr=False,
+    )
+    first_class_remaining_seat_count: str | None = field(
+        default=None,
+        repr=False,
+    )
+    free_car_count: str | None = field(default=None, repr=False)
+    reservation_wait_passenger_count: str | None = field(
+        default=None,
+        repr=False,
+    )
+    total_passenger_count: int | None = None
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -195,6 +381,79 @@ class TrainSummary:
             ),
             seat_map_flag=raw.get("h_rd_seat_map_flg"),
             general_reservation_code=raw.get("h_gen_rsv_cd"),
+            departure_construction_order=_train_optional_string(
+                raw,
+                "h_dpt_stn_cons_ordr",
+            ),
+            arrival_construction_order=_train_optional_string(
+                raw,
+                "h_arv_stn_cons_ordr",
+            ),
+            seat_attribute_code=_train_optional_string(
+                raw,
+                "h_seat_att_cd",
+            ),
+            car_type_code=_train_optional_string(raw, "h_car_tp_cd"),
+            car_type_name=_train_optional_string(raw, "h_car_tp_nm"),
+            train_class_name=_train_optional_string(raw, "h_trn_clsf_nm"),
+            train_group_name=_train_optional_string(raw, "h_trn_gp_nm"),
+            general_room_class_name=_train_optional_string(
+                raw,
+                "h_gen_psrm_cl_nm",
+            ),
+            special_room_class_name=_train_optional_string(
+                raw,
+                "h_spe_psrm_cl_nm",
+            ),
+            secondary_general_reservation_code=_train_optional_string(
+                raw,
+                "h_gen_rsv_cd2",
+            ),
+            special_reservation_code=_train_optional_string(
+                raw,
+                "h_spe_rsv_cd",
+            ),
+            secondary_special_reservation_code=_train_optional_string(
+                raw,
+                "h_spe_rsv_cd2",
+            ),
+            free_reservation_code=_train_optional_string(
+                raw,
+                "h_free_rsv_cd",
+            ),
+            standing_reservation_code=_train_optional_string(
+                raw,
+                "h_stnd_rsv_cd",
+            ),
+            general_availability_name=_train_optional_string(
+                raw,
+                "h_rsv_psb_nm",
+            ),
+            special_availability_name=_train_optional_string(
+                raw,
+                "h_spe_rsv_psb_nm",
+            ),
+            wait_reservation_flag=_train_optional_string(
+                raw,
+                "h_wait_rsv_flg",
+            ),
+            standard_remaining_seat_count=_train_optional_string(
+                raw,
+                "h_std_rest_seat_cnt",
+            ),
+            first_class_remaining_seat_count=_train_optional_string(
+                raw,
+                "h_fst_rest_seat_cnt",
+            ),
+            free_car_count=_train_optional_string(
+                raw,
+                "h_free_sracar_cnt",
+            ),
+            reservation_wait_passenger_count=_train_optional_string(
+                raw,
+                "h_rsv_wait_ps_cnt",
+            ),
+            total_passenger_count=_train_optional_int(raw, "totPsgCnt"),
             raw=raw,
         )
 
@@ -202,6 +461,7 @@ class TrainSummary:
 @dataclass(frozen=True)
 class SeatAttribute:
     name: str
+    code: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -210,6 +470,8 @@ class SeatCar:
     room_class_name: str
     remaining_seat_count: int
     attributes: tuple[SeatAttribute, ...]
+    room_class_code: str | None = field(default=None, repr=False)
+    total_seat_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -218,6 +480,8 @@ class SeatCarListResponse(BaseKorailResponse):
     recommended_car_no: int | None = None
     train_no: str | None = field(default=None, repr=False)
     cars: tuple[SeatCar, ...] = ()
+    train_class_code: str | None = field(default=None, repr=False)
+    train_group_code: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -251,6 +515,29 @@ class SeatInventoryResponse(BaseKorailResponse):
     seats: tuple[PhysicalSeat, ...] = ()
     windows: tuple[SeatWindow, ...] = ()
     vr_banner_url: str | None = field(default=None, repr=False)
+    car_type_code: str | None = field(default=None, repr=False)
+    car_no: int | None = None
+    up_down_division_code: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class TrainSearchMetadata:
+    menu_id: str | None = field(default=None, repr=False)
+    job_id: str | None = field(default=None, repr=False)
+    product_no: str | None = field(default=None, repr=False)
+    next_page_flag: str | None = None
+    next_query_station_no: str | None = field(default=None, repr=False)
+    next_train_no: str | None = field(default=None, repr=False)
+    result_count: str | None = None
+    first_seat_count: str | None = None
+    second_seat_count: str | None = None
+    first_departure_time: str | None = field(default=None, repr=False)
+    merge_reservation_available_flag: str | None = None
+    raw: dict[str, Any] = field(
+        default_factory=dict,
+        repr=False,
+        compare=False,
+    )
 
 
 @dataclass(frozen=True)
@@ -258,3 +545,4 @@ class TrainSearchResult:
     trains: list[TrainSummary]
     response: BaseKorailResponse
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)

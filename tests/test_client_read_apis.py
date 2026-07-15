@@ -66,7 +66,9 @@ def test_common_station_and_calendar_use_exact_endpoint_fields(
             "/classes/com.korail.mobile.common.code.do": "common_code_login_crypto_n.json",
             "/classes/com.korail.mobile.common.stationinfo": "station_info.json",
             "/classes/com.korail.mobile.common.stationdata": "station_data.json",
-            "/classes/com.korail.mobile.schedule.runDt": "train_calendar.json",
+            "/classes/com.korail.mobile.schedule.runDt": (
+                "raw_typed_train_calendar.json"
+            ),
         },
     )
     client.get_common_code("login")
@@ -172,7 +174,11 @@ def test_ticket_list_defaults_to_empty_device_id(load_json_fixture):
 def test_train_schedule_sends_device_and_version_without_key(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
-        {"/classes/com.korail.mobile.research.actualTrainSchedule.do": "train_schedule_success.json"},
+        {
+            "/classes/com.korail.mobile.research.actualTrainSchedule.do": (
+                "raw_typed_train_schedule.json"
+            )
+        },
     )
 
     client.get_train_schedule("20260710", "123")
@@ -186,12 +192,19 @@ def test_train_schedule_sends_device_and_version_without_key(load_json_fixture):
 def test_transfer_stations_request_shape(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
-        {"/classes/com.korail.mobile.qry.chtnStn.do": "transfer_stations_success.json"},
+        {
+            "/classes/com.korail.mobile.qry.chtnStn.do": (
+                "raw_typed_transfer_stations.json"
+            )
+        },
     )
 
     response = client.get_transfer_stations("0001", "0020")
 
-    assert response.raw["stations"][0]["dptRsStnCd"] == "0001"
+    assert (
+        response.stations[0].station_code
+        == "SYNTHETIC-TRANSFER-STATION-CODE"
+    )
     request = captured[0]
     assert "dptRsStnCd=0001" in request["body"]
     assert "arvRsStnCd=0020" in request["body"]

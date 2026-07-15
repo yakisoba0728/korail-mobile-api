@@ -1,0 +1,23 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic-calendar-message-secret",
+  "strResult": "SUCC",
+  "runningCalendar": [
+    {
+      "runDt": "SYNTHETIC-RUN-DATE",
+      "bizDdStgCd": "SYNTHETIC-BUSINESS-DAY-STAGE",
+      "dayDvCd": "SYNTHETIC-DAY-DIVISION",
+      "hldyDvCd": "SYNTHETIC-HOLIDAY-DIVISION",
+      "saleDdDvCd": "SYNTHETIC-SALE-DAY-DIVISION",
+      "aTrnOpFlg": "SYNTHETIC-A-TRAIN-FLAG",
+      "dTrnOpFlg": "SYNTHETIC-D-TRAIN-FLAG",
+      "gTrnOpFlg": "SYNTHETIC-G-TRAIN-FLAG",
+      "oTrnOpFlg": "SYNTHETIC-O-TRAIN-FLAG",
+      "sTrnOpFlg": "SYNTHETIC-S-TRAIN-FLAG",
+      "vTrnOpFlg": "SYNTHETIC-V-TRAIN-FLAG",
+      "xTrnOpFlg": "SYNTHETIC-X-TRAIN-FLAG",
+      "synthetic_raw_marker": "synthetic-calendar-row-raw-secret"
+    }
+  ],
+  "synthetic_raw_marker": "synthetic-calendar-raw-secret"
+}

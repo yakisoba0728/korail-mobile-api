@@ -1,0 +1,20 @@
+{
+  "stns": {
+    "stn": [
+      {
+        "stn_cd": "SYNTHETIC-STATION-CODE",
+        "stn_nm": "Synthetic Station Name",
+        "longitude": "SYNTHETIC-LONGITUDE",
+        "latitude": "SYNTHETIC-LATITUDE",
+        "group": "SYNTHETIC-STATION-GROUP",
+        "major": "SYNTHETIC-MAJOR-FLAG",
+        "popupType": 7,
+        "popupMessage": "synthetic-station-popup-message-secret",
+        "popupLinkTitle": "synthetic-station-popup-title-secret",
+        "popupLinkUrl": "https://example.invalid/station-popup?marker=synthetic-station-url-secret",
+        "synthetic_raw_marker": "synthetic-station-row-raw-secret"
+      }
+    ]
+  },
+  "synthetic_raw_marker": "synthetic-station-data-raw-secret"
+}

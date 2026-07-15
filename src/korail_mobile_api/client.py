@@ -16,9 +16,13 @@ from .models import (
     SeatCarListResponse,
     SeatInventoryResponse,
     StationDataResponse,
+    StationInfoResponse,
+    TrainCalendarResponse,
     TrainSearchQuery,
     TrainSearchResult,
+    TrainScheduleResponse,
     TrainSummary,
+    TransferStationListResponse,
     UuidResponse,
 )
 from .parsers import (
@@ -28,8 +32,13 @@ from .parsers import (
     parse_seat_car_list_response,
     parse_seat_inventory_response,
     parse_station_data_response,
+    parse_station_info_response,
     parse_station_name_map,
+    parse_train_calendar_response,
     parse_train_rows,
+    parse_train_schedule_response,
+    parse_train_search_metadata,
+    parse_transfer_station_list_response,
     parse_uuid_response,
     resolve_station_name,
 )
@@ -463,27 +472,33 @@ class KorailClient:
             )
         )
 
-    def get_station_info(self, device: str = "AD") -> BaseKorailResponse:
+    def get_station_info(self, device: str = "AD") -> StationInfoResponse:
         return self._run_read(
-            lambda: self.http.get_json(
-                "/classes/com.korail.mobile.common.stationinfo",
-                {"Device": device},
-                require_envelope=False,
+            lambda: parse_station_info_response(
+                self.http.get_json(
+                    "/classes/com.korail.mobile.common.stationinfo",
+                    {"Device": device},
+                    require_envelope=False,
+                )
             )
         )
 
-    def get_station_data(self) -> BaseKorailResponse:
+    def get_station_data(self) -> StationDataResponse:
         return self._run_read(
-            lambda: self.http.get_json(
-                "/classes/com.korail.mobile.common.stationdata",
-                require_envelope=False,
+            lambda: parse_station_data_response(
+                self.http.get_json(
+                    "/classes/com.korail.mobile.common.stationdata",
+                    require_envelope=False,
+                )
             )
         )
 
-    def get_train_calendar(self) -> BaseKorailResponse:
+    def get_train_calendar(self) -> TrainCalendarResponse:
         return self._run_read(
-            lambda: self.http.get_json(
-                "/classes/com.korail.mobile.schedule.runDt"
+            lambda: parse_train_calendar_response(
+                self.http.get_json(
+                    "/classes/com.korail.mobile.schedule.runDt"
+                )
             )
         )
 
@@ -515,6 +530,7 @@ class KorailClient:
             trains=parse_train_rows(response.raw),
             response=response,
             raw=response.raw,
+            metadata=parse_train_search_metadata(response.raw),
         )
 
     def _resolve_station_reference(self, reference: str) -> str:
@@ -526,27 +542,39 @@ class KorailClient:
             )
         return resolve_station_name(reference, self._station_names)
 
-    def get_train_schedule(self, run_date: str, train_no: str) -> BaseKorailResponse:
+    def get_train_schedule(
+        self,
+        run_date: str,
+        train_no: str,
+    ) -> TrainScheduleResponse:
         return self._run_read(
-            lambda: self.http.post_form(
-                "/classes/com.korail.mobile.research.actualTrainSchedule.do",
-                build_train_schedule_form(
-                    self.config,
-                    run_date,
-                    train_no,
-                ),
-                include_common=False,
+            lambda: parse_train_schedule_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.research.actualTrainSchedule.do",
+                    build_train_schedule_form(
+                        self.config,
+                        run_date,
+                        train_no,
+                    ),
+                    include_common=False,
+                )
             )
         )
 
-    def get_transfer_stations(self, departure_station_code: str, arrival_station_code: str) -> BaseKorailResponse:
+    def get_transfer_stations(
+        self,
+        departure_station_code: str,
+        arrival_station_code: str,
+    ) -> TransferStationListResponse:
         return self._run_read(
-            lambda: self.http.post_form(
-                "/classes/com.korail.mobile.qry.chtnStn.do",
-                {
-                    "dptRsStnCd": departure_station_code,
-                    "arvRsStnCd": arrival_station_code,
-                },
+            lambda: parse_transfer_station_list_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.qry.chtnStn.do",
+                    {
+                        "dptRsStnCd": departure_station_code,
+                        "arvRsStnCd": arrival_station_code,
+                    },
+                )
             )
         )
 

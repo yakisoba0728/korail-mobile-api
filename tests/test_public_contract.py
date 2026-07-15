@@ -245,3 +245,43 @@ def test_train_summary_preserves_baseline_positional_constructor_order():
     assert train.raw is raw
     assert train.departure_station_name is None
     assert train.arrival_station_name is None
+
+
+def test_raw_typed_core_exports_and_return_hints_are_public():
+    expected_models = {
+        "StationInfoResponse": models.StationInfoResponse,
+        "TrainCalendarDay": models.TrainCalendarDay,
+        "TrainCalendarResponse": models.TrainCalendarResponse,
+        "TrainScheduleStop": models.TrainScheduleStop,
+        "TrainScheduleResponse": models.TrainScheduleResponse,
+        "TransferStation": models.TransferStation,
+        "TransferStationListResponse": models.TransferStationListResponse,
+        "TrainSearchMetadata": models.TrainSearchMetadata,
+    }
+    for name, model in expected_models.items():
+        assert name in korail_mobile_api.__all__
+        assert getattr(korail_mobile_api, name) is model
+
+    methods = {
+        "get_station_info": (
+            ["self", "device"],
+            models.StationInfoResponse,
+        ),
+        "get_station_data": (["self"], models.StationDataResponse),
+        "get_train_calendar": (["self"], models.TrainCalendarResponse),
+        "get_train_schedule": (
+            ["self", "run_date", "train_no"],
+            models.TrainScheduleResponse,
+        ),
+        "get_transfer_stations": (
+            ["self", "departure_station_code", "arrival_station_code"],
+            models.TransferStationListResponse,
+        ),
+    }
+    for name, (parameters, return_type) in methods.items():
+        method = getattr(KorailClient, name)
+        assert list(inspect.signature(method).parameters) == parameters
+        assert get_type_hints(method)["return"] is return_type
+    assert inspect.signature(KorailClient.get_station_info).parameters[
+        "device"
+    ].default == "AD"

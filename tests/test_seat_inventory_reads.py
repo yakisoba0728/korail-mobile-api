@@ -236,7 +236,7 @@ def test_train_summary_appends_inventory_fields_and_parses_both_key_styles():
             "arvStnRunOrdr": "000020",
         }
     )
-    assert list(inspect.signature(TrainSummary).parameters)[-6:] == [
+    assert list(inspect.signature(TrainSummary).parameters)[10:16] == [
         "run_date",
         "train_class_code",
         "departure_run_order",
@@ -267,6 +267,8 @@ def test_car_parser_builds_tuples_and_hides_raw_message_and_train_identifiers(
     assert result.h_msg_cd == "SYNTHETIC.OK"
     assert result.recommended_car_no == 2
     assert result.train_no == "99123"
+    assert result.train_class_code == "SYNTHETIC-TRAIN-CLASS-CODE"
+    assert result.train_group_code == "SYNTHETIC-TRAIN-GROUP-CODE"
     assert isinstance(result.cars, tuple)
     assert result.cars == (
         SeatCar(
@@ -274,17 +276,30 @@ def test_car_parser_builds_tuples_and_hides_raw_message_and_train_identifiers(
             room_class_name="Synthetic General",
             remaining_seat_count=4,
             attributes=(
-                SeatAttribute(name="Forward-facing"),
-                SeatAttribute(name="Window-side"),
+                SeatAttribute(
+                    name="Forward-facing",
+                    code="SYNTHETIC-SEAT-ATTRIBUTE-CODE-ONE",
+                ),
+                SeatAttribute(
+                    name="Window-side",
+                    code="SYNTHETIC-SEAT-ATTRIBUTE-CODE-TWO",
+                ),
             ),
+            room_class_code="SYNTHETIC-ROOM-CLASS-CODE-ONE",
+            total_seat_count=8,
         ),
         SeatCar(
             car_no=3,
             room_class_name="Synthetic General",
             remaining_seat_count=0,
             attributes=(
-                SeatAttribute(name="Synthetic unknown attribute"),
+                SeatAttribute(
+                    name="Synthetic unknown attribute",
+                    code="SYNTHETIC-SEAT-ATTRIBUTE-CODE-THREE",
+                ),
             ),
+            room_class_code="SYNTHETIC-ROOM-CLASS-CODE-TWO",
+            total_seat_count=6,
         ),
     )
     assert all(isinstance(car.attributes, tuple) for car in result.cars)
@@ -293,8 +308,37 @@ def test_car_parser_builds_tuples_and_hides_raw_message_and_train_identifiers(
         "synthetic-car-message-secret",
         "99123",
         "synthetic-car-raw-secret",
+        "SYNTHETIC-TRAIN-CLASS-CODE",
+        "SYNTHETIC-TRAIN-GROUP-CODE",
+        "SYNTHETIC-ROOM-CLASS-CODE-ONE",
+        "SYNTHETIC-SEAT-ATTRIBUTE-CODE-ONE",
     ):
         assert secret not in rendered
+
+
+def test_seat_metadata_fields_append_without_changing_legacy_positions():
+    assert list(inspect.signature(SeatAttribute).parameters)[:1] == ["name"]
+    assert list(inspect.signature(SeatCar).parameters)[:4] == [
+        "car_no",
+        "room_class_name",
+        "remaining_seat_count",
+        "attributes",
+    ]
+    car_response_parameters = list(
+        inspect.signature(SeatCarListResponse).parameters
+    )
+    assert car_response_parameters[-2:] == [
+        "train_class_code",
+        "train_group_code",
+    ]
+    inventory_parameters = list(
+        inspect.signature(SeatInventoryResponse).parameters
+    )
+    assert inventory_parameters[-3:] == [
+        "car_type_code",
+        "car_no",
+        "up_down_division_code",
+    ]
 
 
 def test_seat_parser_maps_all_fields_preserves_unknown_codes_and_hides_secrets(
@@ -306,6 +350,12 @@ def test_seat_parser_maps_all_fields_preserves_unknown_codes_and_hides_secrets(
     assert result.arrangement_code == "Z9-UNKNOWN"
     assert result.remaining_count == 1
     assert result.total_count == 8
+    assert result.car_type_code == "SYNTHETIC-CAR-TYPE-CODE"
+    assert result.car_no == 2
+    assert (
+        result.up_down_division_code
+        == "SYNTHETIC-UP-DOWN-DIVISION-CODE"
+    )
     assert isinstance(result.seats, tuple)
     assert isinstance(result.windows, tuple)
     assert len(result.seats) == 2
@@ -336,6 +386,8 @@ def test_seat_parser_maps_all_fields_preserves_unknown_codes_and_hides_secrets(
         "SYNTHETIC-SEAT-01",
         "synthetic-url-secret",
         "synthetic-seat-raw-secret",
+        "SYNTHETIC-CAR-TYPE-CODE",
+        "SYNTHETIC-UP-DOWN-DIVISION-CODE",
     ):
         assert secret not in rendered
 

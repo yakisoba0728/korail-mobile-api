@@ -30,6 +30,15 @@ Last updated: 2026-07-15 KST
   physical-seat reads for the fixed main-menu/general-room contract. Both
   exact POST routes validate before Sid generation, issue one request, and
   force DynaPath off. The banner URL is inert and never followed.
+- The raw-backed typed response core promotes `StationInfoResponse`,
+  `TrainCalendarResponse`, `TrainScheduleResponse`,
+  `TransferStationListResponse`, and `TrainSearchMetadata`, while normal
+  station data continues to use `StationDataResponse`. Seat and train response
+  metadata uses appended, defaulted fields so established positional
+  constructors remain compatible. Existing routes, public signatures, and
+  request payload semantics remain unchanged; raw mappings remain `repr=False`.
+  No capture value, raw body, credential source, or network call
+  was used by this increment.
 - A separate evidence command enforces a four-operation ceiling and writes only
   fixed statuses, 0/1 call counters, bounded counts, type-presence booleans, and
   a sufficiency category after a secret scan. It is not part of broad live
@@ -83,7 +92,7 @@ mutation routes are not callable.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full `0.2.0` offline release gate reports `800 passed, 1 deselected`;
+- The full `0.2.0` offline release gate reports `866 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution

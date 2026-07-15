@@ -4,23 +4,38 @@
   "strResult": "SUCC",
   "h_rcmd_srcar_no": 2,
   "h_trn_no": "99123",
+  "h_trn_clsf_cd": "SYNTHETIC-TRAIN-CLASS-CODE",
+  "h_trn_gp_cd": "SYNTHETIC-TRAIN-GROUP-CODE",
   "srcar_infos": {
     "srcar_info": [
       {
         "h_psrm_cl_nm": "Synthetic General",
+        "h_psrm_cl_cd": "SYNTHETIC-ROOM-CLASS-CODE-ONE",
         "h_rest_seat_cnt": 4,
+        "h_seat_cnt": "8",
         "h_srcar_no": 2,
         "seatAttInfos": [
-          {"seatAttNm": "Forward-facing"},
-          {"seatAttNm": "Window-side"}
+          {
+            "seatAttCd": "SYNTHETIC-SEAT-ATTRIBUTE-CODE-ONE",
+            "seatAttNm": "Forward-facing"
+          },
+          {
+            "seatAttCd": "SYNTHETIC-SEAT-ATTRIBUTE-CODE-TWO",
+            "seatAttNm": "Window-side"
+          }
         ]
       },
       {
         "h_psrm_cl_nm": "Synthetic General",
+        "h_psrm_cl_cd": "SYNTHETIC-ROOM-CLASS-CODE-TWO",
         "h_rest_seat_cnt": 0,
+        "h_seat_cnt": 6,
         "h_srcar_no": 3,
         "seatAttInfos": [
-          {"seatAttNm": "Synthetic unknown attribute"}
+          {
+            "seatAttCd": "SYNTHETIC-SEAT-ATTRIBUTE-CODE-THREE",
+            "seatAttNm": "Synthetic unknown attribute"
+          }
         ]
       }
     ]

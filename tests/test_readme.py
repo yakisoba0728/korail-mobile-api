@@ -101,3 +101,26 @@ def test_readme_documents_typed_seat_inventory_scope_and_live_boundary():
     assert "IRG000000" in text
     assert "repeated seat labels" in text
     assert "service-status preflight" in text
+
+
+def test_docs_describe_raw_backed_typed_core_and_compatibility_boundary():
+    readme = README.read_text(encoding="utf-8")
+    progress = PROGRESS.read_text(encoding="utf-8")
+
+    for text in (readme, progress):
+        assert "raw-backed typed response core" in text
+        assert "StationInfoResponse" in text
+        assert "TrainCalendarResponse" in text
+        assert "TrainScheduleResponse" in text
+        assert "TransferStationListResponse" in text
+        assert "TrainSearchMetadata" in text
+        assert "request payload semantics remain unchanged" in text
+        assert "appended, defaulted fields" in text
+        assert "raw mappings remain `repr=False`" in text
+    for key in (
+        "h_std_rest_seat_cnt",
+        "h_fst_rest_seat_cnt",
+        "h_free_sracar_cnt",
+        "h_rsv_wait_ps_cnt",
+    ):
+        assert key in readme

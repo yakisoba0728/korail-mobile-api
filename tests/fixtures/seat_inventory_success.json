@@ -6,6 +6,9 @@
   "seat_ary_cd": "Z9-UNKNOWN",
   "seat_remain_count": 1,
   "seat_total_count": 8,
+  "car_tp_cd": "SYNTHETIC-CAR-TYPE-CODE",
+  "scar_no": "2",
+  "up_dn_dv_cd": "SYNTHETIC-UP-DOWN-DIVISION-CODE",
   "seatList": [
     {
       "dir_seat_att_cd": "DIRECTION-UNKNOWN",
