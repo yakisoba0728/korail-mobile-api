@@ -262,6 +262,9 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         assert "27 parsed responses" in text
         assert "one expected `KorailAppError`" in text
         assert "zero unexpected failures" in text
+    for text in (readme, progress, handoff):
+        assert "1246 passed, 1 deselected" in text
+        assert "1247 passed, 1 deselected" in text
     assert "authenticated 28-request, 28-response run" in changelog
     assert "25 successful operations" in changelog
     assert "three input-dependent skips" in changelog

@@ -168,8 +168,10 @@ mutation routes are not callable.
   expected pre-login `P058` responses, and reported zero unexpected failures;
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
-- The full offline release gate reports `1246 passed, 1 deselected`;
-  only the explicitly opted-in live-service test was deselected.
+- The historical full offline release gate reported
+  `1246 passed, 1 deselected`. After adding the P0 live-evidence documentation
+  contract test, the fresh non-live gate reports `1247 passed, 1 deselected`;
+  in both gates, only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
   verifier accepted both artifacts, `git diff --check` passed, and all
