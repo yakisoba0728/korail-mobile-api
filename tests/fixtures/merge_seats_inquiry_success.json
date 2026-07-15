@@ -1,7 +1,7 @@
 {
   "h_msg_cd": "SYNTHETIC.OK",
   "h_msg_txt": "synthetic-merge-envelope-secret",
-  "strResult": "SUCCESS",
+  "strResult": "SUCC",
   "midStnList": [
     {
       "rsStnCd": "SYNTHETIC-MID-STATION-CODE",

@@ -191,7 +191,7 @@ def _success_envelope(**extra: Any) -> dict[str, Any]:
     return {
         "h_msg_cd": "SYNTHETIC.OK",
         "h_msg_txt": "synthetic-envelope-secret",
-        "strResult": "SUCCESS",
+        "strResult": "SUCC",
         **extra,
     }
 
@@ -547,7 +547,7 @@ def test_route_parsers_preserve_strict_envelope_and_error_handling(
             {
                 "h_msg_cd": "SYNTHETIC.OK",
                 "h_msg_txt": 7,
-                "strResult": "SUCCESS",
+                "strResult": "SUCC",
             }
         )
     with pytest.raises(KorailAppError):
@@ -564,6 +564,31 @@ def test_route_parsers_preserve_strict_envelope_and_error_handling(
                 "h_msg_cd": "P058",
                 "h_msg_txt": "synthetic expiry",
                 "strResult": "FAIL",
+            }
+        )
+    with pytest.raises(KorailAppError):
+        parser(
+            {
+                "h_msg_cd": "WRC000288",
+                "h_msg_txt": "synthetic WRC failure",
+                "strResult": "SUCC",
+            }
+        )
+
+
+@pytest.mark.parametrize("parser_name", PARSER_NAMES)
+@pytest.mark.parametrize("str_result", (None, "", "ERROR", "SUCCESS"))
+def test_new_route_parsers_require_exact_succ_result(
+    parser_name,
+    str_result,
+):
+    parser = _require(read_parsers, parser_name)
+    with pytest.raises(KorailProtocolError):
+        parser(
+            {
+                "h_msg_cd": "SYNTHETIC.OK",
+                "h_msg_txt": None,
+                "strResult": str_result,
             }
         )
 

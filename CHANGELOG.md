@@ -9,6 +9,8 @@
   synthetic-only fixtures without adding a live call or DynaPath route.
 - Kept the Java Retrofit names as documentation aliases only and deliberately
   omitted `TrainSummary` convenience chaining and every adjacent mutation.
+- Tightened only these four route parsers to require exact `strResult=SUCC`
+  after preserving the existing `FAIL`, `P058`, and `WRC000288` errors.
 
 ## 0.2.0 - 2026-07-14
 

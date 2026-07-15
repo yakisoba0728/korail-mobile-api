@@ -6,7 +6,7 @@ reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
 The reviewed package boundary contains 31 routes and 34 public methods. The
-current offline release gate is `850 passed, 1 deselected`; the
+current offline release gate is `866 passed, 1 deselected`; the
 deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
@@ -295,7 +295,8 @@ before transport.
 
 These reads do not require a local authenticated-session precondition because
 their requests contain no account, PNR, ticket, payment, or point identifier.
-They still use the normal strict envelope/application-error handling, and a
+They require the full envelope and exact success value `strResult="SUCC"`.
+Existing `FAIL`/`WRC000288` application errors remain typed failures, and a
 server `P058` clears any existing local session before raising
 `KorailSessionExpiredError`.
 

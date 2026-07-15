@@ -1,7 +1,7 @@
 {
   "h_msg_cd": "SYNTHETIC.OK",
   "h_msg_txt": "synthetic-assignment-envelope-secret",
-  "strResult": "SUCCESS",
+  "strResult": "SUCC",
   "h_next_pg_flg": "Y",
   "trn_infos": {
     "h_merge_rsv_psb_flg": "SYNTHETIC-MERGE-FLAG",

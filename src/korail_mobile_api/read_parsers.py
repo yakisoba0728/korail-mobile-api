@@ -101,6 +101,14 @@ def _response_fields(raw: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _validate_strict_read_envelope(raw: Mapping[str, Any]) -> None:
+    _validate_envelope(raw)
+    if raw["strResult"] != "SUCC":
+        raise KorailProtocolError(
+            "KORAIL strict read response strResult must be SUCC"
+        )
+
+
 def _optional_mapping(
     data: Mapping[str, Any],
     key: str,
@@ -775,7 +783,7 @@ def parse_reservation_history_response(
 def parse_free_seat_car_response(
     raw: Mapping[str, Any],
 ) -> FreeSeatCarResponse:
-    _validate_envelope(raw)
+    _validate_strict_read_envelope(raw)
     return FreeSeatCarResponse(
         title=_optional_string(raw, "fresTtl", "free seat car response"),
         car_no=_optional_string(
@@ -795,7 +803,7 @@ def parse_free_seat_car_response(
 def parse_guide_seat_condition_response(
     raw: Mapping[str, Any],
 ) -> GuideSeatConditionResponse:
-    _validate_envelope(raw)
+    _validate_strict_read_envelope(raw)
     return GuideSeatConditionResponse(**_response_fields(raw))
 
 
@@ -945,7 +953,7 @@ def _parse_train_schedule_container(
 def parse_seat_assignment_schedule_response(
     raw: Mapping[str, Any],
 ) -> SeatAssignmentScheduleResponse:
-    _validate_envelope(raw)
+    _validate_strict_read_envelope(raw)
     merge_flag, trains = _parse_train_schedule_container(
         raw,
         "seat assignment schedule",
@@ -965,7 +973,7 @@ def parse_seat_assignment_schedule_response(
 def parse_merge_seats_inquiry_response(
     raw: Mapping[str, Any],
 ) -> MergeSeatsInquiryResponse:
-    _validate_envelope(raw)
+    _validate_strict_read_envelope(raw)
     stations = []
     for value in _optional_list(raw, "midStnList", "merge seats inquiry"):
         station = _row(value, "merge seats inquiry midStnList")

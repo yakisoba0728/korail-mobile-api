@@ -104,6 +104,10 @@ mutation routes are not callable.
 - Static-only P0 focused GREEN: `58 passed`. The neighboring HTTP,
   successful-read, and seat-inventory regression suites report `419 passed`.
   All inputs and responses are synthetic or mocked; no live I/O ran.
+- Independent-review envelope RED: the four new parsers accepted each of
+  `None`, empty, `ERROR`, and `SUCCESS`, producing `16 failed, 48 passed`.
+  Route-selected strict-envelope GREEN is `64 passed`: only exact `SUCC`
+  succeeds, while existing `FAIL`, `P058`, and `WRC000288` behavior remains.
 
 - Seat-inventory TDD RED: the focused test command stopped during collection on
   the missing `PhysicalSeat` public interface, as expected before production
@@ -111,7 +115,7 @@ mutation routes are not callable.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full offline release gate reports `850 passed, 1 deselected`;
+- The full offline release gate reports `866 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
