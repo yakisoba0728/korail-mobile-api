@@ -228,6 +228,14 @@ The transport currently allows 50 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
 mutation routes are not callable.
 
+Pure offline parsers now cover the evidenced reservation-hold and reservation-
+payment response shapes, including nested journey/coupon rows and recursive
+redaction of PNR, window, temporary-job, change, certificate, coupon, and ticket
+handoff fields. They add no client route. In one authorized bounded check, a
+single unpaid direct reservation was created and both cancellation steps
+completed once; reservation history was empty before and after. The check made
+no payment request and printed or persisted no raw response or identifier.
+
 ## Verification
 
 - Static-only P0 TDD RED: the focused endpoint/public-contract command reported

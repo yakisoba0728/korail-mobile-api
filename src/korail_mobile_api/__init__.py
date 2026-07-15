@@ -81,6 +81,16 @@ from .models import (
     TransferStationListResponse,
     UuidResponse,
 )
+from .mutation_models import (
+    ReservationHoldResponse,
+    ReservationJourney,
+    ReservationPaymentCoupon,
+    ReservationPaymentResponse,
+)
+from .mutation_parsers import (
+    parse_reservation_hold_response,
+    parse_reservation_payment_response,
+)
 from .redaction import redact_mapping
 from .read_models import (
     CartItem,
@@ -292,6 +302,10 @@ __all__ = [
     "ReceiptPayment",
     "ReservationHistoryResponse",
     "ReservationHistoryTrain",
+    "ReservationHoldResponse",
+    "ReservationJourney",
+    "ReservationPaymentCoupon",
+    "ReservationPaymentResponse",
     "SeatAttribute",
     "SeatCar",
     "SeatCarListResponse",
@@ -305,6 +319,8 @@ __all__ = [
     "generate_dynapath_encoding_table",
     "generate_dynapath_token",
     "parse_base_response",
+    "parse_reservation_hold_response",
+    "parse_reservation_payment_response",
     "redact_mapping",
     "StationDataResponse",
     "StationInfoResponse",

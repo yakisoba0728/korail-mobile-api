@@ -205,6 +205,16 @@ The reservation, payment, and mutation routes remain excluded. The package
 does not create, change, cancel, pay for, refund, or check in a reservation as
 part of any read.
 
+The package does expose pure parsers for already-obtained reservation-hold and
+reservation-payment JSON: `parse_reservation_hold_response()` and
+`parse_reservation_payment_response()`. They return frozen, redaction-safe
+models and perform no network request. Internal evidence-only form builders are
+not client methods or transport routes. A bounded authorized check created one
+unpaid direct reservation and immediately completed both cancellation steps;
+reservation history was empty before and after. No payment endpoint was called,
+and no PNR, credential, card value, token, or raw response was printed or
+persisted.
+
 ### Fixed and account-shaped reads
 
 Four static-evidenced, authenticated reads are available as one-request,
