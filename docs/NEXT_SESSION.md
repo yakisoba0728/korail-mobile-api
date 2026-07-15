@@ -27,8 +27,10 @@ fixtures, and no adjacent or fallback requests. Independent review findings
 were corrected before the historical `435 passed, 1 skipped` baseline. A
 bounded 2026-07-15 replay parsed five methods, stopped four at
 `KorailProtocolError`, and skipped product detail plus ticket receipt because
-no owned identifiers were returned. The four live parser shapes remain an open
-compatibility task and must not be guessed from the fixed status-only summary.
+no owned identifiers were returned. Later sanitized evidence resolved the
+cart, delay-discount, and product-reservation result-only success shapes. Pass
+availability remains the only unresolved live parser shape and must not be
+guessed from the fixed status-only summary.
 
 The earlier cache, DynaPath, UUID, generic MAAS menu, and MAAS station phases
 are also complete at current `HEAD`. The release-readiness change does not
@@ -71,9 +73,9 @@ artifacts. They are not inputs to the internal release gate.
 2. Do not bypass the service-status preflight. A future bounded confirmation,
    if separately authorized while the service is available, must remain
    outside the broad live smoke.
-3. Before changing cart, delay-discount, pass-date, or product-reservation
-   parsing, capture only a separately reviewed sanitized field/type shape; the
-   current evidence contains exception classes but no response structure.
+3. Before changing pass-date parsing, capture only a separately reviewed
+   sanitized field/type shape; the current evidence contains an exception class
+   but no response structure for that remaining endpoint.
 4. Any new KORAIL read requires separate sanitized evidence, a concrete design,
    offline contract tests, and an independent safety review.
 5. Mutation endpoints remain excluded unless a separate safety design and

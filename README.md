@@ -143,7 +143,7 @@ milliseconds.
 
 ### Successful read expansion
 
-The package now exposes 11 new public read methods across the 25 exact login/read routes
+The package now exposes 11 new public read methods across the 27 exact login/read routes
 registered by the transport boundary:
 
 - Account-neutral: `get_service_status()` and `get_pass_available_dates()`.

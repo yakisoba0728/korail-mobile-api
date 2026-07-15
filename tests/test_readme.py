@@ -49,7 +49,7 @@ def test_readme_documents_every_successful_read_expansion_method_and_boundary():
     ):
         assert f"{method_name}(" in text
     assert "11 new public read methods" in text
-    assert "25 exact login/read routes" in text
+    assert "27 exact login/read routes" in text
     assert "Five methods parsed successfully" in text
     assert "four stopped at `KorailProtocolError`" in text
     assert "two" in text
