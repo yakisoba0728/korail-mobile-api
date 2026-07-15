@@ -5,8 +5,8 @@ evidenced KORAIL mobile API surface. It also retains the static
 reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
-The reviewed package boundary contains 34 routes and 37 public methods. The
-current offline release gate is `1080 passed, 1 deselected`; the
+The reviewed package boundary contains 37 routes and 40 public methods. The
+current offline release gate is `1180 passed, 1 deselected`; the
 deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
@@ -333,6 +333,38 @@ mappings, train/station/car identifiers, and server free text are repr-hidden.
 This phase deliberately does not accept `TrainSummary` and adds no convenience
 chaining from a search result, seat selection, reservation, fallback request,
 or live helper call.
+
+### Static-only limousine schedule and seat reads
+
+Three additional P0 wrappers expose the APK's read-only limousine contracts:
+
+- `get_limousine_schedules(query)` maps the direct schedule-list response.
+- `get_limousine_seat_inventory(query)` maps the selected train/car seat list.
+- `get_limousine_schedule_view(query)` maps the Sid-bearing schedule-view
+  response and its typed train/product rows.
+
+Each method accepts one frozen, closed request dataclass. The schedule and seat
+queries require caller-supplied service, schedule, train, and car identifiers;
+the schedule-view query additionally requires a caller-supplied menu and job
+identifier. The package does not embed the APK's current limousine service,
+menu, train-class, station, car, seat-attribute, or sale-division values.
+Unknown wire fields cannot be supplied.
+
+All three methods issue exactly one POST with the Retrofit-declared field set
+and `include_common=False`. The first two forms explicitly carry `Device`,
+`Version`, and the app `Key`; the schedule-view form carries `Device`,
+`Version`, and one fresh `Sid`. None has a static authenticated-session
+prerequisite in the reviewed caller flow, so a login is not required. Existing
+session-expiry handling still clears an already-present local session on
+`P058`. The three calls are DynaPath-disabled because none of their exact paths
+appears in the APK DynaPath URL list.
+
+Responses use frozen typed schedule, train, recommended-product, and
+seat-inventory models. Identifiers, raw mappings, response/free-text messages,
+and station names are repr-hidden. These methods expose no seat selection,
+seat hold, booking, reservation, payment, cancellation, or fallback request.
+No live call was made for this increment; its contract and parser evidence is
+limited to exact APK/static sources plus synthetic fixtures.
 
 ### UUID and MAAS station reads
 

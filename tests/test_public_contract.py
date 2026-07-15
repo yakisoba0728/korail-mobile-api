@@ -5,6 +5,14 @@ import korail_mobile_api
 import korail_mobile_api.models as models
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
+from korail_mobile_api.limousine_models import (
+    LimousineScheduleQuery,
+    LimousineScheduleResponse,
+    LimousineScheduleViewQuery,
+    LimousineScheduleViewResponse,
+    LimousineSeatInventoryQuery,
+    LimousineSeatInventoryResponse,
+)
 from korail_mobile_api.models import (
     KorailStation,
     KorailSession,
@@ -36,6 +44,9 @@ def test_client_public_method_set_is_stable():
         "get_discount_coupons",
         "get_free_seat_car_info",
         "get_guide_seat_condition",
+        "get_limousine_schedule_view",
+        "get_limousine_schedules",
+        "get_limousine_seat_inventory",
         "get_maas_menu_list",
         "get_maas_station_data",
         "get_merge_seats_inquiry",
@@ -62,6 +73,44 @@ def test_client_public_method_set_is_stable():
         "logout",
         "search_trains",
     }
+
+
+def test_limousine_signatures_types_and_exports_are_public():
+    expected = {
+        "get_limousine_schedules": (
+            LimousineScheduleQuery,
+            LimousineScheduleResponse,
+        ),
+        "get_limousine_seat_inventory": (
+            LimousineSeatInventoryQuery,
+            LimousineSeatInventoryResponse,
+        ),
+        "get_limousine_schedule_view": (
+            LimousineScheduleViewQuery,
+            LimousineScheduleViewResponse,
+        ),
+    }
+    for method_name, (query_type, response_type) in expected.items():
+        method = getattr(KorailClient, method_name)
+        assert list(inspect.signature(method).parameters) == ["self", "query"]
+        assert get_type_hints(method) == {
+            "query": query_type,
+            "return": response_type,
+        }
+    for name in (
+        "LimousineScheduleQuery",
+        "LimousineSeatInventoryQuery",
+        "LimousineScheduleViewQuery",
+        "LimousineSchedule",
+        "LimousineScheduleResponse",
+        "LimousineSeat",
+        "LimousineSeatInventoryResponse",
+        "LimousineRecommendedProduct",
+        "LimousineScheduleViewTrain",
+        "LimousineScheduleViewResponse",
+    ):
+        assert name in korail_mobile_api.__all__
+        assert getattr(korail_mobile_api, name)
 
 
 def test_seat_inventory_signatures_types_and_exports_are_public():

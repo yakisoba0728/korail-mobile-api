@@ -371,7 +371,7 @@ def _common_fields(config: KorailConfig) -> dict[str, str]:
 
 
 def test_successful_read_routes_have_exact_final_fields():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 34
+    assert len(KORAIL_READ_ONLY_ROUTES) == 37
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     for path, fields in EXACT_FIELDS.items():
         assert KORAIL_EXACT_REQUEST_FIELDS[path] == fields

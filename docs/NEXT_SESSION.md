@@ -13,9 +13,9 @@ menu/reference reads; it changes no credential or live-smoke behavior.
 
 The current implementation evidence establishes:
 
-- 34 routes at the exact login/read transport boundary.
-- 37 public methods on `KorailClient`.
-- A reviewed offline gate of `1080 passed, 1 deselected`; the deselected
+- 37 routes at the exact login/read transport boundary.
+- 40 public methods on `KorailClient`.
+- A reviewed offline gate of `1180 passed, 1 deselected`; the deselected
   test is the explicitly opted-in live-service test.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.
@@ -51,6 +51,14 @@ and synthetic fixtures. The routes are session-unverified; any live
 verification must start only after login. No live call was made. The similarly named
 `/classes/com.korail.mobile.push.callCrew.do` mutation remains unregistered and
 has no public client method.
+
+The static-only limousine increment adds three one-request read wrappers for
+R04, R05, and R38. Closed request dataclasses require caller-supplied
+service/menu/schedule/train/car identifiers; no live discriminator values are
+embedded. All three exact paths force DynaPath off, require no authenticated
+session from the reviewed caller evidence, and expose no seat selection,
+booking, hold, or mutation. No live call or credential read was performed for
+this increment.
 
 The `0.2.0` typed seat-inventory increment adds two authenticated,
 DynaPath-disabled reads with closed general-room forms, strict frozen response

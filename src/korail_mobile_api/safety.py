@@ -76,6 +76,15 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
             "POST",
             "/classes/com.korail.mobile.research.mergeSeatsC.do",
         ),
+        ("POST", "/classes/com.korail.mobile.lmu.scdlQry.do"),
+        (
+            "POST",
+            "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do",
+        ),
+        (
+            "POST",
+            "/classes/com.korail.mobile.seatMovie.LimousineScheduleView",
+        ),
     }
 )
 
@@ -239,6 +248,73 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "seatAttCd",
             "totPsgNum",
         }
+    ),
+    "/classes/com.korail.mobile.lmu.scdlQry.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "dptDt",
+            "dptRsStnCd",
+            "arvRsStnCd",
+            "tmGpCd",
+            "psrmClCd",
+            "dptTm",
+            "trnNo",
+            "seatAttCd",
+            "rsvSaleDvCd",
+        }
+    ),
+    "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "trnClsfCd",
+            "trnGpCd",
+            "runDt",
+            "trnNo",
+            "srcarNo",
+            "psrmClCd",
+            "dptRsStnCd",
+            "arvRsStnCd",
+            "seatAttCd",
+            "dptStnRunOrdr",
+            "arvStnRunOrdr",
+            "totPsgCnt",
+            "gdNo",
+            "isArrow",
+        }
+    ),
+    "/classes/com.korail.mobile.seatMovie.LimousineScheduleView": (
+        frozenset(
+            {
+                "Device",
+                "Version",
+                "Sid",
+                "txtMenuId",
+                "radJobId",
+                "txtJobDv",
+                "selGoTrain",
+                "txtTrnGpCd",
+                "txtGoTrnNo",
+                "txtGoStart",
+                "txtGoEnd",
+                "txtGoAbrdDt",
+                "txtGoHour",
+                "txtPsgFlg_1",
+                "txtPsgFlg_2",
+                "txtPsgFlg_3",
+                "txtPsgFlg_4",
+                "txtPsgFlg_5",
+                "txtSeatAttCd_2",
+                "txtSeatAttCd_3",
+                "txtSeatAttCd_4",
+                "ebizCrossCheck",
+                "srtCheckYn",
+                "rtYn",
+            }
+        )
     ),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS

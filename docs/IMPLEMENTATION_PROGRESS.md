@@ -46,6 +46,11 @@ Last updated: 2026-07-15 KST
   raw mappings remain `repr=False`.
   No capture value, raw body, credential source, or network call
   was used by this increment.
+- Three static-only limousine P0 reads implement the exact R04, R05, and R38
+  POST contracts. Their frozen query dataclasses require caller-supplied
+  service/menu/schedule/train/car identifiers; no live discriminator is
+  hardcoded. Every method issues one DynaPath-disabled request and exposes no
+  seat selection, hold, reservation, or mutation. No live call was made.
 - A separate evidence command enforces a four-operation ceiling and writes only
   fixed statuses, 0/1 call counters, bounded counts, type-presence booleans, and
   a sufficiency category after a secret scan. It is not part of broad live
@@ -60,8 +65,8 @@ Last updated: 2026-07-15 KST
 - The consolidated final review is complete. Its two Important and one Minor
   KORAIL findings were fixed together; re-review found no remaining Critical,
   Important, or Minor issue.
-- The transport now allows 34 exact login/read routes and the client exposes
-  37 public methods. No new route was added to the DynaPath allowlist.
+- The transport now allows 37 exact login/read routes and the client exposes
+  40 public methods. No new route was added to the DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -98,8 +103,9 @@ Last updated: 2026-07-15 KST
   request objects
 - Account-neutral seat-assignment schedule and merged-seat inquiry through
   closed request objects
+- Static-only limousine schedule-list, seat-inventory, and schedule-view lookup
 
-The transport currently allows 34 exact read/login routes. Reservation,
+The transport currently allows 37 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
 mutation routes are not callable.
 
@@ -119,13 +125,19 @@ mutation routes are not callable.
   contracts, payload builders, typed parsers, public methods, exports, and
   documentation. Focused GREEN reports `56 passed` for the runtime/public
   contract gate, using only mock transport and synthetic fixtures.
+- Limousine-read TDD RED: the focused contract command stopped during
+  collection on the missing limousine public models/module before production
+  code existed.
+- Limousine-read focused GREEN: `549 passed`; the limousine, public-contract,
+  README, HTTP, session, successful-read, and seat-inventory tests are wholly
+  synthetic or mocked and perform no live I/O.
 - Seat-inventory TDD RED: the focused test command stopped during collection on
   the missing `PhysicalSeat` public interface, as expected before production
   code existed.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full offline release gate reports `1080 passed, 1 deselected`;
+- The full offline release gate reports `1180 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
@@ -233,7 +245,7 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
 - Live-successful inventory entries: 27
-- Currently implemented exact login/read routes: 34
+- Currently implemented exact login/read routes: 37
 - Therefore the complete APK endpoint inventory is not yet implemented
 
 All recorded successful read entries now have an exact package route. The

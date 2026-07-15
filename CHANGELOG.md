@@ -18,6 +18,12 @@
   separate state-changing crew-call route remains excluded.
 - Added frozen repr-safe models, strict parsers, synthetic fixtures, and
   offline route, request, error, export, and documentation coverage.
+- Added three static-evidenced limousine schedule and seat-inventory reads with
+  closed caller-supplied query dataclasses, exact POST allowlists, typed
+  repr-safe parsers, one-shot session/error handling, and DynaPath disabled.
+- Added no live service/menu/train/car constants, seat selection, hold,
+  reservation, payment, cancellation, or other mutation capability; the new
+  contracts are covered by synthetic fixtures only.
 
 ## 0.2.0 - 2026-07-14
 

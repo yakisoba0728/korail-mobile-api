@@ -40,6 +40,18 @@ from .errors import (
     KorailTransportError,
 )
 from .http import parse_base_response
+from .limousine_models import (
+    LimousineRecommendedProduct,
+    LimousineSchedule,
+    LimousineScheduleQuery,
+    LimousineScheduleResponse,
+    LimousineScheduleViewQuery,
+    LimousineScheduleViewResponse,
+    LimousineScheduleViewTrain,
+    LimousineSeat,
+    LimousineSeatInventoryQuery,
+    LimousineSeatInventoryResponse,
+)
 from .models import (
     AppDataResponse,
     AppVersionInfo,
@@ -173,6 +185,16 @@ __all__ = [
     "KorailSession",
     "KorailSessionExpiredError",
     "KorailTransportError",
+    "LimousineRecommendedProduct",
+    "LimousineSchedule",
+    "LimousineScheduleQuery",
+    "LimousineScheduleResponse",
+    "LimousineScheduleViewQuery",
+    "LimousineScheduleViewResponse",
+    "LimousineScheduleViewTrain",
+    "LimousineSeat",
+    "LimousineSeatInventoryQuery",
+    "LimousineSeatInventoryResponse",
     "MaasMenuItem",
     "MaasMenuListResponse",
     "MergeSeatsInquiryRequest",

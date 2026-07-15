@@ -7,6 +7,25 @@ from .config import KorailConfig
 from .crypto import generate_sid
 from .errors import KorailAuthError, KorailSessionExpiredError
 from .http import KorailHttpClient
+from .limousine_models import (
+    LimousineScheduleQuery,
+    LimousineScheduleResponse,
+    LimousineScheduleViewQuery,
+    LimousineScheduleViewResponse,
+    LimousineSeatInventoryQuery,
+    LimousineSeatInventoryResponse,
+)
+from .limousine_parsers import (
+    parse_limousine_schedule_response,
+    parse_limousine_schedule_view_response,
+    parse_limousine_seat_inventory_response,
+)
+from .limousine_payloads import (
+    build_limousine_schedule_form,
+    build_limousine_schedule_view_form,
+    build_limousine_seat_inventory_form,
+    validate_limousine_schedule_view_query,
+)
 from .models import (
     AppDataResponse,
     BaseKorailResponse,
@@ -218,6 +237,59 @@ class KorailClient:
             lambda: parse_seat_inventory_response(
                 self.http.post_form(
                     "/classes/com.korail.mobile.research.TResidualSeatsResearch.do",
+                    form,
+                    include_common=False,
+                    include_dynapath=False,
+                )
+            )
+        )
+
+    def get_limousine_schedules(
+        self,
+        query: LimousineScheduleQuery,
+    ) -> LimousineScheduleResponse:
+        form = build_limousine_schedule_form(self.config, query)
+        return self._run_read(
+            lambda: parse_limousine_schedule_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.lmu.scdlQry.do",
+                    form,
+                    include_common=False,
+                    include_dynapath=False,
+                )
+            )
+        )
+
+    def get_limousine_seat_inventory(
+        self,
+        query: LimousineSeatInventoryQuery,
+    ) -> LimousineSeatInventoryResponse:
+        form = build_limousine_seat_inventory_form(self.config, query)
+        return self._run_read(
+            lambda: parse_limousine_seat_inventory_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do",
+                    form,
+                    include_common=False,
+                    include_dynapath=False,
+                )
+            )
+        )
+
+    def get_limousine_schedule_view(
+        self,
+        query: LimousineScheduleViewQuery,
+    ) -> LimousineScheduleViewResponse:
+        validate_limousine_schedule_view_query(query)
+        form = build_limousine_schedule_view_form(
+            self.config,
+            query,
+            sid=generate_sid(),
+        )
+        return self._run_read(
+            lambda: parse_limousine_schedule_view_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.seatMovie.LimousineScheduleView",
                     form,
                     include_common=False,
                     include_dynapath=False,

@@ -1,0 +1,33 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic-schedule-envelope-secret",
+  "strResult": "SUCC",
+  "fllwPgExt": "SYNTHETIC-FOLLOW",
+  "lgtmShtmDvCd": "SYNTHETIC-LENGTH-DIVISION",
+  "trainList": [
+    {
+      "arvDt": "20991231",
+      "arvRsStnCd": "9002",
+      "arvStnRunOrdr": "000456",
+      "arvTm": "235959",
+      "chtnDvCd": "SYNTHETIC-TRANSFER",
+      "dptDt": "20991231",
+      "dptRsStnCd": "9001",
+      "dptStnRunOrdr": "000123",
+      "dptTm": "220000",
+      "gnrmRestSeatNum": "12",
+      "ocurDlayTnum": "0",
+      "restFresNum": "2",
+      "restStndNum": "3",
+      "runDt": "20991231",
+      "sprmRestSeatNum": "4",
+      "stlbTrnClsfCd": "77",
+      "trnGpCd": "777",
+      "trnNo": "54321",
+      "trnOrdNo": "SYNTHETIC-ORDER",
+      "ymsAplFlg": "SYNTHETIC-YMS",
+      "syntheticRawMarker": "synthetic-schedule-raw-secret"
+    }
+  ],
+  "syntheticRawMarker": "synthetic-schedule-response-raw-secret"
+}

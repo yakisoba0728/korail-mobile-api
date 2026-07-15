@@ -1,0 +1,37 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic-seat-envelope-secret",
+  "strResult": "SUCC",
+  "car_tp_cd": "SYNTHETIC-CAR-TYPE",
+  "scar_no": "0007",
+  "seat_ary_cd": "SYNTHETIC-ARRANGEMENT",
+  "up_dn_dv_cd": "SYNTHETIC-DIRECTION",
+  "seatList": [
+    {
+      "dir_seat_att_cd": "SYNTHETIC-DIRECTION-ATTRIBUTE",
+      "etc_seat_att_cd": "SYNTHETIC-OTHER-ATTRIBUTE",
+      "intg_msg": "synthetic-seat-message-secret",
+      "intg_msg_cd": "SYNTHETIC-MESSAGE-CODE",
+      "rq_seat_att_cd": "SYNTHETIC-REQUESTED-ATTRIBUTE",
+      "sale_psb_flg": "Y",
+      "seat_no": "SYNTHETIC-SEAT-01",
+      "seat_spec": "SYNTHETIC-SPECIFICATION",
+      "sqr_no": "SYNTHETIC-SEQUENCE-01",
+      "vz_msg_dv_cd": "SYNTHETIC-VISUAL-CODE",
+      "syntheticRawMarker": "synthetic-seat-row-raw-secret"
+    },
+    {
+      "dir_seat_att_cd": "SYNTHETIC-DIRECTION-ATTRIBUTE-2",
+      "etc_seat_att_cd": "SYNTHETIC-OTHER-ATTRIBUTE-2",
+      "intg_msg": "synthetic-seat-message-secret-2",
+      "intg_msg_cd": "SYNTHETIC-MESSAGE-CODE-2",
+      "rq_seat_att_cd": "SYNTHETIC-REQUESTED-ATTRIBUTE-2",
+      "sale_psb_flg": "N",
+      "seat_no": "SYNTHETIC-SEAT-02",
+      "seat_spec": "SYNTHETIC-SPECIFICATION-2",
+      "sqr_no": "SYNTHETIC-SEQUENCE-02",
+      "vz_msg_dv_cd": "SYNTHETIC-VISUAL-CODE-2"
+    }
+  ],
+  "syntheticRawMarker": "synthetic-seat-response-raw-secret"
+}
