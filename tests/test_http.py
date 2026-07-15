@@ -30,6 +30,7 @@ from korail_mobile_api.safety import (
     KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_READ_ONLY_ROUTES,
     assert_korail_origin,
+    assert_read_only_request_fields,
     assert_read_only_route,
 )
 from conftest import load_json_fixture
@@ -383,6 +384,126 @@ def test_exact_post_request_fields_and_scalar_values_fail_before_io(data):
             data,
         )
     assert called is False
+
+
+def test_unregistered_common_code_ordered_duplicates_fail_before_io():
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "SYNTHETIC.OK",
+                "h_msg_txt": "synthetic",
+                "strResult": "SUCC",
+            },
+        )
+
+    client = KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(KorailProtocolError, match="ordered request"):
+        client.post_form(
+            "/classes/com.korail.mobile.common.code.do",
+            (("code", "A"), ("code", "B")),
+            include_common=False,
+        )
+    assert called is False
+
+
+def test_exact_unordered_cart_contract_rejects_full_ordered_sequence():
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={})
+
+    client = KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(KorailProtocolError, match="ordered request"):
+        client.post_form(
+            "/classes/com.korail.mobile.cart.showCartList",
+            (
+                ("Device", client.config.device),
+                ("Version", client.config.version),
+                ("Key", client.config.key),
+                ("pnrNo", ""),
+                ("addSrvReqNo", ""),
+            ),
+            include_common=False,
+        )
+    assert called is False
+
+
+def test_exact_unordered_cart_contract_keeps_mapping_transport_compatible():
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "SYNTHETIC.OK",
+                "h_msg_txt": "synthetic",
+                "strResult": "SUCC",
+            },
+        )
+
+    client = KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(handler),
+    )
+    client.post_form(
+        "/classes/com.korail.mobile.cart.showCartList",
+        {"pnrNo": "", "addSrvReqNo": ""},
+    )
+    assert called is True
+
+
+def test_registered_variant_routes_allow_only_their_ordered_sequences():
+    registered = {
+        "/classes/com.korail.mobile.gift.gdLst.do": (
+            ("Device", "AD"),
+            ("Version", "1"),
+            ("Key", "K"),
+            ("qryDvCd", "F"),
+            ("qryVal", "E"),
+        ),
+        "/classes/com.korail.mobile.research.cmtrInfo.do": (
+            ("Device", "AD"),
+            ("Version", "1"),
+            ("Key", "K"),
+            ("jobDvCd", "b"),
+            ("cmtrKndCd", "C"),
+            ("psgCnt", "1"),
+            ("cmtrUtlAgeCd", "A"),
+            ("psgPrnb", "1"),
+        ),
+        "/classes/com.korail.mobile.trn.prcFare.do": (
+            ("Device", "AD"),
+            ("Version", "1"),
+            ("Key", "K"),
+            ("txtMenuId", "11"),
+            ("chtnDvCd", "1"),
+            ("dptRsStnCd", "D"),
+            ("arvRsStnCd", "A"),
+            ("runDt", "20990101"),
+            ("trnNo", "00001"),
+            ("gdNo", "G"),
+            ("rqSeatAttCd", "S"),
+            ("trnGpCd", "T"),
+            ("stlbTrnClsfCd", "C"),
+        ),
+    }
+    for path, fields in registered.items():
+        assert_read_only_request_fields(path, fields)
 
 
 @pytest.mark.parametrize(

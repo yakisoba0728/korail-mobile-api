@@ -547,9 +547,6 @@ def assert_read_only_request_fields(
     values: Mapping[str, Any] | Sequence[tuple[str, Any]],
 ) -> None:
     route_path = urlsplit(path).path
-    allowed = KORAIL_EXACT_REQUEST_FIELDS.get(route_path)
-    if allowed is None:
-        return
     if isinstance(values, Mapping):
         scalar_pairs = tuple(values.items())
     elif isinstance(values, Sequence) and not isinstance(
@@ -566,10 +563,17 @@ def assert_read_only_request_fields(
             raise KorailProtocolError(
                 "KORAIL ordered request fields must be scalar name/value pairs"
             )
+        if route_path not in KORAIL_EXACT_REQUEST_FIELD_ORDERS:
+            raise KorailProtocolError(
+                "KORAIL ordered request fields are not registered for this route"
+            )
     else:
         raise KorailProtocolError(
             "KORAIL request fields must be a mapping or ordered pair sequence"
         )
+    allowed = KORAIL_EXACT_REQUEST_FIELDS.get(route_path)
+    if allowed is None:
+        return
     field_names = [name for name, _ in scalar_pairs]
     has_duplicates = len(field_names) != len(set(field_names))
     if has_duplicates and route_path != _COMMUTER_INFO_PATH:

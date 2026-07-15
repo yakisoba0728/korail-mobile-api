@@ -50,6 +50,7 @@ from korail_mobile_api.read_payloads import (
     PriceFareLeg,
     PriceFareQuoteRequest,
     _ProductPassengerGroups,
+    _ProductTrainInquiryContinuation,
     _ProductTrainInquiryRequest,
     _ProductTransferContext,
     _build_product_train_inquiry_form,
@@ -571,7 +572,11 @@ def _product_item() -> PassMenuItem:
     )
 
 
-def _product_request(*, transfer=False) -> _ProductTrainInquiryRequest:
+def _product_request(
+    *,
+    transfer=False,
+    continuation=None,
+) -> _ProductTrainInquiryRequest:
     context = (
         _ProductTransferContext("TRANSFER_STATION", "100")
         if transfer
@@ -585,33 +590,201 @@ def _product_request(*, transfer=False) -> _ProductTrainInquiryRequest:
         departure_time="120000",
         passengers=_ProductPassengerGroups(1, 0, 0, 0, 0),
         transfer=context,
+        continuation=continuation,
     )
 
 
 def test_r39_offline_builder_is_exact_and_has_no_transport_surface():
-    direct = _build_product_train_inquiry_form(KorailConfig(), _product_request())
-    transfer = _build_product_train_inquiry_form(
-        KorailConfig(), _product_request(transfer=True)
+    config = KorailConfig()
+    initial = _build_product_train_inquiry_form(config, _product_request())
+    direct_source = ProductTrainInquiryResponse(
+        next_query_station_no="DIRECT_QUERY_STATION",
+        result_count="7",
+        next_train_no="DIRECT_NEXT_TRAIN",
     )
-    assert direct[:6] == (
-        ("Device", KorailConfig().device),
-        ("Version", KorailConfig().version),
+    direct_continuation = _ProductTrainInquiryContinuation.direct(
+        direct_source
+    )
+    direct = _build_product_train_inquiry_form(
+        config,
+        _product_request(continuation=direct_continuation),
+    )
+    transfer_source = ProductTrainInquiryResponse(
+        next_query_station_no="TRANSFER_QUERY_STATION",
+        result_count="8",
+        preceding_train_no_next="TRANSFER_PRECEDING_TRAIN",
+        early_train_no_next="TRANSFER_EARLY_TRAIN",
+    )
+    transfer_continuation = _ProductTrainInquiryContinuation.transfer(
+        transfer_source
+    )
+    transfer = _build_product_train_inquiry_form(
+        config,
+        _product_request(
+            transfer=True,
+            continuation=transfer_continuation,
+        ),
+    )
+    common = (
+        ("Device", config.device),
+        ("Version", config.version),
         ("txtMenuId", "41"),
         ("radJobId", "1"),
         ("selGoTrain", "109"),
         ("txtTrnGpCd", "109"),
+        ("txtGoStart", "START"),
+        ("txtGoEnd", "END"),
+        ("txtGoAbrdDt", "20990101"),
+        ("txtGoHour", "120000"),
+        ("txtPsgFlg_1", "1"),
+        ("txtPsgFlg_2", "0"),
+        ("txtPsgFlg_3", "0"),
+        ("txtPsgFlg_4", "0"),
+        ("txtPsgFlg_5", "0"),
+        ("txtSeatAttCd_2", "000"),
+        ("txtSeatAttCd_3", "000"),
+        ("txtSeatAttCd_4", "015"),
+        ("txtGdNo", "SECRET_PRODUCT"),
+        ("qryDvCd", "1"),
     )
-    assert ("pgPrCnt", "10") in direct
-    assert all(name not in {"Key", "Sid"} for name, _ in direct)
-    assert transfer[-4:] == (
+    assert initial == common + (
+        ("qryStNo", "0"),
+        ("qryStTrnNo", "00000"),
+        ("qryStTrnNo2", ""),
+        ("pgPrCnt", "10"),
+    )
+    assert direct == common + (
+        ("qryStNo", "DIRECT_QUERY_STATION"),
+        ("qryStTrnNo", "DIRECT_NEXT_TRAIN"),
+        ("qryStTrnNo2", ""),
+        ("pgPrCnt", "7"),
+    )
+    assert transfer == (
+        *common[:3],
+        ("radJobId", "2"),
+        *common[4:],
+        ("qryStNo", "TRANSFER_QUERY_STATION"),
+        ("qryStTrnNo", "TRANSFER_PRECEDING_TRAIN"),
+        ("qryStTrnNo2", "TRANSFER_EARLY_TRAIN"),
+        ("pgPrCnt", "8"),
         ("chtnCnt", "1"),
         ("chtnRsStnCd1", "TRANSFER_STATION"),
         ("trnGpCnt", "1"),
         ("trnGpCd1", "100"),
     )
-    assert ("radJobId", "2") in transfer
-    assert ("pgPrCnt", "0") in transfer
+    for form in (initial, direct, transfer):
+        assert all(name not in {"Key", "Sid"} for name, _ in form)
+        assert ("qryDvCd", "1") in form
+    assert "DIRECT_QUERY_STATION" not in repr(direct_continuation)
+    assert "TRANSFER_QUERY_STATION" not in repr(transfer_continuation)
     assert "SECRET_PRODUCT" not in repr(_product_request())
+
+
+def test_r39_continuation_requires_exact_complete_response_provenance():
+    with pytest.raises(TypeError):
+        _ProductTrainInquiryContinuation.direct(object())
+
+    class UnsafeResponse(ProductTrainInquiryResponse):
+        pass
+
+    with pytest.raises(TypeError):
+        _ProductTrainInquiryContinuation.direct(
+            UnsafeResponse(
+                next_query_station_no="Q",
+                result_count="1",
+                next_train_no="T",
+            )
+        )
+
+    for source in (
+        ProductTrainInquiryResponse(
+            next_query_station_no=None,
+            result_count="1",
+            next_train_no="T",
+        ),
+        ProductTrainInquiryResponse(
+            next_query_station_no="Q",
+            result_count=None,
+            next_train_no="T",
+        ),
+        ProductTrainInquiryResponse(
+            next_query_station_no="Q",
+            result_count="1",
+            next_train_no=None,
+        ),
+    ):
+        with pytest.raises(ValueError):
+            _ProductTrainInquiryContinuation.direct(source)
+
+    for source in (
+        ProductTrainInquiryResponse(
+            next_query_station_no=None,
+            result_count="1",
+            preceding_train_no_next="P",
+            early_train_no_next="E",
+        ),
+        ProductTrainInquiryResponse(
+            next_query_station_no="Q",
+            result_count=None,
+            preceding_train_no_next="P",
+            early_train_no_next="E",
+        ),
+        ProductTrainInquiryResponse(
+            next_query_station_no="Q",
+            result_count="1",
+            preceding_train_no_next=None,
+            early_train_no_next="E",
+        ),
+        ProductTrainInquiryResponse(
+            next_query_station_no="Q",
+            result_count="1",
+            preceding_train_no_next="P",
+            early_train_no_next=None,
+        ),
+    ):
+        with pytest.raises(ValueError):
+            _ProductTrainInquiryContinuation.transfer(source)
+
+    source = ProductTrainInquiryResponse(
+        next_query_station_no="Q",
+        result_count="1",
+        next_train_no="T",
+    )
+    continuation = _ProductTrainInquiryContinuation.direct(source)
+    object.__setattr__(source, "next_train_no", None)
+    with pytest.raises(ValueError):
+        _build_product_train_inquiry_form(
+            KorailConfig(),
+            _product_request(continuation=continuation),
+        )
+
+
+def test_r39_continuation_mode_must_match_selected_request_mode():
+    direct = _ProductTrainInquiryContinuation.direct(
+        ProductTrainInquiryResponse(
+            next_query_station_no="Q",
+            result_count="1",
+            next_train_no="T",
+        )
+    )
+    transfer = _ProductTrainInquiryContinuation.transfer(
+        ProductTrainInquiryResponse(
+            next_query_station_no="Q",
+            result_count="1",
+            preceding_train_no_next="P",
+            early_train_no_next="E",
+        )
+    )
+    with pytest.raises(ValueError):
+        _build_product_train_inquiry_form(
+            KorailConfig(),
+            _product_request(continuation=transfer),
+        )
+    with pytest.raises(ValueError):
+        _build_product_train_inquiry_form(
+            KorailConfig(),
+            _product_request(transfer=True, continuation=direct),
+        )
 
 
 def test_r39_offline_parser_preserves_nested_shape_and_errors(load_json_fixture):

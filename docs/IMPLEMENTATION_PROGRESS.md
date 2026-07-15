@@ -139,7 +139,7 @@ the boundary is 45 routes and 48 public methods, live inventory remains 28
 successful / 9 failed / 128 unexecuted out of 165, and no live request,
 credential access, `.env`, secure raw, or mutation expansion occurred.
 The APK inventory remains 28 successful, 9 failed, and 128 unexecuted entries
-out of 165; only package coverage changed to 42 exact routes and 45 public
+out of 165; the current package boundary is 45 exact routes and 48 public
 methods.
 
 ## Implemented Public Operations

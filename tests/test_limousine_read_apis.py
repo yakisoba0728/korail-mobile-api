@@ -1123,7 +1123,7 @@ def test_current_docs_describe_static_only_limousine_boundary():
         "get_limousine_schedule_view(",
     ):
         assert method in combined
-    assert "42 exact" in combined
+    assert "45 exact" in combined
     assert "48 public methods" in combined
     assert "caller-supplied service" in combined
     assert "DynaPath" in combined

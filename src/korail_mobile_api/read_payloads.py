@@ -14,6 +14,7 @@ from .read_models import (
     PassMenuItem,
     PassMenuData,
     PassPassengerInfos,
+    ProductTrainInquiryResponse,
 )
 
 
@@ -958,6 +959,78 @@ class _ProductTransferContext:
             )
 
 
+@dataclass(frozen=True, init=False)
+class _ProductTrainInquiryContinuation:
+    source: ProductTrainInquiryResponse = field(repr=False)
+    _mode: str = field(repr=False)
+
+    @classmethod
+    def direct(
+        cls,
+        source: ProductTrainInquiryResponse,
+    ) -> "_ProductTrainInquiryContinuation":
+        return cls._create("direct", source)
+
+    @classmethod
+    def transfer(
+        cls,
+        source: ProductTrainInquiryResponse,
+    ) -> "_ProductTrainInquiryContinuation":
+        return cls._create("transfer", source)
+
+    @classmethod
+    def _create(
+        cls,
+        mode: str,
+        source: ProductTrainInquiryResponse,
+    ) -> "_ProductTrainInquiryContinuation":
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "source", source)
+        object.__setattr__(instance, "_mode", mode)
+        _validate_product_train_inquiry_continuation(instance)
+        return instance
+
+
+def _validate_product_train_inquiry_continuation(
+    continuation: _ProductTrainInquiryContinuation,
+) -> tuple[str, str, str, str]:
+    if type(continuation) is not _ProductTrainInquiryContinuation:
+        raise TypeError(
+            "continuation must be an exact product inquiry continuation"
+        )
+    if type(continuation.source) is not ProductTrainInquiryResponse:
+        raise TypeError(
+            "continuation source must be an exact ProductTrainInquiryResponse"
+        )
+    source = continuation.source
+    query_station_no = _required_text(
+        source.next_query_station_no,
+        "continuation next_query_station_no",
+    )
+    page_count = _required_text(
+        source.result_count,
+        "continuation result_count",
+    )
+    if continuation._mode == "direct":
+        first_train_no = _required_text(
+            source.next_train_no,
+            "continuation next_train_no",
+        )
+        second_train_no = ""
+    elif continuation._mode == "transfer":
+        first_train_no = _required_text(
+            source.preceding_train_no_next,
+            "continuation preceding_train_no_next",
+        )
+        second_train_no = _required_text(
+            source.early_train_no_next,
+            "continuation early_train_no_next",
+        )
+    else:
+        raise ValueError("product inquiry continuation mode is invalid")
+    return query_station_no, first_train_no, second_train_no, page_count
+
+
 @dataclass(frozen=True)
 class _ProductTrainInquiryRequest:
     product: PassMenuItem = field(repr=False)
@@ -968,6 +1041,10 @@ class _ProductTrainInquiryRequest:
     passengers: _ProductPassengerGroups = field(repr=False)
     seat_attribute_code: str = field(default="015", repr=False)
     transfer: _ProductTransferContext | None = field(default=None, repr=False)
+    continuation: _ProductTrainInquiryContinuation | None = field(
+        default=None,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         _validate_product_train_inquiry_request(self)
@@ -1025,6 +1102,17 @@ def _validate_product_train_inquiry_request(
         raise TypeError("transfer must be an exact product transfer context")
     if request.transfer is not None:
         _ProductTransferContext.__post_init__(request.transfer)
+    if request.continuation is not None:
+        if type(request.continuation) is not _ProductTrainInquiryContinuation:
+            raise TypeError(
+                "continuation must be an exact product inquiry continuation"
+            )
+        _validate_product_train_inquiry_continuation(request.continuation)
+        expected_mode = "transfer" if request.transfer is not None else "direct"
+        if request.continuation._mode != expected_mode:
+            raise ValueError(
+                "continuation mode must match the selected product inquiry mode"
+            )
     return goods_no, train_group_code
 
 
@@ -1038,6 +1126,9 @@ def _build_product_train_inquiry_form(
         request
     )
     transfer_fields: tuple[tuple[str, str], ...] = ()
+    query_station_no = "0"
+    first_train_no = "00000"
+    second_train_no = ""
     page_count = "10"
     job_id = "1"
     if request.transfer is not None:
@@ -1051,6 +1142,15 @@ def _build_product_train_inquiry_form(
             ),
             ("trnGpCnt", "1"),
             ("trnGpCd1", request.transfer.connection_train_group_code),
+        )
+    if request.continuation is not None:
+        (
+            query_station_no,
+            first_train_no,
+            second_train_no,
+            page_count,
+        ) = _validate_product_train_inquiry_continuation(
+            request.continuation
         )
     passenger_values = (
         request.passengers.adult,
@@ -1079,9 +1179,9 @@ def _build_product_train_inquiry_form(
         ("txtSeatAttCd_4", request.seat_attribute_code),
         ("txtGdNo", goods_no),
         ("qryDvCd", "1"),
-        ("qryStNo", "0"),
-        ("qryStTrnNo", "00000"),
-        ("qryStTrnNo2", ""),
+        ("qryStNo", query_station_no),
+        ("qryStTrnNo", first_train_no),
+        ("qryStTrnNo2", second_train_no),
         ("pgPrCnt", page_count),
         *transfer_fields,
     )

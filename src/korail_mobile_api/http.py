@@ -147,6 +147,10 @@ class KorailHttpClient:
     ) -> BaseKorailResponse:
         assert_korail_origin(str(self._client.base_url))
         assert_read_only_route("POST", path)
+        if data is not None and not isinstance(data, (Mapping, Sequence)):
+            raise KorailProtocolError(
+                "KORAIL form data must be a mapping or registered ordered sequence"
+            )
         ordered = data is not None and not isinstance(data, Mapping)
         form: dict[str, Any] | list[tuple[str, Any]]
         form = [] if ordered else {}
