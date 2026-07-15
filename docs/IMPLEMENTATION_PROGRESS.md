@@ -35,8 +35,10 @@ Last updated: 2026-07-15 KST
   `TransferStationListResponse`, and `TrainSearchMetadata`, while normal
   station data continues to use `StationDataResponse`. Seat and train response
   metadata uses appended, defaulted fields so established positional
-  constructors remain compatible. Existing routes, public signatures, and
-  request payload semantics remain unchanged; raw mappings remain `repr=False`.
+  constructors remain compatible. Client call parameters remain unchanged;
+  return annotations for five existing read methods are narrowed to typed
+  responses. Existing routes and request payload semantics remain unchanged;
+  raw mappings remain `repr=False`.
   No capture value, raw body, credential source, or network call
   was used by this increment.
 - A separate evidence command enforces a four-operation ceiling and writes only
@@ -92,7 +94,7 @@ mutation routes are not callable.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full `0.2.0` offline release gate reports `866 passed, 1 deselected`;
+- The full `0.2.0` offline release gate reports `867 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution

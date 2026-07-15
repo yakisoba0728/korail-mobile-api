@@ -6,7 +6,7 @@ reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
 The reviewed package boundary contains 27 routes and 30 public methods. The
-current `0.2.0` offline release gate is `866 passed, 1 deselected`; the
+current `0.2.0` offline release gate is `867 passed, 1 deselected`; the
 deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
@@ -239,12 +239,13 @@ The observed `h_std_rest_seat_cnt`, `h_fst_rest_seat_cnt`,
 `h_free_sracar_cnt`, and `h_rsv_wait_ps_cnt` values remain optional strings;
 the client does not sum, coerce, or infer numeric meaning from them.
 
-For compatibility, existing constructor prefixes and all client method
-signatures are preserved through appended, defaulted fields. Existing routes,
-methods, and request payload semantics remain unchanged. Response and nested
-raw mappings remain `repr=False`, as do newly promoted server identifiers,
-URLs, and free-text messages. This typing increment does not use the promoted
-values to change the fixed seat request forms.
+For compatibility, existing constructor prefixes are preserved through
+appended, defaulted fields. Client call parameters remain unchanged; return
+annotations for five existing read methods are narrowed to typed responses.
+Existing routes, methods, and request payload semantics remain unchanged.
+Response and nested raw mappings remain `repr=False`, as do newly promoted
+server identifiers, URLs, and free-text messages. This typing increment does
+not use the promoted values to change the fixed seat request forms.
 
 The separately opted-in evidence command is not part of the broad live smoke:
 

@@ -836,7 +836,7 @@ def test_repository_truth_and_full_mutation_policy() -> None:
     for document in (readme, handoff):
         assert "27 routes" in document
         assert "30 public methods" in document
-        assert "866 passed" in document and "1 deselected" in document
+        assert "867 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
         assert "5 cars" in document
         assert "75 seat rows" in document

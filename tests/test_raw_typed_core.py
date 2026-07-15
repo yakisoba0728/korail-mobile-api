@@ -293,12 +293,25 @@ def test_transfer_station_parser_maps_evidenced_rows_repr_safely(
         assert secret not in rendered
 
 
+def test_transfer_station_parser_accepts_present_empty_list(
+    load_json_fixture,
+):
+    raw = load_json_fixture("raw_typed_transfer_stations.json")
+    raw["chtnList"] = []
+
+    response = parsers.parse_transfer_station_list_response(
+        _enveloped_response(raw)
+    )
+
+    assert response.stations == ()
+    assert response.raw is raw
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
         lambda raw: raw.pop("chtnList"),
         lambda raw: raw.__setitem__("chtnList", {}),
-        lambda raw: raw.__setitem__("chtnList", []),
         lambda raw: raw["chtnList"].__setitem__(0, []),
         lambda raw: raw["chtnList"][0].pop("chtnRsStnCd"),
         lambda raw: raw["chtnList"][0].__setitem__("chtnRsStnNm", 1),
@@ -407,6 +420,16 @@ def test_typed_reference_models_are_frozen_dataclasses():
         assert is_dataclass(instance)
         with pytest.raises(FrozenInstanceError):
             instance.raw = {}
+
+
+def test_train_rows_reject_mixed_object_and_non_object_rows(
+    load_json_fixture,
+):
+    raw = load_json_fixture("raw_typed_train_search.json")
+    raw["trn_infos"]["trn_info"].append("SYNTHETIC-NON-OBJECT-ROW")
+
+    with pytest.raises(KorailProtocolError, match="non-object row"):
+        parsers.parse_train_rows(raw)
 
 
 def test_train_search_metadata_preserves_named_server_strings_repr_safely(

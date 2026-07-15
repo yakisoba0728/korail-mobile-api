@@ -108,6 +108,7 @@ def test_docs_describe_raw_backed_typed_core_and_compatibility_boundary():
     progress = PROGRESS.read_text(encoding="utf-8")
 
     for text in (readme, progress):
+        normalized = " ".join(text.split())
         assert "raw-backed typed response core" in text
         assert "StationInfoResponse" in text
         assert "TrainCalendarResponse" in text
@@ -117,6 +118,13 @@ def test_docs_describe_raw_backed_typed_core_and_compatibility_boundary():
         assert "request payload semantics remain unchanged" in text
         assert "appended, defaulted fields" in text
         assert "raw mappings remain `repr=False`" in text
+        assert "Client call parameters remain unchanged" in normalized
+        assert (
+            "return annotations for five existing read methods are narrowed "
+            "to typed responses" in normalized
+        )
+    assert "all client method signatures are preserved" not in readme
+    assert "Existing routes, public signatures" not in progress
     for key in (
         "h_std_rest_seat_cnt",
         "h_fst_rest_seat_cnt",

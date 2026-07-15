@@ -227,10 +227,13 @@ def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
         raise KorailProtocolError(
             "KORAIL train response missing trn_infos.trn_info list"
         )
+    if any(not isinstance(row, Mapping) for row in rows):
+        raise KorailProtocolError(
+            "KORAIL train response contained a non-object row"
+        )
     return [
         TrainSummary.from_raw(dict(row))
         for row in rows
-        if isinstance(row, Mapping)
     ]
 
 
@@ -709,11 +712,11 @@ def parse_transfer_station_list_response(
     response: BaseKorailResponse,
 ) -> TransferStationListResponse:
     raw = response.raw
-    rows = _typed_required_non_empty_list(
-        raw,
-        "chtnList",
-        context="transfer station",
-    )
+    rows = raw.get("chtnList")
+    if not isinstance(rows, list):
+        raise KorailProtocolError(
+            "KORAIL transfer station field chtnList must be a list"
+        )
     stations: list[TransferStation] = []
     for row in rows:
         if not isinstance(row, Mapping):
