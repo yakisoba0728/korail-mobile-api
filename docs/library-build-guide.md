@@ -23,7 +23,7 @@
 | Distinct HTTP+path pairs | 159 |
 | Annotated service interfaces | 35 |
 | HTTP method mix | POST 136 / GET 29 |
-| Runtime test status | 성공 28 / 실패 9 / 미실행 128 |
+| Runtime test status | 성공 31 / 실패 10 / 미실행 124 |
 
 ## Runtime Contract
 
@@ -84,7 +84,7 @@ evidence, independent review, and explicit user authorization.
 | `CertificationService` | 12 | 0 | 0 | 12 |
 | `CommonService` | 11 | 6 | 0 | 5 |
 | `CompensateService` | 3 | 0 | 1 | 2 |
-| `CustService` | 1 | 0 | 0 | 1 |
+| `CustService` | 1 | 0 | 1 | 0 |
 | `DelayService` | 9 | 1 | 1 | 7 |
 | `GiftInfoService` | 1 | 0 | 0 | 1 |
 | `GifticketService` | 4 | 0 | 2 | 2 |
@@ -102,19 +102,20 @@ evidence, independent review, and explicit user authorization.
 | `RailPlusService` | 1 | 0 | 0 | 1 |
 | `ReceiptService` | 1 | 1 | 0 | 0 |
 | `RefundService` | 5 | 0 | 0 | 5 |
-| `ResearchService` | 11 | 2 | 2 | 7 |
+| `ResearchService` | 11 | 3 | 2 | 6 |
 | `ReservationCancelService` | 3 | 0 | 0 | 3 |
 | `ReservationService` | 4 | 1 | 1 | 2 |
 | `ReservationWaitService` | 1 | 0 | 0 | 1 |
 | `SeatMovieService` | 3 | 1 | 0 | 2 |
-| `TicketService` | 19 | 0 | 0 | 19 |
+| `TicketService` | 19 | 2 | 0 | 17 |
 | `TrainsInfoService` | 6 | 3 | 0 | 3 |
 | `XPointService` | 5 | 0 | 0 | 5 |
 
-The updated counts reflect one bounded authenticated revalidation that made 28
-requests and received 28 responses: 25 successful operations, one expected
-typed application failure, and three input-dependent skips. Deposit-bank and
-trip-menu reads succeeded after login. R30 `getFresScar` returned exact
+The historical pre-revalidation 28/9/128 counts reflected one bounded
+authenticated run that made 28 requests and received 28 responses: 25
+successful operations, one expected typed application failure, and three
+input-dependent skips. Deposit-bank and trip-menu reads succeeded after login.
+R30 `getFresScar` returned exact
 `strResult="SUCC"` and parsed successfully; R33 `getGuideSeatCnd` returned a
 full `FAIL` application envelope for the server-supplied seat attribute,
 surfaced as `KorailAppError`, and was not retried. R37
@@ -122,11 +123,23 @@ surfaced as `KorailAppError`, and was not retried. R37
 unexecuted. Offline raw replay yielded 27 parsed responses, one expected
 `KorailAppError`, and zero unexpected failures.
 
+A later bounded authenticated read-only revalidation used an empty advertising
+ID, logged in once, and confirmed that the repr-hidden `customer_no` was
+available. R13 made one request, returned `WRC800029`, surfaced as
+`KorailAppError` and was not retried. R32 succeeded with 0 rows, current-form
+R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the existing safe
+train search succeeded with 10 rows. R52 made zero requests and was recorded
+as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not called. No mutation
+route was called, and no credential, identifier, or raw response value was
+retained. Current service inventory is 31 successful, 10 failed, and 124
+unexecuted entries out of 165.
+
 ## Runtime Failure Notes
 
 | Service | Method | Path | Result |
 |---|---|---|---|
 | `CompensateService` | `executeCompensateRefundList` | `/classes/com.korail.mobile.compensate.ticketList.do` | `WRG000000` 조회 결과 없음 |
+| `CustService` | `mchdDcntTgt` | `/classes/com.korail.mobile.cust.mchdDcntTgt.do` | `WRC800029`; `KorailAppError`, 재시도 없음 |
 | `DelayService` | `executeDelayRefundList` | `/classes/com.korail.mobile.delay.ticketList.do` | `WRG000000` 조회 결과 없음 |
 | `GifticketService` | `getGifticketList` | `/classes/com.korail.mobile.gift.gdLst.do` | HTTP 404 |
 | `GifticketService` | `historyGifticket` | `/classes/com.korail.mobile.gift.gdUseSpec.do` | HTTP 404 |

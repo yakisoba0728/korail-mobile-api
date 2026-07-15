@@ -91,6 +91,26 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
         "## CustService\n\n- 역할: 고객 할인 대상 조회\n"
         "- 상태: 총 1개 / 성공 0 / 실패 1 / 미실행 0" in status
     )
+    for heading, role, totals in (
+        (
+            "ResearchService",
+            "열차/좌석/N카드 관련 조회",
+            "11개 / 성공 3 / 실패 2 / 미실행 6",
+        ),
+        (
+            "TicketService",
+            "발권, 승차권 관리, 체크인, 티켓 정보",
+            "19개 / 성공 2 / 실패 0 / 미실행 17",
+        ),
+        (
+            "TrainsInfoService",
+            "열차/객차/자유석 정보 조회",
+            "6개 / 성공 3 / 실패 0 / 미실행 3",
+        ),
+    ):
+        assert (
+            f"## {heading}\n\n- 역할: {role}\n- 상태: 총 {totals}" in status
+        )
     assert (
         "| 43 | `mchdDcntTgt` | POST | "
         "`/classes/com.korail.mobile.cust.mchdDcntTgt.do` | "
@@ -144,14 +164,35 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
     guide_normalized = " ".join(guide.split())
-    assert "성공 28 / 실패 9 / 미실행 128" in guide
+    assert "## Current Inventory" in guide
+    assert "Runtime test status | 성공 31 / 실패 10 / 미실행 124" in guide
+    assert "| `CustService` | 1 | 0 | 1 | 0 |" in guide
+    assert "| `ResearchService` | 11 | 3 | 2 | 6 |" in guide
     assert "| `ReservationService` | 4 | 1 | 1 | 2 |" in guide
+    assert "| `TicketService` | 19 | 2 | 0 | 17 |" in guide
     assert "| `TrainsInfoService` | 6 | 3 | 0 | 3 |" in guide
+    guide_service_table = guide.split("## Service Runtime Status", 1)[1].split(
+        "The historical pre-revalidation", 1
+    )[0]
+    guide_service_rows = re.findall(
+        r"^\| `[^`]+` \| (\d+) \| (\d+) \| (\d+) \| (\d+) \|$",
+        guide_service_table,
+        flags=re.MULTILINE,
+    )
+    assert len(guide_service_rows) == 35
+    guide_totals = tuple(
+        sum(int(row[index]) for row in guide_service_rows) for index in range(4)
+    )
+    assert guide_totals == (165, 31, 10, 124)
     assert "27 parsed responses" in guide_normalized
     assert "one expected `KorailAppError`" in guide_normalized
     assert "zero unexpected failures" in guide_normalized
-    assert "성공 27 / 실패 8 / 미실행 130" not in guide
-    assert "성공 25 / 실패 8 / 미실행 132" not in guide
+    for stale_totals in (
+        "성공 28 / 실패 9 / 미실행 128",
+        "성공 27 / 실패 8 / 미실행 130",
+        "성공 25 / 실패 8 / 미실행 132",
+    ):
+        assert stale_totals not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
     assert "45 exact login/read routes" in progress
@@ -394,6 +435,7 @@ def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
         "progress": PROGRESS.read_text(encoding="utf-8"),
         "handoff": HANDOFF.read_text(encoding="utf-8"),
         "status": STATUS.read_text(encoding="utf-8"),
+        "guide": BUILD_GUIDE.read_text(encoding="utf-8"),
     }
     for name, document in documents.items():
         normalized = " ".join(document.split())
@@ -407,6 +449,30 @@ def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
         assert "skipped_no_typed_leg" in normalized, name
         assert "R17, R31, R39, and R54 were not called" in normalized, name
         assert "No mutation" in normalized, name
+
+    forbidden_patterns = {
+        "concrete credential assignment": re.compile(
+            r"(?im)^\s*(?:export\s+)?(?:KORAIL|SRT)_"
+            r"(?:MEMBER_NO|PASSWORD|LOGIN_ID|USER_ID|PHONE|EMAIL)\s*=\s*"
+            r"(?![\"']?<)(?!<)[^\s#]+"
+        ),
+        "email address": re.compile(
+            r"(?i)(?<![A-Z0-9._%+-])[A-Z0-9._%+-]+@"
+            r"[A-Z0-9.-]+\.[A-Z]{2,}"
+        ),
+        "Korean mobile number": re.compile(
+            r"(?<!\d)01[016789][ -]?\d{3,4}[ -]?\d{4}(?!\d)"
+        ),
+        "bearer token": re.compile(
+            r"(?i)\bauthorization\s*:\s*bearer\s+[A-Z0-9._~-]{8,}"
+        ),
+        "session cookie value": re.compile(
+            r"(?i)\bJSESSIONID\s*=\s*[A-Z0-9._~-]{8,}"
+        ),
+    }
+    for name, document in documents.items():
+        for pattern_name, pattern in forbidden_patterns.items():
+            assert pattern.search(document) is None, f"{name}: {pattern_name}"
 
     readme = " ".join(documents["README"].split())
     assert "R13 made one request" in readme
