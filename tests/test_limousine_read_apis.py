@@ -122,6 +122,21 @@ VIEW_FIELDS = frozenset(
 )
 
 
+class _ScheduleQueryValidationBypass(LimousineScheduleQuery):
+    def __post_init__(self) -> None:
+        pass
+
+
+class _SeatQueryValidationBypass(LimousineSeatInventoryQuery):
+    def __post_init__(self) -> None:
+        pass
+
+
+class _ViewQueryValidationBypass(LimousineScheduleViewQuery):
+    def __post_init__(self) -> None:
+        pass
+
+
 @pytest.fixture
 def schedule_query() -> LimousineScheduleQuery:
     return LimousineScheduleQuery(
@@ -450,6 +465,92 @@ def test_schedule_view_builder_rejects_invalid_sid(view_query, sid):
             view_query,
             sid=sid,
         )
+
+
+@pytest.mark.parametrize(
+    (
+        "fixture_name",
+        "bypass_type",
+        "invalid_field",
+        "invalid_value",
+        "builder",
+        "method_name",
+    ),
+    [
+        (
+            "schedule_query",
+            _ScheduleQueryValidationBypass,
+            "departure_date",
+            "invalid-date",
+            build_limousine_schedule_form,
+            "get_limousine_schedules",
+        ),
+        (
+            "seat_query",
+            _SeatQueryValidationBypass,
+            "passenger_count",
+            0,
+            build_limousine_seat_inventory_form,
+            "get_limousine_seat_inventory",
+        ),
+        (
+            "view_query",
+            _ViewQueryValidationBypass,
+            "menu_id",
+            "invalid-menu",
+            build_limousine_schedule_view_form,
+            "get_limousine_schedule_view",
+        ),
+    ],
+)
+def test_query_subclass_cannot_bypass_builder_or_reach_transport(
+    request,
+    monkeypatch,
+    fixture_name,
+    bypass_type,
+    invalid_field,
+    invalid_value,
+    builder,
+    method_name,
+):
+    base_query = request.getfixturevalue(fixture_name)
+    values = {
+        model_field.name: getattr(base_query, model_field.name)
+        for model_field in fields(base_query)
+    }
+    values[invalid_field] = invalid_value
+    bypass_query = bypass_type(**values)
+    builder_kwargs = (
+        {"sid": "synthetic-fresh-sid"}
+        if method_name == "get_limousine_schedule_view"
+        else {}
+    )
+
+    with pytest.raises(TypeError, match=type(base_query).__name__):
+        builder(KorailConfig(), bypass_query, **builder_kwargs)
+
+    sid_calls = 0
+    transport_calls = 0
+
+    def fake_sid() -> str:
+        nonlocal sid_calls
+        sid_calls += 1
+        return "synthetic-client-sid"
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal transport_calls
+        transport_calls += 1
+        raise AssertionError("transport must not run")
+
+    monkeypatch.setattr(client_module, "generate_sid", fake_sid)
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(TypeError, match=type(base_query).__name__):
+            getattr(client, method_name)(bypass_query)
+    finally:
+        client.close()
+    assert sid_calls == 0
+    assert transport_calls == 0
 
 
 def test_schedule_parser_maps_every_static_bus_field_and_hides_sensitive_repr(

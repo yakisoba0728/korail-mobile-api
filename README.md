@@ -6,7 +6,7 @@ reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
 The reviewed package boundary contains 37 routes and 40 public methods. The
-current offline release gate is `1180 passed, 1 deselected`; the
+current offline release gate is `1183 passed, 1 deselected`; the
 deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
@@ -349,6 +349,8 @@ the schedule-view query additionally requires a caller-supplied menu and job
 identifier. The package does not embed the APK's current limousine service,
 menu, train-class, station, car, seat-attribute, or sale-division values.
 Unknown wire fields cannot be supplied.
+Only the exact public query dataclass types are accepted; subclasses are
+rejected before Sid generation or transport.
 
 All three methods issue exactly one POST with the Retrofit-declared field set
 and `include_common=False`. The first two forms explicitly carry `Device`,

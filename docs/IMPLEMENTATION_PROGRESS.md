@@ -50,7 +50,9 @@ Last updated: 2026-07-15 KST
   POST contracts. Their frozen query dataclasses require caller-supplied
   service/menu/schedule/train/car identifiers; no live discriminator is
   hardcoded. Every method issues one DynaPath-disabled request and exposes no
-  seat selection, hold, reservation, or mutation. No live call was made.
+  seat selection, hold, reservation, or mutation. Exact concrete query types
+  are required and their validators run non-virtually before Sid generation
+  or transport. No live call was made.
 - A separate evidence command enforces a four-operation ceiling and writes only
   fixed statuses, 0/1 call counters, bounded counts, type-presence booleans, and
   a sufficiency category after a secret scan. It is not part of broad live
@@ -128,7 +130,10 @@ mutation routes are not callable.
 - Limousine-read TDD RED: the focused contract command stopped during
   collection on the missing limousine public models/module before production
   code existed.
-- Limousine-read focused GREEN: `549 passed`; the limousine, public-contract,
+- Limousine validator-hardening RED: all three synthetic query subclasses
+  reached their public builders without the expected `TypeError`. The targeted
+  GREEN reports `3 passed` and also proves no Sid generation or transport.
+- Limousine-read focused GREEN: `552 passed`; the limousine, public-contract,
   README, HTTP, session, successful-read, and seat-inventory tests are wholly
   synthetic or mocked and perform no live I/O.
 - Seat-inventory TDD RED: the focused test command stopped during collection on
@@ -137,7 +142,7 @@ mutation routes are not callable.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full offline release gate reports `1180 passed, 1 deselected`;
+- The full offline release gate reports `1183 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution

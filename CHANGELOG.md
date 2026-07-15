@@ -24,6 +24,8 @@
 - Added no live service/menu/train/car constants, seat selection, hold,
   reservation, payment, cancellation, or other mutation capability; the new
   contracts are covered by synthetic fixtures only.
+- Reject limousine query subclasses and invoke each concrete dataclass
+  validator non-virtually before Sid generation or transport.
 
 ## 0.2.0 - 2026-07-14
 

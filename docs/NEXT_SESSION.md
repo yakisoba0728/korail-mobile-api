@@ -15,7 +15,7 @@ The current implementation evidence establishes:
 
 - 37 routes at the exact login/read transport boundary.
 - 40 public methods on `KorailClient`.
-- A reviewed offline gate of `1180 passed, 1 deselected`; the deselected
+- A reviewed offline gate of `1183 passed, 1 deselected`; the deselected
   test is the explicitly opted-in live-service test.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.
@@ -58,7 +58,8 @@ service/menu/schedule/train/car identifiers; no live discriminator values are
 embedded. All three exact paths force DynaPath off, require no authenticated
 session from the reviewed caller evidence, and expose no seat selection,
 booking, hold, or mutation. No live call or credential read was performed for
-this increment.
+this increment. Exact concrete query types are required; subclasses are
+rejected before Sid generation or transport.
 
 The `0.2.0` typed seat-inventory increment adds two authenticated,
 DynaPath-disabled reads with closed general-room forms, strict frozen response

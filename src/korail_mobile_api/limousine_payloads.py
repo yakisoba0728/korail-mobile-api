@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TypeVar
+from collections.abc import Callable
+from typing import TypeVar, cast
 
 from .config import KorailConfig
 from .limousine_models import (
@@ -15,18 +16,27 @@ QueryT = TypeVar("QueryT")
 def _validated_query(
     query: object,
     expected: type[QueryT],
+    validator: Callable[[QueryT], None],
     name: str,
 ) -> QueryT:
-    if not isinstance(query, expected):
-        raise TypeError(f"{name} query must be a {expected.__name__}")
-    query.__post_init__()
-    return query
+    if type(query) is not expected:
+        raise TypeError(
+            f"{name} query must be exactly {expected.__name__}"
+        )
+    validated = cast(QueryT, query)
+    validator(validated)
+    return validated
 
 
 def validate_limousine_schedule_query(
     query: object,
 ) -> LimousineScheduleQuery:
-    return _validated_query(query, LimousineScheduleQuery, "schedule")
+    return _validated_query(
+        query,
+        LimousineScheduleQuery,
+        LimousineScheduleQuery.__post_init__,
+        "schedule",
+    )
 
 
 def validate_limousine_seat_inventory_query(
@@ -35,6 +45,7 @@ def validate_limousine_seat_inventory_query(
     return _validated_query(
         query,
         LimousineSeatInventoryQuery,
+        LimousineSeatInventoryQuery.__post_init__,
         "seat inventory",
     )
 
@@ -45,6 +56,7 @@ def validate_limousine_schedule_view_query(
     return _validated_query(
         query,
         LimousineScheduleViewQuery,
+        LimousineScheduleViewQuery.__post_init__,
         "schedule view",
     )
 
