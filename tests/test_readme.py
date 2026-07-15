@@ -73,7 +73,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "| 성공 | 27 |" in status
     assert "| 실패 | 8 |" in status
     assert "| 미실행 | 130 |" in status
-    assert "Package coverage: 37 exact login/read routes" in status
+    assert "Package coverage: 38 exact login/read routes" in status
     assert "bounded live structural evidence" in status
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
@@ -81,8 +81,8 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "성공 25 / 실패 8 / 미실행 132" not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
-    assert "37 exact login/read routes" in progress
-    assert "40 public methods" in progress
+    assert "38 exact login/read routes" in progress
+    assert "41 public methods" in progress
     assert "75" in progress
     assert "IRG000000" in progress
 
@@ -109,7 +109,7 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     assert "/classes/com.korail.mobile.push.callCrew.do" in readme
     assert "remains excluded" in readme
     assert "static APK evidence and synthetic fixtures only" in readme
-    assert "37 exact read/login routes" in progress
+    assert "38 exact read/login routes" in progress
     for document in (readme, progress, status, handoff, changelog):
         assert "session-unverified" in document
     assert "live verification only after login" in readme
@@ -190,7 +190,7 @@ def test_readme_documents_static_only_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "37 routes and 40 public methods" in text
+    assert "38 routes and 41 public methods" in text
     assert "static-only" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text

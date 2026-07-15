@@ -24,6 +24,9 @@ from .read_models import (
     GuideSeatConditionResponse,
     IntermediateStation,
     MergeSeatsInquiryResponse,
+    PassScheduleInfo,
+    PassScheduleResponse,
+    PassScheduleTrain,
     PassAvailabilityResponse,
     PassAgeOption,
     PassGoodsInfo,
@@ -1318,5 +1321,85 @@ def parse_merge_seats_inquiry_response(
         merge_reservation_possible_flag=merge_flag,
         intermediate_stations=tuple(stations),
         trains=trains,
+        **_response_fields(raw),
+    )
+
+
+def parse_pass_schedule_response(
+    raw: Mapping[str, Any],
+) -> PassScheduleResponse:
+    _validate_envelope(raw)
+    if raw["strResult"] != "SUCC":
+        raise KorailProtocolError(
+            "KORAIL pass schedule strResult must be exact SUCC"
+        )
+
+    schedules = []
+    for schedule_value in _optional_list(
+        raw,
+        "schedule_info",
+        "pass schedule",
+    ):
+        schedule = _row(schedule_value, "pass schedule schedule_info")
+        trains = []
+        for train_value in _optional_list(
+            schedule,
+            "train_list",
+            "pass schedule schedule_info",
+        ):
+            train = _row(train_value, "pass schedule train_list")
+            trains.append(
+                PassScheduleTrain(
+                    arrival_station_code=_optional_string(
+                        train,
+                        "h_arv_rs_stn_cd",
+                        "pass schedule train",
+                    ),
+                    arrival_station_name=_optional_string(
+                        train,
+                        "h_arv_rs_stn_nm",
+                        "pass schedule train",
+                    ),
+                    departure_station_code=_optional_string(
+                        train,
+                        "h_dpt_rs_stn_cd",
+                        "pass schedule train",
+                    ),
+                    departure_station_name=_optional_string(
+                        train,
+                        "h_dpt_rs_stn_nm",
+                        "pass schedule train",
+                    ),
+                    detour_code=_optional_string(
+                        train,
+                        "h_dtour",
+                        "pass schedule train",
+                    ),
+                    schedule_price=_optional_string(
+                        train,
+                        "h_schd_prc",
+                        "pass schedule train",
+                    ),
+                    train_group_code=_optional_string(
+                        train,
+                        "h_trn_gp_cd",
+                        "pass schedule train",
+                    ),
+                    train_no=_optional_string(
+                        train,
+                        "h_trn_no",
+                        "pass schedule train",
+                    ),
+                    raw=train,
+                )
+            )
+        schedules.append(
+            PassScheduleInfo(
+                trains=tuple(trains),
+                raw=schedule,
+            )
+        )
+    return PassScheduleResponse(
+        schedules=tuple(schedules),
         **_response_fields(raw),
     )

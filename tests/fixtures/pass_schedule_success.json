@@ -1,0 +1,21 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic-pass-schedule-envelope-secret",
+  "strResult": "SUCC",
+  "schedule_info": [
+    {
+      "train_list": [
+        {
+          "h_arv_rs_stn_cd": "SYNTHETIC-ARRIVAL-CODE",
+          "h_arv_rs_stn_nm": "synthetic-arrival-name-secret",
+          "h_dpt_rs_stn_cd": "SYNTHETIC-DEPARTURE-CODE",
+          "h_dpt_rs_stn_nm": "synthetic-departure-name-secret",
+          "h_dtour": "SYNTHETIC-DETOUR-CODE",
+          "h_schd_prc": "SYNTHETIC-SCHEDULE-PRICE",
+          "h_trn_gp_cd": "SYNTHETIC-TRAIN-GROUP-CODE",
+          "h_trn_no": "SYNTHETIC-TRAIN-NO"
+        }
+      ]
+    }
+  ]
+}

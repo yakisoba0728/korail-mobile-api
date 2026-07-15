@@ -104,6 +104,9 @@ from .read_models import (
     PassMenuData,
     PassMenuItem,
     PassMenuResponse,
+    PassScheduleInfo,
+    PassScheduleResponse,
+    PassScheduleTrain,
     PassOffice,
     PassPassengerInfo,
     PassPassengerInfos,
@@ -129,6 +132,7 @@ from .read_payloads import (
     MergeSeatsInquiryRequest,
     SeatAssignmentScheduleRequest,
 )
+from .read_payloads import PassScheduleRequest
 from .safety import EXCLUDED_API_DOMAINS
 
 __all__ = [
@@ -207,6 +211,10 @@ __all__ = [
     "PassMenuData",
     "PassMenuItem",
     "PassMenuResponse",
+    "PassScheduleInfo",
+    "PassScheduleRequest",
+    "PassScheduleResponse",
+    "PassScheduleTrain",
     "PassOffice",
     "PassPassengerInfo",
     "PassPassengerInfos",

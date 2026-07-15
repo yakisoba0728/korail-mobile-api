@@ -53,6 +53,7 @@ def test_client_public_method_set_is_stable():
         "get_notice",
         "get_pass_available_dates",
         "get_pass_menu",
+        "get_pass_schedule",
         "get_product_detail",
         "get_product_reservations",
         "get_reservation_history",

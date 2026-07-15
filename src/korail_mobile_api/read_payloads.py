@@ -67,6 +67,26 @@ def _ascii_identifier(
     return value
 
 
+def _positive_ascii_text(
+    value: str,
+    name: str,
+    *,
+    allow_empty: bool = False,
+) -> str:
+    if allow_empty and value == "":
+        return value
+    if (
+        not isinstance(value, str)
+        or not value
+        or any(character < "0" or character > "9" for character in value)
+        or not any(character != "0" for character in value)
+    ):
+        raise ValueError(
+            f"{name} must be a positive ASCII decimal string"
+        )
+    return value
+
+
 def _passenger_count(value: int, name: str) -> int:
     if type(value) is not int or not 1 <= value <= 9:
         raise ValueError(f"{name} must be an integer from 1 through 9")
@@ -261,6 +281,70 @@ def build_merge_seats_inquiry_form(
         "psrmClCd": request.room_class_code,
         "seatAttCd": request.seat_attribute_code,
         "totPsgNum": str(request.passenger_count),
+    }
+
+
+@dataclass(frozen=True)
+class PassScheduleRequest:
+    selected_train_code: str = field(repr=False)
+    departure_date: str = field(repr=False)
+    departure_time: str = field(repr=False)
+    transfer_type_code: str = field(repr=False)
+    pass_kind_code: str = field(repr=False)
+    pass_period_code: str = field(repr=False)
+    pass_age_code: str = field(repr=False)
+    page_no: str = field(repr=False)
+    page_size: str = field(repr=False)
+    departure_station_name: str = field(repr=False)
+    arrival_station_name: str = field(repr=False)
+    weekend_use_flag: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        _validate_pass_schedule_request(self)
+
+
+def _validate_pass_schedule_request(request: PassScheduleRequest) -> None:
+    _required_text(request.selected_train_code, "selected_train_code")
+    _ascii_digits(request.departure_date, "departure_date", 8)
+    _ascii_digits(request.departure_time, "departure_time", 6)
+    _required_text(request.transfer_type_code, "transfer_type_code")
+    _required_text(request.pass_kind_code, "pass_kind_code")
+    _required_text(request.pass_period_code, "pass_period_code")
+    _required_text(request.pass_age_code, "pass_age_code")
+    _positive_ascii_text(request.page_no, "page_no")
+    _positive_ascii_text(
+        request.page_size,
+        "page_size",
+        allow_empty=True,
+    )
+    _required_text(
+        request.departure_station_name,
+        "departure_station_name",
+    )
+    _required_text(request.arrival_station_name, "arrival_station_name")
+    if request.weekend_use_flag not in {"Y", "N"}:
+        raise ValueError("weekend_use_flag must be 'Y' or 'N'")
+
+
+def build_pass_schedule_form(
+    request: PassScheduleRequest,
+) -> dict[str, str]:
+    if type(request) is not PassScheduleRequest:
+        raise TypeError("request must be exactly a PassScheduleRequest")
+    _validate_pass_schedule_request(request)
+    return {
+        "selGoTrain": request.selected_train_code,
+        "selGoAbrdDt": request.departure_date,
+        "txtGoHour": request.departure_time,
+        "radChgTrnDvCd": request.transfer_type_code,
+        "txtCmtrKndCd": request.pass_kind_code,
+        "txtCmtrUtlTrmCd": request.pass_period_code,
+        "txtCmtrUtlAgeCd": request.pass_age_code,
+        "txtSelPage": request.page_no,
+        "txtCntPerPage": request.page_size,
+        "txtGoStart": request.departure_station_name,
+        "txtGoEnd": request.arrival_station_name,
+        "txtWkndUseFlg": request.weekend_use_flag,
     }
 
 

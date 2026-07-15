@@ -13,9 +13,9 @@ menu/reference reads; it changes no credential or live-smoke behavior.
 
 The current implementation evidence establishes:
 
-- 37 routes at the exact login/read transport boundary.
-- 40 public methods on `KorailClient`.
-- A reviewed offline gate of `1183 passed, 1 deselected`; the deselected
+- 38 routes at the exact login/read transport boundary.
+- 41 public methods on `KorailClient`.
+- A reviewed offline gate of `1216 passed, 1 deselected`; the deselected
   test is the explicitly opted-in live-service test.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.
@@ -61,6 +61,14 @@ booking, hold, or mutation. No live call or credential read was performed for
 this increment. Exact concrete query types are required; subclasses are
 rejected before Sid generation or transport.
 
+R20 pass-schedule candidate lookup is implemented from static evidence. It
+uses a frozen caller-supplied request, the exact 15-field form, one
+DynaPath-disabled POST, strict full-envelope `SUCC` parsing, and frozen models
+for `schedule_info[].train_list`. The server session requirement remains
+unverified; the client applies a conservative authenticated-session gate and
+the route is not classified as account-neutral. No live request was made for
+this increment, and reservation/payment endpoints remain excluded.
+
 The `0.2.0` typed seat-inventory increment adds two authenticated,
 DynaPath-disabled reads with closed general-room forms, strict frozen response
 models, and pre-Sid validation. Its offline contract and sanitized four-step
@@ -103,9 +111,12 @@ artifacts. They are not inputs to the internal release gate.
    but no response structure for that remaining endpoint.
 4. Any new KORAIL read requires separate sanitized evidence, a concrete design,
    offline contract tests, and an independent safety review.
-5. Mutation endpoints remain excluded unless a separate safety design and
+5. Validate R20 only in a separately reviewed bounded run after login. Supply
+   menu/pass codes from prior server responses or the caller; do not hardcode
+   them and do not continue into reservation or payment.
+6. Mutation endpoints remain excluded unless a separate safety design and
    explicit authorization establish a new scope.
-6. A public release remains blocked by the four items listed in
+7. A public release remains blocked by the four items listed in
    [docs/RELEASE.md](RELEASE.md).
 
 Do not run live KORAIL requests as part of release verification. Do not load or

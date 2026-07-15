@@ -47,6 +47,10 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ),
         ("POST", "/classes/com.korail.mobile.passCard.CouponView"),
         ("POST", "/classes/com.korail.mobile.pass.passInfoList"),
+        (
+            "POST",
+            "/classes/com.korail.mobile.pass.passScheduleInfoList",
+        ),
         ("POST", "/classes/com.korail.mobile.pass.trGdMenuLt.do"),
         ("POST", "/classes/com.korail.mobile.pass.passMenu.do"),
         ("GET", "/classes/com.korail.mobile.push.crwCallRq.do"),
@@ -112,6 +116,25 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "txtCmtrKndCd",
             "txtCmtrUtlTrmCd",
             "txtCmtrUtlAgeCd",
+        }
+    ),
+    "/classes/com.korail.mobile.pass.passScheduleInfoList": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "selGoTrain",
+            "selGoAbrdDt",
+            "txtGoHour",
+            "radChgTrnDvCd",
+            "txtCmtrKndCd",
+            "txtCmtrUtlTrmCd",
+            "txtCmtrUtlAgeCd",
+            "txtSelPage",
+            "txtCntPerPage",
+            "txtGoStart",
+            "txtGoEnd",
+            "txtWkndUseFlg",
         }
     ),
     "/classes/com.korail.mobile.pass.trGdMenuLt.do": frozenset(

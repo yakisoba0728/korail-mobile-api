@@ -67,8 +67,13 @@ Last updated: 2026-07-15 KST
 - The consolidated final review is complete. Its two Important and one Minor
   KORAIL findings were fixed together; re-review found no remaining Critical,
   Important, or Minor issue.
-- The transport now allows 37 exact login/read routes and the client exposes
-  40 public methods. No new route was added to the DynaPath allowlist.
+- The static R20 pass-schedule candidate read is implemented with a closed
+  caller-supplied request, one exact DynaPath-disabled POST, strict full
+  `SUCC` parsing, and frozen repr-safe models for all eight evidenced train
+  fields. The server session rule remains unverified, so a conservative
+  client-side login gate remains until a bounded after-login validation.
+- The transport now allows 38 exact login/read routes and the client exposes
+  41 public methods. No new route was added to the DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -106,8 +111,10 @@ Last updated: 2026-07-15 KST
 - Account-neutral seat-assignment schedule and merged-seat inquiry through
   closed request objects
 - Static-only limousine schedule-list, seat-inventory, and schedule-view lookup
+- Client-gated pass-schedule candidate lookup with caller-supplied runtime
+  values; no pass reservation or payment operation
 
-The transport currently allows 37 exact read/login routes. Reservation,
+The transport currently allows 38 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
 mutation routes are not callable.
 
@@ -142,7 +149,9 @@ mutation routes are not callable.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full offline release gate reports `1183 passed, 1 deselected`;
+- Pass-schedule TDD RED reported 33 expected missing-contract failures. Its
+  focused GREEN reports `33 passed` with no live I/O.
+- The full offline release gate reports `1216 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
@@ -250,7 +259,7 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
 - Live-successful inventory entries: 27
-- Currently implemented exact login/read routes: 37
+- Currently implemented exact login/read routes: 38
 - Therefore the complete APK endpoint inventory is not yet implemented
 
 All recorded successful read entries now have an exact package route. The

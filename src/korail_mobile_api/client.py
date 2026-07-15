@@ -85,6 +85,7 @@ from .read_models import (
     MergeSeatsInquiryResponse,
     PassAvailabilityResponse,
     PassMenuResponse,
+    PassScheduleResponse,
     ProductDetailResponse,
     ProductReservationListResponse,
     ReservationHistoryResponse,
@@ -104,6 +105,7 @@ from .read_payloads import (
     build_merge_seats_inquiry_form,
     build_pass_availability_form,
     build_pass_menu_form,
+    build_pass_schedule_form,
     build_product_detail_query,
     build_product_reservations_query,
     build_service_status_query,
@@ -114,6 +116,7 @@ from .read_payloads import (
     GuideSeatConditionRequest,
     MergeSeatsInquiryRequest,
     SeatAssignmentScheduleRequest,
+    PassScheduleRequest,
 )
 from .read_parsers import (
     parse_cart_list_response,
@@ -127,6 +130,7 @@ from .read_parsers import (
     parse_merge_seats_inquiry_response,
     parse_pass_availability_response,
     parse_pass_menu_response,
+    parse_pass_schedule_response,
     parse_product_detail_response,
     parse_product_reservation_list_response,
     parse_reservation_history_response,
@@ -394,6 +398,22 @@ class KorailClient:
             lambda: parse_pass_availability_response(
                 self.http.post_form(
                     "/classes/com.korail.mobile.pass.passInfoList",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_pass_schedule(
+        self,
+        request: PassScheduleRequest,
+    ) -> PassScheduleResponse:
+        self._require_session()
+        form = build_pass_schedule_form(request)
+        return self._run_read(
+            lambda: parse_pass_schedule_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.pass.passScheduleInfoList",
                     form,
                     include_dynapath=False,
                 ).raw

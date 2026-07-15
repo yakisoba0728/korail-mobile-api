@@ -29,6 +29,11 @@
 
 ## 0.2.0 - 2026-07-14
 
+- Added the static R20 pass-schedule candidate read with a closed
+  caller-supplied request, exact DynaPath-disabled form, strict `SUCC` parser,
+  and frozen repr-safe nested train models. A conservative login gate remains
+  while the server session requirement is unverified; reservation and payment
+  calls stay excluded.
 - Added authenticated typed car-list and physical-seat inventory reads for the
   fixed main-menu/general-room contract.
 - Registered only the two exact read-only POST forms, with validation before

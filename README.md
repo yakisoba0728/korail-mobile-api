@@ -5,8 +5,8 @@ evidenced KORAIL mobile API surface. It also retains the static
 reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
-The reviewed package boundary contains 37 routes and 40 public methods. The
-current offline release gate is `1183 passed, 1 deselected`; the
+The reviewed package boundary contains 38 routes and 41 public methods. The
+current offline release gate is `1216 passed, 1 deselected`; the
 deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
@@ -226,6 +226,21 @@ The similarly named `/classes/com.korail.mobile.push.callCrew.do` route is the
 state-changing crew-call operation and remains excluded from the transport
 allowlist and public client. Reading crew request options never submits a crew
 call.
+
+### Pass schedule candidate read
+
+`get_pass_schedule(request)` exposes the statically evidenced
+`POST /classes/com.korail.mobile.pass.passScheduleInfoList` candidate lookup.
+Its frozen request requires every train, date, route, page, and pass value from
+the caller; it does not hardcode runtime menu or pass codes. The client sends
+one exact form with DynaPath disabled and accepts only a full `SUCC` envelope.
+
+The server's session rule remains unverified. Until a bounded live check can
+run after login, the client conservatively requires an authenticated session
+and the route is not documented as account-neutral. The API stops before the
+separate reservation and payment routes. See
+[docs/pass-schedule-read.md](docs/pass-schedule-read.md) for the exact request,
+typed response, and live-validation boundary.
 
 ### Typed car and physical-seat inventory reads
 

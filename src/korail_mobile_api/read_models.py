@@ -309,11 +309,33 @@ class TrainScheduleItem:
 
 
 @dataclass(frozen=True)
+class PassScheduleTrain:
+    arrival_station_code: str | None = field(default=None, repr=False)
+    arrival_station_name: str | None = field(default=None, repr=False)
+    departure_station_code: str | None = field(default=None, repr=False)
+    departure_station_name: str | None = field(default=None, repr=False)
+    detour_code: str | None = field(default=None, repr=False)
+    schedule_price: str | None = field(default=None, repr=False)
+    train_group_code: str | None = field(default=None, repr=False)
+    train_no: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
 class PassAgeOption:
     commuter_age_code: str | None = None
     display_name: str | None = None
     minimum_age: str | None = None
     maximum_age: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PassScheduleInfo:
+    trains: tuple[PassScheduleTrain, ...] = field(
+        default=(),
+        repr=False,
+    )
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
 
@@ -427,3 +449,12 @@ class CrewRequestOption:
 @dataclass(frozen=True)
 class CrewRequestListResponse(BaseKorailResponse):
     items: tuple[CrewRequestOption, ...] = ()
+
+
+@dataclass(frozen=True)
+class PassScheduleResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    schedules: tuple[PassScheduleInfo, ...] = field(
+        default=(),
+        repr=False,
+    )
