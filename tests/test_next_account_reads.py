@@ -387,6 +387,39 @@ def test_payload_builders_emit_only_closed_wire_fields():
     assert "20990101" not in repr(history)
 
 
+def test_maas_builder_rejects_query_subclasses_even_when_init_is_bypassed():
+    class UnsafeQuery(MaasServiceDetailQuery):
+        def __post_init__(self) -> None:
+            pass
+
+    query = UnsafeQuery(start_date="not-a-date", end_date=None)
+
+    with pytest.raises(TypeError, match="exact MaasServiceDetailQuery"):
+        build_maas_service_detail_form(KorailConfig(), query)
+
+
+@pytest.mark.parametrize(
+    ("start_date", "end_date"),
+    [
+        ("20990101", None),
+        ("２０９９０１０１", "20990201"),
+        ("20990230", "20990301"),
+        ("20990201", "20990131"),
+        ("20990131", "20990501"),
+    ],
+)
+def test_maas_builder_revalidates_mutated_exact_queries(
+    start_date,
+    end_date,
+):
+    query = MaasServiceDetailQuery.current()
+    object.__setattr__(query, "start_date", start_date)
+    object.__setattr__(query, "end_date", end_date)
+
+    with pytest.raises(ValueError):
+        build_maas_service_detail_form(KorailConfig(), query)
+
+
 @pytest.mark.parametrize(
     ("fixture_name", "parser", "response_type", "collection_name", "wire", "attrs"),
     [
@@ -801,7 +834,7 @@ def test_false_maas_query_is_not_silently_treated_as_current():
     client = KorailClient(transport=httpx.MockTransport(handler))
     client.session.current = _session()
     try:
-        with pytest.raises(ValueError, match="MaasServiceDetailQuery"):
+        with pytest.raises(TypeError, match="exact MaasServiceDetailQuery"):
             client.get_maas_service_details(False)
     finally:
         client.close()
@@ -956,6 +989,24 @@ def test_sensitive_models_and_raw_values_are_repr_hidden(load_json_fixture):
         "SYNTHETIC_SEAT_ATTRIBUTE",
     ):
         assert secret not in rendered
+
+
+@pytest.mark.parametrize(
+    "response_type",
+    [
+        MultiChildDiscountTargetResponse,
+        CustomerTripInfoResponse,
+        MaasServiceDetailListResponse,
+        TripChangeDateResponse,
+        TourTrainInfoResponse,
+    ],
+)
+def test_new_response_free_text_is_repr_hidden(response_type):
+    secret = "SYNTHETIC_RESPONSE_FREE_TEXT_SECRET"
+
+    response = response_type(h_msg_txt=secret)
+
+    assert secret not in repr(response)
 
 
 def test_session_expiry_clears_current_session(load_json_fixture):

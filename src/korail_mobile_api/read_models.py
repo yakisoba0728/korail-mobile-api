@@ -475,6 +475,7 @@ class MultiChildDiscountTarget:
 
 @dataclass(frozen=True)
 class MultiChildDiscountTargetResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
     targets: tuple[MultiChildDiscountTarget, ...] = field(default=(), repr=False)
 
 
@@ -517,6 +518,7 @@ class CustomerTripInfo:
 
 @dataclass(frozen=True)
 class CustomerTripInfoResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
     trips: tuple[CustomerTripInfo, ...] = field(default=(), repr=False)
 
 
@@ -547,11 +549,13 @@ class MaasServiceDetail:
 
 @dataclass(frozen=True)
 class MaasServiceDetailListResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
     details: tuple[MaasServiceDetail, ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True)
 class TripChangeDateResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
     last_run_date: str | None = field(default=None, repr=False)
     trip_change_date: str | None = field(default=None, repr=False)
     trip_change_dates: tuple[str, ...] = field(default=(), repr=False)
@@ -572,4 +576,5 @@ class TourTrainSeatInfo:
 
 @dataclass(frozen=True)
 class TourTrainInfoResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
     seat_infos: tuple[TourTrainSeatInfo, ...] = field(default=(), repr=False)

@@ -497,22 +497,34 @@ def _add_calendar_months(value: date, months: int) -> date:
     return date(year, month, min(value.day, monthrange(year, month)[1]))
 
 
+def _validate_maas_service_detail_query_values(
+    start_date: str | None,
+    end_date: str | None,
+) -> None:
+    if (start_date is None) != (end_date is None):
+        raise ValueError("MaaS history requires both dates or neither")
+    if start_date is None:
+        return
+    start = _calendar_date(start_date, "start_date")
+    end = _calendar_date(end_date, "end_date")
+    if end < start:
+        raise ValueError("end_date must not be before start_date")
+    if end > _add_calendar_months(start, 3):
+        raise ValueError(
+            "MaaS history range must be at most three calendar months"
+        )
+
+
 @dataclass(frozen=True)
 class MaasServiceDetailQuery:
     start_date: str | None = field(default=None, repr=False)
     end_date: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
-        if (self.start_date is None) != (self.end_date is None):
-            raise ValueError("MaaS history requires both dates or neither")
-        if self.start_date is None:
-            return
-        start = _calendar_date(self.start_date, "start_date")
-        end = _calendar_date(self.end_date, "end_date")
-        if end < start:
-            raise ValueError("end_date must not be before start_date")
-        if end > _add_calendar_months(start, 3):
-            raise ValueError("MaaS history range must be at most three calendar months")
+        _validate_maas_service_detail_query_values(
+            self.start_date,
+            self.end_date,
+        )
 
     @classmethod
     def current(cls) -> "MaasServiceDetailQuery":
@@ -545,8 +557,12 @@ def build_maas_service_detail_form(
     config: KorailConfig,
     query: MaasServiceDetailQuery,
 ) -> dict[str, str]:
-    if not isinstance(query, MaasServiceDetailQuery):
-        raise ValueError("query must be a MaasServiceDetailQuery")
+    if type(query) is not MaasServiceDetailQuery:
+        raise TypeError("query must be an exact MaasServiceDetailQuery")
+    _validate_maas_service_detail_query_values(
+        query.start_date,
+        query.end_date,
+    )
     form = {"Device": config.device, "Version": config.version}
     if query.start_date is not None:
         form["qryDtFrom"] = query.start_date
