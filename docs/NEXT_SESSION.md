@@ -12,12 +12,19 @@ but does not change runtime requests, routes, credentials, or live behavior.
 
 The current implementation evidence establishes:
 
-- 27 routes at the exact login/read transport boundary.
-- 30 public methods on `KorailClient`.
-- A reviewed `0.2.0` offline gate of `867 passed, 1 deselected`; the deselected
+- 31 routes at the exact login/read transport boundary.
+- 34 public methods on `KorailClient`.
+- A reviewed offline gate of `850 passed, 1 deselected`; the deselected
   test is the explicitly opted-in live-service test.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.
+
+The four newest routes are static-only P0 train reads: free-seat car guidance,
+guide-seat conditions, seat-assignment schedules, and merged-seat inquiry.
+They use frozen closed request objects, exact POST forms, strict typed parsers,
+synthetic fixtures, and repr-hidden identifiers/free text/raw mappings. No live
+call, DynaPath addition, Java-name method alias, `TrainSummary` convenience
+chain, fallback, or adjacent mutation was added.
 
 ## Completed read package
 

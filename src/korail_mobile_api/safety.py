@@ -60,6 +60,19 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
             "POST",
             "/classes/com.korail.mobile.research.TResidualSeatsResearch.do",
         ),
+        ("POST", "/classes/com.korail.mobile.trn.fresScar.do"),
+        (
+            "POST",
+            "/classes/com.korail.mobile.reservation.guideSeatCnd.do",
+        ),
+        (
+            "POST",
+            "/classes/com.korail.mobile.research.assignScheduleView.do",
+        ),
+        (
+            "POST",
+            "/classes/com.korail.mobile.research.mergeSeatsC.do",
+        ),
     }
 )
 
@@ -161,6 +174,59 @@ KORAIL_EXACT_REQUEST_FIELDS = {
                 "ctlDvCd",
             }
         )
+    ),
+    "/classes/com.korail.mobile.trn.fresScar.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "runDt",
+            "trnNo",
+            "dptStnConsOrdr",
+            "arvStnConsOrdr",
+            "dptStnRunOrdr",
+            "arvStnRunOrdr",
+        }
+    ),
+    "/classes/com.korail.mobile.reservation.guideSeatCnd.do": (
+        frozenset({"Device", "Version", "Key", "rqSeatAttCd"})
+    ),
+    "/classes/com.korail.mobile.research.assignScheduleView.do": (
+        frozenset(
+            {
+                "Device",
+                "Version",
+                "Key",
+                "menuId",
+                "dptDt",
+                "dptTm",
+                "dptRsStnNm",
+                "arvRsStnNm",
+                "trnGpCd",
+                "psrmClCd",
+                "seatAttCd1",
+                "psgNum1",
+                "stlbDturDvNm1",
+                "dirtChtnDvCd",
+                "chtnArvRsStnNm",
+            }
+        )
+    ),
+    "/classes/com.korail.mobile.research.mergeSeatsC.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "abrdDt",
+            "runDt",
+            "trnNo",
+            "dptRsStnNm",
+            "arvRsStnNm",
+            "selRsStnNm",
+            "psrmClCd",
+            "seatAttCd",
+            "totPsgNum",
+        }
     ),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS

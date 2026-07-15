@@ -59,10 +59,14 @@ from .read_models import (
     DelayDiscountTicketListResponse,
     DepositBankListResponse,
     DiscountCouponListResponse,
+    FreeSeatCarResponse,
+    GuideSeatConditionResponse,
+    MergeSeatsInquiryResponse,
     PassAvailabilityResponse,
     ProductDetailResponse,
     ProductReservationListResponse,
     ReservationHistoryResponse,
+    SeatAssignmentScheduleResponse,
     ServiceStatusResponse,
     TicketReceiptResponse,
     TripMenuResponse,
@@ -71,23 +75,35 @@ from .read_payloads import (
     build_cart_list_form,
     build_delay_discount_ticket_form,
     build_discount_coupon_form,
+    build_free_seat_car_form,
+    build_guide_seat_condition_form,
+    build_merge_seats_inquiry_form,
     build_pass_availability_form,
     build_product_detail_query,
     build_product_reservations_query,
     build_service_status_query,
+    build_seat_assignment_schedule_form,
     build_ticket_receipt_form,
     build_trip_menu_form,
+    FreeSeatCarRequest,
+    GuideSeatConditionRequest,
+    MergeSeatsInquiryRequest,
+    SeatAssignmentScheduleRequest,
 )
 from .read_parsers import (
     parse_cart_list_response,
     parse_delay_discount_ticket_response,
     parse_deposit_bank_response,
     parse_discount_coupon_response,
+    parse_free_seat_car_response,
+    parse_guide_seat_condition_response,
+    parse_merge_seats_inquiry_response,
     parse_pass_availability_response,
     parse_product_detail_response,
     parse_product_reservation_list_response,
     parse_reservation_history_response,
     parse_service_status_response,
+    parse_seat_assignment_schedule_response,
     parse_ticket_receipt_response,
     parse_trip_menu_response,
 )
@@ -390,6 +406,66 @@ class KorailClient:
                     include_common=True,
                     include_dynapath=False,
                     raise_on_fail=False,
+                ).raw
+            )
+        )
+
+    def get_free_seat_car_info(
+        self,
+        request: FreeSeatCarRequest,
+    ) -> FreeSeatCarResponse:
+        form = build_free_seat_car_form(request)
+        return self._run_read(
+            lambda: parse_free_seat_car_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.trn.fresScar.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_guide_seat_condition(
+        self,
+        request: GuideSeatConditionRequest,
+    ) -> GuideSeatConditionResponse:
+        form = build_guide_seat_condition_form(request)
+        return self._run_read(
+            lambda: parse_guide_seat_condition_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.reservation.guideSeatCnd.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_seat_assignment_schedule(
+        self,
+        request: SeatAssignmentScheduleRequest,
+    ) -> SeatAssignmentScheduleResponse:
+        form = build_seat_assignment_schedule_form(request)
+        return self._run_read(
+            lambda: parse_seat_assignment_schedule_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.research.assignScheduleView.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_merge_seats_inquiry(
+        self,
+        request: MergeSeatsInquiryRequest,
+    ) -> MergeSeatsInquiryResponse:
+        form = build_merge_seats_inquiry_form(request)
+        return self._run_read(
+            lambda: parse_merge_seats_inquiry_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.research.mergeSeatsC.do",
+                    form,
+                    include_dynapath=False,
                 ).raw
             )
         )

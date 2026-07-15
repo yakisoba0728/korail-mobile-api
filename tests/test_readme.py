@@ -71,7 +71,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "| 성공 | 27 |" in status
     assert "| 실패 | 8 |" in status
     assert "| 미실행 | 130 |" in status
-    assert "Package coverage: 27 exact login/read routes" in status
+    assert "Package coverage: 31 exact login/read routes" in status
     assert "bounded live structural evidence" in status
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
@@ -79,8 +79,8 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "성공 25 / 실패 8 / 미실행 132" not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
-    assert "27 exact login/read routes" in progress
-    assert "30 public methods" in progress
+    assert "31 exact login/read routes" in progress
+    assert "34 public methods" in progress
     assert "75" in progress
     assert "IRG000000" in progress
 
@@ -132,3 +132,33 @@ def test_docs_describe_raw_backed_typed_core_and_compatibility_boundary():
         "h_rsv_wait_ps_cnt",
     ):
         assert key in readme
+
+
+def test_readme_documents_static_only_p0_train_reads_and_closed_requests():
+    text = README.read_text(encoding="utf-8")
+    for method_name in (
+        "get_free_seat_car_info",
+        "get_guide_seat_condition",
+        "get_seat_assignment_schedule",
+        "get_merge_seats_inquiry",
+    ):
+        assert f"{method_name}(" in text
+    for request_name in (
+        "FreeSeatCarRequest",
+        "GuideSeatConditionRequest",
+        "SeatAssignmentScheduleRequest",
+        "MergeSeatsInquiryRequest",
+    ):
+        assert request_name in text
+    for java_name in (
+        "getFresScar",
+        "getGuideSeatCnd",
+        "getAssignScheduleView",
+        "getMergeSeatsInquiry",
+    ):
+        assert java_name in text
+    assert "31 routes and 34 public methods" in text
+    assert "static-only" in text
+    assert "synthetic fixtures" in text
+    assert "does not accept `TrainSummary`" in text
+    assert "No live call was made" in text

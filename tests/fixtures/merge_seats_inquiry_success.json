@@ -1,0 +1,45 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic-merge-envelope-secret",
+  "strResult": "SUCCESS",
+  "midStnList": [
+    {
+      "rsStnCd": "SYNTHETIC-MID-STATION-CODE",
+      "rsStnNm": "synthetic-mid-station-name-secret",
+      "runOrdr": "000005",
+      "syntheticRawMarker": "synthetic-mid-station-raw-secret"
+    }
+  ],
+  "trn_infos": {
+    "h_merge_rsv_psb_flg": "SYNTHETIC-MERGE-POSSIBLE",
+    "trn_info": [
+      {
+        "h_trn_no": "99002",
+        "h_trn_gp_cd": "100",
+        "h_trn_clsf_cd": "SYNTHETIC-MERGE-CLASS",
+        "h_trn_clsf_nm": "synthetic-merge-class-name-secret",
+        "h_run_dt": "20990102",
+        "h_dpt_dt": "20990102",
+        "h_dpt_tm": "070809",
+        "h_arv_dt": "20990102",
+        "h_arv_tm": "101112",
+        "h_dpt_rs_stn_cd": "SYNTHETIC-MERGE-ORIGIN-CODE",
+        "h_dpt_rs_stn_nm": "synthetic-merge-origin-name-secret",
+        "h_arv_rs_stn_cd": "SYNTHETIC-MERGE-DESTINATION-CODE",
+        "h_arv_rs_stn_nm": "synthetic-merge-destination-name-secret",
+        "h_dpt_stn_cons_ordr": "000011",
+        "h_arv_stn_cons_ordr": "000020",
+        "h_dpt_stn_run_ordr": "000012",
+        "h_arv_stn_run_ordr": "000019",
+        "h_gen_rsv_cd": "SYNTHETIC-MERGE-GENERAL-CODE",
+        "h_spe_rsv_cd": "SYNTHETIC-MERGE-SPECIAL-CODE",
+        "h_free_rsv_cd": "SYNTHETIC-MERGE-FREE-CODE",
+        "h_stnd_rsv_cd": "SYNTHETIC-MERGE-STANDING-CODE",
+        "h_rd_seat_map_flg": "SYNTHETIC-MERGE-SEAT-MAP-FLAG",
+        "syntheticRawMarker": "synthetic-merge-train-raw-secret"
+      }
+    ],
+    "syntheticRawMarker": "synthetic-merge-container-raw-secret"
+  },
+  "syntheticRawMarker": "synthetic-merge-raw-secret"
+}

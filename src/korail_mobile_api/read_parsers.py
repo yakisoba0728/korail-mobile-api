@@ -17,6 +17,10 @@ from .read_models import (
     DepositBankListResponse,
     DiscountCoupon,
     DiscountCouponListResponse,
+    FreeSeatCarResponse,
+    GuideSeatConditionResponse,
+    IntermediateStation,
+    MergeSeatsInquiryResponse,
     PassAvailabilityResponse,
     PassOffice,
     ProductDetailResponse,
@@ -25,12 +29,14 @@ from .read_models import (
     ReceiptPayment,
     ReservationHistoryResponse,
     ReservationHistoryTrain,
+    SeatAssignmentScheduleResponse,
     ServiceStatusResponse,
     TicketReceipt,
     TicketReceiptResponse,
     TripMenuContent,
     TripMenuItem,
     TripMenuResponse,
+    TrainScheduleItem,
 )
 
 
@@ -762,5 +768,234 @@ def parse_reservation_history_response(
             )
     return ReservationHistoryResponse(
         items=tuple(trains),
+        **_response_fields(raw),
+    )
+
+
+def parse_free_seat_car_response(
+    raw: Mapping[str, Any],
+) -> FreeSeatCarResponse:
+    _validate_envelope(raw)
+    return FreeSeatCarResponse(
+        title=_optional_string(raw, "fresTtl", "free seat car response"),
+        car_no=_optional_string(
+            raw,
+            "fresScarNo",
+            "free seat car response",
+        ),
+        content=_optional_string(
+            raw,
+            "fresCont",
+            "free seat car response",
+        ),
+        **_response_fields(raw),
+    )
+
+
+def parse_guide_seat_condition_response(
+    raw: Mapping[str, Any],
+) -> GuideSeatConditionResponse:
+    _validate_envelope(raw)
+    return GuideSeatConditionResponse(**_response_fields(raw))
+
+
+def _parse_train_schedule_item(
+    raw: Mapping[str, Any],
+) -> TrainScheduleItem:
+    context = "train schedule item"
+    return TrainScheduleItem(
+        train_no=_optional_string(raw, "h_trn_no", context),
+        train_group_code=_optional_string(raw, "h_trn_gp_cd", context),
+        train_class_code=_optional_string(
+            raw,
+            "h_trn_clsf_cd",
+            context,
+        ),
+        train_class_name=_optional_string(
+            raw,
+            "h_trn_clsf_nm",
+            context,
+        ),
+        run_date=_optional_string(raw, "h_run_dt", context),
+        departure_date=_optional_string(raw, "h_dpt_dt", context),
+        departure_time=_optional_string(raw, "h_dpt_tm", context),
+        arrival_date=_optional_string(raw, "h_arv_dt", context),
+        arrival_time=_optional_string(raw, "h_arv_tm", context),
+        departure_station_code=_optional_string(
+            raw,
+            "h_dpt_rs_stn_cd",
+            context,
+        ),
+        departure_station_name=_optional_string(
+            raw,
+            "h_dpt_rs_stn_nm",
+            context,
+        ),
+        arrival_station_code=_optional_string(
+            raw,
+            "h_arv_rs_stn_cd",
+            context,
+        ),
+        arrival_station_name=_optional_string(
+            raw,
+            "h_arv_rs_stn_nm",
+            context,
+        ),
+        departure_construction_order=_optional_string(
+            raw,
+            "h_dpt_stn_cons_ordr",
+            context,
+        ),
+        arrival_construction_order=_optional_string(
+            raw,
+            "h_arv_stn_cons_ordr",
+            context,
+        ),
+        departure_run_order=_optional_string(
+            raw,
+            "h_dpt_stn_run_ordr",
+            context,
+        ),
+        arrival_run_order=_optional_string(
+            raw,
+            "h_arv_stn_run_ordr",
+            context,
+        ),
+        car_type_name=_optional_string(raw, "h_car_tp_nm", context),
+        general_room_name=_optional_string(
+            raw,
+            "h_gen_psrm_cl_nm",
+            context,
+        ),
+        special_room_name=_optional_string(
+            raw,
+            "h_spe_psrm_cl_nm",
+            context,
+        ),
+        general_reservation_code=_optional_string(
+            raw,
+            "h_gen_rsv_cd",
+            context,
+        ),
+        special_reservation_code=_optional_string(
+            raw,
+            "h_spe_rsv_cd",
+            context,
+        ),
+        free_seat_reservation_code=_optional_string(
+            raw,
+            "h_free_rsv_cd",
+            context,
+        ),
+        standing_reservation_code=_optional_string(
+            raw,
+            "h_stnd_rsv_cd",
+            context,
+        ),
+        seat_map_flag=_optional_string(
+            raw,
+            "h_rd_seat_map_flg",
+            context,
+        ),
+        delay_sale_flag=_optional_string(
+            raw,
+            "h_dlay_sale_flg",
+            context,
+        ),
+        wait_reservation_flag=_optional_string(
+            raw,
+            "h_wait_rsv_flg",
+            context,
+        ),
+        reservation_possible_name=_optional_string(
+            raw,
+            "h_rsv_psb_nm",
+            context,
+        ),
+        special_reservation_possible_name=_optional_string(
+            raw,
+            "h_spe_rsv_psb_nm",
+            context,
+        ),
+        info_text=_optional_string(raw, "h_info_txt", context),
+        popup_message=_optional_string(raw, "h_popup_msg", context),
+        raw=raw,
+    )
+
+
+def _parse_train_schedule_container(
+    raw: Mapping[str, Any],
+    context: str,
+) -> tuple[str | None, tuple[TrainScheduleItem, ...]]:
+    container = _optional_mapping(raw, "trn_infos", context)
+    if container is None:
+        return None, ()
+    merge_flag = _optional_string(
+        container,
+        "h_merge_rsv_psb_flg",
+        context,
+    )
+    trains = tuple(
+        _parse_train_schedule_item(_row(value, f"{context} trn_info"))
+        for value in _optional_list(container, "trn_info", context)
+    )
+    return merge_flag, trains
+
+
+def parse_seat_assignment_schedule_response(
+    raw: Mapping[str, Any],
+) -> SeatAssignmentScheduleResponse:
+    _validate_envelope(raw)
+    merge_flag, trains = _parse_train_schedule_container(
+        raw,
+        "seat assignment schedule",
+    )
+    return SeatAssignmentScheduleResponse(
+        next_page_flag=_optional_string(
+            raw,
+            "h_next_pg_flg",
+            "seat assignment schedule",
+        ),
+        merge_reservation_possible_flag=merge_flag,
+        trains=trains,
+        **_response_fields(raw),
+    )
+
+
+def parse_merge_seats_inquiry_response(
+    raw: Mapping[str, Any],
+) -> MergeSeatsInquiryResponse:
+    _validate_envelope(raw)
+    stations = []
+    for value in _optional_list(raw, "midStnList", "merge seats inquiry"):
+        station = _row(value, "merge seats inquiry midStnList")
+        stations.append(
+            IntermediateStation(
+                code=_optional_string(
+                    station,
+                    "rsStnCd",
+                    "merge seats intermediate station",
+                ),
+                name=_optional_string(
+                    station,
+                    "rsStnNm",
+                    "merge seats intermediate station",
+                ),
+                run_order=_optional_string(
+                    station,
+                    "runOrdr",
+                    "merge seats intermediate station",
+                ),
+                raw=station,
+            )
+        )
+    merge_flag, trains = _parse_train_schedule_container(
+        raw,
+        "merge seats inquiry",
+    )
+    return MergeSeatsInquiryResponse(
+        merge_reservation_possible_flag=merge_flag,
+        intermediate_stations=tuple(stations),
+        trains=trains,
         **_response_fields(raw),
     )

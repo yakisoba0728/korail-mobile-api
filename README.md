@@ -5,8 +5,8 @@ evidenced KORAIL mobile API surface. It also retains the static
 reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
-The reviewed package boundary contains 27 routes and 30 public methods. The
-current `0.2.0` offline release gate is `867 passed, 1 deselected`; the
+The reviewed package boundary contains 31 routes and 34 public methods. The
+current offline release gate is `850 passed, 1 deselected`; the
 deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
@@ -270,6 +270,41 @@ station, date, credential, cookie, Sid, token, or URL. A later post-fix helper
 confirmation stopped at the service-status preflight before login transport,
 so it made no search, car-list, or seat-list request and was not rapidly
 retried.
+
+### Static-only P0 train reads
+
+Four additional APK-evidenced read operations are exposed through closed,
+frozen request objects. This increment is static-only: its contracts come from
+the tracked Retrofit declarations, response DTOs, and direct APK call sites.
+No live call was made, and all parser coverage uses synthetic fixtures.
+
+| Public method | Frozen request | Documented APK name and exact route |
+|---|---|---|
+| `get_free_seat_car_info(request)` | `FreeSeatCarRequest` | `getFresScar`; `POST /classes/com.korail.mobile.trn.fresScar.do` |
+| `get_guide_seat_condition(request)` | `GuideSeatConditionRequest` | `getGuideSeatCnd`; `POST /classes/com.korail.mobile.reservation.guideSeatCnd.do` |
+| `get_seat_assignment_schedule(request)` | `SeatAssignmentScheduleRequest` | `getAssignScheduleView`; `POST /classes/com.korail.mobile.research.assignScheduleView.do` |
+| `get_merge_seats_inquiry(request)` | `MergeSeatsInquiryRequest` | `getMergeSeatsInquiry`; `POST /classes/com.korail.mobile.research.mergeSeatsC.do` |
+
+The Java names above are documentation aliases only; the client does not add
+duplicate camelCase methods. Each public method accepts exactly its matching
+request type, composes the documented form with `Device`, `Version`, and `Key`,
+issues one POST, and forces `include_dynapath=False`. The forms cannot accept a
+caller-supplied mapping or additional wire field. Date/time shapes, ASCII train
+and order identifiers, transfer type, and passenger counts are validated
+before transport.
+
+These reads do not require a local authenticated-session precondition because
+their requests contain no account, PNR, ticket, payment, or point identifier.
+They still use the normal strict envelope/application-error handling, and a
+server `P058` clears any existing local session before raising
+`KorailSessionExpiredError`.
+
+The schedule responses share an immutable `TrainScheduleItem` representation;
+the merge response additionally exposes immutable intermediate stations. Raw
+mappings, train/station/car identifiers, and server free text are repr-hidden.
+This phase deliberately does not accept `TrainSummary` and adds no convenience
+chaining from a search result, seat selection, reservation, fallback request,
+or live helper call.
 
 ### UUID and MAAS station reads
 

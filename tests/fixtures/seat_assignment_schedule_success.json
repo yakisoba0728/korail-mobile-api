@@ -1,0 +1,47 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic-assignment-envelope-secret",
+  "strResult": "SUCCESS",
+  "h_next_pg_flg": "Y",
+  "trn_infos": {
+    "h_merge_rsv_psb_flg": "SYNTHETIC-MERGE-FLAG",
+    "trn_info": [
+      {
+        "h_trn_no": "99001",
+        "h_trn_gp_cd": "109",
+        "h_trn_clsf_cd": "SYNTHETIC-CLASS-CODE",
+        "h_trn_clsf_nm": "synthetic-class-name-secret",
+        "h_run_dt": "20990101",
+        "h_dpt_dt": "20990101",
+        "h_dpt_tm": "010203",
+        "h_arv_dt": "20990101",
+        "h_arv_tm": "040506",
+        "h_dpt_rs_stn_cd": "SYNTHETIC-ORIGIN-CODE",
+        "h_dpt_rs_stn_nm": "synthetic-origin-name-secret",
+        "h_arv_rs_stn_cd": "SYNTHETIC-DESTINATION-CODE",
+        "h_arv_rs_stn_nm": "synthetic-destination-name-secret",
+        "h_dpt_stn_cons_ordr": "000001",
+        "h_arv_stn_cons_ordr": "000010",
+        "h_dpt_stn_run_ordr": "000002",
+        "h_arv_stn_run_ordr": "000009",
+        "h_car_tp_nm": "synthetic-car-type-secret",
+        "h_gen_psrm_cl_nm": "synthetic-general-room-secret",
+        "h_spe_psrm_cl_nm": "synthetic-special-room-secret",
+        "h_gen_rsv_cd": "SYNTHETIC-GENERAL-CODE",
+        "h_spe_rsv_cd": "SYNTHETIC-SPECIAL-CODE",
+        "h_free_rsv_cd": "SYNTHETIC-FREE-CODE",
+        "h_stnd_rsv_cd": "SYNTHETIC-STANDING-CODE",
+        "h_rd_seat_map_flg": "SYNTHETIC-SEAT-MAP-FLAG",
+        "h_dlay_sale_flg": "SYNTHETIC-DELAY-FLAG",
+        "h_wait_rsv_flg": "SYNTHETIC-WAIT-FLAG",
+        "h_rsv_psb_nm": "synthetic-reservation-possible-secret",
+        "h_spe_rsv_psb_nm": "synthetic-special-possible-secret",
+        "h_info_txt": "synthetic-info-text-secret",
+        "h_popup_msg": "synthetic-popup-message-secret",
+        "syntheticRawMarker": "synthetic-assignment-row-raw-secret"
+      }
+    ],
+    "syntheticRawMarker": "synthetic-assignment-container-raw-secret"
+  },
+  "syntheticRawMarker": "synthetic-assignment-raw-secret"
+}

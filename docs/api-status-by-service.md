@@ -15,7 +15,7 @@
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
 
-Package coverage: 27 exact login/read routes. The package now exposes the ten
+Package coverage: 31 exact login/read routes. The package now exposes the ten
 previously successful but unwrapped reads plus the already registered service
 status cache as 11 public methods, plus the two typed car and physical-seat
 reads. The latter now have bounded live structural evidence: both returned
@@ -24,6 +24,9 @@ or identifiers. A later eleven-method wrapper replay parsed five reads, stopped
 four at `KorailProtocolError`, and omitted two identifier-dependent calls. The
 runtime rows below remain route-level historical outcomes; the four current
 wrapper parser mismatches are tracked in `docs/IMPLEMENTATION_PROGRESS.md`.
+The additional four P0 train-adjacent routes are implemented from static APK
+contracts with synthetic fixtures only; their historical rows remain
+`미실행`, and no live-success claim is made for them.
 
 ## Service Index
 

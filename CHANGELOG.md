@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Added four static-only, typed P0 train reads for free-seat car guidance,
+  guide-seat conditions, seat-assignment schedules, and merged-seat inquiry.
+- Added frozen closed request objects, exact POST field allowlists, strict
+  response parsers, repr-hidden identifiers/free text/raw mappings, and
+  synthetic-only fixtures without adding a live call or DynaPath route.
+- Kept the Java Retrofit names as documentation aliases only and deliberately
+  omitted `TrainSummary` convenience chaining and every adjacent mutation.
+
 ## 0.2.0 - 2026-07-14
 
 - Added authenticated typed car-list and physical-seat inventory reads for the

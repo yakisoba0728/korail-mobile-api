@@ -245,3 +245,88 @@ class ReservationHistoryResponse(BaseKorailResponse):
     @property
     def trains(self) -> tuple[ReservationHistoryTrain, ...]:
         return self.items
+
+
+@dataclass(frozen=True)
+class FreeSeatCarResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    title: str | None = field(default=None, repr=False)
+    car_no: str | None = field(default=None, repr=False)
+    content: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class GuideSeatConditionResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class TrainScheduleItem:
+    train_no: str | None = field(default=None, repr=False)
+    train_group_code: str | None = field(default=None, repr=False)
+    train_class_code: str | None = field(default=None, repr=False)
+    train_class_name: str | None = field(default=None, repr=False)
+    run_date: str | None = field(default=None, repr=False)
+    departure_date: str | None = field(default=None, repr=False)
+    departure_time: str | None = field(default=None, repr=False)
+    arrival_date: str | None = field(default=None, repr=False)
+    arrival_time: str | None = field(default=None, repr=False)
+    departure_station_code: str | None = field(default=None, repr=False)
+    departure_station_name: str | None = field(default=None, repr=False)
+    arrival_station_code: str | None = field(default=None, repr=False)
+    arrival_station_name: str | None = field(default=None, repr=False)
+    departure_construction_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    arrival_construction_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    departure_run_order: str | None = field(default=None, repr=False)
+    arrival_run_order: str | None = field(default=None, repr=False)
+    car_type_name: str | None = field(default=None, repr=False)
+    general_room_name: str | None = field(default=None, repr=False)
+    special_room_name: str | None = field(default=None, repr=False)
+    general_reservation_code: str | None = field(default=None, repr=False)
+    special_reservation_code: str | None = field(default=None, repr=False)
+    free_seat_reservation_code: str | None = field(
+        default=None,
+        repr=False,
+    )
+    standing_reservation_code: str | None = field(default=None, repr=False)
+    seat_map_flag: str | None = field(default=None, repr=False)
+    delay_sale_flag: str | None = field(default=None, repr=False)
+    wait_reservation_flag: str | None = field(default=None, repr=False)
+    reservation_possible_name: str | None = field(default=None, repr=False)
+    special_reservation_possible_name: str | None = field(
+        default=None,
+        repr=False,
+    )
+    info_text: str | None = field(default=None, repr=False)
+    popup_message: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class SeatAssignmentScheduleResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    next_page_flag: str | None = None
+    merge_reservation_possible_flag: str | None = None
+    trains: tuple[TrainScheduleItem, ...] = ()
+
+
+@dataclass(frozen=True)
+class IntermediateStation:
+    code: str | None = field(default=None, repr=False)
+    name: str | None = field(default=None, repr=False)
+    run_order: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class MergeSeatsInquiryResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    merge_reservation_possible_flag: str | None = None
+    intermediate_stations: tuple[IntermediateStation, ...] = ()
+    trains: tuple[TrainScheduleItem, ...] = ()

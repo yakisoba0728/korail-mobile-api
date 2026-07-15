@@ -834,9 +834,9 @@ def test_repository_truth_and_full_mutation_policy() -> None:
     readme = (ROOT / "README.md").read_text()
     handoff = (ROOT / "docs/NEXT_SESSION.md").read_text()
     for document in (readme, handoff):
-        assert "27 routes" in document
-        assert "30 public methods" in document
-        assert "867 passed" in document and "1 deselected" in document
+        assert "31 routes" in document
+        assert "34 public methods" in document
+        assert "850 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
         assert "5 cars" in document
         assert "75 seat rows" in document

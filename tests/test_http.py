@@ -349,7 +349,7 @@ def test_read_only_route_registry_accepts_current_public_requests(method, path):
 
 
 def test_read_only_route_registry_has_exact_expanded_count():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 27
+    assert len(KORAIL_READ_ONLY_ROUTES) == 31
 
 
 def test_exact_form_field_mapping_remains_a_compatibility_alias():

@@ -1,0 +1,9 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic-free-seat-envelope-secret",
+  "strResult": "SUCCESS",
+  "fresCont": "synthetic-free-seat-content-secret",
+  "fresScarNo": "SYNTHETIC-CAR-SECRET",
+  "fresTtl": "synthetic-free-seat-title-secret",
+  "syntheticRawMarker": "synthetic-free-seat-raw-secret"
+}
