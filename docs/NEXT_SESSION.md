@@ -15,7 +15,7 @@ The current implementation evidence establishes:
 
 - 38 routes at the exact login/read transport boundary.
 - 41 public methods on `KorailClient`.
-- A reviewed offline gate of `1216 passed, 1 deselected`; the deselected
+- A reviewed offline gate of `1246 passed, 1 deselected`; the deselected
   test is the explicitly opted-in live-service test.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.

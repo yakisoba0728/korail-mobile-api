@@ -26,6 +26,9 @@
   contracts are covered by synthetic fixtures only.
 - Reject limousine query subclasses and invoke each concrete dataclass
   validator non-virtually before Sid generation or transport.
+- Require exact `strResult=SUCC` for all P0 menu and limousine typed parsers.
+- Normalize live-evidenced JSON integer and ASCII decimal-string station popup
+  types and actual arrival delay counts without accepting broader coercions.
 
 ## 0.2.0 - 2026-07-14
 

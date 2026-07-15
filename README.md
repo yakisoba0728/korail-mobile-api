@@ -6,7 +6,7 @@ reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
 The reviewed package boundary contains 38 routes and 41 public methods. The
-current offline release gate is `1216 passed, 1 deselected`; the
+current offline release gate is `1246 passed, 1 deselected`; the
 deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
@@ -288,6 +288,11 @@ Existing routes, methods, and request payload semantics remain unchanged.
 Response and nested raw mappings remain `repr=False`, as do newly promoted
 server identifiers, URLs, and free-text messages. This typing increment does
 not use the promoted values to change the fixed seat request forms.
+
+Retained raw replay also established that station `popupType` and actual
+arrival delay count may arrive as either JSON integers or finite ASCII decimal
+strings. Both forms normalize to typed integers; empty, signed, non-ASCII,
+boolean, and floating-point values remain rejected.
 
 The separately opted-in evidence command is not part of the broad live smoke:
 

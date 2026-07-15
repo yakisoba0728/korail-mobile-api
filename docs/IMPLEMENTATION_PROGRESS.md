@@ -151,7 +151,13 @@ mutation routes are not callable.
   synthetic or mocked and perform no live I/O.
 - Pass-schedule TDD RED reported 33 expected missing-contract failures. Its
   focused GREEN reports `33 passed` with no live I/O.
-- The full offline release gate reports `1216 passed, 1 deselected`;
+- Integrated review found that three P0 menu and three limousine parsers could
+  accept non-`SUCC` success-shaped envelopes. All six now require exact
+  `strResult=SUCC`. Retained raw replay parsed 24 responses, preserved two
+  expected pre-login `P058` responses, and reported zero unexpected failures;
+  it also confirmed ASCII decimal strings for station popup types and actual
+  arrival delay counts.
+- The full offline release gate reports `1246 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution

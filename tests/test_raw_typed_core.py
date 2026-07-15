@@ -67,6 +67,43 @@ def test_station_info_parser_and_normal_station_data_are_typed_and_repr_safe(
         assert secret not in rendered
 
 
+def test_live_evidenced_ascii_decimal_station_and_delay_fields_are_normalized(
+    load_json_fixture,
+):
+    station_raw = load_json_fixture("raw_typed_station_data.json")
+    station_raw["stns"]["stn"][0]["popupType"] = "7"
+    station = parsers.parse_station_data_response(
+        _partial_response(station_raw)
+    ).stations[0]
+
+    schedule_raw = load_json_fixture("raw_typed_train_schedule.json")
+    schedule_raw["dlayList"][0]["actArvDlayTnum"] = "3"
+    stop = parsers.parse_train_schedule_response(
+        _enveloped_response(schedule_raw)
+    ).stops[0]
+
+    assert station.popup_type == 7
+    assert stop.actual_arrival_delay_count == 3
+
+
+@pytest.mark.parametrize("value", ["", "-1", "１", True, 1.5])
+def test_live_evidenced_optional_integer_fields_still_reject_invalid_values(
+    load_json_fixture,
+    value,
+):
+    station_raw = load_json_fixture("raw_typed_station_data.json")
+    station_raw["stns"]["stn"][0]["popupType"] = value
+    with pytest.raises(KorailProtocolError):
+        parsers.parse_station_data_response(_partial_response(station_raw))
+
+    schedule_raw = load_json_fixture("raw_typed_train_schedule.json")
+    schedule_raw["dlayList"][0]["actArvDlayTnum"] = value
+    with pytest.raises(KorailProtocolError):
+        parsers.parse_train_schedule_response(
+            _enveloped_response(schedule_raw)
+        )
+
+
 @pytest.mark.parametrize("count", [None, True, -1, "-1", " 42", 4.2])
 def test_station_info_parser_rejects_invalid_count(
     load_json_fixture,

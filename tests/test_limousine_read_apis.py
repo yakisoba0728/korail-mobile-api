@@ -760,6 +760,36 @@ def test_parsers_reject_malformed_documented_containers_and_scalars(
         parser(_base(raw))
 
 
+@pytest.mark.parametrize(
+    ("fixture", "parser"),
+    [
+        (
+            "limousine_schedule_success.json",
+            parse_limousine_schedule_response,
+        ),
+        (
+            "limousine_seat_inventory_success.json",
+            parse_limousine_seat_inventory_response,
+        ),
+        (
+            "limousine_schedule_view_success.json",
+            parse_limousine_schedule_view_response,
+        ),
+    ],
+)
+@pytest.mark.parametrize("str_result", [None, "", "ERROR", "SUCCESS"])
+def test_limousine_parsers_require_exact_succ(
+    load_json_fixture,
+    fixture,
+    parser,
+    str_result,
+):
+    raw = load_json_fixture(fixture)
+    raw["strResult"] = str_result
+    with pytest.raises(KorailProtocolError):
+        parser(_base(raw))
+
+
 def test_schedule_parsers_accept_statically_nullable_empty_containers(
     load_json_fixture,
 ):

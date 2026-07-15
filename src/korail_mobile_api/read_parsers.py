@@ -357,7 +357,7 @@ def _parse_pass_goods_info(
 
 
 def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
-    _validate_envelope(raw)
+    _validate_strict_read_envelope(raw)
     items = []
     for value in _optional_list(raw, "list", "pass menu"):
         item = _row(value, "pass menu list")
@@ -464,7 +464,7 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
 def parse_commuter_kind_menu_response(
     raw: Mapping[str, Any],
 ) -> CommuterKindMenuResponse:
-    _validate_envelope(raw)
+    _validate_strict_read_envelope(raw)
     return CommuterKindMenuResponse(
         after_day=_optional_string(raw, "afterDay", "commuter kind menu"),
         agreement=_optional_string(raw, "agree", "commuter kind menu"),
@@ -485,7 +485,7 @@ def parse_commuter_kind_menu_response(
 def parse_crew_request_list_response(
     raw: Mapping[str, Any],
 ) -> CrewRequestListResponse:
-    _validate_envelope(raw)
+    _validate_strict_read_envelope(raw)
     items = []
     for value in _optional_list(raw, "prsList", "crew request list"):
         item = _row(value, "crew request list prsList")

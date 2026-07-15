@@ -353,6 +353,27 @@ def test_p0_menu_parsers_preserve_application_and_session_errors(parser_name):
 
 
 @pytest.mark.parametrize(
+    "parser_name",
+    (
+        "parse_pass_menu_response",
+        "parse_commuter_kind_menu_response",
+        "parse_crew_request_list_response",
+    ),
+)
+@pytest.mark.parametrize("str_result", [None, "", "ERROR", "SUCCESS"])
+def test_p0_menu_parsers_require_exact_succ(parser_name, str_result):
+    parser = getattr(read_parsers, parser_name)
+    with pytest.raises(KorailProtocolError):
+        parser(
+            {
+                "h_msg_cd": "SYNTHETIC-NON-SUCCESS",
+                "h_msg_txt": "synthetic non-success",
+                "strResult": str_result,
+            }
+        )
+
+
+@pytest.mark.parametrize(
     ("fixture_name", "parser_name"),
     (
         ("pass_menu_success.json", "parse_pass_menu_response"),

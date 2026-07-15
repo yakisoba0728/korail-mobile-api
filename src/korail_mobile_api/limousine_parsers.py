@@ -89,6 +89,13 @@ def _response_fields(response: BaseKorailResponse) -> dict[str, Any]:
     }
 
 
+def _require_exact_success(response: BaseKorailResponse) -> None:
+    if response.str_result != "SUCC":
+        raise KorailProtocolError(
+            "KORAIL limousine read strResult must be exact SUCC"
+        )
+
+
 _SCHEDULE_FIELDS = {
     "arrival_date": "arvDt",
     "arrival_station_code": "arvRsStnCd",
@@ -116,6 +123,7 @@ _SCHEDULE_FIELDS = {
 def parse_limousine_schedule_response(
     response: BaseKorailResponse,
 ) -> LimousineScheduleResponse:
+    _require_exact_success(response)
     raw = response.raw
     schedules = []
     for value in _nullable_list(raw, "trainList", "limousine schedule"):
@@ -166,6 +174,7 @@ _SEAT_FIELDS = {
 def parse_limousine_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> LimousineSeatInventoryResponse:
+    _require_exact_success(response)
     raw = response.raw
     seats = []
     for value in _required_list(raw, "seatList", "limousine seat inventory"):
@@ -318,6 +327,7 @@ def _recommended_products(
 def parse_limousine_schedule_view_response(
     response: BaseKorailResponse,
 ) -> LimousineScheduleViewResponse:
+    _require_exact_success(response)
     raw = response.raw
     container_value = raw.get("trn_infos")
     if container_value is None:

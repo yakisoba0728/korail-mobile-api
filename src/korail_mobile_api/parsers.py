@@ -99,11 +99,11 @@ def _typed_optional_int(
     value = data.get(key)
     if value is None:
         return None
-    if type(value) is not int:
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be an integer or null"
-        )
-    return value
+    return _typed_non_negative_integer_value(
+        value,
+        key,
+        context=context,
+    )
 
 
 def _typed_non_negative_integer_value(
