@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from typing import Any, Mapping
+from urllib.parse import urlencode
 
 import httpx
 
@@ -136,7 +138,7 @@ class KorailHttpClient:
     def post_form(
         self,
         path: str,
-        data: Mapping[str, Any] | None = None,
+        data: Mapping[str, Any] | Sequence[tuple[str, Any]] | None = None,
         *,
         include_common: bool = True,
         include_dynapath: bool = True,
@@ -145,19 +147,34 @@ class KorailHttpClient:
     ) -> BaseKorailResponse:
         assert_korail_origin(str(self._client.base_url))
         assert_read_only_route("POST", path)
-        form: dict[str, Any] = {}
+        ordered = data is not None and not isinstance(data, Mapping)
+        form: dict[str, Any] | list[tuple[str, Any]]
+        form = [] if ordered else {}
         if not include_common and data is not None:
             assert_read_only_request_fields(path, data)
         if include_common:
-            form.update(self.common_fields())
+            if ordered:
+                form.extend(self.common_fields().items())
+            else:
+                form.update(self.common_fields())
         if data:
-            form.update(data)
+            if ordered:
+                form.extend(data)
+            else:
+                form.update(data)
         assert_read_only_request_fields(path, form)
         headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
         try:
-            response = self._client.post(path, data=form, headers=headers)
+            if ordered:
+                response = self._client.post(
+                    path,
+                    content=urlencode(form).encode("ascii"),
+                    headers=headers,
+                )
+            else:
+                response = self._client.post(path, data=form, headers=headers)
         except httpx.HTTPError as exc:
             raise KorailTransportError(
                 f"KORAIL transport failed for POST {path}"

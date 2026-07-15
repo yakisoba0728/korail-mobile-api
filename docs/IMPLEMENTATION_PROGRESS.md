@@ -83,8 +83,8 @@ Last updated: 2026-07-15 KST
   `SUCC` parsing, and frozen repr-safe models for all eight evidenced train
   fields. The server session rule remains unverified, so a conservative
   client-side login gate remains until a bounded after-login validation.
-- The transport now allows 42 exact login/read routes and the client exposes
-  45 public methods. No new route was added to the DynaPath allowlist.
+- The transport now allows 45 exact login/read routes and the client exposes
+  48 public methods. No new route was added to the DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -113,6 +113,31 @@ R54 has a strict internal nested response model/parser, but its unresolved
 train-group provenance keeps transport unavailable. There is no public client
 method, safety route, or raw-string request builder. This tranche used no live
 request, credentials, `.env`, or raw capture and added no mutation capability.
+
+## Tagged variants, ordered repeated forms, and fare quote
+
+R17, R31, and R52 add three public static-contract reads. R17 accepts only the
+two dated history tags and the reduced payment-eligibility tag, requires a
+session, disables DynaPath, and retains its known HTTP-404 status as one typed
+transport failure without retry or fallback. R31 accepts only jobs `a`, `b`,
+and `c`; its ordered form transport preserves the grouped repeated
+`cmtrUtlAgeCd` fields followed by grouped repeated `psgPrnb` fields, while the
+ticket reference and all server free text remain repr-hidden. The public R31
+wrapper conservatively requires a session.
+
+R52 accepts only one or two exact `PriceFareLeg` values and typed
+`TrainSearchMetadata.menu_id`, derives its transfer division, preserves leg
+order in comma-joined columns, and intentionally omits `trnCnt`. It forces no
+local session and uses only the existing conditional DynaPath behavior; the
+DynaPath allowlist is unchanged.
+
+R39 has full synthetic response parsing and an internal exact request builder,
+but its missing normal NetFunnel `service_1` / `act_6` gate keeps it outside
+both `KorailClient` and the read-only safety registry. R54 remains held for its
+unresolved discriminator provenance. Across the complete seven-read tranche,
+the boundary is 45 routes and 48 public methods, live inventory remains 28
+successful / 9 failed / 128 unexecuted out of 165, and no live request,
+credential access, `.env`, secure raw, or mutation expansion occurred.
 The APK inventory remains 28 successful, 9 failed, and 128 unexecuted entries
 out of 165; only package coverage changed to 42 exact routes and 45 public
 methods.
@@ -149,7 +174,7 @@ methods.
 - Client-gated pass-schedule candidate lookup with caller-supplied runtime
   values; no pass reservation or payment operation
 
-The transport currently allows 42 exact read/login routes. Reservation,
+The transport currently allows 45 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
 mutation routes are not callable.
 

@@ -1,0 +1,11 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic price fare quote",
+  "strResult": "SUCC",
+  "prcList": [
+    {"jrnySqno": "1", "psrmClNm": "SYNTHETIC_PSRMCLNM_0", "rcvdFare": "SYNTHETIC_RCVDFare_0", "rcvdPrc": "SYNTHETIC_RCVDPRC_0", "sumAmt": "SYNTHETIC_SUMAMT_0", "trnNo": "SYNTHETIC_TRNNO_0"},
+    {"jrnySqno": "2", "psrmClNm": "SYNTHETIC_PSRMCLNM_1", "rcvdFare": "SYNTHETIC_RCVDFare_1", "rcvdPrc": "SYNTHETIC_RCVDPRC_1", "sumAmt": "SYNTHETIC_SUMAMT_1", "trnNo": "SYNTHETIC_TRNNO_1"},
+    {"jrnySqno": "1", "psrmClNm": "SYNTHETIC_PSRMCLNM_2", "rcvdFare": "SYNTHETIC_RCVDFare_2", "rcvdPrc": "SYNTHETIC_RCVDPRC_2", "sumAmt": "SYNTHETIC_SUMAMT_2", "trnNo": "SYNTHETIC_TRNNO_2"},
+    {"jrnySqno": "2", "psrmClNm": "SYNTHETIC_PSRMCLNM_3", "rcvdFare": "SYNTHETIC_RCVDFare_3", "rcvdPrc": "SYNTHETIC_RCVDPRC_3", "sumAmt": "SYNTHETIC_SUMAMT_3", "trnNo": "SYNTHETIC_TRNNO_3"}
+  ]
+}

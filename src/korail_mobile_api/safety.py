@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -93,6 +93,9 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ("POST", "/classes/com.korail.mobile.research.custTripInfo.do"),
         ("POST", "/classes/com.korail.mobile.copt.gdReqQry.do"),
         ("POST", "/classes/com.korail.mobile.reservation.tripChgDate.do"),
+        ("POST", "/classes/com.korail.mobile.gift.gdLst.do"),
+        ("POST", "/classes/com.korail.mobile.research.cmtrInfo.do"),
+        ("POST", "/classes/com.korail.mobile.trn.prcFare.do"),
     }
 )
 
@@ -355,6 +358,52 @@ KORAIL_EXACT_REQUEST_FIELDS = {
     "/classes/com.korail.mobile.reservation.tripChgDate.do": frozenset(
         {"Device", "Version", "Key", "tripChgDate"}
     ),
+    "/classes/com.korail.mobile.gift.gdLst.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "qryDvCd",
+            "qryVal",
+            "abrdDtFrom",
+            "abrdDtTo",
+            "usePsbFlg",
+        }
+    ),
+    "/classes/com.korail.mobile.research.cmtrInfo.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "jobDvCd",
+            "cmtrKndCd",
+            "psgCnt",
+            "cmtrUtlAgeCd",
+            "psgPrnb",
+            "ogtkSaleWctNo",
+            "ogtkSaleDd",
+            "ogtkSaleSqno",
+            "ogtkRetPwd",
+            "inquiryType",
+        }
+    ),
+    "/classes/com.korail.mobile.trn.prcFare.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "txtMenuId",
+            "chtnDvCd",
+            "dptRsStnCd",
+            "arvRsStnCd",
+            "runDt",
+            "trnNo",
+            "gdNo",
+            "rqSeatAttCd",
+            "trnGpCd",
+            "stlbTrnClsfCd",
+        }
+    ),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 
@@ -372,7 +421,89 @@ KORAIL_EXACT_REQUEST_FIELD_ORDERS = {
     "/classes/com.korail.mobile.reservation.tripChgDate.do": (
         ("Device", "Version", "Key", "tripChgDate"),
     ),
+    "/classes/com.korail.mobile.gift.gdLst.do": (
+        (
+            "Device",
+            "Version",
+            "Key",
+            "qryDvCd",
+            "qryVal",
+            "abrdDtFrom",
+            "abrdDtTo",
+            "usePsbFlg",
+        ),
+        ("Device", "Version", "Key", "qryDvCd", "qryVal"),
+    ),
+    "/classes/com.korail.mobile.research.cmtrInfo.do": (
+        (
+            "Device",
+            "Version",
+            "Key",
+            "jobDvCd",
+            "cmtrKndCd",
+            "psgCnt",
+        ),
+        (
+            "Device",
+            "Version",
+            "Key",
+            "jobDvCd",
+            "psgCnt",
+            "ogtkSaleWctNo",
+            "ogtkSaleDd",
+            "ogtkSaleSqno",
+            "ogtkRetPwd",
+            "inquiryType",
+        ),
+    ),
+    "/classes/com.korail.mobile.trn.prcFare.do": (
+        (
+            "Device",
+            "Version",
+            "Key",
+            "txtMenuId",
+            "chtnDvCd",
+            "dptRsStnCd",
+            "arvRsStnCd",
+            "runDt",
+            "trnNo",
+            "gdNo",
+            "rqSeatAttCd",
+            "trnGpCd",
+            "stlbTrnClsfCd",
+        ),
+    ),
 }
+
+
+_COMMUTER_INFO_PATH = "/classes/com.korail.mobile.research.cmtrInfo.do"
+
+
+def _is_commuter_passenger_field_order(
+    names: tuple[str, ...],
+    scalar_pairs: tuple[tuple[str, str | int], ...],
+) -> bool:
+    prefix = (
+        "Device",
+        "Version",
+        "Key",
+        "jobDvCd",
+        "cmtrKndCd",
+        "psgCnt",
+    )
+    if names[: len(prefix)] != prefix:
+        return False
+    remainder = names[len(prefix) :]
+    if not remainder or len(remainder) % 2:
+        return False
+    count = len(remainder) // 2
+    if remainder != (
+        *(("cmtrUtlAgeCd",) * count),
+        *(("psgPrnb",) * count),
+    ):
+        return False
+    values = dict(scalar_pairs[: len(prefix)])
+    return values.get("jobDvCd") == "b" and values.get("psgCnt") == str(count)
 
 
 def assert_korail_origin(base_url: str) -> None:
@@ -413,21 +544,47 @@ def assert_read_only_route(method: str, path: str) -> None:
 
 def assert_read_only_request_fields(
     path: str,
-    values: Mapping[str, Any],
+    values: Mapping[str, Any] | Sequence[tuple[str, Any]],
 ) -> None:
-    allowed = KORAIL_EXACT_REQUEST_FIELDS.get(urlsplit(path).path)
+    route_path = urlsplit(path).path
+    allowed = KORAIL_EXACT_REQUEST_FIELDS.get(route_path)
     if allowed is None:
         return
-    field_names = list(values)
-    if len(field_names) != len(set(field_names)):
+    if isinstance(values, Mapping):
+        scalar_pairs = tuple(values.items())
+    elif isinstance(values, Sequence) and not isinstance(
+        values,
+        (str, bytes, bytearray),
+    ):
+        scalar_pairs = tuple(values)
+        if any(
+            type(pair) is not tuple
+            or len(pair) != 2
+            or not isinstance(pair[0], str)
+            for pair in scalar_pairs
+        ):
+            raise KorailProtocolError(
+                "KORAIL ordered request fields must be scalar name/value pairs"
+            )
+    else:
+        raise KorailProtocolError(
+            "KORAIL request fields must be a mapping or ordered pair sequence"
+        )
+    field_names = [name for name, _ in scalar_pairs]
+    has_duplicates = len(field_names) != len(set(field_names))
+    if has_duplicates and route_path != _COMMUTER_INFO_PATH:
         raise KorailProtocolError(
             "KORAIL request fields must not contain duplicate names"
         )
     ordered_variants = KORAIL_EXACT_REQUEST_FIELD_ORDERS.get(
-        urlsplit(path).path
+        route_path
     )
     if ordered_variants is not None:
-        valid_shape = tuple(field_names) in ordered_variants
+        names = tuple(field_names)
+        valid_shape = names in ordered_variants or (
+            route_path == _COMMUTER_INFO_PATH
+            and _is_commuter_passenger_field_order(names, scalar_pairs)
+        )
     else:
         valid_shape = set(field_names) == allowed
     if not valid_shape:
@@ -435,7 +592,7 @@ def assert_read_only_request_fields(
             "KORAIL request fields must exactly match the registered "
             "read-only contract"
         )
-    if any(type(value) not in {str, int} for value in values.values()):
+    if any(type(value) not in {str, int} for _, value in scalar_pairs):
         raise KorailProtocolError(
             "KORAIL request values must be scalar strings or integers"
         )

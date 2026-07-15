@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Added closed tagged public reads for gift-ticket list modes, commuter jobs
+  `a`/`b`/`c`, and one/two-leg fare quotes. Exact ordered forms preserve R31
+  duplicate fields and intentionally omit R52 `trnCnt`; only R52 uses the
+  pre-existing conditional DynaPath path.
+- Kept R17's known HTTP 404 as a one-request `KorailTransportError` with no
+  retry, fallback, or alternate path. R17 and R31 require a local session;
+  R52 does not invent one.
+- Added strict synthetic response models/parsers plus an internal exact
+  request builder for R39, while leaving its NetFunnel `service_1` / `act_6`
+  route unavailable. R54 also remains transport-held. The DynaPath allowlist
+  and live inventory remain unchanged, no live call was made, and no mutation
+  capability was added. The boundary is now 45 read/login routes and 48 public
+  methods.
 - Added four authenticated fixed/account-shaped reads for multi-child discount
   targets, login-customer trip information, current or bounded-history MaaS
   service details, and trip-change date lookup. Their exact routes and ordered
@@ -13,7 +26,7 @@
   only: no client method, safety route, or raw-string request builder exists.
 - Made no live request, credential read, raw capture, or mutation expansion.
   The service inventory remains 28 successful, 9 failed, and 128 unexecuted
-  entries; the callable package boundary is now 42 read/login routes and 45
+  entries; that intermediate callable package boundary was 42 read/login routes and 45
   public methods.
 - Ran a bounded revalidation of the P0 read surface in an authenticated 28-request,
   28-response run with 25 successful operations, one expected typed

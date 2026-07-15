@@ -1,0 +1,24 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic commuter info",
+  "strResult": "SUCC",
+  "addSrvGdFlg": "SYNTHETIC_ADDSRVGDFLG",
+  "cmpaFlg": "SYNTHETIC_CMPAFLG",
+  "cmtrKndCd": "SYNTHETIC_CMTRKNDCD",
+  "cmtrUtlAgeCd": "SYNTHETIC_CMTRUTLAGECD",
+  "menuId": "SYNTHETIC_MENUID",
+  "poppMsg": "SYNTHETIC_POPPMSG",
+  "prmoMsg": "SYNTHETIC_PRMOMSG",
+  "prmoUrl": "SYNTHETIC_PRMOURL",
+  "seatAttCd1": "SYNTHETIC_SEATATTCD1",
+  "avlPrnbFrom": 1,
+  "avlPrnbTo": 4,
+  "psgList": [
+    {
+      "cmtrUtlAgeCd": "SYNTHETIC_CMTRUTLAGECD",
+      "comnCdNm": "SYNTHETIC_COMNCDNM",
+      "psgPrnbFrom": 1,
+      "psgPrnbTo": 2
+    }
+  ]
+}

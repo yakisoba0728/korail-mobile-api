@@ -13,8 +13,8 @@ menu/reference reads; it changes no credential or live-smoke behavior.
 
 The current implementation evidence establishes:
 
-- 42 routes at the exact login/read transport boundary.
-- 45 public methods on `KorailClient`.
+- 45 routes at the exact login/read transport boundary.
+- 48 public methods on `KorailClient`.
 - A historical reviewed offline gate of `1246 passed, 1 deselected`; the fresh
   P0 live-evidence documentation gate reports `1247 passed, 1 deselected`. In
   both gates, the deselected test is the explicitly opted-in live-service test.
@@ -57,6 +57,24 @@ safety route, or raw string discriminator until train-group provenance or a
 finite domain is evidenced. No live request, credential access, `.env` read,
 or raw response capture occurred. Service inventory remains 28 successful, 9
 failed, and 128 unexecuted out of 165, and no mutation boundary expanded.
+
+## Tagged variants and transport holdbacks
+
+R17, R31, and R52 are implemented as the three remaining public reads in the
+seven-read static-contract tranche. R17 has only sent/received history and
+payment-eligibility tags, requires a session, disables DynaPath, and preserves
+the known HTTP 404 as a single typed transport error with no retry or fallback.
+R31 has only jobs `a`, `b`, and `c`, preserves the exact grouped repeated form
+order, hides original-ticket data from repr, and uses a uniform conservative
+session guard. R52 accepts typed metadata plus one or two exact legs, omits
+`trnCnt`, does not force a session, and retains existing conditional DynaPath.
+
+R39 has internal exact request construction and full synthetic parser/model
+coverage only. Do not add a client method or route until the normal NetFunnel
+`service_1` / `act_6` gate is separately implemented and reviewed. R54 remains
+held for unresolved train-group provenance. The DynaPath allowlist and live
+inventory are unchanged; this tranche made no live call, read no credentials
+or `.env`, retained no secure raw, and added no mutation route.
 
 ## Completed read package
 

@@ -5,7 +5,7 @@ evidenced KORAIL mobile API surface. It also retains the static
 reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
-The reviewed package boundary contains 42 routes and 45 public methods. The
+The reviewed package boundary contains 45 routes and 48 public methods. The
 pre-P0-evidence reviewed offline gate was `1246 passed, 1 deselected`; after
 adding the documentation contract coverage in this increment, the fresh
 non-live gate is `1247 passed, 1 deselected`. In both gates, the deselected test
@@ -234,9 +234,41 @@ registered safety route, and no raw-string request builder. The accepted train
 group domain or typed provenance remains unresolved.
 
 The APK service inventory remains 28 successful, 9 failed, and 128 unexecuted
-entries out of 165. This increment changes only the package boundary to 42
-exact login/read routes and 45 public methods; it adds no reservation change,
+entries out of 165. This increment changes only the package boundary to 45
+exact login/read routes and 48 public methods; it adds no reservation change,
 booking, payment, refund, cancellation, check-in, or other mutation capability.
+
+### Tagged variant and fare reads
+
+Three additional static-contract reads complete the current seven-read tranche:
+
+- `get_gift_ticket_list(request)` accepts only sent history, received history,
+  or payment-eligibility request objects. History emits the evidenced blank
+  `usePsbFlg=` field; payment eligibility omits dates, that field, and all
+  unresolved continuation fields. The route requires a session, forces
+  DynaPath off, and makes one request. Its bounded endpoint status remains the
+  known HTTP 404; there is no retry, fallback, or alternate path.
+- `get_commuter_info(request)` accepts only the closed job `a`, `b`, and `c`
+  request variants. Job codes are internal, job `b` preserves grouped repeated
+  age-code then passenger-count fields from typed server response data, and job
+  `c` carries one repr-hidden original-ticket reference. The uniform public
+  wrapper conservatively requires a session and forces DynaPath off.
+- `get_price_fare_quote(request)` accepts a typed server search metadata object
+  with a nonempty `menu_id` and exactly one or two typed legs. It comma-joins
+  two legs in response order, derives `chtnDvCd`, and deliberately omits
+  `trnCnt` to match shipped bytecode. It does not invent a session precondition
+  and retains the existing conditional DynaPath behavior for its already
+  allowlisted path.
+
+R39 product-train inquiry has strict synthetic models, an internal exact
+request builder, and a full response parser, but no client method or safety
+route because the normal NetFunnel `service_1` / `act_6` gate is not yet
+implemented. R54 remains parser/model-only until train-group provenance is
+closed. `DYNAPATH_ALLOWLIST_PATHS` is unchanged. This tranche used no live
+request, credential, `.env`, secure raw, or production response, and added no
+reservation, seat-hold, payment, ticketing, cancellation, refund, or other
+mutation capability. The service inventory remains 28 successful, 9 failed,
+and 128 unexecuted entries out of 165.
 
 ### Static P0 menu and reference reads
 

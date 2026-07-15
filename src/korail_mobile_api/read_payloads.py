@@ -6,6 +6,15 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from .config import KorailConfig
+from .models import TrainSearchMetadata
+from .read_models import (
+    CommuterInfoResponse,
+    CommuterPassengerOption,
+    PassGoodsInfo,
+    PassMenuItem,
+    PassMenuData,
+    PassPassengerInfos,
+)
 
 
 def _positive_int(value: int, name: str) -> str:
@@ -572,3 +581,507 @@ def build_maas_service_detail_form(
 
 def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
     return {"tripChgDate": _ascii_date(departure_date, "departure_date")}
+
+
+@dataclass(frozen=True, init=False)
+class GiftTicketHistoryRequest:
+    start_date: str = field(repr=False)
+    end_date: str = field(repr=False)
+    _query_division_code: str = field(repr=False)
+
+    @classmethod
+    def sent(
+        cls,
+        start_date: str,
+        end_date: str,
+    ) -> "GiftTicketHistoryRequest":
+        return cls._create("A", start_date, end_date)
+
+    @classmethod
+    def received(
+        cls,
+        start_date: str,
+        end_date: str,
+    ) -> "GiftTicketHistoryRequest":
+        return cls._create("C", start_date, end_date)
+
+    @classmethod
+    def _create(
+        cls,
+        query_division_code: str,
+        start_date: str,
+        end_date: str,
+    ) -> "GiftTicketHistoryRequest":
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "start_date", start_date)
+        object.__setattr__(instance, "end_date", end_date)
+        object.__setattr__(
+            instance,
+            "_query_division_code",
+            query_division_code,
+        )
+        _validate_gift_ticket_history_request(instance)
+        return instance
+
+
+@dataclass(frozen=True)
+class GiftTicketPaymentEligibilityRequest:
+    pass
+
+
+def _validate_gift_ticket_history_request(
+    request: GiftTicketHistoryRequest,
+) -> None:
+    if request._query_division_code not in {"A", "C"}:
+        raise ValueError("gift-ticket history mode is not supported")
+    start = _calendar_date(request.start_date, "start_date")
+    end = _calendar_date(request.end_date, "end_date")
+    if end < start:
+        raise ValueError("end_date must not be before start_date")
+
+
+def build_gift_ticket_list_form(
+    request: GiftTicketHistoryRequest
+    | GiftTicketPaymentEligibilityRequest,
+) -> tuple[tuple[str, str], ...]:
+    if type(request) is GiftTicketHistoryRequest:
+        _validate_gift_ticket_history_request(request)
+        return (
+            ("qryDvCd", request._query_division_code),
+            ("qryVal", "E"),
+            ("abrdDtFrom", request.start_date),
+            ("abrdDtTo", request.end_date),
+            ("usePsbFlg", ""),
+        )
+    if type(request) is GiftTicketPaymentEligibilityRequest:
+        return (("qryDvCd", "F"), ("qryVal", "E"))
+    raise TypeError("request must be an exact gift-ticket request variant")
+
+
+def _exact_server_pass_data(pass_data: PassMenuData) -> str:
+    if type(pass_data) is not PassMenuData:
+        raise TypeError("pass_data must be an exact PassMenuData")
+    return _required_text(
+        pass_data.commuter_kind_code,
+        "pass_data.commuter_kind_code",
+    )
+
+
+@dataclass(frozen=True)
+class CommuterInitialRequest:
+    pass_data: PassMenuData = field(repr=False)
+
+
+@dataclass(frozen=True, init=False)
+class CommuterPassengerRequest:
+    pass_data: PassMenuData = field(repr=False)
+    source: CommuterInfoResponse = field(repr=False)
+    passenger_counts: tuple[int, ...] = field(repr=False)
+
+    @classmethod
+    def from_response(
+        cls,
+        pass_data: PassMenuData,
+        source: CommuterInfoResponse,
+        passenger_counts: tuple[int, ...],
+    ) -> "CommuterPassengerRequest":
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "pass_data", pass_data)
+        object.__setattr__(instance, "source", source)
+        object.__setattr__(instance, "passenger_counts", passenger_counts)
+        _validate_commuter_passenger_request(instance)
+        return instance
+
+
+def _validate_commuter_passenger_request(
+    request: CommuterPassengerRequest,
+) -> tuple[str, ...]:
+    _exact_server_pass_data(request.pass_data)
+    if type(request.source) is not CommuterInfoResponse:
+        raise TypeError("source must be an exact CommuterInfoResponse")
+    if type(request.passenger_counts) is not tuple:
+        raise TypeError("passenger_counts must be a tuple")
+    age_codes = tuple(
+        option.commuter_usage_age_code
+        for option in request.source.passenger_options
+    )
+    if not age_codes or len(age_codes) != len(request.passenger_counts):
+        raise ValueError(
+            "passenger counts must match the response age-code rows"
+        )
+    for option, age_code in zip(
+        request.source.passenger_options,
+        age_codes,
+        strict=True,
+    ):
+        if type(option) is not CommuterPassengerOption:
+            raise TypeError("response passenger options must use exact types")
+        _required_text(age_code, "commuter_usage_age_code")
+    for count in request.passenger_counts:
+        if type(count) is not int or count < 0:
+            raise ValueError(
+                "passenger counts must be non-negative integers"
+            )
+    return age_codes
+
+
+@dataclass(frozen=True)
+class OriginalTicketReference:
+    sale_window_no: str = field(repr=False)
+    sale_date: str = field(repr=False)
+    sale_sequence: str = field(repr=False)
+    return_password: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        _validate_original_ticket_reference(self)
+
+
+def _validate_original_ticket_reference(
+    reference: OriginalTicketReference,
+) -> None:
+    for value, name in (
+        (reference.sale_window_no, "sale_window_no"),
+        (reference.sale_date, "sale_date"),
+        (reference.sale_sequence, "sale_sequence"),
+        (reference.return_password, "return_password"),
+    ):
+        _required_text(value, name)
+
+
+@dataclass(frozen=True)
+class CommuterTicketInquiryRequest:
+    original_ticket: OriginalTicketReference = field(repr=False)
+    inquiry_type: str = field(default="0", repr=False)
+
+    def __post_init__(self) -> None:
+        if self.inquiry_type not in {"0", "1"}:
+            raise ValueError("inquiry_type must be '0' or '1'")
+        if type(self.original_ticket) is not OriginalTicketReference:
+            raise TypeError(
+                "original_ticket must be an exact OriginalTicketReference"
+            )
+        _validate_original_ticket_reference(self.original_ticket)
+
+
+CommuterInfoRequest = (
+    CommuterInitialRequest
+    | CommuterPassengerRequest
+    | CommuterTicketInquiryRequest
+)
+
+
+def build_commuter_info_form(
+    request: CommuterInfoRequest,
+) -> tuple[tuple[str, str], ...]:
+    if type(request) is CommuterInitialRequest:
+        kind_code = _exact_server_pass_data(request.pass_data)
+        return (
+            ("jobDvCd", "a"),
+            ("cmtrKndCd", kind_code),
+            ("psgCnt", "0"),
+        )
+    if type(request) is CommuterPassengerRequest:
+        kind_code = _exact_server_pass_data(request.pass_data)
+        age_codes = _validate_commuter_passenger_request(request)
+        return (
+            ("jobDvCd", "b"),
+            ("cmtrKndCd", kind_code),
+            ("psgCnt", str(len(age_codes))),
+            *(("cmtrUtlAgeCd", value) for value in age_codes),
+            *(("psgPrnb", str(value)) for value in request.passenger_counts),
+        )
+    if type(request) is CommuterTicketInquiryRequest:
+        if type(request.original_ticket) is not OriginalTicketReference:
+            raise TypeError(
+                "original_ticket must be an exact OriginalTicketReference"
+            )
+        _validate_original_ticket_reference(request.original_ticket)
+        if request.inquiry_type not in {"0", "1"}:
+            raise ValueError("inquiry_type must be '0' or '1'")
+        ticket = request.original_ticket
+        return (
+            ("jobDvCd", "c"),
+            ("psgCnt", "0"),
+            ("ogtkSaleWctNo", ticket.sale_window_no),
+            ("ogtkSaleDd", ticket.sale_date),
+            ("ogtkSaleSqno", ticket.sale_sequence),
+            ("ogtkRetPwd", ticket.return_password),
+            ("inquiryType", request.inquiry_type),
+        )
+    raise TypeError("request must be an exact commuter request variant")
+
+
+def _wire_component(value: str, name: str) -> str:
+    resolved = _required_text(value, name)
+    if "," in resolved:
+        raise ValueError(f"{name} must not contain a comma")
+    return resolved
+
+
+@dataclass(frozen=True)
+class PriceFareLeg:
+    departure_station_code: str = field(repr=False)
+    arrival_station_code: str = field(repr=False)
+    run_date: str = field(repr=False)
+    train_no: str = field(repr=False)
+    goods_no: str = field(repr=False)
+    requested_seat_attribute_code: str = field(repr=False)
+    train_group_code: str = field(repr=False)
+    standing_train_classification_code: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        _validate_price_fare_leg(self)
+
+
+def _validate_price_fare_leg(leg: PriceFareLeg) -> None:
+    for value, name in (
+        (leg.departure_station_code, "departure_station_code"),
+        (leg.arrival_station_code, "arrival_station_code"),
+        (leg.run_date, "run_date"),
+        (leg.train_no, "train_no"),
+        (leg.goods_no, "goods_no"),
+        (leg.requested_seat_attribute_code, "requested_seat_attribute_code"),
+        (leg.train_group_code, "train_group_code"),
+        (
+            leg.standing_train_classification_code,
+            "standing_train_classification_code",
+        ),
+    ):
+        _wire_component(value, name)
+
+
+@dataclass(frozen=True)
+class PriceFareQuoteRequest:
+    metadata: TrainSearchMetadata = field(repr=False)
+    legs: tuple[PriceFareLeg, ...] = field(repr=False)
+
+    def __post_init__(self) -> None:
+        _validate_price_fare_quote_request(self)
+
+
+def _validate_price_fare_quote_request(
+    request: PriceFareQuoteRequest,
+) -> None:
+    if type(request.metadata) is not TrainSearchMetadata:
+        raise TypeError("metadata must be an exact TrainSearchMetadata")
+    _wire_component(request.metadata.menu_id, "metadata.menu_id")
+    if type(request.legs) is not tuple or len(request.legs) not in {1, 2}:
+        raise ValueError("legs must be a tuple containing one or two legs")
+    for leg in request.legs:
+        if type(leg) is not PriceFareLeg:
+            raise TypeError("legs must contain exact PriceFareLeg values")
+        _validate_price_fare_leg(leg)
+
+
+def build_price_fare_quote_form(
+    request: PriceFareQuoteRequest,
+) -> tuple[tuple[str, str], ...]:
+    if type(request) is not PriceFareQuoteRequest:
+        raise TypeError("request must be an exact PriceFareQuoteRequest")
+    _validate_price_fare_quote_request(request)
+    columns = (
+        ("dptRsStnCd", "departure_station_code"),
+        ("arvRsStnCd", "arrival_station_code"),
+        ("runDt", "run_date"),
+        ("trnNo", "train_no"),
+        ("gdNo", "goods_no"),
+        ("rqSeatAttCd", "requested_seat_attribute_code"),
+        ("trnGpCd", "train_group_code"),
+        ("stlbTrnClsfCd", "standing_train_classification_code"),
+    )
+    return (
+        ("txtMenuId", request.metadata.menu_id),
+        ("chtnDvCd", str(len(request.legs))),
+        *(
+            (
+                wire_name,
+                ",".join(getattr(leg, attribute) for leg in request.legs),
+            )
+            for wire_name, attribute in columns
+        ),
+    )
+
+
+_PRODUCT_TRAIN_GROUP_CODES = frozenset({"100", "101", "102", "104", "109"})
+_PRODUCT_SEAT_ATTRIBUTE_CODES = frozenset(
+    {"015", "018", "019", "020", "021", "028", "032", "052"}
+)
+
+
+@dataclass(frozen=True)
+class _ProductPassengerGroups:
+    adult: int = field(repr=False)
+    child: int = field(repr=False)
+    senior: int = field(repr=False)
+    high_disability: int = field(repr=False)
+    low_disability: int = field(repr=False)
+
+    def __post_init__(self) -> None:
+        for value in (
+            self.adult,
+            self.child,
+            self.senior,
+            self.high_disability,
+            self.low_disability,
+        ):
+            if type(value) is not int or value < 0:
+                raise ValueError(
+                    "product passenger groups must be non-negative integers"
+                )
+        if self.total < 1:
+            raise ValueError("product inquiry requires at least one passenger")
+
+    @property
+    def total(self) -> int:
+        return (
+            self.adult
+            + self.child
+            + self.senior
+            + self.high_disability
+            + self.low_disability
+        )
+
+
+@dataclass(frozen=True)
+class _ProductTransferContext:
+    connection_station_code: str = field(repr=False)
+    connection_train_group_code: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        _required_text(
+            self.connection_station_code,
+            "connection_station_code",
+        )
+        if self.connection_train_group_code not in _PRODUCT_TRAIN_GROUP_CODES:
+            raise ValueError(
+                "connection_train_group_code is not an observed product code"
+            )
+
+
+@dataclass(frozen=True)
+class _ProductTrainInquiryRequest:
+    product: PassMenuItem = field(repr=False)
+    departure_station_code: str = field(repr=False)
+    arrival_station_code: str = field(repr=False)
+    departure_date: str = field(repr=False)
+    departure_time: str = field(repr=False)
+    passengers: _ProductPassengerGroups = field(repr=False)
+    seat_attribute_code: str = field(default="015", repr=False)
+    transfer: _ProductTransferContext | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        _validate_product_train_inquiry_request(self)
+
+
+def _validate_product_train_inquiry_request(
+    request: _ProductTrainInquiryRequest,
+) -> tuple[str, str]:
+    if type(request.product) is not PassMenuItem:
+        raise TypeError("product must be an exact PassMenuItem")
+    goods_data = request.product.goods_data
+    if goods_data is None or type(goods_data) is not PassGoodsInfo:
+        raise ValueError("product must contain server goods metadata")
+    goods_no = _required_text(
+        goods_data.h_cnd_flg_disc_no,
+        "product goods number",
+    )
+    train_group_code = _required_text(
+        request.product.train_group_code,
+        "product train group code",
+    )
+    if train_group_code not in _PRODUCT_TRAIN_GROUP_CODES:
+        raise ValueError("product train group code is not observed")
+    _required_text(
+        request.departure_station_code,
+        "departure_station_code",
+    )
+    _required_text(request.arrival_station_code, "arrival_station_code")
+    _ascii_date(request.departure_date, "departure_date")
+    _ascii_digits(request.departure_time, "departure_time", 6)
+    if type(request.passengers) is not _ProductPassengerGroups:
+        raise TypeError("passengers must be exact product passenger groups")
+    _ProductPassengerGroups.__post_init__(request.passengers)
+    passenger_info = goods_data.psg_infos
+    if passenger_info is not None:
+        if type(passenger_info) is not PassPassengerInfos:
+            raise TypeError(
+                "product passenger metadata must use its exact response type"
+            )
+        minimum = passenger_info.h_min_cnt
+        maximum = passenger_info.h_max_cnt
+        if minimum is not None:
+            minimum_value = int(_ascii_identifier(minimum, "product minimum"))
+            if request.passengers.total < minimum_value:
+                raise ValueError("passenger total is below the product minimum")
+        if maximum is not None:
+            maximum_value = int(_ascii_identifier(maximum, "product maximum"))
+            if request.passengers.total > maximum_value:
+                raise ValueError("passenger total exceeds the product maximum")
+    if request.seat_attribute_code not in _PRODUCT_SEAT_ATTRIBUTE_CODES:
+        raise ValueError("seat_attribute_code is not an observed product value")
+    if request.transfer is not None and type(
+        request.transfer
+    ) is not _ProductTransferContext:
+        raise TypeError("transfer must be an exact product transfer context")
+    if request.transfer is not None:
+        _ProductTransferContext.__post_init__(request.transfer)
+    return goods_no, train_group_code
+
+
+def _build_product_train_inquiry_form(
+    config: KorailConfig,
+    request: _ProductTrainInquiryRequest,
+) -> tuple[tuple[str, str], ...]:
+    if type(request) is not _ProductTrainInquiryRequest:
+        raise TypeError("request must be an exact product inquiry request")
+    goods_no, train_group_code = _validate_product_train_inquiry_request(
+        request
+    )
+    transfer_fields: tuple[tuple[str, str], ...] = ()
+    page_count = "10"
+    job_id = "1"
+    if request.transfer is not None:
+        job_id = "2"
+        page_count = "0"
+        transfer_fields = (
+            ("chtnCnt", "1"),
+            (
+                "chtnRsStnCd1",
+                request.transfer.connection_station_code,
+            ),
+            ("trnGpCnt", "1"),
+            ("trnGpCd1", request.transfer.connection_train_group_code),
+        )
+    passenger_values = (
+        request.passengers.adult,
+        request.passengers.child,
+        request.passengers.senior,
+        request.passengers.high_disability,
+        request.passengers.low_disability,
+    )
+    return (
+        ("Device", config.device),
+        ("Version", config.version),
+        ("txtMenuId", "41"),
+        ("radJobId", job_id),
+        ("selGoTrain", train_group_code),
+        ("txtTrnGpCd", train_group_code),
+        ("txtGoStart", request.departure_station_code),
+        ("txtGoEnd", request.arrival_station_code),
+        ("txtGoAbrdDt", request.departure_date),
+        ("txtGoHour", request.departure_time),
+        *(
+            (f"txtPsgFlg_{index}", str(value))
+            for index, value in enumerate(passenger_values, 1)
+        ),
+        ("txtSeatAttCd_2", "000"),
+        ("txtSeatAttCd_3", "000"),
+        ("txtSeatAttCd_4", request.seat_attribute_code),
+        ("txtGdNo", goods_no),
+        ("qryDvCd", "1"),
+        ("qryStNo", "0"),
+        ("qryStTrnNo", "00000"),
+        ("qryStTrnNo2", ""),
+        ("pgPrCnt", page_count),
+        *transfer_fields,
+    )

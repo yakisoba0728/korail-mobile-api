@@ -82,14 +82,17 @@ from .read_models import (
     DepositBankListResponse,
     DiscountCouponListResponse,
     FreeSeatCarResponse,
+    GiftTicketListResponse,
     GuideSeatConditionResponse,
     MaasServiceDetailListResponse,
     MergeSeatsInquiryResponse,
     MultiChildDiscountTargetResponse,
+    CommuterInfoResponse,
     PassAvailabilityResponse,
     PassMenuResponse,
     PassScheduleResponse,
     ProductDetailResponse,
+    PriceFareQuoteResponse,
     ProductReservationListResponse,
     ReservationHistoryResponse,
     SeatAssignmentScheduleResponse,
@@ -100,12 +103,14 @@ from .read_models import (
 )
 from .read_payloads import (
     build_customer_trip_info_form,
+    build_commuter_info_form,
     build_cart_list_form,
     build_commuter_kind_menu_query,
     build_crew_request_list_query,
     build_delay_discount_ticket_form,
     build_discount_coupon_form,
     build_free_seat_car_form,
+    build_gift_ticket_list_form,
     build_guide_seat_condition_form,
     build_maas_service_detail_form,
     build_merge_seats_inquiry_form,
@@ -115,17 +120,22 @@ from .read_payloads import (
     build_pass_schedule_form,
     build_product_detail_query,
     build_product_reservations_query,
+    build_price_fare_quote_form,
     build_service_status_query,
     build_seat_assignment_schedule_form,
     build_ticket_receipt_form,
     build_trip_menu_form,
     build_trip_change_date_form,
     FreeSeatCarRequest,
+    CommuterInfoRequest,
+    GiftTicketHistoryRequest,
+    GiftTicketPaymentEligibilityRequest,
     GuideSeatConditionRequest,
     MaasServiceDetailQuery,
     MergeSeatsInquiryRequest,
     SeatAssignmentScheduleRequest,
     PassScheduleRequest,
+    PriceFareQuoteRequest,
 )
 from .read_parsers import (
     parse_cart_list_response,
@@ -136,14 +146,17 @@ from .read_parsers import (
     parse_deposit_bank_response,
     parse_discount_coupon_response,
     parse_free_seat_car_response,
+    parse_gift_ticket_list_response,
     parse_guide_seat_condition_response,
     parse_maas_service_detail_list_response,
     parse_merge_seats_inquiry_response,
     parse_multi_child_discount_target_response,
+    parse_commuter_info_response,
     parse_pass_availability_response,
     parse_pass_menu_response,
     parse_pass_schedule_response,
     parse_product_detail_response,
+    parse_price_fare_quote_response,
     parse_product_reservation_list_response,
     parse_reservation_history_response,
     parse_service_status_response,
@@ -695,6 +708,53 @@ class KorailClient:
                     "/classes/com.korail.mobile.reservation.tripChgDate.do",
                     form,
                     include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_gift_ticket_list(
+        self,
+        request: GiftTicketHistoryRequest
+        | GiftTicketPaymentEligibilityRequest,
+    ) -> GiftTicketListResponse:
+        self._require_session()
+        form = build_gift_ticket_list_form(request)
+        return self._run_read(
+            lambda: parse_gift_ticket_list_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.gift.gdLst.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_commuter_info(
+        self,
+        request: CommuterInfoRequest,
+    ) -> CommuterInfoResponse:
+        self._require_session()
+        form = build_commuter_info_form(request)
+        return self._run_read(
+            lambda: parse_commuter_info_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.research.cmtrInfo.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_price_fare_quote(
+        self,
+        request: PriceFareQuoteRequest,
+    ) -> PriceFareQuoteResponse:
+        form = build_price_fare_quote_form(request)
+        return self._run_read(
+            lambda: parse_price_fare_quote_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.trn.prcFare.do",
+                    form,
                 ).raw
             )
         )

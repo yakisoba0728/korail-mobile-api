@@ -1,0 +1,23 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic gift-ticket list",
+  "strResult": "SUCC",
+  "qryCnt": "1",
+  "qryNumNext": "SYNTHETIC_NEXT",
+  "gdList": [
+    {
+      "intgCustNm1": "SYNTHETIC_INTGCUSTNM1",
+      "intgCustNm2": "SYNTHETIC_INTGCUSTNM2",
+      "nowPontValNum": "SYNTHETIC_NOWPONTVALNUM",
+      "rcvDt": "20990101",
+      "retAmt": "12345",
+      "retDt": "20991231",
+      "retTm": "235959",
+      "tkId": "SYNTHETIC_TKID",
+      "txnAmt": "12345",
+      "useClsDt": "20991231",
+      "usePontValNum": "0",
+      "usePsbFlg": "SYNTHETIC_USEPSBFLG"
+    }
+  ]
+}

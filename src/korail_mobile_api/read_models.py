@@ -578,3 +578,174 @@ class TourTrainSeatInfo:
 class TourTrainInfoResponse(BaseKorailResponse):
     h_msg_txt: str | None = field(default=None, repr=False)
     seat_infos: tuple[TourTrainSeatInfo, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class GiftTicket:
+    integrated_customer_name_1: str | None = field(default=None, repr=False)
+    integrated_customer_name_2: str | None = field(default=None, repr=False)
+    current_point_value: str | None = field(default=None, repr=False)
+    received_date: str | None = field(default=None, repr=False)
+    return_amount: str | None = field(default=None, repr=False)
+    return_date: str | None = field(default=None, repr=False)
+    return_time: str | None = field(default=None, repr=False)
+    ticket_id: str | None = field(default=None, repr=False)
+    transaction_amount: str | None = field(default=None, repr=False)
+    usage_close_date: str | None = field(default=None, repr=False)
+    used_point_value: str | None = field(default=None, repr=False)
+    usable_flag: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class GiftTicketListResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    tickets: tuple[GiftTicket, ...] = field(default=(), repr=False)
+    query_count: str | None = field(default=None, repr=False)
+    next_query_no: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class CommuterPassengerOption:
+    commuter_usage_age_code: str | None = field(default=None, repr=False)
+    common_code_name: str | None = field(default=None, repr=False)
+    passenger_count_from: int = field(default=0, repr=False)
+    passenger_count_to: int = field(default=0, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class CommuterInfoResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    additional_service_goods_flag: str | None = field(default=None, repr=False)
+    companion_flag: str | None = field(default=None, repr=False)
+    commuter_kind_code: str | None = field(default=None, repr=False)
+    commuter_usage_age_code: str | None = field(default=None, repr=False)
+    menu_id: str | None = field(default=None, repr=False)
+    popup_message: str | None = field(default=None, repr=False)
+    promotion_message: str | None = field(default=None, repr=False)
+    promotion_url: str | None = field(default=None, repr=False)
+    seat_attribute_code: str | None = field(default=None, repr=False)
+    available_passenger_count_from: int = field(default=0, repr=False)
+    available_passenger_count_to: int = field(default=0, repr=False)
+    passenger_options: tuple[CommuterPassengerOption, ...] = field(
+        default=(),
+        repr=False,
+    )
+
+
+@dataclass(frozen=True)
+class PriceFare:
+    journey_sequence: str | None = field(default=None, repr=False)
+    room_class_name: str | None = field(default=None, repr=False)
+    received_fare: str | None = field(default=None, repr=False)
+    received_price: str | None = field(default=None, repr=False)
+    total_amount: str | None = field(default=None, repr=False)
+    train_no: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PriceFareQuoteResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    fares: tuple[PriceFare, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class ProductRecommendation:
+    discount_amount: str | None = field(default=None, repr=False)
+    discount_surcharge_rate: str | None = field(default=None, repr=False)
+    fare_amount_percent_division_code: str | None = field(default=None, repr=False)
+    goods_name: str | None = field(default=None, repr=False)
+    goods_no: str | None = field(default=None, repr=False)
+    received_fare: str | None = field(default=None, repr=False)
+    received_price: str | None = field(default=None, repr=False)
+    received_price_2: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class ProductTrain:
+    detour_via_popup: str | None = field(default=None, repr=False)
+    elevator_damage_control: str | None = field(default=None, repr=False)
+    arrival_date: str | None = field(default=None, repr=False)
+    arrival_station_code: str | None = field(default=None, repr=False)
+    arrival_station_name: str | None = field(default=None, repr=False)
+    arrival_station_construction_order: str | None = field(default=None, repr=False)
+    arrival_station_run_order: str | None = field(default=None, repr=False)
+    arrival_time: str | None = field(default=None, repr=False)
+    car_type_name: str | None = field(default=None, repr=False)
+    change_train_division_code: str | None = field(default=None, repr=False)
+    change_train_sequence: str | None = field(default=None, repr=False)
+    connection_traffic_need_time: str | None = field(default=None, repr=False)
+    connection_traffic_possible_flag: str | None = field(default=None, repr=False)
+    connection_traffic_received_price: str | None = field(default=None, repr=False)
+    delayed_sale_flag: str | None = field(default=None, repr=False)
+    departure_date: str | None = field(default=None, repr=False)
+    departure_station_code: str | None = field(default=None, repr=False)
+    departure_station_name: str | None = field(default=None, repr=False)
+    departure_station_construction_order: str | None = field(default=None, repr=False)
+    departure_station_run_order: str | None = field(default=None, repr=False)
+    departure_time: str | None = field(default=None, repr=False)
+    detour_flag: str | None = field(default=None, repr=False)
+    detour_text: str | None = field(default=None, repr=False)
+    expected_delay_hour: str | None = field(default=None, repr=False)
+    expected_departure_delay_count: str | None = field(default=None, repr=False)
+    free_reservation_code: str | None = field(default=None, repr=False)
+    free_seat_car_count: str | None = field(default=None, repr=False)
+    general_room_class_name: str | None = field(default=None, repr=False)
+    general_reservation_code: str | None = field(default=None, repr=False)
+    general_reservation_code_2: str | None = field(default=None, repr=False)
+    information_text: str | None = field(default=None, repr=False)
+    journey_reservation_code: str | None = field(default=None, repr=False)
+    journey_reservation_name: str | None = field(default=None, repr=False)
+    nonstop_message: str | None = field(default=None, repr=False)
+    nonstop_message_text: str | None = field(default=None, repr=False)
+    popup_message: str | None = field(default=None, repr=False)
+    received_amount: str | None = field(default=None, repr=False)
+    received_fare: str | None = field(default=None, repr=False)
+    received_price_2: str | None = field(default=None, repr=False)
+    road_seat_map_flag: str | None = field(default=None, repr=False)
+    reservation_possible_name: str | None = field(default=None, repr=False)
+    run_date: str | None = field(default=None, repr=False)
+    run_time: str | None = field(default=None, repr=False)
+    seat_attribute_code: str | None = field(default=None, repr=False)
+    simultaneous_train_flag: str | None = field(default=None, repr=False)
+    special_discount_rate: str | None = field(default=None, repr=False)
+    special_room_class_name: str | None = field(default=None, repr=False)
+    special_reservation_code: str | None = field(default=None, repr=False)
+    special_reservation_code_2: str | None = field(default=None, repr=False)
+    special_reservation_possible_name: str | None = field(default=None, repr=False)
+    station_popup_message: str | None = field(default=None, repr=False)
+    standing_reservation_code: str | None = field(default=None, repr=False)
+    train_discount_general_rate: str | None = field(default=None, repr=False)
+    train_discount_origin_rate: str | None = field(default=None, repr=False)
+    train_classification_code: str | None = field(default=None, repr=False)
+    train_classification_name: str | None = field(default=None, repr=False)
+    train_group_code: str | None = field(default=None, repr=False)
+    train_no: str | None = field(default=None, repr=False)
+    use_time_care_article_content: str | None = field(default=None, repr=False)
+    waiting_reservation_flag: str | None = field(default=None, repr=False)
+    youth_mileage_application_flag: str | None = field(default=None, repr=False)
+    goods_no: str | None = field(default=None, repr=False)
+    total_passenger_count: int = field(default=0, repr=False)
+    recommendations: tuple[ProductRecommendation, ...] = field(
+        default=(),
+        repr=False,
+    )
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class ProductTrainInquiryResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    early_train_no_next: str | None = field(default=None, repr=False)
+    goods_no: str | None = field(default=None, repr=False)
+    next_page_flag: str | None = field(default=None, repr=False)
+    notice_message: str | None = field(default=None, repr=False)
+    preceding_train_no_next: str | None = field(default=None, repr=False)
+    next_query_station_no: str | None = field(default=None, repr=False)
+    result_count: str | None = field(default=None, repr=False)
+    next_train_no: str | None = field(default=None, repr=False)
+    merge_reservation_possible_flag: str | None = field(default=None, repr=False)
+    trains: tuple[ProductTrain, ...] = field(default=(), repr=False)
