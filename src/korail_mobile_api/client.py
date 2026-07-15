@@ -79,6 +79,7 @@ from .read_models import (
     CrewRequestListResponse,
     CustomerTripInfoResponse,
     DelayDiscountTicketListResponse,
+    DeliveryRecipientResponse,
     DepositBankListResponse,
     DiscountCouponListResponse,
     FreeSeatCarResponse,
@@ -91,18 +92,23 @@ from .read_models import (
     PassAvailabilityResponse,
     PassMenuResponse,
     PassScheduleResponse,
+    PbpAcceptanceSpecificationResponse,
+    PlatformNumberResponse,
     ProductDetailResponse,
     PriceFareQuoteResponse,
+    RecentDeliveryHistoryResponse,
     ProductReservationListResponse,
     ReservationHistoryResponse,
     SeatAssignmentScheduleResponse,
     ServiceStatusResponse,
     TicketReceiptResponse,
+    TicketDuplicationCheckResponse,
     TripChangeDateResponse,
     TripMenuResponse,
 )
 from .read_payloads import (
     build_customer_trip_info_form,
+    build_delivery_recipient_form,
     build_commuter_info_form,
     build_cart_list_form,
     build_commuter_kind_menu_query,
@@ -118,12 +124,16 @@ from .read_payloads import (
     build_pass_availability_form,
     build_pass_menu_form,
     build_pass_schedule_form,
+    build_pbp_acceptance_specification_form,
+    build_platform_number_form,
     build_product_detail_query,
     build_product_reservations_query,
     build_price_fare_quote_form,
+    build_recent_delivery_history_form,
     build_service_status_query,
     build_seat_assignment_schedule_form,
     build_ticket_receipt_form,
+    build_ticket_duplication_check_form,
     build_trip_menu_form,
     build_trip_change_date_form,
     FreeSeatCarRequest,
@@ -136,6 +146,8 @@ from .read_payloads import (
     SeatAssignmentScheduleRequest,
     PassScheduleRequest,
     PriceFareQuoteRequest,
+    OriginalTicketReference,
+    TicketDuplicationCheckRequest,
 )
 from .read_parsers import (
     parse_cart_list_response,
@@ -143,6 +155,7 @@ from .read_parsers import (
     parse_crew_request_list_response,
     parse_customer_trip_info_response,
     parse_delay_discount_ticket_response,
+    parse_delivery_recipient_response,
     parse_deposit_bank_response,
     parse_discount_coupon_response,
     parse_free_seat_car_response,
@@ -155,13 +168,17 @@ from .read_parsers import (
     parse_pass_availability_response,
     parse_pass_menu_response,
     parse_pass_schedule_response,
+    parse_pbp_acceptance_specification_response,
+    parse_platform_number_response,
     parse_product_detail_response,
     parse_price_fare_quote_response,
+    parse_recent_delivery_history_response,
     parse_product_reservation_list_response,
     parse_reservation_history_response,
     parse_service_status_response,
     parse_seat_assignment_schedule_response,
     parse_ticket_receipt_response,
+    parse_ticket_duplication_check_response,
     parse_trip_change_date_response,
     parse_trip_menu_response,
 )
@@ -755,6 +772,89 @@ class KorailClient:
                 self.http.post_form(
                     "/classes/com.korail.mobile.trn.prcFare.do",
                     form,
+                ).raw
+            )
+        )
+
+    def get_delivery_recipient(
+        self,
+        ticket: OriginalTicketReference,
+    ) -> DeliveryRecipientResponse:
+        self._require_session()
+        form = build_delivery_recipient_form(ticket)
+        return self._run_read(
+            lambda: parse_delivery_recipient_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.tk.dlvRcvCust.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def check_ticket_duplication(
+        self,
+        request: TicketDuplicationCheckRequest,
+    ) -> TicketDuplicationCheckResponse:
+        self._require_session()
+        form = build_ticket_duplication_check_form(request)
+        return self._run_read(
+            lambda: parse_ticket_duplication_check_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.ticket.ticketDupCheck.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_pbp_acceptance_specifications(
+        self,
+        tickets: tuple[OriginalTicketReference, ...],
+    ) -> PbpAcceptanceSpecificationResponse:
+        self._require_session()
+        form = build_pbp_acceptance_specification_form(tickets)
+        return self._run_read(
+            lambda: parse_pbp_acceptance_specification_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.tk.pbpAcepSpec.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_platform_numbers(
+        self,
+        tickets: tuple[OriginalTicketReference, ...],
+    ) -> PlatformNumberResponse:
+        self._require_session()
+        form = build_platform_number_form(tickets)
+        return self._run_read(
+            lambda: parse_platform_number_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.tk.plfNo.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_recent_delivery_history(self) -> RecentDeliveryHistoryResponse:
+        self._require_session()
+        session = self.session.current
+        customer_no = session.customer_no if session is not None else None
+        if not isinstance(customer_no, str) or not customer_no.strip():
+            raise KorailAuthError(
+                "KORAIL delivery history read requires a login customer number"
+            )
+        form = build_recent_delivery_history_form(customer_no)
+        return self._run_read(
+            lambda: parse_recent_delivery_history_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.tk.rcntDlvHst.do",
+                    form,
+                    include_dynapath=False,
                 ).raw
             )
         )

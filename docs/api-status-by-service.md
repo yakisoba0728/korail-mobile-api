@@ -15,7 +15,7 @@
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
 
-Package coverage: 45 exact login/read routes and 48 public methods. The package
+Package coverage: 50 exact login/read routes and 53 public methods. The package
 now exposes the ten
 previously successful but unwrapped reads plus the already registered service
 status cache as 11 public methods, plus the two typed car and physical-seat
@@ -53,6 +53,13 @@ was recorded as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not called.
 No mutation route was called, and no credential, identifier, or raw response
 value was retained. Current service inventory is 31 successful, 10 failed,
 and 124 unexecuted entries out of 165.
+
+R137, R138, R146, R148, and R149 now have static-only typed wrappers with exact
+authenticated forms, strict response parsers, repr-safe data, one-shot
+transport, and DynaPath disabled. No live request was made for this tranche, so
+all five route rows remain unexecuted and the 31/10/124 inventory is unchanged.
+Package coverage is 50 exact routes and 53 public methods; the DynaPath
+allowlist remains six paths.
 
 ## Service Index
 
@@ -493,8 +500,8 @@ and 124 unexecuted entries out of 165.
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
 | 136 | `deviceReset` | POST | `/classes/com.korail.mobile.tk.dvcInfoInit.do` | 승차권 기기정보 초기화 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, teln, custNm, nonMbPwd, stlbTrnClsfCd, dptDttm, latitude, longitude, trnNo | `BaseResponse` |
-| 137 | `dlvRcvCust` | POST | `/classes/com.korail.mobile.tk.dlvRcvCust.do` | 전달 수령자 조회 | 미실행 | PNR/티켓/N카드/상품 등 실데이터 필요 | Device, Version, Key, saleWctNo, saleDt, saleSqno, tkRetPwd | `DlvRcvCustDao.DlvRcvCustwResponse` |
-| 138 | `duplicationCheck` | POST | `/classes/com.korail.mobile.ticket.ticketDupCheck.do` | 승차권 중복 확인 | 미실행 | PNR/티켓/N카드/상품 등 실데이터 필요 | Device, Version, Key, pnrNo | `TicketDuplicationCheckDao.DuplicationCheckResponse` |
+| 137 | `dlvRcvCust` | POST | `/classes/com.korail.mobile.tk.dlvRcvCust.do` | 전달 수령자 조회 | 미실행 | static-only / live 미실행 | Device, Version, Key, saleWctNo, saleDt, saleSqno, tkRetPwd | `DlvRcvCustDao.DlvRcvCustwResponse` |
+| 138 | `duplicationCheck` | POST | `/classes/com.korail.mobile.ticket.ticketDupCheck.do` | 승차권 중복 확인 | 미실행 | static-only / live 미실행 | Device, Version, Key, pnrNo | `TicketDuplicationCheckDao.DuplicationCheckResponse` |
 | 139 | `getMaasCancel` | POST | `/classes//com.korail.mobile.addService.cancelPay.do` | MAAS 결제 취소 | 미실행 | 결제/간편결제/포인트/금전성 API | Device, Version, custMgNo, lumpStlTgtNo | `BaseResponse` |
 | 140 | `getMaasServiceCancel` | POST | `/classes/com.korail.mobile.addService.coptCnc.do` | MAAS 서비스 취소 | 미실행 | 운영 상태 변경 가능 | Device, Version, pnrNo, cncTgtCnt, cncAddSrvReqNo, cncRetFee | `BaseResponse` |
 | 141 | `getMaasServiceCancelFee` | POST | `/classes/com.korail.mobile.maas.cncFee.do` | MAAS 취소 수수료 조회 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, addSrvReqNo, addSrvDvCd, coptEntRsvNo | `MaasServiceCancelFeeDao.MaasServiceCancelFeeResponse` |
@@ -502,10 +509,10 @@ and 124 unexecuted entries out of 165.
 | 143 | `getSelfSeatChgInfo` | POST | `/classes/com.korail.mobile.self.seatChgInfo.do` | 셀프 좌석변경 정보 | 미실행 | 미검증 | Device, Version, Key, runDt, trnNo, dptRsStnCd, arvRsStnCd, psrmClCd | `CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse` |
 | 144 | `getTripChgDate` | POST | `/classes/com.korail.mobile.reservation.tripChgDate.do` | 여정변경 가능일 조회 | 성공 | 15 rows | Device, Version, Key, tripChgDate | `TripChgInfoDao.TripChgInfoDaoResponse` |
 | 145 | `gurdSmsSnd` | POST | `/classes/com.korail.mobile.tk.gurdSmsSnd.do` | 보호자 안심 SMS 발송 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, pnrNo, jrnySqno, rcvPsHndyTeln | `BaseResponse` |
-| 146 | `pbpAcepSpec` | POST | `/classes/com.korail.mobile.tk.pbpAcepSpec.do` | PBP 수락 내역 | 미실행 | PNR/티켓/N카드/상품 등 실데이터 필요 | Device, Version, Key, tkCnt, tkRetNo | `PbpAcepSpecDao.PbpAcepSpecResponse` |
+| 146 | `pbpAcepSpec` | POST | `/classes/com.korail.mobile.tk.pbpAcepSpec.do` | PBP 수락 내역 | 미실행 | static-only / live 미실행 | Device, Version, Key, tkCnt, tkRetNo | `PbpAcepSpecDao.PbpAcepSpecResponse` |
 | 147 | `pbpTkWdrw` | POST | `/classes/com.korail.mobile.tk.pbpWdrw.do` | PBP 승차권 회수 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, pbpCnt, pbpRsvNo, pnrNo | `BaseResponse` |
-| 148 | `plfNo` | POST | `/classes/com.korail.mobile.tk.plfNo.do` | 플랫폼 번호 조회 | 미실행 | PNR/티켓/N카드/상품 등 실데이터 필요 | Device, Version, Key, tkCnt, tkRetNo | `UpdatePlatformDao.PlfNoResponse` |
-| 149 | `rcntDlvHst` | POST | `/classes/com.korail.mobile.tk.rcntDlvHst.do` | 최근 전달 이력 | 미실행 | 미검증 | Device, Version, Key, custMgNo | `RecentDeliveryHistoryDao.RcntDlvHstResponse` |
+| 148 | `plfNo` | POST | `/classes/com.korail.mobile.tk.plfNo.do` | 플랫폼 번호 조회 | 미실행 | static-only / live 미실행 | Device, Version, Key, tkCnt, tkRetNo | `UpdatePlatformDao.PlfNoResponse` |
+| 149 | `rcntDlvHst` | POST | `/classes/com.korail.mobile.tk.rcntDlvHst.do` | 최근 전달 이력 | 미실행 | static-only / live 미실행 | Device, Version, Key, custMgNo | `RecentDeliveryHistoryDao.RcntDlvHstResponse` |
 | 150 | `selfCheckinCancel` | POST | `/classes/com.korail.mobile.checkin.cnc.do` | 셀프체크인 취소 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, saleWctNo, saleDt, saleSqno, tkRetPwd, jrnySqno | `BaseResponse` |
 | 151 | `selfCheckinInfo` | POST | `/classes/com.korail.mobile.checkin.info.do` | 셀프체크인 정보 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, saleWctNo, saleDt, saleSqno, tkRetPwd, jrnySqno | `SelfCheckinInfoDao.SelfCheckinInfoResponse` |
 | 152 | `selfCheckinPossible` | POST | `/classes/com.korail.mobile.checkin.psbFlg.do` | 셀프체크인 가능 여부 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, qrcode, saleWctNo, saleDd, saleSqno, tkRetPwd, jrnySqno | `SelfCheckinPossibleDao.SelfCheckinPossibleResponse` |

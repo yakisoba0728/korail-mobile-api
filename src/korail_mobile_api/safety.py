@@ -96,6 +96,14 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ("POST", "/classes/com.korail.mobile.gift.gdLst.do"),
         ("POST", "/classes/com.korail.mobile.research.cmtrInfo.do"),
         ("POST", "/classes/com.korail.mobile.trn.prcFare.do"),
+        ("POST", "/classes/com.korail.mobile.tk.dlvRcvCust.do"),
+        (
+            "POST",
+            "/classes/com.korail.mobile.ticket.ticketDupCheck.do",
+        ),
+        ("POST", "/classes/com.korail.mobile.tk.pbpAcepSpec.do"),
+        ("POST", "/classes/com.korail.mobile.tk.plfNo.do"),
+        ("POST", "/classes/com.korail.mobile.tk.rcntDlvHst.do"),
     }
 )
 
@@ -404,6 +412,29 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "stlbTrnClsfCd",
         }
     ),
+    "/classes/com.korail.mobile.tk.dlvRcvCust.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "saleWctNo",
+            "saleDt",
+            "saleSqno",
+            "tkRetPwd",
+        }
+    ),
+    "/classes/com.korail.mobile.ticket.ticketDupCheck.do": frozenset(
+        {"Device", "Version", "Key", "pnrNo"}
+    ),
+    "/classes/com.korail.mobile.tk.pbpAcepSpec.do": frozenset(
+        {"Device", "Version", "Key", "tkCnt", "tkRetNo"}
+    ),
+    "/classes/com.korail.mobile.tk.plfNo.do": frozenset(
+        {"Device", "Version", "Key", "tkCnt", "tkRetNo"}
+    ),
+    "/classes/com.korail.mobile.tk.rcntDlvHst.do": frozenset(
+        {"Device", "Version", "Key", "custMgNo"}
+    ),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 
@@ -473,10 +504,34 @@ KORAIL_EXACT_REQUEST_FIELD_ORDERS = {
             "stlbTrnClsfCd",
         ),
     ),
+    "/classes/com.korail.mobile.tk.dlvRcvCust.do": (
+        (
+            "Device",
+            "Version",
+            "Key",
+            "saleWctNo",
+            "saleDt",
+            "saleSqno",
+            "tkRetPwd",
+        ),
+    ),
+    "/classes/com.korail.mobile.ticket.ticketDupCheck.do": (
+        ("Device", "Version", "Key", "pnrNo"),
+    ),
+    "/classes/com.korail.mobile.tk.pbpAcepSpec.do": (),
+    "/classes/com.korail.mobile.tk.plfNo.do": (),
+    "/classes/com.korail.mobile.tk.rcntDlvHst.do": (
+        ("Device", "Version", "Key", "custMgNo"),
+    ),
 }
 
 
 _COMMUTER_INFO_PATH = "/classes/com.korail.mobile.research.cmtrInfo.do"
+_PBP_ACCEPTANCE_PATH = "/classes/com.korail.mobile.tk.pbpAcepSpec.do"
+_PLATFORM_NUMBER_PATH = "/classes/com.korail.mobile.tk.plfNo.do"
+_REPEATED_TICKET_REFERENCE_PATHS = frozenset(
+    {_PBP_ACCEPTANCE_PATH, _PLATFORM_NUMBER_PATH}
+)
 
 
 def _is_commuter_passenger_field_order(
@@ -504,6 +559,38 @@ def _is_commuter_passenger_field_order(
         return False
     values = dict(scalar_pairs[: len(prefix)])
     return values.get("jobDvCd") == "b" and values.get("psgCnt") == str(count)
+
+
+def _is_ticket_reference_field_order(
+    route_path: str,
+    names: tuple[str, ...],
+    scalar_pairs: tuple[tuple[str, Any], ...],
+) -> bool:
+    prefix = ("Device", "Version", "Key", "tkCnt")
+    if names[: len(prefix)] != prefix:
+        return False
+    remainder = names[len(prefix) :]
+    if not remainder or remainder != (("tkRetNo",) * len(remainder)):
+        return False
+    count = scalar_pairs[len(prefix) - 1][1]
+    if route_path == _PBP_ACCEPTANCE_PATH:
+        if type(count) is not int:
+            return False
+    elif route_path == _PLATFORM_NUMBER_PATH:
+        if (
+            not isinstance(count, str)
+            or not count
+            or any(character < "0" or character > "9" for character in count)
+            or str(int(count)) != count
+        ):
+            return False
+        count = int(count)
+    else:
+        return False
+    return count == len(remainder) and all(
+        isinstance(value, str) and bool(value)
+        for _, value in scalar_pairs[len(prefix) :]
+    )
 
 
 def assert_korail_origin(base_url: str) -> None:
@@ -576,7 +663,10 @@ def assert_read_only_request_fields(
         return
     field_names = [name for name, _ in scalar_pairs]
     has_duplicates = len(field_names) != len(set(field_names))
-    if has_duplicates and route_path != _COMMUTER_INFO_PATH:
+    if has_duplicates and route_path not in {
+        _COMMUTER_INFO_PATH,
+        *_REPEATED_TICKET_REFERENCE_PATHS,
+    }:
         raise KorailProtocolError(
             "KORAIL request fields must not contain duplicate names"
         )
@@ -588,6 +678,13 @@ def assert_read_only_request_fields(
         valid_shape = names in ordered_variants or (
             route_path == _COMMUTER_INFO_PATH
             and _is_commuter_passenger_field_order(names, scalar_pairs)
+        ) or (
+            route_path in _REPEATED_TICKET_REFERENCE_PATHS
+            and _is_ticket_reference_field_order(
+                route_path,
+                names,
+                scalar_pairs,
+            )
         )
     else:
         valid_shape = set(field_names) == allowed

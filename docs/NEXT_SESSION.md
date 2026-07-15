@@ -13,8 +13,8 @@ menu/reference reads; it changes no credential or live-smoke behavior.
 
 The current implementation evidence establishes:
 
-- 45 routes at the exact login/read transport boundary.
-- 48 public methods on `KorailClient`.
+- 50 routes at the exact login/read transport boundary.
+- 53 public methods on `KorailClient`.
 - A historical reviewed offline gate of `1246 passed, 1 deselected`; the fresh
   P0 live-evidence documentation gate reports `1247 passed, 1 deselected`. In
   both gates, the deselected test is the explicitly opted-in live-service test.
@@ -91,6 +91,22 @@ held for unresolved train-group provenance. The DynaPath allowlist is
 unchanged. Historically, this implementation tranche made no live call, read
 no credentials or `.env`, retained no secure raw, and added no mutation route;
 the later bounded read-only evidence above changed only inventory evidence.
+
+## Ticket-reference static reads
+
+R137, R138, R146, R148, and R149 are implemented as five authenticated,
+one-shot, DynaPath-disabled reads. R137 and the two repeated-ticket routes use
+only exact repr-hidden `OriginalTicketReference` values. R138 uses a closed
+repr-hidden PNR request. R146 and R148 preserve repeated `tkRetNo` order and
+enforce exact count equality with their distinct integer and decimal-string
+`tkCnt` contracts. R149 derives `custMgNo` only from login `customer_no`.
+
+The tranche is static-only: no live I/O, credentials, secure raw response,
+retry, fallback, adjacent mutation, or DynaPath route was used. Inventory is
+unchanged at 31 successful, 10 failed, and 124 unexecuted out of 165. The
+current boundary is 50 exact login/read routes and 53 public methods, while the
+DynaPath allowlist remains six paths. Keep all five routes unexecuted until a
+separately reviewed caller-owned ticket/PNR evidence plan exists.
 
 ## Completed read package
 

@@ -75,7 +75,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "| 실패 | 10 |" in status
     assert "| 미실행 | 124 |" in status
     assert "| 전체 | 165 |" in status
-    assert "Package coverage: 45 exact login/read routes and 48 public methods" in status
+    assert "Package coverage: 50 exact login/read routes and 53 public methods" in status
     assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
     assert "and 128 unexecuted" in status
     assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
@@ -195,8 +195,8 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
         assert stale_totals not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
-    assert "45 exact login/read routes" in progress
-    assert "48 public methods" in progress
+    assert "50 exact login/read routes" in progress
+    assert "53 public methods" in progress
     assert "75" in progress
     assert "IRG000000" in progress
 
@@ -223,7 +223,7 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     assert "/classes/com.korail.mobile.push.callCrew.do" in readme
     assert "remains excluded" in readme
     assert "static APK evidence and synthetic fixtures only" in readme
-    assert "45 exact read/login routes" in progress
+    assert "50 exact read/login routes" in progress
     for document in (readme, progress, status, handoff, changelog):
         assert "session-unverified" in document
     assert "live verification only after login" in readme
@@ -310,7 +310,7 @@ def test_readme_documents_bounded_live_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "45 routes and 48 public methods" in text
+    assert "50 routes and 53 public methods" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
     assert (

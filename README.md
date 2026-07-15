@@ -5,7 +5,7 @@ evidenced KORAIL mobile API surface. It also retains the static
 reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
-The reviewed package boundary contains 45 routes and 48 public methods. The
+The reviewed package boundary contains 50 routes and 53 public methods. The
 pre-P0-evidence reviewed offline gate was `1246 passed, 1 deselected`; after
 adding the documentation contract coverage in this increment, the fresh
 non-live gate is `1247 passed, 1 deselected`. In both gates, the deselected test
@@ -240,7 +240,7 @@ group domain or typed provenance remains unresolved.
 Historical pre-revalidation inventory was 28 successful, 9 failed, and 128
 unexecuted entries out of 165. The current service inventory is 31 successful,
 10 failed, and 124 unexecuted entries out of 165. This increment changes only
-the package boundary to 45 exact login/read routes and 48 public methods; it
+the package boundary to 50 exact login/read routes and 53 public methods; it
 adds no reservation change, booking, payment, refund, cancellation, check-in,
 or other mutation capability.
 
@@ -289,6 +289,31 @@ ticketing, cancellation, refund, or other mutation capability. Its
 pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted;
 the current inventory is 31 successful, 10 failed, and 124 unexecuted entries
 out of 165.
+
+### Ticket-reference reads
+
+Five additional authenticated reads are implemented from static APK contracts
+and synthetic/mock evidence only:
+
+- `get_delivery_recipient(ticket)` accepts one exact repr-hidden
+  `OriginalTicketReference`.
+- `check_ticket_duplication(request)` accepts one closed repr-hidden
+  `TicketDuplicationCheckRequest`.
+- `get_pbp_acceptance_specifications(tickets)` and
+  `get_platform_numbers(tickets)` accept only a nonempty exact tuple of exact
+  ticket references. Each `tkRetNo` is derived from its four typed components,
+  remains in caller order, and must match the exact integer or decimal-string
+  `tkCnt` contract.
+- `get_recent_delivery_history()` derives `custMgNo` only from the repr-hidden
+  login `customer_no`.
+
+All five methods require a local session, validate before their single request,
+force DynaPath off, and use strict full-envelope `SUCC` parsers with repr-safe
+nested response models. No live request, credential access, secure raw capture,
+retry, fallback, or adjacent mutation was used. The service inventory therefore
+remains 31 successful, 10 failed, and 124 unexecuted out of 165. The boundary is
+50 exact login/read routes and 53 public methods; the DynaPath allowlist remains
+six paths.
 
 ### Static P0 menu and reference reads
 

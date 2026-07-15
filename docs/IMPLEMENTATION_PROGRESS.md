@@ -10,7 +10,7 @@ Last updated: 2026-07-15 KST
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 45 exact login/read routes and 48 public
+- The current package boundary is 50 exact login/read routes and 53 public
   methods. Current service inventory is 31 successful, 10 failed, and 124
   unexecuted entries out of 165.
 - The cache-read expansion implementation, offline tests, package build, and
@@ -86,8 +86,8 @@ Last updated: 2026-07-15 KST
   `SUCC` parsing, and frozen repr-safe models for all eight evidenced train
   fields. The server session rule remains unverified, so a conservative
   client-side login gate remains until a bounded after-login validation.
-- The transport now allows 45 exact login/read routes and the client exposes
-  48 public methods. No new route was added to the DynaPath allowlist.
+- The transport now allows 50 exact login/read routes and the client exposes
+  53 public methods. No new route was added to the six-path DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -153,12 +153,32 @@ R39 has full synthetic response parsing and an internal exact request builder,
 but its missing normal NetFunnel `service_1` / `act_6` gate keeps it outside
 both `KorailClient` and the read-only safety registry. R54 remains held for its
 unresolved discriminator provenance. Across the complete seven-read tranche,
-the boundary is 45 routes and 48 public methods. Historically, that
+the boundary at that historical step was 45 routes and 48 public methods.
+Historically, that
 implementation step made no live request and its pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 current inventory is 31 successful, 10 failed, and 124 unexecuted entries out
-of 165; the current package boundary is 45 exact routes and 48 public methods.
+of 165; the current package boundary is 50 exact routes and 53 public methods.
+
+## Ticket-reference static read tranche
+
+R137, R138, R146, R148, and R149 add five conservative authenticated reads.
+R137 reuses one exact repr-hidden `OriginalTicketReference`; R138 accepts only
+one exact repr-hidden PNR request object. R146 and R148 accept only a nonempty
+exact tuple of exact ticket references, derive each repeated `tkRetNo` from its
+four components in order, and require exact count equality with R146's JSON
+integer-style form value or R148's canonical decimal-string form value. R149
+derives `custMgNo` solely from the repr-hidden login `customer_no`.
+
+All five routes validate before transport, issue at most one request, require a
+local session, force DynaPath off, and parse only a full exact `SUCC` envelope.
+The nested models and raw mappings are repr-safe and redaction-covered. This
+tranche used only static APK evidence plus synthetic/mock tests: no live I/O,
+credential access, secure raw capture, retry, fallback, adjacent mutation, or
+DynaPath expansion occurred. Inventory remains 31 successful, 10 failed, and
+124 unexecuted out of 165; the boundary is 50 exact routes and 53 public
+methods, with six DynaPath allowlist paths.
 
 ## Implemented Public Operations
 
@@ -192,7 +212,7 @@ of 165; the current package boundary is 45 exact routes and 48 public methods.
 - Client-gated pass-schedule candidate lookup with caller-supplied runtime
   values; no pass reservation or payment operation
 
-The transport currently allows 45 exact read/login routes. Reservation,
+The transport currently allows 50 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
 mutation routes are not callable.
 
@@ -345,7 +365,7 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
 - Live-successful inventory entries: 28
-- Currently implemented exact login/read routes: 42
+- Currently implemented exact login/read routes: 50
 - Therefore the complete APK endpoint inventory is not yet implemented
 
 All recorded successful read entries now have an exact package route. The

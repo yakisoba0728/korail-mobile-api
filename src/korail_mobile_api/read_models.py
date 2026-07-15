@@ -652,6 +652,114 @@ class PriceFareQuoteResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
+class DeliveryRecipientResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    acceptance_customer_management_no: str | None = field(
+        default=None,
+        repr=False,
+    )
+    acceptance_customer_name: str | None = field(default=None, repr=False)
+    acceptance_customer_phone: str | None = field(default=None, repr=False)
+    member_card_no: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class TicketDuplicationCheckResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    reservation_count: int = field(default=0, repr=False)
+
+
+@dataclass(frozen=True)
+class PbpAcceptanceSeat:
+    passenger_type_division_name: str | None = field(default=None, repr=False)
+    room_class_code: str | None = field(default=None, repr=False)
+    room_class_name: str | None = field(default=None, repr=False)
+    car_no: int = field(default=0, repr=False)
+    seat_no: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PbpAcceptanceJourney:
+    acceptance_customer_name: str | None = field(default=None, repr=False)
+    acceptance_customer_phone: str | None = field(default=None, repr=False)
+    journey_type_code: str | None = field(default=None, repr=False)
+    member_division_name: str | None = field(default=None, repr=False)
+    acceptance_kind_name: str | None = field(default=None, repr=False)
+    pbp_reservation_no: str | None = field(default=None, repr=False)
+    registered_date: str | None = field(default=None, repr=False)
+    withdrawal_possible_flag: str | None = field(default=None, repr=False)
+    seats: tuple[PbpAcceptanceSeat, ...] = field(default=(), repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PbpAcceptanceTicket:
+    pnr_no: str | None = field(default=None, repr=False)
+    sale_date: str | None = field(default=None, repr=False)
+    sale_sequence: str | None = field(default=None, repr=False)
+    sale_window_no: str | None = field(default=None, repr=False)
+    return_password: str | None = field(default=None, repr=False)
+    journeys: tuple[PbpAcceptanceJourney, ...] = field(default=(), repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PbpAcceptanceSpecificationResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    tickets: tuple[PbpAcceptanceTicket, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class PlatformNumberJourney:
+    platform_no: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PlatformNumberTicket:
+    sale_date: str | None = field(default=None, repr=False)
+    sale_sequence: str | None = field(default=None, repr=False)
+    sale_window_no: str | None = field(default=None, repr=False)
+    ticket_return_no: str | None = field(default=None, repr=False)
+    return_password: str | None = field(default=None, repr=False)
+    journeys: tuple[PlatformNumberJourney, ...] = field(default=(), repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PlatformNumberResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    tickets: tuple[PlatformNumberTicket, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class RecentDeliveryRecipient:
+    acceptance_customer_management_flag: str | None = field(
+        default=None,
+        repr=False,
+    )
+    acceptance_customer_management_no: str | None = field(
+        default=None,
+        repr=False,
+    )
+    acceptance_customer_name: str | None = field(default=None, repr=False)
+    acceptance_customer_phone: str | None = field(default=None, repr=False)
+    acceptance_customer_phone_2: str | None = field(default=None, repr=False)
+    member_card_no: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class RecentDeliveryHistoryResponse(BaseKorailResponse):
+    h_msg_txt: str | None = field(default=None, repr=False)
+    recipients: tuple[RecentDeliveryRecipient, ...] = field(
+        default=(),
+        repr=False,
+    )
+
+
+@dataclass(frozen=True)
 class ProductRecommendation:
     discount_amount: str | None = field(default=None, repr=False)
     discount_surcharge_rate: str | None = field(default=None, repr=False)

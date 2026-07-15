@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added five authenticated, one-shot ticket-reference reads for delivery
+  recipient details, ticket-duplication count, PBP acceptance specifications,
+  platform numbers, and recent delivery history. The exact static contracts
+  accept only repr-hidden typed ticket/PNR provenance, preserve repeated
+  `tkRetNo` order with exact count equality, derive recent-history `custMgNo`
+  only from the login session, and force DynaPath off. No live request was
+  made; inventory remains 31 successful, 10 failed, and 124 unexecuted out of
+  165. The package boundary is now 50 read/login routes and 53 public methods,
+  with the DynaPath allowlist unchanged at six paths.
 - Recorded a bounded authenticated read-only revalidation that used an empty
   advertising ID, logged in once, and confirmed that the repr-hidden
   `customer_no` was available. R13 made one request, returned `WRC800029`,
@@ -24,8 +33,8 @@
   route unavailable. R54 also remains transport-held. At that historical,
   pre-revalidation implementation step, the DynaPath allowlist and live
   inventory remained unchanged, no live call was made, and no mutation
-  capability was added. The boundary is now 45 read/login routes and 48 public
-  methods.
+  capability was added. The current boundary is 50 read/login routes and 53
+  public methods.
 - Added four authenticated fixed/account-shaped reads for multi-child discount
   targets, login-customer trip information, current or bounded-history MaaS
   service details, and trip-change date lookup. Their exact routes and ordered
@@ -39,7 +48,7 @@
   live request, credential read, raw capture, or mutation expansion. Its
   pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted
   entries; that intermediate callable package boundary was 42 read/login
-  routes and 45 public methods. The current boundary is 45 routes and 48 public
+  routes and 45 public methods. The current boundary is 50 routes and 53 public
   methods, with 31 successful, 10 failed, and 124 unexecuted inventory entries.
 - Ran a bounded revalidation of the P0 read surface in an authenticated 28-request,
   28-response run with 25 successful operations, one expected typed

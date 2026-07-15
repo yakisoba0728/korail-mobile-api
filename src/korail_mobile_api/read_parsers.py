@@ -20,6 +20,7 @@ from .read_models import (
     CrewRequestOption,
     DelayDiscountTicket,
     DelayDiscountTicketListResponse,
+    DeliveryRecipientResponse,
     DepositBank,
     DepositBankListResponse,
     DiscountCoupon,
@@ -47,6 +48,13 @@ from .read_models import (
     PassPassengerInfo,
     PassPassengerInfos,
     PassPeriodOption,
+    PbpAcceptanceJourney,
+    PbpAcceptanceSeat,
+    PbpAcceptanceSpecificationResponse,
+    PbpAcceptanceTicket,
+    PlatformNumberJourney,
+    PlatformNumberResponse,
+    PlatformNumberTicket,
     ProductDetailResponse,
     ProductRecommendation,
     ProductReservation,
@@ -55,6 +63,8 @@ from .read_models import (
     ProductTrainInquiryResponse,
     PriceFare,
     PriceFareQuoteResponse,
+    RecentDeliveryHistoryResponse,
+    RecentDeliveryRecipient,
     ReceiptPayment,
     ReservationHistoryResponse,
     ReservationHistoryTrain,
@@ -62,6 +72,7 @@ from .read_models import (
     ServiceStatusResponse,
     TicketReceipt,
     TicketReceiptResponse,
+    TicketDuplicationCheckResponse,
     TripMenuContent,
     TripMenuItem,
     TripMenuResponse,
@@ -238,6 +249,19 @@ def _optional_json_integer(
     raise KorailProtocolError(
         f"KORAIL {context} field {key} must be an integer or null"
     )
+
+
+def _required_json_integer(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+) -> int:
+    value = data.get(key)
+    if type(value) is not int:
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be a JSON integer"
+        )
+    return value
 
 
 def _parse_pass_menu_data(
@@ -1820,6 +1844,217 @@ def parse_price_fare_quote_response(
         )
     return PriceFareQuoteResponse(
         fares=tuple(fares),
+        **_response_fields(raw),
+    )
+
+
+_DELIVERY_RECIPIENT_FIELDS = {
+    "acceptance_customer_management_no": "acepCustMgNo",
+    "acceptance_customer_name": "acepCustNm",
+    "acceptance_customer_phone": "acepCustTeln",
+    "member_card_no": "mbCrdNo",
+}
+
+_PBP_ACCEPTANCE_TICKET_FIELDS = {
+    "pnr_no": "pnrNo",
+    "sale_date": "saleDt",
+    "sale_sequence": "saleSqno",
+    "sale_window_no": "saleWctNo",
+    "return_password": "tkRetPwd",
+}
+
+_PBP_ACCEPTANCE_JOURNEY_FIELDS = {
+    "acceptance_customer_name": "acepCustNm",
+    "acceptance_customer_phone": "acepCustTeln",
+    "journey_type_code": "jrnyTpCd",
+    "member_division_name": "mbDvNm",
+    "acceptance_kind_name": "pbpAcepKndNm",
+    "pbp_reservation_no": "pbpRsvNo",
+    "registered_date": "regDt",
+    "withdrawal_possible_flag": "wdrwPsbFlg",
+}
+
+_PBP_ACCEPTANCE_SEAT_FIELDS = {
+    "passenger_type_division_name": "psgTpDvNm",
+    "room_class_code": "psrmClCd",
+    "room_class_name": "psrmClNm",
+    "seat_no": "seatNo",
+}
+
+_PLATFORM_NUMBER_TICKET_FIELDS = {
+    "sale_date": "saleDt",
+    "sale_sequence": "saleSqno",
+    "sale_window_no": "saleWctNo",
+    "ticket_return_no": "tkRetNo",
+    "return_password": "tkRetPwd",
+}
+
+_RECENT_DELIVERY_RECIPIENT_FIELDS = {
+    "acceptance_customer_management_flag": "acepCustMgFlg",
+    "acceptance_customer_management_no": "acepCustMgNo",
+    "acceptance_customer_name": "acepCustNm",
+    "acceptance_customer_phone": "acepCustTeln",
+    "acceptance_customer_phone_2": "acepCustTeln2",
+    "member_card_no": "mbCrdNo",
+}
+
+
+def parse_delivery_recipient_response(
+    raw: Mapping[str, Any],
+) -> DeliveryRecipientResponse:
+    _validate_strict_read_envelope(raw)
+    return DeliveryRecipientResponse(
+        **_nullable_string_fields(
+            raw,
+            _DELIVERY_RECIPIENT_FIELDS,
+            "delivery recipient",
+        ),
+        **_response_fields(raw),
+    )
+
+
+def parse_ticket_duplication_check_response(
+    raw: Mapping[str, Any],
+) -> TicketDuplicationCheckResponse:
+    _validate_strict_read_envelope(raw)
+    return TicketDuplicationCheckResponse(
+        reservation_count=_required_json_integer(
+            raw,
+            "rsvCnt",
+            "ticket duplication check",
+        ),
+        **_response_fields(raw),
+    )
+
+
+def parse_pbp_acceptance_specification_response(
+    raw: Mapping[str, Any],
+) -> PbpAcceptanceSpecificationResponse:
+    _validate_strict_read_envelope(raw)
+    tickets = []
+    for ticket_value in _optional_list(
+        raw,
+        "tkList",
+        "PBP acceptance specification",
+    ):
+        ticket = _row(ticket_value, "PBP acceptance specification tkList")
+        journeys = []
+        for journey_value in _optional_list(
+            ticket,
+            "jrnyList",
+            "PBP acceptance ticket",
+        ):
+            journey = _row(journey_value, "PBP acceptance ticket jrnyList")
+            seats = []
+            for seat_value in _optional_list(
+                journey,
+                "seatList",
+                "PBP acceptance journey",
+            ):
+                seat = _row(seat_value, "PBP acceptance journey seatList")
+                seats.append(
+                    PbpAcceptanceSeat(
+                        **_nullable_string_fields(
+                            seat,
+                            _PBP_ACCEPTANCE_SEAT_FIELDS,
+                            "PBP acceptance seat",
+                        ),
+                        car_no=_required_json_integer(
+                            seat,
+                            "scarNo",
+                            "PBP acceptance seat",
+                        ),
+                        raw=seat,
+                    )
+                )
+            journeys.append(
+                PbpAcceptanceJourney(
+                    **_nullable_string_fields(
+                        journey,
+                        _PBP_ACCEPTANCE_JOURNEY_FIELDS,
+                        "PBP acceptance journey",
+                    ),
+                    seats=tuple(seats),
+                    raw=journey,
+                )
+            )
+        tickets.append(
+            PbpAcceptanceTicket(
+                **_nullable_string_fields(
+                    ticket,
+                    _PBP_ACCEPTANCE_TICKET_FIELDS,
+                    "PBP acceptance ticket",
+                ),
+                journeys=tuple(journeys),
+                raw=ticket,
+            )
+        )
+    return PbpAcceptanceSpecificationResponse(
+        tickets=tuple(tickets),
+        **_response_fields(raw),
+    )
+
+
+def parse_platform_number_response(
+    raw: Mapping[str, Any],
+) -> PlatformNumberResponse:
+    _validate_strict_read_envelope(raw)
+    tickets = []
+    for ticket_value in _optional_list(raw, "tkList", "platform number"):
+        ticket = _row(ticket_value, "platform number tkList")
+        journeys = []
+        for journey_value in _optional_list(
+            ticket,
+            "jrnyList",
+            "platform number ticket",
+        ):
+            journey = _row(journey_value, "platform number ticket jrnyList")
+            journeys.append(
+                PlatformNumberJourney(
+                    platform_no=_optional_string(
+                        journey,
+                        "plfNo",
+                        "platform number journey",
+                    ),
+                    raw=journey,
+                )
+            )
+        tickets.append(
+            PlatformNumberTicket(
+                **_nullable_string_fields(
+                    ticket,
+                    _PLATFORM_NUMBER_TICKET_FIELDS,
+                    "platform number ticket",
+                ),
+                journeys=tuple(journeys),
+                raw=ticket,
+            )
+        )
+    return PlatformNumberResponse(
+        tickets=tuple(tickets),
+        **_response_fields(raw),
+    )
+
+
+def parse_recent_delivery_history_response(
+    raw: Mapping[str, Any],
+) -> RecentDeliveryHistoryResponse:
+    _validate_strict_read_envelope(raw)
+    recipients = []
+    for value in _optional_list(raw, "acepList", "recent delivery history"):
+        recipient = _row(value, "recent delivery history acepList")
+        recipients.append(
+            RecentDeliveryRecipient(
+                **_nullable_string_fields(
+                    recipient,
+                    _RECENT_DELIVERY_RECIPIENT_FIELDS,
+                    "recent delivery recipient",
+                ),
+                raw=recipient,
+            )
+        )
+    return RecentDeliveryHistoryResponse(
+        recipients=tuple(recipients),
         **_response_fields(raw),
     )
 

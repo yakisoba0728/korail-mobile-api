@@ -749,6 +749,102 @@ def _validate_original_ticket_reference(
         _required_text(value, name)
 
 
+def _exact_original_ticket_reference(
+    reference: OriginalTicketReference,
+) -> OriginalTicketReference:
+    if type(reference) is not OriginalTicketReference:
+        raise TypeError(
+            "ticket must be an exact OriginalTicketReference"
+        )
+    _validate_original_ticket_reference(reference)
+    return reference
+
+
+def _ticket_return_number(reference: OriginalTicketReference) -> str:
+    ticket = _exact_original_ticket_reference(reference)
+    return "-".join(
+        (
+            ticket.sale_window_no,
+            ticket.sale_date,
+            ticket.sale_sequence,
+            ticket.return_password,
+        )
+    )
+
+
+def _exact_ticket_reference_tuple(
+    tickets: tuple[OriginalTicketReference, ...],
+) -> tuple[OriginalTicketReference, ...]:
+    if type(tickets) is not tuple:
+        raise TypeError("tickets must be an exact tuple")
+    if not tickets:
+        raise ValueError("tickets must contain at least one reference")
+    for ticket in tickets:
+        _exact_original_ticket_reference(ticket)
+    return tickets
+
+
+@dataclass(frozen=True)
+class TicketDuplicationCheckRequest:
+    pnr_no: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        _validate_ticket_duplication_check_request(self)
+
+
+def _validate_ticket_duplication_check_request(
+    request: TicketDuplicationCheckRequest,
+) -> None:
+    _required_text(request.pnr_no, "pnr_no")
+
+
+def build_delivery_recipient_form(
+    ticket: OriginalTicketReference,
+) -> dict[str, str]:
+    reference = _exact_original_ticket_reference(ticket)
+    return {
+        "saleWctNo": reference.sale_window_no,
+        "saleDt": reference.sale_date,
+        "saleSqno": reference.sale_sequence,
+        "tkRetPwd": reference.return_password,
+    }
+
+
+def build_ticket_duplication_check_form(
+    request: TicketDuplicationCheckRequest,
+) -> dict[str, str]:
+    if type(request) is not TicketDuplicationCheckRequest:
+        raise TypeError(
+            "request must be an exact TicketDuplicationCheckRequest"
+        )
+    _validate_ticket_duplication_check_request(request)
+    return {"pnrNo": request.pnr_no}
+
+
+def build_pbp_acceptance_specification_form(
+    tickets: tuple[OriginalTicketReference, ...],
+) -> tuple[tuple[str, str | int], ...]:
+    references = _exact_ticket_reference_tuple(tickets)
+    return (
+        ("tkCnt", len(references)),
+        *(("tkRetNo", _ticket_return_number(ticket)) for ticket in references),
+    )
+
+
+def build_platform_number_form(
+    tickets: tuple[OriginalTicketReference, ...],
+) -> tuple[tuple[str, str], ...]:
+    references = _exact_ticket_reference_tuple(tickets)
+    return (
+        ("tkCnt", str(len(references))),
+        *(("tkRetNo", _ticket_return_number(ticket)) for ticket in references),
+    )
+
+
+def build_recent_delivery_history_form(customer_no: str) -> dict[str, str]:
+    return {"custMgNo": _required_text(customer_no, "customer_no")}
+
+
 @dataclass(frozen=True)
 class CommuterTicketInquiryRequest:
     original_ticket: OriginalTicketReference = field(repr=False)
