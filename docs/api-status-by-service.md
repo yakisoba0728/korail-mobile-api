@@ -2,15 +2,15 @@
 
 기준: `analysis/reports/api-endpoints.tsv`, 2026-07-09 안전 범위 실제 호출
 스냅샷, 2026-07-14 MAAS 메뉴·역 목록 읽기 검증, 2026-07-15 객차·좌석
-구조, P0 열차 읽기, 고정/account-shaped 읽기 검증. 결제/예약
+구조, P0 열차 읽기, 고정/account-shaped 및 R149 읽기 검증. 결제/예약
 생성/취소/환불/체크인/회원탈퇴처럼 운영 상태를 바꿀 수 있는 API는
 실행하지 않았다.
 
 | 상태 | 건수 |
 |---|---:|
-| 성공 | 31 |
+| 성공 | 32 |
 | 실패 | 10 |
-| 미실행 | 124 |
+| 미실행 | 123 |
 | 전체 | 165 |
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
@@ -51,15 +51,22 @@ current-form R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the
 existing safe train search succeeded with 10 rows. R52 made zero requests and
 was recorded as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not called.
 No mutation route was called, and no credential, identifier, or raw response
-value was retained. Current service inventory is 31 successful, 10 failed,
-and 124 unexecuted entries out of 165.
+value was retained. At that pre-R149 point, inventory was 31 successful, 10
+failed, and 124 unexecuted entries out of 165.
 
 R137, R138, R146, R148, and R149 now have static-only typed wrappers with exact
 authenticated forms, strict response parsers, repr-safe data, one-shot
-transport, and DynaPath disabled. No live request was made for this tranche, so
-all five route rows remain unexecuted and the 31/10/124 inventory is unchanged.
-Package coverage is 50 exact routes and 53 public methods; the DynaPath
-allowlist remains six paths.
+transport, and DynaPath disabled. At implementation completion no live request
+had been made, all five rows were unexecuted, and the pre-R149 inventory was 31
+successful, 10 failed, and 124 unexecuted. Package coverage is 50 exact routes
+and 53 public methods; the DynaPath allowlist remains six paths.
+
+A later bounded authenticated read-only revalidation used an empty advertising
+ID, made one successful login call, confirmed logged-in state and
+customer-number presence, and called only R149 once. R149 succeeded with one
+row and was not retried; R137, R138, R146, and R148 made zero calls. No
+mutation, raw response, PII, credential, or server message was retained.
+Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 
 ## Service Index
 
@@ -97,7 +104,7 @@ allowlist remains six paths.
 | `ReservationService` | 승차권 예약 및 좌석 조건 | 4 | 1 | 1 | 2 |
 | `ReservationWaitService` | 예약대기 신청 | 1 | 0 | 0 | 1 |
 | `SeatMovieService` | 열차 스케줄 및 예약 조회 | 3 | 1 | 0 | 2 |
-| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 2 | 0 | 17 |
+| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 3 | 0 | 16 |
 | `TrainsInfoService` | 열차/객차/자유석 정보 조회 | 6 | 3 | 0 | 3 |
 | `XPointService` | OK캐쉬백/X포인트 인증 및 적립 | 5 | 0 | 0 | 5 |
 
@@ -495,7 +502,7 @@ allowlist remains six paths.
 ## TicketService
 
 - 역할: 발권, 승차권 관리, 체크인, 티켓 정보
-- 상태: 총 19개 / 성공 2 / 실패 0 / 미실행 17
+- 상태: 총 19개 / 성공 3 / 실패 0 / 미실행 16
 
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
@@ -512,7 +519,7 @@ allowlist remains six paths.
 | 146 | `pbpAcepSpec` | POST | `/classes/com.korail.mobile.tk.pbpAcepSpec.do` | PBP 수락 내역 | 미실행 | static-only / live 미실행 | Device, Version, Key, tkCnt, tkRetNo | `PbpAcepSpecDao.PbpAcepSpecResponse` |
 | 147 | `pbpTkWdrw` | POST | `/classes/com.korail.mobile.tk.pbpWdrw.do` | PBP 승차권 회수 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, pbpCnt, pbpRsvNo, pnrNo | `BaseResponse` |
 | 148 | `plfNo` | POST | `/classes/com.korail.mobile.tk.plfNo.do` | 플랫폼 번호 조회 | 미실행 | static-only / live 미실행 | Device, Version, Key, tkCnt, tkRetNo | `UpdatePlatformDao.PlfNoResponse` |
-| 149 | `rcntDlvHst` | POST | `/classes/com.korail.mobile.tk.rcntDlvHst.do` | 최근 전달 이력 | 미실행 | static-only / live 미실행 | Device, Version, Key, custMgNo | `RecentDeliveryHistoryDao.RcntDlvHstResponse` |
+| 149 | `rcntDlvHst` | POST | `/classes/com.korail.mobile.tk.rcntDlvHst.do` | 최근 전달 이력 | 성공 | `1 row, 1회 호출, 재시도 없음` | Device, Version, Key, custMgNo | `RecentDeliveryHistoryDao.RcntDlvHstResponse` |
 | 150 | `selfCheckinCancel` | POST | `/classes/com.korail.mobile.checkin.cnc.do` | 셀프체크인 취소 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, saleWctNo, saleDt, saleSqno, tkRetPwd, jrnySqno | `BaseResponse` |
 | 151 | `selfCheckinInfo` | POST | `/classes/com.korail.mobile.checkin.info.do` | 셀프체크인 정보 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, saleWctNo, saleDt, saleSqno, tkRetPwd, jrnySqno | `SelfCheckinInfoDao.SelfCheckinInfoResponse` |
 | 152 | `selfCheckinPossible` | POST | `/classes/com.korail.mobile.checkin.psbFlg.do` | 셀프체크인 가능 여부 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, qrcode, saleWctNo, saleDd, saleSqno, tkRetPwd, jrnySqno | `SelfCheckinPossibleDao.SelfCheckinPossibleResponse` |

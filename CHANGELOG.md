@@ -2,17 +2,24 @@
 
 ## Unreleased
 
+- Recorded a bounded authenticated read-only revalidation with an empty
+  advertising ID. It made one successful login call, confirmed logged-in state
+  and customer-number presence, and called only R149 once. R149 succeeded with
+  one row and was not retried; R137, R138, R146, and R148 made zero calls. No
+  mutation, raw response, PII, credential, or server message was retained.
+  Current inventory is 32 successful, 10 failed, and 123 unexecuted out of
+  165.
 - Added five authenticated, one-shot ticket-reference reads for delivery
   recipient details, ticket-duplication count, PBP acceptance specifications,
   platform numbers, and recent delivery history. The exact static contracts
   accept only repr-hidden typed ticket/PNR provenance, preserve repeated
   `tkRetNo` order with exact count equality, derive recent-history `custMgNo`
-  only from the login session, and force DynaPath off. No live request was
-  made; inventory remains 31 successful, 10 failed, and 124 unexecuted out of
-  165. The package boundary is now 50 read/login routes and 53 public methods,
-  with the DynaPath allowlist unchanged at six paths.
-  This ticket-reference tranche used no live I/O and added no mutation
-  capability.
+  only from the login session, and force DynaPath off. The implementation made
+  no live request; the pre-R149 inventory was 31 successful, 10 failed, and
+  124 unexecuted out of 165. The package boundary is now 50 read/login routes
+  and 53 public methods, with the DynaPath allowlist unchanged at six paths.
+  The ticket-reference implementation itself used no live I/O and added no
+  mutation capability.
 - Recorded a bounded authenticated read-only revalidation that used an empty
   advertising ID, logged in once, and confirmed that the repr-hidden
   `customer_no` was available. R13 made one request, returned `WRC800029`,
@@ -21,8 +28,8 @@
   existing safe train search succeeded with 10 rows. R52 made zero requests
   and was recorded as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not
   called. No mutation route was called, and no credential, identifier, or raw
-  response value was retained. Current service inventory is 31 successful, 10
-  failed, and 124 unexecuted entries out of 165.
+  response value was retained. At that pre-R149 point, inventory was 31
+  successful, 10 failed, and 124 unexecuted entries out of 165.
 - Added closed tagged public reads for gift-ticket list modes, commuter jobs
   `a`/`b`/`c`, and one/two-leg fare quotes. Exact ordered forms preserve R31
   duplicate fields and intentionally omit R52 `trnCnt`; only R52 uses the
@@ -51,7 +58,8 @@
   pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted
   entries; that intermediate callable package boundary was 42 read/login
   routes and 45 public methods. The current boundary is 50 routes and 53 public
-  methods, with 31 successful, 10 failed, and 124 unexecuted inventory entries.
+  methods. At that pre-R149 point, inventory was 31 successful, 10 failed, and
+  124 unexecuted entries.
 - Ran a bounded revalidation of the P0 read surface in an authenticated 28-request,
   28-response run with 25 successful operations, one expected typed
   application failure, and three input-dependent skips. Deposit-bank and

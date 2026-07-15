@@ -23,7 +23,7 @@
 | Distinct HTTP+path pairs | 159 |
 | Annotated service interfaces | 35 |
 | HTTP method mix | POST 136 / GET 29 |
-| Runtime test status | 성공 31 / 실패 10 / 미실행 124 |
+| Runtime test status | 성공 32 / 실패 10 / 미실행 123 |
 
 ## Runtime Contract
 
@@ -107,7 +107,7 @@ evidence, independent review, and explicit user authorization.
 | `ReservationService` | 4 | 1 | 1 | 2 |
 | `ReservationWaitService` | 1 | 0 | 0 | 1 |
 | `SeatMovieService` | 3 | 1 | 0 | 2 |
-| `TicketService` | 19 | 2 | 0 | 17 |
+| `TicketService` | 19 | 3 | 0 | 16 |
 | `TrainsInfoService` | 6 | 3 | 0 | 3 |
 | `XPointService` | 5 | 0 | 0 | 5 |
 
@@ -131,8 +131,15 @@ R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the existing safe
 train search succeeded with 10 rows. R52 made zero requests and was recorded
 as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not called. No mutation
 route was called, and no credential, identifier, or raw response value was
-retained. Current service inventory is 31 successful, 10 failed, and 124
+retained. The pre-R149 inventory was 31 successful, 10 failed, and 124
 unexecuted entries out of 165.
+
+A later bounded authenticated read-only revalidation used an empty
+advertising ID, made one successful login call, confirmed logged-in state and
+customer-number presence, and called only R149 once. R149 succeeded with one
+row and was not retried; R137, R138, R146, and R148 made zero calls. No
+mutation, raw response, PII, credential, or server message was retained.
+Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 
 ## Runtime Failure Notes
 

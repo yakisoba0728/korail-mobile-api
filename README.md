@@ -11,7 +11,7 @@ adding the documentation contract coverage in this increment, the fresh
 non-live gate is `1247 passed, 1 deselected`. In both gates, the deselected test
 is the explicitly opted-in live-service test.
 
-Current service inventory is 31 successful, 10 failed, and 124 unexecuted
+Current service inventory is 32 successful, 10 failed, and 123 unexecuted
 entries out of 165.
 
 The original APK and generated decompile directories are intentionally not
@@ -238,11 +238,12 @@ registered safety route, and no raw-string request builder. The accepted train
 group domain or typed provenance remains unresolved.
 
 Historical pre-revalidation inventory was 28 successful, 9 failed, and 128
-unexecuted entries out of 165. The current service inventory is 31 successful,
-10 failed, and 124 unexecuted entries out of 165. This increment changes only
-the package boundary to 50 exact login/read routes and 53 public methods; it
-adds no reservation change, booking, payment, refund, cancellation, check-in,
-or other mutation capability.
+unexecuted entries out of 165. The pre-R149 inventory was 31 successful, 10
+failed, and 124 unexecuted entries out of 165. Current inventory is 32
+successful, 10 failed, and 123 unexecuted entries out of 165. This increment
+changes only the package boundary to 50 exact login/read routes and 53 public
+methods; it adds no reservation change, booking, payment, refund,
+cancellation, check-in, or other mutation capability.
 
 ### Bounded next-safe read evidence
 
@@ -286,9 +287,10 @@ closed. `DYNAPATH_ALLOWLIST_PATHS` is unchanged. Historically, this
 implementation tranche itself used no live request, credential, `.env`, secure
 raw, or production response, and added no reservation, seat-hold, payment,
 ticketing, cancellation, refund, or other mutation capability. Its
-pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted;
-the current inventory is 31 successful, 10 failed, and 124 unexecuted entries
-out of 165.
+pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted.
+The pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted; the
+current inventory is 32 successful, 10 failed, and 123 unexecuted entries out
+of 165.
 
 ### Ticket-reference reads
 
@@ -309,14 +311,21 @@ and synthetic/mock evidence only:
 
 All five methods require a local session, validate before their single request,
 force DynaPath off, and use strict full-envelope `SUCC` parsers with repr-safe
-nested response models. No live request, credential access, secure raw capture,
-retry, fallback, or adjacent mutation was used. The service inventory therefore
-remains 31 successful, 10 failed, and 124 unexecuted out of 165. The boundary is
-50 exact login/read routes and 53 public methods; the DynaPath allowlist remains
-six paths.
+nested response models. The implementation used no live request, credential
+access, secure raw capture, retry, fallback, or adjacent mutation. At
+implementation completion, the pre-R149 inventory was 31 successful, 10
+failed, and 124 unexecuted out of 165. The boundary is 50 exact login/read
+routes and 53 public methods; the DynaPath allowlist remains six paths.
 
-This ticket-reference tranche used no live I/O and added no mutation
-capability.
+The ticket-reference implementation itself used no live I/O and added no
+mutation capability.
+
+A later bounded authenticated read-only revalidation used an empty advertising
+ID, made one successful login call, confirmed logged-in state and
+customer-number presence, and called only R149 once. R149 succeeded with one
+row and was not retried; R137, R138, R146, and R148 made zero calls. No
+mutation, raw response, PII, credential, or server message was retained.
+Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 
 ### Static P0 menu and reference reads
 

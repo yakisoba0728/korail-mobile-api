@@ -11,7 +11,7 @@ Last updated: 2026-07-15 KST
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
 - The current package boundary is 50 exact login/read routes and 53 public
-  methods. Current service inventory is 31 successful, 10 failed, and 124
+  methods. Current service inventory is 32 successful, 10 failed, and 123
   unexecuted entries out of 165.
 - The cache-read expansion implementation, offline tests, package build, and
   isolated import are complete, including bounded live verification.
@@ -129,8 +129,8 @@ R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the existing safe
 train search succeeded with 10 rows. R52 made zero requests and was recorded
 as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not called. No mutation
 route was called, and no credential, identifier, or raw response value was
-retained. Current service inventory is 31 successful, 10 failed, and 124
-unexecuted entries out of 165.
+retained. At that pre-R149 point, inventory was 31 successful, 10 failed, and
+124 unexecuted entries out of 165.
 
 ## Tagged variants, ordered repeated forms, and fare quote
 
@@ -158,8 +158,9 @@ Historically, that
 implementation step made no live request and its pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
-current inventory is 31 successful, 10 failed, and 124 unexecuted entries out
-of 165; the current package boundary is 50 exact routes and 53 public methods.
+pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
+of 165; current inventory is 32 successful, 10 failed, and 123 unexecuted. The
+current package boundary is 50 exact routes and 53 public methods.
 
 ## Ticket-reference static read tranche
 
@@ -174,14 +175,22 @@ derives `custMgNo` solely from the repr-hidden login `customer_no`.
 All five routes validate before transport, issue at most one request, require a
 local session, force DynaPath off, and parse only a full exact `SUCC` envelope.
 The nested models and raw mappings are repr-safe and redaction-covered. This
-tranche used only static APK evidence plus synthetic/mock tests: no live I/O,
-credential access, secure raw capture, retry, fallback, adjacent mutation, or
-DynaPath expansion occurred. Inventory remains 31 successful, 10 failed, and
-124 unexecuted out of 165; the boundary is 50 exact routes and 53 public
-methods, with six DynaPath allowlist paths.
+implementation used only static APK evidence plus synthetic/mock tests: no
+live I/O, credential access, secure raw capture, retry, fallback, adjacent
+mutation, or DynaPath expansion occurred. At implementation completion, the
+pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted out of
+165; the boundary is 50 exact routes and 53 public methods, with six DynaPath
+allowlist paths.
 
-This ticket-reference tranche used no live I/O and added no mutation
-capability.
+The ticket-reference implementation itself used no live I/O and added no
+mutation capability.
+
+A later bounded authenticated read-only revalidation used an empty advertising
+ID, made one successful login call, confirmed logged-in state and
+customer-number presence, and called only R149 once. R149 succeeded with one
+row and was not retried; R137, R138, R146, and R148 made zero calls. No
+mutation, raw response, PII, credential, or server message was retained.
+Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 
 ## Implemented Public Operations
 
@@ -367,7 +376,7 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 ## Analysis Inventory Versus Implementation
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
-- Live-successful inventory entries: 31
+- Live-successful inventory entries: 32
 - Currently implemented exact login/read routes: 50
 - Therefore the complete APK endpoint inventory is not yet implemented
 

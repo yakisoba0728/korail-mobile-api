@@ -18,7 +18,7 @@ The current implementation evidence establishes:
 - A historical reviewed offline gate of `1246 passed, 1 deselected`; the fresh
   P0 live-evidence documentation gate reports `1247 passed, 1 deselected`. In
   both gates, the deselected test is the explicitly opted-in live-service test.
-- Current service inventory of 31 successful, 10 failed, and 124 unexecuted
+- Current service inventory of 32 successful, 10 failed, and 123 unexecuted
   routes; the total remains 165. Historical pre-revalidation inventory was 28
   successful, 9 failed, and 128 unexecuted.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
@@ -70,8 +70,8 @@ R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the existing safe
 train search succeeded with 10 rows. R52 made zero requests and was recorded
 as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not called. No mutation
 route was called, and no credential, identifier, or raw response value was
-retained. Current service inventory is 31 successful, 10 failed, and 124
-unexecuted entries out of 165.
+retained. At that pre-R149 point, inventory was 31 successful, 10 failed, and
+124 unexecuted entries out of 165.
 
 ## Tagged variants and transport holdbacks
 
@@ -101,15 +101,24 @@ repr-hidden PNR request. R146 and R148 preserve repeated `tkRetNo` order and
 enforce exact count equality with their distinct integer and decimal-string
 `tkCnt` contracts. R149 derives `custMgNo` only from login `customer_no`.
 
-The tranche is static-only: no live I/O, credentials, secure raw response,
-retry, fallback, adjacent mutation, or DynaPath route was used. Inventory is
-unchanged at 31 successful, 10 failed, and 124 unexecuted out of 165. The
-current boundary is 50 exact login/read routes and 53 public methods, while the
-DynaPath allowlist remains six paths. Keep all five routes unexecuted until a
-separately reviewed caller-owned ticket/PNR evidence plan exists.
+The implementation was static-only: no live I/O, credentials, secure raw
+response, retry, fallback, adjacent mutation, or DynaPath route was used. At
+implementation completion, the pre-R149 inventory was 31 successful, 10
+failed, and 124 unexecuted out of 165. The current boundary is 50 exact
+login/read routes and 53 public methods, while the DynaPath allowlist remains
+six paths.
 
-This ticket-reference tranche used no live I/O and added no mutation
-capability.
+The ticket-reference implementation itself used no live I/O and added no
+mutation capability.
+
+A later bounded authenticated read-only revalidation used an empty advertising
+ID, made one successful login call, confirmed logged-in state and
+customer-number presence, and called only R149 once. R149 succeeded with one
+row and was not retried; R137, R138, R146, and R148 made zero calls. No
+mutation, raw response, PII, credential, or server message was retained.
+Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
+Keep R137, R138, R146, and R148 unexecuted until a separately reviewed
+caller-owned ticket/PNR evidence plan exists.
 
 ## Completed read package
 

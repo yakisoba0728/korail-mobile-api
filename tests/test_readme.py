@@ -71,16 +71,16 @@ def test_readme_documents_every_successful_read_expansion_method_and_boundary():
 
 def test_status_and_progress_documents_match_current_inventory_and_coverage():
     status = STATUS.read_text(encoding="utf-8")
-    assert "| 성공 | 31 |" in status
+    assert "| 성공 | 32 |" in status
     assert "| 실패 | 10 |" in status
-    assert "| 미실행 | 124 |" in status
+    assert "| 미실행 | 123 |" in status
     assert "| 전체 | 165 |" in status
     assert "Package coverage: 50 exact login/read routes and 53 public methods" in status
     assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
     assert "and 128 unexecuted" in status
     assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
     assert "| `ResearchService` | 열차/좌석/N카드 관련 조회 | 11 | 3 | 2 | 6 |" in status
-    assert "| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 2 | 0 | 17 |" in status
+    assert "| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 3 | 0 | 16 |" in status
     assert "| `ReservationService` | 승차권 예약 및 좌석 조건 | 4 | 1 | 1 | 2 |" in status
     assert "| `TrainsInfoService` | 열차/객차/자유석 정보 조회 | 6 | 3 | 0 | 3 |" in status
     assert (
@@ -100,7 +100,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
         (
             "TicketService",
             "발권, 승차권 관리, 체크인, 티켓 정보",
-            "19개 / 성공 2 / 실패 0 / 미실행 17",
+            "19개 / 성공 3 / 실패 0 / 미실행 16",
         ),
         (
             "TrainsInfoService",
@@ -160,16 +160,16 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     )
     assert len(service_rows) == 35
     service_totals = tuple(sum(int(row[index]) for row in service_rows) for index in range(4))
-    assert service_totals == (165, 31, 10, 124)
+    assert service_totals == (165, 32, 10, 123)
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
     guide_normalized = " ".join(guide.split())
     assert "## Current Inventory" in guide
-    assert "Runtime test status | 성공 31 / 실패 10 / 미실행 124" in guide
+    assert "Runtime test status | 성공 32 / 실패 10 / 미실행 123" in guide
     assert "| `CustService` | 1 | 0 | 1 | 0 |" in guide
     assert "| `ResearchService` | 11 | 3 | 2 | 6 |" in guide
     assert "| `ReservationService` | 4 | 1 | 1 | 2 |" in guide
-    assert "| `TicketService` | 19 | 2 | 0 | 17 |" in guide
+    assert "| `TicketService` | 19 | 3 | 0 | 16 |" in guide
     assert "| `TrainsInfoService` | 6 | 3 | 0 | 3 |" in guide
     guide_service_table = guide.split("## Service Runtime Status", 1)[1].split(
         "The historical pre-revalidation", 1
@@ -183,7 +183,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     guide_totals = tuple(
         sum(int(row[index]) for row in guide_service_rows) for index in range(4)
     )
-    assert guide_totals == (165, 31, 10, 124)
+    assert guide_totals == (165, 32, 10, 123)
     assert "27 parsed responses" in guide_normalized
     assert "one expected `KorailAppError`" in guide_normalized
     assert "zero unexpected failures" in guide_normalized
@@ -197,7 +197,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     progress = PROGRESS.read_text(encoding="utf-8")
     assert "50 exact login/read routes" in progress
     assert "53 public methods" in progress
-    assert "- Live-successful inventory entries: 31" in progress
+    assert "- Live-successful inventory entries: 32" in progress
     assert "75" in progress
     assert "IRG000000" in progress
 
@@ -221,10 +221,6 @@ def test_ticket_reference_docs_keep_static_only_rows_and_scope_consistent():
             "`plfNo`",
             "/classes/com.korail.mobile.tk.plfNo.do",
         ),
-        149: (
-            "`rcntDlvHst`",
-            "/classes/com.korail.mobile.tk.rcntDlvHst.do",
-        ),
     }
     lines = status.splitlines()
     for row_no, (method, path) in expected_rows.items():
@@ -235,9 +231,15 @@ def test_ticket_reference_docs_keep_static_only_rows_and_scope_consistent():
         assert path in row
         assert "| 미실행 | static-only / live 미실행 |" in row
 
+    r149_rows = [line for line in lines if line.startswith("| 149 |")]
+    assert len(r149_rows) == 1
+    assert "`rcntDlvHst`" in r149_rows[0]
+    assert "/classes/com.korail.mobile.tk.rcntDlvHst.do" in r149_rows[0]
+    assert "| 성공 | `1 row, 1회 호출, 재시도 없음` |" in r149_rows[0]
+
     common_scope_claim = (
-        "This ticket-reference tranche used no live I/O and added no mutation "
-        "capability."
+        "The ticket-reference implementation itself used no live I/O and "
+        "added no mutation capability."
     )
     for document in (README, CHANGELOG, PROGRESS, HANDOFF):
         normalized = " ".join(document.read_text(encoding="utf-8").split())
@@ -463,7 +465,11 @@ def test_docs_record_fixed_account_reads_and_tour_train_holdback():
         assert "historical" in normalized.casefold()
         assert "pre-revalidation" in normalized.casefold()
         assert "28 successful, 9 failed, and 128 unexecuted" in normalized
-        assert "31 successful, 10 failed, and 124 unexecuted" in normalized
+        assert (
+            "pre-R149 inventory was 31 successful, 10 failed, and 124 "
+            "unexecuted" in normalized
+        )
+        assert "32 successful, 10 failed, and 123 unexecuted" in normalized
         assert "mutation" in normalized
     normalized_readme = " ".join(readme.split())
     assert "no `get_tour_train_info` client method" in normalized_readme
@@ -482,7 +488,11 @@ def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
     }
     for name, document in documents.items():
         normalized = " ".join(document.split())
-        assert "31 successful, 10 failed, and 124 unexecuted" in normalized, name
+        assert (
+            "pre-R149 inventory was 31 successful, 10 failed, and 124 "
+            "unexecuted" in normalized
+        ), name
+        assert "32 successful, 10 failed, and 123 unexecuted" in normalized, name
         assert "empty advertising ID" in normalized, name
         assert "customer_no" in normalized, name
         assert "WRC800029" in normalized, name
@@ -492,6 +502,18 @@ def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
         assert "skipped_no_typed_leg" in normalized, name
         assert "R17, R31, R39, and R54 were not called" in normalized, name
         assert "No mutation" in normalized, name
+        assert "one successful login call" in normalized, name
+        assert (
+            "confirmed logged-in state and customer-number presence"
+            in normalized
+        ), name
+        assert "called only R149 once" in normalized, name
+        assert "succeeded with one row and was not retried" in normalized, name
+        assert "R137, R138, R146, and R148 made zero calls" in normalized, name
+        assert (
+            "No mutation, raw response, PII, credential, or server message was retained"
+            in normalized
+        ), name
 
     forbidden_patterns = {
         "concrete credential assignment": re.compile(
