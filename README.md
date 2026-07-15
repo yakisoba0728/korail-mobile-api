@@ -318,12 +318,12 @@ confirmation stopped at the service-status preflight before login transport,
 so it made no search, car-list, or seat-list request and was not rapidly
 retried.
 
-### Static-only P0 train reads
+### P0 train reads and bounded live evidence
 
 Four additional APK-evidenced read operations are exposed through closed,
-frozen request objects. This increment is static-only: its contracts come from
-the tracked Retrofit declarations, response DTOs, and direct APK call sites.
-No live call was made, and all parser coverage uses synthetic fixtures.
+frozen request objects. Initial implementation used only static APK evidence
+and synthetic fixtures. That history remains the basis for the closed request
+contracts and offline parser coverage.
 
 | Public method | Frozen request | Documented APK name and exact route |
 |---|---|---|
@@ -331,6 +331,21 @@ No live call was made, and all parser coverage uses synthetic fixtures.
 | `get_guide_seat_condition(request)` | `GuideSeatConditionRequest` | `getGuideSeatCnd`; `POST /classes/com.korail.mobile.reservation.guideSeatCnd.do` |
 | `get_seat_assignment_schedule(request)` | `SeatAssignmentScheduleRequest` | `getAssignScheduleView`; `POST /classes/com.korail.mobile.research.assignScheduleView.do` |
 | `get_merge_seats_inquiry(request)` | `MergeSeatsInquiryRequest` | `getMergeSeatsInquiry`; `POST /classes/com.korail.mobile.research.mergeSeatsC.do` |
+
+A later bounded authenticated revalidation made 28 requests and received 28
+responses. It produced 25 successful operations, one expected typed
+application failure, and three input-dependent skips. Deposit-bank and
+trip-menu reads succeeded after login. R30 `getFresScar` returned exact
+`strResult="SUCC"` and parsed successfully. R33 `getGuideSeatCnd` returned a
+full `FAIL` application envelope for the server-supplied seat attribute; it
+surfaced as `KorailAppError` and was not retried. R37
+`getAssignScheduleView` and R51 `getMergeSeatsInquiry` remain static-only and
+unexecuted. Because the bounded run was authenticated, it does not establish
+pre-login server behavior for these four routes. Offline raw replay yielded 27
+parsed responses, one expected
+`KorailAppError`, and zero unexpected failures. No raw response value,
+identifier, credential, cookie, token, or server-supplied seat attribute was
+recorded.
 
 The Java names above are documentation aliases only; the client does not add
 duplicate camelCase methods. Each public method accepts exactly its matching

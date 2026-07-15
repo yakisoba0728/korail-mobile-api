@@ -2,11 +2,23 @@
 
 ## Unreleased
 
-- Added four static-only, typed P0 train reads for free-seat car guidance,
-  guide-seat conditions, seat-assignment schedules, and merged-seat inquiry.
-- Added frozen closed request objects, exact POST field allowlists, strict
-  response parsers, repr-hidden identifiers/free text/raw mappings, and
-  synthetic-only fixtures without adding a live call or DynaPath route.
+- Ran a bounded revalidation of the P0 read surface in an authenticated 28-request,
+  28-response run with 25 successful operations, one expected typed
+  application failure, and three input-dependent skips. Deposit-bank and
+  trip-menu reads succeeded after login; R30 `getFresScar` returned exact
+  `strResult="SUCC"` and parsed, while R33 `getGuideSeatCnd` returned a full
+  `FAIL` application envelope for the server-supplied seat attribute and
+  surfaced as the expected typed application failure without a retry
+  (`KorailAppError`). R37 and R51 remained unexecuted. Offline raw replay
+  yielded 27 parsed responses, one expected `KorailAppError`, and zero
+  unexpected failures.
+- Initially added four typed P0 train reads from static APK evidence for
+  free-seat car guidance, guide-seat conditions, seat-assignment schedules,
+  and merged-seat inquiry.
+- Initial implementation added frozen closed request objects, exact POST field
+  allowlists, strict response parsers, repr-hidden identifiers/free text/raw
+  mappings, and synthetic-only fixtures; that implementation step added no
+  live call or DynaPath route.
 - Kept the Java Retrofit names as documentation aliases only and deliberately
   omitted `TrainSummary` convenience chaining and every adjacent mutation.
 - Tightened only these four route parsers to require exact `strResult=SUCC`

@@ -23,7 +23,7 @@
 | Distinct HTTP+path pairs | 159 |
 | Annotated service interfaces | 35 |
 | HTTP method mix | POST 136 / GET 29 |
-| Runtime test status | 성공 27 / 실패 8 / 미실행 130 |
+| Runtime test status | 성공 28 / 실패 9 / 미실행 128 |
 
 ## Runtime Contract
 
@@ -104,12 +104,23 @@ evidence, independent review, and explicit user authorization.
 | `RefundService` | 5 | 0 | 0 | 5 |
 | `ResearchService` | 11 | 2 | 2 | 7 |
 | `ReservationCancelService` | 3 | 0 | 0 | 3 |
-| `ReservationService` | 4 | 1 | 0 | 3 |
+| `ReservationService` | 4 | 1 | 1 | 2 |
 | `ReservationWaitService` | 1 | 0 | 0 | 1 |
 | `SeatMovieService` | 3 | 1 | 0 | 2 |
 | `TicketService` | 19 | 0 | 0 | 19 |
-| `TrainsInfoService` | 6 | 2 | 0 | 4 |
+| `TrainsInfoService` | 6 | 3 | 0 | 3 |
 | `XPointService` | 5 | 0 | 0 | 5 |
+
+The updated counts reflect one bounded authenticated revalidation that made 28
+requests and received 28 responses: 25 successful operations, one expected
+typed application failure, and three input-dependent skips. Deposit-bank and
+trip-menu reads succeeded after login. R30 `getFresScar` returned exact
+`strResult="SUCC"` and parsed successfully; R33 `getGuideSeatCnd` returned a
+full `FAIL` application envelope for the server-supplied seat attribute,
+surfaced as `KorailAppError`, and was not retried. R37
+`getAssignScheduleView` and R51 `getMergeSeatsInquiry` remain static-only and
+unexecuted. Offline raw replay yielded 27 parsed responses, one expected
+`KorailAppError`, and zero unexpected failures.
 
 ## Runtime Failure Notes
 
@@ -123,6 +134,7 @@ evidence, independent review, and explicit user authorization.
 | `PassService` | `passMenu` | `/classes/com.korail.mobile.pass.passMenu.do` | `menuNo Error` |
 | `ResearchService` | `getNCardHistory` | `/classes/com.korail.mobile.ticket.dcntCrdUseQry.do` | 입력값 오류 `dcntCrdNo` |
 | `ResearchService` | `getNCardSchedultView` | `/classes/com.korail.mobile.research.dcntCrdScheduleView.do` | 입력값 오류 `dcntCrdKndCd` |
+| `ReservationService` | `getGuideSeatCnd` | `/classes/com.korail.mobile.reservation.guideSeatCnd.do` | server-supplied seat attribute produced a full `FAIL` application envelope surfaced as `KorailAppError`; no retry |
 
 ## Safety Defaults
 

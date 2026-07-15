@@ -17,15 +17,30 @@ The current implementation evidence establishes:
 - 41 public methods on `KorailClient`.
 - A reviewed offline gate of `1246 passed, 1 deselected`; the deselected
   test is the explicitly opted-in live-service test.
+- Service inventory of 28 successful, 9 failed, and 128 unexecuted routes; the
+  total remains 165.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.
 
-The four P0 train routes are static-only reads: free-seat car guidance,
-guide-seat conditions, seat-assignment schedules, and merged-seat inquiry.
-They use frozen closed request objects, exact POST forms, strict typed parsers,
-synthetic fixtures, and repr-hidden identifiers/free text/raw mappings. No live
-call, DynaPath addition, Java-name method alias, `TrainSummary` convenience
-chain, fallback, or adjacent mutation was added.
+The four P0 train routes were initially implemented from static APK evidence
+and synthetic fixtures: free-seat car guidance, guide-seat conditions,
+seat-assignment schedules, and merged-seat inquiry. They use frozen closed
+request objects, exact POST forms, strict typed parsers, and repr-hidden
+identifiers/free text/raw mappings. That implementation step added no live
+call, DynaPath route, Java-name method alias, `TrainSummary` convenience chain,
+fallback, or adjacent mutation.
+
+A later bounded authenticated revalidation made 28 requests and received 28
+responses, with 25 successful operations, one expected typed application
+failure, and three input-dependent skips. Deposit-bank and trip-menu reads
+succeeded after login. R30 `getFresScar` returned exact `strResult="SUCC"` and
+parsed successfully. R33 `getGuideSeatCnd` returned a full `FAIL` application
+envelope for the server-supplied seat attribute, surfaced as `KorailAppError`,
+and was not retried. R37 `getAssignScheduleView` and R51
+`getMergeSeatsInquiry` remain static-only and unexecuted. Offline raw replay
+yielded 27 parsed responses, one expected `KorailAppError`, and zero unexpected
+failures. No raw response value, credential, or server-supplied seat attribute
+was recorded.
 
 ## Completed read package
 

@@ -70,14 +70,41 @@ def test_readme_documents_every_successful_read_expansion_method_and_boundary():
 
 def test_status_and_progress_documents_match_current_inventory_and_coverage():
     status = STATUS.read_text(encoding="utf-8")
-    assert "| 성공 | 27 |" in status
-    assert "| 실패 | 8 |" in status
-    assert "| 미실행 | 130 |" in status
+    assert "| 성공 | 28 |" in status
+    assert "| 실패 | 9 |" in status
+    assert "| 미실행 | 128 |" in status
+    assert "| 전체 | 165 |" in status
+    assert "| 성공 | 27 |" not in status
+    assert "| 실패 | 8 |" not in status
+    assert "| 미실행 | 130 |" not in status
+    assert "| `ReservationService` | 승차권 예약 및 좌석 조건 | 4 | 1 | 1 | 2 |" in status
+    assert "| `TrainsInfoService` | 열차/객차/자유석 정보 조회 | 6 | 3 | 0 | 3 |" in status
+    assert (
+        "| 124 | `getGuideSeatCnd` | POST | "
+        "`/classes/com.korail.mobile.reservation.guideSeatCnd.do` | "
+        "좌석 조건 안내 | 실패 |" in status
+    )
+    assert "server-supplied `rqSeatAttCd`" in status
+    assert "`KorailAppError`, 재시도 없음" in status
+    assert (
+        "| 155 | `getFresScar` | POST | "
+        "`/classes/com.korail.mobile.trn.fresScar.do` | 자유석/객차 조회 | "
+        '성공 | exact `strResult="SUCC"`, typed parse 성공 |' in status
+    )
     assert "Package coverage: 38 exact login/read routes" in status
     assert "bounded live structural evidence" in status
+    assert "25 successful operations" in status
+    assert "three input-dependent skips" in status
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
-    assert "성공 27 / 실패 8 / 미실행 130" in guide
+    guide_normalized = " ".join(guide.split())
+    assert "성공 28 / 실패 9 / 미실행 128" in guide
+    assert "| `ReservationService` | 4 | 1 | 1 | 2 |" in guide
+    assert "| `TrainsInfoService` | 6 | 3 | 0 | 3 |" in guide
+    assert "27 parsed responses" in guide_normalized
+    assert "one expected `KorailAppError`" in guide_normalized
+    assert "zero unexpected failures" in guide_normalized
+    assert "성공 27 / 실패 8 / 미실행 130" not in guide
     assert "성공 25 / 실패 8 / 미실행 132" not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
@@ -113,6 +140,11 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     for document in (readme, progress, status, handoff, changelog):
         assert "session-unverified" in document
     assert "live verification only after login" in readme
+    assert (
+        "No live request or raw response body was used to implement or verify "
+        "this increment." in " ".join(readme.split())
+    )
+    assert "Until a bounded live check can run after login" in " ".join(readme.split())
     assert "Three account-neutral reference methods" not in readme
     assert "Account-neutral pass-menu" not in progress
     assert "typed account-neutral pass-menu" not in changelog
@@ -167,8 +199,9 @@ def test_docs_describe_raw_backed_typed_core_and_compatibility_boundary():
         assert key in readme
 
 
-def test_readme_documents_static_only_p0_train_reads_and_closed_requests():
+def test_readme_documents_bounded_live_p0_train_reads_and_closed_requests():
     text = README.read_text(encoding="utf-8")
+    normalized = " ".join(text.split())
     for method_name in (
         "get_free_seat_car_info",
         "get_guide_seat_condition",
@@ -191,10 +224,53 @@ def test_readme_documents_static_only_p0_train_reads_and_closed_requests():
     ):
         assert java_name in text
     assert "38 routes and 41 public methods" in text
-    assert "static-only" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
-    assert "No live call was made" in text
+    assert (
+        "Initial implementation used only static APK evidence and synthetic "
+        "fixtures." in normalized
+    )
+    assert (
+        '`getFresScar` returned exact `strResult="SUCC"` and parsed successfully.'
+        in normalized
+    )
+    assert "`getGuideSeatCnd` returned a full `FAIL` application envelope" in normalized
+    assert "surfaced as `KorailAppError` and was not retried" in normalized
+    assert (
+        "R37 `getAssignScheduleView` and R51 `getMergeSeatsInquiry` remain "
+        "static-only and unexecuted." in normalized
+    )
+    assert "does not establish pre-login server behavior" in normalized
+    assert (
+        "No live call was made, and all parser coverage uses synthetic fixtures."
+        not in normalized
+    )
+
+
+def test_docs_record_bounded_p0_live_counts_and_replay():
+    readme = " ".join(README.read_text(encoding="utf-8").split())
+    progress = " ".join(PROGRESS.read_text(encoding="utf-8").split())
+    handoff = " ".join(HANDOFF.read_text(encoding="utf-8").split())
+    changelog = " ".join(CHANGELOG.read_text(encoding="utf-8").split())
+
+    assert "made 28 requests and received 28 responses" in readme
+    assert "25 successful operations" in readme
+    assert "one expected typed application failure" in readme
+    assert "three input-dependent skips" in readme
+    assert "Deposit-bank and trip-menu reads succeeded after login" in readme
+    for text in (progress, handoff):
+        assert "27 parsed responses" in text
+        assert "one expected `KorailAppError`" in text
+        assert "zero unexpected failures" in text
+    assert "authenticated 28-request, 28-response run" in changelog
+    assert "25 successful operations" in changelog
+    assert "three input-dependent skips" in changelog
+    assert '`getFresScar` returned exact `strResult="SUCC"` and parsed' in changelog
+    assert "full `FAIL` application envelope for the server-supplied seat attribute" in changelog
+    assert "expected typed application failure without a retry" in changelog
+    assert "27 parsed responses" in changelog
+    assert "one expected `KorailAppError`" in changelog
+    assert "zero unexpected failures" in changelog
 
 
 def test_readme_documents_static_only_limousine_read_contracts():
@@ -208,5 +284,5 @@ def test_readme_documents_static_only_limousine_read_contracts():
     assert "caller-supplied service" in text
     assert "caller-supplied menu" in text
     assert "DynaPath-disabled" in text
-    assert "No live call" in text
+    assert "No live call was made for this increment" in text
     assert "seat selection" in text

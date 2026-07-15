@@ -58,12 +58,23 @@ Last updated: 2026-07-15 KST
   a sufficiency category after a secret scan. It is not part of broad live
   smoke. Bounded live structural evidence now covers both seat-inventory read
   routes without retaining raw response values or identifiers.
-- Four static-only P0 train reads are implemented from the APK contracts:
-  free-seat car guidance, guide-seat conditions, seat-assignment schedules,
-  and merged-seat inquiry. Each accepts one frozen closed request object,
-  issues one exact POST with DynaPath forced off, and returns frozen typed
-  output with identifiers, server free text, and raw mappings repr-hidden. No
-  live request or `TrainSummary` convenience chain was added.
+- Four P0 train reads were initially implemented from static APK contracts and
+  synthetic fixtures: free-seat car guidance, guide-seat conditions,
+  seat-assignment schedules, and merged-seat inquiry. Each accepts one frozen
+  closed request object, issues one exact POST with DynaPath forced off, and
+  returns frozen typed output with identifiers, server free text, and raw
+  mappings repr-hidden. That implementation step added no live request or
+  `TrainSummary` convenience chain.
+- A later bounded authenticated revalidation made 28 requests and received 28
+  responses, producing 25 successful operations, one expected typed
+  application failure, and three input-dependent skips. Deposit-bank and
+  trip-menu reads succeeded after login. R30 `getFresScar` returned exact
+  `strResult="SUCC"` and parsed successfully. R33 `getGuideSeatCnd` returned a
+  full `FAIL` application envelope for the server-supplied seat attribute,
+  surfaced as `KorailAppError`, and was not retried. R37
+  `getAssignScheduleView` and R51 `getMergeSeatsInquiry` remain static-only and
+  unexecuted. Offline raw replay yielded 27 parsed responses, one expected
+  `KorailAppError`, and zero unexpected failures.
 - The consolidated final review is complete. Its two Important and one Minor
   KORAIL findings were fixed together; re-review found no remaining Critical,
   Important, or Minor issue.
@@ -264,7 +275,7 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 ## Analysis Inventory Versus Implementation
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
-- Live-successful inventory entries: 27
+- Live-successful inventory entries: 28
 - Currently implemented exact login/read routes: 38
 - Therefore the complete APK endpoint inventory is not yet implemented
 
