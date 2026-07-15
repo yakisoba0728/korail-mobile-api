@@ -9,6 +9,8 @@ import httpx
 import pytest
 
 import korail_mobile_api
+import korail_mobile_api.read_models as read_models
+import korail_mobile_api.read_payloads as read_payloads
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -224,22 +226,31 @@ def test_route_method_export_and_dynapath_boundaries_are_exact():
     }
     assert len(public_methods) == 53
 
-    for name in (
-        "TicketDuplicationCheckRequest",
-        "DeliveryRecipientResponse",
-        "TicketDuplicationCheckResponse",
-        "PbpAcceptanceSeat",
-        "PbpAcceptanceJourney",
-        "PbpAcceptanceTicket",
-        "PbpAcceptanceSpecificationResponse",
-        "PlatformNumberJourney",
-        "PlatformNumberTicket",
-        "PlatformNumberResponse",
-        "RecentDeliveryRecipient",
-        "RecentDeliveryHistoryResponse",
-    ):
+    expected_exports = {
+        "TicketDuplicationCheckRequest": (
+            read_payloads.TicketDuplicationCheckRequest
+        ),
+        "DeliveryRecipientResponse": read_models.DeliveryRecipientResponse,
+        "TicketDuplicationCheckResponse": (
+            read_models.TicketDuplicationCheckResponse
+        ),
+        "PbpAcceptanceSeat": read_models.PbpAcceptanceSeat,
+        "PbpAcceptanceJourney": read_models.PbpAcceptanceJourney,
+        "PbpAcceptanceTicket": read_models.PbpAcceptanceTicket,
+        "PbpAcceptanceSpecificationResponse": (
+            read_models.PbpAcceptanceSpecificationResponse
+        ),
+        "PlatformNumberJourney": read_models.PlatformNumberJourney,
+        "PlatformNumberTicket": read_models.PlatformNumberTicket,
+        "PlatformNumberResponse": read_models.PlatformNumberResponse,
+        "RecentDeliveryRecipient": read_models.RecentDeliveryRecipient,
+        "RecentDeliveryHistoryResponse": (
+            read_models.RecentDeliveryHistoryResponse
+        ),
+    }
+    for name, expected in expected_exports.items():
         assert name in korail_mobile_api.__all__
-        assert getattr(korail_mobile_api, name)
+        assert getattr(korail_mobile_api, name) is expected
 
 
 def test_exact_builders_preserve_wire_order_duplicate_fields_and_count_types():
@@ -470,6 +481,15 @@ def test_sensitive_models_raw_mappings_and_text_are_repr_safe_and_redacted():
         "plfNo=PLATFORM_SECRET"
     )
     assert "SECRET" not in rendered_text
+
+    assert redact_mapping({"rsvCnt": 37}) == {
+        "rsvCnt": "[REDACTED]"
+    }
+    typed_count = TicketDuplicationCheckResponse(reservation_count=37)
+    redacted_typed_count = redact_mapping({"response": typed_count})
+    assert redacted_typed_count["response"]["reservation_count"] == (
+        "[REDACTED]"
+    )
 
 
 def test_client_uses_one_shot_exact_forms_session_customer_and_no_dynapath():

@@ -197,8 +197,51 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     progress = PROGRESS.read_text(encoding="utf-8")
     assert "50 exact login/read routes" in progress
     assert "53 public methods" in progress
+    assert "- Live-successful inventory entries: 31" in progress
     assert "75" in progress
     assert "IRG000000" in progress
+
+
+def test_ticket_reference_docs_keep_static_only_rows_and_scope_consistent():
+    status = STATUS.read_text(encoding="utf-8")
+    expected_rows = {
+        137: (
+            "`dlvRcvCust`",
+            "/classes/com.korail.mobile.tk.dlvRcvCust.do",
+        ),
+        138: (
+            "`duplicationCheck`",
+            "/classes/com.korail.mobile.ticket.ticketDupCheck.do",
+        ),
+        146: (
+            "`pbpAcepSpec`",
+            "/classes/com.korail.mobile.tk.pbpAcepSpec.do",
+        ),
+        148: (
+            "`plfNo`",
+            "/classes/com.korail.mobile.tk.plfNo.do",
+        ),
+        149: (
+            "`rcntDlvHst`",
+            "/classes/com.korail.mobile.tk.rcntDlvHst.do",
+        ),
+    }
+    lines = status.splitlines()
+    for row_no, (method, path) in expected_rows.items():
+        matches = [line for line in lines if line.startswith(f"| {row_no} |")]
+        assert len(matches) == 1
+        row = matches[0]
+        assert method in row
+        assert path in row
+        assert "| 미실행 | static-only / live 미실행 |" in row
+
+    common_scope_claim = (
+        "This ticket-reference tranche used no live I/O and added no mutation "
+        "capability."
+    )
+    for document in (README, CHANGELOG, PROGRESS, HANDOFF):
+        normalized = " ".join(document.read_text(encoding="utf-8").split())
+        assert common_scope_claim in normalized
 
 
 def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():

@@ -180,6 +180,9 @@ DynaPath expansion occurred. Inventory remains 31 successful, 10 failed, and
 124 unexecuted out of 165; the boundary is 50 exact routes and 53 public
 methods, with six DynaPath allowlist paths.
 
+This ticket-reference tranche used no live I/O and added no mutation
+capability.
+
 ## Implemented Public Operations
 
 - Login and local logout/session clearing
@@ -364,7 +367,7 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 ## Analysis Inventory Versus Implementation
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
-- Live-successful inventory entries: 28
+- Live-successful inventory entries: 31
 - Currently implemented exact login/read routes: 50
 - Therefore the complete APK endpoint inventory is not yet implemented
 

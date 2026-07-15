@@ -108,6 +108,9 @@ current boundary is 50 exact login/read routes and 53 public methods, while the
 DynaPath allowlist remains six paths. Keep all five routes unexecuted until a
 separately reviewed caller-owned ticket/PNR evidence plan exists.
 
+This ticket-reference tranche used no live I/O and added no mutation
+capability.
+
 ## Completed read package
 
 The successful-read expansion is complete. Eleven public read methods were
