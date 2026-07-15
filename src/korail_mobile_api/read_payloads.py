@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import time
+from calendar import monthrange
 from dataclasses import dataclass, field
+from datetime import date
 
 from .config import KorailConfig
 
@@ -478,3 +480,79 @@ def build_ticket_receipt_form(
             "return_password",
         ),
     }
+
+
+def _calendar_date(value: str, name: str) -> date:
+    _ascii_date(value, name)
+    try:
+        return date(int(value[:4]), int(value[4:6]), int(value[6:]))
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a valid calendar date") from exc
+
+
+def _add_calendar_months(value: date, months: int) -> date:
+    index = value.year * 12 + value.month - 1 + months
+    year, zero_based_month = divmod(index, 12)
+    month = zero_based_month + 1
+    return date(year, month, min(value.day, monthrange(year, month)[1]))
+
+
+@dataclass(frozen=True)
+class MaasServiceDetailQuery:
+    start_date: str | None = field(default=None, repr=False)
+    end_date: str | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        if (self.start_date is None) != (self.end_date is None):
+            raise ValueError("MaaS history requires both dates or neither")
+        if self.start_date is None:
+            return
+        start = _calendar_date(self.start_date, "start_date")
+        end = _calendar_date(self.end_date, "end_date")
+        if end < start:
+            raise ValueError("end_date must not be before start_date")
+        if end > _add_calendar_months(start, 3):
+            raise ValueError("MaaS history range must be at most three calendar months")
+
+    @classmethod
+    def current(cls) -> "MaasServiceDetailQuery":
+        return cls()
+
+    @classmethod
+    def history(
+        cls,
+        start_date: str,
+        end_date: str,
+    ) -> "MaasServiceDetailQuery":
+        return cls(start_date=start_date, end_date=end_date)
+
+
+def build_multi_child_discount_target_form(
+    departure_date: str,
+) -> dict[str, str]:
+    return {"dptDt": _ascii_date(departure_date, "departure_date")}
+
+
+def build_customer_trip_info_form(customer_no: str) -> dict[str, str]:
+    return {
+        "custMgNo": _required_text(customer_no, "customer_no"),
+        "medDvCd": "03",
+        "regSqno": "0",
+    }
+
+
+def build_maas_service_detail_form(
+    config: KorailConfig,
+    query: MaasServiceDetailQuery,
+) -> dict[str, str]:
+    if not isinstance(query, MaasServiceDetailQuery):
+        raise ValueError("query must be a MaasServiceDetailQuery")
+    form = {"Device": config.device, "Version": config.version}
+    if query.start_date is not None:
+        form["qryDtFrom"] = query.start_date
+        form["qryDtTo"] = query.end_date
+    return form
+
+
+def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
+    return {"tripChgDate": _ascii_date(departure_date, "departure_date")}

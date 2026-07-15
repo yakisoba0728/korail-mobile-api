@@ -108,8 +108,8 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "성공 25 / 실패 8 / 미실행 132" not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
-    assert "38 exact login/read routes" in progress
-    assert "41 public methods" in progress
+    assert "42 exact login/read routes" in progress
+    assert "45 public methods" in progress
     assert "75" in progress
     assert "IRG000000" in progress
 
@@ -136,7 +136,7 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     assert "/classes/com.korail.mobile.push.callCrew.do" in readme
     assert "remains excluded" in readme
     assert "static APK evidence and synthetic fixtures only" in readme
-    assert "38 exact read/login routes" in progress
+    assert "42 exact read/login routes" in progress
     for document in (readme, progress, status, handoff, changelog):
         assert "session-unverified" in document
     assert "live verification only after login" in readme
@@ -223,7 +223,7 @@ def test_readme_documents_bounded_live_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "38 routes and 41 public methods" in text
+    assert "42 routes and 45 public methods" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
     assert (
@@ -302,3 +302,38 @@ def test_readme_documents_static_only_limousine_read_contracts():
     assert "DynaPath-disabled" in text
     assert "No live call was made for this increment" in text
     assert "seat selection" in text
+
+
+def test_docs_record_fixed_account_reads_and_tour_train_holdback():
+    documents = [
+        README.read_text(encoding="utf-8"),
+        PROGRESS.read_text(encoding="utf-8"),
+        HANDOFF.read_text(encoding="utf-8"),
+        CHANGELOG.read_text(encoding="utf-8"),
+    ]
+    readme = documents[0]
+    for method_name in (
+        "get_multi_child_discount_targets",
+        "get_customer_trip_info",
+        "get_maas_service_details",
+        "get_trip_change_dates",
+    ):
+        assert f"{method_name}(" in readme
+    for path in (
+        "/classes/com.korail.mobile.cust.mchdDcntTgt.do",
+        "/classes/com.korail.mobile.research.custTripInfo.do",
+        "/classes/com.korail.mobile.copt.gdReqQry.do",
+        "/classes/com.korail.mobile.reservation.tripChgDate.do",
+    ):
+        assert path in readme
+    for text in documents:
+        normalized = " ".join(text.split())
+        assert "strCustNo" in text
+        assert "R54" in text
+        assert "no live request" in normalized.casefold()
+        assert "28 successful, 9 failed, and 128 unexecuted" in normalized
+        assert "mutation" in normalized
+    normalized_readme = " ".join(readme.split())
+    assert "no `get_tour_train_info` client method" in normalized_readme
+    assert "no registered safety route" in normalized_readme
+    assert "no raw-string request builder" in normalized_readme

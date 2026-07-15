@@ -1,0 +1,29 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic MaaS service details",
+  "strResult": "SUCC",
+  "addSrvList": [
+    {
+      "addSrvDvCd": "SYNTHETIC_addSrvDvCd",
+      "addSrvGdCd": "SYNTHETIC_addSrvGdCd",
+      "addSrvId": "SYNTHETIC_addSrvId",
+      "addSrvMrkEntId": "SYNTHETIC_addSrvMrkEntId",
+      "addSrvMrkEntNm": "SYNTHETIC_addSrvMrkEntNm",
+      "addSrvNm": "SYNTHETIC_addSrvNm",
+      "addSrvPrgSttCd": "SYNTHETIC_addSrvPrgSttCd",
+      "addSrvReqNo": "SYNTHETIC_addSrvReqNo",
+      "cgPsRefAtclCont": "SYNTHETIC_cgPsRefAtclCont",
+      "coptEntRsvNo": "SYNTHETIC_coptEntRsvNo",
+      "dlivPsbClsTm": "SYNTHETIC_dlivPsbClsTm",
+      "dlivPsbStTm": "SYNTHETIC_dlivPsbStTm",
+      "leadMsgCont1": "SYNTHETIC_leadMsgCont1",
+      "leadMsgCont2": "SYNTHETIC_leadMsgCont2",
+      "pnrNo": "SYNTHETIC_pnrNo",
+      "reqDt": "SYNTHETIC_reqDt",
+      "reqQnty": "SYNTHETIC_reqQnty",
+      "rsvSpecUrl": "SYNTHETIC_rsvSpecUrl",
+      "utlClsDt": "SYNTHETIC_utlClsDt",
+      "utlStDt": "SYNTHETIC_utlStDt"
+    }
+  ]
+}

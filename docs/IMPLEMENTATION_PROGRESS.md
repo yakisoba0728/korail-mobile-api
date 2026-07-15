@@ -83,8 +83,8 @@ Last updated: 2026-07-15 KST
   `SUCC` parsing, and frozen repr-safe models for all eight evidenced train
   fields. The server session rule remains unverified, so a conservative
   client-side login gate remains until a bounded after-login validation.
-- The transport now allows 38 exact login/read routes and the client exposes
-  41 public methods. No new route was added to the DynaPath allowlist.
+- The transport now allows 42 exact login/read routes and the client exposes
+  45 public methods. No new route was added to the DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -92,6 +92,30 @@ Last updated: 2026-07-15 KST
   shape-only evidence resolved cart, delay-discount, and product-reservation
   list envelopes without weakening the remaining strict routes. The same
   evidence established finite ASCII decimal strings for seat-window ratios.
+
+## Fixed and account-shaped read tranche
+
+R13, R32, R43, and R45 are implemented as four conservative authenticated
+reads with exact ordered forms and no DynaPath invocation:
+
+- `/classes/com.korail.mobile.cust.mchdDcntTgt.do`
+- `/classes/com.korail.mobile.research.custTripInfo.do`
+- `/classes/com.korail.mobile.copt.gdReqQry.do`
+- `/classes/com.korail.mobile.reservation.tripChgDate.do`
+
+R32 uses only the repr-hidden login response `strCustNo`, with no member-number
+or member-card fallback. R43 supports only the current `Device`/`Version` form
+or a two-date history form bounded to three calendar months; both forms omit
+`Key`. All four validate before their single transport call and require a
+local session.
+
+R54 has a strict internal nested response model/parser, but its unresolved
+train-group provenance keeps transport unavailable. There is no public client
+method, safety route, or raw-string request builder. This tranche used no live
+request, credentials, `.env`, or raw capture and added no mutation capability.
+The APK inventory remains 28 successful, 9 failed, and 128 unexecuted entries
+out of 165; only package coverage changed to 42 exact routes and 45 public
+methods.
 
 ## Implemented Public Operations
 
@@ -125,7 +149,7 @@ Last updated: 2026-07-15 KST
 - Client-gated pass-schedule candidate lookup with caller-supplied runtime
   values; no pass reservation or payment operation
 
-The transport currently allows 38 exact read/login routes. Reservation,
+The transport currently allows 42 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
 mutation routes are not callable.
 
@@ -278,7 +302,7 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
 - Live-successful inventory entries: 28
-- Currently implemented exact login/read routes: 38
+- Currently implemented exact login/read routes: 42
 - Therefore the complete APK endpoint inventory is not yet implemented
 
 All recorded successful read entries now have an exact package route. The

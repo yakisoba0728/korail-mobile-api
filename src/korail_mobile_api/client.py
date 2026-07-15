@@ -77,12 +77,15 @@ from .read_models import (
     CartListResponse,
     CommuterKindMenuResponse,
     CrewRequestListResponse,
+    CustomerTripInfoResponse,
     DelayDiscountTicketListResponse,
     DepositBankListResponse,
     DiscountCouponListResponse,
     FreeSeatCarResponse,
     GuideSeatConditionResponse,
+    MaasServiceDetailListResponse,
     MergeSeatsInquiryResponse,
+    MultiChildDiscountTargetResponse,
     PassAvailabilityResponse,
     PassMenuResponse,
     PassScheduleResponse,
@@ -92,9 +95,11 @@ from .read_models import (
     SeatAssignmentScheduleResponse,
     ServiceStatusResponse,
     TicketReceiptResponse,
+    TripChangeDateResponse,
     TripMenuResponse,
 )
 from .read_payloads import (
+    build_customer_trip_info_form,
     build_cart_list_form,
     build_commuter_kind_menu_query,
     build_crew_request_list_query,
@@ -102,7 +107,9 @@ from .read_payloads import (
     build_discount_coupon_form,
     build_free_seat_car_form,
     build_guide_seat_condition_form,
+    build_maas_service_detail_form,
     build_merge_seats_inquiry_form,
+    build_multi_child_discount_target_form,
     build_pass_availability_form,
     build_pass_menu_form,
     build_pass_schedule_form,
@@ -112,8 +119,10 @@ from .read_payloads import (
     build_seat_assignment_schedule_form,
     build_ticket_receipt_form,
     build_trip_menu_form,
+    build_trip_change_date_form,
     FreeSeatCarRequest,
     GuideSeatConditionRequest,
+    MaasServiceDetailQuery,
     MergeSeatsInquiryRequest,
     SeatAssignmentScheduleRequest,
     PassScheduleRequest,
@@ -122,12 +131,15 @@ from .read_parsers import (
     parse_cart_list_response,
     parse_commuter_kind_menu_response,
     parse_crew_request_list_response,
+    parse_customer_trip_info_response,
     parse_delay_discount_ticket_response,
     parse_deposit_bank_response,
     parse_discount_coupon_response,
     parse_free_seat_car_response,
     parse_guide_seat_condition_response,
+    parse_maas_service_detail_list_response,
     parse_merge_seats_inquiry_response,
+    parse_multi_child_discount_target_response,
     parse_pass_availability_response,
     parse_pass_menu_response,
     parse_pass_schedule_response,
@@ -137,6 +149,7 @@ from .read_parsers import (
     parse_service_status_response,
     parse_seat_assignment_schedule_response,
     parse_ticket_receipt_response,
+    parse_trip_change_date_response,
     parse_trip_menu_response,
 )
 from .session import KorailSessionClient
@@ -609,6 +622,77 @@ class KorailClient:
             lambda: parse_merge_seats_inquiry_response(
                 self.http.post_form(
                     "/classes/com.korail.mobile.research.mergeSeatsC.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_multi_child_discount_targets(
+        self,
+        departure_date: str,
+    ) -> MultiChildDiscountTargetResponse:
+        self._require_session()
+        form = build_multi_child_discount_target_form(departure_date)
+        return self._run_read(
+            lambda: parse_multi_child_discount_target_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.cust.mchdDcntTgt.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_customer_trip_info(self) -> CustomerTripInfoResponse:
+        self._require_session()
+        session = self.session.current
+        customer_no = session.customer_no if session is not None else None
+        if not isinstance(customer_no, str) or not customer_no.strip():
+            raise KorailAuthError(
+                "KORAIL customer trip read requires a login customer number"
+            )
+        form = build_customer_trip_info_form(customer_no)
+        return self._run_read(
+            lambda: parse_customer_trip_info_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.research.custTripInfo.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_maas_service_details(
+        self,
+        query: MaasServiceDetailQuery | None = None,
+    ) -> MaasServiceDetailListResponse:
+        self._require_session()
+        resolved_query = (
+            query if query is not None else MaasServiceDetailQuery.current()
+        )
+        form = build_maas_service_detail_form(self.config, resolved_query)
+        return self._run_read(
+            lambda: parse_maas_service_detail_list_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.copt.gdReqQry.do",
+                    form,
+                    include_common=False,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_trip_change_dates(
+        self,
+        departure_date: str,
+    ) -> TripChangeDateResponse:
+        self._require_session()
+        form = build_trip_change_date_form(departure_date)
+        return self._run_read(
+            lambda: parse_trip_change_date_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.reservation.tripChgDate.do",
                     form,
                     include_dynapath=False,
                 ).raw

@@ -1,0 +1,41 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic customer trip info",
+  "strResult": "SUCC",
+  "mainList": [
+    {
+      "addSeatAttCd": "SYNTHETIC_addSeatAttCd",
+      "adltHdcpPrnb": "SYNTHETIC_adltHdcpPrnb",
+      "adulCnt": "SYNTHETIC_adulCnt",
+      "arvStnCd": "SYNTHETIC_arvStnCd",
+      "arvStnNm": "SYNTHETIC_arvStnNm",
+      "babyAcpnPrnb": "SYNTHETIC_babyAcpnPrnb",
+      "chgDttm": "SYNTHETIC_chgDttm",
+      "chgUsrId": "SYNTHETIC_chgUsrId",
+      "chilCnt": "SYNTHETIC_chilCnt",
+      "chldHdcpPrnb": "SYNTHETIC_chldHdcpPrnb",
+      "custMgNo": "SYNTHETIC_custMgNo",
+      "dayCd": "SYNTHETIC_dayCd",
+      "dirSeatAttGpCd": "SYNTHETIC_dirSeatAttGpCd",
+      "dirtChtnDvCd": "SYNTHETIC_dirtChtnDvCd",
+      "dptStnCd": "SYNTHETIC_dptStnCd",
+      "dptStnNm": "SYNTHETIC_dptStnNm",
+      "ectbTrnDptTm": "SYNTHETIC_ectbTrnDptTm",
+      "edrPrnb": "SYNTHETIC_edrPrnb",
+      "inclFlg": "SYNTHETIC_inclFlg",
+      "jobStHr": "SYNTHETIC_jobStHr",
+      "locSeatAttGpCd": "SYNTHETIC_locSeatAttGpCd",
+      "medDvCd": "SYNTHETIC_medDvCd",
+      "psrmClCd": "SYNTHETIC_psrmClCd",
+      "ptwtTtl": "SYNTHETIC_ptwtTtl",
+      "regDttm": "SYNTHETIC_regDttm",
+      "regSqno": "SYNTHETIC_regSqno",
+      "regUsrId": "SYNTHETIC_regUsrId",
+      "tripDno": "SYNTHETIC_tripDno",
+      "trnClsfCd": "SYNTHETIC_trnClsfCd",
+      "trnCnecFlg": "SYNTHETIC_trnCnecFlg",
+      "trnGpCd": "SYNTHETIC_trnGpCd",
+      "utlDno": "SYNTHETIC_utlDno"
+    }
+  ]
+}

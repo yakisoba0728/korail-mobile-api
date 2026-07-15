@@ -12,6 +12,8 @@ from .read_models import (
     CartItem,
     CartListResponse,
     CommuterKindMenuResponse,
+    CustomerTripInfo,
+    CustomerTripInfoResponse,
     CrewRequestListResponse,
     CrewRequestOption,
     DelayDiscountTicket,
@@ -23,7 +25,11 @@ from .read_models import (
     FreeSeatCarResponse,
     GuideSeatConditionResponse,
     IntermediateStation,
+    MaasServiceDetail,
+    MaasServiceDetailListResponse,
     MergeSeatsInquiryResponse,
+    MultiChildDiscountTarget,
+    MultiChildDiscountTargetResponse,
     PassScheduleInfo,
     PassScheduleResponse,
     PassScheduleTrain,
@@ -50,7 +56,11 @@ from .read_models import (
     TripMenuContent,
     TripMenuItem,
     TripMenuResponse,
+    TourTrainInfoResponse,
+    TourTrainSeatAdditionalInfo,
+    TourTrainSeatInfo,
     TrainScheduleItem,
+    TripChangeDateResponse,
 )
 
 
@@ -1401,5 +1411,235 @@ def parse_pass_schedule_response(
         )
     return PassScheduleResponse(
         schedules=tuple(schedules),
+        **_response_fields(raw),
+    )
+
+
+_MULTI_CHILD_FIELDS = {
+    "birth_date": "btdt",
+    "customer_family_name": "custFmlyNm",
+    "discount_kind_code": "dcntKndCd",
+    "family_sequence": "fmlySqno",
+    "passenger_type_code": "psgTpCd",
+    "passenger_type_name": "psgTpNm",
+    "room_class_code": "psrmClCd",
+    "requested_discount_kind_code": "rqDcntKndCd",
+}
+
+_CUSTOMER_TRIP_FIELDS = {
+    "additional_seat_attribute_code": "addSeatAttCd",
+    "adult_disabled_person_count": "adltHdcpPrnb",
+    "adult_count": "adulCnt",
+    "arrival_station_code": "arvStnCd",
+    "arrival_station_name": "arvStnNm",
+    "baby_accompanying_person_count": "babyAcpnPrnb",
+    "changed_at": "chgDttm",
+    "changed_by": "chgUsrId",
+    "child_count": "chilCnt",
+    "child_disabled_person_count": "chldHdcpPrnb",
+    "customer_management_no": "custMgNo",
+    "day_code": "dayCd",
+    "direction_seat_attribute_group_code": "dirSeatAttGpCd",
+    "direct_transfer_division_code": "dirtChtnDvCd",
+    "departure_station_code": "dptStnCd",
+    "departure_station_name": "dptStnNm",
+    "early_train_departure_time": "ectbTrnDptTm",
+    "elderly_person_count": "edrPrnb",
+    "included_flag": "inclFlg",
+    "job_start_hour": "jobStHr",
+    "location_seat_attribute_group_code": "locSeatAttGpCd",
+    "media_division_code": "medDvCd",
+    "room_class_code": "psrmClCd",
+    "passenger_total": "ptwtTtl",
+    "registered_at": "regDttm",
+    "registration_sequence": "regSqno",
+    "registered_by": "regUsrId",
+    "trip_day_no": "tripDno",
+    "train_classification_code": "trnClsfCd",
+    "train_connection_flag": "trnCnecFlg",
+    "train_group_code": "trnGpCd",
+    "usage_day_no": "utlDno",
+}
+
+_MAAS_DETAIL_FIELDS = {
+    "additional_service_division_code": "addSrvDvCd",
+    "additional_service_goods_code": "addSrvGdCd",
+    "additional_service_id": "addSrvId",
+    "marketing_entity_id": "addSrvMrkEntId",
+    "marketing_entity_name": "addSrvMrkEntNm",
+    "additional_service_name": "addSrvNm",
+    "progress_status_code": "addSrvPrgSttCd",
+    "request_no": "addSrvReqNo",
+    "passenger_reference_content": "cgPsRefAtclCont",
+    "partner_reservation_no": "coptEntRsvNo",
+    "delivery_close_time": "dlivPsbClsTm",
+    "delivery_start_time": "dlivPsbStTm",
+    "lead_message_1": "leadMsgCont1",
+    "lead_message_2": "leadMsgCont2",
+    "pnr_no": "pnrNo",
+    "request_date": "reqDt",
+    "request_quantity": "reqQnty",
+    "reservation_specification_url": "rsvSpecUrl",
+    "usage_close_date": "utlClsDt",
+    "usage_start_date": "utlStDt",
+}
+
+
+def _nullable_string_fields(
+    data: Mapping[str, Any],
+    field_map: Mapping[str, str],
+    context: str,
+) -> dict[str, str | None]:
+    return {
+        attribute: _optional_string(data, wire_name, context)
+        for attribute, wire_name in field_map.items()
+    }
+
+
+def parse_multi_child_discount_target_response(
+    raw: Mapping[str, Any],
+) -> MultiChildDiscountTargetResponse:
+    _validate_strict_read_envelope(raw)
+    targets = []
+    for value in _optional_list(raw, "fmlyList", "multi-child targets"):
+        item = _row(value, "multi-child targets fmlyList")
+        targets.append(
+            MultiChildDiscountTarget(
+                **_nullable_string_fields(
+                    item,
+                    _MULTI_CHILD_FIELDS,
+                    "multi-child target",
+                ),
+                raw=item,
+            )
+        )
+    return MultiChildDiscountTargetResponse(
+        targets=tuple(targets),
+        **_response_fields(raw),
+    )
+
+
+def parse_customer_trip_info_response(
+    raw: Mapping[str, Any],
+) -> CustomerTripInfoResponse:
+    _validate_strict_read_envelope(raw)
+    trips = []
+    for value in _optional_list(raw, "mainList", "customer trip info"):
+        item = _row(value, "customer trip info mainList")
+        trips.append(
+            CustomerTripInfo(
+                **_nullable_string_fields(
+                    item,
+                    _CUSTOMER_TRIP_FIELDS,
+                    "customer trip info",
+                ),
+                raw=item,
+            )
+        )
+    return CustomerTripInfoResponse(
+        trips=tuple(trips),
+        **_response_fields(raw),
+    )
+
+
+def parse_maas_service_detail_list_response(
+    raw: Mapping[str, Any],
+) -> MaasServiceDetailListResponse:
+    _validate_strict_read_envelope(raw)
+    details = []
+    for value in _optional_list(raw, "addSrvList", "MaaS service details"):
+        item = _row(value, "MaaS service details addSrvList")
+        details.append(
+            MaasServiceDetail(
+                **_nullable_string_fields(
+                    item,
+                    _MAAS_DETAIL_FIELDS,
+                    "MaaS service detail",
+                ),
+                raw=item,
+            )
+        )
+    return MaasServiceDetailListResponse(
+        details=tuple(details),
+        **_response_fields(raw),
+    )
+
+
+def parse_trip_change_date_response(
+    raw: Mapping[str, Any],
+) -> TripChangeDateResponse:
+    _validate_strict_read_envelope(raw)
+    dates = []
+    for value in _optional_list(raw, "tripChgDates", "trip change dates"):
+        if not isinstance(value, str):
+            raise KorailProtocolError(
+                "KORAIL trip change dates field tripChgDates must contain only strings"
+            )
+        dates.append(value)
+    return TripChangeDateResponse(
+        last_run_date=_optional_string(raw, "lastRunDt", "trip change dates"),
+        trip_change_date=_optional_string(
+            raw,
+            "tripChgDate",
+            "trip change dates",
+        ),
+        trip_change_dates=tuple(dates),
+        **_response_fields(raw),
+    )
+
+
+def parse_tour_train_info_response(
+    raw: Mapping[str, Any],
+) -> TourTrainInfoResponse:
+    _validate_strict_read_envelope(raw)
+    seat_infos = _optional_mapping(raw, "seat_infos", "tour train info")
+    seats = []
+    if seat_infos is not None:
+        for value in _optional_list(
+            seat_infos,
+            "seat_info",
+            "tour train seat infos",
+        ):
+            seat = _row(value, "tour train seat_info")
+            additional_wrapper = _optional_mapping(
+                seat,
+                "seat_add_infos",
+                "tour train seat info",
+            )
+            additional_infos = []
+            if additional_wrapper is not None:
+                for additional_value in _optional_list(
+                    additional_wrapper,
+                    "seat_add_info",
+                    "tour train additional seat infos",
+                ):
+                    additional = _row(
+                        additional_value,
+                        "tour train seat_add_info",
+                    )
+                    passenger_count = additional.get("h_psg_num")
+                    if type(passenger_count) is not int:
+                        raise KorailProtocolError(
+                            "KORAIL tour train seat field h_psg_num must be a JSON integer"
+                        )
+                    additional_infos.append(
+                        TourTrainSeatAdditionalInfo(
+                            passenger_count=passenger_count,
+                            raw=additional,
+                        )
+                    )
+            seats.append(
+                TourTrainSeatInfo(
+                    seat_attribute_code=_optional_string(
+                        seat,
+                        "h_seat_att_cd",
+                        "tour train seat info",
+                    ),
+                    additional_infos=tuple(additional_infos),
+                    raw=seat,
+                )
+            )
+    return TourTrainInfoResponse(
+        seat_infos=tuple(seats),
         **_response_fields(raw),
     )

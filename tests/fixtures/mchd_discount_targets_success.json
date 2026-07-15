@@ -1,0 +1,18 @@
+{
+  "h_msg_cd": "SYNTHETIC.OK",
+  "h_msg_txt": "synthetic multi-child discount targets",
+  "strResult": "SUCC",
+  "fmlyList": [
+    {
+      "btdt": "20990101",
+      "custFmlyNm": "SYNTHETIC_custFmlyNm",
+      "dcntKndCd": "SYNTHETIC_dcntKndCd",
+      "fmlySqno": "SYNTHETIC_fmlySqno",
+      "psgTpCd": "SYNTHETIC_psgTpCd",
+      "psgTpNm": "SYNTHETIC_psgTpNm",
+      "psrmClCd": "SYNTHETIC_psrmClCd",
+      "rqDcntKndCd": "SYNTHETIC_rqDcntKndCd",
+      "synthetic_unknown": "SYNTHETIC_RAW_SECRET"
+    }
+  ]
+}

@@ -13,8 +13,8 @@ menu/reference reads; it changes no credential or live-smoke behavior.
 
 The current implementation evidence establishes:
 
-- 38 routes at the exact login/read transport boundary.
-- 41 public methods on `KorailClient`.
+- 42 routes at the exact login/read transport boundary.
+- 45 public methods on `KorailClient`.
 - A historical reviewed offline gate of `1246 passed, 1 deselected`; the fresh
   P0 live-evidence documentation gate reports `1247 passed, 1 deselected`. In
   both gates, the deselected test is the explicitly opted-in live-service test.
@@ -42,6 +42,21 @@ and was not retried. R37 `getAssignScheduleView` and R51
 yielded 27 parsed responses, one expected `KorailAppError`, and zero unexpected
 failures. No raw response value, credential, or server-supplied seat attribute
 was recorded.
+
+## Fixed/account-shaped reads and R54 holdback
+
+R13, R32, R43, and R45 now provide exact one-shot authenticated reads. R32
+retains `strCustNo` from login as a repr-hidden `customer_no` and fails closed
+when it is absent; neither member nor card numbers are substituted. R43 has
+only the no-date current form or a complete, ordered, maximum-three-calendar-
+month history range, and never sends `Key`. Every new route forces DynaPath
+off and validates before transport.
+
+R54 remains parser/model-only static support. Do not add a public method,
+safety route, or raw string discriminator until train-group provenance or a
+finite domain is evidenced. No live request, credential access, `.env` read,
+or raw response capture occurred. Service inventory remains 28 successful, 9
+failed, and 128 unexecuted out of 165, and no mutation boundary expanded.
 
 ## Completed read package
 

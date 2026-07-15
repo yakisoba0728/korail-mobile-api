@@ -5,7 +5,7 @@ evidenced KORAIL mobile API surface. It also retains the static
 reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
-The reviewed package boundary contains 38 routes and 41 public methods. The
+The reviewed package boundary contains 42 routes and 45 public methods. The
 pre-P0-evidence reviewed offline gate was `1246 passed, 1 deselected`; after
 adding the documentation contract coverage in this increment, the fresh
 non-live gate is `1247 passed, 1 deselected`. In both gates, the deselected test
@@ -201,6 +201,42 @@ def get_owned_product_detail(
 The reservation, payment, and mutation routes remain excluded. The package
 does not create, change, cancel, pay for, refund, or check in a reservation as
 part of any read.
+
+### Fixed and account-shaped reads
+
+Four static-evidenced, authenticated reads are available as one-request,
+DynaPath-disabled operations:
+
+- `get_multi_child_discount_targets(departure_date)` posts to
+  `/classes/com.korail.mobile.cust.mchdDcntTgt.do`.
+- `get_customer_trip_info()` posts to
+  `/classes/com.korail.mobile.research.custTripInfo.do` with fixed
+  `medDvCd="03"` and `regSqno="0"`. Its `custMgNo` comes only from the login
+  response `strCustNo`; member and member-card numbers are never substituted.
+- `get_maas_service_details()` posts the current two-field form to
+  `/classes/com.korail.mobile.copt.gdReqQry.do`. A
+  `MaasServiceDetailQuery.history(start_date, end_date)` supplies both ordered
+  dates for a range of at most three calendar months. This route deliberately
+  omits `Key`.
+- `get_trip_change_dates(departure_date)` posts to
+  `/classes/com.korail.mobile.reservation.tripChgDate.do`.
+
+All four methods require a local authenticated session, validate before
+transport, issue exactly one request, and retain raw mappings only behind
+`repr=False`. No live request, credential access, raw capture, or production
+response was used; the implementation and tests use static APK contracts,
+mock transport, and synthetic fixtures only.
+
+R54 `getTourTrainInfo` has strict internal parser/model coverage for the nested
+seat shape, including a required JSON-integer passenger count. Transport is
+intentionally held back: there is no `get_tour_train_info` client method, no
+registered safety route, and no raw-string request builder. The accepted train
+group domain or typed provenance remains unresolved.
+
+The APK service inventory remains 28 successful, 9 failed, and 128 unexecuted
+entries out of 165. This increment changes only the package boundary to 42
+exact login/read routes and 45 public methods; it adds no reservation change,
+booking, payment, refund, cancellation, check-in, or other mutation capability.
 
 ### Static P0 menu and reference reads
 

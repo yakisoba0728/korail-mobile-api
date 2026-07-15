@@ -10,6 +10,7 @@ class KorailSession:
     member_no: str | None = field(default=None, repr=False)
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
     member_card_no: str | None = field(default=None, repr=False)
+    customer_no: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)

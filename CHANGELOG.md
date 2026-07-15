@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Added four authenticated fixed/account-shaped reads for multi-child discount
+  targets, login-customer trip information, current or bounded-history MaaS
+  service details, and trip-change date lookup. Their exact routes and ordered
+  forms are DynaPath-disabled and validation occurs before transport.
+- Retained login `strCustNo` as a repr-hidden session customer number for the
+  customer-trip request; member and member-card identifiers are not fallbacks.
+- Added strict synthetic parsers and frozen repr-safe models for R13, R32,
+  R43, and R45. R54 tour-train response parsing is static-contract support
+  only: no client method, safety route, or raw-string request builder exists.
+- Made no live request, credential read, raw capture, or mutation expansion.
+  The service inventory remains 28 successful, 9 failed, and 128 unexecuted
+  entries; the callable package boundary is now 42 read/login routes and 45
+  public methods.
 - Ran a bounded revalidation of the P0 read surface in an authenticated 28-request,
   28-response run with 25 successful operations, one expected typed
   application failure, and three input-dependent skips. Deposit-bank and

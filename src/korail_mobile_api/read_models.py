@@ -458,3 +458,118 @@ class PassScheduleResponse(BaseKorailResponse):
         default=(),
         repr=False,
     )
+
+
+@dataclass(frozen=True)
+class MultiChildDiscountTarget:
+    birth_date: str | None = field(default=None, repr=False)
+    customer_family_name: str | None = field(default=None, repr=False)
+    discount_kind_code: str | None = field(default=None, repr=False)
+    family_sequence: str | None = field(default=None, repr=False)
+    passenger_type_code: str | None = field(default=None, repr=False)
+    passenger_type_name: str | None = field(default=None, repr=False)
+    room_class_code: str | None = field(default=None, repr=False)
+    requested_discount_kind_code: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class MultiChildDiscountTargetResponse(BaseKorailResponse):
+    targets: tuple[MultiChildDiscountTarget, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class CustomerTripInfo:
+    additional_seat_attribute_code: str | None = field(default=None, repr=False)
+    adult_disabled_person_count: str | None = field(default=None, repr=False)
+    adult_count: str | None = field(default=None, repr=False)
+    arrival_station_code: str | None = field(default=None, repr=False)
+    arrival_station_name: str | None = field(default=None, repr=False)
+    baby_accompanying_person_count: str | None = field(default=None, repr=False)
+    changed_at: str | None = field(default=None, repr=False)
+    changed_by: str | None = field(default=None, repr=False)
+    child_count: str | None = field(default=None, repr=False)
+    child_disabled_person_count: str | None = field(default=None, repr=False)
+    customer_management_no: str | None = field(default=None, repr=False)
+    day_code: str | None = field(default=None, repr=False)
+    direction_seat_attribute_group_code: str | None = field(default=None, repr=False)
+    direct_transfer_division_code: str | None = field(default=None, repr=False)
+    departure_station_code: str | None = field(default=None, repr=False)
+    departure_station_name: str | None = field(default=None, repr=False)
+    early_train_departure_time: str | None = field(default=None, repr=False)
+    elderly_person_count: str | None = field(default=None, repr=False)
+    included_flag: str | None = field(default=None, repr=False)
+    job_start_hour: str | None = field(default=None, repr=False)
+    location_seat_attribute_group_code: str | None = field(default=None, repr=False)
+    media_division_code: str | None = field(default=None, repr=False)
+    room_class_code: str | None = field(default=None, repr=False)
+    passenger_total: str | None = field(default=None, repr=False)
+    registered_at: str | None = field(default=None, repr=False)
+    registration_sequence: str | None = field(default=None, repr=False)
+    registered_by: str | None = field(default=None, repr=False)
+    trip_day_no: str | None = field(default=None, repr=False)
+    train_classification_code: str | None = field(default=None, repr=False)
+    train_connection_flag: str | None = field(default=None, repr=False)
+    train_group_code: str | None = field(default=None, repr=False)
+    usage_day_no: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class CustomerTripInfoResponse(BaseKorailResponse):
+    trips: tuple[CustomerTripInfo, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class MaasServiceDetail:
+    additional_service_division_code: str | None = field(default=None, repr=False)
+    additional_service_goods_code: str | None = field(default=None, repr=False)
+    additional_service_id: str | None = field(default=None, repr=False)
+    marketing_entity_id: str | None = field(default=None, repr=False)
+    marketing_entity_name: str | None = field(default=None, repr=False)
+    additional_service_name: str | None = field(default=None, repr=False)
+    progress_status_code: str | None = field(default=None, repr=False)
+    request_no: str | None = field(default=None, repr=False)
+    passenger_reference_content: str | None = field(default=None, repr=False)
+    partner_reservation_no: str | None = field(default=None, repr=False)
+    delivery_close_time: str | None = field(default=None, repr=False)
+    delivery_start_time: str | None = field(default=None, repr=False)
+    lead_message_1: str | None = field(default=None, repr=False)
+    lead_message_2: str | None = field(default=None, repr=False)
+    pnr_no: str | None = field(default=None, repr=False)
+    request_date: str | None = field(default=None, repr=False)
+    request_quantity: str | None = field(default=None, repr=False)
+    reservation_specification_url: str | None = field(default=None, repr=False)
+    usage_close_date: str | None = field(default=None, repr=False)
+    usage_start_date: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class MaasServiceDetailListResponse(BaseKorailResponse):
+    details: tuple[MaasServiceDetail, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class TripChangeDateResponse(BaseKorailResponse):
+    last_run_date: str | None = field(default=None, repr=False)
+    trip_change_date: str | None = field(default=None, repr=False)
+    trip_change_dates: tuple[str, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class TourTrainSeatAdditionalInfo:
+    passenger_count: int = field(repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class TourTrainSeatInfo:
+    seat_attribute_code: str | None = field(default=None, repr=False)
+    additional_infos: tuple[TourTrainSeatAdditionalInfo, ...] = field(default=(), repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class TourTrainInfoResponse(BaseKorailResponse):
+    seat_infos: tuple[TourTrainSeatInfo, ...] = field(default=(), repr=False)

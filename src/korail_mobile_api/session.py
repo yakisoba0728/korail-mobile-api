@@ -181,10 +181,17 @@ class KorailSessionClient:
             or response.raw.get("strMbCrdNo")
             or ""
         ) or None
+        raw_customer_no = response.raw.get("strCustNo")
+        customer_no = (
+            raw_customer_no
+            if isinstance(raw_customer_no, str) and raw_customer_no.strip()
+            else None
+        )
         self.current = KorailSession(
             jsessionid=jsessionid,
             member_no=member_no,
             member_card_no=member_card_no,
+            customer_no=customer_no,
             raw=response.raw,
         )
         return self.current

@@ -89,6 +89,10 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
             "POST",
             "/classes/com.korail.mobile.seatMovie.LimousineScheduleView",
         ),
+        ("POST", "/classes/com.korail.mobile.cust.mchdDcntTgt.do"),
+        ("POST", "/classes/com.korail.mobile.research.custTripInfo.do"),
+        ("POST", "/classes/com.korail.mobile.copt.gdReqQry.do"),
+        ("POST", "/classes/com.korail.mobile.reservation.tripChgDate.do"),
     }
 )
 
@@ -339,8 +343,36 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             }
         )
     ),
+    "/classes/com.korail.mobile.cust.mchdDcntTgt.do": frozenset(
+        {"Device", "Version", "Key", "dptDt"}
+    ),
+    "/classes/com.korail.mobile.research.custTripInfo.do": frozenset(
+        {"Device", "Version", "Key", "custMgNo", "medDvCd", "regSqno"}
+    ),
+    "/classes/com.korail.mobile.copt.gdReqQry.do": frozenset(
+        {"Device", "Version", "qryDtFrom", "qryDtTo"}
+    ),
+    "/classes/com.korail.mobile.reservation.tripChgDate.do": frozenset(
+        {"Device", "Version", "Key", "tripChgDate"}
+    ),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
+
+KORAIL_EXACT_REQUEST_FIELD_ORDERS = {
+    "/classes/com.korail.mobile.cust.mchdDcntTgt.do": (
+        ("Device", "Version", "Key", "dptDt"),
+    ),
+    "/classes/com.korail.mobile.research.custTripInfo.do": (
+        ("Device", "Version", "Key", "custMgNo", "medDvCd", "regSqno"),
+    ),
+    "/classes/com.korail.mobile.copt.gdReqQry.do": (
+        ("Device", "Version"),
+        ("Device", "Version", "qryDtFrom", "qryDtTo"),
+    ),
+    "/classes/com.korail.mobile.reservation.tripChgDate.do": (
+        ("Device", "Version", "Key", "tripChgDate"),
+    ),
+}
 
 
 def assert_korail_origin(base_url: str) -> None:
@@ -391,7 +423,14 @@ def assert_read_only_request_fields(
         raise KorailProtocolError(
             "KORAIL request fields must not contain duplicate names"
         )
-    if set(field_names) != allowed:
+    ordered_variants = KORAIL_EXACT_REQUEST_FIELD_ORDERS.get(
+        urlsplit(path).path
+    )
+    if ordered_variants is not None:
+        valid_shape = tuple(field_names) in ordered_variants
+    else:
+        valid_shape = set(field_names) == allowed
+    if not valid_shape:
         raise KorailProtocolError(
             "KORAIL request fields must exactly match the registered "
             "read-only contract"
