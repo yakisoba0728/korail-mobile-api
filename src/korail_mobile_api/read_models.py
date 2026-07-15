@@ -309,6 +309,15 @@ class TrainScheduleItem:
 
 
 @dataclass(frozen=True)
+class PassAgeOption:
+    commuter_age_code: str | None = None
+    display_name: str | None = None
+    minimum_age: str | None = None
+    maximum_age: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
 class SeatAssignmentScheduleResponse(BaseKorailResponse):
     h_msg_txt: str | None = field(default=None, repr=False)
     next_page_flag: str | None = None
@@ -325,8 +334,71 @@ class IntermediateStation:
 
 
 @dataclass(frozen=True)
+class PassPeriodOption:
+    commuter_period_code: str | None = None
+    display_name: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
 class MergeSeatsInquiryResponse(BaseKorailResponse):
     h_msg_txt: str | None = field(default=None, repr=False)
     merge_reservation_possible_flag: str | None = None
     intermediate_stations: tuple[IntermediateStation, ...] = ()
     trains: tuple[TrainScheduleItem, ...] = ()
+
+
+@dataclass(frozen=True)
+class PassMenuData:
+    commuter_kind_code: str | None = None
+    station_selection: str | None = None
+    age_options: tuple[PassAgeOption, ...] = ()
+    period_options: tuple[PassPeriodOption, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PassMenuItem:
+    after_day: int | None = None
+    agreement: str | None = None
+    detail_type: str | None = None
+    detail_description: str | None = None
+    enabled: str | None = None
+    item_id: str | None = None
+    information: str | None = None
+    expanded: str | None = None
+    parent_id: str | None = None
+    representative_arrival: str | None = None
+    representative_departure: str | None = None
+    title: str | None = None
+    train_group_code: str | None = None
+    item_type: str | None = None
+    pass_data: PassMenuData | None = None
+    url: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class PassMenuResponse(BaseKorailResponse):
+    items: tuple[PassMenuItem, ...] = ()
+
+
+@dataclass(frozen=True)
+class CommuterKindMenuResponse(BaseKorailResponse):
+    after_day: str | None = None
+    agreement: str | None = None
+    information: str | None = None
+    title: str | None = None
+    pass_data: PassMenuData | None = None
+
+
+@dataclass(frozen=True)
+class CrewRequestOption:
+    message_code: str | None = None
+    content: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class CrewRequestListResponse(BaseKorailResponse):
+    items: tuple[CrewRequestOption, ...] = ()

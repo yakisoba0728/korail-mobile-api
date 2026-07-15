@@ -71,7 +71,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "| 성공 | 27 |" in status
     assert "| 실패 | 8 |" in status
     assert "| 미실행 | 130 |" in status
-    assert "Package coverage: 31 exact login/read routes" in status
+    assert "Package coverage: 34 exact login/read routes" in status
     assert "bounded live structural evidence" in status
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
@@ -79,10 +79,32 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "성공 25 / 실패 8 / 미실행 132" not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
-    assert "31 exact login/read routes" in progress
-    assert "34 public methods" in progress
+    assert "34 exact login/read routes" in progress
+    assert "37 public methods" in progress
     assert "75" in progress
     assert "IRG000000" in progress
+
+
+def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
+    readme = README.read_text(encoding="utf-8")
+    progress = PROGRESS.read_text(encoding="utf-8")
+    for method_name in (
+        "get_pass_menu",
+        "get_crew_request_list",
+        "get_commuter_kind_menu",
+    ):
+        assert f"{method_name}(" in readme
+    for path in (
+        "/classes/com.korail.mobile.pass.passMenu.do",
+        "/classes/com.korail.mobile.push.crwCallRq.do",
+        "/classes/com.korail.mobile.push.cmtrKnd.do",
+    ):
+        assert path in readme
+    assert "caller-supplied runtime discriminator" in readme
+    assert "/classes/com.korail.mobile.push.callCrew.do" in readme
+    assert "remains excluded" in readme
+    assert "static APK evidence and synthetic fixtures only" in readme
+    assert "34 exact read/login routes" in progress
 
 
 def test_readme_documents_typed_seat_inventory_scope_and_live_boundary():
@@ -157,7 +179,7 @@ def test_readme_documents_static_only_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "31 routes and 34 public methods" in text
+    assert "34 routes and 37 public methods" in text
     assert "static-only" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text

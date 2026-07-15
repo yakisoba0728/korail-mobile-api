@@ -4,22 +4,23 @@ Last updated: 2026-07-15 KST
 
 ## Head and base evidence
 
-The internal release-readiness work is based on
+The internal release-readiness baseline is based on
 `259553bbb930c51d8bc28d1144baa49d17372e3c`. Compare that base's
 `docs/IMPLEMENTATION_PROGRESS.md` with the same file at current `HEAD`: the
-release work changes package metadata, artifact checks, CI, and documentation,
-but does not change runtime requests, routes, credentials, or live behavior.
+release work changed package metadata, artifact checks, CI, and documentation.
+The current branch additionally registers three statically evidenced P0
+menu/reference reads; it changes no credential or live-smoke behavior.
 
 The current implementation evidence establishes:
 
-- 31 routes at the exact login/read transport boundary.
-- 34 public methods on `KorailClient`.
-- A reviewed offline gate of `874 passed, 1 deselected`; the deselected
+- 34 routes at the exact login/read transport boundary.
+- 37 public methods on `KorailClient`.
+- A reviewed offline gate of `1076 passed, 1 deselected`; the deselected
   test is the explicitly opted-in live-service test.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.
 
-The four newest routes are static-only P0 train reads: free-seat car guidance,
+The four P0 train routes are static-only reads: free-seat car guidance,
 guide-seat conditions, seat-assignment schedules, and merged-seat inquiry.
 They use frozen closed request objects, exact POST forms, strict typed parsers,
 synthetic fixtures, and repr-hidden identifiers/free text/raw mappings. No live
@@ -42,6 +43,13 @@ guessed from the fixed status-only summary.
 The earlier cache, DynaPath, UUID, generic MAAS menu, and MAAS station phases
 are also complete at current `HEAD`. The release-readiness change does not
 repeat production traffic and does not alter their established contracts.
+
+The static P0 menu/reference increment adds `get_pass_menu()`,
+`get_crew_request_list()`, and `get_commuter_kind_menu()` with exact fields,
+required caller-supplied runtime discriminator codes, frozen typed responses,
+and synthetic fixtures. No live call was made. The similarly named
+`/classes/com.korail.mobile.push.callCrew.do` mutation remains unregistered and
+has no public client method.
 
 The `0.2.0` typed seat-inventory increment adds two authenticated,
 DynaPath-disabled reads with closed general-room forms, strict frozen response

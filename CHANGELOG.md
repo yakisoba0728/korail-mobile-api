@@ -11,6 +11,12 @@
   omitted `TrainSummary` convenience chaining and every adjacent mutation.
 - Tightened only these four route parsers to require exact `strResult=SUCC`
   after preserving the existing `FAIL`, `P058`, and `WRC000288` errors.
+- Added typed account-neutral pass-menu, commuter-kind-menu, and crew-request
+  option reads with caller-required runtime discriminator codes.
+- Registered only the three statically evidenced exact read contracts; the
+  separate state-changing crew-call route remains excluded.
+- Added frozen repr-safe models, strict parsers, synthetic fixtures, and
+  offline route, request, error, export, and documentation coverage.
 
 ## 0.2.0 - 2026-07-14
 

@@ -56,6 +56,8 @@ from .payloads import (
 )
 from .read_models import (
     CartListResponse,
+    CommuterKindMenuResponse,
+    CrewRequestListResponse,
     DelayDiscountTicketListResponse,
     DepositBankListResponse,
     DiscountCouponListResponse,
@@ -63,6 +65,7 @@ from .read_models import (
     GuideSeatConditionResponse,
     MergeSeatsInquiryResponse,
     PassAvailabilityResponse,
+    PassMenuResponse,
     ProductDetailResponse,
     ProductReservationListResponse,
     ReservationHistoryResponse,
@@ -73,12 +76,15 @@ from .read_models import (
 )
 from .read_payloads import (
     build_cart_list_form,
+    build_commuter_kind_menu_query,
+    build_crew_request_list_query,
     build_delay_discount_ticket_form,
     build_discount_coupon_form,
     build_free_seat_car_form,
     build_guide_seat_condition_form,
     build_merge_seats_inquiry_form,
     build_pass_availability_form,
+    build_pass_menu_form,
     build_product_detail_query,
     build_product_reservations_query,
     build_service_status_query,
@@ -92,6 +98,8 @@ from .read_payloads import (
 )
 from .read_parsers import (
     parse_cart_list_response,
+    parse_commuter_kind_menu_response,
+    parse_crew_request_list_response,
     parse_delay_discount_ticket_response,
     parse_deposit_bank_response,
     parse_discount_coupon_response,
@@ -99,6 +107,7 @@ from .read_parsers import (
     parse_guide_seat_condition_response,
     parse_merge_seats_inquiry_response,
     parse_pass_availability_response,
+    parse_pass_menu_response,
     parse_product_detail_response,
     parse_product_reservation_list_response,
     parse_reservation_history_response,
@@ -328,6 +337,50 @@ class KorailClient:
                     "/classes/com.korail.mobile.pass.trGdMenuLt.do",
                     form,
                     include_common=False,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_pass_menu(self, menu_no: str) -> PassMenuResponse:
+        form = build_pass_menu_form(menu_no)
+        return self._run_read(
+            lambda: parse_pass_menu_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.pass.passMenu.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_crew_request_list(
+        self,
+        query_division_code: str,
+    ) -> CrewRequestListResponse:
+        query = build_crew_request_list_query(query_division_code)
+        return self._run_read(
+            lambda: parse_crew_request_list_response(
+                self.http.get_json(
+                    "/classes/com.korail.mobile.push.crwCallRq.do",
+                    query,
+                    include_common=True,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_commuter_kind_menu(
+        self,
+        commuter_kind_code: str,
+    ) -> CommuterKindMenuResponse:
+        query = build_commuter_kind_menu_query(commuter_kind_code)
+        return self._run_read(
+            lambda: parse_commuter_kind_menu_response(
+                self.http.get_json(
+                    "/classes/com.korail.mobile.push.cmtrKnd.do",
+                    query,
+                    include_common=True,
                     include_dynapath=False,
                 ).raw
             )

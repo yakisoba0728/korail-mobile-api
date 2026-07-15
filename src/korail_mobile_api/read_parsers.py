@@ -11,6 +11,9 @@ from .errors import (
 from .read_models import (
     CartItem,
     CartListResponse,
+    CommuterKindMenuResponse,
+    CrewRequestListResponse,
+    CrewRequestOption,
     DelayDiscountTicket,
     DelayDiscountTicketListResponse,
     DepositBank,
@@ -22,7 +25,12 @@ from .read_models import (
     IntermediateStation,
     MergeSeatsInquiryResponse,
     PassAvailabilityResponse,
+    PassAgeOption,
+    PassMenuData,
+    PassMenuItem,
+    PassMenuResponse,
     PassOffice,
+    PassPeriodOption,
     ProductDetailResponse,
     ProductReservation,
     ProductReservationListResponse,
@@ -191,6 +199,221 @@ def _optional_integer(
     raise KorailProtocolError(
         f"KORAIL {context} field {key} must be an integer, "
         "an ASCII decimal string, or null"
+    )
+
+
+def _parse_pass_menu_data(
+    data: Mapping[str, Any] | None,
+    context: str,
+) -> PassMenuData | None:
+    if data is None:
+        return None
+    age_options = []
+    for value in _optional_list(data, "pass_ageinfo", context):
+        item = _row(value, f"{context} pass_ageinfo")
+        age_options.append(
+            PassAgeOption(
+                commuter_age_code=_optional_string(
+                    item,
+                    "h_cmtr_utl_age_cd",
+                    "pass age option",
+                ),
+                display_name=_optional_string(
+                    item,
+                    "h_comn_cd_nm",
+                    "pass age option",
+                ),
+                minimum_age=_optional_string(
+                    item,
+                    "h_min_age",
+                    "pass age option",
+                ),
+                maximum_age=_optional_string(
+                    item,
+                    "h_max_age",
+                    "pass age option",
+                ),
+                raw=item,
+            )
+        )
+    period_options = []
+    for value in _optional_list(data, "pass_periodinfo", context):
+        item = _row(value, f"{context} pass_periodinfo")
+        period_options.append(
+            PassPeriodOption(
+                commuter_period_code=_optional_string(
+                    item,
+                    "h_cmtr_utl_trm_cd",
+                    "pass period option",
+                ),
+                display_name=_optional_string(
+                    item,
+                    "h_comn_cd_nm",
+                    "pass period option",
+                ),
+                raw=item,
+            )
+        )
+    return PassMenuData(
+        commuter_kind_code=_optional_string(
+            data,
+            "h_cmtr_knd_cd",
+            context,
+        ),
+        station_selection=_optional_string(
+            data,
+            "h_select_station",
+            context,
+        ),
+        age_options=tuple(age_options),
+        period_options=tuple(period_options),
+        raw=data,
+    )
+
+
+def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
+    _validate_envelope(raw)
+    items = []
+    for value in _optional_list(raw, "list", "pass menu"):
+        item = _row(value, "pass menu list")
+        web_data = _optional_mapping(item, "webData", "pass menu item")
+        items.append(
+            PassMenuItem(
+                after_day=_optional_integer(
+                    item,
+                    "afterDay",
+                    "pass menu item",
+                ),
+                agreement=_optional_string(
+                    item,
+                    "agree",
+                    "pass menu item",
+                ),
+                detail_type=_optional_string(
+                    item,
+                    "detailType",
+                    "pass menu item",
+                ),
+                detail_description=_optional_string(
+                    item,
+                    "dtlDsc",
+                    "pass menu item",
+                ),
+                enabled=_optional_string(
+                    item,
+                    "enable",
+                    "pass menu item",
+                ),
+                item_id=_optional_string(
+                    item,
+                    "id",
+                    "pass menu item",
+                ),
+                information=_optional_string(
+                    item,
+                    "information",
+                    "pass menu item",
+                ),
+                expanded=_optional_string(
+                    item,
+                    "isExpand",
+                    "pass menu item",
+                ),
+                parent_id=_optional_string(
+                    item,
+                    "parentId",
+                    "pass menu item",
+                ),
+                representative_arrival=_optional_string(
+                    item,
+                    "repSegArv",
+                    "pass menu item",
+                ),
+                representative_departure=_optional_string(
+                    item,
+                    "repSegDpt",
+                    "pass menu item",
+                ),
+                title=_optional_string(
+                    item,
+                    "title",
+                    "pass menu item",
+                ),
+                train_group_code=_optional_string(
+                    item,
+                    "trnGpCd",
+                    "pass menu item",
+                ),
+                item_type=_optional_string(
+                    item,
+                    "type",
+                    "pass menu item",
+                ),
+                pass_data=_parse_pass_menu_data(
+                    _optional_mapping(
+                        item,
+                        "passData",
+                        "pass menu item",
+                    ),
+                    "pass menu data",
+                ),
+                url=(
+                    _optional_string(web_data, "url", "pass menu web data")
+                    if web_data is not None
+                    else None
+                ),
+                raw=item,
+            )
+        )
+    return PassMenuResponse(items=tuple(items), **_response_fields(raw))
+
+
+def parse_commuter_kind_menu_response(
+    raw: Mapping[str, Any],
+) -> CommuterKindMenuResponse:
+    _validate_envelope(raw)
+    return CommuterKindMenuResponse(
+        after_day=_optional_string(raw, "afterDay", "commuter kind menu"),
+        agreement=_optional_string(raw, "agree", "commuter kind menu"),
+        information=_optional_string(
+            raw,
+            "information",
+            "commuter kind menu",
+        ),
+        title=_optional_string(raw, "title", "commuter kind menu"),
+        pass_data=_parse_pass_menu_data(
+            _optional_mapping(raw, "passData", "commuter kind menu"),
+            "commuter kind pass data",
+        ),
+        **_response_fields(raw),
+    )
+
+
+def parse_crew_request_list_response(
+    raw: Mapping[str, Any],
+) -> CrewRequestListResponse:
+    _validate_envelope(raw)
+    items = []
+    for value in _optional_list(raw, "prsList", "crew request list"):
+        item = _row(value, "crew request list prsList")
+        items.append(
+            CrewRequestOption(
+                message_code=_optional_string(
+                    item,
+                    "intgMsgCd",
+                    "crew request option",
+                ),
+                content=_optional_string(
+                    item,
+                    "prsCont",
+                    "crew request option",
+                ),
+                raw=item,
+            )
+        )
+    return CrewRequestListResponse(
+        items=tuple(items),
+        **_response_fields(raw),
     )
 
 

@@ -5,8 +5,8 @@ evidenced KORAIL mobile API surface. It also retains the static
 reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
-The reviewed package boundary contains 31 routes and 34 public methods. The
-current offline release gate is `874 passed, 1 deselected`; the
+The reviewed package boundary contains 34 routes and 37 public methods. The
+current offline release gate is `1076 passed, 1 deselected`; the
 deselected test is the explicitly opted-in live-service test.
 
 The original APK and generated decompile directories are intentionally not
@@ -199,6 +199,29 @@ def get_owned_product_detail(
 The reservation, payment, and mutation routes remain excluded. The package
 does not create, change, cancel, pay for, refund, or check in a reservation as
 part of any read.
+
+### Static P0 menu and reference reads
+
+Three account-neutral reference methods use static APK evidence and synthetic fixtures only:
+
+- `get_pass_menu(menu_no)` sends one exact `POST` to
+  `/classes/com.korail.mobile.pass.passMenu.do`.
+- `get_crew_request_list(query_division_code)` sends one exact `GET` to
+  `/classes/com.korail.mobile.push.crwCallRq.do`.
+- `get_commuter_kind_menu(commuter_kind_code)` sends one exact `GET` to
+  `/classes/com.korail.mobile.push.cmtrKnd.do`.
+
+Each method requires its caller-supplied runtime discriminator and has no
+default or library-selected code. Server-returned pass, period, age, and crew
+option codes remain typed response data. All three requests use their exact
+four-field contracts (`Device`, `Version`, `Key`, plus the discriminator),
+issue no fallback request, and explicitly disable DynaPath. No live request or
+raw response body was used to implement or verify this increment.
+
+The similarly named `/classes/com.korail.mobile.push.callCrew.do` route is the
+state-changing crew-call operation and remains excluded from the transport
+allowlist and public client. Reading crew request options never submits a crew
+call.
 
 ### Typed car and physical-seat inventory reads
 

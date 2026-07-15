@@ -327,6 +327,32 @@ def build_trip_menu_form(config: KorailConfig) -> dict[str, str]:
     }
 
 
+def build_pass_menu_form(menu_no: str) -> dict[str, str]:
+    return {"menuNo": _required_text(menu_no, "menu_no")}
+
+
+def build_crew_request_list_query(
+    query_division_code: str,
+) -> dict[str, str]:
+    return {
+        "qryDvCd": _required_text(
+            query_division_code,
+            "query_division_code",
+        )
+    }
+
+
+def build_commuter_kind_menu_query(
+    commuter_kind_code: str,
+) -> dict[str, str]:
+    return {
+        "cmtrKndCd": _required_text(
+            commuter_kind_code,
+            "commuter_kind_code",
+        )
+    }
+
+
 def build_product_reservations_query(
     page_no: int = 1,
     page_size: int = 20,

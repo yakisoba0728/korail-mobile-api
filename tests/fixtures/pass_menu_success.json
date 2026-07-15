@@ -1,0 +1,45 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic pass menu",
+  "strResult": "SUCC",
+  "list": [
+    {
+      "afterDay": 5,
+      "agree": "Synthetic agreement",
+      "detailType": "SYNTHETIC-DETAIL-TYPE",
+      "dtlDsc": "Synthetic detail description",
+      "enable": "Y",
+      "id": "SYNTHETIC-MENU-ID",
+      "information": "Synthetic pass information",
+      "isExpand": "N",
+      "parentId": "SYNTHETIC-PARENT-ID",
+      "repSegArv": "Synthetic Arrival",
+      "repSegDpt": "Synthetic Departure",
+      "title": "Synthetic Pass Menu",
+      "trnGpCd": "SYNTHETIC-TRAIN-GROUP",
+      "type": "SYNTHETIC-MENU-TYPE",
+      "passData": {
+        "h_cmtr_knd_cd": "SYNTHETIC-SERVER-KIND",
+        "h_select_station": "Y",
+        "pass_ageinfo": [
+          {
+            "h_cmtr_utl_age_cd": "SYNTHETIC-SERVER-AGE",
+            "h_comn_cd_nm": "Synthetic Adult",
+            "h_max_age": "64",
+            "h_min_age": "18"
+          }
+        ],
+        "pass_periodinfo": [
+          {
+            "h_cmtr_utl_trm_cd": "SYNTHETIC-SERVER-PERIOD",
+            "h_comn_cd_nm": "Synthetic Period"
+          }
+        ]
+      },
+      "webData": {
+        "url": "https://example.invalid/SYNTHETIC-RAW-SECRET"
+      },
+      "ignoredSyntheticSecret": "SYNTHETIC-RAW-SECRET"
+    }
+  ]
+}

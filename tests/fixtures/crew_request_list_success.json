@@ -1,0 +1,12 @@
+{
+  "h_msg_cd": "SYNTHETIC-SUCCESS",
+  "h_msg_txt": "synthetic crew request options",
+  "strResult": "SUCC",
+  "prsList": [
+    {
+      "intgMsgCd": "SYNTHETIC-SERVER-CREW-CODE",
+      "prsCont": "Synthetic crew request option",
+      "ignoredSyntheticSecret": "SYNTHETIC-RAW-SECRET"
+    }
+  ]
+}

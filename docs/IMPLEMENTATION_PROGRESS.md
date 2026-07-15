@@ -26,6 +26,10 @@ Last updated: 2026-07-15 KST
 - Eleven successful-read expansion methods are implemented with frozen models,
   strict parsers, exact payload builders, synthetic fixtures, and no adjacent
   or fallback requests.
+- Three additional P0 menu/reference methods are implemented from static APK
+  evidence and synthetic fixtures: pass menu, commuter-kind menu, and crew
+  request options. Their runtime discriminator codes are required caller
+  inputs; the separate state-changing crew-call route remains excluded.
 - The `0.2.0` seat-inventory increment implements typed authenticated car and
   physical-seat reads for the fixed main-menu/general-room contract. Both
   exact POST routes validate before Sid generation, issue one request, and
@@ -55,8 +59,8 @@ Last updated: 2026-07-15 KST
 - The consolidated final review is complete. Its two Important and one Minor
   KORAIL findings were fixed together; re-review found no remaining Critical,
   Important, or Minor issue.
-- The transport now allows 31 exact login/read routes and the client exposes
-  34 public methods. No new route was added to the DynaPath allowlist.
+- The transport now allows 34 exact login/read routes and the client exposes
+  37 public methods. No new route was added to the DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -83,6 +87,7 @@ Last updated: 2026-07-15 KST
 - Fixed `rt=0` DynaPath generation and exact-path attachment
 - Account-neutral service-status and pass available-date lookup
 - Authenticated deposit-bank and trip-menu lookup
+- Account-neutral pass-menu, commuter-kind-menu, and crew-request-option lookup
 - Authenticated cart, delay-discount, and discount-coupon lookup
 - Authenticated product reservation list and caller-owned product detail lookup
 - Authenticated ticket receipt and reservation-history lookup
@@ -92,7 +97,7 @@ Last updated: 2026-07-15 KST
 - Account-neutral seat-assignment schedule and merged-seat inquiry through
   closed request objects
 
-The transport currently allows 31 exact read/login routes. Reservation,
+The transport currently allows 34 exact read/login routes. Reservation,
 payment, cancellation, refund, check-in, member mutation, and point/mileage
 mutation routes are not callable.
 
@@ -108,14 +113,17 @@ mutation routes are not callable.
   `None`, empty, `ERROR`, and `SUCCESS`, producing `16 failed, 48 passed`.
   Route-selected strict-envelope GREEN is `64 passed`: only exact `SUCC`
   succeeds, while existing `FAIL`, `P058`, and `WRC000288` behavior remains.
-
+- P0 menu/reference TDD recorded focused RED failures for the absent route
+  contracts, payload builders, typed parsers, public methods, exports, and
+  documentation. Focused GREEN reports `56 passed` for the runtime/public
+  contract gate, using only mock transport and synthetic fixtures.
 - Seat-inventory TDD RED: the focused test command stopped during collection on
   the missing `PhysicalSeat` public interface, as expected before production
   code existed.
 - Seat-inventory focused GREEN: `150 passed`; the cross-cutting seat, HTTP,
   public-contract, and legacy-model gate reports `271 passed`. All tests are
   synthetic or mocked and perform no live I/O.
-- The full offline release gate reports `874 passed, 1 deselected`;
+- The full offline release gate reports `1076 passed, 1 deselected`;
   only the explicitly opted-in live-service test was deselected.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
@@ -223,7 +231,7 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
 - Live-successful inventory entries: 27
-- Currently implemented exact login/read routes: 27
+- Currently implemented exact login/read routes: 34
 - Therefore the complete APK endpoint inventory is not yet implemented
 
 All recorded successful read entries now have an exact package route. The

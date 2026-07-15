@@ -48,6 +48,9 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ("POST", "/classes/com.korail.mobile.passCard.CouponView"),
         ("POST", "/classes/com.korail.mobile.pass.passInfoList"),
         ("POST", "/classes/com.korail.mobile.pass.trGdMenuLt.do"),
+        ("POST", "/classes/com.korail.mobile.pass.passMenu.do"),
+        ("GET", "/classes/com.korail.mobile.push.crwCallRq.do"),
+        ("GET", "/classes/com.korail.mobile.push.cmtrKnd.do"),
         ("GET", "/classes/com.korail.mobile.product.ReservationList"),
         ("GET", "/classes/com.korail.mobile.product.ReservationDetail"),
         ("POST", "/classes/com.korail.mobile.receipt.ReceiptInfo"),
@@ -104,6 +107,15 @@ KORAIL_EXACT_REQUEST_FIELDS = {
     ),
     "/classes/com.korail.mobile.pass.trGdMenuLt.do": frozenset(
         {"Device", "Version"}
+    ),
+    "/classes/com.korail.mobile.pass.passMenu.do": frozenset(
+        {"Device", "Version", "Key", "menuNo"}
+    ),
+    "/classes/com.korail.mobile.push.crwCallRq.do": frozenset(
+        {"Device", "Version", "Key", "qryDvCd"}
+    ),
+    "/classes/com.korail.mobile.push.cmtrKnd.do": frozenset(
+        {"Device", "Version", "Key", "cmtrKndCd"}
     ),
     "/classes/com.korail.mobile.product.ReservationList": frozenset(
         {"Device", "Version", "Key", "txtSelPage", "txtCntPerPage"}
