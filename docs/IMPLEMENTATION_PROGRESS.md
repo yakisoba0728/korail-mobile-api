@@ -10,6 +10,9 @@ Last updated: 2026-07-15 KST
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
+- The current package boundary is 45 exact login/read routes and 48 public
+  methods. Current service inventory is 31 successful, 10 failed, and 124
+  unexecuted entries out of 165.
 - The cache-read expansion implementation, offline tests, package build, and
   isolated import are complete, including bounded live verification.
 - The fixed `rt=0` DynaPath replacement and empty advertising-ID default are
@@ -111,8 +114,23 @@ local session.
 
 R54 has a strict internal nested response model/parser, but its unresolved
 train-group provenance keeps transport unavailable. There is no public client
-method, safety route, or raw-string request builder. This tranche used no live
-request, credentials, `.env`, or raw capture and added no mutation capability.
+method, safety route, or raw-string request builder. Historically, the
+implementation tranche itself used no live request, credentials, `.env`, or
+raw capture and added no mutation capability. Its pre-revalidation inventory
+was 28 successful, 9 failed, and 128 unexecuted entries out of 165.
+
+### Bounded next-safe read revalidation
+
+A later bounded authenticated read-only revalidation used an empty advertising
+ID, logged in once, and confirmed that the repr-hidden `customer_no` was
+available. R13 made one request, returned `WRC800029`, surfaced as
+`KorailAppError` and was not retried. R32 succeeded with 0 rows, current-form
+R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the existing safe
+train search succeeded with 10 rows. R52 made zero requests and was recorded
+as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not called. No mutation
+route was called, and no credential, identifier, or raw response value was
+retained. Current service inventory is 31 successful, 10 failed, and 124
+unexecuted entries out of 165.
 
 ## Tagged variants, ordered repeated forms, and fare quote
 
@@ -135,12 +153,12 @@ R39 has full synthetic response parsing and an internal exact request builder,
 but its missing normal NetFunnel `service_1` / `act_6` gate keeps it outside
 both `KorailClient` and the read-only safety registry. R54 remains held for its
 unresolved discriminator provenance. Across the complete seven-read tranche,
-the boundary is 45 routes and 48 public methods, live inventory remains 28
-successful / 9 failed / 128 unexecuted out of 165, and no live request,
-credential access, `.env`, secure raw, or mutation expansion occurred.
-The APK inventory remains 28 successful, 9 failed, and 128 unexecuted entries
-out of 165; the current package boundary is 45 exact routes and 48 public
-methods.
+the boundary is 45 routes and 48 public methods. Historically, that
+implementation step made no live request and its pre-revalidation inventory
+was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
+credential access, `.env` read, secure-raw access, or mutation expansion. The
+current inventory is 31 successful, 10 failed, and 124 unexecuted entries out
+of 165; the current package boundary is 45 exact routes and 48 public methods.
 
 ## Implemented Public Operations
 

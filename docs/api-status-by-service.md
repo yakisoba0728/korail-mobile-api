@@ -2,20 +2,21 @@
 
 기준: `analysis/reports/api-endpoints.tsv`, 2026-07-09 안전 범위 실제 호출
 스냅샷, 2026-07-14 MAAS 메뉴·역 목록 읽기 검증, 2026-07-15 객차·좌석
-구조 및 P0 열차 읽기 검증. 결제/예약
+구조, P0 열차 읽기, 고정/account-shaped 읽기 검증. 결제/예약
 생성/취소/환불/체크인/회원탈퇴처럼 운영 상태를 바꿀 수 있는 API는
 실행하지 않았다.
 
 | 상태 | 건수 |
 |---|---:|
-| 성공 | 28 |
-| 실패 | 9 |
-| 미실행 | 128 |
+| 성공 | 31 |
+| 실패 | 10 |
+| 미실행 | 124 |
 | 전체 | 165 |
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
 
-Package coverage: 38 exact login/read routes. The package now exposes the ten
+Package coverage: 45 exact login/read routes and 48 public methods. The package
+now exposes the ten
 previously successful but unwrapped reads plus the already registered service
 status cache as 11 public methods, plus the two typed car and physical-seat
 reads, three static P0 menu/reference reads, and the static-only R20
@@ -39,8 +40,19 @@ attribute, surfaced as `KorailAppError`, and was not retried. R37
 `getAssignScheduleView` and R51 `getMergeSeatsInquiry` remain static-only and
 unexecuted. Offline raw replay yielded 27 parsed responses, one expected
 `KorailAppError`, and zero unexpected failures. The three additional limousine
-P0 wrappers remain static-contract-only and do not contribute to the now 28
-successful, 9 failed, and 128 unexecuted live inventory counts.
+P0 wrappers remain static-contract-only.
+
+Historical pre-revalidation inventory was 28 successful, 9 failed,
+and 128 unexecuted. A later bounded authenticated read-only revalidation used
+an empty advertising ID, logged in once, and confirmed that the repr-hidden
+`customer_no` was available. R13 made one request and returned `WRC800029`,
+surfaced as `KorailAppError` and was not retried. R32 succeeded with 0 rows,
+current-form R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the
+existing safe train search succeeded with 10 rows. R52 made zero requests and
+was recorded as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not called.
+No mutation route was called, and no credential, identifier, or raw response
+value was retained. Current service inventory is 31 successful, 10 failed,
+and 124 unexecuted entries out of 165.
 
 ## Service Index
 
@@ -55,7 +67,7 @@ successful, 9 failed, and 128 unexecuted live inventory counts.
 | `CertificationService` | 할인/자격 인증 및 증빙 | 12 | 0 | 0 | 12 |
 | `CommonService` | 공통코드, 약관, 앱 설정, QR 위치 인증 | 11 | 6 | 0 | 5 |
 | `CompensateService` | 보상 환불 대상 조회 및 실행 | 3 | 0 | 1 | 2 |
-| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 0 | 1 |
+| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |
 | `DelayService` | 지연증명, 지연료, 지연환불 조회/신청 | 9 | 1 | 1 | 7 |
 | `GiftInfoService` | 승차권 선물 | 1 | 0 | 0 | 1 |
 | `GifticketService` | 기프티켓 조회/예약/이력 | 4 | 0 | 2 | 2 |
@@ -73,12 +85,12 @@ successful, 9 failed, and 128 unexecuted live inventory counts.
 | `RailPlusService` | RailPlus 자동충전 조회 | 1 | 0 | 0 | 1 |
 | `ReceiptService` | 승차권 영수증 조회 | 1 | 1 | 0 | 0 |
 | `RefundService` | 승차권 환불/반환 실행 | 5 | 0 | 0 | 5 |
-| `ResearchService` | 열차/좌석/N카드 관련 조회 | 11 | 2 | 2 | 7 |
+| `ResearchService` | 열차/좌석/N카드 관련 조회 | 11 | 3 | 2 | 6 |
 | `ReservationCancelService` | 예약 취소 | 3 | 0 | 0 | 3 |
 | `ReservationService` | 승차권 예약 및 좌석 조건 | 4 | 1 | 1 | 2 |
 | `ReservationWaitService` | 예약대기 신청 | 1 | 0 | 0 | 1 |
 | `SeatMovieService` | 열차 스케줄 및 예약 조회 | 3 | 1 | 0 | 2 |
-| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 0 | 0 | 19 |
+| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 2 | 0 | 17 |
 | `TrainsInfoService` | 열차/객차/자유석 정보 조회 | 6 | 3 | 0 | 3 |
 | `XPointService` | OK캐쉬백/X포인트 인증 및 적립 | 5 | 0 | 0 | 5 |
 
@@ -200,11 +212,11 @@ successful, 9 failed, and 128 unexecuted live inventory counts.
 ## CustService
 
 - 역할: 고객 할인 대상 조회
-- 상태: 총 1개 / 성공 0 / 실패 0 / 미실행 1
+- 상태: 총 1개 / 성공 0 / 실패 1 / 미실행 0
 
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
-| 43 | `mchdDcntTgt` | POST | `/classes/com.korail.mobile.cust.mchdDcntTgt.do` | 고객 할인 대상 조회 | 미실행 | 미검증 | Device, Version, Key, dptDt | `MchdDcntTgtDao.MchdDcntTgtResponse` |
+| 43 | `mchdDcntTgt` | POST | `/classes/com.korail.mobile.cust.mchdDcntTgt.do` | 고객 할인 대상 조회 | 실패 | `WRC800029`; `KorailAppError`, 1회 호출, 재시도 없음 | Device, Version, Key, dptDt | `MchdDcntTgtDao.MchdDcntTgtResponse` |
 
 ## DelayService
 
@@ -414,14 +426,14 @@ successful, 9 failed, and 128 unexecuted live inventory counts.
 ## ResearchService
 
 - 역할: 열차/좌석/N카드 관련 조회
-- 상태: 총 11개 / 성공 2 / 실패 2 / 미실행 7
+- 상태: 총 11개 / 성공 3 / 실패 2 / 미실행 6
 
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
 | 113 | `getAssignScheduleView` | POST | `/classes/com.korail.mobile.research.assignScheduleView.do` | 좌석배정 스케줄 조회 | 미실행 | static-only / 미실행 | Device, Version, Key, menuId, dptDt, dptTm, dptRsStnNm, arvRsStnNm, trnGpCd, psrmClCd, seatAttCd1, psgNum1, stlbDturDvNm1, dirtChtnDvCd, chtnArvRsStnNm | `SeatAssignScheduleViewDao.SeatAssignScheduleViewResponse` |
 | 114 | `getCarList` | POST | `/classes/com.korail.mobile.research.TrainResearch` | 객차 목록 조회 | 성공 | IRG000000 / SUCC, 5개 객차 구조 검증 | Device, Version, Key, Sid, txtMenuId, txtPsrmClCd, txtRunDt, txtDptDt, txtTrnClsfCd, txtTrnNo, txtDptRsStnCd, txtArvRsStnCd, txtDptStnRunOrdr, txtArvStnRunOrdr, txtTrnGpCd, txtTotPsgCnt, txtSeatAttCd, txtGdNo, sidTest | `SearchCarListDao.SearchCarListResponse` |
 | 115 | `getCmtrInfo` | POST | `/classes/com.korail.mobile.research.cmtrInfo.do` | 정기권 정보 조회 | 미실행 | 미검증 | Device, Version, Key, jobDvCd, cmtrKndCd, psgCnt, cmtrUtlAgeCd, psgPrnb, ogtkSaleWctNo, ogtkSaleDd, ogtkSaleSqno, ogtkRetPwd, inquiryType | `CmtrInfoDao.CmtrInfoResponse` |
-| 116 | `getCustTripInfo` | POST | `/classes/com.korail.mobile.research.custTripInfo.do` | 고객 여행 편의설정 조회 | 미실행 | 미검증 | Device, Version, Key, custMgNo, medDvCd, regSqno | `ConvenienceSettingDao.ConvenienceSettingResponse` |
+| 116 | `getCustTripInfo` | POST | `/classes/com.korail.mobile.research.custTripInfo.do` | 고객 여행 편의설정 조회 | 성공 | 0 rows | Device, Version, Key, custMgNo, medDvCd, regSqno | `ConvenienceSettingDao.ConvenienceSettingResponse` |
 | 117 | `getMergeSeatsInquiry` | POST | `/classes/com.korail.mobile.research.mergeSeatsC.do` | 병합좌석 조회 | 미실행 | static-only / 미실행 | Device, Version, Key, abrdDt, runDt, trnNo, dptRsStnNm, arvRsStnNm, selRsStnNm, psrmClCd, seatAttCd, totPsgNum | `MergeSeatInquiryDao.MergeSeatInquiryResponse` |
 | 118 | `getNCardHistory` | GET | `/classes/com.korail.mobile.ticket.dcntCrdUseQry.do` | N카드 사용이력 | 실패 | WRR000100 입력값 오류(dcntCrdNo) | Device, Version, Key, dcntCrdNo | `NCardHistoryDao.NCardHistoryResponse` |
 | 119 | `getNCardSchedultView` | GET | `/classes/com.korail.mobile.research.dcntCrdScheduleView.do` | N카드 스케줄 조회 | 실패 | WRR000100 입력값 오류(dcntCrdKndCd) | Device, Version, Key, dptDt, dptRsStnNm, arvRsStnNm, dptTm, trnGpCd, dirtChtnDvCd, dcntCrdKndCd, dcntCrdKndMgNo, useTrmDno, usePsbTno, qryPgNo | `NCardInquiryDao.NCardInquiryResponse` |
@@ -469,14 +481,14 @@ successful, 9 failed, and 128 unexecuted live inventory counts.
 
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
-| 133 | `getRsvInquiry` | POST | `/classes/com.korail.mobile.seatMovie.ScheduleView` | 열차 스케줄 조회 | 성공 | IRG000000 정상처리되었습니다 | Device, Version, Sid, txtMenuId, radJobId, selGoTrain, txtTrnGpCd, txtGoTrnNo, txtGoStart, txtGoEnd, txtGoAbrdDt, txtGoHour, txtPsgFlg_1, txtPsgFlg_2, txtPsgFlg_3, txtPsgFlg_4, txtPsgFlg_5, txtSeatAttCd_2, txtSeatAttCd_3, txtSeatAttCd_4, txtJobDv, etrPath, tkDptDt, tkDptTm, tkTrnNo, ebizCrossCheck, srtCheckYn, rtYn, adjStnScdlOfrFlg, mbCrdNo, tkPsrmClCd, tkRcvdAmt, qryDvCd, qryStNo, qryStTrnNo, qryStTrnNo2, pgPrCnt, chtnCnt, chtnRsStnCd1, trnGpCnt, trnGpCd1 | `RsvInquiryResponse` |
+| 133 | `getRsvInquiry` | POST | `/classes/com.korail.mobile.seatMovie.ScheduleView` | 열차 스케줄 조회 | 성공 | IRG000000 정상처리, 기존 safe search 10 rows | Device, Version, Sid, txtMenuId, radJobId, selGoTrain, txtTrnGpCd, txtGoTrnNo, txtGoStart, txtGoEnd, txtGoAbrdDt, txtGoHour, txtPsgFlg_1, txtPsgFlg_2, txtPsgFlg_3, txtPsgFlg_4, txtPsgFlg_5, txtSeatAttCd_2, txtSeatAttCd_3, txtSeatAttCd_4, txtJobDv, etrPath, tkDptDt, tkDptTm, tkTrnNo, ebizCrossCheck, srtCheckYn, rtYn, adjStnScdlOfrFlg, mbCrdNo, tkPsrmClCd, tkRcvdAmt, qryDvCd, qryStNo, qryStTrnNo, qryStTrnNo2, pgPrCnt, chtnCnt, chtnRsStnCd1, trnGpCnt, trnGpCd1 | `RsvInquiryResponse` |
 | 134 | `getRsvLimousineInquiry` | POST | `/classes/com.korail.mobile.seatMovie.LimousineScheduleView` | 리무진 연계 스케줄 조회 | 미실행 | 미검증 | Device, Version, Sid, txtMenuId, radJobId, txtJobDv, selGoTrain, txtTrnGpCd, txtGoTrnNo, txtGoStart, txtGoEnd, txtGoAbrdDt, txtGoHour, txtPsgFlg_1, txtPsgFlg_2, txtPsgFlg_3, txtPsgFlg_4, txtPsgFlg_5, txtSeatAttCd_2, txtSeatAttCd_3, txtSeatAttCd_4, ebizCrossCheck, srtCheckYn, rtYn | `RsvInquiryResponse` |
 | 135 | `getRsvProductInquiry` | POST | `/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial` | 상품/특가 스케줄 조회 | 미실행 | PNR/티켓/N카드/상품 등 실데이터 필요 | Device, Version, txtMenuId, radJobId, selGoTrain, txtTrnGpCd, txtGoStart, txtGoEnd, txtGoAbrdDt, txtGoHour, txtPsgFlg_1, txtPsgFlg_2, txtPsgFlg_3, txtPsgFlg_4, txtPsgFlg_5, txtSeatAttCd_2, txtSeatAttCd_3, txtSeatAttCd_4, txtGdNo, qryDvCd, qryStNo, qryStTrnNo, qryStTrnNo2, pgPrCnt, chtnCnt, chtnRsStnCd1, trnGpCnt, trnGpCd1 | `RsvInquiryResponse` |
 
 ## TicketService
 
 - 역할: 발권, 승차권 관리, 체크인, 티켓 정보
-- 상태: 총 19개 / 성공 0 / 실패 0 / 미실행 19
+- 상태: 총 19개 / 성공 2 / 실패 0 / 미실행 17
 
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
@@ -486,9 +498,9 @@ successful, 9 failed, and 128 unexecuted live inventory counts.
 | 139 | `getMaasCancel` | POST | `/classes//com.korail.mobile.addService.cancelPay.do` | MAAS 결제 취소 | 미실행 | 결제/간편결제/포인트/금전성 API | Device, Version, custMgNo, lumpStlTgtNo | `BaseResponse` |
 | 140 | `getMaasServiceCancel` | POST | `/classes/com.korail.mobile.addService.coptCnc.do` | MAAS 서비스 취소 | 미실행 | 운영 상태 변경 가능 | Device, Version, pnrNo, cncTgtCnt, cncAddSrvReqNo, cncRetFee | `BaseResponse` |
 | 141 | `getMaasServiceCancelFee` | POST | `/classes/com.korail.mobile.maas.cncFee.do` | MAAS 취소 수수료 조회 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, addSrvReqNo, addSrvDvCd, coptEntRsvNo | `MaasServiceCancelFeeDao.MaasServiceCancelFeeResponse` |
-| 142 | `getMaasServiceDetailList` | POST | `/classes/com.korail.mobile.copt.gdReqQry.do` | MAAS 서비스 상세 목록 | 미실행 | PNR/티켓/N카드/상품 등 실데이터 필요 | Device, Version, qryDtFrom, qryDtTo | `MaasServiceDetailListDao.MaasServivceDetailResponse` |
+| 142 | `getMaasServiceDetailList` | POST | `/classes/com.korail.mobile.copt.gdReqQry.do` | MAAS 서비스 상세 목록 | 성공 | current form, 0 rows | Device, Version, qryDtFrom, qryDtTo | `MaasServiceDetailListDao.MaasServivceDetailResponse` |
 | 143 | `getSelfSeatChgInfo` | POST | `/classes/com.korail.mobile.self.seatChgInfo.do` | 셀프 좌석변경 정보 | 미실행 | 미검증 | Device, Version, Key, runDt, trnNo, dptRsStnCd, arvRsStnCd, psrmClCd | `CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse` |
-| 144 | `getTripChgDate` | POST | `/classes/com.korail.mobile.reservation.tripChgDate.do` | 여정변경 가능일 조회 | 미실행 | 미검증 | Device, Version, Key, tripChgDate | `TripChgInfoDao.TripChgInfoDaoResponse` |
+| 144 | `getTripChgDate` | POST | `/classes/com.korail.mobile.reservation.tripChgDate.do` | 여정변경 가능일 조회 | 성공 | 15 rows | Device, Version, Key, tripChgDate | `TripChgInfoDao.TripChgInfoDaoResponse` |
 | 145 | `gurdSmsSnd` | POST | `/classes/com.korail.mobile.tk.gurdSmsSnd.do` | 보호자 안심 SMS 발송 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, pnrNo, jrnySqno, rcvPsHndyTeln | `BaseResponse` |
 | 146 | `pbpAcepSpec` | POST | `/classes/com.korail.mobile.tk.pbpAcepSpec.do` | PBP 수락 내역 | 미실행 | PNR/티켓/N카드/상품 등 실데이터 필요 | Device, Version, Key, tkCnt, tkRetNo | `PbpAcepSpecDao.PbpAcepSpecResponse` |
 | 147 | `pbpTkWdrw` | POST | `/classes/com.korail.mobile.tk.pbpWdrw.do` | PBP 승차권 회수 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, pbpCnt, pbpRsvNo, pnrNo | `BaseResponse` |
@@ -509,7 +521,7 @@ successful, 9 failed, and 128 unexecuted live inventory counts.
 |---:|---|---|---|---|---|---|---|---|
 | 155 | `getFresScar` | POST | `/classes/com.korail.mobile.trn.fresScar.do` | 자유석/객차 조회 | 성공 | exact `strResult="SUCC"`, typed parse 성공 | Device, Version, Key, runDt, trnNo, dptStnConsOrdr, arvStnConsOrdr, dptStnRunOrdr, arvStnRunOrdr | `FresScarDao.FresScarResponse` |
 | 156 | `getPrice2Fare` | POST | `/classes/com.korail.mobile.trn.prcFare.do` | 운임 재계산 | 미실행 | 미검증 | Device, Version, Key, txtMenuId, chtnDvCd, trnCnt, FieldMap | `Price2FareDao.Price2FareResponse` |
-| 157 | `getPriceFare` | POST | `/classes/com.korail.mobile.trainsInfo.TrainCharge` | 운임 조회 | 미실행 | 미검증 | Device, Version, Key, txtMenuId, txtRtnDvCd, txtChtrDvCd1, txtSeatAttCd4, FieldMap | `PriceFareDao.PriceFareResponse` |
+| 157 | `getPriceFare` | POST | `/classes/com.korail.mobile.trainsInfo.TrainCharge` | 운임 조회 | 미실행 | `skipped_no_typed_leg`; 0회 호출 | Device, Version, Key, txtMenuId, txtRtnDvCd, txtChtrDvCd1, txtSeatAttCd4, FieldMap | `PriceFareDao.PriceFareResponse` |
 | 158 | `getSelectStationInfo` | POST | `/classes/com.korail.mobile.qry.chtnStn.do` | 선택역 정보 조회 | 성공 | IRZ000001 정상적으로 조회 되었습니다. | Device, Version, Key, dptRsStnCd, arvRsStnCd | `TrainSelectStationDao.TrainSelectStationResponse` |
 | 159 | `getTourTrainInfo` | POST | `/classes/com.korail.mobile.trainsInfo.TourTrainSpecialRoom` | 관광열차 정보 | 미실행 | PNR/티켓/N카드/상품 등 실데이터 필요 | Device, Version, Key, txtTrnGpCd | `TourTrainInfoDao.TourTrainInfoResponse` |
 | 160 | `getTrainSchedule` | POST | `/classes/com.korail.mobile.research.actualTrainSchedule.do` | 실제 열차 운행 스케줄 | 성공 | EVZ000048 열차가 존재하지 않습니다 | Device, Version, runDt, trnNo | `TrainScheduleDao.TrainScheduleResponse` |

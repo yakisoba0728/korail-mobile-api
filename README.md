@@ -11,6 +11,9 @@ adding the documentation contract coverage in this increment, the fresh
 non-live gate is `1247 passed, 1 deselected`. In both gates, the deselected test
 is the explicitly opted-in live-service test.
 
+Current service inventory is 31 successful, 10 failed, and 124 unexecuted
+entries out of 165.
+
 The original APK and generated decompile directories are intentionally not
 committed. Documentation, reproducible inventory output, client source, and
 offline contract tests are committed.
@@ -223,9 +226,10 @@ DynaPath-disabled operations:
 
 All four methods require a local authenticated session, validate before
 transport, issue exactly one request, and retain raw mappings only behind
-`repr=False`. No live request, credential access, raw capture, or production
-response was used; the implementation and tests use static APK contracts,
-mock transport, and synthetic fixtures only.
+`repr=False`. At the historical implementation step, before revalidation, no
+live request, credential access, raw capture, or production response was used;
+the implementation and tests use static APK contracts, mock transport, and
+synthetic fixtures only.
 
 R54 `getTourTrainInfo` has strict internal parser/model coverage for the nested
 seat shape, including a required JSON-integer passenger count. Transport is
@@ -233,10 +237,24 @@ intentionally held back: there is no `get_tour_train_info` client method, no
 registered safety route, and no raw-string request builder. The accepted train
 group domain or typed provenance remains unresolved.
 
-The APK service inventory remains 28 successful, 9 failed, and 128 unexecuted
-entries out of 165. This increment changes only the package boundary to 45
-exact login/read routes and 48 public methods; it adds no reservation change,
-booking, payment, refund, cancellation, check-in, or other mutation capability.
+Historical pre-revalidation inventory was 28 successful, 9 failed, and 128
+unexecuted entries out of 165. The current service inventory is 31 successful,
+10 failed, and 124 unexecuted entries out of 165. This increment changes only
+the package boundary to 45 exact login/read routes and 48 public methods; it
+adds no reservation change, booking, payment, refund, cancellation, check-in,
+or other mutation capability.
+
+### Bounded next-safe read evidence
+
+A later bounded authenticated read-only revalidation used an empty advertising
+ID, logged in once, and confirmed that the repr-hidden `customer_no` was
+available. R13 made one request, returned `WRC800029`, surfaced as
+`KorailAppError` and was not retried. R32 succeeded with 0 rows, current-form
+R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the existing safe
+train search succeeded with 10 rows. R52 made zero requests and was recorded
+as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not called. No mutation
+route was called, and no credential, identifier, or raw response value was
+retained.
 
 ### Tagged variant and fare reads
 
@@ -264,11 +282,13 @@ R39 product-train inquiry has strict synthetic models, an internal exact
 request builder, and a full response parser, but no client method or safety
 route because the normal NetFunnel `service_1` / `act_6` gate is not yet
 implemented. R54 remains parser/model-only until train-group provenance is
-closed. `DYNAPATH_ALLOWLIST_PATHS` is unchanged. This tranche used no live
-request, credential, `.env`, secure raw, or production response, and added no
-reservation, seat-hold, payment, ticketing, cancellation, refund, or other
-mutation capability. The service inventory remains 28 successful, 9 failed,
-and 128 unexecuted entries out of 165.
+closed. `DYNAPATH_ALLOWLIST_PATHS` is unchanged. Historically, this
+implementation tranche itself used no live request, credential, `.env`, secure
+raw, or production response, and added no reservation, seat-hold, payment,
+ticketing, cancellation, refund, or other mutation capability. Its
+pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted;
+the current inventory is 31 successful, 10 failed, and 124 unexecuted entries
+out of 165.
 
 ### Static P0 menu and reference reads
 

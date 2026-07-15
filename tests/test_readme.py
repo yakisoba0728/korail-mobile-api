@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -70,15 +71,52 @@ def test_readme_documents_every_successful_read_expansion_method_and_boundary():
 
 def test_status_and_progress_documents_match_current_inventory_and_coverage():
     status = STATUS.read_text(encoding="utf-8")
-    assert "| 성공 | 28 |" in status
-    assert "| 실패 | 9 |" in status
-    assert "| 미실행 | 128 |" in status
+    assert "| 성공 | 31 |" in status
+    assert "| 실패 | 10 |" in status
+    assert "| 미실행 | 124 |" in status
     assert "| 전체 | 165 |" in status
-    assert "| 성공 | 27 |" not in status
-    assert "| 실패 | 8 |" not in status
-    assert "| 미실행 | 130 |" not in status
+    assert "Package coverage: 45 exact login/read routes and 48 public methods" in status
+    assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
+    assert "and 128 unexecuted" in status
+    assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
+    assert "| `ResearchService` | 열차/좌석/N카드 관련 조회 | 11 | 3 | 2 | 6 |" in status
+    assert "| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 2 | 0 | 17 |" in status
     assert "| `ReservationService` | 승차권 예약 및 좌석 조건 | 4 | 1 | 1 | 2 |" in status
     assert "| `TrainsInfoService` | 열차/객차/자유석 정보 조회 | 6 | 3 | 0 | 3 |" in status
+    assert (
+        "## CashReceipt\n\n- 역할: 현금영수증 발급\n"
+        "- 상태: 총 1개 / 성공 0 / 실패 0 / 미실행 1" in status
+    )
+    assert (
+        "## CustService\n\n- 역할: 고객 할인 대상 조회\n"
+        "- 상태: 총 1개 / 성공 0 / 실패 1 / 미실행 0" in status
+    )
+    assert (
+        "| 43 | `mchdDcntTgt` | POST | "
+        "`/classes/com.korail.mobile.cust.mchdDcntTgt.do` | "
+        "고객 할인 대상 조회 | 실패 | `WRC800029`; `KorailAppError`, "
+        "1회 호출, 재시도 없음 |" in status
+    )
+    assert (
+        "| 116 | `getCustTripInfo` | POST | "
+        "`/classes/com.korail.mobile.research.custTripInfo.do` | "
+        "고객 여행 편의설정 조회 | 성공 | 0 rows |" in status
+    )
+    assert (
+        "| 142 | `getMaasServiceDetailList` | POST | "
+        "`/classes/com.korail.mobile.copt.gdReqQry.do` | "
+        "MAAS 서비스 상세 목록 | 성공 | current form, 0 rows |" in status
+    )
+    assert (
+        "| 144 | `getTripChgDate` | POST | "
+        "`/classes/com.korail.mobile.reservation.tripChgDate.do` | "
+        "여정변경 가능일 조회 | 성공 | 15 rows |" in status
+    )
+    assert (
+        "| 157 | `getPriceFare` | POST | "
+        "`/classes/com.korail.mobile.trainsInfo.TrainCharge` | 운임 조회 | "
+        "미실행 | `skipped_no_typed_leg`; 0회 호출 |" in status
+    )
     assert (
         "| 124 | `getGuideSeatCnd` | POST | "
         "`/classes/com.korail.mobile.reservation.guideSeatCnd.do` | "
@@ -91,10 +129,18 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
         "`/classes/com.korail.mobile.trn.fresScar.do` | 자유석/객차 조회 | "
         '성공 | exact `strResult="SUCC"`, typed parse 성공 |' in status
     )
-    assert "Package coverage: 38 exact login/read routes" in status
     assert "bounded live structural evidence" in status
     assert "25 successful operations" in status
     assert "three input-dependent skips" in status
+
+    service_rows = re.findall(
+        r"^\| `[^`]+` \| [^|]+ \| (\d+) \| (\d+) \| (\d+) \| (\d+) \|$",
+        status,
+        flags=re.MULTILINE,
+    )
+    assert len(service_rows) == 35
+    service_totals = tuple(sum(int(row[index]) for row in service_rows) for index in range(4))
+    assert service_totals == (165, 31, 10, 124)
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
     guide_normalized = " ".join(guide.split())
@@ -330,10 +376,43 @@ def test_docs_record_fixed_account_reads_and_tour_train_holdback():
         normalized = " ".join(text.split())
         assert "strCustNo" in text
         assert "R54" in text
-        assert "no live request" in normalized.casefold()
+        assert "historical" in normalized.casefold()
+        assert "pre-revalidation" in normalized.casefold()
         assert "28 successful, 9 failed, and 128 unexecuted" in normalized
+        assert "31 successful, 10 failed, and 124 unexecuted" in normalized
         assert "mutation" in normalized
     normalized_readme = " ".join(readme.split())
     assert "no `get_tour_train_info` client method" in normalized_readme
     assert "no registered safety route" in normalized_readme
     assert "no raw-string request builder" in normalized_readme
+
+
+def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
+    documents = {
+        "README": README.read_text(encoding="utf-8"),
+        "CHANGELOG": CHANGELOG.read_text(encoding="utf-8"),
+        "progress": PROGRESS.read_text(encoding="utf-8"),
+        "handoff": HANDOFF.read_text(encoding="utf-8"),
+        "status": STATUS.read_text(encoding="utf-8"),
+    }
+    for name, document in documents.items():
+        normalized = " ".join(document.split())
+        assert "31 successful, 10 failed, and 124 unexecuted" in normalized, name
+        assert "empty advertising ID" in normalized, name
+        assert "customer_no" in normalized, name
+        assert "WRC800029" in normalized, name
+        assert "0 rows" in normalized, name
+        assert "15 rows" in normalized, name
+        assert "10 rows" in normalized, name
+        assert "skipped_no_typed_leg" in normalized, name
+        assert "R17, R31, R39, and R54 were not called" in normalized, name
+        assert "No mutation" in normalized, name
+
+    readme = " ".join(documents["README"].split())
+    assert "R13 made one request" in readme
+    assert "surfaced as `KorailAppError` and was not retried" in readme
+    assert "R32 succeeded with 0 rows" in readme
+    assert "current-form R43 succeeded with 0 rows" in readme
+    assert "R45 succeeded with 15 rows" in readme
+    assert "existing safe train search succeeded with 10 rows" in readme
+    assert "R52 made zero requests" in readme

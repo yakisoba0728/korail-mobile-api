@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Recorded a bounded authenticated read-only revalidation that used an empty
+  advertising ID, logged in once, and confirmed that the repr-hidden
+  `customer_no` was available. R13 made one request, returned `WRC800029`,
+  surfaced as `KorailAppError` and was not retried. R32 succeeded with 0 rows,
+  current-form R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the
+  existing safe train search succeeded with 10 rows. R52 made zero requests
+  and was recorded as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not
+  called. No mutation route was called, and no credential, identifier, or raw
+  response value was retained. Current service inventory is 31 successful, 10
+  failed, and 124 unexecuted entries out of 165.
 - Added closed tagged public reads for gift-ticket list modes, commuter jobs
   `a`/`b`/`c`, and one/two-leg fare quotes. Exact ordered forms preserve R31
   duplicate fields and intentionally omit R52 `trnCnt`; only R52 uses the
@@ -11,8 +21,9 @@
   R52 does not invent one.
 - Added strict synthetic response models/parsers plus an internal exact
   request builder for R39, while leaving its NetFunnel `service_1` / `act_6`
-  route unavailable. R54 also remains transport-held. The DynaPath allowlist
-  and live inventory remain unchanged, no live call was made, and no mutation
+  route unavailable. R54 also remains transport-held. At that historical,
+  pre-revalidation implementation step, the DynaPath allowlist and live
+  inventory remained unchanged, no live call was made, and no mutation
   capability was added. The boundary is now 45 read/login routes and 48 public
   methods.
 - Added four authenticated fixed/account-shaped reads for multi-child discount
@@ -24,10 +35,12 @@
 - Added strict synthetic parsers and frozen repr-safe models for R13, R32,
   R43, and R45. R54 tour-train response parsing is static-contract support
   only: no client method, safety route, or raw-string request builder exists.
-- Made no live request, credential read, raw capture, or mutation expansion.
-  The service inventory remains 28 successful, 9 failed, and 128 unexecuted
-  entries; that intermediate callable package boundary was 42 read/login routes and 45
-  public methods.
+- Historically, the fixed/account-shaped implementation step itself made no
+  live request, credential read, raw capture, or mutation expansion. Its
+  pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted
+  entries; that intermediate callable package boundary was 42 read/login
+  routes and 45 public methods. The current boundary is 45 routes and 48 public
+  methods, with 31 successful, 10 failed, and 124 unexecuted inventory entries.
 - Ran a bounded revalidation of the P0 read surface in an authenticated 28-request,
   28-response run with 25 successful operations, one expected typed
   application failure, and three input-dependent skips. Deposit-bank and

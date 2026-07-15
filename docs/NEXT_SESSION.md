@@ -18,8 +18,9 @@ The current implementation evidence establishes:
 - A historical reviewed offline gate of `1246 passed, 1 deselected`; the fresh
   P0 live-evidence documentation gate reports `1247 passed, 1 deselected`. In
   both gates, the deselected test is the explicitly opted-in live-service test.
-- Service inventory of 28 successful, 9 failed, and 128 unexecuted routes; the
-  total remains 165.
+- Current service inventory of 31 successful, 10 failed, and 124 unexecuted
+  routes; the total remains 165. Historical pre-revalidation inventory was 28
+  successful, 9 failed, and 128 unexecuted.
 - No callable reservation, payment, cancellation, refund, check-in, membership,
   or other mutation route.
 
@@ -54,9 +55,23 @@ off and validates before transport.
 
 R54 remains parser/model-only static support. Do not add a public method,
 safety route, or raw string discriminator until train-group provenance or a
-finite domain is evidenced. No live request, credential access, `.env` read,
-or raw response capture occurred. Service inventory remains 28 successful, 9
-failed, and 128 unexecuted out of 165, and no mutation boundary expanded.
+finite domain is evidenced. Historically, the implementation tranche itself
+made no live request, credential access, `.env` read, or raw response capture.
+Its pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted
+out of 165, and no mutation boundary expanded.
+
+## Bounded next-safe read evidence
+
+A later bounded authenticated read-only revalidation used an empty advertising
+ID, logged in once, and confirmed that the repr-hidden `customer_no` was
+available. R13 made one request, returned `WRC800029`, surfaced as
+`KorailAppError` and was not retried. R32 succeeded with 0 rows, current-form
+R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the existing safe
+train search succeeded with 10 rows. R52 made zero requests and was recorded
+as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not called. No mutation
+route was called, and no credential, identifier, or raw response value was
+retained. Current service inventory is 31 successful, 10 failed, and 124
+unexecuted entries out of 165.
 
 ## Tagged variants and transport holdbacks
 
@@ -72,9 +87,10 @@ session guard. R52 accepts typed metadata plus one or two exact legs, omits
 R39 has internal exact request construction and full synthetic parser/model
 coverage only. Do not add a client method or route until the normal NetFunnel
 `service_1` / `act_6` gate is separately implemented and reviewed. R54 remains
-held for unresolved train-group provenance. The DynaPath allowlist and live
-inventory are unchanged; this tranche made no live call, read no credentials
-or `.env`, retained no secure raw, and added no mutation route.
+held for unresolved train-group provenance. The DynaPath allowlist is
+unchanged. Historically, this implementation tranche made no live call, read
+no credentials or `.env`, retained no secure raw, and added no mutation route;
+the later bounded read-only evidence above changed only inventory evidence.
 
 ## Completed read package
 
