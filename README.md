@@ -25,7 +25,7 @@ Start here:
 1. [docs/korail-apk-analysis.md](docs/korail-apk-analysis.md) - high-level APK, host, network, flow, WebView, storage, and security summary.
 2. [docs/api-endpoints.md](docs/api-endpoints.md) - complete Retrofit endpoint table.
 3. [docs/deep-dive/README.md](docs/deep-dive/README.md) - deep-dive manual index and reading order.
-4. [docs/NEXT_SESSION.md](docs/NEXT_SESSION.md) - current handoff state for the next analysis session.
+4. [docs/IMPLEMENTATION_PROGRESS.md](docs/IMPLEMENTATION_PROGRESS.md) - current package boundary, inventory, and verification state.
 5. [docs/RELEASE.md](docs/RELEASE.md) - internal-only test, build, distribution, and fresh-install gate.
 
 Internal editable installation and offline verification:

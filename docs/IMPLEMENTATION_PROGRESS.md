@@ -402,6 +402,3 @@ raw response structure from exception classes. Any additional
 reservation-linked route requires its own safety review and caller-owned data.
 Keep all local credentials and runtime-sensitive values ignored and out of
 documentation.
-
-See the shared [next-session prompt](../../NEXT_SESSION_PROMPT.md) for the
-combined KORAIL/SRT orchestration instructions.
