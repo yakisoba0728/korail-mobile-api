@@ -276,17 +276,44 @@ def test_train_schedule_parser_maps_header_and_stop_repr_safely(
         assert secret not in rendered
 
 
+def test_train_schedule_parser_accepts_app_model_conformant_response(
+    load_json_fixture,
+):
+    # The app's TrainScheduleDao.TimeInfo model declares only stopStnNm among
+    # the station fields (no stopRsStnCd/stnConsOrdr/runOrdr), so an
+    # app-conformant SUCC response omits those three keys entirely.
+    raw = load_json_fixture("raw_typed_train_schedule_app_model.json")
+
+    response = parsers.parse_train_schedule_response(_enveloped_response(raw))
+    stop = response.stops[0]
+
+    assert isinstance(response, models.TrainScheduleResponse)
+    assert isinstance(stop, models.TrainScheduleStop)
+    assert response.run_date == "APP-MODEL-SCHEDULE-RUN-DATE"
+    assert response.train_no == "APP-MODEL-SCHEDULE-TRAIN-NO"
+    assert stop.station_name == "App Model Stop Station Name"
+    # Downgraded to optional -> omitted keys parse to None instead of raising.
+    assert stop.station_code is None
+    assert stop.station_construction_order is None
+    assert stop.run_order is None
+    assert stop.actual_arrival_delay_count == 0
+    assert stop.regular_flag == "APP-MODEL-REGULAR-FLAG"
+    assert stop.service_flag == "APP-MODEL-SERVICE-FLAG"
+
+    # An empty delay list (empty schedule) is valid and must not raise.
+    raw["dlayList"] = []
+    empty = parsers.parse_train_schedule_response(_enveloped_response(raw))
+    assert empty.stops == ()
+    assert empty.run_date == "APP-MODEL-SCHEDULE-RUN-DATE"
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
         lambda raw: raw.pop("dlayList"),
         lambda raw: raw.__setitem__("dlayList", {}),
-        lambda raw: raw.__setitem__("dlayList", []),
         lambda raw: raw["dlayList"].__setitem__(0, []),
-        lambda raw: raw["dlayList"][0].pop("stopRsStnCd"),
         lambda raw: raw["dlayList"][0].pop("stopStnNm"),
-        lambda raw: raw["dlayList"][0].pop("stnConsOrdr"),
-        lambda raw: raw["dlayList"][0].pop("runOrdr"),
         lambda raw: raw["dlayList"][0].__setitem__(
             "actArvDlayTnum", True
         ),

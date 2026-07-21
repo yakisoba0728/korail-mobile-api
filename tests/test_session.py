@@ -148,8 +148,8 @@ def test_login_infers_email_input_flag_and_omits_unset_optional_fields(load_json
     assert "txtMemberNo=user%40example.com" in captured["body"]
     assert "txtInputFlg=5" in captured["body"]
     assert "checkValidPw=Y" in captured["body"]
-    assert "custId=" in captured["body"]
-    assert "etrPath=" in captured["body"]
+    assert "custId=" not in captured["body"]
+    assert "etrPath=" not in captured["body"]
     assert session.jsessionid == "session-email"
 
 

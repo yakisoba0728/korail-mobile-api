@@ -90,6 +90,20 @@ def _typed_required_non_empty_list(
     return value
 
 
+def _typed_required_list(
+    data: Mapping[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> list[Any]:
+    value = data.get(key)
+    if not isinstance(value, list):
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be a list"
+        )
+    return value
+
+
 def _typed_optional_int(
     data: Mapping[str, Any],
     key: str,
@@ -538,7 +552,7 @@ def parse_train_schedule_response(
     response: BaseKorailResponse,
 ) -> TrainScheduleResponse:
     raw = response.raw
-    rows = _typed_required_non_empty_list(
+    rows = _typed_required_list(
         raw,
         "dlayList",
         context="train schedule",
@@ -551,11 +565,10 @@ def parse_train_schedule_response(
             )
         stops.append(
             TrainScheduleStop(
-                station_code=_typed_required_string(
+                station_code=_typed_optional_string(
                     row,
                     "stopRsStnCd",
                     context="train schedule stop",
-                    non_empty=True,
                 ),
                 station_name=_typed_required_string(
                     row,
@@ -563,17 +576,15 @@ def parse_train_schedule_response(
                     context="train schedule stop",
                     non_empty=True,
                 ),
-                station_construction_order=_typed_required_string(
+                station_construction_order=_typed_optional_string(
                     row,
                     "stnConsOrdr",
                     context="train schedule stop",
-                    non_empty=True,
                 ),
-                run_order=_typed_required_string(
+                run_order=_typed_optional_string(
                     row,
                     "runOrdr",
                     context="train schedule stop",
-                    non_empty=True,
                 ),
                 actual_arrival_delay_count=_typed_optional_int(
                     row,

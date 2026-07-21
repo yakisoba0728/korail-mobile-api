@@ -218,19 +218,27 @@ def build_train_schedule_form(
 def build_common_code_form(
     config: KorailConfig,
     code: str | list[str],
+    *,
+    depart_date: str = "",
+    arrival_date: str = "",
+    holiday_yn: str = "",
 ) -> dict[str, object]:
-    return {
+    form: dict[str, object] = {
         "Device": config.device,
         "Version": config.version,
         "Key": config.key,
         "code": [code] if isinstance(code, str) else code,
         "deviceWidth": config.device_width,
         "deviceHeight": config.device_height,
-        "departDate": "",
-        "arrivalDate": "",
-        "holidayYn": "",
-        "OSVersion": config.android_sdk_int,
     }
+    if depart_date:
+        form["departDate"] = depart_date
+    if arrival_date:
+        form["arrivalDate"] = arrival_date
+    if holiday_yn:
+        form["holidayYn"] = holiday_yn
+    form["OSVersion"] = config.android_sdk_int
+    return form
 
 
 def build_ticket_list_form(

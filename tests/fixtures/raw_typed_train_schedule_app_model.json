@@ -1,0 +1,29 @@
+{
+  "h_msg_cd": "IPT000000",
+  "h_msg_txt": "app-model-schedule-envelope-message-secret",
+  "strResult": "SUCC",
+  "dlayDtlRsnCont": "app-model-delay-detail-secret",
+  "msgCont": "app-model-schedule-message-secret",
+  "runDt1": "APP-MODEL-SCHEDULE-RUN-DATE",
+  "runSegOrdr": "APP-MODEL-RUN-SEGMENT-ORDER",
+  "trnDptFlg": "APP-MODEL-TRAIN-DEPARTURE-FLAG",
+  "trnNo1": "APP-MODEL-SCHEDULE-TRAIN-NO",
+  "dlayList": [
+    {
+      "stopStnNm": "App Model Stop Station Name",
+      "actArvDlayTnum": 0,
+      "actArvDt": "APP-MODEL-ACTUAL-ARRIVAL-DATE",
+      "actArvTm": "APP-MODEL-ACTUAL-ARRIVAL-TIME",
+      "actDptDt": "APP-MODEL-ACTUAL-DEPARTURE-DATE",
+      "actDptTm": "APP-MODEL-ACTUAL-DEPARTURE-TIME",
+      "arvDt": "APP-MODEL-PLANNED-ARRIVAL-DATE",
+      "arvTm": "APP-MODEL-PLANNED-ARRIVAL-TIME",
+      "dptDt": "APP-MODEL-PLANNED-DEPARTURE-DATE",
+      "dptTm": "APP-MODEL-PLANNED-DEPARTURE-TIME",
+      "expnArvDlayTnum": "APP-MODEL-EXPECTED-ARRIVAL-DELAY",
+      "expnDptDlayTnum": "APP-MODEL-EXPECTED-DEPARTURE-DELAY",
+      "rgulFlg": "APP-MODEL-REGULAR-FLAG",
+      "saodFlg": "APP-MODEL-SERVICE-FLAG"
+    }
+  ]
+}

@@ -106,8 +106,8 @@ class KorailSessionClient:
         *,
         input_flag: str | None = None,
         check_valid_pw: str = "Y",
-        cust_id: str | None = "",
-        etr_path: str | None = "",
+        cust_id: str | None = None,
+        etr_path: str | None = None,
     ) -> KorailSession:
         self.clear_session()
         try:
@@ -146,8 +146,8 @@ class KorailSessionClient:
             "txtInputFlg": resolved_input_flag,
             "checkValidPw": check_valid_pw,
             "idx": crypto_info.idx or None,
-            "custId": cust_id,
-            "etrPath": etr_path,
+            "custId": cust_id or None,
+            "etrPath": etr_path or None,
         }
         try:
             response = self.http.post_form(
