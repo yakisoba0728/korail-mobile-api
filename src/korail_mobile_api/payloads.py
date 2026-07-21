@@ -119,10 +119,13 @@ def _validated_room_class_code(value: str) -> str:
     return value
 
 
-def _resolved_goods_no(train: TrainSummary) -> str:
-    # Fall back to "" only when the row omits the goods number, matching the
-    # empty txtGdNo the app sends for non-goods trains.
-    return train.goods_no or ""
+def _resolved_goods_no(train: TrainSummary) -> str | None:
+    # x4/b.java:23 forwards trainInfo.getTxtGdNo() verbatim, which is null for a
+    # normal (non-goods) train (SeatSearchRequest.txtGdNo defaults to null), and
+    # Retrofit drops null @Field params (ResearchService getCarList txtGdNo:37 /
+    # getSeatList gdNo:59). So the app OMITS the field for standard searches;
+    # return None here and let the builders delete the key when there is none.
+    return train.goods_no or None
 
 
 def _inventory_sid(value: str) -> str:
@@ -166,6 +169,8 @@ def build_seat_car_form(
     }
     if not train.seat_attribute_code:
         del form["txtSeatAttCd"]
+    if form["txtGdNo"] is None:
+        del form["txtGdNo"]
     return form
 
 
@@ -209,6 +214,8 @@ def build_seat_inventory_form(
     }
     if not train.seat_attribute_code:
         del form["seatAttCd"]
+    if form["gdNo"] is None:
+        del form["gdNo"]
     return form
 
 

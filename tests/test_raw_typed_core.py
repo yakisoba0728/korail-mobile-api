@@ -439,7 +439,6 @@ def test_train_schedule_parser_accepts_app_model_conformant_response(
             "actArvDlayTnum", True
         ),
         lambda raw: raw.pop("runDt1"),
-        lambda raw: raw.pop("trnNo1"),
         lambda raw: raw.__setitem__("msgCont", []),
     ],
 )
@@ -452,6 +451,26 @@ def test_train_schedule_parser_rejects_malformed_shape(
 
     with pytest.raises(KorailProtocolError):
         parsers.parse_train_schedule_response(_enveloped_response(raw))
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda raw: raw.pop("trnNo1"),
+        lambda raw: raw.__setitem__("trnNo1", None),
+    ],
+)
+def test_train_schedule_parser_tolerates_null_train_no(
+    load_json_fixture,
+    mutation,
+):
+    # RV4-04: trnNo1 is a nullable Gson String and the web-view consumer
+    # null-guards it (TrainServiceInfoWebViewActivity.java:200), so a null train
+    # number parses (train_no is None) instead of failing the whole response.
+    raw = load_json_fixture("raw_typed_train_schedule.json")
+    mutation(raw)
+    parsed = parsers.parse_train_schedule_response(_enveloped_response(raw))
+    assert parsed.train_no is None
 
 
 def test_transfer_station_parser_maps_evidenced_rows_repr_safely(

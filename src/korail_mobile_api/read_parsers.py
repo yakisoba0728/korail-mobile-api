@@ -264,6 +264,30 @@ def _required_json_integer(
     return value
 
 
+def _required_integer(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+) -> int:
+    # These fields are declared Java `int` in the DAO, and Gson's
+    # JsonReader.nextInt() coerces a quoted numeric string ("2") into the int,
+    # so the app accepts both the number and the string form. Accept either
+    # (int or ASCII-decimal string); keep rejecting null/bool/float/non-numeric.
+    value = data.get(key)
+    if type(value) is int:
+        return value
+    if (
+        isinstance(value, str)
+        and value
+        and all("0" <= character <= "9" for character in value)
+    ):
+        return int(value)
+    raise KorailProtocolError(
+        f"KORAIL {context} field {key} must be an integer or an "
+        "ASCII decimal string"
+    )
+
+
 def _parse_pass_menu_data(
     data: Mapping[str, Any] | None,
     context: str,
@@ -1371,7 +1395,17 @@ def parse_merge_seats_inquiry_response(
 def parse_pass_schedule_response(
     raw: Mapping[str, Any],
 ) -> PassScheduleResponse:
-    _validate_envelope(raw)
+    # CommutationInquiryActivity.java:182 registers WRG000000 as a non-fatal
+    # empty result for the pass-schedule DAO (CommRsvInquiryDao) via
+    # setErrorMsgCdNotShowDialog, so an empty query returns strResult=FAIL +
+    # h_msg_cd=WRG000000 and the app renders "no schedules" rather than an
+    # error. Mirror parse_discount_coupon_response and treat it as empty.
+    empty = _validate_envelope(
+        raw,
+        accepted_empty_codes=frozenset({"WRG000000"}),
+    )
+    if empty:
+        return PassScheduleResponse(**_response_fields(raw))
     if raw["strResult"] != "SUCC":
         raise KorailProtocolError(
             "KORAIL pass schedule strResult must be exact SUCC"
@@ -1650,11 +1684,16 @@ def parse_tour_train_info_response(
                         additional_value,
                         "tour train seat_add_info",
                     )
-                    passenger_count = additional.get("h_psg_num")
-                    if type(passenger_count) is not int:
-                        raise KorailProtocolError(
-                            "KORAIL tour train seat field h_psg_num must be a JSON integer"
-                        )
+                    # TourTrainInfoDao.SeatAddInfo.h_psg_num is Java `int`
+                    # (TourTrainInfoDao.java:14); the h_-prefixed backend
+                    # serializes such ints as quoted strings on the wire (proven
+                    # for sibling h_srcar_no/h_rest_seat_cnt), and Gson coerces
+                    # them, so accept the string form too.
+                    passenger_count = _required_integer(
+                        additional,
+                        "h_psg_num",
+                        "tour train seat",
+                    )
                     additional_infos.append(
                         TourTrainSeatAdditionalInfo(
                             passenger_count=passenger_count,
@@ -1918,7 +1957,10 @@ def parse_ticket_duplication_check_response(
 ) -> TicketDuplicationCheckResponse:
     _validate_strict_read_envelope(raw)
     return TicketDuplicationCheckResponse(
-        reservation_count=_required_json_integer(
+        # DuplicationCheckResponse.rsvCnt is Java `int`
+        # (TicketDuplicationCheckDao.java:27); Gson coerces a quoted numeric
+        # string, so accept both "0" and 0 like the app.
+        reservation_count=_required_integer(
             raw,
             "rsvCnt",
             "ticket duplication check",
@@ -1959,7 +2001,10 @@ def parse_pbp_acceptance_specification_response(
                             _PBP_ACCEPTANCE_SEAT_FIELDS,
                             "PBP acceptance seat",
                         ),
-                        car_no=_required_json_integer(
+                        # PbpAcepSpecDao.Seat.scarNo is Java `int`
+                        # (PbpAcepSpecDao.java:102); Gson coerces a quoted
+                        # numeric string, so accept both "3" and 3.
+                        car_no=_required_integer(
                             seat,
                             "scarNo",
                             "PBP acceptance seat",

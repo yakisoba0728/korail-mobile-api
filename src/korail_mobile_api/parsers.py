@@ -724,12 +724,12 @@ def parse_train_schedule_response(
         terminal_station_name=optional("tmnRsStnNm"),
         train_attribute_code=optional("trnAttCd"),
         train_departure_flag=optional("trnDptFlg"),
-        train_no=_typed_required_string(
-            raw,
-            "trnNo1",
-            context="train schedule",
-            non_empty=True,
-        ),
+        # trnNo1 is a nullable Gson String (TrainScheduleDao.java:123) and the
+        # web-view consumer null-guards it (TrainServiceInfoWebViewActivity.java
+        # :200 -> if (!N.isNull(tranNo1))), so a null train number is tolerated
+        # by the app. runDt1/msgCont stay required because their consumers use
+        # them unguarded (convertFormat(runDt1)/msgCont.replaceAll).
+        train_no=optional("trnNo1"),
         special_train_flag=optional("trnSpsFlg"),
         up_down_division_code=optional("upDnDvCd"),
     )
@@ -784,6 +784,25 @@ def _inventory_required_list(
     if not isinstance(value, list):
         raise KorailProtocolError(
             f"KORAIL seat inventory field {key} must be a list"
+        )
+    return value
+
+
+def _inventory_optional_list(
+    data: Mapping[str, Any],
+    key: str,
+) -> list[Any]:
+    # SearchCarListDao.CarInfo.seatAttInfos is a nullable Gson List
+    # (SearchCarListDao.java:19) and the app null-guards it before use
+    # (SeatSearchActivity.java:254 -> C0804d.isNull(list) || size()==0), so a
+    # null/absent list is a valid "no special-seat attributes" car. Treat it as
+    # empty; only a present-but-non-list value is malformed.
+    value = data.get(key)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be a list or null"
         )
     return value
 
@@ -891,7 +910,7 @@ def parse_seat_car_list_response(
                 "KORAIL seat car list contained a duplicate car number"
             )
         car_numbers.add(car_no)
-        attributes_raw = _inventory_required_list(row, "seatAttInfos")
+        attributes_raw = _inventory_optional_list(row, "seatAttInfos")
         attributes: list[SeatAttribute] = []
         for attribute_raw in attributes_raw:
             if not isinstance(attribute_raw, Mapping):

@@ -397,6 +397,22 @@ def test_parser_preserves_typed_failure_and_session_expiry_errors(
     assert expired.value.raw is raw
 
 
+def test_parser_treats_wrg000000_empty_query_as_empty_success():
+    # RV4-02: CommutationInquiryActivity.java:182 registers WRG000000 as a
+    # non-fatal empty result for the pass-schedule DAO, so an empty query
+    # (strResult=FAIL + h_msg_cd=WRG000000) returns empty schedules rather than
+    # raising, mirroring parse_discount_coupon_response.
+    response = _parser()(
+        {
+            "h_msg_cd": "WRG000000",
+            "h_msg_txt": "no schedules",
+            "strResult": "FAIL",
+        }
+    )
+    assert type(response) is _require(read_models, "PassScheduleResponse")
+    assert response.schedules == ()
+
+
 def test_client_clears_session_on_p058(load_json_fixture):
     def handler(_: httpx.Request) -> httpx.Response:
         raw = load_json_fixture("pass_schedule_success.json")

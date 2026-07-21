@@ -500,9 +500,8 @@ def test_live_shape_missing_optional_car_fields_are_none(load_json_fixture):
         lambda raw: raw.__setitem__("srcar_infos", []),
         lambda raw: raw["srcar_infos"].__setitem__("srcar_info", {}),
         lambda raw: raw["srcar_infos"]["srcar_info"].__setitem__(0, []),
-        lambda raw: raw["srcar_infos"]["srcar_info"][0].pop(
-            "seatAttInfos"
-        ),
+        # A present-but-non-list seatAttInfos is still malformed. A null/absent
+        # one is not (RV4-01) — see the positive test below.
         lambda raw: raw["srcar_infos"]["srcar_info"][0].__setitem__(
             "seatAttInfos", {}
         ),
@@ -519,6 +518,29 @@ def test_car_parser_rejects_malformed_containers(
     mutation(raw)
     with pytest.raises(KorailProtocolError):
         _parse_car(raw)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda raw: raw["srcar_infos"]["srcar_info"][0].pop("seatAttInfos"),
+        lambda raw: raw["srcar_infos"]["srcar_info"][0].__setitem__(
+            "seatAttInfos", None
+        ),
+    ],
+)
+def test_car_parser_tolerates_null_or_absent_seat_attributes(
+    load_json_fixture,
+    mutation,
+):
+    # RV4-01: SearchCarListDao.CarInfo.seatAttInfos is a nullable Gson List and
+    # the app null-guards it (SeatSearchActivity.java:254), so a normal car with
+    # no special-seat attributes parses as an empty attribute tuple, not a
+    # hard failure.
+    raw = load_json_fixture("seat_car_list_success.json")
+    mutation(raw)
+    parsed = _parse_car(raw)
+    assert parsed.cars[0].attributes == ()
 
 
 @pytest.mark.parametrize(
@@ -725,12 +747,14 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
         passenger_count=3,
         sid="caller-sid-seat",
     )
-    # complete_train carries no h_seat_att_cd, so the app omits the seat-att
-    # @Field entirely (RV3-05) and psrmClCd defaults to general "1".
-    assert set(car) == CAR_FIELDS - {"txtSeatAttCd"}
-    assert len(car) == 17
+    # complete_train carries no h_seat_att_cd and no goods number, so the app
+    # omits both the seat-att @Field (RV3-05) and the txtGdNo @Field (RV4-01);
+    # psrmClCd defaults to general "1".
+    assert set(car) == CAR_FIELDS - {"txtSeatAttCd", "txtGdNo"}
+    assert len(car) == 16
     assert "sidTest" not in car
     assert "txtSeatAttCd" not in car
+    assert "txtGdNo" not in car
     assert car == {
         "Device": config.device,
         "Version": config.version,
@@ -748,12 +772,12 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
         "txtArvStnRunOrdr": "000010",
         "txtTrnGpCd": "100",
         "txtTotPsgCnt": "2",
-        "txtGdNo": "",
     }
-    assert set(seat) == SEAT_FIELDS - {"seatAttCd"}
-    assert len(seat) == 18
+    assert set(seat) == SEAT_FIELDS - {"seatAttCd", "gdNo"}
+    assert len(seat) == 17
     assert "sidTest" not in seat
     assert "seatAttCd" not in seat
+    assert "gdNo" not in seat
     assert seat == {
         "Device": config.device,
         "Version": config.version,
@@ -769,7 +793,6 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
         "dptStnRunOrdr": "000001",
         "arvStnRunOrdr": "000010",
         "totPsgCnt": "3",
-        "gdNo": "",
         "isArrow": "true",
         "Sid": "caller-sid-seat",
         "ctlDvCd": "",
@@ -820,10 +843,10 @@ def test_seat_builders_forward_train_row_seat_attribute_and_goods_no():
 def test_seat_builders_omit_seat_attribute_when_row_has_none(
     complete_train,
 ):
-    # ScheduleView search rows carry no h_seat_att_cd, so x4/b.java:19 forwards
-    # null and Retrofit omits the @Field entirely (RV3-05); the builders must
-    # OMIT txtSeatAttCd/seatAttCd rather than substituting "015". txtGdNo/gdNo
-    # stay as the empty-string the app sends for non-goods trains.
+    # ScheduleView search rows carry no h_seat_att_cd and no goods number, so
+    # x4/b.java:19,23 forward null and Retrofit omits the @Field entirely
+    # (RV3-05 for seatAttCd, RV4-01 for gdNo); the builders must OMIT
+    # txtSeatAttCd/seatAttCd and txtGdNo/gdNo rather than substituting "015"/"".
     assert complete_train.seat_attribute_code is None
     assert complete_train.goods_no is None
     config = KorailConfig()
@@ -844,8 +867,8 @@ def test_seat_builders_omit_seat_attribute_when_row_has_none(
 
     assert "txtSeatAttCd" not in car
     assert "seatAttCd" not in seat
-    assert car["txtGdNo"] == ""
-    assert seat["gdNo"] == ""
+    assert "txtGdNo" not in car
+    assert "gdNo" not in seat
 
 
 def test_seat_builders_carry_selected_cabin_class_and_reject_bad_domain(
@@ -1340,9 +1363,10 @@ def test_inventory_methods_generate_fresh_sid_post_once_and_disable_dynapath(
         requests[1].content.decode(),
         keep_blank_values=True,
     )
-    # complete_train has no seat-attribute code, so the wire form omits it.
-    assert set(car_form) == CAR_FIELDS - {"txtSeatAttCd"}
-    assert set(seat_form) == SEAT_FIELDS - {"seatAttCd"}
+    # complete_train has no seat-attribute code and no goods number, so the
+    # wire form omits both (RV4-01).
+    assert set(car_form) == CAR_FIELDS - {"txtSeatAttCd", "txtGdNo"}
+    assert set(seat_form) == SEAT_FIELDS - {"seatAttCd", "gdNo"}
     assert car_form["Sid"] == ["fresh-car-sid"]
     assert seat_form["Sid"] == ["fresh-seat-sid"]
     assert all(len(values) == 1 for values in car_form.values())

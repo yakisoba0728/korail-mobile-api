@@ -621,9 +621,8 @@ def test_tour_train_parser_rejects_bad_container_shapes(payload):
         parse_tour_train_info_response(payload)
 
 
-@pytest.mark.parametrize("passenger_count", [True, 2.0, "2", None])
-def test_tour_train_passenger_count_is_a_required_json_integer(passenger_count):
-    raw = _success(
+def _tour_train_with_passenger_count(passenger_count):
+    return _success(
         seat_infos={
             "seat_info": [
                 {
@@ -635,8 +634,26 @@ def test_tour_train_passenger_count_is_a_required_json_integer(passenger_count):
             ]
         }
     )
+
+
+@pytest.mark.parametrize("passenger_count", [True, 2.0, None, "", "x"])
+def test_tour_train_passenger_count_rejects_non_numeric(passenger_count):
+    raw = _tour_train_with_passenger_count(passenger_count)
     with pytest.raises(KorailProtocolError, match="h_psg_num"):
         parse_tour_train_info_response(raw)
+
+
+@pytest.mark.parametrize(
+    ("wire", "expected"),
+    [(2, 2), ("2", 2), ("0", 0)],
+)
+def test_tour_train_passenger_count_accepts_gson_coerced_string(wire, expected):
+    # RV4-05: TourTrainInfoDao.SeatAddInfo.h_psg_num is Java `int`; the
+    # h_-prefixed backend serializes such ints as quoted strings and Gson
+    # coerces them, so a quoted-string count parses like a native int.
+    raw = _tour_train_with_passenger_count(wire)
+    parsed = parse_tour_train_info_response(raw)
+    assert parsed.seat_infos[0].additional_infos[0].passenger_count == expected
 
 
 PARSERS = (

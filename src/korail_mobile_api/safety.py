@@ -441,17 +441,18 @@ KORAIL_EXACT_REQUEST_FIELDS = {
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 
 # Fields the app may legitimately OMIT from an otherwise-exact request. On the
-# search-derived seat reads the app forwards trainInfo.getH_seat_att_cd()
-# verbatim and Retrofit drops the @Field when it is null (ResearchService
-# getCarList txtSeatAttCd:37 / getSeatList seatAttCd:59), so a request without
-# the seat-attribute code is contract-conformant. Every other field stays
+# search-derived seat reads the app forwards trainInfo.getH_seat_att_cd() and
+# trainInfo.getTxtGdNo() verbatim (x4/b.java:19,23) and Retrofit drops the
+# @Field when it is null (ResearchService getCarList txtSeatAttCd:37/txtGdNo:37
+# / getSeatList seatAttCd:59/gdNo:59), so a request without the seat-attribute
+# code or goods number is contract-conformant. Every other field stays
 # required, and no field outside the exact set is ever accepted.
 KORAIL_OPTIONAL_REQUEST_FIELDS: dict[str, frozenset[str]] = {
     "/classes/com.korail.mobile.research.TrainResearch": frozenset(
-        {"txtSeatAttCd"}
+        {"txtSeatAttCd", "txtGdNo"}
     ),
     "/classes/com.korail.mobile.research.TResidualSeatsResearch.do": (
-        frozenset({"seatAttCd"})
+        frozenset({"seatAttCd", "gdNo"})
     ),
 }
 

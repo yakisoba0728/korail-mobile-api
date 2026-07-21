@@ -404,6 +404,24 @@ def test_strict_parsers_normalize_nullable_lists_and_return_frozen_models():
         assert getattr(parser(_success()), attribute) == ()
 
 
+@pytest.mark.parametrize(("wire", "expected"), [(0, 0), ("0", 0), ("37", 37)])
+def test_duplication_check_accepts_gson_coerced_rsv_count(wire, expected):
+    # RV4-06: DuplicationCheckResponse.rsvCnt is Java `int`; Gson coerces a
+    # quoted numeric string, so "0"/"37" parse like native ints.
+    parsed = parse_ticket_duplication_check_response(_success(rsvCnt=wire))
+    assert parsed.reservation_count == expected
+
+
+@pytest.mark.parametrize(("wire", "expected"), [(3, 3), ("3", 3)])
+def test_pbp_acceptance_accepts_gson_coerced_car_no(wire, expected):
+    # RV4-06: PbpAcepSpecDao.Seat.scarNo is Java `int`; a quoted numeric string
+    # is Gson-coerced, so it parses like a native int.
+    raw = _responses()[R146_PATH]
+    raw["tkList"][0]["jrnyList"][0]["seatList"][0]["scarNo"] = wire
+    parsed = parse_pbp_acceptance_specification_response(raw)
+    assert parsed.tickets[0].journeys[0].seats[0].car_no == expected
+
+
 def test_parsers_reject_bad_envelopes_containers_rows_and_scalar_types():
     parsers = (
         parse_delivery_recipient_response,
@@ -424,7 +442,7 @@ def test_parsers_reject_bad_envelopes_containers_rows_and_scalar_types():
         with pytest.raises(KorailSessionExpiredError):
             parser(_success(h_msg_cd="P058"))
 
-    for value in (None, True, "2", 2.0):
+    for value in (None, True, 2.0, "", "x"):
         with pytest.raises(KorailProtocolError):
             parse_ticket_duplication_check_response(_success(rsvCnt=value))
     for value in ({}, "rows", ["not-an-object"]):
