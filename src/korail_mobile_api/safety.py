@@ -26,6 +26,7 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ("GET", "/file/CACHE/prdMobilePlusNotice.cache"),
         ("POST", "/classes/com.korail.mobile.common.code.do"),
         ("POST", "/classes/com.korail.mobile.login.Login"),
+        ("GET", "/classes/com.korail.mobile.login.Logout"),
         ("GET", "/classes/com.korail.mobile.common.stationinfo"),
         ("GET", "/classes/com.korail.mobile.common.stationdata"),
         ("GET", "/classes/com.korail.mobile.schedule.runDt"),
@@ -111,6 +112,7 @@ KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
 
 KORAIL_EXACT_REQUEST_FIELDS = {
     "/file/CACHE/MobileService.cache": frozenset({"timeStamp"}),
+    "/classes/com.korail.mobile.login.Logout": frozenset(),
     "/classes/com.korail.mobile.cart.showCartList": frozenset(
         {"Device", "Version", "Key", "pnrNo", "addSrvReqNo"}
     ),

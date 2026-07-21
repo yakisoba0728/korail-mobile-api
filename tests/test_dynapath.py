@@ -51,7 +51,7 @@ def test_token_settings_default_to_korail_source_hardcoded_values():
 
     assert settings.app_id == KORAIL_DYNAPATH_APP_ID == "com.korail.talk"
     assert settings.os_type == KORAIL_DYNAPATH_OS_TYPE == "Android"
-    assert settings.sdk_version == KORAIL_DYNAPATH_SDK_VERSION == "v1"
+    assert settings.sdk_version == KORAIL_DYNAPATH_SDK_VERSION == "v1.0.3"
 
 
 def test_token_settings_do_not_accept_request_history():
@@ -82,11 +82,11 @@ def test_generate_dynapath_token_matches_successful_fixed_rt_reference():
     )
 
     assert token == (
-        "bEeEPSYj1Dm54Mg4Pv4ff4fGKguKkDK1FdDwFGkG9fwdEuJYJ3EuakG9EfldmgE34vnYDmCRKkYEv"
-        "YEvYEqYlMEgddaaDFmY4qdaakERvn4dEvvdJfmnJ5KDR9RwqkPkR43kglDwwk13D5yJ9vYuKk1"
-        "qkKaRCjkPDD5YRCyvngduKDJEE33D5RkuKDGPDJEE33D5RD4dduKDJEE33D5RDyyfwgkG4ddCvn3"
-        "dPkYPPYPER43RCqYEvYEvYDFdFfJuwRFPRwjRJmRyEJ93YEqvnMdPkYDFEuCJuwRluDwRfwl3PMG"
-        "nJRwv3uFdyjJuCEgddaaDFmvngy4Ryln"
+        "bEeEPLYj144a44lDm54Mg4Pv4ff4fGKguKkDK1FdDwFGP4Gdlqujn5nfujYP4GudEqyRufK9v5Jy1"
+        "mkP5u95u95ug5EMuRqqYYJFy5KgqYYPum9vKqu99qndyvn3kJmGmlgPCPmKfPREJllPafJ3wnG95jk"
+        "PagPkYm1DPCJJ35m1w9vRqjkJnuuffJ3mPjkJ4CJnuuffJ3mJKqqjkJnuuffJ3mJwwdlRP4Kqq19vf"
+        "qCP5CC5CumKfm1g5u95u95JFqFdnjlmFCmlDmnymwunGf5ug9vMqCP5JFuj1njlmEjJlmdlEfCM4vnm"
+        "l9fjFqwDnj1uRqqYYJFy9vRwKmwEv55455P"
     )
 
 

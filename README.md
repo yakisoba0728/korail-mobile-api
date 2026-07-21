@@ -633,7 +633,8 @@ are importable from the package. Live smoke constructs `DynapathTokenSettings`
 only from required caller-supplied environment values and fails before request
 construction when any required identity value is missing.
 
-The built-in generator follows the successful fixed `rt=0` contract: SDK version `v1`,
+The built-in generator follows the successful fixed `rt=0` contract: SDK version `v1.0.3`
+(matching decompiled `com.korail.talk` v6.5.0, `B/C1229b.java:137,157`),
 four uppercase-letter-or-digit random characters, and exactly one
 `rt=0` field in each token payload. The app-start timestamp is captured once
 when live configuration is built; request history is not accumulated. The raw

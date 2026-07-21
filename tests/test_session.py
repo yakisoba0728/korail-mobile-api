@@ -388,3 +388,101 @@ def test_continuation_keeps_only_pending_state_and_new_cookie():
     client.clear_session()
     assert client.session.pending is None
     assert "JSESSIONID" not in client.http.cookies
+
+
+LOGOUT_PATH = "/classes/com.korail.mobile.login.Logout"
+
+
+def make_logged_in_client(load_json_fixture, *, logout_response):
+    """Client that logs in, then serves ``logout_response`` for the Logout GET.
+
+    ``logout_response`` is a callable ``(request) -> httpx.Response`` so tests can
+    inject success, an app-level FAIL, or a transport-level error.
+    """
+    events: dict[str, object] = {"logout_calls": []}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == SERVICE_CHECK_PATH:
+            return service_check_response()
+        if request.url.path == "/classes/com.korail.mobile.common.code.do":
+            return httpx.Response(
+                200, json=load_json_fixture("common_code_login_crypto_n.json")
+            )
+        if request.url.path == "/classes/com.korail.mobile.login.Login":
+            return httpx.Response(
+                200,
+                json=load_json_fixture("login_success.json"),
+                headers={"Set-Cookie": "JSESSIONID=logout-sess; Path=/; HttpOnly"},
+            )
+        if request.url.path == LOGOUT_PATH:
+            events["logout_calls"].append(
+                {
+                    "method": request.method,
+                    "query": request.url.query.decode(),
+                    "cookie": request.headers.get("cookie"),
+                }
+            )
+            return logout_response(request)
+        raise AssertionError(f"unexpected path {request.url.path}")
+
+    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    return client, events
+
+
+def _logout_success(_request: httpx.Request) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"},
+    )
+
+
+def test_logout_invalidates_server_session_then_clears_local(load_json_fixture):
+    client, events = make_logged_in_client(
+        load_json_fixture, logout_response=_logout_success
+    )
+    client.login("member1", "pw123")
+    assert client.session.current is not None
+    assert client.http.cookies.get("JSESSIONID") == "logout-sess"
+
+    client.logout()
+
+    # Server-side invalidation was hit exactly once, as a bare GET with no query
+    # envelope (authenticated purely by the JSESSIONID cookie, LoginService.java:30).
+    assert len(events["logout_calls"]) == 1
+    call = events["logout_calls"][0]
+    assert call["method"] == "GET"
+    assert call["query"] == ""
+    assert "JSESSIONID=logout-sess" in (call["cookie"] or "")
+    # Local session state is always cleared afterward.
+    assert client.session.current is None
+    assert client.session.pending is None
+    assert "JSESSIONID" not in client.http.cookies
+
+
+def test_logout_without_session_does_not_call_server(load_json_fixture):
+    client, events = make_logged_in_client(
+        load_json_fixture, logout_response=_logout_success
+    )
+
+    client.logout()
+
+    assert events["logout_calls"] == []
+    assert client.session.current is None
+
+
+def test_logout_is_resilient_to_server_failure(load_json_fixture):
+    def _logout_fail(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"h_msg_cd": "ERR", "strResult": "FAIL"})
+
+    client, events = make_logged_in_client(
+        load_json_fixture, logout_response=_logout_fail
+    )
+    client.login("member1", "pw123")
+
+    # A transport/app failure during server-side logout must not raise nor leave
+    # the local session behind.
+    client.logout()
+
+    assert len(events["logout_calls"]) == 1
+    assert client.session.current is None
+    assert "JSESSIONID" not in client.http.cookies

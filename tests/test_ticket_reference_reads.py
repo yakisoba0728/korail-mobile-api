@@ -154,7 +154,7 @@ def _responses() -> dict[str, dict[str, Any]]:
 
 
 def test_route_method_export_and_dynapath_boundaries_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 50
+    assert len(KORAIL_READ_ONLY_ROUTES) == 51
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert len(DYNAPATH_ALLOWLIST_PATHS) == 6
     assert all(path not in DYNAPATH_ALLOWLIST_PATHS for _, path in NEW_ROUTES)

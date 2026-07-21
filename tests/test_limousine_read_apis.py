@@ -802,7 +802,7 @@ def test_schedule_parsers_accept_statically_nullable_empty_containers(
 
 
 def test_safety_registers_only_the_three_exact_new_post_contracts():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 50
+    assert len(KORAIL_READ_ONLY_ROUTES) == 51
     expected = {
         SCHEDULE_PATH: SCHEDULE_FIELDS,
         SEAT_PATH: SEAT_FIELDS,

@@ -71,7 +71,7 @@ def test_korail_runtime_constants_are_importable():
     assert KORAIL_DEFAULT_ANDROID_SDK_INT == 35
     assert "app.login.cphd" in KORAIL_COMMON_CODE_BOOTSTRAP_CODES
     assert KORAIL_DYNAPATH_AS_VALUE == "[38ff229cb34c7dda8e28220a2d750cce]"
-    assert KORAIL_DYNAPATH_SDK_VERSION == "v1"
+    assert KORAIL_DYNAPATH_SDK_VERSION == "v1.0.3"
     assert KORAIL_DEFAULT_DEVICE_NAME
     assert DYNAPATH_HEADER_NAME == "x-dynapath-m-token"
     assert DynapathTokenGenerator
@@ -330,6 +330,7 @@ def test_http_client_blocks_excluded_domains_before_get(blocked_domain: str):
         ("GET", "/file/CACHE/prdMobilePlusNotice.cache"),
         ("POST", "/classes/com.korail.mobile.common.code.do"),
         ("POST", "/classes/com.korail.mobile.login.Login"),
+        ("GET", "/classes/com.korail.mobile.login.Logout"),
         ("GET", "/classes/com.korail.mobile.common.stationinfo"),
         ("GET", "/classes/com.korail.mobile.common.stationdata"),
         ("GET", "/classes/com.korail.mobile.schedule.runDt"),
@@ -350,7 +351,22 @@ def test_read_only_route_registry_accepts_current_public_requests(method, path):
 
 
 def test_read_only_route_registry_has_exact_expanded_count():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 50
+    assert len(KORAIL_READ_ONLY_ROUTES) == 51
+
+
+def test_logout_route_is_get_only_and_carries_no_fields():
+    # Server-side session invalidation (LoginService.java:29-30) is a bare GET
+    # authenticated by the JSESSIONID cookie; it must reject the common envelope.
+    logout_path = "/classes/com.korail.mobile.login.Logout"
+    assert ("GET", logout_path) in KORAIL_READ_ONLY_ROUTES
+    assert ("POST", logout_path) not in KORAIL_READ_ONLY_ROUTES
+    assert KORAIL_EXACT_REQUEST_FIELDS[logout_path] == frozenset()
+    assert_read_only_route("GET", logout_path)
+    assert_read_only_request_fields(logout_path, {})
+    with pytest.raises(KorailProtocolError):
+        assert_read_only_route("POST", logout_path)
+    with pytest.raises(KorailProtocolError, match="request fields"):
+        assert_read_only_request_fields(logout_path, {"Device": "AD"})
 
 
 def test_exact_form_field_mapping_remains_a_compatibility_alias():

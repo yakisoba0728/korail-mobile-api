@@ -5,6 +5,7 @@ import time
 from .crypto import transform_login_password
 from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 from .errors import (
+    KorailApiError,
     KorailAppError,
     KorailAuthContinuationRequired,
     KorailAuthError,
@@ -195,6 +196,24 @@ class KorailSessionClient:
             raw=response.raw,
         )
         return self.current
+
+    def logout(self) -> None:
+        # Invalidate the server-side session (GET login.Logout, matching the
+        # app's LogoutDao -> LoginService.logout(); LoginService.java:29-30).
+        # The request carries no query params: it is authenticated only by the
+        # JSESSIONID cookie, so the envelope is intentionally omitted. Server
+        # invalidation is best-effort — the local session is always cleared
+        # afterward so logout never fails on transport or an expired session.
+        if self.current is not None:
+            try:
+                self.http.get_json(
+                    "/classes/com.korail.mobile.login.Logout",
+                    include_common=False,
+                    raise_on_fail=False,
+                )
+            except KorailApiError:
+                pass
+        self.clear_session()
 
     def clear_session(self) -> None:
         self.http.cookies.clear()

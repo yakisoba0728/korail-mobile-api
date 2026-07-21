@@ -16,7 +16,7 @@ def test_readme_describes_fixed_rt_dynapath_consistently():
     assert "The committed material is documentation" not in text
     assert "caller-supplied" in text
     assert "fixed `rt=0`" in text
-    assert "SDK version `v1`" in text
+    assert "SDK version `v1.0.3`" in text
     assert "DynapathTokenSettings" in text
     assert "compatibility-only" not in text
     assert "KorailProbeDynapathTokenProvider" not in text

@@ -220,7 +220,7 @@ class KorailClient:
         self.session.clear_session()
 
     def logout(self) -> None:
-        self.clear_session()
+        self.session.logout()
 
     def _run_read(self, operation: Callable[[], T]) -> T:
         try:
