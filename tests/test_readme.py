@@ -6,7 +6,10 @@ README = Path(__file__).parents[1] / "README.md"
 STATUS = Path(__file__).parents[1] / "docs" / "api-status-by-service.md"
 BUILD_GUIDE = Path(__file__).parents[1] / "docs" / "library-build-guide.md"
 PROGRESS = Path(__file__).parents[1] / "docs" / "IMPLEMENTATION_PROGRESS.md"
-HANDOFF = Path(__file__).parents[1] / "docs" / "NEXT_SESSION.md"
+# The standalone session-handoff note (docs/NEXT_SESSION.md) was removed during
+# the docs consolidation; its handoff facts now live in IMPLEMENTATION_PROGRESS.md
+# (see its "Package Handoff Summary" section), so handoff assertions read there.
+HANDOFF = Path(__file__).parents[1] / "docs" / "IMPLEMENTATION_PROGRESS.md"
 CHANGELOG = Path(__file__).parents[1] / "CHANGELOG.md"
 
 

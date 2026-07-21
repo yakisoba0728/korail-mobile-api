@@ -87,3 +87,32 @@ version stability before `1.0.0`.
 Every public release remains blocked until all four items exist and are
 reviewed: a license, owner metadata, a canonical URL, and explicit authorization.
 Internal verification does not satisfy any of these blockers.
+
+## Behavioral verification contract
+
+The distribution verifier (`scripts/verify_distribution.py`) and its offline
+suite (`tests/test_release_readiness.py`) enforce a behavioral contract, not a
+presence check. Building meaningful wheel and sdist fixtures, the suite drives
+the verifier's `main()` and asserts real archive and metadata rejection rather
+than confirming that files merely exist. Presence-only checks cannot satisfy
+this contract, and each rule below is exercised by a dedicated adversarial
+fixture.
+
+The behavioral matrix covers:
+
+- Canonical member paths and normalized duplicate names, so a wheel or sdist
+  that carries a duplicate member is rejected.
+- Zero-byte `py.typed` markers: the marker must be a regular, empty file in both
+  archives; a missing, non-empty, or special-type marker is rejected.
+- Exact metadata: singleton `Name`, `Version`, and `Requires-Python`; the exact
+  classifier set without duplicates; normalized runtime `Requires-Dist` equality
+  with `pyproject.toml`; and rejection of forbidden owner, license, or URL
+  headers.
+- Archive form: the sdist is inspected as a strict gzip tar (`r:gz`) without
+  extraction, and any symlink, hard link, device, FIFO, or other special member
+  in either archive is rejected.
+- A fixed stderr line on any malformed or unsupported input, never leaking a
+  path, traceback, archive member, or exception text.
+
+The gate itself runs `set -euo pipefail` with an `EXIT` cleanup trap and the
+offline `pytest -q -m "not live"` selection defined above.

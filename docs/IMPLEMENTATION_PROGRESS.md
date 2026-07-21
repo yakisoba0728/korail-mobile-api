@@ -392,6 +392,32 @@ All recorded successful read entries now have an exact package route. The
 remaining APK inventory is outside this read expansion and includes unverified
 or state-changing operations.
 
+## Package Handoff Summary
+
+This section consolidates the current-package handoff facts that were previously
+tracked in the removed session-handoff note; their outcomes are preserved here,
+in the CHANGELOG, and under `docs/superpowers/specs/`.
+
+The current implementation evidence establishes 50 routes at the exact
+login/read transport boundary and 53 public methods on `KorailClient`, with no
+callable reservation, payment, cancellation, refund, check-in, membership, or
+other mutation route. The current service inventory is 32 successful, 10 failed,
+and 123 unexecuted entries out of 165; the historical pre-revalidation inventory
+was 28 successful, 9 failed, and 128 unexecuted.
+
+A historical reviewed offline gate of `1246 passed, 1 deselected`; the fresh P0
+live-evidence documentation gate reports `1247 passed, 1 deselected`. In both
+gates, the deselected test is the explicitly opted-in live-service test.
+
+The bounded seat-inventory structural run returned `IRG000000`/`SUCC` with 5
+cars and 75 seat rows while retaining no raw values; a later post-fix
+confirmation stopped at the service-status preflight before login transport and
+therefore made no search, car-list, or seat-list call.
+
+Use [docs/RELEASE.md](RELEASE.md) for the internal-only offline test, build,
+distribution verifier, fresh-wheel install, and cleanup gate. A public release
+remains blocked by the four items listed there.
+
 ## Next Required Step
 
 The typed seat-inventory contract now has repeated bounded live structural

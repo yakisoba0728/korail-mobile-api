@@ -832,7 +832,9 @@ def test_ambient_live_opt_in_is_deselected_by_the_release_command() -> None:
 
 def test_repository_truth_and_full_mutation_policy() -> None:
     readme = (ROOT / "README.md").read_text()
-    handoff = (ROOT / "docs/NEXT_SESSION.md").read_text()
+    # docs/NEXT_SESSION.md was consolidated into IMPLEMENTATION_PROGRESS.md; its
+    # repository-truth handoff facts now live in that doc's Package Handoff Summary.
+    handoff = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text()
     for document in (readme, handoff):
         assert "50 routes" in document
         assert "53 public methods" in document
@@ -870,10 +872,10 @@ def test_repository_truth_and_full_mutation_policy() -> None:
 
 
 def test_canonical_plan_requires_behavioral_release_verification() -> None:
-    plan = (
-        ROOT
-        / "docs/superpowers/plans/2026-07-14-dual-package-internal-release-readiness.md"
-    ).read_text().casefold()
+    # The dual-package release-readiness plan under docs/superpowers/plans/ was
+    # removed during the docs consolidation; its behavioral release-verification
+    # contract now lives in docs/RELEASE.md ("Behavioral verification contract").
+    plan = (ROOT / "docs/RELEASE.md").read_text().casefold()
     for requirement in (
         "behavioral",
         "duplicate",
