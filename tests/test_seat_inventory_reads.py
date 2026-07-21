@@ -774,6 +774,108 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
     }
 
 
+def test_seat_builders_forward_train_row_seat_attribute_and_goods_no():
+    # x4/b.java:19,23 source txtSeatAttCd/txtGdNo from the selected train row
+    # (trainInfo.getH_seat_att_cd()/getTxtGdNo()); the builders must forward the
+    # row's own values rather than pinning "015"/"".
+    train = TrainSummary(
+        train_no="123",
+        train_group_code="100",
+        departure_station_code="0001",
+        arrival_station_code="0020",
+        departure_date="20260714",
+        run_date="20260714",
+        train_class_code="00",
+        departure_run_order="000001",
+        arrival_run_order="000010",
+        seat_attribute_code="052",
+        goods_no="G12345",
+    )
+    config = KorailConfig()
+
+    car = build_seat_car_form(
+        config,
+        train,
+        passenger_count=1,
+        sid="caller-sid-car",
+    )
+    seat = build_seat_inventory_form(
+        config,
+        train,
+        car_no=1,
+        passenger_count=1,
+        sid="caller-sid-seat",
+    )
+
+    assert set(car) == CAR_FIELDS
+    assert set(seat) == SEAT_FIELDS
+    assert car["txtSeatAttCd"] == "052"
+    assert car["txtGdNo"] == "G12345"
+    assert seat["seatAttCd"] == "052"
+    assert seat["gdNo"] == "G12345"
+
+
+def test_seat_builders_fall_back_to_general_seat_and_empty_goods_no(
+    complete_train,
+):
+    # ScheduleView search rows carry no h_seat_att_cd/txtGdNo (both null in the
+    # fixture), so an absent row value falls back to the general-seat defaults.
+    assert complete_train.seat_attribute_code is None
+    assert complete_train.goods_no is None
+    config = KorailConfig()
+
+    car = build_seat_car_form(
+        config,
+        complete_train,
+        passenger_count=1,
+        sid="caller-sid-car",
+    )
+    seat = build_seat_inventory_form(
+        config,
+        complete_train,
+        car_no=1,
+        passenger_count=1,
+        sid="caller-sid-seat",
+    )
+
+    assert (car["txtSeatAttCd"], car["txtGdNo"]) == ("015", "")
+    assert (seat["seatAttCd"], seat["gdNo"]) == ("015", "")
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("seat_attribute_code", "88A"),
+        ("seat_attribute_code", "0152"),
+        ("seat_attribute_code", "０１５"),
+        ("goods_no", "G 12"),
+        ("goods_no", "G\t12"),
+        ("goods_no", "굿즈"),
+    ],
+)
+def test_seat_builders_reject_malformed_seat_attribute_and_goods_no(
+    complete_train,
+    field_name,
+    value,
+):
+    malformed = replace(complete_train, **{field_name: value})
+    with pytest.raises(KorailProtocolError, match=field_name):
+        build_seat_car_form(
+            KorailConfig(),
+            malformed,
+            passenger_count=1,
+            sid="synthetic-sid",
+        )
+    with pytest.raises(KorailProtocolError, match=field_name):
+        build_seat_inventory_form(
+            KorailConfig(),
+            malformed,
+            car_no=1,
+            passenger_count=1,
+            sid="synthetic-sid",
+        )
+
+
 @pytest.mark.parametrize("passenger_count", [True, False, 0, 10, -1, 1.0])
 def test_builders_reject_invalid_passenger_counts(
     complete_train,

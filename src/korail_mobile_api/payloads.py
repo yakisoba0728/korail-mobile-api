@@ -80,6 +80,42 @@ def validate_seat_inventory_inputs(
         "arrival_run_order",
         lengths=frozenset({6}),
     )
+    # x4/b.java:19,23 derive txtSeatAttCd/txtGdNo from the selected train row
+    # rather than pinning them; validate the row's own values when present so
+    # the seat-map builders can forward a dynamic-but-well-formed value.
+    if train.seat_attribute_code:
+        _required_ascii_digits(
+            train.seat_attribute_code,
+            "seat_attribute_code",
+            lengths=frozenset({3}),
+        )
+    if train.goods_no:
+        _wire_goods_no(train.goods_no)
+
+
+def _wire_goods_no(value: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value.isascii()
+        or any(character <= " " or character == "\x7f" for character in value)
+    ):
+        raise KorailProtocolError(
+            "goods_no must be a printable ASCII value"
+        )
+    return value
+
+
+def _resolved_seat_attribute_code(train: TrainSummary) -> str:
+    # Fall back to the general-seat "015" only when the row omits the code:
+    # ScheduleView search rows carry no h_seat_att_cd (schedule_view_success
+    # shows it null), so the common general-class read is unchanged.
+    return train.seat_attribute_code or "015"
+
+
+def _resolved_goods_no(train: TrainSummary) -> str:
+    # Fall back to "" only when the row omits the goods number, matching the
+    # empty txtGdNo the app sends for non-goods trains.
+    return train.goods_no or ""
 
 
 def _inventory_sid(value: str) -> str:
@@ -113,8 +149,8 @@ def build_seat_car_form(
         "txtArvStnRunOrdr": train.arrival_run_order or "",
         "txtTrnGpCd": train.train_group_code or "",
         "txtTotPsgCnt": str(passenger_count),
-        "txtSeatAttCd": "015",
-        "txtGdNo": "",
+        "txtSeatAttCd": _resolved_seat_attribute_code(train),
+        "txtGdNo": _resolved_goods_no(train),
     }
 
 
@@ -143,11 +179,11 @@ def build_seat_inventory_form(
         "psrmClCd": "1",
         "dptRsStnCd": train.departure_station_code or "",
         "arvRsStnCd": train.arrival_station_code or "",
-        "seatAttCd": "015",
+        "seatAttCd": _resolved_seat_attribute_code(train),
         "dptStnRunOrdr": train.departure_run_order or "",
         "arvStnRunOrdr": train.arrival_run_order or "",
         "totPsgCnt": str(passenger_count),
-        "gdNo": "",
+        "gdNo": _resolved_goods_no(train),
         "isArrow": "true",
         "Sid": _inventory_sid(sid),
         "ctlDvCd": "",

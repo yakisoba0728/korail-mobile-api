@@ -179,9 +179,10 @@ def test_train_calendar_parser_maps_evidenced_day_shape(load_json_fixture):
     [
         lambda raw: raw.pop("runningCalendar"),
         lambda raw: raw.__setitem__("runningCalendar", {}),
-        lambda raw: raw.__setitem__("runningCalendar", []),
         lambda raw: raw["runningCalendar"].__setitem__(0, []),
         lambda raw: raw["runningCalendar"][0].pop("runDt"),
+        lambda raw: raw["runningCalendar"][0].__setitem__("hldyDvCd", None),
+        lambda raw: raw["runningCalendar"][0].pop("hldyDvCd"),
         lambda raw: raw["runningCalendar"][0].__setitem__("xTrnOpFlg", 1),
     ],
 )
@@ -194,6 +195,77 @@ def test_train_calendar_parser_rejects_malformed_shape(
 
     with pytest.raises(KorailProtocolError):
         parsers.parse_train_calendar_response(_enveloped_response(raw))
+
+
+def test_train_calendar_parser_accepts_empty_running_calendar(
+    load_json_fixture,
+):
+    # TrainCalendarDao.getRunningCalendarList (:101-103) tolerates an empty
+    # calendar (a window with no bookable dates), so a SUCC response with an
+    # empty runningCalendar must parse rather than raise.
+    raw = load_json_fixture("raw_typed_train_calendar.json")
+    raw["runningCalendar"] = []
+
+    response = parsers.parse_train_calendar_response(
+        _enveloped_response(raw)
+    )
+
+    assert response.days == ()
+
+
+@pytest.mark.parametrize(
+    "optional_key",
+    [
+        "bizDdStgCd",
+        "dayDvCd",
+        "saleDdDvCd",
+        "aTrnOpFlg",
+        "dTrnOpFlg",
+        "gTrnOpFlg",
+        "oTrnOpFlg",
+        "sTrnOpFlg",
+        "vTrnOpFlg",
+        "xTrnOpFlg",
+    ],
+)
+@pytest.mark.parametrize("absent_shape", ["null", "missing"])
+def test_train_calendar_parser_tolerates_app_nullable_fields(
+    load_json_fixture,
+    optional_key,
+    absent_shape,
+):
+    # The DAO treats these fields as nullable (isPeakSeason null-guards
+    # bizDdStgCd; dayDvCd has no accessor; the *TrnOpFlg accessors and
+    # isForSaleDate are null-safe — TrainCalendarDao:44-82), so an
+    # app-conformant SUCC response that omits or nulls them must still parse.
+    raw = load_json_fixture("raw_typed_train_calendar.json")
+    row = raw["runningCalendar"][0]
+    if absent_shape == "null":
+        row[optional_key] = None
+    else:
+        row.pop(optional_key)
+
+    response = parsers.parse_train_calendar_response(
+        _enveloped_response(raw)
+    )
+    day = response.days[0]
+
+    field_name = {
+        "bizDdStgCd": "business_day_stage_code",
+        "dayDvCd": "day_division_code",
+        "saleDdDvCd": "sale_day_division_code",
+        "aTrnOpFlg": "a_train_operation_flag",
+        "dTrnOpFlg": "d_train_operation_flag",
+        "gTrnOpFlg": "g_train_operation_flag",
+        "oTrnOpFlg": "o_train_operation_flag",
+        "sTrnOpFlg": "s_train_operation_flag",
+        "vTrnOpFlg": "v_train_operation_flag",
+        "xTrnOpFlg": "x_train_operation_flag",
+    }[optional_key]
+    assert getattr(day, field_name) is None
+    # runDt and hldyDvCd stay required and keep their evidenced values.
+    assert day.run_date == "SYNTHETIC-RUN-DATE"
+    assert day.holiday_division_code == "SYNTHETIC-HOLIDAY-DIVISION"
 
 
 def test_train_schedule_parser_maps_header_and_stop_repr_safely(

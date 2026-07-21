@@ -355,6 +355,7 @@ class TrainSummary:
         repr=False,
     )
     total_passenger_count: int | None = None
+    goods_no: str | None = field(default=None, repr=False)
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -455,6 +456,13 @@ class TrainSummary:
                 "h_rsv_wait_ps_cnt",
             ),
             total_passenger_count=_train_optional_int(raw, "totPsgCnt"),
+            # x4/b.java:23 sources the seat-search txtGdNo from
+            # trainInfo.getTxtGdNo(); capture the goods number from the train
+            # row (h_gd_no / txtGdNo) so the seat-map builders can forward it.
+            goods_no=(
+                _train_optional_string(raw, "h_gd_no")
+                or _train_optional_string(raw, "txtGdNo")
+            ),
             raw=raw,
         )
 

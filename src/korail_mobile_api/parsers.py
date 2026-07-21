@@ -76,20 +76,6 @@ def _typed_required_string(
     return value
 
 
-def _typed_required_non_empty_list(
-    data: Mapping[str, Any],
-    key: str,
-    *,
-    context: str,
-) -> list[Any]:
-    value = data.get(key)
-    if not isinstance(value, list) or not value:
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a non-empty list"
-        )
-    return value
-
-
 def _typed_required_list(
     data: Mapping[str, Any],
     key: str,
@@ -463,7 +449,10 @@ def parse_train_calendar_response(
     response: BaseKorailResponse,
 ) -> TrainCalendarResponse:
     raw = response.raw
-    rows = _typed_required_non_empty_list(
+    # TrainCalendarDao.getRunningCalendarList (:101-103) tolerates an empty
+    # running calendar (e.g. a window with no bookable dates), so accept an
+    # empty list rather than pinning a non-empty one.
+    rows = _typed_required_list(
         raw,
         "runningCalendar",
         context="train calendar",
@@ -481,57 +470,71 @@ def parse_train_calendar_response(
                     "runDt",
                     context="train calendar",
                 ),
-                business_day_stage_code=_typed_required_string(
+                # bizDdStgCd is null-guarded by isPeakSeason()
+                # (N.notNullEqual(this.bizDdStgCd,"5"), TrainCalendarDao:68-70),
+                # so the app tolerates a null/absent value here.
+                business_day_stage_code=_typed_optional_string(
                     row,
                     "bizDdStgCd",
                     context="train calendar",
                 ),
-                day_division_code=_typed_required_string(
+                # dayDvCd has no accessor in TrainCalendarDao, so a
+                # null/absent value never reaches app code.
+                day_division_code=_typed_optional_string(
                     row,
                     "dayDvCd",
                     context="train calendar",
                 ),
+                # hldyDvCd stays required: isHoliday() calls
+                # this.hldyDvCd.isEmpty() (TrainCalendarDao:60-62) with no
+                # null-guard, so the app itself NPEs on a null value.
                 holiday_division_code=_typed_required_string(
                     row,
                     "hldyDvCd",
                     context="train calendar",
                 ),
-                sale_day_division_code=_typed_required_string(
+                # saleDdDvCd is only read via constant.equals(this.saleDdDvCd)
+                # in isForSaleDate() (TrainCalendarDao:52-54), which is
+                # null-safe, so a null/absent value is tolerated.
+                sale_day_division_code=_typed_optional_string(
                     row,
                     "saleDdDvCd",
                     context="train calendar",
                 ),
-                a_train_operation_flag=_typed_required_string(
+                # Every *TrnOpFlg accessor is BOOL_YES.equals(this.xTrnOpFlg)
+                # (TrainCalendarDao:44-82), null-safe and returning false, so
+                # the app tolerates null/absent flags our parser must not reject.
+                a_train_operation_flag=_typed_optional_string(
                     row,
                     "aTrnOpFlg",
                     context="train calendar",
                 ),
-                d_train_operation_flag=_typed_required_string(
+                d_train_operation_flag=_typed_optional_string(
                     row,
                     "dTrnOpFlg",
                     context="train calendar",
                 ),
-                g_train_operation_flag=_typed_required_string(
+                g_train_operation_flag=_typed_optional_string(
                     row,
                     "gTrnOpFlg",
                     context="train calendar",
                 ),
-                o_train_operation_flag=_typed_required_string(
+                o_train_operation_flag=_typed_optional_string(
                     row,
                     "oTrnOpFlg",
                     context="train calendar",
                 ),
-                s_train_operation_flag=_typed_required_string(
+                s_train_operation_flag=_typed_optional_string(
                     row,
                     "sTrnOpFlg",
                     context="train calendar",
                 ),
-                v_train_operation_flag=_typed_required_string(
+                v_train_operation_flag=_typed_optional_string(
                     row,
                     "vTrnOpFlg",
                     context="train calendar",
                 ),
-                x_train_operation_flag=_typed_required_string(
+                x_train_operation_flag=_typed_optional_string(
                     row,
                     "xTrnOpFlg",
                     context="train calendar",
