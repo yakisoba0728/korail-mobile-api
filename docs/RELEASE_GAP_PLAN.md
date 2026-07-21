@@ -10,6 +10,9 @@ read-completion + full-mutation implementation.
 - Authoritative source: `docs/deep-dive/full-api-analysis-2026-07-20.md` (§ refs
   below are into that file), cross-checked against `docs/api-endpoints.md`,
   `docs/api-status-by-service.md`, decompiled `analysis/jadx/sources/…`.
+  Corrections in this doc are reconciled against
+  `docs/deep-dive/cross-validation-2026-07-21.md` (srtgo reference vs our
+  decompiled v6.5.0 — see Revision 2).
 - Scope decision (user): extend beyond read-only to full mutation — reservation
   creation, seat assignment, payment, refund, cancel/change, check-in. A later
   implementation phase authorizes live testing up to state changes using the
@@ -54,6 +57,13 @@ read-completion + full-mutation implementation.
   + 62-char custom alphabet + key-derived permutation → base161→base30 →
   `bEeEP…`). So "default OFF" is a policy knob, not a limitation — reproduction is
   **FEASIBLE**. See §5 item 10 and the 2026-07-21 revision.
+  **QUALIFIED (2026-07-21, cross-validation vs our decompiled v6.5.0):** the
+  algorithm *structure* is confirmed against our own code, but srtgo's SDK-version
+  string `v1` is **stale** — our app uses `v1.0.3` (`C1229b.java:137,157`) in both
+  the body `sv` field and the `dyn_key` prefix, and since that string reseeds the
+  whole token, the version (and any per-version constants) MUST come from our app,
+  not srtgo. srtgo's `v1` mints a self-consistent but **invalid** token if the
+  server validates `sv`. See Revision 2.
 - **Session.** `KorailSessionClient` (`session.py`) does service preflight →
   `common.code.do` crypto bootstrap → `login.Login`; auth is the `JSESSIONID`
   cookie held by the `httpx.Client` jar (`session.py:176-197`). Email/phone/
@@ -198,6 +208,14 @@ auth = `JSESSIONID` cookie; no body encryption/HMAC.
   anti-bot policy. The generation algorithm is reproducible (`ktx.py:54-160`), so
   the opt-in is implementable today. Keep the default OFF (safe), but plan to flip
   it on for live reserve if a token-less call is rejected.
+  **CROSS-VALIDATION (2026-07-21):** the 6-path allowlist AND the
+  `IS_MACRO_ACTIVE` gate are now confirmed against our decompiled code —
+  `com/korail/talk/network/ExecuteDao.java:26-47` wraps the token in
+  `if (a.IS_MACRO_ACTIVE)` over the exact 6 paths; the flag defaults `false` and
+  flips only on server `isMacroEnable=='Y'`. So our app is **stricter** than srtgo
+  (which attaches unconditionally). Reproducibility is confirmed in *structure*
+  only — the SDK-version string must be our `v1.0.3`, not srtgo's stale `v1`
+  (see Revision 2).
 - **`Sid` token** (`crypto.py:55-62`): required by search (`ScheduleView`),
   car/seat research (`TrainResearch`, `TResidualSeatsResearch.do`) — the reads
   that *precede* a booking. The reservation POST itself carries no `Sid`.
@@ -260,6 +278,10 @@ and both return `BaseResponse`; the ordering is verified in
 > — note the digit widths differ from the `"0001"`/`"000"` constants below). Treat
 > the single-call path as the primary; verify whether the app's step-1 is
 > actually required on the live pass.
+> **CROSS-VALIDATION (2026-07-21):** verified against our code —
+> `ReservationCancelChk` is the **COMMIT** step (not an eligibility pre-check); our
+> step-1 `ReservationCancel` is an *initiate*, so srtgo's single call is
+> functionally sufficient (`a6/x.java:190-207`; cross-val §4).
 
 | Route | Method | Key params | Response | Source |
 |--|--|--|--|--|
@@ -291,6 +313,9 @@ confirm coupons`.
 > (§4.6) and the fake-card / dry-run / never-persist / auto-cancel guards are
 > **mandatory** (§4.4). The `encValue`-only assumption in the PG note below is a
 > divergence from live behavior — see the annotated correction there.
+> **CROSS-VALIDATION (2026-07-21):** all six card field names + the raw-PAN
+> (no client cipher) behavior are now **verified against our decompiled code** —
+> `PaymentMethod.java:14-19`, `v4/a.java:29-34` (cross-val §3 ✅), not just srtgo.
 
 | Route | Method | Key params | Response | Source |
 |--|--|--|--|--|
@@ -351,10 +376,12 @@ Two sub-flows (analysis §3.9 `…:874`):
 > **Confirmed** the wire-rename `h_orgtk_sale_wct_no` (stored as wct_no, sent as
 > `h_orgtk_sale_wct_no`, `ktx.py:1084`) and empty GPS `latitude`/`longitude`,
 > `tk_ret_tms_dv_cd="21"`, `pbpAcepTgtFlg="N"`, `h_mlg_stl="N"` (`ktx.py:1078-1093`).
-> **⚠ TRAP:** srtgo uses the PNR key **`txtPrnNo`** (P-**r**-n, `ktx.py:1082`), not
-> `txtPnrNo` as in the table row above — this may be the real server field name or
-> a typo in a working tool; **flag for live verification** before locking the
-> refund contract.
+> **✅ RESOLVED (2026-07-21, cross-validation):** the `txtPrnNo` trap is closed —
+> srtgo's `txtPrnNo` (P-**r**-n) is a **typo**. Our v6.5.0 uses `txtPnrNo` (P-n-r)
+> in refund (`RefundService.java:29`, `RefundDao.java:24/69/113`,
+> `ticketReturn/a.java:411`), and a tree-wide grep proves **`txtPrnNo` occurs ZERO
+> times** anywhere in our sources (cross-val §4). Lock the refund contract on
+> `txtPnrNo`; no live check needed for the field name.
 
 ### 3.E Flow E — Check-in (self)
 
@@ -555,11 +582,12 @@ relevant phase.
    `h_orgtk_sale_wct_no` on the wire (off-by-name trap). Client: not yet
    implemented — encode correctly from the start.
    **CONFIRMED (2026-07-21, srtgo ref):** the working refund sends
-   `h_orgtk_sale_wct_no` (`srtgo_plus/srtgo/ktx.py:1084`) — rename verified. **⚠
-   NEW TRAP:** srtgo also names the PNR field **`txtPrnNo`** (P-**r**-n,
-   `ktx.py:1082`), not `txtPnrNo`. This may be the true server field name or a
-   working-tool typo — **flag for live verification** before locking the refund
-   contract.
+   `h_orgtk_sale_wct_no` (`srtgo_plus/srtgo/ktx.py:1084`) — rename verified.
+   **✅ RESOLVED (2026-07-21, cross-validation):** the earlier "`txtPrnNo` may be
+   the real server field" trap is closed — it is a srtgo **typo**. Our v6.5.0 uses
+   `txtPnrNo` (`RefundService.java:29`, `RefundDao.java:24/69/113`,
+   `ticketReturn/a.java:411`); tree-wide grep = **ZERO** `txtPrnNo` (cross-val §4).
+   Emit `txtPnrNo`; no live verification needed for the name.
 
 6. **Redaction misses payment card fields** — see §4.6. Client:
    `redaction.py:10-126` has zero card-field coverage; adding payment without
@@ -600,7 +628,8 @@ relevant phase.
    `Version=250601002` (`ktx.py:643`) vs our decompiled app `250601003` — one step
    older; both use `Device="AD"`, `Key="korail1234567890"`. Keep `250601003`
    (matches the analyzed app), but note the server accepts a slightly older
-   version.
+   version. **CROSS-VALIDATION (2026-07-21):** `250601003` re-confirmed in our
+   code (`BaseRequest.java:9,16`, `K4/g.java:11`; cross-val §6).
 
 10. **DynaPath token default for reservation.** `TicketReservation`/`NonMemTicket`
     are in the allowlist (`constants.py:37-38`) but the app sends the token only
@@ -618,6 +647,20 @@ relevant phase.
     Mark DynaPath reproduction **FEASIBLE (algorithm in hand)**, not a blocker.
     Keep the default OFF for safety, but be ready to flip it on for live reserve if
     a token-less call is rejected.
+    **QUALIFIED (2026-07-21, cross-validation vs decompiled v6.5.0):** the
+    algorithm *structure* is confirmed against our own code (`B/C1229b.java`,
+    `l1/AbstractC5980b.java`) and `as` is verified as our signing-cert hash — **but
+    srtgo's SDK-version string `v1` is STALE.** Our app uses `v1.0.3` in both the
+    body `sv` field and the `dyn_key` prefix (`C1229b.java:137,157`), and that
+    string reseeds the entire token, so any reproduction MUST source the version
+    (and per-version constants) from our app — srtgo's `v1` would mint an invalid
+    token if the server validates `sv`. Our app also computes several body fields
+    **live** that srtgo hardcodes — anti-tamper `su/dbg/emu/hk`
+    (`l1/AbstractC5981c.java`), the `rt` timing-delta array, `di` =
+    `Settings.Secure.ANDROID_ID` (`AbstractC1228a.java:16`), and dynamic
+    `os`/`dm`/`it`/`ts` (`C1229b.java:113-135`) — so a hardcoded reproduction is
+    fingerprintable. The `IS_MACRO_ACTIVE` gate + 6-path allowlist are confirmed
+    in our code (`ExecuteDao.java:26-47`). See Revision 2.
 
 (Items 3–4 were the load-bearing ones for a working booking. Post-srtgo-ref: item
 3 is largely resolved — a working hold omits `pnrNo`/`pbepInfo` — so **item 4
@@ -816,6 +859,9 @@ marked confirmed.
   reproducible (`DynaPathMasterEngine`, `:54-160`; app secret
   `[38ff229cb34c7dda8e28220a2d750cce]`, 62-char alphabet, base161→base30 →
   `bEeEP…`). `Sid` confirmed (`AES-CBC` key `2485dd54d9deaa36`, `:661-664`).
+  **→ QUALIFIED by Revision 2:** reproducibility holds for the algorithm
+  *structure* only; srtgo's version string `v1` is stale — our app uses `v1.0.3`
+  (`C1229b.java:137,157`), which must seed the token.
 - **Reservation body correction** (§3.A, §5 items 3–4). Working member hold omits
   `pnrNo`/`pbepInfo` and uses legacy `txt*` passenger rows with
   `txtJobId=1101`(seat)/`1102`(waitlist) (`:864-904` / orig `:715-755`).
@@ -828,6 +874,8 @@ marked confirmed.
 - **`txtPrnNo` refund trap** (§3.D, §5 item 5): srtgo names the refund PNR field
   **`txtPrnNo`** (P-**r**-n, `:1082`), not `txtPnrNo` — flag for live verification.
   Wire-rename `h_orgtk_sale_wct_no` confirmed (`:1084`).
+  **→ RESOLVED by Revision 2:** srtgo's `txtPrnNo` is a typo; our v6.5.0 uses
+  `txtPnrNo` (tree-wide `txtPrnNo` = 0). No live check needed for the field name.
 - **Payment card fields confirmed** (§3.C, §4.4/§4.6): `hidStlCrCrdNo1`/`hidVanPwd1`/
   `hidCrdVlidTrm1`/`hidAthnVal1`/`hidAthnDvCd1`/`hidIsmtMnthNum1` +
   `hidStlMnsCd1="02"`/`hidCrdInpWayCd1="@"`/`hidPnrNo`/`hidWctNo`/`hidMnsStlAmt1`
@@ -837,6 +885,80 @@ marked confirmed.
   `Version=250601002` (srtgo) vs `250601003` (our app) delta noted (§5 item 9);
   check-in unimplemented by srtgo → still a gap (§3.E); licensing (MIT/BSD-3,
   permissive) → reference facts only, reimplement DynaPath, add a `LICENSE` (§7).
+
+---
+
+## Revision 2 (2026-07-21) — cross-validation vs decompiled v6.5.0
+
+Second-pass corrections from `docs/deep-dive/cross-validation-2026-07-21.md`, which
+re-checked the srtgo/srtgo_plus reference (treated as ground truth in the first
+Revision above) against **our own decompiled `com.korail.talk` v6.5.0**
+(`analysis/jadx/sources/…`, `analysis/apktool/`) — the real ground truth. Where the
+first Revision trusted srtgo, this pass promotes claims we could re-read in our code
+to **verified**, and *qualifies* the ones where srtgo turned out to be stale. Each
+item cites the cross-validation doc **and** the decompiled file:line.
+
+1. **DynaPath reproducibility is QUALIFIED — version drift (highest impact).** The
+   token algorithm *structure* is confirmed against our code (UTF packing,
+   `make_key`, encode tables, base62 alphabet, `bEeEP` prefix, pack=161/radix=30/
+   group=2 — cross-val §1 ✅; `B/C1229b.java`, `l1/AbstractC5980b.java`), and the app
+   secret `as` is verified as our v6.5.0 signing-cert hash. **BUT srtgo's SDK-version
+   string `v1` is STALE — our app uses `v1.0.3`** in *both* the body `sv` field and
+   the `dyn_key` prefix (`C1229b.java:137,157`; cross-val §1 ⚠/🔀). Because that
+   string reseeds the whole token, a reproduction MUST take the version (and any
+   per-version constants) from our app; srtgo's `v1` mints a self-consistent but
+   **invalid** token if the server validates `sv`. Corrects the "algorithm in hand /
+   reproducible" verdict in §1.1, §3 (cross-cutting), §5 item 10, and the first
+   Revision's DynaPath bullet: FEASIBLE but **version-string-dependent on our app**,
+   not on srtgo.
+2. **Refund PNR field RESOLVED — `txtPnrNo`, definitively.** The earlier
+   "⚠ `txtPrnNo` (P-r-n) trap — needs live verification" (§3.D, §5 item 5) is closed:
+   srtgo's `txtPrnNo` is a **typo**. Our v6.5.0 uses `txtPnrNo` (P-n-r) in refund
+   (`RefundService.java:29`, `RefundDao.java:24/69/113`, `ticketReturn/a.java:411`),
+   and a tree-wide grep proves **`txtPrnNo` occurs ZERO times** anywhere in our
+   sources (cross-val §4 ⚠ + 📌). Ground truth = `txtPnrNo`; no live check needed for
+   the field name.
+3. **Protocol Version re-confirmed = `250601003`** (`BaseRequest.java:9,16`,
+   `K4/g.java:11`; cross-val §6 ⚠/🔀). srtgo's `250601002` is one build behind; keep
+   our value (already used in the header/§3 envelope and §5 item 9).
+4. **Confidence raised — verified against OUR decompiled code (not just srtgo):**
+   - Reservation body needs **no `pnrNo`/`pbepInfo`** for a fresh member hold
+     (cross-val §2; the params exist on the overload but stay empty — §3.A,
+     §5 item 3).
+   - **Cancel is a single call** to `ReservationCancelChk`, which is the **COMMIT**
+     step (not an eligibility pre-check); our app's extra step-1 `ReservationCancel`
+     is an *initiate* (cross-val §4 ⚠; `a6/x.java:190-207`) — §3.B, §5 item 8.
+   - **Payment card field names** `hidStlCrCrdNo1/hidVanPwd1/hidCrdVlidTrm1/
+     hidIsmtMnthNum1/hidAthnDvCd1/hidAthnVal1` match our `PaymentMethod` constants
+     (`PaymentMethod.java:14-19`, `v4/a.java:29-34`), and the **raw PAN is
+     unencrypted** on the wire (`v4/a.java:29`) — cross-val §3 ✅ (§3.C, §4.4).
+   - **Sid** AES/CBC/PKCS5, key = iv, plaintext `"AD"+ms`, Base64.DEFAULT with
+     trailing newline — confirmed at `S4/C0812l.java:43-50` (cross-val §1/§5/§6 ✅).
+   - **6-path DynaPath allowlist + `IS_MACRO_ACTIVE` gate** confirmed:
+     `ExecuteDao.java:26-47` wraps the token in `if (a.IS_MACRO_ACTIVE)` (default
+     `false`, flips only on server `isMacroEnable=='Y'`) over the exact 6 paths
+     (cross-val §1 ✅). NB our app is thus **stricter** than srtgo, which attaches the
+     token unconditionally.
+5. **~44 newly-found hidden items** the srtgo pass never modeled (tallied across the
+   six 🆕 subsections of the cross-validation doc). Notable for us:
+   - **Live device-fingerprint / anti-macro telemetry inside the DynaPath body** that
+     srtgo hardcodes: anti-tamper `su/dbg/emu/hk` (root/debug/emulator/hook
+     detection, `l1/AbstractC5981c.java`), `rt` = array of ≤5 inter-call timing
+     deltas, `di` = the real `Settings.Secure.ANDROID_ID` (`AbstractC1228a.java:16`),
+     and dynamic `os`/`dm`/`it`/`ts` (`C1229b.java:113-135`). A headless client that
+     hardcodes these is fingerprintable server-side (cross-val §1 🆕).
+   - **Uncaptured SDK secrets in `res/values/strings.xml`** relevant to device
+     fingerprinting — `google_api_key`, `google_app_id`, the GCM sender id, the
+     Firebase project id, and `kakao_app_key` (cross-val §5 📌; values deliberately
+     NOT copied into this plan). Treat as sensitive; never embed in our client.
+   - **Unmodeled mutation endpoints:** self check-in (4), `reservation.seatAssign.do`,
+     the full tripChg change flow, `reservation.reservationChange.do`, special-room
+     upgrade, waiting-list conversion, and a **separate delay-compensation cash
+     refund** distinct from `refunds.RefundsRequest` (cross-val §5 🆕) — most are
+     already in §3/§5 scope; the delay-comp refund is a fresh deferred item.
+6. **Pointer:** the full six-dimension reconciliation (per-claim ✅/⚠/🔀/🆕/📌/❓
+   labels, both-sides file:line, and the "Net changes / Remaining open questions"
+   summary) lives in `docs/deep-dive/cross-validation-2026-07-21.md`.
 
 ---
 
@@ -860,3 +982,9 @@ marked confirmed.
   `:1030-1051`; cancel `:1060-1075`; refund `:1077-1097`) and `srtgo/srtgo/ktx.py`
   (original reserve `:715-755`). Drives the corrections annotated throughout §1,
   §3–§5 and the revision section below.
+- **Cross-validation vs decompiled v6.5.0 (2026-07-21):**
+  `docs/deep-dive/cross-validation-2026-07-21.md` — reconciles the srtgo reference
+  against our own decompiled `com.korail.talk` v6.5.0 across six dimensions
+  (DynaPath, reservation, payment, cancel/refund, uncovered-hidden, transport/auth)
+  with per-claim ✅/⚠/🔀/🆕/📌/❓ labels and both-sides file:line. Ground truth for
+  Revision 2.
