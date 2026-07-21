@@ -440,6 +440,21 @@ KORAIL_EXACT_REQUEST_FIELDS = {
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 
+# Fields the app may legitimately OMIT from an otherwise-exact request. On the
+# search-derived seat reads the app forwards trainInfo.getH_seat_att_cd()
+# verbatim and Retrofit drops the @Field when it is null (ResearchService
+# getCarList txtSeatAttCd:37 / getSeatList seatAttCd:59), so a request without
+# the seat-attribute code is contract-conformant. Every other field stays
+# required, and no field outside the exact set is ever accepted.
+KORAIL_OPTIONAL_REQUEST_FIELDS: dict[str, frozenset[str]] = {
+    "/classes/com.korail.mobile.research.TrainResearch": frozenset(
+        {"txtSeatAttCd"}
+    ),
+    "/classes/com.korail.mobile.research.TResidualSeatsResearch.do": (
+        frozenset({"seatAttCd"})
+    ),
+}
+
 KORAIL_EXACT_REQUEST_FIELD_ORDERS = {
     "/classes/com.korail.mobile.cust.mchdDcntTgt.do": (
         ("Device", "Version", "Key", "dptDt"),
@@ -689,7 +704,15 @@ def assert_read_only_request_fields(
             )
         )
     else:
-        valid_shape = set(field_names) == allowed
+        # Every field must belong to the exact set, and every non-optional
+        # field must be present. Optional fields (Retrofit null-omitted @Fields)
+        # may be absent, but nothing outside `allowed` is ever accepted.
+        optional = KORAIL_OPTIONAL_REQUEST_FIELDS.get(
+            route_path, frozenset()
+        )
+        field_set = set(field_names)
+        required = allowed - optional
+        valid_shape = required <= field_set <= allowed
     if not valid_shape:
         raise KorailProtocolError(
             "KORAIL request fields must exactly match the registered "

@@ -105,11 +105,18 @@ def _wire_goods_no(value: str) -> str:
     return value
 
 
-def _resolved_seat_attribute_code(train: TrainSummary) -> str:
-    # Fall back to the general-seat "015" only when the row omits the code:
-    # ScheduleView search rows carry no h_seat_att_cd (schedule_view_success
-    # shows it null), so the common general-class read is unchanged.
-    return train.seat_attribute_code or "015"
+def _validated_room_class_code(value: str) -> str:
+    # psrmClCd / txtPsrmClCd is the user-selected cabin class, not a constant:
+    # c5/c.java:90 reads RSeat.SEAT_PSRM_CL_CD and feeds it into
+    # X4.b.getSearchRequest -> setTxtPsrmClCd (x4/b.java:18). The value comes
+    # from getSelectSeatTypeCode (U4/a.java:87), which only ever yields
+    # K4/o.java GENERAL("1", 일반실) or SPECIAL("2", 특실), so restrict to that
+    # domain and let general ("1") stay the default.
+    if value not in {"1", "2"}:
+        raise KorailProtocolError(
+            'room_class_code must be "1" (general) or "2" (first class)'
+        )
+    return value
 
 
 def _resolved_goods_no(train: TrainSummary) -> str:
@@ -130,15 +137,16 @@ def build_seat_car_form(
     *,
     passenger_count: int,
     sid: str,
+    room_class_code: str = "1",
 ) -> dict[str, str]:
     validate_seat_inventory_inputs(train, passenger_count)
-    return {
+    form = {
         "Device": config.device,
         "Version": config.version,
         "Key": config.key,
         "Sid": _inventory_sid(sid),
         "txtMenuId": "11",
-        "txtPsrmClCd": "1",
+        "txtPsrmClCd": _validated_room_class_code(room_class_code),
         "txtRunDt": train.run_date or "",
         "txtDptDt": train.departure_date or "",
         "txtTrnClsfCd": train.train_class_code or "",
@@ -149,9 +157,16 @@ def build_seat_car_form(
         "txtArvStnRunOrdr": train.arrival_run_order or "",
         "txtTrnGpCd": train.train_group_code or "",
         "txtTotPsgCnt": str(passenger_count),
-        "txtSeatAttCd": _resolved_seat_attribute_code(train),
+        # x4/b.java:19 forwards trainInfo.getH_seat_att_cd() verbatim; when the
+        # selected row carries no code (ScheduleView rows are null) Retrofit
+        # omits the @Field (getCarList txtSeatAttCd, ResearchService:37), so
+        # omit it here rather than substituting a general-seat "015".
+        "txtSeatAttCd": train.seat_attribute_code,
         "txtGdNo": _resolved_goods_no(train),
     }
+    if not train.seat_attribute_code:
+        del form["txtSeatAttCd"]
+    return form
 
 
 def build_seat_inventory_form(
@@ -161,13 +176,14 @@ def build_seat_inventory_form(
     *,
     passenger_count: int,
     sid: str,
+    room_class_code: str = "1",
 ) -> dict[str, str]:
     validate_seat_inventory_inputs(
         train,
         passenger_count,
         car_no=car_no,
     )
-    return {
+    form = {
         "Device": config.device,
         "Version": config.version,
         "Key": config.key,
@@ -176,10 +192,13 @@ def build_seat_inventory_form(
         "runDt": train.run_date or "",
         "trnNo": train.train_no.zfill(5),
         "srcarNo": str(car_no),
-        "psrmClCd": "1",
+        "psrmClCd": _validated_room_class_code(room_class_code),
         "dptRsStnCd": train.departure_station_code or "",
         "arvRsStnCd": train.arrival_station_code or "",
-        "seatAttCd": _resolved_seat_attribute_code(train),
+        # As with getCarList, getSeatList forwards h_seat_att_cd verbatim and
+        # Retrofit omits the @Field when it is null (ResearchService:59), so
+        # omit seatAttCd for a row without a code instead of sending "015".
+        "seatAttCd": train.seat_attribute_code,
         "dptStnRunOrdr": train.departure_run_order or "",
         "arvStnRunOrdr": train.arrival_run_order or "",
         "totPsgCnt": str(passenger_count),
@@ -188,6 +207,9 @@ def build_seat_inventory_form(
         "Sid": _inventory_sid(sid),
         "ctlDvCd": "",
     }
+    if not train.seat_attribute_code:
+        del form["seatAttCd"]
+    return form
 
 
 def build_cache_query(timestamp_ms: int | None = None) -> dict[str, str]:
@@ -228,7 +250,10 @@ def build_train_search_form(
         "txtSeatAttCd_2": "000",
         "txtSeatAttCd_3": "000",
         "txtSeatAttCd_4": "015",
-        "ebizCrossCheck": "N",
+        # MainBookingActivity.java:775-776 sets both ebizCrossCheck and
+        # srtCheckYn from the single "include SRT" checkbox (f29041T), so the
+        # app always sends them equal; keep the pair coupled to include_srt.
+        "ebizCrossCheck": "Y" if query.include_srt else "N",
         "srtCheckYn": "Y" if query.include_srt else "N",
         "rtYn": "N",
         "adjStnScdlOfrFlg": "N",
@@ -277,17 +302,34 @@ def build_common_code_form(
     return form
 
 
+TICKET_LIST_MODE_ACTIVE = "1"
+TICKET_LIST_MODE_HISTORY = "2"
+
+
 def build_ticket_list_form(
     config: KorailConfig,
     page_no: int,
+    *,
+    mode: str = TICKET_LIST_MODE_ACTIVE,
+    boarding_date_from: str = "",
+    boarding_date_to: str = "",
 ) -> dict[str, str]:
-    page = max(1, page_no)
+    # txtIndex is a fixed list-mode selector, not a page cursor:
+    # TicketListActivity.java:937-939 sends "1" for the active/current ticket
+    # list and TicketPurchaseHistoryActivity.java:276-278 sends "2" for the
+    # purchase-history list (MyTicketService getTicketList). The page rides
+    # h_page_no (both app call sites pin it to "1"); history mode additionally
+    # carries h_abrd_dt_from/h_abrd_dt_to boarding-date bounds.
+    if mode not in {TICKET_LIST_MODE_ACTIVE, TICKET_LIST_MODE_HISTORY}:
+        raise KorailProtocolError(
+            'ticket list mode must be "1" (active) or "2" (history)'
+        )
     return {
         "txtDeviceId": config.advertising_id,
-        "txtIndex": str(page),
-        "h_page_no": str(page),
-        "h_abrd_dt_from": "",
-        "h_abrd_dt_to": "",
+        "txtIndex": mode,
+        "h_page_no": str(max(1, page_no)),
+        "h_abrd_dt_from": boarding_date_from,
+        "h_abrd_dt_to": boarding_date_to,
         "hiduserYn": "Y",
     }
 

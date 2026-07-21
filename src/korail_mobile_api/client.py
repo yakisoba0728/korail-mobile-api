@@ -240,6 +240,7 @@ class KorailClient:
         train: TrainSummary,
         *,
         passenger_count: int = 1,
+        room_class_code: str = "1",
     ) -> SeatCarListResponse:
         self._require_session()
         validate_seat_inventory_inputs(train, passenger_count)
@@ -248,6 +249,7 @@ class KorailClient:
             train,
             passenger_count=passenger_count,
             sid=generate_sid(),
+            room_class_code=room_class_code,
         )
         return self._run_read(
             lambda: parse_seat_car_list_response(
@@ -266,6 +268,7 @@ class KorailClient:
         car_no: int,
         *,
         passenger_count: int = 1,
+        room_class_code: str = "1",
     ) -> SeatInventoryResponse:
         self._require_session()
         validate_seat_inventory_inputs(
@@ -279,6 +282,7 @@ class KorailClient:
             car_no,
             passenger_count=passenger_count,
             sid=generate_sid(),
+            room_class_code=room_class_code,
         )
         return self._run_read(
             lambda: parse_seat_inventory_response(
@@ -1043,7 +1047,14 @@ class KorailClient:
             )
         )
 
-    def get_ticket_list(self, page_no: int = 0) -> BaseKorailResponse:
+    def get_ticket_list(
+        self,
+        page_no: int = 0,
+        *,
+        mode: str = "1",
+        boarding_date_from: str = "",
+        boarding_date_to: str = "",
+    ) -> BaseKorailResponse:
         if self.session.current is None:
             raise KorailAuthError(
                 "KORAIL ticket list requires an authenticated session"
@@ -1051,6 +1062,12 @@ class KorailClient:
         return self._run_read(
             lambda: self.http.post_form(
                 "/classes/com.korail.mobile.myTicket.MyTicketList",
-                build_ticket_list_form(self.config, page_no),
+                build_ticket_list_form(
+                    self.config,
+                    page_no,
+                    mode=mode,
+                    boarding_date_from=boarding_date_from,
+                    boarding_date_to=boarding_date_to,
+                ),
             )
         )

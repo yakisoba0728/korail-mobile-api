@@ -282,6 +282,41 @@ def test_login_redirect_response_raises_continuation_error():
     assert "h_msg_txt=" not in exc.post_data
 
 
+def test_login_continuation_forwards_only_typed_login_response_fields():
+    # RV3-08: S4/u.java:33-43 serializes the typed LoginResponse via
+    # q.toJson(...) — Gson omits null fields and the DTO has a fixed field set,
+    # so undeclared/raw envelope keys are never forwarded and null-valued
+    # declared fields are dropped (not emitted as key=).
+    from korail_mobile_api.session import build_login_authentication_post_data
+
+    post_data = build_login_authentication_post_data(
+        login_id="user@example.com",
+        input_flag="5",
+        response_raw={
+            "strResult": "SUCC",
+            "h_msg_cd": "S201",
+            "h_msg_txt": "additional auth",
+            "strCustNo": "cust-1",
+            "strMbCrdNo": "card-1",
+            "strEmailAdr": None,          # declared but null -> dropped
+            "notiTpCd": "",               # declared, empty string -> emitted
+            "serverOnlyExtra": "leaked",  # undeclared raw key -> dropped
+        },
+    )
+    fields = dict(pair.split("=", 1) for pair in post_data.split("&"))
+    assert fields["callLogin"] == "Y"
+    assert fields["memId"] == "user@example.com"
+    assert fields["inputFlg"] == "5"
+    assert fields["strCustNo"] == "cust-1"
+    assert fields["strMbCrdNo"] == "card-1"
+    assert fields["notiTpCd"] == ""      # empty string is non-null in Gson
+    assert fields["h_msg_cd"] == "S201"
+    assert "strEmailAdr" not in fields   # null field omitted
+    assert "serverOnlyExtra" not in fields
+    assert "strResult" not in fields
+    assert "h_msg_txt" not in fields
+
+
 def test_login_success_without_jsessionid_raises_auth_error(load_json_fixture):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == SERVICE_CHECK_PATH:

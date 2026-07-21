@@ -177,10 +177,12 @@ def test_train_calendar_parser_maps_evidenced_day_shape(load_json_fixture):
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda raw: raw.pop("runningCalendar"),
+        # A present-but-non-list runningCalendar is a genuine shape violation
+        # (Gson cannot deserialize an object into List<RunningCalendar>).
         lambda raw: raw.__setitem__("runningCalendar", {}),
         lambda raw: raw["runningCalendar"].__setitem__(0, []),
-        lambda raw: raw["runningCalendar"][0].pop("runDt"),
+        # hldyDvCd stays required: isHoliday() calls hldyDvCd.isEmpty()
+        # unguarded (TrainCalendarDao:60-62), so the app NPEs on null.
         lambda raw: raw["runningCalendar"][0].__setitem__("hldyDvCd", None),
         lambda raw: raw["runningCalendar"][0].pop("hldyDvCd"),
         lambda raw: raw["runningCalendar"][0].__setitem__("xTrnOpFlg", 1),
@@ -195,6 +197,53 @@ def test_train_calendar_parser_rejects_malformed_shape(
 
     with pytest.raises(KorailProtocolError):
         parsers.parse_train_calendar_response(_enveloped_response(raw))
+
+
+@pytest.mark.parametrize("absent_shape", ["null", "missing"])
+def test_train_calendar_parser_accepts_absent_running_calendar(
+    load_json_fixture,
+    absent_shape,
+):
+    # makeAvailableDatesFactory null-guards the list on SUCC responses
+    # (C0805e.java:124: isNull(list) || size<=0 -> log + return), and
+    # getRunningCalendarList is a nullable List (TrainCalendarDao:101-103), so a
+    # missing/null runningCalendar yields an empty calendar rather than raising.
+    raw = load_json_fixture("raw_typed_train_calendar.json")
+    if absent_shape == "null":
+        raw["runningCalendar"] = None
+    else:
+        raw.pop("runningCalendar")
+
+    response = parsers.parse_train_calendar_response(
+        _enveloped_response(raw)
+    )
+
+    assert response.days == ()
+
+
+@pytest.mark.parametrize("absent_shape", ["null", "missing"])
+def test_train_calendar_parser_skips_but_keeps_null_run_date_rows(
+    load_json_fixture,
+    absent_shape,
+):
+    # runDt is nullable per row: getDateStr() returns the raw field, compareTo
+    # null-guards it, and makeAvailableDatesFactory gates use behind
+    # !TextUtils.isEmpty(dateStr) (C0805e.java:140,147), silently skipping
+    # null-date rows. So a null/absent runDt must not abort the whole parse.
+    raw = load_json_fixture("raw_typed_train_calendar.json")
+    row = raw["runningCalendar"][0]
+    if absent_shape == "null":
+        row["runDt"] = None
+    else:
+        row.pop("runDt")
+
+    response = parsers.parse_train_calendar_response(
+        _enveloped_response(raw)
+    )
+
+    assert response.days[0].run_date is None
+    # The rest of the row is still parsed (hldyDvCd stays required).
+    assert response.days[0].holiday_division_code == "SYNTHETIC-HOLIDAY-DIVISION"
 
 
 def test_train_calendar_parser_accepts_empty_running_calendar(
@@ -263,7 +312,7 @@ def test_train_calendar_parser_tolerates_app_nullable_fields(
         "xTrnOpFlg": "x_train_operation_flag",
     }[optional_key]
     assert getattr(day, field_name) is None
-    # runDt and hldyDvCd stay required and keep their evidenced values.
+    # hldyDvCd stays required; runDt is optional but present here.
     assert day.run_date == "SYNTHETIC-RUN-DATE"
     assert day.holiday_division_code == "SYNTHETIC-HOLIDAY-DIVISION"
 

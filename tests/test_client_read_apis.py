@@ -171,6 +171,88 @@ def test_ticket_list_defaults_to_empty_device_id(load_json_fixture):
     assert "txtDeviceId=" in captured[0]["body"]
 
 
+def _ticket_client(load_json_fixture):
+    client, captured = make_client(
+        load_json_fixture,
+        {
+            "/classes/com.korail.mobile.myTicket.MyTicketList": (
+                "ticket_list_empty.json"
+            ),
+        },
+        config=KorailConfig(advertising_id="ad-id"),
+    )
+    client.session.current = KorailSession(
+        jsessionid="session",
+        member_no="member",
+    )
+    return client, captured
+
+
+def test_ticket_list_txtindex_is_active_mode_and_page_rides_h_page_no(
+    load_json_fixture,
+):
+    # RV3-03: txtIndex is the active/history mode selector (TicketListActivity
+    # sends "1"), NOT a page cursor; the page rides h_page_no.
+    client, captured = _ticket_client(load_json_fixture)
+    client.get_ticket_list(3)
+    body = parse_qs(captured[0]["body"], keep_blank_values=True)
+    assert body["txtIndex"] == ["1"]
+    assert body["h_page_no"] == ["3"]
+    assert body["h_abrd_dt_from"] == [""]
+    assert body["h_abrd_dt_to"] == [""]
+
+
+def test_ticket_list_history_mode_sends_txtindex_two_with_date_bounds(
+    load_json_fixture,
+):
+    # RV3-03: purchase-history mode is txtIndex="2" plus the boarding-date
+    # bounds (TicketPurchaseHistoryActivity.java:276-278).
+    client, captured = _ticket_client(load_json_fixture)
+    client.get_ticket_list(
+        mode="2",
+        boarding_date_from="20260101",
+        boarding_date_to="20260131",
+    )
+    body = parse_qs(captured[0]["body"], keep_blank_values=True)
+    assert body["txtIndex"] == ["2"]
+    assert body["h_page_no"] == ["1"]
+    assert body["h_abrd_dt_from"] == ["20260101"]
+    assert body["h_abrd_dt_to"] == ["20260131"]
+
+
+def test_ticket_list_rejects_unknown_mode(load_json_fixture):
+    from korail_mobile_api.errors import KorailProtocolError
+
+    client, _ = _ticket_client(load_json_fixture)
+    with pytest.raises(KorailProtocolError, match="mode"):
+        client.get_ticket_list(mode="3")
+
+
+def test_train_search_couples_ebiz_cross_check_to_include_srt():
+    # RV3-01: MainBookingActivity.java:775-776 sets ebizCrossCheck and
+    # srtCheckYn from the single "include SRT" checkbox, so they are always
+    # equal; the phantom N/Y pair the app never produces must not appear.
+    from korail_mobile_api.payloads import build_train_search_form
+
+    config = KorailConfig()
+    off = build_train_search_form(
+        config,
+        TrainSearchQuery("서울", "부산", "20260710"),
+        departure_name="서울",
+        arrival_name="부산",
+        sid="sid",
+    )
+    on = build_train_search_form(
+        config,
+        TrainSearchQuery("서울", "부산", "20260710", include_srt=True),
+        departure_name="서울",
+        arrival_name="부산",
+        sid="sid",
+    )
+    assert off["ebizCrossCheck"] == off["srtCheckYn"] == "N"
+    assert on["ebizCrossCheck"] == on["srtCheckYn"] == "Y"
+
+
 def test_train_schedule_sends_device_and_version_without_key(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,

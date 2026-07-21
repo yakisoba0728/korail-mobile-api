@@ -449,14 +449,21 @@ def parse_train_calendar_response(
     response: BaseKorailResponse,
 ) -> TrainCalendarResponse:
     raw = response.raw
-    # TrainCalendarDao.getRunningCalendarList (:101-103) tolerates an empty
-    # running calendar (e.g. a window with no bookable dates), so accept an
-    # empty list rather than pinning a non-empty one.
-    rows = _typed_required_list(
-        raw,
-        "runningCalendar",
-        context="train calendar",
-    )
+    # makeAvailableDatesFactory null-guards the list on SUCC responses
+    # (C0805e.java:124: `if (isNull(list) || list.size() <= 0) { ...return; }`)
+    # and getRunningCalendarList (TrainCalendarDao:101-103) is a nullable List,
+    # so a missing/null runningCalendar yields an empty calendar in the app.
+    # Accept absent/null as an empty day tuple; only a present non-list is a
+    # genuine shape violation.
+    raw_rows = raw.get("runningCalendar")
+    if raw_rows is None:
+        rows: list[Any] = []
+    elif isinstance(raw_rows, list):
+        rows = raw_rows
+    else:
+        raise KorailProtocolError(
+            "KORAIL train calendar field runningCalendar must be a list"
+        )
     days: list[TrainCalendarDay] = []
     for row in rows:
         if not isinstance(row, Mapping):
@@ -465,7 +472,13 @@ def parse_train_calendar_response(
             )
         days.append(
             TrainCalendarDay(
-                run_date=_typed_required_string(
+                # runDt is nullable: getDateStr() (TrainCalendarDao:40-41)
+                # returns the raw field, compareTo null-guards it (:89-94), and
+                # makeAvailableDatesFactory gates use behind
+                # !TextUtils.isEmpty(dateStr) (C0805e.java:140,147) — a null-date
+                # row is silently skipped, never NPEing. So treat it as optional
+                # rather than aborting the whole calendar parse.
+                run_date=_typed_optional_string(
                     row,
                     "runDt",
                     context="train calendar",

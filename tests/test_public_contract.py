@@ -135,12 +135,14 @@ def test_seat_inventory_signatures_types_and_exports_are_public():
         "self",
         "train",
         "passenger_count",
+        "room_class_code",
     ]
     assert list(inventory_signature.parameters) == [
         "self",
         "train",
         "car_no",
         "passenger_count",
+        "room_class_code",
     ]
     assert cars_signature.parameters["passenger_count"].kind is (
         inspect.Parameter.KEYWORD_ONLY
@@ -148,17 +150,25 @@ def test_seat_inventory_signatures_types_and_exports_are_public():
     assert inventory_signature.parameters["passenger_count"].kind is (
         inspect.Parameter.KEYWORD_ONLY
     )
+    assert cars_signature.parameters["room_class_code"].kind is (
+        inspect.Parameter.KEYWORD_ONLY
+    )
+    assert inventory_signature.parameters["room_class_code"].kind is (
+        inspect.Parameter.KEYWORD_ONLY
+    )
     cars_hints = get_type_hints(KorailClient.get_seat_cars)
     inventory_hints = get_type_hints(KorailClient.get_seat_inventory)
     assert cars_hints == {
         "train": TrainSummary,
         "passenger_count": int,
+        "room_class_code": str,
         "return": models.SeatCarListResponse,
     }
     assert inventory_hints == {
         "train": TrainSummary,
         "car_no": int,
         "passenger_count": int,
+        "room_class_code": str,
         "return": models.SeatInventoryResponse,
     }
     for name in (
@@ -226,6 +236,9 @@ def test_login_and_ticket_signatures_remain_compatible():
     assert list(inspect.signature(KorailClient.get_ticket_list).parameters) == [
         "self",
         "page_no",
+        "mode",
+        "boarding_date_from",
+        "boarding_date_to",
     ]
 
 

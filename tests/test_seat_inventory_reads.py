@@ -725,9 +725,12 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
         passenger_count=3,
         sid="caller-sid-seat",
     )
-    assert set(car) == CAR_FIELDS
-    assert len(car) == 18
+    # complete_train carries no h_seat_att_cd, so the app omits the seat-att
+    # @Field entirely (RV3-05) and psrmClCd defaults to general "1".
+    assert set(car) == CAR_FIELDS - {"txtSeatAttCd"}
+    assert len(car) == 17
     assert "sidTest" not in car
+    assert "txtSeatAttCd" not in car
     assert car == {
         "Device": config.device,
         "Version": config.version,
@@ -745,12 +748,12 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
         "txtArvStnRunOrdr": "000010",
         "txtTrnGpCd": "100",
         "txtTotPsgCnt": "2",
-        "txtSeatAttCd": "015",
         "txtGdNo": "",
     }
-    assert set(seat) == SEAT_FIELDS
-    assert len(seat) == 19
+    assert set(seat) == SEAT_FIELDS - {"seatAttCd"}
+    assert len(seat) == 18
     assert "sidTest" not in seat
+    assert "seatAttCd" not in seat
     assert seat == {
         "Device": config.device,
         "Version": config.version,
@@ -763,7 +766,6 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
         "psrmClCd": "1",
         "dptRsStnCd": "0001",
         "arvRsStnCd": "0020",
-        "seatAttCd": "015",
         "dptStnRunOrdr": "000001",
         "arvStnRunOrdr": "000010",
         "totPsgCnt": "3",
@@ -815,11 +817,13 @@ def test_seat_builders_forward_train_row_seat_attribute_and_goods_no():
     assert seat["gdNo"] == "G12345"
 
 
-def test_seat_builders_fall_back_to_general_seat_and_empty_goods_no(
+def test_seat_builders_omit_seat_attribute_when_row_has_none(
     complete_train,
 ):
-    # ScheduleView search rows carry no h_seat_att_cd/txtGdNo (both null in the
-    # fixture), so an absent row value falls back to the general-seat defaults.
+    # ScheduleView search rows carry no h_seat_att_cd, so x4/b.java:19 forwards
+    # null and Retrofit omits the @Field entirely (RV3-05); the builders must
+    # OMIT txtSeatAttCd/seatAttCd rather than substituting "015". txtGdNo/gdNo
+    # stay as the empty-string the app sends for non-goods trains.
     assert complete_train.seat_attribute_code is None
     assert complete_train.goods_no is None
     config = KorailConfig()
@@ -838,8 +842,62 @@ def test_seat_builders_fall_back_to_general_seat_and_empty_goods_no(
         sid="caller-sid-seat",
     )
 
-    assert (car["txtSeatAttCd"], car["txtGdNo"]) == ("015", "")
-    assert (seat["seatAttCd"], seat["gdNo"]) == ("015", "")
+    assert "txtSeatAttCd" not in car
+    assert "seatAttCd" not in seat
+    assert car["txtGdNo"] == ""
+    assert seat["gdNo"] == ""
+
+
+def test_seat_builders_carry_selected_cabin_class_and_reject_bad_domain(
+    complete_train,
+):
+    # psrmClCd/txtPsrmClCd is the user-selected cabin class (K4/o.java
+    # GENERAL="1"/SPECIAL="2" via c5/c.java:90 -> x4/b.java:18); the builders
+    # forward it, defaulting to general "1" and rejecting anything outside the
+    # two-value domain.
+    config = KorailConfig()
+
+    general_car = build_seat_car_form(
+        config, complete_train, passenger_count=1, sid="s"
+    )
+    special_car = build_seat_car_form(
+        config,
+        complete_train,
+        passenger_count=1,
+        sid="s",
+        room_class_code="2",
+    )
+    special_seat = build_seat_inventory_form(
+        config,
+        complete_train,
+        car_no=1,
+        passenger_count=1,
+        sid="s",
+        room_class_code="2",
+    )
+
+    assert general_car["txtPsrmClCd"] == "1"
+    assert special_car["txtPsrmClCd"] == "2"
+    assert special_seat["psrmClCd"] == "2"
+
+    for bad in ("0", "3", "", "12", None):
+        with pytest.raises(KorailProtocolError, match="room_class_code"):
+            build_seat_car_form(
+                config,
+                complete_train,
+                passenger_count=1,
+                sid="s",
+                room_class_code=bad,
+            )
+        with pytest.raises(KorailProtocolError, match="room_class_code"):
+            build_seat_inventory_form(
+                config,
+                complete_train,
+                car_no=1,
+                passenger_count=1,
+                sid="s",
+                room_class_code=bad,
+            )
 
 
 @pytest.mark.parametrize(
@@ -953,15 +1011,28 @@ def test_safety_registers_only_the_two_exact_new_post_contracts():
     )
 
 
-@pytest.mark.parametrize(("path", "fields"), [(CAR_PATH, CAR_FIELDS), (SEAT_PATH, SEAT_FIELDS)])
-def test_inventory_safety_rejects_missing_and_extra_fields(path, fields):
-    missing = {name: "" for name in fields - {next(iter(fields))}}
+@pytest.mark.parametrize(
+    ("path", "fields", "optional"),
+    [
+        (CAR_PATH, CAR_FIELDS, "txtSeatAttCd"),
+        (SEAT_PATH, SEAT_FIELDS, "seatAttCd"),
+    ],
+)
+def test_inventory_safety_rejects_missing_and_extra_fields(
+    path, fields, optional
+):
+    # A required (non-optional) field missing must still be rejected.
+    missing = {name: "" for name in fields - {"Device"}}
     extra = {name: "" for name in fields}
     extra["sidTest"] = "must-not-pass"
     with pytest.raises(KorailProtocolError, match="exactly"):
         assert_read_only_request_fields(path, missing)
     with pytest.raises(KorailProtocolError, match="exactly"):
         assert_read_only_request_fields(path, extra)
+    # The seat-attribute @Field is Retrofit-null-omitted, so an otherwise-exact
+    # request WITHOUT it is contract-conformant (RV3-05).
+    without_optional = {name: "" for name in fields - {optional}}
+    assert_read_only_request_fields(path, without_optional)
 
 
 class _DuplicateFieldMapping(Mapping[str, str]):
@@ -1136,12 +1207,14 @@ def test_inventory_methods_have_exact_public_signatures_and_hints():
         "self",
         "train",
         "passenger_count",
+        "room_class_code",
     ]
     assert list(seats_signature.parameters) == [
         "self",
         "train",
         "car_no",
         "passenger_count",
+        "room_class_code",
     ]
     assert cars_signature.parameters["passenger_count"].kind is (
         inspect.Parameter.KEYWORD_ONLY
@@ -1149,19 +1222,29 @@ def test_inventory_methods_have_exact_public_signatures_and_hints():
     assert seats_signature.parameters["passenger_count"].kind is (
         inspect.Parameter.KEYWORD_ONLY
     )
+    assert cars_signature.parameters["room_class_code"].kind is (
+        inspect.Parameter.KEYWORD_ONLY
+    )
+    assert seats_signature.parameters["room_class_code"].kind is (
+        inspect.Parameter.KEYWORD_ONLY
+    )
     assert cars_signature.parameters["passenger_count"].default == 1
     assert seats_signature.parameters["passenger_count"].default == 1
+    assert cars_signature.parameters["room_class_code"].default == "1"
+    assert seats_signature.parameters["room_class_code"].default == "1"
     car_hints = get_type_hints(KorailClient.get_seat_cars)
     seat_hints = get_type_hints(KorailClient.get_seat_inventory)
     assert car_hints == {
         "train": TrainSummary,
         "passenger_count": int,
+        "room_class_code": str,
         "return": SeatCarListResponse,
     }
     assert seat_hints == {
         "train": TrainSummary,
         "car_no": int,
         "passenger_count": int,
+        "room_class_code": str,
         "return": SeatInventoryResponse,
     }
 
@@ -1257,8 +1340,9 @@ def test_inventory_methods_generate_fresh_sid_post_once_and_disable_dynapath(
         requests[1].content.decode(),
         keep_blank_values=True,
     )
-    assert set(car_form) == CAR_FIELDS
-    assert set(seat_form) == SEAT_FIELDS
+    # complete_train has no seat-attribute code, so the wire form omits it.
+    assert set(car_form) == CAR_FIELDS - {"txtSeatAttCd"}
+    assert set(seat_form) == SEAT_FIELDS - {"seatAttCd"}
     assert car_form["Sid"] == ["fresh-car-sid"]
     assert seat_form["Sid"] == ["fresh-seat-sid"]
     assert all(len(values) == 1 for values in car_form.values())

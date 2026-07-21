@@ -20,6 +20,45 @@ KORAIL_LOGIN_TYPE_MEMBER_NO = "2"
 KORAIL_LOGIN_TYPE_PHONE = "4"
 KORAIL_LOGIN_TYPE_EMAIL = "5"
 
+# S4/u.getLoginAuthenticationPostData serializes the typed
+# LoginDao.LoginResponse via q.toJson(...) and iterates that JSONObject, so the
+# continuation body carries only the declared LoginResponse fields Gson emits
+# (null fields omitted), skipping strResult/h_msg_txt. The tuple below mirrors
+# Gson's field order: the LoginResponse-declared fields (LoginDao.java, in
+# declaration order) followed by the BaseResponse h_msg_cd (@c("h_msg_cd")).
+KORAIL_LOGIN_CONTINUATION_FIELDS: tuple[str, ...] = (
+    "coupClsFlg",
+    "dlayDscpInfo",
+    "encryptCustNo",
+    "encryptHMbCrdNo",
+    "encryptMbCrdNo",
+    "intgFlg",
+    "intgMsgTxt",
+    "intgUrl",
+    "notiTpCd",
+    "strAthnFlg5",
+    "strAthnFlg7",
+    "strBtdt",
+    "strCpNo",
+    "strCustClCd",
+    "strCustDvCd",
+    "strCustLeadFlg",
+    "strCustMgSrtCd",
+    "strCustNm",
+    "strCustNo",
+    "strCustSrtCd",
+    "strEmailAdr",
+    "strHdcpFlg",
+    "strHdcpTpCd",
+    "strHdcpTpCdNm",
+    "strLognTpCd6",
+    "strMbCrdNo",
+    "strRedirectUrl",
+    "strSubtDcsClCd",
+    "strYouthAgrFlg",
+    "h_msg_cd",
+)
+
 
 def infer_login_input_flag(login_id: str) -> str:
     if "@" in login_id:
@@ -43,10 +82,15 @@ def build_login_authentication_post_data(
 ) -> str:
     member_id = login_id if login_id else cust_id or ""
     parts = [f"callLogin=Y", f"memId={member_id}", f"inputFlg={input_flag}"]
-    for key, value in response_raw.items():
-        if key in {"strResult", "h_msg_txt"}:
+    # Mirror the app's typed-DTO serialization (S4/u.java:33-43): emit only the
+    # declared LoginResponse field set, in Gson field order, dropping fields the
+    # server omitted or returned null (Gson omits nulls). Extra/raw envelope
+    # keys the DTO does not declare are not forwarded.
+    for key in KORAIL_LOGIN_CONTINUATION_FIELDS:
+        value = response_raw.get(key)
+        if value is None:
             continue
-        parts.append(f"{key}={'' if value is None else value}")
+        parts.append(f"{key}={value}")
     return "&".join(parts)
 
 
