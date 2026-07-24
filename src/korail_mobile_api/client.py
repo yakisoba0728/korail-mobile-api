@@ -10,7 +10,11 @@ from .consent import (
     require_mutation_consent,
 )
 from .crypto import generate_sid
-from .errors import KorailAuthError, KorailSessionExpiredError
+from .errors import (
+    KorailAuthError,
+    KorailProtocolError,
+    KorailSessionExpiredError,
+)
 from .mutation_models import ReservationHoldResponse
 from .mutation_parsers import parse_reservation_hold_response
 from .mutation_payloads import (
@@ -1123,7 +1127,37 @@ class KorailClient:
         except KorailSessionExpiredError:
             self.clear_session()
             raise
-        return parse_reservation_hold_response(response.raw)
+        return self._hold_from_reservation_response(response)
+
+    @staticmethod
+    def _hold_from_reservation_response(
+        response: BaseKorailResponse,
+    ) -> ReservationHoldResponse:
+        # A live reserve may create a real hold on the server; we must NEVER
+        # lose the identity needed to cancel it. Strict parsing can raise on an
+        # unrelated malformed optional field AFTER the hold exists, so when it
+        # does we fall back to a minimal hold that still carries the PNR and
+        # journey count, letting the caller auto-cancel. We only re-raise when
+        # no PNR was returned (no hold to orphan).
+        raw = response.raw if isinstance(response.raw, dict) else {}
+        try:
+            return parse_reservation_hold_response(raw)
+        except KorailProtocolError:
+            pnr = raw.get("h_pnr_no")
+            if not (isinstance(pnr, str) and pnr.strip()):
+                raise
+            base = BaseKorailResponse.from_raw(raw)
+            journey_count = raw.get("h_jrny_cnt")
+            return ReservationHoldResponse(
+                h_msg_cd=base.h_msg_cd,
+                h_msg_txt=base.h_msg_txt,
+                str_result=base.str_result,
+                raw=raw,
+                pnr_no=pnr,
+                journey_count=(
+                    journey_count if isinstance(journey_count, str) else None
+                ),
+            )
 
     def cancel_unpaid_hold(
         self,

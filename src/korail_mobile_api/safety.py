@@ -131,6 +131,39 @@ KORAIL_MUTATION_ROUTES = frozenset(
     }
 )
 
+# The consent category each mutation route belongs to. The mutation send path
+# cross-checks the caller-supplied category against the route so a consent for
+# one category (e.g. "reserve") can never be used to POST a different category's
+# route (e.g. the refund route).
+KORAIL_MUTATION_ROUTE_CATEGORIES = {
+    "/classes/com.korail.mobile.certification.TicketReservation": "reserve",
+    "/classes/com.korail.mobile.payment.ReservationPayment": "payment",
+    "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk": (
+        "cancel"
+    ),
+    "/classes/com.korail.mobile.refunds.RefundsRequest": "refund",
+}
+
+
+def assert_mutation_route_category(path: str, category: str) -> None:
+    """Ensure ``category`` is the one that owns mutation route ``path``.
+
+    Raises :class:`KorailProtocolError` when the path is not a known mutation
+    route or when the caller's category does not match the route's category, so
+    a per-category consent cannot be redirected to a different category's route.
+    """
+    parsed_path = urlsplit(path).path
+    expected = KORAIL_MUTATION_ROUTE_CATEGORIES.get(parsed_path)
+    if expected is None:
+        raise KorailProtocolError(
+            f"KORAIL mutation route is not allowed: POST {parsed_path}"
+        )
+    if category != expected:
+        raise KorailProtocolError(
+            f"KORAIL mutation category {category!r} does not match route "
+            f"{parsed_path} (expected {expected!r})"
+        )
+
 KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
 
 KORAIL_EXACT_REQUEST_FIELDS = {

@@ -23,6 +23,7 @@ from .models import BaseKorailResponse
 from .safety import (
     assert_korail_origin,
     assert_mutation_route,
+    assert_mutation_route_category,
     assert_read_only_request_fields,
     assert_read_only_route,
 )
@@ -236,6 +237,7 @@ class KorailHttpClient:
             )
         assert_korail_origin(str(self._client.base_url))
         assert_mutation_route("POST", path)
+        assert_mutation_route_category(path, category)
         if not isinstance(data, Mapping):
             raise KorailProtocolError(
                 "KORAIL mutation form data must be a mapping"

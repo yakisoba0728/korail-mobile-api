@@ -20,7 +20,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_NAME = "korail_mobile_api"
 PROJECT_NAME = "korail-mobile-api"
-EXPECTED_KEYWORDS = ['korail','read-only','mobile-api']
+EXPECTED_KEYWORDS = ['korail','read-only-by-default','mobile-api']
 LIVE_ENV = "KORAIL_MOBILE_API_LIVE"
 CLIENT_NAME = "KorailClient"
 FAILURE_MESSAGE = "distribution verification failed\n"

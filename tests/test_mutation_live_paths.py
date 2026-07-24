@@ -232,6 +232,56 @@ def test_post_mutation_form_refuses_none_and_unknown_category():
     assert recorder.requests == []
 
 
+def test_reserve_returns_cancelable_hold_even_if_optional_field_malformed():
+    # The server created a real hold (PNR present) but an unrelated optional
+    # field is malformed, so strict parsing would raise. reserve must still
+    # return a hold carrying the PNR + journey count so it can be auto-cancelled.
+    malformed = {
+        "strResult": "SUCC",
+        "h_msg_cd": "IRR000000",
+        "h_msg_txt": "success",
+        "h_pnr_no": SYNTHETIC_PNR,
+        "h_jrny_cnt": "1",
+        "h_tot_prc": 8400,  # int, not a string -> strict parser raises
+    }
+    client, recorder = _client_with({RESERVE_ROUTE: malformed})
+    hold = client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
+    assert isinstance(hold, ReservationHoldResponse)
+    assert hold.pnr_no == SYNTHETIC_PNR
+    assert hold.journey_count == "1"
+    assert hold.str_result == "SUCC"
+    # And that recovered hold is acceptable to cancel_unpaid_hold.
+    client2, recorder2 = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
+    result = client2.cancel_unpaid_hold(hold, consent=_live(allow_cancel=True))
+    assert result.str_result == "SUCC"
+
+
+def test_reserve_reraises_when_no_pnr_returned():
+    # A malformed response with NO PNR means no hold to orphan: re-raise.
+    no_pnr = {
+        "strResult": "SUCC",
+        "h_msg_cd": "IRR000000",
+        "h_tot_prc": 8400,  # triggers strict-parse failure; no h_pnr_no present
+    }
+    client, _ = _client_with({RESERVE_ROUTE: no_pnr})
+    with pytest.raises(KorailProtocolError):
+        client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
+
+
+def test_post_mutation_form_rejects_category_route_mismatch():
+    # A consent/category for one route cannot be used to POST another route.
+    client, recorder = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
+    form = build_single_adult_reservation_form(KorailConfig(), _eligible_train())
+    with pytest.raises(KorailProtocolError):
+        client.http.post_mutation_form(
+            CANCEL_ROUTE,  # cancel route ...
+            form,
+            consent=_live(allow_reserve=True),
+            category="reserve",  # ... but a reserve category
+        )
+    assert recorder.requests == []
+
+
 def test_read_only_post_form_still_refuses_mutation_routes():
     # The enduring guarantee: the read-only send path rejects mutation routes,
     # so a mutation can only ever leave through post_mutation_form.
