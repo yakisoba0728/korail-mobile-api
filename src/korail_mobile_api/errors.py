@@ -79,3 +79,13 @@ class KorailAppError(KorailApiError):
         super().__init__(
             f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
         )
+
+
+class MutationNotAllowedError(KorailApiError):
+    """A state-changing request was attempted without matching consent.
+
+    Raised by ``require_mutation_consent`` when no ``MutationConsent`` is
+    supplied, when the supplied object is not a ``MutationConsent``, or when
+    the matching per-category ``allow_<category>`` opt-in is False. It fires
+    before any request is built or sent, keeping mutations off by default.
+    """

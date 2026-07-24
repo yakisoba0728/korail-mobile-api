@@ -122,6 +122,18 @@ SENSITIVE_KEYS = frozenset(
         "txtVrRsNo",
         "txtVrRsvSqNo",
         "h_orgtk_sale_dt",
+        # Payment card fields (PaymentMethod map). A mutation preview must
+        # never expose card data even though these keys are not yet sent by
+        # any callable method. CARD_RE only masks bare PANs; these mask the
+        # encrypted/keyed/expiry/CVC/installment variants CARD_RE misses.
+        "hidStlCrCrdNo1",
+        "hidVanPwd1",
+        "hidCrdVlidTrm1",
+        "hidAthnVal1",
+        "hidIsmtMnthNum1",
+        "hidCrdInpWayCd1",
+        # PNR references carried on mutation forms.
+        "txtPnrNo",
     }
 )
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
@@ -208,4 +220,20 @@ def redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
     return {
         key: redact_value(value, key=str(key))
         for key, value in data.items()
+    }
+
+
+def redact_payload(payload: Mapping[str, str]) -> dict[str, str]:
+    """Redact a mutation form/payload mapping for a ``MutationPreview``.
+
+    Every sensitive key (card fields, PII, PNR) becomes ``[REDACTED]``; every
+    remaining value is card-masked via :func:`redact_text` so a raw PAN can
+    never surface in a preview even when it appears under an unexpected key.
+    The result is a plain ``dict[str, str]`` safe to log or display.
+    """
+    return {
+        str(key): "[REDACTED]"
+        if str(key).casefold() in SENSITIVE_KEYS
+        else redact_text(str(value))
+        for key, value in payload.items()
     }

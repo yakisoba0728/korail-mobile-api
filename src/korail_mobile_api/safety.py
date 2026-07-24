@@ -108,6 +108,29 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
     }
 )
 
+# Documentation-level tiering of the state-changing routes. These are the four
+# core mutation endpoints (one per category). They are deliberately kept OUT of
+# KORAIL_READ_ONLY_ROUTES so the read-only allowlist and its guarantee remain
+# fully intact: no code path treats a route in this set as callable. This is a
+# classification only — the library still has no method that can send any of
+# these requests. Each tuple is (HTTP method, exact relative path); the trailing
+# comment names the consent category the future mutation method will gate on.
+KORAIL_MUTATION_ROUTES = frozenset(
+    {
+        # reserve
+        ("POST", "/classes/com.korail.mobile.certification.TicketReservation"),
+        # payment
+        ("POST", "/classes/com.korail.mobile.payment.ReservationPayment"),
+        # cancel
+        (
+            "POST",
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk",
+        ),
+        # refund
+        ("POST", "/classes/com.korail.mobile.refunds.RefundsRequest"),
+    }
+)
+
 KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
 
 KORAIL_EXACT_REQUEST_FIELDS = {

@@ -1,5 +1,10 @@
 from .client import KorailClient
 from .config import KorailConfig
+from .consent import (
+    MutationConsent,
+    MutationPreview,
+    require_mutation_consent,
+)
 from .constants import (
     DYNAPATH_ALLOWLIST_PATHS,
     DYNAPATH_HEADER_NAME,
@@ -38,6 +43,7 @@ from .errors import (
     KorailProtocolError,
     KorailSessionExpiredError,
     KorailTransportError,
+    MutationNotAllowedError,
 )
 from .http import parse_base_response
 from .limousine_models import (
@@ -91,7 +97,7 @@ from .mutation_parsers import (
     parse_reservation_hold_response,
     parse_reservation_payment_response,
 )
-from .redaction import redact_mapping
+from .redaction import redact_mapping, redact_payload
 from .read_models import (
     CartItem,
     CartListResponse,
@@ -178,7 +184,7 @@ from .read_payloads import (
     TicketDuplicationCheckRequest,
 )
 from .read_payloads import PassScheduleRequest
-from .safety import EXCLUDED_API_DOMAINS
+from .safety import EXCLUDED_API_DOMAINS, KORAIL_MUTATION_ROUTES
 
 __all__ = [
     "AppDataResponse",
@@ -235,6 +241,7 @@ __all__ = [
     "KORAIL_DYNAPATH_OS_TYPE",
     "KORAIL_DYNAPATH_SIGNING_CERT_SHA256",
     "KORAIL_DYNAPATH_SDK_VERSION",
+    "KORAIL_MUTATION_ROUTES",
     "KorailApiError",
     "KorailAppError",
     "KorailAuthContinuationRequired",
@@ -266,6 +273,9 @@ __all__ = [
     "MergeSeatsInquiryResponse",
     "MultiChildDiscountTarget",
     "MultiChildDiscountTargetResponse",
+    "MutationConsent",
+    "MutationNotAllowedError",
+    "MutationPreview",
     "NoticeResponse",
     "OriginalTicketReference",
     "PhysicalSeat",
@@ -322,6 +332,8 @@ __all__ = [
     "parse_reservation_hold_response",
     "parse_reservation_payment_response",
     "redact_mapping",
+    "redact_payload",
+    "require_mutation_consent",
     "StationDataResponse",
     "StationInfoResponse",
     "TrainCalendarDay",
