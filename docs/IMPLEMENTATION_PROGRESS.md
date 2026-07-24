@@ -10,8 +10,9 @@ Last updated: 2026-07-15 KST
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 50 exact login/read routes and 53 public
-  methods. Current service inventory is 32 successful, 10 failed, and 123
+- The current package boundary is 50 exact login/read routes and 54 public
+  methods (53 login/read plus the consent-gated dry-run `reserve`, which sends
+  nothing and adds no route). Current service inventory is 32 successful, 10 failed, and 123
   unexecuted entries out of 165.
 - The cache-read expansion implementation, offline tests, package build, and
   isolated import are complete, including bounded live verification.
