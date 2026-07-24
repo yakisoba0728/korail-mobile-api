@@ -84,6 +84,7 @@ def test_client_public_method_set_is_stable():
         "get_uuid",
         "login",
         "logout",
+        "reserve",
         "search_trains",
     }
 

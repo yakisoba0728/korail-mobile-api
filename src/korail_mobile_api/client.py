@@ -4,8 +4,18 @@ from typing import TypeVar
 import httpx
 
 from .config import KorailConfig
+from .consent import (
+    MutationConsent,
+    MutationPreview,
+    require_mutation_consent,
+)
 from .crypto import generate_sid
-from .errors import KorailAuthError, KorailSessionExpiredError
+from .errors import (
+    KorailAuthError,
+    KorailSessionExpiredError,
+    MutationNotAllowedError,
+)
+from .mutation_payloads import build_single_adult_reservation_form
 from .http import KorailHttpClient
 from .limousine_models import (
     LimousineScheduleQuery,
@@ -1070,4 +1080,41 @@ class KorailClient:
                     boarding_date_to=boarding_date_to,
                 ),
             )
+        )
+
+    def reserve(
+        self,
+        train: TrainSummary,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview:
+        """Build a single-adult reservation request under explicit consent.
+
+        This is gated by ``require_mutation_consent(consent, "reserve")``: a
+        default :class:`MutationConsent` (``allow_reserve=False``) or ``None``
+        is denied with :class:`MutationNotAllowedError` before anything is
+        built. With the default ``dry_run=True`` it validates ``train`` and
+        returns a :class:`MutationPreview` describing the exact form that WOULD
+        be POSTed to the reservation route, without sending it — the method
+        never touches the network. ``dry_run=False`` is refused: live
+        reservation sending is not wired, so ``reserve`` can never transmit a
+        state-changing request. Requires an authenticated session, mirroring
+        the real reservation precondition.
+        """
+        require_mutation_consent(consent, "reserve")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL reservation requires an authenticated session"
+            )
+        form = build_single_adult_reservation_form(self.config, train)
+        if not consent.dry_run:
+            raise MutationNotAllowedError(
+                "live reservation sending is not enabled; only dry_run "
+                "previews are supported"
+            )
+        return MutationPreview(
+            category="reserve",
+            method="POST",
+            route="/classes/com.korail.mobile.certification.TicketReservation",
+            payload=form,
         )

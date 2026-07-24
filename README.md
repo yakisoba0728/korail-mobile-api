@@ -5,7 +5,13 @@ evidenced KORAIL mobile API surface. It also retains the static
 reverse-engineering report for `korail.apk`, Android package
 `com.korail.talk` version `6.5.0`, as the package's historical evidence map.
 
-The reviewed package boundary contains 50 routes and 53 public methods. The
+The reviewed package boundary contains 50 routes and 54 public methods. Fifty-three
+are the audited login/read methods, which transmit only read-only requests. The
+54th, `reserve`, is a consent-gated dry-run method: it validates a train and
+returns a redacted `MutationPreview` of the reservation form that *would* be
+posted, but sends nothing and adds no route to the allowlist — the client still
+transmits only login/read requests, and the HTTP layer continues to refuse every
+mutation route. The
 pre-P0-evidence reviewed offline gate was `1246 passed, 1 deselected`; after
 adding the documentation contract coverage in this increment, the fresh
 non-live gate is `1247 passed, 1 deselected`. In both gates, the deselected test
@@ -325,7 +331,7 @@ nested response models. The implementation used no live request, credential
 access, secure raw capture, retry, fallback, or adjacent mutation. At
 implementation completion, the pre-R149 inventory was 31 successful, 10
 failed, and 124 unexecuted out of 165. The boundary is 50 exact login/read
-routes and 53 public methods; the DynaPath allowlist remains six paths.
+routes and 54 public methods; the DynaPath allowlist remains six paths.
 
 The ticket-reference implementation itself used no live I/O and added no
 mutation capability.

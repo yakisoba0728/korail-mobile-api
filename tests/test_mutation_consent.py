@@ -10,20 +10,25 @@ from __future__ import annotations
 
 import dataclasses
 
+import httpx
 import pytest
 
-import korail_mobile_api
 from korail_mobile_api import (
+    KorailClient,
+    KorailProtocolError,
+    KorailSession,
     MutationConsent,
     MutationNotAllowedError,
     MutationPreview,
+    TrainSummary,
     require_mutation_consent,
 )
-from korail_mobile_api.errors import KorailApiError
+from korail_mobile_api.errors import KorailApiError, KorailAuthError
 from korail_mobile_api.redaction import redact_payload
 from korail_mobile_api.safety import (
     KORAIL_MUTATION_ROUTES,
     KORAIL_READ_ONLY_ROUTES,
+    assert_read_only_route,
 )
 
 
@@ -32,6 +37,44 @@ CATEGORIES = ("reserve", "payment", "cancel", "refund")
 # Obviously-fake, non-chargeable placeholders. No real card / credential.
 FAKE_CARD_NUMBER = "0000000000000000"
 FAKE_PNR = "SYNTHETIC_PNR_REFERENCE"
+
+
+def _eligible_train() -> TrainSummary:
+    # A general seat evidenced as available (general_reservation_code == "11").
+    return TrainSummary(
+        train_no="00209",
+        train_group_code="100",
+        departure_station_code="0001",
+        arrival_station_code="0501",
+        departure_date="20990101",
+        departure_time="100700",
+        arrival_time="102400",
+        run_date="20990101",
+        train_class_code="00",
+        departure_run_order="1",
+        arrival_run_order="2",
+        general_reservation_code="11",
+        departure_construction_order="1",
+        arrival_construction_order="2",
+        seat_attribute_code="015",
+    )
+
+
+def _no_network_client() -> KorailClient:
+    # Any network use is a hard failure: reserve() dry-run must never send.
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError(
+            f"reserve() must not send a request (saw {request.method} "
+            f"{request.url.path})"
+        )
+
+    return KorailClient(transport=httpx.MockTransport(handler))
+
+
+def _logged_in_no_network_client() -> KorailClient:
+    client = _no_network_client()
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    return client
 
 
 def _allow(category: str) -> MutationConsent:
@@ -184,13 +227,66 @@ def test_mutation_routes_are_classified_but_not_read_only():
         assert route not in KORAIL_READ_ONLY_ROUTES
 
 
-def test_no_callable_client_method_can_send_a_mutation():
-    # The safety foundation must not add any state-changing client method.
-    method_names = {
-        name for name in dir(korail_mobile_api.KorailClient)
-        if not name.startswith("_")
-    }
-    for verb in ("reserve", "pay", "payment", "cancel", "refund"):
-        assert not any(verb in name for name in method_names), (
-            f"unexpected mutation-shaped client method containing {verb!r}"
+# --- reserve(): consent-gated, dry-run, never sends -------------------------
+
+
+def test_reserve_denied_without_matching_consent_and_sends_nothing():
+    client = _logged_in_no_network_client()
+    train = _eligible_train()
+    # Default consent opts into nothing; None is also denied. Neither sends.
+    with pytest.raises(MutationNotAllowedError):
+        client.reserve(train, consent=MutationConsent())
+    with pytest.raises(MutationNotAllowedError):
+        client.reserve(train, consent=None)  # type: ignore[arg-type]
+
+
+def test_reserve_dry_run_returns_preview_without_sending():
+    client = _logged_in_no_network_client()
+    preview = client.reserve(
+        _eligible_train(), consent=MutationConsent(allow_reserve=True)
+    )
+    assert isinstance(preview, MutationPreview)
+    assert preview.category == "reserve"
+    assert preview.method == "POST"
+    assert preview.route.endswith("certification.TicketReservation")
+    assert preview.note == "dry-run: not sent"
+    # The preview carries the exact form that WOULD be posted (built, not sent).
+    assert preview.payload["txtMenuId"] == "11"
+    assert preview.payload["txtJobId"] == "1101"
+    assert preview.payload["txtTotPsgCnt"] == "1"
+
+
+def test_reserve_refuses_live_send_when_dry_run_false():
+    client = _logged_in_no_network_client()
+    consent = MutationConsent(allow_reserve=True, dry_run=False)
+    # Consent is present, but live sending is not wired: refuse, send nothing.
+    with pytest.raises(MutationNotAllowedError):
+        client.reserve(_eligible_train(), consent=consent)
+
+
+def test_reserve_requires_authenticated_session():
+    client = _no_network_client()  # no session established
+    with pytest.raises(KorailAuthError):
+        client.reserve(
+            _eligible_train(), consent=MutationConsent(allow_reserve=True)
         )
+
+
+def test_reserve_rejects_a_train_without_an_available_general_seat():
+    client = _logged_in_no_network_client()
+    unavailable = dataclasses.replace(
+        _eligible_train(), general_reservation_code="00"
+    )
+    with pytest.raises(KorailProtocolError):
+        client.reserve(
+            unavailable, consent=MutationConsent(allow_reserve=True)
+        )
+
+
+def test_http_layer_still_refuses_every_mutation_route_post():
+    # The enduring network guarantee: no code path can POST a mutation route,
+    # because it is not in the read-only allowlist. This holds regardless of
+    # the (dry-run-only) reserve() method above.
+    for method, path in KORAIL_MUTATION_ROUTES:
+        with pytest.raises(KorailProtocolError):
+            assert_read_only_route(method, path)
