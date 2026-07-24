@@ -670,6 +670,28 @@ def assert_read_only_route(method: str, path: str) -> None:
         )
 
 
+def assert_mutation_route(method: str, path: str) -> None:
+    """Allow only the four evidenced state-changing routes.
+
+    This is the mutation counterpart to :func:`assert_read_only_route`, used
+    solely by the dedicated mutation send path. A route must be an exact member
+    of :data:`KORAIL_MUTATION_ROUTES`; anything else — including a read-only
+    route — is rejected, so the mutation send path can never be repurposed to
+    reach an arbitrary or read endpoint.
+    """
+    parsed = urlsplit(path)
+    if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
+        raise KorailProtocolError(
+            "KORAIL request target is not a registered relative path: "
+            f"{parsed.path}"
+        )
+    route = (method.upper(), parsed.path)
+    if route not in KORAIL_MUTATION_ROUTES:
+        raise KorailProtocolError(
+            f"KORAIL mutation route is not allowed: {route[0]} {route[1]}"
+        )
+
+
 def assert_read_only_request_fields(
     path: str,
     values: Mapping[str, Any] | Sequence[tuple[str, Any]],

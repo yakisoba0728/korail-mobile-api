@@ -32,6 +32,7 @@ def test_client_public_method_set_is_stable():
         if not name.startswith("_")
     }
     assert methods == {
+        "cancel_unpaid_hold",
         "clear_session",
         "close",
         "check_ticket_duplication",

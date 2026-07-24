@@ -10,12 +10,13 @@ from .consent import (
     require_mutation_consent,
 )
 from .crypto import generate_sid
-from .errors import (
-    KorailAuthError,
-    KorailSessionExpiredError,
-    MutationNotAllowedError,
+from .errors import KorailAuthError, KorailSessionExpiredError
+from .mutation_models import ReservationHoldResponse
+from .mutation_parsers import parse_reservation_hold_response
+from .mutation_payloads import (
+    build_single_adult_reservation_form,
+    build_unpaid_reservation_cancel_form,
 )
-from .mutation_payloads import build_single_adult_reservation_form
 from .http import KorailHttpClient
 from .limousine_models import (
     LimousineScheduleQuery,
@@ -1087,34 +1088,80 @@ class KorailClient:
         train: TrainSummary,
         *,
         consent: MutationConsent,
-    ) -> MutationPreview:
-        """Build a single-adult reservation request under explicit consent.
+    ) -> MutationPreview | ReservationHoldResponse:
+        """Hold a single-adult reservation under explicit consent.
 
-        This is gated by ``require_mutation_consent(consent, "reserve")``: a
-        default :class:`MutationConsent` (``allow_reserve=False``) or ``None``
-        is denied with :class:`MutationNotAllowedError` before anything is
-        built. With the default ``dry_run=True`` it validates ``train`` and
-        returns a :class:`MutationPreview` describing the exact form that WOULD
-        be POSTed to the reservation route, without sending it — the method
-        never touches the network. ``dry_run=False`` is refused: live
-        reservation sending is not wired, so ``reserve`` can never transmit a
-        state-changing request. Requires an authenticated session, mirroring
-        the real reservation precondition.
+        Gated by ``require_mutation_consent(consent, "reserve")``: a default
+        :class:`MutationConsent` (``allow_reserve=False``) or ``None`` is denied
+        with :class:`MutationNotAllowedError` before anything is built. Requires
+        an authenticated session. With the default ``dry_run=True`` it validates
+        ``train`` and returns a :class:`MutationPreview` of the exact form that
+        WOULD be POSTed, without touching the network. With ``dry_run=False`` it
+        performs the live hold via the double-gated mutation send path and
+        returns the parsed :class:`ReservationHoldResponse` (whose ``pnr_no``
+        feeds :meth:`cancel_unpaid_hold`). A live hold is an unpaid reservation
+        that the caller is responsible for cancelling or paying.
         """
         require_mutation_consent(consent, "reserve")
         if self.session.current is None:
             raise KorailAuthError(
                 "KORAIL reservation requires an authenticated session"
             )
+        route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_single_adult_reservation_form(self.config, train)
-        if not consent.dry_run:
-            raise MutationNotAllowedError(
-                "live reservation sending is not enabled; only dry_run "
-                "previews are supported"
+        if consent.dry_run:
+            return MutationPreview(
+                category="reserve",
+                method="POST",
+                route=route,
+                payload=form,
             )
-        return MutationPreview(
-            category="reserve",
-            method="POST",
-            route="/classes/com.korail.mobile.certification.TicketReservation",
-            payload=form,
+        try:
+            response = self.http.post_mutation_form(
+                route, form, consent=consent, category="reserve"
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+        return parse_reservation_hold_response(response.raw)
+
+    def cancel_unpaid_hold(
+        self,
+        hold: ReservationHoldResponse,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | BaseKorailResponse:
+        """Cancel a fresh, unpaid single-journey reservation hold.
+
+        Gated by ``require_mutation_consent(consent, "cancel")`` and an
+        authenticated session. ``build_unpaid_reservation_cancel_form`` requires
+        ``hold`` to be one successful (``SUCC``) single-journey hold with a PNR,
+        so this only ever releases a hold produced by :meth:`reserve`. With
+        ``dry_run=True`` it returns a :class:`MutationPreview` (redacting the
+        PNR); with ``dry_run=False`` it POSTs the cancellation via the
+        double-gated mutation send path and returns the parsed envelope. This is
+        the auto-cancel used to immediately release a live test hold.
+        """
+        require_mutation_consent(consent, "cancel")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL cancellation requires an authenticated session"
+            )
+        route = (
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
         )
+        form = build_unpaid_reservation_cancel_form(self.config, hold)
+        if consent.dry_run:
+            return MutationPreview(
+                category="cancel",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            return self.http.post_mutation_form(
+                route, form, consent=consent, category="cancel"
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise

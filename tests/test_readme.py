@@ -78,7 +78,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "| 실패 | 10 |" in status
     assert "| 미실행 | 123 |" in status
     assert "| 전체 | 165 |" in status
-    assert "Package coverage: 50 exact login/read routes and 54 public methods" in status
+    assert "Package coverage: 50 exact login/read routes and 55 public methods" in status
     assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
     assert "and 128 unexecuted" in status
     assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
@@ -199,7 +199,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
 
     progress = PROGRESS.read_text(encoding="utf-8")
     assert "50 exact login/read routes" in progress
-    assert "54 public methods" in progress
+    assert "55 public methods" in progress
     assert "- Live-successful inventory entries: 32" in progress
     assert "75" in progress
     assert "IRG000000" in progress
@@ -358,7 +358,7 @@ def test_readme_documents_bounded_live_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "50 routes and 54 public methods" in text
+    assert "50 routes and 55 public methods" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
     assert (

@@ -10,9 +10,11 @@ Last updated: 2026-07-15 KST
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 50 exact login/read routes and 54 public
-  methods (53 login/read plus the consent-gated dry-run `reserve`, which sends
-  nothing and adds no route). Current service inventory is 32 successful, 10 failed, and 123
+- The current package boundary is 50 exact login/read routes and 55 public
+  methods (53 login/read plus the consent-gated mutation methods `reserve` and
+  `cancel_unpaid_hold`, which return a redacted preview by default and send a
+  live state change only with a `dry_run=False` matching-category consent via
+  the double-gated `post_mutation_form`). Current service inventory is 32 successful, 10 failed, and 123
   unexecuted entries out of 165.
 - The cache-read expansion implementation, offline tests, package build, and
   isolated import are complete, including bounded live verification.
@@ -88,7 +90,7 @@ Last updated: 2026-07-15 KST
   fields. The server session rule remains unverified, so a conservative
   client-side login gate remains until a bounded after-login validation.
 - The transport now allows 50 exact login/read routes and the client exposes
-  54 public methods. No new route was added to the six-path DynaPath allowlist.
+  55 public methods. No new route was added to the six-path DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -161,7 +163,7 @@ was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
 of 165; current inventory is 32 successful, 10 failed, and 123 unexecuted. The
-current package boundary is 50 exact routes and 54 public methods.
+current package boundary is 50 exact routes and 55 public methods.
 
 ## Ticket-reference static read tranche
 
@@ -180,7 +182,7 @@ implementation used only static APK evidence plus synthetic/mock tests: no
 live I/O, credential access, secure raw capture, retry, fallback, adjacent
 mutation, or DynaPath expansion occurred. At implementation completion, the
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted out of
-165; the boundary is 50 exact routes and 54 public methods, with six DynaPath
+165; the boundary is 50 exact routes and 55 public methods, with six DynaPath
 allowlist paths.
 
 The ticket-reference implementation itself used no live I/O and added no
@@ -400,7 +402,7 @@ tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/superpowers/specs/`.
 
 The current implementation evidence establishes 50 routes at the exact
-login/read transport boundary and 54 public methods on `KorailClient`, with no
+login/read transport boundary and 55 public methods on `KorailClient`, with no
 callable reservation, payment, cancellation, refund, check-in, membership, or
 other mutation route. The current service inventory is 32 successful, 10 failed,
 and 123 unexecuted entries out of 165; the historical pre-revalidation inventory

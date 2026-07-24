@@ -256,12 +256,25 @@ def test_reserve_dry_run_returns_preview_without_sending():
     assert preview.payload["txtTotPsgCnt"] == "1"
 
 
-def test_reserve_refuses_live_send_when_dry_run_false():
-    client = _logged_in_no_network_client()
-    consent = MutationConsent(allow_reserve=True, dry_run=False)
-    # Consent is present, but live sending is not wired: refuse, send nothing.
+def test_post_mutation_form_refuses_a_dry_run_consent():
+    # The send boundary itself refuses to transmit a dry-run consent, so a
+    # preview can never reach the network even via the low-level send path.
+    from korail_mobile_api import KorailConfig
+    from korail_mobile_api.mutation_payloads import (
+        build_single_adult_reservation_form,
+    )
+
+    client = _no_network_client()
+    route = "/classes/com.korail.mobile.certification.TicketReservation"
+    form = build_single_adult_reservation_form(KorailConfig(), _eligible_train())
+    # dry_run defaults to True; the guard fires before any network use.
     with pytest.raises(MutationNotAllowedError):
-        client.reserve(_eligible_train(), consent=consent)
+        client.http.post_mutation_form(
+            route,
+            form,
+            consent=MutationConsent(allow_reserve=True),
+            category="reserve",
+        )
 
 
 def test_reserve_requires_authenticated_session():

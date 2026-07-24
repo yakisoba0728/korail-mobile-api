@@ -1,17 +1,24 @@
 # KORAIL Mobile API
 
-This repository provides an installable read-only Python package for the
-evidenced KORAIL mobile API surface. It also retains the static
-reverse-engineering report for `korail.apk`, Android package
-`com.korail.talk` version `6.5.0`, as the package's historical evidence map.
+This repository provides an installable Python package for the evidenced KORAIL
+mobile API surface. It is read-only by default: unless a caller passes an
+explicit non-dry-run `MutationConsent`, the client transmits only login/read
+requests. It also retains the static reverse-engineering report for `korail.apk`,
+Android package `com.korail.talk` version `6.5.0`, as the package's historical
+evidence map.
 
-The reviewed package boundary contains 50 routes and 54 public methods. Fifty-three
-are the audited login/read methods, which transmit only read-only requests. The
-54th, `reserve`, is a consent-gated dry-run method: it validates a train and
-returns a redacted `MutationPreview` of the reservation form that *would* be
-posted, but sends nothing and adds no route to the allowlist — the client still
-transmits only login/read requests, and the HTTP layer continues to refuse every
-mutation route. The
+The reviewed package boundary contains 50 routes and 55 public methods. All 50
+routes are login/read routes; the four mutation routes are tracked separately and
+are never added to the read-only allowlist. Fifty-three of the methods are the
+audited login/read methods, which transmit only read-only requests. The other two, `reserve` and `cancel_unpaid_hold`, are the
+consent-gated mutation methods. Each is denied unless the caller supplies a
+`MutationConsent` that opts into its category; with the default `dry_run=True`
+each merely validates its inputs and returns a redacted `MutationPreview` of the
+form that *would* be posted, sending nothing. Only a `dry_run=False` consent
+performs the live state change, and only through the dedicated double-gated send
+path (`post_mutation_form`, which enforces `assert_mutation_route` plus the
+consent check). The read-only send path continues to refuse every mutation route,
+so a state-changing request can leave the process by no other route. The
 pre-P0-evidence reviewed offline gate was `1246 passed, 1 deselected`; after
 adding the documentation contract coverage in this increment, the fresh
 non-live gate is `1247 passed, 1 deselected`. In both gates, the deselected test
@@ -120,7 +127,9 @@ The project does not provide:
 
 - Authentication bypass
 - NetFunnel or DynaPath bypass
-- Reservation, payment, cancellation, refund, check-in, or member mutation APIs
+- Payment, refund, check-in, or member mutation APIs (reservation hold and
+  unpaid-hold cancellation are provided only as consent-gated, dry-run-by-default
+  methods; see the mutation section below)
 - General-purpose runtime WebView automation
 
 Server response values, feature flags, redirect behavior, and server-side
@@ -207,19 +216,23 @@ def get_owned_product_detail(
     )
 ```
 
-The reservation, payment, and mutation routes remain excluded. The package
-does not create, change, cancel, pay for, refund, or check in a reservation as
-part of any read.
+The reservation, payment, and mutation routes remain excluded from the
+read-only allowlist, so no read creates, changes, cancels, pays for, refunds, or
+checks in a reservation. State changes occur only through the explicit
+consent-gated mutation methods (`reserve`, `cancel_unpaid_hold`), never as a
+side effect of a read.
 
-The package does expose pure parsers for already-obtained reservation-hold and
+The package also exposes pure parsers for already-obtained reservation-hold and
 reservation-payment JSON: `parse_reservation_hold_response()` and
 `parse_reservation_payment_response()`. They return frozen, redaction-safe
-models and perform no network request. Internal evidence-only form builders are
-not client methods or transport routes. A bounded authorized check created one
-unpaid direct reservation and immediately completed both cancellation steps;
-reservation history was empty before and after. No payment endpoint was called,
-and no PNR, credential, card value, token, or raw response was printed or
-persisted.
+models and perform no network request. The reservation and unpaid-hold-cancel
+form builders are now wired to `reserve` and `cancel_unpaid_hold`, which send
+only via the double-gated mutation path with a `dry_run=False` consent; the
+payment and refund form builders remain evidence-only with no client method. A
+bounded authorized check created one unpaid direct reservation and immediately
+completed both cancellation steps; reservation history was empty before and
+after. No payment endpoint was called, and no PNR, credential, card value,
+token, or raw response was printed or persisted.
 
 ### Fixed and account-shaped reads
 
@@ -331,7 +344,7 @@ nested response models. The implementation used no live request, credential
 access, secure raw capture, retry, fallback, or adjacent mutation. At
 implementation completion, the pre-R149 inventory was 31 successful, 10
 failed, and 124 unexecuted out of 165. The boundary is 50 exact login/read
-routes and 54 public methods; the DynaPath allowlist remains six paths.
+routes and 55 public methods; the DynaPath allowlist remains six paths.
 
 The ticket-reference implementation itself used no live I/O and added no
 mutation capability.
@@ -653,4 +666,4 @@ still provide a custom `DynapathConfig.token_provider`; the package contains no
 separate probe generator and does not retain request history. Login follows the
 app sequence and treats only `IRZ000001` or `S200` as final success.
 
-Reservation, payment, refund, check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
+Reservation hold and unpaid-hold cancellation are implemented as consent-gated, dry-run-by-default methods (`reserve`, `cancel_unpaid_hold`). Payment, refund, check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.

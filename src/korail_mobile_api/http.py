@@ -16,10 +16,13 @@ from .errors import (
     KorailProtocolError,
     KorailSessionExpiredError,
     KorailTransportError,
+    MutationNotAllowedError,
 )
+from .consent import MutationConsent, require_mutation_consent
 from .models import BaseKorailResponse
 from .safety import (
     assert_korail_origin,
+    assert_mutation_route,
     assert_read_only_request_fields,
     assert_read_only_route,
 )
@@ -202,6 +205,58 @@ class KorailHttpClient:
                     raise_on_fail=raise_on_fail,
                 )
             return BaseKorailResponse(raw=payload)
+        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+
+    def post_mutation_form(
+        self,
+        path: str,
+        data: Mapping[str, Any],
+        *,
+        consent: MutationConsent,
+        category: str,
+        raise_on_fail: bool = True,
+    ) -> BaseKorailResponse:
+        """Send a state-changing form to an evidenced mutation route.
+
+        This is the ONLY method that transmits to a mutation route, and it is
+        double-gated: ``require_mutation_consent`` must pass for ``category``,
+        ``consent.dry_run`` must be ``False`` (a dry-run preview never reaches
+        the network), and ``assert_mutation_route`` restricts the target to
+        :data:`~korail_mobile_api.safety.KORAIL_MUTATION_ROUTES`. The
+        read-only path (:meth:`post_form`) still refuses these routes, so a
+        mutation can only leave the process through this gate. ``data`` is sent
+        verbatim (the reservation/cancel builders already include the common
+        Device/Version/Key fields); no read-only field allowlist applies.
+        """
+        require_mutation_consent(consent, category)
+        if consent.dry_run:
+            raise MutationNotAllowedError(
+                "post_mutation_form requires consent.dry_run=False; a dry-run "
+                "preview must never be transmitted"
+            )
+        assert_korail_origin(str(self._client.base_url))
+        assert_mutation_route("POST", path)
+        if not isinstance(data, Mapping):
+            raise KorailProtocolError(
+                "KORAIL mutation form data must be a mapping"
+            )
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+        }
+        headers.update(self._dynapath_headers("POST", path))
+        try:
+            response = self._client.post(path, data=dict(data), headers=headers)
+        except httpx.HTTPError as exc:
+            raise KorailTransportError(
+                f"KORAIL transport failed for POST {path}"
+            ) from exc
+        _raise_for_status(response, path=path)
+        try:
+            payload = response.json()
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise KorailProtocolError(
+                "KORAIL response body was not valid JSON"
+            ) from exc
         return parse_base_response(payload, raise_on_fail=raise_on_fail)
 
     def get_json(

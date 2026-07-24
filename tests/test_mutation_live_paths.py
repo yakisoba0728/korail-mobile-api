@@ -1,0 +1,259 @@
+"""Offline contract tests for the live mutation send paths.
+
+These exercise `reserve(dry_run=False)`, `cancel_unpaid_hold(dry_run=False)`,
+and the double-gated `KorailHttpClient.post_mutation_form` against an
+`httpx.MockTransport` that records requests and returns synthetic envelopes.
+No real network, no real credentials, no real card. They prove that a live
+mutation goes ONLY to the evidenced mutation route, only with a non-dry-run
+consent that opts into the category, and that the read-only path still refuses
+every mutation route.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+
+import httpx
+import pytest
+
+from korail_mobile_api import (
+    BaseKorailResponse,
+    KorailClient,
+    KorailConfig,
+    KorailProtocolError,
+    KorailSession,
+    MutationConsent,
+    MutationNotAllowedError,
+    MutationPreview,
+    ReservationHoldResponse,
+    TrainSummary,
+)
+from korail_mobile_api.mutation_payloads import (
+    build_single_adult_reservation_form,
+)
+
+RESERVE_ROUTE = "/classes/com.korail.mobile.certification.TicketReservation"
+CANCEL_ROUTE = (
+    "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
+)
+PAYMENT_ROUTE = "/classes/com.korail.mobile.payment.ReservationPayment"
+
+# Synthetic, non-secret placeholders.
+SYNTHETIC_PNR = "SYNTHETIC_PNR_REFERENCE"
+
+_HOLD_SUCCESS = {
+    "strResult": "SUCC",
+    "h_msg_cd": "IRR000000",
+    "h_msg_txt": "success",
+    "h_pnr_no": SYNTHETIC_PNR,
+    "h_jrny_cnt": "1",
+    "h_wct_no": "SYNTHETIC_WINDOW",
+    "h_tmp_job_sqno1": "SYNTHETIC_JOB_1",
+    "h_tmp_job_sqno2": "SYNTHETIC_JOB_2",
+    "h_payment_flg": "Y",
+    "h_tot_prc": "8400",
+}
+
+_CANCEL_SUCCESS = {
+    "strResult": "SUCC",
+    "h_msg_cd": "IRP000000",
+    "h_msg_txt": "cancelled",
+}
+
+
+def _eligible_train() -> TrainSummary:
+    return TrainSummary(
+        train_no="00209",
+        train_group_code="100",
+        departure_station_code="0001",
+        arrival_station_code="0501",
+        departure_date="20990101",
+        departure_time="100700",
+        arrival_time="102400",
+        run_date="20990101",
+        train_class_code="00",
+        departure_run_order="1",
+        arrival_run_order="2",
+        general_reservation_code="11",
+        departure_construction_order="1",
+        arrival_construction_order="2",
+        seat_attribute_code="015",
+    )
+
+
+class _Recorder:
+    """A MockTransport handler that records requests and replies by path."""
+
+    def __init__(self, replies: dict[str, dict]) -> None:
+        self.replies = replies
+        self.requests: list[httpx.Request] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        reply = self.replies.get(request.url.path)
+        if reply is None:  # pragma: no cover - guards test wiring mistakes
+            raise AssertionError(f"unexpected request to {request.url.path}")
+        return httpx.Response(200, json=reply)
+
+
+def _client_with(replies: dict[str, dict]) -> tuple[KorailClient, _Recorder]:
+    recorder = _Recorder(replies)
+    client = KorailClient(transport=httpx.MockTransport(recorder))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    return client, recorder
+
+
+def _live(**allow: bool) -> MutationConsent:
+    return MutationConsent(dry_run=False, **allow)
+
+
+# --- reserve(dry_run=False) live send --------------------------------------
+
+
+def test_reserve_live_posts_to_reservation_route_and_returns_hold():
+    client, recorder = _client_with({RESERVE_ROUTE: _HOLD_SUCCESS})
+    hold = client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
+    assert isinstance(hold, ReservationHoldResponse)
+    assert hold.str_result == "SUCC"
+    assert hold.pnr_no == SYNTHETIC_PNR
+    assert hold.journey_count == "1"
+    # Exactly one request, and it went to the mutation route via POST.
+    assert len(recorder.requests) == 1
+    assert recorder.requests[0].method == "POST"
+    assert recorder.requests[0].url.path == RESERVE_ROUTE
+
+
+def test_reserve_live_still_requires_matching_consent():
+    client, recorder = _client_with({RESERVE_ROUTE: _HOLD_SUCCESS})
+    # dry_run=False but no allow_reserve: denied before any send.
+    with pytest.raises(MutationNotAllowedError):
+        client.reserve(_eligible_train(), consent=_live(allow_cancel=True))
+    assert recorder.requests == []
+
+
+def test_reserve_live_raises_app_error_on_fail_envelope_and_holds_nothing():
+    client, recorder = _client_with(
+        {
+            RESERVE_ROUTE: {
+                "strResult": "FAIL",
+                "h_msg_cd": "WRC000288",
+                "h_msg_txt": "no seat",
+            }
+        }
+    )
+    from korail_mobile_api import KorailAppError
+
+    with pytest.raises(KorailAppError):
+        client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
+    assert len(recorder.requests) == 1
+
+
+# --- cancel_unpaid_hold ------------------------------------------------------
+
+
+def _hold() -> ReservationHoldResponse:
+    from korail_mobile_api.mutation_parsers import (
+        parse_reservation_hold_response,
+    )
+
+    return parse_reservation_hold_response(dict(_HOLD_SUCCESS))
+
+
+def test_cancel_dry_run_returns_redacted_preview_without_sending():
+    client, recorder = _client_with({})
+    preview = client.cancel_unpaid_hold(
+        _hold(), consent=MutationConsent(allow_cancel=True)
+    )
+    assert isinstance(preview, MutationPreview)
+    assert preview.category == "cancel"
+    assert preview.route == CANCEL_ROUTE
+    # PNR is redacted in the preview payload; nothing was sent.
+    assert preview.payload["txtPnrNo"] == "[REDACTED]"
+    assert recorder.requests == []
+
+
+def test_cancel_live_posts_to_cancel_route():
+    client, recorder = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
+    result = client.cancel_unpaid_hold(_hold(), consent=_live(allow_cancel=True))
+    assert isinstance(result, BaseKorailResponse)
+    assert result.str_result == "SUCC"
+    assert len(recorder.requests) == 1
+    assert recorder.requests[0].url.path == CANCEL_ROUTE
+
+
+def test_cancel_requires_matching_consent_and_session():
+    client, recorder = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
+    with pytest.raises(MutationNotAllowedError):
+        client.cancel_unpaid_hold(_hold(), consent=MutationConsent())
+    assert recorder.requests == []
+
+    logged_out = KorailClient(
+        transport=httpx.MockTransport(_Recorder({CANCEL_ROUTE: _CANCEL_SUCCESS}))
+    )
+    from korail_mobile_api import KorailAuthError
+
+    with pytest.raises(KorailAuthError):
+        logged_out.cancel_unpaid_hold(
+            _hold(), consent=_live(allow_cancel=True)
+        )
+
+
+# --- post_mutation_form double-gate -----------------------------------------
+
+
+def test_post_mutation_form_refuses_a_non_mutation_route():
+    client, recorder = _client_with({})
+    form = build_single_adult_reservation_form(KorailConfig(), _eligible_train())
+    # A read route (or any non-mutation route) is rejected by assert_mutation_route.
+    with pytest.raises(KorailProtocolError):
+        client.http.post_mutation_form(
+            "/classes/com.korail.mobile.myTicket.MyTicketList",
+            form,
+            consent=_live(allow_reserve=True),
+            category="reserve",
+        )
+    assert recorder.requests == []
+
+
+def test_post_mutation_form_refuses_none_and_unknown_category():
+    client, recorder = _client_with({RESERVE_ROUTE: _HOLD_SUCCESS})
+    form = build_single_adult_reservation_form(KorailConfig(), _eligible_train())
+    with pytest.raises(MutationNotAllowedError):
+        client.http.post_mutation_form(
+            RESERVE_ROUTE, form, consent=None, category="reserve"  # type: ignore[arg-type]
+        )
+    with pytest.raises(MutationNotAllowedError):
+        client.http.post_mutation_form(
+            RESERVE_ROUTE,
+            form,
+            consent=_live(allow_reserve=True),
+            category="checkin",
+        )
+    assert recorder.requests == []
+
+
+def test_read_only_post_form_still_refuses_mutation_routes():
+    # The enduring guarantee: the read-only send path rejects mutation routes,
+    # so a mutation can only ever leave through post_mutation_form.
+    client, _ = _client_with({})
+    for route in (RESERVE_ROUTE, CANCEL_ROUTE, PAYMENT_ROUTE):
+        with pytest.raises(KorailProtocolError):
+            client.http.post_form(route, {"x": "1"})
+
+
+# --- reserve -> auto-cancel round trip (offline model of the live flow) ------
+
+
+def test_reserve_then_auto_cancel_round_trip_offline():
+    client, recorder = _client_with(
+        {RESERVE_ROUTE: _HOLD_SUCCESS, CANCEL_ROUTE: _CANCEL_SUCCESS}
+    )
+    consent = _live(allow_reserve=True, allow_cancel=True)
+    hold = client.reserve(_eligible_train(), consent=consent)
+    assert isinstance(hold, ReservationHoldResponse)
+    cancel = client.cancel_unpaid_hold(hold, consent=consent)
+    assert cancel.str_result == "SUCC"
+    assert [r.url.path for r in recorder.requests] == [
+        RESERVE_ROUTE,
+        CANCEL_ROUTE,
+    ]
