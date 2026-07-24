@@ -174,11 +174,20 @@ def build_unpaid_reservation_cancel_form(
         raise KorailProtocolError(
             "KORAIL cancellation requires an exact reservation hold response"
         )
+    # A live TicketReservation returns the journey count zero-padded
+    # (h_jrny_cnt="0001"), not "1". Accept any digit string that is numerically
+    # one single journey; the cancel form still transmits the app's txtJrnyCnt.
+    journey_count = response.journey_count
+    is_single_journey = (
+        isinstance(journey_count, str)
+        and journey_count.strip().isdigit()
+        and int(journey_count) == 1
+    )
     if (
         response.str_result != "SUCC"
         or not isinstance(response.pnr_no, str)
         or not response.pnr_no.strip()
-        or response.journey_count != "1"
+        or not is_single_journey
     ):
         raise KorailProtocolError(
             "KORAIL cancellation requires one fresh successful unpaid hold"

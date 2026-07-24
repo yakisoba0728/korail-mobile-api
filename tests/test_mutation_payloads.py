@@ -142,11 +142,30 @@ def test_unpaid_reservation_cancel_form_uses_only_fresh_hold_identifiers():
     }
 
 
+def test_unpaid_reservation_cancel_form_accepts_zero_padded_journey_count():
+    # A live TicketReservation returns h_jrny_cnt="0001", not "1"; the cancel
+    # form builder must accept the real single-journey value (evidenced live).
+    response = ReservationHoldResponse(
+        h_msg_cd="IRR000018",
+        h_msg_txt="success",
+        str_result="SUCC",
+        raw={},
+        pnr_no="SYNTHETIC_PNR_REFERENCE",
+        journey_count="0001",
+    )
+    form = build_unpaid_reservation_cancel_form(KorailConfig(), response)
+    assert form["txtPnrNo"] == "SYNTHETIC_PNR_REFERENCE"
+    assert form["txtJrnyCnt"] == "1"
+    assert form["txtJrnySqno"] == "0001"
+
+
 @pytest.mark.parametrize(
     "response",
     [
         ReservationHoldResponse(),
         ReservationHoldResponse(pnr_no="SYNTHETIC_PNR_REFERENCE", journey_count="2"),
+        ReservationHoldResponse(pnr_no="SYNTHETIC_PNR_REFERENCE", journey_count="0002"),
+        ReservationHoldResponse(pnr_no="SYNTHETIC_PNR_REFERENCE", journey_count="1x"),
         BaseKorailResponse(),
     ],
 )
