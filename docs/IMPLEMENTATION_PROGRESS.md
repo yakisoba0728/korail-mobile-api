@@ -227,9 +227,11 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 - Client-gated pass-schedule candidate lookup with caller-supplied runtime
   values; no pass reservation or payment operation
 
-The transport currently allows 50 exact read/login routes. Reservation,
-payment, cancellation, refund, check-in, member mutation, and point/mileage
-mutation routes are not callable.
+The read-only transport (`post_form`/`get_json`) refuses every mutation route
+and allows 50 exact read/login routes. The reservation, unpaid-cancel, and
+payment routes are callable only through the separate consent-gated send path
+(`post_mutation_form`, `dry_run=False`); refund, check-in, member mutation, and
+point/mileage mutation routes remain not callable.
 
 Pure offline parsers now cover the evidenced reservation-hold and reservation-
 payment response shapes, including nested journey/coupon rows and recursive
@@ -402,9 +404,11 @@ tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/superpowers/specs/`.
 
 The current implementation evidence establishes 50 routes at the exact
-login/read transport boundary and 56 public methods on `KorailClient`, with no
-callable reservation, payment, cancellation, refund, check-in, membership, or
-other mutation route. The current service inventory is 32 successful, 10 failed,
+login/read transport boundary and 56 public methods on `KorailClient`. The
+read-only path exposes no callable mutation route; reservation, unpaid-cancel,
+and fake-card payment are callable only through the separate consent-gated
+`post_mutation_form` path, while refund, check-in, membership, and point/mileage
+mutation routes remain not callable. The current service inventory is 32 successful, 10 failed,
 and 123 unexecuted entries out of 165; the historical pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted.
 

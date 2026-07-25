@@ -235,6 +235,17 @@ class KorailHttpClient:
                 "post_mutation_form requires consent.dry_run=False; a dry-run "
                 "preview must never be transmitted"
             )
+        # Defense-in-depth at the transmit boundary: a payment carries the PAN
+        # in the clear, so the send gate itself refuses to transmit one unless
+        # fake_card_only is set. This keeps the "only non-chargeable test cards"
+        # invariant at the layer that actually sends, not only in the public
+        # pay_with_fake_card method.
+        if category == "payment" and not consent.fake_card_only:
+            raise MutationNotAllowedError(
+                "payment mutations require consent.fake_card_only=True; the PAN "
+                "is transmitted in the clear, so only non-chargeable test cards "
+                "are supported"
+            )
         assert_korail_origin(str(self._client.base_url))
         assert_mutation_route("POST", path)
         assert_mutation_route_category(path, category)

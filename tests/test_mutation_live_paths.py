@@ -31,6 +31,7 @@ from korail_mobile_api import (
     TrainSummary,
 )
 from korail_mobile_api.mutation_payloads import (
+    build_card_payment_form,
     build_single_adult_reservation_form,
 )
 
@@ -320,12 +321,40 @@ def test_pay_dry_run_preview_redacts_card_and_sends_nothing():
     assert isinstance(preview, MutationPreview)
     assert preview.category == "payment"
     assert preview.route == PAYMENT_ROUTE
-    # Raw PAN and card secrets are never present in the preview.
-    assert preview.payload["hidStlCrCrdNo1"] == "[REDACTED]"
-    assert preview.payload["hidVanPwd1"] == "[REDACTED]"
-    assert preview.payload["hidAthnVal1"] == "[REDACTED]"
-    assert preview.payload["hidPnrNo"] == "[REDACTED]"
-    assert "0000000000000000" not in "".join(preview.payload.values())
+    # Raw PAN, card secrets, and reservation identity are never present.
+    for key in (
+        "hidStlCrCrdNo1",
+        "hidVanPwd1",
+        "hidCrdVlidTrm1",
+        "hidAthnVal1",
+        "hidAthnDvCd1",
+        "hidIsmtMnthNum1",
+        "hidPnrNo",
+        "hidWctNo",
+        "hidTmpJobSqno1",
+        "hidTmpJobSqno2",
+    ):
+        assert preview.payload[key] == "[REDACTED]", key
+    joined = "".join(preview.payload.values())
+    for secret in ("0000000000000000", "2612", "900101", SYNTHETIC_PNR):
+        assert secret not in joined, secret
+    assert recorder.requests == []
+
+
+def test_post_mutation_form_refuses_real_card_payment_at_the_send_gate():
+    # Defense-in-depth: even a hand-assembled low-level call cannot transmit a
+    # payment with fake_card_only disabled. The transport gate itself refuses.
+    client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_DECLINE})
+    form = build_card_payment_form(KorailConfig(), _paid_hold(), _fake_card())
+    with pytest.raises(MutationNotAllowedError):
+        client.http.post_mutation_form(
+            PAYMENT_ROUTE,
+            form,
+            consent=MutationConsent(
+                allow_payment=True, dry_run=False, fake_card_only=False
+            ),
+            category="payment",
+        )
     assert recorder.requests == []
 
 
