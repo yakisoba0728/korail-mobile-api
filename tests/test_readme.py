@@ -75,10 +75,10 @@ def test_readme_documents_every_successful_read_expansion_method_and_boundary():
 def test_status_and_progress_documents_match_current_inventory_and_coverage():
     status = STATUS.read_text(encoding="utf-8")
     assert "| 성공 | 32 |" in status
-    assert "| 실패 | 10 |" in status
-    assert "| 미실행 | 123 |" in status
+    assert "| 실패 | 13 |" in status
+    assert "| 미실행 | 120 |" in status
     assert "| 전체 | 165 |" in status
-    assert "Package coverage: 51 exact login/read routes and 57 public methods" in status
+    assert "Package coverage: 54 exact login/read routes and 60 public methods" in status
     assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
     assert "and 128 unexecuted" in status
     assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
@@ -163,12 +163,12 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     )
     assert len(service_rows) == 35
     service_totals = tuple(sum(int(row[index]) for row in service_rows) for index in range(4))
-    assert service_totals == (165, 32, 10, 123)
+    assert service_totals == (165, 32, 13, 120)
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
     guide_normalized = " ".join(guide.split())
     assert "## Current Inventory" in guide
-    assert "Runtime test status | 성공 32 / 실패 10 / 미실행 123" in guide
+    assert "Runtime test status | 성공 32 / 실패 13 / 미실행 120" in guide
     assert "| `CustService` | 1 | 0 | 1 | 0 |" in guide
     assert "| `ResearchService` | 11 | 3 | 2 | 6 |" in guide
     assert "| `ReservationService` | 4 | 1 | 1 | 2 |" in guide
@@ -186,7 +186,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     guide_totals = tuple(
         sum(int(row[index]) for row in guide_service_rows) for index in range(4)
     )
-    assert guide_totals == (165, 32, 10, 123)
+    assert guide_totals == (165, 32, 13, 120)
     assert "27 parsed responses" in guide_normalized
     assert "one expected `KorailAppError`" in guide_normalized
     assert "zero unexpected failures" in guide_normalized
@@ -198,8 +198,8 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
         assert stale_totals not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
-    assert "51 exact login/read routes" in progress
-    assert "57 public methods" in progress
+    assert "54 exact login/read routes" in progress
+    assert "60 public methods" in progress
     assert "- Live-successful inventory entries: 32" in progress
     assert "75" in progress
     assert "IRG000000" in progress
@@ -271,7 +271,7 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     assert "/classes/com.korail.mobile.push.callCrew.do" in readme
     assert "remains excluded" in readme
     assert "static APK evidence and synthetic fixtures only" in readme
-    assert "51 exact read/login routes" in progress
+    assert "54 exact read/login routes" in progress
     for document in (readme, progress, status, handoff, changelog):
         assert "session-unverified" in document
     assert "live verification only after login" in readme
@@ -358,7 +358,7 @@ def test_readme_documents_bounded_live_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "51 routes and 57 public methods" in text
+    assert "54 routes and 60 public methods" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
     assert (
@@ -400,7 +400,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
     # The live gate figure is the count the offline suite actually reports
     # today; the 1246/1247 figures are kept only as labelled history.
     assert (
-        "current reviewed offline gate is `1648 passed, 1 deselected`" in readme
+        "current reviewed offline gate is `1664 passed, 1 deselected`" in readme
     )
     assert (
         "Earlier gates in this repository's history were `1246 passed, 1 "
@@ -408,7 +408,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "`1247 passed, 1 deselected` directly after it" in readme
     )
     assert (
-        "current full offline release gate reports `1648 passed, 1 deselected`"
+        "current full offline release gate reports `1664 passed, 1 deselected`"
         in progress
     )
     assert (
@@ -417,7 +417,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "deselected` directly after it" in progress
     )
     assert (
-        "current reviewed offline gate reports `1648 passed, 1 deselected`; the "
+        "current reviewed offline gate reports `1664 passed, 1 deselected`; the "
         "historical gates were `1246 passed, 1 deselected` and, after the P0 "
         "live-evidence documentation coverage, `1247 passed, 1 deselected`"
         in handoff

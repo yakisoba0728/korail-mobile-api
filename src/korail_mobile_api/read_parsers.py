@@ -66,12 +66,19 @@ from .read_models import (
     RecentDeliveryHistoryResponse,
     RecentDeliveryRecipient,
     ReceiptPayment,
+    RefundCommissionResponse,
+    RefundTicketDetailResponse,
+    RefundTicketJourney,
+    RefundTicketSeat,
+    ReservationDetailJourney,
     ReservationHistoryResponse,
     ReservationHistoryTrain,
+    ReservationSeatDetail,
     SeatAssignmentScheduleResponse,
     ServiceStatusResponse,
     TicketReceipt,
     TicketReceiptResponse,
+    TicketReservationDetailResponse,
     TicketDuplicationCheckResponse,
     TripMenuContent,
     TripMenuItem,
@@ -2285,5 +2292,223 @@ def parse_product_train_inquiry_response(
         ),
         merge_reservation_possible_flag=merge_flag,
         trains=tuple(trains),
+        **_response_fields(raw),
+    )
+
+
+_RESERVATION_SEAT_DETAIL_FIELDS = {
+    "car_no": "h_srcar_no",
+    "seat_no": "h_seat_no",
+    "room_class_code": "h_psrm_cl_cd",
+    "room_class_name": "h_psrm_cl_nm",
+    # ReservationResponse.SeatInfo declares the passenger type as a CODE
+    # (:304). No h_psg_tp_dv_nm exists anywhere in the decompiled app, so the
+    # display-name variant is deliberately NOT mapped; an unmapped key stays
+    # reachable through `raw`.
+    "passenger_type_code": "h_psg_tp_cd",
+    "received_amount": "h_rcvd_amt",
+    "seat_price": "h_seat_prc",
+    "seat_fare": "h_seat_fare",
+    "seat_group_name": "h_sgr_nm",
+}
+
+_RESERVATION_DETAIL_JOURNEY_FIELDS = {
+    "journey_sequence": "h_jrny_sqno",
+    "journey_type_code": "h_jrny_tp_cd",
+    "reservation_change_no": "h_rsv_chg_no",
+    "departure_date": "h_dpt_dt",
+    "departure_time": "h_dpt_tm",
+    "arrival_time": "h_arv_tm",
+    "departure_station_name": "h_dpt_rs_stn_nm",
+    "arrival_station_name": "h_arv_rs_stn_nm",
+    "train_no": "h_trn_no",
+    "train_class_name": "h_trn_clsf_nm",
+}
+
+_TICKET_RESERVATION_DETAIL_FIELDS = {
+    "pnr_no": "h_pnr_no",
+    "window_no": "h_wct_no",
+    "journey_count": "h_jrny_cnt",
+    "total_fare": "h_tot_fare",
+    "total_price": "h_tot_prc",
+    "total_discount_amount": "h_tot_dcnt_amt",
+    "total_received_amount": "h_tot_rcvd_amt",
+    "payment_flag": "h_payment_flg",
+}
+
+
+def parse_ticket_reservation_detail_response(
+    raw: Mapping[str, Any],
+) -> TicketReservationDetailResponse:
+    _validate_strict_read_envelope(raw)
+    journeys = []
+    for value in _nested_rows(
+        raw,
+        "jrny_infos",
+        "jrny_info",
+        "ticket reservation detail",
+    ):
+        journey = _row(value, "ticket reservation detail jrny_info")
+        seats = []
+        for seat_value in _nested_rows(
+            journey,
+            "seat_infos",
+            "seat_info",
+            "ticket reservation detail journey",
+        ):
+            seat = _row(seat_value, "ticket reservation detail seat_info")
+            seats.append(
+                ReservationSeatDetail(
+                    **_nullable_string_fields(
+                        seat,
+                        _RESERVATION_SEAT_DETAIL_FIELDS,
+                        "reservation seat detail",
+                    ),
+                    raw=seat,
+                )
+            )
+        journeys.append(
+            ReservationDetailJourney(
+                **_nullable_string_fields(
+                    journey,
+                    _RESERVATION_DETAIL_JOURNEY_FIELDS,
+                    "reservation detail journey",
+                ),
+                seats=tuple(seats),
+                raw=journey,
+            )
+        )
+    return TicketReservationDetailResponse(
+        **_nullable_string_fields(
+            raw,
+            _TICKET_RESERVATION_DETAIL_FIELDS,
+            "ticket reservation detail",
+        ),
+        journeys=tuple(journeys),
+        **_response_fields(raw),
+    )
+
+
+_REFUND_COMMISSION_FIELDS = {
+    "refund_amount": "ret_amt",
+    "refund_fee": "ret_fee",
+    "proceed_possible_flag": "prg_psb_flg",
+    "ticket_return_times_division_code": "tk_ret_tms_dv_cd",
+    "usable_mileage": "use_psb_mlg_num",
+    "secondary_message_code": "h_msg_cd2",
+    "secondary_message_text": "h_msg_txt2",
+}
+
+
+def parse_refund_commission_response(
+    raw: Mapping[str, Any],
+) -> RefundCommissionResponse:
+    _validate_strict_read_envelope(raw)
+    return RefundCommissionResponse(
+        **_nullable_string_fields(
+            raw,
+            _REFUND_COMMISSION_FIELDS,
+            "refund commission",
+        ),
+        **_response_fields(raw),
+    )
+
+
+_REFUND_TICKET_SEAT_FIELDS = {
+    "car_no": "h_srcar_no",
+    "seat_no": "h_seat_no",
+    "buyer_name": "h_buy_ps_nm",
+    "checkin_status_code": "h_chckn_stt_cd",
+    "discount_kind_code": "h_dcnt_knd_cd",
+    "discount_kind_name": "h_dcnt_knd_nm",
+    "passenger_type_code": "h_psg_tp_cd",
+    "passenger_type_name": "h_psg_tp_nm",
+    "seat_group_name": "h_sgr_nm",
+}
+
+_REFUND_TICKET_JOURNEY_FIELDS = {
+    "journey_sequence": "h_jrny_sqno",
+    "journey_type_code": "h_jrny_tp_cd",
+    "departure_date": "h_dpt_dt",
+    "departure_time": "h_dpt_tm",
+    "departure_station_name": "h_dpt_rs_stn_nm",
+    "arrival_date": "h_arv_dt",
+    "arrival_time": "h_arv_tm",
+    "arrival_station_name": "h_arv_rs_stn_nm",
+    "train_no": "h_trn_no",
+    "train_class_name": "h_trn_clsf_nm",
+    "room_class_name": "h_psrm_cl_nm",
+    "platform_no": "h_plf_no",
+}
+
+_REFUND_TICKET_DETAIL_FIELDS = {
+    "pnr_no": "h_pnr_no",
+    "sale_date": "h_sale_dt",
+    "sale_time": "h_sale_tm",
+    "window_name": "h_wct_nm",
+    "original_sale_date": "h_orgtk_ret_sale_dt",
+    "original_window_no": "h_orgtk_wct_no",
+    "original_sale_sequence": "h_orgtk_sale_sqno",
+    "original_return_password": "h_orgtk_ret_pwd",
+    "ticket_kind_code": "h_tk_knd_cd",
+    "ticket_kind_name": "h_tk_knd_nm",
+    "refund_possible_flag": "retPsbFlg",
+    "return_flag": "h_ret_flg",
+    "total_fare_amount": "h_tot_fare_amt",
+    "total_discount_amount": "h_tot_disc_amt",
+    "total_received_amount": "h_tot_rcvd_amt",
+    "train_running_flag": "h_trn_running_flg",
+    "companion_name": "h_compa_nm",
+    "companion_birth_date": "h_compa_brth",
+}
+
+
+def parse_refund_ticket_detail_response(
+    raw: Mapping[str, Any],
+) -> RefundTicketDetailResponse:
+    _validate_strict_read_envelope(raw)
+    journeys = []
+    for value in _nested_rows(
+        raw,
+        "ticket_infos",
+        "ticket_info",
+        "refund ticket detail",
+    ):
+        journey = _row(value, "refund ticket detail ticket_info")
+        seats = []
+        for seat_value in _optional_list(
+            journey,
+            "tk_seat_info",
+            "refund ticket detail ticket_info",
+        ):
+            seat = _row(seat_value, "refund ticket detail tk_seat_info")
+            seats.append(
+                RefundTicketSeat(
+                    **_nullable_string_fields(
+                        seat,
+                        _REFUND_TICKET_SEAT_FIELDS,
+                        "refund ticket seat",
+                    ),
+                    raw=seat,
+                )
+            )
+        journeys.append(
+            RefundTicketJourney(
+                **_nullable_string_fields(
+                    journey,
+                    _REFUND_TICKET_JOURNEY_FIELDS,
+                    "refund ticket journey",
+                ),
+                seats=tuple(seats),
+                raw=journey,
+            )
+        )
+    return RefundTicketDetailResponse(
+        **_nullable_string_fields(
+            raw,
+            _REFUND_TICKET_DETAIL_FIELDS,
+            "refund ticket detail",
+        ),
+        journeys=tuple(journeys),
         **_response_fields(raw),
     )

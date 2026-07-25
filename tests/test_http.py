@@ -381,7 +381,7 @@ def test_read_only_route_registry_accepts_current_public_requests(method, path):
 
 
 def test_read_only_route_registry_has_exact_expanded_count():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 51
+    assert len(KORAIL_READ_ONLY_ROUTES) == 54
 
 
 def test_logout_route_is_get_only_and_carries_no_fields():

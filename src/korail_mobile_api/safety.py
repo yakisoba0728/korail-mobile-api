@@ -21,11 +21,19 @@ EXCLUDED_API_DOMAINS = frozenset(
 
 # The exact (method, path) pairs the read-only send path will transmit to.
 #
-# 51 entries, 51 distinct paths, pinned by tests. The count is 51 and not 50
-# because two of the entries are session routes rather than reads: the login
-# POST and the server-side logout GET (cookie-authenticated, zero parameters,
-# not a mutation), which was added later than the other 50. There is no
-# "excluding logout" counting convention — docs that said 50 were simply stale.
+# 54 entries, 54 distinct paths, pinned by tests. The count is not 52 because
+# two of the entries are session routes rather than reads: the login POST and
+# the server-side logout GET (cookie-authenticated, zero parameters, not a
+# mutation), which was added later than the other 50. There is no "excluding
+# logout" counting convention — docs that said 50 were simply stale.
+#
+# NOTE on certification.ReservationList: that path carries TWO Retrofit
+# overloads in the app. Only the read one (`inquiryTicketRsv`,
+# CertificationService.java:45-46, four query fields) is registered here; the
+# write-flavoured `applyDisabilityCertification` (:22) shares the path but adds
+# txtPsgDisc0019Cnt plus six @QueryMaps. KORAIL_EXACT_REQUEST_FIELDS pins the
+# read overload's exact four fields, so the write overload's shape can never be
+# emitted through this route.
 KORAIL_READ_ONLY_ROUTES = frozenset(
     {
         ("GET", "/file/CACHE/MobileService.cache"),
@@ -112,6 +120,12 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ("POST", "/classes/com.korail.mobile.tk.pbpAcepSpec.do"),
         ("POST", "/classes/com.korail.mobile.tk.plfNo.do"),
         ("POST", "/classes/com.korail.mobile.tk.rcntDlvHst.do"),
+        (
+            "GET",
+            "/classes/com.korail.mobile.certification.ReservationList",
+        ),
+        ("POST", "/classes/com.korail.mobile.refunds.CommissionView"),
+        ("POST", "/classes/com.korail.mobile.refunds.SelTicketInfo"),
     }
 )
 
@@ -511,6 +525,47 @@ KORAIL_EXACT_REQUEST_FIELDS = {
     ),
     "/classes/com.korail.mobile.tk.rcntDlvHst.do": frozenset(
         {"Device", "Version", "Key", "custMgNo"}
+    ),
+    # The READ overload only. CertificationService.java declares two methods on
+    # this one path: inquiryTicketRsv (:45-46) with exactly these four @Query
+    # fields, and applyDisabilityCertification (:22) which adds
+    # txtPsgDisc0019Cnt and six @QueryMaps to apply a disability certificate to
+    # a held reservation. Pinning the four-field set here means the write
+    # overload's shape is rejected by assert_read_only_request_fields before it
+    # can reach the wire, even though it shares the path.
+    "/classes/com.korail.mobile.certification.ReservationList": frozenset(
+        {"Device", "Version", "Key", "hidPnrNo"}
+    ),
+    "/classes/com.korail.mobile.refunds.CommissionView": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "h_orgtk_ret_sale_dt",
+            "h_orgtk_wct_no",
+            "h_orgtk_sale_sqno",
+            "h_orgtk_ret_pwd",
+            "h_comp_nm",
+            "h_comp_cert_no",
+        }
+    ),
+    # Same six identity fields plus h_purchase_history. srtgo calls this route
+    # as a GET and omits h_purchase_history (ktx.py:791-800); the app declares
+    # @POST @FormUrlEncoded with the full eight-field set
+    # (RefundService.java:23-25) and every call site sets the flag
+    # (TicketListActivity.java:926 "N", TicketPurchaseHistoryActivity.java:267
+    # "Y"). The app wins.
+    "/classes/com.korail.mobile.refunds.SelTicketInfo": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "h_orgtk_ret_sale_dt",
+            "h_orgtk_wct_no",
+            "h_orgtk_sale_sqno",
+            "h_orgtk_ret_pwd",
+            "h_purchase_history",
+        }
     ),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS

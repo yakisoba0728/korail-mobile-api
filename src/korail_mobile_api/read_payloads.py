@@ -1291,3 +1291,132 @@ def _build_product_train_inquiry_form(
         ("pgPrCnt", page_count),
         *transfer_fields,
     )
+
+
+@dataclass(frozen=True)
+class TicketReservationDetailRequest:
+    """The PNR whose held-reservation detail to read.
+
+    Feeds ``certification.ReservationList`` (``inquiryTicketRsv``,
+    ``CertificationService.java:45-46``). The PNR is ``repr=False`` because it
+    identifies a real reservation.
+    """
+
+    pnr_no: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        _validate_ticket_reservation_detail_request(self)
+
+
+def _validate_ticket_reservation_detail_request(
+    request: TicketReservationDetailRequest,
+) -> None:
+    _required_text(request.pnr_no, "pnr_no")
+
+
+def build_ticket_reservation_detail_query(
+    request: TicketReservationDetailRequest,
+) -> dict[str, str]:
+    """Build the READ overload's exact single query field.
+
+    ``certification.ReservationList`` also hosts the write-flavoured
+    ``applyDisabilityCertification`` overload (``CertificationService.java:22``),
+    which adds ``txtPsgDisc0019Cnt`` and six ``@QueryMap``s. This builder emits
+    ``hidPnrNo`` and nothing else, and the route's entry in
+    ``KORAIL_EXACT_REQUEST_FIELDS`` refuses anything wider, so the write shape
+    cannot be produced through this path.
+    """
+    if type(request) is not TicketReservationDetailRequest:
+        raise TypeError(
+            "request must be an exact TicketReservationDetailRequest"
+        )
+    _validate_ticket_reservation_detail_request(request)
+    return {"hidPnrNo": request.pnr_no}
+
+
+@dataclass(frozen=True)
+class RefundCompanion:
+    """The companion identity ``refunds.CommissionView`` echoes back.
+
+    Both app call sites take these straight off a ``SelTicketInfo`` response:
+    ``h_comp_nm`` from ``getH_compa_nm()`` and ``h_comp_cert_no`` from
+    ``getH_compa_brth()`` (``TicketListActivity.java:908-909``,
+    ``ui/ticket/ticketReturn/a.java:355-356``). A ticket with no companion
+    sends both empty, which is why empty strings are accepted here — the two
+    fields are always transmitted, never omitted.
+    """
+
+    name: str = field(default="", repr=False)
+    certificate_no: str = field(default="", repr=False)
+
+    def __post_init__(self) -> None:
+        _validate_refund_companion(self)
+
+
+def _validate_refund_companion(companion: RefundCompanion) -> None:
+    for value, name in (
+        (companion.name, "name"),
+        (companion.certificate_no, "certificate_no"),
+    ):
+        if not isinstance(value, str):
+            raise ValueError(f"{name} must be a string")
+
+
+def _exact_refund_companion(companion: RefundCompanion) -> RefundCompanion:
+    if type(companion) is not RefundCompanion:
+        raise TypeError("companion must be an exact RefundCompanion")
+    _validate_refund_companion(companion)
+    return companion
+
+
+def build_refund_commission_form(
+    ticket: OriginalTicketReference,
+    companion: RefundCompanion = RefundCompanion(),
+) -> dict[str, str]:
+    """Build the refund fee / refundable-amount pre-check form.
+
+    ``RefundService.java:19-21`` declares POST + @FormUrlEncoded with exactly
+    these six fields on top of Device/Version/Key. Note the sale-date field is
+    ``h_orgtk_ret_sale_dt`` here, NOT the ``h_orgtk_sale_dt`` the receipt read
+    uses — the two routes spell the same value differently.
+    """
+    reference = _exact_original_ticket_reference(ticket)
+    party = _exact_refund_companion(companion)
+    return {
+        "h_orgtk_ret_sale_dt": reference.sale_date,
+        "h_orgtk_wct_no": reference.sale_window_no,
+        "h_orgtk_sale_sqno": reference.sale_sequence,
+        "h_orgtk_ret_pwd": reference.return_password,
+        "h_comp_nm": party.name,
+        "h_comp_cert_no": party.certificate_no,
+    }
+
+
+def build_refund_ticket_detail_form(
+    ticket: OriginalTicketReference,
+    *,
+    from_purchase_history: bool = False,
+) -> dict[str, str]:
+    """Build the refund-target ticket detail form.
+
+    POST with the four identity fields plus ``h_purchase_history``
+    (``RefundService.java:23-25``). The flag is exactly "Y" or "N" in the app:
+    the purchase-history screen sends "Y"
+    (``TicketPurchaseHistoryActivity.java:267``) and the ticket list and
+    seat-assign screens send "N" (``TicketListActivity.java:926``,
+    ``SeatAssignBookingActivity.java:317``).
+
+    srtgo issues this as a GET and drops ``h_purchase_history`` entirely
+    (``ktx.py:791-800``). The app is the authority and it declares POST with
+    the field present, so this builder always emits it.
+    """
+    reference = _exact_original_ticket_reference(ticket)
+    if type(from_purchase_history) is not bool:
+        raise TypeError("from_purchase_history must be a bool")
+    return {
+        "h_orgtk_ret_sale_dt": reference.sale_date,
+        "h_orgtk_wct_no": reference.sale_window_no,
+        "h_orgtk_sale_sqno": reference.sale_sequence,
+        "h_orgtk_ret_pwd": reference.return_password,
+        "h_purchase_history": "Y" if from_purchase_history else "N",
+    }

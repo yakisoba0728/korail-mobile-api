@@ -19,6 +19,7 @@ import pytest
 
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.errors import (
+    KorailAppError,
     KorailProtocolError,
     KorailSessionExpiredError,
 )
@@ -30,6 +31,10 @@ from korail_mobile_api.read_models import (
 from korail_mobile_api.read_parsers import (
     parse_pass_availability_response,
     parse_pass_menu_response,
+)
+from korail_mobile_api.read_payloads import (
+    OriginalTicketReference,
+    TicketReservationDetailRequest,
 )
 
 PASS_MENU_PATH = "/classes/com.korail.mobile.pass.passMenu.do"
@@ -175,3 +180,134 @@ def test_get_pass_available_dates_accepts_the_live_success_body(
     result = client.get_pass_available_dates("1", "1", "1")
     assert isinstance(result, PassAvailabilityResponse)
     assert len(result.offices) == 2
+
+
+# --------------------------------------------------------------------------
+# The three reference-derived reads -- LIVE-VERIFIED ERROR SHAPES.
+#
+# All three routes were called once against the live server on 2026-07-26 with
+# an account holding zero reservations. Every one was ACCEPTED (HTTP 200, no
+# DynaPath rejection, no transport error) and answered with a bare three-key
+# FAIL envelope -- h_msg_cd / strResult / h_msg_txt and NOTHING else. The
+# fixtures below are those bodies byte-for-byte; they carry no personal data,
+# so nothing needed redacting.
+#
+# Each code proves the server parsed the field it complains about, which is the
+# evidence that the request shapes are right:
+#   WRG200018 입력값오류(PNR번호)      <- hidPnrNo was read and rejected
+#   WRT100002 창구번호미입력,미승인창구 <- h_orgtk_wct_no was read and rejected
+#   WRT100124 반환번호를 확인해주세요   <- the return-number tuple was read
+#
+# The SUCCESS bodies remain UNVERIFIED: producing one requires a real held or
+# paid ticket, which this increment cannot create.
+# --------------------------------------------------------------------------
+
+TICKET_RESERVATION_DETAIL_PATH = (
+    "/classes/com.korail.mobile.certification.ReservationList"
+)
+REFUND_COMMISSION_PATH = "/classes/com.korail.mobile.refunds.CommissionView"
+REFUND_TICKET_DETAIL_PATH = "/classes/com.korail.mobile.refunds.SelTicketInfo"
+
+_LIVE_ERROR_FIXTURES = (
+    (
+        "ticket_reservation_detail_live_unknown_pnr_fail.json",
+        "WRG200018",
+        "입력값오류(PNR번호)",
+    ),
+    (
+        "refund_ticket_detail_live_unknown_ticket_fail.json",
+        "WRT100002",
+        "창구번호미입력,미승인창구",
+    ),
+    (
+        "refund_commission_live_unknown_ticket_fail.json",
+        "WRT100124",
+        "반환번호를 확인해주세요",
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "code", "message"),
+    _LIVE_ERROR_FIXTURES,
+)
+def test_reference_derived_reads_live_failures_are_bare_three_key_envelopes(
+    load_json_fixture,
+    fixture_name,
+    code,
+    message,
+):
+    raw = load_json_fixture(fixture_name)
+    # The live FAIL body carries the envelope and nothing else -- no partial
+    # payload, no empty containers to mistake for "no rows".
+    assert sorted(raw) == ["h_msg_cd", "h_msg_txt", "strResult"]
+    assert raw["strResult"] == "FAIL"
+    assert raw["h_msg_cd"] == code
+    assert raw["h_msg_txt"] == message
+
+
+@pytest.mark.parametrize(
+    ("path", "fixture_name", "code"),
+    [
+        (
+            TICKET_RESERVATION_DETAIL_PATH,
+            "ticket_reservation_detail_live_unknown_pnr_fail.json",
+            "WRG200018",
+        ),
+        (
+            REFUND_TICKET_DETAIL_PATH,
+            "refund_ticket_detail_live_unknown_ticket_fail.json",
+            "WRT100002",
+        ),
+        (
+            REFUND_COMMISSION_PATH,
+            "refund_commission_live_unknown_ticket_fail.json",
+            "WRT100124",
+        ),
+    ],
+)
+def test_reference_derived_reads_surface_the_live_failure_as_korail_app_error(
+    load_json_fixture,
+    path,
+    fixture_name,
+    code,
+):
+    """The observed live behaviour, end to end through the client.
+
+    Each call raised exactly this, with exactly this code, on the live pass.
+    """
+    body = load_json_fixture(fixture_name)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == path
+        return httpx.Response(200, json=body)
+
+    client = _client(handler)
+    _authenticated(client)
+    client.session.current = KorailSession(
+        jsessionid="synthetic-session-secret",
+        member_no="synthetic-member-secret",
+        customer_no="synthetic-customer-secret",
+    )
+    ticket = OriginalTicketReference(
+        sale_window_no="synthetic-window",
+        sale_date="20260101",
+        sale_sequence="synthetic-sequence",
+        return_password="synthetic-password",
+    )
+    operations = {
+        TICKET_RESERVATION_DETAIL_PATH: lambda: (
+            client.get_ticket_reservation_detail(
+                TicketReservationDetailRequest("synthetic-pnr")
+            )
+        ),
+        REFUND_TICKET_DETAIL_PATH: lambda: client.get_refund_ticket_detail(
+            ticket
+        ),
+        REFUND_COMMISSION_PATH: lambda: client.get_refund_commission(ticket),
+    }
+    with pytest.raises(KorailAppError) as excinfo:
+        operations[path]()
+    assert excinfo.value.code == code
+    # The account state that made these failures the only reachable shape.
+    assert client.session.current is not None

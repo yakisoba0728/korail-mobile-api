@@ -802,7 +802,7 @@ def test_schedule_parsers_accept_statically_nullable_empty_containers(
 
 
 def test_safety_registers_only_the_three_exact_new_post_contracts():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 51
+    assert len(KORAIL_READ_ONLY_ROUTES) == 54
     expected = {
         SCHEDULE_PATH: SCHEDULE_FIELDS,
         SEAT_PATH: SEAT_FIELDS,
@@ -1123,8 +1123,8 @@ def test_current_docs_describe_static_only_limousine_boundary():
         "get_limousine_schedule_view(",
     ):
         assert method in combined
-    assert "51 exact" in combined
-    assert "57 public methods" in combined
+    assert "54 exact" in combined
+    assert "60 public methods" in combined
     assert "caller-supplied service" in combined
     assert "DynaPath" in combined
     assert "No live" in combined

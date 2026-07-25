@@ -1017,7 +1017,7 @@ def test_inventory_validation_rejects_missing_non_ascii_and_malformed_train_fiel
 
 
 def test_safety_registers_only_the_two_exact_new_post_contracts():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 51
+    assert len(KORAIL_READ_ONLY_ROUTES) == 54
     assert ("POST", CAR_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", SEAT_PATH) in KORAIL_READ_ONLY_ROUTES
     assert KORAIL_EXACT_REQUEST_FIELDS[CAR_PATH] == CAR_FIELDS

@@ -7,10 +7,10 @@ requests. It also retains the static reverse-engineering report for `korail.apk`
 Android package `com.korail.talk` version `6.5.0`, as the package's historical
 evidence map.
 
-The reviewed package boundary contains 51 routes and 57 public methods. All 51
-routes are login/read routes: 49 reads plus the login POST and the server-side
+The reviewed package boundary contains 54 routes and 60 public methods. All 54
+routes are login/read routes: 52 reads plus the login POST and the server-side
 logout GET. The four mutation routes are tracked separately and
-are never added to the read-only allowlist. Fifty-three of the methods are the
+are never added to the read-only allowlist. Fifty-six of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
 four, `reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, and `refund`, are
 the consent-gated mutation methods. Each is denied unless the caller supplies a
@@ -27,7 +27,7 @@ card was declined, no charge); `refund` acts on a settled ticket, which the
 fake-card flow never produces, so its live path is exercised offline only. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `1648 passed, 1 deselected`; the one
+current reviewed offline gate is `1664 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -287,7 +287,7 @@ Historical pre-revalidation inventory was 28 successful, 9 failed, and 128
 unexecuted entries out of 165. The pre-R149 inventory was 31 successful, 10
 failed, and 124 unexecuted entries out of 165. Current inventory is 32
 successful, 10 failed, and 123 unexecuted entries out of 165. This increment
-changes only the package boundary to 51 exact login/read routes and 57 public
+changes only the package boundary to 54 exact login/read routes and 60 public
 methods; it adds no reservation change, booking, payment, refund,
 cancellation, check-in, or other mutation capability.
 
@@ -364,8 +364,8 @@ force DynaPath off, and use strict full-envelope `SUCC` parsers with repr-safe
 nested response models. The implementation used no live request, credential
 access, secure raw capture, retry, fallback, or adjacent mutation. At
 implementation completion, the pre-R149 inventory was 31 successful, 10
-failed, and 124 unexecuted out of 165. The boundary is 51 exact login/read
-routes and 57 public methods; the DynaPath allowlist remains six paths.
+failed, and 124 unexecuted out of 165. The boundary is 54 exact login/read
+routes and 60 public methods; the DynaPath allowlist remains six paths.
 
 The ticket-reference implementation itself used no live I/O and added no
 mutation capability.

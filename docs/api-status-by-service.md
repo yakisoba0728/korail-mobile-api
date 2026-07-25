@@ -9,13 +9,13 @@
 | 상태 | 건수 |
 |---|---:|
 | 성공 | 32 |
-| 실패 | 10 |
-| 미실행 | 123 |
+| 실패 | 13 |
+| 미실행 | 120 |
 | 전체 | 165 |
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
 
-Package coverage: 51 exact login/read routes and 57 public methods. Fifty-three
+Package coverage: 54 exact login/read routes and 60 public methods. Fifty-six
 are audited login/read methods; the other four, `reserve`, `cancel_unpaid_hold`,
 `pay_with_fake_card`, and `refund`, are consent-gated mutation methods. Each is
 denied without a matching-category `MutationConsent`; with the default
@@ -68,8 +68,8 @@ R137, R138, R146, R148, and R149 now have static-only typed wrappers with exact
 authenticated forms, strict response parsers, repr-safe data, one-shot
 transport, and DynaPath disabled. At implementation completion no live request
 had been made, all five rows were unexecuted, and the pre-R149 inventory was 31
-successful, 10 failed, and 124 unexecuted. Package coverage is 51 exact routes
-and 57 public methods; the DynaPath allowlist remains six paths.
+successful, 10 failed, and 124 unexecuted. Package coverage is 54 exact routes
+and 60 public methods; the DynaPath allowlist remains six paths.
 
 A later bounded authenticated read-only revalidation used an empty advertising
 ID, made one successful login call, confirmed logged-in state and
@@ -88,7 +88,7 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 | `CalendarService` | 운행일 캘린더 조회 | 1 | 1 | 0 | 0 |
 | `CartService` | 장바구니 및 MAAS 예약 상태 | 3 | 1 | 0 | 2 |
 | `CashReceipt` | 현금영수증 발급 | 1 | 0 | 0 | 1 |
-| `CertificationService` | 할인/자격 인증 및 증빙 | 12 | 0 | 0 | 12 |
+| `CertificationService` | 할인/자격 인증 및 증빙 | 12 | 0 | 1 | 11 |
 | `CommonService` | 공통코드, 약관, 앱 설정, QR 위치 인증 | 11 | 6 | 0 | 5 |
 | `CompensateService` | 보상 환불 대상 조회 및 실행 | 3 | 0 | 1 | 2 |
 | `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |
@@ -108,7 +108,7 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 | `PushService` | 푸시 설정 및 승무원 호출 | 4 | 0 | 0 | 4 |
 | `RailPlusService` | RailPlus 자동충전 조회 | 1 | 0 | 0 | 1 |
 | `ReceiptService` | 승차권 영수증 조회 | 1 | 1 | 0 | 0 |
-| `RefundService` | 승차권 환불/반환 실행 | 5 | 0 | 0 | 5 |
+| `RefundService` | 승차권 환불/반환 실행 | 5 | 0 | 2 | 3 |
 | `ResearchService` | 열차/좌석/N카드 관련 조회 | 11 | 3 | 2 | 6 |
 | `ReservationCancelService` | 예약 취소 | 3 | 0 | 0 | 3 |
 | `ReservationService` | 승차권 예약 및 좌석 조건 | 4 | 1 | 1 | 2 |
@@ -186,7 +186,7 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 ## CertificationService
 
 - 역할: 할인/자격 인증 및 증빙
-- 상태: 총 12개 / 성공 0 / 실패 0 / 미실행 12
+- 상태: 총 12개 / 성공 0 / 실패 1 / 미실행 11
 
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
@@ -197,7 +197,7 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 | 21 | `getDiscountPrice` | POST | `/classes/com.korail.mobile.certification.PriceReCalculation` | 할인 적용 후 운임 재계산 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, hidPnrNo, txtJobId, hiduserYn, hidCustNo, txtPsgGridcnt, psg_tp_dv_cd, hidDcntKndCd, dcnt_knd_cd1, hidDscpNo, psrm_cl_cd, hidFmlyNo | `ReservationResponse` |
 | 22 | `govermentCertification1` | GET | `/classes/com.korail.mobile.pbep.toknCre.do` | 정부 인증 토큰 생성 | 미실행 | 운영 상태 변경 가능 | Device, Version | `GovernmentCertificationStep1Dao.GovernmentCertificationResponse` |
 | 23 | `govermentCertification2` | GET | `/classes/com.korail.mobile.pbep.sttChck.do` | 정부 인증 상태 확인 | 미실행 | 운영 상태 변경 가능 | Device, Version, csrfToken | `GovernmentCertificationStep2Dao.GovernmentCertificationStep2Response` |
-| 24 | `inquiryTicketRsv` | GET | `/classes/com.korail.mobile.certification.ReservationList` | 예약 상세/인증 목록 조회 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, hidPnrNo | `ReservationResponse` |
+| 24 | `inquiryTicketRsv` | GET | `/classes/com.korail.mobile.certification.ReservationList` | 예약 상세/인증 목록 조회 | 실패 | 읽기 전용. 라이브 호출 수락됨, 예약 0건 계정이라 `WRG200018` 입력값오류(PNR번호). 성공 응답 미검증 | Device, Version, Key, hidPnrNo | `ReservationResponse` |
 | 25 | `reservation` | POST | `/classes/com.korail.mobile.nonMember.NonMemTicket` | 승차권 예약 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, pnrNo, txtMenuId, txtJobId, txtGdNo, hidFreeFlg, txtStndFlg, txtCustNm, txtCpNo, txtCustPw, FieldMap, FieldMap, FieldMap, FieldMap | `ReservationResponse` |
 | 26 | `reservation` | POST | `/classes/com.korail.mobile.certification.TicketReservation` | 승차권 예약 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, pnrNo, txtMenuId, txtJobId, txtGdNo, hidFreeFlg, txtStndFlg, pbepInfo, FieldMap, FieldMap, FieldMap, FieldMap | `ReservationResponse` |
 | 27 | `reservation` | POST | `/classes/com.korail.mobile.nonMember.NonMemTicket` | 승차권 예약 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, txtCustNm, txtCpNo, txtCustPw, FieldMap | `ReservationResponse` |
@@ -437,13 +437,13 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 ## RefundService
 
 - 역할: 승차권 환불/반환 실행
-- 상태: 총 5개 / 성공 0 / 실패 0 / 미실행 5
+- 상태: 총 5개 / 성공 0 / 실패 2 / 미실행 3
 
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
 | 108 | `executeOnlineRefunds` | POST | `/classes/com.korail.mobile.refunds.executeOnlineRefunds` | 온라인 환불 실행 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, pnrNo, tkKndCd, retDvCd, retRsnCd, ogtkSaleDt, ogtkSaleWctNo, ogtkSaleSqno, ogtkRetPwd, retAmt, retFee, custTeln, acepCustNm | `RefundExecuteTicketRefundDao.RefundExecuteTicketRefundResponse` |
-| 109 | `getTicketCommission` | POST | `/classes/com.korail.mobile.refunds.CommissionView` | 환불 수수료 조회 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, h_orgtk_ret_sale_dt, h_orgtk_wct_no, h_orgtk_sale_sqno, h_orgtk_ret_pwd, h_comp_nm, h_comp_cert_no | `RefundCommissionDao.RefundCommissionResponse` |
-| 110 | `getTicketDetail` | POST | `/classes/com.korail.mobile.refunds.SelTicketInfo` | 환불용 티켓 상세 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, h_orgtk_ret_sale_dt, h_orgtk_wct_no, h_orgtk_sale_sqno, h_orgtk_ret_pwd, h_purchase_history | `TicketDetailDao.TicketDetailResponse` |
+| 109 | `getTicketCommission` | POST | `/classes/com.korail.mobile.refunds.CommissionView` | 환불 수수료 조회 | 실패 | 읽기 전용 사전조회. 라이브 호출 수락됨, 실티켓 없어 `WRT100124`. 성공 응답 미검증 | Device, Version, Key, h_orgtk_ret_sale_dt, h_orgtk_wct_no, h_orgtk_sale_sqno, h_orgtk_ret_pwd, h_comp_nm, h_comp_cert_no | `RefundCommissionDao.RefundCommissionResponse` |
+| 110 | `getTicketDetail` | POST | `/classes/com.korail.mobile.refunds.SelTicketInfo` | 환불용 티켓 상세 | 실패 | 읽기 전용. 라이브 호출 수락됨, 실티켓 없어 `WRT100002`. 성공 응답 미검증 | Device, Version, Key, h_orgtk_ret_sale_dt, h_orgtk_wct_no, h_orgtk_sale_sqno, h_orgtk_ret_pwd, h_purchase_history | `TicketDetailDao.TicketDetailResponse` |
 | 111 | `returnTicket` | POST | `/classes/com.korail.mobile.refunds.RefundsRequest` | 승차권 환불 요청 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, txtPnrNo, h_orgtk_sale_dt, h_orgtk_sale_wct_no, h_orgtk_sale_sqno, h_orgtk_ret_pwd, h_mlg_stl, tk_ret_tms_dv_cd, trnNo, pbpAcepTgtFlg, latitude, longitude | `RefundDao.RefundResponse` |
 | 112 | `verifyOnlineRefunds` | POST | `/classes/com.korail.mobile.refunds.verifyOnlineRefunds` | 온라인 환불 검증 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, retNo1, retNo2, retNo3, retNo4, strName | `RefundVerifyTicketDao.RefundVerifyTicketResponse` |
 

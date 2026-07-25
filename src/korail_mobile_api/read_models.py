@@ -857,3 +857,172 @@ class ProductTrainInquiryResponse(BaseKorailResponse):
     next_train_no: str | None = field(default=None, repr=False)
     merge_reservation_possible_flag: str | None = field(default=None, repr=False)
     trains: tuple[ProductTrain, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class ReservationSeatDetail:
+    """One seat row of a held reservation (``seat_infos.seat_info[]``).
+
+    Field names follow ``ReservationResponse.SeatInfo``
+    (``response/certification/ReservationResponse.java:296-313``).
+    ``passenger_type_code`` is ``h_psg_tp_cd``: the app declares the passenger
+    type as a CODE on this row and there is no ``h_psg_tp_dv_nm`` anywhere in
+    the decompiled app, so the display-name variant some third-party clients
+    name is not modelled. If the server does send it, it stays reachable
+    through :attr:`raw`.
+    """
+
+    car_no: str | None = field(default=None, repr=False)
+    seat_no: str | None = field(default=None, repr=False)
+    room_class_code: str | None = field(default=None, repr=False)
+    room_class_name: str | None = field(default=None, repr=False)
+    passenger_type_code: str | None = field(default=None, repr=False)
+    #: ``h_rcvd_amt`` — the amount actually collected for this seat. Summing
+    #: these is how the payment path derives ``hidMnsStlAmt1`` when the hold
+    #: response omits ``h_tot_rcvd_amt``, so this read is an independent source
+    #: for cross-checking the settled amount.
+    received_amount: str | None = None
+    seat_price: str | None = None
+    seat_fare: str | None = None
+    seat_group_name: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class ReservationDetailJourney:
+    """One journey of a held reservation (``jrny_infos.jrny_info[]``)."""
+
+    journey_sequence: str | None = None
+    journey_type_code: str | None = field(default=None, repr=False)
+    reservation_change_no: str | None = field(default=None, repr=False)
+    departure_date: str | None = None
+    departure_time: str | None = None
+    arrival_time: str | None = None
+    departure_station_name: str | None = field(default=None, repr=False)
+    arrival_station_name: str | None = field(default=None, repr=False)
+    train_no: str | None = field(default=None, repr=False)
+    train_class_name: str | None = None
+    seats: tuple[ReservationSeatDetail, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class TicketReservationDetailResponse(BaseKorailResponse):
+    """A held reservation read back by PNR (``certification.ReservationList``).
+
+    The response type is the app's ``ReservationResponse`` — the same DAO the
+    reserve mutation returns — so this read gives an independent view of a hold
+    the package can already create: ``window_no`` (``h_wct_no``) and the
+    per-seat amounts that the payment form settles.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    pnr_no: str | None = field(default=None, repr=False)
+    window_no: str | None = field(default=None, repr=False)
+    journey_count: str | None = None
+    total_fare: str | None = None
+    total_price: str | None = None
+    total_discount_amount: str | None = None
+    #: ``h_tot_rcvd_amt`` — the settled total. Cross-checks ``hidMnsStlAmt1``
+    #: on the payment form against a source that is not the hold response.
+    total_received_amount: str | None = None
+    payment_flag: str | None = None
+    journeys: tuple[ReservationDetailJourney, ...] = ()
+
+
+@dataclass(frozen=True)
+class RefundCommissionResponse(BaseKorailResponse):
+    """Refund fee and refundable amount for one original ticket.
+
+    Fields follow ``RefundCommissionDao.RefundCommissionResponse``
+    (``dao/refund/RefundCommissionDao.java:70-77``). This is the "how much comes
+    back and what is the fee" pre-check that must precede a first live refund.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    #: ``ret_amt`` — the amount that would be returned.
+    refund_amount: str | None = None
+    #: ``ret_fee`` — the fee withheld from it.
+    refund_fee: str | None = None
+    #: ``prg_psb_flg`` — whether the refund may proceed at all.
+    proceed_possible_flag: str | None = None
+    ticket_return_times_division_code: str | None = None
+    usable_mileage: str | None = None
+    #: ``h_msg_cd2``/``h_msg_txt2`` — a SECOND message pair this route carries
+    #: alongside the envelope's own, e.g. a fee-policy notice on a successful
+    #: pre-check.
+    secondary_message_code: str | None = None
+    secondary_message_text: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class RefundTicketSeat:
+    """One seat of a refund-target ticket (``tk_seat_info[]``)."""
+
+    car_no: str | None = field(default=None, repr=False)
+    seat_no: str | None = field(default=None, repr=False)
+    buyer_name: str | None = field(default=None, repr=False)
+    checkin_status_code: str | None = field(default=None, repr=False)
+    discount_kind_code: str | None = field(default=None, repr=False)
+    discount_kind_name: str | None = None
+    passenger_type_code: str | None = field(default=None, repr=False)
+    passenger_type_name: str | None = None
+    seat_group_name: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class RefundTicketJourney:
+    """One journey of a refund-target ticket (``ticket_infos.ticket_info[]``)."""
+
+    journey_sequence: str | None = None
+    journey_type_code: str | None = field(default=None, repr=False)
+    departure_date: str | None = None
+    departure_time: str | None = None
+    departure_station_name: str | None = field(default=None, repr=False)
+    arrival_date: str | None = None
+    arrival_time: str | None = None
+    arrival_station_name: str | None = field(default=None, repr=False)
+    train_no: str | None = field(default=None, repr=False)
+    train_class_name: str | None = None
+    room_class_name: str | None = field(default=None, repr=False)
+    platform_no: str | None = field(default=None, repr=False)
+    seats: tuple[RefundTicketSeat, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class RefundTicketDetailResponse(BaseKorailResponse):
+    """The refund target's ticket detail (``refunds.SelTicketInfo``).
+
+    Fields follow ``TicketDetailDao.TicketDetailResponse``
+    (``dao/refund/TicketDetailDao.java:227-281``). :attr:`companion_name` and
+    :attr:`companion_birth_date` are what the app feeds straight into the
+    following ``CommissionView`` call as ``h_comp_nm``/``h_comp_cert_no``
+    (``TicketListActivity.java:908-909``), so the two reads chain.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    pnr_no: str | None = field(default=None, repr=False)
+    sale_date: str | None = field(default=None, repr=False)
+    sale_time: str | None = field(default=None, repr=False)
+    window_name: str | None = field(default=None, repr=False)
+    original_sale_date: str | None = field(default=None, repr=False)
+    original_window_no: str | None = field(default=None, repr=False)
+    original_sale_sequence: str | None = field(default=None, repr=False)
+    original_return_password: str | None = field(default=None, repr=False)
+    ticket_kind_code: str | None = field(default=None, repr=False)
+    ticket_kind_name: str | None = None
+    #: ``retPsbFlg`` — whether this ticket is refundable at all. The cheapest
+    #: possible pre-flight for a refund.
+    refund_possible_flag: str | None = None
+    return_flag: str | None = None
+    total_fare_amount: str | None = None
+    total_discount_amount: str | None = None
+    total_received_amount: str | None = None
+    train_running_flag: str | None = None
+    #: ``h_compa_nm``/``h_compa_brth`` — copied verbatim into the CommissionView
+    #: request as ``h_comp_nm``/``h_comp_cert_no``.
+    companion_name: str | None = field(default=None, repr=False)
+    companion_birth_date: str | None = field(default=None, repr=False)
+    journeys: tuple[RefundTicketJourney, ...] = ()

@@ -125,10 +125,13 @@ from .read_models import (
     PriceFareQuoteResponse,
     RecentDeliveryHistoryResponse,
     ProductReservationListResponse,
+    RefundCommissionResponse,
+    RefundTicketDetailResponse,
     ReservationHistoryResponse,
     SeatAssignmentScheduleResponse,
     ServiceStatusResponse,
     TicketReceiptResponse,
+    TicketReservationDetailResponse,
     TicketDuplicationCheckResponse,
     TripChangeDateResponse,
     TripMenuResponse,
@@ -157,9 +160,12 @@ from .read_payloads import (
     build_product_reservations_query,
     build_price_fare_quote_form,
     build_recent_delivery_history_form,
+    build_refund_commission_form,
+    build_refund_ticket_detail_form,
     build_service_status_query,
     build_seat_assignment_schedule_form,
     build_ticket_receipt_form,
+    build_ticket_reservation_detail_query,
     build_ticket_duplication_check_form,
     build_trip_menu_form,
     build_trip_change_date_form,
@@ -174,7 +180,9 @@ from .read_payloads import (
     PassScheduleRequest,
     PriceFareQuoteRequest,
     OriginalTicketReference,
+    RefundCompanion,
     TicketDuplicationCheckRequest,
+    TicketReservationDetailRequest,
 )
 from .read_parsers import (
     parse_cart_list_response,
@@ -201,10 +209,13 @@ from .read_parsers import (
     parse_price_fare_quote_response,
     parse_recent_delivery_history_response,
     parse_product_reservation_list_response,
+    parse_refund_commission_response,
+    parse_refund_ticket_detail_response,
     parse_reservation_history_response,
     parse_service_status_response,
     parse_seat_assignment_schedule_response,
     parse_ticket_receipt_response,
+    parse_ticket_reservation_detail_response,
     parse_ticket_duplication_check_response,
     parse_trip_change_date_response,
     parse_trip_menu_response,
@@ -894,6 +905,87 @@ class KorailClient:
             lambda: parse_recent_delivery_history_response(
                 self.http.post_form(
                     "/classes/com.korail.mobile.tk.rcntDlvHst.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_ticket_reservation_detail(
+        self,
+        request: TicketReservationDetailRequest,
+    ) -> TicketReservationDetailResponse:
+        """Read one held reservation back by PNR.
+
+        Ports ONLY the read overload of
+        ``/classes/com.korail.mobile.certification.ReservationList``
+        (``CertificationService.java:45-46`` ``inquiryTicketRsv``). The same
+        path also carries ``applyDisabilityCertification`` (:22), which applies
+        a disability certificate to a held reservation and is therefore a
+        write; it is not ported, and the route's four-field pin in
+        ``KORAIL_EXACT_REQUEST_FIELDS`` means its wider request shape cannot be
+        emitted here even by accident.
+        """
+        self._require_session()
+        query = build_ticket_reservation_detail_query(request)
+        return self._run_read(
+            lambda: parse_ticket_reservation_detail_response(
+                self.http.get_json(
+                    "/classes/com.korail.mobile.certification.ReservationList",
+                    query,
+                    include_common=True,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_refund_commission(
+        self,
+        ticket: OriginalTicketReference,
+        companion: RefundCompanion = RefundCompanion(),
+    ) -> RefundCommissionResponse:
+        """Ask what a refund of ``ticket`` would return and what it would cost.
+
+        Read-only pre-check for :meth:`refund` (``RefundService.java:19-21``).
+        Nothing is refunded by calling this; it reports ``ret_amt`` /``ret_fee``
+        /``prg_psb_flg`` so a caller can decide before touching the mutation
+        route.
+        """
+        self._require_session()
+        form = build_refund_commission_form(ticket, companion)
+        return self._run_read(
+            lambda: parse_refund_commission_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.refunds.CommissionView",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_refund_ticket_detail(
+        self,
+        ticket: OriginalTicketReference,
+        *,
+        from_purchase_history: bool = False,
+    ) -> RefundTicketDetailResponse:
+        """Read the refund target's ticket detail (``RefundService.java:23-25``).
+
+        The app chains this before :meth:`get_refund_commission`: the response's
+        ``h_compa_nm``/``h_compa_brth`` become that call's
+        ``h_comp_nm``/``h_comp_cert_no`` (``TicketListActivity.java:908-909``).
+        Set ``from_purchase_history=True`` to send the app's purchase-history
+        variant (``h_purchase_history="Y"``).
+        """
+        self._require_session()
+        form = build_refund_ticket_detail_form(
+            ticket,
+            from_purchase_history=from_purchase_history,
+        )
+        return self._run_read(
+            lambda: parse_refund_ticket_detail_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.refunds.SelTicketInfo",
                     form,
                     include_dynapath=False,
                 ).raw

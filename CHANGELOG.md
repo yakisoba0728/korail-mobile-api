@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+- Added three read-only routes found by comparing the package against four
+  third-party reference clients (srtgo, srtgo_plus, ryanking13/SRT, korail2);
+  all three are declared in our own decompiled APK. `get_ticket_reservation_detail`
+  reads one held reservation back by PNR (`certification.ReservationList`,
+  `CertificationService.java:45-46`), giving an independent view of `h_wct_no`
+  and the per-seat `h_rcvd_amt` rows the payment form settles.
+  `get_refund_commission` (`refunds.CommissionView`, `RefundService.java:19-21`)
+  reports `ret_amt`/`ret_fee`/`prg_psb_flg`, and `get_refund_ticket_detail`
+  (`refunds.SelTicketInfo`, `RefundService.java:23-25`) reports the refund
+  target's ticket detail including `retPsbFlg`. Together the latter two are the
+  "how much comes back and what is the fee" pre-check that `refund` has never
+  had; none of the four reference clients implements either one. The boundary is
+  now 54 exact login/read routes and 60 public methods.
+- `certification.ReservationList` hosts a SECOND, write-flavoured Retrofit
+  overload, `applyDisabilityCertification` (`CertificationService.java:22`),
+  which applies a disability certificate to a held reservation. Only the read
+  overload is ported, and the route's `KORAIL_EXACT_REQUEST_FIELDS` entry pins
+  the read's exact four fields, so the write overload's wider shape
+  (`txtPsgDisc0019Cnt` plus six `@QueryMap`s) is rejected before transmission
+  even though it shares the path.
+- `refunds.SelTicketInfo` is sent as the app declares it — POST, with
+  `h_purchase_history` — not as srtgo sends it (`ktx.py:791-800` uses GET and
+  drops the field). Every app call site sets the flag, "Y" from the
+  purchase-history screen and "N" elsewhere.
+- Verified all three against the live server in one paced read-only pass on an
+  account holding zero reservations. Every route was ACCEPTED — HTTP 200, no
+  DynaPath rejection — and each answered with a bare three-key FAIL envelope for
+  the deliberately-invalid arguments it was given: `WRG200018` 입력값오류(PNR번호),
+  `WRT100002` 창구번호미입력,미승인창구 and `WRT100124` 반환번호를 확인해주세요.
+  Each code names the field the server parsed, which is what establishes the
+  request shapes. Those bodies are pinned verbatim as offline regressions. The
+  SUCCESS bodies remain UNVERIFIED and are covered only by APK-declared
+  synthetic fixtures, because producing one needs a real held or paid ticket.
+  No payment, refund, or reservation call was made and the account still holds
+  zero reservations.
+- `ReservationSeatDetail` maps the passenger type from `h_psg_tp_cd`, which is
+  what `ReservationResponse.SeatInfo` declares. The `h_psg_tp_dv_nm` that a
+  reference client names does not appear anywhere in the decompiled app and was
+  not observed live, so it is deliberately not mapped; an unmapped key stays
+  reachable through `raw`.
 - Added the consent and safety foundation for state-changing requests. Frozen
   `MutationConsent` (per-category `allow_*` default `False`, `dry_run` default
   `True`, `fake_card_only` default `True`) and frozen `MutationPreview` (whose

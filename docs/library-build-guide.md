@@ -23,7 +23,7 @@
 | Distinct HTTP+path pairs | 159 |
 | Annotated service interfaces | 35 |
 | HTTP method mix | POST 136 / GET 29 |
-| Runtime test status | 성공 32 / 실패 10 / 미실행 123 |
+| Runtime test status | 성공 32 / 실패 13 / 미실행 120 |
 
 ## Runtime Contract
 
@@ -91,7 +91,7 @@ is still unimplemented and still governed by the baseline policy above.
 | `CalendarService` | 1 | 1 | 0 | 0 |
 | `CartService` | 3 | 1 | 0 | 2 |
 | `CashReceipt` | 1 | 0 | 0 | 1 |
-| `CertificationService` | 12 | 0 | 0 | 12 |
+| `CertificationService` | 12 | 0 | 1 | 11 |
 | `CommonService` | 11 | 6 | 0 | 5 |
 | `CompensateService` | 3 | 0 | 1 | 2 |
 | `CustService` | 1 | 0 | 1 | 0 |
@@ -111,7 +111,7 @@ is still unimplemented and still governed by the baseline policy above.
 | `PushService` | 4 | 0 | 0 | 4 |
 | `RailPlusService` | 1 | 0 | 0 | 1 |
 | `ReceiptService` | 1 | 1 | 0 | 0 |
-| `RefundService` | 5 | 0 | 0 | 5 |
+| `RefundService` | 5 | 0 | 2 | 3 |
 | `ResearchService` | 11 | 3 | 2 | 6 |
 | `ReservationCancelService` | 3 | 0 | 0 | 3 |
 | `ReservationService` | 4 | 1 | 1 | 2 |

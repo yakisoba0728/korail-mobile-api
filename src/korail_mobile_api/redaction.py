@@ -141,6 +141,30 @@ SENSITIVE_KEYS = frozenset(
         "hidTmpJobSqno2",
         # Original-ticket sale identity carried on the refund form.
         "h_orgtk_sale_wct_no",
+        # Reference-derived reads: certification.ReservationList seat rows and
+        # refunds.SelTicketInfo ticket rows. The wire names below are the ones
+        # these three routes add on top of the sets already listed above.
+        "h_srcar_no",
+        "h_seat_no",
+        "h_sgr_nm",
+        "h_buy_ps_nm",
+        "h_compa_nm",
+        "h_compa_brth",
+        "h_comp_nm",
+        "h_comp_cert_no",
+        "h_wct_nm",
+        "h_plf_no",
+        "h_purchase_history",
+        # ...and the model attribute names they parse into.
+        "original_window_no",
+        "original_sale_sequence",
+        "original_return_password",
+        "buyer_name",
+        "seat_group_name",
+        "companion_name",
+        "companion_birth_date",
+        "window_name",
+        "certificate_no",
     }
 )
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
