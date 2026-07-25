@@ -57,6 +57,12 @@ PLACEHOLDER_CARD_PASSWORD = "00"
 PLACEHOLDER_CARD_EXPIRE = "3012"
 PLACEHOLDER_CARD_BIRTHDAY = "900101"
 SYNTHETIC_PNR = "SYNTHETICPNR1"
+#: A PNR shaped exactly like a live one: KORAIL issues 15 DECIMAL DIGITS. This
+#: value is synthetic (a real PNR starts from the issue date), but its shape is
+#: the real one, and its shape is the whole point -- a 15-digit run is
+#: indistinguishable from an Amex PAN, so any generic card-number pattern eats
+#: it. The 2026-07-25 live run lost its PNR to exactly that.
+LIVE_SHAPED_PNR = "399999999999999"
 
 SEARCH = "/classes/com.korail.mobile.seatMovie.ScheduleView"
 HISTORY = "/classes/com.korail.mobile.reservation.ReservationView"
@@ -97,12 +103,12 @@ def _train_row(train_no: str) -> dict[str, Any]:
     }
 
 
-def _replies(**overrides: Any) -> dict[str, dict[str, Any]]:
+def _replies(*, pnr: str = SYNTHETIC_PNR, **overrides: Any) -> dict[str, dict[str, Any]]:
     base = {
         SEARCH: _ok(trn_infos={"trn_info": [_train_row("00101"), _train_row("00103")]}),
         HISTORY: _ok(jrny_infos={"jrny_info": []}),
         RESERVE: _ok(
-            h_pnr_no=SYNTHETIC_PNR,
+            h_pnr_no=pnr,
             h_jrny_cnt="1",
             h_wct_no="SYNTHETIC_WCT",
             h_tmp_job_sqno1="SYNTHETIC_JOB_1",
@@ -114,7 +120,7 @@ def _replies(**overrides: Any) -> dict[str, dict[str, Any]]:
             },
         ),
         DETAIL: _ok(
-            h_pnr_no=SYNTHETIC_PNR,
+            h_pnr_no=pnr,
             h_wct_no="SYNTHETIC_WCT",
             h_jrny_cnt="1",
             h_tot_fare="8400",
@@ -127,7 +133,7 @@ def _replies(**overrides: Any) -> dict[str, dict[str, Any]]:
         TICKETS: _ok(
             tickets=[
                 {
-                    "h_pnr_no": SYNTHETIC_PNR,
+                    "h_pnr_no": pnr,
                     "h_orgtk_ret_sale_dt": "20990101",
                     "h_orgtk_wct_no": "SYNTHETIC_WCT",
                     "h_orgtk_sale_sqno": "0001",
@@ -136,7 +142,7 @@ def _replies(**overrides: Any) -> dict[str, dict[str, Any]]:
             ]
         ),
         SEL_TICKET: _ok(
-            h_pnr_no=SYNTHETIC_PNR,
+            h_pnr_no=pnr,
             retPsbFlg="Y",
             h_compa_nm="",
             h_compa_brth="",
@@ -350,11 +356,6 @@ def test_console_masks_a_pan_written_with_separators():
     assert "1111" not in text
 
 
-def test_console_masks_an_unknown_pan_it_was_never_given():
-    console = rt._Console()
-    assert "5555444433332222" not in console.scrub("pan 5555444433332222")
-
-
 def test_console_keeps_the_pnr_and_ordinary_numbers_readable():
     # The PNR is the single most important thing this script prints; a scrubber
     # that ate it would defeat the whole recovery design. Dates, times and
@@ -366,6 +367,34 @@ def test_console_keeps_the_pnr_and_ordinary_numbers_readable():
     assert SYNTHETIC_PNR in text
     assert "20990101 060000-083000" in text
     assert "8400" in text
+
+
+def test_console_keeps_a_live_shaped_15_digit_pnr_but_still_masks_the_pan():
+    """The exact regression from the 2026-07-25 live run.
+
+    A 15-digit PNR and a 16-digit PAN sit in one string. The PAN must go; the
+    PNR must survive byte for byte. A digit-run rule cannot do both, which is
+    why the scrubber matches the card by exact value instead.
+    """
+    console = rt._console_for(_card())
+    text = console.scrub(
+        f"LIVE HOLD CREATED   PNR {LIVE_SHAPED_PNR} "
+        f"card {PLACEHOLDER_CARD_NUMBER}"
+    )
+    assert LIVE_SHAPED_PNR in text
+    _assert_no_card_leak(text)
+
+
+def test_the_recovery_command_survives_scrubbing_with_a_live_shaped_pnr():
+    # The banner prints a runnable command line. Redacting the PNR inside it is
+    # what left the last live run holding an unpaid reservation it could not
+    # name; the command has to come out copy-pasteable.
+    console = rt._console_for(_card())
+    command = rt._recovery_command(LIVE_SHAPED_PNR)
+    scrubbed = console.scrub(command)
+    assert scrubbed == command
+    assert f"KORAIL_RECOVER_PNR={LIVE_SHAPED_PNR}" in scrubbed
+    assert "[REDACTED" not in scrubbed
 
 
 def test_console_scrubs_exception_text_too():
@@ -521,6 +550,33 @@ def test_full_round_trip_reserves_pays_refunds_and_leaks_no_card(
     assert "REFUND AMOUNT: 8400 KRW" in out
     assert "REFUND FEE:    0 KRW" in out
     assert out.index("REFUND FEE") < out.index("[h] refunding")
+
+
+def test_a_live_shaped_pnr_reaches_the_operator_through_every_banner(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """End-to-end proof of the 2026-07-25 regression, on the path that failed.
+
+    The hold banner and the failure banner both print the PNR and the runnable
+    recovery command. With a 15-digit PNR the previous digit-run backstop turned
+    every one of those into ``[REDACTED_CARD]``, which is how a real unpaid hold
+    ended up with no identifier attached to it.
+    """
+    # TICKETS returns nothing, so the run fails AFTER paying: this exercises the
+    # hold banner and the not-clean failure banner in one pass.
+    recorder = _Recorder(
+        _replies(pnr=LIVE_SHAPED_PNR, **{TICKETS: _ok(tickets=[])})
+    )
+    trip = _round_trip(recorder, monkeypatch)
+    with pytest.raises(rt.RoundTripAborted):
+        trip.run()
+    out = capsys.readouterr().out
+    assert f"LIVE HOLD CREATED   PNR {LIVE_SHAPED_PNR}" in out
+    assert f"PNR {LIVE_SHAPED_PNR}" in out
+    assert rt._recovery_command(LIVE_SHAPED_PNR) in out
+    # Nothing anywhere in the run was mistaken for a card number.
+    assert "[REDACTED_CARD]" not in out
+    _assert_no_card_leak(out)
 
 
 def test_the_confirmed_amount_is_the_independently_read_one(

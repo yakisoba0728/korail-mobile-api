@@ -274,7 +274,12 @@ python3 scripts/reserve_pay_refund_roundtrip.py
 ```
 
 The PAN, the card password, the expiry and the birthday are scrubbed from every
-line it prints, including exception text. The PNR is printed unredacted on
+line it prints, including exception text, by exact-value substitution of the
+four values it was handed. It applies no generic digit-run pattern, because a
+KORAIL PNR is 15 decimal digits and is therefore indistinguishable from a PAN by
+shape: on 2026-07-25 a live run printed `LIVE HOLD CREATED   PNR
+[REDACTED_CARD]`, and the same for the recovery command line, leaving a real
+unpaid hold with no identifier. The PNR is printed unredacted on
 purpose, the instant the hold exists, and again in a banner with a runnable
 recovery command if anything later fails — a paid ticket whose PNR the operator
 does not know is the worst outcome the script can produce. That recovery command

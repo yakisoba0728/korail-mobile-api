@@ -17,12 +17,16 @@ Safety posture
   file, never a command-line argument (argv is visible in ``ps``), and never a
   default value. A missing one aborts before login.
 * The PAN and the card password are scrubbed from EVERY line this script writes,
-  including exception text and every error path, by :class:`_Console`. The card
-  number is never printed, not even partially, and nothing is written to disk.
+  including exception text and every error path, by :class:`_Console`. It does
+  so by EXACT VALUE -- the four card values it was handed and nothing else. The
+  card number is never printed, not even partially, and nothing is written to
+  disk.
 * The PNR is printed IN FULL, on purpose. A paid ticket whose PNR the operator
   does not know is the worst outcome this script can produce, so the PNR is
   printed the instant it exists and again, in an unmissable banner with a
-  runnable recovery command, on any later failure.
+  runnable recovery command, on any later failure. No digit-run pattern is
+  applied to this output: a PNR is 15 digits and cannot be told from a PAN by
+  shape, so such a pattern masks the one value that must always get through.
 * Reserve, pay, cancel and refund each go out under their own single-category
   consent; no consent object in this file grants two money-moving categories at
   once, and each factory asserts that.
@@ -117,16 +121,6 @@ class RoundTripAborted(RuntimeError):
     """A refusal raised before or instead of a state change."""
 
 
-#: A bare PAN-length run of CONTIGUOUS digits. Deliberately stricter than the
-#: package's own ``CARD_RE``, which tolerates spaces and dashes between digits:
-#: that tolerance is right when redacting an arbitrary payload, but here it
-#: would swallow legitimate output like "20990101 060000" (a date next to a
-#: time, 14 digits with a space). This backstop only has to catch a PAN that is
-#: NOT the one we were given; the one we were given is matched exactly, and
-#: separator-tolerantly, by :func:`_secret_pattern`.
-_BARE_PAN_RE = re.compile(r"(?<![0-9])[0-9]{13,19}(?![0-9])")
-
-
 def _secret_pattern(secret: str) -> re.Pattern[str]:
     """Match ``secret`` as a standalone token, spaces/dashes allowed inside.
 
@@ -139,16 +133,28 @@ def _secret_pattern(secret: str) -> re.Pattern[str]:
 
 
 class _Console:
-    """stdout that can never emit a card secret.
+    """stdout that can never emit a card secret, and never eats the PNR.
 
-    Every string printed by this script goes through :meth:`scrub` first. Two
-    layers apply: a bare-PAN backstop, then an exact, token-anchored,
-    separator-tolerant substitution of the four values read from the card
-    environment variables.
+    Every string printed by this script goes through :meth:`scrub` first, which
+    substitutes -- by EXACT VALUE, token-anchored and separator-tolerant -- the
+    four secrets read from the card environment variables, and nothing else.
 
-    The full ``redact_payload``/``redact_text`` treatment is deliberately NOT
-    used here, because it masks ``pnr``-shaped keys, and this script's single
-    most important output is an unredacted PNR.
+    There is deliberately NO generic digit-run pattern here, neither the
+    package's ``CARD_RE`` nor a stricter local variant. A Korail PNR is a
+    15-digit numeric string, which is indistinguishable from a PAN by shape
+    alone (a 15-digit PAN is an ordinary Amex number), so any 13-19 digit rule
+    masks the PNR as well. A 2026-07-25 live run proved it: the hold banner read
+    ``LIVE HOLD CREATED   PNR [REDACTED_CARD]`` and so did the recovery command
+    line beneath it, leaving the operator with a real unpaid hold and no
+    identifier for it. That is precisely the orphaned-hold outcome this whole
+    script is shaped to prevent, and it is a far worse failure than the one the
+    backstop guarded against.
+
+    Masking by exact value loses nothing real. The only card this process ever
+    holds is the one it was handed, it is matched here separator-tolerantly, and
+    :func:`_console_for` self-checks that match against the actual card before a
+    single line is printed. A PAN that is not ours cannot reach this stdout:
+    KORAIL never echoes one back, and we never read one from anywhere else.
     """
 
     def __init__(self, secrets: tuple[str, ...] = ()) -> None:
@@ -163,7 +169,6 @@ class _Console:
 
     def scrub(self, value: Any) -> str:
         text = value if isinstance(value, str) else str(value)
-        text = _BARE_PAN_RE.sub("[REDACTED_CARD]", text)
         for pattern in self._patterns:
             text = pattern.sub("[REDACTED]", text)
         return text

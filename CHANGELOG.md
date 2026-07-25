@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Fixed: `scripts/reserve_pay_refund_roundtrip.py` masked the PNR it exists to
+  print. Its console scrubber applied a 13–19 digit card-number pattern to
+  arbitrary text, and a KORAIL PNR is 15 decimal digits, so a live run on
+  2026-07-25 printed `LIVE HOLD CREATED   PNR [REDACTED_CARD]` and redacted the
+  PNR inside the recovery command line as well — leaving a real unpaid hold with
+  no identifier attached to it. The scrubber now substitutes the four card
+  values it was actually handed, by exact value, and applies no digit-run
+  pattern at all: a 15-digit run cannot be told from an Amex PAN by shape, and
+  the PNR is the one value that must always reach the operator. `redact_payload`
+  and the package's `CARD_RE` are unchanged; the generic pattern is right where
+  it guards a mutation payload against a PAN under an unknown key.
 - Real (chargeable) card payment is now possible, as an explicit, additive
   opt-in. `MutationConsent` gains `real_card_acknowledged` (default `False`):
   the caller's acknowledgement that a real, chargeable PAN will be transmitted
