@@ -93,6 +93,8 @@ def _paid_hold() -> ReservationHoldResponse:
         pnr_no="SYNTHETIC_PNR",
         journey_count="0001",
         window_no="SYNTHETIC_WCT",
+        temporary_job_sequence_1="SYNTHETIC_JOB_1",
+        temporary_job_sequence_2="SYNTHETIC_JOB_2",
         total_price="8400",
         received_amount="7560",
     )
@@ -115,8 +117,8 @@ def test_card_payment_form_matches_the_app_pay_with_card_contract():
         "Key": "korail1234567890",
         "hidPnrNo": "SYNTHETIC_PNR",
         "hidWctNo": "SYNTHETIC_WCT",
-        "hidTmpJobSqno1": "000000",
-        "hidTmpJobSqno2": "000000",
+        "hidTmpJobSqno1": "SYNTHETIC_JOB_1",
+        "hidTmpJobSqno2": "SYNTHETIC_JOB_2",
         "hidRsvChgNo": "000",
         "hidInrecmnsGridcnt": "1",
         "hidStlMnsSqno1": "1",
@@ -143,6 +145,37 @@ def test_card_payment_form_settles_the_received_amount_not_the_display_total():
     form = build_card_payment_form(KorailConfig(), hold, _fake_card())
     assert form["hidMnsStlAmt1"] == hold.received_amount
     assert form["hidMnsStlAmt1"] != hold.total_price
+
+
+def test_card_payment_form_echoes_the_holds_temporary_job_sequences():
+    # V4/b.java:39-40 does setJobSqNo1(response.getH_tmp_job_sqno1()) and
+    # likewise for 2; RsvPaymentDao.executeDao() (:129-131) passes those into
+    # PaymentService.payment's @Field("hidTmpJobSqno1"/"2")
+    # (PaymentService.java:14). They are reservation state, not a constant.
+    hold = replace(
+        _paid_hold(),
+        temporary_job_sequence_1="000123",
+        temporary_job_sequence_2="000456",
+    )
+    form = build_card_payment_form(KorailConfig(), hold, _fake_card())
+    assert form["hidTmpJobSqno1"] == "000123"
+    assert form["hidTmpJobSqno2"] == "000456"
+
+
+@pytest.mark.parametrize("missing", [None, "", "   "])
+def test_card_payment_form_falls_back_when_the_hold_withheld_a_sequence(missing):
+    # The app would forward the null and Retrofit would omit the @Field; this
+    # client cannot reproduce that without a conditional field, so "000000" --
+    # the value it has always sent, and the value srtgo hardcodes -- stays as
+    # the explicit last resort.
+    hold = replace(
+        _paid_hold(),
+        temporary_job_sequence_1=missing,
+        temporary_job_sequence_2=missing,
+    )
+    form = build_card_payment_form(KorailConfig(), hold, _fake_card())
+    assert form["hidTmpJobSqno1"] == "000000"
+    assert form["hidTmpJobSqno2"] == "000000"
 
 
 def test_card_payment_form_refuses_a_hold_that_carries_only_a_display_total():

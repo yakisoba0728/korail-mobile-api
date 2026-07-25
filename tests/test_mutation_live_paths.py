@@ -297,6 +297,8 @@ def _paid_hold() -> ReservationHoldResponse:
         pnr_no=SYNTHETIC_PNR,
         journey_count="0001",
         window_no="SYNTHETIC_WCT",
+        temporary_job_sequence_1="SYNTHETIC_JOB_1",
+        temporary_job_sequence_2="SYNTHETIC_JOB_2",
         total_price="8400",
         received_amount="7560",
     )
@@ -344,6 +346,17 @@ def test_pay_dry_run_preview_redacts_card_and_sends_nothing():
     for secret in ("0000000000000000", "2612", "900101", SYNTHETIC_PNR):
         assert secret not in joined, secret
     assert recorder.requests == []
+
+
+def test_payment_form_from_a_parsed_hold_carries_that_holds_reservation_state():
+    # End to end from the reserve response the server actually returned: the
+    # temporary job sequences and the settled amount both come off the parsed
+    # hold, not from constants baked into the builder.
+    form = build_card_payment_form(KorailConfig(), _hold(), _fake_card())
+    assert form["hidTmpJobSqno1"] == _HOLD_SUCCESS["h_tmp_job_sqno1"]
+    assert form["hidTmpJobSqno2"] == _HOLD_SUCCESS["h_tmp_job_sqno2"]
+    assert form["hidMnsStlAmt1"] == _HOLD_SUCCESS["h_tot_rcvd_amt"]
+    assert form["hidMnsStlAmt1"] != _HOLD_SUCCESS["h_tot_prc"]
 
 
 def test_post_mutation_form_refuses_real_card_payment_at_the_send_gate():

@@ -206,6 +206,21 @@ def build_unpaid_reservation_cancel_form(
 
 _CARD_FIELD_RE = re.compile(r"[0-9]+")
 
+# What the app sends when the hold response withheld the sequence. The app
+# passes whatever getH_tmp_job_sqno1/2() returned, including null, and Retrofit
+# then omits the @Field entirely — a shape this client cannot reproduce without
+# making the field conditional, and one no observed hold has produced (both
+# 2026-07 live holds returned populated sequences). "000000" is the value this
+# builder has always sent and the value srtgo hardcodes, so it stays as the
+# explicit last resort rather than dropping reservation state silently.
+_ABSENT_JOB_SEQUENCE = "000000"
+
+
+def _echoed_job_sequence(value: str | None) -> str:
+    if isinstance(value, str) and value.strip():
+        return value
+    return _ABSENT_JOB_SEQUENCE
+
 
 def build_card_payment_form(
     config: KorailConfig,
@@ -217,10 +232,14 @@ def build_card_payment_form(
     Field set and constants mirror the evidenced app/srtgo ``pay_with_card``
     (``ktx.py:1030-1051``, cross-validated against decompiled ``PaymentMethod``):
     a single card settlement row (``hidStlMnsCd1="02"``) carrying the raw PAN.
-    ``hidTmpJobSqno1/2`` are the app's fixed ``"000000"``. The reservation
-    identity and amount come from ``hold`` (a fresh successful hold with a PNR,
-    window number, and a received amount). ``card`` MUST be a non-chargeable
-    fake card — the caller/method is responsible for enforcing that.
+    ``hidTmpJobSqno1/2`` echo the hold response, not a constant: ``V4/b.java:39-40``
+    does ``setJobSqNo1(reservationResponse.getH_tmp_job_sqno1())`` (likewise 2)
+    and ``RsvPaymentDao.executeDao()`` (``:129-131``) hands those straight to
+    ``PaymentService.payment``'s ``@Field("hidTmpJobSqno1"/"2")``
+    (``PaymentService.java:14``). The reservation identity and amount come from
+    ``hold`` (a fresh successful hold with a PNR, window number, and a received
+    amount). ``card`` MUST be a non-chargeable fake card — the caller/method is
+    responsible for enforcing that.
 
     ``hidMnsStlAmt1`` is the app's ``getReceivedAmount()``, not the display
     total: ``AbstractC1269e.java:406`` puts ``String.valueOf(getReceivedAmount())``
@@ -267,8 +286,12 @@ def build_card_payment_form(
         {
             "hidPnrNo": pnr_no,
             "hidWctNo": window_no,
-            "hidTmpJobSqno1": "000000",
-            "hidTmpJobSqno2": "000000",
+            "hidTmpJobSqno1": _echoed_job_sequence(
+                hold.temporary_job_sequence_1
+            ),
+            "hidTmpJobSqno2": _echoed_job_sequence(
+                hold.temporary_job_sequence_2
+            ),
             "hidRsvChgNo": "000",
             "hidInrecmnsGridcnt": "1",
             "hidStlMnsSqno1": "1",
