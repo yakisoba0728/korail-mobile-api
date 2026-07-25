@@ -225,6 +225,19 @@ from .session import KorailSessionClient
 T = TypeVar("T")
 
 
+def _scalar_text(value: object) -> str | None:
+    """A KORAIL scalar as text, whether it arrived quoted or as a number.
+
+    ``type(...) is int`` excludes bool, which is an int subclass and is never a
+    KORAIL identity value.
+    """
+    if isinstance(value, str):
+        return value
+    if type(value) is int:
+        return str(value)
+    return None
+
+
 class KorailClient:
     def __init__(self, config: KorailConfig | None = None, *, transport: httpx.BaseTransport | None = None) -> None:
         self.config = config or KorailConfig()
@@ -1278,20 +1291,20 @@ class KorailClient:
         try:
             return parse_reservation_hold_response(raw)
         except KorailProtocolError:
-            pnr = raw.get("h_pnr_no")
-            if not (isinstance(pnr, str) and pnr.strip()):
+            # A PNR or journey count that arrived as a JSON number is a hold we
+            # can still cancel, so normalise both here the same way the parser
+            # does rather than discarding the only identity we have.
+            pnr = _scalar_text(raw.get("h_pnr_no"))
+            if not (pnr and pnr.strip()):
                 raise
             base = BaseKorailResponse.from_raw(raw)
-            journey_count = raw.get("h_jrny_cnt")
             return ReservationHoldResponse(
                 h_msg_cd=base.h_msg_cd,
                 h_msg_txt=base.h_msg_txt,
                 str_result=base.str_result,
                 raw=raw,
                 pnr_no=pnr,
-                journey_count=(
-                    journey_count if isinstance(journey_count, str) else None
-                ),
+                journey_count=_scalar_text(raw.get("h_jrny_cnt")),
             )
 
     def cancel_unpaid_hold(

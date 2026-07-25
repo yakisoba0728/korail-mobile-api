@@ -27,6 +27,20 @@
   code expects. The app never noticed because Gson's `JsonReader.nextString()`
   coerces a number into a String. Genuinely wrong types are still refused: a
   bool, a float, a list or an object where a scalar belongs is a protocol error.
+- Fixed: `parse_reservation_hold_response` could not read a hold back out of
+  the reservation history — the documented recovery path when a PNR is lost. The
+  history sends `h_jrny_cnt` as the JSON integer `1` while a reserve response
+  sends the string `"0001"`, so the parser raised and the operator had to
+  hand-build a hold to cancel a real reservation. Every scalar on the hold and
+  payment parsers now accepts a JSON string or a JSON number and normalises to
+  the string the form builders expect, so `1`, `"1"` and `"0001"` all reach
+  `build_unpaid_reservation_cancel_form`, which already compared them
+  numerically. The same tolerance covers the PNR, window number, job sequences
+  and settlement amount, because those identify a hold that may already exist on
+  the server and refusing one strands it;
+  `KorailClient._hold_from_reservation_response`, the last-ditch fallback whose
+  entire job is never to lose a PNR, normalises them too. Bools, floats, lists
+  and objects are still protocol errors.
 - Real (chargeable) card payment is now possible, as an explicit, additive
   opt-in. `MutationConsent` gains `real_card_acknowledged` (default `False`):
   the caller's acknowledgement that a real, chargeable PAN will be transmitted

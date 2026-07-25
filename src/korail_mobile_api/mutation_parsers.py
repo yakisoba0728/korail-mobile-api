@@ -31,12 +31,34 @@ def _optional_string(
     *,
     context: str,
 ) -> str | None:
+    """A scalar field, accepted as a JSON string OR a JSON number.
+
+    KORAIL sends whichever it likes for a field the APK declares as a Java
+    ``String``, and the app is indifferent because Gson's
+    ``JsonReader.nextString()`` coerces a number into its string form. The
+    reserve response quotes the journey count and zero-pads it
+    (``h_jrny_cnt="0001"``); the reservation history sends the same field as the
+    JSON integer ``1``. Both must parse, because reading a hold back out of the
+    history is the recovery path when a PNR has been lost.
+
+    This matters more here than on a read parser. Every value below identifies a
+    hold that may already EXIST on the server -- the PNR, the window number, the
+    job sequences the payment form echoes, the amount it settles. Refusing one
+    because it arrived unquoted strands a real reservation, which is the single
+    worst outcome this package can produce. So normalise to the string the form
+    builders expect, and keep rejecting only what is genuinely a different
+    shape: a bool, a float, a list or an object.
+    """
     value = row.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a string or null"
-        )
-    return value
+    if value is None or isinstance(value, str):
+        return value
+    # `type(...) is int` on purpose: bool is an int subclass, and True is not a
+    # number KORAIL sends for any of these.
+    if type(value) is int:
+        return str(value)
+    raise KorailProtocolError(
+        f"KORAIL {context} field {key} must be a string, an integer, or null"
+    )
 
 
 def _received_amount(

@@ -258,7 +258,11 @@ def test_reserve_returns_cancelable_hold_even_if_optional_field_malformed():
         "h_msg_txt": "success",
         "h_pnr_no": SYNTHETIC_PNR,
         "h_jrny_cnt": "1",
-        "h_tot_prc": 8400,  # int, not a string -> strict parser raises
+        # An OBJECT where a scalar belongs. A bare int would no longer do: the
+        # parser now normalises a JSON number, because KORAIL genuinely sends
+        # one. This has to be a shape the parser still rejects, or the test
+        # stops exercising the fallback it is named for.
+        "h_tot_prc": {"amount": 8400},
     }
     client, recorder = _client_with({RESERVE_ROUTE: malformed})
     hold = client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
@@ -272,12 +276,40 @@ def test_reserve_returns_cancelable_hold_even_if_optional_field_malformed():
     assert result.str_result == "SUCC"
 
 
+def test_reserve_recovers_a_hold_whose_pnr_arrived_as_a_json_number():
+    # The last-ditch fallback must apply the same string-or-number tolerance the
+    # parser does. A PNR is 15 decimal digits; if one ever arrives unquoted
+    # alongside a genuinely malformed field, discarding it would orphan a real
+    # hold -- the exact outcome this fallback exists to prevent.
+    malformed = {
+        "strResult": "SUCC",
+        "h_msg_cd": "IRR000000",
+        "h_msg_txt": "success",
+        "h_pnr_no": 399999999999999,
+        "h_jrny_cnt": 1,
+        "h_tot_prc": {"amount": 8400},
+    }
+    client, _ = _client_with({RESERVE_ROUTE: malformed})
+    hold = client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
+    assert hold.pnr_no == "399999999999999"
+    assert hold.journey_count == "1"
+    client2, _ = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
+    assert (
+        client2.cancel_unpaid_hold(
+            hold, consent=_live(allow_cancel=True)
+        ).str_result
+        == "SUCC"
+    )
+
+
 def test_reserve_reraises_when_no_pnr_returned():
     # A malformed response with NO PNR means no hold to orphan: re-raise.
     no_pnr = {
         "strResult": "SUCC",
         "h_msg_cd": "IRR000000",
-        "h_tot_prc": 8400,  # triggers strict-parse failure; no h_pnr_no present
+        # A missing envelope field triggers the strict-parse failure; no
+        # h_pnr_no is present, so there is no hold to protect.
+        "h_tot_prc": {"amount": 8400},
     }
     client, _ = _client_with({RESERVE_ROUTE: no_pnr})
     with pytest.raises(KorailProtocolError):

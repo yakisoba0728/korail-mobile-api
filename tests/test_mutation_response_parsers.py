@@ -3,13 +3,139 @@ from __future__ import annotations
 import pytest
 
 from korail_mobile_api import (
+    KorailConfig,
     KorailProtocolError,
     ReservationHoldResponse,
     ReservationPaymentResponse,
     parse_reservation_hold_response,
     parse_reservation_payment_response,
 )
+from korail_mobile_api.mutation_payloads import (
+    build_unpaid_reservation_cancel_form,
+)
+from korail_mobile_api.read_parsers import parse_reservation_history_response
 from korail_mobile_api.redaction import redact_mapping
+
+#: 15 decimal digits, the real PNR shape. Synthetic value.
+SYNTHETIC_LIVE_PNR = "399999999999999"
+
+
+def _reservation_history_body() -> dict[str, object]:
+    """The reservation-history shape a live account with one hold returns.
+
+    Structure and types from the 2026-07-25 live run, identities replaced with
+    synthetic values. The two things that matter here are that ``h_jrny_cnt``
+    is the JSON integer ``1`` -- where the reserve response sends the string
+    ``"0001"`` -- and that the PNR lives on the ``train_info`` row. The DAO
+    (``TicketRsvHistoryDao``) declares no ``h_jrny_cnt`` at all; the server
+    sends it anyway, and Gson simply ignores what it does not declare.
+    """
+    return {
+        "h_msg_cd": "IRG000000",
+        "h_msg_txt": "synthetic history",
+        "strResult": "SUCC",
+        "h_jrny_cnt": 1,
+        "jrny_infos": {
+            "jrny_info": [
+                {
+                    "train_infos": {
+                        "train_info": [
+                            {
+                                "h_pnr_no": SYNTHETIC_LIVE_PNR,
+                                "h_trn_no": "00101",
+                                "h_run_dt": "20990101",
+                                "h_dpt_rs_stn_nm": "SYNTHETIC_DEPARTURE",
+                                "h_arv_rs_stn_nm": "SYNTHETIC_ARRIVAL",
+                                "h_dpt_tm": "060000",
+                                "h_arv_tm": "083000",
+                                "h_payment_flg": "N",
+                                "h_stl_flg": "N",
+                                "h_tot_seat_cnt": 1,
+                                "h_tot_stnd_cnt": 0,
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+    }
+
+
+def test_a_hold_can_be_read_back_out_of_the_reservation_history():
+    """The documented recovery path, end to end, on the real history shape.
+
+    When the PNR is lost, the reservation history is where it is found again.
+    On 2026-07-25 that path did not work: handing the history response to
+    ``parse_reservation_hold_response`` raised "KORAIL reservation field
+    h_jrny_cnt must be a string or null", because the history sends the JSON
+    integer ``1`` while a reserve response sends ``"0001"``. The operator had to
+    hand-build a hold to cancel a real reservation.
+    """
+    history_raw = _reservation_history_body()
+
+    # 1. The history itself parses and names the outstanding PNR.
+    history = parse_reservation_history_response(history_raw)
+    assert [item.pnr_no for item in history.items] == [SYNTHETIC_LIVE_PNR]
+
+    # 2. The SAME body goes through the hold parser without raising, and the
+    #    integer journey count normalises to the string the builders expect.
+    hold = parse_reservation_hold_response(history_raw)
+    assert hold.journey_count == "1"
+
+    # 3. And a hold carrying the recovered PNR builds a real cancel form. The
+    #    builder compares journey counts numerically, so all three live spellings
+    #    have to reach it intact.
+    for journey_count in (1, "1", "0001"):
+        recovered = parse_reservation_hold_response(
+            {**history_raw, "h_pnr_no": SYNTHETIC_LIVE_PNR, "h_jrny_cnt": journey_count}
+        )
+        assert recovered.pnr_no == SYNTHETIC_LIVE_PNR
+        form = build_unpaid_reservation_cancel_form(KorailConfig(), recovered)
+        assert form["txtPnrNo"] == SYNTHETIC_LIVE_PNR
+        assert form["txtJrnyCnt"] == "1"
+        assert form["txtJrnySqno"] == "0001"
+
+
+def test_hold_parser_normalises_a_numeric_pnr_and_identity_rather_than_refusing():
+    """A hold that EXISTS must never be lost to an unquoted identity field.
+
+    A PNR is 15 digits and the settlement amount is a number; either could
+    arrive unquoted, and refusing one strands a real reservation on the server.
+    """
+    hold = parse_reservation_hold_response(
+        {
+            "strResult": "SUCC",
+            "h_msg_cd": "IRR000018",
+            "h_msg_txt": "success",
+            "h_pnr_no": int(SYNTHETIC_LIVE_PNR),
+            "h_jrny_cnt": 1,
+            "h_wct_no": 1234,
+            "h_tot_rcvd_amt": 59800,
+            "jrny_infos": {"jrny_info": [{"h_jrny_sqno": 1, "h_trn_no": 101}]},
+        }
+    )
+    assert hold.pnr_no == SYNTHETIC_LIVE_PNR
+    assert hold.journey_count == "1"
+    assert hold.window_no == "1234"
+    assert hold.received_amount == "59800"
+    assert hold.journeys[0].journey_sequence == "1"
+    assert hold.journeys[0].train_no == "101"
+
+
+@pytest.mark.parametrize("value", [True, 1.5, ["1"], {"count": 1}])
+def test_hold_parser_still_refuses_a_genuinely_wrong_scalar_type(value):
+    # Tolerating a number is not tolerating anything: these are not shapes Gson
+    # would have read as a String either.
+    with pytest.raises(KorailProtocolError):
+        parse_reservation_hold_response(
+            {
+                "strResult": "SUCC",
+                "h_msg_cd": "IRR000018",
+                "h_msg_txt": "success",
+                "h_pnr_no": "SYNTHETIC_PNR",
+                "h_jrny_cnt": value,
+            }
+        )
 
 
 def test_reservation_hold_parser_preserves_payment_handoff_without_repr_leaks():
