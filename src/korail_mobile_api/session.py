@@ -184,14 +184,22 @@ class KorailSessionClient:
         crypto_info = self.get_login_crypto_info()
         transformed = transform_login_password(password, crypto_info)
         resolved_input_flag = input_flag or infer_login_input_flag(member_no)
+        # Field order is the app's own Retrofit signature:
+        # LoginService.java:19 declares
+        # (Device, Version, Key, txtMemberNo, txtPwd, txtInputFlg,
+        #  checkValidPw, custId, etrPath, idx)
+        # and LoginDao.java:240 calls it in exactly that order. idx is LAST.
+        # Device/Version/Key are prepended by post_form's common fields.
+        # This only shows on the wire when custId/etrPath are supplied, since
+        # the app omits nulls (Retrofit drops a null @Field) and so do we.
         form = {
             "txtMemberNo": member_no,
             "txtPwd": transformed,
             "txtInputFlg": resolved_input_flag,
             "checkValidPw": check_valid_pw,
-            "idx": crypto_info.idx or None,
             "custId": cust_id or None,
             "etrPath": etr_path or None,
+            "idx": crypto_info.idx or None,
         }
         try:
             response = self.http.post_form(

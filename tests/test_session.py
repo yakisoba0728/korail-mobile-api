@@ -153,6 +153,63 @@ def test_login_infers_email_input_flag_and_omits_unset_optional_fields(load_json
     assert session.jsessionid == "session-email"
 
 
+def test_login_emits_fields_in_the_apps_retrofit_order(load_json_fixture):
+    # LoginService.java:19 declares
+    # (Device, Version, Key, txtMemberNo, txtPwd, txtInputFlg, checkValidPw,
+    #  custId, etrPath, idx) and LoginDao.java:240 calls it in that order --
+    # idx is LAST, after custId/etrPath. This only shows on the wire when
+    # custId/etrPath are supplied, because the app omits null @Fields.
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == SERVICE_CHECK_PATH:
+            return service_check_response()
+        if request.url.path == "/classes/com.korail.mobile.common.code.do":
+            return httpx.Response(
+                200,
+                json={
+                    "h_msg_cd": "API.I00000",
+                    "h_msg_txt": "Success",
+                    "strResult": "SUCC",
+                    "app.login.cphd": {
+                        "idx": "IDX-AES",
+                        "key": "1234567890abcdef",
+                        "pwdAESCphd": "Y",
+                    },
+                },
+            )
+        if request.url.path == "/classes/com.korail.mobile.login.Login":
+            captured["body"] = request.content.decode()
+            return httpx.Response(
+                200,
+                json=load_json_fixture("login_success.json"),
+                headers={"Set-Cookie": "JSESSIONID=s; Path=/; HttpOnly"},
+            )
+        raise AssertionError(f"unexpected path {request.url.path}")
+
+    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client.login(
+        "member1",
+        "pw123",
+        cust_id="SYNTHETIC-CUST",
+        etr_path="SYNTHETIC-PATH",
+    )
+
+    names = [pair.split("=", 1)[0] for pair in captured["body"].split("&")]
+    assert names == [
+        "Device",
+        "Version",
+        "Key",
+        "txtMemberNo",
+        "txtPwd",
+        "txtInputFlg",
+        "checkValidPw",
+        "custId",
+        "etrPath",
+        "idx",
+    ]
+
+
 def test_login_accepts_live_no_aes_bootstrap_without_idx_or_key(load_json_fixture):
     captured = {}
 
