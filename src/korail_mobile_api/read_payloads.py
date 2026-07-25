@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from .config import KorailConfig
-from .models import TrainSearchMetadata
 from .read_models import (
     CommuterInfoResponse,
     CommuterPassengerOption,
@@ -949,8 +948,21 @@ def _validate_price_fare_leg(leg: PriceFareLeg) -> None:
 
 @dataclass(frozen=True)
 class PriceFareQuoteRequest:
-    metadata: TrainSearchMetadata = field(repr=False)
+    """One or two legs to price, plus the app's client-side ``txtMenuId``.
+
+    ``txtMenuId`` is NOT a server value. The app hardcodes it: ``a5/k.java:92-94``
+    returns ``"11"``, ``a5/u.java:279`` passes it as the ``MENU_ID`` intent
+    extra, ``PriceFareActivity.java:49`` reads it back and ``:62`` sets it on the
+    Price2Fare request. The default is therefore the app's constant, so a quote
+    can be built straight from a parsed search response.
+
+    This used to read ``menu_id`` off ``TrainSearchMetadata``, which parsed it
+    from a response key (``h_menu_id``) that does not exist anywhere in the app,
+    so every request built from a real search result raised.
+    """
+
     legs: tuple[PriceFareLeg, ...] = field(repr=False)
+    menu_id: str = field(default="11", repr=False)
 
     def __post_init__(self) -> None:
         _validate_price_fare_quote_request(self)
@@ -959,9 +971,7 @@ class PriceFareQuoteRequest:
 def _validate_price_fare_quote_request(
     request: PriceFareQuoteRequest,
 ) -> None:
-    if type(request.metadata) is not TrainSearchMetadata:
-        raise TypeError("metadata must be an exact TrainSearchMetadata")
-    _wire_component(request.metadata.menu_id, "metadata.menu_id")
+    _wire_component(request.menu_id, "menu_id")
     if type(request.legs) is not tuple or len(request.legs) not in {1, 2}:
         raise ValueError("legs must be a tuple containing one or two legs")
     for leg in request.legs:
@@ -987,7 +997,7 @@ def build_price_fare_quote_form(
         ("stlbTrnClsfCd", "standing_train_classification_code"),
     )
     return (
-        ("txtMenuId", request.metadata.menu_id),
+        ("txtMenuId", request.menu_id),
         ("chtnDvCd", str(len(request.legs))),
         *(
             (

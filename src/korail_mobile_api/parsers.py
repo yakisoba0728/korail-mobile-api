@@ -255,7 +255,7 @@ def parse_train_search_metadata(
     else:
         merge_reservation_available_flag = None
     return TrainSearchMetadata(
-        menu_id=optional("h_menu_id"),
+        # No h_menu_id: see TrainSearchMetadata. txtMenuId is a client constant.
         job_id=optional("strJobId"),
         product_no=optional("h_gd_no"),
         next_page_flag=optional("h_next_pg_flg"),

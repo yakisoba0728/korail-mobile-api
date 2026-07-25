@@ -644,7 +644,9 @@ def test_train_search_metadata_preserves_named_server_strings_repr_safely(
     metadata = parsers.parse_train_search_metadata(raw)
 
     assert isinstance(metadata, models.TrainSearchMetadata)
-    assert metadata.menu_id == "SYNTHETIC-MENU-ID"
+    # No menu_id: h_menu_id is not a wire key (zero hits in the app);
+    # txtMenuId is the client constant "11" (a5/k.java:92-94).
+    assert not hasattr(metadata, "menu_id")
     assert metadata.job_id == "SYNTHETIC-JOB-ID"
     assert metadata.product_no == "SYNTHETIC-PRODUCT-NO"
     assert metadata.next_page_flag == "SYNTHETIC-NEXT-PAGE-FLAG"
@@ -785,7 +787,6 @@ def test_train_summary_rejects_non_string_server_fields(
 @pytest.mark.parametrize(
     "key",
     [
-        "h_menu_id",
         "strJobId",
         "h_gd_no",
         "h_next_pg_flg",
@@ -843,7 +844,7 @@ def test_search_trains_populates_metadata_without_changing_request(
         client.close()
 
     assert isinstance(result.metadata, models.TrainSearchMetadata)
-    assert result.metadata.menu_id == "SYNTHETIC-MENU-ID"
+    assert not hasattr(result.metadata, "menu_id")
     assert result.trains[0].seat_attribute_code == (
         "SYNTHETIC-SEAT-ATTRIBUTE-CODE"
     )

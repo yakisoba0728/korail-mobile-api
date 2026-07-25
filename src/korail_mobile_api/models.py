@@ -531,7 +531,10 @@ class SeatInventoryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TrainSearchMetadata:
-    menu_id: str | None = field(default=None, repr=False)
+    # No menu_id: there is no h_menu_id in the ScheduleView response. The app's
+    # txtMenuId is a client-side constant ("11" from a5/k.java:92-94, carried
+    # to PriceFareActivity as the MENU_ID intent extra), never a server value —
+    # h_menu_id has zero hits across the whole decompiled app.
     job_id: str | None = field(default=None, repr=False)
     product_no: str | None = field(default=None, repr=False)
     next_page_flag: str | None = None

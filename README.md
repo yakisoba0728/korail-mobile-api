@@ -318,8 +318,12 @@ Three additional static-contract reads complete the current seven-read tranche:
   age-code then passenger-count fields from typed server response data, and job
   `c` carries one repr-hidden original-ticket reference. The uniform public
   wrapper conservatively requires a session and forces DynaPath off.
-- `get_price_fare_quote(request)` accepts a typed server search metadata object
-  with a nonempty `menu_id` and exactly one or two typed legs. It comma-joins
+- `get_price_fare_quote(request)` accepts exactly one or two typed legs plus
+  `menu_id`, which defaults to the app's client-side constant `"11"`
+  (`a5/k.java:92-94` → `MENU_ID` intent extra → `PriceFareActivity.java:49,62`).
+  `txtMenuId` is not a server value: `h_menu_id` occurs nowhere in the app, so
+  the earlier requirement that it be read off `TrainSearchMetadata.menu_id` made
+  every request built from a real search response raise. It comma-joins
   two legs in response order, derives `chtnDvCd`, and deliberately omits
   `trnCnt` to match shipped bytecode. It does not invent a session precondition
   and retains the existing conditional DynaPath behavior for its already

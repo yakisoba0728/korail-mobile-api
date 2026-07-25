@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
-from korail_mobile_api import KorailClient, KorailConfig, TrainSearchMetadata
+from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -21,6 +21,10 @@ from korail_mobile_api.errors import (
     KorailTransportError,
 )
 from korail_mobile_api.models import KorailSession
+from korail_mobile_api.parsers import (
+    parse_train_rows,
+    parse_train_search_metadata,
+)
 from korail_mobile_api.read_models import (
     CommuterInfoResponse,
     CommuterPassengerOption,
@@ -163,12 +167,11 @@ def test_r31_closed_variants_preserve_grouped_duplicates():
 
 
 def test_r52_one_and_two_leg_forms_omit_train_count():
-    metadata = TrainSearchMetadata(menu_id="11")
     direct = build_price_fare_quote_form(
-        PriceFareQuoteRequest(metadata=metadata, legs=(_leg(),))
+        PriceFareQuoteRequest(legs=(_leg(),))
     )
     transfer = build_price_fare_quote_form(
-        PriceFareQuoteRequest(metadata=metadata, legs=(_leg("1"), _leg("2")))
+        PriceFareQuoteRequest(legs=(_leg("1"), _leg("2")))
     )
     assert direct[:2] == (("txtMenuId", "11"), ("chtnDvCd", "1"))
     assert transfer[:2] == (("txtMenuId", "11"), ("chtnDvCd", "2"))
@@ -186,6 +189,45 @@ def test_r52_one_and_two_leg_forms_omit_train_count():
         ("trnGpCd", "T1,T2"),
         ("stlbTrnClsfCd", "C1,C2"),
     )
+
+
+def test_r52_quote_builds_from_a_real_parsed_search_response(load_json_fixture):
+    # Regression: the request used to require metadata.menu_id, parsed from
+    # "h_menu_id" -- a key with ZERO hits across jadx and smali. Every request
+    # built from an actually-parsed search response therefore raised, and
+    # get_price_fare_quote was unreachable; only hand-forged
+    # TrainSearchMetadata(menu_id="11") objects in this file kept it green.
+    # This test drives the request from parsed server data only.
+    raw = load_json_fixture("raw_typed_train_search.json")
+    metadata = parse_train_search_metadata(raw)
+    train = parse_train_rows(raw)[0]
+    assert not hasattr(metadata, "menu_id")
+
+    form = build_price_fare_quote_form(
+        PriceFareQuoteRequest(
+            legs=(
+                PriceFareLeg(
+                    departure_station_code=train.departure_station_code,
+                    arrival_station_code=train.arrival_station_code,
+                    run_date=train.run_date,
+                    train_no=train.train_no,
+                    # b5/c.java:374 stamps the response's top-level h_gd_no onto
+                    # every TrainInfo row before the price screen reads it.
+                    goods_no=metadata.product_no,
+                    requested_seat_attribute_code=train.seat_attribute_code,
+                    train_group_code=train.train_group_code,
+                    standing_train_classification_code=(
+                        train.train_class_code
+                    ),
+                ),
+            )
+        )
+    )
+    # a5/k.java:92-94 returns "11"; a5/u.java:279 carries it as the MENU_ID
+    # intent extra; PriceFareActivity.java:49,62 sets it on the request.
+    assert form[0] == ("txtMenuId", "11")
+    assert ("gdNo", "SYNTHETIC-PRODUCT-NO") in form
+    assert ("trnNo", "SYNTHETIC-TRAIN-NO") in form
 
 
 def test_r31_client_sends_duplicate_fields_in_wire_order():
@@ -383,20 +425,16 @@ def test_commuter_request_provenance_lengths_and_repr_are_strict():
 
 
 def test_price_fare_request_validates_typed_sources_and_no_raw_mapping():
-    metadata = TrainSearchMetadata(menu_id="SECRET_MENU")
-    request = PriceFareQuoteRequest(metadata=metadata, legs=(_leg(),))
+    request = PriceFareQuoteRequest(legs=(_leg(),), menu_id="SECRET_MENU")
     assert "SECRET_MENU" not in repr(request)
     assert not hasattr(request, "raw")
     assert not hasattr(request.legs[0], "raw")
     with pytest.raises(ValueError):
-        PriceFareQuoteRequest(metadata=metadata, legs=())
+        PriceFareQuoteRequest(legs=())
     with pytest.raises(ValueError):
-        PriceFareQuoteRequest(metadata=metadata, legs=(_leg(), _leg(), _leg()))
+        PriceFareQuoteRequest(legs=(_leg(), _leg(), _leg()))
     with pytest.raises(ValueError):
-        PriceFareQuoteRequest(
-            metadata=TrainSearchMetadata(menu_id=""),
-            legs=(_leg(),),
-        )
+        PriceFareQuoteRequest(legs=(_leg(),), menu_id="")
     with pytest.raises(ValueError):
         PriceFareLeg(
             departure_station_code="D,1",
@@ -966,10 +1004,7 @@ def test_r52_uses_existing_conditional_dynapath_without_session(load_json_fixtur
         transport=httpx.MockTransport(handler),
     )
     result = client.get_price_fare_quote(
-        PriceFareQuoteRequest(
-            metadata=TrainSearchMetadata(menu_id="11"),
-            legs=(_leg(),),
-        )
+        PriceFareQuoteRequest(legs=(_leg(),))
     )
     assert len(result.fares) == 4
     assert len(contexts) == 1
@@ -1003,8 +1038,5 @@ def test_r52_dynapath_rejection_is_typed(load_json_fixture):
     )
     with pytest.raises(KorailDynaPathError):
         client.get_price_fare_quote(
-            PriceFareQuoteRequest(
-                metadata=TrainSearchMetadata(menu_id="11"),
-                legs=(_leg(),),
-            )
+            PriceFareQuoteRequest(legs=(_leg(),))
         )

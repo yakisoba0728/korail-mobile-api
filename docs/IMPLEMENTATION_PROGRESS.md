@@ -148,8 +148,11 @@ and `c`; its ordered form transport preserves the grouped repeated
 ticket reference and all server free text remain repr-hidden. The public R31
 wrapper conservatively requires a session.
 
-R52 accepts only one or two exact `PriceFareLeg` values and typed
-`TrainSearchMetadata.menu_id`, derives its transfer division, preserves leg
+R52 accepts only one or two exact `PriceFareLeg` values plus `menu_id`, which
+defaults to the app's client-side constant `"11"` (`a5/k.java:92-94`); it no
+longer sources that value from `TrainSearchMetadata`, because the response key
+that field was parsed from (`h_menu_id`) does not exist in the app. It derives
+its transfer division, preserves leg
 order in comma-joined columns, and intentionally omits `trnCnt`. It forces no
 local session and uses only the existing conditional DynaPath behavior; the
 DynaPath allowlist is unchanged.
