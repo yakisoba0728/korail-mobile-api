@@ -145,8 +145,15 @@ def _response_fields(raw: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _validate_strict_read_envelope(raw: Mapping[str, Any]) -> None:
-    _validate_envelope(raw)
+def _validate_strict_read_envelope(
+    raw: Mapping[str, Any],
+    *,
+    allow_result_only_success: bool = False,
+) -> None:
+    _validate_envelope(
+        raw,
+        allow_result_only_success=allow_result_only_success,
+    )
     if raw["strResult"] != "SUCC":
         raise KorailProtocolError(
             "KORAIL strict read response strResult must be SUCC"
@@ -235,19 +242,6 @@ def _optional_integer(
     raise KorailProtocolError(
         f"KORAIL {context} field {key} must be an integer, "
         "an ASCII decimal string, or null"
-    )
-
-
-def _optional_json_integer(
-    data: Mapping[str, Any],
-    key: str,
-    context: str,
-) -> int | None:
-    value = data.get(key)
-    if value is None or type(value) is int:
-        return value
-    raise KorailProtocolError(
-        f"KORAIL {context} field {key} must be an integer or null"
     )
 
 
@@ -375,7 +369,13 @@ def _parse_pass_goods_info(
             item = _row(value, "pass passenger infos psg_info")
             passengers.append(
                 PassPassengerInfo(
-                    h_cls_prnb=_optional_json_integer(
+                    # The live pass menu sends these counts as ZERO-PADDED
+                    # decimal strings ("h_st_prnb": "000001", "h_cls_prnb":
+                    # "000009"), never as JSON integers, so demanding a JSON
+                    # integer rejected every real goods row. _optional_integer
+                    # accepts both and coerces the padded string to int, which
+                    # is what the int|None model field already promises.
+                    h_cls_prnb=_optional_integer(
                         item,
                         "h_cls_prnb",
                         "pass passenger info",
@@ -385,7 +385,7 @@ def _parse_pass_goods_info(
                         "h_dcnt_knd_cd",
                         "pass passenger info",
                     ),
-                    h_st_prnb=_optional_json_integer(
+                    h_st_prnb=_optional_integer(
                         item,
                         "h_st_prnb",
                         "pass passenger info",
@@ -424,7 +424,13 @@ def _parse_pass_goods_info(
 
 
 def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
-    _validate_strict_read_envelope(raw)
+    # A live pass.passMenu.do success is result-only: the body is
+    # {"list": [...], "strResult": "SUCC"} with no h_msg_cd/h_msg_txt at all.
+    # Only the failure body carries the full envelope (P058 when unauthenticated),
+    # so requiring h_msg_cd made every SUCCESS unparseable while every FAILURE
+    # parsed. Accept the result-only shape the way the cart/delay-discount reads
+    # already do.
+    _validate_strict_read_envelope(raw, allow_result_only_success=True)
     items = []
     for value in _optional_list(raw, "list", "pass menu"):
         item = _row(value, "pass menu list")
@@ -768,7 +774,11 @@ def parse_discount_coupon_response(
 def parse_pass_availability_response(
     raw: Mapping[str, Any],
 ) -> PassAvailabilityResponse:
-    _validate_envelope(raw)
+    # A live pass.passInfoList success nests its code as main_info.h_msg_cd and
+    # leaves the top level with strResult only, so the top-level envelope check
+    # rejected every successful response. Same result-only accommodation as
+    # parse_pass_menu_response.
+    _validate_envelope(raw, allow_result_only_success=True)
     open_dates = []
     for value in _optional_list(raw, "pass_info", "pass availability"):
         item = _row(value, "pass availability pass_info")

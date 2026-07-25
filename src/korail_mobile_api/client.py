@@ -474,6 +474,11 @@ class KorailClient:
                     "/classes/com.korail.mobile.pass.passInfoList",
                     form,
                     include_dynapath=False,
+                    # A success body carries strResult only (its code lives in
+                    # main_info), so the envelope gate would reject it before
+                    # the parser ever saw it. A P058/FAIL body still carries the
+                    # full envelope and is still raised on.
+                    require_envelope=False,
                 ).raw
             )
         )
@@ -516,6 +521,11 @@ class KorailClient:
                     "/classes/com.korail.mobile.pass.passMenu.do",
                     form,
                     include_dynapath=False,
+                    # A success body is {"list": [...], "strResult": "SUCC"}
+                    # with no h_msg_cd/h_msg_txt, so the envelope gate would
+                    # reject it before the parser ever saw it. A P058/FAIL body
+                    # still carries the full envelope and is still raised on.
+                    require_envelope=False,
                 ).raw
             )
         )

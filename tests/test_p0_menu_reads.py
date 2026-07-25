@@ -279,11 +279,14 @@ def test_crew_request_list_parser_exposes_options_without_calling_crew(
             ][0].__setitem__("h_cls_prnb", True),
         ),
         (
+            # A DECIMAL string is now valid -- the live server sends these
+            # counts zero-padded ("000009"), see
+            # test_live_verified_shapes.py. A non-decimal string is still junk.
             "pass_menu_success.json",
             "parse_pass_menu_response",
             lambda raw: raw["list"][0]["goodsData"]["psg_infos"][
                 "psg_info"
-            ][0].__setitem__("h_cls_prnb", "3"),
+            ][0].__setitem__("h_cls_prnb", "not-a-number"),
         ),
         (
             "pass_menu_success.json",

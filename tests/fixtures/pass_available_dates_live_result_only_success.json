@@ -1,0 +1,21 @@
+{
+  "main_info": {
+    "h_msg_cd": "SYNTHETIC-NESTED-CODE",
+    "h_tot_cnt": "0",
+    "h_row_cnt": "0",
+    "h_sel_pg_no": "1"
+  },
+  "pass_info": [],
+  "wct_info": [
+    {
+      "kor_cd_val": "Synthetic Office",
+      "eng_cd_val": "SYNTHETIC-OFFICE-CODE"
+    },
+    {
+      "kor_cd_val": "Synthetic Office 2",
+      "eng_cd_val": "SYNTHETIC-OFFICE-CODE-2"
+    }
+  ],
+  "ticket_info": [],
+  "strResult": "SUCC"
+}

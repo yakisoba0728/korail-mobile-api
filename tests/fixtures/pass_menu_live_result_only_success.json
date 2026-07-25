@@ -1,0 +1,86 @@
+{
+  "list": [
+    {
+      "id": "SYNTHETIC-CATEGORY-ID",
+      "parentId": "",
+      "type": "category",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "Synthetic Category",
+      "isExpand": "Y",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "Synthetic category description",
+      "information": "",
+      "agree": ""
+    },
+    {
+      "id": "SYNTHETIC-GOODS-ID",
+      "parentId": "SYNTHETIC-CATEGORY-ID",
+      "type": "goods",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "Synthetic Goods",
+      "isExpand": "",
+      "repSegDpt": "Synthetic Departure",
+      "repSegArv": "Synthetic Arrival",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "Synthetic goods description",
+      "information": "Synthetic goods information",
+      "agree": "Synthetic goods agreement",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "SYNTHETIC-DISCOUNT-NO",
+        "h_cnd_flg_disc_nm": "Synthetic Discount",
+        "h_cnd_flg_disc_stt": "02",
+        "h_mrk_st_dt": "20990101",
+        "h_mrk_cls_dt": "99991231",
+        "h_mrk_open_dttm": null,
+        "h_stl_mtd_cd": null,
+        "h_tk_prt_cont": "Synthetic Discount",
+        "h_trip_chg_allw_flg": "N",
+        "h_dtl_info": null,
+        "h_dtl_dsc_1": "03",
+        "h_dtl_dsc_2": "20990101",
+        "h_dtl_dsc_3": "1000",
+        "h_dtl_dsc_4": "IM",
+        "h_dtl_dsc_5": null,
+        "h_dtl_dsc_6": null,
+        "h_dtl_dsc_7": null,
+        "h_dtl_dsc_8": null,
+        "h_one_tk_flg": "N",
+        "h_cndn_dcnt_knd_cd": "12",
+        "ln1_dsc_cont": "Synthetic line 1 description",
+        "ln2_dsc_cont": "Synthetic line 2 description",
+        "psg_infos": {
+          "h_cndn_dcnt_knd_cd": "12",
+          "h_alc_stdr_dv_cd": "03",
+          "h_bkcl_cd": "",
+          "h_cndn_dcnt_wdrw_flg": "Y",
+          "h_sngl_tk_flg": "N",
+          "h_gen_chg_allw_flg": "N",
+          "h_chtn_allw_flg": "N",
+          "h_dly_max_mrk_qnty": "099999",
+          "psg_info": [
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "000001",
+              "h_dcnt_knd_cd": "000",
+              "h_st_prnb": "000001",
+              "h_cls_prnb": "000009",
+              "h_dcnt_flg": "Y"
+            }
+          ],
+          "h_max_cnt": "9",
+          "h_min_cnt": "1"
+        }
+      }
+    }
+  ],
+  "strResult": "SUCC"
+}
