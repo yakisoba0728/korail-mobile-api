@@ -23,6 +23,18 @@
   acknowledging a real charge is a caller bug, and paying on an ambiguous
   consent is the mistake the gate exists to prevent. The boundary is now 54
   exact login/read routes and 61 public methods; no new route was added.
+- Added `scripts/reserve_pay_refund_roundtrip.py`, the operator script for one
+  full reserve → pay → refund round trip on a real card. Three environment
+  opt-ins are required (`KORAIL_MOBILE_API_LIVE=1`, `KORAIL_LIVE_MUTATION=1`,
+  `KORAIL_LIVE_REAL_CHARGE=1`); the card is read from the environment only,
+  never a file and never argv. It refuses to start unless the account holds
+  zero reservations, prints the PNR the instant it exists, cross-checks the
+  amount owed against an independent server read before paying, prints the
+  refund amount and fee before refunding, and on any later failure prints an
+  unmissable banner with the PNR, what is outstanding, and a runnable recovery
+  command (`--recover` with `KORAIL_RECOVER_PNR`). The PAN, PIN digits, expiry
+  and birthday are scrubbed from every output path including exception text;
+  the PNR deliberately is not, because losing it is the worst outcome.
 - Neither `pay_with_card` nor `refund` has a live-verified success envelope. No
   run recorded in this repository has settled a real payment or returned money;
   the docs now say so instead of saying a real charge is impossible.

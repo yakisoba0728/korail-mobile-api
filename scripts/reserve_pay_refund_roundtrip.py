@@ -1,0 +1,1063 @@
+"""Drive ONE live reserve -> pay -> refund round trip with a REAL card.
+
+This is the operator script for the one thing this package could never do
+before: settle a reservation with a real, chargeable card. Money actually moves.
+It is meant to be run by a human, once, against their OWN account and their OWN
+card, and it is deliberately loud at every step.
+
+Safety posture
+--------------
+* THREE opt-ins are required, and none of them alone runs anything:
+  ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live switch),
+  ``KORAIL_LIVE_MUTATION=1`` (this run may change state), and
+  ``KORAIL_LIVE_REAL_CHARGE=1`` (this run may charge a real card).
+* The card is read ONLY from the environment: ``KORAIL_CARD_NUMBER``,
+  ``KORAIL_CARD_PASSWORD`` (the first two digits of the card PIN),
+  ``KORAIL_CARD_EXPIRE`` (YYMM) and ``KORAIL_CARD_BIRTHDAY`` (YYMMDD). Never a
+  file, never a command-line argument (argv is visible in ``ps``), and never a
+  default value. A missing one aborts before login.
+* The PAN and the card password are scrubbed from EVERY line this script writes,
+  including exception text and every error path, by :class:`_Console`. The card
+  number is never printed, not even partially, and nothing is written to disk.
+* The PNR is printed IN FULL, on purpose. A paid ticket whose PNR the operator
+  does not know is the worst outcome this script can produce, so the PNR is
+  printed the instant it exists and again, in an unmissable banner with a
+  runnable recovery command, on any later failure.
+* Reserve, pay, cancel and refund each go out under their own single-category
+  consent; no consent object in this file grants two money-moving categories at
+  once, and each factory asserts that.
+* Every request is paced (default 1.5s minimum spacing) because KORAIL bans IPs
+  for macro-like traffic.
+* The module is import-safe: importing it performs no I/O, reads no environment
+  variable, and builds no client. Everything happens under :func:`main`.
+
+Flow
+----
+a. log in, and REFUSE to start unless the account holds zero reservations
+b. search the configured route ~14 days out (inside the fee-free refund window)
+   and select the cheapest available train; print the train and its fare
+c. reserve one adult in the cheapest class; print the PNR immediately
+d. read the reservation back independently and cross-check the amount owed
+   against the hold's own amount; STOP (and cancel) if they disagree
+e. pay with the real card; print the raw confirmation codes
+f. on payment failure, cancel the still-unpaid hold and exit non-zero -- never
+   attempt a refund for a payment that did not succeed
+g. locate the paid ticket's refund identity and ask ``get_refund_commission``
+   what comes back and what the fee is; print both BEFORE refunding
+h. refund; print the raw codes
+i. verify the account is back to zero reservations
+
+Recovery
+--------
+``--recover`` (with ``KORAIL_RECOVER_PNR`` set) resolves one stranded PNR: it
+cancels an unpaid hold, or refunds a paid ticket after printing its commission.
+The failure banner prints the exact command line for it.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import sys
+import time
+from typing import Any, NamedTuple
+
+from korail_mobile_api import (
+    CardPayment,
+    KorailClient,
+    MutationConsent,
+    OriginalTicketReference,
+    PaidTicket,
+    PriceFareLeg,
+    PriceFareQuoteRequest,
+    RefundCompanion,
+    ReservationHoldResponse,
+    TicketReservationDetailRequest,
+    TrainSearchQuery,
+    TrainSummary,
+)
+from korail_mobile_api.live import (
+    build_config_from_env,
+    live_enabled,
+    read_credentials_from_env,
+)
+
+LIVE_MUTATION_ENV = "KORAIL_LIVE_MUTATION"
+LIVE_REAL_CHARGE_ENV = "KORAIL_LIVE_REAL_CHARGE"
+CARD_NUMBER_ENV = "KORAIL_CARD_NUMBER"
+CARD_PASSWORD_ENV = "KORAIL_CARD_PASSWORD"
+CARD_EXPIRE_ENV = "KORAIL_CARD_EXPIRE"
+CARD_BIRTHDAY_ENV = "KORAIL_CARD_BIRTHDAY"
+MAX_FARE_ENV = "KORAIL_MAX_FARE"
+TRAIN_NO_ENV = "KORAIL_TRAIN_NO"
+RECOVER_PNR_ENV = "KORAIL_RECOVER_PNR"
+
+DEFAULT_MIN_INTERVAL_S = 1.5
+#: Far enough out that a refund is inside KORAIL's fee-free window, near enough
+#: that the schedule is published. Overridable with ``--date``/``KORAIL_TEST_DATE``.
+DEFAULT_DAYS_AHEAD = 14
+#: The reservation-code value that means "a general seat is available", which is
+#: also what ``build_single_adult_reservation_form`` insists on.
+AVAILABLE_GENERAL_SEAT = "11"
+
+#: The four keys that together identify a settled ticket for a refund. They are
+#: what ``refunds.SelTicketInfo``/``CommissionView`` and the refund mutation all
+#: key off; ``h_orgtk_ret_sale_dt`` is the source the app copies into the refund
+#: form's ``h_orgtk_sale_dt`` (TicketReceiptActivity.java:402).
+_TICKET_IDENTITY_KEYS = (
+    "h_orgtk_ret_sale_dt",
+    "h_orgtk_wct_no",
+    "h_orgtk_sale_sqno",
+    "h_orgtk_ret_pwd",
+)
+
+
+class RoundTripAborted(RuntimeError):
+    """A refusal raised before or instead of a state change."""
+
+
+#: A bare PAN-length run of CONTIGUOUS digits. Deliberately stricter than the
+#: package's own ``CARD_RE``, which tolerates spaces and dashes between digits:
+#: that tolerance is right when redacting an arbitrary payload, but here it
+#: would swallow legitimate output like "20990101 060000" (a date next to a
+#: time, 14 digits with a space). This backstop only has to catch a PAN that is
+#: NOT the one we were given; the one we were given is matched exactly, and
+#: separator-tolerantly, by :func:`_secret_pattern`.
+_BARE_PAN_RE = re.compile(r"(?<![0-9])[0-9]{13,19}(?![0-9])")
+
+
+def _secret_pattern(secret: str) -> re.Pattern[str]:
+    """Match ``secret`` as a standalone token, spaces/dashes allowed inside.
+
+    The token anchoring is what lets a two-digit card password be scrubbed
+    without mangling every amount that happens to contain those digits: "00" is
+    replaced when it stands alone, never inside "8400".
+    """
+    body = r"[ \-]*".join(re.escape(character) for character in secret)
+    return re.compile(rf"(?<![0-9A-Za-z]){body}(?![0-9A-Za-z])")
+
+
+class _Console:
+    """stdout that can never emit a card secret.
+
+    Every string printed by this script goes through :meth:`scrub` first. Two
+    layers apply: a bare-PAN backstop, then an exact, token-anchored,
+    separator-tolerant substitution of the four values read from the card
+    environment variables.
+
+    The full ``redact_payload``/``redact_text`` treatment is deliberately NOT
+    used here, because it masks ``pnr``-shaped keys, and this script's single
+    most important output is an unredacted PNR.
+    """
+
+    def __init__(self, secrets: tuple[str, ...] = ()) -> None:
+        self._patterns = tuple(
+            _secret_pattern(secret)
+            for secret in sorted(
+                {secret for secret in secrets if secret},
+                key=len,
+                reverse=True,
+            )
+        )
+
+    def scrub(self, value: Any) -> str:
+        text = value if isinstance(value, str) else str(value)
+        text = _BARE_PAN_RE.sub("[REDACTED_CARD]", text)
+        for pattern in self._patterns:
+            text = pattern.sub("[REDACTED]", text)
+        return text
+
+    def say(self, message: Any = "") -> None:
+        print(self.scrub(message), flush=True)
+
+    def banner(self, lines: tuple[str, ...]) -> None:
+        rule = "!" * 76
+        self.say("")
+        self.say(rule)
+        for line in lines:
+            self.say(f"!! {line}")
+        self.say(rule)
+        self.say("")
+
+
+class _Pacer:
+    """Enforce a minimum spacing between outbound requests."""
+
+    def __init__(self, min_interval_s: float) -> None:
+        self.min_interval_s = min_interval_s
+        self._last: float | None = None
+
+    def wait(self) -> None:
+        now = time.monotonic()
+        if self._last is not None:
+            remaining = self.min_interval_s - (now - self._last)
+            if remaining > 0:
+                time.sleep(remaining)
+        self._last = time.monotonic()
+
+
+def _install_pacing(client: KorailClient, pacer: _Pacer) -> None:
+    inner = client.http._client
+    hooks = dict(inner.event_hooks)
+    hooks["request"] = [
+        *hooks.get("request", []),
+        lambda request: pacer.wait(),
+    ]
+    inner.event_hooks = hooks
+
+
+# --- environment inputs ------------------------------------------------------
+
+
+def _required_env(name: str, *, why: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise RoundTripAborted(f"{name} is required ({why})")
+    return value
+
+
+def read_card_from_env() -> CardPayment:
+    """Build the card from the environment ONLY.
+
+    There is no file source, no command-line source (argv is world-readable via
+    ``ps``) and no default: every value must be present or the run aborts. The
+    returned :class:`CardPayment` hides all four values from ``repr``.
+    """
+    number = _required_env(CARD_NUMBER_ENV, why="the card number to charge")
+    password = _required_env(
+        CARD_PASSWORD_ENV, why="the first two digits of the card PIN"
+    )
+    expire = _required_env(CARD_EXPIRE_ENV, why="the card expiry as YYMM")
+    birthday = _required_env(
+        CARD_BIRTHDAY_ENV, why="the personal-auth birthday as YYMMDD"
+    )
+    for value, name, length in (
+        (number, CARD_NUMBER_ENV, None),
+        (password, CARD_PASSWORD_ENV, 2),
+        (expire, CARD_EXPIRE_ENV, 4),
+        (birthday, CARD_BIRTHDAY_ENV, 6),
+    ):
+        if not value.isdigit():
+            raise RoundTripAborted(f"{name} must be decimal digits")
+        if length is not None and len(value) != length:
+            raise RoundTripAborted(f"{name} must be exactly {length} digits")
+    return CardPayment(
+        card_number=number,
+        card_password=password,
+        card_expire=expire,
+        birthday=birthday,
+    )
+
+
+def _console_for(card: CardPayment) -> _Console:
+    console = _Console(
+        (
+            card.card_number,
+            card.card_password,
+            card.card_expire,
+            card.birthday,
+        )
+    )
+    # Prove the scrubber actually works on this card before anything is printed.
+    probe = console.scrub(
+        f"probe {card.card_number} {card.card_password} "
+        f"{card.card_expire} {card.birthday}"
+    )
+    for secret in (
+        card.card_number,
+        card.card_password,
+        card.card_expire,
+        card.birthday,
+    ):
+        if secret in probe:
+            raise RoundTripAborted(
+                "the output scrubber failed its self-check; refusing to run"
+            )
+    return console
+
+
+def _default_date() -> str:
+    return time.strftime(
+        "%Y%m%d", time.localtime(time.time() + DEFAULT_DAYS_AHEAD * 86400)
+    )
+
+
+def _max_fare_from_env() -> int | None:
+    raw = os.environ.get(MAX_FARE_ENV, "").strip()
+    if not raw:
+        return None
+    if not raw.isdigit():
+        raise RoundTripAborted(f"{MAX_FARE_ENV} must be a whole number of won")
+    return int(raw)
+
+
+# --- consents ----------------------------------------------------------------
+
+
+def _single_category_consent(category: str, **extra: bool) -> MutationConsent:
+    """One consent, one category. Never two money-moving categories at once.
+
+    The check raises rather than asserts on purpose: ``python -O`` strips
+    ``assert``, and this is exactly the kind of invariant that must not quietly
+    disappear under an optimisation flag.
+    """
+    consent = MutationConsent(
+        **{f"allow_{category}": True}, dry_run=False, **extra
+    )
+    granted = [
+        name
+        for name in ("reserve", "payment", "cancel", "refund")
+        if getattr(consent, f"allow_{name}")
+    ]
+    if granted != [category]:
+        raise RoundTripAborted(
+            f"consent for {category!r} unexpectedly granted {granted}"
+        )
+    return consent
+
+
+def reserve_consent() -> MutationConsent:
+    return _single_category_consent("reserve")
+
+
+def cancel_consent() -> MutationConsent:
+    return _single_category_consent("cancel")
+
+
+def refund_consent() -> MutationConsent:
+    return _single_category_consent("refund")
+
+
+def real_card_payment_consent() -> MutationConsent:
+    """The ONLY consent in this file that can move money.
+
+    Both halves are stated deliberately: ``fake_card_only=False`` (this is not a
+    test card) and ``real_card_acknowledged=True`` (yes, charge it). Setting one
+    without the other is refused by both ``pay_with_card`` and the transmit gate.
+    """
+    consent = _single_category_consent(
+        "payment", fake_card_only=False, real_card_acknowledged=True
+    )
+    if not consent.real_card_acknowledged or consent.fake_card_only:
+        raise RoundTripAborted(
+            "the real-card payment consent is not what it claims to be"
+        )
+    return consent
+
+
+# --- helpers -----------------------------------------------------------------
+
+
+def _envelope(response: Any) -> str:
+    return (
+        f"strResult={getattr(response, 'str_result', None)} "
+        f"h_msg_cd={getattr(response, 'h_msg_cd', None)} "
+        f"h_msg_txt={getattr(response, 'h_msg_txt', None)}"
+    )
+
+
+def _succeeded(response: Any) -> bool:
+    return getattr(response, "str_result", None) == "SUCC"
+
+
+def find_ticket_identity(
+    raw: Any,
+    *,
+    pnr_no: str,
+    _pnr_in_scope: str | None = None,
+) -> OriginalTicketReference | None:
+    """Locate the refund identity belonging to ``pnr_no`` in a raw response.
+
+    Walks the tree carrying down the nearest enclosing ``h_pnr_no``, so an
+    identity block is only accepted when it (or an ancestor) names the PNR this
+    run created. That matters because the ticket list can hold other tickets:
+    refunding the wrong one would be irreversible.
+    """
+    if isinstance(raw, dict):
+        scope = raw.get("h_pnr_no") or raw.get("pnrNo")
+        in_scope = scope if isinstance(scope, str) and scope else _pnr_in_scope
+        if in_scope == pnr_no and all(
+            isinstance(raw.get(key), str) and raw[key].strip()
+            for key in _TICKET_IDENTITY_KEYS
+        ):
+            return OriginalTicketReference(
+                sale_window_no=raw["h_orgtk_wct_no"],
+                sale_date=raw["h_orgtk_ret_sale_dt"],
+                sale_sequence=raw["h_orgtk_sale_sqno"],
+                return_password=raw["h_orgtk_ret_pwd"],
+            )
+        for value in raw.values():
+            found = find_ticket_identity(
+                value, pnr_no=pnr_no, _pnr_in_scope=in_scope
+            )
+            if found is not None:
+                return found
+    elif isinstance(raw, list):
+        for item in raw:
+            found = find_ticket_identity(
+                item, pnr_no=pnr_no, _pnr_in_scope=_pnr_in_scope
+            )
+            if found is not None:
+                return found
+    return None
+
+
+def find_train_no(raw: Any, *, pnr_no: str) -> str:
+    """Find the train number recorded next to ``pnr_no``, or ``""``.
+
+    The refund form carries ``trnNo``; a recovery run that only has a PNR still
+    wants to send it rather than an empty field.
+    """
+    if isinstance(raw, dict):
+        if raw.get("h_pnr_no") == pnr_no or raw.get("pnrNo") == pnr_no:
+            train_no = raw.get("h_trn_no") or raw.get("trnNo")
+            if isinstance(train_no, str) and train_no.strip():
+                return train_no
+        for value in raw.values():
+            found = find_train_no(value, pnr_no=pnr_no)
+            if found:
+                return found
+    elif isinstance(raw, list):
+        for item in raw:
+            found = find_train_no(item, pnr_no=pnr_no)
+            if found:
+                return found
+    return ""
+
+
+def _pnr_present(raw: Any, *, pnr_no: str) -> bool:
+    """Whether ``pnr_no`` appears anywhere in a raw response."""
+    if isinstance(raw, dict):
+        if raw.get("h_pnr_no") == pnr_no or raw.get("pnrNo") == pnr_no:
+            return True
+        return any(_pnr_present(value, pnr_no=pnr_no) for value in raw.values())
+    if isinstance(raw, list):
+        return any(_pnr_present(item, pnr_no=pnr_no) for item in raw)
+    return False
+
+
+def _safe_raw(read: Any, console: _Console, name: str) -> Any:
+    """Read a source, reporting rather than raising when it refuses.
+
+    Used only on the recovery paths, where one unavailable source must not stop
+    the other from being tried.
+    """
+    try:
+        return getattr(read(), "raw", None)
+    except Exception as exc:  # noqa: BLE001 - the other source may still work
+        console.say(f"    [note] the {name} read failed: {type(exc).__name__}")
+        return None
+
+
+def _recovery_command(pnr_no: str) -> str:
+    return (
+        f"KORAIL_MOBILE_API_LIVE=1 {LIVE_MUTATION_ENV}=1 "
+        f"{RECOVER_PNR_ENV}={pnr_no} "
+        "python3 scripts/reserve_pay_refund_roundtrip.py --recover"
+    )
+
+
+#: What the operator is left holding, per :attr:`RoundTrip.state`.
+_OUTSTANDING_BY_STATE = {
+    "none": "Nothing outstanding was recorded, but VERIFY the account anyway.",
+    "unpaid": "The hold is UNPAID -- it needs a CANCEL. No money moved.",
+    # The payment call went out and did not come back. The server may well have
+    # settled it. Claiming "unpaid" here would be the single most dangerous
+    # thing this script could print, so it claims nothing.
+    "paying": (
+        "The payment outcome is UNKNOWN -- the call did not return. The ticket "
+        "MAY BE PAID. Do not assume it is not; the recovery command below "
+        "checks which it is."
+    ),
+    "paid": "The ticket is PAID -- it needs a REFUND. MONEY HAS MOVED.",
+    "refunded": (
+        "The refund was accepted, but the account was not verified clean."
+    ),
+}
+
+
+class _Candidate(NamedTuple):
+    train: TrainSummary
+    fare: int | None
+
+
+# --- the round trip ----------------------------------------------------------
+
+
+class RoundTrip:
+    def __init__(
+        self,
+        client: KorailClient,
+        console: _Console,
+        card: CardPayment,
+        args: argparse.Namespace,
+    ) -> None:
+        self.client = client
+        self.console = console
+        self.card = card
+        self.args = args
+        self.max_fare = _max_fare_from_env()
+        #: Set the instant a hold exists, so the failure banner always has it.
+        self.pnr_no: str | None = None
+        #: "none" -> nothing exists yet, "unpaid" -> a hold needing a cancel,
+        #: "paid" -> a settled ticket needing a refund, "refunded" -> done.
+        #: The failure banner tells the operator which of those they are
+        #: holding, which is the difference between a free cleanup and a
+        #: forgotten charge.
+        self.state = "none"
+
+    # -- step a ---------------------------------------------------------------
+
+    def login(self) -> None:
+        member_no, password = read_credentials_from_env()
+        self.console.say("[a] logging in")
+        session = self.client.login(member_no, password)
+        if not session.jsessionid:
+            raise RoundTripAborted("login returned no session")
+        self.console.say("    logged in")
+
+    def outstanding_pnrs(self) -> tuple[str, ...]:
+        history = self.client.get_reservation_history()
+        return tuple(
+            item.pnr_no for item in history.items if item.pnr_no
+        )
+
+    def require_zero_reservations(self, when: str) -> None:
+        self.console.say(f"[a] checking the account holds no reservations ({when})")
+        outstanding = self.outstanding_pnrs()
+        if outstanding:
+            raise RoundTripAborted(
+                f"the account already holds {len(outstanding)} reservation(s) "
+                f"({when}): "
+                + ", ".join(outstanding)
+                + ". This script only runs on a clean account, so it can never "
+                "confuse someone else's booking with its own."
+            )
+        self.console.say("    confirmed: zero reservations")
+
+    # -- step b ---------------------------------------------------------------
+
+    def select_train(self) -> _Candidate:
+        date = self.args.date
+        departure = os.environ.get("KORAIL_DEPARTURE_STATION", "서울")
+        arrival = os.environ.get("KORAIL_ARRIVAL_STATION", "부산")
+        departure_time = os.environ.get("KORAIL_DEPARTURE_TIME", "060000")
+        self.console.say(
+            f"[b] searching {departure} -> {arrival} on {date} from {departure_time}"
+        )
+        query = TrainSearchQuery(
+            departure_station_code=departure,
+            arrival_station_code=arrival,
+            departure_date=date,
+            departure_time=departure_time,
+        )
+        search = self.client.search_trains(query)
+        available = [
+            train
+            for train in search.trains
+            if train.general_reservation_code == AVAILABLE_GENERAL_SEAT
+        ]
+        if not available:
+            raise RoundTripAborted(
+                f"no train on {departure}->{arrival} {date} has an available "
+                "general seat"
+            )
+        self.console.say(f"    {len(available)} train(s) with an available seat")
+
+        wanted = os.environ.get(TRAIN_NO_ENV, "").strip()
+        if wanted:
+            chosen = next(
+                (train for train in available if train.train_no == wanted), None
+            )
+            if chosen is None:
+                raise RoundTripAborted(
+                    f"{TRAIN_NO_ENV}={wanted} is not among the available trains"
+                )
+            candidate = _Candidate(chosen, self._quote_fare(chosen, search))
+            self._announce(candidate, reason=f"chosen by {TRAIN_NO_ENV}")
+            return candidate
+
+        priced = [
+            _Candidate(train, self._quote_fare(train, search))
+            for train in available
+        ]
+        quoted = [item for item in priced if item.fare is not None]
+        if quoted:
+            candidate = min(quoted, key=lambda item: item.fare or 0)
+            self._announce(candidate, reason="cheapest quoted fare")
+            return candidate
+        # A live ScheduleView row carries no goods number and the envelope's
+        # h_gd_no is empty, so trn.prcFare.do cannot be built for it. Rather
+        # than invent a train-class price ranking with no evidence behind it,
+        # say plainly that the cheapest could not be established. The
+        # authoritative amount is read back and checked at step (d), before any
+        # money moves, and KORAIL_MAX_FARE is the operator's ceiling there.
+        candidate = priced[0]
+        self._announce(
+            candidate,
+            reason=(
+                "FIRST available train -- no fare quote was obtainable, so "
+                "'cheapest' could NOT be established"
+            ),
+        )
+        self.console.say(
+            f"    set {TRAIN_NO_ENV} to choose a specific train, and "
+            f"{MAX_FARE_ENV} to cap what may be charged"
+        )
+        return candidate
+
+    def _quote_fare(self, train: TrainSummary, search: Any) -> int | None:
+        goods_no = train.goods_no or (search.metadata.product_no or "")
+        if not goods_no:
+            return None
+        try:
+            quote = self.client.get_price_fare_quote(
+                PriceFareQuoteRequest(
+                    legs=(
+                        PriceFareLeg(
+                            departure_station_code=(
+                                train.departure_station_code or ""
+                            ),
+                            arrival_station_code=train.arrival_station_code or "",
+                            run_date=train.run_date or self.args.date,
+                            train_no=train.train_no,
+                            goods_no=goods_no,
+                            requested_seat_attribute_code=(
+                                train.seat_attribute_code or "015"
+                            ),
+                            train_group_code=train.train_group_code or "",
+                            standing_train_classification_code="",
+                        ),
+                    )
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - an unpriceable train is normal
+            self.console.say(
+                f"    [note] no fare quote for train {train.train_no}: "
+                f"{type(exc).__name__}"
+            )
+            return None
+        fares = [
+            int(fare.received_fare)
+            for fare in quote.fares
+            if fare.received_fare and fare.received_fare.isdigit()
+        ]
+        return min(fares) if fares else None
+
+    def _announce(self, candidate: _Candidate, *, reason: str) -> None:
+        train = candidate.train
+        fare = (
+            f"{candidate.fare} KRW (quoted)"
+            if candidate.fare is not None
+            else "UNKNOWN (no fare quote available)"
+        )
+        self.console.say(
+            f"    selected train {train.train_no} "
+            f"{train.train_class_name or train.train_class_code} "
+            f"{train.departure_station_name}->{train.arrival_station_name} "
+            f"{train.departure_date} {train.departure_time}-{train.arrival_time}"
+        )
+        self.console.say(f"    fare: {fare}   ({reason})")
+        if self.max_fare is not None:
+            self.console.say(f"    ceiling: {MAX_FARE_ENV}={self.max_fare} KRW")
+
+    # -- step c ---------------------------------------------------------------
+
+    def reserve(self, train: TrainSummary) -> ReservationHoldResponse:
+        self.console.say("[c] reserving ONE adult, cheapest class")
+        hold = self.client.reserve(train, consent=reserve_consent())
+        if not isinstance(hold, ReservationHoldResponse):
+            raise RoundTripAborted(
+                "reserve returned a preview instead of a live hold"
+            )
+        pnr = hold.pnr_no
+        if not pnr:
+            raise RoundTripAborted(
+                f"reserve returned no PNR: {_envelope(hold)}"
+            )
+        # Before anything else can fail.
+        self.pnr_no = pnr
+        self.state = "unpaid"
+        self.console.banner(
+            (
+                f"LIVE HOLD CREATED   PNR {pnr}",
+                "It is UNPAID. If this run stops now, cancel it with:",
+                f"  {_recovery_command(pnr)}",
+            )
+        )
+        self.console.say(f"    {_envelope(hold)}")
+        return hold
+
+    # -- step d ---------------------------------------------------------------
+
+    def confirm_amount(self, hold: ReservationHoldResponse) -> str:
+        self.console.say("[d] reading the reservation back to confirm the amount")
+        pnr = hold.pnr_no or ""
+        detail = self.client.get_ticket_reservation_detail(
+            TicketReservationDetailRequest(pnr_no=pnr)
+        )
+        server_amount = detail.total_received_amount
+        hold_amount = hold.received_amount
+        self.console.say(
+            f"    server says owed: {server_amount!r}; "
+            f"hold said: {hold_amount!r}"
+        )
+        if not server_amount or not hold_amount or server_amount != hold_amount:
+            raise RoundTripAborted(
+                "the amount the server says is owed does not match the hold's "
+                f"own amount ({server_amount!r} vs {hold_amount!r}); refusing "
+                "to pay an amount two sources disagree on"
+            )
+        if self.max_fare is not None and int(server_amount) > self.max_fare:
+            raise RoundTripAborted(
+                f"the amount owed ({server_amount} KRW) exceeds "
+                f"{MAX_FARE_ENV}={self.max_fare} KRW"
+            )
+        self.console.say(f"    confirmed: {server_amount} KRW will be charged")
+        return server_amount
+
+    # -- step e/f -------------------------------------------------------------
+
+    def pay(self, hold: ReservationHoldResponse) -> bool:
+        self.console.say("[e] PAYING WITH THE REAL CARD -- money moves now")
+        # From here until the call returns, the payment outcome is UNKNOWN: a
+        # transport failure after the server committed looks exactly like one
+        # before it. pay_with_card only raises when it never got an envelope,
+        # so the state is narrowed the moment one arrives.
+        self.state = "paying"
+        result = self.client.pay_with_card(
+            hold, self.card, consent=real_card_payment_consent()
+        )
+        self.console.say(f"    {_envelope(result)}")
+        self.console.say(f"    coupons returned: {len(result.coupons)}")
+        if not _succeeded(result):
+            # A declined payment is an answer: the server refused, so the hold
+            # is still unpaid and still cancellable.
+            self.state = "unpaid"
+            return False
+        self.state = "paid"
+        return True
+
+    def cancel_unpaid(self, hold: ReservationHoldResponse) -> bool:
+        self.console.say("[f] cancelling the still-unpaid hold")
+        result = self.client.cancel_unpaid_hold(hold, consent=cancel_consent())
+        self.console.say(f"    {_envelope(result)}")
+        if _succeeded(result):
+            self.state = "none"
+            return True
+        return False
+
+    # -- step g ---------------------------------------------------------------
+
+    def refund_identity(self, pnr_no: str) -> OriginalTicketReference:
+        self.console.say("[g] locating the paid ticket's refund identity")
+        for name, read in (
+            ("ticket list", self.client.get_ticket_list),
+            ("reservation history", self.client.get_reservation_history),
+        ):
+            try:
+                raw = getattr(read(), "raw", None)
+            except Exception as exc:  # noqa: BLE001 - try the other source
+                self.console.say(
+                    f"    [note] the {name} read failed: {type(exc).__name__}"
+                )
+                continue
+            reference = find_ticket_identity(raw, pnr_no=pnr_no)
+            if reference is not None:
+                self.console.say(f"    found it in the {name}")
+                return reference
+        raise RoundTripAborted(
+            f"could not find the refund identity for PNR {pnr_no}; the ticket "
+            "is PAID and must be refunded by hand"
+        )
+
+    def quote_refund(self, reference: OriginalTicketReference) -> None:
+        self.console.say("[g] asking what a refund returns and what it costs")
+        detail = self.client.get_refund_ticket_detail(reference)
+        self.console.say(
+            f"    ticket detail: {_envelope(detail)} "
+            f"refund_possible_flag={detail.refund_possible_flag!r}"
+        )
+        commission = self.client.get_refund_commission(
+            reference,
+            RefundCompanion(
+                name=detail.companion_name or "",
+                certificate_no=detail.companion_birth_date or "",
+            ),
+        )
+        self.console.banner(
+            (
+                f"REFUND AMOUNT: {commission.refund_amount} KRW",
+                f"REFUND FEE:    {commission.refund_fee} KRW",
+                f"proceed flag:  {commission.proceed_possible_flag!r}",
+                f"note:          {commission.secondary_message_text!r}",
+            )
+        )
+
+    # -- step h ---------------------------------------------------------------
+
+    def refund(
+        self,
+        reference: OriginalTicketReference,
+        *,
+        pnr_no: str,
+        train_no: str,
+    ) -> bool:
+        self.console.say("[h] refunding")
+        result = self.client.refund(
+            PaidTicket(
+                pnr_no=pnr_no,
+                sale_date=reference.sale_date,
+                sale_window_no=reference.sale_window_no,
+                sale_sequence=reference.sale_sequence,
+                return_password=reference.return_password,
+                train_no=train_no,
+            ),
+            consent=refund_consent(),
+        )
+        self.console.say(f"    {_envelope(result)}")
+        return _succeeded(result)
+
+    # -- orchestration --------------------------------------------------------
+
+    def run(self) -> int:
+        self.login()
+        self.require_zero_reservations("before starting")
+        candidate = self.select_train()
+        hold = self.reserve(candidate.train)
+        pnr = hold.pnr_no or ""
+        clean = False
+        try:
+            try:
+                self.confirm_amount(hold)
+            except RoundTripAborted:
+                # Nothing has been charged yet and the hold is unambiguously
+                # ours and unpaid, so release it rather than leaving it behind.
+                self.console.say(
+                    "    stopping BEFORE payment; releasing the unpaid hold"
+                )
+                if self.cancel_unpaid(hold):
+                    clean = True
+                raise
+            if not self.pay(hold):
+                # A failed payment is NOT a refund situation. The hold is still
+                # unpaid, so release it and stop.
+                if not self.cancel_unpaid(hold):
+                    raise RoundTripAborted(
+                        "payment failed AND the unpaid hold could not be "
+                        "cancelled"
+                    )
+                self.console.say(
+                    "    payment failed; the hold was cancelled and nothing "
+                    "was charged"
+                )
+                clean = True
+                return 1
+            reference = self.refund_identity(pnr)
+            self.quote_refund(reference)
+            if not self.refund(
+                reference, pnr_no=pnr, train_no=candidate.train.train_no
+            ):
+                raise RoundTripAborted("the refund was refused by the server")
+            self.state = "refunded"
+            self.console.say("[i] verifying the account is back to zero")
+            self.require_zero_reservations("after the refund")
+            clean = True
+            return 0
+        finally:
+            if not clean:
+                self.console.banner(
+                    (
+                        "THIS RUN DID NOT FINISH CLEANLY.",
+                        f"PNR {pnr}",
+                        _OUTSTANDING_BY_STATE.get(
+                            self.state, "State UNKNOWN -- check the account."
+                        ),
+                        "Recover it with:",
+                        f"  {_recovery_command(pnr)}",
+                        "or do it by hand in the KORAIL app. Do not ignore this.",
+                    )
+                )
+
+
+# --- recovery ----------------------------------------------------------------
+
+
+def _hold_for_cancel(pnr_no: str) -> ReservationHoldResponse:
+    """The minimum hold shape ``build_unpaid_reservation_cancel_form`` accepts.
+
+    A stranded PNR is all the operator has; the cancel form needs only the PNR
+    plus a single-journey successful hold, and the app hardcodes the rest.
+    """
+    return ReservationHoldResponse(
+        h_msg_cd="",
+        h_msg_txt="",
+        str_result="SUCC",
+        raw={},
+        pnr_no=pnr_no,
+        journey_count="1",
+    )
+
+
+def recover(client: KorailClient, console: _Console, pnr_no: str) -> int:
+    console.say(f"[recover] resolving PNR {pnr_no}")
+    member_no, password = read_credentials_from_env()
+    client.login(member_no, password)
+    tickets_raw = _safe_raw(client.get_ticket_list, console, "ticket list")
+    history_raw = _safe_raw(
+        client.get_reservation_history, console, "reservation history"
+    )
+    reference = find_ticket_identity(tickets_raw, pnr_no=pnr_no)
+    if reference is None:
+        reference = find_ticket_identity(history_raw, pnr_no=pnr_no)
+    if reference is not None:
+        console.say("    the ticket is PAID (it has an original-sale identity)")
+        detail = client.get_refund_ticket_detail(reference)
+        commission = client.get_refund_commission(
+            reference,
+            RefundCompanion(
+                name=detail.companion_name or "",
+                certificate_no=detail.companion_birth_date or "",
+            ),
+        )
+        console.banner(
+            (
+                f"REFUND AMOUNT: {commission.refund_amount} KRW",
+                f"REFUND FEE:    {commission.refund_fee} KRW",
+            )
+        )
+        train_no = find_train_no(tickets_raw, pnr_no=pnr_no) or find_train_no(
+            history_raw, pnr_no=pnr_no
+        )
+        result = client.refund(
+            PaidTicket(
+                pnr_no=pnr_no,
+                sale_date=reference.sale_date,
+                sale_window_no=reference.sale_window_no,
+                sale_sequence=reference.sale_sequence,
+                return_password=reference.return_password,
+                train_no=train_no,
+            ),
+            consent=refund_consent(),
+        )
+        console.say(f"    refund: {_envelope(result)}")
+        return 0 if _succeeded(result) else 1
+    if not _pnr_present(history_raw, pnr_no=pnr_no) and not _pnr_present(
+        tickets_raw, pnr_no=pnr_no
+    ):
+        console.say(
+            f"    PNR {pnr_no} is not on this account's reservation history or "
+            "ticket list; nothing to recover here"
+        )
+        return 1
+    console.say("    the reservation is UNPAID; cancelling it")
+    result = client.cancel_unpaid_hold(
+        _hold_for_cancel(pnr_no), consent=cancel_consent()
+    )
+    console.say(f"    cancel: {_envelope(result)}")
+    return 0 if _succeeded(result) else 1
+
+
+# --- entry point -------------------------------------------------------------
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run ONE live reserve -> pay -> refund round trip with a real "
+            "card. The card is read from the environment only."
+        )
+    )
+    parser.add_argument(
+        "--date",
+        default="",
+        help=(
+            "departure date YYYYMMDD; defaults to KORAIL_TEST_DATE, else "
+            f"{DEFAULT_DAYS_AHEAD} days from today"
+        ),
+    )
+    parser.add_argument(
+        "--min-interval",
+        type=float,
+        default=DEFAULT_MIN_INTERVAL_S,
+        help="minimum seconds between requests (rate-limit protection)",
+    )
+    parser.add_argument(
+        "--recover",
+        action="store_true",
+        help=(
+            f"resolve the single PNR in {RECOVER_PNR_ENV}: cancel it if it is "
+            "unpaid, refund it if it is paid"
+        ),
+    )
+    return parser
+
+
+def _require_opt_ins(*, real_charge: bool) -> None:
+    if not live_enabled():
+        raise RoundTripAborted(
+            "Set KORAIL_MOBILE_API_LIVE=1 to touch the live server"
+        )
+    if os.environ.get(LIVE_MUTATION_ENV) != "1":
+        raise RoundTripAborted(
+            f"Set {LIVE_MUTATION_ENV}=1 to opt in to changing state"
+        )
+    if real_charge and os.environ.get(LIVE_REAL_CHARGE_ENV) != "1":
+        raise RoundTripAborted(
+            f"Set {LIVE_REAL_CHARGE_ENV}=1 to opt in to charging a REAL card"
+        )
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    console = _Console()
+    client: KorailClient | None = None
+    try:
+        _require_opt_ins(real_charge=not args.recover)
+        if args.recover:
+            pnr_no = _required_env(
+                RECOVER_PNR_ENV, why="the PNR to recover"
+            ).strip()
+            client = KorailClient(build_config_from_env())
+            _install_pacing(client, _Pacer(args.min_interval))
+            return recover(client, console, pnr_no)
+
+        card = read_card_from_env()
+        console = _console_for(card)
+        args.date = (
+            args.date or os.environ.get("KORAIL_TEST_DATE") or _default_date()
+        )
+        if len(args.date) != 8 or not args.date.isdigit():
+            raise RoundTripAborted("--date must be an 8-digit YYYYMMDD date")
+        if args.date < time.strftime("%Y%m%d"):
+            raise RoundTripAborted(f"--date {args.date} is in the past")
+        if args.min_interval < 1.0:
+            raise RoundTripAborted(
+                "--min-interval below 1.0s risks a KORAIL IP ban"
+            )
+        console.banner(
+            (
+                "THIS RUN WILL CHARGE A REAL CARD AND THEN REFUND IT.",
+                f"date {args.date}, one adult, cheapest class.",
+                "Interrupt now if that is not what you want.",
+            )
+        )
+        client = KorailClient(build_config_from_env())
+        _install_pacing(client, _Pacer(args.min_interval))
+        return RoundTrip(client, console, card, args).run()
+    except RoundTripAborted as exc:
+        console.say(f"ABORTED: {console.scrub(exc)}")
+        return 2
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception as exc:  # noqa: BLE001 - never let a raw message escape
+        console.say(f"FAILED: {type(exc).__name__}: {console.scrub(exc)}")
+        return 1
+    finally:
+        if client is not None:
+            client.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

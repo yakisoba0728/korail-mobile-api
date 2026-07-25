@@ -245,6 +245,49 @@ print booleans + message codes only, never the PAN/PNR/credentials):
 Env: source the repo `.env` (via the scripts' own loader), then
 `KORAIL_MOBILE_API_LIVE=1 KORAIL_TEST_DATE=<future YYYYMMDD>`.
 
+## The real-card round trip (`scripts/reserve_pay_refund_roundtrip.py`)
+
+This one IS committed, because it is the only way `pay_with_card` and `refund`
+can ever stop being unverified. It reserves one adult on the configured route
+about two weeks out, pays with a real card, and refunds — printing what it is
+about to do at every step.
+
+Three opt-ins, none of them enough alone:
+
+| variable | meaning |
+|---|---|
+| `KORAIL_MOBILE_API_LIVE=1` | may touch the live server |
+| `KORAIL_LIVE_MUTATION=1` | may change state |
+| `KORAIL_LIVE_REAL_CHARGE=1` | may charge a REAL card |
+
+The card is read from `KORAIL_CARD_NUMBER`, `KORAIL_CARD_PASSWORD` (first two
+PIN digits), `KORAIL_CARD_EXPIRE` (YYMM) and `KORAIL_CARD_BIRTHDAY` (YYMMDD) —
+environment only, never a file and never a command-line argument, because argv
+is world-readable through `ps`. `KORAIL_MAX_FARE` is an optional ceiling in won
+and is strongly recommended: the run stops and releases the unpaid hold if the
+server says more is owed. `KORAIL_TRAIN_NO` pins an exact train.
+
+```bash
+KORAIL_MOBILE_API_LIVE=1 KORAIL_LIVE_MUTATION=1 KORAIL_LIVE_REAL_CHARGE=1 \
+KORAIL_MAX_FARE=20000 \
+python3 scripts/reserve_pay_refund_roundtrip.py
+```
+
+The PAN, the card password, the expiry and the birthday are scrubbed from every
+line it prints, including exception text. The PNR is printed unredacted on
+purpose, the instant the hold exists, and again in a banner with a runnable
+recovery command if anything later fails — a paid ticket whose PNR the operator
+does not know is the worst outcome the script can produce. That recovery command
+is the script's own `--recover` mode, driven by `KORAIL_RECOVER_PNR`: it cancels
+an unpaid hold, or prints the commission and refunds a paid ticket. It does NOT
+need `KORAIL_LIVE_REAL_CHARGE`, because neither branch charges anything.
+
+Caveat carried over from item 1: a live ScheduleView row supplies no goods
+number, so `trn.prcFare.do` usually cannot be built and "cheapest" cannot be
+established from a fare quote. The script says so rather than inventing a
+train-class price ranking, and falls back to the first reservable train — which
+is exactly why `KORAIL_MAX_FARE`/`KORAIL_TRAIN_NO` matter.
+
 SRT went the other way and **committed** its equivalents on `feat/srt-cancel`:
 `scripts/verify_reserve_cancel_roundtrip.py` (the round trip, offline-tested
 against a mock transport) and `scripts/recover_hold.py` (cancels a stranded hold
