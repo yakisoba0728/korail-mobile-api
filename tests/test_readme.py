@@ -78,7 +78,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "| 실패 | 13 |" in status
     assert "| 미실행 | 120 |" in status
     assert "| 전체 | 165 |" in status
-    assert "Package coverage: 54 exact login/read routes and 60 public methods" in status
+    assert "Package coverage: 54 exact login/read routes and 61 public methods" in status
     assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
     assert "and 128 unexecuted" in status
     assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
@@ -199,7 +199,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
 
     progress = PROGRESS.read_text(encoding="utf-8")
     assert "54 exact login/read routes" in progress
-    assert "60 public methods" in progress
+    assert "61 public methods" in progress
     assert "- Live-successful inventory entries: 32" in progress
     assert "75" in progress
     assert "IRG000000" in progress
@@ -358,7 +358,7 @@ def test_readme_documents_bounded_live_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "54 routes and 60 public methods" in text
+    assert "54 routes and 61 public methods" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
     assert (
@@ -400,7 +400,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
     # The live gate figure is the count the offline suite actually reports
     # today; the 1246/1247 figures are kept only as labelled history.
     assert (
-        "current reviewed offline gate is `1664 passed, 1 deselected`" in readme
+        "current reviewed offline gate is `1682 passed, 1 deselected`" in readme
     )
     assert (
         "Earlier gates in this repository's history were `1246 passed, 1 "
@@ -408,7 +408,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "`1247 passed, 1 deselected` directly after it" in readme
     )
     assert (
-        "current full offline release gate reports `1664 passed, 1 deselected`"
+        "current full offline release gate reports `1682 passed, 1 deselected`"
         in progress
     )
     assert (
@@ -417,7 +417,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "deselected` directly after it" in progress
     )
     assert (
-        "current reviewed offline gate reports `1664 passed, 1 deselected`; the "
+        "current reviewed offline gate reports `1682 passed, 1 deselected`; the "
         "historical gates were `1246 passed, 1 deselected` and, after the P0 "
         "live-evidence documentation coverage, `1247 passed, 1 deselected`"
         in handoff

@@ -290,8 +290,10 @@ def build_card_payment_form(
     protocol constant; the cancel builder's fixed ``"000"`` is a genuinely
     different case, evidenced separately there. The reservation identity and
     amount come from ``hold`` (a fresh successful hold with a PNR, window
-    number, and a received amount). ``card`` MUST be a non-chargeable fake card
-    — the caller/method is responsible for enforcing that.
+    number, and a received amount). This builder does not decide whether ``card``
+    is chargeable and cannot tell: both ``pay_with_fake_card`` and
+    ``pay_with_card`` build through here, and the consent they each accept is
+    what separates a test card from an acknowledged real charge.
 
     ``hidMnsStlAmt1`` is the app's ``getReceivedAmount()``, not the display
     total: ``AbstractC1269e.java:406`` puts ``String.valueOf(getReceivedAmount())``

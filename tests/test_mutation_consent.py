@@ -92,6 +92,8 @@ def test_mutation_consent_defaults_are_safe():
     assert consent.allow_refund is False
     assert consent.dry_run is True
     assert consent.fake_card_only is True
+    # A real, chargeable card is never the default: it has to be acknowledged.
+    assert consent.real_card_acknowledged is False
 
 
 def test_mutation_consent_is_frozen():

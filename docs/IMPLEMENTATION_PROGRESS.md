@@ -10,13 +10,17 @@ Last updated: 2026-07-15 KST
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 54 exact login/read routes and 60 public methods (56 login/read plus the consent-gated mutation methods `reserve`,
-  `cancel_unpaid_hold`, `pay_with_fake_card`, and `refund`, which return a
+- The current package boundary is 54 exact login/read routes and 61 public methods (56 login/read plus the consent-gated mutation methods `reserve`,
+  `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, and `refund`,
+  which return a
   redacted preview by default and send a live state change only with a
   `dry_run=False` matching-category consent via the double-gated
-  `post_mutation_form`; `pay_with_fake_card` also requires `fake_card_only`.
-  reserve/cancel/pay were verified live; `refund` acts on a settled ticket and
-  is exercised offline only). Current service inventory is 32 successful, 10 failed, and 123
+  `post_mutation_form`; `pay_with_fake_card` also requires `fake_card_only` and
+  still sends only test cards, while `pay_with_card` requires
+  `real_card_acknowledged=True` together with `fake_card_only=False` and is the
+  only path that can move real money.
+  reserve/cancel/pay were verified live; `pay_with_card` and `refund` have no
+  live-verified success envelope). Current service inventory is 32 successful, 10 failed, and 123
   unexecuted entries out of 165.
 - The cache-read expansion implementation, offline tests, package build, and
   isolated import are complete, including bounded live verification.
@@ -92,7 +96,7 @@ Last updated: 2026-07-15 KST
   fields. The server session rule remains unverified, so a conservative
   client-side login gate remains until a bounded after-login validation.
 - The transport now allows 54 exact login/read routes and the client exposes
-  60 public methods. No new route was added to the six-path DynaPath allowlist.
+  61 public methods. No new route was added to the six-path DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -168,7 +172,7 @@ was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
 of 165; current inventory is 32 successful, 10 failed, and 123 unexecuted. The
-current package boundary is 54 exact routes and 60 public methods.
+current package boundary is 54 exact routes and 61 public methods.
 
 ## Ticket-reference static read tranche
 
@@ -187,7 +191,7 @@ implementation used only static APK evidence plus synthetic/mock tests: no
 live I/O, credential access, secure raw capture, retry, fallback, adjacent
 mutation, or DynaPath expansion occurred. At implementation completion, the
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted out of
-165; the boundary is 54 exact routes and 60 public methods, with six DynaPath
+165; the boundary is 54 exact routes and 61 public methods, with six DynaPath
 allowlist paths.
 
 The ticket-reference implementation itself used no live I/O and added no
@@ -286,7 +290,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `1664 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `1682 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -410,15 +414,16 @@ tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/superpowers/specs/`.
 
 The current implementation evidence establishes 54 routes at the exact
-login/read transport boundary and 60 public methods on `KorailClient`. The
+login/read transport boundary and 61 public methods on `KorailClient`. The
 read-only path exposes no callable mutation route; reservation, unpaid-cancel,
-fake-card payment, and refund are callable only through the separate
+fake-card payment, acknowledged real-card payment, and refund are callable only
+through the separate
 consent-gated `post_mutation_form` path, while check-in, membership, and
 point/mileage mutation routes remain not callable. The current service inventory is 32 successful, 10 failed,
 and 123 unexecuted entries out of 165; the historical pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted.
 
-The current reviewed offline gate reports `1664 passed, 1 deselected`; the
+The current reviewed offline gate reports `1682 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service

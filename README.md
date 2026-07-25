@@ -7,27 +7,43 @@ requests. It also retains the static reverse-engineering report for `korail.apk`
 Android package `com.korail.talk` version `6.5.0`, as the package's historical
 evidence map.
 
-The reviewed package boundary contains 54 routes and 60 public methods. All 54
+The reviewed package boundary contains 54 routes and 61 public methods. All 54
 routes are login/read routes: 52 reads plus the login POST and the server-side
 logout GET. The four mutation routes are tracked separately and
 are never added to the read-only allowlist. Fifty-six of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
-four, `reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, and `refund`, are
+five, `reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`,
+and `refund`, are
 the consent-gated mutation methods. Each is denied unless the caller supplies a
 `MutationConsent` that opts into its category; with the default `dry_run=True`
 each merely validates its inputs and returns a redacted `MutationPreview` of the
 form that *would* be posted, sending nothing. Only a `dry_run=False` consent
 performs the live state change, and only through the dedicated double-gated send
 path (`post_mutation_form`, which enforces `assert_mutation_route` plus the
-consent check). `pay_with_fake_card` additionally refuses unless
-`fake_card_only` is set: the pay call transmits the PAN in the clear, so only a
-non-chargeable test card is supported. `reserve`, `cancel_unpaid_hold`, and
+consent check).
+
+The pay call transmits the PAN in the clear, so a payment is gated once more on
+which kind of card the consent claims. `pay_with_fake_card` still refuses unless
+`fake_card_only` is set and therefore still sends only non-chargeable test
+cards; that method and that guarantee are unchanged. A real, chargeable card is
+possible ONLY through the separate `pay_with_card`, and only on a consent that
+explicitly sets both `real_card_acknowledged=True` and `fake_card_only=False` —
+the acknowledgement that a real PAN goes over the wire and money actually moves.
+Both flags default to the safe side (`fake_card_only=True`,
+`real_card_acknowledged=False`), so every consent that does not name the new
+flag means exactly what it meant before, and the default posture is still
+fake-card-only. The transmit gate independently refuses a payment whose consent
+states neither claim or both, so an ambiguous consent is never sent.
+
+`reserve`, `cancel_unpaid_hold`, and
 `pay_with_fake_card` were verified end-to-end against the live server (the fake
-card was declined, no charge); `refund` acts on a settled ticket, which the
-fake-card flow never produces, so its live path is exercised offline only. The
+card was declined, no charge). `pay_with_card` and `refund` have no live-verified
+success envelope in this repository: they share the reserve/cancel/pay wire
+shapes and the same gated send path, but no run recorded here has settled or
+returned money. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `1664 passed, 1 deselected`; the one
+current reviewed offline gate is `1682 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -136,10 +152,12 @@ The project does not provide:
 
 - Authentication bypass
 - NetFunnel or DynaPath bypass
-- Real (chargeable) card payment, check-in, or member mutation APIs (reservation
-  hold, unpaid-hold cancellation, a fake-card-only payment attempt, and a
-  paid-ticket refund are provided as consent-gated, dry-run-by-default methods;
-  see the mutation section below)
+- Check-in or member mutation APIs (reservation hold, unpaid-hold cancellation,
+  a fake-card payment attempt, an explicitly acknowledged real card payment, and
+  a paid-ticket refund are provided as consent-gated, dry-run-by-default
+  methods; see the mutation section below. Real card payment is off by default
+  and reachable only through `pay_with_card` on a consent that sets
+  `real_card_acknowledged=True` and `fake_card_only=False`)
 - General-purpose runtime WebView automation
 
 Server response values, feature flags, redirect behavior, and server-side
@@ -230,20 +248,22 @@ The reservation, payment, and mutation routes remain excluded from the
 read-only allowlist, so no read creates, changes, cancels, pays for, refunds, or
 checks in a reservation. State changes occur only through the explicit
 consent-gated mutation methods (`reserve`, `cancel_unpaid_hold`,
-`pay_with_fake_card`, and `refund`), never as a side effect of a read.
+`pay_with_fake_card`, `pay_with_card`, and `refund`), never as a side effect of
+a read.
 
 The package also exposes pure parsers for already-obtained reservation-hold and
 reservation-payment JSON: `parse_reservation_hold_response()` and
 `parse_reservation_payment_response()`. They return frozen, redaction-safe
 models and perform no network request. All four mutation form builders are now
 wired to a client method: reservation and unpaid-hold-cancel to `reserve` and
-`cancel_unpaid_hold`, card payment to `pay_with_fake_card`, and refund to
+`cancel_unpaid_hold`, card payment to `pay_with_fake_card` (test cards) and
+`pay_with_card` (an acknowledged real charge), and refund to
 `refund`. Each sends only via the double-gated mutation path and only with a
 `dry_run=False` consent; with the default consent each returns a redacted
-preview and transmits nothing. `refund` is the one category whose send path,
-while fully active code rather than blocked, has never been run against the
-live server: a refund acts on a settled ticket and this package's fake-card
-payment is always declined, so no paid ticket is ever produced here. A bounded
+preview and transmits nothing. `pay_with_card` and `refund` are the two send
+paths that, while fully active code rather than blocked, have never been run
+against the live server: no run recorded in this repository has settled a real
+payment or returned money, so neither has a live-verified success envelope. A bounded
 authorized check created one unpaid direct reservation and immediately
 completed both cancellation steps; reservation history was empty before and
 after, and that check called no payment endpoint. A separate bounded check
@@ -365,7 +385,7 @@ nested response models. The implementation used no live request, credential
 access, secure raw capture, retry, fallback, or adjacent mutation. At
 implementation completion, the pre-R149 inventory was 31 successful, 10
 failed, and 124 unexecuted out of 165. The boundary is 54 exact login/read
-routes and 60 public methods; the DynaPath allowlist remains six paths.
+routes and 61 public methods; the DynaPath allowlist remains six paths.
 
 The ticket-reference implementation itself used no live I/O and added no
 mutation capability.
@@ -699,4 +719,4 @@ still provide a custom `DynapathConfig.token_provider`; the package contains no
 separate probe generator and does not retain request history. Login follows the
 app sequence and treats only `IRZ000001` or `S200` as final success.
 
-Reservation hold, unpaid-hold cancellation, a fake-card-only payment attempt, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, `refund`). Real (chargeable) card payment, check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
+Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, an explicitly acknowledged real card payment, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`). Real (chargeable) card payment is off by default: it requires `pay_with_card` plus a consent that sets `real_card_acknowledged=True` and `fake_card_only=False`, and `pay_with_fake_card` still refuses anything but a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.

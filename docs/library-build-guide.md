@@ -76,9 +76,14 @@ authorization.
 
 That authorization has since been given for four categories only. The shipped
 client now has consent-gated `reserve`, `cancel_unpaid_hold`,
-`pay_with_fake_card`, and `refund` methods, which send only through a dedicated
+`pay_with_fake_card`, `pay_with_card`, and `refund` methods, which send only
+through a dedicated
 gated path and only with an explicit non-preview consent (see `README.md` and
-`docs/MUTATION_HANDOFF.md`). Every other mutation endpoint listed in this guide
+`docs/MUTATION_HANDOFF.md`). `pay_with_fake_card` and `pay_with_card` are two
+methods on the one payment category: the first accepts only a non-chargeable
+test card, the second only a consent that explicitly acknowledges a real charge
+(`real_card_acknowledged=True` with `fake_card_only=False`). Every other
+mutation endpoint listed in this guide
 is still unimplemented and still governed by the baseline policy above.
 
 ## Service Runtime Status
@@ -206,5 +211,5 @@ Retrofit annotation 기준 165개 endpoint는 `analysis/reports/api-endpoints.ts
 2. `CommonApi.getCommonCode`, station/cache/config 조회를 구현해 기본 통신을 검증한다.
 3. 로그인은 common-code 기반 암호화와 cookie persistence까지 하나의 integration test로 묶는다.
 4. 열차 조회, 구매이력, 영수증처럼 현재 성공한 조회성 API부터 typed wrapper를 만든다.
-5. Do not expose mutation methods or DTO stubs beyond the four authorized consent-gated ones (reserve, unpaid-hold cancel, fake-card payment, refund). Any further interface requires a separate safety design, new evidence, independent review, and explicit user authorization.
+5. Do not expose mutation methods or DTO stubs beyond the four authorized consent-gated categories (reserve, unpaid-hold cancel, payment, refund), exposed as five methods because payment is split into a fake-card path and an explicitly acknowledged real-card path. Any further interface requires a separate safety design, new evidence, independent review, and explicit user authorization.
 6. WebView/provider/NetFunnel/DynaPath는 core API와 분리해 optional adapter로 둔다.

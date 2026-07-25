@@ -16,13 +16,14 @@ state-changing request can leave the process only through the dedicated
 |---|---|---|
 | reserve | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
 | cancel (unpaid hold) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
-| payment | ✅ fake-card-only, **live-verified (declined)** | ⛔ not implemented — route tiered only, not live-enabled |
-| refund | ⚠️ implemented, **offline only** (never live-run) | ⛔ not implemented — route tiered only, not live-enabled |
+| payment (fake card) | ✅ `pay_with_fake_card`, **live-verified (declined)** | ⛔ not implemented — route tiered only, not live-enabled |
+| payment (real card) | ⚠️ `pay_with_card`, explicit opt-in, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
+| refund | ⚠️ implemented, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
 
 "Live-verified" on both sides means the request was actually sent and its
-response observed. korail `refund` is the exception: its send path is fully
-active code, NOT blocked, but it has never been run (see item 1 under "NOT
-settled"). The SRT reserve/cancel work sits on branch **`feat/srt-cancel` of
+response observed. korail `pay_with_card` and `refund` are the exceptions:
+their send paths are fully active code, NOT blocked, but neither has ever been
+run (see item 1 under "NOT settled"). The SRT reserve/cancel work sits on branch **`feat/srt-cancel` of
 `srt-mobile-api`, not merged**.
 
 "Not live-enabled" on the SRT side is a hard gate, not a description of missing
@@ -31,7 +32,8 @@ code — see the SRT gate note below.
 ## Safety model (both repos)
 
 - `MutationConsent` (frozen): per-category `allow_*` (default `False`),
-  `dry_run` (default `True`), `fake_card_only` (default `True`).
+  `dry_run` (default `True`), `fake_card_only` (default `True`),
+  `real_card_acknowledged` (default `False`, korail only).
 - `MutationPreview` (frozen): the dry-run result; its `payload` is forced
   through `redact_payload` on construction, so a preview can never hold a raw
   PAN, PNR, or other sensitive identity.
@@ -39,9 +41,13 @@ code — see the SRT gate note below.
   route. It triple-gates: `require_mutation_consent(category)` → refuse
   `dry_run=True` → `assert_mutation_route` (route allowlist) +
   `assert_mutation_route_category` (category/route cross-check). Both repos also
-  refuse `category=="payment"` unless `fake_card_only` is set (the PAN is
-  transmitted in the clear); on SRT that gate sits behind the category kill
-  switch, which refuses payment outright anyway.
+  gate `category=="payment"` on which kind of card the consent claims, because
+  the PAN is transmitted in the clear. On korail the consent must state exactly
+  ONE of `fake_card_only=True` (a non-chargeable test card, the default) or
+  `real_card_acknowledged=True` (an acknowledged real charge); neither is the
+  original refusal and both is a contradiction, so an ambiguous consent is never
+  sent. On SRT only the `fake_card_only` half exists and it sits behind the
+  category kill switch, which refuses payment outright anyway.
 - The read-only send path (`post_form`/`get_json` on korail;
   `assert_read_only_request` on SRT) still refuses every mutation route.
 - Mutation routes are tracked in a separate `*_MUTATION_ROUTES` set, never added
@@ -156,13 +162,17 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
 
 ## NOT settled / trade-offs
 
-1. **korail `refund` is not live-verified.** A refund acts on a *settled* ticket
-   and needs its original sale window/date/sequence + return password. This
-   package's fake-card payment is always declined, so it never produces a paid
-   ticket. The refund form + method are wired and offline contract-tested
-   against the srtgo/app wire (`ktx.py:1077-1094`), but the live path has never
-   run. **Trade-off:** implemented for API completeness; accepted as unverified
-   because verifying it would require a real (chargeable) payment.
+1. **korail `pay_with_card` and `refund` are not live-verified.** A refund acts
+   on a *settled* ticket and needs its original sale window/date/sequence +
+   return password. The fake-card payment is always declined, so it never
+   produces a paid ticket. The refund form + method are wired and offline
+   contract-tested against the srtgo/app wire (`ktx.py:1077-1094`), but the live
+   path has never run. `pay_with_card` closes the loop in code — an explicitly
+   acknowledged real charge does settle a ticket, which is then refundable — and
+   `scripts/reserve_pay_refund_roundtrip.py` drives that round trip, but no run
+   recorded here has executed it. **Trade-off:** both are implemented for API
+   completeness and remain marked unverified until an operator has actually run
+   the round trip against a real card and a real account.
 
 2. **SRT `payment` and `refund` are still deferred (need live capture) and are
    still kill-switched.** They have no client method, and even a caller reaching
@@ -207,10 +217,14 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    gained `scripts/recover_hold.py`, which cancels a stranded hold from the PNR
    string alone.
 
-5. **Fake-card enforcement is honor-system on the card value.** The library
-   cannot verify a card is non-chargeable; `fake_card_only` is a policy flag
-   plus the expectation of a server decline. Real-card mode is refused entirely
-   at both the `pay_with_fake_card` method and the `post_mutation_form` gate.
+5. **Card-kind enforcement is honor-system on the card value.** The library
+   cannot verify whether a card is chargeable; `fake_card_only` and
+   `real_card_acknowledged` are policy claims the caller makes, not facts the
+   library can check. What the gates do enforce is that the claim is stated and
+   unambiguous: `pay_with_fake_card` accepts only the fake-card claim, the
+   separate `pay_with_card` accepts only the acknowledged-real-charge claim, and
+   `post_mutation_form` refuses a payment consent that makes neither claim or
+   both.
 
 6. **Live-testing risks.** Real unpaid holds (auto-expire, but always
    auto-cancel), anti-bot IP-ban risk, and (SRT) NetFunnel virtual queue. Every

@@ -228,6 +228,12 @@ class KorailHttpClient:
         mutation can only leave the process through this gate. ``data`` is sent
         verbatim (the reservation/cancel builders already include the common
         Device/Version/Key fields); no read-only field allowlist applies.
+
+        A ``category="payment"`` send carries the PAN in the clear and is gated
+        once more: the consent must state exactly one of
+        ``fake_card_only=True`` (a non-chargeable test card) or
+        ``real_card_acknowledged=True`` (an acknowledged real charge). Neither
+        and both are refused.
         """
         require_mutation_consent(consent, category)
         if consent.dry_run:
@@ -237,15 +243,34 @@ class KorailHttpClient:
             )
         # Defense-in-depth at the transmit boundary: a payment carries the PAN
         # in the clear, so the send gate itself refuses to transmit one unless
-        # fake_card_only is set. This keeps the "only non-chargeable test cards"
-        # invariant at the layer that actually sends, not only in the public
-        # pay_with_fake_card method.
-        if category == "payment" and not consent.fake_card_only:
-            raise MutationNotAllowedError(
-                "payment mutations require consent.fake_card_only=True; the PAN "
-                "is transmitted in the clear, so only non-chargeable test cards "
-                "are supported"
-            )
+        # the consent states, unambiguously, WHICH kind of card it is. Exactly
+        # one of the two claims must hold:
+        #
+        #   fake_card_only=True        -> a non-chargeable test card (default)
+        #   real_card_acknowledged=True -> a real card, money will move
+        #
+        # Neither set is the historical refusal, unchanged. BOTH set is a
+        # contradiction -- the consent simultaneously claims a test card and
+        # acknowledges a real charge -- and is refused rather than resolved,
+        # because sending a payment on an ambiguous consent is precisely the
+        # mistake this gate exists to prevent. This keeps the invariant at the
+        # layer that actually sends, not only in the public payment methods.
+        if category == "payment":
+            if consent.fake_card_only and consent.real_card_acknowledged:
+                raise MutationNotAllowedError(
+                    "payment mutations refuse a contradictory consent: "
+                    "fake_card_only=True claims a non-chargeable test card "
+                    "while real_card_acknowledged=True acknowledges a real "
+                    "charge; set exactly one"
+                )
+            if not consent.fake_card_only and not consent.real_card_acknowledged:
+                raise MutationNotAllowedError(
+                    "payment mutations require consent.fake_card_only=True (a "
+                    "non-chargeable test card) or "
+                    "consent.real_card_acknowledged=True (an acknowledged real "
+                    "charge); the PAN is transmitted in the clear, so an "
+                    "unstated card kind is never sent"
+                )
         assert_korail_origin(str(self._client.base_url))
         assert_mutation_route("POST", path)
         assert_mutation_route_category(path, category)

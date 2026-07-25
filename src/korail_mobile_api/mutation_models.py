@@ -85,9 +85,21 @@ class CardPayment:
     """Card settlement inputs for a reservation payment (settlement code 02).
 
     Mirrors the app/srtgo ``pay_with_card`` card fields. The PAN goes over the
-    wire in the clear (no client-side encryption), so this must only ever carry
-    a non-chargeable FAKE test card: the payment method refuses to send unless
-    ``MutationConsent.fake_card_only`` is True. Sensitive fields are ``repr=False``.
+    wire in the clear (no client-side encryption), so which kind of card this
+    may carry is decided by the consent, never by this type:
+
+    * By default it can only be a non-chargeable FAKE test card.
+      :meth:`~korail_mobile_api.client.KorailClient.pay_with_fake_card` refuses
+      to send unless ``MutationConsent.fake_card_only`` is True, which is the
+      default, and it accepts nothing else.
+    * A REAL, CHARGEABLE card is possible only through the separate
+      :meth:`~korail_mobile_api.client.KorailClient.pay_with_card`, and only on
+      a consent that explicitly sets ``real_card_acknowledged=True`` together
+      with ``fake_card_only=False``. That combination has to be written on
+      purpose; nothing infers it, and the transmit gate refuses a consent that
+      states neither claim or both.
+
+    Sensitive fields are ``repr=False``.
     """
 
     card_number: str = field(repr=False)
@@ -104,9 +116,18 @@ class PaidTicket:
 
     Mirrors the app/srtgo ``refund`` inputs (``ktx.py:1077-1094``): the PNR plus
     the original-ticket sale window/date/sequence and return password, and the
-    train number. These come from a settled ticket (e.g. a ticket-list row).
-    Because a fake-card payment is always declined, no real paid ticket is
-    produced in this package's test flow, so refund is exercised offline only.
+    train number. These come from a settled ticket (e.g. a ticket-list row, or
+    :meth:`~korail_mobile_api.client.KorailClient.get_refund_ticket_detail`).
+
+    A fake-card payment is always declined and so never produces one of these;
+    for as long as that was the only payment path, refund could be exercised
+    offline only. :meth:`~korail_mobile_api.client.KorailClient.pay_with_card`
+    changes that — an explicitly acknowledged real charge does settle a ticket,
+    and that ticket is refundable. The refund send path itself is unchanged and
+    still has no live-verified success envelope; call
+    :meth:`~korail_mobile_api.client.KorailClient.get_refund_commission` first to
+    see the refundable amount and the fee before issuing one.
+
     Sale-identity fields are ``repr=False``.
     """
 

@@ -10,8 +10,12 @@ The safety posture is:
   per-category ``allow_*`` flag defaults to ``False``.
 * ``dry_run`` defaults to ``True``: a mutation call builds and validates its
   request, then returns a :class:`MutationPreview` **without sending**.
-* ``fake_card_only`` defaults to ``True`` so a payment preview can only ever
-  carry a non-chargeable test card.
+* ``fake_card_only`` defaults to ``True`` and ``real_card_acknowledged``
+  defaults to ``False``, so a default consent can only ever carry a
+  non-chargeable test card. A real, chargeable card requires the caller to
+  invert BOTH flags explicitly (``fake_card_only=False,
+  real_card_acknowledged=True``); setting neither, or setting both, is refused
+  at the transmit gate.
 * :func:`require_mutation_consent` denies by default, raising
   :class:`~korail_mobile_api.errors.MutationNotAllowedError` before any request
   is built unless the caller has explicitly opted into the exact category.
@@ -45,6 +49,18 @@ class MutationConsent:
     ``dry_run`` (default ``True``) makes a mutation call build-but-never-send,
     returning a :class:`MutationPreview`. ``fake_card_only`` (default ``True``)
     keeps any payment path restricted to a non-chargeable test card.
+
+    ``real_card_acknowledged`` (default ``False``) is the single, explicit
+    acknowledgement that a REAL, CHARGEABLE card number will be transmitted in
+    the clear and that money will actually move. It is additive: because it
+    defaults to ``False``, every consent written before it existed means exactly
+    what it meant before, and the default posture is still fake-card-only.
+    A real charge therefore needs both halves stated deliberately —
+    ``fake_card_only=False`` (this is not a test card) and
+    ``real_card_acknowledged=True`` (yes, charge it). The two are mutually
+    exclusive claims: a consent that sets both is a caller bug and is refused
+    rather than resolved in either direction, because an ambiguous consent is
+    exactly the state a payment must never be sent on.
     """
 
     allow_reserve: bool = False
@@ -53,6 +69,10 @@ class MutationConsent:
     allow_refund: bool = False
     dry_run: bool = True
     fake_card_only: bool = True
+    #: The caller acknowledges that a real, chargeable PAN will be transmitted
+    #: in the clear and that money will actually move. Never inferred, never
+    #: defaulted on; see the class docstring.
+    real_card_acknowledged: bool = False
 
 
 @dataclass(frozen=True)

@@ -1388,6 +1388,87 @@ class KorailClient:
             raise
         return parse_reservation_payment_response(response.raw)
 
+    def pay_with_card(
+        self,
+        hold: ReservationHoldResponse,
+        card: CardPayment,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | ReservationPaymentResponse:
+        """Pay for an unpaid hold with a REAL, CHARGEABLE card. Money moves.
+
+        This is the sibling of :meth:`pay_with_fake_card`, not a replacement for
+        it: that method still exists, still refuses anything but a test card, and
+        its name still means what it says. The wire shape is identical — both
+        build the same ``build_card_payment_form`` and both leave through the
+        same double-gated
+        :meth:`~korail_mobile_api.http.KorailHttpClient.post_mutation_form`
+        — so a real payment cannot drift from the shape that was verified live.
+        The ONLY difference is which consent each accepts.
+
+        This one requires ``consent.real_card_acknowledged is True`` AND
+        ``consent.fake_card_only is False``. Both halves must be stated:
+        acknowledging a real charge while still claiming a test card is a
+        contradiction, and it is refused here and again at the transmit gate
+        rather than resolved. The default :class:`MutationConsent` satisfies
+        neither, so nothing that has not been deliberately written for a real
+        charge can reach this path. Gated further by
+        ``require_mutation_consent(consent, "payment")`` and an authenticated
+        session. With ``dry_run=True`` it returns a :class:`MutationPreview`
+        whose card and identity fields are redacted and transmits nothing.
+
+        Like its sibling it sends with ``raise_on_fail=False``, but for a
+        different reason. A fake card is *expected* to decline; a real card is
+        not, and precisely because a real failure is unexpected the caller needs
+        the server's own envelope rather than an exception. The response code is
+        what distinguishes "declined, the hold is still unpaid, cancel it" from
+        an ambiguous outcome that must NOT be blind-cancelled, and it is the only
+        record of what happened to the money. Raising would discard that at the
+        exact moment it matters most, leaving a hold of unknown payment state.
+        So the parsed :class:`ReservationPaymentResponse` is always returned and
+        the caller decides; check ``str_result``/``h_msg_cd`` before assuming the
+        ticket is paid.
+        """
+        require_mutation_consent(consent, "payment")
+        if not consent.real_card_acknowledged:
+            raise MutationNotAllowedError(
+                "pay_with_card requires consent.real_card_acknowledged=True; a "
+                "real, chargeable card number is transmitted in the clear and "
+                "money actually moves, so the caller must say so explicitly "
+                "(use pay_with_fake_card for a non-chargeable test card)"
+            )
+        if consent.fake_card_only:
+            raise MutationNotAllowedError(
+                "pay_with_card requires consent.fake_card_only=False; a consent "
+                "that still claims a non-chargeable test card while "
+                "acknowledging a real charge is contradictory and is never sent"
+            )
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL payment requires an authenticated session"
+            )
+        route = "/classes/com.korail.mobile.payment.ReservationPayment"
+        form = build_card_payment_form(self.config, hold, card)
+        if consent.dry_run:
+            return MutationPreview(
+                category="payment",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            response = self.http.post_mutation_form(
+                route,
+                form,
+                consent=consent,
+                category="payment",
+                raise_on_fail=False,
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+        return parse_reservation_payment_response(response.raw)
+
     def refund(
         self,
         ticket: PaidTicket,

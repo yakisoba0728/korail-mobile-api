@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Real (chargeable) card payment is now possible, as an explicit, additive
+  opt-in. `MutationConsent` gains `real_card_acknowledged` (default `False`):
+  the caller's acknowledgement that a real, chargeable PAN will be transmitted
+  in the clear and that money will actually move. Because it defaults to
+  `False`, every consent written before it existed means exactly what it meant
+  before and the default posture is unchanged — fake-card-only.
+- Added `KorailClient.pay_with_card`, beside an unchanged `pay_with_fake_card`.
+  The new method requires `real_card_acknowledged=True` AND
+  `fake_card_only=False`; the old one still refuses anything but a test card,
+  so its name keeps meaning what it says. Both build the same
+  `build_card_payment_form` and leave through the same double-gated
+  `post_mutation_form`, so a real payment cannot drift from the wire shape that
+  was verified live. `pay_with_card` returns the parsed payment envelope rather
+  than raising on a FAIL, because that envelope is the only record of what
+  happened to the money and of whether the hold is still cancellable.
+- The transmit gate now requires a payment consent to state exactly ONE card
+  claim. Neither flag set is the original refusal, unchanged. BOTH set is
+  refused as a contradiction: a consent that claims a test card while
+  acknowledging a real charge is a caller bug, and paying on an ambiguous
+  consent is the mistake the gate exists to prevent. The boundary is now 54
+  exact login/read routes and 61 public methods; no new route was added.
+- Neither `pay_with_card` nor `refund` has a live-verified success envelope. No
+  run recorded in this repository has settled a real payment or returned money;
+  the docs now say so instead of saying a real charge is impossible.
 - Added three read-only routes found by comparing the package against four
   third-party reference clients (srtgo, srtgo_plus, ryanking13/SRT, korail2);
   all three are declared in our own decompiled APK. `get_ticket_reservation_detail`
