@@ -14,7 +14,7 @@ state-changing request can leave the process only through the dedicated
 
 | Category | korail | SRT |
 |---|---|---|
-| reserve | ✅ implemented, **live-verified** | ✅ ported, offline dry-run (not live-run) |
+| reserve | ✅ implemented, **live-verified** | ✅ ported, **preview-only** (live send refused) |
 | cancel (unpaid hold) | ✅ implemented, **live-verified** | ⛔ route tiered only — deferred |
 | payment | ✅ fake-card-only, **live-verified (declined)** | ⛔ route tiered only — deferred |
 | refund | ⚠️ implemented, **offline only** (unverifiable) | ⛔ route tiered only — deferred |
@@ -80,11 +80,20 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    (`ard02017`/`ard02018`), so a clean fake-card JSON attempt is likely
    infeasible. cancel/refund need live response capture to validate parsing.
 
-3. **SRT `reserve` is offline only.** Ported from srtgo `_reserve`
-   (`arc/selectListArc05013_n.do`), NetFunnel-gated. Not live-run this session
-   (would create a real hold; needs a real SRT account). Open uncertainties to
-   verify next: NetFunnel-key handling inside the mutation send path, and
-   passenger-dict / seat-type fidelity vs srtgo.
+3. **SRT `reserve` is preview-only.** Ported from srtgo `_reserve`
+   (`arc/selectListArc05013_n.do`), the dry-run preview is offline-verified
+   (form matches the srtgo wire field-for-field). Live sending (`dry_run=False`)
+   is **deliberately refused**: SRT has no callable cancel method to release a
+   created hold, and the live NetFunnel-key/referer wiring is unverified — a
+   live reserve could strand an uncancellable real hold. The reserve-response
+   parser (`parse_reservation_hold_response` → `SrtReservationHold`) and the
+   `post_mutation_form` gate are wired for the future live path. Open
+   uncertainties to verify before enabling live: NetFunnel-key handling and the
+   reserve-POST referer (currently a guess: `.../ara/selectListAra10007_n.do`;
+   srtgo sends no explicit referer). Deliberate wire divergences already taken:
+   `mblPhone` omitted (srtgo sends `None`, which `requests` drops) and
+   `runDt1 = departure_date` (mirrors srtgo; differs from `run_date` only for a
+   date-shifted train). SRT-only guard: `service_class_code == "17"`.
 
 4. **Fake-card enforcement is honor-system on the card value.** The library
    cannot verify a card is non-chargeable; `fake_card_only` is a policy flag
@@ -112,9 +121,13 @@ Env: source the repo `.env` (via the scripts' own loader), then
 
 ## Next-session continuation
 
-- **SRT live reserve → cancel** round trip (real account + NetFunnel + auto-cancel
-  safety net), mirroring the korail flow, to validate the SRT reserve port and
-  resolve the NetFunnel/passenger uncertainties (item 3).
+- **SRT: implement a cancel method FIRST, then enable live reserve.** SRT
+  reserve is preview-only precisely because there is no way to release a hold.
+  The correct order is: (a) implement SRT `cancel` (route `Ard02045`, wire in
+  srtgo `srt.py:1114`), (b) remove reserve's `dry_run=False` guard, (c) run a
+  live reserve → immediate cancel round trip (real account + NetFunnel +
+  auto-cancel safety net, mirroring korail) to resolve the NetFunnel/referer
+  uncertainties (item 3), then keep it enabled.
 - **SRT cancel/refund**: capture their live response shapes, then implement the
   methods + parsers.
 - **SRT payment**: investigate the WebView + TransKey + FIDO flow
