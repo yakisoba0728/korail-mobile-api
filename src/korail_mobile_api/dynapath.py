@@ -10,8 +10,8 @@ from urllib.parse import quote_plus
 from .constants import (
     DYNAPATH_ALLOWLIST_PATHS,
     DYNAPATH_HEADER_NAME,
+    KORAIL_DEFAULT_ANDROID_OS_RELEASE,
     KORAIL_DEFAULT_DEVICE_NAME,
-    KORAIL_DEFAULT_OS_VERSION,
 )
 
 DYNAPATH_BASE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -172,7 +172,7 @@ class DynapathConfig:
     header_name: str = DYNAPATH_HEADER_NAME
     allowlist_paths: frozenset[str] = DYNAPATH_ALLOWLIST_PATHS
     device_name: str = KORAIL_DEFAULT_DEVICE_NAME
-    os_version: str = KORAIL_DEFAULT_OS_VERSION
+    os_version: str = KORAIL_DEFAULT_ANDROID_OS_RELEASE
 
     def __post_init__(self) -> None:
         if self.enabled and (

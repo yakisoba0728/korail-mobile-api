@@ -1,3 +1,5 @@
+import inspect
+
 import httpx
 import korail_mobile_api as api
 import pytest
@@ -9,6 +11,7 @@ from korail_mobile_api import (
     KORAIL_API_VERSION,
     KORAIL_APP_KEY,
     KORAIL_COMMON_CODE_BOOTSTRAP_CODES,
+    KORAIL_DEFAULT_ANDROID_OS_RELEASE,
     KORAIL_DEFAULT_ANDROID_SDK_INT,
     KORAIL_DEFAULT_DEVICE_NAME,
     KORAIL_DEVICE_ANDROID,
@@ -16,7 +19,7 @@ from korail_mobile_api import (
     KORAIL_DYNAPATH_SDK_VERSION,
     KorailConfig,
 )
-from korail_mobile_api.dynapath import DynapathConfig
+from korail_mobile_api.dynapath import DynapathConfig, DynapathTokenSettings
 from korail_mobile_api.errors import (
     KorailAppError,
     KorailDynaPathError,
@@ -70,6 +73,7 @@ def test_korail_runtime_constants_are_importable():
     assert KORAIL_APP_KEY == "korail1234567890"
     assert KORAIL_DEFAULT_ANDROID_SDK_INT == 35
     assert "app.login.cphd" in KORAIL_COMMON_CODE_BOOTSTRAP_CODES
+    assert KORAIL_DEFAULT_ANDROID_OS_RELEASE == "15"
     assert KORAIL_DYNAPATH_AS_VALUE == "[38ff229cb34c7dda8e28220a2d750cce]"
     assert KORAIL_DYNAPATH_SDK_VERSION == "v1.0.3"
     assert KORAIL_DEFAULT_DEVICE_NAME
@@ -78,6 +82,32 @@ def test_korail_runtime_constants_are_importable():
     assert not hasattr(api, "KorailProbeDynapathTokenProvider")
     assert not hasattr(api, "generate_korail_probe_dynapath_token")
     assert "/classes/com.korail.mobile.login.Login" in DYNAPATH_ALLOWLIST_PATHS
+
+
+def test_os_release_and_sdk_int_are_distinct_app_values():
+    # The DynaPath "os" field is Build.VERSION.RELEASE (b/C1229b.java:128-131),
+    # i.e. "15" for Android 15. Build.VERSION.SDK_INT (35) is a different value
+    # the app only sends as the integer OSVersion field on common.code.do
+    # (CommonService.java:32). The two constants used to hold the same number
+    # with different meanings, which is how "35" ended up as the release string.
+    assert KORAIL_DEFAULT_ANDROID_OS_RELEASE != str(
+        KORAIL_DEFAULT_ANDROID_SDK_INT
+    )
+    assert isinstance(KORAIL_DEFAULT_ANDROID_OS_RELEASE, str)
+    assert isinstance(KORAIL_DEFAULT_ANDROID_SDK_INT, int)
+    # The default reaches the wire only through a custom token_provider: it is
+    # surfaced on DynapathRequestContext, while the built-in generator reads
+    # DynapathTokenSettings.os_version, which has no default at all.
+    assert (
+        DynapathConfig().os_version == KORAIL_DEFAULT_ANDROID_OS_RELEASE
+    )
+    assert "os_version" not in {
+        name
+        for name, parameter in inspect.signature(
+            DynapathTokenSettings
+        ).parameters.items()
+        if parameter.default is not inspect.Parameter.empty
+    }
 
 
 def test_post_form_adds_dynapath_header_for_allowlisted_path():

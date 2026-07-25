@@ -5,9 +5,19 @@ KORAIL_APP_KEY = "korail1234567890"
 KORAIL_TIMEOUT_SECONDS = 60.0
 KORAIL_USER_AGENT = "korail-mobile-api/0.2.0"
 KORAIL_DEFAULT_DEVICE_NAME = "Android"
-KORAIL_DEFAULT_OS_VERSION = "35"
+# The DynaPath "os" field is Build.VERSION.RELEASE — the marketing release
+# string, e.g. "15" for Android 15 — NOT Build.VERSION.SDK_INT:
+# b/C1229b.java:128-131 puts Build.VERSION.RELEASE under Constants.OS.
+# This previously held "35", the SDK int, which is a different value that the
+# app only ever sends as the common-code form's integer OSVersion field
+# (CommonService.java:32) — see KORAIL_DEFAULT_ANDROID_SDK_INT below.
+KORAIL_DEFAULT_ANDROID_OS_RELEASE = "15"
 KORAIL_DEFAULT_DEVICE_WIDTH = 1080
 KORAIL_DEFAULT_DEVICE_HEIGHT = 2400
+# Build.VERSION.SDK_INT. Sent as the integer @Field("OSVersion") on
+# common.code.do (CommonService.java:32). 35 is the SDK level of Android 15,
+# so this and KORAIL_DEFAULT_ANDROID_OS_RELEASE describe the same platform with
+# two different numbers; they are not interchangeable.
 KORAIL_DEFAULT_ANDROID_SDK_INT = 35
 
 KORAIL_COMMON_CODE_BOOTSTRAP_CODES = (
