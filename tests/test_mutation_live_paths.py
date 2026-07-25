@@ -438,7 +438,7 @@ def test_refund_dry_run_preview_redacts_ticket_identity_without_sending():
     assert preview.category == "refund"
     assert preview.route == REFUND_ROUTE
     for key in (
-        "txtPrnNo",
+        "txtPnrNo",
         "h_orgtk_sale_dt",
         "h_orgtk_sale_wct_no",
         "h_orgtk_sale_sqno",

@@ -279,12 +279,16 @@ def build_refund_form(
 ) -> dict[str, str]:
     """Build the ticket-refund (``refunds.RefundsRequest``) form for a paid ticket.
 
-    Field set and constants mirror the evidenced app/srtgo ``refund``
-    (``ktx.py:1077-1094``): the PNR (``txtPrnNo`` — the app's spelling) plus the
-    original-ticket sale window/date/sequence and return password, with the
-    fixed ``h_mlg_stl="N"``, ``tk_ret_tms_dv_cd="21"``, ``pbpAcepTgtFlg="N"`` and
-    empty geo fields. A refund acts on a settled ticket; the caller supplies the
-    :class:`PaidTicket` identity.
+    Field set and order follow the app's own Retrofit declaration
+    (``RefundService.java:29`` / ``RefundService.smali:212``): the PNR is
+    ``txtPnrNo`` (P-n-r), plus the original-ticket sale window/date/sequence and
+    return password, with the fixed ``h_mlg_stl="N"``,
+    ``tk_ret_tms_dv_cd="21"``, ``pbpAcepTgtFlg="N"`` and empty geo fields.
+    srtgo's ``ktx.py:1082`` spells the same field ``txtPrnNo``; that is a
+    korail2-lineage typo which occurs ZERO times in the decompiled app, and
+    Retrofit ``@Field`` names are exact-match, so sending it would transmit a
+    refund with no PNR at all. A refund acts on a settled ticket; the caller
+    supplies the :class:`PaidTicket` identity.
     """
     if type(ticket) is not PaidTicket:
         raise KorailProtocolError("KORAIL refund requires a PaidTicket")
@@ -302,7 +306,7 @@ def build_refund_form(
     form = _common_fields(config)
     form.update(
         {
-            "txtPrnNo": ticket.pnr_no,
+            "txtPnrNo": ticket.pnr_no,
             "h_orgtk_sale_dt": ticket.sale_date,
             "h_orgtk_sale_wct_no": ticket.sale_window_no,
             "h_orgtk_sale_sqno": ticket.sale_sequence,

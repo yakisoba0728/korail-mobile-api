@@ -38,7 +38,7 @@ def test_refund_form_matches_the_app_refund_contract():
         "Device": "AD",
         "Version": "250601003",
         "Key": "korail1234567890",
-        "txtPrnNo": "SYNTHETIC_PNR",
+        "txtPnrNo": "SYNTHETIC_PNR",
         "h_orgtk_sale_dt": "20260725",
         "h_orgtk_sale_wct_no": "SYNTHETIC_WCT",
         "h_orgtk_sale_sqno": "0001",
@@ -50,6 +50,20 @@ def test_refund_form_matches_the_app_refund_contract():
         "latitude": "",
         "longitude": "",
     }
+
+
+def test_refund_form_spells_the_pnr_field_the_way_the_app_declares_it():
+    # RefundService.java:29 / RefundService.smali:212 declare
+    # @Field("txtPnrNo"); srtgo's txtPrnNo (ktx.py:1082) is a lineage typo with
+    # zero hits in the decompiled app. Retrofit @Field is exact-match, so the
+    # typo would post a refund carrying no PNR at all.
+    form = build_refund_form(KorailConfig(), _paid_ticket())
+    assert form["txtPnrNo"] == "SYNTHETIC_PNR"
+    assert "txtPrnNo" not in form
+    cancel_form = build_unpaid_reservation_cancel_form(
+        KorailConfig(), _paid_hold()
+    )
+    assert cancel_form["txtPnrNo"] == form["txtPnrNo"]
 
 
 @pytest.mark.parametrize(
