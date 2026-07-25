@@ -397,21 +397,30 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         assert "27 parsed responses" in text
         assert "one expected `KorailAppError`" in text
         assert "zero unexpected failures" in text
+    # The live gate figure is the count the offline suite actually reports
+    # today; the 1246/1247 figures are kept only as labelled history.
     assert (
-        "pre-P0-evidence reviewed offline gate was `1246 passed, 1 deselected`; "
-        "after adding the documentation contract coverage in this increment, "
-        "the fresh non-live gate is `1247 passed, 1 deselected`" in readme
+        "current reviewed offline gate is `1610 passed, 1 deselected`" in readme
     )
     assert (
-        "historical full offline release gate reported `1246 passed, 1 "
-        "deselected`. After adding the P0 live-evidence documentation contract "
-        "test, the fresh non-live gate reports `1247 passed, 1 deselected`"
+        "Earlier gates in this repository's history were `1246 passed, 1 "
+        "deselected` before the P0 live-evidence documentation coverage and "
+        "`1247 passed, 1 deselected` directly after it" in readme
+    )
+    assert (
+        "current full offline release gate reports `1610 passed, 1 deselected`"
         in progress
     )
     assert (
-        "historical reviewed offline gate of `1246 passed, 1 deselected`; the "
-        "fresh P0 live-evidence documentation gate reports `1247 passed, 1 "
-        "deselected`" in handoff
+        "Historically the same gate reported `1246 passed, 1 deselected` before "
+        "the P0 live-evidence documentation contract test and `1247 passed, 1 "
+        "deselected` directly after it" in progress
+    )
+    assert (
+        "current reviewed offline gate reports `1610 passed, 1 deselected`; the "
+        "historical gates were `1246 passed, 1 deselected` and, after the P0 "
+        "live-evidence documentation coverage, `1247 passed, 1 deselected`"
+        in handoff
     )
     assert "authenticated 28-request, 28-response run" in changelog
     assert "25 successful operations" in changelog

@@ -282,10 +282,11 @@ no payment request and printed or persisted no raw response or identifier.
   expected pre-login `P058` responses, and reported zero unexpected failures;
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
-- The historical full offline release gate reported
-  `1246 passed, 1 deselected`. After adding the P0 live-evidence documentation
-  contract test, the fresh non-live gate reports `1247 passed, 1 deselected`;
-  in both gates, only the explicitly opted-in live-service test was deselected.
+- The current full offline release gate reports
+  `1610 passed, 1 deselected`; only the explicitly opted-in live-service test
+  is deselected. Historically the same gate reported `1246 passed, 1 deselected`
+  before the P0 live-evidence documentation contract test and
+  `1247 passed, 1 deselected` directly after it.
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
   verifier accepted both artifacts, `git diff --check` passed, and all
@@ -414,9 +415,11 @@ point/mileage mutation routes remain not callable. The current service inventory
 and 123 unexecuted entries out of 165; the historical pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted.
 
-A historical reviewed offline gate of `1246 passed, 1 deselected`; the fresh P0
-live-evidence documentation gate reports `1247 passed, 1 deselected`. In both
-gates, the deselected test is the explicitly opted-in live-service test.
+The current reviewed offline gate reports `1610 passed, 1 deselected`; the
+historical gates were `1246 passed, 1 deselected` and, after the P0
+live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
+of those gates, the deselected test is the explicitly opted-in live-service
+test.
 
 The bounded seat-inventory structural run returned `IRG000000`/`SUCC` with 5
 cars and 75 seat rows while retaining no raw values; a later post-fix

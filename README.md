@@ -26,10 +26,11 @@ card was declined, no charge); `refund` acts on a settled ticket, which the
 fake-card flow never produces, so its live path is exercised offline only. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-pre-P0-evidence reviewed offline gate was `1246 passed, 1 deselected`; after
-adding the documentation contract coverage in this increment, the fresh
-non-live gate is `1247 passed, 1 deselected`. In both gates, the deselected test
-is the explicitly opted-in live-service test.
+current reviewed offline gate is `1610 passed, 1 deselected`; the one
+deselected test is the explicitly opted-in live-service test. Earlier gates in
+this repository's history were `1246 passed, 1 deselected` before the P0
+live-evidence documentation coverage and `1247 passed, 1 deselected` directly
+after it.
 
 Current service inventory is 32 successful, 10 failed, and 123 unexecuted
 entries out of 165.
