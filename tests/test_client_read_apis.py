@@ -253,6 +253,160 @@ def test_train_search_couples_ebiz_cross_check_to_include_srt():
     assert on["ebizCrossCheck"] == on["srtCheckYn"] == "Y"
 
 
+def test_train_search_always_sends_the_apps_paging_block():
+    # b5/c.java:145-147 calls setQryDvCd("1"),
+    # setSelectTransferPage("0", "10") and setSelectTransferPages("00000", "")
+    # unconditionally on every search; RsvInquiryRequest.java:207-215 maps them
+    # onto qryStNo/pgPrCnt and qryStTrnNo/qryStTrnNo2, and all five are declared
+    # on SeatMovieService.java:14. They are not transfer-only extras.
+    from korail_mobile_api.payloads import build_train_search_form
+
+    form = build_train_search_form(
+        KorailConfig(),
+        TrainSearchQuery("서울", "부산", "20260710"),
+        departure_name="서울",
+        arrival_name="부산",
+        sid="sid",
+        member_card_no="SYNTHETIC-CARD",
+    )
+    assert form["qryDvCd"] == "1"
+    assert form["qryStNo"] == "0"
+    assert form["qryStTrnNo"] == "00000"
+    assert form["qryStTrnNo2"] == ""
+    assert form["pgPrCnt"] == "10"
+    # SeatMovieService.java:14 declares ... adjStnScdlOfrFlg, mbCrdNo, ...,
+    # qryDvCd, qryStNo, qryStTrnNo, qryStTrnNo2, pgPrCnt.
+    names = list(form)
+    assert names[names.index("adjStnScdlOfrFlg") :] == [
+        "adjStnScdlOfrFlg",
+        "mbCrdNo",
+        "qryDvCd",
+        "qryStNo",
+        "qryStTrnNo",
+        "qryStTrnNo2",
+        "pgPrCnt",
+    ]
+
+
+def test_train_search_continuation_replays_the_previous_pages_cursor():
+    from korail_mobile_api import TrainSearchContinuation
+    from korail_mobile_api.payloads import build_train_search_form
+
+    form = build_train_search_form(
+        KorailConfig(),
+        TrainSearchQuery("서울", "부산", "20260710"),
+        departure_name="서울",
+        arrival_name="부산",
+        sid="sid",
+        continuation=TrainSearchContinuation(
+            query_station_no="SYNTHETIC-QRY-ST-NO",
+            query_train_no="SYNTHETIC-TRN-NO",
+            page_count="SYNTHETIC-RSLT-CNT",
+        ),
+    )
+    # setNextTimeTC(h_qry_st_no_next, h_trn_no_next) then
+    # setSelectTransferPage(h_qry_st_no_next, h_rslt_cnt) -- b5/c.java:184-191.
+    assert form["qryDvCd"] == "1"
+    assert form["qryStNo"] == "SYNTHETIC-QRY-ST-NO"
+    assert form["qryStTrnNo"] == "SYNTHETIC-TRN-NO"
+    assert form["pgPrCnt"] == "SYNTHETIC-RSLT-CNT"
+    # setSelectTransferPages needs BOTH transfer cursors non-empty
+    # (b5/c.java:192), which a direct search never has.
+    assert form["qryStTrnNo2"] == ""
+
+
+def test_train_search_continuation_must_be_the_exact_type():
+    from korail_mobile_api.errors import KorailProtocolError
+    from korail_mobile_api.payloads import build_train_search_form
+
+    with pytest.raises(KorailProtocolError):
+        build_train_search_form(
+            KorailConfig(),
+            TrainSearchQuery("서울", "부산", "20260710"),
+            departure_name="서울",
+            arrival_name="부산",
+            sid="sid",
+            continuation={"query_station_no": "1"},
+        )
+
+
+def test_train_search_result_yields_a_cursor_only_when_the_app_would_page():
+    from korail_mobile_api import (
+        BaseKorailResponse,
+        TrainSearchContinuation,
+        TrainSearchMetadata,
+        TrainSearchResult,
+    )
+
+    def result(**metadata) -> TrainSearchResult:
+        return TrainSearchResult(
+            trains=[],
+            response=BaseKorailResponse(),
+            metadata=TrainSearchMetadata(**metadata),
+        )
+
+    complete = result(
+        next_page_flag="Y",
+        next_query_station_no="SYNTHETIC-QRY-ST-NO",
+        next_train_no="SYNTHETIC-TRN-NO",
+        result_count="SYNTHETIC-RSLT-CNT",
+    )
+    assert complete.next_page() == TrainSearchContinuation(
+        query_station_no="SYNTHETIC-QRY-ST-NO",
+        query_train_no="SYNTHETIC-TRN-NO",
+        page_count="SYNTHETIC-RSLT-CNT",
+    )
+    # b5/c.java:381-387 stops paging as soon as h_next_pg_flg is not "Y".
+    assert (
+        result(
+            next_page_flag="N",
+            next_query_station_no="SYNTHETIC-QRY-ST-NO",
+            next_train_no="SYNTHETIC-TRN-NO",
+        ).next_page()
+        is None
+    )
+    assert result().next_page() is None
+    # A half-filled cursor would silently re-request page one.
+    assert (
+        result(
+            next_page_flag="Y",
+            next_query_station_no="SYNTHETIC-QRY-ST-NO",
+        ).next_page()
+        is None
+    )
+
+
+def test_search_trains_next_page_posts_the_cursor(load_json_fixture):
+    from korail_mobile_api import TrainSearchContinuation
+
+    client, captured = make_client(
+        load_json_fixture,
+        {
+            "/classes/com.korail.mobile.seatMovie.ScheduleView": (
+                "schedule_view_success.json"
+            )
+        },
+    )
+    first = client.search_trains(TrainSearchQuery("서울", "부산", "20260710"))
+    assert "qryStNo=0" in captured[0]["body"]
+    # This fixture carries no h_next_pg_flg, so the app would stop here.
+    assert first.next_page() is None
+
+    client.search_trains(
+        TrainSearchQuery("서울", "부산", "20260710"),
+        continuation=TrainSearchContinuation(
+            query_station_no="12",
+            query_train_no="00777",
+            page_count="10",
+        ),
+    )
+    body = parse_qs(captured[1]["body"])
+    assert body["qryDvCd"] == ["1"]
+    assert body["qryStNo"] == ["12"]
+    assert body["qryStTrnNo"] == ["00777"]
+    assert body["pgPrCnt"] == ["10"]
+
+
 def test_train_schedule_sends_device_and_version_without_key(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,

@@ -2,7 +2,7 @@ import time
 
 from .config import KorailConfig
 from .errors import KorailProtocolError
-from .models import TrainSearchQuery, TrainSummary
+from .models import TrainSearchContinuation, TrainSearchQuery, TrainSummary
 
 
 def _required_ascii_digits(
@@ -236,7 +236,25 @@ def build_train_search_form(
     arrival_name: str,
     sid: str,
     member_card_no: str | None = None,
+    continuation: TrainSearchContinuation | None = None,
 ) -> dict[str, str]:
+    """Build the ``seatMovie.ScheduleView`` form for one page of results.
+
+    With ``continuation=None`` this is the app's first-page request: ``b5/c.java``
+    calls ``setQryDvCd("1")`` (``:145``), ``setSelectTransferPage("0", "10")``
+    (``:146``) and ``setSelectTransferPages("00000", "")`` (``:147``)
+    unconditionally on every search, so ``qryDvCd``/``qryStNo``/``pgPrCnt``/
+    ``qryStTrnNo``/``qryStTrnNo2`` are always on the wire — they are not optional
+    transfer-only extras. Pass a :class:`TrainSearchContinuation` (from
+    :meth:`TrainSearchResult.next_page`) to request the page after that one.
+    """
+    if continuation is not None and type(continuation) is not (
+        TrainSearchContinuation
+    ):
+        raise KorailProtocolError(
+            "KORAIL train search continuation must be an exact "
+            "TrainSearchContinuation"
+        )
     form = {
         "Device": config.device,
         "Version": config.version,
@@ -267,6 +285,26 @@ def build_train_search_form(
     }
     if member_card_no:
         form["mbCrdNo"] = member_card_no
+    # Declared order in SeatMovieService.java:14 is
+    # ... adjStnScdlOfrFlg, mbCrdNo, tkPsrmClCd, tkRcvdAmt, qryDvCd, qryStNo,
+    # qryStTrnNo, qryStTrnNo2, pgPrCnt, chtnCnt, ... so the paging block goes
+    # after mbCrdNo. tkPsrmClCd/tkRcvdAmt belong to the ticket-change entry
+    # point, which this client does not drive, and the app leaves them null
+    # there (Retrofit then omits the @Field).
+    form["qryDvCd"] = "1"
+    if continuation is None:
+        form["qryStNo"] = "0"
+        form["qryStTrnNo"] = "00000"
+        form["qryStTrnNo2"] = ""
+        form["pgPrCnt"] = "10"
+    else:
+        form["qryStNo"] = continuation.query_station_no
+        form["qryStTrnNo"] = continuation.query_train_no
+        # setSelectTransferPages only fires for a transfer search (b5/c.java:192
+        # requires both transfer cursors non-empty), so a direct next page keeps
+        # the first-page "".
+        form["qryStTrnNo2"] = ""
+        form["pgPrCnt"] = continuation.page_count
     return form
 
 

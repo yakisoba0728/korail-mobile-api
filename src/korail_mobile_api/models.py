@@ -550,8 +550,58 @@ class TrainSearchMetadata:
 
 
 @dataclass(frozen=True)
+class TrainSearchContinuation:
+    """The follow-up-page cursor the app carries between ScheduleView calls.
+
+    The app keeps the previous response's paging fields on the search screen
+    (``b5/c.java:367-371``) and, when the user asks for more results, replays
+    them into the next request (``b5/c.java:184-194``):
+    ``setNextTimeTC(h_qry_st_no_next, h_trn_no_next)`` sets ``qryStNo`` and
+    ``qryStTrnNo`` (``RsvInquiryRequest.java:174-177``) and
+    ``setSelectTransferPage(h_qry_st_no_next, h_rslt_cnt)`` sets ``qryStNo``
+    and ``pgPrCnt`` (``:207-210``). ``setSelectTransferPages`` only fires for a
+    transfer search, whose two extra cursors this direct-search client does not
+    request, so ``qryStTrnNo2`` stays at the first-page ``""``.
+
+    Build one with :meth:`TrainSearchResult.next_page` rather than by hand.
+    """
+
+    query_station_no: str = field(repr=False)
+    query_train_no: str = field(repr=False)
+    page_count: str = "10"
+
+    def __post_init__(self) -> None:
+        for name in ("query_station_no", "query_train_no", "page_count"):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"TrainSearchContinuation.{name} must be a non-empty string"
+                )
+
+
+@dataclass(frozen=True)
 class TrainSearchResult:
     trains: list[TrainSummary]
     response: BaseKorailResponse
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
+
+    def next_page(self) -> TrainSearchContinuation | None:
+        """Cursor for the page after this one, or ``None`` when there is none.
+
+        Mirrors the app's own gate: ``b5/c.java:381-387`` only keeps the
+        "more results" affordance alive while ``h_next_pg_flg`` equals ``"Y"``.
+        ``None`` is also returned when the response withheld a cursor field,
+        because a half-filled cursor would silently re-request page one.
+        """
+        metadata = self.metadata
+        if metadata.next_page_flag != "Y":
+            return None
+        try:
+            return TrainSearchContinuation(
+                query_station_no=metadata.next_query_station_no or "",
+                query_train_no=metadata.next_train_no or "",
+                page_count=metadata.result_count or "10",
+            )
+        except ValueError:
+            return None

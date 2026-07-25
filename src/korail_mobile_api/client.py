@@ -63,6 +63,7 @@ from .models import (
     StationDataResponse,
     StationInfoResponse,
     TrainCalendarResponse,
+    TrainSearchContinuation,
     TrainSearchQuery,
     TrainSearchResult,
     TrainScheduleResponse,
@@ -997,10 +998,30 @@ class KorailClient:
             )
         )
 
-    def search_trains(self, query: TrainSearchQuery) -> TrainSearchResult:
-        return self._run_read(lambda: self._search_trains(query))
+    def search_trains(
+        self,
+        query: TrainSearchQuery,
+        *,
+        continuation: TrainSearchContinuation | None = None,
+    ) -> TrainSearchResult:
+        """Search one page of trains.
 
-    def _search_trains(self, query: TrainSearchQuery) -> TrainSearchResult:
+        Pass ``continuation=previous.next_page()`` to fetch the page after
+        ``previous``; the app pages the same way, replaying the previous
+        response's cursor into ``qryStNo``/``qryStTrnNo``/``pgPrCnt``
+        (``b5/c.java:184-194``). ``next_page()`` returns ``None`` once the
+        server stops setting ``h_next_pg_flg="Y"``, which is the app's own
+        stop condition.
+        """
+        return self._run_read(
+            lambda: self._search_trains(query, continuation)
+        )
+
+    def _search_trains(
+        self,
+        query: TrainSearchQuery,
+        continuation: TrainSearchContinuation | None = None,
+    ) -> TrainSearchResult:
         departure_name = self._resolve_station_reference(
             query.departure_station_code
         )
@@ -1015,6 +1036,7 @@ class KorailClient:
             arrival_name=arrival_name,
             sid=generate_sid(),
             member_card_no=current.member_card_no if current else None,
+            continuation=continuation,
         )
         response = self.http.post_form(
             "/classes/com.korail.mobile.seatMovie.ScheduleView",

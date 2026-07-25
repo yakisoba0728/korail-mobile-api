@@ -27,7 +27,7 @@ card was declined, no charge); `refund` acts on a settled ticket, which the
 fake-card flow never produces, so its live path is exercised offline only. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `1618 passed, 1 deselected`; the one
+current reviewed offline gate is `1623 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -447,7 +447,14 @@ exposes optional group, major, coordinate, and popup metadata; popup messages,
 titles, and URLs are repr-hidden.
 
 `TrainSearchMetadata` promotes the response menu, job, product, paging, and
-count strings. `TrainSummary` now promotes station construction orders,
+count strings. Those paging strings are now wired: `TrainSearchResult.next_page()`
+returns a `TrainSearchContinuation` (or `None` once the server stops setting
+`h_next_pg_flg="Y"`, the app's own stop condition), and
+`search_trains(query, continuation=...)` replays it into the request's
+`qryStNo`/`qryStTrnNo`/`pgPrCnt` exactly as the app does. The five paging fields
+`qryDvCd`, `qryStNo`, `qryStTrnNo`, `qryStTrnNo2`, `pgPrCnt` are sent on every
+search, first page included, because the app sets them unconditionally.
+`TrainSummary` now promotes station construction orders,
 seat-attribute and car-type fields, train class/group names, reservation
 availability, and remaining-count metadata needed by safe follow-on reads.
 The observed `h_std_rest_seat_cnt`, `h_fst_rest_seat_cnt`,

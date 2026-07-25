@@ -400,7 +400,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
     # The live gate figure is the count the offline suite actually reports
     # today; the 1246/1247 figures are kept only as labelled history.
     assert (
-        "current reviewed offline gate is `1618 passed, 1 deselected`" in readme
+        "current reviewed offline gate is `1623 passed, 1 deselected`" in readme
     )
     assert (
         "Earlier gates in this repository's history were `1246 passed, 1 "
@@ -408,7 +408,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "`1247 passed, 1 deselected` directly after it" in readme
     )
     assert (
-        "current full offline release gate reports `1618 passed, 1 deselected`"
+        "current full offline release gate reports `1623 passed, 1 deselected`"
         in progress
     )
     assert (
@@ -417,7 +417,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "deselected` directly after it" in progress
     )
     assert (
-        "current reviewed offline gate reports `1618 passed, 1 deselected`; the "
+        "current reviewed offline gate reports `1623 passed, 1 deselected`; the "
         "historical gates were `1246 passed, 1 deselected` and, after the P0 "
         "live-evidence documentation coverage, `1247 passed, 1 deselected`"
         in handoff
