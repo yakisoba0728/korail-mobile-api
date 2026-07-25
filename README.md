@@ -227,20 +227,27 @@ def get_owned_product_detail(
 The reservation, payment, and mutation routes remain excluded from the
 read-only allowlist, so no read creates, changes, cancels, pays for, refunds, or
 checks in a reservation. State changes occur only through the explicit
-consent-gated mutation methods (`reserve`, `cancel_unpaid_hold`), never as a
-side effect of a read.
+consent-gated mutation methods (`reserve`, `cancel_unpaid_hold`,
+`pay_with_fake_card`, and `refund`), never as a side effect of a read.
 
 The package also exposes pure parsers for already-obtained reservation-hold and
 reservation-payment JSON: `parse_reservation_hold_response()` and
 `parse_reservation_payment_response()`. They return frozen, redaction-safe
-models and perform no network request. The reservation and unpaid-hold-cancel
-form builders are now wired to `reserve` and `cancel_unpaid_hold`, which send
-only via the double-gated mutation path with a `dry_run=False` consent; the
-payment and refund form builders remain evidence-only with no client method. A
-bounded authorized check created one unpaid direct reservation and immediately
+models and perform no network request. All four mutation form builders are now
+wired to a client method: reservation and unpaid-hold-cancel to `reserve` and
+`cancel_unpaid_hold`, card payment to `pay_with_fake_card`, and refund to
+`refund`. Each sends only via the double-gated mutation path and only with a
+`dry_run=False` consent; with the default consent each returns a redacted
+preview and transmits nothing. `refund` is the one category whose send path,
+while fully active code rather than blocked, has never been run against the
+live server: a refund acts on a settled ticket and this package's fake-card
+payment is always declined, so no paid ticket is ever produced here. A bounded
+authorized check created one unpaid direct reservation and immediately
 completed both cancellation steps; reservation history was empty before and
-after. No payment endpoint was called, and no PNR, credential, card value,
-token, or raw response was printed or persisted.
+after, and that check called no payment endpoint. A separate bounded check
+attempted one fake-card payment, which the server declined with no charge, and
+then cancelled the hold. No PNR, credential, card value, token, or raw response
+was printed or persisted.
 
 ### Fixed and account-shaped reads
 

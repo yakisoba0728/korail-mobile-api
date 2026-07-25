@@ -108,13 +108,25 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
     }
 )
 
-# Documentation-level tiering of the state-changing routes. These are the four
-# core mutation endpoints (one per category). They are deliberately kept OUT of
+# Tiering of the state-changing routes. These are the four core mutation
+# endpoints (one per category). They are deliberately kept OUT of
 # KORAIL_READ_ONLY_ROUTES so the read-only allowlist and its guarantee remain
-# fully intact: no code path treats a route in this set as callable. This is a
-# classification only — the library still has no method that can send any of
-# these requests. Each tuple is (HTTP method, exact relative path); the trailing
-# comment names the consent category the future mutation method will gate on.
+# fully intact: the read-only send path (post_form/get_json) refuses every route
+# in this set.
+#
+# This is NOT an inert classification. All four categories now have a callable
+# client method — KorailClient.reserve, .cancel_unpaid_hold, .pay_with_fake_card
+# and .refund — and each of them CAN transmit to its route below. What bounds
+# them is the gate, not the absence of a method: the only code that sends to a
+# route in this set is KorailHttpClient.post_mutation_form, which requires a
+# MutationConsent opting into the matching category, refuses a dry_run=True
+# consent, refuses a payment unless fake_card_only is set, and re-checks both
+# assert_mutation_route and assert_mutation_route_category before the POST.
+# Under the default consent (dry_run=True) the methods build a redacted preview
+# and send nothing.
+#
+# Each tuple is (HTTP method, exact relative path); the trailing comment names
+# the consent category that owns the route.
 KORAIL_MUTATION_ROUTES = frozenset(
     {
         # reserve
