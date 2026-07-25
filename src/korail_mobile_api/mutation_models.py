@@ -32,7 +32,20 @@ class ReservationHoldResponse(BaseKorailResponse):
     temporary_job_sequence_2: str | None = field(default=None, repr=False)
     payment_flag: str | None = None
     payment_message: str | None = field(default=None, repr=False)
+    #: ``h_pay_limit_msg``. Declared on the app's ``ReservationResponse``
+    #: (``:22``, getter ``:529``) but read by NO app screen, and a live hold
+    #: returns it empty. It is NOT the payment deadline — use the three fields
+    #: below, which are what the app actually renders.
     payment_deadline_message: str | None = field(default=None, repr=False)
+    #: ``h_ntisu_lmt`` — the server's own prose deadline, e.g. "…까지 미결제시
+    #: 승차권이 자동으로 취소됩니다."
+    payment_deadline_notice: str | None = field(default=None, repr=False)
+    #: ``h_ntisu_lmt_dt`` / ``h_ntisu_lmt_tm`` — the structured deadline the app
+    #: concatenates and parses as ``yyyyMMddHHmmss`` to show when an unpaid hold
+    #: self-cancels (``S4/C0816p.java:64-70``,
+    #: ``ReservedTicketActivity.java:356,365``).
+    payment_deadline_date: str | None = None
+    payment_deadline_time: str | None = None
     total_fare: str | None = None
     #: ``h_tot_prc`` — the DISPLAY total. ``PaymentActivity.java:174`` assigns it
     #: to ``mTotPrc``, which is only ever read back by ``getmTotPrc()``

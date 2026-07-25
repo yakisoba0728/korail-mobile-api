@@ -302,3 +302,58 @@ def test_mutation_models_and_raw_handoff_fields_are_recursively_redacted():
         redacted["payment"]["raw"]["tk_coupon_info"][0]["h_tk_ret_no"]
         == "[REDACTED]"
     )
+
+
+def test_reservation_hold_parser_exposes_the_live_payment_deadline():
+    # Shape taken from a real hold captured by
+    # scripts/capture_live_read_surface.py, with identity fields replaced by
+    # synthetic values. The live server leaves h_pay_limit_msg EMPTY and puts
+    # the deadline in h_ntisu_lmt / h_ntisu_lmt_dt / h_ntisu_lmt_tm, which is
+    # what the app concatenates and parses as yyyyMMddHHmmss
+    # (S4/C0816p.java:64-70, ReservedTicketActivity.java:356,365).
+    # h_pay_limit_msg is declared on ReservationResponse (:22, getter :529) but
+    # read by no app screen, so a caller reading only payment_deadline_message
+    # never learns when the unpaid hold self-cancels.
+    raw = {
+        "strResult": "SUCC",
+        "h_msg_cd": "IRR000018",
+        "h_msg_txt": "synthetic hold notice",
+        "h_pnr_no": "SYNTHETIC_PNR",
+        "h_jrny_cnt": "0001",
+        "h_payment_flg": "Y",
+        "h_payment_msg": "",
+        "h_pay_limit_msg": "",
+        "h_ntisu_lmt": "synthetic deadline notice",
+        "h_ntisu_lmt_dt": "20990101",
+        "h_ntisu_lmt_tm": "025852",
+        "h_tot_prc": "00000059800",
+        "jrny_infos": {"jrny_info": [{"h_jrny_sqno": "0001"}]},
+    }
+
+    response = parse_reservation_hold_response(raw)
+
+    assert response.payment_deadline_message == ""
+    assert response.payment_deadline_notice == "synthetic deadline notice"
+    assert response.payment_deadline_date == "20990101"
+    assert response.payment_deadline_time == "025852"
+    assert (
+        response.payment_deadline_date + response.payment_deadline_time
+        == "20990101025852"
+    )
+
+
+def test_reservation_hold_payment_deadline_is_absent_not_invented():
+    response = parse_reservation_hold_response(
+        {
+            "strResult": "SUCC",
+            "h_msg_cd": "IRR000000",
+            "h_msg_txt": "success",
+            "h_pnr_no": "SYNTHETIC_PNR",
+            "h_jrny_cnt": "1",
+            "jrny_infos": {"jrny_info": [{"h_jrny_sqno": "0001"}]},
+        }
+    )
+
+    assert response.payment_deadline_notice is None
+    assert response.payment_deadline_date is None
+    assert response.payment_deadline_time is None

@@ -218,6 +218,21 @@ def parse_reservation_hold_response(
             "h_pay_limit_msg",
             context="reservation",
         ),
+        payment_deadline_notice=_optional_string(
+            copied,
+            "h_ntisu_lmt",
+            context="reservation",
+        ),
+        payment_deadline_date=_optional_string(
+            copied,
+            "h_ntisu_lmt_dt",
+            context="reservation",
+        ),
+        payment_deadline_time=_optional_string(
+            copied,
+            "h_ntisu_lmt_tm",
+            context="reservation",
+        ),
         total_fare=_optional_string(
             copied,
             "h_tot_fare",
