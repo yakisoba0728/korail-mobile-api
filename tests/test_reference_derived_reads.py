@@ -8,11 +8,20 @@ server on an account holding zero reservations. Every route was ACCEPTED — HTT
 200, no DynaPath rejection — and each returned a distinct application-level
 error for the deliberately-invalid arguments it was given. Those error bodies
 are live-verified and are pinned in ``test_live_verified_shapes.py``. The
-SUCCESS bodies are NOT verified: producing one needs a real paid/held ticket,
-which cannot be created here (reserve and pay are out of scope for this
-increment). The success-shape cases below are therefore built from the APK's
-DAO declarations plus synthetic values and are labelled as such — they pin what
-the app says the response is, not what the server was seen to send.
+SUCCESS bodies were NOT verified at the time: producing one needs a real
+paid/held ticket, which could not be created then. The success-shape cases below
+are therefore built from the APK's DAO declarations plus synthetic values and
+are labelled as such — they pin what the app says the response is, not what the
+server was seen to send.
+
+That distinction stopped being theoretical on 2026-07-25, when a real hold
+finally produced a success body from R150 and the parser REJECTED it: the seat
+row's ``h_srcar_no`` arrived as a JSON number, not the ``String`` the DAO
+declares, and the operator's live round trip died holding an unpaid
+reservation. See
+``test_scalar_fields_accept_a_json_number_the_way_gson_does`` — a DAO
+declaration is evidence of what the app tolerates, not of what the server sends,
+and Gson tolerates both.
 """
 
 from __future__ import annotations
@@ -558,7 +567,10 @@ def test_parsers_reject_bad_envelopes_containers_and_scalar_types():
                 _success(ticket_infos={"ticket_info": value})
             )
 
-    for value in (3, True, ["x"], {"a": 1}):
+    # A JSON number is NOT a bad scalar type on these three routes -- see
+    # test_scalar_fields_accept_a_json_number_the_way_gson_does. A bool, a
+    # float, a list and an object still are.
+    for value in (True, 3.5, ["x"], {"a": 1}):
         with pytest.raises(KorailProtocolError):
             parse_refund_commission_response(_success(ret_amt=value))
         with pytest.raises(KorailProtocolError):
@@ -574,6 +586,80 @@ def test_parsers_reject_bad_envelopes_containers_and_scalar_types():
     malformed_seat["ticket_infos"]["ticket_info"][0]["tk_seat_info"] = "rows"
     with pytest.raises(KorailProtocolError):
         parse_refund_ticket_detail_response(malformed_seat)
+
+
+def test_scalar_fields_accept_a_json_number_the_way_gson_does():
+    """The 2026-07-25 live regression: h_srcar_no came back a NUMBER.
+
+    These three routes' success shapes were built from the APK's DAO
+    declarations, which type every field below as a Java ``String``. The first
+    live success body proved that declaration is not what the server sends: the
+    seat row's ``h_srcar_no`` arrived as a JSON number and the round trip died
+    with "must be a string or null" AFTER a real unpaid hold existed.
+
+    The app never noticed because Gson's ``JsonReader.nextString()`` coerces a
+    JSON number into a String. This is the third time this codebase has been bitten
+    by KORAIL being loose about string-vs-number (``h_jrny_cnt`` = ``"0001"``,
+    ``h_st_prnb``/``h_cls_prnb`` = zero-padded strings for declared ``int``s), so
+    every asserted scalar on these parsers accepts both and normalises to the
+    string the rest of the code expects.
+    """
+    reservation = _reservation_detail_body()
+    reservation["h_jrny_cnt"] = 1
+    reservation["h_tot_rcvd_amt"] = 59800
+    journey = reservation["jrny_infos"]["jrny_info"][0]
+    journey["h_trn_no"] = 101
+    seat = journey["seat_infos"]["seat_info"][0]
+    seat["h_srcar_no"] = 3
+    seat["h_seat_no"] = 12
+    seat["h_rcvd_amt"] = 59800
+
+    detail = parse_ticket_reservation_detail_response(reservation)
+    assert detail.journey_count == "1"
+    # The amount the round trip cross-checks against the hold before paying: it
+    # must come back as the same string a quoted response would have given.
+    assert detail.total_received_amount == "59800"
+    assert detail.journeys[0].train_no == "101"
+    assert detail.journeys[0].seats[0].car_no == "3"
+    assert detail.journeys[0].seats[0].seat_no == "12"
+    assert detail.journeys[0].seats[0].received_amount == "59800"
+
+    ticket = _refund_ticket_detail_body()
+    ticket["h_tot_rcvd_amt"] = 59800
+    ticket_journey = ticket["ticket_infos"]["ticket_info"][0]
+    ticket_journey["h_plf_no"] = 4
+    ticket_seat = ticket_journey["tk_seat_info"][0]
+    ticket_seat["h_srcar_no"] = 3
+    ticket_seat["h_seat_no"] = 12
+
+    refund_detail = parse_refund_ticket_detail_response(ticket)
+    assert refund_detail.total_received_amount == "59800"
+    assert refund_detail.journeys[0].platform_no == "4"
+    assert refund_detail.journeys[0].seats[0].car_no == "3"
+    assert refund_detail.journeys[0].seats[0].seat_no == "12"
+
+    # The refund pre-check the operator reads before money comes back.
+    commission = parse_refund_commission_response(
+        _success(ret_amt=59800, ret_fee=0, prg_psb_flg="Y")
+    )
+    assert commission.refund_amount == "59800"
+    assert commission.refund_fee == "0"
+
+    # Accepting a number is NOT accepting anything: a container where a scalar
+    # belongs is still a protocol error, on every one of the three levels.
+    for mutate in (
+        lambda body: body.__setitem__("h_tot_rcvd_amt", {"amount": 59800}),
+        lambda body: body["jrny_infos"]["jrny_info"][0].__setitem__(
+            "h_trn_no", ["101"]
+        ),
+        lambda body: body["jrny_infos"]["jrny_info"][0]["seat_infos"][
+            "seat_info"
+        ][0].__setitem__("h_srcar_no", {"car": 3}),
+    ):
+        broken = _reservation_detail_body()
+        mutate(broken)
+        with pytest.raises(KorailProtocolError):
+            parse_ticket_reservation_detail_response(broken)
 
 
 def test_sensitive_identities_are_repr_safe_and_redacted():

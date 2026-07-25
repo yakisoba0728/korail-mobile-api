@@ -230,6 +230,41 @@ def _optional_string(
     return value
 
 
+def _optional_scalar_string(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+) -> str | None:
+    """A scalar field, accepted as a JSON string OR a JSON number.
+
+    KORAIL is not consistent about which of the two it sends for a field the
+    APK declares as a Java ``String``, and the app never notices: every one of
+    these DAOs is deserialized by Gson, whose ``JsonReader.nextString()``
+    coerces a JSON number into its string form. Three separate live findings
+    have now landed on the same seam -- ``h_jrny_cnt`` arrived zero-padded as
+    ``"0001"``, ``h_st_prnb``/``h_cls_prnb`` arrived as zero-padded strings
+    where an ``int`` was demanded, and ``h_srcar_no`` arrived as a JSON number
+    where a string was demanded, which is what killed a live reserve on
+    2026-07-25 -- so this is treated as the systemic issue it is rather than as
+    three one-offs.
+
+    Accepting both is not the same as accepting anything. A ``bool``, a
+    ``float``, a list or an object where a scalar belongs is still a protocol
+    error: those are not shapes Gson would have taken for a String either, and
+    silently stringifying one would hide a genuinely different response.
+    """
+    value = data.get(key)
+    if value is None or isinstance(value, str):
+        return value
+    # `type(...) is int` on purpose: bool is an int subclass and `True` is not
+    # a number KORAIL ever sends for one of these fields.
+    if type(value) is int:
+        return str(value)
+    raise KorailProtocolError(
+        f"KORAIL {context} field {key} must be a string, an integer, or null"
+    )
+
+
 def _optional_integer(
     data: Mapping[str, Any],
     key: str,
@@ -1580,6 +1615,23 @@ def _nullable_string_fields(
     }
 
 
+def _nullable_scalar_fields(
+    data: Mapping[str, Any],
+    field_map: Mapping[str, str],
+    context: str,
+) -> dict[str, str | None]:
+    """:func:`_nullable_string_fields`, but string-or-number per field.
+
+    Used by the reservation-detail and refund-ticket-detail parsers, whose
+    success shapes were built from the APK's DAO declarations and never seen
+    live until 2026-07-25. See :func:`_optional_scalar_string`.
+    """
+    return {
+        attribute: _optional_scalar_string(data, wire_name, context)
+        for attribute, wire_name in field_map.items()
+    }
+
+
 def parse_multi_child_discount_target_response(
     raw: Mapping[str, Any],
 ) -> MultiChildDiscountTargetResponse:
@@ -2359,7 +2411,7 @@ def parse_ticket_reservation_detail_response(
             seat = _row(seat_value, "ticket reservation detail seat_info")
             seats.append(
                 ReservationSeatDetail(
-                    **_nullable_string_fields(
+                    **_nullable_scalar_fields(
                         seat,
                         _RESERVATION_SEAT_DETAIL_FIELDS,
                         "reservation seat detail",
@@ -2369,7 +2421,7 @@ def parse_ticket_reservation_detail_response(
             )
         journeys.append(
             ReservationDetailJourney(
-                **_nullable_string_fields(
+                **_nullable_scalar_fields(
                     journey,
                     _RESERVATION_DETAIL_JOURNEY_FIELDS,
                     "reservation detail journey",
@@ -2379,7 +2431,7 @@ def parse_ticket_reservation_detail_response(
             )
         )
     return TicketReservationDetailResponse(
-        **_nullable_string_fields(
+        **_nullable_scalar_fields(
             raw,
             _TICKET_RESERVATION_DETAIL_FIELDS,
             "ticket reservation detail",
@@ -2405,7 +2457,7 @@ def parse_refund_commission_response(
 ) -> RefundCommissionResponse:
     _validate_strict_read_envelope(raw)
     return RefundCommissionResponse(
-        **_nullable_string_fields(
+        **_nullable_scalar_fields(
             raw,
             _REFUND_COMMISSION_FIELDS,
             "refund commission",
@@ -2484,7 +2536,7 @@ def parse_refund_ticket_detail_response(
             seat = _row(seat_value, "refund ticket detail tk_seat_info")
             seats.append(
                 RefundTicketSeat(
-                    **_nullable_string_fields(
+                    **_nullable_scalar_fields(
                         seat,
                         _REFUND_TICKET_SEAT_FIELDS,
                         "refund ticket seat",
@@ -2494,7 +2546,7 @@ def parse_refund_ticket_detail_response(
             )
         journeys.append(
             RefundTicketJourney(
-                **_nullable_string_fields(
+                **_nullable_scalar_fields(
                     journey,
                     _REFUND_TICKET_JOURNEY_FIELDS,
                     "refund ticket journey",
@@ -2504,7 +2556,7 @@ def parse_refund_ticket_detail_response(
             )
         )
     return RefundTicketDetailResponse(
-        **_nullable_string_fields(
+        **_nullable_scalar_fields(
             raw,
             _REFUND_TICKET_DETAIL_FIELDS,
             "refund ticket detail",

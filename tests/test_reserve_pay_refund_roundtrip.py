@@ -128,6 +128,27 @@ def _replies(*, pnr: str = SYNTHETIC_PNR, **overrides: Any) -> dict[str, dict[st
             h_tot_dcnt_amt="0",
             h_tot_rcvd_amt="8400",
             h_payment_flg="N",
+            # The live server sends the seat row's car number as a JSON NUMBER,
+            # not the String the APK's DAO declares. On 2026-07-25 that killed
+            # this step after a real unpaid hold already existed, so the shape
+            # is carried here on the default reply rather than in one test.
+            jrny_infos={
+                "jrny_info": [
+                    {
+                        "h_jrny_sqno": "001",
+                        "h_trn_no": "00101",
+                        "seat_infos": {
+                            "seat_info": [
+                                {
+                                    "h_srcar_no": 3,
+                                    "h_seat_no": 12,
+                                    "h_rcvd_amt": 8400,
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
         ),
         PAYMENT: _ok(h_img_tk_flg="N"),
         TICKETS: _ok(

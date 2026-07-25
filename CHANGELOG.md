@@ -13,6 +13,20 @@
   the PNR is the one value that must always reach the operator. `redact_payload`
   and the package's `CARD_RE` are unchanged; the generic pattern is right where
   it guards a mutation payload against a PAN under an unknown key.
+- Fixed: `get_ticket_reservation_detail` rejected the live success body. Its
+  success-shape handling was built from the APK's DAO declaration, which types
+  every field as a Java `String`; the live server sends the seat row's
+  `h_srcar_no` as a JSON number, so the first real hold produced
+  `KorailProtocolError: ... h_srcar_no must be a string or null` — after the
+  hold existed. This is the third live finding on the same seam (`h_jrny_cnt` =
+  `"0001"`, `h_st_prnb`/`h_cls_prnb` = zero-padded strings for declared `int`s),
+  so it is fixed systemically rather than field by field: every asserted scalar
+  on `certification.ReservationList`, `refunds.CommissionView` and
+  `refunds.SelTicketInfo` — response, journey and seat levels alike — now accepts
+  a JSON string or a JSON number and normalises to the string the rest of the
+  code expects. The app never noticed because Gson's `JsonReader.nextString()`
+  coerces a number into a String. Genuinely wrong types are still refused: a
+  bool, a float, a list or an object where a scalar belongs is a protocol error.
 - Real (chargeable) card payment is now possible, as an explicit, additive
   opt-in. `MutationConsent` gains `real_card_acknowledged` (default `False`):
   the caller's acknowledgement that a real, chargeable PAN will be transmitted
