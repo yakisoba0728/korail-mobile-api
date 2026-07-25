@@ -168,27 +168,52 @@ auth = `JSESSIONID` cookie; no body encryption/HMAC.
 - **NetFunnel virtual-waiting-room act keys** (analysis §1.9 `…:150`, §7.7
   `…:2508-2534`; host `nf.letskorail.com:443`, `serviceID=service_1`, opcodes
   `5101`/`5002`/`5003`/`SET_COMPLETE`, `T6/d.java:21-113`):
-  - **⚠ CORRECTION (2026-07-21, srtgo ref) — Korail does NOT use NetFunnel at
-    all; only SRT does.** A working client
-    (`srtgo_plus/srtgo/ktx.py`) instantiates `NetFunnelHelper`
-    (`ktx.py:640`) but **never calls `.run()`** on the Korail path, and sends **no
-    `netfunnelKey`** in either the reserve body (`ktx.py:864-904`) or the pay body
-    (`ktx.py:1030-1051`). Its NetFunnel helper only knows `sid="service_1",
-    aid="act_8"` — there is **no `act_18` payment gate and no `act_14`/`act_6`
-    gate** in it (`ktx.py:601-608`); `.run()` is only wired on the *SRT* side
-    (`srt.py`, `netfunnelKey`). Korail reservation **and** payment succeed
-    **without any queue token**. The `act_18`/`act_6` gates below were inferred
-    from the decompiled *app*; the live-tool evidence says the Korail server
-    accepts reserve/pay with no NetFunnel round-trip. **Downgrade this from a top
-    risk / new subsystem to: NetFunnel client is NOT required for Korail
-    reserve/pay/refund** (confirm on the single authorized live pass; keep only if
-    a live call actually returns a queue-required error).
+  - **⚠ CORRECTION (2026-07-21, srtgo ref), REVISED 2026-07-26 — the Korail
+    server does not currently ENFORCE NetFunnel; the app does WIRE it.** The
+    earlier wording here ("Korail does NOT use NetFunnel at all; only SRT does")
+    was too strong and is withdrawn. Three separate claims have to be kept
+    apart:
+    1. **The app wires NetFunnel round trips.** `K4/g.java:43-51` defines the
+       Korail act keys — `act_8` (inquiry), `act_14` (reserve), `act_18` (pay) —
+       and they have real call sites: the pay screen opens a queue with
+       `T6.g.BEGIN(NETFUNNEL_SERVER_ID, NETFUNNEL_ACTION_PAY_ID, …)` at
+       `B6/AbstractC1269e.java:1046`, and the reservation path attaches a
+       `NetfunnelDao` to `ReservationDao` at `c5/a.java:184`. The host is
+       configured at application start: `KTApplication.java:78-85` sets
+       `nf.letskorail.com`, port 443, `serviceID=service_1`,
+       `actionID=act_8`, timeout 3. So NetFunnel is a real, wired subsystem in
+       v6.5.0, not something only SRT has.
+    2. **No Retrofit request body carries a NetFunnel token field.** Nothing in
+       the declared request contracts — reserve, pay, cancel, refund — has a
+       `netfunnelKey`-shaped `@Field`. The queue is a side-channel to
+       `nf.letskorail.com`, not a parameter of the `smart.letskorail.com` call.
+    3. **The server accepted our calls without one.** Our own live pass ran
+       reserve → cancel and a fake-card payment attempt with no NetFunnel round
+       trip at all and got real application responses (`IRR000018`,
+       `IRG000000`, and a `WRT200342` card decline), not a queue-required
+       error. srtgo agrees: it instantiates `NetFunnelHelper` (`ktx.py:640`)
+       but never calls `.run()` on the Korail path (`ktx.py:601-608` knows only
+       `sid="service_1", aid="act_8"`), and sends no token in the reserve
+       (`ktx.py:864-904`) or pay (`ktx.py:1030-1051`) body.
+    **Net effect on this plan is unchanged — a NetFunnel client is still NOT on
+    the critical path for Korail reserve/pay/refund/cancel — but the reason is
+    "the server does not currently enforce it", not "the app does not have it".**
+    **Residual risk:** enforcement is a server-side policy, and the app ships the
+    client for it. Peak season is exactly when a virtual waiting room gets turned
+    on (note the app has a separate `act_8_2` "peak-season booking" key), so a
+    mutation that works today can start returning a queue-required error under
+    load without any app or API change. Treat a sudden queue-shaped failure on
+    reserve/pay as expected-but-unimplemented rather than as a regression, and
+    keep §7.7 / `T6/d.java:21-113` as the implementation reference if it ever has
+    to be built.
   - `act_8` booking/simple-purchase (default), `act_8_2` peak-season booking.
-  - ~~**`act_18` gates the real pay calls**~~ (`ReservationPayment`, `intgStl`,
-    `passPayIssue`, `passOtrPayIssue`) — `K4/g.java:45`, wired at
+  - **`act_18` gates the real pay calls IN THE APP** (`ReservationPayment`,
+    `intgStl`, `passPayIssue`, `passOtrPayIssue`) — `K4/g.java:45`, wired at
     `B6/AbstractC1269e.java:1046`, `B6/C1270f.java:232` (analysis §3.7 `…:724`).
-    **Superseded:** not sent by the working client (see correction above); the pay
-    POST carries no queue token (`ktx.py:1030-1051`).
+    The earlier strikethrough here was wrong: the gate is genuinely wired. What
+    is true is that the gate is client-side and the pay POST itself carries no
+    queue token, and the server accepted our pay attempt without one
+    (`ktx.py:1030-1051` agrees). Not required today; see the residual risk above.
   - `act_6` gates `ScheduleViewSpecial` tour-train inquiry (analysis §3.16.3
     `…:1325`) — needed for G1 (still app-inferred; not exercised by srtgo, which
     does not implement tour search).
@@ -197,7 +222,8 @@ auth = `JSESSIONID` cookie; no body encryption/HMAC.
   - Cancel/change/check-in domains attach **no** NetFunnel gate (analysis §3.6
     `…:707`, §3.8 `…:805`).
   - Revised implication: a NetFunnel client is **not** on the critical path for
-    Korail reserve/pay/refund/cancel (the working reference does not use one). If
+    Korail reserve/pay/refund/cancel — because the server does not currently
+    enforce the queue, not because the app lacks the client (it has one). If
     G1 tour-search (`ScheduleViewSpecial`, `act_6`) is ever wired it may still need
     a gate, but that is optional/deferred, **not** the "single biggest new
     subsystem" this plan originally claimed. §39 R39

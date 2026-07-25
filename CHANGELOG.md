@@ -42,6 +42,10 @@
   reference client names does not appear anywhere in the decompiled app and was
   not observed live, so it is deliberately not mapped; an unmapped key stays
   reachable through `raw`.
+- Corrected the NetFunnel claim in `docs/RELEASE_GAP_PLAN.md`. Saying Korail
+  "does NOT use NetFunnel at all" was too strong: the app does wire the round
+  trips. What is true is that no Retrofit request body carries a token field and
+  our live calls succeed without one.
 - Added the consent and safety foundation for state-changing requests. Frozen
   `MutationConsent` (per-category `allow_*` default `False`, `dry_run` default
   `True`, `fake_card_only` default `True`) and frozen `MutationPreview` (whose
