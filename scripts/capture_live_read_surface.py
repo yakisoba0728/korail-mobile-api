@@ -510,14 +510,18 @@ def _drive_reads(runner: SurfaceRunner, args: argparse.Namespace) -> dict[str, A
         )
     else:
         print("  [skip] product_detail: account has no product reservation")
-    pass_item = ctx.get("pass_menu_item")
-    if pass_item is not None:
+    # PassScheduleRequest.selected_train_code must be non-empty and names a
+    # commuter-pass train the caller has already chosen. Nothing in the read
+    # surface hands one back, so this read is only reachable with a
+    # caller-supplied code.
+    selected_train_code = os.environ.get("KORAIL_PASS_TRAIN_CODE", "")
+    if ctx.get("pass_menu_item") is not None and selected_train_code:
         runner.run(
             "pass_schedule",
             "get_pass_schedule",
             lambda: client.get_pass_schedule(
                 PassScheduleRequest(
-                    selected_train_code="",
+                    selected_train_code=selected_train_code,
                     departure_date=date,
                     departure_time=departure_time,
                     transfer_type_code="",
@@ -531,6 +535,11 @@ def _drive_reads(runner: SurfaceRunner, args: argparse.Namespace) -> dict[str, A
                     weekend_use_flag="N",
                 )
             ),
+        )
+    else:
+        print(
+            "  [skip] pass_schedule: needs a caller-chosen commuter-pass train "
+            "code (set KORAIL_PASS_TRAIN_CODE)"
         )
     runner.run(
         "multi_child_discount_targets",
@@ -860,6 +869,14 @@ def build_parser() -> argparse.ArgumentParser:
             "a --reserve pass does not re-drive the whole read surface"
         ),
     )
+    parser.add_argument(
+        "--only",
+        default="",
+        help=(
+            "comma-separated step names to run (login is always kept), so a "
+            "single fix can be re-verified live without a full pass"
+        ),
+    )
     return parser
 
 
@@ -890,24 +907,23 @@ def main(argv: list[str] | None = None) -> int:
     pacer = _Pacer(args.min_interval)
     client = KorailClient(build_config_from_env())
     _install_hooks(client, records, pacer)
-    runner = SurfaceRunner(
-        client,
-        records,
-        only=(
-            frozenset(
-                {
-                    "login",
-                    "search_trains",
-                    "reserve",
-                    "cancel_unpaid_hold_attempt_1",
-                    "cancel_unpaid_hold_attempt_2",
-                    "reservation_history_after_cancel",
-                }
-            )
-            if args.skip_reads
-            else None
-        ),
-    )
+    only: frozenset[str] | None = None
+    if args.only.strip():
+        only = frozenset(
+            {"login", *(name.strip() for name in args.only.split(",") if name.strip())}
+        )
+    elif args.skip_reads:
+        only = frozenset(
+            {
+                "login",
+                "search_trains",
+                "reserve",
+                "cancel_unpaid_hold_attempt_1",
+                "cancel_unpaid_hold_attempt_2",
+                "reservation_history_after_cancel",
+            }
+        )
+    runner = SurfaceRunner(client, records, only=only)
     try:
         ctx = _drive_reads(runner, args)
         train = ctx.get("train")
