@@ -6,15 +6,93 @@ import pytest
 
 from korail_mobile_api import (
     BaseKorailResponse,
+    CardPayment,
     KorailConfig,
     KorailProtocolError,
     ReservationHoldResponse,
     TrainSummary,
 )
 from korail_mobile_api.mutation_payloads import (
+    build_card_payment_form,
     build_single_adult_reservation_form,
     build_unpaid_reservation_cancel_form,
 )
+
+
+def _paid_hold() -> ReservationHoldResponse:
+    return ReservationHoldResponse(
+        h_msg_cd="IRR000018",
+        h_msg_txt="ok",
+        str_result="SUCC",
+        raw={},
+        pnr_no="SYNTHETIC_PNR",
+        journey_count="0001",
+        window_no="SYNTHETIC_WCT",
+        total_price="8400",
+    )
+
+
+def _fake_card() -> CardPayment:
+    return CardPayment(
+        card_number="0000000000000000",
+        card_password="00",
+        card_expire="2612",
+        birthday="900101",
+    )
+
+
+def test_card_payment_form_matches_the_app_pay_with_card_contract():
+    form = build_card_payment_form(KorailConfig(), _paid_hold(), _fake_card())
+    assert form == {
+        "Device": "AD",
+        "Version": "250601003",
+        "Key": "korail1234567890",
+        "hidPnrNo": "SYNTHETIC_PNR",
+        "hidWctNo": "SYNTHETIC_WCT",
+        "hidTmpJobSqno1": "000000",
+        "hidTmpJobSqno2": "000000",
+        "hidRsvChgNo": "000",
+        "hidInrecmnsGridcnt": "1",
+        "hidStlMnsSqno1": "1",
+        "hidStlMnsCd1": "02",
+        "hidMnsStlAmt1": "8400",
+        "hidCrdInpWayCd1": "@",
+        "hidStlCrCrdNo1": "0000000000000000",
+        "hidVanPwd1": "00",
+        "hidCrdVlidTrm1": "2612",
+        "hidIsmtMnthNum1": "00",
+        "hidAthnDvCd1": "J",
+        "hidAthnVal1": "900101",
+        "hiduserYn": "Y",
+    }
+
+
+@pytest.mark.parametrize(
+    "hold",
+    [
+        ReservationHoldResponse(),  # no PNR / not SUCC
+        ReservationHoldResponse(
+            str_result="SUCC", pnr_no="P", window_no="W", total_price="abc"
+        ),  # non-numeric amount
+        ReservationHoldResponse(
+            str_result="SUCC", pnr_no="P", total_price="8400"
+        ),  # missing window number
+    ],
+)
+def test_card_payment_form_rejects_holds_without_payment_identity(hold):
+    with pytest.raises(KorailProtocolError):
+        build_card_payment_form(KorailConfig(), hold, _fake_card())
+
+
+def test_card_payment_form_rejects_non_digit_card_number():
+    bad = CardPayment(
+        card_number="4111-1111-1111-1111",
+        card_password="00",
+        card_expire="2612",
+        birthday="900101",
+    )
+    with pytest.raises(KorailProtocolError):
+        build_card_payment_form(KorailConfig(), _paid_hold(), bad)
 
 
 def _eligible_train() -> TrainSummary:

@@ -130,10 +130,14 @@ SENSITIVE_KEYS = frozenset(
         "hidVanPwd1",
         "hidCrdVlidTrm1",
         "hidAthnVal1",
+        "hidAthnDvCd1",
         "hidIsmtMnthNum1",
         "hidCrdInpWayCd1",
-        # PNR references carried on mutation forms.
+        # Reservation identity carried on the payment/cancel forms.
         "txtPnrNo",
+        "hidWctNo",
+        "hidTmpJobSqno1",
+        "hidTmpJobSqno2",
     }
 )
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")

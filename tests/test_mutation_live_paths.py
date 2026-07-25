@@ -18,6 +18,7 @@ import pytest
 
 from korail_mobile_api import (
     BaseKorailResponse,
+    CardPayment,
     KorailClient,
     KorailConfig,
     KorailProtocolError,
@@ -26,6 +27,7 @@ from korail_mobile_api import (
     MutationNotAllowedError,
     MutationPreview,
     ReservationHoldResponse,
+    ReservationPaymentResponse,
     TrainSummary,
 )
 from korail_mobile_api.mutation_payloads import (
@@ -280,6 +282,101 @@ def test_post_mutation_form_rejects_category_route_mismatch():
             category="reserve",  # ... but a reserve category
         )
     assert recorder.requests == []
+
+
+def _paid_hold() -> ReservationHoldResponse:
+    return ReservationHoldResponse(
+        h_msg_cd="IRR000018",
+        str_result="SUCC",
+        raw={},
+        pnr_no=SYNTHETIC_PNR,
+        journey_count="0001",
+        window_no="SYNTHETIC_WCT",
+        total_price="8400",
+    )
+
+
+def _fake_card() -> CardPayment:
+    return CardPayment(
+        card_number="0000000000000000",
+        card_password="00",
+        card_expire="2612",
+        birthday="900101",
+    )
+
+
+_PAYMENT_DECLINE = {
+    "strResult": "FAIL",
+    "h_msg_cd": "WRC000123",
+    "h_msg_txt": "card declined",
+}
+
+
+def test_pay_dry_run_preview_redacts_card_and_sends_nothing():
+    client, recorder = _client_with({})
+    preview = client.pay_with_fake_card(
+        _paid_hold(), _fake_card(), consent=MutationConsent(allow_payment=True)
+    )
+    assert isinstance(preview, MutationPreview)
+    assert preview.category == "payment"
+    assert preview.route == PAYMENT_ROUTE
+    # Raw PAN and card secrets are never present in the preview.
+    assert preview.payload["hidStlCrCrdNo1"] == "[REDACTED]"
+    assert preview.payload["hidVanPwd1"] == "[REDACTED]"
+    assert preview.payload["hidAthnVal1"] == "[REDACTED]"
+    assert preview.payload["hidPnrNo"] == "[REDACTED]"
+    assert "0000000000000000" not in "".join(preview.payload.values())
+    assert recorder.requests == []
+
+
+def test_pay_live_posts_to_payment_route_and_returns_decline_without_raising():
+    client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_DECLINE})
+    result = client.pay_with_fake_card(
+        _paid_hold(),
+        _fake_card(),
+        consent=MutationConsent(allow_payment=True, dry_run=False),
+    )
+    # A decline is a FAIL envelope; pay must NOT raise, so the caller sees it.
+    assert isinstance(result, ReservationPaymentResponse)
+    assert result.str_result == "FAIL"
+    assert result.h_msg_cd == "WRC000123"
+    assert len(recorder.requests) == 1
+    assert recorder.requests[0].url.path == PAYMENT_ROUTE
+
+
+def test_pay_requires_payment_consent_and_refuses_real_card_mode():
+    client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_DECLINE})
+    # Wrong category consent -> denied.
+    with pytest.raises(MutationNotAllowedError):
+        client.pay_with_fake_card(
+            _paid_hold(),
+            _fake_card(),
+            consent=MutationConsent(allow_reserve=True, dry_run=False),
+        )
+    # payment allowed but fake_card_only disabled -> refused (no real cards).
+    with pytest.raises(MutationNotAllowedError):
+        client.pay_with_fake_card(
+            _paid_hold(),
+            _fake_card(),
+            consent=MutationConsent(
+                allow_payment=True, dry_run=False, fake_card_only=False
+            ),
+        )
+    assert recorder.requests == []
+
+
+def test_pay_requires_authenticated_session():
+    from korail_mobile_api import KorailAuthError
+
+    logged_out = KorailClient(
+        transport=httpx.MockTransport(_Recorder({PAYMENT_ROUTE: _PAYMENT_DECLINE}))
+    )
+    with pytest.raises(KorailAuthError):
+        logged_out.pay_with_fake_card(
+            _paid_hold(),
+            _fake_card(),
+            consent=MutationConsent(allow_payment=True, dry_run=False),
+        )
 
 
 def test_read_only_post_form_still_refuses_mutation_routes():

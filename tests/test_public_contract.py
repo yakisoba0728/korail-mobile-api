@@ -85,6 +85,7 @@ def test_client_public_method_set_is_stable():
         "get_uuid",
         "login",
         "logout",
+        "pay_with_fake_card",
         "reserve",
         "search_trains",
     }

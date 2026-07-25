@@ -88,6 +88,7 @@ from .models import (
     UuidResponse,
 )
 from .mutation_models import (
+    CardPayment,
     ReservationHoldResponse,
     ReservationJourney,
     ReservationPaymentCoupon,
@@ -312,6 +313,7 @@ __all__ = [
     "ReceiptPayment",
     "ReservationHistoryResponse",
     "ReservationHistoryTrain",
+    "CardPayment",
     "ReservationHoldResponse",
     "ReservationJourney",
     "ReservationPaymentCoupon",

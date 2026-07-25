@@ -14,10 +14,19 @@ from .errors import (
     KorailAuthError,
     KorailProtocolError,
     KorailSessionExpiredError,
+    MutationNotAllowedError,
 )
-from .mutation_models import ReservationHoldResponse
-from .mutation_parsers import parse_reservation_hold_response
+from .mutation_models import (
+    CardPayment,
+    ReservationHoldResponse,
+    ReservationPaymentResponse,
+)
+from .mutation_parsers import (
+    parse_reservation_hold_response,
+    parse_reservation_payment_response,
+)
 from .mutation_payloads import (
+    build_card_payment_form,
     build_single_adult_reservation_form,
     build_unpaid_reservation_cancel_form,
 )
@@ -1199,3 +1208,56 @@ class KorailClient:
         except KorailSessionExpiredError:
             self.clear_session()
             raise
+
+    def pay_with_fake_card(
+        self,
+        hold: ReservationHoldResponse,
+        card: CardPayment,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | ReservationPaymentResponse:
+        """Attempt a single-card payment for an unpaid hold (FAKE cards only).
+
+        Gated by ``require_mutation_consent(consent, "payment")`` and an
+        authenticated session. The KORAIL pay call sends the PAN in the clear,
+        so this method refuses unless ``consent.fake_card_only`` is True and
+        expects the supplied ``card`` to be a non-chargeable test card that the
+        PG will decline. With ``dry_run=True`` it returns a
+        :class:`MutationPreview` whose card and identity fields are redacted;
+        with ``dry_run=False`` it POSTs the payment via the double-gated
+        mutation path and returns the parsed :class:`ReservationPaymentResponse`
+        WITHOUT raising on a decline (``raise_on_fail=False``), so the caller can
+        inspect the rejection code. The hold stays unpaid on decline and can be
+        released with :meth:`cancel_unpaid_hold`.
+        """
+        require_mutation_consent(consent, "payment")
+        if not consent.fake_card_only:
+            raise MutationNotAllowedError(
+                "pay_with_fake_card requires consent.fake_card_only=True; only "
+                "non-chargeable test cards are supported"
+            )
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL payment requires an authenticated session"
+            )
+        route = "/classes/com.korail.mobile.payment.ReservationPayment"
+        form = build_card_payment_form(self.config, hold, card)
+        if consent.dry_run:
+            return MutationPreview(
+                category="payment",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            response = self.http.post_mutation_form(
+                route,
+                form,
+                consent=consent,
+                category="payment",
+                raise_on_fail=False,
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+        return parse_reservation_payment_response(response.raw)

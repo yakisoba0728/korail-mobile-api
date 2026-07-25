@@ -5,7 +5,7 @@ import re
 from .config import KorailConfig
 from .errors import KorailProtocolError
 from .models import TrainSummary
-from .mutation_models import ReservationHoldResponse
+from .mutation_models import CardPayment, ReservationHoldResponse
 
 
 _DATE_RE = re.compile(r"[0-9]{8}")
@@ -199,6 +199,75 @@ def build_unpaid_reservation_cancel_form(
             "txtJrnySqno": "0001",
             "txtJrnyCnt": "1",
             "hidRsvChgNo": "000",
+        }
+    )
+    return form
+
+
+_CARD_FIELD_RE = re.compile(r"[0-9]+")
+
+
+def build_card_payment_form(
+    config: KorailConfig,
+    hold: ReservationHoldResponse,
+    card: CardPayment,
+) -> dict[str, str]:
+    """Build the single-card ReservationPayment form for an unpaid hold.
+
+    Field set and constants mirror the evidenced app/srtgo ``pay_with_card``
+    (``ktx.py:1030-1051``, cross-validated against decompiled ``PaymentMethod``):
+    a single card settlement row (``hidStlMnsCd1="02"``) carrying the raw PAN.
+    ``hidTmpJobSqno1/2`` are the app's fixed ``"000000"``. The reservation
+    identity and amount come from ``hold`` (a fresh successful hold with a PNR,
+    window number, and total price). ``card`` MUST be a non-chargeable fake card
+    — the caller/method is responsible for enforcing that.
+    """
+    if type(hold) is not ReservationHoldResponse:
+        raise KorailProtocolError(
+            "KORAIL payment requires an exact reservation hold response"
+        )
+    if type(card) is not CardPayment:
+        raise KorailProtocolError("KORAIL payment requires a CardPayment")
+    pnr_no = hold.pnr_no
+    window_no = hold.window_no
+    amount = hold.total_price
+    if (
+        hold.str_result != "SUCC"
+        or not isinstance(pnr_no, str)
+        or not pnr_no.strip()
+        or not isinstance(window_no, str)
+        or not window_no.strip()
+        or not isinstance(amount, str)
+        or _DIGITS_RE.fullmatch(amount) is None
+    ):
+        raise KorailProtocolError(
+            "KORAIL payment requires a fresh successful unpaid hold with a "
+            "PNR, window number, and numeric amount"
+        )
+    # The card number must be all digits (a fake test PAN is still digits); the
+    # decline happens server-side at authorization.
+    if _CARD_FIELD_RE.fullmatch(card.card_number) is None:
+        raise KorailProtocolError("KORAIL payment card number must be digits")
+    form = _common_fields(config)
+    form.update(
+        {
+            "hidPnrNo": pnr_no,
+            "hidWctNo": window_no,
+            "hidTmpJobSqno1": "000000",
+            "hidTmpJobSqno2": "000000",
+            "hidRsvChgNo": "000",
+            "hidInrecmnsGridcnt": "1",
+            "hidStlMnsSqno1": "1",
+            "hidStlMnsCd1": "02",
+            "hidMnsStlAmt1": amount,
+            "hidCrdInpWayCd1": "@",
+            "hidStlCrCrdNo1": card.card_number,
+            "hidVanPwd1": card.card_password,
+            "hidCrdVlidTrm1": card.card_expire,
+            "hidIsmtMnthNum1": card.installment,
+            "hidAthnDvCd1": card.card_type,
+            "hidAthnVal1": card.birthday,
+            "hiduserYn": "Y",
         }
     )
     return form

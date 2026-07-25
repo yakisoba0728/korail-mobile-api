@@ -15,14 +15,15 @@
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
 
-Package coverage: 50 exact login/read routes and 55 public methods. Fifty-three
-are audited login/read methods; the other two, `reserve` and
-`cancel_unpaid_hold`, are consent-gated mutation methods. Each is denied without
-a matching-category `MutationConsent`; with the default `dry_run=True` each only
-returns a redacted `MutationPreview` (sending nothing), and only a
+Package coverage: 50 exact login/read routes and 56 public methods. Fifty-three
+are audited login/read methods; the other three, `reserve`, `cancel_unpaid_hold`,
+and `pay_with_fake_card`, are consent-gated mutation methods. Each is denied
+without a matching-category `MutationConsent`; with the default `dry_run=True`
+each only returns a redacted `MutationPreview` (sending nothing), and only a
 `dry_run=False` consent performs the live state change, exclusively through the
-double-gated `post_mutation_form` path. The read-only send path still refuses
-every mutation route. The package
+double-gated `post_mutation_form` path (`pay_with_fake_card` additionally
+requires `fake_card_only`, so only non-chargeable test cards are sent). The
+read-only send path still refuses every mutation route. The package
 now exposes the ten
 previously successful but unwrapped reads plus the already registered service
 status cache as 11 public methods, plus the two typed car and physical-seat
@@ -66,7 +67,7 @@ authenticated forms, strict response parsers, repr-safe data, one-shot
 transport, and DynaPath disabled. At implementation completion no live request
 had been made, all five rows were unexecuted, and the pre-R149 inventory was 31
 successful, 10 failed, and 124 unexecuted. Package coverage is 50 exact routes
-and 55 public methods; the DynaPath allowlist remains six paths.
+and 56 public methods; the DynaPath allowlist remains six paths.
 
 A later bounded authenticated read-only revalidation used an empty advertising
 ID, made one successful login call, confirmed logged-in state and
