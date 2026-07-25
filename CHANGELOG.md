@@ -2,6 +2,59 @@
 
 ## Unreleased
 
+- Added the consent and safety foundation for state-changing requests. Frozen
+  `MutationConsent` (per-category `allow_*` default `False`, `dry_run` default
+  `True`, `fake_card_only` default `True`) and frozen `MutationPreview` (whose
+  payload is forced through `redact_payload` on construction, so a preview can
+  never hold a raw PAN, PNR, or sale identity) live in `consent.py`. The route
+  registry became tiered: `KORAIL_MUTATION_ROUTES` holds the four
+  state-changing routes and is deliberately never added to
+  `KORAIL_READ_ONLY_ROUTES`, while `KORAIL_MUTATION_ROUTE_CATEGORIES` and
+  `assert_mutation_route_category` cross-check the caller's consent category
+  against the route, so a consent for one category cannot post another
+  category's route. Redaction was extended over the mutation fields, including
+  the card number, PNR, original-ticket sale identity, return password,
+  `txtPrnNo`, and `h_orgtk_sale_wct_no`.
+- Added four consent-gated mutation methods: `reserve`, `cancel_unpaid_hold`,
+  `pay_with_fake_card`, and `refund`. Each requires an authenticated session
+  and a `MutationConsent` that opts into its own category, and each is denied
+  with `MutationNotAllowedError` before anything is built otherwise. With the
+  default `dry_run=True` a method validates its inputs and returns a redacted
+  `MutationPreview` of the form that *would* be posted, sending nothing. Only a
+  `dry_run=False` consent transmits, and only through `post_mutation_form`, the
+  single send path that re-checks consent, refuses a `dry_run=True` consent,
+  and asserts both the mutation route and its category. The read-only send path
+  (`post_form`/`get_json`) still refuses every mutation route.
+  `pay_with_fake_card` additionally refuses unless `fake_card_only` is set, at
+  both the method and the send gate, because the payment form carries the card
+  number in the clear; only a non-chargeable test card is supported.
+- Verified `reserve`, `cancel_unpaid_hold`, and `pay_with_fake_card` end to end
+  against the live server in a bounded authorized run: the hold returned
+  `h_msg_cd=IRR000018`, the cancellation returned `h_msg_cd=IRG000000`, and the
+  fake-card payment was declined with `strResult=FAIL` and `h_msg_cd=WRT200342`
+  with no charge. The live hold response returned a zero-padded
+  `h_jrny_cnt="0001"`, so `build_unpaid_reservation_cancel_form` now accepts any
+  digit string equal to one; `reserve` also falls back to a minimal hold that
+  still carries the PNR when strict parsing fails after the server has already
+  created the hold, so a created hold can always be cancelled. Every round trip
+  left reservation history at zero rows and no card was charged.
+- Added `refund` on the same gated send path. Its live send path is fully
+  active code, not blocked, but it has never been exercised against the live
+  server: a refund acts on a settled ticket, and this package's fake-card
+  payment is always declined, so no paid ticket is produced here. Its request
+  contract, gates, and redaction are covered by offline tests only, and it must
+  be treated as unverified against the real service.
+- The package boundary is now 51 exact login/read routes and 57 public methods:
+  53 audited login/read methods that transmit only read-only requests, plus the
+  four consent-gated mutation methods. The four mutation routes are tracked in
+  their own set and are never reachable from a read path.
+- Made `logout()` invalidate the server session with a bare `GET`
+  `login.Logout` before clearing local state, best-effort so it never fails on
+  transport or an already-expired session. That cookie-authenticated,
+  zero-parameter route joined the read-only allowlist, which is why the
+  allowlist holds 51 routes rather than 50. Also corrected
+  `KORAIL_DYNAPATH_SDK_VERSION` from `v1` to `v1.0.3` to match the decompiled
+  app, since that constant seeds both the `sv` body field and the `dyn_key`.
 - Recorded a bounded authenticated read-only revalidation with an empty
   advertising ID. It made one successful login call, confirmed logged-in state
   and customer-number presence, and called only R149 once. R149 succeeded with
@@ -16,8 +69,8 @@
   `tkRetNo` order with exact count equality, derive recent-history `custMgNo`
   only from the login session, and force DynaPath off. The implementation made
   no live request; the pre-R149 inventory was 31 successful, 10 failed, and
-  124 unexecuted out of 165. The package boundary is now 50 read/login routes
-  and 53 public methods, with the DynaPath allowlist unchanged at six paths.
+  124 unexecuted out of 165. The package boundary is now 51 read/login routes
+  and 57 public methods, with the DynaPath allowlist unchanged at six paths.
   The ticket-reference implementation itself used no live I/O and added no
   mutation capability.
 - Recorded a bounded authenticated read-only revalidation that used an empty
@@ -42,7 +95,7 @@
   route unavailable. R54 also remains transport-held. At that historical,
   pre-revalidation implementation step, the DynaPath allowlist and live
   inventory remained unchanged, no live call was made, and no mutation
-  capability was added. The current boundary is 50 read/login routes and 53
+  capability was added. The current boundary is 51 read/login routes and 57
   public methods.
 - Added four authenticated fixed/account-shaped reads for multi-child discount
   targets, login-customer trip information, current or bounded-history MaaS
@@ -57,7 +110,7 @@
   live request, credential read, raw capture, or mutation expansion. Its
   pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted
   entries; that intermediate callable package boundary was 42 read/login
-  routes and 45 public methods. The current boundary is 50 routes and 53 public
+  routes and 45 public methods. The current boundary is 51 routes and 57 public
   methods. At that pre-R149 point, inventory was 31 successful, 10 failed, and
   124 unexecuted entries.
 - Ran a bounded revalidation of the P0 read surface in an authenticated 28-request,
