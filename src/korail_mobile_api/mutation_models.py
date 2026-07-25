@@ -34,7 +34,16 @@ class ReservationHoldResponse(BaseKorailResponse):
     payment_message: str | None = field(default=None, repr=False)
     payment_deadline_message: str | None = field(default=None, repr=False)
     total_fare: str | None = None
+    #: ``h_tot_prc`` — the DISPLAY total. ``PaymentActivity.java:174`` assigns it
+    #: to ``mTotPrc``, which is only ever read back by ``getmTotPrc()``
+    #: (``:497``) for the UI. It is NOT the amount the app settles.
     total_price: str | None = None
+    #: The amount the app actually collects (``hidMnsStlAmt1``): the app's
+    #: ``getReceivedAmount()`` (``PaymentActivity.java:186-199``, sent via
+    #: ``AbstractC1269e.java:406`` → ``V4/a.java:27``). Sourced from
+    #: ``h_tot_rcvd_amt`` when the hold response carries it, else summed from the
+    #: per-seat ``h_rcvd_amt`` rows the way the app computes it.
+    received_amount: str | None = None
     journeys: tuple[ReservationJourney, ...] = ()
 
 

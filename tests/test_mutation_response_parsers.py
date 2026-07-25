@@ -53,6 +53,113 @@ def test_reservation_hold_parser_preserves_payment_handoff_without_repr_leaks():
     assert "SYNTHETIC_JOB_1" not in rendered
 
 
+def test_reservation_hold_parser_prefers_the_responses_total_received_amount():
+    # BasketTicketActivity.java:638 reads RECEIVED_AMOUNT straight off
+    # reservationResponse.getH_tot_rcvd_amt() (ReservationResponse.java:33).
+    response = parse_reservation_hold_response(
+        {
+            "strResult": "SUCC",
+            "h_msg_cd": "IRR000000",
+            "h_msg_txt": "success",
+            "h_tot_prc": "8400",
+            "h_tot_rcvd_amt": "7560",
+            "jrny_infos": {
+                "jrny_info": [
+                    {
+                        "h_jrny_sqno": "0001",
+                        "seat_infos": {
+                            "seat_info": [
+                                {
+                                    "h_seat_prc": "8400",
+                                    "h_seat_fare": "0",
+                                    "h_rcvd_amt": "7560",
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+        }
+    )
+    assert response.total_price == "8400"
+    assert response.received_amount == "7560"
+
+
+def test_reservation_hold_parser_sums_seat_amounts_when_the_total_is_absent():
+    # PaymentActivity.G0() (:186-199) computes mReceivedAmount as
+    # sum(h_seat_prc + h_seat_fare) - sum((h_seat_prc + h_seat_fare) -
+    # h_rcvd_amt), which is the plain sum of the per-seat h_rcvd_amt.
+    response = parse_reservation_hold_response(
+        {
+            "strResult": "SUCC",
+            "h_msg_cd": "IRR000000",
+            "h_msg_txt": "success",
+            "h_tot_prc": "16800",
+            "jrny_infos": {
+                "jrny_info": [
+                    {
+                        "h_jrny_sqno": "0001",
+                        "seat_infos": {
+                            "seat_info": [
+                                {
+                                    "h_seat_prc": "8400",
+                                    "h_seat_fare": "0",
+                                    "h_rcvd_amt": "8400",
+                                },
+                                {
+                                    "h_seat_prc": "8400",
+                                    "h_seat_fare": "0",
+                                    "h_rcvd_amt": "4200",
+                                },
+                            ]
+                        },
+                    }
+                ]
+            },
+        }
+    )
+    assert response.total_price == "16800"
+    assert response.received_amount == "12600"
+
+
+@pytest.mark.parametrize(
+    "jrny_infos",
+    [
+        None,  # no journeys at all
+        {"jrny_info": [{"h_jrny_sqno": "0001"}]},  # journey without seat rows
+        {
+            "jrny_info": [
+                {
+                    "h_jrny_sqno": "0001",
+                    "seat_infos": {
+                        "seat_info": [
+                            {"h_seat_prc": "8400", "h_rcvd_amt": "8400"},
+                            {"h_seat_prc": "8400"},  # one seat unreadable
+                        ]
+                    },
+                }
+            ]
+        },
+    ],
+)
+def test_reservation_hold_parser_reports_no_received_amount_when_unknowable(
+    jrny_infos,
+):
+    # A partial sum would under-charge, so the parser reports nothing and the
+    # payment builder refuses rather than falling back to the display total.
+    response = parse_reservation_hold_response(
+        {
+            "strResult": "SUCC",
+            "h_msg_cd": "IRR000000",
+            "h_msg_txt": "success",
+            "h_tot_prc": "8400",
+            "jrny_infos": jrny_infos,
+        }
+    )
+    assert response.total_price == "8400"
+    assert response.received_amount is None
+
+
 def test_reservation_payment_parser_accepts_failure_envelope_without_card_data():
     raw = {
         "strResult": "FAIL",

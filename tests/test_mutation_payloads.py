@@ -94,6 +94,7 @@ def _paid_hold() -> ReservationHoldResponse:
         journey_count="0001",
         window_no="SYNTHETIC_WCT",
         total_price="8400",
+        received_amount="7560",
     )
 
 
@@ -120,7 +121,7 @@ def test_card_payment_form_matches_the_app_pay_with_card_contract():
         "hidInrecmnsGridcnt": "1",
         "hidStlMnsSqno1": "1",
         "hidStlMnsCd1": "02",
-        "hidMnsStlAmt1": "8400",
+        "hidMnsStlAmt1": "7560",
         "hidCrdInpWayCd1": "@",
         "hidStlCrCrdNo1": "0000000000000000",
         "hidVanPwd1": "00",
@@ -132,15 +133,36 @@ def test_card_payment_form_matches_the_app_pay_with_card_contract():
     }
 
 
+def test_card_payment_form_settles_the_received_amount_not_the_display_total():
+    # AbstractC1269e.java:406 puts String.valueOf(getReceivedAmount()) into
+    # PAYMENT_AMOUNT and V4/a.java:27 sets that as hidMnsStlAmt1.
+    # PaymentActivity.java:174 assigns h_tot_prc to mTotPrc, which only
+    # getmTotPrc() (:497) reads, for the UI.
+    hold = _paid_hold()
+    assert hold.total_price != hold.received_amount
+    form = build_card_payment_form(KorailConfig(), hold, _fake_card())
+    assert form["hidMnsStlAmt1"] == hold.received_amount
+    assert form["hidMnsStlAmt1"] != hold.total_price
+
+
+def test_card_payment_form_refuses_a_hold_that_carries_only_a_display_total():
+    # Substituting h_tot_prc when the received amount is unknown is precisely
+    # the defect this replaced, so the builder must refuse instead.
+    hold = replace(_paid_hold(), received_amount=None)
+    assert hold.total_price == "8400"
+    with pytest.raises(KorailProtocolError):
+        build_card_payment_form(KorailConfig(), hold, _fake_card())
+
+
 @pytest.mark.parametrize(
     "hold",
     [
         ReservationHoldResponse(),  # no PNR / not SUCC
         ReservationHoldResponse(
-            str_result="SUCC", pnr_no="P", window_no="W", total_price="abc"
+            str_result="SUCC", pnr_no="P", window_no="W", received_amount="abc"
         ),  # non-numeric amount
         ReservationHoldResponse(
-            str_result="SUCC", pnr_no="P", total_price="8400"
+            str_result="SUCC", pnr_no="P", received_amount="8400"
         ),  # missing window number
     ],
 )

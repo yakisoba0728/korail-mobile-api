@@ -56,6 +56,9 @@ _HOLD_SUCCESS = {
     "h_tmp_job_sqno2": "SYNTHETIC_JOB_2",
     "h_payment_flg": "Y",
     "h_tot_prc": "8400",
+    # Display total and settled total deliberately differ, so a builder that
+    # regressed to h_tot_prc would be caught rather than silently pass.
+    "h_tot_rcvd_amt": "7560",
 }
 
 _CANCEL_SUCCESS = {
@@ -295,6 +298,7 @@ def _paid_hold() -> ReservationHoldResponse:
         journey_count="0001",
         window_no="SYNTHETIC_WCT",
         total_price="8400",
+        received_amount="7560",
     )
 
 

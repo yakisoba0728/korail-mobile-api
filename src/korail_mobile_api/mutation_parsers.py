@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -11,6 +12,9 @@ from .mutation_models import (
     ReservationPaymentCoupon,
     ReservationPaymentResponse,
 )
+
+
+_DIGITS_RE = re.compile(r"[0-9]+")
 
 
 def _response_mapping(raw: Mapping[str, Any]) -> dict[str, Any]:
@@ -33,6 +37,66 @@ def _optional_string(
             f"KORAIL {context} field {key} must be a string or null"
         )
     return value
+
+
+def _received_amount(
+    raw: Mapping[str, Any],
+    journey_rows: list[Mapping[str, Any]],
+) -> str | None:
+    """Recover the amount the app would settle, the way the app computes it.
+
+    ``PaymentActivity.G0()`` (``:186-199``) sums ``h_seat_prc + h_seat_fare``
+    per seat into ``totalAmount`` and ``(h_seat_prc + h_seat_fare) - h_rcvd_amt``
+    into ``discountAmount``, then sets ``mReceivedAmount = totalAmount -
+    discountAmount`` — algebraically the plain sum of the per-seat
+    ``h_rcvd_amt``. ``BasketTicketActivity.java:638`` takes the identical figure
+    straight off the response's ``h_tot_rcvd_amt``
+    (``ReservationResponse.java:33``), so prefer that key when it is present and
+    fall back to the seat rows when it is not.
+
+    Returns ``None`` rather than a partial figure when neither source is usable:
+    a wrong settlement amount must never reach the wire.
+    """
+    total = _optional_string(raw, "h_tot_rcvd_amt", context="reservation")
+    if total is not None and _DIGITS_RE.fullmatch(total.strip()):
+        return total.strip()
+
+    summed = 0
+    seats_seen = 0
+    for journey in journey_rows:
+        container = journey.get("seat_infos")
+        if container is None:
+            continue
+        if not isinstance(container, Mapping):
+            raise KorailProtocolError(
+                "KORAIL reservation seat_infos must be an object or null"
+            )
+        seat_rows = container.get("seat_info")
+        if seat_rows is None:
+            continue
+        if not isinstance(seat_rows, list):
+            raise KorailProtocolError(
+                "KORAIL reservation seat_infos.seat_info must be a list or null"
+            )
+        for seat in seat_rows:
+            if not isinstance(seat, Mapping):
+                raise KorailProtocolError(
+                    "KORAIL reservation seat_info row must be an object"
+                )
+            amount = _optional_string(
+                seat,
+                "h_rcvd_amt",
+                context="reservation seat",
+            )
+            if amount is None or not _DIGITS_RE.fullmatch(amount.strip()):
+                # One unreadable seat makes the whole sum wrong, so refuse the
+                # whole sum rather than under-charge the settlement.
+                return None
+            summed += int(amount)
+            seats_seen += 1
+    if seats_seen == 0:
+        return None
+    return str(summed)
 
 
 def _base_fields(raw: dict[str, Any]) -> dict[str, Any]:
@@ -163,6 +227,10 @@ def parse_reservation_hold_response(
             copied,
             "h_tot_prc",
             context="reservation",
+        ),
+        received_amount=_received_amount(
+            copied,
+            [journey.raw for journey in journeys],
         ),
         journeys=tuple(journeys),
     )

@@ -134,9 +134,25 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
   and payment routes are not DynaPath routes (no token), matching the app.
 - An unpaid hold appears in reservation history with `h_stl_flg=N`
   (unsettled/unpaid), `h_payment_flg=Y` (payment pending).
-- Payment amount source: the library sends `hidMnsStlAmt1 = hold.total_price`
-  (`h_tot_prc`), which matches the decompiled app (`PaymentActivity.java:174`).
-  srtgo uses `h_rsv_amt`; we matched the app, which is the authority.
+- Payment amount source: the library sends `hidMnsStlAmt1 =
+  hold.received_amount`, the app's `getReceivedAmount()`. The app puts
+  `String.valueOf(getReceivedAmount())` into the `PAYMENT_AMOUNT` bundle key
+  (`B6/AbstractC1269e.java:406`) and reads it straight back out as
+  `hidMnsStlAmt1` (`V4/a.java:27`); `getReceivedAmount()` is computed at
+  `PaymentActivity.java:186-199` as the sum of the per-seat `h_rcvd_amt`.
+  `h_tot_prc` is display-only — `PaymentActivity.java:174` assigns it to
+  `mTotPrc`, whose only reader is `getmTotPrc()` (`:497`), a UI accessor.
+  **This entry previously claimed the opposite** ("the library sends
+  `hidMnsStlAmt1 = hold.total_price` … which matches the decompiled app
+  (`PaymentActivity.java:174`)"). It cited the display assignment as though it
+  were the wire value; it was wrong and the code has been corrected.
+  The one live payment run never exposed the difference because for a single
+  adult in a general seat with no discount the two figures coincide, and the
+  card declined at authorization (`WRT200342`) before the amount mattered.
+  `hold.received_amount` is parsed from `h_tot_rcvd_amt` when the hold response
+  carries it, else summed from the per-seat `h_rcvd_amt` rows; when neither is
+  readable the payment builder refuses rather than substituting the display
+  total. srtgo uses `h_rsv_amt`; we match the app, which is the authority.
 
 ## NOT settled / trade-offs
 

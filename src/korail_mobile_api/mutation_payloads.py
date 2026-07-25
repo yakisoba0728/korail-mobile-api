@@ -219,8 +219,17 @@ def build_card_payment_form(
     a single card settlement row (``hidStlMnsCd1="02"``) carrying the raw PAN.
     ``hidTmpJobSqno1/2`` are the app's fixed ``"000000"``. The reservation
     identity and amount come from ``hold`` (a fresh successful hold with a PNR,
-    window number, and total price). ``card`` MUST be a non-chargeable fake card
-    — the caller/method is responsible for enforcing that.
+    window number, and a received amount). ``card`` MUST be a non-chargeable
+    fake card — the caller/method is responsible for enforcing that.
+
+    ``hidMnsStlAmt1`` is the app's ``getReceivedAmount()``, not the display
+    total: ``AbstractC1269e.java:406`` puts ``String.valueOf(getReceivedAmount())``
+    into ``PAYMENT_AMOUNT`` and ``V4/a.java:27`` sets that as ``hidMnsStlAmt1``.
+    ``h_tot_prc`` goes to ``mTotPrc`` (``PaymentActivity.java:174``), which is
+    read only by ``getmTotPrc()`` (``:497``) for the UI. The two coincide for a
+    single undiscounted adult, which is why the one live (card-declined) run
+    never exposed the difference, but they diverge as soon as a discount or a
+    second passenger is involved.
     """
     if type(hold) is not ReservationHoldResponse:
         raise KorailProtocolError(
@@ -230,7 +239,12 @@ def build_card_payment_form(
         raise KorailProtocolError("KORAIL payment requires a CardPayment")
     pnr_no = hold.pnr_no
     window_no = hold.window_no
-    amount = hold.total_price
+    # Deliberately NOT hold.total_price: that is the display figure. See the
+    # docstring — the app settles getReceivedAmount(). When a hold response
+    # carries neither h_tot_rcvd_amt nor readable per-seat h_rcvd_amt rows we
+    # refuse rather than substitute the display total, because substituting is
+    # exactly the defect this replaces.
+    amount = hold.received_amount
     if (
         hold.str_result != "SUCC"
         or not isinstance(pnr_no, str)
@@ -242,7 +256,7 @@ def build_card_payment_form(
     ):
         raise KorailProtocolError(
             "KORAIL payment requires a fresh successful unpaid hold with a "
-            "PNR, window number, and numeric amount"
+            "PNR, window number, and numeric received amount"
         )
     # The card number must be all digits (a fake test PAN is still digits); the
     # decline happens server-side at authorization.
