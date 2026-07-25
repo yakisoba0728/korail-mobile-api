@@ -41,6 +41,19 @@
   `KorailClient._hold_from_reservation_response`, the last-ditch fallback whose
   entire job is never to lose a PNR, normalises them too. Bools, floats, lists
   and objects are still protocol errors.
+- `scripts/reserve_pay_refund_roundtrip.py` now orders its train choice by the
+  search row's own price field when no fare quote can be built. A live
+  ScheduleView row carries no goods number, so `trn.prcFare.do` usually cannot
+  be built and the script reported `fare: UNKNOWN` and took the first reservable
+  train. It still invents nothing: `KORAIL_TRAIN_NO` pins an exact train (and
+  aborts before reserving if that train is not reservable), then the cheapest
+  fare quote, then the cheapest by `h_rcvd_amt`/`h_rcvd_fare` — fields
+  `RsvInquiryResponse.TrainInfo` declares — printed as
+  `~N KRW (HINT from the search row, not a quote)` so it can never be read as
+  the amount about to be charged, then the first reservable train with the same
+  plain statement as before. The printed reason always names which branch ran.
+  The authoritative amount is still the one read back and cross-checked before
+  paying, and `KORAIL_MAX_FARE` is still the only ceiling on the charge.
 - Real (chargeable) card payment is now possible, as an explicit, additive
   opt-in. `MutationConsent` gains `real_card_acknowledged` (default `False`):
   the caller's acknowledgement that a real, chargeable PAN will be transmitted

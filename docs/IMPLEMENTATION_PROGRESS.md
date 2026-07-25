@@ -290,7 +290,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `1730 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `1742 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -423,7 +423,7 @@ point/mileage mutation routes remain not callable. The current service inventory
 and 123 unexecuted entries out of 165; the historical pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted.
 
-The current reviewed offline gate reports `1730 passed, 1 deselected`; the
+The current reviewed offline gate reports `1742 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service

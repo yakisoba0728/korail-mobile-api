@@ -39,7 +39,10 @@ Flow
 ----
 a. log in, and REFUSE to start unless the account holds zero reservations
 b. search the configured route ~14 days out (inside the fee-free refund window)
-   and select the cheapest available train; print the train and its fare
+   and select a train: ``KORAIL_TRAIN_NO`` pins one exactly; otherwise the
+   cheapest by fare QUOTE, else the cheapest by the search row's own price HINT,
+   else the first available one -- and the printed reason always says which of
+   the four it was
 c. reserve one adult in the cheapest class; print the PNR immediately
 d. read the reservation back independently and cross-check the amount owed
    against the hold's own amount; STOP (and cancel) if they disagree
@@ -431,6 +434,35 @@ def find_train_no(raw: Any, *, pnr_no: str) -> str:
     return ""
 
 
+#: The price fields ``RsvInquiryResponse.TrainInfo`` declares on a search row
+#: (``:102-104``), in the order they are preferred. ``h_rcvd_amt`` is the amount
+#: actually collected, which is what a comparison wants; ``h_rcvd_fare`` is the
+#: fare component. Neither is a quote -- ``trn.prcFare.do`` is the only authority
+#: on what will be charged -- and no app screen was found reading either one off
+#: THIS row, so whatever is here is a HINT and is labelled as one wherever it is
+#: printed. It orders candidates; it never decides what may be paid.
+_FARE_HINT_KEYS = ("h_rcvd_amt", "h_rcvd_fare")
+
+
+def _fare_hint(train: TrainSummary) -> int | None:
+    """The search row's own price field, in won, or ``None``.
+
+    Reads only what the row actually carries: a value that is missing, empty or
+    not a plain decimal string yields ``None`` rather than a guess. Accepts a
+    JSON number as well as a string, because KORAIL is inconsistent about which
+    it sends for a field its DAO declares as ``String``.
+    """
+    for key in _FARE_HINT_KEYS:
+        value = train.raw.get(key)
+        if type(value) is int and value > 0:
+            return value
+        if isinstance(value, str) and value.strip().isdigit():
+            hint = int(value.strip())
+            if hint > 0:
+                return hint
+    return None
+
+
 def _pnr_present(raw: Any, *, pnr_no: str) -> bool:
     """Whether ``pnr_no`` appears anywhere in a raw response."""
     if isinstance(raw, dict):
@@ -484,7 +516,10 @@ _OUTSTANDING_BY_STATE = {
 
 class _Candidate(NamedTuple):
     train: TrainSummary
+    #: An authoritative quote from ``trn.prcFare.do``, when one can be built.
     fare: int | None
+    #: The search row's own price field, when it carries one. See above.
+    hint: int | None = None
 
 
 # --- the round trip ----------------------------------------------------------
@@ -579,12 +614,16 @@ class RoundTrip:
                 raise RoundTripAborted(
                     f"{TRAIN_NO_ENV}={wanted} is not among the available trains"
                 )
-            candidate = _Candidate(chosen, self._quote_fare(chosen, search))
+            candidate = _Candidate(
+                chosen,
+                self._quote_fare(chosen, search),
+                _fare_hint(chosen),
+            )
             self._announce(candidate, reason=f"chosen by {TRAIN_NO_ENV}")
             return candidate
 
         priced = [
-            _Candidate(train, self._quote_fare(train, search))
+            _Candidate(train, self._quote_fare(train, search), _fare_hint(train))
             for train in available
         ]
         quoted = [item for item in priced if item.fare is not None]
@@ -593,17 +632,36 @@ class RoundTrip:
             self._announce(candidate, reason="cheapest quoted fare")
             return candidate
         # A live ScheduleView row carries no goods number and the envelope's
-        # h_gd_no is empty, so trn.prcFare.do cannot be built for it. Rather
-        # than invent a train-class price ranking with no evidence behind it,
-        # say plainly that the cheapest could not be established. The
-        # authoritative amount is read back and checked at step (d), before any
-        # money moves, and KORAIL_MAX_FARE is the operator's ceiling there.
+        # h_gd_no is empty, so trn.prcFare.do cannot be built for it, and
+        # "cheapest" has no authoritative source. Second best is the row's OWN
+        # price field, which the app's DAO declares (see _FARE_HINT_KEYS); when
+        # the server fills it in, ordering by it is reading KORAIL's own number
+        # rather than inventing a train-class ranking. It is called a hint
+        # everywhere it is printed, because it is not what the payment will
+        # settle. The authoritative amount is still read back and cross-checked
+        # at step (d), before any money moves, and KORAIL_MAX_FARE is the
+        # operator's ceiling there.
+        hinted = [item for item in priced if item.hint is not None]
+        if hinted:
+            candidate = min(hinted, key=lambda item: item.hint or 0)
+            self._announce(
+                candidate,
+                reason=(
+                    "cheapest by the search row's own price HINT -- no fare "
+                    "quote was obtainable, so this is NOT a quote"
+                ),
+            )
+            self.console.say(
+                f"    the hint orders the choice only; {MAX_FARE_ENV} is what "
+                "caps the charge"
+            )
+            return candidate
         candidate = priced[0]
         self._announce(
             candidate,
             reason=(
-                "FIRST available train -- no fare quote was obtainable, so "
-                "'cheapest' could NOT be established"
+                "FIRST available train -- no fare quote and no price hint were "
+                "obtainable, so 'cheapest' could NOT be established"
             ),
         )
         self.console.say(
@@ -652,11 +710,16 @@ class RoundTrip:
 
     def _announce(self, candidate: _Candidate, *, reason: str) -> None:
         train = candidate.train
-        fare = (
-            f"{candidate.fare} KRW (quoted)"
-            if candidate.fare is not None
-            else "UNKNOWN (no fare quote available)"
-        )
+        if candidate.fare is not None:
+            fare = f"{candidate.fare} KRW (quoted)"
+        elif candidate.hint is not None:
+            # Never the bare number: an operator reading "8400 KRW" would
+            # reasonably take it for the amount about to be charged.
+            fare = (
+                f"~{candidate.hint} KRW (HINT from the search row, not a quote)"
+            )
+        else:
+            fare = "UNKNOWN (no fare quote available)"
         self.console.say(
             f"    selected train {train.train_no} "
             f"{train.train_class_name or train.train_class_code} "

@@ -289,9 +289,18 @@ need `KORAIL_LIVE_REAL_CHARGE`, because neither branch charges anything.
 
 Caveat carried over from item 1: a live ScheduleView row supplies no goods
 number, so `trn.prcFare.do` usually cannot be built and "cheapest" cannot be
-established from a fare quote. The script says so rather than inventing a
-train-class price ranking, and falls back to the first reservable train — which
-is exactly why `KORAIL_MAX_FARE`/`KORAIL_TRAIN_NO` matter.
+established from a fare QUOTE. The script never invents a train-class price
+ranking. It picks, in order: the train named by `KORAIL_TRAIN_NO` (verified to
+select that exact train, and to abort before reserving when it is not among the
+reservable ones); else the cheapest by fare quote; else the cheapest by the
+search row's own `h_rcvd_amt`/`h_rcvd_fare`, which
+`RsvInquiryResponse.TrainInfo` declares (`:102-104`) — printed as
+`~N KRW (HINT from the search row, not a quote)` and never as a fare, because it
+is not what the payment will settle; else the first reservable train, saying
+plainly that cheapest could not be established. Whichever branch runs, the
+printed reason names it, the authoritative amount is still read back and
+cross-checked at step (d) before any money moves, and `KORAIL_MAX_FARE` is the
+only thing that caps the charge.
 
 SRT went the other way and **committed** its equivalents on `feat/srt-cancel`:
 `scripts/verify_reserve_cancel_roundtrip.py` (the round trip, offline-tested

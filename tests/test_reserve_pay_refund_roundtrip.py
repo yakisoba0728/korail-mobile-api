@@ -30,7 +30,12 @@ from typing import Any
 import httpx
 import pytest
 
-from korail_mobile_api import CardPayment, KorailClient, KorailSession
+from korail_mobile_api import (
+    CardPayment,
+    KorailClient,
+    KorailSession,
+    TrainSummary,
+)
 
 SCRIPT_PATH = (
     Path(__file__).parents[1] / "scripts" / "reserve_pay_refund_roundtrip.py"
@@ -75,13 +80,17 @@ COMMISSION = "/classes/com.korail.mobile.refunds.CommissionView"
 REFUND = "/classes/com.korail.mobile.refunds.RefundsRequest"
 CANCEL = "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
 
+TRAIN_NO_ENV = "KORAIL_TRAIN_NO"
+MAX_FARE_ENV = "KORAIL_MAX_FARE"
+
 
 def _ok(**extra: Any) -> dict[str, Any]:
     return {"h_msg_cd": "SYNTHETIC.OK", "h_msg_txt": "ok", "strResult": "SUCC", **extra}
 
 
-def _train_row(train_no: str) -> dict[str, Any]:
+def _train_row(train_no: str, **extra: Any) -> dict[str, Any]:
     return {
+        **extra,
         "h_trn_no": train_no,
         "h_trn_gp_cd": "100",
         "h_dpt_rs_stn_cd": "0001",
@@ -206,6 +215,11 @@ def _card() -> CardPayment:
 def _round_trip(
     recorder: _Recorder, monkeypatch: pytest.MonkeyPatch, **env: str
 ) -> Any:
+    # The train-selection and ceiling knobs must not leak in from the operator's
+    # own shell: several tests below assert what the DEFAULT choice is.
+    for name in (TRAIN_NO_ENV, MAX_FARE_ENV):
+        if name not in env:
+            monkeypatch.delenv(name, raising=False)
     for name, value in env.items():
         monkeypatch.setenv(name, value)
     client = KorailClient(transport=httpx.MockTransport(recorder))
@@ -609,6 +623,106 @@ def test_the_confirmed_amount_is_the_independently_read_one(
     assert "confirmed: 8400 KRW will be charged" in capsys.readouterr().out
 
 
+# --- choosing the train ------------------------------------------------------
+
+
+def test_korail_train_no_pins_the_exact_train_that_gets_reserved(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    # The documented answer to "cheapest cannot be established". It has to
+    # actually select the named train, not merely be accepted.
+    recorder = _Recorder(_replies())
+    trip = _round_trip(recorder, monkeypatch, KORAIL_TRAIN_NO="00103")
+    candidate = trip.select_train()
+    assert candidate.train.train_no == "00103"
+    assert "chosen by KORAIL_TRAIN_NO" in capsys.readouterr().out
+
+
+def test_korail_train_no_that_is_not_reservable_aborts_before_reserving(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    recorder = _Recorder(_replies())
+    trip = _round_trip(recorder, monkeypatch, KORAIL_TRAIN_NO="00999")
+    with pytest.raises(rt.RoundTripAborted) as excinfo:
+        trip.run()
+    assert "KORAIL_TRAIN_NO=00999" in str(excinfo.value)
+    assert RESERVE not in recorder.paths()
+
+
+def test_the_cheapest_search_row_price_hint_orders_the_choice(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """No quote is obtainable live, but the row may carry its own price.
+
+    ``RsvInquiryResponse.TrainInfo`` declares ``h_rcvd_amt``/``h_rcvd_fare``
+    (:102-104). When the server fills one in, ordering by it is reading KORAIL's
+    own number rather than inventing a train-class ranking -- but it is not a
+    quote, and the output must not let an operator read it as one.
+    """
+    recorder = _Recorder(
+        _replies(
+            **{
+                SEARCH: _ok(
+                    trn_infos={
+                        "trn_info": [
+                            _train_row("00101", h_rcvd_amt="59800"),
+                            # A JSON number, the way the live server sends
+                            # fields the DAO declares as String.
+                            _train_row("00103", h_rcvd_amt=8400),
+                        ]
+                    }
+                )
+            }
+        )
+    )
+    trip = _round_trip(recorder, monkeypatch)
+    candidate = trip.select_train()
+    assert candidate.train.train_no == "00103"
+    assert candidate.hint == 8400
+    # No quote was obtainable, so nothing may claim one.
+    assert candidate.fare is None
+    out = capsys.readouterr().out
+    assert "~8400 KRW (HINT from the search row, not a quote)" in out
+    assert "cheapest by the search row's own price HINT" in out
+    assert "(quoted)" not in out
+
+
+def test_no_quote_and_no_hint_says_so_and_takes_the_first_train(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    # The honest fallback. It must not silently look like a cheapest-first pick.
+    recorder = _Recorder(_replies())
+    trip = _round_trip(recorder, monkeypatch)
+    candidate = trip.select_train()
+    assert candidate.train.train_no == "00101"
+    assert candidate.fare is None and candidate.hint is None
+    out = capsys.readouterr().out
+    assert "UNKNOWN (no fare quote available)" in out
+    assert "'cheapest' could NOT be established" in out
+    assert "set KORAIL_TRAIN_NO to choose a specific train" in out
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {},
+        {"h_rcvd_amt": ""},
+        {"h_rcvd_amt": "   "},
+        {"h_rcvd_amt": "8,400"},
+        {"h_rcvd_amt": 0},
+        {"h_rcvd_amt": None},
+        {"h_rcvd_amt": {"amount": 8400}},
+    ],
+)
+def test_an_unusable_price_field_yields_no_hint_rather_than_a_guess(row):
+    assert rt._fare_hint(TrainSummary.from_raw({**_train_row("00101"), **row})) is None
+
+
+def test_the_fare_hint_falls_back_to_the_rows_fare_component():
+    train = TrainSummary.from_raw(_train_row("00101", h_rcvd_fare="8400"))
+    assert rt._fare_hint(train) == 8400
+
+
 # --- stopping before the money moves -----------------------------------------
 
 
@@ -717,6 +831,8 @@ def test_a_payment_that_never_answers_is_reported_as_unknown_not_unpaid(
     # dangerous thing this script could say, so it must claim nothing.
     replies = _replies()
     recorder = _Recorder(replies)
+    for name in (TRAIN_NO_ENV, MAX_FARE_ENV):
+        monkeypatch.delenv(name, raising=False)
 
     def _handler(request: httpx.Request) -> httpx.Response:
         recorder.seen.append((request.method, request.url.path))
