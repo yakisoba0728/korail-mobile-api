@@ -8,7 +8,8 @@ Android package `com.korail.talk` version `6.5.0`, as the package's historical
 evidence map.
 
 The reviewed package boundary contains 51 routes and 57 public methods. All 51
-routes are login/read routes; the four mutation routes are tracked separately and
+routes are login/read routes: 49 reads plus the login POST and the server-side
+logout GET. The four mutation routes are tracked separately and
 are never added to the read-only allowlist. Fifty-three of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
 four, `reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, and `refund`, are
