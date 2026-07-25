@@ -90,24 +90,50 @@ def test_generate_dynapath_token_matches_successful_fixed_rt_reference():
     )
 
 
-def test_generate_dynapath_token_uses_uppercase_alphanumeric_random_text(monkeypatch):
+def test_generate_dynapath_token_uses_the_apps_mixed_case_random_text(monkeypatch):
+    # b/C1229b.java:164 (smali b.1/b.smali:549) draws each of the four nonce
+    # characters from the 62-character set below, lowercase first. The previous
+    # 36-character uppercase-only set could not produce ~89% of real nonces.
     calls = []
 
     def fake_choices(population, *, k):
         calls.append((population, k))
-        return "AZ09"
+        return "aZ09"
 
     monkeypatch.setattr("korail_mobile_api.dynapath.random.choices", fake_choices)
     settings = make_settings()
 
     generated = generate_dynapath_token(settings, timestamp_ms=1712345678901)
 
-    assert calls == [("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 4)]
+    assert calls == [
+        (
+            "abcdefghijklmnopqrstuvwxyz"
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "0123456789",
+            4,
+        )
+    ]
     assert generated == generate_dynapath_token(
         settings,
         timestamp_ms=1712345678901,
-        random_text="AZ09",
+        random_text="aZ09",
     )
+
+
+def test_dynapath_random_text_is_four_characters_from_the_apps_alphabet():
+    from korail_mobile_api.dynapath import (
+        DYNAPATH_RANDOM_ALPHABET,
+        _random_text,
+    )
+
+    assert len(DYNAPATH_RANDOM_ALPHABET) == 62
+    assert set(DYNAPATH_RANDOM_ALPHABET) == set(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    )
+    for _ in range(200):
+        text = _random_text()
+        assert len(text) == 4
+        assert set(text) <= set(DYNAPATH_RANDOM_ALPHABET)
 
 
 def test_http_client_generates_dynapath_header_from_token_settings():

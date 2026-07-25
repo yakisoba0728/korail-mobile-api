@@ -27,7 +27,7 @@ card was declined, no charge); `refund` acts on a settled ticket, which the
 fake-card flow never produces, so its live path is exercised offline only. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `1628 passed, 1 deselected`; the one
+current reviewed offline gate is `1629 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -682,8 +682,13 @@ construction when any required identity value is missing.
 
 The built-in generator follows the successful fixed `rt=0` contract: SDK version `v1.0.3`
 (matching decompiled `com.korail.talk` v6.5.0, `B/C1229b.java:137,157`),
-four uppercase-letter-or-digit random characters, and exactly one
-`rt=0` field in each token payload. The app-start timestamp is captured once
+four random characters drawn from the app's own 62-character nonce alphabet
+`a-zA-Z0-9` (`b/C1229b.java:164`, confirmed in smali at `b.1/b.smali:549`), and
+exactly one
+`rt=0` field in each token payload. An earlier version of this document
+described that alphabet as uppercase-and-digits only; that was a 36-character
+subset the APK contradicts, and it made roughly 89% of genuine app nonces
+unreachable. The app-start timestamp is captured once
 when live configuration is built; request history is not accumulated. The raw
 application-signature setting is form-encoded exactly once during token
 construction.

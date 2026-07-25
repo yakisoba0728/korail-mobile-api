@@ -16,7 +16,14 @@ from .constants import (
 
 DYNAPATH_BASE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 DYNAPATH_TABLE_INDEX = 1
-DYNAPATH_RANDOM_ALPHABET = string.ascii_uppercase + string.digits
+# The app's own nonce alphabet, verbatim: b/C1229b.java:164 calls
+# CharsKt.random("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+# four times, confirmed in smali at analysis/apktool/smali/b.1/b.smali:549. An
+# uppercase-only 36-character set would make roughly 89% of genuine app nonces
+# unreachable, which is a per-request fingerprint.
+DYNAPATH_RANDOM_ALPHABET = (
+    string.ascii_lowercase + string.ascii_uppercase + string.digits
+)
 DYNAPATH_DEFAULT_I8 = 161
 DYNAPATH_DEFAULT_I9 = 30
 DYNAPATH_DEFAULT_I10 = 2

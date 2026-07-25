@@ -93,7 +93,7 @@ Each of these was submitted by a sub-audit and **overturned** with direct decomp
 
 ### Deliberate non-bugs (correct-by-design; not counted)
 
-- **DynaPath random-text alphabet** — ours is uppercase+digits vs the app's lower+upper+digits (`C1229b.java:164`); `rand` is random and only feeds key derivation, so any ASCII subset yields a valid token. No wire impact.
+- ~~**DynaPath random-text alphabet** — ours is uppercase+digits vs the app's lower+upper+digits (`C1229b.java:164`); `rand` is random and only feeds key derivation, so any ASCII subset yields a valid token. No wire impact.~~ **Overturned 2026-07-26 and fixed** (`fix/apk-fidelity`): the client now uses the app's 62-character set. "No wire impact" was wrong — `rand` is embedded in `dyn_key = "v1.0.3+RAND+ts"`, which is encoded as `encoded_key` and **transmitted** as part of the token, so the nonce is recoverable by anyone holding the (public, static) table. A 36-character subset makes roughly 89% of genuine app nonces impossible for this client to emit, which is a per-request fingerprint even if the server never validates the value.
 - **`pwdAESCphd` comparison** — the app is case-sensitive (`'Y'.equals`) while `get_login_crypto_info` upper-cases the value (`session.py:93`); harmless since the server returns uppercase `Y`/`N`.
 - **Login POST field order** — `idx` emitted before `custId`/`etrPath` differs from the `@Field` order; form params are order-independent.
 - **`member_card_no` lookup** — tries a non-existent `mbCrdNo` key before the real `strMbCrdNo` (`session.py:181-183`); the fallback resolves correctly.

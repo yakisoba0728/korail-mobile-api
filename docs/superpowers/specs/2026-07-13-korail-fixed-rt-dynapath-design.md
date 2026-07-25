@@ -38,7 +38,12 @@ contract:
 - application id `com.korail.talk`;
 - OS type `Android`;
 - SDK version `v1`;
-- four random characters drawn from uppercase ASCII letters and digits;
+- four random characters drawn from the app's 62-character nonce alphabet
+  `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`
+  (`b/C1229b.java:164`, smali `b.1/b.smali:549`). **Corrected:** this spec
+  originally said "uppercase ASCII letters and digits", taken from the reference
+  contract. The APK is the authority and the reference was a 36-character
+  subset of the real set;
 - one literal `rt=0` field per payload;
 - the existing KORAIL encoding table, prefix, key derivation, and body encoding;
 - caller-supplied device id, app-start timestamp, OS version, and device model;
