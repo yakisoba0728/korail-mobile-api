@@ -9,14 +9,65 @@ from korail_mobile_api import (
     CardPayment,
     KorailConfig,
     KorailProtocolError,
+    PaidTicket,
     ReservationHoldResponse,
     TrainSummary,
 )
 from korail_mobile_api.mutation_payloads import (
     build_card_payment_form,
+    build_refund_form,
     build_single_adult_reservation_form,
     build_unpaid_reservation_cancel_form,
 )
+
+
+def _paid_ticket() -> PaidTicket:
+    return PaidTicket(
+        pnr_no="SYNTHETIC_PNR",
+        sale_date="20260725",
+        sale_window_no="SYNTHETIC_WCT",
+        sale_sequence="0001",
+        return_password="SYNTHETIC_RETPWD",
+        train_no="00209",
+    )
+
+
+def test_refund_form_matches_the_app_refund_contract():
+    form = build_refund_form(KorailConfig(), _paid_ticket())
+    assert form == {
+        "Device": "AD",
+        "Version": "250601003",
+        "Key": "korail1234567890",
+        "txtPrnNo": "SYNTHETIC_PNR",
+        "h_orgtk_sale_dt": "20260725",
+        "h_orgtk_sale_wct_no": "SYNTHETIC_WCT",
+        "h_orgtk_sale_sqno": "0001",
+        "h_orgtk_ret_pwd": "SYNTHETIC_RETPWD",
+        "h_mlg_stl": "N",
+        "tk_ret_tms_dv_cd": "21",
+        "trnNo": "00209",
+        "pbpAcepTgtFlg": "N",
+        "latitude": "",
+        "longitude": "",
+    }
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["pnr_no", "sale_date", "sale_window_no", "sale_sequence", "return_password"],
+)
+def test_refund_form_rejects_missing_paid_ticket_identity(field_name):
+    kwargs = {
+        "pnr_no": "P",
+        "sale_date": "20260725",
+        "sale_window_no": "W",
+        "sale_sequence": "1",
+        "return_password": "R",
+        "train_no": "00209",
+    }
+    kwargs[field_name] = ""
+    with pytest.raises(KorailProtocolError):
+        build_refund_form(KorailConfig(), PaidTicket(**kwargs))
 
 
 def _paid_hold() -> ReservationHoldResponse:

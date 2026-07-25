@@ -10,11 +10,13 @@ Last updated: 2026-07-15 KST
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 50 exact login/read routes and 56 public methods (53 login/read plus the consent-gated mutation methods `reserve`,
-  `cancel_unpaid_hold`, and `pay_with_fake_card`, which return a redacted preview
-  by default and send a live state change only with a `dry_run=False`
-  matching-category consent via the double-gated `post_mutation_form`;
-  `pay_with_fake_card` also requires `fake_card_only`). Current service inventory is 32 successful, 10 failed, and 123
+- The current package boundary is 50 exact login/read routes and 57 public methods (53 login/read plus the consent-gated mutation methods `reserve`,
+  `cancel_unpaid_hold`, `pay_with_fake_card`, and `refund`, which return a
+  redacted preview by default and send a live state change only with a
+  `dry_run=False` matching-category consent via the double-gated
+  `post_mutation_form`; `pay_with_fake_card` also requires `fake_card_only`.
+  reserve/cancel/pay were verified live; `refund` acts on a settled ticket and
+  is exercised offline only). Current service inventory is 32 successful, 10 failed, and 123
   unexecuted entries out of 165.
 - The cache-read expansion implementation, offline tests, package build, and
   isolated import are complete, including bounded live verification.
@@ -90,7 +92,7 @@ Last updated: 2026-07-15 KST
   fields. The server session rule remains unverified, so a conservative
   client-side login gate remains until a bounded after-login validation.
 - The transport now allows 50 exact login/read routes and the client exposes
-  56 public methods. No new route was added to the six-path DynaPath allowlist.
+  57 public methods. No new route was added to the six-path DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -163,7 +165,7 @@ was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
 of 165; current inventory is 32 successful, 10 failed, and 123 unexecuted. The
-current package boundary is 50 exact routes and 56 public methods.
+current package boundary is 50 exact routes and 57 public methods.
 
 ## Ticket-reference static read tranche
 
@@ -182,7 +184,7 @@ implementation used only static APK evidence plus synthetic/mock tests: no
 live I/O, credential access, secure raw capture, retry, fallback, adjacent
 mutation, or DynaPath expansion occurred. At implementation completion, the
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted out of
-165; the boundary is 50 exact routes and 56 public methods, with six DynaPath
+165; the boundary is 50 exact routes and 57 public methods, with six DynaPath
 allowlist paths.
 
 The ticket-reference implementation itself used no live I/O and added no
@@ -228,9 +230,9 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
   values; no pass reservation or payment operation
 
 The read-only transport (`post_form`/`get_json`) refuses every mutation route
-and allows 50 exact read/login routes. The reservation, unpaid-cancel, and
-payment routes are callable only through the separate consent-gated send path
-(`post_mutation_form`, `dry_run=False`); refund, check-in, member mutation, and
+and allows 50 exact read/login routes. The reservation, unpaid-cancel, payment,
+and refund routes are callable only through the separate consent-gated send path
+(`post_mutation_form`, `dry_run=False`); check-in, member mutation, and
 point/mileage mutation routes remain not callable.
 
 Pure offline parsers now cover the evidenced reservation-hold and reservation-
@@ -404,11 +406,11 @@ tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/superpowers/specs/`.
 
 The current implementation evidence establishes 50 routes at the exact
-login/read transport boundary and 56 public methods on `KorailClient`. The
+login/read transport boundary and 57 public methods on `KorailClient`. The
 read-only path exposes no callable mutation route; reservation, unpaid-cancel,
-and fake-card payment are callable only through the separate consent-gated
-`post_mutation_form` path, while refund, check-in, membership, and point/mileage
-mutation routes remain not callable. The current service inventory is 32 successful, 10 failed,
+fake-card payment, and refund are callable only through the separate
+consent-gated `post_mutation_form` path, while check-in, membership, and
+point/mileage mutation routes remain not callable. The current service inventory is 32 successful, 10 failed,
 and 123 unexecuted entries out of 165; the historical pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted.
 

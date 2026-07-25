@@ -89,6 +89,7 @@ from .models import (
 )
 from .mutation_models import (
     CardPayment,
+    PaidTicket,
     ReservationHoldResponse,
     ReservationJourney,
     ReservationPaymentCoupon,
@@ -314,6 +315,7 @@ __all__ = [
     "ReservationHistoryResponse",
     "ReservationHistoryTrain",
     "CardPayment",
+    "PaidTicket",
     "ReservationHoldResponse",
     "ReservationJourney",
     "ReservationPaymentCoupon",

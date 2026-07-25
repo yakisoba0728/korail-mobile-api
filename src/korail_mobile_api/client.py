@@ -18,6 +18,7 @@ from .errors import (
 )
 from .mutation_models import (
     CardPayment,
+    PaidTicket,
     ReservationHoldResponse,
     ReservationPaymentResponse,
 )
@@ -27,6 +28,7 @@ from .mutation_parsers import (
 )
 from .mutation_payloads import (
     build_card_payment_form,
+    build_refund_form,
     build_single_adult_reservation_form,
     build_unpaid_reservation_cancel_form,
 )
@@ -1261,3 +1263,43 @@ class KorailClient:
             self.clear_session()
             raise
         return parse_reservation_payment_response(response.raw)
+
+    def refund(
+        self,
+        ticket: PaidTicket,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | BaseKorailResponse:
+        """Refund a settled (paid) ticket via ``refunds.RefundsRequest``.
+
+        Gated by ``require_mutation_consent(consent, "refund")`` and an
+        authenticated session. ``build_refund_form`` requires a
+        :class:`~korail_mobile_api.mutation_models.PaidTicket` (PNR + original
+        sale identity + return password). With ``dry_run=True`` it returns a
+        :class:`MutationPreview` with the ticket identity redacted; with
+        ``dry_run=False`` it POSTs via the double-gated mutation path and returns
+        the parsed envelope. NOTE: a refund acts on a *paid* ticket, and this
+        package's fake-card payment is always declined, so no live paid ticket is
+        produced here — the live path exists but is exercised offline only.
+        """
+        require_mutation_consent(consent, "refund")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL refund requires an authenticated session"
+            )
+        route = "/classes/com.korail.mobile.refunds.RefundsRequest"
+        form = build_refund_form(self.config, ticket)
+        if consent.dry_run:
+            return MutationPreview(
+                category="refund",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            return self.http.post_mutation_form(
+                route, form, consent=consent, category="refund"
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise

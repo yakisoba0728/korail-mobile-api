@@ -74,3 +74,23 @@ class CardPayment:
     birthday: str = field(repr=False)  # YYMMDD (personal auth) or biz no
     installment: str = "00"  # months; "00" = lump sum
     card_type: str = "J"  # hidAthnDvCd1: "J" personal / "S" corporate
+
+
+@dataclass(frozen=True)
+class PaidTicket:
+    """The paid-ticket identity a refund (``refunds.RefundsRequest``) needs.
+
+    Mirrors the app/srtgo ``refund`` inputs (``ktx.py:1077-1094``): the PNR plus
+    the original-ticket sale window/date/sequence and return password, and the
+    train number. These come from a settled ticket (e.g. a ticket-list row).
+    Because a fake-card payment is always declined, no real paid ticket is
+    produced in this package's test flow, so refund is exercised offline only.
+    Sale-identity fields are ``repr=False``.
+    """
+
+    pnr_no: str = field(repr=False)
+    sale_date: str = field(repr=False)  # h_orgtk_sale_dt
+    sale_window_no: str = field(repr=False)  # h_orgtk_sale_wct_no
+    sale_sequence: str = field(repr=False)  # h_orgtk_sale_sqno
+    return_password: str = field(repr=False)  # h_orgtk_ret_pwd
+    train_no: str = ""  # trnNo

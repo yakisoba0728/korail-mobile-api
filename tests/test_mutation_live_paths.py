@@ -26,6 +26,7 @@ from korail_mobile_api import (
     MutationConsent,
     MutationNotAllowedError,
     MutationPreview,
+    PaidTicket,
     ReservationHoldResponse,
     ReservationPaymentResponse,
     TrainSummary,
@@ -408,11 +409,83 @@ def test_pay_requires_authenticated_session():
         )
 
 
+REFUND_ROUTE = "/classes/com.korail.mobile.refunds.RefundsRequest"
+
+_REFUND_SUCCESS = {
+    "strResult": "SUCC",
+    "h_msg_cd": "IRG000000",
+    "h_msg_txt": "refunded",
+}
+
+
+def _paid_ticket() -> PaidTicket:
+    return PaidTicket(
+        pnr_no=SYNTHETIC_PNR,
+        sale_date="20260725",
+        sale_window_no="SYNTHETIC_WCT",
+        sale_sequence="0001",
+        return_password="SYNTHETIC_RETPWD",
+        train_no="00209",
+    )
+
+
+def test_refund_dry_run_preview_redacts_ticket_identity_without_sending():
+    client, recorder = _client_with({})
+    preview = client.refund(
+        _paid_ticket(), consent=MutationConsent(allow_refund=True)
+    )
+    assert isinstance(preview, MutationPreview)
+    assert preview.category == "refund"
+    assert preview.route == REFUND_ROUTE
+    for key in (
+        "txtPrnNo",
+        "h_orgtk_sale_dt",
+        "h_orgtk_sale_wct_no",
+        "h_orgtk_sale_sqno",
+        "h_orgtk_ret_pwd",
+    ):
+        assert preview.payload[key] == "[REDACTED]", key
+    joined = "".join(preview.payload.values())
+    for secret in (SYNTHETIC_PNR, "SYNTHETIC_RETPWD", "SYNTHETIC_WCT"):
+        assert secret not in joined, secret
+    assert recorder.requests == []
+
+
+def test_refund_live_posts_to_refund_route():
+    client, recorder = _client_with({REFUND_ROUTE: _REFUND_SUCCESS})
+    result = client.refund(
+        _paid_ticket(),
+        consent=MutationConsent(allow_refund=True, dry_run=False),
+    )
+    assert isinstance(result, BaseKorailResponse)
+    assert result.str_result == "SUCC"
+    assert len(recorder.requests) == 1
+    assert recorder.requests[0].url.path == REFUND_ROUTE
+
+
+def test_refund_requires_matching_consent_and_session():
+    client, recorder = _client_with({REFUND_ROUTE: _REFUND_SUCCESS})
+    with pytest.raises(MutationNotAllowedError):
+        client.refund(_paid_ticket(), consent=MutationConsent(allow_cancel=True))
+    assert recorder.requests == []
+
+    from korail_mobile_api import KorailAuthError
+
+    logged_out = KorailClient(
+        transport=httpx.MockTransport(_Recorder({REFUND_ROUTE: _REFUND_SUCCESS}))
+    )
+    with pytest.raises(KorailAuthError):
+        logged_out.refund(
+            _paid_ticket(),
+            consent=MutationConsent(allow_refund=True, dry_run=False),
+        )
+
+
 def test_read_only_post_form_still_refuses_mutation_routes():
     # The enduring guarantee: the read-only send path rejects mutation routes,
     # so a mutation can only ever leave through post_mutation_form.
     client, _ = _client_with({})
-    for route in (RESERVE_ROUTE, CANCEL_ROUTE, PAYMENT_ROUTE):
+    for route in (RESERVE_ROUTE, CANCEL_ROUTE, PAYMENT_ROUTE, REFUND_ROUTE):
         with pytest.raises(KorailProtocolError):
             client.http.post_form(route, {"x": "1"})
 

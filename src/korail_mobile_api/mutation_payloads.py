@@ -5,7 +5,7 @@ import re
 from .config import KorailConfig
 from .errors import KorailProtocolError
 from .models import TrainSummary
-from .mutation_models import CardPayment, ReservationHoldResponse
+from .mutation_models import CardPayment, PaidTicket, ReservationHoldResponse
 
 
 _DATE_RE = re.compile(r"[0-9]{8}")
@@ -268,6 +268,51 @@ def build_card_payment_form(
             "hidAthnDvCd1": card.card_type,
             "hidAthnVal1": card.birthday,
             "hiduserYn": "Y",
+        }
+    )
+    return form
+
+
+def build_refund_form(
+    config: KorailConfig,
+    ticket: PaidTicket,
+) -> dict[str, str]:
+    """Build the ticket-refund (``refunds.RefundsRequest``) form for a paid ticket.
+
+    Field set and constants mirror the evidenced app/srtgo ``refund``
+    (``ktx.py:1077-1094``): the PNR (``txtPrnNo`` — the app's spelling) plus the
+    original-ticket sale window/date/sequence and return password, with the
+    fixed ``h_mlg_stl="N"``, ``tk_ret_tms_dv_cd="21"``, ``pbpAcepTgtFlg="N"`` and
+    empty geo fields. A refund acts on a settled ticket; the caller supplies the
+    :class:`PaidTicket` identity.
+    """
+    if type(ticket) is not PaidTicket:
+        raise KorailProtocolError("KORAIL refund requires a PaidTicket")
+    for name, value in (
+        ("pnr_no", ticket.pnr_no),
+        ("sale_date", ticket.sale_date),
+        ("sale_window_no", ticket.sale_window_no),
+        ("sale_sequence", ticket.sale_sequence),
+        ("return_password", ticket.return_password),
+    ):
+        if not isinstance(value, str) or not value.strip():
+            raise KorailProtocolError(
+                f"KORAIL refund requires a non-empty PaidTicket.{name}"
+            )
+    form = _common_fields(config)
+    form.update(
+        {
+            "txtPrnNo": ticket.pnr_no,
+            "h_orgtk_sale_dt": ticket.sale_date,
+            "h_orgtk_sale_wct_no": ticket.sale_window_no,
+            "h_orgtk_sale_sqno": ticket.sale_sequence,
+            "h_orgtk_ret_pwd": ticket.return_password,
+            "h_mlg_stl": "N",
+            "tk_ret_tms_dv_cd": "21",
+            "trnNo": ticket.train_no,
+            "pbpAcepTgtFlg": "N",
+            "latitude": "",
+            "longitude": "",
         }
     )
     return form

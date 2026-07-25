@@ -135,9 +135,12 @@ SENSITIVE_KEYS = frozenset(
         "hidCrdInpWayCd1",
         # Reservation identity carried on the payment/cancel forms.
         "txtPnrNo",
+        "txtPrnNo",
         "hidWctNo",
         "hidTmpJobSqno1",
         "hidTmpJobSqno2",
+        # Original-ticket sale identity carried on the refund form.
+        "h_orgtk_sale_wct_no",
     }
 )
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
