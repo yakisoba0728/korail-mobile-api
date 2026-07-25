@@ -15,7 +15,7 @@
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
 
-Package coverage: 50 exact login/read routes and 57 public methods. Fifty-three
+Package coverage: 51 exact login/read routes and 57 public methods. Fifty-three
 are audited login/read methods; the other four, `reserve`, `cancel_unpaid_hold`,
 `pay_with_fake_card`, and `refund`, are consent-gated mutation methods. Each is
 denied without a matching-category `MutationConsent`; with the default
@@ -68,7 +68,7 @@ R137, R138, R146, R148, and R149 now have static-only typed wrappers with exact
 authenticated forms, strict response parsers, repr-safe data, one-shot
 transport, and DynaPath disabled. At implementation completion no live request
 had been made, all five rows were unexecuted, and the pre-R149 inventory was 31
-successful, 10 failed, and 124 unexecuted. Package coverage is 50 exact routes
+successful, 10 failed, and 124 unexecuted. Package coverage is 51 exact routes
 and 57 public methods; the DynaPath allowlist remains six paths.
 
 A later bounded authenticated read-only revalidation used an empty advertising

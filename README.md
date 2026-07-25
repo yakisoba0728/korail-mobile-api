@@ -7,7 +7,7 @@ requests. It also retains the static reverse-engineering report for `korail.apk`
 Android package `com.korail.talk` version `6.5.0`, as the package's historical
 evidence map.
 
-The reviewed package boundary contains 50 routes and 57 public methods. All 50
+The reviewed package boundary contains 51 routes and 57 public methods. All 51
 routes are login/read routes; the four mutation routes are tracked separately and
 are never added to the read-only allowlist. Fifty-three of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
@@ -286,7 +286,7 @@ Historical pre-revalidation inventory was 28 successful, 9 failed, and 128
 unexecuted entries out of 165. The pre-R149 inventory was 31 successful, 10
 failed, and 124 unexecuted entries out of 165. Current inventory is 32
 successful, 10 failed, and 123 unexecuted entries out of 165. This increment
-changes only the package boundary to 50 exact login/read routes and 53 public
+changes only the package boundary to 51 exact login/read routes and 57 public
 methods; it adds no reservation change, booking, payment, refund,
 cancellation, check-in, or other mutation capability.
 
@@ -359,7 +359,7 @@ force DynaPath off, and use strict full-envelope `SUCC` parsers with repr-safe
 nested response models. The implementation used no live request, credential
 access, secure raw capture, retry, fallback, or adjacent mutation. At
 implementation completion, the pre-R149 inventory was 31 successful, 10
-failed, and 124 unexecuted out of 165. The boundary is 50 exact login/read
+failed, and 124 unexecuted out of 165. The boundary is 51 exact login/read
 routes and 57 public methods; the DynaPath allowlist remains six paths.
 
 The ticket-reference implementation itself used no live I/O and added no

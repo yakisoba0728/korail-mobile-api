@@ -836,7 +836,7 @@ def test_repository_truth_and_full_mutation_policy() -> None:
     # repository-truth handoff facts now live in that doc's Package Handoff Summary.
     handoff = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text()
     for document in (readme, handoff):
-        assert "50 routes" in document
+        assert "51 routes" in document
         assert "57 public methods" in document
         assert "1610 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document

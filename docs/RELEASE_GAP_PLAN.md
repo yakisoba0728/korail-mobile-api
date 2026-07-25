@@ -3,6 +3,15 @@
 Status: planning document (no code changes, no live calls). Drives the
 read-completion + full-mutation implementation.
 
+This document is a pre-implementation snapshot and is deliberately not kept in
+sync with the shipped package. Its counts and proposals describe the state
+*before* the mutation increment: the read-only allowlist has since grown to 51
+routes (the server-side logout GET was added), the four mutation categories
+were implemented as consent-gated methods rather than left excluded, and the
+gating landed as `post_mutation_form` rather than the `assert_allowed_route`
+rename sketched in §4.1. For current facts see `README.md`,
+`docs/IMPLEMENTATION_PROGRESS.md`, and `docs/MUTATION_HANDOFF.md`.
+
 - Target library: `korail-mobile-api` (`src/korail_mobile_api/`), currently `0.2.0`
   (`pyproject.toml:7`).
 - Target app: `com.korail.talk` v6.5.0, API version `250601003`, host
