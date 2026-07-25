@@ -11,6 +11,7 @@ from korail_mobile_api import (
     KorailProtocolError,
     PaidTicket,
     ReservationHoldResponse,
+    ReservationJourney,
     TrainSummary,
 )
 from korail_mobile_api.mutation_payloads import (
@@ -97,6 +98,15 @@ def _paid_hold() -> ReservationHoldResponse:
         temporary_job_sequence_2="SYNTHETIC_JOB_2",
         total_price="8400",
         received_amount="7560",
+        # Deliberately NOT "000": a builder that regressed to the constant would
+        # otherwise pass against a fixture whose value happened to match the
+        # fallback.
+        journeys=(
+            ReservationJourney(
+                journey_sequence="0001",
+                reservation_change_no="SYNTHETIC_CHG_NO",
+            ),
+        ),
     )
 
 
@@ -119,7 +129,7 @@ def test_card_payment_form_matches_the_app_pay_with_card_contract():
         "hidWctNo": "SYNTHETIC_WCT",
         "hidTmpJobSqno1": "SYNTHETIC_JOB_1",
         "hidTmpJobSqno2": "SYNTHETIC_JOB_2",
-        "hidRsvChgNo": "000",
+        "hidRsvChgNo": "SYNTHETIC_CHG_NO",
         "hidInrecmnsGridcnt": "1",
         "hidStlMnsSqno1": "1",
         "hidStlMnsCd1": "02",
@@ -176,6 +186,68 @@ def test_card_payment_form_falls_back_when_the_hold_withheld_a_sequence(missing)
     form = build_card_payment_form(KorailConfig(), hold, _fake_card())
     assert form["hidTmpJobSqno1"] == "000000"
     assert form["hidTmpJobSqno2"] == "000000"
+
+
+def test_card_payment_form_echoes_the_holds_reservation_change_no():
+    # V4/b.java:41 does setHidRsvChgNo(response.getJrny_infos()
+    # .getJrny_info().get(0).getH_rsv_chg_no()), handed to
+    # PaymentService.payment's @Field("hidRsvChgNo") (PaymentService.java:14).
+    # Per-reservation state, not a protocol constant.
+    hold = replace(
+        _paid_hold(),
+        journeys=(
+            ReservationJourney(
+                journey_sequence="0001", reservation_change_no="001"
+            ),
+        ),
+    )
+    form = build_card_payment_form(KorailConfig(), hold, _fake_card())
+    assert form["hidRsvChgNo"] == "001"
+
+
+def test_card_payment_form_takes_the_first_journeys_reservation_change_no():
+    # The app indexes .get(0) specifically, so a later journey's change number
+    # must never win.
+    hold = replace(
+        _paid_hold(),
+        journeys=(
+            ReservationJourney(
+                journey_sequence="0001", reservation_change_no="002"
+            ),
+            ReservationJourney(
+                journey_sequence="0002", reservation_change_no="017"
+            ),
+        ),
+    )
+    form = build_card_payment_form(KorailConfig(), hold, _fake_card())
+    assert form["hidRsvChgNo"] == "002"
+
+
+@pytest.mark.parametrize(
+    "journeys",
+    [
+        (),  # no journey rows at all
+        (ReservationJourney(journey_sequence="0001"),),  # None
+        (
+            ReservationJourney(
+                journey_sequence="0001", reservation_change_no=""
+            ),
+        ),
+        (
+            ReservationJourney(
+                journey_sequence="0001", reservation_change_no="   "
+            ),
+        ),
+    ],
+)
+def test_card_payment_form_falls_back_when_the_hold_omits_the_change_no(journeys):
+    # The app dereferences .get(0) unguarded and would forward a null for
+    # Retrofit to drop; neither shape is reproducible without a conditional
+    # field, so "000" -- what this builder has always sent -- is the documented
+    # last resort.
+    hold = replace(_paid_hold(), journeys=journeys)
+    form = build_card_payment_form(KorailConfig(), hold, _fake_card())
+    assert form["hidRsvChgNo"] == "000"
 
 
 def test_card_payment_form_refuses_a_hold_that_carries_only_a_display_total():
@@ -355,6 +427,38 @@ def test_unpaid_reservation_cancel_form_accepts_zero_padded_journey_count():
     assert form["txtPnrNo"] == "SYNTHETIC_PNR_REFERENCE"
     assert form["txtJrnyCnt"] == "1"
     assert form["txtJrnySqno"] == "0001"
+
+
+def test_unpaid_reservation_cancel_form_sends_the_apps_fixed_change_no():
+    # Deliberately NOT the payment builder's echo. Every app flow that cancels a
+    # just-created hold from its ReservationResponse hardcodes "000" next to the
+    # same fixed txtJrnySqno="0001": DReservationConfirmActivity.java:270-279
+    # (executeRsvCancel reads getH_pnr_no()/getH_jrny_cnt() off the response,
+    # even keeps the object, and still sets "000"),
+    # ReservationWaitActivity.java:118-128, a6/x.java:97-106,
+    # LimousineActivity.java:134-143, LimousineSelectSeatActivity.java:325.
+    # Only the reservation-list screens pass a row's real change number, and
+    # they pass that row's h_jrny_sqno too. So a hold carrying a change number
+    # must NOT leak it into the cancel form.
+    response = ReservationHoldResponse(
+        h_msg_cd="IRR000018",
+        h_msg_txt="success",
+        str_result="SUCC",
+        raw={},
+        pnr_no="SYNTHETIC_PNR_REFERENCE",
+        journey_count="0001",
+        journeys=(
+            ReservationJourney(
+                journey_sequence="0001", reservation_change_no="017"
+            ),
+        ),
+    )
+    form = build_unpaid_reservation_cancel_form(KorailConfig(), response)
+    assert form["hidRsvChgNo"] == "000"
+    assert form["txtJrnySqno"] == "0001"
+    # The payment builder, on the same hold, does echo it -- the two paths
+    # diverge on purpose.
+    assert response.journeys[0].reservation_change_no == "017"
 
 
 @pytest.mark.parametrize(

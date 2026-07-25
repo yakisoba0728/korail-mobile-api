@@ -198,6 +198,23 @@ def build_unpaid_reservation_cancel_form(
             "txtPnrNo": response.pnr_no,
             "txtJrnySqno": "0001",
             "txtJrnyCnt": "1",
+            # A literal "000" here, NOT the hold's h_rsv_chg_no -- deliberately
+            # unlike build_card_payment_form below. Every app flow that cancels
+            # a just-created hold from its ReservationResponse hardcodes it,
+            # next to the same fixed txtJrnySqno="0001":
+            # DReservationConfirmActivity.java:270-279 is decisive, because
+            # executeRsvCancel(ReservationResponse) reads getH_pnr_no() and
+            # getH_jrny_cnt() off that very response, even stores the whole
+            # object via setReservationResponse, and STILL sets "000" rather
+            # than jrny_info[0].getH_rsv_chg_no(). Likewise
+            # ReservationWaitActivity.java:118-128, a6/x.java:97-106,
+            # LimousineActivity.java:134-143 and
+            # LimousineSelectSeatActivity.java:325. The only cancel call sites
+            # that pass a real change number are the reservation-LIST screens
+            # (ReservedTicketActivity.java:228, BasketTicketActivity.java:276),
+            # which cancel an arbitrary listed row and therefore also pass that
+            # row's own h_jrny_sqno instead of "0001". This builder is the
+            # fresh-single-journey-hold flow, so it sends the app's constant.
             "hidRsvChgNo": "000",
         }
     )
@@ -222,6 +239,32 @@ def _echoed_job_sequence(value: str | None) -> str:
     return _ABSENT_JOB_SEQUENCE
 
 
+# What the payment form sends when the hold response carried no usable
+# first-journey h_rsv_chg_no. The app never handles that case: V4/b.java:41
+# dereferences getJrny_infos().getJrny_info().get(0) unconditionally, so a hold
+# without a journey row would throw inside the app rather than produce a wire
+# value, and a null h_rsv_chg_no would be forwarded and then dropped by Retrofit
+# -- neither shape is reproducible here without making the @Field conditional,
+# and no observed hold has produced one. "000" is the value this builder has
+# always sent, the value every fresh-hold cancel in the app hardcodes, and the
+# value srtgo uses, so it stays as the explicit last resort. Note V4/b.java:25-30
+# falls back to "0" instead, but only on getRecalculationRsvPaymentRequest,
+# whose source is a previous request object rather than the reservation
+# response; it is not this path's fallback.
+_ABSENT_RESERVATION_CHANGE_NO = "000"
+
+
+def _echoed_reservation_change_no(hold: ReservationHoldResponse) -> str:
+    # The FIRST journey specifically, mirroring the app's
+    # getJrny_infos().getJrny_info().get(0).getH_rsv_chg_no() (V4/b.java:41).
+    journeys = hold.journeys
+    if journeys:
+        value = journeys[0].reservation_change_no
+        if isinstance(value, str) and value.strip():
+            return value
+    return _ABSENT_RESERVATION_CHANGE_NO
+
+
 def build_card_payment_form(
     config: KorailConfig,
     hold: ReservationHoldResponse,
@@ -236,10 +279,19 @@ def build_card_payment_form(
     does ``setJobSqNo1(reservationResponse.getH_tmp_job_sqno1())`` (likewise 2)
     and ``RsvPaymentDao.executeDao()`` (``:129-131``) hands those straight to
     ``PaymentService.payment``'s ``@Field("hidTmpJobSqno1"/"2")``
-    (``PaymentService.java:14``). The reservation identity and amount come from
-    ``hold`` (a fresh successful hold with a PNR, window number, and a received
-    amount). ``card`` MUST be a non-chargeable fake card — the caller/method is
-    responsible for enforcing that.
+    (``PaymentService.java:14``). ``hidRsvChgNo`` echoes the hold the same way:
+    ``V4/b.java:41`` does ``setHidRsvChgNo(reservationResponse.getJrny_infos()
+    .getJrny_info().get(0).getH_rsv_chg_no())`` — the FIRST journey's change
+    number — and the app repeats that exact expression at every other payment
+    call site (``MainBookingActivity.java:998``,
+    ``OldMainBookingActivity.java:505``, ``TicketListActivity.java:1518``,
+    ``ReservedTicketActivity.java:414``, ``LimousineActivity.java:189``,
+    ``LimousineSelectSeatActivity.java:180``). It is per-reservation state, not a
+    protocol constant; the cancel builder's fixed ``"000"`` is a genuinely
+    different case, evidenced separately there. The reservation identity and
+    amount come from ``hold`` (a fresh successful hold with a PNR, window
+    number, and a received amount). ``card`` MUST be a non-chargeable fake card
+    — the caller/method is responsible for enforcing that.
 
     ``hidMnsStlAmt1`` is the app's ``getReceivedAmount()``, not the display
     total: ``AbstractC1269e.java:406`` puts ``String.valueOf(getReceivedAmount())``
@@ -292,7 +344,7 @@ def build_card_payment_form(
             "hidTmpJobSqno2": _echoed_job_sequence(
                 hold.temporary_job_sequence_2
             ),
-            "hidRsvChgNo": "000",
+            "hidRsvChgNo": _echoed_reservation_change_no(hold),
             "hidInrecmnsGridcnt": "1",
             "hidStlMnsSqno1": "1",
             "hidStlMnsCd1": "02",

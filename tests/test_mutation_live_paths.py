@@ -59,6 +59,15 @@ _HOLD_SUCCESS = {
     # Display total and settled total deliberately differ, so a builder that
     # regressed to h_tot_prc would be caught rather than silently pass.
     "h_tot_rcvd_amt": "7560",
+    # h_rsv_chg_no deliberately NOT "000", so a payment builder that regressed
+    # to the constant fallback would be caught. The second journey carries a
+    # different one to pin the app's .get(0) indexing (V4/b.java:41).
+    "jrny_infos": {
+        "jrny_info": [
+            {"h_jrny_sqno": "0001", "h_rsv_chg_no": "001"},
+            {"h_jrny_sqno": "0002", "h_rsv_chg_no": "019"},
+        ]
+    },
 }
 
 _CANCEL_SUCCESS = {
@@ -357,6 +366,28 @@ def test_payment_form_from_a_parsed_hold_carries_that_holds_reservation_state():
     assert form["hidTmpJobSqno2"] == _HOLD_SUCCESS["h_tmp_job_sqno2"]
     assert form["hidMnsStlAmt1"] == _HOLD_SUCCESS["h_tot_rcvd_amt"]
     assert form["hidMnsStlAmt1"] != _HOLD_SUCCESS["h_tot_prc"]
+    # hidRsvChgNo comes off the FIRST journey of the parsed response
+    # (V4/b.java:41 indexes .get(0)), not the constant and not the second row.
+    journeys = _HOLD_SUCCESS["jrny_infos"]["jrny_info"]
+    assert form["hidRsvChgNo"] == journeys[0]["h_rsv_chg_no"]
+    assert form["hidRsvChgNo"] != journeys[1]["h_rsv_chg_no"]
+    assert form["hidRsvChgNo"] != "000"
+
+
+def test_cancel_form_from_a_parsed_hold_keeps_the_apps_fixed_change_no():
+    # Same parsed hold, opposite decision: the app's fresh-hold cancel flows
+    # hardcode "000" even holding the ReservationResponse
+    # (DReservationConfirmActivity.java:270-279,
+    # ReservationWaitActivity.java:118-128, a6/x.java:97-106), so the parsed
+    # change number must not reach the cancel wire.
+    from korail_mobile_api.mutation_payloads import (
+        build_unpaid_reservation_cancel_form,
+    )
+
+    hold = _hold()
+    assert hold.journeys[0].reservation_change_no == "001"
+    form = build_unpaid_reservation_cancel_form(KorailConfig(), hold)
+    assert form["hidRsvChgNo"] == "000"
 
 
 def test_post_mutation_form_refuses_real_card_payment_at_the_send_gate():
