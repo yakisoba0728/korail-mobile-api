@@ -226,7 +226,7 @@ def _responses() -> dict[str, dict[str, Any]]:
 
 
 def test_routes_fields_exports_and_signatures_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 56
+    assert len(KORAIL_READ_ONLY_ROUTES) == 58
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert len(DYNAPATH_ALLOWLIST_PATHS) == 6
     assert all(path not in DYNAPATH_ALLOWLIST_PATHS for _, path in NEW_ROUTES)
@@ -308,7 +308,7 @@ def test_routes_fields_exports_and_signatures_are_exact():
         )
         if not name.startswith("_")
     }
-    assert len(public_methods) == 67
+    assert len(public_methods) == 69
 
     expected_exports = {
         "TicketReservationDetailRequest": (

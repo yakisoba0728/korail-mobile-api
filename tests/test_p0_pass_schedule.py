@@ -208,7 +208,7 @@ def test_request_rejects_malformed_or_ambiguous_values(
 
 def test_safety_registers_one_exact_read_only_contract():
     assert ("POST", PASS_SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
-    assert len(KORAIL_READ_ONLY_ROUTES) == 56
+    assert len(KORAIL_READ_ONLY_ROUTES) == 58
     assert KORAIL_EXACT_REQUEST_FIELDS[PASS_SCHEDULE_PATH] == (
         PASS_SCHEDULE_FIELDS
     )

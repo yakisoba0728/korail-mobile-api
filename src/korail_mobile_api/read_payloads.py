@@ -554,6 +554,98 @@ def build_multi_child_discount_target_form(
     return {"dptDt": _ascii_date(departure_date, "departure_date")}
 
 
+def build_korail_point_summary_form() -> dict[str, str]:
+    """``xPoint.MyXPointView`` — one constant, not a caller parameter.
+
+    ``KorailPointInquiryDao.java:87-92`` has no request class at all: it builds
+    a bare ``BaseRequest`` and passes the literal ``"0"`` as ``point_dv_cd``.
+    Both call sites (``MyPageActivity.java:414``,
+    ``MemberCardActivity.java:67``) instantiate the DAO with no arguments, so
+    ``"0"`` is the only value the app can send and this builder takes nothing.
+    """
+    return {"point_dv_cd": "0"}
+
+
+#: ``pontTpVal`` — which ledger ``mlg.amtSpec.do`` reads.
+#: ``MileageHistoryActivity.java:289,543`` sets ``"1"`` for the KTX 마일리지 tab
+#: (the screen's default) and ``:313`` sets ``"2"`` for the 철도포인트 tab.
+KORAIL_MILEAGE_LEDGER_KTX = "1"
+KORAIL_MILEAGE_LEDGER_RAIL_POINT = "2"
+
+#: ``qryDvVal`` — the 전체/적립/사용 selector, sent as the dropdown INDEX rather
+#: than as a code: ``MileageHistoryActivity.java:566`` assigns
+#: ``Integer.toString(i9)`` straight from ``onItemSelected``, and ``:502``
+#: declares the three entries in this order. ``"0"`` is the field's initial
+#: value (``:134``).
+KORAIL_MILEAGE_MOVEMENT_ALL = "0"
+KORAIL_MILEAGE_MOVEMENT_EARNED = "1"
+KORAIL_MILEAGE_MOVEMENT_SPENT = "2"
+
+_KORAIL_MILEAGE_LEDGERS = frozenset(
+    {KORAIL_MILEAGE_LEDGER_KTX, KORAIL_MILEAGE_LEDGER_RAIL_POINT}
+)
+_KORAIL_MILEAGE_MOVEMENTS = frozenset(
+    {
+        KORAIL_MILEAGE_MOVEMENT_ALL,
+        KORAIL_MILEAGE_MOVEMENT_EARNED,
+        KORAIL_MILEAGE_MOVEMENT_SPENT,
+    }
+)
+
+
+@dataclass(frozen=True)
+class MileageHistoryRequest:
+    """The 마일리지 내역 read's inputs (``XPointService.java:26-28``).
+
+    The defaults are the screen's own: the KTX ledger
+    (``MileageHistoryActivity.java:543``), 전체 movements (``:134``), and
+    ``pgPrCnt="20"`` — a hardcoded literal at ``:274``, not a preference, which
+    is why it is not a constructor argument. ``nowPgNo`` is 1-based (``:131``)
+    and the app increments it while ``page_no <= pgCnt`` (``:158,252-253``).
+
+    :attr:`start_date` and :attr:`end_date` have no default because the app has
+    none either: ``onCreate`` calls ``e1(2)`` (``:545``), which is the "최근
+    3개월" branch at ``:372-380``. Reproducing a relative default here would
+    put a clock in a payload builder, so the caller supplies both dates.
+    """
+
+    start_date: str
+    end_date: str
+    ledger: str = KORAIL_MILEAGE_LEDGER_KTX
+    movement: str = KORAIL_MILEAGE_MOVEMENT_ALL
+    page_no: int = 1
+
+
+def build_mileage_history_form(
+    request: MileageHistoryRequest,
+) -> dict[str, str]:
+    if type(request) is not MileageHistoryRequest:
+        raise TypeError("request must be an exact MileageHistoryRequest")
+    if request.ledger not in _KORAIL_MILEAGE_LEDGERS:
+        raise ValueError(
+            "ledger must be KORAIL_MILEAGE_LEDGER_KTX or "
+            "KORAIL_MILEAGE_LEDGER_RAIL_POINT"
+        )
+    if request.movement not in _KORAIL_MILEAGE_MOVEMENTS:
+        raise ValueError(
+            "movement must be one of KORAIL_MILEAGE_MOVEMENT_ALL, "
+            "KORAIL_MILEAGE_MOVEMENT_EARNED, KORAIL_MILEAGE_MOVEMENT_SPENT"
+        )
+    start_date = _ascii_date(request.start_date, "start_date")
+    end_date = _ascii_date(request.end_date, "end_date")
+    if start_date > end_date:
+        raise ValueError("start_date must not be after end_date")
+    return {
+        "pontTpVal": request.ledger,
+        "qryDvVal": request.movement,
+        "qryStDt": start_date,
+        "qryClsDt": end_date,
+        # MileageHistoryActivity.java:274 -- a literal, every call.
+        "pgPrCnt": "20",
+        "nowPgNo": _positive_int(request.page_no, "page_no"),
+    }
+
+
 def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
     """``ticket.dcntCrdUseQry.do`` — one card number, nothing else.
 

@@ -14,6 +14,30 @@ from .constants import (
 from .errors import KorailProtocolError
 
 
+# The subject areas this package will not build a send path for.
+#
+# NARROWED ON 2026-07-26: the label was "points-mileage", which excluded the
+# whole loyalty area including its balance READS. Those reads are now in scope
+# and two of them are implemented (xPoint.MyXPointView, mlg.amtSpec.do), so the
+# label is now "points-mileage-write" and names only what it still refuses:
+# anything that moves, earns, spends or re-authenticates points.
+#
+# Concretely still out, and each for a stated reason rather than by category:
+#
+#   mlg.lpotAthn.do     -- authenticates against L.POINT with a user-supplied
+#                          numeric password and returns pwdErrTno, a FAILURE
+#                          COUNTER. A wrong guess is a state change at the
+#                          loyalty provider and repeated guesses lock the
+#                          account, so this is not a read regardless of the
+#                          Korean word 조회 in its screen title.
+#   xPoint.XPointView   -- same shape, same objection (xpoint_no + xpoint_pwd).
+#   xPoint.OkCashbagCertView, mileage.acpnMlgSave.do, mileage.acpnMlgNoti.do
+#                       -- registration/accrual writes.
+#
+# This set is documentary: nothing dispatches on it, and the actual boundary is
+# KORAIL_READ_ONLY_ROUTES plus KORAIL_MUTATION_ROUTES. It is kept because it
+# records which areas were considered and declined, which a route allowlist
+# cannot express.
 EXCLUDED_API_DOMAINS = frozenset(
     {
         "reservation",
@@ -22,14 +46,14 @@ EXCLUDED_API_DOMAINS = frozenset(
         "check-in",
         "member-drop",
         "push-sms",
-        "points-mileage",
+        "points-mileage-write",
         "dynapath-token-generation",
     }
 )
 
 # The exact (method, path) pairs the read-only send path will transmit to.
 #
-# 56 entries, 56 distinct paths, pinned by tests. The count is not 52 because
+# 58 entries, 58 distinct paths, pinned by tests. The count is not 52 because
 # two of the entries are session routes rather than reads: the login POST and
 # the server-side logout GET (cookie-authenticated, zero parameters, not a
 # mutation), which was added later than the other 50. There is no "excluding
@@ -134,6 +158,15 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ),
         ("POST", "/classes/com.korail.mobile.refunds.CommissionView"),
         ("POST", "/classes/com.korail.mobile.refunds.SelTicketInfo"),
+        # Loyalty READS. Neither carries a password and neither moves a point:
+        # MyXPointView is the my-page summary the app fetches on open
+        # (MyPageActivity.java:414) with point_dv_cd pinned to "0" by the DAO
+        # itself (KorailPointInquiryDao.java:91), and mlg.amtSpec.do is the
+        # 적립/사용 history list. The password-bearing loyalty routes
+        # (mlg.lpotAthn.do, xPoint.XPointView) are excluded -- see
+        # EXCLUDED_API_DOMAINS above.
+        ("POST", "/classes/com.korail.mobile.xPoint.MyXPointView"),
+        ("POST", "/classes/com.korail.mobile.mlg.amtSpec.do"),
         # 할인카드(N카드) reads. Both are GETs whose only credential is the
         # session cookie, and neither changes anything: one lists the trips a
         # card has already been spent on, the other lists the trains a card
@@ -954,6 +987,26 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "h_orgtk_sale_sqno",
             "h_orgtk_ret_pwd",
             "h_purchase_history",
+        }
+    ),
+    # 마일리지/포인트 요약 (XPointService.java:18-20). point_dv_cd is not a
+    # caller parameter: KorailPointInquiryDao.java:91 passes the literal "0" and
+    # the DAO has no request class at all, so there is nothing else it can be.
+    "/classes/com.korail.mobile.xPoint.MyXPointView": frozenset(
+        {"Device", "Version", "Key", "point_dv_cd"}
+    ),
+    # 마일리지 적립/사용 내역 (XPointService.java:26-28).
+    "/classes/com.korail.mobile.mlg.amtSpec.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "pontTpVal",
+            "qryDvVal",
+            "qryStDt",
+            "qryClsDt",
+            "pgPrCnt",
+            "nowPgNo",
         }
     ),
     # 할인카드(N카드) 사용이력 (ResearchService.java:51-52). One identifier and

@@ -122,8 +122,10 @@ from .read_models import (
     FreeSeatCarResponse,
     GiftTicketListResponse,
     GuideSeatConditionResponse,
+    KorailPointSummaryResponse,
     MaasServiceDetailListResponse,
     MergeSeatsInquiryResponse,
+    MileageHistoryResponse,
     MultiChildDiscountTargetResponse,
     CommuterInfoResponse,
     PassAvailabilityResponse,
@@ -161,6 +163,8 @@ from .read_payloads import (
     build_free_seat_car_form,
     build_gift_ticket_list_form,
     build_guide_seat_condition_form,
+    build_korail_point_summary_form,
+    build_mileage_history_form,
     build_maas_service_detail_form,
     build_merge_seats_inquiry_form,
     build_multi_child_discount_target_form,
@@ -189,6 +193,7 @@ from .read_payloads import (
     GuideSeatConditionRequest,
     MaasServiceDetailQuery,
     MergeSeatsInquiryRequest,
+    MileageHistoryRequest,
     SeatAssignmentScheduleRequest,
     PassScheduleRequest,
     PriceFareQuoteRequest,
@@ -211,6 +216,8 @@ from .read_parsers import (
     parse_free_seat_car_response,
     parse_gift_ticket_list_response,
     parse_guide_seat_condition_response,
+    parse_korail_point_summary_response,
+    parse_mileage_history_response,
     parse_maas_service_detail_list_response,
     parse_merge_seats_inquiry_response,
     parse_multi_child_discount_target_response,
@@ -492,6 +499,76 @@ class KorailClient:
                     form,
                     include_dynapath=False,
                     raise_on_fail=False,
+                ).raw
+            )
+        )
+
+    def get_korail_point_summary(self) -> KorailPointSummaryResponse:
+        """Read the my-page loyalty and welfare-entitlement summary.
+
+        ``POST xPoint.MyXPointView`` (``XPointService.java:18-20``), the call
+        마이페이지 makes on open (``MyPageActivity.java:414``). It takes no
+        arguments: ``point_dv_cd`` is the literal ``"0"`` the DAO itself passes
+        (``KorailPointInquiryDao.java:91``), and there is no request class.
+
+        **Why this read is here.** Besides the point balance and the
+        coupon/지연할인권 counts, the response carries the account's welfare
+        registration: ``MyPageActivity.java:206-212`` shows the whole 장애인
+        section only when ``h_hdcp_flg`` is ``"Y"``, then labels
+        ``h_subt_dcs_cl_nm`` 장애인증 and ``h_cust_lead_flg_nm`` 보조견
+        (``:353-355``, ``:393-394``). That makes this the cheapest available
+        check on whether an account is even eligible for the 1~3급 장애 /
+        안내견 fares, which a live reservation refused on 2026-07-26 with the
+        server-only code ``ERR299943`` on a byte-exact form
+        (``docs/MUTATION_HANDOFF.md:172-179``).
+
+        **NOT LIVE-VERIFIED, and the entitlement reading is a hypothesis.** No
+        call has been made on this route; the mapping above is what the app
+        does with the fields, not an observed correlation between the flag and
+        that refusal.
+
+        This route reads points; it never moves them. The loyalty routes that
+        carry a user password (``mlg.lpotAthn.do``, ``xPoint.XPointView``) are
+        deliberately unimplemented — a wrong password there increments a
+        server-side failure counter, which is a state change.
+        """
+        self._require_session()
+        form = build_korail_point_summary_form()
+        return self._run_read(
+            lambda: parse_korail_point_summary_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.xPoint.MyXPointView",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_mileage_history(
+        self,
+        request: MileageHistoryRequest,
+    ) -> MileageHistoryResponse:
+        """Read one page of the 마일리지 적립/사용 내역 ledger.
+
+        ``POST mlg.amtSpec.do`` (``XPointService.java:26-28``). ``request``
+        chooses the ledger (KTX 마일리지 vs 철도포인트), the movement filter
+        (전체/적립/사용) and the date window; the page size is fixed at 20
+        because the app hardcodes it (``MileageHistoryActivity.java:274``).
+
+        Paging is the caller's: the response's
+        :attr:`~korail_mobile_api.read_models.MileageHistoryResponse.page_count`
+        is the ceiling the app scrolls to (``:158,581``).
+
+        **NOT LIVE-VERIFIED.** Shape from ``MileageInquiryDao``.
+        """
+        self._require_session()
+        form = build_mileage_history_form(request)
+        return self._run_read(
+            lambda: parse_mileage_history_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.mlg.amtSpec.do",
+                    form,
+                    include_dynapath=False,
                 ).raw
             )
         )

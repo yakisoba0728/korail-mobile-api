@@ -461,6 +461,118 @@ class PassScheduleResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
+class KorailPointSummaryResponse(BaseKorailResponse):
+    """``xPoint.MyXPointView`` — the my-page loyalty and entitlement summary.
+
+    ``KorailPointInquiryDao.KorailPointInquiryResponse``
+    (``dao/xPoint/KorailPointInquiryDao.java:11-85``). The app fetches it
+    unconditionally when 마이페이지 opens (``MyPageActivity.java:414``) and
+    again on the member-card screen (``MemberCardActivity.java:67``).
+
+    **This is the closest thing KORAIL exposes to "what discounts is this
+    account entitled to".** ``MyPageActivity.java:206-212`` reveals the whole
+    disability section — the view ``v_mypage_disable_person`` — on
+    ``h_hdcp_flg == "Y"`` and on nothing else, then fills its two rows from
+    :attr:`welfare_discount_class_name` (labelled 장애인증,
+    ``MyPageActivity.java:353,393``) and :attr:`customer_lead_flag_name`
+    (labelled 보조견, ``:355,394``). So an account with
+    ``h_hdcp_flg != "Y"`` has no 장애인 registration and no 보조견
+    registration, which is the condition that would explain a server-side
+    ``ERR299943`` "예약할인이 지원되지 않습니다" on a 1~3급 장애 + 안내견
+    reservation whose form matched the app exactly
+    (``docs/MUTATION_HANDOFF.md:172-179``).
+
+    **That reading is a hypothesis until the operator runs it.** It is derived
+    from what the app DOES with the flag, not from an observed pairing of this
+    flag with that refusal.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    #: ``h_korail_point`` — the KORAIL point balance shown on 마이페이지.
+    korail_point: str | None = None
+    #: ``h_disc_coup_cnt`` — how many 할인쿠폰 the account holds. The count
+    #: behind :meth:`~korail_mobile_api.client.KorailClient.get_discount_coupons`.
+    discount_coupon_count: str | None = None
+    #: ``h_delay_cnt`` — how many 지연할인권 the account holds.
+    delay_discount_count: str | None = None
+    #: ``h_hdcp_flg`` — ``"Y"`` when the account carries a 장애인 registration.
+    disability_flag: str | None = None
+    #: ``h_subt_dcs_cl_nm`` / ``h_subt_dcs_cl_cd`` — the 우대할인 class the
+    #: registration grants, rendered under the 장애인증 label.
+    welfare_discount_class_name: str | None = None
+    welfare_discount_class_code: str | None = field(default=None, repr=False)
+    #: ``h_cust_lead_flg_nm`` — rendered under the 보조견 label.
+    customer_lead_flag_name: str | None = None
+    #: ``h_cp_athn_flg`` / ``h_emil_athn_flg`` — phone and e-mail verified.
+    phone_verified_flag: str | None = field(default=None, repr=False)
+    email_verified_flag: str | None = field(default=None, repr=False)
+    contact_channel_content: str | None = field(default=None, repr=False)
+    #: ``h_logn_tp_cd1``/``2``/``4``/``5`` — Naver / Kakao / Google / Apple
+    #: social-login linkage, in the order ``MyPageActivity.java:214-236`` reads
+    #: them.
+    naver_linked_flag: str | None = field(default=None, repr=False)
+    kakao_linked_flag: str | None = field(default=None, repr=False)
+    google_linked_flag: str | None = field(default=None, repr=False)
+    apple_linked_flag: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class MileageHistoryEntry:
+    """One 적립 or 사용 row of the mileage ledger.
+
+    ``MileageInquiryDao.SpecList``
+    (``dao/xPoint/MileageInquiryDao.java:128-167``).
+    """
+
+    #: ``dptDt`` — the departure date the row is attributed to.
+    departure_date: str | None = None
+    #: ``pontDvNm`` — 적립/사용 division name.
+    point_division_name: str | None = None
+    #: ``mlgAcmDvCdNm`` — how the mileage was accrued.
+    accrual_division_name: str | None = None
+    #: ``rcpDvNm`` — receipt division name.
+    receipt_division_name: str | None = None
+    #: ``pontAmt`` — the signed point movement of this row.
+    point_amount: str | None = None
+    #: ``savePontValNum`` — the running saved balance.
+    saved_point_value: str | None = field(default=None, repr=False)
+    #: ``stlAmt`` — the settled fare the row derives from.
+    settlement_amount: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class MileageHistoryResponse(BaseKorailResponse):
+    """``mlg.amtSpec.do`` — the 마일리지 적립/사용 내역 page.
+
+    ``MileageInquiryDao.MileageInquiryResponse``
+    (``dao/xPoint/MileageInquiryDao.java:72-126``). The app's totals row is
+    :attr:`total_available_rail_point` + :attr:`total_available_rail_point_1`
+    added together as KTX 마일리지 and 삼성카드 마일리지
+    (``MileageHistoryActivity.java:574-578``), which is why both are exposed
+    rather than folded.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    #: ``pgCnt`` — the page count. ``MileageHistoryActivity.java:581`` keeps it
+    #: as the ceiling for its infinite scroll.
+    page_count: str | None = None
+    total_available_rail_point: str | None = None
+    total_available_rail_point_1: str | None = None
+    total_available_affiliate_point: str | None = None
+    total_accumulated_rail_point_1: str | None = field(
+        default=None,
+        repr=False,
+    )
+    total_used_rail_point_1: str | None = field(default=None, repr=False)
+    rail_now_saved_point_1: str | None = field(default=None, repr=False)
+    #: ``delPontValNum`` — the points expiring this month.
+    expiring_point_value: str | None = None
+    ktx_mileage_info: str | None = field(default=None, repr=False)
+    entries: tuple[MileageHistoryEntry, ...] = ()
+
+
+@dataclass(frozen=True)
 class DiscountCardUsage:
     """One trip a 할인카드(N카드) has already been spent on.
 

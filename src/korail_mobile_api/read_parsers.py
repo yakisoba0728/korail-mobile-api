@@ -36,7 +36,10 @@ from .read_models import (
     IntermediateStation,
     MaasServiceDetail,
     MaasServiceDetailListResponse,
+    KorailPointSummaryResponse,
     MergeSeatsInquiryResponse,
+    MileageHistoryEntry,
+    MileageHistoryResponse,
     MultiChildDiscountTarget,
     MultiChildDiscountTargetResponse,
     PassScheduleInfo,
@@ -1537,6 +1540,93 @@ def parse_pass_schedule_response(
         )
     return PassScheduleResponse(
         schedules=tuple(schedules),
+        **_response_fields(raw),
+    )
+
+
+_KORAIL_POINT_SUMMARY_FIELDS = {
+    "korail_point": "h_korail_point",
+    "discount_coupon_count": "h_disc_coup_cnt",
+    "delay_discount_count": "h_delay_cnt",
+    "disability_flag": "h_hdcp_flg",
+    "welfare_discount_class_name": "h_subt_dcs_cl_nm",
+    "welfare_discount_class_code": "h_subt_dcs_cl_cd",
+    "customer_lead_flag_name": "h_cust_lead_flg_nm",
+    "phone_verified_flag": "h_cp_athn_flg",
+    "email_verified_flag": "h_emil_athn_flg",
+    "contact_channel_content": "h_cntc_chn_cont1",
+    "naver_linked_flag": "h_logn_tp_cd1",
+    "kakao_linked_flag": "h_logn_tp_cd2",
+    "google_linked_flag": "h_logn_tp_cd4",
+    "apple_linked_flag": "h_logn_tp_cd5",
+}
+
+_MILEAGE_HISTORY_FIELDS = {
+    "page_count": "pgCnt",
+    "total_available_rail_point": "totAvlRailPontValNum",
+    "total_available_rail_point_1": "totAvlRailPontValNum1",
+    "total_available_affiliate_point": "totAvlAfltPontValNum",
+    "total_accumulated_rail_point_1": "totAcmRailPontValNum1",
+    "total_used_rail_point_1": "totUseRailPontValNum1",
+    "rail_now_saved_point_1": "railNowSavePontValNum1",
+    "expiring_point_value": "delPontValNum",
+    "ktx_mileage_info": "ktxMlgInfo",
+}
+
+_MILEAGE_HISTORY_ENTRY_FIELDS = {
+    "departure_date": "dptDt",
+    "point_division_name": "pontDvNm",
+    "accrual_division_name": "mlgAcmDvCdNm",
+    "receipt_division_name": "rcpDvNm",
+    "point_amount": "pontAmt",
+    "saved_point_value": "savePontValNum",
+    "settlement_amount": "stlAmt",
+}
+
+
+def parse_korail_point_summary_response(
+    raw: Mapping[str, Any],
+) -> KorailPointSummaryResponse:
+    _validate_strict_read_envelope(raw)
+    return KorailPointSummaryResponse(
+        # Scalar rather than string: every point total here is a Java String in
+        # the DAO but a number in spirit, and the app reads them back through
+        # N.getInteger / N.getDecimalFormatString
+        # (MileageHistoryActivity.java:574-580), which would not care either
+        # way. Neither shape has been observed live.
+        **_nullable_scalar_fields(
+            raw,
+            _KORAIL_POINT_SUMMARY_FIELDS,
+            "korail point summary",
+        ),
+        **_response_fields(raw),
+    )
+
+
+def parse_mileage_history_response(
+    raw: Mapping[str, Any],
+) -> MileageHistoryResponse:
+    _validate_strict_read_envelope(raw)
+    entries = []
+    for value in _optional_list(raw, "specList", "mileage history"):
+        item = _row(value, "mileage history specList")
+        entries.append(
+            MileageHistoryEntry(
+                **_nullable_scalar_fields(
+                    item,
+                    _MILEAGE_HISTORY_ENTRY_FIELDS,
+                    "mileage history entry",
+                ),
+                raw=item,
+            )
+        )
+    return MileageHistoryResponse(
+        **_nullable_scalar_fields(
+            raw,
+            _MILEAGE_HISTORY_FIELDS,
+            "mileage history",
+        ),
+        entries=tuple(entries),
         **_response_fields(raw),
     )
 

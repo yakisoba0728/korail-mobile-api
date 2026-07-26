@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+- Added: loyalty READS, and the welfare entitlement one of them exposes —
+  `KorailClient.get_korail_point_summary` and
+  `KorailClient.get_mileage_history`, plus `KorailPointSummaryResponse`,
+  `MileageHistoryRequest`, `MileageHistoryEntry`, `MileageHistoryResponse` and
+  the five `KORAIL_MILEAGE_*` selector constants. The read-only boundary is now
+  58 routes.
+- Changed: `EXCLUDED_API_DOMAINS` no longer contains `"points-mileage"`; it
+  contains `"points-mileage-write"`. The old label excluded the whole loyalty
+  area including its balance reads, which the user has now asked for. The new
+  label names only what is still refused, and each refusal now has a reason
+  rather than a category: `mlg.lpotAthn.do` and `xPoint.XPointView` take a
+  user-supplied point PASSWORD and answer with `pwdErrTno`, a failure counter,
+  so a wrong guess is a state change at the loyalty provider no matter what the
+  screen title says; `xPoint.OkCashbagCertView`, `mileage.acpnMlgSave.do` and
+  `mileage.acpnMlgNoti.do` are registration/accrual writes. A test pins that
+  all five stay unreachable and that no other excluded domain moved.
+  - **`xPoint.MyXPointView` is the account-entitlement read this project did
+    not know it had.** Besides the point balance it carries `h_hdcp_flg`, and
+    `MyPageActivity.java:206-212` reveals the entire 장애인 section on that
+    flag alone, filling its two rows from `h_subt_dcs_cl_nm` (labelled 장애인증,
+    `:353,393`) and `h_cust_lead_flg_nm` (labelled 보조견, `:355,394`). An
+    account whose flag is not `"Y"` therefore holds neither registration —
+    which is the shape of an explanation for the live `ERR299943`
+    "예약할인이 지원되지 않습니다" that refused 1~3급 장애 + 안내견 on a
+    byte-exact form (`docs/MUTATION_HANDOFF.md:172-179`). **Hypothesis, not
+    finding**: it is what the app does with the flag, not an observed pairing.
+  - `point_dv_cd` is not a caller parameter. `KorailPointInquiryDao.java:87-92`
+    has no request class and passes the literal `"0"`, so the builder takes no
+    arguments at all.
+  - The mileage read's page size is the app's hardcoded `"20"`
+    (`MileageHistoryActivity.java:274`) rather than an option, and `qryDvVal`
+    is a dropdown INDEX rather than a code — `:566` assigns
+    `Integer.toString(i9)` straight from `onItemSelected`, with the three
+    entries declared 전체/적립/사용 at `:502`. The date window has no default
+    because supplying one would put a clock in a payload builder; the app's own
+    default is the "최근 3개월" branch at `:372-380`.
+
 - Added: 할인카드(N카드) reads — `KorailClient.get_discount_card_usage_history`
   and `KorailClient.get_discount_card_schedule`, plus
   `DiscountCardScheduleRequest`, `DiscountCardUsage`,
