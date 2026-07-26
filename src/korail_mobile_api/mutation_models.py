@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
+from .errors import KorailProtocolError
 from .models import BaseKorailResponse, PhysicalSeat, SeatInventoryResponse
+
+if TYPE_CHECKING:
+    from .read_models import RefundTicketDetailResponse
 
 
 @dataclass(frozen=True)
@@ -308,7 +312,11 @@ class CardPayment:
     card_password: str = field(repr=False)  # first two digits of the card PIN
     card_expire: str = field(repr=False)  # YYMM
     birthday: str = field(repr=False)  # YYMMDD (personal auth) or biz no
-    installment: str = "00"  # months; "00" = lump sum
+    #: ``hidIsmtMnthNum1`` — installment months. Lump sum is ``"0"``, ONE zero:
+    #: ``K4/h.smali:44-52`` builds the INS_0 constant with ``const-string "0"``
+    #: and every other value is unpadded too (``"2"``, ``"3"``, ``"12"``,
+    #: ``"24"``). ``"00"`` occurs nowhere in the APK for this field.
+    installment: str = "0"
     card_type: str = "J"  # hidAthnDvCd1: "J" personal / "S" corporate
 
 
@@ -316,10 +324,24 @@ class CardPayment:
 class PaidTicket:
     """The paid-ticket identity a refund (``refunds.RefundsRequest``) needs.
 
-    Mirrors the app/srtgo ``refund`` inputs (``ktx.py:1077-1094``): the PNR plus
-    the original-ticket sale window/date/sequence and return password, and the
-    train number. These come from a settled ticket (e.g. a ticket-list row, or
-    :meth:`~korail_mobile_api.client.KorailClient.get_refund_ticket_detail`).
+    Mirrors the app/srtgo ``refund`` inputs (``ktx.py:1077-1094``): the PNR, the
+    sale date, the original-ticket sale window/sequence and return password, and
+    the train number. These come from a settled ticket (e.g. a ticket-list row,
+    or :meth:`~korail_mobile_api.client.KorailClient.get_refund_ticket_detail`).
+
+    .. warning::
+       :attr:`sale_date` is the CURRENT ticket's ``h_sale_dt``, not the original
+       ticket's ``h_orgtk_ret_sale_dt``, even though the wire key it fills is
+       spelled ``h_orgtk_sale_dt``. The app is explicit about this:
+       ``TicketListActivity.java:965`` does
+       ``setH_orgtk_sale_dt(detail.getH_sale_dt())`` while taking the window,
+       sequence and password from the ``h_orgtk_*`` fields beside it, and
+       ``ticketReturn/a.java:413`` agrees. The refund-commission request is the
+       one that wants ``h_orgtk_ret_sale_dt`` (``ticketReturn/a.java:352``).
+       On an unchanged ticket the two dates are equal and the mistake is
+       invisible; on a ticket that was changed or reissued they differ and the
+       four-part return identity no longer matches. Use
+       :meth:`from_refund_detail` instead of assembling this by hand.
 
     A fake-card payment is always declined and so never produces one of these;
     for as long as that was the only payment path, refund could be exercised
@@ -334,11 +356,49 @@ class PaidTicket:
     """
 
     pnr_no: str = field(repr=False)
-    sale_date: str = field(repr=False)  # h_orgtk_sale_dt
-    sale_window_no: str = field(repr=False)  # h_orgtk_sale_wct_no
+    #: The CURRENT ticket's ``h_sale_dt``. Fills the wire key
+    #: ``h_orgtk_sale_dt`` -- see the warning above; these are not the same
+    #: thing on a reissued ticket.
+    sale_date: str = field(repr=False)
+    sale_window_no: str = field(repr=False)  # h_orgtk_wct_no -> h_orgtk_sale_wct_no
     sale_sequence: str = field(repr=False)  # h_orgtk_sale_sqno
     return_password: str = field(repr=False)  # h_orgtk_ret_pwd
     train_no: str = ""  # trnNo
+
+    @classmethod
+    def from_refund_detail(
+        cls,
+        detail: "RefundTicketDetailResponse",
+        *,
+        train_no: str = "",
+    ) -> "PaidTicket":
+        """Build the refund identity from a ticket detail, the way the app does.
+
+        Takes the sale date from ``h_sale_dt`` and the window, sequence and
+        password from the ``h_orgtk_*`` trio, matching
+        ``TicketListActivity.java:964-968`` field for field. Prefer this over
+        constructing :class:`PaidTicket` directly: the wire key for the sale
+        date is spelled ``h_orgtk_sale_dt``, which invites reusing
+        :attr:`~RefundTicketDetailResponse.original_sale_date`, and that is the
+        one value here that must NOT come from the ``h_orgtk_*`` group.
+
+        Raises :class:`KorailProtocolError` if any of the four identity parts is
+        missing, rather than letting a refund go out with a blank in it.
+        """
+        parts = {
+            "pnr_no": detail.pnr_no,
+            "sale_date": detail.sale_date,
+            "sale_window_no": detail.original_window_no,
+            "sale_sequence": detail.original_sale_sequence,
+            "return_password": detail.original_return_password,
+        }
+        missing = [name for name, value in parts.items() if not value]
+        if missing:
+            raise KorailProtocolError(
+                "KORAIL refund identity is incomplete; the ticket detail is "
+                f"missing {', '.join(sorted(missing))}"
+            )
+        return cls(train_no=train_no, **parts)  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True)

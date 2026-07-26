@@ -74,6 +74,7 @@ from .read_models import (
     PriceFareQuoteResponse,
     RecentDeliveryHistoryResponse,
     RecentDeliveryRecipient,
+    ReceiptCashPayment,
     ReceiptPayment,
     RefundCommissionResponse,
     RefundTicketDetailResponse,
@@ -1057,6 +1058,31 @@ def parse_ticket_receipt_response(
                     raw=payment,
                 )
             )
+        cash_receipts = []
+        for cash_value in _optional_list(
+            item, "cash_rcet_info", "ticket receipt"
+        ):
+            cash = _row(cash_value, "ticket receipt cash_rcet_info")
+            cash_receipts.append(
+                ReceiptCashPayment(
+                    approval_method_name=_optional_string(
+                        cash, "h_apv_mtd_nm", "receipt cash payment"
+                    ),
+                    authentication_domain_recognition_no=_optional_string(
+                        cash, "h_athn_dmn_rcgn_no", "receipt cash payment"
+                    ),
+                    cash_receipt_approval_no=_optional_string(
+                        cash, "h_cash_rcet_apv_no", "receipt cash payment"
+                    ),
+                    cash_receipt_transaction_division_code=_optional_string(
+                        cash, "h_cash_rcet_txn_dv_cd", "receipt cash payment"
+                    ),
+                    total_approved_amount=_optional_integer(
+                        cash, "h_tot_apv_amt", "receipt cash payment"
+                    ),
+                    raw=cash,
+                )
+            )
         items.append(
             TicketReceipt(
                 travel_date=_optional_string(
@@ -1131,6 +1157,7 @@ def parse_ticket_receipt_response(
                     item, "h_xpoint_ret_amt", "ticket receipt"
                 ),
                 payments=tuple(payments),
+                cash_receipts=tuple(cash_receipts),
                 member_card_no=_optional_string(
                     item, "h_stl_mb_crd_no", "ticket receipt"
                 ),

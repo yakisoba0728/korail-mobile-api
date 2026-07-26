@@ -142,7 +142,9 @@ def test_card_payment_form_matches_the_app_pay_with_card_contract():
         "hidStlCrCrdNo1": "0000000000000000",
         "hidVanPwd1": "00",
         "hidCrdVlidTrm1": "2612",
-        "hidIsmtMnthNum1": "00",
+        # Lump sum is ONE zero. K4/h.smali:44-52 builds INS_0 with
+        # const-string "0", and no path in the APK sends "00" for this field.
+        "hidIsmtMnthNum1": "0",
         "hidAthnDvCd1": "J",
         "hidAthnVal1": "900101",
         "hiduserYn": "Y",
