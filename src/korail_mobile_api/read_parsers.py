@@ -4,9 +4,9 @@ from collections.abc import Mapping
 from typing import Any
 
 from .errors import (
-    KorailAppError,
     KorailProtocolError,
     KorailSessionExpiredError,
+    classify_app_error,
 )
 from .read_models import (
     CartItem,
@@ -139,7 +139,10 @@ def _validate_envelope(
         raise KorailSessionExpiredError(code, message, raw=raw)
     failed = result == "FAIL" or code == "WRC000288"
     if failed and code not in accepted_empty_codes:
-        raise KorailAppError(code, message, raw=raw)
+        # ``accepted_empty_codes`` still wins: a per-endpoint opt-in returns an
+        # empty result without raising anything, so classification never touches
+        # it. Only a failure that was already going to be raised gets refined.
+        raise classify_app_error(code, message, raw=raw)
     return failed
 
 

@@ -11,12 +11,12 @@ from .config import KorailConfig
 from .constants import DYNAPATH_ALLOWLIST_PATHS
 from .dynapath import DynapathRequestContext, DynapathTokenGenerator
 from .errors import (
-    KorailAppError,
     KorailDynaPathError,
     KorailProtocolError,
     KorailSessionExpiredError,
     KorailTransportError,
     MutationNotAllowedError,
+    classify_app_error,
 )
 from .consent import MutationConsent, require_mutation_consent
 from .models import BaseKorailResponse
@@ -43,7 +43,17 @@ def parse_base_response(data: Any, *, raise_on_fail: bool = True) -> BaseKorailR
         response.str_result == "FAIL"
         or response.h_msg_cd == "WRC000288"
     ):
-        raise KorailAppError(response.h_msg_cd, response.h_msg_txt, raw=data)
+        # The FAIL/WRC000288 gate above is unchanged and remains the ONLY thing
+        # that decides there is a failure at all -- exactly as the app decides it
+        # (BaseActivity.java:620, with any unrecognised code on a non-FAIL
+        # response falling through to success at :629). classify_app_error only
+        # picks which KorailAppError subclass describes the failure, so a
+        # success carrying a warning code (WRR664296) still returns normally.
+        raise classify_app_error(
+            response.h_msg_cd,
+            response.h_msg_txt,
+            raw=data,
+        )
     return response
 
 
