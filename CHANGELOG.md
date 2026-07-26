@@ -2,6 +2,70 @@
 
 ## Unreleased
 
+- Added: 환승 (transfer) search and reservation — `KorailClient.search_transfer_trains`,
+  `KorailClient.search_trains_with_transfer_fallback` and
+  `KorailClient.reserve_transfer`, plus `TransferItinerary`,
+  `TransferSearchResult`, `pair_transfer_itineraries` and the four resolved
+  codes `KORAIL_DIRECT_ITINERARY_CODE`/`KORAIL_TRANSFER_ITINERARY_CODE`
+  (`"1"`/`"2"`), `KORAIL_DIRECT_JOURNEY_TYPE_CODE`/
+  `KORAIL_TRANSFER_JOURNEY_TYPE_CODE` (`"11"`/`"14"`) and
+  `KORAIL_MAX_JOURNEY_LEGS` (`2`). Reservation is no longer one-leg-only.
+  **Implemented and NOT live-verified**: nothing here has been sent to KORAIL.
+  - The app has one request builder for both cases. `C5/a.java:52-119` (`N0`) is
+    a loop over the train array, and the array's **length** decides everything:
+    `txtJrnyCnt` is `(length == 1 ? "1" : "2")` at `:55`, the loop writes at
+    `i + 1` so journey indices are 1-based, and the sixteen `OJrny` keys repeat
+    per leg. `build_reservation_form` is now a one-leg call into a leg-sequence
+    core and `build_transfer_reservation_form` is the same core with two, so the
+    **single-leg form is byte-for-byte what it was, key order included** — a
+    contract test pins all 56 keys in order rather than trusting that.
+  - Four codes were read from **bytecode**, not assumed. `K4/d` is `"1"`/`"2"`
+    (`smali/K4/d.smali:36,64`) and does three unrelated jobs with the same two
+    values — search `radJobId`, `txtJrnyCnt`, and the seed for `txtJrnySqno`.
+    `K4/e` is **not** `"1"`/`"2"`: DIRECT is `"11"` (`smali/K4/e.smali:40`) and
+    TRANSFER is `"14"` (`smali/K4/e.smali:68`), which jadx hides behind an
+    unrelated same-valued constant. `S4/O.getSequenceNo` is `DecimalFormat("000")`, so the
+    sequence numbers reach the wire as `"001"`/`"002"`.
+  - **Both legs of a transfer carry `txtJrnyTpCd="14"`.** The ternary at
+    `C5/a.java:60` sits inside the per-leg loop but tests the array *length*,
+    while `:61` two lines below tests the loop *index*. Getting that backwards
+    would send a form the app never sends, so both were re-read as
+    `smali/C5/a.smali:306-338` (`array-length` re-evaluated every iteration) and
+    `:343` (`if-nez v1`).
+  - **Two legs is the app's ceiling, not a limitation chosen here.** The form has
+    no journey-3 spelling: `OSeat.java:32-35` and `OSrcar.java:21-30` each split
+    on "journey 1 or not", so a third leg would *overwrite* leg 2, and
+    `ReservationRequest.java:114-117` reads back exactly two seat slots. Any
+    other leg count is refused before a form is built.
+  - The transfer **search** moves exactly one field. On `WRD000061` the app calls
+    `setRadJobId(TRANSFER_SQ_NO.getCode())` on the request it already built and
+    hands it on untouched (`DirectInquiryActivity.java:615-624` into
+    `DirectInquiryActivity.java:284-296`, confirmed at
+    `smali/…/DirectInquiryActivity.smali:1677-1689`).
+    `chtnCnt`/`chtnRsStnCd1`/`trnGpCnt`/`trnGpCd1` are not part of it.
+    `search_trains_with_transfer_fallback` reproduces the app's own flow and
+    swallows `KorailNoDirectTrainError` and nothing else.
+  - A transfer **response is not shaped differently**: the same flat
+    `trn_infos.trn_info` list, paired positionally, rows 0/1 then 2/3, trailing
+    odd row dropped (`a5/k.java:156-170`). `h_chg_trn_seq` is the server's copy
+    of that position and is used as a consistency check, not as the pairing key.
+    Paging gained the transfer half of the cursor —
+    `TrainSearchContinuation.query_train_no2`, defaulting to `""` so a direct
+    next page is unchanged.
+  - Passenger mix composes **per booking** (`w4/a.java:47-74` builds `OPsg` once);
+    cabin class and 좌석지정 compose **per leg** (`C5/a.java:59`/`:97` and
+    `:120-133`). **예약대기 (`1102`) does not compose and is refused**: the app
+    gates it twice, at `a5/k.java:120-127` (the standby check returns false for
+    a non-direct result) and at `DirectInquiryActivity.java:434` (its only
+    `setJobId("1102")`, on a screen `TransferInquiryActivity` overrides away).
+- Known gap: **`cancel_unpaid_hold` cannot release a transfer hold.** It requires
+  `h_jrny_cnt` to be numerically one. The app has no such restriction —
+  `DReservationConfirmActivity.java:269-278` forwards `getH_jrny_cnt()` verbatim
+  as `txtJrnyCnt` beside the same fixed `txtJrnySqno="0001"`/`hidRsvChgNo="000"`
+  — so the fix is to forward the hold's own count instead of pinning `"1"`. That
+  touches the cancel path, which was out of scope for the transfer change, so it
+  is reported rather than made. A live transfer hold sent before it lands must be
+  cancelled in the KORAIL app or on the website.
 - Added: a NetFunnel virtual-waiting-room client, `KorailNetFunnelClient`, so a
   gated operation can wait its turn instead of failing.
   **Off by default, and partly live-confirmed on 2026-07-26.** Probing on that

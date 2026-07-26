@@ -10,8 +10,8 @@ Last updated: 2026-07-15 KST
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 54 exact login/read routes and 62 public methods (56 login/read plus the consent-gated mutation methods `reserve`,
-  `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, and `refund`,
+- The current package boundary is 54 exact login/read routes and 65 public methods (58 login/read plus the consent-gated mutation methods `reserve`,
+  `reserve_transfer`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, and `refund`,
   which return a
   redacted preview by default and send a live state change only with a
   `dry_run=False` matching-category consent via the double-gated
@@ -96,7 +96,7 @@ Last updated: 2026-07-15 KST
   fields. The server session rule remains unverified, so a conservative
   client-side login gate remains until a bounded after-login validation.
 - The transport now allows 54 exact login/read routes and the client exposes
-  62 public methods. No new route was added to the six-path DynaPath allowlist.
+  65 public methods. No new route was added to the six-path DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -174,7 +174,7 @@ was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
 of 165; current inventory is 32 successful, 10 failed, and 123 unexecuted. The
-current package boundary is 54 exact routes and 62 public methods.
+current package boundary is 54 exact routes and 65 public methods.
 
 ## Ticket-reference static read tranche
 
@@ -246,6 +246,32 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
   it; the mix is capped at `KORAIL_MAX_PASSENGERS_PER_RESERVATION` (9). Only
   the one-adult general-seat form is live-verified; the multi-passenger and
   특실 wire shapes are static-evidenced and have never been transmitted
+- Consent-gated 환승 (transfer) search and reservation — `search_transfer_trains`,
+  `search_trains_with_transfer_fallback` and `reserve_transfer`. **Implemented
+  and NOT live-verified**: no transfer search and no transfer hold built by this
+  package has reached KORAIL. The transfer query is the direct query with
+  `radJobId="2"` and nothing else changed (`DirectInquiryActivity.java:284-296`);
+  the response is the same flat `trn_infos.trn_info` list paired positionally
+  into two-leg itineraries (`a5/k.java:156-170`). The reservation form is the
+  existing one with the sixteen-key journey block repeated, `txtJrnyCnt="2"`,
+  `txtJrnyTpCd` = `14` on **both** legs and `txtJrnySqno` = `001`/`002`
+  (`C5/a.java:52-119`, the journey-type and sequence ternaries re-read from
+  bytecode at `smali/C5/a.smali:306-338` and `:343` because they key on
+  different things). Two legs is the app's ceiling, not this package's:
+  `OSeat.java:32-35` and `OSrcar.java:21-30` both split on "journey 1 or not",
+  so a third leg would overwrite leg 2. The single-leg call is byte-for-byte
+  unchanged, key order included. Passenger mix composes per booking, cabin class
+  and 좌석지정 compose per leg, and 예약대기 (`1102`) is refused because the app
+  gates it twice (`a5/k.java:120-127`, `DirectInquiryActivity.java:434`)
+- Known gap, deliberately not closed here: `cancel_unpaid_hold` accepts a hold
+  whose `h_jrny_cnt` is numerically one, so it cannot release a two-journey
+  transfer hold. The app has no such restriction:
+  `DReservationConfirmActivity.java:269-278` forwards `getH_jrny_cnt()` verbatim
+  as `txtJrnyCnt` beside the same fixed
+  `txtJrnySqno="0001"`/`hidRsvChgNo="000"`, so the fix is to forward the hold's
+  own count. It touches the cancel path, which was out of scope for
+  the transfer change, and it blocks a clean live reserve → cancel round trip
+  for a transfer until it lands
 
 The read-only transport (`post_form`/`get_json`) refuses every mutation route
 and allows 54 exact read/login routes. The reservation, unpaid-cancel, payment,
@@ -301,7 +327,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `2089 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `2090 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -594,7 +620,7 @@ tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/superpowers/specs/`.
 
 The current implementation evidence establishes 54 routes at the exact
-login/read transport boundary and 62 public methods on `KorailClient`. The
+login/read transport boundary and 65 public methods on `KorailClient`. The
 read-only path exposes no callable mutation route; reservation, unpaid-cancel,
 fake-card payment, acknowledged real-card payment, and refund are callable only
 through the separate
@@ -621,7 +647,7 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-The current reviewed offline gate reports `2089 passed, 1 deselected`; the
+The current reviewed offline gate reports `2090 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service

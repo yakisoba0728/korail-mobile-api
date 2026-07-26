@@ -78,7 +78,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "| 실패 | 13 |" in status
     assert "| 미실행 | 120 |" in status
     assert "| 전체 | 165 |" in status
-    assert "Package coverage: 54 exact login/read routes and 62 public methods" in status
+    assert "Package coverage: 54 exact login/read routes and 65 public methods" in status
     assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
     assert "and 128 unexecuted" in status
     assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
@@ -199,7 +199,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
 
     progress = PROGRESS.read_text(encoding="utf-8")
     assert "54 exact login/read routes" in progress
-    assert "62 public methods" in progress
+    assert "65 public methods" in progress
     assert "- Live-successful inventory entries: 32" in progress
     assert "75" in progress
     assert "IRG000000" in progress
@@ -358,7 +358,7 @@ def test_readme_documents_bounded_live_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "54 routes and 62 public methods" in text
+    assert "54 routes and 65 public methods" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
     assert (
@@ -400,7 +400,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
     # The live gate figure is the count the offline suite actually reports
     # today; the 1246/1247 figures are kept only as labelled history.
     assert (
-        "current reviewed offline gate is `2089 passed, 1 deselected`" in readme
+        "current reviewed offline gate is `2090 passed, 1 deselected`" in readme
     )
     assert (
         "Earlier gates in this repository's history were `1246 passed, 1 "
@@ -408,7 +408,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "`1247 passed, 1 deselected` directly after it" in readme
     )
     assert (
-        "current full offline release gate reports `2089 passed, 1 deselected`"
+        "current full offline release gate reports `2090 passed, 1 deselected`"
         in progress
     )
     assert (
@@ -417,7 +417,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "deselected` directly after it" in progress
     )
     assert (
-        "current reviewed offline gate reports `2089 passed, 1 deselected`; the "
+        "current reviewed offline gate reports `2090 passed, 1 deselected`; the "
         "historical gates were `1246 passed, 1 deselected` and, after the P0 "
         "live-evidence documentation coverage, `1247 passed, 1 deselected`"
         in handoff
@@ -623,3 +623,58 @@ def test_progress_records_the_error_taxonomy():
     assert "pure refinement" in progress
     assert "never introduces a failure the server did not declare" in progress
     assert "third-party-attested only" in progress
+
+
+def test_docs_record_transfer_as_implemented_and_unverified():
+    """The 환승 documentation contract.
+
+    Three documents must agree on the same three things: that transfer is built
+    and unproven, what the wire shape is, and what the operator has to do. Each
+    claim below is one this package could get wrong silently, so each is pinned
+    rather than left to prose drift.
+    """
+    readme = README.read_text(encoding="utf-8")
+    progress = PROGRESS.read_text(encoding="utf-8")
+    changelog = CHANGELOG.read_text(encoding="utf-8")
+
+    for document in (readme, progress, changelog):
+        # Built, and not proven. Both halves, in every document.
+        assert "NOT live-verified" in document
+        assert "search_transfer_trains" in document
+        assert "reserve_transfer" in document
+        # The two codes a reader would otherwise guess wrongly.
+        assert "`14`" in document or '`"14"`' in document
+        assert "001" in document and "002" in document
+        # Two legs, and why it is the app's ceiling rather than ours.
+        assert "OSeat.java:32-35" in document
+        assert "OSrcar.java:21-30" in document
+        # The one field the transfer search moves.
+        assert "DirectInquiryActivity.java:284-296" in document
+        # 예약대기 does not compose, with both of the app's gates named.
+        assert "a5/k.java:120-127" in document
+        assert "DirectInquiryActivity.java:434" in document
+        # The cancel gap, in every document, because it blocks the round trip.
+        assert "DReservationConfirmActivity.java:269-278" in document
+
+    # jadx mangles the two ternaries, so the bytecode citation must survive.
+    for document in (readme, changelog):
+        assert "smali/C5/a.smali:306-338" in document
+        assert "smali/K4/e.smali:68" in document
+
+    # The response shape, stated as the app's own pairing rather than invented.
+    assert "a5/k.java:156-170" in readme
+    assert "paired\n**positionally**" in readme or "paired positionally" in readme
+    assert "h_chg_trn_seq" in readme
+
+    # What the operator needs, including where the candidate pairs come from and
+    # that they are inferred rather than verified here.
+    assert "arrays.xml:200-208" in readme
+    assert "ktx_map" in readme
+    assert "강릉 → 여수엑스포" in readme
+    assert "not** verified against a timetable" in readme
+    assert "get_transfer_stations" in readme
+    assert "WRD000061" in readme
+    # And the warning that a live hold cannot be released by this client yet.
+    assert "cancelled in the KORAIL app" in readme or (
+        "cancel it in the KORAIL app" in readme
+    )

@@ -7,13 +7,13 @@ requests. It also retains the static reverse-engineering report for `korail.apk`
 Android package `com.korail.talk` version `6.5.0`, as the package's historical
 evidence map.
 
-The reviewed package boundary contains 54 routes and 62 public methods. All 54
+The reviewed package boundary contains 54 routes and 65 public methods. All 54
 routes are login/read routes: 52 reads plus the login POST and the server-side
 logout GET. The five mutation routes are tracked separately and
-are never added to the read-only allowlist. Fifty-six of the methods are the
+are never added to the read-only allowlist. Fifty-eight of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
-six, `reserve`, `confirm_standby_hold`, `cancel_unpaid_hold`,
-`pay_with_fake_card`, `pay_with_card`, and `refund`, are
+seven, `reserve`, `reserve_transfer`, `confirm_standby_hold`,
+`cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, and `refund`, are
 the consent-gated mutation methods. Each is denied unless the caller supplies a
 `MutationConsent` that opts into its category; with the default `dry_run=True`
 each merely validates its inputs and returns a redacted `MutationPreview` of the
@@ -40,10 +40,13 @@ states neither claim or both, so an ambiguous consent is never sent.
 card was declined, no charge). `pay_with_card` and `refund` have no live-verified
 success envelope in this repository: they share the reserve/cancel/pay wire
 shapes and the same gated send path, but no run recorded here has settled or
-returned money. The
+returned money. 환승 (transfer) search and reservation are **implemented and NOT
+live-verified** -- see [환승 (transfer) itineraries](#환승-transfer-itineraries)
+for the whole shape, what the operator must do to prove it, and the one thing
+that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `2089 passed, 1 deselected`; the one
+current reviewed offline gate is `2090 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -671,6 +674,195 @@ double-gated mutation transport as everything else, on the **`reserve` consent
 category** -- it completes the booking an `allow_reserve` consent authorised,
 moves no money and releases no seat, so it is deliberately not a new category.
 
+### 환승 (transfer) itineraries
+
+**Implemented and NOT live-verified.** No transfer search and no transfer hold
+built by this package has ever been sent to KORAIL. Everything below is read out
+of the decompiled app; the section ends with exactly what the operator has to do
+to prove it, and with the one thing that currently blocks a clean reserve →
+cancel round trip.
+
+KORAIL books a 환승 as **one PNR carrying two journeys**, not as two bookings.
+The app does not have a second request builder for it: `C5/a.java:52-119` (`N0`)
+is a single loop over the train array it was handed, and the array's **length**
+is what decides the whole field set.
+
+| what | 직통 (one leg) | 환승 (two legs) | evidence |
+| --- | --- | --- | --- |
+| `radJobId` (search) | `1` | `2` | `K4/d.java:5-6`, `DirectInquiryActivity.java:284-296` |
+| `txtJrnyCnt` | `1` | `2` | `C5/a.java:55` — from `trainInfoArr.length`, not a flag |
+| `txtJrnyTpCd{i}` | `11` on leg 1 | `14` on **both** legs | `K4/e.java:6-7`; `C5/a.java:60` keys on the LENGTH |
+| `txtJrnySqno{i}` | `001` | `001`, `002` | `C5/a.java:61` keys on the INDEX, via `DecimalFormat("000")` |
+| journey block | 16 keys, suffix `1` | the same 16 keys twice, suffixes `1` and `2` | `OJrny.java:6-27`, `C5/a.java:62-76` |
+| cabin | `txtPsrmClCd1` | `txtPsrmClCd1`, `txtPsrmClCd2` | `OSeat.java:16-18`, `C5/a.java:97` |
+| seat attribute | `txtSeatAttCd4` | `txtSeatAttCd4`, `txtSeatAttCd4_1` | `OSeat.java:32-35` |
+| designated seats | `txtSrcarCnt`, `txtSrcarNo{n}`, `txtSeatNo{n}` | plus `txtSrcarCnt1`, `txtSrcarNo1_{n}`, `txtSeatNo1_{n}` | `OSrcar.java:14-30` |
+
+Two codes are worth stating out loud because guessing them wrongly is easy.
+`txtJrnyTpCd` for a transfer is **`14`**, not `12` and not `2` — jadx renders it
+as an unrelated same-valued constant, so it was read from bytecode at
+`analysis/apktool/smali/K4/e.smali:68`. And it is `14` on **both** legs: the
+ternary at `C5/a.java:60` sits inside the per-leg loop but tests the array
+length, which `analysis/apktool/smali/C5/a.smali:306-338` confirms by
+re-evaluating `array-length` on every iteration. Leg 1 is not left as a direct
+leg. The neighbouring `txtJrnySqno` line two lines below *does* key on the loop
+index (`smali/C5/a.smali:343`, `if-nez v1`), which is why both were re-read
+rather than assumed to match.
+
+**Two legs is a ceiling, not a limit this package chose.** The form has no
+journey-3 spelling at all: `OSeat.java:32-35` and `OSrcar.java:21-30` each split
+on "journey 1 or not", so a third leg would *overwrite* leg 2 rather than be
+added, and `ReservationRequest.java:114-117` reads back exactly the two seat
+slots. The search side agrees — `a5/k.java:108-110` builds `{list[i*2],
+list[i*2+1]}`, `:156-170` chunks into `new Bundle[2]`, `a5/u.java:252-253`
+carries two slots with the second nullable. `KORAIL_MAX_JOURNEY_LEGS` is `2` and
+`reserve_transfer` refuses anything else before building a form.
+
+#### Searching
+
+The transfer query moves exactly one field. `search_transfer_trains` sends the
+same `seatMovie.ScheduleView` form with `radJobId="2"`, because that is
+literally all the app changes: its `WRD000061` dialog handler calls
+`setRadJobId(TRANSFER_SQ_NO.getCode())` on the `RsvInquiryRequest` it already
+built and hands the object straight on
+(`DirectInquiryActivity.java:284-296`, confirmed at
+`smali/…/DirectInquiryActivity.smali:1677-1689`). The
+`chtnCnt`/`chtnRsStnCd1`/`trnGpCnt`/`trnGpCd1` tail is *not* part of it —
+`b5/c.java:154-160` sets those only behind a pinned-환승역 intent extra this
+client does not drive.
+
+`search_trains_with_transfer_fallback` is the app's own flow rather than a
+convenience: a direct search that finds nothing answers `WRD000061`, and
+`DirectInquiryActivity.java:615-624` catches that code **and no other** before
+offering the transfer. This client already classifies `WRD000061` as
+`KorailNoDirectTrainError`, so that exception is the only one the fallback
+swallows.
+
+```python
+from korail_mobile_api import TrainSearchQuery, TransferSearchResult
+
+result = client.search_trains_with_transfer_fallback(
+    TrainSearchQuery("서울", "여수엑스포", "20260810")
+)
+
+if isinstance(result, TransferSearchResult):
+    itinerary = result.itineraries[0]
+    itinerary.first.train_no, itinerary.second.train_no
+    itinerary.transfer_station_name        # None when the legs disagree
+    legs = itinerary.legs                  # ready for reserve_transfer
+```
+
+**A transfer response is not shaped differently.** It is the same flat
+`trn_infos.trn_info` list a direct search returns, and the legs are paired
+**positionally**: rows 0/1 are one itinerary, rows 2/3 the next, and a trailing
+unpaired row is dropped (`a5/k.java:156-170`, and `:108-110` reading a selection
+back out as `{list[i*2], list[i*2+1]}`). `h_chg_trn_seq` is the server's own copy
+of that position, `"1"` then `"2"`, corroborated by two independent readers:
+`u4/a.java:111-131` de-duplicates a page by dropping a matching `"2"` row
+*together with its predecessor*, and `RsvInquiryRequest.java:164-172` seeds the
+next page's `txtGoHour` from the last row only when that row is a `"1"`.
+`pair_transfer_itineraries` pairs positionally as the app does and treats the
+marker as a consistency check — a misaligned list raises rather than producing
+two rows that are not one itinerary — while an absent marker is accepted,
+because the app defaults it from position too
+(`DirectInquiryActivity.java:194-195`).
+
+`transfer_station_name` returning `None` is a real answer, not a parse failure:
+`a5/u.java:947-956` prints leg 1's arrival and leg 2's departure as two separate
+labels and only collapses them when they are equal, so KORAIL does offer
+itineraries that arrive at one station and leave from another.
+
+Transfer paging uses the other half of the cursor. `b5/c.java:370-371` stashes
+`h_prcd_trn_no_next` and `h_ectb_trn_no_next` and `:192-194` replays them
+through `setSelectTransferPages`, which overwrites `qryStTrnNo` and sets
+`qryStTrnNo2` — but only when **both** came back non-empty.
+`TransferSearchResult.next_page()` applies that rule;
+`TrainSearchContinuation.query_train_no2` defaults to `""`, so a direct next
+page puts the same empty string on the wire it always did.
+
+#### Booking
+
+```python
+from korail_mobile_api import KorailPassengerCounts, KorailSeatClass, MutationConsent
+
+preview = client.reserve_transfer(
+    itinerary.legs,
+    consent=MutationConsent(allow_reserve=True),     # dry_run=True by default
+    passengers=KorailPassengerCounts(adult=2),
+    seat_classes=(KorailSeatClass.GENERAL, KorailSeatClass.SPECIAL),
+)
+preview.payload["txtJrnyCnt"]      # "2"
+preview.payload["txtJrnySqno2"]    # "002"
+```
+
+Same route, same consent category, same double-gated send path as `reserve`; the
+app uses one endpoint for both. What composes and what does not:
+
+| feature | composes? | why |
+| --- | --- | --- |
+| passenger mix (`KorailPassengerCounts`) | yes, **per booking** | `OPsg` is built once on the booking-options screen (`w4/a.java:47-74`), before any itinerary exists, and `N0` never touches it |
+| cabin class (`KorailSeatClass`) | yes, **per leg** | `C5/a.java:59` reads it with the leg index and `:97` writes `txtPsrmClCd{i}`, so 일반실 + 특실 across legs is a shape the app produces. Pass one value or one per leg |
+| 좌석지정 (`SEAT_DESIGNATED`, `1103`) | yes, **per leg** | `C5/a.java:120-133` opens the seat picker once per journey index and passes it as `TRAIN_INDEX`; `SeatSearchActivity.java:675-682` writes `setSrcarCnt(TRAIN_INDEX + 1, …)`. Pass `seats` as one list per leg, one seat per passenger in each |
+| 예약대기 (`STANDBY`, `1102`) | **no — refused** | `a5/k.java:120-127`'s `G0()` opens with "if not direct, return false", so `a5/u.java:369-371`/`:401-404` never enables the 예약대기 button on a transfer result; and the app's only `setJobId("1102")` is `DirectInquiryActivity.java:434`, in an `onClick` branch `TransferInquiryActivity` overrides away. Two independent gates |
+| 입석+좌석 병합 (`1202`) | not implemented at all | also `DirectInquiryActivity`-only (`:449-450`), and it uses `K4/e`'s other pair, `STANDING_SEAT_1`/`_2` (`21`/`22`) |
+
+`txtStndFlg` is always `"N"` on a transfer, and that is a consequence rather than
+a choice. `C5/a.java:78-82` makes the flag a property of the whole itinerary —
+leg 1 assigns it and later legs overwrite it only while it still reads `"N"` —
+but `S4/J.java:83-85`'s `isStndSeat` needs a 매진 leg, and a 매진 leg is not
+bookable: `a5/u.java:346-355` walks **every** leg of the selected itinerary and
+disables 예약 outright when any reads 매진 or 좌석부족. The one job that
+tolerates 매진 is 예약대기, which does not exist here.
+
+The existing single-leg call is untouched. `reserve` and
+`build_reservation_form` emit byte-for-byte what they emitted before, key order
+included, and a contract test pins all 56 keys in order.
+
+#### What the operator must do to live-verify
+
+Nothing below has been run.
+
+1. **Find a station pair with no direct service.** This is the whole difficulty:
+   the app only offers 환승 after a direct search fails with `WRD000061`. The
+   APK names the seven KTX corridors it draws maps for —
+   `analysis/apktool/res/values/arrays.xml:200-208`, `ktx_map`: 경부선, 호남선,
+   경전선, 전라선, 강릉선, 중앙선, 중부내륙. A pair whose two endpoints sit on
+   **different** corridors that do not share a trunk is the shape that forces a
+   change of train. Likely candidates, in decreasing confidence: 강릉선 ↔ 전라선
+   (e.g. 강릉 → 여수엑스포), 강릉선 ↔ 경전선 (강릉 → 진주), 중앙선 ↔ 호남선
+   (안동 → 목포), 동해선 ↔ 호남선 (포항 → 목포). These are inferred from the
+   corridor list, **not** verified against a timetable in this repository, which
+   holds no real station or route catalogue — every station fixture here is
+   synthetic.
+2. **Confirm the pair cheaply first.** `get_transfer_stations(dpt, arv)`
+   (`qry.chtnStn.do`) is the app's own oracle and is a plain read: a pair with a
+   populated 환승역 list is a pair KORAIL expects to be transferred at. Then run
+   `search_trains_with_transfer_fallback`; getting a `TransferSearchResult` back
+   is the definitive test, because it means the direct query really did answer
+   `WRD000061`.
+3. **Record the search shape.** With a real transfer response in hand, check the
+   claims this package could only infer: that `trn_infos.trn_info` is flat and
+   even-length, that `h_chg_trn_seq` alternates `"1"`/`"2"`, and that
+   `h_prcd_trn_no_next`/`h_ectb_trn_no_next` are populated (they are the
+   transfer paging cursor and no direct response has ever carried them here).
+4. **Dry-run the hold first.** `reserve_transfer(..., consent=MutationConsent(
+   allow_reserve=True))` returns a `MutationPreview` and sends nothing. Compare
+   its payload against the table above before transmitting anything.
+5. **Then the hold.** `dry_run=False`, one adult, 일반실, `IMMEDIATE`. Expect
+   `h_jrny_cnt` to come back as two journeys.
+
+> **Blocking, and deliberately not fixed here: `cancel_unpaid_hold` cannot
+> release a transfer hold.** It requires a hold whose `h_jrny_cnt` is
+> numerically one, so a two-journey hold is refused before a form is built. The
+> app has no such restriction — `DReservationConfirmActivity.java:269-278`
+> passes `reservationResponse.getH_jrny_cnt()` straight through as `txtJrnyCnt`
+> alongside the same fixed `txtJrnySqno="0001"` and `hidRsvChgNo="000"` — so the
+> fix is to forward the hold's own journey count instead of pinning `"1"`. That
+> touches the cancel path, which was explicitly out of scope for this change, so
+> it was reported rather than made. **Until it lands, do not send a live
+> transfer hold unless you are prepared to cancel it in the KORAIL app or on the
+> website**, or it will sit unpaid until KORAIL expires it.
+
 ### Fixed and account-shaped reads
 
 Four static-evidenced, authenticated reads are available as one-request,
@@ -787,7 +979,7 @@ nested response models. The implementation used no live request, credential
 access, secure raw capture, retry, fallback, or adjacent mutation. At
 implementation completion, the pre-R149 inventory was 31 successful, 10
 failed, and 124 unexecuted out of 165. The boundary is 54 exact login/read
-routes and 62 public methods; the DynaPath allowlist remains six paths.
+routes and 65 public methods; the DynaPath allowlist remains six paths.
 
 The ticket-reference implementation itself used no live I/O and added no
 mutation capability.
