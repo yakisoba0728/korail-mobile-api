@@ -853,6 +853,17 @@ Nothing below has been run.
 > transfer hold unless you are prepared to cancel it in the KORAIL app or on the
 > website**, or it will sit unpaid until KORAIL expires it.
 
+**RESOLVED — this blocker no longer exists.** The record above is kept as
+written because it says what was true when the transfer work landed, but the
+fix it asks for was made: `build_unpaid_reservation_cancel_form` now echoes the
+hold's own `h_jrny_cnt` into `txtJrnyCnt` instead of pinning `"1"`, so
+`cancel_unpaid_hold` releases a two-journey 환승 hold and a multi-journey 병합
+hold as readily as a single-journey one. Do not read the paragraph above as
+current advice: the 2026-07-27 audit found it, and three docstrings that
+repeated it, still telling operators a live transfer hold could not be
+released — which pushes exactly toward the orphaned hold the code was changed
+to prevent.
+
 ### 병합예약 (입석+좌석) — one train, split at a mid station
 
 **The first hold is live-verified; the second has never been transmitted.**

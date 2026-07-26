@@ -1,5 +1,8 @@
+import inspect
 import re
 from pathlib import Path
+
+from korail_mobile_api import KorailClient
 
 
 README = Path(__file__).parents[1] / "README.md"
@@ -216,10 +219,38 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
 
     progress = PROGRESS.read_text(encoding="utf-8")
     assert "58 exact login/read routes" in progress
-    assert "72 public methods" in progress
     assert "- Live-successful inventory entries: 32" in progress
-    assert "75" in progress
     assert "IRG000000" in progress
+
+    # The public-method count is measured, not quoted. Pinning the sentence
+    # "72 public methods" looked like a guard and was not one: the count had
+    # moved to 74 while the assertion still passed, because an older sentence
+    # elsewhere in the same file satisfied the substring. A stale number in
+    # prose is now a failure with the real figure in the message.
+    actual_public_methods = len(
+        [
+            name
+            for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
+            if not name.startswith("_")
+        ]
+    )
+    assert actual_public_methods == 74, (
+        f"KorailClient now exposes {actual_public_methods} public methods; "
+        "update this number and every doc that states it "
+        "(README.md, api-status-by-service.md, verification-record.md, "
+        "IMPLEMENTATION_PROGRESS.md)."
+    )
+    assert f"{actual_public_methods} public methods" in progress
+    # ...and no sentence may claim the old figure as the CURRENT one. The
+    # number survives in a milestone bullet, which is legitimate history, so
+    # the check is on tense rather than on the digits: "exposed 72" records the
+    # past, "exposes 72" asserts a present that is no longer true.
+    stale_present_tense = [
+        line
+        for line in progress.splitlines()
+        if re.search(r"(exposes|allows|boundary is)[^.]*\b72 public methods", line)
+    ]
+    assert not stale_present_tense, stale_present_tense
 
 
 def test_ticket_reference_docs_keep_static_only_rows_and_scope_consistent():
