@@ -14,6 +14,7 @@ transport used, and the two tests that exercise the polling loop inject a fake
 sleeper and clock so a bounded wait costs no wall-clock time.
 """
 
+import pathlib
 import re
 
 import httpx
@@ -752,6 +753,55 @@ def test_gated_operations_map_to_the_action_ids_the_apk_pairs_them_with():
         action.value for action in KORAIL_NETFUNNEL_GATED_OPERATIONS.values()
     }
     assert unmapped == {"act_4", "act_22", "act_8_2"}
+
+
+# ---------------------------------------------------------------------------
+# The documentation contract.
+#
+# The single most important thing these docs have to keep saying is that this
+# subsystem is BUILT and UNPROVEN. A queue client that is quietly described as
+# working, when the server has never queued us and the response shape has never
+# been seen, would be the most misleading sentence in the repository.
+# ---------------------------------------------------------------------------
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def test_docs_say_netfunnel_is_implemented_but_not_live_exercised():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
+        encoding="utf-8"
+    )
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "### NetFunnel virtual waiting room" in readme
+    assert "## NetFunnel virtual waiting room" in progress
+    for document in (readme, progress, changelog):
+        assert "NOT live-exercised" in document
+    assert "off by default" in readme.casefold()
+    # The peak-season action is the reason the subsystem exists; each document
+    # has to name it.
+    for document in (readme, progress, changelog):
+        assert "act_8_2" in document
+
+
+def test_docs_record_the_unverified_response_shape():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
+        encoding="utf-8"
+    )
+    for document in (readme, progress):
+        assert "<code>:<params>" in document
+        assert "NetFunnel.gRtype" in document
+
+
+def test_release_gap_plan_no_longer_claims_korail_has_no_netfunnel():
+    plan = (ROOT / "docs/RELEASE_GAP_PLAN.md").read_text(encoding="utf-8")
+    # The withdrawn claim, which survived in the srtgo-corrections appendix long
+    # after the body of the document had corrected it.
+    assert "Korail\n  uses **no** NetFunnel at all" not in plan
+    assert "uses **no** NetFunnel at all — only SRT does." not in plan
+    assert "WITHDRAWN and IMPLEMENTED" in plan
 
 
 def test_the_opcode_table_is_the_apks_own():

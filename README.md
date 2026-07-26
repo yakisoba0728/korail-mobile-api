@@ -43,7 +43,7 @@ shapes and the same gated send path, but no run recorded here has settled or
 returned money. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `1981 passed, 1 deselected`; the one
+current reviewed offline gate is `1984 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -239,6 +239,99 @@ in the APK, so there is nothing to key on — classifying it would mean matching
 Korean text, the practice this taxonomy replaces. Its trigger is unconfirmed;
 rate limiting, a DynaPath problem and a session problem are all consistent with
 what was seen. It surfaces as a plain `KorailAppError` with its message intact.
+
+### NetFunnel virtual waiting room
+
+**Implemented, off by default, and NOT live-exercised.** The queue has never
+engaged for this repository: every live call it has made to
+`smart.letskorail.com` — the whole read surface, plus reserve, cancel, pay and
+refund — succeeded without a queue token, so the server does not currently meter
+us. The 201 polling path, the slot-release path and the response shape are
+therefore covered by offline fixtures only, exactly as the sibling SRT client's
+polling path is. Treat this subsystem as built-and-unproven, not as verified.
+
+It exists for the load at which that stops being true. Enforcement is a
+server-side policy and the app ships the client for it, including a **dedicated
+peak-season inquiry action, `act_8_2`**, which is a separate queue from the
+ordinary `act_8`. Peak season is precisely when a virtual waiting room gets
+switched on, and a client with no way to wait its turn simply fails there.
+
+`KorailNetFunnelClient` is a standalone client on its own host. It is not
+reachable from `KorailClient`, and the two cannot touch each other's origin:
+`assert_korail_origin` pins the API to `smart.letskorail.com` and
+`assert_korail_netfunnel_origin` pins the queue to `nf.letskorail.com`.
+`KORAIL_READ_ONLY_ROUTES` stays at 54 app routes with `/ts.wseq` outside it, so
+`post_form` and `get_json` can never target the queue.
+
+```python
+from korail_mobile_api import (
+    KorailClient, KorailConfig, KorailNetFunnelClient, inquiry_action,
+)
+
+config = KorailConfig(netfunnel_enabled=True)   # explicit opt-in; default False
+queue = KorailNetFunnelClient(config)
+client = KorailClient(config)
+
+calendar = client.get_train_calendar()          # the app's own peak-season source
+action = inquiry_action(peak_season=is_peak(calendar, query.departure_date))
+with queue.slot(action):
+    result = client.search_trains(query)
+```
+
+`netfunnel_enabled` defaults to `False` and is enforced at construction:
+`KorailNetFunnelClient` on a config without it raises `KorailNetFunnelError`
+before any socket exists. Enabling it costs a round trip and a failure mode on
+every gated operation and buys nothing until the server actually meters us.
+
+**The key is never attached to a KORAIL request.** No Retrofit interface in the
+app declares a `netfunnelKey`-shaped field on any route — reserve, pay, cancel
+and refund all send exactly what they sent before. The queue is a side channel
+that *gates* the call, not a parameter of it, which is why this is a separate
+client rather than a header or a form field. The app works the same way: it
+runs `T6.g.BEGIN(...)`, and only when the queue answers does it issue the
+Retrofit call, releasing the slot afterwards from `BaseDaoHelper`'s
+`onPostExecute` — on the success and the failure path alike.
+
+**KORAIL does not speak the JavaScript dialect.** `nf.letskorail.com` serves
+both apps, but they embed different client SDKs for the one product. SRT is a
+WebView over `netfunnel.js` and sends `nfid`, `prefix`, `js=yes` and a trailing
+epoch; `korail.apk` embeds STCLab's native Android SDK (`T6`/`U6`) and sends
+none of them. The three requests this library issues are exactly:
+
+| opcode | request | query, in order |
+| --- | --- | --- |
+| `5101` | `getTidChkEnter` — join the line | `opcode`, `sid`, `aid` |
+| `5002` | `chkEnter` — am I admitted yet? | `opcode`, `key` |
+| `5004` | `setComplete` — release my slot | `opcode`, `key` |
+
+Note that `sid`/`aid` ride on `5101` **only**, which is the opposite of the
+JavaScript dialect. `ttl` is never sent back: the native SDK reads it solely to
+decide how long to sleep and clamps it to 30 seconds, not the JS bundle's 5. The
+reply is `<code>:<params>`, not `<rtype>:<code>:<params>`. That last point is
+the one assumption no live run has checked, and it is the **first thing to
+verify**: `parse_netfunnel_body` rejects a `NetFunnel.gRtype=…` body and says so
+by name rather than guessing.
+
+Each opcode is registered as an exact ordered query contract rather than the
+allowlist being loosened, and `aid` is constrained to the eight action ids
+`K4/g.java` declares. Status handling follows the app: `200` pass, `300` bypass
+(no key issued), `201`/`202` wait, `301`/`302` `KorailQueueRejectedError`,
+everything else `KorailNetFunnelError`. `502` is accepted for `setComplete`
+only, and that acceptance is an inference this repository states rather than
+hides — the app's `Complete()` never reads its reply at all.
+
+The wait is bounded twice, by poll count (20) and by wall clock (60s), whichever
+comes first. The app polls indefinitely behind a dialog a human can close; this
+library has no such escape hatch, and a queue is a wait rather than a retry — it
+still never retries on its own initiative. The slot is released on both paths,
+and a failed release **raises** on the success path rather than being swallowed,
+because a silently leaked slot is the failure mode this was written against.
+
+Two things the app does that this client deliberately does not: it follows the
+`ip`/`port` a queue reply names, sending follow-up opcodes to a server-chosen
+host, and it runs `aliveNotice` (`5003`) to keep a waiting-room popup alive. We
+pin the origin and render no popup. `5003`, `5105` and `5106` are declared as
+constants and rejected by the request guard.
 
 ### Account-neutral cache reads
 
@@ -569,9 +662,11 @@ Three additional static-contract reads complete the current seven-read tranche:
   allowlisted path.
 
 R39 product-train inquiry has strict synthetic models, an internal exact
-request builder, and a full response parser, but no client method or safety
-route because the normal NetFunnel `service_1` / `act_6` gate is not yet
-implemented. R54 remains parser/model-only until train-group provenance is
+request builder, and a full response parser, but still no client method or
+safety route. Its `service_1` / `act_6` NetFunnel gate is no longer the reason:
+that gate is implemented now (`KorailNetFunnelAction.PRODUCT`, see the NetFunnel
+section above). What remains missing is the route registration and the client
+method itself. R54 remains parser/model-only until train-group provenance is
 closed. `DYNAPATH_ALLOWLIST_PATHS` is unchanged. Historically, this
 implementation tranche itself used no live request, credential, `.env`, secure
 raw, or production response, and added no reservation, seat-hold, payment,

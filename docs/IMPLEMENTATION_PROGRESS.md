@@ -162,8 +162,10 @@ local session and uses only the existing conditional DynaPath behavior; the
 DynaPath allowlist is unchanged.
 
 R39 has full synthetic response parsing and an internal exact request builder,
-but its missing normal NetFunnel `service_1` / `act_6` gate keeps it outside
-both `KorailClient` and the read-only safety registry. R54 remains held for its
+but remains outside both `KorailClient` and the read-only safety registry. Its
+NetFunnel `service_1` / `act_6` gate was the reason recorded here and is no
+longer missing — see the NetFunnel section below — so what holds R39 back now is
+its unregistered route, not the queue. R54 remains held for its
 unresolved discriminator provenance. Across the complete seven-read tranche,
 the boundary at that historical step was 45 routes and 48 public methods.
 Historically, that
@@ -299,7 +301,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `1981 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `1984 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -405,6 +407,83 @@ no payment request and printed or persisted no raw response or identifier.
 The local credential file remains ignored and is not tracked. No credential,
 cookie, session token, or generated DynaPath token is stored in the repository.
 
+## NetFunnel virtual waiting room
+
+Status: **implemented, off by default, and NOT live-exercised.** This subsystem
+is built and offline-tested; it has never been run against
+`nf.letskorail.com`. The queue has never engaged for this repository — every
+live call it has made to `smart.letskorail.com`, reads and mutations alike,
+succeeded without a token — so the server does not currently meter us, and the
+`201` polling path, the slot-release path and the response shape are covered by
+fixtures only. That is the same standing as the sibling SRT client's polling
+path, and it should be read as built-and-unproven rather than verified.
+
+What the APK establishes, with the file and line for each constant:
+
+| Fact | Evidence |
+| --- | --- |
+| Host `nf.letskorail.com`, https, port 443, timeout 3s | `com/korail/talk/application/KTApplication.java:79-85` |
+| Path `/ts.wseq` | `T6/h.java:31` (held in the field whose getter is named `getQuery`), used as the path by `U6/c.java:26-33` |
+| Service id `service_1` | `K4/g.java` `NETFUNNEL_SERVER_ID` |
+| Action ids `act_8` / `act_8_2` / `act_14` / `act_18` / `act_22` / `act_6` / `act_21` / `act_4` | `K4/g.java:43-51` |
+| Opcodes 5002 / 5003 / 5004 / 5101 / 5105 / 5106 | `T6/c.java:6-11` — identical to SRT's |
+| Status codes 200/201/202/300/301/302/303/502 | `T6/a.java`, and `analysis/apktool/smali/T6/a.smali` where jadx substituted unrelated named constants: `0xc8`–`0xca` at :510-574, `0x12c`–`0x12f` at :228-281, `0x1f6` at :319 |
+| Request parameters and their order | `T6/d.java:99-101` (5101), `:54-55` (5002), `:78-79` (5004), rendered in `addParam` order by `U6/a.java:180-185` |
+| ttl clamp 1..30 | `T6/i.java:175-181` with `max_ttl` 30 from `T6/h.java:40`, asked for at `T6/g.java:462` |
+| Release runs on both paths | `NetfunnelDao.java:41` called from `BaseDaoHelper.java:105-107` (`onPostExecute`) |
+
+Two premises did not survive the APK and were stopped rather than forced.
+
+1. **The wire dialect.** `nf.letskorail.com` serves both KORAIL and SRT, but the
+   two apps embed different client SDKs for the one STCLab product. SRT is a
+   WebView over `netfunnel.js` and sends `nfid`, `prefix`, `js=yes` and a
+   trailing epoch millisecond; `korail.apk` embeds the native Android SDK (the
+   `T6`/`U6` packages) and sends none of them. Consequently `sid`/`aid` ride on
+   `5101` only — not on `5002`, which is where the JavaScript dialect puts them
+   — and `ttl` is never returned to the server at all, being read purely to
+   decide how long to sleep. The `js=yes` distinction that cost the SRT work real
+   debugging simply has no application here.
+2. **The response shape.** `T6/i.java:36-43` reads everything before the first
+   `:` as the status code, so the reply must be `<code>:<params>`. The JS
+   dialect's `<rtype>:<code>:<params>` would parse as code `5002` and yield no
+   key, i.e. the app itself could not read it. This is the one inference in the
+   subsystem with no live confirmation, and it is the **first thing an operator
+   should check**: `parse_netfunnel_body` rejects a `NetFunnel.gRtype=…` body
+   and names that possibility in its error rather than guessing.
+
+The third premise held and is worth restating because it determines the design:
+**no Retrofit interface in the app carries a NetFunnel key parameter.** The
+queue gates the call rather than parameterising it, so `KorailNetFunnelClient`
+is a standalone client on its own host and every mutation and read still sends
+exactly the body it sent before.
+
+Deliberate divergences from the app, both narrowing:
+
+- The app sends `chkEnter`/`setComplete` to whatever `ip`/`port` a previous
+  reply named, because `host_notmodify` is false by default (`T6/h.java:43`) and
+  `KTApplication` never sets it. We pin the origin instead; a response must not
+  choose where the next request goes.
+- The app polls indefinitely (`T6/g.java:449`) behind a dialog a human can
+  close. We bound the wait at 20 polls and 60 seconds, whichever comes first, and
+  add no retry logic anywhere.
+- `aliveNotice` (5003), `init` (5105) and `stop` (5106) are declared as constants
+  and rejected by the request guard. The first keeps a popup alive that this
+  library never renders; the other two are administrative and the app's own SDK
+  refuses them without touching the network (`T6/d.java:115-121`).
+
+`act_8_2` is the reason the subsystem exists at all. `b5/c.java:439`,
+`MainBookingActivity.java:749` and `OldMainBookingActivity.java:321` choose it
+over `act_8` when the departure date is a peak-season date, and a separate
+action is a separate queue on the server. `S4/C0805e.java:116-121` answers
+`isPeakSeason` from the 열차운행달력 the app has already downloaded — the same
+response `get_train_calendar()` reads — so the choice is a lookup, not a
+calendar rule this package reimplements. `inquiry_action(peak_season=...)` takes
+the flag for that reason.
+
+`KORAIL_READ_ONLY_ROUTES` remains 54 app routes with `/ts.wseq` outside it, so
+the read path cannot reach the queue and the queue client cannot reach
+`smart.letskorail.com`.
+
 ## Analysis Inventory Versus Implementation
 
 - APK inventory: 165 Retrofit method entries, 159 distinct HTTP/path pairs
@@ -450,7 +529,7 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-The current reviewed offline gate reports `1981 passed, 1 deselected`; the
+The current reviewed offline gate reports `1984 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service

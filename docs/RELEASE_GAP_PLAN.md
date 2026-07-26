@@ -826,10 +826,15 @@ existing architecture over rewrites.
 - [ ] Enforce `EXCLUDED_API_DOMAINS` (§4.2, bug §5.7); add `MutationPolicy`,
       `ConfirmToken`, `dry_run` (§4.3).
 - [ ] Extend redaction to card/PII fields (§4.6, bug §5.6).
-- [ ] ~~Build minimal `NetFunnelClient`~~ **DEPRIORITIZED (2026-07-21 rev):** the
-      reference shows Korail reserve/pay/refund/cancel work with **no** NetFunnel;
-      drop from the P1 critical path. Only revisit if a live call returns a
-      queue-required error, or if G1 tour-search (`act_6`) is later scoped.
+- [x] ~~Build minimal `NetFunnelClient`~~ **DONE (2026-07-26), off by default and
+      NOT live-exercised.** Deprioritised on 2026-07-21 because reserve/pay/
+      refund/cancel demonstrably work without it, and built anyway because that
+      is a statement about today's server policy rather than about the app,
+      which ships a queue client and a dedicated peak-season action. Shipped as
+      `KorailNetFunnelClient` in the app's **native** dialect — this document's
+      SRT-shaped opcode references describe the JavaScript client, which KORAIL
+      does not use. `KorailConfig.netfunnel_enabled` is `False` by default, so
+      the "still read-only at runtime, defaults off" line below is unaffected.
 - [ ] All still read-only at runtime (defaults off); offline tests prove a
       mutation route is rejected without full opt-in.
 
@@ -883,12 +888,29 @@ code cited from `srtgo_plus/srtgo/ktx.py` and `srtgo/srtgo/ktx.py`. These overri
 app-only inferences where they conflict; each item is confirm-on-live-pass unless
 marked confirmed.
 
-- **NetFunnel is NOT needed for Korail** (§3 cross-cutting, §3.C header). Korail
-  uses **no** NetFunnel at all — only SRT does. srtgo instantiates
-  `NetFunnelHelper` (`ktx.py:640`) but never calls `.run()` and sends no
-  `netfunnelKey` in the reserve (`:864-904`) or pay (`:1030-1051`) body; no
-  `act_18` payment gate / `act_14` reserve gate exists (`:601-608`). Downgraded
-  from "single biggest new subsystem" to **not required** for reserve/pay/refund.
+- ~~**NetFunnel is NOT needed for Korail**~~ **WITHDRAWN and IMPLEMENTED
+  (2026-07-26).** This bullet said "Korail uses **no** NetFunnel at all — only
+  SRT does", which was already contradicted by the revision at §168-231 of this
+  document and is now contradicted by the code. What srtgo shows is only that
+  *srtgo* does not use it: it instantiates `NetFunnelHelper` (`ktx.py:640`),
+  never calls `.run()`, knows only `sid="service_1", aid="act_8"`
+  (`:601-608`) and sends no `netfunnelKey` in the reserve (`:864-904`) or pay
+  (`:1030-1051`) body. That is a fact about a third-party client, not about the
+  app.
+  The app plainly does wire the queue — `KTApplication.java:79-85` configures
+  `nf.letskorail.com`, and `T6.g.BEGIN(...)` is called from `b5/c.java:439`
+  (inquiry), `DirectInquiryActivity.java:442/469/499` (reserve),
+  `B6/AbstractC1269e.java:1046` and `B6/C1270f.java:232` (pay) and
+  `ReservedTicketActivity.java:553` (예약목록). Three claims must be kept apart,
+  and only the third one was ever really true: the app wires it; no Retrofit
+  body carries a token field, so it gates rather than parameterises; and the
+  server has not so far enforced it on us.
+  `KorailNetFunnelClient` now implements the queue in the app's own native
+  dialect (**not** the JavaScript one this document's SRT-shaped references
+  imply — see the NetFunnel section of `docs/IMPLEMENTATION_PROGRESS.md`), off
+  by default, and it is **not live-exercised**. The residual risk this plan
+  named — that a peak-season server-side policy change turns the queue on, which
+  is exactly what `act_8_2` exists for — is what it answers.
 - **DynaPath is FEASIBLE, not a blocker** (§1, §3 cross-cutting, §5 item 10). Token
   sent on all 6 paths always (`:666-675`); the generation algorithm is known and
   reproducible (`DynaPathMasterEngine`, `:54-160`; app secret

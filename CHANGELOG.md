@@ -2,6 +2,69 @@
 
 ## Unreleased
 
+- Added: a NetFunnel virtual-waiting-room client, `KorailNetFunnelClient`, so a
+  gated operation can wait its turn instead of failing.
+  **Implemented but NOT live-exercised, and off by default.**
+  The queue has never engaged for this
+  repository — every live call it has made succeeded without a token, so the
+  server does not currently meter us — which means the 201 polling path, the
+  release path and the response shape are covered by offline fixtures only,
+  exactly as the sibling SRT client's polling path is.
+  - **KORAIL does not speak the JavaScript dialect, and this is the whole
+    substance of the change.** `nf.letskorail.com` serves both apps, so the
+    live-verified `srt-mobile-api` implementation was expected to be a template.
+    It is not: SRT is a WebView over `netfunnel.js` and sends the browser
+    dialect (`nfid`, `prefix`, `js=yes`, a trailing epoch), while `korail.apk`
+    embeds STCLab's native Android SDK — the `T6`/`U6` packages — which sends
+    none of it. The three requests are `5101` `opcode,sid,aid`
+    (`T6/d.java:99-101`), `5002` `opcode,key` (`:54-55`) and `5004` `opcode,key`
+    (`:78-79`), in that order, because `U6/a.java` renders the `addParam` list
+    with `URLEncodedUtils.format`. So `sid`/`aid` ride on `5101` **only**, the
+    opposite of the JS dialect; `ttl` is never sent back at all, being read only
+    to decide how long to sleep (`T6/g.java:462`) and clamped to 30 seconds
+    (`T6/h.java:40`) rather than the JS bundle's 5.
+  - **The response shape is the one assumption no live run has checked.**
+    `T6/i.java:36-43` parses everything before the first `:` as the status code,
+    so the reply must be `<code>:<params>` and not the JS dialect's
+    `<rtype>:<code>:<params>` — feed the app the latter and it reads the code as
+    5002 and finds no key. `parse_netfunnel_body` therefore rejects a
+    `NetFunnel.gRtype=…` body and names that possibility in its error message
+    rather than guessing. Verifying it is the first thing a live run should do.
+  - **The key never rides on a KORAIL request.** No Retrofit interface in the
+    app declares a `netfunnelKey`-shaped field on any route; the queue gates the
+    call rather than parameterising it, which is why this is a separate client
+    on a separate host and why reserve, pay, cancel and refund send exactly what
+    they sent before.
+  - **Off by default, enforced at construction.** `KorailConfig.
+    netfunnel_enabled` is `False`, and `KorailNetFunnelClient` on a config
+    without it raises before any socket exists. Enabling it adds a round trip
+    and a failure mode to every gated operation and buys nothing until the
+    server actually meters us. It is meant for peak season, which is why the app
+    carries a separate peak-season inquiry queue (`act_8_2`) at all.
+  - **The wait is bounded twice** — 20 polls and 60 seconds, whichever comes
+    first. The app polls indefinitely (`T6/g.java:449`) behind a dialog a human
+    can close; this library has none, and a queue is a wait rather than a retry.
+    No retry logic was added.
+  - **The slot is released on both paths**, as the app releases it from
+    `BaseDaoHelper`'s `onPostExecute` (:105-107) whether or not the gated call
+    raised. A failed release **raises** on the success path instead of being
+    swallowed: the sibling repo bounded its key at 128 characters while real
+    keys are 256, so every release was refused before it was sent and leaked
+    every slot silently until a live run exposed it.
+  - **Three exact query contracts are registered, not an allowlist loosened**,
+    and the queue host has its own origin assertion.
+    `KORAIL_READ_ONLY_ROUTES` is untouched at 54, so `post_form`/`get_json` can
+    never reach `/ts.wseq`. `5003`, `5105` and `5106` are declared as constants
+    and rejected by the guard. We also decline the redirection the app itself
+    accepts (`T6/d.java:17-19` follows the `ip`/`port` a reply names): a
+    response must not choose where the next request goes.
+- Corrected: `docs/RELEASE_GAP_PLAN.md` still carried, in its srtgo-corrections
+  appendix, the withdrawn claim that "Korail uses **no** NetFunnel at all — only
+  SRT does". The body of that document has said otherwise since 2026-07-26; the
+  appendix now agrees with it. The corresponding "not yet implemented" notes on
+  the `service_1` / `act_6` gate in `README.md` and
+  `docs/IMPLEMENTATION_PROGRESS.md` were also stale and are corrected: the gate
+  exists, and what still holds R39 back is its unregistered route.
 - Added: server-side failures are classified on `h_msg_cd` instead of all
   arriving as one `KorailAppError`. New types — `KorailNoResultsError` (with
   `KorailNoDirectTrainError`), `KorailSoldOutError`,
