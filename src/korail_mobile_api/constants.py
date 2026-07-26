@@ -129,6 +129,83 @@ KORAIL_STANDBY_HOLD_MESSAGE_CODE = "IRR000014"
 # bounds this package's seat-inventory passenger_count.
 KORAIL_MAX_PASSENGERS_PER_RESERVATION = 9
 
+
+# ---------------------------------------------------------------------------
+# 환승 (transfer) — one itinerary, two legs.
+#
+# K4/d.java:5-6 is the app's 직통/환승 pair, `DIRECT_SQ_NO("직통", "1")` and
+# `TRANSFER_SQ_NO("환승", "2")`, and it does three different jobs with the same
+# two codes:
+#
+#   * it is the SEARCH job id. On WRD000061 ("직통열차가 없습니다") the app
+#     re-issues the ScheduleView query with
+#     `setRadJobId(TRANSFER_SQ_NO.getCode())` and nothing else changed --
+#     DirectInquiryActivity.java:284-296 (`n3`, the 102/확인 branch of the
+#     WRD000061 dialog raised by onReceiveError at :615-624). Confirmed in
+#     bytecode at smali/…/DirectInquiryActivity.smali:1677-1689, which reads
+#     the enum and calls setRadJobId with nothing else between.
+#   * it is `txtJrnyCnt`, and the app derives it from the LEG COUNT rather than
+#     from any flag: `setJrnyCnt((trainInfoArr.length == 1 ? DIRECT_SQ_NO :
+#     TRANSFER_SQ_NO).getCode())` -- C5/a.java:55, smali/C5/a.smali:218-253.
+#   * it seeds the per-leg `txtJrnySqno{i}`, via
+#     `O.getSequenceNo((i == 0 ? DIRECT_SQ_NO : TRANSFER_SQ_NO).getCode())` --
+#     C5/a.java:61. `S4/O.java:19-21` is `N.addZero(3, parseInt(code))` and
+#     `S4/N.java:32-38` is `DecimalFormat("000").format(n)`, so the wire values
+#     are the zero-padded "001" and "002", not "1"/"2".
+KORAIL_DIRECT_ITINERARY_CODE = "1"
+KORAIL_TRANSFER_ITINERARY_CODE = "2"
+
+# `txtJrnyTpCd{i}`: K4/e.java:6-7. jadx renders TRANSFER's code as the
+# same-valued constant `TicketSelfCheckinStatusActivity.CHECKIN_STATUS_EXCEED`
+# (itself "14", TicketSelfCheckinStatusActivity.java:40), which reads like a
+# decompiler artefact, so it was re-read from bytecode: smali/K4/e.smali:40
+# (DIRECT -> "11") and :68 (TRANSFER -> "14"). "14" it is.
+#
+# The two remaining K4/e members, STANDING_SEAT_1 ("병합 선행", "21") and
+# STANDING_SEAT_2 ("병합 후행", "22"), belong to 병합예약 -- the merge-standing
+# flow that DirectInquiryActivity.java:576-601 builds off an AutoRsvCancelCheck
+# response -- which this package does not implement, so they are deliberately
+# absent.
+#
+# Note what C5/a.java:60 actually keys on: `(trainInfoArr.length == 1 ? DIRECT :
+# TRANSFER).getCode()` sits INSIDE the per-leg loop but tests the array LENGTH,
+# not the loop index. Both legs of a transfer therefore carry
+# `txtJrnyTpCd = "14"`; leg 2 is not "the transfer leg" with leg 1 left direct.
+# A ternary-on-a-constant inside a loop is the shape jadx most often folds
+# wrongly, so it was re-read in bytecode: smali/C5/a.smali:306-338 re-evaluates
+# `array-length v6, p1` and compares it against 1 on every iteration before
+# calling setJrnyTpCd, while :343 shows the neighbouring jrnySqNo branch keying
+# on `if-nez v1` -- the loop INDEX. The two really do differ.
+KORAIL_DIRECT_JOURNEY_TYPE_CODE = "11"
+KORAIL_TRANSFER_JOURNEY_TYPE_CODE = "14"
+
+# The most legs one reservation may carry.
+#
+# Two, and the app is unambiguous about it. The decisive evidence is that the
+# form has no journey-3 spelling at all -- a third leg would not be dropped, it
+# would silently overwrite leg 2:
+#
+#   * OSeat.java:32-35 -- `setSeatAttCd4(i, v)` writes `txtSeatAttCd4` when
+#     i == 1 and `txtSeatAttCd4_1` for EVERY other i.
+#   * OSrcar.java:21-30 -- `setSrcarCnt`/`setSrcarNo`/`setSeatNo` split the same
+#     way, `txtSrcarCnt` vs `txtSrcarCnt1` and `txtSrcarNo`/`txtSeatNo` vs
+#     `txtSrcarNo1_`/`txtSeatNo1_`, again on `i == 1` and nothing finer.
+#   * ReservationRequest.java:114-117 reads exactly those two seat slots back
+#     (`SEAT_ATT_CD4` and `SEAT_ATT_CD4_1`) when it decides whether the booking
+#     may go out as a non-member -- the request object itself knows of two.
+#
+# and the search and selection sides never produce more than two either:
+#
+#   * a5/k.java:108-110 assembles the array handed to the journey builder as
+#     either `{list[i]}` or `{list[i * 2], list[i * 2 + 1]}` -- one row or
+#     exactly two, never three.
+#   * a5/k.java:156-170 chunks a transfer result list into `new Bundle[2]` on
+#     `i % 2`, appending a row only when the pair completes.
+#   * a5/u.java:252-253 passes the itinerary onward as
+#     `P1(i, arr[0], arr.length == 1 ? null : arr[1])` -- two slots, the second
+#     nullable.
+KORAIL_MAX_JOURNEY_LEGS = 2
+
 # ---------------------------------------------------------------------------
 # NetFunnel — the virtual waiting room, on its own host.
 #

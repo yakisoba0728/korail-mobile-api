@@ -5,7 +5,12 @@ from collections.abc import Sequence
 
 from .config import KorailConfig
 from .constants import (
+    KORAIL_DIRECT_ITINERARY_CODE,
+    KORAIL_DIRECT_JOURNEY_TYPE_CODE,
+    KORAIL_MAX_JOURNEY_LEGS,
     KORAIL_STANDBY_WAIT_FLAG,
+    KORAIL_TRANSFER_ITINERARY_CODE,
+    KORAIL_TRANSFER_JOURNEY_TYPE_CODE,
     KorailReservationJobType,
     KorailSeatClass,
 )
@@ -78,7 +83,7 @@ def _validated_seat_assignments(
     job_type: KorailReservationJobType,
     passenger_total: int,
 ) -> tuple[KorailSeatAssignment, ...]:
-    """Check the designated-seat list against the job type and the mix.
+    """Check one leg's designated-seat list against the job type and the mix.
 
     A seat list belongs to ``"1103"`` and to nothing else: the app switches the
     job id to ``"1103"`` in the same three lines that install the ``OSrcar``
@@ -89,7 +94,11 @@ def _validated_seat_assignments(
     "선택완료" only while ``selectedSeatCount == G0()``, and ``G0()``
     (``:273-278``) is the request's ``txtTotPsgCnt``. A short list is refused
     here, before anything is sent, because the server would otherwise be asked
-    to seat N passengers in fewer than N seats.
+    to seat N passengers in fewer than N seats. The rule is per leg because the
+    app's seat picker is per leg: ``C5/a.java:120-133`` launches
+    ``SeatSearchActivity`` once per journey index and passes that index on as
+    the ``TRAIN_INDEX`` extra, while the passenger total it compares against
+    (``SeatSearchActivity.java:273-278``) is the whole booking's.
     """
     if job_type is not KorailReservationJobType.SEAT_DESIGNATED:
         if seats:
@@ -167,27 +176,275 @@ def build_reservation_form(
     ``i11`` starts at 1). ``txtSrcarCnt`` is the number of **seats**, not cars:
     it is ``String.valueOf(selectedSeatList.size())``.
 
+    This books **one** journey: ``txtJrnyCnt="1"`` and a single journey block,
+    because ``C5/a.java:55`` derives the count from the length of the train
+    array it is handed. For a 환승 itinerary's two legs use
+    :func:`build_transfer_reservation_form`, which is the same builder with a
+    longer array.
+
     Only the single-adult, general-class, ``"1101"`` shape has ever been sent to
     the live server. Multi-passenger and 특실 forms, and both non-default job
     types, are built from the app's own request builder but are NOT
     live-verified.
     """
-    if type(train) is not TrainSummary:
+    return _build_journey_reservation_form(
+        config,
+        (train,),
+        passengers=passengers,
+        seat_classes=(seat_class,),
+        job_type=job_type,
+        leg_seats=None if seats is None else (seats,),
+        _leg_noun="train",
+    )
+
+
+def build_transfer_reservation_form(
+    config: KorailConfig,
+    legs: Sequence[TrainSummary],
+    *,
+    passengers: KorailPassengerCounts | None = None,
+    seat_classes: Sequence[KorailSeatClass] | KorailSeatClass = (
+        KorailSeatClass.GENERAL
+    ),
+    job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
+    seats: Sequence[Sequence[KorailSeatAssignment]] | None = None,
+) -> dict[str, str]:
+    """Build the reservation-hold form for a 환승 itinerary -- two legs, one PNR.
+
+    This is :func:`build_reservation_form` with the journey block repeated. The
+    app has one builder for both cases (``C5/a.java:52-119``, ``N0``) and it is
+    a loop over the train array it was handed, so the leg count alone decides
+    the field set:
+
+    * ``txtJrnyCnt`` is ``(length == 1 ? DIRECT_SQ_NO : TRANSFER_SQ_NO)`` --
+      ``C5/a.java:55``. It is derived from the array length, not from a flag,
+      which is why a direct booking cannot be made to emit a transfer form by
+      setting something.
+    * the loop writes at ``i10 = i9 + 1``, so journey indices are **1-based**
+      (``C5/a.java:57-77``).
+    * ``txtJrnyTpCd{i}`` is ``(length == 1 ? DIRECT : TRANSFER)`` -- also keyed
+      on the LENGTH even though it is written inside the loop
+      (``C5/a.java:60``, re-read as ``smali/C5/a.smali:306-338``), so **both**
+      legs of a transfer carry ``"14"``.
+    * ``txtJrnySqno{i}`` is keyed on the loop INDEX -- ``(i == 0 ?
+      DIRECT_SQ_NO : TRANSFER_SQ_NO)`` fed through ``O.getSequenceNo``, which
+      is ``DecimalFormat("000")`` (``S4/O.java:19-21``, ``S4/N.java:32-38``) --
+      so leg 1 sends ``"001"`` and leg 2 ``"002"``.
+
+    ``legs`` must hold exactly
+    :data:`~korail_mobile_api.KORAIL_MAX_JOURNEY_LEGS` (2) trains, in boarding
+    order; :attr:`TransferItinerary.legs
+    <korail_mobile_api.TransferItinerary.legs>` produces one. Any other count is
+    refused -- see :data:`~korail_mobile_api.KORAIL_MAX_JOURNEY_LEGS` for why
+    the form has no third journey and what a third leg would overwrite.
+
+    What composes, and what does not:
+
+    * **passenger mix** -- composes, and is per booking rather than per leg.
+      ``OPsg`` is built once on the booking-options screen (``w4/a.java:47-74``)
+      before any itinerary is chosen, and ``N0`` never touches it.
+    * **cabin class** -- composes, and is genuinely **per leg**. ``C5/a.java:59``
+      reads ``U4.a.getSelectSeatTypeCode(D0(), i9)`` with the leg index and
+      ``:97`` writes it as ``txtPsrmClCd{i}``, so 일반실 on one leg and 특실 on
+      the other is a shape the app can produce. Pass either one
+      :class:`~korail_mobile_api.KorailSeatClass` for both legs or a sequence of
+      one per leg.
+    * **seat designation** (``"1103"``) -- composes, and is also per leg.
+      ``C5/a.java:120-133`` launches the seat picker once per journey index and
+      passes it as ``TRAIN_INDEX``; ``SeatSearchActivity.java:675-682`` then
+      writes ``setSrcarCnt(TRAIN_INDEX + 1, …)``, and ``OSrcar.java:21-30``
+      spells journey 2 as ``txtSrcarCnt1``/``txtSrcarNo1_{n}``/``txtSeatNo1_{n}``.
+      Pass ``seats`` as one sequence per leg, each holding one
+      :class:`~korail_mobile_api.KorailSeatAssignment` per passenger.
+    * **standby** (``"1102"``, 예약대기) -- does **not** compose, and this
+      builder refuses it. Two independent gates in the app say so. ``G0()``, the
+      standby-eligibility check, opens with ``if (!isDirect) return false``
+      (``a5/k.java:120-127``), so the 예약대기 button is never enabled on a
+      transfer result (``a5/u.java:369-371`` feeds that into the button state at
+      ``:401-404``); and the only ``setJobId("1102")`` in the app is
+      ``DirectInquiryActivity.java:434``, in a branch of an ``onClick``
+      that ``TransferInquiryActivity`` overrides and never reaches.
+
+    NOT live-verified: no transfer form built here has been sent to KORAIL.
+    """
+    return _build_journey_reservation_form(
+        config,
+        legs,
+        passengers=passengers,
+        seat_classes=seat_classes,
+        job_type=job_type,
+        leg_seats=seats,
+        _leg_noun="leg",
+        _require_legs=KORAIL_MAX_JOURNEY_LEGS,
+    )
+
+
+# The app's own key-selection methods, which are the reason a third leg is
+# impossible rather than merely unsupported: every one of them is a two-way
+# `i == 1 ? … : …`, so a journey-3 write lands on the journey-2 key.
+def _seat_attribute_key(journey: int) -> str:
+    """``OSeat.setSeatAttCd4`` -- OSeat.java:32-35."""
+    return "txtSeatAttCd4" if journey == 1 else "txtSeatAttCd4_1"
+
+
+def _srcar_count_key(journey: int) -> str:
+    """``OSrcar.setSrcarCnt`` -- OSrcar.java:21-23."""
+    return "txtSrcarCnt" if journey == 1 else "txtSrcarCnt1"
+
+
+def _srcar_no_key(journey: int, seat: int) -> str:
+    """``OSrcar.setSrcarNo`` -- OSrcar.java:25-30."""
+    return f"txtSrcarNo{seat}" if journey == 1 else f"txtSrcarNo1_{seat}"
+
+
+def _seat_no_key(journey: int, seat: int) -> str:
+    """``OSrcar.setSeatNo`` -- OSrcar.java:14-19."""
+    return f"txtSeatNo{seat}" if journey == 1 else f"txtSeatNo1_{seat}"
+
+
+def _validated_legs(
+    legs: Sequence[TrainSummary],
+    *,
+    noun: str,
+    require: int | None,
+) -> tuple[TrainSummary, ...]:
+    if isinstance(legs, (str, bytes)) or not isinstance(legs, Sequence):
         raise KorailProtocolError(
-            "KORAIL reservation requires an exact TrainSummary"
+            f"KORAIL reservation requires a sequence of {noun}s"
         )
+    resolved = tuple(legs)
+    for leg in resolved:
+        if type(leg) is not TrainSummary:
+            raise KorailProtocolError(
+                f"KORAIL reservation requires an exact TrainSummary per {noun}"
+            )
+    if require is not None and len(resolved) != require:
+        raise KorailProtocolError(
+            f"KORAIL 환승 reservation books exactly {require} legs, got "
+            f"{len(resolved)}: the reservation form has no journey-{require + 1} "
+            "spelling at all (OSeat.java:32-35 and OSrcar.java:21-30 both split "
+            'on "journey 1 or not"), so a further leg would overwrite leg '
+            f"{require} rather than be added"
+        )
+    if not resolved or len(resolved) > KORAIL_MAX_JOURNEY_LEGS:
+        raise KorailProtocolError(
+            "KORAIL reservation carries between 1 and "
+            f"{KORAIL_MAX_JOURNEY_LEGS} legs, got {len(resolved)}"
+        )
+    return resolved
+
+
+def _validated_seat_classes(
+    seat_classes: Sequence[KorailSeatClass] | KorailSeatClass,
+    *,
+    leg_count: int,
+) -> tuple[KorailSeatClass, ...]:
+    """One cabin per leg, from either one value or a per-leg sequence.
+
+    Per leg because the app is per leg: ``C5/a.java:59`` reads the cabin with
+    ``U4.a.getSelectSeatTypeCode(D0(), i9)``, the leg index, and ``:97`` writes
+    ``txtPsrmClCd{i}`` from it.
+    """
+    if isinstance(seat_classes, (str, KorailSeatClass)):
+        candidates: tuple[object, ...] = (seat_classes,) * leg_count
+    elif isinstance(seat_classes, Sequence) and not isinstance(
+        seat_classes,
+        bytes,
+    ):
+        candidates = tuple(seat_classes)
+        if len(candidates) == 1:
+            candidates = candidates * leg_count
+    else:
+        raise KorailProtocolError(
+            "KORAIL reservation seat class must be a KorailSeatClass or a "
+            "sequence of one per leg"
+        )
+    if len(candidates) != leg_count:
+        raise KorailProtocolError(
+            f"KORAIL reservation needs one cabin class per leg: {leg_count} "
+            f"leg(s), {len(candidates)} class(es)"
+        )
+    resolved: list[KorailSeatClass] = []
+    for candidate in candidates:
+        try:
+            resolved.append(KorailSeatClass(candidate))
+        except ValueError:
+            raise KorailProtocolError(
+                'KORAIL reservation seat class must be "1" (일반실) or "2" '
+                "(특실)"
+            ) from None
+    return tuple(resolved)
+
+
+def _validated_leg_seats(
+    leg_seats: Sequence[Sequence[KorailSeatAssignment]] | None,
+    *,
+    leg_count: int,
+    job_type: KorailReservationJobType,
+    passenger_total: int,
+) -> tuple[tuple[KorailSeatAssignment, ...], ...]:
+    if leg_seats is None:
+        per_leg: tuple[Sequence[KorailSeatAssignment] | None, ...] = (
+            (None,) * leg_count
+        )
+    elif isinstance(leg_seats, (str, bytes)) or not isinstance(
+        leg_seats,
+        Sequence,
+    ):
+        raise KorailProtocolError(
+            "KORAIL seat-designated reservation requires one sequence of "
+            "KorailSeatAssignment per leg"
+        )
+    else:
+        per_leg = tuple(leg_seats)
+        if len(per_leg) != leg_count:
+            raise KorailProtocolError(
+                "KORAIL seat-designated reservation needs one seat list per "
+                f"leg: {leg_count} leg(s), {len(per_leg)} list(s)"
+            )
+    return tuple(
+        _validated_seat_assignments(
+            seats,
+            job_type=job_type,
+            passenger_total=passenger_total,
+        )
+        for seats in per_leg
+    )
+
+
+def _build_journey_reservation_form(
+    config: KorailConfig,
+    legs: Sequence[TrainSummary],
+    *,
+    passengers: KorailPassengerCounts | None,
+    seat_classes: Sequence[KorailSeatClass] | KorailSeatClass,
+    job_type: KorailReservationJobType,
+    leg_seats: Sequence[Sequence[KorailSeatAssignment]] | None,
+    _leg_noun: str,
+    _require_legs: int | None = None,
+) -> dict[str, str]:
+    """The one builder behind both public reservation forms.
+
+    ``C5/a.java:52-119`` is a single loop over the train array, so one
+    implementation covers a direct booking and a 환승 booking; the leg count is
+    the only thing that differs. A one-leg call therefore emits exactly the
+    bytes it emitted before this function existed, key order included.
+    """
+    resolved_legs = _validated_legs(
+        legs,
+        noun=_leg_noun,
+        require=_require_legs,
+    )
     if passengers is None:
         passengers = KorailPassengerCounts()
     elif type(passengers) is not KorailPassengerCounts:
         raise KorailProtocolError(
             "KORAIL reservation requires an exact KorailPassengerCounts"
         )
-    try:
-        seat_class = KorailSeatClass(seat_class)
-    except ValueError:
-        raise KorailProtocolError(
-            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
-        ) from None
+    resolved_classes = _validated_seat_classes(
+        seat_classes,
+        leg_count=len(resolved_legs),
+    )
     try:
         job_type = KorailReservationJobType(job_type)
     except ValueError:
@@ -197,11 +454,176 @@ def build_reservation_form(
                 f'"{member.value}"' for member in KorailReservationJobType
             )
         ) from None
-    assignments = _validated_seat_assignments(
-        seats,
+    if (
+        job_type is KorailReservationJobType.STANDBY
+        and len(resolved_legs) > 1
+    ):
+        # a5/k.java:120-127 -- G0(), the standby-eligibility check, returns
+        # false outright for a transfer result, so a5/u.java:369-371/:401-404
+        # never enables the 예약대기 button there; and the app's only
+        # setJobId("1102") lives in DirectInquiryActivity.java:434, in an
+        # onClick branch TransferInquiryActivity overrides away.
+        raise KorailProtocolError(
+            "KORAIL standby (예약대기) is a 직통 booking only: the app's "
+            "standby check returns false for a transfer itinerary "
+            "(a5/k.java:120-127) and its only txtJobId \"1102\" is on the "
+            "direct screen (DirectInquiryActivity.java:434)"
+        )
+    assignments = _validated_leg_seats(
+        leg_seats,
+        leg_count=len(resolved_legs),
         job_type=job_type,
         passenger_total=passengers.total,
     )
+    for leg, seat_class in zip(resolved_legs, resolved_classes):
+        _assert_leg_is_bookable(leg, seat_class=seat_class, job_type=job_type)
+    journeys = tuple(
+        _journey_fields(leg) for leg in resolved_legs
+    )
+    form = _common_fields(config)
+    form.update(
+        {
+            "txtMenuId": "11",
+            "txtJobId": job_type.value,
+            "txtGdNo": "",
+            "hidFreeFlg": "N",
+            # The app sets it from
+            # J.isStndSeat(seatClass, h_gen_rsv_cd, h_stnd_rsv_cd)
+            # (c5/b.java:69), which is true only for a GENERAL request on a
+            # train whose general seats are sold out ("13") and whose standing
+            # inventory is open -- S4/J.java:83-85. For "1101"/"1103" it is
+            # always "N": neither cabin those jobs accept can be in that state,
+            # since both demand "11". A standby train usually IS "13", so the
+            # rule has to be evaluated rather than pinned there.
+            #
+            # C5/a.java:78-82 makes it a property of the whole booking rather
+            # than of a leg: leg 1 assigns it, and every later leg overwrites it
+            # only while it still reads "N" -- so one standing leg makes the
+            # whole itinerary standing.
+            "txtStndFlg": _itinerary_standing_flag(
+                resolved_legs,
+                seat_classes=resolved_classes,
+            ),
+            # w4/a.java:49 sends the app's TOTAL_PERSON_COUNT, and that is the
+            # sum of ALL eight counters -- 동반유아 and 안내견 included
+            # (m5/c.java:330).
+            "txtTotPsgCnt": str(passengers.total),
+        }
+    )
+    for index, (attribute, passenger_type, discount_code) in enumerate(
+        _PASSENGER_ROWS,
+        start=1,
+    ):
+        form[f"txtCompaCnt{index}"] = str(getattr(passengers, attribute))
+        form[f"txtPsgTpCd{index}"] = passenger_type
+        form[f"txtDiscKndCd{index}"] = discount_code
+    # OSeat, in w4/a.java:82-91's insertion order. The five txtSeatAttCd* keys
+    # and txtPsrmClCd1 are written once on the booking-options screen; C5/a.java
+    # :84-97 then re-puts journey 1's two and appends journey 2's. Because
+    # OSeat is a LinkedHashMap and ReservationRequest.setOSeat is a putAll
+    # (ReservationRequest.java:165-167), re-putting an existing key keeps its
+    # position -- so the second leg's pair lands after txtPsrmClCd1 and the
+    # one-leg block is untouched.
+    form.update(
+        {
+            "txtSeatAttCd1": "000",
+            "txtSeatAttCd2": "000",
+            "txtSeatAttCd3": "000",
+            _seat_attribute_key(1): "015",
+            "txtSeatAttCd5": "000",
+            # OSeat.PSRM_CL_CD + journey number (OSeat.java:8,16-18), set from
+            # the user's chosen tab: c5/b.java:72 passes
+            # U4/a.java:88's GENERAL("1")/SPECIAL("2").
+            "txtPsrmClCd1": resolved_classes[0].value,
+        }
+    )
+    for journey, seat_class in enumerate(resolved_classes[1:], start=2):
+        # C5/a.java:88-97 for the second leg. txtSeatAttCd4_1 carries the same
+        # search-request seat attribute leg 1 does: C5/a.java:90's t2() is
+        # b5/c.java:453-455, the ScheduleView request's txtSeatAttCd_4, which
+        # this package always sends as "015" (K4/p.DEFAULT).
+        form[_seat_attribute_key(journey)] = "015"
+        form[f"txtPsrmClCd{journey}"] = seat_class.value
+    # OJrny (OJrny.java:6-27), a LinkedHashMap in C5/a.java:54-76's write order:
+    # the count once, then the sixteen per-leg keys for journey 1, then the same
+    # sixteen for journey 2.
+    form["txtJrnyCnt"] = (
+        KORAIL_DIRECT_ITINERARY_CODE
+        if len(resolved_legs) == 1
+        else KORAIL_TRANSFER_ITINERARY_CODE
+    )
+    journey_type_code = (
+        KORAIL_DIRECT_JOURNEY_TYPE_CODE
+        if len(resolved_legs) == 1
+        else KORAIL_TRANSFER_JOURNEY_TYPE_CODE
+    )
+    for journey, fields in enumerate(journeys, start=1):
+        form[f"txtJrnyTpCd{journey}"] = journey_type_code
+        form[f"txtJrnySqno{journey}"] = _sequence_no(
+            KORAIL_DIRECT_ITINERARY_CODE
+            if journey == 1
+            else KORAIL_TRANSFER_ITINERARY_CODE
+        )
+        form[f"txtTrnNo{journey}"] = fields["train_no"]
+        form[f"txtTrnClsfCd{journey}"] = fields["train_class_code"]
+        form[f"txtTrnGpCd{journey}"] = fields["train_group_code"]
+        form[f"txtRunDt{journey}"] = fields["run_date"]
+        form[f"txtDptDt{journey}"] = fields["departure_date"]
+        form[f"txtDptTm{journey}"] = fields["departure_time"]
+        # OJrny.ARV_TM is "arvTm_", not "txtArvTm" (OJrny.java:12, 40-42).
+        form[f"arvTm_{journey}"] = fields["arrival_time"]
+        form[f"txtDptRsStnCd{journey}"] = fields["departure_station_code"]
+        form[f"txtDptStnConsOrdr{journey}"] = fields[
+            "departure_construction_order"
+        ]
+        form[f"txtDptStnRunOrdr{journey}"] = fields["departure_run_order"]
+        form[f"txtArvRsStnCd{journey}"] = fields["arrival_station_code"]
+        form[f"txtArvStnConsOrdr{journey}"] = fields[
+            "arrival_construction_order"
+        ]
+        form[f"txtArvStnRunOrdr{journey}"] = fields["arrival_run_order"]
+        form[f"txtChgFlg{journey}"] = "N"
+    # OSrcar is the LAST @FieldMap on the Retrofit call
+    # (CertificationService.java:52-54), so its keys go after the journey keys.
+    # For "1101"/"1102" the map is empty and contributes nothing at all --
+    # C5/a.java:118 clears it while building an ordinary journey -- which is why
+    # a txtSrcarCnt of "0" never appears on the wire.
+    #
+    # Per leg, the order below is SeatSearchActivity.java:676-682's: the count,
+    # then (car, seat) per index. The app itself cannot guarantee it -- :650
+    # collects into a plain HashMap and :144 of C5/a.java putAll()s that back
+    # into the LinkedHashMap -- so KORAIL demonstrably tolerates any OSrcar
+    # ordering, and emitting the builder's own order is the reproducible choice.
+    # Across legs the order is the app's screen order: the picker is opened per
+    # journey index (C5/a.java:120-133) and each return merges its own block in.
+    for journey, leg_assignments in enumerate(assignments, start=1):
+        for index, assignment in enumerate(leg_assignments, start=1):
+            if index == 1:
+                # SeatSearchActivity.java:676. The count is the SEAT count, and
+                # the key is chosen by the JOURNEY index, not the seat index
+                # (OSrcar.java:21-23).
+                form[_srcar_count_key(journey)] = str(len(leg_assignments))
+            form[_srcar_no_key(journey, index)] = str(assignment.car_no)
+            form[_seat_no_key(journey, index)] = assignment.seat_no
+    return form
+
+
+def _sequence_no(code: str) -> str:
+    """``S4/O.getSequenceNo`` -- ``N.addZero(3, parseInt(code))``.
+
+    ``S4/O.java:19-21`` into ``S4/N.java:32-38``, which is
+    ``DecimalFormat("000").format(n)``. So the itinerary codes ``"1"``/``"2"``
+    reach the wire as ``"001"``/``"002"``.
+    """
+    return f"{int(code):03d}"
+
+
+def _assert_leg_is_bookable(
+    train: TrainSummary,
+    *,
+    seat_class: KorailSeatClass,
+    job_type: KorailReservationJobType,
+) -> None:
     if job_type is KorailReservationJobType.STANDBY:
         # 예약대기 is offered on the 일반실 tab only. U4.a.b() sets the "wait"
         # bundle flag solely on the standard-cabin bundle (the p3 branch,
@@ -221,13 +643,15 @@ def build_reservation_form(
         # Deliberately NO h_gen_rsv_cd check. The app never consults it for
         # standby; a standby train is normally 매진 ("13"), which is exactly the
         # state the "11" rule below refuses.
+        return
     # The train list checks the availability code of the cabin the user picked,
     # not always the general one: a5/u.java:319 reads h_gen_rsv_cd for the
     # standard tab and h_spe_rsv_cd for the suite tab (likewise
     # DirectInquiryActivity.java:198). Keep this package's stricter rule -- only
     # an explicit "11" counts as available -- and apply it to whichever cabin is
-    # being booked.
-    elif seat_class is KorailSeatClass.SPECIAL:
+    # being booked. On a transfer it is applied to every leg, because a booking
+    # whose second leg is sold out is not bookable either.
+    if seat_class is KorailSeatClass.SPECIAL:
         if train.special_reservation_code != "11":
             raise KorailProtocolError(
                 "KORAIL reservation requires an evidenced available special seat"
@@ -237,139 +661,83 @@ def build_reservation_form(
             "KORAIL reservation requires an evidenced available general seat"
         )
 
-    train_no = _required_digits(train.train_no, field="train_no")
-    train_group_code = _required_digits(
-        train.train_group_code,
-        field="train_group_code",
-    )
-    train_class_code = _required_digits(
-        train.train_class_code,
-        field="train_class_code",
-    )
-    run_date = _required_pattern(
-        train.run_date,
-        field="run_date",
-        pattern=_DATE_RE,
-    )
-    departure_date = _required_pattern(
-        train.departure_date,
-        field="departure_date",
-        pattern=_DATE_RE,
-    )
-    departure_time = _required_pattern(
-        train.departure_time,
-        field="departure_time",
-        pattern=_TIME_RE,
-    )
-    arrival_time = _required_pattern(
-        train.arrival_time,
-        field="arrival_time",
-        pattern=_TIME_RE,
-    )
-    departure_station_code = _required_digits(
-        train.departure_station_code,
-        field="departure_station_code",
-    )
-    arrival_station_code = _required_digits(
-        train.arrival_station_code,
-        field="arrival_station_code",
-    )
-    departure_construction_order = _required_digits(
-        train.departure_construction_order,
-        field="departure_construction_order",
-    )
-    arrival_construction_order = _required_digits(
-        train.arrival_construction_order,
-        field="arrival_construction_order",
-    )
-    departure_run_order = _required_digits(
-        train.departure_run_order,
-        field="departure_run_order",
-    )
-    arrival_run_order = _required_digits(
-        train.arrival_run_order,
-        field="arrival_run_order",
-    )
-    form = _common_fields(config)
-    form.update(
-        {
-            "txtMenuId": "11",
-            "txtJobId": job_type.value,
-            "txtGdNo": "",
-            "hidFreeFlg": "N",
-            # The app sets it from
-            # J.isStndSeat(seatClass, h_gen_rsv_cd, h_stnd_rsv_cd)
-            # (c5/b.java:69), which is true only for a GENERAL request on a
-            # train whose general seats are sold out ("13") and whose standing
-            # inventory is open -- S4/J.java:83-85. For "1101"/"1103" it is
-            # always "N": neither cabin those jobs accept can be in that state,
-            # since both demand "11". A standby train usually IS "13", so the
-            # rule has to be evaluated rather than pinned there.
-            "txtStndFlg": _standing_flag(train, seat_class=seat_class),
-            # w4/a.java:49 sends the app's TOTAL_PERSON_COUNT, and that is the
-            # sum of ALL eight counters -- 동반유아 and 안내견 included
-            # (m5/c.java:330).
-            "txtTotPsgCnt": str(passengers.total),
-        }
-    )
-    for index, (attribute, passenger_type, discount_code) in enumerate(
-        _PASSENGER_ROWS,
-        start=1,
-    ):
-        form[f"txtCompaCnt{index}"] = str(getattr(passengers, attribute))
-        form[f"txtPsgTpCd{index}"] = passenger_type
-        form[f"txtDiscKndCd{index}"] = discount_code
-    form.update(
-        {
-            "txtSeatAttCd1": "000",
-            "txtSeatAttCd2": "000",
-            "txtSeatAttCd3": "000",
-            "txtSeatAttCd4": "015",
-            "txtSeatAttCd5": "000",
-            # OSeat.PSRM_CL_CD + journey number (OSeat.java:8,16-18), set from
-            # the user's chosen tab: c5/b.java:72 passes
-            # U4/a.java:88's GENERAL("1")/SPECIAL("2").
-            "txtPsrmClCd1": seat_class.value,
-            "txtJrnyCnt": "1",
-            "txtJrnyTpCd1": "11",
-            "txtJrnySqno1": "001",
-            "txtTrnNo1": train_no,
-            "txtTrnClsfCd1": train_class_code,
-            "txtTrnGpCd1": train_group_code,
-            "txtRunDt1": run_date,
-            "txtDptDt1": departure_date,
-            "txtDptTm1": departure_time,
-            "arvTm_1": arrival_time,
-            "txtDptRsStnCd1": departure_station_code,
-            "txtDptStnConsOrdr1": departure_construction_order,
-            "txtDptStnRunOrdr1": departure_run_order,
-            "txtArvRsStnCd1": arrival_station_code,
-            "txtArvStnConsOrdr1": arrival_construction_order,
-            "txtArvStnRunOrdr1": arrival_run_order,
-            "txtChgFlg1": "N",
-        }
-    )
-    # OSrcar is the LAST @FieldMap on the Retrofit call
-    # (CertificationService.java:52-54), so its keys go after the journey keys.
-    # For "1101"/"1102" the map is empty and contributes nothing at all --
-    # C5/a.java:118 clears it while building an ordinary journey -- which is why
-    # a txtSrcarCnt of "0" never appears on the wire.
-    #
-    # The order below is SeatSearchActivity.java:676-682's: the count, then
-    # (car, seat) per index. The app itself cannot guarantee it -- :650 collects
-    # into a plain HashMap and :144 of C5/a.java putAll()s that back into the
-    # LinkedHashMap -- so KORAIL demonstrably tolerates any OSrcar ordering, and
-    # emitting the builder's own order is the reproducible choice.
-    for index, assignment in enumerate(assignments, start=1):
-        if index == 1:
-            # SeatSearchActivity.java:676. The count is the SEAT count, and the
-            # key is unsuffixed for journey 1 (OSrcar.java:21-23 selects
-            # "txtSrcarCnt" vs "txtSrcarCnt1" on the journey index, not the seat
-            # index).
-            form["txtSrcarCnt"] = str(len(assignments))
-        form[f"txtSrcarNo{index}"] = str(assignment.car_no)
-        form[f"txtSeatNo{index}"] = assignment.seat_no
-    return form
+
+def _journey_fields(train: TrainSummary) -> dict[str, str]:
+    """The sixteen ``OJrny`` values one leg contributes, all shape-checked."""
+    return {
+        "train_no": _required_digits(train.train_no, field="train_no"),
+        "train_group_code": _required_digits(
+            train.train_group_code,
+            field="train_group_code",
+        ),
+        "train_class_code": _required_digits(
+            train.train_class_code,
+            field="train_class_code",
+        ),
+        "run_date": _required_pattern(
+            train.run_date,
+            field="run_date",
+            pattern=_DATE_RE,
+        ),
+        "departure_date": _required_pattern(
+            train.departure_date,
+            field="departure_date",
+            pattern=_DATE_RE,
+        ),
+        "departure_time": _required_pattern(
+            train.departure_time,
+            field="departure_time",
+            pattern=_TIME_RE,
+        ),
+        "arrival_time": _required_pattern(
+            train.arrival_time,
+            field="arrival_time",
+            pattern=_TIME_RE,
+        ),
+        "departure_station_code": _required_digits(
+            train.departure_station_code,
+            field="departure_station_code",
+        ),
+        "arrival_station_code": _required_digits(
+            train.arrival_station_code,
+            field="arrival_station_code",
+        ),
+        "departure_construction_order": _required_digits(
+            train.departure_construction_order,
+            field="departure_construction_order",
+        ),
+        "arrival_construction_order": _required_digits(
+            train.arrival_construction_order,
+            field="arrival_construction_order",
+        ),
+        "departure_run_order": _required_digits(
+            train.departure_run_order,
+            field="departure_run_order",
+        ),
+        "arrival_run_order": _required_digits(
+            train.arrival_run_order,
+            field="arrival_run_order",
+        ),
+    }
+
+
+def _itinerary_standing_flag(
+    legs: Sequence[TrainSummary],
+    *,
+    seat_classes: Sequence[KorailSeatClass],
+) -> str:
+    """``txtStndFlg`` for a whole itinerary -- C5/a.java:78-82.
+
+    Leg 1 assigns the flag unconditionally; every later leg recomputes it only
+    while the current value is still ``"N"``. The observable result is "Y if any
+    leg is standing", and it is written as the app writes it so the equivalence
+    stays visible.
+    """
+    flag = "N"
+    for index, (train, seat_class) in enumerate(zip(legs, seat_classes)):
+        if index == 0 or flag == "N":
+            flag = _standing_flag(train, seat_class=seat_class)
+    return flag
 
 
 def _standing_flag(
@@ -377,7 +745,7 @@ def _standing_flag(
     *,
     seat_class: KorailSeatClass,
 ) -> str:
-    """``txtStndFlg``: S4/J.java:83-84's ``isStndSeat``, verbatim.
+    """``txtStndFlg`` for one leg: S4/J.java:83-84's ``isStndSeat``, verbatim.
 
     ``GENERAL`` cabin, general seats 매진 (``"13"``) and standing inventory open
     (``"11"``). c5/b.java:69 is the caller that feeds it into the reservation

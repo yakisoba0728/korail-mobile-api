@@ -93,7 +93,10 @@ def test_client_public_method_set_is_stable():
         "pay_with_fake_card",
         "refund",
         "reserve",
+        "reserve_transfer",
         "search_trains",
+        "search_trains_with_transfer_fallback",
+        "search_transfer_trains",
     }
 
 

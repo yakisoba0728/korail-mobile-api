@@ -13,6 +13,7 @@ from .constants import KorailReservationJobType, KorailSeatClass
 from .crypto import generate_sid
 from .errors import (
     KorailAuthError,
+    KorailNoDirectTrainError,
     KorailProtocolError,
     KorailSessionExpiredError,
     MutationNotAllowedError,
@@ -34,6 +35,7 @@ from .mutation_payloads import (
     build_refund_form,
     build_reservation_form,
     build_standby_wait_form,
+    build_transfer_reservation_form,
     build_unpaid_reservation_cancel_form,
 )
 from .http import KorailHttpClient
@@ -72,8 +74,10 @@ from .models import (
     TrainSearchResult,
     TrainScheduleResponse,
     TrainSummary,
+    TransferSearchResult,
     TransferStationListResponse,
     UuidResponse,
+    pair_transfer_itineraries,
 )
 from .parsers import (
     parse_app_data_response,
@@ -1136,11 +1140,114 @@ class KorailClient:
             lambda: self._search_trains(query, continuation)
         )
 
+    def search_transfer_trains(
+        self,
+        query: TrainSearchQuery,
+        *,
+        continuation: TrainSearchContinuation | None = None,
+    ) -> TransferSearchResult:
+        """Search one page of 환승 itineraries for the same query.
+
+        Same endpoint, same form, one field different: ``radJobId`` carries
+        :data:`~korail_mobile_api.KORAIL_TRANSFER_ITINERARY_CODE` (``"2"``)
+        instead of ``"1"``. That is the entirety of the app's transfer query --
+        ``DirectInquiryActivity.java:284-296`` sets exactly that on the
+        ``RsvInquiryRequest`` it already built and hands the object on
+        untouched.
+
+        The response is **not** shaped differently. It is the same flat
+        ``trn_infos.trn_info`` list, and the legs are paired positionally: rows
+        0/1 are one itinerary, rows 2/3 the next (``a5/k.java:156-170``, and
+        ``:108-110`` reading a selection back out as ``{list[i*2],
+        list[i*2+1]}``). :attr:`TransferSearchResult.itineraries
+        <korail_mobile_api.TransferSearchResult.itineraries>` is that pairing;
+        :attr:`~korail_mobile_api.TransferSearchResult.trains` is the raw list.
+
+        Paging works, with a different cursor -- see
+        :meth:`TransferSearchResult.next_page
+        <korail_mobile_api.TransferSearchResult.next_page>`. Feed its result
+        back in as ``continuation``.
+
+        This is a read. It sends nothing that changes state, and a caller who
+        never books can use it freely. NOT live-verified: reaching it requires a
+        station pair with no direct service.
+        """
+        return self._run_read(
+            lambda: self._search_transfer_trains(query, continuation)
+        )
+
+    def search_trains_with_transfer_fallback(
+        self,
+        query: TrainSearchQuery,
+        *,
+        continuation: TrainSearchContinuation | None = None,
+    ) -> TrainSearchResult | TransferSearchResult:
+        """Search direct trains, falling back to 환승 when there are none.
+
+        This is the app's own flow, not a convenience invented here. A direct
+        ScheduleView that finds nothing answers ``WRD000061`` ("직통열차가
+        없습니다"); ``DirectInquiryActivity.java:615-624`` catches exactly that
+        code, and nothing else, and raises a confirm dialog whose 확인 branch
+        (``:284-296``) re-issues the query with ``radJobId="2"`` and moves the
+        user to the transfer screen.
+
+        This client already classifies ``WRD000061`` as
+        :class:`~korail_mobile_api.KorailNoDirectTrainError`, so the fallback is
+        that exception and no other: any other failure propagates. The return
+        type tells you which happened -- a :class:`TrainSearchResult
+        <korail_mobile_api.TrainSearchResult>` means the direct search
+        succeeded, a :class:`TransferSearchResult
+        <korail_mobile_api.TransferSearchResult>` means it did not and these are
+        the transfer alternatives. Call :meth:`search_trains` or
+        :meth:`search_transfer_trains` directly when you want one or the other
+        unconditionally.
+
+        ``continuation`` is forwarded to the direct search only. A cursor is
+        specific to the search that produced it, and a direct cursor replayed
+        into a transfer query would be asking a different question with the
+        wrong bookmark, so the fallback always starts the transfer search at
+        page one.
+        """
+        try:
+            return self.search_trains(query, continuation=continuation)
+        except KorailNoDirectTrainError:
+            return self.search_transfer_trains(query)
+
     def _search_trains(
         self,
         query: TrainSearchQuery,
         continuation: TrainSearchContinuation | None = None,
     ) -> TrainSearchResult:
+        response = self._post_schedule_view(query, continuation, transfer=False)
+        return TrainSearchResult(
+            trains=parse_train_rows(response.raw),
+            response=response,
+            raw=response.raw,
+            metadata=parse_train_search_metadata(response.raw),
+        )
+
+    def _search_transfer_trains(
+        self,
+        query: TrainSearchQuery,
+        continuation: TrainSearchContinuation | None = None,
+    ) -> TransferSearchResult:
+        response = self._post_schedule_view(query, continuation, transfer=True)
+        trains = parse_train_rows(response.raw)
+        return TransferSearchResult(
+            itineraries=pair_transfer_itineraries(trains),
+            trains=trains,
+            response=response,
+            raw=response.raw,
+            metadata=parse_train_search_metadata(response.raw),
+        )
+
+    def _post_schedule_view(
+        self,
+        query: TrainSearchQuery,
+        continuation: TrainSearchContinuation | None,
+        *,
+        transfer: bool,
+    ) -> BaseKorailResponse:
         departure_name = self._resolve_station_reference(
             query.departure_station_code
         )
@@ -1156,17 +1263,12 @@ class KorailClient:
             sid=generate_sid(),
             member_card_no=current.member_card_no if current else None,
             continuation=continuation,
+            transfer=transfer,
         )
-        response = self.http.post_form(
+        return self.http.post_form(
             "/classes/com.korail.mobile.seatMovie.ScheduleView",
             form,
             include_common=False,
-        )
-        return TrainSearchResult(
-            trains=parse_train_rows(response.raw),
-            response=response,
-            raw=response.raw,
-            metadata=parse_train_search_metadata(response.raw),
         )
 
     def _resolve_station_reference(self, reference: str) -> str:
@@ -1417,6 +1519,80 @@ class KorailClient:
                 pnr_no=pnr,
                 journey_count=_scalar_text(raw.get("h_jrny_cnt")),
             )
+
+    def reserve_transfer(
+        self,
+        legs: Sequence[TrainSummary],
+        *,
+        consent: MutationConsent,
+        passengers: KorailPassengerCounts | None = None,
+        seat_classes: Sequence[KorailSeatClass] | KorailSeatClass = (
+            KorailSeatClass.GENERAL
+        ),
+        job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
+        seats: Sequence[Sequence[KorailSeatAssignment]] | None = None,
+    ) -> MutationPreview | ReservationHoldResponse:
+        """Hold one 환승 reservation -- two legs, one PNR.
+
+        The same route, consent gate and session requirement as :meth:`reserve`;
+        the app uses one endpoint and one request builder for both, and the leg
+        count alone changes the form (``C5/a.java:52-119``). Everything
+        :meth:`reserve` says about consent, ``dry_run`` and the returned hold
+        applies unchanged.
+
+        ``legs`` must be exactly two :class:`~korail_mobile_api.TrainSummary`
+        rows in boarding order --
+        :attr:`TransferItinerary.legs
+        <korail_mobile_api.TransferItinerary.legs>` from
+        :meth:`search_transfer_trains` produces them. Any other count is
+        refused before anything is built; see
+        :data:`~korail_mobile_api.KORAIL_MAX_JOURNEY_LEGS`.
+
+        ``seat_classes`` takes one :class:`~korail_mobile_api.KorailSeatClass`
+        for both legs or one per leg -- the app's cabin choice is per leg
+        (``C5/a.java:59``/``:97``). ``seats`` likewise takes one seat list per
+        leg, since the seat picker is opened per journey index
+        (``C5/a.java:120-133``).
+
+        ``job_type=STANDBY`` is **refused**: 예약대기 does not exist for a
+        transfer itinerary. ``a5/k.java:120-127`` returns false from the
+        standby-eligibility check for any non-direct result, and the app's only
+        ``txtJobId="1102"`` sits on the direct screen
+        (``DirectInquiryActivity.java:434``).
+
+        NOT live-verified. No transfer hold has been sent to KORAIL, and note
+        that :meth:`cancel_unpaid_hold` currently accepts single-journey holds
+        only, so a live transfer hold cannot be released through this client.
+        """
+        require_mutation_consent(consent, "reserve")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL reservation requires an authenticated session"
+            )
+        route = "/classes/com.korail.mobile.certification.TicketReservation"
+        form = build_transfer_reservation_form(
+            self.config,
+            legs,
+            passengers=passengers,
+            seat_classes=seat_classes,
+            job_type=job_type,
+            seats=seats,
+        )
+        if consent.dry_run:
+            return MutationPreview(
+                category="reserve",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            response = self.http.post_mutation_form(
+                route, form, consent=consent, category="reserve"
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+        return self._hold_from_reservation_response(response)
 
     def cancel_unpaid_hold(
         self,

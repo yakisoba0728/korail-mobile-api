@@ -261,6 +261,12 @@ def parse_train_search_metadata(
         next_page_flag=optional("h_next_pg_flg"),
         next_query_station_no=optional("h_qry_st_no_next"),
         next_train_no=optional("h_trn_no_next"),
+        # The 환승 cursor pair (b5/c.java:370-371). Read on every response
+        # because the app reads them on every response; they simply come back
+        # empty for a direct search, and TransferSearchResult.next_page applies
+        # the app's both-non-empty rule.
+        next_preceding_train_no=optional("h_prcd_trn_no_next"),
+        next_connecting_train_no=optional("h_ectb_trn_no_next"),
         result_count=optional("h_rslt_cnt"),
         first_seat_count=optional("h_seat_cnt_first"),
         second_seat_count=optional("h_seat_cnt_second"),

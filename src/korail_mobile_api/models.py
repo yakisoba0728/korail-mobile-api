@@ -1,6 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from .constants import (
+    KORAIL_DIRECT_ITINERARY_CODE,
+    KORAIL_TRANSFER_ITINERARY_CODE,
+)
 from .errors import KorailProtocolError
 
 
@@ -356,6 +360,27 @@ class TrainSummary:
     )
     total_passenger_count: int | None = None
     goods_no: str | None = field(default=None, repr=False)
+    # The two 환승 markers a ScheduleView row carries
+    # (RsvInquiryResponse.java:75-76, getters at :171/:175).
+    #
+    # ``change_train_sequence`` (``h_chg_trn_seq``) is the leg's position inside
+    # its itinerary, and the app reads it against K4/d's codes -- "1" for a
+    # first leg, "2" for a second. Two independent places test it that way:
+    # u4/a.java:111-131 de-duplicates a newly fetched page against the rows
+    # already held by finding a ``"2"`` row that matches one it has and dropping
+    # that row TOGETHER WITH ITS PREDECESSOR (`list2.get(i - 1)`), and
+    # RsvInquiryRequest.java:164-172 seeds the next page's ``txtGoHour`` from
+    # the last row when that row is a ``"1"`` and from the second-to-last
+    # otherwise. Both only make sense if a ``"2"`` row is the back half of a
+    # pair whose front half is the row before it.
+    #
+    # ``change_train_division_code`` (``h_chg_trn_dv_cd``) is the row's 환승
+    # division; DirectInquiryActivity.java:194 defaults a null one to
+    # ``DIRECT_SQ_NO`` before forwarding it as ``chtnDvCd``. A direct search
+    # leaves both null, which is why both default to ``None`` here rather than
+    # to a code.
+    change_train_sequence: str | None = field(default=None, repr=False)
+    change_train_division_code: str | None = field(default=None, repr=False)
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -463,6 +488,14 @@ class TrainSummary:
                 _train_optional_string(raw, "h_gd_no")
                 or _train_optional_string(raw, "txtGdNo")
             ),
+            change_train_sequence=_train_optional_string(
+                raw,
+                "h_chg_trn_seq",
+            ),
+            change_train_division_code=_train_optional_string(
+                raw,
+                "h_chg_trn_dv_cd",
+            ),
             raw=raw,
         )
 
@@ -540,6 +573,15 @@ class TrainSearchMetadata:
     next_page_flag: str | None = None
     next_query_station_no: str | None = field(default=None, repr=False)
     next_train_no: str | None = field(default=None, repr=False)
+    # The 환승 half of the cursor. b5/c.java:370-371 stashes h_prcd_trn_no_next
+    # and h_ectb_trn_no_next beside the three fields above, and :192-194 replays
+    # them through setSelectTransferPages -- which overwrites qryStTrnNo with
+    # the first and sets qryStTrnNo2 to the second (RsvInquiryRequest.java:
+    # 212-215) -- but only when BOTH are non-empty. A direct search leaves them
+    # empty, which is why a direct next page keeps qryStTrnNo = h_trn_no_next
+    # and qryStTrnNo2 = "".
+    next_preceding_train_no: str | None = field(default=None, repr=False)
+    next_connecting_train_no: str | None = field(default=None, repr=False)
     result_count: str | None = None
     first_seat_count: str | None = None
     second_seat_count: str | None = None
@@ -562,16 +604,26 @@ class TrainSearchContinuation:
     ``setNextTimeTC(h_qry_st_no_next, h_trn_no_next)`` sets ``qryStNo`` and
     ``qryStTrnNo`` (``RsvInquiryRequest.java:174-177``) and
     ``setSelectTransferPage(h_qry_st_no_next, h_rslt_cnt)`` sets ``qryStNo``
-    and ``pgPrCnt`` (``:207-210``). ``setSelectTransferPages`` only fires for a
-    transfer search, whose two extra cursors this direct-search client does not
-    request, so ``qryStTrnNo2`` stays at the first-page ``""``.
+    and ``pgPrCnt`` (``:207-210``).
 
-    Build one with :meth:`TrainSearchResult.next_page` rather than by hand.
+    ``query_train_no2`` is the fourth cursor and belongs to a 환승 search.
+    ``b5/c.java:192-194`` calls ``setSelectTransferPages`` only when both
+    ``h_prcd_trn_no_next`` and ``h_ectb_trn_no_next`` came back non-empty, and
+    that call overwrites ``qryStTrnNo`` with the first and sets ``qryStTrnNo2``
+    to the second (``RsvInquiryRequest.java:212-215``). A direct search never
+    populates the pair, so a direct continuation carries the empty-string
+    default and puts the first page's ``qryStTrnNo2 = ""`` back on the wire --
+    unchanged from before this field existed. It is therefore the one field
+    here that is allowed to be empty.
+
+    Build one with :meth:`TrainSearchResult.next_page` or
+    :meth:`TransferSearchResult.next_page` rather than by hand.
     """
 
     query_station_no: str = field(repr=False)
     query_train_no: str = field(repr=False)
     page_count: str = "10"
+    query_train_no2: str = field(default="", repr=False)
 
     def __post_init__(self) -> None:
         for name in ("query_station_no", "query_train_no", "page_count"):
@@ -580,6 +632,10 @@ class TrainSearchContinuation:
                 raise ValueError(
                     f"TrainSearchContinuation.{name} must be a non-empty string"
                 )
+        if not isinstance(self.query_train_no2, str):
+            raise ValueError(
+                "TrainSearchContinuation.query_train_no2 must be a string"
+            )
 
 
 @dataclass(frozen=True)
@@ -605,6 +661,161 @@ class TrainSearchResult:
                 query_station_no=metadata.next_query_station_no or "",
                 query_train_no=metadata.next_train_no or "",
                 page_count=metadata.result_count or "10",
+            )
+        except ValueError:
+            return None
+
+
+@dataclass(frozen=True)
+class TransferItinerary:
+    """One 환승 itinerary: the two legs a transfer reservation books together.
+
+    A transfer ScheduleView response does NOT nest its legs, and it does not
+    return a separate itinerary object either. It returns the same flat
+    ``trn_infos.trn_info`` list a direct search returns, and the app pairs it up
+    **positionally**:
+
+    * ``a5/k.java:142-172`` (``P0``) walks the list and, on the ``!isDirect``
+      branch, opens a fresh ``new Bundle[2]`` whenever ``i % 2 == 0`` and only
+      appends the row once ``i % 2 == 1`` -- so rows 0/1 are one itinerary,
+      rows 2/3 the next, and a trailing unpaired row is silently dropped.
+    * ``a5/k.java:108-110`` (``E0``) reads a selected itinerary straight back
+      out of the flat list as ``{list[i * 2], list[i * 2 + 1]}``, and that array
+      is exactly what the reservation's journey builder receives
+      (``a5/u.java:495``/``:938`` call ``N0(E0())``).
+    * ``a5/u.java:947-956`` names the transfer station the same way, off
+      ``f236n.get(i * 2)`` and ``f236n.get(i * 2 + 1)``.
+
+    ``h_chg_trn_seq`` is the server's own copy of that position -- ``"1"`` on a
+    first leg, ``"2"`` on a second. This class uses the positional pairing the
+    app uses, and treats the sequence markers, when the server populates them,
+    as a consistency check rather than as the pairing key; see
+    :func:`pair_transfer_itineraries`.
+    """
+
+    first: TrainSummary
+    second: TrainSummary
+
+    @property
+    def legs(self) -> tuple[TrainSummary, ...]:
+        """The itinerary's legs in boarding order, ready for ``reserve_transfer``."""
+        return (self.first, self.second)
+
+    @property
+    def transfer_station_code(self) -> str | None:
+        """Where the passenger changes trains, or ``None`` if the legs disagree.
+
+        The app never sends this as a field of its own: the change of trains is
+        simply leg 1's arrival and leg 2's departure, which the reservation form
+        restates as ``txtArvRsStnCd1`` and ``txtDptRsStnCd2``.
+
+        ``None`` is a real answer, not a parse failure. ``a5/u.java:947-956``
+        prints leg 1's arrival name and leg 2's departure name as two separate
+        labels and only collapses them to one when they are equal, so KORAIL
+        does return itineraries that arrive at one station and leave from
+        another. Read :attr:`arrival_station_code <TrainSummary>` on
+        :attr:`first` and :attr:`departure_station_code <TrainSummary>` on
+        :attr:`second` when that case matters to you.
+        """
+        arrival = self.first.arrival_station_code
+        if arrival is not None and arrival == self.second.departure_station_code:
+            return arrival
+        return None
+
+    @property
+    def transfer_station_name(self) -> str | None:
+        """The transfer station's name under the same equal-or-``None`` rule."""
+        arrival = self.first.arrival_station_name
+        if arrival is not None and arrival == self.second.departure_station_name:
+            return arrival
+        return None
+
+
+def pair_transfer_itineraries(
+    trains: list[TrainSummary],
+) -> list[TransferItinerary]:
+    """Chunk a flat transfer result list into itineraries, the app's way.
+
+    Mirrors ``a5/k.java:156-170`` exactly, including its treatment of a trailing
+    odd row: the app adds a row to the rendered list only on ``i % 2 == 1``, so
+    a final unpaired leg is dropped rather than shown as a bookable half.
+
+    Raises :class:`KorailProtocolError` when the server populated
+    ``h_chg_trn_seq`` on a row but not as ``"1"`` then ``"2"``. That check is
+    this package's, not the app's -- the app pairs blind -- but a misaligned
+    list would otherwise hand :meth:`KorailClient.reserve_transfer` two rows
+    that are not one itinerary, and this package will not build a form it cannot
+    justify. A response that omits the marker entirely is accepted, because
+    ``DirectInquiryActivity.java:194-195`` and ``TransferInquiryActivity.java:44``
+    both show the app defaulting a null marker from the row's position.
+    """
+    itineraries: list[TransferItinerary] = []
+    for index in range(0, len(trains) - 1, 2):
+        first = trains[index]
+        second = trains[index + 1]
+        _assert_leg_sequence(first, index, KORAIL_DIRECT_ITINERARY_CODE)
+        _assert_leg_sequence(second, index + 1, KORAIL_TRANSFER_ITINERARY_CODE)
+        itineraries.append(TransferItinerary(first=first, second=second))
+    return itineraries
+
+
+def _assert_leg_sequence(
+    train: TrainSummary,
+    index: int,
+    expected: str,
+) -> None:
+    sequence = train.change_train_sequence
+    if sequence is not None and sequence.strip() and sequence != expected:
+        raise KorailProtocolError(
+            "KORAIL transfer search returned a misaligned leg: row "
+            f"{index} carries h_chg_trn_seq {sequence!r}, expected {expected!r}"
+        )
+
+
+@dataclass(frozen=True)
+class TransferSearchResult:
+    """One page of 환승 itineraries.
+
+    ``trains`` is the untouched flat row list the server sent, in server order;
+    ``itineraries`` is that list paired up by :func:`pair_transfer_itineraries`.
+    Both are exposed because the app keeps both too -- ``a5/k.java``'s ``f236n``
+    is the flat list it indexes with ``i * 2`` and ``f237o`` is the paired one
+    it renders.
+    """
+
+    itineraries: list[TransferItinerary]
+    trains: list[TrainSummary]
+    response: BaseKorailResponse
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
+
+    def next_page(self) -> TrainSearchContinuation | None:
+        """Cursor for the page after this one, or ``None`` when there is none.
+
+        Same ``h_next_pg_flg == "Y"`` gate as a direct search
+        (``b5/c.java:381-387``), but the cursor is not the same cursor. A
+        transfer page comes back with two extra fields, and ``b5/c.java:192-194``
+        replays them through ``setSelectTransferPages``, which overwrites
+        ``qryStTrnNo`` with ``h_prcd_trn_no_next`` and sets ``qryStTrnNo2`` to
+        ``h_ectb_trn_no_next`` (``RsvInquiryRequest.java:212-215``). The app
+        applies that overwrite only when BOTH are non-empty, so this does too:
+        with either missing the cursor stays the direct-search one built at
+        ``:186``/``:190`` from ``h_trn_no_next``.
+        """
+        metadata = self.metadata
+        if metadata.next_page_flag != "Y":
+            return None
+        preceding = metadata.next_preceding_train_no or ""
+        connecting = metadata.next_connecting_train_no or ""
+        transfer_cursor = bool(preceding.strip()) and bool(connecting.strip())
+        try:
+            return TrainSearchContinuation(
+                query_station_no=metadata.next_query_station_no or "",
+                query_train_no=(
+                    preceding if transfer_cursor else metadata.next_train_no or ""
+                ),
+                page_count=metadata.result_count or "10",
+                query_train_no2=connecting if transfer_cursor else "",
             )
         except ValueError:
             return None

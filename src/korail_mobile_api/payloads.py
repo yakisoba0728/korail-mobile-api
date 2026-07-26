@@ -1,6 +1,10 @@
 import time
 
 from .config import KorailConfig
+from .constants import (
+    KORAIL_DIRECT_ITINERARY_CODE,
+    KORAIL_TRANSFER_ITINERARY_CODE,
+)
 from .errors import KorailProtocolError
 from .models import TrainSearchContinuation, TrainSearchQuery, TrainSummary
 
@@ -237,6 +241,7 @@ def build_train_search_form(
     sid: str,
     member_card_no: str | None = None,
     continuation: TrainSearchContinuation | None = None,
+    transfer: bool = False,
 ) -> dict[str, str]:
     """Build the ``seatMovie.ScheduleView`` form for one page of results.
 
@@ -247,6 +252,25 @@ def build_train_search_form(
     ``qryStTrnNo``/``qryStTrnNo2`` are always on the wire — they are not optional
     transfer-only extras. Pass a :class:`TrainSearchContinuation` (from
     :meth:`TrainSearchResult.next_page`) to request the page after that one.
+
+    ``transfer=True`` asks the same endpoint for 환승 itineraries instead of
+    직통 runs. Exactly one field moves: ``radJobId`` goes from
+    :data:`~korail_mobile_api.KORAIL_DIRECT_ITINERARY_CODE` to
+    :data:`~korail_mobile_api.KORAIL_TRANSFER_ITINERARY_CODE`. That really is
+    the whole of the app's own transfer re-query. Its WRD000061 dialog handler
+    (``DirectInquiryActivity.java:284-296``, the ``102``/확인 branch of ``n3``)
+    calls ``rsvInquiryRequest.setRadJobId(TRANSFER_SQ_NO.getCode())`` on the
+    *same* ``RsvInquiryRequest`` object it had already built for the direct
+    search and hands that object straight to ``TransferInquiryActivity`` as the
+    ``INQUIRY_REQUEST`` extra; nothing else on it is touched. Confirmed against
+    ``smali/…/DirectInquiryActivity.smali:1677-1689``, which contains no other
+    setter between reading the enum and the ``setRadJobId`` call.
+
+    ``chtnCnt``/``chtnRsStnCd1``/``trnGpCnt``/``trnGpCd1`` — the tail of the
+    field list in ``SeatMovieService.java:14`` — are NOT part of it:
+    ``b5/c.java:154-160`` sets those only when the user has additionally pinned a
+    specific 환승역 through the ``TRANSFER_CHTNRSSTNCD`` intent extra, which is a
+    separate screen this client does not drive.
     """
     if continuation is not None and type(continuation) is not (
         TrainSearchContinuation
@@ -260,7 +284,11 @@ def build_train_search_form(
         "Version": config.version,
         "Sid": sid,
         "txtMenuId": "11",
-        "radJobId": "1",
+        "radJobId": (
+            KORAIL_TRANSFER_ITINERARY_CODE
+            if transfer
+            else KORAIL_DIRECT_ITINERARY_CODE
+        ),
         "selGoTrain": query.train_group_code,
         "txtTrnGpCd": query.train_group_code,
         "txtGoStart": departure_name,
@@ -300,10 +328,12 @@ def build_train_search_form(
     else:
         form["qryStNo"] = continuation.query_station_no
         form["qryStTrnNo"] = continuation.query_train_no
-        # setSelectTransferPages only fires for a transfer search (b5/c.java:192
-        # requires both transfer cursors non-empty), so a direct next page keeps
-        # the first-page "".
-        form["qryStTrnNo2"] = ""
+        # setSelectTransferPages only fires when both transfer cursors came back
+        # non-empty (b5/c.java:192-194), which a direct search never does. The
+        # continuation carries the outcome of that rule rather than re-deciding
+        # it here: TrainSearchResult.next_page leaves query_train_no2 at "" and
+        # TransferSearchResult.next_page fills it from h_ectb_trn_no_next.
+        form["qryStTrnNo2"] = continuation.query_train_no2
         form["pgPrCnt"] = continuation.page_count
     return form
 
