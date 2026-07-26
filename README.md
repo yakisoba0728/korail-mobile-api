@@ -7,13 +7,15 @@ requests. It also retains the static reverse-engineering report for `korail.apk`
 Android package `com.korail.talk` version `6.5.0`, as the package's historical
 evidence map.
 
-The reviewed package boundary contains 58 routes and 72 public methods. All 58
+The reviewed package boundary contains 58 routes and 73 public methods. All 58
 routes are login/read routes: 56 reads plus the login POST and the server-side
 logout GET. The seven mutation routes are tracked separately and
 are never added to the read-only allowlist. Sixty-two of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
-seven, `reserve`, `reserve_transfer`, `confirm_standby_hold`,
-`cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, and `refund`, are
+eleven, `reserve`, `reserve_transfer`, `reserve_merge`,
+`reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
+`pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card` and
+`extend_discount_card`, are
 the consent-gated mutation methods. Each is denied unless the caller supplies a
 `MutationConsent` that opts into its category; with the default `dry_run=True`
 each merely validates its inputs and returns a redacted `MutationPreview` of the
@@ -862,6 +864,115 @@ Nothing below has been run.
 > it was reported rather than made. **Until it lands, do not send a live
 > transfer hold unless you are prepared to cancel it in the KORAIL app or on the
 > website**, or it will sit unpaid until KORAIL expires it.
+
+### 병합예약 (입석+좌석) — one train, split at a mid station
+
+**Implemented and NEVER TRANSMITTED.** No form in this section has been sent to
+KORAIL.
+
+병합 is the feature whose name most invites the wrong model. It is **not** a
+transfer, and it is **not** a third case of the journey loop that builds 직통 and
+환승. It is one physical train sold as two journeys so that the two halves can be
+seated differently — the app's own words are "구간을 좌석+좌석 또는 좌석+입석으로
+연결하여 이용하실 수 있습니다" (`res/values/strings.xml:577`) under the title
+좌석 연결역 선택 (`:702`). You board once and never change train.
+
+`K4/e`'s four members are the journey types, and **three of the four reach jadx
+as unrelated same-valued constants**, so all four were resolved from bytecode at
+`analysis/apktool/smali/K4/e.smali:31-55`:
+
+| member | 이름 | code | jadx rendered it as |
+| --- | --- | --- | --- |
+| `DIRECT` | 직통 | `11` | (correct) |
+| `TRANSFER` | 환승 | `14` | `TicketSelfCheckinStatusActivity.CHECKIN_STATUS_EXCEED` |
+| `STANDING_SEAT_1` | 병합 선행 | `21` | `I4.a.BEFORE_DEPARTURE` |
+| `STANDING_SEAT_2` | 병합 후행 | `22` | (correct) |
+
+#### The flow is five steps, and two of them are the server's
+
+1. **Eligibility is one flag.** `S4/J.java:61-63`'s `isMixedSeat(cabin,
+   h_yms_apl_flg)` is the only row property consulted. Evaluated per cabin it
+   collapses to two sets — 일반실 merges on `A`/`G`, 특실 on `A`/`S`
+   (`KORAIL_MERGE_SEAT_FLAGS_BY_CABIN`, and `is_merge_eligible`). `a5/u.java:378-380`
+   computes it per row and `:394-397` re-labels the booking button 입석+좌석
+   예매 (`strings.xml:425`) and sets its tag to `"1202"`.
+2. **The first hold is the ordinary direct form with one field changed.**
+   `DirectInquiryActivity.java:448-451` reads that tag and does
+   `setJobId("1202")`; nothing else moves. `reserve(train,
+   job_type=KorailReservationJobType.MERGE_STANDING)` is that call, and a
+   contract test asserts the only difference from the live-verified one-adult
+   form is `txtJobId`.
+3. **KORAIL offers the merge, not the app.** The reply's own message text
+   carries the literal `<중간연결역 변경>` (`strings.xml:2018`); `S4/x.java:93-109`
+   copies `h_msg_mndry`/`h_msg_txt5` into the confirm screen verbatim, the span
+   table at `res/values/arrays.xml:421-438` makes exactly that literal tappable
+   (`K6/C5956a.java:74-77`), and tapping it is `setResult(RESULT_OK)` + `finish`
+   (`i6/ActivityC5799a.java:70-73`) back to the requestCode-119 caller
+   (`C5/a.java:239`). **There is nothing to call at this step.** Whether a given
+   hold is mergeable is a property of KORAIL's reply, so an integrator should
+   look for that literal in the hold's message text.
+4. **`research.mergeSeatsC.do` names the 연결역 and returns the split train.**
+   Already implemented: `get_merge_seats_inquiry`. Its `intermediate_stations`
+   are the dialog's list and its `trains` are the same train number twice, split
+   at the chosen station.
+5. **The second hold replaces the first.** The app cancels the standing hold
+   (ReservationCancel then ReservationCancelChk —
+   `DirectInquiryActivity.java:227-250`; the `AutoRsvCancel*` DAOs are those two
+   subclassed only to carry the new trains alongside) and re-books it as one
+   reservation of two journeys. `reserve_merge` builds that second hold. The
+   cancel is deliberately **not** performed inside it: silently cancelling a
+   live PNR under a `"reserve"` consent is precisely the category confusion the
+   gates exist to prevent, so the caller runs `cancel_unpaid_hold` under its own
+   `"cancel"` consent.
+
+#### Where the merged form diverges from a 환승
+
+Step 5's builder is `DirectInquiryActivity.java:576-601`, not `C5/a.java`'s
+loop, and it differs in four ways — all re-read as
+`analysis/apktool/smali/…/DirectInquiryActivity.smali:5580-6010`:
+
+| what | 환승 | 병합 | evidence |
+| --- | --- | --- | --- |
+| `txtJrnyTpCd{i}` | `14` on **both** legs (keyed on array LENGTH) | `21` then `22` (keyed on the loop INDEX) | `smali:5658`, `if-nez v2` |
+| `txtStndFlg` | derived from `isStndSeat` per leg | pinned `"Y"` | `smali:5887-5891`, a bare `const-string "Y"` |
+| `txtPsrmClCd2` | read per leg — the halves may differ | **copied** from `txtPsrmClCd1` | `smali:5919-5983` |
+| `arvTm_` | one per leg, each that leg's arrival | `arvTm_1` only, and it is the **whole route's** arrival time | no `setArvTm` call exists in `smali:5730-6010` |
+
+The last row is the one worth staring at. The merged request is a *clone* of the
+`"1202"` hold's (`ReservationRequest.java:29-46`) and `OJrny` merges rather than
+replaces (`:158-160`), so the standing hold's `arvTm_1` survives untouched into
+a form where leg 1 now ends at the mid station. It is stale on the wire, and
+reproducing the app means reproducing it — which is why
+`build_merge_reservation_form` takes the standing hold's `TrainSummary` as well
+as the two split legs.
+
+`txtJrnyCnt` is `"2"`, `txtJrnySqno` is `"001"`/`"002"` off the loop index, and
+`txtJobId` goes back to `"1101"`: the `"1202"` job id belongs only to the hold
+being replaced.
+
+#### What the operator must live-verify
+
+1. **Find a merge-eligible row.** Search any busy corridor near departure and
+   look for `TrainSummary.merge_seat_application_flag` in `{A, G}` for 일반실.
+   This costs nothing — it is a read.
+2. **Dry-run the standing hold**, then send it: `reserve(train,
+   job_type=MERGE_STANDING, consent=MutationConsent(allow_reserve=True,
+   dry_run=False))`. **This creates a real unpaid 입석 PNR** and must be
+   cancelled or paid. Cost: nothing if cancelled promptly.
+3. **Check the reply's message text for `<중간연결역 변경>`.** This is the one
+   claim in this section that no amount of static reading can settle: that
+   KORAIL puts that literal in `h_msg_mndry`/`h_msg_txt5` of a `"1202"` reply.
+   If it is absent, the merge offer is gated on something else and step 4 is
+   the fallback probe.
+4. **`get_merge_seats_inquiry`** with that train. Confirm `midStnList` is
+   populated and `trn_infos.trn_info` holds exactly two rows carrying the same
+   `h_trn_no`. Also a read, so also free.
+5. **Cancel the standing hold, then `reserve_merge`.** Expect a hold whose
+   `h_jrny_cnt` is two. Cost: nothing if the merged hold is cancelled too.
+
+Unknown until step 3 or 5 runs: whether `"1202"` is accepted at all outside the
+app's own flow, and whether KORAIL tolerates the stale `arvTm_1` or validates it
+against leg 1's real arrival.
 
 ### 할인 / 복지 / 쿠폰 surface
 

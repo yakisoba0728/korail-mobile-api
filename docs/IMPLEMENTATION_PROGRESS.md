@@ -125,8 +125,8 @@ a live call does.
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 58 exact login/read routes and 72 public methods (62 login/read plus the consent-gated mutation methods `reserve`,
-  `reserve_transfer`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, and `refund`,
+- The current package boundary is 58 exact login/read routes and 73 public methods (62 login/read plus the consent-gated mutation methods `reserve`,
+  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`, and `extend_discount_card`,
   which return a
   redacted preview by default and send a live state change only with a
   `dry_run=False` matching-category consent via the double-gated

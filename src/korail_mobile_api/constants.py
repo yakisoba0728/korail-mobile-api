@@ -64,7 +64,7 @@ class KorailSeatClass(StrEnum):
 class KorailReservationJobType(StrEnum):
     """``txtJobId``: which of the booking screen's actions a hold performs.
 
-    All three POST the same route
+    All four POST the same route
     (``certification.TicketReservation``, ``CertificationService.java:52-54``)
     with the same passenger, seat and journey maps; the job id -- and, for
     :attr:`SEAT_DESIGNATED`, one extra ``OSrcar`` map -- is the whole
@@ -83,11 +83,21 @@ class KorailReservationJobType(StrEnum):
     * :attr:`SEAT_DESIGNATED` (``"1103"``) is set the moment the seat map
       returns a selection (``C5/a.java:143-146``): the activity copies
       ``SEAT_SELECT_DATA`` into a fresh ``OSrcar`` and switches the job id.
+    * :attr:`MERGE_STANDING` (``"1202"``) is 입석+좌석 예매, the FIRST of the
+      two holds a 병합예약 is made of. It is the ordinary single-leg form with
+      nothing changed but the job id: ``a5/u.java:394-397`` tags the booking
+      button ``"1202"`` when the row is merge-eligible, and
+      ``DirectInquiryActivity.java:448-451`` does
+      ``if ("1202".equals(button.getTag())) request.setJobId("1202")`` and then
+      falls into the same send path. See
+      :data:`KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` for the second hold, which
+      is the one that is actually 병합.
     """
 
     IMMEDIATE = "1101"
     STANDBY = "1102"
     SEAT_DESIGNATED = "1103"
+    MERGE_STANDING = "1202"
 
 
 # The exact h_wait_rsv_flg value that makes a train standby-eligible.
@@ -185,12 +195,6 @@ KORAIL_TRANSFER_ITINERARY_CODE = "2"
 # decompiler artefact, so it was re-read from bytecode: smali/K4/e.smali:40
 # (DIRECT -> "11") and :68 (TRANSFER -> "14"). "14" it is.
 #
-# The two remaining K4/e members, STANDING_SEAT_1 ("병합 선행", "21") and
-# STANDING_SEAT_2 ("병합 후행", "22"), belong to 병합예약 -- the merge-standing
-# flow that DirectInquiryActivity.java:576-601 builds off an AutoRsvCancelCheck
-# response -- which this package does not implement, so they are deliberately
-# absent.
-#
 # Note what C5/a.java:60 actually keys on: `(trainInfoArr.length == 1 ? DIRECT :
 # TRANSFER).getCode()` sits INSIDE the per-leg loop but tests the array LENGTH,
 # not the loop index. Both legs of a transfer therefore carry
@@ -202,6 +206,89 @@ KORAIL_TRANSFER_ITINERARY_CODE = "2"
 # on `if-nez v1` -- the loop INDEX. The two really do differ.
 KORAIL_DIRECT_JOURNEY_TYPE_CODE = "11"
 KORAIL_TRANSFER_JOURNEY_TYPE_CODE = "14"
+
+# ---------------------------------------------------------------------------
+# 병합예약 -- ONE train, split at a mid station so its two halves can be seated
+# differently. Not a transfer, and not a third parallel case of C5/a.java's
+# journey loop: it is built somewhere else entirely.
+#
+# K4/e's other two members. jadx substituted an unrelated same-valued constant
+# for STANDING_SEAT_1 too (`I4.a.BEFORE_DEPARTURE`), exactly as it did for
+# TRANSFER, so all four were re-read from bytecode -- smali/K4/e.smali:31-55:
+#
+#     DIRECT          "직통"                  ("직통")      "11"
+#     TRANSFER        "환승"                  ("환승")      "14"
+#     STANDING_SEAT_1 "병합 선행"     ("병합 선행")  "21"
+#     STANDING_SEAT_2 "병합 후행"     ("병합 후행")  "22"
+#
+# WHAT 병합 IS, end to end:
+#
+#   1. A search row is merge-eligible when S4/J.java:61-63's isMixedSeat() says
+#      so -- see KORAIL_MERGE_SEAT_FLAGS_BY_CABIN below. a5/u.java:378-380
+#      computes it per row and :394-397 then re-labels the booking button
+#      "입석+좌석 예매" (res/values/strings.xml:425) and sets its tag to "1202".
+#   2. Tapping it sends the ORDINARY single-leg direct form with
+#      txtJobId="1202" (KorailReservationJobType.MERGE_STANDING) --
+#      DirectInquiryActivity.java:448-451. That hold buys the whole route
+#      standing.
+#   3. KORAIL's reply carries the literal "<중간연결역 변경>"
+#      (res/values/strings.xml:2018) in its own message text. The confirm screen
+#      renders every message through a span table (res/values/arrays.xml:421-438)
+#      and K6/C5956a.java:74-77 makes that one literal tappable; tapping it is
+#      setResult(RESULT_OK)+finish (i6/ActivityC5799a.java:70-73) back to the
+#      inquiry screen, which launched it with requestCode 119 (C5/a.java:239).
+#      So the offer to merge is the SERVER's, not the client's.
+#   4. DirectInquiryActivity.java:294-296 answers that result by asking
+#      research.mergeSeatsC.do (already implemented here as
+#      KorailClient.get_merge_seats_inquiry) for the stations at which the
+#      train's seat inventory changes, and shows 좌석 연결역 선택
+#      (strings.xml:702) -- "구간을 좌석+좌석 또는 좌석+입석으로 연결하여
+#      이용하실 수 있습니다" (strings.xml:577).
+#   5. Confirming cancels the standing hold -- ReservationCancel then
+#      ReservationCancelChk (DirectInquiryActivity.java:227-250; AutoRsvCancel*
+#      are those two DAOs subclassed only to carry the new trains alongside) --
+#      and re-books it as ONE reservation of TWO journeys on that ONE train.
+#
+# Step 5 is the only genuinely new form, and it is NOT built by C5/a.java's
+# loop. DirectInquiryActivity.java:576-601 has its own, and it differs from
+# that loop in four ways, all re-read in bytecode at
+# smali/…/DirectInquiryActivity.smali:5580-6010:
+#
+#   * txtJrnyTpCd{i} keys on the loop INDEX, not the array length --
+#     `if-nez v2` at :5658 picks STANDING_SEAT_1 for index 0 and
+#     STANDING_SEAT_2 otherwise. Leg 1 is "21" and leg 2 is "22". This is the
+#     opposite of a 환승, where both legs carry "14".
+#   * txtStndFlg is pinned "Y" (:5887-5891), not derived from isStndSeat.
+#   * leg 2's cabin is COPIED from leg 1's txtPsrmClCd1 rather than read per
+#     leg (:5919-5983), defaulting to 일반실 when leg 1 somehow has none.
+#   * there is no setArvTm call at all, so no arvTm_ key is written for either
+#     leg. Because the request is a clone of the "1202" hold's
+#     (ReservationRequest.java:29-46) and OJrny merges rather than replaces
+#     (:158-160), the hold's arvTm_1 -- the WHOLE ROUTE's arrival time --
+#     survives into the merged form, and there is no arvTm_2.
+#
+# txtJrnyCnt is "2" and txtJobId goes back to "1101"; txtJrnySqno stays
+# "001"/"002" off the loop index, as on a transfer.
+KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE = "21"
+KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE = "22"
+
+# `h_yms_apl_flg` values that make a search row 병합-eligible, per cabin.
+#
+# S4/J.java:61-63, verbatim:
+#
+#     "A".equals(f) || (GENERAL.equals(cabin) || "M".equals(f) ? "G".equals(f)
+#                                                             : "S".equals(f))
+#
+# ("G" reaches jadx as R1.x.MAX_AD_CONTENT_RATING_G, another same-valued
+# substitution.) Evaluate it per cabin and it collapses to two small sets: a
+# 일반실 request merges on "A" or "G", a 특실 request on "A" or "S" -- the "M"
+# arm only ever reaches `"G".equals("M")`, which is false, so it changes
+# nothing. Keyed by KorailSeatClass value so the table cannot drift from the
+# cabin codes.
+KORAIL_MERGE_SEAT_FLAGS_BY_CABIN = {
+    "1": frozenset({"A", "G"}),
+    "2": frozenset({"A", "S"}),
+}
 
 # The most legs one reservation may carry.
 #

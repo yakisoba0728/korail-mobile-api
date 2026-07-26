@@ -224,7 +224,7 @@ def test_route_method_export_and_dynapath_boundaries_are_exact():
         )
         if not name.startswith("_")
     }
-    assert len(public_methods) == 72
+    assert len(public_methods) == 73
 
     expected_exports = {
         "TicketDuplicationCheckRequest": (

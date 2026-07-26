@@ -39,6 +39,7 @@ from .mutation_payloads import (
     build_discount_card_extension_query,
     build_discount_card_purchase_form,
     build_discount_card_reservation_form,
+    build_merge_reservation_form,
     build_refund_form,
     build_reservation_form,
     build_standby_wait_form,
@@ -152,6 +153,7 @@ from .read_models import (
     TicketReceiptResponse,
     TicketReservationDetailResponse,
     TicketDuplicationCheckResponse,
+    TrainScheduleItem,
     TripChangeDateResponse,
     TripMenuResponse,
 )
@@ -1741,6 +1743,77 @@ class KorailClient:
             seat_classes=seat_classes,
             job_type=job_type,
             seats=seats,
+        )
+        if consent.dry_run:
+            return MutationPreview(
+                category="reserve",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            response = self.http.post_mutation_form(
+                route, form, consent=consent, category="reserve"
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+        return self._hold_from_reservation_response(response)
+
+    def reserve_merge(
+        self,
+        standing_hold_train: TrainSummary,
+        legs: Sequence[TrainScheduleItem],
+        *,
+        consent: MutationConsent,
+        passengers: KorailPassengerCounts | None = None,
+        seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
+    ) -> MutationPreview | ReservationHoldResponse:
+        """Hold a 병합예약 -- ONE train split at a mid station, two journeys.
+
+        The second and last hold of the merge flow. The first is
+        :meth:`reserve` with
+        ``job_type=KorailReservationJobType.MERGE_STANDING`` (``"1202"``,
+        입석+좌석 예매), which buys the whole route standing; this one replaces
+        it with a two-journey booking on the same train, split at one of the
+        stations :meth:`get_merge_seats_inquiry` names.
+        :data:`~korail_mobile_api.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE`
+        documents the five-step flow and its evidence.
+
+        Same route, consent gate and session requirement as :meth:`reserve`. It
+        is the reserve route and the ``"reserve"`` category: a merged booking is
+        a booking, and it moves no money.
+
+        ``standing_hold_train`` is the 직통 row the ``"1202"`` hold was placed
+        on -- it is needed for more than validation, because the app's merged
+        form carries that row's arrival time in ``arvTm_1`` (see
+        :func:`~korail_mobile_api.mutation_payloads.build_merge_reservation_form`).
+        ``legs`` are the two rows from
+        :attr:`MergeSeatsInquiryResponse.trains
+        <korail_mobile_api.MergeSeatsInquiryResponse.trains>`, in order.
+
+        WHAT THIS METHOD DOES NOT DO: the app cancels the standing hold before
+        re-booking (``DirectInquiryActivity.java:227-250`` -- ReservationCancel
+        then ReservationCancelChk). That is :meth:`cancel_unpaid_hold`, under
+        the ``"cancel"`` consent, and it is deliberately left to the caller
+        rather than performed here: a method that silently cancels a live PNR
+        under a ``"reserve"`` consent would be exactly the category confusion
+        this client's gates exist to prevent.
+
+        NEVER TRANSMITTED. No merged form built here has been sent to KORAIL.
+        """
+        require_mutation_consent(consent, "reserve")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL reservation requires an authenticated session"
+            )
+        route = "/classes/com.korail.mobile.certification.TicketReservation"
+        form = build_merge_reservation_form(
+            self.config,
+            standing_hold_train,
+            legs,
+            passengers=passengers,
+            seat_class=seat_class,
         )
         if consent.dry_run:
             return MutationPreview(

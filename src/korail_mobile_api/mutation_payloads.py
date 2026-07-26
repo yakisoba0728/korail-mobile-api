@@ -11,6 +11,9 @@ from .constants import (
     KORAIL_DISCOUNT_CARD_MENU_ID,
     KORAIL_MAX_DISCOUNT_CARD_SECTIONS,
     KORAIL_MAX_JOURNEY_LEGS,
+    KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE,
+    KORAIL_MERGE_SEAT_FLAGS_BY_CABIN,
+    KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE,
     KORAIL_STANDBY_WAIT_FLAG,
     KORAIL_TRANSFER_ITINERARY_CODE,
     KORAIL_TRANSFER_JOURNEY_TYPE_CODE,
@@ -19,6 +22,7 @@ from .constants import (
 )
 from .errors import KorailProtocolError
 from .models import TrainSummary
+from .read_models import TrainScheduleItem
 from .mutation_models import (
     DiscountCardAdditionalUser,
     DiscountCardPurchaseRequest,
@@ -284,6 +288,284 @@ def build_transfer_reservation_form(
     )
 
 
+def build_merge_reservation_form(
+    config: KorailConfig,
+    standing_hold_train: TrainSummary,
+    legs: Sequence[TrainScheduleItem],
+    *,
+    passengers: KorailPassengerCounts | None = None,
+    seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
+) -> dict[str, str]:
+    """Build the SECOND hold of a 병합예약 -- one train, two journeys.
+
+    병합 is not a transfer and not a third case of ``C5/a.java``'s journey loop.
+    It is one physical train split at an intermediate station so the two halves
+    can be seated differently (좌석+좌석 or 좌석+입석 --
+    ``res/values/strings.xml:577``), and the app builds it in a loop of its own:
+    ``DirectInquiryActivity.java:576-601``, re-read as
+    ``smali/…/DirectInquiryActivity.smali:5580-6010``. See
+    :data:`~korail_mobile_api.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` for the
+    whole five-step flow and where each step's evidence is.
+
+    The four differences from a 환승 form, all of them from that loop:
+
+    * ``txtJrnyTpCd{i}`` keys on the loop **index**, so leg 1 is ``"21"``
+      (병합 선행) and leg 2 is ``"22"`` (병합 후행). Both legs of a 환승 carry
+      ``"14"``; here they differ, and the bytecode branch is ``if-nez v2`` on the
+      index (``smali:5658``).
+    * ``txtStndFlg`` is pinned ``"Y"`` (``smali:5887-5891``) rather than derived
+      from ``isStndSeat`` -- the whole point of the flow is that the standing
+      hold is being converted, so the app does not re-derive it.
+    * ``txtPsrmClCd2`` is **copied** from ``txtPsrmClCd1`` (``smali:5919-5983``),
+      falling back to 일반실 if the hold somehow carried no cabin. So ``legs``
+      takes ONE ``seat_class``, not one per leg: the app cannot produce a merged
+      booking whose halves are in different cabins even though its 환승 builder
+      can.
+    * there is **no** ``arvTm_2``, and ``arvTm_1`` is the WHOLE ROUTE's arrival
+      time rather than leg 1's. The merge loop never calls ``setArvTm``
+      (no such call anywhere in ``smali:5730-6010``), and the request it fills
+      is a clone of the ``"1202"`` hold's whose ``OJrny`` merges rather than
+      replaces (``ReservationRequest.java:29-46``, ``:158-160``). That is why
+      this builder needs ``standing_hold_train``: the stale arrival time is a
+      real field on the wire and reproducing the app means reproducing it.
+
+    ``standing_hold_train`` is the 직통 row the ``"1202"`` hold was placed on --
+    the same :class:`~korail_mobile_api.TrainSummary` passed to
+    :meth:`KorailClient.reserve
+    <korail_mobile_api.KorailClient.reserve>` with
+    ``job_type=MERGE_STANDING``. ``legs`` are the two rows
+    ``research.mergeSeatsC.do`` answered with, in order, from
+    :attr:`MergeSeatsInquiryResponse.trains
+    <korail_mobile_api.MergeSeatsInquiryResponse.trains>`; they are the same
+    train number twice, split at the chosen 연결역.
+
+    NEVER TRANSMITTED. Nothing built here has been sent to KORAIL, and no
+    live-test path in this repository sends it.
+    """
+    if type(standing_hold_train) is not TrainSummary:
+        raise KorailProtocolError(
+            "KORAIL 병합 reservation requires the exact TrainSummary the "
+            "입석+좌석 hold was placed on"
+        )
+    if isinstance(legs, (str, bytes)) or not isinstance(legs, Sequence):
+        raise KorailProtocolError(
+            "KORAIL 병합 reservation requires a sequence of merge-seat legs"
+        )
+    resolved_legs = tuple(legs)
+    for leg in resolved_legs:
+        if type(leg) is not TrainScheduleItem:
+            raise KorailProtocolError(
+                "KORAIL 병합 reservation legs are the TrainScheduleItem rows "
+                "research.mergeSeatsC.do answers with"
+            )
+    if len(resolved_legs) != KORAIL_MAX_JOURNEY_LEGS:
+        raise KorailProtocolError(
+            f"KORAIL 병합 reservation books exactly {KORAIL_MAX_JOURNEY_LEGS} "
+            f"journeys on one train, got {len(resolved_legs)}: the merge loop "
+            'writes txtJrnyCnt="2" before it starts '
+            "(DirectInquiryActivity.java:578) and the form has no journey-3 "
+            "spelling at all"
+        )
+    if passengers is None:
+        passengers = KorailPassengerCounts()
+    elif type(passengers) is not KorailPassengerCounts:
+        raise KorailProtocolError(
+            "KORAIL reservation requires an exact KorailPassengerCounts"
+        )
+    try:
+        cabin = KorailSeatClass(seat_class)
+    except ValueError:
+        raise KorailProtocolError(
+            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
+        ) from None
+    # The two halves must be the one train the standing hold was placed on.
+    # The app never checks this because it cannot be otherwise -- the rows come
+    # straight back from mergeSeatsC.do, which was asked about that train
+    # (DirectInquiryActivity.java:358-360 sends its txtTrnNo1) -- but a caller
+    # assembling the call by hand can get it wrong, and a merged booking of two
+    # unrelated trains is a 환승 spelled with the wrong journey type.
+    hold_train_no = _required_digits(
+        standing_hold_train.train_no,
+        field="train_no",
+    )
+    for leg in resolved_legs:
+        if _required_digits(leg.train_no, field="train_no") != hold_train_no:
+            raise KorailProtocolError(
+                "KORAIL 병합 reservation splits ONE train: both legs must "
+                f"carry the standing hold's train_no {hold_train_no!r}"
+            )
+    journeys = tuple(_merge_leg_fields(leg) for leg in resolved_legs)
+    form = _common_fields(config)
+    form.update(
+        {
+            "txtMenuId": "11",
+            # Back to "1101". The "1202" job id belongs to the standing hold
+            # this one replaces; the merge loop re-sets it inside the loop
+            # (DirectInquiryActivity.java:583, smali:5573-5575).
+            "txtJobId": KorailReservationJobType.IMMEDIATE.value,
+            "txtGdNo": "",
+            "hidFreeFlg": "N",
+            # Pinned, not derived. smali:5887-5891 is a bare const-string "Y".
+            "txtStndFlg": "Y",
+            "txtTotPsgCnt": str(passengers.total),
+        }
+    )
+    for index, (attribute, passenger_type, discount_code) in enumerate(
+        _PASSENGER_ROWS,
+        start=1,
+    ):
+        form[f"txtCompaCnt{index}"] = str(getattr(passengers, attribute))
+        form[f"txtPsgTpCd{index}"] = passenger_type
+        form[f"txtDiscKndCd{index}"] = discount_code
+    # OSeat. The merge loop re-puts journey 1's pair and appends journey 2's,
+    # into the LinkedHashMap the standing hold left behind, so the order is the
+    # ordinary two-leg order -- see build_transfer_reservation_form.
+    form.update(
+        {
+            "txtSeatAttCd1": "000",
+            "txtSeatAttCd2": "000",
+            "txtSeatAttCd3": "000",
+            _seat_attribute_key(1): "015",
+            "txtSeatAttCd5": "000",
+            "txtPsrmClCd1": cabin.value,
+        }
+    )
+    form[_seat_attribute_key(2)] = "015"
+    # Copied, not read per leg (smali:5919-5983).
+    form["txtPsrmClCd2"] = cabin.value
+    form["txtJrnyCnt"] = KORAIL_TRANSFER_ITINERARY_CODE
+    for journey, fields in enumerate(journeys, start=1):
+        form[f"txtJrnyTpCd{journey}"] = (
+            KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE
+            if journey == 1
+            else KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE
+        )
+        form[f"txtJrnySqno{journey}"] = _sequence_no(
+            KORAIL_DIRECT_ITINERARY_CODE
+            if journey == 1
+            else KORAIL_TRANSFER_ITINERARY_CODE
+        )
+        form[f"txtTrnNo{journey}"] = fields["train_no"]
+        form[f"txtTrnClsfCd{journey}"] = fields["train_class_code"]
+        form[f"txtTrnGpCd{journey}"] = fields["train_group_code"]
+        form[f"txtRunDt{journey}"] = fields["run_date"]
+        form[f"txtDptDt{journey}"] = fields["departure_date"]
+        form[f"txtDptTm{journey}"] = fields["departure_time"]
+        if journey == 1:
+            # The standing hold's own arvTm_1, kept because the merge loop
+            # never overwrites it. It is the arrival time of the WHOLE route,
+            # not of this half.
+            form["arvTm_1"] = _required_pattern(
+                standing_hold_train.arrival_time,
+                field="arrival_time",
+                pattern=_TIME_RE,
+            )
+        form[f"txtDptRsStnCd{journey}"] = fields["departure_station_code"]
+        form[f"txtDptStnConsOrdr{journey}"] = fields[
+            "departure_construction_order"
+        ]
+        form[f"txtDptStnRunOrdr{journey}"] = fields["departure_run_order"]
+        form[f"txtArvRsStnCd{journey}"] = fields["arrival_station_code"]
+        form[f"txtArvStnConsOrdr{journey}"] = fields[
+            "arrival_construction_order"
+        ]
+        form[f"txtArvStnRunOrdr{journey}"] = fields["arrival_run_order"]
+        form[f"txtChgFlg{journey}"] = "N"
+    # No OSrcar: the standing hold cleared it (C5/a.java:118) and the merge
+    # loop never writes one, so an empty @FieldMap contributes no fields.
+    return form
+
+
+def is_merge_eligible(
+    train: TrainSummary,
+    *,
+    seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
+) -> bool:
+    """Would the app offer 입석+좌석 예매 on this search row?
+
+    ``S4/J.java:61-63``'s ``isMixedSeat(cabin, h_yms_apl_flg)``, expressed as
+    the per-cabin flag sets it collapses to -- see
+    :data:`~korail_mobile_api.KORAIL_MERGE_SEAT_FLAGS_BY_CABIN`. It is the only
+    row property the app consults: ``a5/u.java:378-380`` computes it per row and
+    ``:394-397`` re-labels the booking button and tags it ``"1202"`` on the
+    strength of it alone.
+    """
+    if type(train) is not TrainSummary:
+        raise KorailProtocolError(
+            "KORAIL merge eligibility requires an exact TrainSummary"
+        )
+    try:
+        cabin = KorailSeatClass(seat_class)
+    except ValueError:
+        raise KorailProtocolError(
+            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
+        ) from None
+    flag = train.merge_seat_application_flag
+    if not isinstance(flag, str):
+        return False
+    return flag in KORAIL_MERGE_SEAT_FLAGS_BY_CABIN[cabin.value]
+
+
+def _merge_leg_fields(leg: TrainScheduleItem) -> dict[str, str]:
+    """The twelve values one merged journey contributes.
+
+    ``_journey_fields``'s set minus ``arrival_time``: the merge loop reads
+    twelve getters off each ``TrainInfo`` and ``getH_arv_tm()`` is not among
+    them (``smali/…/DirectInquiryActivity.smali:5730-5880``). The thirteenth
+    per-leg key, ``txtChgFlg{i}``, is the constant ``"N"``.
+    """
+    return {
+        "train_no": _required_digits(leg.train_no, field="train_no"),
+        "train_group_code": _required_digits(
+            leg.train_group_code,
+            field="train_group_code",
+        ),
+        "train_class_code": _required_digits(
+            leg.train_class_code,
+            field="train_class_code",
+        ),
+        "run_date": _required_pattern(
+            leg.run_date,
+            field="run_date",
+            pattern=_DATE_RE,
+        ),
+        "departure_date": _required_pattern(
+            leg.departure_date,
+            field="departure_date",
+            pattern=_DATE_RE,
+        ),
+        "departure_time": _required_pattern(
+            leg.departure_time,
+            field="departure_time",
+            pattern=_TIME_RE,
+        ),
+        "departure_station_code": _required_digits(
+            leg.departure_station_code,
+            field="departure_station_code",
+        ),
+        "arrival_station_code": _required_digits(
+            leg.arrival_station_code,
+            field="arrival_station_code",
+        ),
+        "departure_construction_order": _required_digits(
+            leg.departure_construction_order,
+            field="departure_construction_order",
+        ),
+        "arrival_construction_order": _required_digits(
+            leg.arrival_construction_order,
+            field="arrival_construction_order",
+        ),
+        "departure_run_order": _required_digits(
+            leg.departure_run_order,
+            field="departure_run_order",
+        ),
+        "arrival_run_order": _required_digits(
+            leg.arrival_run_order,
+            field="arrival_run_order",
+        ),
+    }
+
+
 # The app's own key-selection methods, which are the reason a third leg is
 # impossible rather than merely unsupported: every one of them is a two-way
 # `i == 1 ? … : …`, so a journey-3 write lands on the journey-2 key.
@@ -476,6 +758,23 @@ def _build_journey_reservation_form(
             "(a5/k.java:120-127) and its only txtJobId \"1102\" is on the "
             "direct screen (DirectInquiryActivity.java:434)"
         )
+    if (
+        job_type is KorailReservationJobType.MERGE_STANDING
+        and len(resolved_legs) > 1
+    ):
+        # The 입석+좌석 button lives on the direct screen only. a5/u.java:346-360
+        # disables the booking button outright while a transfer result has an
+        # unselected leg, and the "1202" tag is set at :394-397 -- inside the
+        # same U1() -- whereas the only reader of that tag is
+        # DirectInquiryActivity.java:448-451, on the direct screen's own
+        # onClick. The merged form that FOLLOWS a "1202" hold has two journeys,
+        # but the hold itself is always one; that form is
+        # build_merge_reservation_form, not this one.
+        raise KorailProtocolError(
+            "KORAIL 입석+좌석 (txtJobId \"1202\") is a 직통 hold: it is the "
+            "FIRST of the two holds a 병합예약 is made of. Its two-journey "
+            "successor is build_merge_reservation_form"
+        )
     assignments = _validated_leg_seats(
         leg_seats,
         leg_count=len(resolved_legs),
@@ -651,6 +950,25 @@ def _assert_leg_is_bookable(
         # standby; a standby train is normally 매진 ("13"), which is exactly the
         # state the "11" rule below refuses.
         return
+    if job_type is KorailReservationJobType.MERGE_STANDING and not (
+        is_merge_eligible(train, seat_class=seat_class)
+    ):
+        # ADDITIVE to the "11" rule below, not instead of it. a5/u.java:346-360
+        # first refuses the booking button outright while any selected cabin
+        # reads 매진 or 좌석부족, and only then (:394-397) does isMixedSeat
+        # decide whether the button becomes 입석+좌석 예매 with tag "1202". This
+        # package cannot reproduce that display-state string -- it is built in
+        # U4.a.b(), which jadx could not decompile -- so the existing, at least
+        # as strict "11" rule stands in for it, and merge-eligibility is checked
+        # on top.
+        raise KorailProtocolError(
+            "KORAIL 입석+좌석 (txtJobId \"1202\") requires a merge-eligible "
+            "row: h_yms_apl_flg must be one of "
+            + ", ".join(
+                sorted(KORAIL_MERGE_SEAT_FLAGS_BY_CABIN[seat_class.value])
+            )
+            + f" for this cabin, got {train.merge_seat_application_flag!r}"
+        )
     # The train list checks the availability code of the cabin the user picked,
     # not always the general one: a5/u.java:319 reads h_gen_rsv_cd for the
     # standard tab and h_spe_rsv_cd for the suite tab (likewise

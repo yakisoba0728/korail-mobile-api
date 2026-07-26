@@ -381,6 +381,15 @@ class TrainSummary:
     # to a code.
     change_train_sequence: str | None = field(default=None, repr=False)
     change_train_division_code: str | None = field(default=None, repr=False)
+    # ``h_yms_apl_flg``: the only input to the app's 병합 (입석+좌석) test.
+    # S4/J.java:61-63's isMixedSeat(cabin, flag) reads nothing else off the row,
+    # and a5/u.java:378-380 feeds each row's value into it to decide whether the
+    # booking button becomes 입석+좌석 예매 with tag "1202" (:394-397). Named for
+    # what it decides rather than for the abbreviation: the same field is
+    # already parsed under a guessed expansion elsewhere in this package, and
+    # only this call site shows what it is actually consulted for. See
+    # KORAIL_MERGE_SEAT_FLAGS_BY_CABIN.
+    merge_seat_application_flag: str | None = field(default=None, repr=False)
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -495,6 +504,10 @@ class TrainSummary:
             change_train_division_code=_train_optional_string(
                 raw,
                 "h_chg_trn_dv_cd",
+            ),
+            merge_seat_application_flag=_train_optional_string(
+                raw,
+                "h_yms_apl_flg",
             ),
             raw=raw,
         )

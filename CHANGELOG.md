@@ -2,6 +2,51 @@
 
 ## Unreleased
 
+- Added: 병합예약. `KorailClient.reserve_merge`,
+  `build_merge_reservation_form`, `is_merge_eligible`,
+  `KorailReservationJobType.MERGE_STANDING` (`"1202"`),
+  `KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` (`"21"`),
+  `KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE` (`"22"`),
+  `KORAIL_MERGE_SEAT_FLAGS_BY_CABIN`, and
+  `TrainSummary.merge_seat_application_flag` (`h_yms_apl_flg`).
+  **병합 is ONE train split at a mid station so its two halves can be seated
+  differently — not a transfer.** 좌석 연결역 선택 /
+  "구간을 좌석+좌석 또는 좌석+입석으로 연결하여 이용하실 수 있습니다"
+  (`res/values/strings.xml:702,577`). You board once.
+  - The `K4/e` codes were resolved from bytecode
+    (`analysis/apktool/smali/K4/e.smali:31-55`) because **three of its four
+    members reach jadx as unrelated same-valued constants**: `TRANSFER` as
+    `TicketSelfCheckinStatusActivity.CHECKIN_STATUS_EXCEED` and
+    `STANDING_SEAT_1` as `I4.a.BEFORE_DEPARTURE`. 직통 `11`, 환승 `14`,
+    병합 선행 `21`, 병합 후행 `22`.
+  - 병합 is TWO holds. The first is the ordinary direct form with
+    `txtJobId="1202"` and nothing else changed
+    (`DirectInquiryActivity.java:448-451`, tag set at `a5/u.java:394-397`); the
+    second replaces it with two journeys on the same train. Between them sits
+    the server: KORAIL puts the literal `<중간연결역 변경>`
+    (`strings.xml:2018`) in the first hold's own message text, and the confirm
+    screen's span table (`res/values/arrays.xml:421-438`,
+    `K6/C5956a.java:74-77`) turns that literal into the tap that starts the
+    merge. The offer is KORAIL's, not the client's.
+  - The merged form is built by `DirectInquiryActivity.java:576-601`, NOT by
+    `C5/a.java`'s journey loop, and diverges from a 환승 in four ways, all
+    re-read at `analysis/apktool/smali/…/DirectInquiryActivity.smali:5580-6010`:
+    `txtJrnyTpCd{i}` keys on the loop INDEX so the legs differ (`21` then `22`)
+    where a 환승's both read `14`; `txtStndFlg` is pinned `"Y"`; leg 2's cabin
+    is copied from leg 1's rather than read per leg; and there is no
+    `setArvTm` call at all, so `arvTm_2` does not exist and `arvTm_1` keeps the
+    standing hold's WHOLE-ROUTE arrival time. That last one is why
+    `build_merge_reservation_form` takes the standing hold's `TrainSummary`
+    alongside the two split legs — the stale value is on the wire.
+  - `reserve_merge` does NOT cancel the standing hold it replaces, although the
+    app does. That cancel is `cancel_unpaid_hold` under the `"cancel"` consent;
+    performing it inside a `"reserve"`-gated method would let a reserve consent
+    release a live PNR.
+  - Touches the reserve route because the feature is the reserve route: same
+    path, same `"reserve"` category, one new `txtJobId` value and one new
+    builder. Every existing call is byte-identical — a contract test rebuilds
+    the live-verified one-adult form and compares it key by key.
+  - **NEVER TRANSMITTED.** No form in this feature has reached KORAIL.
 - Added: `KorailClient.reserve_with_discount_card` and
   `build_discount_card_reservation_form`, plus
   `KORAIL_DISCOUNT_CARD_DISCOUNT_CODE` (`"153"`) and
