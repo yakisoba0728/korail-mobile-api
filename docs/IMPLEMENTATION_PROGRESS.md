@@ -672,3 +672,34 @@ raw response structure from exception classes. Any additional
 reservation-linked route requires its own safety review and caller-owned data.
 Keep all local credentials and runtime-sensitive values ignored and out of
 documentation.
+
+## 환승 live verification (2026-07-26)
+
+**Verified end to end, no payment.** 강릉 (0115) → 목포 (0041), a pair with no
+direct service, on 20260812.
+
+- The direct search raised `KorailNoDirectTrainError` / `WRD000061`
+  "직통열차는 없지만, 환승으로 조회 가능합니다." — the taxonomy hook works, and
+  the same code turns out to mean the same thing on SRT.
+- `search_transfer_trains` returned one itinerary of two connecting legs:
+  train 820 강릉→서울, then train 433 서울→목포.
+- `reserve_transfer` produced a hold with **`h_jrny_cnt="0002"`**, amount
+  80,700 KRW, answering `SUCC` / `MRR000003`
+  "선택한 좌석은 유아동반 객실입니다…" — **another warning that accompanies a
+  successful reservation**, alongside the already-known `WRR664296`. Nothing may
+  treat a non-`IRR000018` code as failure.
+- `cancel_unpaid_hold` released it, `SUCC` / `IRG000000`, and the account went
+  back to `P100`.
+
+**The cancel fix landed in the same branch was load-bearing.** The builder
+previously demanded a single-journey hold, so this two-journey hold would have
+been refused and the reservation would have had no release path through this
+library. It was found by reading the code rather than by stranding a live hold,
+but only just.
+
+Also confirmed on the way: the client-side availability guard is not
+over-strict. An earlier attempt on 20260809 was refused locally because leg 1
+carried `h_gen_rsv_cd="13"`; the search on 20260812 showed `"11"` on both legs
+and the reservation went through. The guard read the server correctly and no
+request was sent on the sold-out attempt.
+
