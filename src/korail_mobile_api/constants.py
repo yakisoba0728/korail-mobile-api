@@ -129,6 +129,106 @@ KORAIL_STANDBY_HOLD_MESSAGE_CODE = "IRR000014"
 # bounds this package's seat-inventory passenger_count.
 KORAIL_MAX_PASSENGERS_PER_RESERVATION = 9
 
+# ---------------------------------------------------------------------------
+# NetFunnel — the virtual waiting room, on its own host.
+#
+# Every value here is read off KTApplication.g(), which configures the queue SDK
+# at application start (analysis/jadx/sources/com/korail/talk/application/
+# KTApplication.java:79-85):
+#
+#     defaultInstance.setProtocol(Constants.SCHEME);        // "https"
+#     defaultInstance.setHost("nf.letskorail.com");
+#     defaultInstance.setPort(U.DEFAULT_PORT_SSL);          // 443
+#     defaultInstance.setServiceID(g.NETFUNNEL_SERVER_ID);  // "service_1"
+#     defaultInstance.setActionID(g.NETFUNNEL_ACTION_ID);   // "act_8"
+#     defaultInstance.setTimeout(3);
+#
+# The path is the ONE field whose name lies about it: T6/h.java:31 holds
+# `ts.wseq` in the field its getter calls getQuery(), and U6/c.make(protocol,
+# host, port, query) passes that straight into setPath (U6/c.java:26-33). The
+# assembled URL (U6/c.java:82-108) is therefore https://nf.letskorail.com/ts.wseq
+# with the port elided because it is 443 — there is no query component until
+# U6/a.java appends the parameters.
+#
+# This host is DELIBERATELY not part of KORAIL_BASE_URL's origin assertion and
+# never will be: assert_korail_origin pins the API to smart.letskorail.com, and
+# assert_korail_netfunnel_origin pins the queue here. Neither client can reach
+# the other's host.
+# ---------------------------------------------------------------------------
+KORAIL_NETFUNNEL_URL = "https://nf.letskorail.com"
+KORAIL_NETFUNNEL_PATH = "/ts.wseq"
+KORAIL_NETFUNNEL_SERVICE_ID = "service_1"
+# KTApplication.java:85, `setTimeout(3)` — seconds, applied to both the connect
+# and the socket timeout (U6/a.java:150-153). Far tighter than the 60s the API
+# client uses, which is the app's own judgement that a waiting room that does not
+# answer promptly is not worth waiting on.
+KORAIL_NETFUNNEL_TIMEOUT_SECONDS = 3.0
+
+
+class KorailNetFunnelAction(StrEnum):
+    """The queue action ids, all eight, from ``K4/g.java:43-51``.
+
+    An action is a separate line: the server meters ``act_8`` and ``act_8_2``
+    independently even though both are 열차조회 on ``service_1``. That is the
+    entire point of :attr:`PEAK_SEASON_INQUIRY`.
+
+    Six of the eight have call sites in the APK; the trailing comments say which,
+    and say plainly where there is none. Being declared but unwired is a fact
+    about v6.5.0, not a reason to hide the constant — the server side of an
+    action exists whether or not this app version reaches for it.
+    """
+
+    #: 일반 조회. Also the SDK-wide default (``KTApplication.java:84``) and what
+    #: the in-app queue test screen uses
+    #: (``com/korail/talk/test/NetfunnelTestActivity.java:54``).
+    INQUIRY = "act_8"
+    #: 성수기 조회 — a SEPARATE queue for peak-season departure dates, chosen at
+    #: ``b5/c.java:439``, ``MainBookingActivity.java:749`` and
+    #: ``OldMainBookingActivity.java:321``. See
+    #: :func:`~korail_mobile_api.netfunnel.inquiry_action`.
+    PEAK_SEASON_INQUIRY = "act_8_2"
+    #: 상품(관광열차) 조회 — ``b5/c.java:439``, taken when the request is a
+    #: ``ProductTrainInquiryRequest``, ahead of the peak-season test.
+    PRODUCT = "act_6"
+    #: 예약 — ``DirectInquiryActivity.java:442`` (예약대기), :469 (일반 예약)
+    #: and :499 (the 공무원 인증 variant).
+    RESERVE = "act_14"
+    #: 결제 — ``B6/AbstractC1269e.java:1046`` and ``B6/C1270f.java:232``.
+    PAY = "act_18"
+    #: 예약목록 — ``com/korail/talk/ui/menu/ReservedTicketActivity.java:553``.
+    RESERVED = "act_21"
+    #: 환불. Declared at ``K4/g.java:47`` and referenced by NOTHING in the APK —
+    #: the refund flow attaches no queue gate at all.
+    REFUND = "act_22"
+    #: 테스트. Declared at ``K4/g.java:50`` and likewise referenced by nothing;
+    #: note that the app's own NetFunnel test screen gates on ``act_8`` instead.
+    TEST = "act_4"
+
+
+class KorailNetFunnelOpcode(StrEnum):
+    """``T6/c.java:6-11`` — the queue request types, verbatim.
+
+    Byte-for-byte the same table SRT's ``netfunnel.js`` declares, which is the
+    evidence that the two apps embed two client SDKs for one product (STCLab
+    NetFunnel) rather than talking to two different systems.
+
+    :attr:`ALIVE_NOTICE`, :attr:`INIT` and :attr:`STOP` are declared here because
+    the app declares them, and are deliberately NOT implemented.
+    ``ALIVE_NOTICE`` exists to keep a visible waiting-room popup alive
+    (``T6/g.java:517-527``) and this library renders none; ``Init`` and ``Stop``
+    are administrative and the app's own SDK refuses them outright, throwing
+    ``ErrorNotSupport`` without touching the network
+    (``T6/d.java:115-121``).
+    """
+
+    CHK_ENTER = "5002"
+    ALIVE_NOTICE = "5003"
+    SET_COMPLETE = "5004"
+    GET_TID_CHK_ENTER = "5101"
+    INIT = "5105"
+    STOP = "5106"
+
+
 DYNAPATH_HEADER_NAME = "x-dynapath-m-token"
 DYNAPATH_ALLOWLIST_PATHS = frozenset(
     {

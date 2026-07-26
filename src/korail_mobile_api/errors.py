@@ -347,6 +347,65 @@ class KorailAppUpdateRequiredError(KorailAppError):
     """
 
 
+class KorailNetFunnelError(KorailApiError):
+    """The NetFunnel virtual waiting room refused, malfunctioned, or kept us.
+
+    Raised by :mod:`korail_mobile_api.netfunnel` for every queue outcome that is
+    neither a pass (200/300) nor a wait (201/202), and for the two bounds this
+    library puts on a wait that the app does not: a hard poll count and a hard
+    wall-clock ceiling. ``code`` is the queue's own 3-digit status
+    (``T6/a.java``) when there was one, and ``None`` when the reply could not be
+    parsed at all.
+
+    This is NOT a :class:`KorailAppError`. Nothing here comes from
+    ``smart.letskorail.com`` or carries an ``h_msg_cd``; the queue is a separate
+    host with a separate protocol, and conflating the two would put a queue
+    status into a code map that only ever describes application failures.
+
+    **A caller who has never seen one of these is the normal case.** The queue
+    has never engaged for this repository — every live call has succeeded
+    without a token — so in practice this exception means either that the server
+    has started metering us, or that the response shape assumption documented in
+    :mod:`korail_mobile_api.netfunnel` is wrong.
+    """
+
+    def __init__(
+        self,
+        code: str | None,
+        message: str | None,
+        *,
+        raw: object | None = None,
+    ) -> None:
+        self.code = code
+        self.message = message
+        self.raw = raw
+        super().__init__(
+            f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
+        )
+
+
+class KorailQueueRejectedError(KorailNetFunnelError):
+    """The waiting room refused us outright. ``TsBlock`` (301) / ``TsIpBlock`` (302).
+
+    "Retry is pointless right now; you were turned away, not merely queued."
+
+    The app draws exactly this distinction rather than folding the pair into its
+    generic error path: ``T6/g.d`` gives blocking its own predicate,
+    ``isBlocking()`` (``analysis/jadx/sources/T6/g.java:892-894``), separate from
+    the ``isError()`` immediately below it, and dispatches ``Block``/``IpBlock``
+    as their own states. Both still raise here — a refusal is not a wait, and a
+    wait is the only non-failure that is not a pass — but as this subclass, so a
+    caller can tell "the queue turned me away" from "the queue broke" without
+    reading the numeric code.
+
+    ``TsExpressNumber`` (303) is deliberately NOT mapped here. The app counts it
+    as a SUCCESS (``T6/g.java:909``, where ``isSuccess()`` lists
+    ``ExpressNumber``), this repository has never observed one, and guessing an
+    admission into the refusal bucket would be worse than leaving it in the
+    generic error path.
+    """
+
+
 class MutationNotAllowedError(KorailApiError):
     """A state-changing request was attempted without matching consent.
 

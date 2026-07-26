@@ -1,8 +1,16 @@
 from collections.abc import Mapping, Sequence
+import re
 from typing import Any
 from urllib.parse import urlsplit
 
-from .constants import KORAIL_BASE_URL
+from .constants import (
+    KORAIL_BASE_URL,
+    KORAIL_NETFUNNEL_PATH,
+    KORAIL_NETFUNNEL_SERVICE_ID,
+    KORAIL_NETFUNNEL_URL,
+    KorailNetFunnelAction,
+    KorailNetFunnelOpcode,
+)
 from .errors import KorailProtocolError
 
 
@@ -215,6 +223,181 @@ def assert_mutation_route_category(path: str, category: str) -> None:
         )
 
 KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
+KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
+
+# ---------------------------------------------------------------------------
+# The NetFunnel queue protocol: one exact query contract per opcode.
+#
+# THREE NAMED CONTRACTS, NOT ONE LOOSENED ONE. The queue lives on a different
+# host from every other route in this module, so it could not simply be added to
+# KORAIL_READ_ONLY_ROUTES — and it deliberately was not, because that set is the
+# app-origin allowlist and post_form/get_json must never be able to target
+# ts.wseq. What is registered instead is the exact parameter list of each opcode
+# this library issues, IN ORDER, so adding a queue operation means registering
+# it rather than relaxing a check.
+#
+# Every tuple below is the sequence of `U6.a.addParam` calls in the matching
+# T6/d.java builder. U6/a.java:57-63 appends each one to an ArrayList and
+# U6/a.java:180-185 renders that list with URLEncodedUtils.format, so the app's
+# call order IS the wire order:
+#
+#   5101 GetTidCacekedEnter  (T6/d.java:99-101)   opcode, sid, aid
+#   5002 CheckedEnter        (T6/d.java:54-55)    opcode, key
+#   5004 Complete            (T6/d.java:78-79)    opcode, key
+#
+# Note what is absent, because it is what a reader coming from the SRT sibling
+# will expect to find: no `js`, no `nfid`, no `prefix`, no trailing epoch
+# millisecond, and no `ttl` anywhere. Those belong to the JavaScript NetFunnel
+# client that SRT's WebView loads. KORAIL embeds the native Android SDK instead,
+# and the native SDK sends none of them — see the module docstring of
+# korail_mobile_api.netfunnel. `js=yes` in particular is a real parameter of the
+# other dialect (srtgo and ryanking13 both spell it `js=true`, which is wrong
+# there too) and simply has no place here.
+#
+# 5003 ALIVE_NOTICE, 5105 INIT and 5106 STOP are NOT registered. The first keeps
+# a waiting-room popup alive that this library never renders; the other two are
+# administrative and the app's own SDK refuses them without touching the network
+# (T6/d.java:115-121). An unregistered opcode is rejected by
+# assert_netfunnel_request, which is the point of registering rather than
+# pattern-matching.
+# ---------------------------------------------------------------------------
+KORAIL_NETFUNNEL_ROUTES = frozenset({("GET", KORAIL_NETFUNNEL_PATH)})
+
+KORAIL_NETFUNNEL_QUERY_CONTRACTS: dict[str, tuple[str, ...]] = {
+    KorailNetFunnelOpcode.GET_TID_CHK_ENTER.value: ("opcode", "sid", "aid"),
+    KorailNetFunnelOpcode.CHK_ENTER.value: ("opcode", "key"),
+    KorailNetFunnelOpcode.SET_COMPLETE.value: ("opcode", "key"),
+}
+
+#: Opcodes whose request carries the slot key. Kept as data beside the contracts
+#: so "which opcode has which field" is answerable by reading, not by tracing.
+KORAIL_NETFUNNEL_KEYED_OPCODES = frozenset(
+    {
+        KorailNetFunnelOpcode.CHK_ENTER.value,
+        KorailNetFunnelOpcode.SET_COMPLETE.value,
+    }
+)
+
+#: The only action ids that may appear in an ``aid``. All eight the app declares
+#: (``K4/g.java:43-51``) — including the two it never calls — and nothing else,
+#: so ``aid`` cannot become a free-text field a bug smuggles a value through.
+KORAIL_NETFUNNEL_ACTION_IDS = frozenset(
+    action.value for action in KorailNetFunnelAction
+)
+
+# The key is opaque and server-issued, so it is validated by SHAPE: a non-empty
+# run of the characters a NetFunnel key is made of.
+#
+# THE 512 BOUND IS A CEILING TAKEN FROM A SCAR, NOT A GUESS. The sibling SRT
+# implementation bounded the same field at 128 while real keys are 256 characters
+# of uppercase hex. Every setComplete therefore failed this check before it was
+# sent, and because a failed release was swallowed there, it failed SILENTLY —
+# every slot leaked until a live run exposed it. Nothing offline could have
+# caught it, which is exactly why the bound here is generous and why
+# KorailNetFunnelClient.release raises instead of swallowing.
+KORAIL_NETFUNNEL_KEY_RE = re.compile(r"[A-Za-z0-9_.:@~-]{1,512}")
+
+
+def assert_korail_netfunnel_origin(netfunnel_url: str) -> None:
+    """Pin the queue client to ``https://nf.letskorail.com`` (port 443).
+
+    The NetFunnel counterpart to :func:`assert_korail_origin`, and deliberately
+    a separate function over a separate constant: the API client may not reach
+    the queue host and the queue client may not reach the API host. It also
+    refuses the redirection the app itself accepts — ``T6/d.java:17-19`` sends
+    the follow-up opcodes to whatever ``ip``/``port`` a previous reply named,
+    because ``host_notmodify`` is false by default (``T6/h.java:43``) and
+    ``KTApplication`` never sets it. We do not follow a server-named host: a
+    response must not choose where the next request goes.
+    """
+    parsed = urlsplit(netfunnel_url)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise KorailProtocolError(
+            "KORAIL NetFunnel request origin is not allowed"
+        ) from exc
+    if (
+        parsed.scheme.casefold() != "https"
+        or parsed.hostname is None
+        or parsed.hostname.casefold() != KORAIL_NETFUNNEL_HTTPS_HOST
+        or port not in {None, 443}
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise KorailProtocolError(
+            "KORAIL NetFunnel request origin is not allowed"
+        )
+
+
+def assert_netfunnel_request(
+    method: str,
+    path: str,
+    params: Sequence[tuple[str, str]],
+) -> None:
+    """Allow only a registered queue opcode, with its exact ordered parameters.
+
+    ``params`` is checked as the ordered name/value pairs the request will be
+    built from, before encoding, so the contract covers the parameter ORDER as
+    well as its membership — the app's order is not decorative, it is simply
+    what ``URLEncodedUtils.format`` emits from the list ``T6/d.java`` built.
+
+    Raises :class:`KorailProtocolError` for an unregistered opcode (5003, 5105,
+    5106 and anything invented), for a parameter list that is not exactly the
+    contract in exactly that order, for a ``sid`` that is not ``service_1``, for
+    an ``aid`` outside :data:`KORAIL_NETFUNNEL_ACTION_IDS`, and for a key that is
+    not the shape a NetFunnel key has.
+    """
+    route = (method.upper(), urlsplit(path).path)
+    if route not in KORAIL_NETFUNNEL_ROUTES:
+        raise KorailProtocolError(
+            f"KORAIL NetFunnel route is not allowed: {route[0]} {route[1]}"
+        )
+    pairs = tuple(params)
+    if any(
+        type(pair) is not tuple
+        or len(pair) != 2
+        or not isinstance(pair[0], str)
+        or not isinstance(pair[1], str)
+        for pair in pairs
+    ):
+        raise KorailProtocolError(
+            "KORAIL NetFunnel parameters must be ordered string pairs"
+        )
+    values = dict(pairs)
+    opcode = values.get("opcode", "")
+    contract = KORAIL_NETFUNNEL_QUERY_CONTRACTS.get(opcode)
+    if contract is None:
+        raise KorailProtocolError(
+            f"KORAIL NetFunnel opcode {opcode!r} is not one of the registered "
+            "queue operations (5101 getTidChkEnter, 5002 chkEnter, "
+            "5004 setComplete)"
+        )
+    if tuple(name for name, _value in pairs) != contract:
+        raise KorailProtocolError(
+            f"KORAIL NetFunnel request is not the registered opcode-{opcode} "
+            "contract: expected exactly " + ", ".join(contract) + " in order"
+        )
+    if opcode in KORAIL_NETFUNNEL_KEYED_OPCODES and (
+        KORAIL_NETFUNNEL_KEY_RE.fullmatch(values["key"]) is None
+    ):
+        raise KorailProtocolError(
+            "KORAIL NetFunnel key parameter is missing or malformed"
+        )
+    if "sid" in values and values["sid"] != KORAIL_NETFUNNEL_SERVICE_ID:
+        raise KorailProtocolError(
+            "KORAIL NetFunnel service id must be "
+            f"{KORAIL_NETFUNNEL_SERVICE_ID!r}"
+        )
+    if "aid" in values and values["aid"] not in KORAIL_NETFUNNEL_ACTION_IDS:
+        raise KorailProtocolError(
+            f"KORAIL NetFunnel action id {values['aid']!r} is not one the app "
+            "declares"
+        )
+
 
 KORAIL_EXACT_REQUEST_FIELDS = {
     "/file/CACHE/MobileService.cache": frozenset({"timeStamp"}),

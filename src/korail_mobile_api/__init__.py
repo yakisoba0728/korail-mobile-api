@@ -19,8 +19,14 @@ from .constants import (
     KORAIL_DEFAULT_DEVICE_WIDTH,
     KORAIL_DEVICE_ANDROID,
     KORAIL_MAX_PASSENGERS_PER_RESERVATION,
+    KORAIL_NETFUNNEL_PATH,
+    KORAIL_NETFUNNEL_SERVICE_ID,
+    KORAIL_NETFUNNEL_TIMEOUT_SECONDS,
+    KORAIL_NETFUNNEL_URL,
     KORAIL_STANDBY_HOLD_MESSAGE_CODE,
     KORAIL_STANDBY_WAIT_FLAG,
+    KorailNetFunnelAction,
+    KorailNetFunnelOpcode,
     KorailReservationJobType,
     KorailSeatClass,
 )
@@ -47,10 +53,12 @@ from .errors import (
     KorailAuthError,
     KorailDynaPathError,
     KorailInvalidRequestError,
+    KorailNetFunnelError,
     KorailNoDirectTrainError,
     KorailNoResultsError,
     KorailNotEntitledError,
     KorailProtocolError,
+    KorailQueueRejectedError,
     KorailReservationRefusedError,
     KorailSeatUnavailableError,
     KorailServiceUnavailableError,
@@ -112,6 +120,12 @@ from .mutation_models import (
     ReservationJourney,
     ReservationPaymentCoupon,
     ReservationPaymentResponse,
+)
+from .netfunnel import (
+    KORAIL_NETFUNNEL_GATED_OPERATIONS,
+    KorailNetFunnelClient,
+    KorailNetFunnelToken,
+    inquiry_action,
 )
 from .mutation_parsers import (
     parse_reservation_hold_response,
@@ -213,7 +227,11 @@ from .read_payloads import (
     TicketReservationDetailRequest,
 )
 from .read_payloads import PassScheduleRequest
-from .safety import EXCLUDED_API_DOMAINS, KORAIL_MUTATION_ROUTES
+from .safety import (
+    EXCLUDED_API_DOMAINS,
+    KORAIL_MUTATION_ROUTES,
+    KORAIL_NETFUNNEL_ROUTES,
+)
 
 __all__ = [
     "AppDataResponse",
@@ -271,6 +289,12 @@ __all__ = [
     "KORAIL_DYNAPATH_SIGNING_CERT_SHA256",
     "KORAIL_DYNAPATH_SDK_VERSION",
     "KORAIL_MAX_PASSENGERS_PER_RESERVATION",
+    "KORAIL_NETFUNNEL_GATED_OPERATIONS",
+    "KORAIL_NETFUNNEL_PATH",
+    "KORAIL_NETFUNNEL_ROUTES",
+    "KORAIL_NETFUNNEL_SERVICE_ID",
+    "KORAIL_NETFUNNEL_TIMEOUT_SECONDS",
+    "KORAIL_NETFUNNEL_URL",
     "KORAIL_STANDBY_HOLD_MESSAGE_CODE",
     "KORAIL_STANDBY_WAIT_FLAG",
     "KORAIL_MUTATION_ROUTES",
@@ -283,10 +307,16 @@ __all__ = [
     "KorailConfig",
     "KorailDynaPathError",
     "KorailInvalidRequestError",
+    "KorailNetFunnelAction",
+    "KorailNetFunnelClient",
+    "KorailNetFunnelError",
+    "KorailNetFunnelOpcode",
+    "KorailNetFunnelToken",
     "KorailNoDirectTrainError",
     "KorailNoResultsError",
     "KorailNotEntitledError",
     "KorailPassengerCounts",
+    "KorailQueueRejectedError",
     "KorailReservationJobType",
     "KorailReservationRefusedError",
     "KorailProtocolError",
@@ -382,6 +412,7 @@ __all__ = [
     "build_dynapath_prefix",
     "generate_dynapath_encoding_table",
     "generate_dynapath_token",
+    "inquiry_action",
     "parse_base_response",
     "parse_reservation_hold_response",
     "parse_reservation_payment_response",
