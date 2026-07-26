@@ -194,7 +194,6 @@ def build_reservation_form(
         seat_classes=(seat_class,),
         job_type=job_type,
         leg_seats=None if seats is None else (seats,),
-        _leg_noun="train",
     )
 
 
@@ -274,8 +273,7 @@ def build_transfer_reservation_form(
         seat_classes=seat_classes,
         job_type=job_type,
         leg_seats=seats,
-        _leg_noun="leg",
-        _require_legs=KORAIL_MAX_JOURNEY_LEGS,
+        require_legs=KORAIL_MAX_JOURNEY_LEGS,
     )
 
 
@@ -305,18 +303,25 @@ def _seat_no_key(journey: int, seat: int) -> str:
 def _validated_legs(
     legs: Sequence[TrainSummary],
     *,
-    noun: str,
     require: int | None,
 ) -> tuple[TrainSummary, ...]:
+    """The legs of one reservation, checked for type and count.
+
+    ``require`` is the exact count a caller demands (two, for a 환승 booking) or
+    ``None`` for "whatever the app supports". The single-leg builder passes
+    ``None`` and keeps its own rejection message, so a caller who handed
+    ``build_reservation_form`` something that is not a ``TrainSummary`` reads
+    the same sentence it has always read.
+    """
     if isinstance(legs, (str, bytes)) or not isinstance(legs, Sequence):
         raise KorailProtocolError(
-            f"KORAIL reservation requires a sequence of {noun}s"
+            "KORAIL reservation requires a sequence of legs"
         )
     resolved = tuple(legs)
     for leg in resolved:
         if type(leg) is not TrainSummary:
             raise KorailProtocolError(
-                f"KORAIL reservation requires an exact TrainSummary per {noun}"
+                "KORAIL reservation requires an exact TrainSummary"
             )
     if require is not None and len(resolved) != require:
         raise KorailProtocolError(
@@ -420,8 +425,7 @@ def _build_journey_reservation_form(
     seat_classes: Sequence[KorailSeatClass] | KorailSeatClass,
     job_type: KorailReservationJobType,
     leg_seats: Sequence[Sequence[KorailSeatAssignment]] | None,
-    _leg_noun: str,
-    _require_legs: int | None = None,
+    require_legs: int | None = None,
 ) -> dict[str, str]:
     """The one builder behind both public reservation forms.
 
@@ -430,11 +434,7 @@ def _build_journey_reservation_form(
     the only thing that differs. A one-leg call therefore emits exactly the
     bytes it emitted before this function existed, key order included.
     """
-    resolved_legs = _validated_legs(
-        legs,
-        noun=_leg_noun,
-        require=_require_legs,
-    )
+    resolved_legs = _validated_legs(legs, require=require_legs)
     if passengers is None:
         passengers = KorailPassengerCounts()
     elif type(passengers) is not KorailPassengerCounts:

@@ -1072,3 +1072,26 @@ def test_reserve_transfer_needs_a_session():
             _legs(),
             consent=MutationConsent(allow_reserve=True),
         )
+
+
+def test_single_leg_rejection_messages_are_unchanged():
+    """Generalising the builder must not reword what an existing caller sees.
+
+    ``build_reservation_form`` is now a one-leg call into a leg-sequence core,
+    and the core's own messages talk about legs. The single-leg entry point
+    keeps the sentences it has always raised.
+    """
+    with pytest.raises(
+        KorailProtocolError,
+        match=r"^KORAIL reservation requires an exact TrainSummary$",
+    ):
+        build_reservation_form(KorailConfig(), {"train_no": "00209"})
+    with pytest.raises(
+        KorailProtocolError,
+        match=r"^KORAIL reservation requires an exact KorailPassengerCounts$",
+    ):
+        build_reservation_form(
+            KorailConfig(),
+            _first_leg(),
+            passengers={"adult": 1},
+        )
