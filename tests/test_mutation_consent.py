@@ -15,13 +15,18 @@ import pytest
 
 from korail_mobile_api import (
     KorailClient,
+    KorailPassengerCounts,
     KorailProtocolError,
+    KorailSeatClass,
     KorailSession,
     MutationConsent,
     MutationNotAllowedError,
     MutationPreview,
     TrainSummary,
     require_mutation_consent,
+)
+from korail_mobile_api.mutation_payloads import (
+    build_single_adult_reservation_form,
 )
 from korail_mobile_api.errors import KorailApiError, KorailAuthError
 from korail_mobile_api.redaction import redact_payload
@@ -296,6 +301,66 @@ def test_reserve_rejects_a_train_without_an_available_general_seat():
         client.reserve(
             unavailable, consent=MutationConsent(allow_reserve=True)
         )
+
+
+def test_reserve_previews_a_passenger_mix_and_a_special_cabin():
+    client = _logged_in_no_network_client()
+    train = dataclasses.replace(_eligible_train(), special_reservation_code="11")
+
+    preview = client.reserve(
+        train,
+        consent=MutationConsent(allow_reserve=True),
+        passengers=KorailPassengerCounts(adult=2, child=1, senior=1),
+        seat_class=KorailSeatClass.SPECIAL,
+    )
+
+    assert isinstance(preview, MutationPreview)
+    assert preview.payload["txtTotPsgCnt"] == "4"
+    assert preview.payload["txtCompaCnt1"] == "2"  # 어른
+    assert preview.payload["txtCompaCnt3"] == "1"  # 어린이
+    assert preview.payload["txtCompaCnt5"] == "1"  # 경로
+    assert preview.payload["txtPsrmClCd1"] == "2"  # 특실
+
+
+def test_reserve_without_a_mix_still_previews_the_single_adult_form():
+    client = _logged_in_no_network_client()
+    train = _eligible_train()
+
+    preview = client.reserve(train, consent=MutationConsent(allow_reserve=True))
+    explicit = client.reserve(
+        train,
+        consent=MutationConsent(allow_reserve=True),
+        passengers=KorailPassengerCounts(),
+        seat_class=KorailSeatClass.GENERAL,
+    )
+
+    assert isinstance(preview, MutationPreview)
+    assert isinstance(explicit, MutationPreview)
+    assert preview.payload == explicit.payload
+    assert preview.payload == build_single_adult_reservation_form(
+        client.config, train
+    )
+
+
+def test_reserve_rejects_a_special_cabin_that_is_not_available():
+    client = _logged_in_no_network_client()
+    # General seats free, suite sold out (a5/u.java:319 reads h_spe_rsv_cd for
+    # the suite tab).
+    train = dataclasses.replace(_eligible_train(), special_reservation_code="13")
+
+    with pytest.raises(KorailProtocolError):
+        client.reserve(
+            train,
+            consent=MutationConsent(allow_reserve=True),
+            seat_class=KorailSeatClass.SPECIAL,
+        )
+
+
+def test_reserve_refuses_an_over_large_mix_before_building_anything():
+    # KorailPassengerCounts itself refuses, so an over-large mix cannot even be
+    # spelled, let alone previewed or sent.
+    with pytest.raises(ValueError):
+        KorailPassengerCounts(adult=9, infant=1)
 
 
 def test_http_layer_still_refuses_every_mutation_route_post():

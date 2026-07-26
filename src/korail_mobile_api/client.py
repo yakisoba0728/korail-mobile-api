@@ -9,6 +9,7 @@ from .consent import (
     MutationPreview,
     require_mutation_consent,
 )
+from .constants import KorailSeatClass
 from .crypto import generate_sid
 from .errors import (
     KorailAuthError,
@@ -18,6 +19,7 @@ from .errors import (
 )
 from .mutation_models import (
     CardPayment,
+    KorailPassengerCounts,
     PaidTicket,
     ReservationHoldResponse,
     ReservationPaymentResponse,
@@ -29,7 +31,7 @@ from .mutation_parsers import (
 from .mutation_payloads import (
     build_card_payment_form,
     build_refund_form,
-    build_single_adult_reservation_form,
+    build_reservation_form,
     build_unpaid_reservation_cancel_form,
 )
 from .http import KorailHttpClient
@@ -1240,8 +1242,10 @@ class KorailClient:
         train: TrainSummary,
         *,
         consent: MutationConsent,
+        passengers: KorailPassengerCounts | None = None,
+        seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
     ) -> MutationPreview | ReservationHoldResponse:
-        """Hold a single-adult reservation under explicit consent.
+        """Hold a reservation for a passenger mix under explicit consent.
 
         Gated by ``require_mutation_consent(consent, "reserve")``: a default
         :class:`MutationConsent` (``allow_reserve=False``) or ``None`` is denied
@@ -1253,6 +1257,14 @@ class KorailClient:
         returns the parsed :class:`ReservationHoldResponse` (whose ``pnr_no``
         feeds :meth:`cancel_unpaid_hold`). A live hold is an unpaid reservation
         that the caller is responsible for cancelling or paying.
+
+        ``passengers`` is a :class:`KorailPassengerCounts`, defaulting to its
+        own one-adult default, and ``seat_class`` a :class:`KorailSeatClass`,
+        defaulting to 일반실. Omitting both sends exactly the form this method
+        sent before mixes existed, so no existing caller changes behaviour.
+        Only that single-adult, general-class form has ever been accepted by
+        the live server; a multi-passenger or 특실 hold is built from the app's
+        own request builder but is NOT live-verified.
         """
         require_mutation_consent(consent, "reserve")
         if self.session.current is None:
@@ -1260,7 +1272,12 @@ class KorailClient:
                 "KORAIL reservation requires an authenticated session"
             )
         route = "/classes/com.korail.mobile.certification.TicketReservation"
-        form = build_single_adult_reservation_form(self.config, train)
+        form = build_reservation_form(
+            self.config,
+            train,
+            passengers=passengers,
+            seat_class=seat_class,
+        )
         if consent.dry_run:
             return MutationPreview(
                 category="reserve",
