@@ -96,6 +96,7 @@ def test_client_public_method_set_is_stable():
         "logout",
         "pay_with_card",
         "pay_with_fake_card",
+        "recalculate_price",
         "refund",
         "register_discount_card",
         "reserve",

@@ -204,6 +204,29 @@ SENSITIVE_KEYS = frozenset(
         "companion_birth_date",
         "window_name",
         "certificate_no",
+        # 운임 재계산 (certification.PriceReCalculation) on the way OUT. Its
+        # per-row lists carry values this set already redacts under other
+        # spellings, and SENSITIVE_KEYS is matched exactly, so the underscore
+        # and hid- spellings have to be listed too or the same secret becomes
+        # readable purely because this one route names it differently.
+        #
+        #   hidDscpNo -- the coupon/certificate number backing the discount:
+        #     h_cpn_no for a 쿠폰/국가유공자 row (a6/C1042B.java:99,110,140)
+        #     and the four-part 지연증명 return number (:128). h_cpn_no,
+        #     h_coup_no and coupon_no are all already listed above; this is the
+        #     same number on the way out, and a 국가유공자 certificate number
+        #     is spendable by whoever holds it.
+        #   hidCustNo -- the non-member number (a6/C1042B.java:292), the same
+        #     value as h_cust_no / custMgNo / customer_no above.
+        #   hidFmlyNo -- the 다자녀 family member's fmlySqno
+        #     (a6/C1041A.java:75). It identifies a specific person on the
+        #     account.
+        #   psrm_cl_cd -- the underscore spelling of psrmClCd, which together
+        #     with room_class_code is already redacted.
+        "hidDscpNo",
+        "hidCustNo",
+        "hidFmlyNo",
+        "psrm_cl_cd",
     }
 )
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
@@ -293,17 +316,35 @@ def redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def redact_payload(payload: Mapping[str, str]) -> dict[str, str]:
+def redact_payload(
+    payload: Mapping[str, object],
+) -> dict[str, str | list[str]]:
     """Redact a mutation form/payload mapping for a ``MutationPreview``.
 
     Every sensitive key (card fields, PII, PNR) becomes ``[REDACTED]``; every
     remaining value is card-masked via :func:`redact_text` so a raw PAN can
     never surface in a preview even when it appears under an unexpected key.
-    The result is a plain ``dict[str, str]`` safe to log or display.
+
+    A LIST value is redacted element by element and stays a list of the same
+    length, because one form key here can legitimately carry many values: the
+    six ``List`` ``@Field``s of ``certification.PriceReCalculation`` go out as
+    repeated keys. Collapsing such a value with ``str()`` would print a Python
+    repr in place of the wire form, and — far worse — would hide each element
+    from :func:`redact_text` behind the list's own brackets and quotes. The
+    length is preserved because it is not a secret: it equals
+    ``txtPsgGridcnt``, which travels in the clear beside it.
     """
-    return {
-        str(key): "[REDACTED]"
-        if str(key).casefold() in SENSITIVE_KEYS
-        else redact_text(str(value))
-        for key, value in payload.items()
-    }
+    redacted: dict[str, str | list[str]] = {}
+    for key, value in payload.items():
+        name = str(key)
+        sensitive = name.casefold() in SENSITIVE_KEYS
+        if isinstance(value, (list, tuple)):
+            redacted[name] = [
+                "[REDACTED]" if sensitive else redact_text(str(item))
+                for item in value
+            ]
+        else:
+            redacted[name] = (
+                "[REDACTED]" if sensitive else redact_text(str(value))
+            )
+    return redacted

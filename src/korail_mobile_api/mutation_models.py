@@ -435,3 +435,83 @@ class DiscountCardPurchaseResponse(BaseKorailResponse):
     usable_trip_count: str | None = None
     validity_start_date: str | None = None
     validity_end_date: str | None = None
+
+
+@dataclass(frozen=True)
+class PriceRecalculationRow:
+    """One passenger row of a 운임 재계산 request.
+
+    The app's ``DiscountPriceParams``
+    (``network/data/certification/DiscountPriceParams.java``) — a flat
+    six-field POJO, one instance per seat of the held journey. The whole
+    request is an array of these, which ``a6/C1042B.java:275-283`` fans out
+    into the six parallel ``List`` ``@Field``s the DAO declares. The six lists
+    are therefore INDEX-ALIGNED, and this class is the row they zip back into.
+
+    The first three fields are copied straight off the held seat, and
+    :attr:`raw_room_class_code` is not a choice the caller makes:
+    ``S4/D.java:176-190`` (``makeDiscountParams``) reads ``h_psg_tp_cd`` and
+    ``h_psrm_cl_cd`` off ``seat_infos.seat_info[i]`` verbatim. Read them from
+    :class:`~korail_mobile_api.read_models.ReservationSeatDetail` for the same
+    PNR.
+
+    The last three carry the discount being APPLIED:
+
+    * :attr:`requested_discount_code` — ``hidDcntKndCd``, the discount kind
+      the payment screen just selected for this passenger. ``""`` when none.
+      Observed values: ``"151"``/``"152"`` (쿠폰·국가유공자 본인),
+      ``"171"``/``"172"`` (장애인·유공자 보호자), ``"321"`` (동반유아),
+      ``"401"`` (지연할인), ``"402"`` (국회의원).
+    * :attr:`certificate_no` — ``hidDscpNo``, the coupon or certificate number
+      that backs it (``h_cpn_no``, or the four-part 지연증명 return number
+      ``H4/a.getReturnNumber``). ``""`` when the discount needs none.
+    * :attr:`family_sequence_no` — ``hidFmlyNo``, the 다자녀 family member's
+      ``fmlySqno``. ``""`` for every discount except that one; only
+      ``a6/C1041A.java:75`` ever writes it non-empty.
+
+    Every value is a plain string and none may be ``None``: Retrofit SKIPS a
+    null element when it flattens the list (``RequestBuilder.smali:1559-1571``
+    jumps back to the loop head on ``if-eqz v5``), which would shorten one key
+    relative to the other five and silently re-pair every row after it.
+    """
+
+    #: ``psg_tp_dv_cd`` ← the seat's ``h_psg_tp_cd``.
+    passenger_type_code: str
+    #: ``psrm_cl_cd`` ← the seat's ``h_psrm_cl_cd``.
+    room_class_code: str
+    #: ``dcnt_knd_cd1`` ← the seat's EXISTING ``h_dcnt_knd_cd1``, i.e. the
+    #: discount the hold already carries. ``makeDiscountParams`` overwrites it
+    #: in exactly two cases, both enforced by the builder: ``"432"`` for a
+    #: 군장병 row, and ``"000"`` when the applied discount is an integrated
+    #: 국가유공자 one.
+    discount_kind_code: str
+    #: ``hidDcntKndCd`` — the discount being applied now.
+    requested_discount_code: str = ""
+    #: ``hidDscpNo`` — a spendable coupon/certificate number. Redacted.
+    certificate_no: str = field(default="", repr=False)
+    #: ``hidFmlyNo`` — 다자녀 family member sequence. Redacted.
+    family_sequence_no: str = field(default="", repr=False)
+
+
+@dataclass(frozen=True)
+class PriceRecalculationRequest:
+    """A 운임 재계산 for one held PNR.
+
+    ``a6/C1042B.java:265-296`` (``k2()``) builds exactly this: the PNR, the
+    fixed job id ``"1101"``, a row count, the six lists, and — only when the
+    account is a non-member — ``hiduserYn="N"`` plus the non-member number.
+
+    :attr:`rows` must carry one row per seat of the journey being re-priced,
+    in seat order, because ``txtPsgGridcnt`` is derived from its length and
+    the server pairs the six repeated keys by position.
+    """
+
+    pnr_no: str = field(repr=False)
+    rows: tuple[PriceRecalculationRow, ...] = ()
+    #: ``hidCustNo``. Set ONLY for a non-member session, which is the only
+    #: case in which ``k2()`` writes either this or ``hiduserYn``
+    #: (``a6/C1042B.java:290-293``). ``None`` for a member, and then neither
+    #: field is transmitted at all — Retrofit omits a null ``@Field``
+    #: (``RequestBuilder.smali:1531`` branches past ``addField`` on a null
+    #: value), so a member's form genuinely has twelve keys, not fourteen.
+    non_member_no: str | None = field(default=None, repr=False)

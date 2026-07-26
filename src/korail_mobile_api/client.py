@@ -26,6 +26,7 @@ from .mutation_models import (
     KorailPassengerCounts,
     KorailSeatAssignment,
     PaidTicket,
+    PriceRecalculationRequest,
     ReservationHoldResponse,
     ReservationPaymentResponse,
 )
@@ -40,6 +41,7 @@ from .mutation_payloads import (
     build_discount_card_purchase_form,
     build_discount_card_reservation_form,
     build_merge_reservation_form,
+    build_price_recalculation_form,
     build_refund_form,
     build_reservation_form,
     build_standby_wait_form,
@@ -2228,3 +2230,79 @@ class KorailClient:
             self.clear_session()
             raise
         return self._hold_from_reservation_response(response)
+
+    def recalculate_price(
+        self,
+        request: PriceRecalculationRequest,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | ReservationHoldResponse:
+        """Re-price a held PNR under a different set of discounts.
+
+        ``POST certification.PriceReCalculation``
+        (``CertificationService.java:35-37``, ``getDiscountPrice``). The app
+        fires it from the payment screen whenever the discount selection
+        changes for a reservation that already exists
+        (``a6/C1042B.java:265-296``), and answers with the same
+        ``ReservationResponse`` a hold returns — so what comes back is the
+        re-priced booking, with :attr:`ReservationHoldResponse.received_amount`
+        the new amount that would be settled.
+
+        Gated by ``require_mutation_consent(consent, "price_recalculation")``
+        and an authenticated session. That category is its own, and in
+        particular is NOT ``"payment"``: a payment consent authorises settling
+        an amount that has already been quoted, whereas this call rewrites the
+        quote. With the default ``dry_run=True`` this builds and validates the
+        form and returns a redacted
+        :class:`~korail_mobile_api.consent.MutationPreview`, sending nothing.
+
+        ``request.rows`` must carry one
+        :class:`~korail_mobile_api.mutation_models.PriceRecalculationRow` per
+        seat of the journey, in seat order — take
+        ``passenger_type_code``/``room_class_code`` and the seat's existing
+        discount code from
+        :meth:`get_ticket_reservation_detail`, which reads the same PNR.
+
+        This method does NOT reuse ``reserve``'s lenient hold-recovery parse.
+        That fallback exists so a live hold can never be orphaned by a strict
+        parse failing after the server already created it; nothing is created
+        here, so a malformed response is just a malformed response and is
+        raised.
+
+        **VERIFIED FROM THE APK: the route, the method, all fourteen ``@Field``
+        names, the index-alignment of the six lists, and the repeated-key
+        encoding** — the last confirmed in ``smali/a6.1/B.smali`` and
+        ``RequestBuilder.smali`` rather than taken from jadx.
+
+        **NOT VERIFIED: anything the server does with it.** It has never been
+        sent, by this package or under observation, and no live-test path
+        reaches it. Sending it against a real held PNR changes what the
+        passenger is about to be charged, so an operator must verify it against
+        a hold they are willing to have re-priced.
+        """
+        require_mutation_consent(consent, "price_recalculation")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL price recalculation requires an authenticated session"
+            )
+        route = "/classes/com.korail.mobile.certification.PriceReCalculation"
+        form = build_price_recalculation_form(self.config, request)
+        if consent.dry_run:
+            return MutationPreview(
+                category="price_recalculation",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            response = self.http.post_mutation_form(
+                route,
+                form,
+                consent=consent,
+                category="price_recalculation",
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+        raw = response.raw if isinstance(response.raw, dict) else {}
+        return parse_reservation_hold_response(raw)

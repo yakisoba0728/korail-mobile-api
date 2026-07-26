@@ -11,6 +11,7 @@ from .constants import (
     KORAIL_DISCOUNT_CARD_MENU_ID,
     KORAIL_MAX_DISCOUNT_CARD_SECTIONS,
     KORAIL_MAX_JOURNEY_LEGS,
+    KORAIL_MAX_PASSENGERS_PER_RESERVATION,
     KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE,
     KORAIL_MERGE_SEAT_FLAGS_BY_CABIN,
     KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE,
@@ -32,6 +33,8 @@ from .mutation_models import (
     KorailPassengerCounts,
     KorailSeatAssignment,
     PaidTicket,
+    PriceRecalculationRequest,
+    PriceRecalculationRow,
     ReservationHoldResponse,
 )
 
@@ -1710,3 +1713,163 @@ def build_discount_card_reservation_form(
     # where build_reservation_form put it.
     rebuilt["txtMenuId"] = KORAIL_DISCOUNT_CARD_MENU_ID
     return rebuilt
+
+
+# The one wire value ``hidDcntKndCd`` can never carry. ``makeDiscountParams``
+# (``S4/D.java:181-183``) special-cases 군장병: it writes "432" into
+# ``dcnt_knd_cd1`` and BLANKS the applied-discount field. The smali is
+# unambiguous that the blanking happens -- ``S4/D.smali`` line 24 of the method
+# is ``move-object p3, v2`` with ``v2`` the empty string, immediately before
+# the shared ``:goto_1`` tail that calls ``setHidDcntKndCd(p3)``. jadx renders
+# the same reassignment, and here the two agree.
+_SOLDIER_DISCOUNT_CODE = "432"
+
+# ``T4/a.java:51-53`` -> ``T4/b.java:46,62``: an "integrated" 국가유공자
+# discount is a certificate number beginning "51" under discount kind "151" or
+# "152". ``makeDiscountParams`` then sends ``dcnt_knd_cd1="000"`` -- CLEARING
+# the seat's existing discount -- instead of echoing it back.
+_MERIT_DISCOUNT_CODES = frozenset({"151", "152"})
+_MERIT_CERTIFICATE_PREFIX = "51"
+
+_PRICE_RECALCULATION_ROW_FIELDS: tuple[tuple[str, str], ...] = (
+    ("psg_tp_dv_cd", "passenger_type_code"),
+    ("hidDcntKndCd", "requested_discount_code"),
+    ("dcnt_knd_cd1", "discount_kind_code"),
+    ("hidDscpNo", "certificate_no"),
+    ("psrm_cl_cd", "room_class_code"),
+    ("hidFmlyNo", "family_sequence_no"),
+)
+
+
+def build_price_recalculation_form(
+    config: KorailConfig,
+    request: PriceRecalculationRequest,
+) -> dict[str, str | list[str]]:
+    """``certification.PriceReCalculation`` — re-price a held PNR.
+
+    ``CertificationService.java:35-37`` (``getDiscountPrice``), built by
+    ``a6/C1042B.java:265-296`` (``k2()``) and dispatched by
+    ``DiscountPriceDao.executeDao`` (``DiscountPriceDao.java:118-120``).
+
+    **THE SIX PARALLEL LISTS ARE ONE ROW PER SEAT, PAIRED BY INDEX.** ``k2()``
+    is a single loop over one ``DiscountPriceParams[]`` that appends one field
+    of the same element to each of six ``ArrayList``s per iteration
+    (``a6/C1042B.java:275-283``), so element *i* of all six belongs to seat
+    *i*. Verified against ``smali/a6.1/B.smali`` (the ``k2()`` body: one
+    ``:goto_0`` loop over ``z0``, six ``List->add`` calls between
+    ``aget-object v11`` and ``add-int/lit8 v10, v10, 0x1``), because jadx has
+    mangled this codebase before. ``a6/C1041A.java:57-80``, the 다자녀 variant,
+    builds its rows differently and then calls the SAME ``k2()``, and its own
+    screen refuses to submit unless the row count equals the seat count
+    (``:91-94``) — so "one row per seat" holds on both paths.
+
+    **The lists go out as REPEATED KEYS, not indexed ones.** Retrofit 1.x
+    flattens an ``Iterable`` ``@Field`` by iterating it and calling
+    ``addField(name, element)`` with the name unchanged
+    (``RequestBuilder.smali:1537-1601``: the ``instance-of ... Iterable``
+    branch, then ``invoke-virtual {v6, v3, v5}`` inside the ``:goto_3`` loop
+    where ``v3`` is loop-invariant). ``FormUrlEncodedTypedOutput.addField``
+    just appends ``&`` and URL-encodes. So the body carries
+    ``psg_tp_dv_cd=..&psg_tp_dv_cd=..``, with no ``[]`` and no index suffix.
+    This builder therefore returns ``list`` values, which httpx encodes the
+    same way.
+
+    ``txtJobId`` is the fixed ``"1101"`` of ``a6/C1042B.java:267``, and
+    ``txtPsgGridcnt`` is the row count — the app sends the journey's seat count
+    (``:269``), which is the same number.
+
+    ``hiduserYn``/``hidCustNo`` are transmitted ONLY for a non-member
+    (``:290-293``). For a member they are null, and Retrofit omits a null
+    ``@Field`` entirely (``RequestBuilder.smali:1531``), so a member's form has
+    twelve keys rather than fourteen.
+
+    **NOT VERIFIED.** Nothing here has ever been sent. The pairing, the key
+    spellings and the repeated-key encoding are all settled from the APK, but
+    what the server does with a row whose ``dcnt_knd_cd1`` disagrees with the
+    hold, and whether it validates ``txtPsgGridcnt`` against the PNR at all,
+    can only be learned from a live call against a real hold.
+    """
+    if type(request) is not PriceRecalculationRequest:
+        raise KorailProtocolError(
+            "KORAIL price recalculation requires an exact "
+            "PriceRecalculationRequest"
+        )
+    pnr_no = request.pnr_no
+    if not isinstance(pnr_no, str) or not pnr_no.strip():
+        raise KorailProtocolError(
+            "KORAIL price recalculation requires a non-empty pnr_no"
+        )
+    rows = tuple(request.rows)
+    if not rows or len(rows) > KORAIL_MAX_PASSENGERS_PER_RESERVATION:
+        raise KorailProtocolError(
+            "KORAIL price recalculation needs 1 to "
+            f"{KORAIL_MAX_PASSENGERS_PER_RESERVATION} passenger rows"
+        )
+
+    columns: dict[str, list[str]] = {
+        name: [] for name, _ in _PRICE_RECALCULATION_ROW_FIELDS
+    }
+    for row in rows:
+        if type(row) is not PriceRecalculationRow:
+            raise KorailProtocolError(
+                "KORAIL price recalculation requires exact "
+                "PriceRecalculationRow values"
+            )
+        for wire_name, attribute in _PRICE_RECALCULATION_ROW_FIELDS:
+            value = getattr(row, attribute)
+            # Not `or not value`: three of the six are legitimately "". What is
+            # refused is a non-string -- above all None, which Retrofit would
+            # DROP from its list rather than send empty, shortening one key
+            # against the other five and re-pairing every later row.
+            if type(value) is not str:
+                raise KorailProtocolError(
+                    f"KORAIL price recalculation row field {attribute} must "
+                    "be a string"
+                )
+            columns[wire_name].append(value)
+        for attribute in (
+            "passenger_type_code",
+            "room_class_code",
+            "discount_kind_code",
+        ):
+            if not getattr(row, attribute).strip():
+                raise KorailProtocolError(
+                    "KORAIL price recalculation copies "
+                    f"{attribute} off the held seat; it must not be empty"
+                )
+        if row.requested_discount_code == _SOLDIER_DISCOUNT_CODE:
+            raise KorailProtocolError(
+                "KORAIL price recalculation never sends 군장병 as "
+                "requested_discount_code: the app moves \"432\" into "
+                "discount_kind_code and blanks this field "
+                "(S4/D.java:181-183)"
+            )
+        if (
+            row.requested_discount_code in _MERIT_DISCOUNT_CODES
+            and row.certificate_no.startswith(_MERIT_CERTIFICATE_PREFIX)
+            and row.discount_kind_code != "000"
+        ):
+            raise KorailProtocolError(
+                "KORAIL price recalculation must send discount_kind_code "
+                "\"000\" for an integrated 국가유공자 discount "
+                "(S4/D.java:184-186 via T4/a.java:51-53)"
+            )
+
+    form: dict[str, str | list[str]] = dict(_common_fields(config))
+    form["hidPnrNo"] = pnr_no
+    form["txtJobId"] = KorailReservationJobType.IMMEDIATE.value
+    non_member_no = request.non_member_no
+    if non_member_no is not None:
+        if not isinstance(non_member_no, str) or not non_member_no.strip():
+            raise KorailProtocolError(
+                "KORAIL price recalculation non_member_no must be a non-empty "
+                "string when present"
+            )
+        # Only a non-member session writes these two, and it writes them
+        # together (a6/C1042B.java:290-293).
+        form["hiduserYn"] = "N"
+        form["hidCustNo"] = non_member_no
+    form["txtPsgGridcnt"] = str(len(rows))
+    for wire_name, _ in _PRICE_RECALCULATION_ROW_FIELDS:
+        form[wire_name] = columns[wire_name]
+    return form
