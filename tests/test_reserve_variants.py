@@ -543,7 +543,6 @@ def test_reserve_with_no_job_type_is_unchanged_at_the_client_surface():
     assert defaulted.payload["txtJobId"] == "1101"
 
 
-
 # --- B. standby (1102) -------------------------------------------------------
 
 
@@ -865,3 +864,35 @@ def test_reserve_standby_dry_run_previews_the_standby_job_id():
     assert isinstance(preview, MutationPreview)
     assert preview.payload["txtJobId"] == "1102"
     assert "txtSrcarCnt" not in preview.payload
+
+
+# --- documentation contract -------------------------------------------------
+
+
+def test_docs_state_plainly_that_neither_variant_is_live_verified():
+    root = Path(__file__).parents[1]
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    handoff = (root / "docs" / "MUTATION_HANDOFF.md").read_text(encoding="utf-8")
+
+    assert "**Neither variant has been live-verified.**" in readme
+    assert (
+        "**Neither new variant has been live-verified; nothing here has "
+        "transmitted a\n  `1102` or a `1103`.**" in changelog
+    )
+    assert (
+        "**korail seat-designated (`1103`) and standby (`1102`) holds are NOT\n"
+        "   live-verified.**" in handoff
+    )
+    combined = f"{readme}\n{changelog}\n{handoff}"
+    for claim in (
+        "KorailReservationJobType",
+        "KorailSeatAssignment",
+        "confirm_standby_hold",
+        "txtSrcarCnt",
+        "members-only",
+        "IRR000014",
+        "ERR299943",
+        "WRR664296",
+    ):
+        assert claim in combined

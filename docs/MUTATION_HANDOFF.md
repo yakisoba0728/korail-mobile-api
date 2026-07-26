@@ -14,16 +14,20 @@ state-changing request can leave the process only through the dedicated
 
 | Category | korail | SRT |
 |---|---|---|
-| reserve | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
+| reserve (`1101`, immediate) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
+| reserve (`1103`, seat-designated) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
+| reserve (`1102`, 예약대기 standby) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
+| standby follow-up (`reservationWait`) | ⚠️ `confirm_standby_hold`, **never live-run** | ⛔ not implemented |
 | cancel (unpaid hold) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
 | payment (fake card) | ✅ `pay_with_fake_card`, **live-verified (declined)** | ⛔ not implemented — route tiered only, not live-enabled |
 | payment (real card) | ⚠️ `pay_with_card`, explicit opt-in, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
 | refund | ⚠️ implemented, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
 
 "Live-verified" on both sides means the request was actually sent and its
-response observed. korail `pay_with_card` and `refund` are the exceptions:
-their send paths are fully active code, NOT blocked, but neither has ever been
-run (see item 1 under "NOT settled"). The SRT reserve/cancel work sits on branch **`feat/srt-cancel` of
+response observed. korail `pay_with_card`, `refund`, the two non-default
+reservation job types and `confirm_standby_hold` are the exceptions: their
+send paths are fully active code, NOT blocked, but none has ever been run
+(see items 1 and 8 under "NOT settled"). The SRT reserve/cancel work sits on branch **`feat/srt-cancel` of
 `srt-mobile-api`, not merged**.
 
 "Not live-enabled" on the SRT side is a hard gate, not a description of missing
@@ -163,6 +167,22 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
   single journey. `KorailClient.reserve` now accepts an arbitrary passenger mix
   and 특실 (item 7 below), and its default still builds exactly the form these
   runs sent — but no other mix and no 특실 request has ever been transmitted.
+  Every live run was also `txtJobId="1101"`; the `1102`/`1103` variants (item 8)
+  have never been sent.
+- **Observed server rule: `ERR299943` 예약할인이 지원되지 않습니다.** On
+  2026-07-26, six passenger combinations were accepted live on a 서울→부산 KTX
+  and two were refused with this code: 청소년 alone, and 1~3급 장애 + 안내견.
+  The forms matched the app exactly, and `ERR299943` has **zero hits anywhere in
+  the decompiled APK**, so this is a server-side account-entitlement rule — the
+  test account does not carry the 청소년 / 안내견 discount registration — not a
+  form defect. Nothing in the package should be "fixed" for it; a different
+  account may well be accepted with the identical form.
+- **Observed: a hold can carry a warning code and still be real.** One hold came
+  back with `h_msg_cd = WRR664296` (senior / 4~6급 장애 discounts do not apply
+  at weekends) and was a genuine, cancelable reservation. Success is
+  `strResult = SUCC` plus a PNR, **not** `h_msg_cd == IRR000018`; no code path
+  in this package treats a non-`IRR000018` code as failure. Standby depends on
+  exactly that, since its own success code is `IRR000014`.
 
 ## NOT settled / trade-offs
 
@@ -268,6 +288,102 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    version of them would reject mixes it may accept. An operator verifying this
    should reserve→cancel (no payment) only the combinations they actually
    intend to use; nothing here generalises from one mix to another.
+
+8. **korail seat-designated (`1103`) and standby (`1102`) holds are NOT
+   live-verified.** Both are reachable from `KorailClient.reserve` through the
+   keyword-only, defaulted `job_type` (`KorailReservationJobType`), and standby
+   has a second, separately gated call. Every byte of both forms comes from the
+   APK; **nothing in this repository has transmitted either one.**
+
+   *Seat designation (`1103`).* The app switches the job id in the same three
+   lines that install the `OSrcar` map (`C5/a.java:143-146`), and clears that
+   map whenever it rebuilds an ordinary journey (`C5/a.java:118`). `OSrcar`
+   reaches Retrofit as the last `@FieldMap` of the call
+   (`CertificationService.java:52-54`), so an empty map contributes **no fields
+   at all** — a `1101` hold carries no `txtSrcarCnt`, and srtgo's unconditional
+   `txtSrcarCnt="0"` is a shape the app never sends. The keys, from
+   `OSrcar.java:6-30` + `SeatSearchActivity.java:675-683`: `txtSrcarCnt` (the
+   **seat** count, `selectedSeatList.size()`), then `txtSrcarNo{i}` /
+   `txtSeatNo{i}` with `i` from **1**. The car number is
+   `SeatSearchRequest.getTxtSrcarNo()` (`:269-271`) and the seat is
+   `Seat.getSeat_no()`, i.e. exactly `SeatCar.car_no` / `SeatInventoryResponse.car_no`
+   and `PhysicalSeat.seat_no` from this package's own seat reads —
+   `KorailSeatAssignment.from_inventory()` pairs them. The seat count must equal
+   `txtTotPsgCnt`, which is the app's own rule (`SeatSearchActivity.java:902`
+   enables 선택완료 only while `selectedSeatCount == G0()`, and `G0()` at
+   `:273-278` is `txtTotPsgCnt`); a mismatch is refused before anything is
+   built, since a partial seat list is how a half-booked hold happens.
+
+   *Standby (`1102`).* Job id at `DirectInquiryActivity.java:434`. Eligibility
+   is **not** "sold out": `U4.a.b()` — which jadx cannot decompile, so read
+   `analysis/apktool/smali/U4/a.smali:1250-1290` and `:1969-1981` — sets the
+   train row's `wait` bundle flag from
+   `N.isNotNull(h_wait_rsv_flg) && " 9".equals(h_wait_rsv_flg) && cVar == RSV_DEFAULT`,
+   ANDed with the standard-cabin branch. That bundle flag is the only input to
+   `a5/k.java:120-126`'s `G0()`, which with a 일반실 tab is the only thing that
+   enables the 예약대기 button (`a5/u.java:371` → `:401`). `h_gen_rsv_cd` is
+   never consulted. So the wire literal is `" 9"` — a leading **space**, then a
+   9 — exported as `KORAIL_STANDBY_WAIT_FLAG`. korail2 (`korail2.py:196-199`)
+   describes the field as `-2` / `9` / `0`; only the 9 has any support in this
+   app and its spelling is right-aligned in two characters. Because a standby
+   train is normally 매진, `reserve` skips the "seats available" check for
+   `1102`, requires the flag plus 일반실 (there is no 특실 standby), and
+   computes `txtStndFlg` from `S4/J.java:83-84`'s `isStndSeat` instead of
+   pinning `"N"`.
+
+   *Standby is members-only, and that is real.*
+   `ReservationRequest.java:105-119`'s `isNonmemberNotEnable()` returns true for
+   `jobId == "1102"`, and its only caller, `BaseActivity.java:350`, passes the
+   negation to `moveToLogin` as "may this request be retried as a non-member".
+   A 비회원 therefore can never place a standby booking. This package satisfies
+   it structurally — every mutation needs a logged-in member session and
+   `nonMember.NonMemTicket` is not in any allowlist — and the form carries none
+   of the non-member identity fields.
+
+   *The follow-up call.* A standby hold returns `h_msg_cd = IRR000014`
+   (`KORAIL_STANDBY_HOLD_MESSAGE_CODE`), the only code that opens 예약대기
+   screen (`ui/inquiry/rir/orr/a.java:222-225`). That screen POSTs
+   `reservationWait.ReservationWait` (`ReservationWaitService.java:10-12`) with
+   `txtPnrNo`, `txtPsrmClChgFlg`, `txtSmsSndFlg` and `txtCpNo` —
+   `ReservationWaitActivity.java:147-155, 213-228`. `txtCpNo` is set **only**
+   when the SMS box is checked (otherwise the getter is null and Retrofit drops
+   the field), and the app refuses fewer than 10 digits against 3+4+4-digit
+   inputs (`res/values/integers.xml:34-35`), so this package sends 10 or 11
+   digits or omits the key. `confirm_standby_hold` is that POST.
+
+   **Trade-off: it is a `"reserve"`-category mutation, not a new category.**
+   It changes no money and releases no seat; it completes the booking an
+   `allow_reserve` consent already authorised, on a PNR that same consent just
+   created. A new category would mean a caller who opted into placing a standby
+   booking could not finish placing it — and every `MutationConsent` written
+   before today would silently deny an operation it plainly intended to allow.
+   That is not a safety boundary, it is a footgun. The route/category
+   cross-check still stops a reserve consent from reaching payment, cancel or
+   refund, and the call still goes through `post_mutation_form` like every other
+   mutation — never the read path.
+
+   **How an operator live-verifies these.** Both need reserve→cancel only; no
+   payment.
+   - `1103`: pick a train with seats, `get_seat_cars` → `get_seat_inventory` →
+     build `KorailSeatAssignment`s → `reserve(..., job_type=SEAT_DESIGNATED,
+     seats=[...])` with `dry_run=False`, then read the hold back with
+     `get_ticket_reservation_detail` and check `h_srcar_no` / `h_seat_no` are
+     the seats that were asked for — that is the only thing that proves the
+     `OSrcar` keys reached the server rather than being ignored — then
+     `cancel_unpaid_hold`. Worth doing once with **two** passengers, because a
+     single seat cannot distinguish "the index is 1-based" from "the server
+     ignored the map".
+   - `1102`: find a **sold-out** 서울→부산 KTX and check its
+     `TrainSummary.wait_reservation_flag` is `" 9"` first (a dry-run `reserve`
+     with `job_type=STANDBY` will say so without sending anything). Then
+     `dry_run=False`, expect `strResult=SUCC` with `h_msg_cd=IRR000014`, call
+     `confirm_standby_hold` (start with both options off, so no phone number
+     leaves the machine), and `cancel_unpaid_hold` the PNR. Record what
+     `h_msg_cd` the follow-up returns — it is completely unknown.
+   - Unknowns worth recording either way: whether `1103` accepts seats spread
+     across two cars (the app's UI can only ever select within one car, though
+     the wire format is per-seat), and what the server says when a designated
+     seat has been taken between the inventory read and the hold.
 
 ## How the korail live round trips were run
 

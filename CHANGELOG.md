@@ -2,6 +2,66 @@
 
 ## Unreleased
 
+- Added: `reserve` reaches all three of the booking screen's job types through a
+  keyword-only, defaulted `job_type` (`KorailReservationJobType`). The default
+  is `IMMEDIATE` (`txtJobId="1101"`), the only value this package has ever sent,
+  so every existing call is byte-for-byte unchanged.
+  **Neither new variant has been live-verified; nothing here has transmitted a
+  `1102` or a `1103`.**
+  - `SEAT_DESIGNATED` (`"1103"`) books named seats. `seats` takes one
+    `KorailSeatAssignment` per passenger, carrying exactly the two identifiers
+    the existing seat reads return — `SeatCar.car_no` /
+    `SeatInventoryResponse.car_no` and `PhysicalSeat.seat_no`, with
+    `KorailSeatAssignment.from_inventory()` pairing them and refusing a seat the
+    read marked unsellable. The form appends `txtSrcarCnt` (the *seat* count)
+    then `txtSrcarNo{i}`/`txtSeatNo{i}` from index 1, after the journey block.
+    An ordinary hold still sends none of those keys at all — the app clears its
+    `OSrcar` map and an empty Retrofit `@FieldMap` contributes no fields, so
+    srtgo's unconditional `txtSrcarCnt="0"` is a shape the app never produces.
+    A seat list whose length is not the passenger total, or that names the same
+    seat twice, is refused before anything is built: a partial seat list is how
+    a half-booked hold happens.
+  - `STANDBY` (`"1102"`) is 예약대기. Eligibility is not "sold out" — the app
+    reads one field, the search row's `h_wait_rsv_flg`, and compares it to the
+    two-character literal `" 9"` (leading space; exported as
+    `KORAIL_STANDBY_WAIT_FLAG`), on the 일반실 tab only. That, and nothing
+    else, enables its button; the availability code is never consulted. So
+    standby skips the "seats available" check that `1101` enforces, requires
+    the flag and the general cabin, and computes `txtStndFlg` from the app's
+    own `isStndSeat` instead of pinning `"N"`. korail2 describes the field as
+    `-2`/`9`/`0`; only the 9 has any support in this app. Standby is
+    **members-only** — the app's request declares itself not-non-member-enabled
+    for this job id — which this client satisfies structurally, since every
+    mutation needs a logged-in member session.
+- Added: `confirm_standby_hold`, the second call a standby booking needs. A
+  `"1102"` hold comes back with `h_msg_cd = IRR000014`
+  (`KORAIL_STANDBY_HOLD_MESSAGE_CODE`), the only code that opens the app's
+  예약대기 screen; that screen then POSTs `reservationWait.ReservationWait` with
+  `txtPsrmClChgFlg` (좌석등급 변경 동의) and `txtSmsSndFlg`/`txtCpNo`. The phone
+  number is sent only when SMS is on, must be 10 or 11 digits, and is otherwise
+  omitted entirely rather than sent empty — matching the app, where the field is
+  null and Retrofit drops it. It is a state-changing call on an existing PNR, so
+  it goes through the same double-gated mutation transport as everything else,
+  and it deliberately shares the **`reserve` consent category** rather than
+  introducing a new one: it completes the booking an `allow_reserve` consent
+  authorised, moves no money and releases no seat, and a new category would mean
+  a caller who opted into placing a standby booking could not finish placing it.
+  `reservationWait.ReservationWait` is now a fifth mutation route; the read-only
+  allowlist and its guarantee are untouched. Never live-run.
+- Changed: `redact_payload` now masks `txtCpNo` and the indexed
+  `txtSrcarNo{i}`/`txtSeatNo{i}` keys, so a mutation preview cannot expose the
+  standby notification number or the designated seats. Car and seat identifiers
+  were already redacted everywhere they are read back; these are the same two
+  values on the way out.
+- Documented: two live observations from 2026-07-26 that are server rules, not
+  package defects. `ERR299943 예약할인이 지원되지 않습니다` refused 청소년 alone
+  and 1~3급 장애 + 안내견 while six other mixes were accepted; the code has zero
+  hits anywhere in the decompiled APK and the forms matched the app exactly, so
+  it is an account-entitlement rule. Separately, a hold returned
+  `h_msg_cd = WRR664296` (weekend discount notice) and was still a real,
+  cancelable reservation — success is `strResult = SUCC` plus a PNR, not
+  `h_msg_cd == IRR000018`, and no code path treats a non-`IRR000018` code as
+  failure.
 - Added: `reserve` books an arbitrary passenger mix in either cabin. It takes a
   `KorailPassengerCounts` — one field per row the app's request has always
   carried (어른, 청소년, 어린이, 동반유아, 경로, 1~3급 장애, 4~6급 장애,

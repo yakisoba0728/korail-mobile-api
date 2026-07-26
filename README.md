@@ -43,7 +43,7 @@ shapes and the same gated send path, but no run recorded here has settled or
 returned money. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `1861 passed, 1 deselected`; the one
+current reviewed offline gate is `1862 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -305,6 +305,125 @@ fix load-bearing. Every other passenger type, and every mix of types, is
 still static evidence only, so acceptance, pricing and error envelopes for
 those remain unknown until an operator exercises the
 specific combinations they need.
+
+### Seat-designated and standby reservations
+
+The booking screen has three actions on the same route, told apart by
+`txtJobId`. `reserve` now reaches all three through a keyword-only, defaulted
+`job_type` (`KorailReservationJobType`), so an existing call is byte-for-byte
+unchanged:
+
+| `job_type` | `txtJobId` | what it is |
+| --- | --- | --- |
+| `IMMEDIATE` (default) | `1101` | the seat-unspecified hold this package has always sent |
+| `SEAT_DESIGNATED` | `1103` | 좌석지정: book named car+seat numbers |
+| `STANDBY` | `1102` | 예약대기: join the waiting list on a sold-out train |
+
+**Neither variant has been live-verified.** Both forms are built from the app's
+own request builder; nothing in this repository has transmitted a `1102` or a
+`1103`.
+
+#### Seat designation (`1103`)
+
+A caller drives it end to end from the reads that already exist -- search, pick
+a train, list its cars, read one car's seat map, name the seats:
+
+```python
+from korail_mobile_api import (
+    KorailPassengerCounts,
+    KorailReservationJobType,
+    KorailSeatAssignment,
+)
+
+train = client.search_trains(query).trains[0]
+
+cars = client.get_seat_cars(train, passenger_count=2)
+car = cars.cars[0]                                   # SeatCar.car_no
+
+inventory = client.get_seat_inventory(train, car.car_no, passenger_count=2)
+free = [seat for seat in inventory.seats if seat.sale_possible == "Y"][:2]
+
+preview = client.reserve(
+    train,
+    consent=MutationConsent(allow_reserve=True),
+    passengers=KorailPassengerCounts(adult=2),
+    job_type=KorailReservationJobType.SEAT_DESIGNATED,
+    seats=[KorailSeatAssignment.from_inventory(inventory, seat) for seat in free],
+)
+```
+
+`KorailSeatAssignment` carries exactly the two identifiers the seat reads
+return and nothing else: `car_no` is `SeatCar.car_no` / `SeatInventoryResponse.car_no`
+(`h_srcar_no` / `scar_no`), and `seat_no` is `PhysicalSeat.seat_no` (`seat_no`,
+not the human `seat_spec` label). `from_inventory()` pairs them for you and
+refuses a seat the read itself marked unsellable.
+
+The form adds exactly five keys per two seats and no others -- `txtSrcarCnt`,
+then `txtSrcarNo{i}` / `txtSeatNo{i}` counting from **1** -- appended after the
+journey block. `txtSrcarCnt` is the number of *seats*, not cars. An ordinary
+`1101` hold sends none of them at all: the app clears its `OSrcar` map and an
+empty Retrofit `@FieldMap` contributes no fields, so there is no
+`txtSrcarCnt="0"` on the wire (srtgo sends one unconditionally; the app never
+does).
+
+**The seat count must equal the passenger total**, counting every row including
+동반유아 and 안내견, exactly as the app's own seat map does (its 선택완료 button
+is enabled only while `selectedSeatCount == txtTotPsgCnt`). A mismatch is
+refused before anything is built or sent, because a partial seat list is how you
+get a half-booked hold. Booking the same seat twice is refused too.
+
+#### Standby / 예약대기 (`1102`)
+
+```python
+hold = client.reserve(
+    sold_out_train,
+    consent=MutationConsent(allow_reserve=True, dry_run=False),
+    job_type=KorailReservationJobType.STANDBY,
+)
+
+client.confirm_standby_hold(
+    hold,
+    consent=MutationConsent(allow_reserve=True, dry_run=False),
+    allow_seat_class_change=True,
+    sms_notify=True,
+    phone_no="0101234...",
+)
+```
+
+Standby is *not* gated on the train being sold out, and it is not gated on
+seats being available either. The app looks at one field: the search row's
+`h_wait_rsv_flg`, which must be the two-character literal `" 9"`
+(`KORAIL_STANDBY_WAIT_FLAG`) -- a leading space then a 9. That flag, on the
+일반실 tab only, is the sole thing that enables the 예약대기 button; the
+availability code is never consulted for it. In practice a train is flagged
+that way when it is 매진, which is why standby exists, but the flag is the
+rule. korail2 describes the same field as `-2` / `9` / `0`; only the 9 has any
+support in this app, and its wire spelling carries the leading space.
+
+Because `1101` demands an available seat and a standby train usually has none,
+`reserve` skips that check for `1102` and instead requires the flag and the
+일반실 cabin (there is no 특실 standby), and it computes `txtStndFlg` the way
+the app does rather than pinning `"N"`.
+
+**Standby is members-only.** The app's reservation request reports itself as
+"not non-member enabled" whenever the job id is `1102`, and the session-expiry
+handler passes that straight through as "may this be retried as a non-member",
+so a 비회원 can never place one. This client satisfies the constraint
+structurally -- every mutation requires a logged-in member session and the
+non-member booking route is not in the allowlist at all -- and the form carries
+none of the non-member identity fields.
+
+A standby booking is **two calls**. The hold comes back with `h_msg_cd =
+IRR000014` (`KORAIL_STANDBY_HOLD_MESSAGE_CODE`), which is the only code that
+opens the 예약대기 screen in the app; that screen then POSTs
+`reservationWait.ReservationWait` with the two options it collects.
+`confirm_standby_hold` is that second POST: `txtPsrmClChgFlg` (may KORAIL seat
+you in a different cabin when it assigns one) and `txtSmsSndFlg` with
+`txtCpNo`, which is sent only when SMS is on and must be 10 or 11 digits. It is
+a state-changing call on an existing PNR, so it goes through the same
+double-gated mutation transport as everything else, on the **`reserve` consent
+category** -- it completes the booking an `allow_reserve` consent authorised,
+moves no money and releases no seat, so it is deliberately not a new category.
 
 ### Fixed and account-shaped reads
 
@@ -754,4 +873,4 @@ still provide a custom `DynapathConfig.token_provider`; the package contains no
 separate probe generator and does not retain request history. Login follows the
 app sequence and treats only `IRZ000001` or `S200` as final success.
 
-Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, an explicitly acknowledged real card payment, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`). `reserve` accepts an arbitrary passenger mix (`KorailPassengerCounts`) and either cabin class (`KorailSeatClass`), defaulting to the one-adult, general-seat request. Two adults in a general seat and one adult in 특실 are live-verified (2026-07-26); the other passenger types and any mix of them are static-evidenced only. Real (chargeable) card payment is off by default: it requires `pay_with_card` plus a consent that sets `real_card_acknowledged=True` and `fake_card_only=False`, and `pay_with_fake_card` still refuses anything but a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
+Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, an explicitly acknowledged real card payment, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`). `reserve` accepts an arbitrary passenger mix (`KorailPassengerCounts`), either cabin class (`KorailSeatClass`), and any of the booking screen's three job types (`KorailReservationJobType`: immediate `1101`, seat-designated `1103`, standby/예약대기 `1102`), defaulting to the one-adult, general-seat, immediate request. Two adults in a general seat and one adult in 특실 are live-verified (2026-07-26); the other passenger types and any mix of them are static-evidenced only, and **neither the seat-designated nor the standby variant has been live-verified** — including `confirm_standby_hold`, the second call a standby booking needs. Real (chargeable) card payment is off by default: it requires `pay_with_card` plus a consent that sets `real_card_acknowledged=True` and `fake_card_only=False`, and `pay_with_fake_card` still refuses anything but a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
