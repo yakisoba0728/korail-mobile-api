@@ -141,6 +141,10 @@ SENSITIVE_KEYS = frozenset(
         "hidWctNo",
         "hidTmpJobSqno1",
         "hidTmpJobSqno2",
+        # The 예약대기 follow-up's notification number
+        # (ReservationWaitService.java:12). A phone number, and the only PII a
+        # reserve-category form has ever carried.
+        "txtCpNo",
         # The seat-designated hold's OSrcar keys. car_no/seat_no/h_srcar_no/
         # h_seat_no are already redacted above wherever they are READ back;
         # these are the same two values on the way out. The keys are indexed

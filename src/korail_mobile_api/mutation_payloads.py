@@ -4,7 +4,11 @@ import re
 from collections.abc import Sequence
 
 from .config import KorailConfig
-from .constants import KorailReservationJobType, KorailSeatClass
+from .constants import (
+    KORAIL_STANDBY_WAIT_FLAG,
+    KorailReservationJobType,
+    KorailSeatClass,
+)
 from .errors import KorailProtocolError
 from .models import TrainSummary
 from .mutation_models import (
@@ -139,7 +143,7 @@ def build_reservation_form(
     before mixes existed -- see
     :func:`build_single_adult_reservation_form`.
 
-    ``job_type`` selects which of the booking screen's actions is being
+    ``job_type`` selects which of the booking screen's three actions is being
     performed and defaults to
     :attr:`KorailReservationJobType.IMMEDIATE <korail_mobile_api.KorailReservationJobType.IMMEDIATE>`
     (``txtJobId="1101"``), the only one that existed before:
@@ -148,6 +152,11 @@ def build_reservation_form(
       (``"1103"``) additionally requires ``seats``, one
       :class:`~korail_mobile_api.KorailSeatAssignment` per passenger, and adds
       the ``OSrcar`` keys described below.
+    * :attr:`~korail_mobile_api.KorailReservationJobType.STANDBY` (``"1102"``)
+      is 예약대기. It does not require an available seat -- the point is that
+      there is none -- but it does require the train row's own
+      standby-eligibility flag and the 일반실 cabin, and it computes
+      ``txtStndFlg`` the way the app does instead of pinning ``"N"``.
 
     ``seats`` is accepted only for the seat-designated job. Its keys are
     ``OSrcar``'s (``OSrcar.java:6-11``), a ``@FieldMap`` appended after the
@@ -159,8 +168,8 @@ def build_reservation_form(
     it is ``String.valueOf(selectedSeatList.size())``.
 
     Only the single-adult, general-class, ``"1101"`` shape has ever been sent to
-    the live server. Multi-passenger and 특실 forms, and the seat-designated job
-    type, are built from the app's own request builder but are NOT
+    the live server. Multi-passenger and 특실 forms, and both non-default job
+    types, are built from the app's own request builder but are NOT
     live-verified.
     """
     if type(train) is not TrainSummary:
@@ -193,13 +202,32 @@ def build_reservation_form(
         job_type=job_type,
         passenger_total=passengers.total,
     )
+    if job_type is KorailReservationJobType.STANDBY:
+        # 예약대기 is offered on the 일반실 tab only. U4.a.b() sets the "wait"
+        # bundle flag solely on the standard-cabin bundle (the p3 branch,
+        # smali/U4/a.smali:1969-1981), and a5/u.java:371 enables the button only
+        # when the selected tab is K4.o.GENERAL. There is no 특실 standby.
+        if seat_class is not KorailSeatClass.GENERAL:
+            raise KorailProtocolError(
+                "KORAIL standby (예약대기) is offered on the 일반실 cabin "
+                "only"
+            )
+        if train.wait_reservation_flag != KORAIL_STANDBY_WAIT_FLAG:
+            raise KorailProtocolError(
+                "KORAIL standby requires a train whose h_wait_rsv_flg is "
+                f"{KORAIL_STANDBY_WAIT_FLAG!r}, got "
+                f"{train.wait_reservation_flag!r}"
+            )
+        # Deliberately NO h_gen_rsv_cd check. The app never consults it for
+        # standby; a standby train is normally 매진 ("13"), which is exactly the
+        # state the "11" rule below refuses.
     # The train list checks the availability code of the cabin the user picked,
     # not always the general one: a5/u.java:319 reads h_gen_rsv_cd for the
     # standard tab and h_spe_rsv_cd for the suite tab (likewise
     # DirectInquiryActivity.java:198). Keep this package's stricter rule -- only
     # an explicit "11" counts as available -- and apply it to whichever cabin is
     # being booked.
-    if seat_class is KorailSeatClass.SPECIAL:
+    elif seat_class is KorailSeatClass.SPECIAL:
         if train.special_reservation_code != "11":
             raise KorailProtocolError(
                 "KORAIL reservation requires an evidenced available special seat"
@@ -269,13 +297,15 @@ def build_reservation_form(
             "txtJobId": job_type.value,
             "txtGdNo": "",
             "hidFreeFlg": "N",
-            # Always "N" here. The app sets it from
+            # The app sets it from
             # J.isStndSeat(seatClass, h_gen_rsv_cd, h_stnd_rsv_cd)
             # (c5/b.java:69), which is true only for a GENERAL request on a
             # train whose general seats are sold out ("13") and whose standing
-            # inventory is open -- S4/J.java:83-84. Neither cabin this builder
-            # will accept can be in that state, since both demand "11".
-            "txtStndFlg": "N",
+            # inventory is open -- S4/J.java:83-85. For "1101"/"1103" it is
+            # always "N": neither cabin those jobs accept can be in that state,
+            # since both demand "11". A standby train usually IS "13", so the
+            # rule has to be evaluated rather than pinned there.
+            "txtStndFlg": _standing_flag(train, seat_class=seat_class),
             # w4/a.java:49 sends the app's TOTAL_PERSON_COUNT, and that is the
             # sum of ALL eight counters -- 동반유아 and 안내견 included
             # (m5/c.java:330).
@@ -321,7 +351,7 @@ def build_reservation_form(
     )
     # OSrcar is the LAST @FieldMap on the Retrofit call
     # (CertificationService.java:52-54), so its keys go after the journey keys.
-    # For "1101" the map is empty and contributes nothing at all --
+    # For "1101"/"1102" the map is empty and contributes nothing at all --
     # C5/a.java:118 clears it while building an ordinary journey -- which is why
     # a txtSrcarCnt of "0" never appears on the wire.
     #
@@ -342,6 +372,26 @@ def build_reservation_form(
     return form
 
 
+def _standing_flag(
+    train: TrainSummary,
+    *,
+    seat_class: KorailSeatClass,
+) -> str:
+    """``txtStndFlg``: S4/J.java:83-84's ``isStndSeat``, verbatim.
+
+    ``GENERAL`` cabin, general seats 매진 (``"13"``) and standing inventory open
+    (``"11"``). c5/b.java:69 is the caller that feeds it into the reservation
+    request.
+    """
+    if (
+        seat_class is KorailSeatClass.GENERAL
+        and train.general_reservation_code == "13"
+        and train.standing_reservation_code == "11"
+    ):
+        return "Y"
+    return "N"
+
+
 def build_single_adult_reservation_form(
     config: KorailConfig,
     train: TrainSummary,
@@ -354,6 +404,98 @@ def build_single_adult_reservation_form(
     from this package.
     """
     return build_reservation_form(config, train)
+
+
+# The app concatenates three phone-number fields, capped at 3 + 4 + 4 digits
+# (res/values/integers.xml:34-35, phone_number_max_length_3 and
+# phone_number_max_length, applied in ReservationWaitActivity.java:88-89), and
+# refuses the dialog when the concatenation is shorter than 10
+# (ReservationWaitActivity.java:220-224). So 10 or 11 digits, nothing else.
+_STANDBY_PHONE_RE = re.compile(r"[0-9]{10,11}")
+
+
+def build_standby_wait_form(
+    config: KorailConfig,
+    hold: ReservationHoldResponse,
+    *,
+    allow_seat_class_change: bool = False,
+    sms_notify: bool = False,
+    phone_no: str | None = None,
+) -> dict[str, str]:
+    """Build the 예약대기 follow-up form for a standby hold.
+
+    This is ``reservationWait.ReservationWait``
+    (``ReservationWaitService.java:10-12``), the second half of a standby
+    booking: the ``"1102"`` hold creates the PNR, and this call records the two
+    options the 예약대기 screen collects for it.
+
+    Fields, in the order ``RsvWaitDao.executeDao()`` passes them:
+
+    * ``txtPnrNo`` -- the hold's PNR (``ReservationWaitActivity.java:150``).
+    * ``txtPsrmClChgFlg`` -- ``"Y"``/``"N"``, 좌석등급 변경 동의: may KORAIL
+      assign a different cabin than the one waited for
+      (``:213``/``:219``, ``check0``). The app hides that checkbox entirely
+      for tour trains (``:115``), so it can only ever be ``"N"`` there.
+    * ``txtSmsSndFlg`` -- ``"Y"``/``"N"``, SMS notification on assignment
+      (``:214``/``:218``, ``check1``).
+    * ``txtCpNo`` -- the notification number. The app sets it ONLY when SMS is
+      on (``:220-227``); otherwise ``OWait`` has no ``PHONE_NO`` entry, the
+      getter returns null and Retrofit drops the ``@Field``. This builder omits
+      the key in exactly that case rather than sending an empty string.
+
+    ``hold`` must be a successful hold carrying a PNR. A standby hold is the one
+    whose ``h_msg_cd`` is
+    :data:`~korail_mobile_api.KORAIL_STANDBY_HOLD_MESSAGE_CODE` (``IRR000014``)
+    -- the only code that opens this screen in the app
+    (``ui/inquiry/rir/orr/a.java:222-225``). That is not enforced here, because
+    it is a routing condition rather than a wire constraint and a hold that
+    carried some other advisory code would still be a real standby PNR; check it
+    yourself if you want the app's exact behaviour.
+
+    NOT live-verified.
+    """
+    if type(hold) is not ReservationHoldResponse:
+        raise KorailProtocolError(
+            "KORAIL standby options require an exact reservation hold response"
+        )
+    if (
+        hold.str_result != "SUCC"
+        or not isinstance(hold.pnr_no, str)
+        or not hold.pnr_no.strip()
+    ):
+        raise KorailProtocolError(
+            "KORAIL standby options require one successful hold with a PNR"
+        )
+    if type(allow_seat_class_change) is not bool:
+        raise KorailProtocolError(
+            "allow_seat_class_change must be a bool"
+        )
+    if type(sms_notify) is not bool:
+        raise KorailProtocolError("sms_notify must be a bool")
+    if sms_notify:
+        if not isinstance(phone_no, str) or (
+            _STANDBY_PHONE_RE.fullmatch(phone_no) is None
+        ):
+            raise KorailProtocolError(
+                "KORAIL standby SMS notification requires a 10- or 11-digit "
+                "phone number"
+            )
+    elif phone_no is not None:
+        raise KorailProtocolError(
+            "KORAIL standby sends no phone number unless sms_notify is True"
+        )
+    form = _common_fields(config)
+    form.update(
+        {
+            "txtPnrNo": hold.pnr_no,
+            "txtPsrmClChgFlg": "Y" if allow_seat_class_change else "N",
+            "txtSmsSndFlg": "Y" if sms_notify else "N",
+        }
+    )
+    if sms_notify:
+        assert phone_no is not None
+        form["txtCpNo"] = phone_no
+    return form
 
 
 def build_unpaid_reservation_cancel_form(

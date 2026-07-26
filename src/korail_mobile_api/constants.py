@@ -64,7 +64,7 @@ class KorailSeatClass(StrEnum):
 class KorailReservationJobType(StrEnum):
     """``txtJobId``: which of the booking screen's actions a hold performs.
 
-    They all POST the same route
+    All three POST the same route
     (``certification.TicketReservation``, ``CertificationService.java:52-54``)
     with the same passenger, seat and journey maps; the job id -- and, for
     :attr:`SEAT_DESIGNATED`, one extra ``OSrcar`` map -- is the whole
@@ -78,13 +78,46 @@ class KorailReservationJobType(StrEnum):
       (``CertificationService.java:54``) and an empty map contributes no fields.
       srtgo's unconditional ``txtSrcarCnt="0"`` (``ktx.py``) is therefore a
       shape the app never sends.
+    * :attr:`STANDBY` (``"1102"``) is 예약대기, set when the user taps the
+      second booking button (``DirectInquiryActivity.java:434``).
     * :attr:`SEAT_DESIGNATED` (``"1103"``) is set the moment the seat map
       returns a selection (``C5/a.java:143-146``): the activity copies
       ``SEAT_SELECT_DATA`` into a fresh ``OSrcar`` and switches the job id.
     """
 
     IMMEDIATE = "1101"
+    STANDBY = "1102"
     SEAT_DESIGNATED = "1103"
+
+
+# The exact h_wait_rsv_flg value that makes a train standby-eligible.
+#
+# Two characters, a SPACE then a 9. The app compares the search row's
+# h_wait_rsv_flg against this literal and nothing else --
+# analysis/apktool/smali/U4/a.smali:1250-1290, inside the U4.a.b() train-row
+# bundler that jadx could not decompile (U4/a.java:52-57 is a stub). The smali
+# reads getH_wait_rsv_flg() into v4, then:
+#
+#     if (N.isNotNull(v4) && " 9".equals(v4) && cVar == K4.c.RSV_DEFAULT)
+#         waitEligible = true
+#
+# and at :1969-1981 writes bundle.putBoolean("wait", isStandardCabin &&
+# waitEligible). That bundle bool is the ONLY input to a5/k.java:120-126's
+# G0(), which in turn is the only thing that enables the 예약대기 button
+# (a5/u.java:371 -> :401). h_gen_rsv_cd is never consulted for standby, so
+# "sold out" is not the app's test; this flag is.
+#
+# korail2 (korail2.py:196-199) describes the same field as -2/9/0. Only the 9
+# has any support in this app, and its wire spelling is right-aligned in two
+# characters, which is why the literal carries a leading space.
+KORAIL_STANDBY_WAIT_FLAG = " 9"
+
+# The reservation-response message code that means "this hold is a standby
+# (예약대기) hold, go collect the notify options".
+# com/korail/talk/ui/inquiry/rir/orr/a.java:222-225 routes to
+# ReservationWaitActivity on exactly this code and nothing else. It is NOT a
+# failure code: strResult is still SUCC and a PNR is still returned.
+KORAIL_STANDBY_HOLD_MESSAGE_CODE = "IRR000014"
 
 
 # The most passengers one reservation may carry. The booking screen's passenger

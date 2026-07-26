@@ -7,13 +7,13 @@ requests. It also retains the static reverse-engineering report for `korail.apk`
 Android package `com.korail.talk` version `6.5.0`, as the package's historical
 evidence map.
 
-The reviewed package boundary contains 54 routes and 61 public methods. All 54
+The reviewed package boundary contains 54 routes and 62 public methods. All 54
 routes are login/read routes: 52 reads plus the login POST and the server-side
-logout GET. The four mutation routes are tracked separately and
+logout GET. The five mutation routes are tracked separately and
 are never added to the read-only allowlist. Fifty-six of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
-five, `reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`,
-and `refund`, are
+six, `reserve`, `confirm_standby_hold`, `cancel_unpaid_hold`,
+`pay_with_fake_card`, `pay_with_card`, and `refund`, are
 the consent-gated mutation methods. Each is denied unless the caller supplies a
 `MutationConsent` that opts into its category; with the default `dry_run=True`
 each merely validates its inputs and returns a redacted `MutationPreview` of the
@@ -43,7 +43,7 @@ shapes and the same gated send path, but no run recorded here has settled or
 returned money. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `1815 passed, 1 deselected`; the one
+current reviewed offline gate is `1861 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -247,18 +247,18 @@ def get_owned_product_detail(
 The reservation, payment, and mutation routes remain excluded from the
 read-only allowlist, so no read creates, changes, cancels, pays for, refunds, or
 checks in a reservation. State changes occur only through the explicit
-consent-gated mutation methods (`reserve`, `cancel_unpaid_hold`,
-`pay_with_fake_card`, `pay_with_card`, and `refund`), never as a side effect of
-a read.
+consent-gated mutation methods (`reserve`, `confirm_standby_hold`,
+`cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, and `refund`),
+never as a side effect of a read.
 
 The package also exposes pure parsers for already-obtained reservation-hold and
 reservation-payment JSON: `parse_reservation_hold_response()` and
 `parse_reservation_payment_response()`. They return frozen, redaction-safe
-models and perform no network request. All four mutation form builders are now
+models and perform no network request. All five mutation form builders are now
 wired to a client method: reservation and unpaid-hold-cancel to `reserve` and
-`cancel_unpaid_hold`, card payment to `pay_with_fake_card` (test cards) and
-`pay_with_card` (an acknowledged real charge), and refund to
-`refund`. Each sends only via the double-gated mutation path and only with a
+`cancel_unpaid_hold`, the 예약대기 follow-up to `confirm_standby_hold`, card
+payment to `pay_with_fake_card` (test cards) and `pay_with_card` (an
+acknowledged real charge), and refund to `refund`. Each sends only via the double-gated mutation path and only with a
 `dry_run=False` consent; with the default consent each returns a redacted
 preview and transmits nothing. `pay_with_card` and `refund` are the two send
 paths that, while fully active code rather than blocked, have never been run
@@ -420,7 +420,7 @@ nested response models. The implementation used no live request, credential
 access, secure raw capture, retry, fallback, or adjacent mutation. At
 implementation completion, the pre-R149 inventory was 31 successful, 10
 failed, and 124 unexecuted out of 165. The boundary is 54 exact login/read
-routes and 61 public methods; the DynaPath allowlist remains six paths.
+routes and 62 public methods; the DynaPath allowlist remains six paths.
 
 The ticket-reference implementation itself used no live I/O and added no
 mutation capability.

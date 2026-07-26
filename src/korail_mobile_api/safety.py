@@ -130,14 +130,16 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
 )
 
 # Tiering of the state-changing routes. These are the four core mutation
-# endpoints (one per category). They are deliberately kept OUT of
-# KORAIL_READ_ONLY_ROUTES so the read-only allowlist and its guarantee remain
+# endpoints (one per category) plus the 예약대기 follow-up, which shares the
+# "reserve" category with the hold it completes. They are deliberately kept OUT
+# of KORAIL_READ_ONLY_ROUTES so the read-only allowlist and its guarantee remain
 # fully intact: the read-only send path (post_form/get_json) refuses every route
 # in this set.
 #
 # This is NOT an inert classification. All four categories now have a callable
-# client method — KorailClient.reserve, .cancel_unpaid_hold, .pay_with_fake_card
-# and .refund — and each of them CAN transmit to its route below. What bounds
+# client method — KorailClient.reserve, .confirm_standby_hold,
+# .cancel_unpaid_hold, .pay_with_fake_card and .refund — and each of them CAN
+# transmit to its route below. What bounds
 # them is the gate, not the absence of a method: the only code that sends to a
 # route in this set is KorailHttpClient.post_mutation_form, which requires a
 # MutationConsent opting into the matching category, refuses a dry_run=True
@@ -152,6 +154,20 @@ KORAIL_MUTATION_ROUTES = frozenset(
     {
         # reserve
         ("POST", "/classes/com.korail.mobile.certification.TicketReservation"),
+        # reserve -- the 예약대기 follow-up. Deliberately the SAME category as
+        # the hold that creates it, not a new one. It changes no money and
+        # releases no seat; it records the two options
+        # (좌석등급 변경 / SMS 통보) that the standby screen collects for a PNR
+        # the caller has just created with an allow_reserve consent
+        # (ReservationWaitService.java:10-12, reached only from
+        # ui/inquiry/rir/orr/a.java:222-225 after a "1102" hold). Splitting it
+        # into its own category would mean a caller who opted into placing a
+        # standby booking could not finish placing it, which is not a safety
+        # boundary -- and every existing MutationConsent would silently deny an
+        # operation it plainly intended to allow. The route/category cross-check
+        # below still stops a reserve consent from reaching payment, cancel or
+        # refund.
+        ("POST", "/classes/com.korail.mobile.reservationWait.ReservationWait"),
         # payment
         ("POST", "/classes/com.korail.mobile.payment.ReservationPayment"),
         # cancel
@@ -170,6 +186,7 @@ KORAIL_MUTATION_ROUTES = frozenset(
 # route (e.g. the refund route).
 KORAIL_MUTATION_ROUTE_CATEGORIES = {
     "/classes/com.korail.mobile.certification.TicketReservation": "reserve",
+    "/classes/com.korail.mobile.reservationWait.ReservationWait": "reserve",
     "/classes/com.korail.mobile.payment.ReservationPayment": "payment",
     "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk": (
         "cancel"

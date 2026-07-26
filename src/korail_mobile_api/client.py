@@ -33,6 +33,7 @@ from .mutation_payloads import (
     build_card_payment_form,
     build_refund_form,
     build_reservation_form,
+    build_standby_wait_form,
     build_unpaid_reservation_cancel_form,
 )
 from .http import KorailHttpClient
@@ -1278,8 +1279,18 @@ class KorailClient:
           from :meth:`get_seat_cars` + :meth:`get_seat_inventory`. A count that
           does not match the passenger total is refused here, before any
           request is built.
+        * ``STANDBY`` (``"1102"``) places a 예약대기 booking on a train whose
+          search row says standby is possible. It is **members only** -- the
+          app's own request refuses to offer the non-member path for this job id
+          (``ReservationRequest.java:105-119``) -- which this client satisfies
+          structurally, since every mutation here needs a logged-in member
+          session and the non-member booking route is not reachable at all. A
+          successful standby hold comes back with ``h_msg_cd`` =
+          :data:`~korail_mobile_api.KORAIL_STANDBY_HOLD_MESSAGE_CODE`
+          (``IRR000014``) and is only complete once
+          :meth:`confirm_standby_hold` records its notify options.
 
-        The seat-designated job has never been transmitted.
+        Neither non-default job type has ever been transmitted.
         """
         require_mutation_consent(consent, "reserve")
         if self.session.current is None:
@@ -1310,6 +1321,72 @@ class KorailClient:
             self.clear_session()
             raise
         return self._hold_from_reservation_response(response)
+
+    def confirm_standby_hold(
+        self,
+        hold: ReservationHoldResponse,
+        *,
+        consent: MutationConsent,
+        allow_seat_class_change: bool = False,
+        sms_notify: bool = False,
+        phone_no: str | None = None,
+    ) -> MutationPreview | BaseKorailResponse:
+        """Record the 예약대기 options for a standby hold (second half of "1102").
+
+        A standby booking is two calls in the app, not one: :meth:`reserve` with
+        ``job_type=STANDBY`` creates the PNR and returns ``h_msg_cd`` =
+        ``IRR000014``, which is the only code that opens 예약대기 screen
+        (``ui/inquiry/rir/orr/a.java:222-225``); that screen then POSTs
+        ``reservationWait.ReservationWait``
+        (``ReservationWaitService.java:10-12``) with the user's choices. This
+        method is that second POST.
+
+        It is a state-changing call on an existing PNR, so it goes through the
+        same double-gated mutation transport as every other mutation -- never
+        the read path. Its consent category is deliberately ``"reserve"``: it
+        completes the booking that an ``allow_reserve`` consent authorised, and
+        moves no money and releases no seat. See
+        :data:`~korail_mobile_api.KORAIL_MUTATION_ROUTES` for why that is not a
+        new category.
+
+        ``allow_seat_class_change`` is ``txtPsrmClChgFlg`` (may KORAIL seat the
+        booking in a different cabin when it assigns one) and ``sms_notify`` is
+        ``txtSmsSndFlg``; both default to the unchecked state the app's screen
+        opens in. ``phone_no`` is required when, and permitted only when,
+        ``sms_notify`` is True.
+
+        With the default ``dry_run=True`` it returns a :class:`MutationPreview`
+        (PNR and phone number redacted) and sends nothing.
+
+        NOT live-verified.
+        """
+        require_mutation_consent(consent, "reserve")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL standby options require an authenticated session"
+            )
+        route = "/classes/com.korail.mobile.reservationWait.ReservationWait"
+        form = build_standby_wait_form(
+            self.config,
+            hold,
+            allow_seat_class_change=allow_seat_class_change,
+            sms_notify=sms_notify,
+            phone_no=phone_no,
+        )
+        if consent.dry_run:
+            return MutationPreview(
+                category="reserve",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            return self.http.post_mutation_form(
+                route, form, consent=consent, category="reserve"
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
 
     @staticmethod
     def _hold_from_reservation_response(

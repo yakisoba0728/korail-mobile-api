@@ -34,6 +34,7 @@ def test_client_public_method_set_is_stable():
     assert methods == {
         "cancel_unpaid_hold",
         "clear_session",
+        "confirm_standby_hold",
         "close",
         "check_ticket_duplication",
         "get_app_data",
