@@ -952,25 +952,27 @@ def _assert_leg_is_bookable(
         # standby; a standby train is normally 매진 ("13"), which is exactly the
         # state the "11" rule below refuses.
         return
-    if job_type is KorailReservationJobType.MERGE_STANDING and not (
-        is_merge_eligible(train, seat_class=seat_class)
-    ):
-        # ADDITIVE to the "11" rule below, not instead of it. a5/u.java:346-360
-        # first refuses the booking button outright while any selected cabin
-        # reads 매진 or 좌석부족, and only then (:394-397) does isMixedSeat
-        # decide whether the button becomes 입석+좌석 예매 with tag "1202". This
-        # package cannot reproduce that display-state string -- it is built in
-        # U4.a.b(), which jadx could not decompile -- so the existing, at least
-        # as strict "11" rule stands in for it, and merge-eligibility is checked
-        # on top.
-        raise KorailProtocolError(
-            "KORAIL 입석+좌석 (txtJobId \"1202\") requires a merge-eligible "
-            "row: h_yms_apl_flg must be one of "
-            + ", ".join(
-                sorted(KORAIL_MERGE_SEAT_FLAGS_BY_CABIN[seat_class.value])
-            )
-            + f" for this cabin, got {train.merge_seat_application_flag!r}"
-        )
+    if job_type is KorailReservationJobType.MERGE_STANDING:
+        if not is_merge_eligible(train, seat_class=seat_class):
+            raise KorailProtocolError(_merge_ineligible_message(train, seat_class))
+        # Deliberately NO h_gen_rsv_cd check, for the same reason as standby
+        # above: a merge-eligible train is normally 매진, which is exactly the
+        # state the "11" rule below refuses. 입석+좌석 exists BECAUSE the seats
+        # are gone.
+        #
+        # This replaced an earlier reading that made the "11" rule additive,
+        # reasoning from a5/u.java:346-360 that the app disables the booking
+        # button while any selected cabin reads 매진 or 좌석부족 and only then
+        # (:394-397) lets isMixedSeat turn it into 입석+좌석 예매. That control
+        # flow is real, but the string it tests is a DISPLAY state assembled in
+        # U4.a.b() -- which jadx cannot decompile -- not h_gen_rsv_cd, and a
+        # sold-out row can still have standing stock.
+        #
+        # LIVE 2026-07-26 settled it: 서울->부산 20260731 train 125 came back
+        # with h_gen_rsv_cd="13" AND h_yms_apl_flg="A". On the additive reading
+        # the merge flag could never fire, because the rows that carry it are
+        # precisely the rows the "11" rule rejects. The flag is the gate.
+        return
     # The train list checks the availability code of the cabin the user picked,
     # not always the general one: a5/u.java:319 reads h_gen_rsv_cd for the
     # standard tab and h_spe_rsv_cd for the suite tab (likewise
@@ -987,6 +989,18 @@ def _assert_leg_is_bookable(
         raise KorailProtocolError(
             "KORAIL reservation requires an evidenced available general seat"
         )
+
+
+def _merge_ineligible_message(
+    train: TrainSummary,
+    seat_class: KorailSeatClass,
+) -> str:
+    return (
+        "KORAIL 입석+좌석 (txtJobId \"1202\") requires a merge-eligible row: "
+        "h_yms_apl_flg must be one of "
+        + ", ".join(sorted(KORAIL_MERGE_SEAT_FLAGS_BY_CABIN[seat_class.value]))
+        + f" for this cabin, got {train.merge_seat_application_flag!r}"
+    )
 
 
 def _journey_fields(train: TrainSummary) -> dict[str, str]:

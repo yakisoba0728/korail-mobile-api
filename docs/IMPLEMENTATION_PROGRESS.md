@@ -854,3 +854,36 @@ unverifiable identity-document submitter is worse than shipping nothing.
 age field — so whether that refusal is an age mismatch or a separate
 entitlement is still open.
 
+## 병합예약 (1202) — live-verified, and the availability guard was wrong (2026-07-26)
+
+서울→부산 20260731 16:00, train 125, one adult.
+
+    h_yms_apl_flg='A'   h_gen_rsv_cd='13' (매진)
+    reserve(job_type=MERGE_STANDING) -> SUCC / IRR000018
+    PNR issued, h_jrny_cnt='0002', 43,600 KRW
+    '중간연결역' present in the response
+    cancel -> IRG000000, account back to P100. No payment.
+
+Three things settled at once. The reservation works **on a sold-out train**;
+it produces a **two-journey** hold, matching 병합 선행 (`21`) / 병합 후행 (`22`);
+and the server really does put the mid-station connection prompt in the
+response, which had been inferred from `strings.xml:2018` and `S4/x.java:93-109`
+but never observed.
+
+**The first live attempt was refused by our own guard**, which required
+`h_gen_rsv_cd == "11"`. That rule was added as ADDITIVE to the merge-eligibility
+flag, reasoning from `a5/u.java:346-360` that the app disables the booking
+button while a selected cabin reads 매진 or 좌석부족 and only then (`:394-397`)
+lets `isMixedSeat` turn it into 입석+좌석 예매.
+
+That control flow is real, but the string it tests is a DISPLAY state assembled
+in `U4.a.b()` — which jadx cannot decompile — not `h_gen_rsv_cd`, and a sold-out
+row can still have standing stock. The live row is the disproof: train 125
+carried `h_gen_rsv_cd="13"` **and** `h_yms_apl_flg="A"` together. On the additive
+reading the merge flag could never fire, because the rows that carry it are
+exactly the rows the `"11"` rule rejects — the feature would be unreachable.
+
+So the `"11"` rule no longer applies to `MERGE_STANDING`, exactly as it already
+did not apply to `STANDBY`, and the eligibility flag is the gate. **입석+좌석
+exists because the seats are gone.**
+
