@@ -71,6 +71,50 @@ from korail_mobile_api.safety import (
 REAL_LENGTH_KEY = "0F3B" * 64
 ENABLED = KorailConfig(netfunnel_enabled=True)
 
+# THE LIVE 2026-07-26 TRANSCRIPT, as fixtures. These are the bodies
+# nf.letskorail.com actually returned, with only the key material replaced by
+# hex of the same length and the 5101 reply's node name (which the probe
+# recorded elided, as `ip=...`) filled in with the one the 5004 reply did name.
+# Everything else — parameter names, order, `tps=0.000000`, the empty `key=` on
+# a successful release, the quoted `msg` — is verbatim.
+#
+# The two lengths are the point of the pair: 5101 issued 252 characters and the
+# chkEnter that superseded it issued 104. Neither is the 256 the SRT side saw,
+# which is why the guard bounds keys at 512 and must not be tightened to any of
+# the three observed lengths.
+TICKET_KEY = "0F3B" * 63
+SESSION_KEY = "9C4A" * 26
+TICKET_BODY = (
+    f"200:key={TICKET_KEY}&nwait=0&nnext=0&tps=0.000000&ttl=0"
+    "&ip=rnf13.letskorail.com&port=443"
+)
+SESSION_BODY = f"200:key={SESSION_KEY}&nwait=0&nnext=0&tps=0.000000&ttl=0"
+RELEASED_BODY = (
+    "200:key=&nwait=0&nnext=0&tps=0.000000&ttl=0&ip=rnf13.letskorail.com"
+    "&port=443&vwr_html=&live_message=&chk_enter_cnt=0"
+)
+WRONG_SERVER_ID_BODY = '503:msg="Wrong Server ID"'
+
+
+def _sequence_handler(
+    bodies: dict[str, str],
+    seen: list[tuple[str, str]],
+):
+    """A MockTransport handler that answers per OPCODE, recording the order.
+
+    Every test below that walks the entry sequence needs to distinguish the
+    5002 from the 5004, which is exactly what the pre-2026-07-26 fixtures could
+    not do: they answered "5101, or else the release", so the newly-required
+    chkEnter would have been served the setComplete's reply.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        opcode = request.url.params["opcode"]
+        seen.append((opcode, request.url.params.get("key", "")))
+        return httpx.Response(200, text=bodies[opcode])
+
+    return handler
+
 
 def _client(
     handler,
@@ -549,6 +593,221 @@ def test_an_http_error_from_the_queue_is_a_transport_error():
 
 
 # ---------------------------------------------------------------------------
+# The entry sequence: 5101 -> 5002 -> (work) -> 5004, live-confirmed 2026-07-26.
+#
+# The defect these pin: `acquire` used to return the 5101 reply directly, so
+# `release` sent the TICKET to setComplete and the server answered
+# 503:msg="Wrong Server ID" every time. Only a key that chkEnter issued is a
+# completable session, and each step's key supersedes the one before it.
+# ---------------------------------------------------------------------------
+
+
+def test_the_live_transcript_keys_have_the_lengths_the_probe_saw():
+    assert len(TICKET_KEY) == 252
+    assert len(SESSION_KEY) == 104
+    # Different lengths, different values — the whole point of the exchange.
+    assert TICKET_KEY != SESSION_KEY
+    # ...and both inside the 512 the guard allows, which is why it stays at 512.
+    for key in (TICKET_KEY, SESSION_KEY):
+        assert_netfunnel_request(
+            "GET",
+            KORAIL_NETFUNNEL_PATH,
+            (("opcode", "5004"), ("key", key)),
+        )
+
+
+def test_acquire_exchanges_the_ticket_for_a_session_before_returning():
+    seen: list[tuple[str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": RELEASED_BODY},
+            seen,
+        )
+    )
+
+    token = client.acquire(KorailNetFunnelAction.INQUIRY)
+
+    # 5101 with no key, then 5002 carrying the TICKET the 5101 issued.
+    assert seen == [("5101", ""), ("5002", TICKET_KEY)]
+    # The token that comes back is the chkEnter's, not the ticket.
+    assert token.key == SESSION_KEY
+    assert token.key != TICKET_KEY
+    assert token.code == "200"
+
+
+def test_the_full_sequence_releases_with_the_key_chk_enter_issued():
+    seen: list[tuple[str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": RELEASED_BODY},
+            seen,
+        )
+    )
+
+    with client.slot(KorailNetFunnelAction.RESERVE) as token:
+        assert token.key == SESSION_KEY
+
+    assert seen == [
+        ("5101", ""),
+        ("5002", TICKET_KEY),
+        ("5004", SESSION_KEY),
+    ]
+
+
+def test_the_5002_is_sent_even_when_nobody_is_queued():
+    # The trap: 5101 answers 200 with nwait=0 and looks like a finished
+    # handshake. It is not — the key it issued cannot be completed. The extra
+    # round trip is the price of not following the server-named ip/port.
+    seen: list[tuple[str, str]] = []
+    client = _client(
+        _sequence_handler({"5101": TICKET_BODY, "5002": SESSION_BODY}, seen)
+    )
+
+    client.acquire(KorailNetFunnelAction.PAY)
+
+    assert [opcode for opcode, _ in seen] == ["5101", "5002"]
+
+
+def test_a_201_from_chk_enter_supersedes_the_key_on_every_poll():
+    # The queued path, which the live server did NOT exercise: it was not
+    # queueing on 2026-07-26, so this shape is built from the confirmed one and
+    # remains offline-only evidence.
+    queued_first = f"201:key={SESSION_KEY}&nwait=4213&nnext=100&ttl=2"
+    reissued_key = "5E17" * 26
+    queued_again = f"201:key={reissued_key}&nwait=12&nnext=100&ttl=2"
+    admitted_key = "A2D9" * 26
+    admitted = f"200:key={admitted_key}&nwait=0&nnext=0&tps=0.000000&ttl=0"
+
+    bodies = [TICKET_BODY, queued_first, queued_again, admitted, RELEASED_BODY]
+    seen: list[tuple[str, str]] = []
+    clock = _FakeClock()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(
+            (request.url.params["opcode"], request.url.params.get("key", ""))
+        )
+        return httpx.Response(200, text=bodies[len(seen) - 1])
+
+    client = _client(handler, sleeper=clock.sleep, clock=clock)
+    with client.slot(KorailNetFunnelAction.INQUIRY) as token:
+        assert token.key == admitted_key
+
+    # Each request carries the key the PREVIOUS reply issued, never the first
+    # one — and the release carries the last of all.
+    assert seen == [
+        ("5101", ""),
+        ("5002", TICKET_KEY),
+        ("5002", SESSION_KEY),
+        ("5002", reissued_key),
+        ("5004", admitted_key),
+    ]
+    # Two waits, so two sleeps; the entry 5002 is not preceded by one.
+    assert clock.slept == [2, 2]
+
+
+def test_a_wait_that_echoes_no_key_keeps_the_last_key_in_force():
+    # parse_queue_response allows a 201 to omit the key ("we already hold one").
+    # Superseding must therefore mean "the newest key there was", not "whatever
+    # the newest reply said" — otherwise the next chkEnter is built with an
+    # empty key and never leaves the process.
+    bodies = [TICKET_BODY, "201:nwait=7&ttl=1", SESSION_BODY]
+    seen: list[tuple[str, str]] = []
+    clock = _FakeClock()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(
+            (request.url.params["opcode"], request.url.params.get("key", ""))
+        )
+        return httpx.Response(200, text=bodies[len(seen) - 1])
+
+    client = _client(handler, sleeper=clock.sleep, clock=clock)
+    token = client.acquire(KorailNetFunnelAction.INQUIRY)
+
+    assert seen == [("5101", ""), ("5002", TICKET_KEY), ("5002", TICKET_KEY)]
+    assert token.key == SESSION_KEY
+
+
+def test_releasing_the_5101_ticket_surfaces_the_503_instead_of_leaking():
+    # The exact live failure. 503 must never join 502 in the accepted set: the
+    # server's "Wrong Server ID" reads like a routing complaint, but adding
+    # sid/aid did not help and no other host was involved — it means the key was
+    # never exchanged, and treating it as released is a silent leak.
+    with pytest.raises(KorailNetFunnelError, match="never exchanged") as caught:
+        parse_set_complete_response(WRONG_SERVER_ID_BODY, action="act_8")
+    assert caught.value.code == "503"
+    assert not isinstance(caught.value, KorailQueueRejectedError)
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=WRONG_SERVER_ID_BODY)
+
+    with pytest.raises(KorailNetFunnelError, match="never exchanged"):
+        _client(handler).release(
+            KorailNetFunnelToken(action="act_8", key=TICKET_KEY, code="200")
+        )
+
+
+def test_a_503_during_a_slot_is_audible_on_the_success_path():
+    # Same failure through the context manager, which is where it actually bit:
+    # the gated call succeeds and the release quietly does nothing.
+    def handler(request: httpx.Request) -> httpx.Response:
+        opcode = request.url.params["opcode"]
+        if opcode == "5101":
+            return httpx.Response(200, text=TICKET_BODY)
+        if opcode == "5002":
+            return httpx.Response(200, text=SESSION_BODY)
+        return httpx.Response(200, text=WRONG_SERVER_ID_BODY)
+
+    with pytest.raises(KorailNetFunnelError, match="never exchanged"):
+        with _client(handler).slot(KorailNetFunnelAction.RESERVE):
+            pass
+
+
+def test_the_empty_key_of_a_successful_release_is_not_a_parse_failure():
+    # 200:key= with chk_enter_cnt=0 is what a real release answered. An empty
+    # key is the server saying the slot is gone; only 5101/5002 require one.
+    token = parse_set_complete_response(RELEASED_BODY, action="act_8")
+    assert token.code == "200"
+    assert token.key == ""
+    assert token.params["chk_enter_cnt"] == "0"
+    # The reply names a queue node, and we ignore it rather than following it.
+    assert token.params["ip"] == "rnf13.letskorail.com"
+    # Empty-valued parameters survive as empty rather than being dropped.
+    assert token.params["vwr_html"] == ""
+
+
+def test_the_same_empty_key_would_be_refused_from_chk_enter():
+    # The asymmetry is deliberate: a pass is identified BY its key, so 5101 and
+    # 5002 must carry one; a release has nothing left to identify.
+    with pytest.raises(KorailNetFunnelError, match="non-empty key"):
+        parse_queue_response(RELEASED_BODY, action="act_8")
+
+
+def test_release_refuses_a_keyless_token_that_is_not_a_bypass():
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        calls.append(request)
+        return httpx.Response(200, text=RELEASED_BODY)
+
+    with pytest.raises(KorailNetFunnelError, match="carries no key"):
+        _client(handler).release(
+            KorailNetFunnelToken(action="act_8", key="", code="200")
+        )
+    assert calls == []
+
+
+def test_a_bypass_still_skips_the_5002_and_the_5004():
+    # 300 issues no key because there is no line, so there is nothing to
+    # exchange and nothing to release.
+    seen: list[tuple[str, str]] = []
+    client = _client(_sequence_handler({"5101": "300:"}, seen))
+
+    with client.slot(KorailNetFunnelAction.INQUIRY) as token:
+        assert token.key == ""
+    assert [opcode for opcode, _ in seen] == ["5101"]
+
+
+# ---------------------------------------------------------------------------
 # Bounded polling.
 # ---------------------------------------------------------------------------
 
@@ -643,52 +902,64 @@ def test_a_queue_refusal_during_polling_propagates_immediately():
 # ---------------------------------------------------------------------------
 
 
+# THE PIN MOVED HERE ON 2026-07-26. Each of the four tests below used to assert
+# the sequence `["5101", "5004"]` and used a handler that answered "5101, or
+# else the release". Both encoded the defect the live probe exposed: 5101 alone
+# is a ticket, not a completable session, so the real sequence is
+# `["5101", "5002", "5004"]` and the released key is the one chkEnter issued.
+# What each test is actually *about* — that the slot is released on both paths,
+# and how loudly a failed release may complain — is unchanged.
+
+
 def test_slot_releases_after_a_successful_body():
-    opcodes: list[str] = []
+    seen: list[tuple[str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": RELEASED_BODY},
+            seen,
+        )
+    )
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        opcode = request.url.params["opcode"]
-        opcodes.append(opcode)
-        if opcode == "5101":
-            return httpx.Response(200, text=f"200:key={REAL_LENGTH_KEY}&ttl=0")
-        return httpx.Response(200, text="200:utime=17")
-
-    with _client(handler).slot(KorailNetFunnelAction.PAY) as token:
-        assert token.key == REAL_LENGTH_KEY
-    assert opcodes == ["5101", "5004"]
+    with client.slot(KorailNetFunnelAction.PAY) as token:
+        assert token.key == SESSION_KEY
+    assert [opcode for opcode, _ in seen] == ["5101", "5002", "5004"]
 
 
 def test_slot_releases_after_the_body_raises_and_keeps_the_original_error():
-    opcodes: list[str] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        opcodes.append(request.url.params["opcode"])
-        if opcodes[-1] == "5101":
-            return httpx.Response(200, text=f"200:key={REAL_LENGTH_KEY}&ttl=0")
-        return httpx.Response(200, text="200:utime=17")
+    seen: list[tuple[str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": RELEASED_BODY},
+            seen,
+        )
+    )
 
     class Boom(RuntimeError):
         pass
 
     with pytest.raises(Boom):
-        with _client(handler).slot(KorailNetFunnelAction.RESERVE):
+        with client.slot(KorailNetFunnelAction.RESERVE):
             raise Boom("the gated operation failed")
     # The app releases from onPostExecute (BaseDaoHelper.java:105-107), which
     # runs whether or not the gated call raised. So do we.
-    assert opcodes == ["5101", "5004"]
+    assert [opcode for opcode, _ in seen] == ["5101", "5002", "5004"]
+    assert seen[-1] == ("5004", SESSION_KEY)
 
 
 def test_a_failed_release_on_the_failure_path_is_noted_not_substituted():
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.params["opcode"] == "5101":
-            return httpx.Response(200, text=f"200:key={REAL_LENGTH_KEY}&ttl=0")
-        return httpx.Response(200, text="507:")
+    seen: list[tuple[str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": "507:"},
+            seen,
+        )
+    )
 
     class Boom(RuntimeError):
         pass
 
     with pytest.raises(Boom) as caught:
-        with _client(handler).slot(KorailNetFunnelAction.RESERVE):
+        with client.slot(KorailNetFunnelAction.RESERVE):
             raise Boom("the gated operation failed")
     # The caller's error survives, and the leak is recorded rather than hidden.
     notes = getattr(caught.value, "__notes__", [])
@@ -696,13 +967,16 @@ def test_a_failed_release_on_the_failure_path_is_noted_not_substituted():
 
 
 def test_a_failed_release_on_the_success_path_is_raised():
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.params["opcode"] == "5101":
-            return httpx.Response(200, text=f"200:key={REAL_LENGTH_KEY}&ttl=0")
-        return httpx.Response(200, text="507:")
+    seen: list[tuple[str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": "507:"},
+            seen,
+        )
+    )
 
     with pytest.raises(KorailNetFunnelError, match="did not release"):
-        with _client(handler).slot(KorailNetFunnelAction.RESERVE):
+        with client.slot(KorailNetFunnelAction.RESERVE):
             pass
 
 

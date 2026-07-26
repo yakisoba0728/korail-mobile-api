@@ -48,11 +48,61 @@ have produced a request KORAIL's own app never sends:
    ``T6/a.toEnum`` maps to ``None`` — and finds no key. The app can only work
    with the bare form, so that is the only form parsed here.
 
-That last point is the one thing in this module that has never been seen on the
-wire from this repository, and it is stated as an inference: the request shape is
-the app's, so the response shape should be the app's too, but **no live
-round trip has confirmed it.** :func:`parse_netfunnel_body` says so in its error
-message rather than guessing, so the first live failure names its own cause.
+That last point used to be the one thing in this module that had never been seen
+on the wire. **A live probe on 2026-07-26 confirmed it**: ``nf.letskorail.com``
+answers a ``js``-less native-SDK request with exactly ``<code>:<params>`` —
+``200:key=…&nwait=0&nnext=0&tps=0.000000&ttl=0&ip=…`` — and never with a
+``NetFunnel.gRtype=…`` assignment. :func:`parse_netfunnel_body` still names the
+JavaScript dialect in its error message, but now as a diagnosis for a server that
+changed rather than as an admission that we were guessing.
+
+THE ENTRY SEQUENCE IS 5101 → 5002 → 5004, AND 5101 ALONE IS NOT A SESSION
+========================================================================
+The same 2026-07-26 probe settled a second question, and the answer contradicts
+the obvious reading of the APK. **The key 5101 hands out is a ticket to enter,
+not a session that can be completed.** Sending it straight to ``setComplete``
+fails::
+
+    GET opcode=5101&sid=service_1&aid=act_8
+     -> 200:key=<252 hex chars>&nwait=0&nnext=0&tps=0.000000&ttl=0&ip=…
+    GET opcode=5004&key=<that key>
+     -> 503:msg="Wrong Server ID"          # and adding sid/aid does not help
+
+Only a key that ``chkEnter`` issued is completable, and ``chkEnter`` issues a new
+and *shorter* one::
+
+    GET opcode=5002&key=<the 5101 key>
+     -> 200:key=<a DIFFERENT, shorter key>&…
+    GET opcode=5004&key=<the 5002 key>
+     -> 200:key=&nwait=0&…&chk_enter_cnt=0&…
+
+So every step's key **supersedes** the previous one, and :meth:`
+KorailNetFunnelClient.acquire` always performs the 5002 before handing a token
+back — even when 5101 answered 200 with nobody in line.
+
+``503:msg="Wrong Server ID"`` is a misleading message for "this key is not a
+completable session"; :data:`NOT_COMPLETABLE_CODE` names it so that a regression
+here reports its own cause instead of the server's.
+
+**WHERE THE APK DISAGREES.** Read literally, ``T6/g.java`` does *not* do this.
+Its poll loop (the ``a`` Runnable, :77-129) enters at ``GetTidCacekedEnter`` and
+leaves the loop the moment the code is not Continue/ContinueDebug — the smali
+(``T6/g$a.smali``, ``:243-247`` then ``:282`` → ``goto :goto_3`` → ``:892``)
+confirms the fall-through is a return — so on a 200 from 5101 the app issues **no
+5002 at all** and completes with the 5101 key. The live server wins over that
+reading, and the most likely reconciliation is the redirection this module
+declines: ``T6/d.makeURL`` (``T6/d.java:17-19``) sends ``chkEnter`` and
+``setComplete`` to the ``ip``/``port`` the previous reply named, and the 5101
+reply names one. "Wrong Server ID" is then literally true — the front door does
+not own a session that a queue node issued. Since we stay pinned to the front
+door (see below), we must obtain a key the front door *does* own, and ``chkEnter``
+is what issues it.
+
+What the APK does corroborate is the supersession itself: ``T6/d.java`` keeps one
+response object and every opcode overwrites it — ``this.f5141b = iVarParser.
+m184clone()`` at :61 (chkEnter) and :107 (getTidChkEnter) — while ``Complete()``
+sends ``this.f5141b.getKey()`` (:79), i.e. whatever key arrived last. The app has
+no notion of "the original key" either.
 
 WHAT THE APP DOES THAT WE DELIBERATELY DO NOT
 =============================================
@@ -61,9 +111,11 @@ WHAT THE APP DOES THAT WE DELIBERATELY DO NOT
 ``host_notmodify`` is set — and it is false by default (``T6/h.java:43``) and
 never set by ``KTApplication``. We do not follow that redirection. The whole
 client is pinned to canonical origins, and following a server-named host means
-letting a response choose where the next request goes. The sibling repo's live
-run is the evidence that we do not have to: a key issued by a specific queue node
-was released fine by a ``setComplete`` sent to the front door.
+letting a response choose where the next request goes. Our own 2026-07-26 probe
+is the evidence that we do not have to — the front door released a ``chkEnter``
+key perfectly well, and answered with an ``ip`` of ``rnf13.letskorail.com`` that
+we simply ignored — and the sibling SRT run said the same before it. The price of
+staying pinned is exactly the extra 5002 documented above.
 
 ``AliveNotice`` (5003) is likewise not implemented. It exists to keep a visible
 waiting-room popup alive (``T6/g.java:517-527``); this library renders no popup
@@ -113,6 +165,14 @@ CONTINUE_CODES = frozenset({"201", "202"})
 #: ``TsErrorAComplete``. Accepted for setComplete only; see
 #: :func:`parse_set_complete_response` for why that is an inference.
 ALREADY_COMPLETE_CODE = "502"
+#: What the live server answers when ``setComplete`` is handed a key that is not
+#: a completable session — in practice, the 5101 ticket instead of the key
+#: ``chkEnter`` issued for it. The wire message is ``msg="Wrong Server ID"``,
+#: which is misleading enough to be worth naming: it is not a routing complaint
+#: that a different host would satisfy (the probe re-sent it with ``sid``/``aid``
+#: attached and got the same answer). It is REFUSED, never accepted alongside
+#: 502 — treating it as "released" is exactly how a slot leaks silently.
+NOT_COMPLETABLE_CODE = "503"
 #: ``TsBlock``/``TsIpBlock``. The waiting room refused us, which is a different
 #: fact from the waiting room malfunctioning — ``T6/g.d.isBlocking()``
 #: (``T6/g.java:892-894``) gives the pair its own predicate, distinct from
@@ -155,6 +215,13 @@ class KorailNetFunnelToken:
     ``key`` is the queue slot's identifier and the ONLY thing that identifies it
     on the follow-up requests — ``chkEnter`` and ``setComplete`` send nothing
     else (``T6/d.java:54-55``, :78-79).
+
+    A token is one REPLY, not one session: each reply's key supersedes the last,
+    so the key here is only good for the *next* request. The 5101 ticket is
+    spent by ``chkEnter``, and every 201 poll reissues the key again. Holding on
+    to an earlier token and releasing that is the defect this type's immutability
+    is meant to make obvious — :meth:`KorailNetFunnelClient.acquire` returns the
+    latest token and that is the only one ``setComplete`` will accept.
     """
 
     action: str
@@ -362,10 +429,28 @@ def parse_set_complete_response(
     APK has no opinion to copy. Our caller's question is "is my slot released?",
     and both 200 and ``TsErrorAComplete`` answer yes.
 
-    No key is required in the reply; a setComplete answers with ``utime``, and
-    there is nothing left to identify anyway.
+    **No key is required in the reply, and a successful release does not send
+    one.** The live 2026-07-26 release answered
+    ``200:key=&nwait=0&nnext=0&tps=0.000000&ttl=0&ip=rnf13.letskorail.com&
+    port=443&…&chk_enter_cnt=0&…`` — an EMPTY ``key=``, which is the server
+    saying the slot is gone rather than a truncated body. This deliberately does
+    not run :func:`_require_pass_key`: an empty key is a success here and only a
+    failure on 5101/5002, where the key is the whole point of the reply.
+
+    :data:`NOT_COMPLETABLE_CODE` gets a message of its own because the server's
+    is actively misleading. Everything else keeps the generic one.
     """
     token = parse_netfunnel_body(body, action=action)
+    if token.code == NOT_COMPLETABLE_CODE:
+        raise _queue_failure(
+            token,
+            "KORAIL NetFunnel setComplete refused this key as a session to "
+            "release; the server calls that 'Wrong Server ID' but it means the "
+            "key was never exchanged for one, which is what chkEnter (5002) "
+            "does — a slot entered as 5101 -> 5002 releases with the key 5002 "
+            "issued, never with the 5101 ticket",
+            body,
+        )
     if token.code not in {SUCCESS_CODE, ALREADY_COMPLETE_CODE}:
         raise _queue_failure(
             token,
@@ -462,7 +547,13 @@ class KorailNetFunnelClient:
         return response.text
 
     def enter(self, action: str) -> KorailNetFunnelToken:
-        """5101 — join the line for ``action``. May return a WAIT token."""
+        """5101 — take a TICKET for ``action``. May return a WAIT token.
+
+        The key this returns is not yet a session: it is what :meth:`check`
+        exchanges for one, and ``setComplete`` refuses it
+        (:data:`NOT_COMPLETABLE_CODE`). Callers who want a slot they can release
+        want :meth:`acquire`, which performs the exchange.
+        """
         body = self._get(
             build_get_tid_chk_enter_url(
                 self.config.netfunnel_url,
@@ -472,7 +563,14 @@ class KorailNetFunnelClient:
         return parse_queue_response(body, action=str(action))
 
     def check(self, action: str, key: str) -> KorailNetFunnelToken:
-        """5002 — "am I admitted yet?". May return a WAIT token."""
+        """5002 — enter with ``key``, or ask again. May return a WAIT token.
+
+        This is both halves of the same opcode: the first call exchanges the
+        5101 ticket for a completable session, and each later call re-asks with
+        whatever key the previous 201 issued. Either way the reply's key
+        supersedes ``key``, so the caller must carry the returned token forward
+        rather than the one it passed in.
+        """
         body = self._get(
             build_chk_enter_url(self.config.netfunnel_url, key=key)
         )
@@ -490,51 +588,92 @@ class KorailNetFunnelClient:
 
         A token with no key is a bypass (300) and there is nothing to release, so
         that returns without sending — the same condition ``T6/d.Complete()``
-        short-circuits on (``T6/d.java:70-73``, ``getKey().length() < 1``).
+        short-circuits on (``T6/d.java:70-73``, ``getKey().length() < 1``). That
+        short-circuit is deliberately narrowed to a bypass: "no key" is a
+        legitimate state for exactly one status code, and letting any other
+        keyless token take the silent path would rebuild the leak from the other
+        end — the request would not merely be refused, it would never be built.
         """
         if not token.key:
-            return
+            if token.code == BYPASS_CODE:
+                return
+            raise KorailNetFunnelError(
+                token.code or None,
+                "KORAIL NetFunnel slot cannot be released because its token "
+                "carries no key, and only a bypass (300) is allowed to; the "
+                "slot is held until the server times it out",
+            )
         body = self._get(
             build_set_complete_url(self.config.netfunnel_url, key=token.key)
         )
         parse_set_complete_response(body, action=token.action)
 
     def acquire(self, action: str) -> KorailNetFunnelToken:
-        """Enter the queue and poll until admitted, within hard bounds.
+        """Take a ticket, enter with it, and poll until admitted, within bounds.
 
-        Returns the passing token (200 or 300). Raises
-        :class:`~korail_mobile_api.errors.KorailNetFunnelError` if the queue is
-        still holding us after :data:`QUEUE_POLL_LIMIT` polls or
-        :data:`QUEUE_WAIT_LIMIT_SECONDS` seconds, whichever comes first — and it
-        raises with the key attached to nothing, so :meth:`slot` can still
-        release what it holds.
+        The full sequence, which is 5101 → 5002 and NOT 5101 alone::
+
+            enter(action)          # 5101, issues the ticket
+            check(action, key)     # 5002, exchanges it for a session
+            ...                    # more 5002s while the answer is 201/202
+            -> the token whose key setComplete will accept
+
+        The 5002 is unconditional. A 5101 that answers 200 with ``nwait=0`` has
+        still only issued a ticket, and releasing that ticket fails with
+        :data:`NOT_COMPLETABLE_CODE` — see the module docstring for the live
+        transcript. The single exception is a bypass (300), which issues no key
+        because there is no line to stand in and so has nothing to exchange.
+
+        Returns the passing token (200 or 300), whose key is the LATEST one the
+        server issued — every reply supersedes its predecessor, so the caller
+        must release this token and not an earlier one. A 201 that echoes no key
+        leaves the last known key in force, because a wait is not a revocation.
+
+        Raises :class:`~korail_mobile_api.errors.KorailNetFunnelError` if the
+        queue is still holding us after :data:`QUEUE_POLL_LIMIT` polls or
+        :data:`QUEUE_WAIT_LIMIT_SECONDS` seconds, whichever comes first. That
+        give-up leaves the slot to the server's own timeout: :meth:`slot` never
+        received a token, so it has nothing to release, and the current key is
+        put on the error's ``raw`` for a caller who wants to release it by hand.
         """
         token = self.enter(action)
+        if not token.key:
+            # A bypass. No ticket was issued, so there is nothing to exchange
+            # and nothing to release — T6/d.Complete() short-circuits on the
+            # same emptiness (T6/d.java:70-73).
+            return token
+        # The key rides alongside the token because a 201 is allowed to omit it
+        # and we must not send an empty one to the next chkEnter.
+        key = token.key
         started = self._clock()
         polls = 0
-        while is_queued(token):
-            if polls >= QUEUE_POLL_LIMIT:
-                raise KorailNetFunnelError(
-                    token.code,
-                    "KORAIL NetFunnel queue did not admit this request within "
-                    f"{QUEUE_POLL_LIMIT} polls; the wait is bounded on purpose "
-                    "and this library does not retry on its own initiative",
-                    raw=token.key,
-                )
-            wait = queue_wait_seconds(token)
-            if self._clock() - started + wait > QUEUE_WAIT_LIMIT_SECONDS:
-                raise KorailNetFunnelError(
-                    token.code,
-                    "KORAIL NetFunnel queue did not admit this request within "
-                    f"{QUEUE_WAIT_LIMIT_SECONDS:.0f}s; the wait is bounded on "
-                    "purpose and this library does not retry on its own "
-                    "initiative",
-                    raw=token.key,
-                )
-            self._sleep(wait)
-            polls += 1
-            token = self.check(action, token.key)
-        return token
+        while True:
+            if is_queued(token):
+                if polls >= QUEUE_POLL_LIMIT:
+                    raise KorailNetFunnelError(
+                        token.code,
+                        "KORAIL NetFunnel queue did not admit this request "
+                        f"within {QUEUE_POLL_LIMIT} polls; the wait is bounded "
+                        "on purpose and this library does not retry on its own "
+                        "initiative",
+                        raw=key,
+                    )
+                wait = queue_wait_seconds(token)
+                if self._clock() - started + wait > QUEUE_WAIT_LIMIT_SECONDS:
+                    raise KorailNetFunnelError(
+                        token.code,
+                        "KORAIL NetFunnel queue did not admit this request "
+                        f"within {QUEUE_WAIT_LIMIT_SECONDS:.0f}s; the wait is "
+                        "bounded on purpose and this library does not retry on "
+                        "its own initiative",
+                        raw=key,
+                    )
+                self._sleep(wait)
+                polls += 1
+            token = self.check(action, key)
+            key = token.key or key
+            if not is_queued(token):
+                return token
 
     @contextmanager
     def slot(self, action: str) -> Iterator[KorailNetFunnelToken]:
