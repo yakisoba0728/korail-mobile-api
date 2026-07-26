@@ -48,7 +48,7 @@ for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `2093 passed, 1 deselected`; the one
+current reviewed offline gate is `2228 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -867,8 +867,11 @@ Nothing below has been run.
 
 ### 병합예약 (입석+좌석) — one train, split at a mid station
 
-**Implemented and NEVER TRANSMITTED.** No form in this section has been sent to
-KORAIL.
+**The first hold is live-verified; the second has never been transmitted.**
+`reserve(job_type=MERGE_STANDING)` was sent on 2026-07-26 and answered
+`SUCC`/`IRR000018` with `h_jrny_cnt="0002"`, and the server's own 중간연결역
+prompt was present in the reply; the hold was cancelled (`IRG000000`) unpaid. No
+`reserve_merge` form has ever reached KORAIL.
 
 병합 is the feature whose name most invites the wrong model. It is **not** a
 transfer, and it is **not** a third case of the journey loop that builds 직통 and
@@ -952,27 +955,37 @@ being replaced.
 
 #### What the operator must live-verify
 
+Steps 1 to 3 ran on 2026-07-26 (서울→부산 20260731, train 125, one adult) and
+are recorded as settled. Steps 4 and 5 have not.
+
 1. **Find a merge-eligible row.** Search any busy corridor near departure and
    look for `TrainSummary.merge_seat_application_flag` in `{A, G}` for 일반실.
-   This costs nothing — it is a read.
+   This costs nothing — it is a read. *Settled: train 125 carried
+   `h_yms_apl_flg="A"` together with `h_gen_rsv_cd="13"` (매진), which is why
+   the availability guard that demanded `"11"` had to go — 입석+좌석 exists
+   BECAUSE the seats are gone.*
 2. **Dry-run the standing hold**, then send it: `reserve(train,
    job_type=MERGE_STANDING, consent=MutationConsent(allow_reserve=True,
    dry_run=False))`. **This creates a real unpaid 입석 PNR** and must be
-   cancelled or paid. Cost: nothing if cancelled promptly.
-3. **Check the reply's message text for `<중간연결역 변경>`.** This is the one
-   claim in this section that no amount of static reading can settle: that
+   cancelled or paid. Cost: nothing if cancelled promptly. *Settled: `SUCC` /
+   `IRR000018`, `h_jrny_cnt="0002"` matching 선행 `21` / 후행 `22`, 43,600 KRW;
+   cancelled `IRG000000`, account back to `P100`, no payment.*
+3. **Check the reply's message text for `<중간연결역 변경>`.** This was the one
+   claim in this section that no amount of static reading could settle: that
    KORAIL puts that literal in `h_msg_mndry`/`h_msg_txt5` of a `"1202"` reply.
-   If it is absent, the merge offer is gated on something else and step 4 is
-   the fallback probe.
+   *Settled: the 중간연결역 prompt was present in the live reply, which had
+   been inferred from `strings.xml:2018` and `S4/x.java:93-109` and never
+   observed until then.*
 4. **`get_merge_seats_inquiry`** with that train. Confirm `midStnList` is
    populated and `trn_infos.trn_info` holds exactly two rows carrying the same
    `h_trn_no`. Also a read, so also free.
 5. **Cancel the standing hold, then `reserve_merge`.** Expect a hold whose
    `h_jrny_cnt` is two. Cost: nothing if the merged hold is cancelled too.
 
-Unknown until step 3 or 5 runs: whether `"1202"` is accepted at all outside the
-app's own flow, and whether KORAIL tolerates the stale `arvTm_1` or validates it
-against leg 1's real arrival.
+Still unknown until step 5 runs: whether the merged `"1101"` two-journey form is
+accepted at all, and whether KORAIL tolerates the stale `arvTm_1` or validates
+it against leg 1's real arrival. That `"1202"` itself is accepted outside the
+app's own flow is no longer open — step 2 answered it.
 
 ### 정기권 (commuter pass) purchase — NOT implemented, and removed on purpose
 
@@ -1677,4 +1690,4 @@ still provide a custom `DynapathConfig.token_provider`; the package contains no
 separate probe generator and does not retain request history. Login follows the
 app sequence and treats only `IRZ000001` or `S200` as final success.
 
-Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, an explicitly acknowledged real card payment, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`). `reserve` accepts an arbitrary passenger mix (`KorailPassengerCounts`), either cabin class (`KorailSeatClass`), and any of the booking screen's three job types (`KorailReservationJobType`: immediate `1101`, seat-designated `1103`, standby/예약대기 `1102`), defaulting to the one-adult, general-seat, immediate request. Two adults in a general seat and one adult in 특실 are live-verified (2026-07-26); the other passenger types and any mix of them are static-evidenced only, and **neither the seat-designated nor the standby variant has been live-verified** — including `confirm_standby_hold`, the second call a standby booking needs. Real (chargeable) card payment is off by default: it requires `pay_with_card` plus a consent that sets `real_card_acknowledged=True` and `fake_card_only=False`, and `pay_with_fake_card` still refuses anything but a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
+Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, an explicitly acknowledged real card payment, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`). `reserve` accepts an arbitrary passenger mix (`KorailPassengerCounts`), either cabin class (`KorailSeatClass`), and any of the booking screen's three job types (`KorailReservationJobType`: immediate `1101`, seat-designated `1103`, standby/예약대기 `1102`), defaulting to the one-adult, general-seat, immediate request. Two adults in a general seat and one adult in 특실 are live-verified (2026-07-26); the other passenger types and any mix of them are static-evidenced only, and the seat-designated (`1103`), 예약대기 (`1102`) and 입석+좌석 (`1202`) variants are all live-verified (2026-07-26), `confirm_standby_hold` included. Real (chargeable) card payment is off by default: it requires `pay_with_card` plus a consent that sets `real_card_acknowledged=True` and `fake_card_only=False`, and `pay_with_fake_card` still refuses anything but a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.

@@ -8,10 +8,14 @@ Do not disclose credentials, cookies, tokens, PNRs, raw responses, or
 production identifiers in public issues, discussions, logs, fixtures, or
 commits. Remove or replace those values before sharing any diagnostic output.
 
-This package is read-only by default, but it is no longer read-only only. Five
-state-changing operations are implemented behind an explicit consent gate:
-`reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, and
-`refund`. Each is
+This package is read-only by default, but it is no longer read-only only. Twelve
+state-changing methods are implemented behind an explicit consent gate, across
+six independently opted-into categories: `reserve`, `reserve_transfer`,
+`reserve_merge`, `reserve_with_discount_card` and `confirm_standby_hold`
+(`reserve`); `cancel_unpaid_hold` (`cancel`); `pay_with_fake_card` and
+`pay_with_card` (`payment`); `refund` (`refund`); `register_discount_card` and
+`extend_discount_card` (`discount_card`); and `recalculate_price`
+(`price_recalculation`). Each is
 denied without a `MutationConsent` that opts into its category, each returns a
 redacted preview and sends nothing under the default `dry_run=True`, and each
 transmits only through the single gated send path. Check-in, membership,

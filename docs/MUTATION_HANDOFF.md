@@ -16,22 +16,24 @@ state-changing request can leave the process only through the dedicated
 |---|---|---|
 | reserve (`1101`, immediate) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
 | reserve (`1103`, seat-designated) | ✅ live-verified 2026-07-26 (seat map honoured) | ⛔ not implemented |
-| reserve (`1102`, 예약대기 standby) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
-| standby follow-up (`reservationWait`) | ⚠️ `confirm_standby_hold`, **never live-run** | ⛔ not implemented |
+| reserve (`1102`, 예약대기 standby) | ✅ live-verified 2026-07-26 (`IRR000014` on a sold-out train) | ⛔ not implemented |
+| standby follow-up (`reservationWait`) | ✅ `confirm_standby_hold`, **live-verified 2026-07-26** (`IRZ000003`) | ⛔ not implemented |
 | cancel (unpaid hold) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
 | payment (fake card) | ✅ `pay_with_fake_card`, **live-verified (declined)** | ⛔ not implemented — route tiered only, not live-enabled |
 | payment (real card) | ⚠️ `pay_with_card`, explicit opt-in, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
 | refund | ⚠️ implemented, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
-| reserve (`1202`, 입석+좌석 — the first half of 병합예약) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
+| reserve (`1202`, 입석+좌석 — the first half of 병합예약) | ✅ live-verified 2026-07-26 (`IRR000018`, two journeys, 중간연결역 prompt present) | ⛔ not implemented |
 | 병합예약 second hold (`reserve_merge`) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
 | 정기권 예약/결제 (`pass.passReserve` / `passPayIssue`) | ⛔ **not implemented — implemented once, then removed**; the routes are not on the mutation allowlist and no method can reach them | ⛔ not implemented |
 | 운임 재계산 (`certification.PriceReCalculation`) | ⚠️ `recalculate_price`, own `price_recalculation` consent, **never live-run** | ⛔ not implemented |
 
 "Live-verified" on both sides means the request was actually sent and its
-response observed. korail `pay_with_card`, `refund`, the two non-default
-reservation job types and `confirm_standby_hold` are the exceptions: their
+response observed. korail `pay_with_card`, `refund`, `reserve_merge`,
+`recalculate_price` and the whole 할인카드 surface are the exceptions: their
 send paths are fully active code, NOT blocked, but none has ever been run
-(see items 1 and 8 under "NOT settled"). The SRT reserve/cancel work sits on branch **`feat/srt-cancel` of
+(see items 1 and 8 under "NOT settled"). The three non-default reservation
+job types and `confirm_standby_hold` WERE exceptions until 2026-07-26 and
+are not any more; the rows above carry the codes each one returned. The SRT reserve/cancel work sits on branch **`feat/srt-cancel` of
 `srt-mobile-api`, not merged**.
 
 "Not live-enabled" on the SRT side is a hard gate, not a description of missing
