@@ -7,6 +7,8 @@ from .config import KorailConfig
 from .constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_DIRECT_JOURNEY_TYPE_CODE,
+    KORAIL_DISCOUNT_CARD_DISCOUNT_CODE,
+    KORAIL_DISCOUNT_CARD_MENU_ID,
     KORAIL_MAX_DISCOUNT_CARD_SECTIONS,
     KORAIL_MAX_JOURNEY_LEGS,
     KORAIL_STANDBY_WAIT_FLAG,
@@ -1293,3 +1295,86 @@ def build_discount_card_extension_query(
         }
     )
     return query
+
+
+#: The eight passenger-row key prefixes an ordinary hold carries
+#: (``OPsg.java:8-10``). An N카드 hold replaces all of them with one row.
+_PASSENGER_ROW_KEYS = frozenset(
+    f"{prefix}{index}"
+    for prefix in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd")
+    for index in range(1, len(_PASSENGER_ROWS) + 1)
+)
+
+
+def build_discount_card_reservation_form(
+    config: KorailConfig,
+    train: TrainSummary,
+    *,
+    card_no: str,
+) -> dict[str, str]:
+    """Build a hold that pays for one seat with a 할인카드(N카드).
+
+    **This is the ordinary reservation route.** ``w4/a.java:93-104``
+    (``getNCardReservationRequest``) produces a plain ``ReservationRequest``,
+    and its single caller —
+    ``SeatAssignBookingActivity.java:153-163`` (``setNCCardTicket``) — hands it
+    to ``NCardDirectInquiryActivity``, whose base class POSTs it with an
+    ordinary ``ReservationDao`` (``c5/b.java:128-138`` →
+    ``ReservationDao.java:12-22``) to
+    ``certification.TicketReservation`` (``CertificationService.java:52-54``).
+    There is no N카드 reservation endpoint; there is an N카드 passenger block.
+
+    Two things, and only two, differ from
+    :func:`build_reservation_form`'s one-adult 일반실 form:
+
+    1. **The passenger block collapses to one row carrying the card.** The
+       eight rows become ``txtTotPsgCnt="1"``, ``txtCompaCnt1="1"``,
+       ``txtPsgTpCd1="1"``, ``txtDiscKndCd1="153"`` and
+       ``txtCardNo_1=<card_no>`` (``w4/a.java:96-101``). Note the inconsistent
+       spelling: ``OPsg.CARD_NO`` is ``"txtCardNo_"`` WITH a trailing
+       underscore while the other three prefixes have none
+       (``OPsg.java:7-10``), so the transmitted key is ``txtCardNo_1``, not
+       ``txtCardNo1``.
+    2. ``txtMenuId`` becomes ``"A2"``
+       (``SeatAssignBookingActivity.java:159``) instead of ``"11"``.
+
+    Everything else is byte-identical, and deliberately so: this builder starts
+    from :func:`build_reservation_form`'s output and substitutes the passenger
+    block **in place**, so the journey block, the seat block, ``txtJobId``,
+    ``txtStndFlg``, ``hidFreeFlg`` and ``txtGdNo`` are the values the live-
+    verified path already sends, in the positions it already sends them. The
+    app agrees that they are shared: ``c5/b.java:42-77`` writes ``OJrny`` and
+    ``OSeat`` for an N카드 hold with the same code that writes them for an
+    ordinary one.
+
+    A card is one seat. The app never offers a passenger mix here —
+    ``w4/a.java:97-98`` hardcodes a total of one — and never offers 특실:
+    ``w4/a.java:88`` pins ``psrmClCd1`` to ``o.GENERAL``. Both are therefore
+    fixed rather than parameters.
+
+    **NEVER TRANSMITTED.** This is a reserve-surface addition built entirely
+    from the APK, and no account this project can reach owns an N카드 to send
+    it with. What is verified is the route, the two differences, and the key
+    spellings; what is not verified is that a server accepts this form, or
+    what it answers when the card is expired, spent or not the caller's.
+    """
+    form = build_reservation_form(config, train)
+    rebuilt: dict[str, str] = {}
+    for name, value in form.items():
+        if name == "txtTotPsgCnt":
+            rebuilt[name] = "1"
+            rebuilt["txtCompaCnt1"] = "1"
+            rebuilt["txtPsgTpCd1"] = "1"
+            rebuilt["txtDiscKndCd1"] = KORAIL_DISCOUNT_CARD_DISCOUNT_CODE
+            rebuilt["txtCardNo_1"] = _required_mutation_text(
+                card_no,
+                field="card_no",
+            )
+            continue
+        if name in _PASSENGER_ROW_KEYS:
+            continue
+        rebuilt[name] = value
+    # Re-assigning an existing key keeps its position, so the menu id stays
+    # where build_reservation_form put it.
+    rebuilt["txtMenuId"] = KORAIL_DISCOUNT_CARD_MENU_ID
+    return rebuilt

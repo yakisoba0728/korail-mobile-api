@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- Added: `KorailClient.reserve_with_discount_card` and
+  `build_discount_card_reservation_form`, plus
+  `KORAIL_DISCOUNT_CARD_DISCOUNT_CODE` (`"153"`) and
+  `KORAIL_DISCOUNT_CARD_MENU_ID` (`"A2"`).
+  **A reservation CAN carry a 할인카드, and it does so through the ORDINARY
+  reserve route.** `w4/a.java:93-104` builds a plain `ReservationRequest`; its
+  only caller, `SeatAssignBookingActivity.java:153-163`, hands it to
+  `NCardDirectInquiryActivity`, whose base class POSTs it with a plain
+  `ReservationDao` (`c5/b.java:128-138`) to
+  `certification.TicketReservation` (`CertificationService.java:52-54`). There
+  is no N카드 reservation endpoint; there is an N카드 passenger block.
+- Changed: `txtCardNo_1..N` joins `SENSITIVE_KEYS`. The inbound spellings were
+  redacted already; the outbound form key was not, and a dry-run preview of a
+  carded hold printed a spendable card number in the clear. Caught by a test
+  written for exactly that.
+  - Exactly two things differ from the live-verified one-adult 일반실 form:
+    the eight passenger rows collapse to `txtTotPsgCnt="1"`,
+    `txtCompaCnt1="1"`, `txtPsgTpCd1="1"`, `txtDiscKndCd1="153"`,
+    `txtCardNo_1=<card>` (`w4/a.java:96-101`), and `txtMenuId` becomes `"A2"`
+    (`SeatAssignBookingActivity.java:159`). Everything else — journey block,
+    seat block, `txtJobId`, `txtStndFlg`, `hidFreeFlg`, `txtGdNo` — is
+    identical, because the app writes it with the same code
+    (`c5/b.java:42-77`). The builder is written as a substitution INTO
+    `build_reservation_form`'s output so that is true by construction, and a
+    test compares both forms key by key, in order.
+  - **`txtCardNo_1` carries a trailing underscore and its three neighbours do
+    not** (`OPsg.java:7-10`). A hold spelled `txtCardNo1` would be a hold with
+    a discount code and no card.
+  - No `passengers` and no `seat_class` argument: the app offers neither, since
+    `w4/a.java:97-98` hardcodes one passenger and `:88` pins 일반실.
+  - Gated by the existing `"reserve"` consent, because it IS the reserve route.
+    **NEVER TRANSMITTED**: no account this project can reach owns an N카드.
+
 - Added: 할인카드(N카드) 구매 and 기간연장 as consent-gated mutations —
   `KorailClient.register_discount_card` and
   `KorailClient.extend_discount_card`, plus `DiscountCardPurchaseRequest`,

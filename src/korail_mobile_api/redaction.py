@@ -184,6 +184,17 @@ SENSITIVE_KEYS = frozenset(
         "dcntCrdNo",
         "h_dcnt_crd_no",
         "discount_card_no",
+        # ...and the same number on the way OUT, as the reservation form's
+        # OPsg.CARD_NO key (OPsg.java:7,13-15). The prefix carries a trailing
+        # underscore that the other OPsg prefixes do not, so the transmitted
+        # key is txtCardNo_1. A card row is one passenger, so only index 1 can
+        # occur today; the whole reachable range is listed anyway, because
+        # SENSITIVE_KEYS is matched exactly and a leak here is a spendable
+        # credential in a log.
+        *(
+            f"txtCardNo_{index}"
+            for index in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+        ),
         "original_window_no",
         "original_sale_sequence",
         "original_return_password",

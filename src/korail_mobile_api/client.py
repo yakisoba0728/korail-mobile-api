@@ -38,6 +38,7 @@ from .mutation_payloads import (
     build_card_payment_form,
     build_discount_card_extension_query,
     build_discount_card_purchase_form,
+    build_discount_card_reservation_form,
     build_refund_form,
     build_reservation_form,
     build_standby_wait_form,
@@ -2086,3 +2087,71 @@ class KorailClient:
         except KorailSessionExpiredError:
             self.clear_session()
             raise
+
+    def reserve_with_discount_card(
+        self,
+        train: TrainSummary,
+        *,
+        card_no: str,
+        consent: MutationConsent,
+    ) -> MutationPreview | ReservationHoldResponse:
+        """Hold one seat and pay for it with a 할인카드(N카드).
+
+        **The same route, category and gate as :meth:`reserve`**, because it is
+        the same call: ``w4/a.java:93-104`` builds an ordinary
+        ``ReservationRequest`` and ``c5/b.java:128-138`` POSTs it with an
+        ordinary ``ReservationDao`` to
+        ``certification.TicketReservation``. There is no N카드 reservation
+        endpoint; there is an N카드 passenger block. Consequently this is
+        gated by ``require_mutation_consent(consent, "reserve")`` — a discount
+        card does not make a reservation something other than a reservation,
+        and a caller who has not opted into holding seats must not hold one
+        this way either.
+
+        ``card_no`` is
+        :attr:`~korail_mobile_api.read_models.DiscountCardOnTicket.card_no`,
+        from the N카드 ticket's own detail
+        (:meth:`get_refund_ticket_detail`). ``train`` should be a row from
+        :meth:`get_discount_card_schedule`, which is the search that knows
+        which trains the card actually covers.
+
+        There is no ``passengers`` and no ``seat_class`` argument, because the
+        app offers neither: ``w4/a.java:97-98`` hardcodes one passenger and
+        ``:88`` pins the cabin to 일반실.
+
+        **NEVER TRANSMITTED, BY ANYONE HERE.** This is a reserve-surface
+        addition derived entirely from the APK. What is verified is the route,
+        the two fields that differ from an ordinary hold
+        (``txtDiscKndCd1="153"``, ``txtCardNo_1``), the ``txtMenuId="A2"``, and
+        that everything else is the byte-identical form the live-verified
+        single-adult path already sends. What is NOT verified is that the
+        server accepts it, or what it answers for an expired, spent or
+        borrowed card. Treat a first live call as an experiment and be ready to
+        release the hold with :meth:`cancel_unpaid_hold`.
+        """
+        require_mutation_consent(consent, "reserve")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL reservation requires an authenticated session"
+            )
+        route = "/classes/com.korail.mobile.certification.TicketReservation"
+        form = build_discount_card_reservation_form(
+            self.config,
+            train,
+            card_no=card_no,
+        )
+        if consent.dry_run:
+            return MutationPreview(
+                category="reserve",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            response = self.http.post_mutation_form(
+                route, form, consent=consent, category="reserve"
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+        return self._hold_from_reservation_response(response)

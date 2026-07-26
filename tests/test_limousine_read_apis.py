@@ -1124,7 +1124,7 @@ def test_current_docs_describe_static_only_limousine_boundary():
     ):
         assert method in combined
     assert "58 exact" in combined
-    assert "71 public methods" in combined
+    assert "72 public methods" in combined
     assert "caller-supplied service" in combined
     assert "DynaPath" in combined
     assert "No live" in combined

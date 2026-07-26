@@ -10,7 +10,7 @@ Last updated: 2026-07-15 KST
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 58 exact login/read routes and 71 public methods (62 login/read plus the consent-gated mutation methods `reserve`,
+- The current package boundary is 58 exact login/read routes and 72 public methods (62 login/read plus the consent-gated mutation methods `reserve`,
   `reserve_transfer`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, and `refund`,
   which return a
   redacted preview by default and send a live state change only with a
@@ -96,7 +96,7 @@ Last updated: 2026-07-15 KST
   fields. The server session rule remains unverified, so a conservative
   client-side login gate remains until a bounded after-login validation.
 - The transport now allows 58 exact login/read routes and the client exposes
-  71 public methods. No new route was added to the six-path DynaPath allowlist.
+  72 public methods. No new route was added to the six-path DynaPath allowlist.
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -174,7 +174,7 @@ was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
 of 165; current inventory is 32 successful, 10 failed, and 123 unexecuted. The
-current package boundary is 58 exact routes and 71 public methods.
+current package boundary is 58 exact routes and 72 public methods.
 
 ## Ticket-reference static read tranche
 
@@ -620,7 +620,7 @@ tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/superpowers/specs/`.
 
 The current implementation evidence establishes 58 routes at the exact
-login/read transport boundary and 71 public methods on `KorailClient`. The
+login/read transport boundary and 72 public methods on `KorailClient`. The
 read-only path exposes no callable mutation route; reservation, unpaid-cancel,
 fake-card payment, acknowledged real-card payment, and refund are callable only
 through the separate

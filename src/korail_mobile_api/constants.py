@@ -131,6 +131,18 @@ KORAIL_STANDBY_HOLD_MESSAGE_CODE = "IRR000014"
 # 2x3x2 table).
 KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
 
+# The discount-kind code that means "this seat is being paid for with a
+# 할인카드(N카드)". w4/a.java:100 is the only place the app writes it, and
+# t4/a.java:59-61's isNCard() is the only place it reads it back.
+KORAIL_DISCOUNT_CARD_DISCOUNT_CODE = "153"
+
+# txtMenuId on an N카드 reservation. The ordinary booking screen sends "11"
+# (w4/a.java:115); the 좌석지정 screen sets "A2" on the SeatAssignData it hands
+# to getNCardReservationRequest (SeatAssignBookingActivity.java:159), and "A1"
+# for a 정기권 (:128,142). The menu id is the only scalar outside the passenger
+# block that an N카드 hold changes.
+KORAIL_DISCOUNT_CARD_MENU_ID = "A2"
+
 
 # The most passengers one reservation may carry. The booking screen's passenger
 # picker is the authority: m5/d.java:32-33 (the picker the main booking flow
