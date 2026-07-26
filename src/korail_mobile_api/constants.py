@@ -61,6 +61,32 @@ class KorailSeatClass(StrEnum):
     SPECIAL = "2"
 
 
+class KorailReservationJobType(StrEnum):
+    """``txtJobId``: which of the booking screen's actions a hold performs.
+
+    They all POST the same route
+    (``certification.TicketReservation``, ``CertificationService.java:52-54``)
+    with the same passenger, seat and journey maps; the job id -- and, for
+    :attr:`SEAT_DESIGNATED`, one extra ``OSrcar`` map -- is the whole
+    difference.
+
+    * :attr:`IMMEDIATE` (``"1101"``) is what ``C5/a.java:59`` writes while
+      building the journey map, i.e. the default the booking screen carries
+      until the user does something else. ``C5/a.java:118`` then calls
+      ``getOSrcar().clear()``, so an ordinary hold transmits no seat-designation
+      keys at all -- ``OSrcar`` reaches Retrofit as a ``@FieldMap``
+      (``CertificationService.java:54``) and an empty map contributes no fields.
+      srtgo's unconditional ``txtSrcarCnt="0"`` (``ktx.py``) is therefore a
+      shape the app never sends.
+    * :attr:`SEAT_DESIGNATED` (``"1103"``) is set the moment the seat map
+      returns a selection (``C5/a.java:143-146``): the activity copies
+      ``SEAT_SELECT_DATA`` into a fresh ``OSrcar`` and switches the job id.
+    """
+
+    IMMEDIATE = "1101"
+    SEAT_DESIGNATED = "1103"
+
+
 # The most passengers one reservation may carry. The booking screen's passenger
 # picker is the authority: m5/d.java:32-33 (the picker the main booking flow
 # instantiates, MainBookingActivity.java:832/1180/1184) sets min 0 / max 9, and

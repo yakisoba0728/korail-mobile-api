@@ -19,6 +19,7 @@ from .constants import (
     KORAIL_DEFAULT_DEVICE_WIDTH,
     KORAIL_DEVICE_ANDROID,
     KORAIL_MAX_PASSENGERS_PER_RESERVATION,
+    KorailReservationJobType,
     KorailSeatClass,
 )
 from .dynapath import (
@@ -93,6 +94,7 @@ from .models import (
 from .mutation_models import (
     CardPayment,
     KorailPassengerCounts,
+    KorailSeatAssignment,
     PaidTicket,
     ReservationHoldResponse,
     ReservationJourney,
@@ -266,7 +268,9 @@ __all__ = [
     "KorailConfig",
     "KorailDynaPathError",
     "KorailPassengerCounts",
+    "KorailReservationJobType",
     "KorailProtocolError",
+    "KorailSeatAssignment",
     "KorailSeatClass",
     "KorailStation",
     "KorailSession",

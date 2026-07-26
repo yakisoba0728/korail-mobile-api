@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TypeVar
 
 import httpx
@@ -9,7 +9,7 @@ from .consent import (
     MutationPreview,
     require_mutation_consent,
 )
-from .constants import KorailSeatClass
+from .constants import KorailReservationJobType, KorailSeatClass
 from .crypto import generate_sid
 from .errors import (
     KorailAuthError,
@@ -20,6 +20,7 @@ from .errors import (
 from .mutation_models import (
     CardPayment,
     KorailPassengerCounts,
+    KorailSeatAssignment,
     PaidTicket,
     ReservationHoldResponse,
     ReservationPaymentResponse,
@@ -1244,6 +1245,8 @@ class KorailClient:
         consent: MutationConsent,
         passengers: KorailPassengerCounts | None = None,
         seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
+        job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
+        seats: Sequence[KorailSeatAssignment] | None = None,
     ) -> MutationPreview | ReservationHoldResponse:
         """Hold a reservation for a passenger mix under explicit consent.
 
@@ -1265,6 +1268,18 @@ class KorailClient:
         Only that single-adult, general-class form has ever been accepted by
         the live server; a multi-passenger or 특실 hold is built from the app's
         own request builder but is NOT live-verified.
+
+        ``job_type`` is a :class:`KorailReservationJobType` and defaults to
+        ``IMMEDIATE`` (``txtJobId="1101"``), the only value this method sent
+        before, so an existing call is byte-for-byte unchanged:
+
+        * ``SEAT_DESIGNATED`` (``"1103"``) books named seats and needs ``seats``
+          -- exactly one :class:`KorailSeatAssignment` per passenger, each taken
+          from :meth:`get_seat_cars` + :meth:`get_seat_inventory`. A count that
+          does not match the passenger total is refused here, before any
+          request is built.
+
+        The seat-designated job has never been transmitted.
         """
         require_mutation_consent(consent, "reserve")
         if self.session.current is None:
@@ -1277,6 +1292,8 @@ class KorailClient:
             train,
             passengers=passengers,
             seat_class=seat_class,
+            job_type=job_type,
+            seats=seats,
         )
         if consent.dry_run:
             return MutationPreview(

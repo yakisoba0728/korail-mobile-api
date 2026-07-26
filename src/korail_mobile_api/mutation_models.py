@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
-from .models import BaseKorailResponse
+from .models import BaseKorailResponse, PhysicalSeat, SeatInventoryResponse
 
 
 @dataclass(frozen=True)
@@ -118,6 +118,94 @@ class KorailPassengerCounts:
             + self.mild_disability
             + self.guide_dog
         )
+
+
+@dataclass(frozen=True)
+class KorailSeatAssignment:
+    """One physical seat a seat-designated (``txtJobId="1103"``) hold asks for.
+
+    A seat is identified by exactly the two values the seat-map reads already
+    return, and by nothing else:
+
+    * ``car_no`` is :attr:`~korail_mobile_api.SeatCar.car_no` from
+      :meth:`KorailClient.get_seat_cars <korail_mobile_api.KorailClient.get_seat_cars>`
+      (parsed from ``h_srcar_no``), i.e. the same number
+      :meth:`~korail_mobile_api.KorailClient.get_seat_inventory` is then called
+      with and echoes back as
+      :attr:`~korail_mobile_api.SeatInventoryResponse.car_no`. The app sends the
+      car currently on screen: ``SeatSearchActivity.java:678`` writes
+      ``String.valueOf(F0())`` and ``F0()`` (``:269-271``) is
+      ``SeatSearchRequest.getTxtSrcarNo()``, the car the seat map was asked for.
+    * ``seat_no`` is :attr:`~korail_mobile_api.PhysicalSeat.seat_no` from
+      :meth:`~korail_mobile_api.KorailClient.get_seat_inventory` (parsed from
+      ``seat_no``), forwarded verbatim: ``SeatSearchActivity.java:680`` sends
+      ``selectedSeatList.get(i).getSeat_no()``. It is deliberately NOT
+      ``seat_spec`` -- that is the human label ("5A") the app renders at
+      ``:894``, not the wire identifier.
+
+    Both are taken as-is from an inventory read; this package never synthesises
+    a seat identifier, and there is no format assumption beyond "printable
+    ASCII, non-empty".
+    """
+
+    car_no: int
+    seat_no: str
+
+    def __post_init__(self) -> None:
+        # type(...) is int, not isinstance: bool is an int subclass and True is
+        # not a car number. Matches validate_seat_inventory_inputs' car_no rule
+        # so a car that could be read cannot be rejected here and vice versa.
+        if type(self.car_no) is not int or self.car_no < 1:
+            raise ValueError("car_no must be a positive integer")
+        seat_no = self.seat_no
+        if (
+            not isinstance(seat_no, str)
+            or not seat_no
+            or not seat_no.isascii()
+            or any(character <= " " or character == "\x7f" for character in seat_no)
+        ):
+            raise ValueError(
+                "seat_no must be a non-empty printable ASCII value taken from "
+                "a seat-inventory read"
+            )
+
+    @classmethod
+    def from_inventory(
+        cls,
+        inventory: SeatInventoryResponse,
+        seat: PhysicalSeat,
+    ) -> "KorailSeatAssignment":
+        """Pair a :class:`~korail_mobile_api.SeatInventoryResponse` with one of its seats.
+
+        ``inventory`` must be a seat-inventory read whose ``car_no`` the server
+        echoed back (``scar_no``), and ``seat`` one of its
+        :attr:`~korail_mobile_api.SeatInventoryResponse.seats` rows. This is the
+        only constructor that needs no hand-copied identifiers, and it refuses a
+        seat the read itself marked unsellable (``sale_psb_flg != "Y"``) --
+        ``com/korail/talk/ui/seat/a.java`` only makes a ``"Y"`` seat tappable, so
+        designating one the map would not let a user pick can only produce a
+        server refusal, or worse a partial hold.
+        """
+        if type(inventory) is not SeatInventoryResponse:
+            raise ValueError(
+                "inventory must be an exact SeatInventoryResponse"
+            )
+        if type(seat) is not PhysicalSeat:
+            raise ValueError("seat must be an exact PhysicalSeat")
+        car_no = inventory.car_no
+        if type(car_no) is not int:
+            raise ValueError(
+                "seat inventory did not echo a car number (scar_no); "
+                "construct KorailSeatAssignment with an explicit car_no"
+            )
+        if seat not in inventory.seats:
+            raise ValueError("seat does not belong to this seat inventory")
+        if seat.sale_possible != "Y":
+            raise ValueError(
+                "seat is not marked sellable by the seat-inventory read "
+                '(sale_psb_flg must be "Y")'
+            )
+        return cls(car_no=car_no, seat_no=seat.seat_no)
 
 
 @dataclass(frozen=True)

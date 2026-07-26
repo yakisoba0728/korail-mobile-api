@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
 from .config import KorailConfig
-from .constants import KorailSeatClass
+from .constants import KorailReservationJobType, KorailSeatClass
 from .errors import KorailProtocolError
 from .models import TrainSummary
 from .mutation_models import (
     CardPayment,
     KorailPassengerCounts,
+    KorailSeatAssignment,
     PaidTicket,
     ReservationHoldResponse,
 )
@@ -66,12 +68,67 @@ _PASSENGER_ROWS: tuple[tuple[str, str, str], ...] = (
 )
 
 
+def _validated_seat_assignments(
+    seats: Sequence[KorailSeatAssignment] | None,
+    *,
+    job_type: KorailReservationJobType,
+    passenger_total: int,
+) -> tuple[KorailSeatAssignment, ...]:
+    """Check the designated-seat list against the job type and the mix.
+
+    A seat list belongs to ``"1103"`` and to nothing else: the app switches the
+    job id to ``"1103"`` in the same three lines that install the ``OSrcar``
+    map (``C5/a.java:143-146``), and clears that map whenever it rebuilds an
+    ordinary ``"1101"`` journey (``C5/a.java:118``).
+
+    The count rule is the app's own: ``SeatSearchActivity.java:902`` enables
+    "선택완료" only while ``selectedSeatCount == G0()``, and ``G0()``
+    (``:273-278``) is the request's ``txtTotPsgCnt``. A short list is refused
+    here, before anything is sent, because the server would otherwise be asked
+    to seat N passengers in fewer than N seats.
+    """
+    if job_type is not KorailReservationJobType.SEAT_DESIGNATED:
+        if seats:
+            raise KorailProtocolError(
+                "KORAIL designated seats belong to a seat-designated "
+                f'reservation (txtJobId "1103"), not "{job_type.value}"'
+            )
+        return ()
+    if seats is None or isinstance(seats, (str, bytes)):
+        raise KorailProtocolError(
+            "KORAIL seat-designated reservation requires a sequence of "
+            "KorailSeatAssignment"
+        )
+    assignments = tuple(seats)
+    for assignment in assignments:
+        if type(assignment) is not KorailSeatAssignment:
+            raise KorailProtocolError(
+                "KORAIL seat-designated reservation requires exact "
+                "KorailSeatAssignment values"
+            )
+    if len(assignments) != passenger_total:
+        raise KorailProtocolError(
+            "KORAIL seat-designated reservation needs exactly one seat per "
+            f"passenger: {passenger_total} passenger(s), "
+            f"{len(assignments)} seat(s)"
+        )
+    identities = {(item.car_no, item.seat_no) for item in assignments}
+    if len(identities) != len(assignments):
+        raise KorailProtocolError(
+            "KORAIL seat-designated reservation cannot book the same seat "
+            "twice"
+        )
+    return assignments
+
+
 def build_reservation_form(
     config: KorailConfig,
     train: TrainSummary,
     *,
     passengers: KorailPassengerCounts | None = None,
     seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
+    job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
+    seats: Sequence[KorailSeatAssignment] | None = None,
 ) -> dict[str, str]:
     """Build the reservation-hold form for a passenger mix and a cabin class.
 
@@ -82,9 +139,29 @@ def build_reservation_form(
     before mixes existed -- see
     :func:`build_single_adult_reservation_form`.
 
-    Only the single-adult, general-class shape has ever been sent to the live
-    server. Multi-passenger and 특실 forms are built from the app's own request
-    builder but are NOT live-verified.
+    ``job_type`` selects which of the booking screen's actions is being
+    performed and defaults to
+    :attr:`KorailReservationJobType.IMMEDIATE <korail_mobile_api.KorailReservationJobType.IMMEDIATE>`
+    (``txtJobId="1101"``), the only one that existed before:
+
+    * :attr:`~korail_mobile_api.KorailReservationJobType.SEAT_DESIGNATED`
+      (``"1103"``) additionally requires ``seats``, one
+      :class:`~korail_mobile_api.KorailSeatAssignment` per passenger, and adds
+      the ``OSrcar`` keys described below.
+
+    ``seats`` is accepted only for the seat-designated job. Its keys are
+    ``OSrcar``'s (``OSrcar.java:6-11``), a ``@FieldMap`` appended after the
+    journey keys (``CertificationService.java:52-54``): ``txtSrcarCnt`` first,
+    then ``txtSrcarNo{i}``/``txtSeatNo{i}`` for ``i`` counting from **1**
+    (``SeatSearchActivity.java:675-683`` -- ``setSrcarCnt(this.f29973o + 1, …)``
+    picks the *journey* index, which is 1 for a direct train, and the loop's
+    ``i11`` starts at 1). ``txtSrcarCnt`` is the number of **seats**, not cars:
+    it is ``String.valueOf(selectedSeatList.size())``.
+
+    Only the single-adult, general-class, ``"1101"`` shape has ever been sent to
+    the live server. Multi-passenger and 특실 forms, and the seat-designated job
+    type, are built from the app's own request builder but are NOT
+    live-verified.
     """
     if type(train) is not TrainSummary:
         raise KorailProtocolError(
@@ -102,6 +179,20 @@ def build_reservation_form(
         raise KorailProtocolError(
             'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
         ) from None
+    try:
+        job_type = KorailReservationJobType(job_type)
+    except ValueError:
+        raise KorailProtocolError(
+            "KORAIL reservation job type must be one of "
+            + ", ".join(
+                f'"{member.value}"' for member in KorailReservationJobType
+            )
+        ) from None
+    assignments = _validated_seat_assignments(
+        seats,
+        job_type=job_type,
+        passenger_total=passengers.total,
+    )
     # The train list checks the availability code of the cabin the user picked,
     # not always the general one: a5/u.java:319 reads h_gen_rsv_cd for the
     # standard tab and h_spe_rsv_cd for the suite tab (likewise
@@ -175,14 +266,14 @@ def build_reservation_form(
     form.update(
         {
             "txtMenuId": "11",
-            "txtJobId": "1101",
+            "txtJobId": job_type.value,
             "txtGdNo": "",
             "hidFreeFlg": "N",
             # Always "N" here. The app sets it from
             # J.isStndSeat(seatClass, h_gen_rsv_cd, h_stnd_rsv_cd)
             # (c5/b.java:69), which is true only for a GENERAL request on a
             # train whose general seats are sold out ("13") and whose standing
-            # inventory is open -- S4/J.java:83-85. Neither cabin this builder
+            # inventory is open -- S4/J.java:83-84. Neither cabin this builder
             # will accept can be in that state, since both demand "11".
             "txtStndFlg": "N",
             # w4/a.java:49 sends the app's TOTAL_PERSON_COUNT, and that is the
@@ -228,6 +319,26 @@ def build_reservation_form(
             "txtChgFlg1": "N",
         }
     )
+    # OSrcar is the LAST @FieldMap on the Retrofit call
+    # (CertificationService.java:52-54), so its keys go after the journey keys.
+    # For "1101" the map is empty and contributes nothing at all --
+    # C5/a.java:118 clears it while building an ordinary journey -- which is why
+    # a txtSrcarCnt of "0" never appears on the wire.
+    #
+    # The order below is SeatSearchActivity.java:676-682's: the count, then
+    # (car, seat) per index. The app itself cannot guarantee it -- :650 collects
+    # into a plain HashMap and :144 of C5/a.java putAll()s that back into the
+    # LinkedHashMap -- so KORAIL demonstrably tolerates any OSrcar ordering, and
+    # emitting the builder's own order is the reproducible choice.
+    for index, assignment in enumerate(assignments, start=1):
+        if index == 1:
+            # SeatSearchActivity.java:676. The count is the SEAT count, and the
+            # key is unsuffixed for journey 1 (OSrcar.java:21-23 selects
+            # "txtSrcarCnt" vs "txtSrcarCnt1" on the journey index, not the seat
+            # index).
+            form["txtSrcarCnt"] = str(len(assignments))
+        form[f"txtSrcarNo{index}"] = str(assignment.car_no)
+        form[f"txtSeatNo{index}"] = assignment.seat_no
     return form
 
 

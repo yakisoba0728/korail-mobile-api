@@ -6,6 +6,8 @@ from dataclasses import fields, is_dataclass
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
+
 
 SENSITIVE_KEYS = frozenset(
     key.casefold()
@@ -139,6 +141,20 @@ SENSITIVE_KEYS = frozenset(
         "hidWctNo",
         "hidTmpJobSqno1",
         "hidTmpJobSqno2",
+        # The seat-designated hold's OSrcar keys. car_no/seat_no/h_srcar_no/
+        # h_seat_no are already redacted above wherever they are READ back;
+        # these are the same two values on the way out. The keys are indexed
+        # (txtSrcarNo1..N/txtSeatNo1..N, SeatSearchActivity.java:679-680) and
+        # SENSITIVE_KEYS is matched exactly, so every index a reservation can
+        # reach is listed -- N is bounded by KORAIL_MAX_PASSENGERS_PER_RESERVATION.
+        *(
+            f"txtSrcarNo{index}"
+            for index in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+        ),
+        *(
+            f"txtSeatNo{index}"
+            for index in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+        ),
         # Original-ticket sale identity carried on the refund form.
         "h_orgtk_sale_wct_no",
         # Reference-derived reads: certification.ReservationList seat rows and
