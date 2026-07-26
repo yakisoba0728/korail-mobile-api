@@ -22,6 +22,10 @@ state-changing request can leave the process only through the dedicated
 | payment (fake card) | ✅ `pay_with_fake_card`, **live-verified (declined)** | ⛔ not implemented — route tiered only, not live-enabled |
 | payment (real card) | ⚠️ `pay_with_card`, explicit opt-in, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
 | refund | ⚠️ implemented, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
+| reserve (`1202`, 입석+좌석 — the first half of 병합예약) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
+| 병합예약 second hold (`reserve_merge`) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
+| 정기권 예약 (`pass.passReserve`) | ⚠️ implemented, own `commuter_pass` consent, **never live-run** | ⛔ not implemented |
+| 정기권 결제 (`pass.passPayIssue`) | ⚠️ implemented, own `commuter_pass` consent, **NOT live-enabled**, **never live-run** | ⛔ not implemented |
 
 "Live-verified" on both sides means the request was actually sent and its
 response observed. korail `pay_with_card`, `refund`, the two non-default
@@ -531,3 +535,27 @@ back to the hold.
   case.
 - **korail refund**: unchanged — only reachable if a real paid ticket is ever
   available (out of normal, no-charge scope).
+- **korail 병합예약** (branch `feat/merge-and-pass`, not merged): the cheap half
+  is free. Search any busy corridor and look for a row whose
+  `merge_seat_application_flag` is `A` or `G` (일반실); that alone tells you the
+  app would show 입석+좌석 예매. Then `reserve(..., job_type=MERGE_STANDING)`
+  creates a real unpaid 입석 PNR — cancel it immediately with
+  `cancel_unpaid_hold`, which does work for it (one journey). The claim to check
+  on that reply is whether its `h_msg_mndry`/`h_msg_txt5` contains the literal
+  `<중간연결역 변경>`: that is how the app learns a merge is on offer, and it is
+  the one link in the chain that no static reading can confirm. Then
+  `get_merge_seats_inquiry` (free) should answer with a `midStnList` and two
+  `trn_info` rows sharing one `h_trn_no`. `reserve_merge` last, and cancel it
+  too. Also open: whether KORAIL validates `arvTm_1`, which the app leaves at the
+  whole route's arrival time rather than leg 1's.
+- **korail 정기권** (same branch): `reserve_commuter_pass` creates a real unpaid
+  reservation and **this package has no cancel route for it** —
+  `cancel_unpaid_hold` is the ticket cancel and will not take a
+  `CommuterPassReservation`. Release it in the KORAIL app or let it expire. Its
+  `main_info` is worth capturing whole, because that object IS the payment's
+  first `@FieldMap` and a real one settles whether the 54-key list is right.
+  `pay_for_commuter_pass` charges roughly ₩150,000–₩250,000 for a 1개월 pass with
+  no refund path here, so it should not be run to prove a field list; and note
+  that the shipped app cannot issue `passPayIssue` either (its
+  `isCommPaymentRequest()` tests the response class), so there is no capture to
+  compare against and no way to be sure short of paying.
