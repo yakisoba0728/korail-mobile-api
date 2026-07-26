@@ -2,61 +2,39 @@
 
 ## Unreleased
 
-- Added: 정기권 구매. `KorailClient.reserve_commuter_pass` and
-  `KorailClient.pay_for_commuter_pass`,
-  `build_commuter_pass_reservation_form`, `build_commuter_pass_payment_form`,
-  `parse_commuter_pass_reservation_response`,
-  `CommuterPassPurchaseRequest`, `CommuterPassReservation`,
-  `CommuterPassReservationResponse`,
-  `KORAIL_COMMUTER_PASS_PAYMENT_FIELDS`, and a new
-  `MutationConsent.allow_commuter_pass`.
-  - **A new consent category, `"commuter_pass"`, not a reuse of `"payment"`.**
-    `pay_with_card` settles a `ReservationHoldResponse` — a train hold the
-    caller just created — so nothing an `allow_payment` consent could reach
-    would have bought a one-to-six-month season pass. Reusing that flag would
-    make every consent written before 정기권 existed silently authorise a
-    purchase an order of magnitude larger. Same argument that gave
-    `discount_card` its own category. The two routes share the one category
-    because `passReserve` creates the unpaid reservation `passPayIssue`
-    settles.
-  - **Both `@FieldMap`s of `passPayIssue` are answered by v6.5.0**, unlike the
-    discount-card registration's pair. The first is the whole `passReserve`
-    reply: `CommutationInquiryActivity.java:242` is
-    `setCommPaymentMap(A.convertObjectToMap(main_info))` and `S4/A.java:18-27`
-    keys every public `get…` by its own name minus "get", lowercased — 54 `h_*`
-    fields plus `stationinfo` and `usernames`, the two the app writes into the
-    object first (`:238-240`). The second is the ORDINARY `PaymentMethod` map,
-    the same one a train payment sends (`B6/AbstractC1269e.java:736-744` into
-    `V4/a.java:21-34`); a test compares this form's card half against
-    `build_card_payment_form`'s key by key.
-  - `hidPayAmount` is the reservation's own `h_rcvd_amt` and is not a caller
-    argument: `AbstractC1269e.java:740` sends `t1() = s1() +
-    getDiscountAmount()`, and `CReservationConfirmActivity.java:47-48` sets
-    those two extras to `Integer.parseInt(mainInfo.getH_rcvd_amt())` and `0`.
-  - **`passPayIssue` is unreachable in the shipped app.**
+- Not shipping: 정기권 구매. The purchase pair (`pass.passReserve` /
+  `pass.passPayIssue`) was implemented in this same unreleased cycle and removed
+  again before release, so no `reserve_commuter_pass`, `pay_for_commuter_pass`,
+  `CommuterPass*` type, `KORAIL_COMMUTER_PASS_PAYMENT_FIELDS`, `commuter_pass`
+  consent category or `MutationConsent.allow_commuter_pass` exists. Nothing was
+  ever transmitted, and no released version ever carried them.
+  - **Why: it cannot be proven correct without spending unrecoverable money.**
+    A 1개월 정기권 is roughly ₩150,000–₩250,000, and this package has neither a
+    refund route nor a cancel route for one — `cancel_unpaid_hold` is the ticket
+    cancel.
+  - **And there is no capture to compare against**, because the shipped app
+    cannot issue `passPayIssue` either:
     `PaymentActivity.isCommPaymentRequest()` tests
-    `instanceof CommPaymentDao.CommPaymentResponse` — the RESPONSE type
-    (`PaymentActivity.java:502-503`, bytecode at
-    `smali/…/PaymentActivity.smali:3963-3980`) — while only `CommPaymentRequest`
-    implements `IPaymentRequest`. Always false. The neighbouring
-    `isPassPaymentRequest()` tests the request type and is correct, so it is a
-    one-word slip. There is therefore not even an app capture to compare a
-    live attempt against.
-  - The reserve form's one-train shape was worth pinning: `hidChtrnStnCd`/`Nm`
-    are sent as EMPTY STRINGS (the app assigns them on every loop iteration and
-    the index-0 branch assigns `""`), while `hidTrnNo2`/`hidTrnGpCd2`/
-    `hidDtour2` are ABSENT (never assigned; Retrofit drops a null `@Field`).
-  - `pass.passOtrReserve` / `pass.passOtrPayIssue` are deliberately NOT
-    registered. They are the 자유이용권 family (내일로 / A-PASS / 강릉패스,
-    `APassBookingActivity` and siblings): not route-bound, so the reserve takes
-    only kind/term/age/open-date, and the payment adds `h_rcvd_prc`, `hidWctNo`
-    and a companion list.
-  - Changed: `h_cust_nm`, `usernames`, `h_chg_mg_no` and their model attribute
-    names join `SENSITIVE_KEYS`. A 정기권 is a NAMED product and the payment
-    form carries the whole reservation object, so a dry-run preview would
-    otherwise have printed the holder's real name. Amounts stay visible on
-    purpose — the one thing a preview of a purchase must show is the price.
-  - **NEVER TRANSMITTED and NOT live-enabled.**
+    `getIPaymentRequest() instanceof CommPaymentDao.CommPaymentResponse` — a
+    Response type where a Request is required (`PaymentActivity.java:502-503`,
+    bytecode at `smali/…/PaymentActivity.smali:3963-3980`) — so the test is
+    always false and the DAO never runs. A form assembled from decompiled code
+    with no capture and no affordable live call is a guess with references.
+  - **The 정기권 READS are unaffected**: `get_pass_menu`,
+    `get_pass_available_dates` and `get_pass_schedule` are unchanged.
+  - **The knowledge is kept, not lost.** README's 정기권 section records the
+    twenty `passReserve` fields and the loop that fills them, the one-train
+    shape (`hidChtrnStnCd`/`Nm` sent as EMPTY STRINGS, `hidTrnNo2`/
+    `hidTrnGpCd2`/`hidDtour2` ABSENT), both `passPayIssue` `@FieldMap`s and why
+    both are populated by v6.5.0, the `hidPayAmount` chain, the
+    `isCommPaymentRequest()` bug, why `passOtrReserve`/`passOtrPayIssue` are a
+    different product (자유이용권: 내일로 / A-PASS / 강릉패스), and what
+    reviving the feature would cost to prove.
+  - `KORAIL_CARD_BEARING_MUTATION_CATEGORIES` **stays** a named set, now holding
+    `{"payment"}` again. It was introduced as its own behaviour-preserving
+    change because `category == "payment"` asked the wrong question, not
+    because it had two members, and it still carries the tested invariant that
+    no card-bearing category owns a GET mutation route.
 - Added: 병합예약. `KorailClient.reserve_merge`,
   `build_merge_reservation_form`, `is_merge_eligible`,
   `KorailReservationJobType.MERGE_STANDING` (`"1202"`),

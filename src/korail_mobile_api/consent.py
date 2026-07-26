@@ -36,7 +36,6 @@ MUTATION_CATEGORIES = (
     "cancel",
     "refund",
     "discount_card",
-    "commuter_pass",
 )
 
 _CONSENT_FLAG_BY_CATEGORY = {
@@ -45,7 +44,6 @@ _CONSENT_FLAG_BY_CATEGORY = {
     "cancel": "allow_cancel",
     "refund": "allow_refund",
     "discount_card": "allow_discount_card",
-    "commuter_pass": "allow_commuter_pass",
 }
 
 
@@ -85,24 +83,6 @@ class MutationConsent:
     #: also opted into buying a discount card, and no live-test path in this
     #: repository exercises this category.
     allow_discount_card: bool = False
-    #: 정기권 (commutation pass) 예약 and its settlement. A SEPARATE category
-    #: from both ``allow_reserve`` and ``allow_payment``, and the second one is
-    #: the important half: ``pay_with_card`` settles a
-    #: :class:`~korail_mobile_api.ReservationHoldResponse` -- a train hold the
-    #: caller has just created -- so nothing an ``allow_payment`` consent could
-    #: reach would have bought a one-to-six-month season pass. Reusing it here
-    #: would mean every consent written before 정기권 existed silently
-    #: authorised a purchase of a different order of magnitude. The two routes
-    #: share one category because ``pass.passReserve`` creates the unpaid
-    #: reservation that ``pass.passPayIssue`` settles, and a caller who may
-    #: create one must be able to finish it -- the same reasoning that keeps
-    #: 예약대기's follow-up inside ``"reserve"``.
-    #:
-    #: The settlement carries a PAN, so it is additionally gated by
-    #: :data:`~korail_mobile_api.safety.KORAIL_CARD_BEARING_MUTATION_CATEGORIES`
-    #: exactly as a train payment is. No live-test path in this repository
-    #: touches this category.
-    allow_commuter_pass: bool = False
     dry_run: bool = True
     fake_card_only: bool = True
     #: The caller acknowledges that a real, chargeable PAN will be transmitted
@@ -138,7 +118,7 @@ def require_mutation_consent(
     """Deny a mutation unless ``consent`` explicitly opts into ``category``.
 
     ``category`` must be one of ``"reserve"``, ``"payment"``, ``"cancel"``,
-    ``"refund"``, ``"discount_card"``, ``"commuter_pass"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
+    ``"refund"``, ``"discount_card"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
     when ``consent`` is ``None``, is not a :class:`MutationConsent`, names an
     unknown category, or when the matching ``allow_<category>`` flag is False.
     Returns ``None`` when the mutation is permitted. Performs no I/O.

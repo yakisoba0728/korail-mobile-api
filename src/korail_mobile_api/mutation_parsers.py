@@ -7,8 +7,6 @@ from typing import Any
 from .errors import KorailProtocolError
 from .models import BaseKorailResponse
 from .mutation_models import (
-    CommuterPassReservation,
-    CommuterPassReservationResponse,
     DiscountCardPurchaseResponse,
     ReservationHoldResponse,
     ReservationJourney,
@@ -375,92 +373,4 @@ def parse_discount_card_purchase_response(
             )
             for attribute, wire_name in _DISCOUNT_CARD_PURCHASE_FIELDS.items()
         },
-    )
-
-
-# The typed slice of ``main_info`` this package names. Every key the app's
-# reflection sweeps into the payment map is still available through
-# ``CommuterPassReservation.raw``; these are the ones a caller acts on.
-_COMMUTER_PASS_RESERVATION_FIELDS = {
-    "received_amount": "h_rcvd_amt",
-    "received_price": "h_rcvd_prc",
-    "received_fare": "h_rcvd_fare",
-    "one_time_received_amount": "h_otm_rcvd_amt",
-    "change_management_no": "h_chg_mg_no",
-    "change_management_division_code": "h_chg_mg_dv_cd",
-    "customer_name": "h_cust_nm",
-    "customer_no": "h_cust_no",
-    "pass_kind_code": "h_cmtr_knd_cd",
-    "pass_period_code": "h_cmtr_utl_trm_cd",
-    "pass_period_name": "h_cmtr_utl_trm_nm",
-    "pass_age_code": "h_cmtr_utl_age_cd",
-    "use_open_date": "h_use_open_dt",
-    "use_close_date": "h_use_cls_dt",
-    "usable_day_count": "h_use_psb_dno",
-    "usable_trip_count": "h_use_psb_tno",
-    "departure_station_code": "h_app_dpt_rs_stn_cd",
-    "departure_station_name": "h_app_dpt_rs_stn_nm",
-    "arrival_station_code": "h_app_arv_rs_stn_cd",
-    "arrival_station_name": "h_app_arv_rs_stn_nm",
-    "transfer_station_code": "h_chtrn_rs_stn_cd",
-    "transfer_station_name": "h_chtrn_rs_stn_nm",
-    "train_group_code": "h_trn_gp_cd",
-    "train_no_1": "h_trn_no_1",
-    "train_no_2": "h_trn_no_2",
-    "holiday_flag": "h_holiday_flg",
-}
-
-
-def parse_commuter_pass_reservation_response(
-    raw: Mapping[str, Any],
-) -> CommuterPassReservationResponse:
-    """Parse ``pass.passReserve``'s reply.
-
-    ``CommReservationDao.CommReservationResponse``: a free-text ``h_guide``
-    beside a ``main_info`` object. ``h_guide`` is advisory -- the app shows it
-    in a confirm dialog and proceeds either way
-    (``CommutationInquiryActivity.java:155-166``).
-
-    ``main_info`` is kept whole in
-    :attr:`CommuterPassReservation.raw
-    <korail_mobile_api.CommuterPassReservation.raw>` and not merely sampled,
-    because the payment that follows transmits every field of it -- see
-    :func:`~korail_mobile_api.mutation_payloads.build_commuter_pass_payment_form`.
-
-    **NOT LIVE-VERIFIED.** Never sent, so never observed.
-    """
-    data = _response_mapping(raw)
-    base = BaseKorailResponse.from_raw(data)
-    main_info = data.get("main_info")
-    reservation: CommuterPassReservation | None = None
-    if main_info is not None:
-        if not isinstance(main_info, Mapping):
-            raise KorailProtocolError(
-                "KORAIL commuter pass reservation main_info must be an object"
-            )
-        row = dict(main_info)
-        reservation = CommuterPassReservation(
-            raw=row,
-            **{
-                attribute: _optional_string(
-                    row,
-                    wire_name,
-                    context="commuter pass reservation",
-                )
-                for attribute, wire_name in (
-                    _COMMUTER_PASS_RESERVATION_FIELDS.items()
-                )
-            },
-        )
-    return CommuterPassReservationResponse(
-        h_msg_cd=base.h_msg_cd,
-        h_msg_txt=base.h_msg_txt,
-        str_result=base.str_result,
-        raw=data,
-        guide=_optional_string(
-            data,
-            "h_guide",
-            context="commuter pass reservation",
-        ),
-        reservation=reservation,
     )

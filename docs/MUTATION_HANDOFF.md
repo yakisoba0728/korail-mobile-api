@@ -24,8 +24,7 @@ state-changing request can leave the process only through the dedicated
 | refund | ⚠️ implemented, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
 | reserve (`1202`, 입석+좌석 — the first half of 병합예약) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
 | 병합예약 second hold (`reserve_merge`) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
-| 정기권 예약 (`pass.passReserve`) | ⚠️ implemented, own `commuter_pass` consent, **never live-run** | ⛔ not implemented |
-| 정기권 결제 (`pass.passPayIssue`) | ⚠️ implemented, own `commuter_pass` consent, **NOT live-enabled**, **never live-run** | ⛔ not implemented |
+| 정기권 예약/결제 (`pass.passReserve` / `passPayIssue`) | ⛔ **not implemented — implemented once, then removed**; the routes are not on the mutation allowlist and no method can reach them | ⛔ not implemented |
 
 "Live-verified" on both sides means the request was actually sent and its
 response observed. korail `pay_with_card`, `refund`, the two non-default
@@ -548,14 +547,17 @@ back to the hold.
   `trn_info` rows sharing one `h_trn_no`. `reserve_merge` last, and cancel it
   too. Also open: whether KORAIL validates `arvTm_1`, which the app leaves at the
   whole route's arrival time rather than leg 1's.
-- **korail 정기권** (same branch): `reserve_commuter_pass` creates a real unpaid
-  reservation and **this package has no cancel route for it** —
-  `cancel_unpaid_hold` is the ticket cancel and will not take a
-  `CommuterPassReservation`. Release it in the KORAIL app or let it expire. Its
-  `main_info` is worth capturing whole, because that object IS the payment's
-  first `@FieldMap` and a real one settles whether the 54-key list is right.
-  `pay_for_commuter_pass` charges roughly ₩150,000–₩250,000 for a 1개월 pass with
-  no refund path here, so it should not be run to prove a field list; and note
-  that the shipped app cannot issue `passPayIssue` either (its
-  `isCommPaymentRequest()` tests the response class), so there is no capture to
-  compare against and no way to be sure short of paying.
+- **korail 정기권: there is nothing for an operator to run, and that is the
+  answer, not an omission.** The purchase pair was implemented and then removed;
+  no method, route registration or consent category for it survives, so no
+  amount of consent can send `passReserve` or `passPayIssue` from this package.
+  The reasoning, in operator terms: the settlement is roughly ₩150,000–₩250,000
+  for a 1개월 pass with **no refund path and no cancel route here**, and the
+  shipped app cannot issue `passPayIssue` either — its `isCommPaymentRequest()`
+  tests the *response* class where a *request* is required, so the branch is
+  always false — which means there is no app capture to compare a live attempt
+  against. An operator would be paying, unrecoverably, to learn whether a form
+  nobody has ever sent is accepted. Everything that was established about both
+  calls is written down in README's 정기권 section, including the one step that
+  would actually be worth its cost if this is ever revived (capturing a real
+  `passReserve` `main_info`, which IS the payment's first `@FieldMap`).

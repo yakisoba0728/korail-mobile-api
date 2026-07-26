@@ -247,27 +247,15 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # being mis-registered.
         ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
         ("GET", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
-        # commuter_pass -- 정기권 예약 and its settlement. A category of their
-        # own for the same reason discount_card is: a caller who consented to
-        # pay for a train ticket has not consented to buy a one-to-six-month
-        # season pass. See MutationConsent.allow_commuter_pass.
-        #
-        # pass.passReserve creates an UNPAID reservation (its main_info carries
-        # h_rcvd_amt, CommReservationDao.java:174-...); pass.passPayIssue is
-        # the settlement and carries a PAN, which is why "commuter_pass" is in
-        # KORAIL_CARD_BEARING_MUTATION_CATEGORIES below.
-        #
-        # The two 'Otr' siblings, pass.passOtrReserve and pass.passOtrPayIssue
-        # (PassService.java:39-44), are DELIBERATELY ABSENT. They are a
-        # different product: the 자유이용권 family (내일로 / A-PASS / 강릉패스),
-        # booked from APassBookingActivity, NewAPassBookingActivity and
-        # GangneungPassBookingActivity, whose reserve needs only kind/term/age/
-        # open-date because such a pass is not route-bound, and whose payment
-        # adds h_rcvd_prc, hidWctNo and a companion list. Registering them
-        # unimplemented would put two chargeable routes on the allowlist that
-        # no builder can fill.
-        ("POST", "/classes/com.korail.mobile.pass.passReserve"),
-        ("POST", "/classes/com.korail.mobile.pass.passPayIssue"),
+        # DELIBERATELY ABSENT: the whole PassService purchase family --
+        # pass.passReserve / passPayIssue and their passOtr* siblings
+        # (PassService.java:19-44). 정기권 구매 was implemented against these
+        # two routes and then REMOVED: the settlement can only be proven by
+        # buying a ₩150,000-250,000 season pass this package cannot refund, and
+        # the shipped app cannot issue passPayIssue either, so no capture to
+        # compare against exists. The README's 정기권 section keeps what was
+        # learned. The 정기권 READS are untouched and remain read-only routes;
+        # no chargeable pass route is on this allowlist.
     }
 )
 
@@ -285,8 +273,6 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
     "/classes/com.korail.mobile.refunds.RefundsRequest": "refund",
     "/classes/com.korail.mobile.research.dcntCrdInfo.do": "discount_card",
     "/classes/com.korail.mobile.reservation.dcntCrdExtn.do": "discount_card",
-    "/classes/com.korail.mobile.pass.passReserve": "commuter_pass",
-    "/classes/com.korail.mobile.pass.passPayIssue": "commuter_pass",
 }
 
 # The consent categories whose forms carry a card number in the clear.
@@ -304,14 +290,14 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
 # `category == "payment"` and quietly says no. Membership is the check; the set
 # is the list of categories that must be on the far side of it.
 #
-# "commuter_pass" is here because pass.passPayIssue settles a 정기권 with the
-# same PaymentMethod block a train payment uses (PassService.java:19-21 ->
-# CommPaymentDao.java:79-81 -> V4/a.java:21-34). It is a separate CATEGORY from
-# "payment" -- different product, different consent -- but the same KIND of
-# form, and the transmit gate cares about the form.
-KORAIL_CARD_BEARING_MUTATION_CATEGORIES = frozenset(
-    {"payment", "commuter_pass"}
-)
+# It holds one member again, having briefly held "commuter_pass" too. That is
+# not a reason to fold it back into an equality test: the set was introduced on
+# its own, with behaviour unchanged in every direction, precisely because the
+# equality test was the wrong QUESTION rather than the wrong answer, and the
+# invariant it carries -- that no card-bearing category owns a GET mutation
+# route, which is why get_mutation_query has no card branch -- is stated against
+# this name and tested against it.
+KORAIL_CARD_BEARING_MUTATION_CATEGORIES = frozenset({"payment"})
 
 
 def assert_mutation_route_category(path: str, category: str) -> None:

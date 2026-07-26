@@ -7,15 +7,15 @@ requests. It also retains the static reverse-engineering report for `korail.apk`
 Android package `com.korail.talk` version `6.5.0`, as the package's historical
 evidence map.
 
-The reviewed package boundary contains 58 routes and 75 public methods. All 58
+The reviewed package boundary contains 58 routes and 73 public methods. All 58
 routes are login/read routes: 56 reads plus the login POST and the server-side
-logout GET. The nine mutation routes are tracked separately and
+logout GET. The seven mutation routes are tracked separately and
 are never added to the read-only allowlist. Sixty-two of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
-thirteen, `reserve`, `reserve_transfer`, `reserve_merge`,
+eleven, `reserve`, `reserve_transfer`, `reserve_merge`,
 `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
-`pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`,
-`extend_discount_card`, `reserve_commuter_pass` and `pay_for_commuter_pass`, are
+`pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card` and
+`extend_discount_card`, are
 the consent-gated mutation methods. Each is denied unless the caller supplies a
 `MutationConsent` that opts into its category; with the default `dry_run=True`
 each merely validates its inputs and returns a redacted `MutationPreview` of the
@@ -974,26 +974,42 @@ Unknown until step 3 or 5 runs: whether `"1202"` is accepted at all outside the
 app's own flow, and whether KORAIL tolerates the stale `arvTm_1` or validates it
 against leg 1's real arrival.
 
-### 정기권 (commuter pass) purchase
+### 정기권 (commuter pass) purchase — NOT implemented, and removed on purpose
 
-**Implemented, NEVER TRANSMITTED, and not live-enabled.** The reads
-(`get_pass_menu`, `get_pass_available_dates`, `get_pass_schedule`) already
-existed; the purchase did not.
+**The reads are here and work**: `get_pass_menu`, `get_pass_available_dates` and
+`get_pass_schedule` look up pass products, the days a pass may start on, and the
+trains it can be bound to. Nothing below takes anything away from them.
 
-A 정기권 is a route-bound season pass — one to six months on one or two named
-trains — and buying it is **two calls in `PassService`**, nowhere near the ticket
-routes:
+**Buying a pass is not here.** It was implemented — `reserve_commuter_pass`,
+`pay_for_commuter_pass`, their form builders, models, parser, routes and a
+`commuter_pass` consent category — and then **deliberately removed on
+2026-07-26**, because neither call can ever be shown to be correct from this
+repository:
+
+- A 1개월 정기권 is roughly **₩150,000–₩250,000**, and this package has **no
+  refund route and no cancel route** for one. `cancel_unpaid_hold` is the ticket
+  cancel and does not take a pass reservation. So a live proof is money that
+  cannot be recovered.
+- **`passPayIssue` is unreachable in the shipped app** (below), so there is not
+  even an app traffic capture to compare a form against. A field list assembled
+  from decompiled code, with no capture and no affordable live call, is a
+  guess with references.
+
+The knowledge below cost real work to establish and is kept so that nobody has
+to rediscover it. What is written here is what the code said; none of it was
+ever confirmed on the wire.
+
+#### The purchase is two calls
 
 | call | route | what it does |
 | --- | --- | --- |
-| `reserve_commuter_pass` | `POST pass.passReserve` | creates an **unpaid** reservation; the reply's `main_info.h_rcvd_amt` is the price |
-| `pay_for_commuter_pass` | `POST pass.passPayIssue` | **charges that amount** |
+| 정기권 예약 | `POST pass.passReserve` (`PassService.java:23-25`) | creates an **unpaid** reservation; the reply's `main_info.h_rcvd_amt` is the price |
+| 정기권 결제 | `POST pass.passPayIssue` (`PassService.java:19-21`) | **charges that amount** |
 
-#### The reserve form is a loop with index-keyed branches
+#### `passReserve`: twenty `@Field`s from a loop with index-keyed branches
 
-Twenty `@Field`s (`PassService.java:23-25`), filled by
-`CommutationInquiryActivity.java:188-222` from **one** schedule option's
-`train_list`. The loop's shape is what determines the field set:
+Filled by `CommutationInquiryActivity.java:188-222` (`w0`) from **one** schedule
+option's `train_list`. The loop's shape is what determines the field set:
 
 - index 0 fills the origin (`hidAppDptStnCd`/`Nm`) and the first train
   (`hidTrnNo1`/`hidTrnGpCd1`/`hidDtour1`);
@@ -1002,127 +1018,109 @@ Twenty `@Field`s (`PassService.java:23-25`), filled by
 - **every** index overwrites the 환승역 — with `""` at index 0 and with its own
   *departure* otherwise.
 
-So a one-train pass sends `hidChtrnStnCd`/`Nm` as **empty strings** (assigned
-every iteration) but omits `hidTrnNo2`/`hidTrnGpCd2`/`hidDtour2` **entirely**
-(never assigned, and Retrofit drops a null `@Field`). Getting that backwards is
-the easy mistake, so a test pins both halves.
+So a one-train pass sends `hidChtrnStnCd`/`hidChtrnStnNm` as **empty strings**
+(assigned on every iteration) but omits `hidTrnNo2`, `hidTrnGpCd2` and
+`hidDtour2` **entirely** (never assigned, and Retrofit drops a null `@Field`).
+Getting that backwards is the easy mistake; it is the opposite of what the field
+list alone suggests.
 
-Everything it needs comes from reads this package already has:
-`get_pass_menu` gives the kind code and — importantly — the period **code and
-display name** as a pair (`PassPeriodOption`), because `hidCmtrUtlTrmNm` is a
-real wire field; `get_pass_available_dates` gives `hidUseOpenDt`;
-`get_pass_schedule` gives the trains.
+The twenty fields in declaration order: `Device`, `Version`, `Key`,
+`hidCmtrKndCd`, `hidCmtrUtlTrmCd`, `hidCmtrUtlTrmNm`, `hidCmtrUtlAgeCd`,
+`hidUseOpenDt`, `hidAppDptStnCd`, `hidAppDptStnNm`, `hidAppArvStnCd`,
+`hidAppArvStnNm`, `hidChtrnStnCd`, `hidChtrnStnNm`, `hidTrnNo1`, `hidTrnNo2`,
+`hidTrnGpCd1`, `hidTrnGpCd2`, `hidDtour1`, `hidDtour2`.
 
-#### Both `@FieldMap`s of the payment ARE answered by v6.5.0
+Everything it needs comes from reads this package still has: `get_pass_menu`
+gives the kind code and — importantly — the period **code and display name** as
+a pair (`PassPeriodOption`), because `hidCmtrUtlTrmNm` is a real wire field;
+`get_pass_available_dates` gives `hidUseOpenDt`; `get_pass_schedule` gives the
+trains.
 
-This is the shape that defeated the discount-card registration, and here it does
-not:
+#### `passPayIssue`: both `@FieldMap`s ARE populated by v6.5.0
 
-1. **`commPaymentMap` is the entire reserve response.**
+This is where it stops resembling the discount-card registration, whose second
+map the app never fills:
+
+1. **`commPaymentMap` is the entire `passReserve` response.**
    `CommutationInquiryActivity.java:242` is
    `setCommPaymentMap(A.convertObjectToMap(main_info))`, and `S4/A.java:18-27`
-   keys every public `get…` by its own name minus `get`, lowercased. That is 54
-   `h_*` fields (`KORAIL_COMMUTER_PASS_PAYMENT_FIELDS`) plus two the **app**
-   writes into the object first (`:238-240`): `stationInfo` → `stationinfo` (a
-   route label) and `userNames` → `usernames` (the holder's name + 님). Those
-   two are `station_info` / `user_names` on the builder, **required rather than
-   defaulted**, because one of them is a person's name and this call transmits
-   it. `isIncludeHoliday` is absent because its getter starts with `is`.
-   Ordering is genuinely non-contractual — `getMethods()` is unordered and the
-   result is a `HashMap`, so the app itself cannot control it.
+   keys every public `get…` by its own name minus `get`, **lowercased**. That is
+   54 `h_*` fields, plus two the **app** writes into the object first
+   (`:238-240`): `stationInfo` → `stationinfo` (a route label) and `userNames` →
+   `usernames` (the holder's name + 님). `isIncludeHoliday` is absent because its
+   getter starts with `is`. Ordering is genuinely non-contractual —
+   `getMethods()` is unordered and the result is a `HashMap`, so the app itself
+   cannot control it, and KORAIL demonstrably tolerates any order.
 2. **The second map is the ordinary `PaymentMethod`** — the *same* one a train
    payment sends. `B6/AbstractC1269e.java:736-744` hands the shared payment
-   screen's `PaymentMethod` to `CommPaymentDao`, and `V4/a.java:21-34` built it.
-   A test compares this form's card half against `build_card_payment_form`'s,
-   key by key, so the two cannot drift.
+   screen's `PaymentMethod` to `CommPaymentDao`, and `V4/a.java:21-34`
+   (`getCardRequest`) built it. The card half of a pass settlement is therefore
+   byte-identical to `build_card_payment_form`'s card half.
 
-`hidPayAmount` is **not** a parameter. `AbstractC1269e.java:740` sends `t1()` =
-`s1() + getDiscountAmount()`; `s1()` is the `RECEIVED_AMOUNT` extra and
-`getDiscountAmount()` the `DISCOUNT_AMOUNT` extra; and
-`CReservationConfirmActivity.java:47-48` sets them to
+`hidPayAmount` is **not** a caller argument. `AbstractC1269e.java:740` sends
+`t1()` = `s1() + getDiscountAmount()`; `s1()` (`:1763`) is the `RECEIVED_AMOUNT`
+extra and `getDiscountAmount()` the `DISCOUNT_AMOUNT` extra; and
+`CReservationConfirmActivity.java:47-48` sets those two to
 `Integer.parseInt(mainInfo.getH_rcvd_amt())` and `0`. So the amount is the
 reservation's own `h_rcvd_amt`, and taking it from anywhere else would be
-inventing a price.
+inventing a price. `hidMnsStlAmt1` is the same number for the same reason
+(`AbstractC1269e.java:406` → `V4/a.java:27`).
 
-#### `passPayIssue` is dead code in the shipped app
+#### Why no capture can exist: `passPayIssue` is dead code in the shipped app
 
 `PaymentActivity.isCommPaymentRequest()` is
 `getIPaymentRequest() instanceof CommPaymentDao.CommPaymentResponse` — the
-**response** type (`PaymentActivity.java:502-503`, confirmed in bytecode at
+**response** type where a **request** is required (`PaymentActivity.java:502-503`,
+confirmed in bytecode at
 `analysis/apktool/smali/…/PaymentActivity.smali:3963-3980`). Only
-`CommPaymentRequest` implements `IPaymentRequest`; `CommPaymentResponse` extends
-`BaseResponse` and implements nothing. The test is therefore always false and
-`k1()` falls through without executing any DAO. The neighbouring
+`CommPaymentRequest` implements `IPaymentRequest`
+(`…$CommPaymentDao$CommPaymentRequest.smali:1-6`); `CommPaymentResponse` extends
+`BaseResponse` and implements nothing (`…$CommPaymentResponse.smali:1-3`). The
+test is therefore **always false**, `k1()` falls through executing no DAO, and
+the shipped app cannot reach `passPayIssue` at all. The neighbouring
 `isPassPaymentRequest()` (`:4415-4430`) tests the **request** type and is
 correct, so this is a one-word class-name slip rather than a design.
 
-Consequence for an integrator: the form is assembled entirely from real code,
-but **no running client has ever sent it**, so there is not even an app traffic
-capture to compare against. The route is registered and the builder exists; the
-server's opinion of it is unknown.
+That is the load-bearing fact. It is why there is no app traffic to compare
+against, and why the only remaining way to validate the form is to buy a pass.
 
-#### Why `commuter_pass` is its own consent category
+#### The `Otr` siblings are a different product
 
-Not `payment`, and not `reserve`. `pay_with_card` takes a
-`ReservationHoldResponse` — a train hold the caller has just created — so no
-signature an `allow_payment` consent could reach would have bought a season
-pass. Reusing that flag would mean every `MutationConsent` written before 정기권
-existed silently authorised a purchase an order of magnitude larger. This is the
-same argument that gave `discount_card` its own category, applied to a bigger
-number.
+`pass.passOtrReserve` / `pass.passOtrPayIssue` (`PassService.java:39-44`) are the
+**자유이용권** family — 내일로, A-PASS, 강릉패스 — booked from
+`APassBookingActivity`, `NewAPassBookingActivity` and
+`GangneungPassBookingActivity`. `passOtrReserve` takes only
+kind/term/age/open-date and no stations or trains at all, because such a pass is
+not route-bound; `passOtrPayIssue` adds `h_rcvd_prc` and `hidWctNo` to the scalar
+half and its first `@FieldMap` carries a companion list (`h_cmpa_cnt`,
+`h_cmpa_nm_N`, `h_cmpa_btdt_N`, `h_cmpa_sex_dv_cd_N` —
+`APassBookingActivity.java:546-563`). They were never registered here, and are
+not registered now.
 
-The two routes share one category because `passReserve` creates the unpaid
-reservation `passPayIssue` settles, and a caller who may create one must be able
-to finish it — the reasoning that keeps 예약대기's follow-up inside `reserve`.
+#### What bringing the purchase back would cost to prove
 
-The settlement still gets the **card gate**: `commuter_pass` is in
-`KORAIL_CARD_BEARING_MUTATION_CATEGORIES`, so a `dry_run=False` send needs the
-consent to state exactly one of `fake_card_only=True` /
-`real_card_acknowledged=True`, exactly as a train payment does.
+Restoring the code is cheap — it is one revert away in this repository's history
+(`cd32ea4`, removed in the commit that added this section). Proving it is not:
 
-#### What the `Otr` siblings are, and why they are not here
+1. Free: the three reads, and a dry-run of the reserve form against
+   `PassService.java:23-25`.
+2. **A real unpaid reservation.** `passReserve` at `dry_run=False` costs no money
+   directly, but this package has no cancel route for what it creates — release
+   it in the KORAIL app or let it expire. This step is the valuable one: its
+   `main_info` **is** the payment's first `@FieldMap`, so one real capture
+   settles the 54-key list, the empty `hidChtrnStnCd`/`Nm`, and the three absent
+   `…2` keys at once.
+3. **₩150,000–₩250,000, unrecoverable.** The settlement is the only way to learn
+   anything about `passPayIssue`, and it buys one data point: whether a form no
+   app has ever sent is accepted. There is no capture to check it against and no
+   refund path here. Nobody should spend that to confirm a field list.
 
-`pass.passOtrReserve` / `pass.passOtrPayIssue` (`PassService.java:39-44`) are a
-**different product**: the 자유이용권 family — 내일로, A-PASS, 강릉패스 — booked
-from `APassBookingActivity`, `NewAPassBookingActivity` and
-`GangneungPassBookingActivity`. It shows in the shapes. `passOtrReserve` takes
-only kind/term/age/open-date and no stations or trains at all, because such a
-pass is not route-bound; `passOtrPayIssue` adds `h_rcvd_prc` and `hidWctNo` to
-the scalar half and its first `@FieldMap` carries a companion list
-(`h_cmpa_cnt`, `h_cmpa_nm_N`, `h_cmpa_btdt_N`, `h_cmpa_sex_dv_cd_N` —
-`APassBookingActivity.java:546-563`). Registering two chargeable routes no
-builder can fill would put them on the allowlist for nothing, so they are out.
-
-#### What the operator must live-verify
-
-Steps 1–3 are free; step 4 is not.
-
-1. **Read the catalogue.** `get_pass_menu`, then `get_pass_available_dates`,
-   then `get_pass_schedule` for a real commuter pair. Confirm a
-   `PassPeriodOption` carries both `commuter_period_code` and `display_name` —
-   the reserve form needs both.
-2. **Dry-run the reserve.** `reserve_commuter_pass(..., consent=MutationConsent(
-   allow_commuter_pass=True))` sends nothing and returns the preview. Compare it
-   against `PassService.java:23-25`.
-3. **Send the reserve.** `dry_run=False`. **This creates a real unpaid 정기권
-   reservation.** Cost: nothing directly, but there is **no cancel route for it
-   in this package** — `cancel_unpaid_hold` is the ticket cancel and will not
-   take a `CommuterPassReservation`. Release it in the KORAIL app or let it
-   expire. Record the whole `main_info`: that object is the payment's first
-   `@FieldMap`, so a real one settles whether the 54-key list is right.
-4. **The settlement is real money and is not live-enabled here.** A 1개월
-   정기권 is on the order of ₩150,000–₩250,000 depending on the route, and there
-   is no refund path in this package either. Do not send it to prove a field
-   list. If it must be proven, the honest sequence is: dry-run the payment,
-   inspect the preview, and compare it field-for-field against
-   `PassService.java:19-21` + `V4/a.java:21-34` — which is what the offline
-   tests already do.
-
-Unknown until step 3 runs: whether the server tolerates the empty
-`hidChtrnStnCd`/`Nm` on a one-train pass, whether it needs the three absent
-`…2` keys as empty strings instead, and what `main_info` actually contains.
-Unknown until step 4 runs, if it ever does: everything about
-`passPayIssue`'s reply, since the shipped app never issues it.
+Anyone reviving this should also revive its consent posture: a season pass is a
+purchase of a different order of magnitude from a train ticket, so it needs its
+own `MutationConsent` category rather than a reuse of `allow_payment` — and,
+because the settlement carries a PAN in the clear, it must join
+`KORAIL_CARD_BEARING_MUTATION_CATEGORIES` so the fake-card / real-card gate
+applies to it exactly as it does to a train payment.
 
 ### 할인 / 복지 / 쿠폰 surface
 

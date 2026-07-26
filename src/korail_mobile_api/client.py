@@ -20,9 +20,6 @@ from .errors import (
 )
 from .mutation_models import (
     CardPayment,
-    CommuterPassPurchaseRequest,
-    CommuterPassReservation,
-    CommuterPassReservationResponse,
     DiscountCardPurchaseRequest,
     DiscountCardPurchaseResponse,
     DiscountCardTicket,
@@ -33,15 +30,12 @@ from .mutation_models import (
     ReservationPaymentResponse,
 )
 from .mutation_parsers import (
-    parse_commuter_pass_reservation_response,
     parse_discount_card_purchase_response,
     parse_reservation_hold_response,
     parse_reservation_payment_response,
 )
 from .mutation_payloads import (
     build_card_payment_form,
-    build_commuter_pass_payment_form,
-    build_commuter_pass_reservation_form,
     build_discount_card_extension_query,
     build_discount_card_purchase_form,
     build_discount_card_reservation_form,
@@ -2234,132 +2228,3 @@ class KorailClient:
             self.clear_session()
             raise
         return self._hold_from_reservation_response(response)
-
-    def reserve_commuter_pass(
-        self,
-        request: CommuterPassPurchaseRequest,
-        *,
-        consent: MutationConsent,
-    ) -> MutationPreview | CommuterPassReservationResponse:
-        """Reserve a 정기권. Consent-gated, dry-run by default.
-
-        ``POST pass.passReserve`` (``PassService.java:23-25``). This creates an
-        UNPAID purchase: the reply's ``main_info`` carries the price in
-        ``h_rcvd_amt``, and :meth:`pay_for_commuter_pass` is what settles it.
-
-        Gated by ``require_mutation_consent(consent, "commuter_pass")`` and an
-        authenticated session. ``"commuter_pass"`` is its own consent category
-        rather than a reuse of ``"reserve"`` or ``"payment"`` -- see
-        :attr:`MutationConsent.allow_commuter_pass
-        <korail_mobile_api.MutationConsent.allow_commuter_pass>` for why. With
-        the default ``dry_run=True`` this builds and validates the form and
-        returns a redacted :class:`~korail_mobile_api.consent.MutationPreview`,
-        sending nothing.
-
-        The reads that feed it already exist: :meth:`get_pass_menu` for the
-        kind, period (code AND display name) and age codes,
-        :meth:`get_pass_available_dates` for ``use_open_date``, and
-        :meth:`get_pass_schedule` for the trains.
-
-        **VERIFIED: the route, the twenty field names and their order, and the
-        loop that fills them** (``CommutationInquiryActivity.java:188-222``).
-
-        **NEVER TRANSMITTED**, and no live-test path in this repository sends
-        it.
-        """
-        require_mutation_consent(consent, "commuter_pass")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL 정기권 reservation requires an authenticated session"
-            )
-        route = "/classes/com.korail.mobile.pass.passReserve"
-        form = build_commuter_pass_reservation_form(self.config, request)
-        if consent.dry_run:
-            return MutationPreview(
-                category="commuter_pass",
-                method="POST",
-                route=route,
-                payload=form,
-            )
-        try:
-            return parse_commuter_pass_reservation_response(
-                self.http.post_mutation_form(
-                    route,
-                    form,
-                    consent=consent,
-                    category="commuter_pass",
-                ).raw
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
-
-    def pay_for_commuter_pass(
-        self,
-        reservation: CommuterPassReservation,
-        card: CardPayment,
-        *,
-        consent: MutationConsent,
-        station_info: str,
-        user_names: str,
-    ) -> MutationPreview | BaseKorailResponse:
-        """Settle a 정기권 reservation. **THIS CHARGES REAL MONEY.**
-
-        ``POST pass.passPayIssue`` (``PassService.java:19-21``). The amount is
-        the reservation's own ``h_rcvd_amt`` and is not a parameter --
-        ``build_commuter_pass_payment_form`` documents the chain that makes it
-        so. A 정기권 is a one-to-six-month product, so the number is
-        substantially larger than a ticket's.
-
-        Gated by ``require_mutation_consent(consent, "commuter_pass")``, an
-        authenticated session, and -- because the form carries a PAN in the
-        clear -- the same card-kind gate a train payment gets: ``"commuter_pass"``
-        is in
-        :data:`~korail_mobile_api.safety.KORAIL_CARD_BEARING_MUTATION_CATEGORIES`,
-        so a ``dry_run=False`` send needs the consent to state exactly one of
-        ``fake_card_only=True`` or ``real_card_acknowledged=True``.
-
-        ``station_info`` and ``user_names`` are the two client-side display
-        strings the app writes into ``main_info`` before reflecting it into the
-        payment map (``CommutationInquiryActivity.java:238-240``): the route
-        label and the holder's name. They are required rather than defaulted
-        because one of them is a person's name and this method transmits it.
-
-        **NOT LIVE-ENABLED AND NEVER TRANSMITTED.** Beyond that, the shipped
-        app cannot reach this route either: ``PaymentActivity``'s
-        ``isCommPaymentRequest()`` tests the RESPONSE class instead of the
-        REQUEST class and is therefore always false (``PaymentActivity.java:502-503``,
-        bytecode at ``smali/…/PaymentActivity.smali:3963-3980``). So there is
-        not even an app capture to compare a live attempt against -- see
-        :func:`~korail_mobile_api.mutation_payloads.build_commuter_pass_payment_form`.
-        """
-        require_mutation_consent(consent, "commuter_pass")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL 정기권 payment requires an authenticated session"
-            )
-        route = "/classes/com.korail.mobile.pass.passPayIssue"
-        form = build_commuter_pass_payment_form(
-            self.config,
-            reservation,
-            card,
-            station_info=station_info,
-            user_names=user_names,
-        )
-        if consent.dry_run:
-            return MutationPreview(
-                category="commuter_pass",
-                method="POST",
-                route=route,
-                payload=form,
-            )
-        try:
-            return self.http.post_mutation_form(
-                route,
-                form,
-                consent=consent,
-                category="commuter_pass",
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
