@@ -1032,13 +1032,36 @@ def test_gated_operations_map_to_the_action_ids_the_apk_pairs_them_with():
 # ---------------------------------------------------------------------------
 # The documentation contract.
 #
-# The single most important thing these docs have to keep saying is that this
-# subsystem is BUILT and UNPROVEN. A queue client that is quietly described as
-# working, when the server has never queued us and the response shape has never
-# been seen, would be the most misleading sentence in the repository.
+# THIS PIN MOVED ON 2026-07-26 AND NARROWED. It used to require every document
+# to call the whole subsystem BUILT and UNPROVEN, which was right while nothing
+# had ever been on the wire. A live probe has since confirmed the wire format
+# and the entry sequence, so that blanket claim would now understate what is
+# known — while the 201 queued path genuinely is still fixture-only, because the
+# server was not queueing. The docs must therefore say BOTH things, and the two
+# assertions below hold them apart: the phrase "NOT live-exercised" survives but
+# must now be attached to the queued path, and the confirmation date must be
+# recorded so the docs cannot drift back to either extreme.
 # ---------------------------------------------------------------------------
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def test_docs_scope_the_unproven_claim_to_the_queued_path():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
+        encoding="utf-8"
+    )
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    for document in (readme, progress, changelog):
+        # The live confirmation is dated, and the queued path is still named as
+        # the part that is not covered by it.
+        assert "2026-07-26" in document
+        assert "201" in document
+        head, _, tail = document.partition("NOT live-exercised")
+        assert tail, "the unproven claim must still be made somewhere"
+        # ...and it must be about the queue, not about the subsystem.
+        assert "queued path" in head[-200:] or "queued path" in tail[:200]
 
 
 def test_docs_say_netfunnel_is_implemented_but_not_live_exercised():
@@ -1059,7 +1082,7 @@ def test_docs_say_netfunnel_is_implemented_but_not_live_exercised():
         assert "act_8_2" in document
 
 
-def test_docs_record_the_unverified_response_shape():
+def test_docs_record_the_now_confirmed_response_shape():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
         encoding="utf-8"
@@ -1067,6 +1090,21 @@ def test_docs_record_the_unverified_response_shape():
     for document in (readme, progress):
         assert "<code>:<params>" in document
         assert "NetFunnel.gRtype" in document
+
+
+def test_docs_record_the_entry_sequence_and_the_ticket_trap():
+    # The correction a reader most needs: 5101 alone is not a session, so any
+    # document that still describes acquiring and releasing as a two-step
+    # handshake is describing a client that leaks every slot it takes.
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
+        encoding="utf-8"
+    )
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    for document in (readme, progress, changelog):
+        assert "Wrong Server ID" in document
+        assert "supersede" in document
+        assert "ticket" in document
 
 
 def test_release_gap_plan_no_longer_claims_korail_has_no_netfunnel():

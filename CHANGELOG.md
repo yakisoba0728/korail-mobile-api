@@ -4,12 +4,40 @@
 
 - Added: a NetFunnel virtual-waiting-room client, `KorailNetFunnelClient`, so a
   gated operation can wait its turn instead of failing.
-  **Implemented but NOT live-exercised, and off by default.**
-  The queue has never engaged for this
-  repository — every live call it has made succeeded without a token, so the
-  server does not currently meter us — which means the 201 polling path, the
-  release path and the response shape are covered by offline fixtures only,
-  exactly as the sibling SRT client's polling path is.
+  **Off by default, and partly live-confirmed on 2026-07-26.** A probe on that
+  date ran the protocol against `nf.letskorail.com` and settled the two
+  standing inferences: the wire format is the native SDK's `<code>:<params>`,
+  and the entry sequence is `5101` → `5002` → gated call → `5004`. The
+  slot-release path was exercised end to end.
+  **The 201 queued path is still NOT live-exercised**: the server was not
+  queueing (`5101` answered `nwait=0`), so the polling loop, the ttl sleep and
+  the two bounds remain covered by offline fixtures only, exactly as the
+  sibling SRT client's polling path is.
+  - **The `5101` key is a ticket, not a session — the defect the probe
+    exposed.** `acquire` originally returned the 5101 reply and `release` sent
+    that key to `setComplete`, which the server refuses with
+    `503:msg="Wrong Server ID"` every time, with or without `sid`/`aid`. Only a
+    key `chkEnter` issued is completable, and it is a different, shorter one
+    (252 characters became 104). So `acquire` now always performs the 5002,
+    even when 5101 reported `nwait=0`, and **every step's key supersedes the
+    one before it** — including each 201 poll, and including a 201 that echoes
+    no key at all, where the last known key stays in force. A successful
+    release answers `200:` with an *empty* `key=`, which parses as a release
+    rather than as a truncated body. `503` is refused rather than accepted
+    beside the `502` we do accept, and the keyless short-circuit in `release`
+    is narrowed to a bypass (`300`), so no other token can skip the request
+    silently.
+  - **Read literally, the APK disagrees, and the live server wins.**
+    `T6/g.java`'s poll loop leaves the moment the status is not Continue —
+    `T6/g$a.smali:243-247` → `:282` → `:892` shows the fall-through is a
+    `return` — so after a 200 from 5101 the app sends no 5002 and completes
+    with the ticket. The likely reconciliation is the redirection this client
+    declines: `T6/d.makeURL` (`T6/d.java:17-19`) sends follow-ups to the
+    `ip`/`port` a reply named, and the 5101 reply names one, so "Wrong Server
+    ID" is literally true for the app. Staying pinned to the front door is
+    exactly why we need a key the front door owns. The APK does corroborate the
+    supersession: one response object, overwritten at `:61` and `:107`, with
+    `Complete()` sending whatever key arrived last (`:79`).
   - **KORAIL does not speak the JavaScript dialect, and this is the whole
     substance of the change.** `nf.letskorail.com` serves both apps, so the
     live-verified `srt-mobile-api` implementation was expected to be a template.
@@ -23,13 +51,14 @@
     opposite of the JS dialect; `ttl` is never sent back at all, being read only
     to decide how long to sleep (`T6/g.java:462`) and clamped to 30 seconds
     (`T6/h.java:40`) rather than the JS bundle's 5.
-  - **The response shape is the one assumption no live run has checked.**
-    `T6/i.java:36-43` parses everything before the first `:` as the status code,
-    so the reply must be `<code>:<params>` and not the JS dialect's
-    `<rtype>:<code>:<params>` — feed the app the latter and it reads the code as
-    5002 and finds no key. `parse_netfunnel_body` therefore rejects a
-    `NetFunnel.gRtype=…` body and names that possibility in its error message
-    rather than guessing. Verifying it is the first thing a live run should do.
+  - **The response shape was the one assumption no live run had checked, and it
+    holds.** `T6/i.java:36-43` parses everything before the first `:` as the
+    status code, so the reply must be `<code>:<params>` and not the JS
+    dialect's `<rtype>:<code>:<params>` — feed the app the latter and it reads
+    the code as 5002 and finds no key. Every 2026-07-26 reply arrived in exactly
+    the native form. `parse_netfunnel_body` still rejects a `NetFunnel.gRtype=…`
+    body and names that possibility in its error message, now as a diagnosis
+    for a server that changed rather than as a hedge against our own guess.
   - **The key never rides on a KORAIL request.** No Retrofit interface in the
     app declares a `netfunnelKey`-shaped field on any route; the queue gates the
     call rather than parameterising it, which is why this is a separate client
@@ -50,7 +79,10 @@
     raised. A failed release **raises** on the success path instead of being
     swallowed: the sibling repo bounded its key at 128 characters while real
     keys are 256, so every release was refused before it was sent and leaked
-    every slot silently until a live run exposed it.
+    every slot silently until a live run exposed it. The 2026-07-26 probe added
+    two more real lengths — 252 from `5101` and 104 from `5002` — so the guard
+    stays at 512 characters and is deliberately not tightened to any single
+    observed length.
   - **Three exact query contracts are registered, not an allowlist loosened**,
     and the queue host has its own origin assertion.
     `KORAIL_READ_ONLY_ROUTES` is untouched at 54, so `post_form`/`get_json` can

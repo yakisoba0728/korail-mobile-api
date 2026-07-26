@@ -43,7 +43,7 @@ shapes and the same gated send path, but no run recorded here has settled or
 returned money. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `1996 passed, 1 deselected`; the one
+current reviewed offline gate is `1998 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -242,13 +242,18 @@ what was seen. It surfaces as a plain `KorailAppError` with its message intact.
 
 ### NetFunnel virtual waiting room
 
-**Implemented, off by default, and NOT live-exercised.** The queue has never
-engaged for this repository: every live call it has made to
-`smart.letskorail.com` — the whole read surface, plus reserve, cancel, pay and
-refund — succeeded without a queue token, so the server does not currently meter
-us. The 201 polling path, the slot-release path and the response shape are
-therefore covered by offline fixtures only, exactly as the sibling SRT client's
-polling path is. Treat this subsystem as built-and-unproven, not as verified.
+**Implemented, off by default, and partly live-confirmed as of 2026-07-26.** A
+probe on that date ran the queue protocol against `nf.letskorail.com` and
+settled the two things that had been inferences: the **wire format** is the
+native SDK's `<code>:<params>`, and the **entry sequence** is `5101` → `5002` →
+the gated call → `5004`. The release path was exercised end to end and works.
+
+**The `201` queued path is still NOT live-exercised**, because the server was
+not queueing: `5101` answered `nwait=0` and admitted us immediately, so nobody
+has ever seen this client wait in an actual line. That path — the polling loop,
+the ttl sleep and the bounds — remains covered by offline fixtures only, exactly
+as the sibling SRT client's polling path is. Treat the handshake as verified and
+the wait as built-and-unproven.
 
 It exists for the load at which that stops being true. Enforcement is a
 server-side policy and the app ships the client for it, including a **dedicated
@@ -300,17 +305,42 @@ none of them. The three requests this library issues are exactly:
 
 | opcode | request | query, in order |
 | --- | --- | --- |
-| `5101` | `getTidChkEnter` — join the line | `opcode`, `sid`, `aid` |
-| `5002` | `chkEnter` — am I admitted yet? | `opcode`, `key` |
+| `5101` | `getTidChkEnter` — take a ticket | `opcode`, `sid`, `aid` |
+| `5002` | `chkEnter` — enter with it, or ask again | `opcode`, `key` |
 | `5004` | `setComplete` — release my slot | `opcode`, `key` |
 
 Note that `sid`/`aid` ride on `5101` **only**, which is the opposite of the
 JavaScript dialect. `ttl` is never sent back: the native SDK reads it solely to
 decide how long to sleep and clamps it to 30 seconds, not the JS bundle's 5. The
-reply is `<code>:<params>`, not `<rtype>:<code>:<params>`. That last point is
-the one assumption no live run has checked, and it is the **first thing to
-verify**: `parse_netfunnel_body` rejects a `NetFunnel.gRtype=…` body and says so
-by name rather than guessing.
+reply is `<code>:<params>`, not `<rtype>:<code>:<params>` — confirmed live on
+2026-07-26, and `parse_netfunnel_body` still names a `NetFunnel.gRtype=…` body
+in its error message, now as a diagnosis for a server that changed rather than
+as an admission of guessing.
+
+**The `5101` key is a ticket, not a session, and this is the trap.** Sending it
+to `setComplete` fails with `503:msg="Wrong Server ID"` — a misleading message
+for "this key was never exchanged for a session". Only the key `chkEnter`
+issues can be released, and it is a different, shorter key:
+
+```
+5101 -> 200:key=<252 chars>&nwait=0&nnext=0&tps=0.000000&ttl=0&ip=…
+5004 with that key    -> 503:msg="Wrong Server ID"     (sid/aid do not help)
+5002 with that key    -> 200:key=<a different, shorter key>&…
+5004 with the new key -> 200:key=&nwait=0&…&chk_enter_cnt=0&…
+```
+
+So `acquire()` always performs the `5002`, even when `5101` reported `nwait=0`,
+and **every step's key supersedes the one before it** — including each `201`
+poll. Release the token `acquire()` returned, never an earlier one. A successful
+release answers `200:` with an *empty* `key=`, which is a release and not a
+truncated body.
+
+Read literally the APK disagrees: its poll loop leaves on any non-`201` status,
+so on a `200` from `5101` it sends no `5002` and completes with the ticket. The
+live server wins. The likely reconciliation is the redirection this client
+declines — the app sends follow-ups to the `ip`/`port` a reply names, so "wrong
+server" is literally true for it, while we stay pinned to the front door and
+therefore need a key the front door owns.
 
 Each opcode is registered as an exact ordered query contract rather than the
 allowlist being loosened, and `aid` is constrained to the eight action ids
@@ -318,7 +348,9 @@ allowlist being loosened, and `aid` is constrained to the eight action ids
 (no key issued), `201`/`202` wait, `301`/`302` `KorailQueueRejectedError`,
 everything else `KorailNetFunnelError`. `502` is accepted for `setComplete`
 only, and that acceptance is an inference this repository states rather than
-hides — the app's `Complete()` never reads its reply at all.
+hides — the app's `Complete()` never reads its reply at all. `503` is **not**
+accepted alongside it: folding "Wrong Server ID" into "released" is precisely
+how a slot leaks silently, so it raises with a message naming the real cause.
 
 The wait is bounded twice, by poll count (20) and by wall clock (60s), whichever
 comes first. The app polls indefinitely behind a dialog a human can close; this

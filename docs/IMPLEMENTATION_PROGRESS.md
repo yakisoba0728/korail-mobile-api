@@ -301,7 +301,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `1996 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `1998 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -409,14 +409,17 @@ cookie, session token, or generated DynaPath token is stored in the repository.
 
 ## NetFunnel virtual waiting room
 
-Status: **implemented, off by default, and NOT live-exercised.** This subsystem
-is built and offline-tested; it has never been run against
-`nf.letskorail.com`. The queue has never engaged for this repository — every
-live call it has made to `smart.letskorail.com`, reads and mutations alike,
-succeeded without a token — so the server does not currently meter us, and the
-`201` polling path, the slot-release path and the response shape are covered by
-fixtures only. That is the same standing as the sibling SRT client's polling
-path, and it should be read as built-and-unproven rather than verified.
+Status: **implemented, off by default, and partly live-confirmed (2026-07-26).**
+A probe on that date ran the protocol against `nf.letskorail.com` and settled
+both of the inferences recorded below: the response shape is the native SDK's
+`<code>:<params>`, and the entry sequence is `5101` → `5002` → gated call →
+`5004`. The slot-release path was exercised end to end.
+
+**The `201` queued path is still NOT live-exercised.** The server was not
+queueing — `5101` answered `nwait=0` and admitted us at once — so the polling
+loop, the ttl sleep and the two bounds are covered by fixtures only. That is the
+same standing as the sibling SRT client's polling path. The handshake should be
+read as verified; the wait, as built-and-unproven.
 
 What the APK establishes, with the file and line for each constant:
 
@@ -432,6 +435,32 @@ What the APK establishes, with the file and line for each constant:
 | ttl clamp 1..30 | `T6/i.java:175-181` with `max_ttl` 30 from `T6/h.java:40`, asked for at `T6/g.java:462` |
 | Release runs on both paths | `NetfunnelDao.java:41` called from `BaseDaoHelper.java:105-107` (`onPostExecute`) |
 
+One thing the APK gets **wrong about the live server**, found by the 2026-07-26
+probe and now the shape of `acquire()`:
+
+| Request | Live answer |
+| --- | --- |
+| `5101` `sid=service_1&aid=act_8` | `200:key=<252 chars>&nwait=0&nnext=0&tps=0.000000&ttl=0&ip=…` |
+| `5004` with that key | `503:msg="Wrong Server ID"` — also with `sid`/`aid` re-attached |
+| `5002` with that key | `200:key=<a different, shorter key>&…` |
+| `5004` with the `5002` key | `200:key=&nwait=0&…&chk_enter_cnt=0&…` |
+
+The `5101` key is a **ticket to enter**, not a completable session; only what
+`chkEnter` issues can be released, and each step's key supersedes the previous
+one. Read literally, `T6/g.java`'s poll loop leaves on any non-`201` status
+(the smali fall-through at `T6/g$a.smali:243-247` → `:282` → `:892` is a
+`return`), so the app sends no `5002` after a `200` from `5101` and completes
+with the ticket. The live server overrides that reading. The likely
+reconciliation is `T6/d.makeURL` (`T6/d.java:17-19`): the app sends follow-ups
+to the `ip`/`port` a reply named, so "Wrong Server ID" is literally true for it,
+whereas we stay pinned to the front door and must hold a key the front door
+owns. `T6/d.java` does corroborate the supersession — one response object
+overwritten at `:61` and `:107`, with `Complete()` sending whatever key arrived
+last (`:79`).
+
+`503` is refused rather than accepted next to the `502` we do accept: treating
+"Wrong Server ID" as a release is how the slot leaks unnoticed.
+
 Two premises did not survive the APK and were stopped rather than forced.
 
 1. **The wire dialect.** `nf.letskorail.com` serves both KORAIL and SRT, but the
@@ -446,10 +475,11 @@ Two premises did not survive the APK and were stopped rather than forced.
 2. **The response shape.** `T6/i.java:36-43` reads everything before the first
    `:` as the status code, so the reply must be `<code>:<params>`. The JS
    dialect's `<rtype>:<code>:<params>` would parse as code `5002` and yield no
-   key, i.e. the app itself could not read it. This is the one inference in the
-   subsystem with no live confirmation, and it is the **first thing an operator
-   should check**: `parse_netfunnel_body` rejects a `NetFunnel.gRtype=…` body
-   and names that possibility in its error rather than guessing.
+   key, i.e. the app itself could not read it. This was the one inference in the
+   subsystem with no live confirmation; the 2026-07-26 probe **confirmed it** —
+   every reply above arrived in exactly that form. `parse_netfunnel_body` still
+   rejects a `NetFunnel.gRtype=…` body and names that possibility in its error,
+   now as a diagnosis for a server that changed rather than as a hedge.
 
 The third premise held and is worth restating because it determines the design:
 **no Retrofit interface in the app carries a NetFunnel key parameter.** The
@@ -529,7 +559,7 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-The current reviewed offline gate reports `1996 passed, 1 deselected`; the
+The current reviewed offline gate reports `1998 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service
