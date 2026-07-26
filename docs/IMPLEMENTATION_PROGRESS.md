@@ -2,6 +2,121 @@
 
 Last updated: 2026-07-15 KST
 
+## 할인 / 복지 / 쿠폰 survey and what the operator must settle (2026-07-26)
+
+The 할인 surface was surveyed exhaustively against every `*Service.java` in
+`analysis/jadx/sources/com/korail/talk/network/dao/**` rather than against a
+grep of likely names. What follows is the result, then what was built, then
+what was deliberately left out, then the live checks.
+
+### What already existed
+
+`get_delay_discount_tickets` (`passCard.DelayDiscountView`),
+`get_discount_coupons` (`passCard.CouponView`),
+`get_multi_child_discount_targets` (`cust.mchdDcntTgt.do`), the 정기권 reads
+(`research.cmtrInfo.do`, `push.cmtrKnd.do`) and the five pass reads. And on the
+mutation side, `KorailPassengerCounts` already carried 경로 (`131`), 1~3급 장애
+(`111`), 4~6급 장애 (`112`) and 안내견 (`173`) as reservation rows.
+
+### What was missing, and what each missing route does
+
+| route | method | what it does | evidence |
+|--|--|--|--|
+| `ticket.dcntCrdUseQry.do` | GET | trips a 할인카드 has been spent on | `ResearchService.java:51` |
+| `research.dcntCrdScheduleView.do` | GET | trains a 할인카드 may be spent on, per registered 구간 | `ResearchService.java:54` |
+| `research.dcntCrdInfo.do` | POST | **buys** a 할인카드; answers `lumpStlTgtNo` + `rcvdAmt` | `ResearchService.java:68` |
+| `reservation.dcntCrdExtn.do` | GET | 기간연장 against the card ticket's credential | `ResearchService.java:65` |
+| `xPoint.MyXPointView` | POST | point balance + coupon counts + **`h_hdcp_flg`** | `XPointService.java:18` |
+| `mlg.amtSpec.do` | POST | 마일리지 적립/사용 ledger page | `XPointService.java:26` |
+| `mlg.lpotAthn.do` | POST | L.POINT auth by password; returns `pwdErrTno` | `XPointService.java:22` |
+| `xPoint.XPointView` | POST | external point auth by number + password | `XPointService.java:30` |
+| `xPoint.OkCashbagCertView` | POST | OK캐시백 registration | `XPointService.java:14` |
+| `mileage.acpnMlgSave.do` / `acpnMlgNoti.do` / `acpnMlgSpec.do` | POST | companion-mileage accrual, notification, per-PNR spec | `MileageService.java:11,15,19` |
+| `certification.PriceReCalculation` | POST | re-prices an existing PNR against a passenger/discount list | `CertificationService.java:35` |
+| `certification.disabled.do` | GET | 장애인 certification by `regNum` + `hdcpGrade` | `CertificationService.java:32` |
+| `certification.MeritCert` | POST | 국가유공자 certification | `CertificationService.java:28` |
+| `certification.assemblyCert` | GET | 국회의원 certification | `CertificationService.java:25` |
+| `pbep.toknCre.do` / `pbep.sttChck.do` | GET | 공공마이데이터 two-step certification | `CertificationService.java:39,42` |
+| `passCard.DiscountCheck` / `DelayDiscountCheck` | POST | registers a coupon / a 지연할인권 onto the account | `PassCardService.java:16,12` |
+| `pass.passReserve` / `passPayIssue` / `passOtrReserve` / `passOtrPayIssue` | POST | 정기권·패스 구매 and 발권 | `PassService.java:19,23,39,43` |
+
+### What was built
+
+The 할인카드 family in full (two reads, two consent-gated writes, the
+reservation variant), the two password-free loyalty reads, and
+`RefundTicketDetailResponse.discount_card` — the object the whole family is
+keyed by, which `refunds.SelTicketInfo` was already returning and the package
+was discarding.
+
+### What was deliberately left out, and why
+
+- **Password-bearing loyalty routes** (`mlg.lpotAthn.do`, `xPoint.XPointView`).
+  They authenticate with a user-supplied point password and answer with
+  `pwdErrTno`, a failure counter. A wrong guess is a state change at the
+  loyalty provider and repeated guesses lock the account. Not reads.
+- **Accrual and registration writes** (`OkCashbagCertView`, `acpnMlgSave.do`,
+  `acpnMlgNoti.do`, `passCard.DiscountCheck`, `passCard.DelayDiscountCheck`).
+  They move money-equivalents or bind a credential to the account; none of them
+  is needed to exercise a discount and none can be proven offline.
+- **Welfare certification routes** (`certification.disabled.do`,
+  `MeritCert`, `assemblyCert`, `pbep.*`). Every one of them transmits a
+  national-ID fragment or a government certificate number
+  (`DisabledCertificationDao.java:10-41` `regNum`;
+  `MeritCertDao.java:10-56` `txtJuminNo7`), and each REGISTERS an entitlement
+  against the account rather than reading one. Building an unverifiable
+  identity-document submitter was judged worse than not having it.
+- **`certification.PriceReCalculation`.** It re-prices a live PNR. It is the
+  most interesting remaining route in this area — see the live list below —
+  but it mutates a held reservation's price, its `@Field` set carries six
+  parallel `List` parameters whose pairing is not decidable from the DAO alone,
+  and no offline test can show it is right.
+- **정기권/패스 구매·발권** (`pass.passReserve` and the three siblings). A
+  separate product family with its own payment flow; out of scope for a
+  discount tranche.
+
+### What only a live call can settle
+
+1. **`h_hdcp_flg` vs `ERR299943`.** Call `get_korail_point_summary()` on the
+   account that was refused 1~3급 장애 + 안내견 on 2026-07-26. If
+   `disability_flag` is not `"Y"`, the entitlement hypothesis in
+   `docs/MUTATION_HANDOFF.md:172-179` is confirmed and no form change is
+   warranted. This is a read; it costs nothing.
+2. **청소년 (`P11`) alone.** The same refusal hit 청소년 booked alone. Nothing
+   in the point summary speaks to it, so the operator should check whether the
+   account's registered birth date makes it 청소년-eligible.
+3. **The two N카드 reads**, with a card number from
+   `get_refund_ticket_detail(...).discount_card`. Both are reads; both need an
+   account that owns an N카드, which this project's account does not.
+4. **`register_discount_card`'s two `@FieldMap`s.** No v6.5.0 call site
+   populates `jrnyInfo`/`apdUsrInfo` — only the setters that would. Whether a
+   1-section card must still send a section, and whether `apdUsrCnt` must be
+   present as `"0"` rather than omitted for a 1인용 card, is unknown. Send a
+   dry run first and inspect the preview.
+5. **`extend_discount_card`'s reply and cost.** The DAO's response type is a
+   bare `BaseResponse`, so a successful extension's shape — and whether it
+   charges — is unknown.
+6. **`reserve_with_discount_card`.** Never transmitted. Be ready to release the
+   hold with `cancel_unpaid_hold`.
+
+### On server-rendered pages
+
+The sibling SRT repository learned on 2026-07-26 that a shape which "needs a
+traffic capture" may simply be in a page our own authenticated session can
+fetch (`docs/IMPLEMENTATION_PROGRESS.md` in `srt-mobile-api`, "Seat designation
+(1103) needs no MITM"). **That lesson does not apply anywhere in this surface,
+and the check was made rather than assumed.** Every route above is a Retrofit
+declaration with a declared DAO; none of the 할인 screens is a WebView. The
+app's WebView URLs (`K4/g.java:88-115`) are sign-up, notices, guides, refund-fee
+and luggage documents — no discount API hides behind one. The single thing not
+derivable from the APK is the 할인카드 product catalogue: every `dcntCrdKndMgNo`
+is a client-side literal in a booking Activity
+(`NCard1SectionBookingActivity.java:28`, `NCard2SectionBookingActivity.java:34`,
+`NCard3SectionBookingActivity.java:28`,
+`q5/ViewOnClickListenerC6267a.java:73,76`) and `pass.passMenu.do` returns only a
+`detailType` string that selects a screen. So the open items above are questions
+about server BEHAVIOUR, which neither a capture nor a page fetch answers — only
+a live call does.
+
 ## Current State
 
 - Internal release preparation is complete at current `HEAD`: typed-package

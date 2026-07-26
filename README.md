@@ -863,6 +863,63 @@ Nothing below has been run.
 > transfer hold unless you are prepared to cancel it in the KORAIL app or on the
 > website**, or it will sit unpaid until KORAIL expires it.
 
+### 할인 / 복지 / 쿠폰 surface
+
+**할인카드(N카드)** is the whole 할인카드 feature, and it was entirely absent
+before this tranche. Four routes, of which two are reads:
+
+- `get_discount_card_usage_history(card_no)` — `GET ticket.dcntCrdUseQry.do`.
+  The trips a card has been spent on.
+- `get_discount_card_schedule(request)` — `GET research.dcntCrdScheduleView.do`.
+  The trains a card may still be spent on. This is NOT a train search with a
+  discount filter: an N카드 is sold against one to three fixed 구간, and the
+  route is keyed by the card product and by the section's station NAMES.
+- `register_discount_card(request, consent=...)` —
+  `POST research.dcntCrdInfo.do`. A **purchase**, despite the name: it answers
+  with a `lumpStlTgtNo` that a payment then settles.
+- `extend_discount_card(ticket, consent=...)` —
+  `GET reservation.dcntCrdExtn.do`. 기간연장. A mutation the app performs with a
+  GET, sent through `KorailHttpClient.get_mutation_query`.
+
+The two writes sit in their own consent category, `"discount_card"`
+(`MutationConsent.allow_discount_card`, default `False`), which no live path in
+this repository touches.
+
+Everything starts from `RefundTicketDetailResponse.discount_card`. When the
+"ticket" being read is itself a card, `refunds.SelTicketInfo` returns a
+`dcnt_crd_info` object carrying the card number, the 기간연장 eligibility flag
+and the registered 구간 rows — the card number for the usage read, the station
+names for the schedule read.
+
+**A reservation can carry a discount card, and it uses the ordinary reserve
+route.** `reserve_with_discount_card(train, card_no=..., consent=...)` POSTs to
+`certification.TicketReservation` exactly as `reserve` does. Two fields differ
+from the live-verified one-adult 일반실 hold: the eight passenger rows collapse
+to a single row spelled `txtDiscKndCd1="153"` + `txtCardNo_1=<card>`, and
+`txtMenuId` becomes `"A2"`. Everything else is byte-identical.
+
+**Loyalty and welfare entitlement.**
+
+- `get_korail_point_summary()` — `POST xPoint.MyXPointView`. The my-page
+  summary: point balance, 할인쿠폰 and 지연할인권 counts, and — the reason it is
+  here — `h_hdcp_flg`, the flag the app uses to decide whether the account has
+  a 장애인 registration at all, together with the 장애인증 and 보조견 names it
+  renders beside it.
+- `get_mileage_history(request)` — `POST mlg.amtSpec.do`. One page of the
+  적립/사용 ledger.
+
+`EXCLUDED_API_DOMAINS` narrowed from `"points-mileage"` to
+`"points-mileage-write"` to admit those two. The loyalty routes that take a
+user-supplied point PASSWORD (`mlg.lpotAthn.do`, `xPoint.XPointView`) stay out:
+they answer with `pwdErrTno`, a failure counter, so a wrong guess is a state
+change at the loyalty provider whatever the screen calls it.
+
+**Nothing in this surface has been sent to the live server**, and no account
+this project can reach owns an N카드. Every request and response shape above
+comes from the app's Retrofit declarations and DAOs. What remains open is
+server *behaviour*, not shape — see `docs/IMPLEMENTATION_PROGRESS.md` for the
+list an operator has to settle.
+
 ### Fixed and account-shaped reads
 
 Four static-evidenced, authenticated reads are available as one-request,
