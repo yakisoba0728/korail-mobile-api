@@ -22,8 +22,10 @@ from .constants import (
 )
 from .errors import KorailProtocolError
 from .models import TrainSummary
-from .read_models import TrainScheduleItem
+from .read_models import PassScheduleTrain, TrainScheduleItem
 from .mutation_models import (
+    CommuterPassPurchaseRequest,
+    CommuterPassReservation,
     DiscountCardAdditionalUser,
     DiscountCardPurchaseRequest,
     DiscountCardSectionRequest,
@@ -1696,3 +1698,338 @@ def build_discount_card_reservation_form(
     # where build_reservation_form put it.
     rebuilt["txtMenuId"] = KORAIL_DISCOUNT_CARD_MENU_ID
     return rebuilt
+
+
+def _required_pass_text(value: object, *, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise KorailProtocolError(
+            f"KORAIL 정기권 request requires a non-empty {field}"
+        )
+    return value
+
+
+def build_commuter_pass_reservation_form(
+    config: KorailConfig,
+    request: CommuterPassPurchaseRequest,
+) -> dict[str, str]:
+    """``pass.passReserve`` — reserve a 정기권. Creates an UNPAID purchase.
+
+    Twenty ``@Field``s in the order ``PassService.java:23-25`` declares them.
+    The app builds them at ``CommutationInquiryActivity.java:188-222`` (``w0``),
+    and the shape of that builder is a loop over the chosen schedule's
+    ``train_list`` whose two branches are keyed on the loop index:
+
+    * index 0 fills the ORIGIN (``hidAppDptStnCd``/``Nm``) and the FIRST train
+      (``hidTrnNo1``/``hidTrnGpCd1``/``hidDtour1``);
+    * any later index fills the SECOND train (``hidTrnNo2``/``hidTrnGpCd2``/
+      ``hidDtour2``);
+    * every index overwrites the DESTINATION (``hidAppArvStnCd``/``Nm``) with
+      its own arrival, so the last leg's arrival wins;
+    * every index overwrites the 환승역 (``hidChtrnStnCd``/``Nm``) with ``""``
+      at index 0 and with its own DEPARTURE otherwise -- so a one-train pass
+      sends two empty strings and a two-train pass sends the station where the
+      change happens.
+
+    A one-train pass therefore never sets ``hidTrnNo2``/``hidTrnGpCd2``/
+    ``hidDtour2`` at all, and Retrofit omits a null ``@Field``, so those three
+    keys are absent rather than empty. The two ``hidChtrnStn*`` keys ARE sent,
+    as empty strings, because the app assigns them on every iteration.
+
+    ``request.trains`` are :class:`~korail_mobile_api.PassScheduleTrain` rows
+    from :meth:`~korail_mobile_api.KorailClient.get_pass_schedule` -- one
+    schedule option, not the whole answer.
+
+    NEVER TRANSMITTED, and this is a purchase: it creates a 정기권 reservation
+    the caller then owes money for.
+    """
+    if type(request) is not CommuterPassPurchaseRequest:
+        raise KorailProtocolError(
+            "KORAIL 정기권 reservation requires an exact "
+            "CommuterPassPurchaseRequest"
+        )
+    trains = tuple(request.trains)
+    for train in trains:
+        if type(train) is not PassScheduleTrain:
+            raise KorailProtocolError(
+                "KORAIL 정기권 reservation takes PassScheduleTrain rows from "
+                "one get_pass_schedule option"
+            )
+    if not 1 <= len(trains) <= KORAIL_MAX_JOURNEY_LEGS:
+        raise KorailProtocolError(
+            "KORAIL 정기권 reservation covers 1 or "
+            f"{KORAIL_MAX_JOURNEY_LEGS} trains, got {len(trains)}: the form "
+            "has a hidTrnNo1 and a hidTrnNo2 and nothing further "
+            "(PassService.java:23-25)"
+        )
+    form = _common_fields(config)
+    form.update(
+        {
+            "hidCmtrKndCd": _required_pass_text(
+                request.pass_kind_code,
+                field="pass_kind_code",
+            ),
+            "hidCmtrUtlTrmCd": _required_pass_text(
+                request.pass_period_code,
+                field="pass_period_code",
+            ),
+            "hidCmtrUtlTrmNm": _required_pass_text(
+                request.pass_period_name,
+                field="pass_period_name",
+            ),
+            "hidCmtrUtlAgeCd": _required_pass_text(
+                request.pass_age_code,
+                field="pass_age_code",
+            ),
+            "hidUseOpenDt": _required_pattern(
+                request.use_open_date,
+                field="use_open_date",
+                pattern=_DATE_RE,
+            ),
+        }
+    )
+    origin = trains[0]
+    last = trains[-1]
+    form["hidAppDptStnCd"] = _required_pass_text(
+        origin.departure_station_code,
+        field="departure_station_code",
+    )
+    form["hidAppDptStnNm"] = _required_pass_text(
+        origin.departure_station_name,
+        field="departure_station_name",
+    )
+    form["hidAppArvStnCd"] = _required_pass_text(
+        last.arrival_station_code,
+        field="arrival_station_code",
+    )
+    form["hidAppArvStnNm"] = _required_pass_text(
+        last.arrival_station_name,
+        field="arrival_station_name",
+    )
+    # "" for a one-train pass -- the app assigns the 환승역 on EVERY iteration
+    # and the index-0 branch assigns the empty string
+    # (CommutationInquiryActivity.java:212-216).
+    form["hidChtrnStnCd"] = (
+        ""
+        if len(trains) == 1
+        else _required_pass_text(
+            last.departure_station_code,
+            field="transfer station departure_station_code",
+        )
+    )
+    form["hidChtrnStnNm"] = (
+        ""
+        if len(trains) == 1
+        else _required_pass_text(
+            last.departure_station_name,
+            field="transfer station departure_station_name",
+        )
+    )
+    for index, train in enumerate(trains, start=1):
+        form[f"hidTrnNo{index}"] = _required_pass_text(
+            train.train_no,
+            field="train_no",
+        )
+        form[f"hidTrnGpCd{index}"] = _required_pass_text(
+            train.train_group_code,
+            field="train_group_code",
+        )
+        # h_dtour, the 우회 (detour) marker. The app forwards it verbatim and
+        # never defaults it, so an absent one is sent as the empty string
+        # rather than invented.
+        detour = train.detour_code
+        form[f"hidDtour{index}"] = detour if isinstance(detour, str) else ""
+    return form
+
+
+# What ``S4/A.convertObjectToMap`` produces from a ``CommReservationResponse
+# .MainInfo``: one entry per public getter, keyed by the getter's name minus
+# "get", lowercased (``S4/A.java:18-27``).
+#
+# So the keys are the DAO's own field names -- fifty-four ``h_*`` server fields
+# plus the two the APP writes into the object before the map is taken,
+# ``stationInfo`` -> "stationinfo" and ``userNames`` -> "usernames"
+# (``CommutationInquiryActivity.java:238-240``). ``isIncludeHoliday`` is absent
+# because its getter is named ``is…``, not ``get…``.
+#
+# ORDER IS NOT CONTRACTUAL and cannot be: ``getMethods()`` is unordered and the
+# result is a ``HashMap``. The app itself sends these in whatever order the JVM
+# produced, so KORAIL demonstrably tolerates any. The order below is the DAO's
+# own field declaration order, which is the reproducible choice.
+KORAIL_COMMUTER_PASS_PAYMENT_FIELDS: tuple[str, ...] = (
+    "h_age",
+    "h_app_arv_rs_stn_cd",
+    "h_app_arv_rs_stn_nm",
+    "h_app_dpt_rs_stn_cd",
+    "h_app_dpt_rs_stn_nm",
+    "h_arv_stn_cons_ordr_1",
+    "h_arv_stn_cons_ordr_2",
+    "h_arv_tm",
+    "h_chg_mg_dv_cd",
+    "h_chg_mg_no",
+    "h_chtrn_rs_stn_cd",
+    "h_chtrn_rs_stn_nm",
+    "h_cmtr_knd_cd",
+    "h_cmtr_srt_cd",
+    "h_cmtr_utl_age_cd",
+    "h_cmtr_utl_trm_cd",
+    "h_cmtr_utl_trm_nm",
+    "h_cust_nm",
+    "h_cust_no",
+    "h_dpt_stn_cons_ordr_1",
+    "h_dpt_stn_cons_ordr_2",
+    "h_dpt_tm",
+    "h_dtour1",
+    "h_dtour2",
+    "h_exs_ln_acm_dst",
+    "h_holiday_cls_dt",
+    "h_holiday_flg",
+    "h_holiday_st_dt",
+    "h_new_ln_acm_dst",
+    "h_otm_rcvd_amt",
+    "h_prc_cl_cd_1",
+    "h_prc_cl_cd_2",
+    "h_psg_tp_cd",
+    "h_psrm_cl_cd",
+    "h_rcvd_amt",
+    "h_rcvd_fare",
+    "h_rcvd_prc",
+    "h_rout_cd_1",
+    "h_rout_cd_2",
+    "h_rsv_trm_dup",
+    "h_schd_trvl_dv_cd",
+    "h_stx_amt",
+    "h_taxt_spl_prce",
+    "h_trn_clsf_cd_1",
+    "h_trn_clsf_cd_2",
+    "h_trn_gp_cd",
+    "h_trn_no_1",
+    "h_trn_no_2",
+    "h_und_dv_cd_1",
+    "h_und_dv_cd_2",
+    "h_use_cls_dt",
+    "h_use_open_dt",
+    "h_use_psb_dno",
+    "h_use_psb_tno",
+)
+
+
+def build_commuter_pass_payment_form(
+    config: KorailConfig,
+    reservation: CommuterPassReservation,
+    card: CardPayment,
+    *,
+    station_info: str,
+    user_names: str,
+) -> dict[str, str]:
+    """``pass.passPayIssue`` — pay for a 정기권. THIS CHARGES REAL MONEY.
+
+    ``hidPayAmount`` plus two ``@FieldMap``s
+    (``PassService.java:19-21``). Both maps are answered by v6.5.0, unlike the
+    discount-card registration's pair:
+
+    * the first is ``commPaymentMap``, and it is the ENTIRE ``passReserve``
+      response's ``main_info`` reflected into a map --
+      ``CommutationInquiryActivity.java:242`` is
+      ``setCommPaymentMap(A.convertObjectToMap(main_info))``, and
+      ``S4/A.java:18-27`` keys every public ``get…`` by its own name minus
+      "get", lowercased. See
+      :data:`KORAIL_COMMUTER_PASS_PAYMENT_FIELDS`. Two of its keys are not
+      server fields at all: the app writes ``stationInfo`` (the route label) and
+      ``userNames`` (the holder's name plus 님) into the object first
+      (``:238-240``), and the reflection sweeps them in. They are ``station_info``
+      and ``user_names`` here, required rather than defaulted because one of
+      them is a person's name.
+    * the second is the ordinary ``PaymentMethod`` map -- the SAME one a train
+      payment sends. ``B6/AbstractC1269e.java:736-744`` hands the shared payment
+      screen's ``PaymentMethod`` straight to ``CommPaymentDao``, and
+      ``V4/a.java:21-34`` (``getCardRequest``) is what built it. So the card
+      half of this form is byte-identical to
+      :func:`build_card_payment_form`'s card half, and it is built here by the
+      same rules rather than by a second reading of the same code.
+
+    ``hidPayAmount`` is the reservation's own ``h_rcvd_amt`` and is not a caller
+    argument. ``B6/AbstractC1269e.java:740`` sends ``String.valueOf(t1())``;
+    ``t1()`` (``:1868``) is ``s1() + getDiscountAmount()``; ``s1()`` (``:1763``)
+    returns the ``RECEIVED_AMOUNT`` extra and ``getDiscountAmount()`` the
+    ``DISCOUNT_AMOUNT`` extra; and ``CReservationConfirmActivity.java:47-48``
+    sets those two to ``Integer.parseInt(mainInfo.getH_rcvd_amt())`` and ``0``.
+    ``hidMnsStlAmt1`` is the same number for the same reason
+    (``AbstractC1269e.java:406`` -> ``V4/a.java:27``), the two differing only
+    once mileage or points are applied -- which this builder does not do.
+
+    **A DEAD PATH IN v6.5.0, AND NOT BECAUSE IT IS UNUSED.**
+    ``PaymentActivity.isCommPaymentRequest()`` is
+    ``getIPaymentRequest() instanceof CommPaymentDao.CommPaymentResponse`` --
+    the RESPONSE type (``PaymentActivity.java:502-503``, and the same in
+    bytecode at ``smali/…/PaymentActivity.smali:3963-3980``). Only
+    ``CommPaymentRequest`` implements ``IPaymentRequest``
+    (``smali/…/CommPaymentDao$CommPaymentRequest.smali:1-6``); the response
+    extends ``BaseResponse`` and implements nothing
+    (``…$CommPaymentResponse.smali:1-3``). The test is therefore always false,
+    and the shipped app cannot reach ``passPayIssue`` at all. The neighbouring
+    ``isPassPaymentRequest()`` (``:4415-4430``) tests the REQUEST type and is
+    correct, so this is a one-character class-name slip, not a design.
+
+    What that means for a caller: this form is assembled from the DAO and from
+    the code that fills it, all of which is real, but no running client has ever
+    sent it -- so an operator cannot even compare against a capture of the app.
+
+    NEVER TRANSMITTED, and never live-enabled from this package.
+    """
+    if type(reservation) is not CommuterPassReservation:
+        raise KorailProtocolError(
+            "KORAIL 정기권 payment requires an exact CommuterPassReservation"
+        )
+    if type(card) is not CardPayment:
+        raise KorailProtocolError("KORAIL payment requires a CardPayment")
+    if not isinstance(station_info, str) or not isinstance(user_names, str):
+        raise KorailProtocolError(
+            "KORAIL 정기권 payment requires station_info and user_names as "
+            "strings: the app writes both into main_info before the map is "
+            "taken (CommutationInquiryActivity.java:238-240)"
+        )
+    amount = reservation.received_amount
+    if not isinstance(amount, str) or _DIGITS_RE.fullmatch(amount) is None:
+        raise KorailProtocolError(
+            "KORAIL 정기권 payment requires the reservation's numeric "
+            "h_rcvd_amt: that is the amount the app charges"
+        )
+    if _CARD_FIELD_RE.fullmatch(card.card_number) is None:
+        raise KorailProtocolError("KORAIL payment card number must be digits")
+    form = _common_fields(config)
+    form["hidPayAmount"] = amount
+    row = reservation.raw
+    for key in KORAIL_COMMUTER_PASS_PAYMENT_FIELDS:
+        value = row.get(key)
+        # Gson leaves a field the server omitted as null, and the app's
+        # reflection then puts a null into the map; Retrofit drops a null
+        # @FieldMap entry. So an absent field is absent here too, rather than
+        # invented as "".
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            raise KorailProtocolError(
+                f"KORAIL 정기권 payment field {key} must be a string"
+            )
+        form[key] = value
+    form["stationinfo"] = station_info
+    form["usernames"] = user_names
+    # The PaymentMethod half, V4/a.java:21-34 verbatim, with hiduserYn appended
+    # last by B6/AbstractC1269e.java:711-717 as it is for a train payment.
+    form.update(
+        {
+            "hidInrecmnsGridcnt": "1",
+            "hidStlMnsSqno1": "1",
+            "hidStlMnsCd1": "02",
+            "hidMnsStlAmt1": amount,
+            "hidCrdInpWayCd1": "@",
+            "hidStlCrCrdNo1": card.card_number,
+            "hidVanPwd1": card.card_password,
+            "hidCrdVlidTrm1": card.card_expire,
+            "hidIsmtMnthNum1": card.installment,
+            "hidAthnDvCd1": card.card_type,
+            "hidAthnVal1": card.birthday,
+            "hiduserYn": "Y",
+        }
+    )
+    return form

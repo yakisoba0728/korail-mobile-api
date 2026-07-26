@@ -72,7 +72,12 @@ was discarding.
   and no offline test can show it is right.
 - **정기권/패스 구매·발권** (`pass.passReserve` and the three siblings). A
   separate product family with its own payment flow; out of scope for a
-  discount tranche.
+  discount tranche. **Superseded on 2026-07-26:** the plain pair
+  (`pass.passReserve` / `pass.passPayIssue`) is now implemented under its own
+  `commuter_pass` consent category — see the 정기권 section below. The two
+  `Otr` siblings remain out, and now for a stated reason rather than for
+  scope: they are the 자유이용권 family (내일로 / A-PASS / 강릉패스), a
+  different product with a different request shape.
 
 ### What only a live call can settle
 
@@ -125,8 +130,8 @@ a live call does.
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 58 exact login/read routes and 73 public methods (62 login/read plus the consent-gated mutation methods `reserve`,
-  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`, and `extend_discount_card`,
+- The current package boundary is 58 exact login/read routes and 75 public methods (62 login/read plus the consent-gated mutation methods `reserve`,
+  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`, `extend_discount_card`, `reserve_commuter_pass`, and `pay_for_commuter_pass`,
   which return a
   redacted preview by default and send a live state change only with a
   `dry_run=False` matching-category consent via the double-gated

@@ -195,6 +195,27 @@ SENSITIVE_KEYS = frozenset(
             f"txtCardNo_{index}"
             for index in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
         ),
+        # 정기권 identity. A season pass is a NAMED product, and the payment
+        # form carries the whole reservation object: h_cust_nm is the holder's
+        # real name and "usernames" is the app's own display copy of it
+        # (CommutationInquiryActivity.java:239, memberName + "님"). h_chg_mg_no
+        # is the handle to the reservation, i.e. this product's pnrNo.
+        #
+        # NOT redacted, deliberately: "stationinfo" and the h_app_*_rs_stn_*
+        # pair. A 정기권's route is the holder's commute and is arguably
+        # personal, but the station names are already unredacted everywhere
+        # else in this package, and masking one copy of a value while three
+        # others print in the clear is theatre rather than redaction. Also not
+        # redacted: hidPayAmount / h_rcvd_amt / hidMnsStlAmt1, for the same
+        # reason build_card_payment_form leaves hidMnsStlAmt1 visible -- the
+        # single most important thing a dry-run preview of a purchase can show
+        # is how much it would charge.
+        "h_cust_nm",
+        "usernames",
+        "h_chg_mg_no",
+        "customer_name",
+        "user_names",
+        "change_management_no",
         "original_window_no",
         "original_sale_sequence",
         "original_return_password",
