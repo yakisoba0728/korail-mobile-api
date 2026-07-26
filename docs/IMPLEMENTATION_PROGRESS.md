@@ -299,7 +299,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `1923 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `1925 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -432,7 +432,25 @@ point/mileage mutation routes remain not callable. The current service inventory
 and 123 unexecuted entries out of 165; the historical pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted.
 
-The current reviewed offline gate reports `1923 passed, 1 deselected`; the
+App-level failures are now classified on `h_msg_cd` rather than surfacing as one
+undifferentiated `KorailAppError`. The taxonomy is a pure refinement: every new
+type subclasses the one it replaces, `code`/`message`/`raw` remain on all of
+them, and `classify_app_error` is called only where a `KorailAppError` was
+already being raised (`src/korail_mobile_api/http.py:46`,
+`src/korail_mobile_api/read_parsers.py:141`), so it never introduces a failure
+the server did not declare. Failure is still decided by `strResult` plus the
+app's own `WRC000288`, matching the app, whose dispatcher passes any
+unrecognised code on a non-`FAIL` response through to `onReceive()` as a success
+(`analysis/jadx/sources/com/korail/talk/view/base/BaseActivity.java:629`) — which
+is why the live-observed `WRR664296` warning stays a successful reservation. See
+the error-taxonomy table in `README.md` for which exception means retry is
+pointless, which means re-login, and which means the request was fine and there
+was simply nothing there. `IRT010110` (srtgo's second sold-out code) and
+srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
+and deliberately not encoded; the anti-macro refusal on this app is the
+`DynaPath-Result` header, already carried by `KorailDynaPathError`.
+
+The current reviewed offline gate reports `1925 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service

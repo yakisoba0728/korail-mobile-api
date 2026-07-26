@@ -400,7 +400,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
     # The live gate figure is the count the offline suite actually reports
     # today; the 1246/1247 figures are kept only as labelled history.
     assert (
-        "current reviewed offline gate is `1923 passed, 1 deselected`" in readme
+        "current reviewed offline gate is `1925 passed, 1 deselected`" in readme
     )
     assert (
         "Earlier gates in this repository's history were `1246 passed, 1 "
@@ -408,7 +408,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "`1247 passed, 1 deselected` directly after it" in readme
     )
     assert (
-        "current full offline release gate reports `1923 passed, 1 deselected`"
+        "current full offline release gate reports `1925 passed, 1 deselected`"
         in progress
     )
     assert (
@@ -417,7 +417,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "deselected` directly after it" in progress
     )
     assert (
-        "current reviewed offline gate reports `1923 passed, 1 deselected`; the "
+        "current reviewed offline gate reports `1925 passed, 1 deselected`; the "
         "historical gates were `1246 passed, 1 deselected` and, after the P0 "
         "live-evidence documentation coverage, `1247 passed, 1 deselected`"
         in handoff
@@ -559,3 +559,67 @@ def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
     assert "R45 succeeded with 15 rows" in readme
     assert "existing safe train search succeeded with 10 rows" in readme
     assert "R52 made zero requests" in readme
+
+
+def test_readme_documents_the_error_taxonomy():
+    """The taxonomy is only useful if a caller can find out what to DO with it.
+
+    The three questions the docs must answer out loud are which exception means
+    retry is pointless, which means re-login, and which means the request was
+    fine and there was simply nothing there.
+    """
+    readme = " ".join(README.read_text(encoding="utf-8").split())
+
+    assert "### Error taxonomy" in README.read_text(encoding="utf-8")
+    assert "classified on `h_msg_cd`" in readme
+    assert "never on Korean message text" in readme
+
+    # Every exception in the taxonomy is named, so none can be added to the
+    # code without being explained here.
+    for name in (
+        "KorailNoResultsError",
+        "KorailNoDirectTrainError",
+        "KorailSoldOutError",
+        "KorailSeatUnavailableError",
+        "KorailReservationRefusedError",
+        "KorailInvalidRequestError",
+        "KorailNotEntitledError",
+        "KorailServiceUnavailableError",
+        "KorailAppUpdateRequiredError",
+        "KorailSessionExpiredError",
+        "KorailDynaPathError",
+        "classify_app_error",
+    ):
+        assert f"`{name}`" in readme, name
+
+    # Retry is pointless / re-login / nothing was there.
+    assert "Retry is pointless for this train; pick another." in readme
+    assert "Retry is pointless; ask a different question." in readme
+    assert "**Re-login.**" in readme
+    assert "**Nothing was there.** The request was fine." in readme
+    assert "The library never retries on its own initiative" in readme
+    assert "a retried reserve is a duplicate booking" in readme
+
+    # A warning on a success must be documented as staying a success.
+    assert "WRR664296" in readme
+    assert "`strResult=SUCC`" in readme
+    assert "a real, cancelable PNR" in readme
+
+    # Third-party claims are labelled, not adopted.
+    assert "zero hits in\nthe decompiled APK".replace("\n", " ") in readme
+    assert "Anti-macro rejection has no message code" in readme
+    assert "IRT010110" in readme
+    assert "is not encoded" in readme
+
+    # The one observation we deliberately refused to classify.
+    assert "left unclassified" in readme
+    assert "[3]인증정보에 문제가 있습니다." in readme
+    assert "Its trigger is unconfirmed" in readme
+
+
+def test_progress_records_the_error_taxonomy():
+    progress = " ".join(PROGRESS.read_text(encoding="utf-8").split())
+    assert "classified on `h_msg_cd`" in progress
+    assert "pure refinement" in progress
+    assert "never introduces a failure the server did not declare" in progress
+    assert "third-party-attested only" in progress

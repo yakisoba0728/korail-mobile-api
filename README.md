@@ -43,7 +43,7 @@ shapes and the same gated send path, but no run recorded here has settled or
 returned money. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `1923 passed, 1 deselected`; the one
+current reviewed offline gate is `1925 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -174,6 +174,71 @@ Default tests are offline:
 pip install -e ".[test]"
 pytest
 ```
+
+### Error taxonomy
+
+Server-side failures are classified on `h_msg_cd`, the field the app itself
+branches on, never on Korean message text. Every type below subclasses the one
+it replaces, so an existing `except KorailAppError` still catches everything it
+used to, and `code` / `message` / `raw` are present on all of them so a caller
+can fall back to inspecting the code for a failure that has no subclass yet.
+
+**A failure is decided by `strResult` (plus the app's own `WRC000288`), never by
+the code.** Classification chooses which exception describes a failure; it never
+decides that there is one. The app works the same way — its dispatcher
+recognises a handful of codes and then delivers any *unrecognised* code on a
+non-`FAIL` response to `onReceive()` as a success
+(`analysis/jadx/sources/com/korail/talk/view/base/BaseActivity.java:629`). This
+is why a warning attached to a success stays a success: `WRR664296`
+("…할인은 토/일/공휴일에는 적용되지 않습니다.") arrived with `strResult=SUCC`
+and a real, cancelable PNR, and the APK has its own examples — `IRR000014`
+(waitlist accepted), `IRT800005` (reserved with a notice), `WRS800036` (per-leg
+advisory). `tests/test_error_classification.py` pins that none of them raise.
+
+| Exception | Codes | What a caller should do |
+| --- | --- | --- |
+| `KorailNoResultsError` | `WRG000000`, `P114`, `P100`*, `WRT300005`* | **Nothing was there.** The request was fine. Retry is pointless; ask a different question. |
+| `KorailNoDirectTrainError` | `WRD000061` | No *direct* train. Re-ask the same query as a transfer search — which is exactly what the app does. Subclasses `KorailNoResultsError`. |
+| `KorailSoldOutError` | `ERR211161` | **Inventory is gone.** Retry is pointless for this train; pick another. |
+| `KorailSeatUnavailableError` | `WRI411345`, `ERR911081`, `WRT800176` | The *seat* you asked for, not the train. Retrying **without** seat designation may work; the app offers exactly that. |
+| `KorailReservationRefusedError` | `WRR800029`, `ERR911531`, `ERR911051` | Reserve refused. Look at what you already hold — the app navigates to the user's existing reservations. `message` carries the server's reason. |
+| `KorailInvalidRequestError` | `WRG200018`*, `WRT100002`*, `WRT100124`* | **Fix the payload.** A field was rejected; retry is pointless unchanged. |
+| `KorailNotEntitledError` | `ERR299943`* | **This account may not book that fare.** The payload is well-formed; it is refused for who is asking. Another account may be accepted with the identical form. |
+| `KorailServiceUnavailableError` | `SEMGTK` | The back end is down, not your request. |
+| `KorailAppUpdateRequiredError` | `SUPDATE` | This client version is refused. `KORAIL_API_VERSION` has been superseded; no retry interval helps. |
+| `KorailAppError` | anything else | Unclassified. `code` and `raw` are intact — this is how the map grows. |
+| `KorailSessionExpiredError` | `P058` | **Re-login.** A `KorailAuthError`, deliberately *not* a `KorailAppError`. |
+| `KorailDynaPathError` | *(no code — a header)* | **You were flagged, not throttled.** See below. |
+
+Codes marked \* are this repository's own live observations with **zero hits in
+the decompiled APK**; every unmarked code is an APK branch, cited file:line in
+the class docstring. `classify_app_error` is exported if you want the mapping
+without the raising.
+
+**Anti-macro rejection has no message code.** `BaseDaoHelper.java:59-86` reads
+the `DynaPath-Result` response header and, when it is negative, displays the
+body's `message` *instead of* running the `h_msg_cd` ladder at all
+(`BaseActivity.java:632-634`). So the anti-macro refusal surfaces as
+`KorailDynaPathError`, not as any `KorailAppError`. srtgo_plus's rule that a
+code or message containing `MACRO` means anti-macro (`srtgo/srtgo.py:756`) has
+no counterpart in this app and is not encoded; neither is srtgo's second
+sold-out code `IRT010110`, which is 0-hit across jadx, all three smali trees,
+`analysis/raw` and `analysis/splits`. Separately, KORAIL may attach a macro
+*advisory* to a **successful** login via `notiTpCd` in `{MC, MM, MS}`
+(`analysis/jadx/sources/S4/u.java:57-90`); that is not a rejection and raises
+nothing.
+
+**The library never retries on its own initiative**, and `reserve` in
+particular is never retried, because a retried reserve is a duplicate booking.
+Classification exists so the *caller* can decide.
+
+One live observation is deliberately **left unclassified**:
+`[3]인증정보에 문제가 있습니다.`, seen once on a seat-inventory read after a
+burst of calls. No `h_msg_cd` was captured alongside it and the string is 0-hit
+in the APK, so there is nothing to key on — classifying it would mean matching
+Korean text, the practice this taxonomy replaces. Its trigger is unconfirmed;
+rate limiting, a DynaPath problem and a session problem are all consistent with
+what was seen. It surfaces as a plain `KorailAppError` with its message intact.
 
 ### Account-neutral cache reads
 

@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+- Added: server-side failures are classified on `h_msg_cd` instead of all
+  arriving as one `KorailAppError`. New types — `KorailNoResultsError` (with
+  `KorailNoDirectTrainError`), `KorailSoldOutError`,
+  `KorailSeatUnavailableError`, `KorailReservationRefusedError`,
+  `KorailInvalidRequestError`, `KorailNotEntitledError`,
+  `KorailServiceUnavailableError`, `KorailAppUpdateRequiredError` — plus the
+  exported `classify_app_error`. See the error-taxonomy table in README for
+  which one means retry is pointless, which means re-login, and which means the
+  request was fine and there was simply nothing there.
+  - **Compatibility-preserving.** Every new type subclasses `KorailAppError`,
+    so no existing `except` clause changes meaning, and `code`/`message`/`raw`
+    stay on all of them so a caller can migrate incrementally.
+  - **It never invents a failure.** Whether a response failed is still decided
+    by `strResult` plus the app's own `WRC000288`; classification only picks
+    which exception describes a failure that was already going to be raised.
+    The app behaves the same way — any unrecognised code on a non-`FAIL`
+    response goes to `onReceive()` as a success (`BaseActivity.java:629`) — so
+    a warning attached to a success stays a success. `WRR664296`, which came
+    back with `strResult=SUCC` and a real, cancelable PNR, is pinned by test,
+    as are the APK's own success-side codes `IRR000014`, `IRT800005` and
+    `WRS800036`.
+  - **No retry logic was added.** The library still does not retry on its own
+    initiative, and `reserve` is never retried, because a retried reserve is a
+    duplicate booking.
+  - Sold-out (`ERR211161`), the seat-specific refusals
+    (`WRI411345`/`ERR911081`/`WRT800176`, for which the app offers automatic
+    seat assignment rather than a dead end), the reserve refusals
+    (`WRR800029`/`ERR911531`/`ERR911051`, which the app answers by navigating
+    to the user's existing reservations), `WRD000061`, `WRG000000`, `P114`,
+    `SEMGTK` and `SUPDATE` are all APK branches, cited file:line in each
+    docstring. `P100`, `WRT300005`, `ERR299943`, `WRG200018`, `WRT100002` and
+    `WRT100124` are this repository's live observations with zero APK hits and
+    are labelled as such.
+  - Anti-macro turned out not to be a code: `BaseDaoHelper.java:59-86` reads
+    the `DynaPath-Result` header and shows the body's `message` instead of
+    running the `h_msg_cd` ladder, so the existing `KorailDynaPathError` already
+    is the anti-macro refusal. srtgo_plus's `MACRO` substring rule and srtgo's
+    second sold-out code `IRT010110` are recorded as third-party-attested only
+    and not encoded; a test asserts neither was adopted.
+  - `[3]인증정보에 문제가 있습니다.` is deliberately left unclassified: no
+    `h_msg_cd` was captured with it and the string is 0-hit in the APK, so
+    classifying it would mean the Korean-text matching this change removes.
+
 - Added: `reserve` reaches all three of the booking screen's job types through a
   keyword-only, defaulted `job_type` (`KorailReservationJobType`). The default
   is `IMMEDIATE` (`txtJobId="1101"`), the only value this package has ever sent,
