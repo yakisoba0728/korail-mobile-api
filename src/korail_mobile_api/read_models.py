@@ -461,6 +461,57 @@ class PassScheduleResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
+class DiscountCardSection:
+    """One 구간 a 할인카드 is registered against.
+
+    ``TicketDetailDao.AppSegInfo``
+    (``dao/refund/TicketDetailDao.java:25-64``). An N카드 is sold against one
+    to three of these, and the card can only be spent on trains that serve the
+    section — which is why the schedule read
+    (:meth:`~korail_mobile_api.client.KorailClient.get_discount_card_schedule`)
+    is keyed by station NAMES: they come from here.
+    """
+
+    #: ``dcntCrdAplSegSqno`` — the section's sequence within the card.
+    section_sequence: str | None = None
+    departure_station_name: str | None = None
+    arrival_station_name: str | None = None
+    journey_sequence: str | None = field(default=None, repr=False)
+    journey_type_code: str | None = field(default=None, repr=False)
+    train_group_code: str | None = field(default=None, repr=False)
+    #: ``stlbDturDvNm`` — the 경유 name the app forwards verbatim into the
+    #: seat-assign schedule request (``u4/b.java:104``).
+    detour_division_name: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class DiscountCardOnTicket:
+    """The 할인카드 a ticket-detail response describes.
+
+    ``TicketDetailDao.DiscountCardInfo``
+    (``dao/refund/TicketDetailDao.java:123-142``), reached as
+    ``TicketDetailResponse.dcnt_crd_info`` (``:233``). It is present only when
+    the "ticket" being read IS a card; ordinary tickets carry no such object.
+
+    :attr:`card_no` is the whole point of this model. It is the single input to
+    :meth:`~korail_mobile_api.client.KorailClient.get_discount_card_usage_history`,
+    and — per ``w4/a.java:100-101`` — the single input, beside the discount code
+    ``"153"``, that turns an ordinary reservation into a discounted one. It is
+    redacted in every preview and log.
+    """
+
+    #: ``h_dcnt_crd_no``.
+    card_no: str | None = field(default=None, repr=False)
+    #: ``h_dcnt_crd_trm_extn_psb_flg`` — ``"Y"`` when 기간연장 is offered.
+    #: ``Y4/C0907b.java:301`` is the only thing that enables the "기간연장"
+    #: button (``Y4/Q.java:1013-1026``).
+    term_extension_possible_flag: str | None = None
+    sections: tuple[DiscountCardSection, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
 class KorailPointSummaryResponse(BaseKorailResponse):
     """``xPoint.MyXPointView`` — the my-page loyalty and entitlement summary.
 
@@ -1224,3 +1275,6 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     companion_name: str | None = field(default=None, repr=False)
     companion_birth_date: str | None = field(default=None, repr=False)
     journeys: tuple[RefundTicketJourney, ...] = ()
+    #: ``dcnt_crd_info`` — present only when this "ticket" is a 할인카드(N카드).
+    #: ``None`` for every ordinary ticket.
+    discount_card: "DiscountCardOnTicket | None" = None

@@ -14,12 +14,14 @@ from korail_mobile_api.errors import (
 )
 from korail_mobile_api.models import KorailSession
 from korail_mobile_api.read_models import (
+    DiscountCardOnTicket,
     DiscountCardScheduleResponse,
     DiscountCardUsageListResponse,
 )
 from korail_mobile_api.read_parsers import (
     parse_discount_card_schedule_response,
     parse_discount_card_usage_response,
+    parse_refund_ticket_detail_response,
 )
 from korail_mobile_api.read_payloads import (
     DiscountCardScheduleRequest,
@@ -373,3 +375,74 @@ def test_public_surface_exports_the_new_names():
     # Nothing on this branch adds a way to register or extend a card yet.
     assert not hasattr(KorailClient, "register_discount_card")
     assert not hasattr(KorailClient, "extend_discount_card")
+
+
+def test_the_ticket_detail_hands_out_the_card_the_reads_need():
+    # refunds.SelTicketInfo is TicketDetailDao.TicketDetailResponse, which
+    # carries dcnt_crd_info (TicketDetailDao.java:233) whenever the "ticket"
+    # being read is itself an N카드. That object is where the app gets the card
+    # number from (Y4/C0907b.java:303), so it is the entry point to both reads
+    # in this module.
+    parsed = parse_refund_ticket_detail_response(
+        _envelope(
+            h_tk_knd_nm="N카드",
+            dcnt_crd_info={
+                "h_dcnt_crd_no": "N1234567890",
+                "h_dcnt_crd_trm_extn_psb_flg": "Y",
+                # The wire key is the Java FIELD name (TicketDetailDao.java:124),
+                # not the getter's getAppSeg_info() spelling.
+                "appSegList": [
+                    {
+                        "dcntCrdAplSegSqno": "1",
+                        "dptRsStnNm": "서울",
+                        "arvRsStnNm": "부산",
+                        "jrnySqno": "1",
+                        "jrnyTpCd": "11",
+                        "trnGpCd": "100",
+                        "stlbDturDvNm": "경부",
+                    }
+                ],
+            },
+        )
+    )
+    card = parsed.discount_card
+    assert type(card) is DiscountCardOnTicket
+    assert card.card_no == "N1234567890"
+    assert card.term_extension_possible_flag == "Y"
+    assert len(card.sections) == 1
+    section = card.sections[0]
+    assert section.departure_station_name == "서울"
+    assert section.arrival_station_name == "부산"
+    # The section's two station names are exactly what the schedule read needs.
+    query = build_discount_card_schedule_query(
+        DiscountCardScheduleRequest.for_card(
+            "B2N18120402",
+            departure_station_name=section.departure_station_name,
+            arrival_station_name=section.arrival_station_name,
+            departure_date="20990101",
+            usable_trip_count="10",
+        )
+    )
+    assert query["dptRsStnNm"] == "서울"
+    assert query["arvRsStnNm"] == "부산"
+    # ...and the card number is what the usage read needs.
+    assert build_discount_card_usage_query(card.card_no) == {
+        "dcntCrdNo": "N1234567890"
+    }
+    # A card never leaks through a preview or a log.
+    assert "N1234567890" not in str(redact_payload({"h_dcnt_crd_no": card.card_no}))
+
+
+def test_an_ordinary_ticket_carries_no_discount_card():
+    parsed = parse_refund_ticket_detail_response(_envelope(h_tk_knd_nm="일반"))
+    assert parsed.discount_card is None
+    assert (
+        parse_refund_ticket_detail_response(
+            _envelope(dcnt_crd_info={"h_dcnt_crd_no": "N1"})
+        ).discount_card.sections
+        == ()
+    )
+    with pytest.raises(KorailProtocolError):
+        parse_refund_ticket_detail_response(
+            _envelope(dcnt_crd_info={"appSegList": ["nope"]})
+        )

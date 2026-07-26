@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Added: `RefundTicketDetailResponse.discount_card`, plus `DiscountCardOnTicket`
+  and `DiscountCardSection`. No new route and no new method: `SelTicketInfo`
+  already returns `TicketDetailDao.TicketDetailResponse`, which carries
+  `dcnt_crd_info` (`dao/refund/TicketDetailDao.java:233`) whenever the "ticket"
+  being read is itself a 할인카드. The package was already fetching that object
+  and discarding it.
+  - This is the entry point to everything else in the 할인카드 surface. The
+    card number is the sole input to `get_discount_card_usage_history`, the
+    section rows are where `get_discount_card_schedule`'s station NAMES come
+    from, and `h_dcnt_crd_trm_extn_psb_flg` is the only thing that enables
+    기간연장 in the app (`Y4/C0907b.java:301` → `Y4/Q.java:1013-1026`).
+  - The section list's wire key is `appSegList` — the Java FIELD name
+    (`TicketDetailDao.java:124`), which is what Gson serialises. The getter is
+    spelled `getAppSeg_info()` and is NOT the wire name; taking the getter
+    would have produced a parser that silently found no sections.
+
 - Added: loyalty READS, and the welfare entitlement one of them exposes —
   `KorailClient.get_korail_point_summary` and
   `KorailClient.get_mileage_history`, plus `KorailPointSummaryResponse`,

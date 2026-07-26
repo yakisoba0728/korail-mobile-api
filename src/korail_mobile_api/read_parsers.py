@@ -23,8 +23,10 @@ from .read_models import (
     DeliveryRecipientResponse,
     DepositBank,
     DepositBankListResponse,
+    DiscountCardOnTicket,
     DiscountCardScheduleResponse,
     DiscountCardScheduleTrain,
+    DiscountCardSection,
     DiscountCardUsage,
     DiscountCardUsageListResponse,
     DiscountCoupon,
@@ -2696,6 +2698,63 @@ _REFUND_TICKET_DETAIL_FIELDS = {
 }
 
 
+_DISCOUNT_CARD_SECTION_FIELDS = {
+    "section_sequence": "dcntCrdAplSegSqno",
+    "departure_station_name": "dptRsStnNm",
+    "arrival_station_name": "arvRsStnNm",
+    "journey_sequence": "jrnySqno",
+    "journey_type_code": "jrnyTpCd",
+    "train_group_code": "trnGpCd",
+    "detour_division_name": "stlbDturDvNm",
+}
+
+
+def _discount_card_on_ticket(
+    raw: Mapping[str, Any],
+) -> DiscountCardOnTicket | None:
+    """Read ``dcnt_crd_info`` off a ticket detail, or ``None``.
+
+    Absent for every ordinary ticket, so absence is not an error. The section
+    list's wire key is ``appSegList`` — the Java FIELD name
+    (``TicketDetailDao.java:124``), which is what Gson serialises; the getter
+    is spelled ``getAppSeg_info()`` and is not the wire name.
+    """
+    info = _optional_mapping(raw, "dcnt_crd_info", "refund ticket detail")
+    if info is None:
+        return None
+    sections = []
+    for value in _optional_list(
+        info,
+        "appSegList",
+        "refund ticket detail dcnt_crd_info",
+    ):
+        item = _row(value, "refund ticket detail appSegList")
+        sections.append(
+            DiscountCardSection(
+                **_nullable_scalar_fields(
+                    item,
+                    _DISCOUNT_CARD_SECTION_FIELDS,
+                    "discount card section",
+                ),
+                raw=item,
+            )
+        )
+    return DiscountCardOnTicket(
+        card_no=_optional_scalar_string(
+            info,
+            "h_dcnt_crd_no",
+            "discount card info",
+        ),
+        term_extension_possible_flag=_optional_string(
+            info,
+            "h_dcnt_crd_trm_extn_psb_flg",
+            "discount card info",
+        ),
+        sections=tuple(sections),
+        raw=info,
+    )
+
+
 def parse_refund_ticket_detail_response(
     raw: Mapping[str, Any],
 ) -> RefundTicketDetailResponse:
@@ -2743,5 +2802,6 @@ def parse_refund_ticket_detail_response(
             "refund ticket detail",
         ),
         journeys=tuple(journeys),
+        discount_card=_discount_card_on_ticket(raw),
         **_response_fields(raw),
     )
