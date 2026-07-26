@@ -15,7 +15,7 @@ state-changing request can leave the process only through the dedicated
 | Category | korail | SRT |
 |---|---|---|
 | reserve (`1101`, immediate) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
-| reserve (`1103`, seat-designated) | ⚠️ implemented, live-run once, **seat map NOT confirmed honoured** | ⛔ not implemented |
+| reserve (`1103`, seat-designated) | ✅ live-verified 2026-07-26 (seat map honoured) | ⛔ not implemented |
 | reserve (`1102`, 예약대기 standby) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
 | standby follow-up (`reservationWait`) | ⚠️ `confirm_standby_hold`, **never live-run** | ⛔ not implemented |
 | cancel (unpaid hold) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
@@ -289,28 +289,40 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    should reserve→cancel (no payment) only the combinations they actually
    intend to use; nothing here generalises from one mix to another.
 
-8a. **2026-07-26 live attempt at `1103` — inconclusive, and why.** One
-   seat-designated hold was created on 서울->부산 20260809 for two adults,
-   requesting car 11 seats `37` and `33` (the `seat_no` values the seat
-   inventory returned). The server issued the hold and
-   `get_ticket_reservation_detail` read it back as car 11 seats **`9A` and
-   `10A`**. The car matched; the seat identifiers did not round-trip. Two
-   explanations remain open and this run cannot separate them: either the
-   inventory's `seat_no` is an internal index while `h_seat_no` is the printed
-   label for the same physical seat, or the server ignored the `OSrcar` map and
-   auto-assigned. The hold was cancelled (`IRG000000`) and the account verified
-   empty. **Do not describe `1103` as working until this is settled.**
-   Settling it needs one more run that dumps the raw seat-inventory record
-   alongside the reservation detail, which could not be done immediately:
-   `get_seat_inventory` began answering `[3]인증정보에 문제가 있습니다.` after a
-   burst of calls and kept doing so, having worked minutes earlier. That looks
-   like rate limiting rather than a client defect — **back off before retrying,
-   and treat that message as a signal to stop, not to retry harder.**
+8a. **2026-07-26: both variants are now live-verified.**
 
-8b. **`1102` (standby) was never reached live.** The run aborted during `1103`
-   before the standby leg, so nothing about it is verified.
+   *Seat designation (`1103`).* Two adults on 서울->부산 20260809, requesting
+   car 11 `seat_no` `37` and `33`. The reservation read back as car 11 seats
+   `10A` and `9A` — **the seats requested**. The apparent mismatch in the first
+   attempt was a false alarm: an inventory record carries BOTH identifiers,
+   `{"seat_no": "45", "seat_spec": "12A"}`, where `seat_no` is what the
+   reservation form sends and `seat_spec` is the printed label the reservation
+   detail echoes back. `seat_no` 37 is label `10A` and 33 is `9A`, so the server
+   honoured the `OSrcar` map exactly. Cancelled `IRG000000`, account empty.
+   **Anyone comparing requested against booked seats must compare `seat_spec`
+   to `h_seat_no`, not `seat_no` to `h_seat_no`.**
 
-8. **korail seat-designated (`1103`) and standby (`1102`) holds are NOT
+   *Standby (`1102`).* Verified against a genuinely sold-out train: 서울->부산
+   20260731 16:00 had every train at `h_gen_rsv_cd="13"`, and train 125 carried
+   `h_wait_rsv_flg=" 9"`. One adult, general class:
+   - reserve -> `SUCC` / `IRR000014` "예약대기 가능합니다." — the code the APK
+     predicted (`ui/inquiry/rir/orr/a.java:222-225`).
+   - `confirm_standby_hold` -> `SUCC` / `IRZ000003` "정상적으로 수정 되었습니다."
+     (both options off, so no phone number was transmitted).
+   - cancel -> `IRG000000`, account empty.
+   The flag values observed live match the APK exactly: `" 9"` standby-eligible
+   (leading space is real), `" 0"` sold out without standby, `"-2"` seats
+   available. korail2's `-2`/`9`/`0` claim is right about the meanings but wrong
+   about the wire format — the values are space-padded to width 2.
+
+8b. **A stale session reads as an auth failure, not as a session expiry.**
+   After a long run, `get_seat_inventory` began answering
+   `[3]인증정보에 문제가 있습니다.` and kept doing so. It was first read as rate
+   limiting; it was not. A fresh `login()` cleared it immediately. Treat that
+   message as "re-login", and note it does NOT arrive as `P058`, so the existing
+   session-expiry path does not catch it.
+
+8c. **Design record for `1103` / `1102`** (was: NOT
    live-verified.** Both are reachable from `KorailClient.reserve` through the
    keyword-only, defaulted `job_type` (`KorailReservationJobType`), and standby
    has a second, separately gated call. Every byte of both forms comes from the

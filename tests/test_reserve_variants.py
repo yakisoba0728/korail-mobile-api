@@ -869,29 +869,41 @@ def test_reserve_standby_dry_run_previews_the_standby_job_id():
 # --- documentation contract -------------------------------------------------
 
 
-def test_docs_state_plainly_that_neither_variant_is_live_verified():
+def test_docs_record_the_live_verification_of_both_variants():
+    """Pin what the 2026-07-26 runs established, and the trap they exposed.
+
+    This replaces an assertion that neither variant was live-verified. That
+    claim was true when written and is now false, so the pin moves to the new
+    facts rather than being deleted: a reader must still be able to tell what
+    was actually exercised, and must still be warned that a booked seat is
+    compared by ``seat_spec`` and not by ``seat_no``.
+    """
     root = Path(__file__).parents[1]
     readme = (root / "README.md").read_text(encoding="utf-8")
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     handoff = (root / "docs" / "MUTATION_HANDOFF.md").read_text(encoding="utf-8")
-
-    assert "**Neither variant has been live-verified.**" in readme
-    assert (
-        "**Neither new variant has been live-verified; nothing here has "
-        "transmitted a\n  `1102` or a `1103`.**" in changelog
-    )
-    assert (
-        "**korail seat-designated (`1103`) and standby (`1102`) holds are NOT\n"
-        "   live-verified.**" in handoff
-    )
     combined = f"{readme}\n{changelog}\n{handoff}"
+
+    # The confirmation codes each variant actually returned.
+    assert "IRR000014" in combined
+    assert "IRZ000003" in combined
+    # The seat-identifier trap: seat_no is sent, seat_spec is echoed back.
+    for doc in (readme, changelog, handoff):
+        assert "seat_spec" in doc
+    assert "2026-07-26" in combined
+    # Nothing may claim the variants are unverified any more.
+    for stale in (
+        "Neither variant has been live-verified",
+        "Neither new variant has been live-verified",
+    ):
+        assert stale not in combined
+
     for claim in (
         "KorailReservationJobType",
         "KorailSeatAssignment",
         "confirm_standby_hold",
         "txtSrcarCnt",
         "members-only",
-        "IRR000014",
         "ERR299943",
         "WRR664296",
     ):

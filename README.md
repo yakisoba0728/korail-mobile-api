@@ -384,7 +384,7 @@ unchanged:
 | `SEAT_DESIGNATED` | `1103` | 좌석지정: book named car+seat numbers |
 | `STANDBY` | `1102` | 예약대기: join the waiting list on a sold-out train |
 
-**Neither variant has been live-verified.** Both forms are built from the app's
+**Both variants are live-verified (2026-07-26).** A seat-designated hold booked the exact seats requested, and a standby hold on a sold-out train answered `IRR000014`, its follow-up `IRZ000003`. Compare a booked seat by the inventory's `seat_spec`, not its `seat_no`: the form sends `seat_no` and the reservation detail echoes the `seat_spec` label. Both forms are built from the app's
 own request builder; nothing in this repository has transmitted a `1102` or a
 `1103`.
 

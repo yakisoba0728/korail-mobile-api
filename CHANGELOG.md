@@ -49,8 +49,11 @@
   keyword-only, defaulted `job_type` (`KorailReservationJobType`). The default
   is `IMMEDIATE` (`txtJobId="1101"`), the only value this package has ever sent,
   so every existing call is byte-for-byte unchanged.
-  **Neither new variant has been live-verified; nothing here has transmitted a
-  `1102` or a `1103`.**
+  **Both variants were live-verified on 2026-07-26** by reserve -> read back
+  -> cancel. `1103` booked the exact seats requested (compare the
+  inventory's `seat_spec` to the detail's `h_seat_no`, not `seat_no`).
+  `1102` on a sold-out train answered `IRR000014`, and
+  `confirm_standby_hold` answered `IRZ000003`.
   - `SEAT_DESIGNATED` (`"1103"`) books named seats. `seats` takes one
     `KorailSeatAssignment` per passenger, carrying exactly the two identifiers
     the existing seat reads return — `SeatCar.car_no` /
