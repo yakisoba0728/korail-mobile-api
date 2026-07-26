@@ -25,6 +25,7 @@ state-changing request can leave the process only through the dedicated
 | reserve (`1202`, 입석+좌석 — the first half of 병합예약) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
 | 병합예약 second hold (`reserve_merge`) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
 | 정기권 예약/결제 (`pass.passReserve` / `passPayIssue`) | ⛔ **not implemented — implemented once, then removed**; the routes are not on the mutation allowlist and no method can reach them | ⛔ not implemented |
+| 운임 재계산 (`certification.PriceReCalculation`) | ⚠️ `recalculate_price`, own `price_recalculation` consent, **never live-run** | ⛔ not implemented |
 
 "Live-verified" on both sides means the request was actually sent and its
 response observed. korail `pay_with_card`, `refund`, the two non-default
@@ -420,6 +421,39 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
      across two cars (the app's UI can only ever select within one car, though
      the wire format is per-seat), and what the server says when a designated
      seat has been taken between the inventory read and the hold.
+
+9. **korail `recalculate_price` (운임 재계산) has never been sent.** The wire
+   shape is settled from the APK and needs no further static work: the six
+   `List` `@Field`s are index-aligned one row per seat (`a6/C1042B.java:275-283`,
+   confirmed in `smali/a6.1/B.smali`), and Retrofit emits them as repeated keys
+   rather than indexed ones (`RequestBuilder.smali:1537-1601`). What is unknown
+   is entirely server-side.
+
+   *Cost to prove: one hold, and no money, if it is done in this order.* Place
+   an ordinary `1101` hold (₩0 until settled), read it back with
+   `get_ticket_reservation_detail` to get each seat's `h_psg_tp_cd`,
+   `h_psrm_cl_cd` and `h_dcnt_knd_cd1`, build one `PriceRecalculationRow` per
+   seat **echoing those values unchanged and applying no discount** (all three
+   discount fields `""`), and call `recalculate_price` with
+   `dry_run=False`. That is the identity case: it should return the hold
+   re-priced to the amount it already had. Compare `received_amount` against
+   the same field from the hold. Then `cancel_unpaid_hold`. Nothing is
+   settled at any point, so the run costs nothing but the hold.
+
+   Only after the identity case answers should a real discount be applied, and
+   then only one whose entitlement the account actually has. **Do not run this
+   against a hold anyone intends to pay for**, and do not run it against a
+   settled ticket at all: a wrong row changes what the passenger is about to be
+   charged, which is the whole reason it has its own consent category.
+
+   *Unknowns worth recording:* whether the server validates `txtPsgGridcnt`
+   against the PNR or trusts it; what it does when `dcnt_knd_cd1` disagrees
+   with the hold's stored discount; whether it rejects or silently ignores a
+   discount the account is not entitled to; and whether the response's
+   `h_tot_rcvd_amt` is the re-priced amount or the original one. Also worth
+   confirming that the repeated-key encoding is accepted at all — that is the
+   single assumption a live call would most usefully falsify, and a
+   `strResult=FAIL` with a parameter-count message would say so immediately.
 
 ## How the korail live round trips were run
 

@@ -65,11 +65,17 @@ was discarding.
   `MeritCertDao.java:10-56` `txtJuminNo7`), and each REGISTERS an entitlement
   against the account rather than reading one. Building an unverifiable
   identity-document submitter was judged worse than not having it.
-- **`certification.PriceReCalculation`.** It re-prices a live PNR. It is the
-  most interesting remaining route in this area — see the live list below —
-  but it mutates a held reservation's price, its `@Field` set carries six
-  parallel `List` parameters whose pairing is not decidable from the DAO alone,
-  and no offline test can show it is right.
+- **`certification.PriceReCalculation`.** Left out at the time because its
+  `@Field` set carries six parallel `List` parameters whose pairing is not
+  decidable *from the DAO alone*. **It was decidable from the call site, and
+  has since been implemented** as `recalculate_price` under its own
+  `price_recalculation` consent category: `k2()`
+  (`a6/C1042B.java:275-283`) is one loop over a single `DiscountPriceParams[]`
+  appending one field of the same element to each of the six lists, so they
+  are index-aligned, one row per seat. Retrofit sends them as repeated keys
+  (`RequestBuilder.smali:1537-1601`). Still never transmitted, and not
+  live-enabled — re-pricing a real hold changes what the passenger is about to
+  be charged.
 - **정기권/패스 구매·발권** (`pass.passReserve` and the three siblings). A
   separate product family with its own payment flow; out of scope for a
   discount tranche. The plain pair (`pass.passReserve` / `pass.passPayIssue`)
@@ -139,8 +145,8 @@ a live call does.
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 58 exact login/read routes and 73 public methods (62 login/read plus the consent-gated mutation methods `reserve`,
-  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`, and `extend_discount_card`,
+- The current package boundary is 58 exact login/read routes and 74 public methods (62 login/read plus the consent-gated mutation methods `reserve`,
+  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`, `extend_discount_card`, and `recalculate_price`,
   which return a
   redacted preview by default and send a live state change only with a
   `dry_run=False` matching-category consent via the double-gated

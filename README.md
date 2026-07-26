@@ -7,15 +7,15 @@ requests. It also retains the static reverse-engineering report for `korail.apk`
 Android package `com.korail.talk` version `6.5.0`, as the package's historical
 evidence map.
 
-The reviewed package boundary contains 58 routes and 73 public methods. All 58
+The reviewed package boundary contains 58 routes and 74 public methods. All 58
 routes are login/read routes: 56 reads plus the login POST and the server-side
-logout GET. The seven mutation routes are tracked separately and
+logout GET. The eight mutation routes are tracked separately and
 are never added to the read-only allowlist. Sixty-two of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
-eleven, `reserve`, `reserve_transfer`, `reserve_merge`,
+twelve, `reserve`, `reserve_transfer`, `reserve_merge`,
 `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
-`pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card` and
-`extend_discount_card`, are
+`pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`,
+`extend_discount_card` and `recalculate_price`, are
 the consent-gated mutation methods. Each is denied unless the caller supplies a
 `MutationConsent` that opts into its category; with the default `dry_run=True`
 each merely validates its inputs and returns a redacted `MutationPreview` of the
@@ -1143,6 +1143,54 @@ before this tranche. Four routes, of which two are reads:
 The two writes sit in their own consent category, `"discount_card"`
 (`MutationConsent.allow_discount_card`, default `False`), which no live path in
 this repository touches.
+
+## 운임 재계산 — re-pricing a held PNR
+
+- `recalculate_price(request, consent=...)` —
+  `POST certification.PriceReCalculation` (`CertificationService.java:35-37`).
+  The app fires it from the payment screen whenever the discount selection
+  changes for a reservation that **already exists** (`a6/C1042B.java:265-296`),
+  and answers with the same `ReservationResponse` a hold returns — so
+  `ReservationHoldResponse.received_amount` comes back as the *new* amount that
+  would be settled.
+
+`request.rows` is one `PriceRecalculationRow` per seat of the journey, in seat
+order. The first three fields are copied off the held seat — take them from
+`get_ticket_reservation_detail` for the same PNR — and the last three carry the
+discount being applied:
+
+| field | wire key | source |
+|---|---|---|
+| `passenger_type_code` | `psg_tp_dv_cd` | seat's `h_psg_tp_cd` |
+| `room_class_code` | `psrm_cl_cd` | seat's `h_psrm_cl_cd` |
+| `discount_kind_code` | `dcnt_knd_cd1` | seat's existing `h_dcnt_knd_cd1` |
+| `requested_discount_code` | `hidDcntKndCd` | the discount being applied, `""` if none |
+| `certificate_no` | `hidDscpNo` | its coupon/certificate number, `""` if none |
+| `family_sequence_no` | `hidFmlyNo` | 다자녀 `fmlySqno`, `""` otherwise |
+
+**The six lists pair by index.** `k2()` is one loop over a single
+`DiscountPriceParams[]` appending one field of the same element to each of six
+`ArrayList`s (`a6/C1042B.java:275-283`, confirmed in `smali/a6.1/B.smali`), so
+element *i* of all six belongs to seat *i*, and `txtPsgGridcnt` is their common
+length. Retrofit flattens each list into **repeated keys** — `addField(name,
+element)` in a loop where the name never changes
+(`RequestBuilder.smali:1537-1601`) — so the body carries
+`psg_tp_dv_cd=..&psg_tp_dv_cd=..`, with no `[]` and no index suffix.
+
+Two derivations the builder enforces rather than trusting the caller, because
+both are single code paths in the app and both change money: `"432"` (군장병)
+never travels in `requested_discount_code` — the app moves it into
+`discount_kind_code` and blanks the field (`S4/D.java:181-183`) — and an
+integrated 국가유공자 discount (a `51`-prefixed certificate under kind `"151"`
+or `"152"`, `T4/a.java:51-53`) must clear `discount_kind_code` to `"000"`. A
+`None` anywhere in the six is refused: Retrofit *skips* a null list element,
+which would shorten one key against the other five and re-pair every later row.
+
+It sits in its own consent category, `"price_recalculation"`
+(`MutationConsent.allow_price_recalculation`, default `False`) — **not**
+`"payment"`, because a payment consent authorises settling an amount that has
+already been quoted and this call rewrites the quote. Nothing here has ever
+been transmitted and no live path in this repository reaches it.
 
 Everything starts from `RefundTicketDetailResponse.discount_card`. When the
 "ticket" being read is itself a card, `refunds.SelTicketInfo` returns a

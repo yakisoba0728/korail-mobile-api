@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+- Added: 운임 재계산 as a consent-gated mutation —
+  `KorailClient.recalculate_price`, `POST
+  certification.PriceReCalculation` (`CertificationService.java:35-37`), with
+  `PriceRecalculationRequest`/`PriceRecalculationRow` and
+  `build_price_recalculation_form`. It re-prices an ALREADY HELD PNR after the
+  payment screen's discount selection changes. Never transmitted; not
+  live-enabled.
+  - **The six parallel `List` `@Field`s pair by index, one row per seat.**
+    `k2()` (`a6/C1042B.java:275-283`) is a single loop over one
+    `DiscountPriceParams[]` appending one field of the same element to each of
+    six `ArrayList`s, so element *i* of all six belongs to seat *i*. Verified
+    in `smali/a6.1/B.smali` rather than taken from jadx. The 다자녀 variant
+    (`a6/C1041A.java:57-80`) builds rows differently and calls the same `k2()`.
+  - **They go out as repeated keys, not indexed ones.** Retrofit 1.x flattens
+    an `Iterable` `@Field` with `addField(name, element)` in a loop where the
+    name is loop-invariant (`RequestBuilder.smali:1537-1601`), so the body is
+    `psg_tp_dv_cd=..&psg_tp_dv_cd=..` with no brackets or suffix. The builder
+    returns list values; httpx encodes them identically and the mutation
+    transmit gate needed no change.
+  - `hiduserYn`/`hidCustNo` are sent only for a non-member
+    (`a6/C1042B.java:290-293`); Retrofit omits a null `@Field`, so a member's
+    form is twelve keys, not fourteen.
+- Added: a sixth mutation consent category, `"price_recalculation"`, with
+  `MutationConsent.allow_price_recalculation` (default `False`). Deliberately
+  **not** a reuse of `"payment"`: a payment consent authorises settling an
+  already-quoted amount, and this route rewrites the quote, so folding them
+  together would let a consent to pay a sum authorise changing what the sum is.
+- Changed: `hidDscpNo`, `hidCustNo`, `hidFmlyNo` and `psrm_cl_cd` join
+  `SENSITIVE_KEYS`. The first is a coupon/국가유공자 certificate number — the
+  same `h_cpn_no` already redacted inbound — on the way out; the other three
+  are a customer number, a family-member sequence and the underscore spelling
+  of the already-redacted `psrmClCd`.
+- Changed: `redact_payload` redacts a list value ELEMENTWISE and preserves its
+  length, instead of collapsing it with `str()`. A form key can legitimately
+  carry many values now, and stringifying the list hid every element from
+  `redact_text` behind the list's own quotes.
+
 - Not shipping: 정기권 구매. The purchase pair (`pass.passReserve` /
   `pass.passPayIssue`) was implemented in this same unreleased cycle and removed
   again before release, so no `reserve_commuter_pass`, `pay_for_commuter_pass`,
