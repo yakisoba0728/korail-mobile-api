@@ -72,17 +72,31 @@ def _received_amount(
     per seat into ``totalAmount`` and ``(h_seat_prc + h_seat_fare) - h_rcvd_amt``
     into ``discountAmount``, then sets ``mReceivedAmount = totalAmount -
     discountAmount`` — algebraically the plain sum of the per-seat
-    ``h_rcvd_amt``. ``BasketTicketActivity.java:638`` takes the identical figure
-    straight off the response's ``h_tot_rcvd_amt``
-    (``ReservationResponse.java:33``), so prefer that key when it is present and
-    fall back to the seat rows when it is not.
+    ``h_rcvd_amt``.
 
-    Returns ``None`` rather than a partial figure when neither source is usable:
-    a wrong settlement amount must never reach the wire.
+    The seat sum is the PRIMARY source here, matching the app. The
+    ``h_tot_rcvd_amt`` key looks like the obvious shortcut, and
+    ``BasketTicketActivity.java:637-641`` does put that figure in the payment
+    bundle — but it puts the reservation response in the same bundle, so
+    ``PaymentActivity.java:169`` takes the recalculating branch and the
+    extra is never read. There is no live path in the APK by which
+    ``h_tot_rcvd_amt`` reaches ``hidMnsStlAmt1``. Preferring it was therefore
+    preferring a number the app deliberately ignores, and the two can only
+    agree by luck once add-on products, fees or mileage land at a different
+    moment than the seat rows.
+
+    When both sources are readable and disagree, this refuses outright rather
+    than picking one: a settlement whose amount is ambiguous is exactly the
+    thing that must not reach the wire. ``h_tot_rcvd_amt`` remains the fallback
+    for a response that carries no seat rows at all.
+
+    Returns ``None`` rather than a partial figure when neither source is usable.
     """
-    total = _optional_string(raw, "h_tot_rcvd_amt", context="reservation")
-    if total is not None and _DIGITS_RE.fullmatch(total.strip()):
-        return total.strip()
+    declared = _optional_string(raw, "h_tot_rcvd_amt", context="reservation")
+    if declared is not None:
+        declared = declared.strip()
+        if not _DIGITS_RE.fullmatch(declared):
+            declared = None
 
     summed = 0
     seats_seen = 0
@@ -118,8 +132,17 @@ def _received_amount(
             summed += int(amount)
             seats_seen += 1
     if seats_seen == 0:
-        return None
-    return str(summed)
+        # No seat rows to recompute from; the declared total is all there is.
+        return declared
+    seat_total = str(summed)
+    if declared is not None and declared != seat_total:
+        raise KorailProtocolError(
+            "KORAIL reservation settlement amount is ambiguous: the seat rows "
+            f"sum to {seat_total} but h_tot_rcvd_amt says {declared}. The app "
+            "settles the seat sum; refusing rather than guessing which one to "
+            "charge."
+        )
+    return seat_total
 
 
 def _base_fields(raw: dict[str, Any]) -> dict[str, Any]:

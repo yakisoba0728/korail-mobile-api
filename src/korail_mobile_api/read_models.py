@@ -182,6 +182,32 @@ class ReceiptPayment:
 
 
 @dataclass(frozen=True)
+class ReceiptCashPayment:
+    """One 현금영수증 row of a receipt (``ReceiptDao.CashReceiptInfo``).
+
+    The sibling of :class:`ReceiptPayment`: ``stl_info`` carries the card and
+    point settlements, ``cash_rcet_info`` carries the cash-receipt ones
+    (``ReceiptDao.java:12-40,43-44``). Only ``h_tot_apv_amt`` is an ``int`` on
+    the app side; the rest are strings.
+    """
+
+    #: ``h_apv_mtd_nm`` — approval method name.
+    approval_method_name: str | None = None
+    #: ``h_athn_dmn_rcgn_no`` — the identifier the receipt was issued against
+    #: (a phone or business number), so it is treated as identity.
+    authentication_domain_recognition_no: str | None = field(
+        default=None, repr=False
+    )
+    #: ``h_cash_rcet_apv_no`` — the cash-receipt approval number.
+    cash_receipt_approval_no: str | None = field(default=None, repr=False)
+    #: ``h_cash_rcet_txn_dv_cd`` — issue vs cancellation.
+    cash_receipt_transaction_division_code: str | None = None
+    #: ``h_tot_apv_amt`` — total approved amount.
+    total_approved_amount: int | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
 class TicketReceipt:
     travel_date: str | None = None
     departure_station: str | None = None
@@ -209,6 +235,10 @@ class TicketReceipt:
     refund_received_amount: int | None = None
     point_refund_amount: int | None = None
     payments: tuple[ReceiptPayment, ...] = ()
+    #: ``cash_rcet_info`` — the cash-receipt rows. Empty for a receipt with no
+    #: 현금영수증; the sibling list to :attr:`payments`, which carries card and
+    #: point settlements.
+    cash_receipts: tuple[ReceiptCashPayment, ...] = ()
     member_card_no: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
@@ -1274,6 +1304,21 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     #: request as ``h_comp_nm``/``h_comp_cert_no``.
     companion_name: str | None = field(default=None, repr=False)
     companion_birth_date: str | None = field(default=None, repr=False)
+    #: ``h_pbp_acep_tgt_flg`` — whether this ticket is a PBP acceptance target.
+    #: The app echoes this value verbatim into the refund request's
+    #: ``pbpAcepTgtFlg`` (``ticketReturn/a.java:430-431``); pass it to
+    #: :func:`build_refund_form` so the refund states what the server said
+    #: rather than the ``"N"`` default.
+    pbp_acceptance_target_flag: str | None = None
+    #: ``h_dlay_flg``/``h_dlay_tk_flg`` — delay-compensation eligibility.
+    delay_flag: str | None = None
+    delay_ticket_flag: str | None = None
+    #: ``mlgSaveFlg`` — whether refunding this ticket restores mileage.
+    mileage_save_flag: str | None = None
+    #: ``addSrvFlg``/``addSrvCancel`` — attached add-on services and whether
+    #: refunding cancels them too.
+    additional_service_flag: str | None = None
+    additional_service_cancel: str | None = None
     journeys: tuple[RefundTicketJourney, ...] = ()
     #: ``dcnt_crd_info`` — present only when this "ticket" is a 할인카드(N카드).
     #: ``None`` for every ordinary ticket.

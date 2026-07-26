@@ -74,6 +74,7 @@ from .read_models import (
     PriceFareQuoteResponse,
     RecentDeliveryHistoryResponse,
     RecentDeliveryRecipient,
+    ReceiptCashPayment,
     ReceiptPayment,
     RefundCommissionResponse,
     RefundTicketDetailResponse,
@@ -1057,6 +1058,31 @@ def parse_ticket_receipt_response(
                     raw=payment,
                 )
             )
+        cash_receipts = []
+        for cash_value in _optional_list(
+            item, "cash_rcet_info", "ticket receipt"
+        ):
+            cash = _row(cash_value, "ticket receipt cash_rcet_info")
+            cash_receipts.append(
+                ReceiptCashPayment(
+                    approval_method_name=_optional_string(
+                        cash, "h_apv_mtd_nm", "receipt cash payment"
+                    ),
+                    authentication_domain_recognition_no=_optional_string(
+                        cash, "h_athn_dmn_rcgn_no", "receipt cash payment"
+                    ),
+                    cash_receipt_approval_no=_optional_string(
+                        cash, "h_cash_rcet_apv_no", "receipt cash payment"
+                    ),
+                    cash_receipt_transaction_division_code=_optional_string(
+                        cash, "h_cash_rcet_txn_dv_cd", "receipt cash payment"
+                    ),
+                    total_approved_amount=_optional_integer(
+                        cash, "h_tot_apv_amt", "receipt cash payment"
+                    ),
+                    raw=cash,
+                )
+            )
         items.append(
             TicketReceipt(
                 travel_date=_optional_string(
@@ -1131,6 +1157,7 @@ def parse_ticket_receipt_response(
                     item, "h_xpoint_ret_amt", "ticket receipt"
                 ),
                 payments=tuple(payments),
+                cash_receipts=tuple(cash_receipts),
                 member_card_no=_optional_string(
                     item, "h_stl_mb_crd_no", "ticket receipt"
                 ),
@@ -2695,6 +2722,17 @@ _REFUND_TICKET_DETAIL_FIELDS = {
     "train_running_flag": "h_trn_running_flg",
     "companion_name": "h_compa_nm",
     "companion_birth_date": "h_compa_brth",
+    # Flags the app echoes straight back into the refund it then sends
+    # (TicketDetailDao.java:227-281). h_pbp_acep_tgt_flg is the one
+    # build_refund_form needs: ticketReturn/a.java:430-431 puts this exact value
+    # in pbpAcepTgtFlg, so without parsing it there is no way for a caller to
+    # send anything but a guess.
+    "pbp_acceptance_target_flag": "h_pbp_acep_tgt_flg",
+    "delay_flag": "h_dlay_flg",
+    "delay_ticket_flag": "h_dlay_tk_flg",
+    "mileage_save_flag": "mlgSaveFlg",
+    "additional_service_flag": "addSrvFlg",
+    "additional_service_cancel": "addSrvCancel",
 }
 
 

@@ -1728,9 +1728,10 @@ class KorailClient:
         ``txtJobId="1102"`` sits on the direct screen
         (``DirectInquiryActivity.java:434``).
 
-        NOT live-verified. No transfer hold has been sent to KORAIL, and note
-        that :meth:`cancel_unpaid_hold` currently accepts single-journey holds
-        only, so a live transfer hold cannot be released through this client.
+        NOT live-verified: no transfer hold has been sent to KORAIL.
+        :meth:`cancel_unpaid_hold` DOES release one — it echoes the hold's own
+        journey count rather than assuming one, so a two-journey transfer hold
+        cancels through this client like any other.
         """
         require_mutation_consent(consent, "reserve")
         if self.session.current is None:
@@ -1839,16 +1840,25 @@ class KorailClient:
         *,
         consent: MutationConsent,
     ) -> MutationPreview | BaseKorailResponse:
-        """Cancel a fresh, unpaid single-journey reservation hold.
+        """Cancel a fresh, unpaid reservation hold, however many journeys it has.
 
         Gated by ``require_mutation_consent(consent, "cancel")`` and an
         authenticated session. ``build_unpaid_reservation_cancel_form`` requires
-        ``hold`` to be one successful (``SUCC``) single-journey hold with a PNR,
-        so this only ever releases a hold produced by :meth:`reserve`. With
-        ``dry_run=True`` it returns a :class:`MutationPreview` (redacting the
-        PNR); with ``dry_run=False`` it POSTs the cancellation via the
-        double-gated mutation send path and returns the parsed envelope. This is
-        the auto-cancel used to immediately release a live test hold.
+        ``hold`` to be one successful (``SUCC``) hold with a PNR, and echoes the
+        hold's OWN journey count into ``txtJrnyCnt`` rather than fixing it at
+        one. That is deliberate: a 환승 hold carries two journeys and a 병합
+        hold can carry more, and refusing them here would strand a live
+        reservation with no way to release it. So this releases holds from
+        :meth:`reserve`, :meth:`reserve_transfer` and :meth:`merge_reservation`
+        alike. With ``dry_run=True`` it returns a :class:`MutationPreview`
+        (redacting the PNR); with ``dry_run=False`` it POSTs the cancellation
+        via the double-gated mutation send path and returns the parsed envelope.
+        This is the auto-cancel used to immediately release a live test hold.
+
+        This sends the SECOND of the app's two cancel calls
+        (``ReservationCancelChk``), not both. Skipping ``ReservationCancel`` is
+        a live-verified simplification, not an oversight — see
+        ``docs/MUTATION_HANDOFF.md:21``.
         """
         require_mutation_consent(consent, "cancel")
         if self.session.current is None:
@@ -2013,6 +2023,9 @@ class KorailClient:
         ticket: PaidTicket,
         *,
         consent: MutationConsent,
+        return_times_division_code: str | None = None,
+        settle_mileage: bool = False,
+        pbp_acceptance_target_flag: str | None = None,
     ) -> MutationPreview | BaseKorailResponse:
         """Refund a settled (paid) ticket via ``refunds.RefundsRequest``.
 
@@ -2025,6 +2038,22 @@ class KorailClient:
         the parsed envelope. NOTE: a refund acts on a *paid* ticket, and this
         package's fake-card payment is always declined, so no live paid ticket is
         produced here — the live path exists but is exercised offline only.
+
+        The app does not send fixed values for three of this form's fields; it
+        echoes what the server just told it. To match it, chain the two reads
+        that carry those values:
+
+        1. :meth:`get_refund_ticket_detail` →
+           :attr:`RefundTicketDetailResponse.pbp_acceptance_target_flag`
+        2. :meth:`get_refund_commission` →
+           :attr:`ticket_return_times_division_code` (``"21"`` before
+           departure, ``"15"`` after)
+
+        and pass both here. ``settle_mileage`` is a caller decision rather than
+        an echo — the app sets it only when the ticket is mileage-settleable and
+        the usable balance covers the fee. Omitting all three keeps the previous
+        fixed ``"21"``/``"N"``/``"N"``, which is correct only for a
+        before-departure, non-mileage, non-PBP refund.
         """
         require_mutation_consent(consent, "refund")
         if self.session.current is None:
@@ -2032,7 +2061,13 @@ class KorailClient:
                 "KORAIL refund requires an authenticated session"
             )
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
-        form = build_refund_form(self.config, ticket)
+        form = build_refund_form(
+            self.config,
+            ticket,
+            return_times_division_code=return_times_division_code,
+            settle_mileage=settle_mileage,
+            pbp_acceptance_target_flag=pbp_acceptance_target_flag,
+        )
         if consent.dry_run:
             return MutationPreview(
                 category="refund",

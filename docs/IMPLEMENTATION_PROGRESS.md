@@ -230,8 +230,11 @@ a live call does.
   `SUCC` parsing, and frozen repr-safe models for all eight evidenced train
   fields. The server session rule remains unverified, so a conservative
   client-side login gate remains until a bounded after-login validation.
-- The transport now allows 58 exact login/read routes and the client exposes
-  72 public methods. No new route was added to the six-path DynaPath allowlist.
+- At this milestone the transport allowed 58 exact login/read routes and the
+  client exposed 72 public methods. No new route was added to the six-path
+  DynaPath allowlist. (The count has since grown to 74; this line records the
+  state at the time, and `tests/test_readme.py` measures the live figure rather
+  than trusting any sentence here.)
 - A bounded 2026-07-15 one-session replay exercised the eleven-method expansion
   without raw output. Five wrappers parsed successfully, four stopped at
   `KorailProtocolError`, and two identifier-dependent reads were not issued
@@ -309,7 +312,7 @@ was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
 of 165; current inventory is 32 successful, 10 failed, and 123 unexecuted. The
-current package boundary is 58 exact routes and 72 public methods.
+current package boundary is 58 exact routes and 74 public methods.
 
 ## Ticket-reference static read tranche
 
@@ -755,7 +758,7 @@ tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/superpowers/specs/`.
 
 The current implementation evidence establishes 58 routes at the exact
-login/read transport boundary and 72 public methods on `KorailClient`. The
+login/read transport boundary and 74 public methods on `KorailClient`. The
 read-only path exposes no callable mutation route; reservation, unpaid-cancel,
 fake-card payment, acknowledged real-card payment, and refund are callable only
 through the separate

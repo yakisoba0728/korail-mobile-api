@@ -124,7 +124,11 @@ class MutationPreview:
     category: str
     method: str
     route: str
-    payload: Mapping[str, str]
+    #: A list value is legitimate here, not an anomaly: ``redact_payload``
+    #: preserves repeated wire keys as a list, and the app itself declares six
+    #: ``@Field List<String>`` parameters on 운임 재계산
+    #: (``CertificationService.java:35-37``).
+    payload: Mapping[str, str | list[str]]
     note: str = "dry-run: not sent"
 
     def __post_init__(self) -> None:

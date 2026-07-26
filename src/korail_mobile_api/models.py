@@ -596,6 +596,23 @@ class TrainSearchMetadata:
     next_preceding_train_no: str | None = field(default=None, repr=False)
     next_connecting_train_no: str | None = field(default=None, repr=False)
     result_count: str | None = None
+    #: ``h_notice_msg`` — the notice the server attaches to a search
+    #: (``RsvInquiryResponse.java:12``). Declared by the app's own DTO, and read
+    #: by the sibling parsers that return this same shape
+    #: (``read_parsers.py``, ``limousine_parsers.py``); this parser was the only
+    #: one that dropped it.
+    notice_message: str | None = None
+    # WARNING -- the four fields below are NOT attested by the APK. Each of
+    # strJobId / h_seat_cnt_first / h_seat_cnt_second / txtGoHour_first occurs
+    # in ZERO files across analysis/, while RsvInquiryResponse.java:8-17
+    # declares exactly nine top-level fields and none of these is among them.
+    # They are kept because removing a public attribute would break callers,
+    # not because they are evidenced: expect them to be None against a real
+    # server. Compare h_menu_id, which was excluded from this very model for
+    # exactly this reason -- the same standard simply had not been applied
+    # here. The fixture that exercises them uses SYNTHETIC- values, so the test
+    # covering them proves only that the parser reads keys it was written to
+    # read.
     first_seat_count: str | None = None
     second_seat_count: str | None = None
     first_departure_time: str | None = field(default=None, repr=False)

@@ -227,8 +227,75 @@ SENSITIVE_KEYS = frozenset(
         "hidCustNo",
         "hidFmlyNo",
         "psrm_cl_cd",
+        # The 할인카드 registration form's per-row identity
+        # (NCardReservationDao.java:16,29,30 -> apdUsrInfo.put(prefix + i, ...)).
+        # These are the OUTBOUND spellings of values this set already redacts as
+        # acepCustNm/acepCustTeln/custMgNo. They arrive indexed (custMgNo_1,
+        # apdCustName_1, apdCustTeln_1), which is why the bases are listed here
+        # and _index_stripped() below is what actually catches them: a real
+        # name, a phone number and a customer number travel together in one
+        # preview row, and together they re-identify a person outright.
+        "apdCustName",
+        "apdCustTeln",
+        # The refund form's original-sale date under its third spelling. The
+        # other three quarters of the return-number tuple (window, sequence,
+        # password) are already redacted, so leaving this one readable is the
+        # only thing standing between a preview and a reconstructable 반환번호.
+        "saleDd",
+        # 예약변경 차수 on the payment form (PaymentService.java:12-14). Four of
+        # the five identity keys beside it are redacted; this was the gap.
+        "hidRsvChgNo",
+        # The login response's continuation PII (LoginDao.java:84-107). These
+        # are held on KorailSession.raw and serialised into the pending-auth
+        # string, and mbCrdNo alone was listed -- so the same value was masked
+        # or not purely according to which spelling the server used.
+        "strCpNo",
+        "strCustNm",
+        "strBtdt",
+        "strEmailAdr",
+        "strMbCrdNo",
+        "strCustNo",
+        "encryptCustNo",
+        # Bases for the index-enumerated keys above. The enumerations are kept
+        # so that an exact match still works, but these make the family the
+        # matched thing rather than each reachable subscript.
+        "txtSrcarNo",
+        "txtSeatNo",
+        "txtCardNo",
+        "custMgNo_",
     }
 )
+_INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)_?(?P<index>\d+)$")
+
+
+def _index_stripped(name: str) -> str | None:
+    """Return ``name`` without a trailing wire index, or ``None``.
+
+    Korail spells one logical field as many keys by appending a row number,
+    sometimes with an underscore (``custMgNo_1``) and sometimes without
+    (``txtSeatNo1``). Matching SENSITIVE_KEYS exactly meant every reachable
+    subscript had to be enumerated by hand, and a secret stayed readable
+    whenever a spelling was missed -- which is exactly how a real name, a phone
+    number and a customer number survived into previews.
+    """
+    match = _INDEX_SUFFIX_RE.match(name)
+    if match is None:
+        return None
+    base = match.group("base")
+    return base or None
+
+
+def is_sensitive_key(name: str) -> bool:
+    """Whether ``name`` names a value that must never reach a preview or log.
+
+    Matches the key itself and, failing that, the key with a trailing wire
+    index removed, so ``custMgNo_7`` is as redacted as ``custMgNo``.
+    """
+    folded = name.casefold()
+    if folded in SENSITIVE_KEYS:
+        return True
+    base = _index_stripped(folded)
+    return base is not None and base in SENSITIVE_KEYS
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
 SESSION_RE = re.compile(r"(?i)(JSESSIONID=)[^&;\s]+")
 SENSITIVE_KEY_VALUE_RE = re.compile(
@@ -276,9 +343,7 @@ def redact_url(value: str) -> str:
     query = [
         (
             key,
-            "[REDACTED]"
-            if key.casefold() in SENSITIVE_KEYS
-            else redact_text(item),
+            "[REDACTED]" if is_sensitive_key(key) else redact_text(item),
         )
         for key, item in parse_qsl(parsed.query, keep_blank_values=True)
     ]
@@ -288,7 +353,7 @@ def redact_url(value: str) -> str:
 
 
 def redact_value(value: Any, *, key: str | None = None) -> Any:
-    if key is not None and key.casefold() in SENSITIVE_KEYS:
+    if key is not None and is_sensitive_key(key):
         return "[REDACTED]"
     if isinstance(value, Mapping):
         return {
@@ -337,7 +402,7 @@ def redact_payload(
     redacted: dict[str, str | list[str]] = {}
     for key, value in payload.items():
         name = str(key)
-        sensitive = name.casefold() in SENSITIVE_KEYS
+        sensitive = is_sensitive_key(name)
         if isinstance(value, (list, tuple)):
             redacted[name] = [
                 "[REDACTED]" if sensitive else redact_text(str(item))

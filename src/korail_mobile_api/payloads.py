@@ -399,6 +399,19 @@ def build_ticket_list_form(
         raise KorailProtocolError(
             'ticket list mode must be "1" (active) or "2" (history)'
         )
+    # History mode without the bounds is a form the app never builds: every
+    # entry point into TicketPurchaseHistoryActivity (:365, :372, :719) arrives
+    # with both dates formatted, and :277-280 sends them. The comment above has
+    # always said history "carries" them; this makes that true rather than
+    # aspirational. Mode "1" deliberately keeps the empty strings, because
+    # TicketListActivity.java:939-941 transmits them empty.
+    if mode == TICKET_LIST_MODE_HISTORY and not (
+        boarding_date_from.strip() and boarding_date_to.strip()
+    ):
+        raise KorailProtocolError(
+            'ticket list mode "2" (history) requires both boarding_date_from '
+            "and boarding_date_to; the app never sends this list without them"
+        )
     return {
         "txtDeviceId": config.advertising_id,
         "txtIndex": mode,

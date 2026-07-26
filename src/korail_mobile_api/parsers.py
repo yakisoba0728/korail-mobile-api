@@ -268,6 +268,7 @@ def parse_train_search_metadata(
         next_preceding_train_no=optional("h_prcd_trn_no_next"),
         next_connecting_train_no=optional("h_ectb_trn_no_next"),
         result_count=optional("h_rslt_cnt"),
+        notice_message=optional("h_notice_msg"),
         first_seat_count=optional("h_seat_cnt_first"),
         second_seat_count=optional("h_seat_cnt_second"),
         first_departure_time=optional("txtGoHour_first"),
