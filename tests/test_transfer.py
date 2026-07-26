@@ -1095,3 +1095,56 @@ def test_single_leg_rejection_messages_are_unchanged():
             _first_leg(),
             passengers={"adult": 1},
         )
+
+
+def test_cancel_accepts_a_two_journey_transfer_hold_and_echoes_its_count():
+    """A 환승 hold must be cancelable, and the count is echoed not fixed.
+
+    The app's own cancel of a just-created hold keeps txtJrnySqno and
+    hidRsvChgNo constant but passes the hold's h_jrny_cnt straight through
+    (DReservationConfirmActivity.java:269-278). Rejecting a two-journey hold
+    here would leave a live transfer reservation with no way to release it.
+    """
+    from korail_mobile_api.config import KorailConfig
+    from korail_mobile_api.mutation_models import ReservationHoldResponse
+    from korail_mobile_api.mutation_payloads import (
+        build_unpaid_reservation_cancel_form,
+    )
+
+    config = KorailConfig()
+    for raw_count, expected in (("2", "2"), ("0002", "2"), ("1", "1"), ("0001", "1")):
+        hold = ReservationHoldResponse(
+            h_msg_cd="IRR000018",
+            h_msg_txt="",
+            str_result="SUCC",
+            raw={},
+            pnr_no="399999999999999",
+            journey_count=raw_count,
+        )
+        form = build_unpaid_reservation_cancel_form(config, hold)
+        assert form["txtJrnyCnt"] == expected, raw_count
+        # These two stay constant for a freshly created hold, whatever the legs.
+        assert form["txtJrnySqno"] == "0001"
+        assert form["hidRsvChgNo"] == "000"
+
+
+def test_cancel_still_refuses_a_hold_with_no_usable_journey_count():
+    from korail_mobile_api.config import KorailConfig
+    from korail_mobile_api.errors import KorailProtocolError
+    from korail_mobile_api.mutation_models import ReservationHoldResponse
+    from korail_mobile_api.mutation_payloads import (
+        build_unpaid_reservation_cancel_form,
+    )
+
+    config = KorailConfig()
+    for bad in ("", "   ", "0", "abc", None):
+        hold = ReservationHoldResponse(
+            h_msg_cd="IRR000018",
+            h_msg_txt="",
+            str_result="SUCC",
+            raw={},
+            pnr_no="399999999999999",
+            journey_count=bad,
+        )
+        with pytest.raises(KorailProtocolError):
+            build_unpaid_reservation_cancel_form(config, hold)

@@ -875,29 +875,36 @@ def build_unpaid_reservation_cancel_form(
             "KORAIL cancellation requires an exact reservation hold response"
         )
     # A live TicketReservation returns the journey count zero-padded
-    # (h_jrny_cnt="0001"), not "1". Accept any digit string that is numerically
-    # one single journey; the cancel form still transmits the app's txtJrnyCnt.
+    # (h_jrny_cnt="0001"), not "1", so compare numerically rather than by
+    # spelling -- a formatting difference must never make a hold uncancellable.
+    #
+    # The count is ECHOED, not fixed at one. DReservationConfirmActivity.java:
+    # 269-278 is decisive: executeRsvCancel(ReservationResponse) sets
+    # txtJrnySqno="0001" and hidRsvChgNo="000" as constants but passes
+    # setTxtJrnyCnt(reservationResponse.getH_jrny_cnt()) straight through. A
+    # 환승 hold carries two journeys, and refusing it here would leave a live
+    # transfer reservation with no way to release it -- the orphaned hold this
+    # whole subsystem exists to prevent.
     journey_count = response.journey_count
-    is_single_journey = (
-        isinstance(journey_count, str)
-        and journey_count.strip().isdigit()
-        and int(journey_count) == 1
-    )
+    legs = None
+    if isinstance(journey_count, str) and journey_count.strip().isdigit():
+        legs = int(journey_count)
     if (
         response.str_result != "SUCC"
         or not isinstance(response.pnr_no, str)
         or not response.pnr_no.strip()
-        or not is_single_journey
+        or legs is None
+        or legs < 1
     ):
         raise KorailProtocolError(
-            "KORAIL cancellation requires one fresh successful unpaid hold"
+            "KORAIL cancellation requires a fresh successful unpaid hold"
         )
     form = _common_fields(config)
     form.update(
         {
             "txtPnrNo": response.pnr_no,
             "txtJrnySqno": "0001",
-            "txtJrnyCnt": "1",
+            "txtJrnyCnt": str(legs),
             # A literal "000" here, NOT the hold's h_rsv_chg_no -- deliberately
             # unlike build_card_payment_form below. Every app flow that cancels
             # a just-created hold from its ReservationResponse hardcodes it,
