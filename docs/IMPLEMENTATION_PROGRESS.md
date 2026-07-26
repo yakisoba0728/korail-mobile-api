@@ -235,6 +235,15 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 - Static-only limousine schedule-list, seat-inventory, and schedule-view lookup
 - Client-gated pass-schedule candidate lookup with caller-supplied runtime
   values; no pass reservation or payment operation
+- Consent-gated reservation hold for an arbitrary passenger mix
+  (`KorailPassengerCounts`: 어른, 청소년, 어린이, 동반유아, 경로, 1~3급 장애,
+  4~6급 장애, 안내견) in either cabin (`KorailSeatClass`: 일반실 / 특실). Both
+  `reserve` parameters are keyword-only and default to one adult in a general
+  seat, which reproduces the previously sent form exactly. `txtTotPsgCnt` is
+  every row summed, the 동반유아 and the 안내견 included, as the app computes
+  it; the mix is capped at `KORAIL_MAX_PASSENGERS_PER_RESERVATION` (9). Only
+  the one-adult general-seat form is live-verified; the multi-passenger and
+  특실 wire shapes are static-evidenced and have never been transmitted
 
 The read-only transport (`post_form`/`get_json`) refuses every mutation route
 and allows 54 exact read/login routes. The reservation, unpaid-cancel, payment,

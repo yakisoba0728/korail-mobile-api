@@ -271,6 +271,38 @@ attempted one fake-card payment, which the server declined with no charge, and
 then cancelled the hold. No PNR, credential, card value, token, or raw response
 was printed or persisted.
 
+`reserve` is no longer limited to one adult in a general seat. It takes a
+`KorailPassengerCounts` and a `KorailSeatClass`, both keyword-only and both
+defaulted so an existing call is unchanged:
+
+```python
+from korail_mobile_api import KorailPassengerCounts, KorailSeatClass
+
+preview = client.reserve(
+    train,
+    consent=MutationConsent(allow_reserve=True),
+    passengers=KorailPassengerCounts(adult=2, child=1, senior=1),
+    seat_class=KorailSeatClass.SPECIAL,
+)
+```
+
+`KorailPassengerCounts` has one field per row the app's request carries --
+`adult`, `teenager`, `child`, `infant` (동반유아), `senior`,
+`severe_disability` (1~3급), `mild_disability` (4~6급) and `guide_dog` -- with
+`adult` defaulting to 1 and the rest to 0. It refuses an empty mix, a negative
+count and a total above `KORAIL_MAX_PASSENGERS_PER_RESERVATION` (9, the cap the
+app's own passenger picker enforces). `txtTotPsgCnt` is every row summed, the
+lap infant and the guide dog included, because that is how the app computes it.
+`KorailSeatClass` is `GENERAL` (일반실, `"1"`) or `SPECIAL` (특실, `"2"`); a
+특실 hold requires the train's *special* seats to be evidenced as available,
+not its general ones.
+
+Only the single-adult, general-class form is live-verified. The
+multi-passenger and 특실 wire shapes are built from the app's own request
+builder and have never been sent to the live server, so their acceptance,
+pricing and error envelopes are unknown until an operator exercises the
+specific combinations they need.
+
 ### Fixed and account-shaped reads
 
 Four static-evidenced, authenticated reads are available as one-request,
@@ -719,4 +751,4 @@ still provide a custom `DynapathConfig.token_provider`; the package contains no
 separate probe generator and does not retain request history. Login follows the
 app sequence and treats only `IRZ000001` or `S200` as final success.
 
-Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, an explicitly acknowledged real card payment, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`). Real (chargeable) card payment is off by default: it requires `pay_with_card` plus a consent that sets `real_card_acknowledged=True` and `fake_card_only=False`, and `pay_with_fake_card` still refuses anything but a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
+Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, an explicitly acknowledged real card payment, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`). `reserve` accepts an arbitrary passenger mix (`KorailPassengerCounts`) and either cabin class (`KorailSeatClass`), defaulting to the one-adult, general-seat request that is the only live-verified shape; the multi-passenger and 특실 shapes are static-evidenced only. Real (chargeable) card payment is off by default: it requires `pay_with_card` plus a consent that sets `real_card_acknowledged=True` and `fake_card_only=False`, and `pay_with_fake_card` still refuses anything but a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.

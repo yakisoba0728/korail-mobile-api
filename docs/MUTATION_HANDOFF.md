@@ -159,6 +159,10 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
   carries it, else summed from the per-seat `h_rcvd_amt` rows; when neither is
   readable the payment builder refuses rather than substituting the display
   total. srtgo uses `h_rsv_amt`; we match the app, which is the authority.
+- **Scope.** Every korail live run above held ONE ADULT in a GENERAL seat on a
+  single journey. `KorailClient.reserve` now accepts an arbitrary passenger mix
+  and 특실 (item 7 below), and its default still builds exactly the form these
+  runs sent — but no other mix and no 특실 request has ever been transmitted.
 
 ## NOT settled / trade-offs
 
@@ -230,6 +234,28 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    auto-cancel), anti-bot IP-ban risk, and (SRT) NetFunnel virtual queue. Every
    live run must auto-cancel any created hold and verify reservation history is
    empty afterward.
+
+7. **korail multi-passenger and 특실 holds are not live-verified.**
+   `KorailClient.reserve` now takes a `KorailPassengerCounts` (어른, 청소년,
+   어린이, 동반유아, 경로, 1~3급 장애, 4~6급 장애, 안내견) and a
+   `KorailSeatClass` (일반실 / 특실). Both are keyword-only and defaulted to
+   one adult in a general seat, so the default request is byte-for-byte the one
+   the 2026-07-24/25 runs sent and the existing live evidence still stands
+   unchanged. Everything else is static evidence only, read out of the app's own
+   request builder (`w4/a.java:49-73` for the eight rows and their fixed
+   type/discount codes, `m5/c.java:330` for `txtTotPsgCnt` being the sum of all
+   eight — 동반유아 and 안내견 included, `m5/d.java:32-33` for the maximum of 9,
+   `c5/b.java:72` + `U4/a.java:88` + `K4/o.java:7-8` for `txtPsrmClCd1`). No
+   multi-passenger or 특실 form has ever been sent, so their acceptance,
+   pricing, seat allocation and error envelopes are unknown. **Trade-off:** the
+   mix is validated only as far as the app's picker validates it (non-negative,
+   at least one, at most nine); two picker warnings with no wire representation
+   — a 동반유아 needs an adult-ish companion (`m5/c.java:452-455`) and an
+   안내견 needs more 장애 passengers than dogs (`m5/c.java:458-465`) — are
+   documented but deliberately not enforced, since guessing at the server's
+   version of them would reject mixes it may accept. An operator verifying this
+   should reserve→cancel (no payment) only the combinations they actually
+   intend to use; nothing here generalises from one mix to another.
 
 ## How the korail live round trips were run
 

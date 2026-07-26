@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Added: `reserve` books an arbitrary passenger mix in either cabin. It takes a
+  `KorailPassengerCounts` — one field per row the app's request has always
+  carried (어른, 청소년, 어린이, 동반유아, 경로, 1~3급 장애, 4~6급 장애,
+  안내견) — and a `KorailSeatClass` (일반실 `"1"` / 특실 `"2"`). Both are
+  keyword-only and default to one adult in a general seat, so an existing call
+  sends the identical form, byte for byte and key for key. `txtTotPsgCnt` is
+  every row summed, the lap infant and the guide dog included, because that is
+  how the app computes `TOTAL_PERSON_COUNT`; the mix must be non-negative, hold
+  at least one passenger, and stay within
+  `KORAIL_MAX_PASSENGERS_PER_RESERVATION` (9, the cap the app's passenger
+  picker enforces). No discount-card field accompanies a discounted row: the
+  app's `OPsg` declares only `txtCardNo_`, written solely by the separate N-card
+  request, and korail2's/srtgo's `txtCardCode_`/`txtCardPw_` appear nowhere in
+  the decompiled app. A 특실 hold requires the train's special seats to be
+  evidenced as available, not its general ones. **Only the one-adult
+  general-seat form is live-verified**; the multi-passenger and 특실 wire shapes
+  are static-evidenced and have never been transmitted.
 - Fixed: `scripts/reserve_pay_refund_roundtrip.py` masked the PNR it exists to
   print. Its console scrubber applied a 13–19 digit card-number pattern to
   arbitrary text, and a KORAIL PNR is 15 decimal digits, so a live run on
