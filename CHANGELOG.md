@@ -35,6 +35,13 @@
     change because `category == "payment"` asked the wrong question, not
     because it had two members, and it still carries the tested invariant that
     no card-bearing category owns a GET mutation route.
+  - Changed: `h_cust_nm`, `usernames`, `h_chg_mg_no` and their model attribute
+    names (`customer_name`, `user_names`, `change_management_no`) leave
+    `SENSITIVE_KEYS`. Every one of them entered it for the pass payment form,
+    and no surviving response, form or model in this package carries any of
+    them — `h_cust_nm` and `h_chg_mg_no` appear in exactly one DAO in the whole
+    APK, `CommReservationDao`, which nothing here parses any more. The
+    pre-existing `h_cust_no` / `customer_no` entries are untouched.
 - Added: 병합예약. `KorailClient.reserve_merge`,
   `build_merge_reservation_form`, `is_merge_eligible`,
   `KorailReservationJobType.MERGE_STANDING` (`"1202"`),
