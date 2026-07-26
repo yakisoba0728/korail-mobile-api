@@ -114,6 +114,8 @@ from .read_models import (
     CrewRequestListResponse,
     CustomerTripInfoResponse,
     DelayDiscountTicketListResponse,
+    DiscountCardScheduleResponse,
+    DiscountCardUsageListResponse,
     DeliveryRecipientResponse,
     DepositBankListResponse,
     DiscountCouponListResponse,
@@ -151,7 +153,10 @@ from .read_payloads import (
     build_cart_list_form,
     build_commuter_kind_menu_query,
     build_crew_request_list_query,
+    DiscountCardScheduleRequest,
     build_delay_discount_ticket_form,
+    build_discount_card_schedule_query,
+    build_discount_card_usage_query,
     build_discount_coupon_form,
     build_free_seat_car_form,
     build_gift_ticket_list_form,
@@ -198,6 +203,8 @@ from .read_parsers import (
     parse_crew_request_list_response,
     parse_customer_trip_info_response,
     parse_delay_discount_ticket_response,
+    parse_discount_card_schedule_response,
+    parse_discount_card_usage_response,
     parse_delivery_recipient_response,
     parse_deposit_bank_response,
     parse_discount_coupon_response,
@@ -485,6 +492,79 @@ class KorailClient:
                     form,
                     include_dynapath=False,
                     raise_on_fail=False,
+                ).raw
+            )
+        )
+
+    def get_discount_card_usage_history(
+        self,
+        card_no: str,
+    ) -> DiscountCardUsageListResponse:
+        """List the trips a 할인카드(N카드) has already been spent on.
+
+        ``GET ticket.dcntCrdUseQry.do`` (``ResearchService.java:51-52``), the
+        read behind the ticket list's "사용 내역 조회하기" button
+        (``Y4/Q.java:347-353``). ``card_no`` is the card's own number, which
+        the app never asks a user to type: it comes off the N카드 ticket's
+        detail response as ``dcnt_crd_info.h_dcnt_crd_no``
+        (``Y4/C0907b.java:303``), i.e. from
+        :attr:`~korail_mobile_api.read_models.RefundTicketDetailResponse.discount_card`.
+
+        **NOT LIVE-VERIFIED.** No account this project can reach owns an N카드,
+        so the request shape is the APK's declaration and the response shape is
+        ``NCardHistoryDao`` rather than an observed body. Calling it with a
+        card number that is not the caller's own is expected to be refused by
+        the server; nothing here bypasses that.
+        """
+        self._require_session()
+        query = build_discount_card_usage_query(card_no)
+        return self._run_read(
+            lambda: parse_discount_card_usage_response(
+                self.http.get_json(
+                    "/classes/com.korail.mobile.ticket.dcntCrdUseQry.do",
+                    query,
+                    include_common=True,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_discount_card_schedule(
+        self,
+        request: DiscountCardScheduleRequest,
+    ) -> DiscountCardScheduleResponse:
+        """List the trains a 할인카드 may still be spent on, for one section.
+
+        ``GET research.dcntCrdScheduleView.do``
+        (``ResearchService.java:54-55``). This is NOT the ordinary train
+        search: an N카드 is sold against one to three fixed 구간, and this
+        route answers "which trains on this 구간 does this card cover", which
+        is why it is keyed by the card product (``dcntCrdKndCd`` /
+        ``dcntCrdKndMgNo``) rather than by station codes.
+
+        Paging is the caller's: the response's
+        :attr:`~korail_mobile_api.read_models.DiscountCardScheduleResponse.following_page_exists`
+        is ``"Y"`` while another page follows, and the app re-issues the read
+        with an incremented ``qryPgNo``
+        (``SectionNCardInquiryActivity.java:406-408``). Build the next request
+        with ``page_no`` set; leave it ``None`` for the first page, which is
+        what v6.5.0 itself sends.
+
+        **NOT LIVE-VERIFIED**, for the same reason as
+        :meth:`get_discount_card_usage_history`.
+        """
+        self._require_session()
+        query = build_discount_card_schedule_query(request)
+        return self._run_read(
+            lambda: parse_discount_card_schedule_response(
+                self.http.get_json(
+                    (
+                        "/classes/com.korail.mobile.research."
+                        "dcntCrdScheduleView.do"
+                    ),
+                    query,
+                    include_common=True,
+                    include_dynapath=False,
                 ).raw
             )
         )

@@ -29,7 +29,7 @@ EXCLUDED_API_DOMAINS = frozenset(
 
 # The exact (method, path) pairs the read-only send path will transmit to.
 #
-# 54 entries, 54 distinct paths, pinned by tests. The count is not 52 because
+# 56 entries, 56 distinct paths, pinned by tests. The count is not 52 because
 # two of the entries are session routes rather than reads: the login POST and
 # the server-side logout GET (cookie-authenticated, zero parameters, not a
 # mutation), which was added later than the other 50. There is no "excluding
@@ -134,6 +134,17 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ),
         ("POST", "/classes/com.korail.mobile.refunds.CommissionView"),
         ("POST", "/classes/com.korail.mobile.refunds.SelTicketInfo"),
+        # 할인카드(N카드) reads. Both are GETs whose only credential is the
+        # session cookie, and neither changes anything: one lists the trips a
+        # card has already been spent on, the other lists the trains a card
+        # may still be spent on. The two dcntCrd* routes that DO change state
+        # (research.dcntCrdInfo.do, reservation.dcntCrdExtn.do) are
+        # deliberately absent from this set.
+        ("GET", "/classes/com.korail.mobile.ticket.dcntCrdUseQry.do"),
+        (
+            "GET",
+            "/classes/com.korail.mobile.research.dcntCrdScheduleView.do",
+        ),
     }
 )
 
@@ -945,6 +956,35 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "h_purchase_history",
         }
     ),
+    # 할인카드(N카드) 사용이력 (ResearchService.java:51-52). One identifier and
+    # nothing else: the card number the ticket detail hands out as
+    # dcnt_crd_info.h_dcnt_crd_no (Y4/C0907b.java:303 puts it in the intent
+    # extra that TicketNCardHistoryActivity.java:137 reads straight into
+    # setDcntCrdNo).
+    "/classes/com.korail.mobile.ticket.dcntCrdUseQry.do": frozenset(
+        {"Device", "Version", "Key", "dcntCrdNo"}
+    ),
+    # 할인카드(N카드) 스케줄 조회 (ResearchService.java:54-55). Fourteen
+    # @Query parameters, of which two are Retrofit-omittable -- see
+    # KORAIL_OPTIONAL_REQUEST_FIELDS below.
+    "/classes/com.korail.mobile.research.dcntCrdScheduleView.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "dptDt",
+            "dptRsStnNm",
+            "arvRsStnNm",
+            "dptTm",
+            "trnGpCd",
+            "dirtChtnDvCd",
+            "dcntCrdKndCd",
+            "dcntCrdKndMgNo",
+            "useTrmDno",
+            "usePsbTno",
+            "qryPgNo",
+        }
+    ),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 
@@ -961,6 +1001,18 @@ KORAIL_OPTIONAL_REQUEST_FIELDS: dict[str, frozenset[str]] = {
     ),
     "/classes/com.korail.mobile.research.TResidualSeatsResearch.do": (
         frozenset({"seatAttCd", "gdNo"})
+    ),
+    # The N-card schedule view's two never-set @Query parameters. NEITHER of
+    # the app's two builders (u4/b.java:52-65 and :67-81) ever calls
+    # setQryPgNo, so qryPgNo is always null and Retrofit drops it; and the
+    # 1-section builder (:52-65) additionally never calls setUseTrmDno, so a
+    # card bought by trip count rather than by period omits that one too. Both
+    # are registered as omittable rather than pinned, because a request that
+    # includes them is equally contract-conformant -- the response's
+    # fllwPgExt/qryPgNo pair is how the app's other paged reads continue, and
+    # this route declares the parameter even though v6.5.0 never fills it.
+    "/classes/com.korail.mobile.research.dcntCrdScheduleView.do": frozenset(
+        {"useTrmDno", "qryPgNo"}
     ),
 }
 

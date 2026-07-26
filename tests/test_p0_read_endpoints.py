@@ -660,7 +660,7 @@ def test_null_documented_optional_containers_parse_as_empty_tuples():
 
 def test_safety_registry_has_only_exact_new_read_contracts():
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
-    assert len(KORAIL_READ_ONLY_ROUTES) == 54
+    assert len(KORAIL_READ_ONLY_ROUTES) == 56
     for path, expected_fields in EXACT_FIELDS.items():
         assert KORAIL_EXACT_REQUEST_FIELDS[path] == frozenset(
             expected_fields

@@ -176,6 +176,14 @@ SENSITIVE_KEYS = frozenset(
         "h_plf_no",
         "h_purchase_history",
         # ...and the model attribute names they parse into.
+        # 할인카드(N카드) identity. h_dcnt_crd_no is a bearer credential in the
+        # strongest sense this API has: w4/a.java:100-101 books a discounted
+        # seat by sending nothing but that number and the discount code "153",
+        # so anyone holding it can spend someone else's card. dcntCrdNo is the
+        # same value on the way out (ResearchService.java:51-52).
+        "dcntCrdNo",
+        "h_dcnt_crd_no",
+        "discount_card_no",
         "original_window_no",
         "original_sale_sequence",
         "original_return_password",

@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+- Added: 할인카드(N카드) reads — `KorailClient.get_discount_card_usage_history`
+  and `KorailClient.get_discount_card_schedule`, plus
+  `DiscountCardScheduleRequest`, `DiscountCardUsage`,
+  `DiscountCardUsageListResponse`, `DiscountCardScheduleTrain` and
+  `DiscountCardScheduleResponse`. The read-only boundary is now 56 routes.
+  **Implemented and NOT live-verified**: no account this project can reach owns
+  an N카드, so both shapes come from the APK's DAOs rather than from an observed
+  body.
+  - `GET ticket.dcntCrdUseQry.do` (`ResearchService.java:51-52`) takes one
+    identifier, `dcntCrdNo`, and the card number is never typed by a user: the
+    N카드 ticket's own detail response carries it as
+    `dcnt_crd_info.h_dcnt_crd_no`, which `Y4/C0907b.java:303` puts in an intent
+    extra and `TicketNCardHistoryActivity.java:138,109` reads straight back into
+    `setDcntCrdNo`. That number is now redacted everywhere it can appear.
+  - `GET research.dcntCrdScheduleView.do` (`ResearchService.java:54-55`) is not
+    an ordinary train search. An N카드 is sold against one to three fixed 구간,
+    and this route answers "which trains on this 구간 does this card cover",
+    which is why it is keyed by the card product rather than by station codes.
+  - **Two of its fourteen `@Query` parameters are omitted, because the app omits
+    them.** Neither builder (`u4/b.java:52-65`, `:67-81`) ever calls
+    `setQryPgNo`, and the 1-section builder never calls `setUseTrmDno`, so
+    Retrofit drops both nulls. They are registered in
+    `KORAIL_OPTIONAL_REQUEST_FIELDS` rather than pinned, since a request that
+    carries them is equally conformant — the response's `fllwPgExt` is the
+    app's own paging signal (`SectionNCardInquiryActivity.java:406-408`).
+  - `dcntCrdKndCd` has exactly two values in the whole app. `u4/b.java:60-61`
+    sends `"B2N"` for the two original 1-section products (`B2N18120402`,
+    `B2N18120403`) and `"MMM"` for everything else; `:76` hardcodes `"MMM"`.
+    `DiscountCardScheduleRequest.for_card` reproduces that rule.
+  - **No endpoint supplies the card product codes.** Every `dcntCrdKndMgNo` the
+    app can send is a client-side literal (`NCard1SectionBookingActivity.java:28`,
+    `NCard2SectionBookingActivity.java:34`, `NCard3SectionBookingActivity.java:28`,
+    `q5/ViewOnClickListenerC6267a.java:73,76`), and `pass.passMenu.do` returns
+    only a `detailType` string that selects an Activity, not a code list.
+  - The two `dcntCrd*` routes that CHANGE state — `research.dcntCrdInfo.do` and
+    `reservation.dcntCrdExtn.do` — are deliberately absent from the read-only
+    allowlist and from `KORAIL_MUTATION_ROUTES`; a test pins their absence.
+
 - Added: 환승 (transfer) search and reservation — `KorailClient.search_transfer_trains`,
   `KorailClient.search_trains_with_transfer_fallback` and
   `KorailClient.reserve_transfer`, plus `TransferItinerary`,

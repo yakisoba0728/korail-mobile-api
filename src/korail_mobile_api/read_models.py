@@ -461,6 +461,92 @@ class PassScheduleResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
+class DiscountCardUsage:
+    """One trip a 할인카드(N카드) has already been spent on.
+
+    ``NCardHistoryDao.NCardHistoryInfo``
+    (``dao/research/NCardHistoryDao.java:12-61``). The app renders exactly
+    these five fields as a numbered list — passenger name, "(추가사용자)" when
+    :attr:`additional_user_flag` is ``"Y"``, departure → arrival, and the run
+    date reformatted to ``yyyy.MM.dd``
+    (``TicketNCardHistoryActivity.java:84-97``).
+    """
+
+    #: ``custNm`` — the name of whoever travelled on this leg.
+    passenger_name: str | None = field(default=None, repr=False)
+    departure_station_name: str | None = None
+    arrival_station_name: str | None = None
+    #: ``runDt1``, ``yyyyMMdd``.
+    run_date: str | None = None
+    #: ``apdUsrFlg`` — ``"Y"`` when the trip was taken by the card's *second*
+    #: registered user rather than its owner (N카드 2인용).
+    additional_user_flag: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class DiscountCardUsageListResponse(BaseKorailResponse):
+    """``ticket.dcntCrdUseQry.do`` — a card's spent trips.
+
+    ``NCardHistoryDao.NCardHistoryResponse``
+    (``dao/research/NCardHistoryDao.java:78-87``) carries ``tkUseList`` and
+    nothing else, so this model adds no summary fields the wire does not have.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    items: tuple[DiscountCardUsage, ...] = ()
+
+
+@dataclass(frozen=True)
+class DiscountCardScheduleTrain:
+    """One train a 할인카드 may still be spent on.
+
+    ``NCardInquiryDao.TrainInfo``
+    (``dao/research/NCardInquiryDao.java:144-236``). ``stationInfo`` is absent
+    on purpose: it is an ``android.text.Spanned`` the app renders locally from
+    :attr:`station_string_info` and never reads off the wire (``:157``, its
+    only writer is ``setStationInfo`` at ``:229``).
+    """
+
+    train_no: str | None = None
+    train_group_code: str | None = None
+    run_date: str | None = None
+    departure_station_code: str | None = field(default=None, repr=False)
+    departure_station_name: str | None = None
+    arrival_station_code: str | None = field(default=None, repr=False)
+    arrival_station_name: str | None = None
+    departure_station_order: str | None = field(default=None, repr=False)
+    arrival_station_order: str | None = field(default=None, repr=False)
+    #: ``cmtrPrc`` — the fare this card's section is quoted at.
+    commuter_price: str | None = None
+    direct_transfer_division_code: str | None = field(default=None, repr=False)
+    detour_code: str | None = field(default=None, repr=False)
+    detour_name: str | None = field(default=None, repr=False)
+    route_code: str | None = field(default=None, repr=False)
+    #: ``stationStringInfo`` — the intermediate-stop line the app spans.
+    station_string_info: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class DiscountCardScheduleResponse(BaseKorailResponse):
+    """``research.dcntCrdScheduleView.do`` — the trains a card can book.
+
+    ``NCardInquiryDao.NCardInquiryResponse``
+    (``dao/research/NCardInquiryDao.java:128-142``).
+
+    :attr:`following_page_exists` is the app's own pagination signal:
+    ``SectionNCardInquiryActivity.java:406-408`` re-issues the read with an
+    incremented ``qryPgNo`` for as long as it reads ``"Y"``.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    #: ``fllwPgExt`` — ``"Y"`` when another page follows.
+    following_page_exists: str | None = None
+    trains: tuple[DiscountCardScheduleTrain, ...] = ()
+
+
+@dataclass(frozen=True)
 class MultiChildDiscountTarget:
     birth_date: str | None = field(default=None, repr=False)
     customer_family_name: str | None = field(default=None, repr=False)

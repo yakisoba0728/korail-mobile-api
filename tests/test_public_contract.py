@@ -44,6 +44,8 @@ def test_client_public_method_set_is_stable():
         "get_commuter_info",
         "get_crew_request_list",
         "get_delay_discount_tickets",
+        "get_discount_card_schedule",
+        "get_discount_card_usage_history",
         "get_delivery_recipient",
         "get_deposit_banks",
         "get_discount_coupons",

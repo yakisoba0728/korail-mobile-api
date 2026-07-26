@@ -23,6 +23,10 @@ from .read_models import (
     DeliveryRecipientResponse,
     DepositBank,
     DepositBankListResponse,
+    DiscountCardScheduleResponse,
+    DiscountCardScheduleTrain,
+    DiscountCardUsage,
+    DiscountCardUsageListResponse,
     DiscountCoupon,
     DiscountCouponListResponse,
     FreeSeatCarResponse,
@@ -1533,6 +1537,90 @@ def parse_pass_schedule_response(
         )
     return PassScheduleResponse(
         schedules=tuple(schedules),
+        **_response_fields(raw),
+    )
+
+
+_DISCOUNT_CARD_USAGE_FIELDS = {
+    "passenger_name": "custNm",
+    "departure_station_name": "dptStnNm",
+    "arrival_station_name": "arvStnNm",
+    "run_date": "runDt1",
+    "additional_user_flag": "apdUsrFlg",
+}
+
+_DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS = {
+    "train_no": "trnNo",
+    "train_group_code": "trnGpCd",
+    "run_date": "runDt",
+    "departure_station_code": "dptRsStnCd",
+    "departure_station_name": "dptRsStnNm",
+    "arrival_station_code": "arvRsStnCd",
+    "arrival_station_name": "arvRsStnNm",
+    "departure_station_order": "dptStnConsOrdr",
+    "arrival_station_order": "arvStnConsOrdr",
+    "commuter_price": "cmtrPrc",
+    "direct_transfer_division_code": "dirtChtnDvCd",
+    "detour_code": "dturCd",
+    "detour_name": "dturNm",
+    "route_code": "routCd",
+    "station_string_info": "stationStringInfo",
+}
+
+
+def parse_discount_card_usage_response(
+    raw: Mapping[str, Any],
+) -> DiscountCardUsageListResponse:
+    _validate_strict_read_envelope(raw)
+    items = []
+    for value in _optional_list(raw, "tkUseList", "discount card usage"):
+        item = _row(value, "discount card usage tkUseList")
+        items.append(
+            DiscountCardUsage(
+                **_nullable_string_fields(
+                    item,
+                    _DISCOUNT_CARD_USAGE_FIELDS,
+                    "discount card usage",
+                ),
+                raw=item,
+            )
+        )
+    return DiscountCardUsageListResponse(
+        items=tuple(items),
+        **_response_fields(raw),
+    )
+
+
+def parse_discount_card_schedule_response(
+    raw: Mapping[str, Any],
+) -> DiscountCardScheduleResponse:
+    _validate_strict_read_envelope(raw)
+    trains = []
+    for value in _optional_list(raw, "trnScdlList", "discount card schedule"):
+        item = _row(value, "discount card schedule trnScdlList")
+        trains.append(
+            DiscountCardScheduleTrain(
+                # Scalar rather than string: cmtrPrc is a fare and the
+                # station-order fields are ordinals, and KORAIL has already
+                # been caught sending a declared-String number on three
+                # separate reads (see _optional_scalar_string). This route has
+                # never been seen live, so the tolerant reader is the correct
+                # default rather than a concession.
+                **_nullable_scalar_fields(
+                    item,
+                    _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS,
+                    "discount card schedule train",
+                ),
+                raw=item,
+            )
+        )
+    return DiscountCardScheduleResponse(
+        following_page_exists=_optional_string(
+            raw,
+            "fllwPgExt",
+            "discount card schedule",
+        ),
+        trains=tuple(trains),
         **_response_fields(raw),
     )
 

@@ -554,6 +554,154 @@ def build_multi_child_discount_target_form(
     return {"dptDt": _ascii_date(departure_date, "departure_date")}
 
 
+def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
+    """``ticket.dcntCrdUseQry.do`` — one card number, nothing else.
+
+    ``ResearchService.java:51-52``. The app never asks the user to type this:
+    ``Y4/C0907b.java:303`` copies ``dcnt_crd_info.h_dcnt_crd_no`` off the
+    N-card ticket's own detail response into an intent extra, and
+    ``TicketNCardHistoryActivity.java:138,109`` reads it straight back out into
+    ``setDcntCrdNo``. So the natural source for this argument is
+    :attr:`~korail_mobile_api.read_models.RefundTicketDetailResponse.discount_card`.
+    """
+    return {"dcntCrdNo": _required_text(card_no, "card_no")}
+
+
+@dataclass(frozen=True)
+class DiscountCardScheduleRequest:
+    """The 할인카드 schedule read's inputs (``ResearchService.java:54-55``).
+
+    The app builds this in exactly two places — ``u4/b.java:52-65`` for the
+    1-section N카드 and ``u4/b.java:67-81`` for the v2 (기간+횟수) card — and
+    the two differ only in whether they carry :attr:`usage_period_days`. The
+    defaults below are the values BOTH builders hardcode, so a caller who
+    supplies only the card identity and the section's two station names sends
+    what the app sends:
+
+    * ``dptTm`` ``"000000"`` (``u4/b.java:55,70``) — from midnight, i.e. the
+      whole day, which is why the app never offers a time picker here.
+    * ``trnGpCd`` ``"109"`` — ``K4/s.java:5`` ``ALL("전체", "109")``
+      (``u4/b.java:58,73``).
+    * ``dirtChtnDvCd`` ``"1"`` — ``K4/d.java:5`` ``DIRECT_SQ_NO("직통", "1")``
+      (``u4/b.java:59,74``). An N카드 section is always a direct leg; the app
+      never sends ``"2"`` on this route.
+
+    :attr:`card_kind_code` is one of exactly two literals. ``u4/b.java:60-61``
+    sends ``"B2N"`` for the two original 1-section products
+    (``B2N18120402``/``B2N18120403``) and ``"MMM"`` for everything else;
+    ``u4/b.java:76`` hardcodes ``"MMM"`` on the v2 path. :meth:`for_card`
+    reproduces that rule so a caller does not have to.
+
+    NOT VERIFIED. No live call has been made on this route, and no account this
+    project has access to owns an N카드, so the response shape below is the
+    APK's DAO declaration rather than an observed body.
+    """
+
+    card_kind_management_no: str
+    departure_station_name: str
+    arrival_station_name: str
+    departure_date: str
+    card_kind_code: str = "MMM"
+    usable_trip_count: str = ""
+    usage_period_days: str | None = None
+    page_no: str | None = None
+    departure_time: str = "000000"
+    train_group_code: str = "109"
+    direct_transfer_division_code: str = "1"
+
+    @classmethod
+    def for_card(
+        cls,
+        card_kind_management_no: str,
+        *,
+        departure_station_name: str,
+        arrival_station_name: str,
+        departure_date: str,
+        usable_trip_count: str = "",
+        usage_period_days: str | None = None,
+        page_no: str | None = None,
+    ) -> "DiscountCardScheduleRequest":
+        """Build a request, deriving ``dcntCrdKndCd`` the way ``u4/b.java`` does."""
+        kind_code = (
+            "B2N"
+            if card_kind_management_no in _B2N_CARD_KIND_MANAGEMENT_NOS
+            else "MMM"
+        )
+        return cls(
+            card_kind_management_no=card_kind_management_no,
+            departure_station_name=departure_station_name,
+            arrival_station_name=arrival_station_name,
+            departure_date=departure_date,
+            card_kind_code=kind_code,
+            usable_trip_count=usable_trip_count,
+            usage_period_days=usage_period_days,
+            page_no=page_no,
+        )
+
+
+#: The two ``dcntCrdKndMgNo`` values that make ``dcntCrdKndCd`` ``"B2N"``
+#: rather than ``"MMM"`` (``u4/b.java:61``). They are the 2개월 and 3개월
+#: 1-section N카드 products declared at
+#: ``NCard1SectionBookingActivity.java:28``.
+_B2N_CARD_KIND_MANAGEMENT_NOS = frozenset({"B2N18120402", "B2N18120403"})
+
+
+def build_discount_card_schedule_query(
+    request: DiscountCardScheduleRequest,
+) -> dict[str, str]:
+    """Render :class:`DiscountCardScheduleRequest` as the route's query.
+
+    ``useTrmDno`` and ``qryPgNo`` are OMITTED when they are ``None``, because
+    that is what the app transmits: neither builder ever calls ``setQryPgNo``
+    and the 1-section builder never calls ``setUseTrmDno``, so Retrofit drops
+    the null ``@Query`` (``ResearchService.java:54-55``). Both are registered
+    as omittable in
+    :data:`~korail_mobile_api.safety.KORAIL_OPTIONAL_REQUEST_FIELDS`.
+    """
+    if type(request) is not DiscountCardScheduleRequest:
+        raise TypeError("request must be an exact DiscountCardScheduleRequest")
+    query = {
+        "dptDt": _ascii_date(request.departure_date, "departure_date"),
+        "dptRsStnNm": _required_text(
+            request.departure_station_name,
+            "departure_station_name",
+        ),
+        "arvRsStnNm": _required_text(
+            request.arrival_station_name,
+            "arrival_station_name",
+        ),
+        "dptTm": _ascii_digits(request.departure_time, "departure_time", 6),
+        "trnGpCd": _required_text(
+            request.train_group_code,
+            "train_group_code",
+        ),
+        "dirtChtnDvCd": _required_text(
+            request.direct_transfer_division_code,
+            "direct_transfer_division_code",
+        ),
+        "dcntCrdKndCd": _required_text(
+            request.card_kind_code,
+            "card_kind_code",
+        ),
+        "dcntCrdKndMgNo": _required_text(
+            request.card_kind_management_no,
+            "card_kind_management_no",
+        ),
+        "usePsbTno": _optional_text(
+            request.usable_trip_count,
+            "usable_trip_count",
+        ),
+    }
+    if request.usage_period_days is not None:
+        query["useTrmDno"] = _required_text(
+            request.usage_period_days,
+            "usage_period_days",
+        )
+    if request.page_no is not None:
+        query["qryPgNo"] = _required_text(request.page_no, "page_no")
+    return query
+
+
 def build_customer_trip_info_form(customer_no: str) -> dict[str, str]:
     return {
         "custMgNo": _required_text(customer_no, "customer_no"),
