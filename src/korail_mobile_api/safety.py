@@ -297,18 +297,104 @@ KORAIL_NETFUNNEL_ACTION_IDS = frozenset(
 # KorailNetFunnelClient.release raises instead of swallowing.
 KORAIL_NETFUNNEL_KEY_RE = re.compile(r"[A-Za-z0-9_.:@~-]{1,512}")
 
+# ---------------------------------------------------------------------------
+# THE QUEUE IS A POOL OF NODES, AND FOLLOWING ONE IS NOT OPTIONAL.
+#
+# `nf.letskorail.com` is a FRONT DOOR. It load-balances the entry call across a
+# pool of queue nodes, and the node that issues a session is the only one that
+# can complete it. Every reply names the node that answered it, in its `ip` and
+# `port` fields (`T6/i.java:50-53` reads them into the response object's host and
+# port), and the app follows that naming: `T6/d.java:17-19` (`makeURL`) rebuilds
+# the URL from `iVar.getHost()`/`iVar.getPort()` for `chkEnter`, `aliveNotice`
+# and `setComplete` unless `host_notmodify` is set — and `host_notmodify` is
+# false by default (`T6/h.java:43`, `isHostNotmodify()` at :134-135) and
+# `KTApplication` never sets it. Only the entry call, which has no previous
+# reply to name a node, goes to the configured host.
+#
+# DIAGNOSED LIVE ON 2026-07-26, and the symptom was not obvious. This module used
+# to decline the redirection and send every opcode to the front door. Slot
+# release then failed ABOUT HALF THE TIME, non-deterministically — five
+# acquire-then-release cycles, all entered through `nf.letskorail.com`:
+#
+#     acquire said ip=rnf12.letskorail.com  -> release 503
+#     acquire said ip=rnf12.letskorail.com  -> release 503
+#     acquire said ip=rnf13.letskorail.com  -> release 503
+#     acquire said ip=rnf14.letskorail.com  -> release 200
+#     acquire said ip=rnf13.letskorail.com  -> release 200
+#
+# and the controlled pair that names the cause outright:
+#
+#     acquire on nf.letskorail.com (reply said ip=rnf13.letskorail.com)
+#       release via nf.letskorail.com    -> 503:msg="Wrong Server ID"
+#       release via rnf13.letskorail.com -> 200:key=&nwait=0&...
+#
+# `Wrong Server ID` IS LITERAL. It is the pool saying "that session is not
+# mine" — not a complaint about a credential, a parameter or a key generation.
+# The releases that succeeded were the balancer happening to land the
+# front-door request back on the node that owned the session. The price of
+# staying pinned was leaking roughly half of every queue slot we took, which is
+# precisely the behaviour NetFunnel exists to prevent.
+#
+# CONSTRAINED, NOT TRUSTED. A response choosing where the next request goes is
+# exactly what an origin guard exists to stop, so the redirection is admitted
+# only into the queue's OWN node naming, and a reply naming anything else is a
+# hard error rather than a quiet fall-back to the front door. Falling back
+# silently is what produced the flaky release in the first place: it turns "this
+# reply is lying to us" into "this slot leaked", which is unobservable.
+#
+# THE RULE, and why it is drawn where it is. The observed nodes are
+# `rnf12`, `rnf13` and `rnf14`, all under `letskorail.com`, all https on 443. So:
+#
+#   * the label is `rnf` followed by a decimal 1..99 with NO leading zero — the
+#     observed names are contiguous small integers, so the shape is "the pool's
+#     n-th node" and two digits already admits 99 of them. A leading zero is
+#     refused because `rnf013` is not a name the pool hands out and a
+#     normalisation question is not worth inviting into a guard.
+#   * the parent is EXACTLY `letskorail.com`, matched as whole labels, so
+#     `rnf13.letskorail.com.example.net` and `evil-rnf13.letskorail.com` are not
+#     nodes.
+#   * lowercase, exactly as the wire spells it. DNS would not care; a guard
+#     comparing raw response bytes should, and refusing the case variants we have
+#     never seen costs nothing.
+#   * https on port 443 and nothing else — the port is NOT followed blindly
+#     either. 443 is the only value observed and the only one the front-door
+#     guard permits, so any other is refused.
+#   * plus the front door itself, which is already the pinned origin: a reply
+#     naming `nf.letskorail.com` is the balancer naming itself, and admitting it
+#     grants no reach that the client did not already have.
+# ---------------------------------------------------------------------------
 
-def assert_korail_netfunnel_origin(netfunnel_url: str) -> None:
-    """Pin the queue client to ``https://nf.letskorail.com`` (port 443).
+#: The node label a queue reply may name. See the block comment above for why
+#: each part of this is as tight as it is.
+KORAIL_NETFUNNEL_NODE_HOST_RE = re.compile(r"rnf[1-9][0-9]?\.letskorail\.com")
 
-    The NetFunnel counterpart to :func:`assert_korail_origin`, and deliberately
-    a separate function over a separate constant: the API client may not reach
-    the queue host and the queue client may not reach the API host. It also
-    refuses the redirection the app itself accepts — ``T6/d.java:17-19`` sends
-    the follow-up opcodes to whatever ``ip``/``port`` a previous reply named,
-    because ``host_notmodify`` is false by default (``T6/h.java:43``) and
-    ``KTApplication`` never sets it. We do not follow a server-named host: a
-    response must not choose where the next request goes.
+#: The only port a named node may be on. Observed as 443 on every reply, and the
+#: only port :func:`assert_korail_netfunnel_origin` permits for the front door.
+KORAIL_NETFUNNEL_NODE_PORT = 443
+
+#: The opcodes that belong to an ESTABLISHED SESSION and therefore go to the node
+#: that issued it. ``5101`` is deliberately absent: the entry call is the one the
+#: front door balances, and it has no previous reply to name a node anyway.
+#:
+#: This coincides with :data:`KORAIL_NETFUNNEL_KEYED_OPCODES` today, and not by
+#: accident — a session is identified by its key and lives on its node, so the
+#: opcodes that carry one are the opcodes that must reach the other. They stay
+#: separate constants because they answer different questions.
+KORAIL_NETFUNNEL_NODE_OPCODES = frozenset(
+    {
+        KorailNetFunnelOpcode.CHK_ENTER.value,
+        KorailNetFunnelOpcode.SET_COMPLETE.value,
+    }
+)
+
+
+def _assert_netfunnel_origin(netfunnel_url: str, *, allow_nodes: bool) -> None:
+    """The structural half of both queue-origin guards.
+
+    Everything except *which hostnames* are acceptable is identical between the
+    front door and a queue node — https, no userinfo, no path, no query, no
+    fragment, port 443 or implicit — so it is written once and the hostname rule
+    is the only parameter.
     """
     parsed = urlsplit(netfunnel_url)
     try:
@@ -317,11 +403,16 @@ def assert_korail_netfunnel_origin(netfunnel_url: str) -> None:
         raise KorailProtocolError(
             "KORAIL NetFunnel request origin is not allowed"
         ) from exc
+    hostname = (parsed.hostname or "").casefold()
+    host_allowed = hostname == KORAIL_NETFUNNEL_HTTPS_HOST or (
+        allow_nodes
+        and KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(hostname) is not None
+    )
     if (
         parsed.scheme.casefold() != "https"
         or parsed.hostname is None
-        or parsed.hostname.casefold() != KORAIL_NETFUNNEL_HTTPS_HOST
-        or port not in {None, 443}
+        or not host_allowed
+        or port not in {None, KORAIL_NETFUNNEL_NODE_PORT}
         or parsed.username is not None
         or parsed.password is not None
         or parsed.path not in {"", "/"}
@@ -331,6 +422,93 @@ def assert_korail_netfunnel_origin(netfunnel_url: str) -> None:
         raise KorailProtocolError(
             "KORAIL NetFunnel request origin is not allowed"
         )
+
+
+def assert_korail_netfunnel_origin(netfunnel_url: str) -> None:
+    """Pin the queue's FRONT DOOR to ``https://nf.letskorail.com`` (port 443).
+
+    The NetFunnel counterpart to :func:`assert_korail_origin`, and deliberately
+    a separate function over a separate constant: the API client may not reach
+    the queue host and the queue client may not reach the API host.
+
+    This is the guard for the configured origin and for the entry call
+    (``5101``), and it admits the front door ONLY — a queue node is refused here.
+    The follow-up opcodes have their own, wider guard in
+    :func:`assert_korail_netfunnel_node_origin`; see
+    :func:`assert_korail_netfunnel_opcode_origin` for which is which.
+    """
+    _assert_netfunnel_origin(netfunnel_url, allow_nodes=False)
+
+
+def assert_korail_netfunnel_node_origin(netfunnel_url: str) -> None:
+    """Pin a session's origin to the front door or one of the queue's own nodes.
+
+    Admits ``https://nf.letskorail.com`` and ``https://rnf<N>.letskorail.com``
+    on port 443, and nothing else. See the block comment above
+    :data:`KORAIL_NETFUNNEL_NODE_HOST_RE` for the live evidence that the pool is
+    real and for why the rule is drawn exactly here.
+    """
+    _assert_netfunnel_origin(netfunnel_url, allow_nodes=True)
+
+
+def assert_korail_netfunnel_opcode_origin(
+    opcode: str,
+    netfunnel_url: str,
+) -> None:
+    """Which host this opcode is allowed to be sent to.
+
+    ``5101`` getTidChkEnter is the entry call and goes to the FRONT DOOR, which
+    is what balances it across the pool. ``5002`` chkEnter and ``5004``
+    setComplete belong to a session and go to the NODE that issued it — the
+    front door does not own that session and answers
+    ``503:msg="Wrong Server ID"`` when it is asked to complete it.
+
+    The split lives here rather than in the client so that "which host does this
+    opcode go to" is answered by the guard, not by whichever call site happened
+    to build the URL.
+    """
+    if opcode in KORAIL_NETFUNNEL_NODE_OPCODES:
+        assert_korail_netfunnel_node_origin(netfunnel_url)
+    else:
+        assert_korail_netfunnel_origin(netfunnel_url)
+
+
+def korail_netfunnel_node_url(ip: str, port: str) -> str:
+    """Turn a reply's ``ip``/``port`` into the origin of the node that answered.
+
+    Returns the origin URL (``https://<host>``), or ``""`` when the reply named
+    no node at all — which is the ``getHost().length() <= 0 || getPort() <= 0``
+    branch of ``T6/d.makeURL`` (``T6/d.java:17-19``), and is the ONLY case in
+    which a follow-up legitimately goes to the front door. ``ip`` and ``port``
+    travel together on every reply that has ever been seen, so naming one
+    without the other is treated as naming a node badly, not as naming none.
+
+    Raises :class:`KorailProtocolError` for a host outside the queue's own node
+    naming and for any port but 443. That refusal is deliberately LOUD: silently
+    falling back to the front door here is the defect this function was added to
+    fix, because it converts a bad redirection into a leaked queue slot, and a
+    leaked slot makes no noise at all.
+    """
+    if not ip and not port:
+        return ""
+    if (
+        ip != KORAIL_NETFUNNEL_HTTPS_HOST
+        and KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(ip) is None
+    ):
+        raise KorailProtocolError(
+            f"KORAIL NetFunnel reply named {ip!r} as the host for the rest of "
+            "this session, and it is not one of the queue's own nodes "
+            "(rnf<1-99>.letskorail.com, lowercase) nor the front door "
+            f"{KORAIL_NETFUNNEL_HTTPS_HOST!r}; the redirection this queue needs "
+            "is constrained to the pool, never trusted as given"
+        )
+    if port != str(KORAIL_NETFUNNEL_NODE_PORT):
+        raise KorailProtocolError(
+            f"KORAIL NetFunnel reply named port {port!r} for queue node {ip!r}; "
+            f"only {KORAIL_NETFUNNEL_NODE_PORT} is allowed, and the port is no "
+            "more followed on the server's say-so than the host is"
+        )
+    return f"https://{ip}"
 
 
 def assert_netfunnel_request(

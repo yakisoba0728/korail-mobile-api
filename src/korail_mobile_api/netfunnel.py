@@ -90,13 +90,10 @@ leaves the loop the moment the code is not Continue/ContinueDebug — the smali
 (``T6/g$a.smali``, ``:243-247`` then ``:282`` → ``goto :goto_3`` → ``:892``)
 confirms the fall-through is a return — so on a 200 from 5101 the app issues **no
 5002 at all** and completes with the 5101 key. The live server wins over that
-reading, and the most likely reconciliation is the redirection this module
-declines: ``T6/d.makeURL`` (``T6/d.java:17-19``) sends ``chkEnter`` and
-``setComplete`` to the ``ip``/``port`` the previous reply named, and the 5101
-reply names one. "Wrong Server ID" is then literally true — the front door does
-not own a session that a queue node issued. Since we stay pinned to the front
-door (see below), we must obtain a key the front door *does* own, and ``chkEnter``
-is what issues it.
+reading. The 5002 stays unconditional here because the only sequence ever seen to
+release cleanly is 5101 → 5002 → 5004; whether the 5101 ticket would complete at
+the *node* that issued it has never been probed, and this module does not guess
+at a shortcut it has not tested.
 
 What the APK does corroborate is the supersession itself: ``T6/d.java`` keeps one
 response object and every opcode overwrites it — ``this.f5141b = iVarParser.
@@ -104,20 +101,76 @@ m184clone()`` at :61 (chkEnter) and :107 (getTidChkEnter) — while ``Complete()
 sends ``this.f5141b.getKey()`` (:79), i.e. whatever key arrived last. The app has
 no notion of "the original key" either.
 
+THE QUEUE IS A POOL, AND THE SESSION LIVES ON ONE NODE OF IT
+===========================================================
+``nf.letskorail.com`` is a FRONT DOOR that load-balances the entry call. The node
+it lands on is the only one that can complete the session, and every reply names
+that node in its ``ip``/``port`` (``T6/i.java:50-53``). The app follows the
+naming — ``T6/d.makeURL`` (``T6/d.java:17-19``) rebuilds the URL from
+``iVar.getHost()``/``getPort()`` for ``chkEnter``, ``aliveNotice`` and
+``setComplete`` unless ``host_notmodify`` is set, and that flag is false by
+default (``T6/h.java:43``) and never set by ``KTApplication``.
+
+**This module used to refuse to follow it, and that leaked about half our
+slots.** Diagnosed live on 2026-07-26. The symptom was a ``setComplete`` that
+failed non-deterministically, roughly one time in two, always with
+``503:msg="Wrong Server ID"`` — a message that reads like a credential or
+parameter complaint and is nothing of the sort. Five acquire-then-release cycles,
+all entered through the front door::
+
+    acquire said ip=rnf12.letskorail.com  -> release 503
+    acquire said ip=rnf12.letskorail.com  -> release 503
+    acquire said ip=rnf13.letskorail.com  -> release 503
+    acquire said ip=rnf14.letskorail.com  -> release 200
+    acquire said ip=rnf13.letskorail.com  -> release 200
+
+and the controlled pair that settles it::
+
+    acquire on nf.letskorail.com (reply said ip=rnf13.letskorail.com)
+      release via nf.letskorail.com    -> 503:msg="Wrong Server ID"
+      release via rnf13.letskorail.com -> 200:key=&nwait=0&...
+
+"Wrong Server ID" is **literal**: the front door does not own a session that a
+queue node issued. The releases that appeared to work were the balancer happening
+to land the request back on the right node, which is also why the same key
+sometimes released fine and sometimes did not.
+
+So the handshake spans hosts, deliberately:
+
+============ ============================================================
+``5101``     the FRONT DOOR (``config.netfunnel_url``). It is the entry
+             call; balancing it is the front door's whole job, and it has
+             no previous reply to name a node.
+``5002``     the NODE the previous reply named.
+``5004``     the same node — the one that issued the session being
+             released.
+============ ============================================================
+
+The node rides on :class:`KorailNetFunnelToken` (``node``) so the whole
+handshake stays coherent, and it supersedes exactly as the key does: a reply that
+names no node leaves the last one in force, because a poll that is silent about
+routing has not re-routed anything. A token with no node — a bypass, which has no
+session either — simply uses the front door, and :meth:`
+KorailNetFunnelClient.release` short-circuits on its empty key before routing
+matters at all.
+
+**CONSTRAINED, NOT TRUSTED.** Following a server-named host is exactly what an
+origin guard exists to stop, so the naming is admitted only into the queue's own
+pool: ``rnf<1-99>.letskorail.com`` (lowercase) or the front door, https, port
+443, and nothing else — the port is no more followed on the server's say-so than
+the host is. The rule lives in :func:`~korail_mobile_api.safety.
+korail_netfunnel_node_url` beside the origin assertions, not in this client, and
+a reply naming anything outside it is a **hard error**. It is deliberately not a
+quiet fall-back to the front door: falling back silently is what turns "this
+reply is lying to us" into "this slot leaked", and a leaked slot makes no noise.
+
+``follow_redirects`` stays ``False``. An HTTP 30x is a different mechanism from
+the ``ip``/``port`` naming and gets no such allowance — nothing about the pool
+being real makes a redirect chain acceptable.
+
 WHAT THE APP DOES THAT WE DELIBERATELY DO NOT
 =============================================
-``T6/d.java:17-19`` (``makeURL``) sends ``chkEnter``/``aliveNotice``/
-``setComplete`` to the ``ip``/``port`` a previous response named, unless
-``host_notmodify`` is set — and it is false by default (``T6/h.java:43``) and
-never set by ``KTApplication``. We do not follow that redirection. The whole
-client is pinned to canonical origins, and following a server-named host means
-letting a response choose where the next request goes. Our own 2026-07-26 probe
-is the evidence that we do not have to — the front door released a ``chkEnter``
-key perfectly well, and answered with an ``ip`` of ``rnf13.letskorail.com`` that
-we simply ignored — and the sibling SRT run said the same before it. The price of
-staying pinned is exactly the extra 5002 documented above.
-
-``AliveNotice`` (5003) is likewise not implemented. It exists to keep a visible
+``AliveNotice`` (5003) is not implemented. It exists to keep a visible
 waiting-room popup alive (``T6/g.java:517-527``); this library renders no popup
 and holds no slot longer than one bounded operation.
 """
@@ -127,7 +180,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from urllib.parse import urlencode
 
 import httpx
@@ -144,7 +197,12 @@ from .errors import (
     KorailQueueRejectedError,
     KorailTransportError,
 )
-from .safety import assert_korail_netfunnel_origin, assert_netfunnel_request
+from .safety import (
+    assert_korail_netfunnel_opcode_origin,
+    assert_korail_netfunnel_origin,
+    assert_netfunnel_request,
+    korail_netfunnel_node_url,
+)
 
 
 # The status codes, read off ``T6/a.java`` — and off ``analysis/apktool/smali/
@@ -165,13 +223,20 @@ CONTINUE_CODES = frozenset({"201", "202"})
 #: ``TsErrorAComplete``. Accepted for setComplete only; see
 #: :func:`parse_set_complete_response` for why that is an inference.
 ALREADY_COMPLETE_CODE = "502"
-#: What the live server answers when ``setComplete`` is handed a key that is not
-#: a completable session — in practice, the 5101 ticket instead of the key
-#: ``chkEnter`` issued for it. The wire message is ``msg="Wrong Server ID"``,
-#: which is misleading enough to be worth naming: it is not a routing complaint
-#: that a different host would satisfy (the probe re-sent it with ``sid``/``aid``
-#: attached and got the same answer). It is REFUSED, never accepted alongside
-#: 502 — treating it as "released" is exactly how a slot leaks silently.
+#: What the live server answers when ``setComplete`` is asked to release a
+#: session THIS host does not own. ``msg="Wrong Server ID"`` covers TWO distinct
+#: causes and the wire cannot tell them apart, which is why it is named here:
+#:
+#: 1. the key is not a completable session — in practice the 5101 ticket instead
+#:    of the key ``chkEnter`` issued for it. Re-attaching ``sid``/``aid`` does
+#:    not help; the ticket is simply not a session.
+#: 2. the key IS a session, but the request reached the wrong queue node. The
+#:    message is then literal: the pool member being asked has no such session.
+#:    This is the defect diagnosed on 2026-07-26 and fixed by routing 5004 to
+#:    :attr:`KorailNetFunnelToken.node`; see the module docstring.
+#:
+#: It is REFUSED, never accepted alongside 502 — treating it as "released" is
+#: exactly how a slot leaks silently, and cause 2 leaked about half of them.
 NOT_COMPLETABLE_CODE = "503"
 #: ``TsBlock``/``TsIpBlock``. The waiting room refused us, which is a different
 #: fact from the waiting room malfunctioning — ``T6/g.d.isBlocking()``
@@ -222,12 +287,21 @@ class KorailNetFunnelToken:
     to an earlier token and releasing that is the defect this type's immutability
     is meant to make obvious — :meth:`KorailNetFunnelClient.acquire` returns the
     latest token and that is the only one ``setComplete`` will accept.
+
+    ``node`` is the origin of the queue node that answered — the ``https://``
+    form of the reply's ``ip``/``port``, already checked against the pool's own
+    naming by :func:`~korail_mobile_api.safety.korail_netfunnel_node_url`. It is
+    ``""`` when the reply named nothing, which means the front door. The key
+    identifies the session and the node says WHERE that session lives; sending
+    the right key to the wrong node is answered ``503:msg="Wrong Server ID"``,
+    so the two travel together. See the module docstring for the live transcript.
     """
 
     action: str
     key: str
     code: str
     params: dict[str, str] = field(default_factory=dict)
+    node: str = ""
 
     @property
     def wait_count(self) -> int:
@@ -243,9 +317,14 @@ def _netfunnel_url(netfunnel_url: str, params: Sequence[tuple[str, str]]) -> str
     per-opcode contract in :mod:`korail_mobile_api.safety` is checked against the
     parameter names, values *and order* rather than against a re-parsed query
     string.
+
+    The origin is guarded per OPCODE, because the handshake spans hosts: 5101
+    may only go to the front door, while 5002 and 5004 may also go to one of the
+    queue's own nodes. The request contract is asserted first so the opcode read
+    below is one the guard has already vouched for.
     """
-    assert_korail_netfunnel_origin(netfunnel_url)
     assert_netfunnel_request("GET", KORAIL_NETFUNNEL_PATH, params)
+    assert_korail_netfunnel_opcode_origin(dict(params)["opcode"], netfunnel_url)
     return (
         f"{netfunnel_url.rstrip('/')}{KORAIL_NETFUNNEL_PATH}"
         f"?{urlencode(params)}"
@@ -310,7 +389,11 @@ def build_get_tid_chk_enter_url(
     action: str,
     service_id: str = KORAIL_NETFUNNEL_SERVICE_ID,
 ) -> str:
-    """The 5101 URL: "put me in line for ``action``"."""
+    """The 5101 URL: "put me in line for ``action``".
+
+    ``netfunnel_url`` must be the FRONT DOOR. This is the entry call, so there is
+    no node yet and balancing it is what the front door is for.
+    """
     return _netfunnel_url(
         netfunnel_url,
         get_tid_chk_enter_params(action, service_id=service_id),
@@ -318,12 +401,21 @@ def build_get_tid_chk_enter_url(
 
 
 def build_chk_enter_url(netfunnel_url: str, *, key: str) -> str:
-    """The 5002 URL: "am I admitted yet?"."""
+    """The 5002 URL: "am I admitted yet?".
+
+    ``netfunnel_url`` is the NODE that issued the session (or the front door when
+    no reply has named one yet). A node outside the pool is refused by the guard.
+    """
     return _netfunnel_url(netfunnel_url, chk_enter_params(key))
 
 
 def build_set_complete_url(netfunnel_url: str, *, key: str) -> str:
-    """The 5004 URL: "I am done, release my slot"."""
+    """The 5004 URL: "I am done, release my slot".
+
+    ``netfunnel_url`` is the NODE that issued the session. Sending this to the
+    front door instead is what answers ``503:msg="Wrong Server ID"`` whenever the
+    balancer does not happen to land back on the owning node.
+    """
     return _netfunnel_url(netfunnel_url, set_complete_params(key))
 
 
@@ -353,6 +445,16 @@ def parse_netfunnel_body(body: str, *, action: str) -> KorailNetFunnelToken:
     which would truncate a value containing ``=``; this splits once so such a
     value survives intact. That is strictly more faithful to the wire than to the
     decompiled Java, and no NetFunnel parameter is known to contain one.
+
+    **The one judgement made here is about routing, not about status.** ``ip``
+    and ``port`` say which queue node answered, and the follow-up opcodes have to
+    be sent there (see the module docstring). They are therefore resolved through
+    :func:`~korail_mobile_api.safety.korail_netfunnel_node_url` at parse time, so
+    a reply naming a host outside the pool raises
+    :class:`~korail_mobile_api.errors.KorailProtocolError` here rather than
+    quietly routing the rest of the session back to the front door. Doing it in
+    the parser means every caller of every parse function gets the check, and no
+    code path can obtain a token whose ``node`` was never vetted.
     """
     head, separator, tail = body.strip().partition(":")
     if not separator or not head.isdigit():
@@ -374,6 +476,10 @@ def parse_netfunnel_body(body: str, *, action: str) -> KorailNetFunnelToken:
         key=params.get("key", ""),
         code=head,
         params=params,
+        node=korail_netfunnel_node_url(
+            params.get("ip", ""),
+            params.get("port", ""),
+        ),
     )
 
 
@@ -444,11 +550,14 @@ def parse_set_complete_response(
     if token.code == NOT_COMPLETABLE_CODE:
         raise _queue_failure(
             token,
-            "KORAIL NetFunnel setComplete refused this key as a session to "
-            "release; the server calls that 'Wrong Server ID' but it means the "
-            "key was never exchanged for one, which is what chkEnter (5002) "
-            "does — a slot entered as 5101 -> 5002 releases with the key 5002 "
-            "issued, never with the 5101 ticket",
+            "KORAIL NetFunnel setComplete refused this key as a session THIS "
+            "host owns; the server calls that 'Wrong Server ID' and means one "
+            "of two things — either the key was never exchanged for a session, "
+            "which is what chkEnter (5002) does (a slot entered as 5101 -> 5002 "
+            "releases with the key 5002 issued, never with the 5101 ticket), or "
+            "the request went to a queue node that did not issue this session, "
+            "in which case the message is literal and the fix is to send it to "
+            "the ip/port the reply named",
             body,
         )
     if token.code not in {SUCCESS_CODE, ALREADY_COMPLETE_CODE}:
@@ -478,13 +587,16 @@ def queue_wait_seconds(token: KorailNetFunnelToken) -> int:
 
 
 class KorailNetFunnelClient:
-    """A bounded client for the waiting room, pinned to ``nf.letskorail.com``.
+    """A bounded client for the waiting room, pinned to the queue's own hosts.
 
     Deliberately a SEPARATE client from
     :class:`~korail_mobile_api.http.KorailHttpClient`: that one is pinned to
     ``smart.letskorail.com`` by ``assert_korail_origin`` and must stay that way,
-    and this one can reach nothing but ``/ts.wseq`` on the queue host. Neither
-    can be used to reach the other's origin.
+    and this one can reach nothing but ``/ts.wseq`` on the queue's front door and
+    on the queue's own nodes. Neither can be used to reach the other's origin,
+    and the canonical-origin guarantee for the API host is untouched by the pool
+    described in the module docstring — the pool is the QUEUE host's business
+    only.
     """
 
     def __init__(
@@ -521,9 +633,11 @@ class KorailNetFunnelClient:
                 "User-Agent": config.user_agent,
                 "Connection": "close",
             },
-            # A queue reply names another queue node in ``ip``/``port`` and the
-            # app follows it (``T6/d.java:17-19``); we do not, and a redirect is
-            # the same hazard by another name.
+            # A queue reply names the node that owns the session in
+            # ``ip``/``port`` and we follow that (see the module docstring),
+            # but only into the pool's own naming and only via a URL this
+            # client builds. An HTTP 30x is a different mechanism and gets no
+            # such allowance.
             follow_redirects=False,
             transport=transport,
         )
@@ -547,12 +661,16 @@ class KorailNetFunnelClient:
         return response.text
 
     def enter(self, action: str) -> KorailNetFunnelToken:
-        """5101 — take a TICKET for ``action``. May return a WAIT token.
+        """5101 — take a TICKET for ``action``, at the FRONT DOOR.
 
-        The key this returns is not yet a session: it is what :meth:`check`
-        exchanges for one, and ``setComplete`` refuses it
+        May return a WAIT token. The key this returns is not yet a session: it is
+        what :meth:`check` exchanges for one, and ``setComplete`` refuses it
         (:data:`NOT_COMPLETABLE_CODE`). Callers who want a slot they can release
         want :meth:`acquire`, which performs the exchange.
+
+        This is the only opcode that goes to ``config.netfunnel_url``
+        unconditionally: it is the call the front door balances across the pool,
+        and its reply is what names the node the rest of the session belongs to.
         """
         body = self._get(
             build_get_tid_chk_enter_url(
@@ -562,22 +680,41 @@ class KorailNetFunnelClient:
         )
         return parse_queue_response(body, action=str(action))
 
-    def check(self, action: str, key: str) -> KorailNetFunnelToken:
-        """5002 — enter with ``key``, or ask again. May return a WAIT token.
+    def check(
+        self,
+        action: str,
+        key: str,
+        *,
+        node: str = "",
+    ) -> KorailNetFunnelToken:
+        """5002 — enter with ``key``, or ask again, AT ``node``.
 
-        This is both halves of the same opcode: the first call exchanges the
-        5101 ticket for a completable session, and each later call re-asks with
-        whatever key the previous 201 issued. Either way the reply's key
-        supersedes ``key``, so the caller must carry the returned token forward
-        rather than the one it passed in.
+        May return a WAIT token. This is both halves of the same opcode: the
+        first call exchanges the 5101 ticket for a completable session, and each
+        later call re-asks with whatever key the previous 201 issued. Either way
+        the reply's key supersedes ``key``, so the caller must carry the returned
+        token forward rather than the one it passed in.
+
+        ``node`` is the origin the previous reply named — carry
+        :attr:`KorailNetFunnelToken.node` into it. It defaults to the front door
+        for a caller who has none, which is only correct before any reply has
+        named a node; :meth:`acquire` always has one by the time it gets here.
         """
         body = self._get(
-            build_chk_enter_url(self.config.netfunnel_url, key=key)
+            build_chk_enter_url(node or self.config.netfunnel_url, key=key)
         )
         return parse_queue_response(body, action=str(action))
 
     def release(self, token: KorailNetFunnelToken) -> None:
-        """5004 — release the slot. Raises if the server did not release it.
+        """5004 — release the slot AT ITS NODE. Raises if it was not released.
+
+        The request goes to ``token.node``, the node that issued the session. The
+        front door does not own it and answers ``503:msg="Wrong Server ID"``
+        unless the balancer happens to land back on the owning node, which is
+        where the roughly-half-the-time release failure of 2026-07-26 came from.
+        A token with no node (nothing named one) falls to the front door, which is
+        the app's own ``T6/d.makeURL`` behaviour for an unnamed host and not a
+        fall-back from a refusal — a refused host raises long before this.
 
         This RAISES rather than swallowing, and that is the whole point. The
         sibling SRT implementation guarded its key against a 128-character bound
@@ -604,19 +741,23 @@ class KorailNetFunnelClient:
                 "slot is held until the server times it out",
             )
         body = self._get(
-            build_set_complete_url(self.config.netfunnel_url, key=token.key)
+            build_set_complete_url(
+                token.node or self.config.netfunnel_url,
+                key=token.key,
+            )
         )
         parse_set_complete_response(body, action=token.action)
 
     def acquire(self, action: str) -> KorailNetFunnelToken:
         """Take a ticket, enter with it, and poll until admitted, within bounds.
 
-        The full sequence, which is 5101 → 5002 and NOT 5101 alone::
+        The full sequence, which is 5101 → 5002 and NOT 5101 alone, and which
+        spans two hosts::
 
-            enter(action)          # 5101, issues the ticket
-            check(action, key)     # 5002, exchanges it for a session
-            ...                    # more 5002s while the answer is 201/202
-            -> the token whose key setComplete will accept
+            enter(action)                     # 5101 at the FRONT DOOR
+            check(action, key, node=node)     # 5002 at the NODE it named
+            ...                               # more 5002s while 201/202
+            -> the token whose key AND node setComplete will accept
 
         The 5002 is unconditional. A 5101 that answers 200 with ``nwait=0`` has
         still only issued a ticket, and releasing that ticket fails with
@@ -629,6 +770,13 @@ class KorailNetFunnelClient:
         must release this token and not an earlier one. A 201 that echoes no key
         leaves the last known key in force, because a wait is not a revocation.
 
+        The NODE supersedes the same way and for the same reason: the returned
+        token carries the last node any reply named, so :meth:`release` reaches
+        the host that owns the session. A reply that names no node leaves the
+        previous one in force — a poll that says nothing about routing has not
+        re-routed anything — and a bypass carries no node at all, which is
+        correct, because it has no session either.
+
         Raises :class:`~korail_mobile_api.errors.KorailNetFunnelError` if the
         queue is still holding us after :data:`QUEUE_POLL_LIMIT` polls or
         :data:`QUEUE_WAIT_LIMIT_SECONDS` seconds, whichever comes first. That
@@ -640,11 +788,15 @@ class KorailNetFunnelClient:
         if not token.key:
             # A bypass. No ticket was issued, so there is nothing to exchange
             # and nothing to release — T6/d.Complete() short-circuits on the
-            # same emptiness (T6/d.java:70-73).
+            # same emptiness (T6/d.java:70-73). There is no session, so there is
+            # no node either, and `release` never gets far enough to want one.
             return token
-        # The key rides alongside the token because a 201 is allowed to omit it
-        # and we must not send an empty one to the next chkEnter.
+        # The key and the node ride alongside the token because a 201 is allowed
+        # to omit either: we must not send an empty key to the next chkEnter, and
+        # we must not lose the node a previous reply named just because this one
+        # was silent about routing.
         key = token.key
+        node = token.node
         started = self._clock()
         polls = 0
         while True:
@@ -670,10 +822,17 @@ class KorailNetFunnelClient:
                     )
                 self._sleep(wait)
                 polls += 1
-            token = self.check(action, key)
+            token = self.check(action, key, node=node)
             key = token.key or key
+            node = token.node or node
             if not is_queued(token):
-                return token
+                # The node is put back on the token rather than left in this
+                # loop's local, so the caller holds one object that says both
+                # which slot it is and where that slot lives. The key is NOT
+                # written back: a keyless pass is a bypass, and giving it the
+                # previous key would send it to a setComplete it has no business
+                # reaching.
+                return replace(token, node=node)
 
     @contextmanager
     def slot(self, action: str) -> Iterator[KorailNetFunnelToken]:

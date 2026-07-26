@@ -1,16 +1,22 @@
 """Offline tests for the NetFunnel virtual waiting room.
 
-EVERY TEST HERE IS A FIXTURE TEST, AND THAT IS A LIMITATION, NOT A CLAIM. The
-KORAIL server has never queued this repository — every live call it has made
-succeeded without a token — so the 201 polling path, the release path and the
-response shape below have never been seen on the wire. What these tests pin is
-that the client builds the requests the APK builds and reacts the way the APK
-reacts. Whether ``nf.letskorail.com`` answers a keyless, ``js``-less request in
-the native SDK's ``<code>:<params>`` form is the one thing only a live run can
-settle; see the module docstring of :mod:`korail_mobile_api.netfunnel`.
+EVERY TEST HERE IS A FIXTURE TEST, BUT THE FIXTURES ARE NOT ALL GUESSES. Two
+live probes on 2026-07-26 settled the wire format, the entry sequence and the
+routing, and their transcripts are quoted verbatim in the fixtures below. What
+is still fixture-only is the **201 queued path**: the server was not queueing,
+so nobody has ever seen this client wait in an actual line, and the polling
+loop, the ttl sleep and the two bounds are covered by nothing else. See the
+module docstring of :mod:`korail_mobile_api.netfunnel`.
+
+The second of those probes is why this file now asserts a HOST alongside every
+opcode. The queue is a pool: ``nf.letskorail.com`` balances the entry call and
+the node it lands on is the only one that can complete the session. Releasing at
+the front door therefore failed about half the time — non-deterministically,
+with ``503:msg="Wrong Server ID"`` — and no assertion in this file could see it,
+because none of them recorded where a request went.
 
 No test in this file may reach the network. ``httpx.MockTransport`` is the only
-transport used, and the two tests that exercise the polling loop inject a fake
+transport used, and the tests that exercise the polling loop inject a fake
 sleeper and clock so a bounded wait costs no wall-clock time.
 """
 
@@ -55,10 +61,15 @@ from korail_mobile_api.netfunnel import (
 )
 from korail_mobile_api.safety import (
     KORAIL_NETFUNNEL_ACTION_IDS,
+    KORAIL_NETFUNNEL_KEYED_OPCODES,
+    KORAIL_NETFUNNEL_NODE_OPCODES,
     KORAIL_NETFUNNEL_QUERY_CONTRACTS,
     KORAIL_NETFUNNEL_ROUTES,
+    assert_korail_netfunnel_node_origin,
+    assert_korail_netfunnel_opcode_origin,
     assert_korail_netfunnel_origin,
     assert_netfunnel_request,
+    korail_netfunnel_node_url,
 )
 
 
@@ -95,10 +106,30 @@ RELEASED_BODY = (
 )
 WRONG_SERVER_ID_BODY = '503:msg="Wrong Server ID"'
 
+# THE QUEUE IS A POOL, DIAGNOSED LIVE ON 2026-07-26. `nf.letskorail.com` is a
+# front door that balances the entry call; the node it lands on is the only one
+# that can complete the session, and it names itself in the reply's `ip`/`port`.
+# Sending `setComplete` to the front door instead answered
+# 503:msg="Wrong Server ID" on three of five cycles and 200 on the other two —
+# the two being the balancer happening to land back on the owning node.
+#
+# The three node names below are the ones the probe actually saw. They are the
+# whole evidence base for the admissibility rule, so they are spelled out here
+# rather than generated.
+FRONT_DOOR_HOST = "nf.letskorail.com"
+OBSERVED_NODE_HOSTS = (
+    "rnf12.letskorail.com",
+    "rnf13.letskorail.com",
+    "rnf14.letskorail.com",
+)
+# The node TICKET_BODY and RELEASED_BODY name, i.e. where the session lives for
+# every fixture below that walks the whole sequence.
+NODE_HOST = "rnf13.letskorail.com"
+
 
 def _sequence_handler(
     bodies: dict[str, str],
-    seen: list[tuple[str, str]],
+    seen: list[tuple[str, str, str]],
 ):
     """A MockTransport handler that answers per OPCODE, recording the order.
 
@@ -106,11 +137,19 @@ def _sequence_handler(
     5002 from the 5004, which is exactly what the pre-2026-07-26 fixtures could
     not do: they answered "5101, or else the release", so the newly-required
     chkEnter would have been served the setComplete's reply.
+
+    THE RECORDED TUPLE GREW A HOST ON 2026-07-26, and that is the second pin
+    that moved that day. It used to be ``(opcode, key)``, which could not tell
+    the front door from a queue node — so the leak this file now covers was
+    invisible to every sequence assertion in it. It is ``(opcode, host, key)``
+    now, and the host is asserted alongside the key everywhere the sequence is.
     """
 
     def handler(request: httpx.Request) -> httpx.Response:
         opcode = request.url.params["opcode"]
-        seen.append((opcode, request.url.params.get("key", "")))
+        seen.append(
+            (opcode, request.url.host, request.url.params.get("key", ""))
+        )
         return httpx.Response(200, text=bodies[opcode])
 
     return handler
@@ -322,14 +361,17 @@ def test_registered_contracts_are_exactly_the_three_we_issue():
     }
 
 
-def test_netfunnel_origin_is_pinned_to_the_queue_host():
+def test_netfunnel_origin_is_pinned_to_the_front_door():
     assert_korail_netfunnel_origin(KORAIL_NETFUNNEL_URL)
     assert_korail_netfunnel_origin("https://nf.letskorail.com:443")
     for bad in (
         "http://nf.letskorail.com",
         "https://smart.letskorail.com",
-        # The queue names another node in ip/port and the app follows it
-        # (T6/d.java:17-19). We never do.
+        # THIS PIN DID NOT MOVE ON 2026-07-26, AND THAT IS THE POINT. The queue
+        # really is a pool and the session really does live on a node, but this
+        # function guards the CONFIGURED origin and the 5101 entry call, and
+        # neither of those may be a node. The wider guard is a separate function
+        # so that widening one cannot widen the other by accident.
         "https://rnf14.letskorail.com",
         "https://nf.letskorail.com:8443",
         "https://nf.letskorail.com/ts.wseq",
@@ -337,6 +379,173 @@ def test_netfunnel_origin_is_pinned_to_the_queue_host():
     ):
         with pytest.raises(KorailProtocolError):
             assert_korail_netfunnel_origin(bad)
+
+
+# ---------------------------------------------------------------------------
+# The pool, and the rule that admits it. Diagnosed live on 2026-07-26: see the
+# block comment above KORAIL_NETFUNNEL_NODE_HOST_RE in safety.py for the
+# transcript. The rule is CONSTRAINED, not trusting — a reply names a node, and
+# the guard decides whether that name is one the pool could have produced.
+# ---------------------------------------------------------------------------
+
+
+def test_the_node_rule_admits_every_node_the_probe_saw():
+    # The whole evidence base, and all of it must pass.
+    for host in OBSERVED_NODE_HOSTS:
+        assert korail_netfunnel_node_url(host, "443") == f"https://{host}"
+        assert_korail_netfunnel_node_origin(f"https://{host}")
+
+
+def test_the_node_rule_admits_the_front_door_naming_itself():
+    # The balancer naming itself grants no reach the client did not already
+    # have, so it is admitted rather than treated as an attack.
+    assert korail_netfunnel_node_url(FRONT_DOOR_HOST, "443") == (
+        f"https://{FRONT_DOOR_HOST}"
+    )
+    assert_korail_netfunnel_node_origin(KORAIL_NETFUNNEL_URL)
+
+
+def test_a_reply_that_names_no_node_at_all_is_not_a_redirection():
+    # T6/d.makeURL's `getHost().length() <= 0 || getPort() <= 0` branch: with
+    # nothing named there is nothing to follow, and the front door is where the
+    # request goes. This is the ONE legitimate front-door fall-back, and it is
+    # not a fall-back from a refusal — a refusal raises.
+    assert korail_netfunnel_node_url("", "") == ""
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        # Not the queue's naming at all.
+        "smart.letskorail.com",
+        "evil.example.com",
+        # Suffix and prefix tricks on a name that contains a real one.
+        "rnf13.letskorail.com.evil.example.com",
+        "evil-rnf13.letskorail.com",
+        "rnf13.evil.example.com",
+        "a.rnf13.letskorail.com",
+        # Shaped like a node but not one the pool hands out.
+        "rnf.letskorail.com",
+        "rnfX.letskorail.com",
+        "rnf0.letskorail.com",
+        "rnf013.letskorail.com",
+        "rnf100.letskorail.com",
+        # Case the wire has never used; a guard comparing response bytes should
+        # not be the place where DNS case-insensitivity is relitigated.
+        "RNF13.letskorail.com",
+        # Not a bare hostname at all.
+        "rnf13.letskorail.com:443",
+        "rnf13.letskorail.com/ts.wseq",
+        "user:pw@rnf13.letskorail.com",
+        "https://rnf13.letskorail.com",
+        # A port without a host is naming a node badly, not naming none.
+        "",
+    ],
+)
+def test_a_host_outside_the_pool_is_refused_rather_than_falling_back(host):
+    # HARD ERROR, NOT A FALL-BACK. Quietly reverting to the front door here is
+    # what produced the flaky release: it turns "this reply is lying" into "this
+    # slot leaked", and a leaked slot makes no noise whatsoever.
+    with pytest.raises(KorailProtocolError, match="queue's own nodes"):
+        korail_netfunnel_node_url(host, "443")
+
+
+@pytest.mark.parametrize("port", ["80", "8443", "0", "", "443 ", "0443"])
+def test_a_port_other_than_443_is_refused_rather_than_followed(port):
+    # The port is not followed on the server's say-so either. 443 is the only
+    # value any reply has carried and the only one the origin guard permits.
+    with pytest.raises(KorailProtocolError, match="named port"):
+        korail_netfunnel_node_url(NODE_HOST, port)
+
+
+def test_the_node_origin_guard_is_as_structural_as_the_front_door_one():
+    # Widening the hostname rule widened nothing else: scheme, userinfo, path,
+    # query, fragment and port are checked exactly as they are for the front
+    # door, because both guards share one implementation.
+    for bad in (
+        f"http://{NODE_HOST}",
+        f"https://{NODE_HOST}:8443",
+        f"https://{NODE_HOST}/ts.wseq",
+        f"https://user:pw@{NODE_HOST}",
+        f"https://{NODE_HOST}?opcode=5004",
+        f"https://{NODE_HOST}#x",
+        "https://smart.letskorail.com",
+    ):
+        with pytest.raises(KorailProtocolError):
+            assert_korail_netfunnel_node_origin(bad)
+
+
+def test_the_entry_opcode_may_not_be_sent_to_a_node():
+    # Which host each opcode goes to is answered by the guard, not by whichever
+    # call site built the URL. 5101 is the call the front door balances.
+    assert_korail_netfunnel_opcode_origin("5101", KORAIL_NETFUNNEL_URL)
+    with pytest.raises(KorailProtocolError):
+        assert_korail_netfunnel_opcode_origin("5101", f"https://{NODE_HOST}")
+    for session_opcode in ("5002", "5004"):
+        assert_korail_netfunnel_opcode_origin(
+            session_opcode,
+            f"https://{NODE_HOST}",
+        )
+        assert_korail_netfunnel_opcode_origin(
+            session_opcode,
+            KORAIL_NETFUNNEL_URL,
+        )
+
+
+def test_the_session_opcodes_are_exactly_the_ones_that_carry_a_key():
+    # Not a coincidence: a session is identified by its key and lives on its
+    # node, so the opcodes that carry one are the opcodes that must reach the
+    # other. They are separate constants because they answer different
+    # questions, and this is the assertion that they agree.
+    assert KORAIL_NETFUNNEL_NODE_OPCODES == {"5002", "5004"}
+    assert KORAIL_NETFUNNEL_NODE_OPCODES == KORAIL_NETFUNNEL_KEYED_OPCODES
+    assert (
+        KorailNetFunnelOpcode.GET_TID_CHK_ENTER.value
+        not in KORAIL_NETFUNNEL_NODE_OPCODES
+    )
+
+
+def test_the_url_builders_refuse_the_wrong_host_for_their_opcode():
+    # The guard is reached through the builders, not only by calling it
+    # directly, so a future call site cannot route an opcode by mistake.
+    with pytest.raises(KorailProtocolError):
+        build_get_tid_chk_enter_url(
+            f"https://{NODE_HOST}",
+            action=KorailNetFunnelAction.INQUIRY,
+        )
+    assert build_chk_enter_url(
+        f"https://{NODE_HOST}", key=REAL_LENGTH_KEY
+    ) == (f"https://{NODE_HOST}/ts.wseq?opcode=5002&key={REAL_LENGTH_KEY}")
+    assert build_set_complete_url(
+        f"https://{NODE_HOST}", key=REAL_LENGTH_KEY
+    ) == (f"https://{NODE_HOST}/ts.wseq?opcode=5004&key={REAL_LENGTH_KEY}")
+    for builder in (build_chk_enter_url, build_set_complete_url):
+        with pytest.raises(KorailProtocolError):
+            builder("https://smart.letskorail.com", key=REAL_LENGTH_KEY)
+
+
+def test_a_parsed_reply_carries_the_node_that_answered_it():
+    token = parse_netfunnel_body(TICKET_BODY, action="act_8")
+    assert token.params["ip"] == NODE_HOST
+    assert token.params["port"] == "443"
+    assert token.node == f"https://{NODE_HOST}"
+    # A reply that names nothing carries no node, which means the front door.
+    assert parse_netfunnel_body(SESSION_BODY, action="act_8").node == ""
+
+
+def test_a_reply_naming_a_host_outside_the_pool_is_refused_at_parse_time():
+    # Doing this in the parser means every caller of every parse function gets
+    # the check and no code path can hold a token whose node was never vetted.
+    body = f"200:key={SESSION_KEY}&ip=evil.example.com&port=443"
+    with pytest.raises(KorailProtocolError, match="queue's own nodes"):
+        parse_netfunnel_body(body, action="act_8")
+    with pytest.raises(KorailProtocolError):
+        parse_queue_response(body, action="act_8")
+    with pytest.raises(KorailProtocolError):
+        parse_set_complete_response(
+            "200:key=&ip=evil.example.com&port=443",
+            action="act_8",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -617,7 +826,7 @@ def test_the_live_transcript_keys_have_the_lengths_the_probe_saw():
 
 
 def test_acquire_exchanges_the_ticket_for_a_session_before_returning():
-    seen: list[tuple[str, str]] = []
+    seen: list[tuple[str, str, str]] = []
     client = _client(
         _sequence_handler(
             {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": RELEASED_BODY},
@@ -627,16 +836,22 @@ def test_acquire_exchanges_the_ticket_for_a_session_before_returning():
 
     token = client.acquire(KorailNetFunnelAction.INQUIRY)
 
-    # 5101 with no key, then 5002 carrying the TICKET the 5101 issued.
-    assert seen == [("5101", ""), ("5002", TICKET_KEY)]
+    # 5101 with no key at the front door, then 5002 carrying the TICKET the
+    # 5101 issued, at the node the 5101 named.
+    assert seen == [
+        ("5101", FRONT_DOOR_HOST, ""),
+        ("5002", NODE_HOST, TICKET_KEY),
+    ]
     # The token that comes back is the chkEnter's, not the ticket.
     assert token.key == SESSION_KEY
     assert token.key != TICKET_KEY
     assert token.code == "200"
+    # ...and it carries the node, so the caller can release at the right host.
+    assert token.node == f"https://{NODE_HOST}"
 
 
 def test_the_full_sequence_releases_with_the_key_chk_enter_issued():
-    seen: list[tuple[str, str]] = []
+    seen: list[tuple[str, str, str]] = []
     client = _client(
         _sequence_handler(
             {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": RELEASED_BODY},
@@ -648,24 +863,55 @@ def test_the_full_sequence_releases_with_the_key_chk_enter_issued():
         assert token.key == SESSION_KEY
 
     assert seen == [
-        ("5101", ""),
-        ("5002", TICKET_KEY),
-        ("5004", SESSION_KEY),
+        ("5101", FRONT_DOOR_HOST, ""),
+        ("5002", NODE_HOST, TICKET_KEY),
+        ("5004", NODE_HOST, SESSION_KEY),
     ]
+
+
+def test_the_entry_call_goes_to_the_front_door_and_the_session_to_the_node():
+    # THE 2026-07-26 DEFECT, stated as a routing pin rather than as a sequence.
+    # Every opcode used to go to the front door, which released the slot only
+    # when the balancer happened to land back on the owning node — roughly half
+    # the time. 5101 is the call the front door balances; 5002 and 5004 belong
+    # to the session and must reach the node that issued it.
+    seen: list[tuple[str, str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": RELEASED_BODY},
+            seen,
+        )
+    )
+
+    with client.slot(KorailNetFunnelAction.INQUIRY):
+        pass
+
+    hosts = {opcode: host for opcode, host, _ in seen}
+    assert hosts == {
+        "5101": FRONT_DOOR_HOST,
+        "5002": NODE_HOST,
+        "5004": NODE_HOST,
+    }
+    # The entry call is the ONLY one on the front door, and the node it went to
+    # is the one the reply named rather than anything configured.
+    assert NODE_HOST != FRONT_DOOR_HOST
+    assert f"ip={NODE_HOST}" in TICKET_BODY
+    assert ENABLED.netfunnel_url == f"https://{FRONT_DOOR_HOST}"
 
 
 def test_the_5002_is_sent_even_when_nobody_is_queued():
     # The trap: 5101 answers 200 with nwait=0 and looks like a finished
-    # handshake. It is not — the key it issued cannot be completed. The extra
-    # round trip is the price of not following the server-named ip/port.
-    seen: list[tuple[str, str]] = []
+    # handshake. It is not — the key it issued cannot be completed by the front
+    # door. Whether the NODE would complete it was never probed, so the extra
+    # round trip stays rather than being optimised away on a guess.
+    seen: list[tuple[str, str, str]] = []
     client = _client(
         _sequence_handler({"5101": TICKET_BODY, "5002": SESSION_BODY}, seen)
     )
 
     client.acquire(KorailNetFunnelAction.PAY)
 
-    assert [opcode for opcode, _ in seen] == ["5101", "5002"]
+    assert [opcode for opcode, _host, _key in seen] == ["5101", "5002"]
 
 
 def test_a_201_from_chk_enter_supersedes_the_key_on_every_poll():
@@ -679,12 +925,16 @@ def test_a_201_from_chk_enter_supersedes_the_key_on_every_poll():
     admitted = f"200:key={admitted_key}&nwait=0&nnext=0&tps=0.000000&ttl=0"
 
     bodies = [TICKET_BODY, queued_first, queued_again, admitted, RELEASED_BODY]
-    seen: list[tuple[str, str]] = []
+    seen: list[tuple[str, str, str]] = []
     clock = _FakeClock()
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(
-            (request.url.params["opcode"], request.url.params.get("key", ""))
+            (
+                request.url.params["opcode"],
+                request.url.host,
+                request.url.params.get("key", ""),
+            )
         )
         return httpx.Response(200, text=bodies[len(seen) - 1])
 
@@ -693,13 +943,14 @@ def test_a_201_from_chk_enter_supersedes_the_key_on_every_poll():
         assert token.key == admitted_key
 
     # Each request carries the key the PREVIOUS reply issued, never the first
-    # one — and the release carries the last of all.
+    # one — and the release carries the last of all. None of these 201s names a
+    # node, so the one the 5101 named stays in force for the whole wait.
     assert seen == [
-        ("5101", ""),
-        ("5002", TICKET_KEY),
-        ("5002", SESSION_KEY),
-        ("5002", reissued_key),
-        ("5004", admitted_key),
+        ("5101", FRONT_DOOR_HOST, ""),
+        ("5002", NODE_HOST, TICKET_KEY),
+        ("5002", NODE_HOST, SESSION_KEY),
+        ("5002", NODE_HOST, reissued_key),
+        ("5004", NODE_HOST, admitted_key),
     ]
     # Two waits, so two sleeps; the entry 5002 is not preceded by one.
     assert clock.slept == [2, 2]
@@ -711,27 +962,98 @@ def test_a_wait_that_echoes_no_key_keeps_the_last_key_in_force():
     # the newest reply said" — otherwise the next chkEnter is built with an
     # empty key and never leaves the process.
     bodies = [TICKET_BODY, "201:nwait=7&ttl=1", SESSION_BODY]
-    seen: list[tuple[str, str]] = []
+    seen: list[tuple[str, str, str]] = []
     clock = _FakeClock()
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(
-            (request.url.params["opcode"], request.url.params.get("key", ""))
+            (
+                request.url.params["opcode"],
+                request.url.host,
+                request.url.params.get("key", ""),
+            )
         )
         return httpx.Response(200, text=bodies[len(seen) - 1])
 
     client = _client(handler, sleeper=clock.sleep, clock=clock)
     token = client.acquire(KorailNetFunnelAction.INQUIRY)
 
-    assert seen == [("5101", ""), ("5002", TICKET_KEY), ("5002", TICKET_KEY)]
+    assert seen == [
+        ("5101", FRONT_DOOR_HOST, ""),
+        ("5002", NODE_HOST, TICKET_KEY),
+        ("5002", NODE_HOST, TICKET_KEY),
+    ]
     assert token.key == SESSION_KEY
 
 
+def test_a_wait_that_names_no_node_keeps_the_last_node_in_force():
+    # The node supersedes exactly as the key does, and for the same reason: a
+    # poll that says nothing about routing has not re-routed anything. The 201
+    # here names neither, and both the key and the node from before it survive.
+    bodies = [TICKET_BODY, "201:nwait=7&ttl=1", SESSION_BODY, RELEASED_BODY]
+    seen: list[tuple[str, str, str]] = []
+    clock = _FakeClock()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(
+            (
+                request.url.params["opcode"],
+                request.url.host,
+                request.url.params.get("key", ""),
+            )
+        )
+        return httpx.Response(200, text=bodies[len(seen) - 1])
+
+    client = _client(handler, sleeper=clock.sleep, clock=clock)
+    with client.slot(KorailNetFunnelAction.INQUIRY) as token:
+        # SESSION_BODY names no node either, so the admitted token still points
+        # at the node the 5101 named.
+        assert "ip=" not in SESSION_BODY
+        assert token.node == f"https://{NODE_HOST}"
+
+    assert [host for _opcode, host, _key in seen] == [
+        FRONT_DOOR_HOST,
+        NODE_HOST,
+        NODE_HOST,
+        NODE_HOST,
+    ]
+
+
+def test_a_reply_may_hand_the_session_on_to_another_node_in_the_pool():
+    # Supersession is not "the 5101's node forever". If a later reply names a
+    # different node of the pool, that is where the session now lives, and the
+    # release has to follow it there — the same rule as the key, applied to the
+    # other half of what identifies a slot.
+    handed_on = (
+        f"200:key={SESSION_KEY}&nwait=0&nnext=0&tps=0.000000&ttl=0"
+        "&ip=rnf14.letskorail.com&port=443"
+    )
+    seen: list[tuple[str, str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {"5101": TICKET_BODY, "5002": handed_on, "5004": RELEASED_BODY},
+            seen,
+        )
+    )
+
+    with client.slot(KorailNetFunnelAction.RESERVE) as token:
+        assert token.node == "https://rnf14.letskorail.com"
+
+    assert seen == [
+        ("5101", FRONT_DOOR_HOST, ""),
+        # The 5002 still goes to the node the 5101 named...
+        ("5002", NODE_HOST, TICKET_KEY),
+        # ...and the 5004 goes to the one the 5002 named instead.
+        ("5004", "rnf14.letskorail.com", SESSION_KEY),
+    ]
+
+
 def test_releasing_the_5101_ticket_surfaces_the_503_instead_of_leaking():
-    # The exact live failure. 503 must never join 502 in the accepted set: the
-    # server's "Wrong Server ID" reads like a routing complaint, but adding
-    # sid/aid did not help and no other host was involved — it means the key was
-    # never exchanged, and treating it as released is a silent leak.
+    # The first live failure of 2026-07-26. 503 must never join 502 in the
+    # accepted set, whichever of its two causes produced it: the key was never
+    # exchanged for a session (this test — re-attaching sid/aid did not help),
+    # or the request reached a node that does not own the session (the pool
+    # defect, covered above). Treating either as released is a silent leak.
     with pytest.raises(KorailNetFunnelError, match="never exchanged") as caught:
         parse_set_complete_response(WRONG_SERVER_ID_BODY, action="act_8")
     assert caught.value.code == "503"
@@ -760,6 +1082,77 @@ def test_a_503_during_a_slot_is_audible_on_the_success_path():
     with pytest.raises(KorailNetFunnelError, match="never exchanged"):
         with _client(handler).slot(KorailNetFunnelAction.RESERVE):
             pass
+
+
+def test_a_reply_naming_a_foreign_host_aborts_instead_of_falling_back():
+    # The client-level statement of the same rule: a 5101 that names a host
+    # outside the pool must stop the handshake, NOT quietly send the 5002 to the
+    # front door. The silent fall-back is what made the release flaky, so the
+    # request count is asserted as well as the exception — nothing may follow.
+    seen: list[tuple[str, str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {
+                "5101": (
+                    f"200:key={TICKET_KEY}&nwait=0&ttl=0"
+                    "&ip=evil.example.com&port=443"
+                ),
+                "5002": SESSION_BODY,
+            },
+            seen,
+        )
+    )
+
+    with pytest.raises(KorailProtocolError, match="queue's own nodes"):
+        client.acquire(KorailNetFunnelAction.INQUIRY)
+    assert [opcode for opcode, _host, _key in seen] == ["5101"]
+
+
+def test_a_reply_naming_a_non_443_port_aborts_instead_of_falling_back():
+    seen: list[tuple[str, str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {
+                "5101": (
+                    f"200:key={TICKET_KEY}&nwait=0&ttl=0"
+                    f"&ip={NODE_HOST}&port=8443"
+                ),
+                "5002": SESSION_BODY,
+            },
+            seen,
+        )
+    )
+
+    with pytest.raises(KorailProtocolError, match="named port"):
+        client.acquire(KorailNetFunnelAction.INQUIRY)
+    assert [opcode for opcode, _host, _key in seen] == ["5101"]
+
+
+def test_a_release_at_the_front_door_is_what_the_503_was_telling_us():
+    # The controlled pair from the 2026-07-26 probe, as a fixture. One session,
+    # released twice: at the front door it is 503:msg="Wrong Server ID", at the
+    # node that issued it, 200. "Wrong Server ID" is LITERAL — it is the pool
+    # saying "that session is not mine", not a complaint about the key.
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == NODE_HOST:
+            return httpx.Response(200, text=RELEASED_BODY)
+        return httpx.Response(200, text=WRONG_SERVER_ID_BODY)
+
+    client = _client(handler)
+    at_the_node = KorailNetFunnelToken(
+        action="act_8",
+        key=SESSION_KEY,
+        code="200",
+        node=f"https://{NODE_HOST}",
+    )
+    client.release(at_the_node)
+
+    # The same key with no node goes to the front door and is refused — which
+    # is exactly the token this client used to build for every release.
+    with pytest.raises(KorailNetFunnelError, match="never exchanged"):
+        client.release(
+            KorailNetFunnelToken(action="act_8", key=SESSION_KEY, code="200")
+        )
 
 
 def test_the_empty_key_of_a_successful_release_is_not_a_parse_failure():
@@ -799,12 +1192,48 @@ def test_release_refuses_a_keyless_token_that_is_not_a_bypass():
 def test_a_bypass_still_skips_the_5002_and_the_5004():
     # 300 issues no key because there is no line, so there is nothing to
     # exchange and nothing to release.
-    seen: list[tuple[str, str]] = []
+    seen: list[tuple[str, str, str]] = []
     client = _client(_sequence_handler({"5101": "300:"}, seen))
 
     with client.slot(KorailNetFunnelAction.INQUIRY) as token:
         assert token.key == ""
-    assert [opcode for opcode, _ in seen] == ["5101"]
+    assert [opcode for opcode, _host, _key in seen] == ["5101"]
+
+
+def test_a_bypass_token_has_no_node_and_still_short_circuits():
+    # A bypass has no session, so it has no node either — nothing named one and
+    # nothing needs one. The keyless short-circuit in release fires before
+    # routing is ever consulted, so the missing node cannot become a request to
+    # the wrong host or a crash on an empty origin.
+    seen: list[tuple[str, str, str]] = []
+    client = _client(_sequence_handler({"5101": "300:"}, seen))
+
+    token = client.acquire(KorailNetFunnelAction.INQUIRY)
+    assert token.code == "300"
+    assert token.key == ""
+    assert token.node == ""
+
+    client.release(token)
+    assert [opcode for opcode, _host, _key in seen] == ["5101"]
+
+
+def test_a_bypass_that_names_a_node_anyway_is_still_released_by_short_circuit():
+    # Defence in depth: even if a 300 did name a node, there is no key to
+    # release, so the short-circuit still wins and no request is built.
+    seen: list[tuple[str, str, str]] = []
+    client = _client(
+        _sequence_handler(
+            {"5101": f"300:ip={NODE_HOST}&port=443"},
+            seen,
+        )
+    )
+
+    token = client.acquire(KorailNetFunnelAction.INQUIRY)
+    assert token.key == ""
+    assert token.node == f"https://{NODE_HOST}"
+
+    client.release(token)
+    assert [opcode for opcode, _host, _key in seen] == ["5101"]
 
 
 # ---------------------------------------------------------------------------
@@ -912,7 +1341,7 @@ def test_a_queue_refusal_during_polling_propagates_immediately():
 
 
 def test_slot_releases_after_a_successful_body():
-    seen: list[tuple[str, str]] = []
+    seen: list[tuple[str, str, str]] = []
     client = _client(
         _sequence_handler(
             {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": RELEASED_BODY},
@@ -922,11 +1351,15 @@ def test_slot_releases_after_a_successful_body():
 
     with client.slot(KorailNetFunnelAction.PAY) as token:
         assert token.key == SESSION_KEY
-    assert [opcode for opcode, _ in seen] == ["5101", "5002", "5004"]
+    assert [opcode for opcode, _host, _key in seen] == [
+        "5101",
+        "5002",
+        "5004",
+    ]
 
 
 def test_slot_releases_after_the_body_raises_and_keeps_the_original_error():
-    seen: list[tuple[str, str]] = []
+    seen: list[tuple[str, str, str]] = []
     client = _client(
         _sequence_handler(
             {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": RELEASED_BODY},
@@ -942,12 +1375,16 @@ def test_slot_releases_after_the_body_raises_and_keeps_the_original_error():
             raise Boom("the gated operation failed")
     # The app releases from onPostExecute (BaseDaoHelper.java:105-107), which
     # runs whether or not the gated call raised. So do we.
-    assert [opcode for opcode, _ in seen] == ["5101", "5002", "5004"]
-    assert seen[-1] == ("5004", SESSION_KEY)
+    assert [opcode for opcode, _host, _key in seen] == [
+        "5101",
+        "5002",
+        "5004",
+    ]
+    assert seen[-1] == ("5004", NODE_HOST, SESSION_KEY)
 
 
 def test_a_failed_release_on_the_failure_path_is_noted_not_substituted():
-    seen: list[tuple[str, str]] = []
+    seen: list[tuple[str, str, str]] = []
     client = _client(
         _sequence_handler(
             {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": "507:"},
@@ -967,7 +1404,7 @@ def test_a_failed_release_on_the_failure_path_is_noted_not_substituted():
 
 
 def test_a_failed_release_on_the_success_path_is_raised():
-    seen: list[tuple[str, str]] = []
+    seen: list[tuple[str, str, str]] = []
     client = _client(
         _sequence_handler(
             {"5101": TICKET_BODY, "5002": SESSION_BODY, "5004": "507:"},
