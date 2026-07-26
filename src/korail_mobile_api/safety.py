@@ -14,7 +14,17 @@ from .constants import (
 from .errors import KorailProtocolError
 
 
-# The subject areas this package will not build a send path for.
+# The subject areas the READ-ONLY send path will not carry.
+#
+# Read this as "not reachable through post_form/get", NOT as "not implemented".
+# Three of the names below -- reservation, payment, refund -- are fully built
+# out: they have routes in KORAIL_MUTATION_ROUTES, client methods, and consent
+# categories of their own. What they must never do is travel on the read path,
+# which is exactly what these entries enforce (see the two parametrized tests
+# in tests/test_http.py). The 2026-07-27 audit read the older wording here as
+# claiming those three were declined outright; they are not, and the wording is
+# corrected rather than the set, because removing them would delete a real
+# guard.
 #
 # NARROWED ON 2026-07-26: the label was "points-mileage", which excluded the
 # whole loyalty area including its balance READS. Those reads are now in scope
@@ -34,10 +44,10 @@ from .errors import KorailProtocolError
 #   xPoint.OkCashbagCertView, mileage.acpnMlgSave.do, mileage.acpnMlgNoti.do
 #                       -- registration/accrual writes.
 #
-# This set is documentary: nothing dispatches on it, and the actual boundary is
-# KORAIL_READ_ONLY_ROUTES plus KORAIL_MUTATION_ROUTES. It is kept because it
-# records which areas were considered and declined, which a route allowlist
-# cannot express.
+# The precise boundary is still KORAIL_READ_ONLY_ROUTES plus
+# KORAIL_MUTATION_ROUTES; this set is the coarser domain-level guard the read
+# path applies on top, and it also records which areas were considered and
+# declined -- something a route allowlist cannot express.
 EXCLUDED_API_DOMAINS = frozenset(
     {
         "reservation",
