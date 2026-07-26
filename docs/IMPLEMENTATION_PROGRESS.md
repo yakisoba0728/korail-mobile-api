@@ -818,3 +818,34 @@ carried `h_gen_rsv_cd="13"`; the search on 20260812 showed `"11"` on both legs
 and the reservation went through. The guard read the server correctly and no
 request was sent on the sold-out attempt.
 
+## ERR299943 settled by a read, not a guess (2026-07-26)
+
+Reserving 청소년 alone, and 1~3급 장애 + 안내견, was refused live with
+`ERR299943 예약할인이 지원되지 않습니다` on a form that matched the app byte for
+byte. The working hypothesis was that the account lacks the entitlement rather
+than that the form is wrong, and `get_korail_point_summary`
+(`xPoint.MyXPointView`) settles it without sending anything:
+
+    disability_flag:             'F'   (not 'Y')
+    welfare_discount_class_name: ''
+    welfare_discount_class_code: ''
+    customer_lead_flag_name:     ''    (보조견)
+
+`MyPageActivity.java:206-212` gates the whole disability section on that flag
+being `Y`, filling its two rows from the welfare class name and the guide-dog
+name. All three are empty here, so this account has neither a disability
+registration nor a guide-dog registration — exactly the shape that produces
+`ERR299943` on those two passenger types.
+
+**The form needs no change.** What an operator would need to exercise those
+types is an account with the entitlement registered, which is a real-world
+enrolment, not an API call this library should make. Note the corresponding
+registration routes (`certification.disabled.do`, `MeritCert`, `assemblyCert`,
+`pbep.*`) are deliberately NOT implemented: they submit 주민등록번호 fragments
+and veteran certificate numbers to enrol an identity, and shipping an
+unverifiable identity-document submitter is worse than shipping nothing.
+
+청소년 (P11) remains unexplained by this read — the point summary carries no
+age field — so whether that refusal is an age mismatch or a separate
+entitlement is still open.
+
