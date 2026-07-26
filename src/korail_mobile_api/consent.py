@@ -30,13 +30,20 @@ from .errors import MutationNotAllowedError
 from .redaction import redact_payload
 
 
-MUTATION_CATEGORIES = ("reserve", "payment", "cancel", "refund")
+MUTATION_CATEGORIES = (
+    "reserve",
+    "payment",
+    "cancel",
+    "refund",
+    "discount_card",
+)
 
 _CONSENT_FLAG_BY_CATEGORY = {
     "reserve": "allow_reserve",
     "payment": "allow_payment",
     "cancel": "allow_cancel",
     "refund": "allow_refund",
+    "discount_card": "allow_discount_card",
 }
 
 
@@ -67,6 +74,15 @@ class MutationConsent:
     allow_payment: bool = False
     allow_cancel: bool = False
     allow_refund: bool = False
+    #: 할인카드(N카드) registration and 기간연장. A SEPARATE category rather
+    #: than a reuse of ``allow_reserve``, because these two routes buy and
+    #: extend a product: ``research.dcntCrdInfo.do`` answers with a
+    #: ``lumpStlTgtNo`` that a payment then settles, and
+    #: ``reservation.dcntCrdExtn.do`` extends a card's validity against its
+    #: ticket credential. Nobody who opted into placing a train reservation
+    #: also opted into buying a discount card, and no live-test path in this
+    #: repository exercises this category.
+    allow_discount_card: bool = False
     dry_run: bool = True
     fake_card_only: bool = True
     #: The caller acknowledges that a real, chargeable PAN will be transmitted
@@ -102,7 +118,7 @@ def require_mutation_consent(
     """Deny a mutation unless ``consent`` explicitly opts into ``category``.
 
     ``category`` must be one of ``"reserve"``, ``"payment"``, ``"cancel"``,
-    ``"refund"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
+    ``"refund"``, ``"discount_card"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
     when ``consent`` is ``None``, is not a :class:`MutationConsent`, names an
     unknown category, or when the matching ``allow_<category>`` flag is False.
     Returns ``None`` when the mutation is permitted. Performs no I/O.

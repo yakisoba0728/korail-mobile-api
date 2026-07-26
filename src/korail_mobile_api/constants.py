@@ -119,6 +119,18 @@ KORAIL_STANDBY_WAIT_FLAG = " 9"
 # failure code: strResult is still SUCC and a PNR is still returned.
 KORAIL_STANDBY_HOLD_MESSAGE_CODE = "IRR000014"
 
+# The most 구간 a 할인카드(N카드) can be registered against.
+#
+# The app has one booking Activity per section count and stops at three:
+# NCard1SectionBookingActivity, NCard2SectionBookingActivity,
+# NCard3SectionBookingActivity, and their v2 counterparts. The v2 option widget
+# agrees -- q5/ViewOnClickListenerC6267a.java holds exactly three route rows
+# (ViewOnClickListenerC6181b[3]) and K4/f.java:5-11 declares SECTIONONE(1),
+# SECTIONTWO(2), SECTIONTHREE(3) and no fourth. There is no product code for a
+# four-section card either (q5/ViewOnClickListenerC6267a.java:68-80 is a
+# 2x3x2 table).
+KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
+
 
 # The most passengers one reservation may carry. The booking screen's passenger
 # picker is the authority: m5/d.java:32-33 (the picker the main booking flow

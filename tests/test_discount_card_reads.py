@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from urllib.parse import parse_qsl, urlsplit
 
 import httpx
@@ -42,11 +43,12 @@ from korail_mobile_api.safety import (
 USAGE_PATH = "/classes/com.korail.mobile.ticket.dcntCrdUseQry.do"
 SCHEDULE_PATH = "/classes/com.korail.mobile.research.dcntCrdScheduleView.do"
 
-# The two dcntCrd* routes this branch deliberately does NOT make reachable
-# through the read-only transport (ResearchService.java:65-70).
-WRITE_PATHS = (
-    "/classes/com.korail.mobile.research.dcntCrdInfo.do",
-    "/classes/com.korail.mobile.reservation.dcntCrdExtn.do",
+# The two dcntCrd* routes that change state. They are reachable only through
+# the consent-gated mutation send path, never through the read-only one
+# (ResearchService.java:65-70).
+WRITE_ROUTES = (
+    ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
+    ("GET", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
 )
 
 
@@ -89,18 +91,19 @@ def test_route_boundary_admits_the_two_reads_and_neither_write():
     assert len(KORAIL_READ_ONLY_ROUTES) == 58
     assert ("GET", USAGE_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("GET", SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
-    for path in WRITE_PATHS:
-        for method in ("GET", "POST"):
-            assert (method, path) not in KORAIL_READ_ONLY_ROUTES
-            assert (method, path) not in KORAIL_MUTATION_ROUTES
+    # The two state-changing dcntCrd* routes are in the mutation set and in
+    # neither direction reachable from the read-only transport.
+    for route in WRITE_ROUTES:
+        assert route in KORAIL_MUTATION_ROUTES
+        assert route not in KORAIL_READ_ONLY_ROUTES
+        with pytest.raises(KorailProtocolError):
+            assert_read_only_route(*route)
     # Both reads are GET-only; the app declares no POST overload for either
     # (ResearchService.java:51,54).
     assert ("POST", USAGE_PATH) not in KORAIL_READ_ONLY_ROUTES
     assert ("POST", SCHEDULE_PATH) not in KORAIL_READ_ONLY_ROUTES
     with pytest.raises(KorailProtocolError):
         assert_read_only_route("POST", USAGE_PATH)
-    with pytest.raises(KorailProtocolError):
-        assert_read_only_route("GET", WRITE_PATHS[1])
 
 
 def test_usage_query_is_the_card_number_and_the_common_three():
@@ -372,9 +375,14 @@ def test_public_surface_exports_the_new_names():
         assert hasattr(korail_mobile_api, name)
     assert hasattr(KorailClient, "get_discount_card_usage_history")
     assert hasattr(KorailClient, "get_discount_card_schedule")
-    # Nothing on this branch adds a way to register or extend a card yet.
-    assert not hasattr(KorailClient, "register_discount_card")
-    assert not hasattr(KorailClient, "extend_discount_card")
+    # Neither read is a disguised write: no method here touches a card.
+    for name in (
+        "get_discount_card_usage_history",
+        "get_discount_card_schedule",
+    ):
+        assert "consent" not in inspect.signature(
+            getattr(KorailClient, name)
+        ).parameters
 
 
 def test_the_ticket_detail_hands_out_the_card_the_reads_need():

@@ -7,6 +7,7 @@ from .config import KorailConfig
 from .constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_DIRECT_JOURNEY_TYPE_CODE,
+    KORAIL_MAX_DISCOUNT_CARD_SECTIONS,
     KORAIL_MAX_JOURNEY_LEGS,
     KORAIL_STANDBY_WAIT_FLAG,
     KORAIL_TRANSFER_ITINERARY_CODE,
@@ -17,6 +18,10 @@ from .constants import (
 from .errors import KorailProtocolError
 from .models import TrainSummary
 from .mutation_models import (
+    DiscountCardAdditionalUser,
+    DiscountCardPurchaseRequest,
+    DiscountCardSectionRequest,
+    DiscountCardTicket,
     CardPayment,
     KorailPassengerCounts,
     KorailSeatAssignment,
@@ -1118,3 +1123,173 @@ def build_refund_form(
         }
     )
     return form
+
+
+def _required_mutation_text(value: object, *, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise KorailProtocolError(
+            f"KORAIL discount card request requires a non-empty {field}"
+        )
+    return value
+
+
+def build_discount_card_purchase_form(
+    config: KorailConfig,
+    request: DiscountCardPurchaseRequest,
+) -> dict[str, str]:
+    """``research.dcntCrdInfo.do`` — buy a 할인카드(N카드).
+
+    Four scalars plus two flattened maps, in the order
+    ``ResearchService.java:68-70`` declares them. The scalar half is built by
+    ``w4/a.java:106-113``; the two maps are the ``jrnyInfo`` and ``apdUsrInfo``
+    ``HashMap``s of ``NCardReservationDao.NCardReservationRequest``
+    (``dao/research/NCardReservationDao.java:31-32``), whose keys are the
+    indexed spellings its setters write (``:74-124``):
+
+    * ``jrnyInfo``: ``jrnyCnt`` once, then ``jrnyTpCd_N`` / ``runDt_N`` /
+      ``trnNo_N`` / ``dptRsStnCd_N`` / ``arvRsStnCd_N`` per section.
+    * ``apdUsrInfo``: ``apdUsrCnt`` once, then ``custMgNo_N`` /
+      ``apdCustName_N`` / ``apdCustTeln_N`` per additional user.
+
+    ``mCustomData`` (``:33,102-104``) is deliberately absent: it is a
+    ``LinkedHashMap`` the request object carries for the confirmation screen
+    and is not passed to ``executeDao`` (``:180``), so it never reaches the
+    wire.
+
+    **NOT VERIFIED, AND NOT ONLY BECAUSE IT WAS NEVER SENT.** No call site in
+    v6.5.0 was found that populates ``jrnyInfo``/``apdUsrInfo`` — only the
+    setters that would. The counts and key spellings come from the DAO;
+    whether the server also requires a section for a 1-section card, and
+    whether ``apdUsrCnt`` must be present as ``"0"`` for a 1인용 card rather
+    than omitted, are open questions an operator must settle.
+    """
+    if type(request) is not DiscountCardPurchaseRequest:
+        raise KorailProtocolError(
+            "KORAIL discount card purchase requires an exact "
+            "DiscountCardPurchaseRequest"
+        )
+    form = _common_fields(config)
+    form.update(
+        {
+            "dcntCrdKndMgNo": _required_mutation_text(
+                request.card_kind_management_no,
+                field="card_kind_management_no",
+            ),
+            "custMgNo": _required_mutation_text(
+                request.customer_no,
+                field="customer_no",
+            ),
+            "vlidTrmStDt": _required_mutation_text(
+                request.validity_start_date,
+                field="validity_start_date",
+            ),
+            "usePsbTno": _required_mutation_text(
+                request.usable_trip_count,
+                field="usable_trip_count",
+            ),
+        }
+    )
+    sections = tuple(request.sections)
+    if not sections or len(sections) > KORAIL_MAX_DISCOUNT_CARD_SECTIONS:
+        raise KorailProtocolError(
+            "KORAIL discount card purchase needs 1 to "
+            f"{KORAIL_MAX_DISCOUNT_CARD_SECTIONS} sections"
+        )
+    form["jrnyCnt"] = str(len(sections))
+    for index, section in enumerate(sections, start=1):
+        if type(section) is not DiscountCardSectionRequest:
+            raise KorailProtocolError(
+                "KORAIL discount card purchase requires exact "
+                "DiscountCardSectionRequest values"
+            )
+        form[f"jrnyTpCd_{index}"] = _required_mutation_text(
+            section.journey_type_code,
+            field="journey_type_code",
+        )
+        form[f"runDt_{index}"] = _required_mutation_text(
+            section.run_date,
+            field="run_date",
+        )
+        form[f"trnNo_{index}"] = section.train_no
+        form[f"dptRsStnCd_{index}"] = _required_mutation_text(
+            section.departure_station_code,
+            field="departure_station_code",
+        )
+        form[f"arvRsStnCd_{index}"] = _required_mutation_text(
+            section.arrival_station_code,
+            field="arrival_station_code",
+        )
+    users = tuple(request.additional_users)
+    if users:
+        form["apdUsrCnt"] = str(len(users))
+        for index, user in enumerate(users, start=1):
+            if type(user) is not DiscountCardAdditionalUser:
+                raise KorailProtocolError(
+                    "KORAIL discount card purchase requires exact "
+                    "DiscountCardAdditionalUser values"
+                )
+            form[f"custMgNo_{index}"] = _required_mutation_text(
+                user.customer_no,
+                field="additional user customer_no",
+            )
+            form[f"apdCustName_{index}"] = _required_mutation_text(
+                user.name,
+                field="additional user name",
+            )
+            form[f"apdCustTeln_{index}"] = _required_mutation_text(
+                user.phone,
+                field="additional user phone",
+            )
+    return form
+
+
+def build_discount_card_extension_query(
+    config: KorailConfig,
+    ticket: DiscountCardTicket,
+) -> dict[str, str]:
+    """``reservation.dcntCrdExtn.do`` — extend a 할인카드's validity.
+
+    Seven ``@Query`` parameters (``ResearchService.java:65-66``): the common
+    three plus the card ticket's four-part credential, which
+    ``TicketListActivity.java:1067-1072`` reads off the N카드 ticket row as
+    ``h_orgtk_wct_no`` / ``h_orgtk_ret_sale_dt`` / ``h_orgtk_sale_sqno`` /
+    ``h_orgtk_ret_pwd``.
+
+    The app offers 기간연장 only when the card says it may:
+    ``Y4/C0907b.java:301`` gates the button on
+    ``dcnt_crd_info.h_dcnt_crd_trm_extn_psb_flg == "Y"``
+    (:attr:`~korail_mobile_api.read_models.DiscountCardOnTicket.term_extension_possible_flag`).
+    That gate is NOT reproduced here, because it is a property of the card
+    rather than of the request and a caller may hold the flag from a different
+    read; check it before calling.
+
+    **NOT VERIFIED.** The response is a bare ``BaseResponse`` in the DAO, so
+    what a successful extension answers with — and what it costs — is unknown.
+    """
+    if type(ticket) is not DiscountCardTicket:
+        raise KorailProtocolError(
+            "KORAIL discount card extension requires an exact "
+            "DiscountCardTicket"
+        )
+    query = _common_fields(config)
+    query.update(
+        {
+            "saleWctNo": _required_mutation_text(
+                ticket.sale_window_no,
+                field="sale_window_no",
+            ),
+            "saleDd": _required_mutation_text(
+                ticket.sale_date,
+                field="sale_date",
+            ),
+            "saleSqno": _required_mutation_text(
+                ticket.sale_sequence,
+                field="sale_sequence",
+            ),
+            "tkRetPwd": _required_mutation_text(
+                ticket.return_password,
+                field="return_password",
+            ),
+        }
+    )
+    return query

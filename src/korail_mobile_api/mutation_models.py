@@ -339,3 +339,99 @@ class PaidTicket:
     sale_sequence: str = field(repr=False)  # h_orgtk_sale_sqno
     return_password: str = field(repr=False)  # h_orgtk_ret_pwd
     train_no: str = ""  # trnNo
+
+
+@dataclass(frozen=True)
+class DiscountCardSectionRequest:
+    """One 구간 of a 할인카드 being bought (``dcntCrdInfo.do`` ``jrnyInfo``).
+
+    ``NCardReservationDao.NCardReservationRequest``
+    (``dao/research/NCardReservationDao.java:74-108``) writes each section into
+    a ``HashMap`` under an indexed key, and Retrofit flattens that map into the
+    form (``ResearchService.java:68-70``). One entry per section, 1..3.
+
+    ``jrnyTpCd`` is the app's own journey-type code and ``trnNo`` may be empty
+    on a section the user has not pinned to a train; both are passed through
+    rather than defaulted, because no v6.5.0 call site was found that fills
+    this map, only the setters that would.
+    """
+
+    run_date: str
+    train_no: str
+    departure_station_code: str
+    arrival_station_code: str
+    journey_type_code: str = "11"
+
+
+@dataclass(frozen=True)
+class DiscountCardAdditionalUser:
+    """The second registered user of an N카드 2인용 (``apdUsrInfo``).
+
+    ``NCardReservationDao.java:66-72,122-124``. The app's own copy for a 1인용
+    card is simply an empty map, which contributes no form fields at all.
+
+    ``customer_no`` and ``phone`` are PII and are ``repr=False``; both are
+    redacted in any preview.
+    """
+
+    customer_no: str = field(repr=False)
+    name: str = field(repr=False)
+    phone: str = field(repr=False)
+
+
+@dataclass(frozen=True)
+class DiscountCardPurchaseRequest:
+    """Everything ``research.dcntCrdInfo.do`` needs to buy a 할인카드.
+
+    ``w4/a.java:106-113`` builds the scalar half: the product
+    (``dcntCrdKndMgNo``), the logged-in member number, ``vlidTrmStDt`` as the
+    device's own today, and the trip count. ``vlidTrmStDt`` is therefore a
+    caller argument here rather than an implicit ``date.today()`` — a payload
+    builder with a clock in it cannot be tested for what it sends.
+    """
+
+    card_kind_management_no: str
+    customer_no: str = field(repr=False)
+    validity_start_date: str = ""
+    usable_trip_count: str = ""
+    sections: tuple[DiscountCardSectionRequest, ...] = ()
+    additional_users: tuple[DiscountCardAdditionalUser, ...] = ()
+
+
+@dataclass(frozen=True)
+class DiscountCardTicket:
+    """The four-part ticket credential of a 할인카드, for 기간연장.
+
+    ``TicketListActivity.java:1066-1074`` reads all four off the N카드 ticket's
+    own row — ``h_orgtk_wct_no``, ``h_orgtk_ret_sale_dt``,
+    ``h_orgtk_sale_sqno``, ``h_orgtk_ret_pwd`` — which is the same credential
+    every other original-ticket operation uses. All four are ``repr=False``.
+    """
+
+    sale_window_no: str = field(repr=False)
+    sale_date: str = field(repr=False)
+    sale_sequence: str = field(repr=False)
+    return_password: str = field(repr=False)
+
+
+@dataclass(frozen=True)
+class DiscountCardPurchaseResponse(BaseKorailResponse):
+    """What ``research.dcntCrdInfo.do`` answers with.
+
+    ``NCardReservationDao.NCardReservationResponse``
+    (``dao/research/NCardReservationDao.java:127-174``).
+
+    :attr:`lump_settlement_target_no` is the point of the call: the app hands
+    it straight to the payment screen
+    (``SectionNCardInquiryActivity.java:213-257``), so this response is an
+    unpaid purchase awaiting settlement, not a completed one.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    #: ``lumpStlTgtNo`` — the settlement target a payment would then charge.
+    lump_settlement_target_no: str | None = field(default=None, repr=False)
+    #: ``rcvdAmt`` — the amount that settlement would be for.
+    received_amount: str | None = None
+    usable_trip_count: str | None = None
+    validity_start_date: str | None = None
+    validity_end_date: str | None = None

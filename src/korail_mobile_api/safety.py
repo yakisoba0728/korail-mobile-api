@@ -229,6 +229,24 @@ KORAIL_MUTATION_ROUTES = frozenset(
         ),
         # refund
         ("POST", "/classes/com.korail.mobile.refunds.RefundsRequest"),
+        # discount_card -- 할인카드(N카드) 구매 and 기간연장. A category of
+        # their own, and one no live-test path in this repository touches.
+        #
+        # research.dcntCrdInfo.do is a PURCHASE, not an inquiry, whatever its
+        # name suggests: it answers with lumpStlTgtNo and rcvdAmt
+        # (NCardReservationDao.java:127-134), and the app takes that target
+        # number straight into the payment screen
+        # (SectionNCardInquiryActivity.java:213-257). reservation.dcntCrdExtn.do
+        # extends a card's validity against the card ticket's own four-part
+        # credential (TicketListActivity.java:1066-1074).
+        #
+        # THE SECOND ONE IS A GET. It is registered with its real method rather
+        # than coerced to POST, and KorailHttpClient.get_mutation_query is the
+        # matching send path -- gated identically to post_mutation_form. A
+        # mutation that the app performs with a GET does not become safer by
+        # being mis-registered.
+        ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
+        ("GET", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
     }
 )
 
@@ -244,6 +262,8 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
         "cancel"
     ),
     "/classes/com.korail.mobile.refunds.RefundsRequest": "refund",
+    "/classes/com.korail.mobile.research.dcntCrdInfo.do": "discount_card",
+    "/classes/com.korail.mobile.reservation.dcntCrdExtn.do": "discount_card",
 }
 
 
@@ -258,7 +278,7 @@ def assert_mutation_route_category(path: str, category: str) -> None:
     expected = KORAIL_MUTATION_ROUTE_CATEGORIES.get(parsed_path)
     if expected is None:
         raise KorailProtocolError(
-            f"KORAIL mutation route is not allowed: POST {parsed_path}"
+            f"KORAIL mutation route is not allowed: {parsed_path}"
         )
     if category != expected:
         raise KorailProtocolError(
@@ -1261,7 +1281,7 @@ def assert_read_only_route(method: str, path: str) -> None:
 
 
 def assert_mutation_route(method: str, path: str) -> None:
-    """Allow only the four evidenced state-changing routes.
+    """Allow only the evidenced state-changing routes.
 
     This is the mutation counterpart to :func:`assert_read_only_route`, used
     solely by the dedicated mutation send path. A route must be an exact member

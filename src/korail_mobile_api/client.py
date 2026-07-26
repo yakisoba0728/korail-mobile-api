@@ -20,6 +20,9 @@ from .errors import (
 )
 from .mutation_models import (
     CardPayment,
+    DiscountCardPurchaseRequest,
+    DiscountCardPurchaseResponse,
+    DiscountCardTicket,
     KorailPassengerCounts,
     KorailSeatAssignment,
     PaidTicket,
@@ -27,11 +30,14 @@ from .mutation_models import (
     ReservationPaymentResponse,
 )
 from .mutation_parsers import (
+    parse_discount_card_purchase_response,
     parse_reservation_hold_response,
     parse_reservation_payment_response,
 )
 from .mutation_payloads import (
     build_card_payment_form,
+    build_discount_card_extension_query,
+    build_discount_card_purchase_form,
     build_refund_form,
     build_reservation_form,
     build_standby_wait_form,
@@ -1961,6 +1967,121 @@ class KorailClient:
         try:
             return self.http.post_mutation_form(
                 route, form, consent=consent, category="refund"
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+
+    def register_discount_card(
+        self,
+        request: DiscountCardPurchaseRequest,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | DiscountCardPurchaseResponse:
+        """Buy a 할인카드(N카드). Consent-gated, dry-run by default.
+
+        ``POST research.dcntCrdInfo.do`` (``ResearchService.java:68-70``).
+        Despite the "Info" in its path this is a PURCHASE: it answers with a
+        ``lumpStlTgtNo`` and an ``rcvdAmt``
+        (``NCardReservationDao.java:127-134``) and the app carries that target
+        number straight into the payment screen
+        (``SectionNCardInquiryActivity.java:213-257``). What it creates is an
+        unpaid purchase awaiting settlement.
+
+        Gated by ``require_mutation_consent(consent, "discount_card")`` and an
+        authenticated session. ``"discount_card"`` is its own consent category,
+        not a reuse of ``"reserve"``: nobody who opted into placing a train
+        booking also opted into buying a product. With the default
+        ``dry_run=True`` this builds and validates the form and returns a
+        redacted :class:`~korail_mobile_api.consent.MutationPreview`, sending
+        nothing.
+
+        **VERIFIED: the route, the method, the four scalar field names, and the
+        two ``@FieldMap`` key spellings, all from the DAO.**
+
+        **NOT VERIFIED, and an operator must settle it before trusting a live
+        call:** no call site in v6.5.0 populates ``jrnyInfo``/``apdUsrInfo`` —
+        only the setters that would — so whether a 1-section card must still
+        send a section, and whether ``apdUsrCnt`` must be present as ``"0"``
+        for a 1인용 card rather than omitted, is unknown. Nothing here has ever
+        been transmitted, and no live-test path in this repository sends it.
+        """
+        require_mutation_consent(consent, "discount_card")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL discount card purchase requires an authenticated "
+                "session"
+            )
+        route = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
+        form = build_discount_card_purchase_form(self.config, request)
+        if consent.dry_run:
+            return MutationPreview(
+                category="discount_card",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            return parse_discount_card_purchase_response(
+                self.http.post_mutation_form(
+                    route,
+                    form,
+                    consent=consent,
+                    category="discount_card",
+                ).raw
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+
+    def extend_discount_card(
+        self,
+        ticket: DiscountCardTicket,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | BaseKorailResponse:
+        """Extend a 할인카드's validity (기간연장). Consent-gated, dry-run.
+
+        ``GET reservation.dcntCrdExtn.do`` (``ResearchService.java:65-66``) —
+        a mutation the app performs with a GET, registered here with that
+        method rather than coerced into the POST send path. It goes out through
+        :meth:`~korail_mobile_api.http.KorailHttpClient.get_mutation_query`,
+        which carries every gate ``post_mutation_form`` does.
+
+        ``ticket`` is the card ticket's own four-part credential, which
+        ``TicketListActivity.java:1067-1072`` reads off the N카드 row. Check
+        :attr:`~korail_mobile_api.read_models.DiscountCardOnTicket.term_extension_possible_flag`
+        first: the app enables the 기간연장 button only when it is ``"Y"``
+        (``Y4/C0907b.java:301`` → ``Y4/Q.java:1013-1026``), and that gate is
+        deliberately not duplicated in the builder because it is a property of
+        the card rather than of the request.
+
+        **NOT VERIFIED IN EITHER DIRECTION.** The DAO's response type is a bare
+        ``BaseResponse`` (``ResearchService.java:65``), so what a successful
+        extension answers with, and whether it costs money, is unknown. Nothing
+        here has ever been transmitted, and no live-test path sends it.
+        """
+        require_mutation_consent(consent, "discount_card")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL discount card extension requires an authenticated "
+                "session"
+            )
+        route = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
+        query = build_discount_card_extension_query(self.config, ticket)
+        if consent.dry_run:
+            return MutationPreview(
+                category="discount_card",
+                method="GET",
+                route=route,
+                payload=query,
+            )
+        try:
+            return self.http.get_mutation_query(
+                route,
+                query,
+                consent=consent,
+                category="discount_card",
             )
         except KorailSessionExpiredError:
             self.clear_session()

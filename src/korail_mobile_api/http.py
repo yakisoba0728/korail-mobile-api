@@ -307,6 +307,75 @@ class KorailHttpClient:
             ) from exc
         return parse_base_response(payload, raise_on_fail=raise_on_fail)
 
+    def get_mutation_query(
+        self,
+        path: str,
+        params: Mapping[str, Any],
+        *,
+        consent: MutationConsent,
+        category: str,
+        raise_on_fail: bool = True,
+    ) -> BaseKorailResponse:
+        """:meth:`post_mutation_form`, for a mutation the app performs as a GET.
+
+        There is exactly one such route today —
+        ``reservation.dcntCrdExtn.do``, declared ``@GET`` with seven
+        ``@Query`` parameters (``ResearchService.java:65-66``) — and it
+        genuinely changes state: it extends a 할인카드's validity period.
+
+        It would have been less code to register it as a POST and send it
+        through :meth:`post_mutation_form`. That was rejected: the registered
+        method would then not be the method the app uses, the request would not
+        be the request the app sends, and the allowlist would be documenting
+        something untrue in order to make a safety check easier to reach. A
+        mutation does not become safer by being mis-registered.
+
+        Every gate of :meth:`post_mutation_form` applies here unchanged:
+        ``require_mutation_consent`` for ``category``, a refusal of
+        ``dry_run=True``, :func:`~korail_mobile_api.safety.assert_mutation_route`
+        against the exact ``(method, path)`` pair, and
+        :func:`~korail_mobile_api.safety.assert_mutation_route_category` so a
+        consent for one category cannot be redirected to another's route. The
+        read-only path (:meth:`get_json`) still refuses this route, so it can
+        only leave the process through this gate.
+
+        There is no payment branch, because no GET mutation carries a card and
+        the ``"payment"`` category owns no GET route. Adding one would have to
+        add its check here too.
+        """
+        require_mutation_consent(consent, category)
+        if consent.dry_run:
+            raise MutationNotAllowedError(
+                "get_mutation_query requires consent.dry_run=False; a dry-run "
+                "preview must never be transmitted"
+            )
+        assert_korail_origin(str(self._client.base_url))
+        assert_mutation_route("GET", path)
+        assert_mutation_route_category(path, category)
+        if not isinstance(params, Mapping):
+            raise KorailProtocolError(
+                "KORAIL mutation query params must be a mapping"
+            )
+        headers = self._dynapath_headers("GET", path)
+        try:
+            response = self._client.get(
+                path,
+                params=dict(params),
+                headers=headers,
+            )
+        except httpx.HTTPError as exc:
+            raise KorailTransportError(
+                f"KORAIL transport failed for GET {path}"
+            ) from exc
+        _raise_for_status(response, path=path)
+        try:
+            payload = response.json()
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise KorailProtocolError(
+                "KORAIL response body was not valid JSON"
+            ) from exc
+        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+
     def get_json(
         self,
         path: str,

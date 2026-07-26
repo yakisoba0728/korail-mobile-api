@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+- Added: 할인카드(N카드) 구매 and 기간연장 as consent-gated mutations —
+  `KorailClient.register_discount_card` and
+  `KorailClient.extend_discount_card`, plus `DiscountCardPurchaseRequest`,
+  `DiscountCardSectionRequest`, `DiscountCardAdditionalUser`,
+  `DiscountCardTicket`, `DiscountCardPurchaseResponse`,
+  `parse_discount_card_purchase_response` and
+  `KORAIL_MAX_DISCOUNT_CARD_SECTIONS` (`3`).
+  **NEVER TRANSMITTED, and no live path in this repository can transmit them.**
+- Added: a fifth mutation consent category, `"discount_card"`, with its own
+  `MutationConsent.allow_discount_card` flag defaulting to `False`. It is
+  additive: every consent written before it exists means exactly what it meant
+  before. It is NOT a reuse of `"reserve"` — `research.dcntCrdInfo.do` buys a
+  product rather than a seat, and nobody who opted into placing a train booking
+  also opted into buying a discount card.
+- Added: `KorailHttpClient.get_mutation_query`, the send path for a mutation
+  the app performs as a GET. `reservation.dcntCrdExtn.do` is declared `@GET`
+  with seven `@Query` parameters (`ResearchService.java:65-66`) and genuinely
+  changes state. Registering it as a POST would have been less code and would
+  have made the allowlist describe a request the app never sends; a mutation
+  does not become safer by being mis-registered. Every gate of
+  `post_mutation_form` applies unchanged — consent, the dry-run refusal,
+  `assert_mutation_route` on the exact `(method, path)` pair, and the
+  route/category cross-check.
+  - `research.dcntCrdInfo.do` is a PURCHASE despite its name. It answers with
+    `lumpStlTgtNo` and `rcvdAmt` (`NCardReservationDao.java:127-134`) and the
+    app hands that target number to the payment screen
+    (`SectionNCardInquiryActivity.java:213-257`), so what it creates is an
+    unpaid purchase awaiting settlement.
+  - Its two `@FieldMap`s are flattened with the DAO's own indexed key
+    spellings (`NCardReservationDao.java:74-124`): `jrnyCnt` + `jrnyTpCd_N` /
+    `runDt_N` / `trnNo_N` / `dptRsStnCd_N` / `arvRsStnCd_N`, and `apdUsrCnt` +
+    `custMgNo_N` / `apdCustName_N` / `apdCustTeln_N`. `mCustomData` is
+    deliberately absent — it is never passed to `executeDao` (`:180`) and never
+    reaches the wire.
+  - **Open, and the operator must settle it:** no v6.5.0 call site populates
+    `jrnyInfo`/`apdUsrInfo`, only the setters that would. Whether a 1-section
+    card must still send a section, and whether `apdUsrCnt` must be present as
+    `"0"` rather than omitted for a 1인용 card, is unknown. `dcntCrdExtn.do`'s
+    DAO response type is a bare `BaseResponse`, so a successful extension's
+    reply — and its cost — is unknown too.
+
 - Added: `RefundTicketDetailResponse.discount_card`, plus `DiscountCardOnTicket`
   and `DiscountCardSection`. No new route and no new method: `SelTicketInfo`
   already returns `TicketDetailDao.TicketDetailResponse`, which carries

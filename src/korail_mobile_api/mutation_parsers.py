@@ -7,6 +7,7 @@ from typing import Any
 from .errors import KorailProtocolError
 from .models import BaseKorailResponse
 from .mutation_models import (
+    DiscountCardPurchaseResponse,
     ReservationHoldResponse,
     ReservationJourney,
     ReservationPaymentCoupon,
@@ -333,4 +334,43 @@ def parse_reservation_payment_response(
             context="payment",
         ),
         coupons=tuple(coupons),
+    )
+
+
+_DISCOUNT_CARD_PURCHASE_FIELDS = {
+    "lump_settlement_target_no": "lumpStlTgtNo",
+    "received_amount": "rcvdAmt",
+    "usable_trip_count": "usePsbTno",
+    "validity_start_date": "vlidTrmStDt",
+    "validity_end_date": "vlidTrmClsDt",
+}
+
+
+def parse_discount_card_purchase_response(
+    raw: Mapping[str, Any],
+) -> DiscountCardPurchaseResponse:
+    """Parse ``research.dcntCrdInfo.do``'s reply.
+
+    ``NCardReservationDao.NCardReservationResponse``
+    (``dao/research/NCardReservationDao.java:127-174``). ``mStationInfo`` and
+    ``mUserNames`` are absent from the model because the app writes them
+    locally after the call (``:167-173``) and the server never sends them.
+
+    **NOT LIVE-VERIFIED.** Never sent, so never observed.
+    """
+    data = _response_mapping(raw)
+    base = BaseKorailResponse.from_raw(data)
+    return DiscountCardPurchaseResponse(
+        h_msg_cd=base.h_msg_cd,
+        h_msg_txt=base.h_msg_txt,
+        str_result=base.str_result,
+        raw=data,
+        **{
+            attribute: _optional_string(
+                data,
+                wire_name,
+                context="discount card purchase",
+            )
+            for attribute, wire_name in _DISCOUNT_CARD_PURCHASE_FIELDS.items()
+        },
     )
