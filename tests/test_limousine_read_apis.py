@@ -1116,7 +1116,13 @@ def test_current_docs_describe_static_only_limousine_boundary():
     progress = (root / "docs" / "IMPLEMENTATION_PROGRESS.md").read_text(
         encoding="utf-8"
     )
-    combined = f"{readme}\n{progress}"
+    # The README was rewritten on 2026-07-26 and its evidence moved whole to
+    # docs/verification-record.md; the limousine boundary claims are now split
+    # between the two, so the record joins the documents this reads across.
+    record = (root / "docs" / "verification-record.md").read_text(
+        encoding="utf-8"
+    )
+    combined = f"{readme}\n{progress}\n{record}"
     for method in (
         "get_limousine_schedules(",
         "get_limousine_seat_inventory(",

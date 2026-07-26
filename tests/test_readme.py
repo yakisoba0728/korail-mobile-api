@@ -3,6 +3,16 @@ from pathlib import Path
 
 
 README = Path(__file__).parents[1] / "README.md"
+# The README was rewritten for people who want to USE the library on
+# 2026-07-26; the audit log it used to be moved WHOLE to docs/verification-
+# record.md. Every assertion below that used to read README now reads whichever
+# document actually carries its claim: the capability names, the safety model,
+# the error taxonomy's "what should a caller do" and the current repository
+# counts stayed in README, and the evidence behind them -- APK citations, live
+# run codes, superseded claims -- follows the prose into RECORD. Nothing was
+# dropped and nothing was loosened; each string is still asserted exactly once,
+# somewhere it is actually supposed to appear.
+RECORD = Path(__file__).parents[1] / "docs" / "verification-record.md"
 STATUS = Path(__file__).parents[1] / "docs" / "api-status-by-service.md"
 BUILD_GUIDE = Path(__file__).parents[1] / "docs" / "library-build-guide.md"
 PROGRESS = Path(__file__).parents[1] / "docs" / "IMPLEMENTATION_PROGRESS.md"
@@ -13,8 +23,15 @@ HANDOFF = Path(__file__).parents[1] / "docs" / "IMPLEMENTATION_PROGRESS.md"
 CHANGELOG = Path(__file__).parents[1] / "CHANGELOG.md"
 
 
-def test_readme_describes_fixed_rt_dynapath_consistently():
-    text = README.read_text(encoding="utf-8")
+def test_record_describes_fixed_rt_dynapath_consistently():
+    # The three account-neutral cache/menu reads are a capability, so they stay
+    # named in the README; the DynaPath token contract and the live-smoke
+    # environment behind them are evidence and moved with the record.
+    readme = README.read_text(encoding="utf-8")
+    for method_name in ("get_app_data()", "get_notice()", "get_maas_menu_list()"):
+        assert method_name in readme
+
+    text = RECORD.read_text(encoding="utf-8")
     assert "This work is static analysis only." not in text
     assert "The committed material is documentation" not in text
     assert "caller-supplied" in text
@@ -38,8 +55,8 @@ def test_readme_describes_fixed_rt_dynapath_consistently():
     assert "explicit override" in text
 
 
-def test_readme_documents_every_successful_read_expansion_method_and_boundary():
-    text = README.read_text(encoding="utf-8")
+def test_record_documents_every_successful_read_expansion_method_and_boundary():
+    text = RECORD.read_text(encoding="utf-8")
     for method_name in (
         "get_service_status",
         "get_cart_list",
@@ -244,13 +261,14 @@ def test_ticket_reference_docs_keep_static_only_rows_and_scope_consistent():
         "The ticket-reference implementation itself used no live I/O and "
         "added no mutation capability."
     )
-    for document in (README, CHANGELOG, PROGRESS, HANDOFF):
+    for document in (RECORD, CHANGELOG, PROGRESS, HANDOFF):
         normalized = " ".join(document.read_text(encoding="utf-8").split())
         assert common_scope_claim in normalized
 
 
 def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     readme = README.read_text(encoding="utf-8")
+    record = RECORD.read_text(encoding="utf-8")
     progress = PROGRESS.read_text(encoding="utf-8")
     status = STATUS.read_text(encoding="utf-8")
     handoff = HANDOFF.read_text(encoding="utf-8")
@@ -260,33 +278,41 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
         "get_crew_request_list",
         "get_commuter_kind_menu",
     ):
-        assert f"{method_name}(" in readme
+        assert f"{method_name}(" in record
     for path in (
         "/classes/com.korail.mobile.pass.passMenu.do",
         "/classes/com.korail.mobile.push.crwCallRq.do",
         "/classes/com.korail.mobile.push.cmtrKnd.do",
     ):
-        assert path in readme
-    assert "caller-supplied runtime discriminator" in readme
+        assert path in record
+    assert "caller-supplied runtime discriminator" in record
+    # The crew-call exclusion is a boundary a USER has to know about, so it is
+    # one of the few evidence-flavoured claims that stayed in the README.
     assert "/classes/com.korail.mobile.push.callCrew.do" in readme
     assert "remains excluded" in readme
-    assert "static APK evidence and synthetic fixtures only" in readme
+    assert "static APK evidence and synthetic fixtures only" in record
     assert "58 exact read/login routes" in progress
-    for document in (readme, progress, status, handoff, changelog):
+    for document in (record, progress, status, handoff, changelog):
         assert "session-unverified" in document
-    assert "live verification only after login" in readme
+    assert "live verification only after login" in record
     assert (
         "No live request or raw response body was used to implement or verify "
-        "this increment." in " ".join(readme.split())
+        "this increment." in " ".join(record.split())
     )
-    assert "Until a bounded live check can run after login" in " ".join(readme.split())
-    assert "Three account-neutral reference methods" not in readme
+    assert "Until a bounded live check can run after login" in " ".join(record.split())
+    assert "Three account-neutral reference methods" not in record
     assert "Account-neutral pass-menu" not in progress
     assert "typed account-neutral pass-menu" not in changelog
 
 
-def test_readme_documents_typed_seat_inventory_scope_and_live_boundary():
-    text = README.read_text(encoding="utf-8")
+def test_docs_document_typed_seat_inventory_scope_and_live_boundary():
+    # The two methods are a capability; the fixed request shape and the bounded
+    # evidence run that proved it are the record's.
+    readme = README.read_text(encoding="utf-8")
+    assert "get_seat_cars(" in readme
+    assert "get_seat_inventory(" in readme
+
+    text = RECORD.read_text(encoding="utf-8")
     assert "get_seat_cars(" in text
     assert "get_seat_inventory(" in text
     assert "main menu `11`" in text
@@ -304,10 +330,10 @@ def test_readme_documents_typed_seat_inventory_scope_and_live_boundary():
 
 
 def test_docs_describe_raw_backed_typed_core_and_compatibility_boundary():
-    readme = README.read_text(encoding="utf-8")
+    record = RECORD.read_text(encoding="utf-8")
     progress = PROGRESS.read_text(encoding="utf-8")
 
-    for text in (readme, progress):
+    for text in (record, progress):
         normalized = " ".join(text.split())
         assert "raw-backed typed response core" in text
         assert "StationInfoResponse" in text
@@ -323,7 +349,7 @@ def test_docs_describe_raw_backed_typed_core_and_compatibility_boundary():
             "return annotations for five existing read methods are narrowed "
             "to typed responses" in normalized
         )
-    assert "all client method signatures are preserved" not in readme
+    assert "all client method signatures are preserved" not in record
     assert "Existing routes, public signatures" not in progress
     for key in (
         "h_std_rest_seat_cnt",
@@ -331,11 +357,16 @@ def test_docs_describe_raw_backed_typed_core_and_compatibility_boundary():
         "h_free_sracar_cnt",
         "h_rsv_wait_ps_cnt",
     ):
-        assert key in readme
+        assert key in record
 
 
-def test_readme_documents_bounded_live_p0_train_reads_and_closed_requests():
-    text = README.read_text(encoding="utf-8")
+def test_docs_document_bounded_live_p0_train_reads_and_closed_requests():
+    # The package boundary is a repository fact and stays in the README; the
+    # four closed request contracts and the bounded run that exercised them are
+    # evidence and moved with the record.
+    assert "58 routes and 74 public methods" in README.read_text(encoding="utf-8")
+
+    text = RECORD.read_text(encoding="utf-8")
     normalized = " ".join(text.split())
     for method_name in (
         "get_free_seat_car_info",
@@ -383,29 +414,33 @@ def test_readme_documents_bounded_live_p0_train_reads_and_closed_requests():
 
 
 def test_docs_record_bounded_p0_live_counts_and_replay():
+    record = " ".join(RECORD.read_text(encoding="utf-8").split())
     readme = " ".join(README.read_text(encoding="utf-8").split())
     progress = " ".join(PROGRESS.read_text(encoding="utf-8").split())
     handoff = " ".join(HANDOFF.read_text(encoding="utf-8").split())
     changelog = " ".join(CHANGELOG.read_text(encoding="utf-8").split())
 
-    assert "made 28 requests and received 28 responses" in readme
-    assert "25 successful operations" in readme
-    assert "one expected typed application failure" in readme
-    assert "three input-dependent skips" in readme
-    assert "Deposit-bank and trip-menu reads succeeded after login" in readme
+    assert "made 28 requests and received 28 responses" in record
+    assert "25 successful operations" in record
+    assert "one expected typed application failure" in record
+    assert "three input-dependent skips" in record
+    assert "Deposit-bank and trip-menu reads succeeded after login" in record
     for text in (progress, handoff):
         assert "27 parsed responses" in text
         assert "one expected `KorailAppError`" in text
         assert "zero unexpected failures" in text
     # The live gate figure is the count the offline suite actually reports
-    # today; the 1246/1247 figures are kept only as labelled history.
+    # today; the 1246/1247 figures are kept only as labelled history. The
+    # README carries the current number because a reader deciding whether to
+    # trust this package needs it; the history stayed with the record.
+    assert "`2228 passed, 1 deselected`" in readme
     assert (
-        "current reviewed offline gate is `2228 passed, 1 deselected`" in readme
+        "current reviewed offline gate is `2228 passed, 1 deselected`" in record
     )
     assert (
         "Earlier gates in this repository's history were `1246 passed, 1 "
         "deselected` before the P0 live-evidence documentation coverage and "
-        "`1247 passed, 1 deselected` directly after it" in readme
+        "`1247 passed, 1 deselected` directly after it" in record
     )
     assert (
         "current full offline release gate reports `2228 passed, 1 deselected`"
@@ -433,13 +468,17 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
     assert "zero unexpected failures" in changelog
 
 
-def test_readme_documents_static_only_limousine_read_contracts():
-    text = README.read_text(encoding="utf-8")
+def test_docs_document_static_only_limousine_read_contracts():
+    # The three methods are a capability and are named in the README's read
+    # table too; their closed request contracts stayed with the record.
+    readme = README.read_text(encoding="utf-8")
+    text = RECORD.read_text(encoding="utf-8")
     for method_name in (
         "get_limousine_schedules",
         "get_limousine_seat_inventory",
         "get_limousine_schedule_view",
     ):
+        assert f"{method_name}(" in readme
         assert f"{method_name}(" in text
     assert "caller-supplied service" in text
     assert "caller-supplied menu" in text
@@ -450,26 +489,26 @@ def test_readme_documents_static_only_limousine_read_contracts():
 
 def test_docs_record_fixed_account_reads_and_tour_train_holdback():
     documents = [
-        README.read_text(encoding="utf-8"),
+        RECORD.read_text(encoding="utf-8"),
         PROGRESS.read_text(encoding="utf-8"),
         HANDOFF.read_text(encoding="utf-8"),
         CHANGELOG.read_text(encoding="utf-8"),
     ]
-    readme = documents[0]
+    record = documents[0]
     for method_name in (
         "get_multi_child_discount_targets",
         "get_customer_trip_info",
         "get_maas_service_details",
         "get_trip_change_dates",
     ):
-        assert f"{method_name}(" in readme
+        assert f"{method_name}(" in record
     for path in (
         "/classes/com.korail.mobile.cust.mchdDcntTgt.do",
         "/classes/com.korail.mobile.research.custTripInfo.do",
         "/classes/com.korail.mobile.copt.gdReqQry.do",
         "/classes/com.korail.mobile.reservation.tripChgDate.do",
     ):
-        assert path in readme
+        assert path in record
     for text in documents:
         normalized = " ".join(text.split())
         assert "strCustNo" in text
@@ -483,15 +522,15 @@ def test_docs_record_fixed_account_reads_and_tour_train_holdback():
         )
         assert "32 successful, 10 failed, and 123 unexecuted" in normalized
         assert "mutation" in normalized
-    normalized_readme = " ".join(readme.split())
-    assert "no `get_tour_train_info` client method" in normalized_readme
-    assert "no registered safety route" in normalized_readme
-    assert "no raw-string request builder" in normalized_readme
+    normalized_record = " ".join(record.split())
+    assert "no `get_tour_train_info` client method" in normalized_record
+    assert "no registered safety route" in normalized_record
+    assert "no raw-string request builder" in normalized_record
 
 
 def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
     documents = {
-        "README": README.read_text(encoding="utf-8"),
+        "record": RECORD.read_text(encoding="utf-8"),
         "CHANGELOG": CHANGELOG.read_text(encoding="utf-8"),
         "progress": PROGRESS.read_text(encoding="utf-8"),
         "handoff": HANDOFF.read_text(encoding="utf-8"),
@@ -547,18 +586,23 @@ def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
             r"(?i)\bJSESSIONID\s*=\s*[A-Z0-9._~-]{8,}"
         ),
     }
-    for name, document in documents.items():
+    # The secret scan covers the README as well, even though its evidence text
+    # moved: a rewritten README is exactly the kind of document into which a
+    # credential gets pasted as an "example".
+    scanned = dict(documents)
+    scanned["README"] = README.read_text(encoding="utf-8")
+    for name, document in scanned.items():
         for pattern_name, pattern in forbidden_patterns.items():
             assert pattern.search(document) is None, f"{name}: {pattern_name}"
 
-    readme = " ".join(documents["README"].split())
-    assert "R13 made one request" in readme
-    assert "surfaced as `KorailAppError` and was not retried" in readme
-    assert "R32 succeeded with 0 rows" in readme
-    assert "current-form R43 succeeded with 0 rows" in readme
-    assert "R45 succeeded with 15 rows" in readme
-    assert "existing safe train search succeeded with 10 rows" in readme
-    assert "R52 made zero requests" in readme
+    record = " ".join(documents["record"].split())
+    assert "R13 made one request" in record
+    assert "surfaced as `KorailAppError` and was not retried" in record
+    assert "R32 succeeded with 0 rows" in record
+    assert "current-form R43 succeeded with 0 rows" in record
+    assert "R45 succeeded with 15 rows" in record
+    assert "existing safe train search succeeded with 10 rows" in record
+    assert "R52 made zero requests" in record
 
 
 def test_readme_documents_the_error_taxonomy():
@@ -569,6 +613,7 @@ def test_readme_documents_the_error_taxonomy():
     fine and there was simply nothing there.
     """
     readme = " ".join(README.read_text(encoding="utf-8").split())
+    record = " ".join(RECORD.read_text(encoding="utf-8").split())
 
     assert "### Error taxonomy" in README.read_text(encoding="utf-8")
     assert "classified on `h_msg_cd`" in readme
@@ -600,21 +645,26 @@ def test_readme_documents_the_error_taxonomy():
     assert "The library never retries on its own initiative" in readme
     assert "a retried reserve is a duplicate booking" in readme
 
-    # A warning on a success must be documented as staying a success.
-    assert "WRR664296" in readme
-    assert "`strResult=SUCC`" in readme
-    assert "a real, cancelable PNR" in readme
+    # A warning on a success must be documented as staying a success. The rule
+    # is in the README because a caller hits it; the observation that proved it
+    # is in the record.
+    assert "stays a success" in readme
+    assert "WRR664296" in record
+    assert "`strResult=SUCC`" in record
+    assert "a real, cancelable PNR" in record
 
     # Third-party claims are labelled, not adopted.
-    assert "zero hits in\nthe decompiled APK".replace("\n", " ") in readme
-    assert "Anti-macro rejection has no message code" in readme
-    assert "IRT010110" in readme
-    assert "is not encoded" in readme
+    assert "zero hits in\nthe decompiled APK".replace("\n", " ") in record
+    assert "Anti-macro rejection has no message code" in record
+    assert "IRT010110" in record
+    assert "is not encoded" in record
 
-    # The one observation we deliberately refused to classify.
+    # The one observation we deliberately refused to classify. The README says
+    # that there is one and where to read it; the record says which.
     assert "left unclassified" in readme
-    assert "[3]인증정보에 문제가 있습니다." in readme
-    assert "Its trigger is unconfirmed" in readme
+    assert "left unclassified" in record
+    assert "[3]인증정보에 문제가 있습니다." in record
+    assert "Its trigger is unconfirmed" in record
 
 
 def test_progress_records_the_error_taxonomy():
@@ -634,14 +684,24 @@ def test_docs_record_transfer_as_implemented_and_unverified():
     rather than left to prose drift.
     """
     readme = README.read_text(encoding="utf-8")
+    record = RECORD.read_text(encoding="utf-8")
     progress = PROGRESS.read_text(encoding="utf-8")
     changelog = CHANGELOG.read_text(encoding="utf-8")
 
-    for document in (readme, progress, changelog):
-        # Built, and not proven. Both halves, in every document.
+    # Built, and not proven, plus the two entry points and the read that probes
+    # a candidate route cheaply -- the half a USER has to know, so it stays in
+    # the README as well as in the three evidence documents.
+    for document in (readme, record, progress, changelog):
         assert "NOT live-verified" in document
         assert "search_transfer_trains" in document
         assert "reserve_transfer" in document
+    assert "get_transfer_stations" in readme
+    # And the warning that a live transfer hold cannot be released from here.
+    assert "cancelled in the KORAIL app" in readme or (
+        "cancel it in the KORAIL app" in readme
+    )
+
+    for document in (record, progress, changelog):
         # The two codes a reader would otherwise guess wrongly.
         assert "`14`" in document or '`"14"`' in document
         assert "001" in document and "002" in document
@@ -657,24 +717,23 @@ def test_docs_record_transfer_as_implemented_and_unverified():
         assert "DReservationConfirmActivity.java:269-278" in document
 
     # jadx mangles the two ternaries, so the bytecode citation must survive.
-    for document in (readme, changelog):
+    for document in (record, changelog):
         assert "smali/C5/a.smali:306-338" in document
         assert "smali/K4/e.smali:68" in document
 
     # The response shape, stated as the app's own pairing rather than invented.
-    assert "a5/k.java:156-170" in readme
-    assert "paired\n**positionally**" in readme or "paired positionally" in readme
-    assert "h_chg_trn_seq" in readme
+    assert "a5/k.java:156-170" in record
+    assert "paired\n**positionally**" in record or "paired positionally" in record
+    assert "h_chg_trn_seq" in record
 
     # What the operator needs, including where the candidate pairs come from and
     # that they are inferred rather than verified here.
-    assert "arrays.xml:200-208" in readme
-    assert "ktx_map" in readme
-    assert "강릉 → 여수엑스포" in readme
-    assert "not** verified against a timetable" in readme
-    assert "get_transfer_stations" in readme
+    assert "arrays.xml:200-208" in record
+    assert "ktx_map" in record
+    assert "강릉 → 여수엑스포" in record
+    assert "not** verified against a timetable" in record
+    assert "get_transfer_stations" in record
+    # WRD000061 is the code the fallback keys on, so a caller meets it: it is
+    # in the README's error table and in the record's evidence.
     assert "WRD000061" in readme
-    # And the warning that a live hold cannot be released by this client yet.
-    assert "cancelled in the KORAIL app" in readme or (
-        "cancel it in the KORAIL app" in readme
-    )
+    assert "WRD000061" in record

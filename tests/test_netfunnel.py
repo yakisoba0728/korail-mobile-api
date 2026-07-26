@@ -1481,16 +1481,31 @@ def test_gated_operations_map_to_the_action_ids_the_apk_pairs_them_with():
 # ---------------------------------------------------------------------------
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+# The README stopped being the evidence log on 2026-07-26 and the queue
+# subsystem's evidence -- the opcode/host table, the two live-diagnosed
+# traps, the transcripts -- moved with it into docs/verification-record.md.
+# What a USER of the queue has to know stayed in the README and is still
+# asserted there: that it is off by default, and that the queued path is
+# the part no live run has covered.
+RECORD = ROOT / "docs/verification-record.md"
 
 
 def test_docs_scope_the_unproven_claim_to_the_queued_path():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    record = RECORD.read_text(encoding="utf-8")
     progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
         encoding="utf-8"
     )
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
 
-    for document in (readme, progress, changelog):
+    # The README carries the scoped claim without the dated evidence, because a
+    # caller deciding whether to switch the queue on needs to know that the wait
+    # is the unproven half.
+    head, _, tail = readme.partition("NOT live-exercised")
+    assert tail, "the README must still scope the unproven claim"
+    assert "queued path" in head[-200:] or "queued path" in tail[:200]
+
+    for document in (record, progress, changelog):
         # The live confirmation is dated, and the queued path is still named as
         # the part that is not covered by it.
         assert "2026-07-26" in document
@@ -1508,19 +1523,20 @@ def test_docs_say_netfunnel_is_implemented_but_not_live_exercised():
     )
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
 
-    assert "### NetFunnel virtual waiting room" in readme
+    record = RECORD.read_text(encoding="utf-8")
+    assert "### NetFunnel virtual waiting room" in record
     assert "## NetFunnel virtual waiting room" in progress
-    for document in (readme, progress, changelog):
+    for document in (readme, record, progress, changelog):
         assert "NOT live-exercised" in document
     assert "off by default" in readme.casefold()
-    # The peak-season action is the reason the subsystem exists; each document
-    # has to name it.
-    for document in (readme, progress, changelog):
+    # The peak-season action is the reason the subsystem exists; each evidence
+    # document has to name it.
+    for document in (record, progress, changelog):
         assert "act_8_2" in document
 
 
 def test_docs_record_the_now_confirmed_response_shape():
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    readme = RECORD.read_text(encoding="utf-8")
     progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
         encoding="utf-8"
     )
@@ -1533,7 +1549,7 @@ def test_docs_record_the_entry_sequence_and_the_ticket_trap():
     # The correction a reader most needs: 5101 alone is not a session, so any
     # document that still describes acquiring and releasing as a two-step
     # handshake is describing a client that leaks every slot it takes.
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    readme = RECORD.read_text(encoding="utf-8")
     progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
         encoding="utf-8"
     )
@@ -1548,7 +1564,7 @@ def test_docs_say_the_queue_spans_nodes_and_which_host_each_opcode_uses():
     # The correction after the ticket one, and the more expensive of the two to
     # rediscover: a document that still says every opcode goes to
     # nf.letskorail.com is describing a client that leaks about half its slots.
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    readme = RECORD.read_text(encoding="utf-8")
     progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
         encoding="utf-8"
     )
@@ -1577,7 +1593,7 @@ def test_docs_record_the_live_diagnosis_and_the_misleading_symptom():
     # neither. Every document has to say so, and has to say when it was found,
     # because the next person to meet that message will otherwise spend an hour
     # on it — which is exactly what happened here.
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    readme = RECORD.read_text(encoding="utf-8")
     progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
         encoding="utf-8"
     )
@@ -1600,11 +1616,12 @@ def test_docs_no_longer_claim_the_redirection_is_declined():
     # The withdrawn claim. It was correct as an instinct and wrong as an
     # outcome, and it appeared in all three documents plus the divergence list.
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    record = RECORD.read_text(encoding="utf-8")
     progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
         encoding="utf-8"
     )
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    for document in (readme, progress, changelog):
+    for document in (readme, record, progress, changelog):
         assert "we do not follow" not in document.casefold()
         assert "the redirection this client\ndeclines" not in document
         assert "decline the redirection" not in document

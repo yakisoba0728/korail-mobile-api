@@ -835,6 +835,12 @@ def test_repository_truth_and_full_mutation_policy() -> None:
     # docs/NEXT_SESSION.md was consolidated into IMPLEMENTATION_PROGRESS.md; its
     # repository-truth handoff facts now live in that doc's Package Handoff Summary.
     handoff = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text()
+    # The README was rewritten on 2026-07-26 for people who want to use the
+    # library; its audit log moved whole to docs/verification-record.md. The
+    # repository-truth numbers a reader needs in order to decide whether to
+    # trust the package stayed in the README, and the bounded seat-inventory
+    # evidence that supports one of them followed the prose into the record.
+    record = (ROOT / "docs/verification-record.md").read_text()
     for document in (readme, handoff):
         assert "58 routes" in document
         # 74, not 72. Both numbers appear in the handoff, because the "72"
@@ -843,6 +849,7 @@ def test_repository_truth_and_full_mutation_policy() -> None:
         assert "74 public methods" in document
         assert "2228 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
+    for document in (record, handoff):
         assert "5 cars" in document
         assert "75 seat rows" in document
         assert "IRG000000" in document
