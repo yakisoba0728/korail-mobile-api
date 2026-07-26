@@ -195,6 +195,30 @@ def test_transport_gate_allows_a_payment_on_the_acknowledged_real_card_claim():
     assert [request.url.path for request in recorder.requests] == [PAYMENT_ROUTE]
 
 
+def test_the_card_gate_is_keyed_on_the_card_bearing_category_set():
+    # The gate asks "does this category's form carry a PAN", not "is this
+    # category literally called payment". Both questions have the same answer
+    # today; only one of them keeps having the right answer when a second
+    # card-bearing product is added.
+    from korail_mobile_api import KORAIL_CARD_BEARING_MUTATION_CATEGORIES
+    from korail_mobile_api.consent import MUTATION_CATEGORIES
+    from korail_mobile_api.safety import (
+        KORAIL_MUTATION_ROUTES,
+        KORAIL_MUTATION_ROUTE_CATEGORIES,
+    )
+
+    assert "payment" in KORAIL_CARD_BEARING_MUTATION_CATEGORIES
+    assert KORAIL_CARD_BEARING_MUTATION_CATEGORIES <= set(MUTATION_CATEGORIES)
+    # get_mutation_query has no card branch, and its docstring says that is
+    # because no card-bearing category owns a GET route. Keep that a fact.
+    get_categories = {
+        KORAIL_MUTATION_ROUTE_CATEGORIES[path]
+        for method, path in KORAIL_MUTATION_ROUTES
+        if method == "GET"
+    }
+    assert not (get_categories & KORAIL_CARD_BEARING_MUTATION_CATEGORIES)
+
+
 def test_the_card_gate_applies_only_to_the_payment_category():
     # A reserve/cancel/refund consent is untouched by the card claim rules.
     from korail_mobile_api.mutation_payloads import (

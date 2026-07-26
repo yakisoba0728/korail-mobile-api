@@ -21,6 +21,7 @@ from .errors import (
 from .consent import MutationConsent, require_mutation_consent
 from .models import BaseKorailResponse
 from .safety import (
+    KORAIL_CARD_BEARING_MUTATION_CATEGORIES,
     assert_korail_origin,
     assert_mutation_route,
     assert_mutation_route_category,
@@ -239,11 +240,12 @@ class KorailHttpClient:
         verbatim (the reservation/cancel builders already include the common
         Device/Version/Key fields); no read-only field allowlist applies.
 
-        A ``category="payment"`` send carries the PAN in the clear and is gated
-        once more: the consent must state exactly one of
-        ``fake_card_only=True`` (a non-chargeable test card) or
-        ``real_card_acknowledged=True`` (an acknowledged real charge). Neither
-        and both are refused.
+        A send in a
+        :data:`~korail_mobile_api.safety.KORAIL_CARD_BEARING_MUTATION_CATEGORIES`
+        category carries the PAN in the clear and is gated once more: the
+        consent must state exactly one of ``fake_card_only=True`` (a
+        non-chargeable test card) or ``real_card_acknowledged=True`` (an
+        acknowledged real charge). Neither and both are refused.
         """
         require_mutation_consent(consent, category)
         if consent.dry_run:
@@ -265,7 +267,13 @@ class KorailHttpClient:
         # because sending a payment on an ambiguous consent is precisely the
         # mistake this gate exists to prevent. This keeps the invariant at the
         # layer that actually sends, not only in the public payment methods.
-        if category == "payment":
+        #
+        # Keyed on MEMBERSHIP of the card-bearing set rather than on the single
+        # literal "payment": which product a category owns and whether its forms
+        # carry a PAN are different questions, and a second card-bearing
+        # category must not slip past a gate that only knows the first one's
+        # name.
+        if category in KORAIL_CARD_BEARING_MUTATION_CATEGORIES:
             if consent.fake_card_only and consent.real_card_acknowledged:
                 raise MutationNotAllowedError(
                     "payment mutations refuse a contradictory consent: "
@@ -339,9 +347,12 @@ class KorailHttpClient:
         read-only path (:meth:`get_json`) still refuses this route, so it can
         only leave the process through this gate.
 
-        There is no payment branch, because no GET mutation carries a card and
-        the ``"payment"`` category owns no GET route. Adding one would have to
-        add its check here too.
+        There is no card branch, because no GET mutation carries a card: no
+        member of
+        :data:`~korail_mobile_api.safety.KORAIL_CARD_BEARING_MUTATION_CATEGORIES`
+        owns a GET route. Adding one would have to add its check here too, and
+        a test asserts the emptiness of that intersection so the omission stays
+        a fact rather than an assumption.
         """
         require_mutation_consent(consent, category)
         if consent.dry_run:

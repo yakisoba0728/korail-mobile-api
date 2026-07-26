@@ -266,6 +266,22 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
     "/classes/com.korail.mobile.reservation.dcntCrdExtn.do": "discount_card",
 }
 
+# The consent categories whose forms carry a card number in the clear.
+#
+# The transmit gate in KorailHttpClient.post_mutation_form refuses to send one
+# of these unless the consent states, unambiguously, WHICH kind of card it is:
+# exactly one of fake_card_only=True (a non-chargeable test card, the default)
+# or real_card_acknowledged=True (a real card, money will move). Neither and
+# both are refused.
+#
+# This is a SET rather than the literal "payment" it was written as, because the
+# category that owns a route and the question "does this route carry a PAN" are
+# two different questions and only one of them is about the product. A second
+# card-bearing category would otherwise reach the wire past a gate that reads
+# `category == "payment"` and quietly says no. Membership is the check; the set
+# is the list of categories that must be on the far side of it.
+KORAIL_CARD_BEARING_MUTATION_CATEGORIES = frozenset({"payment"})
+
 
 def assert_mutation_route_category(path: str, category: str) -> None:
     """Ensure ``category`` is the one that owns mutation route ``path``.

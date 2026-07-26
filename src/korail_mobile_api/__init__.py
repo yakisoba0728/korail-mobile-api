@@ -265,6 +265,7 @@ from .read_payloads import (
 from .read_payloads import PassScheduleRequest
 from .safety import (
     EXCLUDED_API_DOMAINS,
+    KORAIL_CARD_BEARING_MUTATION_CATEGORIES,
     KORAIL_MUTATION_ROUTES,
     KORAIL_NETFUNNEL_ROUTES,
 )
@@ -356,6 +357,7 @@ __all__ = [
     "KORAIL_STANDBY_WAIT_FLAG",
     "KORAIL_TRANSFER_ITINERARY_CODE",
     "KORAIL_TRANSFER_JOURNEY_TYPE_CODE",
+    "KORAIL_CARD_BEARING_MUTATION_CATEGORIES",
     "KORAIL_MUTATION_ROUTES",
     "KorailApiError",
     "KorailAppError",
