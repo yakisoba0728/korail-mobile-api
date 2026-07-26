@@ -2013,6 +2013,9 @@ class KorailClient:
         ticket: PaidTicket,
         *,
         consent: MutationConsent,
+        return_times_division_code: str | None = None,
+        settle_mileage: bool = False,
+        pbp_acceptance_target_flag: str | None = None,
     ) -> MutationPreview | BaseKorailResponse:
         """Refund a settled (paid) ticket via ``refunds.RefundsRequest``.
 
@@ -2025,6 +2028,22 @@ class KorailClient:
         the parsed envelope. NOTE: a refund acts on a *paid* ticket, and this
         package's fake-card payment is always declined, so no live paid ticket is
         produced here — the live path exists but is exercised offline only.
+
+        The app does not send fixed values for three of this form's fields; it
+        echoes what the server just told it. To match it, chain the two reads
+        that carry those values:
+
+        1. :meth:`get_refund_ticket_detail` →
+           :attr:`RefundTicketDetailResponse.pbp_acceptance_target_flag`
+        2. :meth:`get_refund_commission` →
+           :attr:`ticket_return_times_division_code` (``"21"`` before
+           departure, ``"15"`` after)
+
+        and pass both here. ``settle_mileage`` is a caller decision rather than
+        an echo — the app sets it only when the ticket is mileage-settleable and
+        the usable balance covers the fee. Omitting all three keeps the previous
+        fixed ``"21"``/``"N"``/``"N"``, which is correct only for a
+        before-departure, non-mileage, non-PBP refund.
         """
         require_mutation_consent(consent, "refund")
         if self.session.current is None:
@@ -2032,7 +2051,13 @@ class KorailClient:
                 "KORAIL refund requires an authenticated session"
             )
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
-        form = build_refund_form(self.config, ticket)
+        form = build_refund_form(
+            self.config,
+            ticket,
+            return_times_division_code=return_times_division_code,
+            settle_mileage=settle_mileage,
+            pbp_acceptance_target_flag=pbp_acceptance_target_flag,
+        )
         if consent.dry_run:
             return MutationPreview(
                 category="refund",

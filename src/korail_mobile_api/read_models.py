@@ -1274,6 +1274,21 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     #: request as ``h_comp_nm``/``h_comp_cert_no``.
     companion_name: str | None = field(default=None, repr=False)
     companion_birth_date: str | None = field(default=None, repr=False)
+    #: ``h_pbp_acep_tgt_flg`` — whether this ticket is a PBP acceptance target.
+    #: The app echoes this value verbatim into the refund request's
+    #: ``pbpAcepTgtFlg`` (``ticketReturn/a.java:430-431``); pass it to
+    #: :func:`build_refund_form` so the refund states what the server said
+    #: rather than the ``"N"`` default.
+    pbp_acceptance_target_flag: str | None = None
+    #: ``h_dlay_flg``/``h_dlay_tk_flg`` — delay-compensation eligibility.
+    delay_flag: str | None = None
+    delay_ticket_flag: str | None = None
+    #: ``mlgSaveFlg`` — whether refunding this ticket restores mileage.
+    mileage_save_flag: str | None = None
+    #: ``addSrvFlg``/``addSrvCancel`` — attached add-on services and whether
+    #: refunding cancels them too.
+    additional_service_flag: str | None = None
+    additional_service_cancel: str | None = None
     journeys: tuple[RefundTicketJourney, ...] = ()
     #: ``dcnt_crd_info`` — present only when this "ticket" is a 할인카드(N카드).
     #: ``None`` for every ordinary ticket.

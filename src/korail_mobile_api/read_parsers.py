@@ -2695,6 +2695,17 @@ _REFUND_TICKET_DETAIL_FIELDS = {
     "train_running_flag": "h_trn_running_flg",
     "companion_name": "h_compa_nm",
     "companion_birth_date": "h_compa_brth",
+    # Flags the app echoes straight back into the refund it then sends
+    # (TicketDetailDao.java:227-281). h_pbp_acep_tgt_flg is the one
+    # build_refund_form needs: ticketReturn/a.java:430-431 puts this exact value
+    # in pbpAcepTgtFlg, so without parsing it there is no way for a caller to
+    # send anything but a guess.
+    "pbp_acceptance_target_flag": "h_pbp_acep_tgt_flg",
+    "delay_flag": "h_dlay_flg",
+    "delay_ticket_flag": "h_dlay_tk_flg",
+    "mileage_save_flag": "mlgSaveFlg",
+    "additional_service_flag": "addSrvFlg",
+    "additional_service_cancel": "addSrvCancel",
 }
 
 

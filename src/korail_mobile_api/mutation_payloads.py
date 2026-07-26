@@ -1413,22 +1413,70 @@ def build_card_payment_form(
     return form
 
 
+def _refund_echo_field(value: object, *, default: str, field: str) -> str:
+    """Validate one echoed refund flag, falling back to the app's own default.
+
+    ``None`` means "the caller did not read this off the server", which is the
+    pre-existing behaviour and stays allowed. Anything else has to be a
+    non-empty string, because a blank here would silently clear a field the
+    server expects to get its own value back in.
+    """
+    if value is None:
+        return default
+    if not isinstance(value, str) or not value.strip():
+        raise KorailProtocolError(
+            f"KORAIL refund {field} must be a non-empty string when given"
+        )
+    return value
+
+
 def build_refund_form(
     config: KorailConfig,
     ticket: PaidTicket,
+    *,
+    return_times_division_code: str | None = None,
+    settle_mileage: bool = False,
+    pbp_acceptance_target_flag: str | None = None,
 ) -> dict[str, str]:
     """Build the ticket-refund (``refunds.RefundsRequest``) form for a paid ticket.
 
     Field set and order follow the app's own Retrofit declaration
     (``RefundService.java:29`` / ``RefundService.smali:212``): the PNR is
     ``txtPnrNo`` (P-n-r), plus the original-ticket sale window/date/sequence and
-    return password, with the fixed ``h_mlg_stl="N"``,
-    ``tk_ret_tms_dv_cd="21"``, ``pbpAcepTgtFlg="N"`` and empty geo fields.
-    srtgo's ``ktx.py:1082`` spells the same field ``txtPrnNo``; that is a
-    korail2-lineage typo which occurs ZERO times in the decompiled app, and
-    Retrofit ``@Field`` names are exact-match, so sending it would transmit a
-    refund with no PNR at all. A refund acts on a settled ticket; the caller
-    supplies the :class:`PaidTicket` identity.
+    return password, ``tk_ret_tms_dv_cd``, ``h_mlg_stl``, ``pbpAcepTgtFlg`` and
+    empty geo fields. srtgo's ``ktx.py:1082`` spells the PNR field
+    ``txtPrnNo``; that is a korail2-lineage typo which occurs ZERO times in the
+    decompiled app, and Retrofit ``@Field`` names are exact-match, so sending it
+    would transmit a refund with no PNR at all. A refund acts on a settled
+    ticket; the caller supplies the :class:`PaidTicket` identity.
+
+    Three of those fields are NOT constants in the app -- it echoes back what
+    the server just told it, and this builder used to send a fixed value for
+    each:
+
+    ``return_times_division_code``
+        ``tk_ret_tms_dv_cd``. The app copies
+        ``RefundCommissionResponse.tk_ret_tms_dv_cd`` verbatim
+        (``ticketReturn/a.smali:3149-3153``), which is ``"21"`` before
+        departure and ``"15"`` after (``I4/a.java:5-6``). Read it off
+        :meth:`~korail_mobile_api.KorailClient.get_refund_commission`'s
+        :attr:`ticket_return_times_division_code` and pass it here; a refund
+        after departure otherwise claims to be one before it. Defaults to
+        ``"21"``.
+    ``settle_mileage``
+        ``h_mlg_stl``. Unlike the other two this is a caller decision, not a
+        server echo: the app passes ``"Y"`` only when the ticket is
+        mileage-settleable AND the usable mileage covers the fee
+        (``ticketReturn/a.java:185-190``). Defaults to ``False`` (``"N"``).
+    ``pbp_acceptance_target_flag``
+        ``pbpAcepTgtFlg``. Echoed from
+        ``RefundTicketDetailResponse.pbp_acceptance_target_flag``
+        (``ticketReturn/a.smali:3165-3171``). Defaults to ``"N"``.
+
+    Passing nothing keeps the previous fixed values, so existing callers are
+    unaffected -- but a caller who has the ticket detail and the commission in
+    hand should pass all three, because the app never sends any other
+    combination.
     """
     if type(ticket) is not PaidTicket:
         raise KorailProtocolError("KORAIL refund requires a PaidTicket")
@@ -1451,10 +1499,18 @@ def build_refund_form(
             "h_orgtk_sale_wct_no": ticket.sale_window_no,
             "h_orgtk_sale_sqno": ticket.sale_sequence,
             "h_orgtk_ret_pwd": ticket.return_password,
-            "h_mlg_stl": "N",
-            "tk_ret_tms_dv_cd": "21",
+            "h_mlg_stl": "Y" if settle_mileage else "N",
+            "tk_ret_tms_dv_cd": _refund_echo_field(
+                return_times_division_code,
+                default="21",
+                field="return_times_division_code",
+            ),
             "trnNo": ticket.train_no,
-            "pbpAcepTgtFlg": "N",
+            "pbpAcepTgtFlg": _refund_echo_field(
+                pbp_acceptance_target_flag,
+                default="N",
+                field="pbp_acceptance_target_flag",
+            ),
             "latitude": "",
             "longitude": "",
         }
