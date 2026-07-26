@@ -933,7 +933,7 @@ loop, and it differs in four ways — all re-read as
 
 | what | 환승 | 병합 | evidence |
 | --- | --- | --- | --- |
-| `txtJrnyTpCd{i}` | `14` on **both** legs (keyed on array LENGTH) | `21` then `22` (keyed on the loop INDEX) | `smali:5658`, `if-nez v2` |
+| `txtJrnyTpCd{i}` | `14` on **both** legs (keyed on array LENGTH) | `21` then `22` (keyed on the loop INDEX) | `smali:5641`, `if-nez v2` |
 | `txtStndFlg` | derived from `isStndSeat` per leg | pinned `"Y"` | `smali:5887-5891`, a bare `const-string "Y"` |
 | `txtPsrmClCd2` | read per leg — the halves may differ | **copied** from `txtPsrmClCd1` | `smali:5919-5983` |
 | `arvTm_` | one per leg, each that leg's arrival | `arvTm_1` only, and it is the **whole route's** arrival time | no `setArvTm` call exists in `smali:5730-6010` |

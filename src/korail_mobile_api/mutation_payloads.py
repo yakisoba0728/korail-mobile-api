@@ -314,7 +314,7 @@ def build_merge_reservation_form(
     * ``txtJrnyTpCd{i}`` keys on the loop **index**, so leg 1 is ``"21"``
       (병합 선행) and leg 2 is ``"22"`` (병합 후행). Both legs of a 환승 carry
       ``"14"``; here they differ, and the bytecode branch is ``if-nez v2`` on the
-      index (``smali:5658``).
+      index (``smali:5641``).
     * ``txtStndFlg`` is pinned ``"Y"`` (``smali:5887-5891``) rather than derived
       from ``isStndSeat`` -- the whole point of the flow is that the standing
       hold is being converted, so the app does not re-derive it.

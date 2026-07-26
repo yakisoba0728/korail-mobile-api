@@ -255,7 +255,7 @@ KORAIL_TRANSFER_JOURNEY_TYPE_CODE = "14"
 # smali/…/DirectInquiryActivity.smali:5580-6010:
 #
 #   * txtJrnyTpCd{i} keys on the loop INDEX, not the array length --
-#     `if-nez v2` at :5658 picks STANDING_SEAT_1 for index 0 and
+#     `if-nez v2` at :5641 picks STANDING_SEAT_1 for index 0 and
 #     STANDING_SEAT_2 otherwise. Leg 1 is "21" and leg 2 is "22". This is the
 #     opposite of a 환승, where both legs carry "14".
 #   * txtStndFlg is pinned "Y" (:5887-5891), not derived from isStndSeat.

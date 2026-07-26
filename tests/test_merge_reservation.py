@@ -30,7 +30,7 @@ Everything asserted here was read out of the decompiled app:
 * the second hold -- ``DirectInquiryActivity.java:576-601``, re-read as
   ``analysis/apktool/smali/…/DirectInquiryActivity.smali:5580-6010``:
   ``txtJrnyCnt="2"`` before the loop (``:5598``), ``txtJrnyTpCd`` keyed on the
-  loop INDEX (``if-nez v2`` at ``:5658``), ``txtJobId`` back to ``"1101"``
+  loop INDEX (``if-nez v2`` at ``:5641``), ``txtJobId`` back to ``"1101"``
   (``:5636``), ``txtStndFlg`` pinned ``"Y"`` (``:5891``), leg 2's cabin copied
   from ``txtPsrmClCd1`` (``:5926-5983``), and no ``setArvTm`` anywhere.
 
