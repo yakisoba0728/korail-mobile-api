@@ -15,7 +15,7 @@ state-changing request can leave the process only through the dedicated
 | Category | korail | SRT |
 |---|---|---|
 | reserve (`1101`, immediate) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
-| reserve (`1103`, seat-designated) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
+| reserve (`1103`, seat-designated) | ⚠️ implemented, live-run once, **seat map NOT confirmed honoured** | ⛔ not implemented |
 | reserve (`1102`, 예약대기 standby) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
 | standby follow-up (`reservationWait`) | ⚠️ `confirm_standby_hold`, **never live-run** | ⛔ not implemented |
 | cancel (unpaid hold) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
@@ -288,6 +288,27 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    version of them would reject mixes it may accept. An operator verifying this
    should reserve→cancel (no payment) only the combinations they actually
    intend to use; nothing here generalises from one mix to another.
+
+8a. **2026-07-26 live attempt at `1103` — inconclusive, and why.** One
+   seat-designated hold was created on 서울->부산 20260809 for two adults,
+   requesting car 11 seats `37` and `33` (the `seat_no` values the seat
+   inventory returned). The server issued the hold and
+   `get_ticket_reservation_detail` read it back as car 11 seats **`9A` and
+   `10A`**. The car matched; the seat identifiers did not round-trip. Two
+   explanations remain open and this run cannot separate them: either the
+   inventory's `seat_no` is an internal index while `h_seat_no` is the printed
+   label for the same physical seat, or the server ignored the `OSrcar` map and
+   auto-assigned. The hold was cancelled (`IRG000000`) and the account verified
+   empty. **Do not describe `1103` as working until this is settled.**
+   Settling it needs one more run that dumps the raw seat-inventory record
+   alongside the reservation detail, which could not be done immediately:
+   `get_seat_inventory` began answering `[3]인증정보에 문제가 있습니다.` after a
+   burst of calls and kept doing so, having worked minutes earlier. That looks
+   like rate limiting rather than a client defect — **back off before retrying,
+   and treat that message as a signal to stop, not to retry harder.**
+
+8b. **`1102` (standby) was never reached live.** The run aborted during `1103`
+   before the standby leg, so nothing about it is verified.
 
 8. **korail seat-designated (`1103`) and standby (`1102`) holds are NOT
    live-verified.** Both are reachable from `KorailClient.reserve` through the
