@@ -235,21 +235,33 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    live run must auto-cancel any created hold and verify reservation history is
    empty afterward.
 
-7. **korail multi-passenger and 특실 holds are not live-verified.**
-   `KorailClient.reserve` now takes a `KorailPassengerCounts` (어른, 청소년,
+7. **korail multi-passenger and 특실 holds are LIVE-VERIFIED (2026-07-26).**
+   `KorailClient.reserve` takes a `KorailPassengerCounts` (어른, 청소년,
    어린이, 동반유아, 경로, 1~3급 장애, 4~6급 장애, 안내견) and a
-   `KorailSeatClass` (일반실 / 특실). Both are keyword-only and defaulted to
-   one adult in a general seat, so the default request is byte-for-byte the one
-   the 2026-07-24/25 runs sent and the existing live evidence still stands
-   unchanged. Everything else is static evidence only, read out of the app's own
-   request builder (`w4/a.java:49-73` for the eight rows and their fixed
-   type/discount codes, `m5/c.java:330` for `txtTotPsgCnt` being the sum of all
-   eight — 동반유아 and 안내견 included, `m5/d.java:32-33` for the maximum of 9,
-   `c5/b.java:72` + `U4/a.java:88` + `K4/o.java:7-8` for `txtPsrmClCd1`). No
-   multi-passenger or 특실 form has ever been sent, so their acceptance,
-   pricing, seat allocation and error envelopes are unknown. **Trade-off:** the
-   mix is validated only as far as the app's picker validates it (non-negative,
-   at least one, at most nine); two picker warnings with no wire representation
+   `KorailSeatClass` (일반실 / 특실), both keyword-only and defaulted to one
+   adult in a general seat, so the default request stays byte-for-byte the one
+   the 2026-07-24/25 runs sent. Three reserve->cancel round trips on
+   서울->부산 20260809 train 075 confirmed the wire shapes, each cancelled
+   immediately (`SUCC`/`IRG000000`) with the account verified empty afterwards:
+   - two adults, general: hold total `119,600` = 2 x `59,800`, so the count
+     reaches the server rather than being ignored.
+   - one adult, 특실: reading the hold back with
+     `get_ticket_reservation_detail` returned `h_psrm_cl_nm='특실'`,
+     `h_srcar_no=13`, `h_rcvd_amt=83,700` — the cabin code is honoured.
+   - **The 특실 hold is what proves the payment-amount fix mattered.** Its
+     `h_tot_prc` is `59,800` (the general fare) while `h_tot_rcvd_amt` is
+     `83,700`. `build_card_payment_form` sends `hidMnsStlAmt1=83,700`. Had the
+     builder still used `h_tot_prc`, a 특실 payment would have underpaid by
+     23,900 KRW. The one-adult general round trip could not have shown this:
+     there the two values coincide.
+   Static evidence behind the shapes: `w4/a.java:49-73` (the eight rows and
+   their fixed type/discount codes), `m5/c.java:330` (`txtTotPsgCnt` is the sum
+   of all eight — 동반유아 and 안내견 included), `m5/d.java:32-33` (maximum 9),
+   `c5/b.java:72` + `U4/a.java:88` + `K4/o.java:7-8` (`txtPsrmClCd1`).
+   Still unverified: every passenger type other than 어른, any mix of types,
+   and every error envelope. **Trade-off:** the mix is validated only as far as
+   the app's picker validates it (non-negative, at least one, at most nine);
+   two picker warnings with no wire representation
    — a 동반유아 needs an adult-ish companion (`m5/c.java:452-455`) and an
    안내견 needs more 장애 passengers than dogs (`m5/c.java:458-465`) — are
    documented but deliberately not enforced, since guessing at the server's

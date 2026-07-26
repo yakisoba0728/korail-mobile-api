@@ -297,10 +297,13 @@ lap infant and the guide dog included, because that is how the app computes it.
 특실 hold requires the train's *special* seats to be evidenced as available,
 not its general ones.
 
-Only the single-adult, general-class form is live-verified. The
-multi-passenger and 특실 wire shapes are built from the app's own request
-builder and have never been sent to the live server, so their acceptance,
-pricing and error envelopes are unknown until an operator exercises the
+Two adults in a general seat and one adult in 특실 were both live-verified
+on 2026-07-26 by reserve->cancel round trips. The 특실 hold read back as
+`h_psrm_cl_nm='특실'` with `h_rcvd_amt=83,700` against an `h_tot_prc` of
+`59,800`, which is the concrete case that makes the received-amount payment
+fix load-bearing. Every other passenger type, and every mix of types, is
+still static evidence only, so acceptance, pricing and error envelopes for
+those remain unknown until an operator exercises the
 specific combinations they need.
 
 ### Fixed and account-shaped reads
@@ -751,4 +754,4 @@ still provide a custom `DynapathConfig.token_provider`; the package contains no
 separate probe generator and does not retain request history. Login follows the
 app sequence and treats only `IRZ000001` or `S200` as final success.
 
-Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, an explicitly acknowledged real card payment, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`). `reserve` accepts an arbitrary passenger mix (`KorailPassengerCounts`) and either cabin class (`KorailSeatClass`), defaulting to the one-adult, general-seat request that is the only live-verified shape; the multi-passenger and 특실 shapes are static-evidenced only. Real (chargeable) card payment is off by default: it requires `pay_with_card` plus a consent that sets `real_card_acknowledged=True` and `fake_card_only=False`, and `pay_with_fake_card` still refuses anything but a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
+Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, an explicitly acknowledged real card payment, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`). `reserve` accepts an arbitrary passenger mix (`KorailPassengerCounts`) and either cabin class (`KorailSeatClass`), defaulting to the one-adult, general-seat request. Two adults in a general seat and one adult in 특실 are live-verified (2026-07-26); the other passenger types and any mix of them are static-evidenced only. Real (chargeable) card payment is off by default: it requires `pay_with_card` plus a consent that sets `real_card_acknowledged=True` and `fake_card_only=False`, and `pay_with_fake_card` still refuses anything but a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.

@@ -16,9 +16,13 @@
   app's `OPsg` declares only `txtCardNo_`, written solely by the separate N-card
   request, and korail2's/srtgo's `txtCardCode_`/`txtCardPw_` appear nowhere in
   the decompiled app. A 특실 hold requires the train's special seats to be
-  evidenced as available, not its general ones. **Only the one-adult
-  general-seat form is live-verified**; the multi-passenger and 특실 wire shapes
-  are static-evidenced and have never been transmitted.
+  evidenced as available, not its general ones. Live-verified on 2026-07-26 by
+  reserve->cancel round trips: two adults in a general seat (hold total
+  119,600 = 2 x 59,800) and one adult in 특실 (read back as `h_psrm_cl_nm='특실'`,
+  `h_rcvd_amt=83,700`). The 특실 hold also demonstrates why the payment amount
+  must come from `h_tot_rcvd_amt`: its `h_tot_prc` reads `59,800`, so the old
+  builder would have underpaid by 23,900 KRW. Other passenger types and mixes
+  of types remain static-evidenced and have never been transmitted.
 - Fixed: `scripts/reserve_pay_refund_roundtrip.py` masked the PNR it exists to
   print. Its console scrubber applied a 13–19 digit card-number pattern to
   arbitrary text, and a KORAIL PNR is 15 decimal digits, so a live run on
