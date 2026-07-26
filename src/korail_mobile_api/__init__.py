@@ -18,6 +18,8 @@ from .constants import (
     KORAIL_DEFAULT_DEVICE_NAME,
     KORAIL_DEFAULT_DEVICE_WIDTH,
     KORAIL_DEVICE_ANDROID,
+    KORAIL_MAX_PASSENGERS_PER_RESERVATION,
+    KorailSeatClass,
 )
 from .dynapath import (
     DynapathConfig,
@@ -90,6 +92,7 @@ from .models import (
 )
 from .mutation_models import (
     CardPayment,
+    KorailPassengerCounts,
     PaidTicket,
     ReservationHoldResponse,
     ReservationJourney,
@@ -253,6 +256,7 @@ __all__ = [
     "KORAIL_DYNAPATH_OS_TYPE",
     "KORAIL_DYNAPATH_SIGNING_CERT_SHA256",
     "KORAIL_DYNAPATH_SDK_VERSION",
+    "KORAIL_MAX_PASSENGERS_PER_RESERVATION",
     "KORAIL_MUTATION_ROUTES",
     "KorailApiError",
     "KorailAppError",
@@ -261,7 +265,9 @@ __all__ = [
     "KorailClient",
     "KorailConfig",
     "KorailDynaPathError",
+    "KorailPassengerCounts",
     "KorailProtocolError",
+    "KorailSeatClass",
     "KorailStation",
     "KorailSession",
     "KorailSessionExpiredError",

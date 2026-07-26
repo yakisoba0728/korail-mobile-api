@@ -3,9 +3,15 @@ from __future__ import annotations
 import re
 
 from .config import KorailConfig
+from .constants import KorailSeatClass
 from .errors import KorailProtocolError
 from .models import TrainSummary
-from .mutation_models import CardPayment, PaidTicket, ReservationHoldResponse
+from .mutation_models import (
+    CardPayment,
+    KorailPassengerCounts,
+    PaidTicket,
+    ReservationHoldResponse,
+)
 
 
 _DATE_RE = re.compile(r"[0-9]{8}")
@@ -42,15 +48,72 @@ def _common_fields(config: KorailConfig) -> dict[str, str]:
     }
 
 
-def build_single_adult_reservation_form(
+# The eight passenger rows the app's reservation request ALWAYS carries, in the
+# order w4/a.java:49-73 writes them into OPsg. OPsg is a LinkedHashMap
+# (OPsg.java:6) whose keys are "txtCompaCnt"/"txtPsgTpCd"/"txtDiscKndCd" plus the
+# row number (OPsg.java:8-10, 17-27), so the build order below IS the wire order.
+# Only the count varies with the mix; the type and discount codes are fixed per
+# row, which is why a row that carries nobody still goes out as "0".
+_PASSENGER_ROWS: tuple[tuple[str, str, str], ...] = (
+    ("adult", "1", "000"),  # 어른
+    ("teenager", "1", "P11"),  # 청소년
+    ("child", "3", "000"),  # 어린이
+    ("infant", "3", "321"),  # 동반유아
+    ("senior", "1", "131"),  # 경로
+    ("severe_disability", "1", "111"),  # 1~3급 장애
+    ("mild_disability", "1", "112"),  # 4~6급 장애
+    ("guide_dog", "1", "173"),  # 안내견
+)
+
+
+def build_reservation_form(
     config: KorailConfig,
     train: TrainSummary,
+    *,
+    passengers: KorailPassengerCounts | None = None,
+    seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
 ) -> dict[str, str]:
+    """Build the reservation-hold form for a passenger mix and a cabin class.
+
+    ``passengers`` defaults to :class:`KorailPassengerCounts`'s own default of
+    one adult and ``seat_class`` to
+    :attr:`KorailSeatClass.GENERAL <korail_mobile_api.KorailSeatClass.GENERAL>`,
+    so calling this with neither reproduces the exact form this package sent
+    before mixes existed -- see
+    :func:`build_single_adult_reservation_form`.
+
+    Only the single-adult, general-class shape has ever been sent to the live
+    server. Multi-passenger and 특실 forms are built from the app's own request
+    builder but are NOT live-verified.
+    """
     if type(train) is not TrainSummary:
         raise KorailProtocolError(
             "KORAIL reservation requires an exact TrainSummary"
         )
-    if train.general_reservation_code != "11":
+    if passengers is None:
+        passengers = KorailPassengerCounts()
+    elif type(passengers) is not KorailPassengerCounts:
+        raise KorailProtocolError(
+            "KORAIL reservation requires an exact KorailPassengerCounts"
+        )
+    try:
+        seat_class = KorailSeatClass(seat_class)
+    except ValueError:
+        raise KorailProtocolError(
+            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
+        ) from None
+    # The train list checks the availability code of the cabin the user picked,
+    # not always the general one: a5/u.java:319 reads h_gen_rsv_cd for the
+    # standard tab and h_spe_rsv_cd for the suite tab (likewise
+    # DirectInquiryActivity.java:198). Keep this package's stricter rule -- only
+    # an explicit "11" counts as available -- and apply it to whichever cabin is
+    # being booked.
+    if seat_class is KorailSeatClass.SPECIAL:
+        if train.special_reservation_code != "11":
+            raise KorailProtocolError(
+                "KORAIL reservation requires an evidenced available special seat"
+            )
+    elif train.general_reservation_code != "11":
         raise KorailProtocolError(
             "KORAIL reservation requires an evidenced available general seat"
         )
@@ -115,25 +178,24 @@ def build_single_adult_reservation_form(
             "txtJobId": "1101",
             "txtGdNo": "",
             "hidFreeFlg": "N",
+            # Always "N" here. The app sets it from
+            # J.isStndSeat(seatClass, h_gen_rsv_cd, h_stnd_rsv_cd)
+            # (c5/b.java:69), which is true only for a GENERAL request on a
+            # train whose general seats are sold out ("13") and whose standing
+            # inventory is open -- S4/J.java:83-85. Neither cabin this builder
+            # will accept can be in that state, since both demand "11".
             "txtStndFlg": "N",
-            "txtTotPsgCnt": "1",
+            # w4/a.java:49 sends the app's TOTAL_PERSON_COUNT, and that is the
+            # sum of ALL eight counters -- 동반유아 and 안내견 included
+            # (m5/c.java:330).
+            "txtTotPsgCnt": str(passengers.total),
         }
     )
-    passenger_rows = (
-        ("1", "1", "000"),
-        ("0", "1", "P11"),
-        ("0", "3", "000"),
-        ("0", "3", "321"),
-        ("0", "1", "131"),
-        ("0", "1", "111"),
-        ("0", "1", "112"),
-        ("0", "1", "173"),
-    )
-    for index, (count, passenger_type, discount_code) in enumerate(
-        passenger_rows,
+    for index, (attribute, passenger_type, discount_code) in enumerate(
+        _PASSENGER_ROWS,
         start=1,
     ):
-        form[f"txtCompaCnt{index}"] = count
+        form[f"txtCompaCnt{index}"] = str(getattr(passengers, attribute))
         form[f"txtPsgTpCd{index}"] = passenger_type
         form[f"txtDiscKndCd{index}"] = discount_code
     form.update(
@@ -143,7 +205,10 @@ def build_single_adult_reservation_form(
             "txtSeatAttCd3": "000",
             "txtSeatAttCd4": "015",
             "txtSeatAttCd5": "000",
-            "txtPsrmClCd1": "1",
+            # OSeat.PSRM_CL_CD + journey number (OSeat.java:8,16-18), set from
+            # the user's chosen tab: c5/b.java:72 passes
+            # U4/a.java:88's GENERAL("1")/SPECIAL("2").
+            "txtPsrmClCd1": seat_class.value,
             "txtJrnyCnt": "1",
             "txtJrnyTpCd1": "11",
             "txtJrnySqno1": "001",
@@ -164,6 +229,20 @@ def build_single_adult_reservation_form(
         }
     )
     return form
+
+
+def build_single_adult_reservation_form(
+    config: KorailConfig,
+    train: TrainSummary,
+) -> dict[str, str]:
+    """The one-adult, 일반실 hold form -- the only live-verified shape.
+
+    A thin call into :func:`build_reservation_form` with both of its defaults,
+    kept because this is the exact request the 2026-07-24/25 live reserve →
+    cancel round trip sent and the only one KORAIL has been observed to accept
+    from this package.
+    """
+    return build_reservation_form(config, train)
 
 
 def build_unpaid_reservation_cancel_form(

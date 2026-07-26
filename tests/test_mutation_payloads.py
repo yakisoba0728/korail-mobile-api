@@ -7,8 +7,11 @@ import pytest
 from korail_mobile_api import (
     BaseKorailResponse,
     CardPayment,
+    KORAIL_MAX_PASSENGERS_PER_RESERVATION,
     KorailConfig,
+    KorailPassengerCounts,
     KorailProtocolError,
+    KorailSeatClass,
     PaidTicket,
     ReservationHoldResponse,
     ReservationJourney,
@@ -17,6 +20,7 @@ from korail_mobile_api import (
 from korail_mobile_api.mutation_payloads import (
     build_card_payment_form,
     build_refund_form,
+    build_reservation_form,
     build_single_adult_reservation_form,
     build_unpaid_reservation_cancel_form,
 )
@@ -389,6 +393,361 @@ def test_single_adult_reservation_form_uses_the_apps_fixed_general_seat_attribut
 def test_single_adult_reservation_form_rejects_non_hold_safe_train_shapes(train):
     with pytest.raises(KorailProtocolError):
         build_single_adult_reservation_form(KorailConfig(), train)
+
+
+# --- passenger mix and cabin class ------------------------------------------
+#
+# Expectations below are built from w4/a.java:49-73 (the eight rows and their
+# fixed type/discount codes, in OPsg LinkedHashMap insertion order),
+# m5/c.java:330 (the total is every counter summed) and K4/o.java:7-8 (the two
+# cabin codes) -- NOT from what the builder happens to emit.
+
+
+def _special_train() -> TrainSummary:
+    # A 특실 hold is gated on the suite tab's own availability code
+    # (a5/u.java:319 reads h_spe_rsv_cd for i9 != 0), so give the train one.
+    return replace(_eligible_train(), special_reservation_code="11")
+
+
+def test_default_passenger_mix_reproduces_the_single_adult_form_exactly():
+    config = KorailConfig()
+    train = _eligible_train()
+
+    generalised = build_reservation_form(config, train)
+    pinned = build_single_adult_reservation_form(config, train)
+
+    assert generalised == pinned
+    # KORAIL request field order is reproduced at insertion-order fidelity, so
+    # equal contents are not enough: the key sequence has to match too.
+    assert list(generalised) == list(pinned)
+
+
+def test_explicit_one_adult_general_mix_reproduces_the_pinned_form_exactly():
+    config = KorailConfig()
+    train = _eligible_train()
+
+    form = build_reservation_form(
+        config,
+        train,
+        passengers=KorailPassengerCounts(adult=1),
+        seat_class=KorailSeatClass.GENERAL,
+    )
+    pinned = build_single_adult_reservation_form(config, train)
+
+    assert form == pinned
+    assert list(form) == list(pinned)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "row", "passenger_type", "discount_code"),
+    [
+        ("adult", 1, "1", "000"),
+        ("teenager", 2, "1", "P11"),
+        ("child", 3, "3", "000"),
+        ("infant", 4, "3", "321"),
+        ("senior", 5, "1", "131"),
+        ("severe_disability", 6, "1", "111"),
+        ("mild_disability", 7, "1", "112"),
+        ("guide_dog", 8, "1", "173"),
+    ],
+)
+def test_each_passenger_type_fills_its_own_app_row(
+    field_name,
+    row,
+    passenger_type,
+    discount_code,
+):
+    # One passenger of the type under test and nobody else, so the row it lands
+    # in is unambiguous. Some of these mixes (a lone 동반유아, a lone 안내견)
+    # are ones the app's picker would warn about; this asserts wire placement,
+    # not that the mix is bookable.
+    passengers = KorailPassengerCounts(**{"adult": 0, field_name: 1})
+
+    form = build_reservation_form(
+        KorailConfig(),
+        _eligible_train(),
+        passengers=passengers,
+    )
+
+    assert form[f"txtCompaCnt{row}"] == "1"
+    assert form[f"txtPsgTpCd{row}"] == passenger_type
+    assert form[f"txtDiscKndCd{row}"] == discount_code
+    assert form["txtTotPsgCnt"] == "1"
+    # Every other row still goes out, carrying zero.
+    for other in range(1, 9):
+        if other != row:
+            assert form[f"txtCompaCnt{other}"] == "0"
+
+
+def test_passenger_rows_keep_the_apps_field_order():
+    form = build_reservation_form(
+        KorailConfig(),
+        _eligible_train(),
+        passengers=KorailPassengerCounts(adult=2, child=1),
+    )
+    keys = list(form)
+    block = keys[keys.index("txtTotPsgCnt") : keys.index("txtSeatAttCd1")]
+
+    assert block == [
+        "txtTotPsgCnt",
+        "txtCompaCnt1",
+        "txtPsgTpCd1",
+        "txtDiscKndCd1",
+        "txtCompaCnt2",
+        "txtPsgTpCd2",
+        "txtDiscKndCd2",
+        "txtCompaCnt3",
+        "txtPsgTpCd3",
+        "txtDiscKndCd3",
+        "txtCompaCnt4",
+        "txtPsgTpCd4",
+        "txtDiscKndCd4",
+        "txtCompaCnt5",
+        "txtPsgTpCd5",
+        "txtDiscKndCd5",
+        "txtCompaCnt6",
+        "txtPsgTpCd6",
+        "txtDiscKndCd6",
+        "txtCompaCnt7",
+        "txtPsgTpCd7",
+        "txtDiscKndCd7",
+        "txtCompaCnt8",
+        "txtPsgTpCd8",
+        "txtDiscKndCd8",
+    ]
+
+
+def test_mixed_booking_fills_every_row_it_names():
+    passengers = KorailPassengerCounts(
+        adult=2,
+        teenager=1,
+        child=1,
+        infant=1,
+        senior=1,
+    )
+
+    form = build_reservation_form(
+        KorailConfig(),
+        _eligible_train(),
+        passengers=passengers,
+    )
+
+    assert [form[f"txtCompaCnt{row}"] for row in range(1, 9)] == [
+        "2",
+        "1",
+        "1",
+        "1",
+        "1",
+        "0",
+        "0",
+        "0",
+    ]
+    assert [form[f"txtPsgTpCd{row}"] for row in range(1, 9)] == [
+        "1",
+        "1",
+        "3",
+        "3",
+        "1",
+        "1",
+        "1",
+        "1",
+    ]
+    assert [form[f"txtDiscKndCd{row}"] for row in range(1, 9)] == [
+        "000",
+        "P11",
+        "000",
+        "321",
+        "131",
+        "111",
+        "112",
+        "173",
+    ]
+    assert form["txtTotPsgCnt"] == "6"
+
+
+def test_total_passenger_count_includes_the_lap_infant_and_the_guide_dog():
+    # m5/c.java:330 sums ALL eight counters into TOTAL_PERSON_COUNT --
+    # CHILD_ACCOMPANY_COUNT (동반유아) and GUIDE_DOG_COUNT included -- and
+    # w4/a.java:49 sends that number as txtTotPsgCnt. An infant is NOT excluded
+    # from the seat count on this wire, whatever a lap infant means at the gate.
+    passengers = KorailPassengerCounts(
+        adult=1,
+        infant=1,
+        severe_disability=1,
+        guide_dog=1,
+    )
+
+    assert passengers.total == 4
+
+    form = build_reservation_form(
+        KorailConfig(),
+        _eligible_train(),
+        passengers=passengers,
+    )
+
+    assert form["txtTotPsgCnt"] == "4"
+
+
+def test_reservation_form_carries_no_discount_card_field_for_a_discounted_row():
+    # OPsg declares exactly one card field, txtCardNo_ (OPsg.java:7), written
+    # only by the separate N-card request (w4/a.java:101, discount kind "153").
+    # korail2's txtCardCode_/txtCardNo_/txtCardPw_ trio (korail2.py:363-370)
+    # and srtgo's (ktx.py:286-295) have no counterpart in the 경로/장애 rows,
+    # which carry a count and a discount code and nothing else.
+    form = build_reservation_form(
+        KorailConfig(),
+        _eligible_train(),
+        passengers=KorailPassengerCounts(
+            adult=1,
+            senior=1,
+            severe_disability=1,
+            mild_disability=1,
+        ),
+    )
+
+    assert not [
+        key
+        for key in form
+        if key.startswith(("txtCardCode", "txtCardNo", "txtCardPw"))
+    ]
+
+
+def test_special_class_form_sends_the_apps_special_cabin_code():
+    form = build_reservation_form(
+        KorailConfig(),
+        _special_train(),
+        seat_class=KorailSeatClass.SPECIAL,
+    )
+
+    assert form["txtPsrmClCd1"] == "2"
+    # Nothing else about the request moves with the cabin.
+    assert form["txtStndFlg"] == "N"
+    assert form["txtSeatAttCd4"] == "015"
+    assert list(form) == list(
+        build_single_adult_reservation_form(KorailConfig(), _eligible_train())
+    )
+
+
+def test_seat_class_enum_holds_only_the_two_bookable_cabins():
+    assert KorailSeatClass.GENERAL.value == "1"
+    assert KorailSeatClass.SPECIAL.value == "2"
+    assert [member.value for member in KorailSeatClass] == ["1", "2"]
+
+
+def test_special_class_form_needs_the_special_cabin_to_be_available():
+    # h_spe_rsv_cd is the code the suite tab checks (a5/u.java:319); a train
+    # with general seats free but the suite sold out must not be held as 특실.
+    train = replace(
+        _eligible_train(),
+        general_reservation_code="11",
+        special_reservation_code="13",
+    )
+
+    with pytest.raises(KorailProtocolError):
+        build_reservation_form(
+            KorailConfig(), train, seat_class=KorailSeatClass.SPECIAL
+        )
+
+
+def test_general_class_form_ignores_the_special_cabins_availability():
+    train = replace(_eligible_train(), special_reservation_code="13")
+
+    form = build_reservation_form(KorailConfig(), train)
+
+    assert form["txtPsrmClCd1"] == "1"
+
+
+def test_reservation_form_rejects_an_unknown_seat_class():
+    for seat_class in ("0", "3", "", None, 1):
+        with pytest.raises(KorailProtocolError):
+            build_reservation_form(
+                KorailConfig(), _eligible_train(), seat_class=seat_class
+            )
+
+
+def test_reservation_form_rejects_a_foreign_passenger_counts_object():
+    class LookalikeCounts:
+        adult = 1
+        teenager = 0
+        child = 0
+        infant = 0
+        senior = 0
+        severe_disability = 0
+        mild_disability = 0
+        guide_dog = 0
+        total = 1
+
+    with pytest.raises(KorailProtocolError):
+        build_reservation_form(
+            KorailConfig(), _eligible_train(), passengers=LookalikeCounts()
+        )
+
+
+def test_passenger_counts_default_to_one_adult():
+    passengers = KorailPassengerCounts()
+
+    assert passengers.adult == 1
+    assert passengers.total == 1
+    assert (
+        passengers.teenager
+        == passengers.child
+        == passengers.infant
+        == passengers.senior
+        == passengers.severe_disability
+        == passengers.mild_disability
+        == passengers.guide_dog
+        == 0
+    )
+
+
+def test_passenger_counts_reject_an_empty_mix():
+    with pytest.raises(ValueError):
+        KorailPassengerCounts(adult=0)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "adult",
+        "teenager",
+        "child",
+        "infant",
+        "senior",
+        "severe_disability",
+        "mild_disability",
+        "guide_dog",
+    ],
+)
+def test_passenger_counts_reject_a_negative_count(field_name):
+    with pytest.raises(ValueError):
+        KorailPassengerCounts(**{"adult": 2, field_name: -1})
+
+
+@pytest.mark.parametrize("value", [True, 1.0, "1", None])
+def test_passenger_counts_reject_a_non_integer_count(value):
+    with pytest.raises(ValueError):
+        KorailPassengerCounts(adult=value)
+
+
+def test_passenger_counts_allow_the_apps_maximum_mix():
+    # m5/d.java:32-33 -- the picker the main booking flow uses -- caps the
+    # total at 9, and m5/c.java:250-252 stops the plus button there.
+    passengers = KorailPassengerCounts(adult=8, child=1)
+
+    assert passengers.total == KORAIL_MAX_PASSENGERS_PER_RESERVATION == 9
+
+    form = build_reservation_form(
+        KorailConfig(), _eligible_train(), passengers=passengers
+    )
+
+    assert form["txtTotPsgCnt"] == "9"
+
+
+def test_passenger_counts_reject_a_mix_over_the_apps_maximum():
+    with pytest.raises(ValueError):
+        KorailPassengerCounts(adult=9, child=1)
+    with pytest.raises(ValueError):
+        KorailPassengerCounts(adult=10)
 
 
 def test_unpaid_reservation_cancel_form_uses_only_fresh_hold_identifiers():

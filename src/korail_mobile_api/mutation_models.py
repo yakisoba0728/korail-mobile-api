@@ -3,7 +3,121 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from .models import BaseKorailResponse
+
+
+@dataclass(frozen=True)
+class KorailPassengerCounts:
+    """How many of each passenger type one reservation carries.
+
+    The app's reservation request always transmits eight passenger rows,
+    whatever the mix: ``w4/a.java:49-73`` fills rows 1..8 unconditionally, each
+    row a count plus a fixed passenger-type code and discount-kind code, and
+    ``OPsg`` is a ``LinkedHashMap`` (``OPsg.java:6``) so that build order is the
+    wire order. The fields below are declared in that same row order:
+
+    ==== ===================== ============ ============= =================
+    row  field                 app bundle   ``txtPsgTpCd``  ``txtDiscKndCd``
+    ==== ===================== ============ ============= =================
+    1    ``adult``             ADULT        ``"1"``       ``"000"``
+    2    ``teenager``          TEENAGER     ``"1"``       ``"P11"``
+    3    ``child``             CHILD        ``"3"``       ``"000"``
+    4    ``infant``            CHILD_ACCOMPANY ``"3"``    ``"321"``
+    5    ``senior``            SENIOR       ``"1"``       ``"131"``
+    6    ``severe_disability`` HIGH_DISABLE ``"1"``       ``"111"``
+    7    ``mild_disability``   LOW_DISABLE  ``"1"``       ``"112"``
+    8    ``guide_dog``         GUIDE_DOG    ``"1"``       ``"173"``
+    ==== ===================== ============ ============= =================
+
+    ``adult`` defaults to 1 and everything else to 0, so the default instance
+    reproduces the one-adult mix this package sent before mixes existed.
+
+    ``infant`` is 동반유아, the lap infant. It **is** counted in
+    :attr:`total` and therefore in ``txtTotPsgCnt``: the app's own total is
+    ``m5/c.java:330``/``:335``, a plain sum of all eight counters including
+    ``CHILD_ACCOMPANY_COUNT``, and ``w4/a.java:49`` sends exactly that bundle
+    value as ``txtTotPsgCnt``. The same is true of ``guide_dog``.
+
+    No discount-card field accompanies a discounted row. ``OPsg`` declares one
+    card field, ``txtCardNo_`` (``OPsg.java:7``), and the only writer of it is
+    the separate N-card reservation request (``w4/a.java:101``, discount kind
+    ``"153"``). The 경로/장애 rows here send a count and a discount code and
+    nothing else, and neither ``txtCardCode_`` nor ``txtCardPw_`` -- which
+    korail2 (``korail2.py:363-370``) and srtgo (``ktx.py:286-295``) send --
+    exists anywhere in the decompiled app.
+
+    Validation mirrors the app's picker: every count is a non-negative integer
+    (each picker's range starts at 0, ``m5/c.java:111-118``), the total is at
+    least one (the booking screen enables its search button only on
+    ``TOTAL_PERSON_COUNT > 0``, e.g. ``OldMainBookingActivity.java:1023``), and
+    the total is at most :data:`KORAIL_MAX_PASSENGERS_PER_RESERVATION`.
+
+    Two further app-side rules are **not** enforced here, because they are
+    warning dialogs on the picker rather than anything visible on the wire, and
+    guessing at the server's version of them would reject mixes it may accept:
+    a 동반유아 needs at least one 어른/청소년/경로/장애 to sit with
+    (``m5/c.java:452-455``), and a 안내견 needs more 장애 passengers than dogs
+    (``m5/c.java:458-465``). A mix breaking either is likely to be refused by
+    the server.
+    """
+
+    adult: int = 1
+    teenager: int = 0
+    child: int = 0
+    infant: int = 0
+    senior: int = 0
+    severe_disability: int = 0
+    mild_disability: int = 0
+    guide_dog: int = 0
+
+    def __post_init__(self) -> None:
+        for name in (
+            "adult",
+            "teenager",
+            "child",
+            "infant",
+            "senior",
+            "severe_disability",
+            "mild_disability",
+            "guide_dog",
+        ):
+            value = getattr(self, name)
+            # type(...) is int, not isinstance: bool is an int subclass and
+            # True is not a passenger count.
+            if type(value) is not int or value < 0:
+                raise ValueError(
+                    f"{name} must be a non-negative integer"
+                )
+        total = self.total
+        if total < 1:
+            raise ValueError(
+                "a reservation must carry at least one passenger"
+            )
+        if total > KORAIL_MAX_PASSENGERS_PER_RESERVATION:
+            raise ValueError(
+                "a reservation carries at most "
+                f"{KORAIL_MAX_PASSENGERS_PER_RESERVATION} passengers, "
+                f"got {total}"
+            )
+
+    @property
+    def total(self) -> int:
+        """``txtTotPsgCnt``: every row summed, infants and guide dogs included.
+
+        This is the app's ``TOTAL_PERSON_COUNT`` exactly (``m5/c.java:330``,
+        and the identical ``getTotalCount()`` at ``:335``).
+        """
+        return (
+            self.adult
+            + self.teenager
+            + self.child
+            + self.infant
+            + self.senior
+            + self.severe_disability
+            + self.mild_disability
+            + self.guide_dog
+        )
 
 
 @dataclass(frozen=True)
