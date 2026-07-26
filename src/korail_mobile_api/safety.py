@@ -247,6 +247,20 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # being mis-registered.
         ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
         ("GET", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
+        # price_recalculation -- 보류된 PNR의 할인 재적용 후 운임 재계산
+        # (CertificationService.java:35-37 getDiscountPrice). Its own category:
+        # it creates and destroys nothing, but it rewrites what the passenger
+        # is about to be charged, which is exactly why it must not borrow the
+        # "payment" consent that authorises settling the quoted amount.
+        #
+        # The one route in this set whose form carries REPEATED keys. Its last
+        # six @Fields are List<String> and Retrofit emits one key per element
+        # with the name unchanged -- RequestBuilder.smali:1537-1601 takes the
+        # Iterable branch and calls addField(v3, element) in a loop where v3,
+        # the field name, is loop-invariant. There is no index suffix and no
+        # bracket. The builder therefore returns list values, which httpx
+        # encodes identically.
+        ("POST", "/classes/com.korail.mobile.certification.PriceReCalculation"),
         # DELIBERATELY ABSENT: the whole PassService purchase family --
         # pass.passReserve / passPayIssue and their passOtr* siblings
         # (PassService.java:19-44). 정기권 구매 was implemented against these
@@ -273,6 +287,9 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
     "/classes/com.korail.mobile.refunds.RefundsRequest": "refund",
     "/classes/com.korail.mobile.research.dcntCrdInfo.do": "discount_card",
     "/classes/com.korail.mobile.reservation.dcntCrdExtn.do": "discount_card",
+    "/classes/com.korail.mobile.certification.PriceReCalculation": (
+        "price_recalculation"
+    ),
 }
 
 # The consent categories whose forms carry a card number in the clear.

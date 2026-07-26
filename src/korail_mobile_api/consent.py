@@ -36,6 +36,7 @@ MUTATION_CATEGORIES = (
     "cancel",
     "refund",
     "discount_card",
+    "price_recalculation",
 )
 
 _CONSENT_FLAG_BY_CATEGORY = {
@@ -44,6 +45,7 @@ _CONSENT_FLAG_BY_CATEGORY = {
     "cancel": "allow_cancel",
     "refund": "allow_refund",
     "discount_card": "allow_discount_card",
+    "price_recalculation": "allow_price_recalculation",
 }
 
 
@@ -83,6 +85,24 @@ class MutationConsent:
     #: also opted into buying a discount card, and no live-test path in this
     #: repository exercises this category.
     allow_discount_card: bool = False
+    #: 보류된 PNR의 운임 재계산 (``certification.PriceReCalculation``). A
+    #: category of its own, and deliberately NOT a reuse of any existing one.
+    #:
+    #: It is not ``allow_reserve``: the hold already exists and this creates
+    #: nothing. It is not ``allow_cancel``/``allow_refund``: it destroys
+    #: nothing. It is emphatically not ``allow_payment`` — that is the reuse
+    #: that would actually be dangerous. A payment consent authorises settling
+    #: a specific, already-quoted amount; this route REWRITES that amount
+    #: server-side before it is settled, so folding it into ``allow_payment``
+    #: would let a consent granted to pay ₩X silently authorise changing what
+    #: ₩X is. And it is not ``allow_discount_card``: that category buys and
+    #: extends a 할인카드 product, whereas this one applies discounts to a
+    #: train reservation and never touches a card.
+    #:
+    #: Nobody who granted any of the five existing categories was asked about
+    #: re-pricing a held booking, so it is asked for separately. No live-test
+    #: path in this repository exercises it.
+    allow_price_recalculation: bool = False
     dry_run: bool = True
     fake_card_only: bool = True
     #: The caller acknowledges that a real, chargeable PAN will be transmitted
@@ -118,7 +138,7 @@ def require_mutation_consent(
     """Deny a mutation unless ``consent`` explicitly opts into ``category``.
 
     ``category`` must be one of ``"reserve"``, ``"payment"``, ``"cancel"``,
-    ``"refund"``, ``"discount_card"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
+    ``"refund"``, ``"discount_card"``, ``"price_recalculation"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
     when ``consent`` is ``None``, is not a :class:`MutationConsent`, names an
     unknown category, or when the matching ``allow_<category>`` flag is False.
     Returns ``None`` when the mutation is permitted. Performs no I/O.
