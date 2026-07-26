@@ -4,16 +4,70 @@
 
 - Added: a NetFunnel virtual-waiting-room client, `KorailNetFunnelClient`, so a
   gated operation can wait its turn instead of failing.
-  **Off by default, and partly live-confirmed on 2026-07-26.** A probe on that
-  date ran the protocol against `nf.letskorail.com` and settled the two
-  standing inferences: the wire format is the native SDK's `<code>:<params>`,
-  and the entry sequence is `5101` → `5002` → gated call → `5004`. The
-  slot-release path was exercised end to end.
+  **Off by default, and partly live-confirmed on 2026-07-26.** Probing on that
+  date ran the protocol against `nf.letskorail.com` and settled the standing
+  inferences: the wire format is the native SDK's `<code>:<params>`, the entry
+  sequence is `5101` → `5002` → gated call → `5004`, and the queue is a pool of
+  hosts rather than one. The slot-release path was exercised end to end.
   **The 201 queued path is still NOT live-exercised**: the server was not
   queueing (`5101` answered `nwait=0`), so the polling loop, the ttl sleep and
   the two bounds remain covered by offline fixtures only, exactly as the
   sibling SRT client's polling path is.
-  - **The `5101` key is a ticket, not a session — the defect the probe
+  - **The queue is a POOL, and the session lives on one node of it — the second
+    defect the probing exposed, and the one worth an explicit warning.**
+    `nf.letskorail.com` is a *front door* that load-balances the entry call; the
+    node it lands on is the only one that can complete the session, and every
+    reply names that node in its `ip`/`port`. This client sent every opcode to
+    the front door, so slot release failed **about half the time,
+    non-deterministically** — five acquire-then-release cycles:
+
+    ```
+    acquire said ip=rnf12.letskorail.com  -> release 503
+    acquire said ip=rnf12.letskorail.com  -> release 503
+    acquire said ip=rnf13.letskorail.com  -> release 503
+    acquire said ip=rnf14.letskorail.com  -> release 200
+    acquire said ip=rnf13.letskorail.com  -> release 200
+    ```
+
+    and the controlled pair that settles it:
+
+    ```
+    acquire on nf.letskorail.com (reply said ip=rnf13.letskorail.com)
+      release via nf.letskorail.com    -> 503:msg="Wrong Server ID"
+      release via rnf13.letskorail.com -> 200:key=&nwait=0&…
+    ```
+
+    **`Wrong Server ID` is literal**, and it will cost the next reader an hour
+    if this is not written down: it reads like a credential or parameter
+    complaint and is neither — the front door does not own a session a queue
+    node issued. The releases that appeared to work were the balancer happening
+    to land back on the owning node, which is also why the same key sometimes
+    released fine. The app has always followed the naming: `T6/d.makeURL`
+    (`T6/d.java:17-19`) rebuilds the URL from the previous reply's
+    `getHost()`/`getPort()` unless `host_notmodify` is set, and that flag is
+    `false` by default (`T6/h.java:43`, `isHostNotmodify()` at `:134-135`) and
+    never set by `KTApplication`; `T6/i.java:50-53` is where `ip`/`port` are
+    read. Declining it leaked roughly half of every slot taken, which is exactly
+    the behaviour NetFunnel exists to prevent.
+    So `5101` now goes to the front door while `5002` and `5004` go to the node
+    that issued the session, the node rides on `KorailNetFunnelToken.node`, and
+    it supersedes as the key does — a reply naming no node leaves the last one
+    in force, and a bypass has neither a session nor a node.
+  - **The redirect is constrained, not trusted.** A response choosing where the
+    next request goes is what an origin guard exists to stop, so the naming is
+    admitted only into the queue's own pool: `rnf<1-99>.letskorail.com`,
+    lowercase, no leading zero, matched as whole labels, or the front door
+    itself; `https` on port `443` and no other port, because the port is not
+    followed on the server's say-so either. Anything outside the rule is a
+    **hard error**, never a quiet fall-back to the front door — falling back
+    silently is what produced the flaky release, since it turns "this reply is
+    lying to us" into "this slot leaked", and a leaked slot makes no noise. The
+    rule lives in `safety.py` beside the origin assertions rather than in the
+    client, `assert_korail_netfunnel_origin` still refuses a node (it guards the
+    configured origin and the entry call, so widening one guard cannot widen the
+    other), `follow_redirects` stays `False`, and the canonical-origin guarantee
+    for `smart.letskorail.com` is untouched.
+  - **The `5101` key is a ticket, not a session — the first defect the probing
     exposed.** `acquire` originally returned the 5101 reply and `release` sent
     that key to `setComplete`, which the server refuses with
     `503:msg="Wrong Server ID"` every time, with or without `sid`/`aid`. Only a
@@ -26,18 +80,18 @@
     rather than as a truncated body. `503` is refused rather than accepted
     beside the `502` we do accept, and the keyless short-circuit in `release`
     is narrowed to a bypass (`300`), so no other token can skip the request
-    silently.
+    silently. Note that `503` has **two** causes and the wire cannot tell them
+    apart — an unexchanged ticket, or the wrong node — so the exception message
+    names both.
   - **Read literally, the APK disagrees, and the live server wins.**
     `T6/g.java`'s poll loop leaves the moment the status is not Continue —
     `T6/g$a.smali:243-247` → `:282` → `:892` shows the fall-through is a
     `return` — so after a 200 from 5101 the app sends no 5002 and completes
-    with the ticket. The likely reconciliation is the redirection this client
-    declines: `T6/d.makeURL` (`T6/d.java:17-19`) sends follow-ups to the
-    `ip`/`port` a reply named, and the 5101 reply names one, so "Wrong Server
-    ID" is literally true for the app. Staying pinned to the front door is
-    exactly why we need a key the front door owns. The APK does corroborate the
-    supersession: one response object, overwritten at `:61` and `:107`, with
-    `Complete()` sending whatever key arrived last (`:79`).
+    with the ticket. The `5002` stays unconditional anyway: `5101` → `5002` →
+    `5004` is the only sequence ever seen to release cleanly, and whether the
+    ticket would complete at its own node has never been probed. The APK does
+    corroborate the supersession: one response object, overwritten at `:61` and
+    `:107`, with `Complete()` sending whatever key arrived last (`:79`).
   - **KORAIL does not speak the JavaScript dialect, and this is the whole
     substance of the change.** `nf.letskorail.com` serves both apps, so the
     live-verified `srt-mobile-api` implementation was expected to be a template.
@@ -84,12 +138,11 @@
     stays at 512 characters and is deliberately not tightened to any single
     observed length.
   - **Three exact query contracts are registered, not an allowlist loosened**,
-    and the queue host has its own origin assertion.
-    `KORAIL_READ_ONLY_ROUTES` is untouched at 54, so `post_form`/`get_json` can
-    never reach `/ts.wseq`. `5003`, `5105` and `5106` are declared as constants
-    and rejected by the guard. We also decline the redirection the app itself
-    accepts (`T6/d.java:17-19` follows the `ip`/`port` a reply names): a
-    response must not choose where the next request goes.
+    and the queue hosts have their own origin assertions — one for the front
+    door and the entry call, a wider one for the pool, and a third that decides
+    which of the two a given opcode gets. `KORAIL_READ_ONLY_ROUTES` is untouched
+    at 54, so `post_form`/`get_json` can never reach `/ts.wseq`. `5003`, `5105`
+    and `5106` are declared as constants and rejected by the guard.
 - Corrected: `docs/RELEASE_GAP_PLAN.md` still carried, in its srtgo-corrections
   appendix, the withdrawn claim that "Korail uses **no** NetFunnel at all — only
   SRT does". The body of that document has said otherwise since 2026-07-26; the

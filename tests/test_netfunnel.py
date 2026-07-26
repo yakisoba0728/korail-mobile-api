@@ -1544,6 +1544,73 @@ def test_docs_record_the_entry_sequence_and_the_ticket_trap():
         assert "ticket" in document
 
 
+def test_docs_say_the_queue_spans_nodes_and_which_host_each_opcode_uses():
+    # The correction after the ticket one, and the more expensive of the two to
+    # rediscover: a document that still says every opcode goes to
+    # nf.letskorail.com is describing a client that leaks about half its slots.
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
+        encoding="utf-8"
+    )
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    for document in (readme, progress, changelog):
+        # The queue legitimately spans hosts, and the front door is named as a
+        # balancer rather than as the whole queue.
+        assert "front door" in document
+        # Every node the probe saw is quoted, so the admissibility rule can be
+        # checked against its evidence without leaving the document.
+        for host in OBSERVED_NODE_HOSTS:
+            assert host in document
+        # Which host each opcode goes to.
+        assert "5101" in document and "5002" in document and "5004" in document
+        # The redirect is constrained rather than trusted, and a host outside
+        # the rule is refused rather than quietly sent to the front door.
+        assert "rnf<1-99>.letskorail.com" in document
+        assert "hard error" in document
+        # ...and the reason a silent fall-back is not acceptable.
+        assert "leaked" in document or "leaks" in document
+
+
+def test_docs_record_the_live_diagnosis_and_the_misleading_symptom():
+    # "Wrong Server ID" reads like a credential or parameter complaint and is
+    # neither. Every document has to say so, and has to say when it was found,
+    # because the next person to meet that message will otherwise spend an hour
+    # on it — which is exactly what happened here.
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
+        encoding="utf-8"
+    )
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    for document in (readme, progress, changelog):
+        assert "2026-07-26" in document
+        assert "Wrong Server ID" in document
+        # The symptom, in the words that make it recognisable: it was neither
+        # a clean failure nor a clean success.
+        assert "half the time" in document
+        assert "non-deterministic" in document
+        # And the message is literal, not a misnomer to be worked around.
+        assert "literal" in document
+        # The transcript that proves it is quoted rather than summarised.
+        assert "release via rnf13.letskorail.com" in document
+
+
+def test_docs_no_longer_claim_the_redirection_is_declined():
+    # The withdrawn claim. It was correct as an instinct and wrong as an
+    # outcome, and it appeared in all three documents plus the divergence list.
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    progress = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(
+        encoding="utf-8"
+    )
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    for document in (readme, progress, changelog):
+        assert "we do not follow" not in document.casefold()
+        assert "the redirection this client\ndeclines" not in document
+        assert "decline the redirection" not in document
+        assert "We pin the origin instead;" not in document
+
+
 def test_release_gap_plan_no_longer_claims_korail_has_no_netfunnel():
     plan = (ROOT / "docs/RELEASE_GAP_PLAN.md").read_text(encoding="utf-8")
     # The withdrawn claim, which survived in the srtgo-corrections appendix long
