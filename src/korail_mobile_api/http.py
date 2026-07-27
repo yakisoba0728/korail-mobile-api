@@ -15,7 +15,7 @@ from .errors import (
     KorailProtocolError,
     KorailSessionExpiredError,
     KorailTransportError,
-    MutationNotAllowedError,
+    KorailMutationNotAllowedError,
     classify_app_error,
 )
 from .consent import MutationConsent, require_mutation_consent
@@ -250,7 +250,7 @@ class KorailHttpClient:
         """
         require_mutation_consent(consent, category)
         if consent.dry_run:
-            raise MutationNotAllowedError(
+            raise KorailMutationNotAllowedError(
                 "post_mutation_form requires consent.dry_run=False; a dry-run "
                 "preview must never be transmitted"
             )
@@ -276,14 +276,14 @@ class KorailHttpClient:
         # name.
         if category in KORAIL_CARD_BEARING_MUTATION_CATEGORIES:
             if consent.fake_card_only and consent.real_card_acknowledged:
-                raise MutationNotAllowedError(
+                raise KorailMutationNotAllowedError(
                     "payment mutations refuse a contradictory consent: "
                     "fake_card_only=True claims a non-chargeable test card "
                     "while real_card_acknowledged=True acknowledges a real "
                     "charge; set exactly one"
                 )
             if not consent.fake_card_only and not consent.real_card_acknowledged:
-                raise MutationNotAllowedError(
+                raise KorailMutationNotAllowedError(
                     "payment mutations require consent.fake_card_only=True (a "
                     "non-chargeable test card) or "
                     "consent.real_card_acknowledged=True (an acknowledged real "
@@ -363,7 +363,7 @@ class KorailHttpClient:
         """
         require_mutation_consent(consent, category)
         if consent.dry_run:
-            raise MutationNotAllowedError(
+            raise KorailMutationNotAllowedError(
                 "get_mutation_query requires consent.dry_run=False; a dry-run "
                 "preview must never be transmitted"
             )

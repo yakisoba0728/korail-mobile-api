@@ -45,11 +45,8 @@ import pytest
 
 from korail_mobile_api import (
     KORAIL_MAX_JOURNEY_LEGS,
-    KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE,
     KORAIL_MERGE_SEAT_FLAGS_BY_CABIN,
-    KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE,
     KORAIL_TRANSFER_ITINERARY_CODE,
-    KORAIL_TRANSFER_JOURNEY_TYPE_CODE,
     KorailClient,
     KorailConfig,
     KorailPassengerCounts,
@@ -61,6 +58,11 @@ from korail_mobile_api import (
     MutationPreview,
     TrainScheduleItem,
     TrainSummary,
+)
+from korail_mobile_api.constants import (
+    KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE,
+    KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE,
+    KORAIL_TRANSFER_JOURNEY_TYPE_CODE,
 )
 from korail_mobile_api.mutation_payloads import (
     build_merge_reservation_form,
@@ -493,17 +495,17 @@ def _client() -> KorailClient:
 
 
 def test_reserve_merge_is_denied_without_consent() -> None:
-    from korail_mobile_api import MutationNotAllowedError
+    from korail_mobile_api import KorailMutationNotAllowedError
 
     client = _client()
     try:
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             client.reserve_merge(
                 _standing_hold_train(),
                 (_leading_leg(), _trailing_leg()),
                 consent=MutationConsent(),
             )
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             client.reserve_merge(
                 _standing_hold_train(),
                 (_leading_leg(), _trailing_leg()),

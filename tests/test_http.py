@@ -4,10 +4,10 @@ import httpx
 import korail_mobile_api as api
 import pytest
 
-from korail_mobile_api import (
+from korail_mobile_api import KorailConfig
+from korail_mobile_api.constants import (
     DYNAPATH_ALLOWLIST_PATHS,
     DYNAPATH_HEADER_NAME,
-    DynapathTokenGenerator,
     KORAIL_API_VERSION,
     KORAIL_APP_KEY,
     KORAIL_COMMON_CODE_BOOTSTRAP_CODES,
@@ -15,11 +15,14 @@ from korail_mobile_api import (
     KORAIL_DEFAULT_ANDROID_SDK_INT,
     KORAIL_DEFAULT_DEVICE_NAME,
     KORAIL_DEVICE_ANDROID,
+)
+from korail_mobile_api.dynapath import (
+    DynapathConfig,
+    DynapathTokenGenerator,
+    DynapathTokenSettings,
     KORAIL_DYNAPATH_AS_VALUE,
     KORAIL_DYNAPATH_SDK_VERSION,
-    KorailConfig,
 )
-from korail_mobile_api.dynapath import DynapathConfig, DynapathTokenSettings
 from korail_mobile_api.errors import (
     KorailAppError,
     KorailDynaPathError,

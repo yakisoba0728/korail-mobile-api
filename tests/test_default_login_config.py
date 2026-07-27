@@ -26,12 +26,12 @@ import httpx
 import korail_mobile_api
 import pytest
 
-from korail_mobile_api import (
+from korail_mobile_api import KorailConfig
+from korail_mobile_api.constants import (
     DYNAPATH_ALLOWLIST_PATHS,
     DYNAPATH_HEADER_NAME,
     KORAIL_DEFAULT_ANDROID_OS_RELEASE,
     KORAIL_DEFAULT_DEVICE_NAME,
-    KorailConfig,
 )
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.http import KorailHttpClient

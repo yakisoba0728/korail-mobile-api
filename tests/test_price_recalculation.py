@@ -18,7 +18,7 @@ from korail_mobile_api.constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from korail_mobile_api.errors import (
     KorailAuthError,
     KorailProtocolError,
-    MutationNotAllowedError,
+    KorailMutationNotAllowedError,
 )
 from korail_mobile_api.models import KorailSession
 from korail_mobile_api.mutation_models import (
@@ -116,13 +116,13 @@ def test_price_recalculation_is_its_own_consent_category():
     assert len(MUTATION_CATEGORIES) == 7
     # A default consent grants it no more than it grants anything else.
     assert MutationConsent().allow_price_recalculation is False
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(MutationConsent(), "price_recalculation")
     # ...and no other category's opt-in unlocks it. allow_payment is the one
     # that matters most: a consent to settle a quoted amount must not also
     # authorise rewriting what that amount is.
     for other in OTHER_FLAGS:
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             require_mutation_consent(
                 MutationConsent(**{other: True}),
                 "price_recalculation",
@@ -133,7 +133,7 @@ def test_price_recalculation_is_its_own_consent_category():
     )
     # ...and it unlocks nothing else.
     for category in OTHER_CATEGORIES:
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             require_mutation_consent(
                 MutationConsent(allow_price_recalculation=True),
                 category,
@@ -484,7 +484,7 @@ def test_method_refuses_without_the_matching_consent():
             MutationConsent(allow_payment=True, dry_run=False),
             MutationConsent(allow_discount_card=True, dry_run=False),
         ):
-            with pytest.raises(MutationNotAllowedError):
+            with pytest.raises(KorailMutationNotAllowedError):
                 client.recalculate_price(_request(), consent=consent)
     finally:
         client.close()
@@ -570,7 +570,7 @@ def test_transport_gate_refuses_this_route_under_any_other_category():
                 )
         # ...and a dry-run consent never reaches the wire even with the right
         # category.
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             client.http.post_mutation_form(
                 ROUTE,
                 {},

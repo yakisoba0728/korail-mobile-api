@@ -17,7 +17,7 @@ The safety posture is:
   real_card_acknowledged=True``); setting neither, or setting both, is refused
   at the transmit gate.
 * :func:`require_mutation_consent` denies by default, raising
-  :class:`~korail_mobile_api.errors.MutationNotAllowedError` before any request
+  :class:`~korail_mobile_api.errors.KorailMutationNotAllowedError` before any request
   is built unless the caller has explicitly opted into the exact category.
 """
 
@@ -26,7 +26,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from .errors import MutationNotAllowedError
+from .errors import KorailMutationNotAllowedError
 from .redaction import redact_payload
 
 
@@ -168,23 +168,31 @@ def require_mutation_consent(
 
     ``category`` must be one of ``"reserve"``, ``"payment"``, ``"cancel"``,
     ``"refund"``, ``"discount_card"``, ``"price_recalculation"``,
-    ``"cart"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
+    ``"cart"`` — the machine-readable form of that same list is
+    :data:`~korail_mobile_api.consent.MUTATION_CATEGORIES`, importable as
+    ``from korail_mobile_api.consent import MUTATION_CATEGORIES``. It is
+    deliberately not on the top level: this function is public because a
+    caller wrapping a mutation has to be able to state the same gate, not
+    because anyone should be dispatching over the category set, and a tuple
+    exported at the top level is a promise about its order and membership
+    that adding an eighth category would break.
+    Raises :class:`~korail_mobile_api.errors.KorailMutationNotAllowedError`
     when ``consent`` is ``None``, is not a :class:`MutationConsent`, names an
     unknown category, or when the matching ``allow_<category>`` flag is False.
     Returns ``None`` when the mutation is permitted. Performs no I/O.
     """
     flag = _CONSENT_FLAG_BY_CATEGORY.get(category)
     if flag is None:
-        raise MutationNotAllowedError(
+        raise KorailMutationNotAllowedError(
             f"unknown mutation category: {category!r}"
         )
     if not isinstance(consent, MutationConsent):
-        raise MutationNotAllowedError(
+        raise KorailMutationNotAllowedError(
             f"mutation category {category!r} requires an explicit "
             "MutationConsent"
         )
     if not getattr(consent, flag):
-        raise MutationNotAllowedError(
+        raise KorailMutationNotAllowedError(
             f"mutation category {category!r} is not permitted by the "
             "provided consent"
         )

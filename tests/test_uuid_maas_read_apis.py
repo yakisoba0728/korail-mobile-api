@@ -3,7 +3,8 @@ import pytest
 
 import korail_mobile_api.parsers as parsers
 import korail_mobile_api.payloads as payloads
-from korail_mobile_api import DYNAPATH_HEADER_NAME, KorailClient, KorailConfig
+from korail_mobile_api import KorailClient, KorailConfig
+from korail_mobile_api.constants import DYNAPATH_HEADER_NAME
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
     KorailAppError,

@@ -29,7 +29,7 @@ from korail_mobile_api import (
     KorailConfig,
     KorailSession,
     MutationConsent,
-    MutationNotAllowedError,
+    KorailMutationNotAllowedError,
     MutationPreview,
     ReservationHoldResponse,
     ReservationPaymentResponse,
@@ -156,7 +156,7 @@ def test_transport_gate_refuses_a_payment_with_neither_card_claim():
         fake_card_only=False,
         real_card_acknowledged=False,
     )
-    with pytest.raises(MutationNotAllowedError) as excinfo:
+    with pytest.raises(KorailMutationNotAllowedError) as excinfo:
         _post_payment(client, consent)
     assert "real_card_acknowledged" in str(excinfo.value)
     assert recorder.requests == []
@@ -173,7 +173,7 @@ def test_transport_gate_refuses_a_payment_claiming_both_card_kinds():
         fake_card_only=True,
         real_card_acknowledged=True,
     )
-    with pytest.raises(MutationNotAllowedError) as excinfo:
+    with pytest.raises(KorailMutationNotAllowedError) as excinfo:
         _post_payment(client, consent)
     assert "contradictory" in str(excinfo.value)
     assert recorder.requests == []
@@ -200,9 +200,9 @@ def test_the_card_gate_is_keyed_on_the_card_bearing_category_set():
     # category literally called payment". Both questions have the same answer
     # today; only one of them keeps having the right answer when a second
     # card-bearing product is added.
-    from korail_mobile_api import KORAIL_CARD_BEARING_MUTATION_CATEGORIES
     from korail_mobile_api.consent import MUTATION_CATEGORIES
     from korail_mobile_api.safety import (
+        KORAIL_CARD_BEARING_MUTATION_CATEGORIES,
         KORAIL_MUTATION_ROUTES,
         KORAIL_MUTATION_ROUTE_CATEGORIES,
     )
@@ -274,7 +274,7 @@ def test_the_card_gate_applies_only_to_the_payment_category():
 def test_the_dry_run_gate_still_precedes_the_card_gate():
     # An acknowledged real charge does not make a preview sendable.
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_SUCCESS})
-    with pytest.raises(MutationNotAllowedError) as excinfo:
+    with pytest.raises(KorailMutationNotAllowedError) as excinfo:
         _post_payment(client, _real_card_consent(dry_run=True))
     assert "dry_run" in str(excinfo.value)
     assert recorder.requests == []
@@ -282,7 +282,7 @@ def test_the_dry_run_gate_still_precedes_the_card_gate():
 
 def test_the_category_gate_still_precedes_the_card_gate():
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_SUCCESS})
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         _post_payment(client, _real_card_consent(allow_payment=False))
     assert recorder.requests == []
 
@@ -294,7 +294,7 @@ def test_pay_with_fake_card_still_refuses_an_acknowledged_real_card():
     # Its name must keep meaning what it says: it is not a real-card path, no
     # matter what the consent acknowledges.
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_SUCCESS})
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.pay_with_fake_card(
             _hold(), _placeholder_card(), consent=_real_card_consent()
         )
@@ -306,13 +306,13 @@ def test_pay_with_fake_card_still_refuses_an_acknowledged_real_card():
 
 def test_pay_with_card_requires_payment_consent():
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_SUCCESS})
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.pay_with_card(
             _hold(),
             _placeholder_card(),
             consent=_real_card_consent(allow_payment=False),
         )
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.pay_with_card(
             _hold(), _placeholder_card(), consent=None  # type: ignore[arg-type]
         )
@@ -321,7 +321,7 @@ def test_pay_with_card_requires_payment_consent():
 
 def test_pay_with_card_refuses_a_default_fake_card_consent():
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_SUCCESS})
-    with pytest.raises(MutationNotAllowedError) as excinfo:
+    with pytest.raises(KorailMutationNotAllowedError) as excinfo:
         client.pay_with_card(
             _hold(),
             _placeholder_card(),
@@ -333,7 +333,7 @@ def test_pay_with_card_refuses_a_default_fake_card_consent():
 
 def test_pay_with_card_refuses_a_contradictory_consent():
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_SUCCESS})
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.pay_with_card(
             _hold(),
             _placeholder_card(),

@@ -259,7 +259,7 @@ convention, and the offline suite pins it.
 **1. Nothing that changes state moves without an explicit consent object.**
 Every one of the fifteen mutation methods starts with
 `require_mutation_consent(consent, category)` and raises
-`MutationNotAllowedError` before it builds anything. There is no global switch
+`KorailMutationNotAllowedError` before it builds anything. There is no global switch
 and no environment variable that turns this off.
 
 **2. Each category is opted into separately.** `MutationConsent` has one flag
@@ -273,6 +273,10 @@ default consent, a mutation method validates its inputs and returns a
 `MutationPreview` describing the exact form that *would* be posted. The preview's
 payload is forced through `redact_payload` on construction, so it can never hold
 a raw card number, PNR or other identity even if you built it from real values.
+That happens for you; the redaction helpers are not top-level names. If you want
+them for your own logging, they are
+`from korail_mobile_api.redaction import redact_payload, redact_mapping,
+redact_value, redact_text, redact_url, is_sensitive_key`.
 
 ```python
 from korail_mobile_api import MutationConsent

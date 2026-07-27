@@ -168,6 +168,14 @@ def test_no_module_level_definition_is_unreachable():
         # inspectable value behind build_dynapath_prefix's default rather than
         # recomputed at each call site.
         "DYNAPATH_ENCODING_TABLE",
+        # The signing certificate's SHA-256, recorded beside the app-signature
+        # hash the token actually carries. Nothing reads it: the token is built
+        # from the hash, and this is the artefact the hash was derived FROM,
+        # kept so a reader can re-derive it instead of trusting the hash. It
+        # became visible to this scan only when the public surface narrowed --
+        # `__all__` had been standing in as its reason for existing, which was
+        # never the real one.
+        "KORAIL_DYNAPATH_SIGNING_CERT_SHA256",
     }
     package = Path(__file__).parents[1] / "src" / "korail_mobile_api"
     sources = {path: path.read_text(encoding="utf-8") for path in package.glob("*.py")}

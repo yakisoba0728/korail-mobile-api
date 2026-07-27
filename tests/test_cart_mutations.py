@@ -33,7 +33,7 @@ from korail_mobile_api.consent import (
 from korail_mobile_api.errors import (
     KorailAuthError,
     KorailProtocolError,
-    MutationNotAllowedError,
+    KorailMutationNotAllowedError,
 )
 from korail_mobile_api.models import BaseKorailResponse, KorailSession
 from korail_mobile_api.mutation_models import CartAddRequest
@@ -90,7 +90,7 @@ def test_cart_is_its_own_consent_category():
     assert len(MUTATION_CATEGORIES) == 7
     # A default consent grants it no more than it grants anything else.
     assert MutationConsent().allow_cart is False
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(MutationConsent(), "cart")
     # ...and no other category's opt-in unlocks it.
     for other in (
@@ -101,7 +101,7 @@ def test_cart_is_its_own_consent_category():
         "allow_discount_card",
         "allow_price_recalculation",
     ):
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             require_mutation_consent(
                 MutationConsent(**{other: True}),
                 "cart",
@@ -116,14 +116,14 @@ def test_cart_is_its_own_consent_category():
         "discount_card",
         "price_recalculation",
     ):
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             require_mutation_consent(MutationConsent(allow_cart=True), category)
 
 
 def test_require_mutation_consent_rejects_none_and_non_consent_for_cart():
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(None, "cart")
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(object(), "cart")  # type: ignore[arg-type]
 
 
@@ -229,7 +229,7 @@ def test_add_to_cart_refuses_without_the_matching_consent():
             MutationConsent(allow_reserve=True, dry_run=False),
             MutationConsent(allow_discount_card=True, dry_run=False),
         ):
-            with pytest.raises(MutationNotAllowedError):
+            with pytest.raises(KorailMutationNotAllowedError):
                 client.add_to_cart(_request(), consent=consent)
     finally:
         client.close()

@@ -1098,6 +1098,61 @@
   It is deliberately absent from `__all__`.
 - Changed: `Development Status :: 3 - Alpha` → `5 - Production/Stable`.
 
+- **Removed (breaking, and the last chance to do it): 47 names left the
+  top-level `__all__`, which went 263 → 216.** Every one of them is still
+  importable from the module that defines it — this is a move, not a deletion,
+  and `from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS` works
+  exactly as it did. What changed is what the package *promises*: after 1.0.0
+  an exported name cannot be withdrawn without breaking somebody, so the
+  surface now holds only what a caller genuinely has to be able to name — the
+  client, config and session; every type reachable from a public method's
+  annotations; the errors; the consent types; and the domain values a caller
+  passes in or compares a response against. What left, by category:
+  - Transport-layer constants: the base URL, app key, API version, device
+    geometry and SDK int, the NetFunnel URL/path/service-id/timeout, the
+    DynaPath header name and allowlist, the bootstrap code list. Every one of
+    these is already reachable as the default of a `KorailConfig` field, which
+    is where a caller who wants to change one has to go anyway.
+  - The DynaPath token machinery: `generate_dynapath_token`,
+    `generate_dynapath_encoding_table`, `build_dynapath_prefix`,
+    `DynapathTokenGenerator`, `DynapathRequestContext` and the five
+    `KORAIL_DYNAPATH_*` identity constants. `DynapathConfig` and
+    `DynapathTokenSettings` stay: they are `KorailConfig` field types.
+  - The internal route and policy tables: `KORAIL_MUTATION_ROUTES`,
+    `KORAIL_NETFUNNEL_ROUTES`, `KORAIL_CARD_BEARING_MUTATION_CATEGORIES`,
+    `EXCLUDED_API_DOMAINS`, `KORAIL_NETFUNNEL_GATED_OPERATIONS`. The mutation
+    route table is the contentious one — it reads as safety disclosure — but
+    its counterpart `KORAIL_READ_ONLY_ROUTES` was never exported, and half a
+    classification published is worse than a whole one in `safety.py`, where
+    both now sit together.
+  - The parsers the client already calls for you: `parse_base_response`,
+    `parse_reservation_hold_response`, `parse_reservation_payment_response`,
+    `parse_discount_card_purchase_response`, and `pair_transfer_itineraries`.
+    Their *return* types are all still exported, which is the half a caller
+    annotates with.
+  - `redact_mapping` and `redact_payload`. `MutationPreview` runs the payload
+    through redaction on construction, so nothing is lost by default; a caller
+    who wants them for their own logging imports them, and the four other
+    helpers they were separated from, from `korail_mobile_api.redaction`.
+- **Renamed (breaking): `MutationNotAllowedError` → `KorailMutationNotAllowedError`.**
+  It was the only one of the twenty exception types without the package's
+  prefix, and the sibling SRT package already spells its counterpart
+  `SrtMutationNotAllowedError`. No alias is left behind: an alias added at
+  1.0.0 is itself a permanent contract, and the whole point of doing this now
+  is that the rename is still free.
+- **Added: `tests/test_public_surface_rule.py`**, which is what stops the
+  above from being undone by the next person with a convenient name to export.
+  It holds no list of names — a hand-maintained name list is exactly what
+  rots. It derives `__all__`'s expected contents from `__init__.py`'s import
+  statements via `ast` (so dropping an `__all__` entry while leaving the
+  import behind fails), refuses any name from a module not on a short
+  module-level policy list, refuses `parse_*`/`pair_*` outright, walks the
+  transitive closure of every public client method's annotations and requires
+  each package-defined type in it to be exported, and requires every exported
+  non-type to appear in a `DOMAIN_CONSTANTS` table with a written reason. The
+  file is shared verbatim with the SRT package below a marked per-repository
+  header.
+
 ## 0.2.0 - 2026-07-14
 
 - Added the static R20 pass-schedule candidate read with a closed

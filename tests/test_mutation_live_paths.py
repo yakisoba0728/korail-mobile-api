@@ -24,7 +24,7 @@ from korail_mobile_api import (
     KorailProtocolError,
     KorailSession,
     MutationConsent,
-    MutationNotAllowedError,
+    KorailMutationNotAllowedError,
     MutationPreview,
     PaidTicket,
     ReservationHoldResponse,
@@ -142,7 +142,7 @@ def test_reserve_live_posts_to_reservation_route_and_returns_hold():
 def test_reserve_live_still_requires_matching_consent():
     client, recorder = _client_with({RESERVE_ROUTE: _HOLD_SUCCESS})
     # dry_run=False but no allow_reserve: denied before any send.
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.reserve(_eligible_train(), consent=_live(allow_cancel=True))
     assert recorder.requests == []
 
@@ -199,7 +199,7 @@ def test_cancel_live_posts_to_cancel_route():
 
 def test_cancel_requires_matching_consent_and_session():
     client, recorder = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.cancel_unpaid_hold(_hold(), consent=MutationConsent())
     assert recorder.requests == []
 
@@ -234,11 +234,11 @@ def test_post_mutation_form_refuses_a_non_mutation_route():
 def test_post_mutation_form_refuses_none_and_unknown_category():
     client, recorder = _client_with({RESERVE_ROUTE: _HOLD_SUCCESS})
     form = build_single_adult_reservation_form(KorailConfig(), _eligible_train())
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.http.post_mutation_form(
             RESERVE_ROUTE, form, consent=None, category="reserve"  # type: ignore[arg-type]
         )
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.http.post_mutation_form(
             RESERVE_ROUTE,
             form,
@@ -427,7 +427,7 @@ def test_post_mutation_form_refuses_real_card_payment_at_the_send_gate():
     # payment with fake_card_only disabled. The transport gate itself refuses.
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_DECLINE})
     form = build_card_payment_form(KorailConfig(), _paid_hold(), _fake_card())
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.http.post_mutation_form(
             PAYMENT_ROUTE,
             form,
@@ -457,14 +457,14 @@ def test_pay_live_posts_to_payment_route_and_returns_decline_without_raising():
 def test_pay_requires_payment_consent_and_refuses_real_card_mode():
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_DECLINE})
     # Wrong category consent -> denied.
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.pay_with_fake_card(
             _paid_hold(),
             _fake_card(),
             consent=MutationConsent(allow_reserve=True, dry_run=False),
         )
     # payment allowed but fake_card_only disabled -> refused (no real cards).
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.pay_with_fake_card(
             _paid_hold(),
             _fake_card(),
@@ -545,7 +545,7 @@ def test_refund_live_posts_to_refund_route():
 
 def test_refund_requires_matching_consent_and_session():
     client, recorder = _client_with({REFUND_ROUTE: _REFUND_SUCCESS})
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.refund(_paid_ticket(), consent=MutationConsent(allow_cancel=True))
     assert recorder.requests == []
 

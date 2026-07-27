@@ -33,8 +33,9 @@ import pytest
 
 from korail_mobile_api import (
     KORAIL_STANDBY_HOLD_MESSAGE_CODE,
-    KORAIL_STANDBY_WAIT_FLAG,
     KorailClient,
+    KorailConfig,
+    KorailMutationNotAllowedError,
     KorailPassengerCounts,
     KorailProtocolError,
     KorailReservationJobType,
@@ -42,14 +43,13 @@ from korail_mobile_api import (
     KorailSeatClass,
     KorailSession,
     MutationConsent,
-    MutationNotAllowedError,
     MutationPreview,
     PhysicalSeat,
     ReservationHoldResponse,
     SeatInventoryResponse,
     TrainSummary,
-    KorailConfig,
 )
+from korail_mobile_api.constants import KORAIL_STANDBY_WAIT_FLAG
 from korail_mobile_api.errors import KorailAuthError
 from korail_mobile_api.mutation_payloads import (
     build_reservation_form,
@@ -814,7 +814,7 @@ def test_reservation_wait_is_a_gated_reserve_category_mutation_route():
 def test_confirm_standby_hold_is_denied_without_a_reserve_consent():
     client = _logged_in_no_network_client()
     for consent in (MutationConsent(), None, MutationConsent(allow_cancel=True)):
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             client.confirm_standby_hold(
                 _standby_hold(),
                 consent=consent,  # type: ignore[arg-type]

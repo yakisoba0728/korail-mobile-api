@@ -17,7 +17,7 @@ from korail_mobile_api.constants import KORAIL_MAX_DISCOUNT_CARD_SECTIONS
 from korail_mobile_api.errors import (
     KorailAuthError,
     KorailProtocolError,
-    MutationNotAllowedError,
+    KorailMutationNotAllowedError,
 )
 from korail_mobile_api.http import KorailHttpClient
 from korail_mobile_api.models import KorailSession
@@ -105,7 +105,7 @@ def test_discount_card_is_its_own_consent_category():
     assert len(MUTATION_CATEGORIES) == 7
     # A default consent grants it no more than it grants anything else.
     assert MutationConsent().allow_discount_card is False
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(MutationConsent(), "discount_card")
     # ...and no other category's opt-in unlocks it.
     for other in (
@@ -114,7 +114,7 @@ def test_discount_card_is_its_own_consent_category():
         "allow_cancel",
         "allow_refund",
     ):
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             require_mutation_consent(
                 MutationConsent(**{other: True}),
                 "discount_card",
@@ -125,7 +125,7 @@ def test_discount_card_is_its_own_consent_category():
     )
     # ...and it unlocks nothing else.
     for category in ("reserve", "payment", "cancel", "refund", "cart"):
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             require_mutation_consent(
                 MutationConsent(allow_discount_card=True),
                 category,
@@ -292,9 +292,9 @@ def test_methods_refuse_without_the_matching_consent():
             MutationConsent(allow_reserve=True, dry_run=False),
             MutationConsent(allow_payment=True, dry_run=False),
         ):
-            with pytest.raises(MutationNotAllowedError):
+            with pytest.raises(KorailMutationNotAllowedError):
                 client.register_discount_card(_purchase(), consent=consent)
-            with pytest.raises(MutationNotAllowedError):
+            with pytest.raises(KorailMutationNotAllowedError):
                 client.extend_discount_card(_ticket(), consent=consent)
     finally:
         client.close()
@@ -321,14 +321,14 @@ def test_get_mutation_query_carries_every_gate_post_mutation_form_does():
     )
     try:
         # No consent, wrong category, dry-run, wrong route, wrong method.
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             http.get_mutation_query(
                 EXTENSION_ROUTE,
                 {},
                 consent=MutationConsent(),
                 category="discount_card",
             )
-        with pytest.raises(MutationNotAllowedError):
+        with pytest.raises(KorailMutationNotAllowedError):
             http.get_mutation_query(
                 EXTENSION_ROUTE,
                 {},
@@ -464,7 +464,19 @@ def test_public_surface_exports_the_mutation_names():
         "DiscountCardSectionRequest",
         "DiscountCardTicket",
         "KORAIL_MAX_DISCOUNT_CARD_SECTIONS",
-        "parse_discount_card_purchase_response",
     ):
         assert name in korail_mobile_api.__all__
         assert hasattr(korail_mobile_api, name)
+
+    # The parser is deliberately NOT on the top level: register_discount_card
+    # calls it and hands back the parsed DiscountCardPurchaseResponse, so the
+    # only thing a caller has to be able to name is the response type, which is
+    # asserted above. It stays importable from its own module -- demotion is a
+    # move, not a deletion -- and both halves are checked, because dropping the
+    # __all__ entry while leaving the attribute behind is half a demotion.
+    from korail_mobile_api.mutation_parsers import (  # noqa: F401
+        parse_discount_card_purchase_response,
+    )
+
+    assert "parse_discount_card_purchase_response" not in korail_mobile_api.__all__
+    assert not hasattr(korail_mobile_api, "parse_discount_card_purchase_response")

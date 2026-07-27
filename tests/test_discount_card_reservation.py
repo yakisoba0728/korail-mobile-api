@@ -15,17 +15,19 @@ import httpx
 import pytest
 
 from korail_mobile_api import (
-    KORAIL_DISCOUNT_CARD_DISCOUNT_CODE,
-    KORAIL_DISCOUNT_CARD_MENU_ID,
     KorailClient,
     KorailConfig,
+    KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSession,
     MutationConsent,
-    MutationNotAllowedError,
     MutationPreview,
     ReservationHoldResponse,
     TrainSummary,
+)
+from korail_mobile_api.constants import (
+    KORAIL_DISCOUNT_CARD_DISCOUNT_CODE,
+    KORAIL_DISCOUNT_CARD_MENU_ID,
 )
 from korail_mobile_api.errors import KorailAuthError
 from korail_mobile_api.mutation_payloads import (
@@ -173,7 +175,7 @@ def test_it_is_a_reserve_and_is_gated_as_one():
             MutationConsent(allow_discount_card=True, dry_run=False),
             MutationConsent(allow_payment=True, dry_run=False),
         ):
-            with pytest.raises(MutationNotAllowedError):
+            with pytest.raises(KorailMutationNotAllowedError):
                 client.reserve_with_discount_card(
                     _train(),
                     card_no=CARD_NO,

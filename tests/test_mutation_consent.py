@@ -20,7 +20,7 @@ from korail_mobile_api import (
     KorailSeatClass,
     KorailSession,
     MutationConsent,
-    MutationNotAllowedError,
+    KorailMutationNotAllowedError,
     MutationPreview,
     TrainSummary,
     require_mutation_consent,
@@ -112,7 +112,7 @@ def test_mutation_consent_is_frozen():
 
 @pytest.mark.parametrize("category", CATEGORIES)
 def test_require_mutation_consent_rejects_none_consent(category):
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(None, category)
 
 
@@ -123,7 +123,7 @@ def test_require_mutation_consent_rejects_category_not_allowed(category):
         f"allow_{name}": True for name in CATEGORIES if name != category
     }
     consent = MutationConsent(**other_flags)
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(consent, category)
 
 
@@ -135,7 +135,7 @@ def test_require_mutation_consent_allows_matching_category_returns_none(
 
 
 def test_require_mutation_consent_rejects_unknown_category():
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(
             MutationConsent(
                 allow_reserve=True,
@@ -148,12 +148,12 @@ def test_require_mutation_consent_rejects_unknown_category():
 
 
 def test_require_mutation_consent_rejects_non_consent_object():
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(object(), "reserve")  # type: ignore[arg-type]
 
 
 def test_mutation_not_allowed_error_is_a_korail_api_error():
-    assert issubclass(MutationNotAllowedError, KorailApiError)
+    assert issubclass(KorailMutationNotAllowedError, KorailApiError)
 
 
 # --- MutationPreview construction + redaction ---------------------------------
@@ -241,9 +241,9 @@ def test_reserve_denied_without_matching_consent_and_sends_nothing():
     client = _logged_in_no_network_client()
     train = _eligible_train()
     # Default consent opts into nothing; None is also denied. Neither sends.
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.reserve(train, consent=MutationConsent())
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.reserve(train, consent=None)  # type: ignore[arg-type]
 
 
@@ -275,7 +275,7 @@ def test_post_mutation_form_refuses_a_dry_run_consent():
     route = "/classes/com.korail.mobile.certification.TicketReservation"
     form = build_single_adult_reservation_form(KorailConfig(), _eligible_train())
     # dry_run defaults to True; the guard fires before any network use.
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.http.post_mutation_form(
             route,
             form,

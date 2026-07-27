@@ -16,7 +16,7 @@ from .errors import (
     KorailNoDirectTrainError,
     KorailProtocolError,
     KorailSessionExpiredError,
-    MutationNotAllowedError,
+    KorailMutationNotAllowedError,
 )
 from .mutation_models import (
     CardPayment,
@@ -1606,7 +1606,7 @@ class KorailClient:
 
         Gated by ``require_mutation_consent(consent, "reserve")``: a default
         :class:`MutationConsent` (``allow_reserve=False``) or ``None`` is denied
-        with :class:`MutationNotAllowedError` before anything is built. Requires
+        with :class:`KorailMutationNotAllowedError` before anything is built. Requires
         an authenticated session. With the default ``dry_run=True`` it validates
         ``train`` and returns a :class:`MutationPreview` of the exact form that
         WOULD be POSTed, without touching the network. With ``dry_run=False`` it
@@ -1990,7 +1990,7 @@ class KorailClient:
         """
         require_mutation_consent(consent, "payment")
         if not consent.fake_card_only:
-            raise MutationNotAllowedError(
+            raise KorailMutationNotAllowedError(
                 "pay_with_fake_card requires consent.fake_card_only=True; only "
                 "non-chargeable test cards are supported"
             )
@@ -2063,14 +2063,14 @@ class KorailClient:
         """
         require_mutation_consent(consent, "payment")
         if not consent.real_card_acknowledged:
-            raise MutationNotAllowedError(
+            raise KorailMutationNotAllowedError(
                 "pay_with_card requires consent.real_card_acknowledged=True; a "
                 "real, chargeable card number is transmitted in the clear and "
                 "money actually moves, so the caller must say so explicitly "
                 "(use pay_with_fake_card for a non-chargeable test card)"
             )
         if consent.fake_card_only:
-            raise MutationNotAllowedError(
+            raise KorailMutationNotAllowedError(
                 "pay_with_card requires consent.fake_card_only=False; a consent "
                 "that still claims a non-chargeable test card while "
                 "acknowledging a real charge is contradictory and is never sent"

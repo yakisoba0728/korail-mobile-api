@@ -406,7 +406,7 @@ class KorailQueueRejectedError(KorailNetFunnelError):
     """
 
 
-class MutationNotAllowedError(KorailApiError):
+class KorailMutationNotAllowedError(KorailApiError):
     """A state-changing request was attempted without matching consent.
 
     Raised by ``require_mutation_consent`` when no ``MutationConsent`` is

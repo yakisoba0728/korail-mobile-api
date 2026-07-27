@@ -343,7 +343,7 @@ def test_anti_macro_rejection_arrives_as_a_dynapath_error_not_an_app_error():
     # (BaseActivity.java:632-634). There is no anti-macro message code, so
     # nothing in the taxonomy claims one.
     path = "/classes/com.korail.mobile.seatMovie.ScheduleView"
-    assert path in korail_mobile_api.DYNAPATH_ALLOWLIST_PATHS
+    assert path in korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS
 
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(

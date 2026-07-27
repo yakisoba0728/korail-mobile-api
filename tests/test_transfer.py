@@ -48,11 +48,8 @@ import pytest
 
 from korail_mobile_api import (
     KORAIL_DIRECT_ITINERARY_CODE,
-    KORAIL_DIRECT_JOURNEY_TYPE_CODE,
     KORAIL_MAX_JOURNEY_LEGS,
-    KORAIL_STANDBY_WAIT_FLAG,
     KORAIL_TRANSFER_ITINERARY_CODE,
-    KORAIL_TRANSFER_JOURNEY_TYPE_CODE,
     KorailClient,
     KorailConfig,
     KorailNoDirectTrainError,
@@ -70,7 +67,12 @@ from korail_mobile_api import (
     TrainSummary,
     TransferItinerary,
     TransferSearchResult,
-    pair_transfer_itineraries,
+)
+from korail_mobile_api.models import pair_transfer_itineraries
+from korail_mobile_api.constants import (
+    KORAIL_DIRECT_JOURNEY_TYPE_CODE,
+    KORAIL_STANDBY_WAIT_FLAG,
+    KORAIL_TRANSFER_JOURNEY_TYPE_CODE,
 )
 from korail_mobile_api.mutation_payloads import (
     build_reservation_form,
@@ -1051,11 +1053,11 @@ def test_reserve_transfer_previews_the_two_leg_form_without_sending():
 
 
 def test_reserve_transfer_needs_reserve_consent():
-    from korail_mobile_api import MutationNotAllowedError
+    from korail_mobile_api import KorailMutationNotAllowedError
 
     client = _logged_in_no_network_client()
 
-    with pytest.raises(MutationNotAllowedError):
+    with pytest.raises(KorailMutationNotAllowedError):
         client.reserve_transfer(_legs(), consent=MutationConsent())
 
 
