@@ -1,7 +1,7 @@
 # 참조 분석: `srtgo_plus` (KTX/코레일 예매 로직)
 
 > READ-ONLY 정적 분석 문서. 코드 실행·네트워크 호출 없음. 대상 라이브러리
-> `korail-mobile-api`의 mutation 갭(`docs/RELEASE_GAP_PLAN.md` §3~§5)을 실제 동작
+> `korail-mobile-api`의 mutation 갭(`docs/internal/RELEASE_GAP_PLAN.md` §3~§5)을 실제 동작
 > 클라이언트의 요청/응답 형태로 검증·해소하기 위한 사실 정리.
 >
 > 참조 리포: `srtgo_plus` — 이 저장소 밖에 따로 받아 둔 로컬 체크아웃이다(공개 위치를

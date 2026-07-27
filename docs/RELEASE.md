@@ -1,14 +1,17 @@
-# Internal Release Gate
+# Release Gate
 
-This is an internal-only build and verification workflow. It does not authorize
-a public release or any production-service request.
+This is the build and verification workflow every release of this package goes
+through: offline tests, a wheel and sdist build, a behavioral contract check
+of both artifacts, and a fresh-environment import outside the checkout. It
+governs how a release is built and verified — it does not authorize any
+production-service request; nothing here talks to `smart.letskorail.com`.
 
 ## Preconditions
 
 - Start from a clean tracked worktree.
 - Use Python 3.11 or newer and install the test and build tools locally.
-- Live tests are forbidden during this release gate. Do not load credentials,
-  local live configuration, cookies, tokens, or production response data.
+- Live tests are forbidden during this gate. Do not load credentials, local
+  live configuration, cookies, tokens, or production response data.
 
 ## Test, build, and verify
 
@@ -77,16 +80,40 @@ Finish with `git status --short` and `git diff --check`.
 
 ## Version policy
 
-Before `1.0.0`, use `0.y.z`: increment the patch component for compatible
-fixes, the minor component for new backward-compatible read APIs, and the major
-component for breaking public contracts. The project does not claim semantic
-version stability before `1.0.0`.
+From `1.0.0`, this project follows semantic versioning: the patch component
+for compatible fixes, the minor component for backward-compatible additions,
+and the major component for breaking changes to `korail_mobile_api`'s own
+public Python API — the names in `korail_mobile_api.__all__` and their
+signatures.
 
-## Public-release blockers
+That promise is about this package's API and nothing else. It is not a promise
+that KORAIL's servers keep behaving the way this client currently observes
+them to. The mobile app, its endpoints, its request fields and its response
+shapes are KORAIL's, not this project's, to version; they can change without
+notice, and a server-side change can break this client at any version number
+without being a breaking change *of* this client. Semver here covers the
+contract between this code and its callers, not the contract between this
+code and KORAIL.
 
-Every public release remains blocked until all four items exist and are
-reviewed: a license, owner metadata, a canonical URL, and explicit authorization.
-Internal verification does not satisfy any of these blockers.
+## Public-release readiness
+
+A release of this package to a public GitHub repository was blocked until four
+items existed and were reviewed: a license, owner metadata, a canonical URL,
+and explicit authorization. As of `1.0.0`, all four are satisfied:
+
+- **License.** Apache-2.0, declared as the PEP 639 `license` SPDX expression
+  in `pyproject.toml` and shipped as `LICENSE` in both build artifacts.
+- **Owner metadata.** The `authors` entry in `pyproject.toml`, emitted as the
+  `Author-email` header.
+- **Canonical URL.** `[project.urls]` in `pyproject.toml`, emitted as
+  `Project-URL` headers.
+- **Explicit authorization.** The repository owner explicitly authorized a
+  public release of this project under Apache-2.0 on 2026-07-27.
+
+`scripts/verify_distribution.py` enforces the exact values of the first three
+against `pyproject.toml` on every build (see "Behavioral verification
+contract" below); the offline gate no longer stands between a reviewed
+checkout and a release someone is authorized to make.
 
 ## Behavioral verification contract
 
@@ -104,10 +131,14 @@ The behavioral matrix covers:
   that carries a duplicate member is rejected.
 - Zero-byte `py.typed` markers: the marker must be a regular, empty file in both
   archives; a missing, non-empty, or special-type marker is rejected.
-- Exact metadata: singleton `Name`, `Version`, and `Requires-Python`; the exact
-  classifier set without duplicates; normalized runtime `Requires-Dist` equality
-  with `pyproject.toml`; and rejection of forbidden owner, license, or URL
-  headers.
+- Exact metadata: singleton `Name`, `Version`, `Requires-Python`,
+  `License-Expression`, and `Author-email`; the exact classifier and
+  `Project-URL`/`License-File` sets without duplicates, each checked against
+  the value `pyproject.toml` declares; normalized runtime `Requires-Dist`
+  equality with `pyproject.toml`; and rejection of the legacy owner, license,
+  and URL headers a PEP 639 build never emits (`License`, `Author`,
+  `Maintainer`, `Maintainer-email`, `Home-page`, `Download-URL`) — their
+  presence would mean something other than this build wrote the metadata.
 - Archive form: the sdist is inspected as a strict gzip tar (`r:gz`) without
   extraction, and any symlink, hard link, device, FIFO, or other special member
   in either archive is rejected.

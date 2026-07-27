@@ -465,7 +465,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `2244 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `2398 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -529,13 +529,13 @@ no payment request and printed or persisted no raw response or identifier.
   station, and all 11 expansion calls explicitly disable DynaPath even under a
   custom allowlist.
 - The fresh final static scan reported `request_literals=27` and
-  `excluded_mutation_routes=0`. `git diff --check a331d63..HEAD` passed, and
+  `excluded_mutation_routes=0`. `git diff --check 8a63442..HEAD` passed, and
   the DynaPath implementation and constants remained unchanged.
 - The implementation self-check found all 22 new dataclasses frozen, all raw
   and sensitive fields repr-hidden, and the pre-existing DynaPath code and
   constants unchanged.
 - The independent final whole-feature review reported Critical 0, Important 2,
-  and Minor 0. Both Important findings were fixed together in `6b25341`: the
+  and Minor 0. Both Important findings were fixed together in `d7f9dea`: the
   central redaction boundary now covers the missing typed/trip-menu keys, and
   reservation history stores its flattened tuple in `items`. Focused post-fix
   coverage reported `192 passed`, and no Critical or Important finding remains
@@ -755,7 +755,7 @@ or state-changing operations.
 
 This section consolidates the current-package handoff facts that were previously
 tracked in the removed session-handoff note; their outcomes are preserved here,
-in the CHANGELOG, and under `docs/superpowers/specs/`.
+in the CHANGELOG, and under `docs/internal/superpowers/specs/`.
 
 The current implementation evidence establishes 60 routes at the exact
 login/read transport boundary and 77 public methods on `KorailClient`. The
@@ -785,7 +785,7 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-The current reviewed offline gate reports `2244 passed, 1 deselected`; the
+The current reviewed offline gate reports `2398 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service
@@ -796,9 +796,11 @@ cars and 75 seat rows while retaining no raw values; a later post-fix
 confirmation stopped at the service-status preflight before login transport and
 therefore made no search, car-list, or seat-list call.
 
-Use [docs/RELEASE.md](RELEASE.md) for the internal-only offline test, build,
-distribution verifier, fresh-wheel install, and cleanup gate. A public release
-remains blocked by the four items listed there.
+Use [docs/RELEASE.md](RELEASE.md) for the offline test, build, distribution
+verifier, fresh-wheel install, and cleanup gate every release goes through.
+The four items that once blocked a public release — license, owner metadata,
+canonical URL, and explicit authorization — are all satisfied as of 1.0.0;
+see "Public-release readiness" in that document.
 
 ## Next Required Step
 

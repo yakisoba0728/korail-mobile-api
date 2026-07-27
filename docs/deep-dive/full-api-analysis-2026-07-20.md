@@ -2951,7 +2951,7 @@ load-bearing conclusion of each finding survived):
 - **IV derivation is char-based.** `encryptAES` uses `key.substring(0,16)` on
   **characters** then `.getBytes()` (`C0812l.java:19`) — identical to "first 16
   bytes" for ASCII keys, divergent for non-ASCII. Already flagged at
-  [`full-api-analysis-2026-07-20.md:439`](../full-api-analysis-2026-07-20.md).
+  `full-api-analysis-2026-07-20.md:439` (this document).
 - **`CertificatePinner` class mis-identified.** Not `X7.C0891h`; the only
   `CertificatePinner` reference in jadx is `a8/k.java` (package `a8`, class `k`).
   The substantive claim stands and is verified: no `com/korail/` class references

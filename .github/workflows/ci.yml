@@ -26,7 +26,7 @@ jobs:
         run: pytest -q -m "not live"
 
   package:
-    name: Verify internal distributions
+    name: Verify distributions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

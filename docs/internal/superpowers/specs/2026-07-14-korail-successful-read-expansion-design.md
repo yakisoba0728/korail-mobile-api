@@ -14,7 +14,7 @@ check-in, member mutation, point/mileage mutation, or other side-effect routes.
 
 ## Context
 
-The current package is clean on `main` at `a29a19a`. It allows fifteen exact
+The current package is clean on `main` at `857eea1`. It allows fifteen exact
 login/read routes and its recorded final offline result is `275 passed, 1
 skipped`, with the skipped test being the explicit live-service opt-in.
 

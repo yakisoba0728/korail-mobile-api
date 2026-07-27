@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in the client diverges from what the KORAIL app does, or from what it documents itself as doing.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before you fill this in: do not paste credentials, tokens, cookies,
+        PNRs (reservation numbers), ticket numbers, phone numbers, real names,
+        or raw production server responses anywhere in this report** — not in
+        the description, not in a fixture, not in a screenshot. This client
+        talks to a real ticketing service; anything you paste here becomes
+        public. If your reproduction needs a real response, sanitize it first
+        (replace values, keep only the field names and structure that show
+        the bug) or describe it in your own words with a `file:line` citation
+        instead.
+
+        If this is a security-relevant issue (unintended state change,
+        unapproved charge, or credential/PII exposure), stop and use
+        [GitHub Security Advisories](https://github.com/yakisoba0728/korail-mobile-api/security/advisories/new)
+        instead of this form.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: >-
+        What did you call, what did you expect, and what did you get instead?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: >-
+        Prefer a decompiled-APK citation (class/file and line) or a sanitized
+        reproduction over pasted real output. If you're including a response
+        body, redact every value and keep only field names / structure.
+      placeholder: |
+        e.g. "ReservationService.java:23-25 sends field X that this client omits"
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: "korail_mobile_api.__version__, or the commit SHA if installed from source"
+    validations:
+      required: true

@@ -407,7 +407,7 @@ Two sub-flows (analysis §3.9 `…:874`):
 
 > **NOT IMPLEMENTED, AND REMOVED AGAIN (2026-07-27).** These two offline rows
 > were built as `verify_offline_refund_ticket` / `execute_offline_refund` on
-> 2026-07-27 and removed the same day in `e8fa0e3`, together with the
+> 2026-07-27 and removed the same day in `3d5c4f1`, together with the
 > `KorailNonMemberSession` they needed. Flow D is 3/5, not 5/5. Nothing named
 > here exists in the package today; a call to either raises `AttributeError`.
 >
@@ -893,8 +893,12 @@ existing architecture over rewrites.
       if separately authorized.
 
 ### P5 — Release prep (Risk: Low)
-- [ ] Version bump 0.2.0→0.3.0 (→1.0.0 after A–C live-verified); CHANGELOG;
+- [x] Version bump 0.2.0→0.3.0 (→1.0.0 after A–C live-verified); CHANGELOG;
       docs (§7); README mutation banner; SECURITY expansion.
+      **Superseded 2026-07-27: shipped as `1.0.0`, see `CHANGELOG.md`.** The
+      checkbox above is left checked rather than rewritten because this
+      document is a dated planning snapshot, not living documentation — see
+      `docs/internal/README.md`.
 - [ ] Update `__all__`, packaging description/classifier; build wheel+sdist,
       isolated-install import check (as `docs/IMPLEMENTATION_PROGRESS.md:310-317`).
 - [ ] Final review: no card data persisted, redaction complete, mutations

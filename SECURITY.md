@@ -1,8 +1,11 @@
 # Security
 
-Report security concerns privately through the owner's existing private
-channel. Include only the minimum sanitized detail needed to reproduce the
-issue.
+Report security concerns privately through
+[GitHub Security Advisories](https://github.com/yakisoba0728/korail-mobile-api/security/advisories/new)
+for this repository ("Security" tab → "Report a vulnerability"). That channel
+is private between you and the maintainer until a fix is ready; do not open a
+public issue or discussion for a vulnerability report. Include only the
+minimum sanitized detail needed to reproduce the issue.
 
 Do not disclose credentials, cookies, tokens, PNRs, raw responses, or
 production identifiers in public issues, discussions, logs, fixtures, or

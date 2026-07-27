@@ -1,0 +1,32 @@
+name: Feature request
+description: A route, read, or capability this client does not have yet.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste credentials, tokens, cookies, PNRs, ticket numbers,
+        phone numbers, real names, or raw production server responses
+        anywhere in this request.** See CONTRIBUTING.md and SECURITY.md.
+
+        If this request is for a new **state-changing** (mutation) capability,
+        read "Changes to the mutation consent / safety model" in
+        CONTRIBUTING.md first: it needs a safety design and evidence, not just
+        a description of the feature.
+  - type: textarea
+    id: what
+    attributes:
+      label: What is missing
+      description: What route or capability, and what would you use it for?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: >-
+        A decompiled-APK citation (class/file and line) for the route, if you
+        have one. Quote wire names (route paths, field keys) in short
+        backtick spans only — do not paste decompiled source.
+    validations:
+      required: false

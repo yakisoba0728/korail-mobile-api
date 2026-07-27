@@ -19,7 +19,7 @@ raising. That is what the app does —
 through `setErrorMsgCdNotShowDialog`, so an empty query renders "no
 schedules" instead of an error — and treating it as a failure here would
 turn "you have no passes" into an exception. Every other non-`SUCC`
-envelope still raises. (Added in `0d632db`, 2026-07-22; this sentence
+envelope still raises. (Added in `fc0e061`, 2026-07-22; this sentence
 described only the `SUCC` half until 2026-07-27.)
 
 The response types only project the statically evidenced

@@ -1145,7 +1145,7 @@ def test_repository_truth_and_full_mutation_policy() -> None:
         # sentences were true when written and are kept as history; the pin has
         # to name the CURRENT boundary or it stops detecting the next drift.
         assert "77 public methods" in document
-        assert "2244 passed" in document and "1 deselected" in document
+        assert "2398 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
     for document in (record, handoff):
         assert "5 cars" in document

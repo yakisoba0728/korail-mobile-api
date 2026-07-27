@@ -1,0 +1,28 @@
+korail-mobile-api
+Copyright (c) 2026 yakisoba0728
+
+This product is licensed under the Apache License, Version 2.0. See LICENSE
+for the full license text.
+
+Prior-art reference, not derived code
+--------------------------------------
+
+During analysis, this project's reference notes
+(docs/deep-dive/ref-srtgo_plus.md) examined a local checkout of `srtgo_plus`,
+a maintenance fork of `srtgo` (https://github.com/lapis42/srtgo). Per that
+checkout's own LICENSE file, `srtgo_plus` is MIT-licensed (Copyright (c) 2023
+DKim) and itself bundles two third-party components as reference: `SRT`
+(MIT, Copyright (c) 2018 Gyeongjae Choi) and `korail2`
+(BSD-3-Clause, Copyright (c) 2014 Taehoon Kim; its KTX-handling module carries
+that attribution in its own file header).
+
+Those projects' request/response shapes for the KORAIL mobile API — endpoint
+paths, form and query parameter names, and similar externally observable
+facts — are exactly that: facts about how the KORAIL app and server
+communicate, independently confirmed here against the decompiled KORAIL
+Android application. This project's reference notes record those facts. No
+source code, comments, or class/function structure were copied from
+`srtgo_plus`, `srtgo`, `SRT`, or `korail2` into this package; the
+`korail_mobile_api` implementation is this project's own, written from the
+decompiled application. See docs/deep-dive/ref-srtgo_plus.md §1.1 for the
+full analysis this notice summarizes.

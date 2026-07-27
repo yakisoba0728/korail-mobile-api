@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 - 2026-07-27
 
 - **Changed: `scripts/reserve_pay_refund_roundtrip.py` no longer starts without
   a fare ceiling.** `KORAIL_MAX_FARE` was documented as "optional … strongly

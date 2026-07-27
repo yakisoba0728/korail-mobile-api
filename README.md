@@ -71,6 +71,18 @@ client.close()
 the app itself downloads. Dates and times are the app's own `YYYYMMDD` and
 `HHMMSS` strings.
 
+> **If you also use `srt-mobile-api` in the same process:** `TrainSearchQuery`
+> and `DiscountCoupon` are names both packages export, and they are not the
+> same type. `korail_mobile_api.TrainSearchQuery.passengers` is a plain `int`
+> (default `1`) and its default `departure_time` is `"000000"`;
+> `srt_mobile_api.TrainSearchQuery.passengers` is a `PassengerCounts` and its
+> default departure time is `"060000"` — the two apps' own defaults, kept
+> as-is. `DiscountCoupon` differs the same way: same name, different fields,
+> in each package. Import both under an alias
+> (`from korail_mobile_api import TrainSearchQuery as KorailTrainSearchQuery`)
+> if a module needs both; do not assume a value built for one works with the
+> other.
+
 ### What the default configuration sends
 
 `login` is behind KORAIL's anti-automation check, so the defaults are not
@@ -477,7 +489,8 @@ account does not have; three were implemented and then removed.
 | [docs/deep-dive/README.md](docs/deep-dive/README.md) | Twenty focused subsystem reports and their reading order. |
 | [docs/library-build-guide.md](docs/library-build-guide.md) | How the static analysis was turned into this library, and the policy it must keep. |
 | [docs/pass-schedule-read.md](docs/pass-schedule-read.md) | The 정기권 schedule read's exact request, typed response, and live-validation boundary. |
-| [docs/RELEASE.md](docs/RELEASE.md) | The internal test, build and distribution gate. Not a public release process. |
+| [docs/RELEASE.md](docs/RELEASE.md) | The test, build and distribution gate this package's releases go through. |
+| [docs/internal/README.md](docs/internal/README.md) | Development history: audits, re-verification passes, design specs. Not user documentation. |
 | [CHANGELOG.md](CHANGELOG.md) | What changed, with the reasoning. |
 
 ## Working on this repository
@@ -487,7 +500,7 @@ env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
 ```
 
 The offline suite is the gate and it makes no network calls:
-`2244 passed, 1 deselected`, where the one deselected test is the explicitly
+`2398 passed, 1 deselected`, where the one deselected test is the explicitly
 opted-in live-service test. Live tests run only when `KORAIL_MOBILE_API_LIVE=1`
 is set together with credentials you supply yourself; nothing in this repository
 ships an account.
@@ -503,3 +516,10 @@ checks is a claim nobody can trust.
 The APK and the generated decompile directories are not committed. Documentation,
 the reproducible inventory output, the client source and the offline contract
 tests are.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations.
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).

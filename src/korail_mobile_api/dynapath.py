@@ -178,7 +178,7 @@ def generate_dynapath_device_id() -> str:
       installation of a library shares is a perfect bot signature — it says
       "one device made all of these requests" — which is precisely why srtgo's
       fixed ``558a4f02041657ea`` was called out as a fingerprint in
-      ``docs/deep-dive/cross-validation-2026-07-21.md:67``.
+      ``docs/internal/deep-dive/cross-validation-2026-07-21.md:67``.
     * It must be STABLE for as long as the thing it identifies exists. On a
       real handset ``ANDROID_ID`` is per-installation and survives restarts.
       This function is consequently called once per

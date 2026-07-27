@@ -1629,7 +1629,7 @@ def test_docs_no_longer_claim_the_redirection_is_declined():
 
 
 def test_release_gap_plan_no_longer_claims_korail_has_no_netfunnel():
-    plan = (ROOT / "docs/RELEASE_GAP_PLAN.md").read_text(encoding="utf-8")
+    plan = (ROOT / "docs/internal/RELEASE_GAP_PLAN.md").read_text(encoding="utf-8")
     # The withdrawn claim, which survived in the srtgo-corrections appendix long
     # after the body of the document had corrected it.
     assert "Korail\n  uses **no** NetFunnel at all" not in plan

@@ -59,7 +59,7 @@ for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `2244 passed, 1 deselected`; the one
+current reviewed offline gate is `2398 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -1237,7 +1237,7 @@ it — nothing here reproduces that run.
 ## 승차권 변경 chain reads — get_self_seat_change_info, get_trip_change_original_ticket
 
 Two reads added on 2026-07-27. They are what remains of the 여행변경 chain:
-the three mutations built the same day were removed hours later (`22ba4cc`),
+the three mutations built the same day were removed hours later (`61958b1`),
 because exercising them needs a PAID ticket, charges a 변경수수료, and has no
 clean undo. The reads have none of those problems and stayed.
 
@@ -1691,7 +1691,7 @@ account, session, ticket, station, menu, app-data, or notice response bodies.
 For the successful-read expansion, the pre-review complete offline suite result
 of `427 passed, 1 skipped` is historical. The independent final whole-feature
 review reported Critical 0, Important 2, and Minor 0. Both Important findings
-were fixed together in `6b25341`, with `192 passed` focused coverage; no open
+were fixed together in `d7f9dea`, with `192 passed` focused coverage; no open
 Critical or Important finding remains. Fresh post-fix verification reported
 `435 passed, 1 skipped`; the only skip was the explicit live-service opt-in.
 
