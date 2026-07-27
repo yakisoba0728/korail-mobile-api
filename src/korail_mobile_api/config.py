@@ -13,7 +13,30 @@ from .constants import (
     KORAIL_TIMEOUT_SECONDS,
     KORAIL_USER_AGENT,
 )
-from .dynapath import DynapathConfig
+from .dynapath import DynapathConfig, build_default_token_settings
+
+
+def _default_dynapath_config() -> DynapathConfig:
+    """DynaPath, enabled, with freshly generated per-instance device values.
+
+    This is what makes ``KorailClient()`` — no arguments — able to log in.
+    Until 1.0.0 a bare config produced a disabled DynaPath and a User-Agent
+    naming this Python package, and the server answered ``login.Login`` with
+    ``**MACRO ERROR**``, disguised in the user-facing text as a demand to
+    update the app. The asymmetry made it hard to see: account-neutral reads
+    kept working under the same bare config, so the library looked healthy and
+    only login failed.
+
+    A fresh :func:`~korail_mobile_api.dynapath.build_default_token_settings`
+    per config — not a module-level singleton — is deliberate. The settings
+    carry a per-installation device id and an app-start timestamp; sharing one
+    object across every config in a process would hand every client in it the
+    same device identity and the same start time.
+    """
+    return DynapathConfig(
+        enabled=True,
+        token_settings=build_default_token_settings(),
+    )
 
 
 @dataclass(frozen=True)
@@ -25,7 +48,10 @@ class KorailConfig:
     timeout: float = KORAIL_TIMEOUT_SECONDS
     user_agent: str = KORAIL_USER_AGENT
     live_env_var: str = "KORAIL_MOBILE_API_LIVE"
-    dynapath: DynapathConfig = field(default_factory=DynapathConfig)
+    #: DynaPath anti-automation, ON by default — see
+    #: :func:`_default_dynapath_config`. Pass ``DynapathConfig()`` to opt out;
+    #: nothing outside the six allowlisted paths is affected either way.
+    dynapath: DynapathConfig = field(default_factory=_default_dynapath_config)
     device_width: int = KORAIL_DEFAULT_DEVICE_WIDTH
     device_height: int = KORAIL_DEFAULT_DEVICE_HEIGHT
     android_sdk_int: int = KORAIL_DEFAULT_ANDROID_SDK_INT

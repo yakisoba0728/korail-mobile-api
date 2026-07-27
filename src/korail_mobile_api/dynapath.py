@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 import string
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from urllib.parse import quote_plus
@@ -162,8 +163,80 @@ class DynapathTokenSettings:
         int(self.app_start_ts)
 
 
+def generate_dynapath_device_id() -> str:
+    """A synthetic ``Settings.Secure.ANDROID_ID``, fresh on every call.
+
+    ``di`` is the device's ``ANDROID_ID`` verbatim — ``AbstractC1228a.java:16``
+    reads ``Settings.Secure.getString(..., "android_id")`` and hands it
+    straight to the token builder, which emits it unchanged
+    (``C1229b.java:103``). That value is 64 bits rendered as **16 lowercase hex
+    characters**, which is the shape reproduced here.
+
+    Two properties matter, and they pull in opposite directions:
+
+    * It must NOT be a constant baked into this package. An identifier every
+      installation of a library shares is a perfect bot signature — it says
+      "one device made all of these requests" — which is precisely why srtgo's
+      fixed ``558a4f02041657ea`` was called out as a fingerprint in
+      ``docs/deep-dive/cross-validation-2026-07-21.md:67``.
+    * It must be STABLE for as long as the thing it identifies exists. On a
+      real handset ``ANDROID_ID`` is per-installation and survives restarts.
+      This function is consequently called once per
+      :class:`~korail_mobile_api.config.KorailConfig`, from that dataclass's
+      default factory, and the frozen config then holds it for the lifetime of
+      the client — not regenerated per request, which would look like a new
+      device on every call.
+
+    ``uuid.uuid4()`` supplies the randomness because it is the standard library's
+    CSPRNG-backed source; only the first 64 bits are kept, since a 32-hex-digit
+    ``di`` would be a value no Android device can produce.
+
+    A caller who wants their own device's real ``ANDROID_ID`` — stable across
+    processes, which this cannot be — should use
+    :func:`~korail_mobile_api.live.build_config_from_env`.
+    """
+    return uuid.uuid4().hex[:16]
+
+
+def build_default_token_settings() -> DynapathTokenSettings:
+    """The token settings behind a bare :class:`KorailConfig`.
+
+    Every field is either an app constant (``ai``, ``as``, ``st``, ``sv``) or
+    derived from the package-wide device defaults, so the ``dm``/``os`` this
+    puts in the token are the same two values
+    :data:`~korail_mobile_api.constants.KORAIL_USER_AGENT` is built from.
+
+    ``it`` (``app_start_ts``) is the moment this is called, because that is
+    what the app records: ``AbstractC1228a.java:14`` captures
+    ``System.currentTimeMillis()`` when the DynaPath engine is constructed at
+    startup. Building the config is this package's equivalent of that moment.
+    """
+    return DynapathTokenSettings(
+        device_id=generate_dynapath_device_id(),
+        as_value=KORAIL_DYNAPATH_AS_VALUE,
+        app_start_ts=str(_timestamp_ms()),
+        os_version=KORAIL_DEFAULT_ANDROID_OS_RELEASE,
+        device_model=KORAIL_DEFAULT_DEVICE_NAME,
+    )
+
+
 @dataclass(frozen=True)
 class DynapathConfig:
+    #: Whether a DynaPath token is attached to the allowlisted paths.
+    #:
+    #: **FALSE here, and TRUE for a bare** :class:`KorailConfig`. The two are
+    #: not in conflict: this class also has to be constructible as the explicit
+    #: OPT-OUT (``KorailConfig(dynapath=DynapathConfig())``), and the default
+    #: token settings that make ``enabled`` useful are attached by
+    #: :class:`~korail_mobile_api.config.KorailConfig`'s own default factory
+    #: rather than here.
+    #:
+    #: Defaulting ``enabled`` and ``token_settings`` on THIS class instead was
+    #: tried and rejected: ``__post_init__`` requires exactly one of
+    #: ``token_provider``/``token_settings``, so a defaulted ``token_settings``
+    #: would make every ``DynapathConfig(enabled=True, token_provider=fn)`` a
+    #: contradiction — it would abolish the custom-provider form to add a
+    #: default.
     enabled: bool = False
     token_provider: DynapathTokenProvider | None = None
     token_settings: DynapathTokenSettings | None = None

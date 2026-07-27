@@ -5,7 +5,19 @@ KORAIL_DEVICE_ANDROID = "AD"
 KORAIL_API_VERSION = "250601003"
 KORAIL_APP_KEY = "korail1234567890"
 KORAIL_TIMEOUT_SECONDS = 60.0
-KORAIL_USER_AGENT = "korail-mobile-api/0.2.0"
+# The DynaPath "dm" field is Build.MODEL (b/C1229b.java:132), so it has no
+# app-mandated value at all: it is whatever handset happens to be running the
+# app. This default is therefore deliberately GENERIC rather than a named
+# handset. Naming one (srtgo picks "SM-S928N", ktx.py:32) would oblige every
+# other device fact this package sends to match that handset — screen geometry
+# (KORAIL_DEFAULT_DEVICE_WIDTH/HEIGHT, sent on common.code.do) and SDK level —
+# and no evidence in this repository fixes that combination, so a specific but
+# incoherent device is a worse fingerprint than a generic one. Pin a real
+# device with build_config_from_env instead.
+#
+# Note this is NOT the DynaPath "st" field, which is separately the literal
+# "Android" (C1229b.java:135, KORAIL_DYNAPATH_OS_TYPE); the coincidence of
+# spelling is not a shared meaning.
 KORAIL_DEFAULT_DEVICE_NAME = "Android"
 # The DynaPath "os" field is Build.VERSION.RELEASE — the marketing release
 # string, e.g. "15" for Android 15 — NOT Build.VERSION.SDK_INT:
@@ -21,6 +33,52 @@ KORAIL_DEFAULT_DEVICE_HEIGHT = 2400
 # so this and KORAIL_DEFAULT_ANDROID_OS_RELEASE describe the same platform with
 # two different numbers; they are not interchangeable.
 KORAIL_DEFAULT_ANDROID_SDK_INT = 35
+
+
+def build_dalvik_user_agent(*, os_release: str, device_model: str) -> str:
+    """The platform-default Android User-Agent, in the app's own shape.
+
+    ``com.korail.talk`` hardcodes no User-Agent: it speaks Retrofit v1 over
+    ``UrlConnectionClient``/``HttpURLConnection`` (``ExecuteDao.java:7-11``),
+    so what the server sees is whatever the platform sends — the Dalvik string
+    built here.
+
+    This exists as a function, and is the ONLY place the string is spelled, so
+    that the default configuration and
+    :func:`~korail_mobile_api.live.build_config_from_env` cannot drift into
+    two different shapes. The two arguments are keyword-only because
+    ``(os_release, device_model)`` and ``(device_model, os_release)`` are both
+    plausible orders and silently swapping them would produce a header that
+    looks right and is not.
+
+    The real platform string carries a trailing ``Build/<id>`` too
+    (``Dalvik/2.1.0 (Linux; U; Android 13; SM-S928N Build/UP1A.231005.007)``);
+    it is omitted here because the four-part form without it is the one this
+    repository has actually logged in with, and inventing a build id that does
+    not belong to the device model would add a second unverifiable claim
+    rather than remove one.
+    """
+    return f"Dalvik/2.1.0 (Linux; U; Android {os_release}; {device_model})"
+
+
+#: The default ``User-Agent``.
+#:
+#: **DERIVED, not written.** Until 1.0.0 this was the literal
+#: ``"korail-mobile-api/0.2.0"``, which is the single most distinguishing thing
+#: a request to ``smart.letskorail.com`` can carry: no genuine app names a
+#: Python package. The server's anti-macro check reads it, and a login sent
+#: under that header is refused — see the DynaPath default in
+#: :mod:`korail_mobile_api.config`.
+#:
+#: The device and release embedded here come from the same two constants the
+#: DynaPath token's ``dm`` and ``os`` fields carry. That is the point of
+#: deriving them: a User-Agent claiming one device while the token in the same
+#: request claims another is not a neutral inconsistency, it is a signal that
+#: the two were produced by different things.
+KORAIL_USER_AGENT = build_dalvik_user_agent(
+    os_release=KORAIL_DEFAULT_ANDROID_OS_RELEASE,
+    device_model=KORAIL_DEFAULT_DEVICE_NAME,
+)
 
 KORAIL_COMMON_CODE_BOOTSTRAP_CODES = (
     "app.display.image",

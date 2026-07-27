@@ -2,6 +2,65 @@
 
 ## Unreleased
 
+- **Changed (behaviour, and the reason for everything below): a bare
+  `KorailClient()` can now log in.** It could not before, and the README's
+  quickstart — `KorailClient()` then `login(...)` — was therefore false.
+  Live-verified 2026-07-27: a default `KorailConfig()` sent
+  `User-Agent: korail-mobile-api/0.2.0` with DynaPath disabled, and
+  `login.Login` came back `**MACRO ERROR**` from the anti-automation check.
+  The only configuration that logged in was `build_config_from_env`, which
+  the README never mentioned and `__all__` did not export. The failure was
+  hard to read because it is **disguised**: the server returns the macro
+  rejection as "원활한 서비스 이용을 위해 앱을 최신 버전으로 업데이트한 뒤…",
+  and because account-neutral reads keep succeeding under the same config,
+  the symptom looks like a version gate rather than a client-shape problem —
+  which it had already been misdiagnosed as once. Three defaults changed:
+  - `KORAIL_USER_AGENT` is now the platform-default Dalvik string,
+    `Dalvik/2.1.0 (Linux; U; Android 15; Android)`, instead of
+    `korail-mobile-api/0.2.0`. The app hardcodes no UA — Retrofit v1 over
+    `UrlConnectionClient`/`HttpURLConnection` (`ExecuteDao.java:7-11`) — so
+    the platform string is what the server sees from the real app. It is
+    **derived**, by a new `build_dalvik_user_agent`, from the same
+    `KORAIL_DEFAULT_DEVICE_NAME` / `KORAIL_DEFAULT_ANDROID_OS_RELEASE` that
+    the DynaPath token's `dm` and `os` carry, and `build_config_from_env`
+    now calls the same builder: a UA claiming one handset while the token in
+    the same request claims another is itself a signal, so the two cannot be
+    spelled separately any more.
+  - **DynaPath is enabled by default.** Every client now attaches
+    `x-dynapath-m-token` to the six allowlisted paths where it previously
+    attached none. Where a token is sent is unchanged; only whether one is.
+    Opt out with `KorailConfig(dynapath=DynapathConfig())`.
+    `DynapathConfig`'s own defaults are untouched — the enabled default and
+    its token settings hang off `KorailConfig`'s field factory instead,
+    because `DynapathConfig.__post_init__` requires exactly one of
+    `token_provider`/`token_settings` and a defaulted `token_settings` would
+    have made every `DynapathConfig(enabled=True, token_provider=fn)` a
+    contradiction.
+  - The default token settings generate their device identity **per
+    `KorailConfig` instance**, via `generate_dynapath_device_id`. No fixed
+    device id is baked into the package: `di` is the handset's
+    `Settings.Secure.ANDROID_ID` (`AbstractC1228a.java:16`, emitted verbatim
+    at `C1229b.java:103`), and an identifier shared by every installation of
+    a library is exactly the bot signature the header exists to catch — the
+    criticism this repository already levelled at srtgo's fixed
+    `558a4f02041657ea`. It is `uuid.uuid4().hex[:16]`, matching ANDROID_ID's
+    real 16-lowercase-hex shape, stable for the life of the config and not
+    persisted. `app_start_ts` is the moment the config was built, which is
+    what `AbstractC1228a.java:14` records.
+- Added: `build_config_from_env` is exported from the package. It is the
+  supported way to pin a **real** device identity —
+  `KORAIL_DYNAPATH_DEVICE_ID` / `_OS_VERSION` / `_DEVICE_MODEL` — and the
+  only way to get a device id stable across processes, since nothing here
+  persists state. `read_credentials_from_env`, `live_enabled` and
+  `run_live_smoke_from_env` stay unexported: the first would make this
+  package assert an opinion about where a caller's credentials live, and the
+  other two are this repository's own smoke scaffolding.
+- Added: `tests/test_default_login_config.py`, which pins the three things
+  that were wrong and are checkable offline — DynaPath enabled, an
+  app-shaped UA, and the UA's handset agreeing with the token's — plus the
+  per-instance device id. It asserts **nothing** about a login succeeding;
+  that is not offline-checkable and is not claimed anywhere.
+
 - Removed: the 여행변경 (trip change) mutation chain and the `ticket_change`
   consent category with it — `change_trip_reservation`,
   `rollback_trip_change` and `change_reservation_passengers`, plus

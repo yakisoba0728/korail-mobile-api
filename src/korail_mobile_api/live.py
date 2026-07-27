@@ -6,6 +6,7 @@ from typing import Any
 
 from .client import KorailClient
 from .config import KorailConfig
+from .constants import build_dalvik_user_agent
 from .dynapath import (
     DynapathConfig,
     DynapathTokenSettings,
@@ -34,6 +35,33 @@ def _required_env(name: str) -> str:
 
 
 def build_config_from_env() -> KorailConfig:
+    """A :class:`KorailConfig` whose device identity comes from the environment.
+
+    A bare ``KorailConfig()`` already logs in, on synthetic device values
+    generated per instance. This is the supported way to pin REAL ones instead,
+    and it is the only way to get a device id that is stable across processes —
+    the generated one cannot be, since nothing in this package persists state.
+
+    Three variables are required and have no default, because a wrong value
+    here is worse than a missing one:
+
+    ``KORAIL_DYNAPATH_DEVICE_ID``
+        The DynaPath ``di``: the device's ``Settings.Secure.ANDROID_ID``
+        (``AbstractC1228a.java:16``), 16 lowercase hex characters.
+    ``KORAIL_DYNAPATH_OS_VERSION``
+        ``Build.VERSION.RELEASE``, e.g. ``"15"`` — not the SDK int.
+    ``KORAIL_DYNAPATH_DEVICE_MODEL``
+        ``Build.MODEL``, e.g. ``"SM-S928N"``.
+
+    The last two are used TWICE on purpose: they go into the token's ``os`` and
+    ``dm``, and into the ``User-Agent``, which is derived from them by
+    :func:`~korail_mobile_api.constants.build_dalvik_user_agent` rather than
+    written separately. Overriding ``KORAIL_USER_AGENT`` on its own therefore
+    means asserting a device in the header that the token does not confirm.
+
+    Everything else — base URL, screen geometry, SDK int, advertising id,
+    ``KORAIL_DYNAPATH_AS_VALUE`` — falls back to the package defaults.
+    """
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
     device_model = _required_env("KORAIL_DYNAPATH_DEVICE_MODEL")
@@ -61,7 +89,10 @@ def build_config_from_env() -> KorailConfig:
         ),
         user_agent=os.environ.get(
             "KORAIL_USER_AGENT",
-            f"Dalvik/2.1.0 (Linux; U; Android {os_version}; {device_model})",
+            build_dalvik_user_agent(
+                os_release=os_version,
+                device_model=device_model,
+            ),
         ),
         device_width=int(os.environ.get("KORAIL_DEVICE_WIDTH", "1440")),
         device_height=int(os.environ.get("KORAIL_DEVICE_HEIGHT", "3088")),

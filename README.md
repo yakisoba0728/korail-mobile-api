@@ -66,13 +66,71 @@ client.logout()
 client.close()
 ```
 
-Stations may be given as names (`"서울"`) or as codes; a numeric reference is
-resolved through the station list the app itself downloads. Dates and times are
-the app's own `YYYYMMDD` and `HHMMSS` strings.
+`KorailClient()` needs no configuration. Stations may be given as names
+(`"서울"`) or as codes; a numeric reference is resolved through the station list
+the app itself downloads. Dates and times are the app's own `YYYYMMDD` and
+`HHMMSS` strings.
 
-Nothing above needs DynaPath. That anti-automation header is **off by default**
-and is only ever attached to the six allowlisted paths, from settings you supply
-explicitly — see [docs/verification-record.md](docs/verification-record.md).
+### What the default configuration sends
+
+`login` is behind KORAIL's anti-automation check, so the defaults are not
+cosmetic — a request that does not look like the app is refused. Two of them:
+
+- **User-Agent.** The app hardcodes none; it speaks Retrofit v1 over
+  `HttpURLConnection`, so what the server sees is the platform's Dalvik string,
+  and that is the shape `KORAIL_USER_AGENT` now has. Before 1.0.0 it named this
+  Python package, which nothing on the network but this library does.
+- **DynaPath.** The `x-dynapath-m-token` anti-automation header is **on by
+  default** and is only ever attached to the paths the app attaches it to,
+  which are exactly `DYNAPATH_ALLOWLIST_PATHS` — never to anything else.
+  Turning it on widened *whether* a token is sent, not *where*. It is generated
+  locally from a config's own device values; nothing on your machine is read to
+  build it.
+
+Those device values are **synthetic and per-instance**. Each `KorailConfig()`
+invents its own `di` — the field that on a handset is `Settings.Secure.ANDROID_ID`
+— rather than sharing a constant baked into the package, because an identifier
+every installation sends in common is itself the thing an anti-macro check looks
+for. It is stable for the life of that config and does not survive the process.
+
+If you want a *real* device identity instead — your own `ANDROID_ID`, model and
+Android release, stable across runs — pin it through the environment:
+
+```bash
+export KORAIL_DYNAPATH_DEVICE_ID="<Settings.Secure.ANDROID_ID, 16 hex chars>"
+export KORAIL_DYNAPATH_OS_VERSION="15"        # Build.VERSION.RELEASE
+export KORAIL_DYNAPATH_DEVICE_MODEL="SM-S928N"  # Build.MODEL
+```
+
+```python
+from korail_mobile_api import KorailClient, build_config_from_env
+
+client = KorailClient(build_config_from_env())
+```
+
+The last two are used twice on purpose — in the token *and* in the User-Agent,
+which is derived from them rather than written separately, so the header and the
+token cannot end up claiming different handsets. Everything else
+(`KORAIL_BASE_URL`, screen geometry, `KORAIL_ANDROID_SDK_INT`,
+`KORAIL_ADVERTISING_ID`) has a default; see
+[docs/verification-record.md](docs/verification-record.md).
+
+To turn DynaPath off — for a mock transport, or to see what the bare protocol
+does — say so explicitly:
+
+```python
+from korail_mobile_api import DynapathConfig, KorailClient, KorailConfig
+
+client = KorailClient(KorailConfig(dynapath=DynapathConfig()))
+```
+
+Be aware of what that gives up. Under the pre-1.0.0 defaults — no DynaPath, and
+a User-Agent naming this package — reads were observed to succeed and `login`
+was observed to fail, in the disguised way described under
+[Error taxonomy](#error-taxonomy). Which of the two changes login was actually
+answering was never isolated one at a time against the live server, so a config
+with DynaPath off but the app-shaped User-Agent kept is untested rather than
+known-broken.
 
 ## What it can do
 
@@ -284,7 +342,7 @@ to, and `code` / `message` / `raw` are present on all of them.
 | `KorailInvalidRequestError` | `WRG200018`*, `WRT100002`*, `WRT100124`* | **Fix the payload.** A field was rejected; retry is pointless unchanged. |
 | `KorailNotEntitledError` | `ERR299943`* | **This account may not book that fare.** The payload is well-formed; it is refused for who is asking. |
 | `KorailServiceUnavailableError` | `SEMGTK` | The back end is down, not your request. |
-| `KorailAppUpdateRequiredError` | `SUPDATE` | This client version is refused; no retry interval helps. |
+| `KorailAppUpdateRequiredError` | `SUPDATE` | This client version is refused; no retry interval helps. Note that a login refused for *looking automated* also says "update the app" — see below. |
 | `KorailAppError` | anything else | Unclassified. `code` and `raw` are intact — this is how the map grows. |
 | `KorailSessionExpiredError` | `P058` | **Re-login.** A `KorailAuthError`, deliberately *not* a `KorailAppError`. |
 | `KorailDynaPathError` | *(no code — a response header)* | You were flagged, not throttled. Anti-macro rejection carries no `h_msg_cd` at all. |
@@ -293,6 +351,32 @@ to, and `code` / `message` / `raw` are present on all of them.
 Codes marked \* are this repository's own live observations rather than APK
 branches; which is which, and the one observation deliberately left unclassified,
 are in [docs/verification-record.md](docs/verification-record.md).
+
+#### An anti-macro rejection that reads as a version problem
+
+**A failed `login` telling you to update the app is usually not about the app
+version.** The check the server applies to login answers a client that does not
+look like the app with `**MACRO ERROR**`, and dresses that up in the user-facing
+text as *"원활한 서비스 이용을 위해 앱을 최신 버전으로 업데이트한 뒤…"*. Take
+that at face value and you go looking for a superseded
+`KORAIL_API_VERSION` — which is what `KorailAppUpdateRequiredError`'s `SUPDATE`
+genuinely means, and is not what happened.
+
+Two things tell them apart:
+
+- **What else works.** Anti-macro rejection is account-shaped, not
+  client-shaped: `get_app_data()`, `get_notice()` and the rest of the
+  account-neutral reads keep answering normally while only `login` fails. A real
+  version gate refuses everything. "Reads fine, login refused" is the signature,
+  and it has already caused one misdiagnosis in this repository.
+- **The raw code.** `login` is a route this library parses; call it and read
+  `error.code` and `error.raw` rather than the Korean text. `SUPDATE` is a
+  version gate. A `MACRO`-bearing code or message is not.
+
+The fix is not a version bump: it is to look like the app. That is what the
+default configuration above is for, and it is why turning DynaPath off or
+overriding `user_agent` with something of your own is a change worth making
+deliberately.
 
 A warning code attached to a success stays a success — the app dispatches any
 unrecognised code on a non-`FAIL` response as a success, and so does this client.

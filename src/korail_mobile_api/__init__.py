@@ -36,6 +36,7 @@ from .constants import (
     KORAIL_STANDBY_WAIT_FLAG,
     KORAIL_TRANSFER_ITINERARY_CODE,
     KORAIL_TRANSFER_JOURNEY_TYPE_CODE,
+    KORAIL_USER_AGENT,
     KorailNetFunnelAction,
     KorailNetFunnelOpcode,
     KorailReservationJobType,
@@ -80,6 +81,23 @@ from .errors import (
     classify_app_error,
 )
 from .http import parse_base_response
+# Imported LAST among the package's own modules on purpose. ``live`` sits on
+# top of the stack — it imports ``client``, which imports everything else — so
+# pulling it in earlier would make this file's import order decide whether the
+# package loads. There is no cycle to break (nothing under ``client`` imports
+# ``live``), and importing it here rather than lazily keeps ``__all__`` honest:
+# a name in ``__all__`` that only appears after a deferred import is a name
+# ``dir()`` and static checkers cannot see.
+#
+# ``build_config_from_env`` is the ONLY thing exported from this module.
+# ``read_credentials_from_env``, ``live_enabled`` and ``run_live_smoke_from_env``
+# stay unexported: the first reads ``KORAIL_MEMBER_NO``/``KORAIL_PASSWORD``, and
+# exporting it would make this package assert an opinion about where a caller's
+# credentials live, which it deliberately does not have; the other two are this
+# repository's own smoke scaffolding, gated on an env flag, and are not an API
+# anyone else has a reason to call. Configuration is a user's problem;
+# credentials and smoke runs are ours.
+from .live import build_config_from_env
 from .limousine_models import (
     LimousineRecommendedProduct,
     LimousineSchedule,
@@ -371,6 +389,7 @@ __all__ = [
     "KORAIL_STANDBY_WAIT_FLAG",
     "KORAIL_TRANSFER_ITINERARY_CODE",
     "KORAIL_TRANSFER_JOURNEY_TYPE_CODE",
+    "KORAIL_USER_AGENT",
     "KORAIL_CARD_BEARING_MUTATION_CATEGORIES",
     "KORAIL_MUTATION_ROUTES",
     "KorailApiError",
@@ -505,6 +524,7 @@ __all__ = [
     "SelfSeatChangeStation",
     "ServiceStatusResponse",
     "EXCLUDED_API_DOMAINS",
+    "build_config_from_env",
     "build_dynapath_prefix",
     "generate_dynapath_encoding_table",
     "generate_dynapath_token",
