@@ -15,7 +15,7 @@
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
 
-Package coverage: 58 exact login/read routes and 74 public methods. Sixty-two
+Package coverage: 61 exact login/read routes and 77 public methods. Sixty-five
 are audited login/read methods; the other twelve, `reserve`,
 `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`,
 `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`,

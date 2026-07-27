@@ -63,7 +63,7 @@ EXCLUDED_API_DOMAINS = frozenset(
 
 # The exact (method, path) pairs the read-only send path will transmit to.
 #
-# 58 entries, 58 distinct paths, pinned by tests. The count is not 52 because
+# 61 entries, 61 distinct paths, pinned by tests. The count is not 55 because
 # two of the entries are session routes rather than reads: the login POST and
 # the server-side logout GET (cookie-authenticated, zero parameters, not a
 # mutation), which was added later than the other 50. There is no "excluding
@@ -188,6 +188,38 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
             "GET",
             "/classes/com.korail.mobile.research.dcntCrdScheduleView.do",
         ),
+        # 승차권 변경(자율 좌석/열차 변경) 조회 chain. All three are reads that
+        # precede a change; none of them commits one.
+        #
+        # self.seatChgInfo.do (TicketService.java:54-56) answers "which
+        # stations and which reasons does this train allow a self seat change
+        # for", keyed by the train the ticket is already on
+        # (TCSOptionsActivity.java:128-140).
+        ("POST", "/classes/com.korail.mobile.self.seatChgInfo.do"),
+        # research.tripChgOgtk.do (ResearchService.java:61-63) is the 원표
+        # (원승차권) lookup the change chain starts from: it takes N 반환번호
+        # tuples and returns the original tickets' journeys and seats
+        # (OgTkInquiryDao.java:38-53). Its sibling reservation.tripChgDate.do
+        # is already registered above.
+        ("POST", "/classes/com.korail.mobile.research.tripChgOgtk.do"),
+        # myTicket.reqUpgradeSeat (MyTicketService.java:23-24) is the 특실
+        # 업그레이드 QUOTE. It answers "what would this cost" -- the app shows
+        # the returned scnIndcAmt in a confirmation dialog
+        # (SpecialRoomUpgradeActivity.java:59-66) and only charges after the
+        # user accepts, through the SEPARATE procUpgradeSeat route
+        # (MyTicketService.java:20-21), which is NOT registered anywhere in
+        # this module.
+        #
+        # CAVEAT, recorded rather than glossed: the quote's response carries
+        # jrnys[].lumpStlTgtNo (SpecialRoomUpgradeDao.java:15-21), a
+        # 일괄결제대상번호 that procUpgradeSeat then spends
+        # (SpecialRoomUpgradeActivity.java:74). The app has no undo path for a
+        # quote that is never paid, so whether the server mints settlement
+        # state here is not decidable from the APK alone. It is registered as a
+        # read because that is what the app's own request does -- it sends no
+        # amount, no payment means and no confirmation flag -- but a caller
+        # should treat it as the most speculative entry in this set.
+        ("GET", "/classes/com.korail.mobile.myTicket.reqUpgradeSeat"),
     }
 )
 
@@ -1118,6 +1150,71 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "qryPgNo",
         }
     ),
+    # 자율 좌석/열차 변경 옵션 조회 (TicketService.java:54-56, eight @Fields;
+    # cross-checked against TicketService.smali:280-325). psrmClCd is
+    # omittable -- see KORAIL_OPTIONAL_REQUEST_FIELDS below.
+    "/classes/com.korail.mobile.self.seatChgInfo.do": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "runDt",
+            "trnNo",
+            "dptRsStnCd",
+            "arvRsStnCd",
+            "psrmClCd",
+        }
+    ),
+    # 특실 업그레이드 견적 (MyTicketService.java:23-24, twenty-six @Query
+    # parameters; cross-checked against MyTicketService.smali:176-309). Every
+    # one of them is always transmitted, so nothing is registered as optional.
+    # Twenty-three come from a push payload read with JSONObject.optString,
+    # which yields "" rather than null (SpecialRoomUpgradeActivity.java:
+    # 103-130). The remaining three -- scarNo, seatNo, rqSeatAttCd -- are the
+    # only ones that builder leaves unset, and BOTH of the two places that
+    # actually send the request fill them first: the "any seat" branch blanks
+    # the pair and sets rqSeatAttCd (:163-165) and the seat-picker branch sets
+    # them from the chosen seat (:268-270). rqSeatAttCd is I4/a.AFTER_DEPARTURE
+    # = "15" on both paths (I4/a.java:5, I4/a.smali:7).
+    "/classes/com.korail.mobile.myTicket.reqUpgradeSeat": frozenset(
+        {
+            "Device",
+            "Version",
+            "Key",
+            "ogtkSaleDd",
+            "ogtkSaleWctNo",
+            "ogtkSaleSqno",
+            "ogtkRetPwd",
+            "jrnyTpCd",
+            "jrnySqno",
+            "dptDt",
+            "dptStnConsOrdr",
+            "dptStnRunOrdr",
+            "dptRsStnCd",
+            "dptTm",
+            "arvDt",
+            "arvStnConsOrdr",
+            "arvStnRunOrdr",
+            "arvRsStnCd",
+            "arvTm",
+            "trnNo",
+            "runDt",
+            "trnGpCd",
+            "roomClsfCd",
+            "scarNo",
+            "seatNo",
+            "rqSeatAttCd",
+        }
+    ),
+    # 원표(원승차권) 조회 (ResearchService.java:61-63). Only the four fixed
+    # @Fields can be named here; the rest of the request is a @FieldMap whose
+    # keys carry a row index, so the shape is pinned by
+    # _is_original_ticket_field_order below rather than by this set. The entry
+    # still has to exist: assert_read_only_request_fields returns without
+    # validating anything at all when a path is absent from this mapping.
+    "/classes/com.korail.mobile.research.tripChgOgtk.do": frozenset(
+        {"Device", "Version", "Key", "tkCnt"}
+    ),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 
@@ -1146,6 +1243,15 @@ KORAIL_OPTIONAL_REQUEST_FIELDS: dict[str, frozenset[str]] = {
     # this route declares the parameter even though v6.5.0 never fills it.
     "/classes/com.korail.mobile.research.dcntCrdScheduleView.do": frozenset(
         {"useTrmDno", "qryPgNo"}
+    ),
+    # 자율 좌석/열차 변경 옵션 조회's room class. TCSOptionsActivity.java:135-138
+    # calls setPsrmClCd ONLY when the ticket's own h_psrm_cl_cd is 일반실 or
+    # 특실 (K4/o.java:7-8 -> "1"/"2", cross-checked K4/o.smali:34-82); for any
+    # other value the setter is never reached, the field stays null and
+    # Retrofit drops it. A request that carries the code and one that omits it
+    # are therefore both shapes the app itself emits.
+    "/classes/com.korail.mobile.self.seatChgInfo.do": frozenset(
+        {"psrmClCd"}
     ),
 }
 
@@ -1231,6 +1337,7 @@ KORAIL_EXACT_REQUEST_FIELD_ORDERS = {
     ),
     "/classes/com.korail.mobile.tk.pbpAcepSpec.do": (),
     "/classes/com.korail.mobile.tk.plfNo.do": (),
+    "/classes/com.korail.mobile.research.tripChgOgtk.do": (),
     "/classes/com.korail.mobile.tk.rcntDlvHst.do": (
         ("Device", "Version", "Key", "custMgNo"),
     ),
@@ -1243,6 +1350,65 @@ _PLATFORM_NUMBER_PATH = "/classes/com.korail.mobile.tk.plfNo.do"
 _REPEATED_TICKET_REFERENCE_PATHS = frozenset(
     {_PBP_ACCEPTANCE_PATH, _PLATFORM_NUMBER_PATH}
 )
+_TRIP_CHANGE_ORIGINAL_TICKET_PATH = (
+    "/classes/com.korail.mobile.research.tripChgOgtk.do"
+)
+# The @FieldMap key prefixes of the 원표 lookup, in the order the app's own
+# loops put them (TCBookingActivity.java:169-175, SeatSearchActivity.java:
+# 605-611). Every prefix ends in an underscore in the constant itself --
+# ROrtg.java:8-11, cross-checked ROrtg.smali:20-26 -- and the row number is
+# appended directly, so the transmitted keys are ogtkSaleWctNo_1,
+# ogtkSaleDd_1, ogtkSaleSqno_1, ogtkRetPwd_1, ...
+_ORIGINAL_TICKET_FIELD_PREFIXES = (
+    "ogtkSaleWctNo_",
+    "ogtkSaleDd_",
+    "ogtkSaleSqno_",
+    "ogtkRetPwd_",
+)
+
+
+def _is_original_ticket_field_order(
+    names: tuple[str, ...],
+    scalar_pairs: tuple[tuple[str, Any], ...],
+) -> bool:
+    """Whether an ordered 원표 request matches ``research.tripChgOgtk.do``.
+
+    ``ResearchService.java:61-63`` declares four fixed ``@Field``s and then a
+    ``@FieldMap``, so the only part of the request an exact NAME set could pin
+    is the prefix; the rest is one four-key group per original ticket, indexed
+    from 1.
+
+    ``tkCnt`` is deliberately NOT required to equal the number of groups. The
+    app disagrees with itself on what it means: ``TCBookingActivity.java:179``
+    sends the passenger count (``TOTAL_PERSON_COUNT``),
+    ``PushHistoryActivity.java:357`` sends the number of ticket rows, and
+    ``SeatSearchActivity.java:615`` hardcodes ``1`` while looping over
+    ``f29962H.size()`` rows. Two of the app's own three call sites would fail a
+    ``tkCnt == N`` check, so requiring it would reject requests the app itself
+    emits. What IS pinned is the type -- the smali signature is ``I``
+    (``ResearchService.smali:613,628-632``), so a string here is wrong.
+    """
+    prefix = ("Device", "Version", "Key", "tkCnt")
+    if names[: len(prefix)] != prefix:
+        return False
+    if type(scalar_pairs[len(prefix) - 1][1]) is not int:
+        return False
+    remainder = names[len(prefix) :]
+    group = len(_ORIGINAL_TICKET_FIELD_PREFIXES)
+    if not remainder or len(remainder) % group:
+        return False
+    count = len(remainder) // group
+    expected = tuple(
+        f"{name}{index}"
+        for index in range(1, count + 1)
+        for name in _ORIGINAL_TICKET_FIELD_PREFIXES
+    )
+    if remainder != expected:
+        return False
+    return all(
+        isinstance(value, str) and bool(value)
+        for _, value in scalar_pairs[len(prefix) :]
+    )
 
 
 def _is_commuter_passenger_field_order(
@@ -1418,6 +1584,9 @@ def assert_read_only_request_fields(
                 names,
                 scalar_pairs,
             )
+        ) or (
+            route_path == _TRIP_CHANGE_ORIGINAL_TICKET_PATH
+            and _is_original_ticket_field_order(names, scalar_pairs)
         )
     else:
         # Every field must belong to the exact set, and every non-optional

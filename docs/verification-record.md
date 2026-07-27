@@ -18,10 +18,10 @@ is a bug report.
 
 ## Package boundary and verification summary
 
-The reviewed package boundary contains 58 routes and 74 public methods. All 58
-routes are login/read routes: 56 reads plus the login POST and the server-side
+The reviewed package boundary contains 61 routes and 77 public methods. All 61
+routes are login/read routes: 59 reads plus the login POST and the server-side
 logout GET. The eight mutation routes are tracked separately and
-are never added to the read-only allowlist. Sixty-two of the methods are the
+are never added to the read-only allowlist. Sixty-five of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
 twelve, `reserve`, `reserve_transfer`, `reserve_merge`,
 `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
@@ -59,7 +59,7 @@ for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `2228 passed, 1 deselected`; the one
+current reviewed offline gate is `2245 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly

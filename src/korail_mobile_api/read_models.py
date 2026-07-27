@@ -1013,6 +1013,252 @@ class PlatformNumberResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
+class SelfSeatChangeStation:
+    """One boarding station a 자율 좌석 변경 may move the ticket to.
+
+    ``CallSelfSeatChgInfoDao.ChgStnList``
+    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:157-204``). The two seat
+    counts are what makes a row selectable: ``gnrmRestSeatNum`` /
+    ``sprmRestSeatNum`` are the 일반실 / 특실 remaining-seat numbers for the
+    section starting at this station.
+    """
+
+    departure_station_code: str | None = None
+    departure_station_name: str | None = None
+    departure_date: str | None = None
+    departure_time: str | None = None
+    arrival_date: str | None = None
+    arrival_time: str | None = None
+    departure_construction_order: str | None = None
+    departure_run_order: str | None = None
+    general_remaining_seats: str | None = None
+    special_remaining_seats: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class SelfSeatChangeReason:
+    """One 변경 사유 row (``CallSelfSeatChgInfoDao.java:136-155``)."""
+
+    query_code: str | None = None
+    query_order: str | None = None
+    reason_text: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class SelfSeatChangeInfoResponse(BaseKorailResponse):
+    """``self.seatChgInfo.do`` — what a self seat/train change may become.
+
+    ``CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse``
+    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:64-134``).
+
+    :attr:`general_reservation_possible_code` /
+    :attr:`special_reservation_possible_code` (``gnrmRsvPsbCd`` /
+    ``sprmRsvPsbCd``) are the train-level yes/no for each 객실 등급; the
+    per-station remaining seats live on :attr:`stations`.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    train_no: str | None = None
+    train_class_code: str | None = None
+    train_class_name: str | None = None
+    train_group_code: str | None = None
+    train_group_name: str | None = None
+    run_date: str | None = None
+    general_reservation_possible_code: str | None = None
+    special_reservation_possible_code: str | None = None
+    change_before_departure_construction_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    change_before_arrival_construction_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    existing_departure_run_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    existing_arrival_run_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    stations: tuple[SelfSeatChangeStation, ...] = ()
+    reasons: tuple[SelfSeatChangeReason, ...] = ()
+
+
+@dataclass(frozen=True)
+class SpecialRoomUpgradeJourney:
+    """``SpecialRoomUpgradeDao.Jrnys`` (``dao/myTicket/SpecialRoomUpgradeDao.java:12-21``).
+
+    Carries exactly one value, and it is the reason the quote exists:
+    ``lumpStlTgtNo`` is the 일괄결제대상번호 the separate ``procUpgradeSeat``
+    route charges against (``SpecialRoomUpgradeActivity.java:74``). It is
+    redacted everywhere it is previewed or logged.
+    """
+
+    lump_settlement_target_no: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class SpecialRoomUpgradeTicketInfo:
+    """``SpecialRoomUpgradeDao.TicketInfo`` (``:37-57``).
+
+    :attr:`screen_indicated_amount` (``scnIndcAmt``) is the PRICE OF THE
+    UPGRADE in KTX 마일리지 points — the app parses it as an int and shows it
+    in the confirmation dialog (``SpecialRoomUpgradeActivity.java:60-62``),
+    then passes it to the payment as ``mnsStlAmt`` (``:78``).
+    :attr:`total_fare` (``totFare``) is the ticket's own fare, which becomes
+    the payment's ``totTxnAmt`` (``:71``).
+
+    The DAO's third field, ``custNm``, is deliberately NOT surfaced as a typed
+    attribute: it is the traveller's real name, and this package does not add
+    new plaintext-name attributes. It stays reachable through :attr:`raw`.
+    """
+
+    screen_indicated_amount: str | None = None
+    total_fare: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class SpecialRoomUpgradeQuoteResponse(BaseKorailResponse):
+    """``myTicket.reqUpgradeSeat`` — the cost of a 특실 업그레이드.
+
+    ``SpecialRoomUpgradeDao.SpecialRoomUpgradeResponse``
+    (``dao/myTicket/SpecialRoomUpgradeDao.java:23-35``).
+
+    The app treats ``h_msg_cd`` of ``"IRT000000"`` or ``"MRT200105"`` as
+    "quote available" and anything else as a refusal to display
+    (``SpecialRoomUpgradeActivity.java:52-57``); those two codes are exposed
+    as :data:`SPECIAL_ROOM_UPGRADE_QUOTE_OK_CODES` rather than being enforced
+    here, because a strict-envelope read already requires ``strResult ==
+    "SUCC"``.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    ticket_info: SpecialRoomUpgradeTicketInfo | None = None
+    journeys: tuple[SpecialRoomUpgradeJourney, ...] = field(
+        default=(),
+        repr=False,
+    )
+
+
+#: The two ``h_msg_cd`` values the app accepts as a usable 특실 업그레이드
+#: quote (``SpecialRoomUpgradeActivity.java:53-54``). Anything else is shown
+#: to the user as an error instead of a price.
+SPECIAL_ROOM_UPGRADE_QUOTE_OK_CODES = frozenset({"IRT000000", "MRT200105"})
+
+
+@dataclass(frozen=True)
+class OriginalTicketSeat:
+    """One seat of one journey of an original ticket.
+
+    ``response/research/Seat.java``. The seat identity itself (``scarNo`` /
+    ``seatNo``) is redacted wherever it is previewed.
+    """
+
+    passenger_sequence: str | None = None
+    assign_sequence: str | None = None
+    passenger_type_code: str | None = None
+    room_class_code: str | None = field(default=None, repr=False)
+    car_no: str | None = field(default=None, repr=False)
+    seat_no: str | None = field(default=None, repr=False)
+    seat_count: str | None = None
+    received_fare: str | None = None
+    received_price: str | None = None
+    requested_seat_attribute_code: str | None = None
+    direction_seat_attribute_code: str | None = None
+    location_seat_attribute_code: str | None = None
+    smoking_seat_attribute_code: str | None = None
+    additional_seat_attribute_code: str | None = None
+    etc_seat_attribute_code: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class OriginalTicketJourney:
+    """One leg of an original ticket (``response/research/Jrny.java``).
+
+    This is the row the change chain is keyed on: ``jrnySqno`` plus the
+    departure/arrival station codes and orders are exactly the parameters the
+    follow-up reads take.
+    """
+
+    journey_sequence: str | None = None
+    journey_order: str | None = None
+    journey_type_code: str | None = None
+    train_no: str | None = None
+    train_group_code: str | None = None
+    departure_date: str | None = None
+    departure_time: str | None = None
+    departure_station_code: str | None = None
+    departure_station_name: str | None = None
+    departure_construction_order: str | None = None
+    arrival_date: str | None = None
+    arrival_time: str | None = None
+    arrival_station_code: str | None = None
+    arrival_station_name: str | None = None
+    arrival_construction_order: str | None = None
+    goods_no: str | None = None
+    total_seat_count: str | None = None
+    total_standing_count: str | None = None
+    general_change_allowed_flag: str | None = None
+    single_ticket_flag: str | None = None
+    seats: tuple[OriginalTicketSeat, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class OriginalTicket:
+    """One 원표 (``response/research/OrgTk.java``).
+
+    The four ``ogtk*`` values are the ticket's own 반환번호 coming back — the
+    same secret the request sent — and are redacted under both their wire and
+    their attribute spellings. ``cmpnList`` and ``stlList`` (companion
+    discounts and settlement rows) are deliberately left in :attr:`raw`: they
+    carry further credentials (지연증명 return numbers, card and approval
+    numbers) that this model has no change-chain use for. Those wire keys are
+    registered in :mod:`~korail_mobile_api.redaction` so they stay masked in
+    ``raw`` too.
+    """
+
+    pnr_no: str | None = field(default=None, repr=False)
+    ticket_kind_code: str | None = None
+    original_sale_datetime: str | None = field(default=None, repr=False)
+    original_window_no: str | None = field(default=None, repr=False)
+    original_sale_sequence: str | None = field(default=None, repr=False)
+    original_return_password: str | None = field(default=None, repr=False)
+    member_card_no: str | None = field(default=None, repr=False)
+    adult_count: str | None = None
+    child_count: str | None = None
+    group_discount_count: str | None = None
+    passenger_type_division_code: str | None = None
+    received_amount: str | None = None
+    received_fare: str | None = None
+    received_price: str | None = None
+    change_sale_transaction_no: str | None = field(default=None, repr=False)
+    sms_send_flag: str | None = None
+    forced_sale_reason_text: str | None = None
+    journeys: tuple[OriginalTicketJourney, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class OriginalTicketInquiryResponse(BaseKorailResponse):
+    """``research.tripChgOgtk.do`` — the tickets a change would start from.
+
+    ``OgTkInquiryDao.OgTkInquiryResponse``
+    (``dao/research/OgTkInquiryDao.java:38-46``).
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    tickets: tuple[OriginalTicket, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
 class RecentDeliveryRecipient:
     acceptance_customer_management_flag: str | None = field(
         default=None,
