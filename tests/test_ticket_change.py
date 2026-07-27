@@ -181,7 +181,7 @@ def _refuse(request: httpx.Request) -> httpx.Response:
 
 def test_ticket_change_is_its_own_consent_category():
     assert "ticket_change" in MUTATION_CATEGORIES
-    assert len(MUTATION_CATEGORIES) == 7
+    assert len(MUTATION_CATEGORIES) == 8
     # A default consent grants it nothing.
     assert MutationConsent().allow_ticket_change is False
     with pytest.raises(MutationNotAllowedError):
@@ -224,7 +224,7 @@ def test_the_rollback_shares_the_category_it_undoes():
 
 
 def test_routes_are_mutation_routes_owned_by_that_category():
-    assert len(KORAIL_MUTATION_ROUTES) == 11
+    assert len(KORAIL_MUTATION_ROUTES) == 14
     assert KORAIL_MUTATION_ROUTES.isdisjoint(KORAIL_READ_ONLY_ROUTES)
     for route in TICKET_CHANGE_ROUTES:
         assert ("POST", route) in KORAIL_MUTATION_ROUTES

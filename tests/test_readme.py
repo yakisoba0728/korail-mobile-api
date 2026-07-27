@@ -98,7 +98,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "| 실패 | 13 |" in status
     assert "| 미실행 | 120 |" in status
     assert "| 전체 | 165 |" in status
-    assert "Package coverage: 60 exact login/read routes and 76 public methods" in status
+    assert "Package coverage: 60 exact login/read routes and 84 public methods" in status
     assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
     assert "and 128 unexecuted" in status
     assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
@@ -234,7 +234,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
             if not name.startswith("_")
         ]
     )
-    assert actual_public_methods == 76, (
+    assert actual_public_methods == 84, (
         f"KorailClient now exposes {actual_public_methods} public methods; "
         "update this number and every doc that states it "
         "(README.md, api-status-by-service.md, verification-record.md, "
@@ -402,7 +402,7 @@ def test_docs_document_bounded_live_p0_train_reads_and_closed_requests():
     # The package boundary is a repository fact and stays in the README; the
     # four closed request contracts and the bounded run that exercised them are
     # evidence and moved with the record.
-    assert "60 routes and 76 public methods" in README.read_text(encoding="utf-8")
+    assert "60 routes and 84 public methods" in README.read_text(encoding="utf-8")
 
     text = RECORD.read_text(encoding="utf-8")
     normalized = " ".join(text.split())
@@ -427,7 +427,7 @@ def test_docs_document_bounded_live_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "60 routes and 76 public methods" in text
+    assert "60 routes and 84 public methods" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
     assert (

@@ -274,7 +274,7 @@ def test_the_read_only_path_still_refuses_both_routes():
 def test_no_new_consent_category_and_no_card_bearing_change():
     from korail_mobile_api.consent import MUTATION_CATEGORIES
 
-    assert len(MUTATION_CATEGORIES) == 6
+    assert len(MUTATION_CATEGORIES) == 8
     assert "refund" in MUTATION_CATEGORIES
     # Neither form carries a card number, so the card gate is untouched.
     assert KORAIL_CARD_BEARING_MUTATION_CATEGORIES == frozenset({"payment"})
