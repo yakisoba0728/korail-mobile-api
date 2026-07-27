@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Added: 장바구니 담기 as a consent-gated mutation —
+  `KorailClient.add_to_cart`, `POST cart.addCartList`
+  (`CartService.java:11-13`), with `CartAddRequest` and
+  `build_cart_add_form`. One request field beyond the common three —
+  `hidPnrNo` — confirmed against `AddCartDao.java:9-24` and, independently,
+  `AddCartDao$AddCartRequest.smali` / `CartService.smali`. `get_cart_list`
+  already read the cart; this is the write half. The DAO's response type is a
+  bare `BaseResponse`, so `add_to_cart` returns the unparsed envelope rather
+  than a dedicated response type, same as `extend_discount_card`. Never
+  transmitted; not live-enabled.
+- Added: a seventh mutation consent category, `"cart"`, with its own
+  `MutationConsent.allow_cart` flag defaulting to `False`. Deliberately
+  **not** a reuse of `"reserve"`: the hold this acts on already exists and
+  the call creates and destroys nothing this package can observe. It carries
+  no card number and so is not a member of
+  `KORAIL_CARD_BEARING_MUTATION_CATEGORIES`.
 - Added: 운임 재계산 as a consent-gated mutation —
   `KorailClient.recalculate_price`, `POST
   certification.PriceReCalculation` (`CertificationService.java:35-37`), with

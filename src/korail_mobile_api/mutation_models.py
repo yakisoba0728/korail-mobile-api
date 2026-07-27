@@ -575,3 +575,24 @@ class PriceRecalculationRequest:
     #: (``RequestBuilder.smali:1531`` branches past ``addField`` on a null
     #: value), so a member's form genuinely has twelve keys, not fourteen.
     non_member_no: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class CartAddRequest:
+    """Add a held reservation's PNR to the 장바구니 (cart).
+
+    ``cart.addCartList`` (``CartService.java:11-13``) takes exactly one
+    request field beyond the common three: ``hidPnrNo``. The DAO
+    (``AddCartDao.java:9-24``, request class ``AddCartDao$AddCartRequest``)
+    carries the same single field, confirmed against
+    ``AddCartDao$AddCartRequest.smali`` (``hidPnrNo:Ljava/lang/String;`` and
+    the matching ``@Field("hidPnrNo")`` annotation on
+    ``CartService.smali``'s ``addCart`` method).
+
+    ``pnr_no`` is a ticket identifier and is ``repr=False``; it is also
+    already registered in :data:`~korail_mobile_api.redaction.SENSITIVE_KEYS`
+    under its wire name ``hidPnrNo``, so a :class:`~korail_mobile_api.consent.MutationPreview`
+    of this request redacts it automatically.
+    """
+
+    pnr_no: str = field(repr=False)

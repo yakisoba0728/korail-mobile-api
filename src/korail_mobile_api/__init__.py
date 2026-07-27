@@ -126,6 +126,7 @@ from .models import (
     pair_transfer_itineraries,
 )
 from .mutation_models import (
+    CartAddRequest,
     DiscountCardAdditionalUser,
     DiscountCardPurchaseRequest,
     DiscountCardPurchaseResponse,
@@ -277,6 +278,7 @@ __all__ = [
     "AppDataResponse",
     "AppVersionInfo",
     "BaseKorailResponse",
+    "CartAddRequest",
     "CartItem",
     "CartListResponse",
     "CommuterKindMenuResponse",

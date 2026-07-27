@@ -37,6 +37,7 @@ MUTATION_CATEGORIES = (
     "refund",
     "discount_card",
     "price_recalculation",
+    "cart",
 )
 
 _CONSENT_FLAG_BY_CATEGORY = {
@@ -46,6 +47,7 @@ _CONSENT_FLAG_BY_CATEGORY = {
     "refund": "allow_refund",
     "discount_card": "allow_discount_card",
     "price_recalculation": "allow_price_recalculation",
+    "cart": "allow_cart",
 }
 
 
@@ -103,6 +105,12 @@ class MutationConsent:
     #: re-pricing a held booking, so it is asked for separately. No live-test
     #: path in this repository exercises it.
     allow_price_recalculation: bool = False
+    #: 장바구니에 승차권 담기 (``cart.addCartList``,
+    #: ``CartService.java:11-13``). Its own category rather than a reuse of
+    #: ``allow_reserve``: it acts on a PNR that already exists, creates and
+    #: destroys nothing this package can observe, and carries no card number.
+    #: No live-test path in this repository exercises it.
+    allow_cart: bool = False
     dry_run: bool = True
     fake_card_only: bool = True
     #: The caller acknowledges that a real, chargeable PAN will be transmitted
@@ -142,7 +150,8 @@ def require_mutation_consent(
     """Deny a mutation unless ``consent`` explicitly opts into ``category``.
 
     ``category`` must be one of ``"reserve"``, ``"payment"``, ``"cancel"``,
-    ``"refund"``, ``"discount_card"``, ``"price_recalculation"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
+    ``"refund"``, ``"discount_card"``, ``"price_recalculation"``, ``"cart"``.
+    Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
     when ``consent`` is ``None``, is not a :class:`MutationConsent`, names an
     unknown category, or when the matching ``allow_<category>`` flag is False.
     Returns ``None`` when the mutation is permitted. Performs no I/O.

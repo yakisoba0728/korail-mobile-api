@@ -76,11 +76,11 @@ explicitly — see [docs/verification-record.md](docs/verification-record.md).
 
 ## What it can do
 
-The reviewed package boundary contains 58 routes and 74 public methods. Fifty-six
-of the routes are reads, plus the login POST and the logout GET; the eight
+The reviewed package boundary contains 58 routes and 75 public methods. Fifty-six
+of the routes are reads, plus the login POST and the logout GET; the nine
 mutation routes are tracked in a separate set and are never added to the
 read-only allowlist. Sixty-two of the methods transmit only login/read requests.
-The other twelve are the consent-gated mutations below.
+The other thirteen are the consent-gated mutations below.
 
 ### Searching and reading
 
@@ -142,6 +142,13 @@ passenger row.
 - `recalculate_price(request, consent=...)` — 운임 재계산: rewrite what an
   existing hold will cost when the discount selection changes.
 
+### Cart
+
+`get_cart_list(pnr_no=..., additional_service_request_no=...)` reads the
+장바구니; the read used to be the whole cart surface. `add_to_cart(request,
+consent=...)` completes it — `POST cart.addCartList`, one field (`hidPnrNo`)
+beyond the common three, in its own `cart` consent category.
+
 ### Discounts, welfare and passes
 
 - `get_discount_card_usage_history(card_no)` and
@@ -193,16 +200,16 @@ This is the part to read before calling anything. It is enforced in code, not by
 convention, and the offline suite pins it.
 
 **1. Nothing that changes state moves without an explicit consent object.**
-Every one of the twelve mutation methods starts with
+Every one of the thirteen mutation methods starts with
 `require_mutation_consent(consent, category)` and raises
 `MutationNotAllowedError` before it builds anything. There is no global switch
 and no environment variable that turns this off.
 
 **2. Each category is opted into separately.** `MutationConsent` has one flag
 per category — `allow_reserve`, `allow_payment`, `allow_cancel`, `allow_refund`,
-`allow_discount_card`, `allow_price_recalculation` — and every one defaults to
-`False`. A consent that authorises a booking cannot cancel one, and a consent
-that authorises paying a quoted amount cannot re-price it.
+`allow_discount_card`, `allow_price_recalculation`, `allow_cart` — and every one
+defaults to `False`. A consent that authorises a booking cannot cancel one, and a
+consent that authorises paying a quoted amount cannot re-price it.
 
 **3. `dry_run=True` is the default, and a dry run sends nothing.** With the
 default consent, a mutation method validates its inputs and returns a
@@ -375,7 +382,7 @@ env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
 ```
 
 The offline suite is the gate and it makes no network calls:
-`2228 passed, 1 deselected`, where the one deselected test is the explicitly
+`2242 passed, 1 deselected`, where the one deselected test is the explicitly
 opted-in live-service test. Live tests run only when `KORAIL_MOBILE_API_LIVE=1`
 is set together with credentials you supply yourself; nothing in this repository
 ships an account.
