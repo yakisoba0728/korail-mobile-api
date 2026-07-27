@@ -1,14 +1,36 @@
+# Kept in step with the sibling srt-mobile-api repository. The two had drifted:
+# this file was missing `build/` and `dist/`, the sibling was missing
+# `.pytest_cache/` and `.claude/`, and neither ignored `dist/` at all -- which
+# matters because `scripts/verify_distribution.py` REJECTS any archive member
+# whose path has a `build` or `dist` component. A stray build tree left in the
+# checkout does not just clutter `git status`; it can end up inside the sdist
+# and fail the release gate for a reason nobody would look for.
+
+# Local analysis workspaces and the APKs they are unpacked from. Never
+# distributed: the app binaries are not ours to redistribute, and the unpacked
+# trees carry the vendor keys this repository redacts.
 analysis/
-.DS_Store
+*.apk
+
+# Credentials. `.env` is anchored so a `docs/.env` example would still be
+# tracked deliberately rather than ignored by accident.
 /.env
 .local-live-smoke.env
-*.apk
-.worktrees/
-.superpowers/
+
+# Build artifacts. `python3 -m build` writes the first two; installing in
+# editable mode writes the third.
+build/
+dist/
+*.egg-info/
+
+# Python and pytest scratch.
 __pycache__/
 *.py[cod]
-*.egg-info/
 .pytest_cache/
 
 # Agent worktrees and local tool state — never part of the package.
+.worktrees/
+.superpowers/
 .claude/
+
+.DS_Store

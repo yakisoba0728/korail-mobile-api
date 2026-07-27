@@ -23,7 +23,7 @@ Three things to know before you install it:
 There is no PyPI release. Install it from this repository:
 
 ```bash
-pip install "korail-mobile-api @ git+https://github.com/yakisoba0728/korail-mobile-api"
+python3 -m pip install "korail-mobile-api @ git+https://github.com/yakisoba0728/korail-mobile-api"
 ```
 
 Python **3.11 or newer** (`requires-python = ">=3.11"`). The only runtime
@@ -33,7 +33,7 @@ dependencies are `httpx` and `cryptography`. The package is typed and ships
 For a checkout you intend to edit:
 
 ```bash
-pip install -e ".[test]"
+python3 -m pip install -e ".[test]"
 python3 -m pytest -q -m "not live"
 ```
 
