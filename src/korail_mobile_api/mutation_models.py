@@ -316,6 +316,13 @@ class CardPayment:
     #: ``K4/h.smali:44-52`` builds the INS_0 constant with ``const-string "0"``
     #: and every other value is unpadded too (``"2"``, ``"3"``, ``"12"``,
     #: ``"24"``). ``"00"`` occurs nowhere in the APK for this field.
+    #:
+    #: Re-checked against a SECOND, independent site on 2026-07-27, because the
+    #: line above was carried on the strength of one citation:
+    #: ``v4/a.java:288`` calls ``setHidIsmtMnthNum(i9, "0")`` with the literal
+    #: inline, and ``:239`` defaults ``h hVar = h.INS_0`` before the dropdown
+    #: switch assigns INS_2/INS_3/INS_4 for the other options. Two sites, one
+    #: value, no padding.
     installment: str = "0"
     card_type: str = "J"  # hidAthnDvCd1: "J" personal / "S" corporate
 

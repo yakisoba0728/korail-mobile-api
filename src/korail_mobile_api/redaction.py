@@ -39,7 +39,22 @@ SENSITIVE_KEYS = frozenset(
         "pbpAcepKndNm",
         "regDt",
         "wdrwPsbFlg",
+        # The human-readable special-category labels. psgTpDvNm was registered
+        # alone, and the 2026-07-27 read-side sweep found four more spellings
+        # carrying the SAME VALUE -- "장애 1~3급", "국가유공자", "만 65세이상"
+        # -- that were not. That is not the code-vs-name policy this module
+        # documents (mask what a human can read, not the codes standing for
+        # it); it is that policy implemented in one spelling out of five.
+        #
+        # psgTpNm / h_psg_tp_nm are the 승객유형명 as the reservation and
+        # refund reads return it; h_dcnt_knd_nm is 할인종류명; h_subt_dcs_cl_nm
+        # is the 복지할인 구분명 on the point summary. A spelling that is not
+        # here is a spelling that leaks the day a route starts sending it.
         "psgTpDvNm",
+        "psgTpNm",
+        "h_psg_tp_nm",
+        "h_dcnt_knd_nm",
+        "h_subt_dcs_cl_nm",
         "psrmClCd",
         "psrmClNm",
         "scarNo",

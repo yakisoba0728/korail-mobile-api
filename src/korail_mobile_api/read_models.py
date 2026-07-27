@@ -577,13 +577,13 @@ class KorailPointSummaryResponse(BaseKorailResponse):
     #: ``h_delay_cnt`` — how many 지연할인권 the account holds.
     delay_discount_count: str | None = None
     #: ``h_hdcp_flg`` — ``"Y"`` when the account carries a 장애인 registration.
-    disability_flag: str | None = None
+    disability_flag: str | None = field(default=None, repr=False)
     #: ``h_subt_dcs_cl_nm`` / ``h_subt_dcs_cl_cd`` — the 우대할인 class the
     #: registration grants, rendered under the 장애인증 label.
-    welfare_discount_class_name: str | None = None
+    welfare_discount_class_name: str | None = field(default=None, repr=False)
     welfare_discount_class_code: str | None = field(default=None, repr=False)
     #: ``h_cust_lead_flg_nm`` — rendered under the 보조견 label.
-    customer_lead_flag_name: str | None = None
+    customer_lead_flag_name: str | None = field(default=None, repr=False)
     #: ``h_cp_athn_flg`` / ``h_emil_athn_flg`` — phone and e-mail verified.
     phone_verified_flag: str | None = field(default=None, repr=False)
     email_verified_flag: str | None = field(default=None, repr=False)
@@ -1428,9 +1428,9 @@ class RefundTicketSeat:
     buyer_name: str | None = field(default=None, repr=False)
     checkin_status_code: str | None = field(default=None, repr=False)
     discount_kind_code: str | None = field(default=None, repr=False)
-    discount_kind_name: str | None = None
+    discount_kind_name: str | None = field(default=None, repr=False)
     passenger_type_code: str | None = field(default=None, repr=False)
-    passenger_type_name: str | None = None
+    passenger_type_name: str | None = field(default=None, repr=False)
     seat_group_name: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 

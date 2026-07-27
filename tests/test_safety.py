@@ -205,3 +205,99 @@ def test_no_module_level_definition_is_unreachable():
     assert not orphans, "unreachable module-level definitions:\n  " + "\n  ".join(
         sorted(orphans)
     )
+
+
+# --------------------------------------------------------------------------
+# The queue is a SECOND ORIGIN. It lives on a different host from every other
+# route in this package, which is why it could not simply be added to
+# KORAIL_READ_ONLY_ROUTES and deliberately was not. The two boundaries had
+# never been tested against each other -- each was tested from the inside.
+# --------------------------------------------------------------------------
+
+
+def test_the_ordinary_origin_gate_refuses_the_queue_host():
+    """post_form / get_json must never be able to target ts.wseq."""
+    from korail_mobile_api.constants import KORAIL_NETFUNNEL_URL
+
+    for url in (KORAIL_NETFUNNEL_URL, "https://rnf1.letskorail.com"):
+        with pytest.raises(KorailProtocolError):
+            safety.assert_korail_origin(url)
+
+
+def test_the_read_only_allowlist_refuses_the_queue_path():
+    """And the queue path is not reachable through the read-only boundary."""
+    from korail_mobile_api.constants import KORAIL_NETFUNNEL_PATH
+
+    for method in ("GET", "POST"):
+        with pytest.raises(KorailProtocolError):
+            safety.assert_read_only_route(method, KORAIL_NETFUNNEL_PATH)
+
+
+def test_the_queue_gate_refuses_an_ordinary_route():
+    """The other direction: the queue contract is not a general-purpose GET."""
+    with pytest.raises(KorailProtocolError):
+        safety.assert_netfunnel_request(
+            "GET", "/classes/com.korail.mobile.common.code.do", {}
+        )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # A suffix that merely CONTAINS the allowed host.
+        "https://rnf1.letskorail.com.evil.example",
+        # The allowed host smuggled into a query string.
+        "https://evil.example/?x=https://rnf1.letskorail.com",
+        "http://rnf1.letskorail.com",  # not https
+        "https://user:pw@rnf1.letskorail.com",  # userinfo
+        "https://rnf1.letskorail.com:8443",  # wrong port
+        "https://rnf0.letskorail.com",  # outside the observed pool
+        "https://rnf1.letskorail.com/path",  # a path
+        "https://rnf1.letskorail.com#frag",  # a fragment
+    ],
+)
+def test_a_queue_node_lookalike_is_refused(url):
+    with pytest.raises(KorailProtocolError):
+        safety.assert_korail_netfunnel_node_origin(url)
+
+
+def test_a_queue_hostname_is_matched_case_insensitively():
+    """Not a hole: DNS is case-insensitive and the gate casefolds on purpose.
+
+    Pinned so that a future "tighten the host check" edit does not turn a
+    correct behaviour into a refusal of the app's own traffic.
+    """
+    safety.assert_korail_netfunnel_node_origin("https://RNF1.LETSKORAIL.COM")
+
+
+def test_a_caller_supplied_queue_url_is_gated_before_any_request():
+    """The config field is caller-writable, so it is checked, not trusted.
+
+    ``netfunnel_enabled=True`` is set because the disabled-by-default refusal
+    fires FIRST and would otherwise be what this test observed. That ordering
+    is defence in depth and is pinned separately below; here the point is that
+    a caller who legitimately enables the queue still cannot redirect it.
+    """
+    from korail_mobile_api.config import KorailConfig
+    from korail_mobile_api.netfunnel import KorailNetFunnelClient
+
+    for hostile in ("https://evil.example", "http://nf.letskorail.com"):
+        with pytest.raises(KorailProtocolError):
+            KorailNetFunnelClient(
+                KorailConfig(netfunnel_url=hostile, netfunnel_enabled=True)
+            )
+
+
+def test_the_queue_is_refused_before_its_origin_is_even_considered():
+    """Disabled by default, and that refusal precedes the origin check.
+
+    Two independent reasons a hostile queue URL goes nowhere, in the order
+    they fire. Worth pinning because the outer one silently makes the inner
+    one unreachable in tests -- which is exactly how it was noticed.
+    """
+    from korail_mobile_api.config import KorailConfig
+    from korail_mobile_api.errors import KorailNetFunnelError
+    from korail_mobile_api.netfunnel import KorailNetFunnelClient
+
+    with pytest.raises(KorailNetFunnelError, match="disabled by default"):
+        KorailNetFunnelClient(KorailConfig(netfunnel_url="https://evil.example"))

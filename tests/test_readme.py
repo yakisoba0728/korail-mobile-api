@@ -860,3 +860,30 @@ def test_every_document_that_lists_the_mutation_methods_lists_all_of_them():
             assert not re.search(
                 rf"`{method}[`(]", document
             ), f"{name} still names {method}"
+
+
+def test_the_route_decomposition_is_measured_not_asserted():
+    """"60 routes = 58 reads + the login POST + the logout GET", derived.
+
+    README states the breakdown and nothing checked it, so every read added
+    since would have silently made the sentence wrong while the total beside
+    it stayed pinned and green. The two auth routes are identified by their
+    exact (method, path) pairs rather than by a substring, because
+    `login.Logout` contains `login` and a careless filter counts it twice.
+    """
+    from korail_mobile_api import safety
+
+    routes = set(safety.KORAIL_READ_ONLY_ROUTES)
+    auth = {
+        ("POST", "/classes/com.korail.mobile.login.Login"),
+        ("GET", "/classes/com.korail.mobile.login.Logout"),
+    }
+
+    assert auth <= routes, "the login/logout pair is not on the allowlist"
+    reads = len(routes) - len(auth)
+
+    readme = README.read_text(encoding="utf-8")
+    normalized = " ".join(readme.split())
+    assert f"{len(routes)} routes" in normalized
+    assert f"{reads}" in normalized, f"README does not state {reads} reads"
+    assert f"contains {len(routes)} routes" in normalized

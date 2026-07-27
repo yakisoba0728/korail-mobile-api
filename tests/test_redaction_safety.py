@@ -354,3 +354,89 @@ def test_safety_excludes_dangerous_domains_without_stub_apis():
     assert "payment" in EXCLUDED_API_DOMAINS
     assert "refund" in EXCLUDED_API_DOMAINS
     assert "check-in" in EXCLUDED_API_DOMAINS
+
+
+# --------------------------------------------------------------------------
+# The read side, swept whole rather than per-route. The 2026-07-27 audit
+# checked the three routes added that day; this checks all 47 field contracts
+# and every model dataclass at once, which is what found that the policy was
+# implemented in one spelling out of five.
+# --------------------------------------------------------------------------
+
+
+def test_every_special_category_label_spelling_is_masked():
+    """One meaning, five wire spellings; masking one of them masks nothing.
+
+    These carry a human-readable special-category value -- "장애 1~3급",
+    "국가유공자", "만 65세이상". This module's documented policy is to mask
+    what a human can read and to leave the CODES that stand for it, so all of
+    them belong in SENSITIVE_KEYS. Only psgTpDvNm was there.
+    """
+    from korail_mobile_api.redaction import is_sensitive_key
+
+    for spelling in (
+        "psgTpDvNm",
+        "psgTpNm",
+        "h_psg_tp_nm",
+        "h_dcnt_knd_nm",
+        "h_subt_dcs_cl_nm",
+    ):
+        assert is_sensitive_key(spelling), spelling
+
+
+def test_no_special_category_label_is_left_in_a_model_repr():
+    """The other half: masked on the wire, hidden in repr().
+
+    These were the wrong way round -- welfare_discount_class_CODE was
+    repr=False while welfare_discount_class_NAME, the directly readable one,
+    was printed. A repr lands in logs and tracebacks, which is the same
+    exposure redact_payload exists to prevent.
+    """
+    import dataclasses
+
+    from korail_mobile_api import read_models
+
+    exposed = []
+    for name, obj in vars(read_models).items():
+        if not dataclasses.is_dataclass(obj):
+            continue
+        for field_ in dataclasses.fields(obj):
+            if field_.name in {
+                "disability_flag",
+                "welfare_discount_class_name",
+                "customer_lead_flag_name",
+                "discount_kind_name",
+                "passenger_type_name",
+            } and field_.repr:
+                exposed.append(f"{name}.{field_.name}")
+
+    assert not exposed, f"special-category labels still in repr(): {exposed}"
+
+
+def test_no_read_route_field_contract_carries_an_unmasked_identity_field():
+    """All 47 contracts at once, so a new route cannot quietly add one.
+
+    Station names (dptRsStnNm and friends) are the deliberate exception: they
+    name a PLACE, are not tied to a person, and masking them would make every
+    preview unreadable for no privacy gain.
+    """
+    import re
+
+    from korail_mobile_api import safety
+    from korail_mobile_api.redaction import is_sensitive_key
+
+    identity_shaped = re.compile(
+        r"cust|teln|phone|jumin|birth|regnum|pwd|passwd|email|addr", re.I
+    )
+    allowed = {"custMgNo"}  # a management number, masked by its indexed forms
+
+    unmasked = {
+        field_
+        for fields in safety.KORAIL_EXACT_REQUEST_FIELDS.values()
+        for field_ in fields
+        if identity_shaped.search(field_)
+        and not is_sensitive_key(field_)
+        and field_ not in allowed
+    }
+
+    assert not unmasked, f"identity-shaped request fields not masked: {unmasked}"
