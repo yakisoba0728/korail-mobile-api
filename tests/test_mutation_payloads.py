@@ -835,3 +835,60 @@ def test_unpaid_reservation_cancel_form_sends_the_apps_fixed_change_no():
 def test_unpaid_reservation_cancel_form_rejects_non_fresh_hold_shapes(response):
     with pytest.raises(KorailProtocolError):
         build_unpaid_reservation_cancel_form(KorailConfig(), response)
+
+
+# --- zero-padded settlement amounts (live 2026-07-27) -------------------------
+#
+# A real hold answers with BOTH amount fields zero-padded, to different widths:
+#   h_tot_rcvd_amt = "0000000000042600"   (16)
+#   h_rcvd_amt     = "00000042600"        (11)
+# Comparing them as STRINGS made 42,600 disagree with 42,600, so _received_amount
+# returned nothing and card_payment_payload refused to build a form for an
+# ordinary one-seat hold. Every fixture in this suite used unpadded values, which
+# is why only a live response could surface it. These pin the real shape.
+
+
+def _padded_hold_raw():
+    return {
+        "h_tot_rcvd_amt": "0000000000042600",
+        "jrny_infos": {
+            "jrny_info": [
+                {
+                    "seat_infos": {
+                        "seat_info": [
+                            {
+                                "h_rcvd_amt": "00000042600",
+                                "h_seat_prc": "00000000042600",
+                                "h_seat_fare": "00000000000000",
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+    }
+
+
+def test_zero_padded_amounts_agree_and_settle_unpadded():
+    from korail_mobile_api.mutation_parsers import _received_amount
+
+    raw = _padded_hold_raw()
+    rows = raw["jrny_infos"]["jrny_info"]
+    assert _received_amount(raw, rows) == "42600"
+
+
+def test_zero_padded_totals_still_catch_a_genuine_disagreement():
+    from korail_mobile_api.errors import KorailProtocolError
+    from korail_mobile_api.mutation_parsers import _received_amount
+
+    raw = _padded_hold_raw()
+    raw["h_tot_rcvd_amt"] = "0000000000099900"
+    rows = raw["jrny_infos"]["jrny_info"]
+    with pytest.raises(KorailProtocolError, match="ambiguous"):
+        _received_amount(raw, rows)
+
+
+def test_a_padded_declared_total_alone_is_normalised():
+    from korail_mobile_api.mutation_parsers import _received_amount
+
+    assert _received_amount({"h_tot_rcvd_amt": "0000000000042600"}, []) == "42600"

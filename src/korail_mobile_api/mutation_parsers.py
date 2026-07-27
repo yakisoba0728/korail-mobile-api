@@ -139,15 +139,26 @@ def _received_amount(
             seats_seen += 1
     if seats_seen == 0:
         # No seat rows to recompute from; the declared total is all there is.
-        return declared
+        # Normalised the same way as the sum, for the same reason as below.
+        return None if declared is None else str(int(declared))
     seat_total = str(summed)
-    if declared is not None and declared != seat_total:
+    # Compare NUMERICALLY. Both of these arrive zero-padded, to different
+    # widths, and the padding is not part of the number: a live 2026-07-27 hold
+    # answered h_tot_rcvd_amt="0000000000042600" beside h_rcvd_amt="00000042600"
+    # for one seat. Comparing the strings made 42,600 disagree with 42,600, and
+    # every ordinary hold then failed to produce an amount at all -- which the
+    # payment builder turns into a refusal to build the form. The synthetic
+    # fixtures behind the offline tests were unpadded, so only a real response
+    # could show this.
+    if declared is not None and int(declared) != summed:
         raise KorailProtocolError(
             "KORAIL reservation settlement amount is ambiguous: the seat rows "
-            f"sum to {seat_total} but h_tot_rcvd_amt says {declared}. The app "
+            f"sum to {summed} but h_tot_rcvd_amt says {int(declared)}. The app "
             "settles the seat sum; refusing rather than guessing which one to "
             "charge."
         )
+    # Unpadded, because that is what the app settles: PaymentActivity computes
+    # mReceivedAmount as an int and hands the decimal form to hidMnsStlAmt1.
     return seat_total
 
 
