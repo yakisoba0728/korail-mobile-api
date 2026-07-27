@@ -795,10 +795,14 @@ class TripChangeReservationRequest:
     temporary_job_sequence: str | None = field(default=None, repr=False)
     #: ``ctlDvCd``. Absent on the ordinary 여행변경 path — no call site sets it
     #: — and ``"3584"`` only on the 발상역 변경 path
-    #: (``SeatSearchActivity.java:784,852``). ``None`` omits it.
+    #: (``SeatSearchActivity.java:784,852``). ``None`` omits it. Setting it
+    #: does NOT turn this into that path: see the builder's docstring, which
+    #: lists the journey and seat differences that are deliberately not
+    #: reproduced. 발상역 변경 is not implemented.
     control_division_code: str | None = None
-    #: ``frcSaleRsnCont``. Same story: only the 발상역 변경 path writes it, as
-    #: the ``StartStationDto.reasonCode`` (``SeatSearchActivity.java:779,844``).
+    #: ``frcSaleRsnCont``. Same story, same caveat: only the 발상역 변경 path
+    #: writes it, as the ``StartStationDto.reasonCode``
+    #: (``SeatSearchActivity.java:779,844``).
     forced_sale_reason: str | None = None
 
 

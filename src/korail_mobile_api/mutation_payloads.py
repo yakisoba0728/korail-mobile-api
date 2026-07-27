@@ -1947,7 +1947,10 @@ def build_price_recalculation_form(
 # append a decimal index to a constant prefix, and Retrofit's @FieldMap
 # flattens the map key-for-key (RequestBuilder.smali:1440-1508 walks
 # entrySet() and calls addField(key, value)). So the wire key IS the map key,
-# the map's build order IS the wire order, and there are exactly two shapes:
+# the map's INSERTION order is the wire order -- which is not the same as the
+# order the calls appear in, because a LinkedHashMap re-put keeps the key's
+# first position (see the RSeat block of build_trip_change_reservation_form,
+# the one map two files write) -- and there are exactly two shapes:
 #
 #   one index   prefix + N            e.g. dptDt_1, psgTpDvCd_2
 #   two indices prefix + N + "_" + K  e.g. rqSeatAttCd_1_1, dcntKndCd_2_1
@@ -1973,18 +1976,22 @@ def build_price_recalculation_form(
 #: (``K4/d.java:5-6``), so the two possible values are these.
 _TRIP_CHANGE_JOURNEY_SEQUENCE_NOS = ("0001", "0002")
 
-#: The four ``RSeat`` attribute codes ``w4/b.java:165-169`` writes for every
-#: leg and ``C5/d.java`` never touches. Each is ``prefix + leg + "_1"``.
-#: The values are enum codes: ``K4/q.DISABLE`` 사용안함, ``K4/l.DEFAULT``
-#: 모든방향, ``K4/n.DEFAULT`` 모든 위치, ``K4/m.DISABLE`` 사용안함 — all
-#: ``"000"``, but spelled out per key because they come from four different
+#: The three ``RSeat`` attribute codes ``w4/b.java:165-167`` writes before
+#: ``rqSeatAttCd`` and ``C5/d.java`` never touches. Each is
+#: ``prefix + leg + "_1"``. The values are enum codes: ``K4/q.DISABLE``
+#: 사용안함, ``K4/l.DEFAULT`` 모든방향, ``K4/n.DEFAULT`` 모든 위치 — all
+#: ``"000"``, but spelled out per key because they come from three different
 #: enums and only coincide.
 _TRIP_CHANGE_SEAT_OPTION_CODES: tuple[tuple[str, str], ...] = (
     ("smkSeatAttCd_", "000"),  # K4/q.java:6 DISABLE
     ("dirSeatAttCd_", "000"),  # K4/l.java:5 DEFAULT
     ("locSeatAttCd_", "000"),  # K4/n.java:5 DEFAULT
-    ("etcSeatAttCd_", "000"),  # K4/m.java:5 DISABLE
 )
+
+#: ``etcSeatAttCd_N_1`` (``K4/m.java:5`` DISABLE), written LAST of the six
+#: (``w4/b.java:169``) — after ``rqSeatAttCd``, which is why it is not in the
+#: tuple above.
+_TRIP_CHANGE_ETC_SEAT_ATTRIBUTE_CODE = "000"
 
 #: ``trvlKndCd`` (``w4/b.java:135``), ``intgTktIseFlg`` (``:139``),
 #: ``alcSeatDmnPsDvCd`` (``:140``) and the two "second journey" counters
@@ -2087,6 +2094,18 @@ def build_trip_change_reservation_form(
     of passengers: ``w4/b.java:136-137`` uses ``orgTkList.size()`` for both
     while ``psgCnt`` (``:175``) uses the picker's total. They differ whenever
     a 동반유아 is added or removed, and this builder keeps them separate.
+
+    **``ctlDvCd``/``frcSaleRsnCont`` DO NOT SELECT THE 발상역 변경 PATH.**
+    They are the two extra scalars that path sends, and they are exposed
+    because they are real ``@Field``s of this route — but nothing else about
+    that path is reproduced here. ``SeatSearchActivity.java:793,820`` writes
+    ``jrnyTpCd`` as ``"21"``/``"22"`` (``K4/e`` STANDING_SEAT_1/2, not
+    ``"11"``/``"14"``), rebuilds the ``RJrny`` block out of a
+    ``StartStationDto`` whose station orders are the ``chgBf``/``exs`` pairs
+    rather than the train's own, and indexes ``RSrcar`` off a TRAIN index
+    (``:780-782``, ``:845-850``) instead of a leg. Setting these two on an
+    ordinary request produces a form the app never sends. Treat 발상역 변경 as
+    NOT IMPLEMENTED.
 
     **THE THREE OMITTED FIELDS ARE OMITTED, NOT BLANK.** ``tmpJobSqno``,
     ``ctlDvCd`` and ``frcSaleRsnCont`` are ``null`` on the ordinary path and
@@ -2232,17 +2251,28 @@ def build_trip_change_reservation_form(
     # sends a direct original to the direct inquiry and a transfer original to
     # the transfer one (:274 -> :93), so a replacement has the original's leg
     # count.
+    #
+    # THE ORDER INSIDE THIS MAP IS THE ONE PLACE THE TWO BUILDERS INTERLEAVE.
+    # RSeat is a LinkedHashMap, and re-putting an existing key keeps its
+    # ORIGINAL position while a new key is appended. So of C5/d.java's three
+    # writes per leg (:69,70,72/74) only roomClsfCd_ is new: seatCnt_ and
+    # rqSeatAttCd_ land back where w4/b.java:164,168 first put them, which is
+    # why rqSeatAttCd_ sits BETWEEN locSeatAttCd_ and etcSeatAttCd_ rather
+    # than after them, and why every roomClsfCd_ key comes after EVERY leg's
+    # block rather than inside its own.
     for index, leg in enumerate(legs, start=1):
         form[f"seatCnt_{index}"] = _zero_padded(len(legs), width=4)
         for prefix, code in _TRIP_CHANGE_SEAT_OPTION_CODES:
             form[f"{prefix}{index}_1"] = code
-        form[f"roomClsfCd_{index}_1"] = _required_trip_change_text(
-            leg.room_class_code,
-            field="room_class_code",
-        )
         form[f"rqSeatAttCd_{index}_1"] = _required_trip_change_text(
             leg.seat_attribute_code,
             field="seat_attribute_code",
+        )
+        form[f"etcSeatAttCd_{index}_1"] = _TRIP_CHANGE_ETC_SEAT_ATTRIBUTE_CODE
+    for index, leg in enumerate(legs, start=1):
+        form[f"roomClsfCd_{index}_1"] = _required_trip_change_text(
+            leg.room_class_code,
+            field="room_class_code",
         )
 
     # --- FieldMap 4/6: RPsg (w4/b.java:174-289) ----------------------------

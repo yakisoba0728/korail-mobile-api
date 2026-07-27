@@ -343,13 +343,25 @@ def test_the_two_reprice_halves_cannot_be_sent_apart():
         )
 
 
-def test_the_start_station_path_adds_its_two_fields_only_when_asked():
+def test_the_start_station_scalars_are_added_but_select_no_other_shape():
     form = build_trip_change_reservation_form(
         KorailConfig(),
         _request(control_division_code="3584", forced_sale_reason="01"),
     )
     assert form["ctlDvCd"] == "3584"
     assert form["frcSaleRsnCont"] == "01"
+    # ...and the rest of the form is unchanged. 발상역 변경 is NOT implemented:
+    # that path writes jrnyTpCd "21"/"22" (K4/e STANDING_SEAT_1/2), takes its
+    # station orders off a StartStationDto, and indexes RSrcar off a train
+    # rather than a leg. These two scalars do not switch any of that on, and
+    # this test exists so nobody later mistakes them for a mode selector.
+    assert form["jrnyTpCd_1"] == "11"
+    plain = build_trip_change_reservation_form(KorailConfig(), _request())
+    assert {
+        name: value
+        for name, value in form.items()
+        if name not in {"ctlDvCd", "frcSaleRsnCont"}
+    } == plain
 
 
 # --- tripChgPrsC.do: the six FieldMaps --------------------------------------
@@ -434,6 +446,37 @@ def test_rseat_carries_the_overwritten_count_and_the_four_option_codes():
     assert form["roomClsfCd_2_1"] == "2"
     # seatPsrmClCd_ belongs to the OTHER trip-change route, not this one.
     assert not [name for name in form if name.startswith("seatPsrmClCd_")]
+
+
+def test_rseat_key_order_survives_the_two_builders_re_putting_into_it():
+    # RSeat is the one map two files write, and a LinkedHashMap re-put keeps
+    # the key's FIRST position. So of C5/d.java's three writes per leg, only
+    # roomClsfCd_ is a new key: seatCnt_ and rqSeatAttCd_ land back where
+    # w4/b.java:164,168 first put them. Emitting in call order instead of
+    # insertion order would put rqSeatAttCd_ after etcSeatAttCd_ and
+    # interleave roomClsfCd_ per leg, neither of which is what goes out.
+    form = build_trip_change_reservation_form(
+        KorailConfig(),
+        _request(legs=(_leg(), _leg(train_no="202"))),
+    )
+    names = list(form)
+    seat_block = names[names.index("seatCnt_1") : names.index("psgCnt")]
+    assert seat_block == [
+        "seatCnt_1",
+        "smkSeatAttCd_1_1",
+        "dirSeatAttCd_1_1",
+        "locSeatAttCd_1_1",
+        "rqSeatAttCd_1_1",
+        "etcSeatAttCd_1_1",
+        "seatCnt_2",
+        "smkSeatAttCd_2_1",
+        "dirSeatAttCd_2_1",
+        "locSeatAttCd_2_1",
+        "rqSeatAttCd_2_1",
+        "etcSeatAttCd_2_1",
+        "roomClsfCd_1_1",
+        "roomClsfCd_2_1",
+    ]
 
 
 def test_rsrcar_is_empty_unless_seats_were_picked():

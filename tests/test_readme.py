@@ -464,9 +464,9 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
     # today; the 1246/1247 figures are kept only as labelled history. The
     # README carries the current number because a reader deciding whether to
     # trust this package needs it; the history stayed with the record.
-    assert "`2273 passed, 1 deselected`" in readme
+    assert "`2274 passed, 1 deselected`" in readme
     assert (
-        "current reviewed offline gate is `2273 passed, 1 deselected`" in record
+        "current reviewed offline gate is `2274 passed, 1 deselected`" in record
     )
     assert (
         "Earlier gates in this repository's history were `1246 passed, 1 "
@@ -474,7 +474,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "`1247 passed, 1 deselected` directly after it" in record
     )
     assert (
-        "current full offline release gate reports `2273 passed, 1 deselected`"
+        "current full offline release gate reports `2274 passed, 1 deselected`"
         in progress
     )
     assert (
@@ -483,7 +483,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "deselected` directly after it" in progress
     )
     assert (
-        "current reviewed offline gate reports `2273 passed, 1 deselected`; the "
+        "current reviewed offline gate reports `2274 passed, 1 deselected`; the "
         "historical gates were `1246 passed, 1 deselected` and, after the P0 "
         "live-evidence documentation coverage, `1247 passed, 1 deselected`"
         in handoff
