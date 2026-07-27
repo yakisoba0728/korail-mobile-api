@@ -20,12 +20,12 @@ the caller's behalf, the token-generation machinery, and constants already
 reachable as a default on a config field.
 
 **"Demote" means deleting the import line AND the ``__all__`` entry**, not one
-of them. ``tests/test_next_variant_reads.py`` asserts both halves for the names
-it holds back (``held_back not in __all__`` *and* ``not hasattr(pkg, ...)``);
-deleting only the ``__all__`` entry leaves the attribute reachable and the
-holdback half-done. ``test_all_equals_the_import_block`` below makes that
-symmetry a property of the whole file rather than of the names someone
-remembered to check.
+of them. Delete only the ``__all__`` entry and the attribute stays reachable, so
+the demotion is half-done and nothing says so; delete only the import and
+``from pkg import *`` binds a name that does not exist. Both halves have been
+asserted by hand before, for the handful of names somebody remembered to check —
+``test_all_equals_the_import_block`` below makes the symmetry a property of
+every name instead.
 
 Nothing here holds a list of exported names. A list of names is the thing that
 rots — this repository has already shipped two hand-maintained counts that went
@@ -146,6 +146,7 @@ DOMAIN_CONSTANTS = {
 
 import ast
 import dataclasses
+import functools
 import importlib
 import inspect
 import sys
@@ -157,7 +158,28 @@ import pytest
 
 PACKAGE = importlib.import_module(PACKAGE_NAME)
 PACKAGE_DIR = Path(PACKAGE.__file__).parent
-EXPORTED = list(PACKAGE.__all__)
+INIT_TREE = ast.parse((PACKAGE_DIR / "__init__.py").read_text(encoding="utf-8"))
+
+
+def _declared_all() -> list[str]:
+    """``__all__`` as the source file spells it, not as the module object has it.
+
+    The two can disagree: an ``__all__`` built by concatenation, mutated after
+    assignment, or shadowed by a later statement produces a runtime value that
+    no reader of ``__init__.py`` would predict. Every check below is about what
+    the source declares, so the source is what they read — and the runtime value
+    is asserted equal to it once, here, rather than trusted.
+    """
+    for node in INIT_TREE.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "__all__"
+            for target in node.targets
+        ):
+            return [ast.literal_eval(element) for element in node.value.elts]
+    raise AssertionError(f"{PACKAGE_NAME}/__init__.py declares no literal __all__")
+
+
+EXPORTED = _declared_all()
 EXPORTED_SET = set(EXPORTED)
 EXPORTING_MODULES = FUNCTION_EXPORTING_MODULES | DATA_EXPORTING_MODULES
 
@@ -171,9 +193,8 @@ def _init_imports() -> dict[str, str]:
     submodule, a leftover attribute) is exactly what the first check is looking
     for.
     """
-    tree = ast.parse((PACKAGE_DIR / "__init__.py").read_text(encoding="utf-8"))
     imported: dict[str, str] = {}
-    for node in ast.walk(tree):
+    for node in ast.walk(INIT_TREE):
         if isinstance(node, ast.ImportFrom) and node.level:
             for alias in node.names:
                 imported[alias.asname or alias.name] = node.module or ""
@@ -192,7 +213,9 @@ def _module_level_functions(module: str) -> set[str]:
     }
 
 
-def _resolve_hints(obj: object, module_name: str) -> dict[str, object]:
+def _resolve_hints(
+    obj: object, module_name: str, label: str, unresolved: list[str]
+) -> dict[str, object]:
     """Resolve annotations in the namespace of the module that wrote them.
 
     Every module in this package uses ``from __future__ import annotations``, so
@@ -202,12 +225,28 @@ def _resolve_hints(obj: object, module_name: str) -> dict[str, object]:
     package namespace instead would turn a correct demotion into a ``NameError``
     — which is to say, it would make this check pass or fail for reasons that
     have nothing to do with the rule.
+
+    A failure is recorded and the walk continues, rather than propagating. One
+    unresolvable annotation raised from inside the dataclass-field recursion
+    would abort the entire closure, and the test would then report that single
+    name while silently not having checked any of the types underneath it.
+    Collected, every failure is named at once and the assertion says plainly
+    that the check below it is weaker than it looks.
     """
     namespace = dict(vars(sys.modules[module_name]))
-    return typing.get_type_hints(obj, globalns=namespace)
+    try:
+        return typing.get_type_hints(obj, globalns=namespace)
+    except Exception as error:  # a string annotation that no longer resolves
+        unresolved.append(f"{label}: {error!r}")
+        return {}
 
 
-def _walk(annotation: object, seen: set[object], reached: set[type]) -> None:
+def _walk(
+    annotation: object,
+    seen: set[object],
+    reached: set[type],
+    unresolved: list[str],
+) -> None:
     """Collect package-defined classes in the transitive closure of a type."""
     try:
         if annotation in seen:
@@ -216,7 +255,15 @@ def _walk(annotation: object, seen: set[object], reached: set[type]) -> None:
     except TypeError:  # unhashable annotation object
         pass
     for argument in typing.get_args(annotation):
-        _walk(argument, seen, reached)
+        _walk(argument, seen, reached, unresolved)
+    # The origin as well as the arguments. For ``list[Row]`` the origin is
+    # ``list`` and uninteresting, but a generic this package defines itself --
+    # ``Page[Row]`` -- has the package's own class as its origin and none of its
+    # arguments, so walking only ``get_args`` would step over the very type a
+    # caller has to be able to name.
+    origin = typing.get_origin(annotation)
+    if origin is not None:
+        _walk(origin, seen, reached, unresolved)
     if not inspect.isclass(annotation):
         return
     module = getattr(annotation, "__module__", "")
@@ -224,10 +271,13 @@ def _walk(annotation: object, seen: set[object], reached: set[type]) -> None:
         return
     reached.add(annotation)
     for base in annotation.__mro__[1:]:
-        _walk(base, seen, reached)
+        _walk(base, seen, reached, unresolved)
     if dataclasses.is_dataclass(annotation):
-        for hint in _resolve_hints(annotation, annotation.__module__).values():
-            _walk(hint, seen, reached)
+        hints = _resolve_hints(
+            annotation, annotation.__module__, annotation.__name__, unresolved
+        )
+        for hint in hints.values():
+            _walk(hint, seen, reached, unresolved)
 
 
 def _public_methods() -> list[tuple[str, object, str]]:
@@ -245,18 +295,29 @@ def _public_methods() -> list[tuple[str, object, str]]:
                 member = member.__func__
             elif isinstance(member, property):
                 member = member.fget
+            elif isinstance(member, functools.cached_property):
+                # Unwrapped explicitly: a cached_property is not a function, so
+                # without this it falls past `isfunction` and its return type is
+                # never walked -- silently, which is the only kind of gap that
+                # matters. Neither package has one today; the descriptor exists
+                # so that adding one does not quietly shrink the closure.
+                member = member.func
             if inspect.isfunction(member):
                 methods.append((name, member, module))
     return methods
 
 
-def _reachable_types() -> set[type]:
+def _reachable_types() -> tuple[set[type], list[str]]:
     seen: set[object] = set()
     reached: set[type] = set()
-    for _, method, module in _public_methods():
-        for hint in _resolve_hints(method, module).values():
-            _walk(hint, seen, reached)
-    return reached
+    unresolved: list[str] = []
+    for name, method, module in _public_methods():
+        hints = _resolve_hints(
+            method, module, f"{CLIENT_CLASS_NAME}.{name}", unresolved
+        )
+        for hint in hints.values():
+            _walk(hint, seen, reached, unresolved)
+    return reached, unresolved
 
 
 def test_the_per_repository_block_is_self_consistent():
@@ -283,6 +344,15 @@ def test_all_equals_the_import_block():
     assert len(EXPORTED) == len(EXPORTED_SET), sorted(
         name for name in EXPORTED_SET if EXPORTED.count(name) > 1
     )
+    # Everything here reads the literal `__all__` out of the source; this is the
+    # one place the runtime value is compared against it. They can disagree --
+    # an `__all__` extended, mutated or shadowed after assignment produces a
+    # surface no reader of __init__.py would predict -- and if they ever do, it
+    # is this line that should say so, not a check downstream failing obscurely.
+    assert EXPORTED_SET == set(PACKAGE.__all__), {
+        "declared in the source": sorted(EXPORTED_SET - set(PACKAGE.__all__)),
+        "present at runtime": sorted(set(PACKAGE.__all__) - EXPORTED_SET),
+    }
     imported = set(_init_imports())
     assert EXPORTED_SET == imported, {
         "in __all__ but not imported": sorted(EXPORTED_SET - imported),
@@ -353,7 +423,11 @@ def test_every_type_a_public_method_can_hand_back_is_exported():
     # method's annotations -- return types, argument types, their dataclass
     # fields, their base classes -- makes adding a method with an unexported
     # type in its signature fail here instead of in someone's type checker.
-    reached = _reachable_types()
+    reached, unresolved = _reachable_types()
+    assert not unresolved, (
+        "an annotation could not be resolved, so the walk below it did not "
+        f"happen and this check is weaker than it looks: {unresolved}"
+    )
     missing = sorted(
         klass.__name__ for klass in reached if klass.__name__ not in EXPORTED_SET
     )

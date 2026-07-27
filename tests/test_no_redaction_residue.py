@@ -36,15 +36,23 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-#: The fixed ``AIza`` + ``Sy`` prefix every Google API key starts with, and
-#: nothing more. Requiring a body length was the first version of this pattern
-#: and it was wrong: the residue that motivated the file was ``AIzaSyA2Qx...``,
-#: four characters of body, which a ``{10,}`` quantifier walks straight past.
-#: A pattern for a secret has to match the part of it that is quoted, not the
-#: whole secret -- nobody leaks the whole secret, they leak enough of it to
-#: identify which one they meant. The prefix carries no information on its own,
-#: so matching it alone costs nothing: the redacted spellings this repository
-#: uses name the key in words and never reproduce the prefix.
+#: The fixed prefix every Google API key starts with, and nothing more.
+#: Requiring a body length was the first version of this pattern and it was
+#: wrong: the residue that motivated this file was a prefix plus FOUR characters
+#: trailing into an ellipsis, which a ``{10,}`` quantifier walks straight past.
+#: A pattern for a secret has to match the part of it that gets quoted -- nobody
+#: leaks a whole key, they leak just enough of one to identify which they meant.
+#: The prefix carries no information on its own, so matching it alone costs
+#: nothing: the redacted spellings both repositories use name the key in words
+#: and never reproduce it.
+#:
+#: This comment does not spell the prefix out, and the sample in
+#: ``test_the_scanner_would_notice`` builds it by concatenation, for the reason
+#: the module docstring gives: a scanner that matches itself has to be excluded
+#: from its own scan, and an excluded file is where a real key survives. That is
+#: not hypothetical -- an earlier draft of this very line quoted the residue
+#: verbatim, and the scan went red on itself the moment the file was committed
+#: and became visible to ``git ls-files``.
 VENDOR_KEY = re.compile("AIza" + r"Sy")
 
 #: A Firebase realtime-database URL with a real project id in it. Documents are
