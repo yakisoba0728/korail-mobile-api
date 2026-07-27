@@ -394,6 +394,20 @@ default configuration above is for, and it is why turning DynaPath off or
 overriding `user_agent` with something of your own is a change worth making
 deliberately.
 
+`KorailDynaPathError` is the opposite failure, and the defaults can now reach
+it. Six paths are token-bearing, and `ScheduleView` — the one `search_trains`
+uses — is one of them, so the quickstart's *first* call carries a token built
+from a device id this library synthesised and a `device_model` of `"Android"`.
+Neither value has been checked against the live server; what has been verified
+live is the same request carrying a real handset's values, via
+`build_config_from_env`. If the server validates token contents rather than
+merely their presence, the symptom is a `KorailDynaPathError` on a read that
+used to succeed without any token at all. There are two ways out, and both are
+above: pass `KorailConfig(dynapath=DynapathConfig())` to send no token, or use
+`build_config_from_env` to send your own device's. This is stated rather than
+hidden because a 1.0.0 whose headline path can fail in a way its documentation
+does not name is worse than one that says where it is unproven.
+
 A warning code attached to a success stays a success — the app dispatches any
 unrecognised code on a non-`FAIL` response as a success, and so does this client.
 
