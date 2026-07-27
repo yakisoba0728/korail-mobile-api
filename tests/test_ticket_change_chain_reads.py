@@ -577,7 +577,7 @@ def test_original_ticket_parser_reads_nested_journeys_and_seats():
                     "jrnyList": [
                         {
                             "jrnySqno": "001",
-                            "jrnyTpCd": "1",
+                            "jrnyTpCd": "JOURNEY_TYPE_SECRET",
                             "trnNo": 17,
                             "trnGpCd": "100",
                             "dptDt": "20260801",
@@ -611,15 +611,27 @@ def test_original_ticket_parser_reads_nested_journeys_and_seats():
     journey = ticket.journeys[0]
     assert journey.train_no == "17"
     assert journey.journey_sequence == "001"
+    assert journey.journey_type_code == "JOURNEY_TYPE_SECRET"
     assert journey.seats[0].car_no == "3"
     assert journey.seats[0].seat_no == "SEAT_SECRET"
+    # Every registered sensitive value must stay out of the repr of the object
+    # that actually holds it, not merely out of the top-level response -- the
+    # response hides `tickets` behind repr=False, so asserting only against
+    # repr(parsed) would pass no matter what the nested rows print.
     for secret in (
         "RETURN_PASSWORD_SECRET",
         "PNR_SECRET",
         "SEAT_SECRET",
         "MEMBER_CARD_SECRET",
+        "JOURNEY_TYPE_SECRET",
     ):
-        assert secret not in repr(parsed)
+        for rendered in (
+            repr(parsed),
+            repr(ticket),
+            repr(journey),
+            repr(journey.seats[0]),
+        ):
+            assert secret not in rendered, secret
 
     empty = parse_original_ticket_inquiry_response(_success())
     assert empty.tickets == ()
@@ -659,6 +671,7 @@ def test_the_original_ticket_credential_is_redacted_in_every_spelling():
         "prepCrdNo",
         "apvNo",
         "lumpStlTgtNo",
+        "roomClsfCd",
     ):
         assert is_sensitive_key(key), key
     # ...plus the model attribute names the parsers write them into.
@@ -668,6 +681,11 @@ def test_the_original_ticket_credential_is_redacted_in_every_spelling():
         "original_sale_sequence",
         "original_sale_datetime",
         "lump_settlement_target_no",
+        "room_classification_code",
+        # jrnyTpCd was already registered under both spellings before this
+        # change; OriginalTicketJourney has to honour it like every other
+        # model that surfaces it.
+        "journey_type_code",
     ):
         assert is_sensitive_key(attribute), attribute
 

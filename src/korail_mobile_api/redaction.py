@@ -323,6 +323,13 @@ SENSITIVE_KEYS = frozenset(
         # procUpgradeSeat spends (MyTicketService.java:20-21).
         "lumpStlTgtNo",
         "lump_settlement_target_no",
+        # 특실 업그레이드 견적's 객실 구분 code. psrmClCd, psrm_cl_cd,
+        # room_class_code and room_class_name are all already registered above;
+        # roomClsfCd is the same value under the one spelling this route uses,
+        # and leaving it readable is precisely the failure the psrm_cl_cd note
+        # above was written about.
+        "roomClsfCd",
+        "room_classification_code",
     }
 )
 _INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)_?(?P<index>\d+)$")

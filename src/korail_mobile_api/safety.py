@@ -63,11 +63,11 @@ EXCLUDED_API_DOMAINS = frozenset(
 
 # The exact (method, path) pairs the read-only send path will transmit to.
 #
-# 61 entries, 61 distinct paths, pinned by tests. The count is not 55 because
-# two of the entries are session routes rather than reads: the login POST and
-# the server-side logout GET (cookie-authenticated, zero parameters, not a
-# mutation), which was added later than the other 50. There is no "excluding
-# logout" counting convention — docs that said 50 were simply stale.
+# 61 entries, 61 distinct paths, pinned by tests. The decomposition is
+# 59 reads + the login POST + the server-side logout GET (cookie-authenticated,
+# zero parameters, and not a mutation, which is why it belongs here rather than
+# in KORAIL_MUTATION_ROUTES). There is no "excluding logout" counting
+# convention: every number quoted in the docs is the full set.
 #
 # NOTE on certification.ReservationList: that path carries TWO Retrofit
 # overloads in the app. Only the read one (`inquiryTicketRsv`,

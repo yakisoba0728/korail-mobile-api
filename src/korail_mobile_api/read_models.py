@@ -1189,7 +1189,10 @@ class OriginalTicketJourney:
 
     journey_sequence: str | None = None
     journey_order: str | None = None
-    journey_type_code: str | None = None
+    #: ``jrnyTpCd``. Already a registered sensitive key under both its wire and
+    #: its attribute spelling, so it is kept out of the repr like every other
+    #: model that surfaces it.
+    journey_type_code: str | None = field(default=None, repr=False)
     train_no: str | None = None
     train_group_code: str | None = None
     departure_date: str | None = None

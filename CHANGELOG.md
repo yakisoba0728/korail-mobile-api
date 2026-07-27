@@ -52,7 +52,10 @@
   Also registered: the 지연증명 tuple `Cmpn.dlayOgtk*` (`Cmpn.java:11-14`), the
   settlement rows' `stlCrdNo`/`prepCrdNo`/`apvNo` (`Stl.java:5-16`), and
   `lumpStlTgtNo` under both spellings. `cmpnList`/`stlList` are deliberately
-  left unparsed and stay masked inside `raw`.
+  left unparsed and stay masked inside `raw`. Finally `roomClsfCd`, the 특실
+  업그레이드 견적's spelling of a value already registered as `psrmClCd` /
+  `psrm_cl_cd` / `room_class_code` / `room_class_name` — the exact "readable
+  purely because this route names it differently" gap that block warns about.
 
 - Added: 운임 재계산 as a consent-gated mutation —
   `KorailClient.recalculate_price`, `POST
