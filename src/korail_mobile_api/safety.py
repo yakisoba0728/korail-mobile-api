@@ -1645,9 +1645,6 @@ def assert_read_only_request_fields(
         )
 
 
-def assert_read_only_form_fields(path: str, fields: set[str]) -> None:
-    assert_read_only_request_fields(path, {field: "" for field in fields})
-
 SAFETY_DEFAULTS = {
     "조회성 API": "실제 호출 허용 가능. 단, 계정/티켓 개인정보 로그 마스킹",
     "예약 생성/취소/변경": "기본 비활성화. 명시적 opt-in과 dry-run marker 필요",

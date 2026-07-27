@@ -307,19 +307,6 @@ def _optional_integer(
     )
 
 
-def _required_json_integer(
-    data: Mapping[str, Any],
-    key: str,
-    context: str,
-) -> int:
-    value = data.get(key)
-    if type(value) is not int:
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a JSON integer"
-        )
-    return value
-
-
 def _required_integer(
     data: Mapping[str, Any],
     key: str,

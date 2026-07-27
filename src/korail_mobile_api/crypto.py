@@ -27,10 +27,6 @@ def _android_base64_default(data: bytes) -> str:
     return base64.encodebytes(data).decode("ascii")
 
 
-def _aes_cbc_pkcs7_encrypt_to_base64(plaintext: bytes, key: bytes, iv: bytes) -> str:
-    return _base64_no_wrap(_aes_cbc_pkcs7_encrypt(plaintext, key, iv))
-
-
 def _validate_login_crypto_key(info: LoginCryptoInfo) -> bytes:
     key = info.key.encode("utf-8")
     if len(key) not in {16, 24, 32}:

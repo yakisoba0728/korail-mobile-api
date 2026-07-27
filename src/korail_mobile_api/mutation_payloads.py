@@ -1284,6 +1284,23 @@ _ABSENT_JOB_SEQUENCE = "000000"
 
 
 def _echoed_job_sequence(value: str | None) -> str:
+    """Echo the hold's tmpJobSqno onto the payment form, unchanged.
+
+    NO WIDTH RESTORATION, and that is settled rather than overlooked. Three
+    separate audits have raised this as a possible zero-padding defect --
+    ``_optional_string`` turns a JSON number into ``str(n)``, so an echoed
+    ``tmpJobSqno`` that arrived as a number reaches the wire with any leading
+    zeros already gone. Checked against the APK on 2026-07-27:
+    ``TCReservationDao.java:28,107,183`` declares ``tmpJobSqno`` a plain
+    ``String`` with a bare getter and setter, and no ``addZero`` call touches
+    it anywhere in the sources. So the app receives the identical short string
+    from Gson's ``nextString()`` and forwards the identical bytes. Padding
+    here would send something the app never sends.
+
+    The same reasoning covers ``_echoed_reservation_change_no``, whose
+    ``"000"`` default is a hardcoded constant rather than evidence of a
+    3-character wire width.
+    """
     if isinstance(value, str) and value.strip():
         return value
     return _ABSENT_JOB_SEQUENCE
