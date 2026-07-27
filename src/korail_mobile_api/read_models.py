@@ -1013,6 +1013,191 @@ class PlatformNumberResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
+class SelfSeatChangeStation:
+    """One boarding station a 자율 좌석 변경 may move the ticket to.
+
+    ``CallSelfSeatChgInfoDao.ChgStnList``
+    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:157-204``). The two seat
+    counts are what makes a row selectable: ``gnrmRestSeatNum`` /
+    ``sprmRestSeatNum`` are the 일반실 / 특실 remaining-seat numbers for the
+    section starting at this station.
+    """
+
+    departure_station_code: str | None = None
+    departure_station_name: str | None = None
+    departure_date: str | None = None
+    departure_time: str | None = None
+    arrival_date: str | None = None
+    arrival_time: str | None = None
+    departure_construction_order: str | None = None
+    departure_run_order: str | None = None
+    general_remaining_seats: str | None = None
+    special_remaining_seats: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class SelfSeatChangeReason:
+    """One 변경 사유 row (``CallSelfSeatChgInfoDao.java:136-155``)."""
+
+    query_code: str | None = None
+    query_order: str | None = None
+    reason_text: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class SelfSeatChangeInfoResponse(BaseKorailResponse):
+    """``self.seatChgInfo.do`` — what a self seat/train change may become.
+
+    ``CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse``
+    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:64-134``).
+
+    :attr:`general_reservation_possible_code` /
+    :attr:`special_reservation_possible_code` (``gnrmRsvPsbCd`` /
+    ``sprmRsvPsbCd``) are the train-level yes/no for each 객실 등급; the
+    per-station remaining seats live on :attr:`stations`.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    train_no: str | None = None
+    train_class_code: str | None = None
+    train_class_name: str | None = None
+    train_group_code: str | None = None
+    train_group_name: str | None = None
+    run_date: str | None = None
+    general_reservation_possible_code: str | None = None
+    special_reservation_possible_code: str | None = None
+    change_before_departure_construction_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    change_before_arrival_construction_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    existing_departure_run_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    existing_arrival_run_order: str | None = field(
+        default=None,
+        repr=False,
+    )
+    stations: tuple[SelfSeatChangeStation, ...] = ()
+    reasons: tuple[SelfSeatChangeReason, ...] = ()
+
+
+@dataclass(frozen=True)
+class OriginalTicketSeat:
+    """One seat of one journey of an original ticket.
+
+    ``response/research/Seat.java``. The seat identity itself (``scarNo`` /
+    ``seatNo``) is redacted wherever it is previewed.
+    """
+
+    passenger_sequence: str | None = None
+    assign_sequence: str | None = None
+    passenger_type_code: str | None = None
+    room_class_code: str | None = field(default=None, repr=False)
+    car_no: str | None = field(default=None, repr=False)
+    seat_no: str | None = field(default=None, repr=False)
+    seat_count: str | None = None
+    received_fare: str | None = None
+    received_price: str | None = None
+    requested_seat_attribute_code: str | None = None
+    direction_seat_attribute_code: str | None = None
+    location_seat_attribute_code: str | None = None
+    smoking_seat_attribute_code: str | None = None
+    additional_seat_attribute_code: str | None = None
+    etc_seat_attribute_code: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class OriginalTicketJourney:
+    """One leg of an original ticket (``response/research/Jrny.java``).
+
+    This is the row the change chain is keyed on: ``jrnySqno`` plus the
+    departure/arrival station codes and orders are exactly the parameters the
+    follow-up reads take.
+    """
+
+    journey_sequence: str | None = None
+    journey_order: str | None = None
+    #: ``jrnyTpCd``. Already a registered sensitive key under both its wire and
+    #: its attribute spelling, so it is kept out of the repr like every other
+    #: model that surfaces it.
+    journey_type_code: str | None = field(default=None, repr=False)
+    train_no: str | None = None
+    train_group_code: str | None = None
+    departure_date: str | None = None
+    departure_time: str | None = None
+    departure_station_code: str | None = None
+    departure_station_name: str | None = None
+    departure_construction_order: str | None = None
+    arrival_date: str | None = None
+    arrival_time: str | None = None
+    arrival_station_code: str | None = None
+    arrival_station_name: str | None = None
+    arrival_construction_order: str | None = None
+    goods_no: str | None = None
+    total_seat_count: str | None = None
+    total_standing_count: str | None = None
+    general_change_allowed_flag: str | None = None
+    single_ticket_flag: str | None = None
+    seats: tuple[OriginalTicketSeat, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class OriginalTicket:
+    """One 원표 (``response/research/OrgTk.java``).
+
+    The four ``ogtk*`` values are the ticket's own 반환번호 coming back — the
+    same secret the request sent — and are redacted under both their wire and
+    their attribute spellings. ``cmpnList`` and ``stlList`` (companion
+    discounts and settlement rows) are deliberately left in :attr:`raw`: they
+    carry further credentials (지연증명 return numbers, card and approval
+    numbers) that this model has no change-chain use for. Those wire keys are
+    registered in :mod:`~korail_mobile_api.redaction` so they stay masked in
+    ``raw`` too.
+    """
+
+    pnr_no: str | None = field(default=None, repr=False)
+    ticket_kind_code: str | None = None
+    original_sale_datetime: str | None = field(default=None, repr=False)
+    original_window_no: str | None = field(default=None, repr=False)
+    original_sale_sequence: str | None = field(default=None, repr=False)
+    original_return_password: str | None = field(default=None, repr=False)
+    member_card_no: str | None = field(default=None, repr=False)
+    adult_count: str | None = None
+    child_count: str | None = None
+    group_discount_count: str | None = None
+    passenger_type_division_code: str | None = None
+    received_amount: str | None = None
+    received_fare: str | None = None
+    received_price: str | None = None
+    change_sale_transaction_no: str | None = field(default=None, repr=False)
+    sms_send_flag: str | None = None
+    forced_sale_reason_text: str | None = None
+    journeys: tuple[OriginalTicketJourney, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class OriginalTicketInquiryResponse(BaseKorailResponse):
+    """``research.tripChgOgtk.do`` — the tickets a change would start from.
+
+    ``OgTkInquiryDao.OgTkInquiryResponse``
+    (``dao/research/OgTkInquiryDao.java:38-46``).
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    tickets: tuple[OriginalTicket, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
 class RecentDeliveryRecipient:
     acceptance_customer_management_flag: str | None = field(
         default=None,

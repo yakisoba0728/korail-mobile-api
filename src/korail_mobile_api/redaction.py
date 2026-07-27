@@ -256,6 +256,101 @@ SENSITIVE_KEYS = frozenset(
         "strMbCrdNo",
         "strCustNo",
         "encryptCustNo",
+        # ------------------------------------------------------------------
+        # 비회원 오프라인 반환 (refunds.verifyOnlineRefunds /
+        # refunds.executeOnlineRefunds). NOTHING here is caught by a regex:
+        # CARD_RE needs 13-19 CONSECUTIVE digits and the 16-digit 반환번호
+        # arrives split 5/4/5/2 (res/values/integers.xml:29-32), the phone
+        # number is 11 digits, and the requester's name is a Korean name. Key
+        # matching is the only thing between these values and a preview.
+        #
+        # retNo1..4 -- the four segments of the printed 반환번호
+        #   (RefundService.java:33). Together they ARE the credential that
+        #   turns into a refundable ticket, and the server answers them with
+        #   the sale window/date/sequence and the return password
+        #   (RefundVerifyTicketDao.java:119-122). Enumerated AND given a base:
+        #   is_sensitive_key() would catch retNo1 from the base alone via
+        #   _index_stripped, but SENSITIVE_KEY_VALUE_RE matches literals with a
+        #   trailing (?![\w-]) and so would NOT catch "retNo1=..." in free
+        #   text. Both paths have to be covered.
+        # strName -- the 요청자 name on the verify form (s5/c.java:71, the
+        #   requestorEdit field of offline_return_input_fragment.xml).
+        # custTeln -- the 요청자 phone number on the execute form
+        #   (s5/h.java:123). A DISTINCT spelling: acepCustTeln is already
+        #   listed but _index_stripped("custteln") is None, so this one was not
+        #   covered by anything.
+        # ogtkSaleDt / ogtkSaleWctNo / ogtkSaleSqno / ogtkRetPwd -- the camel
+        #   spellings of the four-part sale identity on the execute form
+        #   (RefundService.java:17). The h_orgtk_* spellings are listed above;
+        #   these are the same four values.
+        "retNo1",
+        "retNo2",
+        "retNo3",
+        "retNo4",
+        "retNo",
+        "strName",
+        "custTeln",
+        "ogtkSaleDt",
+        "ogtkSaleWctNo",
+        "ogtkSaleSqno",
+        "ogtkRetPwd",
+        # ...and the verify RESPONSE, which is where the credential comes back.
+        #
+        # prnNo -- a trap. The response spells the PNR P-r-n
+        #   (RefundVerifyTicketDao.java:123,151) and the app feeds it straight
+        #   into setPnrNo (s5/h.java:118). pnrNo and txtPrnNo were both listed;
+        #   the bare response spelling was not.
+        # ogtk_* -- the underscore spellings of the same four-part identity
+        #   (RefundVerifyTicketDao.java:119-122), including the return password
+        #   in the clear.
+        # scar_no / psrm_cl_nm -- the underscore spellings of scarNo/psrmClNm
+        #   on the response's seat rows (:169-171).
+        "prnNo",
+        "ogtk_ret_pwd",
+        "ogtk_sale_dt",
+        "ogtk_sale_sqno",
+        "ogtk_sale_wct_no",
+        "scar_no",
+        "psrm_cl_nm",
+        # poppMsg -- server-composed notice text on a screen whose entire input
+        # is a name and a 반환번호 (RefundVerifyTicketDao.java:66;
+        # s5/c.java:199-208). Registered for the same reason h_msg_txt already
+        # is: server text is free to quote back what the caller sent, and there
+        # is no way to tell from here whether it does. It costs nothing to
+        # redact -- it is a response field, so no request preview loses
+        # anything by it.
+        "poppMsg",
+        "popup_message",
+        # ...and the model attribute names this flow parses into. The response
+        # rows reuse attribute names already listed above (pnr_no,
+        # original_sale_date, original_window_no, original_sale_sequence,
+        # original_return_password, car_no, seat_no, room_class_name); these
+        # are the ones that are genuinely new.
+        #
+        # non_member_* -- KorailNonMemberSession's three fields (models.py).
+        #   The whole non-member identity: a real name, a real phone number and
+        #   the 비회원 승차권 조회 password. Named with the non_member_ prefix
+        #   rather than name/phone/password precisely so that registering them
+        #   here cannot start redacting unrelated "name=" text: SENSITIVE_KEYS
+        #   feeds SENSITIVE_KEY_VALUE_RE, which substitutes across every
+        #   redacted string in the package.
+        # return_no_1..4 / return_no -- OfflineRefundReturnNumber's segments
+        #   (mutation_models.py), enumerated and based for the same reason
+        #   retNo1..4 are.
+        # requester_name / requester_phone -- not attributes but the keyword
+        #   names the two offline-refund form builders take. Registered so that
+        #   a kwargs dump or a bound-arguments repr masks them exactly as the
+        #   wire keys do; they carry the same two values.
+        "non_member_name",
+        "non_member_phone",
+        "non_member_password",
+        "return_no_1",
+        "return_no_2",
+        "return_no_3",
+        "return_no_4",
+        "return_no",
+        "requester_name",
+        "requester_phone",
         # Bases for the index-enumerated keys above. The enumerations are kept
         # so that an exact match still works, but these make the family the
         # matched thing rather than each reachable subscript.
@@ -263,6 +358,130 @@ SENSITIVE_KEYS = frozenset(
         "txtSeatNo",
         "txtCardNo",
         "custMgNo_",
+        # 원표(원승차권) identity, on the way OUT and on the way BACK.
+        #
+        # ogtkRetPwd is a bearer credential in the same sense h_orgtk_ret_pwd
+        # already registered above is: it is one quarter of a 반환번호, and the
+        # holder of the tuple can read and act on someone else's ticket. It
+        # travels three ways and none was covered:
+        #
+        #   * as a bare @Field on the 정기권 원표 조회 branch of
+        #     research.cmtrInfo.do (ResearchService.java:41-42; this package
+        #     has emitted it since build_commuter_info_form was added),
+        #   * as an INDEXED @FieldMap key on the 원표 lookup -- ogtkRetPwd_1,
+        #     ogtkRetPwd_2, ... (ROrtg.java:8-11 + TCBookingActivity.java:
+        #     169-175). _index_stripped() below turns those back into the base
+        #     name, so registering the base covers every row,
+        #   * and as a RESPONSE field, OrgTk.ogtkRetPwd
+        #     (response/research/OrgTk.java:16), which is the same secret being
+        #     handed back.
+        #
+        # The other three quarters (ogtkSaleWctNo / ogtkSaleDd / ogtkSaleSqno,
+        # plus the response's ogtkSaleDt spelling) are registered for the
+        # reason this file already states of saleDd at the top of this block:
+        # masking three quarters of a return number and leaving one readable is
+        # the only thing standing between a log and a reconstructable 반환번호.
+        # Note these are DISTINCT keys from the already-registered saleDd /
+        # saleWctNo / saleSqno -- an "ogtk" prefix is not an index, so
+        # _index_stripped() cannot fall back to them.
+        "ogtkRetPwd",
+        "ogtkSaleDd",
+        "ogtkSaleDt",
+        "ogtkSaleWctNo",
+        "ogtkSaleSqno",
+        # The same tuple once more under the 지연증명 spelling carried by each
+        # companion row of the 원표 response (response/research/Cmpn.java:
+        # 11-14). A 지연증명 원표 return number is spendable as a discount.
+        "dlayOgtkRetPwd",
+        "dlayOgtkSaleDt",
+        "dlayOgtkSaleSqno",
+        "dlayOgtkWctNo",
+        # The 원표 response's settlement rows (response/research/Stl.java:
+        # 5-16). h_stl_crd_no / h_apv_no are already registered above; these
+        # are a card number, a prepaid card number and an approval number
+        # under the spellings THIS route uses.
+        "stlCrdNo",
+        "prepCrdNo",
+        "apvNo",
+        # ...and the model attribute names the parsers below put them under.
+        "original_sale_datetime",
+        "delay_certificate_return_password",
+        "delay_certificate_sale_date",
+        "delay_certificate_sale_sequence",
+        "delay_certificate_window_no",
+        "settlement_card_no",
+        "prepaid_card_no",
+        "approval_no",
+        # 일괄결제대상번호, the number a settlement is charged against.
+        # lump_sum_target_no / h_lump_stl_tgt_no are already registered under
+        # other spellings; these two are the same number as the 할인카드 구매
+        # mutation returns it (mutation_parsers.py maps lumpStlTgtNo ->
+        # lump_settlement_target_no), and whoever holds one can have a payment
+        # applied to it.
+        "lumpStlTgtNo",
+        "lump_settlement_target_no",
+        # ------------------------------------------------------------------
+        # 승차권 여행변경 (ticket_change) on the way OUT. Every name below is a
+        # value this set ALREADY redacts under a different spelling; listing
+        # them is what stops the same secret from becoming readable purely
+        # because these three routes name it differently.
+        #
+        #   tmpJobSqno IS THE PNR. C5/d.java:145 sets it to
+        #     reservationResponse.getH_pnr_no() before the re-price call.
+        #     h_pnr_no, pnrNo, txtPnrNo, hidTmpJobSqno1/2, h_tmp_job_sqno1/2
+        #     and temporary_job_sequence_1/2 are all already listed; the bare
+        #     spelling this route uses was not.
+        #   chgTno -- 예약변경 차수 (w4/a.java:136 <- h_rsv_chg_no). The same
+        #     value as hidRsvChgNo / h_rsv_chg_no / reservation_change_no.
+        #   ogtkSaleWctNo / ogtkSaleDd / ogtkSaleSqno / ogtkRetPwd -- the
+        #     원표's four-part 반환번호 (ROrtg.java:8-11). Whoever holds all
+        #     four can refund or change the ticket. Single-index keys, so the
+        #     base catches ogtkRetPwd_1 via _index_stripped().
+        #   lumpStlTgtNo -- the 묶음결제 handle a settlement charges and a
+        #     rollback cancels. h_lump_stl_tgt_no and lump_sum_target_no are
+        #     listed; the outbound spelling was not.
+        "tmpJobSqno",
+        "chgTno",
+        "ogtkSaleWctNo",
+        "ogtkSaleDd",
+        "ogtkSaleSqno",
+        "ogtkRetPwd",
+        "lumpStlTgtNo",
+        # ...and the model attribute names they parse into.
+        "lump_settlement_target_nos",
+        "temporary_job_sequence",
+        # DOUBLY INDEXED KEYS NEED ENUMERATING, because _index_stripped()
+        # removes ONE trailing index: "scarNo_1_1" strips to "scarNo_1", which
+        # is not in this set even though "scarNo" is. Rather than change what
+        # stripping means for every route in the package, the reachable pairs
+        # are spelled out -- the outer index is a journey leg (at most
+        # KORAIL_MAX_JOURNEY_LEGS) or a passenger, the inner a seat or a
+        # discount row (at most KORAIL_MAX_PASSENGERS_PER_RESERVATION).
+        #
+        #   scarNo_/seatNo_ (RSrcar.java:8-9) -- the physical seat, already
+        #     redacted as scarNo/seatNo/h_srcar_no/h_seat_no elsewhere.
+        #   roomClsfCd_/seatPsrmClCd_ (RSeat.java:10,13) -- the cabin, already
+        #     redacted as psrmClCd/psrm_cl_cd/room_class_code.
+        #   dscpNo_ (RDscp.java:13) -- a spendable coupon/certificate number,
+        #     the same value as h_cpn_no/coupon_no/hidDscpNo.
+        #   dlayOgtkWctNo_/dlayOgtkSaleDd_/dlayOgtkSaleSqno_/dlayOgtkRetPwd_
+        #     (RDscp.java:8-11) -- the 지연할인증's own four-part 반환번호.
+        *(
+            f"{prefix}{outer}_{inner}"
+            for prefix in (
+                "scarNo_",
+                "seatNo_",
+                "roomClsfCd_",
+                "seatPsrmClCd_",
+                "dscpNo_",
+                "dlayOgtkWctNo_",
+                "dlayOgtkSaleDd_",
+                "dlayOgtkSaleSqno_",
+                "dlayOgtkRetPwd_",
+            )
+            for outer in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+            for inner in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+        ),
     }
 )
 _INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)_?(?P<index>\d+)$")

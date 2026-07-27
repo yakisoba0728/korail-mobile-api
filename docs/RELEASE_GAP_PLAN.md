@@ -131,7 +131,7 @@ analysis §8.4 (`…:2708-2790`) + `docs/api-endpoints.md`.
 | G4 | `research.tripChgOgtk.do` | POST | Original-ticket inquiry — **prerequisite read** for the 승차권 변경 chain | `ResearchService.java:61`; analysis §3.6 boundary (`…:687`) | Change-flow read not ported (needed before `tripChgPrsC`) |
 | G5 | `trainsInfo.TourTrainSpecialRoom` | POST | Tour-train special-room info | `TrainsInfoService.java:36` | Not ported |
 | G6 | `self.seatChgInfo.do` | POST | Self seat-change info (options/stations) | `TicketService.java:54` | Read; not ported |
-| G7 | `myTicket.reqUpgradeSeat` | GET | Seat/special-room upgrade **quote** | `MyTicketService.java:23`; analysis §3.8 (`…:814`) | Read (quote), but carries `ogtkRetPwd` in query — port with redaction; `procUpgrade` is the paired write |
+| G7 | `myTicket.reqUpgradeSeat` | GET | Seat/special-room upgrade | `MyTicketService.java:23`; analysis §3.8 (`…:814`) | **NOT a read — do not port.** Its response mints `lumpStlTgtNo` (`SpecialRoomUpgradeDao.java:13,19`) and `procUpgrade` settles that same number (`MyTicketService.java:21`), so it creates an unpaid purchase, exactly as `research.dcntCrdInfo.do` does. Blocked on its paired write `procUpgradeSeat`, which is an intended deferral; ship the pair or neither |
 | G8 | `maas.cncFee.do` | POST | MaaS cancel-**fee quote** (feeds `coptCnc`) | `TicketService.java:46`; analysis §3.8 (`…:833`) | Cancel-flow read; prerequisite for MaaS cancel |
 | G9 | `product.payInfo` | GET | Product reservation pay-info / lump-settlement target | `ProductService.java:18`; analysis §3.7.1 (`…:755`) | Pay-info read; prerequisite for product settlement |
 | G10 | `gift.gdUseSpec.do` | POST | Gift-ticket usage history | `GifticketService.java:21` | Read; not ported (list `gdLst` is implemented) |
@@ -404,6 +404,20 @@ Two sub-flows (analysis §3.9 `…:874`):
 | `refunds.RefundsRequest` (execute) | POST | `txtPnrNo`, `h_orgtk_sale_dt`, `h_orgtk_sale_wct_no`, `h_orgtk_sale_sqno`, `h_orgtk_ret_pwd`, `h_mlg_stl`, `tk_ret_tms_dv_cd`, `trnNo`, `pbpAcepTgtFlg`, `latitude`, `longitude` | `RefundResponse{stlList[{stl_mns_cd}]}` | `RefundService.java:27`; wire quirk §5 |
 | `refunds.verifyOnlineRefunds` | POST | `retNo1..4`, `strName` | `RefundVerifyTicketResponse{ret_amt, ret_fee, rcvd_amt,…}` | `RefundService.java:31` |
 | `refunds.executeOnlineRefunds` | POST | `pnrNo`, `tkKndCd`, `retDvCd`, `retRsnCd`, `ogtkSaleDt`, `ogtkSaleWctNo`, `ogtkSaleSqno`, `ogtkRetPwd`, `retAmt`, `retFee`, `custTeln`, `acepCustNm` | `RefundExecuteTicketRefundResponse{h_ret_dv_cd}` | `RefundService.java:15` |
+
+> **IMPLEMENTED (offline pair).** `verify_offline_refund_ticket` and
+> `execute_offline_refund` now cover the two offline rows, so Flow D is 5/5.
+> Both are on the EXISTING `refund` consent category (`allow_refund`), not a new
+> one: same product act, same money, only a different way of proving whose
+> ticket it is. Their premise, the 비회원 identity the app keeps in
+> `b5/h.java:158-172`, is modelled as `KorailNonMemberSession` — a distinct type
+> from `KorailSession` with no `jsessionid`, held in `session.non_member`,
+> mutually exclusive with a member session in both directions.
+> `verifyOnlineRefunds` is registered as a MUTATION despite reading like a
+> lookup: it converts a printed 반환번호 into the four-part sale identity
+> **including `ogtk_ret_pwd`** (`RefundVerifyTicketDao.java:119-122`), which the
+> execute call then spends. Whether the server records anything at that step is
+> not established from the APK; it is gated as though it does.
 
 > **CORRECTION (2026-07-21, srtgo ref).** The working client refunds with a
 > **single `refunds.RefundsRequest` POST** — no `SelTicketInfo`/`CommissionView`

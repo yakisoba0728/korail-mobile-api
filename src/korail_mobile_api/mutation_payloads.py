@@ -25,6 +25,7 @@ from .errors import KorailProtocolError
 from .models import TrainSummary
 from .read_models import TrainScheduleItem
 from .mutation_models import (
+    CartAddRequest,
     DiscountCardAdditionalUser,
     DiscountCardPurchaseRequest,
     DiscountCardSectionRequest,
@@ -32,10 +33,20 @@ from .mutation_models import (
     CardPayment,
     KorailPassengerCounts,
     KorailSeatAssignment,
+    OfflineRefundReturnNumber,
+    OfflineRefundVerifyResponse,
     PaidTicket,
     PriceRecalculationRequest,
     PriceRecalculationRow,
     ReservationHoldResponse,
+    ReservationPassengerChangeLeg,
+    ReservationPassengerChangeRequest,
+    TripChangeDiscount,
+    TripChangeLeg,
+    TripChangeOriginalTicket,
+    TripChangePassenger,
+    TripChangeReservationRequest,
+    TripChangeSeatAssignment,
 )
 
 
@@ -1928,4 +1939,820 @@ def build_price_recalculation_form(
     form["txtPsgGridcnt"] = str(len(rows))
     for wire_name, _ in _PRICE_RECALCULATION_ROW_FIELDS:
         form[wire_name] = columns[wire_name]
+    return form
+
+
+def _required_identity_text(value: object, *, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise KorailProtocolError(
+            f"KORAIL offline refund requires a non-empty {field}"
+        )
+    return value
+
+
+def build_offline_refund_verify_form(
+    config: KorailConfig,
+    return_number: OfflineRefundReturnNumber,
+    *,
+    requester_name: str,
+) -> dict[str, str]:
+    """``refunds.verifyOnlineRefunds`` — 비회원 오프라인 반환 1단계 (조회).
+
+    NOT the member refund. There is no session, no PNR and no
+    :class:`~korail_mobile_api.mutation_models.PaidTicket` here: the ticket is
+    a paper one bought at a station window, and it is identified by the
+    16-digit 반환번호 printed on it plus the requester's own name. The member
+    path is :func:`build_refund_form` (``refunds.RefundsRequest``).
+
+    Five fields after the common envelope, in the order the app's Retrofit
+    signature declares them — ``Device``, ``Version``, ``Key``, ``retNo1``,
+    ``retNo2``, ``retNo3``, ``retNo4``, ``strName``
+    (``RefundService.java:31-33``; re-read from
+    ``smali/com/korail/talk/network/dao/refund/RefundService.smali:273-320``,
+    where the eight ``retrofit/http/Field`` annotations carry exactly those
+    values and the ``POST`` annotation carries
+    ``/classes/com.korail.mobile.refunds.verifyOnlineRefunds``).
+
+    ``strName`` is the 요청자 — the ``requestorEdit`` box of
+    ``offline_return_input_fragment.xml``, read at ``s5/c.java:71``. The
+    phone number the same screen collects is NOT sent here; it is held for the
+    execute call (``s5/c.java:106`` passes it along, ``s5/h.java:123`` sends
+    it).
+
+    Every field this builds is a bearer credential or PII, and none of them is
+    caught by a value-shaped regex — the 16 digits arrive split 5/4/5/2, so
+    ``CARD_RE`` never sees 13 consecutive digits. All five wire keys are
+    registered in :data:`~korail_mobile_api.redaction.SENSITIVE_KEYS`.
+    """
+    if type(return_number) is not OfflineRefundReturnNumber:
+        raise KorailProtocolError(
+            "KORAIL offline refund verification requires an "
+            "OfflineRefundReturnNumber"
+        )
+    form = _common_fields(config)
+    form.update(
+        {
+            "retNo1": return_number.return_no_1,
+            "retNo2": return_number.return_no_2,
+            "retNo3": return_number.return_no_3,
+            "retNo4": return_number.return_no_4,
+            "strName": _required_identity_text(
+                requester_name,
+                field="requester_name",
+            ),
+        }
+    )
+    return form
+
+
+def build_offline_refund_execute_form(
+    config: KorailConfig,
+    verified: OfflineRefundVerifyResponse,
+    *,
+    requester_name: str,
+    requester_phone: str,
+) -> dict[str, str]:
+    """``refunds.executeOnlineRefunds`` — 비회원 오프라인 반환 2단계 (접수/환불).
+
+    NOT the member refund (:func:`build_refund_form`). This one moves money on
+    a paper ticket nobody is logged in to own.
+
+    Twelve fields after the common envelope, in the order the app's Retrofit
+    signature declares them — ``Device``, ``Version``, ``Key``, ``pnrNo``,
+    ``tkKndCd``, ``retDvCd``, ``retRsnCd``, ``ogtkSaleDt``, ``ogtkSaleWctNo``,
+    ``ogtkSaleSqno``, ``ogtkRetPwd``, ``retAmt``, ``retFee``, ``custTeln``,
+    ``acepCustNm`` (``RefundService.java:15-17``; re-read from
+    ``RefundService.smali:1-90``, whose fifteen ``Field`` annotation values are
+    exactly those and whose ``POST`` value is
+    ``/classes/com.korail.mobile.refunds.executeOnlineRefunds``).
+
+    ``verified`` is the PARSED VERIFY RESPONSE rather than a hand-assembled
+    identity, because that is precisely what the app does: ``s5/h.java:114-125``
+    takes nine of the twelve values off ``getOrgTkInfos().get(0)`` and the two
+    amounts off the response itself, and only the last two come from the user.
+    Letting a caller assemble the four-part sale identity by hand is how a
+    mismatched credential reaches a real refund.
+
+    **The two identity fields are crossed relative to their bundle keys.** The
+    app stashes the requester's NAME under the bundle key ``"CUSTOMER_NUMBER"``
+    and the PHONE under ``"PHONE_NUMBER"`` (``s5/h.java:100-108``, from
+    ``s5/c.java:106`` which passes ``requestorEdit`` then ``phoneNoEdit``), then
+    reads them back as ``setAcepCustNm(...getString("CUSTOMER_NUMBER"))`` and
+    ``setCustTeln(...getString("PHONE_NUMBER"))`` (``:122-123``). So
+    ``acepCustNm`` is the name and ``custTeln`` is the phone number — the
+    misleading bundle key is the app's, and it is exactly the kind of thing a
+    later reader "fixes" the wrong way.
+
+    Only the FIRST resolved ticket is refunded, matching the app's
+    ``get(0)``. A 반환번호 that resolved to more than one ticket is refused
+    rather than silently refunding one of them.
+    """
+    if type(verified) is not OfflineRefundVerifyResponse:
+        raise KorailProtocolError(
+            "KORAIL offline refund execution requires an "
+            "OfflineRefundVerifyResponse from verifyOnlineRefunds"
+        )
+    tickets = verified.tickets
+    if len(tickets) != 1:
+        raise KorailProtocolError(
+            "KORAIL offline refund execution requires exactly one verified "
+            f"ticket; the verification returned {len(tickets)}"
+        )
+    ticket = tickets[0]
+    identity = {
+        "pnrNo": ticket.pnr_no,
+        "tkKndCd": ticket.ticket_kind_code,
+        "retDvCd": ticket.return_division_code,
+        "retRsnCd": ticket.return_reason_code,
+        "ogtkSaleDt": ticket.original_sale_date,
+        "ogtkSaleWctNo": ticket.original_window_no,
+        "ogtkSaleSqno": ticket.original_sale_sequence,
+        "ogtkRetPwd": ticket.original_return_password,
+        "retAmt": verified.refund_amount,
+        "retFee": verified.refund_fee,
+    }
+    missing = [name for name, value in identity.items() if not value]
+    if missing:
+        raise KorailProtocolError(
+            "KORAIL offline refund execution is missing verified fields: "
+            f"{', '.join(missing)}"
+        )
+    form = _common_fields(config)
+    form.update({name: str(value) for name, value in identity.items()})
+    form["custTeln"] = _required_identity_text(
+        requester_phone,
+        field="requester_phone",
+    )
+    form["acepCustNm"] = _required_identity_text(
+        requester_name,
+        field="requester_name",
+    )
+    return form
+
+
+# ---------------------------------------------------------------------------
+# 승차권 여행변경 (ticket_change)
+#
+# THE INDEXING RULE, ONCE, FOR ALL THREE ROUTES BELOW. Every R* class in
+# network/data/reservation is a LinkedHashMap<String,String> whose setters
+# append a decimal index to a constant prefix, and Retrofit's @FieldMap
+# flattens the map key-for-key (RequestBuilder.smali:1440-1508 walks
+# entrySet() and calls addField(key, value)). So the wire key IS the map key,
+# the map's INSERTION order is the wire order -- which is not the same as the
+# order the calls appear in, because a LinkedHashMap re-put keeps the key's
+# first position (see the RSeat block of build_trip_change_reservation_form,
+# the one map two files write) -- and there are exactly two shapes:
+#
+#   one index   prefix + N            e.g. dptDt_1, psgTpDvCd_2
+#   two indices prefix + N + "_" + K  e.g. rqSeatAttCd_1_1, dcntKndCd_2_1
+#
+# EVERY index is 1-based. The app's loops all increment before the first use
+# (w4/b.java:148, C5/d.java:48, w4/a.java:140), and the two-index writers are
+# called with a literal 1 for the inner index on every path found.
+#
+# Two prefixes are NOT what their setter names suggest and are easy to get
+# wrong (RSrcar.java:7-10, 24-26):
+#
+#   setScarCnt  -> "scarCnt_"     setSrcarCnt -> "srcarCnt_"
+#   setSrcarNo  -> "scarNo_"      setSeatNo   -> "seatNo_"
+#
+# and the two routes below disagree about which count they send:
+# reservationChange.do writes scarCnt_ (w4/a.java:154) while the trip-change
+# seat picker writes srcarCnt_ (SeatSearchActivity.java:660).
+# ---------------------------------------------------------------------------
+
+#: ``jrnySqno_N`` for leg N. ``C5/d.java:51`` writes
+#: ``addZero(4, int(K4.d.DIRECT_SQ_NO))`` for the first leg and
+#: ``TRANSFER_SQ_NO`` for every later one; the codes are "1" and "2"
+#: (``K4/d.java:5-6``), so the two possible values are these.
+_TRIP_CHANGE_JOURNEY_SEQUENCE_NOS = ("0001", "0002")
+
+#: The three ``RSeat`` attribute codes ``w4/b.java:165-167`` writes before
+#: ``rqSeatAttCd`` and ``C5/d.java`` never touches. Each is
+#: ``prefix + leg + "_1"``. The values are enum codes: ``K4/q.DISABLE``
+#: 사용안함, ``K4/l.DEFAULT`` 모든방향, ``K4/n.DEFAULT`` 모든 위치 — all
+#: ``"000"``, but spelled out per key because they come from three different
+#: enums and only coincide.
+_TRIP_CHANGE_SEAT_OPTION_CODES: tuple[tuple[str, str], ...] = (
+    ("smkSeatAttCd_", "000"),  # K4/q.java:6 DISABLE
+    ("dirSeatAttCd_", "000"),  # K4/l.java:5 DEFAULT
+    ("locSeatAttCd_", "000"),  # K4/n.java:5 DEFAULT
+)
+
+#: ``etcSeatAttCd_N_1`` (``K4/m.java:5`` DISABLE), written LAST of the six
+#: (``w4/b.java:169``) — after ``rqSeatAttCd``, which is why it is not in the
+#: tuple above.
+_TRIP_CHANGE_ETC_SEAT_ATTRIBUTE_CODE = "000"
+
+#: ``trvlKndCd`` (``w4/b.java:135``), ``intgTktIseFlg`` (``:139``),
+#: ``alcSeatDmnPsDvCd`` (``:140``) and the two "second journey" counters
+#: ``jrny2Cnt``/``psg2Cnt``, both ``addZero(4, 0)`` (``:141-142``). No call
+#: site varies any of them, so they are constants rather than parameters.
+_TRIP_CHANGE_TRAVEL_KIND_CODE = "1"
+_TRIP_CHANGE_INTEGRATED_TICKET_FLAG = "N"
+_TRIP_CHANGE_SEAT_DEMAND_CODE = "000"
+_TRIP_CHANGE_SECOND_JOURNEY_COUNT = "0000"
+
+
+def _zero_padded(value: int, *, width: int) -> str:
+    """``S4/N.addZero(width, value)`` — a ``DecimalFormat`` of ``width`` zeros.
+
+    ``S4/N.java:32-38`` builds a format string of ``width`` ``"0"`` characters
+    and formats the integer with it, which is left-zero-padding that does NOT
+    truncate a longer number.
+    """
+    return f"{value:0{width}d}"
+
+
+def _required_trip_change_text(value: object, *, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise KorailProtocolError(
+            f"KORAIL ticket change request requires a non-empty {field}"
+        )
+    return value
+
+
+#: ``RJrny`` keys ``C5/d.java:54-66`` writes after the three derived ones, in
+#: the order it writes them. Prefixes from ``RJrny.java:5-18``.
+_TRIP_CHANGE_JOURNEY_FIELDS: tuple[tuple[str, str], ...] = (
+    ("runDt_", "run_date"),
+    ("stlbTrnClsfCd_", "train_classification_code"),
+    ("trnGpCd_", "train_group_code"),
+    ("dptDt_", "departure_date"),
+    ("dptTm_", "departure_time"),
+    ("dptRsStnCd_", "departure_station_code"),
+    ("dptStnConsOrdr_", "departure_station_consecutive_order"),
+    ("dptStnRunOrdr_", "departure_station_run_order"),
+    ("arvDt_", "arrival_date"),
+    ("arvTm_", "arrival_time"),
+    ("arvRsStnCd_", "arrival_station_code"),
+    ("arvStnConsOrdr_", "arrival_station_consecutive_order"),
+    ("arvStnRunOrdr_", "arrival_station_run_order"),
+)
+
+#: ``ROrtg`` keys ``w4/b.java:149-153`` writes per original ticket, in order.
+#: Prefixes from ``ROrtg.java:7-13``.
+_TRIP_CHANGE_ORIGINAL_TICKET_FIELDS: tuple[tuple[str, str], ...] = (
+    ("ogtkSaleWctNo_", "sale_window_no"),
+    ("ogtkSaleDd_", "sale_date"),
+    ("ogtkSaleSqno_", "sale_sequence"),
+    ("ogtkRetPwd_", "return_password"),
+    ("retNoMnlInpFlg_", "manual_return_no_flag"),
+)
+
+
+def build_trip_change_reservation_form(
+    config: KorailConfig,
+    request: TripChangeReservationRequest,
+) -> dict[str, str]:
+    """``reservation.tripChgPrsC.do`` — hold the replacement of a 여행변경.
+
+    Fifteen ``@Field``s then SIX ``@FieldMap``s
+    (``ReservationService.java:24-26``). The maps are not interchangeable and
+    their identity is not guessable from the signature — it is fixed by the
+    argument order of ``TCReservationDao.executeDao`` (``:218-223``), which
+    passes ``getRJrny()``, ``getRSrcar()``, ``getRSeat()``, ``getRPsg()``,
+    ``getROrtg()``, ``getRDscp()`` in that order. This builder emits them in
+    that order, and the form below is a ``dict``, whose insertion order httpx
+    preserves on the wire.
+
+    ``getOrgRDscp()`` — the SEVENTH map on the request object
+    (``TCReservationDao.java:36``) — is deliberately absent: ``executeDao``
+    does not pass it. The app carries it so the payment screen can clone it and
+    add discounts (``a6/C1043C.java:85,230``); it never reaches the network.
+
+    Field by field, with the two builders that produce them:
+
+    ==================== ============================= ================    field                value                          evidence
+    ==================== ============================= =======================
+    ``trvlKndCd``        ``"1"``                        w4/b.java:135
+    ``totPrnb``          原票 count                     w4/b.java:136
+    ``isePrnb``          原票 count                     w4/b.java:137
+    ``stndSeatFlg``      caller                         w4/b.java:138 →
+                                                        C5/d.java:68
+    ``intgTktIseFlg``    ``"N"``                        w4/b.java:139
+    ``prcFareReCalcFlg`` ``"N"``/``"Y"``                C5/d.java:136,144
+    ``tmpJobSqno``       omitted / PNR                  C5/d.java:137,145
+    ``alcSeatDmnPsDvCd`` ``"000"``                      w4/b.java:140
+    ``jrny2Cnt``         ``"0000"``                     w4/b.java:141
+    ``psg2Cnt``          ``"0000"``                     w4/b.java:142
+    ``ctlDvCd``          omitted / ``"3584"``           SeatSearchActivity:784
+    ``frcSaleRsnCont``   omitted / reason code          SeatSearchActivity:779
+    ==================== ============================= =======================
+
+    ``totPrnb``/``isePrnb`` are the number of ORIGINAL tickets, not the number
+    of passengers: ``w4/b.java:136-137`` uses ``orgTkList.size()`` for both
+    while ``psgCnt`` (``:175``) uses the picker's total. They differ whenever
+    a 동반유아 is added or removed, and this builder keeps them separate.
+
+    **``ctlDvCd``/``frcSaleRsnCont`` DO NOT SELECT THE 발상역 변경 PATH.**
+    They are the two extra scalars that path sends, and they are exposed
+    because they are real ``@Field``s of this route — but nothing else about
+    that path is reproduced here. ``SeatSearchActivity.java:793,820`` writes
+    ``jrnyTpCd`` as ``"21"``/``"22"`` (``K4/e`` STANDING_SEAT_1/2, not
+    ``"11"``/``"14"``), rebuilds the ``RJrny`` block out of a
+    ``StartStationDto`` whose station orders are the ``chgBf``/``exs`` pairs
+    rather than the train's own, and indexes ``RSrcar`` off a TRAIN index
+    (``:780-782``, ``:845-850``) instead of a leg. Setting these two on an
+    ordinary request produces a form the app never sends. Treat 발상역 변경 as
+    NOT IMPLEMENTED.
+
+    **THE THREE OMITTED FIELDS ARE OMITTED, NOT BLANK.** ``tmpJobSqno``,
+    ``ctlDvCd`` and ``frcSaleRsnCont`` are ``null`` on the ordinary path and
+    Retrofit drops a null ``@Field`` outright — ``RequestBuilder.smali:1510``
+    is ``if-eqz v4, :cond_16`` at the head of the ``@Field`` branch, and
+    ``:cond_16``/``:goto_a`` (``:2086-2087``) is the argument loop's own head.
+    Sending them as ``""`` would be a different request.
+
+    **VERIFIED FROM THE APK: the route, the method, all fifteen ``@Field``
+    names, the six ``@FieldMap`` identities and their order, every map's key
+    prefix and index arity, and the constant values above.**
+
+    **NEVER TRANSMITTED.** No account this project can reach holds a paid
+    ticket it is willing to have changed, so nothing here has been sent, by
+    this package or under observation. A live call re-books a paid ticket and
+    commits the holder to a settlement; treat the first one as an experiment
+    and be ready to undo it with
+    :meth:`~korail_mobile_api.KorailClient.roll_back_trip_change`.
+    """
+    if type(request) is not TripChangeReservationRequest:
+        raise KorailProtocolError(
+            "KORAIL ticket change requires an exact "
+            "TripChangeReservationRequest"
+        )
+    tickets = tuple(request.original_tickets)
+    legs = tuple(request.legs)
+    passengers = tuple(request.passengers)
+    if not tickets or len(tickets) > KORAIL_MAX_PASSENGERS_PER_RESERVATION:
+        raise KorailProtocolError(
+            "KORAIL ticket change needs 1 to "
+            f"{KORAIL_MAX_PASSENGERS_PER_RESERVATION} original tickets"
+        )
+    if not legs or len(legs) > KORAIL_MAX_JOURNEY_LEGS:
+        raise KorailProtocolError(
+            f"KORAIL ticket change needs 1 to {KORAIL_MAX_JOURNEY_LEGS} legs"
+        )
+    if not passengers or len(passengers) > KORAIL_MAX_PASSENGERS_PER_RESERVATION:
+        raise KorailProtocolError(
+            "KORAIL ticket change needs 1 to "
+            f"{KORAIL_MAX_PASSENGERS_PER_RESERVATION} passengers"
+        )
+    recalculate = request.recalculate_fare
+    job_sequence = request.temporary_job_sequence
+    if recalculate and not (
+        isinstance(job_sequence, str) and job_sequence.strip()
+    ):
+        # C5/d.java:144-145 sets the two together: the re-price call names the
+        # PNR it is re-pricing. A "Y" without one is a request the app never
+        # makes.
+        raise KorailProtocolError(
+            "KORAIL ticket change re-price needs the temporary_job_sequence "
+            "returned by the first call"
+        )
+    if not recalculate and job_sequence is not None:
+        raise KorailProtocolError(
+            "KORAIL ticket change sends temporary_job_sequence only with "
+            "recalculate_fare=True (C5/d.java:136-137)"
+        )
+
+    form = _common_fields(config)
+    form["trvlKndCd"] = _TRIP_CHANGE_TRAVEL_KIND_CODE
+    form["totPrnb"] = str(len(tickets))
+    form["isePrnb"] = str(len(tickets))
+    form["stndSeatFlg"] = _required_trip_change_text(
+        request.standing_seat_flag,
+        field="standing_seat_flag",
+    )
+    form["intgTktIseFlg"] = _TRIP_CHANGE_INTEGRATED_TICKET_FLAG
+    form["prcFareReCalcFlg"] = "Y" if recalculate else "N"
+    if job_sequence is not None:
+        form["tmpJobSqno"] = job_sequence
+    form["alcSeatDmnPsDvCd"] = _TRIP_CHANGE_SEAT_DEMAND_CODE
+    form["jrny2Cnt"] = _TRIP_CHANGE_SECOND_JOURNEY_COUNT
+    form["psg2Cnt"] = _TRIP_CHANGE_SECOND_JOURNEY_COUNT
+    if request.control_division_code is not None:
+        form["ctlDvCd"] = _required_trip_change_text(
+            request.control_division_code,
+            field="control_division_code",
+        )
+    if request.forced_sale_reason is not None:
+        form["frcSaleRsnCont"] = _required_trip_change_text(
+            request.forced_sale_reason,
+            field="forced_sale_reason",
+        )
+
+    # --- FieldMap 1/6: RJrny (C5/d.java:43-89) -----------------------------
+    journey_type = (
+        KORAIL_DIRECT_JOURNEY_TYPE_CODE
+        if len(legs) == 1
+        else KORAIL_TRANSFER_JOURNEY_TYPE_CODE
+    )
+    form["jrnyCnt"] = _zero_padded(len(legs), width=4)
+    for index, leg in enumerate(legs, start=1):
+        if type(leg) is not TripChangeLeg:
+            raise KorailProtocolError(
+                "KORAIL ticket change requires exact TripChangeLeg values"
+            )
+        form[f"jrnySqno_{index}"] = _TRIP_CHANGE_JOURNEY_SEQUENCE_NOS[index - 1]
+        form[f"jrnyTpCd_{index}"] = journey_type
+        form[f"trnNo_{index}"] = _zero_padded(
+            int(_required_digits(leg.train_no, field="train_no")),
+            width=5,
+        )
+        for wire_name, attribute in _TRIP_CHANGE_JOURNEY_FIELDS:
+            form[f"{wire_name}{index}"] = _required_trip_change_text(
+                getattr(leg, attribute),
+                field=attribute,
+            )
+
+    # --- FieldMap 2/6: RSrcar (C5/d.java:90,109-111) -----------------------
+    # Empty by default: the journey screen clears it and only a seat pick
+    # refills it. The count key is srcarCnt_ on this branch, NOT scarCnt_
+    # (SeatSearchActivity.java:660 vs :658).
+    seats_by_leg: dict[int, list[TripChangeSeatAssignment]] = {}
+    for seat in request.seats:
+        if type(seat) is not TripChangeSeatAssignment:
+            raise KorailProtocolError(
+                "KORAIL ticket change requires exact "
+                "TripChangeSeatAssignment values"
+            )
+        if type(seat.leg) is not int or not 1 <= seat.leg <= len(legs):
+            raise KorailProtocolError(
+                "KORAIL ticket change seat names a leg that is not in the "
+                "request"
+            )
+        seats_by_leg.setdefault(seat.leg, []).append(seat)
+    for leg_index in sorted(seats_by_leg):
+        leg_seats = seats_by_leg[leg_index]
+        form[f"srcarCnt_{leg_index}"] = str(len(leg_seats))
+        for seat_index, seat in enumerate(leg_seats, start=1):
+            form[f"scarNo_{leg_index}_{seat_index}"] = (
+                _required_trip_change_text(seat.car_no, field="car_no")
+            )
+            form[f"seatNo_{leg_index}_{seat_index}"] = (
+                _required_trip_change_text(seat.seat_no, field="seat_no")
+            )
+
+    # --- FieldMap 3/6: RSeat (w4/b.java:156-171 then C5/d.java:69-75) ------
+    # seatCnt_N is written TWICE by the app and the second write wins: "1"/"2"
+    # from w4/b.java:164, then addZero(4, len(legs)) from C5/d.java:69. The two
+    # loops agree on their bound -- w4/b.java:160 uses the ORIGINAL ticket's
+    # journey type and C5/d.java:47 the selected trains, and TCBookingActivity
+    # sends a direct original to the direct inquiry and a transfer original to
+    # the transfer one (:274 -> :93), so a replacement has the original's leg
+    # count.
+    #
+    # THE ORDER INSIDE THIS MAP IS THE ONE PLACE THE TWO BUILDERS INTERLEAVE.
+    # RSeat is a LinkedHashMap, and re-putting an existing key keeps its
+    # ORIGINAL position while a new key is appended. So of C5/d.java's three
+    # writes per leg (:69,70,72/74) only roomClsfCd_ is new: seatCnt_ and
+    # rqSeatAttCd_ land back where w4/b.java:164,168 first put them, which is
+    # why rqSeatAttCd_ sits BETWEEN locSeatAttCd_ and etcSeatAttCd_ rather
+    # than after them, and why every roomClsfCd_ key comes after EVERY leg's
+    # block rather than inside its own.
+    for index, leg in enumerate(legs, start=1):
+        form[f"seatCnt_{index}"] = _zero_padded(len(legs), width=4)
+        for prefix, code in _TRIP_CHANGE_SEAT_OPTION_CODES:
+            form[f"{prefix}{index}_1"] = code
+        form[f"rqSeatAttCd_{index}_1"] = _required_trip_change_text(
+            leg.seat_attribute_code,
+            field="seat_attribute_code",
+        )
+        form[f"etcSeatAttCd_{index}_1"] = _TRIP_CHANGE_ETC_SEAT_ATTRIBUTE_CODE
+    for index, leg in enumerate(legs, start=1):
+        form[f"roomClsfCd_{index}_1"] = _required_trip_change_text(
+            leg.room_class_code,
+            field="room_class_code",
+        )
+
+    # --- FieldMap 4/6: RPsg (w4/b.java:174-289) ----------------------------
+    form["psgCnt"] = str(len(passengers))
+    for index, passenger in enumerate(passengers, start=1):
+        if type(passenger) is not TripChangePassenger:
+            raise KorailProtocolError(
+                "KORAIL ticket change requires exact TripChangePassenger "
+                "values"
+            )
+        form[f"psgInfoPerPrnb_{index}"] = _required_trip_change_text(
+            passenger.passengers_per_person,
+            field="passengers_per_person",
+        )
+        form[f"psgTpDvCd_{index}"] = _required_trip_change_text(
+            passenger.passenger_type_code,
+            field="passenger_type_code",
+        )
+
+    # --- FieldMap 5/6: ROrtg (w4/b.java:143-155) ---------------------------
+    form["ortgCnt"] = _zero_padded(len(tickets), width=4)
+    for index, ticket in enumerate(tickets, start=1):
+        if type(ticket) is not TripChangeOriginalTicket:
+            raise KorailProtocolError(
+                "KORAIL ticket change requires exact TripChangeOriginalTicket "
+                "values"
+            )
+        for wire_name, attribute in _TRIP_CHANGE_ORIGINAL_TICKET_FIELDS:
+            form[f"{wire_name}{index}"] = _required_trip_change_text(
+                getattr(ticket, attribute),
+                field=attribute,
+            )
+
+    # --- FieldMap 6/6: RDscp (W4/b.smali rel. 816-824, a6/C1043C.java) -----
+    # dscpCnt_N is UNCONDITIONAL, even at zero: the tail of W4.b.b writes
+    # rDscp2.setDscpCnt(index, addZero(4, count)) on every passenger, and
+    # a6/C1043C.java:100 parses it back for every passenger.
+    for index, passenger in enumerate(passengers, start=1):
+        discounts = tuple(passenger.discounts)
+        form[f"dscpCnt_{index}"] = _zero_padded(len(discounts), width=4)
+        for row, discount in enumerate(discounts, start=1):
+            if type(discount) is not TripChangeDiscount:
+                raise KorailProtocolError(
+                    "KORAIL ticket change requires exact TripChangeDiscount "
+                    "values"
+                )
+            form[f"dcntKndCd_{index}_{row}"] = _required_trip_change_text(
+                discount.discount_kind_code,
+                field="discount_kind_code",
+            )
+            if discount.certificate_no:
+                form[f"dscpNo_{index}_{row}"] = discount.certificate_no
+            delay = (
+                discount.delay_window_no,
+                discount.delay_sale_date,
+                discount.delay_sale_sequence,
+                discount.delay_return_password,
+            )
+            if any(delay):
+                # a6/C1043C.java:161-164 writes all four together or none;
+                # a partial 지연할인증 return number identifies no ticket.
+                if not all(delay):
+                    raise KorailProtocolError(
+                        "KORAIL ticket change 지연할인증 needs all four of "
+                        "delay_window_no / delay_sale_date / "
+                        "delay_sale_sequence / delay_return_password"
+                    )
+                form[f"dlayOgtkWctNo_{index}_{row}"] = discount.delay_window_no
+                form[f"dlayOgtkSaleDd_{index}_{row}"] = discount.delay_sale_date
+                form[f"dlayOgtkSaleSqno_{index}_{row}"] = (
+                    discount.delay_sale_sequence
+                )
+                form[f"dlayOgtkRetPwd_{index}_{row}"] = (
+                    discount.delay_return_password
+                )
+    return form
+
+
+def build_trip_change_rollback_form(
+    config: KorailConfig,
+    lump_settlement_target_nos: Sequence[str],
+) -> dict[str, str]:
+    """``ticket.tripChgHndgCnc.do`` — undo a 여행변경 that was never settled.
+
+    The whole request is the common three, a count, and ONE ``@FieldMap``
+    (``TicketService.java:98-100``). ``TCCancelDao.TCCancelRequest``
+    (``:12-35``) is a ``lumpStlCnt`` plus a ``HashMap`` whose only writer is
+    ``setLumpStlTgtNo(int, String)`` at ``:32-34``, spelling the key
+    ``"lumpStlTgtNo_" + index``.
+
+    Both call sites send exactly one target, 1-INDEXED — ``a6/x.java:111-112``
+    and ``DReservationConfirmActivity.java:285-286``, each
+    ``setLumpStlCnt("1")`` then ``setLumpStlTgtNo(1, ...)``. A list is accepted
+    here because the field is a count and a map rather than a scalar, but the
+    only shape ever observed is a single target.
+
+    ``lumpStlCnt`` is derived from the list length rather than taken as a
+    parameter: it is the count of the map beside it, and the two disagreeing is
+    not a request any app path can produce.
+
+    **NOT VERIFIED: the response.** ``TicketService.java:98`` declares a bare
+    ``BaseResponse``, so what a successful rollback answers with beyond the
+    common ``h_msg_cd``/``h_msg_txt`` is unknown. Nothing here has ever been
+    transmitted.
+    """
+    targets = tuple(lump_settlement_target_nos)
+    if not targets or len(targets) > KORAIL_MAX_PASSENGERS_PER_RESERVATION:
+        raise KorailProtocolError(
+            "KORAIL ticket change rollback needs 1 to "
+            f"{KORAIL_MAX_PASSENGERS_PER_RESERVATION} settlement targets"
+        )
+    form = _common_fields(config)
+    form["lumpStlCnt"] = str(len(targets))
+    for index, target in enumerate(targets, start=1):
+        form[f"lumpStlTgtNo_{index}"] = _required_trip_change_text(
+            target,
+            field="lump settlement target no",
+        )
+    return form
+
+
+#: The six passenger counters ``w4/a.java:164-235`` actually reads, in the
+#: order it reads them, with the ``psgTpDvCd`` and the ``RDscp`` row each one
+#: writes. The two absentees are the point: 청소년 (TEENAGER) and 안내견
+#: (GUIDE_DOG) are offered by the picker and IGNORED by this builder, so a mix
+#: containing either cannot be sent on this route.
+_RESERVATION_CHANGE_PASSENGER_ROWS: tuple[
+    tuple[str, str, str, str | None], ...
+] = (
+    ("adult", "1", "0", None),  # w4/a.java:164-177 어른
+    ("child", "3", "0", None),  # :178-188 어린이
+    ("infant", "3", "1", "321"),  # :189-200 동반유아
+    ("senior", "1", "1", "131"),  # :201-212 경로
+    ("severe_disability", "1", "1", "111"),  # :213-224 1~3급 장애
+    ("mild_disability", "1", "1", "112"),  # :225-235 4~6급 장애
+)
+
+#: ``RJrny`` keys ``w4/a.java:142-153`` writes per leg, in order, AFTER the
+#: zero-padded train number. Four keys the trip-change route sends are missing
+#: here because this builder never writes them.
+_RESERVATION_CHANGE_JOURNEY_FIELDS: tuple[tuple[str, str], ...] = (
+    ("runDt_", "departure_date"),
+    ("stlbTrnClsfCd_", "train_classification_code"),
+    ("trnGpCd_", "train_group_code"),
+    ("dptDt_", "departure_date"),
+    ("dptTm_", "departure_time"),
+    ("dptRsStnCd_", "departure_station_code"),
+    ("dptStnConsOrdr_", "departure_station_consecutive_order"),
+    ("arvRsStnCd_", "arrival_station_code"),
+    ("arvStnConsOrdr_", "arrival_station_consecutive_order"),
+)
+
+
+def build_reservation_passenger_change_form(
+    config: KorailConfig,
+    request: ReservationPassengerChangeRequest,
+) -> dict[str, str]:
+    """``reservation.reservationChange.do`` — re-mix a held PNR's passengers.
+
+    Eleven ``@Field``s then FIVE ``@FieldMap``s. The route is declared TWICE,
+    byte-identically — ``BusReservationService.java:23-25`` and
+    ``ReservationCancelService.java:23-25`` — and only the second is bound:
+    ``ReservationChangeDao.executeDao`` (``:164-166``) asks for
+    ``ReservationCancelService``. The duplicate declaration changes nothing on
+    the wire.
+
+    The five maps' identity comes from that same ``executeDao`` argument order:
+    ``getRJrny()``, ``getRSrcar()``, ``getRSeat()``, ``getRPsg()``,
+    ``getRDscp()``. Note that ``ROrtg`` is absent — this route re-mixes a hold
+    that has not been paid for, so there is no 원표 to stake.
+
+    **``psgCnt`` REACHES THE WIRE EXACTLY ONCE, FROM THE MAP.** The eleventh
+    ``@Field`` is declared as ``@Field(RPsg.PSG_CNT)``, i.e. literally
+    ``"psgCnt"`` (``RPsg.java:7``), and it would collide with the ``RPsg``
+    map's own ``psgCnt`` key — except that ``ReservationChangeRequest.setPsgCnt``
+    (``ReservationChangeDao.java:114-116``) has NO call site anywhere in
+    v6.5.0. The scalar is therefore always null and Retrofit drops it
+    (``RequestBuilder.smali:1510``), leaving ``rPsg.setPsgCnt``
+    (``w4/a.java:163``) as the only writer. This builder emits it once, in the
+    map's position.
+
+    The other four scalars beside the PNR are pinned by ``w4/a.java:131-134``:
+    ``stndFlg``, ``evntWctFlg``, ``wctHndgCncDvCd`` and ``lrgCrgFlg`` are all
+    ``"N"`` on every path. ``totPrnb`` (``:130``) is the picker's total.
+
+    ``jrnyCnt`` is ECHOED, not recomputed: ``w4/a.java:137`` passes the
+    reservation's own ``h_jrny_cnt`` through, so it is not zero-padded the way
+    the trip-change route's is.
+
+    **VERIFIED FROM THE APK: the route, both declarations, the eleven
+    ``@Field`` names, the five ``@FieldMap`` identities and order, every key
+    prefix, and that ``psgCnt`` has exactly one writer.**
+
+    **NEVER TRANSMITTED.** No live-test path in this repository sends it.
+    """
+    if type(request) is not ReservationPassengerChangeRequest:
+        raise KorailProtocolError(
+            "KORAIL reservation passenger change requires an exact "
+            "ReservationPassengerChangeRequest"
+        )
+    legs = tuple(request.legs)
+    if not legs or len(legs) > KORAIL_MAX_JOURNEY_LEGS:
+        raise KorailProtocolError(
+            "KORAIL reservation passenger change needs 1 to "
+            f"{KORAIL_MAX_JOURNEY_LEGS} legs"
+        )
+    counts = request.passengers
+    if type(counts) is not KorailPassengerCounts:
+        raise KorailProtocolError(
+            "KORAIL reservation passenger change requires an exact "
+            "KorailPassengerCounts"
+        )
+    if counts.teenager or counts.guide_dog:
+        raise KorailProtocolError(
+            "KORAIL reservation passenger change cannot carry 청소년 or "
+            "안내견: w4/a.java:164-235 reads only the other six counters, so "
+            "the row block would not match totPrnb"
+        )
+
+    form = _common_fields(config)
+    form["pnrNo"] = _required_trip_change_text(request.pnr_no, field="pnr_no")
+    form["chgTno"] = _required_trip_change_text(
+        request.reservation_change_no,
+        field="reservation_change_no",
+    )
+    form["totPrnb"] = str(counts.total)
+    form["stndFlg"] = "N"
+    form["evntWctFlg"] = "N"
+    form["wctHndgCncDvCd"] = "N"
+    form["lrgCrgFlg"] = "N"
+
+    # --- FieldMap 1/5: RJrny (w4/a.java:137-153) ---------------------------
+    form["jrnyCnt"] = _required_trip_change_text(
+        request.journey_count,
+        field="journey_count",
+    )
+    for index, leg in enumerate(legs, start=1):
+        if type(leg) is not ReservationPassengerChangeLeg:
+            raise KorailProtocolError(
+                "KORAIL reservation passenger change requires exact "
+                "ReservationPassengerChangeLeg values"
+            )
+        form[f"jrnySqno_{index}"] = _required_trip_change_text(
+            leg.journey_sequence_no,
+            field="journey_sequence_no",
+        )
+        form[f"jrnyTpCd_{index}"] = _required_trip_change_text(
+            leg.journey_type_code,
+            field="journey_type_code",
+        )
+        form[f"trnNo_{index}"] = _zero_padded(
+            int(_required_digits(leg.train_no, field="train_no")),
+            width=5,
+        )
+        for wire_name, attribute in _RESERVATION_CHANGE_JOURNEY_FIELDS:
+            form[f"{wire_name}{index}"] = _required_trip_change_text(
+                getattr(leg, attribute),
+                field=attribute,
+            )
+
+    # --- FieldMap 2/5: RSrcar (w4/a.java:154) ------------------------------
+    # scarCnt_, NOT srcarCnt_ (RSrcar.java:7,12-14), and always "0": this route
+    # never designates a seat.
+    for index in range(1, len(legs) + 1):
+        form[f"scarCnt_{index}"] = "0"
+
+    # --- FieldMap 3/5: RSeat (w4/a.java:156-158) ---------------------------
+    # seatPsrmClCd_, NOT roomClsfCd_ -- the other trip-change route spells the
+    # same idea the other way (RSeat.java:10,13).
+    for index, leg in enumerate(legs, start=1):
+        form[f"seatCnt_{index}"] = "1"
+        form[f"seatPsrmClCd_{index}_1"] = _required_trip_change_text(
+            leg.room_class_code,
+            field="room_class_code",
+        )
+        form[f"rqSeatAttCd_{index}_1"] = _required_trip_change_text(
+            leg.seat_attribute_code,
+            field="seat_attribute_code",
+        )
+
+    # --- FieldMap 4/5: RPsg and 5/5: RDscp (w4/a.java:161-235) -------------
+    # One RPsg row and one RDscp row per PERSON, both 1-based and sharing the
+    # same running index, emitted in the counter order w4/a.java walks. The
+    # RDscp counts here are bare "0"/"1", not the zero-padded "0000"/"0001"
+    # the trip-change route sends -- w4/a.java:171 writes the literal string.
+    form["psgCnt"] = str(counts.total)
+    person = 0
+    discount_rows: dict[str, str] = {}
+    for attribute, type_code, discount_count, discount_code in (
+        _RESERVATION_CHANGE_PASSENGER_ROWS
+    ):
+        for _ in range(getattr(counts, attribute)):
+            person += 1
+            form[f"psgInfoPerPrnb_{person}"] = "1"
+            form[f"psgTpDvCd_{person}"] = type_code
+            discount_rows[f"dscpCnt_{person}"] = discount_count
+            if discount_code is not None:
+                discount_rows[f"dcntKndCd_{person}_1"] = discount_code
+    form.update(discount_rows)
+    return form
+
+
+def build_cart_add_form(
+    config: KorailConfig,
+    request: CartAddRequest,
+) -> dict[str, str]:
+    """``cart.addCartList`` — add a held reservation to the 장바구니 (cart).
+
+    One field beyond the common three: ``hidPnrNo``
+    (``CartService.java:11-13``, ``AddCartDao.java:9-24``, confirmed against
+    ``AddCartDao$AddCartRequest.smali``). The DAO's response type is a bare
+    ``BaseResponse`` (``CartService.java:13``), so unlike the purchase half of
+    ``discount_card`` there is no dedicated response dataclass or parser here
+    — :meth:`~korail_mobile_api.client.KorailClient.add_to_cart` returns the
+    unparsed envelope, the same shape ``extend_discount_card`` returns for its
+    own bare-``BaseResponse`` route.
+
+    **NOT VERIFIED.** What a successful add answers with, and whether it can
+    fail for reasons other than an invalid PNR, is unknown; no live-test path
+    in this repository sends it.
+    """
+    if type(request) is not CartAddRequest:
+        raise KorailProtocolError(
+            "KORAIL cart request requires an exact CartAddRequest"
+        )
+    pnr_no = request.pnr_no
+    if not isinstance(pnr_no, str) or not pnr_no.strip():
+        raise KorailProtocolError(
+            "KORAIL cart request requires a non-empty pnr_no"
+        )
+    form = _common_fields(config)
+    form["hidPnrNo"] = pnr_no
     return form

@@ -32,11 +32,15 @@ def test_client_public_method_set_is_stable():
         if not name.startswith("_")
     }
     assert methods == {
+        "add_to_cart",
+        "begin_non_member",
         "cancel_unpaid_hold",
         "clear_session",
         "confirm_standby_hold",
         "close",
         "check_ticket_duplication",
+        "end_non_member",
+        "execute_offline_refund",
         "extend_discount_card",
         "get_app_data",
         "get_cart_list",
@@ -67,6 +71,7 @@ def test_client_public_method_set_is_stable():
         "get_pass_available_dates",
         "get_pass_menu",
         "get_pass_schedule",
+        "get_original_ticket_inquiry",
         "get_pbp_acceptance_specifications",
         "get_platform_numbers",
         "get_product_detail",
@@ -79,6 +84,7 @@ def test_client_public_method_set_is_stable():
         "get_seat_cars",
         "get_seat_inventory",
         "get_seat_assignment_schedule",
+        "get_self_seat_change_info",
         "get_service_status",
         "get_station_data",
         "get_station_info",
@@ -103,9 +109,13 @@ def test_client_public_method_set_is_stable():
         "reserve_merge",
         "reserve_with_discount_card",
         "reserve_transfer",
+        "change_reservation_passengers",
+        "create_trip_change_reservation",
+        "roll_back_trip_change",
         "search_trains",
         "search_trains_with_transfer_fallback",
         "search_transfer_trains",
+        "verify_offline_refund_ticket",
     }
 
 

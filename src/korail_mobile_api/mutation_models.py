@@ -575,3 +575,573 @@ class PriceRecalculationRequest:
     #: (``RequestBuilder.smali:1531`` branches past ``addField`` on a null
     #: value), so a member's form genuinely has twelve keys, not fourteen.
     non_member_no: str | None = field(default=None, repr=False)
+
+
+# ---------------------------------------------------------------------------
+# 비회원 오프라인(역창구 발권) 승차권 반환 — refunds.verifyOnlineRefunds and
+# refunds.executeOnlineRefunds.
+#
+# A SEPARATE flow from the member refund above (PaidTicket ->
+# refunds.RefundsRequest), not a variant of it. Nobody is logged in: the ticket
+# is identified by the 16-digit 반환번호 printed on the paper ticket plus the
+# requester's own name, and the requester's name and phone number are what the
+# execute call books the 반환 접수 against.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class OfflineRefundReturnNumber:
+    """The four segments of a printed 반환번호 (``retNo1``..``retNo4``).
+
+    The app collects them in four separate boxes
+    (``res/layout/offline_return_input_fragment.xml``, ids ``ticketNoEdit0``..
+    ``ticketNoEdit3``) and sends them as four ``@Field``s
+    (``RefundService.java:33``; ``s5/c.java:67-70``). The help text calls the
+    whole thing "승차권번호(승차권 우측 하단 16자리)"
+    (``res/values/strings.xml:1298``).
+
+    Segment lengths are 5 / 4 / 5 / 2 = 16, from
+    ``res/values/integers.xml:29-32`` (``offline_max_length0``..``3``), and the
+    app requires every box to be FULL before it will enable the button
+    (``s5/c.java:85`` compares each length against those same integers). They
+    are validated here for the same reason: a short segment is a malformed
+    credential, and the only way to find that out on the wire is to guess at a
+    live endpoint.
+
+    **UNVERIFIED — which segment is which.** The response comes back carrying
+    ``ogtk_sale_wct_no`` / ``ogtk_sale_dt`` / ``ogtk_sale_sqno`` /
+    ``ogtk_ret_pwd`` (``RefundVerifyTicketDao.java:119-122``), and the widths
+    are suggestive, but nothing in the APK states the correspondence: the
+    request treats the four as opaque strings and so does this class. Do not
+    build one of these out of a sale identity — read the number off the ticket.
+    """
+
+    return_no_1: str = field(repr=False)
+    return_no_2: str = field(repr=False)
+    return_no_3: str = field(repr=False)
+    return_no_4: str = field(repr=False)
+
+    #: ``offline_max_length0``..``offline_max_length3``
+    #: (``res/values/integers.xml:29-32``).
+    SEGMENT_LENGTHS = (5, 4, 5, 2)
+
+    def __post_init__(self) -> None:
+        for index, expected in enumerate(self.SEGMENT_LENGTHS, start=1):
+            name = f"return_no_{index}"
+            value = getattr(self, name)
+            if not isinstance(value, str) or len(value) != expected:
+                raise KorailProtocolError(
+                    f"KORAIL offline refund {name} must be exactly "
+                    f"{expected} characters"
+                )
+            if not value.isdigit():
+                raise KorailProtocolError(
+                    f"KORAIL offline refund {name} must be decimal digits"
+                )
+
+    @classmethod
+    def from_ticket_number(
+        cls,
+        ticket_number: str,
+    ) -> "OfflineRefundReturnNumber":
+        """Split the printed 16-digit number into its four segments.
+
+        Accepts the number with or without the ``-`` separators the app uses
+        when it re-joins the boxes for display (``s5/c.java:197`` concatenates
+        them with ``z5.e.STATE_NAME_NONE``, which is ``"-"``,
+        ``z5/e.java:83``). Whitespace is ignored.
+        """
+        if not isinstance(ticket_number, str):
+            raise KorailProtocolError(
+                "KORAIL offline refund ticket number must be a string"
+            )
+        digits = "".join(
+            character
+            for character in ticket_number
+            if not character.isspace() and character != "-"
+        )
+        if len(digits) != sum(cls.SEGMENT_LENGTHS):
+            raise KorailProtocolError(
+                "KORAIL offline refund ticket number must be "
+                f"{sum(cls.SEGMENT_LENGTHS)} digits"
+            )
+        segments: list[str] = []
+        position = 0
+        for length in cls.SEGMENT_LENGTHS:
+            segments.append(digits[position : position + length])
+            position += length
+        return cls(*segments)
+
+
+@dataclass(frozen=True)
+class OfflineRefundSeat:
+    """One seat row of a verified offline-refund ticket.
+
+    ``RefundVerifyTicketDao.RefundVerifyTicketResponse.SeatInfo``
+    (``RefundVerifyTicketDao.java:168-171``).
+    """
+
+    room_class_name: str | None = field(default=None, repr=False)  # psrm_cl_nm
+    car_no: str | None = field(default=None, repr=False)  # scar_no
+    seat_no: str | None = field(default=None, repr=False)  # seat_no
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class OfflineRefundJourney:
+    """One 여정 of a verified offline-refund ticket.
+
+    ``RefundVerifyTicketDao.RefundVerifyTicketResponse.JrnyInfo``
+    (``RefundVerifyTicketDao.java:71-79``). The app renders exactly these
+    fields on the confirmation screen (``s5/h.java:62-85``).
+    """
+
+    departure_date: str | None = None  # dpt_dt
+    departure_time: str | None = None  # dpt_tm
+    arrival_time: str | None = None  # arv_tm
+    departure_station_code: str | None = None  # dpt_rs_stn_cd
+    arrival_station_code: str | None = None  # arv_rs_stn_cd
+    train_group_code: str | None = None  # trn_gp_cd
+    train_no: str | None = None  # trn_no
+    seats: tuple[OfflineRefundSeat, ...] = ()
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class OfflineRefundTicket:
+    """One original ticket the verify call resolved the 반환번호 into.
+
+    ``RefundVerifyTicketDao.RefundVerifyTicketResponse.Orgtkinfo``
+    (``RefundVerifyTicketDao.java:117-126``).
+
+    .. warning::
+       Every field except the three codes is a bearer credential. Together
+       they are exactly what
+       :func:`~korail_mobile_api.mutation_payloads.build_offline_refund_execute_form`
+       spends, and :attr:`original_return_password` is the ticket's return
+       password IN THE CLEAR. Do not log one of these; the attribute names are
+       registered in :data:`~korail_mobile_api.redaction.SENSITIVE_KEYS` so a
+       preview and :func:`~korail_mobile_api.redaction.redact_value` mask them.
+
+    :attr:`pnr_no` parses ``prnNo`` — spelled P-**r**-n in this ONE response
+    (``RefundVerifyTicketDao.java:123,151``) and fed straight into the execute
+    form's ``pnrNo``, spelled P-**n**-r (``s5/h.java:118``;
+    ``RefundService.java:17``). Both spellings are real here, unlike the
+    ``txtPrnNo`` in srtgo which is a typo for a field that does not exist.
+    """
+
+    pnr_no: str | None = field(default=None, repr=False)  # prnNo
+    #: ``ogtk_sale_dt``
+    original_sale_date: str | None = field(default=None, repr=False)
+    #: ``ogtk_sale_wct_no``
+    original_window_no: str | None = field(default=None, repr=False)
+    #: ``ogtk_sale_sqno``
+    original_sale_sequence: str | None = field(default=None, repr=False)
+    #: ``ogtk_ret_pwd``
+    original_return_password: str | None = field(default=None, repr=False)
+    ticket_kind_code: str | None = None  # tk_knd_cd
+    return_division_code: str | None = None  # ret_dv_cd
+    return_reason_code: str | None = None  # ret_rsn_cd
+    journeys: tuple[OfflineRefundJourney, ...] = ()
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class OfflineRefundVerifyResponse(BaseKorailResponse):
+    """What ``refunds.verifyOnlineRefunds`` answers with.
+
+    ``RefundVerifyTicketDao.RefundVerifyTicketResponse``
+    (``RefundVerifyTicketDao.java:64-69,192-209``).
+
+    The three amounts are what the app shows on the confirmation screen
+    (``s5/h.java:88-90``): what was paid, the 환불위약금, and what comes back.
+    :attr:`tickets` is the resolved ticket identity — see the warning on
+    :class:`OfflineRefundTicket`.
+
+    :attr:`popup_message` (``poppMsg``) is a notice the app shows before
+    continuing, NOT an error: ``s5/c.java:199-208`` proceeds to the request
+    screen either way, only interposing a dialog when it is present.
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    #: ``rcvd_amt`` — the amount originally received for the ticket.
+    received_amount: str | None = None
+    #: ``ret_amt`` — the amount that would be refunded.
+    refund_amount: str | None = None
+    #: ``ret_fee`` — the 환불위약금 deducted from it.
+    refund_fee: str | None = None
+    #: ``poppMsg``.
+    popup_message: str | None = None
+    tickets: tuple[OfflineRefundTicket, ...] = ()
+
+
+@dataclass(frozen=True)
+class OfflineRefundExecuteResponse(BaseKorailResponse):
+    """What ``refunds.executeOnlineRefunds`` answers with.
+
+    ``RefundExecuteTicketRefundDao.RefundExecuteTicketRefundResponse``
+    (``RefundExecuteTicketRefundDao.java:125-133``) — one field beyond the
+    envelope.
+
+    :attr:`return_division_code` (``h_ret_dv_cd``) distinguishes the two
+    outcomes the app words differently: ``"02"`` means the refund COMPLETED
+    (``offline_return_ticket_refund_complete_message``, 반환이 완료되었습니다),
+    anything else means the 반환 접수 was accepted and the paper ticket still
+    has to be handed in at a station within a year
+    (``s5/h.java:187``; ``res/values/strings.xml:1297,1292-1295``).
+    """
+
+    h_msg_txt: str | None = field(default=None, repr=False)
+    #: ``h_ret_dv_cd``. ``"02"`` = refunded outright; otherwise 반환 접수 only.
+    return_division_code: str | None = None
+
+    #: The value of :attr:`return_division_code` that means the money has
+    #: already been returned (``s5/h.java:187``).
+    COMPLETED_RETURN_DIVISION_CODE = "02"
+
+    @property
+    def is_refund_completed(self) -> bool:
+        """Whether the refund completed outright rather than being accepted."""
+        return (
+            self.return_division_code == self.COMPLETED_RETURN_DIVISION_CODE
+        )
+
+
+@dataclass(frozen=True)
+class TripChangeOriginalTicket:
+    """One 원표 staked on a 여행변경 (``tripChgPrsC.do``'s ``ROrtg`` map).
+
+    ``ROrtg`` is a ``LinkedHashMap`` (``ROrtg.java:6``) and ``w4/b.java:143-155``
+    writes one row per original ticket, **1-based** (``i13`` is incremented
+    before it is used at ``:148-149``), under the keys ``ogtkSaleWctNo_N`` /
+    ``ogtkSaleDd_N`` / ``ogtkSaleSqno_N`` / ``ogtkRetPwd_N`` /
+    ``retNoMnlInpFlg_N``, preceded by an un-indexed ``ortgCnt``.
+
+    The first four are the ticket's 반환번호 — the same four-part credential
+    every other original-ticket operation uses, here read off the 원표 inquiry's
+    ``orgTkList`` (``:149-152``). All four are ``repr=False`` and redacted in
+    any preview: whoever holds them can refund or change the ticket.
+
+    :attr:`manual_return_no_flag` is ``retNoMnlInpFlg_N``, "was this 반환번호
+    typed in by hand". ``w4/b.java:153`` pins it to ``"N"`` on every row,
+    because the app got the number from a list it already owned.
+
+    ``cmtrDvCd_`` is declared on ``ROrtg`` (``ROrtg.java:7,15-17``) and is
+    **never written by any v6.5.0 call site**; it is therefore not a field of
+    this class and does not reach the wire.
+    """
+
+    sale_window_no: str = field(repr=False)
+    sale_date: str = field(repr=False)
+    sale_sequence: str = field(repr=False)
+    return_password: str = field(repr=False)
+    #: ``retNoMnlInpFlg_N``. ``"N"`` on every row the app builds.
+    manual_return_no_flag: str = "N"
+
+
+@dataclass(frozen=True)
+class TripChangeLeg:
+    """One leg of the REPLACEMENT journey (``RJrny`` + ``RSeat`` per index).
+
+    ``C5/d.java:43-91`` (``c5/d.java`` in the jadx tree) builds this from the
+    train the user picked, one row per selected train, 1-based. Every attribute
+    below is copied verbatim off that train's ``RsvInquiryResponse.TrainInfo``
+    except where noted — read them from a
+    :class:`~korail_mobile_api.models.TrainSummary` for the same train.
+
+    Two values are DERIVED rather than carried, and the builder derives them:
+
+    * ``jrnySqno_N`` is ``"0001"`` for the first leg and ``"0002"`` for the
+      second — ``N.addZero(4, int(K4.d.DIRECT_SQ_NO="1" | TRANSFER_SQ_NO="2"))``
+      at ``C5/d.java:51`` (codes at ``K4/d.java:5-6``).
+    * ``jrnyTpCd_N`` is ``"11"`` when there is one leg and ``"14"`` when there
+      are two (``C5/d.java:52``, ``K4/e.smali:40,68``). It is per-request, not
+      per-leg: both legs of a transfer carry ``"14"``.
+
+    ``chgFlg_`` is declared on ``RJrny`` (``RJrny.java:12``) and is never
+    written by any v6.5.0 call site, so it is absent here and on the wire.
+    """
+
+    train_no: str
+    run_date: str
+    train_classification_code: str
+    train_group_code: str
+    departure_date: str
+    departure_time: str
+    departure_station_code: str
+    departure_station_consecutive_order: str
+    departure_station_run_order: str
+    arrival_date: str
+    arrival_time: str
+    arrival_station_code: str
+    arrival_station_consecutive_order: str
+    arrival_station_run_order: str
+    #: ``roomClsfCd_N_1`` — the cabin the user picked for this leg
+    #: (``C5/d.java:70``, ``U4/a.getSelectSeatTypeCode``). ``"1"`` 일반실,
+    #: ``"2"`` 특실.
+    room_class_code: str = "1"
+    #: ``rqSeatAttCd_N_1`` — the requested seat attribute
+    #: (``C5/d.java:72,74``). ``"015"`` 일반석 is ``K4/p.DEFAULT``; the app
+    #: substitutes ``"003"`` 자유석 when the picked cabin is a free-seat one.
+    seat_attribute_code: str = "015"
+
+
+@dataclass(frozen=True)
+class TripChangeDiscount:
+    """One discount row of a 여행변경 passenger (``RDscp``'s second index).
+
+    ``RDscp`` keys are DOUBLY indexed — ``dcntKndCd_<passenger>_<row>`` and
+    ``dscpNo_<passenger>_<row>`` (``RDscp.java:19-21,43-45``) — with both
+    indices 1-based (``W4/b.smali`` increments before every write).
+
+    :attr:`discount_kind_code` is the ``dcntKndCd``: ``"111"``/``"112"``
+    (1~3급 / 4~6급 장애), ``"131"`` (경로), ``"151"``/``"152"``
+    (쿠폰·국가유공자 본인), ``"171"``/``"172"`` (보호자), ``"321"`` (동반유아),
+    ``"401"`` (지연할인증), ``"402"`` (국회의원), ``"432"`` (군장병).
+
+    :attr:`certificate_no` is the ``dscpNo`` backing it — a coupon number
+    (``h_cpn_no``) or a certificate number. Redacted.
+
+    The four ``delay_*`` fields are the 지연할인증's own four-part 반환번호,
+    written as ``dlayOgtkWctNo_N_K`` / ``dlayOgtkSaleDd_N_K`` /
+    ``dlayOgtkSaleSqno_N_K`` / ``dlayOgtkRetPwd_N_K`` (``RDscp.java:23-37``,
+    written together at ``W4/b.smali`` rel. 503-518 and
+    ``a6/C1043C.java:161-164``) and only ever alongside ``dcntKndCd="401"``.
+    All four are redacted.
+    """
+
+    discount_kind_code: str
+    certificate_no: str = field(default="", repr=False)
+    delay_window_no: str = field(default="", repr=False)
+    delay_sale_date: str = field(default="", repr=False)
+    delay_sale_sequence: str = field(default="", repr=False)
+    delay_return_password: str = field(default="", repr=False)
+
+
+@dataclass(frozen=True)
+class TripChangePassenger:
+    """One passenger of a 여행변경 (``RPsg`` row + its ``RDscp`` rows).
+
+    ``w4/b.java:174-289`` writes ``psgInfoPerPrnb_N="1"`` and ``psgTpDvCd_N``
+    for every passenger, 1-based, in this bundle order: 중증장애 → 경증장애 →
+    어른 → 경로 → 어린이 → 동반유아 (``:186``, ``:204``, ``:220``, ``:245``,
+    ``:257``, ``:277``). ``psgTpDvCd`` is ``"1"`` for all of them except
+    어린이/동반유아, which are ``"3"`` (``:265``, ``:283``).
+
+    The ORDER of :attr:`~TripChangeReservationRequest.passengers` is therefore
+    load-bearing in a way a count-per-type object could not express: row *N*
+    pairs with the *N*-th 원표 (``w4/b.java:193`` reads
+    ``orgTkList.get(i - 1).getCmpnList()`` to decide that passenger's
+    discounts), so the passenger list and the original-ticket list are
+    index-aligned. This class is spelled as an explicit ordered row for that
+    reason.
+
+    :attr:`discounts` becomes this passenger's ``RDscp`` rows and its
+    ``dscpCnt_N``. It may be empty, and then ``dscpCnt_N`` still goes out, as
+    ``"0000"``: ``W4/b.smali`` rel. 816-824 writes
+    ``rDscp2.setDscpCnt(index, addZero(4, count))`` unconditionally at the end
+    of the method, and ``a6/C1043C.java:100`` then ``Integer.parseInt``s it
+    back for every passenger — which is only safe because it is always there.
+    """
+
+    #: ``psgTpDvCd_N``. ``"1"`` 어른/경로/장애, ``"3"`` 어린이/동반유아.
+    passenger_type_code: str = "1"
+    #: ``psgInfoPerPrnb_N``. ``"1"`` on every row the app builds
+    #: (``w4/b.java:190`` and the five loops after it).
+    passengers_per_person: str = "1"
+    discounts: tuple[TripChangeDiscount, ...] = ()
+
+
+@dataclass(frozen=True)
+class TripChangeSeatAssignment:
+    """One designated seat on a 여행변경 leg (``RSrcar``).
+
+    ``SeatSearchActivity.java:655-668`` builds the map the trip-change screen
+    receives back as ``SEAT_SELECT_DATA`` (``:689``) and ``C5/d.java:109-111``
+    puts straight into ``RSrcar``. The keys are ``srcarCnt_<leg>`` (one per
+    leg) plus ``scarNo_<leg>_<seat>`` and ``seatNo_<leg>_<seat>`` — note that
+    the count uses ``setSrcarCnt`` (``"srcarCnt_"``) on this branch while the
+    seat-assign booking branch two lines above uses ``setScarCnt``
+    (``"scarCnt_"``); ``RSrcar.java:7-10`` declares both spellings and they are
+    NOT interchangeable. ``setSrcarNo`` writes ``scarNo_``, not ``srcarNo_``
+    (``RSrcar.java:8,24-26``).
+
+    :attr:`leg` is 1-based and names which :class:`TripChangeLeg` this seat is
+    on. Both values are redacted in a preview.
+    """
+
+    leg: int
+    car_no: str = field(repr=False)
+    seat_no: str = field(repr=False)
+
+
+@dataclass(frozen=True)
+class TripChangeReservationRequest:
+    """A 여행변경 replacement hold (``reservation.tripChgPrsC.do``).
+
+    Assembled by TWO app files in sequence, which is why some values below look
+    redundant with each other:
+    ``W4.b.getTicketChangeReservationRequest`` (``w4/b.java:126-297``) builds
+    the request from the 원표 inquiry, then ``C5/d.N0`` (``c5/d.java:42-91``)
+    overwrites the journey and part of the seat block with the train the user
+    actually picked. Where the two disagree, the second wins — most visibly
+    ``seatCnt_N``, which ``w4/b.java:164`` writes as ``"1"``/``"2"`` and
+    ``C5/d.java:69`` replaces with a zero-padded leg count.
+
+    The two calls the app makes with this request differ in exactly two fields
+    (``C5/d.java:133-145``):
+
+    * the first sends ``prcFareReCalcFlg="N"`` and no ``tmpJobSqno`` at all;
+    * the second, after the user has chosen discounts on the payment screen,
+      sends ``prcFareReCalcFlg="Y"`` and ``tmpJobSqno`` = the PNR the first
+      call returned.
+
+    :attr:`recalculate_fare` and :attr:`temporary_job_sequence` are those two,
+    spelled separately so a caller cannot send the re-price flag without the
+    PNR it re-prices.
+    """
+
+    original_tickets: tuple[TripChangeOriginalTicket, ...]
+    legs: tuple[TripChangeLeg, ...]
+    passengers: tuple[TripChangePassenger, ...]
+    #: ``RSrcar``. EMPTY unless the caller picked physical seats:
+    #: ``C5/d.java:90`` clears the map the moment the journey is chosen and only
+    #: ``onActivityResult`` (``:109-111``) refills it, from the seat-map screen.
+    seats: tuple[TripChangeSeatAssignment, ...] = ()
+    #: ``stndSeatFlg``. ``w4/b.java:138`` seeds it from the 원표's remaining
+    #: standing count, then ``C5/d.java:68`` overwrites it per leg from the
+    #: picked cabin and the train's 잔여석 codes — last leg wins. Passed in
+    #: rather than derived, because the derivation needs the train's
+    #: ``h_gen_rsv_cd``/``h_stnd_rsv_cd``, which the caller holds.
+    standing_seat_flag: str = "N"
+    #: ``prcFareReCalcFlg``. ``"N"`` on the first call, ``"Y"`` on the re-price.
+    recalculate_fare: bool = False
+    #: ``tmpJobSqno`` — the PNR returned by the first call
+    #: (``C5/d.java:145``). ``None`` on the first call, and then the field is
+    #: not transmitted at all: Retrofit skips a null ``@Field``
+    #: (``RequestBuilder.smali:1510`` — the ``:pswitch_4`` @Field branch jumps
+    #: straight to the loop head ``:cond_16``/``:goto_a`` at ``:2086-2087``
+    #: when the value is null).
+    temporary_job_sequence: str | None = field(default=None, repr=False)
+    #: ``ctlDvCd``. Absent on the ordinary 여행변경 path — no call site sets it
+    #: — and ``"3584"`` only on the 발상역 변경 path
+    #: (``SeatSearchActivity.java:784,852``). ``None`` omits it. Setting it
+    #: does NOT turn this into that path: see the builder's docstring, which
+    #: lists the journey and seat differences that are deliberately not
+    #: reproduced. 발상역 변경 is not implemented.
+    control_division_code: str | None = None
+    #: ``frcSaleRsnCont``. Same story, same caveat: only the 발상역 변경 path
+    #: writes it, as the ``StartStationDto.reasonCode``
+    #: (``SeatSearchActivity.java:779,844``).
+    forced_sale_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ReservationPassengerChangeLeg:
+    """One leg of the held PNR being re-mixed (``w4/a.java:139-160``).
+
+    Every value is echoed off the reservation's own ``jrny_info`` row, so read
+    them from :meth:`KorailClient.get_ticket_reservation_detail
+    <korail_mobile_api.KorailClient.get_ticket_reservation_detail>` for the
+    same PNR rather than inventing them.
+
+    Four ``RJrny`` keys the OTHER trip-change route sends are absent here, and
+    that asymmetry is the app's: ``w4/a.java`` never calls ``setDptStnRunOrdr``,
+    ``setArvDt``, ``setArvTm`` or ``setArvStnRunOrdr`` on this request.
+    ``runDt_N`` is likewise not the run date — ``:145`` passes
+    ``getH_dpt_dt()``, the same value it puts in ``dptDt_N``.
+    """
+
+    journey_sequence_no: str
+    journey_type_code: str
+    train_no: str
+    departure_date: str
+    train_classification_code: str
+    train_group_code: str
+    departure_time: str
+    departure_station_code: str
+    departure_station_consecutive_order: str
+    arrival_station_code: str
+    arrival_station_consecutive_order: str
+    #: ``seatPsrmClCd_N_1`` — the held seat's ``h_psrm_cl_cd``
+    #: (``w4/a.java:157``). NOTE the key: this route sends ``seatPsrmClCd_``
+    #: while ``tripChgPrsC.do`` sends ``roomClsfCd_`` for the same idea
+    #: (``RSeat.java:10,13``).
+    room_class_code: str = "1"
+    #: ``rqSeatAttCd_N_1`` — the held seat's ``h_rq_seat_att_cd``
+    #: (``w4/a.java:158``).
+    seat_attribute_code: str = "015"
+
+
+@dataclass(frozen=True)
+class ReservationPassengerChangeRequest:
+    """A 예약 인원 변경 for one held PNR (``reservation.reservationChange.do``).
+
+    ``W4.a.getReservationChangeRequest`` (``w4/a.java:120-242``), dispatched by
+    ``ReservationChangeDao.executeDao`` (``:162-167``) and fired by
+    ``ReservedTicketChangeActivity.java:121-125``. Everything it needs comes
+    from the held reservation itself plus the new passenger mix.
+
+    :attr:`legs` must be one row per ``jrny_info`` of the held PNR, in order —
+    ``w4/a.java:139-160`` walks that list and copies each leg verbatim.
+
+    :attr:`passengers` is the NEW mix. Note that the app's builder reads only
+    six of the eight counters the picker offers (``:164``, ``:178``, ``:189``,
+    ``:201``, ``:213``, ``:225``): 청소년 and 안내견 are silently dropped, so a
+    mix containing either cannot be expressed on this route and the builder
+    refuses it rather than sending a total that does not match the rows.
+    """
+
+    pnr_no: str = field(repr=False)
+    #: ``chgTno`` — the held PNR's 예약변경 차수, ``jrny_info[0].h_rsv_chg_no``
+    #: (``w4/a.java:136``). Redacted.
+    reservation_change_no: str = field(repr=False)
+    #: ``jrnyCnt`` — echoed back from the reservation's own ``h_jrny_cnt``
+    #: (``w4/a.java:137``), NOT recomputed and NOT zero-padded.
+    journey_count: str = ""
+    legs: tuple[ReservationPassengerChangeLeg, ...] = ()
+    passengers: KorailPassengerCounts = field(
+        default_factory=KorailPassengerCounts
+    )
+
+
+@dataclass(frozen=True)
+class ReservationPassengerChangeResponse(BaseKorailResponse):
+    """What ``reservation.reservationChange.do`` answers with.
+
+    ``ReservationChangeDao.ReservationChangeResponse`` (``:151-160``) is a bare
+    ``jrnyList`` of ``JrnyInfo`` objects carrying ONE field each,
+    ``lumpStlTgtNo`` (``:17-26``) — and the app reads exactly the first one
+    (``ReservedTicketChangeActivity.java:179``) before handing it to the
+    묶음결제 screen (``:111-119``, ``ctlDvCd="0008"``).
+
+    :attr:`lump_settlement_target_nos` is that list in order. It is the handle
+    a settlement charges and the handle
+    :meth:`KorailClient.roll_back_trip_change
+    <korail_mobile_api.KorailClient.roll_back_trip_change>` cancels, so it is
+    ``repr=False`` and redacted.
+    """
+
+    #: ``jrnyList[].lumpStlTgtNo``, in the order the server returned them.
+    lump_settlement_target_nos: tuple[str, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class CartAddRequest:
+    """Add a held reservation's PNR to the 장바구니 (cart).
+
+    ``cart.addCartList`` (``CartService.java:11-13``) takes exactly one
+    request field beyond the common three: ``hidPnrNo``. The DAO
+    (``AddCartDao.java:9-24``, request class ``AddCartDao$AddCartRequest``)
+    carries the same single field, confirmed against
+    ``AddCartDao$AddCartRequest.smali`` (``hidPnrNo:Ljava/lang/String;`` and
+    the matching ``@Field("hidPnrNo")`` annotation on
+    ``CartService.smali``'s ``addCart`` method).
+
+    ``pnr_no`` is a ticket identifier and is ``repr=False``; it is also
+    already registered in :data:`~korail_mobile_api.redaction.SENSITIVE_KEYS`
+    under its wire name ``hidPnrNo``, so a :class:`~korail_mobile_api.consent.MutationPreview`
+    of this request redacts it automatically.
+    """
+
+    pnr_no: str = field(repr=False)

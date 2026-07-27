@@ -98,7 +98,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     assert "| 실패 | 13 |" in status
     assert "| 미실행 | 120 |" in status
     assert "| 전체 | 165 |" in status
-    assert "Package coverage: 58 exact login/read routes and 74 public methods" in status
+    assert "Package coverage: 60 exact login/read routes and 84 public methods" in status
     assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
     assert "and 128 unexecuted" in status
     assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
@@ -218,7 +218,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
         assert stale_totals not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
-    assert "58 exact login/read routes" in progress
+    assert "60 exact login/read routes" in progress
     assert "- Live-successful inventory entries: 32" in progress
     assert "IRG000000" in progress
 
@@ -234,7 +234,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
             if not name.startswith("_")
         ]
     )
-    assert actual_public_methods == 74, (
+    assert actual_public_methods == 84, (
         f"KorailClient now exposes {actual_public_methods} public methods; "
         "update this number and every doc that states it "
         "(README.md, api-status-by-service.md, verification-record.md, "
@@ -245,10 +245,17 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     # number survives in a milestone bullet, which is legitimate history, so
     # the check is on tense rather than on the digits: "exposed 72" records the
     # past, "exposes 72" asserts a present that is no longer true.
+    # Every superseded figure is listed, not just the first one: 74 became
+    # history when the 비회원 오프라인 반환 pair and its two identity helpers
+    # landed, and a guard that only knows about 72 would let the next stale
+    # sentence through exactly as the "72"-only version let 74 through.
     stale_present_tense = [
         line
         for line in progress.splitlines()
-        if re.search(r"(exposes|allows|boundary is)[^.]*\b72 public methods", line)
+        if re.search(
+            r"(exposes|allows|boundary is)[^.]*\b(72|74) public methods",
+            line,
+        )
     ]
     assert not stale_present_tense, stale_present_tense
 
@@ -322,7 +329,7 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     assert "/classes/com.korail.mobile.push.callCrew.do" in readme
     assert "remains excluded" in readme
     assert "static APK evidence and synthetic fixtures only" in record
-    assert "58 exact read/login routes" in progress
+    assert "60 exact read/login routes" in progress
     for document in (record, progress, status, handoff, changelog):
         assert "session-unverified" in document
     assert "live verification only after login" in record
@@ -395,7 +402,7 @@ def test_docs_document_bounded_live_p0_train_reads_and_closed_requests():
     # The package boundary is a repository fact and stays in the README; the
     # four closed request contracts and the bounded run that exercised them are
     # evidence and moved with the record.
-    assert "58 routes and 74 public methods" in README.read_text(encoding="utf-8")
+    assert "60 routes and 84 public methods" in README.read_text(encoding="utf-8")
 
     text = RECORD.read_text(encoding="utf-8")
     normalized = " ".join(text.split())
@@ -420,7 +427,7 @@ def test_docs_document_bounded_live_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "58 routes and 74 public methods" in text
+    assert "60 routes and 84 public methods" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
     assert (
@@ -464,9 +471,9 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
     # today; the 1246/1247 figures are kept only as labelled history. The
     # README carries the current number because a reader deciding whether to
     # trust this package needs it; the history stayed with the record.
-    assert "`2228 passed, 1 deselected`" in readme
+    assert "`2244 passed, 1 deselected`" in readme
     assert (
-        "current reviewed offline gate is `2228 passed, 1 deselected`" in record
+        "current reviewed offline gate is `2244 passed, 1 deselected`" in record
     )
     assert (
         "Earlier gates in this repository's history were `1246 passed, 1 "
@@ -474,7 +481,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "`1247 passed, 1 deselected` directly after it" in record
     )
     assert (
-        "current full offline release gate reports `2228 passed, 1 deselected`"
+        "current full offline release gate reports `2244 passed, 1 deselected`"
         in progress
     )
     assert (
@@ -483,7 +490,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "deselected` directly after it" in progress
     )
     assert (
-        "current reviewed offline gate reports `2228 passed, 1 deselected`; the "
+        "current reviewed offline gate reports `2244 passed, 1 deselected`; the "
         "historical gates were `1246 passed, 1 deselected` and, after the P0 "
         "live-evidence documentation coverage, `1247 passed, 1 deselected`"
         in handoff

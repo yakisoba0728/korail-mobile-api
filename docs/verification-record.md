@@ -18,16 +18,19 @@ is a bug report.
 
 ## Package boundary and verification summary
 
-The reviewed package boundary contains 58 routes and 74 public methods. All 58
-routes are login/read routes: 56 reads plus the login POST and the server-side
+The reviewed package boundary contains 60 routes and 84 public methods. All 60
+routes are login/read routes: 58 reads plus the login POST and the server-side
 logout GET. The eight mutation routes are tracked separately and
-are never added to the read-only allowlist. Sixty-two of the methods are the
+are never added to the read-only allowlist. Sixty-four of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
-twelve, `reserve`, `reserve_transfer`, `reserve_merge`,
+fifteen, `reserve`, `reserve_transfer`, `reserve_merge`,
 `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
-`pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`,
-`extend_discount_card` and `recalculate_price`, are
-the consent-gated mutation methods. Each is denied unless the caller supplies a
+`pay_with_fake_card`, `pay_with_card`, `refund`,
+`verify_offline_refund_ticket`, `execute_offline_refund`,
+`register_discount_card`, `extend_discount_card` and `recalculate_price`, are
+the consent-gated mutation methods; the remaining two, `begin_non_member` and
+`end_non_member`, hold and drop the 비회원 identity locally and transmit
+nothing. Each is denied unless the caller supplies a
 `MutationConsent` that opts into its category; with the default `dry_run=True`
 each merely validates its inputs and returns a redacted `MutationPreview` of the
 form that *would* be posted, sending nothing. Only a `dry_run=False` consent
@@ -59,7 +62,7 @@ for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `2228 passed, 1 deselected`; the one
+current reviewed offline gate is `2244 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -1203,6 +1206,30 @@ It sits in its own consent category, `"price_recalculation"`
 `"payment"`, because a payment consent authorises settling an amount that has
 already been quoted and this call rewrites the quote. Nothing here has ever
 been transmitted and no live path in this repository reaches it.
+
+## 장바구니 담기 — add_to_cart
+
+- `add_to_cart(request, consent=...)` — `POST cart.addCartList`
+  (`CartService.java:11-13`). One request field beyond the common three:
+  `hidPnrNo` (`AddCartDao.java:9-24`, request class
+  `AddCartDao$AddCartRequest`), confirmed independently against
+  `AddCartDao$AddCartRequest.smali` (the `hidPnrNo` field declaration) and
+  `CartService.smali` (the `@Field("hidPnrNo")` annotation on `addCart` and
+  the `@POST("/classes/com.korail.mobile.cart.addCartList")` route
+  annotation). `get_cart_list` (`GET` sibling `cart.showCartList`, keyed by
+  `pnrNo` rather than `hidPnrNo`) already read the cart; this is the write
+  half.
+
+It sits in its own consent category, `"cart"` (`MutationConsent.allow_cart`,
+default `False`) — **not** `"reserve"`, because the hold this acts on already
+exists and the call creates and destroys nothing this package can observe. It
+carries no card number and so is deliberately absent from
+`KORAIL_CARD_BEARING_MUTATION_CATEGORIES`. The DAO's response type is a bare
+`BaseResponse` (`CartService.java:13`), so `add_to_cart` returns the unparsed
+envelope on a live send — the same shape `extend_discount_card` returns for
+its own bare-`BaseResponse` route — rather than a dedicated response
+dataclass. Nothing here has ever been transmitted and no live path in this
+repository reaches it.
 
 Everything starts from `RefundTicketDetailResponse.discount_card`. When the
 "ticket" being read is itself a card, `refunds.SelTicketInfo` returns a

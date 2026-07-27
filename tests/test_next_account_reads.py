@@ -240,7 +240,7 @@ def _recording_client(
 
 
 def test_new_routes_and_public_contract_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 58
+    assert len(KORAIL_READ_ONLY_ROUTES) == 60
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert ("POST", R54_PATH) not in KORAIL_READ_ONLY_ROUTES
     assert not hasattr(KorailClient, "get_tour_train_info")

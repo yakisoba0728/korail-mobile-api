@@ -2,6 +2,60 @@
 
 ## Unreleased
 
+- Added: two reads of the 승차권 변경 chain. The read-only boundary is now
+  60 routes and `KorailClient` exposes 76 public methods.
+  - `get_self_seat_change_info` — `POST self.seatChgInfo.do`
+    (`TicketService.java:54-56`, `TicketService.smali:280-325`). Eight fields;
+    `psrmClCd` is registered OPTIONAL because `TCSOptionsActivity.java:135-138`
+    sets it only for 일반실 (`"1"`) or 특실 (`"2"`) (`K4/o.java:7-8`,
+    `K4/o.smali:34-82`) and Retrofit drops it otherwise. `trnNo` is forwarded
+    verbatim, not zero-padded: `:132` copies `h_trn_no` as-is.
+  - `get_original_ticket_inquiry` — `POST research.tripChgOgtk.do`
+    (`ResearchService.java:61-63`). The `@FieldMap` keys are
+    `ROrtg.OGTK_SALE_WCT_NO`/`OGTK_SALE_DD`/`OGTK_SALE_SQ_NO`/`OGTK_RET_PWD`
+    (`ROrtg.java:8-11`, `ROrtg.smali:20-26`), each already ending in `_`, with
+    a 1-based row number appended — so `ogtkSaleWctNo_1`, `ogtkSaleDd_1`, and
+    so on. Pinned by `_is_original_ticket_field_order` in `safety.py` rather
+    than by a name set, since the key set grows with the ticket count.
+    - **`tkCnt` is NOT pinned to the group count**, and it is sent as an
+      `int` (`ResearchService.smali:613`, `I`) rather than the string the
+      neighbouring `tk.plfNo.do` uses for the same name. The app disagrees
+      with itself about the meaning: `TCBookingActivity.java:179` sends the
+      passenger count, `PushHistoryActivity.java:357` the row count, and
+      `SeatSearchActivity.java:615` a hardcoded `1` over `f29962H.size()`
+      rows. A `tkCnt == N` check would reject two of the three.
+    - **The indexed keys' ORDER is this package's choice.** The app hands
+      Retrofit a `HashMap` (`OgTkInquiryDao.java:15,52`), so its wire order is
+      unspecified, and its own call sites do not even insert in the same
+      order. Grouping by ticket in `ROrtg` declaration order is deterministic.
+- Not added, and deliberately so: 특실 업그레이드's `myTicket.reqUpgradeSeat`
+  (`MyTicketService.java:23-24`). It was briefly implemented as a read on the
+  strength of its request — no amount, no payment means, no confirmation flag
+  — but its RESPONSE mints a `lumpStlTgtNo` (`SpecialRoomUpgradeDao.java:
+  13,19`) and `procUpgrade` takes that same 일괄결제대상번호 beside `stlMnsCd`
+  / `crdInpWayCd` / `ismtMnthNum` / `mnsStlAmt` (`MyTicketService.java:21`).
+  Producing the settlement target a payment then spends creates an unpaid
+  purchase; it does not price one. That is the same reading this repository
+  already applied to `research.dcntCrdInfo.do` ("Despite the 'Info' in its
+  path this is a PURCHASE"), which is why that route lives in
+  `KORAIL_MUTATION_ROUTES`. It is not registered as a mutation either: its
+  paired write `procUpgradeSeat` is an intended deferral, and half a purchase
+  chain would let a caller create settlement targets with no supported way to
+  settle or abandon them. `tests/test_ticket_change_chain_reads.py` pins both
+  halves out of both allowlists.
+- Security: `ogtkRetPwd` and the rest of the 원표 반환번호 tuple are now
+  redacted. `ogtkRetPwd` travels three ways — as a bare `@Field` on
+  `research.cmtrInfo.do`'s 원표 branch, which this package has emitted since
+  `build_commuter_info_form` was added, as indexed `@FieldMap` keys, and back
+  as `OrgTk.ogtkRetPwd` — and none was masked before. `ogtkSaleWctNo`/`ogtkSaleDd`/`ogtkSaleSqno`/
+  `ogtkSaleDt` are registered with it, since masking three quarters of a
+  반환번호 leaves it reconstructable; `_index_stripped` covers every row index.
+  Also registered: the 지연증명 tuple `Cmpn.dlayOgtk*` (`Cmpn.java:11-14`), the
+  settlement rows' `stlCrdNo`/`prepCrdNo`/`apvNo` (`Stl.java:5-16`), and
+  `lumpStlTgtNo` under both spellings, which the 할인카드 구매 mutation
+  already returns. `cmpnList`/`stlList` are deliberately left unparsed and
+  stay masked inside `raw`.
+
 - Added: 운임 재계산 as a consent-gated mutation —
   `KorailClient.recalculate_price`, `POST
   certification.PriceReCalculation` (`CertificationService.java:35-37`), with
