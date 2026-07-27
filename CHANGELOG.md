@@ -1121,13 +1121,16 @@
 
 - **Added: this package is licensed.** `LICENSE` carries the Apache License
   2.0 verbatim, and `pyproject.toml` declares it in the PEP 639 SPDX form
-  (`license = "Apache-2.0"`, `license-files = ["LICENSE"]`) rather than the
-  deprecated `license = {text = ...}` table, which setuptools now warns on and
-  will reject outright from 2027-02-18. The build floor moved to
+  (`license = "Apache-2.0"`, `license-files = ["LICENSE", "NOTICE"]`) rather
+  than the deprecated `license = {text = ...}` table, which setuptools now
+  warns on and will reject outright from 2027-02-18. The build floor moved to
   `setuptools>=77` for the same reason: earlier versions ignore `license-files`
   silently, producing a wheel that claims a licence and ships no licence text.
   No `License ::` classifier accompanies it — PEP 639 makes the two mutually
-  exclusive.
+  exclusive. `NOTICE` is declared alongside `LICENSE` rather than left at the
+  repository root alone: Apache-2.0 §4(d) requires a redistributor to carry the
+  attribution notices forward, and a wheel that omits the file makes that
+  impossible. Both artifacts now carry both files.
 - Added: owner and canonical-URL metadata. `authors` names `yakisoba0728` and
   a contact address — spelled in `pyproject.toml`, not repeated here, because
   `tests/test_readme.py` forbids a bare email address in the evidence

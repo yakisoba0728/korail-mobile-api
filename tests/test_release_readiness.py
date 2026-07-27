@@ -26,11 +26,19 @@ CLIENT_NAME = "KorailClient"
 FAILURE_MESSAGE = "distribution verification failed\n"
 EXPECTED_VERSION = "1.0.0"
 EXPECTED_LICENSE_EXPRESSION = "Apache-2.0"
-EXPECTED_LICENSE_FILES = ["LICENSE"]
+EXPECTED_LICENSE_FILES = ["LICENSE", "NOTICE"]
 # The checkout's own bytes, not a stand-in. The verifier compares every licence
 # member of both artifacts against these, so a fixture that invented its own
 # payload would be testing a licence this repository does not ship.
-LICENSE_PAYLOAD = (ROOT / EXPECTED_LICENSE_FILES[0]).read_bytes()
+#
+# NOTICE is declared beside LICENSE because Apache-2.0 section 4(d) obliges a
+# redistributor to carry the attribution notices forward, and a wheel that
+# ships only LICENSE leaves everyone downstream unable to do that. The notice
+# here is not decorative: it records which prior-art checkouts were read and
+# that no code was taken from them, which is exactly the claim a redistributor
+# would need to be able to repeat.
+LICENSE_PAYLOADS = {name: (ROOT / name).read_bytes() for name in EXPECTED_LICENSE_FILES}
+LICENSE_PAYLOAD = LICENSE_PAYLOADS[EXPECTED_LICENSE_FILES[0]]
 EXPECTED_AUTHOR_NAME = "yakisoba0728"
 EXPECTED_AUTHOR_EMAIL = "yakihyuk0728@gmail.com"
 EXPECTED_AUTHOR_HEADER = f"{EXPECTED_AUTHOR_NAME} <{EXPECTED_AUTHOR_EMAIL}>"
@@ -183,7 +191,7 @@ def _write_wheel(
                     _metadata() if metadata is None else metadata,
                 )
             members = (
-                {name: LICENSE_PAYLOAD for name in EXPECTED_LICENSE_FILES}
+                dict(LICENSE_PAYLOADS)
                 if license_members is None
                 else license_members
             )
@@ -234,7 +242,7 @@ def _write_sdist(
         "CHANGELOG.md": b"changelog\n",
         "SECURITY.md": b"security\n",
         "docs/RELEASE.md": b"release\n",
-        **{name: LICENSE_PAYLOAD for name in EXPECTED_LICENSE_FILES},
+        **dict(LICENSE_PAYLOADS),
         f"src/{PACKAGE_NAME}/py.typed": b"" if marker is None else marker,
         "PKG-INFO": _metadata() if metadata is None else metadata,
     }
@@ -485,10 +493,11 @@ def test_license_files_must_name_readable_non_empty_files_in_the_checkout(
 def test_license_files_carries_the_checkouts_own_bytes() -> None:
     """The positive that makes the negatives above mean something."""
     declared = VERIFIER._license_files(ROOT, {"license-files": EXPECTED_LICENSE_FILES})
-    assert declared == (
-        (EXPECTED_LICENSE_FILES[0], (ROOT / EXPECTED_LICENSE_FILES[0]).read_bytes()),
+    assert declared == tuple(
+        (name, (ROOT / name).read_bytes()) for name in EXPECTED_LICENSE_FILES
     )
     assert b"Apache License" in declared[0][1]
+    assert b"Apache License" in dict(declared)["NOTICE"]
 
 
 @pytest.mark.parametrize(
@@ -537,8 +546,8 @@ def test_the_repository_pyproject_satisfies_every_new_contract_rule() -> None:
     contract = VERIFIER._project_contract()
     assert contract.version == EXPECTED_VERSION
     assert contract.license_expression == EXPECTED_LICENSE_EXPRESSION
-    assert contract.license_files == (
-        (EXPECTED_LICENSE_FILES[0], (ROOT / EXPECTED_LICENSE_FILES[0]).read_bytes()),
+    assert contract.license_files == tuple(
+        (name, (ROOT / name).read_bytes()) for name in EXPECTED_LICENSE_FILES
     )
     assert contract.author_email == EXPECTED_AUTHOR_HEADER
     assert set(contract.project_urls) == set(EXPECTED_PROJECT_URL_HEADERS)
