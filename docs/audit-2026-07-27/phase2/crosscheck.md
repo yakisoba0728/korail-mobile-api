@@ -1,6 +1,6 @@
 # Phase 2 — 교차검증 렌즈 (2차 독립 재확인)
 
-감사자: Phase-2 (교차검증 렌즈) · 대상: `/Users/yakisoba/Documents/GitHub/korail-mobile-api`
+감사자: Phase-2 (교차검증 렌즈) · 대상: `korail-mobile-api` (이 저장소)
 방법: 1차 8건 보고서를 읽되 신뢰하지 않고, **문서(README/docs/CHANGELOG) ↔ 테스트 ↔ 라이브러리 코드 ↔ 앱(jadx+smali)**
 네 축을 기계적으로 대조. 저장소는 읽기 전용으로만 접근했다(수정/생성 0건, git 조작 0건).
 산출물은 이 파일 하나뿐이며 저장소 밖에 있다.

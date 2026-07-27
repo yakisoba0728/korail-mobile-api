@@ -1,6 +1,6 @@
 # 코레일톡(Korail Talk) ↔ korail-mobile-api 전수 감사 — 최종 종합
 
-작성 2026-07-27 · 대상 저장소 `/Users/yakisoba/Documents/GitHub/korail-mobile-api`
+작성 2026-07-27 · 대상 저장소 `korail-mobile-api` (이 저장소)
 앱 근거 `analysis/jadx/sources/`(가독) + `analysis/apktool/smali*/`(상수·제어흐름 authoritative)
 라이브러리 근거 `src/korail_mobile_api/`
 

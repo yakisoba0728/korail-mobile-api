@@ -3,7 +3,7 @@
 > 이 파일은 같은 경로에 있던 이전 판본(18,795바이트, 타임스탬프 01:51)을
 > **의도적으로 대체**한 것이다(재실행 결과이지 다른 에이전트 산출물의 훼손이 아니다).
 
-대상: /Users/yakisoba/Documents/GitHub/korail-mobile-api
+대상: korail-mobile-api (이 저장소)
 저장소는 읽기만 했다. 파일 생성/수정/git 조작 없음. 파이썬 임포트는
 `PYTHONDONTWRITEBYTECODE=1` 로 저장소 밖(scratchpad)에서 실행했다.
 

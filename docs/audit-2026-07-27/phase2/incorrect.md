@@ -1,6 +1,6 @@
 # Phase 2 — 오구현(Incorrect) 렌즈 전체 표면 재검증
 
-대상: `/Users/yakisoba/Documents/GitHub/korail-mobile-api`
+대상: `korail-mobile-api` (이 저장소)
 렌즈: **라이브러리에 있긴 한데 틀린 것** (필드명, 값 타입, 상수값, 분기, 기본값, 파싱 키, 인코딩, 헤더, 엔드포인트 동일성)
 방법: 1차 8개 보고서를 읽되 신뢰하지 않고, APK 전체를 **기계적 diff**로 독립 재구성한 뒤 라이브러리와 대조.
 

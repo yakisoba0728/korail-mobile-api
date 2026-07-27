@@ -1,6 +1,6 @@
 # Korail Talk 3차 검증 (verifier-2) — 21건 판정
 
-저장소: /Users/yakisoba/Documents/GitHub/korail-mobile-api
+저장소: korail-mobile-api (이 저장소)
 방법: 인용된 file:line 을 전부 직접 열어 확인. 상수 주장은 apktool smali 로 재확인.
 마스킹·타입 주장은 `sys.path.insert(0,'src')` 로 in-process 실측(저장소 무수정, git 무조작).
 

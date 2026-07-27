@@ -480,20 +480,25 @@ can ever stop being unverified. It reserves one adult on the configured route
 about two weeks out, pays with a real card, and refunds — printing what it is
 about to do at every step.
 
-Three opt-ins, none of them enough alone:
+Four things must be set, none of them enough alone:
 
 | variable | meaning |
 |---|---|
 | `KORAIL_MOBILE_API_LIVE=1` | may touch the live server |
 | `KORAIL_LIVE_MUTATION=1` | may change state |
 | `KORAIL_LIVE_REAL_CHARGE=1` | may charge a REAL card |
+| `KORAIL_MAX_FARE=<won>` | the ceiling on what may be charged |
 
 The card is read from `KORAIL_CARD_NUMBER`, `KORAIL_CARD_PASSWORD` (first two
 PIN digits), `KORAIL_CARD_EXPIRE` (YYMM) and `KORAIL_CARD_BIRTHDAY` (YYMMDD) —
 environment only, never a file and never a command-line argument, because argv
-is world-readable through `ps`. `KORAIL_MAX_FARE` is an optional ceiling in won
-and is strongly recommended: the run stops and releases the unpaid hold if the
-server says more is owed. `KORAIL_TRAIN_NO` pins an exact train.
+is world-readable through `ps`. `KORAIL_MAX_FARE` is a ceiling in won and is
+**required** on the charging path (it used to be optional; a run without it had
+no ceiling at all, which is not a defensible default for a script that charges a
+real card). It is checked before the card is read, before login and before any
+request; if the server later says more is owed than the ceiling, the run stops
+and releases the unpaid hold. `--recover` does not need it, because neither of
+its branches charges anything. `KORAIL_TRAIN_NO` pins an exact train.
 
 ```bash
 KORAIL_MOBILE_API_LIVE=1 KORAIL_LIVE_MUTATION=1 KORAIL_LIVE_REAL_CHARGE=1 \
@@ -528,7 +533,8 @@ is not what the payment will settle; else the first reservable train, saying
 plainly that cheapest could not be established. Whichever branch runs, the
 printed reason names it, the authoritative amount is still read back and
 cross-checked at step (d) before any money moves, and `KORAIL_MAX_FARE` is the
-only thing that caps the charge.
+only thing that caps the charge — which is exactly why the script now refuses to
+run without it.
 
 SRT went the other way and **committed** its equivalents on `feat/srt-cancel`:
 `scripts/verify_reserve_cancel_roundtrip.py` (the round trip, offline-tested

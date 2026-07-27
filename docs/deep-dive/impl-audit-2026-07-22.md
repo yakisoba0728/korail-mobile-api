@@ -7,6 +7,8 @@
 
 This audit consolidates seven scoped sub-audits (auth/session/crypto, common-station, search-schedule, seat-fare-traininfo, ticket-reservation-read, account-pass-maas-limousine, safety-transport). Each finding carries both-sides `file:line` citations: where our client diverges, and where the app proves the correct behavior.
 
+**Evidence style.** The decompiled app is a third party's copyrighted work and is not redistributed here (`analysis/` is untracked). So findings cite it by `file:line` and *describe* what was observed there — the fields, the routes, the control flow — instead of pasting its Java or smali. The citation is what makes a claim checkable: anyone who decompiles the same APK build can open the same line. Wire-level names (route paths, `@Field`/`@Query` keys, constant values) are quoted as short literals because they are the interface the client must match, and the client would be unusable without them.
+
 ## Headline
 
 | Severity | Count |
@@ -102,24 +104,14 @@ One sub-audit (seat-fare-traininfo) reported that `build_price_fare_quote_form` 
 - **Our ref:** `src/korail_mobile_api/read_payloads.py:989-991` (emits `txtMenuId` + `chtnDvCd` + `Price2FareParams`, no `trnCnt`).
 - **Ground-truth ref:** `analysis/jadx/.../trainsInfo/Price2FareDao.java:170-172` and smali `Price2FareDao$Price2FareRequest.smali:149-162`.
 
-The `@Field("trnCnt")` param does exist on `TrainsInfoService.getPrice2Fare` (`TrainsInfoService.java:26`) and `PriceFareActivity.java:64` does call `setTrnCnt(...)` — which is what the sub-audit saw. But the setter is a **self-assignment no-op**:
+The `@Field("trnCnt")` param does exist on `TrainsInfoService.getPrice2Fare` (`TrainsInfoService.java:26`) and `PriceFareActivity.java:64` does call `setTrnCnt(...)` — which is what the sub-audit saw. But the setter is a **self-assignment no-op**.
 
-```java
-// Price2FareDao.java:170-172
-public void setTrnCnt(String str) {
-    this.trnCnt = this.trnCnt;   // argument discarded
-}
-```
+What the decompile shows, described rather than reproduced (third-party app code; see "Evidence style" below):
 
-```smali
-# Price2FareDao$Price2FareRequest.smali:149-162
-.method public setTrnCnt(Ljava/lang/String;)V
-    iget-object p1, p0, ...->trnCnt:Ljava/lang/String;   # p1 <- this.trnCnt (ignores the arg)
-    iput-object p1, p0, ...->trnCnt:Ljava/lang/String;   # this.trnCnt <- p1
-    return-void
-```
+- **Java (`Price2FareDao.java:170-172`).** The one-statement body of `setTrnCnt(String)` assigns the *field* to itself. The parameter is never referenced on the right-hand side, so it is discarded.
+- **Smali (`Price2FareDao$Price2FareRequest.smali:149-162`).** The same three instructions confirm it at bytecode level and rule out a decompiler artefact: the method loads the existing `trnCnt` field into the register that held the incoming argument (`iget-object` into `p1`), stores that register straight back into the same field (`iput-object` from `p1`), and returns. Overwriting the parameter register before it is used is why the argument cannot reach the field.
 
-The incoming value is read over by `this.trnCnt` before being written back, so `trnCnt` stays `null` no matter what the caller passes. Retrofit's `@Field` skips null values (`RequestBuilder.java` case 8), so **the app never transmits `trnCnt`**. The client's omission is therefore correct, and adding the field would make us diverge. This conclusion is independently corroborated inside the provided findings by the **account-pass-maas-limousine** notes ("`setTrnCnt` is a decompiled no-op … the app never actually sends `trnCnt`") and the **safety-transport** notes ("`trnCnt` [nulled by the app's own self-assignment bug in `Price2FareDao.setTrnCnt`]"). The current `KORAIL_EXACT_REQUEST_FIELDS`/`_FIELD_ORDERS` entries for `trn.prcFare.do`, which omit `trnCnt`, are **correct as-is**.
+Either way the incoming value is read over by the field's own value before being written back, so `trnCnt` stays `null` no matter what the caller passes. Retrofit's `@Field` skips null values (`RequestBuilder.java` case 8), so **the app never transmits `trnCnt`**. The client's omission is therefore correct, and adding the field would make us diverge. This conclusion is independently corroborated inside the provided findings by the **account-pass-maas-limousine** notes ("`setTrnCnt` is a decompiled no-op … the app never actually sends `trnCnt`") and the **safety-transport** notes ("`trnCnt` [nulled by the app's own self-assignment bug in `Price2FareDao.setTrnCnt`]"). The current `KORAIL_EXACT_REQUEST_FIELDS`/`_FIELD_ORDERS` entries for `trn.prcFare.do`, which omit `trnCnt`, are **correct as-is**.
 
 ### Deliberate / benign observations (not divergences)
 

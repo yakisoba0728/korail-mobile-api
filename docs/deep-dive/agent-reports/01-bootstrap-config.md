@@ -7,6 +7,16 @@
 - 응답/요청 데이터는 로컬 코드의 Retrofit annotation, DTO 필드, 리소스 문자열, 매니페스트 메타데이터에서 확인 가능한 범위로만 기술했다.
 - JADX 난독화/디컴파일 결과라 일부 클래스명은 원본과 다를 수 있다. 예: `G4.a`, `K4.g`, `S4.z`.
 
+### 벤더 키 표기
+
+이 문서는 KORAIL 앱이 자기 것으로 들고 있는 **제3자 SDK 자격증명**(Google/Firebase API
+key·app id, Kakao app key, AdMob app id)을 **필드 이름과 위치로만** 기록한다.
+값 자체는 이 클라이언트가 쓰지도, 필요로 하지도 않으므로 저장소 본문에서도 git 히스토리에서도
+제거했고, 그 자리에는 `<KORAIL-APP-…-REDACTED>` 자리표시자만 남는다. 즉 자리표시자는
+"여기에 그 이름의 값이 있었다"는 뜻이고, 실제 값은 APK 사본에서만 읽을 수 있다.
+예외가 하나 있다: `gcm_defaultSenderId`(=`303574505999`)는 자격증명이 아니라 Firebase
+**프로젝트 번호**라서 의도적으로 그대로 둔다. 빠뜨린 것이 아니다.
+
 ## APK/빌드 메타데이터
 
 ### APK 식별자와 SDK
@@ -147,7 +157,8 @@
     - `"com.korail.talkemergency"` / `"긴급공지"` / importance 4
     - `G4.a.APPLICATION_ID` (`"com.korail.talk"`) / `"일반공지"` / importance 4
   - `KakaoSdk.init(this, getString(G4.j.kakao_app_key))`
-    - `analysis/apktool/res/values/strings.xml`의 `kakao_app_key = "<KORAIL-APP-KAKAO-APP-KEY-REDACTED>"` 사용
+    - `analysis/apktool/res/values/strings.xml`의 `kakao_app_key` 문자열 리소스를 사용
+      (값 자체는 앱 벤더의 자격증명이라 이 저장소에 싣지 않는다 — 문서 첫머리의 "벤더 키 표기" 참조)
 - 데이터 송수신:
   - `KTApplication.onCreate()` 자체에서 확인되는 직접 KORAIL API 호출은 없다.
   - NetFunnel 설정은 이후 `T6.g.BEGIN(...)` 호출 시 `nf.letskorail.com`으로 대기열/제어 요청을 수행할 기반 설정으로 보인다. 실제 NetFunnel wire format은 SDK 내부 난독화와 추가 분석이 필요하다.
@@ -382,7 +393,7 @@
     - `MAIN`/`LAUNCHER`
   - `com.korail.talk.ui.login.member.LoginActivity`
   - `com.kakao.sdk.auth.AuthCodeHandlerActivity`
-    - `kakao<KORAIL-APP-KAKAO-APP-KEY-REDACTED>://oauth`
+    - scheme = 고정 접두 `kakao` + `kakao_app_key`, host = `oauth`
   - `com.korail.talk.ui.mypage.MyPageActivity`
   - `com.korail.talk.ui.scheme.NavigationActivity`
     - `korailtalk://navigation`
@@ -550,7 +561,8 @@
 
 - Kakao
   - manifest: `com.kakao.sdk.auth.AuthCodeHandlerActivity`
-  - scheme/host: `kakao<KORAIL-APP-KAKAO-APP-KEY-REDACTED>://oauth`
+  - scheme/host: scheme 은 고정 접두 `kakao` 에 `kakao_app_key` 를 이어붙인 것, host 는 `oauth`
+    (Kakao SDK 규칙. 키 값은 싣지 않으므로 완성된 리터럴은 적지 않는다)
   - app key: `analysis/apktool/res/values/strings.xml`의 `kakao_app_key`
   - SDK 버전 후보: `analysis/jadx/sources/com/kakao/sdk/v2/*/BuildConfig.java`에서 `2.11.0` 또는 일부 `2.6.0`
 - Naver
@@ -659,7 +671,7 @@
 
 - 코드 초기화: `KTApplication.onCreate()`의 `KakaoSdk.init(this, getString(j.kakao_app_key))`
 - manifest metadata: `com.kakao.sdk.AppKey=@string/kakao_app_key`
-- 리소스: `kakao_app_key=<KORAIL-APP-KAKAO-APP-KEY-REDACTED>`
+- 리소스: `kakao_app_key` (값 비공개 — 「벤더 키 표기」)
 - OAuth callback activity: `com.kakao.sdk.auth.AuthCodeHandlerActivity`
 - 데이터:
   - 앱 키와 OAuth redirect scheme이 SDK에 사용된다.
@@ -679,9 +691,9 @@
     - `TransportRegistrar`
     - `FirebaseInstallationsRegistrar`
 - 리소스:
-  - `google_app_id=<KORAIL-APP-GOOGLE-APP-ID-REDACTED>`
+  - `google_app_id` (값 비공개 — 「벤더 키 표기」)
   - `gcm_defaultSenderId=303574505999`
-  - `firebase_database_url=https://<KORAIL-APP-FIREBASE-PROJECT-REDACTED>.firebaseio.com`
+  - `firebase_database_url` = `https://<프로젝트 id>.firebaseio.com` 형태 (프로젝트 id 비공개 — 「벤더 키 표기」)
 - raw properties:
   - `analysis/raw/firebase-common.properties`: `19.3.0`
   - `analysis/raw/firebase-components.properties`: `16.0.0`
@@ -696,7 +708,7 @@
 ### Google Mobile Ads / AdServices
 
 - manifest:
-  - metadata `com.google.android.gms.ads.APPLICATION_ID = <KORAIL-APP-ADMOB-APP-ID-REDACTED>`
+  - metadata `com.google.android.gms.ads.APPLICATION_ID` 존재 (AdMob app id, 값 비공개 — 「벤더 키 표기」)
   - provider `com.google.android.gms.ads.MobileAdsInitProvider`
   - service `com.google.android.gms.ads.AdService`
   - activity `com.google.android.gms.ads.AdActivity`

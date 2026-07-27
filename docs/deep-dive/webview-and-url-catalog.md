@@ -1,35 +1,42 @@
 # WebView JavaScript Interface Inventory
 
+**표기 원칙.** 이 문서는 기계 생성 목록이지만 실을 수 있는 것은 **인터페이스**로 한정한다 —
+라우트 문자열, scheme, 메서드 이름과 파라미터 타입처럼 클라이언트가 맞춰야 하는 표면.
+디컴파일된 앱 소스의 **문장**(대입·분기·문자열 조립)은 타사 저작물이므로 옮겨 싣지 않고,
+`file:line` 로 가리키고 무엇을 하는지 서술한다. 그래서 아래 `Signature` 열은 선언부만 적고
+본문 여는 중괄호를 달지 않으며, `Context` 열에서 Retrofit 라우트 애노테이션이 아닌 칸은
+원문 대신 설명이 들어 있다.
+
 Generated JavascriptInterface methods: **26**.
 
 | Source | Line | Signature |
 |---|---:|---|
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 304 | `public void appBack(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 311 | `public void cartlist() {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 318 | `public void certificationIdSuccess(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 326 | `public void certificationPwSuccess(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 334 | `public void changeLanguage(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 342 | `public void clearHistory() {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 349 | `public void fn_webViewOpenRsult(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 354 | `public void fn_webViewSeatSetResult(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 365 | `public void goHome() {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 372 | `public void goMaasPayment(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 380 | `public void goPayment(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 388 | `public void goSelectFromDate() {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 395 | `public void goSelectToDate() {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 402 | `public void hideLoadingDialog(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 409 | `public void identityVerificationSuccess(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 417 | `public void login(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 425 | `public void moveToTrainTime(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 433 | `public void nonmember() {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 440 | `public void nonmemberResult(String str, String str2, String str3) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 448 | `public void refreshCustTrip() {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 455 | `public void sendCalendar(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 468 | `public void sessionExpired(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 481 | `public void setTitle(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 486 | `public void showLoadingDialog(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 493 | `public void showToast(String str) {` |
-| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 498 | `public void windowClose() {` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 304 | `public void appBack(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 311 | `public void cartlist()` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 318 | `public void certificationIdSuccess(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 326 | `public void certificationPwSuccess(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 334 | `public void changeLanguage(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 342 | `public void clearHistory()` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 349 | `public void fn_webViewOpenRsult(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 354 | `public void fn_webViewSeatSetResult(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 365 | `public void goHome()` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 372 | `public void goMaasPayment(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 380 | `public void goPayment(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 388 | `public void goSelectFromDate()` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 395 | `public void goSelectToDate()` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 402 | `public void hideLoadingDialog(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 409 | `public void identityVerificationSuccess(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 417 | `public void login(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 425 | `public void moveToTrainTime(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 433 | `public void nonmember()` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 440 | `public void nonmemberResult(String str, String str2, String str3)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 448 | `public void refreshCustTrip()` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 455 | `public void sendCalendar(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 468 | `public void sessionExpired(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 481 | `public void setTitle(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 486 | `public void showLoadingDialog(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 493 | `public void showToast(String str)` |
+| `com/korail/talk/ui/web/BaseWebViewActivity.java` | 498 | `public void windowClose()` |
 
 # URL, Scheme, and API-like Path Inventory
 
@@ -37,14 +44,14 @@ Generated string rows: **179**.
 
 | Value | Source | Line | Context |
 |---|---|---:|---|
-| `/classes/com.korail.mobile.certification.TicketReservation` | `com/korail/talk/network/ExecuteDao.java` | 27 | `String[] strArr = {"/classes/com.korail.mobile.certification.TicketReservation", "/classes/com.korail.mobile.nonMember.NonMemTicket", "/classes/com.korail.mobile.seatMovie.ScheduleView", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial", "/classes/com.korail.mobile.trn.prcFare.do", "/classe` |
-| `/classes/com.korail.mobile.login.Login` | `com/korail/talk/network/ExecuteDao.java` | 27 | `String[] strArr = {"/classes/com.korail.mobile.certification.TicketReservation", "/classes/com.korail.mobile.nonMember.NonMemTicket", "/classes/com.korail.mobile.seatMovie.ScheduleView", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial", "/classes/com.korail.mobile.trn.prcFare.do", "/classe` |
-| `/classes/com.korail.mobile.nonMember.NonMemTicket` | `com/korail/talk/network/ExecuteDao.java` | 27 | `String[] strArr = {"/classes/com.korail.mobile.certification.TicketReservation", "/classes/com.korail.mobile.nonMember.NonMemTicket", "/classes/com.korail.mobile.seatMovie.ScheduleView", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial", "/classes/com.korail.mobile.trn.prcFare.do", "/classe` |
-| `/classes/com.korail.mobile.seatMovie.ScheduleView` | `com/korail/talk/network/ExecuteDao.java` | 27 | `String[] strArr = {"/classes/com.korail.mobile.certification.TicketReservation", "/classes/com.korail.mobile.nonMember.NonMemTicket", "/classes/com.korail.mobile.seatMovie.ScheduleView", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial", "/classes/com.korail.mobile.trn.prcFare.do", "/classe` |
-| `/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial` | `com/korail/talk/network/ExecuteDao.java` | 27 | `String[] strArr = {"/classes/com.korail.mobile.certification.TicketReservation", "/classes/com.korail.mobile.nonMember.NonMemTicket", "/classes/com.korail.mobile.seatMovie.ScheduleView", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial", "/classes/com.korail.mobile.trn.prcFare.do", "/classe` |
-| `/classes/com.korail.mobile.trn.prcFare.do` | `com/korail/talk/network/ExecuteDao.java` | 27 | `String[] strArr = {"/classes/com.korail.mobile.certification.TicketReservation", "/classes/com.korail.mobile.nonMember.NonMemTicket", "/classes/com.korail.mobile.seatMovie.ScheduleView", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial", "/classes/com.korail.mobile.trn.prcFare.do", "/classe` |
-| `korailtalk://navigation?view=booking` | `com/korail/talk/provider/WidgetReceiver.java` | 176 | `Intent intent3 = new Intent("android.intent.action.VIEW", Uri.parse("korailtalk://navigation?view=booking"));` |
-| `korailtalk://navigation?view=ticket` | `com/korail/talk/provider/WidgetReceiver.java` | 182 | `Intent intent4 = new Intent("android.intent.action.VIEW", Uri.parse("korailtalk://navigation?view=ticket"));` |
+| `/classes/com.korail.mobile.certification.TicketReservation` | `com/korail/talk/network/ExecuteDao.java` | 27 | 6개 경로를 담은 `String[]` 배열 리터럴 — DynaPath 토큰을 붙일 대상 allowlist |
+| `/classes/com.korail.mobile.login.Login` | `com/korail/talk/network/ExecuteDao.java` | 27 | 6개 경로를 담은 `String[]` 배열 리터럴 — DynaPath 토큰을 붙일 대상 allowlist |
+| `/classes/com.korail.mobile.nonMember.NonMemTicket` | `com/korail/talk/network/ExecuteDao.java` | 27 | 6개 경로를 담은 `String[]` 배열 리터럴 — DynaPath 토큰을 붙일 대상 allowlist |
+| `/classes/com.korail.mobile.seatMovie.ScheduleView` | `com/korail/talk/network/ExecuteDao.java` | 27 | 6개 경로를 담은 `String[]` 배열 리터럴 — DynaPath 토큰을 붙일 대상 allowlist |
+| `/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial` | `com/korail/talk/network/ExecuteDao.java` | 27 | 6개 경로를 담은 `String[]` 배열 리터럴 — DynaPath 토큰을 붙일 대상 allowlist |
+| `/classes/com.korail.mobile.trn.prcFare.do` | `com/korail/talk/network/ExecuteDao.java` | 27 | 6개 경로를 담은 `String[]` 배열 리터럴 — DynaPath 토큰을 붙일 대상 allowlist |
+| `korailtalk://navigation?view=booking` | `com/korail/talk/provider/WidgetReceiver.java` | 176 | `Uri.parse` 로 만들어 `ACTION_VIEW` Intent 로 발사 |
+| `korailtalk://navigation?view=ticket` | `com/korail/talk/provider/WidgetReceiver.java` | 182 | `Uri.parse` 로 만들어 `ACTION_VIEW` Intent 로 발사 |
 | `/classes/com.korail.mobile.research.assignScheduleView.do` | `com/korail/talk/network/dao/research/ResearchService.java` | 31 | `@POST("/classes/com.korail.mobile.research.assignScheduleView.do")` |
 | `/classes/com.korail.mobile.research.TrainResearch` | `com/korail/talk/network/dao/research/ResearchService.java` | 35 | `@POST("/classes/com.korail.mobile.research.TrainResearch")` |
 | `/classes/com.korail.mobile.research.cmtrInfo.do` | `com/korail/talk/network/dao/research/ResearchService.java` | 39 | `@POST("/classes/com.korail.mobile.research.cmtrInfo.do")` |
@@ -206,13 +213,13 @@ Generated string rows: **179**.
 | `/classes/com.korail.mobile.reservationCancel.ReservationCancelChk` | `com/korail/talk/network/dao/reservationCancel/ReservationCancelService.java` | 19 | `@POST("/classes/com.korail.mobile.reservationCancel.ReservationCancelChk")` |
 | `/classes/com.korail.mobile.reservation.reservationChange.do` | `com/korail/talk/network/dao/reservationCancel/ReservationCancelService.java` | 23 | `@POST("/classes/com.korail.mobile.reservation.reservationChange.do")` |
 | `/classes/com.korail.mobile.cust.mchdDcntTgt.do` | `com/korail/talk/network/dao/cust/CustService.java` | 11 | `@POST("/classes/com.korail.mobile.cust.mchdDcntTgt.do")` |
-| `/webapp/` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 816 | `if (str2.contains("/webapp/")) {` |
+| `/webapp/` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 816 | URL 에 이 조각이 들어 있는지 검사하는 분기 조건 |
 | `http://` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 922 | `if (N.isNull(str) \|\| !str.startsWith("http://") \|\| !str.contains(".srail.kr")) {` |
-| `http://app.srail.kr` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 956 | `return N.isNull(str) ? str : str.replace("http://teapp.srail.kr", "https://teapp.srail.kr").replace("http://app.srail.kr", "https://app.srail.kr");` |
-| `http://teapp.srail.kr` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 956 | `return N.isNull(str) ? str : str.replace("http://teapp.srail.kr", "https://teapp.srail.kr").replace("http://app.srail.kr", "https://app.srail.kr");` |
-| `https://app.srail.kr` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 956 | `return N.isNull(str) ? str : str.replace("http://teapp.srail.kr", "https://teapp.srail.kr").replace("http://app.srail.kr", "https://app.srail.kr");` |
-| `https://teapp.srail.kr` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 956 | `return N.isNull(str) ? str : str.replace("http://teapp.srail.kr", "https://teapp.srail.kr").replace("http://app.srail.kr", "https://app.srail.kr");` |
-| `https://gis.korail.com/korailTalk/entrance?route=ticket&trnNo=` | `com/korail/talk/ui/web/TrainServiceInfoWebViewActivity.java` | 602 | `String str = "https://gis.korail.com/korailTalk/entrance?route=ticket&trnNo=" + this.f30636H.getH_trn_no() + "&stnCd=" + this.f30636H.getH_dpt_rs_stn_cd() + "&date=" + this.f30636H.getH_dpt_dt() + "&lon=" + strValueOf2 + "&lat=" + strValueOf;` |
-| `/classes/com.korail.mobile.onepass.login.do` | `com/korail/talk/ui/mypage/MyPageActivity.java` | 543 | `intent3.putExtra("WEB_GET_URL", z.getWebHost() + "/classes/com.korail.mobile.onepass.login.do");` |
-| `/classes/com.korail.mobile.onepass.login.do` | `com/korail/talk/ui/login/member/LoginActivity.java` | 219 | `intent.putExtra("WEB_GET_URL", z.getWebHost() + "/classes/com.korail.mobile.onepass.login.do");` |
-| `korailtalk://stnLeadNavi` | `com/korail/talk/ui/ticket/service/AdditionalServiceActivity.java` | 321 | `if (string.contains("korailtalk://stnLeadNavi") && C0804d.isShouldOverrideUrlLoading(this, string)) {` |
+| `http://app.srail.kr` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 956 | SRT 호스트 두 개의 `http://` 를 `https://` 로 바꿔 주는 헬퍼(널이면 그대로 반환) |
+| `http://teapp.srail.kr` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 956 | SRT 호스트 두 개의 `http://` 를 `https://` 로 바꿔 주는 헬퍼(널이면 그대로 반환) |
+| `https://app.srail.kr` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 956 | SRT 호스트 두 개의 `http://` 를 `https://` 로 바꿔 주는 헬퍼(널이면 그대로 반환) |
+| `https://teapp.srail.kr` | `com/korail/talk/ui/web/BaseWebViewActivity.java` | 956 | SRT 호스트 두 개의 `http://` 를 `https://` 로 바꿔 주는 헬퍼(널이면 그대로 반환) |
+| `https://gis.korail.com/korailTalk/entrance?route=ticket&trnNo=` | `com/korail/talk/ui/web/TrainServiceInfoWebViewActivity.java` | 602 | 문자열 연결로 조립되는 URL. 질의 파라미터는 `route=ticket` 고정에 `trnNo`/`stnCd`/`date` 를 승차권 응답 필드(`h_trn_no`/`h_dpt_rs_stn_cd`/`h_dpt_dt`)에서, `lon`/`lat` 을 현재 위치에서 채운다 |
+| `/classes/com.korail.mobile.onepass.login.do` | `com/korail/talk/ui/mypage/MyPageActivity.java` | 543 | `getWebHost()` 에 경로를 이어붙여 `WEB_GET_URL` Intent extra 로 전달 |
+| `/classes/com.korail.mobile.onepass.login.do` | `com/korail/talk/ui/login/member/LoginActivity.java` | 219 | `getWebHost()` 에 경로를 이어붙여 `WEB_GET_URL` Intent extra 로 전달 |
+| `korailtalk://stnLeadNavi` | `com/korail/talk/ui/ticket/service/AdditionalServiceActivity.java` | 321 | URL 에 이 scheme 조각이 있고 `isShouldOverrideUrlLoading` 도 참일 때만 타는 분기 조건 |

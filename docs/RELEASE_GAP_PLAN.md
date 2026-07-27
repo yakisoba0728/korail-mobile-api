@@ -1028,8 +1028,17 @@ item cites the cross-validation doc **and** the decompiled file:line.
      hardcodes these is fingerprintable server-side (cross-val §1 🆕).
    - **Uncaptured SDK secrets in `res/values/strings.xml`** relevant to device
      fingerprinting — `google_api_key`, `google_app_id`, the GCM sender id, the
-     Firebase project id, and `kakao_app_key` (cross-val §5 📌; values deliberately
-     NOT copied into this plan). Treat as sensitive; never embed in our client.
+     Firebase project id, and `kakao_app_key` (cross-val §5 📌). Treat as
+     sensitive; never embed in our client. **The policy now holds everywhere, not
+     just here.** When this line was first written it declared "values deliberately
+     NOT copied into this plan" while pointing at a cross-validation section that
+     did print them — the note was true of *this file* and false of the repository.
+     That is resolved: the values were rewritten out of every document *and out of
+     the git history*, leaving `<KORAIL-APP-…-REDACTED>` placeholders that name the
+     field without disclosing it. So there is no older commit to go spelunking in;
+     the field names above are the whole of what this repository records, and the
+     one exception — the GCM sender id `303574505999`, a Firebase project number
+     rather than a credential — is left in the clear on purpose.
    - **Unmodeled mutation endpoints:** self check-in (4), `reservation.seatAssign.do`,
      the full tripChg change flow, `reservation.reservationChange.do`, special-room
      upgrade, waiting-list conversion, and a **separate delay-compensation cash

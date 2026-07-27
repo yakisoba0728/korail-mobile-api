@@ -2,6 +2,62 @@
 
 ## Unreleased
 
+- **Changed: `scripts/reserve_pay_refund_roundtrip.py` no longer starts without
+  a fare ceiling.** `KORAIL_MAX_FARE` was documented as "optional … strongly
+  recommended", but it is the *only* thing that caps what the script charges:
+  step (d) compares the amount owed against it and simply skips the comparison
+  when it is unset. Nor does the train choice bound the cost — when neither a
+  fare quote nor the search row's own price hint can be obtained, the script
+  falls through to the first reservable train at whatever it costs. So an
+  operator who followed the documented command without the variable was running
+  an uncapped real-card charge. The requirement is enforced on the charging path
+  only, before the card is read, before login and before any request; a
+  malformed value now aborts there too instead of ~200 lines later. `--recover`
+  is unaffected — neither of its branches charges anything.
+- Added: `scripts/README.md`. Three of the four committed scripts talk to the
+  live server and one of them moves money, and until now nothing in the
+  repository told a reader which was which; `capture_live_read_surface.py` was
+  referenced only from test comments. The page states the rules that hold for
+  all of them (two switches minimum, credentials from the environment only,
+  pacing, import safety, run against your own account) and points at each
+  script's own docstring for its variables rather than duplicating them.
+- Changed: the docs no longer reproduce decompiled KORAIL app code. The one
+  place that pasted a Java method body and its smali (`docs/deep-dive/
+  impl-audit-2026-07-22.md`, the `setTrnCnt` self-assignment no-op) and the one
+  that pasted a Retrofit interface declaration (`docs/audit-2026-07-27/phase2/
+  safety.md`, `dcntCrdExtn.do`) now describe what was observed instead. Every
+  `file:line` citation is kept, and so is the bytecode-level detail that ruled
+  out a decompiler artefact — the change is to the form of the evidence, not its
+  force. The audit doc states the rule it now follows: cite the third party's
+  work by location, quote only the wire-level names the client must match.
+- Changed: the two machine-generated catalogs followed the same rule instead of
+  being exempted for being generated. A second sweep by CONTENT (not by fence
+  tag) found ~660 more copied source lines than the fence scan did:
+  `docs/deep-dive/local-storage-catalog.md` pasted the whole statement for each
+  of 644 key rows, and `docs/deep-dive/webview-and-url-catalog.md` pasted 26
+  method lines and 17 statement cells. Nothing evidential is lost — the storage
+  catalog's Context column now names the access it always meant (`쓰기
+  putString` / `읽기 getInt` / `존재 확인 containsKey`), derived mechanically
+  from the statement it replaced; the WebView catalog's Signature column drops
+  the body's opening brace, which is what made those rows source lines rather
+  than signatures; and its route-annotation cells are untouched, because a
+  route is interface the client must match. Key names, `file:line` and counts
+  are unchanged, so every row is still checkable against the same APK.
+- Changed: absolute paths in the docs no longer carry a local username. All 14
+  were rewritten to repository-relative form, so no exemption list exists for a
+  future leak to hide in. The one path that is not inside this repository — the
+  `srtgo_plus` reference checkout — is described as a local checkout rather than
+  given an invented upstream URL.
+- Changed: the vendor-key placeholders left by the history rewrite now read as
+  sentences. `<KORAIL-APP-…-REDACTED>` sites explain which field stood there and
+  why the value is absent; `kakao<key>://oauth`, which had become a false
+  literal, is written as the rule it always was (the scheme is `kakao` followed
+  by the app key). `docs/RELEASE_GAP_PLAN.md` used to declare "values
+  deliberately NOT copied into this plan" while pointing at a document that
+  printed them — it now records that the contradiction is resolved, that the
+  values are gone from the history as well as the tree, and that the one value
+  still in the clear (the GCM sender id, a Firebase project *number*, not a
+  credential) is retained on purpose rather than missed.
 - **Changed (behaviour, and the reason for everything below): a bare
   `KorailClient()` can now log in.** It could not before, and the README's
   quickstart — `KorailClient()` then `login(...)` — was therefore false.

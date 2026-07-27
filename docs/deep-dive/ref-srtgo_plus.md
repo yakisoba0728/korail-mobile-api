@@ -4,7 +4,8 @@
 > `korail-mobile-api`의 mutation 갭(`docs/RELEASE_GAP_PLAN.md` §3~§5)을 실제 동작
 > 클라이언트의 요청/응답 형태로 검증·해소하기 위한 사실 정리.
 >
-> 참조 리포: `/Users/yakisoba/Documents/GitHub/srtgo_plus`
+> 참조 리포: `srtgo_plus` — 이 저장소 밖에 따로 받아 둔 로컬 체크아웃이다(공개 위치를
+> 확인하지 않았으므로 URL은 적지 않는다). 아래 인용은 그 체크아웃의 아래 커밋 기준.
 > 커밋: `354960197855b2ca5d2fe300f26d1b45bdbf66ab` "Initial commit" (2026-03-23)
 > 핵심 파일: `srtgo/ktx.py` (1101줄), 오케스트레이션 `srtgo/srtgo.py`.
 > 인용된 라인 번호는 모두 `srtgo/ktx.py` 기준(다른 파일은 명시).

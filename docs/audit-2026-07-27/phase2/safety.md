@@ -1,6 +1,6 @@
 # Phase 2 — 안전·일관성 렌즈 (2차 독립 재확인)
 
-대상: `/Users/yakisoba/Documents/GitHub/korail-mobile-api`
+대상: `korail-mobile-api` (이 저장소)
 렌즈: 안전 게이트의 구멍 / 킬스위치·라우트 정합 / 카드·PII 마스킹 우회 경로 / 공개 API 표면 일관성
 방법: 1차 8건 보고서를 읽되 재사용하지 않고, 세트·게이트를 **기계적으로 재계산**한 뒤
 앱 근거는 jadx 원본 파일을 직접 열어 확인. 라이브러리 docstring의 인용은 **감사 대상**이므로
@@ -114,10 +114,12 @@ READ-ONLY ROUTES WITH NO EXACT FIELD CONTRACT: 13 / 58
   `public static final String APD_CUST_NAME = "apdCustName_";`
 - `:29` `private final String CUST_MG_NO = "custMgNo_";`
 - `:30` `private final String APD_CUST_TEL = "apdCustTeln_";`
-- `:67` `this.apdUsrInfo.put(APD_CUST_NAME + i9, str);`
-- `:71` `this.apdUsrInfo.put("apdCustTeln_" + i9, str);`
-- `:123` `this.apdUsrInfo.put("custMgNo_" + i9, str);`
-- 라우트 선언: `dao/research/ResearchService.java:68-70` `setNCardReservation(... @FieldMap map, @FieldMap map2)`
+- 세 상수 이름이 전부 `_` 로 끝나는 것이 이미 인덱스 접미의 증거이고,
+  `:67`(이름) / `:71`(전화) / `:123`(고객관리번호) 세 곳에서 각각 그 접두에 1부터의
+  일련번호를 이어붙여 동반자 정보 맵에 넣는다. (앱 소스 문장은 타사 저작물이라
+  옮기지 않고 위치와 동작만 적는다.)
+- 라우트 선언: `dao/research/ResearchService.java:68-70` — Retrofit 메서드
+  `setNCardReservation` 이 `@FieldMap` 두 개를 받는다(그중 하나가 위 동반자 맵).
 
 라이브러리는 그대로 재현한다:
 `src/korail_mobile_api/mutation_payloads.py:1568` `form[f"custMgNo_{index}"] = ...`,
@@ -165,13 +167,18 @@ redact_payload({"custMgNo_1":"1234567890","apdCustTeln_1":"01012345678",
 
 ### P2SAF-02 [risk / medium] `extend_discount_card` 프리뷰가 4부분 자격증명 중 `saleDd` 만 노출
 
-앱 선언(`analysis/jadx/sources/com/korail/talk/network/dao/research/ResearchService.java:65-66`):
+앱 선언(`analysis/jadx/sources/com/korail/talk/network/dao/research/ResearchService.java:65-66`).
+디컴파일 소스는 타사 저작물이라 옮겨 싣지 않고, 관측한 **와이어 계약**만 적는다 —
+해당 줄의 Retrofit 메서드(`setNCardExtension`)는 `GET
+/classes/com.korail.mobile.reservation.dcntCrdExtn.do` 를 선언하고, 공통 `Device` 외에
+`@Query` 키 네 개를 이 순서로 받는다:
 
-```java
-@GET("/classes/com.korail.mobile.reservation.dcntCrdExtn.do")
-BaseResponse setNCardExtension(@Query("Device") ..., @Query("saleWctNo") str4,
-    @Query("saleDd") str5, @Query("saleSqno") str6, @Query("tkRetPwd") str7);
-```
+| # | `@Query` 키 | 클라이언트 대응 필드 (`DiscountCardTicket`) |
+|---:|---|---|
+| 1 | `saleWctNo` | `sale_window_no` |
+| 2 | `saleDd` | `sale_date` (다른 라우트에서는 `saleDt` 철자) |
+| 3 | `saleSqno` | `sale_sequence` |
+| 4 | `tkRetPwd` | `return_password` |
 
 `saleWctNo + saleDd + saleSqno + tkRetPwd` 는 승차권을 식별·인증하는 **한 덩어리 bearer
 자격증명**이다(같은 4개조로 환불·영수증·승무원호출이 모두 동작한다).

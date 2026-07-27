@@ -11,6 +11,11 @@ Safety posture
   ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live switch),
   ``KORAIL_LIVE_MUTATION=1`` (this run may change state), and
   ``KORAIL_LIVE_REAL_CHARGE=1`` (this run may charge a real card).
+* ``KORAIL_MAX_FARE`` -- a ceiling in won -- is REQUIRED on the charging path,
+  not a suggestion. It is the only thing that caps what may be charged, and it
+  is checked before the card is read, before login, and before any request. A
+  run without it would accept whatever amount the server says is owed.
+  ``--recover`` does not need it because neither of its branches charges.
 * The card is read ONLY from the environment: ``KORAIL_CARD_NUMBER``,
   ``KORAIL_CARD_PASSWORD`` (the first two digits of the card PIN),
   ``KORAIL_CARD_EXPIRE`` (YYMM) and ``KORAIL_CARD_BIRTHDAY`` (YYMMDD). Never a
@@ -1074,6 +1079,21 @@ def _require_opt_ins(*, real_charge: bool) -> None:
     if real_charge and os.environ.get(LIVE_REAL_CHARGE_ENV) != "1":
         raise RoundTripAborted(
             f"Set {LIVE_REAL_CHARGE_ENV}=1 to opt in to charging a REAL card"
+        )
+    # A ceiling is not optional on the charging path. Step (d) compares the
+    # amount owed against self.max_fare, and when that is None the comparison
+    # is skipped -- i.e. the script would pay whatever the server says. The
+    # train choice does not make up for it: when no fare quote and no price
+    # hint can be obtained, _select_train falls through to the FIRST reservable
+    # train, whose class and price are whatever the route happens to offer. So
+    # the operator must name the most they are willing to lose, up front. This
+    # call also surfaces a malformed value here rather than 200 lines later.
+    if real_charge and _max_fare_from_env() is None:
+        raise RoundTripAborted(
+            f"Set {MAX_FARE_ENV} to the most you are willing to be charged, in "
+            "won. It is the only ceiling on this run: without it, step (d) "
+            "accepts whatever amount the server says is owed. (--recover does "
+            "not need it -- neither of its branches charges anything.)"
         )
 
 

@@ -1,6 +1,6 @@
 # K8 — 부가서비스·공통·방어계층 (addService / common / cache / push / seatMovie / HTTP layer) 감사
 
-감사자: K8 (phase1) · 대상 저장소: `/Users/yakisoba/Documents/GitHub/korail-mobile-api`
+감사자: K8 (phase1) · 대상 저장소: `korail-mobile-api` (이 저장소)
 라이브러리: `src/korail_mobile_api/` · 앱 근거: `analysis/jadx/sources/com/korail/talk/network/`
 
 ## 0. 범위와 카운팅 규칙

@@ -1,6 +1,6 @@
 # 2차 검토 — 누락 렌즈 (Phase 2 / missing)
 
-대상: `/Users/yakisoba/Documents/GitHub/korail-mobile-api`
+대상: `korail-mobile-api` (이 저장소)
 렌즈: **앱에는 있는데 라이브러리에 아예 없는 기능/엔드포인트/파라미터**
 방법: 1차 8개 보고서를 읽되 신뢰하지 않고, 앱 API 표면을 **독립 재추출**해서 라이브러리와 대조.
 

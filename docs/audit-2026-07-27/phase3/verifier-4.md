@@ -1,6 +1,6 @@
 # 코레일톡 3차 검증 (반증 담당) — verifier-4
 
-대상: `/Users/yakisoba/Documents/GitHub/korail-mobile-api`
+대상: `korail-mobile-api` (이 저장소)
 방법: 인용된 file:line 을 전부 직접 열어 확인. 상수·분기·필드명은 apktool smali 로 재확인.
 읽기 전용 준수: 저장소 파일 수정/생성 없음, git 상태 변경 없음.
 (`python3 -c` 임포트로 `src/korail_mobile_api/__pycache__` 가 갱신될 수 있으나 소스는 미변경.)

@@ -488,6 +488,72 @@ def test_main_refuses_before_reading_the_card_when_opt_ins_are_missing(
     assert rt.main([]) == 2
 
 
+def _all_opt_ins(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "KORAIL_MOBILE_API_LIVE",
+        "KORAIL_LIVE_MUTATION",
+        "KORAIL_LIVE_REAL_CHARGE",
+    ):
+        monkeypatch.setenv(name, "1")
+
+
+def test_main_refuses_the_charging_path_without_a_fare_ceiling(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    """No ``KORAIL_MAX_FARE`` means no ceiling, so the run must not start.
+
+    Step (d) only compares the amount owed against a ceiling when one exists;
+    with none, it pays whatever the server says. And the train choice cannot be
+    relied on to keep that small -- with no fare quote and no price hint the
+    script takes the first reservable train at whatever it costs. So the
+    ceiling is an opt-in like the other three, and it is checked BEFORE the
+    card is read and before any client is built.
+    """
+    _all_opt_ins(monkeypatch)
+    monkeypatch.delenv(MAX_FARE_ENV, raising=False)
+
+    def _no_card():  # pragma: no cover - must never run
+        raise AssertionError("the card was read despite a missing ceiling")
+
+    def _no_client(*args, **kwargs):  # pragma: no cover - must never run
+        raise AssertionError("a client was built despite a missing ceiling")
+
+    monkeypatch.setattr(rt, "read_card_from_env", _no_card)
+    monkeypatch.setattr(rt, "KorailClient", _no_client)
+    assert rt.main([]) == 2
+    out = capsys.readouterr().out
+    assert "ABORTED" in out
+    assert MAX_FARE_ENV in out
+
+
+def test_main_rejects_a_malformed_fare_ceiling_before_anything_runs(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    """A ceiling that is not a number is worse than none: it looks set."""
+    _all_opt_ins(monkeypatch)
+    monkeypatch.setenv(MAX_FARE_ENV, "20,000")
+
+    def _no_card():  # pragma: no cover - must never run
+        raise AssertionError("the card was read despite a malformed ceiling")
+
+    monkeypatch.setattr(rt, "read_card_from_env", _no_card)
+    assert rt.main([]) == 2
+    assert MAX_FARE_ENV in capsys.readouterr().out
+
+
+def test_recover_does_not_need_a_fare_ceiling(monkeypatch: pytest.MonkeyPatch):
+    """``--recover`` cancels or refunds; neither branch can charge anything.
+
+    The ceiling requirement must not lock an operator out of cleaning up a
+    stranded PNR, which is the one thing this script must always be able to do.
+    """
+    _all_opt_ins(monkeypatch)
+    monkeypatch.delenv(MAX_FARE_ENV, raising=False)
+    rt._require_opt_ins(real_charge=False)
+
+
 # --- consents ----------------------------------------------------------------
 
 

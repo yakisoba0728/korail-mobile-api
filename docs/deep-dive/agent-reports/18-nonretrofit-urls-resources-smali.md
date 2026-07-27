@@ -4,6 +4,13 @@
 
 분석은 정적 로컬 분석만 수행했다. 근거 경로는 임시 decode 산출물 기준으로 `jadx:sources/...`, `apktool:res/...`, `apktool:smali.../...` 형식으로 표기한다.
 
+**벤더 키 표기.** 아래 표에는 KORAIL 앱이 들고 있는 제3자 SDK 자격증명(Google/Firebase
+API key·app id, Kakao app key)이 등장하지만, **이름과 리소스 위치만** 적고 값은 적지 않는다.
+이 클라이언트는 그 값을 쓰지도 필요로 하지도 않으며, 값은 저장소 본문과 git 히스토리 양쪽에서
+제거됐다. `<KORAIL-APP-…-REDACTED>` 자리표시자가 보이면 "그 이름의 값이 여기 있었다"는 뜻이다.
+단 `gcm_defaultSenderId`(=`303574505999`)는 자격증명이 아닌 Firebase 프로젝트 번호라
+의도적으로 그대로 둔다.
+
 ## 요약
 
 | 분류 | 핵심 발견 |
@@ -117,7 +124,7 @@
 
 | 값 | 목적 | 소스 | 송수신 추정 | 내부/외부 | 비고 |
 |---|---|---|---|---|---|
-| `kakao<KORAIL-APP-KAKAO-APP-KEY-REDACTED>://oauth` | Kakao OAuth callback | `apktool:AndroidManifest.xml:131-136`, `apktool:res/values/strings.xml:947` | OAuth code/result | 외부/카카오 | `AuthCodeHandlerActivity` exported. |
+| scheme = `kakao` + `kakao_app_key`, host = `oauth` | Kakao OAuth callback | `apktool:AndroidManifest.xml:131-136`, `apktool:res/values/strings.xml:947` | OAuth code/result | 외부/카카오 | `AuthCodeHandlerActivity` exported. 완성된 scheme 리터럴은 앱 키를 그대로 드러내므로 규칙만 적는다(위 「벤더 키 표기」).  |
 | `naver3rdpartylogin://authorize/` | Naver OAuth callback | `apktool:AndroidManifest.xml:308-313` | OAuth result | 외부/네이버 | `OAuthCustomTabActivity` exported. |
 | `https://nid.naver.com/oauth2.0/authorize?`, `/token?`, `/nidlogin.login?`, `/nidlogin.logout?` | Naver OAuth SDK | `apktool:smali/com/nhn/android/naverlogin/connection/gen/OAuthQueryGenerator.smali:286`, `:366`; `CommonLoginQuery.smali:22` | OAuth code/token/login/logout | 외부/네이버 | SDK 내부 문자열. |
 | `https://openapi.naver.com/v1/nid/me` | Naver profile API | `jadx:sources/K4/g.java:42`, `apktool:smali/c5.1/b$c.smali:104` | access token으로 사용자 profile 수신 | 외부/네이버 | 앱 자체 상수로도 보관. |
@@ -165,9 +172,9 @@
 | 항목 | 값/내용 | 소스 | 목적 | 비고 |
 |---|---|---|---|---|
 | SmartAlimi provider authority | `com.h2osystech.smartalimi.ServiceAlimiData.korail` / `content://com.h2osystech.smartalimi.ServiceAlimiData.korail` | `apktool:res/values/strings.xml:57`, `apktool:smali_classes2/com/h2osystech/smartalimi/servicealimimodule/DataProvider.smali:27` | push/service alimi content provider | smali에서 content URI literal 확인. |
-| Firebase database URL | `https://<KORAIL-APP-FIREBASE-PROJECT-REDACTED>.firebaseio.com` | `apktool:res/values/strings.xml:856` | Firebase config | API key/app id/storage bucket도 resource에 존재. |
+| Firebase database URL | `https://<프로젝트 id>.firebaseio.com` 형태 (프로젝트 id 비공개) | `apktool:res/values/strings.xml:856` | Firebase config | API key/app id/storage bucket도 같은 resource에 존재. 값은 위 「벤더 키 표기」에 따라 싣지 않는다. |
 | Google API/App config | `google_api_key`, `google_app_id`, `google_storage_bucket` | `apktool:res/values/strings.xml:894-897` | Google/Firebase SDK 초기화 | Android app config 값. |
-| Kakao app key | `<KORAIL-APP-KAKAO-APP-KEY-REDACTED>` | `apktool:res/values/strings.xml:947` | Kakao SDK/OAuth callback scheme | manifest callback scheme과 동일. |
+| Kakao app key | `kakao_app_key` (값 비공개) | `apktool:res/values/strings.xml:947` | Kakao SDK/OAuth callback scheme | manifest callback scheme이 이 값을 그대로 접미로 쓴다. 값은 위 「벤더 키 표기」에 따라 싣지 않는다. |
 | `network_security_config.xml` | cleartext 허용: `1.255.59.22`, `bot-dev-lb-...naverncp.com`, `teapp.srail.kr`, `app.srail.kr` | `apktool:res/xml/network_security_config.xml:3-8` | 일부 cleartext 허용 | 코드에서는 SRT HTTP 링크를 HTTPS로 치환하지만 정책상 허용은 남아 있다. |
 | Google/Ads/Firebase properties | `firebase-messaging 21.0.0`, `play-services-ads 23.2.0`, `play-services-auth 19.0.0` 등 | `apktool:unknown/*.properties` | SDK 버전 metadata | 직접 URL은 아니지만 외부 SDK 통신 근거. |
 | Maum AI proto resources | `maum/m2u/*`, `google/api/*`, `io.grpc` service metadata | `apktool:unknown/maum/...`, `apktool:unknown/META-INF/services/io.grpc.*` | AI/chatbot gRPC/protobuf 모델 | host는 코드에서 Railbot Web URL로 확인, proto 자체에는 endpoint host 없음. |
