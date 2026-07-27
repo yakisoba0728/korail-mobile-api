@@ -271,9 +271,3 @@ class KorailSessionClient:
         self.http.cookies.clear()
         self.current = None
         self.pending = None
-        # The non-member identity is credentials held in memory, so "clear the
-        # session" has to mean it too -- otherwise a caller who logged out
-        # would still be holding someone's name, phone number and 비회원
-        # password. This is also what makes login() mutually exclusive with a
-        # held non-member identity for free: login() calls clear_session()
-        # first (see :meth:`login`).

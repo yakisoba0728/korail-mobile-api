@@ -45,40 +45,6 @@ _TIME_RE = re.compile(r"[0-9]{6}")
 _DIGITS_RE = re.compile(r"[0-9]+")
 
 
-_TRIP_CHANGE_JOURNEY_SEQUENCE_NOS = ("0001", "0002")
-
-#: The three ``RSeat`` attribute codes ``w4/b.java:165-167`` writes before
-#: ``rqSeatAttCd`` and ``C5/d.java`` never touches. Each is
-#: ``prefix + leg + "_1"``. The values are enum codes: ``K4/q.DISABLE``
-#: 사용안함, ``K4/l.DEFAULT`` 모든방향, ``K4/n.DEFAULT`` 모든 위치 — all
-#: ``"000"``, but spelled out per key because they come from three different
-#: enums and only coincide.
-
-_TRIP_CHANGE_SEAT_OPTION_CODES: tuple[tuple[str, str], ...] = (
-    ("smkSeatAttCd_", "000"),  # K4/q.java:6 DISABLE
-    ("dirSeatAttCd_", "000"),  # K4/l.java:5 DEFAULT
-    ("locSeatAttCd_", "000"),  # K4/n.java:5 DEFAULT
-)
-
-#: ``etcSeatAttCd_N_1`` (``K4/m.java:5`` DISABLE), written LAST of the six
-#: (``w4/b.java:169``) — after ``rqSeatAttCd``, which is why it is not in the
-#: tuple above.
-
-_TRIP_CHANGE_ETC_SEAT_ATTRIBUTE_CODE = "000"
-
-#: ``trvlKndCd`` (``w4/b.java:135``), ``intgTktIseFlg`` (``:139``),
-#: ``alcSeatDmnPsDvCd`` (``:140``) and the two "second journey" counters
-#: ``jrny2Cnt``/``psg2Cnt``, both ``addZero(4, 0)`` (``:141-142``). No call
-#: site varies any of them, so they are constants rather than parameters.
-
-_TRIP_CHANGE_TRAVEL_KIND_CODE = "1"
-
-_TRIP_CHANGE_INTEGRATED_TICKET_FLAG = "N"
-
-_TRIP_CHANGE_SEAT_DEMAND_CODE = "000"
-
-_TRIP_CHANGE_SECOND_JOURNEY_COUNT = "0000"
-
 def _required_digits(value: str | None, *, field: str) -> str:
     if not isinstance(value, str) or _DIGITS_RE.fullmatch(value) is None:
         raise KorailProtocolError(
@@ -1966,53 +1932,6 @@ def build_price_recalculation_form(
     return form
 
 
-def _zero_padded(value: int, *, width: int) -> str:
-    """``S4/N.addZero(width, value)`` — a ``DecimalFormat`` of ``width`` zeros.
-
-    ``S4/N.java:32-38`` builds a format string of ``width`` ``"0"`` characters
-    and formats the integer with it, which is left-zero-padding that does NOT
-    truncate a longer number.
-    """
-    return f"{value:0{width}d}"
-
-
-def _required_trip_change_text(value: object, *, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise KorailProtocolError(
-            f"KORAIL ticket change request requires a non-empty {field}"
-        )
-    return value
-
-
-#: ``RJrny`` keys ``C5/d.java:54-66`` writes after the three derived ones, in
-#: the order it writes them. Prefixes from ``RJrny.java:5-18``.
-_TRIP_CHANGE_JOURNEY_FIELDS: tuple[tuple[str, str], ...] = (
-    ("runDt_", "run_date"),
-    ("stlbTrnClsfCd_", "train_classification_code"),
-    ("trnGpCd_", "train_group_code"),
-    ("dptDt_", "departure_date"),
-    ("dptTm_", "departure_time"),
-    ("dptRsStnCd_", "departure_station_code"),
-    ("dptStnConsOrdr_", "departure_station_consecutive_order"),
-    ("dptStnRunOrdr_", "departure_station_run_order"),
-    ("arvDt_", "arrival_date"),
-    ("arvTm_", "arrival_time"),
-    ("arvRsStnCd_", "arrival_station_code"),
-    ("arvStnConsOrdr_", "arrival_station_consecutive_order"),
-    ("arvStnRunOrdr_", "arrival_station_run_order"),
-)
-
-#: ``ROrtg`` keys ``w4/b.java:149-153`` writes per original ticket, in order.
-#: Prefixes from ``ROrtg.java:7-13``.
-_TRIP_CHANGE_ORIGINAL_TICKET_FIELDS: tuple[tuple[str, str], ...] = (
-    ("ogtkSaleWctNo_", "sale_window_no"),
-    ("ogtkSaleDd_", "sale_date"),
-    ("ogtkSaleSqno_", "sale_sequence"),
-    ("ogtkRetPwd_", "return_password"),
-    ("retNoMnlInpFlg_", "manual_return_no_flag"),
-)
-
-
 def build_cart_add_form(
     config: KorailConfig,
     request: CartAddRequest,
@@ -2028,9 +1947,11 @@ def build_cart_add_form(
     unparsed envelope, the same shape ``extend_discount_card`` returns for its
     own bare-``BaseResponse`` route.
 
-    **NOT VERIFIED.** What a successful add answers with, and whether it can
-    fail for reasons other than an invalid PNR, is unknown; no live-test path
-    in this repository sends it.
+    **LIVE-VERIFIED 2026-07-27**, ad hoc: a held PNR added cleanly and the
+    envelope came back ``SUCC`` with ``IRZ000002``, and the row was then read
+    back out of ``get_cart_list``. What it answers for reasons other than an
+    invalid PNR is still unknown, and no script or test in this repository
+    sends it — the run was by hand, so nothing here reproduces it.
     """
     if type(request) is not CartAddRequest:
         raise KorailProtocolError(

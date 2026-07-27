@@ -277,16 +277,47 @@ class TrainSearchQuery:
     include_srt: bool = False
 
 
+def _train_scalar(value: Any, key: str) -> str | None:
+    """One search-row field, accepted as a JSON string OR a JSON number.
+
+    The same seam ``read_parsers._optional_scalar_string`` documents, applied
+    to the search row. KORAIL is not consistent about which of the two it
+    sends for a field the APK declares as a Java ``String``, and the app never
+    notices: these rows are deserialized by Gson, whose
+    ``JsonReader.nextString()`` coerces a JSON number into its string form and
+    forwards it verbatim. So a row that arrives with ``"h_dpt_tm": 63000``
+    books fine in the app, and rejecting it here would refuse a train the app
+    would have reserved -- this seam has already produced three live findings,
+    the last of which (``h_srcar_no`` as a JSON number) killed a live reserve
+    on 2026-07-25.
+
+    Accepting both is not accepting anything. A ``bool``, a ``float``, a list
+    or an object is still a protocol error: Gson would not have taken those
+    for a String either, and stringifying one would hide a genuinely different
+    response.
+
+    NOTE this cannot restore a width the server already dropped. If KORAIL
+    sends ``63000`` for a six-digit ``h_dpt_tm``, the leading zero was gone
+    before the bytes arrived; the downstream ``_required_pattern`` /
+    ``_required_digits`` gates in ``mutation_payloads`` are what catch that,
+    and they still do.
+    """
+    if value is None or isinstance(value, str):
+        return value
+    # `type(...) is int` on purpose: bool is an int subclass, and True is not
+    # a number KORAIL ever sends for one of these fields.
+    if type(value) is int:
+        return str(value)
+    raise KorailProtocolError(
+        f"KORAIL train field {key} must be a string, an integer, or null"
+    )
+
+
 def _train_optional_string(
     raw: dict[str, Any],
     key: str,
 ) -> str | None:
-    value = raw.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL train field {key} must be a string or null"
-        )
-    return value
+    return _train_scalar(raw.get(key), key)
 
 
 def _train_optional_int(
@@ -395,28 +426,54 @@ class TrainSummary:
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
         return cls(
             train_no=str(raw.get("h_trn_no") or raw.get("trnNo") or ""),
-            train_group_code=raw.get("h_trn_gp_cd") or raw.get("trnGpCd"),
-            departure_station_code=raw.get("h_dpt_rs_stn_cd") or raw.get("dptRsStnCd"),
-            arrival_station_code=raw.get("h_arv_rs_stn_cd") or raw.get("arvRsStnCd"),
-            departure_station_name=raw.get("h_dpt_rs_stn_nm") or raw.get("dptRsStnNm"),
-            arrival_station_name=raw.get("h_arv_rs_stn_nm") or raw.get("arvRsStnNm"),
-            departure_date=raw.get("h_dpt_dt") or raw.get("dptDt"),
-            departure_time=raw.get("h_dpt_tm") or raw.get("dptTm"),
-            arrival_time=raw.get("h_arv_tm") or raw.get("arvTm"),
-            run_date=raw.get("h_run_dt") or raw.get("runDt"),
-            train_class_code=(
-                raw.get("h_trn_clsf_cd") or raw.get("trnClsfCd")
+            train_group_code=_train_scalar(
+                raw.get("h_trn_gp_cd") or raw.get("trnGpCd"), "h_trn_gp_cd"
             ),
-            departure_run_order=(
-                raw.get("h_dpt_stn_run_ordr")
-                or raw.get("dptStnRunOrdr")
+            departure_station_code=_train_scalar(
+                raw.get("h_dpt_rs_stn_cd") or raw.get("dptRsStnCd"),
+                "h_dpt_rs_stn_cd",
             ),
-            arrival_run_order=(
-                raw.get("h_arv_stn_run_ordr")
-                or raw.get("arvStnRunOrdr")
+            arrival_station_code=_train_scalar(
+                raw.get("h_arv_rs_stn_cd") or raw.get("arvRsStnCd"),
+                "h_arv_rs_stn_cd",
             ),
-            seat_map_flag=raw.get("h_rd_seat_map_flg"),
-            general_reservation_code=raw.get("h_gen_rsv_cd"),
+            departure_station_name=_train_scalar(
+                raw.get("h_dpt_rs_stn_nm") or raw.get("dptRsStnNm"),
+                "h_dpt_rs_stn_nm",
+            ),
+            arrival_station_name=_train_scalar(
+                raw.get("h_arv_rs_stn_nm") or raw.get("arvRsStnNm"),
+                "h_arv_rs_stn_nm",
+            ),
+            departure_date=_train_scalar(
+                raw.get("h_dpt_dt") or raw.get("dptDt"), "h_dpt_dt"
+            ),
+            departure_time=_train_scalar(
+                raw.get("h_dpt_tm") or raw.get("dptTm"), "h_dpt_tm"
+            ),
+            arrival_time=_train_scalar(
+                raw.get("h_arv_tm") or raw.get("arvTm"), "h_arv_tm"
+            ),
+            run_date=_train_scalar(
+                raw.get("h_run_dt") or raw.get("runDt"), "h_run_dt"
+            ),
+            train_class_code=_train_scalar(
+                raw.get("h_trn_clsf_cd") or raw.get("trnClsfCd"),
+                "h_trn_clsf_cd",
+            ),
+            departure_run_order=_train_scalar(
+                raw.get("h_dpt_stn_run_ordr") or raw.get("dptStnRunOrdr"),
+                "h_dpt_stn_run_ordr",
+            ),
+            arrival_run_order=_train_scalar(
+                raw.get("h_arv_stn_run_ordr") or raw.get("arvStnRunOrdr"),
+                "h_arv_stn_run_ordr",
+            ),
+            seat_map_flag=_train_optional_string(raw, "h_rd_seat_map_flg"),
+            general_reservation_code=_train_optional_string(
+                raw,
+                "h_gen_rsv_cd",
+            ),
             departure_construction_order=_train_optional_string(
                 raw,
                 "h_dpt_stn_cons_ordr",

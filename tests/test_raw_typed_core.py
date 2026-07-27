@@ -772,13 +772,64 @@ def test_train_search_extensions_preserve_legacy_constructor_positions():
         "h_spe_rsv_cd",
     ],
 )
-def test_train_summary_rejects_non_string_server_fields(
+def test_train_summary_takes_a_number_for_a_string_field(
     load_json_fixture,
     key,
 ):
+    """A JSON number where a String is declared is coerced, not refused.
+
+    These five used to raise. They no longer do, because that is what the app
+    does: Gson's ``nextString()`` turns the number into its string form and
+    the app books the train. Four of the five are counts, which is precisely
+    the shape ``read_parsers._optional_scalar_string`` records arriving as a
+    live JSON number (``h_jrny_cnt``). Refusing here refused a train KORAIL
+    was willing to sell.
+    """
     raw = load_json_fixture("raw_typed_train_search.json")
     row = raw["trn_infos"]["trn_info"][0]
     row[key] = 1
+
+    summary = models.TrainSummary.from_raw(row)
+
+    assert getattr(summary, _TRAIN_ATTRIBUTE_BY_WIRE_KEY[key]) == "1"
+
+
+#: The attribute each of those five wire keys lands on, so the test above can
+#: assert the coerced value rather than merely that nothing raised.
+_TRAIN_ATTRIBUTE_BY_WIRE_KEY = {
+    "h_std_rest_seat_cnt": "standard_remaining_seat_count",
+    "h_fst_rest_seat_cnt": "first_class_remaining_seat_count",
+    "h_free_sracar_cnt": "free_car_count",
+    "h_rsv_wait_ps_cnt": "reservation_wait_passenger_count",
+    "h_spe_rsv_cd": "special_reservation_code",
+}
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "h_std_rest_seat_cnt",
+        "h_dpt_tm",
+        "h_trn_gp_cd",
+        "h_spe_rsv_cd",
+    ],
+)
+@pytest.mark.parametrize("value", [True, 1.5, ["1"], {"a": "1"}])
+def test_train_summary_still_rejects_shapes_gson_would_not_take(
+    load_json_fixture,
+    key,
+    value,
+):
+    """Accepting a number is not accepting anything.
+
+    ``bool`` is checked explicitly because it is an ``int`` subclass in
+    Python and would slip through a naive ``isinstance`` test -- but ``true``
+    is not a value KORAIL sends for one of these, and silently reading it as
+    ``"True"`` would hide a genuinely different response.
+    """
+    raw = load_json_fixture("raw_typed_train_search.json")
+    row = raw["trn_infos"]["trn_info"][0]
+    row[key] = value
 
     with pytest.raises(KorailProtocolError):
         models.TrainSummary.from_raw(row)

@@ -125,8 +125,25 @@ class MutationPreview:
 
     ``payload`` is always stored redacted — it is passed through
     :func:`~korail_mobile_api.redaction.redact_payload` on construction, so a
-    ``MutationPreview`` can never hold raw card data or PII regardless of what
-    the caller supplies. ``note`` documents that nothing was transmitted.
+    ``MutationPreview`` can never hold a raw PAN, a password, a name, a phone
+    number or a membership/customer number regardless of what the caller
+    supplies. ``note`` documents that nothing was transmitted.
+
+    What that does NOT cover, stated plainly because the sentence above used
+    to say "or PII" and that was too broad: redaction masks the values a
+    human can read, not the **codes** that stand for them. A preview of a
+    운임 재계산 keeps ``hidDcntKndCd`` / ``dcnt_knd_cd1`` in the clear, and
+    those code tables include 국가유공자 (``a6/C1042B.java:140``), 장애인
+    보호자 (``a6/s.java:441``) and 국회의원 (``:442``) — special-category
+    facts about a person, spelled as digits. The same asymmetry runs through
+    the package on purpose (``is_sensitive_key("psgTpDvNm")`` is True,
+    ``is_sensitive_key("psg_tp_dv_cd")`` is False), and the read parsers
+    return the same codes unmasked. It is survivable here because every
+    linking identifier in the same preview (``hidPnrNo``, ``hidCustNo``,
+    ``hidDscpNo``, ``hidFmlyNo``) IS masked, so a code cannot be attached to
+    a person, and because the value is the caller's own input coming back
+    inside their own process. Treat a preview as sensitive anyway before
+    logging it somewhere a third party reads.
     """
 
     category: str
@@ -150,7 +167,7 @@ def require_mutation_consent(
     """Deny a mutation unless ``consent`` explicitly opts into ``category``.
 
     ``category`` must be one of ``"reserve"``, ``"payment"``, ``"cancel"``,
-``"refund"``, ``"discount_card"``, ``"price_recalculation"``,
+    ``"refund"``, ``"discount_card"``, ``"price_recalculation"``,
     ``"cart"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
     when ``consent`` is ``None``, is not a :class:`MutationConsent`, names an
     unknown category, or when the matching ``allow_<category>`` flag is False.

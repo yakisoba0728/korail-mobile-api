@@ -257,11 +257,12 @@ SENSITIVE_KEYS = frozenset(
         "strCustNo",
         "encryptCustNo",
         # ------------------------------------------------------------------
-        # 반환번호(원표) identity. The 비회원 오프라인 반환 routes that first
-        # brought these in were REMOVED on 2026-07-27, but the spellings stay:
-        # research.tripChgOgtk.do takes the same four-part return number as
-        # ogtkSale*_N / ogtkRetPwd_N, and the 여행변경 chain echoes it. The
-        # values are identical; only the route that carries them changed.
+        # 반환번호(원표) identity. Both route families that first brought these
+        # in were REMOVED on 2026-07-27 -- the 비회원 오프라인 반환 pair
+        # (e8fa0e3) and the 여행변경 chain (22ba4cc) -- but the spellings stay:
+        # research.tripChgOgtk.do survived both removals and takes the same
+        # four-part return number as ogtkSale*_N / ogtkRetPwd_N. The values are
+        # identical; only the routes that carry them changed.
         # NOTHING here is caught by a regex:
         # CARD_RE needs 13-19 CONSECUTIVE digits and the 16-digit 반환번호
         # arrives split 5/4/5/2 (res/values/integers.xml:29-32), the phone
@@ -334,9 +335,10 @@ SENSITIVE_KEYS = frozenset(
         # return_no_1..4 / return_no -- the printed 반환번호's segments,
         #   enumerated and based for the same reason retNo1..4 are. The model
         #   that owned them went with the 비회원 routes; the attribute names are
-        #   kept registered because the same four-part number reaches
-        #   tripChgOgtk and the 여행변경 forms, and a spelling that is dropped
-        #   here is a spelling that leaks the day something re-introduces it.
+        #   kept registered because the same four-part number still reaches
+        #   tripChgOgtk -- and because a spelling that is dropped here is a
+        #   spelling that leaks the day something re-introduces it. The 여행변경
+        #   forms that also carried it were removed on 2026-07-27 (22ba4cc).
         "return_no_1",
         "return_no_2",
         "return_no_3",

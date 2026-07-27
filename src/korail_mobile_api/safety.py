@@ -197,6 +197,11 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         # (TCSOptionsActivity.java:128-140).
         ("POST", "/classes/com.korail.mobile.self.seatChgInfo.do"),
         # research.tripChgOgtk.do (ResearchService.java:61-63) is the 원표
+        # (원승차권) lookup the change chain starts from: it takes N 반환번호
+        # tuples and returns the original tickets' journeys and seats
+        # (OgTkInquiryDao.java:38-53). Its sibling reservation.tripChgDate.do
+        # is already registered above. The chain's three MUTATIONS were
+        # removed on 2026-07-27 (22ba4cc); these two reads outlived them.
         ("POST", "/classes/com.korail.mobile.research.tripChgOgtk.do"),
         #
         # DELIBERATELY ABSENT, and it was briefly here: 특실 업그레이드's
@@ -354,6 +359,16 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
 # invariant it carries -- that no card-bearing category owns a GET mutation
 # route, which is why get_mutation_query has no card branch -- is stated against
 # this name and tested against it.
+#
+# "Card-bearing" means A CHARGEABLE PAN, which is narrower than "has a field
+# spelled like a card". `reserve` is deliberately NOT here even though an N카드
+# reservation writes `txtCardNo_1`: that is a prepaid 정기권/N카드 serial, not a
+# payment instrument, nothing is charged by presenting it, and redaction.py
+# masks it in previews anyway. The audit re-raised this on 2026-07-27 and it was
+# re-confirmed as intended. If that ever changes, narrow this comment rather
+# than adding `reserve` to the set -- membership also gates `fake_card_only`,
+# so adding it would newly demand a card acknowledgement from every caller who
+# only wanted to hold a seat.
 KORAIL_CARD_BEARING_MUTATION_CATEGORIES = frozenset({"payment"})
 
 
