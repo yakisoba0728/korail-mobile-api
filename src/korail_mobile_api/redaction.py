@@ -420,6 +420,68 @@ SENSITIVE_KEYS = frozenset(
         # applied to it.
         "lumpStlTgtNo",
         "lump_settlement_target_no",
+        # ------------------------------------------------------------------
+        # 승차권 여행변경 (ticket_change) on the way OUT. Every name below is a
+        # value this set ALREADY redacts under a different spelling; listing
+        # them is what stops the same secret from becoming readable purely
+        # because these three routes name it differently.
+        #
+        #   tmpJobSqno IS THE PNR. C5/d.java:145 sets it to
+        #     reservationResponse.getH_pnr_no() before the re-price call.
+        #     h_pnr_no, pnrNo, txtPnrNo, hidTmpJobSqno1/2, h_tmp_job_sqno1/2
+        #     and temporary_job_sequence_1/2 are all already listed; the bare
+        #     spelling this route uses was not.
+        #   chgTno -- 예약변경 차수 (w4/a.java:136 <- h_rsv_chg_no). The same
+        #     value as hidRsvChgNo / h_rsv_chg_no / reservation_change_no.
+        #   ogtkSaleWctNo / ogtkSaleDd / ogtkSaleSqno / ogtkRetPwd -- the
+        #     원표's four-part 반환번호 (ROrtg.java:8-11). Whoever holds all
+        #     four can refund or change the ticket. Single-index keys, so the
+        #     base catches ogtkRetPwd_1 via _index_stripped().
+        #   lumpStlTgtNo -- the 묶음결제 handle a settlement charges and a
+        #     rollback cancels. h_lump_stl_tgt_no and lump_sum_target_no are
+        #     listed; the outbound spelling was not.
+        "tmpJobSqno",
+        "chgTno",
+        "ogtkSaleWctNo",
+        "ogtkSaleDd",
+        "ogtkSaleSqno",
+        "ogtkRetPwd",
+        "lumpStlTgtNo",
+        # ...and the model attribute names they parse into.
+        "lump_settlement_target_nos",
+        "temporary_job_sequence",
+        # DOUBLY INDEXED KEYS NEED ENUMERATING, because _index_stripped()
+        # removes ONE trailing index: "scarNo_1_1" strips to "scarNo_1", which
+        # is not in this set even though "scarNo" is. Rather than change what
+        # stripping means for every route in the package, the reachable pairs
+        # are spelled out -- the outer index is a journey leg (at most
+        # KORAIL_MAX_JOURNEY_LEGS) or a passenger, the inner a seat or a
+        # discount row (at most KORAIL_MAX_PASSENGERS_PER_RESERVATION).
+        #
+        #   scarNo_/seatNo_ (RSrcar.java:8-9) -- the physical seat, already
+        #     redacted as scarNo/seatNo/h_srcar_no/h_seat_no elsewhere.
+        #   roomClsfCd_/seatPsrmClCd_ (RSeat.java:10,13) -- the cabin, already
+        #     redacted as psrmClCd/psrm_cl_cd/room_class_code.
+        #   dscpNo_ (RDscp.java:13) -- a spendable coupon/certificate number,
+        #     the same value as h_cpn_no/coupon_no/hidDscpNo.
+        #   dlayOgtkWctNo_/dlayOgtkSaleDd_/dlayOgtkSaleSqno_/dlayOgtkRetPwd_
+        #     (RDscp.java:8-11) -- the 지연할인증's own four-part 반환번호.
+        *(
+            f"{prefix}{outer}_{inner}"
+            for prefix in (
+                "scarNo_",
+                "seatNo_",
+                "roomClsfCd_",
+                "seatPsrmClCd_",
+                "dscpNo_",
+                "dlayOgtkWctNo_",
+                "dlayOgtkSaleDd_",
+                "dlayOgtkSaleSqno_",
+                "dlayOgtkRetPwd_",
+            )
+            for outer in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+            for inner in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+        ),
     }
 )
 _INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)_?(?P<index>\d+)$")

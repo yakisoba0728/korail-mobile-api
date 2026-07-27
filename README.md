@@ -215,16 +215,21 @@ This is the part to read before calling anything. It is enforced in code, not by
 convention, and the offline suite pins it.
 
 **1. Nothing that changes state moves without an explicit consent object.**
-Every one of the twelve mutation methods starts with
+Every one of the fifteen mutation methods starts with
 `require_mutation_consent(consent, category)` and raises
 `MutationNotAllowedError` before it builds anything. There is no global switch
 and no environment variable that turns this off.
 
 **2. Each category is opted into separately.** `MutationConsent` has one flag
 per category — `allow_reserve`, `allow_payment`, `allow_cancel`, `allow_refund`,
-`allow_discount_card`, `allow_price_recalculation` — and every one defaults to
-`False`. A consent that authorises a booking cannot cancel one, and a consent
-that authorises paying a quoted amount cannot re-price it.
+`allow_discount_card`, `allow_price_recalculation`, `allow_ticket_change` — and
+every one defaults to `False`. A consent that authorises a booking cannot cancel
+one, and a consent that authorises paying a quoted amount cannot re-price it.
+
+`allow_ticket_change` covers a 여행변경 **and its rollback** on purpose. The
+two are one operation: a change that cannot be undone strands an already-paid
+ticket half-moved, and the app itself fires the rollback from the screen that
+made the change.
 
 **3. `dry_run=True` is the default, and a dry run sends nothing.** With the
 default consent, a mutation method validates its inputs and returns a

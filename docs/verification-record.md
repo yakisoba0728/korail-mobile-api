@@ -23,7 +23,7 @@ routes are login/read routes: 58 reads plus the login POST and the server-side
 logout GET. The eight mutation routes are tracked separately and
 are never added to the read-only allowlist. Sixty-four of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
-twelve, `reserve`, `reserve_transfer`, `reserve_merge`,
+fifteen, `reserve`, `reserve_transfer`, `reserve_merge`,
 `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
 `pay_with_fake_card`, `pay_with_card`, `refund`,
 `verify_offline_refund_ticket`, `execute_offline_refund`,

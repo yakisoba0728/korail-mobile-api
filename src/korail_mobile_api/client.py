@@ -31,13 +31,17 @@ from .mutation_models import (
     PaidTicket,
     PriceRecalculationRequest,
     ReservationHoldResponse,
+    ReservationPassengerChangeRequest,
+    ReservationPassengerChangeResponse,
     ReservationPaymentResponse,
+    TripChangeReservationRequest,
 )
 from .mutation_parsers import (
     parse_discount_card_purchase_response,
     parse_offline_refund_execute_response,
     parse_offline_refund_verify_response,
     parse_reservation_hold_response,
+    parse_reservation_passenger_change_response,
     parse_reservation_payment_response,
 )
 from .mutation_payloads import (
@@ -51,8 +55,11 @@ from .mutation_payloads import (
     build_price_recalculation_form,
     build_refund_form,
     build_reservation_form,
+    build_reservation_passenger_change_form,
     build_standby_wait_form,
     build_transfer_reservation_form,
+    build_trip_change_reservation_form,
+    build_trip_change_rollback_form,
     build_unpaid_reservation_cancel_form,
 )
 from .http import KorailHttpClient
@@ -2614,3 +2621,210 @@ class KorailClient:
             raise
         raw = response.raw if isinstance(response.raw, dict) else {}
         return parse_reservation_hold_response(raw)
+
+    def create_trip_change_reservation(
+        self,
+        request: TripChangeReservationRequest,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | ReservationHoldResponse:
+        """Hold the replacement leg of a 승차권 여행변경. Consent-gated, dry-run.
+
+        ``POST reservation.tripChgPrsC.do``
+        (``ReservationService.java:24-26``, dispatched by
+        ``TCReservationDao.executeDao`` at ``:218-223``). This is step 3 of the
+        four-step 여행변경 chain:
+
+        1. :meth:`get_trip_change_dates` — which dates the ticket may move to.
+        2. ``research.tripChgOgtk.do`` — the 원표 inquiry, which is what
+           :class:`~korail_mobile_api.mutation_models.TripChangeOriginalTicket`
+           rows come from.
+        3. **this** — the replacement hold.
+        4. :meth:`roll_back_trip_change` — undo, while it is still unsettled.
+
+        Gated by ``require_mutation_consent(consent, "ticket_change")`` and an
+        authenticated session. That category is its own and is emphatically NOT
+        ``"reserve"``: this does not add a booking beside the old one, it
+        stakes the ORIGINAL, already-paid ticket — the 원표's four-part
+        반환번호 travels in the request — and what follows is settled as a
+        difference plus a 변경수수료. With the default ``dry_run=True`` this
+        builds and validates the form and returns a redacted
+        :class:`~korail_mobile_api.consent.MutationPreview`, sending nothing.
+
+        The app makes this call TWICE for one change (``C5/d.java:133-145``):
+        once with ``recalculate_fare=False``, then again with
+        ``recalculate_fare=True`` and ``temporary_job_sequence`` set to the PNR
+        the first call returned, after the passenger has chosen discounts. The
+        builder refuses either half without the other.
+
+        Answers with the same ``ReservationResponse`` a hold returns
+        (``ReservationService.java:26``), so what comes back is the replacement
+        booking. This method does NOT reuse :meth:`reserve`'s lenient
+        hold-recovery parse: that fallback exists so a live hold can never be
+        orphaned by a strict parse, and here the honest recovery is
+        :meth:`roll_back_trip_change` against the ``lumpStlTgtNo`` the journey
+        rows carry.
+
+        **VERIFIED FROM THE APK: the route, the method, all fifteen ``@Field``
+        names, the identity and order of all six ``@FieldMap``s, and every
+        map's key prefix and index arity.**
+
+        **NEVER TRANSMITTED, BY ANYONE HERE.** No account this project can
+        reach holds a paid ticket it is willing to have changed. A live call
+        re-books a real ticket and commits its holder to a settlement; treat
+        the first one as an experiment and be ready to undo it.
+        """
+        require_mutation_consent(consent, "ticket_change")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL ticket change requires an authenticated session"
+            )
+        route = "/classes/com.korail.mobile.reservation.tripChgPrsC.do"
+        form = build_trip_change_reservation_form(self.config, request)
+        if consent.dry_run:
+            return MutationPreview(
+                category="ticket_change",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            response = self.http.post_mutation_form(
+                route,
+                form,
+                consent=consent,
+                category="ticket_change",
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+        raw = response.raw if isinstance(response.raw, dict) else {}
+        return parse_reservation_hold_response(raw)
+
+    def roll_back_trip_change(
+        self,
+        lump_settlement_target_nos: Sequence[str],
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | BaseKorailResponse:
+        """Undo a 여행변경 that has not been settled. Consent-gated, dry-run.
+
+        ``POST ticket.tripChgHndgCnc.do`` (``TicketService.java:98-100``,
+        ``TCCancelDao.executeDao`` at ``:37-42``). It cancels the 묶음결제
+        target a change created, which is the only way to undo one.
+
+        ``lump_settlement_target_nos`` is the ``lumpStlTgtNo`` of each journey
+        of the change — from
+        :attr:`ReservationPassengerChangeResponse.lump_settlement_target_nos`,
+        or from the replacement hold's own journey rows. Both app call sites
+        pass exactly one (``a6/x.java:111-112``,
+        ``DReservationConfirmActivity.java:285-286``).
+
+        Gated by ``require_mutation_consent(consent, "ticket_change")`` — the
+        SAME category as the change it undoes, deliberately. A caller who was
+        allowed to make the change must be able to unmake it; a separate flag
+        would strand a paid ticket half-changed, which is the failure mode this
+        package already met once in ``cancel_unpaid_hold``. See
+        :attr:`~korail_mobile_api.consent.MutationConsent.allow_ticket_change`.
+
+        **VERIFIED FROM THE APK: the route, the method, the four ``@Field``
+        names, the single ``@FieldMap``'s key spelling and its 1-based index.**
+
+        **NOT VERIFIED: the response.** ``TicketService.java:98`` declares a
+        bare ``BaseResponse``, and nothing here has ever been transmitted.
+        """
+        require_mutation_consent(consent, "ticket_change")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL ticket change rollback requires an authenticated "
+                "session"
+            )
+        route = "/classes/com.korail.mobile.ticket.tripChgHndgCnc.do"
+        form = build_trip_change_rollback_form(
+            self.config,
+            lump_settlement_target_nos,
+        )
+        if consent.dry_run:
+            return MutationPreview(
+                category="ticket_change",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            return self.http.post_mutation_form(
+                route,
+                form,
+                consent=consent,
+                category="ticket_change",
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+
+    def change_reservation_passengers(
+        self,
+        request: ReservationPassengerChangeRequest,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | ReservationPassengerChangeResponse:
+        """Re-mix a held PNR's passengers. Consent-gated, dry-run by default.
+
+        ``POST reservation.reservationChange.do``. The route is DECLARED TWICE,
+        byte-identically — ``BusReservationService.java:23-25`` and
+        ``ReservationCancelService.java:23-25`` — and only the second is bound:
+        ``ReservationChangeDao.executeDao`` (``:164-166``) asks for
+        ``ReservationCancelService``. Fired by
+        ``ReservedTicketChangeActivity.java:121-125``.
+
+        Gated by ``require_mutation_consent(consent, "ticket_change")``, the
+        same category as the two 여행변경 routes: all three rewrite a booking
+        that already exists and hand back a 묶음결제 target. It is not
+        ``"reserve"`` (nothing new is held) and not ``"cancel"`` (nothing is
+        released).
+
+        Answers with a ``jrnyList`` of ``lumpStlTgtNo`` values
+        (``ReservationChangeDao.java:151-160``) that a settlement then charges
+        — and that :meth:`roll_back_trip_change` cancels, which is why the two
+        share a consent flag.
+
+        ``request.passengers`` cannot carry 청소년 or 안내견: the app's builder
+        reads only six of the eight counters (``w4/a.java:164-235``), so the
+        row block would not match ``totPrnb``. The builder refuses such a mix
+        rather than sending an inconsistent form.
+
+        **VERIFIED FROM THE APK: both route declarations, which one is bound,
+        the eleven ``@Field`` names, the identity and order of all five
+        ``@FieldMap``s, every key prefix, and that the ``psgCnt`` scalar has no
+        writer anywhere in v6.5.0 so the key reaches the wire once, from the
+        map.**
+
+        **NEVER TRANSMITTED.** No live-test path in this repository sends it.
+        """
+        require_mutation_consent(consent, "ticket_change")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL reservation passenger change requires an "
+                "authenticated session"
+            )
+        route = "/classes/com.korail.mobile.reservation.reservationChange.do"
+        form = build_reservation_passenger_change_form(self.config, request)
+        if consent.dry_run:
+            return MutationPreview(
+                category="ticket_change",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            response = self.http.post_mutation_form(
+                route,
+                form,
+                consent=consent,
+                category="ticket_change",
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
+        raw = response.raw if isinstance(response.raw, dict) else {}
+        return parse_reservation_passenger_change_response(raw)

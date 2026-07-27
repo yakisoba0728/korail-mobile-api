@@ -334,6 +334,38 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # bracket. The builder therefore returns list values, which httpx
         # encodes identically.
         ("POST", "/classes/com.korail.mobile.certification.PriceReCalculation"),
+        # ticket_change -- 승차권 여행변경 and its rollback, plus 예약 인원 변경.
+        # One category, three routes, and none of them a reuse of "reserve":
+        # a 여행변경 stakes the ORIGINAL, already-paid ticket. The 원표's
+        # four-part 반환번호 travels in the request's ROrtg map
+        # (w4/b.java:149-153), and what comes back is settled as a difference
+        # plus a 변경수수료 rather than as a fresh fare.
+        #
+        # reservation.tripChgPrsC.do creates the replacement hold
+        # (ReservationService.java:24-26, dispatched by
+        # TCReservationDao.java:218-223). Fifteen @Fields and SIX @FieldMaps.
+        #
+        # ticket.tripChgHndgCnc.do rolls one back (TicketService.java:98-100,
+        # TCCancelDao.java:37-42). It is in the SAME category on purpose --
+        # see MutationConsent.allow_ticket_change. The app fires it from the
+        # screen that made the change (a6/x.java:109-115,
+        # DReservationConfirmActivity.java:283-288).
+        #
+        # reservation.reservationChange.do rebuilds a held PNR for a different
+        # passenger mix (ReservationChangeDao.java:162-167). It answers with a
+        # lumpStlTgtNo the app takes straight to payment
+        # (ReservationedTicketChangeActivity -> ui/menu/
+        # ReservedTicketChangeActivity.java:178-185).
+        #
+        # THE THIRD ROUTE IS DECLARED TWICE, byte-identically, on two Retrofit
+        # interfaces: BusReservationService.java:23-25 and
+        # ReservationCancelService.java:23-25. Only the second is ever bound --
+        # ReservationChangeDao.executeDao (:164-166) asks for
+        # ReservationCancelService -- so the duplicate declaration changes
+        # nothing about the wire and is recorded here rather than resolved.
+        ("POST", "/classes/com.korail.mobile.reservation.tripChgPrsC.do"),
+        ("POST", "/classes/com.korail.mobile.ticket.tripChgHndgCnc.do"),
+        ("POST", "/classes/com.korail.mobile.reservation.reservationChange.do"),
         # DELIBERATELY ABSENT: the whole PassService purchase family --
         # pass.passReserve / passPayIssue and their passOtr* siblings
         # (PassService.java:19-44). 정기권 구매 was implemented against these
@@ -367,6 +399,11 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
     "/classes/com.korail.mobile.reservation.dcntCrdExtn.do": "discount_card",
     "/classes/com.korail.mobile.certification.PriceReCalculation": (
         "price_recalculation"
+    ),
+    "/classes/com.korail.mobile.reservation.tripChgPrsC.do": "ticket_change",
+    "/classes/com.korail.mobile.ticket.tripChgHndgCnc.do": "ticket_change",
+    "/classes/com.korail.mobile.reservation.reservationChange.do": (
+        "ticket_change"
     ),
 }
 
