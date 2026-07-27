@@ -27,7 +27,10 @@ FAILURE_MESSAGE = "distribution verification failed\n"
 EXPECTED_VERSION = "1.0.0"
 EXPECTED_LICENSE_EXPRESSION = "Apache-2.0"
 EXPECTED_LICENSE_FILES = ["LICENSE"]
-LICENSE_PAYLOAD = b"Apache License, Version 2.0\n"
+# The checkout's own bytes, not a stand-in. The verifier compares every licence
+# member of both artifacts against these, so a fixture that invented its own
+# payload would be testing a licence this repository does not ship.
+LICENSE_PAYLOAD = (ROOT / EXPECTED_LICENSE_FILES[0]).read_bytes()
 EXPECTED_AUTHOR_NAME = "yakisoba0728"
 EXPECTED_AUTHOR_EMAIL = "yakihyuk0728@gmail.com"
 EXPECTED_AUTHOR_HEADER = f"{EXPECTED_AUTHOR_NAME} <{EXPECTED_AUTHOR_EMAIL}>"
@@ -456,7 +459,36 @@ def test_license_expression_rejects_a_duplicate_classifier_claim() -> None:
 def test_license_files_must_be_unique_literal_paths(value: object) -> None:
     project = {} if value is None else {"license-files": value}
     with pytest.raises(VERIFIER.ContractError):
-        VERIFIER._license_files(project)
+        VERIFIER._license_files(ROOT, project)
+
+
+@pytest.mark.parametrize("problem", ("absent", "empty", "directory"))
+def test_license_files_must_name_readable_non_empty_files_in_the_checkout(
+    tmp_path: Path,
+    problem: str,
+) -> None:
+    """The declared path is resolved against the checkout, not merely parsed.
+
+    The bytes read here are what both artifacts are later compared against, so
+    a declaration naming a file that does not exist — or one that exists and is
+    blank — would make the comparison vacuous: an empty licence in the checkout
+    would be copied into both archives and match itself.
+    """
+    if problem == "empty":
+        (tmp_path / "LICENSE").write_bytes(b"  \n\t\n")
+    elif problem == "directory":
+        (tmp_path / "LICENSE").mkdir()
+    with pytest.raises(VERIFIER.ContractError):
+        VERIFIER._license_files(tmp_path, {"license-files": EXPECTED_LICENSE_FILES})
+
+
+def test_license_files_carries_the_checkouts_own_bytes() -> None:
+    """The positive that makes the negatives above mean something."""
+    declared = VERIFIER._license_files(ROOT, {"license-files": EXPECTED_LICENSE_FILES})
+    assert declared == (
+        (EXPECTED_LICENSE_FILES[0], (ROOT / EXPECTED_LICENSE_FILES[0]).read_bytes()),
+    )
+    assert b"Apache License" in declared[0][1]
 
 
 @pytest.mark.parametrize(
@@ -505,7 +537,9 @@ def test_the_repository_pyproject_satisfies_every_new_contract_rule() -> None:
     contract = VERIFIER._project_contract()
     assert contract.version == EXPECTED_VERSION
     assert contract.license_expression == EXPECTED_LICENSE_EXPRESSION
-    assert contract.license_files == tuple(EXPECTED_LICENSE_FILES)
+    assert contract.license_files == (
+        (EXPECTED_LICENSE_FILES[0], (ROOT / EXPECTED_LICENSE_FILES[0]).read_bytes()),
+    )
     assert contract.author_email == EXPECTED_AUTHOR_HEADER
     assert set(contract.project_urls) == set(EXPECTED_PROJECT_URL_HEADERS)
     assert len(contract.project_urls) == len(EXPECTED_PROJECT_URL_HEADERS)
@@ -908,7 +942,16 @@ def test_requires_the_exact_declared_license_file_headers(
     _assert_rejected(capsys, [wheel, sdist])
 
 
-@pytest.mark.parametrize("problem", ("missing", "empty", "misplaced"))
+#: A licence that is present, non-empty, and not the one this project ships.
+#: ``.strip()``-style presence checks accept it; only a byte comparison against
+#: the checkout rejects it, which is the difference this constant exists to
+#: exercise.
+ALTERED_LICENSE_PAYLOAD = LICENSE_PAYLOAD.replace(
+    b"Apache License", b"Someone Else License", 1
+)
+
+
+@pytest.mark.parametrize("problem", ("missing", "empty", "altered", "truncated", "misplaced"))
 def test_wheel_must_carry_the_declared_license_text_not_only_a_header(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -918,12 +961,18 @@ def test_wheel_must_carry_the_declared_license_text_not_only_a_header(
 
     Without this gate a wheel whose METADATA advertises Apache-2.0 while
     carrying no licence text at all passes verification, and the installed
-    ``dist-info`` gives the user nothing to read.
+    ``dist-info`` gives the user nothing to read. ``altered`` and ``truncated``
+    are the cases a presence-only check waves through: both are non-empty files
+    at the right path that are not the licence this repository ships.
     """
     if problem == "missing":
         license_members: dict[str, bytes] = {}
     elif problem == "empty":
         license_members = {"LICENSE": b"   \n"}
+    elif problem == "altered":
+        license_members = {"LICENSE": ALTERED_LICENSE_PAYLOAD}
+    elif problem == "truncated":
+        license_members = {"LICENSE": LICENSE_PAYLOAD[:64]}
     else:
         license_members = {"../LICENSE": LICENSE_PAYLOAD}
     wheel = _write_wheel(tmp_path, license_members=license_members)
@@ -931,7 +980,7 @@ def test_wheel_must_carry_the_declared_license_text_not_only_a_header(
     _assert_rejected(capsys, [wheel, sdist])
 
 
-@pytest.mark.parametrize("problem", ("missing", "empty", "symlink"))
+@pytest.mark.parametrize("problem", ("missing", "empty", "altered", "truncated", "symlink"))
 def test_sdist_must_carry_the_declared_license_text_as_a_regular_file(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -940,15 +989,20 @@ def test_sdist_must_carry_the_declared_license_text_as_a_regular_file(
     wheel = _write_wheel(tmp_path)
     if problem == "missing":
         sdist = _write_sdist(tmp_path, missing=("LICENSE",))
-    elif problem == "empty":
-        sdist = _write_sdist(
-            tmp_path,
-            overrides={"LICENSE": (tarfile.REGTYPE, b"\n\n", "")},
-        )
-    else:
+    elif problem == "symlink":
         sdist = _write_sdist(
             tmp_path,
             overrides={"LICENSE": (tarfile.SYMTYPE, b"", "../LICENSE")},
+        )
+    else:
+        payload = {
+            "empty": b"\n\n",
+            "altered": ALTERED_LICENSE_PAYLOAD,
+            "truncated": LICENSE_PAYLOAD[:64],
+        }[problem]
+        sdist = _write_sdist(
+            tmp_path,
+            overrides={"LICENSE": (tarfile.REGTYPE, payload, "")},
         )
     _assert_rejected(capsys, [wheel, sdist])
 
@@ -1128,6 +1182,42 @@ def test_ambient_live_opt_in_is_deselected_by_the_release_command() -> None:
     assert result.returncode == 5
     assert "1 deselected" in result.stdout
 
+
+_COLLECTED_RE = re.compile(
+    r"(?m)^(?:(?P<selected>\d+)/(?P<total>\d+)|(?P<only>\d+)) tests? collected"
+    r"(?: \((?P<deselected>\d+) deselected\))?"
+)
+
+
+def _collected_offline_test_count() -> tuple[int, int]:
+    """How many tests ``-m "not live"`` actually selects, and how many it drops.
+
+    Collection rather than a run: it is the same selection the documents
+    describe, it costs a fraction of a second, and a suite that RUNS itself to
+    check its own count would double every future test's cost.
+
+    The environment is scrubbed of the live opt-in on purpose. Neighbouring
+    tests set it deliberately, and a count that quietly depended on an ambient
+    variable would be no better than the hardcoded string this replaced.
+    """
+    environment = os.environ.copy()
+    environment.pop(LIVE_ENV, None)
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-m", "not live", "--collect-only"],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout[-2000:]
+    match = _COLLECTED_RE.search(result.stdout)
+    assert match is not None, result.stdout[-2000:]
+    selected = int(match.group("selected") or match.group("only"))
+    return selected, int(match.group("deselected") or 0)
+
+
 def test_repository_truth_and_full_mutation_policy() -> None:
     readme = (ROOT / "README.md").read_text()
     # docs/NEXT_SESSION.md was consolidated into IMPLEMENTATION_PROGRESS.md; its
@@ -1145,8 +1235,25 @@ def test_repository_truth_and_full_mutation_policy() -> None:
         # sentences were true when written and are kept as history; the pin has
         # to name the CURRENT boundary or it stops detecting the next drift.
         assert "77 public methods" in document
-        assert "2398 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
+
+    # The offline gate figure is DERIVED, not pinned. It used to be the literal
+    # string "2398 passed, 1 deselected" written out in four places across three
+    # documents and asserted in two test modules -- seven hand-kept copies of one
+    # number, which is how the sibling srt repository's README came to advertise
+    # 1607 tests for a suite that ran 1662. Adding a single test invalidated all
+    # seven at once. Asking the suite for its own count means a stale document
+    # fails here on its own, and the fix is to correct the document rather than
+    # to chase the assertion.
+    #
+    # Only the CURRENT gate is derived. The 1246/1247 figures elsewhere in these
+    # documents are labelled history: they were true on the day they were
+    # written, can never change, and are pinned literally in tests/test_readme.py
+    # for exactly that reason.
+    collected, deselected = _collected_offline_test_count()
+    current_gate = f"`{collected} passed, {deselected} deselected`"
+    for document in (readme, handoff, record):
+        assert current_gate in document
     for document in (record, handoff):
         assert "5 cars" in document
         assert "75 seat rows" in document

@@ -78,7 +78,12 @@ class ProjectContract(NamedTuple):
     classifiers: tuple[str, ...]
     dependencies: tuple[str, ...]
     license_expression: str
-    license_files: tuple[str, ...]
+    #: ``(declared path, the checkout's bytes at that path)`` for every entry in
+    #: ``license-files``. The bytes travel with the name because a ``License-File``
+    #: header, and a member sitting at the matching path, are both only claims
+    #: about a licence; the text is the licence. Both artifacts are compared
+    #: against these bytes, so a truncated or substituted copy fails.
+    license_files: tuple[tuple[str, bytes], ...]
     author_email: str
     project_urls: tuple[str, ...]
 
@@ -173,7 +178,7 @@ def _project_contract() -> ProjectContract:
         tuple(classifiers),
         tuple(value for value in normalized_dependencies if value is not None),
         _license_expression(project, classifiers),
-        _license_files(project),
+        _license_files(root, project),
         _author_email(project),
         _project_urls(project),
     )
@@ -196,12 +201,17 @@ def _license_expression(project: dict[str, object], classifiers: list[str]) -> s
     return expression
 
 
-def _license_files(project: dict[str, object]) -> tuple[str, ...]:
-    """The literal paths the build must place in both artifacts.
+def _license_files(root: Path, project: dict[str, object]) -> tuple[tuple[str, bytes], ...]:
+    """Each declared licence path, paired with the bytes the checkout holds there.
 
     Globs are refused. ``license-files = ["LICEN[CS]E*"]`` is legal PEP 639 but
     would leave the verifier unable to name the file it is meant to require,
     which is how a presence check quietly stops checking anything.
+
+    The bytes are read here, once, so that both artifacts are checked against
+    the same source of truth. An empty (or whitespace-only) licence in the
+    checkout is refused outright: it would otherwise be faithfully copied into
+    both archives and pass a comparison against itself.
     """
     values = project.get("license-files")
     if (
@@ -211,10 +221,18 @@ def _license_files(project: dict[str, object]) -> tuple[str, ...]:
         or len(set(values)) != len(values)
     ):
         raise ContractError
+    declared: list[tuple[str, bytes]] = []
     for value in values:
         if _GLOB_METACHARACTERS.intersection(value) or value != value.strip("/"):
             raise ContractError
-    return tuple(values)
+        try:
+            text = (root / value).read_bytes()
+        except OSError as error:
+            raise ContractError from error
+        if not text.strip():
+            raise ContractError
+        declared.append((value, text))
+    return tuple(declared)
 
 
 def _author_email(project: dict[str, object]) -> str:
@@ -340,7 +358,7 @@ def _verify_metadata(payload: bytes, contract: ProjectContract) -> None:
     for header, expected_values in (
         ("Classifier", contract.classifiers),
         ("Project-URL", contract.project_urls),
-        ("License-File", contract.license_files),
+        ("License-File", tuple(name for name, _ in contract.license_files)),
     ):
         values = metadata.get_all(header, [])
         if len(values) != len(expected_values) or set(values) != set(expected_values):
@@ -400,15 +418,17 @@ def _verify_wheel(wheel_path: Path, contract: ProjectContract) -> None:
             or archive.read(marker_member) != b""
         ):
             raise ContractError
-        # A METADATA header naming a licence file is a claim; the file being in
-        # the wheel is the thing the claim is about. Check both, or an installed
-        # copy can advertise Apache-2.0 while carrying no licence text at all.
-        for license_file in contract.license_files:
+        # A METADATA header naming a licence file is a claim; the bytes in the
+        # wheel are the thing the claim is about. Compare against the checkout's
+        # own copy, or an installed distribution can advertise Apache-2.0 while
+        # carrying a one-line placeholder — which a presence-only check passes.
+        # PEP 639 puts these under ``<dist-info>/licenses/``.
+        for license_file, license_text in contract.license_files:
             license_member = members.get(f"{expected_dist_info}/licenses/{license_file}")
             if (
                 license_member is None
                 or not _zip_member_is_regular(license_member)
-                or not archive.read(license_member).strip()
+                or archive.read(license_member) != license_text
             ):
                 raise ContractError
         _verify_metadata(archive.read(metadata_member), contract)
@@ -432,8 +452,9 @@ def _verify_sdist(sdist_path: Path, contract: ProjectContract) -> None:
     # _REQUIRED_SDIST_FILES: a second hand-kept copy of the same list is how the
     # gate and the declaration drift apart. _license_files() already refuses an
     # absent or empty declaration, so this set cannot silently become empty.
-    license_paths = {
-        f"{expected_root}/{license_file}" for license_file in contract.license_files
+    license_payloads = {
+        f"{expected_root}/{license_file}": license_text
+        for license_file, license_text in contract.license_files
     }
 
     with tarfile.open(sdist_path, mode="r:gz") as archive:
@@ -468,12 +489,12 @@ def _verify_sdist(sdist_path: Path, contract: ProjectContract) -> None:
             member = members.get(required_path)
             if member is None or member.type not in {tarfile.REGTYPE, tarfile.AREGTYPE}:
                 raise ContractError
-        for license_path in license_paths:
+        for license_path, license_text in license_payloads.items():
             member = members.get(license_path)
             if (
                 member is None
                 or member.type not in {tarfile.REGTYPE, tarfile.AREGTYPE}
-                or not _tar_payload(archive, member).strip()
+                or _tar_payload(archive, member) != license_text
             ):
                 raise ContractError
         _verify_metadata(_tar_payload(archive, metadata_member), contract)

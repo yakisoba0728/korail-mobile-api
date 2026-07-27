@@ -468,22 +468,23 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         assert "27 parsed responses" in text
         assert "one expected `KorailAppError`" in text
         assert "zero unexpected failures" in text
-    # The live gate figure is the count the offline suite actually reports
-    # today; the 1246/1247 figures are kept only as labelled history. The
-    # README carries the current number because a reader deciding whether to
-    # trust this package needs it; the history stayed with the record.
-    assert "`2398 passed, 1 deselected`" in readme
-    assert (
-        "current reviewed offline gate is `2398 passed, 1 deselected`" in record
-    )
+    # Only the HISTORICAL gate figures are pinned here. 1246 and 1247 were true
+    # on the days they were written, can never change again, and a literal
+    # string is the right way to keep a fact that is finished.
+    #
+    # The CURRENT figure used to be pinned alongside them -- the literal "2398
+    # passed, 1 deselected" appeared four times across three documents and was
+    # asserted in two test modules. Adding one test invalidated all of it at
+    # once, which is the same way the sibling srt repository's README came to
+    # advertise 1607 tests for a suite that ran 1662. It is now derived from the
+    # suite's own collection in
+    # tests/test_release_readiness.py::test_repository_truth_and_full_mutation_policy,
+    # which asserts the derived string in README.md, docs/verification-record.md
+    # and docs/IMPLEMENTATION_PROGRESS.md. Do not re-pin it here.
     assert (
         "Earlier gates in this repository's history were `1246 passed, 1 "
         "deselected` before the P0 live-evidence documentation coverage and "
         "`1247 passed, 1 deselected` directly after it" in record
-    )
-    assert (
-        "current full offline release gate reports `2398 passed, 1 deselected`"
-        in progress
     )
     assert (
         "Historically the same gate reported `1246 passed, 1 deselected` before "
@@ -491,9 +492,8 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "deselected` directly after it" in progress
     )
     assert (
-        "current reviewed offline gate reports `2398 passed, 1 deselected`; the "
-        "historical gates were `1246 passed, 1 deselected` and, after the P0 "
-        "live-evidence documentation coverage, `1247 passed, 1 deselected`"
+        "the historical gates were `1246 passed, 1 deselected` and, after the "
+        "P0 live-evidence documentation coverage, `1247 passed, 1 deselected`"
         in handoff
     )
     assert "authenticated 28-request, 28-response run" in changelog
