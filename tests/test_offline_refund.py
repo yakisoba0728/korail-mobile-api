@@ -706,6 +706,9 @@ def test_every_new_wire_key_and_model_attribute_is_registered():
         "scar_no",
         "seat_no",
         "psrm_cl_nm",
+        # Server-composed text, redacted for the same reason h_msg_txt is.
+        "poppMsg",
+        "popup_message",
         "non_member_name",
         "non_member_phone",
         "non_member_password",

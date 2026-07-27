@@ -312,6 +312,15 @@ SENSITIVE_KEYS = frozenset(
         "ogtk_sale_wct_no",
         "scar_no",
         "psrm_cl_nm",
+        # poppMsg -- server-composed notice text on a screen whose entire input
+        # is a name and a 반환번호 (RefundVerifyTicketDao.java:66;
+        # s5/c.java:199-208). Registered for the same reason h_msg_txt already
+        # is: server text is free to quote back what the caller sent, and there
+        # is no way to tell from here whether it does. It costs nothing to
+        # redact -- it is a response field, so no request preview loses
+        # anything by it.
+        "poppMsg",
+        "popup_message",
         # ...and the model attribute names this flow parses into. The response
         # rows reuse attribute names already listed above (pnr_no,
         # original_sale_date, original_window_no, original_sale_sequence,

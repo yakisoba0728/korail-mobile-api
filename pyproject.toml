@@ -39,6 +39,13 @@ korail_mobile_api = ["py.typed"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+# Test THIS checkout, not whichever one an editable install happens to point at.
+# Without this, `python3 -m pytest` in a git worktree collected the worktree's
+# tests but imported korail_mobile_api from the main checkout's src/ (the
+# `pip install -e .` finder), so a change could look green while the code under
+# test was somebody else's. pytest prepends rootdir-relative pythonpath entries
+# to sys.path, which wins over that finder and resolves per checkout.
+pythonpath = ["src"]
 markers = [
   "live: tests that call live KORAIL services and require explicit opt-in",
 ]
