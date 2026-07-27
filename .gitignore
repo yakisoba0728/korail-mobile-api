@@ -9,3 +9,6 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+
+# Agent worktrees and local tool state — never part of the package.
+.claude/
