@@ -391,6 +391,70 @@ def assert_mutation_route_category(path: str, category: str) -> None:
             f"{parsed_path} (expected {expected!r})"
         )
 
+
+#: The three fields ``mutation_payloads._common_fields`` puts on EVERY mutation
+#: form. A form that reaches the send boundary without them was not built by a
+#: builder in this package.
+KORAIL_MUTATION_COMMON_FIELDS = frozenset({"Device", "Version", "Key"})
+
+
+def assert_mutation_form_shape(
+    path: str,
+    values: Mapping[str, Any],
+) -> None:
+    """Check a mutation form's SHAPE before it is encoded and sent.
+
+    The read side has had an exact per-route field contract for a long time
+    (:func:`assert_read_only_request_fields`); the mutation side had only
+    ``isinstance(data, Mapping)``, so the strongest statement that could be
+    made about a mutation body was that it was a mapping of something to
+    anything. Everything else -- route, category, consent, card kind -- was
+    gated, and then the payload itself went out unexamined.
+
+    This is deliberately a SHAPE contract and not an exact field set. A
+    mutation body is not a fixed list of names the way a read is: the
+    reservation forms carry a variable number of passenger and seat rows,
+    운임 재계산 sends six parallel ``@Field List<String>`` parameters as
+    repeated keys, and pinning those would mean re-deriving the row grammar
+    here and keeping two copies of it in step. What IS invariant across all
+    nine routes is that a form is flat string-to-string (or string-to-list-of-
+    strings), and that it carries the common three.
+
+    So this refuses what a builder cannot produce and a hand-built dict can: a
+    non-string name, a nested mapping, ``None``, an ``int`` that would encode
+    as an unpadded number, a ``bool`` that would encode as ``"True"``. Those
+    are the shapes that reach the wire looking almost right.
+    """
+    parsed_path = urlsplit(path).path
+    for name, value in values.items():
+        if not isinstance(name, str) or not name:
+            raise KorailProtocolError(
+                f"KORAIL mutation form field names must be non-empty strings; "
+                f"{parsed_path} carries {name!r}"
+            )
+        if isinstance(value, str):
+            continue
+        if isinstance(value, (list, tuple)) and all(
+            isinstance(item, str) for item in value
+        ):
+            # Repeated wire keys: 운임 재계산's six index-paired lists.
+            continue
+        raise KorailProtocolError(
+            f"KORAIL mutation form field {name!r} on {parsed_path} must be a "
+            f"string or a list of strings, not {type(value).__name__}. The "
+            "form is sent as-is, so a non-string here reaches the wire in "
+            "whatever shape str() gives it."
+        )
+    missing = KORAIL_MUTATION_COMMON_FIELDS - set(values)
+    if missing:
+        raise KorailProtocolError(
+            f"KORAIL mutation form for {parsed_path} is missing the common "
+            f"fields {sorted(missing)}; every builder in this package writes "
+            "them via _common_fields, so a form without them did not come "
+            "from one"
+        )
+
+
 KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
 KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
 

@@ -8,9 +8,9 @@
 
 | 상태 | 건수 |
 |---|---:|
-| 성공 | 32 |
-| 실패 | 13 |
-| 미실행 | 120 |
+| 성공 | 33 |
+| 실패 | 14 |
+| 미실행 | 118 |
 | 전체 | 165 |
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
@@ -20,11 +20,9 @@ are audited login/read methods or local helpers; the other thirteen are
 consent-gated mutations: `reserve`,
 `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`,
 `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`,
-`pay_with_card`, `refund`, `verify_offline_refund_ticket`,
-`execute_offline_refund`, `register_discount_card`, `extend_discount_card`
-and `recalculate_price`, are consent-gated mutation methods; the remaining two,
-`begin_non_member` and `end_non_member`, only hold and drop the 비회원 identity
-locally and send nothing. Each is
+`pay_with_card`, `refund`, `add_to_cart`,
+`register_discount_card`, `extend_discount_card`
+and `recalculate_price`. Each is
 denied without a matching-category `MutationConsent`; with the default
 `dry_run=True` each only returns a redacted `MutationPreview` (sending nothing),
 and only a `dry_run=False` consent performs the live state change, exclusively
@@ -87,7 +85,7 @@ ID, made one successful login call, confirmed logged-in state and
 customer-number presence, and called only R149 once. R149 succeeded with one
 row and was not retried; R137, R138, R146, and R148 made zero calls. No
 mutation, raw response, PII, credential, or server message was retained.
-Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
+Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
 
 ## Service Index
 
@@ -97,7 +95,7 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 | `BusReservationService` | 연계 교통 예약 목록, 좌석, 변경/취소 확인 | 4 | 0 | 0 | 4 |
 | `CacheService` | 앱 공지, 메인, 서비스 점검 캐시 조회 | 3 | 3 | 0 | 0 |
 | `CalendarService` | 운행일 캘린더 조회 | 1 | 1 | 0 | 0 |
-| `CartService` | 장바구니 및 MAAS 예약 상태 | 3 | 1 | 0 | 2 |
+| `CartService` | 장바구니 및 MAAS 예약 상태 | 3 | 2 | 0 | 1 |
 | `CashReceipt` | 현금영수증 발급 | 1 | 0 | 0 | 1 |
 | `CertificationService` | 할인/자격 인증 및 증빙 | 12 | 0 | 1 | 11 |
 | `CommonService` | 공통코드, 약관, 앱 설정, QR 위치 인증 | 11 | 6 | 0 | 5 |
@@ -125,7 +123,7 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 | `ReservationService` | 승차권 예약 및 좌석 조건 | 4 | 1 | 1 | 2 |
 | `ReservationWaitService` | 예약대기 신청 | 1 | 0 | 0 | 1 |
 | `SeatMovieService` | 열차 스케줄 및 예약 조회 | 3 | 1 | 0 | 2 |
-| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 3 | 0 | 16 |
+| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 3 | 1 | 15 |
 | `TrainsInfoService` | 열차/객차/자유석 정보 조회 | 6 | 3 | 0 | 3 |
 | `XPointService` | OK캐쉬백/X포인트 인증 및 적립 | 5 | 0 | 0 | 5 |
 
@@ -177,11 +175,11 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 ## CartService
 
 - 역할: 장바구니 및 MAAS 예약 상태
-- 상태: 총 3개 / 성공 1 / 실패 0 / 미실행 2
+- 상태: 총 3개 / 성공 2 / 실패 0 / 미실행 1
 
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
-| 9 | `addCart` | POST | `/classes/com.korail.mobile.cart.addCartList` | 장바구니 추가 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, hidPnrNo | `BaseResponse` |
+| 9 | `addCart` | POST | `/classes/com.korail.mobile.cart.addCartList` | 장바구니 추가 | 성공 | `SUCC`/`IRZ000002`, 2026-07-27 수기 실행; 추가된 행을 `getCartList`로 확인 | Device, Version, Key, hidPnrNo | `BaseResponse` |
 | 10 | `getCartList` | POST | `/classes/com.korail.mobile.cart.showCartList` | 장바구니 목록 조회 | 성공 |  | Device, Version, Key, pnrNo, addSrvReqNo | `CartListDao.CartListResponse` |
 | 11 | `verifyMaasStatus` | POST | `/classes/com.korail.mobile.maas.rsvStt.do` | MAAS 예약 상태 확인 | 미실행 | PNR/티켓/N카드/상품 등 실데이터 필요 | Device, Version, Key, addSrvDvCd, addSrvReqNo, coptEntRsvNo, lumpStlTgtNo | `BaseResponse` |
 
@@ -523,7 +521,7 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 ## TicketService
 
 - 역할: 발권, 승차권 관리, 체크인, 티켓 정보
-- 상태: 총 19개 / 성공 3 / 실패 0 / 미실행 16
+- 상태: 총 19개 / 성공 3 / 실패 1 / 미실행 15
 
 | # | Java method | HTTP | Path | 역할 | 성공 여부 | 비고 | Params | Return type |
 |---:|---|---|---|---|---|---|---|---|
@@ -534,7 +532,7 @@ Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
 | 140 | `getMaasServiceCancel` | POST | `/classes/com.korail.mobile.addService.coptCnc.do` | MAAS 서비스 취소 | 미실행 | 운영 상태 변경 가능 | Device, Version, pnrNo, cncTgtCnt, cncAddSrvReqNo, cncRetFee | `BaseResponse` |
 | 141 | `getMaasServiceCancelFee` | POST | `/classes/com.korail.mobile.maas.cncFee.do` | MAAS 취소 수수료 조회 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, addSrvReqNo, addSrvDvCd, coptEntRsvNo | `MaasServiceCancelFeeDao.MaasServiceCancelFeeResponse` |
 | 142 | `getMaasServiceDetailList` | POST | `/classes/com.korail.mobile.copt.gdReqQry.do` | MAAS 서비스 상세 목록 | 성공 | current form, 0 rows | Device, Version, qryDtFrom, qryDtTo | `MaasServiceDetailListDao.MaasServivceDetailResponse` |
-| 143 | `getSelfSeatChgInfo` | POST | `/classes/com.korail.mobile.self.seatChgInfo.do` | 셀프 좌석변경 정보 | 미실행 | 미검증 | Device, Version, Key, runDt, trnNo, dptRsStnCd, arvRsStnCd, psrmClCd | `CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse` |
+| 143 | `getSelfSeatChgInfo` | POST | `/classes/com.korail.mobile.self.seatChgInfo.do` | 셀프 좌석변경 정보 | 실패 | `WRT800176` 좌석변경가능시간아님; `KorailAppError`, 2026-07-27, 1회 호출, 재시도 없음 | Device, Version, Key, runDt, trnNo, dptRsStnCd, arvRsStnCd, psrmClCd | `CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse` |
 | 144 | `getTripChgDate` | POST | `/classes/com.korail.mobile.reservation.tripChgDate.do` | 여정변경 가능일 조회 | 성공 | 15 rows | Device, Version, Key, tripChgDate | `TripChgInfoDao.TripChgInfoDaoResponse` |
 | 145 | `gurdSmsSnd` | POST | `/classes/com.korail.mobile.tk.gurdSmsSnd.do` | 보호자 안심 SMS 발송 | 미실행 | 운영 상태 변경 가능 | Device, Version, Key, pnrNo, jrnySqno, rcvPsHndyTeln | `BaseResponse` |
 | 146 | `pbpAcepSpec` | POST | `/classes/com.korail.mobile.tk.pbpAcepSpec.do` | PBP 수락 내역 | 미실행 | static-only / live 미실행 | Device, Version, Key, tkCnt, tkRetNo | `PbpAcepSpecDao.PbpAcepSpecResponse` |

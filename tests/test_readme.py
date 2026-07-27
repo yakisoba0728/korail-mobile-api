@@ -94,16 +94,16 @@ def test_record_documents_every_successful_read_expansion_method_and_boundary():
 
 def test_status_and_progress_documents_match_current_inventory_and_coverage():
     status = STATUS.read_text(encoding="utf-8")
-    assert "| 성공 | 32 |" in status
-    assert "| 실패 | 13 |" in status
-    assert "| 미실행 | 120 |" in status
+    assert "| 성공 | 33 |" in status
+    assert "| 실패 | 14 |" in status
+    assert "| 미실행 | 118 |" in status
     assert "| 전체 | 165 |" in status
     assert "Package coverage: 60 exact login/read routes and 77 public methods" in status
     assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
     assert "and 128 unexecuted" in status
     assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
     assert "| `ResearchService` | 열차/좌석/N카드 관련 조회 | 11 | 3 | 2 | 6 |" in status
-    assert "| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 3 | 0 | 16 |" in status
+    assert "| `TicketService` | 발권, 승차권 관리, 체크인, 티켓 정보 | 19 | 3 | 1 | 15 |" in status
     assert "| `ReservationService` | 승차권 예약 및 좌석 조건 | 4 | 1 | 1 | 2 |" in status
     assert "| `TrainsInfoService` | 열차/객차/자유석 정보 조회 | 6 | 3 | 0 | 3 |" in status
     assert (
@@ -123,7 +123,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
         (
             "TicketService",
             "발권, 승차권 관리, 체크인, 티켓 정보",
-            "19개 / 성공 3 / 실패 0 / 미실행 16",
+            "19개 / 성공 3 / 실패 1 / 미실행 15",
         ),
         (
             "TrainsInfoService",
@@ -183,16 +183,16 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     )
     assert len(service_rows) == 35
     service_totals = tuple(sum(int(row[index]) for row in service_rows) for index in range(4))
-    assert service_totals == (165, 32, 13, 120)
+    assert service_totals == (165, 33, 14, 118)
 
     guide = BUILD_GUIDE.read_text(encoding="utf-8")
     guide_normalized = " ".join(guide.split())
     assert "## Current Inventory" in guide
-    assert "Runtime test status | 성공 32 / 실패 13 / 미실행 120" in guide
+    assert "Runtime test status | 성공 33 / 실패 14 / 미실행 118" in guide
     assert "| `CustService` | 1 | 0 | 1 | 0 |" in guide
     assert "| `ResearchService` | 11 | 3 | 2 | 6 |" in guide
     assert "| `ReservationService` | 4 | 1 | 1 | 2 |" in guide
-    assert "| `TicketService` | 19 | 3 | 0 | 16 |" in guide
+    assert "| `TicketService` | 19 | 3 | 1 | 15 |" in guide
     assert "| `TrainsInfoService` | 6 | 3 | 0 | 3 |" in guide
     guide_service_table = guide.split("## Service Runtime Status", 1)[1].split(
         "The historical pre-revalidation", 1
@@ -206,7 +206,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     guide_totals = tuple(
         sum(int(row[index]) for row in guide_service_rows) for index in range(4)
     )
-    assert guide_totals == (165, 32, 13, 120)
+    assert guide_totals == (165, 33, 14, 118)
     assert "27 parsed responses" in guide_normalized
     assert "one expected `KorailAppError`" in guide_normalized
     assert "zero unexpected failures" in guide_normalized
@@ -558,7 +558,6 @@ def test_docs_record_fixed_account_reads_and_tour_train_holdback():
             "pre-R149 inventory was 31 successful, 10 failed, and 124 "
             "unexecuted" in normalized
         )
-        assert "32 successful, 10 failed, and 123 unexecuted" in normalized
         assert "mutation" in normalized
     normalized_record = " ".join(record.split())
     assert "no `get_tour_train_info` client method" in normalized_record
@@ -581,7 +580,6 @@ def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
             "pre-R149 inventory was 31 successful, 10 failed, and 124 "
             "unexecuted" in normalized
         ), name
-        assert "32 successful, 10 failed, and 123 unexecuted" in normalized, name
         assert "empty advertising ID" in normalized, name
         assert "customer_no" in normalized, name
         assert "WRC800029" in normalized, name
@@ -775,3 +773,90 @@ def test_docs_record_transfer_as_implemented_and_unverified():
     # in the README's error table and in the record's evidence.
     assert "WRD000061" in readme
     assert "WRD000061" in record
+
+
+def test_the_prose_inventory_agrees_with_the_service_table_it_summarises():
+    """One inventory, measured -- not two literals frozen in opposite places.
+
+    Two counts used to coexist: the per-service table in
+    api-status-by-service.md summed to 32/13/120, while a sentence repeated
+    across six documents said 32/10/123. Both were pinned, so CI enforced a
+    contradiction and neither number could drift into agreement with the
+    other. api-status-by-service.md contained BOTH, four lines apart.
+
+    The table is the measurement and it is newer (490ae78, 2026-07-26, which
+    moved three entries out of 미실행 when they were tried and failed); the
+    sentence dates from 053ce30 on 2026-07-15 and was never updated. So the
+    sentence is now derived from the table instead of asserted beside it, and
+    a future revalidation that edits one has to edit the other.
+
+    Dated archival entries are exempt on purpose: a CHANGELOG bullet and a
+    closed increment record state what was true when they were written, and
+    rewriting those would falsify the record rather than correct it.
+    """
+    status = STATUS.read_text(encoding="utf-8")
+    rows = re.findall(
+        r"^\| `[^`]+` \| [^|]+ \| (\d+) \| (\d+) \| (\d+) \| (\d+) \|$",
+        status,
+        flags=re.MULTILINE,
+    )
+    total, success, failed, unexecuted = (
+        sum(int(row[index]) for row in rows) for index in range(4)
+    )
+    sentence = (
+        f"{success} successful, {failed} failed, and {unexecuted} unexecuted"
+    )
+
+    current_state_documents = {
+        "status": status,
+        "guide": BUILD_GUIDE.read_text(encoding="utf-8"),
+        "record": RECORD.read_text(encoding="utf-8"),
+        "progress": PROGRESS.read_text(encoding="utf-8"),
+    }
+    for name, document in current_state_documents.items():
+        normalized = " ".join(document.split())
+        assert sentence in normalized, f"{name} disagrees with the table"
+        assert f"out of {total}" in normalized, name
+
+
+def test_every_document_that_lists_the_mutation_methods_lists_all_of_them():
+    """Measured against the client, not transcribed beside it.
+
+    Four documents enumerate the consent-gated methods, and on 2026-07-27 all
+    four were wrong in the same way: e8fa0e3 and 22ba4cc updated the COUNT in
+    each paragraph and left the NAMES alone, so three documents still listed
+    `verify_offline_refund_ticket`, `execute_offline_refund`, `begin_non_member`
+    and `end_non_member` -- names that raise AttributeError -- while none of
+    them listed `add_to_cart`, which had just shipped. README said "Thirteen"
+    and "the other twelve" two lines apart.
+
+    Counting is what the previous pins did and it is what let the names rot,
+    so this asserts the names themselves, derived from the class.
+    """
+    gated = {
+        name
+        for name, member in inspect.getmembers(KorailClient, inspect.isfunction)
+        if not name.startswith("_")
+        and "require_mutation_consent" in inspect.getsource(member)
+    }
+    retired = {
+        "verify_offline_refund_ticket",
+        "execute_offline_refund",
+        "begin_non_member",
+        "end_non_member",
+    }
+
+    for name, path in (
+        ("README", README),
+        ("record", RECORD),
+        ("status", STATUS),
+        ("progress", PROGRESS),
+    ):
+        document = path.read_text(encoding="utf-8")
+        for method in gated:
+            # Either spelling: `name` or `name(args)`. README uses the second.
+            assert re.search(rf"`{method}[`(]", document), f"{name} omits {method}"
+        for method in retired:
+            assert not re.search(
+                rf"`{method}[`(]", document
+            ), f"{name} still names {method}"

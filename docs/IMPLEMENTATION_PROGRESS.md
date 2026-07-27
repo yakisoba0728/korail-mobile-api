@@ -146,7 +146,7 @@ a live call does.
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
 - The current package boundary is 60 exact login/read routes and 77 public methods (64 login/read plus the consent-gated mutation methods `reserve`,
-  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`, `extend_discount_card`, and `recalculate_price`,
+  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `add_to_cart`, `register_discount_card`, `extend_discount_card`, and `recalculate_price`,
   which return a
   redacted preview by default and send a live state change only with a
   `dry_run=False` matching-category consent via the double-gated
@@ -155,7 +155,7 @@ a live call does.
   `real_card_acknowledged=True` together with `fake_card_only=False` and is the
   only path that can move real money.
   reserve/cancel/pay were verified live; `pay_with_card` and `refund` have no
-  live-verified success envelope). Current service inventory is 32 successful, 10 failed, and 123
+  live-verified success envelope). Current service inventory is 33 successful, 14 failed, and 118
   unexecuted entries out of 165.
 - The cache-read expansion implementation, offline tests, package build, and
   isolated import are complete, including bounded live verification.
@@ -311,7 +311,7 @@ implementation step made no live request and its pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
-of 165; current inventory is 32 successful, 10 failed, and 123 unexecuted. The
+of 165; current inventory is 33 successful, 14 failed, and 118 unexecuted. The
 current package boundary is 60 exact routes and 77 public methods.
 
 ## Ticket-reference static read tranche
@@ -342,7 +342,7 @@ ID, made one successful login call, confirmed logged-in state and
 customer-number presence, and called only R149 once. R149 succeeded with one
 row and was not retried; R137, R138, R146, and R148 made zero calls. No
 mutation, raw response, PII, credential, or server message was retained.
-Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
+Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
 
 ## Implemented Public Operations
 
@@ -763,8 +763,8 @@ read-only path exposes no callable mutation route; reservation, unpaid-cancel,
 fake-card payment, acknowledged real-card payment, refund, and cart-add are
 callable only through the separate
 consent-gated `post_mutation_form` path, while check-in, membership, and
-point/mileage mutation routes remain not callable. The current service inventory is 32 successful, 10 failed,
-and 123 unexecuted entries out of 165; the historical pre-revalidation inventory
+point/mileage mutation routes remain not callable. The current service inventory is 32 successful, 13 failed,
+and 120 unexecuted entries out of 165; the historical pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted.
 
 App-level failures are now classified on `h_msg_cd` rather than surfacing as one

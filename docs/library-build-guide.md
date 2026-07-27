@@ -23,7 +23,7 @@
 | Distinct HTTP+path pairs | 159 |
 | Annotated service interfaces | 35 |
 | HTTP method mix | POST 136 / GET 29 |
-| Runtime test status | 성공 32 / 실패 13 / 미실행 120 |
+| Runtime test status | 성공 33 / 실패 14 / 미실행 118 |
 
 ## Runtime Contract
 
@@ -94,7 +94,7 @@ is still unimplemented and still governed by the baseline policy above.
 | `BusReservationService` | 4 | 0 | 0 | 4 |
 | `CacheService` | 3 | 3 | 0 | 0 |
 | `CalendarService` | 1 | 1 | 0 | 0 |
-| `CartService` | 3 | 1 | 0 | 2 |
+| `CartService` | 3 | 2 | 0 | 1 |
 | `CashReceipt` | 1 | 0 | 0 | 1 |
 | `CertificationService` | 12 | 0 | 1 | 11 |
 | `CommonService` | 11 | 6 | 0 | 5 |
@@ -122,7 +122,7 @@ is still unimplemented and still governed by the baseline policy above.
 | `ReservationService` | 4 | 1 | 1 | 2 |
 | `ReservationWaitService` | 1 | 0 | 0 | 1 |
 | `SeatMovieService` | 3 | 1 | 0 | 2 |
-| `TicketService` | 19 | 3 | 0 | 16 |
+| `TicketService` | 19 | 3 | 1 | 15 |
 | `TrainsInfoService` | 6 | 3 | 0 | 3 |
 | `XPointService` | 5 | 0 | 0 | 5 |
 
@@ -154,7 +154,7 @@ advertising ID, made one successful login call, confirmed logged-in state and
 customer-number presence, and called only R149 once. R149 succeeded with one
 row and was not retried; R137, R138, R146, and R148 made zero calls. No
 mutation, raw response, PII, credential, or server message was retained.
-Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
+Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
 
 ## Runtime Failure Notes
 

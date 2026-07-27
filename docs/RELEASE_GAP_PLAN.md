@@ -112,7 +112,7 @@ change/refund/check-in, no route wiring, no state machine, no NetFunnel, no
 per-call gate. Confirmed by analysis §8.5 items 3–4 (`…:2807-2818`).
 
 **Inventory today:** 165 Retrofit method entries / 159 distinct HTTP+path pairs
-(`docs/api-endpoints.md:7`); live status 32 success / 10 fail / 123 unexecuted
+(`docs/api-endpoints.md:7`); live status 33 success / 14 fail / 118 unexecuted
 (`docs/api-status-by-service.md:9-14`).
 
 ---
@@ -405,19 +405,27 @@ Two sub-flows (analysis §3.9 `…:874`):
 | `refunds.verifyOnlineRefunds` | POST | `retNo1..4`, `strName` | `RefundVerifyTicketResponse{ret_amt, ret_fee, rcvd_amt,…}` | `RefundService.java:31` |
 | `refunds.executeOnlineRefunds` | POST | `pnrNo`, `tkKndCd`, `retDvCd`, `retRsnCd`, `ogtkSaleDt`, `ogtkSaleWctNo`, `ogtkSaleSqno`, `ogtkRetPwd`, `retAmt`, `retFee`, `custTeln`, `acepCustNm` | `RefundExecuteTicketRefundResponse{h_ret_dv_cd}` | `RefundService.java:15` |
 
-> **IMPLEMENTED (offline pair).** `verify_offline_refund_ticket` and
-> `execute_offline_refund` now cover the two offline rows, so Flow D is 5/5.
-> Both are on the EXISTING `refund` consent category (`allow_refund`), not a new
-> one: same product act, same money, only a different way of proving whose
-> ticket it is. Their premise, the 비회원 identity the app keeps in
-> `b5/h.java:158-172`, is modelled as `KorailNonMemberSession` — a distinct type
-> from `KorailSession` with no `jsessionid`, held in `session.non_member`,
-> mutually exclusive with a member session in both directions.
-> `verifyOnlineRefunds` is registered as a MUTATION despite reading like a
-> lookup: it converts a printed 반환번호 into the four-part sale identity
-> **including `ogtk_ret_pwd`** (`RefundVerifyTicketDao.java:119-122`), which the
-> execute call then spends. Whether the server records anything at that step is
-> not established from the APK; it is gated as though it does.
+> **NOT IMPLEMENTED, AND REMOVED AGAIN (2026-07-27).** These two offline rows
+> were built as `verify_offline_refund_ticket` / `execute_offline_refund` on
+> 2026-07-27 and removed the same day in `e8fa0e3`, together with the
+> `KorailNonMemberSession` they needed. Flow D is 3/5, not 5/5. Nothing named
+> here exists in the package today; a call to either raises `AttributeError`.
+>
+> The reason for removing them is not a defect: the pair's premise is a
+> PHYSICAL paper ticket. `verifyOnlineRefunds` takes the 반환번호 printed on
+> one, and there was no way to exercise either half without holding a real
+> ticket to refund — so they would have shipped as untestable code on the one
+> category that moves money backwards.
+>
+> The analysis behind them stands and is why this row is worth keeping. Both
+> belong on the EXISTING `refund` category (`allow_refund`), not a new one:
+> same product act, same money, only a different way of proving whose ticket
+> it is. And `verifyOnlineRefunds` is a MUTATION despite reading like a lookup
+> — it converts a printed 반환번호 into the four-part sale identity
+> **including `ogtk_ret_pwd`** (`RefundVerifyTicketDao.java:119-122`), which
+> the execute call then spends. Whether the server records anything at that
+> step is not established from the APK; it should be gated as though it does.
+> The 비회원 identity itself is in `b5/h.java:158-172`.
 
 > **CORRECTION (2026-07-21, srtgo ref).** The working client refunds with a
 > **single `refunds.RefundsRequest` POST** — no `SelTicketInfo`/`CommissionView`

@@ -81,7 +81,7 @@ of the routes are reads, plus the login POST and the logout GET; the nine
 mutation routes are tracked in a separate set and are never added to the
 read-only allowlist. Thirteen of the methods are consent-gated mutations; the
 remaining sixty-four transmit only login/read requests, or nothing at all.
-The other twelve are the consent-gated mutations below.
+They are the thirteen listed below.
 
 ### Searching and reading
 

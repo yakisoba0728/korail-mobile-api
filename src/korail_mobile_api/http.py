@@ -23,6 +23,7 @@ from .models import BaseKorailResponse
 from .safety import (
     KORAIL_CARD_BEARING_MUTATION_CATEGORIES,
     assert_korail_origin,
+    assert_mutation_form_shape,
     assert_mutation_route,
     assert_mutation_route_category,
     assert_read_only_request_fields,
@@ -296,6 +297,7 @@ class KorailHttpClient:
             raise KorailProtocolError(
                 "KORAIL mutation form data must be a mapping"
             )
+        assert_mutation_form_shape(path, data)
         headers = {
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
         }

@@ -20,17 +20,14 @@ is a bug report.
 
 The reviewed package boundary contains 60 routes and 77 public methods. All 60
 routes are login/read routes: 58 reads plus the login POST and the server-side
-logout GET. The eight mutation routes are tracked separately and
+logout GET. The nine mutation routes are tracked separately and
 are never added to the read-only allowlist. Sixty-four of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
-fifteen, `reserve`, `reserve_transfer`, `reserve_merge`,
+thirteen, `reserve`, `reserve_transfer`, `reserve_merge`,
 `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
-`pay_with_fake_card`, `pay_with_card`, `refund`,
-`verify_offline_refund_ticket`, `execute_offline_refund`,
+`pay_with_fake_card`, `pay_with_card`, `refund`, `add_to_cart`,
 `register_discount_card`, `extend_discount_card` and `recalculate_price`, are
-the consent-gated mutation methods; the remaining two, `begin_non_member` and
-`end_non_member`, hold and drop the 비회원 identity locally and transmit
-nothing. Each is denied unless the caller supplies a
+the consent-gated mutation methods. Each is denied unless the caller supplies a
 `MutationConsent` that opts into its category; with the default `dry_run=True`
 each merely validates its inputs and returns a redacted `MutationPreview` of the
 form that *would* be posted, sending nothing. Only a `dry_run=False` consent
@@ -68,7 +65,7 @@ this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
 after it.
 
-Current service inventory is 32 successful, 10 failed, and 123 unexecuted
+Current service inventory is 33 successful, 14 failed, and 118 unexecuted
 entries out of 165.
 
 The original APK and generated decompile directories are intentionally not
@@ -1228,8 +1225,47 @@ carries no card number and so is deliberately absent from
 `BaseResponse` (`CartService.java:13`), so `add_to_cart` returns the unparsed
 envelope on a live send — the same shape `extend_discount_card` returns for
 its own bare-`BaseResponse` route — rather than a dedicated response
-dataclass. Nothing here has ever been transmitted and no live path in this
-repository reaches it.
+dataclass.
+
+**Live-verified 2026-07-27**, by hand rather than by a script. A held PNR was
+added and the envelope came back `SUCC` with `IRZ000002`; the row was then
+read back out of `get_cart_list`, so the add is confirmed by its effect and
+not only by its reply. What the route answers for reasons OTHER than an
+invalid PNR is still unknown, and no script or test in this repository sends
+it — nothing here reproduces that run.
+
+## 승차권 변경 chain reads — get_self_seat_change_info, get_trip_change_original_ticket
+
+Two reads added on 2026-07-27. They are what remains of the 여행변경 chain:
+the three mutations built the same day were removed hours later (`22ba4cc`),
+because exercising them needs a PAID ticket, charges a 변경수수료, and has no
+clean undo. The reads have none of those problems and stayed.
+
+- `get_self_seat_change_info(...)` — `POST self.seatChgInfo.do`
+  (`TicketService.java:54-56`, `TicketService.smali:280-325`). Eight fields;
+  `psrmClCd` is registered OPTIONAL because `TCSOptionsActivity.java:135-138`
+  sets it only for 일반실 (`"1"`) or 특실 (`"2"`) and Retrofit drops it
+  otherwise. `trnNo` is forwarded verbatim, not zero-padded (`:132` copies
+  `h_trn_no` as-is).
+
+  **Live 2026-07-27:** answered `WRT800176` 좌석변경가능시간아님 — a
+  `KorailAppError`, one call, no retry. That is a business refusal about the
+  hour, not a contract failure: the request was accepted and understood, so
+  the field contract is confirmed by the shape of the answer. Recorded as
+  실패 in `docs/api-status-by-service.md` under that document's taxonomy
+  (called, and the app answered with an error), which is the same way
+  `mchdDcntTgt`'s `WRC800029` is recorded.
+
+- `get_trip_change_original_ticket(...)` — `POST research.tripChgOgtk.do`
+  (`ResearchService.java:61-63`) is the 원표 (원승차권) lookup the change
+  chain starts from: N 반환번호 tuples in, the original tickets' journeys and
+  seats out (`OgTkInquiryDao.java:38-53`). Its sibling
+  `reservation.tripChgDate.do` was already registered.
+
+  **Never called.** It needs a real 반환번호 from a ticket this project's
+  account does not have. Its four-part return number is the reason the
+  `ogtkSale*` / `ogtkRetPwd` spellings stay in `redaction.py`'s sensitive-key
+  set even though the routes that first brought them in are gone.
 
 Everything starts from `RefundTicketDetailResponse.discount_card`. When the
 "ticket" being read is itself a card, `refunds.SelTicketInfo` returns a
@@ -1356,7 +1392,7 @@ raw, or production response, and added no reservation, seat-hold, payment,
 ticketing, cancellation, refund, or other mutation capability. Its
 pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted.
 The pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted; the
-current inventory is 32 successful, 10 failed, and 123 unexecuted entries out
+current inventory is 33 successful, 14 failed, and 118 unexecuted entries out
 of 165.
 
 ### Ticket-reference reads
@@ -1392,7 +1428,7 @@ ID, made one successful login call, confirmed logged-in state and
 customer-number presence, and called only R149 once. R149 succeeded with one
 row and was not retried; R137, R138, R146, and R148 made zero calls. No
 mutation, raw response, PII, credential, or server message was retained.
-Current inventory is 32 successful, 10 failed, and 123 unexecuted out of 165.
+Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
 
 ### Static P0 menu and reference reads
 

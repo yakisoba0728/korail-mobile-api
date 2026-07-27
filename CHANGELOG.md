@@ -2,8 +2,47 @@
 
 ## Unreleased
 
+- Removed: the 여행변경 (trip change) mutation chain and the `ticket_change`
+  consent category with it — `change_trip_reservation`,
+  `rollback_trip_change` and `change_reservation_passengers`, plus
+  `MutationConsent.allow_ticket_change`. Built and withdrawn the same day.
+  Exercising the chain needs a PAID ticket, charges a 변경수수료, and has no
+  clean undo, so there was no way to verify it without spending money on a
+  path whose rollback half was itself unverified. The two READS the chain
+  starts from survived and are listed below; the analysis is kept in
+  `docs/RELEASE_GAP_PLAN.md`. **Breaking** for anyone who took the
+  intermediate commit.
+- Removed: the 비회원 오프라인 반환 pair and the non-member session with it —
+  `verify_offline_refund_ticket`, `execute_offline_refund`,
+  `begin_non_member`, `end_non_member` and `KorailNonMemberSession`. Also
+  built and withdrawn the same day, for the same kind of reason: the pair's
+  premise is a PHYSICAL paper ticket whose printed 반환번호 the verify call
+  consumes, so neither half could be exercised at all. The 반환번호 spellings
+  stay registered in `redaction.py` on purpose — `research.tripChgOgtk.do`
+  still carries the same four-part number, and a spelling dropped from the
+  sensitive-key set is one that leaks the day something re-introduces it.
+  **Breaking** on the same terms.
+- Added: 장바구니 담기 as a consent-gated mutation —
+  `KorailClient.add_to_cart`, `POST cart.addCartList`
+  (`CartService.java:11-13`), with `CartAddRequest` and
+  `build_cart_add_form`. One request field beyond the common three —
+  `hidPnrNo` — confirmed against `AddCartDao.java:9-24` and, independently,
+  `AddCartDao$AddCartRequest.smali` / `CartService.smali`. `get_cart_list`
+  already read the cart; this is the write half. The DAO's response type is a
+  bare `BaseResponse`, so `add_to_cart` returns the unparsed envelope rather
+  than a dedicated response type, same as `extend_discount_card`.
+  Live-verified 2026-07-27 by hand: a held PNR added cleanly, `SUCC` /
+  `IRZ000002`, and the row read back out of `get_cart_list`. No script or
+  test in this repository sends it.
+- Added: a seventh mutation consent category, `"cart"`, with its own
+  `MutationConsent.allow_cart` flag defaulting to `False`. Deliberately
+  **not** a reuse of `"reserve"`: the hold this acts on already exists and
+  the call creates and destroys nothing this package can observe. It carries
+  no card number and so is not a member of
+  `KORAIL_CARD_BEARING_MUTATION_CATEGORIES`.
 - Added: two reads of the 승차권 변경 chain. The read-only boundary is now
-  60 routes and `KorailClient` exposes 76 public methods.
+  60 routes and `KorailClient` exposes 77 public methods — 64 login/read plus
+  the thirteen consent-gated mutations.
   - `get_self_seat_change_info` — `POST self.seatChgInfo.do`
     (`TicketService.java:54-56`, `TicketService.smali:280-325`). Eight fields;
     `psrmClCd` is registered OPTIONAL because `TCSOptionsActivity.java:135-138`

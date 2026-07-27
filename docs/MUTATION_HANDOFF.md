@@ -26,11 +26,11 @@ state-changing request can leave the process only through the dedicated
 | 병합예약 second hold (`reserve_merge`) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
 | 정기권 예약/결제 (`pass.passReserve` / `passPayIssue`) | ⛔ **not implemented — implemented once, then removed**; the routes are not on the mutation allowlist and no method can reach them | ⛔ not implemented |
 | 운임 재계산 (`certification.PriceReCalculation`) | ⚠️ `recalculate_price`, own `price_recalculation` consent, **never live-run** | ⛔ not implemented |
-| 장바구니 담기 (`cart.addCartList`) | ⚠️ `add_to_cart`, own `cart` consent, **never live-run** | ⛔ not implemented |
+| 장바구니 담기 (`cart.addCartList`) | ✅ `add_to_cart`, own `cart` consent, live 2026-07-27 (`SUCC`/`IRZ000002`, read back via `get_cart_list`) | ⛔ not implemented |
 
 "Live-verified" on both sides means the request was actually sent and its
 response observed. korail `pay_with_card`, `refund`, `reserve_merge`,
-`recalculate_price`, `add_to_cart` and the whole 할인카드 surface are the
+`recalculate_price` and the whole 할인카드 surface are the
 exceptions: their
 send paths are fully active code, NOT blocked, but none has ever been run
 (see items 1 and 8 under "NOT settled"). The three non-default reservation
