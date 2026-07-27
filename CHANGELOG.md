@@ -2,6 +2,63 @@
 
 ## Unreleased
 
+- Added: the 승차권 여행변경 chain as three consent-gated mutations —
+  `KorailClient.create_trip_change_reservation` (`POST
+  reservation.tripChgPrsC.do`, `ReservationService.java:24-26`),
+  `roll_back_trip_change` (`POST ticket.tripChgHndgCnc.do`,
+  `TicketService.java:98-100`) and `change_reservation_passengers` (`POST
+  reservation.reservationChange.do`), with
+  `TripChangeReservationRequest`/`TripChangeLeg`/`TripChangeOriginalTicket`/
+  `TripChangePassenger`/`TripChangeDiscount`/`TripChangeSeatAssignment`,
+  `ReservationPassengerChangeRequest`/`ReservationPassengerChangeLeg`/
+  `ReservationPassengerChangeResponse`, and the three matching builders. None
+  of them has ever been transmitted, and no live-test path reaches them.
+  - **The eleven `@FieldMap` identities come from `executeDao`'s argument
+    order, not from the Retrofit signature.** A `@FieldMap Map<String,String>`
+    is anonymous on the wire, so which map is which is only decidable at the
+    dispatch site: `TCReservationDao.java:218-223` passes `RJrny`, `RSrcar`,
+    `RSeat`, `RPsg`, `ROrtg`, `RDscp`; `ReservationChangeDao.java:162-167`
+    passes `RJrny`, `RSrcar`, `RSeat`, `RPsg`, `RDscp`. Every key prefix and
+    index arity was then read off the `R*` `LinkedHashMap` classes in
+    `network/data/reservation/` and cross-checked against the two builders
+    (`w4/b.java:126-297` + `C5/d.java:42-91`, and `w4/a.java:120-242`).
+  - `orgRDscp` exists on `TCReservationRequest` (`:36`) and is NOT passed to
+    `executeDao`, so the sixth map is `rDscp` and the original never reaches
+    the wire — the same "carried for the UI, not transmitted" shape as
+    `NCardReservationRequest.mCustomData`.
+  - **`psgCnt` reaches `reservationChange.do` exactly once, from the map.**
+    The eleventh `@Field` is literally `@Field(RPsg.PSG_CNT)` and would collide
+    with `RPsg`'s own key, except that `ReservationChangeRequest.setPsgCnt`
+    (`ReservationChangeDao.java:114-116`) has no call site in v6.5.0, so
+    Retrofit drops the null scalar.
+  - `reservation.reservationChange.do` is declared byte-identically on TWO
+    Retrofit interfaces (`BusReservationService.java:23-25` and
+    `ReservationCancelService.java:23-25`); only the latter is bound.
+  - Two spelling traps are pinned by tests rather than by comment: `setSrcarNo`
+    writes `scarNo_`, and the two routes disagree about the car count
+    (`srcarCnt_` on 여행변경, `scarCnt_` on 인원변경) and about the cabin
+    (`roomClsfCd_` vs `seatPsrmClCd_`).
+  - `tmpJobSqno`, `ctlDvCd` and `frcSaleRsnCont` are OMITTED, not blank, on the
+    ordinary path: `RequestBuilder.smali:1510` jumps a null `@Field` straight
+    to the argument loop's head at `:2086-2087`.
+- Added: a seventh mutation consent category, `"ticket_change"`, with
+  `MutationConsent.allow_ticket_change` (default `False`). It covers the
+  rollback as well as the change, deliberately: `ticket.tripChgHndgCnc.do` is
+  the only way to undo a `tripChgPrsC.do`, the app fires it from the screen
+  that made the change (`a6/x.java:109-115`), and a separate flag would let a
+  caller create a change it could not unmake — the orphaned-hold failure this
+  package already met in `cancel_unpaid_hold`. It is not a reuse of
+  `"reserve"`: a 여행변경 stakes the ORIGINAL paid ticket's 반환번호 rather
+  than holding a new seat. No card travels on any of the three forms, so
+  `KORAIL_CARD_BEARING_MUTATION_CATEGORIES` is unchanged.
+- Added: the outbound identity keys these three forms introduce are registered
+  in `redaction.SENSITIVE_KEYS` — `tmpJobSqno` (which IS the PNR), `chgTno`,
+  `lumpStlTgtNo`, the 원표's `ogtkSaleWctNo`/`ogtkSaleDd`/`ogtkSaleSqno`/
+  `ogtkRetPwd`, and the doubly-indexed `scarNo_N_K`/`seatNo_N_K`/
+  `dscpNo_N_K`/`dlayOgtk*_N_K`/`roomClsfCd_N_K`/`seatPsrmClCd_N_K`. The
+  two-index families are enumerated rather than stripped, because
+  `_index_stripped()` removes one trailing index and `scarNo_1_1` would
+  otherwise reduce to `scarNo_1` and miss.
 - Added: 운임 재계산 as a consent-gated mutation —
   `KorailClient.recalculate_price`, `POST
   certification.PriceReCalculation` (`CertificationService.java:35-37`), with

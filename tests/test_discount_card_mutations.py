@@ -102,13 +102,19 @@ def _refuse(request: httpx.Request) -> httpx.Response:
 
 def test_discount_card_is_its_own_consent_category():
     assert "discount_card" in MUTATION_CATEGORIES
-    assert len(MUTATION_CATEGORIES) == 6
+    assert len(MUTATION_CATEGORIES) == 7
     # A default consent grants it no more than it grants anything else.
     assert MutationConsent().allow_discount_card is False
     with pytest.raises(MutationNotAllowedError):
         require_mutation_consent(MutationConsent(), "discount_card")
     # ...and no other category's opt-in unlocks it.
-    for other in ("allow_reserve", "allow_payment", "allow_cancel", "allow_refund"):
+    for other in (
+        "allow_reserve",
+        "allow_payment",
+        "allow_cancel",
+        "allow_refund",
+        "allow_ticket_change",
+    ):
         with pytest.raises(MutationNotAllowedError):
             require_mutation_consent(
                 MutationConsent(**{other: True}),
@@ -119,7 +125,7 @@ def test_discount_card_is_its_own_consent_category():
         "discount_card",
     )
     # ...and it unlocks nothing else.
-    for category in ("reserve", "payment", "cancel", "refund"):
+    for category in ("reserve", "payment", "cancel", "refund", "ticket_change"):
         with pytest.raises(MutationNotAllowedError):
             require_mutation_consent(
                 MutationConsent(allow_discount_card=True),
@@ -132,12 +138,18 @@ def test_both_routes_are_mutation_routes_owned_by_that_category():
     # Registered with the method the app actually uses, not coerced to POST.
     assert ("GET", EXTENSION_ROUTE) in KORAIL_MUTATION_ROUTES
     assert ("POST", EXTENSION_ROUTE) not in KORAIL_MUTATION_ROUTES
-    assert len(KORAIL_MUTATION_ROUTES) == 8
+    assert len(KORAIL_MUTATION_ROUTES) == 11
     assert KORAIL_MUTATION_ROUTES.isdisjoint(KORAIL_READ_ONLY_ROUTES)
     for route in (PURCHASE_ROUTE, EXTENSION_ROUTE):
         assert KORAIL_MUTATION_ROUTE_CATEGORIES[route] == "discount_card"
         assert_mutation_route_category(route, "discount_card")
-        for wrong in ("reserve", "payment", "cancel", "refund"):
+        for wrong in (
+            "reserve",
+            "payment",
+            "cancel",
+            "refund",
+            "ticket_change",
+        ):
             with pytest.raises(KorailProtocolError):
                 assert_mutation_route_category(route, wrong)
     with pytest.raises(KorailProtocolError):

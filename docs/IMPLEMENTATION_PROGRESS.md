@@ -145,8 +145,8 @@ a live call does.
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 58 exact login/read routes and 74 public methods (62 login/read plus the consent-gated mutation methods `reserve`,
-  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`, `extend_discount_card`, and `recalculate_price`,
+- The current package boundary is 58 exact login/read routes and 77 public methods (62 login/read plus the consent-gated mutation methods `reserve`,
+  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`, `extend_discount_card`, `recalculate_price`, `create_trip_change_reservation`, `roll_back_trip_change`, and `change_reservation_passengers`,
   which return a
   redacted preview by default and send a live state change only with a
   `dry_run=False` matching-category consent via the double-gated
@@ -312,7 +312,7 @@ was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
 of 165; current inventory is 32 successful, 10 failed, and 123 unexecuted. The
-current package boundary is 58 exact routes and 74 public methods.
+current package boundary is 58 exact routes and 77 public methods.
 
 ## Ticket-reference static read tranche
 
@@ -465,7 +465,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `2228 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `2273 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -758,7 +758,7 @@ tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/superpowers/specs/`.
 
 The current implementation evidence establishes 58 routes at the exact
-login/read transport boundary and 74 public methods on `KorailClient`. The
+login/read transport boundary and 77 public methods on `KorailClient`. The
 read-only path exposes no callable mutation route; reservation, unpaid-cancel,
 fake-card payment, acknowledged real-card payment, and refund are callable only
 through the separate
@@ -785,7 +785,7 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-The current reviewed offline gate reports `2228 passed, 1 deselected`; the
+The current reviewed offline gate reports `2273 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service

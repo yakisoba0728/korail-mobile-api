@@ -41,13 +41,21 @@ from korail_mobile_api.safety import (
 
 ROUTE = "/classes/com.korail.mobile.certification.PriceReCalculation"
 
-OTHER_CATEGORIES = ("reserve", "payment", "cancel", "refund", "discount_card")
+OTHER_CATEGORIES = (
+    "reserve",
+    "payment",
+    "cancel",
+    "refund",
+    "discount_card",
+    "ticket_change",
+)
 OTHER_FLAGS = (
     "allow_reserve",
     "allow_payment",
     "allow_cancel",
     "allow_refund",
     "allow_discount_card",
+    "allow_ticket_change",
 )
 
 ALLOWED = MutationConsent(allow_price_recalculation=True, dry_run=False)
@@ -107,7 +115,7 @@ def _refuse(request: httpx.Request) -> httpx.Response:
 
 def test_price_recalculation_is_its_own_consent_category():
     assert "price_recalculation" in MUTATION_CATEGORIES
-    assert len(MUTATION_CATEGORIES) == 6
+    assert len(MUTATION_CATEGORIES) == 7
     # A default consent grants it no more than it grants anything else.
     assert MutationConsent().allow_price_recalculation is False
     with pytest.raises(MutationNotAllowedError):
@@ -137,7 +145,7 @@ def test_price_recalculation_is_its_own_consent_category():
 def test_route_is_a_mutation_route_owned_by_that_category():
     assert ("POST", ROUTE) in KORAIL_MUTATION_ROUTES
     assert ("GET", ROUTE) not in KORAIL_MUTATION_ROUTES
-    assert len(KORAIL_MUTATION_ROUTES) == 8
+    assert len(KORAIL_MUTATION_ROUTES) == 11
     assert KORAIL_MUTATION_ROUTES.isdisjoint(KORAIL_READ_ONLY_ROUTES)
     assert KORAIL_MUTATION_ROUTE_CATEGORIES[ROUTE] == "price_recalculation"
     assert_mutation_route("POST", ROUTE)
@@ -558,6 +566,7 @@ def test_transport_gate_refuses_this_route_under_any_other_category():
                         allow_cancel=True,
                         allow_refund=True,
                         allow_discount_card=True,
+                        allow_ticket_change=True,
                         dry_run=False,
                     ),
                     category=category,

@@ -10,6 +10,7 @@ from .mutation_models import (
     DiscountCardPurchaseResponse,
     ReservationHoldResponse,
     ReservationJourney,
+    ReservationPassengerChangeResponse,
     ReservationPaymentCoupon,
     ReservationPaymentResponse,
 )
@@ -396,4 +397,58 @@ def parse_discount_card_purchase_response(
             )
             for attribute, wire_name in _DISCOUNT_CARD_PURCHASE_FIELDS.items()
         },
+    )
+
+
+def parse_reservation_passenger_change_response(
+    raw: Mapping[str, Any],
+) -> ReservationPassengerChangeResponse:
+    """Parse ``reservation.reservationChange.do``'s reply.
+
+    ``ReservationChangeDao.ReservationChangeResponse`` (``:151-160``) declares
+    exactly one field beyond the common three: ``jrnyList``, a list of
+    ``JrnyInfo`` objects whose only member is ``lumpStlTgtNo`` (``:17-26``).
+
+    ``jrnyList`` is REQUIRED, not optional. The app dereferences
+    ``getJrnyList().get(0).getLumpStlTgtNo()`` with no null check the moment
+    the DAO returns (``ReservedTicketChangeActivity.java:179``), so a reply
+    without it is one the app itself could not use — and this call has already
+    changed the PNR by the time it answers, which is why an unusable reply is
+    raised rather than swallowed into an empty tuple that would read as
+    "nothing to settle".
+
+    **NOT LIVE-VERIFIED.** Never sent, so never observed.
+    """
+    data = _response_mapping(raw)
+    base = BaseKorailResponse.from_raw(data)
+    rows = data.get("jrnyList")
+    if not isinstance(rows, list) or not rows:
+        raise KorailProtocolError(
+            "KORAIL reservation passenger change response must carry a "
+            "non-empty jrnyList"
+        )
+    targets: list[str] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError(
+                "KORAIL reservation passenger change jrnyList must contain "
+                "objects"
+            )
+        target = _optional_string(
+            row,
+            "lumpStlTgtNo",
+            context="reservation passenger change",
+        )
+        if target is None:
+            raise KorailProtocolError(
+                "KORAIL reservation passenger change jrnyList row is missing "
+                "lumpStlTgtNo"
+            )
+        targets.append(target)
+    return ReservationPassengerChangeResponse(
+        h_msg_cd=base.h_msg_cd,
+        h_msg_txt=base.h_msg_txt,
+        str_result=base.str_result,
+        raw=data,
+        lump_settlement_target_nos=tuple(targets),
     )

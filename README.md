@@ -76,11 +76,11 @@ explicitly — see [docs/verification-record.md](docs/verification-record.md).
 
 ## What it can do
 
-The reviewed package boundary contains 58 routes and 74 public methods. Fifty-six
-of the routes are reads, plus the login POST and the logout GET; the eight
+The reviewed package boundary contains 58 routes and 77 public methods. Fifty-six
+of the routes are reads, plus the login POST and the logout GET; the eleven
 mutation routes are tracked in a separate set and are never added to the
 read-only allowlist. Sixty-two of the methods transmit only login/read requests.
-The other twelve are the consent-gated mutations below.
+The other fifteen are the consent-gated mutations below.
 
 ### Searching and reading
 
@@ -142,6 +142,31 @@ passenger row.
 - `recalculate_price(request, consent=...)` — 운임 재계산: rewrite what an
   existing hold will cost when the discount selection changes.
 
+### Changing a ticket you already own
+
+승차권 여행변경 moves a **paid** ticket to another train. It is a four-step
+chain and this package implements three of the four steps, all under one
+`ticket_change` consent category:
+
+1. `get_trip_change_dates(departure_date)` — which dates the ticket may move to.
+2. `research.tripChgOgtk.do`, the 원표 inquiry — not implemented here; its
+   answer is what fills `TripChangeOriginalTicket`.
+3. `create_trip_change_reservation(request, consent=...)` — hold the
+   replacement. The app sends this twice: once plainly, then again with
+   `recalculate_fare=True` and the PNR the first call returned, after discounts
+   are chosen.
+4. `roll_back_trip_change(lump_settlement_target_nos, consent=...)` — undo it
+   while it is still unsettled.
+
+`change_reservation_passengers(request, consent=...)` is the related 예약 인원
+변경: it re-mixes an existing hold's passengers and hands back the 묶음결제
+target a settlement would charge.
+
+**None of these four has ever been transmitted.** No account this project can
+reach owns a paid ticket it is willing to have changed, so what is verified is
+the routes, the fields and the eleven `@FieldMap` expansions — read out of the
+APK — and nothing about how the server replies.
+
 ### Discounts, welfare and passes
 
 - `get_discount_card_usage_history(card_no)` and
@@ -193,16 +218,21 @@ This is the part to read before calling anything. It is enforced in code, not by
 convention, and the offline suite pins it.
 
 **1. Nothing that changes state moves without an explicit consent object.**
-Every one of the twelve mutation methods starts with
+Every one of the fifteen mutation methods starts with
 `require_mutation_consent(consent, category)` and raises
 `MutationNotAllowedError` before it builds anything. There is no global switch
 and no environment variable that turns this off.
 
 **2. Each category is opted into separately.** `MutationConsent` has one flag
 per category — `allow_reserve`, `allow_payment`, `allow_cancel`, `allow_refund`,
-`allow_discount_card`, `allow_price_recalculation` — and every one defaults to
-`False`. A consent that authorises a booking cannot cancel one, and a consent
-that authorises paying a quoted amount cannot re-price it.
+`allow_discount_card`, `allow_price_recalculation`, `allow_ticket_change` — and
+every one defaults to `False`. A consent that authorises a booking cannot cancel
+one, and a consent that authorises paying a quoted amount cannot re-price it.
+
+`allow_ticket_change` covers a 여행변경 **and its rollback** on purpose. The
+two are one operation: a change that cannot be undone strands an already-paid
+ticket half-moved, and the app itself fires the rollback from the screen that
+made the change.
 
 **3. `dry_run=True` is the default, and a dry run sends nothing.** With the
 default consent, a mutation method validates its inputs and returns a
@@ -375,7 +405,7 @@ env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
 ```
 
 The offline suite is the gate and it makes no network calls:
-`2228 passed, 1 deselected`, where the one deselected test is the explicitly
+`2273 passed, 1 deselected`, where the one deselected test is the explicitly
 opted-in live-service test. Live tests run only when `KORAIL_MOBILE_API_LIVE=1`
 is set together with credentials you supply yourself; nothing in this repository
 ships an account.
