@@ -97,6 +97,8 @@ The other twelve are the consent-gated mutations below.
 | Your reservations and purchase history | `get_reservation_history()`, `get_product_reservations(...)` |
 | What a refund would cost, and what a ticket is | `get_refund_commission(ticket)`, `get_refund_ticket_detail(ticket)` |
 | Points, coupons, welfare flags, mileage ledger | `get_korail_point_summary()`, `get_mileage_history(request)` |
+| Whether a seat or train may still be changed | `get_self_seat_change_info(request)` |
+| A paid ticket's original (원표) identity, by 반환번호 | `get_original_ticket_inquiry(request)` |
 | Limousine-bus schedules and seats (static-evidenced, never live-run) | `get_limousine_schedules(query)`, `get_limousine_seat_inventory(query)`, `get_limousine_schedule_view(query)` |
 
 Plus the account-neutral reads that need no login at all: `get_service_status()`
@@ -142,28 +144,9 @@ passenger row.
 - `refund(ticket, consent=...)` — refund a paid ticket.
 - `recalculate_price(request, consent=...)` — 운임 재계산: rewrite what an
   existing hold will cost when the discount selection changes.
-
-There is a second, unrelated refund path for a paper ticket bought at a station
-window, with nobody logged in. It identifies the ticket by the 16-digit
-반환번호 printed on it plus the requester's name, so it starts by holding a
-비회원 identity rather than by logging in:
-
-```python
-client.begin_non_member(requester_name, requester_phone)   # sends nothing
-verified = client.verify_offline_refund_ticket(
-    OfflineRefundReturnNumber.from_ticket_number(printed_ticket_number),
-    consent=MutationConsent(allow_refund=True),   # dry run: returns a preview
-)
-result = client.execute_offline_refund(verified, consent=...)
-```
-
-Both take the same `allow_refund` consent as `refund` — the same act on the
-same money, only a different way of proving whose ticket it is — and both
-refuse to run while a member session is active. `verify_offline_refund_ticket`
-is consent-gated even though the app calls it 조회, because what it returns is
-the ticket's return password, which the second call spends.
-`result.is_refund_completed` tells you whether the money came back now or the
-paper ticket still has to be handed in at a station within a year.
+- `add_to_cart(request, consent=...)` — put a held PNR in the 장바구니. Its own
+  `cart` consent category: the hold already exists and this creates nothing, so
+  it is neither a booking nor a payment.
 
 ### Discounts, welfare and passes
 
@@ -223,14 +206,9 @@ and no environment variable that turns this off.
 
 **2. Each category is opted into separately.** `MutationConsent` has one flag
 per category — `allow_reserve`, `allow_payment`, `allow_cancel`, `allow_refund`,
-`allow_discount_card`, `allow_price_recalculation`, `allow_ticket_change` — and
-every one defaults to `False`. A consent that authorises a booking cannot cancel
-one, and a consent that authorises paying a quoted amount cannot re-price it.
-
-`allow_ticket_change` covers a 여행변경 **and its rollback** on purpose. The
-two are one operation: a change that cannot be undone strands an already-paid
-ticket half-moved, and the app itself fires the rollback from the screen that
-made the change.
+`allow_discount_card`, `allow_price_recalculation`, `allow_cart` — and every one
+defaults to `False`. A consent that authorises a booking cannot cancel one, and
+a consent that authorises paying a quoted amount cannot re-price it.
 
 **3. `dry_run=True` is the default, and a dry run sends nothing.** With the
 default consent, a mutation method validates its inputs and returns a
@@ -330,8 +308,14 @@ This distinction is tracked per operation in
 [docs/MUTATION_HANDOFF.md](docs/MUTATION_HANDOFF.md); the short version:
 
 - **Live-verified end to end:** immediate, seat-designated, standby and
-  입석+좌석 holds; `confirm_standby_hold`; `cancel_unpaid_hold`; and a
-  `pay_with_fake_card` attempt, which the server declined with no charge.
+  입석+좌석 holds; `confirm_standby_hold`; `cancel_unpaid_hold`; `add_to_cart`
+  (`IRZ000002`, read back out of `get_cart_list`); and a `pay_with_fake_card`
+  attempt, which the server declined with no charge.
+- **Live-answered reads:** `get_self_seat_change_info` returned
+  `WRT800176 좌석변경가능시간아님` — a real business answer, which is what
+  proves the route, the field contract and the error taxonomy all line up.
+  `get_original_ticket_inquiry` is built but unrun: it needs the 반환번호 off a
+  ticket that has actually been issued.
 - **Built and never transmitted:** `pay_with_card`, `refund`, `reserve_merge`,
   the whole 할인카드 surface, and `recalculate_price`. Their send paths are
   active code, not blocked code — they have simply never been run.
@@ -349,7 +333,7 @@ each live run returned, and what an operator still has to do — is in
 ## What is not implemented, and why
 
 Some of these are boundaries this project chose; some need an entitlement its
-account does not have; one was implemented and then removed.
+account does not have; three were implemented and then removed.
 
 - **Identity-document submission.** The welfare certification routes
   (`certification.disabled.do`, `MeritCert`, `assemblyCert`, `pbep.*`) each
@@ -367,6 +351,18 @@ account does not have; one was implemented and then removed.
   app, so there is not even an app capture to compare a form against. The three
   pass *reads* are unaffected. Everything learned about the purchase, and what
   reviving it would cost to prove, is kept in the record.
+- **승차권 여행변경, its rollback, and 예약 인원 변경 — removed on purpose.**
+  Built on 2026-07-27 from the app's own dispatch sites, including all eleven
+  `@FieldMap` expansions, then deleted the same day. Exercising any of them
+  needs a ticket that has already been paid for; a change charges the fare
+  difference plus a 변경수수료, and there is no clean undo. They would have sat
+  on the mutation allowlist as permanently unverified money paths. The two
+  *reads* that were added alongside them stayed, because a read costs nothing
+  and stands on its own.
+- **비회원 오프라인 반환 — removed on purpose.** The station-window refund pair
+  identifies a ticket by the 반환번호 printed on paper plus the requester's
+  name, so verifying it needs a physical ticket nobody here has. The whole
+  non-member identity model went with it.
 - **The crew-call submission.**
   `/classes/com.korail.mobile.push.callCrew.do` is the state-changing sibling of
   the crew-request read and remains excluded from the transport allowlist and
