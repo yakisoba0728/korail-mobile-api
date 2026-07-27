@@ -82,3 +82,50 @@ def test_every_registered_mutation_route_is_reachable_by_the_shape_check():
         safety.assert_mutation_form_shape(path, common)
         with pytest.raises(KorailProtocolError):
             safety.assert_mutation_form_shape(path, {**common, "x": 1})
+
+
+def test_every_mutation_send_path_runs_the_shape_check():
+    """Both send paths, asserted structurally rather than by coverage.
+
+    The gate went onto `post_mutation_form` first, and `get_mutation_query`
+    -- the GET half, which exists because `reservation.dcntCrdExtn.do` is
+    declared @GET and mis-registering it as a POST was rejected -- kept
+    sending unexamined values while its own docstring said "every gate of
+    post_mutation_form applies here unchanged". Tracing a suite run is what
+    surfaced it; this makes the next send path fail instead.
+    """
+    import inspect
+
+    from korail_mobile_api.http import KorailHttpClient
+
+    for name in ("post_mutation_form", "get_mutation_query"):
+        source = inspect.getsource(getattr(KorailHttpClient, name))
+        assert "assert_mutation_form_shape(" in source, name
+
+
+def test_the_get_mutation_route_carries_the_common_three_the_check_requires():
+    """The GET mutation is gated by the same rule, so it must satisfy it.
+
+    A contract that the one @GET route could not meet would be a contract
+    that gets loosened the first time it fires. It is built by _common_fields
+    exactly like a POST body, so it meets it.
+    """
+    from korail_mobile_api.config import KorailConfig
+    from korail_mobile_api.mutation_models import DiscountCardTicket
+    from korail_mobile_api.mutation_payloads import (
+        build_discount_card_extension_query,
+    )
+
+    query = build_discount_card_extension_query(
+        KorailConfig(),
+        DiscountCardTicket(
+            sale_date="20260727",
+            sale_window_no="0001",
+            sale_sequence="0001",
+            return_password="0000",
+        ),
+    )
+
+    safety.assert_mutation_form_shape(
+        "/classes/com.korail.mobile.reservation.dcntCrdExtn.do", query
+    )

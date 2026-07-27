@@ -812,6 +812,9 @@ _TRAIN_ATTRIBUTE_BY_WIRE_KEY = {
         "h_dpt_tm",
         "h_trn_gp_cd",
         "h_spe_rsv_cd",
+        # train_no is the one non-optional field on the row, and it used to be
+        # built with a bare str() that would have accepted every value below.
+        "h_trn_no",
     ],
 )
 @pytest.mark.parametrize("value", [True, 1.5, ["1"], {"a": "1"}])

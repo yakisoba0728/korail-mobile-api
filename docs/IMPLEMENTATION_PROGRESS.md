@@ -1,6 +1,6 @@
 # KORAIL Python Package Implementation Progress
 
-Last updated: 2026-07-15 KST
+Last updated: 2026-07-27 KST
 
 ## 할인 / 복지 / 쿠폰 survey and what the operator must settle (2026-07-26)
 

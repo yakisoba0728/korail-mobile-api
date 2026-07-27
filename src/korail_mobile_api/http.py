@@ -343,11 +343,16 @@ class KorailHttpClient:
         Every gate of :meth:`post_mutation_form` applies here unchanged:
         ``require_mutation_consent`` for ``category``, a refusal of
         ``dry_run=True``, :func:`~korail_mobile_api.safety.assert_mutation_route`
-        against the exact ``(method, path)`` pair, and
+        against the exact ``(method, path)`` pair,
         :func:`~korail_mobile_api.safety.assert_mutation_route_category` so a
-        consent for one category cannot be redirected to another's route. The
-        read-only path (:meth:`get_json`) still refuses this route, so it can
-        only leave the process through this gate.
+        consent for one category cannot be redirected to another's route, and
+        :func:`~korail_mobile_api.safety.assert_mutation_form_shape` on the
+        outgoing values. The last one applies here for the same reason as the
+        rest: this route's query is built by ``_common_fields`` plus four more,
+        exactly like a POST body, so "it is a GET" is not a reason for it to be
+        the one mutation whose values reach the wire unexamined. The read-only
+        path (:meth:`get_json`) still refuses this route, so it can only leave
+        the process through this gate.
 
         There is no card branch, because no GET mutation carries a card: no
         member of
@@ -369,6 +374,7 @@ class KorailHttpClient:
             raise KorailProtocolError(
                 "KORAIL mutation query params must be a mapping"
             )
+        assert_mutation_form_shape(path, params)
         headers = self._dynapath_headers("GET", path)
         try:
             response = self._client.get(

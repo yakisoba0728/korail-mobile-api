@@ -425,7 +425,16 @@ class TrainSummary:
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
         return cls(
-            train_no=str(raw.get("h_trn_no") or raw.get("trnNo") or ""),
+            # Through _train_scalar like every other field, then defaulted to
+            # "" because train_no is the one non-optional attribute here. The
+            # bare str() this replaced accepted a bool or a list and turned it
+            # into "True" / "['1']" -- shapes the rule one line below calls a
+            # protocol error, exempted only because this field was written
+            # before the rule existed.
+            train_no=_train_scalar(
+                raw.get("h_trn_no") or raw.get("trnNo"), "h_trn_no"
+            )
+            or "",
             train_group_code=_train_scalar(
                 raw.get("h_trn_gp_cd") or raw.get("trnGpCd"), "h_trn_gp_cd"
             ),

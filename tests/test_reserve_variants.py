@@ -908,3 +908,37 @@ def test_docs_record_the_live_verification_of_both_variants():
         "WRR664296",
     ):
         assert claim in combined
+
+
+def test_confirm_standby_hold_actually_sends_through_the_shape_gate():
+    """A send test, not a preview test -- the gate only runs on the send path.
+
+    Every other test for this method stops at consent or at dry_run, so the
+    form it builds had never been through `assert_mutation_form_shape`. That
+    was invisible until the gate's coverage was traced: seven of nine mutation
+    routes reached it during a suite run and this was one of the two that did
+    not. A builder whose output has never met the gate is a live-only failure,
+    which is the class this gate exists to prevent.
+    """
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(
+            200,
+            json={"strResult": "SUCC", "h_msg_cd": "IRG000000", "h_msg_txt": "ok"},
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+
+    client.confirm_standby_hold(
+        _standby_hold(),
+        consent=MutationConsent(allow_reserve=True, dry_run=False),
+    )
+
+    assert [request.url.path for request in sent] == [RESERVATION_WAIT_PATH]
+    form = dict(httpx.QueryParams(sent[0].content.decode()))
+    # The gate's own invariants, restated against real builder output.
+    assert {"Device", "Version", "Key"} <= set(form)
+    assert all(isinstance(value, str) for value in form.values())
