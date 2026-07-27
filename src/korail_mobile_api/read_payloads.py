@@ -1080,6 +1080,134 @@ def build_platform_number_form(
     )
 
 
+def build_original_ticket_inquiry_form(
+    tickets: tuple[OriginalTicketReference, ...],
+    *,
+    ticket_count: int | None = None,
+) -> tuple[tuple[str, str | int], ...]:
+    """Build the 원표(원승차권) lookup's ordered form.
+
+    ``POST research.tripChgOgtk.do`` (``ResearchService.java:61-63``). The
+    route declares ``@Field("tkCnt") int`` followed by a ``@FieldMap``, so
+    everything past ``tkCnt`` is one indexed group per original ticket. The
+    key prefixes come from ``ROrtg.java:8-11`` (cross-checked
+    ``ROrtg.smali:20-26``) and already end in ``_``, so row 1 is transmitted
+    as ``ogtkSaleWctNo_1`` / ``ogtkSaleDd_1`` / ``ogtkSaleSqno_1`` /
+    ``ogtkRetPwd_1``. Indices are 1-based: all three call sites increment
+    before appending (``TCBookingActivity.java:169-175``,
+    ``SeatSearchActivity.java:605-611``, ``PushHistoryActivity.java:
+    345-351``).
+
+    TWO honest caveats about this shape.
+
+    The ORDER of the indexed keys is this library's choice, not the app's. The
+    app builds a ``java.util.HashMap`` and hands it to Retrofit
+    (``OgTkInquiryDao.java:15,52``), so its wire order is whatever the hash
+    yields — and the app does not even agree with itself about the insertion
+    order, since ``PushHistoryActivity`` puts ``ogtkSaleDd`` first while the
+    other two put ``ogtkSaleWctNo`` first. Grouping by ticket in ``ROrtg``
+    declaration order is deterministic and reproducible, which a map iteration
+    is not.
+
+    ``ticket_count`` (``tkCnt``) defaults to the number of tickets but is a
+    free parameter, because the app's own three call sites mean three
+    different things by it: ``TCBookingActivity.java:179`` sends the passenger
+    count, ``PushHistoryActivity.java:357`` sends the row count and
+    ``SeatSearchActivity.java:615`` hardcodes ``1`` while writing
+    ``f29962H.size()`` rows. It is transmitted as an ``int`` because the smali
+    signature says ``I`` (``ResearchService.smali:613,628-632``) — the
+    neighbouring ``tk.plfNo.do`` declares the same NAME as a ``String``
+    (``TicketService.java:72``), and sending the wrong one is exactly the
+    string/number mismatch this codebase has been bitten by before.
+    """
+    references = _exact_ticket_reference_tuple(tickets)
+    if ticket_count is None:
+        count = len(references)
+    elif type(ticket_count) is not int or ticket_count < 1:
+        raise ValueError("ticket_count must be a positive integer")
+    else:
+        count = ticket_count
+    rows: list[tuple[str, str | int]] = [("tkCnt", count)]
+    for index, ticket in enumerate(references, start=1):
+        rows.append((f"ogtkSaleWctNo_{index}", ticket.sale_window_no))
+        rows.append((f"ogtkSaleDd_{index}", ticket.sale_date))
+        rows.append((f"ogtkSaleSqno_{index}", ticket.sale_sequence))
+        rows.append((f"ogtkRetPwd_{index}", ticket.return_password))
+    return tuple(rows)
+
+
+@dataclass(frozen=True)
+class SelfSeatChangeInfoRequest:
+    """The train a 자율 좌석/열차 변경 is being considered for.
+
+    ``POST self.seatChgInfo.do`` (``TicketService.java:54-56``). Every value
+    is copied straight off the ticket the caller already holds:
+    ``TCSOptionsActivity.java:131-134`` reads ``h_run_dt`` / ``h_trn_no`` /
+    ``h_dpt_rs_stn_cd`` / ``h_arv_rs_stn_cd`` off the reservation's train
+    info, unmodified — in particular ``trnNo`` is NOT zero-padded here, unlike
+    the seat-inventory reads.
+
+    :attr:`room_class_code` is genuinely optional. The app sets it only when
+    the ticket's own class is 일반실 (``"1"``) or 특실 (``"2"``)
+    (``TCSOptionsActivity.java:135-138``, ``K4/o.java:7-8``, cross-checked
+    ``K4/o.smali:34-82``); for anything else the field stays null and Retrofit
+    drops it, so ``None`` here reproduces a request the app really sends.
+    """
+
+    run_date: str = field(repr=False)
+    train_no: str = field(repr=False)
+    departure_station_code: str = field(repr=False)
+    arrival_station_code: str = field(repr=False)
+    room_class_code: str | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        _validate_self_seat_change_info_request(self)
+
+
+#: The two 객실 등급 codes the app will send on ``self.seatChgInfo.do``.
+#: ``K4/o.java:7-8`` — GENERAL("일반실", "1") and SPECIAL("특실", "2"). The
+#: enum's third member ALL ("전체", "9") is deliberately absent: the app's
+#: branch admits only the first two.
+SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
+
+
+def _validate_self_seat_change_info_request(
+    request: SelfSeatChangeInfoRequest,
+) -> None:
+    _ascii_date(request.run_date, "run_date")
+    _ascii_identifier(request.train_no, "train_no", maximum_length=5)
+    _required_text(
+        request.departure_station_code,
+        "departure_station_code",
+    )
+    _required_text(request.arrival_station_code, "arrival_station_code")
+    if request.room_class_code is None:
+        return
+    if request.room_class_code not in SELF_SEAT_CHANGE_ROOM_CLASS_CODES:
+        raise ValueError(
+            "room_class_code must be '1', '2' or None"
+        )
+
+
+def build_self_seat_change_info_form(
+    request: SelfSeatChangeInfoRequest,
+) -> dict[str, str]:
+    if type(request) is not SelfSeatChangeInfoRequest:
+        raise TypeError(
+            "request must be an exact SelfSeatChangeInfoRequest"
+        )
+    _validate_self_seat_change_info_request(request)
+    form = {
+        "runDt": request.run_date,
+        "trnNo": request.train_no,
+        "dptRsStnCd": request.departure_station_code,
+        "arvRsStnCd": request.arrival_station_code,
+    }
+    if request.room_class_code is not None:
+        form["psrmClCd"] = request.room_class_code
+    return form
+
+
 def build_recent_delivery_history_form(customer_no: str) -> dict[str, str]:
     return {"custMgNo": _required_text(customer_no, "customer_no")}
 

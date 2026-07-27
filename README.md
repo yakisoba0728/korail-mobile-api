@@ -76,10 +76,10 @@ explicitly — see [docs/verification-record.md](docs/verification-record.md).
 
 ## What it can do
 
-The reviewed package boundary contains 58 routes and 74 public methods. Fifty-six
+The reviewed package boundary contains 60 routes and 76 public methods. Fifty-eight
 of the routes are reads, plus the login POST and the logout GET; the eight
 mutation routes are tracked in a separate set and are never added to the
-read-only allowlist. Sixty-two of the methods transmit only login/read requests.
+read-only allowlist. Sixty-four of the methods transmit only login/read requests.
 The other twelve are the consent-gated mutations below.
 
 ### Searching and reading
@@ -375,7 +375,7 @@ env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
 ```
 
 The offline suite is the gate and it makes no network calls:
-`2228 passed, 1 deselected`, where the one deselected test is the explicitly
+`2244 passed, 1 deselected`, where the one deselected test is the explicitly
 opted-in live-service test. Live tests run only when `KORAIL_MOBILE_API_LIVE=1`
 is set together with credentials you supply yourself; nothing in this repository
 ships an account.

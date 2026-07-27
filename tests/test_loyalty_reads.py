@@ -74,7 +74,7 @@ def _client(handler) -> KorailClient:
 
 
 def test_only_the_two_password_free_loyalty_reads_are_reachable():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 58
+    assert len(KORAIL_READ_ONLY_ROUTES) == 60
     assert ("POST", SUMMARY_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", MILEAGE_PATH) in KORAIL_READ_ONLY_ROUTES
     for path in WITHHELD_PATHS:

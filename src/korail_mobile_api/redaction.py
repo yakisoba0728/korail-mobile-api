@@ -263,6 +263,68 @@ SENSITIVE_KEYS = frozenset(
         "txtSeatNo",
         "txtCardNo",
         "custMgNo_",
+        # 원표(원승차권) identity, on the way OUT and on the way BACK.
+        #
+        # ogtkRetPwd is a bearer credential in the same sense h_orgtk_ret_pwd
+        # already registered above is: it is one quarter of a 반환번호, and the
+        # holder of the tuple can read and act on someone else's ticket. It
+        # travels three ways and none was covered:
+        #
+        #   * as a bare @Field on the 정기권 원표 조회 branch of
+        #     research.cmtrInfo.do (ResearchService.java:41-42; this package
+        #     has emitted it since build_commuter_info_form was added),
+        #   * as an INDEXED @FieldMap key on the 원표 lookup -- ogtkRetPwd_1,
+        #     ogtkRetPwd_2, ... (ROrtg.java:8-11 + TCBookingActivity.java:
+        #     169-175). _index_stripped() below turns those back into the base
+        #     name, so registering the base covers every row,
+        #   * and as a RESPONSE field, OrgTk.ogtkRetPwd
+        #     (response/research/OrgTk.java:16), which is the same secret being
+        #     handed back.
+        #
+        # The other three quarters (ogtkSaleWctNo / ogtkSaleDd / ogtkSaleSqno,
+        # plus the response's ogtkSaleDt spelling) are registered for the
+        # reason this file already states of saleDd at the top of this block:
+        # masking three quarters of a return number and leaving one readable is
+        # the only thing standing between a log and a reconstructable 반환번호.
+        # Note these are DISTINCT keys from the already-registered saleDd /
+        # saleWctNo / saleSqno -- an "ogtk" prefix is not an index, so
+        # _index_stripped() cannot fall back to them.
+        "ogtkRetPwd",
+        "ogtkSaleDd",
+        "ogtkSaleDt",
+        "ogtkSaleWctNo",
+        "ogtkSaleSqno",
+        # The same tuple once more under the 지연증명 spelling carried by each
+        # companion row of the 원표 response (response/research/Cmpn.java:
+        # 11-14). A 지연증명 원표 return number is spendable as a discount.
+        "dlayOgtkRetPwd",
+        "dlayOgtkSaleDt",
+        "dlayOgtkSaleSqno",
+        "dlayOgtkWctNo",
+        # The 원표 response's settlement rows (response/research/Stl.java:
+        # 5-16). h_stl_crd_no / h_apv_no are already registered above; these
+        # are a card number, a prepaid card number and an approval number
+        # under the spellings THIS route uses.
+        "stlCrdNo",
+        "prepCrdNo",
+        "apvNo",
+        # ...and the model attribute names the parsers below put them under.
+        "original_sale_datetime",
+        "delay_certificate_return_password",
+        "delay_certificate_sale_date",
+        "delay_certificate_sale_sequence",
+        "delay_certificate_window_no",
+        "settlement_card_no",
+        "prepaid_card_no",
+        "approval_no",
+        # 일괄결제대상번호, the number a settlement is charged against.
+        # lump_sum_target_no / h_lump_stl_tgt_no are already registered under
+        # other spellings; these two are the same number as the 할인카드 구매
+        # mutation returns it (mutation_parsers.py maps lumpStlTgtNo ->
+        # lump_settlement_target_no), and whoever holds one can have a payment
+        # applied to it.
+        "lumpStlTgtNo",
+        "lump_settlement_target_no",
     }
 )
 _INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)_?(?P<index>\d+)$")

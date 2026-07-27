@@ -138,6 +138,7 @@ from .read_models import (
     MileageHistoryResponse,
     MultiChildDiscountTargetResponse,
     CommuterInfoResponse,
+    OriginalTicketInquiryResponse,
     PassAvailabilityResponse,
     PassMenuResponse,
     PassScheduleResponse,
@@ -151,6 +152,7 @@ from .read_models import (
     RefundTicketDetailResponse,
     ReservationHistoryResponse,
     SeatAssignmentScheduleResponse,
+    SelfSeatChangeInfoResponse,
     ServiceStatusResponse,
     TicketReceiptResponse,
     TicketReservationDetailResponse,
@@ -179,6 +181,7 @@ from .read_payloads import (
     build_maas_service_detail_form,
     build_merge_seats_inquiry_form,
     build_multi_child_discount_target_form,
+    build_original_ticket_inquiry_form,
     build_pass_availability_form,
     build_pass_menu_form,
     build_pass_schedule_form,
@@ -190,6 +193,7 @@ from .read_payloads import (
     build_recent_delivery_history_form,
     build_refund_commission_form,
     build_refund_ticket_detail_form,
+    build_self_seat_change_info_form,
     build_service_status_query,
     build_seat_assignment_schedule_form,
     build_ticket_receipt_form,
@@ -210,6 +214,7 @@ from .read_payloads import (
     PriceFareQuoteRequest,
     OriginalTicketReference,
     RefundCompanion,
+    SelfSeatChangeInfoRequest,
     TicketDuplicationCheckRequest,
     TicketReservationDetailRequest,
 )
@@ -233,6 +238,7 @@ from .read_parsers import (
     parse_merge_seats_inquiry_response,
     parse_multi_child_discount_target_response,
     parse_commuter_info_response,
+    parse_original_ticket_inquiry_response,
     parse_pass_availability_response,
     parse_pass_menu_response,
     parse_pass_schedule_response,
@@ -245,6 +251,7 @@ from .read_parsers import (
     parse_refund_commission_response,
     parse_refund_ticket_detail_response,
     parse_reservation_history_response,
+    parse_self_seat_change_info_response,
     parse_service_status_response,
     parse_seat_assignment_schedule_response,
     parse_ticket_receipt_response,
@@ -1075,6 +1082,80 @@ class KorailClient:
             lambda: parse_platform_number_response(
                 self.http.post_form(
                     "/classes/com.korail.mobile.tk.plfNo.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_original_ticket_inquiry(
+        self,
+        tickets: tuple[OriginalTicketReference, ...],
+        *,
+        ticket_count: int | None = None,
+    ) -> OriginalTicketInquiryResponse:
+        """Look up the 원표(원승차권) a ticket change would start from.
+
+        ``POST research.tripChgOgtk.do`` (``ResearchService.java:61-63``).
+        This is the first read of the 승차권 변경 chain: given the 반환번호 of
+        each ticket in hand it returns those tickets' journeys, seats and
+        fares, which is what the later steps are keyed on. Its sibling
+        :meth:`get_trip_change_dates` (``reservation.tripChgDate.do``) answers
+        the date question; this one answers the "what am I changing" question.
+
+        ``ticket_count`` is ``tkCnt``. It defaults to ``len(tickets)``, which
+        is what ``PushHistoryActivity.java:357`` sends, but it is exposed
+        because the app's other two call sites mean something else by it --
+        the passenger count (``TCBookingActivity.java:179``) and a hardcoded
+        ``1`` (``SeatSearchActivity.java:615``). It is transmitted as an
+        integer, matching the smali ``I``
+        (``ResearchService.smali:613,628-632``).
+
+        **NOT LIVE-VERIFIED.** The request shape is the APK's declaration plus
+        its three call sites, and the response shape is
+        ``OgTkInquiryDao``/``OrgTk`` rather than an observed body.
+        """
+        self._require_session()
+        form = build_original_ticket_inquiry_form(
+            tickets,
+            ticket_count=ticket_count,
+        )
+        return self._run_read(
+            lambda: parse_original_ticket_inquiry_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.research.tripChgOgtk.do",
+                    form,
+                    include_dynapath=False,
+                ).raw
+            )
+        )
+
+    def get_self_seat_change_info(
+        self,
+        request: SelfSeatChangeInfoRequest,
+    ) -> SelfSeatChangeInfoResponse:
+        """List the stations and reasons a 자율 좌석/열차 변경 allows.
+
+        ``POST self.seatChgInfo.do`` (``TicketService.java:54-56``). Keyed by
+        the train the ticket is already on, it answers with the boarding
+        stations the change may move to -- each with its 일반실/특실
+        remaining-seat count -- and the 변경 사유 list the app puts in front of
+        the user (``TCSOptionsActivity.java:128-140``).
+
+        Leave
+        :attr:`~korail_mobile_api.read_payloads.SelfSeatChangeInfoRequest.room_class_code`
+        as ``None`` unless the ticket is 일반실 (``"1"``) or 특실 (``"2"``);
+        the app omits the field entirely for any other class.
+
+        **NOT LIVE-VERIFIED.** Reaching this route needs a live ticket on a
+        train that permits a self seat change.
+        """
+        self._require_session()
+        form = build_self_seat_change_info_form(request)
+        return self._run_read(
+            lambda: parse_self_seat_change_info_response(
+                self.http.post_form(
+                    "/classes/com.korail.mobile.self.seatChgInfo.do",
                     form,
                     include_dynapath=False,
                 ).raw

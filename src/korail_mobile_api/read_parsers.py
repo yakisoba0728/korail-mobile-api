@@ -57,6 +57,10 @@ from .read_models import (
     PassPassengerInfo,
     PassPassengerInfos,
     PassPeriodOption,
+    OriginalTicket,
+    OriginalTicketInquiryResponse,
+    OriginalTicketJourney,
+    OriginalTicketSeat,
     PbpAcceptanceJourney,
     PbpAcceptanceSeat,
     PbpAcceptanceSpecificationResponse,
@@ -85,6 +89,9 @@ from .read_models import (
     ReservationHistoryTrain,
     ReservationSeatDetail,
     SeatAssignmentScheduleResponse,
+    SelfSeatChangeInfoResponse,
+    SelfSeatChangeReason,
+    SelfSeatChangeStation,
     ServiceStatusResponse,
     TicketReceipt,
     TicketReceiptResponse,
@@ -2841,5 +2848,240 @@ def parse_refund_ticket_detail_response(
         ),
         journeys=tuple(journeys),
         discount_card=_discount_card_on_ticket(raw),
+        **_response_fields(raw),
+    )
+
+
+_SELF_SEAT_CHANGE_STATION_FIELDS = {
+    "departure_station_code": "dptRsStnCd",
+    "departure_station_name": "dptRsStnNm",
+    "departure_date": "dptDt",
+    "departure_time": "dptTm",
+    "arrival_date": "arvDt",
+    "arrival_time": "arvTm",
+    "departure_construction_order": "dptStnConsOrdr",
+    "departure_run_order": "dptStnRunOrdr",
+    "general_remaining_seats": "gnrmRestSeatNum",
+    "special_remaining_seats": "sprmRestSeatNum",
+}
+_SELF_SEAT_CHANGE_REASON_FIELDS = {
+    "query_code": "qryCode",
+    "query_order": "qryOrdr",
+    "reason_text": "frcSaleRsnCont",
+}
+_SELF_SEAT_CHANGE_INFO_FIELDS = {
+    "train_no": "trnNo",
+    "train_class_code": "trnClsfCd",
+    "train_class_name": "trnClsfNm",
+    "train_group_code": "trnGpCd",
+    "train_group_name": "trnGpNm",
+    "run_date": "runDt",
+    "general_reservation_possible_code": "gnrmRsvPsbCd",
+    "special_reservation_possible_code": "sprmRsvPsbCd",
+    "change_before_departure_construction_order": "chgBfDptStnConsOrdr",
+    "change_before_arrival_construction_order": "chgBfArvStnConsOrdr",
+    "existing_departure_run_order": "exsDptStnRunOrdr",
+    "existing_arrival_run_order": "exsArvStnRunOrdr",
+}
+
+
+def parse_self_seat_change_info_response(
+    raw: Mapping[str, Any],
+) -> SelfSeatChangeInfoResponse:
+    """Parse ``self.seatChgInfo.do``.
+
+    ``CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse`` and its two inner
+    row types (``dao/ticket/change/CallSelfSeatChgInfoDao.java:64-204``). Every
+    field the DAO declares is a Java ``String``, so each is read with
+    :func:`_optional_scalar_string`: the remaining-seat counts and the
+    construction/run orders are exactly the kind of field this server has been
+    observed to send as a bare JSON number.
+    """
+    if not isinstance(raw, Mapping):
+        raise KorailProtocolError(
+            "KORAIL self seat change info response must be a mapping"
+        )
+    _validate_strict_read_envelope(raw)
+    stations = tuple(
+        SelfSeatChangeStation(
+            **_nullable_scalar_fields(
+                station,
+                _SELF_SEAT_CHANGE_STATION_FIELDS,
+                "self seat change station",
+            ),
+            raw=station,
+        )
+        for station in (
+            _row(value, "self seat change chgStnList")
+            for value in _optional_list(
+                raw,
+                "chgStnList",
+                "self seat change info",
+            )
+        )
+    )
+    reasons = tuple(
+        SelfSeatChangeReason(
+            **_nullable_scalar_fields(
+                reason,
+                _SELF_SEAT_CHANGE_REASON_FIELDS,
+                "self seat change reason",
+            ),
+            raw=reason,
+        )
+        for reason in (
+            _row(value, "self seat change chgRsnList")
+            for value in _optional_list(
+                raw,
+                "chgRsnList",
+                "self seat change info",
+            )
+        )
+    )
+    return SelfSeatChangeInfoResponse(
+        **_nullable_scalar_fields(
+            raw,
+            _SELF_SEAT_CHANGE_INFO_FIELDS,
+            "self seat change info",
+        ),
+        stations=stations,
+        reasons=reasons,
+        **_response_fields(raw),
+    )
+
+
+_ORIGINAL_TICKET_SEAT_FIELDS = {
+    "passenger_sequence": "psgSqno",
+    "assign_sequence": "asgnSqno",
+    "passenger_type_code": "psgTpDvCd",
+    "room_class_code": "psrmClCd",
+    "car_no": "scarNo",
+    "seat_no": "seatNo",
+    "seat_count": "seatNum",
+    "received_fare": "rcvdFare",
+    "received_price": "rcvdPrc",
+    "requested_seat_attribute_code": "rqSeatAttCd",
+    "direction_seat_attribute_code": "dirSeatAttCd",
+    "location_seat_attribute_code": "locSeatAttCd",
+    "smoking_seat_attribute_code": "smkSeatAttCd",
+    "additional_seat_attribute_code": "addSeatAttCd",
+    "etc_seat_attribute_code": "etcSeatAttCd",
+}
+_ORIGINAL_TICKET_JOURNEY_FIELDS = {
+    "journey_sequence": "jrnySqno",
+    "journey_order": "jrnyOrdr",
+    "journey_type_code": "jrnyTpCd",
+    "train_no": "trnNo",
+    "train_group_code": "trnGpCd",
+    "departure_date": "dptDt",
+    "departure_time": "dptTm",
+    "departure_station_code": "dptRsStnCd",
+    "departure_station_name": "dptRsStnNm",
+    "departure_construction_order": "dptStnConsOrdr",
+    "arrival_date": "arvDt",
+    "arrival_time": "arvTm",
+    "arrival_station_code": "arvRsStnCd",
+    "arrival_station_name": "arvRsStnNm",
+    "arrival_construction_order": "arvStnConsOrdr",
+    "goods_no": "gdNo",
+    "total_seat_count": "totSeatNum",
+    "total_standing_count": "totStndNum",
+    "general_change_allowed_flag": "genChgAllwFlg",
+    "single_ticket_flag": "snglTkFlg",
+}
+_ORIGINAL_TICKET_FIELDS = {
+    "pnr_no": "pnrNo",
+    "ticket_kind_code": "tkKndCd",
+    "original_sale_datetime": "ogtkSaleDt",
+    "original_window_no": "ogtkSaleWctNo",
+    "original_sale_sequence": "ogtkSaleSqno",
+    "original_return_password": "ogtkRetPwd",
+    "member_card_no": "mbCrdNo",
+    "adult_count": "adulCnt",
+    "child_count": "chilCnt",
+    "group_discount_count": "grpDcntCnt",
+    "passenger_type_division_code": "psgTpDvCd",
+    "received_amount": "rcvdAmt",
+    "received_fare": "rcvdFare",
+    "received_price": "rcvdPrc",
+    "change_sale_transaction_no": "chgSaleTno",
+    "sms_send_flag": "smsSndFlg",
+    "forced_sale_reason_text": "frcSaleRsnCont",
+}
+
+
+def parse_original_ticket_inquiry_response(
+    raw: Mapping[str, Any],
+) -> OriginalTicketInquiryResponse:
+    """Parse ``research.tripChgOgtk.do``.
+
+    ``OgTkInquiryDao.OgTkInquiryResponse`` -> ``orgTkList`` of
+    ``response/research/OrgTk.java``, each with a ``jrnyList`` of
+    ``Jrny.java`` and each of those with a ``seatList`` of ``Seat.java``.
+
+    ``cmpnList`` and ``stlList`` are intentionally left unparsed. They carry
+    further bearer credentials -- 지연증명 return numbers
+    (``Cmpn.java:11-14``) and card/approval numbers (``Stl.java:5-16``) --
+    that nothing in the change chain needs; their wire keys are registered in
+    :mod:`~korail_mobile_api.redaction` so they stay masked inside
+    :attr:`~korail_mobile_api.read_models.OriginalTicket.raw`.
+    """
+    if not isinstance(raw, Mapping):
+        raise KorailProtocolError(
+            "KORAIL original ticket inquiry response must be a mapping"
+        )
+    _validate_strict_read_envelope(raw)
+    tickets = []
+    for value in _optional_list(raw, "orgTkList", "original ticket inquiry"):
+        ticket = _row(value, "original ticket inquiry orgTkList")
+        journeys = []
+        for journey_value in _optional_list(
+            ticket,
+            "jrnyList",
+            "original ticket",
+        ):
+            journey = _row(journey_value, "original ticket jrnyList")
+            seats = tuple(
+                OriginalTicketSeat(
+                    **_nullable_scalar_fields(
+                        seat,
+                        _ORIGINAL_TICKET_SEAT_FIELDS,
+                        "original ticket seat",
+                    ),
+                    raw=seat,
+                )
+                for seat in (
+                    _row(seat_value, "original ticket seatList")
+                    for seat_value in _optional_list(
+                        journey,
+                        "seatList",
+                        "original ticket journey",
+                    )
+                )
+            )
+            journeys.append(
+                OriginalTicketJourney(
+                    **_nullable_scalar_fields(
+                        journey,
+                        _ORIGINAL_TICKET_JOURNEY_FIELDS,
+                        "original ticket journey",
+                    ),
+                    seats=seats,
+                    raw=journey,
+                )
+            )
+        tickets.append(
+            OriginalTicket(
+                **_nullable_scalar_fields(
+                    ticket,
+                    _ORIGINAL_TICKET_FIELDS,
+                    "original ticket",
+                ),
+                journeys=tuple(journeys),
+                raw=ticket,
+            )
+        )
+    return OriginalTicketInquiryResponse(
+        tickets=tuple(tickets),
         **_response_fields(raw),
     )
