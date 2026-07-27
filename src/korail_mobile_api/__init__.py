@@ -1,3 +1,12 @@
+#: The released version of this package.
+#:
+#: Kept out of ``__all__`` deliberately: dunders are not part of the exported
+#: name set, and ``from korail_mobile_api import *`` has never carried them.
+#: ``tests/test_release_readiness.py`` asserts this equals ``project.version``
+#: in ``pyproject.toml``; there is no build-time machinery keeping them in
+#: step, so that test is the only thing that does.
+__version__ = "1.0.0"
+
 from .client import KorailClient
 from .config import KorailConfig
 from .consent import (

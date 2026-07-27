@@ -1063,6 +1063,41 @@
 - Normalize live-evidenced JSON integer and ASCII decimal-string station popup
   types and actual arrival delay counts without accepting broader coercions.
 
+- **Added: this package is licensed.** `LICENSE` carries the Apache License
+  2.0 verbatim, and `pyproject.toml` declares it in the PEP 639 SPDX form
+  (`license = "Apache-2.0"`, `license-files = ["LICENSE"]`) rather than the
+  deprecated `license = {text = ...}` table, which setuptools now warns on and
+  will reject outright from 2027-02-18. The build floor moved to
+  `setuptools>=77` for the same reason: earlier versions ignore `license-files`
+  silently, producing a wheel that claims a licence and ships no licence text.
+  No `License ::` classifier accompanies it — PEP 639 makes the two mutually
+  exclusive.
+- Added: owner and canonical-URL metadata. `authors` names `yakisoba0728` and
+  a contact address — spelled in `pyproject.toml`, not repeated here, because
+  `tests/test_readme.py` forbids a bare email address in the evidence
+  documents and that gate is worth more than the duplication.
+  `[project.urls]` pins Homepage, Repository, Issues and Changelog at
+  `https://github.com/yakisoba0728/korail-mobile-api`.
+- **Changed: `scripts/verify_distribution.py` now verifies this metadata
+  instead of banning it.** The four headers a PEP 639 build emits —
+  `License-Expression`, `License-File`, `Author-email`, `Project-URL` — moved
+  out of the forbidden list and into exact-value checks derived from
+  `pyproject.toml`, alongside the ones `Name`/`Version`/`Requires-Python`
+  already had. Merely un-banning them would have left the licence and the
+  owner as the only unchecked metadata in the artifacts. `License`,
+  `Author` (bare), `Home-page`, `Download-URL`, `Maintainer` and
+  `Maintainer-email` stay forbidden: no configuration here emits them, so
+  their presence would mean something other than this pyproject wrote them.
+  Both artifacts must additionally carry the declared licence file as a
+  non-empty regular member — `dist-info/licenses/LICENSE` in the wheel, the
+  sdist root in the tarball — because a metadata header naming a licence file
+  is a claim about a file, not the file.
+- Added: `korail_mobile_api.__version__`, with a test asserting it equals
+  `project.version`. Nothing in the build keeps a hand-written dunder and a
+  hand-written TOML literal in step; that test is the only thing that does.
+  It is deliberately absent from `__all__`.
+- Changed: `Development Status :: 3 - Alpha` → `5 - Production/Stable`.
+
 ## 0.2.0 - 2026-07-14
 
 - Added the static R20 pass-schedule candidate read with a closed
