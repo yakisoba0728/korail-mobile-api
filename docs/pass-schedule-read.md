@@ -8,9 +8,19 @@ value is caller-supplied. No runtime pass or menu code is hardcoded.
 The exact form contains `Device`, `Version`, `Key`, `selGoTrain`,
 `selGoAbrdDt`, `txtGoHour`, `radChgTrnDvCd`, `txtCmtrKndCd`,
 `txtCmtrUtlTrmCd`, `txtCmtrUtlAgeCd`, `txtSelPage`, `txtCntPerPage`,
-`txtGoStart`, `txtGoEnd`, and `txtWkndUseFlg`. The client issues one POST,
-disables DynaPath for this route, and accepts only a full envelope whose
-`strResult` is exactly `SUCC`.
+`txtGoStart`, `txtGoEnd`, and `txtWkndUseFlg`. The client issues one POST and
+disables DynaPath for this route.
+
+It accepts a full envelope whose `strResult` is exactly `SUCC`, **and one
+documented empty-result shape besides**: `strResult=FAIL` together with
+`h_msg_cd=WRG000000` returns an empty `PassScheduleResponse` rather than
+raising. That is what the app does —
+`CommutationInquiryActivity.java:182` registers `WRG000000` on this DAO
+through `setErrorMsgCdNotShowDialog`, so an empty query renders "no
+schedules" instead of an error — and treating it as a failure here would
+turn "you have no passes" into an exception. Every other non-`SUCC`
+envelope still raises. (Added in `0d632db`, 2026-07-22; this sentence
+described only the `SUCC` half until 2026-07-27.)
 
 The response types only project the statically evidenced
 `schedule_info[].train_list` fields: `h_arv_rs_stn_cd`,

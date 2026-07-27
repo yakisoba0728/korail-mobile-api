@@ -24,6 +24,7 @@ PROGRESS = Path(__file__).parents[1] / "docs" / "IMPLEMENTATION_PROGRESS.md"
 # (see its "Package Handoff Summary" section), so handoff assertions read there.
 HANDOFF = Path(__file__).parents[1] / "docs" / "IMPLEMENTATION_PROGRESS.md"
 CHANGELOG = Path(__file__).parents[1] / "CHANGELOG.md"
+SECURITY = Path(__file__).parents[1] / "SECURITY.md"
 
 
 def test_record_describes_fixed_rt_dynapath_consistently():
@@ -851,6 +852,12 @@ def test_every_document_that_lists_the_mutation_methods_lists_all_of_them():
         ("record", RECORD),
         ("status", STATUS),
         ("progress", PROGRESS),
+        # SECURITY.md makes the strongest version of this claim -- it says
+        # everything NOT listed "is not callable" -- so a name missing from it
+        # is a security promise that is false, not a stale doc. It named
+        # twelve methods and six categories for as long as it was
+        # hand-maintained, while add_to_cart and the cart category shipped.
+        ("SECURITY", SECURITY),
     ):
         document = path.read_text(encoding="utf-8")
         for method in gated:
