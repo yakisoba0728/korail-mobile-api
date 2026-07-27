@@ -145,7 +145,7 @@ a live call does.
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 60 exact login/read routes and 84 public methods (64 login/read plus the consent-gated mutation methods `reserve`,
+- The current package boundary is 60 exact login/read routes and 80 public methods (64 login/read plus the consent-gated mutation methods `reserve`,
   `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`, `extend_discount_card`, and `recalculate_price`,
   which return a
   redacted preview by default and send a live state change only with a
@@ -312,7 +312,7 @@ was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
 of 165; current inventory is 32 successful, 10 failed, and 123 unexecuted. The
-current package boundary is 60 exact routes and 84 public methods.
+current package boundary is 60 exact routes and 80 public methods.
 
 ## Ticket-reference static read tranche
 
@@ -758,7 +758,7 @@ tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/superpowers/specs/`.
 
 The current implementation evidence establishes 60 routes at the exact
-login/read transport boundary and 84 public methods on `KorailClient`. The
+login/read transport boundary and 80 public methods on `KorailClient`. The
 read-only path exposes no callable mutation route; reservation, unpaid-cancel,
 fake-card payment, acknowledged real-card payment, refund, and cart-add are
 callable only through the separate

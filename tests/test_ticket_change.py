@@ -224,7 +224,7 @@ def test_the_rollback_shares_the_category_it_undoes():
 
 
 def test_routes_are_mutation_routes_owned_by_that_category():
-    assert len(KORAIL_MUTATION_ROUTES) == 14
+    assert len(KORAIL_MUTATION_ROUTES) == 12
     assert KORAIL_MUTATION_ROUTES.isdisjoint(KORAIL_READ_ONLY_ROUTES)
     for route in TICKET_CHANGE_ROUTES:
         assert ("POST", route) in KORAIL_MUTATION_ROUTES

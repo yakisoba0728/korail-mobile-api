@@ -18,7 +18,7 @@ is a bug report.
 
 ## Package boundary and verification summary
 
-The reviewed package boundary contains 60 routes and 84 public methods. All 60
+The reviewed package boundary contains 60 routes and 80 public methods. All 60
 routes are login/read routes: 58 reads plus the login POST and the server-side
 logout GET. The eight mutation routes are tracked separately and
 are never added to the read-only allowlist. Sixty-four of the methods are the

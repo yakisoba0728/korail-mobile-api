@@ -197,10 +197,6 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         # (TCSOptionsActivity.java:128-140).
         ("POST", "/classes/com.korail.mobile.self.seatChgInfo.do"),
         # research.tripChgOgtk.do (ResearchService.java:61-63) is the 원표
-        # (원승차권) lookup the change chain starts from: it takes N 반환번호
-        # tuples and returns the original tickets' journeys and seats
-        # (OgTkInquiryDao.java:38-53). Its sibling reservation.tripChgDate.do
-        # is already registered above.
         ("POST", "/classes/com.korail.mobile.research.tripChgOgtk.do"),
         #
         # DELIBERATELY ABSENT, and it was briefly here: 특실 업그레이드's
@@ -277,47 +273,6 @@ KORAIL_MUTATION_ROUTES = frozenset(
         ),
         # refund
         ("POST", "/classes/com.korail.mobile.refunds.RefundsRequest"),
-        # refund -- the 비회원 오프라인(역창구 발권) 반환 pair, and DELIBERATELY
-        # the same category as the member refund above rather than a new one.
-        # It is the same product act and the same movement of money: a ticket
-        # stops being valid and a fee is deducted from what is paid back
-        # (RefundService.java:15-17,31-33; screen flow s5/c.java -> s5/h.java).
-        # What differs is only WHO is asking -- nobody is logged in, and the
-        # ticket is identified by the printed 16-digit 반환번호 plus the
-        # requester's name instead of by a session. That is an identity
-        # difference, not a consent boundary: a caller who granted allow_refund
-        # granted refunding a ticket.
-        #
-        # verifyOnlineRefunds is registered as a MUTATION even though it reads
-        # like a lookup (the app's own button says 반환 승차권 조회,
-        # strings.xml:1300). Two reasons, and only the second one is decisive.
-        # First, its response hands back the full four-part sale identity
-        # INCLUDING ogtk_ret_pwd (RefundVerifyTicketDao.java:119-122) -- it
-        # converts a printed number into the credential the execute call
-        # spends, so it is the load-bearing half of the refund. Second, the
-        # 반환번호 it takes is a bearer credential guessed against a live
-        # endpoint; putting it on the read path would let it be called without
-        # any consent at all. Whether the server also records or reserves
-        # anything at this point is NOT established from the APK, so it is
-        # gated as though it does.
-        ("POST", "/classes/com.korail.mobile.refunds.verifyOnlineRefunds"),
-        ("POST", "/classes/com.korail.mobile.refunds.executeOnlineRefunds"),
-        # discount_card -- 할인카드(N카드) 구매 and 기간연장. A category of
-        # their own, and one no live-test path in this repository touches.
-        #
-        # research.dcntCrdInfo.do is a PURCHASE, not an inquiry, whatever its
-        # name suggests: it answers with lumpStlTgtNo and rcvdAmt
-        # (NCardReservationDao.java:127-134), and the app takes that target
-        # number straight into the payment screen
-        # (SectionNCardInquiryActivity.java:213-257). reservation.dcntCrdExtn.do
-        # extends a card's validity against the card ticket's own four-part
-        # credential (TicketListActivity.java:1066-1074).
-        #
-        # THE SECOND ONE IS A GET. It is registered with its real method rather
-        # than coerced to POST, and KorailHttpClient.get_mutation_query is the
-        # matching send path -- gated identically to post_mutation_form. A
-        # mutation that the app performs with a GET does not become safer by
-        # being mis-registered.
         ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
         ("GET", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
         # price_recalculation -- 보류된 PNR의 할인 재적용 후 운임 재계산
@@ -337,32 +292,6 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # ticket_change -- 승차권 여행변경 and its rollback, plus 예약 인원 변경.
         # One category, three routes, and none of them a reuse of "reserve":
         # a 여행변경 stakes the ORIGINAL, already-paid ticket. The 원표's
-        # four-part 반환번호 travels in the request's ROrtg map
-        # (w4/b.java:149-153), and what comes back is settled as a difference
-        # plus a 변경수수료 rather than as a fresh fare.
-        #
-        # reservation.tripChgPrsC.do creates the replacement hold
-        # (ReservationService.java:24-26, dispatched by
-        # TCReservationDao.java:218-223). Fifteen @Fields and SIX @FieldMaps.
-        #
-        # ticket.tripChgHndgCnc.do rolls one back (TicketService.java:98-100,
-        # TCCancelDao.java:37-42). It is in the SAME category on purpose --
-        # see MutationConsent.allow_ticket_change. The app fires it from the
-        # screen that made the change (a6/x.java:109-115,
-        # DReservationConfirmActivity.java:283-288).
-        #
-        # reservation.reservationChange.do rebuilds a held PNR for a different
-        # passenger mix (ReservationChangeDao.java:162-167). It answers with a
-        # lumpStlTgtNo the app takes straight to payment
-        # (ReservationedTicketChangeActivity -> ui/menu/
-        # ReservedTicketChangeActivity.java:178-185).
-        #
-        # THE THIRD ROUTE IS DECLARED TWICE, byte-identically, on two Retrofit
-        # interfaces: BusReservationService.java:23-25 and
-        # ReservationCancelService.java:23-25. Only the second is ever bound --
-        # ReservationChangeDao.executeDao (:164-166) asks for
-        # ReservationCancelService -- so the duplicate declaration changes
-        # nothing about the wire and is recorded here rather than resolved.
         ("POST", "/classes/com.korail.mobile.reservation.tripChgPrsC.do"),
         ("POST", "/classes/com.korail.mobile.ticket.tripChgHndgCnc.do"),
         ("POST", "/classes/com.korail.mobile.reservation.reservationChange.do"),
@@ -401,11 +330,6 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
         "cancel"
     ),
     "/classes/com.korail.mobile.refunds.RefundsRequest": "refund",
-    # The 비회원 오프라인 반환 pair shares the member refund's category; see the
-    # comment on its entry in KORAIL_MUTATION_ROUTES for why identity is not a
-    # consent boundary here.
-    "/classes/com.korail.mobile.refunds.verifyOnlineRefunds": "refund",
-    "/classes/com.korail.mobile.refunds.executeOnlineRefunds": "refund",
     "/classes/com.korail.mobile.research.dcntCrdInfo.do": "discount_card",
     "/classes/com.korail.mobile.reservation.dcntCrdExtn.do": "discount_card",
     "/classes/com.korail.mobile.certification.PriceReCalculation": (

@@ -846,7 +846,7 @@ def test_repository_truth_and_full_mutation_policy() -> None:
         # 76, not 72 or 74. Older numbers appear in the handoff, because those
         # sentences were true when written and are kept as history; the pin has
         # to name the CURRENT boundary or it stops detecting the next drift.
-        assert "84 public methods" in document
+        assert "80 public methods" in document
         assert "2244 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
     for document in (record, handoff):

@@ -12,7 +12,7 @@ from .errors import (
     KorailProtocolError,
 )
 from .http import KorailHttpClient
-from .models import KorailNonMemberSession, KorailSession, LoginCryptoInfo
+from .models import KorailSession, LoginCryptoInfo
 from .payloads import build_common_code_form
 
 KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
@@ -113,21 +113,6 @@ class KorailSessionClient:
         self.http = http
         self.current: KorailSession | None = None
         self.pending: KorailAuthContinuationRequired | None = None
-        #: The 비회원 identity, held in a SEPARATE slot from :attr:`current`
-        #: and typed :class:`~korail_mobile_api.models.KorailNonMemberSession`
-        #: rather than :class:`~korail_mobile_api.models.KorailSession`.
-        #:
-        #: Two slots rather than one polymorphic slot, because the two are not
-        #: alternatives at the type level and code that wants one must never
-        #: silently accept the other. A member route reads ``current`` and gets
-        #: ``None`` for a non-member; a non-member route reads ``non_member``
-        #: and gets ``None`` for a member. Neither can be satisfied by the
-        #: wrong kind of credential.
-        #:
-        #: The two are also mutually exclusive at runtime — see
-        #: :meth:`begin_non_member`, and note that :meth:`login` opens with
-        #: :meth:`clear_session`, which drops this slot too.
-        self.non_member: KorailNonMemberSession | None = None
 
     def check_service(self) -> None:
         self.http.get_json(
@@ -282,53 +267,6 @@ class KorailSessionClient:
                 pass
         self.clear_session()
 
-    def begin_non_member(
-        self,
-        name: str,
-        phone: str,
-        *,
-        password: str | None = None,
-    ) -> KorailNonMemberSession:
-        """Hold a 비회원 identity for the non-member routes. Performs NO I/O.
-
-        There is nothing to call: KORAIL has no non-member login endpoint. The
-        app's 비회원 등록 screen only writes the three values into its session
-        singleton (``NonMemberRegisterActivity.java:66-73``) and every later
-        request re-sends them. This method is the same act, and deliberately
-        does not touch the network — so it can never be mistaken for
-        authentication.
-
-        Refuses while a member session is active. A member and a non-member are
-        two different customers, and the offline-refund methods pick their
-        identity out of this slot; letting both be set would make "whose ticket
-        is this" depend on which slot a caller happened to read. Call
-        :meth:`logout` (or :meth:`clear_session`) first if that is really what
-        was meant. The reverse direction needs no separate guard: :meth:`login`
-        opens with :meth:`clear_session`, which drops any held non-member
-        identity.
-        """
-        if self.current is not None:
-            raise KorailAuthError(
-                "KORAIL non-member identity cannot be held while a member "
-                "session is active; log out first"
-            )
-        self.non_member = KorailNonMemberSession(
-            non_member_name=name,
-            non_member_phone=phone,
-            non_member_password=password,
-        )
-        return self.non_member
-
-    def end_non_member(self) -> None:
-        """Drop the held 비회원 identity, leaving any member session alone.
-
-        The counterpart of :meth:`begin_non_member`, and the analogue of the
-        app's ``initNonmemberData()`` (``b5/h.java:212-219``), which likewise
-        clears only the non-member group. There is no server call because there
-        is no server-side non-member session to end.
-        """
-        self.non_member = None
-
     def clear_session(self) -> None:
         self.http.cookies.clear()
         self.current = None
@@ -339,4 +277,3 @@ class KorailSessionClient:
         # password. This is also what makes login() mutually exclusive with a
         # held non-member identity for free: login() calls clear_session()
         # first (see :meth:`login`).
-        self.non_member = None

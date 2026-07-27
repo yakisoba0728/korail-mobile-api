@@ -33,8 +33,6 @@ from .mutation_models import (
     CardPayment,
     KorailPassengerCounts,
     KorailSeatAssignment,
-    OfflineRefundReturnNumber,
-    OfflineRefundVerifyResponse,
     PaidTicket,
     PriceRecalculationRequest,
     PriceRecalculationRow,
@@ -54,6 +52,40 @@ _DATE_RE = re.compile(r"[0-9]{8}")
 _TIME_RE = re.compile(r"[0-9]{6}")
 _DIGITS_RE = re.compile(r"[0-9]+")
 
+
+_TRIP_CHANGE_JOURNEY_SEQUENCE_NOS = ("0001", "0002")
+
+#: The three ``RSeat`` attribute codes ``w4/b.java:165-167`` writes before
+#: ``rqSeatAttCd`` and ``C5/d.java`` never touches. Each is
+#: ``prefix + leg + "_1"``. The values are enum codes: ``K4/q.DISABLE``
+#: 사용안함, ``K4/l.DEFAULT`` 모든방향, ``K4/n.DEFAULT`` 모든 위치 — all
+#: ``"000"``, but spelled out per key because they come from three different
+#: enums and only coincide.
+
+_TRIP_CHANGE_SEAT_OPTION_CODES: tuple[tuple[str, str], ...] = (
+    ("smkSeatAttCd_", "000"),  # K4/q.java:6 DISABLE
+    ("dirSeatAttCd_", "000"),  # K4/l.java:5 DEFAULT
+    ("locSeatAttCd_", "000"),  # K4/n.java:5 DEFAULT
+)
+
+#: ``etcSeatAttCd_N_1`` (``K4/m.java:5`` DISABLE), written LAST of the six
+#: (``w4/b.java:169``) — after ``rqSeatAttCd``, which is why it is not in the
+#: tuple above.
+
+_TRIP_CHANGE_ETC_SEAT_ATTRIBUTE_CODE = "000"
+
+#: ``trvlKndCd`` (``w4/b.java:135``), ``intgTktIseFlg`` (``:139``),
+#: ``alcSeatDmnPsDvCd`` (``:140``) and the two "second journey" counters
+#: ``jrny2Cnt``/``psg2Cnt``, both ``addZero(4, 0)`` (``:141-142``). No call
+#: site varies any of them, so they are constants rather than parameters.
+
+_TRIP_CHANGE_TRAVEL_KIND_CODE = "1"
+
+_TRIP_CHANGE_INTEGRATED_TICKET_FLAG = "N"
+
+_TRIP_CHANGE_SEAT_DEMAND_CODE = "000"
+
+_TRIP_CHANGE_SECOND_JOURNEY_COUNT = "0000"
 
 def _required_digits(value: str | None, *, field: str) -> str:
     if not isinstance(value, str) or _DIGITS_RE.fullmatch(value) is None:
@@ -1940,218 +1972,6 @@ def build_price_recalculation_form(
     for wire_name, _ in _PRICE_RECALCULATION_ROW_FIELDS:
         form[wire_name] = columns[wire_name]
     return form
-
-
-def _required_identity_text(value: object, *, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise KorailProtocolError(
-            f"KORAIL offline refund requires a non-empty {field}"
-        )
-    return value
-
-
-def build_offline_refund_verify_form(
-    config: KorailConfig,
-    return_number: OfflineRefundReturnNumber,
-    *,
-    requester_name: str,
-) -> dict[str, str]:
-    """``refunds.verifyOnlineRefunds`` — 비회원 오프라인 반환 1단계 (조회).
-
-    NOT the member refund. There is no session, no PNR and no
-    :class:`~korail_mobile_api.mutation_models.PaidTicket` here: the ticket is
-    a paper one bought at a station window, and it is identified by the
-    16-digit 반환번호 printed on it plus the requester's own name. The member
-    path is :func:`build_refund_form` (``refunds.RefundsRequest``).
-
-    Five fields after the common envelope, in the order the app's Retrofit
-    signature declares them — ``Device``, ``Version``, ``Key``, ``retNo1``,
-    ``retNo2``, ``retNo3``, ``retNo4``, ``strName``
-    (``RefundService.java:31-33``; re-read from
-    ``smali/com/korail/talk/network/dao/refund/RefundService.smali:273-320``,
-    where the eight ``retrofit/http/Field`` annotations carry exactly those
-    values and the ``POST`` annotation carries
-    ``/classes/com.korail.mobile.refunds.verifyOnlineRefunds``).
-
-    ``strName`` is the 요청자 — the ``requestorEdit`` box of
-    ``offline_return_input_fragment.xml``, read at ``s5/c.java:71``. The
-    phone number the same screen collects is NOT sent here; it is held for the
-    execute call (``s5/c.java:106`` passes it along, ``s5/h.java:123`` sends
-    it).
-
-    Every field this builds is a bearer credential or PII, and none of them is
-    caught by a value-shaped regex — the 16 digits arrive split 5/4/5/2, so
-    ``CARD_RE`` never sees 13 consecutive digits. All five wire keys are
-    registered in :data:`~korail_mobile_api.redaction.SENSITIVE_KEYS`.
-    """
-    if type(return_number) is not OfflineRefundReturnNumber:
-        raise KorailProtocolError(
-            "KORAIL offline refund verification requires an "
-            "OfflineRefundReturnNumber"
-        )
-    form = _common_fields(config)
-    form.update(
-        {
-            "retNo1": return_number.return_no_1,
-            "retNo2": return_number.return_no_2,
-            "retNo3": return_number.return_no_3,
-            "retNo4": return_number.return_no_4,
-            "strName": _required_identity_text(
-                requester_name,
-                field="requester_name",
-            ),
-        }
-    )
-    return form
-
-
-def build_offline_refund_execute_form(
-    config: KorailConfig,
-    verified: OfflineRefundVerifyResponse,
-    *,
-    requester_name: str,
-    requester_phone: str,
-) -> dict[str, str]:
-    """``refunds.executeOnlineRefunds`` — 비회원 오프라인 반환 2단계 (접수/환불).
-
-    NOT the member refund (:func:`build_refund_form`). This one moves money on
-    a paper ticket nobody is logged in to own.
-
-    Twelve fields after the common envelope, in the order the app's Retrofit
-    signature declares them — ``Device``, ``Version``, ``Key``, ``pnrNo``,
-    ``tkKndCd``, ``retDvCd``, ``retRsnCd``, ``ogtkSaleDt``, ``ogtkSaleWctNo``,
-    ``ogtkSaleSqno``, ``ogtkRetPwd``, ``retAmt``, ``retFee``, ``custTeln``,
-    ``acepCustNm`` (``RefundService.java:15-17``; re-read from
-    ``RefundService.smali:1-90``, whose fifteen ``Field`` annotation values are
-    exactly those and whose ``POST`` value is
-    ``/classes/com.korail.mobile.refunds.executeOnlineRefunds``).
-
-    ``verified`` is the PARSED VERIFY RESPONSE rather than a hand-assembled
-    identity, because that is precisely what the app does: ``s5/h.java:114-125``
-    takes nine of the twelve values off ``getOrgTkInfos().get(0)`` and the two
-    amounts off the response itself, and only the last two come from the user.
-    Letting a caller assemble the four-part sale identity by hand is how a
-    mismatched credential reaches a real refund.
-
-    **The two identity fields are crossed relative to their bundle keys.** The
-    app stashes the requester's NAME under the bundle key ``"CUSTOMER_NUMBER"``
-    and the PHONE under ``"PHONE_NUMBER"`` (``s5/h.java:100-108``, from
-    ``s5/c.java:106`` which passes ``requestorEdit`` then ``phoneNoEdit``), then
-    reads them back as ``setAcepCustNm(...getString("CUSTOMER_NUMBER"))`` and
-    ``setCustTeln(...getString("PHONE_NUMBER"))`` (``:122-123``). So
-    ``acepCustNm`` is the name and ``custTeln`` is the phone number — the
-    misleading bundle key is the app's, and it is exactly the kind of thing a
-    later reader "fixes" the wrong way.
-
-    Only the FIRST resolved ticket is refunded, matching the app's
-    ``get(0)``. A 반환번호 that resolved to more than one ticket is refused
-    rather than silently refunding one of them.
-    """
-    if type(verified) is not OfflineRefundVerifyResponse:
-        raise KorailProtocolError(
-            "KORAIL offline refund execution requires an "
-            "OfflineRefundVerifyResponse from verifyOnlineRefunds"
-        )
-    tickets = verified.tickets
-    if len(tickets) != 1:
-        raise KorailProtocolError(
-            "KORAIL offline refund execution requires exactly one verified "
-            f"ticket; the verification returned {len(tickets)}"
-        )
-    ticket = tickets[0]
-    identity = {
-        "pnrNo": ticket.pnr_no,
-        "tkKndCd": ticket.ticket_kind_code,
-        "retDvCd": ticket.return_division_code,
-        "retRsnCd": ticket.return_reason_code,
-        "ogtkSaleDt": ticket.original_sale_date,
-        "ogtkSaleWctNo": ticket.original_window_no,
-        "ogtkSaleSqno": ticket.original_sale_sequence,
-        "ogtkRetPwd": ticket.original_return_password,
-        "retAmt": verified.refund_amount,
-        "retFee": verified.refund_fee,
-    }
-    missing = [name for name, value in identity.items() if not value]
-    if missing:
-        raise KorailProtocolError(
-            "KORAIL offline refund execution is missing verified fields: "
-            f"{', '.join(missing)}"
-        )
-    form = _common_fields(config)
-    form.update({name: str(value) for name, value in identity.items()})
-    form["custTeln"] = _required_identity_text(
-        requester_phone,
-        field="requester_phone",
-    )
-    form["acepCustNm"] = _required_identity_text(
-        requester_name,
-        field="requester_name",
-    )
-    return form
-
-
-# ---------------------------------------------------------------------------
-# 승차권 여행변경 (ticket_change)
-#
-# THE INDEXING RULE, ONCE, FOR ALL THREE ROUTES BELOW. Every R* class in
-# network/data/reservation is a LinkedHashMap<String,String> whose setters
-# append a decimal index to a constant prefix, and Retrofit's @FieldMap
-# flattens the map key-for-key (RequestBuilder.smali:1440-1508 walks
-# entrySet() and calls addField(key, value)). So the wire key IS the map key,
-# the map's INSERTION order is the wire order -- which is not the same as the
-# order the calls appear in, because a LinkedHashMap re-put keeps the key's
-# first position (see the RSeat block of build_trip_change_reservation_form,
-# the one map two files write) -- and there are exactly two shapes:
-#
-#   one index   prefix + N            e.g. dptDt_1, psgTpDvCd_2
-#   two indices prefix + N + "_" + K  e.g. rqSeatAttCd_1_1, dcntKndCd_2_1
-#
-# EVERY index is 1-based. The app's loops all increment before the first use
-# (w4/b.java:148, C5/d.java:48, w4/a.java:140), and the two-index writers are
-# called with a literal 1 for the inner index on every path found.
-#
-# Two prefixes are NOT what their setter names suggest and are easy to get
-# wrong (RSrcar.java:7-10, 24-26):
-#
-#   setScarCnt  -> "scarCnt_"     setSrcarCnt -> "srcarCnt_"
-#   setSrcarNo  -> "scarNo_"      setSeatNo   -> "seatNo_"
-#
-# and the two routes below disagree about which count they send:
-# reservationChange.do writes scarCnt_ (w4/a.java:154) while the trip-change
-# seat picker writes srcarCnt_ (SeatSearchActivity.java:660).
-# ---------------------------------------------------------------------------
-
-#: ``jrnySqno_N`` for leg N. ``C5/d.java:51`` writes
-#: ``addZero(4, int(K4.d.DIRECT_SQ_NO))`` for the first leg and
-#: ``TRANSFER_SQ_NO`` for every later one; the codes are "1" and "2"
-#: (``K4/d.java:5-6``), so the two possible values are these.
-_TRIP_CHANGE_JOURNEY_SEQUENCE_NOS = ("0001", "0002")
-
-#: The three ``RSeat`` attribute codes ``w4/b.java:165-167`` writes before
-#: ``rqSeatAttCd`` and ``C5/d.java`` never touches. Each is
-#: ``prefix + leg + "_1"``. The values are enum codes: ``K4/q.DISABLE``
-#: 사용안함, ``K4/l.DEFAULT`` 모든방향, ``K4/n.DEFAULT`` 모든 위치 — all
-#: ``"000"``, but spelled out per key because they come from three different
-#: enums and only coincide.
-_TRIP_CHANGE_SEAT_OPTION_CODES: tuple[tuple[str, str], ...] = (
-    ("smkSeatAttCd_", "000"),  # K4/q.java:6 DISABLE
-    ("dirSeatAttCd_", "000"),  # K4/l.java:5 DEFAULT
-    ("locSeatAttCd_", "000"),  # K4/n.java:5 DEFAULT
-)
-
-#: ``etcSeatAttCd_N_1`` (``K4/m.java:5`` DISABLE), written LAST of the six
-#: (``w4/b.java:169``) — after ``rqSeatAttCd``, which is why it is not in the
-#: tuple above.
-_TRIP_CHANGE_ETC_SEAT_ATTRIBUTE_CODE = "000"
-
-#: ``trvlKndCd`` (``w4/b.java:135``), ``intgTktIseFlg`` (``:139``),
-#: ``alcSeatDmnPsDvCd`` (``:140``) and the two "second journey" counters
-#: ``jrny2Cnt``/``psg2Cnt``, both ``addZero(4, 0)`` (``:141-142``). No call
-#: site varies any of them, so they are constants rather than parameters.
-_TRIP_CHANGE_TRAVEL_KIND_CODE = "1"
-_TRIP_CHANGE_INTEGRATED_TICKET_FLAG = "N"
-_TRIP_CHANGE_SEAT_DEMAND_CODE = "000"
-_TRIP_CHANGE_SECOND_JOURNEY_COUNT = "0000"
 
 
 def _zero_padded(value: int, *, width: int) -> str:

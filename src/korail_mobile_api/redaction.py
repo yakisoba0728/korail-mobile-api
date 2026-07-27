@@ -257,8 +257,12 @@ SENSITIVE_KEYS = frozenset(
         "strCustNo",
         "encryptCustNo",
         # ------------------------------------------------------------------
-        # 비회원 오프라인 반환 (refunds.verifyOnlineRefunds /
-        # refunds.executeOnlineRefunds). NOTHING here is caught by a regex:
+        # 반환번호(원표) identity. The 비회원 오프라인 반환 routes that first
+        # brought these in were REMOVED on 2026-07-27, but the spellings stay:
+        # research.tripChgOgtk.do takes the same four-part return number as
+        # ogtkSale*_N / ogtkRetPwd_N, and the 여행변경 chain echoes it. The
+        # values are identical; only the route that carries them changed.
+        # NOTHING here is caught by a regex:
         # CARD_RE needs 13-19 CONSECUTIVE digits and the 16-digit 반환번호
         # arrives split 5/4/5/2 (res/values/integers.xml:29-32), the phone
         # number is 11 digits, and the requester's name is a Korean name. Key
@@ -327,23 +331,12 @@ SENSITIVE_KEYS = frozenset(
         # original_return_password, car_no, seat_no, room_class_name); these
         # are the ones that are genuinely new.
         #
-        # non_member_* -- KorailNonMemberSession's three fields (models.py).
-        #   The whole non-member identity: a real name, a real phone number and
-        #   the 비회원 승차권 조회 password. Named with the non_member_ prefix
-        #   rather than name/phone/password precisely so that registering them
-        #   here cannot start redacting unrelated "name=" text: SENSITIVE_KEYS
-        #   feeds SENSITIVE_KEY_VALUE_RE, which substitutes across every
-        #   redacted string in the package.
-        # return_no_1..4 / return_no -- OfflineRefundReturnNumber's segments
-        #   (mutation_models.py), enumerated and based for the same reason
-        #   retNo1..4 are.
-        # requester_name / requester_phone -- not attributes but the keyword
-        #   names the two offline-refund form builders take. Registered so that
-        #   a kwargs dump or a bound-arguments repr masks them exactly as the
-        #   wire keys do; they carry the same two values.
-        "non_member_name",
-        "non_member_phone",
-        "non_member_password",
+        # return_no_1..4 / return_no -- the printed 반환번호's segments,
+        #   enumerated and based for the same reason retNo1..4 are. The model
+        #   that owned them went with the 비회원 routes; the attribute names are
+        #   kept registered because the same four-part number reaches
+        #   tripChgOgtk and the 여행변경 forms, and a spelling that is dropped
+        #   here is a spelling that leaks the day something re-introduces it.
         "return_no_1",
         "return_no_2",
         "return_no_3",

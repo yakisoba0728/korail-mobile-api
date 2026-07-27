@@ -145,7 +145,7 @@ def test_price_recalculation_is_its_own_consent_category():
 def test_route_is_a_mutation_route_owned_by_that_category():
     assert ("POST", ROUTE) in KORAIL_MUTATION_ROUTES
     assert ("GET", ROUTE) not in KORAIL_MUTATION_ROUTES
-    assert len(KORAIL_MUTATION_ROUTES) == 14
+    assert len(KORAIL_MUTATION_ROUTES) == 12
     assert KORAIL_MUTATION_ROUTES.isdisjoint(KORAIL_READ_ONLY_ROUTES)
     assert KORAIL_MUTATION_ROUTE_CATEGORIES[ROUTE] == "price_recalculation"
     assert_mutation_route("POST", ROUTE)
