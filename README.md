@@ -76,10 +76,10 @@ explicitly — see [docs/verification-record.md](docs/verification-record.md).
 
 ## What it can do
 
-The reviewed package boundary contains 60 routes and 80 public methods. Fifty-eight
-of the routes are reads, plus the login POST and the logout GET; the twelve
+The reviewed package boundary contains 60 routes and 77 public methods. Fifty-eight
+of the routes are reads, plus the login POST and the logout GET; the nine
 mutation routes are tracked in a separate set and are never added to the
-read-only allowlist. Sixteen of the methods are consent-gated mutations; the
+read-only allowlist. Thirteen of the methods are consent-gated mutations; the
 remaining sixty-four transmit only login/read requests, or nothing at all.
 The other twelve are the consent-gated mutations below.
 

@@ -289,12 +289,6 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # bracket. The builder therefore returns list values, which httpx
         # encodes identically.
         ("POST", "/classes/com.korail.mobile.certification.PriceReCalculation"),
-        # ticket_change -- 승차권 여행변경 and its rollback, plus 예약 인원 변경.
-        # One category, three routes, and none of them a reuse of "reserve":
-        # a 여행변경 stakes the ORIGINAL, already-paid ticket. The 원표's
-        ("POST", "/classes/com.korail.mobile.reservation.tripChgPrsC.do"),
-        ("POST", "/classes/com.korail.mobile.ticket.tripChgHndgCnc.do"),
-        ("POST", "/classes/com.korail.mobile.reservation.reservationChange.do"),
         # cart -- 장바구니에 승차권(PNR) 담기 (CartService.java:11-13, addCart).
         # A category of its own rather than a reuse of "reserve": the hold
         # this acts on already exists, the route creates and destroys nothing
@@ -334,11 +328,6 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
     "/classes/com.korail.mobile.reservation.dcntCrdExtn.do": "discount_card",
     "/classes/com.korail.mobile.certification.PriceReCalculation": (
         "price_recalculation"
-    ),
-    "/classes/com.korail.mobile.reservation.tripChgPrsC.do": "ticket_change",
-    "/classes/com.korail.mobile.ticket.tripChgHndgCnc.do": "ticket_change",
-    "/classes/com.korail.mobile.reservation.reservationChange.do": (
-        "ticket_change"
     ),
     "/classes/com.korail.mobile.cart.addCartList": "cart",
 }

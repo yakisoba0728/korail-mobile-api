@@ -414,10 +414,10 @@ SENSITIVE_KEYS = frozenset(
         "lumpStlTgtNo",
         "lump_settlement_target_no",
         # ------------------------------------------------------------------
-        # 승차권 여행변경 (ticket_change) on the way OUT. Every name below is a
-        # value this set ALREADY redacts under a different spelling; listing
-        # them is what stops the same secret from becoming readable purely
-        # because these three routes name it differently.
+        # 승차권 여행변경 identity. The three 여행변경 routes were removed on
+        # 2026-07-27, but these spellings stay registered: each is a value this
+        # set already redacts under a different name, and a spelling dropped
+        # here is one that leaks if anything reintroduces the family.
         #
         #   tmpJobSqno IS THE PNR. C5/d.java:145 sets it to
         #     reservationResponse.getH_pnr_no() before the re-price call.

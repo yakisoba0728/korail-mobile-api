@@ -37,7 +37,6 @@ MUTATION_CATEGORIES = (
     "refund",
     "discount_card",
     "price_recalculation",
-    "ticket_change",
     "cart",
 )
 
@@ -48,7 +47,6 @@ _CONSENT_FLAG_BY_CATEGORY = {
     "refund": "allow_refund",
     "discount_card": "allow_discount_card",
     "price_recalculation": "allow_price_recalculation",
-    "ticket_change": "allow_ticket_change",
     "cart": "allow_cart",
 }
 
@@ -107,32 +105,6 @@ class MutationConsent:
     #: re-pricing a held booking, so it is asked for separately. No live-test
     #: path in this repository exercises it.
     allow_price_recalculation: bool = False
-    #: 승차권 여행변경 (``reservation.tripChgPrsC.do``), its rollback
-    #: (``ticket.tripChgHndgCnc.do``) and 예약 인원 변경
-    #: (``reservation.reservationChange.do``). One category for all three, and
-    #: not a reuse of any existing one.
-    #:
-    #: It is not ``allow_reserve``: a 여행변경 does not place a new booking
-    #: beside the old one, it puts the ORIGINAL, already-paid ticket up as
-    #: collateral — ``ROrtg`` carries the 원표's four-part 반환번호 — and the
-    #: settlement that follows charges or refunds the difference plus a
-    #: 변경수수료. Nobody who opted into holding a seat opted into that. It is
-    #: not ``allow_cancel``/``allow_refund`` either: the original ticket is not
-    #: refunded, it is consumed.
-    #:
-    #: **THE ROLLBACK IS DELIBERATELY IN THIS SAME CATEGORY.**
-    #: ``ticket.tripChgHndgCnc.do`` cancels the 묶음결제 target that
-    #: ``tripChgPrsC.do`` just created, and it is the ONLY way to undo one. The
-    #: app treats them as one operation — ``a6/x.java:109-115`` fires the
-    #: rollback from the very screen that made the change, with
-    #: ``setNotShowDialog(true)`` because it is cleanup and not a user action.
-    #: Splitting it into its own flag would mean a caller who was allowed to
-    #: make the change could not undo it, which is not a safety boundary but a
-    #: way to strand a paid ticket in a half-changed state. This project has
-    #: already paid for that mistake once, in ``cancel_unpaid_hold``'s orphaned
-    #: holds. The route/category cross-check still stops a ticket_change
-    #: consent from reaching payment, cancel or refund.
-    allow_ticket_change: bool = False
     #: 장바구니에 승차권 담기 (``cart.addCartList``,
     #: ``CartService.java:11-13``). Its own category rather than a reuse of
     #: ``allow_reserve``: it acts on a PNR that already exists, creates and
@@ -179,7 +151,7 @@ def require_mutation_consent(
 
     ``category`` must be one of ``"reserve"``, ``"payment"``, ``"cancel"``,
 ``"refund"``, ``"discount_card"``, ``"price_recalculation"``,
-    ``"ticket_change"``, ``"cart"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
+    ``"cart"``. Raises :class:`~korail_mobile_api.errors.MutationNotAllowedError`
     when ``consent`` is ``None``, is not a :class:`MutationConsent`, names an
     unknown category, or when the matching ``allow_<category>`` flag is False.
     Returns ``None`` when the mutation is permitted. Performs no I/O.
