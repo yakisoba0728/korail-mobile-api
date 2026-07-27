@@ -93,9 +93,6 @@ from .read_models import (
     SelfSeatChangeReason,
     SelfSeatChangeStation,
     ServiceStatusResponse,
-    SpecialRoomUpgradeJourney,
-    SpecialRoomUpgradeQuoteResponse,
-    SpecialRoomUpgradeTicketInfo,
     TicketReceipt,
     TicketReceiptResponse,
     TicketReservationDetailResponse,
@@ -2949,72 +2946,6 @@ def parse_self_seat_change_info_response(
         ),
         stations=stations,
         reasons=reasons,
-        **_response_fields(raw),
-    )
-
-
-_SPECIAL_ROOM_UPGRADE_TICKET_FIELDS = {
-    "screen_indicated_amount": "scnIndcAmt",
-    "total_fare": "totFare",
-}
-_SPECIAL_ROOM_UPGRADE_JOURNEY_FIELDS = {
-    "lump_settlement_target_no": "lumpStlTgtNo",
-}
-
-
-def parse_special_room_upgrade_quote_response(
-    raw: Mapping[str, Any],
-) -> SpecialRoomUpgradeQuoteResponse:
-    """Parse ``myTicket.reqUpgradeSeat``.
-
-    ``SpecialRoomUpgradeDao`` (``dao/myTicket/SpecialRoomUpgradeDao.java:
-    12-57``). ``scnIndcAmt`` is read as string-or-number on purpose: the app
-    does ``Integer.parseInt`` on it (``SpecialRoomUpgradeActivity.java:61``),
-    which is precisely the field shape KORAIL has been seen to send both ways.
-    """
-    if not isinstance(raw, Mapping):
-        raise KorailProtocolError(
-            "KORAIL special room upgrade quote response must be a mapping"
-        )
-    _validate_strict_read_envelope(raw)
-    ticket_info_raw = _optional_mapping(
-        raw,
-        "ticketInfo",
-        "special room upgrade quote",
-    )
-    ticket_info = (
-        None
-        if ticket_info_raw is None
-        else SpecialRoomUpgradeTicketInfo(
-            **_nullable_scalar_fields(
-                ticket_info_raw,
-                _SPECIAL_ROOM_UPGRADE_TICKET_FIELDS,
-                "special room upgrade ticket info",
-            ),
-            raw=ticket_info_raw,
-        )
-    )
-    journeys = tuple(
-        SpecialRoomUpgradeJourney(
-            **_nullable_scalar_fields(
-                journey,
-                _SPECIAL_ROOM_UPGRADE_JOURNEY_FIELDS,
-                "special room upgrade journey",
-            ),
-            raw=journey,
-        )
-        for journey in (
-            _row(value, "special room upgrade jrnys")
-            for value in _optional_list(
-                raw,
-                "jrnys",
-                "special room upgrade quote",
-            )
-        )
-    )
-    return SpecialRoomUpgradeQuoteResponse(
-        ticket_info=ticket_info,
-        journeys=journeys,
         **_response_fields(raw),
     )
 

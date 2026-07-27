@@ -1,8 +1,13 @@
-"""Offline contract tests for the 승차권 변경 chain's three new reads.
+"""Offline contract tests for the 승차권 변경 chain's two new reads.
 
 * ``POST self.seatChgInfo.do``            (``TicketService.java:54-56``)
 * ``POST research.tripChgOgtk.do``        (``ResearchService.java:61-63``)
-* ``GET  myTicket.reqUpgradeSeat``        (``MyTicketService.java:23-24``)
+
+The chain's third candidate, ``GET myTicket.reqUpgradeSeat``, is deliberately
+NOT implemented, and :func:`test_the_special_room_upgrade_chain_stays_out`
+pins that: its response mints the ``lumpStlTgtNo`` its paired ``procUpgrade``
+settles, which makes it a purchase rather than a quote by the same standard
+this repository already applied to ``research.dcntCrdInfo.do``.
 
 Nothing here touches the network: every request is answered by an
 ``httpx.MockTransport`` handler, and every field name and constant asserted
@@ -31,20 +36,18 @@ from korail_mobile_api.models import KorailSession
 from korail_mobile_api.read_models import (
     OriginalTicketInquiryResponse,
     SelfSeatChangeInfoResponse,
-    SpecialRoomUpgradeQuoteResponse,
 )
 from korail_mobile_api.read_parsers import (
     parse_original_ticket_inquiry_response,
     parse_self_seat_change_info_response,
-    parse_special_room_upgrade_quote_response,
 )
 from korail_mobile_api.read_payloads import (
+    CommuterTicketInquiryRequest,
     OriginalTicketReference,
     SelfSeatChangeInfoRequest,
-    SpecialRoomUpgradeQuoteRequest,
+    build_commuter_info_form,
     build_original_ticket_inquiry_form,
     build_self_seat_change_info_form,
-    build_special_room_upgrade_quote_query,
 )
 from korail_mobile_api.redaction import (
     is_sensitive_key,
@@ -63,15 +66,15 @@ from korail_mobile_api.safety import (
 
 SEAT_CHANGE_PATH = "/classes/com.korail.mobile.self.seatChgInfo.do"
 ORIGINAL_TICKET_PATH = "/classes/com.korail.mobile.research.tripChgOgtk.do"
+# The 특실 업그레이드 pair. Neither half may become reachable: the first mints
+# a settlement target (SpecialRoomUpgradeDao.java:13,19) and the second spends
+# it (MyTicketService.java:21).
 UPGRADE_QUOTE_PATH = "/classes/com.korail.mobile.myTicket.reqUpgradeSeat"
-# The purchase that follows the quote (MyTicketService.java:20-21). It must
-# never become reachable through anything added here.
 UPGRADE_PURCHASE_PATH = "/classes/com.korail.mobile.myTicket.procUpgradeSeat"
 
 NEW_ROUTES = {
     ("POST", SEAT_CHANGE_PATH),
     ("POST", ORIGINAL_TICKET_PATH),
-    ("GET", UPGRADE_QUOTE_PATH),
 }
 
 
@@ -94,29 +97,6 @@ def _seat_change_request(
         arrival_station_code="0015",
         room_class_code=room_class_code,
     )
-
-
-def _upgrade_request(**overrides: Any) -> SpecialRoomUpgradeQuoteRequest:
-    values: dict[str, Any] = {
-        "original_ticket": _reference(),
-        "journey_type_code": "1",
-        "journey_sequence": "001",
-        "departure_date": "20260801",
-        "departure_construction_order": "000001",
-        "departure_run_order": "000001",
-        "departure_station_code": "0001",
-        "departure_time": "070000",
-        "arrival_date": "20260801",
-        "arrival_construction_order": "000010",
-        "arrival_run_order": "000010",
-        "arrival_station_code": "0015",
-        "arrival_time": "094500",
-        "train_no": "00017",
-        "run_date": "20260801",
-        "room_classification_code": "1",
-    }
-    values.update(overrides)
-    return SpecialRoomUpgradeQuoteRequest(**values)
 
 
 def _success(**extra: Any) -> dict[str, Any]:
@@ -147,16 +127,42 @@ def _client(handler) -> KorailClient:
 # ---------------------------------------------------------------------------
 
 
-def test_the_three_change_chain_routes_are_registered_reads_only():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 61
+def test_the_two_change_chain_routes_are_registered_reads_only():
+    assert len(KORAIL_READ_ONLY_ROUTES) == 60
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
-    # The quote's paying sibling is in neither set, so no code path reaches it.
-    assert ("GET", UPGRADE_PURCHASE_PATH) not in KORAIL_READ_ONLY_ROUTES
-    assert ("GET", UPGRADE_PURCHASE_PATH) not in KORAIL_MUTATION_ROUTES
-    assert ("POST", UPGRADE_PURCHASE_PATH) not in KORAIL_MUTATION_ROUTES
     assert KORAIL_MUTATION_ROUTES.isdisjoint(NEW_ROUTES)
-    # None of the three is a DynaPath-signed path.
+    # Neither is a DynaPath-signed path.
     assert all(path not in DYNAPATH_ALLOWLIST_PATHS for _, path in NEW_ROUTES)
+
+
+def test_the_special_room_upgrade_chain_stays_out_of_both_allowlists():
+    """Neither half of 특실 업그레이드 may be reachable.
+
+    ``reqUpgradeSeat`` reads like a quote — its request carries no amount, no
+    payment means and no confirmation flag — but its response mints a
+    ``lumpStlTgtNo`` (``SpecialRoomUpgradeDao.java:13,19``) and ``procUpgrade``
+    takes that same 일괄결제대상번호 beside ``stlMnsCd`` / ``crdInpWayCd`` /
+    ``ismtMnthNum`` / ``mnsStlAmt`` (``MyTicketService.java:21``). Producing
+    the settlement target a payment then spends is creating an unpaid
+    purchase, which is the reading this repository already applied to
+    ``research.dcntCrdInfo.do`` when it put that route in
+    :data:`KORAIL_MUTATION_ROUTES` rather than the read allowlist.
+
+    It is not registered as a mutation either: its paired write is an intended
+    deferral, and half a purchase chain would let a caller create settlement
+    targets with no supported way to settle or abandon them.
+    """
+    for path in (UPGRADE_QUOTE_PATH, UPGRADE_PURCHASE_PATH):
+        for method in ("GET", "POST"):
+            assert (method, path) not in KORAIL_READ_ONLY_ROUTES
+            assert (method, path) not in KORAIL_MUTATION_ROUTES
+        assert path not in KORAIL_EXACT_REQUEST_FIELDS
+    # ...and no client method offers either of them.
+    assert not [
+        name
+        for name in dir(KorailClient)
+        if "upgrade" in name.casefold()
+    ]
 
 
 def test_exact_request_field_contracts_match_the_apk_declarations():
@@ -174,39 +180,6 @@ def test_exact_request_field_contracts_match_the_apk_declarations():
     # ...of which only psrmClCd may be dropped (TCSOptionsActivity.java:135-138).
     assert KORAIL_OPTIONAL_REQUEST_FIELDS[SEAT_CHANGE_PATH] == {"psrmClCd"}
 
-    # MyTicketService.java:23-24 / MyTicketService.smali:176-309. All 26 are
-    # always sent, so nothing is optional here.
-    assert KORAIL_EXACT_REQUEST_FIELDS[UPGRADE_QUOTE_PATH] == {
-        "Device",
-        "Version",
-        "Key",
-        "ogtkSaleDd",
-        "ogtkSaleWctNo",
-        "ogtkSaleSqno",
-        "ogtkRetPwd",
-        "jrnyTpCd",
-        "jrnySqno",
-        "dptDt",
-        "dptStnConsOrdr",
-        "dptStnRunOrdr",
-        "dptRsStnCd",
-        "dptTm",
-        "arvDt",
-        "arvStnConsOrdr",
-        "arvStnRunOrdr",
-        "arvRsStnCd",
-        "arvTm",
-        "trnNo",
-        "runDt",
-        "trnGpCd",
-        "roomClsfCd",
-        "scarNo",
-        "seatNo",
-        "rqSeatAttCd",
-    }
-    assert len(KORAIL_EXACT_REQUEST_FIELDS[UPGRADE_QUOTE_PATH]) == 26
-    assert UPGRADE_QUOTE_PATH not in KORAIL_OPTIONAL_REQUEST_FIELDS
-
     # ResearchService.java:61-63 — only the four fixed @Fields can be named.
     assert KORAIL_EXACT_REQUEST_FIELDS[ORIGINAL_TICKET_PATH] == {
         "Device",
@@ -223,13 +196,6 @@ def test_client_method_signatures_and_exports_are_exact():
             {
                 "request": SelfSeatChangeInfoRequest,
                 "return": SelfSeatChangeInfoResponse,
-            },
-        ),
-        "get_special_room_upgrade_quote": (
-            ["self", "request"],
-            {
-                "request": SpecialRoomUpgradeQuoteRequest,
-                "return": SpecialRoomUpgradeQuoteResponse,
             },
         ),
         "get_original_ticket_inquiry": (
@@ -251,16 +217,11 @@ def test_client_method_signatures_and_exports_are_exact():
         "SelfSeatChangeInfoResponse",
         "SelfSeatChangeStation",
         "SelfSeatChangeReason",
-        "SpecialRoomUpgradeQuoteRequest",
-        "SpecialRoomUpgradeQuoteResponse",
-        "SpecialRoomUpgradeTicketInfo",
-        "SpecialRoomUpgradeJourney",
         "OriginalTicket",
         "OriginalTicketInquiryResponse",
         "OriginalTicketJourney",
         "OriginalTicketSeat",
         "SELF_SEAT_CHANGE_ROOM_CLASS_CODES",
-        "SPECIAL_ROOM_UPGRADE_QUOTE_OK_CODES",
     ):
         assert name in korail_mobile_api.__all__
         assert getattr(korail_mobile_api, name) is not None
@@ -310,48 +271,6 @@ def test_seat_change_request_rejects_an_unevidenced_room_class():
         )
     with pytest.raises(TypeError):
         build_self_seat_change_info_form({"runDt": "20260801"})
-
-
-def test_upgrade_quote_query_matches_the_twenty_three_declared_parameters():
-    query = build_special_room_upgrade_quote_query(_upgrade_request())
-    assert query == {
-        "ogtkSaleDd": "SALE_DATE_SECRET_1",
-        "ogtkSaleWctNo": "WINDOW_SECRET_1",
-        "ogtkSaleSqno": "SALE_SEQUENCE_SECRET_1",
-        "ogtkRetPwd": "RETURN_PASSWORD_SECRET_1",
-        "jrnyTpCd": "1",
-        "jrnySqno": "001",
-        "dptDt": "20260801",
-        "dptStnConsOrdr": "000001",
-        "dptStnRunOrdr": "000001",
-        "dptRsStnCd": "0001",
-        "dptTm": "070000",
-        "arvDt": "20260801",
-        "arvStnConsOrdr": "000010",
-        "arvStnRunOrdr": "000010",
-        "arvRsStnCd": "0015",
-        "arvTm": "094500",
-        "trnNo": "00017",
-        "runDt": "20260801",
-        # Hardcoded by the app (SpecialRoomUpgradeActivity.java:126) and
-        # I4/a.AFTER_DEPARTURE = "15" (I4/a.smali:7).
-        "trnGpCd": "100",
-        "roomClsfCd": "1",
-        "scarNo": "",
-        "seatNo": "",
-        "rqSeatAttCd": "15",
-    }
-    assert len(query) == 23
-    assert_read_only_request_fields(
-        UPGRADE_QUOTE_PATH,
-        {"Device": "AD", "Version": "v", "Key": "k", **query},
-    )
-    with pytest.raises(TypeError):
-        build_special_room_upgrade_quote_query(query)
-    with pytest.raises(TypeError):
-        _upgrade_request(original_ticket=("W", "D", "S", "P"))
-    with pytest.raises(ValueError):
-        _upgrade_request(departure_time="0700")
 
 
 def test_original_ticket_form_indexes_groups_from_one_in_rortg_order():
@@ -523,42 +442,6 @@ def test_seat_change_parser_reads_the_dao_shape_and_tolerates_numbers():
         parse_self_seat_change_info_response(_success(chgStnList=["nope"]))
 
 
-def test_upgrade_quote_parser_reads_the_price_and_the_settlement_target():
-    parsed = parse_special_room_upgrade_quote_response(
-        _success(
-            ticketInfo={
-                "custNm": "NAME_SECRET",
-                # Integer.parseInt'd by the app, and seen both ways on the wire.
-                "scnIndcAmt": 2400,
-                "totFare": "59800",
-            },
-            jrnys=[{"lumpStlTgtNo": "TARGET_SECRET"}],
-        )
-    )
-    assert type(parsed) is SpecialRoomUpgradeQuoteResponse
-    assert parsed.ticket_info.screen_indicated_amount == "2400"
-    assert parsed.ticket_info.total_fare == "59800"
-    assert parsed.journeys[0].lump_settlement_target_no == "TARGET_SECRET"
-    # The traveller's name is not promoted to a typed attribute.
-    assert not hasattr(parsed.ticket_info, "customer_name")
-    assert parsed.ticket_info.raw["custNm"] == "NAME_SECRET"
-    # Neither secret may reach a repr.
-    assert "TARGET_SECRET" not in repr(parsed)
-    assert "NAME_SECRET" not in repr(parsed)
-
-    missing = parse_special_room_upgrade_quote_response(_success())
-    assert missing.ticket_info is None and missing.journeys == ()
-
-    assert korail_mobile_api.SPECIAL_ROOM_UPGRADE_QUOTE_OK_CODES == {
-        "IRT000000",
-        "MRT200105",
-    }
-    with pytest.raises(KorailProtocolError):
-        parse_special_room_upgrade_quote_response("not a mapping")
-    with pytest.raises(KorailProtocolError):
-        parse_special_room_upgrade_quote_response(_success(ticketInfo=[]))
-
-
 def test_original_ticket_parser_reads_nested_journeys_and_seats():
     parsed = parse_original_ticket_inquiry_response(
         _success(
@@ -648,7 +531,7 @@ def test_original_ticket_parser_reads_nested_journeys_and_seats():
 
 
 def test_the_original_ticket_credential_is_redacted_in_every_spelling():
-    # The bare @Query spelling the upgrade quote uses...
+    # The bare spelling research.cmtrInfo.do's 원표 branch already emits...
     assert is_sensitive_key("ogtkRetPwd")
     # ...the indexed @FieldMap spellings the 원표 lookup uses...
     for index in (1, 2, 9, 10):
@@ -671,7 +554,6 @@ def test_the_original_ticket_credential_is_redacted_in_every_spelling():
         "prepCrdNo",
         "apvNo",
         "lumpStlTgtNo",
-        "roomClsfCd",
     ):
         assert is_sensitive_key(key), key
     # ...plus the model attribute names the parsers write them into.
@@ -681,7 +563,6 @@ def test_the_original_ticket_credential_is_redacted_in_every_spelling():
         "original_sale_sequence",
         "original_sale_datetime",
         "lump_settlement_target_no",
-        "room_classification_code",
         # jrnyTpCd was already registered under both spellings before this
         # change; OriginalTicketJourney has to honour it like every other
         # model that surfaces it.
@@ -697,11 +578,27 @@ def test_the_credential_never_survives_a_preview_of_either_request():
     assert redacted_form["ogtkSaleWctNo_1"] == "[REDACTED]"
     assert redacted_form["tkCnt"] == "1"
 
-    # The upgrade quote is a GET, so the credential lands in a URL.
-    query = build_special_room_upgrade_quote_query(_upgrade_request())
+    # The commuter read emits the same four keys unindexed
+    # (ResearchService.java:41-42), and they must mask there too.
+    commuter_form = dict(
+        build_commuter_info_form(
+            CommuterTicketInquiryRequest(original_ticket=_reference())
+        )
+    )
+    redacted_commuter = redact_payload(commuter_form)
+    for key in (
+        "ogtkRetPwd",
+        "ogtkSaleWctNo",
+        "ogtkSaleDd",
+        "ogtkSaleSqno",
+    ):
+        assert redacted_commuter[key] == "[REDACTED]", key
+    assert redacted_commuter["jobDvCd"] == "c"
+
+    # redact_url is what protects any of these that reaches a log inside a URL.
     url = httpx.URL(
-        f"https://smart.letskorail.com{UPGRADE_QUOTE_PATH}",
-        params=query,
+        "https://smart.letskorail.com/classes/anything",
+        params=commuter_form,
     )
     redacted_url = redact_url(str(url))
     assert "RETURN_PASSWORD_SECRET_1" not in redacted_url
@@ -709,7 +606,7 @@ def test_the_credential_never_survives_a_preview_of_either_request():
     assert "SALE_SEQUENCE_SECRET_1" not in redacted_url
     assert "ogtkRetPwd=%5BREDACTED%5D" in redacted_url
     # A non-credential parameter still travels in the clear.
-    assert "trnGpCd=100" in redacted_url
+    assert "jobDvCd=c" in redacted_url
 
 
 def test_the_credential_never_survives_a_parsed_response_either():
@@ -732,30 +629,17 @@ def test_the_credential_never_survives_a_parsed_response_either():
     assert "DELAY_PWD_SECRET" not in repr(redacted)
     assert "CARD_SECRET" not in repr(redacted)
 
-    quote = parse_special_room_upgrade_quote_response(
-        _success(jrnys=[{"lumpStlTgtNo": "TARGET_SECRET"}])
-    )
-    assert "TARGET_SECRET" not in repr(redact_value(quote))
-
 
 # ---------------------------------------------------------------------------
 # Client wiring
 # ---------------------------------------------------------------------------
 
 
-def test_client_sends_exactly_the_built_shapes_to_the_three_routes():
+def test_client_sends_exactly_the_built_shapes_to_the_two_routes():
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        if request.url.path == UPGRADE_QUOTE_PATH:
-            return httpx.Response(
-                200,
-                json=_success(
-                    ticketInfo={"scnIndcAmt": "2400", "totFare": "59800"},
-                    jrnys=[{"lumpStlTgtNo": "TARGET_SECRET"}],
-                ),
-            )
         if request.url.path == ORIGINAL_TICKET_PATH:
             return httpx.Response(
                 200,
@@ -770,20 +654,17 @@ def test_client_sends_exactly_the_built_shapes_to_the_three_routes():
     try:
         seat = client.get_self_seat_change_info(_seat_change_request())
         original = client.get_original_ticket_inquiry((_reference(),))
-        quote = client.get_special_room_upgrade_quote(_upgrade_request())
     finally:
         client.close()
 
     assert type(seat) is SelfSeatChangeInfoResponse
     assert type(original) is OriginalTicketInquiryResponse
-    assert type(quote) is SpecialRoomUpgradeQuoteResponse
-    assert [request.method for request in seen] == ["POST", "POST", "GET"]
+    assert [request.method for request in seen] == ["POST", "POST"]
     assert [request.url.path for request in seen] == [
         SEAT_CHANGE_PATH,
         ORIGINAL_TICKET_PATH,
-        UPGRADE_QUOTE_PATH,
     ]
-    # No route signs a DynaPath header.
+    # Neither route signs a DynaPath header.
     assert all(
         "X-DynaPath-M-Token" not in request.headers for request in seen
     )
@@ -813,15 +694,8 @@ def test_client_sends_exactly_the_built_shapes_to_the_three_routes():
     ]
     assert dict(original_fields)["tkCnt"] == "1"
 
-    quote_params = dict(parse_qsl(seen[2].url.query.decode("utf-8"),
-                                  keep_blank_values=True))
-    assert quote_params["ogtkRetPwd"] == "RETURN_PASSWORD_SECRET_1"
-    assert quote_params["scarNo"] == "" and quote_params["seatNo"] == ""
-    assert quote_params["rqSeatAttCd"] == "15"
-    assert len(quote_params) == 26
 
-
-def test_every_one_of_the_three_requires_a_session():
+def test_both_of_them_require_a_session():
     def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
         raise AssertionError("no request may leave without a session")
 
@@ -833,7 +707,6 @@ def test_every_one_of_the_three_requires_a_session():
         for call in (
             lambda: client.get_self_seat_change_info(_seat_change_request()),
             lambda: client.get_original_ticket_inquiry((_reference(),)),
-            lambda: client.get_special_room_upgrade_quote(_upgrade_request()),
         ):
             with pytest.raises(KorailAuthError):
                 call()

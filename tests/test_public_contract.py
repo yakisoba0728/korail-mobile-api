@@ -82,7 +82,6 @@ def test_client_public_method_set_is_stable():
         "get_seat_assignment_schedule",
         "get_self_seat_change_info",
         "get_service_status",
-        "get_special_room_upgrade_quote",
         "get_station_data",
         "get_station_info",
         "get_ticket_list",

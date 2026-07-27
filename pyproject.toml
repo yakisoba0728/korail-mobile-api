@@ -39,6 +39,11 @@ korail_mobile_api = ["py.typed"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+# Test the tree pytest was invoked in, not whatever `korail_mobile_api` the
+# editable install happens to resolve to. Without this, running pytest from a
+# git worktree imports the MAIN checkout's src/ and reports a green suite for
+# code that was never under test.
+pythonpath = ["src"]
 markers = [
   "live: tests that call live KORAIL services and require explicit opt-in",
 ]

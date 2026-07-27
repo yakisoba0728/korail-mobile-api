@@ -268,11 +268,11 @@ SENSITIVE_KEYS = frozenset(
         # ogtkRetPwd is a bearer credential in the same sense h_orgtk_ret_pwd
         # already registered above is: it is one quarter of a 반환번호, and the
         # holder of the tuple can read and act on someone else's ticket. It
-        # travels three ways and only the third was ever covered:
+        # travels three ways and none was covered:
         #
-        #   * as a bare @Query on the 특실 업그레이드 견적
-        #     (MyTicketService.java:23-24 -- so it lands in a URL, which is why
-        #     redact_url matters here and not just redact_payload),
+        #   * as a bare @Field on the 정기권 원표 조회 branch of
+        #     research.cmtrInfo.do (ResearchService.java:41-42; this package
+        #     has emitted it since build_commuter_info_form was added),
         #   * as an INDEXED @FieldMap key on the 원표 lookup -- ogtkRetPwd_1,
         #     ogtkRetPwd_2, ... (ROrtg.java:8-11 + TCBookingActivity.java:
         #     169-175). _index_stripped() below turns those back into the base
@@ -317,19 +317,14 @@ SENSITIVE_KEYS = frozenset(
         "settlement_card_no",
         "prepaid_card_no",
         "approval_no",
-        # 특실 업그레이드 견적's 일괄결제대상번호 (SpecialRoomUpgradeDao.java:
-        # 15-21). lump_stl_tgt_no / h_lump_stl_tgt_no are already registered
-        # under other spellings; this is the same number, and it is what
-        # procUpgradeSeat spends (MyTicketService.java:20-21).
+        # 일괄결제대상번호, the number a settlement is charged against.
+        # lump_sum_target_no / h_lump_stl_tgt_no are already registered under
+        # other spellings; these two are the same number as the 할인카드 구매
+        # mutation returns it (mutation_parsers.py maps lumpStlTgtNo ->
+        # lump_settlement_target_no), and whoever holds one can have a payment
+        # applied to it.
         "lumpStlTgtNo",
         "lump_settlement_target_no",
-        # 특실 업그레이드 견적's 객실 구분 code. psrmClCd, psrm_cl_cd,
-        # room_class_code and room_class_name are all already registered above;
-        # roomClsfCd is the same value under the one spelling this route uses,
-        # and leaving it readable is precisely the failure the psrm_cl_cd note
-        # above was written about.
-        "roomClsfCd",
-        "room_classification_code",
     }
 )
 _INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)_?(?P<index>\d+)$")

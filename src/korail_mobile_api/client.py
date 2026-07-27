@@ -154,7 +154,6 @@ from .read_models import (
     SeatAssignmentScheduleResponse,
     SelfSeatChangeInfoResponse,
     ServiceStatusResponse,
-    SpecialRoomUpgradeQuoteResponse,
     TicketReceiptResponse,
     TicketReservationDetailResponse,
     TicketDuplicationCheckResponse,
@@ -197,7 +196,6 @@ from .read_payloads import (
     build_self_seat_change_info_form,
     build_service_status_query,
     build_seat_assignment_schedule_form,
-    build_special_room_upgrade_quote_query,
     build_ticket_receipt_form,
     build_ticket_reservation_detail_query,
     build_ticket_duplication_check_form,
@@ -217,7 +215,6 @@ from .read_payloads import (
     OriginalTicketReference,
     RefundCompanion,
     SelfSeatChangeInfoRequest,
-    SpecialRoomUpgradeQuoteRequest,
     TicketDuplicationCheckRequest,
     TicketReservationDetailRequest,
 )
@@ -257,7 +254,6 @@ from .read_parsers import (
     parse_self_seat_change_info_response,
     parse_service_status_response,
     parse_seat_assignment_schedule_response,
-    parse_special_room_upgrade_quote_response,
     parse_ticket_receipt_response,
     parse_ticket_reservation_detail_response,
     parse_ticket_duplication_check_response,
@@ -1161,54 +1157,6 @@ class KorailClient:
                 self.http.post_form(
                     "/classes/com.korail.mobile.self.seatChgInfo.do",
                     form,
-                    include_dynapath=False,
-                ).raw
-            )
-        )
-
-    def get_special_room_upgrade_quote(
-        self,
-        request: SpecialRoomUpgradeQuoteRequest,
-    ) -> SpecialRoomUpgradeQuoteResponse:
-        """Price a 특실 업그레이드 without buying it.
-
-        ``GET myTicket.reqUpgradeSeat`` (``MyTicketService.java:23-24``). The
-        answer's
-        :attr:`~korail_mobile_api.read_models.SpecialRoomUpgradeTicketInfo.screen_indicated_amount`
-        is the upgrade's price in KTX 마일리지 points -- the number the app
-        shows in its "이 점수를 차감하여 업그레이드 하시겠습니까?" dialog
-        (``SpecialRoomUpgradeActivity.java:59-66``).
-
-        **This method cannot upgrade anything.** The purchase is a different
-        route, ``myTicket.procUpgradeSeat`` (``MyTicketService.java:20-21``),
-        which is registered in neither
-        :data:`~korail_mobile_api.safety.KORAIL_READ_ONLY_ROUTES` nor
-        :data:`~korail_mobile_api.safety.KORAIL_MUTATION_ROUTES`, so no code
-        path in this package can reach it.
-
-        **Read the caveat before using this in a loop.** The quote returns
-        ``jrnys[].lumpStlTgtNo``, a 일괄결제대상번호 that ``procUpgradeSeat``
-        then settles (``SpecialRoomUpgradeActivity.java:74``). Whether the
-        server MINTS that number here -- i.e. whether a quote leaves a pending
-        settlement row behind -- cannot be decided from the APK: the app has
-        no cancel path for a quote that is never paid. The request itself
-        carries no amount, no payment means and no confirmation flag, which is
-        why it is classified as a read; but of every route in this package
-        this is the one whose read-only classification rests on the thinnest
-        evidence. Treat repeated calls as something to avoid rather than
-        something proven harmless.
-
-        **NOT LIVE-VERIFIED.** The app reaches this screen only from a push
-        notification whose payload supplies all twenty-three parameters.
-        """
-        self._require_session()
-        query = build_special_room_upgrade_quote_query(request)
-        return self._run_read(
-            lambda: parse_special_room_upgrade_quote_response(
-                self.http.get_json(
-                    "/classes/com.korail.mobile.myTicket.reqUpgradeSeat",
-                    query,
-                    include_common=True,
                     include_dynapath=False,
                 ).raw
             )

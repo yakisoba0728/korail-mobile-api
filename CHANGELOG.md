@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Added: the 승차권 변경 chain's three remaining READS. The read-only boundary
-  is now 61 routes and `KorailClient` exposes 77 public methods.
+- Added: two reads of the 승차권 변경 chain. The read-only boundary is now
+  60 routes and `KorailClient` exposes 76 public methods.
   - `get_self_seat_change_info` — `POST self.seatChgInfo.do`
     (`TicketService.java:54-56`, `TicketService.smali:280-325`). Eight fields;
     `psrmClCd` is registered OPTIONAL because `TCSOptionsActivity.java:135-138`
@@ -28,34 +28,33 @@
       Retrofit a `HashMap` (`OgTkInquiryDao.java:15,52`), so its wire order is
       unspecified, and its own call sites do not even insert in the same
       order. Grouping by ticket in `ROrtg` declaration order is deterministic.
-  - `get_special_room_upgrade_quote` — `GET myTicket.reqUpgradeSeat`
-    (`MyTicketService.java:23-24`, `MyTicketService.smali:176-309`). All 26
-    `@Query` parameters are always sent, so none is optional; `trnGpCd` is the
-    app's hardcoded `"100"` (`SpecialRoomUpgradeActivity.java:126`) and
-    `rqSeatAttCd` is `I4/a.AFTER_DEPARTURE` = `"15"` (`I4/a.smali:7`) on both
-    branches that send the request (`:163-165`, `:268-270`).
-    - **Registered as a read, with the caveat recorded rather than glossed.**
-      It is the QUOTE — the app shows the returned `scnIndcAmt` in a
-      confirmation dialog (`:59-66`) and charges through the separate
-      `procUpgradeSeat` route (`MyTicketService.java:20-21`), which is in
-      neither the read nor the mutation allowlist. But the quote answers with
-      `jrnys[].lumpStlTgtNo`, a 일괄결제대상번호 the payment then spends
-      (`:74`), and the app has no undo for an unpaid quote, so whether the
-      server mints settlement state here is not decidable from the APK. The
-      client docstring says so.
+- Not added, and deliberately so: 특실 업그레이드's `myTicket.reqUpgradeSeat`
+  (`MyTicketService.java:23-24`). It was briefly implemented as a read on the
+  strength of its request — no amount, no payment means, no confirmation flag
+  — but its RESPONSE mints a `lumpStlTgtNo` (`SpecialRoomUpgradeDao.java:
+  13,19`) and `procUpgrade` takes that same 일괄결제대상번호 beside `stlMnsCd`
+  / `crdInpWayCd` / `ismtMnthNum` / `mnsStlAmt` (`MyTicketService.java:21`).
+  Producing the settlement target a payment then spends creates an unpaid
+  purchase; it does not price one. That is the same reading this repository
+  already applied to `research.dcntCrdInfo.do` ("Despite the 'Info' in its
+  path this is a PURCHASE"), which is why that route lives in
+  `KORAIL_MUTATION_ROUTES`. It is not registered as a mutation either: its
+  paired write `procUpgradeSeat` is an intended deferral, and half a purchase
+  chain would let a caller create settlement targets with no supported way to
+  settle or abandon them. `tests/test_ticket_change_chain_reads.py` pins both
+  halves out of both allowlists.
 - Security: `ogtkRetPwd` and the rest of the 원표 반환번호 tuple are now
-  redacted. `ogtkRetPwd` travels three ways — as a bare `@Query` (so it lands
-  in a URL), as indexed `@FieldMap` keys, and back as `OrgTk.ogtkRetPwd` — and
-  none was masked before. `ogtkSaleWctNo`/`ogtkSaleDd`/`ogtkSaleSqno`/
+  redacted. `ogtkRetPwd` travels three ways — as a bare `@Field` on
+  `research.cmtrInfo.do`'s 원표 branch, which this package has emitted since
+  `build_commuter_info_form` was added, as indexed `@FieldMap` keys, and back
+  as `OrgTk.ogtkRetPwd` — and none was masked before. `ogtkSaleWctNo`/`ogtkSaleDd`/`ogtkSaleSqno`/
   `ogtkSaleDt` are registered with it, since masking three quarters of a
   반환번호 leaves it reconstructable; `_index_stripped` covers every row index.
   Also registered: the 지연증명 tuple `Cmpn.dlayOgtk*` (`Cmpn.java:11-14`), the
   settlement rows' `stlCrdNo`/`prepCrdNo`/`apvNo` (`Stl.java:5-16`), and
-  `lumpStlTgtNo` under both spellings. `cmpnList`/`stlList` are deliberately
-  left unparsed and stay masked inside `raw`. Finally `roomClsfCd`, the 특실
-  업그레이드 견적's spelling of a value already registered as `psrmClCd` /
-  `psrm_cl_cd` / `room_class_code` / `room_class_name` — the exact "readable
-  purely because this route names it differently" gap that block warns about.
+  `lumpStlTgtNo` under both spellings, which the 할인카드 구매 mutation
+  already returns. `cmpnList`/`stlList` are deliberately left unparsed and
+  stay masked inside `raw`.
 
 - Added: 운임 재계산 as a consent-gated mutation —
   `KorailClient.recalculate_price`, `POST

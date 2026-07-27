@@ -842,12 +842,12 @@ def test_repository_truth_and_full_mutation_policy() -> None:
     # evidence that supports one of them followed the prose into the record.
     record = (ROOT / "docs/verification-record.md").read_text()
     for document in (readme, handoff):
-        assert "61 routes" in document
-        # 77, not 72 or 74. Older numbers appear in the handoff, because those
+        assert "60 routes" in document
+        # 76, not 72 or 74. Older numbers appear in the handoff, because those
         # sentences were true when written and are kept as history; the pin has
         # to name the CURRENT boundary or it stops detecting the next drift.
-        assert "77 public methods" in document
-        assert "2245 passed" in document and "1 deselected" in document
+        assert "76 public methods" in document
+        assert "2244 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
     for document in (record, handoff):
         assert "5 cars" in document

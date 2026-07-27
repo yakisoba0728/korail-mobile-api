@@ -63,8 +63,8 @@ EXCLUDED_API_DOMAINS = frozenset(
 
 # The exact (method, path) pairs the read-only send path will transmit to.
 #
-# 61 entries, 61 distinct paths, pinned by tests. The decomposition is
-# 59 reads + the login POST + the server-side logout GET (cookie-authenticated,
+# 60 entries, 60 distinct paths, pinned by tests. The decomposition is
+# 58 reads + the login POST + the server-side logout GET (cookie-authenticated,
 # zero parameters, and not a mutation, which is why it belongs here rather than
 # in KORAIL_MUTATION_ROUTES). There is no "excluding logout" counting
 # convention: every number quoted in the docs is the full set.
@@ -202,24 +202,30 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         # (OgTkInquiryDao.java:38-53). Its sibling reservation.tripChgDate.do
         # is already registered above.
         ("POST", "/classes/com.korail.mobile.research.tripChgOgtk.do"),
-        # myTicket.reqUpgradeSeat (MyTicketService.java:23-24) is the 특실
-        # 업그레이드 QUOTE. It answers "what would this cost" -- the app shows
-        # the returned scnIndcAmt in a confirmation dialog
-        # (SpecialRoomUpgradeActivity.java:59-66) and only charges after the
-        # user accepts, through the SEPARATE procUpgradeSeat route
-        # (MyTicketService.java:20-21), which is NOT registered anywhere in
-        # this module.
         #
-        # CAVEAT, recorded rather than glossed: the quote's response carries
-        # jrnys[].lumpStlTgtNo (SpecialRoomUpgradeDao.java:15-21), a
-        # 일괄결제대상번호 that procUpgradeSeat then spends
-        # (SpecialRoomUpgradeActivity.java:74). The app has no undo path for a
-        # quote that is never paid, so whether the server mints settlement
-        # state here is not decidable from the APK alone. It is registered as a
-        # read because that is what the app's own request does -- it sends no
-        # amount, no payment means and no confirmation flag -- but a caller
-        # should treat it as the most speculative entry in this set.
-        ("GET", "/classes/com.korail.mobile.myTicket.reqUpgradeSeat"),
+        # DELIBERATELY ABSENT, and it was briefly here: 특실 업그레이드's
+        # myTicket.reqUpgradeSeat (MyTicketService.java:23-24). Its path and
+        # its request look like a quote -- it sends no amount, no payment
+        # means and no confirmation flag -- but its RESPONSE mints a
+        # lumpStlTgtNo (SpecialRoomUpgradeDao.java:13,19), and procUpgrade
+        # takes that same 일괄결제대상번호 alongside stlMnsCd / crdInpWayCd /
+        # ismtMnthNum / mnsStlAmt (MyTicketService.java:21). A route that
+        # produces the settlement target a payment then spends is creating an
+        # unpaid purchase, not pricing one.
+        #
+        # This repository has already made exactly this call once, for
+        # research.dcntCrdInfo.do -- "Despite the 'Info' in its path this is a
+        # PURCHASE: it answers with a lumpStlTgtNo and an rcvdAmt ... What it
+        # creates is an unpaid purchase awaiting settlement" (client.py, the
+        # register_discount_card docstring) -- which is why that route sits in
+        # KORAIL_MUTATION_ROUTES under the discount_card category. The same
+        # shape gets the same answer.
+        #
+        # It is NOT re-registered as a mutation either. Its paired write,
+        # procUpgradeSeat (MyTicketService.java:20-21), is scoped out as an
+        # intended deferral, and shipping half of a purchase chain is worse
+        # than shipping none of it: it would leave a caller able to create
+        # settlement targets with no supported way to settle or abandon them.
     }
 )
 
@@ -1163,47 +1169,6 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "dptRsStnCd",
             "arvRsStnCd",
             "psrmClCd",
-        }
-    ),
-    # 특실 업그레이드 견적 (MyTicketService.java:23-24, twenty-six @Query
-    # parameters; cross-checked against MyTicketService.smali:176-309). Every
-    # one of them is always transmitted, so nothing is registered as optional.
-    # Twenty-three come from a push payload read with JSONObject.optString,
-    # which yields "" rather than null (SpecialRoomUpgradeActivity.java:
-    # 103-130). The remaining three -- scarNo, seatNo, rqSeatAttCd -- are the
-    # only ones that builder leaves unset, and BOTH of the two places that
-    # actually send the request fill them first: the "any seat" branch blanks
-    # the pair and sets rqSeatAttCd (:163-165) and the seat-picker branch sets
-    # them from the chosen seat (:268-270). rqSeatAttCd is I4/a.AFTER_DEPARTURE
-    # = "15" on both paths (I4/a.java:5, I4/a.smali:7).
-    "/classes/com.korail.mobile.myTicket.reqUpgradeSeat": frozenset(
-        {
-            "Device",
-            "Version",
-            "Key",
-            "ogtkSaleDd",
-            "ogtkSaleWctNo",
-            "ogtkSaleSqno",
-            "ogtkRetPwd",
-            "jrnyTpCd",
-            "jrnySqno",
-            "dptDt",
-            "dptStnConsOrdr",
-            "dptStnRunOrdr",
-            "dptRsStnCd",
-            "dptTm",
-            "arvDt",
-            "arvStnConsOrdr",
-            "arvStnRunOrdr",
-            "arvRsStnCd",
-            "arvTm",
-            "trnNo",
-            "runDt",
-            "trnGpCd",
-            "roomClsfCd",
-            "scarNo",
-            "seatNo",
-            "rqSeatAttCd",
         }
     ),
     # 원표(원승차권) 조회 (ResearchService.java:61-63). Only the four fixed
