@@ -25,9 +25,12 @@ are never added to the read-only allowlist. Sixty-four of the methods are the
 audited login/read methods, which transmit only read-only requests. The other
 twelve, `reserve`, `reserve_transfer`, `reserve_merge`,
 `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
-`pay_with_fake_card`, `pay_with_card`, `refund`, `register_discount_card`,
-`extend_discount_card` and `recalculate_price`, are
-the consent-gated mutation methods. Each is denied unless the caller supplies a
+`pay_with_fake_card`, `pay_with_card`, `refund`,
+`verify_offline_refund_ticket`, `execute_offline_refund`,
+`register_discount_card`, `extend_discount_card` and `recalculate_price`, are
+the consent-gated mutation methods; the remaining two, `begin_non_member` and
+`end_non_member`, hold and drop the 비회원 identity locally and transmit
+nothing. Each is denied unless the caller supplies a
 `MutationConsent` that opts into its category; with the default `dry_run=True`
 each merely validates its inputs and returns a redacted `MutationPreview` of the
 form that *would* be posted, sending nothing. Only a `dry_run=False` consent

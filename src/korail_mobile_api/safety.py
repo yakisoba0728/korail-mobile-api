@@ -277,6 +277,31 @@ KORAIL_MUTATION_ROUTES = frozenset(
         ),
         # refund
         ("POST", "/classes/com.korail.mobile.refunds.RefundsRequest"),
+        # refund -- the 비회원 오프라인(역창구 발권) 반환 pair, and DELIBERATELY
+        # the same category as the member refund above rather than a new one.
+        # It is the same product act and the same movement of money: a ticket
+        # stops being valid and a fee is deducted from what is paid back
+        # (RefundService.java:15-17,31-33; screen flow s5/c.java -> s5/h.java).
+        # What differs is only WHO is asking -- nobody is logged in, and the
+        # ticket is identified by the printed 16-digit 반환번호 plus the
+        # requester's name instead of by a session. That is an identity
+        # difference, not a consent boundary: a caller who granted allow_refund
+        # granted refunding a ticket.
+        #
+        # verifyOnlineRefunds is registered as a MUTATION even though it reads
+        # like a lookup (the app's own button says 반환 승차권 조회,
+        # strings.xml:1300). Two reasons, and only the second one is decisive.
+        # First, its response hands back the full four-part sale identity
+        # INCLUDING ogtk_ret_pwd (RefundVerifyTicketDao.java:119-122) -- it
+        # converts a printed number into the credential the execute call
+        # spends, so it is the load-bearing half of the refund. Second, the
+        # 반환번호 it takes is a bearer credential guessed against a live
+        # endpoint; putting it on the read path would let it be called without
+        # any consent at all. Whether the server also records or reserves
+        # anything at this point is NOT established from the APK, so it is
+        # gated as though it does.
+        ("POST", "/classes/com.korail.mobile.refunds.verifyOnlineRefunds"),
+        ("POST", "/classes/com.korail.mobile.refunds.executeOnlineRefunds"),
         # discount_card -- 할인카드(N카드) 구매 and 기간연장. A category of
         # their own, and one no live-test path in this repository touches.
         #
@@ -333,6 +358,11 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
         "cancel"
     ),
     "/classes/com.korail.mobile.refunds.RefundsRequest": "refund",
+    # The 비회원 오프라인 반환 pair shares the member refund's category; see the
+    # comment on its entry in KORAIL_MUTATION_ROUTES for why identity is not a
+    # consent boundary here.
+    "/classes/com.korail.mobile.refunds.verifyOnlineRefunds": "refund",
+    "/classes/com.korail.mobile.refunds.executeOnlineRefunds": "refund",
     "/classes/com.korail.mobile.research.dcntCrdInfo.do": "discount_card",
     "/classes/com.korail.mobile.reservation.dcntCrdExtn.do": "discount_card",
     "/classes/com.korail.mobile.certification.PriceReCalculation": (

@@ -245,10 +245,17 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     # number survives in a milestone bullet, which is legitimate history, so
     # the check is on tense rather than on the digits: "exposed 72" records the
     # past, "exposes 72" asserts a present that is no longer true.
+    # Every superseded figure is listed, not just the first one: 74 became
+    # history when the 비회원 오프라인 반환 pair and its two identity helpers
+    # landed, and a guard that only knows about 72 would let the next stale
+    # sentence through exactly as the "72"-only version let 74 through.
     stale_present_tense = [
         line
         for line in progress.splitlines()
-        if re.search(r"(exposes|allows|boundary is)[^.]*\b72 public methods", line)
+        if re.search(
+            r"(exposes|allows|boundary is)[^.]*\b(72|74) public methods",
+            line,
+        )
     ]
     assert not stale_present_tense, stale_present_tense
 

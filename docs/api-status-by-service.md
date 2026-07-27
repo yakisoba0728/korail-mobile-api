@@ -19,8 +19,11 @@ Package coverage: 60 exact login/read routes and 76 public methods. Sixty-four
 are audited login/read methods; the other twelve, `reserve`,
 `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`,
 `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`,
-`pay_with_card`, `refund`, `register_discount_card`, `extend_discount_card`
-and `recalculate_price`, are consent-gated mutation methods. Each is
+`pay_with_card`, `refund`, `verify_offline_refund_ticket`,
+`execute_offline_refund`, `register_discount_card`, `extend_discount_card`
+and `recalculate_price`, are consent-gated mutation methods; the remaining two,
+`begin_non_member` and `end_non_member`, only hold and drop the 비회원 identity
+locally and send nothing. Each is
 denied without a matching-category `MutationConsent`; with the default
 `dry_run=True` each only returns a redacted `MutationPreview` (sending nothing),
 and only a `dry_run=False` consent performs the live state change, exclusively

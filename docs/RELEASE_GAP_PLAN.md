@@ -405,6 +405,20 @@ Two sub-flows (analysis §3.9 `…:874`):
 | `refunds.verifyOnlineRefunds` | POST | `retNo1..4`, `strName` | `RefundVerifyTicketResponse{ret_amt, ret_fee, rcvd_amt,…}` | `RefundService.java:31` |
 | `refunds.executeOnlineRefunds` | POST | `pnrNo`, `tkKndCd`, `retDvCd`, `retRsnCd`, `ogtkSaleDt`, `ogtkSaleWctNo`, `ogtkSaleSqno`, `ogtkRetPwd`, `retAmt`, `retFee`, `custTeln`, `acepCustNm` | `RefundExecuteTicketRefundResponse{h_ret_dv_cd}` | `RefundService.java:15` |
 
+> **IMPLEMENTED (offline pair).** `verify_offline_refund_ticket` and
+> `execute_offline_refund` now cover the two offline rows, so Flow D is 5/5.
+> Both are on the EXISTING `refund` consent category (`allow_refund`), not a new
+> one: same product act, same money, only a different way of proving whose
+> ticket it is. Their premise, the 비회원 identity the app keeps in
+> `b5/h.java:158-172`, is modelled as `KorailNonMemberSession` — a distinct type
+> from `KorailSession` with no `jsessionid`, held in `session.non_member`,
+> mutually exclusive with a member session in both directions.
+> `verifyOnlineRefunds` is registered as a MUTATION despite reading like a
+> lookup: it converts a printed 반환번호 into the four-part sale identity
+> **including `ogtk_ret_pwd`** (`RefundVerifyTicketDao.java:119-122`), which the
+> execute call then spends. Whether the server records anything at that step is
+> not established from the APK; it is gated as though it does.
+
 > **CORRECTION (2026-07-21, srtgo ref).** The working client refunds with a
 > **single `refunds.RefundsRequest` POST** — no `SelTicketInfo`/`CommissionView`
 > preview in the refund call itself (`srtgo_plus/srtgo/ktx.py:1077-1097`).

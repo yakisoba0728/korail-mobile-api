@@ -32,11 +32,14 @@ def test_client_public_method_set_is_stable():
         if not name.startswith("_")
     }
     assert methods == {
+        "begin_non_member",
         "cancel_unpaid_hold",
         "clear_session",
         "confirm_standby_hold",
         "close",
         "check_ticket_duplication",
+        "end_non_member",
+        "execute_offline_refund",
         "extend_discount_card",
         "get_app_data",
         "get_cart_list",
@@ -108,6 +111,7 @@ def test_client_public_method_set_is_stable():
         "search_trains",
         "search_trains_with_transfer_fallback",
         "search_transfer_trains",
+        "verify_offline_refund_ticket",
     }
 
 

@@ -142,6 +142,28 @@ passenger row.
 - `recalculate_price(request, consent=...)` — 운임 재계산: rewrite what an
   existing hold will cost when the discount selection changes.
 
+There is a second, unrelated refund path for a paper ticket bought at a station
+window, with nobody logged in. It identifies the ticket by the 16-digit
+반환번호 printed on it plus the requester's name, so it starts by holding a
+비회원 identity rather than by logging in:
+
+```python
+client.begin_non_member(requester_name, requester_phone)   # sends nothing
+verified = client.verify_offline_refund_ticket(
+    OfflineRefundReturnNumber.from_ticket_number(printed_ticket_number),
+    consent=MutationConsent(allow_refund=True),   # dry run: returns a preview
+)
+result = client.execute_offline_refund(verified, consent=...)
+```
+
+Both take the same `allow_refund` consent as `refund` — the same act on the
+same money, only a different way of proving whose ticket it is — and both
+refuse to run while a member session is active. `verify_offline_refund_ticket`
+is consent-gated even though the app calls it 조회, because what it returns is
+the ticket's return password, which the second call spends.
+`result.is_refund_completed` tells you whether the money came back now or the
+paper ticket still has to be handed in at a station within a year.
+
 ### Discounts, welfare and passes
 
 - `get_discount_card_usage_history(card_no)` and

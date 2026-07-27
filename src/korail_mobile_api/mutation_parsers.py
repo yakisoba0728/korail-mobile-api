@@ -8,6 +8,11 @@ from .errors import KorailProtocolError
 from .models import BaseKorailResponse
 from .mutation_models import (
     DiscountCardPurchaseResponse,
+    OfflineRefundExecuteResponse,
+    OfflineRefundJourney,
+    OfflineRefundSeat,
+    OfflineRefundTicket,
+    OfflineRefundVerifyResponse,
     ReservationHoldResponse,
     ReservationJourney,
     ReservationPaymentCoupon,
@@ -396,4 +401,206 @@ def parse_discount_card_purchase_response(
             )
             for attribute, wire_name in _DISCOUNT_CARD_PURCHASE_FIELDS.items()
         },
+    )
+
+
+# --- 비회원 오프라인 반환 ------------------------------------------------
+
+#: ``RefundVerifyTicketDao.RefundVerifyTicketResponse.SeatInfo:169-171``.
+_OFFLINE_REFUND_SEAT_FIELDS = {
+    "room_class_name": "psrm_cl_nm",
+    "car_no": "scar_no",
+    "seat_no": "seat_no",
+}
+
+#: ``RefundVerifyTicketDao.RefundVerifyTicketResponse.JrnyInfo:72-79``.
+_OFFLINE_REFUND_JOURNEY_FIELDS = {
+    "departure_date": "dpt_dt",
+    "departure_time": "dpt_tm",
+    "arrival_time": "arv_tm",
+    "departure_station_code": "dpt_rs_stn_cd",
+    "arrival_station_code": "arv_rs_stn_cd",
+    "train_group_code": "trn_gp_cd",
+    "train_no": "trn_no",
+}
+
+#: ``RefundVerifyTicketDao.RefundVerifyTicketResponse.Orgtkinfo:118-126``.
+#: ``prnNo`` is P-r-n here and becomes the execute form's P-n-r ``pnrNo``;
+#: see :class:`~korail_mobile_api.mutation_models.OfflineRefundTicket`.
+_OFFLINE_REFUND_TICKET_FIELDS = {
+    "pnr_no": "prnNo",
+    "original_sale_date": "ogtk_sale_dt",
+    "original_window_no": "ogtk_sale_wct_no",
+    "original_sale_sequence": "ogtk_sale_sqno",
+    "original_return_password": "ogtk_ret_pwd",
+    "ticket_kind_code": "tk_knd_cd",
+    "return_division_code": "ret_dv_cd",
+    "return_reason_code": "ret_rsn_cd",
+}
+
+#: ``RefundVerifyTicketDao.RefundVerifyTicketResponse:66-69``.
+_OFFLINE_REFUND_VERIFY_FIELDS = {
+    "received_amount": "rcvd_amt",
+    "refund_amount": "ret_amt",
+    "refund_fee": "ret_fee",
+    "popup_message": "poppMsg",
+}
+
+
+def _offline_refund_rows(
+    container: Any,
+    *,
+    key: str,
+    context: str,
+) -> list[Mapping[str, Any]]:
+    """Read one of the response's ``ArrayList`` members.
+
+    Gson gives the app a plain JSON array for each of ``orgtkinfo_list`` /
+    ``jrnyinfo_list`` / ``seatinfo_list``
+    (``RefundVerifyTicketDao.java:65,77,118``). Absent and null both mean "no
+    rows" rather than an error, because the app dereferences them only when it
+    has already decided the verification succeeded (``s5/h.java:61-85``).
+    """
+    if container is None:
+        return []
+    if isinstance(container, list):
+        rows = container
+    else:
+        raise KorailProtocolError(
+            f"KORAIL offline refund {key} must be a list or null"
+        )
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError(
+                f"KORAIL offline refund {context} must be an object"
+            )
+    return list(rows)
+
+
+def parse_offline_refund_verify_response(
+    raw: Mapping[str, Any],
+) -> OfflineRefundVerifyResponse:
+    """Parse ``refunds.verifyOnlineRefunds``'s reply.
+
+    ``RefundVerifyTicketDao.RefundVerifyTicketResponse``
+    (``RefundVerifyTicketDao.java:64-209``), including the three nested lists
+    the confirmation screen renders (``s5/h.java:61-90``).
+
+    **NOT LIVE-VERIFIED.** The shape comes from the DAO alone; no capture of a
+    real 비회원 반환 조회 exists in this repository.
+
+    The parsed object carries the ticket's four-part sale identity and its
+    return password in the clear — that is what the call is FOR — so treat it
+    as a credential. Its attribute names are registered in
+    :data:`~korail_mobile_api.redaction.SENSITIVE_KEYS`.
+    """
+    data = _response_mapping(raw)
+    base = BaseKorailResponse.from_raw(data)
+    tickets: list[OfflineRefundTicket] = []
+    for ticket_row in _offline_refund_rows(
+        data.get("orgtkinfo_list"),
+        key="orgtkinfo_list",
+        context="ticket",
+    ):
+        ticket_data = dict(ticket_row)
+        journeys: list[OfflineRefundJourney] = []
+        for journey_row in _offline_refund_rows(
+            ticket_data.get("jrnyinfo_list"),
+            key="jrnyinfo_list",
+            context="journey",
+        ):
+            journey_data = dict(journey_row)
+            seats = tuple(
+                OfflineRefundSeat(
+                    raw=dict(seat_row),
+                    **{
+                        attribute: _optional_string(
+                            seat_row,
+                            wire_name,
+                            context="offline refund seat",
+                        )
+                        for attribute, wire_name in (
+                            _OFFLINE_REFUND_SEAT_FIELDS.items()
+                        )
+                    },
+                )
+                for seat_row in _offline_refund_rows(
+                    journey_data.get("seatinfo_list"),
+                    key="seatinfo_list",
+                    context="seat",
+                )
+            )
+            journeys.append(
+                OfflineRefundJourney(
+                    seats=seats,
+                    raw=journey_data,
+                    **{
+                        attribute: _optional_string(
+                            journey_data,
+                            wire_name,
+                            context="offline refund journey",
+                        )
+                        for attribute, wire_name in (
+                            _OFFLINE_REFUND_JOURNEY_FIELDS.items()
+                        )
+                    },
+                )
+            )
+        tickets.append(
+            OfflineRefundTicket(
+                journeys=tuple(journeys),
+                raw=ticket_data,
+                **{
+                    attribute: _optional_string(
+                        ticket_data,
+                        wire_name,
+                        context="offline refund ticket",
+                    )
+                    for attribute, wire_name in (
+                        _OFFLINE_REFUND_TICKET_FIELDS.items()
+                    )
+                },
+            )
+        )
+    return OfflineRefundVerifyResponse(
+        h_msg_cd=base.h_msg_cd,
+        h_msg_txt=base.h_msg_txt,
+        str_result=base.str_result,
+        raw=data,
+        tickets=tuple(tickets),
+        **{
+            attribute: _optional_string(
+                data,
+                wire_name,
+                context="offline refund verification",
+            )
+            for attribute, wire_name in _OFFLINE_REFUND_VERIFY_FIELDS.items()
+        },
+    )
+
+
+def parse_offline_refund_execute_response(
+    raw: Mapping[str, Any],
+) -> OfflineRefundExecuteResponse:
+    """Parse ``refunds.executeOnlineRefunds``'s reply.
+
+    ``RefundExecuteTicketRefundDao.RefundExecuteTicketRefundResponse``
+    (``RefundExecuteTicketRefundDao.java:125-133``): the envelope plus
+    ``h_ret_dv_cd``, which says whether the money came back now or the paper
+    ticket still has to be handed in (``s5/h.java:187``).
+
+    **NOT LIVE-VERIFIED.**
+    """
+    data = _response_mapping(raw)
+    base = BaseKorailResponse.from_raw(data)
+    return OfflineRefundExecuteResponse(
+        h_msg_cd=base.h_msg_cd,
+        h_msg_txt=base.h_msg_txt,
+        str_result=base.str_result,
+        raw=data,
+        return_division_code=_optional_string(
+            data,
+            "h_ret_dv_cd",
+            context="offline refund execution",
+        ),
     )
