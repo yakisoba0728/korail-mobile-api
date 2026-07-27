@@ -760,8 +760,8 @@ in the CHANGELOG, and under `docs/superpowers/specs/`.
 The current implementation evidence establishes 60 routes at the exact
 login/read transport boundary and 76 public methods on `KorailClient`. The
 read-only path exposes no callable mutation route; reservation, unpaid-cancel,
-fake-card payment, acknowledged real-card payment, and refund are callable only
-through the separate
+fake-card payment, acknowledged real-card payment, refund, and cart-add are
+callable only through the separate
 consent-gated `post_mutation_form` path, while check-in, membership, and
 point/mileage mutation routes remain not callable. The current service inventory is 32 successful, 10 failed,
 and 123 unexecuted entries out of 165; the historical pre-revalidation inventory

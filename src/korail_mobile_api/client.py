@@ -20,6 +20,7 @@ from .errors import (
 )
 from .mutation_models import (
     CardPayment,
+    CartAddRequest,
     DiscountCardPurchaseRequest,
     DiscountCardPurchaseResponse,
     DiscountCardTicket,
@@ -46,6 +47,7 @@ from .mutation_parsers import (
 )
 from .mutation_payloads import (
     build_card_payment_form,
+    build_cart_add_form,
     build_discount_card_extension_query,
     build_discount_card_purchase_form,
     build_discount_card_reservation_form,
@@ -2362,6 +2364,62 @@ class KorailClient:
     def end_non_member(self) -> None:
         """Drop the held 비회원 identity, leaving any member session alone."""
         self.session.end_non_member()
+
+    def add_to_cart(
+        self,
+        request: CartAddRequest,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | BaseKorailResponse:
+        """Add a held reservation's PNR to the 장바구니 (cart).
+
+        ``POST cart.addCartList`` (``CartService.java:11-13``). One request
+        field beyond the common three: ``hidPnrNo``
+        (``AddCartDao.java:9-24``, confirmed against
+        ``AddCartDao$AddCartRequest.smali``).
+
+        Gated by ``require_mutation_consent(consent, "cart")`` and an
+        authenticated session. ``"cart"`` is its own consent category, not a
+        reuse of ``"reserve"``: the hold this acts on already exists, the
+        route creates and destroys nothing this package can observe, and it
+        carries no card number (it is deliberately absent from
+        :data:`~korail_mobile_api.safety.KORAIL_CARD_BEARING_MUTATION_CATEGORIES`).
+        With the default ``dry_run=True`` this builds and validates the form
+        and returns a redacted
+        :class:`~korail_mobile_api.consent.MutationPreview` — ``hidPnrNo`` is
+        registered in
+        :data:`~korail_mobile_api.redaction.SENSITIVE_KEYS`, so the PNR never
+        appears in a preview — sending nothing.
+
+        **VERIFIED: the route, the method, and the one field name, all from
+        the DAO and cross-checked against the smali.**
+
+        **NOT VERIFIED.** The DAO's response type is a bare ``BaseResponse``
+        (``CartService.java:13``), so what a successful add answers with is
+        unknown. Nothing here has ever been transmitted, and no live-test
+        path in this repository sends it.
+        """
+        require_mutation_consent(consent, "cart")
+        if self.session.current is None:
+            raise KorailAuthError(
+                "KORAIL cart add requires an authenticated session"
+            )
+        route = "/classes/com.korail.mobile.cart.addCartList"
+        form = build_cart_add_form(self.config, request)
+        if consent.dry_run:
+            return MutationPreview(
+                category="cart",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        try:
+            return self.http.post_mutation_form(
+                route, form, consent=consent, category="cart"
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
 
     def register_discount_card(
         self,

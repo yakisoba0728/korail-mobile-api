@@ -366,6 +366,17 @@ KORAIL_MUTATION_ROUTES = frozenset(
         ("POST", "/classes/com.korail.mobile.reservation.tripChgPrsC.do"),
         ("POST", "/classes/com.korail.mobile.ticket.tripChgHndgCnc.do"),
         ("POST", "/classes/com.korail.mobile.reservation.reservationChange.do"),
+        # cart -- 장바구니에 승차권(PNR) 담기 (CartService.java:11-13, addCart).
+        # A category of its own rather than a reuse of "reserve": the hold
+        # this acts on already exists, the route creates and destroys nothing
+        # server-side that this package can observe, and it carries no card
+        # number, so it is deliberately absent from
+        # KORAIL_CARD_BEARING_MUTATION_CATEGORIES. Confirmed against
+        # AddCartDao.java:9-24 and CartService.smali / AddCartDao$AddCartRequest.smali:
+        # the request is exactly the common three fields plus "hidPnrNo", and
+        # the DAO's response type is a bare BaseResponse (CartService.java:13),
+        # same shape as the discount_card extension route above.
+        ("POST", "/classes/com.korail.mobile.cart.addCartList"),
         # DELIBERATELY ABSENT: the whole PassService purchase family --
         # pass.passReserve / passPayIssue and their passOtr* siblings
         # (PassService.java:19-44). 정기권 구매 was implemented against these
@@ -405,6 +416,7 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
     "/classes/com.korail.mobile.reservation.reservationChange.do": (
         "ticket_change"
     ),
+    "/classes/com.korail.mobile.cart.addCartList": "cart",
 }
 
 # The consent categories whose forms carry a card number in the clear.

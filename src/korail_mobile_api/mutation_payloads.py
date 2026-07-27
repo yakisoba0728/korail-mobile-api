@@ -25,6 +25,7 @@ from .errors import KorailProtocolError
 from .models import TrainSummary
 from .read_models import TrainScheduleItem
 from .mutation_models import (
+    CartAddRequest,
     DiscountCardAdditionalUser,
     DiscountCardPurchaseRequest,
     DiscountCardSectionRequest,
@@ -2222,8 +2223,7 @@ def build_trip_change_reservation_form(
 
     Field by field, with the two builders that produce them:
 
-    ==================== ============================= =======================
-    field                value                          evidence
+    ==================== ============================= ================    field                value                          evidence
     ==================== ============================= =======================
     ``trvlKndCd``        ``"1"``                        w4/b.java:135
     ``totPrnb``          原票 count                     w4/b.java:136
@@ -2722,4 +2722,37 @@ def build_reservation_passenger_change_form(
             if discount_code is not None:
                 discount_rows[f"dcntKndCd_{person}_1"] = discount_code
     form.update(discount_rows)
+    return form
+
+
+def build_cart_add_form(
+    config: KorailConfig,
+    request: CartAddRequest,
+) -> dict[str, str]:
+    """``cart.addCartList`` — add a held reservation to the 장바구니 (cart).
+
+    One field beyond the common three: ``hidPnrNo``
+    (``CartService.java:11-13``, ``AddCartDao.java:9-24``, confirmed against
+    ``AddCartDao$AddCartRequest.smali``). The DAO's response type is a bare
+    ``BaseResponse`` (``CartService.java:13``), so unlike the purchase half of
+    ``discount_card`` there is no dedicated response dataclass or parser here
+    — :meth:`~korail_mobile_api.client.KorailClient.add_to_cart` returns the
+    unparsed envelope, the same shape ``extend_discount_card`` returns for its
+    own bare-``BaseResponse`` route.
+
+    **NOT VERIFIED.** What a successful add answers with, and whether it can
+    fail for reasons other than an invalid PNR, is unknown; no live-test path
+    in this repository sends it.
+    """
+    if type(request) is not CartAddRequest:
+        raise KorailProtocolError(
+            "KORAIL cart request requires an exact CartAddRequest"
+        )
+    pnr_no = request.pnr_no
+    if not isinstance(pnr_no, str) or not pnr_no.strip():
+        raise KorailProtocolError(
+            "KORAIL cart request requires a non-empty pnr_no"
+        )
+    form = _common_fields(config)
+    form["hidPnrNo"] = pnr_no
     return form

@@ -1207,6 +1207,30 @@ It sits in its own consent category, `"price_recalculation"`
 already been quoted and this call rewrites the quote. Nothing here has ever
 been transmitted and no live path in this repository reaches it.
 
+## 장바구니 담기 — add_to_cart
+
+- `add_to_cart(request, consent=...)` — `POST cart.addCartList`
+  (`CartService.java:11-13`). One request field beyond the common three:
+  `hidPnrNo` (`AddCartDao.java:9-24`, request class
+  `AddCartDao$AddCartRequest`), confirmed independently against
+  `AddCartDao$AddCartRequest.smali` (the `hidPnrNo` field declaration) and
+  `CartService.smali` (the `@Field("hidPnrNo")` annotation on `addCart` and
+  the `@POST("/classes/com.korail.mobile.cart.addCartList")` route
+  annotation). `get_cart_list` (`GET` sibling `cart.showCartList`, keyed by
+  `pnrNo` rather than `hidPnrNo`) already read the cart; this is the write
+  half.
+
+It sits in its own consent category, `"cart"` (`MutationConsent.allow_cart`,
+default `False`) — **not** `"reserve"`, because the hold this acts on already
+exists and the call creates and destroys nothing this package can observe. It
+carries no card number and so is deliberately absent from
+`KORAIL_CARD_BEARING_MUTATION_CATEGORIES`. The DAO's response type is a bare
+`BaseResponse` (`CartService.java:13`), so `add_to_cart` returns the unparsed
+envelope on a live send — the same shape `extend_discount_card` returns for
+its own bare-`BaseResponse` route — rather than a dedicated response
+dataclass. Nothing here has ever been transmitted and no live path in this
+repository reaches it.
+
 Everything starts from `RefundTicketDetailResponse.discount_card`. When the
 "ticket" being read is itself a card, `refunds.SelTicketInfo` returns a
 `dcnt_crd_info` object carrying the card number, the 기간연장 eligibility flag
