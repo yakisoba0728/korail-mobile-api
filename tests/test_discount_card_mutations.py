@@ -132,7 +132,7 @@ def test_both_routes_are_mutation_routes_owned_by_that_category():
     # Registered with the method the app actually uses, not coerced to POST.
     assert ("GET", EXTENSION_ROUTE) in KORAIL_MUTATION_ROUTES
     assert ("POST", EXTENSION_ROUTE) not in KORAIL_MUTATION_ROUTES
-    assert len(KORAIL_MUTATION_ROUTES) == 8
+    assert len(KORAIL_MUTATION_ROUTES) == 10
     assert KORAIL_MUTATION_ROUTES.isdisjoint(KORAIL_READ_ONLY_ROUTES)
     for route in (PURCHASE_ROUTE, EXTENSION_ROUTE):
         assert KORAIL_MUTATION_ROUTE_CATEGORIES[route] == "discount_card"

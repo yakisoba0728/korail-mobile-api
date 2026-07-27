@@ -308,7 +308,7 @@ def test_routes_fields_exports_and_signatures_are_exact():
         )
         if not name.startswith("_")
     }
-    assert len(public_methods) == 74
+    assert len(public_methods) == 78
 
     expected_exports = {
         "TicketReservationDetailRequest": (

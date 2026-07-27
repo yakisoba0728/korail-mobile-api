@@ -256,6 +256,92 @@ SENSITIVE_KEYS = frozenset(
         "strMbCrdNo",
         "strCustNo",
         "encryptCustNo",
+        # ------------------------------------------------------------------
+        # 비회원 오프라인 반환 (refunds.verifyOnlineRefunds /
+        # refunds.executeOnlineRefunds). NOTHING here is caught by a regex:
+        # CARD_RE needs 13-19 CONSECUTIVE digits and the 16-digit 반환번호
+        # arrives split 5/4/5/2 (res/values/integers.xml:29-32), the phone
+        # number is 11 digits, and the requester's name is a Korean name. Key
+        # matching is the only thing between these values and a preview.
+        #
+        # retNo1..4 -- the four segments of the printed 반환번호
+        #   (RefundService.java:33). Together they ARE the credential that
+        #   turns into a refundable ticket, and the server answers them with
+        #   the sale window/date/sequence and the return password
+        #   (RefundVerifyTicketDao.java:119-122). Enumerated AND given a base:
+        #   is_sensitive_key() would catch retNo1 from the base alone via
+        #   _index_stripped, but SENSITIVE_KEY_VALUE_RE matches literals with a
+        #   trailing (?![\w-]) and so would NOT catch "retNo1=..." in free
+        #   text. Both paths have to be covered.
+        # strName -- the 요청자 name on the verify form (s5/c.java:71, the
+        #   requestorEdit field of offline_return_input_fragment.xml).
+        # custTeln -- the 요청자 phone number on the execute form
+        #   (s5/h.java:123). A DISTINCT spelling: acepCustTeln is already
+        #   listed but _index_stripped("custteln") is None, so this one was not
+        #   covered by anything.
+        # ogtkSaleDt / ogtkSaleWctNo / ogtkSaleSqno / ogtkRetPwd -- the camel
+        #   spellings of the four-part sale identity on the execute form
+        #   (RefundService.java:17). The h_orgtk_* spellings are listed above;
+        #   these are the same four values.
+        "retNo1",
+        "retNo2",
+        "retNo3",
+        "retNo4",
+        "retNo",
+        "strName",
+        "custTeln",
+        "ogtkSaleDt",
+        "ogtkSaleWctNo",
+        "ogtkSaleSqno",
+        "ogtkRetPwd",
+        # ...and the verify RESPONSE, which is where the credential comes back.
+        #
+        # prnNo -- a trap. The response spells the PNR P-r-n
+        #   (RefundVerifyTicketDao.java:123,151) and the app feeds it straight
+        #   into setPnrNo (s5/h.java:118). pnrNo and txtPrnNo were both listed;
+        #   the bare response spelling was not.
+        # ogtk_* -- the underscore spellings of the same four-part identity
+        #   (RefundVerifyTicketDao.java:119-122), including the return password
+        #   in the clear.
+        # scar_no / psrm_cl_nm -- the underscore spellings of scarNo/psrmClNm
+        #   on the response's seat rows (:169-171).
+        "prnNo",
+        "ogtk_ret_pwd",
+        "ogtk_sale_dt",
+        "ogtk_sale_sqno",
+        "ogtk_sale_wct_no",
+        "scar_no",
+        "psrm_cl_nm",
+        # ...and the model attribute names this flow parses into. The response
+        # rows reuse attribute names already listed above (pnr_no,
+        # original_sale_date, original_window_no, original_sale_sequence,
+        # original_return_password, car_no, seat_no, room_class_name); these
+        # are the ones that are genuinely new.
+        #
+        # non_member_* -- KorailNonMemberSession's three fields (models.py).
+        #   The whole non-member identity: a real name, a real phone number and
+        #   the 비회원 승차권 조회 password. Named with the non_member_ prefix
+        #   rather than name/phone/password precisely so that registering them
+        #   here cannot start redacting unrelated "name=" text: SENSITIVE_KEYS
+        #   feeds SENSITIVE_KEY_VALUE_RE, which substitutes across every
+        #   redacted string in the package.
+        # return_no_1..4 / return_no -- OfflineRefundReturnNumber's segments
+        #   (mutation_models.py), enumerated and based for the same reason
+        #   retNo1..4 are.
+        # requester_name / requester_phone -- not attributes but the keyword
+        #   names the two offline-refund form builders take. Registered so that
+        #   a kwargs dump or a bound-arguments repr masks them exactly as the
+        #   wire keys do; they carry the same two values.
+        "non_member_name",
+        "non_member_phone",
+        "non_member_password",
+        "return_no_1",
+        "return_no_2",
+        "return_no_3",
+        "return_no_4",
+        "return_no",
+        "requester_name",
+        "requester_phone",
         # Bases for the index-enumerated keys above. The enumerations are kept
         # so that an exact match still works, but these make the family the
         # matched thing rather than each reachable subscript.

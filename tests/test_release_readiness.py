@@ -843,11 +843,12 @@ def test_repository_truth_and_full_mutation_policy() -> None:
     record = (ROOT / "docs/verification-record.md").read_text()
     for document in (readme, handoff):
         assert "58 routes" in document
-        # 74, not 72. Both numbers appear in the handoff, because the "72"
-        # sentences were true when written and are kept as history; the pin has
-        # to name the CURRENT boundary or it stops detecting the next drift.
-        assert "74 public methods" in document
-        assert "2228 passed" in document and "1 deselected" in document
+        # 78, not 72 or 74. The superseded numbers still appear in the handoff,
+        # because those sentences were true when written and are kept as
+        # history; the pin has to name the CURRENT boundary or it stops
+        # detecting the next drift.
+        assert "78 public methods" in document
+        assert "2264 passed" in document and "1 deselected" in document
         assert "docs/RELEASE.md" in document
     for document in (record, handoff):
         assert "5 cars" in document

@@ -25,6 +25,9 @@ from .mutation_models import (
     DiscountCardTicket,
     KorailPassengerCounts,
     KorailSeatAssignment,
+    OfflineRefundExecuteResponse,
+    OfflineRefundReturnNumber,
+    OfflineRefundVerifyResponse,
     PaidTicket,
     PriceRecalculationRequest,
     ReservationHoldResponse,
@@ -32,6 +35,8 @@ from .mutation_models import (
 )
 from .mutation_parsers import (
     parse_discount_card_purchase_response,
+    parse_offline_refund_execute_response,
+    parse_offline_refund_verify_response,
     parse_reservation_hold_response,
     parse_reservation_payment_response,
 )
@@ -41,6 +46,8 @@ from .mutation_payloads import (
     build_discount_card_purchase_form,
     build_discount_card_reservation_form,
     build_merge_reservation_form,
+    build_offline_refund_execute_form,
+    build_offline_refund_verify_form,
     build_price_recalculation_form,
     build_refund_form,
     build_reservation_form,
@@ -71,6 +78,7 @@ from .limousine_payloads import (
 from .models import (
     AppDataResponse,
     BaseKorailResponse,
+    KorailNonMemberSession,
     KorailSession,
     MaasMenuListResponse,
     NoticeResponse,
@@ -2082,6 +2090,190 @@ class KorailClient:
         except KorailSessionExpiredError:
             self.clear_session()
             raise
+
+    def _require_non_member_identity(self, *, operation: str):
+        """The 비회원 precondition, and the member session's absence.
+
+        Both halves matter. A held
+        :class:`~korail_mobile_api.models.KorailNonMemberSession` is what these
+        two routes send instead of a session cookie, so without one there is
+        nothing to send. And an ACTIVE MEMBER SESSION is refused rather than
+        ignored: a caller who is logged in and reaches for an offline refund
+        has almost certainly reached for the wrong method, and the member path
+        (:meth:`refund`) is one line away. ``begin_non_member`` already refuses
+        the reverse ordering, so the two states cannot both be set — this is
+        the defence at the point of use.
+        """
+        non_member = self.session.non_member
+        if self.session.current is not None:
+            raise KorailAuthError(
+                f"KORAIL {operation} is the NON-MEMBER offline path and "
+                "refuses to run while a member session is active; use "
+                "refund() for a ticket bought while logged in"
+            )
+        if non_member is None:
+            raise KorailAuthError(
+                f"KORAIL {operation} requires a non-member identity; call "
+                "begin_non_member(name, phone) first"
+            )
+        return non_member
+
+    def verify_offline_refund_ticket(
+        self,
+        return_number: OfflineRefundReturnNumber,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | OfflineRefundVerifyResponse:
+        """비회원 오프라인 반환 1단계 — resolve a printed 반환번호.
+
+        ``POST refunds.verifyOnlineRefunds`` (``RefundService.java:31-33``).
+        THE NON-MEMBER, PAPER-TICKET PATH: no login, no PNR, no
+        :class:`~korail_mobile_api.mutation_models.PaidTicket`. It is not
+        related to :meth:`refund`, which refunds a ticket bought in-app while
+        logged in, nor to :meth:`get_refund_ticket_detail` /
+        :meth:`get_refund_commission`, which are that path's reads.
+
+        Requires a held non-member identity
+        (:meth:`~korail_mobile_api.session.KorailSessionClient.begin_non_member`)
+        and refuses to run while a member session is active. The requester's
+        name goes out as ``strName``, exactly as the app reads it off the
+        ``requestorEdit`` box (``s5/c.java:71``).
+
+        Gated by ``require_mutation_consent(consent, "refund")`` — the SAME
+        category as :meth:`refund`, deliberately. It is the same product act on
+        the same money; only the identity differs. It is consent-gated at all
+        despite the app calling it 조회 (``strings.xml:1300``) because it
+        converts a printed number into the four-part sale identity and the
+        return password that :meth:`execute_offline_refund` then spends
+        (``RefundVerifyTicketDao.java:119-122``), and because the 반환번호 it
+        takes is a bearer credential that must never be guessable through an
+        ungated path. Whether the server itself records anything at this step
+        is NOT established from the APK.
+
+        With the default ``dry_run=True`` it returns a
+        :class:`~korail_mobile_api.consent.MutationPreview` in which the four
+        return-number segments and the requester's name are all ``[REDACTED]``,
+        and sends nothing.
+
+        **NOT LIVE-VERIFIED.** Exercising it needs a real paper ticket.
+        """
+        require_mutation_consent(consent, "refund")
+        non_member = self._require_non_member_identity(
+            operation="offline refund verification"
+        )
+        route = "/classes/com.korail.mobile.refunds.verifyOnlineRefunds"
+        form = build_offline_refund_verify_form(
+            self.config,
+            return_number,
+            requester_name=non_member.non_member_name,
+        )
+        if consent.dry_run:
+            return MutationPreview(
+                category="refund",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        return parse_offline_refund_verify_response(
+            self.http.post_mutation_form(
+                route,
+                form,
+                consent=consent,
+                category="refund",
+            ).raw
+        )
+
+    def execute_offline_refund(
+        self,
+        verified: OfflineRefundVerifyResponse,
+        *,
+        consent: MutationConsent,
+    ) -> MutationPreview | OfflineRefundExecuteResponse:
+        """비회원 오프라인 반환 2단계 — book the 반환 접수 / refund the ticket.
+
+        ``POST refunds.executeOnlineRefunds`` (``RefundService.java:15-17``).
+        THE NON-MEMBER, PAPER-TICKET PATH; :meth:`refund` is the member one.
+        This is the call that moves money.
+
+        ``verified`` must be the response :meth:`verify_offline_refund_ticket`
+        returned. The app takes nine of the twelve fields straight off it
+        (``s5/h.java:114-125``), and so does
+        :func:`~korail_mobile_api.mutation_payloads.build_offline_refund_execute_form`
+        — the four-part sale identity is never re-assembled by hand.
+
+        The requester's name and phone number come from the held non-member
+        identity and go out as ``acepCustNm`` and ``custTeln``. (The app's own
+        bundle key for the NAME is ``"CUSTOMER_NUMBER"``, ``s5/h.java:105,122``
+        — a misleading name, not a different value.)
+
+        Gated by ``require_mutation_consent(consent, "refund")``, the same
+        category as :meth:`refund`. With the default ``dry_run=True`` it
+        returns a :class:`~korail_mobile_api.consent.MutationPreview` with the
+        PNR, the sale identity, the return password, the requester's name and
+        the phone number all ``[REDACTED]``, and sends nothing.
+
+        The result's :attr:`~korail_mobile_api.mutation_models.OfflineRefundExecuteResponse.is_refund_completed`
+        distinguishes the two outcomes: money already returned versus 반환 접수
+        accepted, with the paper ticket still to be handed in at a station
+        within a year (``s5/h.java:187``; ``strings.xml:1292-1297``).
+
+        **NOT LIVE-VERIFIED.**
+        """
+        require_mutation_consent(consent, "refund")
+        non_member = self._require_non_member_identity(
+            operation="offline refund execution"
+        )
+        route = "/classes/com.korail.mobile.refunds.executeOnlineRefunds"
+        form = build_offline_refund_execute_form(
+            self.config,
+            verified,
+            requester_name=non_member.non_member_name,
+            requester_phone=non_member.non_member_phone,
+        )
+        if consent.dry_run:
+            return MutationPreview(
+                category="refund",
+                method="POST",
+                route=route,
+                payload=form,
+            )
+        return parse_offline_refund_execute_response(
+            self.http.post_mutation_form(
+                route,
+                form,
+                consent=consent,
+                category="refund",
+            ).raw
+        )
+
+    def begin_non_member(
+        self,
+        name: str,
+        phone: str,
+        *,
+        password: str | None = None,
+    ) -> KorailNonMemberSession:
+        """Hold a 비회원 identity for the non-member routes. Sends NOTHING.
+
+        KORAIL has no non-member login endpoint: the app's 비회원 등록 screen
+        only stores the values locally
+        (``NonMemberRegisterActivity.java:66-73``) and re-sends them on every
+        request. This does the same and performs no I/O, so it can never be
+        mistaken for authentication.
+
+        The result is a
+        :class:`~korail_mobile_api.models.KorailNonMemberSession`, a DIFFERENT
+        type from :class:`~korail_mobile_api.models.KorailSession` with no
+        ``jsessionid`` field, kept in a different slot
+        (``client.session.non_member`` rather than ``client.session.current``).
+        Refuses while a member session is active; :meth:`login` and
+        :meth:`clear_session` both drop it.
+        """
+        return self.session.begin_non_member(name, phone, password=password)
+
+    def end_non_member(self) -> None:
+        """Drop the held 비회원 identity, leaving any member session alone."""
+        self.session.end_non_member()
 
     def register_discount_card(
         self,

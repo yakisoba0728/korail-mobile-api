@@ -76,11 +76,14 @@ explicitly — see [docs/verification-record.md](docs/verification-record.md).
 
 ## What it can do
 
-The reviewed package boundary contains 58 routes and 74 public methods. Fifty-six
-of the routes are reads, plus the login POST and the logout GET; the eight
+The reviewed package boundary contains 58 routes and 78 public methods. Fifty-six
+of the routes are reads, plus the login POST and the logout GET; the ten
 mutation routes are tracked in a separate set and are never added to the
 read-only allowlist. Sixty-two of the methods transmit only login/read requests.
-The other twelve are the consent-gated mutations below.
+Fourteen are the consent-gated mutations below. The remaining two,
+`begin_non_member` and `end_non_member`, transmit nothing at all: they hold and
+drop the 비회원 identity that the offline-refund pair sends in place of a
+session, and KORAIL has no non-member login endpoint to call.
 
 ### Searching and reading
 
@@ -141,6 +144,28 @@ passenger row.
 - `refund(ticket, consent=...)` — refund a paid ticket.
 - `recalculate_price(request, consent=...)` — 운임 재계산: rewrite what an
   existing hold will cost when the discount selection changes.
+
+There is a second, unrelated refund path for a paper ticket bought at a station
+window, with nobody logged in. It identifies the ticket by the 16-digit
+반환번호 printed on it plus the requester's name, so it starts by holding a
+비회원 identity rather than by logging in:
+
+```python
+client.begin_non_member(requester_name, requester_phone)   # sends nothing
+verified = client.verify_offline_refund_ticket(
+    OfflineRefundReturnNumber.from_ticket_number(printed_ticket_number),
+    consent=MutationConsent(allow_refund=True),   # dry run: returns a preview
+)
+result = client.execute_offline_refund(verified, consent=...)
+```
+
+Both take the same `allow_refund` consent as `refund` — the same act on the
+same money, only a different way of proving whose ticket it is — and both
+refuse to run while a member session is active. `verify_offline_refund_ticket`
+is consent-gated even though the app calls it 조회, because what it returns is
+the ticket's return password, which the second call spends.
+`result.is_refund_completed` tells you whether the money came back now or the
+paper ticket still has to be handed in at a station within a year.
 
 ### Discounts, welfare and passes
 
@@ -375,7 +400,7 @@ env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
 ```
 
 The offline suite is the gate and it makes no network calls:
-`2228 passed, 1 deselected`, where the one deselected test is the explicitly
+`2264 passed, 1 deselected`, where the one deselected test is the explicitly
 opted-in live-service test. Live tests run only when `KORAIL_MOBILE_API_LIVE=1`
 is set together with credentials you supply yourself; nothing in this repository
 ships an account.
