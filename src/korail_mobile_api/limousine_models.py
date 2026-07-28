@@ -1,15 +1,15 @@
 """리무진 연계 조회의 요청 질의와 응답 타입.
 
-``lmu.scdlQry.do``(운행 스케줄), ``lms.TResidualSeatsResearch.do``(좌석
-재고), ``seatMovie.LimousineScheduleView``(좌석이동 화면의 열차 목록) 세
-라우트가 쓴다.
+``lmu.scdlQry.do``(운행 스케줄), ``lms.TResidualSeatsResearch.do``(좌석 재고),
+``seatMovie.LimousineScheduleView``(좌석이동 화면의 열차 목록) 세 라우트가
+씁니다.
 
 ``*Query`` 세 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서
-자릿수·형식을 검사한다. 역은 라우트마다 다르게 준다 — 스케줄과 좌석 재고는
-역**코드**(4자리), 좌석이동 목록은 역**이름**이다. 모든 필드가
-``repr=False`` 라서 질의 객체를 로그에 찍어도 승객 구성이 새지 않는다.
+자릿수·형식을 검사합니다. 역은 라우트마다 다르게 줍니다 — 스케줄과 좌석 재고는
+역**코드**(4자리), 좌석이동 목록은 역**이름**입니다. 모든 필드가 ``repr=False``
+라서 질의 객체를 로그에 찍어도 승객 구성이 새지 않습니다.
 
-라이브 미검증 — 요청과 응답 모양은 모두 APK 선언에서 나왔다.
+라이브 미검증 — 요청과 응답 모양은 모두 APK 선언에서 나왔습니다.
 """
 from __future__ import annotations
 
@@ -71,12 +71,13 @@ def _boolean(value: object, name: str) -> None:
 class LimousineScheduleQuery:
     """``lmu.scdlQry.do`` 운행 스케줄 조회의 입력.
 
-    역은 이름이 아니라 **4자리 역코드**다. ``departure_date`` 는 ``YYYYMMDD``,
-    ``departure_time`` 은 ``HHMMSS``. ``train_no`` 와 ``seat_attribute_code`` 는
-    빈 문자열을 허용한다 — 편이나 좌석 속성을 좁히지 않는다는 뜻이다.
+    역은 이름이 아니라 **4자리 역코드**입니다. ``departure_date`` 는
+    ``YYYYMMDD``, ``departure_time`` 은 ``HHMMSS`` 입니다. ``train_no`` 와
+    ``seat_attribute_code`` 는 빈 문자열을 허용합니다 — 편이나 좌석 속성을
+    좁히지 않는다는 뜻입니다.
 
     ``service_code``(``tmGpCd``)와 ``room_class_code``(``psrmClCd``)는 자릿수만
-    검사한다. 어떤 코드가 유효한지는 서버가 정한다.
+    검사하고, 어떤 코드가 유효한지는 서버가 정합니다.
     """
     departure_date: str = field(repr=False)
     departure_station_code: str = field(repr=False)
@@ -141,14 +142,13 @@ class LimousineScheduleQuery:
 class LimousineSeatInventoryQuery:
     """``lms.TResidualSeatsResearch.do`` 좌석 재고 조회의 입력.
 
-    편과 호차를 지목하는 값들에 구간과 인원이 붙는다. 역은 4자리 역코드이고,
-    ``departure_run_order``/``arrival_run_order`` 는 그 편에서 두 역이 몇 번째
-    정차인지다 — 같은 열차가 한 역을 두 번 지날 수 있어 역코드만으로는 구간이
-    정해지지 않는다.
+    역은 4자리 역코드이고, ``departure_run_order``/``arrival_run_order`` 는 그
+    편에서 두 역이 몇 번째 정차인지입니다 — 같은 열차가 한 역을 두 번 지날 수
+    있어 역코드만으로는 구간이 정해지지 않습니다.
 
-    ``passenger_count`` 는 0 을 허용하지 않는 정수, ``is_arrow`` 는 불리언이다.
+    ``passenger_count`` 는 0 을 허용하지 않는 정수, ``is_arrow`` 는 불리언입니다.
     둘만 문자열이 아니며 폼 빌더가 각각 ``str(int)`` 과 ``"true"``/``"false"``
-    로 바꾼다. ``product_no``(``gdNo``)는 선택값이라 빈 문자열이 될 수 있다.
+    로 바꿉니다. ``product_no``(``gdNo``)는 선택값이라 빈 문자열이 될 수 있습니다.
     """
     train_class_code: str = field(repr=False)
     service_code: str = field(repr=False)
@@ -231,18 +231,18 @@ class LimousineSeatInventoryQuery:
 class LimousineScheduleViewQuery:
     """``seatMovie.LimousineScheduleView`` 열차 목록 조회의 입력.
 
-    앞의 두 질의와 달리 역을 **역이름**으로 준다
+    앞의 두 질의와 달리 역을 **역이름**으로 줍니다
     (``departure_station_name``/``arrival_station_name``).
 
-    인원은 하나의 총원이 아니라 다섯 칸으로 나뉘고 각각 ``txtPsgFlg_1``~
-    ``txtPsgFlg_5`` 가 된다 — 승객 그룹 둘, 경로우대, 중증장애, 경증장애.
+    인원은 총원 하나가 아니라 다섯 칸으로 나뉘어 각각 ``txtPsgFlg_1``~
+    ``txtPsgFlg_5`` 가 됩니다 — 승객 그룹 둘, 경로우대, 중증장애, 경증장애.
 
     좌석 속성 셋은 방향(``direction_seat_attribute_code``), 위치
     (``location_seat_attribute_code``), 객실(``room_seat_attribute_code``)이며
-    각각 ``txtSeatAttCd_2``/``_3``/``_4`` 로 나간다.
+    각각 ``txtSeatAttCd_2``/``_3``/``_4`` 로 나갑니다.
 
     ``ebiz_cross_check``·``srt_check``·``round_trip`` 은 불리언이고 전선에서는
-    ``"Y"``/``"N"`` 이 된다.
+    ``"Y"``/``"N"`` 이 됩니다.
     """
     menu_id: str = field(repr=False)
     job_id: str = field(repr=False)
@@ -335,15 +335,15 @@ class LimousineScheduleViewQuery:
 class LimousineSchedule:
     """운행 스케줄 조회 결과의 한 편.
 
-    잔여 좌석이 등급별로 따로 온다 — 일반
-    (``general_remaining_seat_count``), 자유석(``free_remaining_seat_count``),
-    입석(``standing_remaining_seat_count``), 특실
+    잔여 좌석이 등급별로 따로 옵니다 — 일반(``general_remaining_seat_count``),
+    자유석(``free_remaining_seat_count``), 입석
+    (``standing_remaining_seat_count``), 특실
     (``special_remaining_seat_count``).
 
     ``departure_run_order``/``arrival_run_order`` 는
     :class:`LimousineSeatInventoryQuery` 가 요구하는 정차 순서와 같은 값이라
-    좌석 재고 조회로 그대로 넘기면 된다. 모든 필드가 선택 문자열이고 서버가
-    빼면 ``None`` 이다. 원본 행은 ``raw`` 에 남는다.
+    좌석 재고 조회로 그대로 넘기면 됩니다. 모든 필드가 선택 문자열이고 서버가
+    빼면 ``None`` 입니다. 원본 행은 ``raw`` 에 남습니다.
     """
     arrival_date: str | None = field(default=None, repr=False)
     arrival_station_code: str | None = field(default=None, repr=False)
@@ -372,9 +372,9 @@ class LimousineSchedule:
 class LimousineScheduleResponse(BaseKorailResponse):
     """``lmu.scdlQry.do`` 의 응답.
 
-    ``schedules`` 가 편 목록이고, 조건에 맞는 편이 없으면 빈 튜플이다.
-    ``following_page_extension`` 이 다음 페이지가 있는지를 말하며,
-    ``long_short_division_code`` 는 장·단거리 구분이다.
+    ``schedules`` 가 편 목록이고, 조건에 맞는 편이 없으면 빈 튜플입니다.
+    ``following_page_extension`` 이 다음 페이지 유무,
+    ``long_short_division_code`` 가 장·단거리 구분입니다.
     """
     h_msg_txt: str | None = field(default=None, repr=False)
     following_page_extension: str | None = field(default=None, repr=False)
@@ -386,12 +386,12 @@ class LimousineScheduleResponse(BaseKorailResponse):
 class LimousineSeat:
     """좌석표의 좌석 한 자리.
 
-    ``seat_no`` 가 전선 식별자이고 ``specification`` 이 사람이 읽는 표시다.
-    ``sale_possible_flag`` 가 ``"Y"`` 인 좌석만 고를 수 있다.
+    ``seat_no`` 가 전선 식별자이고 ``specification`` 이 사람이 읽는 표시입니다.
+    ``sale_possible_flag`` 가 ``"Y"`` 인 좌석만 고를 수 있습니다.
 
-    속성 코드가 셋이다 — 방향(``direction_attribute_code``), 그 밖
+    속성 코드는 셋입니다 — 방향(``direction_attribute_code``), 그 밖
     (``other_attribute_code``), 요청한 속성(``requested_attribute_code``).
-    마지막 것은 질의가 요구한 속성을 서버가 되울린 값이다.
+    마지막 것은 질의가 요구한 속성을 서버가 되울린 값입니다.
     """
     direction_attribute_code: str | None = field(default=None, repr=False)
     other_attribute_code: str | None = field(default=None, repr=False)
@@ -410,9 +410,9 @@ class LimousineSeat:
 class LimousineSeatInventoryResponse(BaseKorailResponse):
     """``lms.TResidualSeatsResearch.do`` 의 응답 — 한 호차의 좌석표.
 
-    ``seats`` 가 좌석 하나하나다. 빈 튜플은 좌석 정보가 없다는 뜻이며 정상이다.
-    ``car_no`` 는 서버가 되돌려 준 호차 번호이고,
-    ``seat_arrangement_code`` 와 ``car_type_code`` 는 좌석표를 그릴 때 쓴다.
+    ``seats`` 가 좌석 하나하나입니다. 빈 튜플은 좌석 정보가 없다는 뜻이며
+    정상입니다. ``car_no`` 는 서버가 되돌려 준 호차 번호이고,
+    ``seat_arrangement_code`` 와 ``car_type_code`` 는 좌석표를 그릴 때 씁니다.
     """
     h_msg_txt: str | None = field(default=None, repr=False)
     car_type_code: str | None = None
@@ -427,9 +427,9 @@ class LimousineRecommendedProduct:
     """열차 행에 딸려 오는 추천 상품 한 건.
 
     ``goods_no``(``goodsNo``)가 상품 식별자, ``goods_name``(``goodsNm``)이 표시
-    이름이다. 금액이 여럿으로 온다 — 할인액·할인율, 운임(``rcvdFare``), 요금
-    (``rcvdPrc``)과 그 둘째 자리(``rcvdPrc2``), 그리고 구분 코드
-    (``famtPctDvCd``). 전부 선택 문자열이라 서버가 빼면 ``None`` 이다.
+    이름입니다. 금액은 여럿으로 옵니다 — 할인액·할인율, 운임(``rcvdFare``),
+    요금(``rcvdPrc``)과 그 둘째 자리(``rcvdPrc2``), 구분 코드
+    (``famtPctDvCd``). 전부 선택 문자열이라 서버가 빼면 ``None`` 입니다.
     """
     discount_amount: str | None = field(default=None, repr=False)
     discount_rate: str | None = field(default=None, repr=False)
@@ -446,17 +446,17 @@ class LimousineRecommendedProduct:
 class LimousineScheduleViewTrain:
     """좌석이동 화면이 쓰는 열차 목록의 한 행.
 
-    앞의 :class:`LimousineSchedule` 보다 훨씬 넓다. 같은 편에 대해 화면이
-    그리는 모든 것 — 등급별 예약 코드와 이름, 우회·지연 안내, 환승 연결
-    가능 여부와 소요 시간, 팝업 문구, 추천 상품 목록 — 이 한 행에 실린다.
+    :class:`LimousineSchedule` 보다 훨씬 넓습니다. 같은 편에 대해 화면이 그리는
+    모든 것 — 등급별 예약 코드와 이름, 우회·지연 안내, 환승 연결 가능 여부와
+    소요 시간, 팝업 문구, 추천 상품 목록 — 이 한 행에 실립니다.
 
-    등급 관련 값은 일반(``general_*``)과 특실(``special_*``)로 짝을 이룬다.
-    ``*_secondary`` 로 끝나는 필드는 전선 키가 ``2`` 로 끝나는 짝이다 —
-    ``h_gen_rsv_cd`` 옆의 ``h_gen_rsv_cd2`` 같은 것이다.
+    등급 관련 값은 일반(``general_*``)과 특실(``special_*``)로 짝을 이룹니다.
+    ``*_secondary`` 로 끝나는 필드는 전선 키가 ``2`` 로 끝나는 짝입니다 —
+    ``h_gen_rsv_cd`` 옆의 ``h_gen_rsv_cd2`` 같은 것입니다.
 
     ``recommended_products`` 는 :class:`LimousineRecommendedProduct` 의 튜플이며
-    비어 있을 수 있다. 나머지는 전부 선택 문자열이라 서버가 빼면 ``None``
-    이고, 원본 행은 ``raw`` 에 남는다.
+    비어 있을 수 있습니다. 나머지는 전부 선택 문자열이라 서버가 빼면 ``None``
+    이고, 원본 행은 ``raw`` 에 남습니다.
     """
     detour_via_popup: str | None = field(default=None, repr=False)
     elevator_damage_control: str | None = field(default=None, repr=False)
@@ -541,12 +541,12 @@ class LimousineScheduleViewTrain:
 class LimousineScheduleViewResponse(BaseKorailResponse):
     """``seatMovie.LimousineScheduleView`` 의 응답.
 
-    ``schedules`` 가 열차 행 목록이고 ``trn_infos`` 가 ``null`` 이면 빈 튜플이다.
+    ``schedules`` 가 열차 행 목록이고 ``trn_infos`` 가 ``null`` 이면 빈 튜플입니다.
 
-    페이지 커서가 여럿이다 — ``next_page_flag`` 가 다음 페이지 유무,
+    페이지 커서는 여럿입니다 — ``next_page_flag`` 가 다음 페이지 유무,
     ``next_train_no``·``next_preceding_train_no``·``next_ectb_train_no``·
-    ``next_query_station_no`` 가 다음 요청에 되실을 값이다. ``result_count`` 는
-    전체 건수, ``merge_reservation_possible_flag`` 는 병합예약 가능 여부다.
+    ``next_query_station_no`` 가 다음 요청에 되실을 값입니다. ``result_count`` 는
+    전체 건수, ``merge_reservation_possible_flag`` 는 병합예약 가능 여부입니다.
     """
     h_msg_txt: str | None = field(default=None, repr=False)
     next_ectb_train_no: str | None = field(default=None, repr=False)

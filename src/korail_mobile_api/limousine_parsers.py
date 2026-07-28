@@ -1,12 +1,11 @@
-"""리무진 연계 조회 응답을 :mod:`korail_mobile_api.limousine_models` 로 옮긴다.
+"""리무진 연계 조회 응답을 :mod:`korail_mobile_api.limousine_models` 로 옮깁니다.
 
-세 파서가 세 라우트를 맡는다. 봉투는 정확히 ``SUCC`` 여야 하고 그 밖은
-:class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+세 파서가 세 라우트를 맡습니다. 봉투는 정확히 ``SUCC`` 여야 하고 그 밖은
+:class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
 
-목록 키를 다루는 방식이 라우트마다 다르며 그것은 앱 선언을 따른 것이다.
-스케줄 조회의 ``trainList`` 와 좌석이동 목록의 ``trn_infos`` 는 없거나
-``null`` 이어도 빈 결과일 뿐이지만, 좌석 재고의 ``seatList`` 는 필수라서
-키가 없으면 오류다.
+목록 키를 다루는 방식은 라우트마다 다릅니다. 스케줄 조회의 ``trainList`` 와
+좌석이동 목록의 ``trn_infos`` 는 없거나 ``null`` 이어도 빈 결과일 뿐이지만,
+좌석 재고의 ``seatList`` 는 필수라서 키가 없으면 오류입니다.
 """
 from __future__ import annotations
 
@@ -133,14 +132,12 @@ _SCHEDULE_FIELDS = {
 def parse_limousine_schedule_response(
     response: BaseKorailResponse,
 ) -> LimousineScheduleResponse:
-    """``lmu.scdlQry.do`` 의 응답을 파싱한다.
+    """``lmu.scdlQry.do`` 의 응답을 파싱합니다.
 
-    봉투가 정확히 ``SUCC`` 여야 하고 그 밖은
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
-
-    ``trainList`` 는 없거나 ``null`` 이어도 되고 그때 ``schedules`` 는 빈
-    튜플이다 — 조건에 맞는 편이 없다는 뜻이지 오류가 아니다. 다음 페이지가
-    있는지는 ``following_page_extension`` 으로 본다.
+    봉투가 정확히 ``SUCC`` 여야 합니다. ``trainList`` 는 없거나 ``null`` 이어도
+    되고 그때 ``schedules`` 는 빈 튜플입니다 — 조건에 맞는 편이 없다는 뜻이지
+    오류가 아닙니다. 다음 페이지가 있는지는 ``following_page_extension`` 으로
+    봅니다.
     """
     _require_exact_success(response)
     raw = response.raw
@@ -193,12 +190,12 @@ _SEAT_FIELDS = {
 def parse_limousine_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> LimousineSeatInventoryResponse:
-    """``lms.TResidualSeatsResearch.do`` 의 응답을 파싱한다.
+    """``lms.TResidualSeatsResearch.do`` 의 응답을 파싱합니다.
 
-    봉투가 정확히 ``SUCC`` 여야 한다. 스케줄 조회와 달리 ``seatList`` 키는
+    봉투가 정확히 ``SUCC`` 여야 합니다. 스케줄 조회와 달리 ``seatList`` 키는
     **필수**라서 키가 없으면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 다. 빈 리스트 자체는
-    정상이며 좌석 정보가 하나도 없다는 뜻이다.
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 빈 리스트
+    자체는 정상이며 좌석 정보가 하나도 없다는 뜻입니다.
     """
     _require_exact_success(response)
     raw = response.raw
@@ -353,13 +350,13 @@ def _recommended_products(
 def parse_limousine_schedule_view_response(
     response: BaseKorailResponse,
 ) -> LimousineScheduleViewResponse:
-    """``seatMovie.LimousineScheduleView`` 의 응답을 파싱한다.
+    """``seatMovie.LimousineScheduleView`` 의 응답을 파싱합니다.
 
-    봉투가 정확히 ``SUCC`` 여야 한다. 열차 행은 ``trn_infos.trn_info`` 에
-    있고, ``trn_infos`` 가 ``null`` 이면 ``schedules`` 가 빈 튜플이다. 행마다
-    추천 상품 목록이 함께 오며 :class:`LimousineRecommendedProduct` 로 파싱한다.
+    봉투가 정확히 ``SUCC`` 여야 합니다. 열차 행은 ``trn_infos.trn_info`` 에 있고,
+    ``trn_infos`` 가 ``null`` 이면 ``schedules`` 가 빈 튜플입니다. 행마다 추천
+    상품 목록이 함께 오며 :class:`LimousineRecommendedProduct` 로 파싱합니다.
 
-    다음 페이지 여부는 ``next_page_flag``, 전체 건수는 ``result_count`` 다.
+    다음 페이지 여부는 ``next_page_flag``, 전체 건수는 ``result_count`` 입니다.
     """
     _require_exact_success(response)
     raw = response.raw
