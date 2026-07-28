@@ -71,9 +71,9 @@ client.close()
 the app itself downloads. Dates and times are the app's own `YYYYMMDD` and
 `HHMMSS` strings.
 
-> **If you also use `srt-mobile-api` in the same process:** `TrainSearchQuery`
-> and `DiscountCoupon` are names both packages export, and they are not the
-> same type. `korail_mobile_api.TrainSearchQuery.passengers` is a plain `int`
+> **If you also use `srt-mobile-api` in the same process:** `TrainSearchQuery`,
+> `DiscountCoupon` and `MutationCategory` are names both packages export, and
+> they are not the same type. `korail_mobile_api.TrainSearchQuery.passengers` is a plain `int`
 > (default `1`) and its default `departure_time` is `"000000"`;
 > `srt_mobile_api.TrainSearchQuery.passengers` is a `PassengerCounts` and its
 > default departure time is `"060000"` — the two apps' own defaults, kept
@@ -81,7 +81,19 @@ the app itself downloads. Dates and times are the app's own `YYYYMMDD` and
 > in each package. Import both under an alias
 > (`from korail_mobile_api import TrainSearchQuery as KorailTrainSearchQuery`)
 > if a module needs both; do not assume a value built for one works with the
-> other.
+> other. `MutationCategory` is the same story in the type system: this
+> package's has seven members and SRT's five, and the four they share make the
+> wrong import type-check.
+
+Four parameter types are `Literal` aliases rather than `str`, so an editor
+completes their values and a typo is an error rather than a request:
+`MutationCategory` (`require_mutation_consent`), `KorailMileageLedger` and
+`KorailMileageMovement` (`MileageHistoryRequest`), and
+`KorailSelfSeatChangeRoomClassCode` (`SelfSeatChangeInfoRequest`). All four are
+exported, so a caller can annotate their own wrappers with them. Nothing else
+is narrowed — a code read off a response stays `str`, because the server is
+free to invent one, and so does any argument the runtime does not itself close
+to a fixed set.
 
 ### What the default configuration sends
 
