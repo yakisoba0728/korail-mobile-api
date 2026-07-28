@@ -1,12 +1,11 @@
 """환경변수로 실기기 값을 고정하고 라이브 스모크를 돌리는 보조 모듈.
 
-여기 있는 것은 두 가지다. :func:`build_config_from_env` 는 DynaPath 의 기기
-식별자·OS·모델을 환경변수에서 읽어
-:class:`~korail_mobile_api.config.KorailConfig` 를 만든다 — 프로세스를 넘어
-안정적인 기기 식별자를 얻는 유일한 방법이다. :func:`run_live_smoke_from_env`
-는 실제 서버에 붙어 읽기 표면을 한 바퀴 돈다.
+:func:`build_config_from_env` 는 DynaPath 의 기기 식별자·OS·모델을 환경변수에서 읽어
+:class:`~korail_mobile_api.config.KorailConfig` 를 만듭니다 — 프로세스를 넘어
+안정적인 기기 식별자를 얻는 유일한 방법입니다. :func:`run_live_smoke_from_env` 는
+실제 서버에 붙어 읽기 표면을 한 바퀴 돕니다.
 
-라이브 호출은 ``KORAIL_MOBILE_API_LIVE=1`` 이 없으면 시작하지 않는다
+라이브 호출은 ``KORAIL_MOBILE_API_LIVE=1`` 이 없으면 시작하지 않습니다
 (:func:`live_enabled`).
 """
 from __future__ import annotations
@@ -27,15 +26,15 @@ from .models import TrainSearchQuery
 
 
 def live_enabled() -> bool:
-    """``KORAIL_MOBILE_API_LIVE=1`` 인지. 라이브 호출의 유일한 스위치다."""
+    """``KORAIL_MOBILE_API_LIVE=1`` 인지. 라이브 호출의 유일한 스위치입니다."""
     return os.environ.get("KORAIL_MOBILE_API_LIVE") == "1"
 
 
 def read_credentials_from_env() -> tuple[str, str]:
-    """``KORAIL_MEMBER_NO``·``KORAIL_PASSWORD`` 를 읽어 짝으로 돌려준다.
+    """``KORAIL_MEMBER_NO``·``KORAIL_PASSWORD`` 를 읽어 짝으로 돌려줍니다.
 
-    둘 중 하나라도 비어 있으면 ``RuntimeError`` 다. 이 패키지는 자격증명을
-    파일에서 읽지 않는다.
+    둘 중 하나라도 비어 있으면 ``RuntimeError`` 입니다. 이 패키지는 자격증명을 파일에서
+    읽지 않습니다.
     """
     member_no = os.environ.get("KORAIL_MEMBER_NO")
     password = os.environ.get("KORAIL_PASSWORD")
@@ -54,28 +53,28 @@ def _required_env(name: str) -> str:
 def build_config_from_env() -> KorailConfig:
     """기기 신원을 환경변수에서 가져온 :class:`KorailConfig`.
 
-    맨손 ``KorailConfig()`` 로도 로그인은 된다. 인스턴스마다 합성된 기기 값을
-    쓴다. 이 함수는 **실제 값**을 고정하는 방법이고, 프로세스를 넘어 안정적인
-    기기 식별자를 얻는 유일한 길이다 — 이 패키지는 아무 상태도 저장하지 않으므로
-    합성 값은 그럴 수 없다.
+    맨손 ``KorailConfig()`` 로도 로그인은 됩니다. 인스턴스마다 합성된 기기 값을 씁니다.
+    이 함수는 **실제 값**을 고정하는 방법이고, 프로세스를 넘어 안정적인 기기 식별자를
+    얻는 유일한 길입니다 — 이 패키지는 아무 상태도 저장하지 않으므로 합성 값은 그럴 수
+    없습니다.
 
-    세 변수는 필수이며 기본값이 없다. 여기서는 틀린 값이 없는 값보다 나쁘다.
+    세 변수는 필수이며 기본값이 없습니다. 여기서는 틀린 값이 없는 값보다 나쁩니다.
 
     ``KORAIL_DYNAPATH_DEVICE_ID``
         DynaPath 의 ``di``. 기기의 ``Settings.Secure.ANDROID_ID``
         (``AbstractC1228a.java:16``), 소문자 hex 16자.
     ``KORAIL_DYNAPATH_OS_VERSION``
-        ``Build.VERSION.RELEASE``. 예: ``"15"``. SDK 정수가 아니다.
+        ``Build.VERSION.RELEASE``. 예: ``"15"``. SDK 정수가 아닙니다.
     ``KORAIL_DYNAPATH_DEVICE_MODEL``
         ``Build.MODEL``. 예: ``"SM-S928N"``.
 
-    뒤의 둘은 일부러 두 번 쓰인다. 토큰의 ``os``·``dm`` 으로 들어가고,
+    뒤의 둘은 일부러 두 번 쓰입니다. 토큰의 ``os``·``dm`` 으로 들어가고,
     :func:`~korail_mobile_api.constants.build_dalvik_user_agent` 를 통해
-    ``User-Agent`` 로도 들어간다. 그래서 ``KORAIL_USER_AGENT`` 만 따로 덮어쓰면
-    토큰이 뒷받침하지 않는 기기를 헤더에서 주장하게 된다.
+    ``User-Agent`` 로도 들어갑니다. 그래서 ``KORAIL_USER_AGENT`` 만 따로 덮어쓰면 토큰이
+    뒷받침하지 않는 기기를 헤더에서 주장하게 됩니다.
 
-    나머지는 — base URL, 화면 크기, SDK 정수, 광고 식별자,
-    ``KORAIL_DYNAPATH_AS_VALUE`` — 패키지 기본값으로 떨어진다.
+    나머지는 — base URL, 화면 크기, SDK 정수, 광고 식별자, ``KORAIL_DYNAPATH_AS_VALUE`` —
+    패키지 기본값으로 떨어집니다.
     """
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
@@ -118,16 +117,15 @@ def build_config_from_env() -> KorailConfig:
 
 
 def run_live_smoke_from_env() -> dict[str, Any]:
-    """실제 서버에 붙어 읽기 표면을 한 바퀴 돌고 결과 요약을 돌려준다.
+    """실제 서버에 붙어 읽기 표면을 한 바퀴 돌고 결과 요약을 돌려줍니다.
 
-    ``KORAIL_MOBILE_API_LIVE=1`` 이 아니면 시작하지 않고 ``RuntimeError`` 다.
-    :func:`build_config_from_env` 로 기기 신원을 고정하고
-    :func:`read_credentials_from_env` 로 로그인한 뒤, 앱 기동 데이터·공지·
-    UUID·MaaS 메뉴·역 목록·열차 조회 같은 계정 중립 조회와 로그인이 필요한
-    조회를 차례로 부른다.
+    ``KORAIL_MOBILE_API_LIVE=1`` 이 아니면 시작하지 않고 ``RuntimeError`` 입니다.
+    :func:`build_config_from_env` 로 기기 신원을 고정하고 :func:`read_credentials_from_env`
+    로 로그인한 뒤, 앱 기동 데이터·공지·UUID·MaaS 메뉴·역 목록·열차 조회 같은 계정
+    중립 조회와 로그인이 필요한 조회를 차례로 부릅니다.
 
-    **상태를 바꾸는 라우트는 하나도 부르지 않는다.** 예약·결제·환불은 이
-    경로에 없다.
+    **상태를 바꾸는 라우트는 하나도 부르지 않습니다.** 예약·결제·환불은 이 경로에
+    없습니다.
     """
     if not live_enabled():
         raise RuntimeError("Set KORAIL_MOBILE_API_LIVE=1 to run live smoke")

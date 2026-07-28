@@ -1,15 +1,14 @@
 """DynaPath 토큰 — 앱이 일부 경로에 붙이는 안티봇 헤더.
 
-STCLab 의 DynaPath SDK(``b/C1229b.java``, ``AbstractC1228a.java``)가 만드는
-헤더 값을 재현한다. 토큰은 기기 식별자(``di``)·앱 구동 시각(``it``)·OS 와
+STCLab 의 DynaPath SDK(``b/C1229b.java``, ``AbstractC1228a.java``)가 만드는 헤더
+값을 재현합니다. 토큰은 기기 식별자(``di``)·앱 구동 시각(``it``)·OS 와
 모델(``os``/``dm``)·난수를 SDK 자신의 치환 테이블로 인코딩한 문자열이고,
-:data:`~korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS` 의 경로에만
-붙는다.
+:data:`~korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS` 의 경로에만 붙습니다.
 
-:class:`DynapathTokenGenerator` 가 요청마다 값을 만들고
-:class:`DynapathConfig` 가 켜짐/꺼짐과 설정을 담는다. 기기 식별자는 설치마다
-합성되며(:func:`generate_dynapath_device_id`) 실제 기기 값을 고정하고 싶으면
-:func:`~korail_mobile_api.live.build_config_from_env` 를 쓴다.
+:class:`DynapathTokenGenerator` 가 요청마다 값을 만들고 :class:`DynapathConfig` 가
+켜짐/꺼짐과 설정을 담습니다. 기기 식별자는 설치마다
+합성되며(:func:`generate_dynapath_device_id`) 실제 기기 값을 고정하려면
+:func:`~korail_mobile_api.live.build_config_from_env` 를 쓰면 됩니다.
 """
 from __future__ import annotations
 
@@ -189,29 +188,24 @@ class DynapathTokenSettings:
 
 
 def generate_dynapath_device_id() -> str:
-    """합성 ``Settings.Secure.ANDROID_ID``. 부를 때마다 새로 만든다.
+    """합성 ``Settings.Secure.ANDROID_ID``. 부를 때마다 새로 만듭니다.
 
-    ``di`` 는 기기의 ``ANDROID_ID`` 그대로다 — ``AbstractC1228a.java:16`` 이
-    ``Settings.Secure.getString(..., "android_id")`` 를 읽어 토큰 빌더에 넘기고
-    빌더는 그대로 싣는다(``C1229b.java:103``). 그 값은 64비트를 **소문자 hex
-    16자**로 쓴 것이고, 여기서 만드는 모양도 같다.
+    ``di`` 는 기기의 ``ANDROID_ID`` 그대로입니다 — ``AbstractC1228a.java:16`` 이
+    ``Settings.Secure.getString(..., "android_id")`` 를 읽어 토큰 빌더에 넘기고 빌더는
+    그대로 싣습니다(``C1229b.java:103``). 그 값은 64비트를 **소문자 hex 16자**로 쓴
+    것이고, 여기서 만드는 모양도 같습니다. 난수는 ``uuid.uuid4()``(표준 라이브러리
+    CSPRNG)에서 오고 앞 64비트만 남깁니다.
 
-    서로 반대 방향으로 당기는 두 성질이 중요하다.
+    서로 반대로 당기는 두 성질을 지킵니다.
 
-    * 패키지에 **상수로 박아서는 안 된다.** 라이브러리를 설치한 모두가 공유하는
-      식별자는 "한 기기가 이 요청을 전부 보냈다"고 말하는 완벽한 봇 서명이다.
-    * 식별 대상이 존재하는 동안은 **안정적이어야 한다.** 실제 단말의
-      ``ANDROID_ID`` 는 설치 단위로 고정이고 재시작을 견딘다. 그래서 이 함수는
-      :class:`~korail_mobile_api.config.KorailConfig` 하나당 한 번, 그
-      데이터클래스의 default factory 에서 불린다. 얼어붙은 config 가 클라이언트
-      수명 동안 그 값을 들고 있으며 요청마다 다시 만들지 않는다.
+    * 패키지에 **상수로 박지 않습니다.** 설치한 모두가 공유하는 식별자는 "한 기기가
+      이 요청을 전부 보냈다"고 말하는 완벽한 봇 서명입니다.
+    * 식별 대상이 존재하는 동안은 **안정적입니다.** 그래서 이 함수는
+      :class:`~korail_mobile_api.config.KorailConfig` 하나당 한 번, 그 데이터클래스의
+      default factory 에서만 불립니다. 요청마다 다시 만들지 않습니다.
 
-    난수는 표준 라이브러리의 CSPRNG 를 쓰는 ``uuid.uuid4()`` 에서 오고 앞 64비트
-    만 남긴다. hex 32자리 ``di`` 는 어떤 안드로이드 기기도 만들 수 없는 값이다.
-
-    프로세스를 넘어 안정적인 진짜 ``ANDROID_ID`` 를 쓰고 싶으면 —
-    이 함수로는 불가능하다 — :func:`~korail_mobile_api.live.build_config_from_env`
-    를 쓴다.
+    프로세스를 넘어 안정적인 진짜 ``ANDROID_ID`` 가 필요하면 — 이 함수로는 불가능합니다 —
+    :func:`~korail_mobile_api.live.build_config_from_env` 를 쓰면 됩니다.
     """
     return uuid.uuid4().hex[:16]
 
@@ -219,14 +213,13 @@ def generate_dynapath_device_id() -> str:
 def build_default_token_settings() -> DynapathTokenSettings:
     """맨손 :class:`KorailConfig` 뒤에 들어가는 토큰 설정.
 
-    모든 필드가 앱 상수(``ai``, ``as``, ``st``, ``sv``)이거나 패키지 기본 기기
-    값에서 유도된다. 그래서 토큰에 실리는 ``dm``/``os`` 는
-    :data:`~korail_mobile_api.constants.KORAIL_USER_AGENT` 를 만든 두 값과 같다.
+    모든 필드가 앱 상수(``ai``, ``as``, ``st``, ``sv``)이거나 패키지 기본 기기 값에서
+    유도됩니다. 그래서 토큰에 실리는 ``dm``/``os`` 는
+    :data:`~korail_mobile_api.constants.KORAIL_USER_AGENT` 를 만든 두 값과 같습니다.
 
-    ``it``(``app_start_ts``)은 이 함수를 부른 순간이다. 앱이 기록하는 것이 그
-    값이기 때문이다 — ``AbstractC1228a.java:14`` 는 DynaPath 엔진이 구동 시점에
-    생성될 때 ``System.currentTimeMillis()`` 를 잡는다. config 를 만드는 것이
-    이 패키지에서 그 순간에 해당한다.
+    ``it``(``app_start_ts``)은 이 함수를 부른 순간입니다. 앱이 기록하는 것이 그 값이기
+    때문입니다 — ``AbstractC1228a.java:14`` 는 DynaPath 엔진이 구동 시점에 생성될 때
+    ``System.currentTimeMillis()`` 를 잡습니다.
     """
     return DynapathTokenSettings(
         device_id=generate_dynapath_device_id(),
@@ -241,18 +234,18 @@ def build_default_token_settings() -> DynapathTokenSettings:
 class DynapathConfig:
     #: allowlist 경로에 DynaPath 토큰을 붙일지.
     #:
-    #: **여기서는 False 이고 맨손** :class:`KorailConfig` **에서는 True 다.**
-    #: 모순이 아니다. 이 클래스는 명시적 opt-out
+    #: **여기서는 False 이고 맨손** :class:`KorailConfig` **에서는 True 입니다.**
+    #: 모순이 아닙니다. 이 클래스는 명시적 opt-out
     #: (``KorailConfig(dynapath=DynapathConfig())``)으로도 만들어질 수 있어야
     #: 하고, ``enabled`` 를 쓸모 있게 만드는 기본 토큰 설정은 여기가 아니라
     #: :class:`~korail_mobile_api.config.KorailConfig` 의 default factory 가
-    #: 붙인다.
+    #: 붙입니다.
     #:
     #: 이 클래스에서 ``enabled`` 와 ``token_settings`` 를 함께 기본값으로 두면
-    #: 안 된다. ``__post_init__`` 이 ``token_provider``/``token_settings`` 중
+    #: 안 됩니다. ``__post_init__`` 이 ``token_provider``/``token_settings`` 중
     #: 정확히 하나를 요구하므로, ``token_settings`` 에 기본값이 있으면
-    #: ``DynapathConfig(enabled=True, token_provider=fn)`` 이 전부 모순이 된다 —
-    #: 기본값 하나를 더하려고 커스텀 provider 형태를 없애는 셈이다.
+    #: ``DynapathConfig(enabled=True, token_provider=fn)`` 이 전부 모순이 됩니다 —
+    #: 기본값 하나를 더하려고 커스텀 provider 형태를 없애는 셈입니다.
     enabled: bool = False
     token_provider: DynapathTokenProvider | None = None
     token_settings: DynapathTokenSettings | None = None

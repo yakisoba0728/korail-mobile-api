@@ -1,24 +1,23 @@
 """전선에 나가는 것을 제한하는 가드.
 
-이 모듈에는 실행 로직이 없다. 목록과 단언뿐이다. 어떤 origin·라우트·필드
-집합이 허용되는지를 여기 한곳에 모아 두고, :mod:`korail_mobile_api.http` 의
-전송 경로가 보내기 직전에 이 단언들을 통과한다.
+이 모듈에는 실행 로직이 없습니다. 목록과 단언뿐입니다. 어떤 origin·라우트·필드 집합이
+허용되는지를 여기 한곳에 모아 두고, :mod:`korail_mobile_api.http` 의 전송 경로가 보내기
+직전에 이 단언들을 통과합니다.
 
-가드는 세 갈래다.
+가드는 세 갈래입니다.
 
 * **읽기 경로** — :func:`assert_read_only_route` 와
   :func:`assert_read_only_request_fields` 가 라우트와 필드 이름을
-  :data:`KORAIL_READ_ONLY_ROUTES`·:data:`KORAIL_EXACT_REQUEST_FIELDS` 의
-  정확한 원소로 제한한다.
+  :data:`KORAIL_READ_ONLY_ROUTES`·:data:`KORAIL_EXACT_REQUEST_FIELDS` 의 정확한
+  원소로 제한합니다.
 * **변경 경로** — :func:`assert_mutation_route`,
   :func:`assert_mutation_route_category`, :func:`assert_mutation_form_shape`.
-  읽기 라우트를 포함해 :data:`KORAIL_MUTATION_ROUTES` 밖은 전부 거부한다.
-* **origin** — :func:`assert_korail_origin` 이 API 호스트를,
-  NetFunnel 쪽 세 함수가 대기열 호스트를 고정한다. 둘은 서로의 호스트에
-  닿을 수 없다.
+  읽기 라우트를 포함해 :data:`KORAIL_MUTATION_ROUTES` 밖은 전부 거부합니다.
+* **origin** — :func:`assert_korail_origin` 이 API 호스트를, NetFunnel 쪽 세 함수가
+  대기열 호스트를 고정합니다. 둘은 서로의 호스트에 닿을 수 없습니다.
 
-목록의 원소는 전부 APK 의 Retrofit 선언에서 나왔다. 근거 없는 라우트나
-필드는 여기 없고, 없으면 보낼 수 없다.
+목록의 원소는 전부 APK 의 Retrofit 선언에서 나왔습니다. 근거 없는 라우트나 필드는 여기
+없고, 없으면 보낼 수 없습니다.
 """
 import re
 from collections.abc import Mapping, Sequence
@@ -395,11 +394,11 @@ KORAIL_CARD_BEARING_MUTATION_CATEGORIES = frozenset({"payment"})
 
 
 def assert_mutation_route_category(path: str, category: str) -> None:
-    """``category`` 가 변경 라우트 ``path`` 를 소유한 범주인지 확인한다.
+    """``category`` 가 변경 라우트 ``path`` 를 소유한 범주인지 확인합니다.
 
     알려진 변경 라우트가 아니거나 호출자의 범주가 그 라우트의 범주와 다르면
-    :class:`KorailProtocolError` 다. 한 범주로 받은 consent 를 다른 범주의
-    라우트로 돌려쓸 수 없다.
+    :class:`KorailProtocolError` 입니다. 한 범주로 받은 consent 를 다른 범주의 라우트로
+    돌려쓸 수 없습니다.
     """
     parsed_path = urlsplit(path).path
     expected = KORAIL_MUTATION_ROUTE_CATEGORIES.get(parsed_path)
@@ -415,7 +414,7 @@ def assert_mutation_route_category(path: str, category: str) -> None:
 
 
 #: ``mutation_payloads._common_fields`` 가 **모든** 변경 폼에 넣는 세 필드.
-#: 이것 없이 전송 경계에 닿은 폼은 이 패키지의 빌더가 만든 것이 아니다.
+#: 이것 없이 전송 경계에 닿은 폼은 이 패키지의 빌더가 만든 것이 아닙니다.
 KORAIL_MUTATION_COMMON_FIELDS = frozenset({"Device", "Version", "Key"})
 
 
@@ -423,21 +422,19 @@ def assert_mutation_form_shape(
     path: str,
     values: Mapping[str, Any],
 ) -> None:
-    """변경 폼의 **모양**을 인코딩 전에 검사한다.
+    """변경 폼의 **모양**을 인코딩 전에 검사합니다.
 
-    일부러 정확한 필드 집합이 아니라 모양 계약이다. 변경 본문은 읽기처럼 고정된
-    이름 목록이 아니다 — 예약 폼은 승객·좌석 행 수가 변하고, 운임 재계산은 여섯
-    개의 ``@Field List<String>`` 을 반복 키로 보낸다. 그것까지 고정하려면 행
-    문법을 여기 다시 유도해 두 벌로 관리해야 한다.
+    일부러 정확한 필드 집합이 아니라 모양 계약입니다. 변경 본문은 읽기처럼 고정된 이름
+    목록이 아닙니다 — 예약 폼은 승객·좌석 행 수가 변하고, 운임 재계산은 여섯 개의
+    ``@Field List<String>`` 을 반복 키로 보냅니다.
 
-    아홉 라우트 전부에 걸쳐 변하지 않는 것은 두 가지다. 폼이 문자열→문자열
-    (또는 문자열→문자열 리스트)의 평평한 매핑이라는 것, 그리고 공통 세 필드
-    (:data:`KORAIL_MUTATION_COMMON_FIELDS`)를 싣는다는 것.
+    아홉 라우트 전부에 걸쳐 변하지 않는 것은 둘입니다. 폼이 문자열→문자열(또는
+    문자열→문자열 리스트)의 평평한 매핑이라는 것, 그리고 공통 세 필드
+    (:data:`KORAIL_MUTATION_COMMON_FIELDS`)를 싣는다는 것입니다.
 
-    그래서 이 함수는 빌더가 만들 수 없고 손으로 만든 dict 만 만들 수 있는 것을
-    거부한다 — 문자열 아닌 이름, 중첩 매핑, ``None``, 자릿수 없이 인코딩될
-    ``int``, ``"True"`` 로 인코딩될 ``bool``. 전선에 거의 맞아 보이는 모양으로
-    도착하는 것들이다.
+    그래서 이 함수는 빌더가 만들 수 없고 손으로 만든 dict 만 만들 수 있는 것을 거부합니다 —
+    문자열 아닌 이름, 중첩 매핑, ``None``, 자릿수 없이 인코딩될 ``int``, ``"True"`` 로
+    인코딩될 ``bool``. 전선에 거의 맞아 보이는 모양으로 도착하는 것들입니다.
     """
     parsed_path = urlsplit(path).path
     for name, value in values.items():
@@ -517,7 +514,7 @@ KORAIL_NETFUNNEL_QUERY_CONTRACTS: dict[str, tuple[str, ...]] = {
 }
 
 #: 요청에 슬롯 키를 싣는 opcode. "어느 opcode 에 어느 필드가 있는가"를 코드를
-#: 따라가지 않고 읽어서 답할 수 있도록 계약 옆에 데이터로 둔다.
+#: 따라가지 않고 읽어서 답할 수 있도록 계약 옆에 데이터로 둡니다.
 KORAIL_NETFUNNEL_KEYED_OPCODES = frozenset(
     {
         KorailNetFunnelOpcode.CHK_ENTER.value,
@@ -527,7 +524,7 @@ KORAIL_NETFUNNEL_KEYED_OPCODES = frozenset(
 
 #: ``aid`` 에 나타날 수 있는 액션 id 전부. 앱이 선언한 여덟 개
 #: (``K4/g.java:43-51``)이며 한 번도 부르지 않는 둘까지 포함하고, 그 밖은
-#: 없다. ``aid`` 가 자유 문자열 필드가 되지 않게 하기 위해서다.
+#: 없습니다. ``aid`` 가 자유 문자열 필드가 되지 않게 하기 위해서입니다.
 KORAIL_NETFUNNEL_ACTION_IDS = frozenset(
     action.value for action in KorailNetFunnelAction
 )
@@ -612,21 +609,21 @@ KORAIL_NETFUNNEL_KEY_RE = re.compile(r"[A-Za-z0-9_.:@~-]{1,512}")
 # ---------------------------------------------------------------------------
 
 #: 대기열 응답이 가리킬 수 있는 노드 이름. 각 부분을 왜 이만큼 좁혔는지는
-#: 위의 블록 주석에 있다.
+#: 위의 블록 주석에 있습니다.
 KORAIL_NETFUNNEL_NODE_HOST_RE = re.compile(r"rnf[1-9][0-9]?\.letskorail\.com")
 
 #: 지목된 노드에 허용되는 유일한 포트. 관측된 모든 응답이 443 이었고,
-#: :func:`assert_korail_netfunnel_origin` 이 정문에 허용하는 포트도 그것뿐이다.
+#: :func:`assert_korail_netfunnel_origin` 이 정문에 허용하는 포트도 그것뿐입니다.
 KORAIL_NETFUNNEL_NODE_PORT = 443
 
-#: **이미 성립한 세션**에 속하는 opcode. 그래서 그 세션을 발급한 노드로 간다.
-#: ``5101`` 은 일부러 빠져 있다. 진입 호출은 정문이 분산하는 것이고, 노드를
-#: 가리킬 앞선 응답도 없다.
+#: **이미 성립한 세션**에 속하는 opcode. 그래서 그 세션을 발급한 노드로 갑니다.
+#: ``5101`` 은 일부러 빠져 있습니다. 진입 호출은 정문이 분산하는 것이고, 노드를
+#: 가리킬 앞선 응답도 없습니다.
 #:
 #: 지금은 :data:`KORAIL_NETFUNNEL_KEYED_OPCODES` 와 같은 집합이며 우연이
-#: 아니다 — 세션은 키로 식별되고 자기 노드에 살기 때문에, 키를 싣는 opcode 가
-#: 곧 노드에 닿아야 하는 opcode 다. 서로 다른 질문에 답하므로 상수는 따로
-#: 둔다.
+#: 아닙니다 — 세션은 키로 식별되고 자기 노드에 살기 때문에, 키를 싣는 opcode 가
+#: 곧 노드에 닿아야 하는 opcode 입니다. 서로 다른 질문에 답하므로 상수는 따로
+#: 둡니다.
 KORAIL_NETFUNNEL_NODE_OPCODES = frozenset(
     {
         KorailNetFunnelOpcode.CHK_ENTER.value,
@@ -638,9 +635,9 @@ KORAIL_NETFUNNEL_NODE_OPCODES = frozenset(
 def _assert_netfunnel_origin(netfunnel_url: str, *, allow_nodes: bool) -> None:
     """대기열 origin 가드 둘의 공통 골격.
 
-    정문과 대기열 노드 사이에서 **어떤 호스트명을 받아들이냐**를 빼면 검사가
-    동일하다 — https, userinfo 없음, path·query·fragment 없음, 443 또는 생략된
-    포트. 그래서 한 번만 쓰고 호스트명 규칙만 매개변수로 받는다.
+    정문과 대기열 노드 사이에서 **어떤 호스트명을 받아들이냐**를 빼면 검사가 동일합니다 —
+    https, userinfo 없음, path·query·fragment 없음, 443 또는 생략된 포트. 그래서 한 번만
+    쓰고 호스트명 규칙만 매개변수로 받습니다.
     """
     parsed = urlsplit(netfunnel_url)
     try:
@@ -671,26 +668,26 @@ def _assert_netfunnel_origin(netfunnel_url: str, *, allow_nodes: bool) -> None:
 
 
 def assert_korail_netfunnel_origin(netfunnel_url: str) -> None:
-    """대기열 **정문**을 ``https://nf.letskorail.com``(443)으로 고정한다.
+    """대기열 **정문**을 ``https://nf.letskorail.com``(443)으로 고정합니다.
 
-    :func:`assert_korail_origin` 의 NetFunnel 짝이며 상수도 함수도 일부러
-    분리했다. API 클라이언트는 대기열 호스트에 닿을 수 없고 대기열
-    클라이언트는 API 호스트에 닿을 수 없다.
+    :func:`assert_korail_origin` 의 NetFunnel 짝이며 상수도 함수도 일부러 분리했습니다.
+    API 클라이언트는 대기열 호스트에 닿을 수 없고 대기열 클라이언트는 API 호스트에 닿을 수
+    없습니다.
 
-    설정된 origin 과 진입 호출(``5101``)에 쓰는 가드이고 정문만 허용한다 —
-    대기열 노드는 여기서 거부된다. 후속 opcode 는 더 넓은
-    :func:`assert_korail_netfunnel_node_origin` 을 쓰며, 어느 opcode 가 어느
-    쪽인지는 :func:`assert_korail_netfunnel_opcode_origin` 이 정한다.
+    설정된 origin 과 진입 호출(``5101``)에 쓰는 가드이고 정문만 허용합니다 — 대기열 노드는
+    여기서 거부됩니다. 후속 opcode 는 더 넓은
+    :func:`assert_korail_netfunnel_node_origin` 을 쓰며, 어느 opcode 가 어느 쪽인지는
+    :func:`assert_korail_netfunnel_opcode_origin` 이 정합니다.
     """
     _assert_netfunnel_origin(netfunnel_url, allow_nodes=False)
 
 
 def assert_korail_netfunnel_node_origin(netfunnel_url: str) -> None:
-    """세션의 origin 을 정문 또는 대기열 자신의 노드로 제한한다.
+    """세션의 origin 을 정문 또는 대기열 자신의 노드로 제한합니다.
 
-    ``https://nf.letskorail.com`` 과 ``https://rnf<N>.letskorail.com`` 을 443
-    포트로만 허용하고 그 밖은 없다. 풀이 실재한다는 근거와 경계를 왜 정확히
-    여기 그었는지는 :data:`KORAIL_NETFUNNEL_NODE_HOST_RE` 위의 주석에 있다.
+    ``https://nf.letskorail.com`` 과 ``https://rnf<N>.letskorail.com`` 을 443 포트로만
+    허용하고 그 밖은 없습니다. 풀이 실재한다는 근거와 경계를 왜 정확히 여기 그었는지는
+    :data:`KORAIL_NETFUNNEL_NODE_HOST_RE` 위의 주석에 있습니다.
     """
     _assert_netfunnel_origin(netfunnel_url, allow_nodes=True)
 
@@ -699,15 +696,15 @@ def assert_korail_netfunnel_opcode_origin(
     opcode: str,
     netfunnel_url: str,
 ) -> None:
-    """이 opcode 를 어느 호스트로 보내도 되는지 정한다.
+    """이 opcode 를 어느 호스트로 보내도 되는지 정합니다.
 
-    ``5101`` getTidChkEnter 는 진입 호출이라 **정문**으로 간다. 분산이 정문의
-    일이다. ``5002`` chkEnter 와 ``5004`` setComplete 는 세션에 속하므로 그
-    세션을 발급한 **노드**로 간다 — 정문은 그 세션의 주인이 아니라서 완료를
-    요구하면 ``503:msg="Wrong Server ID"`` 로 답한다.
+    ``5101`` getTidChkEnter 는 진입 호출이라 **정문**으로 갑니다. 분산이 정문의 일입니다.
+    ``5002`` chkEnter 와 ``5004`` setComplete 는 세션에 속하므로 그 세션을 발급한
+    **노드**로 갑니다 — 정문은 그 세션의 주인이 아니라서 완료를 요구하면
+    ``503:msg="Wrong Server ID"`` 로 답합니다.
 
-    이 분기가 클라이언트가 아니라 가드에 있는 것은, "이 opcode 는 어느 호스트로
-    가는가"를 URL 을 만든 호출 지점이 아니라 가드가 답하게 하기 위해서다.
+    이 분기가 클라이언트가 아니라 가드에 있는 것은, "이 opcode 는 어느 호스트로 가는가"를
+    URL 을 만든 호출 지점이 아니라 가드가 답하게 하기 위해서입니다.
     """
     if opcode in KORAIL_NETFUNNEL_NODE_OPCODES:
         assert_korail_netfunnel_node_origin(netfunnel_url)
@@ -716,19 +713,18 @@ def assert_korail_netfunnel_opcode_origin(
 
 
 def korail_netfunnel_node_url(ip: str, port: str) -> str:
-    """응답의 ``ip``/``port`` 를 답한 노드의 origin 으로 바꾼다.
+    """응답의 ``ip``/``port`` 를 답한 노드의 origin 으로 바꿉니다.
 
-    origin URL(``https://<host>``)을 돌려주고, 응답이 아무 노드도 가리키지
-    않았으면 ``""`` 이다. 후자는 ``T6/d.makeURL`` 의
-    ``getHost().length() <= 0 || getPort() <= 0`` 가지이며
-    (``T6/d.java:17-19``), 후속 요청이 정당하게 정문으로 가는 유일한 경우다.
-    ``ip`` 와 ``port`` 는 관측된 모든 응답에서 함께 오므로, 한쪽만 온 것은
-    "노드를 가리키지 않았다"가 아니라 "노드를 잘못 가리켰다"로 다룬다.
+    origin URL(``https://<host>``)을 돌려주고, 응답이 아무 노드도 가리키지 않았으면 ``""``
+    입니다. 후자는 ``T6/d.makeURL`` 의 ``getHost().length() <= 0 || getPort() <= 0``
+    가지이며(``T6/d.java:17-19``), 후속 요청이 정당하게 정문으로 가는 유일한 경우입니다.
+    ``ip`` 와 ``port`` 는 관측된 모든 응답에서 함께 오므로, 한쪽만 온 것은 "노드를 가리키지
+    않았다"가 아니라 "노드를 잘못 가리켰다"로 다룹니다.
 
     대기열 자신의 노드 이름 규칙 밖 호스트와 443 이 아닌 포트는
-    :class:`KorailProtocolError` 다. 그 거부는 일부러 시끄럽다. 여기서 조용히
-    정문으로 되돌아가면 잘못된 재지정이 샌 슬롯으로 바뀌고, 샌 슬롯은 아무
-    소리도 내지 않는다.
+    :class:`KorailProtocolError` 입니다. 그 거부는 일부러 시끄럽습니다. 여기서 조용히
+    정문으로 되돌아가면 잘못된 재지정이 샌 슬롯으로 바뀌고, 샌 슬롯은 아무 소리도 내지
+    않습니다.
     """
     if not ip and not port:
         return ""
@@ -757,18 +753,16 @@ def assert_netfunnel_request(
     path: str,
     params: Sequence[tuple[str, str]],
 ) -> None:
-    """등록된 대기열 opcode 만, 정확히 그 순서의 파라미터로만 허용한다.
+    """등록된 대기열 opcode 만, 정확히 그 순서의 파라미터로만 허용합니다.
 
-    ``params`` 는 요청이 만들어질 이름/값 쌍을 인코딩 전에 순서 그대로 받는다.
-    그래서 계약이 파라미터 구성뿐 아니라 **순서**까지 덮는다. 앱의 순서는
-    장식이 아니라 ``T6/d.java`` 가 만든 리스트를
-    ``URLEncodedUtils.format`` 이 그대로 뱉은 결과다.
+    ``params`` 는 요청이 만들어질 이름/값 쌍을 인코딩 전에 순서 그대로 받습니다. 그래서
+    계약이 파라미터 구성뿐 아니라 **순서**까지 덮습니다. 앱의 순서는 장식이 아니라
+    ``T6/d.java`` 가 만든 리스트를 ``URLEncodedUtils.format`` 이 그대로 뱉은 결과입니다.
 
-    :class:`KorailProtocolError` 가 되는 경우는 등록되지 않은 opcode(5003,
-    5105, 5106 과 지어낸 값), 계약과 정확히 같지 않거나 순서가 다른 파라미터
-    목록, ``service_1`` 이 아닌 ``sid``,
-    :data:`KORAIL_NETFUNNEL_ACTION_IDS` 밖의 ``aid``, NetFunnel 키의 모양이
-    아닌 키다.
+    :class:`KorailProtocolError` 가 되는 경우는 등록되지 않은 opcode(5003, 5105, 5106 과
+    지어낸 값), 계약과 정확히 같지 않거나 순서가 다른 파라미터 목록, ``service_1`` 이 아닌
+    ``sid``, :data:`KORAIL_NETFUNNEL_ACTION_IDS` 밖의 ``aid``, NetFunnel 키의 모양이 아닌
+    키입니다.
     """
     route = (method.upper(), urlsplit(path).path)
     if route not in KORAIL_NETFUNNEL_ROUTES:
@@ -1418,17 +1412,16 @@ def _is_original_ticket_field_order(
     """순서 있는 원표 요청이 ``research.tripChgOgtk.do`` 의 문법에 맞는지.
 
     ``ResearchService.java:61-63`` 은 고정 ``@Field`` 넷 뒤에 ``@FieldMap`` 을
-    선언한다. 그래서 정확한 이름 집합으로 고정할 수 있는 부분은 접두사뿐이고,
-    나머지는 원표 한 장당 네 키짜리 묶음이 1부터 인덱스를 달고 반복된다.
+    선언합니다. 그래서 정확한 이름 집합으로 고정할 수 있는 부분은 접두사뿐이고, 나머지는
+    원표 한 장당 네 키짜리 묶음이 1부터 인덱스를 달고 반복됩니다.
 
-    ``tkCnt`` 가 묶음 개수와 같기를 **요구하지 않는다.** 앱이 그 뜻을 스스로
-    통일하지 못한다 — ``TCBookingActivity.java:179`` 는 승객 수
-    (``TOTAL_PERSON_COUNT``)를, ``PushHistoryActivity.java:357`` 은 승차권 행
-    수를 보내고, ``SeatSearchActivity.java:615`` 는 ``f29962H.size()`` 행을
-    돌면서 ``1`` 을 박아 보낸다. 세 호출 지점 중 둘이 ``tkCnt == N`` 검사에
-    걸리므로, 그걸 요구하면 앱 자신이 보내는 요청을 거부하게 된다. 대신 고정하는
-    것은 타입이다 — smali 시그니처가 ``I`` 이므로
-    (``ResearchService.smali:613,628-632``) 여기 문자열이 오면 틀린 것이다.
+    ``tkCnt`` 가 묶음 개수와 같기를 **요구하지 않습니다.** 앱이 그 뜻을 스스로 통일하지
+    못합니다 — ``TCBookingActivity.java:179`` 는 승객 수(``TOTAL_PERSON_COUNT``)를,
+    ``PushHistoryActivity.java:357`` 은 승차권 행 수를 보내고,
+    ``SeatSearchActivity.java:615`` 는 ``f29962H.size()`` 행을 돌면서 ``1`` 을 박아
+    보냅니다. 세 호출 지점 중 둘이 ``tkCnt == N`` 검사에 걸리므로, 그걸 요구하면 앱 자신이
+    보내는 요청을 거부하게 됩니다. 대신 고정하는 것은 타입입니다 — smali 시그니처가 ``I``
+    이므로(``ResearchService.smali:613,628-632``) 여기 문자열이 오면 틀린 것입니다.
     """
     prefix = ("Device", "Version", "Key", "tkCnt")
     if names[: len(prefix)] != prefix:
@@ -1513,13 +1506,13 @@ def _is_ticket_reference_field_order(
 
 
 def assert_korail_origin(base_url: str) -> None:
-    """API 요청의 origin 을 ``https://smart.letskorail.com``(443)으로 고정한다.
+    """API 요청의 origin 을 ``https://smart.letskorail.com``(443)으로 고정합니다.
 
-    https 가 아니거나, 호스트가 다르거나, 443 이 아닌 포트·userinfo·path·
-    query·fragment 가 붙어 있으면 :class:`KorailProtocolError` 다.
-    :class:`~korail_mobile_api.http.KorailHttpClient` 가 생성 시점에 부르므로,
-    다른 호스트를 가리키는 설정은 소켓이 생기기 전에 막힌다. 대기열 호스트는
-    여기서 거부되며 자기 가드(:func:`assert_korail_netfunnel_origin`)를 쓴다.
+    https 가 아니거나, 호스트가 다르거나, 443 이 아닌 포트·userinfo·path·query·fragment 가
+    붙어 있으면 :class:`KorailProtocolError` 입니다.
+    :class:`~korail_mobile_api.http.KorailHttpClient` 가 생성 시점에 부르므로, 다른
+    호스트를 가리키는 설정은 소켓이 생기기 전에 막힙니다. 대기열 호스트는 여기서 거부되며
+    자기 가드(:func:`assert_korail_netfunnel_origin`)를 씁니다.
     """
     parsed = urlsplit(base_url)
     try:
@@ -1543,13 +1536,12 @@ def assert_korail_origin(base_url: str) -> None:
 
 
 def assert_read_only_route(method: str, path: str) -> None:
-    """읽기 전용 전송 경로가 갈 수 있는 라우트만 허용한다.
+    """읽기 전용 전송 경로가 갈 수 있는 라우트만 허용합니다.
 
-    ``path`` 는 상대 경로여야 한다 — scheme·netloc·query·fragment 가 붙으면
-    거부다. ``(method, path)`` 쌍이 :data:`KORAIL_READ_ONLY_ROUTES` 의 정확한
-    원소가 아니면 :class:`KorailProtocolError` 이고, 변경 라우트도 여기 없으므로
-    읽기 경로로는 상태를 바꿀 수 없다. 변경 쪽 짝은
-    :func:`assert_mutation_route` 다.
+    ``path`` 는 상대 경로여야 합니다 — scheme·netloc·query·fragment 가 붙으면 거부입니다.
+    ``(method, path)`` 쌍이 :data:`KORAIL_READ_ONLY_ROUTES` 의 정확한 원소가 아니면
+    :class:`KorailProtocolError` 이고, 변경 라우트도 여기 없으므로 읽기 경로로는 상태를
+    바꿀 수 없습니다. 변경 쪽 짝은 :func:`assert_mutation_route` 입니다.
     """
     parsed = urlsplit(path)
     if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
@@ -1565,12 +1557,12 @@ def assert_read_only_route(method: str, path: str) -> None:
 
 
 def assert_mutation_route(method: str, path: str) -> None:
-    """근거가 확인된 상태 변경 라우트만 허용한다.
+    """근거가 확인된 상태 변경 라우트만 허용합니다.
 
-    :func:`assert_read_only_route` 의 변경 쪽 짝이며 전용 변경 전송 경로만
-    사용한다. 라우트는 :data:`KORAIL_MUTATION_ROUTES` 의 정확한 원소여야 하고
-    그 밖은 — 읽기 전용 라우트를 포함해 — 거부된다. 변경 전송 경로를 임의
-    엔드포인트나 읽기 엔드포인트로 돌려쓸 수 없다.
+    :func:`assert_read_only_route` 의 변경 쪽 짝이며 전용 변경 전송 경로만 사용합니다.
+    라우트는 :data:`KORAIL_MUTATION_ROUTES` 의 정확한 원소여야 하고 그 밖은 — 읽기 전용
+    라우트를 포함해 — 거부됩니다. 변경 전송 경로를 임의 엔드포인트나 읽기 엔드포인트로
+    돌려쓸 수 없습니다.
     """
     parsed = urlsplit(path)
     if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
@@ -1589,17 +1581,17 @@ def assert_read_only_request_fields(
     path: str,
     values: Mapping[str, Any] | Sequence[tuple[str, Any]],
 ) -> None:
-    """읽기 요청이 그 라우트에 등록된 필드 이름만 싣도록 강제한다.
+    """읽기 요청이 그 라우트에 등록된 필드 이름만 싣도록 강제합니다.
 
-    ``values`` 는 매핑이거나 순서 있는 ``(이름, 값)`` 쌍의 시퀀스다. 라우트가
-    :data:`KORAIL_EXACT_REQUEST_FIELDS` 에 있으면 이름 집합이 정확히 일치해야
-    하고, :data:`KORAIL_OPTIONAL_REQUEST_FIELDS` 에 등록된 이름만 빠질 수 있다.
+    ``values`` 는 매핑이거나 순서 있는 ``(이름, 값)`` 쌍의 시퀀스입니다. 라우트가
+    :data:`KORAIL_EXACT_REQUEST_FIELDS` 에 있으면 이름 집합이 정확히 일치해야 하고,
+    :data:`KORAIL_OPTIONAL_REQUEST_FIELDS` 에 등록된 이름만 빠질 수 있습니다.
     :data:`KORAIL_EXACT_REQUEST_FIELD_ORDERS` 에 순서까지 등록된 라우트는 순서도
-    검사한다 — 승객·구간 행처럼 개수가 변하는 목록은 접두사와 반복 블록의 문법
-    으로 검사한다.
+    검사합니다 — 승객·구간 행처럼 개수가 변하는 목록은 접두사와 반복 블록의 문법으로
+    검사합니다.
 
-    어긋나면 :class:`KorailProtocolError` 다. 앱이 보내지 않는 필드를 얹거나
-    보내는 필드를 빠뜨린 요청은 전송 전에 막힌다.
+    어긋나면 :class:`KorailProtocolError` 입니다. 앱이 보내지 않는 필드를 얹거나 보내는
+    필드를 빠뜨린 요청은 전송 전에 막힙니다.
     """
     route_path = urlsplit(path).path
     if isinstance(values, Mapping):

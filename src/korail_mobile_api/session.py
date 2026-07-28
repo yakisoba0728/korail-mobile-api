@@ -1,21 +1,19 @@
 """로그인·로그아웃과 세션 상태.
 
 :class:`KorailSessionClient` 가 로그인 왕복을 수행하고 그 결과인
-:class:`~korail_mobile_api.models.KorailSession` 에 ``JSESSIONID``,
-회원카드번호, 고객번호(``strCustNo``)가 담긴다.
-:class:`~korail_mobile_api.client.KorailClient` 는 이 클라이언트를 안에
-두고 쓴다.
+:class:`~korail_mobile_api.models.KorailSession` 에 ``JSESSIONID``, 회원카드번호,
+고객번호(``strCustNo``)가 담깁니다. :class:`~korail_mobile_api.client.KorailClient`
+는 이 클라이언트를 안에 두고 씁니다.
 
-로그인은 한 번에 끝나지 않을 수 있다. 서버가 ``strRedirectUrl`` 을 주면
-2단계 인증이 필요하다는 뜻이고
-:class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 가 올라간다.
-그 이어달리기 본문은 :func:`build_login_authentication_post_data` 가 만들며,
-필드 순서는 Gson 이 ``LoginDao.LoginResponse`` 를 직렬화하는 순서를 따른다
+로그인은 한 번에 끝나지 않을 수 있습니다. 서버가 ``strRedirectUrl`` 을 주면 2단계
+인증이 필요하다는 뜻이고
+:class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 가 올라갑니다.
+그 이어달리기 본문은 :func:`build_login_authentication_post_data` 가 만들며, 필드
+순서는 Gson 이 ``LoginDao.LoginResponse`` 를 직렬화하는 순서를 따릅니다
 (:data:`KORAIL_LOGIN_CONTINUATION_FIELDS`).
 
-회원번호·휴대폰번호·이메일 중 무엇으로 로그인하는지는
-:func:`infer_login_input_flag` 가 값의 모양을 보고 ``"2"``/``"4"``/``"5"``
-중에서 고른다.
+회원번호·휴대폰번호·이메일 중 무엇으로 로그인하는지는 :func:`infer_login_input_flag`
+가 값의 모양을 보고 ``"2"``/``"4"``/``"5"`` 중에서 고릅니다.
 """
 from __future__ import annotations
 
@@ -81,11 +79,11 @@ KORAIL_LOGIN_CONTINUATION_FIELDS: tuple[str, ...] = (
 
 
 def infer_login_input_flag(login_id: str) -> str:
-    """로그인 아이디의 모양을 보고 ``txtInputFlg`` 를 고른다.
+    """로그인 아이디의 모양을 보고 ``txtInputFlg`` 를 고릅니다.
 
-    ``@`` 가 있으면 이메일(``"5"``), 전부 숫자이면서 ``01`` 로 시작하는 10~11
-    자리면 휴대폰번호(``"4"``), 그 밖은 회원번호(``"2"``)다.
-    :meth:`KorailSessionClient.login` 이 ``input_flag`` 를 받지 않았을 때 쓴다.
+    ``@`` 가 있으면 이메일(``"5"``), 전부 숫자이면서 ``01`` 로 시작하는 10~11자리면
+    휴대폰번호(``"4"``), 그 밖은 회원번호(``"2"``)입니다.
+    :meth:`KorailSessionClient.login` 이 ``input_flag`` 를 받지 않았을 때 씁니다.
     """
     if "@" in login_id:
         return KORAIL_LOGIN_TYPE_EMAIL
@@ -107,22 +105,21 @@ def build_login_authentication_post_data(
     response_raw: dict[str, object],
     cust_id: str | None = None,
 ) -> str:
-    """2단계 인증 이어달리기의 POST 본문을 만든다.
+    """2단계 인증 이어달리기의 POST 본문을 만듭니다.
 
-    서버가 ``strRedirectUrl`` 을 주면 로그인이 끝나지 않은 것이고, 그 URL 로
-    보낼 본문이 이것이다.
-    :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 가 이 값을
-    싣고 올라간다.
+    서버가 ``strRedirectUrl`` 을 주면 로그인이 끝나지 않은 것이고, 그 URL 로 보낼 본문이
+    이것입니다. :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 가 이
+    값을 싣고 올라갑니다.
 
     ``callLogin=Y``, ``memId``, ``inputFlg`` 로 시작한 뒤
-    :data:`KORAIL_LOGIN_CONTINUATION_FIELDS` 를 그 순서대로 덧붙인다. 그 순서는
-    Gson 이 ``LoginDao.LoginResponse`` 를 직렬화하는 순서다 —
-    ``S4/u.getLoginAuthenticationPostData`` 가 타입이 있는 DTO 를
-    ``q.toJson(...)`` 으로 만든 ``JSONObject`` 를 훑기 때문에, DTO 가 선언하지
-    않은 봉투 키(``strResult``, ``h_msg_txt``)는 실리지 않는다. 서버가 보내지
-    않았거나 ``null`` 인 필드도 빠진다. Gson 이 null 을 생략하기 때문이다.
+    :data:`KORAIL_LOGIN_CONTINUATION_FIELDS` 를 그 순서대로 덧붙입니다. 그 순서는 Gson 이
+    ``LoginDao.LoginResponse`` 를 직렬화하는 순서입니다 —
+    ``S4/u.getLoginAuthenticationPostData`` 가 타입이 있는 DTO 를 ``q.toJson(...)`` 으로
+    만든 ``JSONObject`` 를 훑기 때문에, DTO 가 선언하지 않은 봉투 키(``strResult``,
+    ``h_msg_txt``)는 실리지 않습니다. 서버가 보내지 않았거나 ``null`` 인 필드도 빠집니다.
+    Gson 이 null 을 생략하기 때문입니다.
 
-    ``login_id`` 가 비어 있으면 ``cust_id`` 가 ``memId`` 로 들어간다.
+    ``login_id`` 가 비어 있으면 ``cust_id`` 가 ``memId`` 로 들어갑니다.
     """
     member_id = login_id if login_id else cust_id or ""
     parts = ["callLogin=Y", f"memId={member_id}", f"inputFlg={input_flag}"]
@@ -139,11 +136,11 @@ def build_login_authentication_post_data(
 
 
 def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
-    """``common.code.do`` 응답에서 비밀번호 암호화 파라미터가 든 객체를 꺼낸다.
+    """``common.code.do`` 응답에서 비밀번호 암호화 파라미터가 든 객체를 꺼냅니다.
 
-    ``app.login.cphd`` 또는 ``login`` 키를 최상위에서 찾고, 없으면 ``data``
-    아래에서 같은 두 키를 찾는다. 그래도 없으면 응답 자체를 돌려준다. 서버가
-    이 값을 감싸는 깊이가 일정하지 않아서 세 자리를 모두 본다.
+    ``app.login.cphd`` 또는 ``login`` 키를 최상위에서 찾고, 없으면 ``data`` 아래에서 같은
+    두 키를 찾습니다. 그래도 없으면 응답 자체를 돌려줍니다. 서버가 이 값을 감싸는 깊이가
+    일정하지 않아서 세 자리를 모두 봅니다.
     """
     for key in ("app.login.cphd", "login"):
         value = raw.get(key)
@@ -159,16 +156,16 @@ def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
 
 
 class KorailSessionClient:
-    """로그인 왕복과 세션 상태를 관리한다.
+    """로그인 왕복과 세션 상태를 관리합니다.
 
     :class:`~korail_mobile_api.client.KorailClient` 가 안에 두고 쓰는 계층이며,
-    :class:`~korail_mobile_api.http.KorailHttpClient` 하나 위에서 동작한다.
+    :class:`~korail_mobile_api.http.KorailHttpClient` 하나 위에서 동작합니다.
 
-    상태는 둘이다. :attr:`current` 는 살아 있는
+    상태는 둘입니다. :attr:`current` 는 살아 있는
     :class:`~korail_mobile_api.models.KorailSession` 이거나 ``None`` 이고,
     :attr:`pending` 은 2단계 인증이 필요해 멈춘
-    :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 다.
-    :meth:`login` 은 부르는 즉시 둘 다 비운다.
+    :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 입니다.
+    :meth:`login` 은 부르는 즉시 둘 다 비웁니다.
     """
     def __init__(self, http: KorailHttpClient) -> None:
         self.http = http
@@ -176,10 +173,10 @@ class KorailSessionClient:
         self.pending: KorailAuthContinuationRequired | None = None
 
     def check_service(self) -> None:
-        """서비스 상태 캐시(``MobileService.cache``)를 읽는다.
+        """서비스 상태 캐시(``MobileService.cache``)를 읽습니다.
 
-        로그인 직전에 앱이 하는 것과 같은 호출이다. 실패하면 그대로 예외를 올리므로
-        서버 점검 중에는 로그인 폼을 만들기 전에 멈춘다.
+        로그인 직전에 앱이 하는 것과 같은 호출입니다. 실패하면 그대로 예외를 올리므로 서버
+        점검 중에는 로그인 폼을 만들기 전에 멈춥니다.
         """
         self.http.get_json(
             "/file/CACHE/MobileService.cache",
@@ -188,13 +185,13 @@ class KorailSessionClient:
         )
 
     def get_login_crypto_info(self) -> LoginCryptoInfo:
-        """비밀번호 암호화 파라미터를 ``common.code.do`` 에서 읽는다.
+        """비밀번호 암호화 파라미터를 ``common.code.do`` 에서 읽습니다.
 
         :class:`~korail_mobile_api.models.LoginCryptoInfo` 를 돌려주며
-        :func:`~korail_mobile_api.crypto.transform_login_password` 가 그것을 쓴다.
-        ``pwdAESCphd``(또는 ``loginFlg``)가 ``"Y"``/``"N"`` 이 아니거나, ``"Y"``
-        인데 ``idx`` 나 ``key`` 가 비어 있으면
-        :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+        :func:`~korail_mobile_api.crypto.transform_login_password` 가 그것을 씁니다.
+        ``pwdAESCphd``(또는 ``loginFlg``)가 ``"Y"``/``"N"`` 이 아니거나, ``"Y"`` 인데 ``idx``
+        나 ``key`` 가 비어 있으면
+        :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
         """
         response = self.http.post_form(
             "/classes/com.korail.mobile.common.code.do",
@@ -227,25 +224,23 @@ class KorailSessionClient:
         cust_id: str | None = None,
         etr_path: str | None = None,
     ) -> KorailSession:
-        """회원 자격증명으로 로그인하고 살아 있는 세션을 돌려준다.
+        """회원 자격증명으로 로그인하고 살아 있는 세션을 돌려줍니다.
 
-        ``POST login.Login``(``LoginService.java:17``). 부르는 즉시 기존 세션을 먼저
-        버리고, 서비스 상태와 암호화 파라미터를 읽은 뒤 변환한 비밀번호를 보낸다.
+        ``POST login.Login``(``LoginService.java:17``). 부르는 즉시 기존 세션을 먼저 버리고,
+        서비스 상태와 암호화 파라미터를 읽은 뒤 변환한 비밀번호를 보냅니다.
 
-        폼 필드 순서는 앱의 Retrofit 시그니처 그대로이고 ``idx`` 가 마지막이다
-        (``LoginService.java:19``, ``LoginDao.java:240``). ``cust_id``·``etr_path``
-        는 비어 있으면 전선에 실리지 않는다. Retrofit 이 null ``@Field`` 를
-        떨어뜨리는 것과 같다.
+        폼 필드 순서는 앱의 Retrofit 시그니처 그대로이고 ``idx`` 가 마지막입니다
+        (``LoginService.java:19``, ``LoginDao.java:240``). ``cust_id``·``etr_path`` 는 비어
+        있으면 전선에 실리지 않습니다. Retrofit 이 null ``@Field`` 를 떨어뜨리는 것과 같습니다.
 
-        ``member_no`` 는 회원번호·휴대폰번호·이메일 중 아무거나 되고,
-        ``input_flag`` 를 주지 않으면 :func:`infer_login_input_flag` 가 값의 모양을
-        보고 고른다.
+        ``member_no`` 는 회원번호·휴대폰번호·이메일 중 아무거나 되고, ``input_flag`` 를 주지
+        않으면 :func:`infer_login_input_flag` 가 값의 모양을 보고 고릅니다.
 
         서버가 ``strRedirectUrl`` 을 주면 2단계 인증이 필요하다는 뜻이라
-        :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 를 올리고
-        그 예외를 :attr:`pending` 에 남긴다. 그 밖의 실패는
-        :class:`~korail_mobile_api.errors.KorailAuthError` 이며, 쿠키가 오지 않은
-        성공 응답도 같은 예외로 막는다.
+        :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 를 올리고 그 예외를
+        :attr:`pending` 에 남깁니다. 그 밖의 실패는
+        :class:`~korail_mobile_api.errors.KorailAuthError` 이며, 쿠키가 오지 않은 성공 응답도
+        같은 예외로 막습니다.
         """
         self.clear_session()
         try:
@@ -351,14 +346,14 @@ class KorailSessionClient:
         # JSESSIONID cookie, so the envelope is intentionally omitted. Server
         # invalidation is best-effort — the local session is always cleared
         # afterward so logout never fails on transport or an expired session.
-        """서버 쪽 세션을 무효화하고 로컬 상태를 비운다.
+        """서버 쪽 세션을 무효화하고 로컬 상태를 비웁니다.
 
-        ``GET login.Logout``(``LoginService.java:29-30``, 앱의 ``LogoutDao``).
-        쿼리 파라미터가 없다 — JSESSIONID 쿠키만으로 인증되므로 봉투도 보지 않는다.
+        ``GET login.Logout``(``LoginService.java:29-30``, 앱의 ``LogoutDao``). 쿼리
+        파라미터가 없습니다 — JSESSIONID 쿠키만으로 인증되므로 봉투도 보지 않습니다.
 
-        로그인 상태가 아니면 아무 요청도 보내지 않는다. 서버 무효화는 최선 노력이며
-        전송이 실패하거나 세션이 이미 만료됐어도 예외가 되지 않는다. 로컬 상태는
-        어느 경우에도 :meth:`clear_session` 으로 비운다.
+        로그인 상태가 아니면 아무 요청도 보내지 않습니다. 서버 무효화는 최선 노력이며 전송이
+        실패하거나 세션이 이미 만료됐어도 예외가 되지 않습니다. 로컬 상태는 어느 경우에도
+        :meth:`clear_session` 으로 비웁니다.
         """
         if self.current is not None:
             try:
@@ -372,9 +367,9 @@ class KorailSessionClient:
         self.clear_session()
 
     def clear_session(self) -> None:
-        """요청을 보내지 않고 쿠키·세션·대기 중인 인증을 버린다.
+        """요청을 보내지 않고 쿠키·세션·대기 중인 인증을 버립니다.
 
-        서버 쪽 세션은 그대로 남으므로 실제로 끊으려면 :meth:`logout` 을 쓴다.
+        서버 쪽 세션은 그대로 남으므로 실제로 끊으려면 :meth:`logout` 을 쓰면 됩니다.
         """
         self.http.cookies.clear()
         self.current = None
