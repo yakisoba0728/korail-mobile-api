@@ -689,8 +689,8 @@ def test_readme_documents_the_error_taxonomy():
     record = " ".join(RECORD.read_text(encoding="utf-8").split())
 
     assert "### 에러 분류" in README.read_text(encoding="utf-8")
-    assert "앱 자신이 분기하는 필드인 `h_msg_cd` 로 분류합니다" in readme
-    assert "한국어 메시지 문구로는 분류하지 않습니다" in readme
+    assert "앱이 실제로 분기하는 `h_msg_cd` 로 가릅니다" in readme
+    assert "한국어 문구로는 가르지 않습니다" in readme
 
     # Every exception in the taxonomy is named, so none can be added to the
     # code without being explained here.
@@ -711,10 +711,10 @@ def test_readme_documents_the_error_taxonomy():
         assert f"`{name}`" in readme, name
 
     # Retry is pointless / re-login / nothing was there.
-    assert "이 열차는 재시도해도 소용없습니다. 다른 열차를 골라야 합니다." in readme
-    assert "재시도는 소용없습니다. 다른 질문을 해야 합니다." in readme
-    assert "**다시 로그인해야 합니다.**" in readme
-    assert "**아무것도 없었습니다.** 요청 자체는 정상입니다." in readme
+    assert "매진입니다. 다른 열차를 골라야 합니다" in readme
+    assert "요청은 정상이니 조건을 바꿔야 합니다" in readme
+    assert "세션이 끊겼으니 다시 로그인해야 합니다" in readme
+    assert "결과가 없습니다" in readme
     assert "**이 라이브러리는 스스로 재시도하지 않습니다.**" in readme
     assert "재시도한 예약은 중복 예약이기 때문입니다" in readme
 
@@ -949,7 +949,7 @@ def test_the_route_decomposition_is_measured_not_asserted():
     normalized = " ".join(readme.split())
     assert f"라우트 {len(routes)}개" in normalized
     assert f"읽기 {reads}개" in normalized, f"README does not state {reads} reads"
-    assert f"경계에는 라우트 {len(routes)}개" in normalized
+    assert f"경계 안에 라우트 {len(routes)}개" in normalized
     # The mutation split is the other half of the same sentence, and it drifted
     # once already: the safety model said "fifteen mutation methods" while the
     # capability section two screens above said thirteen.
