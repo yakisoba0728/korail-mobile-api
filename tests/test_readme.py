@@ -338,7 +338,7 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     # one of the few evidence-flavoured claims that stayed in the README. The
     # README is Korean, so the claim is pinned in Korean.
     assert "/classes/com.korail.mobile.push.callCrew.do" in readme
-    assert "제외되어 있다" in readme
+    assert "제외되어 있습니다" in readme
     assert "static APK evidence and synthetic fixtures only" in record
     assert "60 exact read/login routes" in progress
     for document in (record, progress, status, handoff, changelog):
@@ -689,8 +689,8 @@ def test_readme_documents_the_error_taxonomy():
     record = " ".join(RECORD.read_text(encoding="utf-8").split())
 
     assert "### 에러 분류" in README.read_text(encoding="utf-8")
-    assert "앱 자신이 분기하는 필드인 `h_msg_cd` 로 분류한다" in readme
-    assert "한국어 메시지 문구로는 분류하지 않는다" in readme
+    assert "앱 자신이 분기하는 필드인 `h_msg_cd` 로 분류합니다" in readme
+    assert "한국어 메시지 문구로는 분류하지 않습니다" in readme
 
     # Every exception in the taxonomy is named, so none can be added to the
     # code without being explained here.
@@ -711,17 +711,17 @@ def test_readme_documents_the_error_taxonomy():
         assert f"`{name}`" in readme, name
 
     # Retry is pointless / re-login / nothing was there.
-    assert "이 열차는 재시도해도 소용없다. 다른 열차를 골라라." in readme
-    assert "재시도는 소용없다. 다른 질문을 하라." in readme
-    assert "**다시 로그인하라.**" in readme
-    assert "**아무것도 없었다.** 요청 자체는 정상이다." in readme
-    assert "**이 라이브러리는 스스로 재시도하지 않는다.**" in readme
-    assert "재시도한 예약은 중복 예약이기 때문이다" in readme
+    assert "이 열차는 재시도해도 소용없습니다. 다른 열차를 골라야 합니다." in readme
+    assert "재시도는 소용없습니다. 다른 질문을 해야 합니다." in readme
+    assert "**다시 로그인해야 합니다.**" in readme
+    assert "**아무것도 없었습니다.** 요청 자체는 정상입니다." in readme
+    assert "**이 라이브러리는 스스로 재시도하지 않습니다.**" in readme
+    assert "재시도한 예약은 중복 예약이기 때문입니다" in readme
 
     # A warning on a success must be documented as staying a success. The rule
     # is in the README because a caller hits it; the observation that proved it
     # is in the record.
-    assert "성공으로 남는다" in readme
+    assert "성공으로 남습니다" in readme
     assert "WRR664296" in record
     assert "`strResult=SUCC`" in record
     assert "a real, cancelable PNR" in record
@@ -775,7 +775,7 @@ def test_docs_record_transfer_as_implemented_and_unverified():
     assert "reserve_transfer" in readme
     assert "get_transfer_stations" in readme
     # And the warning that a live transfer hold cannot be released from here.
-    assert "KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내지 마라" in readme
+    assert "KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내면 안 됩니다" in readme
 
     for document in (record, progress, changelog):
         # The two codes a reader would otherwise guess wrongly.
