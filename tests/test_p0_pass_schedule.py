@@ -429,13 +429,14 @@ def test_documentation_keeps_unverified_session_and_mutation_boundary():
     root = Path(__file__).resolve().parents[1]
     document = (root / "docs/pass-schedule-read.md").read_text(encoding="utf-8")
     assert PASS_SCHEDULE_PATH in document
-    normalized = " ".join(document.casefold().split())
-    assert "server session requirement is unverified" in normalized
-    assert "client-side safety gate" in normalized
-    assert "validate live only after login" in normalized
-    assert "account-neutral" in normalized
-    assert "not account-neutral" in normalized
-    assert "reservation" in normalized
-    assert "payment" in normalized
-    assert "caller-supplied" in normalized
-    assert "no runtime pass or menu code is hardcoded" in normalized
+    # The document is Korean, so the same four boundary claims are pinned in
+    # Korean. Each one is a thing a reader could get wrong in a way that costs
+    # a live request against an assumption the package never proved.
+    normalized = " ".join(document.split())
+    assert "서버가 세션을 요구하는지는 확인되지 않았다" in normalized
+    assert "클라이언트 쪽 안전 게이트" in normalized
+    assert "실서버 검증은 로그인 이후에만" in normalized
+    assert "계정 무관이 아니지만, 그렇게 만든 것은 서버가 아니라 이 패키지다" in normalized
+    assert "정기권 예약이나 결제 호출은 드러내지" in normalized
+    assert "전부 호출자가 준다" in normalized
+    assert "하드코딩한 것은 하나도 없다" in normalized
