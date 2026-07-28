@@ -427,7 +427,7 @@ def test_client_clears_session_on_p058(load_json_fixture):
 
 def test_documentation_keeps_unverified_session_and_mutation_boundary():
     root = Path(__file__).resolve().parents[1]
-    document = (root / "docs/pass-schedule-read.md").read_text()
+    document = (root / "docs/pass-schedule-read.md").read_text(encoding="utf-8")
     assert PASS_SCHEDULE_PATH in document
     normalized = " ".join(document.casefold().split())
     assert "server session requirement is unverified" in normalized

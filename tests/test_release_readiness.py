@@ -1121,6 +1121,7 @@ def test_only_the_repo_root_dotenv_is_ignored() -> None:
         input=".env\nnested/.env\n.env.backup\n",
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -1130,8 +1131,8 @@ def test_only_the_repo_root_dotenv_is_ignored() -> None:
 
 
 def test_ci_and_manual_release_gates_are_structurally_offline_and_fail_fast() -> None:
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-    release = (ROOT / "docs/RELEASE.md").read_text()
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    release = (ROOT / "docs/RELEASE.md").read_text(encoding="utf-8")
     release_lower = release.casefold()
     offline_command = 'pytest -q -m "not live"'
 
@@ -1164,8 +1165,8 @@ def test_ci_and_manual_release_gates_are_structurally_offline_and_fail_fast() ->
 
 
 def test_ambient_live_opt_in_is_deselected_by_the_release_command() -> None:
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-    release = (ROOT / "docs/RELEASE.md").read_text()
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    release = (ROOT / "docs/RELEASE.md").read_text(encoding="utf-8")
     offline_command = 'pytest -q -m "not live"'
     assert offline_command in workflow and offline_command in release
 
@@ -1185,7 +1186,11 @@ def test_ambient_live_opt_in_is_deselected_by_the_release_command() -> None:
         env=environment,
         capture_output=True,
         text=True,
-        timeout=30,
+        encoding="utf-8",
+        # Windows 러너에서는 pytest 의 콜드 스타트가 눈에 띄게 느리다.
+        # 이 값은 "이 하위 프로세스가 멈추지 않았다"를 보장하는 것이지
+        # 성능을 재는 것이 아니므로 넉넉히 잡는다.
+        timeout=60,
         check=False,
     )
     assert result.returncode == 5
@@ -1217,6 +1222,7 @@ def _collected_offline_test_count() -> tuple[int, int]:
         env=environment,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=120,
         check=False,
     )
@@ -1228,16 +1234,16 @@ def _collected_offline_test_count() -> tuple[int, int]:
 
 
 def test_repository_truth_and_full_mutation_policy() -> None:
-    readme = (ROOT / "README.md").read_text()
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     # docs/NEXT_SESSION.md was consolidated into IMPLEMENTATION_PROGRESS.md; its
     # repository-truth handoff facts now live in that doc's Package Handoff Summary.
-    handoff = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text()
+    handoff = (ROOT / "docs/IMPLEMENTATION_PROGRESS.md").read_text(encoding="utf-8")
     # The README was rewritten on 2026-07-26 for people who want to use the
     # library; its audit log moved whole to docs/verification-record.md. The
     # repository-truth numbers a reader needs in order to decide whether to
     # trust the package stayed in the README, and the bounded seat-inventory
     # evidence that supports one of them followed the prose into the record.
-    record = (ROOT / "docs/verification-record.md").read_text()
+    record = (ROOT / "docs/verification-record.md").read_text(encoding="utf-8")
     for document in (readme, handoff):
         assert "60 routes" in document
         # 76, not 72 or 74. Older numbers appear in the handoff, because those
@@ -1269,7 +1275,7 @@ def test_repository_truth_and_full_mutation_policy() -> None:
         assert "IRG000000" in document
         assert "service-status preflight" in document
 
-    policy = (ROOT / "docs/library-build-guide.md").read_text().casefold()
+    policy = (ROOT / "docs/library-build-guide.md").read_text(encoding="utf-8").casefold()
     forbidden_recommendations = (
         "reservationapi",
         "paymentapi",
@@ -1299,7 +1305,7 @@ def test_canonical_plan_requires_behavioral_release_verification() -> None:
     # The dual-package release-readiness plan under docs/superpowers/plans/ was
     # removed during the docs consolidation; its behavioral release-verification
     # contract now lives in docs/RELEASE.md ("Behavioral verification contract").
-    plan = (ROOT / "docs/RELEASE.md").read_text().casefold()
+    plan = (ROOT / "docs/RELEASE.md").read_text(encoding="utf-8").casefold()
     for requirement in (
         "behavioral",
         "duplicate",
