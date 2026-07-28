@@ -47,6 +47,18 @@ def _validate_login_crypto_key(info: LoginCryptoInfo) -> bytes:
 
 
 def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
+    """로그인 폼에 실을 비밀번호를 서버가 지정한 방식으로 변환한다.
+
+    ``info.pwd_aes_cphd`` 가 ``"Y"`` 면 AES-128/192/256-CBC(PKCS7)로 암호화한다.
+    키는 ``info.key`` 의 UTF-8 바이트이고 IV 는 그 앞 16바이트다. 결과를 안드로이드
+    ``Base64`` 기본 모드로 한 번, 그 문자열을 줄바꿈 없는 Base64 로 다시 한 번
+    감싼다. 두 번 감싸는 것이 앱의 동작이다.
+
+    ``"N"`` 이면 암호화 없이 줄바꿈 없는 Base64 만 적용한다.
+
+    키 길이가 16·24·32바이트가 아니면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+    """
     if info.pwd_aes_cphd == "Y":
         key = _validate_login_crypto_key(info)
         iv = key[:16]
@@ -63,6 +75,18 @@ def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
 
 
 def generate_sid(*, epoch_ms: int | None = None) -> str:
+    """요청마다 새로 만드는 ``Sid`` 값.
+
+    ``"AD"`` 에 밀리초 epoch 을 붙인 문자열을 고정 키
+    (:data:`SID_KEY`, 키와 IV 가 같다)로 AES-CBC 암호화하고 안드로이드
+    ``Base64`` 기본 모드로 인코딩한다. 그래서 값은 부를 때마다 다르고 76자마다
+    개행이 들어간다.
+
+    ``epoch_ms`` 는 시각을 고정하고 싶을 때만 준다. 주지 않으면 현재 시각이다.
+    공통 ``Key`` 대신 이 값을 요구하는 폼은
+    :func:`~korail_mobile_api.limousine_payloads.build_limousine_schedule_view_form`
+    뿐이다.
+    """
     timestamp = epoch_ms if epoch_ms is not None else int(time.time() * 1000)
     encrypted = _aes_cbc_pkcs7_encrypt(
         f"AD{timestamp}".encode(),

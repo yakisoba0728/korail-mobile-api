@@ -150,6 +150,13 @@ def _typed_non_negative_integer_value(
 
 
 def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
+    """``prdMobilePlusMain.cache`` 를 파싱한다.
+
+    캐시 파일이라 KORAIL 봉투가 없다. 모든 필드가 선택값이므로 서버가 빼면
+    ``None`` 이다. ``version`` 이 객체로 오면 앱 업데이트 안내
+    (:class:`~korail_mobile_api.models.AppVersionInfo`)이고, 객체도 ``null``
+    도 아니면 :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+    """
     raw = response.raw
     version_raw = raw.get("version")
     if version_raw is not None and not isinstance(version_raw, Mapping):
@@ -179,6 +186,11 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
 
 
 def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
+    """공지 응답을 파싱한다.
+
+    게시판 아이디·게시물 일련번호·제목 셋만 꺼내며 모두 선택값이다. 공지가
+    없는 상태도 정상이라 빈 값이 오류가 아니다.
+    """
     raw = response.raw
     return NoticeResponse(
         h_msg_cd=response.h_msg_cd,
@@ -192,6 +204,14 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
 
 
 def parse_station_name_map(raw: Mapping[str, Any]) -> dict[str, str]:
+    """역 목록 응답에서 역코드 → 역이름 대응표를 만든다.
+
+    ``stns.stn`` 리스트가 없으면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다. 코드와 이름이
+    둘 다 있는 행만 담으며, 쓸 만한 역이 하나도 없으면 빈 dict 대신 역시
+    예외다. :meth:`~korail_mobile_api.client.KorailClient.search_trains` 가
+    역코드를 이름으로 바꾸려고 이 표를 만들어 캐시한다.
+    """
     container = raw.get("stns")
     rows = container.get("stn") if isinstance(container, Mapping) else None
     if not isinstance(rows, list):
@@ -209,6 +229,12 @@ def parse_station_name_map(raw: Mapping[str, Any]) -> dict[str, str]:
 
 
 def resolve_station_name(reference: str, names: Mapping[str, str]) -> str:
+    """역 참조를 조회 폼에 실을 역이름으로 바꾼다.
+
+    숫자가 아니면 이미 이름이라고 보고 그대로 돌려준다. 숫자면 역코드로 보고
+    ``names``(:func:`parse_station_name_map` 의 결과)에서 찾는다. 빈 참조와
+    표에 없는 코드는 :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+    """
     value = reference.strip()
     if not value:
         raise KorailProtocolError("KORAIL station reference must not be empty")
@@ -223,6 +249,16 @@ def resolve_station_name(reference: str, names: Mapping[str, str]) -> str:
 
 
 def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
+    """조회 응답의 열차 행들을 :class:`~korail_mobile_api.models.TrainSummary` 로
+    만든다.
+
+    ``trn_infos`` 는 세 모양을 모두 받는다 — ``trn_info`` 를 담은 객체, 리스트
+    그 자체, 그리고 ``null``(결과 없음). 그 밖의 값이거나 행이 객체가 아니면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+
+    빈 목록 자체는 오류가 아니다. 직통 열차가 없다는 판정은 호출자가
+    :class:`~korail_mobile_api.errors.KorailNoDirectTrainError` 로 내린다.
+    """
     container = raw.get("trn_infos")
     if isinstance(container, Mapping):
         rows = container.get("trn_info", [])
@@ -251,6 +287,16 @@ def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
 def parse_train_search_metadata(
     raw: Mapping[str, Any],
 ) -> TrainSearchMetadata:
+    """조회 응답에서 열차 행이 아닌 값들 — 페이지 커서와 조회 조건 — 을 꺼낸다.
+
+    :class:`~korail_mobile_api.models.TrainSearchMetadata` 를 돌려주며, 다음
+    페이지 요청에 되실을 커서(``h_next_pg_flg``, ``strJobId``, ``h_gd_no`` 등)가
+    여기 담긴다. 병합예약 가능 플래그(``h_merge_rsv_psb_flg``)는 최상위가 아니라
+    ``trn_infos`` 안에 있어 거기서 읽는다.
+
+    ``h_menu_id`` 는 읽지 않는다. ``txtMenuId`` 는 서버 값이 아니라 앱이 박아
+    넣는 클라이언트 상수다.
+    """
     def optional(key: str) -> str | None:
         return _typed_optional_string(raw, key, context="train search metadata")
 
@@ -305,6 +351,12 @@ def _station_required_string(row: Mapping[str, Any], key: str) -> str:
 
 
 def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
+    """``ebizcross/getUUID.do`` 를 파싱한다.
+
+    ``mutMrkVrfCd`` 가 비어 있지 않은 문자열이어야 하고 아니면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다. 이 라우트는
+    KORAIL 봉투를 싣지 않는다.
+    """
     value = response.raw.get("mutMrkVrfCd")
     if not isinstance(value, str) or not value.strip():
         raise KorailProtocolError(
@@ -334,6 +386,16 @@ def _maas_optional_string(
 def parse_maas_menu_list_response(
     response: BaseKorailResponse,
 ) -> MaasMenuListResponse:
+    """``copt.gdMenuLt.do`` 의 MaaS 메뉴 목록을 파싱한다.
+
+    ``menuList`` 는 없거나 ``null`` 이어도 되고 그때는 빈 목록이다. 리스트가
+    아니거나 행이 객체가 아니면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+
+    각 항목은 부가서비스 코드를 가지며, 역 선택을 쓰는 항목의 그 코드가
+    :meth:`~korail_mobile_api.client.KorailClient.get_maas_station_data` 의
+    입력이다.
+    """
     rows = response.raw.get("menuList")
     if rows is None:
         rows = []
@@ -388,6 +450,15 @@ def parse_maas_menu_list_response(
 def parse_station_data_response(
     response: BaseKorailResponse,
 ) -> StationDataResponse:
+    """역 목록 응답을 파싱한다.
+
+    ``common.stationdata`` 와 ``EbizMaasStationList.do`` 가 같은 모양을 쓴다.
+    두 라우트 모두 KORAIL 봉투를 싣지 않지만 ``stns.stn`` 리스트는 필수라서
+    없으면 :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+
+    역마다 코드(``stn_cd``)와 이름(``stn_nm``)은 필수, 위경도·그룹·팝업 문구는
+    선택값이다.
+    """
     container = response.raw.get("stns")
     if not isinstance(container, Mapping):
         raise KorailProtocolError("KORAIL station data missing stns object")
@@ -441,6 +512,13 @@ def parse_station_data_response(
 def parse_station_info_response(
     response: BaseKorailResponse,
 ) -> StationInfoResponse:
+    """``common.stationinfo`` 를 파싱한다.
+
+    역 목록이 아니라 그 목록의 버전 정보다. ``count``(0 이상의 정수)와
+    ``map_version``(비어 있지 않은 문자열) 둘 다 필수이며, 하나라도 어긋나면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다. 앱은 이 값으로
+    캐시한 역 목록을 다시 받을지 판단한다.
+    """
     raw = response.raw
     return StationInfoResponse(
         h_msg_cd=response.h_msg_cd,
@@ -464,6 +542,18 @@ def parse_station_info_response(
 def parse_train_calendar_response(
     response: BaseKorailResponse,
 ) -> TrainCalendarResponse:
+    """``schedule.runDt`` 열차운행달력을 파싱한다.
+
+    ``runningCalendar`` 가 없거나 ``null`` 이면 빈 날짜 튜플이다. 앱도 그렇게
+    다룬다 — ``makeAvailableDatesFactory`` 가 SUCC 응답에서 리스트를 null 검사
+    하고(``C0805e.java:124``) ``getRunningCalendarList``
+    (``TrainCalendarDao:101-103``)가 nullable ``List`` 다. 값이 있는데 리스트가
+    아닐 때만 :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+
+    행의 날짜(``runDt``)도 선택값이라 ``None`` 인 행이 섞일 수 있다. 성수기
+    여부는 이 응답에서 오며
+    :func:`~korail_mobile_api.netfunnel.inquiry_action` 이 그것을 본다.
+    """
     raw = response.raw
     # makeAvailableDatesFactory null-guards the list on SUCC responses
     # (C0805e.java:124: `if (isNull(list) || list.size() <= 0) { ...return; }`)
@@ -583,6 +673,13 @@ def parse_train_calendar_response(
 def parse_train_schedule_response(
     response: BaseKorailResponse,
 ) -> TrainScheduleResponse:
+    """``research.actualTrainSchedule.do`` 의 정차역·지연 정보를 파싱한다.
+
+    ``dlayList`` 는 필수 리스트이고 없으면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다. 행 하나가
+    정차역 하나이며 도착·출발 시각과 지연 시간이 담긴다. 개별 필드는 선택값이라
+    서버가 빼면 ``None`` 이다.
+    """
     raw = response.raw
     rows = _typed_required_list(
         raw,
@@ -752,6 +849,12 @@ def parse_train_schedule_response(
 def parse_transfer_station_list_response(
     response: BaseKorailResponse,
 ) -> TransferStationListResponse:
+    """``qry.chtnStn.do`` 의 환승역 목록을 파싱한다.
+
+    ``chtnList`` 는 필수 리스트이고 리스트가 아니면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다. 역마다 코드와
+    이름이 필수다. 빈 리스트는 그 구간에 환승역이 없다는 뜻이며 오류가 아니다.
+    """
     raw = response.raw
     rows = raw.get("chtnList")
     if not isinstance(rows, list):
@@ -891,6 +994,16 @@ def _inventory_optional_int(
 def parse_seat_car_list_response(
     response: BaseKorailResponse,
 ) -> SeatCarListResponse:
+    """``research.TrainResearch`` 의 호차 목록을 파싱한다.
+
+    ``srcar_infos`` 는 없거나 ``null`` 이어도 되고 그때는 빈 목록이다. 객체면
+    ``srcar_info`` 를 읽으며, 그 값이 리스트도 ``null`` 도 아니면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+
+    호차마다 좌석 속성(유아동반·휠체어 등) 목록이 함께 오고, 그 호차번호가
+    :meth:`~korail_mobile_api.client.KorailClient.get_seat_inventory` 의
+    입력이다.
+    """
     raw = response.raw
     container = raw.get("srcar_infos")
     if container is None:
@@ -1021,6 +1134,17 @@ def _inventory_ratio(data: Mapping[str, Any], key: str) -> float:
 def parse_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> SeatInventoryResponse:
+    """``research.TResidualSeatsResearch.do`` 의 좌석 배치와 점유 상태를 파싱한다.
+
+    배치 유형(``layout_type``), 좌석 배열 코드(``seat_ary_cd``), 잔여·전체
+    좌석 수, ``seatList`` 가 모두 필수다. 잔여가 전체보다 크면 값의 모양이
+    맞더라도 :class:`~korail_mobile_api.errors.KorailProtocolError` 다 — 서로
+    모순되는 재고를 그대로 통과시키지 않는다.
+
+    좌석 행은 :class:`~korail_mobile_api.models.PhysicalSeat` 가 된다. 창문
+    위치 비율은 좌석이 아니라 좌석표를 그리기 위한 값이라
+    :class:`~korail_mobile_api.models.SeatWindow` 로 따로 담긴다.
+    """
     raw = response.raw
     layout_type = _inventory_required_int(raw, "layout_type")
     arrangement_code = _inventory_required_string(raw, "seat_ary_cd")

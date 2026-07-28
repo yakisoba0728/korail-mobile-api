@@ -43,6 +43,12 @@ def _validated_query(
 def validate_limousine_schedule_query(
     query: object,
 ) -> LimousineScheduleQuery:
+    """``query`` 가 정확히 :class:`LimousineScheduleQuery` 인지 확인하고 돌려준다.
+
+    하위 클래스는 거부한다(``TypeError``). 통과하면 ``__post_init__`` 의 자릿수
+    검사를 다시 돌리므로, ``object.__setattr__`` 등으로 얼어붙은 필드를 바꾼
+    객체도 여기서 걸린다.
+    """
     return _validated_query(
         query,
         LimousineScheduleQuery,
@@ -54,6 +60,11 @@ def validate_limousine_schedule_query(
 def validate_limousine_seat_inventory_query(
     query: object,
 ) -> LimousineSeatInventoryQuery:
+    """``query`` 가 정확히 :class:`LimousineSeatInventoryQuery` 인지 확인하고
+    돌려준다.
+
+    :func:`validate_limousine_schedule_query` 와 같은 규칙이다.
+    """
     return _validated_query(
         query,
         LimousineSeatInventoryQuery,
@@ -65,6 +76,13 @@ def validate_limousine_seat_inventory_query(
 def validate_limousine_schedule_view_query(
     query: object,
 ) -> LimousineScheduleViewQuery:
+    """``query`` 가 정확히 :class:`LimousineScheduleViewQuery` 인지 확인하고
+    돌려준다.
+
+    :func:`validate_limousine_schedule_query` 와 같은 규칙이다.
+    :meth:`~korail_mobile_api.client.KorailClient.get_limousine_schedule_view`
+    는 폼을 만들기 전에 이것을 따로 한 번 더 부른다.
+    """
     return _validated_query(
         query,
         LimousineScheduleViewQuery,
@@ -89,6 +107,13 @@ def build_limousine_schedule_form(
     config: KorailConfig,
     query: LimousineScheduleQuery,
 ) -> dict[str, str]:
+    """``lmu.scdlQry.do`` 의 운행 스케줄 조회 폼을 만든다.
+
+    ``BusReservationService.java:27``. 공통 ``Device``/``Version``/``Key`` 위에
+    질의의 아홉 값을 얹는다. 역은 역이름이 아니라 4자리 역코드
+    (``dptRsStnCd``/``arvRsStnCd``)이고, 날짜는 ``YYYYMMDD``, 시각은
+    ``HHMMSS`` 다.
+    """
     query = validate_limousine_schedule_query(query)
     return {
         "Device": config.device,
@@ -110,6 +135,13 @@ def build_limousine_seat_inventory_form(
     config: KorailConfig,
     query: LimousineSeatInventoryQuery,
 ) -> dict[str, str]:
+    """``lms.TResidualSeatsResearch.do`` 의 좌석 재고 조회 폼을 만든다.
+
+    ``BusReservationService.java:31``. 편·호차를 지목하는 값들에 승하차역의
+    운행 순서(``dptStnRunOrdr``/``arvStnRunOrdr``)와 인원이 붙는다. 두 값만
+    문자열이 아닌 파이썬 값에서 온다 — ``totPsgCnt`` 는 ``str(int)``,
+    ``isArrow`` 는 ``"Y"``/``"N"`` 이 아니라 ``"true"``/``"false"`` 다.
+    """
     query = validate_limousine_seat_inventory_query(query)
     return {
         "Device": config.device,
@@ -138,6 +170,18 @@ def build_limousine_schedule_view_form(
     *,
     sid: str,
 ) -> dict[str, str]:
+    """``seatMovie.LimousineScheduleView`` 의 열차 목록 조회 폼을 만든다.
+
+    ``SeatMovieService.java:16``. 이 폼만은 공통 ``Key`` 대신 호출자가 넘긴
+    ``sid`` 를 싣는다(:func:`~korail_mobile_api.crypto.generate_sid`). 역은
+    코드가 아니라 **역이름**이다.
+
+    인원은 ``txtPsgFlg_1``~``txtPsgFlg_5`` 다섯 칸으로 나뉜다 — 경로 두 종류,
+    경로우대, 중증장애, 경증장애가 각각 자기 칸을 가진다. 좌석 속성 셋
+    (``txtSeatAttCd_2``/``_3``/``_4``)은 방향·위치·객실이고, 마지막 세
+    불리언(``ebizCrossCheck``/``srtCheckYn``/``rtYn``)은 ``"Y"``/``"N"`` 으로
+    나간다.
+    """
     query = validate_limousine_schedule_view_query(query)
     return {
         "Device": config.device,

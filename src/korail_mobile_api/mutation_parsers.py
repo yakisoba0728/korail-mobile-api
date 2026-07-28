@@ -173,6 +173,23 @@ def _base_fields(raw: dict[str, Any]) -> dict[str, Any]:
 def parse_reservation_hold_response(
     raw: Mapping[str, Any],
 ) -> ReservationHoldResponse:
+    """``certification.TicketReservation`` 의 응답을 파싱한다.
+
+    성공한 홀드의 PNR·발권창구번호·여정 목록·정산 금액을 꺼내
+    :class:`~korail_mobile_api.mutation_models.ReservationHoldResponse` 로 만든다.
+    결제(:func:`~korail_mobile_api.mutation_payloads.build_card_payment_form`)와
+    취소(:func:`~korail_mobile_api.mutation_payloads.build_unpaid_reservation_cancel_form`)
+    가 되울릴 값이 전부 여기서 나온다.
+
+    ``jrny_infos`` 는 없거나 ``null`` 이어도 되고 그때는 여정이 빈 튜플이다.
+    객체가 아니거나 ``jrny_info`` 가 리스트가 아니면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+
+    **성공 여부는 판정하지 않는다.** 봉투는 세 필드가 있고 문자열이거나
+    ``null`` 인지만 확인하므로, 실패한 홀드 응답도 그대로 돌아온다. 호출자가
+    ``str_result``·``h_msg_cd`` 를 직접 봐야 한다. 홀드가 실제로 걸렸는데
+    파싱이 거부하면 놓을 수 없는 예약이 남기 때문이다.
+    """
     copied = _response_mapping(raw)
     journeys_container = copied.get("jrny_infos")
     if journeys_container is None:
@@ -315,6 +332,16 @@ def parse_reservation_hold_response(
 def parse_reservation_payment_response(
     raw: Mapping[str, Any],
 ) -> ReservationPaymentResponse:
+    """``payment.ReservationPayment`` 의 응답을 파싱한다.
+
+    :class:`~korail_mobile_api.mutation_models.ReservationPaymentResponse` 를
+    만든다. ``tk_coupon_info`` 는 없거나 ``null`` 이어도 되고 그때는 쿠폰이 빈
+    튜플이다. 리스트가 아니면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+
+    홀드 파서와 마찬가지로 성공 여부는 판정하지 않는다. 결제가 서버에서 이미
+    이뤄졌을 수 있으므로 응답을 버리지 않는다.
+    """
     copied = _response_mapping(raw)
     value = copied.get("tk_coupon_info")
     if value is None:
