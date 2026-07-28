@@ -288,6 +288,13 @@ class KorailClient:
         self._station_names: dict[str, str] | None = None
 
     def close(self) -> None:
+        """HTTP 커넥션 풀을 닫는다. 로그인 상태는 건드리지 않는다.
+
+        :meth:`~korail_mobile_api.http.KorailHttpClient.close` 로 위임하며
+        네트워크 호출을 하지 않는다. 로그인까지 끝내려면 먼저
+        :meth:`logout`(서버 세션 무효화) 이나 :meth:`clear_session`(로컬만
+        폐기)을 부른다.
+        """
         self.http.close()
 
     def login(
@@ -310,6 +317,13 @@ class KorailClient:
         )
 
     def clear_session(self) -> None:
+        """서버에 알리지 않고 로컬 로그인 상태만 버린다.
+
+        쿠키 저장소(``JSESSIONID`` 포함), 현재 :class:`KorailSession`, 보류
+        중인 2단계 인증 상태를 모두 비운다. 네트워크 호출이 없으므로 서버
+        쪽 세션은 스스로 만료될 때까지 살아 있다. 서버 세션까지 무효화
+        하려면 :meth:`logout` 을 쓴다.
+        """
         self.session.clear_session()
 
     def logout(self) -> None:
@@ -392,6 +406,22 @@ class KorailClient:
         self,
         query: LimousineScheduleQuery,
     ) -> LimousineScheduleResponse:
+        """리무진 연계 구간의 운행 스케줄 한 페이지를 조회한다.
+
+        ``POST lmu.scdlQry.do`` (``BusReservationService.java:27``). 세션
+        가드가 없어 비로그인 상태에서도 부를 수 있다. ``query`` 는 정확히
+        :class:`~korail_mobile_api.limousine_models.LimousineScheduleQuery`
+        여야 하고(하위 클래스는 거부), 날짜는 ``YYYYMMDD``, 시각은
+        ``HHMMSS``, 역은 이름이 아니라 역코드로 준다.
+
+        :class:`~korail_mobile_api.limousine_models.LimousineScheduleResponse`
+        를 돌려준다. 서버가 ``trainList`` 를 비우거나 아예 내려보내지
+        않으면 ``schedules`` 가 빈 튜플이 될 뿐 예외가 아니다. 다음 페이지
+        여부는 ``following_page_extension`` 으로 판단한다. 봉투는 정확히
+        ``SUCC`` 여야 하며 그 외에는 예외다.
+
+        라이브 미검증 — 요청·응답 모양은 APK 선언에서 왔다.
+        """
         form = build_limousine_schedule_form(self.config, query)
         return self._run_read(
             lambda: parse_limousine_schedule_response(
@@ -408,6 +438,21 @@ class KorailClient:
         self,
         query: LimousineSeatInventoryQuery,
     ) -> LimousineSeatInventoryResponse:
+        """리무진 연계 편 한 호차의 좌석 점유 상태를 조회한다.
+
+        ``POST lms.TResidualSeatsResearch.do``
+        (``BusReservationService.java:31``). 세션 가드가 없다. ``query`` 는
+        정확히
+        :class:`~korail_mobile_api.limousine_models.LimousineSeatInventoryQuery`
+        여야 한다.
+
+        :class:`~korail_mobile_api.limousine_models.LimousineSeatInventoryResponse`
+        를 돌려준다. 스케줄 조회와 달리 ``seatList`` 키는 필수라서, 키가
+        없으면 :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+        빈 리스트 자체는 정상이고 좌석 정보가 하나도 없다는 뜻이다.
+
+        라이브 미검증.
+        """
         form = build_limousine_seat_inventory_form(self.config, query)
         return self._run_read(
             lambda: parse_limousine_seat_inventory_response(
@@ -424,6 +469,22 @@ class KorailClient:
         self,
         query: LimousineScheduleViewQuery,
     ) -> LimousineScheduleViewResponse:
+        """좌석이동 화면이 쓰는 리무진 연계 열차 목록을 조회한다.
+
+        ``POST seatMovie.LimousineScheduleView``
+        (``SeatMovieService.java:16``). 세션 가드가 없다. 이 폼만은 공통
+        ``Key`` 대신 요청마다 새로 만든 ``Sid`` 를 싣는다. 역은 코드가
+        아니라 역이름으로, 날짜는 ``YYYYMMDD`` 로 준다. 인원은
+        ``txtPsgFlg_1``~``txtPsgFlg_5`` 다섯 칸으로 나뉘어 경로·중증장애·
+        경증장애가 각각 제 칸을 가진다.
+
+        :class:`~korail_mobile_api.limousine_models.LimousineScheduleViewResponse`
+        를 돌려준다. ``trn_infos`` 가 ``null`` 이면 ``schedules`` 가 빈
+        튜플이 될 뿐 예외가 아니다. 다음 페이지 여부는 ``next_page_flag``,
+        전체 건수는 ``result_count`` 다.
+
+        라이브 미검증.
+        """
         validate_limousine_schedule_view_query(query)
         form = build_limousine_schedule_view_form(
             self.config,
@@ -461,6 +522,19 @@ class KorailClient:
         pnr_no: str = "",
         additional_service_request_no: str = "",
     ) -> CartListResponse:
+        """로그인 계정의 장바구니에 담긴 부가상품 항목을 조회한다.
+
+        ``POST cart.showCartList`` (``CartService.java:15``). 로그인 필요 —
+        세션이 없으면 :class:`~korail_mobile_api.errors.KorailAuthError` 다.
+        ``pnr_no`` 와 ``additional_service_request_no`` 는 기본이 빈
+        문자열이고, 그대로 두면 계정 전체를, 채우면 그 예약번호·요청번호로
+        범위를 좁힌다.
+
+        :class:`~korail_mobile_api.read_models.CartListResponse` 를
+        돌려준다. 장바구니가 비어 있으면 ``items`` 가 빈 튜플이며 예외가
+        아니다. 이 라우트의 성공 응답은 ``h_msg_cd`` 없이 ``strResult`` 만
+        싣기도 해서 봉투 검사가 그 모양을 허용한다.
+        """
         self._require_session()
         form = build_cart_list_form(
             pnr_no,
@@ -478,6 +552,16 @@ class KorailClient:
         )
 
     def get_deposit_banks(self) -> DepositBankListResponse:
+        """지연 환불금을 받을 수 있는 입금은행 코드표를 조회한다.
+
+        ``POST dlay.dptnBank.do`` (``DelayService.java:30``). 인자가 없고
+        로그인이 필요하다.
+
+        :class:`~korail_mobile_api.read_models.DepositBankListResponse` 를
+        돌려주며, 각 항목은 은행코드(``dptnBankCd``)와 표시명이다. 지연
+        현금환불 신청에서 은행을 고를 때 쓰는 코드표일 뿐, 이 메서드가
+        환불을 신청하지는 않는다.
+        """
         self._require_session()
         return self._run_read(
             lambda: parse_deposit_bank_response(
@@ -492,6 +576,18 @@ class KorailClient:
         self,
         departure_date_to: str,
     ) -> DelayDiscountTicketListResponse:
+        """계정이 보유한 지연할인권을 조회한다.
+
+        ``POST passCard.DelayDiscountView`` (``PassCardService.java:20``).
+        로그인 필요. ``departure_date_to`` 는 ``YYYYMMDD`` 이며, 그 날짜
+        까지 출발한 승차권에 붙은 할인권으로 범위를 자른다.
+
+        :class:`~korail_mobile_api.read_models.DelayDiscountTicketListResponse`
+        를 돌려준다. 보유분이 없으면 ``items`` 가 빈 튜플이고 예외가
+        아니다. 항목의 ``original_sale_date``·``window_no``·
+        ``sale_sequence``·``return_password`` 네 값이 원승차권을 가리키는
+        자격증명이다.
+        """
         self._require_session()
         form = build_delay_discount_ticket_form(departure_date_to)
         return self._run_read(
@@ -510,6 +606,18 @@ class KorailClient:
         page_no: int = 1,
         pnr_no: str = "",
     ) -> DiscountCouponListResponse:
+        """계정이 보유한 할인쿠폰 한 페이지를 조회한다.
+
+        ``POST passCard.CouponView`` (``PassCardService.java:24``). 로그인
+        필요. ``page_no`` 는 1부터 세고, ``pnr_no`` 는 특정 예약에 쓸 수
+        있는 쿠폰만 보고 싶을 때만 채운다.
+
+        :class:`~korail_mobile_api.read_models.DiscountCouponListResponse`
+        를 돌려주고 총 페이지 수는 ``total_pages`` 다. 보유 쿠폰이 없으면
+        서버가 ``strResult=FAIL`` 에 ``h_msg_cd=WRG000000``("조회 결과가
+        없습니다")를 실어 보내는데, 이 코드는 빈 결과로 받아들여 ``items``
+        가 빈 응답을 돌려준다. 예외가 아니다.
+        """
         self._require_session()
         form = build_discount_coupon_form(page_no, pnr_no)
         return self._run_read(
@@ -524,33 +632,27 @@ class KorailClient:
         )
 
     def get_korail_point_summary(self) -> KorailPointSummaryResponse:
-        """Read the my-page loyalty and welfare-entitlement summary.
+        """마이페이지의 포인트·쿠폰·복지자격 요약을 한 번에 조회한다.
 
-        ``POST xPoint.MyXPointView`` (``XPointService.java:18-20``), the call
-        마이페이지 makes on open (``MyPageActivity.java:414``). It takes no
-        arguments: ``point_dv_cd`` is the literal ``"0"`` the DAO itself passes
-        (``KorailPointInquiryDao.java:91``), and there is no request class.
+        ``POST xPoint.MyXPointView`` (``XPointService.java:18-20``), 앱이
+        마이페이지를 열 때 부르는 읽기다(``MyPageActivity.java:414``).
+        인자가 없다 — ``point_dv_cd`` 는 DAO 가 직접 넣는 리터럴 ``"0"``
+        이고(``KorailPointInquiryDao.java:91``) 요청 클래스도 없다.
+        로그인 필요.
 
-        **Why this read is here.** Besides the point balance and the
-        coupon/지연할인권 counts, the response carries the account's welfare
-        registration: ``MyPageActivity.java:206-212`` shows the whole 장애인
-        section only when ``h_hdcp_flg`` is ``"Y"``, then labels
-        ``h_subt_dcs_cl_nm`` 장애인증 and ``h_cust_lead_flg_nm`` 보조견
-        (``:353-355``, ``:393-394``). That makes this the cheapest available
-        check on whether an account is even eligible for the 1~3급 장애 /
-        안내견 fares, which a live reservation refused on 2026-07-26 with the
-        server-only code ``ERR299943`` on a byte-exact form
-        (``docs/MUTATION_HANDOFF.md:172-179``).
+        :class:`~korail_mobile_api.read_models.KorailPointSummaryResponse` 를
+        돌려준다. 포인트 잔액과 쿠폰·지연할인권 개수 말고도 계정의 복지
+        등록 상태가 함께 온다: ``h_hdcp_flg`` 가 ``"Y"`` 일 때만 앱이
+        장애인 항목 전체를 그리고(``MyPageActivity.java:206-212``),
+        ``h_subt_dcs_cl_nm`` 이 장애인증, ``h_cust_lead_flg_nm`` 이
+        보조견이다(``:353-355``, ``:393-394``). 장애·안내견 운임 자격을
+        확인하는 가장 싼 읽기다.
 
-        **NOT LIVE-VERIFIED, and the entitlement reading is a hypothesis.** No
-        call has been made on this route; the mapping above is what the app
-        does with the fields, not an observed correlation between the flag and
-        that refusal.
+        읽기만 하며 포인트를 움직이지 않는다. 사용자 비밀번호를 싣는
+        포인트 라우트(``mlg.lpotAthn.do``, ``xPoint.XPointView``)는 틀린
+        비밀번호가 서버 실패 카운터를 올리므로 일부러 구현하지 않았다.
 
-        This route reads points; it never moves them. The loyalty routes that
-        carry a user password (``mlg.lpotAthn.do``, ``xPoint.XPointView``) are
-        deliberately unimplemented — a wrong password there increments a
-        server-side failure counter, which is a state change.
+        라이브 미검증이고, 복지 필드 해석은 앱 동작에서 유추한 것이다.
         """
         self._require_session()
         form = build_korail_point_summary_form()
@@ -568,18 +670,19 @@ class KorailClient:
         self,
         request: MileageHistoryRequest,
     ) -> MileageHistoryResponse:
-        """Read one page of the 마일리지 적립/사용 내역 ledger.
+        """마일리지 적립/사용 내역 한 페이지를 조회한다.
 
-        ``POST mlg.amtSpec.do`` (``XPointService.java:26-28``). ``request``
-        chooses the ledger (KTX 마일리지 vs 철도포인트), the movement filter
-        (전체/적립/사용) and the date window; the page size is fixed at 20
-        because the app hardcodes it (``MileageHistoryActivity.java:274``).
+        ``POST mlg.amtSpec.do`` (``XPointService.java:26-28``). 로그인
+        필요. ``request`` 가 원장(KTX 마일리지 / 철도포인트), 증감 필터
+        (전체/적립/사용), 조회 기간을 고른다. 페이지 크기는 앱이 20 으로
+        박아 두어(``MileageHistoryActivity.java:274``) 바꿀 수 없다.
 
-        Paging is the caller's: the response's
+        :class:`~korail_mobile_api.read_models.MileageHistoryResponse` 를
+        돌려준다. 페이지 넘기기는 호출자 몫이고,
         :attr:`~korail_mobile_api.read_models.MileageHistoryResponse.page_count`
-        is the ceiling the app scrolls to (``:158,581``).
+        이 앱이 스크롤하는 상한이다(``:158,581``).
 
-        **NOT LIVE-VERIFIED.** Shape from ``MileageInquiryDao``.
+        라이브 미검증 — 응답 모양은 ``MileageInquiryDao`` 선언이다.
         """
         self._require_session()
         form = build_mileage_history_form(request)
@@ -597,21 +700,24 @@ class KorailClient:
         self,
         card_no: str,
     ) -> DiscountCardUsageListResponse:
-        """List the trips a 할인카드(N카드) has already been spent on.
+        """할인카드(N카드) 한 장을 이미 사용한 여행 내역을 조회한다.
 
-        ``GET ticket.dcntCrdUseQry.do`` (``ResearchService.java:51-52``), the
-        read behind the ticket list's "사용 내역 조회하기" button
-        (``Y4/Q.java:347-353``). ``card_no`` is the card's own number, which
-        the app never asks a user to type: it comes off the N카드 ticket's
-        detail response as ``dcnt_crd_info.h_dcnt_crd_no``
-        (``Y4/C0907b.java:303``), i.e. from
-        :attr:`~korail_mobile_api.read_models.RefundTicketDetailResponse.discount_card`.
+        ``GET ticket.dcntCrdUseQry.do`` (``ResearchService.java:51-52``),
+        승차권 목록의 "사용 내역 조회하기" 버튼이 부르는 읽기다
+        (``Y4/Q.java:347-353``). 로그인 필요.
 
-        **NOT LIVE-VERIFIED.** No account this project can reach owns an N카드,
-        so the request shape is the APK's declaration and the response shape is
-        ``NCardHistoryDao`` rather than an observed body. Calling it with a
-        card number that is not the caller's own is expected to be refused by
-        the server; nothing here bypasses that.
+        ``card_no`` 는 카드 자신의 번호이고 사용자가 입력하는 값이 아니다.
+        N카드 승차권 상세 응답의 ``dcnt_crd_info.h_dcnt_crd_no``
+        (``Y4/C0907b.java:303``), 즉
+        :attr:`~korail_mobile_api.read_models.RefundTicketDetailResponse.discount_card`
+        에서 꺼내 쓴다.
+
+        :class:`~korail_mobile_api.read_models.DiscountCardUsageListResponse`
+        를 돌려준다. 남의 카드번호로 부르면 서버가 거절하며, 여기에 그것을
+        우회하는 장치는 없다.
+
+        라이브 미검증 — 이 프로젝트가 닿을 수 있는 계정 중 N카드를 가진
+        것이 없어, 요청은 APK 선언, 응답은 ``NCardHistoryDao`` 선언이다.
         """
         self._require_session()
         query = build_discount_card_usage_query(card_no)
@@ -630,25 +736,24 @@ class KorailClient:
         self,
         request: DiscountCardScheduleRequest,
     ) -> DiscountCardScheduleResponse:
-        """List the trains a 할인카드 may still be spent on, for one section.
+        """할인카드로 아직 탈 수 있는 열차를 한 구간에 대해 조회한다.
 
         ``GET research.dcntCrdScheduleView.do``
-        (``ResearchService.java:54-55``). This is NOT the ordinary train
-        search: an N카드 is sold against one to three fixed 구간, and this
-        route answers "which trains on this 구간 does this card cover", which
-        is why it is keyed by the card product (``dcntCrdKndCd`` /
-        ``dcntCrdKndMgNo``) rather than by station codes.
+        (``ResearchService.java:54-55``). 로그인 필요. 일반 열차 조회가
+        아니다 — N카드는 정해진 1~3 개 구간에 묶여 팔리므로, 이 라우트는
+        역코드가 아니라 카드 상품(``dcntCrdKndCd`` / ``dcntCrdKndMgNo``)을
+        키로 "이 카드가 이 구간에서 커버하는 열차"를 답한다.
 
-        Paging is the caller's: the response's
+        :class:`~korail_mobile_api.read_models.DiscountCardScheduleResponse`
+        를 돌려준다. 페이지 넘기기는 호출자 몫으로,
         :attr:`~korail_mobile_api.read_models.DiscountCardScheduleResponse.following_page_exists`
-        is ``"Y"`` while another page follows, and the app re-issues the read
-        with an incremented ``qryPgNo``
-        (``SectionNCardInquiryActivity.java:406-408``). Build the next request
-        with ``page_no`` set; leave it ``None`` for the first page, which is
-        what v6.5.0 itself sends.
+        가 ``"Y"`` 인 동안 앱은 ``qryPgNo`` 를 올려 다시 읽는다
+        (``SectionNCardInquiryActivity.java:406-408``). 다음 요청은
+        ``page_no`` 를 채워 만들고, 첫 페이지는 ``None`` 으로 둔다 —
+        v6.5.0 이 보내는 모양이 그것이다.
 
-        **NOT LIVE-VERIFIED**, for the same reason as
-        :meth:`get_discount_card_usage_history`.
+        라이브 미검증 — 사유는 :meth:`get_discount_card_usage_history` 와
+        같다.
         """
         self._require_session()
         query = build_discount_card_schedule_query(request)
@@ -672,6 +777,20 @@ class KorailClient:
         period_code: str,
         age_code: str,
     ) -> PassAvailabilityResponse:
+        """정기권 상품 하나의 사용 개시 가능일과 발권 가능일을 조회한다.
+
+        ``POST pass.passInfoList`` (``PassService.java:31``). 세션 가드가
+        없다. 세 인자는 모두 공통코드 값이다 — ``kind_code`` 는 정기권
+        종류, ``period_code`` 는 사용기간, ``age_code`` 는 연령구분이며 빈
+        문자열은 거부된다.
+
+        :class:`~korail_mobile_api.read_models.PassAvailabilityResponse` 를
+        돌려준다. ``open_dates`` 가 사용 개시일(``YYYYMMDD``),
+        ``ticket_issue_dates`` 가 발권일, ``offices`` 가 수령 창구다.
+        성공 응답은 자기 코드를 ``main_info.h_msg_cd`` 안에 넣고 최상위엔
+        ``strResult`` 만 남기므로 봉투 검사가 그 모양을 허용한다. 실패
+        응답은 최상위 봉투를 그대로 실어 예외가 된다.
+        """
         form = build_pass_availability_form(
             kind_code,
             period_code,
@@ -696,6 +815,22 @@ class KorailClient:
         self,
         request: PassScheduleRequest,
     ) -> PassScheduleResponse:
+        """정기권으로 탈 수 있는 열차 스케줄 한 페이지를 조회한다.
+
+        ``POST pass.passScheduleInfoList`` (``PassService.java:27``).
+        로그인 필요. ``request`` 는 구간(역이름), 출발일 ``YYYYMMDD``,
+        출발시각, 정기권 종류·기간·연령 코드, 페이지 번호와 페이지 크기를
+        담는다.
+
+        :class:`~korail_mobile_api.read_models.PassScheduleResponse` 를
+        돌려준다. 조건에 맞는 열차가 없으면 서버가 ``strResult=FAIL`` 에
+        ``h_msg_cd=WRG000000`` 을 실어 보내는데, 앱도 이 코드를 오류창 없이
+        "결과 없음"으로 그리므로(``CommutationInquiryActivity.java:182``)
+        여기서도 ``schedules`` 가 빈 응답으로 돌려준다. 그 밖의 ``FAIL`` 은
+        예외다.
+
+        라이브 미검증.
+        """
         self._require_session()
         form = build_pass_schedule_form(request)
         return self._run_read(
@@ -723,6 +858,19 @@ class KorailClient:
         )
 
     def get_pass_menu(self, menu_no: str) -> PassMenuResponse:
+        """정기권·패스 메뉴 한 갈래의 화면 구성 항목을 조회한다.
+
+        ``POST pass.passMenu.do`` (``PassService.java:35``). 세션 가드가
+        없다. ``menu_no`` 는 상위 메뉴가 내려준 메뉴 번호이며 빈 문자열은
+        거부된다.
+
+        :class:`~korail_mobile_api.read_models.PassMenuResponse` 를
+        돌려준다. 각 항목은 화면 문구(제목·설명·안내)와 함께 상품 정보
+        (``goods_data``), 정기권 파라미터(``pass_data``)를 나른다. 성공
+        응답은 ``{"list": [...], "strResult": "SUCC"}`` 뿐이고 ``h_msg_cd``
+        가 없어서 봉투 검사가 그 모양을 허용한다. 서버가 모르는
+        ``menu_no`` 는 봉투를 갖춘 ``FAIL`` 로 돌아와 예외가 된다.
+        """
         form = build_pass_menu_form(menu_no)
         return self._run_read(
             lambda: parse_pass_menu_response(
@@ -743,6 +891,19 @@ class KorailClient:
         self,
         query_division_code: str,
     ) -> CrewRequestListResponse:
+        """승무원 호출 화면에 띄울 요청 사유 선택지를 조회한다.
+
+        ``GET push.crwCallRq.do`` (``PushService.java:16``). 세션 가드가
+        없다. ``query_division_code`` 는 어느 갈래의 문구 묶음을 받을지
+        고르는 공통코드이며 빈 문자열은 거부된다.
+
+        :class:`~korail_mobile_api.read_models.CrewRequestListResponse` 를
+        돌려준다. 항목은 문구(``content``)와 연동 메시지코드뿐이고,
+        선택지가 없으면 ``items`` 가 빈 튜플이다. 이 메서드는 목록만 읽을
+        뿐 승무원을 호출하지 않는다.
+
+        라이브 미검증.
+        """
         query = build_crew_request_list_query(query_division_code)
         return self._run_read(
             lambda: parse_crew_request_list_response(
@@ -759,6 +920,20 @@ class KorailClient:
         self,
         commuter_kind_code: str,
     ) -> CommuterKindMenuResponse:
+        """정기권 종류 하나의 안내 문구와 조회 파라미터를 받아온다.
+
+        ``GET push.cmtrKnd.do`` (``PushService.java:19``). 세션 가드가
+        없다. ``commuter_kind_code`` 는 정기권 종류 코드이며 빈 문자열은
+        거부된다.
+
+        :class:`~korail_mobile_api.read_models.CommuterKindMenuResponse` 를
+        돌려준다. 목록이 아니라 단일 객체이고, 핵심은 ``pass_data`` 다 —
+        :meth:`get_commuter_info` 가 이 값을 그대로 받아 쓴다.
+        ``after_day`` 는 며칠 뒤부터 개시할 수 있는지, ``agreement`` 는
+        동의 문구다.
+
+        라이브 미검증.
+        """
         query = build_commuter_kind_menu_query(commuter_kind_code)
         return self._run_read(
             lambda: parse_commuter_kind_menu_response(
@@ -852,6 +1027,18 @@ class KorailClient:
         self,
         request: FreeSeatCarRequest,
     ) -> FreeSeatCarResponse:
+        """한 열차의 자유석 호차와 안내 문구를 조회한다.
+
+        ``POST trn.fresScar.do`` (``TrainsInfoService.java:20``). 세션
+        가드가 없다. ``request`` 는 정확히
+        :class:`~korail_mobile_api.read_payloads.FreeSeatCarRequest` 여야
+        하며, 운행일 ``YYYYMMDD``, 열차번호(빌더가 5자리로 0을 채운다),
+        출발·도착역의 조성순서와 운행순서를 담는다.
+
+        :class:`~korail_mobile_api.read_models.FreeSeatCarResponse` 를
+        돌려준다. 목록이 아니라 제목·호차·본문 세 문자열이고, 서버가 비워
+        보내면 ``None`` 이다.
+        """
         form = build_free_seat_car_form(request)
         return self._run_read(
             lambda: parse_free_seat_car_response(
@@ -867,6 +1054,22 @@ class KorailClient:
         self,
         request: GuideSeatConditionRequest,
     ) -> GuideSeatConditionResponse:
+        """좌석속성 코드 하나에 대한 안내를 서버 봉투로 받는다.
+
+        ``POST reservation.guideSeatCnd.do``
+        (``ReservationService.java:17``). 세션 가드가 없다. ``request`` 는
+        정확히
+        :class:`~korail_mobile_api.read_payloads.GuideSeatConditionRequest`
+        여야 하고 ``rqSeatAttCd`` 하나만 싣는다.
+
+        DAO 의 응답 타입이 맨 ``BaseResponse`` 라 고유 필드가 없다 —
+        돌려주는
+        :class:`~korail_mobile_api.read_models.GuideSeatConditionResponse`
+        는 봉투(``h_msg_cd``/``h_msg_txt``/``str_result``)뿐이고, 안내
+        문구는 ``h_msg_txt`` 에 실려 온다. 서버가 인정하지 않는 코드는
+        ``FAIL`` 로 돌아와 :class:`~korail_mobile_api.errors.KorailAppError`
+        가 된다.
+        """
         form = build_guide_seat_condition_form(request)
         return self._run_read(
             lambda: parse_guide_seat_condition_response(
@@ -897,6 +1100,21 @@ class KorailClient:
         self,
         request: MergeSeatsInquiryRequest,
     ) -> MergeSeatsInquiryResponse:
+        """좌석 병합이 가능한 열차와 좌석이 갈리는 중간역을 조회한다.
+
+        ``POST research.mergeSeatsC.do`` (``ResearchService.java:47``).
+        세션 가드가 없다. ``request`` 는 정확히
+        :class:`~korail_mobile_api.read_payloads.MergeSeatsInquiryRequest`
+        여야 하고, 승차일시·운행일시·열차번호(5자리로 0 채움), 출발·도착·
+        선택 역이름, 실별코드·좌석속성코드·총인원을 담는다.
+
+        :class:`~korail_mobile_api.read_models.MergeSeatsInquiryResponse` 를
+        돌려준다. ``merge_reservation_possible_flag`` 가 병합 가능 여부,
+        ``intermediate_stations`` 가 중간역, ``trains`` 가 그 구간의
+        열차다. 각 목록은 비어 있어도 정상이다.
+
+        라이브 미검증.
+        """
         form = build_merge_seats_inquiry_form(request)
         return self._run_read(
             lambda: parse_merge_seats_inquiry_response(
@@ -912,6 +1130,17 @@ class KorailClient:
         self,
         departure_date: str,
     ) -> MultiChildDiscountTargetResponse:
+        """다자녀 할인 대상으로 등록된 가족 구성원을 조회한다.
+
+        ``POST cust.mchdDcntTgt.do`` (``CustService.java:11``). 로그인
+        필요. ``departure_date`` 는 ``YYYYMMDD`` 이고, 그 날짜 기준으로
+        자격이 판정된다.
+
+        :class:`~korail_mobile_api.read_models.MultiChildDiscountTargetResponse`
+        를 돌려준다. 파서가 성공 봉투를 요구하므로, 서버가 ``WRC800029``
+        처럼 실패 코드로 답하면 빈 목록이 아니라
+        :class:`~korail_mobile_api.errors.KorailAppError` 가 된다.
+        """
         self._require_session()
         form = build_multi_child_discount_target_form(departure_date)
         return self._run_read(
@@ -925,6 +1154,18 @@ class KorailClient:
         )
 
     def get_customer_trip_info(self) -> CustomerTripInfoResponse:
+        """로그인 계정에 저장된 여행 편의설정을 조회한다.
+
+        ``POST research.custTripInfo.do`` (``ResearchService.java:43``).
+        로그인 필요. 인자가 없다 — 고객번호는 로그인 응답의 ``strCustNo``
+        에서 가져오며, 그 값이 비어 있으면 세션이 있어도 요청 전에
+        :class:`~korail_mobile_api.errors.KorailAuthError` 로 막힌다.
+        ``medDvCd``/``regSqno`` 는 빌더가 넣는 리터럴 ``"03"``/``"0"`` 이다.
+
+        :class:`~korail_mobile_api.read_models.CustomerTripInfoResponse` 를
+        돌려준다. 저장해 둔 설정이 없으면 ``trips`` 가 빈 튜플이고 예외가
+        아니다.
+        """
         self._require_session()
         session = self.session.current
         customer_no = session.customer_no if session is not None else None
@@ -947,6 +1188,19 @@ class KorailClient:
         self,
         query: MaasServiceDetailQuery | None = None,
     ) -> MaasServiceDetailListResponse:
+        """계정이 신청한 MaaS 부가서비스 내역을 조회한다.
+
+        ``POST copt.gdReqQry.do`` (``TicketService.java:50``). 로그인
+        필요. ``query`` 를 생략하면
+        :meth:`~korail_mobile_api.read_payloads.MaasServiceDetailQuery.current`
+        가 쓰이고, 그것은 기간 필드를 아예 빼서 현재 건만 받는다. 기간을
+        지정할 때는 시작일과 종료일을 둘 다 ``YYYYMMDD`` 로 채워야 하며,
+        한쪽만 주면 거부된다.
+
+        :class:`~korail_mobile_api.read_models.MaasServiceDetailListResponse`
+        를 돌려준다. 신청 내역이 없으면 ``details`` 가 빈 튜플이고 예외가
+        아니다.
+        """
         self._require_session()
         resolved_query = (
             query if query is not None else MaasServiceDetailQuery.current()
@@ -984,6 +1238,21 @@ class KorailClient:
         request: GiftTicketHistoryRequest
         | GiftTicketPaymentEligibilityRequest,
     ) -> GiftTicketListResponse:
+        """기프티켓 목록을 두 가지 조회 목적 중 하나로 읽는다.
+
+        ``POST gift.gdLst.do`` (``GifticketService.java:17``). 로그인
+        필요. ``request`` 의 타입이 목적을 정한다 —
+        :class:`~korail_mobile_api.read_payloads.GiftTicketHistoryRequest`
+        는 승차일 구간(``YYYYMMDD``)으로 내역을 읽고,
+        :class:`~korail_mobile_api.read_payloads.GiftTicketPaymentEligibilityRequest`
+        는 인자 없이 결제 가능 여부만 묻는다(``qryDvCd=F``). 둘 중 정확히
+        한 타입이어야 하고 하위 클래스는 거부된다.
+
+        :class:`~korail_mobile_api.read_models.GiftTicketListResponse` 를
+        돌려주며, 다음 페이지 키는 ``next_query_no`` 다.
+
+        라이브 미검증 — 시험한 host/version 에서는 이 경로가 404 였다.
+        """
         self._require_session()
         form = build_gift_ticket_list_form(request)
         return self._run_read(
@@ -1000,6 +1269,26 @@ class KorailClient:
         self,
         request: CommuterInfoRequest,
     ) -> CommuterInfoResponse:
+        """정기권 예매에 필요한 조건을 세 단계 중 하나로 조회한다.
+
+        ``POST research.cmtrInfo.do`` (``ResearchService.java:39``).
+        로그인 필요. ``request`` 의 타입이 ``jobDvCd`` 를 정한다 —
+        :class:`~korail_mobile_api.read_payloads.CommuterInitialRequest` 가
+        ``"a"``(상품 기본조건),
+        :class:`~korail_mobile_api.read_payloads.CommuterPassengerRequest`
+        가 ``"b"``(연령구분별 인원 확정),
+        :class:`~korail_mobile_api.read_payloads.CommuterTicketInquiryRequest`
+        가 ``"c"``(기존 정기권 승차권 조회)다. 앞의 둘은
+        :meth:`get_commuter_kind_menu` 가 준 ``pass_data`` 를 그대로
+        넘긴다.
+
+        :class:`~korail_mobile_api.read_models.CommuterInfoResponse` 를
+        돌려준다. ``available_passenger_count_from``/``_to`` 가 허용 인원
+        범위, ``passenger_options`` 가 연령구분별 인원 범위이고,
+        ``popup_message``/``promotion_message`` 는 화면에 띄울 문구다.
+
+        라이브 미검증.
+        """
         self._require_session()
         form = build_commuter_info_form(request)
         return self._run_read(
@@ -1030,6 +1319,20 @@ class KorailClient:
         self,
         ticket: OriginalTicketReference,
     ) -> DeliveryRecipientResponse:
+        """승차권 한 장을 전달받은 수령자 정보를 조회한다.
+
+        ``POST tk.dlvRcvCust.do`` (``TicketService.java:30``). 로그인
+        필요. ``ticket`` 은 승차권의 네 부분 자격증명(발권창구번호·발매일·
+        발매일련번호·반환비밀번호)이며, 정확히
+        :class:`~korail_mobile_api.read_payloads.OriginalTicketReference`
+        여야 한다.
+
+        :class:`~korail_mobile_api.read_models.DeliveryRecipientResponse` 를
+        돌려준다. 목록이 아니라 단일 객체이고 필드는 모두 선택값이라
+        서버가 비워 보내면 ``None`` 이다.
+
+        라이브 미검증.
+        """
         self._require_session()
         form = build_delivery_recipient_form(ticket)
         return self._run_read(
@@ -1046,6 +1349,21 @@ class KorailClient:
         self,
         request: TicketDuplicationCheckRequest,
     ) -> TicketDuplicationCheckResponse:
+        """같은 PNR 로 이미 잡혀 있는 예약이 몇 건인지 센다.
+
+        ``POST ticket.ticketDupCheck.do`` (``TicketService.java:34``).
+        로그인 필요. ``request`` 는 정확히
+        :class:`~korail_mobile_api.read_payloads.TicketDuplicationCheckRequest`
+        여야 하고 PNR 하나만 싣는다.
+
+        :class:`~korail_mobile_api.read_models.TicketDuplicationCheckResponse`
+        를 돌려주며 핵심은 정수 ``reservation_count`` 하나다. 서버가 이
+        값을 따옴표 친 숫자로 보내든 숫자로 보내든 양쪽 다 받는다
+        (``TicketDuplicationCheckDao.java:27``). ``0`` 은 중복이 없다는
+        정상 결과다.
+
+        라이브 미검증.
+        """
         self._require_session()
         form = build_ticket_duplication_check_form(request)
         return self._run_read(
@@ -1062,6 +1380,22 @@ class KorailClient:
         self,
         tickets: tuple[OriginalTicketReference, ...],
     ) -> PbpAcceptanceSpecificationResponse:
+        """승차권 여러 장의 PBP 수락 내역을 여정·좌석 단위로 조회한다.
+
+        ``POST tk.pbpAcepSpec.do`` (``TicketService.java:66``). 로그인
+        필요. ``tickets`` 는
+        :class:`~korail_mobile_api.read_payloads.OriginalTicketReference`
+        튜플이고, 빌더가 장수를 ``tkCnt`` 로 앞에 붙인 뒤 승차권마다
+        ``tkRetNo`` 를 반복해 넣는다.
+
+        :class:`~korail_mobile_api.read_models.PbpAcceptanceSpecificationResponse`
+        를 돌려준다. 승차권 → 여정(``journeys``) → 좌석(``seats``) 3단
+        중첩이고, 좌석의 ``car_no`` 는 정수로 정규화된다
+        (``PbpAcepSpecDao.java:102``). 각 단계의 하위 목록은 비어 있어도
+        정상이다.
+
+        라이브 미검증.
+        """
         self._require_session()
         form = build_pbp_acceptance_specification_form(tickets)
         return self._run_read(
@@ -1096,26 +1430,27 @@ class KorailClient:
         *,
         ticket_count: int | None = None,
     ) -> OriginalTicketInquiryResponse:
-        """Look up the 원표(원승차권) a ticket change would start from.
+        """승차권 변경의 출발점이 되는 원표(원승차권)를 조회한다.
 
         ``POST research.tripChgOgtk.do`` (``ResearchService.java:61-63``).
-        This is the first read of the 승차권 변경 chain: given the 반환번호 of
-        each ticket in hand it returns those tickets' journeys, seats and
-        fares, which is what the later steps are keyed on. Its sibling
-        :meth:`get_trip_change_dates` (``reservation.tripChgDate.do``) answers
-        the date question; this one answers the "what am I changing" question.
+        로그인 필요. 승차권 변경 사슬의 첫 읽기다 — 손에 든 승차권들의
+        반환번호를 주면 그 승차권의 여정·좌석·운임을 돌려주고, 이후
+        단계가 그 값을 키로 삼는다. 날짜 쪽 질문은 형제 라우트인
+        :meth:`get_trip_change_dates`(``reservation.tripChgDate.do``)가
+        답한다.
 
-        ``ticket_count`` is ``tkCnt``. It defaults to ``len(tickets)``, which
-        is what ``PushHistoryActivity.java:357`` sends, but it is exposed
-        because the app's other two call sites mean something else by it --
-        the passenger count (``TCBookingActivity.java:179``) and a hardcoded
-        ``1`` (``SeatSearchActivity.java:615``). It is transmitted as an
-        integer, matching the smali ``I``
+        ``ticket_count`` 는 ``tkCnt`` 이며 기본값은 ``len(tickets)``,
+        ``PushHistoryActivity.java:357`` 이 보내는 값이다. 앱의 나머지 두
+        호출부는 같은 자리에 승객 수(``TCBookingActivity.java:179``)나
+        고정값 ``1``(``SeatSearchActivity.java:615``)을 넣기 때문에 인자로
+        열어 두었다. 전선에는 정수로 나간다
         (``ResearchService.smali:613,628-632``).
 
-        **NOT LIVE-VERIFIED.** The request shape is the APK's declaration plus
-        its three call sites, and the response shape is
-        ``OgTkInquiryDao``/``OrgTk`` rather than an observed body.
+        :class:`~korail_mobile_api.read_models.OriginalTicketInquiryResponse`
+        를 돌려준다.
+
+        라이브 미검증 — 요청은 APK 선언과 세 호출부, 응답은
+        ``OgTkInquiryDao``/``OrgTk`` 선언이다.
         """
         self._require_session()
         form = build_original_ticket_inquiry_form(
@@ -1265,6 +1600,19 @@ class KorailClient:
         )
 
     def get_common_code(self, code: str = "") -> BaseKorailResponse:
+        """공통코드 표를 코드 하나만큼 조회한다.
+
+        ``POST common.code.do`` (``CommonService.java:30``). 세션 가드가
+        없고 로그인 전에도 부를 수 있다 — 로그인 절차 자체가 비밀번호
+        암호화 파라미터를 이 라우트에서 먼저 받아 온다.
+
+        파싱하지 않고 :class:`~korail_mobile_api.models.BaseKorailResponse`
+        를 그대로 돌려주므로 코드값은 ``raw`` 에서 직접 꺼낸다. ``code`` 는
+        문자열 하나를 받아 ``code=[""]`` 처럼 리스트 한 칸으로 나가고,
+        여러 코드를 한 번에 받으려면
+        :func:`~korail_mobile_api.payloads.build_common_code_form` 이
+        리스트도 받는다.
+        """
         return self._run_read(
             lambda: self.http.post_form(
                 "/classes/com.korail.mobile.common.code.do",
@@ -1277,6 +1625,18 @@ class KorailClient:
         self,
         timestamp_ms: int | None = None,
     ) -> AppDataResponse:
+        """앱 메인 화면이 쓰는 캐시 파일을 받아 온다.
+
+        ``GET /file/CACHE/prdMobilePlusMain.cache``
+        (``CacheService.java:14``). 세션 가드가 없다. ``timestamp_ms`` 는
+        캐시 무효화용 ``timeStamp`` 질의값이고, 생략하면 현재 시각을 쓴다.
+
+        :class:`~korail_mobile_api.models.AppDataResponse` 를 돌려준다.
+        캐시 파일이라 KORAIL 봉투(``h_msg_cd``)가 없어 봉투 검사를 끈다.
+        ``version`` 이 있으면 앱 업데이트 안내이고, 나머지는 장애인 인증·
+        공항버스·레일플러스 카드 안내 문구다. 필드는 모두 선택값이라
+        서버가 빼면 ``None`` 이다.
+        """
         return self._run_read(
             lambda: parse_app_data_response(
                 self.http.get_json(
@@ -1291,6 +1651,16 @@ class KorailClient:
         self,
         timestamp_ms: int | None = None,
     ) -> NoticeResponse:
+        """공지 배너 캐시 파일을 받아 온다.
+
+        ``GET /file/CACHE/prdMobilePlusNotice.cache``
+        (``CacheService.java:17``). 세션 가드가 없다. ``timestamp_ms`` 는
+        캐시 무효화용 값이고 생략하면 현재 시각을 쓴다.
+
+        :class:`~korail_mobile_api.models.NoticeResponse` 를 돌려준다.
+        게시판 ID·글 일련번호·제목 세 값뿐이고 본문은 없다. 띄울 공지가
+        없으면 셋 다 ``None`` 이다. 캐시 파일이라 봉투 검사를 끈다.
+        """
         return self._run_read(
             lambda: parse_notice_response(
                 self.http.get_json(
@@ -1313,6 +1683,19 @@ class KorailClient:
         )
 
     def get_maas_menu_list(self) -> MaasMenuListResponse:
+        """역 연계 MaaS 서비스 메뉴와 역 안내 링크들을 조회한다.
+
+        ``POST copt.gdMenuLt.do`` (``CommonService.java:46``). 세션 가드가
+        없다. 인자가 없고 폼은 ``Device``/``Version`` 뿐이다.
+
+        :class:`~korail_mobile_api.models.MaasMenuListResponse` 를
+        돌려준다. 각 항목의 ``additional_service_code``(``addSrvDvCd``)가
+        :meth:`get_maas_station_data` 에 넣을 값이고, ``login_required`` 는
+        그 메뉴가 로그인 뒤에만 열리는지를 서버가 알려주는 플래그다.
+        ``menuList`` 가 ``null`` 이면 ``items`` 가 빈 튜플이 될 뿐 예외가
+        아니다. 출발·도착역의 엘리베이터·주차장·수하물 로봇 URL 은 응답
+        최상위에 따로 실린다.
+        """
         form = build_maas_menu_form(self.config)
         return self._run_read(
             lambda: parse_maas_menu_list_response(
@@ -1329,6 +1712,19 @@ class KorailClient:
         self,
         additional_service_code: str,
     ) -> StationDataResponse:
+        """MaaS 부가서비스 하나가 지원하는 역 목록을 조회한다.
+
+        ``POST /ebizmaas/EbizMaasStationList.do``
+        (``CommonService.java:50``). 세션 가드가 없다.
+        ``additional_service_code`` 는 :meth:`get_maas_menu_list` 가 준
+        ``addSrvDvCd`` 이며 빈 문자열은 거부된다.
+
+        일반 역 목록과 같은
+        :class:`~korail_mobile_api.models.StationDataResponse` 를 돌려주고
+        각 역은 코드·이름과 위경도를 가진다. 이 라우트는 KORAIL 봉투를
+        싣지 않아 봉투 검사를 끄지만 ``stns.stn`` 리스트는 필수라서, 없으면
+        :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+        """
         form = build_maas_station_form(additional_service_code)
         return self._run_read(
             lambda: parse_station_data_response(
@@ -1684,34 +2080,30 @@ class KorailClient:
         sms_notify: bool = False,
         phone_no: str | None = None,
     ) -> MutationPreview | BaseKorailResponse:
-        """Record the 예약대기 options for a standby hold (second half of "1102").
+        """예약대기 홀드에 대기 옵션을 기록한다. consent 게이트가 있다.
 
-        A standby booking is two calls in the app, not one: :meth:`reserve` with
-        ``job_type=STANDBY`` creates the PNR and returns ``h_msg_cd`` =
-        ``IRR000014``, which is the only code that opens 예약대기 screen
-        (``ui/inquiry/rir/orr/a.java:222-225``); that screen then POSTs
+        예약대기는 호출 두 번이다. ``job_type=STANDBY`` 로 부른
+        :meth:`reserve` 가 PNR 을 만들고 ``h_msg_cd`` = ``IRR000014`` 를
+        돌려주는데, 앱은 이 코드에서만 예약대기 화면을 연다
+        (``ui/inquiry/rir/orr/a.java:222-225``). 그 화면이 사용자의 선택을
+        실어 보내는 두 번째 POST 가 이 메서드다 —
         ``reservationWait.ReservationWait``
-        (``ReservationWaitService.java:10-12``) with the user's choices. This
-        method is that second POST.
+        (``ReservationWaitService.java:10-12``).
 
-        It is a state-changing call on an existing PNR, so it goes through the
-        same double-gated mutation transport as every other mutation -- never
-        the read path. Its consent category is deliberately ``"reserve"``: it
-        completes the booking that an ``allow_reserve`` consent authorised, and
-        moves no money and releases no seat. See
-        :data:`~korail_mobile_api.KORAIL_MUTATION_ROUTES` for why that is not a
-        new category.
+        ``require_mutation_consent(consent, "reserve")`` 와 로그인 세션을
+        요구하고, 다른 모든 상태 변경과 같은 이중 게이트 전송로로 나간다.
+        이미 있는 PNR 의 예약을 마무리할 뿐 돈을 옮기지도 좌석을 놓지도
+        않으므로 소비 범주가 ``"reserve"`` 다.
 
-        ``allow_seat_class_change`` is ``txtPsrmClChgFlg`` (may KORAIL seat the
-        booking in a different cabin when it assigns one) and ``sms_notify`` is
-        ``txtSmsSndFlg``; both default to the unchecked state the app's screen
-        opens in. ``phone_no`` is required when, and permitted only when,
-        ``sms_notify`` is True.
+        ``allow_seat_class_change`` 는 ``txtPsrmClChgFlg``(배정 때 다른
+        실별에 앉혀도 되는지), ``sms_notify`` 는 ``txtSmsSndFlg`` 이고 둘
+        다 앱 화면이 열릴 때의 해제 상태가 기본이다. ``phone_no`` 는
+        ``sms_notify`` 가 참일 때만 허용되고, 그때는 반드시 필요하다.
 
-        With the default ``dry_run=True`` it returns a :class:`MutationPreview`
-        (PNR and phone number redacted) and sends nothing.
+        ``consent.dry_run`` 이 참이면(기본) 아무것도 보내지 않고 PNR·전화
+        번호를 가린 :class:`MutationPreview` 를 돌려준다.
 
-        NOT live-verified.
+        라이브 미검증.
         """
         require_mutation_consent(consent, "reserve")
         if self.session.current is None:
@@ -1923,25 +2315,24 @@ class KorailClient:
         *,
         consent: MutationConsent,
     ) -> MutationPreview | BaseKorailResponse:
-        """Cancel a fresh, unpaid reservation hold, however many journeys it has.
+        """결제 전 예약 홀드를 취소한다. 여정이 몇 개든 상관없다.
 
-        Gated by ``require_mutation_consent(consent, "cancel")`` and an
-        authenticated session. ``build_unpaid_reservation_cancel_form`` requires
-        ``hold`` to be one successful (``SUCC``) hold with a PNR, and echoes the
-        hold's OWN journey count into ``txtJrnyCnt`` rather than fixing it at
-        one. That is deliberate: a 환승 hold carries two journeys and a 병합
-        hold can carry more, and refusing them here would strand a live
-        reservation with no way to release it. So this releases holds from
-        :meth:`reserve`, :meth:`reserve_transfer` and :meth:`merge_reservation`
-        alike. With ``dry_run=True`` it returns a :class:`MutationPreview`
-        (redacting the PNR); with ``dry_run=False`` it POSTs the cancellation
-        via the double-gated mutation send path and returns the parsed envelope.
-        This is the auto-cancel used to immediately release a live test hold.
+        ``require_mutation_consent(consent, "cancel")`` 와 로그인 세션을
+        요구한다. ``build_unpaid_reservation_cancel_form`` 은 ``hold`` 가
+        PNR 을 가진 성공(``SUCC``) 홀드일 것을 요구하고, ``txtJrnyCnt`` 에
+        1 을 박는 대신 그 홀드 자신의 여정 수를 그대로 실어 보낸다. 환승
+        홀드는 여정이 둘이고 병합 홀드는 그보다 많을 수 있어서, 여기서
+        거절하면 살아 있는 예약을 풀 방법이 없어지기 때문이다. 그래서
+        :meth:`reserve`, :meth:`reserve_transfer`, :meth:`reserve_merge` 가
+        만든 홀드를 모두 이 하나로 푼다.
 
-        This sends the SECOND of the app's two cancel calls
-        (``ReservationCancelChk``), not both. Skipping ``ReservationCancel`` is
-        a live-verified simplification, not an oversight — see
-        ``docs/MUTATION_HANDOFF.md:21``.
+        ``consent.dry_run`` 이 참이면 PNR 을 가린 :class:`MutationPreview`
+        를, 거짓이면 이중 게이트 전송로로 POST 한 뒤 파싱한 봉투를
+        돌려준다.
+
+        앱의 취소 호출 두 개 중 뒤쪽(``ReservationCancelChk``)만 보낸다.
+        앞의 ``ReservationCancel`` 을 생략해도 취소가 성립하는 것은 라이브로
+        확인했다.
         """
         require_mutation_consent(consent, "cancel")
         if self.session.current is None:
@@ -2172,33 +2563,27 @@ class KorailClient:
         *,
         consent: MutationConsent,
     ) -> MutationPreview | BaseKorailResponse:
-        """Add a held reservation's PNR to the 장바구니 (cart).
+        """홀드 중인 예약의 PNR 을 장바구니에 담는다. consent 게이트가 있다.
 
-        ``POST cart.addCartList`` (``CartService.java:11-13``). One request
-        field beyond the common three: ``hidPnrNo``
-        (``AddCartDao.java:9-24``, confirmed against
-        ``AddCartDao$AddCartRequest.smali``).
+        ``POST cart.addCartList`` (``CartService.java:11-13``). 공통 세
+        필드 말고 요청 필드는 ``hidPnrNo`` 하나뿐이다
+        (``AddCartDao.java:9-24``, smali 로 교차 확인).
 
-        Gated by ``require_mutation_consent(consent, "cart")`` and an
-        authenticated session. ``"cart"`` is its own consent category, not a
-        reuse of ``"reserve"``: the hold this acts on already exists, the
-        route creates and destroys nothing this package can observe, and it
-        carries no card number (it is deliberately absent from
-        :data:`~korail_mobile_api.safety.KORAIL_CARD_BEARING_MUTATION_CATEGORIES`).
-        With the default ``dry_run=True`` this builds and validates the form
-        and returns a redacted
-        :class:`~korail_mobile_api.consent.MutationPreview` — ``hidPnrNo`` is
-        registered in
-        :data:`~korail_mobile_api.redaction.SENSITIVE_KEYS`, so the PNR never
-        appears in a preview — sending nothing.
+        ``require_mutation_consent(consent, "cart")`` 와 로그인 세션을
+        요구한다. ``"cart"`` 는 ``"reserve"`` 를 돌려 쓴 것이 아니라 독립
+        범주다 — 대상 홀드는 이미 존재하고, 이 라우트는 이 패키지가 관측할
+        수 있는 무엇도 만들거나 없애지 않으며, 카드번호를 싣지 않아
+        :data:`~korail_mobile_api.safety.KORAIL_CARD_BEARING_MUTATION_CATEGORIES`
+        에서 일부러 빠져 있다.
 
-        **VERIFIED: the route, the method, and the one field name, all from
-        the DAO and cross-checked against the smali.**
+        ``consent.dry_run`` 이 참이면(기본) 폼을 만들어 검증만 하고
+        :class:`~korail_mobile_api.consent.MutationPreview` 를 돌려준다.
+        ``hidPnrNo`` 는 :data:`~korail_mobile_api.redaction.SENSITIVE_KEYS`
+        에 등록돼 있어 미리보기에 PNR 이 드러나지 않는다.
 
-        **NOT VERIFIED.** The DAO's response type is a bare ``BaseResponse``
-        (``CartService.java:13``), so what a successful add answers with is
-        unknown. Nothing here has ever been transmitted, and no live-test
-        path in this repository sends it.
+        DAO 의 응답 타입이 맨 ``BaseResponse``(``CartService.java:13``)라
+        성공했을 때 무엇이 오는지는 알 수 없다. 라이브 미검증이고, 이
+        저장소에 실제로 보내는 경로도 없다.
         """
         require_mutation_consent(consent, "cart")
         if self.session.current is None:
@@ -2290,26 +2675,27 @@ class KorailClient:
         *,
         consent: MutationConsent,
     ) -> MutationPreview | BaseKorailResponse:
-        """Extend a 할인카드's validity (기간연장). Consent-gated, dry-run.
+        """할인카드의 유효기간을 연장한다(기간연장). consent 게이트가 있다.
 
-        ``GET reservation.dcntCrdExtn.do`` (``ResearchService.java:65-66``) —
-        a mutation the app performs with a GET, registered here with that
-        method rather than coerced into the POST send path. It goes out through
-        :meth:`~korail_mobile_api.http.KorailHttpClient.get_mutation_query`,
-        which carries every gate ``post_mutation_form`` does.
+        ``GET reservation.dcntCrdExtn.do`` (``ResearchService.java:65-66``)
+        — 앱이 GET 으로 수행하는 상태 변경이라 여기서도 GET 그대로
+        등록했고, ``post_mutation_form`` 과 같은 게이트를 모두 갖춘
+        :meth:`~korail_mobile_api.http.KorailHttpClient.get_mutation_query`
+        로 나간다. ``require_mutation_consent(consent, "discount_card")`` 와
+        로그인 세션을 요구하며, ``consent.dry_run`` 이 참이면(기본)
+        :class:`MutationPreview` 만 돌려주고 아무것도 보내지 않는다.
 
-        ``ticket`` is the card ticket's own four-part credential, which
-        ``TicketListActivity.java:1067-1072`` reads off the N카드 row. Check
+        ``ticket`` 은 카드 승차권 자신의 네 부분 자격증명이고,
+        ``TicketListActivity.java:1067-1072`` 가 N카드 행에서 읽어 오는
+        값이다. 부르기 전에
         :attr:`~korail_mobile_api.read_models.DiscountCardOnTicket.term_extension_possible_flag`
-        first: the app enables the 기간연장 button only when it is ``"Y"``
-        (``Y4/C0907b.java:301`` → ``Y4/Q.java:1013-1026``), and that gate is
-        deliberately not duplicated in the builder because it is a property of
-        the card rather than of the request.
+        를 확인하라 — 앱은 이 값이 ``"Y"`` 일 때만 기간연장 버튼을 켠다
+        (``Y4/C0907b.java:301`` → ``Y4/Q.java:1013-1026``). 카드의 성질이지
+        요청의 성질이 아니라서 빌더는 이 조건을 중복 검사하지 않는다.
 
-        **NOT VERIFIED IN EITHER DIRECTION.** The DAO's response type is a bare
-        ``BaseResponse`` (``ResearchService.java:65``), so what a successful
-        extension answers with, and whether it costs money, is unknown. Nothing
-        here has ever been transmitted, and no live-test path sends it.
+        DAO 의 응답 타입이 맨 ``BaseResponse``(``ResearchService.java:65``)
+        라 성공했을 때 무엇이 오는지, 비용이 드는지 알 수 없다. 라이브
+        미검증이고 보내는 경로도 없다.
         """
         require_mutation_consent(consent, "discount_card")
         if self.session.current is None:
