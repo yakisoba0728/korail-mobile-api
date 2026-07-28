@@ -1,13 +1,13 @@
-"""문서 사이트가 패키지와 어긋나면 여기서 먼저 실패한다.
+"""문서 사이트가 패키지와 어긋나면 여기서 먼저 실패합니다.
 
-`mkdocs build --strict` 는 CI 가 돌린다. 이 모듈은 그 빌드가 돌기 전에, 그리고
-mkdocs 없이도 확인할 수 있는 것만 본다 — 레퍼런스 쪽의 목록이 공개면과 같은지,
+`mkdocs build --strict` 는 CI 가 돌립니다. 이 모듈은 그 빌드가 돌기 전에, 그리고
+mkdocs 없이도 확인할 수 있는 것만 봅니다 — 레퍼런스 쪽의 목록이 공개면과 같은지,
 사이트가 쓰는 README 절 제목이 아직 있는지, 워크플로가 사이트를 실제로 빌드하고
 배포는 수동으로만 도는지.
 
-레퍼런스 모듈 목록은 `__init__.py` 의 `from .X import ...` 에서 유도한다. 손으로
+레퍼런스 모듈 목록은 `__init__.py` 의 `from .X import ...` 에서 유도합니다. 손으로
 적은 목록과 대조하는 것이 아니라, 손으로 적은 것(`mkdocs.yml` 의 차례와
-`docs/reference/` 의 파일)이 유도된 것과 같은지를 본다.
+`docs/reference/` 의 파일)이 유도된 것과 같은지를 봅니다.
 """
 
 from __future__ import annotations
@@ -61,11 +61,11 @@ def test_the_navigation_lists_exactly_those_pages() -> None:
 
 
 def test_the_exclusion_only_covers_markdown() -> None:
-    """제외 패턴이 마크다운보다 넓으면 테마의 CSS·JS 까지 빠진다.
+    """제외 패턴이 마크다운보다 넓으면 테마의 CSS·JS 까지 빠집니다.
 
-    `exclude_docs` 는 docs_dir 뿐 아니라 테마가 넣는 파일에도 걸린다. `/*` 한
+    `exclude_docs` 는 docs_dir 뿐 아니라 테마가 넣는 파일에도 걸립니다. `/*` 한
     줄이면 사이트가 스타일 없이 만들어지는데, `mkdocs build --strict` 는 그래도
-    성공한다. 그래서 패턴의 모양 자체를 여기서 고정한다.
+    성공합니다. 그래서 패턴의 모양 자체를 여기서 고정합니다.
     """
     block = MKDOCS.split("exclude_docs: |", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
     lines = [line.strip() for line in block.splitlines() if line.strip()]
@@ -80,7 +80,7 @@ def test_the_reference_index_links_every_module_page() -> None:
 
 
 def test_the_included_readme_sections_still_exist() -> None:
-    """사이트는 README 를 절 제목으로 잘라 싣는다. 제목이 바뀌면 조각이 사라진다."""
+    """사이트는 README 를 절 제목으로 잘라 싣습니다. 제목이 바뀌면 조각이 사라집니다."""
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     delimiters = set(re.findall(r'(?:start|end)="([^"]+)"', "".join(
         path.read_text(encoding="utf-8") for path in (ROOT / "docs").glob("*.md")

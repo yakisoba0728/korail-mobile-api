@@ -1,13 +1,13 @@
 # API 레퍼런스
 
-`korail_mobile_api` 의 `__all__` 이 내보내는 이름이 공개면이다. 아래 쪽들은 그
+`korail_mobile_api` 의 `__all__` 이 내보내는 이름이 공개면입니다. 아래 쪽들은 그
 이름을 정의한 모듈별로 나뉘어 있고, 내용은 소스의 docstring 을 그대로 렌더링한
-것이다 — 이 사이트가 따로 관리하는 설명은 없다.
+것입니다 — 이 사이트가 따로 관리하는 설명은 없습니다.
 
-모듈 쪽은 모듈을 통째로 싣는다. 그래서 `__all__` 에 없는 모듈 상수(예:
-`constants` 의 `DYNAPATH_ALLOWLIST_PATHS`)도 여기서 볼 수 있다. 최상위에서
+모듈 쪽은 모듈을 통째로 싣습니다. 그래서 `__all__` 에 없는 모듈 상수(예:
+`constants` 의 `DYNAPATH_ALLOWLIST_PATHS`)도 여기서 볼 수 있습니다. 최상위에서
 `from korail_mobile_api import ...` 로 꺼낼 수 있는 것만이 안정된 이름이고,
-나머지는 모듈 경로로 가져다 쓰는 만큼 바뀔 수 있다.
+나머지는 모듈 경로로 가져다 쓰는 만큼 바뀔 수 있습니다.
 
 | 모듈 | 무엇이 들어 있나 |
 | --- | --- |
@@ -22,8 +22,8 @@
 | [models](models.md) | 로그인·검색·예약의 요청/응답 타입 |
 | [mutation_models](mutation_models.md) | `MutationPreview` 와 변경 결과 타입 |
 | [netfunnel](netfunnel.md) | 가상대기실 상태와 설정 |
-| [read_models](read_models.md) | 읽기 라우트의 응답 타입 — 가장 큰 묶음이다 |
+| [read_models](read_models.md) | 읽기 라우트의 응답 타입 — 가장 큰 묶음입니다 |
 | [read_payloads](read_payloads.md) | 읽기 요청을 만드는 payload 타입 |
 
-docstring 이 없는 dataclass 도 필드를 보여 주려고 함께 싣는다. 설명이 붙어 있지
-않다는 것은 그 타입이 서버 응답을 그대로 담는 그릇이라는 뜻이다.
+docstring 이 없는 dataclass 도 필드를 보여 주려고 함께 싣습니다. 설명이 붙어 있지
+않다는 것은 그 타입이 서버 응답을 그대로 담는 그릇이라는 뜻입니다.

@@ -190,9 +190,9 @@ class KorailHttpClient:
                 # 설정 문제를 버전 문제로 오진하게 만드는 자리라, 보내기 전에
                 # 무엇을 켜야 하는지 말하고 끝낸다.
                 raise KorailDynaPathRequiredError(
-                    f"KORAIL {path} 는 DynaPath 토큰을 요구한다. "
+                    f"KORAIL {path} 는 DynaPath 토큰을 요구합니다. "
                     "KorailConfig(enable_dynapath=True) 로 켜거나, 실제 단말 "
-                    "값을 쓰려면 build_config_from_env() 를 넘겨라."
+                    "값을 쓰려면 build_config_from_env() 를 넘겨야 합니다."
                 )
             return {}
         if path not in dynapath.allowlist_paths:
