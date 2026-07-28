@@ -733,200 +733,159 @@
 
 ### Changed
 
-- **Changed: `scripts/reserve_pay_refund_roundtrip.py` no longer starts without
-  a fare ceiling.** `KORAIL_MAX_FARE` was documented as "optional … strongly
-  recommended", but it is the *only* thing that caps what the script charges:
-  step (d) compares the amount owed against it and simply skips the comparison
-  when it is unset. Nor does the train choice bound the cost — when neither a
-  fare quote nor the search row's own price hint can be obtained, the script
-  falls through to the first reservable train at whatever it costs. So an
-  operator who followed the documented command without the variable was running
-  an uncapped real-card charge. The requirement is enforced on the charging path
-  only, before the card is read, before login and before any request; a
-  malformed value now aborts there too instead of ~200 lines later. `--recover`
-  is unaffected — neither of its branches charges anything.
-- Changed: the docs no longer reproduce decompiled KORAIL app code. The one
-  place that pasted a Java method body and its smali (`docs/deep-dive/
-  impl-audit-2026-07-22.md`, the `setTrnCnt` self-assignment no-op) and the one
-  that pasted a Retrofit interface declaration (`docs/audit-2026-07-27/phase2/
-  safety.md`, `dcntCrdExtn.do`) now describe what was observed instead. Every
-  `file:line` citation is kept, and so is the bytecode-level detail that ruled
-  out a decompiler artefact — the change is to the form of the evidence, not its
-  force. The audit doc states the rule it now follows: cite the third party's
-  work by location, quote only the wire-level names the client must match.
-- Changed: the two machine-generated catalogs followed the same rule instead of
-  being exempted for being generated. A second sweep by CONTENT (not by fence
-  tag) found ~660 more copied source lines than the fence scan did:
-  `docs/deep-dive/local-storage-catalog.md` pasted the whole statement for each
-  of 644 key rows, and `docs/deep-dive/webview-and-url-catalog.md` pasted 26
-  method lines and 17 statement cells. Nothing evidential is lost — the storage
-  catalog's Context column now names the access it always meant (`쓰기
-  putString` / `읽기 getInt` / `존재 확인 containsKey`), derived mechanically
-  from the statement it replaced; the WebView catalog's Signature column drops
-  the body's opening brace, which is what made those rows source lines rather
-  than signatures; and its route-annotation cells are untouched, because a
-  route is interface the client must match. Key names, `file:line` and counts
-  are unchanged, so every row is still checkable against the same APK.
-- Changed: absolute paths in the docs no longer carry a local username. All 14
-  were rewritten to repository-relative form, so no exemption list exists for a
-  future leak to hide in. The one path that is not inside this repository — the
-  `srtgo_plus` reference checkout — is described as a local checkout rather than
-  given an invented upstream URL.
-- Changed: the vendor-key placeholders left by the history rewrite now read as
-  sentences. `<KORAIL-APP-…-REDACTED>` sites explain which field stood there and
-  why the value is absent; `kakao<key>://oauth`, which had become a false
-  literal, is written as the rule it always was (the scheme is `kakao` followed
-  by the app key). `docs/RELEASE_GAP_PLAN.md` used to declare "values
-  deliberately NOT copied into this plan" while pointing at a document that
-  printed them — it now records that the contradiction is resolved, that the
-  values are gone from the history as well as the tree, and that the one value
-  still in the clear (the GCM sender id, a Firebase project *number*, not a
-  credential) is retained on purpose rather than missed.
-- **Changed (behaviour, and the reason for everything below): a bare
-  `KorailClient()` can now log in.** It could not before, and the README's
-  quickstart — `KorailClient()` then `login(...)` — was therefore false.
-  Live-verified 2026-07-27: a default `KorailConfig()` sent
-  `User-Agent: korail-mobile-api/0.2.0` with DynaPath disabled, and
-  `login.Login` came back `**MACRO ERROR**` from the anti-automation check.
-  The only configuration that logged in was `build_config_from_env`, which
-  the README never mentioned and `__all__` did not export. The failure was
-  hard to read because it is **disguised**: the server returns the macro
-  rejection as "원활한 서비스 이용을 위해 앱을 최신 버전으로 업데이트한 뒤…",
-  and because account-neutral reads keep succeeding under the same config,
-  the symptom looks like a version gate rather than a client-shape problem —
-  which it had already been misdiagnosed as once. Three defaults changed:
-  - `KORAIL_USER_AGENT` is now the platform-default Dalvik string,
-    `Dalvik/2.1.0 (Linux; U; Android 15; Android)`, instead of
-    `korail-mobile-api/0.2.0`. The app hardcodes no UA — Retrofit v1 over
-    `UrlConnectionClient`/`HttpURLConnection` (`ExecuteDao.java:7-11`) — so
-    the platform string is what the server sees from the real app. It is
-    **derived**, by a new `build_dalvik_user_agent`, from the same
-    `KORAIL_DEFAULT_DEVICE_NAME` / `KORAIL_DEFAULT_ANDROID_OS_RELEASE` that
-    the DynaPath token's `dm` and `os` carry, and `build_config_from_env`
-    now calls the same builder: a UA claiming one handset while the token in
-    the same request claims another is itself a signal, so the two cannot be
-    spelled separately any more.
-  - **DynaPath is enabled by default.** Every client now attaches
-    `x-dynapath-m-token` to the six allowlisted paths where it previously
-    attached none. Where a token is sent is unchanged; only whether one is.
-    Opt out with `KorailConfig(dynapath=DynapathConfig())`.
-    `DynapathConfig`'s own defaults are untouched — the enabled default and
-    its token settings hang off `KorailConfig`'s field factory instead,
-    because `DynapathConfig.__post_init__` requires exactly one of
-    `token_provider`/`token_settings` and a defaulted `token_settings` would
-    have made every `DynapathConfig(enabled=True, token_provider=fn)` a
-    contradiction.
-  - The default token settings generate their device identity **per
-    `KorailConfig` instance**, via `generate_dynapath_device_id`. No fixed
-    device id is baked into the package: `di` is the handset's
-    `Settings.Secure.ANDROID_ID` (`AbstractC1228a.java:16`, emitted verbatim
-    at `C1229b.java:103`), and an identifier shared by every installation of
-    a library is exactly the bot signature the header exists to catch — the
-    criticism this repository already levelled at srtgo's fixed
-    `558a4f02041657ea`. It is `uuid.uuid4().hex[:16]`, matching ANDROID_ID's
-    real 16-lowercase-hex shape, stable for the life of the config and not
-    persisted. `app_start_ts` is the moment the config was built, which is
-    what `AbstractC1228a.java:14` records.
-- Changed: `EXCLUDED_API_DOMAINS` no longer contains `"points-mileage"`; it
-  contains `"points-mileage-write"`. The old label excluded the whole loyalty
-  area including its balance reads, which the user has now asked for. The new
-  label names only what is still refused, and each refusal now has a reason
-  rather than a category: `mlg.lpotAthn.do` and `xPoint.XPointView` take a
-  user-supplied point PASSWORD and answer with `pwdErrTno`, a failure counter,
-  so a wrong guess is a state change at the loyalty provider no matter what the
-  screen title says; `xPoint.OkCashbagCertView`, `mileage.acpnMlgSave.do` and
-  `mileage.acpnMlgNoti.do` are registration/accrual writes. A test pins that
-  all five stay unreachable and that no other excluded domain moved.
-  - **`xPoint.MyXPointView` is the account-entitlement read this project did
-    not know it had.** Besides the point balance it carries `h_hdcp_flg`, and
-    `MyPageActivity.java:206-212` reveals the entire 장애인 section on that
-    flag alone, filling its two rows from `h_subt_dcs_cl_nm` (labelled 장애인증,
-    `:353,393`) and `h_cust_lead_flg_nm` (labelled 보조견, `:355,394`). An
-    account whose flag is not `"Y"` therefore holds neither registration —
-    which is the shape of an explanation for the live `ERR299943`
-    "예약할인이 지원되지 않습니다" that refused 1~3급 장애 + 안내견 on a
-    byte-exact form (`docs/MUTATION_HANDOFF.md:172-179`). **Hypothesis, not
-    finding**: it is what the app does with the flag, not an observed pairing.
-  - `point_dv_cd` is not a caller parameter. `KorailPointInquiryDao.java:87-92`
-    has no request class and passes the literal `"0"`, so the builder takes no
-    arguments at all.
-  - The mileage read's page size is the app's hardcoded `"20"`
-    (`MileageHistoryActivity.java:274`) rather than an option, and `qryDvVal`
-    is a dropdown INDEX rather than a code — `:566` assigns
-    `Integer.toString(i9)` straight from `onItemSelected`, with the three
-    entries declared 전체/적립/사용 at `:502`. The date window has no default
-    because supplying one would put a clock in a payload builder; the app's own
-    default is the "최근 3개월" branch at `:372-380`.
-- `scripts/reserve_pay_refund_roundtrip.py` now orders its train choice by the
-  search row's own price field when no fare quote can be built. A live
-  ScheduleView row carries no goods number, so `trn.prcFare.do` usually cannot
-  be built and the script reported `fare: UNKNOWN` and took the first reservable
-  train. It still invents nothing: `KORAIL_TRAIN_NO` pins an exact train (and
-  aborts before reserving if that train is not reservable), then the cheapest
-  fare quote, then the cheapest by `h_rcvd_amt`/`h_rcvd_fare` — fields
-  `RsvInquiryResponse.TrainInfo` declares — printed as
-  `~N KRW (HINT from the search row, not a quote)` so it can never be read as
-  the amount about to be charged, then the first reservable train with the same
-  plain statement as before. The printed reason always names which branch ran.
-  The authoritative amount is still the one read back and cross-checked before
-  paying, and `KORAIL_MAX_FARE` is still the only ceiling on the charge.
-- The transmit gate now requires a payment consent to state exactly ONE card
-  claim. Neither flag set is the original refusal, unchanged. BOTH set is
-  refused as a contradiction: a consent that claims a test card while
-  acknowledging a real charge is a caller bug, and paying on an ambiguous
-  consent is the mistake the gate exists to prevent. The boundary is now 54
-  exact login/read routes and 61 public methods; no new route was added.
-- `ReservationSeatDetail` maps the passenger type from `h_psg_tp_cd`, which is
-  what `ReservationResponse.SeatInfo` declares. The `h_psg_tp_dv_nm` that a
-  reference client names does not appear anywhere in the decompiled app and was
-  not observed live, so it is deliberately not mapped; an unmapped key stays
-  reachable through `raw`.
-- The package boundary is now 51 exact login/read routes and 57 public methods:
-  53 audited login/read methods that transmit only read-only requests, plus the
-  four consent-gated mutation methods. The four mutation routes are tracked in
-  their own set and are never reachable from a read path.
-- Made `logout()` invalidate the server session with a bare `GET`
-  `login.Logout` before clearing local state, best-effort so it never fails on
-  transport or an already-expired session. That cookie-authenticated,
-  zero-parameter route joined the read-only allowlist, which is why the
-  allowlist holds 51 routes rather than 50. Also corrected
-  `KORAIL_DYNAPATH_SDK_VERSION` from `v1` to `v1.0.3` to match the decompiled
-  app, since that constant seeds both the `sv` body field and the `dyn_key`.
-- Kept R17's known HTTP 404 as a one-request `KorailTransportError` with no
-  retry, fallback, or alternate path. R17 and R31 require a local session;
-  R52 does not invent one.
-- Retained login `strCustNo` as a repr-hidden session customer number for the
-  customer-trip request; member and member-card identifiers are not fallbacks.
-- Kept the Java Retrofit names as documentation aliases only and deliberately
-  omitted `TrainSummary` convenience chaining and every adjacent mutation.
-- Tightened only these four route parsers to require exact `strResult=SUCC`
-  after preserving the existing `FAIL`, `P058`, and `WRC000288` errors.
-- Reject limousine query subclasses and invoke each concrete dataclass
-  validator non-virtually before Sid generation or transport.
-- Require exact `strResult=SUCC` for all P0 menu and limousine typed parsers.
-- Normalize live-evidenced JSON integer and ASCII decimal-string station popup
-  types and actual arrival delay counts without accepting broader coercions.
-- **Changed: `scripts/verify_distribution.py` now verifies this metadata
-  instead of banning it.** The four headers a PEP 639 build emits —
-  `License-Expression`, `License-File`, `Author-email`, `Project-URL` — moved
-  out of the forbidden list and into exact-value checks derived from
-  `pyproject.toml`, alongside the ones `Name`/`Version`/`Requires-Python`
-  already had. Merely un-banning them would have left the licence and the
-  owner as the only unchecked metadata in the artifacts. `License`,
-  `Author` (bare), `Home-page`, `Download-URL`, `Maintainer` and
-  `Maintainer-email` stay forbidden: no configuration here emits them, so
-  their presence would mean something other than this pyproject wrote them.
-  Both artifacts must additionally carry the declared licence file as a
-  non-empty regular member — `dist-info/licenses/LICENSE` in the wheel, the
-  sdist root in the tarball — because a metadata header naming a licence file
-  is a claim about a file, not the file.
-- Changed: `Development Status :: 3 - Alpha` → `5 - Production/Stable`.
-- **Renamed (breaking): `MutationNotAllowedError` → `KorailMutationNotAllowedError`.**
-  It was the only one of the twenty exception types without the package's
-  prefix, and the sibling SRT package already spells its counterpart
-  `SrtMutationNotAllowedError`. No alias is left behind: an alias added at
-  1.0.0 is itself a permanent contract, and the whole point of doing this now
-  is that the rename is still free.
+- **`scripts/reserve_pay_refund_roundtrip.py` 는 운임 상한 없이는 시작하지 않는다.**
+  `KORAIL_MAX_FARE` 는 "optional … strongly recommended" 로 적혀 있었지만, 이 스크립트가
+  결제하는 금액을 막는 것은 *이것뿐*이다. (d) 단계가 청구 금액을 이 값과 비교하는데, 값이
+  없으면 비교를 그냥 건너뛴다. 열차 선택도 비용을 묶어 주지 않는다. 운임 조회도, 검색 행의
+  가격 힌트도 얻을 수 없으면 스크립트는 값이 얼마든 첫 예약 가능 열차로 내려간다. 그래서
+  문서에 적힌 명령을 이 변수 없이 따른 운영자는 상한 없는 실카드 결제를 돌리고 있었다.
+  요구는 결제 경로에서만, 카드를 읽기 전에, 로그인 전에, 어떤 요청보다 먼저 강제한다.
+  형식이 잘못된 값도 200 줄 뒤가 아니라 거기서 중단시킨다. `--recover` 는 영향을 받지
+  않는다. 두 분기 모두 아무것도 결제하지 않는다.
+- 문서가 디컴파일된 KORAIL 앱 코드를 그대로 싣지 않는다. Java 메서드 본문과 그 smali 를
+  붙여넣었던 한 곳(`docs/deep-dive/impl-audit-2026-07-22.md` 의 `setTrnCnt` 자기대입 무동작)
+  과 Retrofit 인터페이스 선언을 붙여넣었던 한 곳(`docs/audit-2026-07-27/phase2/safety.md`
+  의 `dcntCrdExtn.do`)이 이제 관찰한 내용을 서술한다. 모든 `file:line` 인용은 그대로이고,
+  디컴파일러 산물이 아님을 가른 바이트코드 수준의 세부도 그대로다. 바뀐 것은 근거의 형식이지
+  근거의 힘이 아니다. 해당 감사 문서가 지금 따르는 규칙을 명시한다. 제3자의 저작물은 위치로
+  인용하고, 클라이언트가 맞춰야 하는 와이어 이름만 인용한다.
+- 기계 생성 카탈로그 둘도 생성물이라는 이유로 예외를 두지 않고 같은 규칙을 따랐다. 펜스
+  태그가 아니라 내용으로 다시 훑자 펜스 스캔이 찾은 것보다 약 660 줄이 더 나왔다.
+  `docs/deep-dive/local-storage-catalog.md` 는 644개 키 행마다 문장 전체를 붙여넣었고,
+  `docs/deep-dive/webview-and-url-catalog.md` 는 메서드 26줄과 문장 셀 17개를 붙여넣었다.
+  근거로서 잃은 것은 없다. 저장소 카탈로그의 Context 열은 원래 의미하던 접근을
+  (`쓰기 putString` / `읽기 getInt` / `존재 확인 containsKey`) 대체한 문장에서 기계적으로
+  유도해 적는다. WebView 카탈로그의 Signature 열은 본문 여는 중괄호를 뺐는데, 그것이 그 행을
+  시그니처가 아니라 소스 줄로 만들던 것이다. 라우트 애너테이션 셀은 그대로 둔다. 라우트는
+  클라이언트가 맞춰야 하는 인터페이스다. 키 이름, `file:line`, 개수는 바뀌지 않았으므로 모든
+  행을 같은 APK 로 다시 확인할 수 있다.
+- 문서의 절대경로에 로컬 사용자명이 남지 않는다. 14개 전부 저장소 기준 상대경로로 다시
+  썼으므로, 나중에 새는 값이 숨을 예외 목록이 없다. 이 저장소 안이 아닌 유일한 경로인
+  `srtgo_plus` 참조 체크아웃은 없는 업스트림 URL 을 지어내는 대신 로컬 체크아웃이라고
+  적는다.
+- 히스토리 재작성이 남긴 벤더 키 자리표시자가 문장으로 읽힌다. `<KORAIL-APP-…-REDACTED>`
+  자리마다 원래 어떤 필드였고 왜 값이 없는지 적는다. 거짓 리터럴이 돼 버린
+  `kakao<key>://oauth` 는 원래부터 규칙이었던 대로 쓴다(스킴은 `kakao` 뒤에 앱 키가 붙는다).
+  `docs/RELEASE_GAP_PLAN.md` 는 "values deliberately NOT copied into this plan" 이라고
+  선언하면서 정작 그 값을 인쇄하는 문서를 가리키고 있었다. 이제 그 모순이 해소됐다는 것,
+  값이 트리뿐 아니라 히스토리에서도 사라졌다는 것, 그리고 아직 평문으로 남은 값 하나(GCM
+  sender id — 자격증명이 아니라 Firebase 프로젝트 *번호*)는 놓친 것이 아니라 일부러 남긴
+  것임을 기록한다.
+- **동작 변경. 맨손 `KorailClient()` 로 로그인할 수 있다.** 전에는 되지 않았고, 그래서
+  README 의 빠른 시작 — `KorailClient()` 다음 `login(...)` — 은 거짓이었다. 2026-07-27
+  실검증: 기본 `KorailConfig()` 는 DynaPath 를 끈 채
+  `User-Agent: korail-mobile-api/0.2.0` 을 보냈고, `login.Login` 은 자동화 방지 검사에서
+  `**MACRO ERROR**` 를 돌려줬다. 로그인에 성공한 유일한 설정은 `build_config_from_env`
+  였는데 README 는 그것을 언급하지 않았고 `__all__` 도 내보내지 않았다. 이 실패는 읽기
+  어려웠다. **위장돼 있기** 때문이다. 서버는 매크로 거부를
+  "원활한 서비스 이용을 위해 앱을 최신 버전으로 업데이트한 뒤…" 로 돌려준다.
+  게다가 계정과 무관한 읽기는 같은 설정에서 계속
+  성공하므로, 증상이 클라이언트 형태 문제가 아니라 버전 게이트처럼 보인다. 실제로 한 번
+  그렇게 오진된 적이 있다. 기본값 셋이 바뀌었다.
+  - `KORAIL_USER_AGENT` 가 `korail-mobile-api/0.2.0` 대신 플랫폼 기본 Dalvik 문자열
+    `Dalvik/2.1.0 (Linux; U; Android 15; Android)` 이 됐다. 앱은 UA 를 하드코딩하지 않는다.
+    Retrofit v1 이 `UrlConnectionClient`/`HttpURLConnection` 위에서 돈다
+    (`ExecuteDao.java:7-11`). 그러니 서버가 실제 앱에서 보는 것은 플랫폼 문자열이다. 이 값은
+    새 `build_dalvik_user_agent` 가 DynaPath 토큰의 `dm` 과 `os` 가 싣는 것과 같은
+    `KORAIL_DEFAULT_DEVICE_NAME` / `KORAIL_DEFAULT_ANDROID_OS_RELEASE` 에서 **유도**한다.
+    `build_config_from_env` 도 같은 빌더를 부른다. 한 요청 안에서 UA 는 이 단말이라 하고
+    토큰은 저 단말이라 하는 것 자체가 신호이므로, 둘을 따로 적을 수 없게 했다.
+  - **DynaPath 가 기본으로 켜진다.** 이제 모든 클라이언트가 허용된 여섯 경로에
+    `x-dynapath-m-token` 을 붙인다. 전에는 하나도 붙이지 않았다. 어디에 토큰을 보내는지는
+    그대로이고 보내느냐 마느냐만 바뀐다. 끄려면
+    `KorailConfig(dynapath=DynapathConfig())` 를 쓴다. `DynapathConfig` 자신의 기본값은
+    건드리지 않았다. 켜진 기본값과 토큰 설정은 `KorailConfig` 의 필드 팩토리 쪽에 달려
+    있다. `DynapathConfig.__post_init__` 이 `token_provider`/`token_settings` 중 정확히
+    하나를 요구하므로, `token_settings` 에 기본값이 있으면 모든
+    `DynapathConfig(enabled=True, token_provider=fn)` 이 모순이 된다.
+  - 기본 토큰 설정은 기기 신원을 `generate_dynapath_device_id` 로 **`KorailConfig`
+    인스턴스마다** 생성한다. 고정된 기기 ID 는 패키지에 넣지 않는다. `di` 는 단말의
+    `Settings.Secure.ANDROID_ID` 이고 (`AbstractC1228a.java:16`, `C1229b.java:103` 에서
+    그대로 실린다), 라이브러리의 모든 설치본이 공유하는 식별자야말로 이 헤더가 잡으려는 봇
+    서명이다. 이 저장소가 srtgo 의 고정값 `558a4f02041657ea` 에 이미 제기한 비판이 그것이다.
+    값은 `uuid.uuid4().hex[:16]` 으로 ANDROID_ID 의 실제 형태인 소문자 16진수 16자리와
+    같고, 설정 객체가 사는 동안 유지되며 저장되지 않는다. `app_start_ts` 는 설정을 만든
+    시각이며 `AbstractC1228a.java:14` 가 기록하는 것이 그것이다.
+- `EXCLUDED_API_DOMAINS` 가 `"points-mileage"` 대신 `"points-mileage-write"` 를 담는다.
+  옛 이름은 잔액 읽기까지 포함해 적립 영역 전체를 막았는데, 사용자가 그 읽기를 요청했다.
+  새 이름은 여전히 거부하는 것만 가리키고, 거부마다 범주가 아니라 이유가 붙는다.
+  `mlg.lpotAthn.do` 와 `xPoint.XPointView` 는 사용자가 입력한 포인트 **비밀번호**를 받고
+  실패 횟수 `pwdErrTno` 로 답한다. 화면 제목이 무엇이든 틀린 추측 한 번이 적립 사업자 쪽
+  상태 변경이다. `xPoint.OkCashbagCertView`, `mileage.acpnMlgSave.do`,
+  `mileage.acpnMlgNoti.do` 는 등록·적립 쓰기다. 다섯 개가 계속 닿을 수 없다는 것과 다른
+  제외 도메인이 움직이지 않았다는 것을 테스트가 고정한다.
+  - **`xPoint.MyXPointView` 는 이 프로젝트가 가진 줄 몰랐던 계정 자격 읽기다.** 포인트
+    잔액 외에 `h_hdcp_flg` 를 싣는데, `MyPageActivity.java:206-212` 가 이 플래그 하나로
+    장애인 절 전체를 드러내고 두 행을 `h_subt_dcs_cl_nm`(라벨 장애인증, `:353,393`)과
+    `h_cust_lead_flg_nm`(라벨 보조견, `:355,394`)으로 채운다. 따라서 플래그가 `"Y"` 가
+    아닌 계정은 두 등록 중 어느 것도 갖고 있지 않다. 바이트 단위로 일치하는 폼에 대해
+    1~3급 장애 + 안내견을 거부한 라이브 `ERR299943` "예약할인이 지원되지 않습니다" 의
+    설명이 될 만한 모양이다(`docs/MUTATION_HANDOFF.md:172-179`). **발견이 아니라 가설**
+    이다. 앱이 그 플래그로 무엇을 하는지일 뿐 관찰된 짝은 아니다.
+  - `point_dv_cd` 는 호출자 인자가 아니다. `KorailPointInquiryDao.java:87-92` 에는 요청
+    클래스가 없고 리터럴 `"0"` 을 넘기므로 빌더는 인자를 하나도 받지 않는다.
+  - 마일리지 읽기의 페이지 크기는 선택지가 아니라 앱이 하드코딩한 `"20"` 이고
+    (`MileageHistoryActivity.java:274`), `qryDvVal` 은 코드가 아니라 드롭다운 **인덱스**다.
+    `:566` 이 `onItemSelected` 에서 온 `Integer.toString(i9)` 를 그대로 대입하고, 세 항목은
+    `:502` 에서 전체/적립/사용으로 선언된다. 기간에는 기본값이 없다. 기본값을 주면 페이로드
+    빌더 안에 시계를 넣는 셈이기 때문이다. 앱 자신의 기본값은 `:372-380` 의 "최근 3개월"
+    분기다.
+- `scripts/reserve_pay_refund_roundtrip.py` 는 운임 조회를 만들 수 없을 때 검색 행 자신의
+  가격 필드로 열차를 고른다. 라이브 ScheduleView 행에는 상품 번호가 없어서 `trn.prcFare.do`
+  를 보통 만들 수 없고, 그러면 스크립트는 `fare: UNKNOWN` 을 찍고 첫 예약 가능 열차를 잡았다.
+  지어내는 것은 여전히 없다. `KORAIL_TRAIN_NO` 가 열차를 정확히 지정하고(그 열차가 예약
+  불가면 예약 전에 중단한다), 그다음이 가장 싼 운임 조회, 그다음이
+  `RsvInquiryResponse.TrainInfo` 가 선언하는 `h_rcvd_amt`/`h_rcvd_fare` 기준 최저가다.
+  이 값은 `~N KRW (HINT from the search row, not a quote)` 로 찍어 곧 청구될 금액으로 읽힐
+  수 없게 한다. 그다음이 전과 같은 문구의 첫 예약 가능 열차다. 어느 분기가 실행됐는지는 항상
+  출력에 이름으로 나온다. 권위 있는 금액은 여전히 결제 전에 다시 읽어 교차 확인한 값이고,
+  청구의 유일한 상한은 여전히 `KORAIL_MAX_FARE` 다.
+- 전송 게이트가 결제 동의에 카드 주장 **하나**만 있을 것을 요구한다. 둘 다 설정하지 않은
+  경우는 원래대로 거부다. 둘 다 설정한 경우는 모순으로 거부한다. 테스트 카드라고 주장하면서
+  실제 과금을 확인했다는 동의는 호출자 버그이고, 모호한 동의로 결제하는 것이야말로 이
+  게이트가 막으려는 실수다. 경계는 이제 정확한 로그인·읽기 라우트 54개와 공개 메서드
+  61개이며 새 라우트는 없다.
+- `ReservationSeatDetail` 은 승객 유형을 `h_psg_tp_cd` 에서 가져온다.
+  `ReservationResponse.SeatInfo` 가 선언하는 것이 그것이다. 어떤 참조 클라이언트가 쓰는
+  `h_psg_tp_dv_nm` 은 디컴파일된 앱 어디에도 없고 라이브에서도 관찰되지 않아 일부러 매핑하지
+  않는다. 매핑하지 않은 키는 `raw` 로 닿을 수 있다.
+- 패키지 경계가 정확한 로그인·읽기 라우트 51개와 공개 메서드 57개가 됐다. 읽기 전용 요청만
+  보내는 감사된 로그인·읽기 메서드 53개에 동의 게이트가 걸린 상태 변경 메서드 4개다. 상태
+  변경 라우트 4개는 별도 집합으로 관리하며 읽기 경로에서는 절대 닿을 수 없다.
+- `logout()` 이 로컬 상태를 지우기 전에 맨 `GET` `login.Logout` 으로 서버 세션을 무효화한다.
+  전송 오류나 이미 만료된 세션에서 실패하지 않도록 best-effort 다. 쿠키로 인증되고 매개변수가
+  없는 이 라우트가 읽기 전용 허용 목록에 들어갔고, 그래서 목록이 50개가 아니라 51개다.
+  `KORAIL_DYNAPATH_SDK_VERSION` 도 디컴파일된 앱에 맞춰 `v1` 에서 `v1.0.3` 으로 고쳤다. 이
+  상수가 본문 필드 `sv` 와 `dyn_key` 양쪽의 씨앗이다.
+- R17 의 알려진 HTTP 404 는 재시도·대체·우회 없이 요청 한 번짜리 `KorailTransportError` 로
+  둔다. R17 과 R31 은 로컬 세션을 요구하고, R52 는 세션을 지어내지 않는다.
+- 로그인 응답의 `strCustNo` 는 고객 여정 요청용 세션 고객번호로 repr 에서 숨긴 채 보관한다.
+  회원·회원카드 식별자는 대체값이 아니다.
+- Java Retrofit 이름은 문서용 별칭으로만 두고, `TrainSummary` 편의 연결과 인접한 모든 상태
+  변경은 일부러 뺐다.
+- 기존의 `FAIL`, `P058`, `WRC000288` 오류를 보존한 뒤 이 네 라우트의 파서만 정확한
+  `strResult=SUCC` 를 요구하도록 좁혔다.
+- 리무진 질의의 하위 클래스를 거부하고, Sid 생성이나 전송 전에 각 구체 데이터클래스의
+  검증기를 비가상으로 호출한다.
+- P0 메뉴와 리무진의 모든 타입 파서가 정확한 `strResult=SUCC` 를 요구한다.
+- 라이브에서 확인된 JSON 정수와 ASCII 10진 문자열 형태의 역 팝업 유형·실제 도착 지연 횟수를
+  더 넓은 강제 변환 없이 정규화한다.
+- **`scripts/verify_distribution.py` 가 이 메타데이터를 금지하는 대신 검증한다.** PEP 639
+  빌드가 내는 네 헤더 — `License-Expression`, `License-File`, `Author-email`,
+  `Project-URL` — 가 금지 목록에서 나와, `Name`/`Version`/`Requires-Python` 이 이미 받고
+  있던 것과 같은 `pyproject.toml` 기반 정확값 검사로 들어갔다. 금지만 풀었다면 라이선스와
+  소유자가 산출물에서 유일하게 검사되지 않는 메타데이터로 남았을 것이다. `License`,
+  맨 `Author`, `Home-page`, `Download-URL`, `Maintainer`, `Maintainer-email` 은 계속
+  금지다. 여기의 어떤 설정도 그것들을 내지 않으므로, 그 헤더가 있다는 것은 이 pyproject 가
+  아닌 무언가가 썼다는 뜻이다. 두 산출물은 선언한 라이선스 파일을 비어 있지 않은 일반
+  멤버로도 실어야 한다. wheel 에서는 `dist-info/licenses/LICENSE`, tarball 에서는 sdist
+  루트다. 라이선스 파일을 가리키는 메타데이터 헤더는 파일에 대한 주장이지 파일이 아니다.
+- `Development Status :: 3 - Alpha` → `5 - Production/Stable`.
+- **`MutationNotAllowedError` → `KorailMutationNotAllowedError` 로 이름을 바꿨다(파괴적
+  변경).** 예외 타입 스무 개 중 패키지 접두사가 없는 유일한 이름이었고, 자매 SRT 패키지는
+  대응하는 이름을 이미 `SrtMutationNotAllowedError` 로 쓴다. 별칭은 남기지 않는다. 1.0.0
+  에서 더한 별칭은 그 자체로 영구 계약이 되며, 지금 바꾸는 이유가 바로 아직 공짜라는
+  것이다.
 
 ### Fixed
 
