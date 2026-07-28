@@ -8,211 +8,171 @@
 
 ### Added
 
-- Added: `scripts/README.md`. Three of the four committed scripts talk to the
-  live server and one of them moves money, and until now nothing in the
-  repository told a reader which was which; `capture_live_read_surface.py` was
-  referenced only from test comments. The page states the rules that hold for
-  all of them (two switches minimum, credentials from the environment only,
-  pacing, import safety, run against your own account) and points at each
-  script's own docstring for its variables rather than duplicating them.
-- Added: `build_config_from_env` is exported from the package. It is the
-  supported way to pin a **real** device identity —
-  `KORAIL_DYNAPATH_DEVICE_ID` / `_OS_VERSION` / `_DEVICE_MODEL` — and the
-  only way to get a device id stable across processes, since nothing here
-  persists state. `read_credentials_from_env`, `live_enabled` and
-  `run_live_smoke_from_env` stay unexported: the first would make this
-  package assert an opinion about where a caller's credentials live, and the
-  other two are this repository's own smoke scaffolding.
-- Added: `tests/test_default_login_config.py`, which pins the three things
-  that were wrong and are checkable offline — DynaPath enabled, an
-  app-shaped UA, and the UA's handset agreeing with the token's — plus the
-  per-instance device id. It asserts **nothing** about a login succeeding;
-  that is not offline-checkable and is not claimed anywhere.
-- Added: 장바구니 담기 as a consent-gated mutation —
-  `KorailClient.add_to_cart`, `POST cart.addCartList`
-  (`CartService.java:11-13`), with `CartAddRequest` and
-  `build_cart_add_form`. One request field beyond the common three —
-  `hidPnrNo` — confirmed against `AddCartDao.java:9-24` and, independently,
-  `AddCartDao$AddCartRequest.smali` / `CartService.smali`. `get_cart_list`
-  already read the cart; this is the write half. The DAO's response type is a
-  bare `BaseResponse`, so `add_to_cart` returns the unparsed envelope rather
-  than a dedicated response type, same as `extend_discount_card`.
-  Live-verified 2026-07-27 by hand: a held PNR added cleanly, `SUCC` /
-  `IRZ000002`, and the row read back out of `get_cart_list`. No script or
-  test in this repository sends it.
-- Added: a seventh mutation consent category, `"cart"`, with its own
-  `MutationConsent.allow_cart` flag defaulting to `False`. Deliberately
-  **not** a reuse of `"reserve"`: the hold this acts on already exists and
-  the call creates and destroys nothing this package can observe. It carries
-  no card number and so is not a member of
-  `KORAIL_CARD_BEARING_MUTATION_CATEGORIES`.
-- Added: two reads of the 승차권 변경 chain. The read-only boundary is now
-  60 routes and `KorailClient` exposes 77 public methods — 64 login/read plus
-  the thirteen consent-gated mutations.
+- `scripts/README.md`. 커밋된 스크립트 넷 중 셋이 라이브 서버와 통신하고 그중 하나는 돈을
+  움직이는데, 어느 것이 어느 쪽인지 저장소 어디에도 적혀 있지 않았다.
+  `capture_live_read_surface.py` 는 테스트 주석에서만 언급됐다. 이 문서는 넷 모두에
+  적용되는 규칙(스위치 최소 둘, 자격증명은 환경변수에서만, 호출 간격, 임포트 안전성, 본인
+  계정에 대해서만 실행)을 적고, 변수는 중복해 적는 대신 각 스크립트의 docstring 을 가리킨다.
+- `build_config_from_env` 를 패키지에서 내보낸다. **실제** 기기 신원
+  (`KORAIL_DYNAPATH_DEVICE_ID` / `_OS_VERSION` / `_DEVICE_MODEL`)을 고정하는 지원되는
+  방법이고, 여기서는 아무 상태도 저장하지 않으므로 프로세스 사이에서 기기 ID 를 유지하는
+  유일한 방법이다. `read_credentials_from_env`, `live_enabled`,
+  `run_live_smoke_from_env` 는 내보내지 않는다. 앞의 하나는 호출자의 자격증명이 어디 있어야
+  하는지에 대한 의견을 패키지가 주장하게 만들고, 나머지 둘은 이 저장소 자신의 스모크
+  발판이다.
+- `tests/test_default_login_config.py`. 잘못돼 있었고 오프라인으로 확인 가능한 세 가지 —
+  DynaPath 켜짐, 앱 모양의 UA, 그리고 UA 의 단말과 토큰의 단말이 일치하는 것 — 과 인스턴스별
+  기기 ID 를 고정한다. 로그인 성공에 대해서는 **아무것도** 단언하지 않는다. 그것은 오프라인
+  으로 확인할 수 없고 어디에서도 주장하지 않는다.
+- 장바구니 담기를 동의 게이트가 걸린 mutation 으로 추가했다. `KorailClient.add_to_cart`,
+  `POST cart.addCartList` (`CartService.java:11-13`), `CartAddRequest`,
+  `build_cart_add_form`. 공통 세 필드 외에 요청 필드는 `hidPnrNo` 하나이며
+  `AddCartDao.java:9-24` 와, 별도로 `AddCartDao$AddCartRequest.smali` /
+  `CartService.smali` 로 확인했다. `get_cart_list` 가 이미 장바구니를 읽고 있었고 이것이 쓰는
+  쪽이다. DAO 의 응답 타입이 맨 `BaseResponse` 라 `add_to_cart` 는 전용 응답 타입 대신 파싱
+  하지 않은 봉투를 돌려준다. `extend_discount_card` 와 같다. 2026-07-27 손으로 실검증했다.
+  잡아둔 PNR 이 깨끗이 담겼고 `SUCC` / `IRZ000002` 가 왔으며 그 행을 `get_cart_list` 로 다시
+  읽었다. 이 저장소의 어떤 스크립트나 테스트도 이것을 보내지 않는다.
+- 일곱 번째 mutation 동의 범주 `"cart"` 와 기본값 `False` 인
+  `MutationConsent.allow_cart` 플래그. `"reserve"` 를 재사용하지 **않은** 것은 의도다. 이
+  호출이 다루는 예약은 이미 존재하고, 호출 자체는 이 패키지가 관찰할 수 있는 무언가를
+  만들지도 없애지도 않는다. 카드번호를 싣지 않으므로
+  `KORAIL_CARD_BEARING_MUTATION_CATEGORIES` 의 원소가 아니다.
+- 승차권 변경 체인의 읽기 둘. 읽기 전용 경계가 60 라우트가 됐고 `KorailClient` 는 공개
+  메서드 77개를 노출한다. 로그인·읽기 64개에 동의 게이트가 걸린 mutation 13개다.
   - `get_self_seat_change_info` — `POST self.seatChgInfo.do`
-    (`TicketService.java:54-56`, `TicketService.smali:280-325`). Eight fields;
-    `psrmClCd` is registered OPTIONAL because `TCSOptionsActivity.java:135-138`
-    sets it only for 일반실 (`"1"`) or 특실 (`"2"`) (`K4/o.java:7-8`,
-    `K4/o.smali:34-82`) and Retrofit drops it otherwise. `trnNo` is forwarded
-    verbatim, not zero-padded: `:132` copies `h_trn_no` as-is.
+    (`TicketService.java:54-56`, `TicketService.smali:280-325`). 필드 여덟 개.
+    `psrmClCd` 는 OPTIONAL 로 등록한다. `TCSOptionsActivity.java:135-138` 이 일반실(`"1"`)
+    이나 특실(`"2"`)일 때만 설정하고 (`K4/o.java:7-8`, `K4/o.smali:34-82`) 그 밖에는
+    Retrofit 이 버리기 때문이다. `trnNo` 는 0으로 채우지 않고 그대로 넘긴다. `:132` 가
+    `h_trn_no` 를 있는 그대로 복사한다.
   - `get_original_ticket_inquiry` — `POST research.tripChgOgtk.do`
-    (`ResearchService.java:61-63`). The `@FieldMap` keys are
+    (`ResearchService.java:61-63`). `@FieldMap` 키는
     `ROrtg.OGTK_SALE_WCT_NO`/`OGTK_SALE_DD`/`OGTK_SALE_SQ_NO`/`OGTK_RET_PWD`
-    (`ROrtg.java:8-11`, `ROrtg.smali:20-26`), each already ending in `_`, with
-    a 1-based row number appended — so `ogtkSaleWctNo_1`, `ogtkSaleDd_1`, and
-    so on. Pinned by `_is_original_ticket_field_order` in `safety.py` rather
-    than by a name set, since the key set grows with the ticket count.
-    - **`tkCnt` is NOT pinned to the group count**, and it is sent as an
-      `int` (`ResearchService.smali:613`, `I`) rather than the string the
-      neighbouring `tk.plfNo.do` uses for the same name. The app disagrees
-      with itself about the meaning: `TCBookingActivity.java:179` sends the
-      passenger count, `PushHistoryActivity.java:357` the row count, and
-      `SeatSearchActivity.java:615` a hardcoded `1` over `f29962H.size()`
-      rows. A `tkCnt == N` check would reject two of the three.
-    - **The indexed keys' ORDER is this package's choice.** The app hands
-      Retrofit a `HashMap` (`OgTkInquiryDao.java:15,52`), so its wire order is
-      unspecified, and its own call sites do not even insert in the same
-      order. Grouping by ticket in `ROrtg` declaration order is deterministic.
-- Added: 운임 재계산 as a consent-gated mutation —
-  `KorailClient.recalculate_price`, `POST
-  certification.PriceReCalculation` (`CertificationService.java:35-37`), with
-  `PriceRecalculationRequest`/`PriceRecalculationRow` and
-  `build_price_recalculation_form`. It re-prices an ALREADY HELD PNR after the
-  payment screen's discount selection changes. Never transmitted; not
-  live-enabled.
-  - **The six parallel `List` `@Field`s pair by index, one row per seat.**
-    `k2()` (`a6/C1042B.java:275-283`) is a single loop over one
-    `DiscountPriceParams[]` appending one field of the same element to each of
-    six `ArrayList`s, so element *i* of all six belongs to seat *i*. Verified
-    in `smali/a6.1/B.smali` rather than taken from jadx. The 다자녀 variant
-    (`a6/C1041A.java:57-80`) builds rows differently and calls the same `k2()`.
-  - **They go out as repeated keys, not indexed ones.** Retrofit 1.x flattens
-    an `Iterable` `@Field` with `addField(name, element)` in a loop where the
-    name is loop-invariant (`RequestBuilder.smali:1537-1601`), so the body is
-    `psg_tp_dv_cd=..&psg_tp_dv_cd=..` with no brackets or suffix. The builder
-    returns list values; httpx encodes them identically and the mutation
-    transmit gate needed no change.
-  - `hiduserYn`/`hidCustNo` are sent only for a non-member
-    (`a6/C1042B.java:290-293`); Retrofit omits a null `@Field`, so a member's
-    form is twelve keys, not fourteen.
-- Added: a sixth mutation consent category, `"price_recalculation"`, with
-  `MutationConsent.allow_price_recalculation` (default `False`). Deliberately
-  **not** a reuse of `"payment"`: a payment consent authorises settling an
-  already-quoted amount, and this route rewrites the quote, so folding them
-  together would let a consent to pay a sum authorise changing what the sum is.
-- Added: 병합예약. `KorailClient.reserve_merge`,
-  `build_merge_reservation_form`, `is_merge_eligible`,
-  `KorailReservationJobType.MERGE_STANDING` (`"1202"`),
+    (`ROrtg.java:8-11`, `ROrtg.smali:20-26`)로 각각 이미 `_` 로 끝나고, 여기에 1부터 세는
+    행 번호가 붙는다. 그래서 `ogtkSaleWctNo_1`, `ogtkSaleDd_1` 같은 식이다. 키 집합이
+    승차권 수에 따라 늘어나므로 이름 집합이 아니라 `safety.py` 의
+    `_is_original_ticket_field_order` 로 고정한다.
+    - **`tkCnt` 는 묶음 개수에 고정하지 않는다.** 그리고 같은 이름을 문자열로 쓰는 이웃
+      `tk.plfNo.do` 와 달리 `int` 로 보낸다 (`ResearchService.smali:613`, `I`). 앱 자신이
+      의미를 두고 엇갈린다. `TCBookingActivity.java:179` 는 승객 수를,
+      `PushHistoryActivity.java:357` 은 행 수를, `SeatSearchActivity.java:615` 는
+      `f29962H.size()` 개 행에 대해 하드코딩된 `1` 을 보낸다. `tkCnt == N` 검사는 셋 중 둘을
+      거부하게 된다.
+    - **인덱스 키의 순서는 이 패키지의 선택이다.** 앱은 Retrofit 에 `HashMap` 을 넘기므로
+      (`OgTkInquiryDao.java:15,52`) 와이어 순서가 정해져 있지 않고, 앱의 호출 지점끼리도
+      같은 순서로 넣지 않는다. `ROrtg` 선언 순서대로 승차권 단위로 묶는 것이 결정적이다.
+- 운임 재계산을 동의 게이트가 걸린 mutation 으로 추가했다. `KorailClient.recalculate_price`,
+  `POST certification.PriceReCalculation` (`CertificationService.java:35-37`),
+  `PriceRecalculationRequest`/`PriceRecalculationRow`,
+  `build_price_recalculation_form`. 결제 화면에서 할인 선택이 바뀐 뒤, 이미 잡아둔 PNR 의
+  가격을 다시 매긴다. 전송한 적 없고 라이브로 열려 있지도 않다.
+  - **여섯 개의 병렬 `List` `@Field` 는 인덱스로 짝지어지며 좌석 하나가 한 행이다.**
+    `k2()` (`a6/C1042B.java:275-283`)는 `DiscountPriceParams[]` 하나를 도는 단일 루프로
+    같은 원소의 필드 하나씩을 여섯 `ArrayList` 에 넣는다. 그래서 여섯 리스트의 *i* 번째
+    원소가 모두 좌석 *i* 의 것이다. jadx 출력이 아니라 `smali/a6.1/B.smali` 에서 확인했다.
+    다자녀 변형(`a6/C1041A.java:57-80`)은 행을 다르게 만들지만 같은 `k2()` 를 부른다.
+  - **인덱스 키가 아니라 반복 키로 나간다.** Retrofit 1.x 는 `Iterable` `@Field` 를 루프
+    안에서 `addField(name, element)` 로 펼치는데 이름은 루프 불변이다
+    (`RequestBuilder.smali:1537-1601`). 그래서 본문이 대괄호나 접미사 없이
+    `psg_tp_dv_cd=..&psg_tp_dv_cd=..` 이다. 빌더는 리스트 값을 돌려주고, httpx 가 똑같이
+    인코딩하며, mutation 전송 게이트는 바꿀 필요가 없었다.
+  - `hiduserYn`/`hidCustNo` 는 비회원일 때만 보낸다 (`a6/C1042B.java:290-293`). Retrofit 은
+    null `@Field` 를 빼므로 회원의 폼은 열네 키가 아니라 열두 키다.
+- 여섯 번째 mutation 동의 범주 `"price_recalculation"` 과
+  `MutationConsent.allow_price_recalculation` (기본 `False`). `"payment"` 를 재사용하지
+  **않은** 것은 의도다. 결제 동의는 이미 산정된 금액을 정산하는 것을 허가하는데 이 라우트는
+  그 산정 자체를 다시 쓴다. 둘을 합치면 금액을 결제해도 된다는 동의가 금액을 바꿔도 된다는
+  허가가 된다.
+- 병합예약. `KorailClient.reserve_merge`, `build_merge_reservation_form`,
+  `is_merge_eligible`, `KorailReservationJobType.MERGE_STANDING` (`"1202"`),
   `KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` (`"21"`),
   `KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE` (`"22"`),
-  `KORAIL_MERGE_SEAT_FLAGS_BY_CABIN`, and
-  `TrainSummary.merge_seat_application_flag` (`h_yms_apl_flg`).
-  **병합 is ONE train split at a mid station so its two halves can be seated
-  differently — not a transfer.** 좌석 연결역 선택 /
+  `KORAIL_MERGE_SEAT_FLAGS_BY_CABIN`, `TrainSummary.merge_seat_application_flag`
+  (`h_yms_apl_flg`).
+  **병합은 한 열차를 중간역에서 나눠 두 구간의 좌석을 다르게 잡는 것이지 환승이 아니다.**
+  좌석 연결역 선택 /
   "구간을 좌석+좌석 또는 좌석+입석으로 연결하여 이용하실 수 있습니다"
-  (`res/values/strings.xml:702,577`). You board once.
-  - The `K4/e` codes were resolved from bytecode
-    (`analysis/apktool/smali/K4/e.smali:31-55`) because **three of its four
-    members reach jadx as unrelated same-valued constants**: `TRANSFER` as
-    `TicketSelfCheckinStatusActivity.CHECKIN_STATUS_EXCEED` and
-    `STANDING_SEAT_1` as `I4.a.BEFORE_DEPARTURE`. 직통 `11`, 환승 `14`,
-    병합 선행 `21`, 병합 후행 `22`.
-  - 병합 is TWO holds. The first is the ordinary direct form with
-    `txtJobId="1202"` and nothing else changed
-    (`DirectInquiryActivity.java:448-451`, tag set at `a5/u.java:394-397`); the
-    second replaces it with two journeys on the same train. Between them sits
-    the server: KORAIL puts the literal `<중간연결역 변경>`
-    (`strings.xml:2018`) in the first hold's own message text, and the confirm
-    screen's span table (`res/values/arrays.xml:421-438`,
-    `K6/C5956a.java:74-77`) turns that literal into the tap that starts the
-    merge. The offer is KORAIL's, not the client's.
-  - The merged form is built by `DirectInquiryActivity.java:576-601`, NOT by
-    `C5/a.java`'s journey loop, and diverges from a 환승 in four ways, all
-    re-read at `analysis/apktool/smali/…/DirectInquiryActivity.smali:5580-6010`:
-    `txtJrnyTpCd{i}` keys on the loop INDEX so the legs differ (`21` then `22`)
-    where a 환승's both read `14`; `txtStndFlg` is pinned `"Y"`; leg 2's cabin
-    is copied from leg 1's rather than read per leg; and there is no
-    `setArvTm` call at all, so `arvTm_2` does not exist and `arvTm_1` keeps the
-    standing hold's WHOLE-ROUTE arrival time. That last one is why
-    `build_merge_reservation_form` takes the standing hold's `TrainSummary`
-    alongside the two split legs — the stale value is on the wire.
-  - `reserve_merge` does NOT cancel the standing hold it replaces, although the
-    app does. That cancel is `cancel_unpaid_hold` under the `"cancel"` consent;
-    performing it inside a `"reserve"`-gated method would let a reserve consent
-    release a live PNR.
-  - Touches the reserve route because the feature is the reserve route: same
-    path, same `"reserve"` category, one new `txtJobId` value and one new
-    builder. Every existing call is byte-identical — a contract test rebuilds
-    the live-verified one-adult form and compares it key by key.
-  - **NEVER TRANSMITTED.** No form in this feature has reached KORAIL.
-- Added: `KorailClient.reserve_with_discount_card` and
-  `build_discount_card_reservation_form`, plus
-  `KORAIL_DISCOUNT_CARD_DISCOUNT_CODE` (`"153"`) and
+  (`res/values/strings.xml:702,577`). 탑승은 한 번이다.
+  - `K4/e` 의 코드는 바이트코드(`analysis/apktool/smali/K4/e.smali:31-55`)에서 풀었다.
+    **네 멤버 중 셋이 jadx 에서는 값만 같은 무관한 상수로 보이기** 때문이다. `TRANSFER` 는
+    `TicketSelfCheckinStatusActivity.CHECKIN_STATUS_EXCEED` 로, `STANDING_SEAT_1` 은
+    `I4.a.BEFORE_DEPARTURE` 로 나온다. 직통 `11`, 환승 `14`, 병합 선행 `21`, 병합 후행 `22`.
+  - 병합은 예약 **둘**이다. 첫째는 `txtJobId="1202"` 만 다르고 나머지는 그대로인 평범한 직통
+    폼이고 (`DirectInquiryActivity.java:448-451`, 태그는 `a5/u.java:394-397` 에서 설정),
+    둘째는 그것을 같은 열차 위의 두 여정으로 바꾼다. 그 사이에 서버가 있다. KORAIL 이 첫
+    예약의 메시지 본문에 리터럴 `<중간연결역 변경>` (`strings.xml:2018`)을 넣고, 확인 화면의
+    span 표(`res/values/arrays.xml:421-438`, `K6/C5956a.java:74-77`)가 그 리터럴을 병합을
+    시작하는 탭으로 만든다. 제안하는 쪽은 KORAIL 이지 클라이언트가 아니다.
+  - 병합 폼은 `C5/a.java` 의 여정 루프가 아니라 `DirectInquiryActivity.java:576-601` 이
+    만들고, 환승과 네 군데에서 갈린다. 넷 다
+    `analysis/apktool/smali/…/DirectInquiryActivity.smali:5580-6010` 에서 다시 읽었다.
+    `txtJrnyTpCd{i}` 가 루프 **인덱스**를 키로 삼아 두 구간이 달라지고(`21` 다음 `22`),
+    환승은 양쪽 모두 `14` 다. `txtStndFlg` 는 `"Y"` 로 박힌다. 2구간의 실 등급은 구간마다
+    읽는 대신 1구간의 것을 복사한다. 그리고 `setArvTm` 호출이 아예 없어서 `arvTm_2` 가
+    존재하지 않고 `arvTm_1` 에는 입석 예약의 **전 구간** 도착시각이 그대로 남는다. 마지막
+    항목 때문에 `build_merge_reservation_form` 이 나뉜 두 구간과 함께 입석 예약의
+    `TrainSummary` 를 받는다. 그 낡은 값이 실제로 와이어에 실린다.
+  - `reserve_merge` 는 자신이 대체하는 입석 예약을 취소하지 않는다. 앱은 취소한다. 그 취소는
+    `"cancel"` 동의 아래의 `cancel_unpaid_hold` 이고, `"reserve"` 게이트가 걸린 메서드 안에서
+    그것을 수행하면 예약 동의가 살아 있는 PNR 을 풀 수 있게 된다.
+  - 예약 라우트를 건드리는 이유는 이 기능이 예약 라우트이기 때문이다. 같은 경로, 같은
+    `"reserve"` 범주, 새 `txtJobId` 값 하나와 새 빌더 하나다. 기존 호출은 바이트 단위로
+    동일하다. 계약 테스트가 라이브로 확인된 성인 1명 폼을 다시 만들어 키 단위로 비교한다.
+  - **전송한 적 없다.** 이 기능의 어떤 폼도 KORAIL 에 닿은 적이 없다.
+- `KorailClient.reserve_with_discount_card` 와 `build_discount_card_reservation_form`,
+  그리고 `KORAIL_DISCOUNT_CARD_DISCOUNT_CODE` (`"153"`),
   `KORAIL_DISCOUNT_CARD_MENU_ID` (`"A2"`).
-  **A reservation CAN carry a 할인카드, and it does so through the ORDINARY
-  reserve route.** `w4/a.java:93-104` builds a plain `ReservationRequest`; its
-  only caller, `SeatAssignBookingActivity.java:153-163`, hands it to
-  `NCardDirectInquiryActivity`, whose base class POSTs it with a plain
-  `ReservationDao` (`c5/b.java:128-138`) to
-  `certification.TicketReservation` (`CertificationService.java:52-54`). There
-  is no N카드 reservation endpoint; there is an N카드 passenger block.
-  - Exactly two things differ from the live-verified one-adult 일반실 form:
-    the eight passenger rows collapse to `txtTotPsgCnt="1"`,
-    `txtCompaCnt1="1"`, `txtPsgTpCd1="1"`, `txtDiscKndCd1="153"`,
-    `txtCardNo_1=<card>` (`w4/a.java:96-101`), and `txtMenuId` becomes `"A2"`
-    (`SeatAssignBookingActivity.java:159`). Everything else — journey block,
-    seat block, `txtJobId`, `txtStndFlg`, `hidFreeFlg`, `txtGdNo` — is
-    identical, because the app writes it with the same code
-    (`c5/b.java:42-77`). The builder is written as a substitution INTO
-    `build_reservation_form`'s output so that is true by construction, and a
-    test compares both forms key by key, in order.
-  - **`txtCardNo_1` carries a trailing underscore and its three neighbours do
-    not** (`OPsg.java:7-10`). A hold spelled `txtCardNo1` would be a hold with
-    a discount code and no card.
-  - No `passengers` and no `seat_class` argument: the app offers neither, since
-    `w4/a.java:97-98` hardcodes one passenger and `:88` pins 일반실.
-  - Gated by the existing `"reserve"` consent, because it IS the reserve route.
-    **NEVER TRANSMITTED**: no account this project can reach owns an N카드.
-- Added: 할인카드(N카드) 구매 and 기간연장 as consent-gated mutations —
-  `KorailClient.register_discount_card` and
-  `KorailClient.extend_discount_card`, plus `DiscountCardPurchaseRequest`,
-  `DiscountCardSectionRequest`, `DiscountCardAdditionalUser`,
-  `DiscountCardTicket`, `DiscountCardPurchaseResponse`,
-  `parse_discount_card_purchase_response` and
-  `KORAIL_MAX_DISCOUNT_CARD_SECTIONS` (`3`).
-  **NEVER TRANSMITTED, and no live path in this repository can transmit them.**
-- Added: a fifth mutation consent category, `"discount_card"`, with its own
-  `MutationConsent.allow_discount_card` flag defaulting to `False`. It is
-  additive: every consent written before it exists means exactly what it meant
-  before. It is NOT a reuse of `"reserve"` — `research.dcntCrdInfo.do` buys a
-  product rather than a seat, and nobody who opted into placing a train booking
-  also opted into buying a discount card.
-- Added: `KorailHttpClient.get_mutation_query`, the send path for a mutation
-  the app performs as a GET. `reservation.dcntCrdExtn.do` is declared `@GET`
-  with seven `@Query` parameters (`ResearchService.java:65-66`) and genuinely
-  changes state. Registering it as a POST would have been less code and would
-  have made the allowlist describe a request the app never sends; a mutation
-  does not become safer by being mis-registered. Every gate of
-  `post_mutation_form` applies unchanged — consent, the dry-run refusal,
-  `assert_mutation_route` on the exact `(method, path)` pair, and the
-  route/category cross-check.
-  - `research.dcntCrdInfo.do` is a PURCHASE despite its name. It answers with
-    `lumpStlTgtNo` and `rcvdAmt` (`NCardReservationDao.java:127-134`) and the
-    app hands that target number to the payment screen
-    (`SectionNCardInquiryActivity.java:213-257`), so what it creates is an
-    unpaid purchase awaiting settlement.
-  - Its two `@FieldMap`s are flattened with the DAO's own indexed key
-    spellings (`NCardReservationDao.java:74-124`): `jrnyCnt` + `jrnyTpCd_N` /
-    `runDt_N` / `trnNo_N` / `dptRsStnCd_N` / `arvRsStnCd_N`, and `apdUsrCnt` +
-    `custMgNo_N` / `apdCustName_N` / `apdCustTeln_N`. `mCustomData` is
-    deliberately absent — it is never passed to `executeDao` (`:180`) and never
-    reaches the wire.
-  - **Open, and the operator must settle it:** no v6.5.0 call site populates
-    `jrnyInfo`/`apdUsrInfo`, only the setters that would. Whether a 1-section
-    card must still send a section, and whether `apdUsrCnt` must be present as
-    `"0"` rather than omitted for a 1인용 card, is unknown. `dcntCrdExtn.do`'s
-    DAO response type is a bare `BaseResponse`, so a successful extension's
-    reply — and its cost — is unknown too.
+  **예약은 할인카드를 실을 수 있고, 그것을 평범한 예약 라우트로 한다.**
+  `w4/a.java:93-104` 는 평범한 `ReservationRequest` 를 만든다. 유일한 호출자인
+  `SeatAssignBookingActivity.java:153-163` 이 그것을 `NCardDirectInquiryActivity` 에
+  넘기고, 그 상위 클래스가 평범한 `ReservationDao` (`c5/b.java:128-138`)로
+  `certification.TicketReservation` (`CertificationService.java:52-54`)에 POST 한다. N카드
+  전용 예약 엔드포인트는 없다. N카드 승객 블록이 있을 뿐이다.
+  - 라이브로 확인된 성인 1명 일반실 폼과 다른 것은 정확히 둘이다. 승객 행 여덟 개가
+    `txtTotPsgCnt="1"`, `txtCompaCnt1="1"`, `txtPsgTpCd1="1"`, `txtDiscKndCd1="153"`,
+    `txtCardNo_1=<card>` (`w4/a.java:96-101`)로 접히고, `txtMenuId` 가 `"A2"` 가 된다
+    (`SeatAssignBookingActivity.java:159`). 나머지 — 여정 블록, 좌석 블록, `txtJobId`,
+    `txtStndFlg`, `hidFreeFlg`, `txtGdNo` — 는 동일하다. 앱이 같은 코드로 쓰기 때문이다
+    (`c5/b.java:42-77`). 빌더는 `build_reservation_form` 의 출력에 **치환**하는 방식으로
+    작성해 그것이 구조적으로 참이 되게 했고, 테스트가 두 폼을 순서까지 키 단위로 비교한다.
+  - **`txtCardNo_1` 에만 끝에 언더스코어가 붙고 이웃 셋에는 붙지 않는다**
+    (`OPsg.java:7-10`). `txtCardNo1` 로 쓴 예약은 할인 코드만 있고 카드는 없는 예약이 된다.
+  - `passengers` 인자도 `seat_class` 인자도 없다. 앱이 둘 다 제공하지 않는다.
+    `w4/a.java:97-98` 이 승객 한 명을 하드코딩하고 `:88` 이 일반실을 박는다.
+  - 기존 `"reserve"` 동의로 게이트한다. 이것이 곧 예약 라우트이기 때문이다.
+    **전송한 적 없다.** 이 프로젝트가 닿을 수 있는 계정 중 N카드를 가진 것이 없다.
+- 할인카드(N카드) 구매와 기간연장을 동의 게이트가 걸린 mutation 으로 추가했다.
+  `KorailClient.register_discount_card`, `KorailClient.extend_discount_card`,
+  `DiscountCardPurchaseRequest`, `DiscountCardSectionRequest`,
+  `DiscountCardAdditionalUser`, `DiscountCardTicket`, `DiscountCardPurchaseResponse`,
+  `parse_discount_card_purchase_response`, `KORAIL_MAX_DISCOUNT_CARD_SECTIONS` (`3`).
+  **전송한 적 없고, 이 저장소의 어떤 라이브 경로도 이것을 전송할 수 없다.**
+- 다섯 번째 mutation 동의 범주 `"discount_card"` 와 기본값 `False` 인
+  `MutationConsent.allow_discount_card` 플래그. 추가적이다. 이전에 작성된 모든 동의는
+  전과 똑같은 의미를 유지한다. `"reserve"` 의 재사용이 아니다.
+  `research.dcntCrdInfo.do` 는 좌석이 아니라 상품을 사는 것이고, 열차 예약에 옵트인한
+  사람이 할인카드 구매에 옵트인한 것은 아니다.
+- `KorailHttpClient.get_mutation_query`. 앱이 GET 으로 수행하는 mutation 의 전송 경로다.
+  `reservation.dcntCrdExtn.do` 는 `@Query` 매개변수 일곱 개와 함께 `@GET` 으로 선언돼 있고
+  (`ResearchService.java:65-66`) 실제로 상태를 바꾼다. POST 로 등록했다면 코드는 줄었겠지만
+  허용 목록이 앱이 보내지 않는 요청을 서술하게 된다. 잘못 등록한다고 mutation 이 안전해지지
+  않는다. `post_mutation_form` 의 모든 게이트가 그대로 적용된다. 동의, dry-run 거부, 정확한
+  `(method, path)` 쌍에 대한 `assert_mutation_route`, 라우트·범주 교차 확인이다.
+  - `research.dcntCrdInfo.do` 는 이름과 달리 **구매**다. `lumpStlTgtNo` 와 `rcvdAmt` 로
+    답하고 (`NCardReservationDao.java:127-134`) 앱이 그 대상 번호를 결제 화면에 넘긴다
+    (`SectionNCardInquiryActivity.java:213-257`). 즉 이 호출이 만드는 것은 정산을 기다리는
+    미결제 구매다.
+  - 두 `@FieldMap` 은 DAO 자신의 인덱스 키 철자로 펼친다
+    (`NCardReservationDao.java:74-124`). `jrnyCnt` + `jrnyTpCd_N` / `runDt_N` / `trnNo_N` /
+    `dptRsStnCd_N` / `arvRsStnCd_N`, 그리고 `apdUsrCnt` + `custMgNo_N` / `apdCustName_N` /
+    `apdCustTeln_N`. `mCustomData` 는 일부러 뺐다. `executeDao` 에 전달되지 않고 (`:180`)
+    와이어에 닿지 않는다.
+  - **열려 있고, 운영자가 확인해야 한다.** v6.5.0 의 어떤 호출 지점도
+    `jrnyInfo`/`apdUsrInfo` 를 채우지 않는다. 채울 세터만 있다. 1구간 카드도 구간을 보내야
+    하는지, 1인용 카드에서 `apdUsrCnt` 를 빼는 대신 `"0"` 으로 보내야 하는지는 알 수 없다.
+    `dcntCrdExtn.do` 의 DAO 응답 타입이 맨 `BaseResponse` 라, 연장 성공 시의 응답과 그
+    비용도 알 수 없다.
 - Added: `RefundTicketDetailResponse.discount_card`, plus `DiscountCardOnTicket`
   and `DiscountCardSection`. No new route and no new method: `SelTicketInfo`
   already returns `TicketDetailDao.TicketDetailResponse`, which carries
