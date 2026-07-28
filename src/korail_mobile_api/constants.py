@@ -1,10 +1,10 @@
 """앱에서 그대로 옮겨 온 상수 — 엔드포인트, 기기 기본값, 코드값.
 
 여기 있는 값은 대부분 앱 v6.5.0 의 디컴파일 결과에서 읽은 것이고, 각 값
-옆에 그 근거가 ``파일:줄`` 로 붙어 있다. 값을 바꾸면 서버가 보는 요청의
-모양이 바뀐다.
+옆에 그 근거가 ``파일:줄`` 로 붙어 있습니다. 값을 바꾸면 서버가 보는 요청의
+모양이 바뀝니다.
 
-닫힌 코드 집합은 :class:`StrEnum` 으로 둔다 —
+닫힌 코드 집합은 :class:`StrEnum` 으로 둡니다 —
 :class:`KorailSeatClass`, :class:`KorailReservationJobType`,
 :class:`KorailNetFunnelAction`, :class:`KorailNetFunnelOpcode`.
 """
@@ -19,62 +19,61 @@ KORAIL_APP_KEY = "korail1234567890"
 KORAIL_TIMEOUT_SECONDS = 60.0
 #: DynaPath 토큰의 ``dm`` 필드, 즉 ``Build.MODEL``(``b/C1229b.java:132``).
 #: 앱이 정한 값이 아니라 앱이 돌고 있는 단말이 무엇이냐일 뿐이므로, 기본값을
-#: 특정 기종 대신 일부러 일반적인 문자열로 둔다. 기종을 못 박으면(srtgo 는
-#: ``"SM-S928N"`` 을 쓴다) 화면 크기와 SDK 레벨까지 그 기종과 맞아야 하는데,
-#: 그 조합을 확정할 근거가 없다 — 구체적이지만 앞뒤가 안 맞는 기기는 일반적인
-#: 기기보다 더 눈에 띈다. 실제 기기로 고정하려면
-#: :func:`~korail_mobile_api.live.build_config_from_env` 를 써라.
+#: 특정 기종 대신 일부러 일반적인 문자열로 둡니다. 기종을 못 박으면(srtgo 는
+#: ``"SM-S928N"`` 을 씁니다) 화면 크기와 SDK 레벨까지 그 기종과 맞아야 하는데
+#: 그 조합을 확정할 근거가 없습니다. 실제 기기로 고정하려면
+#: :func:`~korail_mobile_api.live.build_config_from_env` 를 쓰면 됩니다.
 #:
-#: DynaPath 의 ``st`` 필드와 헷갈리지 마라. 그쪽은 따로 리터럴 ``"Android"``
-#: 다(``C1229b.java:135``). 철자가 같은 것이 뜻이 같은 것은 아니다.
+#: DynaPath 의 ``st`` 필드와 헷갈리지 않아야 합니다. 그쪽은 따로 리터럴
+#: ``"Android"`` 입니다(``C1229b.java:135``).
 KORAIL_DEFAULT_DEVICE_NAME = "Android"
 #: DynaPath 토큰의 ``os`` 필드, 즉 ``Build.VERSION.RELEASE`` — 안드로이드 15
-#: 면 ``"15"`` 인 마케팅 릴리스 문자열이다(``b/C1229b.java:128-131``).
-#: ``Build.VERSION.SDK_INT`` 가 아니다. SDK 정수는
-#: :data:`KORAIL_DEFAULT_ANDROID_SDK_INT` 쪽이다.
+#: 면 ``"15"`` 인 마케팅 릴리스 문자열입니다(``b/C1229b.java:128-131``).
+#: ``Build.VERSION.SDK_INT`` 가 아닙니다. SDK 정수는
+#: :data:`KORAIL_DEFAULT_ANDROID_SDK_INT` 쪽입니다.
 KORAIL_DEFAULT_ANDROID_OS_RELEASE = "15"
 KORAIL_DEFAULT_DEVICE_WIDTH = 1080
 KORAIL_DEFAULT_DEVICE_HEIGHT = 2400
 #: ``Build.VERSION.SDK_INT``. ``common.code.do`` 의 정수 ``@Field("OSVersion")``
-#: 로 나간다(``CommonService.java:32``). 35 는 안드로이드 15 의 SDK 레벨이라
+#: 로 나갑니다(``CommonService.java:32``). 35 는 안드로이드 15 의 SDK 레벨이라
 #: :data:`KORAIL_DEFAULT_ANDROID_OS_RELEASE` 와 같은 플랫폼을 다른 숫자로
-#: 가리킨다. 서로 바꿔 쓸 수 없다.
+#: 가리킵니다. 서로 바꿔 쓸 수 없습니다.
 KORAIL_DEFAULT_ANDROID_SDK_INT = 35
 
 
 def build_dalvik_user_agent(*, os_release: str, device_model: str) -> str:
-    """안드로이드 플랫폼 기본 User-Agent 를 앱이 보내는 모양으로 만든다.
+    """안드로이드 플랫폼 기본 User-Agent 를 앱이 보내는 모양으로 만듭니다.
 
-    ``com.korail.talk`` 는 User-Agent 를 하드코딩하지 않는다. Retrofit v1 을
+    ``com.korail.talk`` 는 User-Agent 를 하드코딩하지 않습니다. Retrofit v1 을
     ``UrlConnectionClient``/``HttpURLConnection`` 위에서 쓰므로
     (``ExecuteDao.java:7-11``) 서버가 보는 것은 플랫폼이 붙이는 Dalvik
-    문자열이고, 그것을 여기서 만든다.
+    문자열이고, 그것을 여기서 만듭니다.
 
-    이 문자열을 적는 곳은 여기 하나뿐이다. 기본 설정과
+    이 문자열을 적는 곳은 여기 하나뿐입니다. 기본 설정과
     :func:`~korail_mobile_api.live.build_config_from_env` 가 서로 다른 모양을
-    보내는 일을 막기 위해서다. 두 인자를 키워드 전용으로 한 것은
+    보내는 일을 막기 위해서입니다. 두 인자를 키워드 전용으로 한 것은
     ``(os_release, device_model)`` 과 그 반대가 둘 다 그럴듯해서, 뒤바꿔도
-    맞아 보이는 헤더가 나오기 때문이다.
+    맞아 보이는 헤더가 나오기 때문입니다.
 
-    진짜 플랫폼 문자열에는 끝에 ``Build/<id>`` 도 붙는다
+    진짜 플랫폼 문자열에는 끝에 ``Build/<id>`` 도 붙습니다
     (``Dalvik/2.1.0 (Linux; U; Android 13; SM-S928N Build/UP1A.231005.007)``).
-    여기서는 뺐다 — 실제로 로그인이 된 것이 이 네 조각짜리 형태이고, 기기
-    모델과 맞지도 않는 빌드 id 를 지어내면 검증 못 할 주장이 하나 늘 뿐이다.
+    여기서는 뺐습니다 — 실제로 로그인이 된 것이 이 네 조각짜리 형태이고, 기기
+    모델과 맞지도 않는 빌드 id 를 지어내면 검증 못 할 주장이 하나 늘 뿐입니다.
     """
     return f"Dalvik/2.1.0 (Linux; U; Android {os_release}; {device_model})"
 
 
 #: 기본 ``User-Agent``. 적어 넣은 값이 아니라
-#: :func:`build_dalvik_user_agent` 로 **유도된** 값이다.
+#: :func:`build_dalvik_user_agent` 로 **유도된** 값입니다.
 #:
-#: Python 패키지 이름이 든 User-Agent 로는 로그인이 거절된다. 진짜 앱은
+#: Python 패키지 이름이 든 User-Agent 로는 로그인이 거절됩니다. 진짜 앱은
 #: 파이썬 패키지 이름을 대지 않으므로, 그것은 ``smart.letskorail.com`` 으로
-#: 가는 요청이 실을 수 있는 가장 티 나는 값이다.
+#: 가는 요청이 실을 수 있는 가장 티 나는 값입니다.
 #:
 #: 여기 박히는 기기명과 릴리스는 DynaPath 토큰의 ``dm``/``os`` 필드가 싣는
-#: 것과 같은 두 상수에서 온다. 유도하는 이유가 그것이다 — 한 요청 안에서
+#: 것과 같은 두 상수에서 옵니다. 유도하는 이유가 그것입니다 — 한 요청 안에서
 #: User-Agent 와 토큰이 서로 다른 기기를 주장하면, 그것은 무해한 불일치가
-#: 아니라 둘이 서로 다른 데서 만들어졌다는 신호다.
+#: 아니라 둘이 서로 다른 데서 만들어졌다는 신호입니다.
 KORAIL_USER_AGENT = build_dalvik_user_agent(
     os_release=KORAIL_DEFAULT_ANDROID_OS_RELEASE,
     device_model=KORAIL_DEFAULT_DEVICE_NAME,
@@ -104,14 +103,14 @@ KORAIL_COMMON_CODE_BOOTSTRAP_CODES = (
 class KorailSeatClass(StrEnum):
     """요청이 지목하는 객실 등급(``txtPsrmClCd`` / ``psrmClCd``).
 
-    ``K4/o.java:7-9`` 는 셋을 선언한다 — ``GENERAL("일반실", "1")``,
-    ``SPECIAL("특실", "2")``, ``ALL``. 예약이 되는 것은 앞의 둘뿐이다.
+    ``K4/o.java:7-9`` 는 셋을 선언합니다 — ``GENERAL("일반실", "1")``,
+    ``SPECIAL("특실", "2")``, ``ALL``. 예약이 되는 것은 앞의 둘뿐입니다.
     예매 화면은 사용자가 고른 탭을 이 둘 중 하나로 바꾸고
     (``U4/a.java:88``), 그 값이 그대로 ``OSeat.setPsrmClCd`` 를 지나
-    이 패키지가 보내는 ``txtPsrmClCd1`` 이 된다(``c5/b.java:72``).
+    이 패키지가 보내는 ``txtPsrmClCd1`` 이 됩니다(``c5/b.java:72``).
 
     ``ALL`` 은 검색 쪽 와일드카드(``u4/b.java:101``)이지 앉을 수 있는 객실이
-    아니라서 여기 없다.
+    아니라서 여기 없습니다.
     """
 
     GENERAL = "1"
@@ -123,24 +122,24 @@ class KorailReservationJobType(StrEnum):
 
     넷 다 같은 경로(``certification.TicketReservation``,
     ``CertificationService.java:52-54``)에 같은 승객·좌석·여정 맵을 실어
-    보낸다. 차이는 job id 하나, 그리고 :attr:`SEAT_DESIGNATED` 일 때 붙는
-    ``OSrcar`` 맵 하나뿐이다.
+    보냅니다. 차이는 job id 하나, 그리고 :attr:`SEAT_DESIGNATED` 일 때 붙는
+    ``OSrcar`` 맵 하나뿐입니다.
 
     * :attr:`IMMEDIATE`(``"1101"``) — 예매 화면이 기본으로 들고 있는 값
       (``C5/a.java:59``). 곧이어 ``getOSrcar().clear()`` 를 부르므로
-      (``:118``) 평범한 예약은 좌석지정 키를 아예 싣지 않는다. 빈 맵은
-      ``@FieldMap`` 으로 나가면 필드가 하나도 되지 않기 때문이다. srtgo 가
-      무조건 붙이는 ``txtSrcarCnt="0"`` 은 앱이 보내지 않는 모양이다.
+      (``:118``) 평범한 예약은 좌석지정 키를 아예 싣지 않습니다. 빈 맵은
+      ``@FieldMap`` 으로 나가면 필드가 하나도 되지 않기 때문입니다. srtgo 가
+      무조건 붙이는 ``txtSrcarCnt="0"`` 은 앱이 보내지 않는 모양입니다.
     * :attr:`STANDBY`(``"1102"``) — 예약대기. 두 번째 예매 버튼을 누르면
-      설정된다(``DirectInquiryActivity.java:434``).
+      설정됩니다(``DirectInquiryActivity.java:434``).
     * :attr:`SEAT_DESIGNATED`(``"1103"``) — 좌석 선택이 돌아오는 순간
-      설정된다(``C5/a.java:143-146``). 선택 결과를 새 ``OSrcar`` 에 옮기면서
-      job id 를 바꾼다.
+      설정됩니다(``C5/a.java:143-146``). 선택 결과를 새 ``OSrcar`` 에
+      옮기면서 job id 를 바꿉니다.
     * :attr:`MERGE_STANDING`(``"1202"``) — 입석+좌석 예매. 병합예약을
-      이루는 두 예약 중 **첫 번째** 다. job id 만 다를 뿐 평범한 단일구간
-      폼이다(``a5/u.java:394-397``,
+      이루는 두 예약 중 **첫 번째** 입니다. job id 만 다를 뿐 평범한 단일구간
+      폼입니다(``a5/u.java:394-397``,
       ``DirectInquiryActivity.java:448-451``). 실제로 병합인 두 번째 예약은
-      :data:`KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` 쪽을 보라.
+      :data:`KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` 쪽을 참조하면 됩니다.
     """
 
     IMMEDIATE = "1101"
@@ -150,51 +149,52 @@ class KorailReservationJobType(StrEnum):
 
 
 #: 열차가 예약대기 대상이 되는 ``h_wait_rsv_flg`` 값. 두 글자, **공백 다음
-#: 9** 다.
+#: 9** 입니다.
 #:
-#: 앱은 검색 행의 ``h_wait_rsv_flg`` 를 이 리터럴하고만 비교한다
+#: 앱은 검색 행의 ``h_wait_rsv_flg`` 를 이 리터럴하고만 비교합니다
 #: (``smali/U4/a.smali:1250-1290``. jadx 가 풀지 못한 ``U4.a.b()`` 안이라
-#: 바이트코드에서 읽었다). 그 결과가 ``bundle.putBoolean("wait", ...)`` 로
-#: 실리고(:1969-1981), 그 불리언이 예약대기 버튼을 켜는 유일한 입력이다
+#: 바이트코드에서 읽었습니다). 그 결과가 ``bundle.putBoolean("wait", ...)`` 로
+#: 실리고(:1969-1981), 그 불리언이 예약대기 버튼을 켜는 유일한 입력입니다
 #: (``a5/k.java:120-126`` → ``a5/u.java:371`` → :401).
 #:
-#: 예약대기 판정에 ``h_gen_rsv_cd`` 는 쓰이지 않는다 — 매진 여부가 아니라
-#: 이 플래그가 기준이다. 두 칸 오른쪽 정렬이라 리터럴 앞에 공백이 붙는다.
+#: 예약대기 판정에 ``h_gen_rsv_cd`` 는 쓰이지 않습니다 — 매진 여부가 아니라
+#: 이 플래그가 기준입니다. 두 칸 오른쪽 정렬이라 리터럴 앞에 공백이 붙습니다.
 KORAIL_STANDBY_WAIT_FLAG = " 9"
 
 #: "이 예약은 예약대기다, 알림 옵션을 받아 가라"를 뜻하는 예약 응답 메시지
 #: 코드. ``ui/inquiry/rir/orr/a.java:222-225`` 는 오직 이 코드에서만
-#: ``ReservationWaitActivity`` 로 넘어간다.
+#: ``ReservationWaitActivity`` 로 넘어갑니다.
 #:
-#: 실패 코드가 아니다. ``strResult`` 는 여전히 ``SUCC`` 이고 PNR 도 나온다.
+#: 실패 코드가 아닙니다. ``strResult`` 는 여전히 ``SUCC`` 이고 PNR 도
+#: 나옵니다.
 KORAIL_STANDBY_HOLD_MESSAGE_CODE = "IRR000014"
 
 #: 할인카드(N카드) 하나에 등록할 수 있는 최대 구간 수.
 #:
-#: 앱은 구간 수마다 예매 Activity 를 따로 두고 셋에서 멈춘다
+#: 앱은 구간 수마다 예매 Activity 를 따로 두고 셋에서 멈춥니다
 #: (``NCard1SectionBookingActivity`` ~ ``NCard3SectionBookingActivity`` 와
 #: 각각의 v2). ``K4/f.java:5-11`` 도 ``SECTIONONE``/``TWO``/``THREE`` 만
-#: 선언하고 넷째가 없으며, 네 구간짜리 상품코드도 없다.
+#: 선언하고 넷째가 없으며, 네 구간짜리 상품코드도 없습니다.
 KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
 
 #: "이 좌석은 할인카드(N카드)로 산다"를 뜻하는 할인종류 코드. 앱이 이 값을
 #: 쓰는 곳은 ``w4/a.java:100`` 하나, 되읽는 곳은 ``t4/a.java:59-61`` 의
-#: ``isNCard()`` 하나뿐이다.
+#: ``isNCard()`` 하나뿐입니다.
 KORAIL_DISCOUNT_CARD_DISCOUNT_CODE = "153"
 
 #: N카드 예약의 ``txtMenuId``. 평범한 예매 화면은 ``"11"`` 을 보내고
-#: (``w4/a.java:115``), 좌석지정 화면은 ``"A2"`` 를 얹는다
+#: (``w4/a.java:115``), 좌석지정 화면은 ``"A2"`` 를 얹습니다
 #: (``SeatAssignBookingActivity.java:159``. 정기권이면 ``"A1"``).
-#: 승객 블록 밖에서 N카드 예약이 바꾸는 스칼라는 이 하나뿐이다.
+#: 승객 블록 밖에서 N카드 예약이 바꾸는 스칼라는 이 하나뿐입니다.
 KORAIL_DISCOUNT_CARD_MENU_ID = "A2"
 
 
 #: 예약 하나가 실을 수 있는 최대 승객 수.
 #:
-#: 예매 화면의 승객 선택기가 기준이다. ``m5/d.java:32-33`` 이 최소 0·최대 9
+#: 예매 화면의 승객 선택기가 기준입니다. ``m5/d.java:32-33`` 이 최소 0·최대 9
 #: 로 만들고, ``m5/c.java:250-252`` 는 합계가 그 최대에 닿으면 더 이상 늘리지
-#: 않는다. 개별 종류도 각각 9 가 상한이라(``m5/c.java:110-118``) 9 는 합계의
-#: 상한이자 한 줄의 상한이다.
+#: 않습니다. 개별 종류도 각각 9 가 상한이라(``m5/c.java:110-118``) 9 는
+#: 합계의 상한이자 한 줄의 상한입니다.
 KORAIL_MAX_PASSENGERS_PER_RESERVATION = 9
 
 
@@ -287,27 +287,28 @@ KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE = "21"
 KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE = "22"
 
 #: 검색 행을 병합 대상으로 만드는 ``h_yms_apl_flg`` 값을 객실 등급별로 모은
-#: 표. 일반실은 ``"A"`` 또는 ``"G"``, 특실은 ``"A"`` 또는 ``"S"`` 다.
+#: 표. 일반실은 ``"A"`` 또는 ``"G"``, 특실은 ``"A"`` 또는 ``"S"`` 입니다.
 #:
-#: ``S4/J.java:61-63`` 의 식을 등급마다 풀면 이 두 집합으로 접힌다 — ``"M"``
+#: ``S4/J.java:61-63`` 의 식을 등급마다 풀면 이 두 집합으로 접힙니다 — ``"M"``
 #: 가지는 결국 ``"G".equals("M")`` 에 닿아 항상 거짓이라 아무것도 바꾸지
-#: 않는다. 키는 :class:`KorailSeatClass` 의 값이라 객실 코드와 어긋날 수 없다.
+#: 않습니다. 키는 :class:`KorailSeatClass` 의 값이라 객실 코드와 어긋날 수
+#: 없습니다.
 KORAIL_MERGE_SEAT_FLAGS_BY_CABIN = {
     "1": frozenset({"A", "G"}),
     "2": frozenset({"A", "S"}),
 }
 
-#: 예약 하나가 실을 수 있는 최대 구간 수. 둘이다.
+#: 예약 하나가 실을 수 있는 최대 구간 수. 둘입니다.
 #:
-#: 결정적인 근거는 폼에 3구간 철자가 아예 없다는 것이다 — 세 번째 구간은
-#: 무시되는 게 아니라 2구간을 조용히 덮어쓴다. ``OSeat.java:32-35`` 와
+#: 결정적인 근거는 폼에 3구간 철자가 아예 없다는 것입니다 — 세 번째 구간은
+#: 무시되는 게 아니라 2구간을 조용히 덮어씁니다. ``OSeat.java:32-35`` 와
 #: ``OSrcar.java:21-30`` 은 ``i == 1`` 이냐 아니냐로만 키를 나누고,
-#: ``ReservationRequest.java:114-117`` 도 그 두 좌석 칸만 되읽는다.
+#: ``ReservationRequest.java:114-117`` 도 그 두 좌석 칸만 되읽습니다.
 #:
-#: 검색·선택 쪽도 둘을 넘기지 않는다. ``a5/k.java:108-110`` 은 여정 빌더에
+#: 검색·선택 쪽도 둘을 넘기지 않습니다. ``a5/k.java:108-110`` 은 여정 빌더에
 #: 넘길 배열을 한 행 아니면 정확히 두 행으로 만들고,
 #: ``a5/k.java:156-170`` 은 환승 결과를 ``new Bundle[2]`` 로 묶으며,
-#: ``a5/u.java:252-253`` 은 두 칸(둘째는 널 허용)으로만 넘긴다.
+#: ``a5/u.java:252-253`` 은 두 칸(둘째는 널 허용)으로만 넘깁니다.
 KORAIL_MAX_JOURNEY_LEGS = 2
 
 # ---------------------------------------------------------------------------
@@ -338,32 +339,33 @@ KORAIL_NETFUNNEL_URL = "https://nf.letskorail.com"
 KORAIL_NETFUNNEL_PATH = "/ts.wseq"
 KORAIL_NETFUNNEL_SERVICE_ID = "service_1"
 #: 대기열 타임아웃(초). ``KTApplication.java:85`` 의 ``setTimeout(3)`` 이며
-#: 연결과 소켓 양쪽에 걸린다(``U6/a.java:150-153``). API 클라이언트의 60초보다
-#: 훨씬 짧다 — 빨리 답하지 않는 대기실은 기다릴 값어치가 없다는 앱의 판단이다.
+#: 연결과 소켓 양쪽에 걸립니다(``U6/a.java:150-153``). API 클라이언트의
+#: 60초보다 훨씬 짧습니다 — 빨리 답하지 않는 대기실은 기다릴 값어치가 없다는
+#: 앱의 판단입니다.
 KORAIL_NETFUNNEL_TIMEOUT_SECONDS = 3.0
 
 
 class KorailNetFunnelAction(StrEnum):
     """대기열 액션 id 여덟 개 전부(``K4/g.java:43-51``).
 
-    액션 하나가 줄 하나다. ``act_8`` 과 ``act_8_2`` 는 둘 다 ``service_1``
-    위의 열차조회지만 서버는 따로 계량한다 — :attr:`PEAK_SEASON_INQUIRY` 가
-    따로 있는 이유가 그것이다.
+    액션 하나가 줄 하나입니다. ``act_8`` 과 ``act_8_2`` 는 둘 다 ``service_1``
+    위의 열차조회지만 서버는 따로 계량합니다 — :attr:`PEAK_SEASON_INQUIRY` 가
+    따로 있는 이유가 그것입니다.
 
-    여덟 중 여섯만 APK 에 호출 지점이 있다. 선언만 되고 쓰이지 않는 것은
-    앱 v6.5.0 의 사정일 뿐, 서버 쪽 액션은 이 앱이 부르든 말든 존재한다.
+    여덟 중 여섯만 APK 에 호출 지점이 있습니다. 선언만 되고 쓰이지 않는 것은
+    앱 v6.5.0 의 사정일 뿐, 서버 쪽 액션은 이 앱이 부르든 말든 존재합니다.
     """
 
-    #: 일반 조회. SDK 전역 기본값이기도 하다(``KTApplication.java:84``). 앱
-    #: 안의 대기열 시험 화면도 이것을 쓴다
+    #: 일반 조회. SDK 전역 기본값이기도 합니다(``KTApplication.java:84``). 앱
+    #: 안의 대기열 시험 화면도 이것을 씁니다
     #: (``com/korail/talk/test/NetfunnelTestActivity.java:54``).
     INQUIRY = "act_8"
-    #: 성수기 조회. 성수기 출발일에는 별도의 줄이다(``b5/c.java:439``,
+    #: 성수기 조회. 성수기 출발일에는 별도의 줄입니다(``b5/c.java:439``,
     #: ``MainBookingActivity.java:749``, ``OldMainBookingActivity.java:321``).
     #: :func:`~korail_mobile_api.netfunnel.inquiry_action` 참조.
     PEAK_SEASON_INQUIRY = "act_8_2"
     #: 상품(관광열차) 조회. 요청이 ``ProductTrainInquiryRequest`` 면 성수기
-    #: 판단보다 먼저 이쪽으로 간다(``b5/c.java:439``).
+    #: 판단보다 먼저 이쪽으로 갑니다(``b5/c.java:439``).
     PRODUCT = "act_6"
     #: 예약. ``DirectInquiryActivity.java:442``(예약대기), :469(일반 예약),
     #: :499(공무원 인증 변형).
@@ -372,26 +374,26 @@ class KorailNetFunnelAction(StrEnum):
     PAY = "act_18"
     #: 예약목록. ``com/korail/talk/ui/menu/ReservedTicketActivity.java:553``.
     RESERVED = "act_21"
-    #: 환불. ``K4/g.java:47`` 에 선언돼 있으나 APK 어디에서도 참조하지 않는다 —
-    #: 환불 흐름에는 대기열 게이트가 걸려 있지 않다.
+    #: 환불. ``K4/g.java:47`` 에 선언돼 있으나 APK 어디에서도 참조하지
+    #: 않습니다 — 환불 흐름에는 대기열 게이트가 걸려 있지 않습니다.
     REFUND = "act_22"
-    #: 테스트. ``K4/g.java:50`` 에 선언돼 있고 역시 참조하는 곳이 없다. 앱의
-    #: NetFunnel 시험 화면조차 ``act_8`` 로 건다.
+    #: 테스트. ``K4/g.java:50`` 에 선언돼 있고 역시 참조하는 곳이 없습니다.
+    #: 앱의 NetFunnel 시험 화면조차 ``act_8`` 로 겁니다.
     TEST = "act_4"
 
 
 class KorailNetFunnelOpcode(StrEnum):
     """대기열 요청 종류(``T6/c.java:6-11``) 그대로.
 
-    SRT 의 ``netfunnel.js`` 가 선언하는 표와 바이트 단위로 같다. 두 앱이
+    SRT 의 ``netfunnel.js`` 가 선언하는 표와 바이트 단위로 같습니다. 두 앱이
     서로 다른 시스템이 아니라 같은 제품(STCLab NetFunnel)의 클라이언트 SDK
-    를 각각 품고 있다는 뜻이다.
+    를 각각 품고 있다는 뜻입니다.
 
     :attr:`ALIVE_NOTICE`, :attr:`INIT`, :attr:`STOP` 은 앱이 선언하니 여기도
-    선언만 하고 구현하지 않았다. ``ALIVE_NOTICE`` 는 화면에 떠 있는 대기열
+    선언만 하고 구현하지 않았습니다. ``ALIVE_NOTICE`` 는 화면에 떠 있는 대기열
     팝업을 살려 두는 용도인데(``T6/g.java:517-527``) 이 라이브러리는 아무
-    화면도 그리지 않는다. ``Init``/``Stop`` 은 관리용이고, 앱의 SDK 자신이
-    네트워크에 닿지도 않고 ``ErrorNotSupport`` 를 던진다
+    화면도 그리지 않습니다. ``Init``/``Stop`` 은 관리용이고, 앱의 SDK 자신이
+    네트워크에 닿지도 않고 ``ErrorNotSupport`` 를 던집니다
     (``T6/d.java:115-121``).
     """
 
@@ -405,7 +407,7 @@ class KorailNetFunnelOpcode(StrEnum):
 
 DYNAPATH_HEADER_NAME = "x-dynapath-m-token"
 KORAIL_LOGIN_PATH = "/classes/com.korail.mobile.login.Login"
-#: 앱이 DynaPath 토큰을 실어 보내는 경로. 켜져 있으면 여기에만 붙는다.
+#: 앱이 DynaPath 토큰을 실어 보내는 경로. 켜져 있으면 여기에만 붙습니다.
 DYNAPATH_ALLOWLIST_PATHS = frozenset(
     {
         "/classes/com.korail.mobile.certification.TicketReservation",
@@ -417,10 +419,11 @@ DYNAPATH_ALLOWLIST_PATHS = frozenset(
     }
 )
 #: 토큰 **없이는 통하지 않는** 경로. 꺼진 설정으로 부르면 전송 전에
-#: :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError` 로 막힌다.
+#: :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError` 로 막힙니다.
 #:
-#: 허용목록과 같지 않고 더 좁다. 토큰 없이 관측된 결과가 갈렸기 때문이다 —
-#: 검색을 비롯한 읽기는 토큰 없이 성공했고 ``login.Login`` 만 거절당했다.
-#: 관측되지 않은 것을 막으면 잘 되던 읽기를 이 패키지가 끊는 셈이므로,
-#: 근거가 있는 하나만 요구한다. 다른 경로에서 거절이 관측되면 여기 추가한다.
+#: 허용목록과 같지 않고 더 좁습니다. 토큰 없이 관측된 결과가 갈렸기
+#: 때문입니다 — 검색을 비롯한 읽기는 토큰 없이 성공했고 ``login.Login`` 만
+#: 거절당했습니다. 관측되지 않은 것을 막으면 잘 되던 읽기를 이 패키지가 끊는
+#: 셈이므로, 근거가 있는 하나만 요구합니다. 다른 경로에서 거절이 관측되면
+#: 여기 추가하면 됩니다.
 DYNAPATH_REQUIRED_PATHS = frozenset({KORAIL_LOGIN_PATH})
