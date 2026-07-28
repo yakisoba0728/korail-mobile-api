@@ -173,12 +173,13 @@ class MaasMenuListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class KorailStation:
-    """역 하나. :meth:`~korail_mobile_api.client.KorailClient.get_station_data`
-    가 주는 전체 역 목록의 한 줄이다.
+    """역 하나.
 
-    ``code`` 와 ``name`` 이 짝이다. 열차 검색 폼에는 코드가 아니라 **이름** 이
-    나가므로, 코드로 검색하면 클라이언트가 이 목록을 한 번 조회해 이름으로
-    바꾼다.
+    :meth:`~korail_mobile_api.client.KorailClient.get_station_data` 가 주는
+    전체 역 목록의 한 줄이다. ``code`` 와 ``name`` 이 짝이다.
+
+    열차 검색 폼에는 코드가 아니라 **이름** 이 나가므로, 코드로 검색하면
+    클라이언트가 이 목록을 한 번 조회해 이름으로 바꾼다.
 
     ``popup_*`` 는 그 역을 고르면 앱이 띄우는 안내다(공사 중 등).
     """
@@ -372,8 +373,8 @@ def _train_scalar(value: Any, key: str) -> str | None:
     """
     if value is None or isinstance(value, str):
         return value
-    # `type(...) is int` on purpose: bool is an int subclass, and True is not
-    # a number KORAIL ever sends for one of these fields.
+    # isinstance 가 아니라 type(...) is int 인 것은 의도다. bool 이 int 의
+    # 하위 타입이고, True 는 KORAIL 이 이런 필드로 보내는 숫자가 아니다.
     if type(value) is int:
         return str(value)
     raise KorailProtocolError(
@@ -667,9 +668,9 @@ class SeatAttribute:
 @dataclass(frozen=True)
 class SeatCar:
     """호차 하나의 남은 좌석 요약.
-    :meth:`~korail_mobile_api.client.KorailClient.get_seat_cars` 결과의 한 줄.
 
-    ``car_no`` 가 그대로
+    :meth:`~korail_mobile_api.client.KorailClient.get_seat_cars` 결과의 한
+    줄이다. ``car_no`` 가 그대로
     :meth:`~korail_mobile_api.client.KorailClient.get_seat_inventory` 에
     넘길 호차 번호다. ``attributes`` 는 그 호차가 가진 좌석 속성(유아동반,
     휠체어 등)이며 코드와 이름이 함께 온다.
@@ -728,9 +729,9 @@ class SeatWindow:
 @dataclass(frozen=True)
 class SeatInventoryResponse(BaseKorailResponse):
     """한 호차의 좌석표.
-    :meth:`~korail_mobile_api.client.KorailClient.get_seat_inventory` 결과.
 
-    ``seats`` 가 좌석 하나하나, ``windows`` 는 창문 위치 비율이라 좌석표를
+    :meth:`~korail_mobile_api.client.KorailClient.get_seat_inventory` 가
+    돌려준다. ``seats`` 가 좌석 하나하나, ``windows`` 는 창문 위치 비율이라 좌석표를
     그릴 때만 쓴다. ``car_no`` 는 서버가 되돌려 준 호차 번호(``scar_no``)이며,
     :meth:`~korail_mobile_api.mutation_models.KorailSeatAssignment.from_inventory`
     가 이 값을 요구한다 — 없으면 호차를 직접 적어야 한다.

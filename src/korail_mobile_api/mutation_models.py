@@ -89,8 +89,8 @@ class KorailPassengerCounts:
             "guide_dog",
         ):
             value = getattr(self, name)
-            # type(...) is int, not isinstance: bool is an int subclass and
-            # True is not a passenger count.
+            # isinstance 가 아니라 type(...) is int. bool 이 int 의 하위
+            # 타입이고, True 는 승객 수가 아니다.
             if type(value) is not int or value < 0:
                 raise ValueError(
                     f"{name} must be a non-negative integer"
@@ -152,9 +152,10 @@ class KorailSeatAssignment:
     seat_no: str
 
     def __post_init__(self) -> None:
-        # type(...) is int, not isinstance: bool is an int subclass and True is
-        # not a car number. Matches validate_seat_inventory_inputs' car_no rule
-        # so a car that could be read cannot be rejected here and vice versa.
+        # isinstance 가 아니라 type(...) is int. bool 이 int 의 하위 타입이고,
+        # True 는 호차 번호가 아니다. validate_seat_inventory_inputs 의 car_no
+        # 규칙과 같게 두어, 조회할 수 있었던 호차가 여기서 거절되거나 그 반대가
+        # 되는 일이 없게 한다.
         if type(self.car_no) is not int or self.car_no < 1:
             raise ValueError("car_no must be a positive integer")
         seat_no = self.seat_no

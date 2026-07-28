@@ -80,7 +80,9 @@ class MutationConsent:
     :meth:`~korail_mobile_api.client.KorailClient.pay_with_card` 가 통과한다.
     기본값 그대로는 :meth:`~korail_mobile_api.client.KorailClient.pay_with_fake_card`
     쪽만 열린다. 둘 다 켠 consent 는 모순이라 어느 쪽으로도 해석하지 않고
-    거절한다 — 모호한 consent 가 바로 결제를 보내면 안 되는 상태다.
+    거절한다 — 모호한 consent 가 바로 결제를 보내면 안 되는 상태다. 둘 다
+    끈 consent 도 같은 이유로 거절한다. 어느 종류의 카드인지 아무 주장도
+    하지 않은 것이기 때문이다.
 
     카드 종류 주장이 결제를 열어 주지는 않는다. 카드번호를 들여다보는 코드는 없고,
     실제 청구를 가르는 것은 ``allow_payment`` 와 ``dry_run`` 이다.

@@ -185,7 +185,7 @@ class KorailAppError(KorailApiError):
     """서버가 앱 수준 실패로 답했다 — ``h_msg_cd`` 분류의 뿌리.
 
     ``strResult == "FAIL"`` 이거나 ``h_msg_cd`` 가 ``WRC000288`` 일 때
-    올라간다. 아래 여덟 하위 클래스는 전부 **세분화** 일 뿐이라
+    올라간다. 아래 하위 클래스는 전부 **세분화** 일 뿐이라
     ``except KorailAppError`` 로 하나도 빠짐없이 잡힌다. 매핑되지 않은
     코드는 이 클래스 그대로 온다.
 
@@ -432,58 +432,55 @@ class KorailMutationNotAllowedError(KorailApiError):
 # ---------------------------------------------------------------------------
 # h_msg_cd -> exception mapping
 #
-# CODES, NOT MESSAGE TEXT, because that is what the app does. Every branch in
-# the dispatcher compares gethMsgCd() against a literal
-# (BaseActivity.java:600-649); the app never substring-matches h_msg_txt, it only
-# displays it, <br>-to-newline and all (:625). The one place the app reads Korean
-# text at all is the TRAIN LIST, where "매진"/"좌석부족" in a row's display state
-# gate the booking button (a5/u.java:354) -- a rendering decision about data we
-# already parse, not an error classification.
+# 메시지 문구가 아니라 코드로 가른다. 앱이 그렇게 하기 때문이다. 디스패처의
+# 모든 분기가 gethMsgCd() 를 리터럴과 비교하고(BaseActivity.java:600-649),
+# h_msg_txt 는 부분 문자열로 맞춰 보는 일 없이 그저 화면에 찍기만 한다(:625).
+# 앱이 한국어 문구를 실제로 읽는 곳은 열차 목록 하나뿐인데, 거기서 행의 표시
+# 상태에 든 "매진"/"좌석부족" 이 예매 버튼을 막는다(a5/u.java:354). 그것은
+# 우리가 이미 파싱하는 데이터를 어떻게 그릴지의 문제이지 오류 분류가 아니다.
 #
-# WHAT THIS MAP MAY NOT DO. It may only refine an exception that would already
-# have been raised. Failure is decided by strResult (plus the app's own
-# WRC000288), never by the code, and the app itself drops any unrecognised code
-# on a non-FAIL response straight through to onReceive() as a success
-# (BaseActivity.java:629, `aVar = null`). The app is full of codes that ride
-# along with a success and must never become exceptions:
+# 이 매핑이 해서는 안 되는 일. 이미 올라가기로 정해진 예외를 더 좁히는 것만
+# 할 수 있다. 실패인지는 strResult(와 앱 자신의 WRC000288)가 정하지 코드가
+# 정하지 않으며, 앱도 FAIL 이 아닌 응답에 실린 모르는 코드는 그대로 성공으로
+# 흘려보낸다(BaseActivity.java:629 의 `aVar = null`). 성공에 얹혀 오는, 결코
+# 예외가 되어서는 안 되는 코드가 앱에 가득하다:
 #
-#   IRR000014  waitlist accepted -> starts ReservationWaitActivity
+#   IRR000014  예약대기 접수 -> ReservationWaitActivity 로 이동
 #              (ui/inquiry/rir/orr/a.java:223)
-#   IRT800005  reservation succeeded with a notice; both dialog branches call the
-#              same z2(response) continuation (ui/inquiry/rir/orr/a.java:142, :71)
-#   WRS800036  per-leg advisory, purchase continues
+#   IRT800005  안내와 함께 예약 성공. 대화상자의 두 분기가 같은 z2(response)
+#              연속 처리를 부른다 (ui/inquiry/rir/orr/a.java:142, :71)
+#   WRS800036  구간별 안내. 구매는 계속된다
 #              (ui/reservation/confirm/activity/DReservationConfirmActivity.java:76)
-#   IRZ000001 / S200   login success (S4/u.java:131)
-#   IRT000000 / MRT200105  upgrade quote accepted (ui/push/SpecialRoomUpgradeActivity.java:55)
+#   IRZ000001 / S200   로그인 성공 (S4/u.java:131)
+#   IRT000000 / MRT200105  업그레이드 견적 수락 (ui/push/SpecialRoomUpgradeActivity.java:55)
 #
-# and WRR664296 ("KTX/새마을호/ITX-청춘 열차의 경로 및 장애인(4-6급)할인은
-# 토/일/공휴일에는 적용되지 않습니다.") arrives with strResult=SUCC and a real,
-# cancelable PNR -- a WARNING attached to a SUCCESSFUL reservation. Because
-# classification never introduces a raise, none of these can become an error
-# here. tests/test_error_classification.py pins that.
+# WRR664296("KTX/새마을호/ITX-청춘 열차의 경로 및 장애인(4-6급)할인은
+# 토/일/공휴일에는 적용되지 않습니다.")은 strResult=SUCC 와 취소 가능한 실제
+# PNR 을 달고 온다 -- 성공한 예약에 붙은 경고다. 분류가 새로운 raise 를
+# 만들지 않으므로 이 중 어느 것도 여기서 오류가 될 수 없다.
+# tests/test_error_classification.py 가 그것을 고정한다.
 #
-# NOT ENCODED, deliberately:
-#   IRT010110  srtgo's second sold-out code (srtgo/srtgo/ktx.py:388) -- 0-hit in
-#              jadx, all three smali trees, analysis/raw and analysis/splits.
-#   "MACRO"    srtgo_plus's anti-macro substring test (srtgo/srtgo.py:756) -- the
-#              app's anti-macro refusal is a DynaPath-Result header, see
-#              KorailDynaPathError.
-#   S198       the app special-cases it, but ONLY for dao_verify_maas_status
-#              (BaseActivity.java:621, ui/menu/BasketTicketActivity.java:811), a
-#              MaaS surface this library does not implement. Promoting an
-#              endpoint-scoped code to a global rule would misfile it everywhere
-#              else.
+# 일부러 넣지 않은 것:
+#   IRT010110  srtgo 의 두 번째 매진 코드(srtgo/srtgo/ktx.py:388). jadx,
+#              smali 세 트리, analysis/raw, analysis/splits 전부에서 0건.
+#   "MACRO"    srtgo_plus 의 안티매크로 부분 문자열 검사(srtgo/srtgo.py:756).
+#              이 앱의 안티매크로 거절은 DynaPath-Result 헤더다 --
+#              KorailDynaPathError 참조.
+#   S198       앱이 특별 취급하지만 dao_verify_maas_status 에서만 그렇다
+#              (BaseActivity.java:621, ui/menu/BasketTicketActivity.java:811).
+#              이 라이브러리가 구현하지 않는 MaaS 표면이다. 엔드포인트 하나에
+#              한정된 코드를 전역 규칙으로 올리면 나머지 전부에서 오분류된다.
 #   ERT800077  "좌석변경 중 문제가 발생하였습니다. 다시 시도해주세요."
-#              (TCSOptionsActivity.java:555) -- the app's own text invites a
-#              retry, and this library adds no retry logic, so it stays a plain
-#              KorailAppError rather than gaining a class that implies one.
-#   "[3]인증정보에 문제가 있습니다."  seen once live on a seat-inventory read after
-#              a burst of calls. NO h_msg_cd was captured with it and the string
-#              is 0-hit in the APK, so there is nothing to key on; classifying it
-#              would mean matching Korean text, which is the practice this map
-#              exists to replace. Its trigger is unconfirmed -- plausibly rate
-#              limiting, plausibly a DynaPath or session problem. It surfaces as
-#              a plain KorailAppError with its message intact.
+#              (TCSOptionsActivity.java:555). 앱 자신의 문구가 재시도를
+#              권하는데 이 라이브러리에는 재시도 로직이 없다. 재시도를
+#              암시하는 클래스를 주지 않고 밋밋한 KorailAppError 로 둔다.
+#   "[3]인증정보에 문제가 있습니다."  좌석 조회를 몰아친 뒤 한 번 관측됐다.
+#              h_msg_cd 가 함께 잡히지 않았고 문자열도 APK 에 0건이라 키로
+#              삼을 것이 없다. 분류하려면 한국어 문구를 맞춰 봐야 하는데,
+#              그것이 바로 이 매핑이 대신하려는 방식이다. 무엇이 이것을
+#              부르는지는 확인되지 않았다 -- 속도 제한일 수도, DynaPath 나
+#              세션 문제일 수도 있다. 메시지를 그대로 단 밋밋한
+#              KorailAppError 로 올라온다.
 # ---------------------------------------------------------------------------
 
 #: 요청은 이해됐고 맞는 것이 없었다. ``WRG000000``/``P114`` 는 앱이 빈 화면
