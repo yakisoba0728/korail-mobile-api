@@ -414,9 +414,8 @@ def assert_mutation_route_category(path: str, category: str) -> None:
         )
 
 
-#: The three fields ``mutation_payloads._common_fields`` puts on EVERY mutation
-#: form. A form that reaches the send boundary without them was not built by a
-#: builder in this package.
+#: ``mutation_payloads._common_fields`` 가 **모든** 변경 폼에 넣는 세 필드.
+#: 이것 없이 전송 경계에 닿은 폼은 이 패키지의 빌더가 만든 것이 아니다.
 KORAIL_MUTATION_COMMON_FIELDS = frozenset({"Device", "Version", "Key"})
 
 
@@ -517,8 +516,8 @@ KORAIL_NETFUNNEL_QUERY_CONTRACTS: dict[str, tuple[str, ...]] = {
     KorailNetFunnelOpcode.SET_COMPLETE.value: ("opcode", "key"),
 }
 
-#: Opcodes whose request carries the slot key. Kept as data beside the contracts
-#: so "which opcode has which field" is answerable by reading, not by tracing.
+#: 요청에 슬롯 키를 싣는 opcode. "어느 opcode 에 어느 필드가 있는가"를 코드를
+#: 따라가지 않고 읽어서 답할 수 있도록 계약 옆에 데이터로 둔다.
 KORAIL_NETFUNNEL_KEYED_OPCODES = frozenset(
     {
         KorailNetFunnelOpcode.CHK_ENTER.value,
@@ -526,9 +525,9 @@ KORAIL_NETFUNNEL_KEYED_OPCODES = frozenset(
     }
 )
 
-#: The only action ids that may appear in an ``aid``. All eight the app declares
-#: (``K4/g.java:43-51``) — including the two it never calls — and nothing else,
-#: so ``aid`` cannot become a free-text field a bug smuggles a value through.
+#: ``aid`` 에 나타날 수 있는 액션 id 전부. 앱이 선언한 여덟 개
+#: (``K4/g.java:43-51``)이며 한 번도 부르지 않는 둘까지 포함하고, 그 밖은
+#: 없다. ``aid`` 가 자유 문자열 필드가 되지 않게 하기 위해서다.
 KORAIL_NETFUNNEL_ACTION_IDS = frozenset(
     action.value for action in KorailNetFunnelAction
 )
@@ -612,22 +611,22 @@ KORAIL_NETFUNNEL_KEY_RE = re.compile(r"[A-Za-z0-9_.:@~-]{1,512}")
 #     grants no reach that the client did not already have.
 # ---------------------------------------------------------------------------
 
-#: The node label a queue reply may name. See the block comment above for why
-#: each part of this is as tight as it is.
+#: 대기열 응답이 가리킬 수 있는 노드 이름. 각 부분을 왜 이만큼 좁혔는지는
+#: 위의 블록 주석에 있다.
 KORAIL_NETFUNNEL_NODE_HOST_RE = re.compile(r"rnf[1-9][0-9]?\.letskorail\.com")
 
-#: The only port a named node may be on. Observed as 443 on every reply, and the
-#: only port :func:`assert_korail_netfunnel_origin` permits for the front door.
+#: 지목된 노드에 허용되는 유일한 포트. 관측된 모든 응답이 443 이었고,
+#: :func:`assert_korail_netfunnel_origin` 이 정문에 허용하는 포트도 그것뿐이다.
 KORAIL_NETFUNNEL_NODE_PORT = 443
 
-#: The opcodes that belong to an ESTABLISHED SESSION and therefore go to the node
-#: that issued it. ``5101`` is deliberately absent: the entry call is the one the
-#: front door balances, and it has no previous reply to name a node anyway.
+#: **이미 성립한 세션**에 속하는 opcode. 그래서 그 세션을 발급한 노드로 간다.
+#: ``5101`` 은 일부러 빠져 있다. 진입 호출은 정문이 분산하는 것이고, 노드를
+#: 가리킬 앞선 응답도 없다.
 #:
-#: This coincides with :data:`KORAIL_NETFUNNEL_KEYED_OPCODES` today, and not by
-#: accident — a session is identified by its key and lives on its node, so the
-#: opcodes that carry one are the opcodes that must reach the other. They stay
-#: separate constants because they answer different questions.
+#: 지금은 :data:`KORAIL_NETFUNNEL_KEYED_OPCODES` 와 같은 집합이며 우연이
+#: 아니다 — 세션은 키로 식별되고 자기 노드에 살기 때문에, 키를 싣는 opcode 가
+#: 곧 노드에 닿아야 하는 opcode 다. 서로 다른 질문에 답하므로 상수는 따로
+#: 둔다.
 KORAIL_NETFUNNEL_NODE_OPCODES = frozenset(
     {
         KorailNetFunnelOpcode.CHK_ENTER.value,

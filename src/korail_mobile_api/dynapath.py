@@ -239,21 +239,20 @@ def build_default_token_settings() -> DynapathTokenSettings:
 
 @dataclass(frozen=True)
 class DynapathConfig:
-    #: Whether a DynaPath token is attached to the allowlisted paths.
+    #: allowlist 경로에 DynaPath 토큰을 붙일지.
     #:
-    #: **FALSE here, and TRUE for a bare** :class:`KorailConfig`. The two are
-    #: not in conflict: this class also has to be constructible as the explicit
-    #: OPT-OUT (``KorailConfig(dynapath=DynapathConfig())``), and the default
-    #: token settings that make ``enabled`` useful are attached by
-    #: :class:`~korail_mobile_api.config.KorailConfig`'s own default factory
-    #: rather than here.
+    #: **여기서는 False 이고 맨손** :class:`KorailConfig` **에서는 True 다.**
+    #: 모순이 아니다. 이 클래스는 명시적 opt-out
+    #: (``KorailConfig(dynapath=DynapathConfig())``)으로도 만들어질 수 있어야
+    #: 하고, ``enabled`` 를 쓸모 있게 만드는 기본 토큰 설정은 여기가 아니라
+    #: :class:`~korail_mobile_api.config.KorailConfig` 의 default factory 가
+    #: 붙인다.
     #:
-    #: Defaulting ``enabled`` and ``token_settings`` on THIS class instead was
-    #: tried and rejected: ``__post_init__`` requires exactly one of
-    #: ``token_provider``/``token_settings``, so a defaulted ``token_settings``
-    #: would make every ``DynapathConfig(enabled=True, token_provider=fn)`` a
-    #: contradiction — it would abolish the custom-provider form to add a
-    #: default.
+    #: 이 클래스에서 ``enabled`` 와 ``token_settings`` 를 함께 기본값으로 두면
+    #: 안 된다. ``__post_init__`` 이 ``token_provider``/``token_settings`` 중
+    #: 정확히 하나를 요구하므로, ``token_settings`` 에 기본값이 있으면
+    #: ``DynapathConfig(enabled=True, token_provider=fn)`` 이 전부 모순이 된다 —
+    #: 기본값 하나를 더하려고 커스텀 provider 형태를 없애는 셈이다.
     enabled: bool = False
     token_provider: DynapathTokenProvider | None = None
     token_settings: DynapathTokenSettings | None = None

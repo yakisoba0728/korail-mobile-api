@@ -132,40 +132,38 @@ from .safety import (
 # the evidence that the two apps embed two SDKs for ONE product.
 SUCCESS_CODE = "200"
 BYPASS_CODE = "300"
-#: A pass. 200 issues a key; 300 means the queue was bypassed and there is none.
+#: 통과. 200 은 키를 발급하고, 300 은 대기열을 건너뛴 것이라 키가 없다.
 SUCCESS_CODES = frozenset({SUCCESS_CODE, BYPASS_CODE})
-#: Still queued — ``T6/g.java:451`` loops on exactly these two.
+#: 아직 대기 중 — ``T6/g.java:451`` 이 정확히 이 둘에서만 루프를 돈다.
 CONTINUE_CODES = frozenset({"201", "202"})
-#: ``TsErrorAComplete``. Accepted for setComplete only; see
-#: :func:`parse_set_complete_response` for why that is an inference.
+#: ``TsErrorAComplete``. setComplete 에서만 받아들인다. 그것이 왜 추론인지는
+#: :func:`parse_set_complete_response` 참조.
 ALREADY_COMPLETE_CODE = "502"
-#: What the live server answers when ``setComplete`` is asked to release a
-#: session THIS host does not own. ``msg="Wrong Server ID"`` covers TWO distinct
-#: causes and the wire cannot tell them apart, which is why it is named here:
+#: 이 호스트가 소유하지 않은 세션을 ``setComplete`` 로 놓으려 할 때 서버가
+#: 주는 답. ``msg="Wrong Server ID"`` 는 서로 다른 두 원인을 덮고 전선으로는
+#: 구분되지 않아 여기 이름을 붙여 둔다.
 #:
-#: 1. the key is not a completable session — in practice the 5101 ticket instead
-#:    of the key ``chkEnter`` issued for it. Re-attaching ``sid``/``aid`` does
-#:    not help; the ticket is simply not a session.
-#: 2. the key IS a session, but the request reached the wrong queue node. The
-#:    message is then literal: the pool member being asked has no such session.
-#:    This is the defect diagnosed on 2026-07-26 and fixed by routing 5004 to
-#:    :attr:`KorailNetFunnelToken.node`; see the module docstring.
+#: 1. 키가 완료 가능한 세션이 아니다 — 실제로는 ``chkEnter`` 가 발급한 키
+#:    대신 5101 표를 보낸 경우다. ``sid``/``aid`` 를 붙여도 소용없다. 표는
+#:    세션이 아니다.
+#: 2. 키는 세션이 맞는데 요청이 엉뚱한 대기열 노드에 닿았다. 이때 메시지는
+#:    글자 그대로다 — 질문받은 풀 구성원에게 그런 세션이 없다. 5004 를
+#:    :attr:`KorailNetFunnelToken.node` 로 보내는 이유다.
 #:
-#: It is REFUSED, never accepted alongside 502 — treating it as "released" is
-#: exactly how a slot leaks silently, and cause 2 leaked about half of them.
+#: 이 코드는 **거부**하며 502 와 나란히 받아들이지 않는다. "놓였다"고 치는
+#: 것이 슬롯이 조용히 새는 방식 그 자체다.
 NOT_COMPLETABLE_CODE = "503"
-#: ``TsBlock``/``TsIpBlock``. The waiting room refused us, which is a different
-#: fact from the waiting room malfunctioning — ``T6/g.d.isBlocking()``
-#: (``T6/g.java:892-894``) gives the pair its own predicate, distinct from
-#: ``isError()`` three lines below it. Both still raise, because a refusal is
-#: not a wait and a wait is the only non-failure that is not a pass; they raise
-#: :class:`~korail_mobile_api.errors.KorailQueueRejectedError` so a caller can
-#: tell them apart without reading the numeric code.
+#: ``TsBlock``/``TsIpBlock``. 대기실이 우리를 거부했다는 뜻이고, 대기실이
+#: 고장 났다는 것과는 다른 사실이다 — ``T6/g.d.isBlocking()``
+#: (``T6/g.java:892-894``)이 이 둘에 전용 술어를 주며, 세 줄 아래의
+#: ``isError()`` 와 구분된다. 그래도 둘 다 예외가 된다. 거부는 대기가 아니고,
+#: 통과가 아니면서 실패도 아닌 것은 대기뿐이기 때문이다. 숫자 코드를 읽지
+#: 않고도 구분할 수 있도록
+#: :class:`~korail_mobile_api.errors.KorailQueueRejectedError` 로 올린다.
 #:
-#: ``TsExpressNumber`` (303) is deliberately NOT mapped here: the app counts it
-#: as a SUCCESS (``T6/g.d.isSuccess()``, :909, lists ``ExpressNumber``), we have
-#: never seen one, and folding an admission into a refusal would be worse than
-#: leaving it in the generic error path.
+#: ``TsExpressNumber``(303)는 일부러 여기 넣지 않았다. 앱은 그것을 성공으로
+#: 센다(``T6/g.d.isSuccess()``, ``:909`` 가 ``ExpressNumber`` 를 포함). 입장
+#: 허가를 거부로 접어 넣는 것보다 일반 오류 경로에 두는 편이 낫다.
 QUEUE_REJECTED_CODES = frozenset({"301", "302"})
 
 # The ttl clamp, ours copied from the app's. ``T6/g.java:462`` asks
@@ -755,23 +753,23 @@ class KorailNetFunnelClient:
         self.release(token)
 
 
-#: Which action id gates which operation, as the app pairs them. Each entry is
-#: an APK call site, and none of them is a guess:
+#: 어느 액션 id 가 어느 작업을 막는지, 앱이 짝지은 대로. 항목마다 APK 호출
+#: 지점이 있다.
 #:
-#: * ``INQUIRY``/``PEAK_SEASON_INQUIRY``/``PRODUCT`` — ``b5/c.java:439``, the
-#:   열차조회 path, which picks between all three on one line. See
-#:   :func:`inquiry_action` for the rule.
+#: * ``INQUIRY``/``PEAK_SEASON_INQUIRY``/``PRODUCT`` — ``b5/c.java:439`` 의
+#:   열차조회 경로가 한 줄에서 셋 중 하나를 고른다. 규칙은
+#:   :func:`inquiry_action` 참조.
 #: * ``RESERVE`` — ``com/korail/talk/ui/inquiry/rir/orr/
-#:   DirectInquiryActivity.java:442``, :469 and :499 (예약대기, 일반 예약 and the
-#:   공무원 인증 variant all gate on ``act_14``).
-#: * ``PAY`` — ``B6/AbstractC1269e.java:1046`` and ``B6/C1270f.java:232``.
-#: * ``RESERVED`` — ``com/korail/talk/ui/menu/ReservedTicketActivity.java:553``,
-#:   the 예약목록 read.
-#: * ``TEST`` — ``com/korail/talk/test/NetfunnelTestActivity.java:54`` gates on
-#:   ``act_8``, NOT on ``act_4``; ``act_4`` and ``act_22`` are declared in
-#:   ``K4/g.java:47,50`` and used at ZERO call sites in the APK. They are exposed
-#:   because the app declares them, and their absence from this map is the
-#:   statement that nothing in the app reaches them.
+#:   DirectInquiryActivity.java:442``, ``:469``, ``:499``(예약대기·일반 예약·
+#:   공무원 인증 변형이 모두 ``act_14`` 를 쓴다).
+#: * ``PAY`` — ``B6/AbstractC1269e.java:1046`` 과 ``B6/C1270f.java:232``.
+#: * ``RESERVED`` — ``com/korail/talk/ui/menu/ReservedTicketActivity.java:553``
+#:   의 예약목록 조회.
+#: * ``TEST`` — ``com/korail/talk/test/NetfunnelTestActivity.java:54`` 는
+#:   ``act_4`` 가 아니라 ``act_8`` 을 쓴다. ``act_4`` 와 ``act_22`` 는
+#:   ``K4/g.java:47,50`` 에 선언돼 있지만 APK 안 어느 호출 지점에서도 쓰이지
+#:   않는다. 앱이 선언하므로 노출은 하되, 이 표에 없다는 것이 앱에서 아무도
+#:   그것들에 닿지 않는다는 진술이다.
 KORAIL_NETFUNNEL_GATED_OPERATIONS: dict[str, KorailNetFunnelAction] = {
     "search_trains": KorailNetFunnelAction.INQUIRY,
     "search_product_trains": KorailNetFunnelAction.PRODUCT,

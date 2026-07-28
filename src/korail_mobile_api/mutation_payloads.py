@@ -1705,8 +1705,8 @@ def build_discount_card_extension_query(
     return query
 
 
-#: The eight passenger-row key prefixes an ordinary hold carries
-#: (``OPsg.java:8-10``). An N카드 hold replaces all of them with one row.
+#: 보통의 홀드가 싣는 승객 행 키 접두사 여덟 개(``OPsg.java:8-10``).
+#: N카드 홀드는 이 전부를 한 행으로 대체한다.
 _PASSENGER_ROW_KEYS = frozenset(
     f"{prefix}{index}"
     for prefix in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd")

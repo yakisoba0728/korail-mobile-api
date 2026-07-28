@@ -596,17 +596,16 @@ KorailMileageLedger = Literal["1", "2"]
 #: ``"2"`` 사용. 드롭다운 인덱스라서 세 항목이 곧 세 값이다.
 KorailMileageMovement = Literal["0", "1", "2"]
 
-#: ``pontTpVal`` — which ledger ``mlg.amtSpec.do`` reads.
-#: ``MileageHistoryActivity.java:289,543`` sets ``"1"`` for the KTX 마일리지 tab
-#: (the screen's default) and ``:313`` sets ``"2"`` for the 철도포인트 tab.
+#: ``pontTpVal`` — ``mlg.amtSpec.do`` 가 어느 원장을 읽을지.
+#: ``MileageHistoryActivity.java:289,543`` 이 KTX 마일리지 탭(화면 기본값)에
+#: ``"1"`` 을, ``:313`` 이 철도포인트 탭에 ``"2"`` 를 넣는다.
 KORAIL_MILEAGE_LEDGER_KTX: KorailMileageLedger = "1"
 KORAIL_MILEAGE_LEDGER_RAIL_POINT: KorailMileageLedger = "2"
 
-#: ``qryDvVal`` — the 전체/적립/사용 selector, sent as the dropdown INDEX rather
-#: than as a code: ``MileageHistoryActivity.java:566`` assigns
-#: ``Integer.toString(i9)`` straight from ``onItemSelected``, and ``:502``
-#: declares the three entries in this order. ``"0"`` is the field's initial
-#: value (``:134``).
+#: ``qryDvVal`` — 전체/적립/사용 선택. 코드가 아니라 드롭다운 **인덱스**로
+#: 나간다. ``MileageHistoryActivity.java:566`` 이 ``onItemSelected`` 의 값을
+#: ``Integer.toString(i9)`` 로 그대로 넣고, ``:502`` 가 세 항목을 이 순서로
+#: 선언한다. ``"0"`` 은 필드의 초기값이다(``:134``).
 KORAIL_MILEAGE_MOVEMENT_ALL: KorailMileageMovement = "0"
 KORAIL_MILEAGE_MOVEMENT_EARNED: KorailMileageMovement = "1"
 KORAIL_MILEAGE_MOVEMENT_SPENT: KorailMileageMovement = "2"
@@ -760,10 +759,9 @@ class DiscountCardScheduleRequest:
         )
 
 
-#: The two ``dcntCrdKndMgNo`` values that make ``dcntCrdKndCd`` ``"B2N"``
-#: rather than ``"MMM"`` (``u4/b.java:61``). They are the 2개월 and 3개월
-#: 1-section N카드 products declared at
-#: ``NCard1SectionBookingActivity.java:28``.
+#: ``dcntCrdKndCd`` 를 ``"MMM"`` 이 아니라 ``"B2N"`` 으로 만드는 두
+#: ``dcntCrdKndMgNo`` 값(``u4/b.java:61``). ``NCard1SectionBookingActivity.java:28``
+#: 이 선언하는 2개월·3개월 1구간 N카드 상품이다.
 _B2N_CARD_KIND_MANAGEMENT_NOS = frozenset({"B2N18120402", "B2N18120403"})
 
 
@@ -1202,10 +1200,10 @@ class SelfSeatChangeInfoRequest:
         _validate_self_seat_change_info_request(self)
 
 
-#: The two 객실 등급 codes the app will send on ``self.seatChgInfo.do``.
-#: ``K4/o.java:7-8`` — GENERAL("일반실", "1") and SPECIAL("특실", "2"). The
-#: enum's third member ALL ("전체", "9") is deliberately absent: the app's
-#: branch admits only the first two.
+#: 앱이 ``self.seatChgInfo.do`` 에 보내는 객실 등급 코드 둘.
+#: ``K4/o.java:7-8`` 의 GENERAL("일반실", "1")과 SPECIAL("특실", "2")이다.
+#: 세 번째 멤버 ALL("전체", "9")은 일부러 뺐다. 앱의 분기가 앞의 둘만
+#: 받아들인다.
 SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
 
 
