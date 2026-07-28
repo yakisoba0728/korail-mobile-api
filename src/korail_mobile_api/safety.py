@@ -1,5 +1,5 @@
-from collections.abc import Mapping, Sequence
 import re
+from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import urlsplit
 

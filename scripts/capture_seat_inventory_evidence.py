@@ -5,8 +5,9 @@ import json
 import math
 import os
 import tempfile
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from korail_mobile_api import (
     KorailClient,

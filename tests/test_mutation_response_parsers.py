@@ -18,6 +18,7 @@ from korail_mobile_api.mutation_payloads import (
 from korail_mobile_api.read_parsers import parse_reservation_history_response
 from korail_mobile_api.redaction import redact_mapping
 
+
 #: 15 decimal digits, the real PNR shape. Synthetic value.
 SYNTHETIC_LIVE_PNR = "399999999999999"
 

@@ -240,11 +240,9 @@ def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
 def parse_train_search_metadata(
     raw: Mapping[str, Any],
 ) -> TrainSearchMetadata:
-    optional = lambda key: _typed_optional_string(
-        raw,
-        key,
-        context="train search metadata",
-    )
+    def optional(key: str) -> str | None:
+        return _typed_optional_string(raw, key, context="train search metadata")
+
     train_container = raw.get("trn_infos")
     if isinstance(train_container, Mapping):
         merge_reservation_available_flag = _typed_optional_string(
@@ -697,11 +695,9 @@ def parse_train_schedule_response(
                 raw=dict(row),
             )
         )
-    optional = lambda key: _typed_optional_string(
-        raw,
-        key,
-        context="train schedule",
-    )
+    def optional(key: str) -> str | None:
+        return _typed_optional_string(raw, key, context="train schedule")
+
     return TrainScheduleResponse(
         h_msg_cd=response.h_msg_cd,
         h_msg_txt=response.h_msg_txt,

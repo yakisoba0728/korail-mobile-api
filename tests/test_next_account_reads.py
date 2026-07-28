@@ -762,7 +762,9 @@ def test_four_public_reads_emit_exact_ordered_bodies_once_without_dynapath(
         R43_PATH,
         R45_PATH,
     ]
-    assert [parse_qsl(request.content.decode(), keep_blank_values=True) for request in requests] == [
+    assert [
+        parse_qsl(request.content.decode(), keep_blank_values=True) for request in requests
+    ] == [
         [
             ("Device", config.device),
             ("Version", config.version),

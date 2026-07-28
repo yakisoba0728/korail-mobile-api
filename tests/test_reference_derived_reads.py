@@ -73,6 +73,7 @@ from korail_mobile_api.safety import (
     assert_read_only_request_fields,
 )
 
+
 R150_PATH = "/classes/com.korail.mobile.certification.ReservationList"
 R151_PATH = "/classes/com.korail.mobile.refunds.CommissionView"
 R152_PATH = "/classes/com.korail.mobile.refunds.SelTicketInfo"

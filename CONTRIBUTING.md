@@ -6,16 +6,35 @@
 2. Make your change. If it touches documentation, expect a test to check it —
    see "Documentation is measured, not asserted" below before you write a
    number or a claim by hand.
-3. Run the offline gate before opening a pull request:
+3. Run the three offline gates before opening a pull request:
 
    ```bash
-   pip install -e ".[test]"
+   pip install -e ".[dev]"                                     # test + ruff + pyright
    env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
+   ruff check .                                                # must report 0
+   pyright                                                     # must report 0 errors
    ```
 
-   This must pass with no network access. It is the only gate; there is no
-   separate lint or type-check step to run locally beyond what the test suite
-   already exercises.
+   All three must pass with no network access, and CI runs the same three.
+   `".[test]"` still installs just enough for the suite if that is all you
+   want.
+
+   Both tools read their configuration from `pyproject.toml` and nowhere else,
+   so your editor (Pylance + the Ruff extension — see
+   `.vscode/extensions.json`) reports exactly what CI will. If you disagree
+   with a rule, argue with the comment next to it in `[tool.ruff.lint]` or
+   `[tool.pyright]`; each one records what was measured and why.
+
+   Two things that are settled and should not be quietly reversed:
+
+   - **`ruff format` is not adopted.** The hand-aligned comment tables and
+     APK-evidence blocks in this codebase are its documentation, and a
+     formatter rewrites them. `ruff check` is the gate; formatting is not.
+   - **pyright runs in `basic` mode with a `strict` list of individual
+     modules.** That list is not a taste judgement — it is every module that
+     already measures zero errors under `strict`, re-derivable by running
+     pyright once per file. Adding a module to it is welcome; making a module
+     on it fail is a regression.
 4. Do not run the live-service tests (`-m live` / `KORAIL_MOBILE_API_LIVE=1`)
    as part of a contribution. They require a real account and make real
    requests against `smart.letskorail.com`; that is the maintainer's call to

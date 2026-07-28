@@ -4,18 +4,18 @@ import pytest
 from korail_mobile_api import KorailConfig
 from korail_mobile_api.constants import DYNAPATH_HEADER_NAME
 from korail_mobile_api.dynapath import (
-    DynapathConfig,
-    DynapathTokenGenerator,
-    DynapathTokenSettings,
     KORAIL_DYNAPATH_APP_ID,
     KORAIL_DYNAPATH_OS_TYPE,
     KORAIL_DYNAPATH_SDK_VERSION,
+    DynapathConfig,
+    DynapathTokenGenerator,
+    DynapathTokenSettings,
     build_dynapath_prefix,
     generate_dynapath_encoding_table,
     generate_dynapath_token,
 )
-from korail_mobile_api.http import KorailHttpClient
 from korail_mobile_api.errors import KorailProtocolError
+from korail_mobile_api.http import KorailHttpClient
 
 
 def make_settings() -> DynapathTokenSettings:
@@ -142,7 +142,9 @@ def test_http_client_generates_dynapath_header_from_token_settings():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["token"] = request.headers.get(DYNAPATH_HEADER_NAME)
-        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+        return httpx.Response(
+            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+        )
 
     config = KorailConfig(
         dynapath=DynapathConfig(

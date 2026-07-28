@@ -1,0 +1,11 @@
+{
+  // Pylance reads `[tool.pyright]` out of pyproject.toml, and the Ruff
+  // extension reads `[tool.ruff]` out of the same file. With these three
+  // installed, what the editor underlines is exactly what CI's `types` and
+  // `lint` jobs fail on — no second copy of the configuration anywhere.
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff"
+  ]
+}

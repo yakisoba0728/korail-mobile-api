@@ -17,8 +17,8 @@ from korail_mobile_api.consent import (
 from korail_mobile_api.constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from korail_mobile_api.errors import (
     KorailAuthError,
-    KorailProtocolError,
     KorailMutationNotAllowedError,
+    KorailProtocolError,
 )
 from korail_mobile_api.models import KorailSession
 from korail_mobile_api.mutation_models import (

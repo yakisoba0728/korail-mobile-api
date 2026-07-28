@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from importlib.util import module_from_spec, spec_from_file_location
-from io import BytesIO
-from pathlib import Path
 import os
 import re
 import stat
@@ -13,6 +10,9 @@ import tarfile
 import tomllib
 import warnings
 import zipfile
+from importlib.util import module_from_spec, spec_from_file_location
+from io import BytesIO
+from pathlib import Path
 
 import pytest
 

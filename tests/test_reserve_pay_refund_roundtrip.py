@@ -34,8 +34,10 @@ from korail_mobile_api import (
     CardPayment,
     KorailClient,
     KorailSession,
+    KorailTransportError,
     TrainSummary,
 )
+
 
 SCRIPT_PATH = (
     Path(__file__).parents[1] / "scripts" / "reserve_pay_refund_roundtrip.py"
@@ -919,7 +921,10 @@ def test_a_payment_that_never_answers_is_reported_as_unknown_not_unpaid(
         card,
         argparse.Namespace(date="20990101", min_interval=1.5, recover=False),
     )
-    with pytest.raises(Exception):
+    # 예외 타입을 좁혀 둔다. `Exception` 이면 스크립트가 어디서 어떻게 죽든
+    # 통과하므로, "결제 응답이 오지 않았다"가 아니라 아무 버그나 이 테스트를
+    # 만족시킨다. 전송 실패는 KorailTransportError 로 감싸여 올라온다.
+    with pytest.raises(KorailTransportError):
         trip.run()
     out = capsys.readouterr().out
     assert "The payment outcome is UNKNOWN" in out

@@ -5,9 +5,9 @@ from dataclasses import replace
 import pytest
 
 from korail_mobile_api import (
+    KORAIL_MAX_PASSENGERS_PER_RESERVATION,
     BaseKorailResponse,
     CardPayment,
-    KORAIL_MAX_PASSENGERS_PER_RESERVATION,
     KorailConfig,
     KorailPassengerCounts,
     KorailProtocolError,

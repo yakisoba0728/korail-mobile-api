@@ -1,0 +1,20 @@
+{
+  // Deliberately short. Type checking and linting are configured once, in
+  // pyproject.toml, because that is the file both the editor extensions and CI
+  // read; restating any of it here would create a second source of truth that
+  // can drift. Nothing below is a style preference.
+
+  // Running the suite from the Test Explorer must not be able to fire a live
+  // request at smart.letskorail.com. `-m "not live"` is the same deselection CI and
+  // CONTRIBUTING.md use; `testpaths` in pyproject.toml supplies the directory.
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["-m", "not live"],
+  "python.testing.unittestEnabled": false,
+
+  // `ruff format` is not adopted here — it rewrites the hand-aligned comment
+  // tables and evidence blocks that are this repository's documentation. Format
+  // on save is off so that no formatter silently does it on someone's machine.
+  "[python]": {
+    "editor.formatOnSave": false
+  }
+}

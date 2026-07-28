@@ -37,6 +37,7 @@ from korail_mobile_api.read_payloads import (
     TicketReservationDetailRequest,
 )
 
+
 PASS_MENU_PATH = "/classes/com.korail.mobile.pass.passMenu.do"
 PASS_INFO_LIST_PATH = "/classes/com.korail.mobile.pass.passInfoList"
 COMMUTER_KIND_MENU_PATH = "/classes/com.korail.mobile.push.cmtrKnd.do"

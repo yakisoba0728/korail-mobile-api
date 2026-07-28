@@ -43,6 +43,16 @@ Changelog = "https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGEL
 test = [
   "pytest>=8,<10",
 ]
+# CI 의 lint / types 잡이 설치하는 것과 같은 도구. 런타임 의존성이 아니므로
+# METADATA 에는 `Requires-Dist: ruff; extra == "dev"` 형태로만 나가고,
+# scripts/verify_distribution.py 는 extra 표시가 붙은 요구사항을 런타임 목록에서
+# 걸러내므로(_normalize_requirement) 배포 계약은 그대로다.
+dev = [
+  "build>=1,<2",
+  "pyright>=1.1.400,<2",
+  "pytest>=8,<10",
+  "ruff>=0.16,<0.17",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -61,3 +71,120 @@ pythonpath = ["src"]
 markers = [
   "live: tests that call live KORAIL services and require explicit opt-in",
 ]
+
+[tool.ruff]
+# 이 저장소에서 주석과 docstring 은 근거 그 자체다 — 어느 APK 파일 몇 번째 줄에서
+# 나온 필드인지가 거기 적혀 있다. 그래서 `ruff format` 은 채택하지 않았다. 손으로
+# 열을 맞춘 표와 주석 블록을 재배치해 버리기 때문이다. 게이트는 `ruff check` 뿐이다.
+#
+# line-length 는 취향이 아니라 실측이다. ruff 의 E501 은 동아시아 문자를 2칸으로
+# 세므로(터미널 폭과 같다 — 1칸으로 센다는 통념은 틀렸다) 그 기준으로 잰 src +
+# tests + scripts 57,180 줄의 분포는 p95 77 / p99 81 / p99.9 94 이고, 100칸을
+# 넘는 줄은 29개(0.05%)다. 그 29줄 가운데 한글이 든 줄은 단 1개라, 100 이라는
+# 한계는 한국어 산문에 사실상 아무 비용도 물리지 않는다.
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "RUF"]
+ignore = [
+  # 모호한 유니코드 문자. 이 저장소에서만 142건이 걸리는데 전부 의도된 문자다:
+  # 산문의 en dash `–`, 좌석 격자의 `×`, 그리고 유니코드 정규화 방어를 시험하려고
+  # 일부러 넣어 둔 아라비아-인도 숫자 픽스처. ASCII 로 "고치면" 시험 대상 자체가
+  # 사라진다.
+  "RUF001",
+  "RUF002",
+  "RUF003",
+  # `__all__` 알파벳 정렬. 지금 `__all__` 는 __init__.py 의 import 블록과 같은
+  # 모듈 순서로 묶여 있다. tests/test_public_surface_rule.py 는 집합으로
+  # 비교하므로 정렬해도 테스트는 통과한다 — 묶음을 지키는 이유는 그 파일이
+  # 요구하는 "강등은 import 줄과 __all__ 항목을 둘 다 지우는 것"을 눈으로
+  # 대조할 수 있게 하기 위해서다. 알파벳순은 그 대조를 없앤다.
+  "RUF022",
+]
+
+[tool.ruff.lint.isort]
+# 이 저장소는 import 블록 뒤에 빈 줄 2개를 쓴다. ruff 의 기본값(-1, "알아서")은
+# 뒤따르는 것이 def/class 가 아니면 1줄로 줄여 버려서, I001 자동수정이 순서와는
+# 무관한 공백 변경을 저장소 전체에 흩뿌린다. 기존 관례를 그대로 못박는다.
+lines-after-imports = 2
+
+[tool.ruff.lint.flake8-bugbear]
+# B008 은 "기본값에서 함수를 부르지 마라"는 규칙이고, 그 이유는 그 값이 모든 호출에
+# 공유되는 가변 객체가 되기 때문이다. RefundCompanion 은 `@dataclass(frozen=True)`
+# 라서 그 위험이 성립하지 않는다. 기본값을 모듈 상수로 빼면 "동반자 없음"이라는
+# 뜻이 시그니처에서 사라지므로, 규칙을 끄는 대신 이 호출만 불변으로 선언한다.
+extend-immutable-calls = ["korail_mobile_api.read_payloads.RefundCompanion"]
+
+[tool.ruff.lint.per-file-ignores]
+# 파일 맨 앞의 "저장소별 상수 블록" 다음에 import 가 온다. 그 배치가 마커 아래를
+# 형제 저장소와 바이트 동일하게 유지하는 방법이라, import 를 위로 올리면 공유가
+# 깨진다(파일 자신의 docstring 이 그렇게 못박아 두었다).
+"tests/test_public_surface_rule.py" = ["E402"]
+# 마스킹 대상 키 집합은 같은 철자를 일부러 여러 번 적는다. 중복 하나하나가 서로
+# 다른 주석 아래 놓여 있고, 그 주석이 "이 철자는 어느 라우트/어느 응답에서
+# 오는가"를 말한다(예: ogtkRetPwd 는 요청 키로도, 인덱스 붙은 @FieldMap 키로도,
+# OrgTk 응답 필드로도 온다). B033 의 자동수정은 중복만 지우고 주석은 남겨서,
+# 근거가 딸린 대상 없이 떠 있게 만든다.
+"src/korail_mobile_api/redaction.py" = ["B033"]
+
+[tool.pyright]
+# VSCode/Pylance 가 그대로 읽는 설정이다. 기준은 하나 — 이 저장소의 파일을 열었을
+# 때 빨간 줄이 없어야 한다. 그래서 아래 값은 고른 것이 아니라 실제로 돌려서 오류
+# 0 이 되는 조합을 찾은 결과다.
+include = ["src", "tests", "scripts"]
+# src 레이아웃을 명시한다. pyright 는 ./src 를 알아서 찾아 주기도 하지만, 그건
+# 문서화된 계약이 아니라 휴리스틱이다. pytest 의 `pythonpath = ["src"]` 와 같은
+# 것을 같은 이유로 적어 둔다 — 설치 없이 체크아웃만 열어도 import 가 풀려야 한다.
+extraPaths = ["src"]
+pythonVersion = "3.11"  # requires-python 의 하한과 같다
+typeCheckingMode = "basic"
+
+# 전체 strict 는 켜지 않았다: src/ 만 strict 로 돌리면 오류가 468건 남고, 그
+# 대부분은 서버 JSON 을 Any 로 받아 손으로 좁혀 가는 파서·페이로드 코드다
+# (read_parsers.py 156, parsers.py 117, read_models.py 55). 그건 이 단계의
+# 범위가 아니다.
+#
+# 대신 "이미 strict 로 0 인 모듈"만 strict 에 고정한다. 이 목록은 고른 것이 아니라
+# 잰 것이다 — 모듈마다 strict 로 한 번씩 pyright 를 돌려 0 이 나온 것만 남겼고,
+# 같은 방법으로 언제든 다시 유도할 수 있다. 여기에 있는 파일이 하나라도 늘어난
+# 오류를 내면 그건 회귀이지 설정 문제가 아니다.
+#
+# 공개면(`__all__` 이 이름을 내보내는 곳) 가운데 config.py / consent.py /
+# constants.py / dynapath.py / errors.py 가 여기 들어 있다. client.py(2) ·
+# models.py(13) · netfunnel.py(2) 는 아직 0 이 아니라 빠졌다. client.py 의 2건은
+# 런타임 방어용 isinstance 검사라 strict 를 만족시키려면 그 방어를 없애야 해서
+# 일부러 두었다.
+strict = [
+  "src/korail_mobile_api/__init__.py",
+  "src/korail_mobile_api/config.py",
+  "src/korail_mobile_api/consent.py",
+  "src/korail_mobile_api/constants.py",
+  "src/korail_mobile_api/crypto.py",
+  "src/korail_mobile_api/dynapath.py",
+  "src/korail_mobile_api/errors.py",
+  "src/korail_mobile_api/limousine_payloads.py",
+]
+
+# tests/ 와 scripts/ 는 배포되지 않고, 일부러 틀린 값을 넣어 가드가 우는지 보거나
+# 유니온 반환값을 테스트가 아는 쪽으로 좁혀 쓴다. 그래서 basic 으로도 123건이 뜨는데
+# 전부 그 성격이다. 아래 5개는 그 123건이 실제로 사용하는 규칙을 세어서 뽑은 것이지
+# 짐작이 아니다(`pyright --outputjson tests/ scripts/` 의 rule 집계).
+# executionEnvironments 안에서 `typeCheckingMode = "off"` 는 pyright 1.1.411 이
+# 무시한다(형제 저장소에서 실측: 73 -> 70). 규칙별로 끄는 이 방식만 실제로 0 이 된다.
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+reportArgumentType = "none"
+reportAttributeAccessIssue = "none"
+reportCallIssue = "none"
+reportIndexIssue = "none"
+reportOptionalMemberAccess = "none"
+
+[[tool.pyright.executionEnvironments]]
+root = "scripts"
+reportArgumentType = "none"
+reportAttributeAccessIssue = "none"
+reportCallIssue = "none"
+reportIndexIssue = "none"
+reportOptionalMemberAccess = "none"

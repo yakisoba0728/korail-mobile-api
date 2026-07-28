@@ -1,6 +1,7 @@
+from urllib.parse import parse_qs
+
 import httpx
 import pytest
-from urllib.parse import parse_qs
 
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.errors import KorailAppError, KorailSessionExpiredError

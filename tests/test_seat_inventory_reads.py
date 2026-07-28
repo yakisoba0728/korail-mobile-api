@@ -6,10 +6,9 @@ import inspect
 import json
 import math
 from collections.abc import Iterator, Mapping
-from copy import deepcopy
 from dataclasses import FrozenInstanceError, fields, is_dataclass, replace
 from pathlib import Path
-from typing import Any, get_type_hints
+from typing import Any, ClassVar, get_type_hints
 from urllib.parse import parse_qs
 
 import httpx
@@ -1565,7 +1564,7 @@ def test_first_eligible_general_train_returns_none_without_eligible_row():
 
 class _EvidenceFakeClient:
     scenario = "completed"
-    calls: list[str] = []
+    calls: ClassVar[list[str]] = []
     train: TrainSummary
 
     def __init__(self, _config: KorailConfig) -> None:
@@ -2117,6 +2116,11 @@ def test_evidence_script_has_narrow_import_and_operation_boundaries():
     assert imported_roots <= {
         "__future__",
         "argparse",
+        # `collections` is here for `collections.abc` only, which is where
+        # `Mapping`/`Sequence` now live: importing them from `typing` has been
+        # deprecated since 3.9 and ruff's UP035 moves them. It buys the script
+        # no capability the `typing` spelling did not already have.
+        "collections",
         "json",
         "math",
         "os",

@@ -11,8 +11,8 @@ from .read_models import (
     CommuterInfoResponse,
     CommuterPassengerOption,
     PassGoodsInfo,
-    PassMenuItem,
     PassMenuData,
+    PassMenuItem,
     PassPassengerInfos,
     ProductTrainInquiryResponse,
 )
@@ -543,7 +543,7 @@ class MaasServiceDetailQuery:
         )
 
     @classmethod
-    def current(cls) -> "MaasServiceDetailQuery":
+    def current(cls) -> MaasServiceDetailQuery:
         return cls()
 
     @classmethod
@@ -551,7 +551,7 @@ class MaasServiceDetailQuery:
         cls,
         start_date: str,
         end_date: str,
-    ) -> "MaasServiceDetailQuery":
+    ) -> MaasServiceDetailQuery:
         return cls(start_date=start_date, end_date=end_date)
 
 
@@ -728,7 +728,7 @@ class DiscountCardScheduleRequest:
         usable_trip_count: str = "",
         usage_period_days: str | None = None,
         page_no: str | None = None,
-    ) -> "DiscountCardScheduleRequest":
+    ) -> DiscountCardScheduleRequest:
         """Build a request, deriving ``dcntCrdKndCd`` the way ``u4/b.java`` does."""
         kind_code = (
             "B2N"
@@ -852,7 +852,7 @@ class GiftTicketHistoryRequest:
         cls,
         start_date: str,
         end_date: str,
-    ) -> "GiftTicketHistoryRequest":
+    ) -> GiftTicketHistoryRequest:
         return cls._create("A", start_date, end_date)
 
     @classmethod
@@ -860,7 +860,7 @@ class GiftTicketHistoryRequest:
         cls,
         start_date: str,
         end_date: str,
-    ) -> "GiftTicketHistoryRequest":
+    ) -> GiftTicketHistoryRequest:
         return cls._create("C", start_date, end_date)
 
     @classmethod
@@ -869,7 +869,7 @@ class GiftTicketHistoryRequest:
         query_division_code: str,
         start_date: str,
         end_date: str,
-    ) -> "GiftTicketHistoryRequest":
+    ) -> GiftTicketHistoryRequest:
         instance = object.__new__(cls)
         object.__setattr__(instance, "start_date", start_date)
         object.__setattr__(instance, "end_date", end_date)
@@ -942,7 +942,7 @@ class CommuterPassengerRequest:
         pass_data: PassMenuData,
         source: CommuterInfoResponse,
         passenger_counts: tuple[int, ...],
-    ) -> "CommuterPassengerRequest":
+    ) -> CommuterPassengerRequest:
         instance = object.__new__(cls)
         object.__setattr__(instance, "pass_data", pass_data)
         object.__setattr__(instance, "source", source)
@@ -1472,14 +1472,14 @@ class _ProductTrainInquiryContinuation:
     def direct(
         cls,
         source: ProductTrainInquiryResponse,
-    ) -> "_ProductTrainInquiryContinuation":
+    ) -> _ProductTrainInquiryContinuation:
         return cls._create("direct", source)
 
     @classmethod
     def transfer(
         cls,
         source: ProductTrainInquiryResponse,
-    ) -> "_ProductTrainInquiryContinuation":
+    ) -> _ProductTrainInquiryContinuation:
         return cls._create("transfer", source)
 
     @classmethod
@@ -1487,7 +1487,7 @@ class _ProductTrainInquiryContinuation:
         cls,
         mode: str,
         source: ProductTrainInquiryResponse,
-    ) -> "_ProductTrainInquiryContinuation":
+    ) -> _ProductTrainInquiryContinuation:
         instance = object.__new__(cls)
         object.__setattr__(instance, "source", source)
         object.__setattr__(instance, "_mode", mode)

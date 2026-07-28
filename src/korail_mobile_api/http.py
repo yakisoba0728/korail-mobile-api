@@ -1,27 +1,27 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
-from typing import Any, Mapping
+from collections.abc import Mapping, Sequence
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
 
 from .config import KorailConfig
-from .constants import DYNAPATH_ALLOWLIST_PATHS
-from .dynapath import DynapathRequestContext, DynapathTokenGenerator
-from .errors import (
-    KorailDynaPathError,
-    KorailProtocolError,
-    KorailSessionExpiredError,
-    KorailTransportError,
-    KorailMutationNotAllowedError,
-    classify_app_error,
-)
 from .consent import (
     MutationCategory,
     MutationConsent,
     require_mutation_consent,
+)
+from .constants import DYNAPATH_ALLOWLIST_PATHS
+from .dynapath import DynapathRequestContext, DynapathTokenGenerator
+from .errors import (
+    KorailDynaPathError,
+    KorailMutationNotAllowedError,
+    KorailProtocolError,
+    KorailSessionExpiredError,
+    KorailTransportError,
+    classify_app_error,
 )
 from .models import BaseKorailResponse
 from .safety import (
@@ -93,7 +93,12 @@ def _raise_for_status(response: httpx.Response, *, path: str) -> None:
 
 
 class KorailHttpClient:
-    def __init__(self, config: KorailConfig, *, transport: httpx.BaseTransport | None = None) -> None:
+    def __init__(
+        self,
+        config: KorailConfig,
+        *,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
         assert_korail_origin(config.base_url)
         self.config = config
         self._dynapath_generator = (
@@ -120,7 +125,11 @@ class KorailHttpClient:
         self._client.close()
 
     def common_fields(self) -> dict[str, str]:
-        return {"Device": self.config.device, "Version": self.config.version, "Key": self.config.key}
+        return {
+            "Device": self.config.device,
+            "Version": self.config.version,
+            "Key": self.config.key,
+        }
 
     def _absolute_url(self, path: str) -> str:
         return f"{self.config.base_url.rstrip('/')}/{path.lstrip('/')}"

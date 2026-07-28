@@ -30,8 +30,8 @@ from korail_mobile_api.read_models import (
     CommuterPassengerOption,
     GiftTicketListResponse,
     PassGoodsInfo,
-    PassMenuItem,
     PassMenuData,
+    PassMenuItem,
     PassPassengerInfos,
     PriceFareQuoteResponse,
     ProductTrainInquiryResponse,
@@ -53,11 +53,11 @@ from korail_mobile_api.read_payloads import (
     OriginalTicketReference,
     PriceFareLeg,
     PriceFareQuoteRequest,
+    _build_product_train_inquiry_form,
     _ProductPassengerGroups,
     _ProductTrainInquiryContinuation,
     _ProductTrainInquiryRequest,
     _ProductTransferContext,
-    _build_product_train_inquiry_form,
     build_commuter_info_form,
     build_gift_ticket_list_form,
     build_price_fare_quote_form,
@@ -685,13 +685,15 @@ def test_r39_offline_builder_is_exact_and_has_no_transport_surface():
         ("txtGdNo", "SECRET_PRODUCT"),
         ("qryDvCd", "1"),
     )
-    assert initial == common + (
+    assert initial == (
+        *common,
         ("qryStNo", "0"),
         ("qryStTrnNo", "00000"),
         ("qryStTrnNo2", ""),
         ("pgPrCnt", "10"),
     )
-    assert direct == common + (
+    assert direct == (
+        *common,
         ("qryStNo", "DIRECT_QUERY_STATION"),
         ("qryStTrnNo", "DIRECT_NEXT_TRAIN"),
         ("qryStTrnNo2", ""),
@@ -956,7 +958,8 @@ def test_r17_client_emits_exact_history_and_payment_sequences(load_json_fixture)
     ]
     assert parse_qsl(
         requests[0].content.decode(), keep_blank_values=True
-    ) == common + [
+    ) == [
+        *common,
         ("qryDvCd", "A"),
         ("qryVal", "E"),
         ("abrdDtFrom", "20990101"),
@@ -965,7 +968,7 @@ def test_r17_client_emits_exact_history_and_payment_sequences(load_json_fixture)
     ]
     assert parse_qsl(
         requests[1].content.decode(), keep_blank_values=True
-    ) == common + [("qryDvCd", "F"), ("qryVal", "E")]
+    ) == [*common, ("qryDvCd", "F"), ("qryVal", "E")]
 
 
 def test_r17_and_r31_require_session_before_transport():

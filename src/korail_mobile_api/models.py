@@ -35,7 +35,10 @@ class BaseKorailResponse:
             if field_name not in raw
         ]
         if missing:
-            raise KorailProtocolError(f"KORAIL response missing required envelope fields: {', '.join(missing)}")
+            raise KorailProtocolError(
+                "KORAIL response missing required envelope fields: "
+                + ", ".join(missing)
+            )
         invalid = [
             field_name
             for field_name in envelope_fields

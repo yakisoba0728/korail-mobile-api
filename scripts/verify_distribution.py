@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from email import policy
-from email.parser import BytesParser
-from pathlib import Path
 import re
 import stat
 import sys
 import tarfile
 import tomllib
-from typing import NamedTuple
 import unicodedata
 import zipfile
+from email import policy
+from email.parser import BytesParser
+from pathlib import Path
+from typing import NamedTuple
 
 
 _FAILURE_MESSAGE = "distribution verification failed"

@@ -262,15 +262,20 @@ def test_http_default_still_requires_the_full_envelope(method_name):
     )
     try:
         if method_name == "post_form":
-            call = lambda: client.post_form(
-                "/classes/com.korail.mobile.dlay.dptnBank.do",
-                include_dynapath=False,
-            )
+
+            def call() -> object:
+                return client.post_form(
+                    "/classes/com.korail.mobile.dlay.dptnBank.do",
+                    include_dynapath=False,
+                )
+
         else:
-            call = lambda: client.get_json(
-                "/classes/com.korail.mobile.common.stationinfo",
-                include_dynapath=False,
-            )
+
+            def call() -> object:
+                return client.get_json(
+                    "/classes/com.korail.mobile.common.stationinfo",
+                    include_dynapath=False,
+                )
         with pytest.raises(KorailProtocolError):
             call()
     finally:

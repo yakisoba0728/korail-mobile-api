@@ -15,6 +15,7 @@ from .constants import (
     KORAIL_DEFAULT_DEVICE_NAME,
 )
 
+
 DYNAPATH_BASE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 DYNAPATH_TABLE_INDEX = 1
 # The app's own nonce alphabet, verbatim: b/C1229b.java:164 calls
@@ -31,7 +32,10 @@ DYNAPATH_DEFAULT_I10 = 2
 KORAIL_DYNAPATH_APP_ID = "com.korail.talk"
 KORAIL_DYNAPATH_OS_TYPE = "Android"
 KORAIL_DYNAPATH_SDK_VERSION = "v1.0.3"
-KORAIL_DYNAPATH_SIGNING_CERT_SHA256 = "38ff229cb34c7dda8e28220a2d750cceec28db661a36d95ad92d82f6d3c618f9"
+# 해시는 한 줄로 남긴다 — 잘라 붙이면 캡처와 대조하거나 grep 할 수 없다.
+KORAIL_DYNAPATH_SIGNING_CERT_SHA256 = (
+    "38ff229cb34c7dda8e28220a2d750cceec28db661a36d95ad92d82f6d3c618f9"
+)
 KORAIL_DYNAPATH_APP_SIGNATURE_HASH = "38ff229cb34c7dda8e28220a2d750cce"
 KORAIL_DYNAPATH_AS_VALUE = f"[{KORAIL_DYNAPATH_APP_SIGNATURE_HASH}]"
 
@@ -108,7 +112,13 @@ def generate_dynapath_encoding_table(index: int = DYNAPATH_TABLE_INDEX) -> str:
 DYNAPATH_ENCODING_TABLE = generate_dynapath_encoding_table(DYNAPATH_TABLE_INDEX)
 
 
-def build_dynapath_prefix(*, table: str, table_index: int = DYNAPATH_TABLE_INDEX, i11: int = 2, i12: int = 30) -> str:
+def build_dynapath_prefix(
+    *,
+    table: str,
+    table_index: int = DYNAPATH_TABLE_INDEX,
+    i11: int = 2,
+    i12: int = 30,
+) -> str:
     return f"{chr(table_index + 97)}{table[2]}{table[37]}{table[i11]}{table[i12 - 1]}"
 
 
@@ -141,7 +151,9 @@ class DynapathTokenSettings:
     os_type: str = KORAIL_DYNAPATH_OS_TYPE
     sdk_version: str = KORAIL_DYNAPATH_SDK_VERSION
     table_index: int = DYNAPATH_TABLE_INDEX
-    table: str = field(default_factory=lambda: generate_dynapath_encoding_table(DYNAPATH_TABLE_INDEX))
+    table: str = field(
+        default_factory=lambda: generate_dynapath_encoding_table(DYNAPATH_TABLE_INDEX)
+    )
     i8: int = DYNAPATH_DEFAULT_I8
     i9: int = DYNAPATH_DEFAULT_I9
     i10: int = DYNAPATH_DEFAULT_I10

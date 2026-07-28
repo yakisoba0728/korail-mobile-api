@@ -10,6 +10,7 @@ from .limousine_models import (
     LimousineSeatInventoryQuery,
 )
 
+
 QueryT = TypeVar("QueryT")
 
 

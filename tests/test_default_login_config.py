@@ -23,9 +23,9 @@ import time
 from pathlib import Path
 
 import httpx
-import korail_mobile_api
 import pytest
 
+import korail_mobile_api
 from korail_mobile_api import KorailConfig
 from korail_mobile_api.constants import (
     DYNAPATH_ALLOWLIST_PATHS,
@@ -35,6 +35,7 @@ from korail_mobile_api.constants import (
 )
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.http import KorailHttpClient
+
 
 README = Path(__file__).parents[1] / "README.md"
 CHANGELOG = Path(__file__).parents[1] / "CHANGELOG.md"

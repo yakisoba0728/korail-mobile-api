@@ -95,6 +95,7 @@ from korail_mobile_api.live import (
     read_credentials_from_env,
 )
 
+
 LIVE_MUTATION_ENV = "KORAIL_LIVE_MUTATION"
 LIVE_REAL_CHARGE_ENV = "KORAIL_LIVE_REAL_CHARGE"
 CARD_NUMBER_ENV = "KORAIL_CARD_NUMBER"
@@ -487,7 +488,7 @@ def _safe_raw(read: Any, console: _Console, name: str) -> Any:
     """
     try:
         return getattr(read(), "raw", None)
-    except Exception as exc:  # noqa: BLE001 - the other source may still work
+    except Exception as exc:  # 넓게 잡는다: 다른 출처가 아직 통할 수 있다
         console.say(f"    [note] the {name} read failed: {type(exc).__name__}")
         return None
 
@@ -700,7 +701,7 @@ class RoundTrip:
                     )
                 )
             )
-        except Exception as exc:  # noqa: BLE001 - an unpriceable train is normal
+        except Exception as exc:  # 넓게 잡는다: 운임을 못 매기는 열차는 정상이다
             self.console.say(
                 f"    [note] no fare quote for train {train.train_no}: "
                 f"{type(exc).__name__}"
@@ -831,7 +832,7 @@ class RoundTrip:
         ):
             try:
                 raw = getattr(read(), "raw", None)
-            except Exception as exc:  # noqa: BLE001 - try the other source
+            except Exception as exc:  # 넓게 잡는다: 다른 출처를 시도한다
                 self.console.say(
                     f"    [note] the {name} read failed: {type(exc).__name__}"
                 )
@@ -1139,7 +1140,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except (KeyboardInterrupt, SystemExit):
         raise
-    except Exception as exc:  # noqa: BLE001 - never let a raw message escape
+    except Exception as exc:  # 넓게 잡는다: 원본 메시지가 새어 나가게 두지 않는다
         console.say(f"FAILED: {type(exc).__name__}: {console.scrub(exc)}")
         return 1
     finally:

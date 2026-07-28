@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import time
 
-from .crypto import transform_login_password
 from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES
+from .crypto import transform_login_password
 from .errors import (
     KorailApiError,
     KorailAppError,
@@ -14,6 +14,7 @@ from .errors import (
 from .http import KorailHttpClient
 from .models import KorailSession, LoginCryptoInfo
 from .payloads import build_common_code_form
+
 
 KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
 KORAIL_LOGIN_TYPE_MEMBER_NO = "2"
@@ -81,7 +82,7 @@ def build_login_authentication_post_data(
     cust_id: str | None = None,
 ) -> str:
     member_id = login_id if login_id else cust_id or ""
-    parts = [f"callLogin=Y", f"memId={member_id}", f"inputFlg={input_flag}"]
+    parts = ["callLogin=Y", f"memId={member_id}", f"inputFlg={input_flag}"]
     # Mirror the app's typed-DTO serialization (S4/u.java:33-43): emit only the
     # declared LoginResponse field set, in Gson field order, dropping fields the
     # server omitted or returned null (Gson omits nulls). Extra/raw envelope
@@ -224,7 +225,8 @@ class KorailSessionClient:
                     raw=response.raw,
                 )
             raise KorailAuthError(
-                f"{response.h_msg_cd or 'UNKNOWN'}: {response.h_msg_txt or 'KORAIL login did not complete'}"
+                f"{response.h_msg_cd or 'UNKNOWN'}: "
+                f"{response.h_msg_txt or 'KORAIL login did not complete'}"
             )
         jsessionid = self.http.cookies.get("JSESSIONID")
         if not jsessionid:

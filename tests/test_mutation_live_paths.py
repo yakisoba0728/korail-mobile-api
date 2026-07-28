@@ -11,8 +11,6 @@ every mutation route.
 
 from __future__ import annotations
 
-import dataclasses
-
 import httpx
 import pytest
 
@@ -21,10 +19,10 @@ from korail_mobile_api import (
     CardPayment,
     KorailClient,
     KorailConfig,
+    KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSession,
     MutationConsent,
-    KorailMutationNotAllowedError,
     MutationPreview,
     PaidTicket,
     ReservationHoldResponse,
@@ -35,6 +33,7 @@ from korail_mobile_api.mutation_payloads import (
     build_card_payment_form,
     build_single_adult_reservation_form,
 )
+
 
 RESERVE_ROUTE = "/classes/com.korail.mobile.certification.TicketReservation"
 CANCEL_ROUTE = (
@@ -264,14 +263,14 @@ def test_reserve_returns_cancelable_hold_even_if_optional_field_malformed():
         # stops exercising the fallback it is named for.
         "h_tot_prc": {"amount": 8400},
     }
-    client, recorder = _client_with({RESERVE_ROUTE: malformed})
+    client, _recorder = _client_with({RESERVE_ROUTE: malformed})
     hold = client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
     assert isinstance(hold, ReservationHoldResponse)
     assert hold.pnr_no == SYNTHETIC_PNR
     assert hold.journey_count == "1"
     assert hold.str_result == "SUCC"
     # And that recovered hold is acceptable to cancel_unpaid_hold.
-    client2, recorder2 = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
+    client2, _recorder2 = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
     result = client2.cancel_unpaid_hold(hold, consent=_live(allow_cancel=True))
     assert result.str_result == "SUCC"
 

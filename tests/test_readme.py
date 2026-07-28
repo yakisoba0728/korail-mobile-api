@@ -454,7 +454,6 @@ def test_docs_document_bounded_live_p0_train_reads_and_closed_requests():
 
 def test_docs_record_bounded_p0_live_counts_and_replay():
     record = " ".join(RECORD.read_text(encoding="utf-8").split())
-    readme = " ".join(README.read_text(encoding="utf-8").split())
     progress = " ".join(PROGRESS.read_text(encoding="utf-8").split())
     handoff = " ".join(HANDOFF.read_text(encoding="utf-8").split())
     changelog = " ".join(CHANGELOG.read_text(encoding="utf-8").split())

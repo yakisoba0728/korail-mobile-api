@@ -14,8 +14,8 @@ from korail_mobile_api.limousine_models import (
     LimousineSeatInventoryResponse,
 )
 from korail_mobile_api.models import (
-    KorailStation,
     KorailSession,
+    KorailStation,
     StationDataResponse,
     TrainSummary,
     UuidResponse,

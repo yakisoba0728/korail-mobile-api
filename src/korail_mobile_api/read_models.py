@@ -1507,4 +1507,4 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     journeys: tuple[RefundTicketJourney, ...] = ()
     #: ``dcnt_crd_info`` — present only when this "ticket" is a 할인카드(N카드).
     #: ``None`` for every ordinary ticket.
-    discount_card: "DiscountCardOnTicket | None" = None
+    discount_card: DiscountCardOnTicket | None = None

@@ -7,6 +7,7 @@ from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from .errors import KorailProtocolError
 from .models import BaseKorailResponse, PhysicalSeat, SeatInventoryResponse
 
+
 if TYPE_CHECKING:
     from .read_models import RefundTicketDetailResponse
 
@@ -178,7 +179,7 @@ class KorailSeatAssignment:
         cls,
         inventory: SeatInventoryResponse,
         seat: PhysicalSeat,
-    ) -> "KorailSeatAssignment":
+    ) -> KorailSeatAssignment:
         """Pair a :class:`~korail_mobile_api.SeatInventoryResponse` with one of its seats.
 
         ``inventory`` must be a seat-inventory read whose ``car_no`` the server
@@ -375,10 +376,10 @@ class PaidTicket:
     @classmethod
     def from_refund_detail(
         cls,
-        detail: "RefundTicketDetailResponse",
+        detail: RefundTicketDetailResponse,
         *,
         train_no: str = "",
-    ) -> "PaidTicket":
+    ) -> PaidTicket:
         """Build the refund identity from a ticket detail, the way the app does.
 
         Takes the sale date from ``h_sale_dt`` and the window, sequence and

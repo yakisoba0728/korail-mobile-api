@@ -10,11 +10,11 @@ from korail_mobile_api.errors import (
     KorailSessionExpiredError,
     KorailTransportError,
 )
-from korail_mobile_api.redaction import redact_mapping, redact_text, redact_url
 from korail_mobile_api.read_parsers import (
     parse_reservation_history_response,
     parse_trip_menu_response,
 )
+from korail_mobile_api.redaction import redact_mapping, redact_text, redact_url
 from korail_mobile_api.safety import EXCLUDED_API_DOMAINS
 
 

@@ -1,9 +1,10 @@
 import inspect
 
 import httpx
-import korail_mobile_api as api
 import pytest
 
+import korail_mobile_api as api
+from conftest import load_json_fixture
 from korail_mobile_api import KorailConfig
 from korail_mobile_api.constants import (
     DYNAPATH_ALLOWLIST_PATHS,
@@ -17,11 +18,11 @@ from korail_mobile_api.constants import (
     KORAIL_DEVICE_ANDROID,
 )
 from korail_mobile_api.dynapath import (
+    KORAIL_DYNAPATH_AS_VALUE,
+    KORAIL_DYNAPATH_SDK_VERSION,
     DynapathConfig,
     DynapathTokenGenerator,
     DynapathTokenSettings,
-    KORAIL_DYNAPATH_AS_VALUE,
-    KORAIL_DYNAPATH_SDK_VERSION,
 )
 from korail_mobile_api.errors import (
     KorailAppError,
@@ -39,7 +40,6 @@ from korail_mobile_api.safety import (
     assert_read_only_request_fields,
     assert_read_only_route,
 )
-from conftest import load_json_fixture
 
 
 def test_post_form_adds_common_fields_and_form_encoding():
@@ -50,7 +50,9 @@ def test_post_form_adds_common_fields_and_form_encoding():
         captured["content_type"] = request.headers["content-type"]
         captured["connection"] = request.headers["connection"]
         captured["body"] = request.content.decode()
-        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+        return httpx.Response(
+            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+        )
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
     response = client.post_form(
@@ -123,7 +125,9 @@ def test_post_form_adds_dynapath_header_for_allowlisted_path():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["token"] = request.headers.get(DYNAPATH_HEADER_NAME)
-        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+        return httpx.Response(
+            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+        )
 
     config = KorailConfig(dynapath=DynapathConfig(enabled=True, token_provider=token_provider))
     client = KorailHttpClient(config, transport=httpx.MockTransport(handler))
@@ -148,7 +152,9 @@ def test_dynapath_provider_is_not_called_for_non_allowlisted_path():
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers.get(DYNAPATH_HEADER_NAME) is None
-        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+        return httpx.Response(
+            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+        )
 
     config = KorailConfig(dynapath=DynapathConfig(enabled=True, token_provider=token_provider))
     client = KorailHttpClient(config, transport=httpx.MockTransport(handler))
@@ -204,7 +210,9 @@ def test_get_json_returns_parsed_response():
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
         captured["query"] = request.url.query.decode()
-        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+        return httpx.Response(
+            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+        )
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
     response = client.get_json(
@@ -236,7 +244,9 @@ def test_get_json_can_return_raw_object_without_korail_envelope():
 
 def test_parse_base_response_raises_app_error_for_fail():
     try:
-        parse_base_response({"h_msg_cd": "WRG000000", "h_msg_txt": "조회 결과 없음", "strResult": "FAIL"})
+        parse_base_response(
+            {"h_msg_cd": "WRG000000", "h_msg_txt": "조회 결과 없음", "strResult": "FAIL"}
+        )
     except KorailAppError as exc:
         assert exc.code == "WRG000000"
         assert "조회 결과 없음" in str(exc)
@@ -328,7 +338,9 @@ def test_http_client_blocks_excluded_domains_before_post(blocked_domain: str):
     def handler(_: httpx.Request) -> httpx.Response:
         nonlocal called
         called = True
-        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+        return httpx.Response(
+            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+        )
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
 
@@ -345,7 +357,9 @@ def test_http_client_blocks_excluded_domains_before_get(blocked_domain: str):
     def handler(_: httpx.Request) -> httpx.Response:
         nonlocal called
         called = True
-        return httpx.Response(200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"})
+        return httpx.Response(
+            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+        )
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
 
@@ -427,7 +441,7 @@ def test_exact_post_request_fields_and_scalar_values_fail_before_io(data):
         KorailConfig(),
         transport=httpx.MockTransport(handler),
     )
-    with pytest.raises(KorailProtocolError, match="request (fields|values)"):
+    with pytest.raises(KorailProtocolError, match=r"request (fields|values)"):
         client.post_form(
             "/classes/com.korail.mobile.cart.showCartList",
             data,
@@ -580,7 +594,7 @@ def test_exact_get_request_fields_and_scalar_values_fail_before_io(params):
         KorailConfig(),
         transport=httpx.MockTransport(handler),
     )
-    with pytest.raises(KorailProtocolError, match="request (fields|values)"):
+    with pytest.raises(KorailProtocolError, match=r"request (fields|values)"):
         client.get_json(
             "/classes/com.korail.mobile.product.ReservationList",
             params,

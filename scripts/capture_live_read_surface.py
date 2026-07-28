@@ -43,9 +43,10 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
@@ -75,6 +76,7 @@ from korail_mobile_api.live import (
     read_credentials_from_env,
 )
 from korail_mobile_api.redaction import redact_value
+
 
 LIVE_READ_SURFACE_ENV = "KORAIL_LIVE_READ_SURFACE"
 LIVE_RESERVE_ENV = "KORAIL_LIVE_ALLOW_RESERVE"
@@ -190,7 +192,7 @@ class SurfaceRunner:
         except (KeyboardInterrupt, SystemExit):
             # Never swallow an abort: a live run must stay interruptible.
             raise
-        except Exception as exc:  # noqa: BLE001 - a failure IS the evidence
+        except Exception as exc:  # 넓게 잡는다: 여기서는 실패 자체가 증거다
             result = _StepResult(
                 name=name,
                 method=method,

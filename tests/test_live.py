@@ -6,8 +6,8 @@ from korail_mobile_api.live import live_enabled, read_credentials_from_env
 from korail_mobile_api.models import (
     AppDataResponse,
     BaseKorailResponse,
-    KorailStation,
     KorailSession,
+    KorailStation,
     NoticeResponse,
     StationDataResponse,
     TrainSearchQuery,

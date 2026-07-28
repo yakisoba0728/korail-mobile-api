@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import inspect
-from copy import deepcopy
 from dataclasses import FrozenInstanceError, is_dataclass
-from typing import Any, get_type_hints
+from typing import Any
 from urllib.parse import parse_qs
 
 import httpx

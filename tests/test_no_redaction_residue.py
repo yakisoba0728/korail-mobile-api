@@ -27,9 +27,9 @@ in an excluded file forever. Split like this, the scanner is scanned too.
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
 import subprocess
+from pathlib import Path
 
 import pytest
 

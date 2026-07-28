@@ -1,0 +1,19 @@
+version: 2
+
+updates:
+  # The workflow pins every action to a commit SHA, which is what makes a
+  # supply-chain swap behind a moving tag impossible — and also what makes the
+  # pins go stale silently. Dependabot is the half that keeps them moving: it
+  # opens one pull request per action, updates the SHA and the trailing version
+  # comment together, and the pull request runs the same CI as any other change.
+  #
+  # Runtime and dev dependencies are deliberately NOT tracked here. They live in
+  # pyproject.toml as ranges, not as a lock file, so there is no pinned version
+  # for Dependabot to bump.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci

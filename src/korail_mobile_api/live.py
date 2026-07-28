@@ -8,9 +8,9 @@ from .client import KorailClient
 from .config import KorailConfig
 from .constants import build_dalvik_user_agent
 from .dynapath import (
+    KORAIL_DYNAPATH_AS_VALUE,
     DynapathConfig,
     DynapathTokenSettings,
-    KORAIL_DYNAPATH_AS_VALUE,
 )
 from .models import TrainSearchQuery
 

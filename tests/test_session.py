@@ -1,5 +1,5 @@
-import pytest
 import httpx
+import pytest
 
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.errors import (
@@ -8,6 +8,7 @@ from korail_mobile_api.errors import (
     KorailAuthError,
     KorailProtocolError,
 )
+
 
 SERVICE_CHECK_PATH = "/file/CACHE/MobileService.cache"
 
@@ -217,7 +218,9 @@ def test_login_accepts_live_no_aes_bootstrap_without_idx_or_key(load_json_fixtur
         if request.url.path == SERVICE_CHECK_PATH:
             return service_check_response()
         if request.url.path == "/classes/com.korail.mobile.common.code.do":
-            return httpx.Response(200, json=load_json_fixture("common_code_login_crypto_live_n.json"))
+            return httpx.Response(
+                200, json=load_json_fixture("common_code_login_crypto_live_n.json")
+            )
         if request.url.path == "/classes/com.korail.mobile.login.Login":
             captured["body"] = request.content.decode()
             return httpx.Response(
@@ -282,7 +285,12 @@ def test_login_rejects_non_app_success_code_even_with_jsessionid():
         if request.url.path == "/classes/com.korail.mobile.common.code.do":
             return httpx.Response(
                 200,
-                json={"h_msg_cd": "API.I00000", "h_msg_txt": "Success", "strResult": "SUCC", "pwdAESCphd": "N"},
+                json={
+                    "h_msg_cd": "API.I00000",
+                    "h_msg_txt": "Success",
+                    "strResult": "SUCC",
+                    "pwdAESCphd": "N",
+                },
             )
         if request.url.path == "/classes/com.korail.mobile.login.Login":
             return httpx.Response(
@@ -309,7 +317,12 @@ def test_login_redirect_response_raises_continuation_error():
         if request.url.path == "/classes/com.korail.mobile.common.code.do":
             return httpx.Response(
                 200,
-                json={"h_msg_cd": "API.I00000", "h_msg_txt": "Success", "strResult": "SUCC", "pwdAESCphd": "N"},
+                json={
+                    "h_msg_cd": "API.I00000",
+                    "h_msg_txt": "Success",
+                    "strResult": "SUCC",
+                    "pwdAESCphd": "N",
+                },
             )
         if request.url.path == "/classes/com.korail.mobile.login.Login":
             return httpx.Response(
@@ -435,10 +448,38 @@ def test_login_crypto_bootstrap_app_failure_raises_library_error_without_login_p
     "payload",
     [
         {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"},
-        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "IDX", "key": "KEY", "pwdAESCphd": ""},
-        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "IDX", "key": "KEY", "pwdAESCphd": "maybe"},
-        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "", "key": "KEY", "pwdAESCphd": "Y"},
-        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC", "idx": "IDX", "key": "", "pwdAESCphd": "Y"},
+        {
+            "h_msg_cd": "IRG000000",
+            "h_msg_txt": "OK",
+            "strResult": "SUCC",
+            "idx": "IDX",
+            "key": "KEY",
+            "pwdAESCphd": "",
+        },
+        {
+            "h_msg_cd": "IRG000000",
+            "h_msg_txt": "OK",
+            "strResult": "SUCC",
+            "idx": "IDX",
+            "key": "KEY",
+            "pwdAESCphd": "maybe",
+        },
+        {
+            "h_msg_cd": "IRG000000",
+            "h_msg_txt": "OK",
+            "strResult": "SUCC",
+            "idx": "",
+            "key": "KEY",
+            "pwdAESCphd": "Y",
+        },
+        {
+            "h_msg_cd": "IRG000000",
+            "h_msg_txt": "OK",
+            "strResult": "SUCC",
+            "idx": "IDX",
+            "key": "",
+            "pwdAESCphd": "Y",
+        },
     ],
 )
 def test_login_crypto_bootstrap_requires_complete_metadata(payload):

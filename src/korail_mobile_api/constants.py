@@ -1,5 +1,6 @@
 from enum import StrEnum
 
+
 KORAIL_BASE_URL = "https://smart.letskorail.com"
 KORAIL_DEVICE_ANDROID = "AD"
 KORAIL_API_VERSION = "250601003"

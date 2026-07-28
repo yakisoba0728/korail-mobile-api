@@ -23,14 +23,13 @@ from .constants import (
 )
 from .errors import KorailProtocolError
 from .models import TrainSummary
-from .read_models import TrainScheduleItem
 from .mutation_models import (
+    CardPayment,
     CartAddRequest,
     DiscountCardAdditionalUser,
     DiscountCardPurchaseRequest,
     DiscountCardSectionRequest,
     DiscountCardTicket,
-    CardPayment,
     KorailPassengerCounts,
     KorailSeatAssignment,
     PaidTicket,
@@ -38,6 +37,7 @@ from .mutation_models import (
     PriceRecalculationRow,
     ReservationHoldResponse,
 )
+from .read_models import TrainScheduleItem
 
 
 _DATE_RE = re.compile(r"[0-9]{8}")
@@ -168,8 +168,8 @@ def build_reservation_form(
     :func:`build_single_adult_reservation_form`.
 
     ``job_type`` selects which of the booking screen's three actions is being
-    performed and defaults to
-    :attr:`KorailReservationJobType.IMMEDIATE <korail_mobile_api.KorailReservationJobType.IMMEDIATE>`
+    performed and defaults to :attr:`KorailReservationJobType.IMMEDIATE
+    <korail_mobile_api.KorailReservationJobType.IMMEDIATE>`
     (``txtJobId="1101"``), the only one that existed before:
 
     * :attr:`~korail_mobile_api.KorailReservationJobType.SEAT_DESIGNATED`
@@ -785,7 +785,9 @@ def _build_journey_reservation_form(
         job_type=job_type,
         passenger_total=passengers.total,
     )
-    for leg, seat_class in zip(resolved_legs, resolved_classes):
+    # strict=True 는 새 제약이 아니라 이미 성립하는 불변식을 검사로 바꾼 것이다.
+    # _validated_seat_classes() 가 leg 당 정확히 하나의 좌석등급을 보장한다.
+    for leg, seat_class in zip(resolved_legs, resolved_classes, strict=True):
         _assert_leg_is_bookable(leg, seat_class=seat_class, job_type=job_type)
     journeys = tuple(
         _journey_fields(leg) for leg in resolved_legs
@@ -1077,7 +1079,7 @@ def _itinerary_standing_flag(
     stays visible.
     """
     flag = "N"
-    for index, (train, seat_class) in enumerate(zip(legs, seat_classes)):
+    for index, (train, seat_class) in enumerate(zip(legs, seat_classes, strict=True)):
         if index == 0 or flag == "N":
             flag = _standing_flag(train, seat_class=seat_class)
     return flag

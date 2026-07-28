@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.padding import PKCS7
 from .errors import KorailProtocolError
 from .models import LoginCryptoInfo
 
+
 SID_KEY = b"2485dd54d9deaa36"
 
 
@@ -43,7 +44,9 @@ def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
                 _aes_cbc_pkcs7_encrypt(password.encode("utf-8"), key, iv)
             )
         except ValueError as exc:
-            raise KorailProtocolError("KORAIL login crypto metadata contained an invalid AES key/IV") from exc
+            raise KorailProtocolError(
+                "KORAIL login crypto metadata contained an invalid AES key/IV"
+            ) from exc
         return _base64_no_wrap(encrypted.encode("utf-8"))
     return _base64_no_wrap(password.encode("utf-8"))
 
@@ -51,7 +54,7 @@ def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
 def generate_sid(*, epoch_ms: int | None = None) -> str:
     timestamp = epoch_ms if epoch_ms is not None else int(time.time() * 1000)
     encrypted = _aes_cbc_pkcs7_encrypt(
-        f"AD{timestamp}".encode("utf-8"),
+        f"AD{timestamp}".encode(),
         SID_KEY,
         SID_KEY,
     )

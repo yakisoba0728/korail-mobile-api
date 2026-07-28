@@ -543,8 +543,10 @@ The APK and the generated decompile directories are not committed. Documentation
 the reproducible inventory output, the client source and the offline contract
 tests are.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow — the
+three offline gates are `pytest -q -m "not live"`, `ruff check .` and
+`pyright`, all three configured in `pyproject.toml` and all three run by CI —
+and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations.
 
 ## License
 

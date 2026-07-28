@@ -68,12 +68,12 @@ from korail_mobile_api import (
     TransferItinerary,
     TransferSearchResult,
 )
-from korail_mobile_api.models import pair_transfer_itineraries
 from korail_mobile_api.constants import (
     KORAIL_DIRECT_JOURNEY_TYPE_CODE,
     KORAIL_STANDBY_WAIT_FLAG,
     KORAIL_TRANSFER_JOURNEY_TYPE_CODE,
 )
+from korail_mobile_api.models import pair_transfer_itineraries
 from korail_mobile_api.mutation_payloads import (
     build_reservation_form,
     build_single_adult_reservation_form,
@@ -422,9 +422,9 @@ def test_a_third_leg_would_collide_rather_than_extend():
     # selectors are two-way. A journey-3 write lands on journey 2's key.
     from korail_mobile_api.mutation_payloads import (
         _seat_attribute_key,
+        _seat_no_key,
         _srcar_count_key,
         _srcar_no_key,
-        _seat_no_key,
     )
 
     assert _seat_attribute_key(1) == "txtSeatAttCd4"

@@ -859,7 +859,7 @@ class KorailNetFunnelClient:
         except BaseException as exc:
             try:
                 self.release(token)
-            except Exception as release_error:  # noqa: BLE001 - see docstring
+            except Exception as release_error:  # 넓게 잡는다: 이유는 docstring 참조
                 exc.add_note(
                     "KORAIL NetFunnel slot release also failed and the slot may "
                     f"be held until the server times it out: {release_error}"

@@ -27,14 +27,15 @@ from korail_mobile_api import (
     KorailAuthError,
     KorailClient,
     KorailConfig,
+    KorailMutationNotAllowedError,
     KorailSession,
     MutationConsent,
-    KorailMutationNotAllowedError,
     MutationPreview,
     ReservationHoldResponse,
     ReservationPaymentResponse,
 )
 from korail_mobile_api.mutation_payloads import build_card_payment_form
+
 
 PAYMENT_ROUTE = "/classes/com.korail.mobile.payment.ReservationPayment"
 
@@ -203,8 +204,8 @@ def test_the_card_gate_is_keyed_on_the_card_bearing_category_set():
     from korail_mobile_api.consent import MUTATION_CATEGORIES
     from korail_mobile_api.safety import (
         KORAIL_CARD_BEARING_MUTATION_CATEGORIES,
-        KORAIL_MUTATION_ROUTES,
         KORAIL_MUTATION_ROUTE_CATEGORIES,
+        KORAIL_MUTATION_ROUTES,
     )
 
     assert "payment" in KORAIL_CARD_BEARING_MUTATION_CATEGORIES
@@ -221,10 +222,10 @@ def test_the_card_gate_is_keyed_on_the_card_bearing_category_set():
 
 def test_the_card_gate_applies_only_to_the_payment_category():
     # A reserve/cancel/refund consent is untouched by the card claim rules.
+    from korail_mobile_api import TrainSummary
     from korail_mobile_api.mutation_payloads import (
         build_single_adult_reservation_form,
     )
-    from korail_mobile_api import TrainSummary
 
     reserve_route = "/classes/com.korail.mobile.certification.TicketReservation"
     client, recorder = _client_with(
