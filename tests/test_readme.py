@@ -310,7 +310,7 @@ def test_ticket_reference_docs_keep_static_only_rows_and_scope_consistent():
     changelog = " ".join(CHANGELOG.read_text(encoding="utf-8").split())
     assert (
         "승차권 참조 구현 자체는 실서버 입출력을 쓰지 않았고 "
-        "상태 변경 능력을 더하지 않았다." in changelog
+        "상태 변경 능력을 더하지 않았습니다." in changelog
     )
 
 
@@ -529,7 +529,7 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
     assert '정확히 `strResult="SUCC"` 로 파싱' in changelog
     assert "R33 `getGuideSeatCnd`" in changelog
     assert "완전한 `FAIL` 봉투" in changelog
-    assert "재시도 없이 `KorailAppError` 로 올라왔다" in changelog
+    assert "재시도 없이 `KorailAppError` 로 올라왔습니다" in changelog
     assert "27개가 파싱되고" in changelog
     assert "예상 밖 실패는 0" in changelog
 
