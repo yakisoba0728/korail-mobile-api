@@ -116,14 +116,16 @@ def test_the_docs_extra_installs_the_site_toolchain() -> None:
 
 
 def test_the_built_site_is_not_tracked() -> None:
+    # Binary stdin, not ``text=True``. Text mode translates the ``\n`` into
+    # ``\r\n`` on Windows, git takes the carriage return as part of the path,
+    # and the answer comes back as the quoted ``"site/index.html\r"`` -- a
+    # different question, answered correctly.
     result = subprocess.run(
         ["git", "check-ignore", "--stdin"],
         cwd=ROOT,
-        input="site/index.html\n",
+        input=b"site/index.html\n",
         capture_output=True,
-        text=True,
-        encoding="utf-8",
         check=False,
     )
     assert result.returncode == 0
-    assert result.stdout.splitlines() == ["site/index.html"]
+    assert result.stdout.decode("utf-8").splitlines() == ["site/index.html"]

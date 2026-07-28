@@ -1,2 +1,14 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Below, the bytes ARE the contract, so checkout must not rewrite line endings.
+#
+# tests/fixtures holds captured server responses that are compared byte for
+# byte, and one of them by sha256; a Windows checkout that turned its LFs into
+# CRLFs changed the hash and failed the suite while the library was fine.
+# LICENSE and NOTICE travel verbatim into every wheel and sdist, and
+# scripts/verify_distribution.py compares the archive members against these
+# files, so they must be the same bytes on every platform that builds.
+tests/fixtures/** -text
+LICENSE -text
+NOTICE -text
