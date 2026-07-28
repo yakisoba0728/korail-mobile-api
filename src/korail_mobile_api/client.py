@@ -1,3 +1,18 @@
+""":class:`KorailClient` — 이 패키지에 하나뿐인 진입점.
+
+여기에는 클래스가 하나뿐이다. 라우트를 고르고, 폼을 만들고, 응답을 파싱하는
+일은 전부 :mod:`korail_mobile_api.read_payloads`,
+:mod:`korail_mobile_api.mutation_payloads`,
+:mod:`korail_mobile_api.read_parsers` 에 있고 이 모듈은 그것들을 순서대로
+엮어 메서드 하나로 만든다.
+
+공개 메서드는 두 종류뿐이다. 로그인·읽기 메서드는 인자만 받고, 상태를 바꾸는
+메서드는 키워드 전용 ``consent`` 를 함께 요구한다. 후자는 예외 없이
+:func:`~korail_mobile_api.consent.require_mutation_consent` 로 시작하므로,
+폼을 만들기도 전에 거절된다. 어떤 범주가 어떤 라우트를 소유하는지는
+:mod:`korail_mobile_api.safety` 가 정하고 전송 직전에 다시 검사한다.
+"""
+
 from collections.abc import Callable, Sequence
 from typing import TypeVar
 

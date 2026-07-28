@@ -1,3 +1,14 @@
+"""요청마다 실리는 설정값 — :class:`KorailConfig` 하나와 그 기본 구성.
+
+기본값은 앱 v6.5.0 이 보내는 값이고, 그중 DynaPath 기기 값만은 설정 객체마다
+새로 만들어진다. 모든 설치본이 같은 식별자를 보내는 것이 안티매크로 검사가
+찾는 신호이기 때문이다(:func:`_default_dynapath_config`).
+
+실제 단말 값을 프로세스 사이에서 유지하려면 이 클래스를 직접 채우지 말고
+:func:`~korail_mobile_api.live.build_config_from_env` 를 쓴다. User-Agent 와
+DynaPath 토큰이 같은 단말을 주장하게 맞춰 주는 것은 그쪽뿐이다.
+"""
+
 from dataclasses import dataclass, field
 
 from .constants import (
