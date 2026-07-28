@@ -88,16 +88,28 @@ export 되어 있어 직접 만든 래퍼에 붙일 수 있다. 그 밖의 코�
 - **User-Agent.** 앱은 UA 를 직접 박지 않는다. `HttpURLConnection` 위의
   Retrofit v1 을 쓰므로 서버가 보는 것은 플랫폼의 Dalvik 문자열이고,
   `KORAIL_USER_AGENT` 가 그 모양이다.
-- **DynaPath.** `x-dynapath-m-token` 안티 오토메이션 헤더는 **기본적으로 켜져 있다**.
-  붙는 곳은 앱이 붙이는 경로뿐이고, 그 목록은
-  `korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS` 의 6개 경로다. 토큰은
-  설정이 가진 기기 값으로 로컬에서 만든다. 이 값을 만들려고 사용자 컴퓨터에서
-  읽어오는 것은 없다.
+- **DynaPath.** `x-dynapath-m-token` 안티 오토메이션 헤더는 **기본적으로 꺼져 있다**.
+  이 토큰은 자동화 탐지를 통과하기 위한 값이라, 보낼지 말지를 이 패키지가 대신
+  정하지 않는다. 켜려면 `KorailConfig(enable_dynapath=True)` 라고 말해야 한다.
 
-기기 값은 **합성이고 인스턴스마다 다르다.** `KorailConfig()` 는 매번 자기 `di`
-— 실기기에서는 `Settings.Secure.ANDROID_ID` 인 필드 — 를 새로 만든다. 모든 설치본이
-공통으로 보내는 식별자야말로 안티 매크로 검사가 찾는 것이기 때문이다. 그 값은
-설정 객체가 사는 동안만 유지되고 프로세스를 넘기지 않는다.
+```python
+from korail_mobile_api import KorailClient, KorailConfig
+
+client = KorailClient(KorailConfig(enable_dynapath=True))
+client.login("<회원번호·이메일·휴대폰번호 중 하나>", "<비밀번호>")
+```
+
+켜지 않고 로그인하면 요청이 나가기 전에 `KorailDynaPathRequiredError` 로 막히고,
+무엇을 켜야 하는지 예외 메시지가 알려준다. 막히는 곳은 토큰 없이 거절이 관측된
+`login.Login` 하나뿐이다(`DYNAPATH_REQUIRED_PATHS`). 검색을 비롯한 읽기는 토큰
+없이도 성공한 것이 관측됐으므로 그대로 나간다.
+
+켰을 때 붙는 곳은 앱이 붙이는 경로뿐이고, 그 목록은
+`DYNAPATH_ALLOWLIST_PATHS` 의 6개 경로다. 토큰은 설정이 가진 기기 값으로 로컬에서
+만들며, 이 값을 만들려고 사용자 컴퓨터에서 읽어오는 것은 없다. 기기 값은
+**합성이고 인스턴스마다 다르다** — 모든 설치본이 공통으로 보내는 식별자야말로
+안티 매크로 검사가 찾는 것이기 때문이다. 그 값은 설정 객체가 사는 동안만
+유지되고 프로세스를 넘기지 않는다.
 
 진짜 기기 신원 — 본인의 `ANDROID_ID`, 모델, 안드로이드 릴리스 — 을 실행 간에
 고정하고 싶으면 환경변수로 넘겨라.
@@ -120,19 +132,11 @@ client = KorailClient(build_config_from_env())
 에는 기본값이 있다. [docs/verification-record.md](docs/verification-record.md)
 참고.
 
-DynaPath 를 끄려면 — 모의 transport 를 쓰거나 맨 프로토콜을 보려면 — 명시해야 한다.
-
-```python
-from korail_mobile_api import DynapathConfig, KorailClient, KorailConfig
-
-client = KorailClient(KorailConfig(dynapath=DynapathConfig()))
-```
-
-끄면 무엇을 포기하는지는 알고 해라. DynaPath 없이, 그리고 이 패키지 이름을 단
-User-Agent 로 보냈을 때 읽기는 성공했고 `login` 은 실패했다. 그 실패는 아래
-[에러 처리](#에러-처리) 의 위장된 형태로 나타난다. 둘 중 무엇이 로그인을 되살렸는지
-하나씩 분리해 확인하지는 않았으므로, DynaPath 만 끄고 앱 모양 User-Agent 는 남긴
-설정은 "깨진 것으로 확인된" 것이 아니라 "확인되지 않은" 상태다.
+DynaPath 없이, 그리고 이 패키지 이름을 단 User-Agent 로 보냈을 때 읽기는
+성공했고 `login` 은 실패했다. 그 실패가 아래 [에러 처리](#에러-처리) 의 위장된
+형태다. 둘 중 무엇이 로그인을 되살렸는지 하나씩 분리해 확인하지는 않았으므로,
+DynaPath 만 끄고 앱 모양 User-Agent 는 남긴 설정은 "깨진 것으로 확인된" 것이
+아니라 "확인되지 않은" 상태다.
 
 ### srt-mobile-api 와 함께 쓸 때
 
@@ -388,21 +392,16 @@ APK 분기가 아니라 이 저장소의 실서버 관측이다. 어느 쪽이 �
   한국어 문구 대신 `error.code` 와 `error.raw` 를 읽어라. `SUPDATE` 는 버전
   게이트다. `MACRO` 가 실린 코드나 메시지는 아니다.
 
-해결책은 버전을 올리는 것이 아니라 앱처럼 보이는 것이다. 위의 기본 설정이 그
-목적이고, DynaPath 를 끄거나 `user_agent` 를 직접 덮어쓰는 것이 의도적으로만
-해야 할 변경인 이유다.
+해결책은 버전을 올리는 것이 아니라 앱처럼 보이는 것이다. 다만 이 라이브러리는
+그것을 대신 켜주지 않는다 — 켜지 않고 로그인하면 `KorailDynaPathRequiredError`
+로 먼저 막히고, 무엇을 켜야 하는지 알려준다.
 
-`KorailDynaPathError` 는 반대 방향의 실패이고, 기본 설정으로도 여기에 닿는다.
-토큰이 붙는 경로 6개 중 하나가 `search_trains` 가 쓰는 `ScheduleView` 라서, 빠른
-시작의 *첫* 호출부터 토큰이 실린다.
-
-그 토큰은 이 라이브러리가 합성한 기기 id 와 `"Android"` 라는 `device_model` 로
-만든다. **두 값 모두 실서버로 확인한 적이 없다.** 확인된 것은
-`build_config_from_env` 로 진짜 단말 값을 실은 같은 요청이다. 서버가 토큰의 존재가
-아니라 내용을 검사한다면, 증상은 토큰 없이 잘 되던 읽기에서
-`KorailDynaPathError` 가 나는 것이다. 빠져나갈 길은 둘이고 위에 다 있다.
-`KorailConfig(dynapath=DynapathConfig())` 로 토큰을 안 보내거나,
-`build_config_from_env` 로 본인 단말 값을 보내라.
+`KorailDynaPathError` 는 반대 방향의 실패다. 토큰을 보냈는데 서버가 거절한
+것이다. `enable_dynapath=True` 로 켜면 토큰은 이 라이브러리가 합성한 기기 id 와
+`"Android"` 라는 `device_model` 로 만드는데, **두 값 모두 실서버로 확인한 적이
+없다.** 확인된 것은 `build_config_from_env` 로 진짜 단말 값을 실은 요청이다.
+서버가 토큰의 존재가 아니라 내용을 검사한다면 그때 이 예외가 난다. 그 경우
+`build_config_from_env` 로 본인 단말 값을 쓰면 된다.
 
 ## 한계
 
@@ -480,7 +479,7 @@ KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내지 마라.
 env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
 ```
 
-오프라인 스위트가 게이트이고 네트워크를 쓰지 않는다: `2430 passed, 1 deselected`.
+오프라인 스위트가 게이트이고 네트워크를 쓰지 않는다: `2436 passed, 1 deselected`.
 빠진 하나는 명시적으로 옵트인해야 하는 실서버 테스트다. 실서버 테스트는
 `KORAIL_MOBILE_API_LIVE=1` 과 직접 마련한 자격증명이 함께 있을 때만 돈다. 이
 저장소는 계정을 동봉하지 않는다.

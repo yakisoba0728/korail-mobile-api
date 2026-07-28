@@ -27,17 +27,14 @@ from .constants import (
 from .dynapath import DynapathConfig, build_default_token_settings
 
 
-def _default_dynapath_config() -> DynapathConfig:
-    """DynaPath 를 켜고 기기 값을 이 설정만을 위해 새로 만든 구성.
+def enabled_dynapath_config() -> DynapathConfig:
+    """DynaPath 를 켜고 기기 값을 이 구성만을 위해 새로 만든다.
 
-    ``KorailClient()`` 를 인자 없이 만들어도 로그인이 되는 이유가 이것이다.
-    DynaPath 를 끈 설정으로 ``login.Login`` 을 부르면 서버가 거절하는데, 그
-    거절이 사용자 문구로는 "앱을 업데이트하라"로 위장돼 온다. 계정과 무관한
-    읽기는 같은 설정에서 계속 동작하므로 로그인만 골라 실패하는 것처럼
-    보인다.
+    ``KorailConfig(enable_dynapath=True)`` 가 부르는 것이 이 함수다. 직접
+    불러 :class:`KorailConfig` 의 ``dynapath`` 에 넣어도 결과는 같다.
 
     :func:`~korail_mobile_api.dynapath.build_default_token_settings` 를
-    모듈 수준 싱글턴이 아니라 설정마다 새로 부르는 것은 의도다. 이 설정에는
+    모듈 수준 싱글턴이 아니라 호출마다 새로 부르는 것은 의도다. 이 설정에는
     설치별 기기 식별자와 앱 시작 시각이 들어 있어서, 하나를 공유하면 한
     프로세스 안의 모든 클라이언트가 같은 기기·같은 시작 시각을 주장하게
     된다.
@@ -74,10 +71,10 @@ class KorailConfig:
     timeout: float = KORAIL_TIMEOUT_SECONDS
     user_agent: str = KORAIL_USER_AGENT
     live_env_var: str = "KORAIL_MOBILE_API_LIVE"
-    #: DynaPath 안티오토메이션. 기본이 켜짐이며 이유는
-    #: :func:`_default_dynapath_config` 에 있다. 끄려면 ``DynapathConfig()`` 를
-    #: 넘긴다. 켜든 끄든 허용목록 여섯 경로 밖에는 아무 영향이 없다.
-    dynapath: DynapathConfig = field(default_factory=_default_dynapath_config)
+    #: DynaPath 구성 전체. 기본은 **꺼짐** 이다. 보통은 아래
+    #: ``enable_dynapath`` 로 켜고, 토큰 제공자를 갈아끼우거나 허용목록을
+    #: 바꿔야 할 때만 이쪽을 직접 넘긴다.
+    dynapath: DynapathConfig = field(default_factory=DynapathConfig)
     device_width: int = KORAIL_DEFAULT_DEVICE_WIDTH
     device_height: int = KORAIL_DEFAULT_DEVICE_HEIGHT
     android_sdk_int: int = KORAIL_DEFAULT_ANDROID_SDK_INT
@@ -101,3 +98,25 @@ class KorailConfig:
     #: 전용 조회 액션(``act_8_2``)이 따로 있는 것이 그 증거다. 대기열 모양의
     #: 실패가 보이면 그때 ``True`` 로 켜라.
     netfunnel_enabled: bool = False
+    #: DynaPath 안티오토메이션을 켠다. **기본은 거짓이다.**
+    #:
+    #: 이 토큰은 자동화 탐지를 통과하기 위한 값이라 보낼지 말지를 이 패키지가
+    #: 대신 정하지 않는다. 켜지 않은 채
+    #: :data:`~korail_mobile_api.constants.DYNAPATH_REQUIRED_PATHS` 의 경로를
+    #: 부르면 전송 전에
+    #: :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError` 로
+    #: 막힌다. 다른 경로는 켜든 끄든 그대로 나간다.
+    #:
+    #: ``dynapath`` 를 직접 켜서 넘겼다면 이 플래그는 아무것도 하지 않는다.
+    #:
+    #: **필드 목록 맨 끝에 붙였다.** 이 앞의 순서는
+    #: ``tests/test_public_contract.py`` 가 고정하고 있고, 중간에 끼우면 이미
+    #: 위치 인자로 쓰던 호출의 뜻이 조용히 바뀐다.
+    enable_dynapath: bool = False
+
+    def __post_init__(self) -> None:
+        # ``enable_dynapath`` 는 편의 플래그이고 ``dynapath`` 가 실체다. 직접
+        # 넘긴 구성이 있으면 그것을 이긴다 — 토큰 제공자를 갈아끼운 호출자가
+        # 플래그 하나로 그것을 덮어쓰게 되면 안 된다.
+        if self.enable_dynapath and not self.dynapath.enabled:
+            object.__setattr__(self, "dynapath", enabled_dynapath_config())

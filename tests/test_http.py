@@ -883,8 +883,11 @@ def test_allowlisted_403_is_classified_as_dynapath_error(load_json_fixture):
             headers={"DynaPath-Result": "-1"},
         )
 
+    # 서버가 보낸 403 을 분류하는 테스트이므로 요청이 실제로 나가야 한다.
+    # 끈 설정이면 전송 전에 KorailDynaPathRequiredError 로 막혀 서버 응답을
+    # 볼 기회 자체가 없다.
     client = KorailHttpClient(
-        KorailConfig(),
+        KorailConfig(enable_dynapath=True),
         transport=httpx.MockTransport(handler),
     )
     with pytest.raises(KorailDynaPathError, match="macro protection"):

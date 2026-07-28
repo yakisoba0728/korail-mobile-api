@@ -49,7 +49,7 @@ def make_success_then_failure_client(load_json_fixture):
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    return KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    return KorailClient(KorailConfig(enable_dynapath=True), transport=httpx.MockTransport(handler))
 
 
 def make_continuation_client():
@@ -83,7 +83,7 @@ def make_continuation_client():
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    return KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    return KorailClient(KorailConfig(enable_dynapath=True), transport=httpx.MockTransport(handler))
 
 
 def test_login_posts_transformed_password_and_tracks_cookie(load_json_fixture):
@@ -105,7 +105,10 @@ def test_login_posts_transformed_password_and_tracks_cookie(load_json_fixture):
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
     session = client.login("member1", "pw123")
 
     assert "txtMemberNo=member1" in captured["body"]
@@ -143,7 +146,10 @@ def test_login_infers_email_input_flag_and_omits_unset_optional_fields(load_json
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
     session = client.login("user@example.com", "pw123")
 
     assert "txtMemberNo=user%40example.com" in captured["body"]
@@ -188,7 +194,10 @@ def test_login_emits_fields_in_the_apps_retrofit_order(load_json_fixture):
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
     client.login(
         "member1",
         "pw123",
@@ -230,7 +239,10 @@ def test_login_accepts_live_no_aes_bootstrap_without_idx_or_key(load_json_fixtur
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
     session = client.login("member1", "pw123")
 
     assert "txtPwd=cHcxMjM%3D" in captured["body"]
@@ -267,7 +279,10 @@ def test_login_reads_crypto_from_app_login_cphd_common_code_key(load_json_fixtur
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
     session = client.login("member1", "pw123")
 
     assert "idx=IDX-AES" in captured["body"]
@@ -304,7 +319,10 @@ def test_login_rejects_non_app_success_code_even_with_jsessionid():
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
 
     with pytest.raises(KorailAuthError, match="S003"):
         client.login("member1", "pw123")
@@ -338,7 +356,10 @@ def test_login_redirect_response_raises_continuation_error():
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
 
     with pytest.raises(KorailAuthContinuationRequired) as exc_info:
         client.login("user@example.com", "pw123")
@@ -397,7 +418,10 @@ def test_login_success_without_jsessionid_raises_auth_error(load_json_fixture):
             return httpx.Response(200, json=load_json_fixture("login_success.json"))
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
 
     with pytest.raises(KorailAuthError):
         client.login("member1", "pw123")
@@ -416,7 +440,10 @@ def test_login_fail_response_raises_auth_error(load_json_fixture):
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
 
     with pytest.raises(KorailAuthError):
         client.login("member1", "pw123")
@@ -436,7 +463,10 @@ def test_login_crypto_bootstrap_app_failure_raises_library_error_without_login_p
             )
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
 
     with pytest.raises(KorailAppError):
         client.login("member1", "pw123")
@@ -493,7 +523,10 @@ def test_login_crypto_bootstrap_requires_complete_metadata(payload):
             return httpx.Response(200, json=payload)
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
 
     with pytest.raises(KorailProtocolError):
         client.login("member1", "pw123")
@@ -558,7 +591,10 @@ def make_logged_in_client(load_json_fixture, *, logout_response):
             return logout_response(request)
         raise AssertionError(f"unexpected path {request.url.path}")
 
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
     return client, events
 
 

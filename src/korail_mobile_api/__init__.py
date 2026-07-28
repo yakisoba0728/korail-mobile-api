@@ -21,7 +21,7 @@
 __version__ = "1.0.0"
 
 from .client import KorailClient
-from .config import KorailConfig
+from .config import KorailConfig, enabled_dynapath_config
 from .consent import (
     MutationCategory,
     MutationConsent,
@@ -52,6 +52,7 @@ from .errors import (
     KorailAuthContinuationRequired,
     KorailAuthError,
     KorailDynaPathError,
+    KorailDynaPathRequiredError,
     KorailInvalidRequestError,
     KorailMutationNotAllowedError,
     KorailNetFunnelError,
@@ -342,7 +343,9 @@ __all__ = [
     "KorailAuthError",
     "KorailClient",
     "KorailConfig",
+    "enabled_dynapath_config",
     "KorailDynaPathError",
+    "KorailDynaPathRequiredError",
     "KorailInvalidRequestError",
     "KorailMutationNotAllowedError",
     "KorailNetFunnelAction",

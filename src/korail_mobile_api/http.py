@@ -28,10 +28,11 @@ from .consent import (
     MutationConsent,
     require_mutation_consent,
 )
-from .constants import DYNAPATH_ALLOWLIST_PATHS
+from .constants import DYNAPATH_ALLOWLIST_PATHS, DYNAPATH_REQUIRED_PATHS
 from .dynapath import DynapathRequestContext, DynapathTokenGenerator
 from .errors import (
     KorailDynaPathError,
+    KorailDynaPathRequiredError,
     KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSessionExpiredError,
@@ -185,6 +186,16 @@ class KorailHttpClient:
     def _dynapath_headers(self, method: str, path: str) -> dict[str, str]:
         dynapath = self.config.dynapath
         if not dynapath.enabled:
+            if path in DYNAPATH_REQUIRED_PATHS:
+                # 조용히 헤더를 빼면 서버가 대신 거절하는데, 그 거절이 사용자
+                # 문구로는 "앱을 최신 버전으로 업데이트하라"로 위장돼 온다.
+                # 설정 문제를 버전 문제로 오진하게 만드는 자리라, 보내기 전에
+                # 무엇을 켜야 하는지 말하고 끝낸다.
+                raise KorailDynaPathRequiredError(
+                    f"KORAIL {path} 는 DynaPath 토큰을 요구한다. "
+                    "KorailConfig(enable_dynapath=True) 로 켜거나, 실제 단말 "
+                    "값을 쓰려면 build_config_from_env() 를 넘겨라."
+                )
             return {}
         if path not in dynapath.allowlist_paths:
             return {}

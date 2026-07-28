@@ -959,7 +959,10 @@ def test_login_extracts_only_str_customer_number_and_repr_hides_it():
             )
         raise AssertionError(request.url.path)
 
-    client = KorailClient(transport=httpx.MockTransport(handler))
+    client = KorailClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
     try:
         session = client.login("SYNTHETIC_MEMBER_NO", "synthetic-password")
     finally:

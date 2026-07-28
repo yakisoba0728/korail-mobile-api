@@ -429,6 +429,25 @@ class KorailMutationNotAllowedError(KorailApiError):
     """
 
 
+class KorailDynaPathRequiredError(KorailApiError):
+    """DynaPath 가 필요한 경로인데 설정이 꺼져 있다.
+
+    :data:`~korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS` 의 여섯
+    경로는 앱이 안티매크로 토큰을 실어 보내는 곳이고, 토큰 없이 부르면 서버가
+    거절한다. 이 라이브러리는 그 거절을 기다리지 않고 전송 전에 막는다 —
+    서버의 거절이 사용자 문구로는 "앱을 최신 버전으로 업데이트하라"로
+    위장돼 오기 때문에, 그대로 두면 설정 문제가 버전 문제로 오진된다.
+
+    :class:`KorailDynaPathError` 와 다르다. 그쪽은 토큰을 보냈는데 서버가
+    거절한 것이고, 이쪽은 아직 아무것도 보내지 않았다.
+
+    켜려면 ``KorailConfig(enable_dynapath=True)`` 를 넘긴다. 실제 단말 값을
+    쓰려면 :func:`~korail_mobile_api.live.build_config_from_env` 를 쓴다.
+    기본값이 꺼져 있는 것은 의도다 — 이 토큰은 자동화 탐지를 우회하는
+    값이므로, 보낼지 말지는 이 패키지가 대신 정하지 않는다.
+    """
+
+
 # ---------------------------------------------------------------------------
 # h_msg_cd -> exception mapping
 #

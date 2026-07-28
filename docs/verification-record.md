@@ -59,7 +59,7 @@ for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `2430 passed, 1 deselected`; the one
+current reviewed offline gate is `2436 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly

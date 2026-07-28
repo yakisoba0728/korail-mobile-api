@@ -404,6 +404,8 @@ class KorailNetFunnelOpcode(StrEnum):
 
 
 DYNAPATH_HEADER_NAME = "x-dynapath-m-token"
+KORAIL_LOGIN_PATH = "/classes/com.korail.mobile.login.Login"
+#: 앱이 DynaPath 토큰을 실어 보내는 경로. 켜져 있으면 여기에만 붙는다.
 DYNAPATH_ALLOWLIST_PATHS = frozenset(
     {
         "/classes/com.korail.mobile.certification.TicketReservation",
@@ -411,6 +413,14 @@ DYNAPATH_ALLOWLIST_PATHS = frozenset(
         "/classes/com.korail.mobile.seatMovie.ScheduleView",
         "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial",
         "/classes/com.korail.mobile.trn.prcFare.do",
-        "/classes/com.korail.mobile.login.Login",
+        KORAIL_LOGIN_PATH,
     }
 )
+#: 토큰 **없이는 통하지 않는** 경로. 꺼진 설정으로 부르면 전송 전에
+#: :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError` 로 막힌다.
+#:
+#: 허용목록과 같지 않고 더 좁다. 토큰 없이 관측된 결과가 갈렸기 때문이다 —
+#: 검색을 비롯한 읽기는 토큰 없이 성공했고 ``login.Login`` 만 거절당했다.
+#: 관측되지 않은 것을 막으면 잘 되던 읽기를 이 패키지가 끊는 셈이므로,
+#: 근거가 있는 하나만 요구한다. 다른 경로에서 거절이 관측되면 여기 추가한다.
+DYNAPATH_REQUIRED_PATHS = frozenset({KORAIL_LOGIN_PATH})
