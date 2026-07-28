@@ -4,7 +4,10 @@
 이 프로젝트는 [유의적 버전](https://semver.org/lang/ko/)을 따릅니다.
 1.0.0 이전 기록은 당시 형식·언어 그대로 보존합니다.
 
-## Unreleased
+## 1.0.0 - 2026-07-28
+
+읽기 전용 경계가 라우트 60개, `KorailClient` 공개 메서드 77개가 됐습니다. 로그인·읽기
+64개와 동의 게이트가 걸린 mutation 13개입니다.
 
 ### Changed
 
@@ -28,14 +31,6 @@
   `DynapathConfig` 를 직접 구성할 때 씁니다.
 - `korail_mobile_api.constants.DYNAPATH_REQUIRED_PATHS`. 형제인
   `DYNAPATH_ALLOWLIST_PATHS` 와 마찬가지로 전송 계층 상수라 최상위에 올리지 않습니다.
-
-## 1.0.0 - 2026-07-27
-
-읽기 전용 경계가 라우트 60개, `KorailClient` 공개 메서드 77개가 됐습니다. 로그인·읽기
-64개와 동의 게이트가 걸린 mutation 13개입니다.
-
-### Added
-
 - **환승 검색과 환승 예약.** `KorailClient.search_transfer_trains`,
   `search_trains_with_transfer_fallback`, `reserve_transfer`, 그리고
   `TransferItinerary`, `TransferSearchResult`, `pair_transfer_itineraries` 와 코드 넷
