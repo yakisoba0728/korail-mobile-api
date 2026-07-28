@@ -1047,88 +1047,75 @@
 
 ### 알려진 제약과 넣지 않은 것
 
-- Not added, and deliberately so: 특실 업그레이드's `myTicket.reqUpgradeSeat`
-  (`MyTicketService.java:23-24`). It was briefly implemented as a read on the
-  strength of its request — no amount, no payment means, no confirmation flag
-  — but its RESPONSE mints a `lumpStlTgtNo` (`SpecialRoomUpgradeDao.java:
-  13,19`) and `procUpgrade` takes that same 일괄결제대상번호 beside `stlMnsCd`
-  / `crdInpWayCd` / `ismtMnthNum` / `mnsStlAmt` (`MyTicketService.java:21`).
-  Producing the settlement target a payment then spends creates an unpaid
-  purchase; it does not price one. That is the same reading this repository
-  already applied to `research.dcntCrdInfo.do` ("Despite the 'Info' in its
-  path this is a PURCHASE"), which is why that route lives in
-  `KORAIL_MUTATION_ROUTES`. It is not registered as a mutation either: its
-  paired write `procUpgradeSeat` is an intended deferral, and half a purchase
-  chain would let a caller create settlement targets with no supported way to
-  settle or abandon them. `tests/test_ticket_change_chain_reads.py` pins both
-  halves out of both allowlists.
-- Not shipping: 정기권 구매. The purchase pair (`pass.passReserve` /
-  `pass.passPayIssue`) was implemented in this same unreleased cycle and removed
-  again before release, so no `reserve_commuter_pass`, `pay_for_commuter_pass`,
-  `CommuterPass*` type, `KORAIL_COMMUTER_PASS_PAYMENT_FIELDS`, `commuter_pass`
-  consent category or `MutationConsent.allow_commuter_pass` exists. Nothing was
-  ever transmitted, and no released version ever carried them.
-  - **Why: it cannot be proven correct without spending unrecoverable money.**
-    A 1개월 정기권 is roughly ₩150,000–₩250,000, and this package has neither a
-    refund route nor a cancel route for one — `cancel_unpaid_hold` is the ticket
-    cancel.
-  - **And there is no capture to compare against**, because the shipped app
-    cannot issue `passPayIssue` either:
-    `PaymentActivity.isCommPaymentRequest()` tests
-    `getIPaymentRequest() instanceof CommPaymentDao.CommPaymentResponse` — a
-    Response type where a Request is required (`PaymentActivity.java:502-503`,
-    bytecode at `smali/…/PaymentActivity.smali:3963-3980`) — so the test is
-    always false and the DAO never runs. A form assembled from decompiled code
-    with no capture and no affordable live call is a guess with references.
-  - **The 정기권 READS are unaffected**: `get_pass_menu`,
-    `get_pass_available_dates` and `get_pass_schedule` are unchanged.
-  - **The knowledge is kept, not lost.** README's 정기권 section records the
-    twenty `passReserve` fields and the loop that fills them, the one-train
-    shape (`hidChtrnStnCd`/`Nm` sent as EMPTY STRINGS, `hidTrnNo2`/
-    `hidTrnGpCd2`/`hidDtour2` ABSENT), both `passPayIssue` `@FieldMap`s and why
-    both are populated by v6.5.0, the `hidPayAmount` chain, the
-    `isCommPaymentRequest()` bug, why `passOtrReserve`/`passOtrPayIssue` are a
-    different product (자유이용권: 내일로 / A-PASS / 강릉패스), and what
-    reviving the feature would cost to prove.
-  - `KORAIL_CARD_BEARING_MUTATION_CATEGORIES` **stays** a named set, now holding
-    `{"payment"}` again. It was introduced as its own behaviour-preserving
-    change because `category == "payment"` asked the wrong question, not
-    because it had two members, and it still carries the tested invariant that
-    no card-bearing category owns a GET mutation route.
-  - Changed: `h_cust_nm`, `usernames`, `h_chg_mg_no` and their model attribute
-    names (`customer_name`, `user_names`, `change_management_no`) leave
-    `SENSITIVE_KEYS`. Every one of them entered it for the pass payment form,
-    and no surviving response, form or model in this package carries any of
-    them — `h_cust_nm` and `h_chg_mg_no` appear in exactly one DAO in the whole
-    APK, `CommReservationDao`, which nothing here parses any more. The
-    pre-existing `h_cust_no` / `customer_no` entries are untouched.
-- Known gap: **`cancel_unpaid_hold` cannot release a transfer hold.** It requires
-  `h_jrny_cnt` to be numerically one. The app has no such restriction —
-  `DReservationConfirmActivity.java:269-278` forwards `getH_jrny_cnt()` verbatim
-  as `txtJrnyCnt` beside the same fixed `txtJrnySqno="0001"`/`hidRsvChgNo="000"`
-  — so the fix is to forward the hold's own count instead of pinning `"1"`. That
-  touches the cancel path, which was out of scope for the transfer change, so it
-  is reported rather than made. A live transfer hold sent before it lands must be
-  cancelled in the KORAIL app or on the website.
-- Neither `pay_with_card` nor `refund` has a live-verified success envelope. No
-  run recorded in this repository has settled a real payment or returned money;
-  the docs now say so instead of saying a real charge is impossible.
-- `certification.ReservationList` hosts a SECOND, write-flavoured Retrofit
-  overload, `applyDisabilityCertification` (`CertificationService.java:22`),
-  which applies a disability certificate to a held reservation. Only the read
-  overload is ported, and the route's `KORAIL_EXACT_REQUEST_FIELDS` entry pins
-  the read's exact four fields, so the write overload's wider shape
-  (`txtPsgDisc0019Cnt` plus six `@QueryMap`s) is rejected before transmission
-  even though it shares the path.
-- `refunds.SelTicketInfo` is sent as the app declares it — POST, with
-  `h_purchase_history` — not as srtgo sends it (`ktx.py:791-800` uses GET and
-  drops the field). Every app call site sets the flag, "Y" from the
-  purchase-history screen and "N" elsewhere.
-- Registered only the three statically evidenced exact read contracts; the
-  separate state-changing crew-call route remains excluded.
-- Added no live service/menu/train/car constants, seat selection, hold,
-  reservation, payment, cancellation, or other mutation capability; the new
-  contracts are covered by synthetic fixtures only.
+- 특실 업그레이드의 `myTicket.reqUpgradeSeat` (`MyTicketService.java:23-24`)는 일부러 넣지
+  않았다. 요청만 보면 금액도, 결제수단도, 확인 플래그도 없어서 잠깐 읽기로 구현했다. 그런데
+  이 라우트의 **응답**이 `lumpStlTgtNo` 를 발급하고
+  (`SpecialRoomUpgradeDao.java:13,19`), `procUpgrade` 가 그 일괄결제대상번호를
+  `stlMnsCd` / `crdInpWayCd` / `ismtMnthNum` / `mnsStlAmt` 와 함께 받는다
+  (`MyTicketService.java:21`). 결제가 소모할 정산 대상을 만드는 것은 가격을 조회하는 게
+  아니라 미결제 구매를 만드는 것이다. 이 저장소가 `research.dcntCrdInfo.do` 에 이미 적용한
+  판단("Despite the 'Info' in its path this is a PURCHASE")과 같고, 그래서 그 라우트가
+  `KORAIL_MUTATION_ROUTES` 에 있다. mutation 으로도 등록하지 않았다. 짝이 되는 쓰기
+  `procUpgradeSeat` 는 의도적으로 미룬 것이고, 구매 체인의 절반만 있으면 호출자가 정산
+  대상을 만들어 놓고 정산할 수도 버릴 수도 없게 된다.
+  `tests/test_ticket_change_chain_reads.py` 가 두 짝 모두 두 허용 목록 밖에 있음을 고정한다.
+- 정기권 구매는 개시하지 않는다. 구매 짝(`pass.passReserve` / `pass.passPayIssue`)은 개시
+  전 같은 주기 안에서 구현했다가 다시 지웠다. `reserve_commuter_pass`,
+  `pay_for_commuter_pass`, `CommuterPass*` 타입, `KORAIL_COMMUTER_PASS_PAYMENT_FIELDS`,
+  `commuter_pass` 동의 범주, `MutationConsent.allow_commuter_pass` 는 존재하지 않는다.
+  전송한 적이 없고 개시된 버전이 이것을 실은 적도 없다.
+  - **되돌릴 수 없는 돈을 쓰지 않고는 정확성을 증명할 수 없다.** 1개월 정기권이 대략
+    ₩150,000~₩250,000 이고, 이 패키지에는 정기권 환불 라우트도 취소 라우트도 없다.
+    `cancel_unpaid_hold` 는 승차권 취소다.
+  - **비교할 캡처도 없다.** 개시된 앱조차 `passPayIssue` 를 낼 수 없기 때문이다.
+    `PaymentActivity.isCommPaymentRequest()` 가
+    `getIPaymentRequest() instanceof CommPaymentDao.CommPaymentResponse` 를 검사한다.
+    Request 가 와야 할 자리에 Response 타입이다 (`PaymentActivity.java:502-503`, 바이트코드는
+    `smali/…/PaymentActivity.smali:3963-3980`). 그래서 이 검사는 항상 거짓이고 DAO 는
+    실행되지 않는다. 캡처도 없고 감당할 만한 라이브 호출도 없는 상태에서 디컴파일된 코드로
+    조립한 폼은 참고문헌이 달린 추측이다.
+  - **정기권 읽기는 그대로다.** `get_pass_menu`, `get_pass_available_dates`,
+    `get_pass_schedule` 는 바뀌지 않았다.
+  - **알아낸 것은 버리지 않고 남긴다.** README 의 정기권 절이 `passReserve` 필드 20개와
+    그것을 채우는 루프, 한 열차 형태(`hidChtrnStnCd`/`Nm` 은 빈 문자열로 보내고
+    `hidTrnNo2`/`hidTrnGpCd2`/`hidDtour2` 는 아예 없다), `passPayIssue` 의 `@FieldMap` 둘과
+    v6.5.0 이 둘 다 채우는 이유, `hidPayAmount` 체인, `isCommPaymentRequest()` 결함,
+    `passOtrReserve`/`passOtrPayIssue` 가 다른 상품(자유이용권: 내일로 / A-PASS /
+    강릉패스)인 이유, 그리고 이 기능을 되살리려면 무엇을 증명해야 하는지를 기록한다.
+  - `KORAIL_CARD_BEARING_MUTATION_CATEGORIES` 는 이름 있는 집합으로 **남는다**. 지금은
+    다시 `{"payment"}` 하나다. 원소가 둘이어서가 아니라 `category == "payment"` 가 잘못된
+    질문이어서 별도의 동작 보존 변경으로 도입한 것이고, 카드를 싣는 범주가 GET mutation
+    라우트를 소유하지 않는다는 검사된 불변식을 여전히 지고 있다.
+  - `h_cust_nm`, `usernames`, `h_chg_mg_no` 와 그 모델 속성 이름
+    (`customer_name`, `user_names`, `change_management_no`)이 `SENSITIVE_KEYS` 에서
+    빠졌다. 전부 정기권 결제 폼 때문에 들어온 것들이고, 이 패키지에 남은 어떤 응답·폼·모델도
+    이 값들을 싣지 않는다. `h_cust_nm` 과 `h_chg_mg_no` 는 APK 전체에서 DAO 하나
+    (`CommReservationDao`)에만 나오는데 이제 여기서 파싱하지 않는다. 원래 있던
+    `h_cust_no` / `customer_no` 항목은 그대로다.
+- 알려진 제약: **`cancel_unpaid_hold` 는 환승 예약을 풀지 못한다.** `h_jrny_cnt` 가 수치로
+  1 이어야 하기 때문이다. 앱에는 그런 제약이 없다.
+  `DReservationConfirmActivity.java:269-278` 이 `getH_jrny_cnt()` 를 그대로
+  `txtJrnyCnt` 로 넘기며 같은 고정값 `txtJrnySqno="0001"`/`hidRsvChgNo="000"` 을 함께
+  보낸다. 고치는 방법은 `"1"` 로 박는 대신 예약 자신의 여정 수를 넘기는 것이다. 그 수정은
+  환승 작업의 범위 밖인 취소 경로를 건드리므로, 고치지 않고 보고한다. 이 수정이 들어오기
+  전에 보낸 라이브 환승 예약은 KORAIL 앱이나 웹사이트에서 취소해야 한다.
+- `pay_with_card` 도 `refund` 도 라이브로 확인된 성공 봉투가 없다. 이 저장소에 기록된 어떤
+  실행도 실제 결제를 성사시키거나 돈을 돌려받은 적이 없다. 문서는 실제 과금이 불가능하다고
+  말하는 대신 이 사실을 적는다.
+- `certification.ReservationList` 에는 쓰기 성격의 두 번째 Retrofit 오버로드
+  `applyDisabilityCertification` (`CertificationService.java:22`)이 있다. 잡아둔 예약에
+  장애인 증명을 적용하는 호출이다. 여기서는 읽기 오버로드만 옮겼고, 이 라우트의
+  `KORAIL_EXACT_REQUEST_FIELDS` 항목이 읽기의 정확한 네 필드를 고정하므로, 경로가 같더라도
+  쓰기 오버로드의 더 넓은 형태(`txtPsgDisc0019Cnt` 와 `@QueryMap` 여섯)는 전송 전에
+  거부된다.
+- `refunds.SelTicketInfo` 는 앱이 선언한 대로 보낸다. POST 이고 `h_purchase_history` 를
+  싣는다. srtgo 가 보내는 방식(`ktx.py:791-800` 은 GET 을 쓰고 이 필드를 뺀다)과 다르다.
+  앱의 모든 호출 지점이 이 플래그를 설정하며, 구매내역 화면에서는 "Y", 그 밖에서는 "N"
+  이다.
+- 정적 근거가 있는 정확한 읽기 계약 셋만 등록했다. 상태를 바꾸는 승무원 호출 라우트는
+  제외된 채로 둔다.
+- 라이브에서 얻은 서비스·메뉴·열차·차량 상수, 좌석지정, 예약, 발권, 결제, 취소, 그 밖의
+  상태 변경 기능은 하나도 넣지 않았다. 새 계약은 합성 픽스처로만 덮인다.
 
 ### 검증 기록
 
