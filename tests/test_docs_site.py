@@ -129,3 +129,59 @@ def test_the_built_site_is_not_tracked() -> None:
     )
     assert result.returncode == 0
     assert result.stdout.decode("utf-8").splitlines() == ["site/index.html"]
+
+
+def test_no_document_under_docs_is_unreachable():
+    """`docs/` 아래 문서는 전부 어딘가에서 링크돼야 합니다.
+
+    README 를 줄이면서 문서 표에서 다섯 줄이 빠졌고, 그 다섯 문서는 저장소
+    어디에서도 도달할 수 없게 됐습니다. 파일은 그대로 있었으므로 링크 검사도
+    빌드도 통과했습니다 — 없어진 것이 아니라 **가리키는 것이 없어진** 상태라
+    무엇도 실패하지 않았습니다.
+
+    색인은 손으로 유지되는 목록이고 손으로 유지되는 목록은 썩습니다. 이 검사가
+    그 목록을 자기 교정하게 만듭니다: 문서를 더하고 링크를 잊으면 여기서
+    걸립니다.
+    """
+    tracked = subprocess.run(
+        ["git", "ls-files", "docs"],
+        cwd=ROOT,
+        capture_output=True,
+        check=True,
+    ).stdout.decode("utf-8").splitlines()
+
+    # docs/internal/ 은 개발 아카이브입니다. 그 안의 감사 보고서 하나하나까지
+    # 색인할 이유는 없고, 디렉터리 자체는 README 가 가리킵니다.
+    documents = {
+        path for path in tracked
+        if path.endswith(".md") and not path.startswith("docs/internal/")
+    }
+    # 색인 자신과 문서 사이트 원본은 mkdocs.yml 의 nav 가 가리킵니다.
+    documents -= {
+        "docs/README.md",
+        "docs/index.md",
+        "docs/quickstart.md",
+        "docs/safety.md",
+        "docs/errors.md",
+        "docs/changelog.md",
+    }
+
+    # "어딘가에서" 링크되면 고아가 아닙니다. deep-dive 의 보고서들은 최상위가
+    # 아니라 자기 디렉터리의 README 가 가리키고, 그것이 정상입니다.
+    sources = [ROOT / "README.md"] + [
+        ROOT / path for path in tracked if path.endswith(".md")
+    ]
+    haystack = "\n".join(
+        path.read_text(encoding="utf-8") for path in sources if path.is_file()
+    )
+
+    # 링크는 문서마다 다른 상대 경로로 적힙니다(`agent-reports/01-x.md`,
+    # `../README.md`, `docs/RELEASE.md`). 경로를 맞추려 들면 그 형태를 전부
+    # 열거하게 되므로, 마크다운 링크 안에 파일명이 나오는지만 봅니다.
+    linked = set(re.findall(r"\]\([^)]*?([\w.\-]+\.md)[)#]", haystack))
+
+    unreachable = sorted(
+        path for path in documents
+        if path.rsplit("/", maxsplit=1)[-1] not in linked
+    )
+    assert unreachable == [], unreachable

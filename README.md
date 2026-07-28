@@ -242,7 +242,7 @@ KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내면 안 됩�
 | [CHANGELOG.md](CHANGELOG.md) | 무엇이 바뀌었나 |
 
 `python3 -m pytest -q -m "not live"` 가 게이트이고 네트워크를 쓰지 않습니다:
-`2436 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 과 직접 마련한
+`2437 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 과 직접 마련한
 자격증명이 함께 있을 때만 도는 실서버 테스트입니다. 기여는
 [CONTRIBUTING.md](CONTRIBUTING.md), 규범은 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 참고.
 

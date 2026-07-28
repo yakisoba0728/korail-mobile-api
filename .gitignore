@@ -9,7 +9,12 @@
 # Local analysis workspaces and the APKs they are unpacked from. Never
 # distributed: the app binaries are not ours to redistribute, and the unpacked
 # trees carry the vendor keys this repository redacts.
-analysis/
+#
+# Anchored, for the same reason `.env` below is: an unanchored `analysis/`
+# matches at any depth, so it also swallowed `docs/analysis/`. The four
+# documents already tracked there stayed visible, but every file added beside
+# them afterwards was ignored without a word.
+/analysis/
 *.apk
 
 # Credentials. `.env` is anchored so a `docs/.env` example would still be

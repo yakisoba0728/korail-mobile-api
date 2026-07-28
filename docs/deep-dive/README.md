@@ -85,3 +85,10 @@
 - 서버가 field를 필수/선택으로 검증하는 규칙은 정적 코드만으로 확정할 수 없다.
 - 일부 `FieldMap`/`QueryMap`은 map 생성 class에서 key를 재구성했지만, runtime branch별 누락/추가 field는 앱 실행 없이는 완전 확정이 어렵다.
 - JADX decompile warning이 있었으므로, 의심 항목은 `analysis/apktool/smali*`로 fallback 검증해야 한다.
+
+## 이 디렉터리의 나머지 문서
+
+| 문서 | 내용 |
+| --- | --- |
+| [full-api-analysis-2026-07-20.md](full-api-analysis-2026-07-20.md) | 20편 보고서를 하나로 합친 전체 API 분석 |
+| [ref-srtgo_plus.md](ref-srtgo_plus.md) | 선행 클라이언트(srtgo_plus·srtgo·SRT·korail2) 대조 기록. 무엇을 사실로 참조했고 무엇을 가져오지 않았는지를 §1.1 이 정리하며, 루트 `NOTICE` 가 그 결론을 인용합니다 |
