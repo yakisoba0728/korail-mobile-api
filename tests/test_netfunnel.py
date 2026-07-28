@@ -1500,10 +1500,11 @@ def test_docs_scope_the_unproven_claim_to_the_queued_path():
 
     # The README carries the scoped claim without the dated evidence, because a
     # caller deciding whether to switch the queue on needs to know that the wait
-    # is the unproven half.
-    head, _, tail = readme.partition("NOT live-exercised")
+    # is the unproven half. It is Korean now, so the same scoping is pinned in
+    # Korean: the claim, and 대기 경로 (the queued path) next to it.
+    head, _, tail = readme.partition("실서버에서 한 번도 돌지 않았다")
     assert tail, "the README must still scope the unproven claim"
-    assert "queued path" in head[-200:] or "queued path" in tail[:200]
+    assert "대기 경로" in head[-200:] or "대기 경로" in tail[:200]
 
     for document in (record, progress, changelog):
         # The live confirmation is dated, and the queued path is still named as
@@ -1526,9 +1527,13 @@ def test_docs_say_netfunnel_is_implemented_but_not_live_exercised():
     record = RECORD.read_text(encoding="utf-8")
     assert "### NetFunnel virtual waiting room" in record
     assert "## NetFunnel virtual waiting room" in progress
-    for document in (readme, record, progress, changelog):
+    for document in (record, progress, changelog):
         assert "NOT live-exercised" in document
-    assert "off by default" in readme.casefold()
+    # The README makes the same two claims in Korean. It is kept out of the
+    # loop rather than folded into a combined string: a joined document would
+    # let CHANGELOG satisfy the README's half and stop guarding it.
+    assert "실서버에서 한 번도 돌지 않았다" in readme
+    assert "기본적으로 꺼져 있다" in readme
     # The peak-season action is the reason the subsystem exists; each evidence
     # document has to name it.
     for document in (record, progress, changelog):

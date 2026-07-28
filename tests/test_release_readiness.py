@@ -1244,12 +1244,16 @@ def test_repository_truth_and_full_mutation_policy() -> None:
     # trust the package stayed in the README, and the bounded seat-inventory
     # evidence that supports one of them followed the prose into the record.
     record = (ROOT / "docs/verification-record.md").read_text(encoding="utf-8")
+    # 77, not 72 or 74. Older numbers appear in the handoff, because those
+    # sentences were true when written and are kept as history; the pin has to
+    # name the CURRENT boundary or it stops detecting the next drift. The
+    # README states the same boundary in Korean, so it is asserted on its own
+    # rather than joined to the handoff -- a combined string would let either
+    # document cover for the other.
+    assert "60 routes" in handoff
+    assert "77 public methods" in handoff
+    assert "라우트 60개와 공개 메서드 77개" in readme
     for document in (readme, handoff):
-        assert "60 routes" in document
-        # 76, not 72 or 74. Older numbers appear in the handoff, because those
-        # sentences were true when written and are kept as history; the pin has
-        # to name the CURRENT boundary or it stops detecting the next drift.
-        assert "77 public methods" in document
         assert "docs/RELEASE.md" in document
 
     # The offline gate figure is DERIVED, not pinned. It used to be the literal

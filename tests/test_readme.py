@@ -326,9 +326,10 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
         assert path in record
     assert "caller-supplied runtime discriminator" in record
     # The crew-call exclusion is a boundary a USER has to know about, so it is
-    # one of the few evidence-flavoured claims that stayed in the README.
+    # one of the few evidence-flavoured claims that stayed in the README. The
+    # README is Korean, so the claim is pinned in Korean.
     assert "/classes/com.korail.mobile.push.callCrew.do" in readme
-    assert "remains excluded" in readme
+    assert "제외되어 있다" in readme
     assert "static APK evidence and synthetic fixtures only" in record
     assert "60 exact read/login routes" in progress
     for document in (record, progress, status, handoff, changelog):
@@ -402,8 +403,23 @@ def test_docs_describe_raw_backed_typed_core_and_compatibility_boundary():
 def test_docs_document_bounded_live_p0_train_reads_and_closed_requests():
     # The package boundary is a repository fact and stays in the README; the
     # four closed request contracts and the bounded run that exercised them are
-    # evidence and moved with the record.
-    assert "60 routes and 77 public methods" in README.read_text(encoding="utf-8")
+    # evidence and moved with the record. The README states it in Korean, and
+    # both figures are measured here rather than transcribed, so adding a route
+    # or a public method fails this test instead of rotting the sentence.
+    from korail_mobile_api import safety
+
+    route_count = len(set(safety.KORAIL_READ_ONLY_ROUTES))
+    method_count = len(
+        [
+            name
+            for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
+            if not name.startswith("_")
+        ]
+    )
+    assert (
+        f"라우트 {route_count}개와 공개 메서드 {method_count}개"
+        in README.read_text(encoding="utf-8")
+    )
 
     text = RECORD.read_text(encoding="utf-8")
     normalized = " ".join(text.split())
@@ -651,9 +667,9 @@ def test_readme_documents_the_error_taxonomy():
     readme = " ".join(README.read_text(encoding="utf-8").split())
     record = " ".join(RECORD.read_text(encoding="utf-8").split())
 
-    assert "### Error taxonomy" in README.read_text(encoding="utf-8")
-    assert "classified on `h_msg_cd`" in readme
-    assert "never on Korean message text" in readme
+    assert "### 에러 분류" in README.read_text(encoding="utf-8")
+    assert "앱 자신이 분기하는 필드인 `h_msg_cd` 로 분류한다" in readme
+    assert "한국어 메시지 문구로는 분류하지 않는다" in readme
 
     # Every exception in the taxonomy is named, so none can be added to the
     # code without being explained here.
@@ -674,17 +690,17 @@ def test_readme_documents_the_error_taxonomy():
         assert f"`{name}`" in readme, name
 
     # Retry is pointless / re-login / nothing was there.
-    assert "Retry is pointless for this train; pick another." in readme
-    assert "Retry is pointless; ask a different question." in readme
-    assert "**Re-login.**" in readme
-    assert "**Nothing was there.** The request was fine." in readme
-    assert "The library never retries on its own initiative" in readme
-    assert "a retried reserve is a duplicate booking" in readme
+    assert "이 열차는 재시도해도 소용없다. 다른 열차를 골라라." in readme
+    assert "재시도는 소용없다. 다른 질문을 하라." in readme
+    assert "**다시 로그인하라.**" in readme
+    assert "**아무것도 없었다.** 요청 자체는 정상이다." in readme
+    assert "**이 라이브러리는 스스로 재시도하지 않는다.**" in readme
+    assert "재시도한 예약은 중복 예약이기 때문이다" in readme
 
     # A warning on a success must be documented as staying a success. The rule
     # is in the README because a caller hits it; the observation that proved it
     # is in the record.
-    assert "stays a success" in readme
+    assert "성공으로 남는다" in readme
     assert "WRR664296" in record
     assert "`strResult=SUCC`" in record
     assert "a real, cancelable PNR" in record
@@ -697,7 +713,7 @@ def test_readme_documents_the_error_taxonomy():
 
     # The one observation we deliberately refused to classify. The README says
     # that there is one and where to read it; the record says which.
-    assert "left unclassified" in readme
+    assert "일부러 분류하지 않고 남겨 둔 관측 하나" in readme
     assert "left unclassified" in record
     assert "[3]인증정보에 문제가 있습니다." in record
     assert "Its trigger is unconfirmed" in record
@@ -726,16 +742,19 @@ def test_docs_record_transfer_as_implemented_and_unverified():
 
     # Built, and not proven, plus the two entry points and the read that probes
     # a candidate route cheaply -- the half a USER has to know, so it stays in
-    # the README as well as in the three evidence documents.
-    for document in (readme, record, progress, changelog):
+    # the README as well as in the three evidence documents. The README says it
+    # in Korean, so it is pinned separately rather than folded into a combined
+    # string that CHANGELOG could satisfy on its behalf.
+    for document in (record, progress, changelog):
         assert "NOT live-verified" in document
         assert "search_transfer_trains" in document
         assert "reserve_transfer" in document
+    assert "실서버 검증 안 됨" in readme
+    assert "search_transfer_trains" in readme
+    assert "reserve_transfer" in readme
     assert "get_transfer_stations" in readme
     # And the warning that a live transfer hold cannot be released from here.
-    assert "cancelled in the KORAIL app" in readme or (
-        "cancel it in the KORAIL app" in readme
-    )
+    assert "KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내지 마라" in readme
 
     for document in (record, progress, changelog):
         # The two codes a reader would otherwise guess wrongly.
@@ -876,6 +895,11 @@ def test_the_route_decomposition_is_measured_not_asserted():
     it stayed pinned and green. The two auth routes are identified by their
     exact (method, path) pairs rather than by a substring, because
     `login.Logout` contains `login` and a careless filter counts it twice.
+
+    The README is Korean, so the derivation carries the Korean unit with it.
+    The read figure used to be pinned as a bare `f"{reads}"`, which any stray
+    pair of digits anywhere in the document satisfied; it now has to appear as
+    a counted noun.
     """
     from korail_mobile_api import safety
 
@@ -888,8 +912,38 @@ def test_the_route_decomposition_is_measured_not_asserted():
     assert auth <= routes, "the login/logout pair is not on the allowlist"
     reads = len(routes) - len(auth)
 
+    gated = {
+        name
+        for name, member in inspect.getmembers(KorailClient, inspect.isfunction)
+        if not name.startswith("_")
+        and "require_mutation_consent" in inspect.getsource(member)
+    }
+    public = {
+        name
+        for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
+        if not name.startswith("_")
+    }
+
     readme = README.read_text(encoding="utf-8")
     normalized = " ".join(readme.split())
-    assert f"{len(routes)} routes" in normalized
-    assert f"{reads}" in normalized, f"README does not state {reads} reads"
-    assert f"contains {len(routes)} routes" in normalized
+    assert f"라우트 {len(routes)}개" in normalized
+    assert f"읽기 {reads}개" in normalized, f"README does not state {reads} reads"
+    assert f"경계에는 라우트 {len(routes)}개" in normalized
+    # The mutation split is the other half of the same sentence, and it drifted
+    # once already: the safety model said "fifteen mutation methods" while the
+    # capability section two screens above said thirteen.
+    assert f"변경 메서드 {len(gated)}개" in normalized
+    assert f"나머지 {len(public) - len(gated)}개" in normalized
+
+    # The three remaining counts the README states. Each is one the reader uses
+    # to decide something -- how much of the surface can spend money, how much
+    # of it carries the anti-automation token, how many people fit on one PNR --
+    # so none of them may be a number somebody typed once.
+    from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
+    from korail_mobile_api.redaction import (
+        KORAIL_MAX_PASSENGERS_PER_RESERVATION,
+    )
+
+    assert f"변경 라우트 {len(safety.KORAIL_MUTATION_ROUTES)}개" in normalized
+    assert f"{len(DYNAPATH_ALLOWLIST_PATHS)}개 경로" in normalized
+    assert f"합계 {KORAIL_MAX_PASSENGERS_PER_RESERVATION}명까지" in normalized

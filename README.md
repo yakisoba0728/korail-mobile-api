@@ -1,52 +1,53 @@
 # korail-mobile-api
 
-A Python client for the API the KORAIL (한국철도공사) Android app talks to. It
-logs in, searches trains, reads your tickets and reservations, and — only behind
-an explicit consent object — holds a seat, cancels, pays and refunds, using the
-same routes and the same form fields the app itself sends.
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![License](https://img.shields.io/badge/license-Apache--2.0-green)
 
-Three things to know before you install it:
+KORAIL(한국철도공사) 안드로이드 앱이 쓰는 API 를 파이썬에서 그대로 호출하는
+클라이언트다. 로그인하고, 열차를 검색하고, 내 승차권과 예약을 읽는다. 좌석을
+잡거나 취소·결제·환불하는 것은 명시적인 consent 객체 뒤에서만 일어난다. 보내는
+경로와 폼 필드는 앱이 보내는 것과 같다.
 
-- **It is reverse-engineered, not documented.** Every route, field name and
-  status code here was read out of a decompiled `com.korail.talk` 6.5.0 APK and,
-  where it could be afforded, confirmed against the live service. KORAIL
-  publishes no specification and promises nothing about stability.
-- **It talks to the real service.** `smart.letskorail.com` is production
-  ticketing. A reservation this library makes is a real reservation somebody has
-  to cancel, and a payment is real money.
-- **It is not affiliated with, endorsed by, or supported by KORAIL.** Use your
-  own account, accept the consequences yourself, and read
-  [SECURITY.md](SECURITY.md) before you report anything.
+> [!WARNING]
+> - **문서가 아니라 리버스 엔지니어링의 결과다.** 여기의 라우트·필드명·상태코드는
+>   `com.korail.talk` 6.5.0 APK 를 디컴파일해 읽어낸 것이고, 가능한 범위에서만
+>   실서버로 확인했다. KORAIL 은 규격을 공개하지 않고 안정성도 약속하지 않는다.
+> - **실서비스에 붙는다.** `smart.letskorail.com` 은 실제 발권 시스템이다. 이
+>   라이브러리가 만든 예약은 누군가 취소해야 하는 진짜 예약이고, 결제는 진짜 돈이다.
+> - **KORAIL 과 제휴·후원·지원 관계가 없다.** 본인 계정을 쓰고, 결과는 본인이
+>   감당하라. 무보증이다. 취약점 제보는 [SECURITY.md](SECURITY.md) 를 먼저 읽어라.
 
-## Install
+## 설치
 
-There is no PyPI release. Install it from this repository:
+PyPI 배포는 없다. 저장소에서 바로 설치한다.
 
 ```bash
 python3 -m pip install "korail-mobile-api @ git+https://github.com/yakisoba0728/korail-mobile-api"
 ```
 
-Python **3.11 or newer** (`requires-python = ">=3.11"`). The only runtime
-dependencies are `httpx` and `cryptography`. The package is typed and ships
-`py.typed`.
+| 항목 | 값 |
+| --- | --- |
+| 파이썬 | 3.11 이상 (`requires-python = ">=3.11"`) |
+| 런타임 의존성 | `httpx`, `cryptography` — 이 둘뿐이다 |
+| 타입 | 타입 주석 완비, `py.typed` 동봉 |
+| 라이선스 | Apache-2.0 |
 
-For a checkout you intend to edit:
+고쳐 쓸 체크아웃이라면 개발 설치를 하고 오프라인 스위트를 한 번 돌려라.
 
 ```bash
 python3 -m pip install -e ".[test]"
 python3 -m pytest -q -m "not live"
 ```
 
-## Quickstart
+## 빠른 시작
 
-This logs in, searches, and reads something back. It sends nothing that changes
-state and touches no money.
+아래는 로그인하고 검색하고 읽어오기만 한다. 상태를 바꾸지 않고 돈도 건드리지 않는다.
 
 ```python
 from korail_mobile_api import KorailClient, TrainSearchQuery
 
 client = KorailClient()
-client.login("<member no, email, or phone>", "<password>")
+client.login("<회원번호·이메일·휴대폰번호 중 하나>", "<비밀번호>")
 
 result = client.search_trains(
     TrainSearchQuery("서울", "부산", "20260810", departure_time="080000")
@@ -66,63 +67,44 @@ client.logout()
 client.close()
 ```
 
-`KorailClient()` needs no configuration. Stations may be given as names
-(`"서울"`) or as codes; a numeric reference is resolved through the station list
-the app itself downloads. Dates and times are the app's own `YYYYMMDD` and
-`HHMMSS` strings.
+`KorailClient()` 는 설정 없이 만들어진다. 역은 이름(`"서울"`)으로도 코드로도
+넘길 수 있고, 앱이 내려받는 역 목록으로 해석한다. 날짜와 시각은 앱이 쓰는
+`YYYYMMDD`·`HHMMSS` 문자열 그대로다. 다음 페이지는 `result.next_page()` 가
+돌려주는 continuation 을 `search_trains(query, continuation=...)` 에 다시 넣어
+받는다.
 
-> **If you also use `srt-mobile-api` in the same process:** `TrainSearchQuery`,
-> `DiscountCoupon` and `MutationCategory` are names both packages export, and
-> they are not the same type. `korail_mobile_api.TrainSearchQuery.passengers` is a plain `int`
-> (default `1`) and its default `departure_time` is `"000000"`;
-> `srt_mobile_api.TrainSearchQuery.passengers` is a `PassengerCounts` and its
-> default departure time is `"060000"` — the two apps' own defaults, kept
-> as-is. `DiscountCoupon` differs the same way: same name, different fields,
-> in each package. Import both under an alias
-> (`from korail_mobile_api import TrainSearchQuery as KorailTrainSearchQuery`)
-> if a module needs both; do not assume a value built for one works with the
-> other. `MutationCategory` is the same story in the type system: this
-> package's has seven members and SRT's five, and the four they share make the
-> wrong import type-check.
+네 가지 파라미터는 `str` 이 아니라 `Literal` 별칭이라 편집기가 값을 완성해 주고
+오타가 요청이 아니라 오류가 된다: `MutationCategory`(`require_mutation_consent`),
+`KorailMileageLedger` 와 `KorailMileageMovement`(`MileageHistoryRequest`),
+`KorailSelfSeatChangeRoomClassCode`(`SelfSeatChangeInfoRequest`). 넷 다
+export 되어 있어 직접 만든 래퍼에 붙일 수 있다. 그 밖의 코드값은 `str` 로 둔다 —
+응답에서 읽은 코드는 서버가 얼마든지 새로 만들 수 있기 때문이다.
 
-Four parameter types are `Literal` aliases rather than `str`, so an editor
-completes their values and a typo is an error rather than a request:
-`MutationCategory` (`require_mutation_consent`), `KorailMileageLedger` and
-`KorailMileageMovement` (`MileageHistoryRequest`), and
-`KorailSelfSeatChangeRoomClassCode` (`SelfSeatChangeInfoRequest`). All four are
-exported, so a caller can annotate their own wrappers with them. Nothing else
-is narrowed — a code read off a response stays `str`, because the server is
-free to invent one, and so does any argument the runtime does not itself close
-to a fixed set.
+### 기본 설정이 보내는 것
 
-### What the default configuration sends
+`login` 은 KORAIL 의 안티 매크로 검사 뒤에 있다. 앱처럼 보이지 않는 요청은
+거절되므로 기본값은 장식이 아니다.
 
-`login` is behind KORAIL's anti-automation check, so the defaults are not
-cosmetic — a request that does not look like the app is refused. Two of them:
+- **User-Agent.** 앱은 UA 를 직접 박지 않는다. `HttpURLConnection` 위의
+  Retrofit v1 을 쓰므로 서버가 보는 것은 플랫폼의 Dalvik 문자열이고,
+  `KORAIL_USER_AGENT` 가 그 모양이다.
+- **DynaPath.** `x-dynapath-m-token` 안티 오토메이션 헤더는 **기본적으로 켜져 있다**.
+  붙는 곳은 앱이 붙이는 경로뿐이고, 그 목록은
+  `korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS` 의 6개 경로다. 토큰은
+  설정이 가진 기기 값으로 로컬에서 만든다. 이 값을 만들려고 사용자 컴퓨터에서
+  읽어오는 것은 없다.
 
-- **User-Agent.** The app hardcodes none; it speaks Retrofit v1 over
-  `HttpURLConnection`, so what the server sees is the platform's Dalvik string,
-  and that is the shape `KORAIL_USER_AGENT` now has. Before 1.0.0 it named this
-  Python package, which nothing on the network but this library does.
-- **DynaPath.** The `x-dynapath-m-token` anti-automation header is **on by
-  default** and is only ever attached to the paths the app attaches it to,
-  which are exactly `DYNAPATH_ALLOWLIST_PATHS` — never to anything else.
-  Turning it on widened *whether* a token is sent, not *where*. It is generated
-  locally from a config's own device values; nothing on your machine is read to
-  build it.
+기기 값은 **합성이고 인스턴스마다 다르다.** `KorailConfig()` 는 매번 자기 `di`
+— 실기기에서는 `Settings.Secure.ANDROID_ID` 인 필드 — 를 새로 만든다. 모든 설치본이
+공통으로 보내는 식별자야말로 안티 매크로 검사가 찾는 것이기 때문이다. 그 값은
+설정 객체가 사는 동안만 유지되고 프로세스를 넘기지 않는다.
 
-Those device values are **synthetic and per-instance**. Each `KorailConfig()`
-invents its own `di` — the field that on a handset is `Settings.Secure.ANDROID_ID`
-— rather than sharing a constant baked into the package, because an identifier
-every installation sends in common is itself the thing an anti-macro check looks
-for. It is stable for the life of that config and does not survive the process.
-
-If you want a *real* device identity instead — your own `ANDROID_ID`, model and
-Android release, stable across runs — pin it through the environment:
+진짜 기기 신원 — 본인의 `ANDROID_ID`, 모델, 안드로이드 릴리스 — 을 실행 간에
+고정하고 싶으면 환경변수로 넘겨라.
 
 ```bash
 export KORAIL_DYNAPATH_DEVICE_ID="<Settings.Secure.ANDROID_ID, 16 hex chars>"
-export KORAIL_DYNAPATH_OS_VERSION="15"        # Build.VERSION.RELEASE
+export KORAIL_DYNAPATH_OS_VERSION="15"          # Build.VERSION.RELEASE
 export KORAIL_DYNAPATH_DEVICE_MODEL="SM-S928N"  # Build.MODEL
 ```
 
@@ -132,15 +114,13 @@ from korail_mobile_api import KorailClient, build_config_from_env
 client = KorailClient(build_config_from_env())
 ```
 
-The last two are used twice on purpose — in the token *and* in the User-Agent,
-which is derived from them rather than written separately, so the header and the
-token cannot end up claiming different handsets. Everything else
-(`KORAIL_BASE_URL`, screen geometry, `KORAIL_ANDROID_SDK_INT`,
-`KORAIL_ADVERTISING_ID`) has a default; see
-[docs/verification-record.md](docs/verification-record.md).
+뒤의 두 값은 토큰과 User-Agent 양쪽에 쓰인다. UA 를 따로 적는 대신 같은 값에서
+파생시켜, 헤더와 토큰이 서로 다른 단말을 주장하는 일이 없게 한 것이다. 나머지
+(`KORAIL_BASE_URL`, 화면 크기, `KORAIL_ANDROID_SDK_INT`, `KORAIL_ADVERTISING_ID`)
+에는 기본값이 있다. [docs/verification-record.md](docs/verification-record.md)
+참고.
 
-To turn DynaPath off — for a mock transport, or to see what the bare protocol
-does — say so explicitly:
+DynaPath 를 끄려면 — 모의 transport 를 쓰거나 맨 프로토콜을 보려면 — 명시해야 한다.
 
 ```python
 from korail_mobile_api import DynapathConfig, KorailClient, KorailConfig
@@ -148,119 +128,124 @@ from korail_mobile_api import DynapathConfig, KorailClient, KorailConfig
 client = KorailClient(KorailConfig(dynapath=DynapathConfig()))
 ```
 
-Be aware of what that gives up. Under the pre-1.0.0 defaults — no DynaPath, and
-a User-Agent naming this package — reads were observed to succeed and `login`
-was observed to fail, in the disguised way described under
-[Error taxonomy](#error-taxonomy). Which of the two changes login was actually
-answering was never isolated one at a time against the live server, so a config
-with DynaPath off but the app-shaped User-Agent kept is untested rather than
-known-broken.
+끄면 무엇을 포기하는지는 알고 해라. DynaPath 없이, 그리고 이 패키지 이름을 단
+User-Agent 로 보냈을 때 읽기는 성공했고 `login` 은 실패했다. 그 실패는 아래
+[에러 처리](#에러-처리) 의 위장된 형태로 나타난다. 둘 중 무엇이 로그인을 되살렸는지
+하나씩 분리해 확인하지는 않았으므로, DynaPath 만 끄고 앱 모양 User-Agent 는 남긴
+설정은 "깨진 것으로 확인된" 것이 아니라 "확인되지 않은" 상태다.
 
-## What it can do
+### srt-mobile-api 와 함께 쓸 때
 
-The reviewed package boundary contains 60 routes and 77 public methods. Fifty-eight
-of the routes are reads, plus the login POST and the logout GET; the nine
-mutation routes are tracked in a separate set and are never added to the
-read-only allowlist. Thirteen of the methods are consent-gated mutations; the
-remaining sixty-four transmit only login/read requests, or nothing at all.
-They are the thirteen listed below.
+`TrainSearchQuery`, `DiscountCoupon`, `MutationCategory` 는 두 패키지가 모두
+export 하지만 같은 타입이 아니다.
 
-### Searching and reading
-
-| What you want | Method |
-| --- | --- |
-| Trains on a date | `search_trains(query)`, paged with `result.next_page()` |
-| Trains when there is no direct one | `search_trains_with_transfer_fallback(query)`, or `search_transfer_trains(query)` outright |
-| Which stations a pair may be transferred at | `get_transfer_stations(dpt, arv)` |
-| Cars and the physical seat map of one car | `get_seat_cars(train)`, `get_seat_inventory(train, car_no)` |
-| Where a train actually stops, and when it runs | `get_train_schedule(...)`, `get_train_calendar()` |
-| The station catalogue | `get_station_data()`, `get_station_info()` |
-| Your tickets and one ticket in detail | `get_ticket_list()`, `get_ticket_reservation_detail(request)` |
-| Your reservations and purchase history | `get_reservation_history()`, `get_product_reservations(...)` |
-| What a refund would cost, and what a ticket is | `get_refund_commission(ticket)`, `get_refund_ticket_detail(ticket)` |
-| Points, coupons, welfare flags, mileage ledger | `get_korail_point_summary()`, `get_mileage_history(request)` |
-| Whether a seat or train may still be changed | `get_self_seat_change_info(request)` |
-| A paid ticket's original (원표) identity, by 반환번호 | `get_original_ticket_inquiry(request)` |
-| Limousine-bus schedules and seats (static-evidenced, never live-run) | `get_limousine_schedules(query)`, `get_limousine_seat_inventory(query)`, `get_limousine_schedule_view(query)` |
-
-Plus the account-neutral reads that need no login at all: `get_service_status()`
-(is the service up, before you do anything else), `get_app_data()`,
-`get_notice()`, `get_uuid()`, `get_maas_menu_list()` and
-`get_maas_station_data(code)`. The whole login/read surface, with the exact
-route behind each method, is in
-[docs/api-status-by-service.md](docs/api-status-by-service.md).
-
-### Booking
-
-One method, `reserve`, reaches all four of the booking screen's actions through
-a keyword-only `job_type`, so an unadorned call sends exactly what it always
-sent:
-
-| `job_type` | `txtJobId` | What it books |
+| 이름 | korail | srt |
 | --- | --- | --- |
-| `IMMEDIATE` (default) | `1101` | An ordinary seat-unspecified hold |
-| `SEAT_DESIGNATED` | `1103` | 좌석지정 — named car and seat numbers from `get_seat_inventory` |
-| `STANDBY` | `1102` | 예약대기 — join the waiting list on a sold-out train; completed by `confirm_standby_hold` |
-| `MERGE_STANDING` | `1202` | 입석+좌석 — the first of the two holds 병합예약 needs; the second is `reserve_merge` |
+| `TrainSearchQuery.passengers` | `int`, 기본 `1` | `PassengerCounts` |
+| `TrainSearchQuery.departure_time` 기본값 | `"000000"` | `"060000"` |
+| `DiscountCoupon` | `coupon_no`, `discount_values`, `expiration_date`, … | `coupon_number`, `discount_rate`, `remaining_uses`, … |
+| `MutationCategory` | 7개 값 | 5개 값, 공통은 4개 |
 
-`reserve` also takes a `KorailPassengerCounts` (eight passenger rows, capped at
-nine people) and a `KorailSeatClass` (일반실 or 특실).
+각 앱의 기본값을 그대로 옮긴 것이라 통일하지 않았다. 한 모듈에서 둘 다 필요하면
+별칭으로 import 하고(`from korail_mobile_api import TrainSearchQuery as KorailTrainSearchQuery`),
+한쪽에서 만든 값이 다른 쪽에서 통할 것이라고 가정하지 마라.
 
-One trap worth knowing before you use `SEAT_DESIGNATED`: a seat carries two
-identifiers. The form sends `KorailSeatAssignment.seat_no`, and the reservation
-you read back echoes the human label `seat_spec` — so compare a booked seat by
-`seat_spec`, never by `seat_no`, or a correct booking will look wrong.
+## 무엇을 할 수 있나
 
-Two more entry points share the same route and the same `reserve` consent:
-`reserve_transfer(legs, ...)` books a 환승 as one PNR carrying two journeys, and
-`reserve_with_discount_card(train, card_no=...)` books the single 할인카드
-passenger row.
+이 패키지의 경계에는 라우트 60개와 공개 메서드 77개가 들어 있다. 라우트
+60개는 읽기 58개에 로그인 POST 와 로그아웃 GET 을 더한 것이다. 변경 라우트 9개는
+별도 집합으로 관리되며 읽기 전용 허용목록에 올라가지 않는다. 공개 메서드 77개
+가운데 consent 게이트가 걸린 변경 메서드 13개를 뺀 나머지 64개는 로그인·읽기
+요청만 보내거나 아무것도 보내지 않는다.
 
-### Cancelling, paying, refunding
+### 검색과 조회
 
-- `cancel_unpaid_hold(hold, consent=...)` — release a hold before it is paid.
-- `pay_with_fake_card(hold, card, consent=...)` — settle with a non-chargeable
-  test card. It refuses anything else.
-- `pay_with_card(hold, card, consent=...)` — settle with a real card. Off by
-  default; see the safety model.
-- `refund(ticket, consent=...)` — refund a paid ticket.
-- `recalculate_price(request, consent=...)` — 운임 재계산: rewrite what an
-  existing hold will cost when the discount selection changes.
-- `add_to_cart(request, consent=...)` — put a held PNR in the 장바구니. Its own
-  `cart` consent category: the hold already exists and this creates nothing, so
-  it is neither a booking nor a payment.
+| 하고 싶은 것 | 메서드 |
+| --- | --- |
+| 특정 날짜의 열차 | `search_trains(query)`, 다음 쪽은 `result.next_page()` |
+| 직통이 없을 때 | `search_trains_with_transfer_fallback(query)`, 또는 처음부터 `search_transfer_trains(query)` |
+| 어느 역에서 환승할 수 있나 | `get_transfer_stations(departure_station_code, arrival_station_code)` |
+| 객차 목록과 한 객차의 좌석표 | `get_seat_cars(train)`, `get_seat_inventory(train, car_no)` |
+| 실제 정차역과 운행일 | `get_train_schedule(...)`, `get_train_calendar()` |
+| 역 목록 | `get_station_data()`, `get_station_info()` |
+| 내 승차권과 한 장의 상세 | `get_ticket_list()`, `get_ticket_reservation_detail(request)` |
+| 예약 내역과 구매 이력 | `get_reservation_history()`, `get_product_reservations(...)` |
+| 환불하면 얼마가 떼이나, 그 승차권은 무엇인가 | `get_refund_commission(ticket)`, `get_refund_ticket_detail(ticket)` |
+| 포인트·쿠폰·복지 플래그·마일리지 원장 | `get_korail_point_summary()`, `get_mileage_history(request)` |
+| 좌석이나 열차를 아직 바꿀 수 있나 | `get_self_seat_change_info(request)` |
+| 반환번호로 원표를 찾기 | `get_original_ticket_inquiry(tickets)` |
+| 리무진버스 시간표와 좌석 | `get_limousine_schedules(query)`, `get_limousine_seat_inventory(query)`, `get_limousine_schedule_view(query)` |
 
-### Discounts, welfare and passes
+로그인 없이 되는 계정 무관 읽기도 있다. `get_service_status()`(무엇을 하기 전에
+서비스가 살아 있는지), `get_app_data()`, `get_notice()`, `get_uuid()`,
+`get_maas_menu_list()`, `get_maas_station_data(additional_service_code)`.
+메서드마다 어떤 라우트가
+붙는지는 [docs/api-status-by-service.md](docs/api-status-by-service.md) 에 있다.
 
-- `get_discount_card_usage_history(card_no)` and
-  `get_discount_card_schedule(request)` read an N카드: what it has been spent
-  on, and the trains it may still be spent on.
-- `register_discount_card(request, consent=...)` buys one;
-  `extend_discount_card(ticket, consent=...)` is 기간연장. Both sit in their own
-  `discount_card` consent category.
-- `get_pass_menu(menu_no)`, `get_pass_available_dates(...)` and
-  `get_pass_schedule(request)` read 정기권 products, the days a pass may start
-  on, and the trains it can be bound to. **Buying** a pass is not implemented —
-  see below.
-- `get_korail_point_summary()` carries the welfare flags (`h_hdcp_flg` and the
-  장애인증/보조견 names) that decide whether an account may book 장애 or 안내견
-  passenger rows at all.
+### 예약
 
-### The virtual waiting room
+`reserve` 하나가 예약 화면의 네 동작을 모두 덮는다. 키워드 전용 `job_type` 으로
+고르고, 주지 않으면 좌석 미지정 일반 예약이 나간다.
 
-`KorailNetFunnelClient` is a standalone client for KORAIL's NetFunnel queue on
-`nf.letskorail.com`. It is **off by default** because no live call this
-repository has ever made was metered, and it is deliberately unreachable from
-`KorailClient` — the API origin guard and the queue origin guard are separate,
-and constructing the queue client against a config that has not opted in raises
-before any socket exists.
+| `job_type` | `txtJobId` | 무엇을 잡나 |
+| --- | --- | --- |
+| `IMMEDIATE` (기본) | `1101` | 좌석 미지정 일반 예약 |
+| `SEAT_DESIGNATED` | `1103` | 좌석지정 — `get_seat_inventory` 에서 고른 호차·좌석번호 |
+| `STANDBY` | `1102` | 예약대기 — 매진 열차의 대기열. `confirm_standby_hold` 로 마무리한다 |
+| `MERGE_STANDING` | `1202` | 입석+좌석 — 병합예약에 필요한 두 hold 중 첫 번째. 두 번째는 `reserve_merge` |
+
+`reserve` 는 `KorailPassengerCounts`(승객 행 8종, 합계 9명까지)와
+`KorailSeatClass`(일반실·특실)도 받는다.
+
+좌석지정에는 함정이 하나 있다. 좌석은 식별자를 두 개 갖는다. 폼에 나가는 것은
+`KorailSeatAssignment.seat_no` 이고, 예약을 다시 읽으면 서버는 사람이 읽는 표시
+`seat_spec` 을 돌려준다. 예약된 좌석을 대조할 때는 `seat_spec` 을 응답의
+`h_seat_no` 와 비교하라. `seat_no` 를 비교하면 제대로 된 예약이 틀린 것처럼 보인다.
+
+같은 라우트와 같은 `reserve` consent 를 쓰는 진입점이 둘 더 있다.
+`reserve_transfer(legs, ...)` 는 환승을 두 여정을 담은 하나의 PNR 로 잡고,
+`reserve_with_discount_card(train, card_no=...)` 는 할인카드 승객 행 하나를 잡는다.
+
+### 취소·결제·환불
+
+| 메서드 | consent 범주 | 하는 일 |
+| --- | --- | --- |
+| `cancel_unpaid_hold(hold, consent=...)` | `cancel` | 결제 전 hold 를 푼다 |
+| `pay_with_fake_card(hold, card, consent=...)` | `payment` | 청구되지 않는 테스트 카드로만 결제한다. 다른 카드는 거절한다 |
+| `pay_with_card(hold, card, consent=...)` | `payment` | 실카드로 결제한다. 기본으로 막혀 있다 — [안전 모델](#안전-모델) 참고 |
+| `refund(ticket, consent=...)` | `refund` | 결제된 승차권을 환불한다 |
+| `recalculate_price(request, consent=...)` | `price_recalculation` | 운임 재계산. 할인 선택이 바뀐 hold 의 금액을 다시 쓴다 |
+| `add_to_cart(request, consent=...)` | `cart` | 이미 잡힌 PNR 을 장바구니에 넣는다. 새로 만드는 것이 없어 예약도 결제도 아니다 |
+
+모두 `dry_run=True` 가 기본이다.
+
+### 할인카드·복지·정기권
+
+- `get_discount_card_usage_history(card_no)` 와 `get_discount_card_schedule(request)`
+  는 N카드를 읽는다. 어디에 썼는지, 아직 어떤 열차에 쓸 수 있는지.
+- `register_discount_card(request, consent=...)` 는 새로 사고,
+  `extend_discount_card(ticket, consent=...)` 는 기간연장이다. 둘 다 `discount_card`
+  consent 범주다.
+- `get_pass_menu(menu_no)`, `get_pass_available_dates(...)`, `get_pass_schedule(request)`
+  는 정기권 상품, 개시 가능일, 묶을 수 있는 열차를 읽는다. 정기권 **구매**는
+  구현하지 않았다 — [한계](#한계) 참고.
+- `get_korail_point_summary()` 가 복지 플래그(`h_hdcp_flg`, 장애인증·보조견 이름)를
+  들고 온다. 이 계정이 장애·안내견 승객 행을 예약할 수 있는지를 결정하는 값이다.
+
+### 가상대기실 (NetFunnel)
+
+`KorailNetFunnelClient` 는 `nf.letskorail.com` 의 KORAIL 대기열을 다루는 독립
+클라이언트다. **기본적으로 꺼져 있다**. 이 저장소가 지금까지 보낸 실호출 중
+대기열에 걸린 것이 하나도 없기 때문이다. `KorailClient` 에서는 닿을 수 없게
+분리해 두었다 — API origin 가드와 큐 origin 가드가 별개이고, 옵트인하지 않은
+설정으로 큐 클라이언트를 만들면 소켓이 생기기 전에 예외가 난다.
 
 ```python
 from korail_mobile_api import (
     KorailClient, KorailConfig, KorailNetFunnelClient, inquiry_action,
 )
 
-config = KorailConfig(netfunnel_enabled=True)    # explicit opt-in
+config = KorailConfig(netfunnel_enabled=True)    # 명시적 옵트인
 queue = KorailNetFunnelClient(config)
 client = KorailClient(config)
 
@@ -268,39 +253,33 @@ with queue.slot(inquiry_action(peak_season=True)):
     result = client.search_trains(query)
 ```
 
-Enable it when a queue-shaped failure appears, which is what it was built for.
-The handshake and the release are live-confirmed, but the
-**queued path is NOT live-exercised**: the server has never actually made this
-client wait, so the polling loop, the ttl sleep and the bounds are covered by
-offline fixtures only. Treat the handshake as verified and the wait as
-built-and-unproven.
+대기열 모양의 실패가 보일 때 켜라. 그러라고 만든 것이다. 핸드셰이크와 반납은
+실서버에서 확인했지만 **대기 경로는 실서버에서 한 번도 돌지 않았다** — 서버가 이
+클라이언트를 실제로 기다리게 한 적이 없어서, 폴링 루프와 ttl 대기와 경계값은
+오프라인 픽스처로만 덮여 있다.
 
-## The safety model
+## 안전 모델
 
-This is the part to read before calling anything. It is enforced in code, not by
-convention, and the offline suite pins it.
+이 라이브러리의 정체성이다. 관례가 아니라 코드로 강제하고, 오프라인 스위트가
+고정한다.
 
-**1. Nothing that changes state moves without an explicit consent object.**
-Every one of the fifteen mutation methods starts with
-`require_mutation_consent(consent, category)` and raises
-`KorailMutationNotAllowedError` before it builds anything. There is no global switch
-and no environment variable that turns this off.
+**1. 상태를 바꾸는 것은 consent 객체 없이 움직이지 않는다.** 변경 메서드 13개는
+전부 `require_mutation_consent(consent, category)` 로 시작해서, 무엇을 만들기도
+전에 `KorailMutationNotAllowedError` 를 올린다. 이걸 끄는 전역 스위치도 환경변수도
+없다.
 
-**2. Each category is opted into separately.** `MutationConsent` has one flag
-per category — `allow_reserve`, `allow_payment`, `allow_cancel`, `allow_refund`,
-`allow_discount_card`, `allow_price_recalculation`, `allow_cart` — and every one
-defaults to `False`. A consent that authorises a booking cannot cancel one, and
-a consent that authorises paying a quoted amount cannot re-price it.
+**2. 범주마다 따로 동의한다.** `MutationConsent` 는 범주별 플래그를 하나씩 갖는다 —
+`allow_reserve`, `allow_payment`, `allow_cancel`, `allow_refund`,
+`allow_discount_card`, `allow_price_recalculation`, `allow_cart` — 전부 기본
+`False` 다. 예약을 허가한 consent 로 취소할 수 없고, 견적 금액 결제를 허가한
+consent 로 재가격할 수 없다.
 
-**3. `dry_run=True` is the default, and a dry run sends nothing.** With the
-default consent, a mutation method validates its inputs and returns a
-`MutationPreview` describing the exact form that *would* be posted. The preview's
-payload is forced through `redact_payload` on construction, so it can never hold
-a raw card number, PNR or other identity even if you built it from real values.
-That happens for you; the redaction helpers are not top-level names. If you want
-them for your own logging, they are
-`from korail_mobile_api.redaction import redact_payload, redact_mapping,
-redact_value, redact_text, redact_url, is_sensitive_key`.
+**3. `dry_run=True` 가 기본이고, dry run 은 아무것도 보내지 않는다.** 기본 consent
+로는 변경 메서드가 입력을 검증하고, 보냈을 폼을 그대로 담은 `MutationPreview` 를
+돌려준다. 이 payload 는 생성 시점에 `redact_payload` 를 통과하므로 진짜 값으로
+만들었더라도 카드번호·PNR·신원이 남지 않는다. 자동으로 그렇게 된다. 직접
+로깅하려면 `from korail_mobile_api.redaction import redact_payload, redact_mapping,
+redact_value, redact_text, redact_url, is_sensitive_key` 로 가져다 쓸 수 있다.
 
 ```python
 from korail_mobile_api import MutationConsent
@@ -308,24 +287,24 @@ from korail_mobile_api import MutationConsent
 preview = client.reserve(train, consent=MutationConsent(allow_reserve=True))
 preview.route      # '/classes/com.korail.mobile.certification.TicketReservation'
 preview.note       # 'dry-run: not sent'
-preview.payload    # redacted; nothing left the process
+preview.payload    # 마스킹됨. 프로세스 밖으로 나간 것이 없다
 ```
 
-**4. Only `dry_run=False` transmits, and only through one gate.**
-`post_mutation_form` is the single method that can reach a mutation route. It
-re-checks the consent, refuses a `dry_run=True` consent outright, and asserts
-both that the route is a known mutation route and that it belongs to the
-category being claimed. The read-only send path refuses every mutation route, so
-no read can change state as a side effect.
+**4. `dry_run=False` 만 전송하고, 통로는 하나뿐이다.**
+`KorailHttpClient.post_mutation_form` 이 변경 라우트에 닿을 수 있는 유일한
+메서드다. consent 를 다시 검사하고, `dry_run=True` 인 consent 는 그 자리에서
+거절하며, 라우트가 알려진 변경 라우트인지 그리고 주장한 범주에 속하는지를 둘 다
+단언한다. 읽기 전송 경로는 모든 변경 라우트를 거절하므로, 읽기가 부수효과로
+상태를 바꾸는 일은 없다.
 
-**This is a consent that would actually book a train:**
+**실제로 열차를 예약하는 consent 는 이렇게 생겼다.**
 
 ```python
 hold = client.reserve(
     train,
     consent=MutationConsent(allow_reserve=True, dry_run=False),
 )
-hold.pnr_no        # a real, unpaid reservation that you now owe a decision
+hold.pnr_no        # 결정을 내려야 하는 진짜 미결제 예약
 
 client.cancel_unpaid_hold(
     hold,
@@ -333,221 +312,193 @@ client.cancel_unpaid_hold(
 )
 ```
 
-**5. A card-bearing payment needs one more acknowledgement.** The payment form
-carries the PAN in the clear, so `pay_with_fake_card` refuses unless
-`fake_card_only=True` and can therefore only ever send a non-chargeable test
-card. A real, chargeable card is reachable **only** through the separate
-`pay_with_card`, and only on a consent that sets *both*
-`real_card_acknowledged=True` and `fake_card_only=False`:
+**5. 카드를 실은 결제에는 승인이 하나 더 붙는다.** 결제 폼은 카드번호를 평문으로
+싣는다. `pay_with_fake_card` 는 `fake_card_only=True` 가 아니면 거절하므로 청구되지
+않는 테스트 카드만 보낼 수 있다. 청구되는 실카드는 **오직** `pay_with_card` 로만
+갈 수 있고, `real_card_acknowledged=True` 와 `fake_card_only=False` 를 **둘 다**
+세운 consent 여야 한다.
 
 ```python
 MutationConsent(
     allow_payment=True,
     dry_run=False,
     fake_card_only=False,
-    real_card_acknowledged=True,   # a real PAN goes over the wire; money moves
+    real_card_acknowledged=True,
 )
 ```
 
-Both flags default to the safe side, and the transmit gate independently refuses
-a payment whose consent claims neither or both — an ambiguous consent is never
-sent.
+두 플래그 모두 안전한 쪽이 기본이고, 전송 게이트는 둘 다 아니거나 둘 다인 consent
+를 따로 한 번 더 거절한다. 모호한 consent 는 절대 나가지 않는다.
 
-### Error taxonomy
+## 에러 처리
 
-Server-side failures are classified on `h_msg_cd`, the field the app itself
-branches on, never on Korean message text. Every type below subclasses the one it
-replaces, so an existing `except KorailAppError` still catches everything it used
-to, and `code` / `message` / `raw` are present on all of them.
+서버 쪽 실패는 앱 자신이 분기하는 필드인 `h_msg_cd` 로 분류한다. 한국어 메시지
+문구로는 분류하지 않는다.
 
-| Exception | Codes | What a caller should do |
+표의 위 열 개는 전부 `KorailAppError` 의 하위 타입이라 기존
+`except KorailAppError` 가 잡던 것을 그대로 잡고, `code`·`message`·`raw` 를
+모두 싣는다. 마지막 둘은 `KorailAppError` 가 아니다 — `KorailSessionExpiredError`
+는 `KorailAuthError` 이고 세 값을 다 갖지만, `KorailDynaPathError` 는
+`KorailApiError` 이고 `raw` 만 있다. 서버가 코드를 주지 않기 때문이다.
+
+### 에러 분류
+
+| 예외 | 코드 | 호출자가 할 일 |
 | --- | --- | --- |
-| `KorailNoResultsError` | `WRG000000`, `P114`, `P100`*, `WRT300005`* | **Nothing was there.** The request was fine. Retry is pointless; ask a different question. |
-| `KorailNoDirectTrainError` | `WRD000061` | No *direct* train. Re-ask as a transfer search — which is what the app does. Subclasses `KorailNoResultsError`. |
-| `KorailSoldOutError` | `ERR211161` | **Inventory is gone.** Retry is pointless for this train; pick another. |
-| `KorailSeatUnavailableError` | `WRI411345`, `ERR911081`, `WRT800176` | The *seat*, not the train. Retrying **without** seat designation may work. |
-| `KorailReservationRefusedError` | `WRR800029`, `ERR911531`, `ERR911051` | Reserve refused. Look at what you already hold; `message` carries the server's reason. |
-| `KorailInvalidRequestError` | `WRG200018`*, `WRT100002`*, `WRT100124`* | **Fix the payload.** A field was rejected; retry is pointless unchanged. |
-| `KorailNotEntitledError` | `ERR299943`* | **This account may not book that fare.** The payload is well-formed; it is refused for who is asking. |
-| `KorailServiceUnavailableError` | `SEMGTK` | The back end is down, not your request. |
-| `KorailAppUpdateRequiredError` | `SUPDATE` | This client version is refused; no retry interval helps. Note that a login refused for *looking automated* also says "update the app" — see below. |
-| `KorailAppError` | anything else | Unclassified. `code` and `raw` are intact — this is how the map grows. |
-| `KorailSessionExpiredError` | `P058` | **Re-login.** A `KorailAuthError`, deliberately *not* a `KorailAppError`. |
-| `KorailDynaPathError` | *(no code — a response header)* | You were flagged, not throttled. Anti-macro rejection carries no `h_msg_cd` at all. |
+| `KorailNoResultsError` | `WRG000000`, `P114`, `P100`*, `WRT300005`* | **아무것도 없었다.** 요청 자체는 정상이다. 재시도는 소용없다. 다른 질문을 하라. |
+| `KorailNoDirectTrainError` | `WRD000061` | *직통*이 없다. 환승 검색으로 다시 물어라 — 앱이 그렇게 한다. `KorailNoResultsError` 의 하위. |
+| `KorailSoldOutError` | `ERR211161` | **재고가 없다.** 이 열차는 재시도해도 소용없다. 다른 열차를 골라라. |
+| `KorailSeatUnavailableError` | `WRI411345`, `ERR911081`, `WRT800176` | 열차가 아니라 *좌석*이 문제다. 좌석지정을 **빼고** 다시 하면 될 수 있다. |
+| `KorailReservationRefusedError` | `WRR800029`, `ERR911531`, `ERR911051` | 예약이 거절됐다. 이미 들고 있는 예약을 확인하라. 이유는 `message` 에 있다. |
+| `KorailInvalidRequestError` | `WRG200018`*, `WRT100002`*, `WRT100124`* | **payload 를 고쳐라.** 필드가 거절됐다. 그대로 재시도해도 소용없다. |
+| `KorailNotEntitledError` | `ERR299943`* | **이 계정은 그 운임을 살 자격이 없다.** 요청 모양은 맞다. 누가 묻느냐 때문에 거절된 것이다. |
+| `KorailServiceUnavailableError` | `SEMGTK` | 요청이 아니라 백엔드가 죽었다. |
+| `KorailAppUpdateRequiredError` | `SUPDATE` | 이 클라이언트 버전이 거부됐다. 재시도 간격으로 해결되지 않는다. 아래의 위장된 경우와 구별하라. |
+| `KorailAppError` | 그 밖의 전부 | 미분류. `code` 와 `raw` 는 그대로 있다. 이렇게 매핑이 자란다. |
+| `KorailSessionExpiredError` | `P058` | **다시 로그인하라.** `KorailAuthError` 이고, 의도적으로 `KorailAppError` 가 *아니다*. |
+| `KorailDynaPathError` | *(코드 없음 — 응답 헤더)* | 스로틀이 아니라 플래그가 걸린 것이다. 안티 매크로 거부에는 `h_msg_cd` 자체가 없다. |
 
-`classify_app_error` is exported if you want the mapping without the raising.
-Codes marked \* are this repository's own live observations rather than APK
-branches; which is which, and the one observation deliberately left unclassified,
-are in [docs/verification-record.md](docs/verification-record.md).
+올리지 않고 매핑만 원하면 `classify_app_error` 를 쓰면 된다. `*` 가 붙은 코드는
+APK 분기가 아니라 이 저장소의 실서버 관측이다. 어느 쪽이 어느 쪽인지, 그리고
+일부러 분류하지 않고 남겨 둔 관측 하나는
+[docs/verification-record.md](docs/verification-record.md) 에 있다.
 
-#### An anti-macro rejection that reads as a version problem
+성공 응답에 붙은 경고 코드는 성공으로 남는다. 앱은 `FAIL` 이 아닌 응답의 모르는
+코드를 성공으로 처리하고, 이 클라이언트도 같다.
 
-**A failed `login` telling you to update the app is usually not about the app
-version.** The check the server applies to login answers a client that does not
-look like the app with `**MACRO ERROR**`, and dresses that up in the user-facing
-text as *"원활한 서비스 이용을 위해 앱을 최신 버전으로 업데이트한 뒤…"*. Take
-that at face value and you go looking for a superseded
-`KORAIL_API_VERSION` — which is what `KorailAppUpdateRequiredError`'s `SUPDATE`
-genuinely means, and is not what happened.
+**이 라이브러리는 스스로 재시도하지 않는다.** 특히 `reserve` 는 절대 재시도하지
+않는다. 재시도한 예약은 중복 예약이기 때문이다. 분류는 *호출자*가 결정하라고 있다.
 
-Two things tell them apart:
+### 안티 매크로 거부가 버전 문제처럼 보인다
 
-- **What else works.** Anti-macro rejection is account-shaped, not
-  client-shaped: `get_app_data()`, `get_notice()` and the rest of the
-  account-neutral reads keep answering normally while only `login` fails. A real
-  version gate refuses everything. "Reads fine, login refused" is the signature,
-  and it has already caused one misdiagnosis in this repository.
-- **The raw code.** `login` is a route this library parses; call it and read
-  `error.code` and `error.raw` rather than the Korean text. `SUPDATE` is a
-  version gate. A `MACRO`-bearing code or message is not.
+**`login` 이 앱을 업데이트하라고 하면 대개 앱 버전 문제가 아니다.** 로그인에
+적용되는 검사는 앱처럼 보이지 않는 클라이언트에 `MACRO ERROR` 로 답하고, 사용자에게
+보이는 문구로는 *"원활한 서비스 이용을 위해 앱을 최신 버전으로 업데이트한 뒤…"* 를
+내보낸다. 이걸 곧이곧대로 받으면 낡은 `KORAIL_API_VERSION` 을 찾으러 가게 된다.
+그것은 `KorailAppUpdateRequiredError` 의 `SUPDATE` 가 진짜로 뜻하는 바이고, 여기서
+일어난 일이 아니다.
 
-The fix is not a version bump: it is to look like the app. That is what the
-default configuration above is for, and it is why turning DynaPath off or
-overriding `user_agent` with something of your own is a change worth making
-deliberately.
+구별하는 방법은 둘이다.
 
-`KorailDynaPathError` is the opposite failure, and the defaults can now reach
-it. Six paths are token-bearing, and `ScheduleView` — the one `search_trains`
-uses — is one of them, so the quickstart's *first* call carries a token built
-from a device id this library synthesised and a `device_model` of `"Android"`.
-Neither value has been checked against the live server; what has been verified
-live is the same request carrying a real handset's values, via
-`build_config_from_env`. If the server validates token contents rather than
-merely their presence, the symptom is a `KorailDynaPathError` on a read that
-used to succeed without any token at all. There are two ways out, and both are
-above: pass `KorailConfig(dynapath=DynapathConfig())` to send no token, or use
-`build_config_from_env` to send your own device's. This is stated rather than
-hidden because a 1.0.0 whose headline path can fail in a way its documentation
-does not name is worse than one that says where it is unproven.
+- **다른 것이 되는지 본다.** 안티 매크로 거부는 클라이언트가 아니라 계정 모양이다.
+  `get_app_data()`, `get_notice()` 같은 계정 무관 읽기는 정상 응답하는데 `login`
+  만 실패한다. 진짜 버전 게이트는 전부를 거절한다. "읽기는 되는데 로그인만 거절"
+  이 그 신호다.
+- **원본 코드를 본다.** `login` 은 이 라이브러리가 파싱하는 라우트다. 호출해서
+  한국어 문구 대신 `error.code` 와 `error.raw` 를 읽어라. `SUPDATE` 는 버전
+  게이트다. `MACRO` 가 실린 코드나 메시지는 아니다.
 
-A warning code attached to a success stays a success — the app dispatches any
-unrecognised code on a non-`FAIL` response as a success, and so does this client.
+해결책은 버전을 올리는 것이 아니라 앱처럼 보이는 것이다. 위의 기본 설정이 그
+목적이고, DynaPath 를 끄거나 `user_agent` 를 직접 덮어쓰는 것이 의도적으로만
+해야 할 변경인 이유다.
 
-**The library never retries on its own initiative**, and `reserve` in particular
-is never retried, because a retried reserve is a duplicate booking.
-Classification exists so the *caller* can decide.
+`KorailDynaPathError` 는 반대 방향의 실패이고, 기본 설정으로도 여기에 닿는다.
+토큰이 붙는 경로 6개 중 하나가 `search_trains` 가 쓰는 `ScheduleView` 라서, 빠른
+시작의 *첫* 호출부터 토큰이 실린다.
 
-## What is proven, and what is only built
+그 토큰은 이 라이브러리가 합성한 기기 id 와 `"Android"` 라는 `device_model` 로
+만든다. **두 값 모두 실서버로 확인한 적이 없다.** 확인된 것은
+`build_config_from_env` 로 진짜 단말 값을 실은 같은 요청이다. 서버가 토큰의 존재가
+아니라 내용을 검사한다면, 증상은 토큰 없이 잘 되던 읽기에서
+`KorailDynaPathError` 가 나는 것이다. 빠져나갈 길은 둘이고 위에 다 있다.
+`KorailConfig(dynapath=DynapathConfig())` 로 토큰을 안 보내거나,
+`build_config_from_env` 로 본인 단말 값을 보내라.
 
-Being able to build a request is not the same as knowing the server accepts it.
-This distinction is tracked per operation in
-[docs/MUTATION_HANDOFF.md](docs/MUTATION_HANDOFF.md); the short version:
+## 한계
 
-- **Live-verified end to end:** immediate, seat-designated, standby and
-  입석+좌석 holds; `confirm_standby_hold`; `cancel_unpaid_hold`; `add_to_cart`
-  (`IRZ000002`, read back out of `get_cart_list`); and a `pay_with_fake_card`
-  attempt, which the server declined with no charge.
-- **Live-answered reads:** `get_self_seat_change_info` returned
-  `WRT800176 좌석변경가능시간아님` — a real business answer, which is what
-  proves the route, the field contract and the error taxonomy all line up.
-  `get_original_ticket_inquiry` is built but unrun: it needs the 반환번호 off a
-  ticket that has actually been issued.
-- **Built and never transmitted:** `pay_with_card`, `refund`, `reserve_merge`,
-  the whole 할인카드 surface, and `recalculate_price`. Their send paths are
-  active code, not blocked code — they have simply never been run.
-- **환승 is implemented and NOT live-verified.** `search_transfer_trains` and
-  `reserve_transfer` are built from the app's own request builder, but no
-  transfer search or hold from this package has ever been sent. Its search side
-  is cheap to probe: `get_transfer_stations(dpt, arv)` is a plain read.
-  A live transfer hold is not, so do not send one unless you are prepared to
-  cancel it in the KORAIL app.
+### 실서버로 확인되지 않은 것
 
-The evidence behind each of those claims — the file:line citations, the codes
-each live run returned, and what an operator still has to do — is in
-[docs/verification-record.md](docs/verification-record.md).
+요청을 만들 수 있다는 것과 서버가 그것을 받아 준다는 것은 다르다. 연산별 상태는
+[docs/MUTATION_HANDOFF.md](docs/MUTATION_HANDOFF.md) 가 추적한다. 요약하면:
 
-## What is not implemented, and why
-
-Some of these are boundaries this project chose; some need an entitlement its
-account does not have; three were implemented and then removed.
-
-- **Identity-document submission.** The welfare certification routes
-  (`certification.disabled.do`, `MeritCert`, `assemblyCert`, `pbep.*`) each
-  transmit a 주민등록번호 fragment or a government certificate number and
-  *register* an entitlement against the account. Shipping an unverifiable
-  identity-document submitter was judged worse than not having one.
-- **Password-carrying point routes.** `mlg.lpotAthn.do` and `xPoint.XPointView`
-  authenticate with a user-supplied point password and answer with a failure
-  counter, so a wrong guess is a state change at the loyalty provider and
-  repeated guesses lock the account. They are not reads and are not here. The
-  two loyalty routes that *are* reads are.
-- **정기권 (commuter pass) purchase — removed on purpose.** It was implemented
-  and deleted the same day: a settlement is ₩150,000–₩250,000 with no cancel or
-  refund route in this package, and `passPayIssue` is unreachable in the shipped
-  app, so there is not even an app capture to compare a form against. The three
-  pass *reads* are unaffected. Everything learned about the purchase, and what
-  reviving it would cost to prove, is kept in the record.
-- **승차권 여행변경, its rollback, and 예약 인원 변경 — removed on purpose.**
-  Built on 2026-07-27 from the app's own dispatch sites, including all eleven
-  `@FieldMap` expansions, then deleted the same day. Exercising any of them
-  needs a ticket that has already been paid for; a change charges the fare
-  difference plus a 변경수수료, and there is no clean undo. They would have sat
-  on the mutation allowlist as permanently unverified money paths. The two
-  *reads* that were added alongside them stayed, because a read costs nothing
-  and stands on its own.
-- **비회원 오프라인 반환 — removed on purpose.** The station-window refund pair
-  identifies a ticket by the 반환번호 printed on paper plus the requester's
-  name, so verifying it needs a physical ticket nobody here has. The whole
-  non-member identity model went with it.
-- **The crew-call submission.**
-  `/classes/com.korail.mobile.push.callCrew.do` is the state-changing sibling of
-  the crew-request read and remains excluded from the transport allowlist and
-  the public client. Reading crew request options never submits a crew call.
-- **Anything needing an entitlement this account lacks.** The N카드 reads, and
-  the 1~3급 장애 / 안내견 passenger rows, are refused for who is asking rather
-  than for how the request is shaped. Proving them needs an account with the
-  real-world registration.
-- **Check-in, membership mutation, point/mileage mutation, and destructive
-  ticket operations.** Not implemented in this version.
-- **Authentication bypass, NetFunnel or DynaPath bypass, and general-purpose
-  WebView automation.** Out of scope permanently.
-
-## Where the deep material lives
-
-| Document | What is in it |
+| 상태 | 대상 |
 | --- | --- |
-| [docs/verification-record.md](docs/verification-record.md) | The evidence log. Per-feature APK file:line citations, every bounded live run's codes and counts, superseded claims and their corrections. This was the README until 2026-07-26. |
-| [docs/MUTATION_HANDOFF.md](docs/MUTATION_HANDOFF.md) | The mutation surface operator-to-operator: what is proven, what each remaining proof would cost, and the trade-offs taken. |
-| [docs/IMPLEMENTATION_PROGRESS.md](docs/IMPLEMENTATION_PROGRESS.md) | Package boundary, route inventory and verification state, as a dated progress log. |
-| [docs/api-status-by-service.md](docs/api-status-by-service.md) | All 165 Retrofit entries by service, with each one's live success / failure / unexecuted status. |
-| [docs/api-endpoints.md](docs/api-endpoints.md) | The raw endpoint table: method, path, request parameters, return type. |
-| [docs/korail-apk-analysis.md](docs/korail-apk-analysis.md) | The APK itself: structure, hosts, login, security, payment, WebView. |
-| [docs/deep-dive/README.md](docs/deep-dive/README.md) | Twenty focused subsystem reports and their reading order. |
-| [docs/library-build-guide.md](docs/library-build-guide.md) | How the static analysis was turned into this library, and the policy it must keep. |
-| [docs/pass-schedule-read.md](docs/pass-schedule-read.md) | The 정기권 schedule read's exact request, typed response, and live-validation boundary. |
-| [docs/RELEASE.md](docs/RELEASE.md) | The test, build and distribution gate this package's releases go through. |
-| [docs/internal/README.md](docs/internal/README.md) | Development history: audits, re-verification passes, design specs. Not user documentation. |
-| [CHANGELOG.md](CHANGELOG.md) | What changed, with the reasoning. |
+| 왕복까지 실서버 확인 | 즉시·좌석지정·예약대기·입석+좌석 hold, `confirm_standby_hold`, `cancel_unpaid_hold`, `add_to_cart`, 그리고 서버가 청구 없이 거절한 `pay_with_fake_card` 시도 |
+| 실서버가 업무 응답을 준 읽기 | `get_self_seat_change_info` 가 `WRT800176 좌석변경가능시간아님` 을 돌려줬다. 라우트·필드 계약·에러 분류가 모두 맞물린다는 증거다 |
+| 만들었지만 한 번도 보내지 않음 | `pay_with_card`, `refund`, `reserve_merge`, 할인카드 표면 전체, `recalculate_price`. 전송 경로는 막힌 코드가 아니라 살아 있는 코드다 |
+| 아직 못 돌려 본 읽기 | `get_original_ticket_inquiry` — 실제로 발권된 승차권의 반환번호가 있어야 한다 |
 
-## Working on this repository
+**환승은 구현했고 실서버 검증 안 됨.** `search_transfer_trains` 와
+`reserve_transfer` 는 앱의 요청 빌더에서 그대로 옮겼지만, 이 패키지가 환승 검색이나
+환승 hold 를 보낸 적은 없다. 검색 쪽은 싸게 찔러볼 수 있다 —
+`get_transfer_stations` 는 그냥 읽기다. 실환승 hold 는 그렇지 않으니,
+KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내지 마라.
+
+각 주장의 근거 — file:line 인용, 실행마다 서버가 돌려준 코드 — 는
+[docs/verification-record.md](docs/verification-record.md) 에 있다.
+
+### 구현하지 않은 것과 그 이유
+
+- **신원 서류 제출.** 복지 인증 라우트(`certification.disabled.do`, `MeritCert`,
+  `assemblyCert`, `pbep.*`)는 주민등록번호 조각이나 정부 증명서 번호를 전송하고
+  계정에 자격을 *등록*한다. 검증할 수 없는 신원 서류 제출기를 배포하는 쪽이 아예
+  없는 쪽보다 나쁘다고 판단했다.
+- **비밀번호를 싣는 포인트 라우트.** `mlg.lpotAthn.do` 와 `xPoint.XPointView` 는
+  사용자가 입력한 포인트 비밀번호로 인증하고 실패 횟수를 돌려준다. 틀린 추측 한
+  번이 제휴사 쪽 상태 변화이고 반복하면 계정이 잠긴다. 읽기가 아니므로 넣지
+  않았다. 읽기인 제휴 라우트 둘은 들어 있다.
+- **정기권 구매.** 결제액이 15만~25만원인데 이 패키지에는 취소·환불 라우트가 없고,
+  `passPayIssue` 는 배포된 앱에서 도달할 수 없어 폼을 대조할 앱 캡처조차 없다.
+  정기권 *읽기* 세 개는 그대로 있다.
+- **승차권 여행변경과 그 롤백, 예약 인원 변경.** 어느 것을 돌려 보려 해도 이미
+  결제된 승차권이 필요하다. 변경은 운임 차액에 변경수수료를 더해 청구하고 깨끗한
+  되돌리기가 없다. 영구히 미검증인 돈 경로가 변경 허용목록에 앉아 있게 된다.
+  같이 들어왔던 *읽기* 둘은 남겼다. 읽기는 비용이 없고 혼자서도 쓸모가 있다.
+- **비회원 오프라인 반환.** 역 창구 환불 쌍은 종이에 인쇄된 반환번호와 신청인
+  이름으로 승차권을 식별한다. 검증하려면 실물 승차권이 있어야 한다. 비회원 신원
+  모델 전체가 같이 빠졌다.
+- **승무원 호출 제출.** `/classes/com.korail.mobile.push.callCrew.do` 는 승무원
+  요청 읽기의 상태 변경 짝이고, transport 허용목록과 공개 클라이언트에서 계속
+  제외되어 있다. 승무원 요청 옵션을 읽는 것으로 호출이 나가는 일은 없다.
+- **이 계정에 자격이 없는 것.** N카드 읽기와 1~3급 장애·안내견 승객 행은 요청
+  모양이 아니라 누가 묻느냐 때문에 거절된다. 증명하려면 실제 등록이 되어 있는
+  계정이 있어야 한다.
+- **체크인, 회원정보 변경, 포인트·마일리지 변경, 파괴적 승차권 연산.** 이 버전에는
+  없다.
+- **인증 우회, NetFunnel·DynaPath 우회, 범용 WebView 자동화.** 영구히 범위 밖이다.
+
+## 문서
+
+| 문서 | 내용 |
+| --- | --- |
+| [docs/verification-record.md](docs/verification-record.md) | 근거 기록. 기능별 APK file:line 인용, 제한된 실행마다의 코드와 건수, 철회된 주장과 정정 |
+| [docs/MUTATION_HANDOFF.md](docs/MUTATION_HANDOFF.md) | 변경 표면. 무엇이 증명됐고, 남은 증명 하나하나가 얼마를 치러야 하는지 |
+| [docs/IMPLEMENTATION_PROGRESS.md](docs/IMPLEMENTATION_PROGRESS.md) | 패키지 경계, 라우트 인벤토리, 검증 상태 |
+| [docs/api-status-by-service.md](docs/api-status-by-service.md) | Retrofit 항목 165개를 서비스별로. 각각의 실서버 성공/실패/미실행 |
+| [docs/api-endpoints.md](docs/api-endpoints.md) | 원본 엔드포인트 표: 메서드, 경로, 요청 파라미터, 반환 타입 |
+| [docs/korail-apk-analysis.md](docs/korail-apk-analysis.md) | APK 자체: 구조, 호스트, 로그인, 보안, 결제, WebView |
+| [docs/deep-dive/README.md](docs/deep-dive/README.md) | 하위 시스템별 심층 보고서와 읽는 순서 |
+| [docs/library-build-guide.md](docs/library-build-guide.md) | 정적 분석을 이 라이브러리로 옮긴 방법과 지켜야 할 정책 |
+| [docs/pass-schedule-read.md](docs/pass-schedule-read.md) | 정기권 일정 읽기의 요청·응답 타입과 실검증 경계 |
+| [docs/RELEASE.md](docs/RELEASE.md) | 릴리스가 통과해야 하는 테스트·빌드·배포 게이트 |
+| [docs/internal/README.md](docs/internal/README.md) | 감사·재검증·설계 기록. 사용자 문서가 아니다 |
+| [CHANGELOG.md](CHANGELOG.md) | 무엇이 바뀌었나 |
+
+## 개발
 
 ```bash
 env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
 ```
 
-The offline suite is the gate and it makes no network calls:
-`2415 passed, 1 deselected`, where the one deselected test is the explicitly
-opted-in live-service test. Live tests run only when `KORAIL_MOBILE_API_LIVE=1`
-is set together with credentials you supply yourself; nothing in this repository
-ships an account.
+오프라인 스위트가 게이트이고 네트워크를 쓰지 않는다: `2415 passed, 1 deselected`.
+빠진 하나는 명시적으로 옵트인해야 하는 실서버 테스트다. 실서버 테스트는
+`KORAIL_MOBILE_API_LIVE=1` 과 직접 마련한 자격증명이 함께 있을 때만 돈다. 이
+저장소는 계정을 동봉하지 않는다.
 
-Documentation is pinned by the offline suite — principally `tests/test_readme.py`
-and `tests/test_release_readiness.py`, with each feature's own module pinning its
-own claims. They assert that specific claims, counts and method names still
-appear in the document that is supposed to carry them, this file and
-`docs/verification-record.md` included. That is deliberate: this repository has
-repeatedly caught documentation drifting away from the code, and a claim nobody
-checks is a claim nobody can trust.
+문서는 오프라인 스위트가 고정한다. 주로 `tests/test_readme.py` 와
+`tests/test_release_readiness.py` 가, 기능별 모듈은 각자의 주장을 붙든다. 특정
+주장·수치·메서드 이름이 그것을 실어야 할 문서에 아직 있는지를 단언한다. 이 파일과
+`docs/verification-record.md` 도 대상이다. 의도적이다 — 아무도 확인하지 않는 주장은
+아무도 믿을 수 없다.
 
-The APK and the generated decompile directories are not committed. Documentation,
-the reproducible inventory output, the client source and the offline contract
-tests are.
+APK 와 디컴파일 산출물 디렉터리는 커밋하지 않는다. 문서, 재현 가능한 인벤토리
+출력, 클라이언트 소스, 오프라인 계약 테스트는 커밋한다.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow — the
-three offline gates are `pytest -q -m "not live"`, `ruff check .` and
-`pyright`, all three configured in `pyproject.toml` and all three run by CI —
-and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations.
+기여 절차는 [CONTRIBUTING.md](CONTRIBUTING.md) 에 있다. 오프라인 게이트는
+`pytest -q -m "not live"`, `ruff check .`, `pyright` 셋이고 모두 `pyproject.toml`
+에 설정되어 있으며 CI 가 셋 다 돌린다. 커뮤니티 규범은
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 를 보라.
 
-## License
+## 라이선스
 
-Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache License 2.0 — [LICENSE](LICENSE) 와 [NOTICE](NOTICE) 참고.

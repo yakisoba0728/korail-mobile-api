@@ -218,12 +218,16 @@ def test_the_readme_no_longer_says_dynapath_is_off_for_korail():
 
     # The sentence this replaces -- "Nothing above needs DynaPath. That
     # anti-automation header is off by default ... from settings you supply
-    # explicitly" -- described a client that could not log in.
+    # explicitly" -- described a client that could not log in. The README is
+    # Korean now, so the claim is pinned in the language it is written in; the
+    # withdrawn English sentence stays banned so it cannot come back.
     assert "Nothing above needs DynaPath" not in unwrapped
-    assert "anti-automation header is **on by default**" in unwrapped
+    assert "안티 오토메이션 헤더는 **기본적으로 켜져 있다**" in unwrapped
     # NetFunnel is a different subsystem and IS off by default; that claim has
     # to survive, and test_netfunnel.py reads the README for it.
-    assert "It is **off by default** because no live call" in unwrapped
+    assert (
+        "**기본적으로 꺼져 있다**. 이 저장소가 지금까지 보낸 실호출" in unwrapped
+    )
 
     # The env path is the supported way to pin a real device, so the README
     # has to name it and its three required variables.
