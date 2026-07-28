@@ -31,6 +31,10 @@ _FORBIDDEN_COMPONENT_FAMILIES = (
     "analysis",
     "build",
     "dist",
+    # `mkdocs build` 의 산출물. build/ 와 dist/ 를 막는 이유와 같다 — 체크아웃에
+    # 남은 생성물이 sdist 안으로 따라 들어가면 배포본이 커지고, 그 안의 파일은
+    # 아무도 검토하지 않은 것이다.
+    "site",
 )
 # What remains forbidden after 1.0.0 declared an owner, a licence and a set of
 # canonical URLs. Every header here is one a PEP 639 / SPDX build does NOT

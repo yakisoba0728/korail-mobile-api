@@ -655,6 +655,8 @@ FORBIDDEN_MEMBER_COMPONENTS = (
     "build_old",
     "dist",
     "dist~",
+    "site",
+    "site-old",
     ".pytest_cache",
     ".pytest_cache.backup",
     "__pycache__",

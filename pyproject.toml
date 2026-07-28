@@ -57,6 +57,19 @@ dev = [
   "pytest>=8,<10",
   "ruff>=0.16,<0.17",
 ]
+# 문서 사이트(mkdocs.yml)를 빌드하는 데 필요한 것. dev 와 마찬가지로 런타임
+# 의존성이 아니라 `Requires-Dist: ...; extra == "docs"` 로만 나간다.
+# 상한을 붙인 이유는 두 가지다. mkdocs-material 은 MkDocs 2.0 에서 플러그인
+# 체계가 사라진다고 예고했고, mkdocstrings-python 2.x 와 griffe 2.x 는 이
+# 저장소의 docstring 을 실제로 렌더링해 본 첫 조합이다. 올리는 것은
+# `mkdocs build --strict` 를 다시 돌려 보고 하는 의도적 행위여야 한다.
+docs = [
+  "mkdocs>=1.6,<2",
+  "mkdocs-material>=9.5,<10",
+  "mkdocs-include-markdown-plugin>=6.2,<8",
+  "mkdocstrings[python]>=0.26,<1",
+  "mkdocstrings-python>=2,<3",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

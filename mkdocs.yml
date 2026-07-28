@@ -1,0 +1,128 @@
+site_name: korail-mobile-api
+site_description: KORAIL 모바일 앱 API 파이썬 클라이언트 문서
+site_url: https://yakisoba0728.github.io/korail-mobile-api/
+repo_url: https://github.com/yakisoba0728/korail-mobile-api
+repo_name: yakisoba0728/korail-mobile-api
+edit_uri: ""
+copyright: Apache-2.0
+
+docs_dir: docs
+site_dir: site
+
+# docs/ 는 이 사이트보다 먼저 있었고, 그 안에는 감사 기록·APK 분석·구현 계획처럼
+# 패키지 사용자가 아니라 저장소 자신을 위한 문서가 들어 있다(docs/README.md 참고).
+# 그래서 목록은 "빼는 쪽"이 아니라 "넣는 쪽"으로 적는다 — 새 기록 문서가 docs/ 에
+# 하나 더 생겨도 사이트에는 자동으로 올라오지 않는다. 손으로 유지되는 제외 목록은
+# 반드시 어긋난다.
+exclude_docs: |
+  *.md
+  !/index.md
+  !/quickstart.md
+  !/safety.md
+  !/errors.md
+  !/changelog.md
+  !/reference/*.md
+
+# reference/ 아래 한 쪽이 모듈 하나다. 그 목록은 tests 가 `__init__.py` 의 import
+# 문에서 유도해 대조한다(test_docs_site.py) — 모듈이 공개면에 새로 들어오면 쪽이
+# 없다는 이유로 오프라인 스위트가 먼저 실패한다.
+nav:
+  - 홈: index.md
+  - 빠른 시작: quickstart.md
+  - 안전 모델: safety.md
+  - API 레퍼런스:
+      - reference/index.md
+      - client: reference/client.md
+      - config: reference/config.md
+      - consent: reference/consent.md
+      - constants: reference/constants.md
+      - dynapath: reference/dynapath.md
+      - errors: reference/errors.md
+      - limousine_models: reference/limousine_models.md
+      - live: reference/live.md
+      - models: reference/models.md
+      - mutation_models: reference/mutation_models.md
+      - netfunnel: reference/netfunnel.md
+      - read_models: reference/read_models.md
+      - read_payloads: reference/read_payloads.md
+  - 에러: errors.md
+  - 변경 이력: changelog.md
+
+theme:
+  name: material
+  language: ko
+  features:
+    - navigation.instant
+    - navigation.top
+    - navigation.tracking
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: 어두운 테마로
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: 밝은 테마로
+
+plugins:
+  # Material 은 lunr-languages 의 한국어 형태소 지원(`lunr.ko.min.js`)을 함께
+  # 배포한다. 실제로 빌드해 확인한 것이고, 그래서 검색 언어는 한국어다. 영어를
+  # 함께 적는 이유는 이 문서의 절반이 식별자·필드명·코드값이기 때문이고, 둘을
+  # 적으면 Material 이 `lunr.multi` 를 끼워 넣는다. UI 문구는 theme.language 가
+  # 낸다.
+  - search:
+      lang:
+        - ko
+        - en
+  - include-markdown
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            # 이 저장소의 docstring 은 reST 롤(:class:, :meth: …)을 쓴다. 필드
+            # 목록(:param: 등)은 하나도 쓰지 않으므로 스타일 선택이 바꾸는 것은
+            # 파서가 무엇을 필드로 오해하느냐뿐이고, sphinx 가 실제 문법이다.
+            docstring_style: sphinx
+            docstring_section_style: table
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            show_if_no_docstring: true
+            members_order: source
+            separate_signature: true
+            signature_crossrefs: true
+            merge_init_into_class: true
+            heading_level: 2
+            filters: ["!^_"]
+
+# 렌더링 후처리. 무엇을 왜 고치는지는 파일 자신이 설명한다.
+hooks:
+  - mkdocs_hooks.py
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn

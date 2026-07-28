@@ -690,6 +690,10 @@
   non-type to appear in a `DOMAIN_CONSTANTS` table with a written reason. The
   file is shared verbatim with the SRT package below a marked per-repository
   header.
+- 문서 사이트. `mkdocs.yml` 이 `docs/` 아래 여섯 쪽을 만들고, API 레퍼런스는 공개면을
+  내보내는 모듈마다 docstring 에서 생성한다. 빌드 도구는 `docs` extra 로 들어간다
+  (`pip install -e ".[docs]"`). 런타임 의존성은 늘지 않는다 —
+  METADATA 에는 `Requires-Dist: ...; extra == "docs"` 로만 나간다.
 
 ### Changed
 

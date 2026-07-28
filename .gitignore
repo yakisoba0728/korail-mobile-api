@@ -18,10 +18,11 @@ analysis/
 .local-live-smoke.env
 
 # Build artifacts. `python3 -m build` writes the first two; installing in
-# editable mode writes the third.
+# editable mode writes the third; `mkdocs build` writes the fourth.
 build/
 dist/
 *.egg-info/
+site/
 
 # Python and pytest scratch.
 __pycache__/

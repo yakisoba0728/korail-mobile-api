@@ -480,7 +480,7 @@ KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내지 마라.
 env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
 ```
 
-오프라인 스위트가 게이트이고 네트워크를 쓰지 않는다: `2415 passed, 1 deselected`.
+오프라인 스위트가 게이트이고 네트워크를 쓰지 않는다: `2427 passed, 1 deselected`.
 빠진 하나는 명시적으로 옵트인해야 하는 실서버 테스트다. 실서버 테스트는
 `KORAIL_MOBILE_API_LIVE=1` 과 직접 마련한 자격증명이 함께 있을 때만 돈다. 이
 저장소는 계정을 동봉하지 않는다.
