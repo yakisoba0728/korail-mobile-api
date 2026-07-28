@@ -23,7 +23,13 @@ def _positive_int(value: int, name: str) -> str:
     return str(value)
 
 
-def _required_text(value: str, name: str) -> str:
+def _required_text(value: str | None, name: str) -> str:
+    """Return ``value`` unchanged, rejecting a missing or blank string.
+
+    Most callers forward an optional field parsed from a server response, so
+    ``None`` is an accepted argument that this validator turns into a
+    ``ValueError`` rather than a caller-side type error.
+    """
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must not be empty")
     return value
@@ -510,9 +516,9 @@ def _validate_maas_service_detail_query_values(
     start_date: str | None,
     end_date: str | None,
 ) -> None:
-    if (start_date is None) != (end_date is None):
-        raise ValueError("MaaS history requires both dates or neither")
-    if start_date is None:
+    if start_date is None or end_date is None:
+        if start_date is not None or end_date is not None:
+            raise ValueError("MaaS history requires both dates or neither")
         return
     start = _calendar_date(start_date, "start_date")
     end = _calendar_date(end_date, "end_date")
@@ -813,7 +819,9 @@ def build_maas_service_detail_form(
         query.end_date,
     )
     form = {"Device": config.device, "Version": config.version}
-    if query.start_date is not None:
+    # The validator above already rejected one date without the other, so
+    # testing both is equivalent to testing only ``start_date``.
+    if query.start_date is not None and query.end_date is not None:
         form["qryDtFrom"] = query.start_date
         form["qryDtTo"] = query.end_date
     return form
@@ -949,6 +957,7 @@ def _validate_commuter_passenger_request(
         raise ValueError(
             "passenger counts must match the response age-code rows"
         )
+    validated_age_codes: list[str] = []
     for option, age_code in zip(
         request.source.passenger_options,
         age_codes,
@@ -956,13 +965,15 @@ def _validate_commuter_passenger_request(
     ):
         if type(option) is not CommuterPassengerOption:
             raise TypeError("response passenger options must use exact types")
-        _required_text(age_code, "commuter_usage_age_code")
+        validated_age_codes.append(
+            _required_text(age_code, "commuter_usage_age_code")
+        )
     for count in request.passenger_counts:
         if type(count) is not int or count < 0:
             raise ValueError(
                 "passenger counts must be non-negative integers"
             )
-    return age_codes
+    return tuple(validated_age_codes)
 
 
 @dataclass(frozen=True)

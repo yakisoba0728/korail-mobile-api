@@ -810,6 +810,26 @@ def test_coupon_parser_exposes_values_remarks_pages_and_sensitive_number(
     assert item.raw is raw["coupon_infos"]["coupon_info"][0]
 
 
+def test_coupon_parser_drops_absent_values_and_remarks_keeping_order(
+    load_json_fixture,
+):
+    raw = load_json_fixture("discount_coupons_success.json")
+    row = raw["coupon_infos"]["coupon_info"][0]
+    # A null field and an absent field must both collapse out of the tuples
+    # rather than surfacing as ``None`` entries.
+    row["h_rmk_2_cont"] = None
+    del row["h_inwk_fare_disc_rt_amt"]
+    item = parse_discount_coupon_response(raw).items[0]
+    assert item.remarks == ("Synthetic remark one", "Synthetic remark three")
+    assert item.discount_values == (
+        "SYNTHETIC-DISCOUNT-TYPE",
+        "1000",
+        "20",
+        "2000",
+    )
+    assert all(value is not None for value in item.remarks)
+
+
 def test_pass_and_trip_parsers_expose_immutable_approved_content(
     load_json_fixture,
 ):

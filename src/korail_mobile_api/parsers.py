@@ -982,18 +982,24 @@ def parse_seat_car_list_response(
 
 def _inventory_ratio(data: Mapping[str, Any], key: str) -> float:
     value = data.get(key)
-    is_number = type(value) in {int, float}
-    is_ascii_decimal = (
+    number: int | float | str
+    # ``type(value) in {int, float}`` deliberately rejects bool and any other
+    # int subclass; the isinstance call is redundant at runtime and is here
+    # only so the type checker can narrow ``value`` for ``float()``.
+    if type(value) in {int, float} and isinstance(value, (int, float)):
+        number = value
+    elif (
         isinstance(value, str)
         and re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value) is not None
-    )
-    if not is_number and not is_ascii_decimal:
+    ):
+        number = value
+    else:
         raise KorailProtocolError(
             f"KORAIL seat inventory field {key} must be numeric or an "
             "ASCII decimal string"
         )
     try:
-        ratio = float(value)
+        ratio = float(number)
     except (OverflowError, ValueError) as exc:
         raise KorailProtocolError(
             f"KORAIL seat inventory field {key} must be finite"

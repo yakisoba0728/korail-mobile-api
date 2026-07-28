@@ -514,7 +514,7 @@ env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
 ```
 
 The offline suite is the gate and it makes no network calls:
-`2410 passed, 1 deselected`, where the one deselected test is the explicitly
+`2411 passed, 1 deselected`, where the one deselected test is the explicitly
 opted-in live-service test. Live tests run only when `KORAIL_MOBILE_API_LIVE=1`
 is set together with credentials you supply yourself; nothing in this repository
 ships an account.

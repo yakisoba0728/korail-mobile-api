@@ -167,34 +167,40 @@ class KorailHttpClient:
             raise KorailProtocolError(
                 "KORAIL form data must be a mapping or registered ordered sequence"
             )
-        ordered = data is not None and not isinstance(data, Mapping)
-        form: dict[str, Any] | list[tuple[str, Any]]
-        form = [] if ordered else {}
         if not include_common and data is not None:
             assert_read_only_request_fields(path, data)
-        if include_common:
-            if ordered:
-                form.extend(self.common_fields().items())
-            else:
-                form.update(self.common_fields())
-        if data:
-            if ordered:
-                form.extend(data)
-            else:
-                form.update(data)
-        assert_read_only_request_fields(path, form)
+        # The ordered and mapping paths carry different form types, so each
+        # branch builds its own concretely typed container.
+        ordered_form: list[tuple[str, Any]] | None = None
+        mapping_form: dict[str, Any] | None = None
+        if data is not None and not isinstance(data, Mapping):
+            ordered_form = []
+            if include_common:
+                ordered_form.extend(self.common_fields().items())
+            if data:
+                ordered_form.extend(data)
+            assert_read_only_request_fields(path, ordered_form)
+        else:
+            mapping_form = {}
+            if include_common:
+                mapping_form.update(self.common_fields())
+            if data:
+                mapping_form.update(data)
+            assert_read_only_request_fields(path, mapping_form)
         headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
         try:
-            if ordered:
+            if ordered_form is not None:
                 response = self._client.post(
                     path,
-                    content=urlencode(form).encode("ascii"),
+                    content=urlencode(ordered_form).encode("ascii"),
                     headers=headers,
                 )
             else:
-                response = self._client.post(path, data=form, headers=headers)
+                response = self._client.post(
+                    path, data=mapping_form, headers=headers
+                )
         except httpx.HTTPError as exc:
             raise KorailTransportError(
                 f"KORAIL transport failed for POST {path}"

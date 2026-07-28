@@ -250,6 +250,20 @@ def _optional_string(
     return value
 
 
+def _present_strings(
+    data: Mapping[str, Any],
+    keys: tuple[str, ...],
+    context: str,
+) -> tuple[str, ...]:
+    """Collect the keys whose optional string value is present, in order."""
+    values: list[str] = []
+    for key in keys:
+        value = _optional_string(data, key, context)
+        if value is not None:
+            values.append(value)
+    return tuple(values)
+
+
 def _optional_scalar_string(
     data: Mapping[str, Any],
     key: str,
@@ -778,23 +792,21 @@ def parse_discount_coupon_response(
     )
     for value in rows:
         item = _row(value, "discount coupon list coupon_info")
-        discount_values = tuple(
-            result
-            for key in (
+        discount_values = _present_strings(
+            item,
+            (
                 "h_disc_rt_amt_dv_cd",
                 "h_inwk_fare_disc_rt_amt",
                 "h_inwk_prc_disc_rt_amt",
                 "h_wknd_fare_disc_rt_amt",
                 "h_wknd_prc_disc_rt_amt",
-            )
-            if (result := _optional_string(item, key, "discount coupon"))
-            is not None
+            ),
+            "discount coupon",
         )
-        remarks = tuple(
-            result
-            for key in ("h_rmk_1_cont", "h_rmk_2_cont", "h_rmk_3_cont")
-            if (result := _optional_string(item, key, "discount coupon"))
-            is not None
+        remarks = _present_strings(
+            item,
+            ("h_rmk_1_cont", "h_rmk_2_cont", "h_rmk_3_cont"),
+            "discount coupon",
         )
         items.append(
             DiscountCoupon(
