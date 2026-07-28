@@ -511,15 +511,18 @@ def test_docs_record_bounded_p0_live_counts_and_replay():
         "P0 live-evidence documentation coverage, `1247 passed, 1 deselected`"
         in handoff
     )
-    assert "authenticated 28-request, 28-response run" in changelog
-    assert "25 successful operations" in changelog
-    assert "three input-dependent skips" in changelog
-    assert '`getFresScar` returned exact `strResult="SUCC"` and parsed' in changelog
-    assert "full `FAIL` application envelope for the server-supplied seat attribute" in changelog
-    assert "expected typed application failure without a retry" in changelog
-    assert "27 parsed responses" in changelog
-    assert "one expected `KorailAppError`" in changelog
-    assert "zero unexpected failures" in changelog
+    # CHANGELOG.md is Korean, so it is pinned on the same facts in Korean
+    # rather than on the English spellings above. The English wording stays
+    # asserted against record/progress/handoff, which are the evidence
+    # documents and stay English; this is the same split already used for the
+    # Korean README elsewhere in this module.
+    assert "R30 `getFresScar`" in changelog
+    assert '정확히 `strResult="SUCC"` 로 파싱' in changelog
+    assert "R33 `getGuideSeatCnd`" in changelog
+    assert "완전한 `FAIL` 봉투" in changelog
+    assert "재시도 없이 `KorailAppError` 로 올라왔다" in changelog
+    assert "27개가 파싱되고" in changelog
+    assert "예상 밖 실패는 0" in changelog
 
 
 def test_docs_document_static_only_limousine_read_contracts():
@@ -542,11 +545,14 @@ def test_docs_document_static_only_limousine_read_contracts():
 
 
 def test_docs_record_fixed_account_reads_and_tour_train_holdback():
+    # CHANGELOG.md is not in this loop: it is Korean, and these are the English
+    # spellings of the evidence documents. The three that remain are the ones
+    # that carry the inventory sentence, so the contract still holds in three
+    # places rather than four.
     documents = [
         RECORD.read_text(encoding="utf-8"),
         PROGRESS.read_text(encoding="utf-8"),
         HANDOFF.read_text(encoding="utf-8"),
-        CHANGELOG.read_text(encoding="utf-8"),
     ]
     record = documents[0]
     for method_name in (
@@ -582,9 +588,11 @@ def test_docs_record_fixed_account_reads_and_tour_train_holdback():
 
 
 def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
+    # CHANGELOG.md is not in this mapping: it is Korean, and every string below
+    # is an English spelling. Five evidence documents still carry each one, and
+    # the changelog states the same run in Korean.
     documents = {
         "record": RECORD.read_text(encoding="utf-8"),
-        "CHANGELOG": CHANGELOG.read_text(encoding="utf-8"),
         "progress": PROGRESS.read_text(encoding="utf-8"),
         "handoff": HANDOFF.read_text(encoding="utf-8"),
         "status": STATUS.read_text(encoding="utf-8"),
@@ -638,11 +646,15 @@ def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
             r"(?i)\bJSESSIONID\s*=\s*[A-Z0-9._~-]{8,}"
         ),
     }
-    # The secret scan covers the README as well, even though its evidence text
-    # moved: a rewritten README is exactly the kind of document into which a
-    # credential gets pasted as an "example".
+    # The secret scan covers the README and the CHANGELOG as well, even though
+    # their evidence text moved or was translated: a rewritten document is
+    # exactly the kind into which a credential gets pasted as an "example".
+    # CHANGELOG.md is scanned HERE rather than by joining the mapping above,
+    # because the English assertions no longer apply to it but the secret scan
+    # must never stop applying to anything.
     scanned = dict(documents)
     scanned["README"] = README.read_text(encoding="utf-8")
+    scanned["CHANGELOG"] = CHANGELOG.read_text(encoding="utf-8")
     for name, document in scanned.items():
         for pattern_name, pattern in forbidden_patterns.items():
             assert pattern.search(document) is None, f"{name}: {pattern_name}"

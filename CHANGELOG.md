@@ -1042,74 +1042,58 @@
 
 ### 검증 기록
 
-범위를 정해 실행한 라이브 확인 기록이다. 각 항목은 실행 당시의 원문 그대로 두며,
-같은 문장이 `docs/verification-record.md` 와 `docs/IMPLEMENTATION_PROGRESS.md` 에도
-있다.
+범위를 정해 돌린 실서버 확인이 무엇을 확정했고 무엇을 확정하지 못했는지. 같은
+내용이 근거 인용까지 붙어 `docs/verification-record.md` 와
+`docs/IMPLEMENTATION_PROGRESS.md` 에 있다.
 
-- Documented: two live observations from 2026-07-26 that are server rules, not
-  package defects. `ERR299943 예약할인이 지원되지 않습니다` refused 청소년 alone
-  and 1~3급 장애 + 안내견 while six other mixes were accepted; the code has zero
-  hits anywhere in the decompiled APK and the forms matched the app exactly, so
-  it is an account-entitlement rule. Separately, a hold returned
-  `h_msg_cd = WRR664296` (weekend discount notice) and was still a real,
-  cancelable reservation — success is `strResult = SUCC` plus a PNR, not
-  `h_msg_cd == IRR000018`, and no code path treats a non-`IRR000018` code as
-  failure.
-- Verified all three against the live server in one paced read-only pass on an
-  account holding zero reservations. Every route was ACCEPTED — HTTP 200, no
-  DynaPath rejection — and each answered with a bare three-key FAIL envelope for
-  the deliberately-invalid arguments it was given: `WRG200018` 입력값오류(PNR번호),
-  `WRT100002` 창구번호미입력,미승인창구 and `WRT100124` 반환번호를 확인해주세요.
-  Each code names the field the server parsed, which is what establishes the
-  request shapes. Those bodies are pinned verbatim as offline regressions. The
-  SUCCESS bodies remain UNVERIFIED and are covered only by APK-declared
-  synthetic fixtures, because producing one needs a real held or paid ticket.
-  No payment, refund, or reservation call was made and the account still holds
-  zero reservations.
-- Verified `reserve`, `cancel_unpaid_hold`, and `pay_with_fake_card` end to end
-  against the live server in a bounded authorized run: the hold returned
-  `h_msg_cd=IRR000018`, the cancellation returned `h_msg_cd=IRG000000`, and the
-  fake-card payment was declined with `strResult=FAIL` and `h_msg_cd=WRT200342`
-  with no charge. The live hold response returned a zero-padded
-  `h_jrny_cnt="0001"`, so `build_unpaid_reservation_cancel_form` now accepts any
-  digit string equal to one; `reserve` also falls back to a minimal hold that
-  still carries the PNR when strict parsing fails after the server has already
-  created the hold, so a created hold can always be cancelled. Every round trip
-  left reservation history at zero rows and no card was charged.
-- Recorded a bounded authenticated read-only revalidation with an empty
-  advertising ID. It made one successful login call, confirmed logged-in state
-  and customer-number presence, and called only R149 once. R149 succeeded with
-  one row and was not retried; R137, R138, R146, and R148 made zero calls. No
-  mutation, raw response, PII, credential, or server message was retained.
-  Current inventory is 32 successful, 10 failed, and 123 unexecuted out of
-  165.
-- Recorded a bounded authenticated read-only revalidation that used an empty
-  advertising ID, logged in once, and confirmed that the repr-hidden
-  `customer_no` was available. R13 made one request, returned `WRC800029`,
-  surfaced as `KorailAppError` and was not retried. R32 succeeded with 0 rows,
-  current-form R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the
-  existing safe train search succeeded with 10 rows. R52 made zero requests
-  and was recorded as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not
-  called. No mutation route was called, and no credential, identifier, or raw
-  response value was retained. At that pre-R149 point, inventory was 31
-  successful, 10 failed, and 124 unexecuted entries out of 165.
-- Historically, the fixed/account-shaped implementation step itself made no
-  live request, credential read, raw capture, or mutation expansion. Its
-  pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted
-  entries; that intermediate callable package boundary was 42 read/login
-  routes and 45 public methods. The current boundary is 51 routes and 57 public
-  methods. At that pre-R149 point, inventory was 31 successful, 10 failed, and
-  124 unexecuted entries.
-- Ran a bounded revalidation of the P0 read surface in an authenticated 28-request,
-  28-response run with 25 successful operations, one expected typed
-  application failure, and three input-dependent skips. Deposit-bank and
-  trip-menu reads succeeded after login; R30 `getFresScar` returned exact
-  `strResult="SUCC"` and parsed, while R33 `getGuideSeatCnd` returned a full
-  `FAIL` application envelope for the server-supplied seat attribute and
-  surfaced as the expected typed application failure without a retry
-  (`KorailAppError`). R37 and R51 remained unexecuted. Offline raw replay
-  yielded 27 parsed responses, one expected `KorailAppError`, and zero
-  unexpected failures.
+- **서버 규칙 둘은 이 패키지의 결함이 아니다.** `ERR299943 예약할인이 지원되지
+  않습니다` 는 청소년 단독과 1~3급 장애+안내견 조합을 거절했고, 다른 여섯 조합은
+  받아들여졌다. 이 코드는 디컴파일한 APK 어디에도 없고 폼은 앱과 정확히 같았으므로
+  요청 모양이 아니라 계정 자격의 문제다. 별개로, hold 응답이
+  `h_msg_cd = WRR664296`(주말 할인 안내)을 달고 왔는데 그것은 취소 가능한 진짜
+  예약이었다. 성공의 기준은 `strResult = SUCC` 와 PNR 이지
+  `h_msg_cd == IRR000018` 이 아니며, `IRR000018` 이 아닌 코드를 실패로 다루는
+  경로는 하나도 없다.
+- **승차권 참조 읽기 셋은 요청 모양까지만 확정됐다.** 예약이 0건인 계정으로 셋 다
+  HTTP 200 으로 받아들여졌고 DynaPath 거절도 없었다. 일부러 틀린 인자에 대해
+  서버는 키 세 개짜리 FAIL 봉투로 답했다 — `WRG200018` 입력값오류(PNR번호),
+  `WRT100002` 창구번호미입력,미승인창구, `WRT100124` 반환번호를 확인해주세요. 각
+  코드가 서버가 실제로 파싱한 필드를 지목하므로 이것이 요청 모양의 근거다. 이
+  본문들은 오프라인 회귀로 그대로 고정돼 있다. **성공 본문은 미확인이고** APK 가
+  선언한 합성 픽스처로만 덮여 있다 — 만들어 보려면 실제로 잡히거나 발권된 승차권이
+  있어야 한다.
+- **`reserve` → `cancel_unpaid_hold` → `pay_with_fake_card` 왕복이 실서버에서
+  끝까지 돌았다.** hold 는 `h_msg_cd=IRR000018`, 취소는 `h_msg_cd=IRG000000`,
+  가짜카드 결제는 `strResult=FAIL` 과 `h_msg_cd=WRT200342` 로 거절됐고 청구는
+  없었다. 여기서 두 가지가 드러났다. 실서버 hold 응답의 `h_jrny_cnt` 는 앞에 0 이
+  채워진 `"0001"` 이므로 `build_unpaid_reservation_cancel_form` 은 1 과 같은 숫자
+  문자열이면 무엇이든 받는다. 그리고 서버가 이미 hold 를 만든 뒤 엄격 파싱이
+  실패하면 `reserve` 는 PNR 만 실은 최소 hold 로 물러선다 — 만들어진 hold 는 언제나
+  취소할 수 있어야 하기 때문이다. 왕복마다 예약 내역은 0행으로 돌아왔고 카드에
+  청구된 것은 없다.
+- **즉시·좌석지정·예약대기·입석+좌석 네 `KorailReservationJobType` 이 모두 실서버
+  hold 를 만들었다.** 좌석지정은 `h_msg_cd=IRR000014`, 예약대기 확정
+  (`confirm_standby_hold`)은 `h_msg_cd=IRZ000003` 이었다. 여기서 좌석 식별자의
+  함정이 확인됐다 — 폼에 나가는 것은 `KorailSeatAssignment.seat_no` 이고 서버가
+  응답 `h_seat_no` 로 돌려주는 것은 사람이 읽는 표시 `seat_spec` 이다. 둘을 맞대면
+  제대로 된 예약이 틀린 것처럼 보인다. 입석+좌석은 `txtSrcarCnt` 를 요구하고,
+  할인카드 예약은 members-only 자격이 없는 계정에서 `ERR299943` 로 거절된다.
+- **읽기 표면의 실행 상태는 세어서 관리한다.** Retrofit 항목 165개 가운데 현재
+  성공 32, 실패 10, 미실행 123 이다. 이 수치는 손으로 적는 대신
+  `docs/api-status-by-service.md` 의 서비스별 표에서 유도하며, 표를 고치지 않고
+  문장만 고칠 수 없다.
+- **인증 읽기 재검증에서 확정된 응답 형태.** R13 은 `WRC800029` 를 돌려주고
+  `KorailAppError` 로 올라오며 재시도되지 않는다. R32 와 현행 R43 은 0행, R45 는
+  15행, 안전한 열차 검색은 10행으로 성공했다. R52 는 타입 붙은 여정이 없어
+  `skipped_no_typed_leg` 로 남았고 R149 는 1행으로 성공했다. R17, R31, R39, R54 는
+  호출되지 않았다. `strCustNo` 는 로그인 응답에서만 오고 `customer_no` 는 `repr`
+  에서 가려진다. 어느 재검증도 상태변경 라우트를 부르지 않았고, 자격증명·식별자·원본
+  응답을 남기지 않았다.
+- **P0 읽기 표면은 오프라인 재생까지 확인됐다.** R30 `getFresScar` 는 정확히
+  `strResult="SUCC"` 로 파싱됐고, R33 `getGuideSeatCnd` 는 서버가 준 좌석속성에
+  대해 완전한 `FAIL` 봉투를 돌려주며 재시도 없이 `KorailAppError` 로 올라왔다.
+  R37 과 R51 은 미실행이다. 저장한 원본을 오프라인으로 재생하면 27개가 파싱되고
+  예상된 `KorailAppError` 하나가 나며 예상 밖 실패는 0이다.
 
 ## 0.2.0 - 2026-07-14
 
