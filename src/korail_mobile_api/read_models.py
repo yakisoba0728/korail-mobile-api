@@ -1,3 +1,16 @@
+"""읽기 전용 조회가 돌려주는 타입 — 승차권, 환불, 할인카드, 마이페이지.
+
+열차 검색과 좌석 조회 쪽 타입은 :mod:`korail_mobile_api.models` 에 있다.
+여기 있는 것은 전부 ``frozen=True`` 데이터클래스이고
+:class:`~korail_mobile_api.models.BaseKorailResponse` 를 상속하거나 그 안에
+들어가는 행 타입이다.
+
+이름을 붙이지 않은 서버 필드는 어느 모델에서든 ``raw`` 에 그대로 남아 있다.
+``repr=False`` 인 필드는 로그에 실수로 찍히지 않게 표현에서 뺀 것이고, 전선
+이름이 :mod:`korail_mobile_api.redaction` 에 등록된 것은 ``raw`` 안에서도
+마스킹된다.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -183,26 +196,26 @@ class ReceiptPayment:
 
 @dataclass(frozen=True)
 class ReceiptCashPayment:
-    """One 현금영수증 row of a receipt (``ReceiptDao.CashReceiptInfo``).
+    """영수증의 현금영수증 줄 하나(``ReceiptDao.CashReceiptInfo``).
 
-    The sibling of :class:`ReceiptPayment`: ``stl_info`` carries the card and
-    point settlements, ``cash_rcet_info`` carries the cash-receipt ones
-    (``ReceiptDao.java:12-40,43-44``). Only ``h_tot_apv_amt`` is an ``int`` on
-    the app side; the rest are strings.
+    :class:`ReceiptPayment` 와 형제다. ``stl_info`` 는 카드·포인트 정산을,
+    ``cash_rcet_info`` 는 현금영수증을 싣는다
+    (``ReceiptDao.java:12-40,43-44``). 앱에서 정수인 것은
+    ``h_tot_apv_amt`` 뿐이고 나머지는 문자열이다.
     """
 
-    #: ``h_apv_mtd_nm`` — approval method name.
+    #: ``h_apv_mtd_nm`` — 승인 방법 이름.
     approval_method_name: str | None = None
-    #: ``h_athn_dmn_rcgn_no`` — the identifier the receipt was issued against
-    #: (a phone or business number), so it is treated as identity.
+    #: ``h_athn_dmn_rcgn_no`` — 영수증이 어느 번호 앞으로 발행됐는지(휴대폰
+    #: 또는 사업자번호). 신원으로 다뤄 표현에서 뺀다.
     authentication_domain_recognition_no: str | None = field(
         default=None, repr=False
     )
-    #: ``h_cash_rcet_apv_no`` — the cash-receipt approval number.
+    #: ``h_cash_rcet_apv_no`` — 현금영수증 승인번호.
     cash_receipt_approval_no: str | None = field(default=None, repr=False)
-    #: ``h_cash_rcet_txn_dv_cd`` — issue vs cancellation.
+    #: ``h_cash_rcet_txn_dv_cd`` — 발행인지 취소인지.
     cash_receipt_transaction_division_code: str | None = None
-    #: ``h_tot_apv_amt`` — total approved amount.
+    #: ``h_tot_apv_amt`` — 총 승인금액.
     total_approved_amount: int | None = None
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
@@ -235,9 +248,8 @@ class TicketReceipt:
     refund_received_amount: int | None = None
     point_refund_amount: int | None = None
     payments: tuple[ReceiptPayment, ...] = ()
-    #: ``cash_rcet_info`` — the cash-receipt rows. Empty for a receipt with no
-    #: 현금영수증; the sibling list to :attr:`payments`, which carries card and
-    #: point settlements.
+    #: ``cash_rcet_info`` — 현금영수증 줄들. 현금영수증이 없는 영수증에서는
+    #: 비어 있다. 카드·포인트 정산을 싣는 :attr:`payments` 의 형제 목록이다.
     cash_receipts: tuple[ReceiptCashPayment, ...] = ()
     member_card_no: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
@@ -492,50 +504,50 @@ class PassScheduleResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DiscountCardSection:
-    """One 구간 a 할인카드 is registered against.
+    """할인카드가 등록된 구간 하나.
 
     ``TicketDetailDao.AppSegInfo``
-    (``dao/refund/TicketDetailDao.java:25-64``). An N카드 is sold against one
-    to three of these, and the card can only be spent on trains that serve the
-    section — which is why the schedule read
-    (:meth:`~korail_mobile_api.client.KorailClient.get_discount_card_schedule`)
-    is keyed by station NAMES: they come from here.
+    (``dao/refund/TicketDetailDao.java:25-64``). N카드는 이런 구간 1~3 개에
+    대해 팔리고, 그 구간을 지나는 열차에만 쓸 수 있다.
+    :meth:`~korail_mobile_api.client.KorailClient.get_discount_card_schedule`
+    가 역코드가 아니라 역 **이름** 을 받는 것도 그것이 여기서 나오기
+    때문이다.
     """
 
-    #: ``dcntCrdAplSegSqno`` — the section's sequence within the card.
+    #: ``dcntCrdAplSegSqno`` — 카드 안에서 이 구간의 순번.
     section_sequence: str | None = None
     departure_station_name: str | None = None
     arrival_station_name: str | None = None
     journey_sequence: str | None = field(default=None, repr=False)
     journey_type_code: str | None = field(default=None, repr=False)
     train_group_code: str | None = field(default=None, repr=False)
-    #: ``stlbDturDvNm`` — the 경유 name the app forwards verbatim into the
-    #: seat-assign schedule request (``u4/b.java:104``).
+    #: ``stlbDturDvNm`` — 경유 이름. 앱이 좌석지정 시각표 요청에 그대로
+    #: 넘긴다(``u4/b.java:104``).
     detour_division_name: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
 
 @dataclass(frozen=True)
 class DiscountCardOnTicket:
-    """The 할인카드 a ticket-detail response describes.
+    """승차권 상세가 설명하는 할인카드.
 
     ``TicketDetailDao.DiscountCardInfo``
-    (``dao/refund/TicketDetailDao.java:123-142``), reached as
-    ``TicketDetailResponse.dcnt_crd_info`` (``:233``). It is present only when
-    the "ticket" being read IS a card; ordinary tickets carry no such object.
+    (``dao/refund/TicketDetailDao.java:123-142``)이며
+    ``TicketDetailResponse.dcnt_crd_info`` 로 온다(``:233``). 읽고 있는
+    "승차권"이 실은 카드일 때만 있다 — 보통 승차권에는 이 객체가 없다.
 
-    :attr:`card_no` is the whole point of this model. It is the single input to
-    :meth:`~korail_mobile_api.client.KorailClient.get_discount_card_usage_history`,
-    and — per ``w4/a.java:100-101`` — the single input, beside the discount code
-    ``"153"``, that turns an ordinary reservation into a discounted one. It is
-    redacted in every preview and log.
+    :attr:`card_no` 를 얻으려고 있는 모델이다.
+    :meth:`~korail_mobile_api.client.KorailClient.get_discount_card_usage_history`
+    의 유일한 입력이고, 할인코드 ``"153"`` 과 함께 평범한 예약을 할인 예약으로
+    바꾸는 유일한 입력이기도 하다(``w4/a.java:100-101``). 미리보기와 로그에서
+    마스킹된다.
     """
 
     #: ``h_dcnt_crd_no``.
     card_no: str | None = field(default=None, repr=False)
-    #: ``h_dcnt_crd_trm_extn_psb_flg`` — ``"Y"`` when 기간연장 is offered.
-    #: ``Y4/C0907b.java:301`` is the only thing that enables the "기간연장"
-    #: button (``Y4/Q.java:1013-1026``).
+    #: ``h_dcnt_crd_trm_extn_psb_flg`` — 기간연장이 가능하면 ``"Y"``.
+    #: 앱에서 "기간연장" 버튼을 켜는 것도 이 값 하나다
+    #: (``Y4/C0907b.java:301`` → ``Y4/Q.java:1013-1026``).
     term_extension_possible_flag: str | None = None
     sections: tuple[DiscountCardSection, ...] = ()
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
@@ -543,54 +555,49 @@ class DiscountCardOnTicket:
 
 @dataclass(frozen=True)
 class KorailPointSummaryResponse(BaseKorailResponse):
-    """``xPoint.MyXPointView`` — the my-page loyalty and entitlement summary.
+    """``xPoint.MyXPointView`` — 마이페이지의 포인트·자격 요약.
 
     ``KorailPointInquiryDao.KorailPointInquiryResponse``
-    (``dao/xPoint/KorailPointInquiryDao.java:11-85``). The app fetches it
-    unconditionally when 마이페이지 opens (``MyPageActivity.java:414``) and
-    again on the member-card screen (``MemberCardActivity.java:67``).
+    (``dao/xPoint/KorailPointInquiryDao.java:11-85``). 앱은 마이페이지를 열
+    때(``MyPageActivity.java:414``)와 회원카드 화면에서
+    (``MemberCardActivity.java:67``) 무조건 부른다.
 
-    **This is the closest thing KORAIL exposes to "what discounts is this
-    account entitled to".** ``MyPageActivity.java:206-212`` reveals the whole
-    disability section — the view ``v_mypage_disable_person`` — on
-    ``h_hdcp_flg == "Y"`` and on nothing else, then fills its two rows from
-    :attr:`welfare_discount_class_name` (labelled 장애인증,
-    ``MyPageActivity.java:353,393``) and :attr:`customer_lead_flag_name`
-    (labelled 보조견, ``:355,394``). So an account with
-    ``h_hdcp_flg != "Y"`` has no 장애인 registration and no 보조견
-    registration, which is the condition that would explain a server-side
-    ``ERR299943`` "예약할인이 지원되지 않습니다" on a 1~3급 장애 + 안내견
-    reservation whose form matched the app exactly
-    (``docs/MUTATION_HANDOFF.md:172-179``).
+    **"이 계정이 어떤 할인 자격을 갖고 있는가"에 KORAIL 이 내놓는 것 중 가장
+    가까운 답이다.** ``MyPageActivity.java:206-212`` 는 장애 관련 영역 전체를
+    ``h_hdcp_flg == "Y"`` 일 때만, 그리고 그것만 보고 드러낸 뒤,
+    :attr:`welfare_discount_class_name`(장애인증 라벨)과
+    :attr:`customer_lead_flag_name`(보조견 라벨) 두 줄을 채운다.
 
-    **That reading is a hypothesis until the operator runs it.** It is derived
-    from what the app DOES with the flag, not from an observed pairing of this
-    flag with that refusal.
+    그러므로 ``h_hdcp_flg`` 가 ``"Y"`` 가 아닌 계정에는 장애인 등록도 보조견
+    등록도 없다. 폼이 앱과 정확히 같았는데도 1~3급 장애 + 안내견 예약이
+    ``ERR299943`` "예약할인이 지원되지 않습니다"로 거절된 것을 설명할 수 있는
+    조건이다 — 다만 이것은 앱이 이 플래그로 **무엇을 하는지** 에서 끌어낸
+    추론이지, 이 플래그와 그 거절이 함께 관측된 것은 아니다.
     """
 
     h_msg_txt: str | None = field(default=None, repr=False)
-    #: ``h_korail_point`` — the KORAIL point balance shown on 마이페이지.
+    #: ``h_korail_point`` — 마이페이지에 뜨는 코레일 포인트 잔액.
     korail_point: str | None = None
-    #: ``h_disc_coup_cnt`` — how many 할인쿠폰 the account holds. The count
-    #: behind :meth:`~korail_mobile_api.client.KorailClient.get_discount_coupons`.
+    #: ``h_disc_coup_cnt`` — 계정이 가진 할인쿠폰 개수.
+    #: :meth:`~korail_mobile_api.client.KorailClient.get_discount_coupons` 가
+    #: 실제로 돌려주는 목록의 개수다.
     discount_coupon_count: str | None = None
-    #: ``h_delay_cnt`` — how many 지연할인권 the account holds.
+    #: ``h_delay_cnt`` — 계정이 가진 지연할인권 개수.
     delay_discount_count: str | None = None
-    #: ``h_hdcp_flg`` — ``"Y"`` when the account carries a 장애인 registration.
+    #: ``h_hdcp_flg`` — 장애인 등록이 있으면 ``"Y"``.
     disability_flag: str | None = field(default=None, repr=False)
-    #: ``h_subt_dcs_cl_nm`` / ``h_subt_dcs_cl_cd`` — the 우대할인 class the
-    #: registration grants, rendered under the 장애인증 label.
+    #: ``h_subt_dcs_cl_nm`` / ``h_subt_dcs_cl_cd`` — 그 등록이 주는 우대할인
+    #: 등급. 앱에서 장애인증 라벨 아래 찍힌다.
     welfare_discount_class_name: str | None = field(default=None, repr=False)
     welfare_discount_class_code: str | None = field(default=None, repr=False)
-    #: ``h_cust_lead_flg_nm`` — rendered under the 보조견 label.
+    #: ``h_cust_lead_flg_nm`` — 앱에서 보조견 라벨 아래 찍힌다.
     customer_lead_flag_name: str | None = field(default=None, repr=False)
-    #: ``h_cp_athn_flg`` / ``h_emil_athn_flg`` — phone and e-mail verified.
+    #: ``h_cp_athn_flg`` / ``h_emil_athn_flg`` — 휴대폰·이메일 인증 여부.
     phone_verified_flag: str | None = field(default=None, repr=False)
     email_verified_flag: str | None = field(default=None, repr=False)
     contact_channel_content: str | None = field(default=None, repr=False)
-    #: ``h_logn_tp_cd1``/``2``/``4``/``5`` — Naver / Kakao / Google / Apple
-    #: social-login linkage, in the order ``MyPageActivity.java:214-236`` reads
-    #: them.
+    #: ``h_logn_tp_cd1``/``2``/``4``/``5`` — 네이버·카카오·구글·애플 소셜
+    #: 로그인 연동. ``MyPageActivity.java:214-236`` 이 읽는 순서 그대로다.
     naver_linked_flag: str | None = field(default=None, repr=False)
     kakao_linked_flag: str | None = field(default=None, repr=False)
     google_linked_flag: str | None = field(default=None, repr=False)
@@ -599,44 +606,45 @@ class KorailPointSummaryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class MileageHistoryEntry:
-    """One 적립 or 사용 row of the mileage ledger.
+    """마일리지 내역의 적립 또는 사용 한 줄.
 
     ``MileageInquiryDao.SpecList``
     (``dao/xPoint/MileageInquiryDao.java:128-167``).
     """
 
-    #: ``dptDt`` — the departure date the row is attributed to.
+    #: ``dptDt`` — 이 줄이 귀속된 출발일.
     departure_date: str | None = None
-    #: ``pontDvNm`` — 적립/사용 division name.
+    #: ``pontDvNm`` — 적립/사용 구분 이름.
     point_division_name: str | None = None
-    #: ``mlgAcmDvCdNm`` — how the mileage was accrued.
+    #: ``mlgAcmDvCdNm`` — 어떤 방식으로 적립됐는지.
     accrual_division_name: str | None = None
-    #: ``rcpDvNm`` — receipt division name.
+    #: ``rcpDvNm`` — 수납 구분 이름.
     receipt_division_name: str | None = None
-    #: ``pontAmt`` — the signed point movement of this row.
+    #: ``pontAmt`` — 이 줄의 포인트 증감. 부호가 붙는다.
     point_amount: str | None = None
-    #: ``savePontValNum`` — the running saved balance.
+    #: ``savePontValNum`` — 이 줄 시점의 누적 잔액.
     saved_point_value: str | None = field(default=None, repr=False)
-    #: ``stlAmt`` — the settled fare the row derives from.
+    #: ``stlAmt`` — 이 줄이 나온 정산 운임.
     settlement_amount: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
 
 @dataclass(frozen=True)
 class MileageHistoryResponse(BaseKorailResponse):
-    """``mlg.amtSpec.do`` — the 마일리지 적립/사용 내역 page.
+    """``mlg.amtSpec.do`` — 마일리지 적립/사용 내역 한 페이지.
 
     ``MileageInquiryDao.MileageInquiryResponse``
-    (``dao/xPoint/MileageInquiryDao.java:72-126``). The app's totals row is
-    :attr:`total_available_rail_point` + :attr:`total_available_rail_point_1`
-    added together as KTX 마일리지 and 삼성카드 마일리지
-    (``MileageHistoryActivity.java:574-578``), which is why both are exposed
-    rather than folded.
+    (``dao/xPoint/MileageInquiryDao.java:72-126``).
+
+    앱의 합계 줄은 :attr:`total_available_rail_point` 와
+    :attr:`total_available_rail_point_1` 을 KTX 마일리지와 삼성카드
+    마일리지로 각각 찍고 더한다(``MileageHistoryActivity.java:574-578``).
+    그래서 하나로 합치지 않고 둘 다 내놓는다.
     """
 
     h_msg_txt: str | None = field(default=None, repr=False)
-    #: ``pgCnt`` — the page count. ``MileageHistoryActivity.java:581`` keeps it
-    #: as the ceiling for its infinite scroll.
+    #: ``pgCnt`` — 전체 페이지 수. 앱은 무한 스크롤의 상한으로 쓴다
+    #: (``MileageHistoryActivity.java:581``).
     page_count: str | None = None
     total_available_rail_point: str | None = None
     total_available_rail_point_1: str | None = None
@@ -647,7 +655,7 @@ class MileageHistoryResponse(BaseKorailResponse):
     )
     total_used_rail_point_1: str | None = field(default=None, repr=False)
     rail_now_saved_point_1: str | None = field(default=None, repr=False)
-    #: ``delPontValNum`` — the points expiring this month.
+    #: ``delPontValNum`` — 이번 달에 소멸하는 포인트.
     expiring_point_value: str | None = None
     ktx_mileage_info: str | None = field(default=None, repr=False)
     entries: tuple[MileageHistoryEntry, ...] = ()
@@ -655,35 +663,35 @@ class MileageHistoryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DiscountCardUsage:
-    """One trip a 할인카드(N카드) has already been spent on.
+    """할인카드(N카드)를 이미 쓴 여행 한 건.
 
     ``NCardHistoryDao.NCardHistoryInfo``
-    (``dao/research/NCardHistoryDao.java:12-61``). The app renders exactly
-    these five fields as a numbered list — passenger name, "(추가사용자)" when
-    :attr:`additional_user_flag` is ``"Y"``, departure → arrival, and the run
-    date reformatted to ``yyyy.MM.dd``
+    (``dao/research/NCardHistoryDao.java:12-61``). 앱은 정확히 이 다섯 필드로
+    번호 매긴 목록을 그린다 — 승객 이름,
+    :attr:`additional_user_flag` 가 ``"Y"`` 면 "(추가사용자)", 출발 → 도착,
+    그리고 ``yyyy.MM.dd`` 로 다시 쓴 운행일
     (``TicketNCardHistoryActivity.java:84-97``).
     """
 
-    #: ``custNm`` — the name of whoever travelled on this leg.
+    #: ``custNm`` — 이 구간을 실제로 탄 사람의 이름.
     passenger_name: str | None = field(default=None, repr=False)
     departure_station_name: str | None = None
     arrival_station_name: str | None = None
     #: ``runDt1``, ``yyyyMMdd``.
     run_date: str | None = None
-    #: ``apdUsrFlg`` — ``"Y"`` when the trip was taken by the card's *second*
-    #: registered user rather than its owner (N카드 2인용).
+    #: ``apdUsrFlg`` — 카드 소유자가 아니라 **두 번째** 등록 사용자가 탔으면
+    #: ``"Y"``(N카드 2인용).
     additional_user_flag: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
 
 @dataclass(frozen=True)
 class DiscountCardUsageListResponse(BaseKorailResponse):
-    """``ticket.dcntCrdUseQry.do`` — a card's spent trips.
+    """``ticket.dcntCrdUseQry.do`` — 카드가 쓰인 여행 목록.
 
     ``NCardHistoryDao.NCardHistoryResponse``
-    (``dao/research/NCardHistoryDao.java:78-87``) carries ``tkUseList`` and
-    nothing else, so this model adds no summary fields the wire does not have.
+    (``dao/research/NCardHistoryDao.java:78-87``)가 싣는 것은 ``tkUseList``
+    하나뿐이라, 전선에 없는 요약 필드를 이 모델도 만들어 붙이지 않는다.
     """
 
     h_msg_txt: str | None = field(default=None, repr=False)
@@ -692,13 +700,15 @@ class DiscountCardUsageListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DiscountCardScheduleTrain:
-    """One train a 할인카드 may still be spent on.
+    """할인카드를 아직 쓸 수 있는 열차 하나.
 
     ``NCardInquiryDao.TrainInfo``
-    (``dao/research/NCardInquiryDao.java:144-236``). ``stationInfo`` is absent
-    on purpose: it is an ``android.text.Spanned`` the app renders locally from
-    :attr:`station_string_info` and never reads off the wire (``:157``, its
-    only writer is ``setStationInfo`` at ``:229``).
+    (``dao/research/NCardInquiryDao.java:144-236``).
+
+    ``stationInfo`` 는 일부러 없다. 그것은 앱이
+    :attr:`station_string_info` 로부터 스스로 만들어 내는
+    ``android.text.Spanned`` 이지 전선에서 읽는 값이 아니다(``:157``,
+    유일한 기록 지점이 ``:229`` 의 ``setStationInfo``).
     """
 
     train_no: str | None = None
@@ -710,31 +720,31 @@ class DiscountCardScheduleTrain:
     arrival_station_name: str | None = None
     departure_station_order: str | None = field(default=None, repr=False)
     arrival_station_order: str | None = field(default=None, repr=False)
-    #: ``cmtrPrc`` — the fare this card's section is quoted at.
+    #: ``cmtrPrc`` — 이 카드의 구간에 매겨진 운임.
     commuter_price: str | None = None
     direct_transfer_division_code: str | None = field(default=None, repr=False)
     detour_code: str | None = field(default=None, repr=False)
     detour_name: str | None = field(default=None, repr=False)
     route_code: str | None = field(default=None, repr=False)
-    #: ``stationStringInfo`` — the intermediate-stop line the app spans.
+    #: ``stationStringInfo`` — 앱이 서식을 입혀 그리는 중간 정차역 줄.
     station_string_info: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
 
 @dataclass(frozen=True)
 class DiscountCardScheduleResponse(BaseKorailResponse):
-    """``research.dcntCrdScheduleView.do`` — the trains a card can book.
+    """``research.dcntCrdScheduleView.do`` — 카드로 예약할 수 있는 열차들.
 
     ``NCardInquiryDao.NCardInquiryResponse``
     (``dao/research/NCardInquiryDao.java:128-142``).
 
-    :attr:`following_page_exists` is the app's own pagination signal:
-    ``SectionNCardInquiryActivity.java:406-408`` re-issues the read with an
-    incremented ``qryPgNo`` for as long as it reads ``"Y"``.
+    :attr:`following_page_exists` 가 페이징 신호다. 앱은 그 값이 ``"Y"`` 인
+    동안 ``qryPgNo`` 를 하나씩 올려 다시 조회한다
+    (``SectionNCardInquiryActivity.java:406-408``).
     """
 
     h_msg_txt: str | None = field(default=None, repr=False)
-    #: ``fllwPgExt`` — ``"Y"`` when another page follows.
+    #: ``fllwPgExt`` — 다음 페이지가 있으면 ``"Y"``.
     following_page_exists: str | None = None
     trains: tuple[DiscountCardScheduleTrain, ...] = ()
 
@@ -1014,13 +1024,15 @@ class PlatformNumberResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class SelfSeatChangeStation:
-    """One boarding station a 자율 좌석 변경 may move the ticket to.
+    """자율 좌석 변경으로 옮겨 갈 수 있는 승차역 하나.
 
     ``CallSelfSeatChgInfoDao.ChgStnList``
-    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:157-204``). The two seat
-    counts are what makes a row selectable: ``gnrmRestSeatNum`` /
-    ``sprmRestSeatNum`` are the 일반실 / 특실 remaining-seat numbers for the
-    section starting at this station.
+    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:157-204``).
+
+    이 줄을 고를 수 있는지는 좌석 수 둘이 정한다 —
+    :attr:`general_remaining_seats`(``gnrmRestSeatNum``)와
+    :attr:`special_remaining_seats`(``sprmRestSeatNum``)가 이 역에서 시작하는
+    구간의 일반실·특실 잔여 좌석이다.
     """
 
     departure_station_code: str | None = None
@@ -1038,7 +1050,7 @@ class SelfSeatChangeStation:
 
 @dataclass(frozen=True)
 class SelfSeatChangeReason:
-    """One 변경 사유 row (``CallSelfSeatChgInfoDao.java:136-155``)."""
+    """좌석 변경 사유 한 줄(``CallSelfSeatChgInfoDao.java:136-155``)."""
 
     query_code: str | None = None
     query_order: str | None = None
@@ -1048,15 +1060,15 @@ class SelfSeatChangeReason:
 
 @dataclass(frozen=True)
 class SelfSeatChangeInfoResponse(BaseKorailResponse):
-    """``self.seatChgInfo.do`` — what a self seat/train change may become.
+    """``self.seatChgInfo.do`` — 자율 좌석·열차 변경이 무엇으로 바뀔 수 있는지.
 
     ``CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse``
     (``dao/ticket/change/CallSelfSeatChgInfoDao.java:64-134``).
 
     :attr:`general_reservation_possible_code` /
-    :attr:`special_reservation_possible_code` (``gnrmRsvPsbCd`` /
-    ``sprmRsvPsbCd``) are the train-level yes/no for each 객실 등급; the
-    per-station remaining seats live on :attr:`stations`.
+    :attr:`special_reservation_possible_code`
+    (``gnrmRsvPsbCd``/``sprmRsvPsbCd``)는 객실 등급별 **열차 단위** 가부다.
+    역별 잔여 좌석은 :attr:`stations` 쪽에 있다.
     """
 
     h_msg_txt: str | None = field(default=None, repr=False)
@@ -1090,10 +1102,9 @@ class SelfSeatChangeInfoResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class OriginalTicketSeat:
-    """One seat of one journey of an original ticket.
+    """원표의 한 여정에 딸린 좌석 하나(``response/research/Seat.java``).
 
-    ``response/research/Seat.java``. The seat identity itself (``scarNo`` /
-    ``seatNo``) is redacted wherever it is previewed.
+    좌석 식별자 자체(``scarNo``/``seatNo``)는 미리보기에서 마스킹된다.
     """
 
     passenger_sequence: str | None = None
@@ -1116,18 +1127,16 @@ class OriginalTicketSeat:
 
 @dataclass(frozen=True)
 class OriginalTicketJourney:
-    """One leg of an original ticket (``response/research/Jrny.java``).
+    """원표의 구간 하나(``response/research/Jrny.java``).
 
-    This is the row the change chain is keyed on: ``jrnySqno`` plus the
-    departure/arrival station codes and orders are exactly the parameters the
-    follow-up reads take.
+    변경 흐름이 이 줄을 열쇠로 삼는다 — ``jrnySqno`` 와 출발·도착 역코드·
+    운행순서가 뒤따르는 조회들이 그대로 요구하는 인자다.
     """
 
     journey_sequence: str | None = None
     journey_order: str | None = None
-    #: ``jrnyTpCd``. Already a registered sensitive key under both its wire and
-    #: its attribute spelling, so it is kept out of the repr like every other
-    #: model that surfaces it.
+    #: ``jrnyTpCd``. 전선 철자와 속성 철자 양쪽이 민감 키로 등록돼 있어, 이
+    #: 값을 드러내는 다른 모델과 마찬가지로 표현에서 뺀다.
     journey_type_code: str | None = field(default=None, repr=False)
     train_no: str | None = None
     train_group_code: str | None = None
@@ -1152,16 +1161,16 @@ class OriginalTicketJourney:
 
 @dataclass(frozen=True)
 class OriginalTicket:
-    """One 원표 (``response/research/OrgTk.java``).
+    """원표 하나(``response/research/OrgTk.java``).
 
-    The four ``ogtk*`` values are the ticket's own 반환번호 coming back — the
-    same secret the request sent — and are redacted under both their wire and
-    their attribute spellings. ``cmpnList`` and ``stlList`` (companion
-    discounts and settlement rows) are deliberately left in :attr:`raw`: they
-    carry further credentials (지연증명 return numbers, card and approval
-    numbers) that this model has no change-chain use for. Those wire keys are
-    registered in :mod:`~korail_mobile_api.redaction` so they stay masked in
-    ``raw`` too.
+    ``original_*`` 네 값은 승차권 자신의 반환번호가 되돌아온 것이다 — 요청이
+    보낸 것과 같은 비밀이라 전선 철자와 속성 철자 양쪽에서 마스킹된다.
+
+    ``cmpnList``(동반 할인)와 ``stlList``(정산 줄)는 일부러 :attr:`raw` 에만
+    남긴다. 지연증명 반환번호, 카드번호, 승인번호 같은 자격증명이 더 들어
+    있는데 변경 흐름에는 쓸 일이 없기 때문이다. 그 전선 키들도
+    :mod:`korail_mobile_api.redaction` 에 등록돼 있어 ``raw`` 안에서 마스킹된
+    채로 있다.
     """
 
     pnr_no: str | None = field(default=None, repr=False)
@@ -1187,7 +1196,7 @@ class OriginalTicket:
 
 @dataclass(frozen=True)
 class OriginalTicketInquiryResponse(BaseKorailResponse):
-    """``research.tripChgOgtk.do`` — the tickets a change would start from.
+    """``research.tripChgOgtk.do`` — 변경이 출발점으로 삼을 원표들.
 
     ``OgTkInquiryDao.OgTkInquiryResponse``
     (``dao/research/OgTkInquiryDao.java:38-46``).
@@ -1325,15 +1334,20 @@ class ProductTrainInquiryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class ReservationSeatDetail:
-    """One seat row of a held reservation (``seat_infos.seat_info[]``).
+    """보류된 예약의 좌석 한 줄(``seat_infos.seat_info[]``).
 
-    Field names follow ``ReservationResponse.SeatInfo``
-    (``response/certification/ReservationResponse.java:296-313``).
-    ``passenger_type_code`` is ``h_psg_tp_cd``: the app declares the passenger
-    type as a CODE on this row and there is no ``h_psg_tp_dv_nm`` anywhere in
-    the decompiled app, so the display-name variant some third-party clients
-    name is not modelled. If the server does send it, it stays reachable
-    through :attr:`raw`.
+    필드 이름은 ``ReservationResponse.SeatInfo``
+    (``response/certification/ReservationResponse.java:296-313``)를 따른다.
+
+    :attr:`passenger_type_code` 는 ``h_psg_tp_cd`` 다. 앱은 이 줄의 승객
+    종류를 **코드** 로 선언하고, 디컴파일된 앱 어디에도
+    ``h_psg_tp_dv_nm`` 이 없다. 그래서 일부 서드파티 클라이언트가 이름 붙인
+    표시명 변형은 모델링하지 않았다. 서버가 그것을 보낸다면 :attr:`raw` 로
+    닿을 수 있다.
+
+    운임 재계산 요청의
+    :class:`~korail_mobile_api.mutation_models.PriceRecalculationRow` 는 이
+    줄에서 앞의 세 값을 그대로 베낀다.
     """
 
     car_no: str | None = field(default=None, repr=False)
@@ -1341,10 +1355,9 @@ class ReservationSeatDetail:
     room_class_code: str | None = field(default=None, repr=False)
     room_class_name: str | None = field(default=None, repr=False)
     passenger_type_code: str | None = field(default=None, repr=False)
-    #: ``h_rcvd_amt`` — the amount actually collected for this seat. Summing
-    #: these is how the payment path derives ``hidMnsStlAmt1`` when the hold
-    #: response omits ``h_tot_rcvd_amt``, so this read is an independent source
-    #: for cross-checking the settled amount.
+    #: ``h_rcvd_amt`` — 이 좌석에 실제로 걷히는 금액. 예약 응답에
+    #: ``h_tot_rcvd_amt`` 가 없을 때 결제 경로가 ``hidMnsStlAmt1`` 을 이 값들의
+    #: 합으로 구하므로, 정산 금액을 다른 출처로 대조해 볼 수 있다.
     received_amount: str | None = None
     seat_price: str | None = None
     seat_fare: str | None = None
@@ -1354,7 +1367,7 @@ class ReservationSeatDetail:
 
 @dataclass(frozen=True)
 class ReservationDetailJourney:
-    """One journey of a held reservation (``jrny_infos.jrny_info[]``)."""
+    """보류된 예약의 여정 하나(``jrny_infos.jrny_info[]``)."""
 
     journey_sequence: str | None = None
     journey_type_code: str | None = field(default=None, repr=False)
@@ -1372,12 +1385,12 @@ class ReservationDetailJourney:
 
 @dataclass(frozen=True)
 class TicketReservationDetailResponse(BaseKorailResponse):
-    """A held reservation read back by PNR (``certification.ReservationList``).
+    """PNR 로 다시 읽은 보류 예약(``certification.ReservationList``).
 
-    The response type is the app's ``ReservationResponse`` — the same DAO the
-    reserve mutation returns — so this read gives an independent view of a hold
-    the package can already create: ``window_no`` (``h_wct_no``) and the
-    per-seat amounts that the payment form settles.
+    응답 타입이 예약 요청이 돌려주는 것과 같은 ``ReservationResponse`` 다.
+    그래서 이 조회는 이 패키지가 이미 만들 수 있는 예약을 **다른 출처로**
+    다시 보는 셈이다 — 창구번호(``h_wct_no``)와 결제 폼이 정산할 좌석별
+    금액을 여기서 확인할 수 있다.
     """
 
     h_msg_txt: str | None = field(default=None, repr=False)
@@ -1387,8 +1400,8 @@ class TicketReservationDetailResponse(BaseKorailResponse):
     total_fare: str | None = None
     total_price: str | None = None
     total_discount_amount: str | None = None
-    #: ``h_tot_rcvd_amt`` — the settled total. Cross-checks ``hidMnsStlAmt1``
-    #: on the payment form against a source that is not the hold response.
+    #: ``h_tot_rcvd_amt`` — 정산 합계. 결제 폼의 ``hidMnsStlAmt1`` 을 예약
+    #: 응답이 아닌 출처로 대조할 수 있다.
     total_received_amount: str | None = None
     payment_flag: str | None = None
     journeys: tuple[ReservationDetailJourney, ...] = ()
@@ -1396,32 +1409,33 @@ class TicketReservationDetailResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class RefundCommissionResponse(BaseKorailResponse):
-    """Refund fee and refundable amount for one original ticket.
+    """원표 하나의 환불 수수료와 환불액.
 
-    Fields follow ``RefundCommissionDao.RefundCommissionResponse``
-    (``dao/refund/RefundCommissionDao.java:70-77``). This is the "how much comes
-    back and what is the fee" pre-check that must precede a first live refund.
+    필드는 ``RefundCommissionDao.RefundCommissionResponse``
+    (``dao/refund/RefundCommissionDao.java:70-77``)를 따른다.
+
+    "얼마가 돌아오고 수수료는 얼마인가"를 미리 보는 조회다. 실제 환불을
+    보내기 전에 먼저 불러라.
     """
 
     h_msg_txt: str | None = field(default=None, repr=False)
-    #: ``ret_amt`` — the amount that would be returned.
+    #: ``ret_amt`` — 돌려받을 금액.
     refund_amount: str | None = None
-    #: ``ret_fee`` — the fee withheld from it.
+    #: ``ret_fee`` — 거기서 떼는 수수료.
     refund_fee: str | None = None
-    #: ``prg_psb_flg`` — whether the refund may proceed at all.
+    #: ``prg_psb_flg`` — 환불을 진행할 수 있는지.
     proceed_possible_flag: str | None = None
     ticket_return_times_division_code: str | None = None
     usable_mileage: str | None = None
-    #: ``h_msg_cd2``/``h_msg_txt2`` — a SECOND message pair this route carries
-    #: alongside the envelope's own, e.g. a fee-policy notice on a successful
-    #: pre-check.
+    #: ``h_msg_cd2``/``h_msg_txt2`` — 이 경로가 봉투의 것과 별개로 싣는
+    #: **두 번째** 메시지 짝. 성공한 사전 조회에 수수료 정책 안내가 붙는 식이다.
     secondary_message_code: str | None = None
     secondary_message_text: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
 class RefundTicketSeat:
-    """One seat of a refund-target ticket (``tk_seat_info[]``)."""
+    """환불 대상 승차권의 좌석 하나(``tk_seat_info[]``)."""
 
     car_no: str | None = field(default=None, repr=False)
     seat_no: str | None = field(default=None, repr=False)
@@ -1437,7 +1451,7 @@ class RefundTicketSeat:
 
 @dataclass(frozen=True)
 class RefundTicketJourney:
-    """One journey of a refund-target ticket (``ticket_infos.ticket_info[]``)."""
+    """환불 대상 승차권의 여정 하나(``ticket_infos.ticket_info[]``)."""
 
     journey_sequence: str | None = None
     journey_type_code: str | None = field(default=None, repr=False)
@@ -1457,13 +1471,19 @@ class RefundTicketJourney:
 
 @dataclass(frozen=True)
 class RefundTicketDetailResponse(BaseKorailResponse):
-    """The refund target's ticket detail (``refunds.SelTicketInfo``).
+    """환불 대상 승차권의 상세(``refunds.SelTicketInfo``).
 
-    Fields follow ``TicketDetailDao.TicketDetailResponse``
-    (``dao/refund/TicketDetailDao.java:227-281``). :attr:`companion_name` and
-    :attr:`companion_birth_date` are what the app feeds straight into the
-    following ``CommissionView`` call as ``h_comp_nm``/``h_comp_cert_no``
-    (``TicketListActivity.java:908-909``), so the two reads chain.
+    필드는 ``TicketDetailDao.TicketDetailResponse``
+    (``dao/refund/TicketDetailDao.java:227-281``)를 따른다.
+
+    두 조회가 사슬로 이어진다. 앱은 :attr:`companion_name` 과
+    :attr:`companion_birth_date` 를 뒤따르는 ``CommissionView`` 호출에
+    ``h_comp_nm``/``h_comp_cert_no`` 로 그대로 넘긴다
+    (``TicketListActivity.java:908-909``).
+
+    환불 신원을 손으로 조립하지 말고
+    :meth:`~korail_mobile_api.mutation_models.PaidTicket.from_refund_detail`
+    에 이 응답을 넘겨라.
     """
 
     h_msg_txt: str | None = field(default=None, repr=False)
@@ -1477,34 +1497,33 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     original_return_password: str | None = field(default=None, repr=False)
     ticket_kind_code: str | None = field(default=None, repr=False)
     ticket_kind_name: str | None = None
-    #: ``retPsbFlg`` — whether this ticket is refundable at all. The cheapest
-    #: possible pre-flight for a refund.
+    #: ``retPsbFlg`` — 이 승차권이 환불 가능한지. 환불 전에 볼 수 있는 가장
+    #: 싼 사전 점검이다.
     refund_possible_flag: str | None = None
     return_flag: str | None = None
     total_fare_amount: str | None = None
     total_discount_amount: str | None = None
     total_received_amount: str | None = None
     train_running_flag: str | None = None
-    #: ``h_compa_nm``/``h_compa_brth`` — copied verbatim into the CommissionView
-    #: request as ``h_comp_nm``/``h_comp_cert_no``.
+    #: ``h_compa_nm``/``h_compa_brth`` — CommissionView 요청에
+    #: ``h_comp_nm``/``h_comp_cert_no`` 로 그대로 복사돼 나간다.
     companion_name: str | None = field(default=None, repr=False)
     companion_birth_date: str | None = field(default=None, repr=False)
-    #: ``h_pbp_acep_tgt_flg`` — whether this ticket is a PBP acceptance target.
-    #: The app echoes this value verbatim into the refund request's
-    #: ``pbpAcepTgtFlg`` (``ticketReturn/a.java:430-431``); pass it to
-    #: :func:`build_refund_form` so the refund states what the server said
-    #: rather than the ``"N"`` default.
+    #: ``h_pbp_acep_tgt_flg`` — 이 승차권이 PBP 인수 대상인지. 앱은 이 값을
+    #: 환불 요청의 ``pbpAcepTgtFlg`` 로 그대로 되돌려 보낸다
+    #: (``ticketReturn/a.java:430-431``). 환불 폼을 만들 때 이 값을 넘겨야
+    #: 기본값 ``"N"`` 이 아니라 서버가 말한 것을 되말한다.
     pbp_acceptance_target_flag: str | None = None
-    #: ``h_dlay_flg``/``h_dlay_tk_flg`` — delay-compensation eligibility.
+    #: ``h_dlay_flg``/``h_dlay_tk_flg`` — 지연 보상 대상 여부.
     delay_flag: str | None = None
     delay_ticket_flag: str | None = None
-    #: ``mlgSaveFlg`` — whether refunding this ticket restores mileage.
+    #: ``mlgSaveFlg`` — 환불하면 마일리지가 복구되는지.
     mileage_save_flag: str | None = None
-    #: ``addSrvFlg``/``addSrvCancel`` — attached add-on services and whether
-    #: refunding cancels them too.
+    #: ``addSrvFlg``/``addSrvCancel`` — 딸린 부가서비스가 있는지, 환불이 그것도
+    #: 함께 취소하는지.
     additional_service_flag: str | None = None
     additional_service_cancel: str | None = None
     journeys: tuple[RefundTicketJourney, ...] = ()
-    #: ``dcnt_crd_info`` — present only when this "ticket" is a 할인카드(N카드).
-    #: ``None`` for every ordinary ticket.
+    #: ``dcnt_crd_info`` — 이 "승차권"이 실은 할인카드(N카드)일 때만 있다.
+    #: 보통 승차권에서는 ``None``.
     discount_card: DiscountCardOnTicket | None = None

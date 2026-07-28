@@ -17,21 +17,19 @@ from .dynapath import DynapathConfig, build_default_token_settings
 
 
 def _default_dynapath_config() -> DynapathConfig:
-    """DynaPath, enabled, with freshly generated per-instance device values.
+    """DynaPath 를 켜고 기기 값을 이 설정만을 위해 새로 만든 구성.
 
-    This is what makes ``KorailClient()`` — no arguments — able to log in.
-    Until 1.0.0 a bare config produced a disabled DynaPath and a User-Agent
-    naming this Python package, and the server answered ``login.Login`` with
-    ``**MACRO ERROR**``, disguised in the user-facing text as a demand to
-    update the app. The asymmetry made it hard to see: account-neutral reads
-    kept working under the same bare config, so the library looked healthy and
-    only login failed.
+    ``KorailClient()`` 를 인자 없이 만들어도 로그인이 되는 이유가 이것이다.
+    DynaPath 를 끈 설정으로 ``login.Login`` 을 부르면 서버가 거절하는데, 그
+    거절이 사용자 문구로는 "앱을 업데이트하라"로 위장돼 온다. 계정과 무관한
+    읽기는 같은 설정에서 계속 동작하므로 로그인만 골라 실패하는 것처럼
+    보인다.
 
-    A fresh :func:`~korail_mobile_api.dynapath.build_default_token_settings`
-    per config — not a module-level singleton — is deliberate. The settings
-    carry a per-installation device id and an app-start timestamp; sharing one
-    object across every config in a process would hand every client in it the
-    same device identity and the same start time.
+    :func:`~korail_mobile_api.dynapath.build_default_token_settings` 를
+    모듈 수준 싱글턴이 아니라 설정마다 새로 부르는 것은 의도다. 이 설정에는
+    설치별 기기 식별자와 앱 시작 시각이 들어 있어서, 하나를 공유하면 한
+    프로세스 안의 모든 클라이언트가 같은 기기·같은 시작 시각을 주장하게
+    된다.
     """
     return DynapathConfig(
         enabled=True,
@@ -41,6 +39,23 @@ def _default_dynapath_config() -> DynapathConfig:
 
 @dataclass(frozen=True)
 class KorailConfig:
+    """:class:`~korail_mobile_api.client.KorailClient` 가 매 요청에 싣는 값들.
+
+    ``KorailConfig()`` 를 인자 없이 만들면 앱 v6.5.0 의
+    ``Device``/``Version``/``Key`` 와 켜진 DynaPath 가 채워진다. 필드를
+    직접 바꾸기보다
+    :func:`~korail_mobile_api.live.build_config_from_env` 로 실제 기기 값을
+    주입하는 쪽이 낫다 — 기기 이름·화면 크기·SDK 레벨이 서로 맞아야
+    의미가 있기 때문이다.
+
+    ``base_url`` 과 ``netfunnel_url`` 은 서로 다른 호스트이고 서로를 부를 수
+    없다. API 는 ``smart.letskorail.com``, 대기열은 ``nf.letskorail.com``
+    으로 각각 고정 검사된다.
+
+    ``live_env_var`` 는 라이브 테스트를 여는 환경변수 이름이며 요청에
+    실리지 않는다.
+    """
+
     base_url: str = KORAIL_BASE_URL
     device: str = KORAIL_DEVICE_ANDROID
     version: str = KORAIL_API_VERSION
@@ -48,9 +63,9 @@ class KorailConfig:
     timeout: float = KORAIL_TIMEOUT_SECONDS
     user_agent: str = KORAIL_USER_AGENT
     live_env_var: str = "KORAIL_MOBILE_API_LIVE"
-    #: DynaPath anti-automation, ON by default — see
-    #: :func:`_default_dynapath_config`. Pass ``DynapathConfig()`` to opt out;
-    #: nothing outside the six allowlisted paths is affected either way.
+    #: DynaPath 안티오토메이션. 기본이 켜짐이며 이유는
+    #: :func:`_default_dynapath_config` 에 있다. 끄려면 ``DynapathConfig()`` 를
+    #: 넘긴다. 켜든 끄든 허용목록 여섯 경로 밖에는 아무 영향이 없다.
     dynapath: DynapathConfig = field(default_factory=_default_dynapath_config)
     device_width: int = KORAIL_DEFAULT_DEVICE_WIDTH
     device_height: int = KORAIL_DEFAULT_DEVICE_HEIGHT
@@ -58,26 +73,20 @@ class KorailConfig:
     advertising_id: str = ""
     netfunnel_url: str = KORAIL_NETFUNNEL_URL
     netfunnel_timeout: float = KORAIL_NETFUNNEL_TIMEOUT_SECONDS
-    #: Whether the NetFunnel virtual waiting room may be used at all.
+    #: NetFunnel 가상 대기열을 쓸지 여부. 기본은 거짓이다.
     #:
-    #: **FALSE, and that default is load-bearing.** Constructing a
-    #: :class:`~korail_mobile_api.netfunnel.KorailNetFunnelClient` against a
-    #: config with this unset is refused outright, so nothing in this package
-    #: can reach ``nf.letskorail.com`` until a caller says so in writing.
+    #: 거짓인 동안
+    #: :class:`~korail_mobile_api.netfunnel.KorailNetFunnelClient` 생성 자체가
+    #: 거절되므로, 명시적으로 켜기 전에는 이 패키지가 ``nf.letskorail.com``
+    #: 에 닿을 수 없다.
     #:
-    #: The reason is evidence, not caution. Every live call this repository has
-    #: made to ``smart.letskorail.com`` — reserve, cancel, pay, refund and the
-    #: whole read surface — succeeded WITHOUT a queue token, so the server does
-    #: not currently meter us. Turning the queue on by default would therefore
-    #: add a round trip (and a 3-second timeout, and a failure mode) to every
-    #: gated operation in exchange for nothing, and could only regress a client
-    #: that works today. The polling path has consequently never been exercised
-    #: against the real server and is offline-tested only.
+    #: 지금까지 예약·취소·결제·환불과 읽기 전부가 대기열 토큰 없이 통과했다 —
+    #: 서버가 우리를 계량하고 있지 않다는 뜻이다. 그 상태에서 대기열을 켜면
+    #: 게이트가 걸린 모든 호출에 왕복 한 번과 3초 타임아웃과 실패 모드가
+    #: 얹힐 뿐이다. 그래서 폴링 경로는 실제 서버에 대고 돌아간 적이 없고
+    #: 오프라인 테스트만 있다.
     #:
-    #: What it is FOR is the load at which that stops being true. Enforcement is
-    #: a server-side policy and the app ships the client for it — including a
-    #: dedicated peak-season inquiry action (``act_8_2``) that exists precisely
-    #: because peak season is when a waiting room gets switched on. Set this to
-    #: ``True`` when a queue-shaped failure appears, which is the situation this
-    #: subsystem was built for and the only one in which it earns its round trip.
+    #: 대기열은 서버 정책이고 앱은 그 클라이언트를 싣고 다닌다 — 성수기
+    #: 전용 조회 액션(``act_8_2``)이 따로 있는 것이 그 증거다. 대기열 모양의
+    #: 실패가 보이면 그때 ``True`` 로 켜라.
     netfunnel_enabled: bool = False

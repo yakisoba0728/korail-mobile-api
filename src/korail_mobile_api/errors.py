@@ -1,8 +1,52 @@
+"""이 패키지가 올리는 예외 전부와 ``h_msg_cd`` → 예외 매핑.
+
+계층은 아래와 같다. 위를 잡으면 아래가 전부 잡힌다.
+
+.. code-block:: text
+
+    KorailApiError                        모든 실패의 뿌리
+    ├── KorailTransportError              HTTP 왕복 자체가 실패
+    ├── KorailProtocolError               응답 모양이 프로토콜과 다름
+    ├── KorailAuthError                   로그인·세션
+    │   ├── KorailSessionExpiredError     P058
+    │   └── KorailAuthContinuationRequired  WebView 후속 인증이 남음
+    ├── KorailDynaPathError               안티매크로 거절(응답 헤더)
+    ├── KorailAppError                    서버가 h_msg_cd 로 알린 실패
+    │   ├── KorailNoResultsError
+    │   │   └── KorailNoDirectTrainError
+    │   ├── KorailSoldOutError
+    │   ├── KorailSeatUnavailableError
+    │   ├── KorailReservationRefusedError
+    │   ├── KorailInvalidRequestError
+    │   ├── KorailNotEntitledError
+    │   ├── KorailServiceUnavailableError
+    │   └── KorailAppUpdateRequiredError
+    ├── KorailNetFunnelError              대기열(nf.letskorail.com)
+    │   └── KorailQueueRejectedError
+    └── KorailMutationNotAllowedError     consent 게이트
+
+가장 자주 틀리는 곳이 세션 만료다. ``P058`` 은
+:class:`KorailSessionExpiredError` 이고 그것은 :class:`KorailAuthError` 이지
+:class:`KorailAppError` 가 아니다. ``except KorailAppError`` 로는 잡히지 않는다.
+
+실패인지 아닌지는 오직 ``strResult``(와 ``WRC000288``)가 정한다. 코드는 이미
+올라가기로 정해진 예외가 어느 클래스인지만 고른다 — 경고 코드를 달고 온 성공
+응답은 그대로 성공이다. :func:`classify_app_error` 참조.
+
+모든 메시지 문자열은 생성자에서
+:func:`~korail_mobile_api.redaction.redact_text` 를 통과하므로 예외를 그대로
+로그에 남겨도 카드번호·비밀번호·이름·전화번호가 새지 않는다.
+"""
+
 from .redaction import redact_text
 
 
 class KorailApiError(Exception):
-    """Base error for KORAIL client failures."""
+    """이 패키지가 올리는 모든 예외의 최상위 — 하나로 잡고 싶으면 이것이다.
+
+    문자열 인자는 :func:`~korail_mobile_api.redaction.redact_text` 를 거쳐
+    저장되므로 ``str(exc)`` 에 민감값이 남지 않는다.
+    """
 
     def __init__(self, *args: object) -> None:
         super().__init__(
@@ -14,19 +58,57 @@ class KorailApiError(Exception):
 
 
 class KorailTransportError(KorailApiError):
-    """HTTP transport failed before an app-level response was parsed."""
+    """HTTP 왕복이 실패해 앱 수준 응답을 파싱하지도 못한 경우.
+
+    :mod:`httpx` 가 연결·타임아웃으로 던졌거나, 응답이 4xx/5xx 였다
+    (``http.py``). 서버 코드가 없으므로 ``code`` 속성도 없다.
+
+    읽기라면 재시도해도 된다. 상태변경 요청이라면 요청이 서버에 닿았는지
+    알 수 없으므로 그대로 다시 보내지 말고 예약목록·승차권목록으로 결과를
+    먼저 확인하라.
+    """
 
 
 class KorailProtocolError(KorailApiError):
-    """The server response did not match the documented protocol."""
+    """응답이 JSON 이 아니거나 봉투 필드가 빠졌거나 타입이 다른 경우.
+
+    ``h_msg_cd``/``h_msg_txt``/``strResult`` 중 하나라도 없거나 문자열이
+    아니면 여기서 걸린다. 파싱 단계의 값 검증(역코드를 모른다, 환승 결과의
+    ``h_chg_trn_seq`` 가 어긋난다 등)도 같은 예외다.
+
+    재시도해도 같은 응답이 온다. 입력을 고치거나, 서버 응답 모양이 실제로
+    바뀐 것이므로 이 패키지를 고쳐야 한다.
+    """
 
 
 class KorailAuthError(KorailApiError):
-    """Login or session authentication failed."""
+    """로그인이 실패했거나 세션 없이 로그인이 필요한 메서드를 불렀다.
+
+    :meth:`~korail_mobile_api.client.KorailClient.login` 이 실패했을 때,
+    쿠키 없는 성공 응답이 왔을 때, 그리고 계정이 필요한 메서드를 비로그인
+    상태로 불렀을 때 올라온다. 하위로
+    :class:`KorailSessionExpiredError` 와
+    :class:`KorailAuthContinuationRequired` 가 있다.
+    """
 
 
 class KorailSessionExpiredError(KorailAuthError):
-    """The authenticated KORAIL session is no longer valid."""
+    """세션이 끊겼다. ``P058``.
+
+    응답 봉투의 ``h_msg_cd`` 가 ``P058`` 이면 다른 어떤 분류보다 먼저 이것이
+    올라간다. 읽기 메서드는 이 예외를 만나면 로컬 세션을 버리고 다시
+    올리므로, 호출자는
+    :meth:`~korail_mobile_api.client.KorailClient.login` 을 다시 부른 뒤 같은
+    요청을 반복하면 된다. 상태변경 메서드는 세션을 버리지 않으니 직접
+    :meth:`~korail_mobile_api.client.KorailClient.clear_session` 을 부르거나
+    다시 로그인하라.
+
+    :class:`KorailAuthError` 의 하위이고 :class:`KorailAppError` 가 아니다.
+    ``h_msg_cd`` 를 달고 오지만 인증 문제이므로 앱 수준 실패 분류에 넣지
+    않는다.
+
+    ``code``/``message``/``raw`` 에 서버 원본이 그대로 담긴다.
+    """
 
     def __init__(
         self,
@@ -45,40 +127,27 @@ class KorailSessionExpiredError(KorailAuthError):
 
 
 class KorailDynaPathError(KorailApiError):
-    """The KORAIL DynaPath layer rejected a request — the anti-macro refusal.
+    """DynaPath 계층이 요청을 거절했다 — 이 앱의 안티매크로 거절이다.
 
-    "Retry is pointless right now; you were flagged, not merely throttled."
+    지금 다시 보내도 소용없다. 속도 제한이 아니라 표시된 것이다.
 
-    This is what an anti-macro rejection looks like on this app, and the APK is
-    unambiguous that it is a HEADER decision, not an ``h_msg_cd`` one.
-    ``BaseDaoHelper`` inspects every response for a ``DynaPath-Result`` header
-    and, when its value is negative, reads ``message`` out of the JSON body and
-    parks it on the dao as ``macroShowDialog``
-    (``analysis/jadx/sources/com/korail/talk/network/BaseDaoHelper.java:59-86``).
-    The dispatcher then shows that string INSTEAD of running the normal
-    ``h_msg_cd`` ladder at all
-    (``analysis/jadx/sources/com/korail/talk/view/base/BaseActivity.java:632-634``;
-    mirrored at ``analysis/jadx/sources/l4/h.java:401-404``). The token that
-    earns the header is attached only when the server-set ``IS_MACRO_ACTIVE``
-    flag is on AND the URL is one of six sensitive paths
-    (``analysis/jadx/sources/com/korail/talk/network/ExecuteDao.java:25-47``).
+    ``h_msg_cd`` 가 아니라 **응답 헤더** 로 온다. ``DynaPath-Result`` 값이
+    음수면 앱은 본문 ``message`` 를 꺼내 그것만 띄우고 평소의 ``h_msg_cd``
+    사다리는 아예 돌리지 않는다(``BaseDaoHelper.java:59-86``,
+    ``BaseActivity.java:632-634``). 이 패키지도 같은 조건 — 403 + 음수
+    ``DynaPath-Result`` + 여섯 개 민감 경로 중 하나 — 에서만 올린다
+    (``ExecuteDao.java:25-47``).
 
-    So there is NO anti-macro message code to classify. srtgo_plus asserts one
-    — ``if "MACRO" in code or "MACRO" in msg`` (``srtgo/srtgo.py:756``), after
-    which it clears its NetFunnel key and retries — but the substring ``MACRO``
-    appears nowhere in this app as a server code or message; the only in-app
-    occurrences are the client-side flag ``IS_MACRO_ACTIVE``
-    (``analysis/jadx/sources/I4/a.java:14``) and the string resource
-    ``macro_alert_message`` (``analysis/apktool/res/values/strings.xml:996``),
-    which is the post-login advisory described below. That claim is therefore
-    recorded as **third-party-attested only** and is not encoded.
+    그러므로 안티매크로를 뜻하는 서버 코드는 존재하지 않는다. 문자열
+    ``MACRO`` 는 이 앱의 서버 코드나 메시지 어디에도 없다. 앱 안의
+    ``MACRO`` 는 클라이언트 플래그 ``IS_MACRO_ACTIVE``(``I4/a.java:14``)와
+    문자열 자원 ``macro_alert_message``(``strings.xml:996``)뿐이다.
 
-    Separately, KORAIL also warns about macro use on a SUCCESSFUL login: when
-    the login response carries ``notiTpCd`` in ``{"MC", "MM", "MS"}`` the app
-    queues ``macro_alert_message`` as a post-login popup
-    (``analysis/jadx/sources/S4/u.java:57-90``) — the login still succeeded.
-    That is an advisory on a success, not a rejection, and deliberately raises
-    nothing here.
+    로그인 **성공** 응답이 ``notiTpCd`` 로 ``"MC"``/``"MM"``/``"MS"`` 를
+    실어 오면 앱은 그 안내 팝업을 띄우지만 로그인은 성공한 것이다
+    (``S4/u.java:57-90``). 그 경우는 여기서 아무것도 올리지 않는다.
+
+    ``raw`` 에 응답 본문이 담긴다.
     """
 
     def __init__(
@@ -94,7 +163,16 @@ class KorailDynaPathError(KorailApiError):
 
 
 class KorailAuthContinuationRequired(KorailAuthError):
-    """Login requires the app's WebView authentication continuation."""
+    """로그인이 WebView 2단계 인증으로 이어져야 한다.
+
+    로그인 응답이 성공 코드가 아니면서 ``strRedirectUrl`` 을 실어 왔을 때
+    올라온다. 이 패키지는 WebView 를 띄우지 않으므로 여기서 멈추고,
+    :attr:`redirect_url` 과 앱이 그 URL 에 POST 할
+    :attr:`post_data` 를 그대로 넘긴다. 호출자가 브라우저로 그 과정을 마쳐야
+    한다.
+
+    같은 예외가 ``client.session.pending`` 에도 남는다.
+    """
 
     def __init__(self, redirect_url: str, post_data: str, *, raw: object | None = None) -> None:
         self.redirect_url = redirect_url
@@ -104,27 +182,22 @@ class KorailAuthContinuationRequired(KorailAuthError):
 
 
 class KorailAppError(KorailApiError):
-    """The server returned an app-level failure response.
+    """서버가 앱 수준 실패로 답했다 — ``h_msg_cd`` 분류의 뿌리.
 
-    Base of the app-level taxonomy. ``code`` is the server's ``h_msg_cd``
-    verbatim and ``raw`` is the whole response, so a caller can always fall back
-    to inspecting the code even for a failure this library has no subclass for —
-    and so the map below can be grown from real traffic. Every subclass is a
-    REFINEMENT: ``except KorailAppError`` still catches all of them.
+    ``strResult == "FAIL"`` 이거나 ``h_msg_cd`` 가 ``WRC000288`` 일 때
+    올라간다. 아래 여덟 하위 클래스는 전부 **세분화** 일 뿐이라
+    ``except KorailAppError`` 로 하나도 빠짐없이 잡힌다. 매핑되지 않은
+    코드는 이 클래스 그대로 온다.
 
-    **A failure is still decided by ``strResult``, never by the code.** The app
-    works the same way. Its dispatcher recognises ``SEMGTK``, ``P058``,
-    ``SUPDATE``, ``WRC000288`` and (for one dao) ``S198``, and then — crucially
-    — falls off the end of the ladder setting the error object to ``null``, so
-    **any unrecognised ``h_msg_cd`` on a non-``FAIL`` response is delivered to
-    ``onReceive()`` as a success**
-    (``analysis/jadx/sources/com/korail/talk/view/base/BaseActivity.java:600-649``,
-    the ``aVar = null`` at :629; mirrored at
-    ``analysis/jadx/sources/l4/h.java:380-400``). Classification here therefore
-    only ever REPLACES an exception that would already have been raised. It adds
-    no new raise condition, which is what keeps a success-with-a-warning a
-    success — see :class:`KorailNoResultsError` and the module notes at the
-    bottom of this file.
+    ``code`` 는 서버의 ``h_msg_cd`` 원문, ``message`` 는 ``h_msg_txt``,
+    ``raw`` 는 응답 전체다. 하위 클래스가 없는 실패도 ``code`` 로 직접
+    분기할 수 있다.
+
+    실패인지 아닌지를 코드가 정하지는 않는다. 앱도 인식하지 못한
+    ``h_msg_cd`` 는 ``FAIL`` 이 아닌 응답에서 그냥 성공으로 흘려보낸다
+    (``BaseActivity.java:600-649``, :629 의 ``aVar = null``). 그래서
+    경고를 달고 온 성공은 여기서도 성공이다 — :class:`KorailNoResultsError`
+    와 이 파일 아래쪽 매핑 주석을 보라.
     """
 
     def __init__(self, code: str | None, message: str | None, *, raw: object | None = None) -> None:
@@ -137,236 +210,178 @@ class KorailAppError(KorailApiError):
 
 
 class KorailNoResultsError(KorailAppError):
-    """The request was accepted and simply matched nothing.
+    """요청은 받아들여졌고 맞는 것이 하나도 없었다.
 
-    "Retry is pointless; ask a different question." An empty result is not
-    always an empty list on this server — several endpoints declare it as a
-    ``FAIL`` envelope with a code.
+    같은 질문을 다시 해도 소용없다. 조건을 바꿔야 한다. 이 서버는 빈 결과를
+    빈 목록이 아니라 코드가 실린 ``FAIL`` 봉투로 답하는 엔드포인트가 여럿
+    있다.
 
-    The app agrees it is not a real error: for these codes it registers
-    ``setErrorMsgCdNotShowDialog`` so the generic error dialog is suppressed and
-    the screen simply renders its empty view. ``WRG000000`` is registered that
-    way at four sites —
-    ``analysis/jadx/sources/com/korail/talk/ui/inquiry/CommutationInquiryActivity.java:182``,
-    ``analysis/jadx/sources/com/korail/talk/ui/inquiry/SectionNCardInquiryActivity.java:313``,
-    ``analysis/jadx/sources/G6/C5681a.java:66`` and
-    ``analysis/jadx/sources/G6/C5683c.java:82`` — with the suppression itself
-    enforced in
-    ``analysis/jadx/sources/com/korail/talk/view/base/BaseActivity.java:326-337``.
-    ``P114`` is handled on the success path as an "empty list plus a notice"
-    state at
-    ``analysis/jadx/sources/com/korail/talk/ui/ticket/confirm/TicketListActivity.java:1393``
-    and
-    ``analysis/jadx/sources/com/korail/talk/ui/ticket/history/TicketPurchaseHistoryActivity.java:763``.
+    ``WRG000000``, ``P114``, ``P100``, ``WRT300005`` 네 코드다. 앱도 이것을
+    진짜 오류로 보지 않는다 — ``WRG000000`` 은 네 화면에서
+    ``setErrorMsgCdNotShowDialog`` 로 오류 대화상자를 끄고 빈 화면을 그리며
+    (``BaseActivity.java:326-337``), ``P114`` 는 "빈 목록 + 안내" 상태로
+    성공 경로에서 처리된다(``TicketListActivity.java:1393``).
 
-    ``P100`` ("검색된 데이터가 없습니다." — an empty reservation history) and
-    ``WRT300005`` ("조회자료가 없습니다." — an empty ticket list) are
-    **live-observed by this repository, zero-hit in the APK**. They are already
-    tolerated per-endpoint by
-    :func:`~korail_mobile_api.read_parsers._validate_envelope`'s
-    ``accepted_empty_codes``, which returns an empty result WITHOUT raising;
-    mapping them here only covers the case where the same code reaches an
-    endpoint that has not opted in. korail2 and srtgo group the same four codes
-    (``korail2/korail2.py:521-527``, ``srtgo/srtgo/ktx.py:380-381``).
+    ``P100``("검색된 데이터가 없습니다.", 빈 예약내역)과
+    ``WRT300005``("조회자료가 없습니다.", 빈 승차권목록)는 APK 에 없고 실제
+    응답에서만 관측됐다. 이 두 코드를 이미 빈 결과로 받아들이도록 선언한
+    엔드포인트는 예외 없이 빈 결과를 돌려주므로
+    (``read_parsers._validate_envelope`` 의 ``accepted_empty_codes``), 여기
+    매핑이 실제로 쓰이는 것은 선언하지 않은 엔드포인트에 같은 코드가 왔을
+    때다.
     """
 
 
 class KorailNoDirectTrainError(KorailNoResultsError):
-    """No direct train on this route, but a transfer itinerary exists.
+    """직통 열차가 없다. 다만 환승으로는 갈 수 있다. ``WRD000061``.
 
-    "Retry is pointless as asked; re-ask as a transfer search." ``WRD000061``.
+    직통으로 다시 물어도 소용없고, 환승 검색으로 다시 물어야 한다 —
+    :meth:`~korail_mobile_api.client.KorailClient.search_trains_with_transfer_fallback`
+    또는 :meth:`~korail_mobile_api.client.KorailClient.search_transfer_trains`.
 
-    This is the app's own reading, and it is explicit. ``DirectInquiryActivity``
-    intercepts the code before the generic error handler and shows a two-button
-    dialog
-    (``analysis/jadx/sources/com/korail/talk/ui/inquiry/rir/orr/DirectInquiryActivity.java:614-633``);
-    the confirm callback re-issues the *same* query with the job id switched to
-    ``TRANSFER_SQ_NO``
-    (``analysis/jadx/sources/com/korail/talk/ui/inquiry/rir/orr/DirectInquiryActivity.java:284-296``).
-    Behind the dialog it also renders the empty train list, which is why this
-    subclasses :class:`KorailNoResultsError` rather than standing alone.
-
-    korail2 files ``WRD000061`` under no-results with the comment
-    "직통열차는 없지만, 환승으로 조회 가능합니다" (``korail2/korail2.py:524``) —
-    a third-party claim that, unusually, the APK fully corroborates.
+    앱의 해석이 그렇다. ``DirectInquiryActivity`` 는 이 코드를 일반 오류
+    처리보다 먼저 가로채 두 버튼짜리 대화상자를 띄우고(``:614-633``),
+    확인을 누르면 **같은 질의** 를 job id 만 ``TRANSFER_SQ_NO`` 로 바꿔
+    다시 보낸다(``:284-296``). 대화상자 뒤로는 빈 열차 목록을 그리므로
+    :class:`KorailNoResultsError` 의 하위다.
     """
 
 
 class KorailSoldOutError(KorailAppError):
-    """The inventory is gone; this train cannot be booked.
+    """재고가 없다. 이 열차는 예약할 수 없다. ``ERR211161``.
 
-    "Retry is pointless for this train; pick another." ``ERR211161``.
+    이 열차로는 다시 시도해도 소용없다. 다른 열차를 골라야 한다.
 
-    APK-confirmed at two independent sites, both of which replace the server
-    text with the app's own sold-out string rather than showing ``h_msg_txt``:
-    ``analysis/jadx/sources/com/korail/talk/ui/ticket/change/TCSOptionsActivity.java:551``
-    and
-    ``analysis/jadx/sources/com/korail/talk/ui/push/SpecialRoomUpgradeActivity.java:314``.
-    That string is ``tss_dialog_no_left_seat`` =
-    "잔여석이 부족하여 서비스를 제공할 수 없습니다."
-    (``analysis/apktool/res/values/strings.xml:2043``). Both sites use the
-    single-button alert, i.e. the app offers no way forward.
+    앱은 두 곳에서 이 코드를 서버 문구 대신 자기 문자열로 바꿔 띄운다
+    (``TCSOptionsActivity.java:551``,
+    ``SpecialRoomUpgradeActivity.java:314``). 그 문자열이
+    ``tss_dialog_no_left_seat`` = "잔여석이 부족하여 서비스를 제공할 수
+    없습니다."(``strings.xml:2043``)이고, 둘 다 버튼이 하나뿐이다 — 앱이
+    내놓는 다음 수가 없다는 뜻이다.
 
-    korail2 maps sold-out to exactly ``{ERR211161}`` (``korail2/korail2.py:534``).
-    srtgo adds ``IRT010110`` (``srtgo/srtgo/ktx.py:388``); that code is **0-hit
-    across jadx sources, all three smali trees, ``analysis/raw`` and
-    ``analysis/splits``**, so it is recorded as **third-party-attested only**
-    and is NOT mapped. Note also that the app's *train list* decides sold-out
-    from display strings, not codes — ``"매진"``/``"좌석부족"`` gate the booking
-    button at ``analysis/jadx/sources/a5/u.java:354`` — so a sold-out train is
-    normally never requested at all.
+    srtgo 가 매진 코드로 함께 드는 ``IRT010110`` 은 APK 전체에서 0건이라
+    매핑하지 않았다. 애초에 앱의 열차 목록은 매진을 코드가 아니라 표시
+    문자열로 판단해(``"매진"``/``"좌석부족"``, ``a5/u.java:354``) 예매 버튼
+    자체를 막으므로, 매진 열차는 보통 요청되지도 않는다.
     """
 
 
 class KorailSeatUnavailableError(KorailAppError):
-    """The specific seat request cannot be honoured; the train may still be bookable.
+    """요청한 **좌석** 을 줄 수 없다. 열차는 아직 예약 가능할 수 있다.
 
-    "Do not give up on this train — retry WITHOUT seat designation." Distinct
-    from :class:`KorailSoldOutError`, and the app draws exactly that distinction
-    by offering an alternative instead of a dead end.
+    이 열차를 포기하지 말고 좌석지정 없이 다시 시도하라.
+    :class:`KorailSoldOutError` 와 구분되며, 앱도 막다른 길 대신 대안을
+    제시해 정확히 그 구분을 한다.
 
-    * ``WRI411345`` — ``tss_dialog_no_seat`` = "요청하신 좌석이 이미 판매되었습니다.
-      시스템에서 좌석을 자동으로 배정받으시겠습니까?"
-      (``analysis/apktool/res/values/strings.xml:2046``), shown as a two-button
-      dialog whose second button is 임의 좌석 배정 (assign me any seat) —
-      ``analysis/jadx/sources/com/korail/talk/ui/push/SpecialRoomUpgradeActivity.java:312-313``
-      with the helper at :214-221. Contrast the single-button alert used for
-      ``ERR211161`` three lines below it.
-    * ``ERR911081`` — ``tss_dialog_no_seat_not_allowed_time`` = "좌석선택 가능
-      시간이 지났습니다. 자동으로 좌석을 배정받으시고, 예약을 진행하겠습니까?"
-      (``strings.xml:2047``), again a two-button auto-assign offer at
-      ``analysis/jadx/sources/a5/k.java:215-221``. It is one of the codes the
-      reservation daos suppress the generic dialog for (``analysis/jadx/sources/
-      c5/a.java:178``, ``c5/b.java:133``, ``c5/c.java:132``).
-    * ``WRT800176`` — ``tss_dialog_no_left_seat_not_time`` = "좌석변경 가능시간이
-      아닙니다." (``strings.xml:2045``), at
-      ``analysis/jadx/sources/com/korail/talk/ui/ticket/change/TCSOptionsActivity.java:557``.
+    * ``WRI411345`` — "요청하신 좌석이 이미 판매되었습니다. 시스템에서
+      좌석을 자동으로 배정받으시겠습니까?"(``strings.xml:2046``), 두 번째
+      버튼이 임의 좌석 배정이다(``SpecialRoomUpgradeActivity.java:312-313``).
+    * ``ERR911081`` — "좌석선택 가능 시간이 지났습니다. 자동으로 좌석을
+      배정받으시고, 예약을 진행하겠습니까?"(``strings.xml:2047``), 역시 자동
+      배정 제안이다(``a5/k.java:215-221``).
+    * ``WRT800176`` — "좌석변경 가능시간이 아닙니다."(``strings.xml:2045``,
+      ``TCSOptionsActivity.java:557``).
 
-    This matters directly to :meth:`~korail_mobile_api.client.KorailClient.reserve`,
-    which can designate seats. The library still does not retry on your behalf —
-    a retried reserve is a duplicate booking — so acting on this is the caller's
-    choice.
+    좌석을 지정할 수 있는
+    :meth:`~korail_mobile_api.client.KorailClient.reserve` 에 직접 걸리는
+    이야기다. 이 라이브러리는 대신 재시도하지 않는다 — 다시 보낸 예약은
+    중복 예약이 되므로 판단은 호출자 몫이다.
     """
 
 
 class KorailReservationRefusedError(KorailAppError):
-    """The reservation was refused; the app sends the user to their existing bookings.
+    """예약이 거절됐고, 앱은 사용자를 기존 예약목록으로 보낸다.
 
-    "Retry is pointless as-is; look at what you already hold."
-    ``WRR800029``, ``ERR911531``, ``ERR911051``.
+    ``WRR800029``, ``ERR911531``, ``ERR911051``. 그대로 다시 보내도 소용
+    없다. 이미 갖고 있는 예약을 먼저 보라 —
+    :meth:`~korail_mobile_api.client.KorailClient.get_reservation_history`.
 
-    This is the most heavily attested cluster in the APK after ``P058``. Nine
-    reservation call sites register the three codes together so the generic
-    error dialog is suppressed — ``analysis/jadx/sources/c5/a.java:174-177``,
-    ``c5/b.java:129-132``, ``c5/c.java:128-131``,
-    ``analysis/jadx/sources/com/korail/talk/ui/inquiry/rir/orr/a.java:47-49``,
-    ``.../rir/orr/DirectInquiryActivity.java:339-341``,
-    ``.../booking/mainBooking/MainBookingActivity.java:338-340``,
-    ``.../booking/mainBooking/OldMainBookingActivity.java:216-218``,
-    ``.../reservation/BixbyReservationActivity.java:81-83`` and
-    ``.../ticket/confirm/TicketListActivity.java:886-888`` — and five handlers
-    then show the SERVER's own ``h_msg_txt`` and navigate onward:
-    ``analysis/jadx/sources/a5/k.java:208-214`` (whose callback ``I0`` at :69-71
-    starts ``ReservedTicketActivity``, the user's reservation list),
-    ``MainBookingActivity.java:1605``, ``OldMainBookingActivity.java:966``,
-    ``BixbyReservationActivity.java:63`` and ``TicketListActivity.java:1603``.
+    아홉 개 예약 호출 지점이 이 세 코드를 함께 등록해 일반 오류 대화상자를
+    끄고(``c5/a.java:174-177``, ``c5/b.java:129-132``, ``c5/c.java:128-131``
+    외 여섯 곳), 다섯 개 처리기가 서버의 ``h_msg_txt`` 를 그대로 띄운 뒤
+    예약목록 화면으로 넘긴다(``a5/k.java:208-214`` 의 콜백 ``I0`` 가
+    ``ReservedTicketActivity`` 를 띄운다).
 
-    The app never states WHY, so neither does this class: what the APK proves is
-    that these three are a distinct reserve-path refusal routed to the existing
-    reservations, not a generic error. ``message`` carries the server's own
-    explanation.
+    왜 거절인지는 앱도 말하지 않는다. ``message`` 에 담긴 서버 설명이
+    전부다.
     """
 
 
 class KorailInvalidRequestError(KorailAppError):
-    """The server rejected a field in the request we built; the fix is the input.
+    """요청에 실은 필드를 서버가 거부했다. 고칠 것은 입력이다.
 
-    "Retry is pointless; fix the payload." All three codes are this
-    repository's own live observations and are **0-hit in the APK** — they are
-    field-level validation replies the app's own screens cannot produce, because
-    the app never sends the malformed values we deliberately sent:
+    ``WRG200018`` "입력값오류(PNR번호)", ``WRT100002``
+    "창구번호미입력,미승인창구", ``WRT100124`` "반환번호를 확인해주세요".
+    다시 보내도 소용없다. 값을 고쳐야 한다.
 
-    * ``WRG200018`` "입력값오류(PNR번호)" — a reservation-detail read against an
-      account holding no reservations
-      (``docs/api-status-by-service.md:205``);
-    * ``WRT100002`` "창구번호미입력,미승인창구" — the refund ticket-detail read
-      with no real ticket (``docs/api-status-by-service.md:451``);
-    * ``WRT100124`` "반환번호를 확인해주세요" — the refund commission read, same
-      cause (``docs/api-status-by-service.md:450``).
-
-    Neither korail2 nor srtgo models this condition at all.
+    세 코드 모두 APK 에 0건이다. 앱 화면으로는 만들 수 없는 값 — 예약이
+    없는 계정의 PNR, 실재하지 않는 승차권의 반환번호 — 을 보냈을 때 오는
+    필드 수준 검증 응답이다.
     """
 
 
 class KorailNotEntitledError(KorailAppError):
-    """The account is not entitled to the discount or product requested.
+    """이 계정에 그 할인·상품 자격이 없다. ``ERR299943``.
 
-    "Retry is pointless; this account may not book that fare."
-    ``ERR299943`` "예약할인이 지원되지 않습니다".
+    "예약할인이 지원되지 않습니다". 같은 계정으로 다시 시도해도 소용없다.
 
-    **Live observation only — 0 hits anywhere in the APK.** It is a server-side
-    business rule with no client-side counterpart, seen refusing a 청소년 fare
-    booked alone and a 1~3급 장애 + 안내견 combination, on forms that otherwise
-    matched the app byte for byte (``docs/MUTATION_HANDOFF.md:172-179``,
-    ``CHANGELOG.md:57-60``). Distinguished from
-    :class:`KorailInvalidRequestError` because the payload is well-formed: the
-    request is refused for who is asking, not for what was sent.
+    APK 에는 0건이고 서버 쪽 업무 규칙으로만 존재한다. 청소년 운임 1명
+    단독 예약과 1~3급 장애 + 안내견 조합에서 관측됐고, 둘 다 폼은 앱과
+    바이트 단위로 같았다. 폼이 정상이라는 점에서
+    :class:`KorailInvalidRequestError` 와 다르다 — 무엇을 보냈느냐가 아니라
+    누가 묻느냐로 거절된 것이다.
+
+    계정이 어떤 자격을 갖고 있는지는
+    :meth:`~korail_mobile_api.client.KorailClient.get_korail_point_summary`
+    의 ``disability_flag`` 로 짐작할 수 있다.
     """
 
 
 class KorailServiceUnavailableError(KorailAppError):
-    """KORAIL declared the service itself unavailable. ``SEMGTK``.
+    """KORAIL 이 서비스 자체를 불가로 선언했다. ``SEMGTK``.
 
-    "Retry is pointless right now; the back end is down, not your request."
+    지금 다시 보내도 소용없다. 요청이 아니라 백엔드가 내려간 것이다.
 
-    The app checks this ahead of every other code and converts it into its
-    offline-fallback error class ``R4.b``
-    (``analysis/jadx/sources/com/korail/talk/view/base/BaseActivity.java:608-609``;
-    mirrored at ``analysis/jadx/sources/l4/h.java:384-385``), which is dispatched
-    to a two-button dialog offering the saved-ticket screen rather than the
-    generic error alert
-    (``analysis/jadx/sources/com/korail/talk/view/base/BaseActivity.java:298-301``,
-    ``:358-366``). ``R4.b``'s default text is
-    "인터넷 연결상태(WiFi, 4G, 5G)가 좋지 않습니다.\\n\\n저장된 승차권 화면으로
-    이동하시겠습니까?" (``analysis/jadx/sources/R4/b.java:5-7``).
+    앱은 다른 어떤 코드보다 먼저 이것을 검사해 오프라인 대체 오류 ``R4.b``
+    로 바꾸고(``BaseActivity.java:608-609``), 일반 오류 알림 대신 저장된
+    승차권 화면으로 갈지 묻는 두 버튼 대화상자를 띄운다(``:298-301``,
+    ``:358-366``).
     """
 
 
 class KorailAppUpdateRequiredError(KorailAppError):
-    """The server refused this client version and demands an app update. ``SUPDATE``.
+    """서버가 이 클라이언트 버전을 거부하고 앱 업데이트를 요구한다. ``SUPDATE``.
 
-    "Retry is pointless at any interval; the client is what is rejected."
+    간격을 두고 다시 보내도 소용없다. 거부당한 것은 요청이 아니라
+    클라이언트다.
 
-    ``analysis/jadx/sources/com/korail/talk/view/base/BaseActivity.java:613-619``
-    gives this its own dialog, whose button handler sends the user to Google
-    Play. It is the only code the app answers by leaving the app entirely.
+    앱은 이 코드에만 별도 대화상자를 주고 버튼을 누르면 Google Play 로
+    보낸다(``BaseActivity.java:613-619``). 앱을 떠나는 것으로 답하는 유일한
+    코드다.
 
-    A caller seeing this should expect that
-    :data:`~korail_mobile_api.constants.KORAIL_API_VERSION` — the ``Version``
-    field this library sends on every request — has been superseded.
+    이 예외를 보면 이 패키지가 매 요청에 싣는 ``Version`` 값
+    :data:`~korail_mobile_api.constants.KORAIL_API_VERSION` 이 낡았다고
+    보면 된다.
     """
 
 
 class KorailNetFunnelError(KorailApiError):
-    """The NetFunnel virtual waiting room refused, malfunctioned, or kept us.
+    """NetFunnel 대기열이 거절했거나 오작동했거나 우리를 계속 붙잡았다.
 
-    Raised by :mod:`korail_mobile_api.netfunnel` for every queue outcome that is
-    neither a pass (200/300) nor a wait (201/202), and for the two bounds this
-    library puts on a wait that the app does not: a hard poll count and a hard
-    wall-clock ceiling. ``code`` is the queue's own 3-digit status
-    (``T6/a.java``) when there was one, and ``None`` when the reply could not be
-    parsed at all.
+    :mod:`korail_mobile_api.netfunnel` 이 통과(200/300)도 대기(201/202)도
+    아닌 모든 결과에서 올린다. 앱에는 없고 이 라이브러리만 두는 두 가지
+    상한 — 폴링 횟수와 총 시간 — 을 넘겼을 때도 같은 예외다.
 
-    This is NOT a :class:`KorailAppError`. Nothing here comes from
-    ``smart.letskorail.com`` or carries an ``h_msg_cd``; the queue is a separate
-    host with a separate protocol, and conflating the two would put a queue
-    status into a code map that only ever describes application failures.
+    ``code`` 는 대기열 자신의 세 자리 상태값(``T6/a.java``)이고, 응답을
+    아예 파싱하지 못했으면 ``None`` 이다.
 
-    **A caller who has never seen one of these is the normal case.** The queue
-    has never engaged for this repository — every live call has succeeded
-    without a token — so in practice this exception means either that the server
-    has started metering us, or that the response shape assumption documented in
-    :mod:`korail_mobile_api.netfunnel` is wrong.
+    :class:`KorailAppError` 가 **아니다**. 여기 오는 것은
+    ``smart.letskorail.com`` 이 아니라 다른 호스트의 다른 프로토콜이고
+    ``h_msg_cd`` 를 갖지 않는다.
+
+    이 예외를 본 적 없는 것이 정상이다. 대기열이 실제로 걸린 관측은 없다 —
+    이것을 봤다면 서버가 우리에게 계량을 시작했거나,
+    :mod:`korail_mobile_api.netfunnel` 이 가정한 응답 모양이 틀린 것이다.
     """
 
     def __init__(
@@ -385,34 +400,32 @@ class KorailNetFunnelError(KorailApiError):
 
 
 class KorailQueueRejectedError(KorailNetFunnelError):
-    """The waiting room refused us outright. ``TsBlock`` (301) / ``TsIpBlock`` (302).
+    """대기열이 아예 돌려보냈다. ``TsBlock``(301) / ``TsIpBlock``(302).
 
-    "Retry is pointless right now; you were turned away, not merely queued."
+    지금 다시 보내도 소용없다. 줄을 선 것이 아니라 쫓겨난 것이다.
 
-    The app draws exactly this distinction rather than folding the pair into its
-    generic error path: ``T6/g.d`` gives blocking its own predicate,
-    ``isBlocking()`` (``analysis/jadx/sources/T6/g.java:892-894``), separate from
-    the ``isError()`` immediately below it, and dispatches ``Block``/``IpBlock``
-    as their own states. Both still raise here — a refusal is not a wait, and a
-    wait is the only non-failure that is not a pass — but as this subclass, so a
-    caller can tell "the queue turned me away" from "the queue broke" without
-    reading the numeric code.
+    앱도 이 둘을 일반 오류와 섞지 않는다. ``T6/g.d`` 는 차단에만 따로
+    ``isBlocking()`` 술어를 두고(``T6/g.java:892-894``) ``Block``/``IpBlock``
+    을 별도 상태로 보낸다. 여기서도 둘 다 예외이되 이 하위 클래스로 올려,
+    숫자 코드를 읽지 않고도 "쫓겨났다"와 "대기열이 고장났다"를 가릴 수 있게
+    한다.
 
-    ``TsExpressNumber`` (303) is deliberately NOT mapped here. The app counts it
-    as a SUCCESS (``T6/g.java:909``, where ``isSuccess()`` lists
-    ``ExpressNumber``), this repository has never observed one, and guessing an
-    admission into the refusal bucket would be worse than leaving it in the
-    generic error path.
+    ``TsExpressNumber``(303)는 여기 넣지 않았다. 앱이 그것을 성공으로
+    치고(``T6/g.java:909``의 ``isSuccess()``), 관측된 적도 없다.
     """
 
 
 class KorailMutationNotAllowedError(KorailApiError):
-    """A state-changing request was attempted without matching consent.
+    """consent 없이 상태변경 요청을 시도했다.
 
-    Raised by ``require_mutation_consent`` when no ``MutationConsent`` is
-    supplied, when the supplied object is not a ``MutationConsent``, or when
-    the matching per-category ``allow_<category>`` opt-in is False. It fires
-    before any request is built or sent, keeping mutations off by default.
+    :func:`~korail_mobile_api.consent.require_mutation_consent` 가 올린다.
+    ``MutationConsent`` 를 아예 넘기지 않았거나, 넘긴 것이
+    :class:`~korail_mobile_api.consent.MutationConsent` 가 아니거나, 해당
+    범주의 ``allow_<범주>`` 가 거짓일 때다. 폼을 만들기도 전에 걸리므로
+    아무것도 전송되지 않는다.
+
+    :class:`KorailAppError` 가 아니다 — 서버가 아니라 이 라이브러리가
+    막은 것이다. 고치려면 그 범주를 허용한 consent 를 넘겨라.
     """
 
 
@@ -443,12 +456,11 @@ class KorailMutationNotAllowedError(KorailApiError):
 #   IRZ000001 / S200   login success (S4/u.java:131)
 #   IRT000000 / MRT200105  upgrade quote accepted (ui/push/SpecialRoomUpgradeActivity.java:55)
 #
-# and this repository has its own live proof: WRR664296 ("KTX/새마을호/ITX-청춘
-# 열차의 경로 및 장애인(4-6급)할인은 토/일/공휴일에는 적용되지 않습니다.") arrived
-# with strResult=SUCC and a real, cancelable PNR -- a WARNING attached to a
-# SUCCESSFUL reservation (docs/MUTATION_HANDOFF.md:181-184, CHANGELOG.md:61-64).
-# Because classification never introduces a raise, none of these can become an
-# error here. tests/test_error_classification.py pins that.
+# and WRR664296 ("KTX/새마을호/ITX-청춘 열차의 경로 및 장애인(4-6급)할인은
+# 토/일/공휴일에는 적용되지 않습니다.") arrives with strResult=SUCC and a real,
+# cancelable PNR -- a WARNING attached to a SUCCESSFUL reservation. Because
+# classification never introduces a raise, none of these can become an error
+# here. tests/test_error_classification.py pins that.
 #
 # NOT ENCODED, deliberately:
 #   IRT010110  srtgo's second sold-out code (srtgo/srtgo/ktx.py:388) -- 0-hit in
@@ -471,39 +483,39 @@ class KorailMutationNotAllowedError(KorailApiError):
 #              would mean matching Korean text, which is the practice this map
 #              exists to replace. Its trigger is unconfirmed -- plausibly rate
 #              limiting, plausibly a DynaPath or session problem. It surfaces as
-#              a plain KorailAppError with its message intact; see the taxonomy
-#              section of README.md.
+#              a plain KorailAppError with its message intact.
 # ---------------------------------------------------------------------------
 
-#: Request understood, nothing matched. ``WRG000000``/``P114`` are APK-attested
-#: as empty-view states; ``P100``/``WRT300005`` are live-observed only.
+#: 요청은 이해됐고 맞는 것이 없었다. ``WRG000000``/``P114`` 는 앱이 빈 화면
+#: 상태로 다루는 것이 APK 로 확인되고, ``P100``/``WRT300005`` 는 실제 응답에서만
+#: 관측됐다.
 NO_RESULT_CODES = frozenset({"WRG000000", "P114", "P100", "WRT300005"})
 
-#: No direct train; the app re-asks the same query as a transfer search.
+#: 직통이 없다. 앱은 같은 질의를 환승 검색으로 다시 보낸다.
 NO_DIRECT_TRAIN_CODE = "WRD000061"
 
-#: Inventory exhausted. APK-attested; srtgo's ``IRT010110`` is not included.
+#: 재고 소진. APK 확인. srtgo 의 ``IRT010110`` 은 0건이라 넣지 않았다.
 SOLD_OUT_CODES = frozenset({"ERR211161"})
 
-#: The designated seat cannot be given, but the train may still be bookable.
+#: 지정한 좌석은 줄 수 없으나 열차는 아직 예약 가능할 수 있다.
 SEAT_UNAVAILABLE_CODES = frozenset({"WRI411345", "ERR911081", "WRT800176"})
 
-#: Reserve refused; the app routes the user to their existing reservations.
+#: 예약 거절. 앱은 사용자를 기존 예약목록으로 보낸다.
 RESERVATION_REFUSED_CODES = frozenset({"WRR800029", "ERR911531", "ERR911051"})
 
-#: Field-level validation replies. Live-observed only; 0-hit in the APK.
+#: 필드 수준 검증 응답. 실제 응답에서만 관측됐고 APK 에는 0건이다.
 INVALID_REQUEST_CODES = frozenset({"WRG200018", "WRT100002", "WRT100124"})
 
-#: The account lacks the entitlement. Live-observed only; 0-hit in the APK.
+#: 계정에 자격이 없다. 실제 응답에서만 관측됐고 APK 에는 0건이다.
 NOT_ENTITLED_CODES = frozenset({"ERR299943"})
 
-#: Back end declared unavailable; the app offers its offline ticket screen.
+#: 백엔드 불가 선언. 앱은 오프라인 승차권 화면을 제안한다.
 SERVICE_UNAVAILABLE_CODE = "SEMGTK"
 
-#: This client version is refused; the app sends the user to Google Play.
+#: 이 클라이언트 버전이 거부됐다. 앱은 사용자를 Google Play 로 보낸다.
 APP_UPDATE_REQUIRED_CODE = "SUPDATE"
 
-#: Session expired. Handled before this map, by :class:`KorailSessionExpiredError`.
+#: 세션 만료. 이 매핑보다 앞에서 :class:`KorailSessionExpiredError` 로 처리된다.
 SESSION_EXPIRED_CODE = "P058"
 
 _APP_ERROR_BY_CODE: dict[str, type[KorailAppError]] = {
@@ -528,23 +540,20 @@ def classify_app_error(
     *,
     raw: object | None = None,
 ) -> KorailAppError:
-    """Build the most specific :class:`KorailAppError` the ``h_msg_cd`` justifies.
+    """``h_msg_cd`` 가 뒷받침하는 가장 구체적인 :class:`KorailAppError` 를 만든다.
 
-    Returns rather than raises, so each call site keeps its own ``raise`` and its
-    own traceback. An unknown or absent code yields a plain
-    :class:`KorailAppError` — the pre-existing behaviour, unchanged — and every
-    result carries ``code``/``message``/``raw`` exactly as before, so a caller
-    can migrate incrementally and so the map above can be grown from real
-    traffic.
+    올리지 않고 **돌려준다**. 각 호출 지점이 자기 ``raise`` 와 자기 트레이스백을
+    유지하게 하기 위해서다. 모르는 코드나 코드 없음은 밋밋한
+    :class:`KorailAppError` 가 되고, 어느 경우든 ``code``/``message``/``raw``
+    는 그대로 실린다.
 
-    This function decides only WHICH exception describes a failure, never
-    WHETHER there is one. Call it where a :class:`KorailAppError` was already
-    about to be raised; passing it a successful response's code would invent a
-    failure the server did not report.
+    이 함수는 실패를 **어느 예외로 부를지** 만 정하고 실패인지 아닌지는 정하지
+    않는다. 이미 :class:`KorailAppError` 를 올리기로 한 자리에서만 불러라 —
+    성공 응답의 코드를 넘기면 서버가 알리지도 않은 실패를 만들어 내게 된다.
 
-    ``P058`` is not handled here: it is answered by
-    :class:`KorailSessionExpiredError`, which is a :class:`KorailAuthError` and
-    not a :class:`KorailAppError`, and is raised before this map is consulted.
+    ``P058`` 은 여기서 다루지 않는다. 이 매핑을 보기 전에
+    :class:`KorailSessionExpiredError` 로 처리되며, 그것은
+    :class:`KorailAuthError` 이지 :class:`KorailAppError` 가 아니다.
     """
     subclass = _APP_ERROR_BY_CODE.get(code or "", KorailAppError)
     return subclass(code, message, raw=raw)

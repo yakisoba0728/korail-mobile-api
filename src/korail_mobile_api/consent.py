@@ -1,24 +1,18 @@
-"""Safe-by-default consent and preview types for KORAIL mutations.
+"""상태변경 요청의 동의(consent)와 dry-run 미리보기 타입.
 
-This module is pure infrastructure: it carries the opt-in and dry-run preview
-types that every future mutation method will use, but it adds no capability to
-send a state-changing request. Nothing here performs I/O.
+이 모듈 자체는 아무것도 전송하지 않는다. 상태변경 메서드가 요구하는 게이트
+타입과, 전송 대신 돌아오는 미리보기 타입만 있다. I/O 없음.
 
-The safety posture is:
+기본값이 전부 막는 쪽이다.
 
-* A freshly constructed :class:`MutationConsent` grants nothing — every
-  per-category ``allow_*`` flag defaults to ``False``.
-* ``dry_run`` defaults to ``True``: a mutation call builds and validates its
-  request, then returns a :class:`MutationPreview` **without sending**.
-* ``fake_card_only`` defaults to ``True`` and ``real_card_acknowledged``
-  defaults to ``False``, so a default consent can only ever carry a
-  non-chargeable test card. A real, chargeable card requires the caller to
-  invert BOTH flags explicitly (``fake_card_only=False,
-  real_card_acknowledged=True``); setting neither, or setting both, is refused
-  at the transmit gate.
-* :func:`require_mutation_consent` denies by default, raising
-  :class:`~korail_mobile_api.errors.KorailMutationNotAllowedError` before any request
-  is built unless the caller has explicitly opted into the exact category.
+* 갓 만든 :class:`MutationConsent` 는 아무 범주도 허용하지 않는다 —
+  ``allow_*`` 가 전부 ``False``.
+* ``dry_run`` 이 ``True`` 라, 상태변경 호출은 폼을 만들고 검증한 뒤
+  :class:`MutationPreview` 를 돌려주며 **보내지 않는다**.
+* 카드 종류 주장은 :class:`MutationConsent` 의 ``fake_card_only`` /
+  ``real_card_acknowledged`` 두 플래그가 정한다. 규칙은 그 클래스에 적었다.
+* :func:`require_mutation_consent` 는 폼을 만들기도 전에 막고
+  :class:`~korail_mobile_api.errors.KorailMutationNotAllowedError` 를 올린다.
 """
 
 from __future__ import annotations
@@ -96,81 +90,64 @@ class MutationConsent:
     allow_payment: bool = False
     allow_cancel: bool = False
     allow_refund: bool = False
-    #: 할인카드(N카드) registration and 기간연장. A SEPARATE category rather
-    #: than a reuse of ``allow_reserve``, because these two routes buy and
-    #: extend a product: ``research.dcntCrdInfo.do`` answers with a
-    #: ``lumpStlTgtNo`` that a payment then settles, and
-    #: ``reservation.dcntCrdExtn.do`` extends a card's validity against its
-    #: ticket credential. Nobody who opted into placing a train reservation
-    #: also opted into buying a discount card, and no live-test path in this
-    #: repository exercises this category.
+    #: 할인카드(N카드) 등록과 기간연장. ``allow_reserve`` 를 재사용하지 않고
+    #: 따로 둔 것은 이 두 경로가 상품을 사고 늘리기 때문이다 —
+    #: ``research.dcntCrdInfo.do`` 는 결제가 정산할 ``lumpStlTgtNo`` 를
+    #: 돌려주고, ``reservation.dcntCrdExtn.do`` 는 카드의 유효기간을 늘린다.
+    #: 열차 예약을 허락한 사람이 할인카드 구매까지 허락한 것은 아니다.
+    #: 이 범주는 실제 서버에 대고 시험된 적이 없다.
     allow_discount_card: bool = False
-    #: 보류된 PNR의 운임 재계산 (``certification.PriceReCalculation``). A
-    #: category of its own, and deliberately NOT a reuse of any existing one.
+    #: 보류된 PNR 의 운임 재계산(``certification.PriceReCalculation``).
     #:
-    #: It is not ``allow_reserve``: the hold already exists and this creates
-    #: nothing. It is not ``allow_cancel``/``allow_refund``: it destroys
-    #: nothing. It is emphatically not ``allow_payment`` — that is the reuse
-    #: that would actually be dangerous. A payment consent authorises settling
-    #: a specific, already-quoted amount; this route REWRITES that amount
-    #: server-side before it is settled, so folding it into ``allow_payment``
-    #: would let a consent granted to pay ₩X silently authorise changing what
-    #: ₩X is. And it is not ``allow_discount_card``: that category buys and
-    #: extends a 할인카드 product, whereas this one applies discounts to a
-    #: train reservation and never touches a card.
-    #:
-    #: Nobody who granted any of the five existing categories was asked about
-    #: re-pricing a held booking, so it is asked for separately. No live-test
-    #: path in this repository exercises it.
+    #: 특히 ``allow_payment`` 와 합치지 않았다. 결제 동의는 **이미 제시된
+    #: 특정 금액** 을 정산하라는 뜻인데, 이 경로는 정산 전에 그 금액을 서버
+    #: 쪽에서 다시 쓴다. 합쳤다면 "₩X 를 내라"는 동의가 "₩X 가 얼마인지를
+    #: 바꿔도 좋다"까지 뜻하게 된다. 예약을 만들지도 지우지도 않으므로
+    #: ``allow_reserve``/``allow_cancel``/``allow_refund`` 도 아니고, 카드를
+    #: 건드리지 않으므로 ``allow_discount_card`` 도 아니다.
+    #: 이 범주는 실제 서버에 대고 시험된 적이 없다.
     allow_price_recalculation: bool = False
-    #: 장바구니에 승차권 담기 (``cart.addCartList``,
-    #: ``CartService.java:11-13``). Its own category rather than a reuse of
-    #: ``allow_reserve``: it acts on a PNR that already exists, creates and
-    #: destroys nothing this package can observe, and carries no card number.
-    #: No live-test path in this repository exercises it.
+    #: 장바구니에 승차권 담기(``cart.addCartList``,
+    #: ``CartService.java:11-13``). 이미 존재하는 PNR 에 작용할 뿐 무엇을
+    #: 만들지도 지우지도 않고 카드번호도 싣지 않아 ``allow_reserve`` 와
+    #: 별개다. 이 범주는 실제 서버에 대고 시험된 적이 없다.
     allow_cart: bool = False
     dry_run: bool = True
     fake_card_only: bool = True
-    #: The caller acknowledges that a real, chargeable PAN will be transmitted
-    #: in the clear and that money will actually move. Never inferred, never
-    #: defaulted on; see the class docstring.
+    #: 실제로 청구되는 카드번호가 평문으로 나가고 돈이 실제로 움직인다는 것을
+    #: 호출자가 인정한다는 표시. 추론되지도 기본으로 켜지지도 않는다. 규칙은
+    #: 클래스 docstring 에 있다.
     real_card_acknowledged: bool = False
 
 
 @dataclass(frozen=True)
 class MutationPreview:
-    """The result of a dry-run mutation call: a described-but-unsent request.
+    """dry-run 이 돌려주는 것 — 만들어졌지만 전송되지 않은 요청.
 
-    ``payload`` is always stored redacted — it is passed through
-    :func:`~korail_mobile_api.redaction.redact_payload` on construction, so a
-    ``MutationPreview`` can never hold a raw PAN, a password, a name, a phone
-    number or a membership/customer number regardless of what the caller
-    supplies. ``note`` documents that nothing was transmitted.
+    ``payload`` 는 생성 시점에
+    :func:`~korail_mobile_api.redaction.redact_payload` 를 통과해 저장되므로,
+    호출자가 무엇을 넣었든 카드번호·비밀번호·이름·전화번호·회원번호가 그대로
+    남지 않는다. ``note`` 는 전송되지 않았다는 표시다.
 
-    What that does NOT cover, stated plainly because the sentence above used
-    to say "or PII" and that was too broad: redaction masks the values a
-    human can read, not the **codes** that stand for them. A preview of a
-    운임 재계산 keeps ``hidDcntKndCd`` / ``dcnt_knd_cd1`` in the clear, and
-    those code tables include 국가유공자 (``a6/C1042B.java:140``), 장애인
-    보호자 (``a6/s.java:441``) and 국회의원 (``:442``) — special-category
-    facts about a person, spelled as digits. The same asymmetry runs through
-    the package on purpose (``is_sensitive_key("psgTpDvNm")`` is True,
-    ``is_sensitive_key("psg_tp_dv_cd")`` is False), and the read parsers
-    return the same codes unmasked. It is survivable here because every
-    linking identifier in the same preview (``hidPnrNo``, ``hidCustNo``,
-    ``hidDscpNo``, ``hidFmlyNo``) IS masked, so a code cannot be attached to
-    a person, and because the value is the caller's own input coming back
-    inside their own process. Treat a preview as sensitive anyway before
-    logging it somewhere a third party reads.
+    **마스킹되는 것은 사람이 읽는 값이지 그 값을 대신하는 코드가 아니다.**
+    운임 재계산 미리보기에서 ``hidDcntKndCd``/``dcnt_knd_cd1`` 은 평문으로
+    남고, 그 코드표에는 국가유공자(``a6/C1042B.java:140``), 장애인
+    보호자(``a6/s.java:441``), 국회의원(``:442``)이 들어 있다 — 숫자로 적힌
+    민감정보다. 패키지 전체가 같은 비대칭을 갖는다
+    (``is_sensitive_key("psgTpDvNm")`` 는 참, ``("psg_tp_dv_cd")`` 는 거짓).
+
+    같은 미리보기 안의 연결 식별자(``hidPnrNo``, ``hidCustNo``,
+    ``hidDscpNo``, ``hidFmlyNo``)는 모두 마스킹되므로 코드를 사람에게 붙일
+    수는 없다. 그래도 제3자가 읽는 곳에 남기기 전에는 미리보기 전체를
+    민감정보로 다뤄라.
     """
 
     category: str
     method: str
     route: str
-    #: A list value is legitimate here, not an anomaly: ``redact_payload``
-    #: preserves repeated wire keys as a list, and the app itself declares six
-    #: ``@Field List<String>`` parameters on 운임 재계산
-    #: (``CertificationService.java:35-37``).
+    #: 값이 리스트인 것은 이상 상황이 아니다. ``redact_payload`` 는 같은 키가
+    #: 반복되는 폼을 리스트로 보존하고, 앱도 운임 재계산에 여섯 개의
+    #: ``@Field List<String>`` 를 선언한다(``CertificationService.java:35-37``).
     payload: Mapping[str, str | list[str]]
     note: str = "dry-run: not sent"
 
@@ -182,22 +159,18 @@ def require_mutation_consent(
     consent: MutationConsent | None,
     category: MutationCategory,
 ) -> None:
-    """Deny a mutation unless ``consent`` explicitly opts into ``category``.
+    """``consent`` 가 ``category`` 를 명시적으로 허용하지 않으면 막는다.
 
-    ``category`` must be one of ``"reserve"``, ``"payment"``, ``"cancel"``,
-    ``"refund"``, ``"discount_card"``, ``"price_recalculation"``,
-    ``"cart"`` — the parameter's type is
-    :data:`~korail_mobile_api.consent.MutationCategory`, so a type checker
-    completes the seven and rejects anything else. The runtime form of the same
-    list is :data:`~korail_mobile_api.consent.MUTATION_CATEGORIES`, importable
-    as ``from korail_mobile_api.consent import MUTATION_CATEGORIES``. That tuple
-    stays off the top level: it is ordered, and an eighth category would change
-    what its order and length promise. The ``Literal`` has neither property, so
-    widening it later is additive.
-    Raises :class:`~korail_mobile_api.errors.KorailMutationNotAllowedError`
-    when ``consent`` is ``None``, is not a :class:`MutationConsent`, names an
-    unknown category, or when the matching ``allow_<category>`` flag is False.
-    Returns ``None`` when the mutation is permitted. Performs no I/O.
+    ``category`` 는 :data:`MutationCategory` 의 일곱 값 중 하나다. 타입이
+    ``Literal`` 이라 타입 검사기가 일곱 개를 완성해 주고 그 밖의 값을
+    거부한다. 런타임에 같은 목록이 필요하면
+    :data:`MUTATION_CATEGORIES` 를 쓴다 — 순서와 길이를 약속하는 튜플이라
+    최상위로 내보내지 않는다.
+
+    ``consent`` 가 ``None`` 이거나 :class:`MutationConsent` 가 아니거나,
+    모르는 범주이거나, 해당 ``allow_<범주>`` 가 거짓이면
+    :class:`~korail_mobile_api.errors.KorailMutationNotAllowedError` 를
+    올린다. 허용되면 ``None`` 을 돌려준다. I/O 없음.
     """
     flag = _CONSENT_FLAG_BY_CATEGORY.get(category)
     if flag is None:

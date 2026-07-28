@@ -1,3 +1,15 @@
+"""공통 응답 봉투와 열차 검색·좌석 조회가 돌려주는 타입.
+
+전부 ``frozen=True`` 데이터클래스다. 서버가 준 원본은 어느 모델에서든
+``raw`` 에 그대로 남아 있으므로, 이 패키지가 이름을 붙이지 않은 필드도
+거기서 꺼낼 수 있다. ``repr=False`` 인 필드는 로그에 실수로 찍히지 않게
+표현에서 뺀 것이지 값이 없는 것이 아니다.
+
+승차권·환불·마이페이지 쪽 읽기 모델은
+:mod:`korail_mobile_api.read_models`, 상태변경 요청·응답 모델은
+:mod:`korail_mobile_api.mutation_models` 에 있다.
+"""
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -10,6 +22,21 @@ from .errors import KorailProtocolError
 
 @dataclass(frozen=True)
 class KorailSession:
+    """로그인이 남긴 것 — 쿠키와 계정 식별자들.
+
+    :meth:`~korail_mobile_api.client.KorailClient.login` 이 돌려주고 같은
+    값이 ``client.session.current`` 에 남는다.
+
+    ``jsessionid`` 는 이후 요청에 붙는 세션 쿠키다. ``customer_no``
+    (``strCustNo``)는 회원번호가 아니라 고객번호이고,
+    :meth:`~korail_mobile_api.client.KorailClient.get_customer_trip_info` 와
+    :meth:`~korail_mobile_api.client.KorailClient.get_recent_delivery_history`
+    가 따로 요구하는 값이다. ``member_card_no`` 는 열차 검색 폼에
+    ``mbCrdNo`` 로 함께 실린다.
+
+    전부 ``repr=False`` 다 — 세션을 통째로 찍어도 자격증명이 새지 않는다.
+    """
+
     jsessionid: str | None = field(default=None, repr=False)
     member_no: str | None = field(default=None, repr=False)
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
@@ -19,6 +46,17 @@ class KorailSession:
 
 @dataclass(frozen=True)
 class BaseKorailResponse:
+    """모든 응답이 공유하는 봉투. 다른 응답 모델은 전부 이것을 상속한다.
+
+    ``str_result``(``strResult``)가 성공/실패를 정하는 유일한 값이다.
+    ``h_msg_cd``/``h_msg_txt`` 는 서버의 코드와 문구이며, 성공에 경고가
+    딸려 오는 경우가 있으므로 코드가 있다고 실패인 것이 아니다. 실패일 때
+    코드가 어느 예외가 되는지는
+    :func:`~korail_mobile_api.errors.classify_app_error` 를 보라.
+
+    ``raw`` 는 파싱 전 JSON 전체다.
+    """
+
     h_msg_cd: str | None = None
     h_msg_txt: str | None = None
     str_result: str | None = None
@@ -26,6 +64,13 @@ class BaseKorailResponse:
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
+        """봉투 세 필드를 검증하며 응답을 만든다.
+
+        ``h_msg_cd``/``h_msg_txt``/``strResult`` 중 하나라도 없거나
+        문자열도 ``null`` 도 아니면
+        :class:`~korail_mobile_api.errors.KorailProtocolError` 다. 값이
+        무엇인지는 보지 않는다 — 실패 판정은 호출자 몫이다.
+        """
         if not isinstance(raw, dict):
             raise KorailProtocolError("KORAIL response must be a JSON object")
         envelope_fields = ("h_msg_cd", "h_msg_txt", "strResult")
@@ -128,6 +173,16 @@ class MaasMenuListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class KorailStation:
+    """역 하나. :meth:`~korail_mobile_api.client.KorailClient.get_station_data`
+    가 주는 전체 역 목록의 한 줄이다.
+
+    ``code`` 와 ``name`` 이 짝이다. 열차 검색 폼에는 코드가 아니라 **이름** 이
+    나가므로, 코드로 검색하면 클라이언트가 이 목록을 한 번 조회해 이름으로
+    바꾼다.
+
+    ``popup_*`` 는 그 역을 고르면 앱이 띄우는 안내다(공사 중 등).
+    """
+
     code: str
     name: str
     longitude: str | None = None
@@ -271,6 +326,22 @@ class LoginCryptoInfo:
 
 @dataclass(frozen=True)
 class TrainSearchQuery:
+    """열차 검색 한 번의 조건.
+
+    두 역 필드는 역코드와 역이름을 **둘 다** 받는다. 이름은 그대로 나가고,
+    코드를 주면 클라이언트가 역 목록을 조회해 이름으로 바꾼다. 날짜는
+    ``YYYYMMDD``, 시각은 ``HHMMSS`` 이며 그 시각 **이후** 열차를 준다.
+
+    ``train_group_code`` 기본값 ``"109"`` 는 ``K4/s.java:5`` 의
+    ``ALL("전체", "109")``, 즉 열차 종류 제한 없음이다. ``include_srt`` 는
+    ``ebizCrossCheck``/``srtCheckYn`` 한 쌍을 ``"Y"`` 로 만든다 — 앱은 이
+    둘을 항상 같은 값으로 보낸다.
+
+    :meth:`~korail_mobile_api.client.KorailClient.search_trains` 와
+    :meth:`~korail_mobile_api.client.KorailClient.search_transfer_trains` 가
+    같은 질의 객체를 받는다.
+    """
+
     departure_station_code: str
     arrival_station_code: str
     departure_date: str
@@ -281,29 +352,23 @@ class TrainSearchQuery:
 
 
 def _train_scalar(value: Any, key: str) -> str | None:
-    """One search-row field, accepted as a JSON string OR a JSON number.
+    """검색 행의 필드 하나를 JSON 문자열로도 JSON 숫자로도 받아들인다.
 
-    The same seam ``read_parsers._optional_scalar_string`` documents, applied
-    to the search row. KORAIL is not consistent about which of the two it
-    sends for a field the APK declares as a Java ``String``, and the app never
-    notices: these rows are deserialized by Gson, whose
-    ``JsonReader.nextString()`` coerces a JSON number into its string form and
-    forwards it verbatim. So a row that arrives with ``"h_dpt_tm": 63000``
-    books fine in the app, and rejecting it here would refuse a train the app
-    would have reserved -- this seam has already produced three live findings,
-    the last of which (``h_srcar_no`` as a JSON number) killed a live reserve
-    on 2026-07-25.
+    KORAIL 은 APK 가 Java ``String`` 으로 선언한 필드를 둘 중 어느 쪽으로
+    보낼지 일관되지 않고, 앱은 그것을 알아채지 못한다 — 이 행들은 Gson 이
+    역직렬화하는데 ``JsonReader.nextString()`` 이 JSON 숫자를 문자열로
+    강제하기 때문이다. 그래서 ``"h_dpt_tm": 63000`` 으로 온 행도 앱에서는
+    정상 예매되고, 여기서 거부하면 앱이라면 예약했을 열차를 거부하게 된다.
 
-    Accepting both is not accepting anything. A ``bool``, a ``float``, a list
-    or an object is still a protocol error: Gson would not have taken those
-    for a String either, and stringifying one would hide a genuinely different
-    response.
+    둘을 받는 것이 아무거나 받는 것은 아니다. ``bool``, ``float``, 리스트,
+    객체는 여전히
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다 — Gson 도 그런
+    것을 String 으로 받지 않고, 문자열로 바꿔 넘기면 정말로 달라진 응답을
+    가리게 된다.
 
-    NOTE this cannot restore a width the server already dropped. If KORAIL
-    sends ``63000`` for a six-digit ``h_dpt_tm``, the leading zero was gone
-    before the bytes arrived; the downstream ``_required_pattern`` /
-    ``_required_digits`` gates in ``mutation_payloads`` are what catch that,
-    and they still do.
+    서버가 이미 떨군 자릿수를 되살리지는 못한다. 여섯 자리
+    ``h_dpt_tm`` 이 ``63000`` 으로 왔다면 앞의 0 은 바이트가 도착하기 전에
+    사라진 것이다. 그것은 ``mutation_payloads`` 의 자릿수 검사가 잡는다.
     """
     if value is None or isinstance(value, str):
         return value
@@ -337,6 +402,25 @@ def _train_optional_int(
 
 @dataclass(frozen=True)
 class TrainSummary:
+    """열차 검색 결과의 한 행. 예약 폼이 필요한 값이 전부 여기 있다.
+
+    :meth:`~korail_mobile_api.client.KorailClient.reserve` 는 이 객체를
+    그대로 받는다 — 열차번호·역코드·날짜·시각을 손으로 옮겨 적을 일이 없다.
+
+    좌석 여유는 이름이 비슷한 코드가 여럿이라 헷갈리기 쉽다.
+    ``general_reservation_code``/``special_reservation_code`` 는 일반실·특실의
+    예약 가능 코드이고, ``general_availability_name``/
+    ``special_availability_name`` 이 앱이 화면에 찍는 문구다(``"매진"``,
+    ``"좌석부족"`` 등). 앱은 예매 버튼을 코드가 아니라 이 **문구** 로 막는다
+    (``a5/u.java:354``).
+
+    예약대기 가능 여부는 ``wait_reservation_flag`` 하나로 정해지며 값이
+    :data:`~korail_mobile_api.constants.KORAIL_STANDBY_WAIT_FLAG` 와 같을
+    때뿐이다.
+
+    ``raw`` 에 서버 원본 행이 그대로 있다.
+    """
+
     train_no: str
     train_group_code: str | None = None
     departure_station_code: str | None = None
@@ -394,46 +478,38 @@ class TrainSummary:
     )
     total_passenger_count: int | None = None
     goods_no: str | None = field(default=None, repr=False)
-    # The two 환승 markers a ScheduleView row carries
-    # (RsvInquiryResponse.java:75-76, getters at :171/:175).
-    #
-    # ``change_train_sequence`` (``h_chg_trn_seq``) is the leg's position inside
-    # its itinerary, and the app reads it against K4/d's codes -- "1" for a
-    # first leg, "2" for a second. Two independent places test it that way:
-    # u4/a.java:111-131 de-duplicates a newly fetched page against the rows
-    # already held by finding a ``"2"`` row that matches one it has and dropping
-    # that row TOGETHER WITH ITS PREDECESSOR (`list2.get(i - 1)`), and
-    # RsvInquiryRequest.java:164-172 seeds the next page's ``txtGoHour`` from
-    # the last row when that row is a ``"1"`` and from the second-to-last
-    # otherwise. Both only make sense if a ``"2"`` row is the back half of a
-    # pair whose front half is the row before it.
-    #
-    # ``change_train_division_code`` (``h_chg_trn_dv_cd``) is the row's 환승
-    # division; DirectInquiryActivity.java:194 defaults a null one to
-    # ``DIRECT_SQ_NO`` before forwarding it as ``chtnDvCd``. A direct search
-    # leaves both null, which is why both default to ``None`` here rather than
-    # to a code.
+    #: ``h_chg_trn_seq`` — 환승 여정 안에서 이 구간의 위치. 1구간이 ``"1"``,
+    #: 2구간이 ``"2"`` 다(``RsvInquiryResponse.java:75``). 직통 검색에서는
+    #: ``None`` 이다.
+    #:
+    #: 앱이 두 곳에서 그렇게 읽는다. ``u4/a.java:111-131`` 은 새 페이지를
+    #: 기존 행과 중복 제거할 때 ``"2"`` 행을 찾아 **그 앞 행과 함께** 버리고,
+    #: ``RsvInquiryRequest.java:164-172`` 는 다음 페이지의 ``txtGoHour`` 를
+    #: 마지막 행이 ``"1"`` 이면 그 행에서, 아니면 그 앞 행에서 가져온다.
     change_train_sequence: str | None = field(default=None, repr=False)
+    #: ``h_chg_trn_dv_cd`` — 행의 환승 구분.
+    #: ``DirectInquiryActivity.java:194`` 는 널이면 직통으로 채운 뒤
+    #: ``chtnDvCd`` 로 넘긴다. 직통 검색에서는 ``None`` 이다.
     change_train_division_code: str | None = field(default=None, repr=False)
-    # ``h_yms_apl_flg``: the only input to the app's 병합 (입석+좌석) test.
-    # S4/J.java:61-63's isMixedSeat(cabin, flag) reads nothing else off the row,
-    # and a5/u.java:378-380 feeds each row's value into it to decide whether the
-    # booking button becomes 입석+좌석 예매 with tag "1202" (:394-397). Named for
-    # what it decides rather than for the abbreviation: the same field is
-    # already parsed under a guessed expansion elsewhere in this package, and
-    # only this call site shows what it is actually consulted for. See
-    # KORAIL_MERGE_SEAT_FLAGS_BY_CABIN.
+    #: ``h_yms_apl_flg`` — 이 행이 병합(입석+좌석) 대상인지를 정하는 유일한
+    #: 입력. ``S4/J.java:61-63`` 의 ``isMixedSeat(객실등급, 플래그)`` 는 행에서
+    #: 이것 말고 아무것도 읽지 않고, ``a5/u.java:378-380`` 이 그 결과로 예매
+    #: 버튼을 입석+좌석 예매(태그 ``"1202"``)로 바꾼다.
+    #: :data:`~korail_mobile_api.constants.KORAIL_MERGE_SEAT_FLAGS_BY_CABIN`
+    #: 참조.
     merge_seat_application_flag: str | None = field(default=None, repr=False)
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
+        """검색 응답의 행 하나를 :class:`TrainSummary` 로 만든다.
+
+        주요 값은 ``h_`` 접두 철자와 접두 없는 철자를 둘 다 찾는다
+        (``h_trn_no`` 와 ``trnNo`` 등). 모든 스칼라는
+        :func:`_train_scalar` 를 지나므로 숫자로 온 값도 받아들인다.
+        """
         return cls(
-            # Through _train_scalar like every other field, then defaulted to
-            # "" because train_no is the one non-optional attribute here. The
-            # bare str() this replaced accepted a bool or a list and turned it
-            # into "True" / "['1']" -- shapes the rule one line below calls a
-            # protocol error, exempted only because this field was written
-            # before the rule existed.
+            # _train_scalar 를 지난 뒤 ""로 기본값을 준다. train_no 만이
+            # 이 클래스에서 유일하게 선택적이지 않은 속성이다.
             train_no=_train_scalar(
                 raw.get("h_trn_no") or raw.get("trnNo"), "h_trn_no"
             )
@@ -559,9 +635,9 @@ class TrainSummary:
                 "h_rsv_wait_ps_cnt",
             ),
             total_passenger_count=_train_optional_int(raw, "totPsgCnt"),
-            # x4/b.java:23 sources the seat-search txtGdNo from
-            # trainInfo.getTxtGdNo(); capture the goods number from the train
-            # row (h_gd_no / txtGdNo) so the seat-map builders can forward it.
+            # x4/b.java:23 이 좌석 검색의 txtGdNo 를 trainInfo.getTxtGdNo()
+            # 에서 가져오므로, 좌석 조회 폼이 넘길 수 있게 열차 행에서
+            # 상품번호(h_gd_no / txtGdNo)를 붙잡아 둔다.
             goods_no=(
                 _train_optional_string(raw, "h_gd_no")
                 or _train_optional_string(raw, "txtGdNo")
@@ -590,6 +666,15 @@ class SeatAttribute:
 
 @dataclass(frozen=True)
 class SeatCar:
+    """호차 하나의 남은 좌석 요약.
+    :meth:`~korail_mobile_api.client.KorailClient.get_seat_cars` 결과의 한 줄.
+
+    ``car_no`` 가 그대로
+    :meth:`~korail_mobile_api.client.KorailClient.get_seat_inventory` 에
+    넘길 호차 번호다. ``attributes`` 는 그 호차가 가진 좌석 속성(유아동반,
+    휠체어 등)이며 코드와 이름이 함께 온다.
+    """
+
     car_no: int
     room_class_name: str
     remaining_seat_count: int
@@ -610,6 +695,17 @@ class SeatCarListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class PhysicalSeat:
+    """좌석표의 좌석 한 자리.
+
+    ``seat_no`` 가 전선에 나가는 식별자이고, ``specification`` 이 사람이 읽는
+    표시(``"5A"``)다. 좌석지정 예약에 넘겨야 하는 것은 ``seat_no`` 쪽이다 —
+    :meth:`~korail_mobile_api.mutation_models.KorailSeatAssignment.from_inventory`
+    를 쓰면 손으로 옮길 일이 없다.
+
+    ``sale_possible`` 이 ``"Y"`` 인 좌석만 앱이 누를 수 있게 한다.
+    ``direction_code`` 는 순방향/역방향, ``floor`` 는 복층 차량의 층이다.
+    """
+
     seat_no: str = field(repr=False)
     sale_possible: str
     direction_code: str
@@ -631,6 +727,15 @@ class SeatWindow:
 
 @dataclass(frozen=True)
 class SeatInventoryResponse(BaseKorailResponse):
+    """한 호차의 좌석표.
+    :meth:`~korail_mobile_api.client.KorailClient.get_seat_inventory` 결과.
+
+    ``seats`` 가 좌석 하나하나, ``windows`` 는 창문 위치 비율이라 좌석표를
+    그릴 때만 쓴다. ``car_no`` 는 서버가 되돌려 준 호차 번호(``scar_no``)이며,
+    :meth:`~korail_mobile_api.mutation_models.KorailSeatAssignment.from_inventory`
+    가 이 값을 요구한다 — 없으면 호차를 직접 적어야 한다.
+    """
+
     h_msg_txt: str | None = field(default=None, repr=False)
     layout_type: int = 0
     arrangement_code: str = ""
@@ -646,42 +751,36 @@ class SeatInventoryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TrainSearchMetadata:
-    # No menu_id: there is no h_menu_id in the ScheduleView response. The app's
-    # txtMenuId is a client-side constant ("11" from a5/k.java:92-94, carried
-    # to PriceFareActivity as the MENU_ID intent extra), never a server value —
-    # h_menu_id has zero hits across the whole decompiled app.
+    """검색 응답에서 열차 행이 아닌 부분 — 주로 다음 페이지 커서.
+
+    직접 읽을 일은 거의 없다. 다음 페이지는
+    :meth:`TrainSearchResult.next_page` 가 이 값들로 만들어 준다.
+
+    ``menu_id`` 는 없다. ScheduleView 응답에 ``h_menu_id`` 가 없기 때문이다 —
+    앱의 ``txtMenuId`` 는 클라이언트 쪽 상수(``a5/k.java:92-94`` 의 ``"11"``)
+    이고 서버 값이 아니다.
+    """
+
     job_id: str | None = field(default=None, repr=False)
     product_no: str | None = field(default=None, repr=False)
     next_page_flag: str | None = None
     next_query_station_no: str | None = field(default=None, repr=False)
     next_train_no: str | None = field(default=None, repr=False)
-    # The 환승 half of the cursor. b5/c.java:370-371 stashes h_prcd_trn_no_next
-    # and h_ectb_trn_no_next beside the three fields above, and :192-194 replays
-    # them through setSelectTransferPages -- which overwrites qryStTrnNo with
-    # the first and sets qryStTrnNo2 to the second (RsvInquiryRequest.java:
-    # 212-215) -- but only when BOTH are non-empty. A direct search leaves them
-    # empty, which is why a direct next page keeps qryStTrnNo = h_trn_no_next
-    # and qryStTrnNo2 = "".
+    #: 커서의 환승 쪽 절반(``h_prcd_trn_no_next``/``h_ectb_trn_no_next``).
+    #: ``b5/c.java:192-194`` 는 **둘 다 비어 있지 않을 때만** 이것을 다시 실어,
+    #: ``qryStTrnNo`` 를 앞것으로 덮어쓰고 ``qryStTrnNo2`` 를 뒷것으로 채운다
+    #: (``RsvInquiryRequest.java:212-215``). 직통 검색은 둘 다 비워 보낸다.
     next_preceding_train_no: str | None = field(default=None, repr=False)
     next_connecting_train_no: str | None = field(default=None, repr=False)
     result_count: str | None = None
-    #: ``h_notice_msg`` — the notice the server attaches to a search
-    #: (``RsvInquiryResponse.java:12``). Declared by the app's own DTO, and read
-    #: by the sibling parsers that return this same shape
-    #: (``read_parsers.py``, ``limousine_parsers.py``); this parser was the only
-    #: one that dropped it.
+    #: ``h_notice_msg`` — 서버가 검색 결과에 붙이는 안내 문구
+    #: (``RsvInquiryResponse.java:12``).
     notice_message: str | None = None
-    # WARNING -- the four fields below are NOT attested by the APK. Each of
-    # strJobId / h_seat_cnt_first / h_seat_cnt_second / txtGoHour_first occurs
-    # in ZERO files across analysis/, while RsvInquiryResponse.java:8-17
-    # declares exactly nine top-level fields and none of these is among them.
-    # They are kept because removing a public attribute would break callers,
-    # not because they are evidenced: expect them to be None against a real
-    # server. Compare h_menu_id, which was excluded from this very model for
-    # exactly this reason -- the same standard simply had not been applied
-    # here. The fixture that exercises them uses SYNTHETIC- values, so the test
-    # covering them proves only that the parser reads keys it was written to
-    # read.
+    # 아래 네 필드는 APK 근거가 없다. strJobId / h_seat_cnt_first /
+    # h_seat_cnt_second / txtGoHour_first 는 analysis/ 전체에서 0건이고,
+    # RsvInquiryResponse.java:8-17 이 선언하는 아홉 개 최상위 필드에도 없다.
+    # 공개 속성을 지우면 호출자가 깨지므로 남겨 둘 뿐이니, 실제 서버에서는
+    # None 을 예상하라. 같은 이유로 h_menu_id 는 이 모델에서 제외돼 있다.
     first_seat_count: str | None = None
     second_seat_count: str | None = None
     first_departure_time: str | None = field(default=None, repr=False)
@@ -695,28 +794,19 @@ class TrainSearchMetadata:
 
 @dataclass(frozen=True)
 class TrainSearchContinuation:
-    """The follow-up-page cursor the app carries between ScheduleView calls.
+    """다음 페이지를 요청할 때 되싣는 커서.
 
-    The app keeps the previous response's paging fields on the search screen
-    (``b5/c.java:367-371``) and, when the user asks for more results, replays
-    them into the next request (``b5/c.java:184-194``):
-    ``setNextTimeTC(h_qry_st_no_next, h_trn_no_next)`` sets ``qryStNo`` and
-    ``qryStTrnNo`` (``RsvInquiryRequest.java:174-177``) and
-    ``setSelectTransferPage(h_qry_st_no_next, h_rslt_cnt)`` sets ``qryStNo``
-    and ``pgPrCnt`` (``:207-210``).
+    앱도 같은 방식이다. 앞 응답의 페이징 필드를 검색 화면에 들고 있다가
+    (``b5/c.java:367-371``) 더 보기를 누르면 다음 요청에 되싣는다
+    (``:184-194``) — ``qryStNo``/``qryStTrnNo``/``pgPrCnt`` 가 그것이다
+    (``RsvInquiryRequest.java:174-177``, ``:207-210``).
 
-    ``query_train_no2`` is the fourth cursor and belongs to a 환승 search.
-    ``b5/c.java:192-194`` calls ``setSelectTransferPages`` only when both
-    ``h_prcd_trn_no_next`` and ``h_ectb_trn_no_next`` came back non-empty, and
-    that call overwrites ``qryStTrnNo`` with the first and sets ``qryStTrnNo2``
-    to the second (``RsvInquiryRequest.java:212-215``). A direct search never
-    populates the pair, so a direct continuation carries the empty-string
-    default and puts the first page's ``qryStTrnNo2 = ""`` back on the wire --
-    unchanged from before this field existed. It is therefore the one field
-    here that is allowed to be empty.
+    ``query_train_no2`` 만 환승 검색의 것이다. 앞뒤 열차번호가 둘 다 비어
+    있지 않을 때만 채워지므로(``RsvInquiryRequest.java:212-215``) 직통
+    검색에서는 빈 문자열이다 — 여기서 비어 있어도 되는 유일한 필드다.
 
-    Build one with :meth:`TrainSearchResult.next_page` or
-    :meth:`TransferSearchResult.next_page` rather than by hand.
+    손으로 만들지 말고 :meth:`TrainSearchResult.next_page` 나
+    :meth:`TransferSearchResult.next_page` 가 주는 것을 써라.
     """
 
     query_station_no: str = field(repr=False)
@@ -739,18 +829,27 @@ class TrainSearchContinuation:
 
 @dataclass(frozen=True)
 class TrainSearchResult:
+    """직통 열차 검색 한 페이지.
+
+    ``trains`` 가 그 페이지의 행이다. 조건에 맞는 직통 열차가 없으면 빈
+    목록이 아니라
+    :class:`~korail_mobile_api.errors.KorailNoDirectTrainError` 가 올라온다.
+
+    ``response`` 는 봉투, ``metadata`` 는 페이징 커서다.
+    """
+
     trains: list[TrainSummary]
     response: BaseKorailResponse
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:
-        """Cursor for the page after this one, or ``None`` when there is none.
+        """다음 페이지 커서. 다음이 없으면 ``None``.
 
-        Mirrors the app's own gate: ``b5/c.java:381-387`` only keeps the
-        "more results" affordance alive while ``h_next_pg_flg`` equals ``"Y"``.
-        ``None`` is also returned when the response withheld a cursor field,
-        because a half-filled cursor would silently re-request page one.
+        앱과 같은 게이트다 — ``h_next_pg_flg`` 가 ``"Y"`` 인 동안만 "더 보기"
+        가 살아 있다(``b5/c.java:381-387``). 커서 필드가 하나라도 빠져 있어도
+        ``None`` 이다. 반쯤 채운 커서는 조용히 1페이지를 다시 요청하기
+        때문이다.
         """
         metadata = self.metadata
         if metadata.next_page_flag != "Y":
@@ -767,28 +866,18 @@ class TrainSearchResult:
 
 @dataclass(frozen=True)
 class TransferItinerary:
-    """One 환승 itinerary: the two legs a transfer reservation books together.
+    """환승 여정 하나 — 함께 예약되는 두 구간.
 
-    A transfer ScheduleView response does NOT nest its legs, and it does not
-    return a separate itinerary object either. It returns the same flat
-    ``trn_infos.trn_info`` list a direct search returns, and the app pairs it up
-    **positionally**:
+    환승 검색 응답은 구간을 중첩해 주지 않는다. 직통과 똑같은 평평한
+    ``trn_infos.trn_info`` 목록을 주고, 앱이 그것을 **위치로** 짝짓는다 —
+    0/1 행이 한 여정, 2/3 행이 다음 여정이고, 짝이 안 맞고 남는 마지막 행은
+    버린다(``a5/k.java:142-172``). 고른 여정을 다시 꺼낼 때도
+    ``{list[i * 2], list[i * 2 + 1]}`` 로 읽고(``a5/k.java:108-110``), 그
+    배열이 그대로 예약 여정 빌더로 간다.
 
-    * ``a5/k.java:142-172`` (``P0``) walks the list and, on the ``!isDirect``
-      branch, opens a fresh ``new Bundle[2]`` whenever ``i % 2 == 0`` and only
-      appends the row once ``i % 2 == 1`` -- so rows 0/1 are one itinerary,
-      rows 2/3 the next, and a trailing unpaired row is silently dropped.
-    * ``a5/k.java:108-110`` (``E0``) reads a selected itinerary straight back
-      out of the flat list as ``{list[i * 2], list[i * 2 + 1]}``, and that array
-      is exactly what the reservation's journey builder receives
-      (``a5/u.java:495``/``:938`` call ``N0(E0())``).
-    * ``a5/u.java:947-956`` names the transfer station the same way, off
-      ``f236n.get(i * 2)`` and ``f236n.get(i * 2 + 1)``.
-
-    ``h_chg_trn_seq`` is the server's own copy of that position -- ``"1"`` on a
-    first leg, ``"2"`` on a second. This class uses the positional pairing the
-    app uses, and treats the sequence markers, when the server populates them,
-    as a consistency check rather than as the pairing key; see
+    ``h_chg_trn_seq`` 는 서버가 적어 보낸 같은 위치값이다(1구간 ``"1"``,
+    2구간 ``"2"``). 이 클래스도 앱처럼 위치로 짝짓고, 서버가 그 표시를 채워
+    보냈을 때는 짝짓기 기준이 아니라 검증에 쓴다 —
     :func:`pair_transfer_itineraries`.
     """
 
@@ -797,24 +886,21 @@ class TransferItinerary:
 
     @property
     def legs(self) -> tuple[TrainSummary, ...]:
-        """The itinerary's legs in boarding order, ready for ``reserve_transfer``."""
+        """탑승 순서대로의 두 구간. ``reserve_transfer`` 에 그대로 넘길 수 있다."""
         return (self.first, self.second)
 
     @property
     def transfer_station_code(self) -> str | None:
-        """Where the passenger changes trains, or ``None`` if the legs disagree.
+        """환승역 코드. 두 구간이 다른 역을 가리키면 ``None``.
 
-        The app never sends this as a field of its own: the change of trains is
-        simply leg 1's arrival and leg 2's departure, which the reservation form
-        restates as ``txtArvRsStnCd1`` and ``txtDptRsStnCd2``.
+        서버는 이것을 따로 보내지 않는다. 환승역이란 1구간의 도착역이자
+        2구간의 출발역일 뿐이고, 예약 폼도 그렇게 ``txtArvRsStnCd1`` 과
+        ``txtDptRsStnCd2`` 로 나눠 적는다.
 
-        ``None`` is a real answer, not a parse failure. ``a5/u.java:947-956``
-        prints leg 1's arrival name and leg 2's departure name as two separate
-        labels and only collapses them to one when they are equal, so KORAIL
-        does return itineraries that arrive at one station and leave from
-        another. Read :attr:`arrival_station_code <TrainSummary>` on
-        :attr:`first` and :attr:`departure_station_code <TrainSummary>` on
-        :attr:`second` when that case matters to you.
+        ``None`` 은 파싱 실패가 아니라 진짜 답이다. 앱도 두 이름을 각각
+        찍고 같을 때만 하나로 합친다(``a5/u.java:947-956``) — 한 역에
+        내려 다른 역에서 타는 여정이 실제로 온다. 그 경우가 중요하면
+        :attr:`first` 의 도착역과 :attr:`second` 의 출발역을 직접 읽어라.
         """
         arrival = self.first.arrival_station_code
         if arrival is not None and arrival == self.second.departure_station_code:
@@ -823,7 +909,7 @@ class TransferItinerary:
 
     @property
     def transfer_station_name(self) -> str | None:
-        """The transfer station's name under the same equal-or-``None`` rule."""
+        """환승역 이름. 같으면 그 이름, 다르면 ``None`` — 코드 쪽과 같은 규칙이다."""
         arrival = self.first.arrival_station_name
         if arrival is not None and arrival == self.second.departure_station_name:
             return arrival
@@ -833,20 +919,22 @@ class TransferItinerary:
 def pair_transfer_itineraries(
     trains: list[TrainSummary],
 ) -> list[TransferItinerary]:
-    """Chunk a flat transfer result list into itineraries, the app's way.
+    """평평한 환승 결과 목록을 앱과 같은 방식으로 여정 단위로 묶는다.
 
-    Mirrors ``a5/k.java:156-170`` exactly, including its treatment of a trailing
-    odd row: the app adds a row to the rendered list only on ``i % 2 == 1``, so
-    a final unpaired leg is dropped rather than shown as a bookable half.
+    ``a5/k.java:156-170`` 그대로다. 짝이 안 맞고 남는 마지막 행 처리까지
+    같다 — 앱은 ``i % 2 == 1`` 일 때만 목록에 넣으므로 홀로 남은 구간은
+    예약 가능한 반쪽으로 보여 주지 않고 버린다.
 
-    Raises :class:`KorailProtocolError` when the server populated
-    ``h_chg_trn_seq`` on a row but not as ``"1"`` then ``"2"``. That check is
-    this package's, not the app's -- the app pairs blind -- but a misaligned
-    list would otherwise hand :meth:`KorailClient.reserve_transfer` two rows
-    that are not one itinerary, and this package will not build a form it cannot
-    justify. A response that omits the marker entirely is accepted, because
-    ``DirectInquiryActivity.java:194-195`` and ``TransferInquiryActivity.java:44``
-    both show the app defaulting a null marker from the row's position.
+    서버가 ``h_chg_trn_seq`` 를 채워 보냈는데 그 값이 ``"1"``, ``"2"`` 순서가
+    아니면 :class:`~korail_mobile_api.errors.KorailProtocolError` 를 올린다.
+    이 검사는 앱에는 없는 이 패키지의 것이다 — 앱은 눈감고 짝짓는다. 어긋난
+    목록을 그냥 두면 한 여정이 아닌 두 행이
+    :meth:`~korail_mobile_api.client.KorailClient.reserve_transfer` 로
+    넘어간다.
+
+    표시가 아예 없는 응답은 받아들인다. 앱도 널이면 행의 위치로 채워 넣는다
+    (``DirectInquiryActivity.java:194-195``,
+    ``TransferInquiryActivity.java:44``).
     """
     itineraries: list[TransferItinerary] = []
     for index in range(0, len(trains) - 1, 2):
@@ -873,13 +961,13 @@ def _assert_leg_sequence(
 
 @dataclass(frozen=True)
 class TransferSearchResult:
-    """One page of 환승 itineraries.
+    """환승 여정 한 페이지.
 
-    ``trains`` is the untouched flat row list the server sent, in server order;
-    ``itineraries`` is that list paired up by :func:`pair_transfer_itineraries`.
-    Both are exposed because the app keeps both too -- ``a5/k.java``'s ``f236n``
-    is the flat list it indexes with ``i * 2`` and ``f237o`` is the paired one
-    it renders.
+    ``trains`` 는 서버가 보낸 순서 그대로의 평평한 행 목록이고,
+    ``itineraries`` 는 그것을 :func:`pair_transfer_itineraries` 로 짝지은
+    것이다. 앱도 둘 다 들고 있으므로 둘 다 내놓는다 — ``a5/k.java`` 의
+    ``f236n`` 이 ``i * 2`` 로 인덱싱하는 평평한 목록, ``f237o`` 가 화면에
+    그리는 짝지은 목록이다.
     """
 
     itineraries: list[TransferItinerary]
@@ -889,17 +977,15 @@ class TransferSearchResult:
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:
-        """Cursor for the page after this one, or ``None`` when there is none.
+        """다음 페이지 커서. 다음이 없으면 ``None``.
 
-        Same ``h_next_pg_flg == "Y"`` gate as a direct search
-        (``b5/c.java:381-387``), but the cursor is not the same cursor. A
-        transfer page comes back with two extra fields, and ``b5/c.java:192-194``
-        replays them through ``setSelectTransferPages``, which overwrites
-        ``qryStTrnNo`` with ``h_prcd_trn_no_next`` and sets ``qryStTrnNo2`` to
-        ``h_ectb_trn_no_next`` (``RsvInquiryRequest.java:212-215``). The app
-        applies that overwrite only when BOTH are non-empty, so this does too:
-        with either missing the cursor stays the direct-search one built at
-        ``:186``/``:190`` from ``h_trn_no_next``.
+        ``h_next_pg_flg == "Y"`` 게이트는 직통과 같지만 커서가 다르다. 환승
+        페이지에는 필드가 둘 더 오고, 앱은 그것으로 ``qryStTrnNo`` 를
+        ``h_prcd_trn_no_next`` 로 덮어쓰고 ``qryStTrnNo2`` 에
+        ``h_ectb_trn_no_next`` 를 넣는다(``RsvInquiryRequest.java:212-215``).
+
+        앱이 그 덮어쓰기를 **둘 다 비어 있지 않을 때만** 하므로 여기서도
+        같다. 하나라도 없으면 직통과 같은 커서를 그대로 쓴다.
         """
         metadata = self.metadata
         if metadata.next_page_flag != "Y":

@@ -1,3 +1,15 @@
+"""상태변경 요청이 받는 입력 타입과 그 응답 타입.
+
+여기 있는 것은 값 객체일 뿐이라 아무것도 전송하지 않는다. 실제로 보내려면
+:class:`~korail_mobile_api.consent.MutationConsent` 로 범주를 열고
+``dry_run=False`` 로 꺼야 한다 — 그 규칙은
+:mod:`korail_mobile_api.consent` 에 있다.
+
+민감한 필드는 ``repr=False`` 라 객체를 찍어도 값이 보이지 않고, 전선 이름이
+:mod:`korail_mobile_api.redaction` 에 등록돼 있어
+:class:`~korail_mobile_api.consent.MutationPreview` 에서도 마스킹된다.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -14,57 +26,46 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class KorailPassengerCounts:
-    """How many of each passenger type one reservation carries.
+    """예약 하나에 실을 승객 종류별 인원 수.
 
-    The app's reservation request always transmits eight passenger rows,
-    whatever the mix: ``w4/a.java:49-73`` fills rows 1..8 unconditionally, each
-    row a count plus a fixed passenger-type code and discount-kind code, and
-    ``OPsg`` is a ``LinkedHashMap`` (``OPsg.java:6``) so that build order is the
-    wire order. The fields below are declared in that same row order:
+    앱의 예약 요청은 섞임과 무관하게 **항상 여덟 줄** 을 보낸다. 각 줄이
+    인원 수 하나에 고정된 승객종류 코드와 할인종류 코드를 달고 있고
+    (``w4/a.java:49-73``), ``OPsg`` 가 ``LinkedHashMap`` 이라
+    (``OPsg.java:6``) 만드는 순서가 곧 전선 순서다. 아래 필드는 그 순서로
+    선언돼 있다 — 필드, ``txtPsgTpCd``, ``txtDiscKndCd`` 순:
 
-    ==== ===================== ============ ============= =================
-    row  field                 app bundle   ``txtPsgTpCd``  ``txtDiscKndCd``
-    ==== ===================== ============ ============= =================
-    1    ``adult``             ADULT        ``"1"``       ``"000"``
-    2    ``teenager``          TEENAGER     ``"1"``       ``"P11"``
-    3    ``child``             CHILD        ``"3"``       ``"000"``
-    4    ``infant``            CHILD_ACCOMPANY ``"3"``    ``"321"``
-    5    ``senior``            SENIOR       ``"1"``       ``"131"``
-    6    ``severe_disability`` HIGH_DISABLE ``"1"``       ``"111"``
-    7    ``mild_disability``   LOW_DISABLE  ``"1"``       ``"112"``
-    8    ``guide_dog``         GUIDE_DOG    ``"1"``       ``"173"``
-    ==== ===================== ============ ============= =================
+    * ``adult`` 어른 — ``"1"``, ``"000"``
+    * ``teenager`` 청소년 — ``"1"``, ``"P11"``
+    * ``child`` 어린이 — ``"3"``, ``"000"``
+    * ``infant`` 동반유아 — ``"3"``, ``"321"``
+    * ``senior`` 경로 — ``"1"``, ``"131"``
+    * ``severe_disability`` 중증장애 — ``"1"``, ``"111"``
+    * ``mild_disability`` 경증장애 — ``"1"``, ``"112"``
+    * ``guide_dog`` 안내견 — ``"1"``, ``"173"``
 
-    ``adult`` defaults to 1 and everything else to 0, so the default instance
-    reproduces the one-adult mix this package sent before mixes existed.
+    ``adult`` 만 1 이고 나머지는 0 이 기본이라, 인자 없이 만들면 어른 1명이
+    된다.
 
-    ``infant`` is 동반유아, the lap infant. It **is** counted in
-    :attr:`total` and therefore in ``txtTotPsgCnt``: the app's own total is
-    ``m5/c.java:330``/``:335``, a plain sum of all eight counters including
-    ``CHILD_ACCOMPANY_COUNT``, and ``w4/a.java:49`` sends exactly that bundle
-    value as ``txtTotPsgCnt``. The same is true of ``guide_dog``.
+    ``infant``(동반유아)와 ``guide_dog``(안내견)도 :attr:`total` 에, 따라서
+    ``txtTotPsgCnt`` 에 **들어간다**. 앱의 합계도 여덟 계수기를 그냥 더한
+    것이고(``m5/c.java:330``), 그 값이 그대로 ``txtTotPsgCnt`` 로 나간다.
 
-    No discount-card field accompanies a discounted row. ``OPsg`` declares one
-    card field, ``txtCardNo_`` (``OPsg.java:7``), and the only writer of it is
-    the separate N-card reservation request (``w4/a.java:101``, discount kind
-    ``"153"``). The 경로/장애 rows here send a count and a discount code and
-    nothing else, and neither ``txtCardCode_`` nor ``txtCardPw_`` -- which
-    korail2 (``korail2.py:363-370``) and srtgo (``ktx.py:286-295``) send --
-    exists anywhere in the decompiled app.
+    할인이 붙은 줄에 카드 필드가 따라붙지 않는다. ``OPsg`` 가 선언하는 카드
+    필드는 ``txtCardNo_`` 하나뿐이고(``OPsg.java:7``) 그것을 쓰는 곳은 별개인
+    N카드 예약 요청뿐이다(``w4/a.java:101``). korail2 와 srtgo 가 보내는
+    ``txtCardCode_``/``txtCardPw_`` 는 디컴파일된 앱 어디에도 없다.
 
-    Validation mirrors the app's picker: every count is a non-negative integer
-    (each picker's range starts at 0, ``m5/c.java:111-118``), the total is at
-    least one (the booking screen enables its search button only on
-    ``TOTAL_PERSON_COUNT > 0``, e.g. ``OldMainBookingActivity.java:1023``), and
-    the total is at most :data:`KORAIL_MAX_PASSENGERS_PER_RESERVATION`.
+    검증은 앱의 승객 선택기와 같다. 각 인원은 0 이상의 정수이고, 합계는
+    1 이상,
+    :data:`~korail_mobile_api.constants.KORAIL_MAX_PASSENGERS_PER_RESERVATION`
+    이하여야 한다. 어기면 ``ValueError`` 다.
 
-    Two further app-side rules are **not** enforced here, because they are
-    warning dialogs on the picker rather than anything visible on the wire, and
-    guessing at the server's version of them would reject mixes it may accept:
-    a 동반유아 needs at least one 어른/청소년/경로/장애 to sit with
-    (``m5/c.java:452-455``), and a 안내견 needs more 장애 passengers than dogs
-    (``m5/c.java:458-465``). A mix breaking either is likely to be refused by
-    the server.
+    앱에 있는 규칙 둘은 여기서 강제하지 않는다 — 동반유아에게는 함께 앉을
+    어른/청소년/경로/장애가 하나 이상 필요하고(``m5/c.java:452-455``),
+    안내견은 장애 승객 수보다 많을 수 없다(``:458-465``). 둘 다 선택기의
+    경고 대화상자일 뿐 전선에 드러나지 않아서, 서버 쪽 규칙을 짐작해 막으면
+    서버가 받아 줄 조합까지 거부하게 된다. 다만 어긴 조합은 서버가 거절할
+    가능성이 높다.
     """
 
     adult: int = 1
@@ -108,10 +109,10 @@ class KorailPassengerCounts:
 
     @property
     def total(self) -> int:
-        """``txtTotPsgCnt``: every row summed, infants and guide dogs included.
+        """``txtTotPsgCnt`` — 여덟 줄의 합. 동반유아와 안내견도 센다.
 
-        This is the app's ``TOTAL_PERSON_COUNT`` exactly (``m5/c.java:330``,
-        and the identical ``getTotalCount()`` at ``:335``).
+        앱의 ``TOTAL_PERSON_COUNT`` 와 정확히 같다(``m5/c.java:330``, 같은
+        내용의 ``getTotalCount()`` 가 ``:335``).
         """
         return (
             self.adult
@@ -127,30 +128,24 @@ class KorailPassengerCounts:
 
 @dataclass(frozen=True)
 class KorailSeatAssignment:
-    """One physical seat a seat-designated (``txtJobId="1103"``) hold asks for.
+    """좌석지정 예약(``txtJobId="1103"``)이 지목하는 좌석 한 자리.
 
-    A seat is identified by exactly the two values the seat-map reads already
-    return, and by nothing else:
+    좌석은 좌석표 조회가 이미 돌려준 두 값으로만 식별된다.
 
-    * ``car_no`` is :attr:`~korail_mobile_api.SeatCar.car_no` from
-      :meth:`KorailClient.get_seat_cars <korail_mobile_api.KorailClient.get_seat_cars>`
-      (parsed from ``h_srcar_no``), i.e. the same number
-      :meth:`~korail_mobile_api.KorailClient.get_seat_inventory` is then called
-      with and echoes back as
-      :attr:`~korail_mobile_api.SeatInventoryResponse.car_no`. The app sends the
-      car currently on screen: ``SeatSearchActivity.java:678`` writes
-      ``String.valueOf(F0())`` and ``F0()`` (``:269-271``) is
-      ``SeatSearchRequest.getTxtSrcarNo()``, the car the seat map was asked for.
-    * ``seat_no`` is :attr:`~korail_mobile_api.PhysicalSeat.seat_no` from
-      :meth:`~korail_mobile_api.KorailClient.get_seat_inventory` (parsed from
-      ``seat_no``), forwarded verbatim: ``SeatSearchActivity.java:680`` sends
-      ``selectedSeatList.get(i).getSeat_no()``. It is deliberately NOT
-      ``seat_spec`` -- that is the human label ("5A") the app renders at
-      ``:894``, not the wire identifier.
+    * ``car_no`` 는
+      :meth:`~korail_mobile_api.client.KorailClient.get_seat_cars` 가 준
+      :attr:`~korail_mobile_api.models.SeatCar.car_no`, 즉
+      :meth:`~korail_mobile_api.client.KorailClient.get_seat_inventory` 를
+      부를 때 넣고 응답이 되돌려 주는 그 번호다. 앱도 화면에 떠 있는 호차를
+      그대로 보낸다(``SeatSearchActivity.java:678``, ``:269-271``).
+    * ``seat_no`` 는
+      :attr:`~korail_mobile_api.models.PhysicalSeat.seat_no` 를 그대로 넘긴
+      것이다(``SeatSearchActivity.java:680``). ``seat_spec`` 이 **아니다** —
+      그쪽은 앱이 화면에 찍는 사람용 표시("5A")이지 전선 식별자가 아니다.
 
-    Both are taken as-is from an inventory read; this package never synthesises
-    a seat identifier, and there is no format assumption beyond "printable
-    ASCII, non-empty".
+    둘 다 좌석표 조회에서 그대로 가져온다. 이 패키지는 좌석 식별자를 지어
+    내지 않으며, "비어 있지 않은 출력 가능 ASCII" 말고는 형식을 가정하지
+    않는다. 손으로 옮겨 적지 않으려면 :meth:`from_inventory` 를 써라.
     """
 
     car_no: int
@@ -180,16 +175,19 @@ class KorailSeatAssignment:
         inventory: SeatInventoryResponse,
         seat: PhysicalSeat,
     ) -> KorailSeatAssignment:
-        """Pair a :class:`~korail_mobile_api.SeatInventoryResponse` with one of its seats.
+        """좌석표와 그 안의 좌석 하나를 짝지어 만든다. 손으로 옮길 값이 없다.
 
-        ``inventory`` must be a seat-inventory read whose ``car_no`` the server
-        echoed back (``scar_no``), and ``seat`` one of its
-        :attr:`~korail_mobile_api.SeatInventoryResponse.seats` rows. This is the
-        only constructor that needs no hand-copied identifiers, and it refuses a
-        seat the read itself marked unsellable (``sale_psb_flg != "Y"``) --
-        ``com/korail/talk/ui/seat/a.java`` only makes a ``"Y"`` seat tappable, so
-        designating one the map would not let a user pick can only produce a
-        server refusal, or worse a partial hold.
+        ``inventory`` 는 서버가 호차 번호(``scar_no``)를 되돌려 준 좌석표
+        조회 결과여야 하고, ``seat`` 은 그 결과의
+        :attr:`~korail_mobile_api.models.SeatInventoryResponse.seats` 중
+        하나여야 한다.
+
+        좌석표가 팔 수 없다고 표시한 좌석(``sale_psb_flg != "Y"``)은
+        거절한다. 앱도 ``"Y"`` 인 좌석만 누를 수 있게 하므로
+        (``com/korail/talk/ui/seat/a.java``), 사용자가 고를 수 없는 좌석을
+        지정하면 서버 거절이거나 더 나쁘게는 반쪽짜리 예약이 된다.
+
+        조건에 맞지 않으면 ``ValueError`` 다.
         """
         if type(inventory) is not SeatInventoryResponse:
             raise ValueError(
@@ -232,6 +230,22 @@ class ReservationJourney:
 
 @dataclass(frozen=True)
 class ReservationHoldResponse(BaseKorailResponse):
+    """예약이 잡혔을 때 서버가 주는 것. 아직 결제 전이다.
+
+    :attr:`pnr_no` 가 이 예약을 가리키는 번호이고, 취소·조회·결제가 전부
+    그것을 요구한다. 결제 기한을 넘기면 예약은 스스로 취소된다 —
+    :attr:`payment_deadline_date`/:attr:`payment_deadline_time` 이 그 시각의
+    구조화된 형태다.
+
+    금액을 뜻하는 필드가 셋인데 서로 다르다. 실제로 결제되는 금액은
+    :attr:`received_amount` 이고, :attr:`total_price` 는 화면 표시용,
+    :attr:`total_fare` 는 할인 전 운임이다.
+
+    예약대기로 잡힌 경우에는 ``h_msg_cd`` 가
+    :data:`~korail_mobile_api.constants.KORAIL_STANDBY_HOLD_MESSAGE_CODE` 로
+    온다. 실패가 아니다.
+    """
+
     pnr_no: str | None = field(default=None, repr=False)
     journey_count: str | None = None
     window_no: str | None = field(default=None, repr=False)
@@ -239,30 +253,28 @@ class ReservationHoldResponse(BaseKorailResponse):
     temporary_job_sequence_2: str | None = field(default=None, repr=False)
     payment_flag: str | None = None
     payment_message: str | None = field(default=None, repr=False)
-    #: ``h_pay_limit_msg``. Declared on the app's ``ReservationResponse``
-    #: (``:22``, getter ``:529``) but read by NO app screen, and a live hold
-    #: returns it empty. It is NOT the payment deadline — use the three fields
-    #: below, which are what the app actually renders.
+    #: ``h_pay_limit_msg``. 앱의 ``ReservationResponse`` 에 선언은 돼 있으나
+    #: (``:22``, 게터 ``:529``) 어느 화면도 읽지 않고 실제 응답은 비어 온다.
+    #: **결제 기한이 아니다** — 기한은 아래 세 필드다.
     payment_deadline_message: str | None = field(default=None, repr=False)
-    #: ``h_ntisu_lmt`` — the server's own prose deadline, e.g. "…까지 미결제시
+    #: ``h_ntisu_lmt`` — 서버가 문장으로 적어 준 기한. 예: "…까지 미결제시
     #: 승차권이 자동으로 취소됩니다."
     payment_deadline_notice: str | None = field(default=None, repr=False)
-    #: ``h_ntisu_lmt_dt`` / ``h_ntisu_lmt_tm`` — the structured deadline the app
-    #: concatenates and parses as ``yyyyMMddHHmmss`` to show when an unpaid hold
-    #: self-cancels (``S4/C0816p.java:64-70``,
+    #: ``h_ntisu_lmt_dt`` / ``h_ntisu_lmt_tm`` — 구조화된 결제 기한. 앱은 둘을
+    #: 이어 붙여 ``yyyyMMddHHmmss`` 로 읽고, 미결제 예약이 언제 스스로
+    #: 취소되는지 보여 준다(``S4/C0816p.java:64-70``,
     #: ``ReservedTicketActivity.java:356,365``).
     payment_deadline_date: str | None = None
     payment_deadline_time: str | None = None
     total_fare: str | None = None
-    #: ``h_tot_prc`` — the DISPLAY total. ``PaymentActivity.java:174`` assigns it
-    #: to ``mTotPrc``, which is only ever read back by ``getmTotPrc()``
-    #: (``:497``) for the UI. It is NOT the amount the app settles.
+    #: ``h_tot_prc`` — **표시용** 합계. ``PaymentActivity.java:174`` 가
+    #: ``mTotPrc`` 에 넣고, 그 값은 화면을 위해서만 되읽힌다(``:497``).
+    #: 앱이 정산하는 금액이 아니다.
     total_price: str | None = None
-    #: The amount the app actually collects (``hidMnsStlAmt1``): the app's
-    #: ``getReceivedAmount()`` (``PaymentActivity.java:186-199``, sent via
-    #: ``AbstractC1269e.java:406`` → ``V4/a.java:27``). Sourced from
-    #: ``h_tot_rcvd_amt`` when the hold response carries it, else summed from the
-    #: per-seat ``h_rcvd_amt`` rows the way the app computes it.
+    #: 앱이 실제로 걷는 금액(``hidMnsStlAmt1``). 앱의
+    #: ``getReceivedAmount()`` 와 같다(``PaymentActivity.java:186-199``).
+    #: 예약 응답에 ``h_tot_rcvd_amt`` 가 있으면 그것이고, 없으면 앱이 하듯
+    #: 좌석별 ``h_rcvd_amt`` 를 더한 값이다.
     received_amount: str | None = None
     journeys: tuple[ReservationJourney, ...] = ()
 
@@ -289,89 +301,78 @@ class ReservationPaymentResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class CardPayment:
-    """Card settlement inputs for a reservation payment (settlement code 02).
+    """예약 결제의 카드 입력(정산코드 02).
 
-    Mirrors the app/srtgo ``pay_with_card`` card fields. The PAN goes over the
-    wire in the clear (no client-side encryption), so which kind of card this
-    may carry is decided by the consent, never by this type:
+    카드번호는 클라이언트 암호화 없이 평문으로 나간다. 어떤 종류의 카드를
+    실을 수 있는지는 이 타입이 아니라 consent 가 정한다 — 규칙은
+    :class:`~korail_mobile_api.consent.MutationConsent` 에 있다. 기본
+    consent 로는 청구되지 않는 시험카드만 보낼 수 있다.
 
-    * By default it can only be a non-chargeable FAKE test card.
-      :meth:`~korail_mobile_api.client.KorailClient.pay_with_fake_card` refuses
-      to send unless ``MutationConsent.fake_card_only`` is True, which is the
-      default, and it accepts nothing else.
-    * A REAL, CHARGEABLE card is possible only through the separate
-      :meth:`~korail_mobile_api.client.KorailClient.pay_with_card`, and only on
-      a consent that explicitly sets ``real_card_acknowledged=True`` together
-      with ``fake_card_only=False``. That combination has to be written on
-      purpose; nothing infers it, and the transmit gate refuses a consent that
-      states neither claim or both.
-
-    Sensitive fields are ``repr=False``.
+    민감한 필드는 ``repr=False`` 다.
     """
 
     card_number: str = field(repr=False)
-    card_password: str = field(repr=False)  # first two digits of the card PIN
-    card_expire: str = field(repr=False)  # YYMM
-    birthday: str = field(repr=False)  # YYMMDD (personal auth) or biz no
-    #: ``hidIsmtMnthNum1`` — installment months. Lump sum is ``"0"``, ONE zero:
-    #: ``K4/h.smali:44-52`` builds the INS_0 constant with ``const-string "0"``
-    #: and every other value is unpadded too (``"2"``, ``"3"``, ``"12"``,
-    #: ``"24"``). ``"00"`` occurs nowhere in the APK for this field.
-    #:
-    #: Re-checked against a SECOND, independent site on 2026-07-27, because the
-    #: line above was carried on the strength of one citation:
-    #: ``v4/a.java:288`` calls ``setHidIsmtMnthNum(i9, "0")`` with the literal
-    #: inline, and ``:239`` defaults ``h hVar = h.INS_0`` before the dropdown
-    #: switch assigns INS_2/INS_3/INS_4 for the other options. Two sites, one
-    #: value, no padding.
+    #: 카드 비밀번호 앞 두 자리.
+    card_password: str = field(repr=False)
+    #: 유효기간 ``YYMM``.
+    card_expire: str = field(repr=False)
+    #: 개인 인증이면 생년월일 ``YYMMDD``, 법인이면 사업자번호.
+    birthday: str = field(repr=False)
+    #: ``hidIsmtMnthNum1`` — 할부 개월. 일시불은 ``"0"``, 0 **하나** 다.
+    #: 다른 값도 자릿수를 채우지 않는다(``"2"``, ``"3"``, ``"12"``, ``"24"``).
+    #: 이 필드에 ``"00"`` 은 APK 어디에도 없다 — ``K4/h.smali:44-52`` 가
+    #: ``const-string "0"`` 으로 상수를 만들고, ``v4/a.java:288`` 도 리터럴
+    #: ``"0"`` 을 그대로 넘긴다.
     installment: str = "0"
-    card_type: str = "J"  # hidAthnDvCd1: "J" personal / "S" corporate
+    #: ``hidAthnDvCd1`` — ``"J"`` 개인 / ``"S"`` 법인.
+    card_type: str = "J"
 
 
 @dataclass(frozen=True)
 class PaidTicket:
-    """The paid-ticket identity a refund (``refunds.RefundsRequest``) needs.
+    """환불(``refunds.RefundsRequest``)이 요구하는 발권 승차권의 신원.
 
-    Mirrors the app/srtgo ``refund`` inputs (``ktx.py:1077-1094``): the PNR, the
-    sale date, the original-ticket sale window/sequence and return password, and
-    the train number. These come from a settled ticket (e.g. a ticket-list row,
-    or :meth:`~korail_mobile_api.client.KorailClient.get_refund_ticket_detail`).
+    PNR, 판매일자, 원표의 창구번호·판매일련번호·반환비밀번호, 그리고
+    열차번호다. 정산이 끝난 승차권에서 나온다 — 승차권 목록의 행이나
+    :meth:`~korail_mobile_api.client.KorailClient.get_refund_ticket_detail`.
 
     .. warning::
-       :attr:`sale_date` is the CURRENT ticket's ``h_sale_dt``, not the original
-       ticket's ``h_orgtk_ret_sale_dt``, even though the wire key it fills is
-       spelled ``h_orgtk_sale_dt``. The app is explicit about this:
-       ``TicketListActivity.java:965`` does
-       ``setH_orgtk_sale_dt(detail.getH_sale_dt())`` while taking the window,
-       sequence and password from the ``h_orgtk_*`` fields beside it, and
-       ``ticketReturn/a.java:413`` agrees. The refund-commission request is the
-       one that wants ``h_orgtk_ret_sale_dt`` (``ticketReturn/a.java:352``).
-       On an unchanged ticket the two dates are equal and the mistake is
-       invisible; on a ticket that was changed or reissued they differ and the
-       four-part return identity no longer matches. Use
-       :meth:`from_refund_detail` instead of assembling this by hand.
+       :attr:`sale_date` 는 **현재** 승차권의 ``h_sale_dt`` 이지 원표의
+       ``h_orgtk_ret_sale_dt`` 가 아니다. 이 값이 채우는 전선 키 이름이
+       ``h_orgtk_sale_dt`` 라서 헷갈리기 쉽다. 앱은 명확하다 —
+       ``TicketListActivity.java:965`` 는
+       ``setH_orgtk_sale_dt(detail.getH_sale_dt())`` 를 하면서 창구·일련번호·
+       비밀번호만 옆의 ``h_orgtk_*`` 에서 가져온다
+       (``ticketReturn/a.java:413`` 도 같다). ``h_orgtk_ret_sale_dt`` 를
+       원하는 것은 환불수수료 조회 쪽이다(``ticketReturn/a.java:352``).
 
-    A fake-card payment is always declined and so never produces one of these;
-    for as long as that was the only payment path, refund could be exercised
-    offline only. :meth:`~korail_mobile_api.client.KorailClient.pay_with_card`
-    changes that — an explicitly acknowledged real charge does settle a ticket,
-    and that ticket is refundable. The refund send path itself is unchanged and
-    still has no live-verified success envelope; call
-    :meth:`~korail_mobile_api.client.KorailClient.get_refund_commission` first to
-    see the refundable amount and the fee before issuing one.
+       변경되지 않은 승차권에서는 두 날짜가 같아 실수가 드러나지 않고,
+       변경·재발행된 승차권에서는 달라져 네 조각짜리 반환 신원이 맞지 않게
+       된다. 손으로 조립하지 말고 :meth:`from_refund_detail` 을 써라.
 
-    Sale-identity fields are ``repr=False``.
+    가짜카드 결제는 항상 거절되므로 이것을 만들어 내지 못한다. 실제로 발권된
+    승차권은
+    :meth:`~korail_mobile_api.client.KorailClient.pay_with_card` 로 명시적으로
+    청구를 인정한 결제에서만 나온다. 환불 전송 경로 자체는 성공 응답이
+    확인된 적이 없으니, 보내기 전에
+    :meth:`~korail_mobile_api.client.KorailClient.get_refund_commission` 로
+    환불액과 수수료를 먼저 확인하라.
+
+    신원 필드는 전부 ``repr=False`` 다.
     """
 
     pnr_no: str = field(repr=False)
-    #: The CURRENT ticket's ``h_sale_dt``. Fills the wire key
-    #: ``h_orgtk_sale_dt`` -- see the warning above; these are not the same
-    #: thing on a reissued ticket.
+    #: **현재** 승차권의 ``h_sale_dt``. 전선 키 ``h_orgtk_sale_dt`` 를 채우지만
+    #: 재발행된 승차권에서는 원표의 판매일자와 같지 않다 — 위 경고 참조.
     sale_date: str = field(repr=False)
-    sale_window_no: str = field(repr=False)  # h_orgtk_wct_no -> h_orgtk_sale_wct_no
-    sale_sequence: str = field(repr=False)  # h_orgtk_sale_sqno
-    return_password: str = field(repr=False)  # h_orgtk_ret_pwd
-    train_no: str = ""  # trnNo
+    #: ``h_orgtk_wct_no`` → 전선 키 ``h_orgtk_sale_wct_no``.
+    sale_window_no: str = field(repr=False)
+    #: ``h_orgtk_sale_sqno``.
+    sale_sequence: str = field(repr=False)
+    #: ``h_orgtk_ret_pwd``.
+    return_password: str = field(repr=False)
+    #: ``trnNo``.
+    train_no: str = ""
 
     @classmethod
     def from_refund_detail(
@@ -380,18 +381,20 @@ class PaidTicket:
         *,
         train_no: str = "",
     ) -> PaidTicket:
-        """Build the refund identity from a ticket detail, the way the app does.
+        """승차권 상세에서 환불 신원을 앱과 같은 방식으로 만든다.
 
-        Takes the sale date from ``h_sale_dt`` and the window, sequence and
-        password from the ``h_orgtk_*`` trio, matching
-        ``TicketListActivity.java:964-968`` field for field. Prefer this over
-        constructing :class:`PaidTicket` directly: the wire key for the sale
-        date is spelled ``h_orgtk_sale_dt``, which invites reusing
-        :attr:`~RefundTicketDetailResponse.original_sale_date`, and that is the
-        one value here that must NOT come from the ``h_orgtk_*`` group.
+        판매일자는 ``h_sale_dt`` 에서, 창구·일련번호·비밀번호는 ``h_orgtk_*``
+        세 개에서 가져온다. ``TicketListActivity.java:964-968`` 과 필드 단위로
+        같다.
 
-        Raises :class:`KorailProtocolError` if any of the four identity parts is
-        missing, rather than letting a refund go out with a blank in it.
+        :class:`PaidTicket` 을 직접 만드는 것보다 이쪽을 써라. 판매일자의
+        전선 키가 ``h_orgtk_sale_dt`` 로 적혀 있어
+        :attr:`~korail_mobile_api.read_models.RefundTicketDetailResponse.original_sale_date`
+        를 갖다 쓰기 쉬운데, 그 하나만은 ``h_orgtk_*`` 무리에서 오면 안 되는
+        값이다.
+
+        네 조각 중 하나라도 비어 있으면 빈칸을 실은 환불을 내보내는 대신
+        :class:`~korail_mobile_api.errors.KorailProtocolError` 를 올린다.
         """
         parts = {
             "pnr_no": detail.pnr_no,
@@ -411,17 +414,18 @@ class PaidTicket:
 
 @dataclass(frozen=True)
 class DiscountCardSectionRequest:
-    """One 구간 of a 할인카드 being bought (``dcntCrdInfo.do`` ``jrnyInfo``).
+    """구매하려는 할인카드의 구간 하나(``dcntCrdInfo.do`` 의 ``jrnyInfo``).
 
     ``NCardReservationDao.NCardReservationRequest``
-    (``dao/research/NCardReservationDao.java:74-108``) writes each section into
-    a ``HashMap`` under an indexed key, and Retrofit flattens that map into the
-    form (``ResearchService.java:68-70``). One entry per section, 1..3.
+    (``dao/research/NCardReservationDao.java:74-108``)가 구간마다 인덱스 키로
+    맵에 넣고, Retrofit 이 그 맵을 폼으로 펼친다
+    (``ResearchService.java:68-70``). 구간 하나에 항목 하나, 1~3 개다 —
+    :data:`~korail_mobile_api.constants.KORAIL_MAX_DISCOUNT_CARD_SECTIONS`.
 
-    ``jrnyTpCd`` is the app's own journey-type code and ``trnNo`` may be empty
-    on a section the user has not pinned to a train; both are passed through
-    rather than defaulted, because no v6.5.0 call site was found that fills
-    this map, only the setters that would.
+    ``journey_type_code``(``jrnyTpCd``)와 열차번호는 기본값을 정하지 않고
+    그대로 넘긴다. 이 맵을 실제로 채우는 호출 지점을 앱 v6.5.0 에서 찾지
+    못했고 채울 세터만 있어서, 짐작한 값을 넣지 않았다. 열차를 고르지 않은
+    구간은 ``train_no`` 가 비어 있을 수 있다.
     """
 
     run_date: str
@@ -433,13 +437,12 @@ class DiscountCardSectionRequest:
 
 @dataclass(frozen=True)
 class DiscountCardAdditionalUser:
-    """The second registered user of an N카드 2인용 (``apdUsrInfo``).
+    """N카드 2인용의 두 번째 등록 사용자(``apdUsrInfo``).
 
-    ``NCardReservationDao.java:66-72,122-124``. The app's own copy for a 1인용
-    card is simply an empty map, which contributes no form fields at all.
+    ``NCardReservationDao.java:66-72,122-124``. 1인용 카드에서는 앱도 빈
+    맵을 보내므로 폼에 필드가 하나도 붙지 않는다.
 
-    ``customer_no`` and ``phone`` are PII and are ``repr=False``; both are
-    redacted in any preview.
+    세 필드 모두 개인정보라 ``repr=False`` 이고 미리보기에서도 마스킹된다.
     """
 
     customer_no: str = field(repr=False)
@@ -449,13 +452,14 @@ class DiscountCardAdditionalUser:
 
 @dataclass(frozen=True)
 class DiscountCardPurchaseRequest:
-    """Everything ``research.dcntCrdInfo.do`` needs to buy a 할인카드.
+    """할인카드를 사는 데 ``research.dcntCrdInfo.do`` 가 요구하는 전부.
 
-    ``w4/a.java:106-113`` builds the scalar half: the product
-    (``dcntCrdKndMgNo``), the logged-in member number, ``vlidTrmStDt`` as the
-    device's own today, and the trip count. ``vlidTrmStDt`` is therefore a
-    caller argument here rather than an implicit ``date.today()`` — a payload
-    builder with a clock in it cannot be tested for what it sends.
+    스칼라 절반은 ``w4/a.java:106-113`` 이 만든다 — 상품
+    (``dcntCrdKndMgNo``), 로그인한 회원의 고객번호, 유효기간 시작일
+    (``vlidTrmStDt``), 사용 횟수.
+
+    ``validity_start_date`` 는 앱에서 기기의 오늘 날짜지만 여기서는 호출자
+    인자다. 시계가 든 폼 빌더는 무엇을 보내는지 시험할 수 없기 때문이다.
     """
 
     card_kind_management_no: str
@@ -468,12 +472,12 @@ class DiscountCardPurchaseRequest:
 
 @dataclass(frozen=True)
 class DiscountCardTicket:
-    """The four-part ticket credential of a 할인카드, for 기간연장.
+    """기간연장에 쓰는 할인카드의 네 조각짜리 승차권 자격증명.
 
-    ``TicketListActivity.java:1066-1074`` reads all four off the N카드 ticket's
-    own row — ``h_orgtk_wct_no``, ``h_orgtk_ret_sale_dt``,
-    ``h_orgtk_sale_sqno``, ``h_orgtk_ret_pwd`` — which is the same credential
-    every other original-ticket operation uses. All four are ``repr=False``.
+    ``TicketListActivity.java:1066-1074`` 는 넷 다 N카드 승차권 자신의 행에서
+    읽는다 — ``h_orgtk_wct_no``, ``h_orgtk_ret_sale_dt``,
+    ``h_orgtk_sale_sqno``, ``h_orgtk_ret_pwd``. 다른 원표 작업이 쓰는 것과
+    같은 자격증명이다. 넷 다 ``repr=False`` 다.
     """
 
     sale_window_no: str = field(repr=False)
@@ -484,21 +488,21 @@ class DiscountCardTicket:
 
 @dataclass(frozen=True)
 class DiscountCardPurchaseResponse(BaseKorailResponse):
-    """What ``research.dcntCrdInfo.do`` answers with.
+    """``research.dcntCrdInfo.do`` 의 답. 아직 결제 전이다.
 
     ``NCardReservationDao.NCardReservationResponse``
     (``dao/research/NCardReservationDao.java:127-174``).
 
-    :attr:`lump_settlement_target_no` is the point of the call: the app hands
-    it straight to the payment screen
-    (``SectionNCardInquiryActivity.java:213-257``), so this response is an
-    unpaid purchase awaiting settlement, not a completed one.
+    :attr:`lump_settlement_target_no` 를 받으려고 부르는 호출이다. 앱은 그
+    값을 곧바로 결제 화면으로 넘긴다
+    (``SectionNCardInquiryActivity.java:213-257``) — 이 응답은 정산을
+    기다리는 미결제 구매이지 끝난 구매가 아니다.
     """
 
     h_msg_txt: str | None = field(default=None, repr=False)
-    #: ``lumpStlTgtNo`` — the settlement target a payment would then charge.
+    #: ``lumpStlTgtNo`` — 결제가 청구할 정산 대상.
     lump_settlement_target_no: str | None = field(default=None, repr=False)
-    #: ``rcvdAmt`` — the amount that settlement would be for.
+    #: ``rcvdAmt`` — 그 정산의 금액.
     received_amount: str | None = None
     usable_trip_count: str | None = None
     validity_start_date: str | None = None
@@ -507,81 +511,76 @@ class DiscountCardPurchaseResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class PriceRecalculationRow:
-    """One passenger row of a 운임 재계산 request.
+    """운임 재계산 요청의 승객 한 줄.
 
-    The app's ``DiscountPriceParams``
-    (``network/data/certification/DiscountPriceParams.java``) — a flat
-    six-field POJO, one instance per seat of the held journey. The whole
-    request is an array of these, which ``a6/C1042B.java:275-283`` fans out
-    into the six parallel ``List`` ``@Field``s the DAO declares. The six lists
-    are therefore INDEX-ALIGNED, and this class is the row they zip back into.
+    앱의 ``DiscountPriceParams``
+    (``network/data/certification/DiscountPriceParams.java``) — 여섯 필드짜리
+    평평한 객체이고, 보류된 여정의 좌석 하나마다 하나씩이다. 요청 전체는
+    이것의 배열이며 ``a6/C1042B.java:275-283`` 이 그것을 DAO 가 선언한 여섯
+    개의 병렬 ``List`` ``@Field`` 로 흩뿌린다. 그래서 여섯 리스트는
+    **인덱스로 맞물려** 있고, 이 클래스가 그것을 다시 한 줄로 묶은 것이다.
 
-    The first three fields are copied straight off the held seat, and
-    :attr:`raw_room_class_code` is not a choice the caller makes:
-    ``S4/D.java:176-190`` (``makeDiscountParams``) reads ``h_psg_tp_cd`` and
-    ``h_psrm_cl_cd`` off ``seat_infos.seat_info[i]`` verbatim. Read them from
-    :class:`~korail_mobile_api.read_models.ReservationSeatDetail` for the same
-    PNR.
+    앞의 세 필드는 보류된 좌석에서 그대로 베낀다. 호출자가 고르는 값이
+    아니다 — ``S4/D.java:176-190`` 이 ``seat_infos.seat_info[i]`` 의
+    ``h_psg_tp_cd`` 와 ``h_psrm_cl_cd`` 를 그대로 읽는다. 같은 PNR 의
+    :class:`~korail_mobile_api.read_models.ReservationSeatDetail` 에서 읽어라.
 
-    The last three carry the discount being APPLIED:
+    뒤의 세 필드가 **지금 적용하는** 할인이다.
 
-    * :attr:`requested_discount_code` — ``hidDcntKndCd``, the discount kind
-      the payment screen just selected for this passenger. ``""`` when none.
-      Observed values: ``"151"``/``"152"`` (쿠폰·국가유공자 본인),
-      ``"171"``/``"172"`` (장애인·유공자 보호자), ``"321"`` (동반유아),
-      ``"401"`` (지연할인), ``"402"`` (국회의원).
-    * :attr:`certificate_no` — ``hidDscpNo``, the coupon or certificate number
-      that backs it (``h_cpn_no``, or the four-part 지연증명 return number
-      ``H4/a.getReturnNumber``). ``""`` when the discount needs none.
-    * :attr:`family_sequence_no` — ``hidFmlyNo``, the 다자녀 family member's
-      ``fmlySqno``. ``""`` for every discount except that one; only
-      ``a6/C1041A.java:75`` ever writes it non-empty.
+    * :attr:`requested_discount_code`(``hidDcntKndCd``) — 결제 화면이 이
+      승객에게 방금 고른 할인 종류. 없으면 ``""``. 관측된 값:
+      ``"151"``/``"152"``(쿠폰·국가유공자 본인),
+      ``"171"``/``"172"``(장애인·유공자 보호자), ``"321"``(동반유아),
+      ``"401"``(지연할인), ``"402"``(국회의원).
+    * :attr:`certificate_no`(``hidDscpNo``) — 그 할인을 뒷받침하는
+      쿠폰·증명 번호(``h_cpn_no``, 또는 네 조각짜리 지연증명 반환번호).
+      필요 없는 할인이면 ``""``.
+    * :attr:`family_sequence_no`(``hidFmlyNo``) — 다자녀 가족 구성원의
+      ``fmlySqno``. 다자녀 말고는 전부 ``""`` 이고, 비어 있지 않게 쓰는 곳은
+      ``a6/C1041A.java:75`` 하나뿐이다.
 
-    Every value is a plain string and none may be ``None``: Retrofit SKIPS a
-    null element when it flattens the list (``RequestBuilder.smali:1559-1571``
-    jumps back to the loop head on ``if-eqz v5``), which would shorten one key
-    relative to the other five and silently re-pair every row after it.
+    여섯 값 모두 문자열이어야 하고 ``None`` 이면 안 된다. Retrofit 은 리스트를
+    펼칠 때 널 원소를 **건너뛰므로**(``RequestBuilder.smali:1559-1571``) 한
+    키만 짧아지고, 그 뒤의 모든 줄이 조용히 다시 짝지어진다.
     """
 
-    #: ``psg_tp_dv_cd`` ← the seat's ``h_psg_tp_cd``.
+    #: ``psg_tp_dv_cd`` ← 좌석의 ``h_psg_tp_cd``.
     passenger_type_code: str
-    #: ``psrm_cl_cd`` ← the seat's ``h_psrm_cl_cd``.
+    #: ``psrm_cl_cd`` ← 좌석의 ``h_psrm_cl_cd``.
     room_class_code: str
-    #: ``dcnt_knd_cd1`` ← the seat's EXISTING ``h_dcnt_knd_cd1``, i.e. the
-    #: discount the hold already carries. ``makeDiscountParams`` overwrites it
-    #: in exactly two cases, both enforced by the builder: ``"432"`` for a
-    #: 군장병 row, and ``"000"`` when the applied discount is an integrated
-    #: 국가유공자 one.
+    #: ``dcnt_knd_cd1`` ← 좌석이 **이미 갖고 있는** ``h_dcnt_knd_cd1``, 즉 지금
+    #: 보류된 예약에 붙어 있는 할인. 앱의 ``makeDiscountParams`` 가 이 값을
+    #: 덮어쓰는 경우는 둘뿐이고 폼 빌더도 그것을 강제한다 — 군장병 줄이면
+    #: ``"432"``, 적용 할인이 통합 국가유공자면 ``"000"``.
     discount_kind_code: str
-    #: ``hidDcntKndCd`` — the discount being applied now.
+    #: ``hidDcntKndCd`` — 지금 적용하는 할인.
     requested_discount_code: str = ""
-    #: ``hidDscpNo`` — a spendable coupon/certificate number. Redacted.
+    #: ``hidDscpNo`` — 쓸 수 있는 쿠폰·증명 번호. 마스킹된다.
     certificate_no: str = field(default="", repr=False)
-    #: ``hidFmlyNo`` — 다자녀 family member sequence. Redacted.
+    #: ``hidFmlyNo`` — 다자녀 가족 구성원 일련번호. 마스킹된다.
     family_sequence_no: str = field(default="", repr=False)
 
 
 @dataclass(frozen=True)
 class PriceRecalculationRequest:
-    """A 운임 재계산 for one held PNR.
+    """보류된 PNR 하나의 운임 재계산.
 
-    ``a6/C1042B.java:265-296`` (``k2()``) builds exactly this: the PNR, the
-    fixed job id ``"1101"``, a row count, the six lists, and — only when the
-    account is a non-member — ``hiduserYn="N"`` plus the non-member number.
+    ``a6/C1042B.java:265-296``(``k2()``)이 만드는 것이 정확히 이것이다 —
+    PNR, 고정 job id ``"1101"``, 줄 수, 여섯 개의 리스트, 그리고 **비회원일
+    때만** ``hiduserYn="N"`` 과 비회원 번호.
 
-    :attr:`rows` must carry one row per seat of the journey being re-priced,
-    in seat order, because ``txtPsgGridcnt`` is derived from its length and
-    the server pairs the six repeated keys by position.
+    :attr:`rows` 는 다시 계산할 여정의 좌석 하나마다 한 줄씩, 좌석 순서대로
+    담아야 한다. ``txtPsgGridcnt`` 를 그 길이에서 유도하고 서버는 반복되는
+    여섯 키를 위치로 짝짓기 때문이다.
     """
 
     pnr_no: str = field(repr=False)
     rows: tuple[PriceRecalculationRow, ...] = ()
-    #: ``hidCustNo``. Set ONLY for a non-member session, which is the only
-    #: case in which ``k2()`` writes either this or ``hiduserYn``
-    #: (``a6/C1042B.java:290-293``). ``None`` for a member, and then neither
-    #: field is transmitted at all — Retrofit omits a null ``@Field``
-    #: (``RequestBuilder.smali:1531`` branches past ``addField`` on a null
-    #: value), so a member's form genuinely has twelve keys, not fourteen.
+    #: ``hidCustNo``. 비회원 세션에서만 채운다. ``k2()`` 가 이 값이나
+    #: ``hiduserYn`` 을 쓰는 경우도 그때뿐이다(``a6/C1042B.java:290-293``).
+    #: 회원이면 ``None`` 이고, 그러면 두 필드 다 전송되지 않는다 — Retrofit 은
+    #: 널 ``@Field`` 를 빼므로(``RequestBuilder.smali:1531``) 회원의 폼은
+    #: 실제로 열네 개가 아니라 열두 개 키를 갖는다.
     non_member_no: str | None = field(default=None, repr=False)
 
 
@@ -589,20 +588,16 @@ class PriceRecalculationRequest:
 
 @dataclass(frozen=True)
 class CartAddRequest:
-    """Add a held reservation's PNR to the 장바구니 (cart).
+    """보류된 예약의 PNR 을 장바구니에 담는다.
 
-    ``cart.addCartList`` (``CartService.java:11-13``) takes exactly one
-    request field beyond the common three: ``hidPnrNo``. The DAO
-    (``AddCartDao.java:9-24``, request class ``AddCartDao$AddCartRequest``)
-    carries the same single field, confirmed against
-    ``AddCartDao$AddCartRequest.smali`` (``hidPnrNo:Ljava/lang/String;`` and
-    the matching ``@Field("hidPnrNo")`` annotation on
-    ``CartService.smali``'s ``addCart`` method).
+    ``cart.addCartList``(``CartService.java:11-13``)가 공통 세 필드 말고
+    받는 것은 ``hidPnrNo`` 하나뿐이다. DAO 도 같은 한 필드다
+    (``AddCartDao.java:9-24``, 바이트코드에서도 확인).
 
-    ``pnr_no`` is a ticket identifier and is ``repr=False``; it is also
-    already registered in :data:`~korail_mobile_api.redaction.SENSITIVE_KEYS`
-    under its wire name ``hidPnrNo``, so a :class:`~korail_mobile_api.consent.MutationPreview`
-    of this request redacts it automatically.
+    ``pnr_no`` 는 승차권 식별자라 ``repr=False`` 이고, 전선 이름 ``hidPnrNo``
+    가 :mod:`korail_mobile_api.redaction` 에 민감 키로 등록돼 있어
+    :class:`~korail_mobile_api.consent.MutationPreview` 에서도 자동으로
+    마스킹된다.
     """
 
     pnr_no: str = field(repr=False)
