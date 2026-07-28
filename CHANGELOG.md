@@ -173,138 +173,127 @@
     하는지, 1인용 카드에서 `apdUsrCnt` 를 빼는 대신 `"0"` 으로 보내야 하는지는 알 수 없다.
     `dcntCrdExtn.do` 의 DAO 응답 타입이 맨 `BaseResponse` 라, 연장 성공 시의 응답과 그
     비용도 알 수 없다.
-- Added: `RefundTicketDetailResponse.discount_card`, plus `DiscountCardOnTicket`
-  and `DiscountCardSection`. No new route and no new method: `SelTicketInfo`
-  already returns `TicketDetailDao.TicketDetailResponse`, which carries
-  `dcnt_crd_info` (`dao/refund/TicketDetailDao.java:233`) whenever the "ticket"
-  being read is itself a 할인카드. The package was already fetching that object
-  and discarding it.
-  - This is the entry point to everything else in the 할인카드 surface. The
-    card number is the sole input to `get_discount_card_usage_history`, the
-    section rows are where `get_discount_card_schedule`'s station NAMES come
-    from, and `h_dcnt_crd_trm_extn_psb_flg` is the only thing that enables
-    기간연장 in the app (`Y4/C0907b.java:301` → `Y4/Q.java:1013-1026`).
-  - The section list's wire key is `appSegList` — the Java FIELD name
-    (`TicketDetailDao.java:124`), which is what Gson serialises. The getter is
-    spelled `getAppSeg_info()` and is NOT the wire name; taking the getter
-    would have produced a parser that silently found no sections.
-- Added: loyalty READS, and the welfare entitlement one of them exposes —
-  `KorailClient.get_korail_point_summary` and
-  `KorailClient.get_mileage_history`, plus `KorailPointSummaryResponse`,
-  `MileageHistoryRequest`, `MileageHistoryEntry`, `MileageHistoryResponse` and
-  the five `KORAIL_MILEAGE_*` selector constants. The read-only boundary is now
-  58 routes.
-- Added: 할인카드(N카드) reads — `KorailClient.get_discount_card_usage_history`
-  and `KorailClient.get_discount_card_schedule`, plus
+- `RefundTicketDetailResponse.discount_card` 와 `DiscountCardOnTicket`,
+  `DiscountCardSection`. 새 라우트도 새 메서드도 아니다 — `SelTicketInfo` 가 이미
+  `TicketDetailDao.TicketDetailResponse` 를 돌려주고, 읽는 "승차권" 자체가 할인카드일
+  때 그 안에 `dcnt_crd_info` 가 실려 온다(`dao/refund/TicketDetailDao.java:233`).
+  패키지는 그 객체를 이미 받아 놓고 버리고 있었다.
+  - 할인카드 표면의 나머지 전부가 여기서 시작한다. 카드번호는
+    `get_discount_card_usage_history` 의 유일한 입력이고, 구간 행은
+    `get_discount_card_schedule` 의 역 **이름** 이 나오는 곳이며,
+    `h_dcnt_crd_trm_extn_psb_flg` 는 앱에서 기간연장을 열어 주는 유일한 값이다
+    (`Y4/C0907b.java:301` → `Y4/Q.java:1013-1026`).
+  - 구간 목록의 전선 키는 `appSegList` — Gson 이 직렬화하는 Java **필드** 이름이다
+    (`TicketDetailDao.java:124`). 게터 철자는 `getAppSeg_info()` 이고 전선 이름이
+    아니다. 게터를 따랐다면 구간을 하나도 찾지 못하면서 조용히 성공하는 파서가
+    됐을 것이다.
+- 마일리지·포인트 **읽기**와 그중 하나가 드러내는 복지 자격.
+  `KorailClient.get_korail_point_summary` 와 `KorailClient.get_mileage_history`,
+  그리고 `KorailPointSummaryResponse`, `MileageHistoryRequest`,
+  `MileageHistoryEntry`, `MileageHistoryResponse` 와 `KORAIL_MILEAGE_*` 선택자 상수
+  다섯. 읽기 전용 경계가 58 라우트가 됐다.
+- 할인카드(N카드) 읽기 — `KorailClient.get_discount_card_usage_history` 와
+  `KorailClient.get_discount_card_schedule`, 그리고
   `DiscountCardScheduleRequest`, `DiscountCardUsage`,
-  `DiscountCardUsageListResponse`, `DiscountCardScheduleTrain` and
-  `DiscountCardScheduleResponse`. The read-only boundary is now 56 routes.
-  **Implemented and NOT live-verified**: no account this project can reach owns
-  an N카드, so both shapes come from the APK's DAOs rather than from an observed
-  body.
-  - `GET ticket.dcntCrdUseQry.do` (`ResearchService.java:51-52`) takes one
-    identifier, `dcntCrdNo`, and the card number is never typed by a user: the
-    N카드 ticket's own detail response carries it as
-    `dcnt_crd_info.h_dcnt_crd_no`, which `Y4/C0907b.java:303` puts in an intent
-    extra and `TicketNCardHistoryActivity.java:138,109` reads straight back into
-    `setDcntCrdNo`. That number is now redacted everywhere it can appear.
-  - `GET research.dcntCrdScheduleView.do` (`ResearchService.java:54-55`) is not
-    an ordinary train search. An N카드 is sold against one to three fixed 구간,
-    and this route answers "which trains on this 구간 does this card cover",
-    which is why it is keyed by the card product rather than by station codes.
-  - **Two of its fourteen `@Query` parameters are omitted, because the app omits
-    them.** Neither builder (`u4/b.java:52-65`, `:67-81`) ever calls
-    `setQryPgNo`, and the 1-section builder never calls `setUseTrmDno`, so
-    Retrofit drops both nulls. They are registered in
-    `KORAIL_OPTIONAL_REQUEST_FIELDS` rather than pinned, since a request that
-    carries them is equally conformant — the response's `fllwPgExt` is the
-    app's own paging signal (`SectionNCardInquiryActivity.java:406-408`).
-  - `dcntCrdKndCd` has exactly two values in the whole app. `u4/b.java:60-61`
-    sends `"B2N"` for the two original 1-section products (`B2N18120402`,
-    `B2N18120403`) and `"MMM"` for everything else; `:76` hardcodes `"MMM"`.
-    `DiscountCardScheduleRequest.for_card` reproduces that rule.
-  - **No endpoint supplies the card product codes.** Every `dcntCrdKndMgNo` the
-    app can send is a client-side literal (`NCard1SectionBookingActivity.java:28`,
-    `NCard2SectionBookingActivity.java:34`, `NCard3SectionBookingActivity.java:28`,
-    `q5/ViewOnClickListenerC6267a.java:73,76`), and `pass.passMenu.do` returns
-    only a `detailType` string that selects an Activity, not a code list.
-  - The two `dcntCrd*` routes that CHANGE state — `research.dcntCrdInfo.do` and
-    `reservation.dcntCrdExtn.do` — are deliberately absent from the read-only
-    allowlist and from `KORAIL_MUTATION_ROUTES`; a test pins their absence.
-- Added: 환승 (transfer) search and reservation — `KorailClient.search_transfer_trains`,
-  `KorailClient.search_trains_with_transfer_fallback` and
-  `KorailClient.reserve_transfer`, plus `TransferItinerary`,
-  `TransferSearchResult`, `pair_transfer_itineraries` and the four resolved
-  codes `KORAIL_DIRECT_ITINERARY_CODE`/`KORAIL_TRANSFER_ITINERARY_CODE`
-  (`"1"`/`"2"`), `KORAIL_DIRECT_JOURNEY_TYPE_CODE`/
-  `KORAIL_TRANSFER_JOURNEY_TYPE_CODE` (`"11"`/`"14"`) and
-  `KORAIL_MAX_JOURNEY_LEGS` (`2`). Reservation is no longer one-leg-only.
-  **Implemented and NOT live-verified**: nothing here has been sent to KORAIL.
-  - The app has one request builder for both cases. `C5/a.java:52-119` (`N0`) is
-    a loop over the train array, and the array's **length** decides everything:
-    `txtJrnyCnt` is `(length == 1 ? "1" : "2")` at `:55`, the loop writes at
-    `i + 1` so journey indices are 1-based, and the sixteen `OJrny` keys repeat
-    per leg. `build_reservation_form` is now a one-leg call into a leg-sequence
-    core and `build_transfer_reservation_form` is the same core with two, so the
-    **single-leg form is byte-for-byte what it was, key order included** — a
-    contract test pins all 56 keys in order rather than trusting that.
-  - Four codes were read from **bytecode**, not assumed. `K4/d` is `"1"`/`"2"`
-    (`smali/K4/d.smali:36,64`) and does three unrelated jobs with the same two
-    values — search `radJobId`, `txtJrnyCnt`, and the seed for `txtJrnySqno`.
-    `K4/e` is **not** `"1"`/`"2"`: DIRECT is `"11"` (`smali/K4/e.smali:40`) and
-    TRANSFER is `"14"` (`smali/K4/e.smali:68`), which jadx hides behind an
-    unrelated same-valued constant. `S4/O.getSequenceNo` is `DecimalFormat("000")`, so the
-    sequence numbers reach the wire as `"001"`/`"002"`.
-  - **Both legs of a transfer carry `txtJrnyTpCd="14"`.** The ternary at
-    `C5/a.java:60` sits inside the per-leg loop but tests the array *length*,
-    while `:61` two lines below tests the loop *index*. Getting that backwards
-    would send a form the app never sends, so both were re-read as
-    `smali/C5/a.smali:306-338` (`array-length` re-evaluated every iteration) and
-    `:343` (`if-nez v1`).
-  - **Two legs is the app's ceiling, not a limitation chosen here.** The form has
-    no journey-3 spelling: `OSeat.java:32-35` and `OSrcar.java:21-30` each split
-    on "journey 1 or not", so a third leg would *overwrite* leg 2, and
-    `ReservationRequest.java:114-117` reads back exactly two seat slots. Any
-    other leg count is refused before a form is built.
-  - The transfer **search** moves exactly one field. On `WRD000061` the app calls
-    `setRadJobId(TRANSFER_SQ_NO.getCode())` on the request it already built and
-    hands it on untouched (`DirectInquiryActivity.java:615-624` into
-    `DirectInquiryActivity.java:284-296`, confirmed at
-    `smali/…/DirectInquiryActivity.smali:1677-1689`).
-    `chtnCnt`/`chtnRsStnCd1`/`trnGpCnt`/`trnGpCd1` are not part of it.
-    `search_trains_with_transfer_fallback` reproduces the app's own flow and
-    swallows `KorailNoDirectTrainError` and nothing else.
-  - A transfer **response is not shaped differently**: the same flat
-    `trn_infos.trn_info` list, paired positionally, rows 0/1 then 2/3, trailing
-    odd row dropped (`a5/k.java:156-170`). `h_chg_trn_seq` is the server's copy
-    of that position and is used as a consistency check, not as the pairing key.
-    Paging gained the transfer half of the cursor —
-    `TrainSearchContinuation.query_train_no2`, defaulting to `""` so a direct
-    next page is unchanged.
-  - Passenger mix composes **per booking** (`w4/a.java:47-74` builds `OPsg` once);
-    cabin class and 좌석지정 compose **per leg** (`C5/a.java:59`/`:97` and
-    `:120-133`). **예약대기 (`1102`) does not compose and is refused**: the app
-    gates it twice, at `a5/k.java:120-127` (the standby check returns false for
-    a non-direct result) and at `DirectInquiryActivity.java:434` (its only
-    `setJobId("1102")`, on a screen `TransferInquiryActivity` overrides away).
-- Added: a NetFunnel virtual-waiting-room client, `KorailNetFunnelClient`, so a
-  gated operation can wait its turn instead of failing.
-  **Off by default, and partly live-confirmed on 2026-07-26.** Probing on that
-  date ran the protocol against `nf.letskorail.com` and settled the standing
-  inferences: the wire format is the native SDK's `<code>:<params>`, the entry
-  sequence is `5101` → `5002` → gated call → `5004`, and the queue is a pool of
-  hosts rather than one. The slot-release path was exercised end to end.
-  **The 201 queued path is still NOT live-exercised**: the server was not
-  queueing (`5101` answered `nwait=0`), so the polling loop, the ttl sleep and
-  the two bounds remain covered by offline fixtures only, exactly as the
-  sibling SRT client's polling path is.
-  - **The queue is a POOL, and the session lives on one node of it — the second
-    defect the probing exposed, and the one worth an explicit warning.**
-    `nf.letskorail.com` is a *front door* that load-balances the entry call; the
-    node it lands on is the only one that can complete the session, and every
-    reply names that node in its `ip`/`port`. This client sent every opcode to
-    the front door, so slot release failed **about half the time,
-    non-deterministically** — five acquire-then-release cycles:
+  `DiscountCardUsageListResponse`, `DiscountCardScheduleTrain`,
+  `DiscountCardScheduleResponse`. 읽기 전용 경계가 56 라우트가 됐다.
+  **구현했고 NOT live-verified** — 이 프로젝트가 닿을 수 있는 어떤 계정도 N카드를
+  갖고 있지 않아서, 두 모양 모두 관측된 본문이 아니라 APK 의 DAO 에서 왔다.
+  - `GET ticket.dcntCrdUseQry.do`(`ResearchService.java:51-52`)는 식별자 하나
+    `dcntCrdNo` 만 받고, 그 카드번호를 사용자가 입력하는 일은 없다. N카드 승차권
+    자신의 상세 응답이 `dcnt_crd_info.h_dcnt_crd_no` 로 싣고 오는 것을
+    `Y4/C0907b.java:303` 이 intent extra 에 넣으면
+    `TicketNCardHistoryActivity.java:138,109` 가 그대로 `setDcntCrdNo` 로 되읽는다.
+    그 번호는 이제 나타날 수 있는 모든 곳에서 마스킹된다.
+  - `GET research.dcntCrdScheduleView.do`(`ResearchService.java:54-55`)는 보통의
+    열차 검색이 아니다. N카드는 고정된 구간 한 개에서 세 개까지에 대해 팔리고, 이
+    라우트는 "이 구간에서 이 카드가 덮는 열차는 무엇인가"에 답한다. 역코드가 아니라
+    카드 상품으로 키가 걸리는 이유가 그것이다.
+  - **열네 개 `@Query` 파라미터 중 둘은 보내지 않는다. 앱이 보내지 않기
+    때문이다.** 두 빌더(`u4/b.java:52-65`, `:67-81`) 어느 쪽도 `setQryPgNo` 를
+    부르지 않고, 1구간 빌더는 `setUseTrmDno` 도 부르지 않아 Retrofit 이 null 을
+    떨군다. 고정하지 않고 `KORAIL_OPTIONAL_REQUEST_FIELDS` 에 등록하는 것은, 그
+    둘을 실은 요청도 똑같이 규격에 맞기 때문이다 — 앱 자신의 페이징 신호는 응답의
+    `fllwPgExt` 다(`SectionNCardInquiryActivity.java:406-408`).
+  - `dcntCrdKndCd` 는 앱 전체에서 값이 정확히 둘이다. `u4/b.java:60-61` 이 원래의
+    1구간 상품 둘(`B2N18120402`, `B2N18120403`)에 `"B2N"` 을, 나머지 전부에 `"MMM"`
+    을 보내고 `:76` 은 `"MMM"` 을 하드코딩한다. `DiscountCardScheduleRequest.for_card`
+    가 그 규칙을 그대로 옮긴 것이다.
+  - **카드 상품코드를 내려주는 엔드포인트는 없다.** 앱이 보낼 수 있는
+    `dcntCrdKndMgNo` 는 전부 클라이언트 쪽 리터럴이고
+    (`NCard1SectionBookingActivity.java:28`, `NCard2SectionBookingActivity.java:34`,
+    `NCard3SectionBookingActivity.java:28`, `q5/ViewOnClickListenerC6267a.java:73,76`),
+    `pass.passMenu.do` 는 코드 목록이 아니라 Activity 를 고르는 `detailType` 문자열만
+    돌려준다.
+  - 상태를 **바꾸는** `dcntCrd*` 라우트 둘 — `research.dcntCrdInfo.do` 와
+    `reservation.dcntCrdExtn.do` — 은 읽기 전용 허용목록에도
+    `KORAIL_MUTATION_ROUTES` 에도 일부러 넣지 않았다. 없다는 것을 테스트가 고정한다.
+- 환승 검색과 환승 예약 — `KorailClient.search_transfer_trains`,
+  `KorailClient.search_trains_with_transfer_fallback`,
+  `KorailClient.reserve_transfer`, 그리고 `TransferItinerary`,
+  `TransferSearchResult`, `pair_transfer_itineraries` 와 확정된 코드 넷
+  `KORAIL_DIRECT_ITINERARY_CODE`/`KORAIL_TRANSFER_ITINERARY_CODE`(`"1"`/`"2"`),
+  `KORAIL_DIRECT_JOURNEY_TYPE_CODE`/`KORAIL_TRANSFER_JOURNEY_TYPE_CODE`
+  (`"11"`/`"14"`), `KORAIL_MAX_JOURNEY_LEGS`(`2`). 예약이 더 이상 한 다리 전용이
+  아니다. **구현했고 NOT live-verified** — 여기의 무엇도 KORAIL 로 보낸 적이 없다.
+  - 앱은 두 경우에 요청 빌더 하나를 쓴다. `C5/a.java:52-119`(`N0`)는 열차 배열을
+    도는 반복문이고, 배열의 **길이** 가 모든 것을 정한다. `txtJrnyCnt` 는 `:55` 에서
+    `(length == 1 ? "1" : "2")` 이고, 반복문이 `i + 1` 에 쓰므로 여정 색인은 1부터이며,
+    `OJrny` 키 열여섯 개가 다리마다 반복된다. `build_reservation_form` 은 이제 다리
+    나열 코어를 한 다리로 부르는 것이고 `build_transfer_reservation_form` 은 같은
+    코어를 두 다리로 부르는 것이라서, **한 다리짜리 폼은 키 순서까지 바이트 단위로
+    이전과 같다** — 그것을 믿는 대신 계약 테스트가 키 56개를 순서째로 고정한다.
+  - 코드 넷은 가정이 아니라 **바이트코드** 에서 읽었다. `K4/d` 는 `"1"`/`"2"` 이고
+    (`smali/K4/d.smali:36,64`) 같은 두 값으로 서로 무관한 일 셋을 한다 — 검색
+    `radJobId`, `txtJrnyCnt`, 그리고 `txtJrnySqno` 의 씨앗. `K4/e` 는 `"1"`/`"2"` 가
+    **아니다**. DIRECT 가 `"11"`(`smali/K4/e.smali:40`), TRANSFER 가
+    `"14"`(`smali/K4/e.smali:68`) 이며, jadx 는 값이 같은 무관한 상수 뒤에 이것을
+    숨긴다. `S4/O.getSequenceNo` 는 `DecimalFormat("000")` 이라 순번은 전선에
+    `"001"`/`"002"` 로 닿는다.
+  - **환승의 두 다리 모두 `txtJrnyTpCd="14"` 를 싣는다.** `C5/a.java:60` 의 삼항은
+    다리별 반복문 안에 있지만 배열의 *길이* 를 보고, 두 줄 아래 `:61` 은 반복
+    *색인* 을 본다. 이것을 뒤집으면 앱이 결코 보내지 않는 폼을 보내게 되므로, 둘 다
+    `smali/C5/a.smali:306-338`(`array-length` 가 매 반복 다시 평가된다)과
+    `:343`(`if-nez v1`)으로 다시 읽었다.
+  - **두 다리는 앱의 천장이지 여기서 고른 제약이 아니다.** 폼에 여정 3 의 철자가
+    없다. `OSeat.java:32-35` 와 `OSrcar.java:21-30` 이 각각 "여정 1 이냐 아니냐" 로
+    갈리므로 세 번째 다리는 다리 2 를 *덮어쓴다*. `ReservationRequest.java:114-117`
+    도 좌석 슬롯을 정확히 둘만 되읽는다. 그 밖의 다리 수는 폼을 만들기 전에
+    거절한다.
+  - 환승 **검색** 이 옮기는 필드는 정확히 하나다. `WRD000061` 이 오면 앱은 이미
+    만들어 둔 요청에 `setRadJobId(TRANSFER_SQ_NO.getCode())` 만 부르고 그대로 넘긴다
+    (`DirectInquiryActivity.java:615-624` → `DirectInquiryActivity.java:284-296`,
+    `smali/…/DirectInquiryActivity.smali:1677-1689` 로 확인). `chtnCnt`,
+    `chtnRsStnCd1`, `trnGpCnt`, `trnGpCd1` 은 여기 들어가지 않는다.
+    `search_trains_with_transfer_fallback` 는 앱 자신의 흐름을 그대로 옮긴 것이고
+    `KorailNoDirectTrainError` 만 삼킨다.
+  - 환승 **응답의 모양은 다르지 않다**. 같은 평탄한 `trn_infos.trn_info` 목록을
+    자리로 짝지어 0/1, 2/3 순으로 묶고 홀수로 남은 마지막 행은 버린다
+    (`a5/k.java:156-170`). `h_chg_trn_seq` 는 그 자리를 서버가 복사해 준 값이라
+    짝짓기 키가 아니라 일관성 검사로만 쓴다. 페이징에는 커서의 환승 쪽 절반
+    `TrainSearchContinuation.query_train_no2` 가 생겼고 기본값 `""` 이라 직통 다음
+    쪽은 그대로다.
+  - 승객 구성은 **예약 단위** 로 조합되고(`w4/a.java:47-74` 가 `OPsg` 를 한 번
+    만든다), 좌석등급과 좌석지정은 **다리 단위** 로 조합된다(`C5/a.java:59`/`:97`,
+    `:120-133`). **예약대기(`1102`)는 조합되지 않고 거절된다** — 앱이 두 곳에서
+    막는다. `a5/k.java:120-127`(직통이 아닌 결과에는 예약대기 검사가 false 를
+    돌려준다)과 `DirectInquiryActivity.java:434`(유일한 `setJobId("1102")` 이며,
+    `TransferInquiryActivity` 가 덮어 없애는 화면에 있다).
+- NetFunnel 가상대기실 클라이언트 `KorailNetFunnelClient`. 게이트에 걸린 연산이
+  실패하는 대신 차례를 기다릴 수 있다. **기본은 꺼짐이고, 2026-07-26 실서버 프로브로
+  절반이 확인됐다.** 그날의 프로브가 `nf.letskorail.com` 을 상대로 프로토콜을 돌려
+  그때까지 추정이던 것들을 확정했다 — 전선 형식은 네이티브 SDK 의
+  `<code>:<params>` 이고, 진입 순서는 `5101` → `5002` → 게이트된 호출 → `5004` 이며,
+  큐는 호스트 하나가 아니라 여럿의 풀이다. 자리 반납 경로는 끝까지 돌았다.
+  **201 대기 경로(queued path)는 여전히 NOT live-exercised** — 그날 서버가 줄을
+  세우지 않아서(`5101` 이 `nwait=0` 으로 답했다) 폴링 루프와 ttl 대기와 두 상한은
+  형제 SRT 클라이언트의 폴링 경로와 똑같이 오프라인 픽스처로만 덮여 있다.
+  - **큐는 풀이고 세션은 그 풀의 노드 하나에 산다 — 프로브가 드러낸 두 번째 결함이자
+    경고를 따로 적어 둘 값어치가 있는 것.** `nf.letskorail.com` 은 진입 호출을
+    부하분산하는 정문(front door)이다. 세션을 끝낼 수 있는 것은 그 호출이 떨어진
+    노드뿐이고, 모든 응답이 자기 `ip`/`port` 로 그 노드를 알려 준다. 이 클라이언트는
+    모든 opcode 를 정문으로 보내고 있었으므로 자리 반납이 **절반쯤, 비결정적으로
+    (half the time, non-deterministic)** 실패했다 — 획득·반납 다섯 번은 이랬다.
 
     ```
     acquire said ip=rnf12.letskorail.com  -> release 503
@@ -314,7 +303,7 @@
     acquire said ip=rnf13.letskorail.com  -> release 200
     ```
 
-    and the controlled pair that settles it:
+    그리고 결론을 낸 통제된 한 쌍은 이랬다.
 
     ```
     acquire on nf.letskorail.com (reply said ip=rnf13.letskorail.com)
@@ -322,374 +311,314 @@
       release via rnf13.letskorail.com -> 200:key=&nwait=0&…
     ```
 
-    **`Wrong Server ID` is literal**, and it will cost the next reader an hour
-    if this is not written down: it reads like a credential or parameter
-    complaint and is neither — the front door does not own a session a queue
-    node issued. The releases that appeared to work were the balancer happening
-    to land back on the owning node, which is also why the same key sometimes
-    released fine. The app has always followed the naming: `T6/d.makeURL`
-    (`T6/d.java:17-19`) rebuilds the URL from the previous reply's
-    `getHost()`/`getPort()` unless `host_notmodify` is set, and that flag is
-    `false` by default (`T6/h.java:43`, `isHostNotmodify()` at `:134-135`) and
-    never set by `KTApplication`; `T6/i.java:50-53` is where `ip`/`port` are
-    read. Declining it leaked roughly half of every slot taken, which is exactly
-    the behaviour NetFunnel exists to prevent.
-    So `5101` now goes to the front door while `5002` and `5004` go to the node
-    that issued the session, the node rides on `KorailNetFunnelToken.node`, and
-    it supersedes as the key does — a reply naming no node leaves the last one
-    in force, and a bypass has neither a session nor a node.
-  - **The redirect is constrained, not trusted.** A response choosing where the
-    next request goes is what an origin guard exists to stop, so the naming is
-    admitted only into the queue's own pool: `rnf<1-99>.letskorail.com`,
-    lowercase, no leading zero, matched as whole labels, or the front door
-    itself; `https` on port `443` and no other port, because the port is not
-    followed on the server's say-so either. Anything outside the rule is a
-    **hard error**, never a quiet fall-back to the front door — falling back
-    silently is what produced the flaky release, since it turns "this reply is
-    lying to us" into "this slot leaked", and a leaked slot makes no noise. The
-    rule lives in `safety.py` beside the origin assertions rather than in the
-    client, `assert_korail_netfunnel_origin` still refuses a node (it guards the
-    configured origin and the entry call, so widening one guard cannot widen the
-    other), `follow_redirects` stays `False`, and the canonical-origin guarantee
-    for `smart.letskorail.com` is untouched.
-  - **The `5101` key is a ticket, not a session — the first defect the probing
-    exposed.** `acquire` originally returned the 5101 reply and `release` sent
-    that key to `setComplete`, which the server refuses with
-    `503:msg="Wrong Server ID"` every time, with or without `sid`/`aid`. Only a
-    key `chkEnter` issued is completable, and it is a different, shorter one
-    (252 characters became 104). So `acquire` now always performs the 5002,
-    even when 5101 reported `nwait=0`, and **every step's key supersedes the
-    one before it** — including each 201 poll, and including a 201 that echoes
-    no key at all, where the last known key stays in force. A successful
-    release answers `200:` with an *empty* `key=`, which parses as a release
-    rather than as a truncated body. `503` is refused rather than accepted
-    beside the `502` we do accept, and the keyless short-circuit in `release`
-    is narrowed to a bypass (`300`), so no other token can skip the request
-    silently. Note that `503` has **two** causes and the wire cannot tell them
-    apart — an unexchanged ticket, or the wrong node — so the exception message
-    names both.
-  - **Read literally, the APK disagrees, and the live server wins.**
-    `T6/g.java`'s poll loop leaves the moment the status is not Continue —
-    `T6/g$a.smali:243-247` → `:282` → `:892` shows the fall-through is a
-    `return` — so after a 200 from 5101 the app sends no 5002 and completes
-    with the ticket. The `5002` stays unconditional anyway: `5101` → `5002` →
-    `5004` is the only sequence ever seen to release cleanly, and whether the
-    ticket would complete at its own node has never been probed. The APK does
-    corroborate the supersession: one response object, overwritten at `:61` and
-    `:107`, with `Complete()` sending whatever key arrived last (`:79`).
-  - **KORAIL does not speak the JavaScript dialect, and this is the whole
-    substance of the change.** `nf.letskorail.com` serves both apps, so the
-    live-verified `srt-mobile-api` implementation was expected to be a template.
-    It is not: SRT is a WebView over `netfunnel.js` and sends the browser
-    dialect (`nfid`, `prefix`, `js=yes`, a trailing epoch), while `korail.apk`
-    embeds STCLab's native Android SDK — the `T6`/`U6` packages — which sends
-    none of it. The three requests are `5101` `opcode,sid,aid`
-    (`T6/d.java:99-101`), `5002` `opcode,key` (`:54-55`) and `5004` `opcode,key`
-    (`:78-79`), in that order, because `U6/a.java` renders the `addParam` list
-    with `URLEncodedUtils.format`. So `sid`/`aid` ride on `5101` **only**, the
-    opposite of the JS dialect; `ttl` is never sent back at all, being read only
-    to decide how long to sleep (`T6/g.java:462`) and clamped to 30 seconds
-    (`T6/h.java:40`) rather than the JS bundle's 5.
-  - **The response shape was the one assumption no live run had checked, and it
-    holds.** `T6/i.java:36-43` parses everything before the first `:` as the
-    status code, so the reply must be `<code>:<params>` and not the JS
-    dialect's `<rtype>:<code>:<params>` — feed the app the latter and it reads
-    the code as 5002 and finds no key. Every 2026-07-26 reply arrived in exactly
-    the native form. `parse_netfunnel_body` still rejects a `NetFunnel.gRtype=…`
-    body and names that possibility in its error message, now as a diagnosis
-    for a server that changed rather than as a hedge against our own guess.
-  - **The key never rides on a KORAIL request.** No Retrofit interface in the
-    app declares a `netfunnelKey`-shaped field on any route; the queue gates the
-    call rather than parameterising it, which is why this is a separate client
-    on a separate host and why reserve, pay, cancel and refund send exactly what
-    they sent before.
-  - **Off by default, enforced at construction.** `KorailConfig.
-    netfunnel_enabled` is `False`, and `KorailNetFunnelClient` on a config
-    without it raises before any socket exists. Enabling it adds a round trip
-    and a failure mode to every gated operation and buys nothing until the
-    server actually meters us. It is meant for peak season, which is why the app
-    carries a separate peak-season inquiry queue (`act_8_2`) at all.
-  - **The wait is bounded twice** — 20 polls and 60 seconds, whichever comes
-    first. The app polls indefinitely (`T6/g.java:449`) behind a dialog a human
-    can close; this library has none, and a queue is a wait rather than a retry.
-    No retry logic was added.
-  - **The slot is released on both paths**, as the app releases it from
-    `BaseDaoHelper`'s `onPostExecute` (:105-107) whether or not the gated call
-    raised. A failed release **raises** on the success path instead of being
-    swallowed: the sibling repo bounded its key at 128 characters while real
-    keys are 256, so every release was refused before it was sent and leaked
-    every slot silently until a live run exposed it. The 2026-07-26 probe added
-    two more real lengths — 252 from `5101` and 104 from `5002` — so the guard
-    stays at 512 characters and is deliberately not tightened to any single
-    observed length.
-  - **Three exact query contracts are registered, not an allowlist loosened**,
-    and the queue hosts have their own origin assertions — one for the front
-    door and the entry call, a wider one for the pool, and a third that decides
-    which of the two a given opcode gets. `KORAIL_READ_ONLY_ROUTES` is untouched
-    at 54, so `post_form`/`get_json` can never reach `/ts.wseq`. `5003`, `5105`
-    and `5106` are declared as constants and rejected by the guard.
-- Added: server-side failures are classified on `h_msg_cd` instead of all
-  arriving as one `KorailAppError`. New types — `KorailNoResultsError` (with
-  `KorailNoDirectTrainError`), `KorailSoldOutError`,
-  `KorailSeatUnavailableError`, `KorailReservationRefusedError`,
-  `KorailInvalidRequestError`, `KorailNotEntitledError`,
-  `KorailServiceUnavailableError`, `KorailAppUpdateRequiredError` — plus the
-  exported `classify_app_error`. See the error-taxonomy table in README for
-  which one means retry is pointless, which means re-login, and which means the
-  request was fine and there was simply nothing there.
-  - **Compatibility-preserving.** Every new type subclasses `KorailAppError`,
-    so no existing `except` clause changes meaning, and `code`/`message`/`raw`
-    stay on all of them so a caller can migrate incrementally.
-  - **It never invents a failure.** Whether a response failed is still decided
-    by `strResult` plus the app's own `WRC000288`; classification only picks
-    which exception describes a failure that was already going to be raised.
-    The app behaves the same way — any unrecognised code on a non-`FAIL`
-    response goes to `onReceive()` as a success (`BaseActivity.java:629`) — so
-    a warning attached to a success stays a success. `WRR664296`, which came
-    back with `strResult=SUCC` and a real, cancelable PNR, is pinned by test,
-    as are the APK's own success-side codes `IRR000014`, `IRT800005` and
-    `WRS800036`.
-  - **No retry logic was added.** The library still does not retry on its own
-    initiative, and `reserve` is never retried, because a retried reserve is a
-    duplicate booking.
-  - Sold-out (`ERR211161`), the seat-specific refusals
-    (`WRI411345`/`ERR911081`/`WRT800176`, for which the app offers automatic
-    seat assignment rather than a dead end), the reserve refusals
-    (`WRR800029`/`ERR911531`/`ERR911051`, which the app answers by navigating
-    to the user's existing reservations), `WRD000061`, `WRG000000`, `P114`,
-    `SEMGTK` and `SUPDATE` are all APK branches, cited file:line in each
-    docstring. `P100`, `WRT300005`, `ERR299943`, `WRG200018`, `WRT100002` and
-    `WRT100124` are this repository's live observations with zero APK hits and
-    are labelled as such.
-  - Anti-macro turned out not to be a code: `BaseDaoHelper.java:59-86` reads
-    the `DynaPath-Result` header and shows the body's `message` instead of
-    running the `h_msg_cd` ladder, so the existing `KorailDynaPathError` already
-    is the anti-macro refusal. srtgo_plus's `MACRO` substring rule and srtgo's
-    second sold-out code `IRT010110` are recorded as third-party-attested only
-    and not encoded; a test asserts neither was adopted.
-  - `[3]인증정보에 문제가 있습니다.` is deliberately left unclassified: no
-    `h_msg_cd` was captured with it and the string is 0-hit in the APK, so
-    classifying it would mean the Korean-text matching this change removes.
-- Added: `reserve` reaches all three of the booking screen's job types through a
-  keyword-only, defaulted `job_type` (`KorailReservationJobType`). The default
-  is `IMMEDIATE` (`txtJobId="1101"`), the only value this package has ever sent,
-  so every existing call is byte-for-byte unchanged.
-  **Both variants were live-verified on 2026-07-26** by reserve -> read back
-  -> cancel. `1103` booked the exact seats requested (compare the
-  inventory's `seat_spec` to the detail's `h_seat_no`, not `seat_no`).
-  `1102` on a sold-out train answered `IRR000014`, and
-  `confirm_standby_hold` answered `IRZ000003`.
-  - `SEAT_DESIGNATED` (`"1103"`) books named seats. `seats` takes one
-    `KorailSeatAssignment` per passenger, carrying exactly the two identifiers
-    the existing seat reads return — `SeatCar.car_no` /
-    `SeatInventoryResponse.car_no` and `PhysicalSeat.seat_no`, with
-    `KorailSeatAssignment.from_inventory()` pairing them and refusing a seat the
-    read marked unsellable. The form appends `txtSrcarCnt` (the *seat* count)
-    then `txtSrcarNo{i}`/`txtSeatNo{i}` from index 1, after the journey block.
-    An ordinary hold still sends none of those keys at all — the app clears its
-    `OSrcar` map and an empty Retrofit `@FieldMap` contributes no fields, so
-    srtgo's unconditional `txtSrcarCnt="0"` is a shape the app never produces.
-    A seat list whose length is not the passenger total, or that names the same
-    seat twice, is refused before anything is built: a partial seat list is how
-    a half-booked hold happens.
-  - `STANDBY` (`"1102"`) is 예약대기. Eligibility is not "sold out" — the app
-    reads one field, the search row's `h_wait_rsv_flg`, and compares it to the
-    two-character literal `" 9"` (leading space; exported as
-    `KORAIL_STANDBY_WAIT_FLAG`), on the 일반실 tab only. That, and nothing
-    else, enables its button; the availability code is never consulted. So
-    standby skips the "seats available" check that `1101` enforces, requires
-    the flag and the general cabin, and computes `txtStndFlg` from the app's
-    own `isStndSeat` instead of pinning `"N"`. korail2 describes the field as
-    `-2`/`9`/`0`; only the 9 has any support in this app. Standby is
-    **members-only** — the app's request declares itself not-non-member-enabled
-    for this job id — which this client satisfies structurally, since every
-    mutation needs a logged-in member session.
-- Added: `confirm_standby_hold`, the second call a standby booking needs. A
-  `"1102"` hold comes back with `h_msg_cd = IRR000014`
-  (`KORAIL_STANDBY_HOLD_MESSAGE_CODE`), the only code that opens the app's
-  예약대기 screen; that screen then POSTs `reservationWait.ReservationWait` with
-  `txtPsrmClChgFlg` (좌석등급 변경 동의) and `txtSmsSndFlg`/`txtCpNo`. The phone
-  number is sent only when SMS is on, must be 10 or 11 digits, and is otherwise
-  omitted entirely rather than sent empty — matching the app, where the field is
-  null and Retrofit drops it. It is a state-changing call on an existing PNR, so
-  it goes through the same double-gated mutation transport as everything else,
-  and it deliberately shares the **`reserve` consent category** rather than
-  introducing a new one: it completes the booking an `allow_reserve` consent
-  authorised, moves no money and releases no seat, and a new category would mean
-  a caller who opted into placing a standby booking could not finish placing it.
-  `reservationWait.ReservationWait` is now a fifth mutation route; the read-only
-  allowlist and its guarantee are untouched. Never live-run.
-- Added: `reserve` books an arbitrary passenger mix in either cabin. It takes a
-  `KorailPassengerCounts` — one field per row the app's request has always
-  carried (어른, 청소년, 어린이, 동반유아, 경로, 1~3급 장애, 4~6급 장애,
-  안내견) — and a `KorailSeatClass` (일반실 `"1"` / 특실 `"2"`). Both are
-  keyword-only and default to one adult in a general seat, so an existing call
-  sends the identical form, byte for byte and key for key. `txtTotPsgCnt` is
-  every row summed, the lap infant and the guide dog included, because that is
-  how the app computes `TOTAL_PERSON_COUNT`; the mix must be non-negative, hold
-  at least one passenger, and stay within
-  `KORAIL_MAX_PASSENGERS_PER_RESERVATION` (9, the cap the app's passenger
-  picker enforces). No discount-card field accompanies a discounted row: the
-  app's `OPsg` declares only `txtCardNo_`, written solely by the separate N-card
-  request, and korail2's/srtgo's `txtCardCode_`/`txtCardPw_` appear nowhere in
-  the decompiled app. A 특실 hold requires the train's special seats to be
-  evidenced as available, not its general ones. Live-verified on 2026-07-26 by
-  reserve->cancel round trips: two adults in a general seat (hold total
-  119,600 = 2 x 59,800) and one adult in 특실 (read back as `h_psrm_cl_nm='특실'`,
-  `h_rcvd_amt=83,700`). The 특실 hold also demonstrates why the payment amount
-  must come from `h_tot_rcvd_amt`: its `h_tot_prc` reads `59,800`, so the old
-  builder would have underpaid by 23,900 KRW. Other passenger types and mixes
-  of types remain static-evidenced and have never been transmitted.
-- Real (chargeable) card payment is now possible, as an explicit, additive
-  opt-in. `MutationConsent` gains `real_card_acknowledged` (default `False`):
-  the caller's acknowledgement that a real, chargeable PAN will be transmitted
-  in the clear and that money will actually move. Because it defaults to
-  `False`, every consent written before it existed means exactly what it meant
-  before and the default posture is unchanged — fake-card-only.
-- Added `KorailClient.pay_with_card`, beside an unchanged `pay_with_fake_card`.
-  The new method requires `real_card_acknowledged=True` AND
-  `fake_card_only=False`; the old one still refuses anything but a test card,
-  so its name keeps meaning what it says. Both build the same
-  `build_card_payment_form` and leave through the same double-gated
-  `post_mutation_form`, so a real payment cannot drift from the wire shape that
-  was verified live. `pay_with_card` returns the parsed payment envelope rather
-  than raising on a FAIL, because that envelope is the only record of what
-  happened to the money and of whether the hold is still cancellable.
-- Added `scripts/reserve_pay_refund_roundtrip.py`, the operator script for one
-  full reserve → pay → refund round trip on a real card. Three environment
-  opt-ins are required (`KORAIL_MOBILE_API_LIVE=1`, `KORAIL_LIVE_MUTATION=1`,
-  `KORAIL_LIVE_REAL_CHARGE=1`); the card is read from the environment only,
-  never a file and never argv. It refuses to start unless the account holds
-  zero reservations, prints the PNR the instant it exists, cross-checks the
-  amount owed against an independent server read before paying, prints the
-  refund amount and fee before refunding, and on any later failure prints an
-  unmissable banner with the PNR, what is outstanding, and a runnable recovery
-  command (`--recover` with `KORAIL_RECOVER_PNR`). The PAN, PIN digits, expiry
-  and birthday are scrubbed from every output path including exception text;
-  the PNR deliberately is not, because losing it is the worst outcome.
-- Added three read-only routes found by comparing the package against four
-  third-party reference clients (srtgo, srtgo_plus, ryanking13/SRT, korail2);
-  all three are declared in our own decompiled APK. `get_ticket_reservation_detail`
-  reads one held reservation back by PNR (`certification.ReservationList`,
-  `CertificationService.java:45-46`), giving an independent view of `h_wct_no`
-  and the per-seat `h_rcvd_amt` rows the payment form settles.
-  `get_refund_commission` (`refunds.CommissionView`, `RefundService.java:19-21`)
-  reports `ret_amt`/`ret_fee`/`prg_psb_flg`, and `get_refund_ticket_detail`
-  (`refunds.SelTicketInfo`, `RefundService.java:23-25`) reports the refund
-  target's ticket detail including `retPsbFlg`. Together the latter two are the
-  "how much comes back and what is the fee" pre-check that `refund` has never
-  had; none of the four reference clients implements either one. The boundary is
-  now 54 exact login/read routes and 60 public methods.
-- Added the consent and safety foundation for state-changing requests. Frozen
-  `MutationConsent` (per-category `allow_*` default `False`, `dry_run` default
-  `True`, `fake_card_only` default `True`) and frozen `MutationPreview` (whose
-  payload is forced through `redact_payload` on construction, so a preview can
-  never hold a raw PAN, PNR, or sale identity) live in `consent.py`. The route
-  registry became tiered: `KORAIL_MUTATION_ROUTES` holds the four
-  state-changing routes and is deliberately never added to
-  `KORAIL_READ_ONLY_ROUTES`, while `KORAIL_MUTATION_ROUTE_CATEGORIES` and
-  `assert_mutation_route_category` cross-check the caller's consent category
-  against the route, so a consent for one category cannot post another
-  category's route. Redaction was extended over the mutation fields, including
-  the card number, PNR, original-ticket sale identity, return password,
-  `txtPrnNo`, and `h_orgtk_sale_wct_no`.
-- Added four consent-gated mutation methods: `reserve`, `cancel_unpaid_hold`,
-  `pay_with_fake_card`, and `refund`. Each requires an authenticated session
-  and a `MutationConsent` that opts into its own category, and each is denied
-  with `MutationNotAllowedError` before anything is built otherwise. With the
-  default `dry_run=True` a method validates its inputs and returns a redacted
-  `MutationPreview` of the form that *would* be posted, sending nothing. Only a
-  `dry_run=False` consent transmits, and only through `post_mutation_form`, the
-  single send path that re-checks consent, refuses a `dry_run=True` consent,
-  and asserts both the mutation route and its category. The read-only send path
-  (`post_form`/`get_json`) still refuses every mutation route.
-  `pay_with_fake_card` additionally refuses unless `fake_card_only` is set, at
-  both the method and the send gate, because the payment form carries the card
-  number in the clear; only a non-chargeable test card is supported.
-- Added `refund` on the same gated send path. Its live send path is fully
-  active code, not blocked, but it has never been exercised against the live
-  server: a refund acts on a settled ticket, and this package's fake-card
-  payment is always declined, so no paid ticket is produced here. Its request
-  contract, gates, and redaction are covered by offline tests only, and it must
-  be treated as unverified against the real service.
-- Added five authenticated, one-shot ticket-reference reads for delivery
-  recipient details, ticket-duplication count, PBP acceptance specifications,
-  platform numbers, and recent delivery history. The exact static contracts
-  accept only repr-hidden typed ticket/PNR provenance, preserve repeated
-  `tkRetNo` order with exact count equality, derive recent-history `custMgNo`
-  only from the login session, and force DynaPath off. The implementation made
-  no live request; the pre-R149 inventory was 31 successful, 10 failed, and
-  124 unexecuted out of 165. The package boundary is now 51 read/login routes
-  and 57 public methods, with the DynaPath allowlist unchanged at six paths.
-  The ticket-reference implementation itself used no live I/O and added no
-  mutation capability.
-- Added closed tagged public reads for gift-ticket list modes, commuter jobs
-  `a`/`b`/`c`, and one/two-leg fare quotes. Exact ordered forms preserve R31
-  duplicate fields and intentionally omit R52 `trnCnt`; only R52 uses the
-  pre-existing conditional DynaPath path.
-- Added strict synthetic response models/parsers plus an internal exact
-  request builder for R39, while leaving its NetFunnel `service_1` / `act_6`
-  route unavailable. R54 also remains transport-held. At that historical,
-  pre-revalidation implementation step, the DynaPath allowlist and live
-  inventory remained unchanged, no live call was made, and no mutation
-  capability was added. The current boundary is 51 read/login routes and 57
-  public methods.
-- Added four authenticated fixed/account-shaped reads for multi-child discount
-  targets, login-customer trip information, current or bounded-history MaaS
-  service details, and trip-change date lookup. Their exact routes and ordered
-  forms are DynaPath-disabled and validation occurs before transport.
-- Added strict synthetic parsers and frozen repr-safe models for R13, R32,
-  R43, and R45. R54 tour-train response parsing is static-contract support
-  only: no client method, safety route, or raw-string request builder exists.
-- Initially added four typed P0 train reads from static APK evidence for
-  free-seat car guidance, guide-seat conditions, seat-assignment schedules,
-  and merged-seat inquiry.
-- Initial implementation added frozen closed request objects, exact POST field
-  allowlists, strict response parsers, repr-hidden identifiers/free text/raw
-  mappings, and synthetic-only fixtures; that implementation step added no
-  live call or DynaPath route.
-- Added typed session-unverified pass-menu, commuter-kind-menu, and
-  crew-request option reads with caller-required runtime discriminator codes;
-  any live verification starts only after login.
-- Added frozen repr-safe models, strict parsers, synthetic fixtures, and
-  offline route, request, error, export, and documentation coverage.
-- Added three static-evidenced limousine schedule and seat-inventory reads with
-  closed caller-supplied query dataclasses, exact POST allowlists, typed
-  repr-safe parsers, one-shot session/error handling, and DynaPath disabled.
-- **Added: this package is licensed.** `LICENSE` carries the Apache License
-  2.0 verbatim, and `pyproject.toml` declares it in the PEP 639 SPDX form
-  (`license = "Apache-2.0"`, `license-files = ["LICENSE", "NOTICE"]`) rather
-  than the deprecated `license = {text = ...}` table, which setuptools now
-  warns on and will reject outright from 2027-02-18. The build floor moved to
-  `setuptools>=77` for the same reason: earlier versions ignore `license-files`
-  silently, producing a wheel that claims a licence and ships no licence text.
-  No `License ::` classifier accompanies it — PEP 639 makes the two mutually
-  exclusive. `NOTICE` is declared alongside `LICENSE` rather than left at the
-  repository root alone: Apache-2.0 §4(d) requires a redistributor to carry the
-  attribution notices forward, and a wheel that omits the file makes that
-  impossible. Both artifacts now carry both files.
-- Added: owner and canonical-URL metadata. `authors` names `yakisoba0728` and
-  a contact address — spelled in `pyproject.toml`, not repeated here, because
-  `tests/test_readme.py` forbids a bare email address in the evidence
-  documents and that gate is worth more than the duplication.
-  `[project.urls]` pins Homepage, Repository, Issues and Changelog at
-  `https://github.com/yakisoba0728/korail-mobile-api`.
-- Added: `korail_mobile_api.__version__`, with a test asserting it equals
-  `project.version`. Nothing in the build keeps a hand-written dunder and a
-  hand-written TOML literal in step; that test is the only thing that does.
-  It is deliberately absent from `__all__`.
-- **Added: `tests/test_public_surface_rule.py`**, which is what stops the
-  above from being undone by the next person with a convenient name to export.
-  It holds no list of names — a hand-maintained name list is exactly what
-  rots. It derives `__all__`'s expected contents from `__init__.py`'s import
-  statements via `ast` (so dropping an `__all__` entry while leaving the
-  import behind fails), refuses any name from a module not on a short
-  module-level policy list, refuses `parse_*`/`pair_*` outright, walks the
-  transitive closure of every public client method's annotations and requires
-  each package-defined type in it to be exported, and requires every exported
-  non-type to appear in a `DOMAIN_CONSTANTS` table with a written reason. The
-  file is shared verbatim with the SRT package below a marked per-repository
-  header.
+    **`Wrong Server ID` 는 문자 그대로(literal)의 뜻이다.** 적어 두지 않으면 다음
+    읽는 사람의 한 시간을 먹는다 — 자격증명이나 파라미터 불평처럼 읽히지만 둘 다
+    아니고, 큐 노드가 발급한 세션을 정문이 갖고 있지 않다는 말이다. 되는 것처럼
+    보이던 반납은 부하분산기가 우연히 주인 노드로 돌아간 경우였고, 같은 키가 어떤
+    때는 멀쩡히 반납되던 이유도 그것이다. 앱은 처음부터 그 이름을 따라갔다.
+    `T6/d.makeURL`(`T6/d.java:17-19`)이 `host_notmodify` 가 서 있지 않으면 직전
+    응답의 `getHost()`/`getPort()` 로 URL 을 다시 만들고, 그 플래그는 기본
+    `false`(`T6/h.java:43`, `isHostNotmodify()` 는 `:134-135`)이며 `KTApplication` 이
+    세우지 않는다. `ip`/`port` 를 읽는 곳은 `T6/i.java:50-53` 이다. 이것을 따르지
+    않으면 잡은 자리의 절반쯤이 새고(leaked), 그것이야말로 NetFunnel 이 막으려고
+    있는 일이다. 그래서 `5101` 은 정문으로, `5002` 와 `5004` 는 세션을 발급한 노드로
+    간다. 노드는 `KorailNetFunnelToken.node` 에 실려 다니며 키와 같은 방식으로 뒤엣것이
+    앞엣것을 덮는다(supersede) — 노드를 말하지 않은 응답은 직전 노드를 그대로 두고, 우회에는
+    세션도 노드도 없다.
+  - **리다이렉트는 믿는 것이 아니라 좁히는 것이다.** 다음 요청이 어디로 갈지를 응답이
+    고르는 것이야말로 origin 가드가 막으라고 있는 일이므로, 그 이름은 큐 자신의 풀
+    안으로만 받아들인다 — `rnf<1-99>.letskorail.com`, 소문자, 앞자리 0 없음, 라벨
+    단위로 일치, 아니면 정문 자신. 스킴은 `https`, 포트는 `443` 뿐이다. 포트도 서버가
+    시킨다고 따라가지 않는다. 규칙 밖은 무엇이든 **hard error** 이고 정문으로 조용히
+    되돌아가는 일은 없다 — 조용한 폴백이 바로 그 오락가락하는 반납을 만든 것이고,
+    "이 응답이 우리에게 거짓말을 한다"를 "자리가 샜다"로 바꿔 놓는데 샌 자리는 아무
+    소리도 내지 않는다. 규칙은 클라이언트가 아니라 `safety.py` 의 origin 단언 옆에
+    산다. `assert_korail_netfunnel_origin` 은 여전히 노드를 거절하고(설정된 origin 과
+    진입 호출을 지키므로 한쪽 가드를 넓혀도 다른 쪽이 넓어지지 않는다),
+    `follow_redirects` 는 `False` 그대로이며, `smart.letskorail.com` 의 표준 origin
+    보장은 손대지 않았다.
+  - **`5101` 의 키는 세션이 아니라 표(ticket)다 — 프로브가 드러낸 첫 번째 결함.**
+    `acquire` 는 원래 5101 응답을 돌려주고 `release` 가 그 키를 `setComplete` 로
+    보냈는데, 서버는 `sid`/`aid` 가 있든 없든 매번 `503:msg="Wrong Server ID"` 로
+    거절한다. 완료할 수 있는 키는 `chkEnter` 가 발급한 것뿐이고 그것은 더 짧은 다른
+    키다(252자가 104자가 된다). 그래서 `acquire` 는 5101 이 `nwait=0` 이라고 해도
+    항상 5002 를 수행하고, **매 단계의 키가 앞 단계의 키를 덮는다(supersede)** — 201 폴
+    하나하나가 그렇고, 키를 하나도 echo 하지 않은 201 도 그렇다(그 경우 마지막으로
+    알려진 키가 그대로 유효하다). 반납이 성공하면 `200:` 에 *빈* `key=` 가 와서, 잘린
+    본문이 아니라 반납으로 파싱된다. `503` 은 우리가 받아들이는 `502` 옆에 두지 않고
+    거절하며, `release` 의 키 없는 지름길은 우회(`300`)로 좁혀서 다른 토큰이 요청을
+    조용히 건너뛰지 못하게 했다. `503` 에는 원인이 **둘** 있고 전선으로는 구별할 수
+    없다 — 교환하지 않은 표이거나, 틀린 노드다. 그래서 예외 메시지가 둘 다 말한다.
+  - **글자 그대로 읽으면 APK 와 어긋나고, 이길 쪽은 실서버다.** `T6/g.java` 의 폴
+    루프는 상태가 Continue 가 아닌 순간 빠져나온다 — `T6/g$a.smali:243-247` → `:282`
+    → `:892` 에서 흘러내린 자리가 `return` 이다. 그러니 5101 이 200 을 주면 앱은
+    5002 를 보내지 않고 표로 완료한다. 그래도 `5002` 는 무조건 보낸다. 깨끗하게
+    반납되는 것이 확인된 순서는 `5101` → `5002` → `5004` 뿐이고, 그 표가 자기 노드
+    에서 완료되는지는 프로브해 본 적이 없다. 키가 덮어써진다는 것은 APK 도 뒷받침한다
+    — 응답 객체 하나를 `:61` 과 `:107` 에서 덮어쓰고 `Complete()` 가 마지막으로 도착한
+    키를 보낸다(`:79`).
+  - **KORAIL 은 JavaScript 방언을 쓰지 않는다. 이 변경의 실질은 전부 이것이다.**
+    `nf.letskorail.com` 이 두 앱을 다 받으므로 실서버로 검증된 `srt-mobile-api`
+    구현이 본이 될 줄 알았으나 아니다. SRT 는 `netfunnel.js` 위의 WebView 라 브라우저
+    방언(`nfid`, `prefix`, `js=yes`, 끝의 epoch)을 보내고, `korail.apk` 는 STCLab 의
+    네이티브 안드로이드 SDK — `T6`/`U6` 패키지 — 를 품고 있어 그중 아무것도 보내지
+    않는다. 요청 셋은 `5101` `opcode,sid,aid`(`T6/d.java:99-101`),
+    `5002` `opcode,key`(`:54-55`), `5004` `opcode,key`(`:78-79`)이고 이 순서인 것은
+    `U6/a.java` 가 `addParam` 목록을 `URLEncodedUtils.format` 으로 렌더링하기
+    때문이다. 그래서 `sid`/`aid` 는 `5101` 에**만** 실리고 이는 JS 방언과 정반대다.
+    `ttl` 은 아예 되보내지 않고 얼마나 잘지 정하려고 읽을 뿐이며(`T6/g.java:462`)
+    JS 번들의 5초가 아니라 30초로 잘린다(`T6/h.java:40`).
+  - **응답 모양은 실서버가 확인해 준 적 없던 유일한 가정이었고, 맞았다.**
+    `T6/i.java:36-43` 이 첫 `:` 앞을 전부 상태코드로 파싱하므로 응답은
+    `<code>:<params>` 여야 하고 JS 방언의 `<rtype>:<code>:<params>` 이면 안 된다 —
+    뒤엣것을 앱에 먹이면 코드를 5002 로 읽고 키를 찾지 못한다. 2026-07-26 의 응답은
+    전부 정확히 네이티브 형태로 왔다. `parse_netfunnel_body` 는 여전히
+    `NetFunnel.gRtype=…` 본문을 거절하고 오류 메시지에 그 가능성을 적는데, 이제는
+    우리 추측에 대한 보험이 아니라 서버가 바뀐 경우의 진단이다.
+  - **키는 KORAIL 요청에 절대 실리지 않는다.** 앱의 어떤 Retrofit 인터페이스도
+    어떤 라우트에 `netfunnelKey` 모양의 필드를 선언하지 않는다. 큐는 호출을 게이트할
+    뿐 호출에 파라미터를 더하지 않는다. 이것이 별도 호스트 위의 별도 클라이언트인
+    이유이고, 예약·결제·취소·환불이 이전과 정확히 같은 것을 보내는 이유다.
+  - **기본은 꺼짐이고 생성 시점에 강제한다.** `KorailConfig.netfunnel_enabled` 는
+    `False` 이고, 그것 없이 만든 설정으로 `KorailNetFunnelClient` 를 만들면 소켓이
+    생기기 전에 예외가 난다. 켜면 게이트된 연산마다 왕복 하나와 실패 양상 하나가
+    늘고, 서버가 실제로 우리를 재기 전까지는 얻는 것이 없다. 성수기용이며, 앱이
+    성수기 조회 큐(`act_8_2`)를 따로 들고 있는 이유도 그것이다.
+  - **대기는 두 겹으로 제한된다** — 폴 20회와 60초 중 먼저 오는 쪽. 앱은 사람이 닫을
+    수 있는 다이얼로그 뒤에서 무한히 폴한다(`T6/g.java:449`). 이 라이브러리에는
+    다이얼로그가 없고, 큐는 재시도가 아니라 기다림이다. 재시도 로직은 넣지 않았다.
+  - **자리는 두 경로 모두에서 반납된다.** 앱이 `BaseDaoHelper` 의 `onPostExecute`
+    (:105-107)에서 게이트된 호출이 터졌든 아니든 반납하는 것과 같다. 반납 실패는
+    성공 경로에서 삼켜지지 않고 **예외로 올라간다** — 형제 저장소가 키를 128자로
+    묶어 뒀는데 실제 키는 256자라서 모든 반납이 보내지기도 전에 거절됐고, 실서버
+    실행이 드러낼 때까지 모든 자리를 조용히 흘렸다. 2026-07-26 프로브가 실제 길이 둘
+    — `5101` 의 252, `5002` 의 104 — 을 더했으므로 가드는 512자에 두고 관측된 어느
+    한 길이로도 일부러 좁히지 않는다.
+  - **정확한 질의 계약 셋을 등록한 것이지 허용목록을 느슨하게 한 것이 아니다.** 큐
+    호스트에는 자기 origin 단언이 따로 있다 — 정문과 진입 호출용 하나, 풀용으로 더
+    넓은 하나, 그리고 주어진 opcode 가 둘 중 어느 쪽을 받을지 정하는 셋째.
+    `KORAIL_READ_ONLY_ROUTES` 는 54 그대로라 `post_form`/`get_json` 이 `/ts.wseq` 에
+    닿을 길이 없다. `5003`, `5105`, `5106` 은 상수로 선언해 두고 가드가 거절한다.
+- 서버 쪽 실패를 전부 하나의 `KorailAppError` 로 받는 대신 `h_msg_cd` 로 분류한다.
+  새 타입은 `KorailNoResultsError`(그 아래 `KorailNoDirectTrainError`),
+  `KorailSoldOutError`, `KorailSeatUnavailableError`,
+  `KorailReservationRefusedError`, `KorailInvalidRequestError`,
+  `KorailNotEntitledError`, `KorailServiceUnavailableError`,
+  `KorailAppUpdateRequiredError` 이고 `classify_app_error` 를 함께 내보낸다.
+  어느 것이 재시도 무의미이고 어느 것이 재로그인이며 어느 것이 "요청은 멀쩡했고
+  그냥 아무것도 없었다"인지는 README 의 에러 분류표에 있다.
+  - **기존 코드가 깨지지 않는다.** 새 타입은 전부 `KorailAppError` 의 하위라 기존
+    `except` 절의 의미가 바뀌지 않고, `code`/`message`/`raw` 가 전부에 그대로 있어
+    호출자가 점진적으로 옮겨갈 수 있다.
+  - **실패를 지어내지 않는다.** 응답이 실패인지는 여전히 `strResult` 와 앱 자신의
+    `WRC000288` 이 정하고, 분류는 이미 올라가기로 정해진 실패에 어느 예외가 어울리는지만
+    고른다. 앱도 같다 — `FAIL` 이 아닌 응답의 모르는 코드는 `onReceive()` 로 성공으로
+    간다(`BaseActivity.java:629`). 그래서 경고가 붙은 성공은 여기서도 성공이다.
+    `strResult=SUCC` 와 취소 가능한 진짜 PNR 을 달고 왔던 `WRR664296` 이 테스트로
+    고정돼 있고, APK 자신의 성공 쪽 코드 `IRR000014`, `IRT800005`, `WRS800036` 도
+    마찬가지다.
+  - **재시도 로직은 넣지 않았다.** 이 라이브러리는 여전히 스스로 재시도하지 않고
+    `reserve` 는 절대 재시도하지 않는다. 재시도한 예약은 중복 예약이기 때문이다.
+  - 매진(`ERR211161`), 좌석에 한정된 거절
+    (`WRI411345`/`ERR911081`/`WRT800176` — 앱은 여기서 막다른 길 대신 자동 좌석배정을
+    제안한다), 예약 거절(`WRR800029`/`ERR911531`/`ERR911051` — 앱은 사용자의 기존
+    예약 화면으로 보내며 답한다), `WRD000061`, `WRG000000`, `P114`, `SEMGTK`,
+    `SUPDATE` 는 전부 APK 분기이고 docstring 마다 file:line 으로 인용돼 있다.
+    `P100`, `WRT300005`, `ERR299943`, `WRG200018`, `WRT100002`, `WRT100124` 는 APK
+    적중이 0인 이 저장소의 실서버 관측이며 그렇게 표시돼 있다.
+  - 안티매크로는 코드가 아니었다. `BaseDaoHelper.java:59-86` 이 `DynaPath-Result`
+    헤더를 읽고 `h_msg_cd` 사다리를 돌리는 대신 본문의 `message` 를 띄우므로, 기존
+    `KorailDynaPathError` 가 곧 안티매크로 거절이다. srtgo_plus 의 `MACRO` 부분문자열
+    규칙과 srtgo 의 두 번째 매진 코드 `IRT010110` 은 제3자 주장으로만 기록하고 코드에
+    넣지 않았다. 둘 다 채택하지 않았다는 것을 테스트가 단언한다.
+  - `[3]인증정보에 문제가 있습니다.` 는 일부러 분류하지 않고 둔다. 이 문구와 함께
+    잡힌 `h_msg_cd` 가 없고 문자열 자체가 APK 에서 0적중이라, 분류하려면 이 변경이
+    없애려는 바로 그 한국어 문구 맞추기를 해야 한다.
+- `reserve` 가 예약 화면의 job type 셋에 모두 닿는다. 키워드 전용이고 기본값이 있는
+  `job_type`(`KorailReservationJobType`) 으로 고른다. 기본은 `IMMEDIATE`
+  (`txtJobId="1101"`) 이고 이 패키지가 지금까지 보내 온 유일한 값이라, 기존 호출은
+  바이트 단위로 그대로다. **변형 둘은 2026-07-26 에 실서버로 확인됐다** — 예약 →
+  되읽기 → 취소. `1103` 은 요청한 좌석을 정확히 잡았다(대조는 재고의 `seat_spec` 과
+  상세의 `h_seat_no` 이지 `seat_no` 가 아니다). 매진 열차의 `1102` 는 `IRR000014` 로,
+  `confirm_standby_hold` 는 `IRZ000003` 으로 답했다.
+  - `SEAT_DESIGNATED`(`"1103"`)는 좌석을 지정해 잡는다. `seats` 는 승객 한 명당
+    `KorailSeatAssignment` 하나를 받고, 기존 좌석 읽기가 돌려주는 식별자 둘 —
+    `SeatCar.car_no`/`SeatInventoryResponse.car_no` 와 `PhysicalSeat.seat_no` — 을
+    그대로 싣는다. `KorailSeatAssignment.from_inventory()` 가 둘을 짝지으며 읽기가
+    판매 불가로 표시한 좌석은 거절한다. 폼은 여정 블록 뒤에 `txtSrcarCnt`(*좌석* 수)
+    를 붙이고 이어서 색인 1부터 `txtSrcarNo{i}`/`txtSeatNo{i}` 를 붙인다. 보통 hold
+    는 그 키를 하나도 보내지 않는다 — 앱이 `OSrcar` 맵을 비우고 빈 Retrofit
+    `@FieldMap` 은 필드를 하나도 더하지 않으므로, srtgo 의 무조건적인
+    `txtSrcarCnt="0"` 은 앱이 만들지 않는 모양이다. 길이가 승객 총원과 다르거나 같은
+    좌석을 두 번 부르는 좌석 목록은 무엇을 만들기 전에 거절한다. 반쪽만 예약된 hold
+    는 반쪽짜리 좌석 목록에서 나온다.
+  - `STANDBY`(`"1102"`)는 예약대기다. 자격 조건은 "매진" 이 아니다 — 앱은 필드
+    하나, 검색 행의 `h_wait_rsv_flg` 를 읽어 두 글자 리터럴 `" 9"`(앞이 공백,
+    `KORAIL_STANDBY_WAIT_FLAG` 로 export)와 비교하며, 그것도 일반실 탭에서만 한다.
+    버튼을 여는 것은 그것뿐이고 잔여석 코드는 아예 보지 않는다. 그래서 예약대기는
+    `1101` 이 강제하는 "좌석 있음" 검사를 건너뛰고, 대신 그 플래그와 일반실을
+    요구하며, `txtStndFlg` 를 `"N"` 으로 고정하지 않고 앱 자신의 `isStndSeat` 에서
+    계산한다. korail2 는 이 필드를 `-2`/`9`/`0` 으로 설명하지만 이 앱에서 근거가
+    있는 것은 9 뿐이다. 예약대기는 **members-only** 다 — 이 job id 에 대해 앱의
+    요청이 스스로를 비회원 불가로 선언한다. 이 클라이언트는 그것을 구조적으로
+    만족한다. 모든 상태 변경이 로그인된 회원 세션을 요구하기 때문이다.
+- `confirm_standby_hold`. 예약대기 예약에 필요한 두 번째 호출이다. `"1102"` hold 는
+  `h_msg_cd = IRR000014`(`KORAIL_STANDBY_HOLD_MESSAGE_CODE`)를 달고 돌아오는데,
+  앱의 예약대기 화면을 여는 코드는 그것뿐이다. 그 화면이 이어서
+  `reservationWait.ReservationWait` 로 `txtPsrmClChgFlg`(좌석등급 변경 동의)와
+  `txtSmsSndFlg`/`txtCpNo` 를 POST 한다. 전화번호는 SMS 를 켰을 때만 보내고 10자리
+  또는 11자리여야 하며, 그 밖에는 빈 값으로 보내지 않고 아예 뺀다 — 필드가 null 이라
+  Retrofit 이 떨구는 앱과 같다. 이미 있는 PNR 에 대한 상태 변경 호출이므로 나머지와
+  같은 이중 게이트 상태 변경 transport 를 탄다. 새 범주를 만들지 않고
+  **`reserve` consent 범주** 를 일부러 함께 쓰는 것은, 이 호출이
+  `allow_reserve` consent 가 허가한 예약을 마무리하는 것이고 돈을 움직이지도 좌석을
+  놓아 주지도 않기 때문이다. 새 범주를 만들면 예약대기를 걸기로 옵트인한 호출자가
+  그것을 끝맺지 못하게 된다. `reservationWait.ReservationWait` 가 다섯 번째 상태
+  변경 라우트가 됐고, 읽기 전용 허용목록과 그 보장은 그대로다. 실서버로 돌린 적은
+  없다.
+- `reserve` 가 임의의 승객 구성을 두 좌석등급 어느 쪽으로든 예약한다. 앱의 요청이
+  줄곧 실어 온 행마다 필드 하나씩을 가진 `KorailPassengerCounts`(어른, 청소년,
+  어린이, 동반유아, 경로, 1~3급 장애, 4~6급 장애, 안내견)와
+  `KorailSeatClass`(일반실 `"1"` / 특실 `"2"`)를 받는다. 둘 다 키워드 전용이고
+  기본값이 일반실 어른 1명이라, 기존 호출은 키까지 바이트 단위로 같은 폼을 보낸다.
+  `txtTotPsgCnt` 는 무릎 위 유아와 안내견을 포함해 모든 행을 더한 값이다. 앱이
+  `TOTAL_PERSON_COUNT` 를 그렇게 계산하기 때문이다. 구성은 음수가 아니어야 하고,
+  최소 한 명을 담아야 하며, `KORAIL_MAX_PASSENGERS_PER_RESERVATION`(9, 앱의 승객
+  선택기가 강제하는 상한) 안이어야 한다. 할인 승객 행에 할인카드 필드가 따라붙지는
+  않는다 — 앱의 `OPsg` 는 `txtCardNo_` 만 선언하고 그것을 쓰는 것은 별개의 N카드
+  요청뿐이며, korail2 와 srtgo 의 `txtCardCode_`/`txtCardPw_` 는 디컴파일한 앱
+  어디에도 없다. 특실 hold 는 그 열차의 일반실이 아니라 특실 좌석이 남아 있다는
+  근거를 요구한다. 2026-07-26 에 예약→취소 왕복으로 실서버 확인했다 — 일반실 어른
+  2명(hold 합계 119,600 = 2 × 59,800)과 특실 어른 1명(되읽으면
+  `h_psrm_cl_nm='특실'`, `h_rcvd_amt=83,700`). 특실 hold 는 결제 금액이 왜
+  `h_tot_rcvd_amt` 에서 와야 하는지도 보여 준다 — 그 `h_tot_prc` 는 `59,800` 이라
+  옛 빌더였다면 23,900원을 덜 냈을 것이다. 다른 승객 종류와 종류가 섞인 구성은
+  여전히 정적 근거뿐이고 전송된 적이 없다.
+- 과금되는 실카드 결제가 가능해졌다. 명시적이고 덧붙이는 방식의 옵트인이다.
+  `MutationConsent` 에 `real_card_acknowledged`(기본 `False`)가 생겼다 — 과금되는
+  진짜 PAN 이 평문으로 전송되고 실제로 돈이 움직인다는 것을 호출자가 확인했다는
+  표시다. 기본이 `False` 이므로 이것이 생기기 전에 쓰인 consent 는 전과 정확히 같은
+  뜻이고 기본 자세도 그대로다 — 가짜카드만.
+- `KorailClient.pay_with_card` 를 더했다. `pay_with_fake_card` 는 그대로 옆에
+  있다. 새 메서드는 `real_card_acknowledged=True` 와 `fake_card_only=False` 를
+  **둘 다** 요구하고, 옛 메서드는 여전히 테스트 카드가 아니면 거절하므로 이름이
+  뜻하는 바를 지킨다. 둘 다 같은 `build_card_payment_form` 을 만들고 같은 이중
+  게이트 `post_mutation_form` 으로 나가므로, 실결제가 실서버로 확인된 전선 모양에서
+  벗어날 수 없다. `pay_with_card` 는 FAIL 에 예외를 올리는 대신 파싱된 결제 봉투를
+  돌려준다. 그 봉투가 돈에 무슨 일이 있었는지, 그리고 hold 를 아직 취소할 수 있는지에
+  대한 유일한 기록이기 때문이다.
+- `scripts/reserve_pay_refund_roundtrip.py`. 실카드로 예약 → 결제 → 환불 왕복을 한
+  번 도는 운영자용 스크립트다. 환경변수 옵트인 셋이 모두 필요하고
+  (`KORAIL_MOBILE_API_LIVE=1`, `KORAIL_LIVE_MUTATION=1`,
+  `KORAIL_LIVE_REAL_CHARGE=1`), 카드는 환경변수에서만 읽는다 — 파일도 argv 도
+  아니다. 계정에 예약이 0건이 아니면 시작하지 않고, PNR 이 생기는 즉시 찍고, 결제
+  전에 청구액을 독립된 서버 읽기와 대조하고, 환불 전에 환불액과 수수료를 찍는다.
+  이후 어느 단계가 실패하든 PNR 과 무엇이 남았는지와 실행 가능한 복구 명령
+  (`KORAIL_RECOVER_PNR` 과 함께 쓰는 `--recover`)을 담은 놓칠 수 없는 배너를 찍는다.
+  PAN, 비밀번호 자릿수, 유효기간, 생년월일은 예외 문구를 포함한 모든 출력 경로에서
+  지워진다. PNR 은 일부러 지우지 않는다. 그것을 잃는 것이 최악이기 때문이다.
+- 읽기 전용 라우트 셋. 이 패키지를 제3자 참조 클라이언트 넷(srtgo, srtgo_plus,
+  ryanking13/SRT, korail2)과 대조하다 찾았고, 셋 다 우리가 디컴파일한 APK 에도
+  선언돼 있다. `get_ticket_reservation_detail` 은 잡아 둔 예약 하나를 PNR 로
+  되읽으며(`certification.ReservationList`, `CertificationService.java:45-46`),
+  결제 폼이 정산하는 `h_wct_no` 와 좌석별 `h_rcvd_amt` 행을 독립적으로 볼 수 있게
+  해 준다. `get_refund_commission`(`refunds.CommissionView`,
+  `RefundService.java:19-21`)은 `ret_amt`/`ret_fee`/`prg_psb_flg` 를,
+  `get_refund_ticket_detail`(`refunds.SelTicketInfo`, `RefundService.java:23-25`)은
+  환불 대상의 승차권 상세와 `retPsbFlg` 를 알려 준다. 뒤의 둘을 합치면 `refund` 가
+  한 번도 가져 본 적 없는 "얼마가 돌아오고 수수료는 얼마인가" 사전 확인이 된다.
+  참조 클라이언트 넷 중 어느 것도 이 둘을 구현하지 않았다. 경계는 이제 정확한
+  로그인·읽기 라우트 54개와 공개 메서드 60개다.
+- 상태 변경 요청을 위한 consent·safety 토대. frozen `MutationConsent`(범주별
+  `allow_*` 기본 `False`, `dry_run` 기본 `True`, `fake_card_only` 기본 `True`)와
+  frozen `MutationPreview`(payload 가 생성 시점에 `redact_payload` 를 통과하므로
+  미리보기가 날 PAN·PNR·판매 신원을 담을 수 없다)가 `consent.py` 에 있다. 라우트
+  등록부가 층을 갖게 됐다 — `KORAIL_MUTATION_ROUTES` 가 상태 변경 라우트 넷을 들고
+  있고 `KORAIL_READ_ONLY_ROUTES` 에는 일부러 절대 더하지 않으며,
+  `KORAIL_MUTATION_ROUTE_CATEGORIES` 와 `assert_mutation_route_category` 가 호출자의
+  consent 범주를 라우트와 맞대조하므로 한 범주의 consent 로 다른 범주의 라우트를
+  POST 할 수 없다. 마스킹은 상태 변경 필드까지 넓혔다 — 카드번호, PNR, 원표 판매
+  신원, 반환 비밀번호, `txtPrnNo`, `h_orgtk_sale_wct_no`.
+- consent 게이트가 걸린 상태 변경 메서드 넷: `reserve`, `cancel_unpaid_hold`,
+  `pay_with_fake_card`, `refund`. 각각 인증된 세션과 자기 범주로 옵트인한
+  `MutationConsent` 를 요구하고, 그렇지 않으면 무엇을 만들기 전에
+  `MutationNotAllowedError` 로 거절한다. 기본 `dry_run=True` 에서는 입력을 검증하고
+  *보냈을* 폼을 마스킹한 `MutationPreview` 로 돌려주며 아무것도 보내지 않는다.
+  전송하는 것은 `dry_run=False` 인 consent 뿐이고 통로는 `post_mutation_form` 하나다.
+  그 통로가 consent 를 다시 검사하고, `dry_run=True` 인 consent 를 거절하며, 상태
+  변경 라우트인지와 그 범주에 속하는지를 둘 다 단언한다. 읽기 전송 경로
+  (`post_form`/`get_json`)는 모든 상태 변경 라우트를 여전히 거절한다.
+  `pay_with_fake_card` 는 메서드와 전송 게이트 양쪽에서 `fake_card_only` 가 서 있지
+  않으면 거절한다. 결제 폼이 카드번호를 평문으로 싣기 때문이고, 과금되지 않는 테스트
+  카드만 지원한다.
+- `refund` 를 같은 게이트 전송 경로에 올렸다. 전송 경로는 막힌 코드가 아니라 완전히
+  살아 있는 코드이지만 실서버로 돌아 본 적이 없다 — 환불은 정산된 승차권에 작용하는데
+  이 패키지의 가짜카드 결제는 언제나 거절되므로 여기서 결제된 승차권이 생기지 않는다.
+  요청 계약과 게이트와 마스킹은 오프라인 테스트로만 덮여 있고, 실서비스에 대해서는
+  미검증으로 다뤄야 한다.
+- 인증이 필요한 일회성 승차권 참조 읽기 다섯. 배송 수령인 상세, 승차권 중복 건수,
+  PBP 인수 명세, 승강장 번호, 최근 배송 이력이다. 정확한 정적 계약은 `repr` 에서
+  가려진 타입 붙은 승차권·PNR 출처만 받고, 반복되는 `tkRetNo` 의 순서를 개수까지
+  같게 보존하며, 최근 이력의 `custMgNo` 를 로그인 세션에서만 유도하고, DynaPath 를
+  끈다. 구현 자체는 실서버 요청을 하나도 보내지 않았다. 그 시점(pre-R149)의 인벤토리는
+  165 중 성공 31, 실패 10, 미실행 124 였다. 패키지 경계는 읽기·로그인 라우트 51개와
+  공개 메서드 57개가 됐고 DynaPath 허용목록은 여섯 경로 그대로다. 승차권 참조 구현
+  자체는 실서버 입출력을 쓰지 않았고 상태 변경 능력을 더하지 않았다.
+- 선물하기 승차권 목록 모드, 정기권 job `a`/`b`/`c`, 한 다리·두 다리 운임 견적에
+  대한 닫힌 태그 공개 읽기. 정확한 순서 폼이 R31 의 중복 필드를 보존하고 R52 의
+  `trnCnt` 는 일부러 뺀다. 기존의 조건부 DynaPath 경로를 쓰는 것은 R52 뿐이다.
+- R39 를 위한 엄격 합성 응답 모델·파서와 내부 전용 정확 요청 빌더. R39 의 NetFunnel
+  `service_1`/`act_6` 라우트는 여전히 쓸 수 없게 두었고 R54 도 transport 에서 막혀
+  있다. 그 구현 단계에서 DynaPath 허용목록과 실행 인벤토리는 그대로였고, 실서버 호출도
+  상태 변경 능력 추가도 없었다. 현재 경계는 읽기·로그인 라우트 51개와 공개 메서드
+  57개다.
+- 인증이 필요한 고정형·계정형 읽기 넷. 다자녀 할인 대상, 로그인 고객의 여정 정보,
+  현재 또는 범위를 정한 이력의 MaaS 서비스 상세, 여행변경 가능일 조회다. 정확한
+  라우트와 순서 폼은 DynaPath 를 끄고, 검증은 transport 이전에 일어난다.
+- R13, R32, R43, R45 에 대한 엄격 합성 파서와 `repr` 안전한 frozen 모델. R54
+  관광열차 응답 파싱은 정적 계약 지원까지만이다 — 클라이언트 메서드도, safety 라우트도,
+  날문자열 요청 빌더도 없다.
+- 정적 APK 근거에서 나온 타입 붙은 P0 열차 읽기 넷을 처음 넣었다. 자유석 객차 안내,
+  안내 좌석 조건, 좌석배정 일정, 병합좌석 조회다.
+- 최초 구현이 frozen 닫힌 요청 객체, 정확한 POST 필드 허용목록, 엄격 응답 파서,
+  `repr` 에서 가려진 식별자·자유문구·날매핑, 합성 전용 픽스처를 더했다. 그 구현
+  단계는 실서버 호출도 DynaPath 라우트도 더하지 않았다.
+- 타입 붙은 정기권 메뉴·정기권 종류 메뉴·승무원 요청 옵션 읽기. 세션 요구 여부가
+  확인되지 않은(session-unverified) 것들이고 호출자가 런타임 구분 코드를 직접 줘야
+  한다. 실서버 검증은 로그인 이후에만 시작한다.
+- `repr` 안전한 frozen 모델, 엄격 파서, 합성 픽스처, 그리고 라우트·요청·오류·export·
+  문서에 대한 오프라인 커버리지.
+- 정적 근거가 있는 리무진버스 읽기 셋. 호출자가 주는 닫힌 질의 dataclass, 정확한
+  POST 허용목록, 타입 붙은 `repr` 안전 파서, 일회성 세션·오류 처리를 갖추고 DynaPath
+  는 꺼져 있다.
+- **이 패키지에 라이선스가 생겼다.** `LICENSE` 가 Apache License 2.0 원문을 그대로
+  담고, `pyproject.toml` 이 PEP 639 SPDX 형식(`license = "Apache-2.0"`,
+  `license-files = ["LICENSE", "NOTICE"]`)으로 선언한다. setuptools 가 경고하고
+  2027-02-18 부터는 아예 거절할 낡은 `license = {text = ...}` 테이블을 쓰지 않는다.
+  빌드 최소 버전이 `setuptools>=77` 로 올라간 것도 같은 이유다. 그 이전 버전은
+  `license-files` 를 조용히 무시해서, 라이선스를 주장하면서 라이선스 본문은 싣지 않는
+  wheel 을 만든다. `License ::` 분류자는 함께 쓰지 않는다 — PEP 639 가 둘을 상호
+  배타로 만들었다. `NOTICE` 를 저장소 뿌리에만 두지 않고 `LICENSE` 와 나란히 선언하는
+  것은 Apache-2.0 §4(d) 가 재배포자에게 귀속 고지를 이어 나르도록 요구하는데, 그
+  파일을 뺀 wheel 은 그것을 불가능하게 만들기 때문이다. 두 산출물 모두 두 파일을
+  싣는다.
+- 소유자와 표준 URL 메타데이터. `authors` 가 `yakisoba0728` 과 연락처 주소를
+  가리키며, 철자는 `pyproject.toml` 에만 있고 여기 옮겨 적지 않는다 —
+  `tests/test_readme.py` 가 근거 문서에 맨 이메일 주소가 있는 것을 금지하고 그 게이트가
+  중복해 적는 것보다 값어치가 있다. `[project.urls]` 는 Homepage, Repository, Issues,
+  Changelog 를 `https://github.com/yakisoba0728/korail-mobile-api` 로 고정한다.
+- `korail_mobile_api.__version__`. `project.version` 과 같은지를 단언하는 테스트가
+  함께 있다. 손으로 쓴 던더와 손으로 쓴 TOML 리터럴을 맞춰 주는 것이 빌드에는 없고
+  그 테스트뿐이다. `__all__` 에는 일부러 넣지 않았다.
+- **`tests/test_public_surface_rule.py`.** 위의 것들이 편리한 이름 하나를 export
+  하고 싶은 다음 사람에 의해 되돌려지는 것을 막는 장치다. 이름 목록을 들고 있지
+  않다 — 손으로 유지되는 이름 목록이야말로 썩는 것이다. `ast` 로 `__init__.py` 의
+  import 문에서 `__all__` 의 기대 내용을 유도하고(그래서 import 는 남긴 채 `__all__`
+  항목만 지우면 실패한다), 짧은 모듈 정책 목록에 없는 모듈에서 온 이름을 거절하고,
+  `parse_*`/`pair_*` 는 아예 거절하고, 모든 공개 클라이언트 메서드 애너테이션의 추이
+  폐포를 걸어 그 안의 패키지 정의 타입이 전부 export 되기를 요구하며, export 된
+  타입 아닌 것은 전부 이유가 적힌 `DOMAIN_CONSTANTS` 표에 나타나기를 요구한다. 이
+  파일은 저장소별 헤더 아래에서 SRT 패키지와 글자 그대로 공유한다.
 - 문서 사이트. `mkdocs.yml` 이 `docs/` 아래 여섯 쪽을 만들고, API 레퍼런스는 공개면을
   내보내는 모듈마다 docstring 에서 생성한다. 빌드 도구는 `docs` extra 로 들어간다
   (`pip install -e ".[docs]"`). 런타임 의존성은 늘지 않는다 —

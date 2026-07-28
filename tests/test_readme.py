@@ -300,9 +300,18 @@ def test_ticket_reference_docs_keep_static_only_rows_and_scope_consistent():
         "The ticket-reference implementation itself used no live I/O and "
         "added no mutation capability."
     )
-    for document in (RECORD, CHANGELOG, PROGRESS, HANDOFF):
+    for document in (RECORD, PROGRESS, HANDOFF):
         normalized = " ".join(document.read_text(encoding="utf-8").split())
         assert common_scope_claim in normalized
+    # CHANGELOG.md makes the same claim in Korean, so it is pinned on the
+    # Korean wording rather than dropped: this is the claim that says the
+    # increment touched nothing live, and it has to survive somewhere a reader
+    # of the release notes will actually see it.
+    changelog = " ".join(CHANGELOG.read_text(encoding="utf-8").split())
+    assert (
+        "승차권 참조 구현 자체는 실서버 입출력을 쓰지 않았고 "
+        "상태 변경 능력을 더하지 않았다." in changelog
+    )
 
 
 def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
