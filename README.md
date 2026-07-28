@@ -65,6 +65,38 @@ export KORAIL_DYNAPATH_OS_VERSION="15"          # Build.VERSION.RELEASE
 export KORAIL_DYNAPATH_DEVICE_MODEL="SM-S928N"  # Build.MODEL
 ```
 
+#### 이 값들을 어디서 구하나
+
+기기를 USB 디버깅으로 연결하고 `adb` 로 읽으면 됩니다.
+
+| 환경변수 | 원본 | 명령 |
+| --- | --- | --- |
+| `KORAIL_DYNAPATH_DEVICE_ID` | `Settings.Secure.ANDROID_ID` | `adb shell settings get secure android_id` |
+| `KORAIL_DYNAPATH_OS_VERSION` | `Build.VERSION.RELEASE` | `adb shell getprop ro.build.version.release` |
+| `KORAIL_DYNAPATH_DEVICE_MODEL` | `Build.MODEL` | `adb shell getprop ro.product.model` |
+
+`ANDROID_ID` 는 안드로이드 8부터 앱 서명키별로 갈립니다. `adb shell` 이 보는 값은
+KORAIL 앱이 보는 값과 다릅니다. 이 라이브러리에는 상관없습니다 — `di` 가 필요로 하는
+건 16자 hex 이고, env 경로를 쓰는 이유는 값이 진짜여서가 아니라 프로세스를 넘어
+**안정적**이기 때문입니다.
+
+#### 앱 버전과 API 버전은 다릅니다
+
+요청에 실리는 `Version=250601003` 은 앱 버전(`6.5.0`)도 versionCode(`60500002`)도
+아닌 별개 상수입니다. APK 안에 있어서 기기 속성으로는 나오지 않습니다.
+
+```bash
+adb shell dumpsys package com.korail.talk | grep versionName   # 6.5.0
+adb shell pm path com.korail.talk                              # APK 경로
+adb pull <위 경로>
+unzip -p base.apk 'classes*.dex' | strings | grep -m1 'Device=AD&Version='
+# Device=AD&Version=250601003&Key=korail1234567890
+```
+
+마지막 줄이 모든 요청에 실리는 공통 세 필드입니다 — 차례로
+`KORAIL_DEVICE_ANDROID`, `KORAIL_API_VERSION`, `KORAIL_APP_KEY` 입니다. 서버가 최소
+버전을 올리면 여기를 갱신해야 합니다.
+
 ### srt-mobile-api 와 같이 쓸 때
 
 이름이 겹치는데 타입이 다릅니다. 둘 다 쓴다면 별칭으로 import 하세요.
