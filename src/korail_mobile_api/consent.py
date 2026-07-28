@@ -71,25 +71,25 @@ _CONSENT_FLAG_BY_CATEGORY = {
 
 @dataclass(frozen=True)
 class MutationConsent:
-    """Explicit, per-category opt-in for state-changing KORAIL requests.
+    """상태를 바꾸는 KORAIL 요청에 범주별로 따로 주는 명시적 동의.
 
-    Each ``allow_*`` flag is an independent opt-in for exactly one category and
-    defaults to ``False``; a consent grants only what is named explicitly.
-    ``dry_run`` (default ``True``) makes a mutation call build-but-never-send,
-    returning a :class:`MutationPreview`. ``fake_card_only`` (default ``True``)
-    keeps any payment path restricted to a non-chargeable test card.
+    ``allow_*`` 플래그는 범주 하나씩에 독립으로 붙고 전부 ``False`` 가 기본이다 —
+    consent 는 이름을 적은 것만 허락한다. ``dry_run`` 은 ``True`` 가 기본이라,
+    상태 변경 메서드는 폼을 만들어 검증만 하고 :class:`MutationPreview` 를
+    돌려주며 아무것도 전송하지 않는다.
 
-    ``real_card_acknowledged`` (default ``False``) is the single, explicit
-    acknowledgement that a REAL, CHARGEABLE card number will be transmitted in
-    the clear and that money will actually move. It is additive: because it
-    defaults to ``False``, every consent written before it existed means exactly
-    what it meant before, and the default posture is still fake-card-only.
-    A real charge therefore needs both halves stated deliberately —
-    ``fake_card_only=False`` (this is not a test card) and
-    ``real_card_acknowledged=True`` (yes, charge it). The two are mutually
-    exclusive claims: a consent that sets both is a caller bug and is refused
-    rather than resolved in either direction, because an ambiguous consent is
-    exactly the state a payment must never be sent on.
+    ``fake_card_only``(기본 ``True``)와 ``real_card_acknowledged``(기본
+    ``False``)는 어떤 종류의 카드를 보낸다고 주장하는지를 적는 자리이고, 서로
+    배타적이다. **실제로 청구되는 카드를 쓰려면 두 쪽을 다 적어야 한다** —
+    ``fake_card_only=False``(시험카드가 아니다)와
+    ``real_card_acknowledged=True``(청구돼도 좋다)를 함께 켜야
+    :meth:`~korail_mobile_api.client.KorailClient.pay_with_card` 가 통과한다.
+    기본값 그대로는 :meth:`~korail_mobile_api.client.KorailClient.pay_with_fake_card`
+    쪽만 열린다. 둘 다 켠 consent 는 모순이라 어느 쪽으로도 해석하지 않고
+    거절한다 — 모호한 consent 가 바로 결제를 보내면 안 되는 상태다.
+
+    카드 종류 주장이 결제를 열어 주지는 않는다. 카드번호를 들여다보는 코드는 없고,
+    실제 청구를 가르는 것은 ``allow_payment`` 와 ``dry_run`` 이다.
     """
 
     allow_reserve: bool = False
