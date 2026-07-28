@@ -1,19 +1,13 @@
 # Changelog
 
+이 문서는 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따르고,
+이 프로젝트는 [유의적 버전](https://semver.org/lang/ko/)을 따른다.
+1.0.0 이전 기록은 당시 형식·언어 그대로 보존한다.
+
 ## 1.0.0 - 2026-07-27
 
-- **Changed: `scripts/reserve_pay_refund_roundtrip.py` no longer starts without
-  a fare ceiling.** `KORAIL_MAX_FARE` was documented as "optional … strongly
-  recommended", but it is the *only* thing that caps what the script charges:
-  step (d) compares the amount owed against it and simply skips the comparison
-  when it is unset. Nor does the train choice bound the cost — when neither a
-  fare quote nor the search row's own price hint can be obtained, the script
-  falls through to the first reservable train at whatever it costs. So an
-  operator who followed the documented command without the variable was running
-  an uncapped real-card charge. The requirement is enforced on the charging path
-  only, before the card is read, before login and before any request; a
-  malformed value now aborts there too instead of ~200 lines later. `--recover`
-  is unaffected — neither of its branches charges anything.
+### Added
+
 - Added: `scripts/README.md`. Three of the four committed scripts talk to the
   live server and one of them moves money, and until now nothing in the
   repository told a reader which was which; `capture_live_read_surface.py` was
@@ -21,88 +15,6 @@
   all of them (two switches minimum, credentials from the environment only,
   pacing, import safety, run against your own account) and points at each
   script's own docstring for its variables rather than duplicating them.
-- Changed: the docs no longer reproduce decompiled KORAIL app code. The one
-  place that pasted a Java method body and its smali (`docs/deep-dive/
-  impl-audit-2026-07-22.md`, the `setTrnCnt` self-assignment no-op) and the one
-  that pasted a Retrofit interface declaration (`docs/audit-2026-07-27/phase2/
-  safety.md`, `dcntCrdExtn.do`) now describe what was observed instead. Every
-  `file:line` citation is kept, and so is the bytecode-level detail that ruled
-  out a decompiler artefact — the change is to the form of the evidence, not its
-  force. The audit doc states the rule it now follows: cite the third party's
-  work by location, quote only the wire-level names the client must match.
-- Changed: the two machine-generated catalogs followed the same rule instead of
-  being exempted for being generated. A second sweep by CONTENT (not by fence
-  tag) found ~660 more copied source lines than the fence scan did:
-  `docs/deep-dive/local-storage-catalog.md` pasted the whole statement for each
-  of 644 key rows, and `docs/deep-dive/webview-and-url-catalog.md` pasted 26
-  method lines and 17 statement cells. Nothing evidential is lost — the storage
-  catalog's Context column now names the access it always meant (`쓰기
-  putString` / `읽기 getInt` / `존재 확인 containsKey`), derived mechanically
-  from the statement it replaced; the WebView catalog's Signature column drops
-  the body's opening brace, which is what made those rows source lines rather
-  than signatures; and its route-annotation cells are untouched, because a
-  route is interface the client must match. Key names, `file:line` and counts
-  are unchanged, so every row is still checkable against the same APK.
-- Changed: absolute paths in the docs no longer carry a local username. All 14
-  were rewritten to repository-relative form, so no exemption list exists for a
-  future leak to hide in. The one path that is not inside this repository — the
-  `srtgo_plus` reference checkout — is described as a local checkout rather than
-  given an invented upstream URL.
-- Changed: the vendor-key placeholders left by the history rewrite now read as
-  sentences. `<KORAIL-APP-…-REDACTED>` sites explain which field stood there and
-  why the value is absent; `kakao<key>://oauth`, which had become a false
-  literal, is written as the rule it always was (the scheme is `kakao` followed
-  by the app key). `docs/RELEASE_GAP_PLAN.md` used to declare "values
-  deliberately NOT copied into this plan" while pointing at a document that
-  printed them — it now records that the contradiction is resolved, that the
-  values are gone from the history as well as the tree, and that the one value
-  still in the clear (the GCM sender id, a Firebase project *number*, not a
-  credential) is retained on purpose rather than missed.
-- **Changed (behaviour, and the reason for everything below): a bare
-  `KorailClient()` can now log in.** It could not before, and the README's
-  quickstart — `KorailClient()` then `login(...)` — was therefore false.
-  Live-verified 2026-07-27: a default `KorailConfig()` sent
-  `User-Agent: korail-mobile-api/0.2.0` with DynaPath disabled, and
-  `login.Login` came back `**MACRO ERROR**` from the anti-automation check.
-  The only configuration that logged in was `build_config_from_env`, which
-  the README never mentioned and `__all__` did not export. The failure was
-  hard to read because it is **disguised**: the server returns the macro
-  rejection as "원활한 서비스 이용을 위해 앱을 최신 버전으로 업데이트한 뒤…",
-  and because account-neutral reads keep succeeding under the same config,
-  the symptom looks like a version gate rather than a client-shape problem —
-  which it had already been misdiagnosed as once. Three defaults changed:
-  - `KORAIL_USER_AGENT` is now the platform-default Dalvik string,
-    `Dalvik/2.1.0 (Linux; U; Android 15; Android)`, instead of
-    `korail-mobile-api/0.2.0`. The app hardcodes no UA — Retrofit v1 over
-    `UrlConnectionClient`/`HttpURLConnection` (`ExecuteDao.java:7-11`) — so
-    the platform string is what the server sees from the real app. It is
-    **derived**, by a new `build_dalvik_user_agent`, from the same
-    `KORAIL_DEFAULT_DEVICE_NAME` / `KORAIL_DEFAULT_ANDROID_OS_RELEASE` that
-    the DynaPath token's `dm` and `os` carry, and `build_config_from_env`
-    now calls the same builder: a UA claiming one handset while the token in
-    the same request claims another is itself a signal, so the two cannot be
-    spelled separately any more.
-  - **DynaPath is enabled by default.** Every client now attaches
-    `x-dynapath-m-token` to the six allowlisted paths where it previously
-    attached none. Where a token is sent is unchanged; only whether one is.
-    Opt out with `KorailConfig(dynapath=DynapathConfig())`.
-    `DynapathConfig`'s own defaults are untouched — the enabled default and
-    its token settings hang off `KorailConfig`'s field factory instead,
-    because `DynapathConfig.__post_init__` requires exactly one of
-    `token_provider`/`token_settings` and a defaulted `token_settings` would
-    have made every `DynapathConfig(enabled=True, token_provider=fn)` a
-    contradiction.
-  - The default token settings generate their device identity **per
-    `KorailConfig` instance**, via `generate_dynapath_device_id`. No fixed
-    device id is baked into the package: `di` is the handset's
-    `Settings.Secure.ANDROID_ID` (`AbstractC1228a.java:16`, emitted verbatim
-    at `C1229b.java:103`), and an identifier shared by every installation of
-    a library is exactly the bot signature the header exists to catch — the
-    criticism this repository already levelled at srtgo's fixed
-    `558a4f02041657ea`. It is `uuid.uuid4().hex[:16]`, matching ANDROID_ID's
-    real 16-lowercase-hex shape, stable for the life of the config and not
-    persisted. `app_start_ts` is the moment the config was built, which is
-    what `AbstractC1228a.java:14` records.
 - Added: `build_config_from_env` is exported from the package. It is the
   supported way to pin a **real** device identity —
   `KORAIL_DYNAPATH_DEVICE_ID` / `_OS_VERSION` / `_DEVICE_MODEL` — and the
@@ -116,27 +28,6 @@
   app-shaped UA, and the UA's handset agreeing with the token's — plus the
   per-instance device id. It asserts **nothing** about a login succeeding;
   that is not offline-checkable and is not claimed anywhere.
-
-- Removed: the 여행변경 (trip change) mutation chain and the `ticket_change`
-  consent category with it — `change_trip_reservation`,
-  `rollback_trip_change` and `change_reservation_passengers`, plus
-  `MutationConsent.allow_ticket_change`. Built and withdrawn the same day.
-  Exercising the chain needs a PAID ticket, charges a 변경수수료, and has no
-  clean undo, so there was no way to verify it without spending money on a
-  path whose rollback half was itself unverified. The two READS the chain
-  starts from survived and are listed below; the analysis is kept in
-  `docs/RELEASE_GAP_PLAN.md`. **Breaking** for anyone who took the
-  intermediate commit.
-- Removed: the 비회원 오프라인 반환 pair and the non-member session with it —
-  `verify_offline_refund_ticket`, `execute_offline_refund`,
-  `begin_non_member`, `end_non_member` and `KorailNonMemberSession`. Also
-  built and withdrawn the same day, for the same kind of reason: the pair's
-  premise is a PHYSICAL paper ticket whose printed 반환번호 the verify call
-  consumes, so neither half could be exercised at all. The 반환번호 spellings
-  stay registered in `redaction.py` on purpose — `research.tripChgOgtk.do`
-  still carries the same four-part number, and a spelling dropped from the
-  sensitive-key set is one that leaks the day something re-introduces it.
-  **Breaking** on the same terms.
 - Added: 장바구니 담기 as a consent-gated mutation —
   `KorailClient.add_to_cart`, `POST cart.addCartList`
   (`CartService.java:11-13`), with `CartAddRequest` and
@@ -182,34 +73,6 @@
       Retrofit a `HashMap` (`OgTkInquiryDao.java:15,52`), so its wire order is
       unspecified, and its own call sites do not even insert in the same
       order. Grouping by ticket in `ROrtg` declaration order is deterministic.
-- Not added, and deliberately so: 특실 업그레이드's `myTicket.reqUpgradeSeat`
-  (`MyTicketService.java:23-24`). It was briefly implemented as a read on the
-  strength of its request — no amount, no payment means, no confirmation flag
-  — but its RESPONSE mints a `lumpStlTgtNo` (`SpecialRoomUpgradeDao.java:
-  13,19`) and `procUpgrade` takes that same 일괄결제대상번호 beside `stlMnsCd`
-  / `crdInpWayCd` / `ismtMnthNum` / `mnsStlAmt` (`MyTicketService.java:21`).
-  Producing the settlement target a payment then spends creates an unpaid
-  purchase; it does not price one. That is the same reading this repository
-  already applied to `research.dcntCrdInfo.do` ("Despite the 'Info' in its
-  path this is a PURCHASE"), which is why that route lives in
-  `KORAIL_MUTATION_ROUTES`. It is not registered as a mutation either: its
-  paired write `procUpgradeSeat` is an intended deferral, and half a purchase
-  chain would let a caller create settlement targets with no supported way to
-  settle or abandon them. `tests/test_ticket_change_chain_reads.py` pins both
-  halves out of both allowlists.
-- Security: `ogtkRetPwd` and the rest of the 원표 반환번호 tuple are now
-  redacted. `ogtkRetPwd` travels three ways — as a bare `@Field` on
-  `research.cmtrInfo.do`'s 원표 branch, which this package has emitted since
-  `build_commuter_info_form` was added, as indexed `@FieldMap` keys, and back
-  as `OrgTk.ogtkRetPwd` — and none was masked before. `ogtkSaleWctNo`/`ogtkSaleDd`/`ogtkSaleSqno`/
-  `ogtkSaleDt` are registered with it, since masking three quarters of a
-  반환번호 leaves it reconstructable; `_index_stripped` covers every row index.
-  Also registered: the 지연증명 tuple `Cmpn.dlayOgtk*` (`Cmpn.java:11-14`), the
-  settlement rows' `stlCrdNo`/`prepCrdNo`/`apvNo` (`Stl.java:5-16`), and
-  `lumpStlTgtNo` under both spellings, which the 할인카드 구매 mutation
-  already returns. `cmpnList`/`stlList` are deliberately left unparsed and
-  stay masked inside `raw`.
-
 - Added: 운임 재계산 as a consent-gated mutation —
   `KorailClient.recalculate_price`, `POST
   certification.PriceReCalculation` (`CertificationService.java:35-37`), with
@@ -237,56 +100,6 @@
   **not** a reuse of `"payment"`: a payment consent authorises settling an
   already-quoted amount, and this route rewrites the quote, so folding them
   together would let a consent to pay a sum authorise changing what the sum is.
-- Changed: `hidDscpNo`, `hidCustNo`, `hidFmlyNo` and `psrm_cl_cd` join
-  `SENSITIVE_KEYS`. The first is a coupon/국가유공자 certificate number — the
-  same `h_cpn_no` already redacted inbound — on the way out; the other three
-  are a customer number, a family-member sequence and the underscore spelling
-  of the already-redacted `psrmClCd`.
-- Changed: `redact_payload` redacts a list value ELEMENTWISE and preserves its
-  length, instead of collapsing it with `str()`. A form key can legitimately
-  carry many values now, and stringifying the list hid every element from
-  `redact_text` behind the list's own quotes.
-
-- Not shipping: 정기권 구매. The purchase pair (`pass.passReserve` /
-  `pass.passPayIssue`) was implemented in this same unreleased cycle and removed
-  again before release, so no `reserve_commuter_pass`, `pay_for_commuter_pass`,
-  `CommuterPass*` type, `KORAIL_COMMUTER_PASS_PAYMENT_FIELDS`, `commuter_pass`
-  consent category or `MutationConsent.allow_commuter_pass` exists. Nothing was
-  ever transmitted, and no released version ever carried them.
-  - **Why: it cannot be proven correct without spending unrecoverable money.**
-    A 1개월 정기권 is roughly ₩150,000–₩250,000, and this package has neither a
-    refund route nor a cancel route for one — `cancel_unpaid_hold` is the ticket
-    cancel.
-  - **And there is no capture to compare against**, because the shipped app
-    cannot issue `passPayIssue` either:
-    `PaymentActivity.isCommPaymentRequest()` tests
-    `getIPaymentRequest() instanceof CommPaymentDao.CommPaymentResponse` — a
-    Response type where a Request is required (`PaymentActivity.java:502-503`,
-    bytecode at `smali/…/PaymentActivity.smali:3963-3980`) — so the test is
-    always false and the DAO never runs. A form assembled from decompiled code
-    with no capture and no affordable live call is a guess with references.
-  - **The 정기권 READS are unaffected**: `get_pass_menu`,
-    `get_pass_available_dates` and `get_pass_schedule` are unchanged.
-  - **The knowledge is kept, not lost.** README's 정기권 section records the
-    twenty `passReserve` fields and the loop that fills them, the one-train
-    shape (`hidChtrnStnCd`/`Nm` sent as EMPTY STRINGS, `hidTrnNo2`/
-    `hidTrnGpCd2`/`hidDtour2` ABSENT), both `passPayIssue` `@FieldMap`s and why
-    both are populated by v6.5.0, the `hidPayAmount` chain, the
-    `isCommPaymentRequest()` bug, why `passOtrReserve`/`passOtrPayIssue` are a
-    different product (자유이용권: 내일로 / A-PASS / 강릉패스), and what
-    reviving the feature would cost to prove.
-  - `KORAIL_CARD_BEARING_MUTATION_CATEGORIES` **stays** a named set, now holding
-    `{"payment"}` again. It was introduced as its own behaviour-preserving
-    change because `category == "payment"` asked the wrong question, not
-    because it had two members, and it still carries the tested invariant that
-    no card-bearing category owns a GET mutation route.
-  - Changed: `h_cust_nm`, `usernames`, `h_chg_mg_no` and their model attribute
-    names (`customer_name`, `user_names`, `change_management_no`) leave
-    `SENSITIVE_KEYS`. Every one of them entered it for the pass payment form,
-    and no surviving response, form or model in this package carries any of
-    them — `h_cust_nm` and `h_chg_mg_no` appear in exactly one DAO in the whole
-    APK, `CommReservationDao`, which nothing here parses any more. The
-    pre-existing `h_cust_no` / `customer_no` entries are untouched.
 - Added: 병합예약. `KorailClient.reserve_merge`,
   `build_merge_reservation_form`, `is_merge_eligible`,
   `KorailReservationJobType.MERGE_STANDING` (`"1202"`),
@@ -343,28 +156,6 @@
   `ReservationDao` (`c5/b.java:128-138`) to
   `certification.TicketReservation` (`CertificationService.java:52-54`). There
   is no N카드 reservation endpoint; there is an N카드 passenger block.
-- Changed: `txtCardNo_1..N` joins `SENSITIVE_KEYS`. The inbound spellings were
-  redacted already; the outbound form key was not, and a dry-run preview of a
-  carded hold printed a spendable card number in the clear. Caught by a test
-  written for exactly that.
-  - Exactly two things differ from the live-verified one-adult 일반실 form:
-    the eight passenger rows collapse to `txtTotPsgCnt="1"`,
-    `txtCompaCnt1="1"`, `txtPsgTpCd1="1"`, `txtDiscKndCd1="153"`,
-    `txtCardNo_1=<card>` (`w4/a.java:96-101`), and `txtMenuId` becomes `"A2"`
-    (`SeatAssignBookingActivity.java:159`). Everything else — journey block,
-    seat block, `txtJobId`, `txtStndFlg`, `hidFreeFlg`, `txtGdNo` — is
-    identical, because the app writes it with the same code
-    (`c5/b.java:42-77`). The builder is written as a substitution INTO
-    `build_reservation_form`'s output so that is true by construction, and a
-    test compares both forms key by key, in order.
-  - **`txtCardNo_1` carries a trailing underscore and its three neighbours do
-    not** (`OPsg.java:7-10`). A hold spelled `txtCardNo1` would be a hold with
-    a discount code and no card.
-  - No `passengers` and no `seat_class` argument: the app offers neither, since
-    `w4/a.java:97-98` hardcodes one passenger and `:88` pins 일반실.
-  - Gated by the existing `"reserve"` consent, because it IS the reserve route.
-    **NEVER TRANSMITTED**: no account this project can reach owns an N카드.
-
 - Added: 할인카드(N카드) 구매 and 기간연장 as consent-gated mutations —
   `KorailClient.register_discount_card` and
   `KorailClient.extend_discount_card`, plus `DiscountCardPurchaseRequest`,
@@ -405,7 +196,6 @@
     `"0"` rather than omitted for a 1인용 card, is unknown. `dcntCrdExtn.do`'s
     DAO response type is a bare `BaseResponse`, so a successful extension's
     reply — and its cost — is unknown too.
-
 - Added: `RefundTicketDetailResponse.discount_card`, plus `DiscountCardOnTicket`
   and `DiscountCardSection`. No new route and no new method: `SelTicketInfo`
   already returns `TicketDetailDao.TicketDetailResponse`, which carries
@@ -421,44 +211,12 @@
     (`TicketDetailDao.java:124`), which is what Gson serialises. The getter is
     spelled `getAppSeg_info()` and is NOT the wire name; taking the getter
     would have produced a parser that silently found no sections.
-
 - Added: loyalty READS, and the welfare entitlement one of them exposes —
   `KorailClient.get_korail_point_summary` and
   `KorailClient.get_mileage_history`, plus `KorailPointSummaryResponse`,
   `MileageHistoryRequest`, `MileageHistoryEntry`, `MileageHistoryResponse` and
   the five `KORAIL_MILEAGE_*` selector constants. The read-only boundary is now
   58 routes.
-- Changed: `EXCLUDED_API_DOMAINS` no longer contains `"points-mileage"`; it
-  contains `"points-mileage-write"`. The old label excluded the whole loyalty
-  area including its balance reads, which the user has now asked for. The new
-  label names only what is still refused, and each refusal now has a reason
-  rather than a category: `mlg.lpotAthn.do` and `xPoint.XPointView` take a
-  user-supplied point PASSWORD and answer with `pwdErrTno`, a failure counter,
-  so a wrong guess is a state change at the loyalty provider no matter what the
-  screen title says; `xPoint.OkCashbagCertView`, `mileage.acpnMlgSave.do` and
-  `mileage.acpnMlgNoti.do` are registration/accrual writes. A test pins that
-  all five stay unreachable and that no other excluded domain moved.
-  - **`xPoint.MyXPointView` is the account-entitlement read this project did
-    not know it had.** Besides the point balance it carries `h_hdcp_flg`, and
-    `MyPageActivity.java:206-212` reveals the entire 장애인 section on that
-    flag alone, filling its two rows from `h_subt_dcs_cl_nm` (labelled 장애인증,
-    `:353,393`) and `h_cust_lead_flg_nm` (labelled 보조견, `:355,394`). An
-    account whose flag is not `"Y"` therefore holds neither registration —
-    which is the shape of an explanation for the live `ERR299943`
-    "예약할인이 지원되지 않습니다" that refused 1~3급 장애 + 안내견 on a
-    byte-exact form (`docs/MUTATION_HANDOFF.md:172-179`). **Hypothesis, not
-    finding**: it is what the app does with the flag, not an observed pairing.
-  - `point_dv_cd` is not a caller parameter. `KorailPointInquiryDao.java:87-92`
-    has no request class and passes the literal `"0"`, so the builder takes no
-    arguments at all.
-  - The mileage read's page size is the app's hardcoded `"20"`
-    (`MileageHistoryActivity.java:274`) rather than an option, and `qryDvVal`
-    is a dropdown INDEX rather than a code — `:566` assigns
-    `Integer.toString(i9)` straight from `onItemSelected`, with the three
-    entries declared 전체/적립/사용 at `:502`. The date window has no default
-    because supplying one would put a clock in a payload builder; the app's own
-    default is the "최근 3개월" branch at `:372-380`.
-
 - Added: 할인카드(N카드) reads — `KorailClient.get_discount_card_usage_history`
   and `KorailClient.get_discount_card_schedule`, plus
   `DiscountCardScheduleRequest`, `DiscountCardUsage`,
@@ -496,7 +254,6 @@
   - The two `dcntCrd*` routes that CHANGE state — `research.dcntCrdInfo.do` and
     `reservation.dcntCrdExtn.do` — are deliberately absent from the read-only
     allowlist and from `KORAIL_MUTATION_ROUTES`; a test pins their absence.
-
 - Added: 환승 (transfer) search and reservation — `KorailClient.search_transfer_trains`,
   `KorailClient.search_trains_with_transfer_fallback` and
   `KorailClient.reserve_transfer`, plus `TransferItinerary`,
@@ -553,14 +310,6 @@
     gates it twice, at `a5/k.java:120-127` (the standby check returns false for
     a non-direct result) and at `DirectInquiryActivity.java:434` (its only
     `setJobId("1102")`, on a screen `TransferInquiryActivity` overrides away).
-- Known gap: **`cancel_unpaid_hold` cannot release a transfer hold.** It requires
-  `h_jrny_cnt` to be numerically one. The app has no such restriction —
-  `DReservationConfirmActivity.java:269-278` forwards `getH_jrny_cnt()` verbatim
-  as `txtJrnyCnt` beside the same fixed `txtJrnySqno="0001"`/`hidRsvChgNo="000"`
-  — so the fix is to forward the hold's own count instead of pinning `"1"`. That
-  touches the cancel path, which was out of scope for the transfer change, so it
-  is reported rather than made. A live transfer hold sent before it lands must be
-  cancelled in the KORAIL app or on the website.
 - Added: a NetFunnel virtual-waiting-room client, `KorailNetFunnelClient`, so a
   gated operation can wait its turn instead of failing.
   **Off by default, and partly live-confirmed on 2026-07-26.** Probing on that
@@ -702,13 +451,6 @@
     which of the two a given opcode gets. `KORAIL_READ_ONLY_ROUTES` is untouched
     at 54, so `post_form`/`get_json` can never reach `/ts.wseq`. `5003`, `5105`
     and `5106` are declared as constants and rejected by the guard.
-- Corrected: `docs/RELEASE_GAP_PLAN.md` still carried, in its srtgo-corrections
-  appendix, the withdrawn claim that "Korail uses **no** NetFunnel at all — only
-  SRT does". The body of that document has said otherwise since 2026-07-26; the
-  appendix now agrees with it. The corresponding "not yet implemented" notes on
-  the `service_1` / `act_6` gate in `README.md` and
-  `docs/IMPLEMENTATION_PROGRESS.md` were also stale and are corrected: the gate
-  exists, and what still holds R39 back is its unregistered route.
 - Added: server-side failures are classified on `h_msg_cd` instead of all
   arriving as one `KorailAppError`. New types — `KorailNoResultsError` (with
   `KorailNoDirectTrainError`), `KorailSoldOutError`,
@@ -751,7 +493,6 @@
   - `[3]인증정보에 문제가 있습니다.` is deliberately left unclassified: no
     `h_msg_cd` was captured with it and the string is 0-hit in the APK, so
     classifying it would mean the Korean-text matching this change removes.
-
 - Added: `reserve` reaches all three of the booking screen's job types through a
   keyword-only, defaulted `job_type` (`KorailReservationJobType`). The default
   is `IMMEDIATE` (`txtJobId="1101"`), the only value this package has ever sent,
@@ -801,20 +542,6 @@
   a caller who opted into placing a standby booking could not finish placing it.
   `reservationWait.ReservationWait` is now a fifth mutation route; the read-only
   allowlist and its guarantee are untouched. Never live-run.
-- Changed: `redact_payload` now masks `txtCpNo` and the indexed
-  `txtSrcarNo{i}`/`txtSeatNo{i}` keys, so a mutation preview cannot expose the
-  standby notification number or the designated seats. Car and seat identifiers
-  were already redacted everywhere they are read back; these are the same two
-  values on the way out.
-- Documented: two live observations from 2026-07-26 that are server rules, not
-  package defects. `ERR299943 예약할인이 지원되지 않습니다` refused 청소년 alone
-  and 1~3급 장애 + 안내견 while six other mixes were accepted; the code has zero
-  hits anywhere in the decompiled APK and the forms matched the app exactly, so
-  it is an account-entitlement rule. Separately, a hold returned
-  `h_msg_cd = WRR664296` (weekend discount notice) and was still a real,
-  cancelable reservation — success is `strResult = SUCC` plus a PNR, not
-  `h_msg_cd == IRR000018`, and no code path treats a non-`IRR000018` code as
-  failure.
 - Added: `reserve` books an arbitrary passenger mix in either cabin. It takes a
   `KorailPassengerCounts` — one field per row the app's request has always
   carried (어른, 청소년, 어린이, 동반유아, 경로, 1~3급 장애, 4~6급 장애,
@@ -836,6 +563,363 @@
   must come from `h_tot_rcvd_amt`: its `h_tot_prc` reads `59,800`, so the old
   builder would have underpaid by 23,900 KRW. Other passenger types and mixes
   of types remain static-evidenced and have never been transmitted.
+- Real (chargeable) card payment is now possible, as an explicit, additive
+  opt-in. `MutationConsent` gains `real_card_acknowledged` (default `False`):
+  the caller's acknowledgement that a real, chargeable PAN will be transmitted
+  in the clear and that money will actually move. Because it defaults to
+  `False`, every consent written before it existed means exactly what it meant
+  before and the default posture is unchanged — fake-card-only.
+- Added `KorailClient.pay_with_card`, beside an unchanged `pay_with_fake_card`.
+  The new method requires `real_card_acknowledged=True` AND
+  `fake_card_only=False`; the old one still refuses anything but a test card,
+  so its name keeps meaning what it says. Both build the same
+  `build_card_payment_form` and leave through the same double-gated
+  `post_mutation_form`, so a real payment cannot drift from the wire shape that
+  was verified live. `pay_with_card` returns the parsed payment envelope rather
+  than raising on a FAIL, because that envelope is the only record of what
+  happened to the money and of whether the hold is still cancellable.
+- Added `scripts/reserve_pay_refund_roundtrip.py`, the operator script for one
+  full reserve → pay → refund round trip on a real card. Three environment
+  opt-ins are required (`KORAIL_MOBILE_API_LIVE=1`, `KORAIL_LIVE_MUTATION=1`,
+  `KORAIL_LIVE_REAL_CHARGE=1`); the card is read from the environment only,
+  never a file and never argv. It refuses to start unless the account holds
+  zero reservations, prints the PNR the instant it exists, cross-checks the
+  amount owed against an independent server read before paying, prints the
+  refund amount and fee before refunding, and on any later failure prints an
+  unmissable banner with the PNR, what is outstanding, and a runnable recovery
+  command (`--recover` with `KORAIL_RECOVER_PNR`). The PAN, PIN digits, expiry
+  and birthday are scrubbed from every output path including exception text;
+  the PNR deliberately is not, because losing it is the worst outcome.
+- Added three read-only routes found by comparing the package against four
+  third-party reference clients (srtgo, srtgo_plus, ryanking13/SRT, korail2);
+  all three are declared in our own decompiled APK. `get_ticket_reservation_detail`
+  reads one held reservation back by PNR (`certification.ReservationList`,
+  `CertificationService.java:45-46`), giving an independent view of `h_wct_no`
+  and the per-seat `h_rcvd_amt` rows the payment form settles.
+  `get_refund_commission` (`refunds.CommissionView`, `RefundService.java:19-21`)
+  reports `ret_amt`/`ret_fee`/`prg_psb_flg`, and `get_refund_ticket_detail`
+  (`refunds.SelTicketInfo`, `RefundService.java:23-25`) reports the refund
+  target's ticket detail including `retPsbFlg`. Together the latter two are the
+  "how much comes back and what is the fee" pre-check that `refund` has never
+  had; none of the four reference clients implements either one. The boundary is
+  now 54 exact login/read routes and 60 public methods.
+- Added the consent and safety foundation for state-changing requests. Frozen
+  `MutationConsent` (per-category `allow_*` default `False`, `dry_run` default
+  `True`, `fake_card_only` default `True`) and frozen `MutationPreview` (whose
+  payload is forced through `redact_payload` on construction, so a preview can
+  never hold a raw PAN, PNR, or sale identity) live in `consent.py`. The route
+  registry became tiered: `KORAIL_MUTATION_ROUTES` holds the four
+  state-changing routes and is deliberately never added to
+  `KORAIL_READ_ONLY_ROUTES`, while `KORAIL_MUTATION_ROUTE_CATEGORIES` and
+  `assert_mutation_route_category` cross-check the caller's consent category
+  against the route, so a consent for one category cannot post another
+  category's route. Redaction was extended over the mutation fields, including
+  the card number, PNR, original-ticket sale identity, return password,
+  `txtPrnNo`, and `h_orgtk_sale_wct_no`.
+- Added four consent-gated mutation methods: `reserve`, `cancel_unpaid_hold`,
+  `pay_with_fake_card`, and `refund`. Each requires an authenticated session
+  and a `MutationConsent` that opts into its own category, and each is denied
+  with `MutationNotAllowedError` before anything is built otherwise. With the
+  default `dry_run=True` a method validates its inputs and returns a redacted
+  `MutationPreview` of the form that *would* be posted, sending nothing. Only a
+  `dry_run=False` consent transmits, and only through `post_mutation_form`, the
+  single send path that re-checks consent, refuses a `dry_run=True` consent,
+  and asserts both the mutation route and its category. The read-only send path
+  (`post_form`/`get_json`) still refuses every mutation route.
+  `pay_with_fake_card` additionally refuses unless `fake_card_only` is set, at
+  both the method and the send gate, because the payment form carries the card
+  number in the clear; only a non-chargeable test card is supported.
+- Added `refund` on the same gated send path. Its live send path is fully
+  active code, not blocked, but it has never been exercised against the live
+  server: a refund acts on a settled ticket, and this package's fake-card
+  payment is always declined, so no paid ticket is produced here. Its request
+  contract, gates, and redaction are covered by offline tests only, and it must
+  be treated as unverified against the real service.
+- Added five authenticated, one-shot ticket-reference reads for delivery
+  recipient details, ticket-duplication count, PBP acceptance specifications,
+  platform numbers, and recent delivery history. The exact static contracts
+  accept only repr-hidden typed ticket/PNR provenance, preserve repeated
+  `tkRetNo` order with exact count equality, derive recent-history `custMgNo`
+  only from the login session, and force DynaPath off. The implementation made
+  no live request; the pre-R149 inventory was 31 successful, 10 failed, and
+  124 unexecuted out of 165. The package boundary is now 51 read/login routes
+  and 57 public methods, with the DynaPath allowlist unchanged at six paths.
+  The ticket-reference implementation itself used no live I/O and added no
+  mutation capability.
+- Added closed tagged public reads for gift-ticket list modes, commuter jobs
+  `a`/`b`/`c`, and one/two-leg fare quotes. Exact ordered forms preserve R31
+  duplicate fields and intentionally omit R52 `trnCnt`; only R52 uses the
+  pre-existing conditional DynaPath path.
+- Added strict synthetic response models/parsers plus an internal exact
+  request builder for R39, while leaving its NetFunnel `service_1` / `act_6`
+  route unavailable. R54 also remains transport-held. At that historical,
+  pre-revalidation implementation step, the DynaPath allowlist and live
+  inventory remained unchanged, no live call was made, and no mutation
+  capability was added. The current boundary is 51 read/login routes and 57
+  public methods.
+- Added four authenticated fixed/account-shaped reads for multi-child discount
+  targets, login-customer trip information, current or bounded-history MaaS
+  service details, and trip-change date lookup. Their exact routes and ordered
+  forms are DynaPath-disabled and validation occurs before transport.
+- Added strict synthetic parsers and frozen repr-safe models for R13, R32,
+  R43, and R45. R54 tour-train response parsing is static-contract support
+  only: no client method, safety route, or raw-string request builder exists.
+- Initially added four typed P0 train reads from static APK evidence for
+  free-seat car guidance, guide-seat conditions, seat-assignment schedules,
+  and merged-seat inquiry.
+- Initial implementation added frozen closed request objects, exact POST field
+  allowlists, strict response parsers, repr-hidden identifiers/free text/raw
+  mappings, and synthetic-only fixtures; that implementation step added no
+  live call or DynaPath route.
+- Added typed session-unverified pass-menu, commuter-kind-menu, and
+  crew-request option reads with caller-required runtime discriminator codes;
+  any live verification starts only after login.
+- Added frozen repr-safe models, strict parsers, synthetic fixtures, and
+  offline route, request, error, export, and documentation coverage.
+- Added three static-evidenced limousine schedule and seat-inventory reads with
+  closed caller-supplied query dataclasses, exact POST allowlists, typed
+  repr-safe parsers, one-shot session/error handling, and DynaPath disabled.
+- **Added: this package is licensed.** `LICENSE` carries the Apache License
+  2.0 verbatim, and `pyproject.toml` declares it in the PEP 639 SPDX form
+  (`license = "Apache-2.0"`, `license-files = ["LICENSE", "NOTICE"]`) rather
+  than the deprecated `license = {text = ...}` table, which setuptools now
+  warns on and will reject outright from 2027-02-18. The build floor moved to
+  `setuptools>=77` for the same reason: earlier versions ignore `license-files`
+  silently, producing a wheel that claims a licence and ships no licence text.
+  No `License ::` classifier accompanies it — PEP 639 makes the two mutually
+  exclusive. `NOTICE` is declared alongside `LICENSE` rather than left at the
+  repository root alone: Apache-2.0 §4(d) requires a redistributor to carry the
+  attribution notices forward, and a wheel that omits the file makes that
+  impossible. Both artifacts now carry both files.
+- Added: owner and canonical-URL metadata. `authors` names `yakisoba0728` and
+  a contact address — spelled in `pyproject.toml`, not repeated here, because
+  `tests/test_readme.py` forbids a bare email address in the evidence
+  documents and that gate is worth more than the duplication.
+  `[project.urls]` pins Homepage, Repository, Issues and Changelog at
+  `https://github.com/yakisoba0728/korail-mobile-api`.
+- Added: `korail_mobile_api.__version__`, with a test asserting it equals
+  `project.version`. Nothing in the build keeps a hand-written dunder and a
+  hand-written TOML literal in step; that test is the only thing that does.
+  It is deliberately absent from `__all__`.
+- **Added: `tests/test_public_surface_rule.py`**, which is what stops the
+  above from being undone by the next person with a convenient name to export.
+  It holds no list of names — a hand-maintained name list is exactly what
+  rots. It derives `__all__`'s expected contents from `__init__.py`'s import
+  statements via `ast` (so dropping an `__all__` entry while leaving the
+  import behind fails), refuses any name from a module not on a short
+  module-level policy list, refuses `parse_*`/`pair_*` outright, walks the
+  transitive closure of every public client method's annotations and requires
+  each package-defined type in it to be exported, and requires every exported
+  non-type to appear in a `DOMAIN_CONSTANTS` table with a written reason. The
+  file is shared verbatim with the SRT package below a marked per-repository
+  header.
+
+### Changed
+
+- **Changed: `scripts/reserve_pay_refund_roundtrip.py` no longer starts without
+  a fare ceiling.** `KORAIL_MAX_FARE` was documented as "optional … strongly
+  recommended", but it is the *only* thing that caps what the script charges:
+  step (d) compares the amount owed against it and simply skips the comparison
+  when it is unset. Nor does the train choice bound the cost — when neither a
+  fare quote nor the search row's own price hint can be obtained, the script
+  falls through to the first reservable train at whatever it costs. So an
+  operator who followed the documented command without the variable was running
+  an uncapped real-card charge. The requirement is enforced on the charging path
+  only, before the card is read, before login and before any request; a
+  malformed value now aborts there too instead of ~200 lines later. `--recover`
+  is unaffected — neither of its branches charges anything.
+- Changed: the docs no longer reproduce decompiled KORAIL app code. The one
+  place that pasted a Java method body and its smali (`docs/deep-dive/
+  impl-audit-2026-07-22.md`, the `setTrnCnt` self-assignment no-op) and the one
+  that pasted a Retrofit interface declaration (`docs/audit-2026-07-27/phase2/
+  safety.md`, `dcntCrdExtn.do`) now describe what was observed instead. Every
+  `file:line` citation is kept, and so is the bytecode-level detail that ruled
+  out a decompiler artefact — the change is to the form of the evidence, not its
+  force. The audit doc states the rule it now follows: cite the third party's
+  work by location, quote only the wire-level names the client must match.
+- Changed: the two machine-generated catalogs followed the same rule instead of
+  being exempted for being generated. A second sweep by CONTENT (not by fence
+  tag) found ~660 more copied source lines than the fence scan did:
+  `docs/deep-dive/local-storage-catalog.md` pasted the whole statement for each
+  of 644 key rows, and `docs/deep-dive/webview-and-url-catalog.md` pasted 26
+  method lines and 17 statement cells. Nothing evidential is lost — the storage
+  catalog's Context column now names the access it always meant (`쓰기
+  putString` / `읽기 getInt` / `존재 확인 containsKey`), derived mechanically
+  from the statement it replaced; the WebView catalog's Signature column drops
+  the body's opening brace, which is what made those rows source lines rather
+  than signatures; and its route-annotation cells are untouched, because a
+  route is interface the client must match. Key names, `file:line` and counts
+  are unchanged, so every row is still checkable against the same APK.
+- Changed: absolute paths in the docs no longer carry a local username. All 14
+  were rewritten to repository-relative form, so no exemption list exists for a
+  future leak to hide in. The one path that is not inside this repository — the
+  `srtgo_plus` reference checkout — is described as a local checkout rather than
+  given an invented upstream URL.
+- Changed: the vendor-key placeholders left by the history rewrite now read as
+  sentences. `<KORAIL-APP-…-REDACTED>` sites explain which field stood there and
+  why the value is absent; `kakao<key>://oauth`, which had become a false
+  literal, is written as the rule it always was (the scheme is `kakao` followed
+  by the app key). `docs/RELEASE_GAP_PLAN.md` used to declare "values
+  deliberately NOT copied into this plan" while pointing at a document that
+  printed them — it now records that the contradiction is resolved, that the
+  values are gone from the history as well as the tree, and that the one value
+  still in the clear (the GCM sender id, a Firebase project *number*, not a
+  credential) is retained on purpose rather than missed.
+- **Changed (behaviour, and the reason for everything below): a bare
+  `KorailClient()` can now log in.** It could not before, and the README's
+  quickstart — `KorailClient()` then `login(...)` — was therefore false.
+  Live-verified 2026-07-27: a default `KorailConfig()` sent
+  `User-Agent: korail-mobile-api/0.2.0` with DynaPath disabled, and
+  `login.Login` came back `**MACRO ERROR**` from the anti-automation check.
+  The only configuration that logged in was `build_config_from_env`, which
+  the README never mentioned and `__all__` did not export. The failure was
+  hard to read because it is **disguised**: the server returns the macro
+  rejection as "원활한 서비스 이용을 위해 앱을 최신 버전으로 업데이트한 뒤…",
+  and because account-neutral reads keep succeeding under the same config,
+  the symptom looks like a version gate rather than a client-shape problem —
+  which it had already been misdiagnosed as once. Three defaults changed:
+  - `KORAIL_USER_AGENT` is now the platform-default Dalvik string,
+    `Dalvik/2.1.0 (Linux; U; Android 15; Android)`, instead of
+    `korail-mobile-api/0.2.0`. The app hardcodes no UA — Retrofit v1 over
+    `UrlConnectionClient`/`HttpURLConnection` (`ExecuteDao.java:7-11`) — so
+    the platform string is what the server sees from the real app. It is
+    **derived**, by a new `build_dalvik_user_agent`, from the same
+    `KORAIL_DEFAULT_DEVICE_NAME` / `KORAIL_DEFAULT_ANDROID_OS_RELEASE` that
+    the DynaPath token's `dm` and `os` carry, and `build_config_from_env`
+    now calls the same builder: a UA claiming one handset while the token in
+    the same request claims another is itself a signal, so the two cannot be
+    spelled separately any more.
+  - **DynaPath is enabled by default.** Every client now attaches
+    `x-dynapath-m-token` to the six allowlisted paths where it previously
+    attached none. Where a token is sent is unchanged; only whether one is.
+    Opt out with `KorailConfig(dynapath=DynapathConfig())`.
+    `DynapathConfig`'s own defaults are untouched — the enabled default and
+    its token settings hang off `KorailConfig`'s field factory instead,
+    because `DynapathConfig.__post_init__` requires exactly one of
+    `token_provider`/`token_settings` and a defaulted `token_settings` would
+    have made every `DynapathConfig(enabled=True, token_provider=fn)` a
+    contradiction.
+  - The default token settings generate their device identity **per
+    `KorailConfig` instance**, via `generate_dynapath_device_id`. No fixed
+    device id is baked into the package: `di` is the handset's
+    `Settings.Secure.ANDROID_ID` (`AbstractC1228a.java:16`, emitted verbatim
+    at `C1229b.java:103`), and an identifier shared by every installation of
+    a library is exactly the bot signature the header exists to catch — the
+    criticism this repository already levelled at srtgo's fixed
+    `558a4f02041657ea`. It is `uuid.uuid4().hex[:16]`, matching ANDROID_ID's
+    real 16-lowercase-hex shape, stable for the life of the config and not
+    persisted. `app_start_ts` is the moment the config was built, which is
+    what `AbstractC1228a.java:14` records.
+- Changed: `EXCLUDED_API_DOMAINS` no longer contains `"points-mileage"`; it
+  contains `"points-mileage-write"`. The old label excluded the whole loyalty
+  area including its balance reads, which the user has now asked for. The new
+  label names only what is still refused, and each refusal now has a reason
+  rather than a category: `mlg.lpotAthn.do` and `xPoint.XPointView` take a
+  user-supplied point PASSWORD and answer with `pwdErrTno`, a failure counter,
+  so a wrong guess is a state change at the loyalty provider no matter what the
+  screen title says; `xPoint.OkCashbagCertView`, `mileage.acpnMlgSave.do` and
+  `mileage.acpnMlgNoti.do` are registration/accrual writes. A test pins that
+  all five stay unreachable and that no other excluded domain moved.
+  - **`xPoint.MyXPointView` is the account-entitlement read this project did
+    not know it had.** Besides the point balance it carries `h_hdcp_flg`, and
+    `MyPageActivity.java:206-212` reveals the entire 장애인 section on that
+    flag alone, filling its two rows from `h_subt_dcs_cl_nm` (labelled 장애인증,
+    `:353,393`) and `h_cust_lead_flg_nm` (labelled 보조견, `:355,394`). An
+    account whose flag is not `"Y"` therefore holds neither registration —
+    which is the shape of an explanation for the live `ERR299943`
+    "예약할인이 지원되지 않습니다" that refused 1~3급 장애 + 안내견 on a
+    byte-exact form (`docs/MUTATION_HANDOFF.md:172-179`). **Hypothesis, not
+    finding**: it is what the app does with the flag, not an observed pairing.
+  - `point_dv_cd` is not a caller parameter. `KorailPointInquiryDao.java:87-92`
+    has no request class and passes the literal `"0"`, so the builder takes no
+    arguments at all.
+  - The mileage read's page size is the app's hardcoded `"20"`
+    (`MileageHistoryActivity.java:274`) rather than an option, and `qryDvVal`
+    is a dropdown INDEX rather than a code — `:566` assigns
+    `Integer.toString(i9)` straight from `onItemSelected`, with the three
+    entries declared 전체/적립/사용 at `:502`. The date window has no default
+    because supplying one would put a clock in a payload builder; the app's own
+    default is the "최근 3개월" branch at `:372-380`.
+- `scripts/reserve_pay_refund_roundtrip.py` now orders its train choice by the
+  search row's own price field when no fare quote can be built. A live
+  ScheduleView row carries no goods number, so `trn.prcFare.do` usually cannot
+  be built and the script reported `fare: UNKNOWN` and took the first reservable
+  train. It still invents nothing: `KORAIL_TRAIN_NO` pins an exact train (and
+  aborts before reserving if that train is not reservable), then the cheapest
+  fare quote, then the cheapest by `h_rcvd_amt`/`h_rcvd_fare` — fields
+  `RsvInquiryResponse.TrainInfo` declares — printed as
+  `~N KRW (HINT from the search row, not a quote)` so it can never be read as
+  the amount about to be charged, then the first reservable train with the same
+  plain statement as before. The printed reason always names which branch ran.
+  The authoritative amount is still the one read back and cross-checked before
+  paying, and `KORAIL_MAX_FARE` is still the only ceiling on the charge.
+- The transmit gate now requires a payment consent to state exactly ONE card
+  claim. Neither flag set is the original refusal, unchanged. BOTH set is
+  refused as a contradiction: a consent that claims a test card while
+  acknowledging a real charge is a caller bug, and paying on an ambiguous
+  consent is the mistake the gate exists to prevent. The boundary is now 54
+  exact login/read routes and 61 public methods; no new route was added.
+- `ReservationSeatDetail` maps the passenger type from `h_psg_tp_cd`, which is
+  what `ReservationResponse.SeatInfo` declares. The `h_psg_tp_dv_nm` that a
+  reference client names does not appear anywhere in the decompiled app and was
+  not observed live, so it is deliberately not mapped; an unmapped key stays
+  reachable through `raw`.
+- The package boundary is now 51 exact login/read routes and 57 public methods:
+  53 audited login/read methods that transmit only read-only requests, plus the
+  four consent-gated mutation methods. The four mutation routes are tracked in
+  their own set and are never reachable from a read path.
+- Made `logout()` invalidate the server session with a bare `GET`
+  `login.Logout` before clearing local state, best-effort so it never fails on
+  transport or an already-expired session. That cookie-authenticated,
+  zero-parameter route joined the read-only allowlist, which is why the
+  allowlist holds 51 routes rather than 50. Also corrected
+  `KORAIL_DYNAPATH_SDK_VERSION` from `v1` to `v1.0.3` to match the decompiled
+  app, since that constant seeds both the `sv` body field and the `dyn_key`.
+- Kept R17's known HTTP 404 as a one-request `KorailTransportError` with no
+  retry, fallback, or alternate path. R17 and R31 require a local session;
+  R52 does not invent one.
+- Retained login `strCustNo` as a repr-hidden session customer number for the
+  customer-trip request; member and member-card identifiers are not fallbacks.
+- Kept the Java Retrofit names as documentation aliases only and deliberately
+  omitted `TrainSummary` convenience chaining and every adjacent mutation.
+- Tightened only these four route parsers to require exact `strResult=SUCC`
+  after preserving the existing `FAIL`, `P058`, and `WRC000288` errors.
+- Reject limousine query subclasses and invoke each concrete dataclass
+  validator non-virtually before Sid generation or transport.
+- Require exact `strResult=SUCC` for all P0 menu and limousine typed parsers.
+- Normalize live-evidenced JSON integer and ASCII decimal-string station popup
+  types and actual arrival delay counts without accepting broader coercions.
+- **Changed: `scripts/verify_distribution.py` now verifies this metadata
+  instead of banning it.** The four headers a PEP 639 build emits —
+  `License-Expression`, `License-File`, `Author-email`, `Project-URL` — moved
+  out of the forbidden list and into exact-value checks derived from
+  `pyproject.toml`, alongside the ones `Name`/`Version`/`Requires-Python`
+  already had. Merely un-banning them would have left the licence and the
+  owner as the only unchecked metadata in the artifacts. `License`,
+  `Author` (bare), `Home-page`, `Download-URL`, `Maintainer` and
+  `Maintainer-email` stay forbidden: no configuration here emits them, so
+  their presence would mean something other than this pyproject wrote them.
+  Both artifacts must additionally carry the declared licence file as a
+  non-empty regular member — `dist-info/licenses/LICENSE` in the wheel, the
+  sdist root in the tarball — because a metadata header naming a licence file
+  is a claim about a file, not the file.
+- Changed: `Development Status :: 3 - Alpha` → `5 - Production/Stable`.
+- **Renamed (breaking): `MutationNotAllowedError` → `KorailMutationNotAllowedError`.**
+  It was the only one of the twenty exception types without the package's
+  prefix, and the sibling SRT package already spells its counterpart
+  `SrtMutationNotAllowedError`. No alias is left behind: an alias added at
+  1.0.0 is itself a permanent contract, and the whole point of doing this now
+  is that the rename is still free.
+
+### Fixed
+
+- Corrected: `docs/RELEASE_GAP_PLAN.md` still carried, in its srtgo-corrections
+  appendix, the withdrawn claim that "Korail uses **no** NetFunnel at all — only
+  SRT does". The body of that document has said otherwise since 2026-07-26; the
+  appendix now agrees with it. The corresponding "not yet implemented" notes on
+  the `service_1` / `act_6` gate in `README.md` and
+  `docs/IMPLEMENTATION_PROGRESS.md` were also stale and are corrected: the gate
+  exists, and what still holds R39 back is its unregistered route.
 - Fixed: `scripts/reserve_pay_refund_roundtrip.py` masked the PNR it exists to
   print. Its console scrubber applied a 13–19 digit card-number pattern to
   arbitrary text, and a KORAIL PNR is 15 decimal digits, so a live run on
@@ -875,288 +959,33 @@
   `KorailClient._hold_from_reservation_response`, the last-ditch fallback whose
   entire job is never to lose a PNR, normalises them too. Bools, floats, lists
   and objects are still protocol errors.
-- `scripts/reserve_pay_refund_roundtrip.py` now orders its train choice by the
-  search row's own price field when no fare quote can be built. A live
-  ScheduleView row carries no goods number, so `trn.prcFare.do` usually cannot
-  be built and the script reported `fare: UNKNOWN` and took the first reservable
-  train. It still invents nothing: `KORAIL_TRAIN_NO` pins an exact train (and
-  aborts before reserving if that train is not reservable), then the cheapest
-  fare quote, then the cheapest by `h_rcvd_amt`/`h_rcvd_fare` — fields
-  `RsvInquiryResponse.TrainInfo` declares — printed as
-  `~N KRW (HINT from the search row, not a quote)` so it can never be read as
-  the amount about to be charged, then the first reservable train with the same
-  plain statement as before. The printed reason always names which branch ran.
-  The authoritative amount is still the one read back and cross-checked before
-  paying, and `KORAIL_MAX_FARE` is still the only ceiling on the charge.
-- Real (chargeable) card payment is now possible, as an explicit, additive
-  opt-in. `MutationConsent` gains `real_card_acknowledged` (default `False`):
-  the caller's acknowledgement that a real, chargeable PAN will be transmitted
-  in the clear and that money will actually move. Because it defaults to
-  `False`, every consent written before it existed means exactly what it meant
-  before and the default posture is unchanged — fake-card-only.
-- Added `KorailClient.pay_with_card`, beside an unchanged `pay_with_fake_card`.
-  The new method requires `real_card_acknowledged=True` AND
-  `fake_card_only=False`; the old one still refuses anything but a test card,
-  so its name keeps meaning what it says. Both build the same
-  `build_card_payment_form` and leave through the same double-gated
-  `post_mutation_form`, so a real payment cannot drift from the wire shape that
-  was verified live. `pay_with_card` returns the parsed payment envelope rather
-  than raising on a FAIL, because that envelope is the only record of what
-  happened to the money and of whether the hold is still cancellable.
-- The transmit gate now requires a payment consent to state exactly ONE card
-  claim. Neither flag set is the original refusal, unchanged. BOTH set is
-  refused as a contradiction: a consent that claims a test card while
-  acknowledging a real charge is a caller bug, and paying on an ambiguous
-  consent is the mistake the gate exists to prevent. The boundary is now 54
-  exact login/read routes and 61 public methods; no new route was added.
-- Added `scripts/reserve_pay_refund_roundtrip.py`, the operator script for one
-  full reserve → pay → refund round trip on a real card. Three environment
-  opt-ins are required (`KORAIL_MOBILE_API_LIVE=1`, `KORAIL_LIVE_MUTATION=1`,
-  `KORAIL_LIVE_REAL_CHARGE=1`); the card is read from the environment only,
-  never a file and never argv. It refuses to start unless the account holds
-  zero reservations, prints the PNR the instant it exists, cross-checks the
-  amount owed against an independent server read before paying, prints the
-  refund amount and fee before refunding, and on any later failure prints an
-  unmissable banner with the PNR, what is outstanding, and a runnable recovery
-  command (`--recover` with `KORAIL_RECOVER_PNR`). The PAN, PIN digits, expiry
-  and birthday are scrubbed from every output path including exception text;
-  the PNR deliberately is not, because losing it is the worst outcome.
-- Neither `pay_with_card` nor `refund` has a live-verified success envelope. No
-  run recorded in this repository has settled a real payment or returned money;
-  the docs now say so instead of saying a real charge is impossible.
-- Added three read-only routes found by comparing the package against four
-  third-party reference clients (srtgo, srtgo_plus, ryanking13/SRT, korail2);
-  all three are declared in our own decompiled APK. `get_ticket_reservation_detail`
-  reads one held reservation back by PNR (`certification.ReservationList`,
-  `CertificationService.java:45-46`), giving an independent view of `h_wct_no`
-  and the per-seat `h_rcvd_amt` rows the payment form settles.
-  `get_refund_commission` (`refunds.CommissionView`, `RefundService.java:19-21`)
-  reports `ret_amt`/`ret_fee`/`prg_psb_flg`, and `get_refund_ticket_detail`
-  (`refunds.SelTicketInfo`, `RefundService.java:23-25`) reports the refund
-  target's ticket detail including `retPsbFlg`. Together the latter two are the
-  "how much comes back and what is the fee" pre-check that `refund` has never
-  had; none of the four reference clients implements either one. The boundary is
-  now 54 exact login/read routes and 60 public methods.
-- `certification.ReservationList` hosts a SECOND, write-flavoured Retrofit
-  overload, `applyDisabilityCertification` (`CertificationService.java:22`),
-  which applies a disability certificate to a held reservation. Only the read
-  overload is ported, and the route's `KORAIL_EXACT_REQUEST_FIELDS` entry pins
-  the read's exact four fields, so the write overload's wider shape
-  (`txtPsgDisc0019Cnt` plus six `@QueryMap`s) is rejected before transmission
-  even though it shares the path.
-- `refunds.SelTicketInfo` is sent as the app declares it — POST, with
-  `h_purchase_history` — not as srtgo sends it (`ktx.py:791-800` uses GET and
-  drops the field). Every app call site sets the flag, "Y" from the
-  purchase-history screen and "N" elsewhere.
-- Verified all three against the live server in one paced read-only pass on an
-  account holding zero reservations. Every route was ACCEPTED — HTTP 200, no
-  DynaPath rejection — and each answered with a bare three-key FAIL envelope for
-  the deliberately-invalid arguments it was given: `WRG200018` 입력값오류(PNR번호),
-  `WRT100002` 창구번호미입력,미승인창구 and `WRT100124` 반환번호를 확인해주세요.
-  Each code names the field the server parsed, which is what establishes the
-  request shapes. Those bodies are pinned verbatim as offline regressions. The
-  SUCCESS bodies remain UNVERIFIED and are covered only by APK-declared
-  synthetic fixtures, because producing one needs a real held or paid ticket.
-  No payment, refund, or reservation call was made and the account still holds
-  zero reservations.
-- `ReservationSeatDetail` maps the passenger type from `h_psg_tp_cd`, which is
-  what `ReservationResponse.SeatInfo` declares. The `h_psg_tp_dv_nm` that a
-  reference client names does not appear anywhere in the decompiled app and was
-  not observed live, so it is deliberately not mapped; an unmapped key stays
-  reachable through `raw`.
 - Corrected the NetFunnel claim in `docs/RELEASE_GAP_PLAN.md`. Saying Korail
   "does NOT use NetFunnel at all" was too strong: the app does wire the round
   trips. What is true is that no Retrofit request body carries a token field and
   our live calls succeed without one.
-- Added the consent and safety foundation for state-changing requests. Frozen
-  `MutationConsent` (per-category `allow_*` default `False`, `dry_run` default
-  `True`, `fake_card_only` default `True`) and frozen `MutationPreview` (whose
-  payload is forced through `redact_payload` on construction, so a preview can
-  never hold a raw PAN, PNR, or sale identity) live in `consent.py`. The route
-  registry became tiered: `KORAIL_MUTATION_ROUTES` holds the four
-  state-changing routes and is deliberately never added to
-  `KORAIL_READ_ONLY_ROUTES`, while `KORAIL_MUTATION_ROUTE_CATEGORIES` and
-  `assert_mutation_route_category` cross-check the caller's consent category
-  against the route, so a consent for one category cannot post another
-  category's route. Redaction was extended over the mutation fields, including
-  the card number, PNR, original-ticket sale identity, return password,
-  `txtPrnNo`, and `h_orgtk_sale_wct_no`.
-- Added four consent-gated mutation methods: `reserve`, `cancel_unpaid_hold`,
-  `pay_with_fake_card`, and `refund`. Each requires an authenticated session
-  and a `MutationConsent` that opts into its own category, and each is denied
-  with `MutationNotAllowedError` before anything is built otherwise. With the
-  default `dry_run=True` a method validates its inputs and returns a redacted
-  `MutationPreview` of the form that *would* be posted, sending nothing. Only a
-  `dry_run=False` consent transmits, and only through `post_mutation_form`, the
-  single send path that re-checks consent, refuses a `dry_run=True` consent,
-  and asserts both the mutation route and its category. The read-only send path
-  (`post_form`/`get_json`) still refuses every mutation route.
-  `pay_with_fake_card` additionally refuses unless `fake_card_only` is set, at
-  both the method and the send gate, because the payment form carries the card
-  number in the clear; only a non-chargeable test card is supported.
-- Verified `reserve`, `cancel_unpaid_hold`, and `pay_with_fake_card` end to end
-  against the live server in a bounded authorized run: the hold returned
-  `h_msg_cd=IRR000018`, the cancellation returned `h_msg_cd=IRG000000`, and the
-  fake-card payment was declined with `strResult=FAIL` and `h_msg_cd=WRT200342`
-  with no charge. The live hold response returned a zero-padded
-  `h_jrny_cnt="0001"`, so `build_unpaid_reservation_cancel_form` now accepts any
-  digit string equal to one; `reserve` also falls back to a minimal hold that
-  still carries the PNR when strict parsing fails after the server has already
-  created the hold, so a created hold can always be cancelled. Every round trip
-  left reservation history at zero rows and no card was charged.
-- Added `refund` on the same gated send path. Its live send path is fully
-  active code, not blocked, but it has never been exercised against the live
-  server: a refund acts on a settled ticket, and this package's fake-card
-  payment is always declined, so no paid ticket is produced here. Its request
-  contract, gates, and redaction are covered by offline tests only, and it must
-  be treated as unverified against the real service.
-- The package boundary is now 51 exact login/read routes and 57 public methods:
-  53 audited login/read methods that transmit only read-only requests, plus the
-  four consent-gated mutation methods. The four mutation routes are tracked in
-  their own set and are never reachable from a read path.
-- Made `logout()` invalidate the server session with a bare `GET`
-  `login.Logout` before clearing local state, best-effort so it never fails on
-  transport or an already-expired session. That cookie-authenticated,
-  zero-parameter route joined the read-only allowlist, which is why the
-  allowlist holds 51 routes rather than 50. Also corrected
-  `KORAIL_DYNAPATH_SDK_VERSION` from `v1` to `v1.0.3` to match the decompiled
-  app, since that constant seeds both the `sv` body field and the `dyn_key`.
-- Recorded a bounded authenticated read-only revalidation with an empty
-  advertising ID. It made one successful login call, confirmed logged-in state
-  and customer-number presence, and called only R149 once. R149 succeeded with
-  one row and was not retried; R137, R138, R146, and R148 made zero calls. No
-  mutation, raw response, PII, credential, or server message was retained.
-  Current inventory is 32 successful, 10 failed, and 123 unexecuted out of
-  165.
-- Added five authenticated, one-shot ticket-reference reads for delivery
-  recipient details, ticket-duplication count, PBP acceptance specifications,
-  platform numbers, and recent delivery history. The exact static contracts
-  accept only repr-hidden typed ticket/PNR provenance, preserve repeated
-  `tkRetNo` order with exact count equality, derive recent-history `custMgNo`
-  only from the login session, and force DynaPath off. The implementation made
-  no live request; the pre-R149 inventory was 31 successful, 10 failed, and
-  124 unexecuted out of 165. The package boundary is now 51 read/login routes
-  and 57 public methods, with the DynaPath allowlist unchanged at six paths.
-  The ticket-reference implementation itself used no live I/O and added no
-  mutation capability.
-- Recorded a bounded authenticated read-only revalidation that used an empty
-  advertising ID, logged in once, and confirmed that the repr-hidden
-  `customer_no` was available. R13 made one request, returned `WRC800029`,
-  surfaced as `KorailAppError` and was not retried. R32 succeeded with 0 rows,
-  current-form R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the
-  existing safe train search succeeded with 10 rows. R52 made zero requests
-  and was recorded as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not
-  called. No mutation route was called, and no credential, identifier, or raw
-  response value was retained. At that pre-R149 point, inventory was 31
-  successful, 10 failed, and 124 unexecuted entries out of 165.
-- Added closed tagged public reads for gift-ticket list modes, commuter jobs
-  `a`/`b`/`c`, and one/two-leg fare quotes. Exact ordered forms preserve R31
-  duplicate fields and intentionally omit R52 `trnCnt`; only R52 uses the
-  pre-existing conditional DynaPath path.
-- Kept R17's known HTTP 404 as a one-request `KorailTransportError` with no
-  retry, fallback, or alternate path. R17 and R31 require a local session;
-  R52 does not invent one.
-- Added strict synthetic response models/parsers plus an internal exact
-  request builder for R39, while leaving its NetFunnel `service_1` / `act_6`
-  route unavailable. R54 also remains transport-held. At that historical,
-  pre-revalidation implementation step, the DynaPath allowlist and live
-  inventory remained unchanged, no live call was made, and no mutation
-  capability was added. The current boundary is 51 read/login routes and 57
-  public methods.
-- Added four authenticated fixed/account-shaped reads for multi-child discount
-  targets, login-customer trip information, current or bounded-history MaaS
-  service details, and trip-change date lookup. Their exact routes and ordered
-  forms are DynaPath-disabled and validation occurs before transport.
-- Retained login `strCustNo` as a repr-hidden session customer number for the
-  customer-trip request; member and member-card identifiers are not fallbacks.
-- Added strict synthetic parsers and frozen repr-safe models for R13, R32,
-  R43, and R45. R54 tour-train response parsing is static-contract support
-  only: no client method, safety route, or raw-string request builder exists.
-- Historically, the fixed/account-shaped implementation step itself made no
-  live request, credential read, raw capture, or mutation expansion. Its
-  pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted
-  entries; that intermediate callable package boundary was 42 read/login
-  routes and 45 public methods. The current boundary is 51 routes and 57 public
-  methods. At that pre-R149 point, inventory was 31 successful, 10 failed, and
-  124 unexecuted entries.
-- Ran a bounded revalidation of the P0 read surface in an authenticated 28-request,
-  28-response run with 25 successful operations, one expected typed
-  application failure, and three input-dependent skips. Deposit-bank and
-  trip-menu reads succeeded after login; R30 `getFresScar` returned exact
-  `strResult="SUCC"` and parsed, while R33 `getGuideSeatCnd` returned a full
-  `FAIL` application envelope for the server-supplied seat attribute and
-  surfaced as the expected typed application failure without a retry
-  (`KorailAppError`). R37 and R51 remained unexecuted. Offline raw replay
-  yielded 27 parsed responses, one expected `KorailAppError`, and zero
-  unexpected failures.
-- Initially added four typed P0 train reads from static APK evidence for
-  free-seat car guidance, guide-seat conditions, seat-assignment schedules,
-  and merged-seat inquiry.
-- Initial implementation added frozen closed request objects, exact POST field
-  allowlists, strict response parsers, repr-hidden identifiers/free text/raw
-  mappings, and synthetic-only fixtures; that implementation step added no
-  live call or DynaPath route.
-- Kept the Java Retrofit names as documentation aliases only and deliberately
-  omitted `TrainSummary` convenience chaining and every adjacent mutation.
-- Tightened only these four route parsers to require exact `strResult=SUCC`
-  after preserving the existing `FAIL`, `P058`, and `WRC000288` errors.
-- Added typed session-unverified pass-menu, commuter-kind-menu, and
-  crew-request option reads with caller-required runtime discriminator codes;
-  any live verification starts only after login.
-- Registered only the three statically evidenced exact read contracts; the
-  separate state-changing crew-call route remains excluded.
-- Added frozen repr-safe models, strict parsers, synthetic fixtures, and
-  offline route, request, error, export, and documentation coverage.
-- Added three static-evidenced limousine schedule and seat-inventory reads with
-  closed caller-supplied query dataclasses, exact POST allowlists, typed
-  repr-safe parsers, one-shot session/error handling, and DynaPath disabled.
-- Added no live service/menu/train/car constants, seat selection, hold,
-  reservation, payment, cancellation, or other mutation capability; the new
-  contracts are covered by synthetic fixtures only.
-- Reject limousine query subclasses and invoke each concrete dataclass
-  validator non-virtually before Sid generation or transport.
-- Require exact `strResult=SUCC` for all P0 menu and limousine typed parsers.
-- Normalize live-evidenced JSON integer and ASCII decimal-string station popup
-  types and actual arrival delay counts without accepting broader coercions.
 
-- **Added: this package is licensed.** `LICENSE` carries the Apache License
-  2.0 verbatim, and `pyproject.toml` declares it in the PEP 639 SPDX form
-  (`license = "Apache-2.0"`, `license-files = ["LICENSE", "NOTICE"]`) rather
-  than the deprecated `license = {text = ...}` table, which setuptools now
-  warns on and will reject outright from 2027-02-18. The build floor moved to
-  `setuptools>=77` for the same reason: earlier versions ignore `license-files`
-  silently, producing a wheel that claims a licence and ships no licence text.
-  No `License ::` classifier accompanies it — PEP 639 makes the two mutually
-  exclusive. `NOTICE` is declared alongside `LICENSE` rather than left at the
-  repository root alone: Apache-2.0 §4(d) requires a redistributor to carry the
-  attribution notices forward, and a wheel that omits the file makes that
-  impossible. Both artifacts now carry both files.
-- Added: owner and canonical-URL metadata. `authors` names `yakisoba0728` and
-  a contact address — spelled in `pyproject.toml`, not repeated here, because
-  `tests/test_readme.py` forbids a bare email address in the evidence
-  documents and that gate is worth more than the duplication.
-  `[project.urls]` pins Homepage, Repository, Issues and Changelog at
-  `https://github.com/yakisoba0728/korail-mobile-api`.
-- **Changed: `scripts/verify_distribution.py` now verifies this metadata
-  instead of banning it.** The four headers a PEP 639 build emits —
-  `License-Expression`, `License-File`, `Author-email`, `Project-URL` — moved
-  out of the forbidden list and into exact-value checks derived from
-  `pyproject.toml`, alongside the ones `Name`/`Version`/`Requires-Python`
-  already had. Merely un-banning them would have left the licence and the
-  owner as the only unchecked metadata in the artifacts. `License`,
-  `Author` (bare), `Home-page`, `Download-URL`, `Maintainer` and
-  `Maintainer-email` stay forbidden: no configuration here emits them, so
-  their presence would mean something other than this pyproject wrote them.
-  Both artifacts must additionally carry the declared licence file as a
-  non-empty regular member — `dist-info/licenses/LICENSE` in the wheel, the
-  sdist root in the tarball — because a metadata header naming a licence file
-  is a claim about a file, not the file.
-- Added: `korail_mobile_api.__version__`, with a test asserting it equals
-  `project.version`. Nothing in the build keeps a hand-written dunder and a
-  hand-written TOML literal in step; that test is the only thing that does.
-  It is deliberately absent from `__all__`.
-- Changed: `Development Status :: 3 - Alpha` → `5 - Production/Stable`.
+### Removed
 
+- Removed: the 여행변경 (trip change) mutation chain and the `ticket_change`
+  consent category with it — `change_trip_reservation`,
+  `rollback_trip_change` and `change_reservation_passengers`, plus
+  `MutationConsent.allow_ticket_change`. Built and withdrawn the same day.
+  Exercising the chain needs a PAID ticket, charges a 변경수수료, and has no
+  clean undo, so there was no way to verify it without spending money on a
+  path whose rollback half was itself unverified. The two READS the chain
+  starts from survived and are listed below; the analysis is kept in
+  `docs/RELEASE_GAP_PLAN.md`. **Breaking** for anyone who took the
+  intermediate commit.
+- Removed: the 비회원 오프라인 반환 pair and the non-member session with it —
+  `verify_offline_refund_ticket`, `execute_offline_refund`,
+  `begin_non_member`, `end_non_member` and `KorailNonMemberSession`. Also
+  built and withdrawn the same day, for the same kind of reason: the pair's
+  premise is a PHYSICAL paper ticket whose printed 반환번호 the verify call
+  consumes, so neither half could be exercised at all. The 반환번호 spellings
+  stay registered in `redaction.py` on purpose — `research.tripChgOgtk.do`
+  still carries the same four-part number, and a spelling dropped from the
+  sensitive-key set is one that leaks the day something re-introduces it.
+  **Breaking** on the same terms.
 - **Removed (breaking, and the last chance to do it): 47 names left the
   top-level `__all__`, which went 263 → 216.** Every one of them is still
   importable from the module that defines it — this is a move, not a deletion,
@@ -1193,24 +1022,208 @@
     through redaction on construction, so nothing is lost by default; a caller
     who wants them for their own logging imports them, and the four other
     helpers they were separated from, from `korail_mobile_api.redaction`.
-- **Renamed (breaking): `MutationNotAllowedError` → `KorailMutationNotAllowedError`.**
-  It was the only one of the twenty exception types without the package's
-  prefix, and the sibling SRT package already spells its counterpart
-  `SrtMutationNotAllowedError`. No alias is left behind: an alias added at
-  1.0.0 is itself a permanent contract, and the whole point of doing this now
-  is that the rename is still free.
-- **Added: `tests/test_public_surface_rule.py`**, which is what stops the
-  above from being undone by the next person with a convenient name to export.
-  It holds no list of names — a hand-maintained name list is exactly what
-  rots. It derives `__all__`'s expected contents from `__init__.py`'s import
-  statements via `ast` (so dropping an `__all__` entry while leaving the
-  import behind fails), refuses any name from a module not on a short
-  module-level policy list, refuses `parse_*`/`pair_*` outright, walks the
-  transitive closure of every public client method's annotations and requires
-  each package-defined type in it to be exported, and requires every exported
-  non-type to appear in a `DOMAIN_CONSTANTS` table with a written reason. The
-  file is shared verbatim with the SRT package below a marked per-repository
-  header.
+
+### Security
+
+- Security: `ogtkRetPwd` and the rest of the 원표 반환번호 tuple are now
+  redacted. `ogtkRetPwd` travels three ways — as a bare `@Field` on
+  `research.cmtrInfo.do`'s 원표 branch, which this package has emitted since
+  `build_commuter_info_form` was added, as indexed `@FieldMap` keys, and back
+  as `OrgTk.ogtkRetPwd` — and none was masked before. `ogtkSaleWctNo`/`ogtkSaleDd`/`ogtkSaleSqno`/
+  `ogtkSaleDt` are registered with it, since masking three quarters of a
+  반환번호 leaves it reconstructable; `_index_stripped` covers every row index.
+  Also registered: the 지연증명 tuple `Cmpn.dlayOgtk*` (`Cmpn.java:11-14`), the
+  settlement rows' `stlCrdNo`/`prepCrdNo`/`apvNo` (`Stl.java:5-16`), and
+  `lumpStlTgtNo` under both spellings, which the 할인카드 구매 mutation
+  already returns. `cmpnList`/`stlList` are deliberately left unparsed and
+  stay masked inside `raw`.
+- Changed: `hidDscpNo`, `hidCustNo`, `hidFmlyNo` and `psrm_cl_cd` join
+  `SENSITIVE_KEYS`. The first is a coupon/국가유공자 certificate number — the
+  same `h_cpn_no` already redacted inbound — on the way out; the other three
+  are a customer number, a family-member sequence and the underscore spelling
+  of the already-redacted `psrmClCd`.
+- Changed: `redact_payload` redacts a list value ELEMENTWISE and preserves its
+  length, instead of collapsing it with `str()`. A form key can legitimately
+  carry many values now, and stringifying the list hid every element from
+  `redact_text` behind the list's own quotes.
+- Changed: `txtCardNo_1..N` joins `SENSITIVE_KEYS`. The inbound spellings were
+  redacted already; the outbound form key was not, and a dry-run preview of a
+  carded hold printed a spendable card number in the clear. Caught by a test
+  written for exactly that.
+  - Exactly two things differ from the live-verified one-adult 일반실 form:
+    the eight passenger rows collapse to `txtTotPsgCnt="1"`,
+    `txtCompaCnt1="1"`, `txtPsgTpCd1="1"`, `txtDiscKndCd1="153"`,
+    `txtCardNo_1=<card>` (`w4/a.java:96-101`), and `txtMenuId` becomes `"A2"`
+    (`SeatAssignBookingActivity.java:159`). Everything else — journey block,
+    seat block, `txtJobId`, `txtStndFlg`, `hidFreeFlg`, `txtGdNo` — is
+    identical, because the app writes it with the same code
+    (`c5/b.java:42-77`). The builder is written as a substitution INTO
+    `build_reservation_form`'s output so that is true by construction, and a
+    test compares both forms key by key, in order.
+  - **`txtCardNo_1` carries a trailing underscore and its three neighbours do
+    not** (`OPsg.java:7-10`). A hold spelled `txtCardNo1` would be a hold with
+    a discount code and no card.
+  - No `passengers` and no `seat_class` argument: the app offers neither, since
+    `w4/a.java:97-98` hardcodes one passenger and `:88` pins 일반실.
+  - Gated by the existing `"reserve"` consent, because it IS the reserve route.
+    **NEVER TRANSMITTED**: no account this project can reach owns an N카드.
+- Changed: `redact_payload` now masks `txtCpNo` and the indexed
+  `txtSrcarNo{i}`/`txtSeatNo{i}` keys, so a mutation preview cannot expose the
+  standby notification number or the designated seats. Car and seat identifiers
+  were already redacted everywhere they are read back; these are the same two
+  values on the way out.
+
+### 알려진 제약과 넣지 않은 것
+
+- Not added, and deliberately so: 특실 업그레이드's `myTicket.reqUpgradeSeat`
+  (`MyTicketService.java:23-24`). It was briefly implemented as a read on the
+  strength of its request — no amount, no payment means, no confirmation flag
+  — but its RESPONSE mints a `lumpStlTgtNo` (`SpecialRoomUpgradeDao.java:
+  13,19`) and `procUpgrade` takes that same 일괄결제대상번호 beside `stlMnsCd`
+  / `crdInpWayCd` / `ismtMnthNum` / `mnsStlAmt` (`MyTicketService.java:21`).
+  Producing the settlement target a payment then spends creates an unpaid
+  purchase; it does not price one. That is the same reading this repository
+  already applied to `research.dcntCrdInfo.do` ("Despite the 'Info' in its
+  path this is a PURCHASE"), which is why that route lives in
+  `KORAIL_MUTATION_ROUTES`. It is not registered as a mutation either: its
+  paired write `procUpgradeSeat` is an intended deferral, and half a purchase
+  chain would let a caller create settlement targets with no supported way to
+  settle or abandon them. `tests/test_ticket_change_chain_reads.py` pins both
+  halves out of both allowlists.
+- Not shipping: 정기권 구매. The purchase pair (`pass.passReserve` /
+  `pass.passPayIssue`) was implemented in this same unreleased cycle and removed
+  again before release, so no `reserve_commuter_pass`, `pay_for_commuter_pass`,
+  `CommuterPass*` type, `KORAIL_COMMUTER_PASS_PAYMENT_FIELDS`, `commuter_pass`
+  consent category or `MutationConsent.allow_commuter_pass` exists. Nothing was
+  ever transmitted, and no released version ever carried them.
+  - **Why: it cannot be proven correct without spending unrecoverable money.**
+    A 1개월 정기권 is roughly ₩150,000–₩250,000, and this package has neither a
+    refund route nor a cancel route for one — `cancel_unpaid_hold` is the ticket
+    cancel.
+  - **And there is no capture to compare against**, because the shipped app
+    cannot issue `passPayIssue` either:
+    `PaymentActivity.isCommPaymentRequest()` tests
+    `getIPaymentRequest() instanceof CommPaymentDao.CommPaymentResponse` — a
+    Response type where a Request is required (`PaymentActivity.java:502-503`,
+    bytecode at `smali/…/PaymentActivity.smali:3963-3980`) — so the test is
+    always false and the DAO never runs. A form assembled from decompiled code
+    with no capture and no affordable live call is a guess with references.
+  - **The 정기권 READS are unaffected**: `get_pass_menu`,
+    `get_pass_available_dates` and `get_pass_schedule` are unchanged.
+  - **The knowledge is kept, not lost.** README's 정기권 section records the
+    twenty `passReserve` fields and the loop that fills them, the one-train
+    shape (`hidChtrnStnCd`/`Nm` sent as EMPTY STRINGS, `hidTrnNo2`/
+    `hidTrnGpCd2`/`hidDtour2` ABSENT), both `passPayIssue` `@FieldMap`s and why
+    both are populated by v6.5.0, the `hidPayAmount` chain, the
+    `isCommPaymentRequest()` bug, why `passOtrReserve`/`passOtrPayIssue` are a
+    different product (자유이용권: 내일로 / A-PASS / 강릉패스), and what
+    reviving the feature would cost to prove.
+  - `KORAIL_CARD_BEARING_MUTATION_CATEGORIES` **stays** a named set, now holding
+    `{"payment"}` again. It was introduced as its own behaviour-preserving
+    change because `category == "payment"` asked the wrong question, not
+    because it had two members, and it still carries the tested invariant that
+    no card-bearing category owns a GET mutation route.
+  - Changed: `h_cust_nm`, `usernames`, `h_chg_mg_no` and their model attribute
+    names (`customer_name`, `user_names`, `change_management_no`) leave
+    `SENSITIVE_KEYS`. Every one of them entered it for the pass payment form,
+    and no surviving response, form or model in this package carries any of
+    them — `h_cust_nm` and `h_chg_mg_no` appear in exactly one DAO in the whole
+    APK, `CommReservationDao`, which nothing here parses any more. The
+    pre-existing `h_cust_no` / `customer_no` entries are untouched.
+- Known gap: **`cancel_unpaid_hold` cannot release a transfer hold.** It requires
+  `h_jrny_cnt` to be numerically one. The app has no such restriction —
+  `DReservationConfirmActivity.java:269-278` forwards `getH_jrny_cnt()` verbatim
+  as `txtJrnyCnt` beside the same fixed `txtJrnySqno="0001"`/`hidRsvChgNo="000"`
+  — so the fix is to forward the hold's own count instead of pinning `"1"`. That
+  touches the cancel path, which was out of scope for the transfer change, so it
+  is reported rather than made. A live transfer hold sent before it lands must be
+  cancelled in the KORAIL app or on the website.
+- Neither `pay_with_card` nor `refund` has a live-verified success envelope. No
+  run recorded in this repository has settled a real payment or returned money;
+  the docs now say so instead of saying a real charge is impossible.
+- `certification.ReservationList` hosts a SECOND, write-flavoured Retrofit
+  overload, `applyDisabilityCertification` (`CertificationService.java:22`),
+  which applies a disability certificate to a held reservation. Only the read
+  overload is ported, and the route's `KORAIL_EXACT_REQUEST_FIELDS` entry pins
+  the read's exact four fields, so the write overload's wider shape
+  (`txtPsgDisc0019Cnt` plus six `@QueryMap`s) is rejected before transmission
+  even though it shares the path.
+- `refunds.SelTicketInfo` is sent as the app declares it — POST, with
+  `h_purchase_history` — not as srtgo sends it (`ktx.py:791-800` uses GET and
+  drops the field). Every app call site sets the flag, "Y" from the
+  purchase-history screen and "N" elsewhere.
+- Registered only the three statically evidenced exact read contracts; the
+  separate state-changing crew-call route remains excluded.
+- Added no live service/menu/train/car constants, seat selection, hold,
+  reservation, payment, cancellation, or other mutation capability; the new
+  contracts are covered by synthetic fixtures only.
+
+### 검증 기록
+
+- Documented: two live observations from 2026-07-26 that are server rules, not
+  package defects. `ERR299943 예약할인이 지원되지 않습니다` refused 청소년 alone
+  and 1~3급 장애 + 안내견 while six other mixes were accepted; the code has zero
+  hits anywhere in the decompiled APK and the forms matched the app exactly, so
+  it is an account-entitlement rule. Separately, a hold returned
+  `h_msg_cd = WRR664296` (weekend discount notice) and was still a real,
+  cancelable reservation — success is `strResult = SUCC` plus a PNR, not
+  `h_msg_cd == IRR000018`, and no code path treats a non-`IRR000018` code as
+  failure.
+- Verified all three against the live server in one paced read-only pass on an
+  account holding zero reservations. Every route was ACCEPTED — HTTP 200, no
+  DynaPath rejection — and each answered with a bare three-key FAIL envelope for
+  the deliberately-invalid arguments it was given: `WRG200018` 입력값오류(PNR번호),
+  `WRT100002` 창구번호미입력,미승인창구 and `WRT100124` 반환번호를 확인해주세요.
+  Each code names the field the server parsed, which is what establishes the
+  request shapes. Those bodies are pinned verbatim as offline regressions. The
+  SUCCESS bodies remain UNVERIFIED and are covered only by APK-declared
+  synthetic fixtures, because producing one needs a real held or paid ticket.
+  No payment, refund, or reservation call was made and the account still holds
+  zero reservations.
+- Verified `reserve`, `cancel_unpaid_hold`, and `pay_with_fake_card` end to end
+  against the live server in a bounded authorized run: the hold returned
+  `h_msg_cd=IRR000018`, the cancellation returned `h_msg_cd=IRG000000`, and the
+  fake-card payment was declined with `strResult=FAIL` and `h_msg_cd=WRT200342`
+  with no charge. The live hold response returned a zero-padded
+  `h_jrny_cnt="0001"`, so `build_unpaid_reservation_cancel_form` now accepts any
+  digit string equal to one; `reserve` also falls back to a minimal hold that
+  still carries the PNR when strict parsing fails after the server has already
+  created the hold, so a created hold can always be cancelled. Every round trip
+  left reservation history at zero rows and no card was charged.
+- Recorded a bounded authenticated read-only revalidation with an empty
+  advertising ID. It made one successful login call, confirmed logged-in state
+  and customer-number presence, and called only R149 once. R149 succeeded with
+  one row and was not retried; R137, R138, R146, and R148 made zero calls. No
+  mutation, raw response, PII, credential, or server message was retained.
+  Current inventory is 32 successful, 10 failed, and 123 unexecuted out of
+  165.
+- Recorded a bounded authenticated read-only revalidation that used an empty
+  advertising ID, logged in once, and confirmed that the repr-hidden
+  `customer_no` was available. R13 made one request, returned `WRC800029`,
+  surfaced as `KorailAppError` and was not retried. R32 succeeded with 0 rows,
+  current-form R43 succeeded with 0 rows, R45 succeeded with 15 rows, and the
+  existing safe train search succeeded with 10 rows. R52 made zero requests
+  and was recorded as `skipped_no_typed_leg`; R17, R31, R39, and R54 were not
+  called. No mutation route was called, and no credential, identifier, or raw
+  response value was retained. At that pre-R149 point, inventory was 31
+  successful, 10 failed, and 124 unexecuted entries out of 165.
+- Historically, the fixed/account-shaped implementation step itself made no
+  live request, credential read, raw capture, or mutation expansion. Its
+  pre-revalidation inventory was 28 successful, 9 failed, and 128 unexecuted
+  entries; that intermediate callable package boundary was 42 read/login
+  routes and 45 public methods. The current boundary is 51 routes and 57 public
+  methods. At that pre-R149 point, inventory was 31 successful, 10 failed, and
+  124 unexecuted entries.
+- Ran a bounded revalidation of the P0 read surface in an authenticated 28-request,
+  28-response run with 25 successful operations, one expected typed
+  application failure, and three input-dependent skips. Deposit-bank and
+  trip-menu reads succeeded after login; R30 `getFresScar` returned exact
+  `strResult="SUCC"` and parsed, while R33 `getGuideSeatCnd` returned a full
+  `FAIL` application envelope for the server-supplied seat attribute and
+  surfaced as the expected typed application failure without a retry
+  (`KorailAppError`). R37 and R51 remained unexecuted. Offline raw replay
+  yielded 27 parsed responses, one expected `KorailAppError`, and zero
+  unexpected failures.
 
 ## 0.2.0 - 2026-07-14
 
