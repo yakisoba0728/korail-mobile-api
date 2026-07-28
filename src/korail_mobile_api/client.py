@@ -269,10 +269,10 @@ T = TypeVar("T")
 
 
 def _scalar_text(value: object) -> str | None:
-    """A KORAIL scalar as text, whether it arrived quoted or as a number.
+    """KORAIL 스칼라를 텍스트로. 따옴표로 왔든 숫자로 왔든 같게 만든다.
 
-    ``type(...) is int`` excludes bool, which is an int subclass and is never a
-    KORAIL identity value.
+    ``type(...) is int`` 는 bool 을 제외한다. bool 은 int 의 하위 타입이지만
+    KORAIL 의 신원 값으로 오는 일이 없다.
     """
     if isinstance(value, str):
         return value

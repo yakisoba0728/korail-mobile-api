@@ -1,3 +1,22 @@
+"""로그인·로그아웃과 세션 상태.
+
+:class:`KorailSessionClient` 가 로그인 왕복을 수행하고 그 결과인
+:class:`~korail_mobile_api.models.KorailSession` 에 ``JSESSIONID``,
+회원카드번호, 고객번호(``strCustNo``)가 담긴다.
+:class:`~korail_mobile_api.client.KorailClient` 는 이 클라이언트를 안에
+두고 쓴다.
+
+로그인은 한 번에 끝나지 않을 수 있다. 서버가 ``strRedirectUrl`` 을 주면
+2단계 인증이 필요하다는 뜻이고
+:class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 가 올라간다.
+그 이어달리기 본문은 :func:`build_login_authentication_post_data` 가 만들며,
+필드 순서는 Gson 이 ``LoginDao.LoginResponse`` 를 직렬화하는 순서를 따른다
+(:data:`KORAIL_LOGIN_CONTINUATION_FIELDS`).
+
+회원번호·휴대폰번호·이메일 중 무엇으로 로그인하는지는
+:func:`infer_login_input_flag` 가 값의 모양을 보고 ``"2"``/``"4"``/``"5"``
+중에서 고른다.
+"""
 from __future__ import annotations
 
 import time

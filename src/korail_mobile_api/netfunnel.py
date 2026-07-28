@@ -1,178 +1,94 @@
-"""The NetFunnel virtual waiting room (``nf.letskorail.com``).
+"""NetFunnel 가상 대기열(``nf.letskorail.com``).
 
-WHY THIS EXISTS AT ALL. Every live call this repository has ever made to
-``smart.letskorail.com`` succeeded WITHOUT a NetFunnel token, so the server does
-not presently enforce the queue on us. The app nonetheless wires it on the
-inquiry, reserve, pay and 예약목록 paths, and it carries a *dedicated
-peak-season inquiry action* (``act_8_2``) — which is exactly the load at which a
-client with no way to wait its turn starts failing. This module is the way to
-wait, and it is **off by default** (:attr:`~korail_mobile_api.config.
-KorailConfig.netfunnel_enabled`); see that field for why.
+앱은 조회·예약·결제·예약목록 경로에 대기열을 물려 두었고 성수기 조회
+전용 액션(``act_8_2``)까지 따로 가지고 있다. 이 모듈은 그 줄을 서는
+방법이며 **기본값은 꺼짐**이다
+(:attr:`~korail_mobile_api.config.KorailConfig.netfunnel_enabled`).
 
-THE BIG ONE: KORAIL DOES NOT SPEAK THE JAVASCRIPT DIALECT.
-==========================================================
-``nf.letskorail.com`` serves both KORAIL and SRT, and the sibling
-``srt-mobile-api`` implementation of this same product is live-verified. It is
-prior art, but it is **not a template**, because the two apps embed two
-different NetFunnel client SDKs:
+KORAIL 은 자바스크립트 방언을 쓰지 않는다
+==========================================
+``nf.letskorail.com`` 은 KORAIL 과 SRT 를 함께 받지만 두 앱이 심은
+NetFunnel SDK 가 다르다. SRT 는 WebView 위의 ``netfunnel.js`` 라
+``&nfid=0&prefix=…&js=yes&<epochMillis>`` 를 보내고
+``NetFunnel.gControl.result='5002:200:key=…'`` 같은 자바스크립트 대입문을
+받는다. KORAIL 은 STCLab 의 **네이티브 안드로이드 SDK**(``T6``/``U6``
+패키지)를 심었고 그 어느 것도 보내지 않는다. 아래는 전부 네이티브 SDK 를
+읽은 것이고, 차이는 네 가지다.
 
-* SRT is a WebView over ``netfunnel.js``, so it sends the browser dialect:
-  ``&nfid=0&prefix=NetFunnel.gRtype=5002;&js=yes&<epochMillis>``, and gets back
-  a JavaScript assignment ``NetFunnel.gRtype=…;NetFunnel.gControl.result=
-  '5002:200:key=…'``.
-* KORAIL embeds STCLab's **native Android SDK** (the ``T6``/``U6`` packages),
-  and it sends none of that.
+1. **``js``·``nfid``·``prefix``·꼬리 epoch 이 없다.** ``T6/d.java`` 는
+   ``U6.a.addParam`` 을 두세 번 부를 뿐이고(``:30-31``, ``:54-55``,
+   ``:78-79``, ``:99-101``), ``U6/a.java`` 가
+   ``URLEncodedUtils.format(params, "utf-8")`` 로 붙인다. 그래서 쿼리는
+   추가된 파라미터가 추가된 순서 그대로다.
+2. **``sid``/``aid`` 는 5101 에만 실린다.** ``GetTidCacekedEnter``
+   (``T6/d.java:99-101``)만 둘을 넣는다. ``CheckedEnter``(``:54-55``)는
+   넣지 않는다 — 5002 가 둘을 싣는 JS 방언과 반대이며, 여기서는 5002 와
+   5004 가 모두 ``opcode``+``key`` 뿐이다.
+3. **``ttl`` 은 되돌려 보내지 않는다.** 네이티브 SDK 는 ttl 을 얼마나 잘지
+   정하는 데만 쓰고(``T6/g.java:462``, ``:467`` 의 ``Thread.sleep``)
+   전선에는 올리지 않는다. 순수한 클라이언트 힌트다.
+4. **응답은 ``<code>:<params>`` 이지 ``<rtype>:<code>:<params>`` 가
+   아니다.** ``T6/i.java:36-43`` 은 첫 ``:`` 앞을 상태 코드로 파싱한다.
+   JS 방언의 ``5002:200:key=…`` 를 먹이면 코드를 5002 로 읽고 키를 찾지
+   못한다. 서버도 ``js`` 없는 요청에는 ``200:key=…&nwait=0&nnext=0&
+   tps=0.000000&ttl=0&ip=…`` 형태로만 답한다.
 
-Everything below is read off the native SDK, which is the only NetFunnel client
-in ``korail.apk``. Four consequences, each one a place where following SRT would
-have produced a request KORAIL's own app never sends:
+진입 순서는 5101 → 5002 → 5004 다
+==================================
+**5101 이 주는 키는 들어갈 표이지 완료할 수 있는 세션이 아니다.** 그대로
+``setComplete`` 에 보내면 ``503:msg="Wrong Server ID"`` 로 거부된다
+(``sid``/``aid`` 를 붙여도 마찬가지다). ``chkEnter`` 가 발급한 키만
+완료할 수 있고, ``chkEnter`` 는 더 짧은 새 키를 준다::
 
-1. **No ``js``, no ``nfid``, no ``prefix``, no trailing epoch.** ``T6/d.java``
-   builds each request with ``U6.a.addParam`` calls and there are only ever two
-   or three of them (:30-31, :54-55, :78-79, :99-101). ``U6/a.java`` then does
-   ``URLEncodedUtils.format(params, "utf-8")`` and appends it, so the query is
-   exactly the parameters that were added, in the order they were added.
-2. **``sid``/``aid`` ride on 5101 ONLY.** ``GetTidCacekedEnter``
-   (``T6/d.java:99-101``) is the single builder that adds them. ``CheckedEnter``
-   (:54-55) does not — which is the opposite of the JS dialect, where 5002
-   carries them and only 5004 drops them. Here *both* 5002 and 5004 are bare
-   ``opcode``+``key``.
-3. **``ttl`` is never sent back.** In the JS dialect the ttl from a 201 is
-   echoed on the next ``chkEnter``. The native SDK reads ttl only to decide how
-   long to sleep (``T6/g.java:462``, ``Thread.sleep(ttl * 1000)`` at :467) and
-   never puts it on the wire. So ttl here is purely a client-side hint.
-4. **The response is ``<code>:<params>``, not ``<rtype>:<code>:<params>``.**
-   ``T6/i.java:36-43`` takes ``indexOf(":")``, ``parseInt``\\ s everything before
-   it as *the status code*, and splits the remainder on ``&``. Feed it the JS
-   dialect's ``5002:200:key=…`` and it parses the code as 5002 — which
-   ``T6/a.toEnum`` maps to ``None`` — and finds no key. The app can only work
-   with the bare form, so that is the only form parsed here.
+    5101  -> 200:key=<252자 hex>&nwait=0&…
+    5002  -> 200:key=<다른, 더 짧은 키>&…
+    5004  -> 200:key=&nwait=0&…&chk_enter_cnt=0&…
 
-That last point used to be the one thing in this module that had never been seen
-on the wire. **A live probe on 2026-07-26 confirmed it**: ``nf.letskorail.com``
-answers a ``js``-less native-SDK request with exactly ``<code>:<params>`` —
-``200:key=…&nwait=0&nnext=0&tps=0.000000&ttl=0&ip=…`` — and never with a
-``NetFunnel.gRtype=…`` assignment. :func:`parse_netfunnel_body` still names the
-JavaScript dialect in its error message, but now as a diagnosis for a server that
-changed rather than as an admission that we were guessing.
+즉 매 단계의 키가 앞 키를 **대체**하며,
+:meth:`KorailNetFunnelClient.acquire` 는 5101 이 대기 없이 200 을 줘도
+5002 를 반드시 거친다. ``T6/g.java`` 의 폴 루프를 글자 그대로 읽으면
+5101 이 200 일 때 5002 없이 완료하지만, 실제 서버는 그 키를 완료해 주지
+않는다. :data:`NOT_COMPLETABLE_CODE` 가 그 코드에 이름을 붙여 둔 것은
+서버 문구가 원인을 가리기 때문이다.
 
-THE ENTRY SEQUENCE IS 5101 → 5002 → 5004, AND 5101 ALONE IS NOT A SESSION
-========================================================================
-The same 2026-07-26 probe settled a second question, and the answer contradicts
-the obvious reading of the APK. **The key 5101 hands out is a ticket to enter,
-not a session that can be completed.** Sending it straight to ``setComplete``
-fails::
+키가 대체된다는 사실 자체는 APK 도 뒷받침한다. ``T6/d.java`` 는 응답
+객체 하나를 두고 모든 opcode 가 덮어쓰며(``:61``, ``:107`` 의
+``m184clone()``) ``Complete()`` 는 마지막에 도착한 키를 보낸다(``:79``).
 
-    GET opcode=5101&sid=service_1&aid=act_8
-     -> 200:key=<252 hex chars>&nwait=0&nnext=0&tps=0.000000&ttl=0&ip=…
-    GET opcode=5004&key=<that key>
-     -> 503:msg="Wrong Server ID"          # and adding sid/aid does not help
-
-Only a key that ``chkEnter`` issued is completable, and ``chkEnter`` issues a new
-and *shorter* one::
-
-    GET opcode=5002&key=<the 5101 key>
-     -> 200:key=<a DIFFERENT, shorter key>&…
-    GET opcode=5004&key=<the 5002 key>
-     -> 200:key=&nwait=0&…&chk_enter_cnt=0&…
-
-So every step's key **supersedes** the previous one, and :meth:`
-KorailNetFunnelClient.acquire` always performs the 5002 before handing a token
-back — even when 5101 answered 200 with nobody in line.
-
-``503:msg="Wrong Server ID"`` is a misleading message for "this key is not a
-completable session"; :data:`NOT_COMPLETABLE_CODE` names it so that a regression
-here reports its own cause instead of the server's.
-
-**WHERE THE APK DISAGREES.** Read literally, ``T6/g.java`` does *not* do this.
-Its poll loop (the ``a`` Runnable, :77-129) enters at ``GetTidCacekedEnter`` and
-leaves the loop the moment the code is not Continue/ContinueDebug — the smali
-(``T6/g$a.smali``, ``:243-247`` then ``:282`` → ``goto :goto_3`` → ``:892``)
-confirms the fall-through is a return — so on a 200 from 5101 the app issues **no
-5002 at all** and completes with the 5101 key. The live server wins over that
-reading. The 5002 stays unconditional here because the only sequence ever seen to
-release cleanly is 5101 → 5002 → 5004; whether the 5101 ticket would complete at
-the *node* that issued it has never been probed, and this module does not guess
-at a shortcut it has not tested.
-
-What the APK does corroborate is the supersession itself: ``T6/d.java`` keeps one
-response object and every opcode overwrites it — ``this.f5141b = iVarParser.
-m184clone()`` at :61 (chkEnter) and :107 (getTidChkEnter) — while ``Complete()``
-sends ``this.f5141b.getKey()`` (:79), i.e. whatever key arrived last. The app has
-no notion of "the original key" either.
-
-THE QUEUE IS A POOL, AND THE SESSION LIVES ON ONE NODE OF IT
-===========================================================
-``nf.letskorail.com`` is a FRONT DOOR that load-balances the entry call. The node
-it lands on is the only one that can complete the session, and every reply names
-that node in its ``ip``/``port`` (``T6/i.java:50-53``). The app follows the
-naming — ``T6/d.makeURL`` (``T6/d.java:17-19``) rebuilds the URL from
-``iVar.getHost()``/``getPort()`` for ``chkEnter``, ``aliveNotice`` and
-``setComplete`` unless ``host_notmodify`` is set, and that flag is false by
-default (``T6/h.java:43``) and never set by ``KTApplication``.
-
-**This module used to refuse to follow it, and that leaked about half our
-slots.** Diagnosed live on 2026-07-26. The symptom was a ``setComplete`` that
-failed non-deterministically, roughly one time in two, always with
-``503:msg="Wrong Server ID"`` — a message that reads like a credential or
-parameter complaint and is nothing of the sort. Five acquire-then-release cycles,
-all entered through the front door::
-
-    acquire said ip=rnf12.letskorail.com  -> release 503
-    acquire said ip=rnf12.letskorail.com  -> release 503
-    acquire said ip=rnf13.letskorail.com  -> release 503
-    acquire said ip=rnf14.letskorail.com  -> release 200
-    acquire said ip=rnf13.letskorail.com  -> release 200
-
-and the controlled pair that settles it::
-
-    acquire on nf.letskorail.com (reply said ip=rnf13.letskorail.com)
-      release via nf.letskorail.com    -> 503:msg="Wrong Server ID"
-      release via rnf13.letskorail.com -> 200:key=&nwait=0&...
-
-"Wrong Server ID" is **literal**: the front door does not own a session that a
-queue node issued. The releases that appeared to work were the balancer happening
-to land the request back on the right node, which is also why the same key
-sometimes released fine and sometimes did not.
-
-So the handshake spans hosts, deliberately:
+대기열은 풀이고 세션은 그중 한 노드에 산다
+===========================================
+``nf.letskorail.com`` 은 진입 호출을 분산하는 **정문**이다. 세션을 완료할
+수 있는 곳은 진입이 떨어진 노드뿐이고, 모든 응답이 그 노드를
+``ip``/``port`` 로 알려 준다(``T6/i.java:50-53``). 앱도 그 이름을 따라
+``chkEnter``·``aliveNotice``·``setComplete`` 의 URL 을 다시 만든다
+(``T6/d.makeURL``, ``T6/d.java:17-19``. ``host_notmodify`` 는 기본 false 이며
+``T6/h.java:43`` 이후 아무도 켜지 않는다).
 
 ============ ============================================================
-``5101``     the FRONT DOOR (``config.netfunnel_url``). It is the entry
-             call; balancing it is the front door's whole job, and it has
-             no previous reply to name a node.
-``5002``     the NODE the previous reply named.
-``5004``     the same node — the one that issued the session being
-             released.
+``5101``     **정문**(``config.netfunnel_url``). 분산이 정문의 일이고,
+             가리킬 앞선 응답도 없다.
+``5002``     앞 응답이 가리킨 **노드**.
+``5004``     같은 노드 — 놓아줄 세션을 발급한 그 노드.
 ============ ============================================================
 
-The node rides on :class:`KorailNetFunnelToken` (``node``) so the whole
-handshake stays coherent, and it supersedes exactly as the key does: a reply that
-names no node leaves the last one in force, because a poll that is silent about
-routing has not re-routed anything. A token with no node — a bypass, which has no
-session either — simply uses the front door, and :meth:`
-KorailNetFunnelClient.release` short-circuits on its empty key before routing
-matters at all.
+노드는 :class:`KorailNetFunnelToken` 의 ``node`` 로 따라다니고 키와 똑같이
+대체된다. 노드를 말하지 않은 응답은 직전 노드를 그대로 두고, 노드가 없는
+토큰(우회 — 세션도 없다)은 정문을 쓴다.
 
-**CONSTRAINED, NOT TRUSTED.** Following a server-named host is exactly what an
-origin guard exists to stop, so the naming is admitted only into the queue's own
-pool: ``rnf<1-99>.letskorail.com`` (lowercase) or the front door, https, port
-443, and nothing else — the port is no more followed on the server's say-so than
-the host is. The rule lives in :func:`~korail_mobile_api.safety.
-korail_netfunnel_node_url` beside the origin assertions, not in this client, and
-a reply naming anything outside it is a **hard error**. It is deliberately not a
-quiet fall-back to the front door: falling back silently is what turns "this
-reply is lying to us" into "this slot leaked", and a leaked slot makes no noise.
+**따르되 믿지는 않는다.** 서버가 지목한 호스트를 따라가는 것은 원본 가드가
+막으라고 있는 일이므로, 대기열 자신의 풀만 허용한다 —
+``rnf<1-99>.letskorail.com``(소문자) 또는 정문, https, 443 포트, 그 밖은
+없다. 포트도 호스트만큼이나 서버 말만 듣고 따라가지 않는다. 규칙은
+:func:`~korail_mobile_api.safety.korail_netfunnel_node_url` 에 있고, 풀 밖을
+가리킨 응답은 **하드 에러**다. 조용히 정문으로 되돌아가면 "이 응답이
+거짓말한다"가 "슬롯이 샜다"로 바뀌고, 샌 슬롯은 아무 소리도 내지 않는다.
 
-``follow_redirects`` stays ``False``. An HTTP 30x is a different mechanism from
-the ``ip``/``port`` naming and gets no such allowance — nothing about the pool
-being real makes a redirect chain acceptable.
+``follow_redirects`` 는 ``False`` 다. HTTP 30x 는 ``ip``/``port`` 지목과
+다른 메커니즘이라 같은 허용을 받지 않는다.
 
-WHAT THE APP DOES THAT WE DELIBERATELY DO NOT
-=============================================
-``AliveNotice`` (5003) is not implemented. It exists to keep a visible
-waiting-room popup alive (``T6/g.java:517-527``); this library renders no popup
-and holds no slot longer than one bounded operation.
+``AliveNotice``(5003)는 구현하지 않는다. 보이는 대기실 팝업을 살려 두는
+용도이고(``T6/g.java:517-527``) 이 라이브러리는 팝업을 그리지도, 한 번의
+작업보다 오래 슬롯을 쥐지도 않는다.
 """
 
 from __future__ import annotations
@@ -275,26 +191,25 @@ QUEUE_WAIT_LIMIT_SECONDS = 60.0
 
 @dataclass(frozen=True)
 class KorailNetFunnelToken:
-    """One parsed NetFunnel reply.
+    """파싱된 NetFunnel 응답 하나.
 
-    ``key`` is the queue slot's identifier and the ONLY thing that identifies it
-    on the follow-up requests — ``chkEnter`` and ``setComplete`` send nothing
-    else (``T6/d.java:54-55``, :78-79).
+    ``key`` 는 대기열 슬롯의 식별자이며 후속 요청이 슬롯을 가리키는 유일한
+    수단이다 — ``chkEnter`` 와 ``setComplete`` 는 그것 말고 아무것도 보내지
+    않는다(``T6/d.java:54-55``, ``:78-79``).
 
-    A token is one REPLY, not one session: each reply's key supersedes the last,
-    so the key here is only good for the *next* request. The 5101 ticket is
-    spent by ``chkEnter``, and every 201 poll reissues the key again. Holding on
-    to an earlier token and releasing that is the defect this type's immutability
-    is meant to make obvious — :meth:`KorailNetFunnelClient.acquire` returns the
-    latest token and that is the only one ``setComplete`` will accept.
+    토큰은 세션 하나가 아니라 **응답 하나**다. 응답마다 키가 앞 키를
+    대체하므로 여기 든 키는 바로 다음 요청에만 쓸 수 있다. 5101 표는
+    ``chkEnter`` 가 소진하고, 201 폴마다 키가 다시 발급된다.
+    :meth:`KorailNetFunnelClient.acquire` 가 돌려주는 최신 토큰만
+    ``setComplete`` 가 받는다.
 
-    ``node`` is the origin of the queue node that answered — the ``https://``
-    form of the reply's ``ip``/``port``, already checked against the pool's own
-    naming by :func:`~korail_mobile_api.safety.korail_netfunnel_node_url`. It is
-    ``""`` when the reply named nothing, which means the front door. The key
-    identifies the session and the node says WHERE that session lives; sending
-    the right key to the wrong node is answered ``503:msg="Wrong Server ID"``,
-    so the two travel together. See the module docstring for the live transcript.
+    ``node`` 는 응답한 대기열 노드의 origin — 응답의 ``ip``/``port`` 를
+    ``https://`` 꼴로 만든 것이며
+    :func:`~korail_mobile_api.safety.korail_netfunnel_node_url` 이 풀 이름
+    규칙으로 이미 검사했다. 아무 노드도 가리키지 않은 응답에서는 ``""`` 이고
+    그것은 정문을 뜻한다. 키는 어느 슬롯인지, 노드는 그 슬롯이 어디 사는지를
+    말한다. 맞는 키를 틀린 노드에 보내면 ``503:msg="Wrong Server ID"`` 라
+    둘은 함께 다닌다.
     """
 
     action: str
@@ -305,23 +220,21 @@ class KorailNetFunnelToken:
 
     @property
     def wait_count(self) -> int:
-        """``nwait`` — how many are ahead of us. 0 when the queue is idle."""
+        """``nwait`` — 앞에 몇 명이 서 있는지. 대기열이 한가하면 0 이다."""
         raw = self.params.get("nwait", "")
         return int(raw) if raw.isdigit() else 0
 
 
 def _netfunnel_url(netfunnel_url: str, params: Sequence[tuple[str, str]]) -> str:
-    """Assemble and GUARD one queue URL.
+    """대기열 URL 하나를 조립하면서 가드를 통과시킨다.
 
-    The guard runs on the ordered pairs before they are encoded, so the
-    per-opcode contract in :mod:`korail_mobile_api.safety` is checked against the
-    parameter names, values *and order* rather than against a re-parsed query
-    string.
+    가드는 인코딩 전의 순서 있는 쌍에 대해 돌기 때문에
+    :mod:`korail_mobile_api.safety` 의 opcode 별 계약이 파라미터 이름과 값뿐
+    아니라 **순서**까지 검사한다. 쿼리 문자열을 다시 파싱하지 않는다.
 
-    The origin is guarded per OPCODE, because the handshake spans hosts: 5101
-    may only go to the front door, while 5002 and 5004 may also go to one of the
-    queue's own nodes. The request contract is asserted first so the opcode read
-    below is one the guard has already vouched for.
+    origin 은 opcode 별로 가드한다. 핸드셰이크가 호스트를 넘나들기 때문이다 —
+    5101 은 정문만, 5002 와 5004 는 대기열 노드도 된다. 요청 계약을 먼저
+    단언하므로 그 아래에서 읽는 opcode 는 이미 가드가 보증한 값이다.
     """
     assert_netfunnel_request("GET", KORAIL_NETFUNNEL_PATH, params)
     assert_korail_netfunnel_opcode_origin(dict(params)["opcode"], netfunnel_url)
@@ -336,11 +249,11 @@ def get_tid_chk_enter_params(
     *,
     service_id: str = KORAIL_NETFUNNEL_SERVICE_ID,
 ) -> tuple[tuple[str, str], ...]:
-    """``opcode``, ``sid``, ``aid`` — in that order.
+    """``opcode``, ``sid``, ``aid`` — 그 순서로.
 
-    ``T6/d.java:99-101`` adds exactly these three and nothing else, and
-    ``U6/a.addParam`` appends to an ``ArrayList`` (``U6/a.java:57-63``) that
-    ``URLEncodedUtils.format`` then walks in order, so the order is the app's.
+    ``T6/d.java:99-101`` 이 정확히 셋만 넣고, ``U6/a.addParam`` 은
+    ``ArrayList`` 에 덧붙이며(``U6/a.java:57-63``) ``URLEncodedUtils.format``
+    이 그 순서대로 훑는다. 그래서 순서는 앱의 것이다.
     """
     return (
         ("opcode", KorailNetFunnelOpcode.GET_TID_CHK_ENTER.value),
@@ -350,11 +263,10 @@ def get_tid_chk_enter_params(
 
 
 def chk_enter_params(key: str) -> tuple[tuple[str, str], ...]:
-    """``opcode``, ``key``. No ``sid``, no ``aid``, no ``ttl``.
+    """``opcode``, ``key``. ``sid`` 도 ``aid`` 도 ``ttl`` 도 없다.
 
-    ``T6/d.java:54-55``. This is the parameter list that most obviously diverges
-    from the JavaScript dialect, where 5002 carries the service/action pair and
-    echoes the previous 201's ttl.
+    ``T6/d.java:54-55``. 자바스크립트 방언과 가장 눈에 띄게 갈리는 지점이다 —
+    그쪽 5002 는 서비스/액션 쌍을 싣고 직전 201 의 ttl 을 되돌려 보낸다.
     """
     if not key:
         raise ValueError("chkEnter requires the key the queue issued")
@@ -365,15 +277,13 @@ def chk_enter_params(key: str) -> tuple[tuple[str, str], ...]:
 
 
 def set_complete_params(key: str) -> tuple[tuple[str, str], ...]:
-    """``opcode``, ``key`` — "I am done, release my slot" (``T6/d.java:78-79``).
+    """``opcode``, ``key`` — "끝났으니 슬롯을 놓아 달라"(``T6/d.java:78-79``).
 
-    Sending this is not optional politeness. Without it our place in line is held
-    until the server times it out, and at peak load that is queue pollution we
-    caused. The app releases automatically too: ``NetfunnelDao.runRunner()``
-    calls ``T6.g.END()`` (``com/korail/talk/network/NetfunnelDao.java:41``) from
-    ``BaseDaoHelper``'s ``onPostExecute`` (:105-107) — i.e. after the gated call
-    has returned, on the success and the failure path alike, because
-    ``onPostExecute`` runs either way.
+    보내지 않으면 서버가 시간 초과로 걷어 갈 때까지 자리가 잡혀 있다. 앱도
+    자동으로 놓는다. ``NetfunnelDao.runRunner()`` 가 ``T6.g.END()`` 를 부르고
+    (``com/korail/talk/network/NetfunnelDao.java:41``) 그 호출은
+    ``BaseDaoHelper`` 의 ``onPostExecute``(``:105-107``)에서 나오므로 성공
+    경로와 실패 경로 양쪽에서 실행된다.
     """
     if not key:
         raise ValueError("setComplete requires the key whose slot is released")
@@ -389,10 +299,10 @@ def build_get_tid_chk_enter_url(
     action: str,
     service_id: str = KORAIL_NETFUNNEL_SERVICE_ID,
 ) -> str:
-    """The 5101 URL: "put me in line for ``action``".
+    """5101 URL — "``action`` 줄에 세워 달라".
 
-    ``netfunnel_url`` must be the FRONT DOOR. This is the entry call, so there is
-    no node yet and balancing it is what the front door is for.
+    ``netfunnel_url`` 은 **정문**이어야 한다. 진입 호출이라 아직 노드가 없고,
+    그 분산이 정문의 일이다.
     """
     return _netfunnel_url(
         netfunnel_url,
@@ -401,20 +311,20 @@ def build_get_tid_chk_enter_url(
 
 
 def build_chk_enter_url(netfunnel_url: str, *, key: str) -> str:
-    """The 5002 URL: "am I admitted yet?".
+    """5002 URL — "이제 들어가도 되나".
 
-    ``netfunnel_url`` is the NODE that issued the session (or the front door when
-    no reply has named one yet). A node outside the pool is refused by the guard.
+    ``netfunnel_url`` 은 세션을 발급한 **노드**다(아직 아무 응답도 노드를
+    가리키지 않았다면 정문). 풀 밖의 노드는 가드가 거부한다.
     """
     return _netfunnel_url(netfunnel_url, chk_enter_params(key))
 
 
 def build_set_complete_url(netfunnel_url: str, *, key: str) -> str:
-    """The 5004 URL: "I am done, release my slot".
+    """5004 URL — "끝났으니 슬롯을 놓아 달라".
 
-    ``netfunnel_url`` is the NODE that issued the session. Sending this to the
-    front door instead is what answers ``503:msg="Wrong Server ID"`` whenever the
-    balancer does not happen to land back on the owning node.
+    ``netfunnel_url`` 은 세션을 발급한 **노드**다. 대신 정문으로 보내면,
+    분산기가 마침 그 노드로 되돌려 주지 않는 한
+    ``503:msg="Wrong Server ID"`` 가 돌아온다.
     """
     return _netfunnel_url(netfunnel_url, set_complete_params(key))
 
@@ -433,28 +343,24 @@ def _queue_failure(
 
 
 def parse_netfunnel_body(body: str, *, action: str) -> KorailNetFunnelToken:
-    """Split a native-SDK reply into code and parameters, judging neither.
+    """네이티브 SDK 응답을 코드와 파라미터로 가르기만 한다. 판정은 하지 않는다.
 
-    Mirrors ``T6/i.Parser`` (``T6/i.java:35-63``): everything before the first
-    ``:`` is the status code, the remainder splits on ``&`` into ``name=value``
-    pairs. Each caller below applies its own status policy on top, because
-    "success" is not one set of codes — it depends on which request the reply
-    answers.
+    ``T6/i.Parser``(``T6/i.java:35-63``)를 그대로 옮겼다. 첫 ``:`` 앞이 상태
+    코드, 나머지는 ``&`` 로 갈라 ``name=value`` 쌍이 된다. 성공의 정의는 어느
+    요청에 대한 응답이냐에 따라 다르므로 상태 판정은 호출자마다 따로 한다.
 
-    The app parses the value half with ``split("=")`` and takes element ``[1]``,
-    which would truncate a value containing ``=``; this splits once so such a
-    value survives intact. That is strictly more faithful to the wire than to the
-    decompiled Java, and no NetFunnel parameter is known to contain one.
+    앱은 값 쪽을 ``split("=")`` 하고 ``[1]`` 을 취해서 ``=`` 가 든 값을
+    잘라 먹지만, 여기서는 한 번만 갈라 그런 값도 온전히 남는다. 알려진
+    NetFunnel 파라미터 중 ``=`` 를 담는 것은 없다.
 
-    **The one judgement made here is about routing, not about status.** ``ip``
-    and ``port`` say which queue node answered, and the follow-up opcodes have to
-    be sent there (see the module docstring). They are therefore resolved through
-    :func:`~korail_mobile_api.safety.korail_netfunnel_node_url` at parse time, so
-    a reply naming a host outside the pool raises
-    :class:`~korail_mobile_api.errors.KorailProtocolError` here rather than
-    quietly routing the rest of the session back to the front door. Doing it in
-    the parser means every caller of every parse function gets the check, and no
-    code path can obtain a token whose ``node`` was never vetted.
+    **여기서 내리는 유일한 판단은 상태가 아니라 라우팅이다.** ``ip`` 와
+    ``port`` 는 어느 노드가 답했는지를 말하고 후속 opcode 는 그리로 가야
+    하므로, 파싱 시점에
+    :func:`~korail_mobile_api.safety.korail_netfunnel_node_url` 을 통과시킨다.
+    풀 밖 호스트를 가리킨 응답은 여기서
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다. 파서에서 하면
+    모든 파싱 함수의 모든 호출자가 검사를 받고, 검증되지 않은 ``node`` 를
+    가진 토큰을 얻을 수 있는 경로가 남지 않는다.
     """
     head, separator, tail = body.strip().partition(":")
     if not separator or not head.isdigit():
@@ -499,15 +405,15 @@ def _require_pass_key(token: KorailNetFunnelToken, body: str) -> None:
 
 
 def parse_queue_response(body: str, *, action: str) -> KorailNetFunnelToken:
-    """A 5101/5002 reply, including "still queued".
+    """5101/5002 응답을 읽는다. "아직 대기 중"도 포함한다.
 
-    Returns the token for a pass (200/300) **and** for a wait (201/202); the
-    caller separates them with :func:`is_queued`. Everything else raises — 301
-    and 302 as :class:`~korail_mobile_api.errors.KorailQueueRejectedError`, the
-    rest as :class:`~korail_mobile_api.errors.KorailNetFunnelError`.
+    통과(200/300)든 대기(201/202)든 토큰을 돌려주고, 둘의 구분은 호출자가
+    :func:`is_queued` 로 한다. 그 밖은 예외다 — 301 과 302 는
+    :class:`~korail_mobile_api.errors.KorailQueueRejectedError`, 나머지는
+    :class:`~korail_mobile_api.errors.KorailNetFunnelError`.
 
-    A wait is not required to echo a key: we already hold one, and refusing a
-    wait over a missing echo would abort an operation that was merely queued.
+    대기 응답은 키를 되울려 줄 의무가 없다. 이미 하나 쥐고 있고, 키가 없다고
+    거절하면 그저 줄을 서 있을 뿐인 작업을 중단시키게 된다.
     """
     token = parse_netfunnel_body(body, action=action)
     if token.code in CONTINUE_CODES:
@@ -527,24 +433,21 @@ def parse_set_complete_response(
     *,
     action: str,
 ) -> KorailNetFunnelToken:
-    """A 5004 reply. Accepts 200 (released) and 502 ("already complete").
+    """5004 응답을 읽는다. 200(놓임)과 502(이미 완료)를 받아들인다.
 
-    **The 502 acceptance is our inference and is labelled as such.** The app does
-    not state it: ``T6/d.Complete()`` (``T6/d.java:69-88``) does not even look at
-    the reply — it calls ``execute()`` and clears its state regardless — so the
-    APK has no opinion to copy. Our caller's question is "is my slot released?",
-    and both 200 and ``TsErrorAComplete`` answer yes.
+    **502 를 받아들이는 것은 추론이다.** 앱은 이에 대해 말이 없다 —
+    ``T6/d.Complete()``(``T6/d.java:69-88``)는 응답을 보지도 않고
+    ``execute()`` 뒤 상태를 지운다. 호출자의 질문은 "내 슬롯이 놓였는가"이고
+    200 과 ``TsErrorAComplete`` 는 둘 다 그렇다고 답한다.
 
-    **No key is required in the reply, and a successful release does not send
-    one.** The live 2026-07-26 release answered
-    ``200:key=&nwait=0&nnext=0&tps=0.000000&ttl=0&ip=rnf13.letskorail.com&
-    port=443&…&chk_enter_cnt=0&…`` — an EMPTY ``key=``, which is the server
-    saying the slot is gone rather than a truncated body. This deliberately does
-    not run :func:`_require_pass_key`: an empty key is a success here and only a
-    failure on 5101/5002, where the key is the whole point of the reply.
+    **응답에 키가 없어도 되고, 성공한 해제는 키를 보내지 않는다.** 해제
+    성공은 ``200:key=&nwait=0&…&chk_enter_cnt=0&…`` 처럼 빈 ``key=`` 로 온다 —
+    잘린 본문이 아니라 슬롯이 사라졌다는 서버의 말이다. 그래서 여기서는
+    :func:`_require_pass_key` 를 돌리지 않는다. 빈 키는 5101/5002 에서만
+    실패이고 거기서는 키가 응답의 전부다.
 
-    :data:`NOT_COMPLETABLE_CODE` gets a message of its own because the server's
-    is actively misleading. Everything else keeps the generic one.
+    :data:`NOT_COMPLETABLE_CODE` 에만 따로 메시지를 붙인 것은 서버 문구가
+    원인을 잘못 가리키기 때문이다. 나머지는 일반 메시지를 쓴다.
     """
     token = parse_netfunnel_body(body, action=action)
     if token.code == NOT_COMPLETABLE_CODE:
@@ -570,16 +473,16 @@ def parse_set_complete_response(
 
 
 def is_queued(token: KorailNetFunnelToken) -> bool:
-    """Whether the queue said "come back later" (Continue/ContinueDebug)."""
+    """대기열이 "나중에 다시 오라"고 했는지(Continue/ContinueDebug)."""
     return token.code in CONTINUE_CODES
 
 
 def queue_wait_seconds(token: KorailNetFunnelToken) -> int:
-    """How long to sleep before the next ``chkEnter``, clamped as the app clamps.
+    """다음 ``chkEnter`` 까지 잘 시간. 앱이 자르는 대로 자른다.
 
-    ``T6/i.java:175-181`` with ``max_ttl=30``, ``min=1`` — see
-    :data:`MAX_TTL_SECONDS`. The value is NOT sent back to the server; unlike the
-    JavaScript dialect, the native SDK keeps ttl entirely client-side.
+    ``T6/i.java:175-181`` 의 ``max_ttl=30``, ``min=1`` —
+    :data:`MAX_TTL_SECONDS` 참조. 이 값은 서버로 돌아가지 않는다. 자바스크립트
+    방언과 달리 네이티브 SDK 는 ttl 을 전적으로 클라이언트에만 둔다.
     """
     raw = token.params.get("ttl", "")
     ttl = int(raw) if raw.isdigit() else 0
@@ -587,16 +490,15 @@ def queue_wait_seconds(token: KorailNetFunnelToken) -> int:
 
 
 class KorailNetFunnelClient:
-    """A bounded client for the waiting room, pinned to the queue's own hosts.
+    """대기열 전용 클라이언트. 대기열 자신의 호스트에만 고정되고 폴링에 상한이
+    있다.
 
-    Deliberately a SEPARATE client from
-    :class:`~korail_mobile_api.http.KorailHttpClient`: that one is pinned to
-    ``smart.letskorail.com`` by ``assert_korail_origin`` and must stay that way,
-    and this one can reach nothing but ``/ts.wseq`` on the queue's front door and
-    on the queue's own nodes. Neither can be used to reach the other's origin,
-    and the canonical-origin guarantee for the API host is untouched by the pool
-    described in the module docstring — the pool is the QUEUE host's business
-    only.
+    :class:`~korail_mobile_api.http.KorailHttpClient` 와 **일부러 분리했다**.
+    그쪽은 ``assert_korail_origin`` 으로 ``smart.letskorail.com`` 에 고정되고
+    그대로 있어야 하며, 이쪽은 대기열 정문과 대기열 노드의 ``/ts.wseq`` 밖으로
+    나갈 수 없다. 어느 쪽도 상대의 origin 에 닿는 데 쓸 수 없고, 모듈
+    docstring 이 설명하는 풀은 대기열 호스트만의 사정이라 API 호스트의 단일
+    origin 보장은 그대로다.
     """
 
     def __init__(
@@ -643,6 +545,7 @@ class KorailNetFunnelClient:
         )
 
     def close(self) -> None:
+        """대기열 HTTP 연결을 닫는다."""
         self._client.close()
 
     def _get(self, url: str) -> str:
@@ -661,16 +564,15 @@ class KorailNetFunnelClient:
         return response.text
 
     def enter(self, action: str) -> KorailNetFunnelToken:
-        """5101 — take a TICKET for ``action``, at the FRONT DOOR.
+        """5101 — **정문**에서 ``action`` 의 표를 받는다.
 
-        May return a WAIT token. The key this returns is not yet a session: it is
-        what :meth:`check` exchanges for one, and ``setComplete`` refuses it
-        (:data:`NOT_COMPLETABLE_CODE`). Callers who want a slot they can release
-        want :meth:`acquire`, which performs the exchange.
+        대기 토큰이 나올 수 있다. 여기서 받은 키는 아직 세션이 아니다. :meth:`check`
+        가 그것을 세션으로 바꿔 주고, ``setComplete`` 는 이 키를 거부한다
+        (:data:`NOT_COMPLETABLE_CODE`). 놓아줄 수 있는 슬롯이 필요하면 교환까지
+        수행하는 :meth:`acquire` 를 쓴다.
 
-        This is the only opcode that goes to ``config.netfunnel_url``
-        unconditionally: it is the call the front door balances across the pool,
-        and its reply is what names the node the rest of the session belongs to.
+        무조건 ``config.netfunnel_url`` 로 가는 유일한 opcode 다. 정문이 풀 전체로
+        분산하는 호출이고, 그 응답이 나머지 세션이 속한 노드를 가리킨다.
         """
         body = self._get(
             build_get_tid_chk_enter_url(
@@ -687,18 +589,17 @@ class KorailNetFunnelClient:
         *,
         node: str = "",
     ) -> KorailNetFunnelToken:
-        """5002 — enter with ``key``, or ask again, AT ``node``.
+        """5002 — ``key`` 로 입장하거나 다시 묻는다. ``node`` 에서.
 
-        May return a WAIT token. This is both halves of the same opcode: the
-        first call exchanges the 5101 ticket for a completable session, and each
-        later call re-asks with whatever key the previous 201 issued. Either way
-        the reply's key supersedes ``key``, so the caller must carry the returned
-        token forward rather than the one it passed in.
+        대기 토큰이 나올 수 있다. 같은 opcode 의 두 국면이다. 첫 호출은 5101 표를
+        완료 가능한 세션으로 바꾸고, 이후 호출은 직전 201 이 발급한 키로 다시
+        묻는다. 어느 쪽이든 응답의 키가 ``key`` 를 대체하므로 호출자는 넘긴
+        토큰이 아니라 받은 토큰을 들고 가야 한다.
 
-        ``node`` is the origin the previous reply named — carry
-        :attr:`KorailNetFunnelToken.node` into it. It defaults to the front door
-        for a caller who has none, which is only correct before any reply has
-        named a node; :meth:`acquire` always has one by the time it gets here.
+        ``node`` 는 앞 응답이 가리킨 origin 이다 —
+        :attr:`KorailNetFunnelToken.node` 를 그대로 넘겨라. 노드가 없는 호출자를
+        위해 정문이 기본값이고, 그것이 옳은 경우는 아직 아무 응답도 노드를
+        가리키지 않았을 때뿐이다. :meth:`acquire` 는 여기 올 때 이미 노드를 안다.
         """
         body = self._get(
             build_chk_enter_url(node or self.config.netfunnel_url, key=key)
@@ -706,30 +607,24 @@ class KorailNetFunnelClient:
         return parse_queue_response(body, action=str(action))
 
     def release(self, token: KorailNetFunnelToken) -> None:
-        """5004 — release the slot AT ITS NODE. Raises if it was not released.
+        """5004 — 슬롯을 그 **노드**에서 놓는다. 놓이지 않으면 예외다.
 
-        The request goes to ``token.node``, the node that issued the session. The
-        front door does not own it and answers ``503:msg="Wrong Server ID"``
-        unless the balancer happens to land back on the owning node, which is
-        where the roughly-half-the-time release failure of 2026-07-26 came from.
-        A token with no node (nothing named one) falls to the front door, which is
-        the app's own ``T6/d.makeURL`` behaviour for an unnamed host and not a
-        fall-back from a refusal — a refused host raises long before this.
+        요청은 세션을 발급한 ``token.node`` 로 간다. 정문은 그 세션의 주인이
+        아니라서, 분산기가 마침 주인 노드로 되돌려 주지 않는 한
+        ``503:msg="Wrong Server ID"`` 로 답한다. 아무도 노드를 가리키지 않은
+        토큰은 정문으로 간다 — 호스트가 지목되지 않았을 때의
+        ``T6/d.makeURL`` 동작 그대로이며, 거부에 대한 대체 경로가 아니다. 거부된
+        호스트는 여기 오기 훨씬 전에 예외가 된다.
 
-        This RAISES rather than swallowing, and that is the whole point. The
-        sibling SRT implementation guarded its key against a 128-character bound
-        while real keys are 256, so every release request was rejected before it
-        was sent — and because the failure was swallowed, every slot leaked
-        silently until a live run exposed it. A release that cannot be sent must
-        be audible.
+        실패를 삼키지 않고 **올린다**. 보낼 수 없는 해제는 소리를 내야 한다.
+        조용히 실패하면 슬롯이 새고, 샌 슬롯은 아무 신호도 남기지 않는다.
 
-        A token with no key is a bypass (300) and there is nothing to release, so
-        that returns without sending — the same condition ``T6/d.Complete()``
-        short-circuits on (``T6/d.java:70-73``, ``getKey().length() < 1``). That
-        short-circuit is deliberately narrowed to a bypass: "no key" is a
-        legitimate state for exactly one status code, and letting any other
-        keyless token take the silent path would rebuild the leak from the other
-        end — the request would not merely be refused, it would never be built.
+        키가 없는 토큰은 우회(300)이고 놓을 것이 없으므로 아무것도 보내지 않고
+        돌아온다 — ``T6/d.Complete()`` 가 짧게 끊는 조건과 같다
+        (``T6/d.java:70-73``, ``getKey().length() < 1``). 다만 그 지름길은 우회에만
+        허용한다. 키 없음이 정당한 상태인 코드는 하나뿐이고, 다른 무키 토큰에까지
+        조용한 경로를 열어 주면 요청이 거부되는 것도 아니고 아예 만들어지지 않는
+        쪽으로 슬롯이 샌다.
         """
         if not token.key:
             if token.code == BYPASS_CODE:
@@ -749,40 +644,34 @@ class KorailNetFunnelClient:
         parse_set_complete_response(body, action=token.action)
 
     def acquire(self, action: str) -> KorailNetFunnelToken:
-        """Take a ticket, enter with it, and poll until admitted, within bounds.
+        """표를 받고, 그것으로 입장하고, 들어갈 때까지 상한 안에서 폴링한다.
 
-        The full sequence, which is 5101 → 5002 and NOT 5101 alone, and which
-        spans two hosts::
+        전체 순서는 5101 → 5002 이지 5101 단독이 아니며, 두 호스트에 걸친다::
 
-            enter(action)                     # 5101 at the FRONT DOOR
-            check(action, key, node=node)     # 5002 at the NODE it named
-            ...                               # more 5002s while 201/202
-            -> the token whose key AND node setComplete will accept
+            enter(action)                     # 5101, 정문
+            check(action, key, node=node)     # 5002, 정문이 가리킨 노드
+            ...                               # 201/202 인 동안 5002 반복
+            -> setComplete 가 받아 줄 키와 노드를 가진 토큰
 
-        The 5002 is unconditional. A 5101 that answers 200 with ``nwait=0`` has
-        still only issued a ticket, and releasing that ticket fails with
-        :data:`NOT_COMPLETABLE_CODE` — see the module docstring for the live
-        transcript. The single exception is a bypass (300), which issues no key
-        because there is no line to stand in and so has nothing to exchange.
+        5002 는 조건 없이 보낸다. 5101 이 ``nwait=0`` 으로 200 을 줘도 그것은 표일
+        뿐이고, 그 표를 놓으려 하면 :data:`NOT_COMPLETABLE_CODE` 로 실패한다.
+        예외는 우회(300)뿐이다. 설 줄이 없으니 키도 없고 교환할 것도 없다.
 
-        Returns the passing token (200 or 300), whose key is the LATEST one the
-        server issued — every reply supersedes its predecessor, so the caller
-        must release this token and not an earlier one. A 201 that echoes no key
-        leaves the last known key in force, because a wait is not a revocation.
+        통과 토큰(200 또는 300)을 돌려주며 그 키는 서버가 마지막으로 발급한
+        것이다. 호출자는 반드시 이 토큰을 놓아야 하고 앞선 토큰을 놓으면 안 된다.
+        키를 되울리지 않은 201 은 마지막 키를 그대로 둔다 — 대기는 취소가 아니다.
 
-        The NODE supersedes the same way and for the same reason: the returned
-        token carries the last node any reply named, so :meth:`release` reaches
-        the host that owns the session. A reply that names no node leaves the
-        previous one in force — a poll that says nothing about routing has not
-        re-routed anything — and a bypass carries no node at all, which is
-        correct, because it has no session either.
+        노드도 같은 방식으로 대체된다. 돌려주는 토큰은 어떤 응답이든 마지막으로
+        가리킨 노드를 싣고 있어서 :meth:`release` 가 세션의 주인 호스트에 닿는다.
+        노드를 말하지 않은 응답은 직전 노드를 그대로 두고, 우회는 세션이 없으니
+        노드도 없다.
 
-        Raises :class:`~korail_mobile_api.errors.KorailNetFunnelError` if the
-        queue is still holding us after :data:`QUEUE_POLL_LIMIT` polls or
-        :data:`QUEUE_WAIT_LIMIT_SECONDS` seconds, whichever comes first. That
-        give-up leaves the slot to the server's own timeout: :meth:`slot` never
-        received a token, so it has nothing to release, and the current key is
-        put on the error's ``raw`` for a caller who wants to release it by hand.
+        :data:`QUEUE_POLL_LIMIT` 번 폴링하거나
+        :data:`QUEUE_WAIT_LIMIT_SECONDS` 초가 지나도록 대기열이 놓아 주지 않으면
+        :class:`~korail_mobile_api.errors.KorailNetFunnelError` 다. 그 포기는
+        슬롯을 서버의 시간 초과에 맡긴다 — :meth:`slot` 은 토큰을 받은 적이 없어
+        놓을 것이 없고, 손으로 놓고 싶은 호출자를 위해 현재 키를 예외의 ``raw``
+        에 실어 준다.
         """
         token = self.enter(action)
         if not token.key:
@@ -836,22 +725,20 @@ class KorailNetFunnelClient:
 
     @contextmanager
     def slot(self, action: str) -> Iterator[KorailNetFunnelToken]:
-        """Hold a queue slot for the duration of one operation, then release it.
+        """한 작업이 도는 동안 대기열 슬롯을 쥐었다가 놓는다.
 
         ``with client.slot(KorailNetFunnelAction.INQUIRY): ...``
 
-        The release happens on BOTH paths, which is what the app does
-        (``BaseDaoHelper.java:105-107`` runs it from ``onPostExecute``, i.e.
-        whether or not the gated call raised). The two paths differ only in how
-        loud a *failed* release is allowed to be:
+        해제는 **양쪽 경로**에서 일어난다. 앱도 그렇게 한다
+        (``BaseDaoHelper.java:105-107`` 이 ``onPostExecute`` 에서 부르므로 게이트된
+        호출이 실패했든 아니든 실행된다). 두 경로는 *해제 실패*를 얼마나 크게
+        말하느냐만 다르다.
 
-        * body succeeded — a failed release RAISES. Nothing else is in flight to
-          mask, and a silently leaked slot is the bug this module was written
-          against.
-        * body raised — the release is still attempted, but its own failure is
-          attached as a note to the caller's exception instead of replacing it.
-          The caller's error is the one they need; the leak is recorded, not
-          hidden.
+        * 본문이 성공했으면 — 해제 실패는 예외로 **올린다**. 가릴 다른 것이 없고,
+          조용히 새는 슬롯이야말로 이 모듈이 막으려는 것이다.
+        * 본문이 실패했으면 — 해제는 여전히 시도하되, 해제 자신의 실패는 호출자의
+          예외를 밀어내는 대신 그 예외에 note 로 붙는다. 호출자에게 필요한 것은
+          자기 오류이고, 누수는 감추지 않고 기록만 한다.
         """
         token = self.acquire(action)
         try:
@@ -897,9 +784,9 @@ KORAIL_NETFUNNEL_GATED_OPERATIONS: dict[str, KorailNetFunnelAction] = {
 
 
 def inquiry_action(*, peak_season: bool) -> KorailNetFunnelAction:
-    """Pick the 열차조회 action the way the app picks it.
+    """열차조회 액션을 앱이 고르는 방식대로 고른다.
 
-    ``b5/c.java:439`` is one conditional expression::
+    ``b5/c.java:439`` 는 조건식 하나다::
 
         request instanceof ProductTrainInquiryRequest
             ? NETFUNNEL_ACTION_PRODUCT_ID                       // act_6
@@ -907,25 +794,23 @@ def inquiry_action(*, peak_season: bool) -> KorailNetFunnelAction:
                 ? NETFUNNEL_ACTION_ID_PEAKSEASON                // act_8_2
                 : NETFUNNEL_ACTION_ID                           // act_8
 
-    and ``MainBookingActivity.java:749`` / ``OldMainBookingActivity.java:321``
-    repeat the peak-season half for the 간편구매 flow. So the choice is made per
-    *departure date*, on the client, before any request goes out.
+    ``MainBookingActivity.java:749`` 와 ``OldMainBookingActivity.java:321`` 이
+    간편구매 흐름에서 성수기 쪽 절반을 되풀이한다. 즉 선택은 *출발일자*마다,
+    요청이 나가기 전에 클라이언트에서 이뤄진다.
 
-    **``isPeakSeason`` is server data, not a calendar rule.**
-    ``S4/C0805e.java:116-121`` answers from ``f4891k``, an ``AvailableDates``
-    built at :199-201 from every ``RunningCalendar`` row whose ``isPeakSeason()``
-    is true — i.e. from the ``schedule.runDt`` 열차운행달력 response this library
-    already reads as
-    :meth:`~korail_mobile_api.client.KorailClient.get_train_calendar`. It is
-    therefore a *lookup*, and there is nothing to reimplement: before the
-    calendar has been fetched the app's own answer is ``false`` (:117 returns
-    false on a null table), which is why this takes the flag rather than a date.
+    **``isPeakSeason`` 은 달력 규칙이 아니라 서버 데이터다.**
+    ``S4/C0805e.java:116-121`` 은 ``f4891k`` 로 답하는데, 그것은
+    ``isPeakSeason()`` 이 참인 ``RunningCalendar`` 행들로 ``:199-201`` 에서
+    만든 ``AvailableDates`` 다 — 이 라이브러리가
+    :meth:`~korail_mobile_api.client.KorailClient.get_train_calendar` 로 이미
+    읽는 ``schedule.runDt`` 열차운행달력 응답이다. 그러니 이것은 *조회*이고 다시
+    구현할 것이 없다. 달력을 아직 받지 않았으면 앱 자신의 답도 ``false`` 이며
+    (``:117`` 은 표가 null 이면 false), 그래서 이 함수는 날짜가 아니라 플래그를
+    받는다.
 
-    That makes ``act_8_2`` the reason this module exists. ``act_8`` and
-    ``act_8_2`` are separate actions on the same service, so they are separate
-    queues: at peak load the ordinary inquiry queue is the one that engages, and
-    a caller who has read the calendar can ask for the peak-season line instead
-    of waiting in the wrong one.
+    ``act_8`` 과 ``act_8_2`` 는 같은 서비스의 서로 다른 액션이므로 서로 다른
+    줄이다. 부하가 몰릴 때 걸리는 것은 보통 조회 큐이고, 달력을 읽은 호출자는
+    엉뚱한 줄에서 기다리는 대신 성수기 줄을 요청할 수 있다.
     """
     return (
         KorailNetFunnelAction.PEAK_SEASON_INQUIRY

@@ -1,3 +1,13 @@
+"""리무진 연계 조회 응답을 :mod:`korail_mobile_api.limousine_models` 로 옮긴다.
+
+세 파서가 세 라우트를 맡는다. 봉투는 정확히 ``SUCC`` 여야 하고 그 밖은
+:class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+
+목록 키를 다루는 방식이 라우트마다 다르며 그것은 앱 선언을 따른 것이다.
+스케줄 조회의 ``trainList`` 와 좌석이동 목록의 ``trn_infos`` 는 없거나
+``null`` 이어도 빈 결과일 뿐이지만, 좌석 재고의 ``seatList`` 는 필수라서
+키가 없으면 오류다.
+"""
 from __future__ import annotations
 
 from collections.abc import Mapping

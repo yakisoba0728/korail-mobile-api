@@ -1,3 +1,19 @@
+"""읽기 라우트의 응답을 :mod:`korail_mobile_api.read_models` 의 타입으로 옮긴다.
+
+파서 하나가 라우트 하나를 맡는다. 각 파서는 봉투를 먼저 확인하고
+(``strResult``/``h_msg_cd``,
+:func:`~korail_mobile_api.errors.classify_app_error`), 그다음 그 라우트의
+DAO 선언이 말하는 필드만 꺼낸다. 원본 JSON 은 언제나 모델의 ``raw`` 에
+남으므로 모델이 짚지 않은 필드도 잃지 않는다.
+
+여기서 파싱하지 않는 필드가 있다면 그것은 값이 필요 없거나 —
+:mod:`korail_mobile_api.redaction` 이 가리는 자격증명이거나 — 앱이 화면에서
+지역적으로 채우는 값이다. 해당 파서의 docstring 이 그 이유를 적는다.
+
+KORAIL 은 APK 가 ``String`` 으로 선언한 필드를 JSON 숫자로 보내기도 한다.
+그래서 스칼라는 :func:`_optional_scalar_string` 으로 읽어 두 형태를 모두
+받아들인다.
+"""
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -255,7 +271,7 @@ def _present_strings(
     keys: tuple[str, ...],
     context: str,
 ) -> tuple[str, ...]:
-    """Collect the keys whose optional string value is present, in order."""
+    """선택 문자열 값이 실제로 온 키들을 순서대로 모은다."""
     values: list[str] = []
     for key in keys:
         value = _optional_string(data, key, context)
@@ -269,23 +285,21 @@ def _optional_scalar_string(
     key: str,
     context: str,
 ) -> str | None:
-    """A scalar field, accepted as a JSON string OR a JSON number.
+    """스칼라 필드 하나. JSON 문자열로 와도 JSON 숫자로 와도 받는다.
 
-    KORAIL is not consistent about which of the two it sends for a field the
-    APK declares as a Java ``String``, and the app never notices: every one of
-    these DAOs is deserialized by Gson, whose ``JsonReader.nextString()``
-    coerces a JSON number into its string form. Three separate live findings
-    have now landed on the same seam -- ``h_jrny_cnt`` arrived zero-padded as
-    ``"0001"``, ``h_st_prnb``/``h_cls_prnb`` arrived as zero-padded strings
-    where an ``int`` was demanded, and ``h_srcar_no`` arrived as a JSON number
-    where a string was demanded, which is what killed a live reserve on
-    2026-07-25 -- so this is treated as the systemic issue it is rather than as
-    three one-offs.
+    KORAIL 은 APK 가 자바 ``String`` 으로 선언한 필드를 둘 중 무엇으로 보낼지
+    일관되지 않고, 앱은 그것을 눈치채지 못한다. 이 DAO 들은 전부 Gson 이
+    역직렬화하는데 ``JsonReader.nextString()`` 이 JSON 숫자를 문자열 형태로
+    강제 변환하기 때문이다. 같은 자리에서 관측된 것만 셋이다 —
+    ``h_jrny_cnt`` 가 ``"0001"`` 로 0 을 채워 왔고, ``h_st_prnb``/``h_cls_prnb``
+    가 ``int`` 를 요구하는 자리에 0 을 채운 문자열로 왔으며, ``h_srcar_no`` 가
+    문자열을 요구하는 자리에 JSON 숫자로 왔다. 그래서 개별 사건이 아니라
+    계통적 문제로 다룬다.
 
-    Accepting both is not the same as accepting anything. A ``bool``, a
-    ``float``, a list or an object where a scalar belongs is still a protocol
-    error: those are not shapes Gson would have taken for a String either, and
-    silently stringifying one would hide a genuinely different response.
+    둘 다 받는 것이 아무거나 받는 것은 아니다. 스칼라 자리의 ``bool``,
+    ``float``, 리스트, 객체는 여전히 프로토콜 오류다. Gson 도 그것들을 String
+    으로 받지 않았을 것이고, 조용히 문자열로 만들면 정말로 다른 응답을 숨기게
+    된다.
     """
     value = data.get(key)
     if value is None or isinstance(value, str):
@@ -1836,11 +1850,10 @@ def _nullable_scalar_fields(
     field_map: Mapping[str, str],
     context: str,
 ) -> dict[str, str | None]:
-    """:func:`_nullable_string_fields`, but string-or-number per field.
+    """:func:`_nullable_string_fields` 와 같되 필드마다 문자열-또는-숫자를 받는다.
 
-    Used by the reservation-detail and refund-ticket-detail parsers, whose
-    success shapes were built from the APK's DAO declarations and never seen
-    live until 2026-07-25. See :func:`_optional_scalar_string`.
+    예약 상세와 환불 승차권 상세 파서가 쓴다. 두 성공 응답의 모양은 APK 의 DAO
+    선언에서 나왔다. :func:`_optional_scalar_string` 참조.
     """
     return {
         attribute: _optional_scalar_string(data, wire_name, context)
@@ -2756,12 +2769,12 @@ _DISCOUNT_CARD_SECTION_FIELDS = {
 def _discount_card_on_ticket(
     raw: Mapping[str, Any],
 ) -> DiscountCardOnTicket | None:
-    """Read ``dcnt_crd_info`` off a ticket detail, or ``None``.
+    """승차권 상세에서 ``dcnt_crd_info`` 를 읽는다. 없으면 ``None``.
 
-    Absent for every ordinary ticket, so absence is not an error. The section
-    list's wire key is ``appSegList`` — the Java FIELD name
-    (``TicketDetailDao.java:124``), which is what Gson serialises; the getter
-    is spelled ``getAppSeg_info()`` and is not the wire name.
+    평범한 승차권에는 없으므로 부재가 오류가 아니다. 구간 목록의 전선 키는
+    ``appSegList`` — Gson 이 직렬화하는 자바 **필드** 이름이다
+    (``TicketDetailDao.java:124``). 게터는 ``getAppSeg_info()`` 로 철자가
+    다르며 그것은 전선 이름이 아니다.
     """
     info = _optional_mapping(raw, "dcnt_crd_info", "refund ticket detail")
     if info is None:
@@ -2887,14 +2900,13 @@ _SELF_SEAT_CHANGE_INFO_FIELDS = {
 def parse_self_seat_change_info_response(
     raw: Mapping[str, Any],
 ) -> SelfSeatChangeInfoResponse:
-    """Parse ``self.seatChgInfo.do``.
+    """``self.seatChgInfo.do`` 를 파싱한다.
 
-    ``CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse`` and its two inner
-    row types (``dao/ticket/change/CallSelfSeatChgInfoDao.java:64-204``). Every
-    field the DAO declares is a Java ``String``, so each is read with
-    :func:`_optional_scalar_string`: the remaining-seat counts and the
-    construction/run orders are exactly the kind of field this server has been
-    observed to send as a bare JSON number.
+    ``CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse`` 와 그 안의 두 행 타입
+    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:64-204``). DAO 가 선언한
+    필드가 전부 자바 ``String`` 이라 모두 :func:`_optional_scalar_string` 으로
+    읽는다. 잔여좌석 수와 편성/운행 순서는 이 서버가 맨 JSON 숫자로 보내는
+    것이 관측된 바로 그런 종류의 필드다.
     """
     if not isinstance(raw, Mapping):
         raise KorailProtocolError(
@@ -3012,18 +3024,18 @@ _ORIGINAL_TICKET_FIELDS = {
 def parse_original_ticket_inquiry_response(
     raw: Mapping[str, Any],
 ) -> OriginalTicketInquiryResponse:
-    """Parse ``research.tripChgOgtk.do``.
+    """``research.tripChgOgtk.do`` 를 파싱한다.
 
-    ``OgTkInquiryDao.OgTkInquiryResponse`` -> ``orgTkList`` of
-    ``response/research/OrgTk.java``, each with a ``jrnyList`` of
-    ``Jrny.java`` and each of those with a ``seatList`` of ``Seat.java``.
+    ``OgTkInquiryDao.OgTkInquiryResponse`` → ``response/research/OrgTk.java`` 의
+    ``orgTkList``. 각 원표는 ``Jrny.java`` 의 ``jrnyList`` 를, 각 여정은
+    ``Seat.java`` 의 ``seatList`` 를 가진다.
 
-    ``cmpnList`` and ``stlList`` are intentionally left unparsed. They carry
-    further bearer credentials -- 지연증명 return numbers
-    (``Cmpn.java:11-14``) and card/approval numbers (``Stl.java:5-16``) --
-    that nothing in the change chain needs; their wire keys are registered in
-    :mod:`~korail_mobile_api.redaction` so they stay masked inside
-    :attr:`~korail_mobile_api.read_models.OriginalTicket.raw`.
+    ``cmpnList`` 와 ``stlList`` 는 일부러 파싱하지 않는다. 지연증명 반환번호
+    (``Cmpn.java:11-14``)와 카드/승인번호(``Stl.java:5-16``) 같은 소지 자격증명을
+    더 싣는데 변경 과정의 어느 단계도 그것을 필요로 하지 않는다. 두 목록의 전선
+    키는 :mod:`~korail_mobile_api.redaction` 에 등록돼 있어
+    :attr:`~korail_mobile_api.read_models.OriginalTicket.raw` 안에서도 가려진
+    채로 남는다.
     """
     if not isinstance(raw, Mapping):
         raise KorailProtocolError(

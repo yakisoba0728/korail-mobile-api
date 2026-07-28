@@ -1,3 +1,17 @@
+"""읽기 라우트의 요청 폼·쿼리 빌더와 그 입력 데이터클래스.
+
+승차권·예약·환불·마일리지·할인카드·MaaS 등 상태를 바꾸지 않는 라우트의
+요청을 만든다. 기본 조회(열차·좌석·역)는 :mod:`korail_mobile_api.payloads`,
+상태 변경은 :mod:`korail_mobile_api.mutation_payloads` 에 있다.
+
+입력이 여러 개이거나 앱이 특정 조합만 보내는 라우트는 얼어붙은
+데이터클래스로 받는다. 검증은 그 데이터클래스의 ``__post_init__`` 에서 하고,
+빌더 함수는 검증된 값을 전선 키로 옮기기만 한다. 필드 이름·순서·생략 가능
+여부는 APK 의 Retrofit 선언에서 나왔고
+:data:`~korail_mobile_api.safety.KORAIL_EXACT_REQUEST_FIELDS` 와
+:data:`~korail_mobile_api.safety.KORAIL_OPTIONAL_REQUEST_FIELDS` 가 전송
+직전에 다시 확인한다.
+"""
 from __future__ import annotations
 
 import time
@@ -25,11 +39,11 @@ def _positive_int(value: int, name: str) -> str:
 
 
 def _required_text(value: str | None, name: str) -> str:
-    """Return ``value`` unchanged, rejecting a missing or blank string.
+    """``value`` 를 그대로 돌려주되 없거나 빈 문자열이면 거부한다.
 
-    Most callers forward an optional field parsed from a server response, so
-    ``None`` is an accepted argument that this validator turns into a
-    ``ValueError`` rather than a caller-side type error.
+    호출자 대부분이 서버 응답에서 파싱한 선택 필드를 그대로 넘긴다. 그래서
+    ``None`` 도 인자로 받아 ``ValueError`` 로 바꾼다. 호출자 쪽 타입 오류가
+    아니라 값 오류로 다루는 편이 진단에 낫다.
     """
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must not be empty")
@@ -562,13 +576,13 @@ def build_multi_child_discount_target_form(
 
 
 def build_korail_point_summary_form() -> dict[str, str]:
-    """``xPoint.MyXPointView`` — one constant, not a caller parameter.
+    """``xPoint.MyXPointView`` — 상수 하나이고 호출자 매개변수가 아니다.
 
-    ``KorailPointInquiryDao.java:87-92`` has no request class at all: it builds
-    a bare ``BaseRequest`` and passes the literal ``"0"`` as ``point_dv_cd``.
-    Both call sites (``MyPageActivity.java:414``,
-    ``MemberCardActivity.java:67``) instantiate the DAO with no arguments, so
-    ``"0"`` is the only value the app can send and this builder takes nothing.
+    ``KorailPointInquiryDao.java:87-92`` 에는 요청 클래스가 아예 없다. 맨
+    ``BaseRequest`` 를 만들어 ``point_dv_cd`` 에 리터럴 ``"0"`` 을 넣는다. 두
+    호출 지점(``MyPageActivity.java:414``, ``MemberCardActivity.java:67``)이
+    모두 인자 없이 DAO 를 만들므로 앱이 보낼 수 있는 값은 ``"0"`` 뿐이고, 이
+    빌더도 아무것도 받지 않는다.
     """
     return {"point_dv_cd": "0"}
 
@@ -611,18 +625,18 @@ _KORAIL_MILEAGE_MOVEMENTS = frozenset(
 
 @dataclass(frozen=True)
 class MileageHistoryRequest:
-    """The 마일리지 내역 read's inputs (``XPointService.java:26-28``).
+    """마일리지 내역 조회의 입력(``XPointService.java:26-28``).
 
-    The defaults are the screen's own: the KTX ledger
-    (``MileageHistoryActivity.java:543``), 전체 movements (``:134``), and
-    ``pgPrCnt="20"`` — a hardcoded literal at ``:274``, not a preference, which
-    is why it is not a constructor argument. ``nowPgNo`` is 1-based (``:131``)
-    and the app increments it while ``page_no <= pgCnt`` (``:158,252-253``).
+    기본값은 화면 자신의 값이다 — KTX 마일리지 원장
+    (``MileageHistoryActivity.java:543``), 전체 증감(``:134``), 그리고
+    ``pgPrCnt="20"``. 마지막 것은 ``:274`` 의 리터럴이지 사용자 설정이 아니라서
+    생성자 인자가 아니다. ``nowPgNo`` 는 1부터 세고(``:131``) 앱은
+    ``page_no <= pgCnt`` 인 동안 하나씩 올린다(``:158,252-253``).
 
-    :attr:`start_date` and :attr:`end_date` have no default because the app has
-    none either: ``onCreate`` calls ``e1(2)`` (``:545``), which is the "최근
-    3개월" branch at ``:372-380``. Reproducing a relative default here would
-    put a clock in a payload builder, so the caller supplies both dates.
+    :attr:`start_date` 와 :attr:`end_date` 에 기본값이 없는 것은 앱에도 없기
+    때문이다. ``onCreate`` 는 ``e1(2)``(``:545``)를 부르고 그것은 ``:372-380``
+    의 "최근 3개월" 가지다. 여기서 상대 기본값을 만들면 폼 빌더 안에 시계를
+    넣는 셈이므로 두 날짜는 호출자가 준다.
     """
 
     start_date: str
@@ -663,46 +677,45 @@ def build_mileage_history_form(
 
 
 def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
-    """``ticket.dcntCrdUseQry.do`` — one card number, nothing else.
+    """``ticket.dcntCrdUseQry.do`` — 카드번호 하나, 그 밖은 없다.
 
-    ``ResearchService.java:51-52``. The app never asks the user to type this:
-    ``Y4/C0907b.java:303`` copies ``dcnt_crd_info.h_dcnt_crd_no`` off the
-    N-card ticket's own detail response into an intent extra, and
-    ``TicketNCardHistoryActivity.java:138,109`` reads it straight back out into
-    ``setDcntCrdNo``. So the natural source for this argument is
-    :attr:`~korail_mobile_api.read_models.RefundTicketDetailResponse.discount_card`.
+    ``ResearchService.java:51-52``. 앱은 이 값을 사용자에게 입력받지 않는다.
+    ``Y4/C0907b.java:303`` 이 N카드 승차권 상세 응답의
+    ``dcnt_crd_info.h_dcnt_crd_no`` 를 인텐트 엑스트라로 복사하고,
+    ``TicketNCardHistoryActivity.java:138,109`` 가 그것을 그대로 읽어
+    ``setDcntCrdNo`` 에 넣는다. 그래서 이 인자의 자연스러운 출처는
+    :attr:`~korail_mobile_api.read_models.RefundTicketDetailResponse.discount_card`
+    다.
     """
     return {"dcntCrdNo": _required_text(card_no, "card_no")}
 
 
 @dataclass(frozen=True)
 class DiscountCardScheduleRequest:
-    """The 할인카드 schedule read's inputs (``ResearchService.java:54-55``).
+    """할인카드 운행일정 조회의 입력(``ResearchService.java:54-55``).
 
-    The app builds this in exactly two places — ``u4/b.java:52-65`` for the
-    1-section N카드 and ``u4/b.java:67-81`` for the v2 (기간+횟수) card — and
-    the two differ only in whether they carry :attr:`usage_period_days`. The
-    defaults below are the values BOTH builders hardcode, so a caller who
-    supplies only the card identity and the section's two station names sends
-    what the app sends:
+    앱이 이것을 만드는 곳은 정확히 두 군데다 — 1구간 N카드용
+    ``u4/b.java:52-65`` 와 v2(기간+횟수) 카드용 ``u4/b.java:67-81``. 둘은
+    :attr:`usage_period_days` 를 싣느냐만 다르다. 아래 기본값은 **두 빌더가 모두**
+    박아 넣는 값이라, 카드 신원과 구간의 두 역이름만 준 호출자는 앱과 같은 것을
+    보낸다.
 
-    * ``dptTm`` ``"000000"`` (``u4/b.java:55,70``) — from midnight, i.e. the
-      whole day, which is why the app never offers a time picker here.
-    * ``trnGpCd`` ``"109"`` — ``K4/s.java:5`` ``ALL("전체", "109")``
+    * ``dptTm`` ``"000000"``(``u4/b.java:55,70``) — 자정부터, 즉 하루 전체다.
+      그래서 앱이 여기에는 시각 선택기를 두지 않는다.
+    * ``trnGpCd`` ``"109"`` — ``K4/s.java:5`` 의 ``ALL("전체", "109")``
       (``u4/b.java:58,73``).
-    * ``dirtChtnDvCd`` ``"1"`` — ``K4/d.java:5`` ``DIRECT_SQ_NO("직통", "1")``
-      (``u4/b.java:59,74``). An N카드 section is always a direct leg; the app
-      never sends ``"2"`` on this route.
+    * ``dirtChtnDvCd`` ``"1"`` — ``K4/d.java:5`` 의
+      ``DIRECT_SQ_NO("직통", "1")``(``u4/b.java:59,74``). N카드 구간은 언제나
+      직통이고 앱은 이 라우트에 ``"2"`` 를 보내지 않는다.
 
-    :attr:`card_kind_code` is one of exactly two literals. ``u4/b.java:60-61``
-    sends ``"B2N"`` for the two original 1-section products
-    (``B2N18120402``/``B2N18120403``) and ``"MMM"`` for everything else;
-    ``u4/b.java:76`` hardcodes ``"MMM"`` on the v2 path. :meth:`for_card`
-    reproduces that rule so a caller does not have to.
+    :attr:`card_kind_code` 는 리터럴 두 개 중 하나다. ``u4/b.java:60-61`` 은
+    원래의 1구간 상품 둘(``B2N18120402``/``B2N18120403``)에 ``"B2N"`` 을, 그
+    밖에는 ``"MMM"`` 을 보내고 ``u4/b.java:76`` 은 v2 경로에서 ``"MMM"`` 을
+    박는다. :meth:`for_card` 가 그 규칙을 대신 적용한다.
 
-    NOT VERIFIED. No live call has been made on this route, and no account this
-    project has access to owns an N카드, so the response shape below is the
-    APK's DAO declaration rather than an observed body.
+    **미검증.** 이 라우트로 라이브 호출을 한 적이 없고 이 프로젝트가 접근할 수
+    있는 계정 중 N카드를 가진 것이 없다. 아래 응답 모양은 관측된 본문이 아니라
+    APK 의 DAO 선언이다.
     """
 
     card_kind_management_no: str
@@ -729,7 +742,7 @@ class DiscountCardScheduleRequest:
         usage_period_days: str | None = None,
         page_no: str | None = None,
     ) -> DiscountCardScheduleRequest:
-        """Build a request, deriving ``dcntCrdKndCd`` the way ``u4/b.java`` does."""
+        """카드 종류에서 ``dcntCrdKndCd`` 를 ``u4/b.java`` 방식으로 유도해 요청을 만든다."""
         kind_code = (
             "B2N"
             if card_kind_management_no in _B2N_CARD_KIND_MANAGEMENT_NOS
@@ -757,14 +770,14 @@ _B2N_CARD_KIND_MANAGEMENT_NOS = frozenset({"B2N18120402", "B2N18120403"})
 def build_discount_card_schedule_query(
     request: DiscountCardScheduleRequest,
 ) -> dict[str, str]:
-    """Render :class:`DiscountCardScheduleRequest` as the route's query.
+    """:class:`DiscountCardScheduleRequest` 를 라우트의 쿼리로 옮긴다.
 
-    ``useTrmDno`` and ``qryPgNo`` are OMITTED when they are ``None``, because
-    that is what the app transmits: neither builder ever calls ``setQryPgNo``
-    and the 1-section builder never calls ``setUseTrmDno``, so Retrofit drops
-    the null ``@Query`` (``ResearchService.java:54-55``). Both are registered
-    as omittable in
-    :data:`~korail_mobile_api.safety.KORAIL_OPTIONAL_REQUEST_FIELDS`.
+    ``useTrmDno`` 와 ``qryPgNo`` 는 ``None`` 이면 **생략한다.** 앱이 그렇게
+    전송하기 때문이다 — 어느 빌더도 ``setQryPgNo`` 를 부르지 않고 1구간 빌더는
+    ``setUseTrmDno`` 도 부르지 않아, Retrofit 이 null ``@Query`` 를 떨어뜨린다
+    (``ResearchService.java:54-55``). 둘 다
+    :data:`~korail_mobile_api.safety.KORAIL_OPTIONAL_REQUEST_FIELDS` 에 생략
+    가능으로 등록돼 있다.
     """
     if type(request) is not DiscountCardScheduleRequest:
         raise TypeError("request must be an exact DiscountCardScheduleRequest")
@@ -1106,40 +1119,36 @@ def build_original_ticket_inquiry_form(
     *,
     ticket_count: int | None = None,
 ) -> tuple[tuple[str, str | int], ...]:
-    """Build the 원표(원승차권) lookup's ordered form.
+    """원표(원승차권) 조회의 순서 있는 폼을 만든다.
 
-    ``POST research.tripChgOgtk.do`` (``ResearchService.java:61-63``). The
-    route declares ``@Field("tkCnt") int`` followed by a ``@FieldMap``, so
-    everything past ``tkCnt`` is one indexed group per original ticket. The
-    key prefixes come from ``ROrtg.java:8-11`` (cross-checked
-    ``ROrtg.smali:20-26``) and already end in ``_``, so row 1 is transmitted
-    as ``ogtkSaleWctNo_1`` / ``ogtkSaleDd_1`` / ``ogtkSaleSqno_1`` /
-    ``ogtkRetPwd_1``. Indices are 1-based: all three call sites increment
-    before appending (``TCBookingActivity.java:169-175``,
-    ``SeatSearchActivity.java:605-611``, ``PushHistoryActivity.java:
-    345-351``).
+    ``POST research.tripChgOgtk.do``(``ResearchService.java:61-63``). 이
+    라우트는 ``@Field("tkCnt") int`` 다음에 ``@FieldMap`` 을 선언하므로
+    ``tkCnt`` 뒤는 전부 원표 한 장당 하나씩인 인덱스 묶음이다. 키 접두사는
+    ``ROrtg.java:8-11``(``ROrtg.smali:20-26`` 로 교차확인)에서 나오고 이미
+    ``_`` 로 끝난다. 그래서 1행은 ``ogtkSaleWctNo_1`` / ``ogtkSaleDd_1`` /
+    ``ogtkSaleSqno_1`` / ``ogtkRetPwd_1`` 로 나간다. 인덱스는 1부터다 — 세 호출
+    지점 모두 붙이기 전에 증가시킨다(``TCBookingActivity.java:169-175``,
+    ``SeatSearchActivity.java:605-611``, ``PushHistoryActivity.java:345-351``).
 
-    TWO honest caveats about this shape.
+    이 모양에는 솔직히 밝힐 단서가 둘 있다.
 
-    The ORDER of the indexed keys is this library's choice, not the app's. The
-    app builds a ``java.util.HashMap`` and hands it to Retrofit
-    (``OgTkInquiryDao.java:15,52``), so its wire order is whatever the hash
-    yields — and the app does not even agree with itself about the insertion
-    order, since ``PushHistoryActivity`` puts ``ogtkSaleDd`` first while the
-    other two put ``ogtkSaleWctNo`` first. Grouping by ticket in ``ROrtg``
-    declaration order is deterministic and reproducible, which a map iteration
-    is not.
+    인덱스 키의 **순서**는 앱의 것이 아니라 이 라이브러리의 선택이다. 앱은
+    ``java.util.HashMap`` 을 만들어 Retrofit 에 넘기므로
+    (``OgTkInquiryDao.java:15,52``) 전선 순서는 해시가 정하는 대로다. 앱 자신도
+    삽입 순서를 통일하지 못해서 ``PushHistoryActivity`` 는 ``ogtkSaleDd`` 를
+    먼저 넣고 나머지 둘은 ``ogtkSaleWctNo`` 를 먼저 넣는다. ``ROrtg`` 선언
+    순서로 승차권별 묶음을 만드는 쪽은 결정적이고 재현 가능하지만 맵 순회는
+    그렇지 않다.
 
-    ``ticket_count`` (``tkCnt``) defaults to the number of tickets but is a
-    free parameter, because the app's own three call sites mean three
-    different things by it: ``TCBookingActivity.java:179`` sends the passenger
-    count, ``PushHistoryActivity.java:357`` sends the row count and
-    ``SeatSearchActivity.java:615`` hardcodes ``1`` while writing
-    ``f29962H.size()`` rows. It is transmitted as an ``int`` because the smali
-    signature says ``I`` (``ResearchService.smali:613,628-632``) — the
-    neighbouring ``tk.plfNo.do`` declares the same NAME as a ``String``
-    (``TicketService.java:72``), and sending the wrong one is exactly the
-    string/number mismatch this codebase has been bitten by before.
+    ``ticket_count``(``tkCnt``)는 승차권 수가 기본값이지만 자유 매개변수다. 앱
+    자신의 세 호출 지점이 이 값으로 서로 다른 것을 뜻하기 때문이다 —
+    ``TCBookingActivity.java:179`` 는 승객 수, ``PushHistoryActivity.java:357``
+    은 행 수를 보내고 ``SeatSearchActivity.java:615`` 는 ``f29962H.size()``
+    행을 쓰면서 ``1`` 을 박는다. ``int`` 로 전송하는 것은 smali 시그니처가
+    ``I`` 이기 때문이며(``ResearchService.smali:613,628-632``), 이웃한
+    ``tk.plfNo.do`` 는 같은 **이름**을 ``String`` 으로 선언한다
+    (``TicketService.java:72``). 둘을 바꿔 보내는 것이 이 서버에서 되풀이되는
+    문자열/숫자 불일치다.
     """
     references = _exact_ticket_reference_tuple(tickets)
     if ticket_count is None:
@@ -1165,20 +1174,20 @@ KorailSelfSeatChangeRoomClassCode = Literal["1", "2"]
 
 @dataclass(frozen=True)
 class SelfSeatChangeInfoRequest:
-    """The train a 자율 좌석/열차 변경 is being considered for.
+    """자율 좌석/열차 변경을 검토할 대상 열차.
 
-    ``POST self.seatChgInfo.do`` (``TicketService.java:54-56``). Every value
-    is copied straight off the ticket the caller already holds:
-    ``TCSOptionsActivity.java:131-134`` reads ``h_run_dt`` / ``h_trn_no`` /
-    ``h_dpt_rs_stn_cd`` / ``h_arv_rs_stn_cd`` off the reservation's train
-    info, unmodified — in particular ``trnNo`` is NOT zero-padded here, unlike
-    the seat-inventory reads.
+    ``POST self.seatChgInfo.do``(``TicketService.java:54-56``). 모든 값이
+    호출자가 이미 쥔 승차권에서 그대로 복사된다 —
+    ``TCSOptionsActivity.java:131-134`` 가 예약의 열차 정보에서 ``h_run_dt`` /
+    ``h_trn_no`` / ``h_dpt_rs_stn_cd`` / ``h_arv_rs_stn_cd`` 를 손대지 않고
+    읽는다. 특히 ``trnNo`` 는 좌석 재고 조회와 달리 여기서는 0 을 채우지
+    않는다.
 
-    :attr:`room_class_code` is genuinely optional. The app sets it only when
-    the ticket's own class is 일반실 (``"1"``) or 특실 (``"2"``)
-    (``TCSOptionsActivity.java:135-138``, ``K4/o.java:7-8``, cross-checked
-    ``K4/o.smali:34-82``); for anything else the field stays null and Retrofit
-    drops it, so ``None`` here reproduces a request the app really sends.
+    :attr:`room_class_code` 는 정말로 선택이다. 앱은 승차권 자신의 등급이
+    일반실(``"1"``) 또는 특실(``"2"``)일 때만 이 값을 넣는다
+    (``TCSOptionsActivity.java:135-138``, ``K4/o.java:7-8``,
+    ``K4/o.smali:34-82`` 로 교차확인). 그 밖에는 필드가 null 로 남아 Retrofit
+    이 떨어뜨리므로, 여기 ``None`` 을 주면 앱이 실제로 보내는 요청이 된다.
     """
 
     run_date: str = field(repr=False)
@@ -1346,17 +1355,13 @@ def _validate_price_fare_leg(leg: PriceFareLeg) -> None:
 
 @dataclass(frozen=True)
 class PriceFareQuoteRequest:
-    """One or two legs to price, plus the app's client-side ``txtMenuId``.
+    """운임을 계산할 한두 구간과 앱의 클라이언트 측 ``txtMenuId``.
 
-    ``txtMenuId`` is NOT a server value. The app hardcodes it: ``a5/k.java:92-94``
-    returns ``"11"``, ``a5/u.java:279`` passes it as the ``MENU_ID`` intent
-    extra, ``PriceFareActivity.java:49`` reads it back and ``:62`` sets it on the
-    Price2Fare request. The default is therefore the app's constant, so a quote
-    can be built straight from a parsed search response.
-
-    This used to read ``menu_id`` off ``TrainSearchMetadata``, which parsed it
-    from a response key (``h_menu_id``) that does not exist anywhere in the app,
-    so every request built from a real search result raised.
+    ``txtMenuId`` 는 서버 값이 **아니다.** 앱이 박아 넣는다 —
+    ``a5/k.java:92-94`` 가 ``"11"`` 을 돌려주고 ``a5/u.java:279`` 가 그것을
+    ``MENU_ID`` 인텐트 엑스트라로 넘기며 ``PriceFareActivity.java:49`` 가 다시
+    읽어 ``:62`` 에서 Price2Fare 요청에 넣는다. 기본값이 앱의 상수이므로,
+    파싱된 조회 결과만 있으면 그대로 운임 계산 요청을 만들 수 있다.
     """
 
     legs: tuple[PriceFareLeg, ...] = field(repr=False)
@@ -1693,11 +1698,11 @@ def _build_product_train_inquiry_form(
 
 @dataclass(frozen=True)
 class TicketReservationDetailRequest:
-    """The PNR whose held-reservation detail to read.
+    """상세를 읽을 미결제 예약의 PNR.
 
-    Feeds ``certification.ReservationList`` (``inquiryTicketRsv``,
-    ``CertificationService.java:45-46``). The PNR is ``repr=False`` because it
-    identifies a real reservation.
+    ``certification.ReservationList`` 의 ``inquiryTicketRsv`` 오버로드에 들어간다
+    (``CertificationService.java:45-46``). PNR 은 실제 예약을 식별하므로
+    ``repr=False`` 다.
     """
 
     pnr_no: str = field(repr=False)
@@ -1715,14 +1720,14 @@ def _validate_ticket_reservation_detail_request(
 def build_ticket_reservation_detail_query(
     request: TicketReservationDetailRequest,
 ) -> dict[str, str]:
-    """Build the READ overload's exact single query field.
+    """읽기 오버로드가 쓰는 정확히 한 개의 쿼리 필드를 만든다.
 
-    ``certification.ReservationList`` also hosts the write-flavoured
-    ``applyDisabilityCertification`` overload (``CertificationService.java:22``),
-    which adds ``txtPsgDisc0019Cnt`` and six ``@QueryMap``s. This builder emits
-    ``hidPnrNo`` and nothing else, and the route's entry in
-    ``KORAIL_EXACT_REQUEST_FIELDS`` refuses anything wider, so the write shape
-    cannot be produced through this path.
+    ``certification.ReservationList`` 에는 쓰기 성격의
+    ``applyDisabilityCertification`` 오버로드도 얹혀 있다
+    (``CertificationService.java:22``). 그쪽은 ``txtPsgDisc0019Cnt`` 와
+    ``@QueryMap`` 여섯 개를 더 싣는다. 이 빌더는 ``hidPnrNo`` 하나만 내보내고,
+    ``KORAIL_EXACT_REQUEST_FIELDS`` 의 이 라우트 항목이 그보다 넓은 것을
+    거부하므로 이 경로로는 쓰기 모양을 만들 수 없다.
     """
     if type(request) is not TicketReservationDetailRequest:
         raise TypeError(
@@ -1734,14 +1739,14 @@ def build_ticket_reservation_detail_query(
 
 @dataclass(frozen=True)
 class RefundCompanion:
-    """The companion identity ``refunds.CommissionView`` echoes back.
+    """``refunds.CommissionView`` 가 되울려 받는 동반자 신원.
 
-    Both app call sites take these straight off a ``SelTicketInfo`` response:
-    ``h_comp_nm`` from ``getH_compa_nm()`` and ``h_comp_cert_no`` from
-    ``getH_compa_brth()`` (``TicketListActivity.java:908-909``,
-    ``ui/ticket/ticketReturn/a.java:355-356``). A ticket with no companion
-    sends both empty, which is why empty strings are accepted here — the two
-    fields are always transmitted, never omitted.
+    앱의 두 호출 지점 모두 ``SelTicketInfo`` 응답에서 그대로 가져온다 —
+    ``h_comp_nm`` 은 ``getH_compa_nm()``, ``h_comp_cert_no`` 는
+    ``getH_compa_brth()`` 에서다(``TicketListActivity.java:908-909``,
+    ``ui/ticket/ticketReturn/a.java:355-356``). 동반자가 없는 승차권은 둘 다
+    빈 문자열로 보내므로 여기서도 빈 문자열을 받는다. 두 필드는 언제나
+    전송되며 생략되지 않는다.
     """
 
     name: str = field(default="", repr=False)
@@ -1771,12 +1776,12 @@ def build_refund_commission_form(
     ticket: OriginalTicketReference,
     companion: RefundCompanion = RefundCompanion(),
 ) -> dict[str, str]:
-    """Build the refund fee / refundable-amount pre-check form.
+    """환불 수수료·환불가능금액 사전조회 폼을 만든다.
 
-    ``RefundService.java:19-21`` declares POST + @FormUrlEncoded with exactly
-    these six fields on top of Device/Version/Key. Note the sale-date field is
-    ``h_orgtk_ret_sale_dt`` here, NOT the ``h_orgtk_sale_dt`` the receipt read
-    uses — the two routes spell the same value differently.
+    ``RefundService.java:19-21`` 이 POST + @FormUrlEncoded 로 공통
+    Device/Version/Key 위에 정확히 이 여섯 필드를 선언한다. 판매일자 필드가
+    여기서는 ``h_orgtk_ret_sale_dt`` 이고 영수증 조회가 쓰는
+    ``h_orgtk_sale_dt`` 가 **아니다** — 같은 값을 두 라우트가 다르게 쓴다.
     """
     reference = _exact_original_ticket_reference(ticket)
     party = _exact_refund_companion(companion)
@@ -1795,18 +1800,17 @@ def build_refund_ticket_detail_form(
     *,
     from_purchase_history: bool = False,
 ) -> dict[str, str]:
-    """Build the refund-target ticket detail form.
+    """환불 대상 승차권 상세 조회 폼을 만든다.
 
-    POST with the four identity fields plus ``h_purchase_history``
-    (``RefundService.java:23-25``). The flag is exactly "Y" or "N" in the app:
-    the purchase-history screen sends "Y"
-    (``TicketPurchaseHistoryActivity.java:267``) and the ticket list and
-    seat-assign screens send "N" (``TicketListActivity.java:926``,
-    ``SeatAssignBookingActivity.java:317``).
+    신원 네 필드에 ``h_purchase_history`` 를 더한 POST 다
+    (``RefundService.java:23-25``). 이 플래그는 앱에서 정확히 "Y" 아니면 "N"
+    이다 — 구매이력 화면이 "Y"(``TicketPurchaseHistoryActivity.java:267``),
+    승차권 목록과 좌석지정 화면이 "N" 을 보낸다
+    (``TicketListActivity.java:926``, ``SeatAssignBookingActivity.java:317``).
 
-    srtgo issues this as a GET and drops ``h_purchase_history`` entirely
-    (``ktx.py:791-800``). The app is the authority and it declares POST with
-    the field present, so this builder always emits it.
+    srtgo 는 이것을 GET 으로 보내며 ``h_purchase_history`` 를 아예 뺀다
+    (``ktx.py:791-800``). 근거는 앱이고, 앱은 이 필드가 있는 POST 를
+    선언한다. 그래서 이 빌더는 언제나 그 필드를 내보낸다.
     """
     reference = _exact_original_ticket_reference(ticket)
     if type(from_purchase_history) is not bool:

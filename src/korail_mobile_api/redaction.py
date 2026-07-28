@@ -1,3 +1,17 @@
+"""미리보기·로그에 남으면 안 되는 값을 가린다.
+
+:data:`SENSITIVE_KEYS` 는 가려야 할 폼/응답 키의 집합이고, 나머지 함수는
+그 집합을 문자열·URL·매핑·데이터클래스에 적용한다. 민감한 키의 값은
+``[REDACTED]``, 그 밖의 값에서 발견된 카드번호 모양은
+``[REDACTED_CARD]`` 가 된다.
+
+키 매칭은 대소문자를 무시하고 꼬리 인덱스를 떼어 본다(:func:`is_sensitive_key`).
+KORAIL 이 논리적으로 한 필드를 행 번호가 붙은 여러 키로 쓰기 때문이다 —
+``custMgNo_1``, ``txtSeatNo1``.
+
+:func:`redact_payload` 는 :class:`~korail_mobile_api.consent.MutationPreview`
+가 쓰는 진입점이다.
+"""
 from __future__ import annotations
 
 import re
@@ -498,14 +512,12 @@ _INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)_?(?P<index>\d+)$")
 
 
 def _index_stripped(name: str) -> str | None:
-    """Return ``name`` without a trailing wire index, or ``None``.
+    """``name`` 에서 꼬리 인덱스를 뗀 이름, 없으면 ``None``.
 
-    Korail spells one logical field as many keys by appending a row number,
-    sometimes with an underscore (``custMgNo_1``) and sometimes without
-    (``txtSeatNo1``). Matching SENSITIVE_KEYS exactly meant every reachable
-    subscript had to be enumerated by hand, and a secret stayed readable
-    whenever a spelling was missed -- which is exactly how a real name, a phone
-    number and a customer number survived into previews.
+    KORAIL 은 논리적으로 하나인 필드를 행 번호 붙은 여러 키로 쓴다. 밑줄이
+    있기도 하고(``custMgNo_1``) 없기도 하다(``txtSeatNo1``).
+    :data:`SENSITIVE_KEYS` 와 정확히 일치시키면 도달 가능한 첨자를 손으로
+    전부 적어야 하고, 하나라도 빠뜨리면 그 철자에서 비밀이 그대로 읽힌다.
     """
     match = _INDEX_SUFFIX_RE.match(name)
     if match is None:
@@ -515,10 +527,10 @@ def _index_stripped(name: str) -> str | None:
 
 
 def is_sensitive_key(name: str) -> bool:
-    """Whether ``name`` names a value that must never reach a preview or log.
+    """``name`` 이 미리보기나 로그에 절대 닿으면 안 되는 값의 이름인지.
 
-    Matches the key itself and, failing that, the key with a trailing wire
-    index removed, so ``custMgNo_7`` is as redacted as ``custMgNo``.
+    키 자체를 먼저 보고, 아니면 꼬리 인덱스를 뗀 이름으로 다시 본다. 그래서
+    ``custMgNo_7`` 도 ``custMgNo`` 만큼 가려진다.
     """
     folded = name.casefold()
     if folded in SENSITIVE_KEYS:
@@ -613,20 +625,19 @@ def redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
 def redact_payload(
     payload: Mapping[str, object],
 ) -> dict[str, str | list[str]]:
-    """Redact a mutation form/payload mapping for a ``MutationPreview``.
+    """:class:`~korail_mobile_api.consent.MutationPreview` 를 위해 변경 폼을 가린다.
 
-    Every sensitive key (card fields, PII, PNR) becomes ``[REDACTED]``; every
-    remaining value is card-masked via :func:`redact_text` so a raw PAN can
-    never surface in a preview even when it appears under an unexpected key.
+    민감한 키(카드 필드, 개인정보, PNR)는 전부 ``[REDACTED]`` 가 되고, 남은
+    값은 :func:`redact_text` 로 카드 마스킹을 한 번 더 거친다. 예상 못 한 키
+    아래 있더라도 원본 카드번호가 미리보기에 뜨지 않는다.
 
-    A LIST value is redacted element by element and stays a list of the same
-    length, because one form key here can legitimately carry many values: the
-    six ``List`` ``@Field``s of ``certification.PriceReCalculation`` go out as
-    repeated keys. Collapsing such a value with ``str()`` would print a Python
-    repr in place of the wire form, and — far worse — would hide each element
-    from :func:`redact_text` behind the list's own brackets and quotes. The
-    length is preserved because it is not a secret: it equals
-    ``txtPsgGridcnt``, which travels in the clear beside it.
+    **리스트 값은 원소별로 가리고 길이가 같은 리스트로 남는다.** 여기서는 폼 키
+    하나가 정당하게 여러 값을 실을 수 있기 때문이다 —
+    ``certification.PriceReCalculation`` 의 여섯 ``List`` ``@Field`` 는 반복
+    키로 나간다. ``str()`` 로 뭉치면 전선 형태 대신 파이썬 repr 이 찍히고, 각
+    원소가 리스트의 괄호와 따옴표 뒤로 숨어 :func:`redact_text` 를 피한다.
+    길이를 남기는 것은 그것이 비밀이 아니기 때문이다 — 옆에 평문으로 함께 가는
+    ``txtPsgGridcnt`` 와 같은 값이다.
     """
     redacted: dict[str, str | list[str]] = {}
     for key, value in payload.items():

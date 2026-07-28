@@ -1,3 +1,14 @@
+"""환경변수로 실기기 값을 고정하고 라이브 스모크를 돌리는 보조 모듈.
+
+여기 있는 것은 두 가지다. :func:`build_config_from_env` 는 DynaPath 의 기기
+식별자·OS·모델을 환경변수에서 읽어
+:class:`~korail_mobile_api.config.KorailConfig` 를 만든다 — 프로세스를 넘어
+안정적인 기기 식별자를 얻는 유일한 방법이다. :func:`run_live_smoke_from_env`
+는 실제 서버에 붙어 읽기 표면을 한 바퀴 돈다.
+
+라이브 호출은 ``KORAIL_MOBILE_API_LIVE=1`` 이 없으면 시작하지 않는다
+(:func:`live_enabled`).
+"""
 from __future__ import annotations
 
 import os
@@ -35,32 +46,30 @@ def _required_env(name: str) -> str:
 
 
 def build_config_from_env() -> KorailConfig:
-    """A :class:`KorailConfig` whose device identity comes from the environment.
+    """기기 신원을 환경변수에서 가져온 :class:`KorailConfig`.
 
-    A bare ``KorailConfig()`` already logs in, on synthetic device values
-    generated per instance. This is the supported way to pin REAL ones instead,
-    and it is the only way to get a device id that is stable across processes —
-    the generated one cannot be, since nothing in this package persists state.
+    맨손 ``KorailConfig()`` 로도 로그인은 된다. 인스턴스마다 합성된 기기 값을
+    쓴다. 이 함수는 **실제 값**을 고정하는 방법이고, 프로세스를 넘어 안정적인
+    기기 식별자를 얻는 유일한 길이다 — 이 패키지는 아무 상태도 저장하지 않으므로
+    합성 값은 그럴 수 없다.
 
-    Three variables are required and have no default, because a wrong value
-    here is worse than a missing one:
+    세 변수는 필수이며 기본값이 없다. 여기서는 틀린 값이 없는 값보다 나쁘다.
 
     ``KORAIL_DYNAPATH_DEVICE_ID``
-        The DynaPath ``di``: the device's ``Settings.Secure.ANDROID_ID``
-        (``AbstractC1228a.java:16``), 16 lowercase hex characters.
+        DynaPath 의 ``di``. 기기의 ``Settings.Secure.ANDROID_ID``
+        (``AbstractC1228a.java:16``), 소문자 hex 16자.
     ``KORAIL_DYNAPATH_OS_VERSION``
-        ``Build.VERSION.RELEASE``, e.g. ``"15"`` — not the SDK int.
+        ``Build.VERSION.RELEASE``. 예: ``"15"``. SDK 정수가 아니다.
     ``KORAIL_DYNAPATH_DEVICE_MODEL``
-        ``Build.MODEL``, e.g. ``"SM-S928N"``.
+        ``Build.MODEL``. 예: ``"SM-S928N"``.
 
-    The last two are used TWICE on purpose: they go into the token's ``os`` and
-    ``dm``, and into the ``User-Agent``, which is derived from them by
-    :func:`~korail_mobile_api.constants.build_dalvik_user_agent` rather than
-    written separately. Overriding ``KORAIL_USER_AGENT`` on its own therefore
-    means asserting a device in the header that the token does not confirm.
+    뒤의 둘은 일부러 두 번 쓰인다. 토큰의 ``os``·``dm`` 으로 들어가고,
+    :func:`~korail_mobile_api.constants.build_dalvik_user_agent` 를 통해
+    ``User-Agent`` 로도 들어간다. 그래서 ``KORAIL_USER_AGENT`` 만 따로 덮어쓰면
+    토큰이 뒷받침하지 않는 기기를 헤더에서 주장하게 된다.
 
-    Everything else — base URL, screen geometry, SDK int, advertising id,
-    ``KORAIL_DYNAPATH_AS_VALUE`` — falls back to the package defaults.
+    나머지는 — base URL, 화면 크기, SDK 정수, 광고 식별자,
+    ``KORAIL_DYNAPATH_AS_VALUE`` — 패키지 기본값으로 떨어진다.
     """
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")

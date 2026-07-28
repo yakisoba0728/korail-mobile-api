@@ -1,3 +1,14 @@
+"""기본 조회 응답을 :mod:`korail_mobile_api.models` 의 타입으로 옮긴다.
+
+앱 기동 데이터, 공지, 역 목록·상세, 열차 조회 행, 운행달력, 정차역,
+호차 목록, 좌석 재고를 파싱한다. 나머지 읽기 라우트는
+:mod:`korail_mobile_api.read_parsers` 에 있다.
+
+각 파서는 봉투를 먼저 확인하고 그 라우트의 DAO 선언이 말하는 필드만
+꺼낸다. 원본 JSON 은 모델의 ``raw`` 에 남는다. 역 이름과 역코드의 대응은
+:func:`parse_station_name_map` 과 :func:`resolve_station_name` 이 맡으며,
+:class:`~korail_mobile_api.client.KorailClient` 가 그 표를 캐시한다.
+"""
 from __future__ import annotations
 
 import math

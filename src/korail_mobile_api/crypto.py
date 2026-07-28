@@ -1,3 +1,14 @@
+"""로그인 비밀번호 변환과 ``Sid`` 생성.
+
+로그인 폼에 실리는 비밀번호는 평문이 아니다. ``common.code.do`` 가 내려주는
+암호화 파라미터(:class:`~korail_mobile_api.models.LoginCryptoInfo`)에 따라
+:func:`transform_login_password` 가 변환한다.
+:func:`generate_sid` 는 리무진 좌석이동 조회처럼 공통 ``Key`` 대신 요청마다
+새 ``Sid`` 를 요구하는 폼에 쓴다.
+
+두 함수 모두 안드로이드 ``Base64`` 의 기본 모드를 흉내 낸다. 그 모드는
+76자마다 줄바꿈을 넣으므로, 결과 문자열에 개행이 들어가는 것이 정상이다.
+"""
 from __future__ import annotations
 
 import base64

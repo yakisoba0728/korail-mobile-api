@@ -1,3 +1,15 @@
+"""상태 변경 응답을 :mod:`korail_mobile_api.mutation_models` 의 타입으로 옮긴다.
+
+예약 홀드, 결제, 할인카드 구매의 응답 셋을 파싱한다. 취소·환불·장바구니
+추가처럼 DAO 의 응답 타입이 맨 ``BaseResponse`` 인 라우트는 전용 모델이
+없어 여기 파서도 없다.
+
+읽기 파서와 다른 점이 하나 있다. 여기서 나오는 값은 서버에 **이미 존재할 수
+있는** 예약을 가리킨다 — PNR, 발권창구번호, 결제 폼이 되울릴 job 일련번호,
+정산 금액. 그래서 값의 표현 형태가 예상과 달라도 최대한 받아들인다
+(:func:`_optional_string`). 파싱 실패로 실제 예약을 놓치는 것이 이 패키지가
+낼 수 있는 최악의 결과다.
+"""
 from __future__ import annotations
 
 import re
@@ -32,23 +44,19 @@ def _optional_string(
     *,
     context: str,
 ) -> str | None:
-    """A scalar field, accepted as a JSON string OR a JSON number.
+    """스칼라 필드 하나. JSON 문자열로 와도 JSON 숫자로 와도 받는다.
 
-    KORAIL sends whichever it likes for a field the APK declares as a Java
-    ``String``, and the app is indifferent because Gson's
-    ``JsonReader.nextString()`` coerces a number into its string form. The
-    reserve response quotes the journey count and zero-pads it
-    (``h_jrny_cnt="0001"``); the reservation history sends the same field as the
-    JSON integer ``1``. Both must parse, because reading a hold back out of the
-    history is the recovery path when a PNR has been lost.
+    KORAIL 은 APK 가 자바 ``String`` 으로 선언한 필드를 마음대로 둘 중 하나로
+    보내고, Gson 의 ``JsonReader.nextString()`` 이 숫자를 문자열로 강제 변환하기
+    때문에 앱은 개의치 않는다. 예약 응답은 여정 수를 따옴표로 감싸고 0 까지
+    채워 보내는데(``h_jrny_cnt="0001"``) 예약 이력은 같은 필드를 JSON 정수
+    ``1`` 로 보낸다. 홀드를 이력에서 다시 읽는 것이 PNR 을 잃었을 때의 복구
+    경로이므로 둘 다 파싱돼야 한다.
 
-    This matters more here than on a read parser. Every value below identifies a
-    hold that may already EXIST on the server -- the PNR, the window number, the
-    job sequences the payment form echoes, the amount it settles. Refusing one
-    because it arrived unquoted strands a real reservation, which is the single
-    worst outcome this package can produce. So normalise to the string the form
-    builders expect, and keep rejecting only what is genuinely a different
-    shape: a bool, a float, a list or an object.
+    이것이 읽기 파서에서보다 여기서 더 중요하다. 아래의 모든 값이 서버에 이미
+    존재할 수 있는 홀드를 가리킨다. 따옴표가 없다고 거부하면 실제 예약이
+    고아가 된다. 그래서 폼 빌더가 기대하는 문자열로 정규화하고, 정말로 다른
+    모양인 것 — ``bool``, ``float``, 리스트, 객체 — 만 계속 거부한다.
     """
     value = row.get(key)
     if value is None or isinstance(value, str):
@@ -66,31 +74,27 @@ def _received_amount(
     raw: Mapping[str, Any],
     journey_rows: list[Mapping[str, Any]],
 ) -> str | None:
-    """Recover the amount the app would settle, the way the app computes it.
+    """앱이 정산할 금액을 앱이 계산하는 방식대로 복원한다.
 
-    ``PaymentActivity.G0()`` (``:186-199``) sums ``h_seat_prc + h_seat_fare``
-    per seat into ``totalAmount`` and ``(h_seat_prc + h_seat_fare) - h_rcvd_amt``
-    into ``discountAmount``, then sets ``mReceivedAmount = totalAmount -
-    discountAmount`` — algebraically the plain sum of the per-seat
-    ``h_rcvd_amt``.
+    ``PaymentActivity.G0()``(``:186-199``)은 좌석마다
+    ``h_seat_prc + h_seat_fare`` 를 ``totalAmount`` 에,
+    ``(h_seat_prc + h_seat_fare) - h_rcvd_amt`` 를 ``discountAmount`` 에 더한 뒤
+    ``mReceivedAmount = totalAmount - discountAmount`` 로 둔다. 대수적으로 좌석별
+    ``h_rcvd_amt`` 의 단순 합이다.
 
-    The seat sum is the PRIMARY source here, matching the app. The
-    ``h_tot_rcvd_amt`` key looks like the obvious shortcut, and
-    ``BasketTicketActivity.java:637-641`` does put that figure in the payment
-    bundle — but it puts the reservation response in the same bundle, so
-    ``PaymentActivity.java:169`` takes the recalculating branch and the
-    extra is never read. There is no live path in the APK by which
-    ``h_tot_rcvd_amt`` reaches ``hidMnsStlAmt1``. Preferring it was therefore
-    preferring a number the app deliberately ignores, and the two can only
-    agree by luck once add-on products, fees or mileage land at a different
-    moment than the seat rows.
+    여기서도 좌석 합이 **1차 출처**이며 앱과 같다. ``h_tot_rcvd_amt`` 키가
+    지름길처럼 보이고 ``BasketTicketActivity.java:637-641`` 이 그 값을 결제
+    번들에 넣기는 하지만, 같은 번들에 예약 응답도 넣기 때문에
+    ``PaymentActivity.java:169`` 가 다시 계산하는 가지를 타고 그 엑스트라는 읽히지
+    않는다. APK 안에 ``h_tot_rcvd_amt`` 가 ``hidMnsStlAmt1`` 에 닿는 살아 있는
+    경로가 없다. 두 값은 부가상품·수수료·마일리지가 좌석 행과 다른 시점에
+    반영되는 순간 갈라진다.
 
-    When both sources are readable and disagree, this refuses outright rather
-    than picking one: a settlement whose amount is ambiguous is exactly the
-    thing that must not reach the wire. ``h_tot_rcvd_amt`` remains the fallback
-    for a response that carries no seat rows at all.
+    두 출처를 모두 읽을 수 있는데 값이 다르면 하나를 고르지 않고 거부한다.
+    금액이 모호한 정산이야말로 전선에 올라서는 안 되는 것이다. 좌석 행이 아예
+    없는 응답에서는 ``h_tot_rcvd_amt`` 가 대체 출처로 남는다.
 
-    Returns ``None`` rather than a partial figure when neither source is usable.
+    둘 다 쓸 수 없으면 부분적인 숫자 대신 ``None`` 을 돌려준다.
     """
     declared = _optional_string(raw, "h_tot_rcvd_amt", context="reservation")
     if declared is not None:
@@ -383,14 +387,14 @@ _DISCOUNT_CARD_PURCHASE_FIELDS = {
 def parse_discount_card_purchase_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardPurchaseResponse:
-    """Parse ``research.dcntCrdInfo.do``'s reply.
+    """``research.dcntCrdInfo.do`` 의 응답을 파싱한다.
 
     ``NCardReservationDao.NCardReservationResponse``
-    (``dao/research/NCardReservationDao.java:127-174``). ``mStationInfo`` and
-    ``mUserNames`` are absent from the model because the app writes them
-    locally after the call (``:167-173``) and the server never sends them.
+    (``dao/research/NCardReservationDao.java:127-174``). ``mStationInfo`` 와
+    ``mUserNames`` 는 모델에 없다. 앱이 호출 뒤 지역적으로 채우는 값이고
+    (``:167-173``) 서버는 보내지 않는다.
 
-    **NOT LIVE-VERIFIED.** Never sent, so never observed.
+    **라이브 미검증.** 전송된 적이 없으므로 관측된 적도 없다.
     """
     data = _response_mapping(raw)
     base = BaseKorailResponse.from_raw(data)

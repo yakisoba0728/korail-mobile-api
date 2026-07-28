@@ -1,3 +1,16 @@
+"""리무진 연계 조회의 요청 질의와 응답 타입.
+
+``lmu.scdlQry.do``(운행 스케줄), ``lms.TResidualSeatsResearch.do``(좌석
+재고), ``seatMovie.LimousineScheduleView``(좌석이동 화면의 열차 목록) 세
+라우트가 쓴다.
+
+``*Query`` 세 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서
+자릿수·형식을 검사한다. 역은 라우트마다 다르게 준다 — 스케줄과 좌석 재고는
+역**코드**(4자리), 좌석이동 목록은 역**이름**이다. 모든 필드가
+``repr=False`` 라서 질의 객체를 로그에 찍어도 승객 구성이 새지 않는다.
+
+라이브 미검증 — 요청과 응답 모양은 모두 APK 선언에서 나왔다.
+"""
 from __future__ import annotations
 
 from collections.abc import Mapping

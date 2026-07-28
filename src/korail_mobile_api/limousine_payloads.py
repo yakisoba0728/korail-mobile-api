@@ -1,3 +1,14 @@
+"""리무진 연계 조회의 요청 폼 빌더.
+
+:mod:`korail_mobile_api.limousine_models` 의 질의를 전선 키로 옮긴다.
+``validate_*`` 함수는 질의가 **정확히** 그 타입인지(하위 클래스는 거부)
+확인한 뒤 ``__post_init__`` 의 검사를 다시 돌린다. 그래서 얼어붙은
+데이터클래스를 우회해 만든 객체도 빌더를 통과하지 못한다.
+
+세 폼 모두 공통 ``Device``/``Version`` 을 직접 싣는다.
+:func:`build_limousine_schedule_view_form` 만은 공통 ``Key`` 대신 호출자가
+넘긴 ``Sid``(:func:`~korail_mobile_api.crypto.generate_sid`)를 싣는다.
+"""
 from __future__ import annotations
 
 from collections.abc import Callable

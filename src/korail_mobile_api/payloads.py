@@ -1,3 +1,15 @@
+"""읽기 라우트 가운데 기본 조회들의 요청 폼 빌더.
+
+열차 조회(``seatMovie.ScheduleView``), 좌석 조회, 역 정보, 공통코드,
+승차권 목록, MaaS 메뉴의 폼을 만든다. 나머지 읽기 라우트는
+:mod:`korail_mobile_api.read_payloads`, 상태 변경은
+:mod:`korail_mobile_api.mutation_payloads` 에 있다.
+
+여기 함수들은 dict 를 돌려줄 뿐 아무것도 보내지 않는다. 필드 이름과 순서는
+APK 의 Retrofit 선언에서 나왔고,
+:mod:`korail_mobile_api.safety` 의 필드 계약이 전송 직전에 그것을 다시
+확인한다.
+"""
 import time
 
 from .config import KorailConfig
@@ -243,34 +255,33 @@ def build_train_search_form(
     continuation: TrainSearchContinuation | None = None,
     transfer: bool = False,
 ) -> dict[str, str]:
-    """Build the ``seatMovie.ScheduleView`` form for one page of results.
+    """``seatMovie.ScheduleView`` 폼을 한 페이지 분량으로 만든다.
 
-    With ``continuation=None`` this is the app's first-page request: ``b5/c.java``
-    calls ``setQryDvCd("1")`` (``:145``), ``setSelectTransferPage("0", "10")``
-    (``:146``) and ``setSelectTransferPages("00000", "")`` (``:147``)
-    unconditionally on every search, so ``qryDvCd``/``qryStNo``/``pgPrCnt``/
-    ``qryStTrnNo``/``qryStTrnNo2`` are always on the wire — they are not optional
-    transfer-only extras. Pass a :class:`TrainSearchContinuation` (from
-    :meth:`TrainSearchResult.next_page`) to request the page after that one.
+    ``continuation=None`` 이면 앱의 첫 페이지 요청이다. ``b5/c.java`` 는 모든
+    검색에서 ``setQryDvCd("1")``(``:145``),
+    ``setSelectTransferPage("0", "10")``(``:146``),
+    ``setSelectTransferPages("00000", "")``(``:147``)를 조건 없이 부르므로
+    ``qryDvCd``/``qryStNo``/``pgPrCnt``/``qryStTrnNo``/``qryStTrnNo2`` 는 항상
+    전선에 오른다 — 환승 전용 부가 필드가 아니다. 그다음 페이지는
+    :meth:`TrainSearchResult.next_page` 가 준
+    :class:`TrainSearchContinuation` 을 넘겨 요청한다.
 
-    ``transfer=True`` asks the same endpoint for 환승 itineraries instead of
-    직통 runs. Exactly one field moves: ``radJobId`` goes from
-    :data:`~korail_mobile_api.KORAIL_DIRECT_ITINERARY_CODE` to
-    :data:`~korail_mobile_api.KORAIL_TRANSFER_ITINERARY_CODE`. That really is
-    the whole of the app's own transfer re-query. Its WRD000061 dialog handler
-    (``DirectInquiryActivity.java:284-296``, the ``102``/확인 branch of ``n3``)
-    calls ``rsvInquiryRequest.setRadJobId(TRANSFER_SQ_NO.getCode())`` on the
-    *same* ``RsvInquiryRequest`` object it had already built for the direct
-    search and hands that object straight to ``TransferInquiryActivity`` as the
-    ``INQUIRY_REQUEST`` extra; nothing else on it is touched. Confirmed against
-    ``smali/…/DirectInquiryActivity.smali:1677-1689``, which contains no other
-    setter between reading the enum and the ``setRadJobId`` call.
+    ``transfer=True`` 는 같은 엔드포인트에 직통 대신 환승 여정을 묻는다. 움직이는
+    필드는 정확히 하나다. ``radJobId`` 가
+    :data:`~korail_mobile_api.KORAIL_DIRECT_ITINERARY_CODE` 에서
+    :data:`~korail_mobile_api.KORAIL_TRANSFER_ITINERARY_CODE` 로 바뀐다. 앱의
+    환승 재조회도 그게 전부다 — WRD000061 대화상자 처리기
+    (``DirectInquiryActivity.java:284-296``, ``n3`` 의 ``102``/확인 가지)가
+    직통 검색에 쓰던 **바로 그** ``RsvInquiryRequest`` 객체에
+    ``setRadJobId(TRANSFER_SQ_NO.getCode())`` 만 부르고 그대로
+    ``TransferInquiryActivity`` 에 ``INQUIRY_REQUEST`` 로 넘긴다. 다른 것은
+    건드리지 않는다(``smali/…/DirectInquiryActivity.smali:1677-1689``).
 
-    ``chtnCnt``/``chtnRsStnCd1``/``trnGpCnt``/``trnGpCd1`` — the tail of the
-    field list in ``SeatMovieService.java:14`` — are NOT part of it:
-    ``b5/c.java:154-160`` sets those only when the user has additionally pinned a
-    specific 환승역 through the ``TRANSFER_CHTNRSSTNCD`` intent extra, which is a
-    separate screen this client does not drive.
+    ``SeatMovieService.java:14`` 필드 목록 꼬리의
+    ``chtnCnt``/``chtnRsStnCd1``/``trnGpCnt``/``trnGpCd1`` 은 여기 속하지 않는다.
+    ``b5/c.java:154-160`` 은 사용자가 ``TRANSFER_CHTNRSSTNCD`` 인텐트 엑스트라로
+    특정 환승역을 따로 지정했을 때만 그것들을 채우며, 그 화면은 이 클라이언트가
+    다루지 않는다.
     """
     if continuation is not None and type(continuation) is not (
         TrainSearchContinuation

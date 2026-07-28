@@ -1,3 +1,18 @@
+"""HTTP 전송 계층 — 폼·쿼리를 실제로 보내는 유일한 곳.
+
+:class:`KorailHttpClient` 하나가 읽기와 변경을 서로 다른 메서드로 가른다.
+:meth:`~KorailHttpClient.post_form` 과 :meth:`~KorailHttpClient.get_json` 은
+읽기 라우트만, :meth:`~KorailHttpClient.post_mutation_form` 과
+:meth:`~KorailHttpClient.get_mutation_query` 는 변경 라우트만 갈 수 있고,
+어느 쪽도 상대의 라우트에 닿지 못한다. 그 제한은
+:mod:`korail_mobile_api.safety` 의 단언으로 걸린다.
+
+여기서 붙는 것은 공통 세 필드(``Device``/``Version``/``Key``), 필요한
+경로의 DynaPath 헤더, 그리고 응답의 ``h_msg_cd`` 판정
+(:func:`parse_base_response` → :func:`~korail_mobile_api.errors.
+classify_app_error`)이다. 응답을 모델로 바꾸는 일은 하지 않는다 — 그것은
+파서의 몫이다.
+"""
 from __future__ import annotations
 
 import json
@@ -248,24 +263,23 @@ class KorailHttpClient:
         category: MutationCategory,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
-        """Send a state-changing form to an evidenced mutation route.
+        """상태를 바꾸는 폼을 근거가 확인된 변경 라우트로 보낸다.
 
-        This is the ONLY method that transmits to a mutation route, and it is
-        double-gated: ``require_mutation_consent`` must pass for ``category``,
-        ``consent.dry_run`` must be ``False`` (a dry-run preview never reaches
-        the network), and ``assert_mutation_route`` restricts the target to
-        :data:`~korail_mobile_api.safety.KORAIL_MUTATION_ROUTES`. The
-        read-only path (:meth:`post_form`) still refuses these routes, so a
-        mutation can only leave the process through this gate. ``data`` is sent
-        verbatim (the reservation/cancel builders already include the common
-        Device/Version/Key fields); no read-only field allowlist applies.
+        변경 라우트로 전송하는 **유일한** 메서드이며 이중으로 잠겨 있다.
+        ``category`` 에 대한 ``require_mutation_consent`` 가 통과해야 하고,
+        ``consent.dry_run`` 이 ``False`` 여야 하며(미리보기는 네트워크에 닿지
+        않는다), ``assert_mutation_route`` 가 대상을
+        :data:`~korail_mobile_api.safety.KORAIL_MUTATION_ROUTES` 로 제한한다. 읽기
+        경로(:meth:`post_form`)는 이 라우트들을 여전히 거부하므로 변경은 이 문으로만
+        프로세스를 떠난다. ``data`` 는 그대로 전송된다(예약·취소 빌더가 공통
+        Device/Version/Key 필드를 이미 넣는다). 읽기 쪽 필드 허용목록은 적용되지
+        않는다.
 
-        A send in a
         :data:`~korail_mobile_api.safety.KORAIL_CARD_BEARING_MUTATION_CATEGORIES`
-        category carries the PAN in the clear and is gated once more: the
-        consent must state exactly one of ``fake_card_only=True`` (a
-        non-chargeable test card) or ``real_card_acknowledged=True`` (an
-        acknowledged real charge). Neither and both are refused.
+        범주의 전송은 카드번호를 평문으로 싣기 때문에 한 겹 더 잠긴다 — consent 가
+        ``fake_card_only=True``(청구되지 않는 테스트 카드)와
+        ``real_card_acknowledged=True``(실제 청구 인지) 중 정확히 하나를 켜야 한다.
+        둘 다 꺼짐도, 둘 다 켜짐도 거부다.
         """
         require_mutation_consent(consent, category)
         if consent.dry_run:
@@ -345,40 +359,30 @@ class KorailHttpClient:
         category: MutationCategory,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
-        """:meth:`post_mutation_form`, for a mutation the app performs as a GET.
+        """:meth:`post_mutation_form` 의 GET 판. 앱이 GET 으로 수행하는 변경에 쓴다.
 
-        There is exactly one such route today —
-        ``reservation.dcntCrdExtn.do``, declared ``@GET`` with seven
-        ``@Query`` parameters (``ResearchService.java:65-66``) — and it
-        genuinely changes state: it extends a 할인카드's validity period.
+        그런 라우트는 현재 하나뿐이다 — ``reservation.dcntCrdExtn.do``. ``@GET`` 에
+        ``@Query`` 일곱 개로 선언돼 있고(``ResearchService.java:65-66``) 실제로
+        상태를 바꾼다. 할인카드의 유효기간을 연장한다.
 
-        It would have been less code to register it as a POST and send it
-        through :meth:`post_mutation_form`. That was rejected: the registered
-        method would then not be the method the app uses, the request would not
-        be the request the app sends, and the allowlist would be documenting
-        something untrue in order to make a safety check easier to reach. A
-        mutation does not become safer by being mis-registered.
+        이것을 POST 로 등록해 :meth:`post_mutation_form` 에 태우면 코드는 줄지만,
+        등록된 메서드가 앱이 쓰는 메서드가 아니게 되고 허용목록이 사실이 아닌 것을
+        기록하게 된다.
 
-        Every gate of :meth:`post_mutation_form` applies here unchanged:
-        ``require_mutation_consent`` for ``category``, a refusal of
-        ``dry_run=True``, :func:`~korail_mobile_api.safety.assert_mutation_route`
-        against the exact ``(method, path)`` pair,
-        :func:`~korail_mobile_api.safety.assert_mutation_route_category` so a
-        consent for one category cannot be redirected to another's route, and
-        :func:`~korail_mobile_api.safety.assert_mutation_form_shape` on the
-        outgoing values. The last one applies here for the same reason as the
-        rest: this route's query is built by ``_common_fields`` plus four more,
-        exactly like a POST body, so "it is a GET" is not a reason for it to be
-        the one mutation whose values reach the wire unexamined. The read-only
-        path (:meth:`get_json`) still refuses this route, so it can only leave
-        the process through this gate.
+        :meth:`post_mutation_form` 의 모든 게이트가 그대로 적용된다 — ``category``
+        에 대한 ``require_mutation_consent``, ``dry_run=True`` 거부, 정확한
+        ``(method, path)`` 쌍에 대한
+        :func:`~korail_mobile_api.safety.assert_mutation_route`, 범주 교차를 막는
+        :func:`~korail_mobile_api.safety.assert_mutation_route_category`, 나가는
+        값에 대한 :func:`~korail_mobile_api.safety.assert_mutation_form_shape`.
+        마지막 것까지 거는 이유는 이 라우트의 쿼리도 ``_common_fields`` 에 네
+        필드를 더한 것이라 POST 본문과 구조가 같기 때문이다. 읽기
+        경로(:meth:`get_json`)는 이 라우트를 거부한다.
 
-        There is no card branch, because no GET mutation carries a card: no
-        member of
+        카드 분기는 없다.
         :data:`~korail_mobile_api.safety.KORAIL_CARD_BEARING_MUTATION_CATEGORIES`
-        owns a GET route. Adding one would have to add its check here too, and
-        a test asserts the emptiness of that intersection so the omission stays
-        a fact rather than an assumption.
+        중 GET 라우트를 가진 범주가 없기 때문이며, 그 교집합이 비어 있다는 것은
+        테스트가 단언한다.
         """
         require_mutation_consent(consent, category)
         if consent.dry_run:
