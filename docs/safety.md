@@ -16,6 +16,6 @@
   heading-offset=-1
 %}
 
-consent 를 검사하는 함수와 범주 이름은 [API 레퍼런스](reference/index.md) 에 있다 —
+consent 를 검사하는 함수와 범주 이름은 [API 레퍼런스](reference/index.md) 에 있습니다 —
 `require_mutation_consent`, `MutationConsent`, `MutationCategory`,
 `MutationPreview`.

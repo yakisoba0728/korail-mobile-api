@@ -1,39 +1,33 @@
 # Changelog
 
+이 문서는 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따르고,
+이 프로젝트는 [유의적 버전](https://semver.org/lang/ko/)을 따릅니다.
+1.0.0 이전 기록은 당시 형식·언어 그대로 보존합니다.
+
 ## Unreleased
 
 ### Changed
 
-- **DynaPath 는 이제 명시적으로 켜야 한다.** `KorailConfig()` 의 기본값이 꺼짐이 되고,
-  켜는 것은 `KorailConfig(enable_dynapath=True)` 라고 말한 호출자뿐이다. 이 토큰은
-  자동화 탐지를 통과하기 위한 값이라 보낼지 말지를 패키지가 대신 정하지 않는다.
-  1.0.0 은 이것을 기본으로 켰고, 그때는 인자 없는 `KorailClient()` 로 로그인이
-  되게 만드는 것이 목적이었다.
+- **DynaPath 는 이제 명시적으로 켜야 합니다.** `KorailConfig()` 의 기본값이 꺼짐이 되고,
+  켜는 것은 `KorailConfig(enable_dynapath=True)` 라고 말한 호출자뿐입니다. 이 토큰은
+  자동화 탐지를 통과하기 위한 값이라 보낼지 말지를 패키지가 대신 정하지 않습니다.
 - 켜지 않은 채 `login.Login` 을 부르면 요청이 나가기 전에 새 예외
   `KorailDynaPathRequiredError` 로 막히고, 메시지가 `enable_dynapath=True` 와
-  `build_config_from_env()` 를 직접 가리킨다. 그냥 헤더를 빼고 보내면 서버가 대신
-  거절하는데 그 거절이 "앱을 최신 버전으로 업데이트"로 위장돼 오므로, 설정 문제가
-  버전 문제로 오진된다 — 그 오진은 이 저장소에서 실제로 한 번 일어났다.
-- **막는 경로는 허용목록 전체가 아니라 `DYNAPATH_REQUIRED_PATHS` 하나다.** 토큰 없이
-  거절이 관측된 것은 `login.Login` 뿐이고 검색을 비롯한 읽기는 토큰 없이 성공한 것이
-  관측됐다. 관측되지 않은 것까지 막으면 잘 되던 읽기를 이 패키지가 끊는 셈이라,
-  근거가 있는 하나만 요구한다. 다른 경로에서 거절이 관측되면 그때 추가한다.
-- `enable_dynapath` 는 필드 목록 **맨 끝** 에 붙였다. `dynapath` 는 여덟 번째 위치
-  인자로 남아 있고, 중간에 끼웠다면 이미 위치 인자로 쓰던 호출의 뜻이 조용히 바뀌었을
-  것이다. `tests/test_public_contract.py` 가 그것을 잡았다.
+  `build_config_from_env()` 를 가리킵니다. 헤더를 빼고 보내면 서버의 거절이 "앱을 최신
+  버전으로 업데이트"(`MACRO ERROR`)로 위장돼 오므로 설정 문제가 버전 문제로 오진됩니다.
+- **막는 경로는 허용목록 전체가 아니라 `DYNAPATH_REQUIRED_PATHS` 하나입니다.** 토큰 없이
+  거절이 관측된 것은 `login.Login` 뿐이고, 검색을 비롯한 읽기는 토큰 없이 성공했습니다.
+- `enable_dynapath` 는 필드 목록 **맨 끝** 에 붙였습니다. `dynapath` 는 여덟 번째 위치
+  인자로 남습니다.
 
 ### Added
 
-- `KorailDynaPathRequiredError` — 토큰이 필요한 경로를 꺼진 설정으로 불렀을 때.
-  서버가 거절한 `KorailDynaPathError` 와 다르다. 이쪽은 아직 아무것도 보내지 않았다.
+- `KorailDynaPathRequiredError` — 토큰이 필요한 경로를 꺼진 설정으로 불렀을 때. 서버가
+  거절한 `KorailDynaPathError` 와 달리 아직 아무것도 보내지 않았습니다.
 - `enabled_dynapath_config()` — `enable_dynapath=True` 가 내부에서 부르는 것.
-  `DynapathConfig` 를 직접 구성할 때 쓴다.
+  `DynapathConfig` 를 직접 구성할 때 씁니다.
 - `korail_mobile_api.constants.DYNAPATH_REQUIRED_PATHS`. 형제인
-  `DYNAPATH_ALLOWLIST_PATHS` 와 마찬가지로 전송 계층 상수라 최상위에 올리지 않는다.
-
-이 문서는 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따르고,
-이 프로젝트는 [유의적 버전](https://semver.org/lang/ko/)을 따른다.
-1.0.0 이전 기록은 당시 형식·언어 그대로 보존한다.
+  `DYNAPATH_ALLOWLIST_PATHS` 와 마찬가지로 전송 계층 상수라 최상위에 올리지 않습니다.
 
 ## 1.0.0 - 2026-07-27
 

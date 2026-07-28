@@ -1,26 +1,26 @@
 name: 버그 신고
-description: 클라이언트가 KORAIL 앱의 동작이나 이 저장소의 문서와 어긋난다.
+description: 클라이언트가 KORAIL 앱의 동작이나 이 저장소의 문서와 어긋납니다.
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
         **채우기 전에: 자격증명, 토큰, 쿠키, PNR(예약번호), 승차권 번호, 전화번호, 실명,
-        운영 서버의 원본 응답을 이 신고 어디에도 붙여넣지 마라** — 설명에도, 픽스처에도,
-        스크린샷에도. 이 클라이언트는 실제 발권 서비스와 통신하며, 여기 붙여넣은 것은
-        공개된다. 재현에 실제 응답이 필요하다면 먼저 위생처리하거나(값을 바꾸고 버그를
-        보여주는 필드명과 구조만 남긴다) `file:line` 인용과 함께 자기 말로 설명하라.
+        운영 서버의 원본 응답을 이 신고 어디에도 붙여넣으면 안 됩니다** — 설명에도,
+        픽스처에도, 스크린샷에도. 이 클라이언트는 실제 발권 서비스와 통신하며, 여기 붙여넣은
+        것은 공개됩니다. 재현에 실제 응답이 필요하다면 먼저 값을 바꾸고 버그를 보여주는
+        필드명과 구조만 남기거나, `file:line` 인용과 함께 자기 말로 설명해 주십시오.
 
         보안과 관련된 문제(의도치 않은 상태 변경, 승인되지 않은 과금, 자격증명·개인정보
         노출)라면 이 양식을 쓰지 말고
         [GitHub Security Advisories](https://github.com/yakisoba0728/korail-mobile-api/security/advisories/new)
-        로 신고하라.
+        로 신고해 주십시오.
   - type: textarea
     id: what-happened
     attributes:
       label: 무슨 일이 일어났나
       description: >-
-        무엇을 호출했고, 무엇을 기대했고, 대신 무엇을 받았나?
+        무엇을 호출했고, 무엇을 기대했고, 대신 무엇을 받았습니까?
     validations:
       required: true
   - type: textarea
@@ -29,7 +29,8 @@ body:
       label: 근거
       description: >-
         실제 출력을 붙여넣기보다 디컴파일된 APK 인용(클래스·파일과 줄 번호)이나 위생처리한
-        재현을 우선하라. 응답 본문을 넣어야 한다면 모든 값을 가리고 필드명과 구조만 남겨라.
+        재현을 우선해 주십시오. 응답 본문을 넣어야 한다면 모든 값을 가리고 필드명과 구조만
+        남겨야 합니다.
       placeholder: |
         예: "ReservationService.java:23-25 가 이 클라이언트가 빠뜨린 필드 X 를 보낸다"
     validations:
