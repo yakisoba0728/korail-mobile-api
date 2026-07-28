@@ -1038,6 +1038,10 @@
 
 ### 검증 기록
 
+범위를 정해 실행한 라이브 확인 기록이다. 각 항목은 실행 당시의 원문 그대로 두며,
+같은 문장이 `docs/verification-record.md` 와 `docs/IMPLEMENTATION_PROGRESS.md` 에도
+있다.
+
 - Documented: two live observations from 2026-07-26 that are server rules, not
   package defects. `ERR299943 예약할인이 지원되지 않습니다` refused 청소년 alone
   and 1~3급 장애 + 안내견 while six other mixes were accepted; the code has zero
