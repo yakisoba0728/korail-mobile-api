@@ -1,48 +1,43 @@
-name: Bug report
-description: Something in the client diverges from what the KORAIL app does, or from what it documents itself as doing.
+name: 버그 신고
+description: 클라이언트가 KORAIL 앱의 동작이나 이 저장소의 문서와 어긋난다.
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        **Before you fill this in: do not paste credentials, tokens, cookies,
-        PNRs (reservation numbers), ticket numbers, phone numbers, real names,
-        or raw production server responses anywhere in this report** — not in
-        the description, not in a fixture, not in a screenshot. This client
-        talks to a real ticketing service; anything you paste here becomes
-        public. If your reproduction needs a real response, sanitize it first
-        (replace values, keep only the field names and structure that show
-        the bug) or describe it in your own words with a `file:line` citation
-        instead.
+        **채우기 전에: 자격증명, 토큰, 쿠키, PNR(예약번호), 승차권 번호, 전화번호, 실명,
+        운영 서버의 원본 응답을 이 신고 어디에도 붙여넣지 마라** — 설명에도, 픽스처에도,
+        스크린샷에도. 이 클라이언트는 실제 발권 서비스와 통신하며, 여기 붙여넣은 것은
+        공개된다. 재현에 실제 응답이 필요하다면 먼저 위생처리하거나(값을 바꾸고 버그를
+        보여주는 필드명과 구조만 남긴다) `file:line` 인용과 함께 자기 말로 설명하라.
 
-        If this is a security-relevant issue (unintended state change,
-        unapproved charge, or credential/PII exposure), stop and use
+        보안과 관련된 문제(의도치 않은 상태 변경, 승인되지 않은 과금, 자격증명·개인정보
+        노출)라면 이 양식을 쓰지 말고
         [GitHub Security Advisories](https://github.com/yakisoba0728/korail-mobile-api/security/advisories/new)
-        instead of this form.
+        로 신고하라.
   - type: textarea
     id: what-happened
     attributes:
-      label: What happened
+      label: 무슨 일이 일어났나
       description: >-
-        What did you call, what did you expect, and what did you get instead?
+        무엇을 호출했고, 무엇을 기대했고, 대신 무엇을 받았나?
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
-      label: Evidence
+      label: 근거
       description: >-
-        Prefer a decompiled-APK citation (class/file and line) or a sanitized
-        reproduction over pasted real output. If you're including a response
-        body, redact every value and keep only field names / structure.
+        실제 출력을 붙여넣기보다 디컴파일된 APK 인용(클래스·파일과 줄 번호)이나 위생처리한
+        재현을 우선하라. 응답 본문을 넣어야 한다면 모든 값을 가리고 필드명과 구조만 남겨라.
       placeholder: |
-        e.g. "ReservationService.java:23-25 sends field X that this client omits"
+        예: "ReservationService.java:23-25 가 이 클라이언트가 빠뜨린 필드 X 를 보낸다"
     validations:
       required: false
   - type: input
     id: version
     attributes:
-      label: Package version
-      description: "korail_mobile_api.__version__, or the commit SHA if installed from source"
+      label: 패키지 버전
+      description: "korail_mobile_api.__version__, 소스에서 설치했다면 커밋 SHA"
     validations:
       required: true

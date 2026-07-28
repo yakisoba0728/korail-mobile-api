@@ -1,123 +1,102 @@
-# Contributing
+# 기여 안내
 
-## Workflow
+## 작업 순서
 
-1. Fork and branch from `main`.
-2. Make your change. If it touches documentation, expect a test to check it —
-   see "Documentation is measured, not asserted" below before you write a
-   number or a claim by hand.
-3. Run the three offline gates before opening a pull request:
+1. 포크하고 `main` 에서 브랜치를 딴다.
+2. 변경한다. 문서를 건드린다면 그것을 검사하는 테스트가 있다고 보면 된다. 숫자나 주장을
+   손으로 쓰기 전에 아래 "문서는 재는 것이지 주장하는 것이 아니다"를 먼저 읽어라.
+3. 풀 리퀘스트를 열기 전에 오프라인 게이트 세 개를 돌린다.
 
    ```bash
    pip install -e ".[dev]"                                     # test + ruff + pyright
    env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"
-   ruff check .                                                # must report 0
-   pyright                                                     # must report 0 errors
+   ruff check .                                                # 0 이어야 한다
+   pyright                                                     # 오류 0 이어야 한다
    ```
 
-   All three must pass with no network access, and CI runs the same three.
-   `".[test]"` still installs just enough for the suite if that is all you
-   want.
+   셋 다 네트워크 없이 통과해야 하고, CI 도 같은 셋을 돌린다. 스위트만 돌리고 싶다면
+   `".[test]"` 로도 충분하다.
 
-   Both tools read their configuration from `pyproject.toml` and nowhere else,
-   so your editor (Pylance + the Ruff extension — see
-   `.vscode/extensions.json`) reports exactly what CI will. If you disagree
-   with a rule, argue with the comment next to it in `[tool.ruff.lint]` or
-   `[tool.pyright]`; each one records what was measured and why.
+   두 도구는 설정을 `pyproject.toml` 에서만 읽으므로, 편집기(Pylance + Ruff 확장 —
+   `.vscode/extensions.json` 참고)가 CI 와 똑같은 결과를 보여준다. 규칙에 이견이 있다면
+   `[tool.ruff.lint]` 나 `[tool.pyright]` 의 해당 항목 옆 주석을 보라. 무엇을 재서 그렇게
+   정했는지 적혀 있다.
 
-   Two things that are settled and should not be quietly reversed:
+   되돌리지 말아야 할 결정이 둘 있다.
 
-   - **`ruff format` is not adopted.** The hand-aligned comment tables and
-     APK-evidence blocks in this codebase are its documentation, and a
-     formatter rewrites them. `ruff check` is the gate; formatting is not.
-   - **pyright runs in `basic` mode with a `strict` list of individual
-     modules.** That list is not a taste judgement — it is every module that
-     already measures zero errors under `strict`, re-derivable by running
-     pyright once per file. Adding a module to it is welcome; making a module
-     on it fail is a regression.
-4. Do not run the live-service tests (`-m live` / `KORAIL_MOBILE_API_LIVE=1`)
-   as part of a contribution. They require a real account and make real
-   requests against `smart.letskorail.com`; that is the maintainer's call to
-   make against their own account, not something a contribution should
-   trigger. See "Reporting a bug" below for what evidence to include instead.
-5. Open a pull request. **Before you do, read the checklist in
-   `.github/pull_request_template.md` about not pasting credentials, PNRs, or
-   real server responses** — it applies to the PR description and to every
-   diff, fixture, and screenshot in it.
+   - **`ruff format` 은 쓰지 않는다.** 이 코드베이스의 손으로 정렬한 주석 표와 APK 근거
+     블록은 그 자체가 문서인데 포매터가 그것을 다시 쓴다. 게이트는 `ruff check` 이고
+     포매팅은 게이트가 아니다.
+   - **pyright 은 `basic` 모드로 돌되 모듈 단위 `strict` 목록을 함께 쓴다.** 그 목록은
+     취향이 아니라 `strict` 에서 이미 오류 0 을 기록한 모듈 전부이며, 파일별로 pyright 을
+     한 번씩 돌리면 다시 유도할 수 있다. 목록에 모듈을 추가하는 것은 환영이고, 목록에
+     있는 모듈을 실패하게 만드는 것은 회귀다.
+4. 기여의 일부로 라이브 서비스 테스트(`-m live` / `KORAIL_MOBILE_API_LIVE=1`)를 돌리지
+   마라. 실제 계정이 필요하고 `smart.letskorail.com` 에 실제 요청을 보낸다. 그것은
+   관리자가 자기 계정에 대해 판단할 일이지 기여가 유발할 일이 아니다. 대신 어떤 근거를
+   담을지는 아래 "버그 신고"를 보라.
+5. 풀 리퀘스트를 연다. **열기 전에 `.github/pull_request_template.md` 의 체크리스트에서
+   자격증명·PNR·실제 서버 응답을 붙여넣지 말라는 항목을 읽어라.** 이는 PR 설명뿐 아니라
+   그 안의 모든 diff, 픽스처, 스크린샷에 적용된다.
 
-## Documentation is measured, not asserted
+## 문서는 재는 것이지 주장하는 것이 아니다
 
-This repository has repeatedly caught documentation drifting out of sync with
-the code it describes — route counts, method names, and test counts have each
-been wrong in the README at some point because they were hand-maintained
-literals nobody re-derived when the code moved on. `tests/test_readme.py` and
-`tests/test_release_readiness.py` exist to catch that class of drift by
-deriving the expected value from the code (`korail_mobile_api.__all__`,
-`safety.KORAIL_READ_ONLY_ROUTES`, `inspect.getmembers(KorailClient, ...)`,
-and similar) and asserting the document states that derived value — not by
-freezing a number in the test itself.
+라우트 개수, 메서드 이름, 테스트 개수처럼 코드에서 유도되는 값은 문서에 손으로 적는 순간
+코드가 움직일 때 조용히 틀린다. `tests/test_readme.py` 와 `tests/test_release_readiness.py`
+는 기대값을 테스트 안에 얼려두는 대신 코드(`korail_mobile_api.__all__`,
+`safety.KORAIL_READ_ONLY_ROUTES`, `inspect.getmembers(KorailClient, ...)` 등)에서 유도한
+다음, 문서가 그 유도된 값을 말하고 있는지를 단언한다.
 
-If your change adds or removes a public name, a route, or a mutation method,
-expect an existing test to fail until you update the prose that names it. If
-you add a new hand-maintained count anywhere (a document or a test), prefer
-deriving it from the code instead; a second hand-kept copy of a number is how
-this repository's drift happened the first three times.
+공개 이름, 라우트, 상태 변경 메서드를 더하거나 지우면 그것을 언급하는 문장을 고칠 때까지
+기존 테스트가 실패한다. 새로 세어야 할 값이 생기면 문서든 테스트든 손으로 적지 말고 코드에서
+유도하라.
 
-## Changes to the mutation consent / safety model
+## 동의·안전 모델을 바꾸는 경우
 
-This package ships a small, consent-gated mutation surface (see
-`docs/MUTATION_HANDOFF.md` and `SECURITY.md`) on top of a much larger
-read-only one. Every mutation method is denied by default, gated by category,
-route-owner-checked, and form-shape-checked before anything leaves the
-process — see `src/korail_mobile_api/consent.py` and `safety.py` for the
-mechanism, and `docs/library-build-guide.md` ("Suggested Library Modules" /
-mutation policy) for the standard this was held to when it was authorized.
+이 패키지는 훨씬 큰 읽기 전용 표면 위에 작은 동의 기반 상태 변경 표면을 얹고 있다
+(`docs/MUTATION_HANDOFF.md` 와 `SECURITY.md` 참고). 모든 상태 변경 메서드는 기본이 거부이며,
+범주로 게이트되고, 라우트 소유자를 확인하고, 폼 형태를 확인한 뒤에야 프로세스 밖으로
+나간다. 기제는 `src/korail_mobile_api/consent.py` 와 `safety.py` 에 있고, 이 표면이 승인될
+때 지켜진 기준은 `docs/library-build-guide.md` ("Suggested Library Modules" / mutation
+policy)에 있다.
 
-A pull request that touches any of the following is held to that same
-standard, not a lower one for being "just a fix":
+다음 중 하나라도 건드리는 풀 리퀘스트는 "고치는 것뿐"이라는 이유로 낮은 기준이 적용되지
+않는다.
 
-- adding a new mutation route or category to the allowlist in `safety.py`,
-- widening what `require_mutation_consent`, `post_mutation_form`, or
-  `get_mutation_query` accept,
-- changing a default (`dry_run`, `fake_card_only`,
-  `real_card_acknowledged`, or any per-category `allow_*` flag) toward
-  permissive,
-- changing what `redact_payload` treats as sensitive.
+- `safety.py` 의 허용 목록에 상태 변경 라우트나 범주를 추가하는 것,
+- `require_mutation_consent`, `post_mutation_form`, `get_mutation_query` 가 받아들이는
+  범위를 넓히는 것,
+- 기본값(`dry_run`, `fake_card_only`, `real_card_acknowledged`, 범주별 `allow_*` 플래그)을
+  허용하는 쪽으로 바꾸는 것,
+- `redact_payload` 가 민감하다고 보는 대상을 바꾸는 것.
 
-Concretely, that means:
+구체적으로는 이렇다.
 
-- **Cite your evidence by file:line, not by assertion.** A claim about what
-  the app sends needs a decompiled-APK citation (`ClassName.java:NN`, or the
-  equivalent smali) or a specific bounded live-evidence run — the same
-  citation discipline the rest of this repository's audits use. "I believe
-  the app does X" is not evidence; "`TCReservationDao.java:23-40` builds this
-  FieldMap" is.
-- **Do not paste decompiled source.** Point at `file:line` and describe it in
-  your own words; quote wire names only (route paths, `@Field`/`@Query` keys,
-  literal constant values) in short backtick spans. This repository does not
-  reproduce the app's own source text, and a PR that does will need to be
-  rewritten before it can be merged.
-- **A new mutation capability needs review, not just tests passing.** The
-  four-part bar this project used for every mutation category it has shipped
-  is unchanged: a separate safety design, new evidence, independent review,
-  and explicit user authorization. A green test suite demonstrates the code
-  does what you built it to do; it does not by itself demonstrate that the
-  thing you built should be allowed to exist. Open an issue describing the
-  capability and its evidence before sending a large diff — it is much
-  cheaper to agree on the safety design before the code exists than after.
-- **No new hand-maintained list.** If your change needs to be reflected in a
-  count or a name list somewhere, make that list (or count) derive from
-  `safety.py` / `consent.MUTATION_CATEGORIES` / the client class the way the
-  existing tests do, rather than adding a document that repeats it by hand.
+- **근거는 주장이 아니라 file:line 으로 대라.** 앱이 무엇을 보내는지에 대한 주장에는
+  디컴파일된 APK 인용(`ClassName.java:NN` 또는 그에 해당하는 smali)이나 범위가 정해진
+  라이브 실행 근거가 필요하다. 이 저장소의 다른 감사들이 쓰는 인용 규율과 같다. "앱이 X 를
+  할 것 같다"는 근거가 아니고, "`TCReservationDao.java:23-40` 이 이 FieldMap 을 만든다"가
+  근거다.
+- **디컴파일된 소스를 붙여넣지 마라.** `file:line` 을 가리키고 내용은 자기 말로 설명하라.
+  와이어 이름(라우트 경로, `@Field`/`@Query` 키, 리터럴 상수값)만 짧은 백틱으로 인용하라.
+  이 저장소는 앱의 소스 텍스트를 재생산하지 않으며, 그렇게 한 PR 은 병합 전에 다시 써야
+  한다.
+- **새 상태 변경 기능은 테스트 통과가 아니라 검토를 통과해야 한다.** 이 프로젝트가 지금까지
+  모든 상태 변경 범주에 적용한 네 가지 기준은 그대로다. 별도의 안전 설계, 새 근거, 독립
+  검토, 그리고 사용자의 명시적 승인. 스위트가 초록이라는 것은 코드가 만든 대로 동작한다는
+  뜻이지 그것이 존재해도 된다는 뜻이 아니다. 큰 diff 를 보내기 전에 기능과 근거를 적은
+  이슈를 먼저 열어라.
+- **손으로 유지되는 목록을 새로 만들지 마라.** 변경 때문에 어딘가의 개수나 이름 목록을
+  고쳐야 한다면, 기존 테스트가 하듯 `safety.py` / `consent.MUTATION_CATEGORIES` / 클라이언트
+  클래스에서 유도되게 만들어라.
 
-## Reporting a bug
+## 버그 신고
 
-Open an issue using the bug report template
-(`.github/ISSUE_TEMPLATE/`). Prefer a decompiled-APK citation
-(`file:line`) or a minimal, sanitized reproduction over pasted real output —
-see the template for what not to include.
+버그 신고 템플릿(`.github/ISSUE_TEMPLATE/`)으로 이슈를 연다. 실제 출력을 붙여넣기보다
+디컴파일된 APK 인용(`file:line`)이나 최소한으로 위생처리한 재현을 우선하라. 무엇을 넣지
+말아야 하는지는 템플릿에 있다.
 
-For a security-relevant issue (anything that could cause an unintended state
-change, an unapproved charge, or credential/PII exposure), use
+보안과 관련된 문제(의도치 않은 상태 변경, 승인되지 않은 과금, 자격증명·개인정보 노출로
+이어질 수 있는 것)는 공개 이슈 대신
 [GitHub Security Advisories](https://github.com/yakisoba0728/korail-mobile-api/security/advisories/new)
-instead of a public issue; see `SECURITY.md`.
+를 쓴다. `SECURITY.md` 를 보라.

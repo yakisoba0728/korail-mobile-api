@@ -1304,16 +1304,18 @@ def test_repository_truth_and_full_mutation_policy() -> None:
 def test_canonical_plan_requires_behavioral_release_verification() -> None:
     # The dual-package release-readiness plan under docs/superpowers/plans/ was
     # removed during the docs consolidation; its behavioral release-verification
-    # contract now lives in docs/RELEASE.md ("Behavioral verification contract").
+    # contract now lives in docs/RELEASE.md ("동작 기반 검증 계약"). The document
+    # is Korean, so the four prose requirements are pinned in Korean; the four
+    # that are identifiers or literal commands stay as the wire spells them.
     plan = (ROOT / "docs/RELEASE.md").read_text(encoding="utf-8").casefold()
     for requirement in (
-        "behavioral",
-        "duplicate",
-        "zero-byte",
+        "동작 기반",
+        "중복된 멤버",
+        "0바이트",
         "requires-dist",
         "r:gz",
-        "symlink",
-        "fixed stderr",
+        "심볼릭 링크",
+        "고정된 stderr",
         "set -euo pipefail",
         'pytest -q -m "not live"',
     ):

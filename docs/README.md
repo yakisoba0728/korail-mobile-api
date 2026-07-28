@@ -1,18 +1,13 @@
 # docs/
 
-This directory holds two different kinds of thing, and the difference matters
-more than any index of it would.
+이 디렉터리에는 성격이 다른 두 묶음이 있다.
 
-**Everything directly under `docs/` describes the package** — what it sends,
-what the server answers, what has been proven against the live service and what
-has not. If you are using `korail-mobile-api`, this is material you may want.
+**`docs/` 바로 아래 문서는 패키지를 설명한다.** 클라이언트가 무엇을 보내고, 서버가 무엇을
+답하며, 어디까지 라이브 서비스로 확인됐고 어디부터는 확인되지 않았는지를 다룬다.
+`korail-mobile-api` 를 쓰는 사람이 볼 만한 자료다.
 
-**`docs/internal/` is the development record** — audits, re-verification passes,
-design specs, and the gap plan the package was built from. It is kept because
-the evidence behind a reverse-engineered client is the client's main warranty,
-not because anyone using the package needs to read it.
+**`docs/internal/` 은 개발 기록이다.** 감사, 재검증 기록, 설계 명세, 구현 계획이 들어 있다.
+리버스 엔지니어링 클라이언트의 근거를 남기려고 보관하는 것이지 패키지 사용에 필요한
+자료는 아니다.
 
-For what each individual document contains, see [**Where the deep material
-lives**](../README.md#where-the-deep-material-lives) in the top-level README.
-That table is not repeated here on purpose: a second hand-maintained copy of the
-same list is how the first one goes stale.
+문서별 내용은 최상위 [README](../README.md) 의 심층 자료 표를 보라.

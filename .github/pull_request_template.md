@@ -1,39 +1,32 @@
 <!--
-Before you open this: do not paste credentials, tokens, cookies, PNRs
-(reservation numbers), ticket numbers, phone numbers, real names, or raw
-production server responses anywhere in this PR — not in the description, not
-in a commit message, not in a diff, not in a fixture, not in a screenshot.
-This client talks to a real ticketing service; anything committed here
-becomes public and stays in the git history even if you edit the PR
-description afterward. Sanitize before you paste: replace real values, keep
-only the field names and structure needed to make your point.
+열기 전에: 자격증명, 토큰, 쿠키, PNR(예약번호), 승차권 번호, 전화번호, 실명, 운영 서버의
+원본 응답을 이 PR 어디에도 붙여넣지 마라 — 설명에도, 커밋 메시지에도, diff 에도, 픽스처에도,
+스크린샷에도. 이 클라이언트는 실제 발권 서비스와 통신한다. 여기 커밋된 것은 공개되고, PR
+설명을 나중에 고쳐도 git 히스토리에 남는다. 붙여넣기 전에 위생처리하라. 실제 값을 바꾸고
+논지에 필요한 필드명과 구조만 남긴다.
 -->
 
-## What this changes and why
+## 무엇을 왜 바꾸나
 
-## Evidence
+## 근거
 
 <!--
-For a behavioral claim (the app sends X / the app does Y), cite a
-decompiled-APK file:line or a specific bounded live-evidence run, the way the
-rest of this repository's audits do. Quote wire names (route paths,
-`@Field`/`@Query` keys, literal constants) in short backtick spans only — do
-not paste decompiled source (no ```java/smali/kotlin/xml fences of app code).
+동작에 대한 주장(앱이 X 를 보낸다 / 앱이 Y 를 한다)에는 이 저장소의 다른 감사들이 하듯
+디컴파일된 APK 의 file:line 이나 범위가 정해진 라이브 실행 근거를 대라. 와이어 이름(라우트
+경로, `@Field`/`@Query` 키, 리터럴 상수)만 짧은 백틱으로 인용하고, 디컴파일된 소스는
+붙여넣지 마라(앱 코드의 ```java/smali/kotlin/xml 블록 금지).
 -->
 
-## Checklist
+## 체크리스트
 
-- [ ] `pip install -e ".[test]"` then
-      `env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"` passes
-- [ ] I did not run the live-service tests as part of this change
-- [ ] Any new or changed public name, route, or mutation method is reflected
-      in the documentation the existing tests check (they will fail and tell
-      you where if not)
-- [ ] If this touches the mutation consent / safety model (`safety.py`,
-      `consent.py`, `redact_payload`, or any default toward permissive), I
-      read "Changes to the mutation consent / safety model" in
-      CONTRIBUTING.md and cited evidence accordingly
-- [ ] No hand-maintained count or list was added; anything countable is
-      derived from the code the way the existing tests do
-- [ ] I did not paste credentials, PNRs, real names, phone numbers, or raw
-      production responses anywhere in this PR
+- [ ] `pip install -e ".[test]"` 뒤
+      `env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"` 가 통과한다
+- [ ] 이 변경의 일부로 라이브 서비스 테스트를 돌리지 않았다
+- [ ] 공개 이름·라우트·상태 변경 메서드를 더하거나 바꿨다면 기존 테스트가 검사하는 문서에
+      반영했다(반영하지 않으면 테스트가 실패하며 어디인지 알려준다)
+- [ ] 동의·안전 모델(`safety.py`, `consent.py`, `redact_payload`, 허용하는 쪽으로 바뀌는
+      기본값)을 건드린다면 CONTRIBUTING.md 의 "동의·안전 모델을 바꾸는 경우"를 읽고 그에
+      맞게 근거를 댔다
+- [ ] 손으로 유지되는 개수나 목록을 추가하지 않았다. 셀 수 있는 것은 기존 테스트가 하듯
+      코드에서 유도한다
+- [ ] 자격증명, PNR, 실명, 전화번호, 운영 응답을 이 PR 어디에도 붙여넣지 않았다

@@ -1,8 +1,7 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Report a security vulnerability
+  - name: 보안 취약점 신고
     url: https://github.com/yakisoba0728/korail-mobile-api/security/advisories/new
     about: >-
-      Use this for anything that could cause an unintended state change, an
-      unapproved charge, or credential/PII exposure. Do not open a public
-      issue for it — see SECURITY.md.
+      의도치 않은 상태 변경, 승인되지 않은 과금, 자격증명·개인정보 노출로 이어질 수 있는
+      문제는 여기로 신고한다. 공개 이슈로 열지 마라 — SECURITY.md 를 보라.

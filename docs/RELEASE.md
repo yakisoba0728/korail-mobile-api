@@ -1,21 +1,20 @@
-# Release Gate
+# 개시 게이트
 
-This is the build and verification workflow every release of this package goes
-through: offline tests, a wheel and sdist build, a behavioral contract check
-of both artifacts, and a fresh-environment import outside the checkout. It
-governs how a release is built and verified — it does not authorize any
-production-service request; nothing here talks to `smart.letskorail.com`.
+이 패키지를 개시할 때마다 거치는 빌드·검증 절차다. 오프라인 테스트, wheel·sdist 빌드,
+두 산출물에 대한 동작 기반 계약 검사, 그리고 체크아웃 바깥의 새 환경에서 하는 임포트로
+이루어진다. 개시물을 어떻게 만들고 검증하는지만 정하며, 운영 서비스 요청을 허가하지
+않는다. 여기의 어떤 절차도 `smart.letskorail.com` 과 통신하지 않는다.
 
-## Preconditions
+## 전제
 
-- Start from a clean tracked worktree.
-- Use Python 3.11 or newer and install the test and build tools locally.
-- Live tests are forbidden during this gate. Do not load credentials, local
-  live configuration, cookies, tokens, or production response data.
+- 추적 대상 파일이 깨끗한 워크트리에서 시작한다.
+- Python 3.11 이상을 쓰고 테스트·빌드 도구를 로컬에 설치한다.
+- 이 게이트에서 라이브 테스트는 금지다. 자격증명, 로컬 라이브 설정, 쿠키, 토큰, 운영
+  응답 데이터를 불러오지 마라.
 
-## Test, build, and verify
+## 테스트·빌드·검증
 
-Run from the repository root:
+저장소 루트에서 실행한다.
 
 ```bash
 set -euo pipefail
@@ -67,83 +66,67 @@ cleanup
 trap - EXIT
 ```
 
-The verifier must receive exactly one wheel and one source distribution. The
-fresh import must resolve from `site-packages`, outside the checkout.
+검증기는 wheel 하나와 소스 배포본 하나를 정확히 하나씩만 받아야 한다. 새 환경의 임포트는
+체크아웃 바깥의 `site-packages` 에서 해결돼야 한다.
 
-## Cleanup
+## 뒷정리
 
-The `EXIT` trap removes temporary directories and local build metadata on both
-success and failure. The explicit final cleanup disarms that trap only after all
-checks pass.
+`EXIT` 트랩이 성공·실패 양쪽에서 임시 디렉터리와 로컬 빌드 메타데이터를 지운다. 마지막의
+명시적 `cleanup` 호출은 모든 검사를 통과한 뒤에야 그 트랩을 해제한다.
 
-Finish with `git status --short` and `git diff --check`.
+끝으로 `git status --short` 와 `git diff --check` 를 확인한다.
 
-## Version policy
+## 버전 정책
 
-From `1.0.0`, this project follows semantic versioning: the patch component
-for compatible fixes, the minor component for backward-compatible additions,
-and the major component for breaking changes to `korail_mobile_api`'s own
-public Python API — the names in `korail_mobile_api.__all__` and their
-signatures.
+`1.0.0` 부터 이 프로젝트는 유의적 버전(SemVer)을 따른다. 패치 자리는 호환되는 수정, 마이너
+자리는 하위 호환 추가, 메이저 자리는 `korail_mobile_api` 자신의 공개 Python API —
+`korail_mobile_api.__all__` 에 있는 이름과 그 시그니처 — 에 대한 파괴적 변경을 뜻한다.
 
-That promise is about this package's API and nothing else. It is not a promise
-that KORAIL's servers keep behaving the way this client currently observes
-them to. The mobile app, its endpoints, its request fields and its response
-shapes are KORAIL's, not this project's, to version; they can change without
-notice, and a server-side change can break this client at any version number
-without being a breaking change *of* this client. Semver here covers the
-contract between this code and its callers, not the contract between this
-code and KORAIL.
+이 약속의 대상은 이 패키지의 API 뿐이다. KORAIL 서버가 이 클라이언트가 지금 관찰하는 대로
+계속 동작한다는 약속이 아니다. 모바일 앱, 엔드포인트, 요청 필드, 응답 형태는 이 프로젝트가
+아니라 KORAIL 이 버전을 매기는 것이며 예고 없이 바뀔 수 있다. 서버 쪽 변경은 어떤 버전에서든
+이 클라이언트를 망가뜨릴 수 있고 그것은 이 클라이언트의 파괴적 변경이 아니다. 여기서 SemVer
+가 덮는 것은 이 코드와 호출자 사이의 계약이지 이 코드와 KORAIL 사이의 계약이 아니다.
 
-## Public-release readiness
+## 공개 개시 요건
 
-A release of this package to a public GitHub repository was blocked until four
-items existed and were reviewed: a license, owner metadata, a canonical URL,
-and explicit authorization. As of `1.0.0`, all four are satisfied:
+공개 GitHub 저장소로의 개시는 네 가지를 전제로 하며, `1.0.0` 기준으로 넷 다 충족한다.
 
-- **License.** Apache-2.0, declared as the PEP 639 `license` SPDX expression
-  in `pyproject.toml` and shipped as `LICENSE` in both build artifacts.
-- **Owner metadata.** The `authors` entry in `pyproject.toml`, emitted as the
-  `Author-email` header.
-- **Canonical URL.** `[project.urls]` in `pyproject.toml`, emitted as
-  `Project-URL` headers.
-- **Explicit authorization.** The repository owner explicitly authorized a
-  public release of this project under Apache-2.0 on 2026-07-27.
+- **라이선스.** Apache-2.0. `pyproject.toml` 의 PEP 639 `license` SPDX 식으로 선언하고
+  두 빌드 산출물 모두에 `LICENSE` 로 넣는다.
+- **소유자 메타데이터.** `pyproject.toml` 의 `authors` 항목이며 `Author-email` 헤더로
+  나간다.
+- **정규 URL.** `pyproject.toml` 의 `[project.urls]` 이며 `Project-URL` 헤더로 나간다.
+- **명시적 승인.** 저장소 소유자가 이 프로젝트를 Apache-2.0 으로 공개하는 것을 명시적으로
+  승인했다.
 
-`scripts/verify_distribution.py` enforces the exact values of the first three
-against `pyproject.toml` on every build (see "Behavioral verification
-contract" below); the offline gate no longer stands between a reviewed
-checkout and a release someone is authorized to make.
+앞의 세 가지는 `scripts/verify_distribution.py` 가 빌드마다 `pyproject.toml` 과 대조해
+정확한 값을 강제한다(아래 "동작 기반 검증 계약" 참고).
 
-## Behavioral verification contract
+## 동작 기반 검증 계약
 
-The distribution verifier (`scripts/verify_distribution.py`) and its offline
-suite (`tests/test_release_readiness.py`) enforce a behavioral contract, not a
-presence check. Building meaningful wheel and sdist fixtures, the suite drives
-the verifier's `main()` and asserts real archive and metadata rejection rather
-than confirming that files merely exist. Presence-only checks cannot satisfy
-this contract, and each rule below is exercised by a dedicated adversarial
-fixture.
+배포 검증기(`scripts/verify_distribution.py`)와 그 오프라인 스위트
+(`tests/test_release_readiness.py`)가 강제하는 것은 파일 존재 확인이 아니라 동작 기반
+계약이다. 스위트는 의미 있는 wheel·sdist 픽스처를 실제로 만들어 검증기의 `main()` 을
+돌리고, 아카이브와 메타데이터가 실제로 거부되는지를 단언한다. 존재 확인만으로는 이 계약을
+만족할 수 없으며, 아래 각 규칙마다 그것을 노리는 픽스처가 하나씩 있다.
 
-The behavioral matrix covers:
+동작 검사 항목은 다음과 같다.
 
-- Canonical member paths and normalized duplicate names, so a wheel or sdist
-  that carries a duplicate member is rejected.
-- Zero-byte `py.typed` markers: the marker must be a regular, empty file in both
-  archives; a missing, non-empty, or special-type marker is rejected.
-- Exact metadata: singleton `Name`, `Version`, `Requires-Python`,
-  `License-Expression`, and `Author-email`; the exact classifier and
-  `Project-URL`/`License-File` sets without duplicates, each checked against
-  the value `pyproject.toml` declares; normalized runtime `Requires-Dist`
-  equality with `pyproject.toml`; and rejection of the legacy owner, license,
-  and URL headers a PEP 639 build never emits (`License`, `Author`,
-  `Maintainer`, `Maintainer-email`, `Home-page`, `Download-URL`) — their
-  presence would mean something other than this build wrote the metadata.
-- Archive form: the sdist is inspected as a strict gzip tar (`r:gz`) without
-  extraction, and any symlink, hard link, device, FIFO, or other special member
-  in either archive is rejected.
-- A fixed stderr line on any malformed or unsupported input, never leaking a
-  path, traceback, archive member, or exception text.
+- 정규 멤버 경로와 정규화 후 이름. 중복된 멤버를 실은 wheel 이나 sdist 는 거부된다.
+- 0바이트 `py.typed` 마커. 두 아카이브 모두에서 이 마커는 일반 파일이면서 비어 있어야
+  한다. 없거나, 비어 있지 않거나, 특수 타입이면 거부된다.
+- 정확한 메타데이터. `Name`, `Version`, `Requires-Python`, `License-Expression`,
+  `Author-email` 은 각각 단 하나여야 하고, classifier 집합과 `Project-URL`·`License-File`
+  집합은 중복 없이 `pyproject.toml` 이 선언한 값과 일치해야 하며, 런타임
+  `Requires-Dist` 는 정규화 후 `pyproject.toml` 과 같아야 한다. PEP 639 빌드가 결코 내지
+  않는 구식 소유자·라이선스·URL 헤더(`License`, `Author`, `Maintainer`,
+  `Maintainer-email`, `Home-page`, `Download-URL`)는 거부한다. 그 헤더가 있다는 것은 이
+  빌드가 아닌 무언가가 메타데이터를 썼다는 뜻이다.
+- 아카이브 형태. sdist 는 풀지 않고 엄격한 gzip tar(`r:gz`)로 검사하며, 두 아카이브 중
+  어디에든 심볼릭 링크, 하드 링크, 장치, FIFO 같은 특수 멤버가 있으면 거부한다.
+- 잘못됐거나 지원하지 않는 입력에는 고정된 stderr 한 줄만 낸다. 경로, 트레이스백,
+  아카이브 멤버, 예외 문구를 흘리지 않는다.
 
-The gate itself runs `set -euo pipefail` with an `EXIT` cleanup trap and the
-offline `pytest -q -m "not live"` selection defined above.
+게이트 자체는 위에 정의한 `set -euo pipefail`, `EXIT` 뒷정리 트랩, 오프라인 선택
+`pytest -q -m "not live"` 로 돌아간다.

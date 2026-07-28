@@ -1,32 +1,29 @@
-name: Feature request
-description: A route, read, or capability this client does not have yet.
+name: 기능 요청
+description: 이 클라이언트에 아직 없는 라우트·읽기·기능.
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        **Do not paste credentials, tokens, cookies, PNRs, ticket numbers,
-        phone numbers, real names, or raw production server responses
-        anywhere in this request.** See CONTRIBUTING.md and SECURITY.md.
+        **자격증명, 토큰, 쿠키, PNR, 승차권 번호, 전화번호, 실명, 운영 서버의 원본 응답을
+        이 요청 어디에도 붙여넣지 마라.** CONTRIBUTING.md 와 SECURITY.md 를 보라.
 
-        If this request is for a new **state-changing** (mutation) capability,
-        read "Changes to the mutation consent / safety model" in
-        CONTRIBUTING.md first: it needs a safety design and evidence, not just
-        a description of the feature.
+        상태를 바꾸는 기능을 요청하는 것이라면 CONTRIBUTING.md 의 "동의·안전 모델을 바꾸는
+        경우"를 먼저 읽어라. 기능 설명만으로는 부족하고 안전 설계와 근거가 필요하다.
   - type: textarea
     id: what
     attributes:
-      label: What is missing
-      description: What route or capability, and what would you use it for?
+      label: 무엇이 없나
+      description: 어떤 라우트나 기능이며, 그것으로 무엇을 하려는가?
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
-      label: Evidence
+      label: 근거
       description: >-
-        A decompiled-APK citation (class/file and line) for the route, if you
-        have one. Quote wire names (route paths, field keys) in short
-        backtick spans only — do not paste decompiled source.
+        그 라우트에 대한 디컴파일된 APK 인용(클래스·파일과 줄 번호)이 있다면 적어라.
+        와이어 이름(라우트 경로, 필드 키)만 짧은 백틱으로 인용하고 디컴파일된 소스는
+        붙여넣지 마라.
     validations:
       required: false
