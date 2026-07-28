@@ -27,10 +27,16 @@ from .models import TrainSearchQuery
 
 
 def live_enabled() -> bool:
+    """``KORAIL_MOBILE_API_LIVE=1`` 인지. 라이브 호출의 유일한 스위치다."""
     return os.environ.get("KORAIL_MOBILE_API_LIVE") == "1"
 
 
 def read_credentials_from_env() -> tuple[str, str]:
+    """``KORAIL_MEMBER_NO``·``KORAIL_PASSWORD`` 를 읽어 짝으로 돌려준다.
+
+    둘 중 하나라도 비어 있으면 ``RuntimeError`` 다. 이 패키지는 자격증명을
+    파일에서 읽지 않는다.
+    """
     member_no = os.environ.get("KORAIL_MEMBER_NO")
     password = os.environ.get("KORAIL_PASSWORD")
     if not member_no or not password:
@@ -112,6 +118,17 @@ def build_config_from_env() -> KorailConfig:
 
 
 def run_live_smoke_from_env() -> dict[str, Any]:
+    """실제 서버에 붙어 읽기 표면을 한 바퀴 돌고 결과 요약을 돌려준다.
+
+    ``KORAIL_MOBILE_API_LIVE=1`` 이 아니면 시작하지 않고 ``RuntimeError`` 다.
+    :func:`build_config_from_env` 로 기기 신원을 고정하고
+    :func:`read_credentials_from_env` 로 로그인한 뒤, 앱 기동 데이터·공지·
+    UUID·MaaS 메뉴·역 목록·열차 조회 같은 계정 중립 조회와 로그인이 필요한
+    조회를 차례로 부른다.
+
+    **상태를 바꾸는 라우트는 하나도 부르지 않는다.** 예약·결제·환불은 이
+    경로에 없다.
+    """
     if not live_enabled():
         raise RuntimeError("Set KORAIL_MOBILE_API_LIVE=1 to run live smoke")
     member_no, password = read_credentials_from_env()

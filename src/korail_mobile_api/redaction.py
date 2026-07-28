@@ -569,6 +569,13 @@ def _redact_sensitive_key_value(match: re.Match[str]) -> str:
 
 
 def redact_text(value: str) -> str:
+    """문자열 하나에서 카드번호·세션·민감 키의 값을 가린다.
+
+    카드번호 모양(13~19자리, 사이의 공백·하이픈 포함)은 ``[REDACTED_CARD]``,
+    ``JSESSIONID=…`` 는 값만 ``[REDACTED]``, ``키=값`` 꼴로 문자열 안에 박힌
+    민감 키의 값도 ``[REDACTED]`` 가 된다. 구조를 모르는 로그 한 줄에도 쓸 수
+    있도록 정규식만으로 동작한다.
+    """
     redacted = CARD_RE.sub("[REDACTED_CARD]", value)
     redacted = SENSITIVE_KEY_VALUE_RE.sub(
         _redact_sensitive_key_value,
@@ -578,6 +585,13 @@ def redact_text(value: str) -> str:
 
 
 def redact_url(value: str) -> str:
+    """URL 의 쿼리 파라미터를 키 단위로 가린다.
+
+    scheme 과 netloc 이 없으면 URL 이 아니라고 보고 :func:`redact_text` 로
+    넘긴다. URL 이면 쿼리를 파싱해 민감한 키의 값은 통째로 ``[REDACTED]``,
+    나머지 값은 :func:`redact_text` 를 거친 뒤 다시 조립한다. 빈 값도 보존한다
+    (``keep_blank_values``) — 값이 비어 있다는 사실 자체가 요청의 모양이다.
+    """
     parsed = urlsplit(value)
     if not parsed.scheme or not parsed.netloc:
         return redact_text(value)
@@ -594,6 +608,14 @@ def redact_url(value: str) -> str:
 
 
 def redact_value(value: Any, *, key: str | None = None) -> Any:
+    """임의의 값을 재귀적으로 가린다.
+
+    ``key`` 를 주면 그 이름부터 본다. 민감하면 값을 보지 않고 ``[REDACTED]``
+    다. 그렇지 않으면 타입에 따라 내려간다 — 매핑은 키마다,
+    리스트·튜플은 원소마다(컨테이너 타입을 유지한다), 데이터클래스는 필드 이름을
+    키로 삼아 dict 로 바꾼다. 문자열은 :func:`redact_url` 을 거친다. 나머지
+    타입은 그대로 둔다.
+    """
     if key is not None and is_sensitive_key(key):
         return "[REDACTED]"
     if isinstance(value, Mapping):
@@ -616,6 +638,11 @@ def redact_value(value: Any, *, key: str | None = None) -> Any:
 
 
 def redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
+    """매핑의 각 항목을 키 이름과 함께 :func:`redact_value` 로 가린다.
+
+    응답 봉투나 헤더처럼 최상위가 dict 인 것에 쓴다. 폼/페이로드는 리스트 값을
+    따로 다루는 :func:`redact_payload` 쪽이다.
+    """
     return {
         key: redact_value(value, key=str(key))
         for key, value in data.items()

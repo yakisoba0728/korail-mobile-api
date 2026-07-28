@@ -45,6 +45,17 @@ def validate_seat_inventory_inputs(
     *,
     car_no: int | None = None,
 ) -> None:
+    """좌석 조회에 쓸 열차 행과 인원이 전선에 낼 만한지 검사한다.
+
+    ``train`` 은 :class:`TrainSummary` 여야 하고, 그 행의 식별 필드가 각각
+    정해진 자릿수의 ASCII 숫자여야 한다 — 열차번호(1~5), 열차그룹코드(3),
+    양쪽 역코드(4), 출발일자·운행일자(8), 열차종별코드(2), 양쪽 정차 순서(6).
+    조회 응답에서 그대로 넘긴 행이면 통과한다.
+
+    ``passenger_count`` 는 1~9 의 정수이고, ``car_no`` 를 주면 양의 정수여야
+    한다. :func:`build_seat_car_form` 과 :func:`build_seat_inventory_form` 이
+    폼을 만들기 전에 부른다.
+    """
     if not isinstance(train, TrainSummary):
         raise KorailProtocolError("train must be a TrainSummary")
     if type(passenger_count) is not int or not 1 <= passenger_count <= 9:
@@ -158,6 +169,18 @@ def build_seat_car_form(
     sid: str,
     room_class_code: str = "1",
 ) -> dict[str, str]:
+    """``research.TrainResearch`` 의 호차 목록 조회 폼을 만든다.
+
+    ``txtTrnNo`` 는 다섯 자리로 0 을 채운다. ``txtSeatAttCd`` 는 열차 행이
+    좌석 속성 코드를 가지고 있을 때만 실린다 — ``x4/b.java:19`` 가
+    ``trainInfo.getH_seat_att_cd()`` 를 그대로 넘기고, ScheduleView 행처럼
+    코드가 없으면 Retrofit 이 ``@Field`` 를 떨어뜨리기 때문이다
+    (``ResearchService:37``). 일반석 ``"015"`` 로 대신 채우지 않는다.
+    ``txtGdNo`` 도 값이 없으면 같은 이유로 빠진다.
+
+    ``sid`` 는 요청마다 새로 만든다
+    (:func:`~korail_mobile_api.crypto.generate_sid`).
+    """
     validate_seat_inventory_inputs(train, passenger_count)
     form = {
         "Device": config.device,
@@ -199,6 +222,15 @@ def build_seat_inventory_form(
     sid: str,
     room_class_code: str = "1",
 ) -> dict[str, str]:
+    """``research.TResidualSeatsResearch.do`` 의 좌석표 조회 폼을 만든다.
+
+    :func:`build_seat_car_form` 이 고른 호차 하나를 ``srcarNo`` 로 지목한다.
+    키 철자가 호차 목록 쪽과 다르다 — 이쪽은 ``txt`` 접두사가 없다.
+
+    ``seatAttCd`` 와 ``gdNo`` 는 값이 없으면 빠진다. 호차 목록과 같은 이유이며
+    ``getSeatList`` 도 null ``@Field`` 를 떨어뜨린다(``ResearchService:59``).
+    ``isArrow`` 는 고정 ``"true"``, ``ctlDvCd`` 는 고정 빈 문자열이다.
+    """
     validate_seat_inventory_inputs(
         train,
         passenger_count,
@@ -236,6 +268,11 @@ def build_seat_inventory_form(
 
 
 def build_cache_query(timestamp_ms: int | None = None) -> dict[str, str]:
+    """캐시 파일 요청의 ``timeStamp`` 쿼리를 만든다.
+
+    ``timestamp_ms`` 를 주지 않으면 현재 밀리초 epoch 이다. 음수나 정수가 아닌
+    값은 ``ValueError`` 다. 캐시를 우회하려는 값이라 서버가 내용을 보지 않는다.
+    """
     if timestamp_ms is not None and (
         type(timestamp_ms) is not int or timestamp_ms < 0
     ):
@@ -354,6 +391,11 @@ def build_train_schedule_form(
     run_date: str,
     train_no: str,
 ) -> dict[str, str]:
+    """``research.actualTrainSchedule.do`` 의 정차역·지연 조회 폼을 만든다.
+
+    ``Device``/``Version`` 만 붙고 ``Key`` 는 붙지 않는다. ``trnNo`` 는 다섯
+    자리로 0 을 채운다.
+    """
     return {
         "Device": config.device,
         "Version": config.version,
@@ -370,6 +412,17 @@ def build_common_code_form(
     arrival_date: str = "",
     holiday_yn: str = "",
 ) -> dict[str, object]:
+    """``common.code.do`` 의 공통코드 조회 폼을 만든다.
+
+    ``code`` 는 문자열 하나이거나 목록이며, 하나를 줘도 목록으로 감싸 보낸다 —
+    전선에서는 같은 이름의 반복 키가 된다.
+
+    ``depart_date``·``arrival_date``·``holiday_yn`` 은 비어 있으면 키 자체가
+    빠진다. 화면 크기와 ``OSVersion``(안드로이드 SDK 정수)은 설정에서 온다.
+
+    로그인 직전에 비밀번호 암호화 파라미터를 받아 오는 것도 이 라우트다
+    (:meth:`~korail_mobile_api.session.KorailSessionClient.get_login_crypto_info`).
+    """
     form: dict[str, object] = {
         "Device": config.device,
         "Version": config.version,
@@ -406,6 +459,20 @@ def build_ticket_list_form(
     # purchase-history list (MyTicketService getTicketList). The page rides
     # h_page_no (both app call sites pin it to "1"); history mode additionally
     # carries h_abrd_dt_from/h_abrd_dt_to boarding-date bounds.
+    """``myTicket.MyTicketList`` 의 승차권 목록 조회 폼을 만든다.
+
+    ``txtIndex``(``mode``)는 페이지 커서가 아니라 **목록 종류**다. ``"1"`` 은
+    현재 승차권(``TicketListActivity.java:937-939``), ``"2"`` 는 구매이력
+    (``TicketPurchaseHistoryActivity.java:276-278``)이고 그 밖의 값은
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+
+    ``"2"`` 는 ``boarding_date_from``·``boarding_date_to`` 를 둘 다 요구한다.
+    앱이 그 화면에 들어가는 모든 경로(``:365``, ``:372``, ``:719``)가 두 날짜를
+    갖춘 채 도착하고 ``:277-280`` 이 그것을 보내기 때문이다. ``"1"`` 은 두 값을
+    빈 문자열로 보낸다(``TicketListActivity.java:939-941``).
+
+    페이지는 ``h_page_no`` 로 나가며 1 미만은 1 로 올린다.
+    """
     if mode not in {TICKET_LIST_MODE_ACTIVE, TICKET_LIST_MODE_HISTORY}:
         raise KorailProtocolError(
             'ticket list mode must be "1" (active) or "2" (history)'
@@ -434,6 +501,10 @@ def build_ticket_list_form(
 
 
 def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
+    """``copt.gdMenuLt.do`` 의 MaaS 메뉴 조회 폼 — ``Device``/``Version`` 뿐이다.
+
+    ``Key`` 도 붙지 않는다.
+    """
     return {
         "Device": config.device,
         "Version": config.version,
@@ -441,6 +512,12 @@ def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
 
 
 def build_maas_station_form(additional_service_code: str) -> dict[str, str]:
+    """``EbizMaasStationList.do`` 의 역 목록 조회 폼을 만든다.
+
+    부가서비스 코드(``addSrvDvCd``) 하나뿐이고 공통 필드도 붙지 않는다. 값은
+    :meth:`~korail_mobile_api.client.KorailClient.get_maas_menu_list` 결과의
+    항목에서 온다. 비어 있으면 ``ValueError`` 다.
+    """
     if not isinstance(additional_service_code, str) or not additional_service_code.strip():
         raise ValueError("additional_service_code must be a non-empty string")
     return {"addSrvDvCd": additional_service_code}
