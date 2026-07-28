@@ -1532,6 +1532,8 @@ class KorailClient:
         :class:`~korail_mobile_api.read_models.PriceFareQuoteResponse` 를
         돌려주고 ``fares`` 가 운임 항목이다. ``prcList`` 가 없거나 ``null``
         이면 빈 튜플이 될 뿐 예외가 아니다.
+
+        라이브 미검증.
         """
         form = build_price_fare_quote_form(request)
         return self._run_read(
@@ -1731,7 +1733,9 @@ class KorailClient:
         :class:`~korail_mobile_api.read_models.SelfSeatChangeInfoResponse` 를
         돌려준다. 역 목록과 사유 목록은 각각 비어 있어도 정상이다.
 
-        라이브 미검증 — 자율 변경이 허용된 열차의 실제 승차권이 있어야 닿는다.
+        응답 본문은 미검증이다. 라이브로 한 번 불렀을 때 서버가
+        ``WRT800176``("좌석변경가능시간아님")로 거절했다 — 자율 변경이 허용된
+        시간대의 실제 승차권이 있어야 본문까지 닿는다.
         """
         self._require_session()
         form = build_self_seat_change_info_form(request)
@@ -1757,8 +1761,6 @@ class KorailClient:
         :class:`~korail_mobile_api.read_models.RecentDeliveryHistoryResponse` 를
         돌려주고 ``recipients`` 가 수령자다. 전달 이력이 없으면 빈 튜플이고
         예외가 아니다.
-
-        라이브 미검증.
         """
         self._require_session()
         session = self.session.current
@@ -2123,9 +2125,11 @@ class KorailClient:
         세션 가드가 없어 비로그인으로도 부를 수 있다 — 다만 로그인해 두면
         회원카드번호(``mbCrdNo``)가 폼에 함께 실린다.
 
-        ``query`` 의 역은 역코드와 역이름 둘 다 받는다. 코드를 주면
-        :meth:`get_station_data` 를 한 번 불러 이름으로 바꾼다. 날짜는
-        ``YYYYMMDD``, 시각은 ``HHMMSS`` 이며 그 시각 이후 열차를 준다.
+        ``query`` 의 역은 역코드와 역이름 둘 다 받는다. 이름은 그대로 나가고,
+        코드를 주면 :meth:`get_station_data` 를 한 번 더 불러 이름으로 바꾼다 —
+        첫 조회에만 붙는 왕복이고 그 뒤로는 클라이언트에 캐시된다. 모르는
+        역코드는 :class:`~korail_mobile_api.errors.KorailProtocolError` 다.
+        날짜는 ``YYYYMMDD``, 시각은 ``HHMMSS`` 이며 그 시각 이후 열차를 준다.
 
         :class:`~korail_mobile_api.models.TrainSearchResult` 를 돌려주고
         ``trains`` 가 그 페이지의 행이다. 조건에 맞는 직통 열차가 없으면 빈
@@ -2647,8 +2651,8 @@ class KorailClient:
         입석으로 잡는다. 이 메서드가 그것을 같은 열차의 두 여정 예약으로
         바꾸는데, 나누는 지점은 :meth:`get_merge_seats_inquiry` 가 알려준
         중간역이다. 다섯 단계 전체와 그 근거는
-        :data:`~korail_mobile_api.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` 에
-        적혀 있다.
+        :data:`~korail_mobile_api.constants.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE`
+        에 적혀 있다.
 
         라우트·consent 범주·세션 요구는 :meth:`reserve` 와 같다. 병합예약도
         예약이고 돈을 옮기지 않으므로 범주가 ``"reserve"`` 다.
