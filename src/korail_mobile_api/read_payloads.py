@@ -4,6 +4,7 @@ import time
 from calendar import monthrange
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Literal
 
 from .config import KorailConfig
 from .read_models import (
@@ -572,20 +573,29 @@ def build_korail_point_summary_form() -> dict[str, str]:
     return {"point_dv_cd": "0"}
 
 
+#: :attr:`MileageHistoryRequest.ledger` 의 타입 — ``"1"`` KTX 마일리지,
+#: ``"2"`` 철도포인트. 두 탭이 보내는 값이 전부다. 런타임 검사는
+#: :func:`build_mileage_history_form` 이 계속 한다.
+KorailMileageLedger = Literal["1", "2"]
+
+#: :attr:`MileageHistoryRequest.movement` 의 타입 — ``"0"`` 전체, ``"1"`` 적립,
+#: ``"2"`` 사용. 드롭다운 인덱스라서 세 항목이 곧 세 값이다.
+KorailMileageMovement = Literal["0", "1", "2"]
+
 #: ``pontTpVal`` — which ledger ``mlg.amtSpec.do`` reads.
 #: ``MileageHistoryActivity.java:289,543`` sets ``"1"`` for the KTX 마일리지 tab
 #: (the screen's default) and ``:313`` sets ``"2"`` for the 철도포인트 tab.
-KORAIL_MILEAGE_LEDGER_KTX = "1"
-KORAIL_MILEAGE_LEDGER_RAIL_POINT = "2"
+KORAIL_MILEAGE_LEDGER_KTX: KorailMileageLedger = "1"
+KORAIL_MILEAGE_LEDGER_RAIL_POINT: KorailMileageLedger = "2"
 
 #: ``qryDvVal`` — the 전체/적립/사용 selector, sent as the dropdown INDEX rather
 #: than as a code: ``MileageHistoryActivity.java:566`` assigns
 #: ``Integer.toString(i9)`` straight from ``onItemSelected``, and ``:502``
 #: declares the three entries in this order. ``"0"`` is the field's initial
 #: value (``:134``).
-KORAIL_MILEAGE_MOVEMENT_ALL = "0"
-KORAIL_MILEAGE_MOVEMENT_EARNED = "1"
-KORAIL_MILEAGE_MOVEMENT_SPENT = "2"
+KORAIL_MILEAGE_MOVEMENT_ALL: KorailMileageMovement = "0"
+KORAIL_MILEAGE_MOVEMENT_EARNED: KorailMileageMovement = "1"
+KORAIL_MILEAGE_MOVEMENT_SPENT: KorailMileageMovement = "2"
 
 _KORAIL_MILEAGE_LEDGERS = frozenset(
     {KORAIL_MILEAGE_LEDGER_KTX, KORAIL_MILEAGE_LEDGER_RAIL_POINT}
@@ -617,8 +627,8 @@ class MileageHistoryRequest:
 
     start_date: str
     end_date: str
-    ledger: str = KORAIL_MILEAGE_LEDGER_KTX
-    movement: str = KORAIL_MILEAGE_MOVEMENT_ALL
+    ledger: KorailMileageLedger = KORAIL_MILEAGE_LEDGER_KTX
+    movement: KorailMileageMovement = KORAIL_MILEAGE_MOVEMENT_ALL
     page_no: int = 1
 
 
@@ -1147,6 +1157,12 @@ def build_original_ticket_inquiry_form(
     return tuple(rows)
 
 
+#: :attr:`SelfSeatChangeInfoRequest.room_class_code` 의 타입. ``"1"`` 일반실,
+#: ``"2"`` 특실이고 ``None`` 은 필드를 아예 보내지 않는다는 뜻이다. 런타임 검사는
+#: :func:`_validate_self_seat_change_info_request` 가 계속 한다.
+KorailSelfSeatChangeRoomClassCode = Literal["1", "2"]
+
+
 @dataclass(frozen=True)
 class SelfSeatChangeInfoRequest:
     """The train a 자율 좌석/열차 변경 is being considered for.
@@ -1169,7 +1185,9 @@ class SelfSeatChangeInfoRequest:
     train_no: str = field(repr=False)
     departure_station_code: str = field(repr=False)
     arrival_station_code: str = field(repr=False)
-    room_class_code: str | None = field(default=None, repr=False)
+    room_class_code: KorailSelfSeatChangeRoomClassCode | None = field(
+        default=None, repr=False
+    )
 
     def __post_init__(self) -> None:
         _validate_self_seat_change_info_request(self)
@@ -1180,6 +1198,7 @@ class SelfSeatChangeInfoRequest:
 #: enum's third member ALL ("전체", "9") is deliberately absent: the app's
 #: branch admits only the first two.
 SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
+
 
 
 def _validate_self_seat_change_info_request(

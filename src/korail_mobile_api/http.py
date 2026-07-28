@@ -18,7 +18,11 @@ from .errors import (
     KorailMutationNotAllowedError,
     classify_app_error,
 )
-from .consent import MutationConsent, require_mutation_consent
+from .consent import (
+    MutationCategory,
+    MutationConsent,
+    require_mutation_consent,
+)
 from .models import BaseKorailResponse
 from .safety import (
     KORAIL_CARD_BEARING_MUTATION_CATEGORIES,
@@ -232,7 +236,7 @@ class KorailHttpClient:
         data: Mapping[str, Any],
         *,
         consent: MutationConsent,
-        category: str,
+        category: MutationCategory,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
         """Send a state-changing form to an evidenced mutation route.
@@ -329,7 +333,7 @@ class KorailHttpClient:
         params: Mapping[str, Any],
         *,
         consent: MutationConsent,
-        category: str,
+        category: MutationCategory,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
         """:meth:`post_mutation_form`, for a mutation the app performs as a GET.

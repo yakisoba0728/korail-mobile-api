@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Literal
 
 from .errors import KorailMutationNotAllowedError
 from .redaction import redact_payload
@@ -39,6 +40,23 @@ MUTATION_CATEGORIES = (
     "price_recalculation",
     "cart",
 )
+
+#: :func:`require_mutation_consent` 가 아는 일곱 가지 상태변경 범주. 서버가 주는
+#: 코드가 아니라 이 라이브러리 자신의 게이트 어휘이므로 집합이 완전히 닫혀 있다 —
+#: 각 값은 :class:`MutationConsent` 의 ``allow_<범주>`` 플래그 하나에 대응한다.
+#: ``"reserve"`` 예약, ``"payment"`` 결제, ``"cancel"`` 예약취소, ``"refund"``
+#: 환불, ``"discount_card"`` 할인카드 등록·해지, ``"price_recalculation"`` 운임
+#: 재계산, ``"cart"`` 장바구니. :data:`MUTATION_CATEGORIES` 는 같은 값들의 런타임
+#: 형태다.
+MutationCategory = Literal[
+    "reserve",
+    "payment",
+    "cancel",
+    "refund",
+    "discount_card",
+    "price_recalculation",
+    "cart",
+]
 
 _CONSENT_FLAG_BY_CATEGORY = {
     "reserve": "allow_reserve",
@@ -162,20 +180,20 @@ class MutationPreview:
 
 def require_mutation_consent(
     consent: MutationConsent | None,
-    category: str,
+    category: MutationCategory,
 ) -> None:
     """Deny a mutation unless ``consent`` explicitly opts into ``category``.
 
     ``category`` must be one of ``"reserve"``, ``"payment"``, ``"cancel"``,
     ``"refund"``, ``"discount_card"``, ``"price_recalculation"``,
-    ``"cart"`` — the machine-readable form of that same list is
-    :data:`~korail_mobile_api.consent.MUTATION_CATEGORIES`, importable as
-    ``from korail_mobile_api.consent import MUTATION_CATEGORIES``. It is
-    deliberately not on the top level: this function is public because a
-    caller wrapping a mutation has to be able to state the same gate, not
-    because anyone should be dispatching over the category set, and a tuple
-    exported at the top level is a promise about its order and membership
-    that adding an eighth category would break.
+    ``"cart"`` — the parameter's type is
+    :data:`~korail_mobile_api.consent.MutationCategory`, so a type checker
+    completes the seven and rejects anything else. The runtime form of the same
+    list is :data:`~korail_mobile_api.consent.MUTATION_CATEGORIES`, importable
+    as ``from korail_mobile_api.consent import MUTATION_CATEGORIES``. That tuple
+    stays off the top level: it is ordered, and an eighth category would change
+    what its order and length promise. The ``Literal`` has neither property, so
+    widening it later is additive.
     Raises :class:`~korail_mobile_api.errors.KorailMutationNotAllowedError`
     when ``consent`` is ``None``, is not a :class:`MutationConsent`, names an
     unknown category, or when the matching ``allow_<category>`` flag is False.
