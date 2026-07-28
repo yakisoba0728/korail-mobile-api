@@ -156,6 +156,23 @@
   `ReservationDao` (`c5/b.java:128-138`) to
   `certification.TicketReservation` (`CertificationService.java:52-54`). There
   is no N카드 reservation endpoint; there is an N카드 passenger block.
+  - Exactly two things differ from the live-verified one-adult 일반실 form:
+    the eight passenger rows collapse to `txtTotPsgCnt="1"`,
+    `txtCompaCnt1="1"`, `txtPsgTpCd1="1"`, `txtDiscKndCd1="153"`,
+    `txtCardNo_1=<card>` (`w4/a.java:96-101`), and `txtMenuId` becomes `"A2"`
+    (`SeatAssignBookingActivity.java:159`). Everything else — journey block,
+    seat block, `txtJobId`, `txtStndFlg`, `hidFreeFlg`, `txtGdNo` — is
+    identical, because the app writes it with the same code
+    (`c5/b.java:42-77`). The builder is written as a substitution INTO
+    `build_reservation_form`'s output so that is true by construction, and a
+    test compares both forms key by key, in order.
+  - **`txtCardNo_1` carries a trailing underscore and its three neighbours do
+    not** (`OPsg.java:7-10`). A hold spelled `txtCardNo1` would be a hold with
+    a discount code and no card.
+  - No `passengers` and no `seat_class` argument: the app offers neither, since
+    `w4/a.java:97-98` hardcodes one passenger and `:88` pins 일반실.
+  - Gated by the existing `"reserve"` consent, because it IS the reserve route.
+    **NEVER TRANSMITTED**: no account this project can reach owns an N카드.
 - Added: 할인카드(N카드) 구매 and 기간연장 as consent-gated mutations —
   `KorailClient.register_discount_card` and
   `KorailClient.extend_discount_card`, plus `DiscountCardPurchaseRequest`,
@@ -913,165 +930,120 @@
 
 ### Fixed
 
-- Corrected: `docs/RELEASE_GAP_PLAN.md` still carried, in its srtgo-corrections
-  appendix, the withdrawn claim that "Korail uses **no** NetFunnel at all — only
-  SRT does". The body of that document has said otherwise since 2026-07-26; the
-  appendix now agrees with it. The corresponding "not yet implemented" notes on
-  the `service_1` / `act_6` gate in `README.md` and
-  `docs/IMPLEMENTATION_PROGRESS.md` were also stale and are corrected: the gate
-  exists, and what still holds R39 back is its unregistered route.
-- Fixed: `scripts/reserve_pay_refund_roundtrip.py` masked the PNR it exists to
-  print. Its console scrubber applied a 13–19 digit card-number pattern to
-  arbitrary text, and a KORAIL PNR is 15 decimal digits, so a live run on
-  2026-07-25 printed `LIVE HOLD CREATED   PNR [REDACTED_CARD]` and redacted the
-  PNR inside the recovery command line as well — leaving a real unpaid hold with
-  no identifier attached to it. The scrubber now substitutes the four card
-  values it was actually handed, by exact value, and applies no digit-run
-  pattern at all: a 15-digit run cannot be told from an Amex PAN by shape, and
-  the PNR is the one value that must always reach the operator. `redact_payload`
-  and the package's `CARD_RE` are unchanged; the generic pattern is right where
-  it guards a mutation payload against a PAN under an unknown key.
-- Fixed: `get_ticket_reservation_detail` rejected the live success body. Its
-  success-shape handling was built from the APK's DAO declaration, which types
-  every field as a Java `String`; the live server sends the seat row's
-  `h_srcar_no` as a JSON number, so the first real hold produced
-  `KorailProtocolError: ... h_srcar_no must be a string or null` — after the
-  hold existed. This is the third live finding on the same seam (`h_jrny_cnt` =
-  `"0001"`, `h_st_prnb`/`h_cls_prnb` = zero-padded strings for declared `int`s),
-  so it is fixed systemically rather than field by field: every asserted scalar
-  on `certification.ReservationList`, `refunds.CommissionView` and
-  `refunds.SelTicketInfo` — response, journey and seat levels alike — now accepts
-  a JSON string or a JSON number and normalises to the string the rest of the
-  code expects. The app never noticed because Gson's `JsonReader.nextString()`
-  coerces a number into a String. Genuinely wrong types are still refused: a
-  bool, a float, a list or an object where a scalar belongs is a protocol error.
-- Fixed: `parse_reservation_hold_response` could not read a hold back out of
-  the reservation history — the documented recovery path when a PNR is lost. The
-  history sends `h_jrny_cnt` as the JSON integer `1` while a reserve response
-  sends the string `"0001"`, so the parser raised and the operator had to
-  hand-build a hold to cancel a real reservation. Every scalar on the hold and
-  payment parsers now accepts a JSON string or a JSON number and normalises to
-  the string the form builders expect, so `1`, `"1"` and `"0001"` all reach
-  `build_unpaid_reservation_cancel_form`, which already compared them
-  numerically. The same tolerance covers the PNR, window number, job sequences
-  and settlement amount, because those identify a hold that may already exist on
-  the server and refusing one strands it;
-  `KorailClient._hold_from_reservation_response`, the last-ditch fallback whose
-  entire job is never to lose a PNR, normalises them too. Bools, floats, lists
-  and objects are still protocol errors.
-- Corrected the NetFunnel claim in `docs/RELEASE_GAP_PLAN.md`. Saying Korail
-  "does NOT use NetFunnel at all" was too strong: the app does wire the round
-  trips. What is true is that no Retrofit request body carries a token field and
-  our live calls succeed without one.
+- `docs/RELEASE_GAP_PLAN.md` 의 srtgo 정정 부록에 남아 있던 철회된 주장 — "Korail uses
+  **no** NetFunnel at all — only SRT does" — 을 본문에 맞춰 고쳤다. 본문은 이미 반대로
+  말하고 있었다. `README.md` 와 `docs/IMPLEMENTATION_PROGRESS.md` 에서 `service_1` /
+  `act_6` 게이트를 "아직 구현되지 않았다"고 적은 주석도 함께 고쳤다. 게이트는 있고, R39 를
+  막고 있는 것은 등록되지 않은 라우트다.
+- `scripts/reserve_pay_refund_roundtrip.py` 가 정작 출력해야 할 PNR 을 가리고 있었다.
+  콘솔 스크러버가 13~19 자리 카드번호 패턴을 아무 텍스트에나 적용했는데 KORAIL PNR 이
+  10진수 15자리라, 2026-07-25 실행에서 `LIVE HOLD CREATED   PNR [REDACTED_CARD]` 가 찍혔고
+  복구 명령줄 안의 PNR 까지 가려졌다. 식별자 없는 미결제 예약만 남는 셈이다. 이제
+  스크러버는 실제로 건네받은 카드 값 네 개만 정확히 값으로 치환하고 자릿수 패턴은 전혀
+  적용하지 않는다. 15자리 연속 숫자는 모양만으로 Amex PAN 과 구별할 수 없고, PNR 은 반드시
+  운영자에게 닿아야 하는 유일한 값이다. `redact_payload` 와 패키지의 `CARD_RE` 는 그대로다.
+  일반 패턴은 알 수 없는 키 아래의 PAN 으로부터 mutation 페이로드를 지키는 자리에 있을 때
+  옳다.
+- `get_ticket_reservation_detail` 가 라이브 성공 본문을 거부했다. 성공 형태 처리는 APK 의
+  DAO 선언에서 만들었는데 거기서는 모든 필드가 Java `String` 이다. 실제 서버는 좌석 행의
+  `h_srcar_no` 를 JSON 숫자로 보내므로 첫 실제 예약에서 — 예약이 이미 생긴 뒤에 —
+  `KorailProtocolError: ... h_srcar_no must be a string or null` 이 났다. 같은 이음매에서
+  나온 세 번째 라이브 발견(`h_jrny_cnt` = `"0001"`, `h_st_prnb`/`h_cls_prnb` = 선언은
+  `int` 인데 0으로 채운 문자열)이라 필드별로가 아니라 체계적으로 고쳤다.
+  `certification.ReservationList`, `refunds.CommissionView`,
+  `refunds.SelTicketInfo` 의 모든 단언된 스칼라가 — 응답·여정·좌석 층 모두 — JSON 문자열과
+  JSON 숫자를 함께 받아 나머지 코드가 기대하는 문자열로 정규화한다. 앱이 이것을 못 느낀
+  이유는 Gson 의 `JsonReader.nextString()` 이 숫자를 String 으로 강제하기 때문이다. 진짜
+  잘못된 타입은 여전히 거부한다. 스칼라 자리의 bool, float, 리스트, 객체는 프로토콜
+  오류다.
+- `parse_reservation_hold_response` 가 예약 목록에서 예약을 다시 읽어내지 못했다. PNR 을
+  잃었을 때 문서가 안내하는 복구 경로가 바로 그것이다. 목록은 `h_jrny_cnt` 를 JSON 정수
+  `1` 로 보내는데 예약 응답은 문자열 `"0001"` 로 보내므로 파서가 예외를 냈고, 운영자는 실제
+  예약을 취소하려고 예약 객체를 손으로 조립해야 했다. 이제 예약·결제 파서의 모든 스칼라가
+  JSON 문자열과 JSON 숫자를 함께 받아 폼 빌더가 기대하는 문자열로 정규화하므로 `1`, `"1"`,
+  `"0001"` 이 모두 `build_unpaid_reservation_cancel_form` 에 닿는다. 그쪽은 이미 수치로
+  비교하고 있었다. 같은 관용이 PNR, 발권창구 번호, job 시퀀스, 정산 금액에도 적용된다.
+  이 값들은 서버에 이미 존재할 수 있는 예약을 가리키므로, 하나를 거부하면 그 예약이 붕 뜬다.
+  PNR 을 절대 잃지 않는 것이 유일한 일인 마지막 대비책
+  `KorailClient._hold_from_reservation_response` 도 같이 정규화한다. bool, float, 리스트,
+  객체는 여전히 프로토콜 오류다.
+- `docs/RELEASE_GAP_PLAN.md` 의 NetFunnel 서술을 정정했다. Korail 이 "does NOT use
+  NetFunnel at all" 이라는 말은 지나쳤다. 앱은 실제로 그 왕복을 배선해 두고 있다. 참인 것은
+  어떤 Retrofit 요청 본문도 토큰 필드를 싣지 않으며 이쪽 라이브 호출이 토큰 없이
+  성공한다는 것이다.
 
 ### Removed
 
-- Removed: the 여행변경 (trip change) mutation chain and the `ticket_change`
-  consent category with it — `change_trip_reservation`,
-  `rollback_trip_change` and `change_reservation_passengers`, plus
-  `MutationConsent.allow_ticket_change`. Built and withdrawn the same day.
-  Exercising the chain needs a PAID ticket, charges a 변경수수료, and has no
-  clean undo, so there was no way to verify it without spending money on a
-  path whose rollback half was itself unverified. The two READS the chain
-  starts from survived and are listed below; the analysis is kept in
-  `docs/RELEASE_GAP_PLAN.md`. **Breaking** for anyone who took the
-  intermediate commit.
-- Removed: the 비회원 오프라인 반환 pair and the non-member session with it —
-  `verify_offline_refund_ticket`, `execute_offline_refund`,
-  `begin_non_member`, `end_non_member` and `KorailNonMemberSession`. Also
-  built and withdrawn the same day, for the same kind of reason: the pair's
-  premise is a PHYSICAL paper ticket whose printed 반환번호 the verify call
-  consumes, so neither half could be exercised at all. The 반환번호 spellings
-  stay registered in `redaction.py` on purpose — `research.tripChgOgtk.do`
-  still carries the same four-part number, and a spelling dropped from the
-  sensitive-key set is one that leaks the day something re-introduces it.
-  **Breaking** on the same terms.
-- **Removed (breaking, and the last chance to do it): 47 names left the
-  top-level `__all__`, which went 263 → 216.** Every one of them is still
-  importable from the module that defines it — this is a move, not a deletion,
-  and `from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS` works
-  exactly as it did. What changed is what the package *promises*: after 1.0.0
-  an exported name cannot be withdrawn without breaking somebody, so the
-  surface now holds only what a caller genuinely has to be able to name — the
-  client, config and session; every type reachable from a public method's
-  annotations; the errors; the consent types; and the domain values a caller
-  passes in or compares a response against. What left, by category:
-  - Transport-layer constants: the base URL, app key, API version, device
-    geometry and SDK int, the NetFunnel URL/path/service-id/timeout, the
-    DynaPath header name and allowlist, the bootstrap code list. Every one of
-    these is already reachable as the default of a `KorailConfig` field, which
-    is where a caller who wants to change one has to go anyway.
-  - The DynaPath token machinery: `generate_dynapath_token`,
+- 여행변경 mutation 체인과 `ticket_change` 동의 범주 — `change_trip_reservation`,
+  `rollback_trip_change`, `change_reservation_passengers`, 그리고
+  `MutationConsent.allow_ticket_change`. 만들었다가 같은 날 거뒀다. 이 체인을 실행하려면
+  결제된 승차권이 있어야 하고 변경수수료가 나가며 깨끗한 되돌리기가 없다. 되돌리기 쪽
+  자체가 미검증인 경로에 돈을 쓰지 않고는 검증할 방법이 없었다. 체인이 시작되는 읽기 둘은
+  남았고 아래에 있다. 분석은 `docs/RELEASE_GAP_PLAN.md` 에 남긴다. 중간 커밋을 가져간
+  사람에게는 **파괴적 변경**이다.
+- 비회원 오프라인 반환 짝과 비회원 세션 — `verify_offline_refund_ticket`,
+  `execute_offline_refund`, `begin_non_member`, `end_non_member`,
+  `KorailNonMemberSession`. 역시 만들었다가 같은 날 거뒀고 이유도 비슷하다. 이 짝의 전제는
+  종이 승차권 실물이고 verify 호출이 거기 인쇄된 반환번호를 소모하므로 어느 쪽도 실행해 볼
+  수 없다. 반환번호 철자들은 `redaction.py` 에 일부러 등록된 채로 둔다.
+  `research.tripChgOgtk.do` 가 여전히 같은 네 부분 번호를 실어 나르고, 민감 키 집합에서
+  빠진 철자는 무언가가 그것을 다시 들여오는 날 새어 나간다. 같은 조건으로 **파괴적
+  변경**이다.
+- **최상위 `__all__` 에서 이름 47개가 빠져 263 → 216 이 됐다(파괴적 변경).** 빠진 이름은
+  전부 정의된 모듈에서 그대로 임포트할 수 있다. 이동이지 삭제가 아니며
+  `from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS` 는 전과 똑같이
+  동작한다. 달라진 것은 패키지가 *약속하는* 범위다. 1.0.0 이후로는 내보낸 이름을 거두면
+  누군가가 깨지므로, 표면에는 호출자가 반드시 이름으로 부를 수 있어야 하는 것만 남긴다.
+  클라이언트·설정·세션, 공개 메서드의 애너테이션에서 닿는 모든 타입, 오류, 동의 타입,
+  그리고 호출자가 넘기거나 응답과 비교하는 도메인 값이다. 무엇이 어떤 이유로 빠졌는지는
+  이렇다.
+  - 전송 계층 상수: base URL, 앱 키, API 버전, 기기 화면 정보와 SDK 정수, NetFunnel 의
+    URL·경로·서비스 ID·타임아웃, DynaPath 헤더 이름과 허용 목록, 부트스트랩 코드 목록.
+    전부 `KorailConfig` 필드의 기본값으로 닿을 수 있고, 값을 바꾸려는 호출자는 어차피
+    거기로 가야 한다.
+  - DynaPath 토큰 기계: `generate_dynapath_token`,
     `generate_dynapath_encoding_table`, `build_dynapath_prefix`,
-    `DynapathTokenGenerator`, `DynapathRequestContext` and the five
-    `KORAIL_DYNAPATH_*` identity constants. `DynapathConfig` and
-    `DynapathTokenSettings` stay: they are `KorailConfig` field types.
-  - The internal route and policy tables: `KORAIL_MUTATION_ROUTES`,
-    `KORAIL_NETFUNNEL_ROUTES`, `KORAIL_CARD_BEARING_MUTATION_CATEGORIES`,
-    `EXCLUDED_API_DOMAINS`, `KORAIL_NETFUNNEL_GATED_OPERATIONS`. The mutation
-    route table is the contentious one — it reads as safety disclosure — but
-    its counterpart `KORAIL_READ_ONLY_ROUTES` was never exported, and half a
-    classification published is worse than a whole one in `safety.py`, where
-    both now sit together.
-  - The parsers the client already calls for you: `parse_base_response`,
+    `DynapathTokenGenerator`, `DynapathRequestContext`, 그리고 `KORAIL_DYNAPATH_*` 신원
+    상수 다섯. `DynapathConfig` 와 `DynapathTokenSettings` 는 남는다. `KorailConfig` 의
+    필드 타입이다.
+  - 내부 라우트·정책 표: `KORAIL_MUTATION_ROUTES`, `KORAIL_NETFUNNEL_ROUTES`,
+    `KORAIL_CARD_BEARING_MUTATION_CATEGORIES`, `EXCLUDED_API_DOMAINS`,
+    `KORAIL_NETFUNNEL_GATED_OPERATIONS`. mutation 라우트 표가 논쟁적인데, 안전 정보의
+    공개처럼 읽히기 때문이다. 그러나 짝인 `KORAIL_READ_ONLY_ROUTES` 는 애초에 내보낸 적이
+    없고, 분류의 절반만 공개하는 것은 둘 다 `safety.py` 에 함께 두는 것보다 나쁘다.
+  - 클라이언트가 대신 호출해 주는 파서: `parse_base_response`,
     `parse_reservation_hold_response`, `parse_reservation_payment_response`,
-    `parse_discount_card_purchase_response`, and `pair_transfer_itineraries`.
-    Their *return* types are all still exported, which is the half a caller
-    annotates with.
-  - `redact_mapping` and `redact_payload`. `MutationPreview` runs the payload
-    through redaction on construction, so nothing is lost by default; a caller
-    who wants them for their own logging imports them, and the four other
-    helpers they were separated from, from `korail_mobile_api.redaction`.
+    `parse_discount_card_purchase_response`, `pair_transfer_itineraries`. 이들의 *반환*
+    타입은 모두 그대로 내보내며, 호출자가 애너테이션에 쓰는 쪽은 그쪽이다.
+  - `redact_mapping` 과 `redact_payload`. `MutationPreview` 가 생성 시점에 페이로드를
+    마스킹하므로 기본 동작에서 잃는 것은 없다. 자기 로깅에 쓰려는 호출자는 이 둘과, 함께
+    떨어져 나온 다른 헬퍼 넷을 `korail_mobile_api.redaction` 에서 임포트하면 된다.
 
 ### Security
 
-- Security: `ogtkRetPwd` and the rest of the 원표 반환번호 tuple are now
-  redacted. `ogtkRetPwd` travels three ways — as a bare `@Field` on
-  `research.cmtrInfo.do`'s 원표 branch, which this package has emitted since
-  `build_commuter_info_form` was added, as indexed `@FieldMap` keys, and back
-  as `OrgTk.ogtkRetPwd` — and none was masked before. `ogtkSaleWctNo`/`ogtkSaleDd`/`ogtkSaleSqno`/
-  `ogtkSaleDt` are registered with it, since masking three quarters of a
-  반환번호 leaves it reconstructable; `_index_stripped` covers every row index.
-  Also registered: the 지연증명 tuple `Cmpn.dlayOgtk*` (`Cmpn.java:11-14`), the
-  settlement rows' `stlCrdNo`/`prepCrdNo`/`apvNo` (`Stl.java:5-16`), and
-  `lumpStlTgtNo` under both spellings, which the 할인카드 구매 mutation
-  already returns. `cmpnList`/`stlList` are deliberately left unparsed and
-  stay masked inside `raw`.
-- Changed: `hidDscpNo`, `hidCustNo`, `hidFmlyNo` and `psrm_cl_cd` join
-  `SENSITIVE_KEYS`. The first is a coupon/국가유공자 certificate number — the
-  same `h_cpn_no` already redacted inbound — on the way out; the other three
-  are a customer number, a family-member sequence and the underscore spelling
-  of the already-redacted `psrmClCd`.
-- Changed: `redact_payload` redacts a list value ELEMENTWISE and preserves its
-  length, instead of collapsing it with `str()`. A form key can legitimately
-  carry many values now, and stringifying the list hid every element from
-  `redact_text` behind the list's own quotes.
-- Changed: `txtCardNo_1..N` joins `SENSITIVE_KEYS`. The inbound spellings were
-  redacted already; the outbound form key was not, and a dry-run preview of a
-  carded hold printed a spendable card number in the clear. Caught by a test
-  written for exactly that.
-  - Exactly two things differ from the live-verified one-adult 일반실 form:
-    the eight passenger rows collapse to `txtTotPsgCnt="1"`,
-    `txtCompaCnt1="1"`, `txtPsgTpCd1="1"`, `txtDiscKndCd1="153"`,
-    `txtCardNo_1=<card>` (`w4/a.java:96-101`), and `txtMenuId` becomes `"A2"`
-    (`SeatAssignBookingActivity.java:159`). Everything else — journey block,
-    seat block, `txtJobId`, `txtStndFlg`, `hidFreeFlg`, `txtGdNo` — is
-    identical, because the app writes it with the same code
-    (`c5/b.java:42-77`). The builder is written as a substitution INTO
-    `build_reservation_form`'s output so that is true by construction, and a
-    test compares both forms key by key, in order.
-  - **`txtCardNo_1` carries a trailing underscore and its three neighbours do
-    not** (`OPsg.java:7-10`). A hold spelled `txtCardNo1` would be a hold with
-    a discount code and no card.
-  - No `passengers` and no `seat_class` argument: the app offers neither, since
-    `w4/a.java:97-98` hardcodes one passenger and `:88` pins 일반실.
-  - Gated by the existing `"reserve"` consent, because it IS the reserve route.
-    **NEVER TRANSMITTED**: no account this project can reach owns an N카드.
-- Changed: `redact_payload` now masks `txtCpNo` and the indexed
-  `txtSrcarNo{i}`/`txtSeatNo{i}` keys, so a mutation preview cannot expose the
-  standby notification number or the designated seats. Car and seat identifiers
-  were already redacted everywhere they are read back; these are the same two
-  values on the way out.
+- `ogtkRetPwd` 를 비롯한 원표 반환번호 네 값이 마스킹 대상이 됐다. `ogtkRetPwd` 는 세
+  경로로 오간다. `research.cmtrInfo.do` 의 원표 분기에 붙는 맨 `@Field` (이 패키지는
+  `build_commuter_info_form` 이 생긴 이래 계속 보내왔다), 인덱스가 붙은 `@FieldMap` 키,
+  그리고 돌아오는 `OrgTk.ogtkRetPwd`. 셋 다 가려지지 않았다.
+  `ogtkSaleWctNo`/`ogtkSaleDd`/`ogtkSaleSqno`/`ogtkSaleDt` 를 함께 등록한다. 반환번호의
+  4분의 3만 가리면 나머지로 복원되기 때문이다. 행 인덱스는 `_index_stripped` 가 덮는다.
+  지연증명 튜플 `Cmpn.dlayOgtk*` (`Cmpn.java:11-14`), 정산 행의
+  `stlCrdNo`/`prepCrdNo`/`apvNo` (`Stl.java:5-16`), 그리고 할인카드 구매 mutation 이 이미
+  돌려주는 `lumpStlTgtNo` 의 두 철자도 등록했다. `cmpnList`/`stlList` 는 일부러 파싱하지
+  않고 `raw` 안에서 마스킹된 채로 둔다.
+- `hidDscpNo`, `hidCustNo`, `hidFmlyNo`, `psrm_cl_cd` 가 `SENSITIVE_KEYS` 에 들어갔다.
+  첫째는 쿠폰·국가유공자 증서 번호로, 들어올 때 이미 가려지던 `h_cpn_no` 와 같은 값이
+  나가는 쪽이다. 나머지 셋은 고객번호, 가족 구성원 일련번호, 그리고 이미 가려지던
+  `psrmClCd` 의 언더스코어 철자다.
+- `redact_payload` 가 리스트 값을 `str()` 로 뭉개는 대신 원소 단위로 가리고 길이를
+  유지한다. 이제 폼 키 하나가 여러 값을 가질 수 있는데, 리스트를 문자열로 만들면 모든
+  원소가 리스트 자신의 따옴표 뒤로 숨어 `redact_text` 에 닿지 않는다.
+- `txtCardNo_1..N` 이 `SENSITIVE_KEYS` 에 들어갔다. 들어오는 철자는 이미 가려지고 있었지만
+  나가는 폼 키는 아니었고, 할인카드 예약의 dry-run 미리보기가 쓸 수 있는 카드번호를 평문으로
+  찍었다.
+- `redact_payload` 가 `txtCpNo` 와 인덱스가 붙은 `txtSrcarNo{i}`/`txtSeatNo{i}` 를 가린다.
+  mutation 미리보기가 예약대기 통보번호와 지정 좌석을 드러내지 않는다. 차량·좌석 식별자는
+  읽어 들이는 쪽에서는 이미 전부 가려지고 있었고, 이것은 같은 값이 나가는 쪽이다.
 
 ### 알려진 제약과 넣지 않은 것
 
