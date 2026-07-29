@@ -1,10 +1,12 @@
 # korail-mobile-api
 
-![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![License](https://img.shields.io/badge/license-Apache--2.0-green)
+[![문서](https://img.shields.io/badge/%EB%AC%B8%EC%84%9C-yaki.kr-1f6feb)](https://yaki.kr/korail-mobile-api/) ![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![License](https://img.shields.io/badge/license-Apache--2.0-green)
 
 KORAIL 앱이 쓰는 API 를 파이썬에서 그대로 부릅니다. 로그인하고, 열차를 찾고,
 승차권과 예약을 읽습니다. 좌석을 잡거나 결제·환불하는 일은 consent 객체를
 건네야만 일어납니다.
+
+📖 **문서: <https://yaki.kr/korail-mobile-api/>** — 전체 API 레퍼런스와 예제가 있습니다.
 
 > [!WARNING]
 > - **리버스 엔지니어링 결과입니다.** 라우트와 필드명은 `com.korail.talk` 6.5.0
@@ -258,6 +260,7 @@ KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내면 안 됩�
 
 | 문서 | 내용 |
 | --- | --- |
+| [문서 사이트](https://yaki.kr/korail-mobile-api/) | 이 README 와 API 레퍼런스를 합쳐 놓은 것 |
 | [docs/verification-record.md](docs/verification-record.md) | 근거 기록. APK 인용, 실행별 코드, 정정 |
 | [docs/MUTATION_HANDOFF.md](docs/MUTATION_HANDOFF.md) | 변경 표면의 검증 상태 |
 | [docs/api-status-by-service.md](docs/api-status-by-service.md) | Retrofit 항목 165개의 서비스별 상태 |
