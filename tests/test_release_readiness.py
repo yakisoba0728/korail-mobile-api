@@ -24,7 +24,7 @@ EXPECTED_KEYWORDS = ['korail','read-only-by-default','mobile-api']
 LIVE_ENV = "KORAIL_MOBILE_API_LIVE"
 CLIENT_NAME = "KorailClient"
 FAILURE_MESSAGE = "distribution verification failed\n"
-EXPECTED_VERSION = "1.1.0"
+EXPECTED_VERSION = "1.1.1"
 EXPECTED_LICENSE_EXPRESSION = "Apache-2.0"
 EXPECTED_LICENSE_FILES = ["LICENSE", "NOTICE"]
 # The checkout's own bytes, not a stand-in. The verifier compares every licence
