@@ -375,6 +375,39 @@ def _succeeded(response: Any) -> bool:
     return getattr(response, "str_result", None) == "SUCC"
 
 
+def _won(amount: str | None) -> int | None:
+    """원화 금액 문자열을 정수로. 모르는 값은 ``None`` 이고 0 이 아니다.
+
+    KORAIL 은 같은 금액을 라우트마다 다른 폭으로 싣는다. 2026-07-31 실서버 관측:
+    예약 응답(``certification.ReservationHold``)의 ``h_rcvd_amt`` 는 ``"8400"``
+    인데 예약 상세(``tk.SelTicketInfo``)의 ``h_tot_rcvd_amt`` 는
+    ``"0000000000008400"`` — 16자리 0채움이다. 둘 다 8,400원이다. 그래서 금액
+    비교는 문자열이 아니라 수로 해야 한다.
+
+    숫자가 아니거나 비어 있으면 ``None`` 을 준다. 결제 직전 교차검증에서 쓰이는
+    함수라, 읽지 못한 값을 0 으로 접으면 "0원이 맞다"고 통과시켜 버린다.
+    """
+    if amount is None:
+        return None
+    text = amount.strip()
+    if not text or not text.isdigit():
+        return None
+    return int(text)
+
+
+def _won_text(amount: str | None) -> str:
+    """배너에 찍을 금액. 0채움을 벗기고, 못 읽으면 원문을 그대로 보여 준다.
+
+    ``refunds.CommissionView`` 는 이 두 필드를 14자리 0채움으로 보낸다
+    (2026-07-31 관측: ``ret_amt='00000000008400'``,
+    ``ret_fee='00000000000000'``). 조작자가 눈으로 읽고 환불을 계속할지 정하는
+    줄이라, 그대로 찍으면 자릿수를 세게 된다. 숫자로 읽히지 않는 값은 감추지
+    않는다 — 그것 자체가 봐야 할 신호다.
+    """
+    won = _won(amount)
+    return str(won) if won is not None else repr(amount)
+
+
 def find_ticket_identity(
     raw: Any,
     *,
@@ -777,19 +810,25 @@ class RoundTrip:
             f"    server says owed: {server_amount!r}; "
             f"hold said: {hold_amount!r}"
         )
-        if not server_amount or not hold_amount or server_amount != hold_amount:
+        # 두 값은 같은 금액인데 폭이 다르다 (:func:`_won` 참고). 문자열로 비교하면
+        # 8,400원과 8,400원이 서로 다르다고 나와서, 맞는 금액인데도 결제 전에
+        # 멈춘다. 2026-07-31 실서버 왕복이 정확히 여기서 걸렸다.
+        server_won = _won(server_amount)
+        hold_won = _won(hold_amount)
+        if server_won is None or hold_won is None or server_won != hold_won:
             raise RoundTripAborted(
                 "the amount the server says is owed does not match the hold's "
                 f"own amount ({server_amount!r} vs {hold_amount!r}); refusing "
                 "to pay an amount two sources disagree on"
             )
-        if self.max_fare is not None and int(server_amount) > self.max_fare:
+        if self.max_fare is not None and server_won > self.max_fare:
             raise RoundTripAborted(
-                f"the amount owed ({server_amount} KRW) exceeds "
+                f"the amount owed ({server_won} KRW) exceeds "
                 f"{MAX_FARE_ENV}={self.max_fare} KRW"
             )
-        self.console.say(f"    confirmed: {server_amount} KRW will be charged")
-        return server_amount
+        self.console.say(f"    confirmed: {server_won} KRW will be charged")
+        # 0채움을 벗긴 쪽을 돌려준다. 폭은 라우트마다 다르고 금액은 하나다.
+        return str(server_won)
 
     # -- step e/f -------------------------------------------------------------
 
@@ -862,8 +901,8 @@ class RoundTrip:
         )
         self.console.banner(
             (
-                f"REFUND AMOUNT: {commission.refund_amount} KRW",
-                f"REFUND FEE:    {commission.refund_fee} KRW",
+                f"REFUND AMOUNT: {_won_text(commission.refund_amount)} KRW",
+                f"REFUND FEE:    {_won_text(commission.refund_fee)} KRW",
                 f"proceed flag:  {commission.proceed_possible_flag!r}",
                 f"note:          {commission.secondary_message_text!r}",
             )
@@ -997,8 +1036,8 @@ def recover(client: KorailClient, console: _Console, pnr_no: str) -> int:
         )
         console.banner(
             (
-                f"REFUND AMOUNT: {commission.refund_amount} KRW",
-                f"REFUND FEE:    {commission.refund_fee} KRW",
+                f"REFUND AMOUNT: {_won_text(commission.refund_amount)} KRW",
+                f"REFUND FEE:    {_won_text(commission.refund_fee)} KRW",
             )
         )
         train_no = find_train_no(tickets_raw, pnr_no=pnr_no) or find_train_no(
