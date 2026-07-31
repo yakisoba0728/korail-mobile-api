@@ -137,7 +137,12 @@ def _replies(*, pnr: str = SYNTHETIC_PNR, **overrides: Any) -> dict[str, dict[st
             h_tot_fare="8400",
             h_tot_prc="8400",
             h_tot_dcnt_amt="0",
-            h_tot_rcvd_amt="8400",
+            # 0채움 16자리는 실서버가 이 라우트에서 실제로 보내는 모양이다
+            # (2026-07-31, 서울->광명 8,400원). 예약 응답의 h_rcvd_amt 는 같은
+            # 금액을 "8400" 으로 보낸다. 두 폭을 문자열로 비교하던 코드가 그
+            # 왕복에서 결제 직전에 멈췄고, 그때까지 이 스텁이 양쪽 다 "8400" 이라
+            # 오프라인에서는 드러날 수 없었다. 폭이 다른 쪽을 기본 스텁에 둔다.
+            h_tot_rcvd_amt="0000000000008400",
             h_payment_flg="N",
             # The live server sends the seat row's car number as a JSON NUMBER,
             # not the String the APK's DAO declares. On 2026-07-25 that killed
@@ -179,7 +184,13 @@ def _replies(*, pnr: str = SYNTHETIC_PNR, **overrides: Any) -> dict[str, dict[st
             h_compa_nm="",
             h_compa_brth="",
         ),
-        COMMISSION: _ok(ret_amt="8400", ret_fee="0", prg_psb_flg="Y"),
+        # 0채움 14자리는 실서버가 CommissionView 에서 실제로 보내는 모양이다
+        # (2026-07-31, 8,400원 승차권을 출발 31일 전에 반환: 전액 환불, 수수료 0).
+        COMMISSION: _ok(
+            ret_amt="00000000008400",
+            ret_fee="00000000000000",
+            prg_psb_flg="Y",
+        ),
         REFUND: _ok(),
         CANCEL: _ok(),
     }
