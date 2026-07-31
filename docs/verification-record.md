@@ -50,10 +50,13 @@ states neither claim or both, so an ambiguous consent is never sent.
 
 `reserve`, `cancel_unpaid_hold`, and
 `pay_with_fake_card` were verified end-to-end against the live server (the fake
-card was declined, no charge). `pay_with_card` and `refund` have no live-verified
-success envelope in this repository: they share the reserve/cancel/pay wire
-shapes and the same gated send path, but no run recorded here has settled or
-returned money. 환승 (transfer) search and reservation are **implemented and NOT
+card was declined, no charge). `pay_with_card` and `refund` were verified with
+real money on 2026-07-31: one 8,400 KRW 서울→광명 ticket, bought 31 days before
+departure and returned minutes later — payment `IRT000000`
+"정상발매처리,정상발권처리", refund `IRT200277` "반환이 정상 처리되었습니다", a
+zero fee, and the reservation history back to zero. That settles **one personal
+credit card, one lump-sum charge, one journey, one passenger** and nothing
+wider. 환승 (transfer) search and reservation are **implemented and NOT
 live-verified** -- see [환승 (transfer) itineraries](#환승-transfer-itineraries)
 for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
@@ -499,10 +502,28 @@ wired to a client method: reservation and unpaid-hold-cancel to `reserve` and
 payment to `pay_with_fake_card` (test cards) and `pay_with_card` (an
 acknowledged real charge), and refund to `refund`. Each sends only via the double-gated mutation path and only with a
 `dry_run=False` consent; with the default consent each returns a redacted
-preview and transmits nothing. `pay_with_card` and `refund` are the two send
-paths that, while fully active code rather than blocked, have never been run
-against the live server: no run recorded in this repository has settled a real
-payment or returned money, so neither has a live-verified success envelope. A bounded
+preview and transmits nothing. `pay_with_card` and `refund` were the last two
+send paths without a live-verified success envelope; a bounded authorized run on
+2026-07-31 closed both. It bought one 8,400 KRW 서울→광명 KTX seat for 2026-08-31
+(the far end of the one-month booking window, chosen so the refund fee would be
+zero) and returned it within the same session: payment `IRT000000`, refund
+`IRT200277`, `CommissionView` quoting the full 8,400 KRW back with a 0 KRW fee,
+and reservation history empty afterwards. Three wire shapes came out of that run
+that no offline fixture had:
+
+* `tk.SelTicketInfo` sends `h_tot_rcvd_amt` **zero-padded to 16 digits**
+  (`"0000000000008400"`) while the reservation hold sends the same amount as
+  `h_rcvd_amt="8400"`. `scripts/reserve_pay_refund_roundtrip.py` compared the two
+  as strings and stopped before payment on a correct amount; it now compares them
+  as numbers.
+* `refunds.CommissionView` sends `ret_amt` and `ret_fee` **zero-padded to 14
+  digits** (`"00000000008400"`, `"00000000000000"`).
+* That same reply carried an **empty** `prg_psb_flg`, not the `"Y"` the offline
+  fixtures assumed. Nothing branches on it here — the mileage path
+  (`prg_psb_flg == "M"`) is not implemented — but the field is not reliably
+  populated.
+
+A bounded
 authorized check created one unpaid direct reservation and immediately
 completed both cancellation steps; reservation history was empty before and
 after, and that check called no payment endpoint. A separate bounded check
@@ -544,6 +565,15 @@ fix load-bearing. Every other passenger type, and every mix of types, is
 still static evidence only, so acceptance, pricing and error envelopes for
 those remain unknown until an operator exercises the
 specific combinations they need.
+
+The one-adult general-seat immediate hold (`txtJobId` `1101`) was re-verified on
+2026-07-31, after the package was refactored: 서울→부산 on 2026-08-10, train
+1159 at 14:04, reserve `SUCC`/`IRR000018` "결제기한 내 미결제 시 예약이
+취소됩니다.", `cancel_unpaid_hold` `SUCC`/`IRG000000` "정상처리되었습니다", and the
+reservation history back to zero items in a separate read. That run touched no
+payment route and carried no card values, so it says nothing new about
+`pay_with_card` or `refund`; its point was that a refactor which only offline
+tests still guard had not moved the reserve or cancel wire shape.
 
 ### Seat-designated and standby reservations
 
@@ -1732,6 +1762,17 @@ such as `Device`, API version, app key, DynaPath header name, and allowlist path
 are importable from the package. Live smoke constructs `DynapathTokenSettings`
 only from required caller-supplied environment values and fails before request
 construction when any required identity value is missing.
+
+The synthetic device identity is live-verified as of 2026-07-31. A bare
+`KorailConfig(enable_dynapath=True)` — no environment overrides, so
+`device_model="Android"`, `os_version="15"`, a synthesised 16-hex device id and
+the derived `Dalvik/2.1.0 (Linux; U; Android 15; Android)` user agent — completed
+`login.Login` and `logout` against `smart.letskorail.com` in one session. Until
+that run only the `build_config_from_env()` path (real `Build.MODEL` and
+`Build.VERSION.RELEASE` values) had been exercised live, so the default-on-values
+path was carried as an open question. It is closed: the server accepts a token
+built from the package's own synthetic identity. The same session also confirmed
+the environment path with a real device identity (`Pixel 7`, Android 14).
 
 The built-in generator follows the successful fixed `rt=0` contract: SDK version `v1.0.3`
 (matching decompiled `com.korail.talk` v6.5.0, `B/C1229b.java:137,157`),

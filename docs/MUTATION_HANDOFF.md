@@ -29,13 +29,15 @@ state-changing request can leave the process only through the dedicated
 | 장바구니 담기 (`cart.addCartList`) | ✅ `add_to_cart`, own `cart` consent, live 2026-07-27 (`SUCC`/`IRZ000002`, read back via `get_cart_list`) | ⛔ not implemented |
 
 "Live-verified" on both sides means the request was actually sent and its
-response observed. korail `pay_with_card`, `refund`, `reserve_merge`,
-`recalculate_price` and the whole 할인카드 surface are the
+response observed. korail `reserve_merge`, `recalculate_price` and the whole
+할인카드 surface are the
 exceptions: their
 send paths are fully active code, NOT blocked, but none has ever been run
-(see items 1 and 8 under "NOT settled"). The three non-default reservation
+(see item 8 under "NOT settled"). The three non-default reservation
 job types and `confirm_standby_hold` WERE exceptions until 2026-07-26 and
-are not any more; the rows above carry the codes each one returned. The SRT reserve/cancel work sits on branch **`feat/srt-cancel` of
+are not any more; korail `pay_with_card` and `refund` were exceptions until
+2026-07-31 and are not any more; the rows above carry the codes each one
+returned. The SRT reserve/cancel work sits on branch **`feat/srt-cancel` of
 `srt-mobile-api`, not merged**.
 
 "Not live-enabled" on the SRT side is a hard gate, not a description of missing
@@ -194,17 +196,22 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
 
 ## NOT settled / trade-offs
 
-1. **korail `pay_with_card` and `refund` are not live-verified.** A refund acts
-   on a *settled* ticket and needs its original sale window/date/sequence +
-   return password. The fake-card payment is always declined, so it never
-   produces a paid ticket. The refund form + method are wired and offline
-   contract-tested against the srtgo/app wire (`ktx.py:1077-1094`), but the live
-   path has never run. `pay_with_card` closes the loop in code — an explicitly
-   acknowledged real charge does settle a ticket, which is then refundable — and
-   `scripts/reserve_pay_refund_roundtrip.py` drives that round trip, but no run
-   recorded here has executed it. **Trade-off:** both are implemented for API
-   completeness and remain marked unverified until an operator has actually run
-   the round trip against a real card and a real account.
+1. **korail `pay_with_card` and `refund` are live-verified as of 2026-07-31, for
+   one narrow case.** A refund acts on a *settled* ticket and needs its original
+   sale window/date/sequence + return password. The fake-card payment is always
+   declined, so it never produces a paid ticket; only a real charge does. On
+   2026-07-31 `scripts/reserve_pay_refund_roundtrip.py` drove the whole loop with
+   a real card: 서울→광명, 2026-08-31, 8,400 KRW, one adult, general seat.
+   Payment answered `SUCC`/`IRT000000` "정상발매처리,정상발권처리";
+   `CommissionView` quoted 8,400 KRW back with a 0 KRW fee; the refund answered
+   `SUCC`/`IRT200277` "반환이 정상 처리되었습니다"; reservation history was empty
+   before and after. **What that does NOT settle:** instalments, corporate cards,
+   more than one passenger, more than one journey, partial refunds, and any
+   refund close enough to departure that a fee applies. The run also surfaced
+   three padded wire shapes the offline fixtures had guessed wrong — see
+   verification-record.md. **Trade-off:** the surface stays consent-gated and
+   dry-run-by-default; one successful round trip is evidence for that one shape,
+   not a licence to assume the rest.
 
 2. **SRT `payment` and `refund` are still deferred (need live capture) and are
    still kill-switched.** They have no client method, and even a caller reaching
