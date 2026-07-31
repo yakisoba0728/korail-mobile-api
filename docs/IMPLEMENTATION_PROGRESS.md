@@ -154,8 +154,10 @@ a live call does.
   still sends only test cards, while `pay_with_card` requires
   `real_card_acknowledged=True` together with `fake_card_only=False` and is the
   only path that can move real money.
-  reserve/cancel/pay were verified live; `pay_with_card` and `refund` have no
-  live-verified success envelope). Current service inventory is 33 successful, 14 failed, and 118
+  reserve/cancel/pay were verified live; `pay_with_card` and `refund` were
+  verified live on 2026-07-31 with a real card, for one lump-sum charge on one
+  journey — `IRT000000` then `IRT200277`, 8,400 KRW, zero refund
+  fee). Current service inventory is 33 successful, 14 failed, and 118
   unexecuted entries out of 165.
 - The cache-read expansion implementation, offline tests, package build, and
   isolated import are complete, including bounded live verification.

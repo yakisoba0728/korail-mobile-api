@@ -41,8 +41,9 @@ test cards; a real, chargeable card is reachable only through `pay_with_card` on
 a consent that explicitly sets `real_card_acknowledged=True` and
 `fake_card_only=False`, and the transmit gate refuses a payment consent that
 claims neither or both. reserve/cancel/pay were verified live (fake card
-declined, no charge); `pay_with_card` and `refund` have no live-verified success
-envelope. The read-only
+declined, no charge); `pay_with_card` and `refund` were verified live on
+2026-07-31 with a real card, for one lump-sum charge on one journey
+(`IRT000000` / `IRT200277`, 8,400 KRW, zero refund fee). The read-only
 send path still refuses every mutation route. The package
 now exposes the ten
 previously successful but unwrapped reads plus the already registered service
