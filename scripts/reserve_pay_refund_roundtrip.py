@@ -5,22 +5,32 @@ before: settle a reservation with a real, chargeable card. Money actually moves.
 It is meant to be run by a human, once, against their OWN account and their OWN
 card, and it is deliberately loud at every step.
 
+``--reserve-cancel-only`` runs the first half and stops: reserve, then cancel,
+with no payment step and no card read at all. That is the mode to use for
+re-verifying the reserve and cancel wire shapes after a library change, because
+it costs nothing and can be repeated. Everything below applies to it too, except
+the card and the two charging opt-ins, which it does not use.
+
 Safety posture
 --------------
 * THREE opt-ins are required, and none of them alone runs anything:
   ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live switch),
   ``KORAIL_LIVE_MUTATION=1`` (this run may change state), and
-  ``KORAIL_LIVE_REAL_CHARGE=1`` (this run may charge a real card).
+  ``KORAIL_LIVE_REAL_CHARGE=1`` (this run may charge a real card). The third is
+  not required by ``--reserve-cancel-only`` or ``--recover``, neither of which
+  can charge; the first two always are.
 * ``KORAIL_MAX_FARE`` -- a ceiling in won -- is REQUIRED on the charging path,
   not a suggestion. It is the only thing that caps what may be charged, and it
   is checked before the card is read, before login, and before any request. A
   run without it would accept whatever amount the server says is owed.
-  ``--recover`` does not need it because neither of its branches charges.
+  ``--recover`` and ``--reserve-cancel-only`` do not need it because neither
+  charges anything.
 * The card is read ONLY from the environment: ``KORAIL_CARD_NUMBER``,
   ``KORAIL_CARD_PASSWORD`` (the first two digits of the card PIN),
   ``KORAIL_CARD_EXPIRE`` (YYMM) and ``KORAIL_CARD_BIRTHDAY`` (YYMMDD). Never a
   file, never a command-line argument (argv is visible in ``ps``), and never a
-  default value. A missing one aborts before login.
+  default value. A missing one aborts before login. ``--reserve-cancel-only``
+  does not read them at all, so no PAN enters the process on that path.
 * The PAN and the card password are scrubbed from EVERY line this script writes,
   including exception text and every error path, by :class:`_Console`. It does
   so by EXACT VALUE -- the four card values it was handed and nothing else. The
@@ -49,6 +59,7 @@ b. search the configured route ~14 days out (inside the fee-free refund window)
    else the first available one -- and the printed reason always says which of
    the four it was
 c. reserve one adult in the cheapest class; print the PNR immediately
+   -- ``--reserve-cancel-only`` cancels here and jumps to (i)
 d. read the reservation back independently and cross-check the amount owed
    against the hold's own amount; STOP (and cancel) if they disagree
 e. pay with the real card; print the raw confirmation codes
@@ -569,11 +580,14 @@ class RoundTrip:
         self,
         client: KorailClient,
         console: _Console,
-        card: CardPayment,
+        card: CardPayment | None,
         args: argparse.Namespace,
     ) -> None:
         self.client = client
         self.console = console
+        #: ``None`` on the ``--reserve-cancel-only`` path, where no card is read
+        #: at all. :meth:`pay` is the only reader, and :meth:`run_reserve_cancel`
+        #: never reaches it.
         self.card = card
         self.args = args
         self.max_fare = _max_fare_from_env()
@@ -833,6 +847,14 @@ class RoundTrip:
     # -- step e/f -------------------------------------------------------------
 
     def pay(self, hold: ReservationHoldResponse) -> bool:
+        if self.card is None:
+            # Unreachable from either entry point, and left in rather than
+            # narrowed with an assert: this is the one call that spends money,
+            # so a future caller that forgets the card must stop here instead
+            # of discovering the mistake from a bank statement.
+            raise RoundTripAborted(
+                "pay() was reached with no card; this path cannot charge"
+            )
         self.console.say("[e] PAYING WITH THE REAL CARD -- money moves now")
         # From here until the call returns, the payment outcome is UNKNOWN: a
         # transport failure after the server committed looks exactly like one
@@ -934,6 +956,37 @@ class RoundTrip:
 
     # -- orchestration --------------------------------------------------------
 
+    def run_reserve_cancel(self) -> int:
+        """Reserve and release, with no payment step at all.
+
+        The same four live sends as the paying run's first half -- history,
+        search, reserve, cancel -- and then the history re-read. It exists
+        because those are the sends that can be re-verified for free after the
+        library changes, and :meth:`run` cannot do that: it always charges a
+        real card.
+
+        No payment consent is constructed on this path and :meth:`pay` is never
+        called, so a charge is not merely disallowed, it is unreachable.
+        """
+        self.login()
+        self.require_zero_reservations("before starting")
+        candidate = self.select_train()
+        hold = self.reserve(candidate.train)
+        pnr = hold.pnr_no or ""
+        clean = False
+        try:
+            if not self.cancel_unpaid(hold):
+                # Nothing was charged, but a real unpaid hold is outstanding,
+                # and it will sit on the account until someone releases it.
+                raise RoundTripAborted("the unpaid hold could not be cancelled")
+            self.console.say("[g] verifying the account is back to zero")
+            self.require_zero_reservations("after the cancel")
+            clean = True
+            return 0
+        finally:
+            if not clean:
+                self._not_clean_banner(pnr)
+
     def run(self) -> int:
         self.login()
         self.require_zero_reservations("before starting")
@@ -980,18 +1033,22 @@ class RoundTrip:
             return 0
         finally:
             if not clean:
-                self.console.banner(
-                    (
-                        "THIS RUN DID NOT FINISH CLEANLY.",
-                        f"PNR {pnr}",
-                        _OUTSTANDING_BY_STATE.get(
-                            self.state, "State UNKNOWN -- check the account."
-                        ),
-                        "Recover it with:",
-                        f"  {_recovery_command(pnr)}",
-                        "or do it by hand in the KORAIL app. Do not ignore this.",
-                    )
-                )
+                self._not_clean_banner(pnr)
+
+    def _not_clean_banner(self, pnr: str) -> None:
+        """What the operator is holding, and the one command that clears it."""
+        self.console.banner(
+            (
+                "THIS RUN DID NOT FINISH CLEANLY.",
+                f"PNR {pnr}",
+                _OUTSTANDING_BY_STATE.get(
+                    self.state, "State UNKNOWN -- check the account."
+                ),
+                "Recover it with:",
+                f"  {_recovery_command(pnr)}",
+                "or do it by hand in the KORAIL app. Do not ignore this.",
+            )
+        )
 
 
 # --- recovery ----------------------------------------------------------------
@@ -1097,6 +1154,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="minimum seconds between requests (rate-limit protection)",
     )
     parser.add_argument(
+        "--reserve-cancel-only",
+        action="store_true",
+        help=(
+            "reserve and then immediately cancel, with NO payment step: no "
+            f"card is read, {LIVE_REAL_CHARGE_ENV} and {MAX_FARE_ENV} are not "
+            "required, and nothing can be charged"
+        ),
+    )
+    parser.add_argument(
         "--recover",
         action="store_true",
         help=(
@@ -1132,8 +1198,8 @@ def _require_opt_ins(*, real_charge: bool) -> None:
         raise RoundTripAborted(
             f"Set {MAX_FARE_ENV} to the most you are willing to be charged, in "
             "won. It is the only ceiling on this run: without it, step (d) "
-            "accepts whatever amount the server says is owed. (--recover does "
-            "not need it -- neither of its branches charges anything.)"
+            "accepts whatever amount the server says is owed. (--recover and "
+            "--reserve-cancel-only do not need it -- neither charges anything.)"
         )
 
 
@@ -1142,7 +1208,13 @@ def main(argv: list[str] | None = None) -> int:
     console = _Console()
     client: KorailClient | None = None
     try:
-        _require_opt_ins(real_charge=not args.recover)
+        if args.recover and args.reserve_cancel_only:
+            raise RoundTripAborted(
+                "--recover and --reserve-cancel-only do different things; "
+                "pick one"
+            )
+        charging = not (args.recover or args.reserve_cancel_only)
+        _require_opt_ins(real_charge=charging)
         if args.recover:
             pnr_no = _required_env(
                 RECOVER_PNR_ENV, why="the PNR to recover"
@@ -1151,8 +1223,12 @@ def main(argv: list[str] | None = None) -> int:
             _install_pacing(client, _Pacer(args.min_interval))
             return recover(client, console, pnr_no)
 
-        card = read_card_from_env()
-        console = _console_for(card)
+        # The card is read only on the charging path. On --reserve-cancel-only
+        # it is not read at all, so the process never holds a PAN and the
+        # scrubbing console has nothing to scrub.
+        card = read_card_from_env() if charging else None
+        if card is not None:
+            console = _console_for(card)
         args.date = (
             args.date or os.environ.get("KORAIL_TEST_DATE") or _default_date()
         )
@@ -1166,14 +1242,18 @@ def main(argv: list[str] | None = None) -> int:
             )
         console.banner(
             (
-                "THIS RUN WILL CHARGE A REAL CARD AND THEN REFUND IT.",
+                "THIS RUN WILL CHARGE A REAL CARD AND THEN REFUND IT."
+                if charging
+                else "THIS RUN CREATES A REAL UNPAID HOLD AND CANCELS IT. "
+                "NOTHING IS CHARGED.",
                 f"date {args.date}, one adult, cheapest class.",
                 "Interrupt now if that is not what you want.",
             )
         )
         client = KorailClient(build_config_from_env())
         _install_pacing(client, _Pacer(args.min_interval))
-        return RoundTrip(client, console, card, args).run()
+        trip = RoundTrip(client, console, card, args)
+        return trip.run() if charging else trip.run_reserve_cancel()
     except RoundTripAborted as exc:
         console.say(f"ABORTED: {console.scrub(exc)}")
         return 2
