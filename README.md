@@ -1,12 +1,28 @@
+<div align="center">
+
 # korail-mobile-api
 
-[![문서](https://img.shields.io/badge/%EB%AC%B8%EC%84%9C-yaki.kr-1f6feb)](https://yaki.kr/korail-mobile-api/) ![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![License](https://img.shields.io/badge/license-Apache--2.0-green)
+**KORAIL 앱이 쓰는 API 를, 파이썬에서 그대로.**
 
-KORAIL 앱이 쓰는 API 를 파이썬에서 그대로 부릅니다. 로그인하고, 열차를 찾고,
-승차권과 예약을 읽습니다. 좌석을 잡거나 결제·환불하는 일은 consent 객체를
-건네야만 일어납니다.
+로그인하고, 열차를 찾고, 승차권과 예약을 읽습니다.<br>
+좌석을 잡거나 결제·환불하는 일은 consent 객체를 건네야만 일어납니다.
 
-📖 **문서: <https://yaki.kr/korail-mobile-api/>** — 전체 API 레퍼런스와 예제가 있습니다.
+[![문서](https://img.shields.io/badge/%EB%AC%B8%EC%84%9C-yaki.kr-1f6feb?style=flat-square)](https://yaki.kr/korail-mobile-api/)
+[![Python](https://img.shields.io/badge/python-3.11%2B-3776ab?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
+[![타입](https://img.shields.io/badge/typed-py.typed-2f6f4e?style=flat-square)](src/korail_mobile_api/py.typed)
+[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-2437-4c1?style=flat-square)](#문서)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square)](LICENSE)
+
+[문서](https://yaki.kr/korail-mobile-api/) ·
+[빠른 시작](#빠른-시작) ·
+[무엇을 할 수 있나](#무엇을-할-수-있나) ·
+[안전 모델](#안전-모델) ·
+[에러 처리](#에러-처리) ·
+[한계](#한계)
+
+</div>
+
+---
 
 > [!WARNING]
 > - **리버스 엔지니어링 결과입니다.** 라우트와 필드명은 `com.korail.talk` 6.5.0
@@ -67,7 +83,8 @@ export KORAIL_DYNAPATH_OS_VERSION="15"          # Build.VERSION.RELEASE
 export KORAIL_DYNAPATH_DEVICE_MODEL="SM-S928N"  # Build.MODEL
 ```
 
-#### 이 값들을 어디서 구하나
+<details>
+<summary><b>이 값들을 어디서 구하나</b></summary>
 
 기기를 USB 디버깅으로 연결하고 `adb` 로 읽으면 됩니다.
 
@@ -80,9 +97,12 @@ export KORAIL_DYNAPATH_DEVICE_MODEL="SM-S928N"  # Build.MODEL
 `ANDROID_ID` 는 안드로이드 8부터 앱 서명키별로 갈립니다. `adb shell` 이 보는 값은
 KORAIL 앱이 보는 값과 다릅니다. 이 라이브러리에는 상관없습니다 — `di` 가 필요로 하는
 건 16자 hex 이고, env 경로를 쓰는 이유는 값이 진짜여서가 아니라 프로세스를 넘어
-**안정적**이기 때문입니다.
+**안정적**이기 때문입니다. 합성 기본값으로도 실서버 로그인이 됩니다(2026-07-31 확인).
 
-#### 앱 버전과 API 버전은 다릅니다
+</details>
+
+<details>
+<summary><b>앱 버전과 API 버전은 다릅니다</b></summary>
 
 요청에 실리는 `Version=250601003` 은 앱 버전(`6.5.0`)도 versionCode(`60500002`)도
 아닌 별개 상수입니다. APK 안에 있어서 기기 속성으로는 나오지 않습니다.
@@ -99,7 +119,10 @@ unzip -p base.apk 'classes*.dex' | strings | grep -m1 'Device=AD&Version='
 `KORAIL_DEVICE_ANDROID`, `KORAIL_API_VERSION`, `KORAIL_APP_KEY` 입니다. 서버가 최소
 버전을 올리면 여기를 갱신해야 합니다.
 
-### srt-mobile-api 와 같이 쓸 때
+</details>
+
+<details>
+<summary><b>srt-mobile-api 와 같이 쓸 때</b></summary>
 
 이름이 겹치는데 타입이 다릅니다. 둘 다 쓴다면 별칭으로 import 하세요.
 
@@ -109,6 +132,8 @@ unzip -p base.apk 'classes*.dex' | strings | grep -m1 'Device=AD&Version='
 | `TrainSearchQuery.departure_time` | `"000000"` | `"060000"` |
 | `DiscountCoupon` | `coupon_no`, `discount_values` | `coupon_number`, `discount_rate` |
 | `MutationCategory` | 7개 | 5개 (공통 4개) |
+
+</details>
 
 ## 무엇을 할 수 있나
 
@@ -237,9 +262,16 @@ client.cancel_unpaid_hold(hold, consent=MutationConsent(allow_cancel=True, dry_r
 
 | 상태 | 대상 |
 | --- | --- |
-| 왕복까지 확인 | 즉시·좌석지정·예약대기·입석+좌석 hold, `confirm_standby_hold`, `cancel_unpaid_hold`, `add_to_cart`, 청구 없이 거절된 `pay_with_fake_card` |
+| 왕복까지 확인 | 즉시·좌석지정·예약대기·입석+좌석 hold, `confirm_standby_hold`, `cancel_unpaid_hold`, `add_to_cart`, 청구 없이 거절된 `pay_with_fake_card`, 실카드 `pay_with_card` 와 `refund` |
 | 업무 응답을 받음 | `get_self_seat_change_info` → `WRT800176 좌석변경가능시간아님` |
-| 만들었지만 보낸 적 없음 | `pay_with_card`, `refund`, `reserve_merge`, `recalculate_price`, 할인카드 전체, `get_original_ticket_inquiry` |
+| 만들었지만 보낸 적 없음 | `reserve_merge`, `recalculate_price`, 할인카드 전체, `get_original_ticket_inquiry` |
+
+`pay_with_card` 와 `refund` 는 2026-07-31 에 실제 돈으로 확인했습니다. 서울→광명
+8,400원 승차권 한 장을 출발 31일 전에 사고 바로 반환했습니다 — 결제
+`IRT000000 정상발매처리,정상발권처리`, 반환 `IRT200277 반환이 정상 처리되었습니다`,
+수수료 0원, 계정은 예약 0건으로 복귀. 확인된 것은 **개인 신용카드 일시불 한 건**
+뿐입니다. 할부·법인카드·복수 승객·부분 환불은 여전히 미확인이고, 출발일에 가까운
+반환은 수수료가 붙습니다 — 금액은 `get_refund_commission` 이 서버에서 읽어 옵니다.
 
 **환승은 구현했고 실서버 검증 안 됨.** `search_transfer_trains` 와 `reserve_transfer`
 는 보낸 적이 없습니다. 실환승 hold 는
