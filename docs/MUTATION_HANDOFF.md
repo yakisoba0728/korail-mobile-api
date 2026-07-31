@@ -527,6 +527,22 @@ is the script's own `--recover` mode, driven by `KORAIL_RECOVER_PNR`: it cancels
 an unpaid hold, or prints the commission and refunds a paid ticket. It does NOT
 need `KORAIL_LIVE_REAL_CHARGE`, because neither branch charges anything.
 
+`--reserve-cancel-only` is the third mode and the one to reach for after
+changing the library. It runs steps (a)–(c) and then cancels: reserve, release,
+verify the account is clean. No payment consent is constructed and `pay()` is
+never reached, so a charge is unreachable rather than merely disallowed, and no
+card is read at all — on that path the process never holds a PAN. Like
+`--recover` it needs neither `KORAIL_LIVE_REAL_CHARGE` nor `KORAIL_MAX_FARE`,
+since there is no charge for either to bound; unlike `--recover` it still needs
+`KORAIL_LIVE_MUTATION`, because it creates a real hold. It exists because the
+reserve and cancel wire shapes are free to re-verify and the paying run is not,
+so before this mode the cheap check was the expensive one.
+
+```bash
+KORAIL_MOBILE_API_LIVE=1 KORAIL_LIVE_MUTATION=1 \
+python3 scripts/reserve_pay_refund_roundtrip.py --reserve-cancel-only
+```
+
 Caveat carried over from item 1: a live ScheduleView row supplies no goods
 number, so `trn.prcFare.do` usually cannot be built and "cheapest" cannot be
 established from a fare QUOTE. The script never invents a train-class price

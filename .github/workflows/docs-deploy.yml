@@ -1,17 +1,18 @@
 name: Docs site
 
-# Manual only. There is no `push:` trigger here, and that is deliberate:
+# Manual only. There is no `push:` trigger here, and that is deliberate.
 #
-#   1. This repository is private, and GitHub Pages on a private repository
-#      requires a paid plan. A job that ran on every push would fail on every
-#      push, for a reason that has nothing to do with the commit.
-#   2. Whether the site is built at all is already answered by the `mkdocs` job
-#      in ci.yml, which runs `mkdocs build --strict` on every push. This
-#      workflow adds only the delivery step, and delivery is a decision a
-#      person makes.
+# Whether the site BUILDS is already answered on every push by the `mkdocs` job
+# in ci.yml, which runs `mkdocs build --strict`. This workflow adds only the
+# delivery step, and publishing to a live site is a decision a person makes: a
+# push that is correct is not the same as a push that should be public.
 #
-# When the repository becomes public and Pages is enabled, run this from the
-# Actions tab. Nothing else needs to change.
+# Run it from the Actions tab, or with `gh workflow run docs-deploy.yml`.
+#
+# The original first reason -- that the repository was private and Pages needs a
+# paid plan there -- stopped applying when it went public, and the workflow has
+# since deployed from a manual dispatch. The reason above is the one that was
+# always load-bearing.
 on:
   workflow_dispatch:
 
