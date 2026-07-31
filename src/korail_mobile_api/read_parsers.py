@@ -1,18 +1,10 @@
-"""읽기 라우트의 응답을 :mod:`korail_mobile_api.read_models` 의 타입으로 옮깁니다.
+"""읽기 라우트 응답을 :mod:`korail_mobile_api.read_models` 타입으로 변환.
 
-파서 하나가 라우트 하나를 맡습니다. 각 파서는 봉투를 먼저 확인하고
-(``strResult``/``h_msg_cd``,
-:func:`~korail_mobile_api.errors.classify_app_error`), 그다음 그 라우트의 DAO
-선언이 말하는 필드만 꺼냅니다. 원본 JSON 은 언제나 모델의 ``raw`` 에 남으므로
-모델이 짚지 않은 필드도 잃지 않습니다.
+파서 하나가 라우트 하나를 맡습니다. 봉투 확인 후 DAO 필드만 추출하며,
+원본 JSON 은 모델의 ``raw`` 에 보존됩니다.
 
-여기서 파싱하지 않는 필드는 값이 필요 없거나,
-:mod:`korail_mobile_api.redaction` 이 가리는 자격증명이거나, 앱이 화면에서
-지역적으로 채우는 값입니다. 해당 파서의 docstring 이 그 이유를 적습니다.
-
-KORAIL 은 APK 가 ``String`` 으로 선언한 필드를 JSON 숫자로 보내기도 합니다.
-그래서 스칼라는 :func:`_optional_scalar_string` 으로 읽어 두 형태를 모두
-받아들입니다.
+KORAIL 은 ``String`` 선언 필드를 JSON 숫자로도 보내므로
+:func:`_optional_scalar_string` 으로 양쪽을 수용합니다.
 """
 from __future__ import annotations
 
@@ -285,16 +277,11 @@ def _optional_scalar_string(
     key: str,
     context: str,
 ) -> str | None:
-    """스칼라 필드 하나. JSON 문자열로 와도 JSON 숫자로 와도 받습니다.
+    """스칼라 필드 — JSON 문자열과 JSON 정수를 모두 수용.
 
-    KORAIL 은 APK 가 자바 ``String`` 으로 선언한 필드를 둘 중 무엇으로 보낼지
-    일관되지 않고, Gson 의 ``JsonReader.nextString()`` 이 숫자를 문자열로 강제
-    변환하므로 앱은 그것을 눈치채지 못합니다. 관측된 것만 셋입니다 —
-    ``h_jrny_cnt`` 가 ``"0001"``, ``h_st_prnb``/``h_cls_prnb`` 가 ``int`` 자리에
-    0 을 채운 문자열, ``h_srcar_no`` 가 문자열 자리에 JSON 숫자로 왔습니다.
-
-    다만 아무거나 받지는 않습니다. 스칼라 자리의 ``bool``, ``float``, 리스트,
-    객체는 여전히 프로토콜 오류입니다.
+    KORAIL 이 ``String`` 선언 필드를 숫자로도 보내는 사례: ``h_jrny_cnt``,
+    ``h_st_prnb``/``h_cls_prnb``, ``h_srcar_no``. ``bool``/``float``/리스트/객체는
+    프로토콜 오류.
     """
     value = data.get(key)
     if value is None or isinstance(value, str):
@@ -354,71 +341,277 @@ def _required_integer(
     )
 
 
+def _nullable_string_fields(
+    data: Mapping[str, Any],
+    field_map: Mapping[str, str],
+    context: str,
+) -> dict[str, str | None]:
+    return {
+        attribute: _optional_string(data, wire_name, context)
+        for attribute, wire_name in field_map.items()
+    }
+
+
+def _nullable_scalar_fields(
+    data: Mapping[str, Any],
+    field_map: Mapping[str, str],
+    context: str,
+) -> dict[str, str | None]:
+    """Like :func:`_nullable_string_fields` but accepts JSON numbers too.
+
+    See :func:`_optional_scalar_string`.
+    """
+    return {
+        attribute: _optional_scalar_string(data, wire_name, context)
+        for attribute, wire_name in field_map.items()
+    }
+
+
+# ─── Field maps for the first-half parsers ───────────────────────────────────
+
+_CART_ITEM_FIELDS: dict[str, str] = {
+    "service_code": "addSrvDvCd",
+    "provider_name": "h_add_srv_mrk_ent_nm",
+    "product_name": "h_gd_nm",
+    "item_type": "h_item_dv_nm",
+    "departure_date": "h_dpt_dt",
+    "received_amount": "h_rcvd_amt",
+    "reservation_received_date": "h_rsv_rcp_dt",
+    "usage_start_date": "utlStDt",
+    "usage_start_time": "utlStTm",
+    "usage_close_time": "utlClsTm",
+    "partner_reservation_no": "coptEntRsvNo",
+    "pnr_no": "h_pnr_no",
+    "lump_sum_target_no": "h_lump_stl_tgt_no",
+    "customer_no": "h_cust_no",
+    "virtual_reservation_no": "h_vr_rsv_no",
+}
+
+_DEPOSIT_BANK_FIELDS: dict[str, str] = {
+    "code": "dptnBankCd",
+    "display_name": "dptnBankNm",
+}
+
+_DELAY_DISCOUNT_TICKET_FIELDS: dict[str, str] = {
+    "fare": "h_dlay_fare",
+    "usable_until_date": "h_use_psb_dt",
+    "original_sale_date": "h_orgtk_ret_sale_dt",
+    "window_no": "h_orgtk_wct_no",
+    "sale_sequence": "h_orgtk_sale_sqno",
+    "return_password": "h_orgtk_ret_pwd",
+}
+
+_CREW_REQUEST_OPTION_FIELDS: dict[str, str] = {
+    "message_code": "intgMsgCd",
+    "content": "prsCont",
+}
+
+_PASS_MENU_ITEM_FIELDS: dict[str, str] = {
+    "agreement": "agree",
+    "detail_type": "detailType",
+    "detail_description": "dtlDsc",
+    "enabled": "enable",
+    "item_id": "id",
+    "information": "information",
+    "expanded": "isExpand",
+    "parent_id": "parentId",
+    "representative_arrival": "repSegArv",
+    "representative_departure": "repSegDpt",
+    "title": "title",
+    "train_group_code": "trnGpCd",
+    "item_type": "type",
+}
+
+_COMMUTER_KIND_MENU_FIELDS: dict[str, str] = {
+    "after_day": "afterDay",
+    "agreement": "agree",
+    "information": "information",
+    "title": "title",
+}
+
+_TRIP_MENU_CONTENT_FIELDS: dict[str, str] = {
+    "title": "contTitle",
+    "detail": "contDetail",
+    "content_type": "detailType",
+    "active": "passActive",
+    "agree": "passAgree",
+    "info": "passInfo",
+    "image": "contImage",
+    "url": "contUrl",
+}
+
+_TRIP_MENU_ITEM_FIELDS: dict[str, str] = {
+    "title": "menuTitle",
+    "detail": "menuDetail",
+    "menu_type": "menuType",
+    "button": "menuBtn",
+    "url": "menuUrl",
+}
+
+_PRODUCT_RESERVATION_FIELDS: dict[str, str] = {
+    "product_name": "strGdNm",
+    "reservation_status": "strRsvSttNm",
+    "payment_deadline": "strStlDlnDt",
+    "payment_status": "strStlSttCd",
+    "virtual_reservation_no": "strVrRsvNo",
+}
+
+_PRODUCT_DETAIL_FIELDS: dict[str, str] = {
+    "product_name": "strGdNm",
+    "reservation_status": "strRsvSttNm",
+    "cancellation_deadline": "strCncDlnDt",
+    "cancellation_amount": "strCncRetAmt",
+    "cancellation_fee": "strCncRetFee",
+    "received_amount": "strRcvdAmt",
+    "total_amount": "strTotStlAmt",
+    "usage_period": "strUtlTrmCont",
+    "virtual_reservation_no": "strVrRsvNo",
+}
+
+_RECEIPT_PAYMENT_FIELDS: dict[str, str] = {
+    "payment_method": "h_stl_way_nm",
+    "approval_date": "h_apv_dt",
+    "account_no": "h_acnt_no",
+    "approval_no": "h_apv_no",
+    "card_no": "h_stl_crd_no",
+    "point_no": "h_xpot_no",
+}
+
+_RECEIPT_CASH_PAYMENT_FIELDS: dict[str, str] = {
+    "approval_method_name": "h_apv_mtd_nm",
+    "authentication_domain_recognition_no": "h_athn_dmn_rcgn_no",
+    "cash_receipt_approval_no": "h_cash_rcet_apv_no",
+    "cash_receipt_transaction_division_code": "h_cash_rcet_txn_dv_cd",
+}
+
+_TICKET_RECEIPT_FIELDS: dict[str, str] = {
+    "travel_date": "h_abrd_dt",
+    "departure_station": "h_dpt_rs_stn_nm",
+    "departure_time": "h_dpt_tm",
+    "arrival_station": "h_arv_rs_stn_nm",
+    "arrival_time": "h_arv_tm",
+    "commuter_kind_code": "h_cmtr_knd_cd",
+    "journey_type_code": "h_jrny_tp_cd",
+    "printed_discount_name": "h_prt_disc_knd_nm",
+    "print_type": "h_prt_type",
+    "seat_class_name": "h_psrm_cl_nm",
+    "ticket_kind_code": "h_tk_knd_cd",
+    "ticket_status_code": "h_tk_stt_cd",
+    "train_class_code": "h_trn_clsf_cd",
+    "train_class_name": "h_trn_clsf_nm",
+    "train_no": "h_trn_no",
+    "member_card_no": "h_stl_mb_crd_no",
+}
+
+_RESERVATION_HISTORY_TRAIN_FIELDS: dict[str, str] = {
+    "departure_station": "h_dpt_rs_stn_nm",
+    "departure_time": "h_dpt_tm",
+    "arrival_station": "h_arv_rs_stn_nm",
+    "arrival_time": "h_arv_tm",
+    "run_date": "h_run_dt",
+    "train_no": "h_trn_no",
+    "train_class_code": "h_trn_clsf_cd",
+    "train_class_name": "h_trn_clsf_nm",
+    "reservation_type_code": "h_rsv_tp_cd",
+    "acceptance_possible_flag": "h_acpt_ps_flg",
+    "payment_flag": "h_payment_flg",
+    "settlement_flag": "h_stl_flg",
+    "pnr_no": "h_pnr_no",
+}
+
+_TRAIN_SCHEDULE_ITEM_FIELDS: dict[str, str] = {
+    "train_no": "h_trn_no",
+    "train_group_code": "h_trn_gp_cd",
+    "train_class_code": "h_trn_clsf_cd",
+    "train_class_name": "h_trn_clsf_nm",
+    "run_date": "h_run_dt",
+    "departure_date": "h_dpt_dt",
+    "departure_time": "h_dpt_tm",
+    "arrival_date": "h_arv_dt",
+    "arrival_time": "h_arv_tm",
+    "departure_station_code": "h_dpt_rs_stn_cd",
+    "departure_station_name": "h_dpt_rs_stn_nm",
+    "arrival_station_code": "h_arv_rs_stn_cd",
+    "arrival_station_name": "h_arv_rs_stn_nm",
+    "departure_construction_order": "h_dpt_stn_cons_ordr",
+    "arrival_construction_order": "h_arv_stn_cons_ordr",
+    "departure_run_order": "h_dpt_stn_run_ordr",
+    "arrival_run_order": "h_arv_stn_run_ordr",
+    "car_type_name": "h_car_tp_nm",
+    "general_room_name": "h_gen_psrm_cl_nm",
+    "special_room_name": "h_spe_psrm_cl_nm",
+    "general_reservation_code": "h_gen_rsv_cd",
+    "special_reservation_code": "h_spe_rsv_cd",
+    "free_seat_reservation_code": "h_free_rsv_cd",
+    "standing_reservation_code": "h_stnd_rsv_cd",
+    "seat_map_flag": "h_rd_seat_map_flg",
+    "delay_sale_flag": "h_dlay_sale_flg",
+    "wait_reservation_flag": "h_wait_rsv_flg",
+    "reservation_possible_name": "h_rsv_psb_nm",
+    "special_reservation_possible_name": "h_spe_rsv_psb_nm",
+    "info_text": "h_info_txt",
+    "popup_message": "h_popup_msg",
+}
+
+_PASS_SCHEDULE_TRAIN_FIELDS: dict[str, str] = {
+    "arrival_station_code": "h_arv_rs_stn_cd",
+    "arrival_station_name": "h_arv_rs_stn_nm",
+    "departure_station_code": "h_dpt_rs_stn_cd",
+    "departure_station_name": "h_dpt_rs_stn_nm",
+    "detour_code": "h_dtour",
+    "schedule_price": "h_schd_prc",
+    "train_group_code": "h_trn_gp_cd",
+    "train_no": "h_trn_no",
+}
+
+_PASS_AGE_OPTION_FIELDS: dict[str, str] = {
+    "commuter_age_code": "h_cmtr_utl_age_cd",
+    "display_name": "h_comn_cd_nm",
+    "minimum_age": "h_min_age",
+    "maximum_age": "h_max_age",
+}
+
+_PASS_PERIOD_OPTION_FIELDS: dict[str, str] = {
+    "commuter_period_code": "h_cmtr_utl_trm_cd",
+    "display_name": "h_comn_cd_nm",
+}
+
+
+# ─── Composite parse helpers ─────────────────────────────────────────────────
+
 def _parse_pass_menu_data(
     data: Mapping[str, Any] | None,
     context: str,
 ) -> PassMenuData | None:
     if data is None:
         return None
-    age_options = []
-    for value in _optional_list(data, "pass_ageinfo", context):
-        item = _row(value, f"{context} pass_ageinfo")
-        age_options.append(
-            PassAgeOption(
-                commuter_age_code=_optional_string(
-                    item,
-                    "h_cmtr_utl_age_cd",
-                    "pass age option",
-                ),
-                display_name=_optional_string(
-                    item,
-                    "h_comn_cd_nm",
-                    "pass age option",
-                ),
-                minimum_age=_optional_string(
-                    item,
-                    "h_min_age",
-                    "pass age option",
-                ),
-                maximum_age=_optional_string(
-                    item,
-                    "h_max_age",
-                    "pass age option",
-                ),
-                raw=item,
-            )
+    age_options = tuple(
+        PassAgeOption(
+            **_nullable_string_fields(
+                _row(v, f"{context} pass_ageinfo"),
+                _PASS_AGE_OPTION_FIELDS,
+                "pass age option",
+            ),
+            raw=_row(v, f"{context} pass_ageinfo"),
         )
-    period_options = []
-    for value in _optional_list(data, "pass_periodinfo", context):
-        item = _row(value, f"{context} pass_periodinfo")
-        period_options.append(
-            PassPeriodOption(
-                commuter_period_code=_optional_string(
-                    item,
-                    "h_cmtr_utl_trm_cd",
-                    "pass period option",
-                ),
-                display_name=_optional_string(
-                    item,
-                    "h_comn_cd_nm",
-                    "pass period option",
-                ),
-                raw=item,
-            )
+        for v in _optional_list(data, "pass_ageinfo", context)
+    )
+    period_options = tuple(
+        PassPeriodOption(
+            **_nullable_string_fields(
+                _row(v, f"{context} pass_periodinfo"),
+                _PASS_PERIOD_OPTION_FIELDS,
+                "pass period option",
+            ),
+            raw=_row(v, f"{context} pass_periodinfo"),
         )
+        for v in _optional_list(data, "pass_periodinfo", context)
+    )
     return PassMenuData(
-        commuter_kind_code=_optional_string(
-            data,
-            "h_cmtr_knd_cd",
-            context,
-        ),
-        station_selection=_optional_string(
-            data,
-            "h_select_station",
-            context,
-        ),
-        age_options=tuple(age_options),
-        period_options=tuple(period_options),
+        commuter_kind_code=_optional_string(data, "h_cmtr_knd_cd", context),
+        station_selection=_optional_string(data, "h_select_station", context),
+        age_options=age_options,
+        period_options=period_options,
         raw=data,
     )
 
@@ -496,12 +689,7 @@ def _parse_pass_goods_info(
 
 
 def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
-    # A live pass.passMenu.do success is result-only: the body is
-    # {"list": [...], "strResult": "SUCC"} with no h_msg_cd/h_msg_txt at all.
-    # Only the failure body carries the full envelope (P058 when unauthenticated),
-    # so requiring h_msg_cd made every SUCCESS unparseable while every FAILURE
-    # parsed. Accept the result-only shape the way the cart/delay-discount reads
-    # already do.
+    # Live pass.passMenu.do success is result-only (no h_msg_cd/h_msg_txt).
     _validate_strict_read_envelope(raw, allow_result_only_success=True)
     items = []
     for value in _optional_list(raw, "list", "pass menu"):
@@ -509,90 +697,14 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
         web_data = _optional_mapping(item, "webData", "pass menu item")
         items.append(
             PassMenuItem(
-                after_day=_optional_integer(
-                    item,
-                    "afterDay",
-                    "pass menu item",
-                ),
-                agreement=_optional_string(
-                    item,
-                    "agree",
-                    "pass menu item",
-                ),
-                detail_type=_optional_string(
-                    item,
-                    "detailType",
-                    "pass menu item",
-                ),
-                detail_description=_optional_string(
-                    item,
-                    "dtlDsc",
-                    "pass menu item",
-                ),
-                enabled=_optional_string(
-                    item,
-                    "enable",
-                    "pass menu item",
-                ),
-                item_id=_optional_string(
-                    item,
-                    "id",
-                    "pass menu item",
-                ),
-                information=_optional_string(
-                    item,
-                    "information",
-                    "pass menu item",
-                ),
-                expanded=_optional_string(
-                    item,
-                    "isExpand",
-                    "pass menu item",
-                ),
-                parent_id=_optional_string(
-                    item,
-                    "parentId",
-                    "pass menu item",
-                ),
-                representative_arrival=_optional_string(
-                    item,
-                    "repSegArv",
-                    "pass menu item",
-                ),
-                representative_departure=_optional_string(
-                    item,
-                    "repSegDpt",
-                    "pass menu item",
-                ),
-                title=_optional_string(
-                    item,
-                    "title",
-                    "pass menu item",
-                ),
-                train_group_code=_optional_string(
-                    item,
-                    "trnGpCd",
-                    "pass menu item",
-                ),
-                item_type=_optional_string(
-                    item,
-                    "type",
-                    "pass menu item",
-                ),
+                after_day=_optional_integer(item, "afterDay", "pass menu item"),
+                **_nullable_string_fields(item, _PASS_MENU_ITEM_FIELDS, "pass menu item"),
                 goods_data=_parse_pass_goods_info(
-                    _optional_mapping(
-                        item,
-                        "goodsData",
-                        "pass menu item",
-                    ),
+                    _optional_mapping(item, "goodsData", "pass menu item"),
                     "pass goods info",
                 ),
                 pass_data=_parse_pass_menu_data(
-                    _optional_mapping(
-                        item,
-                        "passData",
-                        "pass menu item",
-                    ),
+                    _optional_mapping(item, "passData", "pass menu item"),
                     "pass menu data",
                 ),
                 url=(
@@ -611,14 +723,7 @@ def parse_commuter_kind_menu_response(
 ) -> CommuterKindMenuResponse:
     _validate_strict_read_envelope(raw)
     return CommuterKindMenuResponse(
-        after_day=_optional_string(raw, "afterDay", "commuter kind menu"),
-        agreement=_optional_string(raw, "agree", "commuter kind menu"),
-        information=_optional_string(
-            raw,
-            "information",
-            "commuter kind menu",
-        ),
-        title=_optional_string(raw, "title", "commuter kind menu"),
+        **_nullable_string_fields(raw, _COMMUTER_KIND_MENU_FIELDS, "commuter kind menu"),
         pass_data=_parse_pass_menu_data(
             _optional_mapping(raw, "passData", "commuter kind menu"),
             "commuter kind pass data",
@@ -631,28 +736,18 @@ def parse_crew_request_list_response(
     raw: Mapping[str, Any],
 ) -> CrewRequestListResponse:
     _validate_strict_read_envelope(raw)
-    items = []
-    for value in _optional_list(raw, "prsList", "crew request list"):
-        item = _row(value, "crew request list prsList")
-        items.append(
-            CrewRequestOption(
-                message_code=_optional_string(
-                    item,
-                    "intgMsgCd",
-                    "crew request option",
-                ),
-                content=_optional_string(
-                    item,
-                    "prsCont",
-                    "crew request option",
-                ),
-                raw=item,
-            )
+    items = tuple(
+        CrewRequestOption(
+            **_nullable_string_fields(
+                _row(v, "crew request list prsList"),
+                _CREW_REQUEST_OPTION_FIELDS,
+                "crew request option",
+            ),
+            raw=_row(v, "crew request list prsList"),
         )
-    return CrewRequestListResponse(
-        items=tuple(items),
-        **_response_fields(raw),
+        for v in _optional_list(raw, "prsList", "crew request list")
     )
+    return CrewRequestListResponse(items=items, **_response_fields(raw))
 
 
 def parse_service_status_response(
@@ -669,50 +764,8 @@ def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
         item = _row(value, "cart list cart_info")
         items.append(
             CartItem(
-                service_code=_optional_string(
-                    item, "addSrvDvCd", "cart item"
-                ),
-                provider_name=_optional_string(
-                    item, "h_add_srv_mrk_ent_nm", "cart item"
-                ),
-                product_name=_optional_string(item, "h_gd_nm", "cart item"),
-                item_type=_optional_string(
-                    item, "h_item_dv_nm", "cart item"
-                ),
-                departure_date=_optional_string(
-                    item, "h_dpt_dt", "cart item"
-                ),
-                received_amount=_optional_string(
-                    item, "h_rcvd_amt", "cart item"
-                ),
-                reservation_received_date=_optional_string(
-                    item, "h_rsv_rcp_dt", "cart item"
-                ),
-                ticket_count=_optional_integer(
-                    item, "h_tk_cnt", "cart item"
-                ),
-                usage_start_date=_optional_string(
-                    item, "utlStDt", "cart item"
-                ),
-                usage_start_time=_optional_string(
-                    item, "utlStTm", "cart item"
-                ),
-                usage_close_time=_optional_string(
-                    item, "utlClsTm", "cart item"
-                ),
-                partner_reservation_no=_optional_string(
-                    item, "coptEntRsvNo", "cart item"
-                ),
-                pnr_no=_optional_string(item, "h_pnr_no", "cart item"),
-                lump_sum_target_no=_optional_string(
-                    item, "h_lump_stl_tgt_no", "cart item"
-                ),
-                customer_no=_optional_string(
-                    item, "h_cust_no", "cart item"
-                ),
-                virtual_reservation_no=_optional_string(
-                    item, "h_vr_rsv_no", "cart item"
-                ),
+                **_nullable_string_fields(item, _CART_ITEM_FIELDS, "cart item"),
+                ticket_count=_optional_integer(item, "h_tk_cnt", "cart item"),
                 raw=item,
             )
         )
@@ -723,64 +776,37 @@ def parse_deposit_bank_response(
     raw: Mapping[str, Any],
 ) -> DepositBankListResponse:
     _validate_envelope(raw)
-    items = []
-    for value in _optional_list(raw, "dptnBank", "deposit bank list"):
-        item = _row(value, "deposit bank list dptnBank")
-        items.append(
-            DepositBank(
-                code=_optional_string(item, "dptnBankCd", "deposit bank"),
-                display_name=_optional_string(
-                    item, "dptnBankNm", "deposit bank"
-                ),
-                raw=item,
-            )
+    items = tuple(
+        DepositBank(
+            **_nullable_string_fields(
+                _row(v, "deposit bank list dptnBank"),
+                _DEPOSIT_BANK_FIELDS,
+                "deposit bank",
+            ),
+            raw=_row(v, "deposit bank list dptnBank"),
         )
-    return DepositBankListResponse(
-        items=tuple(items),
-        **_response_fields(raw),
+        for v in _optional_list(raw, "dptnBank", "deposit bank list")
     )
+    return DepositBankListResponse(items=items, **_response_fields(raw))
 
 
 def parse_delay_discount_ticket_response(
     raw: Mapping[str, Any],
 ) -> DelayDiscountTicketListResponse:
     _validate_envelope(raw, allow_result_only_success=True)
-    items = []
-    rows = _nested_rows(
-        raw,
-        "disc_infos",
-        "disc_info",
-        "delay discount ticket list",
-    )
-    for value in rows:
-        item = _row(value, "delay discount ticket list disc_info")
-        items.append(
-            DelayDiscountTicket(
-                fare=_optional_string(
-                    item, "h_dlay_fare", "delay discount ticket"
-                ),
-                usable_until_date=_optional_string(
-                    item, "h_use_psb_dt", "delay discount ticket"
-                ),
-                original_sale_date=_optional_string(
-                    item, "h_orgtk_ret_sale_dt", "delay discount ticket"
-                ),
-                window_no=_optional_string(
-                    item, "h_orgtk_wct_no", "delay discount ticket"
-                ),
-                sale_sequence=_optional_string(
-                    item, "h_orgtk_sale_sqno", "delay discount ticket"
-                ),
-                return_password=_optional_string(
-                    item, "h_orgtk_ret_pwd", "delay discount ticket"
-                ),
-                raw=item,
-            )
+    rows = _nested_rows(raw, "disc_infos", "disc_info", "delay discount ticket list")
+    items = tuple(
+        DelayDiscountTicket(
+            **_nullable_string_fields(
+                _row(v, "delay discount ticket list disc_info"),
+                _DELAY_DISCOUNT_TICKET_FIELDS,
+                "delay discount ticket",
+            ),
+            raw=_row(v, "delay discount ticket list disc_info"),
         )
-    return DelayDiscountTicketListResponse(
-        items=tuple(items),
-        **_response_fields(raw),
+        for v in rows
     )
+    return DelayDiscountTicketListResponse(items=items, **_response_fields(raw))
 
 
 def parse_discount_coupon_response(
@@ -886,50 +912,21 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
     items = []
     for value in _optional_list(raw, "menuList", "trip menu"):
         item = _row(value, "trip menu menuList")
-        contents = []
-        for content_value in _optional_list(item, "contList", "trip menu"):
-            content = _row(content_value, "trip menu contList")
-            contents.append(
-                TripMenuContent(
-                    title=_optional_string(
-                        content, "contTitle", "trip menu content"
-                    ),
-                    detail=_optional_string(
-                        content, "contDetail", "trip menu content"
-                    ),
-                    content_type=_optional_string(
-                        content, "detailType", "trip menu content"
-                    ),
-                    active=_optional_string(
-                        content, "passActive", "trip menu content"
-                    ),
-                    agree=_optional_string(
-                        content, "passAgree", "trip menu content"
-                    ),
-                    info=_optional_string(
-                        content, "passInfo", "trip menu content"
-                    ),
-                    image=_optional_string(
-                        content, "contImage", "trip menu content"
-                    ),
-                    url=_optional_string(
-                        content, "contUrl", "trip menu content"
-                    ),
-                    raw=content,
-                )
+        contents = tuple(
+            TripMenuContent(
+                **_nullable_string_fields(
+                    _row(cv, "trip menu contList"),
+                    _TRIP_MENU_CONTENT_FIELDS,
+                    "trip menu content",
+                ),
+                raw=_row(cv, "trip menu contList"),
             )
+            for cv in _optional_list(item, "contList", "trip menu")
+        )
         items.append(
             TripMenuItem(
-                title=_optional_string(item, "menuTitle", "trip menu item"),
-                detail=_optional_string(
-                    item, "menuDetail", "trip menu item"
-                ),
-                menu_type=_optional_string(
-                    item, "menuType", "trip menu item"
-                ),
-                button=_optional_string(item, "menuBtn", "trip menu item"),
-                contents=tuple(contents),
-                url=_optional_string(item, "menuUrl", "trip menu item"),
+                **_nullable_string_fields(item, _TRIP_MENU_ITEM_FIELDS, "trip menu item"),
+                contents=contents,
                 raw=item,
             )
         )
@@ -947,36 +944,20 @@ def parse_product_reservation_list_response(
     main = _optional_mapping(raw, "mainInfo", "product reservation list")
     if main is None:
         return ProductReservationListResponse(**_response_fields(raw))
-    items = []
-    for value in _optional_list(main, "entity", "product reservation list"):
-        item = _row(value, "product reservation list entity")
-        items.append(
-            ProductReservation(
-                product_name=_optional_string(
-                    item, "strGdNm", "product reservation"
-                ),
-                reservation_status=_optional_string(
-                    item, "strRsvSttNm", "product reservation"
-                ),
-                payment_deadline=_optional_string(
-                    item, "strStlDlnDt", "product reservation"
-                ),
-                payment_status=_optional_string(
-                    item, "strStlSttCd", "product reservation"
-                ),
-                virtual_reservation_no=_optional_string(
-                    item, "strVrRsvNo", "product reservation"
-                ),
-                raw=item,
-            )
+    items = tuple(
+        ProductReservation(
+            **_nullable_string_fields(
+                _row(v, "product reservation list entity"),
+                _PRODUCT_RESERVATION_FIELDS,
+                "product reservation",
+            ),
+            raw=_row(v, "product reservation list entity"),
         )
+        for v in _optional_list(main, "entity", "product reservation list")
+    )
     return ProductReservationListResponse(
-        items=tuple(items),
-        total_count=_optional_integer(
-            main,
-            "strTotCnt",
-            "product reservation list",
-        ),
+        items=items,
+        total_count=_optional_integer(main, "strTotCnt", "product reservation list"),
         **_response_fields(raw),
     )
 
@@ -995,32 +976,8 @@ def parse_product_detail_response(
         if name is not None:
             included_items.append(name)
     return ProductDetailResponse(
-        product_name=_optional_string(main, "strGdNm", "product detail"),
-        reservation_status=_optional_string(
-            main, "strRsvSttNm", "product detail"
-        ),
-        cancellation_deadline=_optional_string(
-            main, "strCncDlnDt", "product detail"
-        ),
-        cancellation_amount=_optional_string(
-            main, "strCncRetAmt", "product detail"
-        ),
-        cancellation_fee=_optional_string(
-            main, "strCncRetFee", "product detail"
-        ),
-        received_amount=_optional_string(
-            main, "strRcvdAmt", "product detail"
-        ),
-        total_amount=_optional_string(
-            main, "strTotStlAmt", "product detail"
-        ),
-        usage_period=_optional_string(
-            main, "strUtlTrmCont", "product detail"
-        ),
+        **_nullable_string_fields(main, _PRODUCT_DETAIL_FIELDS, "product detail"),
         included_item_names=tuple(included_items),
-        virtual_reservation_no=_optional_string(
-            main, "strVrRsvNo", "product detail"
-        ),
         detail_raw=main,
         **_response_fields(raw),
     )
@@ -1031,26 +988,16 @@ def parse_ticket_receipt_response(
 ) -> TicketReceiptResponse:
     _validate_envelope(raw)
     items = []
-    rows = _nested_rows(
-        raw,
-        "receipt_infos",
-        "receipt_info",
-        "ticket receipt",
-    )
+    rows = _nested_rows(raw, "receipt_infos", "receipt_info", "ticket receipt")
     for value in rows:
         item = _row(value, "ticket receipt receipt_info")
         payments = []
-        for payment_value in _optional_list(
-            item, "stl_info", "ticket receipt"
-        ):
-            payment = _row(payment_value, "ticket receipt stl_info")
+        for pv in _optional_list(item, "stl_info", "ticket receipt"):
+            payment = _row(pv, "ticket receipt stl_info")
             payments.append(
                 ReceiptPayment(
-                    payment_method=_optional_string(
-                        payment, "h_stl_way_nm", "receipt payment"
-                    ),
-                    approval_date=_optional_string(
-                        payment, "h_apv_dt", "receipt payment"
+                    **_nullable_string_fields(
+                        payment, _RECEIPT_PAYMENT_FIELDS, "receipt payment"
                     ),
                     installment_months=_optional_integer(
                         payment, "h_ismt_mnth_num", "receipt payment"
@@ -1058,39 +1005,17 @@ def parse_ticket_receipt_response(
                     amount=_optional_integer(
                         payment, "h_stl_amt", "receipt payment"
                     ),
-                    account_no=_optional_string(
-                        payment, "h_acnt_no", "receipt payment"
-                    ),
-                    approval_no=_optional_string(
-                        payment, "h_apv_no", "receipt payment"
-                    ),
-                    card_no=_optional_string(
-                        payment, "h_stl_crd_no", "receipt payment"
-                    ),
-                    point_no=_optional_string(
-                        payment, "h_xpot_no", "receipt payment"
-                    ),
                     raw=payment,
                 )
             )
         cash_receipts = []
-        for cash_value in _optional_list(
-            item, "cash_rcet_info", "ticket receipt"
-        ):
-            cash = _row(cash_value, "ticket receipt cash_rcet_info")
+        for cv in _optional_list(item, "cash_rcet_info", "ticket receipt"):
+            cash = _row(cv, "ticket receipt cash_rcet_info")
             cash_receipts.append(
                 ReceiptCashPayment(
-                    approval_method_name=_optional_string(
-                        cash, "h_apv_mtd_nm", "receipt cash payment"
-                    ),
-                    authentication_domain_recognition_no=_optional_string(
-                        cash, "h_athn_dmn_rcgn_no", "receipt cash payment"
-                    ),
-                    cash_receipt_approval_no=_optional_string(
-                        cash, "h_cash_rcet_apv_no", "receipt cash payment"
-                    ),
-                    cash_receipt_transaction_division_code=_optional_string(
-                        cash, "h_cash_rcet_txn_dv_cd", "receipt cash payment"
+                    **_nullable_string_fields(
+                        cash, _RECEIPT_CASH_PAYMENT_FIELDS,
+                        "receipt cash payment",
                     ),
                     total_approved_amount=_optional_integer(
                         cash, "h_tot_apv_amt", "receipt cash payment"
@@ -1100,82 +1025,19 @@ def parse_ticket_receipt_response(
             )
         items.append(
             TicketReceipt(
-                travel_date=_optional_string(
-                    item, "h_abrd_dt", "ticket receipt"
-                ),
-                departure_station=_optional_string(
-                    item, "h_dpt_rs_stn_nm", "ticket receipt"
-                ),
-                departure_time=_optional_string(
-                    item, "h_dpt_tm", "ticket receipt"
-                ),
-                arrival_station=_optional_string(
-                    item, "h_arv_rs_stn_nm", "ticket receipt"
-                ),
-                arrival_time=_optional_string(
-                    item, "h_arv_tm", "ticket receipt"
-                ),
-                commuter_kind_code=_optional_string(
-                    item, "h_cmtr_knd_cd", "ticket receipt"
-                ),
-                journey_type_code=_optional_string(
-                    item, "h_jrny_tp_cd", "ticket receipt"
-                ),
-                printed_discount_name=_optional_string(
-                    item, "h_prt_disc_knd_nm", "ticket receipt"
-                ),
-                print_type=_optional_string(
-                    item, "h_prt_type", "ticket receipt"
-                ),
-                seat_class_name=_optional_string(
-                    item, "h_psrm_cl_nm", "ticket receipt"
-                ),
-                ticket_kind_code=_optional_string(
-                    item, "h_tk_knd_cd", "ticket receipt"
-                ),
-                ticket_status_code=_optional_string(
-                    item, "h_tk_stt_cd", "ticket receipt"
-                ),
-                train_class_code=_optional_string(
-                    item, "h_trn_clsf_cd", "ticket receipt"
-                ),
-                train_class_name=_optional_string(
-                    item, "h_trn_clsf_nm", "ticket receipt"
-                ),
-                train_no=_optional_string(
-                    item, "h_trn_no", "ticket receipt"
-                ),
+                **_nullable_string_fields(item, _TICKET_RECEIPT_FIELDS, "ticket receipt"),
                 passenger_counts=(
-                    _optional_integer(
-                        item, "h_psg_type1_cnt", "ticket receipt"
-                    ),
-                    _optional_integer(
-                        item, "h_psg_type2_cnt", "ticket receipt"
-                    ),
-                    _optional_integer(
-                        item, "h_psg_type3_cnt", "ticket receipt"
-                    ),
+                    _optional_integer(item, "h_psg_type1_cnt", "ticket receipt"),
+                    _optional_integer(item, "h_psg_type2_cnt", "ticket receipt"),
+                    _optional_integer(item, "h_psg_type3_cnt", "ticket receipt"),
                 ),
-                received_amount=_optional_integer(
-                    item, "h_rcvd_amt", "ticket receipt"
-                ),
-                card_refund_amount=_optional_integer(
-                    item, "h_crd_ret_amt", "ticket receipt"
-                ),
-                refund_fee=_optional_integer(
-                    item, "h_ret_fee", "ticket receipt"
-                ),
-                refund_received_amount=_optional_integer(
-                    item, "h_ret_rcvd_amt", "ticket receipt"
-                ),
-                point_refund_amount=_optional_integer(
-                    item, "h_xpoint_ret_amt", "ticket receipt"
-                ),
+                received_amount=_optional_integer(item, "h_rcvd_amt", "ticket receipt"),
+                card_refund_amount=_optional_integer(item, "h_crd_ret_amt", "ticket receipt"),
+                refund_fee=_optional_integer(item, "h_ret_fee", "ticket receipt"),
+                refund_received_amount=_optional_integer(item, "h_ret_rcvd_amt", "ticket receipt"),
+                point_refund_amount=_optional_integer(item, "h_xpoint_ret_amt", "ticket receipt"),
                 payments=tuple(payments),
                 cash_receipts=tuple(cash_receipts),
-                member_card_no=_optional_string(
-                    item, "h_stl_mb_crd_no", "ticket receipt"
-                ),
                 raw=item,
             )
         )
@@ -1192,81 +1054,36 @@ def parse_reservation_history_response(
     if empty:
         return ReservationHistoryResponse(**_response_fields(raw))
     trains = []
-    journeys = _nested_rows(
-        raw,
-        "jrny_infos",
-        "jrny_info",
-        "reservation history",
-    )
+    journeys = _nested_rows(raw, "jrny_infos", "jrny_info", "reservation history")
     for journey_value in journeys:
         journey = _row(journey_value, "reservation history jrny_info")
         train_wrapper = _optional_mapping(
-            journey,
-            "train_infos",
-            "reservation history",
+            journey, "train_infos", "reservation history"
         )
         if train_wrapper is None:
             continue
         for train_value in _optional_list(
-            train_wrapper,
-            "train_info",
-            "reservation history",
+            train_wrapper, "train_info", "reservation history"
         ):
             train = _row(train_value, "reservation history train_info")
             trains.append(
                 ReservationHistoryTrain(
-                    departure_station=_optional_string(
-                        train, "h_dpt_rs_stn_nm", "reservation history train"
-                    ),
-                    departure_time=_optional_string(
-                        train, "h_dpt_tm", "reservation history train"
-                    ),
-                    arrival_station=_optional_string(
-                        train, "h_arv_rs_stn_nm", "reservation history train"
-                    ),
-                    arrival_time=_optional_string(
-                        train, "h_arv_tm", "reservation history train"
-                    ),
-                    run_date=_optional_string(
-                        train, "h_run_dt", "reservation history train"
-                    ),
-                    train_no=_optional_string(
-                        train, "h_trn_no", "reservation history train"
-                    ),
-                    train_class_code=_optional_string(
-                        train, "h_trn_clsf_cd", "reservation history train"
-                    ),
-                    train_class_name=_optional_string(
-                        train, "h_trn_clsf_nm", "reservation history train"
-                    ),
-                    reservation_type_code=_optional_string(
-                        train, "h_rsv_tp_cd", "reservation history train"
-                    ),
-                    acceptance_possible_flag=_optional_string(
-                        train, "h_acpt_ps_flg", "reservation history train"
-                    ),
-                    payment_flag=_optional_string(
-                        train, "h_payment_flg", "reservation history train"
-                    ),
-                    settlement_flag=_optional_string(
-                        train, "h_stl_flg", "reservation history train"
+                    **_nullable_string_fields(
+                        train, _RESERVATION_HISTORY_TRAIN_FIELDS,
+                        "reservation history train",
                     ),
                     seat_count=_optional_integer(
-                        train, "h_tot_seat_cnt", "reservation history train"
+                        train, "h_tot_seat_cnt",
+                        "reservation history train",
                     ),
                     standing_count=_optional_integer(
-                        train, "h_tot_stnd_cnt", "reservation history train"
-                    ),
-                    pnr_no=_optional_string(
-                        train, "h_pnr_no", "reservation history train"
+                        train, "h_tot_stnd_cnt",
+                        "reservation history train",
                     ),
                     raw=train,
                 )
             )
-    return ReservationHistoryResponse(
-        items=tuple(trains),
-        **_response_fields(raw),
-    )
+    return ReservationHistoryResponse(items=tuple(trains), **_response_fields(raw))
 
 
 def parse_free_seat_car_response(
@@ -1299,123 +1116,8 @@ def parse_guide_seat_condition_response(
 def _parse_train_schedule_item(
     raw: Mapping[str, Any],
 ) -> TrainScheduleItem:
-    context = "train schedule item"
     return TrainScheduleItem(
-        train_no=_optional_string(raw, "h_trn_no", context),
-        train_group_code=_optional_string(raw, "h_trn_gp_cd", context),
-        train_class_code=_optional_string(
-            raw,
-            "h_trn_clsf_cd",
-            context,
-        ),
-        train_class_name=_optional_string(
-            raw,
-            "h_trn_clsf_nm",
-            context,
-        ),
-        run_date=_optional_string(raw, "h_run_dt", context),
-        departure_date=_optional_string(raw, "h_dpt_dt", context),
-        departure_time=_optional_string(raw, "h_dpt_tm", context),
-        arrival_date=_optional_string(raw, "h_arv_dt", context),
-        arrival_time=_optional_string(raw, "h_arv_tm", context),
-        departure_station_code=_optional_string(
-            raw,
-            "h_dpt_rs_stn_cd",
-            context,
-        ),
-        departure_station_name=_optional_string(
-            raw,
-            "h_dpt_rs_stn_nm",
-            context,
-        ),
-        arrival_station_code=_optional_string(
-            raw,
-            "h_arv_rs_stn_cd",
-            context,
-        ),
-        arrival_station_name=_optional_string(
-            raw,
-            "h_arv_rs_stn_nm",
-            context,
-        ),
-        departure_construction_order=_optional_string(
-            raw,
-            "h_dpt_stn_cons_ordr",
-            context,
-        ),
-        arrival_construction_order=_optional_string(
-            raw,
-            "h_arv_stn_cons_ordr",
-            context,
-        ),
-        departure_run_order=_optional_string(
-            raw,
-            "h_dpt_stn_run_ordr",
-            context,
-        ),
-        arrival_run_order=_optional_string(
-            raw,
-            "h_arv_stn_run_ordr",
-            context,
-        ),
-        car_type_name=_optional_string(raw, "h_car_tp_nm", context),
-        general_room_name=_optional_string(
-            raw,
-            "h_gen_psrm_cl_nm",
-            context,
-        ),
-        special_room_name=_optional_string(
-            raw,
-            "h_spe_psrm_cl_nm",
-            context,
-        ),
-        general_reservation_code=_optional_string(
-            raw,
-            "h_gen_rsv_cd",
-            context,
-        ),
-        special_reservation_code=_optional_string(
-            raw,
-            "h_spe_rsv_cd",
-            context,
-        ),
-        free_seat_reservation_code=_optional_string(
-            raw,
-            "h_free_rsv_cd",
-            context,
-        ),
-        standing_reservation_code=_optional_string(
-            raw,
-            "h_stnd_rsv_cd",
-            context,
-        ),
-        seat_map_flag=_optional_string(
-            raw,
-            "h_rd_seat_map_flg",
-            context,
-        ),
-        delay_sale_flag=_optional_string(
-            raw,
-            "h_dlay_sale_flg",
-            context,
-        ),
-        wait_reservation_flag=_optional_string(
-            raw,
-            "h_wait_rsv_flg",
-            context,
-        ),
-        reservation_possible_name=_optional_string(
-            raw,
-            "h_rsv_psb_nm",
-            context,
-        ),
-        special_reservation_possible_name=_optional_string(
-            raw,
-            "h_spe_rsv_psb_nm",
-            context,
-        ),
-        info_text=_optional_string(raw, "h_info_txt", context),
-        popup_message=_optional_string(raw, "h_popup_msg", context),
+        **_nullable_string_fields(raw, _TRAIN_SCHEDULE_ITEM_FIELDS, "train schedule item"),
         raw=raw,
     )
 
@@ -1501,87 +1203,27 @@ def parse_merge_seats_inquiry_response(
 def parse_pass_schedule_response(
     raw: Mapping[str, Any],
 ) -> PassScheduleResponse:
-    # CommutationInquiryActivity.java:182 registers WRG000000 as a non-fatal
-    # empty result for the pass-schedule DAO (CommRsvInquiryDao) via
-    # setErrorMsgCdNotShowDialog, so an empty query returns strResult=FAIL +
-    # h_msg_cd=WRG000000 and the app renders "no schedules" rather than an
-    # error. Mirror parse_discount_coupon_response and treat it as empty.
-    empty = _validate_envelope(
-        raw,
-        accepted_empty_codes=frozenset({"WRG000000"}),
-    )
+    # WRG000000 is a non-fatal empty result (CommutationInquiryActivity.java:182).
+    empty = _validate_envelope(raw, accepted_empty_codes=frozenset({"WRG000000"}))
     if empty:
         return PassScheduleResponse(**_response_fields(raw))
     if raw["strResult"] != "SUCC":
-        raise KorailProtocolError(
-            "KORAIL pass schedule strResult must be exact SUCC"
-        )
-
+        raise KorailProtocolError("KORAIL pass schedule strResult must be exact SUCC")
     schedules = []
-    for schedule_value in _optional_list(
-        raw,
-        "schedule_info",
-        "pass schedule",
-    ):
+    for schedule_value in _optional_list(raw, "schedule_info", "pass schedule"):
         schedule = _row(schedule_value, "pass schedule schedule_info")
-        trains = []
-        for train_value in _optional_list(
-            schedule,
-            "train_list",
-            "pass schedule schedule_info",
-        ):
-            train = _row(train_value, "pass schedule train_list")
-            trains.append(
-                PassScheduleTrain(
-                    arrival_station_code=_optional_string(
-                        train,
-                        "h_arv_rs_stn_cd",
-                        "pass schedule train",
-                    ),
-                    arrival_station_name=_optional_string(
-                        train,
-                        "h_arv_rs_stn_nm",
-                        "pass schedule train",
-                    ),
-                    departure_station_code=_optional_string(
-                        train,
-                        "h_dpt_rs_stn_cd",
-                        "pass schedule train",
-                    ),
-                    departure_station_name=_optional_string(
-                        train,
-                        "h_dpt_rs_stn_nm",
-                        "pass schedule train",
-                    ),
-                    detour_code=_optional_string(
-                        train,
-                        "h_dtour",
-                        "pass schedule train",
-                    ),
-                    schedule_price=_optional_string(
-                        train,
-                        "h_schd_prc",
-                        "pass schedule train",
-                    ),
-                    train_group_code=_optional_string(
-                        train,
-                        "h_trn_gp_cd",
-                        "pass schedule train",
-                    ),
-                    train_no=_optional_string(
-                        train,
-                        "h_trn_no",
-                        "pass schedule train",
-                    ),
-                    raw=train,
-                )
+        trains = tuple(
+            PassScheduleTrain(
+                **_nullable_string_fields(
+                    _row(tv, "pass schedule train_list"),
+                    _PASS_SCHEDULE_TRAIN_FIELDS,
+                    "pass schedule train",
+                ),
+                raw=_row(tv, "pass schedule train_list"),
             )
-        schedules.append(
-            PassScheduleInfo(
-                trains=tuple(trains),
-                raw=schedule,
-            )
+            for tv in _optional_list(schedule, "train_list", "pass schedule schedule_info")
         )
+        schedules.append(PassScheduleInfo(trains=trains, raw=schedule))
     return PassScheduleResponse(
         schedules=tuple(schedules),
         **_response_fields(raw),
@@ -1827,33 +1469,6 @@ _MAAS_DETAIL_FIELDS = {
     "usage_close_date": "utlClsDt",
     "usage_start_date": "utlStDt",
 }
-
-
-def _nullable_string_fields(
-    data: Mapping[str, Any],
-    field_map: Mapping[str, str],
-    context: str,
-) -> dict[str, str | None]:
-    return {
-        attribute: _optional_string(data, wire_name, context)
-        for attribute, wire_name in field_map.items()
-    }
-
-
-def _nullable_scalar_fields(
-    data: Mapping[str, Any],
-    field_map: Mapping[str, str],
-    context: str,
-) -> dict[str, str | None]:
-    """:func:`_nullable_string_fields` 와 같되 필드마다 문자열-또는-숫자를 받습니다.
-
-    예약 상세와 환불 승차권 상세 파서가 씁니다. 두 성공 응답의 모양은 APK 의 DAO
-    선언에서 나왔습니다. :func:`_optional_scalar_string` 참조.
-    """
-    return {
-        attribute: _optional_scalar_string(data, wire_name, context)
-        for attribute, wire_name in field_map.items()
-    }
 
 
 def parse_multi_child_discount_target_response(

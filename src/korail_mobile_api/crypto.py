@@ -1,12 +1,7 @@
 """로그인 비밀번호 변환과 ``Sid`` 생성.
 
-로그인 폼에 실리는 비밀번호는 평문이 아닙니다. ``common.code.do`` 가 내려주는
-암호화 파라미터(:class:`~korail_mobile_api.models.LoginCryptoInfo`)에 따라
-:func:`transform_login_password` 가 변환합니다. :func:`generate_sid` 는 리무진
-좌석이동 조회처럼 공통 ``Key`` 대신 요청마다 새 ``Sid`` 를 요구하는 폼에 씁니다.
-
-두 함수 모두 안드로이드 ``Base64`` 의 기본 모드를 흉내 냅니다. 그 모드는 76자마다
-줄바꿈을 넣으므로, 결과 문자열에 개행이 들어가는 것이 정상입니다.
+``S4/C0812l.java`` 의 ``encryptAES`` + ``F4/a.java`` 의 ``encryptBase64`` 를
+재현합니다. 안드로이드 ``Base64`` 기본 모드(76자마다 줄바꿈)를 씁니다.
 """
 from __future__ import annotations
 
@@ -31,10 +26,12 @@ def _aes_cbc_pkcs7_encrypt(plaintext: bytes, key: bytes, iv: bytes) -> bytes:
 
 
 def _base64_no_wrap(data: bytes) -> str:
+    """``Base64.encodeToString(..., NO_WRAP)`` — ``F4/a.java:47``."""
     return base64.b64encode(data).decode("ascii")
 
 
 def _android_base64_default(data: bytes) -> str:
+    """``Base64.encode(..., DEFAULT)`` — 76자마다 ``\\n``. ``S4/C0812l.java:23``."""
     return base64.encodebytes(data).decode("ascii")
 
 
@@ -46,17 +43,11 @@ def _validate_login_crypto_key(info: LoginCryptoInfo) -> bytes:
 
 
 def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
-    """로그인 폼에 실을 비밀번호를 서버가 지정한 방식으로 변환합니다.
+    """``S4/C0812l.getAmountEncrypt`` 재현.
 
-    ``info.pwd_aes_cphd`` 가 ``"Y"`` 면 AES-128/192/256-CBC(PKCS7)로 암호화합니다.
-    키는 ``info.key`` 의 UTF-8 바이트, IV 는 그 앞 16바이트입니다. 결과를 안드로이드
-    ``Base64`` 기본 모드로 한 번, 그 문자열을 줄바꿈 없는 Base64 로 다시 한 번 감쌉니다.
-    두 번 감싸는 것이 앱의 동작입니다.
-
-    ``"N"`` 이면 암호화 없이 줄바꿈 없는 Base64 만 적용합니다.
-
-    키 길이가 16·24·32바이트가 아니면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+    ``"Y"``: AES-CBC(PKCS7), IV = key[:16] → Base64 DEFAULT → Base64 NO_WRAP.
+    ``"N"``: Base64 NO_WRAP 만.
+    키 길이 ∉ {16,24,32} 이면 :class:`~korail_mobile_api.errors.KorailProtocolError`.
     """
     if info.pwd_aes_cphd == "Y":
         key = _validate_login_crypto_key(info)
@@ -74,16 +65,10 @@ def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
 
 
 def generate_sid(*, epoch_ms: int | None = None) -> str:
-    """요청마다 새로 만드는 ``Sid`` 값.
+    """``S4/C0812l.getSid`` 재현.
 
-    ``"AD"`` 에 밀리초 epoch 을 붙인 문자열을 고정 키(:data:`SID_KEY`, 키와 IV 가
-    같습니다)로 AES-CBC 암호화하고 안드로이드 ``Base64`` 기본 모드로 인코딩합니다.
-    그래서 값은 부를 때마다 다르고 76자마다 개행이 들어갑니다.
-
-    ``epoch_ms`` 는 시각을 고정하고 싶을 때만 주면 됩니다. 주지 않으면 현재 시각입니다.
-    공통 ``Key`` 대신 이 값을 요구하는 폼은
-    :func:`~korail_mobile_api.limousine_payloads.build_limousine_schedule_view_form`
-    뿐입니다.
+    ``"AD" + millis`` 를 고정 키(:data:`SID_KEY`)로 AES-CBC 암호화 후
+    Base64 DEFAULT. 키와 IV 가 같습니다(``C0812l.java:45``).
     """
     timestamp = epoch_ms if epoch_ms is not None else int(time.time() * 1000)
     encrypted = _aes_cbc_pkcs7_encrypt(

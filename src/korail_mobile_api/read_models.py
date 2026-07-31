@@ -1,14 +1,7 @@
-"""읽기 전용 조회가 돌려주는 타입 — 승차권, 환불, 할인카드, 마이페이지.
+"""읽기 전용 조회 응답 타입 — 승차권, 환불, 할인카드, 마이페이지.
 
-열차 검색과 좌석 조회 쪽 타입은 :mod:`korail_mobile_api.models` 에 있습니다.
-여기 있는 것은 전부 ``frozen=True`` 데이터클래스이고
-:class:`~korail_mobile_api.models.BaseKorailResponse` 를 상속하거나 그 안에
-들어가는 행 타입입니다.
-
-이름을 붙이지 않은 서버 필드는 어느 모델에서든 ``raw`` 에 그대로 남아
-있습니다. ``repr=False`` 인 필드는 로그에 실수로 찍히지 않게 표현에서 뺀
-것이고, 전선 이름이 :mod:`korail_mobile_api.redaction` 에 등록된 것은
-``raw`` 안에서도 마스킹됩니다.
+열차 검색·좌석 조회 타입은 :mod:`korail_mobile_api.models`.
+전부 ``frozen=True`` 데이터클래스이며 ``raw`` 에 원본 JSON 보존.
 """
 
 from __future__ import annotations
@@ -196,26 +189,14 @@ class ReceiptPayment:
 
 @dataclass(frozen=True)
 class ReceiptCashPayment:
-    """영수증의 현금영수증 줄 하나(``ReceiptDao.CashReceiptInfo``).
+    """현금영수증 줄 (``ReceiptDao.java:12-40,43-44``)."""
 
-    :class:`ReceiptPayment` 와 형제입니다. ``stl_info`` 는 카드·포인트 정산을,
-    ``cash_rcet_info`` 는 현금영수증을 싣습니다
-    (``ReceiptDao.java:12-40,43-44``). 앱에서 정수인 것은
-    ``h_tot_apv_amt`` 뿐이고 나머지는 문자열입니다.
-    """
-
-    #: ``h_apv_mtd_nm`` — 승인 방법 이름.
     approval_method_name: str | None = None
-    #: ``h_athn_dmn_rcgn_no`` — 영수증이 어느 번호 앞으로 발행됐는지(휴대폰
-    #: 또는 사업자번호). 신원으로 다뤄 표현에서 뺍니다.
     authentication_domain_recognition_no: str | None = field(
         default=None, repr=False
     )
-    #: ``h_cash_rcet_apv_no`` — 현금영수증 승인번호.
     cash_receipt_approval_no: str | None = field(default=None, repr=False)
-    #: ``h_cash_rcet_txn_dv_cd`` — 발행인지 취소인지.
     cash_receipt_transaction_division_code: str | None = None
-    #: ``h_tot_apv_amt`` — 총 승인금액.
     total_approved_amount: int | None = None
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
@@ -248,9 +229,7 @@ class TicketReceipt:
     refund_received_amount: int | None = None
     point_refund_amount: int | None = None
     payments: tuple[ReceiptPayment, ...] = ()
-    #: ``cash_rcet_info`` — 현금영수증 줄들. 현금영수증이 없는 영수증에서는
-    #: 비어 있습니다. 카드·포인트 정산을 싣는 :attr:`payments` 의 형제
-    #: 목록입니다.
+    #: ``cash_rcet_info`` — 현금영수증 줄들.
     cash_receipts: tuple[ReceiptCashPayment, ...] = ()
     member_card_no: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
@@ -556,24 +535,11 @@ class DiscountCardOnTicket:
 
 @dataclass(frozen=True)
 class KorailPointSummaryResponse(BaseKorailResponse):
-    """``xPoint.MyXPointView`` — 마이페이지의 포인트·자격 요약.
+    """``xPoint.MyXPointView`` — 포인트·자격 요약
+    (``KorailPointInquiryDao.java:11-85``).
 
-    ``KorailPointInquiryDao.KorailPointInquiryResponse``
-    (``dao/xPoint/KorailPointInquiryDao.java:11-85``). 앱은 마이페이지를 열
-    때(``MyPageActivity.java:414``)와 회원카드 화면에서
-    (``MemberCardActivity.java:67``) 무조건 부릅니다.
-
-    **"이 계정이 어떤 할인 자격을 갖고 있는가"에 KORAIL 이 내놓는 것 중 가장
-    가까운 답입니다.** ``MyPageActivity.java:206-212`` 는 장애 관련 영역
-    전체를 ``h_hdcp_flg == "Y"`` 일 때만, 그리고 그것만 보고 드러낸 뒤,
-    :attr:`welfare_discount_class_name`(장애인증 라벨)과
-    :attr:`customer_lead_flag_name`(보조견 라벨) 두 줄을 채웁니다.
-
-    그러므로 ``h_hdcp_flg`` 가 ``"Y"`` 가 아닌 계정에는 장애인 등록도 보조견
-    등록도 없습니다. 폼이 앱과 정확히 같았는데도 1~3급 장애 + 안내견 예약이
-    ``ERR299943`` "예약할인이 지원되지 않습니다"로 거절된 것을 설명할 수 있는
-    조건입니다 — 다만 이것은 앱이 이 플래그로 **무엇을 하는지** 에서 끌어낸
-    추론이지, 이 플래그와 그 거절이 함께 관측된 것은 아닙니다.
+    ``h_hdcp_flg == "Y"`` 일 때만 장애인 할인 자격 있음
+    (``MyPageActivity.java:206-212``).
     """
 
     h_msg_txt: str | None = field(default=None, repr=False)
@@ -1511,10 +1477,7 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     #: ``h_comp_nm``/``h_comp_cert_no`` 로 그대로 복사돼 나갑니다.
     companion_name: str | None = field(default=None, repr=False)
     companion_birth_date: str | None = field(default=None, repr=False)
-    #: ``h_pbp_acep_tgt_flg`` — 이 승차권이 PBP 인수 대상인지 여부. 앱은 이
-    #: 값을 환불 요청의 ``pbpAcepTgtFlg`` 로 그대로 되돌려 보냅니다
-    #: (``ticketReturn/a.java:430-431``). 환불 폼을 만들 때 이 값을 넘겨야
-    #: 기본값 ``"N"`` 이 아니라 서버가 말한 것을 되말하게 됩니다.
+    #: ``h_pbp_acep_tgt_flg`` — PBP 인수 대상 여부 (``ticketReturn/a.java:430-431``).
     pbp_acceptance_target_flag: str | None = None
     #: ``h_dlay_flg``/``h_dlay_tk_flg`` — 지연 보상 대상 여부.
     delay_flag: str | None = None

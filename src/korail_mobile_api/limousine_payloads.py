@@ -42,12 +42,7 @@ def _validated_query(
 def validate_limousine_schedule_query(
     query: object,
 ) -> LimousineScheduleQuery:
-    """``query`` 가 정확히 :class:`LimousineScheduleQuery` 인지 확인하고 돌려줍니다.
-
-    하위 클래스는 ``TypeError`` 로 거부합니다. 통과하면 ``__post_init__`` 의 자릿수
-    검사를 다시 돌리므로, ``object.__setattr__`` 등으로 얼어붙은 필드를 바꾼 객체도
-    여기서 걸립니다.
-    """
+    """``query`` 가 정확히 :class:`LimousineScheduleQuery` 인지 확인하고 돌려줍니다."""
     return _validated_query(
         query,
         LimousineScheduleQuery,
@@ -77,10 +72,6 @@ def validate_limousine_schedule_view_query(
 ) -> LimousineScheduleViewQuery:
     """``query`` 가 정확히 :class:`LimousineScheduleViewQuery` 인지 확인하고
     돌려줍니다.
-
-    :func:`validate_limousine_schedule_query` 와 같은 규칙입니다.
-    :meth:`~korail_mobile_api.client.KorailClient.get_limousine_schedule_view`
-    는 폼을 만들기 전에 이것을 한 번 더 부릅니다.
     """
     return _validated_query(
         query,
@@ -170,13 +161,6 @@ def build_limousine_schedule_view_form(
     """``seatMovie.LimousineScheduleView`` 의 열차 목록 조회 폼을 만듭니다.
 
     ``SeatMovieService.java:16``. 이 폼만은 공통 ``Key`` 대신 호출자가 넘긴
-    ``sid`` 를 싣습니다(:func:`~korail_mobile_api.crypto.generate_sid`). 역은
-    코드가 아니라 **역이름**입니다.
-
-    인원은 ``txtPsgFlg_1``~``txtPsgFlg_5`` 다섯 칸(경로 두 종류, 경로우대,
-    중증장애, 경증장애)으로 나뉩니다. ``txtSeatAttCd_2``/``_3``/``_4`` 는
-    방향·위치·객실이고, ``ebizCrossCheck``/``srtCheckYn``/``rtYn`` 은
-    ``"Y"``/``"N"`` 으로 나갑니다.
     """
     query = validate_limousine_schedule_view_query(query)
     return {

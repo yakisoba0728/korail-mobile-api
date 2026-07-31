@@ -117,16 +117,9 @@ def _validated_seat_assignments(
 ) -> tuple[KorailSeatAssignment, ...]:
     """한 구간의 좌석지정 목록을 job 종류와 승객 구성에 비추어 검사합니다.
 
-    좌석 목록은 ``"1103"`` 에만 속합니다. 앱도 ``OSrcar`` 맵을 설치하는 바로 그
     자리에서 job id 를 ``"1103"`` 으로 바꾸고(``C5/a.java:143-146``), 평범한
-    ``"1101"`` 여정을 다시 만들 때마다 그 맵을 비웁니다(``C5/a.java:118``).
 
-    개수 규칙도 앱의 것입니다. ``SeatSearchActivity.java:902`` 는
-    ``selectedSeatCount == G0()`` 인 동안만 "선택완료"를 활성화하고 ``G0()``
-    (``:273-278``)은 요청의 ``txtTotPsgCnt`` 입니다. 모자란 목록은 보내기 전에
-    여기서 거부합니다. 규칙이 구간별인 것은 앱의 좌석 선택기가 구간별이기
-    때문이며(``C5/a.java:120-133``), 비교 대상인 승객 총수는 예약 전체의
-    값입니다.
+    ``"1101"`` 여정을 다시 만들 때마다 그 맵을 비웁니다(``C5/a.java:118``).
     """
     if job_type is not KorailReservationJobType.SEAT_DESIGNATED:
         if seats:
@@ -173,36 +166,9 @@ def build_reservation_form(
 ) -> dict[str, str]:
     """승객 구성과 좌석 등급으로 예약(홀드) 폼을 만듭니다.
 
-    ``passengers`` 는 성인 1명, ``seat_class`` 는
-    :attr:`KorailSeatClass.GENERAL <korail_mobile_api.KorailSeatClass.GENERAL>`
-    이 기본입니다. 둘 다 생략한 호출은
-    :func:`build_single_adult_reservation_form` 과 같은 폼을 만듭니다.
-
-    ``job_type`` 은 예매 화면의 세 동작 중 무엇인지를 고르며 기본값은
-    :attr:`KorailReservationJobType.IMMEDIATE
-    <korail_mobile_api.KorailReservationJobType.IMMEDIATE>`
-    (``txtJobId="1101"``)입니다.
-
-    * :attr:`~korail_mobile_api.KorailReservationJobType.SEAT_DESIGNATED`
-      (``"1103"``)는 ``seats`` 를 추가로 요구합니다. 승객 한 명당
-      :class:`~korail_mobile_api.KorailSeatAssignment` 하나입니다.
-    * :attr:`~korail_mobile_api.KorailReservationJobType.STANDBY`(``"1102"``)는
-      예약대기입니다. 좌석을 요구하지 않는 대신 열차 행 자신의 예약대기 가능
-      플래그와 일반실을 요구합니다.
-
-    ``seats`` 는 좌석지정 job 에서만 받습니다. 키는 ``OSrcar`` 의 것이고
     (``OSrcar.java:6-11``) 여정 키 뒤에 붙는 ``@FieldMap`` 입니다
+
     (``CertificationService.java:52-54``). ``txtSrcarCnt`` 가 먼저, 그다음
-    ``txtSrcarNo{i}``/``txtSeatNo{i}`` 가 ``i`` 를 **1**부터 셉니다
-    (``SeatSearchActivity.java:675-683``). ``txtSrcarCnt`` 는 호차 수가 아니라
-    **좌석 수**입니다.
-
-    이 빌더는 여정 **하나**를 예약합니다(``txtJrnyCnt="1"``). 환승 여정의 두
-    구간은 :func:`build_transfer_reservation_form` 을 쓰면 됩니다.
-
-    라이브로 확인된 것은 성인 1명·일반실·``"1101"`` 모양뿐입니다. 다인·특실
-    폼과 나머지 두 job 종류는 앱의 요청 빌더를 옮긴 것이지만 전송된 적이
-    없습니다.
     """
     return _build_journey_reservation_form(
         config,
@@ -227,41 +193,9 @@ def build_transfer_reservation_form(
 ) -> dict[str, str]:
     """환승 여정의 예약(홀드) 폼을 만듭니다 — 두 구간, PNR 하나.
 
-    :func:`build_reservation_form` 에서 여정 블록이 반복된 것입니다. 앱도 두
     경우를 빌더 하나로 처리하므로(``C5/a.java:52-119``) 필드 구성을 정하는 것은
-    구간 수뿐입니다.
 
     * ``txtJrnyCnt`` 는 배열 길이에서 유도됩니다(``C5/a.java:55``). 플래그가
-      아니므로 직통 예약이 환승 폼을 내보내게 만들 수 없습니다.
-    * 여정 인덱스는 **1부터**입니다(``C5/a.java:57-77``).
-    * ``txtJrnyTpCd{i}`` 는 인덱스가 아니라 **길이**를 봅니다
-      (``C5/a.java:60``). 그래서 환승의 **두** 구간이 모두 ``"14"`` 를 싣습니다.
-    * ``txtJrnySqno{i}`` 는 ``DecimalFormat("000")`` 을 거친 루프 인덱스라
-      1구간이 ``"001"``, 2구간이 ``"002"`` 입니다(``S4/O.java:19-21``).
-
-    ``legs`` 는 정확히
-    :data:`~korail_mobile_api.KORAIL_MAX_JOURNEY_LEGS`(2)개의 열차를 승차 순서로
-    담아야 하고, :attr:`TransferItinerary.legs
-    <korail_mobile_api.TransferItinerary.legs>` 가 그것을 만들어 줍니다.
-
-    무엇이 함께 쓰이고 무엇이 안 되는지.
-
-    * **승객 구성** — 함께 쓰입니다. 구간별이 아니라 예약 단위입니다
-      (``w4/a.java:47-74``).
-    * **좌석 등급** — 함께 쓰이며 정말로 **구간별**입니다(``C5/a.java:59,97``).
-      두 구간에 같은 :class:`~korail_mobile_api.KorailSeatClass` 하나를 주거나
-      구간별 시퀀스를 주면 됩니다.
-    * **좌석지정**(``"1103"``) — 함께 쓰이며 역시 구간별입니다
-      (``C5/a.java:120-133``, ``OSrcar.java:21-30``). ``seats`` 는 구간당 시퀀스
-      하나이고, 각 시퀀스는 승객당
-      :class:`~korail_mobile_api.KorailSeatAssignment` 하나를 담습니다.
-    * **예약대기**(``"1102"``) — 함께 쓰이지 **않으며** 이 빌더가 거부합니다.
-      앱에도 독립된 관문이 둘 있습니다. 예약대기 가능 검사가
-      ``if (!isDirect) return false`` 로 시작하고(``a5/k.java:120-127``), 유일한
-      ``setJobId("1102")``(``DirectInquiryActivity.java:434``)는
-      ``TransferInquiryActivity`` 가 그 메서드를 재정의해 결코 닿지 않습니다.
-
-    라이브 미검증 — 여기서 만든 환승 폼이 KORAIL 로 전송된 적은 없습니다.
     """
     return _build_journey_reservation_form(
         config,
@@ -284,38 +218,9 @@ def build_merge_reservation_form(
 ) -> dict[str, str]:
     """병합예약의 **두 번째** 홀드 폼을 만듭니다 — 열차 하나, 여정 둘.
 
-    병합은 환승이 아닙니다. 물리적으로 한 대인 열차를 중간역에서 갈라 두 구간을
-    다르게 앉히는 것이며(좌석+좌석 또는 좌석+입석), 앱은 자기만의 루프로
     만듭니다(``DirectInquiryActivity.java:576-601``). 다섯 단계 전체 흐름은
-    :data:`~korail_mobile_api.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` 에
-    있습니다.
 
-    환승 폼과 다른 네 가지는 전부 그 루프에서 나옵니다.
-
-    * ``txtJrnyTpCd{i}`` 가 루프 **인덱스**를 봅니다. 1구간은 ``"21"``(병합
-      선행), 2구간은 ``"22"``(병합 후행)입니다. 환승은 두 구간이 모두 ``"14"``
-      인데 여기서는 갈립니다(``smali:5641``).
-    * ``txtStndFlg`` 는 ``isStndSeat`` 에서 유도하지 않고 ``"Y"`` 로 박습니다
-      (``smali:5887-5891``). 전환 대상이 입석 홀드라는 것이 이 흐름의
-      전제이기 때문입니다.
-    * ``txtPsrmClCd2`` 는 ``txtPsrmClCd1`` 에서 **복사**됩니다
-      (``smali:5919-5983``). 그래서 ``seat_class`` 를 구간별이 아니라 **하나**만
-      받습니다 — 앱도 두 반쪽이 서로 다른 등급인 병합 예약을 만들 수 없습니다.
-    * ``arvTm_2`` 가 **없고**, ``arvTm_1`` 은 1구간이 아니라 **전체 구간**의
-      도착시각입니다. 병합 루프가 ``setArvTm`` 을 부르지 않고 ``"1202"`` 홀드
-      요청의 ``OJrny`` 가 치환이 아니라 병합되기 때문입니다
-      (``ReservationRequest.java:29-46``, ``:158-160``). 이 빌더가
-      ``standing_hold_train`` 을 요구하는 이유가 그것입니다.
-
-    ``standing_hold_train`` 은 ``"1202"`` 홀드를 건 직통 행 —
-    ``job_type=MERGE_STANDING`` 으로 :meth:`KorailClient.reserve
-    <korail_mobile_api.KorailClient.reserve>` 에 넘긴 바로 그
-    :class:`~korail_mobile_api.TrainSummary` 입니다. ``legs`` 는
-    ``research.mergeSeatsC.do`` 가 순서대로 답한 두 행입니다
-    (:attr:`MergeSeatsInquiryResponse.trains
-    <korail_mobile_api.MergeSeatsInquiryResponse.trains>`).
-
-    전송된 적 없음 — 여기서 만든 것이 KORAIL 로 나간 적이 없습니다.
+    인데 여기서는 갈립니다(``smali:5641``).
     """
     if type(standing_hold_train) is not TrainSummary:
         raise KorailProtocolError(
@@ -1101,28 +1006,9 @@ def build_standby_wait_form(
 ) -> dict[str, str]:
     """예약대기 홀드의 후속 폼을 만듭니다.
 
-    ``reservationWait.ReservationWait``
     (``ReservationWaitService.java:10-12``)이며 예약대기 예매의 후반부입니다.
-    ``"1102"`` 홀드가 PNR 을 만들고, 이 호출이 예약대기 화면에서 받은 두 옵션을
-    그 PNR 에 기록합니다.
 
     * ``txtPnrNo`` — 홀드의 PNR(``ReservationWaitActivity.java:150``).
-    * ``txtPsrmClChgFlg`` — ``"Y"``/``"N"``, 좌석등급 변경 동의
-      (``:213``/``:219``). 관광열차에는 앱이 이 체크박스를 감추므로(``:115``)
-      거기서는 ``"N"`` 뿐입니다.
-    * ``txtSmsSndFlg`` — ``"Y"``/``"N"``, 배정 시 SMS 알림(``:214``/``:218``).
-    * ``txtCpNo`` — 알림받을 번호. 앱은 SMS 가 켜졌을 때만 넣습니다
-      (``:220-227``). 이 빌더도 그 경우 빈 문자열을 보내는 대신 키를
-      생략합니다.
-
-    ``hold`` 는 PNR 을 실은 성공한 홀드여야 합니다. 예약대기 홀드는 ``h_msg_cd``
-    가 :data:`~korail_mobile_api.KORAIL_STANDBY_HOLD_MESSAGE_CODE`
-    (``IRR000014``)인 것이지만(``ui/inquiry/rir/orr/a.java:222-225``) 여기서
-    강제하지는 않습니다. 전선 제약이 아니라 화면 이동 조건이고, 다른 안내 코드를
-    실은 홀드라도 실제 예약대기 PNR 이기 때문입니다. 앱과 똑같이 하려면 직접
-    확인하면 됩니다.
-
-    라이브 미검증.
     """
     if type(hold) is not ReservationHoldResponse:
         raise KorailProtocolError(
@@ -1174,20 +1060,7 @@ def build_unpaid_reservation_cancel_form(
 ) -> dict[str, str]:
     """미결제 홀드를 취소하는 폼을 만듭니다.
 
-    ``response`` 는 방금 성공한 :class:`ReservationHoldResponse` 여야 하고
-    (``strResult`` 가 ``"SUCC"``, PNR 이 있고, 여정 수가 1 이상) 그렇지 않으면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
-
-    여정 수는 상수가 아니라 **되울려 보냅니다.**
     ``DReservationConfirmActivity.java:269-278`` 은 ``txtJrnySqno="0001"`` 과
-    ``hidRsvChgNo="000"`` 은 상수로 두면서
-    ``setTxtJrnyCnt(reservationResponse.getH_jrny_cnt())`` 는 그대로
-    통과시킵니다. 환승 홀드는 여정이 둘이므로 여기서 하나만 받아들이면 살아 있는
-    환승 예약을 놓을 방법이 없어집니다.
-
-    살아 있는 ``TicketReservation`` 응답은 여정 수를 ``"1"`` 이 아니라
-    ``h_jrny_cnt="0001"`` 로 0 을 채워 보냅니다. 그래서 철자가 아니라 숫자로
-    비교합니다.
     """
     if type(response) is not ReservationHoldResponse:
         raise KorailProtocolError(
@@ -1262,14 +1135,7 @@ _ABSENT_JOB_SEQUENCE = "000000"
 def _echoed_job_sequence(value: str | None) -> str:
     """홀드의 ``tmpJobSqno`` 를 결제 폼에 그대로 되울립니다.
 
-    **자릿수를 복원하지 않습니다.** 숫자로 도착한 ``tmpJobSqno`` 는 앞의 0 이
-    사라진 채 전선에 오릅니다. 앱도 그렇게 하기 때문입니다 —
     ``TCReservationDao.java:28,107,183`` 은 ``tmpJobSqno`` 를 평범한 ``String``
-    으로 선언하고 어디에서도 ``addZero`` 가 이 값을 건드리지 않습니다. 여기서
-    0 을 채우면 앱이 보내지 않는 것을 보내게 됩니다.
-
-    ``_echoed_reservation_change_no`` 도 같습니다. 그쪽의 ``"000"`` 기본값은
-    전선 폭이 3자라는 근거가 아니라 박아 넣은 상수입니다.
     """
     if isinstance(value, str) and value.strip():
         return value
@@ -1309,25 +1175,9 @@ def build_card_payment_form(
 ) -> dict[str, str]:
     """미결제 홀드에 대한 단일 카드 ReservationPayment 폼을 만듭니다.
 
-    필드 구성과 상수는 근거가 확인된 앱/srtgo 의 ``pay_with_card``
-    (``ktx.py:1030-1051``)와 같습니다. 카드 정산 행 하나
-    (``hidStlMnsCd1="02"``)가 카드번호를 평문으로 싣습니다.
-
-    ``hidTmpJobSqno1/2`` 와 ``hidRsvChgNo`` 는 상수가 아니라 홀드 응답을 되울린
     것입니다(``V4/b.java:39-41``, ``PaymentService.java:14``). ``hidRsvChgNo``
-    는 **첫** 여정의 변경번호이며 앱도 모든 결제 호출 지점에서 같은 식을
-    반복합니다. 프로토콜 상수가 아니라 예약별 상태입니다 — 취소 빌더의 고정된
-    ``"000"`` 은 다른 경우입니다.
 
-    예약 신원과 금액은 ``hold``(PNR·발권창구번호·수납금액을 실은 방금 성공한
-    홀드)에서 옵니다. 이 빌더는 ``card`` 가 청구되는 카드인지 판단하지 않고 알
-    수도 없습니다. ``pay_with_fake_card`` 와 ``pay_with_card`` 가 모두 여기를
-    지나가고, 테스트 카드와 실제 청구를 가르는 것은 각자가 받는 consent 입니다.
-
-    ``hidMnsStlAmt1`` 은 화면의 합계가 아니라 앱의 ``getReceivedAmount()``
     입니다(``AbstractC1269e.java:406`` → ``V4/a.java:27``). ``h_tot_prc`` 는
-    UI 전용 값입니다(``PaymentActivity.java:174,497``). 할인 없는 성인 1명이면
-    두 값이 같지만, 할인이나 두 번째 승객이 끼는 순간 갈라집니다.
     """
     if type(hold) is not ReservationHoldResponse:
         raise KorailProtocolError(
@@ -1415,35 +1265,9 @@ def build_refund_form(
 ) -> dict[str, str]:
     """발권된 승차권의 환불(``refunds.RefundsRequest``) 폼을 만듭니다.
 
-    필드 구성과 순서는 앱의 Retrofit 선언을 따릅니다
     (``RefundService.java:29`` / ``RefundService.smali:212``). PNR 필드는
-    ``txtPnrNo``(P-n-r)입니다. srtgo 의 ``ktx.py:1082`` 는 이것을 ``txtPrnNo``
-    로 쓰는데, korail2 계보의 오타이며 디컴파일된 앱에 0회 등장합니다. Retrofit
-    ``@Field`` 이름은 정확히 일치해야 하므로 그대로 보내면 PNR 없는 환불이
-    전송됩니다. 신원은 호출자가 :class:`PaidTicket` 로 줍니다.
 
-    나머지 셋은 앱에서도 상수가 아닙니다.
-
-    ``return_times_division_code``
-        ``tk_ret_tms_dv_cd``. 앱은
-        ``RefundCommissionResponse.tk_ret_tms_dv_cd`` 를 그대로 복사하며
-        (``ticketReturn/a.smali:3149-3153``) 그 값은 출발 전 ``"21"``, 출발 후
-        ``"15"`` 입니다(``I4/a.java:5-6``).
-        :meth:`~korail_mobile_api.KorailClient.get_refund_commission` 의
-        :attr:`ticket_return_times_division_code` 에서 읽어 넘겨야 합니다.
-        그러지 않으면 출발 후 환불이 출발 전이라고 주장하게 됩니다. 기본값은
-        ``"21"``.
-    ``settle_mileage``
-        ``h_mlg_stl``. 나머지 둘과 달리 서버 에코가 아니라 호출자의
-        결정입니다. 앱은 승차권이 마일리지 정산 대상이고 사용 가능 마일리지가
-        수수료를 덮을 때만 ``"Y"`` 를 보냅니다
-        (``ticketReturn/a.java:185-190``). 기본값은 ``False``(``"N"``).
-    ``pbp_acceptance_target_flag``
-        ``pbpAcepTgtFlg``. ``RefundTicketDetailResponse.pbp_acceptance_target_flag``
-        를 되울립니다(``ticketReturn/a.smali:3165-3171``). 기본값은 ``"N"``.
-
-    승차권 상세와 수수료 조회 결과를 쥔 호출자는 셋 다 넘겨야 합니다. 앱은 그
-    밖의 조합을 보내지 않습니다.
+    (``ticketReturn/a.smali:3149-3153``) 그 값은 출발 전 ``"21"``, 출발 후
     """
     if type(ticket) is not PaidTicket:
         raise KorailProtocolError("KORAIL refund requires a PaidTicket")
@@ -1500,25 +1324,8 @@ def build_discount_card_purchase_form(
     """``research.dcntCrdInfo.do`` — 할인카드(N카드)를 구매합니다.
 
     스칼라 넷에 평평하게 편 맵 둘이며, 순서는 ``ResearchService.java:68-70`` 의
-    선언 순서입니다. 두 맵은
-    ``NCardReservationDao.NCardReservationRequest`` 의 ``jrnyInfo``·
+
     ``apdUsrInfo`` ``HashMap``(``dao/research/NCardReservationDao.java:31-32``)
-    이고, 키는 그 setter 들이 쓰는 인덱스 철자입니다(``:74-124``).
-
-    * ``jrnyInfo``: ``jrnyCnt`` 한 번, 그다음 구간마다 ``jrnyTpCd_N`` /
-      ``runDt_N`` / ``trnNo_N`` / ``dptRsStnCd_N`` / ``arvRsStnCd_N``.
-    * ``apdUsrInfo``: ``apdUsrCnt`` 한 번, 그다음 추가 사용자마다
-      ``custMgNo_N`` / ``apdCustName_N`` / ``apdCustTeln_N``.
-
-    ``mCustomData``(``:33,102-104``)는 일부러 없습니다. 확인 화면용
-    ``LinkedHashMap`` 이고 ``executeDao``(``:180``)에 넘어가지 않아 전선에
-    오르지 않습니다.
-
-    **미검증이며, 전송된 적이 없다는 것만이 이유가 아닙니다.** v6.5.0 에서
-    ``jrnyInfo``/``apdUsrInfo`` 를 채우는 호출 지점을 찾지 못했습니다. 개수와 키
-    철자는 DAO 에서 나왔습니다. 1구간 카드에도 서버가 구간을 요구하는지, 1인용
-    카드에서 ``apdUsrCnt`` 를 생략하는 대신 ``"0"`` 으로 보내야 하는지는 열린
-    질문입니다.
     """
     if type(request) is not DiscountCardPurchaseRequest:
         raise KorailProtocolError(
@@ -1607,19 +1414,8 @@ def build_discount_card_extension_query(
     """``reservation.dcntCrdExtn.do`` — 할인카드의 유효기간을 연장합니다.
 
     ``@Query`` 일곱 개입니다(``ResearchService.java:65-66``). 공통 셋에 카드
-    승차권의 네 부분 자격증명이 붙으며, 그 넷은
+
     ``TicketListActivity.java:1067-1072`` 이 N카드 승차권 행에서
-    ``h_orgtk_wct_no`` / ``h_orgtk_ret_sale_dt`` / ``h_orgtk_sale_sqno`` /
-    ``h_orgtk_ret_pwd`` 로 읽는 값입니다.
-
-    앱은 카드가 허용할 때만 기간연장을 제시합니다 —
-    ``dcnt_crd_info.h_dcnt_crd_trm_extn_psb_flg == "Y"``
-    (``Y4/C0907b.java:301``,
-    :attr:`~korail_mobile_api.read_models.DiscountCardOnTicket.term_extension_possible_flag`).
-    그 관문은 여기 재현하지 않으므로 부르기 전에 직접 확인해야 합니다.
-
-    **미검증.** DAO 의 응답 타입이 맨 ``BaseResponse`` 라, 성공한 연장이 무엇을
-    답하는지도 비용이 얼마인지도 알 수 없습니다.
     """
     if type(ticket) is not DiscountCardTicket:
         raise KorailProtocolError(
@@ -1668,33 +1464,8 @@ def build_discount_card_reservation_form(
     """할인카드(N카드)로 좌석 하나를 결제하는 홀드 폼을 만듭니다.
 
     **평범한 예약 라우트입니다.** ``w4/a.java:93-104`` 가 보통의
-    ``ReservationRequest`` 를 만들고 보통의 ``ReservationDao`` 로
+
     ``certification.TicketReservation``(``CertificationService.java:52-54``)에
-    POST 합니다. N카드 예약 엔드포인트는 없고 N카드 승객 블록이 있을 뿐입니다.
-
-    :func:`build_reservation_form` 의 성인 1명·일반실 폼과 다른 것은 둘입니다.
-
-    1. **승객 블록이 카드를 실은 한 행으로 줄어듭니다.** 여덟 행이
-       ``txtTotPsgCnt="1"``, ``txtCompaCnt1="1"``, ``txtPsgTpCd1="1"``,
-       ``txtDiscKndCd1="153"``, ``txtCardNo_1=<card_no>`` 가 됩니다
-       (``w4/a.java:96-101``). 철자가 고르지 않은 데 주의해야 합니다.
-       ``OPsg.CARD_NO`` 만 뒤에 밑줄이 붙은 ``"txtCardNo_"`` 이므로
-       (``OPsg.java:7-10``) 전송 키는 ``txtCardNo1`` 이 아니라 ``txtCardNo_1``
-       입니다.
-    2. ``txtMenuId`` 가 ``"11"`` 대신 ``"A2"`` 가 됩니다
-       (``SeatAssignBookingActivity.java:159``).
-
-    나머지는 바이트까지 같습니다. 이 빌더는 :func:`build_reservation_form` 의
-    출력에서 승객 블록만 **제자리에서** 갈아 끼우므로 여정 블록, 좌석 블록,
-    ``txtJobId``, ``txtStndFlg``, ``hidFreeFlg``, ``txtGdNo`` 가 라이브로 확인된
-    경로가 보내는 값 그대로 같은 위치에 남습니다.
-
-    카드 하나는 좌석 하나입니다. 앱은 여기서 승객 구성도 특실도 제시하지 않으므로
-    (``w4/a.java:88,97-98``) 둘 다 매개변수가 아니라 고정값입니다.
-
-    **전송된 적 없음.** 전적으로 APK 에서 만든 것입니다. 확인된 것은 라우트,
-    위의 두 차이, 키 철자입니다. 서버가 이 폼을 받아들이는지, 카드가
-    만료·소진됐을 때 무엇을 답하는지는 확인되지 않았습니다.
     """
     form = build_reservation_form(config, train)
     rebuilt: dict[str, str] = {}
@@ -1751,36 +1522,8 @@ def build_price_recalculation_form(
     """``certification.PriceReCalculation`` — 홀드된 PNR 의 운임을 다시 계산합니다.
 
     ``CertificationService.java:35-37``(``getDiscountPrice``)이며
+
     ``a6/C1042B.java:265-296``(``k2()``)이 만들고
-    ``DiscountPriceDao.executeDao``(``DiscountPriceDao.java:118-120``)가
-    보냅니다.
-
-    **여섯 개의 평행 리스트는 좌석당 한 행이고 인덱스로 짝지어집니다.**
-    ``k2()`` 는 ``DiscountPriceParams[]`` 하나를 도는 단일 루프이며 반복마다
-    같은 원소의 필드 하나씩을 여섯 ``ArrayList`` 에 덧붙입니다
-    (``a6/C1042B.java:275-283``, ``smali/a6.1/B.smali`` 로 확인). 다자녀
-    변형(``a6/C1041A.java:57-80``)도 **같은** ``k2()`` 를 부르고 행 수가 좌석
-    수와 같지 않으면 제출을 거부하므로(``:91-94``) "좌석당 한 행"은 양쪽에서
-    성립합니다.
-
-    **리스트는 인덱스 키가 아니라 반복 키로 나갑니다.** Retrofit 1.x 는
-    ``Iterable`` ``@Field`` 를 순회하며 이름을 그대로 둔 채
-    ``addField(name, element)`` 를 부릅니다
-    (``RequestBuilder.smali:1537-1601``). 그래서 본문은
-    ``psg_tp_dv_cd=..&psg_tp_dv_cd=..`` 이고 ``[]`` 도 인덱스 접미사도
-    없습니다. 이 빌더가 ``list`` 값을 돌려주는 이유이며 httpx 도 같은 방식으로
-    인코딩합니다.
-
-    ``txtJobId`` 는 고정 ``"1101"``(``a6/C1042B.java:267``), ``txtPsgGridcnt``
-    는 행 수입니다.
-
-    ``hiduserYn``/``hidCustNo`` 는 비회원일 때만 전송됩니다(``:290-293``).
-    회원이면 null 이고 Retrofit 이 null ``@Field`` 를 통째로 빼므로, 회원의
-    폼은 키가 열넷이 아니라 열둘입니다.
-
-    **미검증.** 여기서 만든 것이 전송된 적이 없습니다. 짝짓기와 키 철자, 반복
-    키 인코딩은 APK 에서 확정했지만, ``dcnt_knd_cd1`` 이 홀드와 어긋나는 행에
-    서버가 무엇을 하는지는 실제 홀드에 대고 불러 봐야 알 수 있습니다.
     """
     if type(request) is not PriceRecalculationRequest:
         raise KorailProtocolError(
@@ -1875,15 +1618,8 @@ def build_cart_add_form(
     """``cart.addCartList`` — 홀드된 예약을 장바구니에 담습니다.
 
     공통 셋 외의 필드는 ``hidPnrNo`` 하나입니다(``CartService.java:11-13``,
-    ``AddCartDao.java:9-24``). DAO 의 응답 타입이 맨 ``BaseResponse`` 라 전용
-    응답 데이터클래스도 파서도 없고,
-    :meth:`~korail_mobile_api.client.KorailClient.add_to_cart` 는 파싱하지 않은
-    봉투를 돌려줍니다.
 
-    **라이브 확인됨.** 홀드된 PNR 이 담겼고 봉투가 ``IRZ000002`` 와 함께
-    ``SUCC`` 로 돌아왔으며 그 행을 ``get_cart_list`` 로 다시 읽었습니다. 잘못된
-    PNR 이 아닌 다른 이유로는 무엇을 답하는지 아직 모릅니다. 이 저장소의 어떤
-    스크립트나 테스트도 이것을 보내지 않습니다.
+    ``AddCartDao.java:9-24``). DAO 의 응답 타입이 맨 ``BaseResponse`` 라 전용
     """
     if type(request) is not CartAddRequest:
         raise KorailProtocolError(
