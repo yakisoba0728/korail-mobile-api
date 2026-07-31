@@ -66,6 +66,13 @@ command; `--recover` then cancels a stranded unpaid hold, or refunds a paid
 ticket after printing the commission. Recovery needs no card ceiling, because
 neither branch charges anything.
 
+`--reserve-cancel-only` runs the free half — reserve, then cancel — with no
+payment step and no card read at all. Use it to re-verify the reserve and cancel
+wire shapes after changing the library: it costs nothing, so it can be repeated,
+which the paying run cannot. It still needs the two state-changing opt-ins,
+because it does create a real hold, but not `KORAIL_LIVE_REAL_CHARGE` and not
+`KORAIL_MAX_FARE` — there is no charge for either to bound.
+
 `docs/MUTATION_HANDOFF.md` documents the flow step by step, including why the
 PNR is deliberately *not* masked while the card number is scrubbed from every
 line the script writes.

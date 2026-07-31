@@ -32,6 +32,7 @@ import pytest
 
 from korail_mobile_api import (
     CardPayment,
+    KorailAppError,
     KorailClient,
     KorailSession,
     KorailTransportError,
@@ -327,11 +328,19 @@ def test_the_script_declares_no_card_source_other_than_the_environment():
     for forbidden in ("open(", "read_text", "write_text", "Path(", "json.dump"):
         assert forbidden not in SCRIPT_SOURCE, forbidden
     # ...and no command-line option that could carry a card value, because argv
-    # is world-readable through `ps`.
+    # is world-readable through `ps`. Every option here is a flag or a date;
+    # none of them takes a secret. A new option that did would land in this set
+    # and fail, which is the point of pinning the whole set rather than a count.
     options = {
         action.dest for action in rt.build_parser()._actions
     }
-    assert options == {"help", "date", "min_interval", "recover"}
+    assert options == {
+        "help",
+        "date",
+        "min_interval",
+        "recover",
+        "reserve_cancel_only",
+    }
 
 
 @pytest.mark.parametrize(
@@ -1060,6 +1069,165 @@ def test_find_train_no_reads_the_train_recorded_beside_the_pnr():
     }
     assert rt.find_train_no(raw, pnr_no=SYNTHETIC_PNR) == "00101"
     assert rt.find_train_no(raw, pnr_no="MISSING") == ""
+
+
+def _reserve_cancel_trip(
+    recorder: _Recorder, monkeypatch: pytest.MonkeyPatch, **env: str
+) -> Any:
+    """A round trip built the way ``--reserve-cancel-only`` builds one.
+
+    The difference that matters is ``card=None``: this path never reads a card,
+    so the tests below can prove a charge is unreachable rather than merely
+    unrequested.
+    """
+    trip = _round_trip(recorder, monkeypatch, **env)
+    trip.card = None
+    trip.console = rt._Console()
+    return trip
+
+
+def test_reserve_cancel_only_reserves_cancels_and_never_pays(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """The four sends of the free half, and not one more.
+
+    ``PAYMENT`` absent from the recorded paths is the assertion: the paying run
+    reaches it between ``RESERVE`` and ``TICKETS``, and this one must not.
+    """
+    recorder = _Recorder(_replies())
+    trip = _reserve_cancel_trip(recorder, monkeypatch)
+    assert trip.run_reserve_cancel() == 0
+    assert recorder.paths() == [HISTORY, SEARCH, RESERVE, CANCEL, HISTORY]
+    assert PAYMENT not in recorder.paths()
+    out = capsys.readouterr().out
+    assert SYNTHETIC_PNR in out
+    assert "PAYING WITH THE REAL CARD" not in out
+    assert trip.state == "none"
+
+
+def test_reserve_cancel_only_banners_the_pnr_when_the_cancel_is_refused(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """A refused cancel leaves a real hold, so it must be impossible to miss.
+
+    Nothing was charged, but the hold sits on the account until someone
+    releases it, and the operator cannot do that without the PNR. The refusal
+    arrives as a raised ``KorailAppError`` rather than a returned envelope, so
+    this also pins that the banner survives an exception on the way out and not
+    only an orderly abort.
+    """
+    replies = _replies()
+    replies[CANCEL] = {
+        "h_msg_cd": "SYNTHETIC.NO",
+        "h_msg_txt": "refused",
+        "strResult": "FAIL",
+    }
+    recorder = _Recorder(replies)
+    trip = _reserve_cancel_trip(recorder, monkeypatch)
+    with pytest.raises(KorailAppError):
+        trip.run_reserve_cancel()
+    out = capsys.readouterr().out
+    assert SYNTHETIC_PNR in out
+    assert "THIS RUN DID NOT FINISH CLEANLY" in out
+    assert "--recover" in out
+    # "unpaid", never "paying": no payment call was made, so the state is known.
+    assert "The hold is UNPAID" in out
+
+
+def test_pay_refuses_to_run_without_a_card_rather_than_crashing(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The guard on the one call that spends money.
+
+    Unreachable from either entry point today. It is a ``RoundTripAborted``
+    rather than an ``assert`` because a future caller that forgets the card must
+    stop at a named refusal, not at an ``AttributeError`` halfway into a payment
+    payload.
+    """
+    recorder = _Recorder(_replies())
+    trip = _reserve_cancel_trip(recorder, monkeypatch)
+    hold = trip.reserve(trip.select_train().train)
+    with pytest.raises(rt.RoundTripAborted, match="no card"):
+        trip.pay(hold)
+    assert PAYMENT not in recorder.paths()
+
+
+def test_reserve_cancel_only_needs_neither_the_card_nor_the_charging_opt_ins(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Two opt-ins, no third, no ceiling, and no card read.
+
+    ``KORAIL_LIVE_REAL_CHARGE`` and ``KORAIL_MAX_FARE`` exist to bound a charge.
+    Requiring them here would be theatre -- there is no payment step to bound --
+    and it would make the free re-verification harder to run than the paying
+    one, which is exactly backwards.
+    """
+    for name in ("KORAIL_MOBILE_API_LIVE", "KORAIL_LIVE_MUTATION"):
+        monkeypatch.setenv(name, "1")
+    for name in ("KORAIL_LIVE_REAL_CHARGE", MAX_FARE_ENV):
+        monkeypatch.delenv(name, raising=False)
+
+    def _no_card():  # pragma: no cover - must never run
+        raise AssertionError("the card was read on the no-payment path")
+
+    monkeypatch.setattr(rt, "read_card_from_env", _no_card)
+    monkeypatch.setattr(
+        rt, "RoundTrip", lambda *a, **k: _StubTrip(*a)
+    )
+    monkeypatch.setattr(rt, "KorailClient", lambda *a, **k: _StubClient())
+    monkeypatch.setattr(rt, "build_config_from_env", lambda: None)
+    # Pacing wraps a real httpx client's event hooks; it is not what this test
+    # is about, and a stub that satisfied it would only be testing the stub.
+    monkeypatch.setattr(rt, "_install_pacing", lambda *a, **k: None)
+    assert rt.main(["--reserve-cancel-only", "--date", "20990101"]) == 0
+
+
+def test_reserve_cancel_only_still_needs_the_two_state_changing_opt_ins(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Free is not the same as harmless: this still creates a real hold."""
+    monkeypatch.setenv("KORAIL_MOBILE_API_LIVE", "1")
+    monkeypatch.delenv("KORAIL_LIVE_MUTATION", raising=False)
+
+    def _no_client(*args, **kwargs):  # pragma: no cover - must never run
+        raise AssertionError("a client was built without KORAIL_LIVE_MUTATION")
+
+    monkeypatch.setattr(rt, "KorailClient", _no_client)
+    assert rt.main(["--reserve-cancel-only"]) == 2
+
+
+def test_the_two_non_charging_modes_cannot_be_combined(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """``--recover`` resolves an existing PNR; the other creates a new one."""
+    for name in ("KORAIL_MOBILE_API_LIVE", "KORAIL_LIVE_MUTATION"):
+        monkeypatch.setenv(name, "1")
+
+    def _no_client(*args, **kwargs):  # pragma: no cover - must never run
+        raise AssertionError("a client was built for a contradictory request")
+
+    monkeypatch.setattr(rt, "KorailClient", _no_client)
+    assert rt.main(["--recover", "--reserve-cancel-only"]) == 2
+    assert "pick one" in capsys.readouterr().out
+
+
+class _StubClient:
+    def close(self) -> None:
+        pass
+
+
+class _StubTrip:
+    """Stands in for :class:`RoundTrip` to pin which orchestration main picks."""
+
+    def __init__(self, client: Any, console: Any, card: Any, args: Any) -> None:
+        assert card is None, "main read a card on the no-payment path"
+        self.args = args
+
+    def run(self) -> int:  # pragma: no cover - must never run
+        raise AssertionError("main chose the CHARGING orchestration")
+
+    def run_reserve_cancel(self) -> int:
+        return 0
 
 
 def test_recover_refunds_a_paid_ticket_after_printing_its_commission(
