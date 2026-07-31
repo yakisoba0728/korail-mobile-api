@@ -766,10 +766,25 @@ def test_docs_record_transfer_as_implemented_and_unverified():
     # the README as well as in the three evidence documents. The README says it
     # in Korean, so it is pinned separately rather than folded into a combined
     # string that CHANGELOG could satisfy on its behalf.
+    # Reserve and cancel are proven; PAYMENT is the half that is not. That
+    # distinction is the whole point of this assertion: from 1.0.0 until
+    # 2026-07-31 these documents said no transfer had ever been sent, while
+    # IMPLEMENTATION_PROGRESS carried a dated record of one that had (강릉→목포,
+    # 2026-07-26) -- the file contradicted itself and this test pinned the wrong
+    # half. So "NOT live-verified" stays pinned, attached to the claim that is
+    # still true, and the phrase now has to appear NEAR the payment word rather
+    # than anywhere in the file.
     for document in (record, progress, changelog):
         assert "NOT live-verified" in document
         assert "search_transfer_trains" in document
         assert "reserve_transfer" in document
+    for document in (record, progress):
+        head, _, tail = document.partition("NOT live-verified")
+        assert "PAYMENT" in head[-160:] or "PAYMENT" in tail[:160], (
+            "the unproven half must be named as payment, not as the whole "
+            "feature: reserve and cancel have run live twice"
+        )
+    assert "환승은 예약·취소까지 확인, 결제는 실서버 검증 안 됨" in readme
     assert "실서버 검증 안 됨" in readme
     assert "search_transfer_trains" in readme
     assert "reserve_transfer" in readme

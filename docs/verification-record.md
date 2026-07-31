@@ -62,7 +62,7 @@ for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `2443 passed, 1 deselected`; the one
+current reviewed offline gate is `2444 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -696,11 +696,14 @@ moves no money and releases no seat, so it is deliberately not a new category.
 
 ### 환승 (transfer) itineraries
 
-**Implemented and NOT live-verified.** No transfer search and no transfer hold
-built by this package has ever been sent to KORAIL. Everything below is read out
-of the decompiled app; the section ends with exactly what the operator has to do
-to prove it, and with the one thing that currently blocks a clean reserve →
-cancel round trip.
+**Reserve and cancel are live-verified; transfer PAYMENT is NOT live-verified.**
+Two round trips have run: 2026-07-26 강릉→목포 and 2026-07-31
+서울→오송→여수EXPO, both one PNR carrying two journeys, both released by
+`cancel_unpaid_hold` from that single PNR. No transfer ticket has ever been paid
+for, so the transfer payment and refund wire shapes remain read out of the
+decompiled app. Everything below is the static derivation the first run
+confirmed; the section ends with exactly what the operator has to do to prove
+it.
 
 KORAIL books a 환승 as **one PNR carrying two journeys**, not as two bookings.
 The app does not have a second request builder for it: `C5/a.java:52-119` (`N0`)

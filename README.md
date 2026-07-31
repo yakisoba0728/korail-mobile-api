@@ -10,7 +10,7 @@
 [![문서](https://img.shields.io/badge/%EB%AC%B8%EC%84%9C-yaki.kr-1f6feb?style=flat-square)](https://yaki.kr/korail-mobile-api/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776ab?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
 [![타입](https://img.shields.io/badge/typed-py.typed-2f6f4e?style=flat-square)](src/korail_mobile_api/py.typed)
-[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-2443-4c1?style=flat-square)](#문서)
+[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-2444-4c1?style=flat-square)](#문서)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square)](LICENSE)
 
 [문서](https://yaki.kr/korail-mobile-api/) ·
@@ -273,8 +273,11 @@ client.cancel_unpaid_hold(hold, consent=MutationConsent(allow_cancel=True, dry_r
 뿐입니다. 할부·법인카드·복수 승객·부분 환불은 여전히 미확인이고, 출발일에 가까운
 반환은 수수료가 붙습니다 — 금액은 `get_refund_commission` 이 서버에서 읽어 옵니다.
 
-**환승은 구현했고 실서버 검증 안 됨.** `search_transfer_trains` 와 `reserve_transfer`
-는 보낸 적이 없습니다. 실환승 hold 는
+**환승은 예약·취소까지 확인, 결제는 실서버 검증 안 됨.** `search_transfer_trains` 와
+`reserve_transfer` 는 실서버에서 두 번 돌았습니다 — 2026-07-26 강릉→목포, 2026-07-31
+서울→오송→여수EXPO. 두 번 다 한 PNR 에 여정 둘(`h_jrny_cnt="0002"`)로 잡히고
+`cancel_unpaid_hold` 가 PNR 하나로 함께 풀었습니다. 환승 승차권을 **결제** 한 적은
+없습니다. 실환승 hold 는
 KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내면 안 됩니다.
 
 일부러 넣지 않은 것도 있습니다.
@@ -301,7 +304,7 @@ KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내면 안 됩�
 | [CHANGELOG.md](CHANGELOG.md) | 무엇이 바뀌었나 |
 
 게이트는 `python3 -m pytest -q -m "not live"` 이고 네트워크를 쓰지 않습니다 —
-`2443 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 이 있을 때만 도는
+`2444 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 이 있을 때만 도는
 실서버 테스트입니다. 기여는 [CONTRIBUTING.md](CONTRIBUTING.md), 규범은
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 참고.
 
