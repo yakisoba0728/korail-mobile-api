@@ -1192,6 +1192,39 @@ def test_ci_and_manual_release_gates_are_structurally_offline_and_fail_fast() ->
     assert not re.search(r"(?m)^\s*tags\s*:", workflow)
 
 
+def _child_pytest(
+    *arguments: str,
+    environment: dict[str, str],
+    timeout: int,
+) -> subprocess.CompletedProcess[str]:
+    """자식 프로세스로 ``pytest`` 를 돌리고 stdout 을 UTF-8 문자열로 받는다.
+
+    ``PYTHONIOENCODING`` 을 세우는 것이 이 함수의 존재 이유다. 파이프에 묶인 자식
+    파이썬은 stdout 인코딩을 로케일에서 가져오므로 한국어 Windows 에서는 cp949 로
+    쓴다. 지금은 이 스위트의 테스트 이름이 전부 ASCII 라서 우연히 통과하지만,
+    한글이 든 이름 하나만 생겨도 ``--collect-only`` 출력이 cp949 바이트가 되고,
+    그것을 부모가 UTF-8 로 읽으면 ``subprocess`` 의 읽기 스레드가
+    ``UnicodeDecodeError`` 로 죽어 ``result.stdout`` 이 문자열이 아니라 ``None``
+    이 된다 (자매 저장소 srt-mobile-api 에서 실제로 그렇게 깨졌다). 자식 쪽
+    인코딩을 못박는 것이 부모 쪽에서 ``errors="replace"`` 로 덮는 것보다 낫다 —
+    뒤엣것은 깨진 글자를 통과시켜 놓고 고쳐진 척한다.
+
+    ``timeout`` 은 호출자가 정한다. Windows 에서 pytest 의 콜드 스타트가 눈에
+    띄게 느려서, 이 값은 "이 하위 프로세스가 멈추지 않았다"만 보장하며 성능을
+    재지 않는다.
+    """
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", *arguments],
+        cwd=ROOT,
+        env={**environment, "PYTHONIOENCODING": "utf-8"},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=timeout,
+        check=False,
+    )
+
+
 def test_ambient_live_opt_in_is_deselected_by_the_release_command() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     release = (ROOT / "docs/RELEASE.md").read_text(encoding="utf-8")
@@ -1200,26 +1233,13 @@ def test_ambient_live_opt_in_is_deselected_by_the_release_command() -> None:
 
     environment = os.environ.copy()
     environment[LIVE_ENV] = "1"
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-q",
-            "-m",
-            "not live",
-            "tests/test_live_service.py",
-        ],
-        cwd=ROOT,
-        env=environment,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        # Windows 러너에서는 pytest 의 콜드 스타트가 눈에 띄게 느리다.
-        # 이 값은 "이 하위 프로세스가 멈추지 않았다"를 보장하는 것이지
-        # 성능을 재는 것이 아니므로 넉넉히 잡는다.
+    result = _child_pytest(
+        "-q",
+        "-m",
+        "not live",
+        "tests/test_live_service.py",
+        environment=environment,
         timeout=60,
-        check=False,
     )
     assert result.returncode == 5
     assert "1 deselected" in result.stdout
@@ -1244,15 +1264,13 @@ def _collected_offline_test_count() -> tuple[int, int]:
     """
     environment = os.environ.copy()
     environment.pop(LIVE_ENV, None)
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "-m", "not live", "--collect-only"],
-        cwd=ROOT,
-        env=environment,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
+    result = _child_pytest(
+        "-q",
+        "-m",
+        "not live",
+        "--collect-only",
+        environment=environment,
         timeout=120,
-        check=False,
     )
     assert result.returncode == 0, result.stdout[-2000:]
     match = _COLLECTED_RE.search(result.stdout)
