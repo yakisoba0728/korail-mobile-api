@@ -35,40 +35,20 @@ from .constants import (
 from .errors import KorailProtocolError
 
 
-# The subject areas the READ-ONLY send path will not carry.
+# Subject areas the READ-ONLY send path refuses. "Not reachable through
+# post_form/get" — NOT "not implemented". reservation/payment/refund have
+# their own routes in KORAIL_MUTATION_ROUTES; this set stops them travelling
+# on the read path (tests/test_http.py parametrized tests).
 #
-# Read this as "not reachable through post_form/get", NOT as "not implemented".
-# Three of the names below -- reservation, payment, refund -- are fully built
-# out: they have routes in KORAIL_MUTATION_ROUTES, client methods, and consent
-# categories of their own. What they must never do is travel on the read path,
-# which is exactly what these entries enforce (see the two parametrized tests
-# in tests/test_http.py). The 2026-07-27 audit read the older wording here as
-# claiming those three were declined outright; they are not, and the wording is
-# corrected rather than the set, because removing them would delete a real
-# guard.
-#
-# NARROWED ON 2026-07-26: the label was "points-mileage", which excluded the
-# whole loyalty area including its balance READS. Those reads are now in scope
-# and two of them are implemented (xPoint.MyXPointView, mlg.amtSpec.do), so the
-# label is now "points-mileage-write" and names only what it still refuses:
-# anything that moves, earns, spends or re-authenticates points.
-#
-# Concretely still out, and each for a stated reason rather than by category:
-#
-#   mlg.lpotAthn.do     -- authenticates against L.POINT with a user-supplied
-#                          numeric password and returns pwdErrTno, a FAILURE
-#                          COUNTER. A wrong guess is a state change at the
-#                          loyalty provider and repeated guesses lock the
-#                          account, so this is not a read regardless of the
-#                          Korean word 조회 in its screen title.
-#   xPoint.XPointView   -- same shape, same objection (xpoint_no + xpoint_pwd).
+# "points-mileage-write" excludes only writes/auths, not balance reads:
+#   mlg.lpotAthn.do     -- password auth → pwdErrTno (failure counter = state change)
+#   xPoint.XPointView   -- same (xpoint_no + xpoint_pwd)
 #   xPoint.OkCashbagCertView, mileage.acpnMlgSave.do, mileage.acpnMlgNoti.do
-#                       -- registration/accrual writes.
+#                       -- registration/accrual writes
 #
-# The precise boundary is still KORAIL_READ_ONLY_ROUTES plus
-# KORAIL_MUTATION_ROUTES; this set is the coarser domain-level guard the read
-# path applies on top, and it also records which areas were considered and
-# declined -- something a route allowlist cannot express.
+# The precise boundary is KORAIL_READ_ONLY_ROUTES ∪ KORAIL_MUTATION_ROUTES;
+# this set is the coarser domain-level guard on top, recording which areas
+# were considered and declined.
 EXCLUDED_API_DOMAINS = frozenset(
     {
         "reservation",
@@ -82,21 +62,13 @@ EXCLUDED_API_DOMAINS = frozenset(
     }
 )
 
-# The exact (method, path) pairs the read-only send path will transmit to.
+# Exact (method, path) pairs the read-only send path will transmit to.
+# 60 entries pinned by tests: 58 reads + login POST + logout GET.
 #
-# 60 entries, 60 distinct paths, pinned by tests. The decomposition is
-# 58 reads + the login POST + the server-side logout GET (cookie-authenticated,
-# zero parameters, and not a mutation, which is why it belongs here rather than
-# in KORAIL_MUTATION_ROUTES). There is no "excluding logout" counting
-# convention: every number quoted in the docs is the full set.
-#
-# NOTE on certification.ReservationList: that path carries TWO Retrofit
-# overloads in the app. Only the read one (`inquiryTicketRsv`,
-# CertificationService.java:45-46, four query fields) is registered here; the
-# write-flavoured `applyDisabilityCertification` (:22) shares the path but adds
-# txtPsgDisc0019Cnt plus six @QueryMaps. KORAIL_EXACT_REQUEST_FIELDS pins the
-# read overload's exact four fields, so the write overload's shape can never be
-# emitted through this route.
+# NOTE on certification.ReservationList: two Retrofit overloads share the path.
+# Only the read overload (inquiryTicketRsv, CertificationService.java:45-46,
+# four query fields) is here; the write overload (applyDisabilityCertification,
+# :22) is excluded. KORAIL_EXACT_REQUEST_FIELDS pins the four-field set.
 KORAIL_READ_ONLY_ROUTES = frozenset(
     {
         ("GET", "/file/CACHE/MobileService.cache"),
@@ -225,70 +197,33 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         # removed on 2026-07-27 (22ba4cc); these two reads outlived them.
         ("POST", "/classes/com.korail.mobile.research.tripChgOgtk.do"),
         #
-        # DELIBERATELY ABSENT, and it was briefly here: 특실 업그레이드's
-        # myTicket.reqUpgradeSeat (MyTicketService.java:23-24). Its path and
-        # its request look like a quote -- it sends no amount, no payment
-        # means and no confirmation flag -- but its RESPONSE mints a
-        # lumpStlTgtNo (SpecialRoomUpgradeDao.java:13,19), and procUpgrade
-        # takes that same 일괄결제대상번호 alongside stlMnsCd / crdInpWayCd /
-        # ismtMnthNum / mnsStlAmt (MyTicketService.java:21). A route that
-        # produces the settlement target a payment then spends is creating an
-        # unpaid purchase, not pricing one.
-        #
-        # This repository has already made exactly this call once, for
-        # research.dcntCrdInfo.do -- "Despite the 'Info' in its path this is a
-        # PURCHASE: it answers with a lumpStlTgtNo and an rcvdAmt ... What it
-        # creates is an unpaid purchase awaiting settlement" (client.py, the
-        # register_discount_card docstring) -- which is why that route sits in
-        # KORAIL_MUTATION_ROUTES under the discount_card category. The same
-        # shape gets the same answer.
-        #
-        # It is NOT re-registered as a mutation either. Its paired write,
-        # procUpgradeSeat (MyTicketService.java:20-21), is scoped out as an
-        # intended deferral, and shipping half of a purchase chain is worse
-        # than shipping none of it: it would leave a caller able to create
-        # settlement targets with no supported way to settle or abandon them.
+        # DELIBERATELY ABSENT: 특실 업그레이드 myTicket.reqUpgradeSeat
+        # (MyTicketService.java:23-24). Its RESPONSE mints a lumpStlTgtNo
+        # (SpecialRoomUpgradeDao.java:13,19), making it an unpaid purchase
+        # creation — same shape as research.dcntCrdInfo.do. Not registered as a
+        # mutation either: its paired write (procUpgradeSeat,
+        # MyTicketService.java:20-21) is scoped out.
     }
 )
 
-# Tiering of the state-changing routes. These are the four core mutation
-# endpoints (one per category) plus the 예약대기 follow-up, which shares the
-# "reserve" category with the hold it completes. They are deliberately kept OUT
-# of KORAIL_READ_ONLY_ROUTES so the read-only allowlist and its guarantee remain
-# fully intact: the read-only send path (post_form/get_json) refuses every route
-# in this set.
+# State-changing routes. Deliberately kept OUT of KORAIL_READ_ONLY_ROUTES:
+# the read-only send path refuses every route in this set.
 #
-# This is NOT an inert classification. All four categories now have a callable
-# client method — KorailClient.reserve, .confirm_standby_hold,
-# .cancel_unpaid_hold, .pay_with_fake_card and .refund — and each of them CAN
-# transmit to its route below. What bounds
-# them is the gate, not the absence of a method: the only code that sends to a
-# route in this set is KorailHttpClient.post_mutation_form, which requires a
-# MutationConsent opting into the matching category, refuses a dry_run=True
-# consent, refuses a payment unless fake_card_only is set, and re-checks both
-# assert_mutation_route and assert_mutation_route_category before the POST.
-# Under the default consent (dry_run=True) the methods build a redacted preview
-# and send nothing.
+# All categories have a callable client method and CAN transmit. What bounds
+# them is the gate: post_mutation_form requires a MutationConsent with the
+# matching category, refuses dry_run=True, refuses payment unless
+# fake_card_only is set, and re-checks both assert_mutation_route and
+# assert_mutation_route_category before the POST.
 #
-# Each tuple is (HTTP method, exact relative path); the trailing comment names
-# the consent category that owns the route.
+# Each tuple is (HTTP method, exact relative path).
 KORAIL_MUTATION_ROUTES = frozenset(
     {
         # reserve
         ("POST", "/classes/com.korail.mobile.certification.TicketReservation"),
-        # reserve -- the 예약대기 follow-up. Deliberately the SAME category as
-        # the hold that creates it, not a new one. It changes no money and
-        # releases no seat; it records the two options
-        # (좌석등급 변경 / SMS 통보) that the standby screen collects for a PNR
-        # the caller has just created with an allow_reserve consent
-        # (ReservationWaitService.java:10-12, reached only from
-        # ui/inquiry/rir/orr/a.java:222-225 after a "1102" hold). Splitting it
-        # into its own category would mean a caller who opted into placing a
-        # standby booking could not finish placing it, which is not a safety
-        # boundary -- and every existing MutationConsent would silently deny an
-        # operation it plainly intended to allow. The route/category cross-check
-        # below still stops a reserve consent from reaching payment, cancel or
-        # refund.
+        # reserve -- 예약대기 follow-up. Same category as the hold: it changes
+        # no money, releases no seat, only records two options (좌석등급 변경 /
+        # SMS 통보) for a PNR the caller just created
+        # (ReservationWaitService.java:10-12).
         ("POST", "/classes/com.korail.mobile.reservationWait.ReservationWait"),
         # payment
         ("POST", "/classes/com.korail.mobile.payment.ReservationPayment"),
@@ -326,15 +261,10 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # the DAO's response type is a bare BaseResponse (CartService.java:13),
         # same shape as the discount_card extension route above.
         ("POST", "/classes/com.korail.mobile.cart.addCartList"),
-        # DELIBERATELY ABSENT: the whole PassService purchase family --
-        # pass.passReserve / passPayIssue and their passOtr* siblings
-        # (PassService.java:19-44). 정기권 구매 was implemented against these
-        # two routes and then REMOVED: the settlement can only be proven by
-        # buying a ₩150,000-250,000 season pass this package cannot refund, and
-        # the shipped app cannot issue passPayIssue either, so no capture to
-        # compare against exists. The README's 정기권 section keeps what was
-        # learned. The 정기권 READS are untouched and remain read-only routes;
-        # no chargeable pass route is on this allowlist.
+        # DELIBERATELY ABSENT: PassService purchase family (pass.passReserve /
+        # passPayIssue, PassService.java:19-44). Settlement can only be proven
+        # by buying a ₩150,000-250,000 season pass this package cannot refund.
+        # 정기권 READS are untouched; no chargeable pass route is here.
     }
 )
 
@@ -358,38 +288,20 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
     "/classes/com.korail.mobile.cart.addCartList": "cart",
 }
 
-# The consent categories whose forms carry a card number in the clear.
+# Consent categories whose forms carry a chargeable PAN.
 #
-# The transmit gate in KorailHttpClient.post_mutation_form refuses to send one
-# of these unless the consent states, unambiguously, WHICH kind of card it is:
-# exactly one of fake_card_only=True (a non-chargeable test card, the default)
-# or real_card_acknowledged=True (a real card, money will move). Neither and
-# both are refused.
+# The transmit gate refuses to send unless the consent states exactly one of
+# fake_card_only=True or real_card_acknowledged=True.
 #
-# This is a SET rather than the literal "payment" it was written as, because the
-# category that owns a route and the question "does this route carry a PAN" are
-# two different questions and only one of them is about the product. A second
-# card-bearing category would otherwise reach the wire past a gate that reads
-# `category == "payment"` and quietly says no. Membership is the check; the set
-# is the list of categories that must be on the far side of it.
+# A SET, not a literal "payment" equality test, because the question "does this
+# route carry a PAN" and "which category owns this route" are independent. The
+# invariant — no card-bearing category owns a GET mutation route — is stated
+# against this name.
 #
-# It holds one member again, having briefly held "commuter_pass" too. That is
-# not a reason to fold it back into an equality test: the set was introduced on
-# its own, with behaviour unchanged in every direction, precisely because the
-# equality test was the wrong QUESTION rather than the wrong answer, and the
-# invariant it carries -- that no card-bearing category owns a GET mutation
-# route, which is why get_mutation_query has no card branch -- is stated against
-# this name and tested against it.
-#
-# "Card-bearing" means A CHARGEABLE PAN, which is narrower than "has a field
-# spelled like a card". `reserve` is deliberately NOT here even though an N카드
-# reservation writes `txtCardNo_1`: that is a prepaid 정기권/N카드 serial, not a
-# payment instrument, nothing is charged by presenting it, and redaction.py
-# masks it in previews anyway. The audit re-raised this on 2026-07-27 and it was
-# re-confirmed as intended. If that ever changes, narrow this comment rather
-# than adding `reserve` to the set -- membership also gates `fake_card_only`,
-# so adding it would newly demand a card acknowledgement from every caller who
-# only wanted to hold a seat.
+# "reserve" is deliberately NOT here: txtCardNo_1 on a reservation is a prepaid
+# N카드 serial, not a payment instrument. Membership gates fake_card_only, so
+# adding it would demand a card acknowledgement from every caller who only
+# wanted to hold a seat.
 KORAIL_CARD_BEARING_MUTATION_CATEGORIES = frozenset({"payment"})
 
 
@@ -470,40 +382,22 @@ KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
 KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
 
 # ---------------------------------------------------------------------------
-# The NetFunnel queue protocol: one exact query contract per opcode.
+# NetFunnel queue protocol: one exact query contract per opcode.
 #
-# THREE NAMED CONTRACTS, NOT ONE LOOSENED ONE. The queue lives on a different
-# host from every other route in this module, so it could not simply be added to
-# KORAIL_READ_ONLY_ROUTES — and it deliberately was not, because that set is the
-# app-origin allowlist and post_form/get_json must never be able to target
-# ts.wseq. What is registered instead is the exact parameter list of each opcode
-# this library issues, IN ORDER, so adding a queue operation means registering
-# it rather than relaxing a check.
+# Three named contracts for three opcodes on a SEPARATE host (nf.letskorail.com).
+# Each tuple is the sequence of U6.a.addParam calls in T6/d.java:
+#   5101 GetTidCacekedEnter (T6/d.java:99-101)  opcode, sid, aid
+#   5002 CheckedEnter       (T6/d.java:54-55)   opcode, key
+#   5004 Complete           (T6/d.java:78-79)   opcode, key
 #
-# Every tuple below is the sequence of `U6.a.addParam` calls in the matching
-# T6/d.java builder. U6/a.java:57-63 appends each one to an ArrayList and
-# U6/a.java:180-185 renders that list with URLEncodedUtils.format, so the app's
-# call order IS the wire order:
+# Absent: no `js`, no `nfid`, no `prefix`, no trailing epoch, no `ttl`.
+# Those belong to the JavaScript NetFunnel client that SRT uses.
+# KORAIL embeds the native Android SDK (T6/U6 packages).
 #
-#   5101 GetTidCacekedEnter  (T6/d.java:99-101)   opcode, sid, aid
-#   5002 CheckedEnter        (T6/d.java:54-55)    opcode, key
-#   5004 Complete            (T6/d.java:78-79)    opcode, key
-#
-# Note what is absent, because it is what a reader coming from the SRT sibling
-# will expect to find: no `js`, no `nfid`, no `prefix`, no trailing epoch
-# millisecond, and no `ttl` anywhere. Those belong to the JavaScript NetFunnel
-# client that SRT's WebView loads. KORAIL embeds the native Android SDK instead,
-# and the native SDK sends none of them — see the module docstring of
-# korail_mobile_api.netfunnel. `js=yes` in particular is a real parameter of the
-# other dialect (srtgo and ryanking13 both spell it `js=true`, which is wrong
-# there too) and simply has no place here.
-#
-# 5003 ALIVE_NOTICE, 5105 INIT and 5106 STOP are NOT registered. The first keeps
-# a waiting-room popup alive that this library never renders; the other two are
-# administrative and the app's own SDK refuses them without touching the network
-# (T6/d.java:115-121). An unregistered opcode is rejected by
-# assert_netfunnel_request, which is the point of registering rather than
-# pattern-matching.
+# 5003 ALIVE_NOTICE, 5105 INIT and 5106 STOP are NOT registered: the first
+# keeps a waiting-room popup alive; the other two are administrative and the
+# SDK refuses them (T6/d.java:115-121).
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 KORAIL_NETFUNNEL_ROUTES = frozenset({("GET", KORAIL_NETFUNNEL_PATH)})
 
@@ -544,68 +438,25 @@ KORAIL_NETFUNNEL_KEY_RE = re.compile(r"[A-Za-z0-9_.:@~-]{1,512}")
 # ---------------------------------------------------------------------------
 # THE QUEUE IS A POOL OF NODES, AND FOLLOWING ONE IS NOT OPTIONAL.
 #
-# `nf.letskorail.com` is a FRONT DOOR. It load-balances the entry call across a
-# pool of queue nodes, and the node that issues a session is the only one that
-# can complete it. Every reply names the node that answered it, in its `ip` and
-# `port` fields (`T6/i.java:50-53` reads them into the response object's host and
-# port), and the app follows that naming: `T6/d.java:17-19` (`makeURL`) rebuilds
-# the URL from `iVar.getHost()`/`iVar.getPort()` for `chkEnter`, `aliveNotice`
-# and `setComplete` unless `host_notmodify` is set — and `host_notmodify` is
-# false by default (`T6/h.java:43`, `isHostNotmodify()` at :134-135) and
-# `KTApplication` never sets it. Only the entry call, which has no previous
-# reply to name a node, goes to the configured host.
+# `nf.letskorail.com` is a front door that load-balances entry calls.
+# The node that issues a session is the only one that can complete it.
+# Replies name the owning node in `ip`/`port` (T6/i.java:50-53), and the
+# app follows it: T6/d.java:17-19 rebuilds the URL from getHost()/getPort()
+# unless host_notmodify is set (default false: T6/h.java:43, :134-135).
 #
-# DIAGNOSED LIVE ON 2026-07-26, and the symptom was not obvious. This module used
-# to decline the redirection and send every opcode to the front door. Slot
-# release then failed ABOUT HALF THE TIME, non-deterministically — five
-# acquire-then-release cycles, all entered through `nf.letskorail.com`:
+# LIVE EVIDENCE (2026-07-26): sending setComplete to the front door instead
+# of the named node failed ~50% of the time with 503:msg="Wrong Server ID".
+# Observed nodes: rnf12, rnf13, rnf14 — all under letskorail.com, https/443.
 #
-#     acquire said ip=rnf12.letskorail.com  -> release 503
-#     acquire said ip=rnf12.letskorail.com  -> release 503
-#     acquire said ip=rnf13.letskorail.com  -> release 503
-#     acquire said ip=rnf14.letskorail.com  -> release 200
-#     acquire said ip=rnf13.letskorail.com  -> release 200
+# CONSTRAINED, NOT TRUSTED. The redirection is admitted only into the pool's
+# own naming; a reply naming anything else is a hard error.
 #
-# and the controlled pair that names the cause outright:
-#
-#     acquire on nf.letskorail.com (reply said ip=rnf13.letskorail.com)
-#       release via nf.letskorail.com    -> 503:msg="Wrong Server ID"
-#       release via rnf13.letskorail.com -> 200:key=&nwait=0&...
-#
-# `Wrong Server ID` IS LITERAL. It is the pool saying "that session is not
-# mine" — not a complaint about a credential, a parameter or a key generation.
-# The releases that succeeded were the balancer happening to land the
-# front-door request back on the node that owned the session. The price of
-# staying pinned was leaking roughly half of every queue slot we took, which is
-# precisely the behaviour NetFunnel exists to prevent.
-#
-# CONSTRAINED, NOT TRUSTED. A response choosing where the next request goes is
-# exactly what an origin guard exists to stop, so the redirection is admitted
-# only into the queue's OWN node naming, and a reply naming anything else is a
-# hard error rather than a quiet fall-back to the front door. Falling back
-# silently is what produced the flaky release in the first place: it turns "this
-# reply is lying to us" into "this slot leaked", which is unobservable.
-#
-# THE RULE, and why it is drawn where it is. The observed nodes are
-# `rnf12`, `rnf13` and `rnf14`, all under `letskorail.com`, all https on 443. So:
-#
-#   * the label is `rnf` followed by a decimal 1..99 with NO leading zero — the
-#     observed names are contiguous small integers, so the shape is "the pool's
-#     n-th node" and two digits already admits 99 of them. A leading zero is
-#     refused because `rnf013` is not a name the pool hands out and a
-#     normalisation question is not worth inviting into a guard.
-#   * the parent is EXACTLY `letskorail.com`, matched as whole labels, so
-#     `rnf13.letskorail.com.example.net` and `evil-rnf13.letskorail.com` are not
-#     nodes.
-#   * lowercase, exactly as the wire spells it. DNS would not care; a guard
-#     comparing raw response bytes should, and refusing the case variants we have
-#     never seen costs nothing.
-#   * https on port 443 and nothing else — the port is NOT followed blindly
-#     either. 443 is the only value observed and the only one the front-door
-#     guard permits, so any other is refused.
-#   * plus the front door itself, which is already the pinned origin: a reply
-#     naming `nf.letskorail.com` is the balancer naming itself, and admitting it
-#     grants no reach that the client did not already have.
+# THE RULE:
+#   * label: `rnf` + decimal 1..99, no leading zero
+#   * parent: exactly `letskorail.com`, whole labels
+#   * lowercase only (as observed on wire)
+#   * https port 443 only
+#   * plus the front door itself (nf.letskorail.com)
 # ---------------------------------------------------------------------------
 
 #: 대기열 응답이 가리킬 수 있는 노드 이름. 각 부분을 왜 이만큼 좁혔는지는
@@ -1409,19 +1260,12 @@ def _is_original_ticket_field_order(
     names: tuple[str, ...],
     scalar_pairs: tuple[tuple[str, Any], ...],
 ) -> bool:
-    """순서 있는 원표 요청이 ``research.tripChgOgtk.do`` 의 문법에 맞는지.
+    """원표 요청이 ``research.tripChgOgtk.do`` 의 문법에 맞는지.
 
-    ``ResearchService.java:61-63`` 은 고정 ``@Field`` 넷 뒤에 ``@FieldMap`` 을
-    선언합니다. 그래서 정확한 이름 집합으로 고정할 수 있는 부분은 접두사뿐이고, 나머지는
-    원표 한 장당 네 키짜리 묶음이 1부터 인덱스를 달고 반복됩니다.
-
-    ``tkCnt`` 가 묶음 개수와 같기를 **요구하지 않습니다.** 앱이 그 뜻을 스스로 통일하지
-    못합니다 — ``TCBookingActivity.java:179`` 는 승객 수(``TOTAL_PERSON_COUNT``)를,
-    ``PushHistoryActivity.java:357`` 은 승차권 행 수를 보내고,
-    ``SeatSearchActivity.java:615`` 는 ``f29962H.size()`` 행을 돌면서 ``1`` 을 박아
-    보냅니다. 세 호출 지점 중 둘이 ``tkCnt == N`` 검사에 걸리므로, 그걸 요구하면 앱 자신이
-    보내는 요청을 거부하게 됩니다. 대신 고정하는 것은 타입입니다 — smali 시그니처가 ``I``
-    이므로(``ResearchService.smali:613,628-632``) 여기 문자열이 오면 틀린 것입니다.
+    ``ResearchService.java:61-63``: 고정 @Field 넷 + @FieldMap (원표 한 장당 네 키,
+    1부터 인덱스). ``tkCnt == N`` 을 요구하지 않음 — 앱 자신의 세 호출 지점이 서로
+    다른 값을 보내므로(TCBookingActivity:179, PushHistoryActivity:357,
+    SeatSearchActivity:615). 타입만 검사(smali 시그니처 ``I``).
     """
     prefix = ("Device", "Version", "Key", "tkCnt")
     if names[: len(prefix)] != prefix:
