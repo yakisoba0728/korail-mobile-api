@@ -18,7 +18,7 @@
 #: 집합이 아니고, ``from korail_mobile_api import *`` 가 이것을 실어 나른 적이
 #: 없다. ``pyproject.toml`` 의 ``project.version`` 과 같은지는
 #: ``tests/test_release_readiness.py`` 만 지킨다. 빌드가 둘을 맞춰 주지 않는다.
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 from .client import KorailClient
 from .config import KorailConfig, enabled_dynapath_config

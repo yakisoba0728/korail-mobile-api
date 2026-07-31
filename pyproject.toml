@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "korail-mobile-api"
-version = "1.1.0"
+version = "1.1.1"
 description = "Python client for documented KORAIL mobile app APIs: read-only by default, with a consent-gated mutation surface"
 readme = "README.md"
 requires-python = ">=3.11"
