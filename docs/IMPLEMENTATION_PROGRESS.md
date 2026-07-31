@@ -387,9 +387,10 @@ Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
   the one-adult general-seat form is live-verified; the multi-passenger and
   특실 wire shapes are static-evidenced and have never been transmitted
 - Consent-gated 환승 (transfer) search and reservation — `search_transfer_trains`,
-  `search_trains_with_transfer_fallback` and `reserve_transfer`. **Implemented
-  and NOT live-verified**: no transfer search and no transfer hold built by this
-  package has reached KORAIL. The transfer query is the direct query with
+  `search_trains_with_transfer_fallback` and `reserve_transfer`. **Reserve and
+  cancel are live-verified (2026-07-26, again 2026-07-31); transfer PAYMENT is
+  NOT live-verified** — no transfer ticket has ever been paid for. See the
+  dated sections below. The transfer query is the direct query with
   `radJobId="2"` and nothing else changed (`DirectInquiryActivity.java:284-296`);
   the response is the same flat `trn_infos.trn_info` list paired positionally
   into two-leg itineraries (`a5/k.java:156-170`). The reservation form is the
@@ -467,7 +468,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `2443 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `2444 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -787,7 +788,7 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-The current reviewed offline gate reports `2443 passed, 1 deselected`; the
+The current reviewed offline gate reports `2444 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service

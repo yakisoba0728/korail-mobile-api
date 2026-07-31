@@ -585,3 +585,37 @@ def test_reserve_then_auto_cancel_round_trip_offline():
         RESERVE_ROUTE,
         CANCEL_ROUTE,
     ]
+
+
+def test_refund_documents_that_it_returns_one_ticket_and_not_one_pnr() -> None:
+    """The scope of `refund` has to be stated where a caller will read it.
+
+    `PaidTicket` carries a PNR, so `refund(PaidTicket(pnr_no=...))` reads like a
+    whole-booking operation. It is not: the server returns only the ticket named
+    by `sale_sequence`. Confirmed live on 2026-07-31 — two adults on one PNR,
+    16,800 KRW paid, one `refund` call answered `SUCC`/`IRT200277` and returned
+    8,400 KRW, leaving the second seat paid and outstanding while the RESERVATION
+    list read empty, because what remained was a ticket rather than a
+    reservation. A caller trusting the empty list would be short one fare.
+
+    Pinned as a documentation test rather than a wire test because no offline
+    fixture can demonstrate it: the stub returns whatever it is told to, and the
+    behaviour lives entirely on KORAIL's side.
+    """
+    from korail_mobile_api.client import KorailClient as _Client
+
+    doc = " ".join((_Client.refund.__doc__ or "").split())
+    assert "PNR 단위가 아니라 승차권 단위" in doc
+    assert "장마다 한 번씩" in doc
+    # The reader must be told where to find the next ticket's identity.
+    for key in (
+        "h_orgtk_wct_no",
+        "h_orgtk_ret_sale_dt",
+        "h_orgtk_sale_sqno",
+        "h_orgtk_ret_pwd",
+    ):
+        assert key in doc
+    # And the quote has to say it answers for the same single ticket, or the
+    # 8,400-for-16,800 reply reads as a bug in the library.
+    quote_doc = " ".join((_Client.get_refund_commission.__doc__ or "").split())
+    assert "승차권 한 장" in quote_doc

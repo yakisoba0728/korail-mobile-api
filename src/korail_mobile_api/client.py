@@ -1214,7 +1214,13 @@ class KorailClient:
         ticket: OriginalTicketReference,
         companion: RefundCompanion = RefundCompanion(),
     ) -> RefundCommissionResponse:
-        """환불했을 때 돌려받을 금액과 떼일 수수료를 미리 묻습니다."""
+        """환불했을 때 돌려받을 금액과 떼일 수수료를 미리 묻습니다.
+
+        :meth:`refund` 와 같은 단위, 즉 ``ticket`` 이 지목한 **승차권 한 장** 에
+        대한 답입니다. 2인 PNR 의 한 장을 넣으면 8,400원이라고 답하는데, 그것은 결제
+        총액 16,800원을 잘못 센 것이 아니라 그 한 장을 반환하면 실제로 8,400원이
+        돌아온다는 정확한 답입니다. 총액을 알고 싶으면 장마다 물어야 합니다.
+        """
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.refunds.CommissionView",
@@ -1687,6 +1693,13 @@ class KorailClient:
         만들기 전에 거절합니다(:data:`~korail_mobile_api.KORAIL_MAX_JOURNEY_LEGS`).
 
         선택이 구간별입니다(``C5/a.java:59``, ``:97``). ``seats`` 도 마찬가지로
+
+        **2026-07-31 실서버 확인.** 서울→여수EXPO 를 :meth:`search_transfer_trains`
+        로 찾아 서울→오송(열차 009) + 오송→여수EXPO(열차 503) 를 성인 1명으로 보내
+        ``SUCC``/``IRR000018``, 49,700원, PNR ``320260733051735`` 를 받았습니다. 되읽은
+        상세의 ``journey_count`` 가 ``"2"`` 였고 :meth:`cancel_unpaid_hold` 가 PNR
+        하나로 두 구간을 함께 해제했습니다 — SRT 쪽과 달리 취소에 여정 수를 따로
+        줄 필요가 없습니다. 확인된 것은 **1인·일반실·편도** 한 건입니다.
         """
         require_mutation_consent(consent, "reserve")
         if self.session.current is None:
@@ -1898,11 +1911,26 @@ class KorailClient:
         settle_mileage: bool = False,
         pbp_acceptance_target_flag: str | None = None,
     ) -> MutationPreview | BaseKorailResponse:
-        """결제까지 끝난 승차권을 환불합니다. consent 게이트가 있습니다.
+        """결제까지 끝난 승차권 **한 장** 을 환불합니다. consent 게이트가 있습니다.
 
         ``POST refunds.RefundsRequest``. ``require_mutation_consent(consent,
 
         반환비밀번호)이어야 합니다. ``consent.dry_run`` 이 참이면 승차권 신원을 가린
+
+        **PNR 단위가 아니라 승차권 단위입니다.** ``ticket`` 이 PNR 을 싣기는 하지만
+        서버가 되돌리는 것은 ``sale_sequence`` 로 지목된 그 한 장뿐입니다. 승객 2명을
+        한 PNR 로 예약하면 승차권이 2장 생기고, 이 메서드를 한 번 부르면 한 장만
+        반환됩니다 — 나머지는 결제된 상태로 계정에 남고, 예약 목록은 비어 있어서
+        (반환된 것은 예약이 아니라 승차권이므로) 다 끝난 것처럼 보입니다.
+        **여러 장이면 장마다 한 번씩 부르십시오.** 남은 장의 신원은
+        :meth:`get_ticket_list` 응답에서 ``h_orgtk_wct_no``·``h_orgtk_ret_sale_dt``·
+        ``h_orgtk_sale_sqno``·``h_orgtk_ret_pwd`` 로 읽습니다.
+
+        2026-07-31 실서버 확인: 성인 2명 16,800원(8,400×2)을 한 PNR
+        (``320260733046452``)로 결제한 뒤 이 메서드를 한 번 부르니
+        ``SUCC``/``IRT200277`` 과 함께 8,400원만 돌아왔고, 좌석 032 한 장이
+        ``h_rcvd_amt="00000008400"`` 으로 남았습니다. 같은 방식으로 한 번 더 부르니
+        비었습니다. 부분 환불을 노린 API 가 아니라, 이것이 이 라우트의 단위입니다.
         """
         require_mutation_consent(consent, "refund")
         if self.session.current is None:
