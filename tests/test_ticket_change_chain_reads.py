@@ -128,7 +128,7 @@ def _client(handler) -> KorailClient:
 
 
 def test_the_two_change_chain_routes_are_registered_reads_only():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert KORAIL_MUTATION_ROUTES.isdisjoint(NEW_ROUTES)
     # Neither is a DynaPath-signed path.

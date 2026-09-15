@@ -625,12 +625,10 @@ def test_301_and_302_are_a_refusal_rather_than_a_malfunction():
         assert caught.value.code == code
 
 
-def test_303_express_number_is_not_folded_into_the_refusal_bucket():
-    # The app counts ExpressNumber as a SUCCESS (T6/g.java:909); we have never
-    # seen one, so it stays a plain error rather than being guessed either way.
-    with pytest.raises(KorailNetFunnelError) as caught:
-        parse_queue_response("303:", action="act_8")
-    assert not isinstance(caught.value, KorailQueueRejectedError)
+def test_303_express_number_is_a_keyless_success():
+    # 7.0.6 EvnetCode.isSuccess includes ExpressNumber; no key means no slot.
+    token = parse_queue_response("303:", action="act_8")
+    assert token.code == "303" and token.key == ""
 
 
 def test_the_javascript_dialects_body_is_rejected_and_says_so():
@@ -762,7 +760,8 @@ def test_release_sends_the_5004_request_with_the_full_key():
     assert seen == [f"/ts.wseq?opcode=5004&key={REAL_LENGTH_KEY}"]
 
 
-def test_release_of_a_bypass_token_sends_nothing():
+@pytest.mark.parametrize("code", ["300", "303"])
+def test_release_of_a_keyless_success_token_sends_nothing(code):
     # A 300 carries no key, so there is no slot to release — the same
     # short-circuit T6/d.Complete() applies at T6/d.java:70-73.
     calls: list[httpx.Request] = []
@@ -772,25 +771,26 @@ def test_release_of_a_bypass_token_sends_nothing():
         return httpx.Response(200, text="200:")
 
     _client(handler).release(
-        KorailNetFunnelToken(action="act_8", key="", code="300")
+        KorailNetFunnelToken(action="act_8", key="", code=code)
     )
     assert calls == []
 
 
-def test_a_failed_release_raises_rather_than_being_swallowed():
-    # The SRT cautionary tale, inverted: a release that does not release must be
-    # audible on the success path.
+def test_complete_ignores_body_as_the_v7_native_sdk_does():
+    # CommandClient.Complete() sends 5004 and discards its body.
+    seen = []
     def handler(_: httpx.Request) -> httpx.Response:
+        seen.append(True)
         return httpx.Response(200, text="507:")
 
-    with pytest.raises(KorailNetFunnelError, match="did not release"):
-        _client(handler).release(
-            KorailNetFunnelToken(
-                action="act_8",
-                key=REAL_LENGTH_KEY,
-                code="200",
-            )
+    _client(handler).release(
+        KorailNetFunnelToken(
+            action="act_8",
+            key=REAL_LENGTH_KEY,
+            code="200",
         )
+    )
+    assert seen == [True]
 
 
 def test_an_http_error_from_the_queue_is_a_transport_error():
@@ -1062,13 +1062,12 @@ def test_releasing_the_5101_ticket_surfaces_the_503_instead_of_leaking():
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(200, text=WRONG_SERVER_ID_BODY)
 
-    with pytest.raises(KorailNetFunnelError, match="never exchanged"):
-        _client(handler).release(
-            KorailNetFunnelToken(action="act_8", key=TICKET_KEY, code="200")
-        )
+    _client(handler).release(
+        KorailNetFunnelToken(action="act_8", key=TICKET_KEY, code="200")
+    )
 
 
-def test_a_503_during_a_slot_is_audible_on_the_success_path():
+def test_a_503_during_complete_is_ignored_on_the_success_path():
     # Same failure through the context manager, which is where it actually bit:
     # the gated call succeeds and the release quietly does nothing.
     def handler(request: httpx.Request) -> httpx.Response:
@@ -1079,9 +1078,8 @@ def test_a_503_during_a_slot_is_audible_on_the_success_path():
             return httpx.Response(200, text=SESSION_BODY)
         return httpx.Response(200, text=WRONG_SERVER_ID_BODY)
 
-    with pytest.raises(KorailNetFunnelError, match="never exchanged"):
-        with _client(handler).slot(KorailNetFunnelAction.RESERVE):
-            pass
+    with _client(handler).slot(KorailNetFunnelAction.RESERVE):
+        pass
 
 
 def test_a_reply_naming_a_foreign_host_aborts_instead_of_falling_back():
@@ -1149,10 +1147,9 @@ def test_a_release_at_the_front_door_is_what_the_503_was_telling_us():
 
     # The same key with no node goes to the front door and is refused — which
     # is exactly the token this client used to build for every release.
-    with pytest.raises(KorailNetFunnelError, match="never exchanged"):
-        client.release(
-            KorailNetFunnelToken(action="act_8", key=SESSION_KEY, code="200")
-        )
+    client.release(
+        KorailNetFunnelToken(action="act_8", key=SESSION_KEY, code="200")
+    )
 
 
 def test_the_empty_key_of_a_successful_release_is_not_a_parse_failure():
@@ -1383,7 +1380,7 @@ def test_slot_releases_after_the_body_raises_and_keeps_the_original_error():
     assert seen[-1] == ("5004", NODE_HOST, SESSION_KEY)
 
 
-def test_a_failed_release_on_the_failure_path_is_noted_not_substituted():
+def test_complete_body_on_failure_path_does_not_substitute_the_caller_error():
     seen: list[tuple[str, str, str]] = []
     client = _client(
         _sequence_handler(
@@ -1398,12 +1395,11 @@ def test_a_failed_release_on_the_failure_path_is_noted_not_substituted():
     with pytest.raises(Boom) as caught:
         with client.slot(KorailNetFunnelAction.RESERVE):
             raise Boom("the gated operation failed")
-    # The caller's error survives, and the leak is recorded rather than hidden.
-    notes = getattr(caught.value, "__notes__", [])
-    assert any("slot release also failed" in note for note in notes)
+    assert str(caught.value) == "the gated operation failed"
+    assert seen[-1][0] == "5004"
 
 
-def test_a_failed_release_on_the_success_path_is_raised():
+def test_complete_body_on_success_path_is_ignored():
     seen: list[tuple[str, str, str]] = []
     client = _client(
         _sequence_handler(
@@ -1412,9 +1408,9 @@ def test_a_failed_release_on_the_success_path_is_raised():
         )
     )
 
-    with pytest.raises(KorailNetFunnelError, match="did not release"):
-        with client.slot(KorailNetFunnelAction.RESERVE):
-            pass
+    with client.slot(KorailNetFunnelAction.RESERVE):
+        pass
+    assert seen[-1][0] == "5004"
 
 
 def test_slot_releases_even_when_the_queue_bypassed_us_without_a_key():

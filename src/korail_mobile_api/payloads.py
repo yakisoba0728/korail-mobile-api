@@ -167,6 +167,7 @@ def build_seat_car_form(
     passenger_count: int,
     sid: str,
     room_class_code: str = "1",
+    seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
     """``research.TrainResearch`` 의 호차 목록 조회 폼을 만듭니다.
 
@@ -190,6 +191,7 @@ def build_seat_car_form(
         "txtPsrmClCd": _validated_room_class_code(room_class_code),
         "txtRunDt": train.run_date or "",
         "txtDptDt": train.departure_date or "",
+        "txtDptTm": train.departure_time or "",
         "txtTrnClsfCd": train.train_class_code or "",
         "txtTrnNo": train.train_no.zfill(5),
         "txtDptRsStnCd": train.departure_station_code or "",
@@ -202,10 +204,10 @@ def build_seat_car_form(
         # selected row carries no code (ScheduleView rows are null) Retrofit
         # omits the @Field (getCarList txtSeatAttCd, ResearchService:37), so
         # omit it here rather than substituting a general-seat "015".
-        "txtSeatAttCd": train.seat_attribute_code,
+        "txtSeatAttCd": seat_attribute_code or train.seat_attribute_code,
         "txtGdNo": _resolved_goods_no(train),
     }
-    if not train.seat_attribute_code:
+    if not form["txtSeatAttCd"]:
         del form["txtSeatAttCd"]
     if form["txtGdNo"] is None:
         del form["txtGdNo"]
@@ -300,18 +302,16 @@ def build_train_search_form(
     ``qryDvCd``/``qryStNo``/``pgPrCnt``/``qryStTrnNo``/``qryStTrnNo2`` 는 환승
     전용 필드가 아니라 모든 검색에 항상 오릅니다(``b5/c.java:145-147``).
 
-    ``transfer=True`` 는 같은 엔드포인트에 직통 대신 환승 여정을 묻습니다.
-    움직이는 필드는 ``radJobId`` 하나뿐이며
+    ``transfer=True`` 는 직통 대신 환승 여정을 묻습니다. 필터를 지정하지
+    않은 기본 쿼리에서는 움직이는 필드가 ``radJobId`` 하나뿐이며
     :data:`~korail_mobile_api.KORAIL_DIRECT_ITINERARY_CODE` 에서
     :data:`~korail_mobile_api.KORAIL_TRANSFER_ITINERARY_CODE` 로 바뀝니다. 앱의
     환승 재조회도 그게 전부입니다(``DirectInquiryActivity.java:284-296``,
     ``smali/…/DirectInquiryActivity.smali:1677-1689``).
 
-    ``SeatMovieService.java:14`` 꼬리의
-    ``chtnCnt``/``chtnRsStnCd1``/``trnGpCnt``/``trnGpCd1`` 은 여기 속하지
-    않습니다. 사용자가 ``TRANSFER_CHTNRSSTNCD`` 로 특정 환승역을 따로 지정한
-    화면에서만 채워지는 값이고(``b5/c.java:154-160``) 그 화면은 이 클라이언트가
-    다루지 않습니다.
+    환승역·후속 열차군을 명시하면 7.0.6 ``TrainScheduleIn`` 목록 계약대로
+    ``chtnCnt``/``chtnRsStnCdN``/``trnGpCnt``/``trnGpCd1`` 을 추가합니다.
+    기본 쿼리에서는 이 필드를 생략합니다.
     """
     if continuation is not None and type(continuation) is not (
         TrainSearchContinuation
@@ -320,6 +320,17 @@ def build_train_search_form(
             "KORAIL train search continuation must be an exact "
             "TrainSearchContinuation"
         )
+    counts = (
+        query.passengers,
+        query.child_passengers,
+        query.senior_passengers,
+        query.high_disability_passengers,
+        query.low_disability_passengers,
+    )
+    if any(type(count) is not int or count < 0 for count in counts) or not sum(counts):
+        raise ValueError("passenger counts must be non-negative integers with a nonzero total")
+    if not isinstance(query.seat_attribute_code, str) or not query.seat_attribute_code:
+        raise ValueError("seat_attribute_code must be a non-empty string")
     form = {
         "Device": config.device,
         "Version": config.version,
@@ -337,13 +348,13 @@ def build_train_search_form(
         "txtGoAbrdDt": query.departure_date,
         "txtGoHour": query.departure_time,
         "txtPsgFlg_1": str(query.passengers),
-        "txtPsgFlg_2": "0",
-        "txtPsgFlg_3": "0",
-        "txtPsgFlg_4": "0",
-        "txtPsgFlg_5": "0",
+        "txtPsgFlg_2": str(query.child_passengers),
+        "txtPsgFlg_3": str(query.senior_passengers),
+        "txtPsgFlg_4": str(query.high_disability_passengers),
+        "txtPsgFlg_5": str(query.low_disability_passengers),
         "txtSeatAttCd_2": "000",
         "txtSeatAttCd_3": "000",
-        "txtSeatAttCd_4": "015",
+        "txtSeatAttCd_4": query.seat_attribute_code,
         # MainBookingActivity.java:775-776 sets both ebizCrossCheck and
         # srtCheckYn from the single "include SRT" checkbox (f29041T), so the
         # app always sends them equal; keep the pair coupled to include_srt.
@@ -360,7 +371,22 @@ def build_train_search_form(
     # after mbCrdNo. tkPsrmClCd/tkRcvdAmt belong to the ticket-change entry
     # point, which this client does not drive, and the app leaves them null
     # there (Retrofit then omits the @Field).
-    form["qryDvCd"] = "1"
+    if not isinstance(query.query_division_code, str) or not query.query_division_code:
+        raise ValueError("query_division_code must be a non-empty string")
+    if not isinstance(query.connection_station_codes, tuple) or any(
+        not isinstance(code, str) or not code for code in query.connection_station_codes
+    ):
+        raise ValueError("connection_station_codes must be a tuple of non-empty strings")
+    if query.connection_train_group_code is not None and (
+        not isinstance(query.connection_train_group_code, str)
+        or not query.connection_train_group_code
+    ):
+        raise ValueError("connection_train_group_code must be a non-empty string or None")
+    if not transfer and (
+        query.connection_station_codes or query.connection_train_group_code is not None
+    ):
+        raise ValueError("connection filters require transfer=True")
+    form["qryDvCd"] = query.query_division_code
     if continuation is None:
         form["qryStNo"] = "0"
         form["qryStTrnNo"] = "00000"
@@ -376,7 +402,64 @@ def build_train_search_form(
         # TransferSearchResult.next_page fills it from h_ectb_trn_no_next.
         form["qryStTrnNo2"] = continuation.query_train_no2
         form["pgPrCnt"] = continuation.page_count
+    # NetworkService.STLibw flattens TrainScheduleInChtnRsStn / TrnGp arrays
+    # as `chtnRsStnCd1`, `trnGpCd1` etc. The selected station or all candidates
+    # are supplied by the caller; protected selection/default codes are not
+    # inferred here.
+    if query.connection_station_codes:
+        form["chtnCnt"] = str(len(query.connection_station_codes))
+        for index, code in enumerate(query.connection_station_codes, 1):
+            form[f"chtnRsStnCd{index}"] = code
+    if query.connection_train_group_code is not None:
+        form["trnGpCnt"] = "1"
+        form["trnGpCd1"] = query.connection_train_group_code
     return form
+
+
+def build_train_schedule_special_form(
+    config: KorailConfig,
+    query: TrainSearchQuery,
+    *,
+    departure_name: str,
+    arrival_name: str,
+    member_card_no: str | None = None,
+    continuation: TrainSearchContinuation | None = None,
+    transfer: bool = False,
+) -> dict[str, str]:
+    """7.0.6 ``ScheduleViewSpecial`` 의 ``@FieldMap`` 입력.
+
+    APK ``NetworkService`` 는 ``TrainScheduleIn`` 을 JSON으로 직렬화한 뒤
+    스칼라와 목록을 폼 필드로 펼칩니다. 조회 본문의 공통 키는 기존
+    ``ScheduleView`` 와 같지만, 7.0.6 ``CommonIn`` 은 ``Key`` 를 선언하고
+    ``Sid`` 는 선언하지 않습니다. 정렬별 ``qryDvCd`` 값은 보호되어
+    :class:`TrainSearchQuery` 에서 받은 값만 보냅니다.
+    """
+    form = build_train_search_form(
+        config,
+        query,
+        departure_name=departure_name,
+        arrival_name=arrival_name,
+        sid="",
+        member_card_no=member_card_no,
+        continuation=continuation,
+        transfer=transfer,
+    )
+    del form["Sid"]
+    # buildTrainScheduleIn() leaves the four paging fields null on its first
+    # ScheduleViewSpecial request. Retrofit's FieldMap receives no keys for
+    # them; they only appear after the screen has a continuation.
+    if continuation is None:
+        for name in ("qryStNo", "qryStTrnNo", "qryStTrnNo2", "pgPrCnt"):
+            form.pop(name, None)
+    # NetworkService.STLibw keeps only non-empty JsonPrimitive values; unlike
+    # the legacy @Field overload it does not send empty values.
+    form = {key: value for key, value in form.items() if value}
+    return {
+        "Device": form.pop("Device"),
+        "Version": form.pop("Version"),
+        "Key": config.key,
+        **form,
+    }
 
 
 def build_train_schedule_form(
@@ -493,13 +576,14 @@ def build_ticket_list_form(
 
 
 def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
-    """``copt.gdMenuLt.do`` 의 MaaS 메뉴 조회 폼 — ``Device``/``Version`` 뿐입니다.
+    """``copt.gdMenuLt.do`` 의 MaaS 메뉴 조회 폼.
 
     ``Key`` 도 붙지 않습니다.
     """
     return {
         "Device": config.device,
         "Version": config.version,
+        "timeStamp": str(int(time.time() * 1000)),
     }
 
 

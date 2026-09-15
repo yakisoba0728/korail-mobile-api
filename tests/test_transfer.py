@@ -1,7 +1,8 @@
 """Offline tests for 환승 — searching two-leg itineraries and booking them.
 
-Everything asserted here was read out of the decompiled app, never out of what
-the builders happen to emit:
+Wire expectations follow the 7.0.6 APK DTO where it differs from the older
+reservation builder, especially positive passenger rows and journey fields.
+The itinerary and transfer structure also draws on decompiled bytecode:
 
 * the two itinerary codes -- ``K4/d.java:5-6``, ``DIRECT_SQ_NO("직통", "1")`` and
   ``TRANSFER_SQ_NO("환승", "2")``, cross-checked in
@@ -17,8 +18,9 @@ the builders happen to emit:
   ``analysis/apktool/smali/C5/a.smali:306-338`` and ``:343``.
 * the sequence-number formatting -- ``S4/O.java:19-21`` into
   ``S4/N.java:32-38``, ``DecimalFormat("000")``.
-* the field names -- ``OJrny.java:6-27`` (note ``arvTm_`` rather than
-  ``txtArvTm``), ``OSeat.java:7-35`` and ``OSrcar.java:6-30``.
+* the field names -- 7.0.6 ``TicketReservationInJrny.java`` omits
+  ``arvTm_``; ``OSeat.java:7-35`` and ``OSrcar.java:6-30`` define the
+  legacy map spellings retained by the high-level builder.
 * two legs and no more -- ``OSeat.java:32-35`` and ``OSrcar.java:21-30`` both
   split on ``i == 1`` alone, ``ReservationRequest.java:114-117`` reads back
   exactly the two seat slots, ``a5/k.java:108-110`` and ``:156-170`` build
@@ -82,9 +84,8 @@ from korail_mobile_api.mutation_payloads import (
 from korail_mobile_api.payloads import build_train_search_form
 
 
-# The sixteen per-leg OJrny keys, unsuffixed, in C5/a.java:62-76's write order.
-# Fifteen carry the journey number as a plain suffix; arvTm_ is the one the app
-# spells with an underscore (OJrny.java:12, 40-42).
+# The per-leg keys declared by 7.0.6 TicketReservationInJrny. Arrival time
+# is not a wire field in this APK DTO.
 JOURNEY_FIELDS: tuple[str, ...] = (
     "txtJrnyTpCd",
     "txtJrnySqno",
@@ -94,7 +95,6 @@ JOURNEY_FIELDS: tuple[str, ...] = (
     "txtRunDt",
     "txtDptDt",
     "txtDptTm",
-    "arvTm_",
     "txtDptRsStnCd",
     "txtDptStnConsOrdr",
     "txtDptStnRunOrdr",
@@ -104,9 +104,7 @@ JOURNEY_FIELDS: tuple[str, ...] = (
     "txtChgFlg",
 )
 
-# What build_single_adult_reservation_form has emitted since the live
-# 2026-07-24/25 reserve -> cancel round trip, in order. Generalising the builder
-# to a sequence of legs must not move, add or drop one of these.
+# Current 7.0.6 single-leg wire order, including compact passenger rows.
 PINNED_SINGLE_LEG_KEYS: tuple[str, ...] = (
     "Device",
     "Version",
@@ -120,27 +118,6 @@ PINNED_SINGLE_LEG_KEYS: tuple[str, ...] = (
     "txtCompaCnt1",
     "txtPsgTpCd1",
     "txtDiscKndCd1",
-    "txtCompaCnt2",
-    "txtPsgTpCd2",
-    "txtDiscKndCd2",
-    "txtCompaCnt3",
-    "txtPsgTpCd3",
-    "txtDiscKndCd3",
-    "txtCompaCnt4",
-    "txtPsgTpCd4",
-    "txtDiscKndCd4",
-    "txtCompaCnt5",
-    "txtPsgTpCd5",
-    "txtDiscKndCd5",
-    "txtCompaCnt6",
-    "txtPsgTpCd6",
-    "txtDiscKndCd6",
-    "txtCompaCnt7",
-    "txtPsgTpCd7",
-    "txtDiscKndCd7",
-    "txtCompaCnt8",
-    "txtPsgTpCd8",
-    "txtDiscKndCd8",
     "txtSeatAttCd1",
     "txtSeatAttCd2",
     "txtSeatAttCd3",
@@ -156,7 +133,6 @@ PINNED_SINGLE_LEG_KEYS: tuple[str, ...] = (
     "txtRunDt1",
     "txtDptDt1",
     "txtDptTm1",
-    "arvTm_1",
     "txtDptRsStnCd1",
     "txtDptStnConsOrdr1",
     "txtDptStnRunOrdr1",
@@ -245,10 +221,10 @@ def test_itinerary_and_journey_type_codes_are_the_apps_enum_values():
     assert KORAIL_MAX_JOURNEY_LEGS == 2
 
 
-# --- the single-leg form is untouched ---------------------------------------
+# --- the single-leg form follows the 7.0.6 DTO -------------------------------
 
 
-def test_single_leg_reservation_form_is_byte_for_byte_what_it_was():
+def test_single_leg_reservation_form_matches_the_7_0_6_wire_order():
     config = KorailConfig()
     train = _first_leg()
 
@@ -340,7 +316,7 @@ def test_transfer_journey_values_come_from_the_matching_leg():
     assert form["txtDptRsStnCd1"] == first.departure_station_code
     assert form["txtArvRsStnCd1"] == first.arrival_station_code
     assert form["txtDptTm1"] == first.departure_time
-    assert form["arvTm_1"] == first.arrival_time
+    assert "arvTm_1" not in form
     assert form["txtDptStnConsOrdr1"] == first.departure_construction_order
     assert form["txtArvStnRunOrdr1"] == first.arrival_run_order
 
@@ -348,7 +324,7 @@ def test_transfer_journey_values_come_from_the_matching_leg():
     assert form["txtDptRsStnCd2"] == second.departure_station_code
     assert form["txtArvRsStnCd2"] == second.arrival_station_code
     assert form["txtDptTm2"] == second.departure_time
-    assert form["arvTm_2"] == second.arrival_time
+    assert "arvTm_2" not in form
     assert form["txtDptStnConsOrdr2"] == second.departure_construction_order
     assert form["txtArvStnRunOrdr2"] == second.arrival_run_order
     # The transfer station is stated twice, once as each leg's endpoint, and the
@@ -397,8 +373,7 @@ def test_transfer_key_order_is_the_apps_map_order():
     # (ReservationDao.java:17 into CertificationService.java:52-54), so the
     # whole OSeat block precedes txtJrnyCnt.
     assert keys.index("txtPsrmClCd2") < keys.index("txtJrnyCnt")
-    # Within OJrny: the count, then all sixteen of journey 1, then all sixteen
-    # of journey 2 (C5/a.java:54-76).
+    # Within the journey block: the count, then the 7.0.6 DTO keys for each leg.
     assert keys[keys.index("txtJrnyCnt") + 1 :] == [
         f"{field}1" for field in JOURNEY_FIELDS
     ] + [f"{field}2" for field in JOURNEY_FIELDS]
@@ -460,7 +435,7 @@ def test_every_leg_must_be_bookable_not_just_the_first():
 
 def test_passenger_mix_is_per_booking_not_per_leg():
     # OPsg is built once on the booking-options screen (w4/a.java:47-74) and N0
-    # never touches it, so a transfer carries exactly one set of eight rows.
+    # never touches it, so a transfer carries one compact passenger block.
     form = build_transfer_reservation_form(
         KorailConfig(),
         _legs(),
@@ -469,7 +444,9 @@ def test_passenger_mix_is_per_booking_not_per_leg():
 
     assert form["txtTotPsgCnt"] == "3"
     assert form["txtCompaCnt1"] == "2"
-    assert form["txtCompaCnt3"] == "1"
+    assert form["txtCompaCnt2"] == "1"
+    assert form["txtPsgTpCd2"] == "3"
+    assert "txtCompaCnt3" not in form
     assert "txtCompaCnt1_1" not in form
     assert "txtTotPsgCnt2" not in form
 
@@ -702,6 +679,63 @@ def test_transfer_search_sends_no_pinned_transfer_station_fields():
 
     for key in ("chtnCnt", "chtnRsStnCd1", "trnGpCnt", "trnGpCd1"):
         assert key not in transfer
+
+
+def test_apk_transfer_filters_flatten_into_declared_form_fields():
+    query = TrainSearchQuery(
+        "0001",
+        "0723",
+        "20990101",
+        connection_station_codes=("SYNTHETIC-STATION-1", "SYNTHETIC-STATION-2"),
+        connection_train_group_code="SYNTHETIC-TRAIN-GROUP",
+        query_division_code="SYNTHETIC-SORT-CODE",
+    )
+    form = build_train_search_form(
+        KorailConfig(),
+        query,
+        departure_name="서울",
+        arrival_name="여수엑스포",
+        sid="SYNTHETIC-SID",
+        transfer=True,
+    )
+    assert form["chtnCnt"] == "2"
+    assert form["chtnRsStnCd1"] == "SYNTHETIC-STATION-1"
+    assert form["chtnRsStnCd2"] == "SYNTHETIC-STATION-2"
+    assert form["trnGpCnt"] == "1"
+    assert form["trnGpCd1"] == "SYNTHETIC-TRAIN-GROUP"
+    assert form["qryDvCd"] == "SYNTHETIC-SORT-CODE"
+
+
+def test_apk_schedule_special_uses_key_instead_of_legacy_sid():
+    from korail_mobile_api.payloads import build_train_schedule_special_form
+
+    config = KorailConfig()
+    form = build_train_schedule_special_form(
+        config,
+        TrainSearchQuery("0001", "0723", "20990101"),
+        departure_name="서울",
+        arrival_name="여수엑스포",
+    )
+    assert form["Key"] == config.key
+    assert "Sid" not in form
+    assert not {"qryStNo", "qryStTrnNo", "qryStTrnNo2", "pgPrCnt"} & set(form)
+    assert list(form)[:3] == ["Device", "Version", "Key"]
+
+
+def test_direct_search_rejects_transfer_only_filters():
+    with pytest.raises(ValueError, match="transfer=True"):
+        build_train_search_form(
+            KorailConfig(),
+            TrainSearchQuery(
+                "0001",
+                "0723",
+                "20990101",
+                connection_station_codes=("SYNTHETIC-STATION",),
+            ),
+            departure_name="서울",
+            arrival_name="여수엑스포",
+            sid="SYNTHETIC-SID",
+        )
 
 
 def test_direct_continuation_still_sends_the_empty_second_train_cursor():
@@ -1114,7 +1148,7 @@ def test_cancel_accepts_a_two_journey_transfer_hold_and_echoes_its_count():
     )
 
     config = KorailConfig()
-    for raw_count, expected in (("2", "2"), ("0002", "2"), ("1", "1"), ("0001", "1")):
+    for raw_count in ("2", "0002", "1", "0001"):
         hold = ReservationHoldResponse(
             h_msg_cd="IRR000018",
             h_msg_txt="",
@@ -1124,7 +1158,7 @@ def test_cancel_accepts_a_two_journey_transfer_hold_and_echoes_its_count():
             journey_count=raw_count,
         )
         form = build_unpaid_reservation_cancel_form(config, hold)
-        assert form["txtJrnyCnt"] == expected, raw_count
+        assert form["txtJrnyCnt"] == raw_count
         # These two stay constant for a freshly created hold, whatever the legs.
         assert form["txtJrnySqno"] == "0001"
         assert form["hidRsvChgNo"] == "000"

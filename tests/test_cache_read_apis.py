@@ -121,12 +121,12 @@ def test_cache_query_uses_current_epoch_milliseconds(monkeypatch):
         ),
         (
             "get_notice",
-            "/file/CACHE/prdMobilePlusNotice.cache",
-            "cache_notice_success.json",
+            "/file/CACHE/prdMobilePlusMain.cache",
+            "cache_app_data_with_notice.json",
         ),
     ],
 )
-def test_cache_client_methods_use_exact_account_neutral_get(
+def test_cache_client_methods_use_registered_cache_methods(
     method_name,
     path,
     fixture_name,
@@ -147,15 +147,15 @@ def test_cache_client_methods_use_exact_account_neutral_get(
 
     assert client.session.current is None
     assert len(seen) == 1
-    assert seen[0].method == "GET"
+    assert seen[0].method == "POST"
     assert seen[0].url.path == path
-    assert parse_qs(seen[0].url.query.decode()) == {
-        "timeStamp": ["1234567890"]
-    }
-    assert set(seen[0].url.params) == {"timeStamp"}
-    assert seen[0].content == b""
+    encoded = seen[0].content.decode()
+    assert parse_qs(encoded) == {"timeStamp": ["1234567890"]}
     assert "x-dynapath-m-token" not in seen[0].headers
     assert result.h_msg_cd == "S000"
+    if method_name == "get_notice":
+        assert result.board_id == "SYNTHETIC"
+        assert result.post_title == "Synthetic notice"
 
 
 @pytest.mark.parametrize("method_name", ["get_app_data", "get_notice"])
@@ -217,7 +217,7 @@ def test_cache_client_preserves_strict_response_classification(
     ("method_name", "payload"),
     [
         ("get_app_data", {"forSeatIntg": "Y"}),
-        ("get_notice", {"bbrdId": "SYNTHETIC"}),
+        ("get_notice", {"notice": {"BbrdId": "SYNTHETIC"}}),
     ],
 )
 def test_cache_client_accepts_envelope_free_objects(method_name, payload):

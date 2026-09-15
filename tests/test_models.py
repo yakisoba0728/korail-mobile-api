@@ -54,6 +54,13 @@ def test_train_summary_exposes_seat_map_flag_and_general_reservation_code():
     assert train.general_reservation_code == "11"
 
 
+def test_train_summary_retains_apk_suspension_flag():
+    train = TrainSummary.from_raw(
+        {"h_trn_no": "00001", "h_trn_sps_flg": "SYNTHETIC-SUSPENDED"}
+    )
+    assert train.train_suspension_flag == "SYNTHETIC-SUSPENDED"
+
+
 def test_config_defaults_match_design():
     config = KorailConfig()
     assert config.base_url == "https://smart.letskorail.com"

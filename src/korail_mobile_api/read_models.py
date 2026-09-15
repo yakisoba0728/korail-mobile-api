@@ -14,6 +14,30 @@ from .models import BaseKorailResponse
 
 
 @dataclass(frozen=True)
+class TicketListTicket:
+    pnr_no: str | None = field(default=None, repr=False)
+    sale_window_no: str | None = field(default=None, repr=False)
+    sale_date: str | None = field(default=None, repr=False)
+    return_sale_date: str | None = field(default=None, repr=False)
+    sale_sequence: str | None = field(default=None, repr=False)
+    return_password: str | None = field(default=None, repr=False)
+    ticket_status_code: str | None = None
+    train_info: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class TicketListReservation:
+    tickets: tuple[TicketListTicket, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class TicketListResponse(BaseKorailResponse):
+    reservations: tuple[TicketListReservation, ...] = ()
+
+
+@dataclass(frozen=True)
 class ServiceStatusResponse(BaseKorailResponse):
     pass
 
@@ -85,7 +109,9 @@ class DelayDiscountTicketListResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class DiscountCoupon:
     guide: str | None = None
+    start_date: str | None = None
     expiration_date: str | None = None
+    discount_kind_code: str | None = None
     discount_values: tuple[str, ...] = ()
     remarks: tuple[str, ...] = ()
     coupon_no: str | None = field(default=None, repr=False)
@@ -97,6 +123,8 @@ class DiscountCouponListResponse(BaseKorailResponse):
     items: tuple[DiscountCoupon, ...] = ()
     current_page: int | None = None
     total_pages: int | None = None
+    total_count: str | None = None
+    row_count: str | None = None
 
 
 @dataclass(frozen=True)
@@ -362,6 +390,24 @@ class PassScheduleInfo:
 
 
 @dataclass(frozen=True)
+class PassScheduleMainInfo:
+    sale_window_no: str | None = field(default=None, repr=False)
+    work_date: str | None = field(default=None, repr=False)
+    work_time: str | None = field(default=None, repr=False)
+    job_id: str | None = field(default=None, repr=False)
+    version_no: str | None = None
+    message_code: str | None = None
+    selected_count: str | None = None
+    total_selected_count: str | None = None
+    count_per_page: str | None = None
+    page_count: str | None = None
+    next_page_flag: str | None = None
+    change_train_division_code: str | None = None
+    page_no: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
 class SeatAssignmentScheduleResponse(BaseKorailResponse):
     h_msg_txt: str | None = field(default=None, repr=False)
     next_page_flag: str | None = None
@@ -434,6 +480,9 @@ class PassMenuItem:
     enabled: str | None = None
     item_id: str | None = None
     information: str | None = None
+    sale_message_1: str | None = None
+    sale_message_2: str | None = None
+    sale_message_3: str | None = None
     expanded: str | None = None
     parent_id: str | None = None
     representative_arrival: str | None = None
@@ -476,6 +525,7 @@ class CrewRequestListResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class PassScheduleResponse(BaseKorailResponse):
     h_msg_txt: str | None = field(default=None, repr=False)
+    main_info: PassScheduleMainInfo | None = None
     schedules: tuple[PassScheduleInfo, ...] = field(
         default=(),
         repr=False,
@@ -613,6 +663,7 @@ class MileageHistoryResponse(BaseKorailResponse):
     #: ``pgCnt`` — 전체 페이지 수. 앱은 무한 스크롤의 상한으로 씁니다
     #: (``MileageHistoryActivity.java:581``).
     page_count: str | None = None
+    query_count: str | None = None
     total_available_rail_point: str | None = None
     total_available_rail_point_1: str | None = None
     total_available_affiliate_point: str | None = None
@@ -779,6 +830,42 @@ class CustomerTripInfoResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
+class MaasServiceDetailInfo:
+    additional_service_request_no: str | None = field(default=None, repr=False)
+    booking_time: str | None = None
+    branch_name: str | None = None
+    partner_name: str | None = None
+    delivery_datetime: str | None = None
+    drop_times: str | None = None
+    dropoff_name: str | None = None
+    image: str | None = field(default=None, repr=False)
+    name: str | None = None
+    option_name: str | None = None
+    pickup_name: str | None = None
+    pickup_place: str | None = None
+    pickup_times: str | None = None
+    reservation_date: str | None = None
+    return_datetime: str | None = None
+    start_datetime: str | None = None
+    cancel_deadline_date: str | None = None
+    cancel_return_amount: str | None = None
+    cancel_return_fee: str | None = None
+    goods_sequence: str | None = field(default=None, repr=False)
+    intermediate_value: str | None = None
+    received_amount: str | None = None
+    reservation_status_name: str | None = None
+    reservation_passenger_name: str | None = field(default=None, repr=False)
+    settlement_deadline_date: str | None = None
+    settlement_deadline_datetime: str | None = None
+    settlement_status_code: str | None = None
+    settlement_status_name: str | None = None
+    total_settlement_amount: str | None = None
+    usage_period_content: str | None = None
+    entity_one: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
 class MaasServiceDetail:
     additional_service_division_code: str | None = field(default=None, repr=False)
     additional_service_goods_code: str | None = field(default=None, repr=False)
@@ -797,9 +884,11 @@ class MaasServiceDetail:
     pnr_no: str | None = field(default=None, repr=False)
     request_date: str | None = field(default=None, repr=False)
     request_quantity: str | None = field(default=None, repr=False)
+    reservation_station_code_name: str | None = None
     reservation_specification_url: str | None = field(default=None, repr=False)
     usage_close_date: str | None = field(default=None, repr=False)
     usage_start_date: str | None = field(default=None, repr=False)
+    detail_info: MaasServiceDetailInfo | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
 
@@ -1193,6 +1282,7 @@ class RecentDeliveryRecipient:
 @dataclass(frozen=True)
 class RecentDeliveryHistoryResponse(BaseKorailResponse):
     h_msg_txt: str | None = field(default=None, repr=False)
+    changed_acceptance_reservation_no: str | None = field(default=None, repr=False)
     recipients: tuple[RecentDeliveryRecipient, ...] = field(
         default=(),
         repr=False,

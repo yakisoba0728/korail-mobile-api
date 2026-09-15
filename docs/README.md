@@ -18,10 +18,15 @@ CHANGELOG 의 절을 그대로 끌어다 쓰고(`include-markdown`), `reference/
 
 | 문서 | 내용 |
 | --- | --- |
-| [api-status-by-service.md](api-status-by-service.md) | 서비스별 Retrofit 엔트리 165개와 각각의 라이브 성공·실패·미실행 상태 |
+| [api-status-by-service.md](api-status-by-service.md) | 6.5.0 Retrofit 엔트리 165개와 당시의 라이브 성공·실패·미실행 상태 |
 | [api-endpoints.md](api-endpoints.md) | 원본 엔드포인트 표 — 메서드, 경로, 요청 파라미터, 반환 타입 |
 | [pass-schedule-read.md](pass-schedule-read.md) | 정기권 조회의 정확한 요청·응답 타입과 라이브 검증 경계 |
 | [verification-record.md](verification-record.md) | 증거 기록. 기능별 APK `파일:줄` 인용과 라이브 실행 결과 |
+| [7.0.6-contract-update.md](7.0.6-contract-update.md) | 7.0.6 APK 정적 대조에서 확인한 기존 호출 변경과 남은 미확인 값 |
+| [7.0.6-additions.md](7.0.6-additions.md) | 7.0.6 추가 Retrofit 계약과 Android 호스트 연동 |
+| [7.0.6-removals.md](7.0.6-removals.md) | 7.0.6 APK에서 빠진 호출과 Python 호환성 변경 |
+| [7.0.6-live-verification.md](7.0.6-live-verification.md) | 7.0.6 작업 트리의 실서버 조회·예약·실카드 결제·전액 환불 검증과 미실행 범위 |
+| [7.0.6-one-to-one-audit.md](7.0.6-one-to-one-audit.md) | 7.0.6 디컴파일 결과와 현재 코드의 1:1 정적 대조 |
 | [MUTATION_HANDOFF.md](MUTATION_HANDOFF.md) | 상태변경 표면의 운영 인수인계 — 무엇이 증명됐고 무엇이 남았는지 |
 | [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md) | 패키지 경계와 라우트 인벤토리의 날짜별 진행 기록 |
 | [korail-apk-analysis.md](korail-apk-analysis.md) | APK 자체 — 구조, 호스트, 로그인, 보안, 결제, WebView |

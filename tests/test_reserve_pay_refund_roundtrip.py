@@ -77,7 +77,7 @@ HISTORY = "/classes/com.korail.mobile.reservation.ReservationView"
 RESERVE = "/classes/com.korail.mobile.certification.TicketReservation"
 DETAIL = "/classes/com.korail.mobile.certification.ReservationList"
 PAYMENT = "/classes/com.korail.mobile.payment.ReservationPayment"
-TICKETS = "/classes/com.korail.mobile.myTicket.MyTicketList"
+TICKETS = "/classes/com.korail.mobile.myTicket.MyTicketNewList.do"
 SEL_TICKET = "/classes/com.korail.mobile.refunds.SelTicketInfo"
 COMMISSION = "/classes/com.korail.mobile.refunds.CommissionView"
 REFUND = "/classes/com.korail.mobile.refunds.RefundsRequest"
@@ -169,13 +169,18 @@ def _replies(*, pnr: str = SYNTHETIC_PNR, **overrides: Any) -> dict[str, dict[st
         ),
         PAYMENT: _ok(h_img_tk_flg="N"),
         TICKETS: _ok(
-            tickets=[
+            pnr_list=[
                 {
                     "h_pnr_no": pnr,
-                    "h_orgtk_ret_sale_dt": "20990101",
-                    "h_orgtk_wct_no": "SYNTHETIC_WCT",
-                    "h_orgtk_sale_sqno": "0001",
-                    "h_orgtk_ret_pwd": "SYNTHETIC_RETPWD",
+                    "ticket_list": [
+                        {
+                            "h_pnr_no": pnr,
+                            "h_orgtk_ret_sale_dt": "20990101",
+                            "h_orgtk_wct_no": "SYNTHETIC_WCT",
+                            "h_orgtk_sale_sqno": "0001",
+                            "h_orgtk_ret_pwd": "SYNTHETIC_RETPWD",
+                        }
+                    ],
                 }
             ]
         ),
@@ -192,7 +197,7 @@ def _replies(*, pnr: str = SYNTHETIC_PNR, **overrides: Any) -> dict[str, dict[st
             ret_fee="00000000000000",
             prg_psb_flg="Y",
         ),
-        REFUND: _ok(),
+        REFUND: _ok(stlList=[]),
         CANCEL: _ok(),
     }
     base.update(overrides)
@@ -688,7 +693,7 @@ def test_a_live_shaped_pnr_reaches_the_operator_through_every_banner(
     # TICKETS returns nothing, so the run fails AFTER paying: this exercises the
     # hold banner and the not-clean failure banner in one pass.
     recorder = _Recorder(
-        _replies(pnr=LIVE_SHAPED_PNR, **{TICKETS: _ok(tickets=[])})
+        _replies(pnr=LIVE_SHAPED_PNR, **{TICKETS: _ok(pnr_list=[])})
     )
     trip = _round_trip(recorder, monkeypatch)
     with pytest.raises(rt.RoundTripAborted):
@@ -898,7 +903,7 @@ def test_a_failure_after_payment_banners_the_pnr_and_the_recovery_command(
     # The payment succeeded but the paid ticket's refund identity cannot be
     # found. This is the worst case the script is designed against: money has
     # moved and the operator must be told exactly what they are holding.
-    recorder = _Recorder(_replies(**{TICKETS: _ok(tickets=[])}))
+    recorder = _Recorder(_replies(**{TICKETS: _ok(pnr_list=[])}))
     trip = _round_trip(recorder, monkeypatch)
     with pytest.raises(rt.RoundTripAborted):
         trip.run()
@@ -1013,7 +1018,7 @@ def test_recover_cancels_an_unpaid_hold(monkeypatch: pytest.MonkeyPatch):
     recorder = _Recorder(
         _replies(
             **{
-                TICKETS: _ok(tickets=[]),
+                TICKETS: _ok(pnr_list=[]),
                 HISTORY: _ok(
                     jrny_infos={
                         "jrny_info": [
@@ -1047,7 +1052,7 @@ def test_recover_cancels_an_unpaid_hold(monkeypatch: pytest.MonkeyPatch):
 def test_recover_reports_and_exits_non_zero_for_an_unknown_pnr(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    recorder = _Recorder(_replies(**{TICKETS: _ok(tickets=[])}))
+    recorder = _Recorder(_replies(**{TICKETS: _ok(pnr_list=[])}))
     client = KorailClient(transport=httpx.MockTransport(recorder))
     client.session.current = KorailSession(jsessionid="synthetic-secret")
     monkeypatch.setattr(

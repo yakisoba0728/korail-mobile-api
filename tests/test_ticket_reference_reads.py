@@ -24,7 +24,6 @@ from korail_mobile_api.models import KorailSession
 from korail_mobile_api.read_models import (
     DeliveryRecipientResponse,
     PbpAcceptanceSpecificationResponse,
-    PlatformNumberResponse,
     RecentDeliveryHistoryResponse,
     TicketDuplicationCheckResponse,
 )
@@ -49,6 +48,7 @@ from korail_mobile_api.safety import (
     KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_READ_ONLY_ROUTES,
     assert_read_only_request_fields,
+    assert_read_only_route,
 )
 
 
@@ -62,7 +62,6 @@ NEW_ROUTES = {
     ("POST", R137_PATH),
     ("POST", R138_PATH),
     ("POST", R146_PATH),
-    ("POST", R148_PATH),
     ("POST", R149_PATH),
 }
 
@@ -83,6 +82,16 @@ def _success(**extra: Any) -> dict[str, Any]:
         "strResult": "SUCC",
         **extra,
     }
+
+
+def test_recent_delivery_history_exposes_changed_reservation_no():
+    raw = _success(
+        chgePbpRsvNo="SYNTHETIC_CHANGED_RESERVATION",
+        acepList=[],
+    )
+    result = parse_recent_delivery_history_response(raw)
+    assert result.changed_acceptance_reservation_no == "SYNTHETIC_CHANGED_RESERVATION"
+    assert result.raw is raw
 
 
 def _responses() -> dict[str, dict[str, Any]]:
@@ -154,8 +163,13 @@ def _responses() -> dict[str, dict[str, Any]]:
 
 
 def test_route_method_export_and_dynapath_boundaries_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
+    assert (
+        "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
+    ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
+    assert ("POST", R148_PATH) not in KORAIL_READ_ONLY_ROUTES
+    assert not hasattr(KorailClient, "get_platform_numbers")
     assert len(DYNAPATH_ALLOWLIST_PATHS) == 6
     assert all(path not in DYNAPATH_ALLOWLIST_PATHS for _, path in NEW_ROUTES)
 
@@ -171,7 +185,6 @@ def test_route_method_export_and_dynapath_boundaries_are_exact():
         },
         R138_PATH: {"Device", "Version", "Key", "pnrNo"},
         R146_PATH: {"Device", "Version", "Key", "tkCnt", "tkRetNo"},
-        R148_PATH: {"Device", "Version", "Key", "tkCnt", "tkRetNo"},
         R149_PATH: {"Device", "Version", "Key", "custMgNo"},
     }
     for path, fields in expected_fields.items():
@@ -199,13 +212,6 @@ def test_route_method_export_and_dynapath_boundaries_are_exact():
                 "return": PbpAcceptanceSpecificationResponse,
             },
         ),
-        "get_platform_numbers": (
-            ["self", "tickets"],
-            {
-                "tickets": tuple[OriginalTicketReference, ...],
-                "return": PlatformNumberResponse,
-            },
-        ),
         "get_recent_delivery_history": (
             ["self"],
             {"return": RecentDeliveryHistoryResponse},
@@ -225,6 +231,11 @@ def test_route_method_export_and_dynapath_boundaries_are_exact():
         if not name.startswith("_")
     }
     assert len(public_methods) == 77
+    assert {
+        "login_social",
+        "verify_station_ticket_refund",
+        "execute_station_ticket_refund",
+    } <= public_methods
 
     expected_exports = {
         "TicketDuplicationCheckRequest": (
@@ -337,10 +348,8 @@ def test_ordered_safety_allows_only_exact_ticket_count_shapes():
         R146_PATH,
         (*common, ("tkCnt", 2), ("tkRetNo", "A"), ("tkRetNo", "B")),
     )
-    assert_read_only_request_fields(
-        R148_PATH,
-        (*common, ("tkCnt", "2"), ("tkRetNo", "A"), ("tkRetNo", "B")),
-    )
+    with pytest.raises(KorailProtocolError):
+        assert_read_only_route("POST", R148_PATH)
     invalid_by_path = {
         R146_PATH: (
             (*common, ("tkCnt", "2"), ("tkRetNo", "A"), ("tkRetNo", "B")),
@@ -349,13 +358,6 @@ def test_ordered_safety_allows_only_exact_ticket_count_shapes():
             (*common, ("tkCnt", 0)),
             (*common, ("tkRetNo", "A"), ("tkCnt", 1)),
             (*common, ("tkCnt", 1), ("tkRetNo", "A"), ("Key", "again")),
-        ),
-        R148_PATH: (
-            (*common, ("tkCnt", 2), ("tkRetNo", "A"), ("tkRetNo", "B")),
-            (*common, ("tkCnt", "01"), ("tkRetNo", "A")),
-            (*common, ("tkCnt", "2"), ("tkRetNo", "A")),
-            (*common, ("tkCnt", ""), ("tkRetNo", "A")),
-            (*common, ("tkCnt", "1"), ("tkRetNo", "A"), ("tkCnt", "1")),
         ),
     }
     for path, invalid_forms in invalid_by_path.items():
@@ -431,8 +433,11 @@ def test_parsers_reject_bad_envelopes_containers_rows_and_scalar_types():
         parse_recent_delivery_history_response,
     )
     for parser in parsers:
-        with pytest.raises(KorailProtocolError):
-            parser({"strResult": "SUCC"})
+        if parser is parse_ticket_duplication_check_response:
+            with pytest.raises(KorailProtocolError, match="rsvCnt"):
+                parser({"strResult": "SUCC"})
+        else:
+            assert parser({"strResult": "SUCC"}).str_result == "SUCC"
         with pytest.raises(KorailProtocolError):
             parser(_success(strResult="ERROR"))
         with pytest.raises(KorailAppError):
@@ -512,6 +517,7 @@ def test_sensitive_models_raw_mappings_and_text_are_repr_safe_and_redacted():
 
 def test_client_uses_one_shot_exact_forms_session_customer_and_no_dynapath():
     responses = _responses()
+    responses.pop(R148_PATH)
     requests: list[httpx.Request] = []
     provider_calls: list[Any] = []
 
@@ -542,7 +548,6 @@ def test_client_uses_one_shot_exact_forms_session_customer_and_no_dynapath():
             TicketDuplicationCheckRequest("PNR_SECRET")
         ),
         lambda: client.get_pbp_acceptance_specifications((ticket,)),
-        lambda: client.get_platform_numbers((ticket,)),
         client.get_recent_delivery_history,
     )
     results = [operation() for operation in operations]
@@ -551,10 +556,9 @@ def test_client_uses_one_shot_exact_forms_session_customer_and_no_dynapath():
         DeliveryRecipientResponse,
         TicketDuplicationCheckResponse,
         PbpAcceptanceSpecificationResponse,
-        PlatformNumberResponse,
         RecentDeliveryHistoryResponse,
     ]
-    assert len(requests) == 5
+    assert len(requests) == 4
     assert provider_calls == []
     assert [request.url.path for request in requests] == list(responses)
     bodies = [
@@ -583,8 +587,7 @@ def test_client_uses_one_shot_exact_forms_session_customer_and_no_dynapath():
             "SALE_SEQUENCE_SECRET_1-RETURN_PASSWORD_SECRET_1",
         ),
     ]
-    assert bodies[3] == bodies[2]
-    assert bodies[4] == [
+    assert bodies[3] == [
         *common,
         ("custMgNo", "SESSION_CUSTOMER_SECRET"),
     ]
@@ -608,7 +611,6 @@ def test_session_and_input_failures_stop_before_transport():
             TicketDuplicationCheckRequest("PNR_SECRET")
         ),
         lambda: client.get_pbp_acceptance_specifications((ticket,)),
-        lambda: client.get_platform_numbers((ticket,)),
         client.get_recent_delivery_history,
     )
     for operation in operations:
@@ -621,6 +623,4 @@ def test_session_and_input_failures_stop_before_transport():
         client.get_recent_delivery_history()
     with pytest.raises(ValueError):
         client.get_pbp_acceptance_specifications(())
-    with pytest.raises(TypeError):
-        client.get_platform_numbers([ticket])  # type: ignore[arg-type]
     assert requests == []

@@ -1,3 +1,5 @@
+from urllib.parse import parse_qs
+
 import httpx
 import pytest
 
@@ -8,6 +10,8 @@ from korail_mobile_api.errors import (
     KorailAuthError,
     KorailProtocolError,
 )
+from korail_mobile_api.http import KorailHttpClient
+from korail_mobile_api.session import KorailSessionClient
 
 
 SERVICE_CHECK_PATH = "/file/CACHE/MobileService.cache"
@@ -15,6 +19,55 @@ SERVICE_CHECK_PATH = "/file/CACHE/MobileService.cache"
 
 def service_check_response() -> httpx.Response:
     return httpx.Response(200, json={"h_msg_cd": "S000", "h_msg_txt": "OK", "strResult": "SUCC"})
+
+
+def test_social_login_uses_cust_id_without_password_bootstrap(load_json_fixture):
+    posted = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        posted.append(request)
+        assert request.url.path == "/classes/com.korail.mobile.login.Login"
+        return httpx.Response(
+            200,
+            json=load_json_fixture("login_success.json"),
+            headers={"Set-Cookie": "JSESSIONID=social-session; Path=/; HttpOnly"},
+        )
+
+    http = KorailHttpClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
+    session = KorailSessionClient(http).login_social(
+        "synthetic-cust-id", input_flag="SYNTHETIC_FLAG", check_valid_pw="SYNTHETIC_CHECK"
+    )
+    fields = parse_qs(posted[0].content.decode())
+    assert fields["txtInputFlg"] == ["SYNTHETIC_FLAG"]
+    assert fields["custId"] == ["synthetic-cust-id"]
+    assert fields["checkValidPw"] == ["SYNTHETIC_CHECK"]
+    assert "txtMemberNo" not in fields
+    assert "txtPwd" not in fields
+    assert "idx" not in fields
+    assert session.jsessionid == "social-session"
+    assert session.member_no is None
+
+
+def test_social_login_rejects_missing_protected_check_flag_before_io():
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        raise AssertionError("no network request should be sent")
+
+    client = KorailSessionClient(
+        KorailHttpClient(
+            KorailConfig(enable_dynapath=True),
+            transport=httpx.MockTransport(handler),
+        )
+    )
+    with pytest.raises(KorailProtocolError, match="explicit check_valid_pw"):
+        client.login_social("synthetic-cust-id", input_flag="SYNTHETIC", check_valid_pw="")
+    assert called is False
 
 
 def make_success_then_failure_client(load_json_fixture):
@@ -112,7 +165,8 @@ def test_login_posts_transformed_password_and_tracks_cookie(load_json_fixture):
     session = client.login("member1", "pw123")
 
     assert "txtMemberNo=member1" in captured["body"]
-    assert "txtPwd=cHcxMjM%3D" in captured["body"]
+    # 7.0.6 selects AES from nonempty key even when pwdAESCphd is N.
+    assert "txtPwd=ZkpkU2JycXlJSzYyeGNxcSsxdUNmUT09Cg%3D%3D" in captured["body"]
     assert "txtInputFlg=2" in captured["body"]
     assert "checkValidPw=Y" in captured["body"]
     assert "code=app.var.data" in captured["bootstrap_body"]
@@ -585,6 +639,7 @@ def make_logged_in_client(load_json_fixture, *, logout_response):
                 {
                     "method": request.method,
                     "query": request.url.query.decode(),
+                    "body": request.content.decode(),
                     "cookie": request.headers.get("cookie"),
                 }
             )
@@ -615,12 +670,12 @@ def test_logout_invalidates_server_session_then_clears_local(load_json_fixture):
 
     client.logout()
 
-    # Server-side invalidation was hit exactly once, as a bare GET with no query
-    # envelope (authenticated purely by the JSESSIONID cookie, LoginService.java:30).
+    # Server-side invalidation uses the 7.0.6 form POST with a timestamp.
     assert len(events["logout_calls"]) == 1
     call = events["logout_calls"][0]
-    assert call["method"] == "GET"
+    assert call["method"] == "POST"
     assert call["query"] == ""
+    assert set(parse_qs(call["body"])) == {"Device", "Version", "Key", "timeStamp"}
     assert "JSESSIONID=logout-sess" in (call["cookie"] or "")
     # Local session state is always cleared afterward.
     assert client.session.current is None

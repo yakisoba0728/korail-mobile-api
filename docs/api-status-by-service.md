@@ -4,11 +4,20 @@
 스냅샷, 2026-07-14 MAAS 메뉴·역 목록 읽기 검증, 2026-07-15 객차·좌석
 구조, P0 열차 읽기, 고정/account-shaped 및 R149 읽기 검증.
 
+아래 165개 Retrofit 항목과 라이브 상태는 **기존 6.5.0 조사 스냅샷**이다.
+7.0.6 APK의 추가·수정·제거 계약은 별도 기록으로 관리한다. 이 표의
+`getNotice`, `getGifticketList`, `getRsvLimousineInquiry`, `plfNo` 행은
+현재 Python 호출 목록이 아니다. [7.0.6 제거 기록](7.0.6-removals.md)을 참조한다.
+
 **상태 변경 API에 대한 이 문서의 범위는 2026-07-26에 바뀌었습니다.** 원래 문장은
 "결제/예약 생성/취소/환불/체크인/회원탈퇴처럼 운영 상태를 바꿀 수 있는 API는
 실행하지 않았다"였고, 그건 이제 사실이 아닙니다. 예약 생성·취소, 가짜카드 결제,
 그리고 2026-07-27의 장바구니 담기(`cart.addCartList`)가 실제로 실행됐습니다.
-여전히 실행하지 않은 것은 **실카드 결제·환불·체크인·회원탈퇴**입니다.
+이 6.5.0 스냅샷 시점에는 **실카드 결제·환불·체크인·회원탈퇴**를 실행하지
+않았습니다. 이후 2026-09-15의 7.0.6 검증에서 일반 승차권 실카드 결제와
+전액 환불을 한 건씩 성공적으로 실행했습니다. 금액·위약금·잔여 승차권 확인은
+[7.0.6 실서버 검증](7.0.6-live-verification.md)에 기록했습니다. 아래 표의
+상태와 건수는 기존 조사 시점의 스냅샷으로 유지합니다.
 
 실행 방식이 두 종류라는 점도 표에서 구분되지 않으므로 여기 적습니다. 아래 성공
 33건 중 대부분은 2026-07-09~15의 **스크립트 실행**(bounded live structural
@@ -24,19 +33,21 @@ evidence)에서 나왔고, `cart.addCartList`(성공)와 `self.seatChgInfo.do`(�
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
 
-Package coverage: 60 exact login/read routes and 77 public methods. Sixty-four
-are audited login/read methods or local helpers; the other thirteen are
+Package coverage: 57 exact login/read routes and 77 public methods. Sixty-three
+are audited login/read methods or local helpers; the other fourteen are
 consent-gated mutations: `reserve`,
 `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`,
 `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`,
 `pay_with_card`, `refund`, `add_to_cart`,
 `register_discount_card`, `extend_discount_card`
-and `recalculate_price`. Each is
-denied without a matching-category `MutationConsent`; with the default
+and `recalculate_price`, plus `execute_station_ticket_refund`. The first
+thirteen are denied without a matching-category `MutationConsent`; with the default
 `dry_run=True` each only returns a redacted `MutationPreview` (sending nothing),
 and only a `dry_run=False` consent performs the live state change, exclusively
-through the double-gated `post_mutation_form` path. `pay_with_fake_card`
-additionally requires `fake_card_only`, so it still sends only non-chargeable
+through the double-gated `post_mutation_form` path. The station-issued ticket
+refund instead requires a method-scoped `V7MutationConsent` for
+`NetworkApi.executeOnlineRefunds`; its default dry-run also sends nothing.
+`pay_with_fake_card` additionally requires `fake_card_only`, so it still sends only non-chargeable
 test cards; a real, chargeable card is reachable only through `pay_with_card` on
 a consent that explicitly sets `real_card_acknowledged=True` and
 `fake_card_only=False`, and the transmit gate refuses a payment consent that

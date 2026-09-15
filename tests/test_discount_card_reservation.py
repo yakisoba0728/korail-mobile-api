@@ -98,13 +98,8 @@ def test_only_the_passenger_block_and_the_menu_id_differ():
     }
     # w4/a.java:96-101 -- one row carrying the card, and nothing else new.
     assert added == {CARD_KEY: CARD_NO}
-    # The other seven of the eight rows are gone; row 1 survives with new
-    # values, which is why it shows up under `changed` rather than `removed`.
-    assert removed == {
-        f"{prefix}{index}"
-        for prefix in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd")
-        for index in range(2, 9)
-    }
+    # The ordinary one-adult request already has only one positive row.
+    assert removed == set()
     # SeatAssignBookingActivity.java:159 -- "A2", not "11".
     assert changed == {"txtMenuId", "txtDiscKndCd1"}
     assert carded["txtMenuId"] == KORAIL_DISCOUNT_CARD_MENU_ID == "A2"
@@ -250,16 +245,14 @@ def test_an_acknowledged_send_posts_the_card_row_to_the_reserve_route():
     assert "txtCompaCnt2" not in body
 
 
-def test_the_ordinary_reserve_path_is_completely_unchanged():
-    # The whole point of building this by substitution: adding a discount-card
-    # hold must not have moved a single byte of the live-verified form.
+def test_the_ordinary_reserve_path_remains_one_adult_with_no_card_field():
     expected_menu_id = "11"
     ordinary = build_reservation_form(KorailConfig(), _train())
     assert ordinary["txtMenuId"] == expected_menu_id
     assert CARD_KEY not in ordinary
     assert ordinary["txtDiscKndCd1"] == "000"
     assert [name for name in ordinary if name.startswith("txtCompaCnt")] == [
-        f"txtCompaCnt{index}" for index in range(1, 9)
+        "txtCompaCnt1"
     ]
 
 

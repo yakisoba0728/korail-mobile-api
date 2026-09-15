@@ -21,28 +21,34 @@
 
 ## 상태 변경 표면
 
-이 패키지는 기본이 읽기 전용이지만 읽기 전용만은 아닙니다. 명시적 동의 게이트 뒤에 상태를
-바꾸는 메서드 13개가 있고, 각각 따로 옵트인해야 하는 범주 7개로 나뉩니다.
+이 패키지는 기본이 읽기 전용이지만 읽기 전용만은 아닙니다. 공개 클라이언트에는
+명시적 동의 게이트 뒤에 상태를 바꾸는 메서드 14개가 있습니다. 기존 범주별 동의
+메서드 13개와 7.0.6 역 발행 승차권 환불의 메서드별 동의 메서드 1개입니다.
 
 | 범주 | 메서드 |
 | --- | --- |
 | `reserve` | `reserve`, `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold` |
 | `cancel` | `cancel_unpaid_hold` |
 | `payment` | `pay_with_fake_card`, `pay_with_card` |
-| `refund` | `refund` |
+| `refund` | `refund`, `execute_station_ticket_refund` |
 | `cart` | `add_to_cart` |
 | `discount_card` | `register_discount_card`, `extend_discount_card` |
 | `price_recalculation` | `recalculate_price` |
 
-각 메서드는 해당 범주로 옵트인한 `MutationConsent` 없이는 거부됩니다. 기본값
-`dry_run=True` 에서는 마스킹된 미리보기만 돌려주고 아무것도 보내지 않습니다. 전송은
-게이트가 걸린 두 경로로만 나갑니다 — POST 라우트 8개는 `post_mutation_form`, 앱이 `@GET`
-으로 선언한 라우트 1개는 `get_mutation_query`. 나머지 모든 상태 변경 엔드포인트(체크인,
-회원, 포인트·마일리지 등)는 제외되어 있고 호출할 수 없습니다.
+기존 13개 메서드는 해당 범주로 옵트인한 `MutationConsent` 없이는 거부됩니다.
+`execute_station_ticket_refund`는 정확한 `NetworkApi.executeOnlineRefunds` 메서드만
+허용하는 `V7MutationConsent`가 필요합니다. 두 동의 객체 모두 기본 `dry_run=True`에서는
+마스킹된 미리보기만 반환하고 요청을 보내지 않습니다.
+
+기존 13개 메서드는 게이트가 걸린 두 전송 경로를 사용합니다. POST 라우트 8개는
+`post_mutation_form`, 앱이 `@GET`으로 선언한 라우트 1개는 `get_mutation_query`입니다.
+7.0.6의 추가 Retrofit 경로는 `V7Gateway`에도 등록돼 있으며, 상태 변경 메서드는
+해당 메서드 이름에 대한 `V7MutationConsent` 없이는 전송할 수 없습니다. 원시
+게이트웨이 호출은 APK 화면의 입력 DTO와 후속 업무 흐름을 대신하지 않습니다.
 
 ## 전송 직전 검사
 
-두 전송 경로는 프로세스 밖으로 무언가 나가기 전에 같은 네 가지를 검사합니다.
+기존 두 전송 경로는 프로세스 밖으로 무언가 나가기 전에 같은 네 가지를 검사합니다.
 
 1. 동의가 해당 범주로 옵트인했는가.
 2. `(method, path)` 쌍이 등록된 상태 변경 라우트인가.

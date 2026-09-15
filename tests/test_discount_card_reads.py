@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl
 
 import httpx
 import pytest
@@ -48,7 +48,7 @@ SCHEDULE_PATH = "/classes/com.korail.mobile.research.dcntCrdScheduleView.do"
 # (ResearchService.java:65-70).
 WRITE_ROUTES = (
     ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
-    ("GET", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
+    ("POST", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
 )
 
 
@@ -88,9 +88,9 @@ def _client(handler) -> KorailClient:
 
 
 def test_route_boundary_admits_the_two_reads_and_neither_write():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
-    assert ("GET", USAGE_PATH) in KORAIL_READ_ONLY_ROUTES
-    assert ("GET", SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
+    assert ("POST", USAGE_PATH) in KORAIL_READ_ONLY_ROUTES
+    assert ("POST", SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
     # The two state-changing dcntCrd* routes are in the mutation set and in
     # neither direction reachable from the read-only transport.
     for route in WRITE_ROUTES:
@@ -98,12 +98,10 @@ def test_route_boundary_admits_the_two_reads_and_neither_write():
         assert route not in KORAIL_READ_ONLY_ROUTES
         with pytest.raises(KorailProtocolError):
             assert_read_only_route(*route)
-    # Both reads are GET-only; the app declares no POST overload for either
-    # (ResearchService.java:51,54).
-    assert ("POST", USAGE_PATH) not in KORAIL_READ_ONLY_ROUTES
-    assert ("POST", SCHEDULE_PATH) not in KORAIL_READ_ONLY_ROUTES
+    assert ("GET", USAGE_PATH) not in KORAIL_READ_ONLY_ROUTES
+    assert ("GET", SCHEDULE_PATH) not in KORAIL_READ_ONLY_ROUTES
     with pytest.raises(KorailProtocolError):
-        assert_read_only_route("POST", USAGE_PATH)
+        assert_read_only_route("GET", USAGE_PATH)
 
 
 def test_usage_query_is_the_card_number_and_the_common_three():
@@ -307,15 +305,15 @@ def test_client_reads_send_exactly_the_registered_shapes():
     finally:
         client.close()
 
-    assert [request.method for request in seen] == ["GET", "GET"]
-    usage = dict(parse_qsl(urlsplit(str(seen[0].url)).query))
+    assert [request.method for request in seen] == ["POST", "POST"]
+    usage = dict(parse_qsl(seen[0].content.decode()))
     assert usage == {
         "Device": "AD",
         "Version": client.config.version,
         "Key": client.config.key,
         "dcntCrdNo": "N123",
     }
-    schedule = dict(parse_qsl(urlsplit(str(seen[1].url)).query))
+    schedule = dict(parse_qsl(seen[1].content.decode()))
     assert set(schedule) == {
         "Device",
         "Version",

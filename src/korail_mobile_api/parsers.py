@@ -87,20 +87,6 @@ def _typed_required_string(
     return value
 
 
-def _typed_required_list(
-    data: Mapping[str, Any],
-    key: str,
-    *,
-    context: str,
-) -> list[Any]:
-    value = data.get(key)
-    if not isinstance(value, list):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a list"
-        )
-    return value
-
-
 def _typed_optional_int(
     data: Mapping[str, Any],
     key: str,
@@ -182,6 +168,11 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
         airport_bus_msg=_optional_string(raw, "airportBusMsg"),
         railplus_cardinfo=_optional_string(raw, "railplus_cardinfo"),
         version=version,
+        notice=(
+            parse_notice_response(response)
+            if raw.get("notice") is not None
+            else None
+        ),
     )
 
 
@@ -192,14 +183,24 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
     없는 상태도 정상이라 빈 값이 오류가 아닙니다.
     """
     raw = response.raw
+    nested = raw.get("notice")
+    if nested is not None and not isinstance(nested, Mapping):
+        raise KorailProtocolError("KORAIL cache field notice must be an object or null")
+    notice_raw = nested if isinstance(nested, Mapping) else raw
+    nested_notice = isinstance(nested, Mapping)
     return NoticeResponse(
         h_msg_cd=response.h_msg_cd,
         h_msg_txt=response.h_msg_txt,
         str_result=response.str_result,
         raw=raw,
-        board_id=_optional_string(raw, "bbrdId"),
-        post_sequence=_optional_string(raw, "ptwtSqno"),
-        post_title=_optional_string(raw, "ptwtTtl"),
+        board_id=_optional_string(notice_raw, "BbrdId" if nested_notice else "bbrdId"),
+        post_sequence=_optional_string(
+            notice_raw, "PtwtSqno" if nested_notice else "ptwtSqno"
+        ),
+        post_title=_optional_string(notice_raw, "PtwtTtl" if nested_notice else "ptwtTtl"),
+        post_content=(
+            _optional_string(notice_raw, "PtwtCont") if nested_notice else None
+        ),
     )
 
 
@@ -294,8 +295,7 @@ def parse_train_search_metadata(
     등)가 여기 담깁니다. 병합예약 가능 플래그(``h_merge_rsv_psb_flg``)는 최상위가
     아니라 ``trn_infos`` 안에 있어 거기서 읽습니다.
 
-    ``h_menu_id`` 는 읽지 않습니다. ``txtMenuId`` 는 서버 값이 아니라 앱이 박아
-    넣는 클라이언트 상수입니다.
+    7.0.6 ``TrainScheduleOut`` 의 ``h_menu_id`` 도 보존합니다.
     """
     def optional(key: str) -> str | None:
         return _typed_optional_string(raw, key, context="train search metadata")
@@ -310,8 +310,8 @@ def parse_train_search_metadata(
     else:
         merge_reservation_available_flag = None
     return TrainSearchMetadata(
-        # No h_menu_id: see TrainSearchMetadata. txtMenuId is a client constant.
         job_id=optional("strJobId"),
+        menu_id=optional("h_menu_id"),
         product_no=optional("h_gd_no"),
         next_page_flag=optional("h_next_pg_flg"),
         next_query_station_no=optional("h_qry_st_no_next"),
@@ -676,17 +676,14 @@ def parse_train_schedule_response(
 ) -> TrainScheduleResponse:
     """``research.actualTrainSchedule.do`` 의 정차역·지연 정보를 파싱합니다.
 
-    ``dlayList`` 는 필수 리스트이고 없으면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 행 하나가
+    7.0.6 DTO에서는 ``dlayList`` 가 생략되면 빈 목록입니다. 행 하나가
     정차역 하나이며 도착·출발 시각과 지연 시간이 담깁니다. 개별 필드는
     선택값이라 서버가 빼면 ``None`` 입니다.
     """
     raw = response.raw
-    rows = _typed_required_list(
-        raw,
-        "dlayList",
-        context="train schedule",
-    )
+    rows = raw.get("dlayList", [])
+    if not isinstance(rows, list):
+        raise KorailProtocolError("KORAIL train schedule field dlayList must be a list")
     stops: list[TrainScheduleStop] = []
     for row in rows:
         if not isinstance(row, Mapping):
@@ -1138,10 +1135,9 @@ def parse_seat_inventory_response(
 ) -> SeatInventoryResponse:
     """``research.TResidualSeatsResearch.do`` 의 좌석 배치와 점유 상태를 파싱합니다.
 
-    배치 유형(``layout_type``), 좌석 배열 코드(``seat_ary_cd``), 잔여·전체 좌석
-    수, ``seatList`` 가 모두 필수입니다. 잔여가 전체보다 크면 값의 모양이
-    맞더라도 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다 —
-    서로 모순되는 재고를 그대로 통과시키지 않습니다.
+    7.0.6 DTO는 ``seatList``·``windowList`` 생략 시 빈 목록이며 잔여·전체
+    좌석 수 키는 선언하지 않습니다. 그 두 건수가 함께 오면 모순 여부를
+    검사하고, 없으면 ``None`` 으로 둡니다.
 
     좌석 행은 :class:`~korail_mobile_api.models.PhysicalSeat` 가 됩니다. 창문
     위치 비율은 좌석이 아니라 좌석표를 그리기 위한 값이라
@@ -1150,20 +1146,26 @@ def parse_seat_inventory_response(
     raw = response.raw
     layout_type = _inventory_required_int(raw, "layout_type")
     arrangement_code = _inventory_required_string(raw, "seat_ary_cd")
-    remaining_count = _inventory_required_int(
+    remaining_count = _inventory_optional_int(
         raw,
         "seat_remain_count",
     )
-    total_count = _inventory_required_int(
+    total_count = _inventory_optional_int(
         raw,
         "seat_total_count",
     )
-    if remaining_count > total_count:
+    if (
+        remaining_count is not None
+        and total_count is not None
+        and remaining_count > total_count
+    ):
         raise KorailProtocolError(
             "KORAIL seat inventory remaining count exceeds total count"
         )
 
-    seat_rows = _inventory_required_list(raw, "seatList")
+    seat_rows = (
+        _inventory_required_list(raw, "seatList") if "seatList" in raw else []
+    )
     seats: list[PhysicalSeat] = []
     for row in seat_rows:
         if not isinstance(row, Mapping):
@@ -1208,7 +1210,9 @@ def parse_seat_inventory_response(
             )
         )
 
-    window_rows = _inventory_required_list(raw, "windowList")
+    window_rows = (
+        _inventory_required_list(raw, "windowList") if "windowList" in raw else []
+    )
     windows: list[SeatWindow] = []
     for row in window_rows:
         if not isinstance(row, Mapping):

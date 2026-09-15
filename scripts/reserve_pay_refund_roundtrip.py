@@ -907,7 +907,7 @@ class RoundTrip:
             "is PAID and must be refunded by hand"
         )
 
-    def quote_refund(self, reference: OriginalTicketReference) -> None:
+    def quote_refund(self, reference: OriginalTicketReference) -> str | None:
         self.console.say("[g] asking what a refund returns and what it costs")
         detail = self.client.get_refund_ticket_detail(reference)
         self.console.say(
@@ -929,6 +929,7 @@ class RoundTrip:
                 f"note:          {commission.secondary_message_text!r}",
             )
         )
+        return detail.pbp_acceptance_target_flag
 
     # -- step h ---------------------------------------------------------------
 
@@ -938,6 +939,7 @@ class RoundTrip:
         *,
         pnr_no: str,
         train_no: str,
+        pbp_acceptance_target_flag: str | None = None,
     ) -> bool:
         self.console.say("[h] refunding")
         result = self.client.refund(
@@ -948,6 +950,7 @@ class RoundTrip:
                 sale_sequence=reference.sale_sequence,
                 return_password=reference.return_password,
                 train_no=train_no,
+                pbp_acceptance_target_flag=pbp_acceptance_target_flag,
             ),
             consent=refund_consent(),
         )
@@ -1021,9 +1024,12 @@ class RoundTrip:
                 clean = True
                 return 1
             reference = self.refund_identity(pnr)
-            self.quote_refund(reference)
+            pbp_acceptance_target_flag = self.quote_refund(reference)
             if not self.refund(
-                reference, pnr_no=pnr, train_no=candidate.train.train_no
+                reference,
+                pnr_no=pnr,
+                train_no=candidate.train.train_no,
+                pbp_acceptance_target_flag=pbp_acceptance_target_flag,
             ):
                 raise RoundTripAborted("the refund was refused by the server")
             self.state = "refunded"
@@ -1108,6 +1114,7 @@ def recover(client: KorailClient, console: _Console, pnr_no: str) -> int:
                 sale_sequence=reference.sale_sequence,
                 return_password=reference.return_password,
                 train_no=train_no,
+                pbp_acceptance_target_flag=detail.pbp_acceptance_target_flag,
             ),
             consent=refund_consent(),
         )

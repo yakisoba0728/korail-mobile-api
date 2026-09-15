@@ -27,6 +27,14 @@ CHANGELOG = Path(__file__).parents[1] / "CHANGELOG.md"
 SECURITY = Path(__file__).parents[1] / "SECURITY.md"
 
 
+def _consent_gated_client_methods() -> set[str]:
+    return {
+        name
+        for name, member in inspect.getmembers(KorailClient, inspect.isfunction)
+        if not name.startswith("_") and "consent" in inspect.signature(member).parameters
+    }
+
+
 def test_record_describes_fixed_rt_dynapath_consistently():
     # The three account-neutral cache/menu reads are a capability, so they stay
     # named in the README; the DynaPath token contract and the live-smoke
@@ -94,12 +102,25 @@ def test_record_documents_every_successful_read_expansion_method_and_boundary():
 
 
 def test_status_and_progress_documents_match_current_inventory_and_coverage():
+    from korail_mobile_api import safety
+
+    route_count = len(set(safety.KORAIL_READ_ONLY_ROUTES))
+    public_count = len(
+        [
+            name
+            for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
+            if not name.startswith("_")
+        ]
+    )
     status = STATUS.read_text(encoding="utf-8")
     assert "| 성공 | 33 |" in status
     assert "| 실패 | 14 |" in status
     assert "| 미실행 | 118 |" in status
     assert "| 전체 | 165 |" in status
-    assert "Package coverage: 60 exact login/read routes and 77 public methods" in status
+    assert (
+        f"Package coverage: {route_count} exact login/read routes "
+        f"and {public_count} public methods"
+    ) in status
     assert "Historical pre-revalidation inventory was 28 successful, 9 failed," in status
     assert "and 128 unexecuted" in status
     assert "| `CustService` | 고객 할인 대상 조회 | 1 | 0 | 1 | 0 |" in status
@@ -219,7 +240,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
         assert stale_totals not in guide
 
     progress = PROGRESS.read_text(encoding="utf-8")
-    assert "60 exact login/read routes" in progress
+    assert f"{route_count} exact login/read routes" in progress
     assert "- Live-successful inventory entries: 32" in progress
     assert "IRG000000" in progress
 
@@ -235,21 +256,14 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
             if not name.startswith("_")
         ]
     )
-    assert actual_public_methods == 77, (
-        f"KorailClient now exposes {actual_public_methods} public methods; "
-        "update this number and every doc that states it "
-        "(README.md, api-status-by-service.md, verification-record.md, "
-        "IMPLEMENTATION_PROGRESS.md)."
-    )
+    assert actual_public_methods == public_count
     assert f"{actual_public_methods} public methods" in progress
     # ...and no sentence may claim the old figure as the CURRENT one. The
     # number survives in a milestone bullet, which is legitimate history, so
     # the check is on tense rather than on the digits: "exposed 72" records the
     # past, "exposes 72" asserts a present that is no longer true.
-    # Every superseded figure is listed, not just the first one: 74 became
-    # history when the 비회원 오프라인 반환 pair was removed on 2026-07-27 and
-    # landed, and a guard that only knows about 72 would let the next stale
-    # sentence through exactly as the "72"-only version let 74 through.
+    # Earlier figures remain in dated milestone notes, but must not describe
+    # the current package boundary.
     stale_present_tense = [
         line
         for line in progress.splitlines()
@@ -340,7 +354,12 @@ def test_docs_describe_static_p0_menu_reads_and_exclude_crew_mutation():
     assert "/classes/com.korail.mobile.push.callCrew.do" in readme
     assert "제외되어 있습니다" in readme
     assert "static APK evidence and synthetic fixtures only" in record
-    assert "60 exact read/login routes" in progress
+    from korail_mobile_api import safety
+
+    assert (
+        f"{len(set(safety.KORAIL_READ_ONLY_ROUTES))} exact read/login routes"
+        in progress
+    )
     for document in (record, progress, status, handoff, changelog):
         assert "session-unverified" in document
     assert "live verification only after login" in record
@@ -453,7 +472,17 @@ def test_docs_document_bounded_live_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    assert "60 routes and 77 public methods" in text
+    from korail_mobile_api import safety
+
+    route_count = len(set(safety.KORAIL_READ_ONLY_ROUTES))
+    method_count = len(
+        [
+            name
+            for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
+            if not name.startswith("_")
+        ]
+    )
+    assert f"{route_count} routes and {method_count} public methods" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
     assert (
@@ -542,10 +571,11 @@ def test_docs_document_static_only_limousine_read_contracts():
     for method_name in (
         "get_limousine_schedules",
         "get_limousine_seat_inventory",
-        "get_limousine_schedule_view",
     ):
         assert f"{method_name}(" in readme
         assert f"{method_name}(" in text
+    assert "get_limousine_schedule_view(" not in readme
+    assert "get_limousine_schedule_view(" in text
     assert "caller-supplied service" in text
     assert "caller-supplied menu" in text
     assert "DynaPath-disabled" in text
@@ -888,12 +918,7 @@ def test_every_document_that_lists_the_mutation_methods_lists_all_of_them():
     Counting is what the previous pins did and it is what let the names rot,
     so this asserts the names themselves, derived from the class.
     """
-    gated = {
-        name
-        for name, member in inspect.getmembers(KorailClient, inspect.isfunction)
-        if not name.startswith("_")
-        and "require_mutation_consent" in inspect.getsource(member)
-    }
+    gated = _consent_gated_client_methods()
     retired = {
         "verify_offline_refund_ticket",
         "execute_offline_refund",
@@ -924,7 +949,7 @@ def test_every_document_that_lists_the_mutation_methods_lists_all_of_them():
 
 
 def test_the_route_decomposition_is_measured_not_asserted():
-    """"60 routes = 58 reads + the login POST + the logout GET", derived.
+    """"56 routes = 54 reads + the login POST + the logout POST", derived.
 
     README states the breakdown and nothing checked it, so every read added
     since would have silently made the sentence wrong while the total beside
@@ -942,18 +967,13 @@ def test_the_route_decomposition_is_measured_not_asserted():
     routes = set(safety.KORAIL_READ_ONLY_ROUTES)
     auth = {
         ("POST", "/classes/com.korail.mobile.login.Login"),
-        ("GET", "/classes/com.korail.mobile.login.Logout"),
+        ("POST", "/classes/com.korail.mobile.login.Logout"),
     }
 
     assert auth <= routes, "the login/logout pair is not on the allowlist"
     reads = len(routes) - len(auth)
 
-    gated = {
-        name
-        for name, member in inspect.getmembers(KorailClient, inspect.isfunction)
-        if not name.startswith("_")
-        and "require_mutation_consent" in inspect.getsource(member)
-    }
+    gated = _consent_gated_client_methods()
     public = {
         name
         for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)

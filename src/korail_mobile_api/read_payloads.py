@@ -54,6 +54,21 @@ def _ascii_date(value: str, name: str) -> str:
     return value
 
 
+def _ticket_return_sale_date(value: str) -> str:
+    """원표일자는 서버가 4자리 또는 8자리 숫자로 돌려준다.
+
+    ReceiptInfo에는 승차권 상세의 ``h_orgtk_ret_sale_dt``를 해석하거나
+    날짜를 보충하지 않고 그대로 복사한다.
+    """
+    if (
+        not isinstance(value, str)
+        or len(value) not in (4, 8)
+        or any(ch < "0" or ch > "9" for ch in value)
+    ):
+        raise ValueError("sale_date must be the ASCII ticket return sale date")
+    return value
+
+
 def _optional_text(value: str, name: str) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{name} must be a string")
@@ -217,7 +232,7 @@ class MergeSeatsInquiryRequest:
     train_no: str = field(repr=False)
     departure_station_name: str = field(repr=False)
     arrival_station_name: str = field(repr=False)
-    selected_station_name: str = field(repr=False)
+    selected_station_name: str | None = field(repr=False)
     room_class_code: str = field(repr=False)
     seat_attribute_code: str = field(repr=False)
     passenger_count: int = field(repr=False)
@@ -238,7 +253,8 @@ class MergeSeatsInquiryRequest:
             "departure_station_name",
         )
         _required_text(self.arrival_station_name, "arrival_station_name")
-        _required_text(self.selected_station_name, "selected_station_name")
+        if self.selected_station_name is not None:
+            _required_text(self.selected_station_name, "selected_station_name")
         _required_text(self.room_class_code, "room_class_code")
         _required_text(self.seat_attribute_code, "seat_attribute_code")
         _passenger_count(self.passenger_count, "passenger_count")
@@ -297,17 +313,19 @@ def build_merge_seats_inquiry_form(
     if type(request) is not MergeSeatsInquiryRequest:
         raise TypeError("request must be a MergeSeatsInquiryRequest")
     MergeSeatsInquiryRequest._validate(request)
-    return {
+    form = {
         "abrdDt": request.boarding_datetime,
         "runDt": request.run_datetime,
         "trnNo": request.train_no.zfill(5),
         "dptRsStnNm": request.departure_station_name,
         "arvRsStnNm": request.arrival_station_name,
-        "selRsStnNm": request.selected_station_name,
         "psrmClCd": request.room_class_code,
         "seatAttCd": request.seat_attribute_code,
         "totPsgNum": str(request.passenger_count),
     }
+    if request.selected_station_name is not None:
+        form["selRsStnNm"] = request.selected_station_name
+    return form
 
 
 @dataclass(frozen=True)
@@ -434,6 +452,7 @@ def build_trip_menu_form(config: KorailConfig) -> dict[str, str]:
     return {
         "Device": config.device,
         "Version": config.version,
+        "timeStamp": str(int(time.time() * 1000)),
     }
 
 
@@ -466,24 +485,40 @@ def build_commuter_kind_menu_query(
 def build_product_reservations_query(
     page_no: int = 1,
     page_size: int = 20,
+    *,
+    reservation_status_code: str | None = None,
+    payment_status_code: str | None = None,
 ) -> dict[str, str]:
-    return {
+    query = {
         "txtSelPage": _positive_int(page_no, "page_no"),
         "txtCntPerPage": _positive_int(page_size, "page_size"),
     }
+    # ProductListIn has both status fields. Their UI defaults are AlienGuard
+    # protected in 7.0.6 ProductReservationViewModel.java:836, so require the
+    # caller to supply observed codes instead of inventing defaults.
+    if reservation_status_code is not None:
+        query["txtRsvSttCd"] = _required_text(
+            reservation_status_code, "reservation_status_code"
+        )
+    if payment_status_code is not None:
+        query["txtStlSttCd"] = _required_text(
+            payment_status_code, "payment_status_code"
+        )
+    return query
 
 
 def build_product_detail_query(
     reservation_no: str,
-    reservation_sequence: str,
+    reservation_sequence: str | None = None,
 ) -> dict[str, str]:
-    return {
+    query = {
         "txtVrRsNo": _required_text(reservation_no, "reservation_no"),
-        "txtVrRsvSqNo": _required_text(
-            reservation_sequence,
-            "reservation_sequence",
-        ),
     }
+    if reservation_sequence is not None:
+        query["txtVrRsvSqNo"] = _required_text(
+            reservation_sequence, "reservation_sequence"
+        )
+    return query
 
 
 def build_ticket_receipt_form(
@@ -491,9 +526,10 @@ def build_ticket_receipt_form(
     window_no: str,
     sale_sequence: str,
     return_password: str,
+    txt_index: str | None = None,
 ) -> dict[str, str]:
-    return {
-        "h_orgtk_sale_dt": _ascii_date(sale_date, "sale_date"),
+    form = {
+        "h_orgtk_sale_dt": _ticket_return_sale_date(sale_date),
         "h_orgtk_wct_no": _required_text(window_no, "window_no"),
         "h_orgtk_sale_sqno": _required_text(
             sale_sequence,
@@ -504,6 +540,12 @@ def build_ticket_receipt_form(
             "return_password",
         ),
     }
+    if txt_index is not None:
+        if not isinstance(txt_index, str):
+            raise ValueError("txt_index must be a string or None")
+        if txt_index.strip():
+            form["txtIndex"] = txt_index
+    return form
 
 
 def _calendar_date(value: str, name: str) -> date:
@@ -1190,7 +1232,6 @@ def build_commuter_info_form(
             ("cmtrKndCd", kind_code),
             ("psgCnt", str(len(age_codes))),
             *(("cmtrUtlAgeCd", value) for value in age_codes),
-            *(("psgPrnb", str(value)) for value in request.passenger_counts),
         )
     if type(request) is CommuterTicketInquiryRequest:
         if type(request.original_ticket) is not OriginalTicketReference:
@@ -1298,6 +1339,7 @@ def build_price_fare_quote_form(
     return (
         ("txtMenuId", request.menu_id),
         ("chtnDvCd", str(len(request.legs))),
+        ("trnCnt", str(len(request.legs))),
         *(
             (
                 wire_name,
@@ -1675,6 +1717,7 @@ def build_refund_ticket_detail_form(
     ticket: OriginalTicketReference,
     *,
     from_purchase_history: bool = False,
+    txt_index: str | None = None,
 ) -> dict[str, str]:
     """환불 대상 승차권 상세 (``RefundService.java:23-25``).
 
@@ -1684,10 +1727,13 @@ def build_refund_ticket_detail_form(
     reference = _exact_original_ticket_reference(ticket)
     if type(from_purchase_history) is not bool:
         raise TypeError("from_purchase_history must be a bool")
-    return {
+    form = {
         "h_orgtk_ret_sale_dt": reference.sale_date,
         "h_orgtk_wct_no": reference.sale_window_no,
         "h_orgtk_sale_sqno": reference.sale_sequence,
         "h_orgtk_ret_pwd": reference.return_password,
         "h_purchase_history": "Y" if from_purchase_history else "N",
     }
+    if txt_index is not None:
+        form["txtIndex"] = _required_text(txt_index, "txt_index")
+    return form

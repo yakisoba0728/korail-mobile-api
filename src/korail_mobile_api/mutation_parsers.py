@@ -1,8 +1,8 @@
 """상태 변경 응답을 :mod:`korail_mobile_api.mutation_models` 의 타입으로 옮깁니다.
 
-예약 홀드, 결제, 할인카드 구매의 응답 셋을 파싱합니다. 취소·환불·장바구니
-추가처럼 DAO 의 응답 타입이 맨 ``BaseResponse`` 인 라우트는 전용 모델이 없어
-여기 파서도 없습니다.
+예약 홀드, 결제, 할인카드 구매와 7.0.6 환불 결과의 응답을 파싱합니다.
+취소·장바구니 추가처럼 DAO 의 응답 타입이 맨 ``BaseResponse`` 인 라우트에는
+전용 파서가 없습니다.
 
 읽기 파서와 다른 점이 하나 있습니다. 여기서 나오는 값은 서버에 **이미 존재할 수
 있는** 예약을 가리킵니다 — PNR, 발권창구번호, 결제 폼이 되울릴 job 일련번호,
@@ -19,12 +19,186 @@ from typing import Any
 from .errors import KorailProtocolError
 from .models import BaseKorailResponse
 from .mutation_models import (
+    CashReceiptApprovalItem,
+    CashReceiptIssueResponse,
     DiscountCardPurchaseResponse,
+    RefundTicketResponse,
     ReservationHoldResponse,
     ReservationJourney,
     ReservationPaymentCoupon,
     ReservationPaymentResponse,
+    StationRefundExecutionResponse,
+    StationRefundOriginalTicket,
+    StationRefundVerificationResponse,
 )
+
+
+def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse:
+    """필수 키 ``stlList``의 nullable 값과 정산 수단 코드를 보존합니다."""
+    copied = _response_mapping(raw)
+    if "stlList" not in copied:
+        raise KorailProtocolError("KORAIL refund stlList is required")
+    rows = copied.get("stlList")
+    if rows is not None and not isinstance(rows, list):
+        raise KorailProtocolError("KORAIL refund stlList must be a list")
+    codes: list[str] = []
+    for row in rows or ():
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError("KORAIL refund settlement must be an object")
+        code = row.get("stl_mns_cd")
+        if not isinstance(code, str):
+            raise KorailProtocolError("KORAIL refund stl_mns_cd is required")
+        codes.append(code)
+    base = BaseKorailResponse.from_raw(copied)
+    return RefundTicketResponse(
+        h_msg_cd=base.h_msg_cd,
+        h_msg_txt=base.h_msg_txt,
+        str_result=base.str_result,
+        raw=copied,
+        settlement_method_codes=tuple(codes),
+        settlement_list_is_null=rows is None,
+    )
+
+
+_CASH_RECEIPT_APPROVAL_FIELDS = {
+    "job_division_code": "jobDvCd",
+    "receipt_no": "rcptNo",
+    "approval_date": "apvDt",
+    "cash_receipt_approval_no": "cashRcetApvNo",
+    "approved_amount": "totApvAmt",
+    "approval_processed_at": "apvPrsDttm",
+    "normal_processing_flag": "nmlPrsFlg",
+    "response_message_code": "rspMsgCd",
+    "short_message_content": "shrtMsgCont",
+    "sale_date": "saleDt",
+    "sale_window_no": "saleWctNo",
+    "sale_sequence": "saleSqno",
+}
+
+
+def parse_cash_receipt_issue_response(
+    raw: Mapping[str, Any],
+) -> CashReceiptIssueResponse:
+    """Parse the unprotected ``CashReceiptIssueOut`` and ``ApvItem`` fields.
+
+    The APK defaults an omitted ``apvList`` to an empty list, but the field is
+    nullable. Present lists must contain objects; approval identifiers remain
+    hidden from ``repr``.
+    """
+    copied = _response_mapping(raw)
+    rows = copied.get("apvList", [])
+    if rows is not None and not isinstance(rows, list):
+        raise KorailProtocolError("KORAIL cash receipt apvList must be a list")
+    approvals: list[CashReceiptApprovalItem] = []
+    for row in rows or ():
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError("KORAIL cash receipt ApvItem must be an object")
+        approval_fields = {
+            attr: _optional_string(row, wire_key, context="cash receipt ApvItem")
+            for attr, wire_key in _CASH_RECEIPT_APPROVAL_FIELDS.items()
+        }
+        approvals.append(CashReceiptApprovalItem(**approval_fields, raw=dict(row)))
+    base = BaseKorailResponse.from_raw(copied)
+    return CashReceiptIssueResponse(
+        h_msg_cd=base.h_msg_cd,
+        h_msg_txt=base.h_msg_txt,
+        str_result=base.str_result,
+        raw=copied,
+        transaction_division_code=_optional_string(
+            copied, "cashRcetTxnDvCd", context="cash receipt issue"
+        ),
+        authentication_method_code=_optional_string(
+            copied, "cashRcetAthnMtdCd", context="cash receipt issue"
+        ),
+        authentication_recognition_no=_optional_string(
+            copied, "athnDmnRcgnNo", context="cash receipt issue"
+        ),
+        total_approved_amount=_optional_string(
+            copied, "totApvAmt", context="cash receipt issue"
+        ),
+        approvals=tuple(approvals),
+        approval_list_is_null=rows is None,
+    )
+
+
+_STATION_REFUND_ORIGINAL_FIELDS = {
+    "original_sale_date": "ogtk_sale_dt",
+    "original_sale_window_no": "ogtk_sale_wct_no",
+    "original_sale_sequence": "ogtk_sale_sqno",
+    "original_return_password": "ogtk_ret_pwd",
+    "ticket_kind_code": "tk_knd_cd",
+    "refund_division_code": "ret_dv_cd",
+    "refund_reason_code": "ret_rsn_cd",
+}
+
+
+def parse_station_refund_verification_response(
+    raw: Mapping[str, Any],
+) -> StationRefundVerificationResponse:
+    """Parse ``VerifyOnlineRefundsOut`` and the original ticket it validates."""
+    copied = _response_mapping(raw)
+    rows = copied.get("orgtkinfo_list", [])
+    if rows is not None and not isinstance(rows, list):
+        raise KorailProtocolError("KORAIL station refund orgtkinfo_list must be a list")
+    original_tickets: list[StationRefundOriginalTicket] = []
+    for row in rows or ():
+        if not isinstance(row, Mapping):
+            raise KorailProtocolError("KORAIL station refund Orgtkinfo must be an object")
+        pnr_no = _optional_string(row, "pnr_no", context="station refund Orgtkinfo")
+        if not pnr_no:
+            raise KorailProtocolError("KORAIL station refund Orgtkinfo.pnr_no is required")
+        identity_fields = {
+            attr: _optional_string(row, wire_key, context="station refund Orgtkinfo")
+            for attr, wire_key in _STATION_REFUND_ORIGINAL_FIELDS.items()
+        }
+        original_tickets.append(
+            StationRefundOriginalTicket(
+                pnr_no=pnr_no,
+                **identity_fields,
+                raw=dict(row),
+            )
+        )
+    base = BaseKorailResponse.from_raw(copied)
+    return StationRefundVerificationResponse(
+        h_msg_cd=base.h_msg_cd,
+        h_msg_txt=base.h_msg_txt,
+        str_result=base.str_result,
+        raw=copied,
+        received_amount=_optional_string(
+            copied, "rcvd_amt", context="station refund verification"
+        ),
+        refund_fee=_optional_string(
+            copied, "ret_fee", context="station refund verification"
+        ),
+        refund_amount=_optional_string(
+            copied, "ret_amt", context="station refund verification"
+        ),
+        popup_message=_optional_string(
+            copied, "poppMsg", context="station refund verification"
+        ),
+        result_message=_optional_string(
+            copied, "strMsg", context="station refund verification"
+        ),
+        original_tickets=tuple(original_tickets),
+        original_ticket_list_is_null=rows is None,
+    )
+
+
+def parse_station_refund_execution_response(
+    raw: Mapping[str, Any],
+) -> StationRefundExecutionResponse:
+    """Parse ``ExecuteOnlineRefundsOut`` without dropping its refund type."""
+    copied = _response_mapping(raw)
+    base = BaseKorailResponse.from_raw(copied)
+    return StationRefundExecutionResponse(
+        h_msg_cd=base.h_msg_cd,
+        h_msg_txt=base.h_msg_txt,
+        str_result=base.str_result,
+        raw=copied,
+        refund_division_code=_optional_string(
+            copied, "h_ret_dv_cd", context="station refund execution"
+        ),
+    )
 
 
 _DIGITS_RE = re.compile(r"[0-9]+")
@@ -392,7 +566,10 @@ def parse_reservation_payment_response(
 
 _DISCOUNT_CARD_PURCHASE_FIELDS = {
     "lump_settlement_target_no": "lumpStlTgtNo",
+    "discount_card_settlement_target_no": "dcntCrdStlTgtNo",
     "received_amount": "rcvdAmt",
+    "stx_amount": "stxAmt",
+    "taxt_supply_amount": "taxtSplAmt",
     "usable_trip_count": "usePsbTno",
     "validity_start_date": "vlidTrmStDt",
     "validity_end_date": "vlidTrmClsDt",
@@ -404,8 +581,10 @@ def parse_discount_card_purchase_response(
 ) -> DiscountCardPurchaseResponse:
     """``research.dcntCrdInfo.do`` 의 응답을 파싱합니다.
 
-    ``NCardReservationDao.NCardReservationResponse``
-    (``dao/research/NCardReservationDao.java:127-174``). ``mStationInfo`` 와
+    7.0.6 ``NCardInfoOut.java:31-39,59-89`` declares the settlement and tax
+    fields. Its serializer descriptor strings are protected, so the parser
+    uses the Kotlin property names, as it already does for ``rcvdAmt`` and
+    ``lumpStlTgtNo``. ``mStationInfo`` 와
     ``mUserNames`` 는 모델에 없습니다. 앱이 호출 뒤 지역적으로 채우는 값이고
     (``:167-173``) 서버는 보내지 않습니다.
 

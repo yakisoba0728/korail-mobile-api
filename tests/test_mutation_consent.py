@@ -317,8 +317,9 @@ def test_reserve_previews_a_passenger_mix_and_a_special_cabin():
     assert isinstance(preview, MutationPreview)
     assert preview.payload["txtTotPsgCnt"] == "4"
     assert preview.payload["txtCompaCnt1"] == "2"  # 어른
-    assert preview.payload["txtCompaCnt3"] == "1"  # 어린이
-    assert preview.payload["txtCompaCnt5"] == "1"  # 경로
+    assert preview.payload["txtCompaCnt2"] == "1"  # 어린이
+    assert preview.payload["txtCompaCnt3"] == "1"  # 경로
+    assert "txtCompaCnt4" not in preview.payload
     assert preview.payload["txtPsrmClCd1"] == "2"  # 특실
 
 

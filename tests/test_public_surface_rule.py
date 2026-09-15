@@ -81,6 +81,7 @@ DATA_EXPORTING_MODULES = frozenset(
         "mutation_models",
         "read_models",
         "read_payloads",
+        "v7",
     }
 )
 

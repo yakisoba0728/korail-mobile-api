@@ -83,9 +83,11 @@ def test_common_station_and_calendar_use_exact_endpoint_fields(
     assert common_body["deviceWidth"] == ["1080"]
     assert common_body["deviceHeight"] == ["2400"]
     assert common_body["OSVersion"] == ["35"]
-    assert captured[1]["query"] == "Device=AD"
-    assert captured[2]["query"] == ""
-    assert captured[3]["query"] == ""
+    assert [request["method"] for request in captured[1:]] == ["POST"] * 3
+    assert [request["query"] for request in captured[1:]] == [""] * 3
+    assert captured[1]["body"] == captured[2]["body"] == ""
+    calendar_form = parse_qs(captured[3]["body"])
+    assert set(calendar_form) == {"Device", "Version", "Key", "timeStamp"}
 
 
 def test_search_resolves_codes_to_names_and_parses_nested_rows(load_json_fixture):
@@ -130,7 +132,7 @@ def test_ticket_list_sends_complete_member_form(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
         {
-            "/classes/com.korail.mobile.myTicket.MyTicketList": "ticket_list_empty.json",
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do": "ticket_list_empty.json",
         },
         config=KorailConfig(advertising_id="ad-id"),
     )
@@ -157,7 +159,7 @@ def test_ticket_list_defaults_to_empty_device_id(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
         {
-            "/classes/com.korail.mobile.myTicket.MyTicketList": (
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do": (
                 "ticket_list_empty.json"
             ),
         },
@@ -176,7 +178,7 @@ def _ticket_client(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
         {
-            "/classes/com.korail.mobile.myTicket.MyTicketList": (
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do": (
                 "ticket_list_empty.json"
             ),
         },

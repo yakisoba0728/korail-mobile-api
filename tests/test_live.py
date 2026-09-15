@@ -140,6 +140,7 @@ def test_run_live_smoke_calls_every_current_read_without_raw_output(
                 h_msg_cd="S000",
                 str_result="SUCC",
                 raw={"ptwtTtl": "must not leak"},
+                post_title="must not leak",
             )
 
         def get_uuid(self) -> UuidResponse:

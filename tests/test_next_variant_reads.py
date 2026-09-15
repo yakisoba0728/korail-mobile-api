@@ -18,7 +18,6 @@ from korail_mobile_api.errors import (
     KorailDynaPathError,
     KorailProtocolError,
     KorailSessionExpiredError,
-    KorailTransportError,
 )
 from korail_mobile_api.models import KorailSession
 from korail_mobile_api.parsers import (
@@ -28,7 +27,6 @@ from korail_mobile_api.parsers import (
 from korail_mobile_api.read_models import (
     CommuterInfoResponse,
     CommuterPassengerOption,
-    GiftTicketListResponse,
     PassGoodsInfo,
     PassMenuData,
     PassMenuItem,
@@ -103,9 +101,11 @@ def _commuter_source(*age_codes: str) -> CommuterInfoResponse:
 
 
 def test_route_and_holdback_boundary_is_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
-    assert {("POST", R17_PATH), ("POST", R31_PATH), ("POST", R52_PATH)} <= KORAIL_READ_ONLY_ROUTES
-    assert ("POST", R39_PATH) not in KORAIL_READ_ONLY_ROUTES
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
+    assert {("POST", R31_PATH), ("POST", R52_PATH)} <= KORAIL_READ_ONLY_ROUTES
+    assert ("POST", R17_PATH) not in KORAIL_READ_ONLY_ROUTES
+    assert not hasattr(KorailClient, "get_gift_ticket_list")
+    assert ("POST", R39_PATH) in KORAIL_READ_ONLY_ROUTES
     assert not hasattr(KorailClient, "get_product_train_inquiry")
     assert not hasattr(korail_mobile_api, "ProductTrainInquiryRequest")
 
@@ -149,8 +149,6 @@ def test_r31_closed_variants_preserve_grouped_duplicates():
         ("psgCnt", "2"),
         ("cmtrUtlAgeCd", "AGE1"),
         ("cmtrUtlAgeCd", "AGE2"),
-        ("psgPrnb", "1"),
-        ("psgPrnb", "2"),
     )
     ticket = OriginalTicketReference("W", "20990101", "S", "P")
     assert build_commuter_info_form(
@@ -166,7 +164,7 @@ def test_r31_closed_variants_preserve_grouped_duplicates():
     )
 
 
-def test_r52_one_and_two_leg_forms_omit_train_count():
+def test_r52_one_and_two_leg_forms_include_train_count():
     direct = build_price_fare_quote_form(
         PriceFareQuoteRequest(legs=(_leg(),))
     )
@@ -176,10 +174,12 @@ def test_r52_one_and_two_leg_forms_omit_train_count():
     assert direct[:2] == (("txtMenuId", "11"), ("chtnDvCd", "1"))
     assert transfer[:2] == (("txtMenuId", "11"), ("chtnDvCd", "2"))
     assert ("dptRsStnCd", "D1,D2") in transfer
-    assert all(name != "trnCnt" for name, _ in direct + transfer)
+    assert ("trnCnt", "1") in direct
+    assert ("trnCnt", "2") in transfer
     assert transfer == (
         ("txtMenuId", "11"),
         ("chtnDvCd", "2"),
+        ("trnCnt", "2"),
         ("dptRsStnCd", "D1,D2"),
         ("arvRsStnCd", "A1,A2"),
         ("runDt", "20990101,20990102"),
@@ -192,16 +192,12 @@ def test_r52_one_and_two_leg_forms_omit_train_count():
 
 
 def test_r52_quote_builds_from_a_real_parsed_search_response(load_json_fixture):
-    # Regression: the request used to require metadata.menu_id, parsed from
-    # "h_menu_id" -- a key with ZERO hits across jadx and smali. Every request
-    # built from an actually-parsed search response therefore raised, and
-    # get_price_fare_quote was unreachable; only hand-forged
-    # TrainSearchMetadata(menu_id="11") objects in this file kept it green.
-    # This test drives the request from parsed server data only.
+    # The 7.0.6 DTO declares h_menu_id, but this fixture omits it. A quote
+    # request still uses its observed menu-code default.
     raw = load_json_fixture("raw_typed_train_search.json")
     metadata = parse_train_search_metadata(raw)
     train = parse_train_rows(raw)[0]
-    assert not hasattr(metadata, "menu_id")
+    assert metadata.menu_id is None
 
     form = build_price_fare_quote_form(
         PriceFareQuoteRequest(
@@ -264,14 +260,11 @@ def test_r31_client_sends_duplicate_fields_in_wire_order():
         ("psgCnt", "2"),
         ("cmtrUtlAgeCd", "A1"),
         ("cmtrUtlAgeCd", "A2"),
-        ("psgPrnb", "1"),
-        ("psgPrnb", "2"),
     ]
 
 
 def test_public_signatures_and_exports_are_closed():
     contracts = {
-        "get_gift_ticket_list": GiftTicketListResponse,
         "get_commuter_info": CommuterInfoResponse,
         "get_price_fare_quote": PriceFareQuoteResponse,
     }
@@ -304,20 +297,11 @@ def test_public_signatures_and_exports_are_closed():
 
 def test_exact_safety_shapes_and_holdback_are_closed():
     assert R39_PATH in DYNAPATH_ALLOWLIST_PATHS
-    assert R39_PATH not in KORAIL_EXACT_REQUEST_FIELDS
-    with pytest.raises(KorailProtocolError):
-        assert_read_only_route("POST", R39_PATH)
+    assert R39_PATH in KORAIL_EXACT_REQUEST_FIELDS
+    assert_read_only_route("POST", R39_PATH)
 
-    assert_read_only_request_fields(
-        R17_PATH,
-        (
-            ("Device", "AD"),
-            ("Version", "1"),
-            ("Key", "K"),
-            ("qryDvCd", "F"),
-            ("qryVal", "E"),
-        ),
-    )
+    with pytest.raises(KorailProtocolError):
+        assert_read_only_route("POST", R17_PATH)
     assert_read_only_request_fields(
         R31_PATH,
         (
@@ -329,8 +313,6 @@ def test_exact_safety_shapes_and_holdback_are_closed():
             ("psgCnt", "2"),
             ("cmtrUtlAgeCd", "A1"),
             ("cmtrUtlAgeCd", "A2"),
-            ("psgPrnb", "1"),
-            ("psgPrnb", "2"),
         ),
     )
     for invalid in (
@@ -342,7 +324,6 @@ def test_exact_safety_shapes_and_holdback_are_closed():
             ("cmtrKndCd", "C"),
             ("psgCnt", "2"),
             ("cmtrUtlAgeCd", "A1"),
-            ("psgPrnb", "1"),
         ),
         (
             ("Device", "AD"),
@@ -523,32 +504,6 @@ def test_r17_parser_preserves_all_fields_and_nullable_container(load_json_fixtur
 def test_r17_common_error_matrix_is_strict(payload, error_type):
     with pytest.raises(error_type):
         parse_gift_ticket_list_response(payload)
-
-
-def test_r17_p058_clears_session_and_invalid_json_is_protocol_error():
-    responses = [
-        httpx.Response(
-            200,
-            json={
-                "h_msg_cd": "P058",
-                "h_msg_txt": "expired",
-                "strResult": "FAIL",
-            },
-        ),
-        httpx.Response(200, content=b"not-json"),
-    ]
-
-    def handler(_):
-        return responses.pop(0)
-
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="SYNTHETIC")
-    with pytest.raises(KorailSessionExpiredError):
-        client.get_gift_ticket_list(GiftTicketPaymentEligibilityRequest())
-    assert client.session.current is None
-    client.session.current = KorailSession(jsessionid="SYNTHETIC")
-    with pytest.raises(KorailProtocolError):
-        client.get_gift_ticket_list(GiftTicketPaymentEligibilityRequest())
 
 
 def test_r31_parser_requires_primitive_json_integers(load_json_fixture):
@@ -912,7 +867,7 @@ def test_r39_offline_parser_preserves_nested_shape_and_errors(load_json_fixture)
     assert "SECRET_PRODUCT_FAILURE" not in repr(caught.value)
 
 
-def test_r17_404_is_one_transport_error_without_dynapath_or_retry():
+def test_removed_r17_fails_before_transport_or_dynapath():
     calls = []
     provider_calls = []
 
@@ -931,47 +886,13 @@ def test_r17_404_is_one_transport_error_without_dynapath_or_retry():
         transport=httpx.MockTransport(handler),
     )
     client.session.current = KorailSession(jsessionid="SYNTHETIC")
-    with pytest.raises(KorailTransportError):
-        client.get_gift_ticket_list(GiftTicketPaymentEligibilityRequest())
-    assert len(calls) == 1
+    with pytest.raises(KorailProtocolError):
+        client.http.post_form(R17_PATH, {"qryDvCd": "F", "qryVal": "E"})
+    assert calls == []
     assert provider_calls == []
 
 
-def test_r17_client_emits_exact_history_and_payment_sequences(load_json_fixture):
-    requests = []
-    raw = load_json_fixture("gifticket_list_success.json")
-
-    def handler(request):
-        requests.append(request)
-        return httpx.Response(200, json=raw)
-
-    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="SYNTHETIC")
-    client.get_gift_ticket_list(
-        GiftTicketHistoryRequest.sent("20990101", "20991231")
-    )
-    client.get_gift_ticket_list(GiftTicketPaymentEligibilityRequest())
-    common = [
-        ("Device", client.config.device),
-        ("Version", client.config.version),
-        ("Key", client.config.key),
-    ]
-    assert parse_qsl(
-        requests[0].content.decode(), keep_blank_values=True
-    ) == [
-        *common,
-        ("qryDvCd", "A"),
-        ("qryVal", "E"),
-        ("abrdDtFrom", "20990101"),
-        ("abrdDtTo", "20991231"),
-        ("usePsbFlg", ""),
-    ]
-    assert parse_qsl(
-        requests[1].content.decode(), keep_blank_values=True
-    ) == [*common, ("qryDvCd", "F"), ("qryVal", "E")]
-
-
-def test_r17_and_r31_require_session_before_transport():
+def test_r31_requires_session_before_transport():
     called = False
 
     def handler(_):
@@ -980,8 +901,6 @@ def test_r17_and_r31_require_session_before_transport():
         return httpx.Response(200, json={})
 
     client = KorailClient(KorailConfig(), transport=httpx.MockTransport(handler))
-    with pytest.raises(KorailAuthError):
-        client.get_gift_ticket_list(GiftTicketPaymentEligibilityRequest())
     with pytest.raises(KorailAuthError):
         client.get_commuter_info(CommuterInitialRequest(_pass_data()))
     assert called is False
@@ -1017,7 +936,7 @@ def test_r52_uses_existing_conditional_dynapath_without_session(load_json_fixtur
     )
     fields = parse_qsl(requests[0].content.decode(), keep_blank_values=True)
     assert fields[3:5] == [("txtMenuId", "11"), ("chtnDvCd", "1")]
-    assert all(name != "trnCnt" for name, _ in fields)
+    assert ("trnCnt", "1") in fields
 
 
 def test_r52_dynapath_rejection_is_typed(load_json_fixture):

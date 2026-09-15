@@ -70,10 +70,51 @@ from korail_mobile_api.mutation_payloads import (
     build_single_adult_reservation_form,
     is_merge_eligible,
 )
+from korail_mobile_api.read_payloads import (
+    MergeSeatsInquiryRequest,
+    build_merge_seats_inquiry_form,
+    build_product_reservations_query,
+)
 
 
 def _config() -> KorailConfig:
     return KorailConfig()
+
+
+def test_merge_station_lookup_can_precede_station_selection() -> None:
+    request = MergeSeatsInquiryRequest(
+        boarding_datetime="20990101060000",
+        run_datetime="20990101060000",
+        train_no="43",
+        departure_station_name="서울",
+        arrival_station_name="부산",
+        selected_station_name=None,
+        room_class_code="1",
+        seat_attribute_code="015",
+        passenger_count=1,
+    )
+    form = build_merge_seats_inquiry_form(request)
+    assert form["trnNo"] == "00043"
+    assert "selRsStnNm" not in form
+    selected = build_merge_seats_inquiry_form(
+        replace(request, selected_station_name="대전")
+    )
+    assert selected["selRsStnNm"] == "대전"
+
+
+def test_product_status_filters_are_only_sent_when_known() -> None:
+    assert build_product_reservations_query() == {
+        "txtSelPage": "1",
+        "txtCntPerPage": "20",
+    }
+    assert build_product_reservations_query(
+        reservation_status_code="A", payment_status_code="B"
+    ) == {
+        "txtSelPage": "1",
+        "txtCntPerPage": "20",
+        "txtRsvSttCd": "A",
+        "txtStlSttCd": "B",
+    }
 
 
 def _standing_hold_train() -> TrainSummary:
@@ -289,7 +330,7 @@ def test_adding_the_job_type_left_the_other_three_alone() -> None:
 
 
 # The merged form's keys, in the order the app's LinkedHashMaps produce them:
-# the standing hold's own order with journey 2's block appended, and NO arvTm_2.
+# the standing hold's own order with journey 2's block appended.
 PINNED_MERGE_KEYS: tuple[str, ...] = (
     "Device",
     "Version",
@@ -303,27 +344,6 @@ PINNED_MERGE_KEYS: tuple[str, ...] = (
     "txtCompaCnt1",
     "txtPsgTpCd1",
     "txtDiscKndCd1",
-    "txtCompaCnt2",
-    "txtPsgTpCd2",
-    "txtDiscKndCd2",
-    "txtCompaCnt3",
-    "txtPsgTpCd3",
-    "txtDiscKndCd3",
-    "txtCompaCnt4",
-    "txtPsgTpCd4",
-    "txtDiscKndCd4",
-    "txtCompaCnt5",
-    "txtPsgTpCd5",
-    "txtDiscKndCd5",
-    "txtCompaCnt6",
-    "txtPsgTpCd6",
-    "txtDiscKndCd6",
-    "txtCompaCnt7",
-    "txtPsgTpCd7",
-    "txtDiscKndCd7",
-    "txtCompaCnt8",
-    "txtPsgTpCd8",
-    "txtDiscKndCd8",
     "txtSeatAttCd1",
     "txtSeatAttCd2",
     "txtSeatAttCd3",
@@ -341,7 +361,6 @@ PINNED_MERGE_KEYS: tuple[str, ...] = (
     "txtRunDt1",
     "txtDptDt1",
     "txtDptTm1",
-    "arvTm_1",
     "txtDptRsStnCd1",
     "txtDptStnConsOrdr1",
     "txtDptStnRunOrdr1",
@@ -371,14 +390,10 @@ def test_merge_form_key_order_is_pinned() -> None:
     assert tuple(_merge_form()) == PINNED_MERGE_KEYS
 
 
-def test_merge_form_has_no_second_arrival_time() -> None:
-    # The merge loop never calls setArvTm (no such call in
-    # smali/…/DirectInquiryActivity.smali:5730-6010), so leg 2 has none at all
-    # and leg 1 keeps the standing hold's -- the WHOLE ROUTE's arrival time.
+def test_merge_form_omits_arrival_time_outside_the_apk_reservation_dto() -> None:
     form = _merge_form()
     assert "arvTm_2" not in form
-    assert form["arvTm_1"] == _standing_hold_train().arrival_time
-    assert form["arvTm_1"] != _leading_leg().arrival_time
+    assert "arvTm_1" not in form
 
 
 def test_merge_journey_types_differ_per_leg() -> None:
@@ -432,7 +447,9 @@ def test_merge_form_carries_the_passenger_mix_unchanged() -> None:
     )
     assert form["txtTotPsgCnt"] == "3"
     assert form["txtCompaCnt1"] == "2"
-    assert form["txtCompaCnt3"] == "1"
+    assert form["txtCompaCnt2"] == "1"
+    assert form["txtPsgTpCd2"] == "3"
+    assert "txtCompaCnt3" not in form
 
 
 def test_merge_form_carries_no_seat_designation_keys() -> None:
@@ -475,13 +492,13 @@ def test_merge_refuses_wrong_leg_types() -> None:
         )
 
 
-def test_merge_refuses_a_hold_train_without_an_arrival_time() -> None:
-    with pytest.raises(KorailProtocolError, match="arrival_time"):
-        build_merge_reservation_form(
-            _config(),
-            replace(_standing_hold_train(), arrival_time=None),
-            (_leading_leg(), _trailing_leg()),
-        )
+def test_merge_does_not_require_an_unserialized_arrival_time() -> None:
+    form = build_merge_reservation_form(
+        _config(),
+        replace(_standing_hold_train(), arrival_time=None),
+        (_leading_leg(), _trailing_leg()),
+    )
+    assert form["txtJrnyCnt"] == "2"
 
 
 # ---------------------------------------------------------------------------

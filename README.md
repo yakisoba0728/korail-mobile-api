@@ -25,8 +25,9 @@
 ---
 
 > [!WARNING]
-> - **리버스 엔지니어링 결과입니다.** 라우트와 필드명은 `com.korail.talk` 6.5.0
->   APK 에서 읽어냈습니다. KORAIL 은 규격을 공개하지 않고 안정성도 약속하지 않습니다.
+> - **리버스 엔지니어링 결과입니다.** 기존 구현은 `com.korail.talk` 6.5.0 APK에
+>   기반했고, 확인된 기존 호출 계약은 7.0.6 APK와 대조해 갱신했습니다.
+>   KORAIL은 규격을 공개하지 않고 안정성도 약속하지 않습니다.
 > - **실서비스입니다.** `smart.letskorail.com` 은 진짜 발권 시스템입니다. 여기서
 >   만든 예약은 누군가 취소해야 하고, 결제는 진짜 돈입니다.
 > - **KORAIL 과 아무 관계가 없습니다.** 본인 계정으로, 본인 책임으로 쓰세요.
@@ -104,8 +105,8 @@ KORAIL 앱이 보는 값과 다릅니다. 이 라이브러리에는 상관없습
 <details>
 <summary><b>앱 버전과 API 버전은 다릅니다</b></summary>
 
-요청에 실리는 `Version=250601003` 은 앱 버전(`6.5.0`)도 versionCode(`60500002`)도
-아닌 별개 상수입니다. APK 안에 있어서 기기 속성으로는 나오지 않습니다.
+요청에 실리는 기존 `Version=250601003` 은 6.5.0 앱 버전·versionCode와
+별개 상수입니다. 7.0.6의 보호된 실제 값은 아직 확인되지 않아 갱신하지 않았습니다.
 
 ```bash
 adb shell dumpsys package com.korail.talk | grep versionName   # 6.5.0
@@ -115,9 +116,9 @@ unzip -p base.apk 'classes*.dex' | strings | grep -m1 'Device=AD&Version='
 # Device=AD&Version=250601003&Key=korail1234567890
 ```
 
-마지막 줄이 모든 요청에 실리는 공통 세 필드입니다 — 차례로
-`KORAIL_DEVICE_ANDROID`, `KORAIL_API_VERSION`, `KORAIL_APP_KEY` 입니다. 서버가 최소
-버전을 올리면 여기를 갱신해야 합니다.
+마지막 줄은 기존 공통 세 필드 `KORAIL_DEVICE_ANDROID`, `KORAIL_API_VERSION`,
+`KORAIL_APP_KEY`의 6.5.0 근거입니다. 7.0.6의 역 정보와 UUID 호출은 인자 없는
+POST라 이 필드를 보내지 않습니다. 보호된 상수를 추측해서 갱신하지 않았습니다.
 
 </details>
 
@@ -137,10 +138,12 @@ unzip -p base.apk 'classes*.dex' | strings | grep -m1 'Device=AD&Version='
 
 ## 무엇을 할 수 있나
 
-경계 안에 라우트 60개와 공개 메서드 77개가 있습니다. 라우트는 읽기 58개에
+경계 안에 라우트 57개와 공개 메서드 77개가 있습니다. 라우트는 읽기 55개에
 로그인·로그아웃을 더한 것이고, 변경 라우트 9개는 읽기 전용 허용목록에 올라가지
-않습니다. 메서드 중 변경 메서드 13개가 consent 게이트를 지나고, 나머지 64개는
-로그인·읽기만 보내거나 아무것도 보내지 않습니다.
+않습니다. 메서드 중 변경 메서드 14개가 consent 게이트를 지나고, 나머지 63개는
+로그인·읽기만 보내거나 아무것도 보내지 않습니다. 이 라우트 수는 기존
+고수준 전송 경계의 허용목록이며, 7.0.6의 추가 Retrofit 메서드 117개는 별도의
+`V7Gateway` 계약 레지스트리에서 관리합니다.
 
 ### 읽기
 
@@ -153,11 +156,13 @@ unzip -p base.apk 'classes*.dex' | strings | grep -m1 'Device=AD&Version='
 | 승차권·예약·구매 이력 | `get_ticket_list()`, `get_ticket_reservation_detail(request)`, `get_reservation_history()`, `get_product_reservations(...)` |
 | 환불 수수료·좌석 변경·원표 | `get_refund_commission(ticket)`, `get_refund_ticket_detail(ticket)`, `get_self_seat_change_info(request)`, `get_original_ticket_inquiry(tickets)` |
 | 포인트·마일리지 | `get_korail_point_summary()`, `get_mileage_history(request)` |
-| N카드·정기권·리무진 | `get_discount_card_usage_history(card_no)`, `get_pass_menu(menu_no)`, `get_pass_schedule(request)`, `get_limousine_schedules(query)`, `get_limousine_seat_inventory(query)`, `get_limousine_schedule_view(query)` |
+| N카드·정기권·리무진 | `get_discount_card_usage_history(card_no)`, `get_pass_menu(menu_no)`, `get_pass_schedule(request)`, `get_limousine_schedules(query)`, `get_limousine_seat_inventory(query)` |
 
 로그인 없이 되는 것도 있습니다. `get_service_status()`, `get_app_data()`,
 `get_notice()`, `get_uuid()`, `get_maas_menu_list()` 가 그렇습니다. 메서드별 라우트는
 [docs/api-status-by-service.md](docs/api-status-by-service.md) 에 있습니다.
+`get_notice()` 는 별도 공지 캐시 대신 메인 캐시의 `notice` 객체를 읽습니다.
+7.0.6에서 빠진 호출은 [제거 기록](docs/7.0.6-removals.md)에 정리했습니다.
 
 ### 예약
 
@@ -185,6 +190,7 @@ unzip -p base.apk 'classes*.dex' | strings | grep -m1 'Device=AD&Version='
 | `pay_with_fake_card(hold, card, …)` | `payment` | 청구되지 않는 테스트 카드 |
 | `pay_with_card(hold, card, …)` | `payment` | 실카드. 기본으로 막힘 |
 | `refund(ticket, …)` | `refund` | 결제된 승차권 환불 |
+| `execute_station_ticket_refund(request, …)` | `V7MutationConsent`의 `NetworkApi.executeOnlineRefunds` | 역발행 승차권의 온라인 환불 실행 |
 | `recalculate_price(request, …)` | `price_recalculation` | 할인 바뀐 hold 의 운임 재계산 |
 | `add_to_cart(request, …)` | `cart` | 잡힌 PNR 을 장바구니로 |
 | `register_discount_card(request, …)` | `discount_card` | N카드 구매 |
@@ -201,11 +207,11 @@ unzip -p base.apk 'classes*.dex' | strings | grep -m1 'Device=AD&Version='
 
 관례가 아니라 코드가 막고, 오프라인 스위트가 그걸 고정합니다.
 
-- 변경 메서드 13개는 전부 `require_mutation_consent` 로 시작합니다. 끄는 스위치는 없습니다.
+- 기존 변경 메서드 13개는 `MutationConsent`, 역발행 승차권 환불 1개는 메서드별 `V7MutationConsent`를 요구합니다.
 - 범주 플래그는 전부 기본 `False` 라, 예약을 허가한 consent 로는 취소하지 못합니다.
-- `dry_run=True` 가 기본입니다. 통신하지 않고 `MutationPreview` 만 돌려주며 payload 는
-  `redact_payload` 를 지납니다.
-- 변경 라우트에 닿는 메서드는 `post_mutation_form` 뿐이고, 라우트와 범주가 맞는지 다시 봅니다.
+- `dry_run=True` 가 기본입니다. 통신하지 않고 기존 변경 메서드는
+  `MutationPreview`, V7 환불은 마스킹된 `V7MutationPreview`를 돌려줍니다.
+- 기존 변경 라우트 9개는 전용 변경 전송 경계에서 검사하고, 7.0.6 추가 메서드는 `V7Gateway`의 메서드별 동의와 기본 dry-run을 거칩니다.
 - 청구되는 실카드는 `pay_with_card` 로만 갑니다. `real_card_acknowledged` 와
   `fake_card_only=False` 를 **둘 다** 세워야 하고, 하나만 세우면 전송 게이트가 거절합니다.
 
@@ -280,15 +286,17 @@ client.cancel_unpaid_hold(hold, consent=MutationConsent(allow_cancel=True, dry_r
 없습니다. 실환승 hold 는
 KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내면 안 됩니다.
 
-일부러 넣지 않은 것도 있습니다.
+기존 고수준 메서드에 넣지 않은 것도 있습니다. 7.0.6에서 추가로 확인된 원시
+Retrofit 계약은 [별도 구현 기록](docs/7.0.6-additions.md)에 정리했습니다.
 
 - **신원 서류 제출** — 주민등록번호 조각을 보내는데 검증할 방법이 없습니다.
 - **비밀번호를 싣는 포인트 라우트** — 틀리면 계정이 잠깁니다.
 - **정기권 구매** — 15만~25만원인데 취소·환불 라우트가 없습니다.
 - **여행변경과 롤백, 예약 인원 변경** — 깨끗한 되돌리기가 없습니다.
 - **비회원 오프라인 반환, 체크인, 회원정보 변경** — 이 버전에 없습니다.
-- **승무원 호출** — `/classes/com.korail.mobile.push.callCrew.do` 는 transport
-  허용목록에서 계속 제외되어 있습니다.
+- **승무원 호출** — `/classes/com.korail.mobile.push.callCrew.do` 는 기존
+  고수준 메서드와 transport 허용목록에서 제외되어 있습니다. 7.0.6 계약
+  게이트웨이에서는 메서드별 동의와 기본 dry-run으로 진입합니다.
 - **인증·NetFunnel·DynaPath 우회, 범용 WebView 자동화** — 영구히 범위 밖입니다.
 
 ## 문서
@@ -297,14 +305,19 @@ KORAIL 앱에서 취소할 준비가 되어 있지 않으면 보내면 안 됩�
 | --- | --- |
 | [문서 사이트](https://yaki.kr/korail-mobile-api/) | 이 README 와 API 레퍼런스를 합쳐 놓은 것 |
 | [docs/verification-record.md](docs/verification-record.md) | 근거 기록. APK 인용, 실행별 코드, 정정 |
+| [docs/7.0.6-contract-update.md](docs/7.0.6-contract-update.md) | 7.0.6에서 확인한 기존 호출 변경과 미확인 wire 값 |
+| [docs/7.0.6-additions.md](docs/7.0.6-additions.md) | 7.0.6 추가 라우트와 Android 호스트 연동 |
+| [docs/7.0.6-removals.md](docs/7.0.6-removals.md) | 7.0.6 기본 호출에서 빠진 경로와 공개 API 변경 |
+| [docs/7.0.6-live-verification.md](docs/7.0.6-live-verification.md) | 7.0.6 실서버 조회·미결제 예약 검증 결과 |
+| [docs/7.0.6-one-to-one-audit.md](docs/7.0.6-one-to-one-audit.md) | 7.0.6 APK와 현재 코드의 1:1 정적 대조 결과 |
 | [docs/MUTATION_HANDOFF.md](docs/MUTATION_HANDOFF.md) | 변경 표면의 검증 상태 |
-| [docs/api-status-by-service.md](docs/api-status-by-service.md) | Retrofit 항목 165개의 서비스별 상태 |
+| [docs/api-status-by-service.md](docs/api-status-by-service.md) | 6.5.0 Retrofit 항목 165개의 당시 서비스별 상태 |
 | [docs/RELEASE.md](docs/RELEASE.md) | 릴리스 게이트 |
 | [docs/README.md](docs/README.md) | 문서 전체 색인 |
 | [CHANGELOG.md](CHANGELOG.md) | 무엇이 바뀌었나 |
 
 게이트는 `python3 -m pytest -q -m "not live"` 이고 네트워크를 쓰지 않습니다 —
-`2444 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 이 있을 때만 도는
+`2491 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 이 있을 때만 도는
 실서버 테스트입니다. 기여는 [CONTRIBUTING.md](CONTRIBUTING.md), 규범은
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 참고.
 

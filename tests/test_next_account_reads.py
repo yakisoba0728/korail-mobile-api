@@ -21,15 +21,20 @@ from korail_mobile_api.errors import (
 from korail_mobile_api.models import KorailSession
 from korail_mobile_api.read_models import (
     CustomerTripInfoResponse,
+    DiscountCouponListResponse,
     MaasServiceDetailListResponse,
     MultiChildDiscountTargetResponse,
+    PassScheduleResponse,
     TourTrainInfoResponse,
     TripChangeDateResponse,
 )
 from korail_mobile_api.read_parsers import (
     parse_customer_trip_info_response,
+    parse_discount_coupon_response,
     parse_maas_service_detail_list_response,
     parse_multi_child_discount_target_response,
+    parse_pass_menu_response,
+    parse_pass_schedule_response,
     parse_tour_train_info_response,
     parse_trip_change_date_response,
 )
@@ -58,7 +63,7 @@ NEW_ROUTES = {
     ("POST", R13_PATH),
     ("POST", R32_PATH),
     ("POST", R43_PATH),
-    ("POST", R45_PATH),
+    ("GET", R45_PATH),
 }
 
 R13_FIELDS = (
@@ -204,6 +209,82 @@ def _success(**extra: Any) -> dict[str, Any]:
     }
 
 
+def test_coupon_apk_counts_kind_and_validity_start_are_typed():
+    raw = _success(
+        h_tot_cnt="7",
+        h_row_cnt="2",
+        coupon_infos={
+            "coupon_info": [
+                {
+                    "h_cpn_no": "SYNTHETIC_COUPON",
+                    "h_fdcert_mg_st_dt": "20990101",
+                    "h_fdcert_mg_cls_dt": "20991231",
+                    "h_dscp_knd_cd": "SYNTHETIC_KIND",
+                }
+            ]
+        },
+    )
+    result = parse_discount_coupon_response(raw)
+    assert type(result) is DiscountCouponListResponse
+    assert result.total_count == "7"
+    assert result.row_count == "2"
+    assert result.items[0].start_date == "20990101"
+    assert result.items[0].discount_kind_code == "SYNTHETIC_KIND"
+    assert result.raw is raw
+
+
+def test_pass_menu_sales_messages_and_schedule_page_info_are_typed():
+    menu = parse_pass_menu_response(
+        _success(list=[{"saleMsg1": "A", "saleMsg2": "B", "saleMsg3": "C"}])
+    )
+    assert (
+        menu.items[0].sale_message_1,
+        menu.items[0].sale_message_2,
+        menu.items[0].sale_message_3,
+    ) == ("A", "B", "C")
+    schedule = parse_pass_schedule_response(
+        _success(
+            main_info={
+                "h_page_no": "2",
+                "h_page_cnt": "5",
+                "h_next_pg_flg": "Y",
+                "h_sel_cnt": "10",
+            },
+            schedule_info=[],
+        )
+    )
+    assert type(schedule) is PassScheduleResponse
+    assert schedule.main_info is not None
+    assert schedule.main_info.page_no == "2"
+    assert schedule.main_info.page_count == "5"
+    assert schedule.main_info.next_page_flag == "Y"
+    assert schedule.main_info.selected_count == "10"
+
+
+def test_maas_detail_info_and_reservation_station_are_typed():
+    info = {
+        "name": "SYNTHETIC_SERVICE",
+        "strRsvSttNm": "reserved",
+        "strStlSttCd": "SYNTHETIC_STATUS",
+        "entityOne": [{"name": "SYNTHETIC_OPTION"}],
+    }
+    raw = _success(
+        addSrvList=[{"rsStnCdNm": "SYNTHETIC_STATION", "detailInfo": info}]
+    )
+    item = parse_maas_service_detail_list_response(raw).details[0]
+    assert item.reservation_station_code_name == "SYNTHETIC_STATION"
+    assert item.detail_info is not None
+    assert item.detail_info.name == "SYNTHETIC_SERVICE"
+    assert item.detail_info.reservation_status_name == "reserved"
+    assert item.detail_info.settlement_status_code == "SYNTHETIC_STATUS"
+    assert item.detail_info.entity_one[0]["name"] == "SYNTHETIC_OPTION"
+    assert item.detail_info.raw is info
+    with pytest.raises(KorailProtocolError, match="detailInfo"):
+        parse_maas_service_detail_list_response(
+            _success(addSrvList=[{"detailInfo": []}])
+        )
+
+
 def _session(*, customer_no: str | None = "SYNTHETIC_CUSTOMER_NO") -> KorailSession:
     return KorailSession(
         jsessionid="SYNTHETIC_SESSION",
@@ -240,7 +321,10 @@ def _recording_client(
 
 
 def test_new_routes_and_public_contract_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
+    assert (
+        "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
+    ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert ("POST", R54_PATH) not in KORAIL_READ_ONLY_ROUTES
     assert not hasattr(KorailClient, "get_tour_train_info")
@@ -298,7 +382,9 @@ def test_new_routes_and_public_contract_are_exact():
         "CustomerTripInfoResponse",
         "MaasServiceDetailQuery",
         "MaasServiceDetail",
+        "MaasServiceDetailInfo",
         "MaasServiceDetailListResponse",
+        "PassScheduleMainInfo",
         "TripChangeDateResponse",
     ):
         assert name in korail_mobile_api.__all__
@@ -686,7 +772,7 @@ def test_all_parsers_require_exact_succ(parser, result):
 
 
 @pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("missing", ["h_msg_cd", "h_msg_txt", "strResult"])
+@pytest.mark.parametrize("missing", ["strResult"])
 def test_all_parsers_require_each_envelope_member(parser, missing):
     raw = _success()
     raw.pop(missing)
@@ -763,7 +849,11 @@ def test_four_public_reads_emit_exact_ordered_bodies_once_without_dynapath(
         R45_PATH,
     ]
     assert [
-        parse_qsl(request.content.decode(), keep_blank_values=True) for request in requests
+        parse_qsl(
+            (request.url.query if request.method == "GET" else request.content).decode(),
+            keep_blank_values=True,
+        )
+        for request in requests
     ] == [
         [
             ("Device", config.device),
@@ -793,7 +883,9 @@ def test_four_public_reads_emit_exact_ordered_bodies_once_without_dynapath(
             ("tripChgDate", "20990101"),
         ],
     ]
-    assert all(request.method == "POST" for request in requests)
+    assert [request.method for request in requests] == [
+        "POST", "POST", "POST", "POST", "GET"
+    ]
     assert all("x-dynapath-m-token" not in request.headers for request in requests)
     assert provider_calls == []
 

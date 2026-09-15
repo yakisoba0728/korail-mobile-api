@@ -74,7 +74,7 @@ def _client(handler) -> KorailClient:
 
 
 def test_only_the_two_password_free_loyalty_reads_are_reachable():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert ("POST", SUMMARY_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", MILEAGE_PATH) in KORAIL_READ_ONLY_ROUTES
     for path in WITHHELD_PATHS:
@@ -210,6 +210,7 @@ def test_mileage_parser_reads_totals_and_rows():
     parsed = parse_mileage_history_response(
         _envelope(
             pgCnt="3",
+            qryCnt="18",
             totAvlRailPontValNum="1000",
             totAvlRailPontValNum1="500",
             totAvlAfltPontValNum="20",
@@ -233,6 +234,7 @@ def test_mileage_parser_reads_totals_and_rows():
     )
     assert type(parsed) is MileageHistoryResponse
     assert parsed.page_count == "3"
+    assert parsed.query_count == "18"
     assert parsed.total_available_rail_point == "1000"
     assert parsed.total_available_rail_point_1 == "500"
     assert parsed.expiring_point_value == "30"

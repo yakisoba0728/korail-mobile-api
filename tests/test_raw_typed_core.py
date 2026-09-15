@@ -430,7 +430,6 @@ def test_train_schedule_parser_accepts_app_model_conformant_response(
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda raw: raw.pop("dlayList"),
         lambda raw: raw.__setitem__("dlayList", {}),
         lambda raw: raw["dlayList"].__setitem__(0, []),
         lambda raw: raw["dlayList"][0].pop("stopStnNm"),
@@ -450,6 +449,12 @@ def test_train_schedule_parser_rejects_malformed_shape(
 
     with pytest.raises(KorailProtocolError):
         parsers.parse_train_schedule_response(_enveloped_response(raw))
+
+
+def test_train_schedule_parser_defaults_missing_delay_list_to_empty(load_json_fixture):
+    raw = load_json_fixture("raw_typed_train_schedule.json")
+    raw.pop("dlayList")
+    assert parsers.parse_train_schedule_response(_enveloped_response(raw)).stops == ()
 
 
 @pytest.mark.parametrize(
@@ -585,15 +590,15 @@ def test_existing_reference_methods_return_typed_models_without_request_changes(
         models.TransferStationListResponse,
     )
     assert [request.method for request in captured] == [
-        "GET",
-        "GET",
-        "GET",
+        "POST",
+        "POST",
+        "POST",
         "POST",
         "POST",
     ]
-    assert captured[0].url.query.decode() == "Device=AD"
-    assert captured[1].url.query == b""
-    assert captured[2].url.query == b""
+    assert all(request.url.query == b"" for request in captured[:3])
+    assert all(request.content == b"" for request in captured[:2])
+    assert parse_qs(captured[2].content.decode())["timeStamp"][0].isdigit()
     assert parse_qs(captured[3].content.decode()) == {
         "Device": ["AD"],
         "Version": ["250601003"],
@@ -639,13 +644,12 @@ def test_train_search_metadata_preserves_named_server_strings_repr_safely(
     load_json_fixture,
 ):
     raw = load_json_fixture("raw_typed_train_search.json")
+    raw["h_menu_id"] = "SYNTHETIC-MENU-ID"
 
     metadata = parsers.parse_train_search_metadata(raw)
 
     assert isinstance(metadata, models.TrainSearchMetadata)
-    # No menu_id: h_menu_id is not a wire key (zero hits in the app);
-    # txtMenuId is the client constant "11" (a5/k.java:92-94).
-    assert not hasattr(metadata, "menu_id")
+    assert metadata.menu_id == "SYNTHETIC-MENU-ID"
     assert metadata.job_id == "SYNTHETIC-JOB-ID"
     assert metadata.product_no == "SYNTHETIC-PRODUCT-NO"
     assert metadata.next_page_flag == "SYNTHETIC-NEXT-PAGE-FLAG"
@@ -879,9 +883,11 @@ def test_search_trains_populates_metadata_without_changing_request(
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured.append(request)
+        raw = load_json_fixture("raw_typed_train_search.json")
+        raw["h_menu_id"] = "SYNTHETIC-MENU-ID"
         return httpx.Response(
             200,
-            json=load_json_fixture("raw_typed_train_search.json"),
+            json=raw,
         )
 
     client = KorailClient(transport=httpx.MockTransport(handler))
@@ -897,7 +903,7 @@ def test_search_trains_populates_metadata_without_changing_request(
         client.close()
 
     assert isinstance(result.metadata, models.TrainSearchMetadata)
-    assert not hasattr(result.metadata, "menu_id")
+    assert result.metadata.menu_id == "SYNTHETIC-MENU-ID"
     assert result.trains[0].seat_attribute_code == (
         "SYNTHETIC-SEAT-ATTRIBUTE-CODE"
     )

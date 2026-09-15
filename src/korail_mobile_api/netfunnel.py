@@ -61,8 +61,8 @@ from .safety import (
 # ---------------------------------------------------------------------------
 SUCCESS_CODE = "200"
 BYPASS_CODE = "300"
-#: 통과. 200 은 키 발급, 300 은 대기열 건너뜀(키 없음).
-SUCCESS_CODES = frozenset({SUCCESS_CODE, BYPASS_CODE})
+#: 통과. 200 은 키 발급, 300·303 은 키 없이도 통과할 수 있다.
+SUCCESS_CODES = frozenset({SUCCESS_CODE, BYPASS_CODE, "303"})
 #: 아직 대기 중(``T6/g.java:451``).
 CONTINUE_CODES = frozenset({"201", "202"})
 #: ``TsErrorAComplete`` — setComplete 에서만 받아들임.
@@ -227,8 +227,8 @@ def parse_netfunnel_body(body: str, *, action: str) -> KorailNetFunnelToken:
 
 
 def _require_pass_key(token: KorailNetFunnelToken, body: str) -> None:
-    """BYPASS(300)는 키 없음이 정당 — 그 외 200 은 키 필수."""
-    if not token.key and token.code != BYPASS_CODE:
+    """300·303은 키 없이도 성공한다. 슬롯을 가진 200은 키가 필요하다."""
+    if not token.key and token.code not in {BYPASS_CODE, "303"}:
         raise KorailNetFunnelError(
             None,
             "KORAIL NetFunnel response did not include a non-empty key",
@@ -378,27 +378,27 @@ class KorailNetFunnelClient:
         return parse_queue_response(body, action=str(action))
 
     def release(self, token: KorailNetFunnelToken) -> None:
-        """5004 — 슬롯을 놓습니다. 실패는 예외.
+        """5004 — 슬롯을 놓습니다. 전송 실패만 예외로 처리합니다.
 
-        키 없는 BYPASS(300)는 놓을 것이 없으므로 즉시 리턴
+        키 없는 BYPASS(300)·ExpressNumber(303)는 놓을 것이 없으므로 즉시 리턴
         (``T6/d.java:70-73`` ``getKey().length() < 1``).
         """
         if not token.key:
-            if token.code == BYPASS_CODE:
+            if token.code in {BYPASS_CODE, "303"}:
                 return
             raise KorailNetFunnelError(
                 token.code or None,
                 "KORAIL NetFunnel slot cannot be released because its token "
-                "carries no key, and only a bypass (300) is allowed to; the "
+                "carries no key, and only keyless 300/303 passes may skip release; the "
                 "slot is held until the server times it out",
             )
-        body = self._get(
+        self._get(
             build_set_complete_url(
                 token.node or self.config.netfunnel_url,
                 key=token.key,
             )
         )
-        parse_set_complete_response(body, action=token.action)
+        # 7.0.6 CommandClient.Complete clears its response without parsing it.
 
     def acquire(self, action: str) -> KorailNetFunnelToken:
         """5101→5002 교환 + 대기 폴링. 통과 토큰을 돌려줍니다.

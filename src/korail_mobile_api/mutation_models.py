@@ -25,6 +25,180 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class RefundTicketResponse(BaseKorailResponse):
+    """7.0.6 환불 결과의 nullable ``stlList`` 정산 수단 코드."""
+
+    settlement_method_codes: tuple[str, ...] = ()
+    #: ``stlList: null`` and ``stlList: []`` are distinct APK responses.
+    settlement_list_is_null: bool = False
+
+
+@dataclass(frozen=True)
+class CashReceiptApprovalItem:
+    """7.0.6 ``ApvItem`` approval row, with the original row retained."""
+
+    job_division_code: str | None = None
+    receipt_no: str | None = field(default=None, repr=False)
+    approval_date: str | None = None
+    cash_receipt_approval_no: str | None = field(default=None, repr=False)
+    approved_amount: str | None = None
+    approval_processed_at: str | None = None
+    normal_processing_flag: str | None = None
+    response_message_code: str | None = None
+    short_message_content: str | None = field(default=None, repr=False)
+    sale_date: str | None = None
+    sale_window_no: str | None = field(default=None, repr=False)
+    sale_sequence: str | None = field(default=None, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class CashReceiptIssueResponse(BaseKorailResponse):
+    """7.0.6 ``CashReceiptIssueOut`` result and its approval rows."""
+
+    transaction_division_code: str | None = None
+    authentication_method_code: str | None = None
+    authentication_recognition_no: str | None = field(default=None, repr=False)
+    total_approved_amount: str | None = None
+    approvals: tuple[CashReceiptApprovalItem, ...] = ()
+    approval_list_is_null: bool = False
+
+
+@dataclass(frozen=True)
+class StationRefundOriginalTicket:
+    """An ``Orgtkinfo`` row returned by station-issued ticket verification."""
+
+    pnr_no: str = field(repr=False)
+    original_sale_date: str | None = field(default=None, repr=False)
+    original_sale_window_no: str | None = field(default=None, repr=False)
+    original_sale_sequence: str | None = field(default=None, repr=False)
+    original_return_password: str | None = field(default=None, repr=False)
+    ticket_kind_code: str | None = None
+    refund_division_code: str | None = None
+    refund_reason_code: str | None = None
+    raw: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class StationRefundVerificationRequest:
+    """``VerifyOnlineRefundsIn`` name and four station-ticket return parts."""
+
+    customer_name: str = field(repr=False)
+    return_no_1: str = field(repr=False)
+    return_no_2: str = field(repr=False)
+    return_no_3: str = field(repr=False)
+    return_no_4: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        for name in (
+            "customer_name",
+            "return_no_1",
+            "return_no_2",
+            "return_no_3",
+            "return_no_4",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value.strip():
+                raise KorailProtocolError(
+                    f"KORAIL station refund verification requires {name}"
+                )
+
+
+@dataclass(frozen=True)
+class StationRefundVerificationResponse(BaseKorailResponse):
+    """``VerifyOnlineRefundsOut`` amounts and verified original tickets."""
+
+    received_amount: str | None = None
+    refund_fee: str | None = None
+    refund_amount: str | None = None
+    popup_message: str | None = field(default=None, repr=False)
+    result_message: str | None = field(default=None, repr=False)
+    original_tickets: tuple[StationRefundOriginalTicket, ...] = ()
+    original_ticket_list_is_null: bool = False
+
+
+@dataclass(frozen=True)
+class StationRefundExecutionRequest:
+    """``ExecuteOnlineRefundsIn`` values echoed from a verified ticket.
+
+    This object only prepares fields. Sending requires the normal refund
+    mutation consent and a separate execution call.
+    """
+
+    pnr_no: str = field(repr=False)
+    original_sale_date: str = field(repr=False)
+    original_sale_window_no: str = field(repr=False)
+    original_sale_sequence: str = field(repr=False)
+    original_return_password: str = field(repr=False)
+    refund_division_code: str
+    refund_reason_code: str
+    ticket_kind_code: str
+    customer_phone: str = field(repr=False)
+    refund_amount: str
+    refund_fee: str
+    customer_name: str = field(repr=False)
+
+    def __post_init__(self) -> None:
+        for name in (
+            "pnr_no",
+            "original_sale_date",
+            "original_sale_window_no",
+            "original_sale_sequence",
+            "original_return_password",
+            "refund_division_code",
+            "refund_reason_code",
+            "ticket_kind_code",
+            "customer_phone",
+            "refund_amount",
+            "refund_fee",
+            "customer_name",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value.strip():
+                raise KorailProtocolError(
+                    f"KORAIL station refund execution requires {name}"
+                )
+
+    @classmethod
+    def from_verification(
+        cls,
+        verification: StationRefundVerificationResponse,
+        *,
+        customer_phone: str,
+        customer_name: str,
+    ) -> StationRefundExecutionRequest:
+        """Use the APK's first verified ``Orgtkinfo`` row and quoted amounts."""
+        if verification.str_result != "SUCC" or not verification.original_tickets:
+            raise KorailProtocolError(
+                "KORAIL station refund requires a successful verification "
+                "with an original ticket"
+            )
+        ticket = verification.original_tickets[0]
+        values = {
+            "pnr_no": ticket.pnr_no,
+            "original_sale_date": ticket.original_sale_date,
+            "original_sale_window_no": ticket.original_sale_window_no,
+            "original_sale_sequence": ticket.original_sale_sequence,
+            "original_return_password": ticket.original_return_password,
+            "refund_division_code": ticket.refund_division_code,
+            "refund_reason_code": ticket.refund_reason_code,
+            "ticket_kind_code": ticket.ticket_kind_code,
+            "customer_phone": customer_phone,
+            "refund_amount": verification.refund_amount,
+            "refund_fee": verification.refund_fee,
+            "customer_name": customer_name,
+        }
+        return cls(**values)  # type: ignore[arg-type]
+
+
+@dataclass(frozen=True)
+class StationRefundExecutionResponse(BaseKorailResponse):
+    """``ExecuteOnlineRefundsOut.h_ret_dv_cd`` after a server call."""
+
+    refund_division_code: str | None = None
+
+
+@dataclass(frozen=True)
 class KorailPassengerCounts:
     """예약 하나에 실을 승객 종류별 인원 수.
 
@@ -279,6 +453,8 @@ class PaidTicket:
     return_password: str = field(repr=False)
     #: ``trnNo``.
     train_no: str = ""
+    #: ``pbpAcepTgtFlg`` — 상세 응답의 값을 환불 요청에 그대로 되울립니다.
+    pbp_acceptance_target_flag: str | None = None
 
     @classmethod
     def from_refund_detail(
@@ -291,20 +467,34 @@ class PaidTicket:
 
         세 개에서 가져옵니다. ``TicketListActivity.java:964-968`` 과 필드
         """
-        parts = {
+        candidate_parts = {
             "pnr_no": detail.pnr_no,
             "sale_date": detail.sale_date,
             "sale_window_no": detail.original_window_no,
             "sale_sequence": detail.original_sale_sequence,
             "return_password": detail.original_return_password,
         }
-        missing = [name for name, value in parts.items() if not value]
+        parts: dict[str, str] = {}
+        missing: list[str] = []
+        for name, value in candidate_parts.items():
+            if value:
+                parts[name] = value
+            else:
+                missing.append(name)
         if missing:
             raise KorailProtocolError(
                 "KORAIL refund identity is incomplete; the ticket detail is "
                 f"missing {', '.join(sorted(missing))}"
             )
-        return cls(train_no=train_no, **parts)  # type: ignore[arg-type]
+        return cls(
+            pnr_no=parts["pnr_no"],
+            sale_date=parts["sale_date"],
+            sale_window_no=parts["sale_window_no"],
+            sale_sequence=parts["sale_sequence"],
+            return_password=parts["return_password"],
+            train_no=train_no,
+            pbp_acceptance_target_flag=detail.pbp_acceptance_target_flag,
+        )
 
 
 @dataclass(frozen=True)
@@ -378,8 +568,14 @@ class DiscountCardPurchaseResponse(BaseKorailResponse):
     h_msg_txt: str | None = field(default=None, repr=False)
     #: ``lumpStlTgtNo`` — 결제가 청구할 정산 대상.
     lump_settlement_target_no: str | None = field(default=None, repr=False)
+    #: ``dcntCrdStlTgtNo`` — N카드 자체의 정산 대상 번호.
+    discount_card_settlement_target_no: str | None = field(default=None, repr=False)
     #: ``rcvdAmt`` — 그 정산의 금액.
     received_amount: str | None = None
+    #: ``stxAmt`` — APK 필드명을 보존한 세액.
+    stx_amount: str | None = None
+    #: ``taxtSplAmt`` — APK 필드명을 보존한 공급 금액.
+    taxt_supply_amount: str | None = None
     usable_trip_count: str | None = None
     validity_start_date: str | None = None
     validity_end_date: str | None = None

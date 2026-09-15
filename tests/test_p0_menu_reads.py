@@ -36,7 +36,7 @@ CALL_CREW_MUTATION_PATH = "/classes/com.korail.mobile.push.callCrew.do"
 def test_p0_menu_routes_have_exact_read_only_contracts():
     assert {
         ("POST", PASS_MENU_PATH),
-        ("GET", CREW_REQUEST_LIST_PATH),
+        ("POST", CREW_REQUEST_LIST_PATH),
         ("GET", COMMUTER_KIND_MENU_PATH),
     } <= KORAIL_READ_ONLY_ROUTES
     assert KORAIL_EXACT_REQUEST_FIELDS[PASS_MENU_PATH] == {
@@ -405,7 +405,7 @@ CLIENT_CASES = (
     (
         "get_crew_request_list",
         "CALLER-QUERY-DIVISION",
-        "GET",
+        "POST",
         CREW_REQUEST_LIST_PATH,
         "qryDvCd",
         read_models.CrewRequestListResponse,

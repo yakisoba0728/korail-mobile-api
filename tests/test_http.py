@@ -1,10 +1,10 @@
 import inspect
+from urllib.parse import parse_qs
 
 import httpx
 import pytest
 
 import korail_mobile_api as api
-from conftest import load_json_fixture
 from korail_mobile_api import KorailConfig
 from korail_mobile_api.constants import (
     DYNAPATH_ALLOWLIST_PATHS,
@@ -40,6 +40,64 @@ from korail_mobile_api.safety import (
     assert_read_only_request_fields,
     assert_read_only_route,
 )
+
+
+def test_delay_discount_post_query_map_places_fields_in_url_and_empty_form_body():
+    captured = {}
+    path = "/classes/com.korail.mobile.passCard.DelayDiscountView"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["request"] = request
+        return httpx.Response(
+            200, json={"h_msg_cd": "S000", "h_msg_txt": "OK", "strResult": "SUCC"}
+        )
+
+    client = KorailHttpClient(
+        KorailConfig(enable_dynapath=True), transport=httpx.MockTransport(handler)
+    )
+    client.post_query(path, {"dptDtTo": "20991231"})
+    request = captured["request"]
+    assert request.method == "POST"
+    assert request.url.path == path
+    assert parse_qs(request.url.query.decode())["dptDtTo"] == ["20991231"]
+    assert set(parse_qs(request.url.query.decode())) == {
+        "Device", "Version", "Key", "dptDtTo"
+    }
+    assert request.content == b""
+    assert request.headers["content-type"].startswith("application/x-www-form-urlencoded")
+
+
+def test_post_query_rejects_unregistered_path_and_fields_before_io():
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        raise AssertionError("no request expected")
+
+    client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
+    with pytest.raises(KorailProtocolError, match="only for DelayDiscountView"):
+        client.post_query("/classes/com.korail.mobile.login.Login", {"custId": "x"})
+    with pytest.raises(KorailProtocolError):
+        client.post_query(
+            "/classes/com.korail.mobile.passCard.DelayDiscountView",
+            {"dptDtTo": "20991231", "unregistered": "x"},
+        )
+    assert called is False
+
+
+def test_delay_discount_post_query_can_return_envelope_free_object():
+    path = "/classes/com.korail.mobile.passCard.DelayDiscountView"
+    client = KorailHttpClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"discountTickets": []})
+        ),
+    )
+    response = client.post_query(
+        path, {"dptDtTo": "20991231"}, require_envelope=False
+    )
+    assert response.raw == {"discountTickets": []}
 
 
 def test_post_form_adds_common_fields_and_form_encoding():
@@ -166,7 +224,7 @@ def test_dynapath_provider_is_not_called_for_non_allowlisted_path():
 def test_get_json_adds_dynapath_header_for_allowlisted_path_by_default():
     captured = {}
     contexts = []
-    path = "/classes/com.korail.mobile.common.stationinfo"
+    path = "/classes/com.korail.mobile.product.ReservationList"
 
     def token_provider(context):
         contexts.append(context)
@@ -195,7 +253,9 @@ def test_get_json_adds_dynapath_header_for_allowlisted_path_by_default():
         transport=httpx.MockTransport(handler),
     )
 
-    response = client.get_json(path)
+    response = client.get_json(
+        path, {"txtSelPage": "1", "txtCntPerPage": "20"}, include_common=True
+    )
 
     assert response.str_result == "SUCC"
     assert captured["token"] == "dynapath-token"
@@ -216,15 +276,21 @@ def test_get_json_returns_parsed_response():
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
     response = client.get_json(
-        "/classes/com.korail.mobile.common.stationinfo",
-        {"custom": "value"},
+        "/classes/com.korail.mobile.product.ReservationList",
+        {"txtSelPage": "1", "txtCntPerPage": "20"},
+        include_common=True,
     )
 
-    assert captured["url"] == (
-        "https://smart.letskorail.com/classes/com.korail.mobile.common.stationinfo"
-        "?custom=value"
+    assert captured["url"].startswith(
+        "https://smart.letskorail.com/classes/com.korail.mobile.product.ReservationList?"
     )
-    assert captured["query"] == "custom=value"
+    assert parse_qs(captured["query"]) == {
+        "Device": [client.config.device],
+        "Version": [client.config.version],
+        "Key": [client.config.key],
+        "txtSelPage": ["1"],
+        "txtCntPerPage": ["20"],
+    }
     assert response.str_result == "SUCC"
 
 
@@ -234,7 +300,9 @@ def test_get_json_can_return_raw_object_without_korail_envelope():
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
     response = client.get_json(
-        "/classes/com.korail.mobile.common.stationinfo",
+        "/classes/com.korail.mobile.product.ReservationList",
+        {"txtSelPage": "1", "txtCntPerPage": "20"},
+        include_common=True,
         require_envelope=False,
     )
 
@@ -275,13 +343,10 @@ def test_parse_base_response_requires_dict():
         raise AssertionError("KorailProtocolError was not raised")
 
 
-def test_parse_base_response_requires_korail_envelope_fields():
-    try:
-        parse_base_response(load_json_fixture("dynapath_403.json"))
-    except KorailProtocolError:
-        pass
-    else:
-        raise AssertionError("KorailProtocolError was not raised")
+def test_parse_base_response_allows_omitted_common_out_fields():
+    response = parse_base_response({"strResult": "SUCC"})
+    assert response.h_msg_cd is None
+    assert response.h_msg_txt is None
 
 
 @pytest.mark.parametrize(
@@ -324,7 +389,11 @@ def test_get_json_raises_protocol_error_for_non_json_response():
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
 
     try:
-        client.get_json("/classes/com.korail.mobile.common.stationinfo")
+        client.get_json(
+            "/classes/com.korail.mobile.product.ReservationList",
+            {"txtSelPage": "1", "txtCntPerPage": "20"},
+            include_common=True,
+        )
     except KorailProtocolError:
         pass
     else:
@@ -372,23 +441,23 @@ def test_http_client_blocks_excluded_domains_before_get(blocked_domain: str):
 @pytest.mark.parametrize(
     ("method", "path"),
     [
-        ("GET", "/file/CACHE/MobileService.cache"),
-        ("GET", "/file/CACHE/prdMobilePlusMain.cache"),
-        ("GET", "/file/CACHE/prdMobilePlusNotice.cache"),
+        ("POST", "/file/CACHE/MobileService.cache"),
+        ("POST", "/file/CACHE/prdMobilePlusMain.cache"),
         ("POST", "/classes/com.korail.mobile.common.code.do"),
         ("POST", "/classes/com.korail.mobile.login.Login"),
-        ("GET", "/classes/com.korail.mobile.login.Logout"),
-        ("GET", "/classes/com.korail.mobile.common.stationinfo"),
-        ("GET", "/classes/com.korail.mobile.common.stationdata"),
-        ("GET", "/classes/com.korail.mobile.schedule.runDt"),
+        ("POST", "/classes/com.korail.mobile.login.Logout"),
+        ("POST", "/classes/com.korail.mobile.common.stationinfo"),
+        ("POST", "/classes/com.korail.mobile.common.stationdata"),
+        ("POST", "/classes/com.korail.mobile.schedule.runDt"),
         ("POST", "/classes/com.korail.mobile.seatMovie.ScheduleView"),
+        ("POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"),
         (
             "POST",
             "/classes/com.korail.mobile.research.actualTrainSchedule.do",
         ),
         ("POST", "/classes/com.korail.mobile.qry.chtnStn.do"),
-        ("POST", "/classes/com.korail.mobile.myTicket.MyTicketList"),
-        ("GET", "/ebizcross/getUUID.do"),
+        ("POST", "/classes/com.korail.mobile.myTicket.MyTicketNewList.do"),
+        ("POST", "/ebizcross/getUUID.do"),
         ("POST", "/classes/com.korail.mobile.copt.gdMenuLt.do"),
         ("POST", "/ebizmaas/EbizMaasStationList.do"),
     ],
@@ -398,20 +467,22 @@ def test_read_only_route_registry_accepts_current_public_requests(method, path):
 
 
 def test_read_only_route_registry_has_exact_expanded_count():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
 
 
-def test_logout_route_is_get_only_and_carries_no_fields():
-    # Server-side session invalidation (LoginService.java:29-30) is a bare GET
-    # authenticated by the JSESSIONID cookie; it must reject the common envelope.
+def test_logout_route_is_post_only_and_carries_timestamp_form():
     logout_path = "/classes/com.korail.mobile.login.Logout"
-    assert ("GET", logout_path) in KORAIL_READ_ONLY_ROUTES
-    assert ("POST", logout_path) not in KORAIL_READ_ONLY_ROUTES
-    assert KORAIL_EXACT_REQUEST_FIELDS[logout_path] == frozenset()
-    assert_read_only_route("GET", logout_path)
-    assert_read_only_request_fields(logout_path, {})
+    assert ("POST", logout_path) in KORAIL_READ_ONLY_ROUTES
+    assert ("GET", logout_path) not in KORAIL_READ_ONLY_ROUTES
+    assert KORAIL_EXACT_REQUEST_FIELDS[logout_path] == frozenset(
+        {"Device", "Version", "Key", "timeStamp"}
+    )
+    assert_read_only_route("POST", logout_path)
+    assert_read_only_request_fields(
+        logout_path, {"Device": "AD", "Version": "v", "Key": "k", "timeStamp": 1}
+    )
     with pytest.raises(KorailProtocolError):
-        assert_read_only_route("POST", logout_path)
+        assert_read_only_route("GET", logout_path)
     with pytest.raises(KorailProtocolError, match="request fields"):
         assert_read_only_request_fields(logout_path, {"Device": "AD"})
 
@@ -532,13 +603,6 @@ def test_exact_unordered_cart_contract_keeps_mapping_transport_compatible():
 
 def test_registered_variant_routes_allow_only_their_ordered_sequences():
     registered = {
-        "/classes/com.korail.mobile.gift.gdLst.do": (
-            ("Device", "AD"),
-            ("Version", "1"),
-            ("Key", "K"),
-            ("qryDvCd", "F"),
-            ("qryVal", "E"),
-        ),
         "/classes/com.korail.mobile.research.cmtrInfo.do": (
             ("Device", "AD"),
             ("Version", "1"),
@@ -547,7 +611,6 @@ def test_registered_variant_routes_allow_only_their_ordered_sequences():
             ("cmtrKndCd", "C"),
             ("psgCnt", "1"),
             ("cmtrUtlAgeCd", "A"),
-            ("psgPrnb", "1"),
         ),
         "/classes/com.korail.mobile.trn.prcFare.do": (
             ("Device", "AD"),
@@ -555,6 +618,7 @@ def test_registered_variant_routes_allow_only_their_ordered_sequences():
             ("Key", "K"),
             ("txtMenuId", "11"),
             ("chtnDvCd", "1"),
+            ("trnCnt", "1"),
             ("dptRsStnCd", "D"),
             ("arvRsStnCd", "A"),
             ("runDt", "20990101"),
@@ -627,12 +691,58 @@ def test_maas_menu_route_rejects_non_generic_form_fields_before_io(
             {
                 "Device": "AD",
                 "Version": "250601003",
+                "timeStamp": "1",
                 extra_field: "blocked-value",
             },
             include_common=False,
         )
 
     assert called is False
+
+
+def test_maas_ticket_menu_accepts_pnr_and_repeated_ticket_return_numbers():
+    captured = {}
+    path = "/classes/com.korail.mobile.copt.gdMenuLt.do"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["request"] = request
+        return httpx.Response(
+            200, json={"h_msg_cd": "S000", "h_msg_txt": "OK", "strResult": "SUCC"}
+        )
+
+    client = KorailHttpClient(
+        KorailConfig(), transport=httpx.MockTransport(handler)
+    )
+    client.post_form(
+        path,
+        (
+            ("Device", "AD"),
+            ("Version", "250601003"),
+            ("Key", "synthetic-key"),
+            ("pnrNo", "synthetic-pnr"),
+            ("tkRetNo", "synthetic-one"),
+            ("tkRetNo", "synthetic-two"),
+            ("addSrvReqNo", "synthetic-request"),
+        ),
+        include_common=False,
+    )
+    fields = parse_qs(captured["request"].content.decode())
+    assert fields["pnrNo"] == ["synthetic-pnr"]
+    assert fields["tkRetNo"] == ["synthetic-one", "synthetic-two"]
+
+
+def test_maas_ticket_menu_rejects_pnr_without_ticket_return_number():
+    path = "/classes/com.korail.mobile.copt.gdMenuLt.do"
+    with pytest.raises(KorailProtocolError, match="request fields"):
+        assert_read_only_request_fields(
+            path,
+            (
+                ("Device", "AD"),
+                ("Version", "1"),
+                ("Key", "k"),
+                ("pnrNo", "p"),
+            ),
+        )
 
 
 @pytest.mark.parametrize(
@@ -661,7 +771,7 @@ def test_maas_menu_route_requires_exact_generic_form_fields(form):
     assert called is False
 
 
-def test_post_form_can_accept_one_envelope_free_object_without_weakening_default():
+def test_post_form_accepts_a_common_out_object_with_omitted_envelope_fields():
     calls = 0
     captured: list[httpx.Request] = []
 
@@ -685,12 +795,12 @@ def test_post_form_can_accept_one_envelope_free_object_without_weakening_default
     )
     assert relaxed.raw == {"stns": {"stn": []}}
     assert captured[0].content == b"addSrvDvCd=M10"
-    with pytest.raises(KorailProtocolError, match="envelope"):
-        client.post_form(
-            "/ebizmaas/EbizMaasStationList.do",
-            {"addSrvDvCd": "M10"},
-            include_common=False,
-        )
+    default = client.post_form(
+        "/ebizmaas/EbizMaasStationList.do",
+        {"addSrvDvCd": "M10"},
+        include_common=False,
+    )
+    assert default.raw == relaxed.raw
 
 
 def test_relaxed_post_still_raises_for_a_session_expiry_envelope():
@@ -720,7 +830,7 @@ def test_relaxed_post_still_raises_for_a_session_expiry_envelope():
 @pytest.mark.parametrize(
     ("method", "path"),
     [
-        ("POST", "/ebizcross/getUUID.do"),
+        ("GET", "/ebizcross/getUUID.do"),
         ("GET", "/ebizmaas/EbizMaasStationList.do"),
         ("GET", "/ebizcross/%67etUUID.do"),
         ("POST", "/ebizmaas/EbizMaasStationList.do/extra"),
@@ -764,8 +874,8 @@ def test_uuid_maas_routes_never_generate_dynapath(method, path):
         ),
         transport=httpx.MockTransport(handler),
     )
-    if method == "GET":
-        client.get_json(path)
+    if path == "/ebizcross/getUUID.do":
+        client.post_form(path, include_common=False, form_encoded=False)
     else:
         client.post_form(path, {"addSrvDvCd": "M10"}, include_common=False)
     assert provider_called is False
@@ -774,7 +884,7 @@ def test_uuid_maas_routes_never_generate_dynapath(method, path):
 @pytest.mark.parametrize(
     ("method", "path"),
     [
-        ("POST", "/file/CACHE/prdMobilePlusMain.cache"),
+        ("GET", "/file/CACHE/prdMobilePlusMain.cache"),
         ("POST", "/file/CACHE/prdMobilePlusNotice.cache"),
         ("GET", "https://evil.example/file/CACHE/prdMobilePlusMain.cache"),
         ("GET", "/file/CACHE/%70rdMobilePlusMain.cache"),
@@ -810,14 +920,8 @@ def test_cache_route_bypasses_are_rejected_before_transport(method, path):
     assert called is False
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/file/CACHE/prdMobilePlusMain.cache",
-        "/file/CACHE/prdMobilePlusNotice.cache",
-    ],
-)
-def test_cache_routes_never_generate_a_dynapath_token(path):
+def test_cache_routes_never_generate_a_dynapath_token():
+    path = "/file/CACHE/prdMobilePlusMain.cache"
     provider_called = False
 
     def token_provider(_context):
@@ -845,7 +949,7 @@ def test_cache_routes_never_generate_a_dynapath_token(path):
         ),
         transport=httpx.MockTransport(handler),
     )
-    client.get_json(path, {"timeStamp": "1"})
+    client.post_form(path, {"timeStamp": "1"}, include_common=False)
     assert provider_called is False
     assert path not in DYNAPATH_ALLOWLIST_PATHS
 

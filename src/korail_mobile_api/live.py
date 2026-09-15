@@ -204,7 +204,10 @@ def run_live_smoke_from_env() -> dict[str, Any]:
         stations = (station_data.raw.get("stns") or {}).get("stn")
         return {
             "appDataLoaded": bool(app_data.raw),
-            "noticeLoaded": bool(notice.raw),
+            "noticeLoaded": bool(
+                notice.board_id or notice.post_sequence or notice.post_title
+                or notice.post_content
+            ),
             "uuidLoaded": bool(uuid.verification_code),
             "maasMenuCount": len(maas_menu.items),
             "maasStationTested": maas_stations is not None,

@@ -82,6 +82,7 @@ CAR_FIELDS = frozenset(
         "txtPsrmClCd",
         "txtRunDt",
         "txtDptDt",
+        "txtDptTm",
         "txtTrnClsfCd",
         "txtTrnNo",
         "txtDptRsStnCd",
@@ -146,6 +147,7 @@ def complete_train() -> TrainSummary:
         departure_station_code="0001",
         arrival_station_code="0020",
         departure_date="20260714",
+        departure_time="060000",
         run_date="20260714",
         train_class_code="00",
         departure_run_order="000001",
@@ -588,10 +590,8 @@ def test_car_parser_rejects_negative_counts_and_duplicate_car_numbers(
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda raw: raw.pop("seatList"),
         lambda raw: raw.__setitem__("seatList", {}),
         lambda raw: raw["seatList"].__setitem__(0, []),
-        lambda raw: raw.pop("windowList"),
         lambda raw: raw.__setitem__("windowList", {}),
         lambda raw: raw["windowList"].__setitem__(0, []),
     ],
@@ -604,6 +604,17 @@ def test_seat_parser_rejects_malformed_containers(
     mutation(raw)
     with pytest.raises(KorailProtocolError):
         _parse_seat(raw)
+
+
+def test_seat_parser_defaults_apk_optional_arrays_and_counts(load_json_fixture):
+    raw = load_json_fixture("seat_inventory_success.json")
+    for key in ("seatList", "windowList", "seat_remain_count", "seat_total_count"):
+        raw.pop(key)
+    parsed = _parse_seat(raw)
+    assert parsed.seats == ()
+    assert parsed.windows == ()
+    assert parsed.remaining_count is None
+    assert parsed.total_count is None
 
 
 @pytest.mark.parametrize(
@@ -750,7 +761,7 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
     # omits both the seat-att @Field (RV3-05) and the txtGdNo @Field (RV4-01);
     # psrmClCd defaults to general "1".
     assert set(car) == CAR_FIELDS - {"txtSeatAttCd", "txtGdNo"}
-    assert len(car) == 16
+    assert len(car) == 17
     assert "sidTest" not in car
     assert "txtSeatAttCd" not in car
     assert "txtGdNo" not in car
@@ -763,6 +774,7 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
         "txtPsrmClCd": "1",
         "txtRunDt": "20260714",
         "txtDptDt": "20260714",
+        "txtDptTm": "060000",
         "txtTrnClsfCd": "00",
         "txtTrnNo": "00123",
         "txtDptRsStnCd": "0001",
@@ -1016,7 +1028,7 @@ def test_inventory_validation_rejects_missing_non_ascii_and_malformed_train_fiel
 
 
 def test_safety_registers_only_the_two_exact_new_post_contracts():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert ("POST", CAR_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", SEAT_PATH) in KORAIL_READ_ONLY_ROUTES
     assert KORAIL_EXACT_REQUEST_FIELDS[CAR_PATH] == CAR_FIELDS
@@ -1230,6 +1242,7 @@ def test_inventory_methods_have_exact_public_signatures_and_hints():
         "train",
         "passenger_count",
         "room_class_code",
+        "seat_attribute_code",
     ]
     assert list(seats_signature.parameters) == [
         "self",
@@ -1260,6 +1273,7 @@ def test_inventory_methods_have_exact_public_signatures_and_hints():
         "train": TrainSummary,
         "passenger_count": int,
         "room_class_code": str,
+        "seat_attribute_code": str | None,
         "return": SeatCarListResponse,
     }
     assert seat_hints == {

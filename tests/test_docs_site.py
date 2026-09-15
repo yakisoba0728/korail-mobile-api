@@ -51,7 +51,7 @@ def test_every_reexporting_module_has_a_reference_page() -> None:
 
 
 def test_the_navigation_lists_exactly_those_pages() -> None:
-    navigated = set(re.findall(r"reference/([a-z_]+)\.md", MKDOCS)) - {"index"}
+    navigated = set(re.findall(r"reference/([a-z0-9_]+)\.md", MKDOCS)) - {"index"}
     assert navigated == _reexported_submodules()
 
     # 차례에 있는 쪽이 exclude_docs 로 빠져 있으면 mkdocs 가 조용히 뺀다.
@@ -75,7 +75,7 @@ def test_the_exclusion_only_covers_markdown() -> None:
 
 def test_the_reference_index_links_every_module_page() -> None:
     index = (REFERENCE_DIR / "index.md").read_text(encoding="utf-8")
-    linked = set(re.findall(r"\]\(([a-z_]+)\.md\)", index))
+    linked = set(re.findall(r"\]\(([a-z0-9_]+)\.md\)", index))
     assert linked == _reexported_submodules()
 
 

@@ -1,3 +1,5 @@
+from urllib.parse import parse_qsl
+
 import httpx
 import pytest
 
@@ -71,10 +73,11 @@ def test_maas_menu_parser_rejects_malformed_known_structure(menu_list):
 def test_maas_menu_form_matches_generic_app_request():
     config = KorailConfig()
 
-    assert payloads.build_maas_menu_form(config) == {
-        "Device": config.device,
-        "Version": config.version,
-    }
+    form = payloads.build_maas_menu_form(config)
+    assert set(form) == {"Device", "Version", "timeStamp"}
+    assert form["Device"] == config.device
+    assert form["Version"] == config.version
+    assert form["timeStamp"].isdigit()
 
 
 def test_uuid_parser_returns_repr_safe_typed_code(load_json_fixture):
@@ -185,7 +188,7 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     assert uuid.verification_code == "fixture-verification-code"
     assert menu.items[0].additional_service_code == "fixture-station-service"
     assert len(stations.stations) == 2
-    assert captured[0].method == "GET"
+    assert captured[0].method == "POST"
     assert captured[0].url.scheme == "https"
     assert captured[0].url.host == "smart.letskorail.com"
     assert captured[0].url.path == "/ebizcross/getUUID.do"
@@ -195,9 +198,10 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     assert captured[1].url.host == "smart.letskorail.com"
     assert captured[1].url.path == "/classes/com.korail.mobile.copt.gdMenuLt.do"
     assert captured[1].url.query == b""
-    assert captured[1].content == (
-        f"Device={client.config.device}&Version={client.config.version}".encode()
-    )
+    menu_form = dict(parse_qsl(captured[1].content.decode()))
+    assert set(menu_form) == {"Device", "Version", "timeStamp"}
+    assert menu_form["Device"] == client.config.device
+    assert menu_form["Version"] == client.config.version
     assert b"Key=" not in captured[1].content
     assert captured[2].method == "POST"
     assert captured[2].url.scheme == "https"
@@ -207,15 +211,14 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     assert captured[2].content == b"addSrvDvCd=M10"
 
 
-def test_client_maas_menu_requires_complete_common_envelope():
+def test_client_maas_menu_accepts_omitted_common_out_fields():
     client = KorailClient(
         transport=httpx.MockTransport(
             lambda _: httpx.Response(200, json={"menuList": []})
         )
     )
     try:
-        with pytest.raises(KorailProtocolError, match="envelope"):
-            client.get_maas_menu_list()
+        assert client.get_maas_menu_list().items == ()
     finally:
         client.close()
 
@@ -261,7 +264,7 @@ def test_client_maas_menu_never_uses_dynapath_when_custom_allowlisted(
 @pytest.mark.parametrize(
     ("method", "path", "fixture_name"),
     [
-        ("GET", "/ebizcross/getUUID.do", "uuid_success.json"),
+            ("POST", "/ebizcross/getUUID.do", "uuid_success.json"),
         (
             "POST",
             "/ebizmaas/EbizMaasStationList.do",
@@ -297,7 +300,7 @@ def test_client_uuid_maas_never_use_dynapath_when_custom_allowlisted(
         transport=httpx.MockTransport(handler),
     )
     try:
-        if method == "GET":
+        if path == "/ebizcross/getUUID.do":
             client.get_uuid()
         else:
             client.get_maas_station_data("M10")
@@ -352,7 +355,7 @@ def test_client_uuid_accepts_live_evidenced_partial_common_envelope():
     assert result.raw["strResult"] == "SUCC"
     assert "fixture-partial-code" not in repr(result)
     assert len(captured) == 1
-    assert captured[0].method == "GET"
+    assert captured[0].method == "POST"
     assert captured[0].url.path == "/ebizcross/getUUID.do"
     assert captured[0].url.query == b""
 

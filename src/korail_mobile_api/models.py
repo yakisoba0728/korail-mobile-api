@@ -67,28 +67,19 @@ class BaseKorailResponse:
     def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
         """봉투 세 필드를 검증하며 응답을 만듭니다.
 
-        ``h_msg_cd``/``h_msg_txt``/``strResult`` 중 하나라도 없거나
-        문자열도 ``null`` 도 아니면
+        ``h_msg_cd``/``h_msg_txt``/``strResult`` 값이 존재할 때 문자열도
+        ``null`` 도 아니면
         :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 값이
         무엇인지는 보지 않습니다 — 실패 판정은 호출자 몫입니다.
         """
         if not isinstance(raw, dict):
             raise KorailProtocolError("KORAIL response must be a JSON object")
         envelope_fields = ("h_msg_cd", "h_msg_txt", "strResult")
-        missing = [
-            field_name
-            for field_name in envelope_fields
-            if field_name not in raw
-        ]
-        if missing:
-            raise KorailProtocolError(
-                "KORAIL response missing required envelope fields: "
-                + ", ".join(missing)
-            )
         invalid = [
             field_name
             for field_name in envelope_fields
-            if raw[field_name] is not None
+            if field_name in raw
+            and raw[field_name] is not None
             and not isinstance(raw[field_name], str)
         ]
         if invalid:
@@ -117,6 +108,7 @@ class AppDataResponse(BaseKorailResponse):
     airport_bus_msg: str | None = None
     railplus_cardinfo: str | None = None
     version: AppVersionInfo | None = None
+    notice: "NoticeResponse | None" = None
 
 
 @dataclass(frozen=True)
@@ -124,6 +116,7 @@ class NoticeResponse(BaseKorailResponse):
     board_id: str | None = None
     post_sequence: str | None = None
     post_title: str | None = None
+    post_content: str | None = None
 
 
 @dataclass(frozen=True)
@@ -339,6 +332,10 @@ class TrainSearchQuery:
     ``ebizCrossCheck``/``srtCheckYn`` 한 쌍을 ``"Y"`` 로 만듭니다 — 앱은 이
     둘을 항상 같은 값으로 보냅니다.
 
+    7.0.6 ``ScheduleViewSpecial`` 에서는 환승역 코드 목록과 후속 열차군
+    코드를 지정할 수 있습니다. 정렬별 ``qryDvCd`` 값은 APK에서 보호되므로
+    ``query_division_code`` 는 전선 코드를 알고 있을 때 직접 지정합니다.
+
     :meth:`~korail_mobile_api.client.KorailClient.search_trains` 와
     :meth:`~korail_mobile_api.client.KorailClient.search_transfer_trains` 가
     같은 질의 객체를 받습니다.
@@ -351,6 +348,17 @@ class TrainSearchQuery:
     passengers: int = 1
     train_group_code: str = "109"
     include_srt: bool = False
+    child_passengers: int = 0
+    senior_passengers: int = 0
+    high_disability_passengers: int = 0
+    low_disability_passengers: int = 0
+    seat_attribute_code: str = "015"
+    #: 7.0.6 TrainScheduleIn의 환승역 목록. 코드가 공개된 역만 지정합니다.
+    connection_station_codes: tuple[str, ...] = ()
+    #: 7.0.6 화면은 선택한 후속 열차군 하나를 목록으로 전송합니다.
+    connection_train_group_code: str | None = None
+    #: APK의 정렬 선택별 값은 보호되어 있으므로 전선 코드를 직접 지정합니다.
+    query_division_code: str = "1"
 
 
 def _train_scalar(value: Any, key: str) -> str | None:
@@ -501,6 +509,8 @@ class TrainSummary:
     #: :data:`~korail_mobile_api.constants.KORAIL_MERGE_SEAT_FLAGS_BY_CABIN`
     #: 참조.
     merge_seat_application_flag: str | None = field(default=None, repr=False)
+    #: 7.0.6 h_trn_sps_flg: 운휴 표시/예약 게이트용 원표 플래그.
+    train_suspension_flag: str | None = field(default=None, repr=False)
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -657,6 +667,10 @@ class TrainSummary:
                 raw,
                 "h_yms_apl_flg",
             ),
+            train_suspension_flag=_train_optional_string(
+                raw,
+                "h_trn_sps_flg",
+            ),
             raw=raw,
         )
 
@@ -744,8 +758,9 @@ class SeatInventoryResponse(BaseKorailResponse):
     h_msg_txt: str | None = field(default=None, repr=False)
     layout_type: int = 0
     arrangement_code: str = ""
-    remaining_count: int = 0
-    total_count: int = 0
+    #: 7.0.6 TResidualSeatsResearchOut DTO에는 이 두 건수 키가 없습니다.
+    remaining_count: int | None = None
+    total_count: int | None = None
     seats: tuple[PhysicalSeat, ...] = ()
     windows: tuple[SeatWindow, ...] = ()
     vr_banner_url: str | None = field(default=None, repr=False)
@@ -761,12 +776,12 @@ class TrainSearchMetadata:
     직접 읽을 일은 거의 없습니다. 다음 페이지는
     :meth:`TrainSearchResult.next_page` 가 이 값들로 만들어 줍니다.
 
-    ``menu_id`` 는 없습니다. ScheduleView 응답에 ``h_menu_id`` 가 없기
-    때문입니다 — 앱의 ``txtMenuId`` 는 클라이언트 쪽 상수
-    (``a5/k.java:92-94`` 의 ``"11"``)이고 서버 값이 아닙니다.
+    7.0.6 ``TrainScheduleOut`` 는 ``h_menu_id`` 를 선언합니다. 요청의
+    ``txtMenuId`` 와 별도로 서버가 되돌려 준 값을 보존합니다.
     """
 
     job_id: str | None = field(default=None, repr=False)
+    menu_id: str | None = field(default=None, repr=False)
     product_no: str | None = field(default=None, repr=False)
     next_page_flag: str | None = None
     next_query_station_no: str | None = field(default=None, repr=False)
@@ -782,11 +797,8 @@ class TrainSearchMetadata:
     #: ``h_notice_msg`` — 서버가 검색 결과에 붙이는 안내 문구
     #: (``RsvInquiryResponse.java:12``).
     notice_message: str | None = None
-    # 아래 네 필드는 APK 근거가 없다. strJobId / h_seat_cnt_first /
-    # h_seat_cnt_second / txtGoHour_first 는 analysis/ 전체에서 0건이고,
-    # RsvInquiryResponse.java:8-17 이 선언하는 아홉 개 최상위 필드에도 없다.
-    # 공개 속성을 지우면 호출자가 깨지므로 남겨 둘 뿐이니, 실제 서버에서는
-    # None 을 예상하라. 같은 이유로 h_menu_id 는 이 모델에서 제외돼 있다.
+    # 7.0.6 TrainScheduleOut은 세 필드를 모두 선언한다. 이전
+    # RsvInquiryResponse 분석에 근거한 주석을 더 이상 적용하지 않는다.
     first_seat_count: str | None = None
     second_seat_count: str | None = None
     first_departure_time: str | None = field(default=None, repr=False)

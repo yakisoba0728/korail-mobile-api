@@ -53,6 +53,7 @@ from .mutation_models import (
     PriceRecalculationRequest,
     PriceRecalculationRow,
     ReservationHoldResponse,
+    StationRefundExecutionRequest,
 )
 from .read_models import TrainScheduleItem
 
@@ -91,12 +92,9 @@ def _common_fields(config: KorailConfig) -> dict[str, str]:
     }
 
 
-# The eight passenger rows the app's reservation request ALWAYS carries, in the
-# order w4/a.java:49-73 writes them into OPsg. OPsg is a LinkedHashMap
-# (OPsg.java:6) whose keys are "txtCompaCnt"/"txtPsgTpCd"/"txtDiscKndCd" plus the
-# row number (OPsg.java:8-10, 17-27), so the build order below IS the wire order.
-# Only the count varies with the mix; the type and discount codes are fixed per
-# row, which is why a row that carries nobody still goes out as "0".
+# Passenger types are ordered here, but only positive counts are assigned
+# consecutive wire indices. Passengers.toTicketReservationInput filters zero
+# entries before indexing (7.0.6 Passengers.java:743-752).
 _PASSENGER_ROWS: tuple[tuple[str, str, str], ...] = (
     ("adult", "1", "000"),  # 어른
     ("teenager", "1", "P11"),  # 청소년
@@ -107,6 +105,38 @@ _PASSENGER_ROWS: tuple[tuple[str, str, str], ...] = (
     ("mild_disability", "1", "112"),  # 4~6급 장애
     ("guide_dog", "1", "173"),  # 안내견
 )
+
+
+def _add_passenger_rows(
+    form: dict[str, str], passengers: KorailPassengerCounts
+) -> None:
+    index = 0
+    for attribute, passenger_type, discount_code in _PASSENGER_ROWS:
+        count = getattr(passengers, attribute)
+        if count == 0:
+            continue
+        index += 1
+        form[f"txtCompaCnt{index}"] = str(count)
+        form[f"txtPsgTpCd{index}"] = passenger_type
+        form[f"txtDiscKndCd{index}"] = discount_code
+
+
+def _seat_attribute_code(
+    train: TrainSummary, selected_code: str | None = None
+) -> str:
+    # 7.0.6 TrainScheduleViewModel.java:2914-2930,2982-2999: explicit
+    # wheelchair/seat-type selection wins; otherwise the row's hSeatAttCd is
+    # used when present, falling back to the basic selection code.
+    candidate = (
+        selected_code
+        if selected_code is not None
+        else train.seat_attribute_code or "015"
+    )
+    return _required_pattern(
+        candidate,
+        field="seat_attribute_code",
+        pattern=re.compile(r"[0-9]{3}"),
+    )
 
 
 def _validated_seat_assignments(
@@ -163,6 +193,7 @@ def build_reservation_form(
     seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
     job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
     seats: Sequence[KorailSeatAssignment] | None = None,
+    seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
     """승객 구성과 좌석 등급으로 예약(홀드) 폼을 만듭니다.
 
@@ -177,6 +208,7 @@ def build_reservation_form(
         seat_classes=(seat_class,),
         job_type=job_type,
         leg_seats=None if seats is None else (seats,),
+        seat_attribute_codes=(seat_attribute_code,),
     )
 
 
@@ -190,6 +222,7 @@ def build_transfer_reservation_form(
     ),
     job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
     seats: Sequence[Sequence[KorailSeatAssignment]] | None = None,
+    seat_attribute_codes: Sequence[str | None] | None = None,
 ) -> dict[str, str]:
     """환승 여정의 예약(홀드) 폼을 만듭니다 — 두 구간, PNR 하나.
 
@@ -205,6 +238,7 @@ def build_transfer_reservation_form(
         job_type=job_type,
         leg_seats=seats,
         require_legs=KORAIL_MAX_JOURNEY_LEGS,
+        seat_attribute_codes=seat_attribute_codes,
     )
 
 
@@ -215,6 +249,7 @@ def build_merge_reservation_form(
     *,
     passengers: KorailPassengerCounts | None = None,
     seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
+    seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
     """병합예약의 **두 번째** 홀드 폼을 만듭니다 — 열차 하나, 여정 둘.
 
@@ -290,13 +325,7 @@ def build_merge_reservation_form(
             "txtTotPsgCnt": str(passengers.total),
         }
     )
-    for index, (attribute, passenger_type, discount_code) in enumerate(
-        _PASSENGER_ROWS,
-        start=1,
-    ):
-        form[f"txtCompaCnt{index}"] = str(getattr(passengers, attribute))
-        form[f"txtPsgTpCd{index}"] = passenger_type
-        form[f"txtDiscKndCd{index}"] = discount_code
+    _add_passenger_rows(form, passengers)
     # OSeat. The merge loop re-puts journey 1's pair and appends journey 2's,
     # into the LinkedHashMap the standing hold left behind, so the order is the
     # ordinary two-leg order -- see build_transfer_reservation_form.
@@ -305,12 +334,16 @@ def build_merge_reservation_form(
             "txtSeatAttCd1": "000",
             "txtSeatAttCd2": "000",
             "txtSeatAttCd3": "000",
-            _seat_attribute_key(1): "015",
+            _seat_attribute_key(1): _seat_attribute_code(
+                standing_hold_train, seat_attribute_code
+            ),
             "txtSeatAttCd5": "000",
             "txtPsrmClCd1": cabin.value,
         }
     )
-    form[_seat_attribute_key(2)] = "015"
+    form[_seat_attribute_key(2)] = _seat_attribute_code(
+        standing_hold_train, seat_attribute_code
+    )
     # Copied, not read per leg (smali:5919-5983).
     form["txtPsrmClCd2"] = cabin.value
     form["txtJrnyCnt"] = KORAIL_TRANSFER_ITINERARY_CODE
@@ -331,15 +364,6 @@ def build_merge_reservation_form(
         form[f"txtRunDt{journey}"] = fields["run_date"]
         form[f"txtDptDt{journey}"] = fields["departure_date"]
         form[f"txtDptTm{journey}"] = fields["departure_time"]
-        if journey == 1:
-            # The standing hold's own arvTm_1, kept because the merge loop
-            # never overwrites it. It is the arrival time of the WHOLE route,
-            # not of this half.
-            form["arvTm_1"] = _required_pattern(
-                standing_hold_train.arrival_time,
-                field="arrival_time",
-                pattern=_TIME_RE,
-            )
         form[f"txtDptRsStnCd{journey}"] = fields["departure_station_code"]
         form[f"txtDptStnConsOrdr{journey}"] = fields[
             "departure_construction_order"
@@ -592,6 +616,7 @@ def _build_journey_reservation_form(
     job_type: KorailReservationJobType,
     leg_seats: Sequence[Sequence[KorailSeatAssignment]] | None,
     require_legs: int | None = None,
+    seat_attribute_codes: Sequence[str | None] | None = None,
 ) -> dict[str, str]:
     """공개 예약 폼 둘 뒤에 있는 단 하나의 빌더.
 
@@ -600,6 +625,20 @@ def _build_journey_reservation_form(
     호출은 키 순서까지 단일 구간 폼과 동일한 바이트를 냅니다.
     """
     resolved_legs = _validated_legs(legs, require=require_legs)
+    if seat_attribute_codes is None:
+        selected_attributes: tuple[str | None, ...] = (None,) * len(resolved_legs)
+    else:
+        selected_attributes = tuple(seat_attribute_codes)
+        if len(selected_attributes) != len(resolved_legs):
+            raise KorailProtocolError(
+                "KORAIL reservation requires one selected seat attribute per leg"
+            )
+    resolved_attributes = tuple(
+        _seat_attribute_code(train, selected)
+        for train, selected in zip(
+            resolved_legs, selected_attributes, strict=True
+        )
+    )
     if passengers is None:
         passengers = KorailPassengerCounts()
     elif type(passengers) is not KorailPassengerCounts:
@@ -694,13 +733,7 @@ def _build_journey_reservation_form(
             "txtTotPsgCnt": str(passengers.total),
         }
     )
-    for index, (attribute, passenger_type, discount_code) in enumerate(
-        _PASSENGER_ROWS,
-        start=1,
-    ):
-        form[f"txtCompaCnt{index}"] = str(getattr(passengers, attribute))
-        form[f"txtPsgTpCd{index}"] = passenger_type
-        form[f"txtDiscKndCd{index}"] = discount_code
+    _add_passenger_rows(form, passengers)
     # OSeat, in w4/a.java:82-91's insertion order. The five txtSeatAttCd* keys
     # and txtPsrmClCd1 are written once on the booking-options screen; C5/a.java
     # :84-97 then re-puts journey 1's two and appends journey 2's. Because
@@ -713,7 +746,7 @@ def _build_journey_reservation_form(
             "txtSeatAttCd1": "000",
             "txtSeatAttCd2": "000",
             "txtSeatAttCd3": "000",
-            _seat_attribute_key(1): "015",
+            _seat_attribute_key(1): resolved_attributes[0],
             "txtSeatAttCd5": "000",
             # OSeat.PSRM_CL_CD + journey number (OSeat.java:8,16-18), set from
             # the user's chosen tab: c5/b.java:72 passes
@@ -723,14 +756,12 @@ def _build_journey_reservation_form(
     )
     for journey, seat_class in enumerate(resolved_classes[1:], start=2):
         # C5/a.java:88-97 for the second leg. txtSeatAttCd4_1 carries the same
-        # search-request seat attribute leg 1 does: C5/a.java:90's t2() is
-        # b5/c.java:453-455, the ScheduleView request's txtSeatAttCd_4, which
-        # this package always sends as "015" (K4/p.DEFAULT).
-        form[_seat_attribute_key(journey)] = "015"
+        # 7.0.6 uses each selected row's hSeatAttCd, with seat-type fallback.
+        form[_seat_attribute_key(journey)] = resolved_attributes[journey - 1]
         form[f"txtPsrmClCd{journey}"] = seat_class.value
     # OJrny (OJrny.java:6-27), a LinkedHashMap in C5/a.java:54-76's write order:
-    # the count once, then the sixteen per-leg keys for journey 1, then the same
-    # sixteen for journey 2.
+    # the count once, then the 7.0.6 DTO per-leg keys for journey 1, then
+    # the same keys for journey 2 (without arvTm_).
     form["txtJrnyCnt"] = (
         KORAIL_DIRECT_ITINERARY_CODE
         if len(resolved_legs) == 1
@@ -754,8 +785,6 @@ def _build_journey_reservation_form(
         form[f"txtRunDt{journey}"] = fields["run_date"]
         form[f"txtDptDt{journey}"] = fields["departure_date"]
         form[f"txtDptTm{journey}"] = fields["departure_time"]
-        # OJrny.ARV_TM is "arvTm_", not "txtArvTm" (OJrny.java:12, 40-42).
-        form[f"arvTm_{journey}"] = fields["arrival_time"]
         form[f"txtDptRsStnCd{journey}"] = fields["departure_station_code"]
         form[f"txtDptStnConsOrdr{journey}"] = fields[
             "departure_construction_order"
@@ -880,7 +909,7 @@ def _merge_ineligible_message(
 
 
 def _journey_fields(train: TrainSummary) -> dict[str, str]:
-    """구간 하나가 싣는 ``OJrny`` 값 열여섯 개. 전부 모양을 검사합니다."""
+    """구간 하나가 싣는 7.0.6 TicketReservationInJrny 값들을 검사합니다."""
     return {
         "train_no": _required_digits(train.train_no, field="train_no"),
         "train_group_code": _required_digits(
@@ -904,11 +933,6 @@ def _journey_fields(train: TrainSummary) -> dict[str, str]:
         "departure_time": _required_pattern(
             train.departure_time,
             field="departure_time",
-            pattern=_TIME_RE,
-        ),
-        "arrival_time": _required_pattern(
-            train.arrival_time,
-            field="arrival_time",
             pattern=_TIME_RE,
         ),
         "departure_station_code": _required_digits(
@@ -991,9 +1015,8 @@ def build_single_adult_reservation_form(
 # The app concatenates three phone-number fields, capped at 3 + 4 + 4 digits
 # (res/values/integers.xml:34-35, phone_number_max_length_3 and
 # phone_number_max_length, applied in ReservationWaitActivity.java:88-89), and
-# refuses the dialog when the concatenation is shorter than 10
-# (ReservationWaitActivity.java:220-224). So 10 or 11 digits, nothing else.
-_STANDBY_PHONE_RE = re.compile(r"[0-9]{10,11}")
+# 7.0.6 ReservationWaitViewModel checks the combined length equals 11.
+_STANDBY_PHONE_RE = re.compile(r"[0-9]{11}")
 
 
 def build_standby_wait_form(
@@ -1033,7 +1056,7 @@ def build_standby_wait_form(
             _STANDBY_PHONE_RE.fullmatch(phone_no) is None
         ):
             raise KorailProtocolError(
-                "KORAIL standby SMS notification requires a 10- or 11-digit "
+                "KORAIL standby SMS notification requires an 11-digit "
                 "phone number"
             )
     elif phone_no is not None:
@@ -1078,13 +1101,15 @@ def build_unpaid_reservation_cancel_form(
     # transfer reservation with no way to release it -- the orphaned hold this
     # whole subsystem exists to prevent.
     journey_count = response.journey_count
+    pnr_no = response.pnr_no
     legs = None
     if isinstance(journey_count, str) and journey_count.strip().isdigit():
         legs = int(journey_count)
     if (
         response.str_result != "SUCC"
-        or not isinstance(response.pnr_no, str)
-        or not response.pnr_no.strip()
+        or not isinstance(pnr_no, str)
+        or not pnr_no.strip()
+        or not isinstance(journey_count, str)
         or legs is None
         or legs < 1
     ):
@@ -1094,9 +1119,9 @@ def build_unpaid_reservation_cancel_form(
     form = _common_fields(config)
     form.update(
         {
-            "txtPnrNo": response.pnr_no,
+            "txtPnrNo": pnr_no,
             "txtJrnySqno": "0001",
-            "txtJrnyCnt": str(legs),
+            "txtJrnyCnt": journey_count,
             # A literal "000" here, NOT the hold's h_rsv_chg_no -- deliberately
             # unlike build_card_payment_form below. Every app flow that cancels
             # a just-created hold from its ReservationResponse hardcodes it,
@@ -1291,20 +1316,63 @@ def build_refund_form(
             "h_orgtk_sale_sqno": ticket.sale_sequence,
             "h_orgtk_ret_pwd": ticket.return_password,
             "h_mlg_stl": "Y" if settle_mileage else "N",
-            "tk_ret_tms_dv_cd": _refund_echo_field(
-                return_times_division_code,
-                default="21",
-                field="return_times_division_code",
-            ),
-            "trnNo": ticket.train_no,
             "pbpAcepTgtFlg": _refund_echo_field(
-                pbp_acceptance_target_flag,
+                (
+                    pbp_acceptance_target_flag
+                    if pbp_acceptance_target_flag is not None
+                    else ticket.pbp_acceptance_target_flag
+                ),
                 default="N",
                 field="pbp_acceptance_target_flag",
             ),
-            "latitude": "",
-            "longitude": "",
         }
+    )
+    if return_times_division_code is not None:
+        form["tk_ret_tms_dv_cd"] = _refund_echo_field(
+            return_times_division_code,
+            default="21",
+            field="return_times_division_code",
+        )
+    return form
+
+
+def build_station_refund_execution_form(
+    config: KorailConfig,
+    request: StationRefundExecutionRequest,
+) -> dict[str, str]:
+    """Build ``ExecuteOnlineRefundsIn`` from a verified station ticket.
+
+    The APK declares these twelve ``@SerialName`` keys in
+    ``ExecuteOnlineRefundsIn.java:60``. This function prepares a form only;
+    execution still requires explicit refund mutation consent.
+    """
+    if type(request) is not StationRefundExecutionRequest:
+        raise KorailProtocolError(
+            "KORAIL station refund requires an exact execution request"
+        )
+    fields = (
+        ("pnrNo", "pnr_no"),
+        ("ogtkSaleDt", "original_sale_date"),
+        ("ogtkSaleWctNo", "original_sale_window_no"),
+        ("ogtkSaleSqno", "original_sale_sequence"),
+        ("ogtkRetPwd", "original_return_password"),
+        ("retDvCd", "refund_division_code"),
+        ("retRsnCd", "refund_reason_code"),
+        ("tkKndCd", "ticket_kind_code"),
+        ("custTeln", "customer_phone"),
+        ("retAmt", "refund_amount"),
+        ("retFee", "refund_fee"),
+        ("acepCustNm", "customer_name"),
+    )
+    form = _common_fields(config)
+    form.update(
+        (
+            wire_name,
+            _required_mutation_text(
+                getattr(request, attribute), field=attribute
+            ),
+        )
+        for wire_name, attribute in fields
     )
     return form
 
@@ -1446,8 +1514,8 @@ def build_discount_card_extension_query(
     return query
 
 
-#: 보통의 홀드가 싣는 승객 행 키 접두사 여덟 개(``OPsg.java:8-10``).
-#: N카드 홀드는 이 전부를 한 행으로 대체합니다.
+#: 가능한 승객 행 키 접두사 최대 여덟 개. 일반 예약에서는 0명 행을
+#: 전송하지 않으며, N카드 홀드는 존재하는 행을 한 행으로 대체합니다.
 _PASSENGER_ROW_KEYS = frozenset(
     f"{prefix}{index}"
     for prefix in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd")

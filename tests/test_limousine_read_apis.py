@@ -493,14 +493,6 @@ def test_schedule_view_builder_rejects_invalid_sid(view_query, sid):
             build_limousine_seat_inventory_form,
             "get_limousine_seat_inventory",
         ),
-        (
-            "view_query",
-            _ViewQueryValidationBypass,
-            "menu_id",
-            "invalid-menu",
-            build_limousine_schedule_view_form,
-            "get_limousine_schedule_view",
-        ),
     ],
 )
 def test_query_subclass_cannot_bypass_builder_or_reach_transport(
@@ -520,11 +512,7 @@ def test_query_subclass_cannot_bypass_builder_or_reach_transport(
     }
     values[invalid_field] = invalid_value
     bypass_query = bypass_type(**values)
-    builder_kwargs = (
-        {"sid": "synthetic-fresh-sid"}
-        if method_name == "get_limousine_schedule_view"
-        else {}
-    )
+    builder_kwargs = {}
 
     with pytest.raises(TypeError, match=type(base_query).__name__):
         builder(KorailConfig(), bypass_query, **builder_kwargs)
@@ -801,12 +789,11 @@ def test_schedule_parsers_accept_statically_nullable_empty_containers(
     assert parse_limousine_schedule_view_response(_base(view_raw)).schedules == ()
 
 
-def test_safety_registers_only_the_three_exact_new_post_contracts():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+def test_safety_registers_only_the_two_current_post_contracts():
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     expected = {
         SCHEDULE_PATH: SCHEDULE_FIELDS,
         SEAT_PATH: SEAT_FIELDS,
-        VIEW_PATH: VIEW_FIELDS,
     }
     for path, request_fields in expected.items():
         assert ("POST", path) in KORAIL_READ_ONLY_ROUTES
@@ -816,6 +803,8 @@ def test_safety_registers_only_the_three_exact_new_post_contracts():
             path,
             {name: "" for name in request_fields},
         )
+    assert ("POST", VIEW_PATH) not in KORAIL_READ_ONLY_ROUTES
+    assert VIEW_PATH not in KORAIL_EXACT_REQUEST_FIELDS
 
 
 @pytest.mark.parametrize(
@@ -823,7 +812,6 @@ def test_safety_registers_only_the_three_exact_new_post_contracts():
     [
         (SCHEDULE_PATH, SCHEDULE_FIELDS),
         (SEAT_PATH, SEAT_FIELDS),
-        (VIEW_PATH, VIEW_FIELDS),
     ],
 )
 def test_limousine_safety_rejects_missing_and_extra_fields(
@@ -859,7 +847,6 @@ class _DuplicateFieldMapping(Mapping[str, str]):
     [
         (SCHEDULE_PATH, SCHEDULE_FIELDS),
         (SEAT_PATH, SEAT_FIELDS),
-        (VIEW_PATH, VIEW_FIELDS),
     ],
 )
 def test_limousine_safety_rejects_duplicate_prepared_fields(
@@ -878,9 +865,11 @@ def test_limousine_safety_rejects_duplicate_prepared_fields(
         ("GET", SCHEDULE_PATH),
         ("GET", SEAT_PATH),
         ("GET", VIEW_PATH),
+        ("POST", VIEW_PATH),
         ("POST", "/classes/com.korail.mobile.lmu.scdlQry"),
         ("POST", "/classes/com.korail.mobile.lms.TResidualSeatsResearch"),
-        ("POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"),
+        ("GET", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"),
+        ("POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial.do"),
         ("POST", "/classes/com.korail.mobile.certification.TicketReservation"),
         ("POST", "/classes/com.korail.mobile.reservation.seatAssign.do"),
         ("POST", "/classes/com.korail.mobile.reservation.ReservationPayment"),
@@ -903,10 +892,6 @@ def test_limousine_methods_have_closed_public_signatures_and_hints():
         "get_limousine_seat_inventory": (
             LimousineSeatInventoryQuery,
             LimousineSeatInventoryResponse,
-        ),
-        "get_limousine_schedule_view": (
-            LimousineScheduleViewQuery,
-            LimousineScheduleViewResponse,
         ),
     }
     for method_name, (query_type, response_type) in expected.items():
@@ -931,7 +916,6 @@ def test_limousine_methods_post_once_without_session_or_dynapath(
     payloads = {
         SCHEDULE_PATH: load_json_fixture("limousine_schedule_success.json"),
         SEAT_PATH: load_json_fixture("limousine_seat_inventory_success.json"),
-        VIEW_PATH: load_json_fixture("limousine_schedule_view_success.json"),
     }
 
     def fake_sid() -> str:
@@ -959,20 +943,17 @@ def test_limousine_methods_post_once_without_session_or_dynapath(
     try:
         schedules = client.get_limousine_schedules(schedule_query)
         seats = client.get_limousine_seat_inventory(seat_query)
-        view = client.get_limousine_schedule_view(view_query)
     finally:
         client.close()
 
     assert type(schedules) is LimousineScheduleResponse
     assert type(seats) is LimousineSeatInventoryResponse
-    assert type(view) is LimousineScheduleViewResponse
-    assert generated_sids == ["synthetic-client-sid"]
-    assert len(requests) == 3
-    assert [request.method for request in requests] == ["POST"] * 3
+    assert generated_sids == []
+    assert len(requests) == 2
+    assert [request.method for request in requests] == ["POST"] * 2
     assert [request.url.path for request in requests] == [
         SCHEDULE_PATH,
         SEAT_PATH,
-        VIEW_PATH,
     ]
     assert all(request.url.query == b"" for request in requests)
     prepared = [
@@ -982,14 +963,10 @@ def test_limousine_methods_post_once_without_session_or_dynapath(
     assert [set(form) for form in prepared] == [
         SCHEDULE_FIELDS,
         SEAT_FIELDS,
-        VIEW_FIELDS,
     ]
     assert prepared[0]["tmGpCd"] == ["777"]
     assert prepared[1]["trnClsfCd"] == ["77"]
     assert prepared[1]["srcarNo"] == ["0007"]
-    assert prepared[2]["txtMenuId"] == ["77"]
-    assert prepared[2]["selGoTrain"] == ["777"]
-    assert prepared[2]["Sid"] == ["synthetic-client-sid"]
     assert all(len(values) == 1 for form in prepared for values in form.values())
     assert token_contexts == []
     assert all("x-dynapath-m-token" not in request.headers for request in requests)
@@ -1000,7 +977,6 @@ def test_limousine_methods_post_once_without_session_or_dynapath(
     [
         "get_limousine_schedules",
         "get_limousine_seat_inventory",
-        "get_limousine_schedule_view",
     ],
 )
 def test_invalid_query_types_fail_before_sid_dynapath_or_transport(
@@ -1031,7 +1007,7 @@ def test_invalid_query_types_fail_before_sid_dynapath_or_transport(
         dynapath=DynapathConfig(
             enabled=True,
             token_provider=token_provider,
-            allowlist_paths=frozenset({SCHEDULE_PATH, SEAT_PATH, VIEW_PATH}),
+            allowlist_paths=frozenset({SCHEDULE_PATH, SEAT_PATH}),
         )
     )
     client = KorailClient(config, transport=httpx.MockTransport(handler))
@@ -1050,7 +1026,6 @@ def test_invalid_query_types_fail_before_sid_dynapath_or_transport(
     [
         ("get_limousine_schedules", "schedule_query"),
         ("get_limousine_seat_inventory", "seat_query"),
-        ("get_limousine_schedule_view", "view_query"),
     ],
 )
 def test_session_expiry_clears_existing_session_without_retry(

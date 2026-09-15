@@ -18,7 +18,7 @@ from .errors import (
     KorailProtocolError,
 )
 from .http import KorailHttpClient
-from .models import KorailSession, LoginCryptoInfo
+from .models import BaseKorailResponse, KorailSession, LoginCryptoInfo
 from .payloads import build_common_code_form
 
 
@@ -136,9 +136,10 @@ class KorailSessionClient:
 
     def check_service(self) -> None:
         """``MobileService.cache`` 읽기 — 서버 점검 중이면 여기서 멈춤."""
-        self.http.get_json(
+        self.http.post_form(
             "/file/CACHE/MobileService.cache",
             {"timeStamp": int(time.time() * 1000)},
+            include_common=False,
             raise_on_fail=True,
         )
 
@@ -201,6 +202,48 @@ class KorailSessionClient:
             self.clear_session()
             raise
 
+    def login_social(
+        self,
+        cust_id: str,
+        *,
+        input_flag: str,
+        check_valid_pw: str,
+    ) -> KorailSession:
+        """Send the APK's ``LoginIn`` social-login branch.
+
+        ``LoginRepositoryImpl.socialLogin`` sends the input flag and ``custId``
+        directly to ``NetworkService.login``. It does not fetch a password
+        encryption key or send a member number/password. The APK's value of
+        ``checkValidPw`` is protected, so callers must supply a known value;
+        this method does not invent one.
+        """
+        if not cust_id or not input_flag or not check_valid_pw:
+            raise KorailProtocolError(
+                "KORAIL social login requires cust_id, input_flag, and "
+                "an explicit check_valid_pw value"
+            )
+        self.clear_session()
+        try:
+            response = self._post_login(
+                {
+                    "txtInputFlg": input_flag,
+                    "custId": cust_id,
+                    "checkValidPw": check_valid_pw,
+                }
+            )
+            return self._finish_login(
+                response,
+                login_id="",
+                input_flag=input_flag,
+                cust_id=cust_id,
+            )
+        except KorailAuthContinuationRequired as exc:
+            self.pending = exc
+            raise
+        except Exception:
+            self.clear_session()
+            raise
+
     def _login(
         self,
         member_no: str,
@@ -226,23 +269,42 @@ class KorailSessionClient:
             "etrPath": etr_path or None,
             "idx": crypto_info.idx or None,
         }
+        response = self._post_login(
+            {name: value for name, value in form.items() if value is not None}
+        )
+        return self._finish_login(
+            response,
+            login_id=member_no,
+            input_flag=resolved_input_flag,
+            cust_id=cust_id,
+        )
+
+    def _post_login(self, form: dict[str, str]) -> BaseKorailResponse:
         try:
-            response = self.http.post_form(
-                "/classes/com.korail.mobile.login.Login",
-                {name: value for name, value in form.items() if value is not None},
+            return self.http.post_form(
+                "/classes/com.korail.mobile.login.Login", form
             )
         except KorailAppError as exc:
             raise KorailAuthError(
                 exc.message or "KORAIL login failed"
             ) from exc
+
+    def _finish_login(
+        self,
+        response: BaseKorailResponse,
+        *,
+        login_id: str,
+        input_flag: str,
+        cust_id: str | None,
+    ) -> KorailSession:
         if not is_login_success_code(response.h_msg_cd):
             redirect_url = response.raw.get("strRedirectUrl")
             if redirect_url:
                 raise KorailAuthContinuationRequired(
                     str(redirect_url),
                     build_login_authentication_post_data(
-                        login_id=member_no,
-                        input_flag=resolved_input_flag,
+                        login_id=login_id,
+                        input_flag=input_flag,
                         response_raw=response.raw,
                         cust_id=cust_id,
                     ),
@@ -268,7 +330,7 @@ class KorailSessionClient:
         )
         self.current = KorailSession(
             jsessionid=jsessionid,
-            member_no=member_no,
+            member_no=login_id or None,
             member_card_no=member_card_no,
             customer_no=customer_no,
             raw=response.raw,
@@ -278,14 +340,14 @@ class KorailSessionClient:
     def logout(self) -> None:
         """서버 세션 무효화 후 로컬 상태 비움.
 
-        ``GET login.Logout``(``LoginService.java:29-30``). 쿼리 없음,
-        JSESSIONID 쿠키만으로 인증. 최선 노력 — 실패해도 예외 없음.
+        7.0.6 ``POST login.Logout`` 의 ``timeStamp`` 폼을 보냅니다.
+        최선 노력 — 실패해도 예외 없음.
         """
         if self.current is not None:
             try:
-                self.http.get_json(
+                self.http.post_form(
                     "/classes/com.korail.mobile.login.Logout",
-                    include_common=False,
+                    {"timeStamp": int(time.time() * 1000)},
                     raise_on_fail=False,
                 )
             except KorailApiError:

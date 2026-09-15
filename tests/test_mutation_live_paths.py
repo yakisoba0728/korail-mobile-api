@@ -494,6 +494,7 @@ _REFUND_SUCCESS = {
     "strResult": "SUCC",
     "h_msg_cd": "IRG000000",
     "h_msg_txt": "refunded",
+    "stlList": [],
 }
 
 

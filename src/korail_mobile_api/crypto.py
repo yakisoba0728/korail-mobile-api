@@ -45,11 +45,13 @@ def _validate_login_crypto_key(info: LoginCryptoInfo) -> bytes:
 def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
     """``S4/C0812l.getAmountEncrypt`` 재현.
 
-    ``"Y"``: AES-CBC(PKCS7), IV = key[:16] → Base64 DEFAULT → Base64 NO_WRAP.
-    ``"N"``: Base64 NO_WRAP 만.
+    7.0.6 ``LoginRepositoryImpl.login`` chooses AES when ``key`` is nonempty,
+    independent of ``pwdAESCphd``. With an empty key it sends plain Base64.
+    The APK's Base64 wrapper dispatch remains protected, so the AES encoding
+    below retains the previously verified transform pending that evidence.
     키 길이 ∉ {16,24,32} 이면 :class:`~korail_mobile_api.errors.KorailProtocolError`.
     """
-    if info.pwd_aes_cphd == "Y":
+    if info.key:
         key = _validate_login_crypto_key(info)
         iv = key[:16]
         try:

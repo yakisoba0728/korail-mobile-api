@@ -279,7 +279,7 @@ def test_classification_over_http_only_refines_an_existing_failure():
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
     with pytest.raises(KorailSoldOutError) as excinfo:
-        client.get_json(STATION_PATH)
+        client.post_form(STATION_PATH, include_common=False, form_encoded=False)
     # Still a KorailAppError, so an existing handler is unaffected.
     assert isinstance(excinfo.value, KorailAppError)
     assert excinfo.value.code == "ERR211161"
@@ -290,7 +290,9 @@ def test_http_raise_on_fail_disabled_still_returns_a_mapped_code():
         return httpx.Response(200, json=_envelope("P100", "없음", result="FAIL"))
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
-    response = client.get_json(STATION_PATH, raise_on_fail=False)
+    response = client.post_form(
+        STATION_PATH, include_common=False, form_encoded=False, raise_on_fail=False
+    )
     assert response.h_msg_cd == "P100"
 
 

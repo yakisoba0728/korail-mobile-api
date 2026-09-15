@@ -134,9 +134,8 @@ def test_discount_card_is_its_own_consent_category():
 
 def test_both_routes_are_mutation_routes_owned_by_that_category():
     assert ("POST", PURCHASE_ROUTE) in KORAIL_MUTATION_ROUTES
-    # Registered with the method the app actually uses, not coerced to POST.
-    assert ("GET", EXTENSION_ROUTE) in KORAIL_MUTATION_ROUTES
-    assert ("POST", EXTENSION_ROUTE) not in KORAIL_MUTATION_ROUTES
+    assert ("POST", EXTENSION_ROUTE) in KORAIL_MUTATION_ROUTES
+    assert ("GET", EXTENSION_ROUTE) not in KORAIL_MUTATION_ROUTES
     assert len(KORAIL_MUTATION_ROUTES) == 9
     assert KORAIL_MUTATION_ROUTES.isdisjoint(KORAIL_READ_ONLY_ROUTES)
     for route in (PURCHASE_ROUTE, EXTENSION_ROUTE):
@@ -151,7 +150,7 @@ def test_both_routes_are_mutation_routes_owned_by_that_category():
             with pytest.raises(KorailProtocolError):
                 assert_mutation_route_category(route, wrong)
     with pytest.raises(KorailProtocolError):
-        assert_mutation_route("POST", EXTENSION_ROUTE)
+        assert_mutation_route("GET", EXTENSION_ROUTE)
     for route in (PURCHASE_ROUTE, EXTENSION_ROUTE):
         for method in ("GET", "POST"):
             with pytest.raises(KorailProtocolError):
@@ -276,7 +275,7 @@ def test_default_consent_previews_and_sends_nothing():
 
         preview = client.extend_discount_card(_ticket(), consent=DRY_RUN)
         assert type(preview) is MutationPreview
-        assert preview.method == "GET"
+        assert preview.method == "POST"
         assert preview.route == EXTENSION_ROUTE
         assert "SYNTHETIC_PWD" not in str(preview.payload)
     finally:
@@ -410,10 +409,10 @@ def test_an_acknowledged_send_transmits_exactly_the_built_shapes():
     assert purchased.received_amount == "60000"
     assert purchased.validity_end_date == "20990301"
     assert extended.str_result == "SUCC"
-    assert [request.method for request in seen] == ["POST", "GET"]
+    assert [request.method for request in seen] == ["POST", "POST"]
     assert seen[0].url.path == PURCHASE_ROUTE
     assert seen[1].url.path == EXTENSION_ROUTE
-    assert "tkRetPwd=SYNTHETIC_PWD" in str(seen[1].url)
+    assert "tkRetPwd=SYNTHETIC_PWD" in seen[1].content.decode()
 
 
 def test_purchase_parser_reads_the_dao_shape():

@@ -79,7 +79,7 @@ R151_PATH = "/classes/com.korail.mobile.refunds.CommissionView"
 R152_PATH = "/classes/com.korail.mobile.refunds.SelTicketInfo"
 
 NEW_ROUTES = {
-    ("GET", R150_PATH),
+    ("POST", R150_PATH),
     ("POST", R151_PATH),
     ("POST", R152_PATH),
 }
@@ -227,7 +227,10 @@ def _responses() -> dict[str, dict[str, Any]]:
 
 
 def test_routes_fields_exports_and_signatures_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
+    assert (
+        "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
+    ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert len(DYNAPATH_ALLOWLIST_PATHS) == 6
     assert all(path not in DYNAPATH_ALLOWLIST_PATHS for _, path in NEW_ROUTES)
@@ -266,6 +269,7 @@ def test_routes_fields_exports_and_signatures_are_exact():
             "h_orgtk_sale_sqno",
             "h_orgtk_ret_pwd",
             "h_purchase_history",
+            "txtIndex",
         },
     }
     for path, fields in expected_fields.items():
@@ -288,10 +292,11 @@ def test_routes_fields_exports_and_signatures_are_exact():
             },
         ),
         "get_refund_ticket_detail": (
-            ["self", "ticket", "from_purchase_history"],
+            ["self", "ticket", "from_purchase_history", "txt_index"],
             {
                 "ticket": OriginalTicketReference,
                 "from_purchase_history": bool,
+                "txt_index": str | None,
                 "return": RefundTicketDetailResponse,
             },
         ),
@@ -310,6 +315,11 @@ def test_routes_fields_exports_and_signatures_are_exact():
         if not name.startswith("_")
     }
     assert len(public_methods) == 77
+    assert {
+        "login_social",
+        "verify_station_ticket_refund",
+        "execute_station_ticket_refund",
+    } <= public_methods
 
     expected_exports = {
         "TicketReservationDetailRequest": (
@@ -542,8 +552,7 @@ def test_parsers_reject_bad_envelopes_containers_and_scalar_types():
         parse_refund_ticket_detail_response,
     )
     for parser in parsers:
-        with pytest.raises(KorailProtocolError):
-            parser({"strResult": "SUCC"})
+        assert parser({"strResult": "SUCC"}).str_result == "SUCC"
         with pytest.raises(KorailProtocolError):
             parser(_success(strResult="ERROR"))
         with pytest.raises(KorailAppError):
@@ -754,7 +763,7 @@ def test_client_sends_the_apps_exact_wire_shapes_without_dynapath():
         RefundCommissionResponse,
         RefundTicketDetailResponse,
     ]
-    assert [request.method for request in requests] == ["GET", "POST", "POST"]
+    assert [request.method for request in requests] == ["POST", "POST", "POST"]
     assert [request.url.path for request in requests] == [
         R150_PATH,
         R151_PATH,
@@ -765,11 +774,11 @@ def test_client_sends_the_apps_exact_wire_shapes_without_dynapath():
         ("Version", config.version),
         ("Key", config.key),
     ]
-    assert parse_qsl(requests[0].url.query.decode(), keep_blank_values=True) == [
+    assert parse_qsl(requests[0].content.decode(), keep_blank_values=True) == [
         *common,
         ("hidPnrNo", "PNR_SECRET"),
     ]
-    assert requests[0].content == b""
+    assert requests[0].url.query == b""
     bodies = [
         parse_qsl(request.content.decode(), keep_blank_values=True)
         for request in requests[1:]

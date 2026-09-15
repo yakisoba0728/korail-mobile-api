@@ -661,7 +661,7 @@ def test_standby_works_with_a_passenger_mix_and_keeps_the_cabin_code():
     )
     assert form["txtTotPsgCnt"] == "3"
     assert form["txtCompaCnt1"] == "2"
-    assert form["txtCompaCnt3"] == "1"
+    assert form["txtCompaCnt2"] == "1"
     assert form["txtPsrmClCd1"] == KorailSeatClass.GENERAL.value
 
 

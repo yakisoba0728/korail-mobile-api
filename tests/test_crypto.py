@@ -6,8 +6,17 @@ from korail_mobile_api.models import LoginCryptoInfo
 
 
 def test_transform_login_password_base64_only():
-    info = LoginCryptoInfo(idx="IDX", key="1234567890abcdef", pwd_aes_cphd="N")
+    info = LoginCryptoInfo(idx="", key="", pwd_aes_cphd="N")
     assert transform_login_password("pw123", info) == "cHcxMjM="
+
+
+def test_706_login_uses_aes_when_key_present_even_if_metadata_flag_is_n():
+    key = "1234567890abcdef"
+    info_n = LoginCryptoInfo(idx="IDX", key=key, pwd_aes_cphd="N")
+    info_y = LoginCryptoInfo(idx="IDX", key=key, pwd_aes_cphd="Y")
+    assert transform_login_password("pw123", info_n) == transform_login_password(
+        "pw123", info_y
+    )
 
 
 def test_transform_login_password_aes_is_deterministic_and_not_plaintext():
@@ -52,9 +61,14 @@ def test_sid_uses_android_base64_default():
     assert generate_sid(epoch_ms=1712345678901) == "rIPj+3cmqQgizSSxkiLJuA==\n"
 
 
-@pytest.mark.parametrize("key", ["", "short", "1234567890abcdefX"])
+@pytest.mark.parametrize("key", ["short", "1234567890abcdefX"])
 def test_transform_login_password_aes_invalid_key_raises_protocol_error(key: str):
     info = LoginCryptoInfo(idx="IDX", key=key, pwd_aes_cphd="Y")
 
     with pytest.raises(KorailProtocolError):
         transform_login_password("pw123", info)
+
+
+def test_706_empty_key_uses_plain_base64_even_if_flag_is_y():
+    info = LoginCryptoInfo(idx="", key="", pwd_aes_cphd="Y")
+    assert transform_login_password("pw123", info) == "cHcxMjM="
