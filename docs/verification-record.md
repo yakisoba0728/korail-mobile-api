@@ -67,7 +67,7 @@ for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `2491 passed, 1 deselected`; the one
+current reviewed offline gate is `2515 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -676,8 +676,11 @@ support in this app, and its wire spelling carries the leading space.
 
 Because `1101` demands an available seat and a standby train usually has none,
 `reserve` skips that check for `1102` and instead requires the flag and the
-일반실 cabin (there is no 특실 standby), and it computes `txtStndFlg` the way
-the app does rather than pinning `"N"`.
+일반실 cabin (there is no 특실 standby), and it pins `txtStndFlg` to `"N"`. The
+earlier rule computed the flag from the row and sent `"Y"` on a sold-out train
+with open standing inventory; a 2026-09-16 live run showed that `"Y"` makes the
+server sell a standing ticket (`IRR000018`, `h_seat_no="입석"`, payment deadline)
+instead of queueing a standby (`IRR000014`).
 
 **Standby is members-only.** The app's reservation request reports itself as
 "not non-member enabled" whenever the job id is `1102`, and the session-expiry

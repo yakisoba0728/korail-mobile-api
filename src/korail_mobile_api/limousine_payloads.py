@@ -111,7 +111,17 @@ def build_limousine_schedule_form(
         "dptDt": query.departure_date,
         "dptRsStnCd": query.departure_station_code,
         "arvRsStnCd": query.arrival_station_code,
-        "tmGpCd": query.service_code,
+        # 6.5.0 의 @Field("tmGpCd") 가 아니라 7.0.6 ScdlQryIn 의 trnGpCd 다. 이 속성엔
+        # @SerialName 이 없고(개명은 Device/Version/Key/lang 뿐), serializer 13개 이름의
+        # AlienGuard 암호문 길이(= 평문 길이) [6,7,3,4,5,10,10,7,8,5,5,9,11] 이 공통 4개와
+        # 속성 9개 이름 길이에 순서대로 맞는다. 속성 9칸 중 7자는 trnGpCd 자리 하나뿐이고
+        # 6자 칸은 없다.
+        # analysis/jadx/sources/com/korail/talk/network/model/ScdlQryIn.java:38,60
+        # analysis/jadx/sources/com/korail/talk/network/model/ScdlQryIn$$serializer.java:32-44
+        # 2026-09-16 실서버: 서버는 이 값으로 거르지 않는다(키 없음·trnGpCd=999·
+        # tmGpCd=999 가 같은 42편). 응답 행은 trnGpCd="980" 을 싣는다
+        # (docs/7.0.6-live-verification.md).
+        "trnGpCd": query.service_code,
         "psrmClCd": query.room_class_code,
         "dptTm": query.departure_time,
         "trnNo": query.train_no,
@@ -161,6 +171,8 @@ def build_limousine_schedule_view_form(
     """``seatMovie.LimousineScheduleView`` 의 열차 목록 조회 폼을 만듭니다.
 
     ``SeatMovieService.java:16``. 이 폼만은 공통 ``Key`` 대신 호출자가 넘긴
+    ``sid`` 를 싣습니다(:func:`~korail_mobile_api.crypto.generate_sid`). 역은
+    코드가 아니라 **역이름**입니다.
     """
     query = validate_limousine_schedule_view_query(query)
     return {

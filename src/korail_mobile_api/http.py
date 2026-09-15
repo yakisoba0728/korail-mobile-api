@@ -44,12 +44,31 @@ from .safety import (
 )
 
 
-def parse_base_response(data: Any, *, raise_on_fail: bool = True) -> BaseKorailResponse:
+# 7.0.6 응답 모델이 CommonOut 을 상속하지 않아 봉투 필드가 아예 없는 읽기 경로.
+# StationDataOut(stationdata, EbizMaasStationList)과 StationInfoOut(stationinfo)
+# 이라 strResult 가 빠져도 실패가 아닙니다.
+_NON_COMMON_OUT_READ_PATHS = frozenset({
+    "/classes/com.korail.mobile.common.stationdata",
+    "/classes/com.korail.mobile.common.stationinfo",
+    "/ebizmaas/EbizMaasStationList.do",
+})
+
+
+def parse_base_response(
+    data: Any,
+    *,
+    raise_on_fail: bool = True,
+    require_result: bool = True,
+) -> BaseKorailResponse:
     """응답 봉투를 검사합니다.
 
     ``P058`` → :class:`~korail_mobile_api.errors.KorailSessionExpiredError`.
-    실패 판정은 앱과 같음(``BaseActivity.java:620``): ``strResult == "FAIL"`` 또는
-    ``h_msg_cd == "WRC000288"`` 일 때만 실패.
+    ``strResult == "FAIL"`` 또는 ``h_msg_cd == "WRC000288"`` 이면 실패입니다
+    (``BaseActivity.java:620``). ``require_result`` 가 참(기본)이면 ``strResult``
+    키가 아예 없는 응답도 실패입니다. 7.0.6 ``CommonOut`` 은 빠진 ``strResult`` 를
+    ``commonFail()`` 이 비교하는 바로 그 보호 상수로 채웁니다
+    (``analysis/jadx/sources/com/korail/talk/network/model/CommonOut.java:361,455-462``).
+    ``CommonOut`` 을 상속하지 않는 응답을 받는 호출자만 ``False`` 를 넘깁니다.
     """
     if not isinstance(data, dict):
         raise KorailProtocolError("KORAIL response must be a JSON object")
@@ -63,6 +82,7 @@ def parse_base_response(data: Any, *, raise_on_fail: bool = True) -> BaseKorailR
     if raise_on_fail and (
         response.str_result == "FAIL"
         or response.h_msg_cd == "WRC000288"
+        or (require_result and "strResult" not in data)
     ):
         raise classify_app_error(
             response.h_msg_cd,
@@ -265,9 +285,17 @@ class KorailHttpClient:
             if not isinstance(payload, dict):
                 raise KorailProtocolError("KORAIL response must be a JSON object")
             if all(name in payload for name in ("h_msg_cd", "h_msg_txt", "strResult")):
-                return parse_base_response(payload, raise_on_fail=raise_on_fail)
+                return parse_base_response(
+                    payload,
+                    raise_on_fail=raise_on_fail,
+                    require_result=path not in _NON_COMMON_OUT_READ_PATHS,
+                )
             return BaseKorailResponse(raw=payload)
-        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+        return parse_base_response(
+            payload,
+            raise_on_fail=raise_on_fail,
+            require_result=path not in _NON_COMMON_OUT_READ_PATHS,
+        )
 
     def post_query(
         self,
@@ -319,9 +347,17 @@ class KorailHttpClient:
             if not isinstance(payload, dict):
                 raise KorailProtocolError("KORAIL response must be a JSON object")
             if all(name in payload for name in ("h_msg_cd", "h_msg_txt", "strResult")):
-                return parse_base_response(payload, raise_on_fail=raise_on_fail)
+                return parse_base_response(
+                    payload,
+                    raise_on_fail=raise_on_fail,
+                    require_result=path not in _NON_COMMON_OUT_READ_PATHS,
+                )
             return BaseKorailResponse(raw=payload)
-        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+        return parse_base_response(
+            payload,
+            raise_on_fail=raise_on_fail,
+            require_result=path not in _NON_COMMON_OUT_READ_PATHS,
+        )
 
     def post_mutation_form(
         self,
@@ -386,7 +422,11 @@ class KorailHttpClient:
             raise KorailProtocolError(
                 "KORAIL response body was not valid JSON"
             ) from exc
-        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+        return parse_base_response(
+            payload,
+            raise_on_fail=raise_on_fail,
+            require_result=path not in _NON_COMMON_OUT_READ_PATHS,
+        )
 
     def get_mutation_query(
         self,
@@ -433,7 +473,11 @@ class KorailHttpClient:
             raise KorailProtocolError(
                 "KORAIL response body was not valid JSON"
             ) from exc
-        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+        return parse_base_response(
+            payload,
+            raise_on_fail=raise_on_fail,
+            require_result=path not in _NON_COMMON_OUT_READ_PATHS,
+        )
 
     def get_json(
         self,
@@ -478,6 +522,14 @@ class KorailHttpClient:
             if not isinstance(payload, dict):
                 raise KorailProtocolError("KORAIL response must be a JSON object")
             if all(name in payload for name in ("h_msg_cd", "h_msg_txt", "strResult")):
-                return parse_base_response(payload, raise_on_fail=raise_on_fail)
+                return parse_base_response(
+                    payload,
+                    raise_on_fail=raise_on_fail,
+                    require_result=path not in _NON_COMMON_OUT_READ_PATHS,
+                )
             return BaseKorailResponse(raw=payload)
-        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+        return parse_base_response(
+            payload,
+            raise_on_fail=raise_on_fail,
+            require_result=path not in _NON_COMMON_OUT_READ_PATHS,
+        )

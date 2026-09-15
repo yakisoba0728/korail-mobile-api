@@ -139,7 +139,7 @@ EXACT_FIELDS = {
         "Device",
         "Version",
         "Key",
-        "dptDtTo",
+        "h_page_no",
     },
     "/classes/com.korail.mobile.passCard.CouponView": {
         "Device",
@@ -227,7 +227,7 @@ REQUEST_CASES = (
         ("20260714",),
         "POST",
         "/classes/com.korail.mobile.passCard.DelayDiscountView",
-        {"dptDtTo": "20260714"},
+        {"h_page_no": "20260714"},
         True,
     ),
     (
@@ -409,7 +409,7 @@ def test_read_payload_builders_emit_only_exact_caller_fields():
     }
     assert build_cart_list_form() == {"pnrNo": "", "addSrvReqNo": ""}
     assert build_delay_discount_ticket_form("20260714") == {
-        "dptDtTo": "20260714"
+        "h_page_no": "20260714"
     }
     assert build_discount_coupon_form() == {"txtSelPage": "1", "pnrNo": ""}
     assert build_pass_availability_form("K", "P", "A") == {

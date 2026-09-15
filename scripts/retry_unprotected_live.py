@@ -1,5 +1,7 @@
 """Bounded, redacted live retry for reads with server-derived inputs.
 
+Two opt-ins are required: ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live
+switch) and ``KORAIL_LIVE_RETRY_READS=1`` (this script). Neither alone runs.
 Credentials are prompted in memory. Nothing from the raw server body, account,
 ticket identity, or PNR is printed or written to disk.
 """
@@ -50,7 +52,13 @@ def _try(name: str, function: Callable[[], Any]) -> Any | None:
 
 
 def main() -> None:
-    os.environ["KORAIL_MOBILE_API_LIVE"] = "1"
+    if (
+        os.environ.get("KORAIL_MOBILE_API_LIVE") != "1"
+        or os.environ.get("KORAIL_LIVE_RETRY_READS") != "1"
+    ):
+        raise SystemExit(
+            "Set KORAIL_MOBILE_API_LIVE=1 and KORAIL_LIVE_RETRY_READS=1 to run live reads"
+        )
     member = getpass.getpass("member (hidden): ")
     password = getpass.getpass("password (hidden): ")
     client = KorailClient(KorailConfig(enable_dynapath=True))

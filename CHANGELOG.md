@@ -4,6 +4,114 @@
 이 프로젝트는 [유의적 버전](https://semver.org/lang/ko/)을 따릅니다.
 1.0.0 이전 기록은 당시 형식·언어 그대로 보존합니다.
 
+## Unreleased
+
+KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠졌으므로 버전 번호는
+릴리스할 때 정합니다.
+
+### Added
+
+- **7.0.6 원시 계약 게이트웨이 `V7Gateway`(`client.v7`).** 기존 고수준 경로 밖의
+  Retrofit 메서드 117개를 계약 레지스트리로 옮겼습니다. 선언된 어노테이션 키만
+  받고, 상태를 바꾸는 계약은 메서드 이름 단위 `V7MutationConsent` 와 기본 dry-run
+  (`V7MutationPreview`, 값 전부 마스킹)을 거칩니다.
+- **Android 호스트 브리지 `android_features`.** Room DAO 18개·메모리 DataStore 8개·
+  Preferences 2개 이름공간과 자동 로그인·ID 저장, PIN·생체 봉인, 로그아웃 정리를
+  주입 프로토콜로 모델링합니다. 스스로 HTTP 를 보내지 않습니다.
+- `login_social`, 역발행 승차권 온라인 환불 `verify_station_ticket_refund` /
+  `execute_station_ticket_refund`(메서드별 동의), `search_trains(...,
+  use_special_schedule=True)`(기본은 `ScheduleView` 유지), 환승역·열차군·정렬 입력,
+  승차권별 MAAS 메뉴(반복 `tkRetNo`).
+
+### Changed
+
+- 7.0.6 에서 동사가 바뀐 14개 경로, 승차권 목록 `myTicket.MyTicketNewList.do`(중첩
+  `pnr_list`/`ticket_list`), `timeStamp` 를 싣는 로그아웃 POST 를 반영했습니다.
+- 로그인 암호화는 `key` 유무로 AES 를 고릅니다. 지연할인 조회는 POST 쿼리 위치로
+  보냅니다.
+- 예약 폼은 인원이 있는 승객 종류만 싣고, 열차 행의 좌석속성을 반영하며, 도착시각
+  초과 필드를 뺐습니다. 결제 전 취소는 여정 수를 받은 그대로 되돌려 보냅니다.
+- 좌석표·정차역·검색 응답에서 빠진 목록을 APK 처럼 빈 목록으로 받습니다.
+
+### Removed
+
+- `get_gift_ticket_list()`, `get_limousine_schedule_view()`, `get_platform_numbers()` —
+  7.0.6 에 해당 경로가 없습니다. [제거 기록](docs/7.0.6-removals.md) 참고.
+
+### Fixed
+
+7.0.6 디컴파일본과 1:1 로 다시 대조해 찾은 것들입니다.
+
+- **비회원 예약 `NetworkApi.postNonMemTicket` 이 동의 없이 나갈 수 있었습니다.**
+  조회로 분류돼 `V7MutationConsent` 도 dry-run 도 거치지 않았습니다. 응답이 회원 예약과
+  같은 `ReservationOut` 인 예약 생성이라 변경으로 재분류했습니다(변경 65 / 조회 52).
+- **V7 로 `ScheduleViewSpecial` 을 부르면 필드 검사를 건너뛰었습니다.** 고수준 읽기
+  허용목록과 겹치는 계약은 이제 같은 `safety` 필드 검증을 거치고, 변경 라우트와
+  겹치는 계약은 거부합니다.
+- **`strResult` 가 없는 응답을 성공으로 넘겼습니다.** 7.0.6 `CommonOut` 은 빠진
+  `strResult` 를 실패 판정 상수로 채웁니다. 이제 실패로 올립니다. `CommonOut` 을
+  상속하지 않는 역 정보·MaaS 역 목록과 V7 응답 모델 7개는 제외합니다.
+- **리무진 일정 조회가 `tmGpCd` 를 보냈습니다.** 7.0.6 직렬화 이름의 길이로 전송 키가
+  `trnGpCd` 임을 확인했습니다.
+- **지연할인 조회가 `dptDtTo` 를 보냈습니다.** 7.0.6 DTO 의 `@SerialName` 은
+  `h_page_no` 입니다.
+- **로그인이 `pwdAESCphd` 없는 암호화 메타데이터를 거부했습니다.** 7.0.6 로그인 경로는
+  이 값을 보지 않으므로 `key` 가 있으면 AES 로 갑니다.
+- 자유석 열차가 즉시·좌석지정 예약에서 전송 전에 거절된다는 것을 테스트로
+  고정했습니다. 7.0.6 의 자유석 폼 값은 보호돼 있어 재현하지 않습니다.
+  `recalculate_price` 는 7.0.6 DTO 의 좌석 필드 네 개가 빠진 미검증 경로라고
+  밝힙니다.
+- 7.0.6 문서의 재분류 개수, 쿠키 공유 설명, `productCancel` 예시와 후속 문서의 과한
+  표현을 고쳤습니다.
+
+2026-09-16 에 실서버로 확인했습니다([기록](docs/7.0.6-live-verification.md)).
+
+- `strResult` 판정은 익명 조회 10개와 로그인 뒤 조회에서 확인했습니다. 빠진 응답은
+  캐시 파일과 제외한 역 정보뿐이었습니다.
+- 리무진 일정은 실제 노선(광명역→인천공항T1)에서 42편을 파싱했습니다. 다만
+  서버가 이 입력으로 거르지 않으므로, 서버 동작으로는 요청 키를 가를 수 없습니다.
+  응답 행은 `trnGpCd` 를 싣습니다.
+- 로그인은 `pwdAESCphd=Y`·`key`·`idx` 가 모두 있는 계정에서 성공했습니다.
+  느슨하게 바꾼 분기는 타지 않았습니다.
+- 지연할인 조회는 네 가지 키 조합 모두 같은 빈 `SUCC` 였습니다. 지연할인권이 없는
+  계정이라 키를 가르지 못했습니다.
+- 병합(`1202`)의 같은 플래그, 로그인의 느슨해진 분기, 직렬화 기본값과 보호된 상수는
+  이번에 확인할 수 없었습니다. 각각의 이유와 확인에 필요한 조건은
+  [기록](docs/7.0.6-live-verification.md)의 마지막 표에 적었습니다.
+
+- **예약대기가 입석 예약이 될 수 있었습니다.** 매진이면서 입석이 열린 열차
+  (`h_gen_rsv_cd="13"` + `h_stnd_rsv_cd="11"`)에 예약대기(`1102`)를 걸면
+  `txtStndFlg="Y"` 가 실려 나갔습니다. 2026-09-16 실서버에서 이 값만 바꿔 같은
+  열차에 두 번 보냈더니, `"N"` 은 `IRR000014`(예약대기)였고 `"Y"` 는
+  `IRR000018` 에 `h_seat_no="입석"` 과 결제 기한이 붙은 **입석 승차권 예약**이었습니다.
+  이제 예약대기는 이 값을 `"N"` 으로 박습니다. 두 예약 모두 즉시 취소했습니다.
+
+APK 와 무관하게 함께 고친 것들입니다.
+
+- **로그인 실패의 `KorailAuthError` 에 `code` 가 없었습니다.** README 는 진짜
+  `SUPDATE` 를 `error.code` 로 가르라고 안내했지만, 안내대로 하면 `AttributeError` 가
+  났습니다. 이제 `KorailAuthError.code` 가 로그인 요청이 받은 `h_msg_cd` 를 담습니다.
+  원래 예외는 `__cause__` 에 남고, 서버 응답 없이 난 인증 실패는 `None` 입니다.
+- **`scripts/retry_delivery_roundtrip.py` 가 PNR 을 가렸습니다.** 12~19자리 숫자열을
+  지우는 정규식을 덧씌운 탓에, 15자리 PNR 과 복구 명령이 가려진 채 출력됐습니다.
+  2026-07-25 에 부모 스크립트가 겪은 바로 그 문제입니다. 이제 부모 스크립트의 콘솔을
+  그대로 써서 PNR 을 온전히 출력합니다. `KORAIL_MOBILE_API_LIVE=1` 도 스스로 켜지 않고
+  설정돼 있는지 확인합니다.
+- **`scripts/retry_unprotected_live.py` 는 스위치 없이 실서버에 나갔습니다.**
+  `KORAIL_MOBILE_API_LIVE=1` 을 스스로 켰고, `scripts/verify_706_new_live.py` 는 그
+  스위치 하나만 확인했습니다. 이제 다른 라이브 스크립트처럼 자기 스위치를 하나씩 더
+  요구합니다(`KORAIL_LIVE_RETRY_READS=1`, `KORAIL_LIVE_706_READS=1`).
+- `scripts/README.md` 가 스크립트 넷만 소개했습니다. 7.0.6 확인용 스크립트 셋을 더하고,
+  각 스크립트가 확인하는 스위치와 `getpass` 입력 방식을 적었습니다.
+- `reserve_transfer`·`refund` docstring 에 2026-07-31 실서버 확인 때의 실제 PNR 이
+  남아 있었습니다. 지웠습니다.
+- **1.1.0 의 docstring 정리가 문장을 잘라 놓았습니다.** APK 인용이 붙은 줄만 남기고
+  그 앞뒤를 지운 탓에, `client.py`·`mutation_models.py`·`mutation_payloads.py`·
+  `limousine_*.py` 의 docstring 38개가 문장 중간에서 끊겨 있었습니다. 원문을 인용과
+  함께 되살렸습니다. 다만 그 뒤로 사실이 아니게 된 문장은 지금에 맞췄습니다. 실서버
+  확인 범위, 예약대기 미검증, 승객 줄 수, 병합 폼의 `arvTm_`, 환불 폼 기본값이
+  그렇습니다.
+
 ## 1.1.1 - 2026-07-31
 
 문서 정정과 실서버 재검증만 담은 판입니다. 코드 동작은 바뀌지 않았고 공개 API 도

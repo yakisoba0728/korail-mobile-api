@@ -62,7 +62,16 @@ class KorailProtocolError(KorailApiError):
 
 
 class KorailAuthError(KorailApiError):
-    """로그인 실패 또는 세션 없이 인증 필요 메서드 호출."""
+    """로그인 실패 또는 세션 없이 인증 필요 메서드 호출.
+
+    ``code`` 는 서버가 준 ``h_msg_cd`` 입니다. 로그인 요청이 서버 실패를 받았을 때
+    채워지고, 그 실패가 :class:`KorailAppError` 였다면 원래 예외가 ``__cause__`` 에
+    남습니다. 서버 응답 없이 난 실패(세션 없음, 기기 쪽 인증 등)는 ``None`` 입니다.
+    """
+
+    def __init__(self, *args: object, code: str | None = None) -> None:
+        super().__init__(*args)
+        self.code = code
 
 
 class KorailSessionExpiredError(KorailAuthError):
@@ -79,12 +88,12 @@ class KorailSessionExpiredError(KorailAuthError):
         *,
         raw: object | None = None,
     ) -> None:
-        self.code = code
         self.message = message
         self.raw = raw
         super().__init__(
             f"{code or 'P058'}: "
-            f"{redact_text(message or 'KORAIL session expired')}"
+            f"{redact_text(message or 'KORAIL session expired')}",
+            code=code,
         )
 
 

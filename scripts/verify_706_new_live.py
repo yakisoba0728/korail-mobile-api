@@ -1,5 +1,7 @@
 """Redacted, paced live checks for the newly connected 7.0.6 reads.
 
+Two opt-ins are required: ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live
+switch) and ``KORAIL_LIVE_706_READS=1`` (this script). Neither alone runs.
 No raw body, credential, cookie, PNR or ticket identity is printed or saved.
 Authenticated checks prompt for a member and password in memory. This script
 never sends a reservation, payment, refund, or other mutation.
@@ -56,8 +58,13 @@ def main() -> int:
     parser.add_argument("--special-only", action="store_true")
     parser.add_argument("--ticket-maas-history", action="store_true")
     args = parser.parse_args()
-    if os.environ.get("KORAIL_MOBILE_API_LIVE") != "1":
-        raise SystemExit("Set KORAIL_MOBILE_API_LIVE=1 to run live checks")
+    if (
+        os.environ.get("KORAIL_MOBILE_API_LIVE") != "1"
+        or os.environ.get("KORAIL_LIVE_706_READS") != "1"
+    ):
+        raise SystemExit(
+            "Set KORAIL_MOBILE_API_LIVE=1 and KORAIL_LIVE_706_READS=1 to run live checks"
+        )
 
     client = KorailClient(KorailConfig(enable_dynapath=True))
     last_send = 0.0

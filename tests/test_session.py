@@ -11,6 +11,7 @@ from korail_mobile_api.errors import (
     KorailProtocolError,
 )
 from korail_mobile_api.http import KorailHttpClient
+from korail_mobile_api.models import LoginCryptoInfo
 from korail_mobile_api.session import KorailSessionClient
 
 
@@ -528,64 +529,152 @@ def test_login_crypto_bootstrap_app_failure_raises_library_error_without_login_p
     assert called_paths == [SERVICE_CHECK_PATH, "/classes/com.korail.mobile.common.code.do"]
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
-        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"},
-        {
-            "h_msg_cd": "IRG000000",
-            "h_msg_txt": "OK",
-            "strResult": "SUCC",
-            "idx": "IDX",
-            "key": "KEY",
-            "pwdAESCphd": "",
-        },
-        {
-            "h_msg_cd": "IRG000000",
-            "h_msg_txt": "OK",
-            "strResult": "SUCC",
-            "idx": "IDX",
-            "key": "KEY",
-            "pwdAESCphd": "maybe",
-        },
-        {
-            "h_msg_cd": "IRG000000",
-            "h_msg_txt": "OK",
-            "strResult": "SUCC",
-            "idx": "",
-            "key": "KEY",
-            "pwdAESCphd": "Y",
-        },
-        {
-            "h_msg_cd": "IRG000000",
-            "h_msg_txt": "OK",
-            "strResult": "SUCC",
-            "idx": "IDX",
-            "key": "",
-            "pwdAESCphd": "Y",
-        },
-    ],
-)
-def test_login_crypto_bootstrap_requires_complete_metadata(payload):
-    called_paths = []
+BOOTSTRAP_OK = {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+COMMON_CODE_PATH = "/classes/com.korail.mobile.common.code.do"
+TEST_AES_KEY = "1234567890abcdef"
+# "pw123" 을 TEST_AES_KEY 로 AES 한 값과 평문 Base64 값입니다(test_crypto.py 와 같습니다).
+AES_PW123 = "ZkpkU2JycXlJSzYyeGNxcSsxdUNmUT09Cg=="
+PLAIN_PW123 = "cHcxMjM="
+
+
+def make_crypto_bootstrap_client(load_json_fixture, bootstrap):
+    """``common.code.do`` 가 ``bootstrap`` 을 돌려주는 클라이언트와 기록을 만듭니다."""
+    captured = {"paths": []}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        called_paths.append(request.url.path)
+        captured["paths"].append(request.url.path)
         if request.url.path == SERVICE_CHECK_PATH:
             return service_check_response()
-        if request.url.path == "/classes/com.korail.mobile.common.code.do":
-            return httpx.Response(200, json=payload)
+        if request.url.path == COMMON_CODE_PATH:
+            return httpx.Response(200, json=bootstrap)
+        if request.url.path == "/classes/com.korail.mobile.login.Login":
+            captured["body"] = request.content.decode()
+            return httpx.Response(
+                200,
+                json=load_json_fixture("login_success.json"),
+                headers={"Set-Cookie": "JSESSIONID=session-crypto; Path=/; HttpOnly"},
+            )
         raise AssertionError(f"unexpected path {request.url.path}")
 
     client = KorailClient(
         KorailConfig(enable_dynapath=True),
         transport=httpx.MockTransport(handler),
     )
+    return client, captured
 
-    with pytest.raises(KorailProtocolError):
+
+def test_login_takes_aes_path_when_key_and_idx_arrive_without_pwd_aes_cphd(load_json_fixture):
+    # 7.0.6 로그인은 pwdAESCphd 를 읽지 않고 key 로 AES 를 겁니다
+    # (LoginRepositoryImpl.java:922-936). 값이 빠져도 거절하지 않고 AES 로 갑니다.
+    bootstrap = {
+        **BOOTSTRAP_OK,
+        "app.login.cphd": {"idx": "IDX-AES", "key": TEST_AES_KEY},
+    }
+    client, captured = make_crypto_bootstrap_client(load_json_fixture, bootstrap)
+
+    session = client.login("member1", "pw123")
+
+    fields = parse_qs(captured["body"])
+    assert fields["txtPwd"] == [AES_PW123]
+    assert fields["idx"] == ["IDX-AES"]
+    assert session.jsessionid == "session-crypto"
+    # 플래그는 버리지 않고 참고용으로 남깁니다. 없으면 빈 문자열입니다.
+    assert client.session.get_login_crypto_info() == LoginCryptoInfo(
+        idx="IDX-AES", key=TEST_AES_KEY, pwd_aes_cphd=""
+    )
+
+
+@pytest.mark.parametrize(
+    ("crypto_fields", "expected_pwd", "expected_idx"),
+    [
+        pytest.param({}, PLAIN_PW123, None, id="no-metadata"),
+        pytest.param(
+            {"idx": "IDX", "key": TEST_AES_KEY, "pwdAESCphd": ""},
+            AES_PW123,
+            ["IDX"],
+            id="empty-pwdAESCphd",
+        ),
+        pytest.param(
+            {"idx": "IDX", "key": TEST_AES_KEY, "pwdAESCphd": "maybe"},
+            AES_PW123,
+            ["IDX"],
+            id="unknown-pwdAESCphd",
+        ),
+        pytest.param(
+            {"idx": "IDX", "key": TEST_AES_KEY, "loginFlg": "maybe"},
+            AES_PW123,
+            ["IDX"],
+            id="unknown-loginFlg",
+        ),
+    ],
+)
+def test_login_crypto_bootstrap_does_not_gate_on_pwd_aes_cphd(
+    load_json_fixture, crypto_fields, expected_pwd, expected_idx
+):
+    # 없거나 낯선 pwdAESCphd/loginFlg 는 거절 사유가 아닙니다. 비밀번호 변환은 key 만
+    # 보고 정합니다.
+    client, captured = make_crypto_bootstrap_client(
+        load_json_fixture, {**BOOTSTRAP_OK, **crypto_fields}
+    )
+
+    client.login("member1", "pw123")
+
+    fields = parse_qs(captured["body"])
+    assert fields["txtPwd"] == [expected_pwd]
+    assert fields.get("idx") == expected_idx
+
+
+@pytest.mark.parametrize("flag", ["Y", "N"])
+def test_login_sends_aes_without_idx_when_key_arrives_without_idx(load_json_fixture, flag):
+    # APK 는 getIdx() 를 확인 없이 LoginIn 에 넘기고, 폼을 만들 때 빈 값을 뺍니다
+    # (LoginRepositoryImpl.java:932-936, NetworkService.java:15342-15343).
+    # 그래서 key 가 있고 idx 가 비면 idx 없이 AES 로 로그인을 보냅니다.
+    client, captured = make_crypto_bootstrap_client(
+        load_json_fixture,
+        {**BOOTSTRAP_OK, "idx": "", "key": TEST_AES_KEY, "pwdAESCphd": flag},
+    )
+
+    client.login("member1", "pw123")
+
+    fields = parse_qs(captured["body"])
+    assert fields["txtPwd"] == [AES_PW123]
+    assert "idx" not in fields
+
+
+def test_login_crypto_bootstrap_rejects_aes_flag_without_key(load_json_fixture):
+    # "Y" 인데 key 가 없으면 AES 를 걸 수 없습니다. APK 도 빈 key 로 AES 를 부르다
+    # 실패하므로, 평문 Base64 로 내려가지 않고 로그인 POST 전에 멈춥니다.
+    client, captured = make_crypto_bootstrap_client(
+        load_json_fixture,
+        {**BOOTSTRAP_OK, "idx": "IDX", "key": "", "pwdAESCphd": "Y"},
+    )
+
+    with pytest.raises(KorailProtocolError, match="missing valid key"):
         client.login("member1", "pw123")
 
-    assert called_paths == [SERVICE_CHECK_PATH, "/classes/com.korail.mobile.common.code.do"]
+    assert captured["paths"] == [SERVICE_CHECK_PATH, COMMON_CODE_PATH]
+
+
+@pytest.mark.parametrize(
+    "crypto_fields",
+    [
+        pytest.param({"idx": "IDX", "key": "KEY"}, id="no-flag"),
+        pytest.param(
+            {"idx": "IDX", "key": "1234567890abcdefX", "pwdAESCphd": "maybe"},
+            id="unknown-flag",
+        ),
+    ],
+)
+def test_login_crypto_bootstrap_rejects_invalid_length_key(load_json_fixture, crypto_fields):
+    # 플래그 검사는 사라졌지만 key 가 있으면 길이는 여전히 검사합니다.
+    client, captured = make_crypto_bootstrap_client(
+        load_json_fixture, {**BOOTSTRAP_OK, **crypto_fields}
+    )
+
+    with pytest.raises(KorailProtocolError, match="invalid AES key/IV"):
+        client.login("member1", "pw123")
+
+    assert captured["paths"] == [SERVICE_CHECK_PATH, COMMON_CODE_PATH]
 
 
 def test_failed_relogin_clears_old_session_and_cookies(load_json_fixture):

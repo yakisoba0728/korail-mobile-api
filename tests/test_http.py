@@ -55,13 +55,13 @@ def test_delay_discount_post_query_map_places_fields_in_url_and_empty_form_body(
     client = KorailHttpClient(
         KorailConfig(enable_dynapath=True), transport=httpx.MockTransport(handler)
     )
-    client.post_query(path, {"dptDtTo": "20991231"})
+    client.post_query(path, {"h_page_no": "20991231"})
     request = captured["request"]
     assert request.method == "POST"
     assert request.url.path == path
-    assert parse_qs(request.url.query.decode())["dptDtTo"] == ["20991231"]
+    assert parse_qs(request.url.query.decode())["h_page_no"] == ["20991231"]
     assert set(parse_qs(request.url.query.decode())) == {
-        "Device", "Version", "Key", "dptDtTo"
+        "Device", "Version", "Key", "h_page_no"
     }
     assert request.content == b""
     assert request.headers["content-type"].startswith("application/x-www-form-urlencoded")
@@ -81,7 +81,7 @@ def test_post_query_rejects_unregistered_path_and_fields_before_io():
     with pytest.raises(KorailProtocolError):
         client.post_query(
             "/classes/com.korail.mobile.passCard.DelayDiscountView",
-            {"dptDtTo": "20991231", "unregistered": "x"},
+            {"h_page_no": "20991231", "unregistered": "x"},
         )
     assert called is False
 
@@ -95,7 +95,7 @@ def test_delay_discount_post_query_can_return_envelope_free_object():
         ),
     )
     response = client.post_query(
-        path, {"dptDtTo": "20991231"}, require_envelope=False
+        path, {"h_page_no": "20991231"}, require_envelope=False
     )
     assert response.raw == {"discountTickets": []}
 

@@ -18,7 +18,12 @@ import httpx
 
 from .errors import KorailMutationNotAllowedError, KorailProtocolError, KorailTransportError
 from .http import KorailHttpClient, _raise_for_status, parse_base_response
-from .safety import assert_korail_origin
+from .safety import (
+    KORAIL_MUTATION_ROUTES,
+    KORAIL_READ_ONLY_ROUTES,
+    assert_korail_origin,
+    assert_read_only_request_fields,
+)
 from .v7_contract_data import CONTRACT_ROWS
 
 
@@ -38,6 +43,27 @@ _MUTATION_OVERRIDES = frozenset({
     "NetworkApi.postLocalRailwayTravelQrAuth",
     "NetworkApi.postMemberVerify",
     "NetworkApi.paymentMassStatusIn",
+    # 비회원 예약 생성. NonMemTicketIn is the non-member TicketReservationIn
+    # (txtJobId, jrnyList, passengerInfoList, txtCustPw, ...) and returns the
+    # same ReservationOut as certification.TicketReservation: it creates a hold.
+    # The generator (analysis/generated/build_v7_contract.py READ_METHODS) lists
+    # it as read; this override is the deciding classification.
+    # postNonMemTicketList stays a read (lookup).
+    "NetworkApi.postNonMemTicket",
+})
+# NetworkApi response models that do not extend CommonOut. Three declare their
+# own strResult defaulting to null or "" rather than CommonOut's FAIL constant
+# (CacheCheckResponse.java:62, AcpnMlgSaveResponse.java:101,
+# VerifyOnlineRefundsOut.java:97); the other four have no envelope field at all.
+# A missing strResult is therefore not a failure for these.
+_NON_COMMON_OUT_RESPONSE_MODELS = frozenset({
+    "com.korail.talk.data.CacheCheckResponse",
+    "com.korail.talk.data.CacheReadResponse",
+    "com.korail.talk.network.model.AcpnMlgSaveResponse",
+    "com.korail.talk.network.model.LostCenterResponse",
+    "com.korail.talk.network.model.SearchMetaOut",
+    "com.korail.talk.network.model.SpecificDateDataOut",
+    "com.korail.talk.network.model.VerifyOnlineRefundsOut",
 })
 
 
@@ -281,7 +307,9 @@ class V7Gateway:
         ``@FieldMap``/``@QueryMap``이 있으면 가변 키가 허용되고, 다른 경우
         어노테이션에 선언된 키만 허용된다. nullable 인자 생략은 키 생략으로
         표현한다. 상태 변경은 정확한 메서드 동의가
-        필요하며 기본 dry-run은 소켓을 열지 않는다.
+        필요하며 기본 dry-run은 소켓을 열지 않는다. 상위 API의 읽기 라우트와
+        겹치는 계약은 같은 ``safety`` 필드 검증을 거치고, 변경 라우트와 겹치는
+        계약은 거부된다.
         """
         contract = V7_CONTRACTS.get(name)
         if contract is None:
@@ -314,6 +342,16 @@ class V7Gateway:
             raise KorailProtocolError("@Body requires a JSON object")
         else:
             _assert_body_shape(contract, data)
+        route = (contract.http, contract.route)
+        if route in KORAIL_MUTATION_ROUTES:
+            # The high-level mutation transport owns the consent-category check.
+            raise KorailProtocolError(
+                f"{name} targets KORAIL mutation route {contract.route}; use the "
+                "high-level KorailClient method gated by MutationConsent"
+            )
+        if route in KORAIL_READ_ONLY_ROUTES:
+            # Same field check as KorailHttpClient.post_form, on the merged wire data.
+            assert_read_only_request_fields(contract.route, data)
         if contract.effect == "mutation":
             if not isinstance(consent, V7MutationConsent) or name not in consent.allow_methods:
                 raise KorailMutationNotAllowedError(f"{name} requires method-scoped consent")
@@ -365,5 +403,11 @@ class V7Gateway:
         if contract.interface == "NetworkApi" and isinstance(raw, dict) and any(
             key in raw for key in ("strResult", "h_msg_cd")
         ):
-            parse_base_response(raw, raise_on_fail=raise_on_fail)
+            parse_base_response(
+                raw,
+                raise_on_fail=raise_on_fail,
+                require_result=(
+                    contract.response_model not in _NON_COMMON_OUT_RESPONSE_MODELS
+                ),
+            )
         return V7Response(name=name, response_model=contract.response_model, raw=raw)

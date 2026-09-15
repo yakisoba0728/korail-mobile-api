@@ -10,7 +10,7 @@
 [![문서](https://img.shields.io/badge/%EB%AC%B8%EC%84%9C-yaki.kr-1f6feb?style=flat-square)](https://yaki.kr/korail-mobile-api/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776ab?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
 [![타입](https://img.shields.io/badge/typed-py.typed-2f6f4e?style=flat-square)](src/korail_mobile_api/py.typed)
-[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-2444-4c1?style=flat-square)](#문서)
+[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-2515-4c1?style=flat-square)](#문서)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square)](LICENSE)
 
 [문서](https://yaki.kr/korail-mobile-api/) ·
@@ -258,8 +258,20 @@ client.cancel_unpaid_hold(hold, consent=MutationConsent(allow_cancel=True, dry_r
 로그인이 실패하면서 앱을 업데이트하라고 하면 대개 버전 문제가 아닙니다. 앱처럼
 보이지 않는 클라이언트에 서버가 `MACRO ERROR` 로 답하면서, 사용자에게는
 *"원활한 서비스 이용을 위해 앱을 최신 버전으로 업데이트한 뒤…"* 를 보여줍니다.
-진짜 버전 게이트는 전부를 막으니, `get_app_data()` 는 되는데 `login` 만 실패하는지
-보고 `error.code` 가 `SUPDATE` 인지 확인하면 갈립니다.
+진짜 버전 게이트는 전부를 막으니, 먼저 `get_app_data()` 는 되는데 `login` 만
+실패하는지 봅니다.
+
+예외로 가를 때는 `code` 가 `SUPDATE` 인지 봅니다. 진짜 버전 거부는
+`KorailAppUpdateRequiredError` 입니다. 로그인 요청에서 났다면 `KorailAuthError` 로
+감싸여 오지만, `code` 는 서버가 준 `SUPDATE` 그대로이고 원래 예외는 `__cause__` 에
+남습니다.
+
+```python
+except (KorailAppError, KorailAuthError) as error:
+    real_update = error.code == "SUPDATE"
+```
+
+`real_update` 가 거짓이면 위장된 경우입니다.
 
 ## 한계
 
@@ -317,7 +329,7 @@ Retrofit 계약은 [별도 구현 기록](docs/7.0.6-additions.md)에 정리했�
 | [CHANGELOG.md](CHANGELOG.md) | 무엇이 바뀌었나 |
 
 게이트는 `python3 -m pytest -q -m "not live"` 이고 네트워크를 쓰지 않습니다 —
-`2491 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 이 있을 때만 도는
+`2515 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 이 있을 때만 도는
 실서버 테스트입니다. 기여는 [CONTRIBUTING.md](CONTRIBUTING.md), 규범은
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 참고.
 

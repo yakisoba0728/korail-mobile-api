@@ -63,7 +63,7 @@ SCHEDULE_FIELDS = frozenset(
         "dptDt",
         "dptRsStnCd",
         "arvRsStnCd",
-        "tmGpCd",
+        "trnGpCd",
         "psrmClCd",
         "dptTm",
         "trnNo",
@@ -384,7 +384,7 @@ def test_builders_emit_only_exact_retrofit_fields_and_caller_values(
         "dptDt": "20991231",
         "dptRsStnCd": "9001",
         "arvRsStnCd": "9002",
-        "tmGpCd": "777",
+        "trnGpCd": "777",
         "psrmClCd": "8",
         "dptTm": "220000",
         "trnNo": "",
@@ -964,7 +964,7 @@ def test_limousine_methods_post_once_without_session_or_dynapath(
         SCHEDULE_FIELDS,
         SEAT_FIELDS,
     ]
-    assert prepared[0]["tmGpCd"] == ["777"]
+    assert prepared[0]["trnGpCd"] == ["777"]
     assert prepared[1]["trnClsfCd"] == ["77"]
     assert prepared[1]["srcarNo"] == ["0007"]
     assert all(len(values) == 1 for form in prepared for values in form.values())

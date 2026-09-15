@@ -682,7 +682,7 @@ KORAIL_EXACT_REQUEST_FIELDS = {
         {"Device", "Version", "Key"}
     ),
     "/classes/com.korail.mobile.passCard.DelayDiscountView": frozenset(
-        {"Device", "Version", "Key", "dptDtTo"}
+        {"Device", "Version", "Key", "h_page_no"}
     ),
     "/classes/com.korail.mobile.passCard.CouponView": frozenset(
         {"Device", "Version", "Key", "txtSelPage", "pnrNo"}
@@ -887,7 +887,7 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "dptDt",
             "dptRsStnCd",
             "arvRsStnCd",
-            "tmGpCd",
+            "trnGpCd",
             "psrmClCd",
             "dptTm",
             "trnNo",

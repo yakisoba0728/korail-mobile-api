@@ -1676,8 +1676,30 @@ class KorailClient:
         ``require_mutation_consent(consent, "reserve")`` 와 로그인 세션을 요구합니다.
 
         ``consent.dry_run`` 이 참이면(기본) ``train`` 을 검증하고 실제로 나갈 폼을 담은
+        :class:`MutationPreview` 를 돌려줄 뿐 네트워크를 건드리지 않습니다. 거짓이면
+        이중 게이트 전송로로 홀드를 걸고 파싱한 :class:`ReservationHoldResponse` 를
+        돌려줍니다. 그 ``pnr_no`` 가 :meth:`cancel_unpaid_hold` 의 입력입니다 — 살아
+        있는 홀드는 미결제 예약이고 취소하든 결제하든 호출자 책임입니다.
 
-        열차에만 붙습니다. 회원 전용입니다(``ReservationRequest.java:105-119``) — 이
+        ``seat_attribute_code`` 는 ``txtSeatAttCd4`` 로 나가는 세 자리 좌석 속성
+        코드입니다. 주지 않으면 열차 행의 ``seat_attribute_code`` 를, 그것도 없으면
+        ``"015"`` 를 씁니다(7.0.6 ``TrainScheduleViewModel.java:2914-2930,2982-2999``).
+
+        ``job_type`` 은 :class:`KorailReservationJobType` 이고 기본이
+        ``IMMEDIATE``(``txtJobId="1101"``)입니다.
+
+        * ``SEAT_DESIGNATED``(``"1103"``)는 좌석지정 예매라 ``seats`` 가 필요합니다 —
+          승객 한 명당 정확히 하나의 :class:`KorailSeatAssignment` 를
+          :meth:`get_seat_cars` 와 :meth:`get_seat_inventory` 에서 골라 넘깁니다. 수가
+          승객 총원과 맞지 않으면 요청을 만들기 전에 거절합니다.
+        * ``STANDBY``(``"1102"``)는 예약대기이고, 검색 행이 대기 가능이라고 말한
+          열차에만 붙습니다. 회원 전용입니다(``ReservationRequest.java:105-119``) — 이
+          클라이언트는 모든 상태 변경이 로그인 세션을 요구하므로 구조적으로 그 조건을
+          만족합니다. 성공한 대기 홀드는 ``h_msg_cd`` 가
+          :data:`~korail_mobile_api.KORAIL_STANDBY_HOLD_MESSAGE_CODE`(``IRR000014``)로
+          오고, :meth:`confirm_standby_hold` 로 알림 옵션을 기록해야 비로소 끝납니다.
+        * ``MERGE_STANDING``(``"1202"``)은 병합예약의 첫 홀드입니다. 두 번째 홀드는
+          :meth:`reserve_merge` 가 겁니다.
         """
         require_mutation_consent(consent, "reserve")
         if self.session.current is None:
@@ -1721,11 +1743,16 @@ class KorailClient:
     ) -> MutationPreview | BaseKorailResponse:
         """예약대기 홀드에 대기 옵션을 기록합니다. consent 게이트가 있습니다.
 
+        예약대기는 호출 두 번입니다. ``job_type=STANDBY`` 로 부른 :meth:`reserve` 가
+        PNR 을 만들고 ``h_msg_cd`` = ``IRR000014`` 를 돌려주는데, 앱은 이 코드에서만
         예약대기 화면을 엽니다(``ui/inquiry/rir/orr/a.java:222-225``). 그 화면이
-
+        사용자의 선택을 실어 보내는 두 번째 POST 가 이 메서드입니다 —
         ``reservationWait.ReservationWait``(``ReservationWaitService.java:10-12``).
 
         ``require_mutation_consent(consent, "reserve")`` 와 로그인 세션을 요구하고,
+        다른 모든 상태 변경과 같은 이중 게이트 전송로로 나갑니다. 이미 있는 PNR 의
+        예약을 마무리할 뿐 돈을 옮기지도 좌석을 놓지도 않으므로 소비 범주가
+        ``"reserve"`` 입니다.
         """
         require_mutation_consent(consent, "reserve")
         if self.session.current is None:
@@ -1787,15 +1814,24 @@ class KorailClient:
     ) -> MutationPreview | ReservationHoldResponse:
         """환승 여정 하나를 두 구간·한 PNR 로 홀드합니다. consent 게이트가 있습니다.
 
+        라우트도 consent 범주도 세션 요구도 :meth:`reserve` 와 같습니다. 앱도
+        엔드포인트와 요청 빌더를 하나만 쓰고 구간 수만 폼을 바꿉니다
         (``C5/a.java:52-119``). consent·``dry_run``·돌려주는 홀드에 대해
+        :meth:`reserve` 가 말한 것이 그대로 적용됩니다.
 
+        ``legs`` 는 탑승 순서대로 정확히 두 개의
+        :class:`~korail_mobile_api.TrainSummary` 여야 하고,
+        :meth:`search_transfer_trains` 가 준 :attr:`TransferItinerary.legs
+        <korail_mobile_api.TransferItinerary.legs>` 가 그것입니다. 다른 개수는 폼을
         만들기 전에 거절합니다(:data:`~korail_mobile_api.KORAIL_MAX_JOURNEY_LEGS`).
 
+        ``seat_classes`` 는 두 구간에 하나를 주거나 구간마다 하나를 줍니다 — 앱의 실별
         선택이 구간별입니다(``C5/a.java:59``, ``:97``). ``seats`` 도 마찬가지로
+        구간마다 한 묶음입니다(``C5/a.java:120-133``).
 
         **2026-07-31 실서버 확인.** 서울→여수EXPO 를 :meth:`search_transfer_trains`
         로 찾아 서울→오송(열차 009) + 오송→여수EXPO(열차 503) 를 성인 1명으로 보내
-        ``SUCC``/``IRR000018``, 49,700원, PNR ``320260733051735`` 를 받았습니다. 되읽은
+        ``SUCC``/``IRR000018``, 49,700원, PNR 하나를 받았습니다. 되읽은
         상세의 ``journey_count`` 가 ``"2"`` 였고 :meth:`cancel_unpaid_hold` 가 PNR
         하나로 두 구간을 함께 해제했습니다 — SRT 쪽과 달리 취소에 여정 수를 따로
         줄 필요가 없습니다. 확인된 것은 **1인·일반실·편도** 한 건입니다.
@@ -1843,9 +1879,20 @@ class KorailClient:
     ) -> MutationPreview | ReservationHoldResponse:
         """한 열차를 중간역에서 나눈 병합예약을 홀드합니다. consent 게이트가 있습니다.
 
+        병합 흐름의 두 번째이자 마지막 홀드입니다. 첫 번째는
+        ``job_type=KorailReservationJobType.MERGE_STANDING``(``"1202"``, 입석+좌석
+        예매)으로 부르는 :meth:`reserve` 이고 그것이 전 구간을 입석으로 잡습니다. 이
+        메서드가 그것을 같은 열차의 두 여정 예약으로 바꾸는데, 나누는 지점은
+        :meth:`get_merge_seats_inquiry` 가 알려준 중간역입니다. 다섯 단계 전체와 그
+        근거는
         :data:`~korail_mobile_api.constants.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE`
+        에 적혀 있습니다.
 
+        입석 홀드를 대신 취소하지는 않습니다. 앱은 다시 예약하기 전에 그것을
         취소하지만(``DirectInquiryActivity.java:227-250``), 여기서는 ``"cancel"``
+        consent 아래의 :meth:`cancel_unpaid_hold` 로 호출자가 직접 합니다 —
+        ``"reserve"`` 동의만 받고 살아 있는 PNR 을 조용히 취소하는 것은 이 게이트들이
+        막으려는 범주 혼동 그 자체입니다.
 
         전송된 적이 없습니다. 여기서 만든 병합 폼이 KORAIL 에 나간 적은 없습니다.
         """
@@ -1890,7 +1937,9 @@ class KorailClient:
         ``require_mutation_consent(consent, "cancel")`` 와 로그인 세션을 요구합니다.
 
         ``consent.dry_run`` 이 참이면 PNR 을 가린 :class:`MutationPreview` 를, 거짓이면
+        이중 게이트 전송로로 POST 한 뒤 파싱한 봉투를 돌려줍니다.
 
+        앱의 취소 호출 두 개 중 뒤쪽(``ReservationCancelChk``)만 보냅니다. 앞의
         ``ReservationCancel`` 을 생략해도 취소가 성립하는 것은 라이브로 확인했습니다.
         """
         require_mutation_consent(consent, "cancel")
@@ -1914,8 +1963,12 @@ class KorailClient:
         """미결제 홀드를 비과금 시험카드로 결제 시도합니다. consent 게이트가 있습니다.
 
         ``require_mutation_consent(consent, "payment")`` 와 로그인 세션에 더해
+        ``consent.fake_card_only`` 가 참이어야 합니다. KORAIL 결제 호출은 카드번호를
+        평문으로 싣기 때문에, ``card`` 는 PG 가 거절할 비과금 시험카드여야 합니다.
 
         ``consent.dry_run`` 이 참이면 카드·신원 필드를 가린 :class:`MutationPreview` 를
+        돌려주고 아무것도 보내지 않습니다. 거짓이면 이중 게이트 전송로로 POST 하고
+        파싱한 :class:`ReservationPaymentResponse` 를 돌려줍니다.
         """
         require_mutation_consent(consent, "payment")
         if not consent.fake_card_only:
@@ -1959,10 +2012,19 @@ class KorailClient:
         """미결제 홀드를 실제 청구되는 카드로 결제합니다. consent 게이트가 있습니다.
 
         ``require_mutation_consent(consent, "payment")`` 와 로그인 세션에 더해
+        ``consent.real_card_acknowledged`` 가 참이고 ``consent.fake_card_only`` 가
+        거짓이어야 합니다. 두 조건을 모두 적어야 합니다 — 실제 청구를 인정하면서
+        시험카드라고 주장하는 consent 는 모순이라 여기서도, 전송 게이트에서도
+        거절합니다. 기본 :class:`MutationConsent` 는 어느 쪽도 만족하지 않습니다.
 
+        전선 모양은 :meth:`pay_with_fake_card` 와 같습니다. 둘 다 같은
+        ``build_card_payment_form`` 을 만들고 같은 이중 게이트
         :meth:`~korail_mobile_api.http.KorailHttpClient.post_mutation_form` 으로
+        나가므로, 실제 결제가 라이브로 검증된 모양에서 벗어날 수 없습니다. 다른 것은
+        어느 consent 를 받느냐뿐입니다.
 
         ``consent.dry_run`` 이 참이면 카드·신원을 가린 :class:`MutationPreview` 만
+        돌려주고 아무것도 전송하지 않습니다.
         """
         require_mutation_consent(consent, "payment")
         if not consent.real_card_acknowledged:
@@ -2016,8 +2078,11 @@ class KorailClient:
         """결제까지 끝난 승차권 **한 장** 을 환불합니다. consent 게이트가 있습니다.
 
         ``POST refunds.RefundsRequest``. ``require_mutation_consent(consent,
-
+        "refund")`` 와 로그인 세션을 요구합니다. ``ticket`` 은
+        :class:`~korail_mobile_api.mutation_models.PaidTicket`(PNR + 원발매 자격증명 +
         반환비밀번호)이어야 합니다. ``consent.dry_run`` 이 참이면 승차권 신원을 가린
+        :class:`MutationPreview` 를, 거짓이면 이중 게이트 전송로로 POST 한 뒤 파싱한
+        :class:`RefundTicketResponse` 를 돌려줍니다.
 
         **PNR 단위가 아니라 승차권 단위입니다.** ``ticket`` 이 PNR 을 싣기는 하지만
         서버가 되돌리는 것은 ``sale_sequence`` 로 지목된 그 한 장뿐입니다. 승객 2명을
@@ -2028,8 +2093,8 @@ class KorailClient:
         :meth:`get_ticket_list` 응답에서 ``h_orgtk_wct_no``·``h_orgtk_ret_sale_dt``·
         ``h_orgtk_sale_sqno``·``h_orgtk_ret_pwd`` 로 읽습니다.
 
-        2026-07-31 실서버 확인: 성인 2명 16,800원(8,400×2)을 한 PNR
-        (``320260733046452``)로 결제한 뒤 이 메서드를 한 번 부르니
+        2026-07-31 실서버 확인: 성인 2명 16,800원(8,400×2)을 한 PNR 로 결제한 뒤
+        이 메서드를 한 번 부르니
         ``SUCC``/``IRT200277`` 과 함께 8,400원만 돌아왔고, 좌석 032 한 장이
         ``h_rcvd_amt="00000008400"`` 으로 남았습니다. 같은 방식으로 한 번 더 부르니
         비었습니다. 부분 환불을 노린 API 가 아니라, 이것이 이 라우트의 단위입니다.
@@ -2100,7 +2165,6 @@ class KorailClient:
         """홀드 중인 예약의 PNR 을 장바구니에 담습니다. consent 게이트가 있습니다.
 
         ``POST cart.addCartList``(``CartService.java:11-13``). 공통 세 필드 말고 요청
-
         필드는 ``hidPnrNo`` 하나뿐입니다(``AddCartDao.java:9-24``, smali 로 교차 확인).
 
         ``require_mutation_consent(consent, "cart")`` 와 로그인 세션을 요구합니다.
@@ -2123,10 +2187,10 @@ class KorailClient:
         """할인카드(N카드)를 구매합니다. consent 게이트가 있습니다.
 
         ``POST research.dcntCrdInfo.do``(``ResearchService.java:68-70``). 경로에
-
+        "Info" 가 붙어 있지만 조회가 아니라 구매입니다 — 응답이 ``lumpStlTgtNo`` 와
         ``rcvdAmt`` 를 주고(``NCardReservationDao.java:127-134``) 앱은 그 대상번호를
-
         결제 화면으로 그대로 넘깁니다(``SectionNCardInquiryActivity.java:213-257``).
+        만들어지는 것은 결제를 기다리는 미결제 구매입니다.
         """
         require_mutation_consent(consent, "discount_card")
         if self.session.current is None:
@@ -2204,11 +2268,14 @@ class KorailClient:
     ) -> MutationPreview | ReservationHoldResponse:
         """할인카드(N카드)로 좌석 하나를 홀드합니다. consent 게이트가 있습니다.
 
+        라우트도 범주도 게이트도 :meth:`reserve` 와 같습니다. 같은 호출이기 때문입니다 —
         ``w4/a.java:93-104`` 이 평범한 ``ReservationRequest`` 를 만들고
-
         ``c5/b.java:128-138`` 이 평범한 ``ReservationDao`` 로
-
+        ``certification.TicketReservation`` 에 보냅니다. N카드 전용 예약 엔드포인트는
+        없고 N카드 승객 블록이 있을 뿐입니다. 그래서
         ``require_mutation_consent(consent, "reserve")`` 입니다 — 할인카드를 쓴다고
+        예약이 예약 아닌 것이 되지 않고, 좌석 홀드에 동의하지 않은 호출자가 이 길로
+        홀드해서도 안 됩니다.
         """
         require_mutation_consent(consent, "reserve")
         if self.session.current is None:
@@ -2246,10 +2313,21 @@ class KorailClient:
         """홀드된 PNR 의 운임을 다른 할인 조합으로 다시 계산합니다. consent 게이트가 있습니다.
 
         ``POST certification.PriceReCalculation``(``CertificationService.java:35-37``,
-
+        ``getDiscountPrice``)입니다. 앱은 예약의 할인 선택이 바뀔 때마다 결제
         화면에서 이것을 쏘고(``a6/C1042B.java:265-296``), 응답은 홀드가 돌려주는 것과
+        같은 ``ReservationOut`` 입니다
+        (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:584,753``).
 
         ``require_mutation_consent(consent, "price_recalculation")`` 와 로그인 세션을
+        요구합니다. ``consent.dry_run`` 이 참이면(기본) 폼을 검증만 하고 가린
+        :class:`~korail_mobile_api.consent.MutationPreview` 를 돌려주며 아무것도
+        보내지 않습니다.
+
+        **미검증 경로로 다뤄야 합니다.** 7.0.6 DTO 는 ``txtPsrmClCd1``,
+        ``txtSeatAttCd2``, ``txtSeatAttCd4``, ``txtSeatAttCd5`` 를 더 선언하지만
+        (``analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41``)
+        이 폼은 넷 중 어느 것도 보내지 않습니다. 그 값은 앱의 화면 상태에서 오는데 그
+        경로를 추적하지 않았습니다. 또 이 경로는 실서버에 한 번도 보낸 적이 없습니다.
         """
         require_mutation_consent(consent, "price_recalculation")
         if self.session.current is None:

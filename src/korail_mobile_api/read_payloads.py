@@ -423,7 +423,15 @@ def build_cart_list_form(
 def build_delay_discount_ticket_form(
     departure_date_to: str,
 ) -> dict[str, str]:
-    return {"dptDtTo": _ascii_date(departure_date_to, "departure_date_to")}
+    # 7.0.6 DelayDiscountViewIn 은 속성 dptDtTo 에 @SerialName("h_page_no") 를 달았고
+    # (암호화되지 않은 애너테이션 상수), serializer 다섯째 이름의 암호문도 9바이트로
+    # len("h_page_no") 와 같다. wire 키만 바꾸고 앱 속성명을 따른 인자 이름은 둔다.
+    # analysis/jadx/sources/com/korail/talk/network/model/DelayDiscountViewIn.java:50,77
+    # analysis/jadx/sources/com/korail/talk/network/model/DelayDiscountViewIn$$serializer.java:38
+    # 선언 수준 근거일 뿐이다. 이 입력을 만드는 7.0.6 화면은 찾지 못했다. 2026-09-16
+    # 실서버에서 h_page_no=날짜·dptDtTo=날짜·키 없음·h_page_no=1 이 모두 같은 빈 SUCC 였다.
+    # 지연할인권이 없는 계정이라 키는 아직 실서버로 가려지지 않았다.
+    return {"h_page_no": _ascii_date(departure_date_to, "departure_date_to")}
 
 
 def build_discount_coupon_form(

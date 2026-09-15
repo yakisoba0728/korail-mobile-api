@@ -211,10 +211,27 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     assert captured[2].content == b"addSrvDvCd=M10"
 
 
-def test_client_maas_menu_accepts_omitted_common_out_fields():
+def test_client_maas_menu_treats_a_missing_str_result_as_failure():
+    # GdMenuLtOut 은 CommonOut 을 상속한다. CommonOut 은 빠진 strResult 를
+    # commonFail() 이 비교하는 보호 상수로 채우므로 "FAIL" 과 같은 판정이다
+    # (analysis/jadx/sources/com/korail/talk/network/model/CommonOut.java:361,455-462).
+    # h_msg_cd/h_msg_txt 만 빠진 응답은 여전히 받는다(아래 성공 픽스처들).
     client = KorailClient(
         transport=httpx.MockTransport(
             lambda _: httpx.Response(200, json={"menuList": []})
+        )
+    )
+    try:
+        with pytest.raises(KorailAppError):
+            client.get_maas_menu_list()
+    finally:
+        client.close()
+
+
+def test_client_maas_menu_accepts_a_result_only_envelope():
+    client = KorailClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"strResult": "SUCC", "menuList": []})
         )
     )
     try:

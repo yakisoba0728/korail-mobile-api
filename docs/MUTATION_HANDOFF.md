@@ -16,7 +16,7 @@ state-changing request can leave the process only through the dedicated
 |---|---|---|
 | reserve (`1101`, immediate) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
 | reserve (`1103`, seat-designated) | ✅ live-verified 2026-07-26 (seat map honoured) | ⛔ not implemented |
-| reserve (`1102`, 예약대기 standby) | ✅ live-verified 2026-07-26 (`IRR000014` on a sold-out train) | ⛔ not implemented |
+| reserve (`1102`, 예약대기 standby) | ✅ live-verified 2026-07-26 and again 2026-09-16 (`IRR000014`; the standing flag is pinned `"N"`) | ⛔ not implemented |
 | standby follow-up (`reservationWait`) | ✅ `confirm_standby_hold`, **live-verified 2026-07-26** (`IRZ000003`) | ⛔ not implemented |
 | cancel (unpaid hold) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
 | payment (fake card) | ✅ `pay_with_fake_card`, **live-verified (declined)** | ⛔ not implemented — route tiered only, not live-enabled |
@@ -25,7 +25,7 @@ state-changing request can leave the process only through the dedicated
 | reserve (`1202`, 입석+좌석 — the first half of 병합예약) | ✅ live-verified 2026-07-26 (`IRR000018`, two journeys, 중간연결역 prompt present) | ⛔ not implemented |
 | 병합예약 second hold (`reserve_merge`) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
 | 정기권 예약/결제 (`pass.passReserve` / `passPayIssue`) | ⛔ **not implemented — implemented once, then removed**; the routes are not on the mutation allowlist and no method can reach them | ⛔ not implemented |
-| 운임 재계산 (`certification.PriceReCalculation`) | ⚠️ `recalculate_price`, own `price_recalculation` consent, **never live-run** | ⛔ not implemented |
+| 운임 재계산 (`certification.PriceReCalculation`) | ⚠️ `recalculate_price`, own `price_recalculation` consent, **never live-run**; the form omits the 7.0.6 DTO's `txtPsrmClCd1`/`txtSeatAttCd2`/`txtSeatAttCd4`/`txtSeatAttCd5` (`analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41`), so treat it as unverified | ⛔ not implemented |
 | 장바구니 담기 (`cart.addCartList`) | ✅ `add_to_cart`, own `cart` consent, live 2026-07-27 (`SUCC`/`IRZ000002`, read back via `get_cart_list`) | ⛔ not implemented |
 
 "Live-verified" on both sides means the request was actually sent and its
@@ -375,9 +375,13 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    describes the field as `-2` / `9` / `0`; only the 9 has any support in this
    app and its spelling is right-aligned in two characters. Because a standby
    train is normally 매진, `reserve` skips the "seats available" check for
-   `1102`, requires the flag plus 일반실 (there is no 특실 standby), and
-   computes `txtStndFlg` from `S4/J.java:83-84`'s `isStndSeat` instead of
-   pinning `"N"`.
+   `1102`, requires the flag plus 일반실 (there is no 특실 standby), and pins
+   `txtStndFlg` to `"N"`. It used to compute the flag from `S4/J.java:83-84`'s
+   `isStndSeat`, which sends `"Y"` on a sold-out row whose standing inventory is
+   open — and `"Y"` is how the server is told "sell me standing". A 2026-09-16
+   live run sent both values to the same standby-eligible train: `"N"` answered
+   `IRR000014` 예약대기, `"Y"` answered `IRR000018` with `h_seat_no="입석"` and a
+   payment deadline, i.e. a standing ticket instead of a place in the queue.
 
    *Standby is members-only, and that is real.*
    `ReservationRequest.java:105-119`'s `isNonmemberNotEnable()` returns true for
@@ -433,12 +437,13 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
      the wire format is per-seat), and what the server says when a designated
      seat has been taken between the inventory read and the hold.
 
-9. **korail `recalculate_price` (운임 재계산) has never been sent.** The wire
-   shape is settled from the APK and needs no further static work: the six
-   `List` `@Field`s are index-aligned one row per seat (`a6/C1042B.java:275-283`,
-   confirmed in `smali/a6.1/B.smali`), and Retrofit emits them as repeated keys
-   rather than indexed ones (`RequestBuilder.smali:1537-1601`). What is unknown
-   is entirely server-side.
+9. **korail `recalculate_price` (운임 재계산) has never been sent.** The six
+   `List` `@Field`s are settled from the APK: they are index-aligned one row
+   per seat (`a6/C1042B.java:275-283`, confirmed in `smali/a6.1/B.smali`), and
+   Retrofit emits them as repeated keys rather than indexed ones
+   (`RequestBuilder.smali:1537-1601`). The form is not complete against 7.0.6,
+   though: it omits the four DTO fields named in the status row, whose
+   screen-state source was not traced.
 
    *Cost to prove: one hold, and no money, if it is done in this order.* Place
    an ordinary `1101` hold (₩0 until settled), read it back with

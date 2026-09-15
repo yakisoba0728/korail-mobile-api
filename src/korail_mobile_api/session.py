@@ -144,7 +144,13 @@ class KorailSessionClient:
         )
 
     def get_login_crypto_info(self) -> LoginCryptoInfo:
-        """``common.code.do`` 에서 비밀번호 암호화 파라미터를 읽습니다."""
+        """``common.code.do`` 에서 비밀번호 암호화 파라미터를 읽습니다.
+
+        7.0.6 로그인은 ``pwdAESCphd`` 를 읽지 않고 ``key`` 로 곧장 AES 를 겁니다
+        (``analysis/jadx/sources/com/korail/talk/data/LoginRepositoryImpl.java:922-936``).
+        그래서 이 값이 없거나 ``Y``/``N`` 이 아니어도 거절하지 않고, 참고용으로만
+        ``LoginCryptoInfo.pwd_aes_cphd`` 에 담습니다(없으면 ``""``).
+        """
         response = self.http.post_form(
             "/classes/com.korail.mobile.common.code.do",
             build_common_code_form(
@@ -157,13 +163,20 @@ class KorailSessionClient:
         raw = extract_login_crypto_payload(raw)
         idx = str(raw.get("idx") or "")
         key = str(raw.get("key") or "")
+        # 참고용입니다. getPwdAESCphd() 의 유일한 사용처는 결제 금액 암호화입니다:
+        # analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:10991-10999
         pwd_aes_cphd = str(raw.get("pwdAESCphd") or raw.get("loginFlg") or "").upper()
-        if pwd_aes_cphd not in {"Y", "N"}:
-            raise KorailProtocolError("KORAIL login crypto metadata missing valid pwdAESCphd")
-        if pwd_aes_cphd == "Y" and not idx:
-            raise KorailProtocolError("KORAIL login crypto metadata missing valid idx")
+        # "Y" 인데 key 가 비었을 때만 거절합니다. APK 도 빈 key 로 AES 를 부르다
+        # 실패하므로(SecretKeySpec), 평문 Base64 로 조용히 내려가지 않습니다:
+        # analysis/jadx/sources/com/korail/talk/crypto/AESCrypto.java:45-57
         if pwd_aes_cphd == "Y" and not key:
             raise KorailProtocolError("KORAIL login crypto metadata missing valid key")
+        # idx 는 key 가 있어도 요구하지 않습니다. APK 는 getIdx() 를 확인 없이 LoginIn 에
+        # 넘기고, 폼을 만들 때 빈 값을 빼므로 idx 없이 로그인을 보냅니다. _login 도 빈
+        # idx 를 폼에서 뺍니다. key 길이는 로그인 POST 전에 transform_login_password 가
+        # 검사합니다.
+        # analysis/jadx/sources/com/korail/talk/data/LoginRepositoryImpl.java:932-936
+        # analysis/jadx/sources/com/korail/talk/network/NetworkService.java:15342-15343
         return LoginCryptoInfo(idx=idx, key=key, pwd_aes_cphd=pwd_aes_cphd)
 
     def login(
@@ -286,7 +299,7 @@ class KorailSessionClient:
             )
         except KorailAppError as exc:
             raise KorailAuthError(
-                exc.message or "KORAIL login failed"
+                exc.message or "KORAIL login failed", code=exc.code
             ) from exc
 
     def _finish_login(
@@ -312,7 +325,8 @@ class KorailSessionClient:
                 )
             raise KorailAuthError(
                 f"{response.h_msg_cd or 'UNKNOWN'}: "
-                f"{response.h_msg_txt or 'KORAIL login did not complete'}"
+                f"{response.h_msg_txt or 'KORAIL login did not complete'}",
+                code=response.h_msg_cd,
             )
         jsessionid = self.http.cookies.get("JSESSIONID")
         if not jsessionid:

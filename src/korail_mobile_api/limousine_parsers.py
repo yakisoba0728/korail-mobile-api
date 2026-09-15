@@ -186,7 +186,10 @@ def parse_limousine_seat_inventory_response(
 ) -> LimousineSeatInventoryResponse:
     """``lms.TResidualSeatsResearch.do`` 의 응답을 파싱합니다.
 
+    봉투가 정확히 ``SUCC`` 여야 합니다. 스케줄 조회와 달리 ``seatList`` 키는
     **필수**라서 키가 없으면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 빈 리스트
+    자체는 정상이며 좌석 정보가 하나도 없다는 뜻입니다.
     """
     _require_exact_success(response)
     raw = response.raw

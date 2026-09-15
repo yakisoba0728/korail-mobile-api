@@ -1,7 +1,10 @@
 """Retry the delivery-recipient read on a fresh paid ticket, then refund it.
 
 This wrapper reuses the established bounded round-trip operator and prompts all
-credentials in memory. It prints only envelope codes and masked booking IDs.
+credentials in memory. It prints through the operator's own console, so the card
+values are scrubbed by exact value and the PNR is printed in full: a digit-run
+mask would hide the 15-digit PNR a stranded paid ticket is recovered with (see
+``_Console`` in ``reserve_pay_refund_roundtrip.py``).
 """
 
 from __future__ import annotations
@@ -9,25 +12,10 @@ from __future__ import annotations
 import argparse
 import getpass
 import os
-import re
 
 import reserve_pay_refund_roundtrip as operator
 from korail_mobile_api import KorailClient, KorailConfig, OriginalTicketReference
-
-
-class RedactedConsole:
-    def __init__(self, inner: operator._Console) -> None:
-        self.inner = inner
-
-    def scrub(self, value: object) -> str:
-        return re.sub(r"\b\d{12,19}\b", "[REDACTED_ID]", self.inner.scrub(value))
-
-    def say(self, message: object = "") -> None:
-        print(self.scrub(message), flush=True)
-
-    def banner(self, lines: tuple[str, ...]) -> None:
-        for line in lines:
-            self.say(line)
+from korail_mobile_api.live import live_enabled
 
 
 class RecipientRoundTrip(operator.RoundTrip):
@@ -66,12 +54,15 @@ class RecipientRoundTrip(operator.RoundTrip):
 
 def main() -> int:
     if (
-        os.environ.get("KORAIL_LIVE_MUTATION") != "1"
+        not live_enabled()
+        or os.environ.get("KORAIL_LIVE_MUTATION") != "1"
         or os.environ.get("KORAIL_LIVE_REAL_CHARGE") != "1"
     ):
-        print("Set KORAIL_LIVE_MUTATION=1 and KORAIL_LIVE_REAL_CHARGE=1")
+        print(
+            "Set KORAIL_MOBILE_API_LIVE=1, KORAIL_LIVE_MUTATION=1 and "
+            "KORAIL_LIVE_REAL_CHARGE=1"
+        )
         return 2
-    os.environ["KORAIL_MOBILE_API_LIVE"] = "1"
     os.environ["KORAIL_MAX_FARE"] = "5000"
     os.environ["KORAIL_DEPARTURE_STATION"] = "서울"
     os.environ["KORAIL_ARRIVAL_STATION"] = "영등포"
@@ -83,7 +74,7 @@ def main() -> int:
     os.environ["KORAIL_CARD_EXPIRE"] = getpass.getpass("expiry YYMM (hidden): ")
     os.environ["KORAIL_CARD_BIRTHDAY"] = getpass.getpass("birth YYMMDD (hidden): ")
     card = operator.read_card_from_env()
-    console = RedactedConsole(operator._console_for(card))
+    console = operator._console_for(card)
     client = KorailClient(KorailConfig(enable_dynapath=True))
     operator._install_pacing(client, operator._Pacer(1.5))
     args = argparse.Namespace(date=operator._default_date(), min_interval=1.5)
