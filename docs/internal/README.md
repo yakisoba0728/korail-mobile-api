@@ -39,6 +39,10 @@ moved is here.
   gaps, exception handling, stale comments and duplication, batched into an
   ordered refactor plan. It records what the safety gate refused as well as
   what it approved, and which of its own findings did not survive refutation.
+- `session-handoff-2026-09-18.md` — where the work stands, what is deliberately
+  not in git (`korail.apk`, `analysis/`) and how to regenerate it from a recorded
+  APK hash, which batch to start from, and the traps that keep being
+  rediscovered. Start here if you are picking this up on another machine.
 - `refactor-plan-tests-scripts-2026-09-16.md` — the companion sweep of
   `tests/` and `scripts/`, which the first plan left untouched. It found that
   the suite does not pin several things it is relied on to pin — notably that
