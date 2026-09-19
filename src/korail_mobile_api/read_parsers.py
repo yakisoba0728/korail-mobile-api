@@ -1124,16 +1124,12 @@ def parse_reservation_history_response(
     if empty:
         return ReservationHistoryResponse(**_response_fields(raw))
     trains = []
-    journeys = _nested_rows(raw, "jrny_infos", "jrny_info", "reservation history")
-    for journey_value in journeys:
+    for journey_value in _nested_rows(
+        raw, "jrny_infos", "jrny_info", "reservation history"
+    ):
         journey = _row(journey_value, "reservation history jrny_info")
-        train_wrapper = _optional_mapping(
-            journey, "train_infos", "reservation history"
-        )
-        if train_wrapper is None:
-            continue
-        for train_value in _optional_list(
-            train_wrapper, "train_info", "reservation history"
+        for train_value in _nested_rows(
+            journey, "train_infos", "train_info", "reservation history"
         ):
             train = _row(train_value, "reservation history train_info")
             trains.append(
@@ -1701,58 +1697,49 @@ def parse_tour_train_info_response(
     raw: Mapping[str, Any],
 ) -> TourTrainInfoResponse:
     _validate_strict_read_envelope(raw)
-    seat_infos = _optional_mapping(raw, "seat_infos", "tour train info")
     seats = []
-    if seat_infos is not None:
-        for value in _optional_list(
-            seat_infos,
-            "seat_info",
-            "tour train seat infos",
+    for value in _nested_rows(
+        raw, "seat_infos", "seat_info", "tour train seat infos"
+    ):
+        seat = _row(value, "tour train seat_info")
+        additional_infos = []
+        for additional_value in _nested_rows(
+            seat,
+            "seat_add_infos",
+            "seat_add_info",
+            "tour train additional seat infos",
         ):
-            seat = _row(value, "tour train seat_info")
-            additional_wrapper = _optional_mapping(
-                seat,
-                "seat_add_infos",
-                "tour train seat info",
+            additional = _row(
+                additional_value,
+                "tour train seat_add_info",
             )
-            additional_infos = []
-            if additional_wrapper is not None:
-                for additional_value in _optional_list(
-                    additional_wrapper,
-                    "seat_add_info",
-                    "tour train additional seat infos",
-                ):
-                    additional = _row(
-                        additional_value,
-                        "tour train seat_add_info",
-                    )
-                    # TourTrainInfoDao.SeatAddInfo.h_psg_num is Java `int`
-                    # (TourTrainInfoDao.java:14); the h_-prefixed backend
-                    # serializes such ints as quoted strings on the wire (proven
-                    # for sibling h_srcar_no/h_rest_seat_cnt), and Gson coerces
-                    # them, so accept the string form too.
-                    passenger_count = _required_integer(
-                        additional,
-                        "h_psg_num",
-                        "tour train seat",
-                    )
-                    additional_infos.append(
-                        TourTrainSeatAdditionalInfo(
-                            passenger_count=passenger_count,
-                            raw=additional,
-                        )
-                    )
-            seats.append(
-                TourTrainSeatInfo(
-                    seat_attribute_code=_optional_string(
-                        seat,
-                        "h_seat_att_cd",
-                        "tour train seat info",
-                    ),
-                    additional_infos=tuple(additional_infos),
-                    raw=seat,
+            # TourTrainInfoDao.SeatAddInfo.h_psg_num is Java `int`
+            # (TourTrainInfoDao.java:14); the h_-prefixed backend
+            # serializes such ints as quoted strings on the wire (proven
+            # for sibling h_srcar_no/h_rest_seat_cnt), and Gson coerces
+            # them, so accept the string form too.
+            passenger_count = _required_integer(
+                additional,
+                "h_psg_num",
+                "tour train seat",
+            )
+            additional_infos.append(
+                TourTrainSeatAdditionalInfo(
+                    passenger_count=passenger_count,
+                    raw=additional,
                 )
             )
+        seats.append(
+            TourTrainSeatInfo(
+                seat_attribute_code=_optional_string(
+                    seat,
+                    "h_seat_att_cd",
+                    "tour train seat info",
+                ),
+                additional_infos=tuple(additional_infos),
+                raw=seat,
+            )
+        )
     return TourTrainInfoResponse(
         seat_infos=tuple(seats),
         **_response_fields(raw),
@@ -2636,10 +2623,6 @@ def parse_self_seat_change_info_response(
     읽습니다 — 잔여좌석 수와 편성/운행 순서가 맨 JSON 숫자로 오는 것이 관측된
     바로 그런 필드입니다.
     """
-    if not isinstance(raw, Mapping):
-        raise KorailProtocolError(
-            "KORAIL self seat change info response must be a mapping"
-        )
     _validate_strict_read_envelope(raw)
     stations = tuple(
         SelfSeatChangeStation(
@@ -2765,10 +2748,6 @@ def parse_original_ticket_inquiry_response(
     직렬화 전에 :func:`~korail_mobile_api.redaction.redact_mapping` 을 적용해야
     합니다.
     """
-    if not isinstance(raw, Mapping):
-        raise KorailProtocolError(
-            "KORAIL original ticket inquiry response must be a mapping"
-        )
     _validate_strict_read_envelope(raw)
     tickets = []
     for value in _optional_list(raw, "orgTkList", "original ticket inquiry"):
