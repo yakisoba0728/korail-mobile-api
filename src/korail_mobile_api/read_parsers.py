@@ -678,25 +678,23 @@ def _parse_pass_menu_data(
         return None
     age_options = tuple(
         PassAgeOption(
-            **_nullable_string_fields(
-                _row(v, f"{context} pass_ageinfo"),
-                _PASS_AGE_OPTION_FIELDS,
-                "pass age option",
-            ),
-            raw=_row(v, f"{context} pass_ageinfo"),
+            **_nullable_string_fields(row, _PASS_AGE_OPTION_FIELDS, "pass age option"),
+            raw=row,
         )
-        for v in _optional_list(data, "pass_ageinfo", context)
+        for row in (
+            _row(v, f"{context} pass_ageinfo")
+            for v in _optional_list(data, "pass_ageinfo", context)
+        )
     )
     period_options = tuple(
         PassPeriodOption(
-            **_nullable_string_fields(
-                _row(v, f"{context} pass_periodinfo"),
-                _PASS_PERIOD_OPTION_FIELDS,
-                "pass period option",
-            ),
-            raw=_row(v, f"{context} pass_periodinfo"),
+            **_nullable_string_fields(row, _PASS_PERIOD_OPTION_FIELDS, "pass period option"),
+            raw=row,
         )
-        for v in _optional_list(data, "pass_periodinfo", context)
+        for row in (
+            _row(v, f"{context} pass_periodinfo")
+            for v in _optional_list(data, "pass_periodinfo", context)
+        )
     )
     return PassMenuData(
         commuter_kind_code=_optional_string(data, "h_cmtr_knd_cd", context),
@@ -829,14 +827,13 @@ def parse_crew_request_list_response(
     _validate_strict_read_envelope(raw)
     items = tuple(
         CrewRequestOption(
-            **_nullable_string_fields(
-                _row(v, "crew request list prsList"),
-                _CREW_REQUEST_OPTION_FIELDS,
-                "crew request option",
-            ),
-            raw=_row(v, "crew request list prsList"),
+            **_nullable_string_fields(row, _CREW_REQUEST_OPTION_FIELDS, "crew request option"),
+            raw=row,
         )
-        for v in _optional_list(raw, "prsList", "crew request list")
+        for row in (
+            _row(v, "crew request list prsList")
+            for v in _optional_list(raw, "prsList", "crew request list")
+        )
     )
     return CrewRequestListResponse(items=items, **_response_fields(raw))
 
@@ -869,14 +866,13 @@ def parse_deposit_bank_response(
     _validate_envelope(raw)
     items = tuple(
         DepositBank(
-            **_nullable_string_fields(
-                _row(v, "deposit bank list dptnBank"),
-                _DEPOSIT_BANK_FIELDS,
-                "deposit bank",
-            ),
-            raw=_row(v, "deposit bank list dptnBank"),
+            **_nullable_string_fields(row, _DEPOSIT_BANK_FIELDS, "deposit bank"),
+            raw=row,
         )
-        for v in _optional_list(raw, "dptnBank", "deposit bank list")
+        for row in (
+            _row(v, "deposit bank list dptnBank")
+            for v in _optional_list(raw, "dptnBank", "deposit bank list")
+        )
     )
     return DepositBankListResponse(items=items, **_response_fields(raw))
 
@@ -888,14 +884,13 @@ def parse_delay_discount_ticket_response(
     rows = _nested_rows(raw, "disc_infos", "disc_info", "delay discount ticket list")
     items = tuple(
         DelayDiscountTicket(
-            **_nullable_string_fields(
-                _row(v, "delay discount ticket list disc_info"),
-                _DELAY_DISCOUNT_TICKET_FIELDS,
-                "delay discount ticket",
-            ),
-            raw=_row(v, "delay discount ticket list disc_info"),
+            **_nullable_string_fields(row, _DELAY_DISCOUNT_TICKET_FIELDS, "delay discount ticket"),
+            raw=row,
         )
-        for v in rows
+        for row in (
+            _row(v, "delay discount ticket list disc_info")
+            for v in rows
+        )
     )
     return DelayDiscountTicketListResponse(items=items, **_response_fields(raw))
 
@@ -1013,14 +1008,13 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
         item = _row(value, "trip menu menuList")
         contents = tuple(
             TripMenuContent(
-                **_nullable_string_fields(
-                    _row(cv, "trip menu contList"),
-                    _TRIP_MENU_CONTENT_FIELDS,
-                    "trip menu content",
-                ),
-                raw=_row(cv, "trip menu contList"),
+                **_nullable_string_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
+                raw=row,
             )
-            for cv in _optional_list(item, "contList", "trip menu")
+            for row in (
+                _row(cv, "trip menu contList")
+                for cv in _optional_list(item, "contList", "trip menu")
+            )
         )
         items.append(
             TripMenuItem(
@@ -1045,14 +1039,13 @@ def parse_product_reservation_list_response(
         return ProductReservationListResponse(**_response_fields(raw))
     items = tuple(
         ProductReservation(
-            **_nullable_string_fields(
-                _row(v, "product reservation list entity"),
-                _PRODUCT_RESERVATION_FIELDS,
-                "product reservation",
-            ),
-            raw=_row(v, "product reservation list entity"),
+            **_nullable_string_fields(row, _PRODUCT_RESERVATION_FIELDS, "product reservation"),
+            raw=row,
         )
-        for v in _optional_list(main, "entity", "product reservation list")
+        for row in (
+            _row(v, "product reservation list entity")
+            for v in _optional_list(main, "entity", "product reservation list")
+        )
     )
     return ProductReservationListResponse(
         items=items,
@@ -1332,14 +1325,13 @@ def parse_pass_schedule_response(
         schedule = _row(schedule_value, "pass schedule schedule_info")
         trains = tuple(
             PassScheduleTrain(
-                **_nullable_string_fields(
-                    _row(tv, "pass schedule train_list"),
-                    _PASS_SCHEDULE_TRAIN_FIELDS,
-                    "pass schedule train",
-                ),
-                raw=_row(tv, "pass schedule train_list"),
+                **_nullable_string_fields(row, _PASS_SCHEDULE_TRAIN_FIELDS, "pass schedule train"),
+                raw=row,
             )
-            for tv in _optional_list(schedule, "train_list", "pass schedule schedule_info")
+            for row in (
+                _row(tv, "pass schedule train_list")
+                for tv in _optional_list(schedule, "train_list", "pass schedule schedule_info")
+            )
         )
         schedules.append(PassScheduleInfo(trains=trains, raw=schedule))
     return PassScheduleResponse(

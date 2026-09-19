@@ -31,42 +31,8 @@ from .limousine_models import (
     LimousineSeatInventoryResponse,
 )
 from .models import BaseKorailResponse
-
-
-def _optional_string(
-    data: Mapping[str, Any],
-    key: str,
-    context: str,
-) -> str | None:
-    value = data.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a string or null"
-        )
-    return value
-
-
-def _row(value: Any, context: str) -> Mapping[str, Any]:
-    if not isinstance(value, Mapping):
-        raise KorailProtocolError(
-            f"KORAIL {context} contained a non-object item"
-        )
-    return value
-
-
-def _nullable_list(
-    data: Mapping[str, Any],
-    key: str,
-    context: str,
-) -> list[Any]:
-    value = data.get(key)
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a list or null"
-        )
-    return value
+from .read_parsers import _optional_list as _nullable_list
+from .read_parsers import _optional_string, _row
 
 
 def _required_list(
