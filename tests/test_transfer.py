@@ -56,6 +56,7 @@ from urllib.parse import parse_qs, parse_qsl
 import httpx
 import pytest
 
+from _helpers import logged_in_no_network_client as _logged_in_no_network_client
 from korail_mobile_api import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_MAX_JOURNEY_LEGS,
@@ -201,18 +202,6 @@ def _second_leg() -> TrainSummary:
 
 def _legs() -> tuple[TrainSummary, TrainSummary]:
     return (_first_leg(), _second_leg())
-
-
-def _logged_in_no_network_client() -> KorailClient:
-    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
-        raise AssertionError(
-            f"a dry run must not send a request (saw {request.method} "
-            f"{request.url.path})"
-        )
-
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    return client
 
 
 # --- the enum values, read from bytecode ------------------------------------

@@ -43,3 +43,19 @@ def make_authenticated_client(handler) -> KorailClient:
 def refuse_transport(request: httpx.Request) -> httpx.Response:
     """A transport handler for tests in which nothing may be sent."""
     raise AssertionError(f"nothing may be sent: {request.method} {request.url}")
+
+
+def no_network_client() -> KorailClient:
+    """A client with no session whose transport fails the test on any request.
+
+    For the refusals that must come before anything is sent: no consent, no
+    session.
+    """
+    return KorailClient(transport=httpx.MockTransport(refuse_transport))
+
+
+def logged_in_no_network_client() -> KorailClient:
+    """The same, with a session: for dry runs, which must not send either."""
+    client = no_network_client()
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    return client

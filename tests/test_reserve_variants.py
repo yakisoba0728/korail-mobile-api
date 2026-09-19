@@ -39,6 +39,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from _helpers import logged_in_no_network_client as _logged_in_no_network_client
 from korail_mobile_api import (
     KORAIL_STANDBY_HOLD_MESSAGE_CODE,
     KorailClient,
@@ -172,18 +173,6 @@ def _standby_hold(
         pnr_no=pnr_no,
         journey_count="0001",
     )
-
-
-def _logged_in_no_network_client() -> KorailClient:
-    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
-        raise AssertionError(
-            f"a dry run must not send a request (saw {request.method} "
-            f"{request.url.path})"
-        )
-
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    return client
 
 
 # --- job ids -----------------------------------------------------------------

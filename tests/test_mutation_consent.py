@@ -18,16 +18,15 @@ from __future__ import annotations
 
 import dataclasses
 
-import httpx
 import pytest
 
+from _helpers import logged_in_no_network_client as _logged_in_no_network_client
+from _helpers import no_network_client as _no_network_client
 from korail_mobile_api import (
-    KorailClient,
     KorailMutationNotAllowedError,
     KorailPassengerCounts,
     KorailProtocolError,
     KorailSeatClass,
-    KorailSession,
     MutationConsent,
     MutationPreview,
     TrainSummary,
@@ -71,23 +70,6 @@ def _eligible_train() -> TrainSummary:
         arrival_construction_order="2",
         seat_attribute_code="015",
     )
-
-
-def _no_network_client() -> KorailClient:
-    # Any network use is a hard failure: reserve() dry-run must never send.
-    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
-        raise AssertionError(
-            f"reserve() must not send a request (saw {request.method} "
-            f"{request.url.path})"
-        )
-
-    return KorailClient(transport=httpx.MockTransport(handler))
-
-
-def _logged_in_no_network_client() -> KorailClient:
-    client = _no_network_client()
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    return client
 
 
 def _allow(category: str) -> MutationConsent:
