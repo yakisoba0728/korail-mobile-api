@@ -21,6 +21,7 @@ import os
 import sys
 import time
 from collections.abc import Callable
+from datetime import date, timedelta
 from typing import Any
 
 from korail_mobile_api import (
@@ -31,6 +32,21 @@ from korail_mobile_api import (
     PriceFareQuoteRequest,
     TrainSearchQuery,
 )
+
+
+# How far ahead every read looks. Two weeks is inside the window these routes
+# accept and far enough out that the day's trains have not all left.
+QUERY_DAYS_AHEAD = 14
+
+
+def _query_date(today: date | None = None) -> str:
+    """The travel date the reads use, counted from today so it never goes stale.
+
+    A fixed date once stood here. After that day passed the searches came back
+    empty and the steps that need a train were skipped without a word.
+    """
+    day = (today or date.today()) + timedelta(days=QUERY_DAYS_AHEAD)
+    return day.strftime("%Y%m%d")
 
 
 def _describe(value: Any) -> str:
@@ -67,6 +83,8 @@ def main() -> int:
         raise SystemExit(
             "Set KORAIL_MOBILE_API_LIVE=1 and KORAIL_LIVE_RETRY_READS=1 to run live reads"
         )
+    travel_date = _query_date()
+    print(f"travel_date: {travel_date}")
     member = getpass.getpass("member (hidden): ")
     password = getpass.getpass("password (hidden): ")
     client = KorailClient(KorailConfig(enable_dynapath=True))
@@ -89,22 +107,31 @@ def main() -> int:
             return 0
         if "--fallback-routes" in sys.argv[1:]:
             for departure, arrival in (("포항", "목포"), ("진주", "강릉")):
-                query = TrainSearchQuery(departure, arrival, "20260929", "060000")
+                query = TrainSearchQuery(departure, arrival, travel_date, "060000")
                 _try(
                     f"fallback_{departure}_{arrival}",
                     lambda query=query: client.search_trains_with_transfer_fallback(query),
                 )
             return 0
         _try("v7_specific_date", lambda: client.v7.call("NetworkApi.postSpecificDateData"))
-        _try("multi_child_20260929", lambda: client.get_multi_child_discount_targets("20260929"))
-        route = TrainSearchQuery("서울", "부산", "20260929", "000000")
+        _try(
+            "multi_child_travel_date",
+            lambda: client.get_multi_child_discount_targets(travel_date),
+        )
+        route = TrainSearchQuery("서울", "부산", travel_date, "000000")
         search = _try("search_seoul_busan", lambda: client.search_trains(route))
         if search is None or not search.trains:
-            return 0
+            # Every step after this needs a train. Say so, and fail the run,
+            # rather than end as if they had been tried.
+            print(
+                f"search_seoul_busan: no trains on {travel_date}; schedule, merge "
+                "seats, fare quote and the late fallback were not tried"
+            )
+            return 1
         train = search.trains[0]
         schedule = _try(
             "schedule_selected_train",
-            lambda: client.get_train_schedule(train.run_date or "20260929", train.train_no),
+            lambda: client.get_train_schedule(train.run_date or travel_date, train.train_no),
         )
         if schedule is not None:
             middle = next(
@@ -116,8 +143,10 @@ def main() -> int:
                     "merge_seats_real_middle_station",
                     lambda: client.get_merge_seats_inquiry(
                         MergeSeatsInquiryRequest(
-                            boarding_datetime=(train.departure_date or "20260929") + departure_time,
-                            run_datetime=(train.run_date or "20260929") + departure_time,
+                            boarding_datetime=(
+                                (train.departure_date or travel_date) + departure_time
+                            ),
+                            run_datetime=(train.run_date or travel_date) + departure_time,
                             train_no=train.train_no,
                             departure_station_name=train.departure_station_name or "서울",
                             arrival_station_name=train.arrival_station_name or "부산",
@@ -147,7 +176,7 @@ def main() -> int:
                             PriceFareLeg(
                                 departure_station_code=train.departure_station_code or "0001",
                                 arrival_station_code=train.arrival_station_code or "0020",
-                                run_date=train.run_date or "20260929",
+                                run_date=train.run_date or travel_date,
                                 train_no=train.train_no,
                                 goods_no=goods_no,
                                 requested_seat_attribute_code=train.seat_attribute_code or "015",
@@ -160,7 +189,7 @@ def main() -> int:
             )
         else:
             print("fare_quote_server_goods: unavailable (source values incomplete)")
-        late = TrainSearchQuery("서울", "부산", "20260929", "235900")
+        late = TrainSearchQuery("서울", "부산", travel_date, "235900")
         _try(
             "direct_transfer_fallback_late",
             lambda: client.search_trains_with_transfer_fallback(late),

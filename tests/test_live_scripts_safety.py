@@ -31,6 +31,7 @@ import ast
 import importlib.util
 import itertools
 import os
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -374,3 +375,60 @@ def test_retry_reads_exits_non_zero_when_login_fails(
     monkeypatch.setattr(module, "KorailClient", _RefusingClient)
     assert module.main() == 1
     assert "login: RuntimeError" in capsys.readouterr().out
+
+
+def test_retry_reads_carries_no_fixed_travel_date() -> None:
+    # It used to search 20260929 everywhere. Once that day passed, the searches
+    # came back empty and the steps after them were skipped without a word.
+    source = (SCRIPTS / "retry_unprotected_live.py").read_text(encoding="utf-8")
+    assert re.findall(r"\b20[0-9]{6}\b", source) == []
+
+
+def test_retry_reads_travel_date_is_two_weeks_from_today(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import date
+
+    module = _load("retry_unprotected_live", monkeypatch)
+    assert module._query_date(date(2026, 9, 19)) == "20261003"
+    assert module._query_date(date(2026, 12, 25)) == "20270108"
+
+
+def test_retry_reads_exits_non_zero_when_the_search_finds_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = _load("retry_unprotected_live", monkeypatch)
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    for switch in OPT_INS["retry_unprotected_live"]:
+        monkeypatch.setenv(switch, "1")
+    monkeypatch.setattr(module.getpass, "getpass", lambda prompt: "synthetic")
+    monkeypatch.setattr(module, "_query_date", lambda: "20991231")
+    searched: list[object] = []
+
+    class _EmptyClient:
+        def __init__(self, config) -> None:
+            self.http = SimpleNamespace(_client=SimpleNamespace(event_hooks={"request": []}))
+            self.v7 = SimpleNamespace(call=lambda name: SimpleNamespace(raw={}))
+
+        def login(self, member, password):
+            return SimpleNamespace(raw={})
+
+        def get_multi_child_discount_targets(self, day):
+            searched.append(day)
+            return SimpleNamespace(raw={})
+
+        def search_trains(self, query):
+            searched.append(query.departure_date)
+            return SimpleNamespace(trains=(), raw={})
+
+        def logout(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(module, "KorailClient", _EmptyClient)
+    assert module.main() == 1
+    assert searched == ["20991231", "20991231"]
+    assert "no trains on 20991231" in capsys.readouterr().out
