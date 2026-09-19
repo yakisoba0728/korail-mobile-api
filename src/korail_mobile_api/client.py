@@ -466,6 +466,7 @@ class KorailClient:
         self.session.logout()
 
     def _run_read(self, operation: Callable[[], T]) -> T:
+        """P058 → clear_session → 재발생; 읽기·변경 골격이 함께 씁니다."""
         try:
             return operation()
         except KorailSessionExpiredError:
@@ -479,7 +480,8 @@ class KorailClient:
 
     # ------------------------------------------------------------------
     # Internal helpers: the read skeleton (post/get → parser → _run_read) and
-    # the mutation skeleton (_mutation: dry-run branch → send → parse)
+    # the mutation skeleton (_mutation: dry-run branch → _run_read → parse),
+    # both sharing _run_read's session-expiry handling
     # ------------------------------------------------------------------
 
     def _post_read(
@@ -536,7 +538,6 @@ class KorailClient:
         route: str,
         form: dict[str, str] | dict[str, str | list[str]],
         *,
-        method: str = ...,
         parser: None = ...,
         raise_on_fail: bool = ...,
     ) -> MutationPreview | BaseKorailResponse: ...
@@ -549,7 +550,6 @@ class KorailClient:
         route: str,
         form: dict[str, str] | dict[str, str | list[str]],
         *,
-        method: str = ...,
         parser: Callable[[dict[str, Any]], T],
         raise_on_fail: bool = ...,
     ) -> MutationPreview | T: ...
@@ -561,7 +561,6 @@ class KorailClient:
         route: str,
         form: dict[str, str] | dict[str, str | list[str]],
         *,
-        method: str = "POST",
         parser: Callable[[dict[str, Any]], T] | None = None,
         raise_on_fail: bool = True,
     ) -> MutationPreview | BaseKorailResponse | T:
@@ -569,24 +568,21 @@ class KorailClient:
         if consent.dry_run:
             return MutationPreview(
                 category=category,
-                method=method,
+                method="POST",
                 route=route,
                 payload=form,
             )
-        try:
-            response = self.http.post_mutation_form(
+        response = self._run_read(
+            lambda: self.http.post_mutation_form(
                 route,
                 form,
                 consent=consent,
                 category=category,
                 raise_on_fail=raise_on_fail,
             )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
+        )
         if parser is not None:
-            raw = response.raw if isinstance(response.raw, dict) else {}
-            return parser(raw)
+            return parser(response.raw)
         return response
 
     def get_seat_cars(
@@ -2053,15 +2049,11 @@ class KorailClient:
         """Execute a verified station-ticket refund with method-scoped consent."""
         self._require_session("station ticket refund requires")
         fields = build_station_refund_execution_form(self.config, request)
-        # The same P058 handling as _mutation, which this call cannot use: it
-        # goes through the 7.0.6 gateway and its method-scoped consent.
-        try:
-            result = self.v7.call(
+        result = self._run_read(
+            lambda: self.v7.call(
                 "NetworkApi.executeOnlineRefunds", fields, consent=consent
             )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
+        )
         if isinstance(result, V7MutationPreview):
             return result
         return parse_station_refund_execution_response(result.raw)
