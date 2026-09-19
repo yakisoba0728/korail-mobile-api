@@ -702,7 +702,7 @@ _ALTERNATIVE_REQUEST_FIELD_SHAPES: dict[
     ),
 }
 
-KORAIL_EXACT_REQUEST_FIELDS = {
+KORAIL_EXACT_REQUEST_FIELDS: dict[str, frozenset[str]] = {
     "/file/CACHE/MobileService.cache": frozenset({"timeStamp"}),
     "/file/CACHE/prdMobilePlusMain.cache": frozenset({"timeStamp", "srtCheckYn"}),
     "/ebizcross/getUUID.do": frozenset(),
