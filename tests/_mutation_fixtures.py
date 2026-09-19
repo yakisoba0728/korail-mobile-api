@@ -10,14 +10,23 @@
 
 Plain functions, not fixtures: test_mutation_payloads calls them inside
 @pytest.mark.parametrize, at collection time. Only values that were identical
-in every file using them live here. The paid hold and paid ticket differ from
-file to file on purpose and stay local.
+in every file using them live here.
+
+The paid hold and paid ticket take the PNR as a required argument. Each file
+checks that a preview does not leak "its" PNR; a shared default PNR could
+drift away from the one a file looks for, and that check would then pass
+without looking at anything.
 """
 
 from __future__ import annotations
 
 from korail_mobile_api import TrainSummary
-from korail_mobile_api.mutation_models import CardPayment
+from korail_mobile_api.mutation_models import (
+    CardPayment,
+    PaidTicket,
+    ReservationHoldResponse,
+    ReservationJourney,
+)
 
 
 def eligible_train() -> TrainSummary:
@@ -48,4 +57,42 @@ def fake_card() -> CardPayment:
         card_password="00",
         card_expire="2612",
         birthday="900101",
+    )
+
+
+def paid_hold(pnr_no: str) -> ReservationHoldResponse:
+    """An unpaid hold ready for payment, carrying ``pnr_no``."""
+    return ReservationHoldResponse(
+        h_msg_cd="IRR000018",
+        h_msg_txt="ok",
+        str_result="SUCC",
+        raw={},
+        pnr_no=pnr_no,
+        journey_count="0001",
+        window_no="SYNTHETIC_WCT",
+        temporary_job_sequence_1="SYNTHETIC_JOB_1",
+        temporary_job_sequence_2="SYNTHETIC_JOB_2",
+        total_price="8400",
+        received_amount="7560",
+        # Deliberately NOT "000": a builder that regressed to the constant would
+        # otherwise pass against a fixture whose value happened to match the
+        # fallback.
+        journeys=(
+            ReservationJourney(
+                journey_sequence="0001",
+                reservation_change_no="SYNTHETIC_CHG_NO",
+            ),
+        ),
+    )
+
+
+def paid_ticket(pnr_no: str) -> PaidTicket:
+    """A paid ticket's refund identity, carrying ``pnr_no``."""
+    return PaidTicket(
+        pnr_no=pnr_no,
+        sale_date="20260725",
+        sale_window_no="SYNTHETIC_WCT",
+        sale_sequence="0001",
+        return_password="SYNTHETIC_RETPWD",
+        train_no="00209",
     )

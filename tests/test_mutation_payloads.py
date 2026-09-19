@@ -14,6 +14,7 @@ import pytest
 
 from _mutation_fixtures import eligible_train as _eligible_train
 from _mutation_fixtures import fake_card as _fake_card
+from _mutation_fixtures import paid_hold, paid_ticket
 from korail_mobile_api import (
     KORAIL_MAX_PASSENGERS_PER_RESERVATION,
     BaseKorailResponse,
@@ -40,14 +41,7 @@ from korail_mobile_api.mutation_payloads import (
 
 
 def _paid_ticket() -> PaidTicket:
-    return PaidTicket(
-        pnr_no="SYNTHETIC_PNR",
-        sale_date="20260725",
-        sale_window_no="SYNTHETIC_WCT",
-        sale_sequence="0001",
-        return_password="SYNTHETIC_RETPWD",
-        train_no="00209",
-    )
+    return paid_ticket("SYNTHETIC_PNR")
 
 
 def test_refund_form_matches_the_app_refund_contract():
@@ -153,28 +147,7 @@ def test_refund_form_rejects_missing_paid_ticket_identity(field_name):
 
 
 def _paid_hold() -> ReservationHoldResponse:
-    return ReservationHoldResponse(
-        h_msg_cd="IRR000018",
-        h_msg_txt="ok",
-        str_result="SUCC",
-        raw={},
-        pnr_no="SYNTHETIC_PNR",
-        journey_count="0001",
-        window_no="SYNTHETIC_WCT",
-        temporary_job_sequence_1="SYNTHETIC_JOB_1",
-        temporary_job_sequence_2="SYNTHETIC_JOB_2",
-        total_price="8400",
-        received_amount="7560",
-        # Deliberately NOT "000": a builder that regressed to the constant would
-        # otherwise pass against a fixture whose value happened to match the
-        # fallback.
-        journeys=(
-            ReservationJourney(
-                journey_sequence="0001",
-                reservation_change_no="SYNTHETIC_CHG_NO",
-            ),
-        ),
-    )
+    return paid_hold("SYNTHETIC_PNR")
 
 
 def test_card_payment_form_matches_the_app_pay_with_card_contract():
