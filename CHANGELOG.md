@@ -55,6 +55,8 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
   `raw` 가 달라도 `==` 이고, 목록 필드가 없는 frozen 모델은 이제 `hash()` 할 수
   있습니다. 전에는 `raw` 의 dict 때문에 모든 응답이 해시 불가였습니다. 열차 행·여정 같은
   일부 모델은 이미 그랬습니다.
+- `CardPayment(card_type=...)` 가 `"J"`(개인)·`"S"`(법인) 밖의 값을 `ValueError` 로
+  거절합니다. 전에는 무엇이든 결제 폼의 `hidAthnDvCd1` 로 그대로 나갔습니다.
 - `StationRefundVerificationRequest`·`StationRefundExecutionRequest` 생성자가 빈 값을
   `KorailProtocolError` 대신 `ValueError` 로 거절합니다. 이 파일의 다른 요청 생성자와
   같은 기준입니다 — 호출자의 입력 오류이지 서버 응답 문제가 아닙니다.

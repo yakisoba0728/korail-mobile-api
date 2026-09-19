@@ -350,6 +350,19 @@ def test_card_payment_form_rejects_non_digit_card_number():
         build_card_payment_form(KorailConfig(), _paid_hold(), bad)
 
 
+@pytest.mark.parametrize("card_type", ["j", "P", "", "JS", None])
+def test_card_payment_refuses_a_card_type_other_than_j_or_s(card_type):
+    with pytest.raises(ValueError, match="card_type"):
+        replace(_fake_card(), card_type=card_type)
+
+
+def test_card_payment_sends_either_card_type_as_given():
+    for card_type in ("J", "S"):
+        card = replace(_fake_card(), card_type=card_type)
+        form = build_card_payment_form(KorailConfig(), _paid_hold(), card)
+        assert form["hidAthnDvCd1"] == card_type
+
+
 def _eligible_train() -> TrainSummary:
     return TrainSummary(
         train_no="00209",

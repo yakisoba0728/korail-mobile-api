@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from .errors import KorailProtocolError
@@ -466,7 +466,13 @@ class CardPayment:
     #: ``v4/a.java:288`` 도 리터럴 ``"0"`` 을 그대로 넘깁니다.
     installment: str = "0"
     #: ``hidAthnDvCd1`` — ``"J"`` 개인 / ``"S"`` 법인.
-    card_type: str = "J"
+    card_type: Literal["J", "S"] = "J"
+
+    def __post_init__(self) -> None:
+        # The annotation does not reach an untyped caller, and this value goes
+        # into a real payment form unexamined, so it is checked here.
+        if self.card_type not in ("J", "S"):
+            raise ValueError('card_type must be "J" (personal) or "S" (corporate)')
 
 
 @dataclass(frozen=True)
