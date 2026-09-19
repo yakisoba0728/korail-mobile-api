@@ -20,8 +20,8 @@ state-changing request can leave the process only through the dedicated
 | standby follow-up (`reservationWait`) | ✅ `confirm_standby_hold`, **live-verified 2026-07-26** (`IRZ000003`) | ⛔ not implemented |
 | cancel (unpaid hold) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
 | payment (fake card) | ✅ `pay_with_fake_card`, **live-verified (declined)** | ⛔ not implemented — route tiered only, not live-enabled |
-| payment (real card) | ⚠️ `pay_with_card`, explicit opt-in, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
-| refund | ⚠️ implemented, **never live-run** | ⛔ not implemented — route tiered only, not live-enabled |
+| payment (real card) | ✅ `pay_with_card`, explicit opt-in, **live-verified 2026-07-31** (`IRT000000`, one and two adults) and again 2026-09-15 on 7.0.6 | ⛔ not implemented — route tiered only, not live-enabled |
+| refund | ✅ `refund`, **live-verified 2026-07-31** (`IRT200277`, one ticket per call) and again 2026-09-15 on 7.0.6 | ⛔ not implemented — route tiered only, not live-enabled |
 | reserve (`1202`, 입석+좌석 — the first half of 병합예약) | ✅ live-verified 2026-07-26 (`IRR000018`, two journeys, 중간연결역 prompt present) | ⛔ not implemented |
 | 병합예약 second hold (`reserve_merge`) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
 | 정기권 예약/결제 (`pass.passReserve` / `passPayIssue`) | ⛔ **not implemented — implemented once, then removed**; the routes are not on the mutation allowlist and no method can reach them | ⛔ not implemented |
