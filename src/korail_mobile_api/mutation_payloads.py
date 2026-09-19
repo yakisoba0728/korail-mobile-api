@@ -373,34 +373,13 @@ def build_merge_reservation_form(
     # Copied, not read per leg (smali:5919-5983).
     form["txtPsrmClCd2"] = cabin.value
     form["txtJrnyCnt"] = KORAIL_TRANSFER_ITINERARY_CODE
-    for journey, fields in enumerate(journeys, start=1):
-        form[f"txtJrnyTpCd{journey}"] = (
-            KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE
-            if journey == 1
-            else KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE
-        )
-        form[f"txtJrnySqno{journey}"] = _sequence_no(
-            KORAIL_DIRECT_ITINERARY_CODE
-            if journey == 1
-            else KORAIL_TRANSFER_ITINERARY_CODE
-        )
-        form[f"txtTrnNo{journey}"] = fields["train_no"]
-        form[f"txtTrnClsfCd{journey}"] = fields["train_class_code"]
-        form[f"txtTrnGpCd{journey}"] = fields["train_group_code"]
-        form[f"txtRunDt{journey}"] = fields["run_date"]
-        form[f"txtDptDt{journey}"] = fields["departure_date"]
-        form[f"txtDptTm{journey}"] = fields["departure_time"]
-        form[f"txtDptRsStnCd{journey}"] = fields["departure_station_code"]
-        form[f"txtDptStnConsOrdr{journey}"] = fields[
-            "departure_construction_order"
-        ]
-        form[f"txtDptStnRunOrdr{journey}"] = fields["departure_run_order"]
-        form[f"txtArvRsStnCd{journey}"] = fields["arrival_station_code"]
-        form[f"txtArvStnConsOrdr{journey}"] = fields[
-            "arrival_construction_order"
-        ]
-        form[f"txtArvStnRunOrdr{journey}"] = fields["arrival_run_order"]
-        form[f"txtChgFlg{journey}"] = "N"
+    journey_type_codes = tuple(
+        KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE
+        if journey == 1
+        else KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE
+        for journey in range(1, len(journeys) + 1)
+    )
+    _write_journey_rows(form, journeys, journey_type_codes)
     # No OSrcar: the standing hold cleared it (C5/a.java:118) and the merge
     # loop never writes one, so an empty @FieldMap contributes no fields.
     return form
@@ -743,9 +722,6 @@ def _build_journey_reservation_form(
         # 7.0.6 uses each selected row's hSeatAttCd, with seat-type fallback.
         form[_seat_attribute_key(journey)] = resolved_attributes[journey - 1]
         form[f"txtPsrmClCd{journey}"] = seat_class.value
-    # OJrny (OJrny.java:6-27), a LinkedHashMap in C5/a.java:54-76's write order:
-    # the count once, then the 7.0.6 DTO per-leg keys for journey 1, then
-    # the same keys for journey 2 (without arvTm_).
     form["txtJrnyCnt"] = (
         KORAIL_DIRECT_ITINERARY_CODE
         if len(resolved_legs) == 1
@@ -756,30 +732,7 @@ def _build_journey_reservation_form(
         if len(resolved_legs) == 1
         else KORAIL_TRANSFER_JOURNEY_TYPE_CODE
     )
-    for journey, fields in enumerate(journeys, start=1):
-        form[f"txtJrnyTpCd{journey}"] = journey_type_code
-        form[f"txtJrnySqno{journey}"] = _sequence_no(
-            KORAIL_DIRECT_ITINERARY_CODE
-            if journey == 1
-            else KORAIL_TRANSFER_ITINERARY_CODE
-        )
-        form[f"txtTrnNo{journey}"] = fields["train_no"]
-        form[f"txtTrnClsfCd{journey}"] = fields["train_class_code"]
-        form[f"txtTrnGpCd{journey}"] = fields["train_group_code"]
-        form[f"txtRunDt{journey}"] = fields["run_date"]
-        form[f"txtDptDt{journey}"] = fields["departure_date"]
-        form[f"txtDptTm{journey}"] = fields["departure_time"]
-        form[f"txtDptRsStnCd{journey}"] = fields["departure_station_code"]
-        form[f"txtDptStnConsOrdr{journey}"] = fields[
-            "departure_construction_order"
-        ]
-        form[f"txtDptStnRunOrdr{journey}"] = fields["departure_run_order"]
-        form[f"txtArvRsStnCd{journey}"] = fields["arrival_station_code"]
-        form[f"txtArvStnConsOrdr{journey}"] = fields[
-            "arrival_construction_order"
-        ]
-        form[f"txtArvStnRunOrdr{journey}"] = fields["arrival_run_order"]
-        form[f"txtChgFlg{journey}"] = "N"
+    _write_journey_rows(form, journeys, (journey_type_code,) * len(journeys))
     # OSrcar is the LAST @FieldMap on the Retrofit call
     # (CertificationService.java:52-54), so its keys go after the journey keys.
     # For "1101"/"1102" the map is empty and contributes nothing at all --
@@ -813,6 +766,46 @@ def _sequence_no(code: str) -> str:
     는 ``"001"``/``"002"`` 로 전선에 오릅니다.
     """
     return f"{int(code):03d}"
+
+
+def _write_journey_rows(
+    form: dict[str, str],
+    journeys: Sequence[dict[str, str]],
+    journey_type_codes: Sequence[str],
+) -> None:
+    """여정 1..N 의 OJrny 행을 폼에 씁니다.
+
+    OJrny (OJrny.java:6-27), a LinkedHashMap in C5/a.java:54-76's write order:
+    the count once, then journey 1's 7.0.6 DTO keys, then journey 2's same
+    keys, without arvTm_. ``txtJrnyCnt`` itself is written at each call site,
+    before this helper runs.
+    """
+    for journey, (fields, journey_type_code) in enumerate(
+        zip(journeys, journey_type_codes, strict=True), start=1
+    ):
+        form[f"txtJrnyTpCd{journey}"] = journey_type_code
+        form[f"txtJrnySqno{journey}"] = _sequence_no(
+            KORAIL_DIRECT_ITINERARY_CODE
+            if journey == 1
+            else KORAIL_TRANSFER_ITINERARY_CODE
+        )
+        form[f"txtTrnNo{journey}"] = fields["train_no"]
+        form[f"txtTrnClsfCd{journey}"] = fields["train_class_code"]
+        form[f"txtTrnGpCd{journey}"] = fields["train_group_code"]
+        form[f"txtRunDt{journey}"] = fields["run_date"]
+        form[f"txtDptDt{journey}"] = fields["departure_date"]
+        form[f"txtDptTm{journey}"] = fields["departure_time"]
+        form[f"txtDptRsStnCd{journey}"] = fields["departure_station_code"]
+        form[f"txtDptStnConsOrdr{journey}"] = fields[
+            "departure_construction_order"
+        ]
+        form[f"txtDptStnRunOrdr{journey}"] = fields["departure_run_order"]
+        form[f"txtArvRsStnCd{journey}"] = fields["arrival_station_code"]
+        form[f"txtArvStnConsOrdr{journey}"] = fields[
+            "arrival_construction_order"
+        ]
+        form[f"txtArvStnRunOrdr{journey}"] = fields["arrival_run_order"]
+        form[f"txtChgFlg{journey}"] = "N"
 
 
 def _assert_leg_is_bookable(
@@ -1164,8 +1157,6 @@ def build_unpaid_reservation_cancel_form(
     return form
 
 
-_CARD_FIELD_RE = re.compile(r"[0-9]+")
-
 # What the app sends when the hold response withheld the sequence. The app
 # passes whatever getH_tmp_job_sqno1/2() returned, including null, and Retrofit
 # then omits the @Field entirely — a shape this client cannot reproduce without
@@ -1263,7 +1254,7 @@ def build_card_payment_form(
         )
     # The card number must be all digits (a fake test PAN is still digits); the
     # decline happens server-side at authorization.
-    if _CARD_FIELD_RE.fullmatch(card.card_number) is None:
+    if _DIGITS_RE.fullmatch(card.card_number) is None:
         raise KorailProtocolError("KORAIL payment card number must be digits")
     form = _common_fields(config)
     form.update(
