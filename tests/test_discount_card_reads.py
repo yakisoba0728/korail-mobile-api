@@ -279,8 +279,9 @@ def test_schedule_parser_reads_the_ncard_inquiry_dao_shape():
 def test_parsers_refuse_a_non_success_or_malformed_body():
     # WRR000100 입력값 오류(dcntCrdNo) is what this route answered on
     # 2026-07-09 when it was probed without a card number
-    # (docs/api-status-by-service.md:467). It is an application failure, not a
-    # protocol one, so it must arrive as a KorailAppError.
+    # (docs/api-status-by-service.md, row 118, getNCardHistory). It is an
+    # application failure, not a protocol one, so it must arrive as a
+    # KorailAppError.
     with pytest.raises(KorailAppError):
         parse_discount_card_usage_response(
             {

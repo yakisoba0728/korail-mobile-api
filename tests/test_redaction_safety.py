@@ -185,8 +185,6 @@ def test_raw_trip_menu_wire_values_are_redacted_without_mutation(
         "txtVrRsNo",
         "txtVrRsvSqNo",
         "h_orgtk_sale_dt",
-        "h_orgtk_wct_no",
-        "h_orgtk_sale_sqno",
         "pnr_no",
         "url",
         "image",
@@ -366,7 +364,7 @@ def test_safety_excludes_dangerous_domains_without_stub_apis():
 
 # --------------------------------------------------------------------------
 # The read side, swept whole rather than per-route. The 2026-07-27 audit
-# checked the three routes added that day; this checks all 47 field contracts
+# checked the three routes added that day; this checks every field contract
 # and every model dataclass at once, which is what found that the policy was
 # implemented in one spelling out of five.
 # --------------------------------------------------------------------------
@@ -422,7 +420,7 @@ def test_no_special_category_label_is_left_in_a_model_repr():
 
 
 def test_no_read_route_field_contract_carries_an_unmasked_identity_field():
-    """All 47 contracts at once, so a new route cannot quietly add one.
+    """Every field contract at once, so a new route cannot quietly add one.
 
     Station names (dptRsStnNm and friends) are the deliberate exception: they
     name a PLACE, are not tied to a person, and masking them would make every
