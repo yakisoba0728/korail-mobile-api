@@ -39,6 +39,7 @@ from korail_mobile_api import (
     KorailConfig,
     KorailMutationNotAllowedError,
     KorailSession,
+    KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
     ReservationHoldResponse,
@@ -479,3 +480,36 @@ def test_pay_with_card_transmits_the_card_the_caller_passed():
     assert sent["hidCrdVlidTrm1"] == PLACEHOLDER_CARD_EXPIRE
     assert sent["hidAthnVal1"] == PLACEHOLDER_BIRTHDAY
     assert sent["hidMnsStlAmt1"] == _hold().received_amount
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+def test_an_expired_session_on_pay_with_card_clears_the_client_before_raising():
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test,
+    # for pay_with_card: one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            client.pay_with_card(
+                _hold(), _placeholder_card(), consent=_real_card_consent()
+            )
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies

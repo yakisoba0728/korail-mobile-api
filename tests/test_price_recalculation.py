@@ -27,6 +27,7 @@ from korail_mobile_api.errors import (
     KorailAuthError,
     KorailMutationNotAllowedError,
     KorailProtocolError,
+    KorailSessionExpiredError,
 )
 from korail_mobile_api.models import KorailSession
 from korail_mobile_api.mutation_models import (
@@ -614,3 +615,38 @@ def test_no_live_path_reaches_this_category():
             "PriceReCalculation",
         ):
             assert name not in source, f"{relative} reaches {name}"
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+def test_an_expired_session_on_recalculate_price_clears_the_client_before_raising():
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test,
+    # for recalculate_price: one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = _client(handler)
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            client.recalculate_price(
+                _request(),
+                consent=MutationConsent(
+                    allow_price_recalculation=True, dry_run=False
+                ),
+            )
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies

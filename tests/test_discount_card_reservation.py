@@ -28,6 +28,7 @@ from korail_mobile_api import (
     KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSession,
+    KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
     ReservationHoldResponse,
@@ -277,3 +278,37 @@ def test_the_outbound_card_key_is_redacted():
     )
     assert CARD_NO not in str(redact_payload(form))
     assert CARD_NO not in str(redact_mapping({CARD_KEY: CARD_NO}))
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+def test_an_expired_session_on_reserve_with_discount_card_clears_the_client_before_raising():
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test,
+    # for reserve_with_discount_card: one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = _client(handler)
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            client.reserve_with_discount_card(
+                _train(),
+                card_no=CARD_NO,
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies

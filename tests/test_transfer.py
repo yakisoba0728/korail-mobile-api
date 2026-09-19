@@ -69,6 +69,7 @@ from korail_mobile_api import (
     KorailSeatAssignment,
     KorailSeatClass,
     KorailSession,
+    KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
     ReservationHoldResponse,
@@ -1253,3 +1254,37 @@ def test_cancel_still_refuses_a_hold_with_no_usable_journey_count():
         )
         with pytest.raises(KorailProtocolError):
             build_unpaid_reservation_cancel_form(config, hold)
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+def test_an_expired_session_on_reserve_transfer_clears_the_client_before_raising():
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test,
+    # for reserve_transfer: one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            client.reserve_transfer(
+                _legs(),
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies

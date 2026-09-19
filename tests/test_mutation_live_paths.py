@@ -30,6 +30,7 @@ from korail_mobile_api import (
     KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSession,
+    KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
     PaidTicket,
@@ -388,6 +389,7 @@ def test_pay_dry_run_preview_redacts_card_and_sends_nothing():
         "hidWctNo",
         "hidTmpJobSqno1",
         "hidTmpJobSqno2",
+        "hidRsvChgNo",
     ):
         assert preview.payload[key] == "[REDACTED]", key
     joined = "".join(preview.payload.values())
@@ -628,3 +630,68 @@ def test_refund_documents_that_it_returns_one_ticket_and_not_one_pnr() -> None:
     # 8,400-for-16,800 reply reads as a bug in the library.
     quote_doc = " ".join((_Client.get_refund_commission.__doc__ or "").split())
     assert "승차권 한 장" in quote_doc
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+@pytest.mark.parametrize(
+    ("route", "consent", "send"),
+    [
+        (
+            RESERVE_ROUTE,
+            _live(allow_reserve=True),
+            lambda client, consent: client.reserve(
+                _eligible_train(), consent=consent
+            ),
+        ),
+        (
+            PAYMENT_ROUTE,
+            _live(allow_payment=True),
+            lambda client, consent: client.pay_with_fake_card(
+                _paid_hold(), _fake_card(), consent=consent
+            ),
+        ),
+        (
+            CANCEL_ROUTE,
+            _live(allow_cancel=True),
+            lambda client, consent: client.cancel_unpaid_hold(
+                _hold(), consent=consent
+            ),
+        ),
+        (
+            REFUND_ROUTE,
+            _live(allow_refund=True),
+            lambda client, consent: client.refund(_paid_ticket(), consent=consent),
+        ),
+    ],
+    ids=["reserve", "pay_with_fake_card", "cancel_unpaid_hold", "refund"],
+)
+def test_an_expired_session_on_a_mutation_clears_the_client_before_raising(
+    route, consent, send
+):
+    """P058 on a state-changing send leaves no stale login behind.
+
+    Every mutation method catches KorailSessionExpiredError, clears the local
+    session and re-raises, as the reads do. Nothing tested it: with the
+    clear_session() call taken out of all ten mutation handlers the suite still
+    passed. src batches 42 and 43 fold those handlers into _mutation, so each
+    one is pinned first -- here for reserve, pay_with_fake_card and two of
+    _mutation's own callers, and beside its other tests for the rest.
+
+    The request did go out (one of it); the session and its cookie did not
+    survive the reply.
+    """
+    client, recorder = _client_with({route: _SESSION_EXPIRED})
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    with pytest.raises(KorailSessionExpiredError):
+        send(client, consent)
+    assert len(recorder.requests) == 1
+    assert client.session.current is None
+    assert not client.http.cookies

@@ -26,6 +26,7 @@ from korail_mobile_api.errors import (
     KorailAuthError,
     KorailMutationNotAllowedError,
     KorailProtocolError,
+    KorailSessionExpiredError,
 )
 from korail_mobile_api.http import KorailHttpClient
 from korail_mobile_api.models import KorailSession
@@ -487,3 +488,45 @@ def test_public_surface_exports_the_mutation_names():
 
     assert "parse_discount_card_purchase_response" not in korail_mobile_api.__all__
     assert not hasattr(korail_mobile_api, "parse_discount_card_purchase_response")
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+@pytest.mark.parametrize(
+    "send",
+    [
+        lambda client, consent: client.register_discount_card(
+            _purchase(), consent=consent
+        ),
+        lambda client, consent: client.extend_discount_card(
+            _ticket(), consent=consent
+        ),
+    ],
+    ids=["register_discount_card", "extend_discount_card"],
+)
+def test_an_expired_session_on_a_discount_card_mutation_clears_the_client(send):
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test:
+    # one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = _client(handler)
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            send(client, MutationConsent(allow_discount_card=True, dry_run=False))
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies
