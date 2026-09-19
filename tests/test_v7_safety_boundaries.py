@@ -46,6 +46,21 @@ def _special_form() -> dict[str, str]:
     )
 
 
+@pytest.mark.parametrize("field", ["device", "version"])
+def test_schedule_view_special_keeps_an_empty_device_or_version(field: str) -> None:
+    # Before the fix, the empty-value filter ran ahead of the Device/Version
+    # pops, so an empty config.device or config.version raised KeyError; they
+    # must come back as "" instead.
+    form = build_train_schedule_special_form(
+        KorailConfig(**{field: ""}),
+        TrainSearchQuery("0001", "0723", "20990101"),
+        departure_name="서울",
+        arrival_name="부산",
+    )
+    assert list(form)[:3] == ["Device", "Version", "Key"]
+    assert form[field.capitalize()] == ""
+
+
 @pytest.mark.parametrize("effect", ["write", "Mutation", "", None])
 def test_the_registry_refuses_a_row_whose_effect_is_neither_read_nor_mutation(
     monkeypatch: pytest.MonkeyPatch, effect: object

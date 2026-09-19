@@ -437,12 +437,14 @@ def build_train_schedule_special_form(
     if continuation is None:
         for name in ("qryStNo", "qryStTrnNo", "qryStTrnNo2", "pgPrCnt"):
             form.pop(name, None)
+    device = form.pop("Device")
+    version = form.pop("Version")
     # NetworkService.STLibw keeps only non-empty JsonPrimitive values; unlike
     # the legacy @Field overload it does not send empty values.
     form = {key: value for key, value in form.items() if value}
     return {
-        "Device": form.pop("Device"),
-        "Version": form.pop("Version"),
+        "Device": device,
+        "Version": version,
         "Key": config.key,
         **form,
     }
