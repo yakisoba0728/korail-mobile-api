@@ -138,6 +138,15 @@ class KorailAuthContinuationRequired(KorailAuthError):
         super().__init__("KORAIL login requires WebView continuation")
 
 
+def _code_message(code: str | None, message: str | None) -> str:
+    """The base class's redaction of the joined string alone is not enough:
+    a code that is itself a sensitive key name ("pnrNo: ...") would take the
+    message's first word as its value, so the message goes in pre-redacted.
+    :class:`KorailSessionExpiredError` does the same inline, with different defaults and no strip.
+    """
+    return f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
+
+
 class KorailAppError(KorailApiError):
     """서버가 앱 수준 실패로 답함 — ``h_msg_cd`` 분류의 뿌리.
 
@@ -153,14 +162,7 @@ class KorailAppError(KorailApiError):
         self.code = code
         self.message = message
         self.raw = raw
-        # The base class redacts the joined string, and that alone is not
-        # enough: a code that is itself a sensitive key name ("pnrNo: ...")
-        # takes the message's first word as its value and swallows the
-        # message's own key with it. So the message goes in already redacted.
-        # KorailSessionExpiredError and KorailNetFunnelError do the same.
-        super().__init__(
-            f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
-        )
+        super().__init__(_code_message(code, message))
 
 
 class KorailNoResultsError(KorailAppError):
@@ -252,9 +254,7 @@ class KorailNetFunnelError(KorailApiError):
         self.code = code
         self.message = message
         self.raw = raw
-        super().__init__(
-            f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
-        )
+        super().__init__(_code_message(code, message))
 
 
 class KorailQueueRejectedError(KorailNetFunnelError):
