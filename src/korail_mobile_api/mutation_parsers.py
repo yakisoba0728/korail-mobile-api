@@ -39,6 +39,7 @@ from .mutation_models import (
     StationRefundOriginalTicket,
     StationRefundVerificationResponse,
 )
+from .read_parsers import _optional_scalar_string as _optional_string
 
 
 def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse:
@@ -223,35 +224,6 @@ def _row(value: object, context: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise KorailProtocolError(f"KORAIL {context} must be an object")
     return value
-
-
-def _optional_string(
-    row: Mapping[str, Any],
-    key: str,
-    *,
-    context: str,
-) -> str | None:
-    """스칼라 필드 하나. JSON 문자열로 와도 JSON 숫자로 와도 받습니다.
-
-    KORAIL 은 APK 가 자바 ``String`` 으로 선언한 필드를 둘 중 아무 쪽으로나
-    보냅니다. 예약 응답은 여정 수를 ``h_jrny_cnt="0001"`` 로 보내는데 예약 이력은
-    같은 필드를 JSON 정수 ``1`` 로 보냅니다. 홀드를 이력에서 다시 읽는 것이 PNR 을
-    잃었을 때의 복구 경로이므로 둘 다 파싱돼야 합니다.
-
-    따옴표가 없다고 거부하면 실제 예약이 고아가 되므로, 폼 빌더가 기대하는
-    문자열로 정규화하고 정말로 다른 모양인 것 — ``bool``, ``float``, 리스트,
-    객체 — 만 계속 거부합니다.
-    """
-    value = row.get(key)
-    if value is None or isinstance(value, str):
-        return value
-    # `type(...) is int` on purpose: bool is an int subclass, and True is not a
-    # number KORAIL sends for any of these.
-    if type(value) is int:
-        return str(value)
-    raise KorailProtocolError(
-        f"KORAIL {context} field {key} must be a string, an integer, or null"
-    )
 
 
 def _received_amount(
