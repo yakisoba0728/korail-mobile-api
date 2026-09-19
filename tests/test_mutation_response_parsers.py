@@ -737,3 +737,58 @@ def test_reservation_hold_payment_deadline_is_absent_not_invented():
     assert response.payment_deadline_notice is None
     assert response.payment_deadline_date is None
     assert response.payment_deadline_time is None
+
+
+def _mutation_parser(name):
+    from korail_mobile_api import mutation_parsers
+
+    return getattr(mutation_parsers, name)
+
+
+@pytest.mark.parametrize(
+    ("parser", "bad_rows"),
+    [
+        ("parse_refund_ticket_response", {"stlList": ["x"]}),
+        ("parse_cash_receipt_issue_response", {"apvList": ["x"]}),
+        ("parse_station_refund_verification_response", {"orgtkinfo_list": ["x"]}),
+        ("parse_station_refund_execution_response", {}),
+        ("parse_reservation_hold_response", {"jrny_infos": {"jrny_info": ["x"]}}),
+        ("parse_reservation_payment_response", {"tk_coupon_info": ["x"]}),
+        ("parse_discount_card_purchase_response", {}),
+    ],
+)
+def test_a_mutation_parser_judges_the_envelope_before_any_row(parser, bad_rows):
+    # Pinned before the second envelope check in each parser went away: the
+    # envelope is still judged first, whatever is wrong with the rows.
+    with pytest.raises(
+        KorailProtocolError, match="envelope fields must be strings or null: h_msg_cd"
+    ):
+        _mutation_parser(parser)({"h_msg_cd": 1, "strResult": "SUCC", **bad_rows})
+
+
+@pytest.mark.parametrize(
+    ("parser", "body", "message"),
+    [
+        ("parse_refund_ticket_response", {"stlList": ["x"]}, "refund settlement"),
+        ("parse_cash_receipt_issue_response", {"apvList": ["x"]}, "cash receipt ApvItem"),
+        (
+            "parse_station_refund_verification_response",
+            {"orgtkinfo_list": ["x"]},
+            "station refund Orgtkinfo",
+        ),
+        (
+            "parse_reservation_hold_response",
+            {"jrny_infos": {"jrny_info": ["x"]}},
+            "reservation journey",
+        ),
+        (
+            "parse_reservation_hold_response",
+            {"jrny_infos": {"jrny_info": [{"seat_infos": {"seat_info": ["x"]}}]}},
+            "reservation seat_info row",
+        ),
+        ("parse_reservation_payment_response", {"tk_coupon_info": ["x"]}, "payment coupon"),
+    ],
+)
+def test_a_mutation_parser_names_a_row_that_is_not_an_object(parser, body, message):
+    with pytest.raises(KorailProtocolError, match=rf"^KORAIL {message} must be an object$"):
+        _mutation_parser(parser)({"strResult": "SUCC", **body})

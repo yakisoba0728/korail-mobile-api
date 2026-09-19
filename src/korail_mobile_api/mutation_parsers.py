@@ -43,7 +43,7 @@ from .mutation_models import (
 
 def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse:
     """필수 키 ``stlList``의 nullable 값과 정산 수단 코드를 보존합니다."""
-    copied = _response_mapping(raw)
+    copied, base = _response_mapping(raw)
     if "stlList" not in copied:
         raise KorailProtocolError("KORAIL refund stlList is required")
     rows = copied.get("stlList")
@@ -51,13 +51,11 @@ def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse
         raise KorailProtocolError("KORAIL refund stlList must be a list")
     codes: list[str] = []
     for row in rows or ():
-        if not isinstance(row, Mapping):
-            raise KorailProtocolError("KORAIL refund settlement must be an object")
+        row = _row(row, "refund settlement")
         code = row.get("stl_mns_cd")
         if not isinstance(code, str):
             raise KorailProtocolError("KORAIL refund stl_mns_cd is required")
         codes.append(code)
-    base = BaseKorailResponse.from_raw(copied)
     return RefundTicketResponse(
         h_msg_cd=base.h_msg_cd,
         h_msg_txt=base.h_msg_txt,
@@ -93,20 +91,18 @@ def parse_cash_receipt_issue_response(
     nullable. Present lists must contain objects; approval identifiers remain
     hidden from ``repr``.
     """
-    copied = _response_mapping(raw)
+    copied, base = _response_mapping(raw)
     rows = copied.get("apvList", [])
     if rows is not None and not isinstance(rows, list):
         raise KorailProtocolError("KORAIL cash receipt apvList must be a list")
     approvals: list[CashReceiptApprovalItem] = []
     for row in rows or ():
-        if not isinstance(row, Mapping):
-            raise KorailProtocolError("KORAIL cash receipt ApvItem must be an object")
+        row = _row(row, "cash receipt ApvItem")
         approval_fields = {
             attr: _optional_string(row, wire_key, context="cash receipt ApvItem")
             for attr, wire_key in _CASH_RECEIPT_APPROVAL_FIELDS.items()
         }
         approvals.append(CashReceiptApprovalItem(**approval_fields, raw=dict(row)))
-    base = BaseKorailResponse.from_raw(copied)
     return CashReceiptIssueResponse(
         h_msg_cd=base.h_msg_cd,
         h_msg_txt=base.h_msg_txt,
@@ -144,14 +140,13 @@ def parse_station_refund_verification_response(
     raw: Mapping[str, Any],
 ) -> StationRefundVerificationResponse:
     """Parse ``VerifyOnlineRefundsOut`` and the original ticket it validates."""
-    copied = _response_mapping(raw)
+    copied, base = _response_mapping(raw)
     rows = copied.get("orgtkinfo_list", [])
     if rows is not None and not isinstance(rows, list):
         raise KorailProtocolError("KORAIL station refund orgtkinfo_list must be a list")
     original_tickets: list[StationRefundOriginalTicket] = []
     for row in rows or ():
-        if not isinstance(row, Mapping):
-            raise KorailProtocolError("KORAIL station refund Orgtkinfo must be an object")
+        row = _row(row, "station refund Orgtkinfo")
         pnr_no = _optional_string(row, "pnr_no", context="station refund Orgtkinfo")
         if not pnr_no:
             raise KorailProtocolError("KORAIL station refund Orgtkinfo.pnr_no is required")
@@ -166,7 +161,6 @@ def parse_station_refund_verification_response(
                 raw=dict(row),
             )
         )
-    base = BaseKorailResponse.from_raw(copied)
     return StationRefundVerificationResponse(
         h_msg_cd=base.h_msg_cd,
         h_msg_txt=base.h_msg_txt,
@@ -196,8 +190,7 @@ def parse_station_refund_execution_response(
     raw: Mapping[str, Any],
 ) -> StationRefundExecutionResponse:
     """Parse ``ExecuteOnlineRefundsOut`` without dropping its refund type."""
-    copied = _response_mapping(raw)
-    base = BaseKorailResponse.from_raw(copied)
+    copied, base = _response_mapping(raw)
     return StationRefundExecutionResponse(
         h_msg_cd=base.h_msg_cd,
         h_msg_txt=base.h_msg_txt,
@@ -212,12 +205,24 @@ def parse_station_refund_execution_response(
 _DIGITS_RE = re.compile(r"[0-9]+")
 
 
-def _response_mapping(raw: Mapping[str, Any]) -> dict[str, Any]:
+def _response_mapping(
+    raw: Mapping[str, Any],
+) -> tuple[dict[str, Any], BaseKorailResponse]:
+    """A copy of the answer and its envelope, checked before anything else.
+
+    Every parser here calls this first, so a bad envelope is reported before
+    any row, and the envelope is not checked a second time.
+    """
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     copied = dict(raw)
-    BaseKorailResponse.from_raw(copied)
-    return copied
+    return copied, BaseKorailResponse.from_raw(copied)
+
+
+def _row(value: object, context: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise KorailProtocolError(f"KORAIL {context} must be an object")
+    return value
 
 
 def _optional_string(
@@ -293,10 +298,7 @@ def _received_amount(
                 "KORAIL reservation seat_infos.seat_info must be a list or null"
             )
         for seat in seat_rows:
-            if not isinstance(seat, Mapping):
-                raise KorailProtocolError(
-                    "KORAIL reservation seat_info row must be an object"
-                )
+            seat = _row(seat, "reservation seat_info row")
             amount = _optional_string(
                 seat,
                 "h_rcvd_amt",
@@ -333,13 +335,12 @@ def _received_amount(
     return seat_total
 
 
-def _base_fields(raw: dict[str, Any]) -> dict[str, Any]:
-    base = BaseKorailResponse.from_raw(raw)
+def _base_fields(base: BaseKorailResponse) -> dict[str, Any]:
     return {
         "h_msg_cd": base.h_msg_cd,
         "h_msg_txt": base.h_msg_txt,
         "str_result": base.str_result,
-        "raw": raw,
+        "raw": base.raw,
     }
 
 
@@ -362,7 +363,7 @@ def parse_reservation_hold_response(
     ``str_result``·``h_msg_cd`` 를 직접 봐야 합니다. 홀드가 실제로 걸렸는데
     파싱이 거부하면 놓을 수 없는 예약이 남기 때문입니다.
     """
-    copied = _response_mapping(raw)
+    copied, base = _response_mapping(raw)
     journeys_container = copied.get("jrny_infos")
     if journeys_container is None:
         journey_rows: list[Any] = []
@@ -383,11 +384,7 @@ def parse_reservation_hold_response(
 
     journeys: list[ReservationJourney] = []
     for value in journey_rows:
-        if not isinstance(value, Mapping):
-            raise KorailProtocolError(
-                "KORAIL reservation journey must be an object"
-            )
-        row = dict(value)
+        row = dict(_row(value, "reservation journey"))
         journeys.append(
             ReservationJourney(
                 journey_sequence=_optional_string(
@@ -435,7 +432,7 @@ def parse_reservation_hold_response(
         )
 
     return ReservationHoldResponse(
-        **_base_fields(copied),
+        **_base_fields(base),
         pnr_no=_optional_string(copied, "h_pnr_no", context="reservation"),
         journey_count=_optional_string(
             copied,
@@ -512,7 +509,7 @@ def parse_reservation_payment_response(
     홀드 파서와 마찬가지로 성공 여부는 판정하지 않습니다. 결제가 서버에서 이미
     이뤄졌을 수 있으므로 응답을 버리지 않습니다.
     """
-    copied = _response_mapping(raw)
+    copied, base = _response_mapping(raw)
     value = copied.get("tk_coupon_info")
     if value is None:
         rows: list[Any] = []
@@ -525,11 +522,7 @@ def parse_reservation_payment_response(
 
     coupons: list[ReservationPaymentCoupon] = []
     for value in rows:
-        if not isinstance(value, Mapping):
-            raise KorailProtocolError(
-                "KORAIL payment coupon must be an object"
-            )
-        row = dict(value)
+        row = dict(_row(value, "payment coupon"))
         coupons.append(
             ReservationPaymentCoupon(
                 certificate_password=_optional_string(
@@ -562,7 +555,7 @@ def parse_reservation_payment_response(
         )
 
     return ReservationPaymentResponse(
-        **_base_fields(copied),
+        **_base_fields(base),
         image_ticket_flag=_optional_string(
             copied,
             "h_im_flg",
@@ -598,8 +591,7 @@ def parse_discount_card_purchase_response(
 
     **라이브 미검증.** 전송된 적이 없으므로 관측된 적도 없습니다.
     """
-    data = _response_mapping(raw)
-    base = BaseKorailResponse.from_raw(data)
+    data, base = _response_mapping(raw)
     return DiscountCardPurchaseResponse(
         h_msg_cd=base.h_msg_cd,
         h_msg_txt=base.h_msg_txt,
