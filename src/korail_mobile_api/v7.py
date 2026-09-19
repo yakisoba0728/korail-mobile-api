@@ -96,6 +96,8 @@ _CARD_BEARING = frozenset({
     "NetworkApi.postStlKeyPrs",
     "NetworkApi.postTossautoC",
 })
+# Interfaces sent on the shared KORAIL HTTP client; a partner origin serves the rest.
+_MAIN_HTTP_INTERFACES = frozenset({"NetworkApi", "PushService"})
 # NetworkApi response models that do not extend CommonOut. Three declare their
 # own strResult defaulting to null or "" rather than CommonOut's FAIL constant
 # (CacheCheckResponse.java:62, AcpnMlgSaveResponse.java:101,
@@ -181,10 +183,10 @@ def _load_registry() -> dict[str, V7Contract]:
     if len(contracts) != 117 or len(registry) != len(contracts):
         raise KorailProtocolError("7.0.6 contract registry is incomplete")
     if any(
-        urlsplit(contract.route).scheme
-        or urlsplit(contract.route).netloc
-        or urlsplit(contract.route).query
-        or urlsplit(contract.route).fragment
+        (parts := urlsplit(contract.route)).scheme
+        or parts.netloc
+        or parts.query
+        or parts.fragment
         or ".." in contract.route.split("/")
         or not contract.route
         for contract in contracts
@@ -322,14 +324,14 @@ class V7Gateway:
     ) -> None:
         self.http = http
         self.partner_origins = MappingProxyType(dict(partner_origins or {}))
+        known_interfaces = {contract.interface for contract in V7_CONTRACTS.values()}
+        korail_host = urlsplit(self.http.config.base_url).hostname
         for interface, origin in self.partner_origins.items():
-            if interface == "NetworkApi" or interface not in {
-                contract.interface for contract in V7_CONTRACTS.values()
-            }:
+            if interface == "NetworkApi" or interface not in known_interfaces:
                 raise KorailProtocolError("unknown partner interface")
             _assert_partner_origin(origin)
             if (interface != "PushService" and
-                urlsplit(origin).hostname == urlsplit(self.http.config.base_url).hostname):
+                urlsplit(origin).hostname == korail_host):
                 raise KorailProtocolError("partner origin must be separate from KORAIL")
         self.partner_transport = partner_transport
         self._partners: dict[str, httpx.Client] = {}
@@ -340,7 +342,7 @@ class V7Gateway:
         self._partners.clear()
 
     def _client_for(self, contract: V7Contract) -> httpx.Client:
-        if contract.interface in {"NetworkApi", "PushService"}:
+        if contract.interface in _MAIN_HTTP_INTERFACES:
             assert_korail_origin(str(self.http._client.base_url))
             return self.http._client
         origin = self.partner_origins.get(contract.interface)
@@ -449,7 +451,7 @@ class V7Gateway:
         client = self._client_for(contract)
         target = self._target_for(contract)
         request_headers = dict(header_map)
-        if contract.interface in {"NetworkApi", "PushService"}:
+        if contract.interface in _MAIN_HTTP_INTERFACES:
             request_headers.update(self.http._dynapath_headers(contract.http, contract.route))
         try:
             if is_body:
