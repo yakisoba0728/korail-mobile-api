@@ -33,6 +33,7 @@ from korail_mobile_api.dynapath import (
     DynapathTokenSettings,
 )
 from korail_mobile_api.errors import (
+    KorailApiError,
     KorailAppError,
     KorailDynaPathError,
     KorailProtocolError,
@@ -920,6 +921,86 @@ def test_read_forms_keep_their_key_order():
     }
     for name, (form, expected) in cases.items():
         assert list(form) == expected, name
+
+
+# --- the mutation tail, pinned for both senders -----------------------------------
+# post_mutation_form and get_mutation_query end the same way after sending:
+# status, JSON, and an envelope that is never relaxed. Pinned before that tail
+# was shared. Nothing here leaves the mock transport. No mutation route is a
+# GET in 7.0.6, so the GET sender gets one for the test's duration, as
+# test_safety does.
+
+_CART = "/classes/com.korail.mobile.cart.addCartList"
+_EXTENSION = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
+
+
+def _mutate_through(sender, answer, monkeypatch, **kw):
+    from korail_mobile_api import safety
+    from korail_mobile_api.consent import MutationConsent
+
+    client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(answer))
+    if sender == "post_mutation_form":
+        return "POST", _CART, lambda: client.post_mutation_form(
+            _CART,
+            {**client.common_fields(), "hidPnrNo": "SYNTHETIC_PNR"},
+            consent=MutationConsent(allow_cart=True, dry_run=False),
+            category="cart",
+            **kw,
+        )
+    monkeypatch.setattr(
+        safety,
+        "KORAIL_MUTATION_ROUTES",
+        safety.KORAIL_MUTATION_ROUTES | {("GET", _EXTENSION)},
+    )
+    return "GET", _EXTENSION, lambda: client.get_mutation_query(
+        _EXTENSION,
+        {**client.common_fields(), "txtCrdNo": "SYNTHETIC_CARD"},
+        consent=MutationConsent(allow_discount_card=True, dry_run=False),
+        category="discount_card",
+        **kw,
+    )
+
+
+_MUTATION_SENDERS = ["get_mutation_query", "post_mutation_form"]
+
+
+@pytest.mark.parametrize("sender", _MUTATION_SENDERS)
+def test_a_mutation_that_cannot_be_sent_names_its_method_and_path(sender, monkeypatch):
+    def answer(request):
+        raise httpx.ConnectError("synthetic", request=request)
+
+    method, path, send = _mutate_through(sender, answer, monkeypatch)
+    with pytest.raises(KorailTransportError) as raised:
+        send()
+    assert str(raised.value) == f"KORAIL transport failed for {method} {path}"
+
+
+@pytest.mark.parametrize("sender", _MUTATION_SENDERS)
+def test_a_mutation_answer_is_checked_like_an_enveloped_read(sender, monkeypatch):
+    def run(response, **kw):
+        _, _, send = _mutate_through(sender, lambda _: response, monkeypatch, **kw)
+        return send()
+
+    with pytest.raises(KorailApiError, match="HTTP 500"):
+        run(httpx.Response(500, text="down"))
+    with pytest.raises(KorailProtocolError, match=r"^KORAIL response body was not valid JSON$"):
+        run(httpx.Response(200, text="<html>"))
+    with pytest.raises(KorailProtocolError, match=r"^KORAIL response must be a JSON object$"):
+        run(httpx.Response(200, json=[{"strResult": "SUCC"}]))
+    # Never relaxed: a missing strResult is a failure, as it is for CommonOut.
+    with pytest.raises(KorailAppError, match="S000"):
+        run(httpx.Response(200, json={"h_msg_cd": "S000", "h_msg_txt": "ok"}))
+    fail = {"h_msg_cd": "ERR", "h_msg_txt": "no", "strResult": "FAIL"}
+    with pytest.raises(KorailAppError, match="ERR"):
+        run(httpx.Response(200, json=fail))
+    assert run(httpx.Response(200, json=fail), raise_on_fail=False).str_result == "FAIL"
+    with pytest.raises(KorailSessionExpiredError):
+        run(
+            httpx.Response(200, json={"h_msg_cd": "P058", "h_msg_txt": "x", "strResult": "FAIL"}),
+            raise_on_fail=False,
+        )
+    ok = run(httpx.Response(200, json={"h_msg_cd": "S000", "h_msg_txt": "ok", "strResult": "SUCC"}))
+    assert ok.str_result == "SUCC"
 
 
 def test_exact_form_field_mapping_remains_a_compatibility_alias():

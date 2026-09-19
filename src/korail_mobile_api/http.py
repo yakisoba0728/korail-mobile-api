@@ -129,6 +129,26 @@ def _raise_for_status(response: httpx.Response, *, path: str) -> None:
         )
 
 
+def _finish_mutation(
+    response: httpx.Response,
+    *,
+    path: str,
+    raise_on_fail: bool,
+) -> BaseKorailResponse:
+    """The end of both mutation senders: status, JSON and the envelope.
+
+    Mutation senders only, and separate from the read senders' tail on
+    purpose. The envelope is never relaxed here: every mutation route answers
+    with a CommonOut, so a missing strResult is a failure.
+    """
+    _raise_for_status(response, path=path)
+    try:
+        payload = response.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
+    return parse_base_response(payload, raise_on_fail=raise_on_fail, require_result=True)
+
+
 class KorailHttpClient:
     """KORAIL API 호스트에 고정된 HTTP 클라이언트.
 
@@ -431,18 +451,7 @@ class KorailHttpClient:
             raise KorailTransportError(
                 f"KORAIL transport failed for POST {path}"
             ) from exc
-        _raise_for_status(response, path=path)
-        try:
-            payload = response.json()
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise KorailProtocolError(
-                "KORAIL response body was not valid JSON"
-            ) from exc
-        return parse_base_response(
-            payload,
-            raise_on_fail=raise_on_fail,
-            require_result=path not in _NON_COMMON_OUT_READ_PATHS,
-        )
+        return _finish_mutation(response, path=path, raise_on_fail=raise_on_fail)
 
     def get_mutation_query(
         self,
@@ -482,18 +491,7 @@ class KorailHttpClient:
             raise KorailTransportError(
                 f"KORAIL transport failed for GET {path}"
             ) from exc
-        _raise_for_status(response, path=path)
-        try:
-            payload = response.json()
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise KorailProtocolError(
-                "KORAIL response body was not valid JSON"
-            ) from exc
-        return parse_base_response(
-            payload,
-            raise_on_fail=raise_on_fail,
-            require_result=path not in _NON_COMMON_OUT_READ_PATHS,
-        )
+        return _finish_mutation(response, path=path, raise_on_fail=raise_on_fail)
 
     def get_json(
         self,
