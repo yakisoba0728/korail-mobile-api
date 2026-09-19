@@ -161,3 +161,20 @@ def client_with_replies(
     client = KorailClient(transport=httpx.MockTransport(recorder))
     client.session.current = KorailSession(jsessionid="synthetic-secret")
     return client, recorder
+
+
+def recording_json_handler(
+    requests: list[httpx.Request],
+    body: object,
+) -> Callable[[httpx.Request], httpx.Response]:
+    """A transport handler that records each request and answers ``body`` as JSON.
+
+    A fresh response per request: one httpx.Response shared across requests
+    would carry one request's state into the next.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=body)
+
+    return handler

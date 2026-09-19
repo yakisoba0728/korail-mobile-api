@@ -15,6 +15,7 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
+from _helpers import recording_json_handler
 from korail_mobile_api import KorailClient
 from korail_mobile_api.errors import KorailMutationNotAllowedError, KorailProtocolError
 from korail_mobile_api.v7 import V7_CONTRACTS, V7MutationConsent, V7MutationPreview
@@ -32,9 +33,7 @@ def test_all_annotated_additions_are_registered() -> None:
 def test_main_read_uses_exact_query_and_existing_session() -> None:
     requests: list[httpx.Request] = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
-        requests.append(request)
-        return httpx.Response(200, json={"strResult": "SUCCESS", "version": "7"})
+    respond = recording_json_handler(requests, {"strResult": "SUCCESS", "version": "7"})
 
     client = KorailClient(transport=httpx.MockTransport(respond))
     client.http.cookies.set("JSESSIONID", "test-session", domain="smart.letskorail.com")
@@ -81,9 +80,7 @@ def test_mutating_get_requires_exact_method_consent_and_dry_run_never_sends() ->
 def test_product_cancel_accepts_only_apk_dto_keys_and_two_identifiers() -> None:
     requests: list[httpx.Request] = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
-        requests.append(request)
-        return httpx.Response(200, json={"strResult": "SUCCESS"})
+    respond = recording_json_handler(requests, {"strResult": "SUCCESS"})
 
     client = KorailClient(transport=httpx.MockTransport(respond))
     consent = V7MutationConsent(
@@ -147,13 +144,8 @@ def test_repeated_field_and_partner_origin_are_separate() -> None:
     main: list[httpx.Request] = []
     partner: list[httpx.Request] = []
 
-    def main_respond(request: httpx.Request) -> httpx.Response:
-        main.append(request)
-        return httpx.Response(200, json={"strResult": "SUCCESS"})
-
-    def partner_respond(request: httpx.Request) -> httpx.Response:
-        partner.append(request)
-        return httpx.Response(200, json={"items": []})
+    main_respond = recording_json_handler(main, {"strResult": "SUCCESS"})
+    partner_respond = recording_json_handler(partner, {"items": []})
 
     client = KorailClient(
         transport=httpx.MockTransport(main_respond),
@@ -261,9 +253,7 @@ def test_partner_host_and_unknown_wire_fields_fail_before_request() -> None:
 def test_body_contracts_reject_incomplete_dto_shapes_before_io() -> None:
     seen: list[httpx.Request] = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={})
+    respond = recording_json_handler(seen, {})
 
     client = KorailClient(transport=httpx.MockTransport(respond))
     try:
@@ -284,13 +274,8 @@ def test_push_web_host_uses_main_http_client_and_cookie_scope() -> None:
     main: list[httpx.Request] = []
     partner: list[httpx.Request] = []
 
-    def main_respond(request: httpx.Request) -> httpx.Response:
-        main.append(request)
-        return httpx.Response(200, json={"strResult": "SUCC"})
-
-    def partner_respond(request: httpx.Request) -> httpx.Response:
-        partner.append(request)
-        return httpx.Response(200, json={})
+    main_respond = recording_json_handler(main, {"strResult": "SUCC"})
+    partner_respond = recording_json_handler(partner, {})
 
     client = KorailClient(
         transport=httpx.MockTransport(main_respond),
@@ -385,9 +370,7 @@ def test_a_card_bearing_v7_mutation_refuses_an_unstated_card_kind(
     # nothing is sent -- and not even previewed.
     calls: list[httpx.Request] = []
 
-    def respond(request: httpx.Request) -> httpx.Response:  # pragma: no cover
-        calls.append(request)
-        return httpx.Response(200, json={"strResult": "SUCC"})
+    respond = recording_json_handler(calls, {"strResult": "SUCC"})
 
     client = KorailClient(transport=httpx.MockTransport(respond))
     try:
@@ -410,11 +393,9 @@ def test_a_card_bearing_v7_mutation_refuses_an_unstated_card_kind(
 def test_a_card_bearing_v7_mutation_with_one_card_kind_is_sent() -> None:
     calls: list[httpx.Request] = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
-        calls.append(request)
-        return httpx.Response(
-            200, json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": ""}
-        )
+    respond = recording_json_handler(
+        calls, {"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": ""}
+    )
 
     client = KorailClient(transport=httpx.MockTransport(respond))
     try:
