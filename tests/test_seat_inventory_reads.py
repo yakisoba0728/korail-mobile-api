@@ -16,6 +16,7 @@ import math
 from collections.abc import Iterator, Mapping
 from dataclasses import FrozenInstanceError, fields, is_dataclass, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, ClassVar, get_type_hints
 from urllib.parse import parse_qs
 
@@ -1593,6 +1594,8 @@ class _EvidenceFakeClient:
         self.calls.append("init")
         if self.scenario == "init_failed":
             raise RuntimeError("synthetic-init-message-secret")
+        # The script paces through the inner httpx client's request hooks.
+        self.http = SimpleNamespace(_client=SimpleNamespace(event_hooks={}))
 
     def login(self, _member_no: str, _password: str) -> KorailSession:
         self.calls.append("login")
@@ -1728,6 +1731,7 @@ def configured_evidence(monkeypatch, complete_train):
     _EvidenceFakeClient.train = complete_train
     monkeypatch.setattr(evidence, "KorailClient", _EvidenceFakeClient)
     monkeypatch.setattr(evidence, "live_enabled", lambda: True)
+    monkeypatch.setenv("KORAIL_LIVE_SEAT_EVIDENCE", "1")
     monkeypatch.setattr(
         evidence,
         "read_credentials_from_env",
@@ -1952,6 +1956,44 @@ def test_car_evidence_type_checks_every_observed_attribute():
     assert evidence._car_fields_typed(response) is False
 
 
+def test_evidence_needs_its_own_switch_as_well_as_the_live_one(
+    configured_evidence,
+    monkeypatch,
+):
+    # scripts/README.md: every live script needs KORAIL_MOBILE_API_LIVE=1 plus
+    # one switch of its own. Without KORAIL_LIVE_SEAT_EVIDENCE nothing is built.
+    monkeypatch.delenv("KORAIL_LIVE_SEAT_EVIDENCE")
+    result = evidence.capture_evidence()
+    assert result["status"] == "setup_failed"
+    assert configured_evidence.calls == []
+
+
+def test_evidence_client_is_paced_between_requests(configured_evidence, monkeypatch):
+    installed: list[tuple[object, float]] = []
+    monkeypatch.setattr(
+        evidence,
+        "_install_pacing",
+        lambda client, interval: installed.append((client, interval)),
+    )
+    evidence.capture_evidence()
+    assert len(installed) == 1
+    assert installed[0][1] == evidence.MIN_INTERVAL_SECONDS
+
+
+def test_evidence_pacing_waits_out_the_remaining_interval():
+    now = [100.0]
+    slept: list[float] = []
+    client = SimpleNamespace(http=SimpleNamespace(_client=SimpleNamespace(event_hooks={})))
+    evidence._install_pacing(client, 1.5, clock=lambda: now[0], sleep=slept.append)
+    (hook,) = client.http._client.event_hooks["request"]
+    hook(None)
+    now[0] += 0.5
+    hook(None)
+    now[0] += 2.0
+    hook(None)
+    assert slept == [pytest.approx(1.0)]
+
+
 def test_evidence_setup_failures_are_fixed_and_do_not_create_a_client(
     configured_evidence,
     monkeypatch,
@@ -2148,6 +2190,9 @@ def test_evidence_script_has_narrow_import_and_operation_boundaries():
         "os",
         "pathlib",
         "tempfile",
+        # `time` is the request pacing: a monotonic clock and a sleep, nothing
+        # that reaches the network.
+        "time",
         "typing",
         "korail_mobile_api",
     }

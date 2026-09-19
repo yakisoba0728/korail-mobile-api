@@ -6,6 +6,21 @@
 # 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
 # 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
+"""Capture bounded, sanitized evidence of the seat-map reads from the live server.
+
+One login, one train search, one car list and one first-car seat list, and
+nothing else. The JSON it writes holds fixed statuses, 0/1 call counters,
+capped counts, field/type-presence booleans and a sufficiency category; raw
+bodies, identifiers, stations, dates and credentials never reach it.
+
+It runs only with both ``KORAIL_MOBILE_API_LIVE=1`` and
+``KORAIL_LIVE_SEAT_EVIDENCE=1``; with either missing it writes the fixed
+``setup_failed`` result and sends nothing. Credentials come from
+``KORAIL_MEMBER_NO``/``KORAIL_PASSWORD`` and the device identity from
+:func:`korail_mobile_api.live.build_config_from_env`. Requests are spaced at
+least ``MIN_INTERVAL_SECONDS`` apart.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -13,7 +28,8 @@ import json
 import math
 import os
 import tempfile
-from collections.abc import Mapping, Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +49,35 @@ from korail_mobile_api.live import (
     live_enabled,
     read_credentials_from_env,
 )
+
+
+SEAT_EVIDENCE_ENV = "KORAIL_LIVE_SEAT_EVIDENCE"
+# KORAIL bans IPs for macro-like traffic; the same floor as the other scripts.
+MIN_INTERVAL_SECONDS = 1.5
+
+
+def _install_pacing(
+    client: KorailClient,
+    min_interval: float,
+    *,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], object] = time.sleep,
+) -> None:
+    """Space every outbound request, the client's own included, at least
+    ``min_interval`` seconds apart."""
+    last: list[float] = []
+
+    def wait(_request: object) -> None:
+        if last:
+            remaining = min_interval - (clock() - last[0])
+            if remaining > 0:
+                sleep(remaining)
+        last[:] = [clock()]
+
+    inner = client.http._client
+    hooks = dict(inner.event_hooks)
+    hooks["request"] = [*hooks.get("request", []), wait]
+    inner.event_hooks = hooks
 
 
 _STATUSES = frozenset(
@@ -238,7 +283,7 @@ def _window_fields_typed(windows: tuple[SeatWindow, ...]) -> bool:
 def capture_evidence() -> dict[str, Any]:
     result = _empty_result()
     try:
-        if not live_enabled():
+        if not live_enabled() or os.environ.get(SEAT_EVIDENCE_ENV) != "1":
             return result
         member_no, password = read_credentials_from_env()
         config = build_config_from_env()
@@ -271,6 +316,7 @@ def capture_evidence() -> dict[str, Any]:
             passengers=1,
         )
         client = KorailClient(config)
+        _install_pacing(client, MIN_INTERVAL_SECONDS)
     except Exception:
         return result
 

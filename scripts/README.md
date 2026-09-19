@@ -55,8 +55,11 @@ stdout and the summary are redacted; the raw bodies are not.
 
 ### `capture_seat_inventory_evidence.py` — live, reads only
 
-Narrower version of the same idea for the seat-map reads. `docs/verification-record.md`
-shows the invocation that produced the evidence recorded there.
+Narrower version of the same idea for the seat-map reads: one login, one search,
+one car list, one seat list. Its own switch is `KORAIL_LIVE_SEAT_EVIDENCE=1`, and
+it paces requests 1.5s apart like the others. `docs/verification-record.md`
+shows the invocation that produced the evidence recorded there; that run
+predates the second switch, which now has to be set as well.
 
 ### `reserve_pay_refund_roundtrip.py` — live, and it MOVES MONEY
 
