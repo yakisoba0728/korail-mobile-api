@@ -423,3 +423,26 @@ def test_messages_stay_redacted_through_classification():
     assert "[REDACTED_CARD]" in str(error)
     # ``message`` stays verbatim so a caller can still match on the original.
     assert error.message == "카드 4111111111111111 오류"
+
+
+@pytest.mark.parametrize(
+    "error_class",
+    [KorailAppError, KorailSessionExpiredError, "KorailNetFunnelError"],
+)
+def test_the_message_is_redacted_before_the_code_is_put_in_front_of_it(error_class):
+    """Why these three redact the message and then the whole string again.
+
+    Redacting only the joined "<code>: <message>" is not the same. When the
+    code is itself a sensitive key name, the joined string reads as
+    "pnrNo: <value>", the message's first word becomes that value, and the
+    message's own key is swallowed with it -- so its real value is left in.
+    A fuzz of the two orders found exactly this. It needs a server that sends
+    a key name as its code, but the cost of the first pass is one call.
+    """
+    if isinstance(error_class, str):
+        from korail_mobile_api import errors
+
+        error_class = getattr(errors, error_class)
+    error = error_class("pnrNo", "txtPwd : SYNTHETIC-SECRET")
+    assert "SYNTHETIC-SECRET" not in str(error)
+    assert error.message == "txtPwd : SYNTHETIC-SECRET"

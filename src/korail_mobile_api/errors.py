@@ -121,9 +121,7 @@ class KorailDynaPathError(KorailApiError):
         raw: object | None = None,
     ) -> None:
         self.raw = raw
-        super().__init__(
-            redact_text(message or "KORAIL DynaPath request rejected")
-        )
+        super().__init__(message or "KORAIL DynaPath request rejected")
 
 
 class KorailAuthContinuationRequired(KorailAuthError):
@@ -155,6 +153,11 @@ class KorailAppError(KorailApiError):
         self.code = code
         self.message = message
         self.raw = raw
+        # The base class redacts the joined string, and that alone is not
+        # enough: a code that is itself a sensitive key name ("pnrNo: ...")
+        # takes the message's first word as its value and swallows the
+        # message's own key with it. So the message goes in already redacted.
+        # KorailSessionExpiredError and KorailNetFunnelError do the same.
         super().__init__(
             f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
         )
