@@ -74,51 +74,18 @@ def validate_seat_inventory_inputs(
         raise ValueError("passenger_count must be an integer from 1 through 9")
     if car_no is not None and (type(car_no) is not int or car_no < 1):
         raise ValueError("car_no must be a positive integer")
-    _required_ascii_digits(
-        train.train_no,
-        "train_no",
-        lengths=frozenset(range(1, 6)),
-    )
-    _required_ascii_digits(
-        train.train_group_code,
-        "train_group_code",
-        lengths=frozenset({3}),
-    )
-    _required_ascii_digits(
-        train.departure_station_code,
-        "departure_station_code",
-        lengths=frozenset({4}),
-    )
-    _required_ascii_digits(
-        train.arrival_station_code,
-        "arrival_station_code",
-        lengths=frozenset({4}),
-    )
-    _required_ascii_digits(
-        train.departure_date,
-        "departure_date",
-        lengths=frozenset({8}),
-    )
-    _required_ascii_digits(
-        train.run_date,
-        "run_date",
-        lengths=frozenset({8}),
-    )
-    _required_ascii_digits(
-        train.train_class_code,
-        "train_class_code",
-        lengths=frozenset({2}),
-    )
-    _required_ascii_digits(
-        train.departure_run_order,
-        "departure_run_order",
-        lengths=frozenset({6}),
-    )
-    _required_ascii_digits(
-        train.arrival_run_order,
-        "arrival_run_order",
-        lengths=frozenset({6}),
-    )
+    for value, name, lengths in (
+        (train.train_no, "train_no", frozenset(range(1, 6))),
+        (train.train_group_code, "train_group_code", frozenset({3})),
+        (train.departure_station_code, "departure_station_code", frozenset({4})),
+        (train.arrival_station_code, "arrival_station_code", frozenset({4})),
+        (train.departure_date, "departure_date", frozenset({8})),
+        (train.run_date, "run_date", frozenset({8})),
+        (train.train_class_code, "train_class_code", frozenset({2})),
+        (train.departure_run_order, "departure_run_order", frozenset({6})),
+        (train.arrival_run_order, "arrival_run_order", frozenset({6})),
+    ):
+        _required_ascii_digits(value, name, lengths=lengths)
     # x4/b.java:19,23 derive txtSeatAttCd/txtGdNo from the selected train row
     # rather than pinning them; validate the row's own values when present so
     # the seat-map builders can forward a dynamic-but-well-formed value.
@@ -163,7 +130,7 @@ def _resolved_goods_no(train: TrainSummary) -> str | None:
     # normal (non-goods) train (SeatSearchRequest.txtGdNo defaults to null), and
     # Retrofit drops null @Field params (ResearchService getCarList txtGdNo:37 /
     # getSeatList gdNo:59). So the app OMITS the field for standard searches;
-    # return None here and let the builders delete the key when there is none.
+    # return None here and let the builders leave the key out when there is none.
     return train.goods_no or None
 
 
@@ -195,7 +162,14 @@ def build_seat_car_form(
     (:func:`~korail_mobile_api.crypto.generate_sid`).
     """
     validate_seat_inventory_inputs(train, passenger_count)
-    form = {
+    # The override stands in for the row's code, so it gets the row's check.
+    if seat_attribute_code:
+        _required_ascii_digits(
+            seat_attribute_code, "seat_attribute_code", lengths=frozenset({3})
+        )
+    seat_attribute = seat_attribute_code or train.seat_attribute_code
+    goods_no = _resolved_goods_no(train)
+    return {
         **_device_version(config),
         "Key": config.key,
         "Sid": _inventory_sid(sid),
@@ -216,14 +190,9 @@ def build_seat_car_form(
         # selected row carries no code (ScheduleView rows are null) Retrofit
         # omits the @Field (getCarList txtSeatAttCd, ResearchService:37), so
         # omit it here rather than substituting a general-seat "015".
-        "txtSeatAttCd": seat_attribute_code or train.seat_attribute_code,
-        "txtGdNo": _resolved_goods_no(train),
+        **({"txtSeatAttCd": seat_attribute} if seat_attribute else {}),
+        **({"txtGdNo": goods_no} if goods_no is not None else {}),
     }
-    if not form["txtSeatAttCd"]:
-        del form["txtSeatAttCd"]
-    if form["txtGdNo"] is None:
-        del form["txtGdNo"]
-    return form
 
 
 def build_seat_inventory_form(
@@ -249,7 +218,9 @@ def build_seat_inventory_form(
         passenger_count,
         car_no=car_no,
     )
-    form = {
+    seat_attribute = train.seat_attribute_code
+    goods_no = _resolved_goods_no(train)
+    return {
         **_device_version(config),
         "Key": config.key,
         "trnClsfCd": train.train_class_code or "",
@@ -263,20 +234,15 @@ def build_seat_inventory_form(
         # As with getCarList, getSeatList forwards h_seat_att_cd verbatim and
         # Retrofit omits the @Field when it is null (ResearchService:59), so
         # omit seatAttCd for a row without a code instead of sending "015".
-        "seatAttCd": train.seat_attribute_code,
+        **({"seatAttCd": seat_attribute} if seat_attribute else {}),
         "dptStnRunOrdr": train.departure_run_order or "",
         "arvStnRunOrdr": train.arrival_run_order or "",
         "totPsgCnt": str(passenger_count),
-        "gdNo": _resolved_goods_no(train),
+        **({"gdNo": goods_no} if goods_no is not None else {}),
         "isArrow": "true",
         "Sid": _inventory_sid(sid),
         "ctlDvCd": "",
     }
-    if not train.seat_attribute_code:
-        del form["seatAttCd"]
-    if form["gdNo"] is None:
-        del form["gdNo"]
-    return form
 
 
 def build_cache_query(timestamp_ms: int | None = None) -> dict[str, str]:

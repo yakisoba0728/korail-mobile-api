@@ -2438,25 +2438,38 @@ def test_evidence_main_validates_output_parent_and_type_before_capture(
     ["NOT VALID; injected", "01", "0150", "\uff10\uff11\uff15"],
     ids=["text", "two-digits", "four-digits", "fullwidth-digits"],
 )
-def test_known_defect_a_seat_attribute_override_is_sent_unvalidated(
+def test_a_seat_attribute_override_is_checked_like_the_rows_own(
     complete_train, override
 ):
-    """TODAY'S BEHAVIOUR, WHICH IS WRONG. src plan batch 38 flips this test.
+    """The override that replaces the row's seat_attribute_code gets its check.
 
-    The row's own seat_attribute_code has to be three ASCII digits
-    (validate_seat_inventory_inputs). The override argument that replaces it is
-    not checked at all, and whatever it holds goes out as txtSeatAttCd. Batch
-    38 gives the override the row's check and, in the same commit, makes this
-    expect a KorailProtocolError instead.
+    The row's own code has to be three ASCII digits
+    (validate_seat_inventory_inputs). The override argument used to go out as
+    txtSeatAttCd unchecked, whatever it held.
     """
+    with pytest.raises(
+        KorailProtocolError, match="seat_attribute_code must contain 3 ASCII digit"
+    ):
+        build_seat_car_form(
+            KorailConfig(),
+            complete_train,
+            passenger_count=1,
+            sid="caller-sid-car",
+            seat_attribute_code=override,
+        )
+
+
+def test_a_valid_seat_attribute_override_replaces_the_rows_code(complete_train):
+    train = replace(complete_train, seat_attribute_code="015")
     car = build_seat_car_form(
-        KorailConfig(),
-        complete_train,
-        passenger_count=1,
-        sid="caller-sid-car",
-        seat_attribute_code=override,
+        KorailConfig(), train, passenger_count=1, sid="S", seat_attribute_code="021"
     )
-    assert car["txtSeatAttCd"] == override
+    assert car["txtSeatAttCd"] == "021"
+    # An empty override still falls back to the row, as before.
+    car = build_seat_car_form(
+        KorailConfig(), train, passenger_count=1, sid="S", seat_attribute_code=""
+    )
+    assert car["txtSeatAttCd"] == "015"
 
 
 _SEAT_STRING_ATTRIBUTES = {
