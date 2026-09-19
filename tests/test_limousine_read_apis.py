@@ -1093,7 +1093,7 @@ def test_application_failure_is_not_retried_or_misclassified(schedule_query):
     assert calls == 1
 
 
-def test_current_docs_describe_static_only_limousine_boundary():
+def test_docs_name_every_limousine_read_and_record_the_removed_one():
     root = Path(__file__).parents[1]
     readme = (root / "README.md").read_text(encoding="utf-8")
     progress = (root / "docs" / "IMPLEMENTATION_PROGRESS.md").read_text(
@@ -1106,14 +1106,19 @@ def test_current_docs_describe_static_only_limousine_boundary():
         encoding="utf-8"
     )
     combined = f"{readme}\n{progress}\n{record}"
-    for method in (
-        "get_limousine_schedules(",
-        "get_limousine_seat_inventory(",
-        "get_limousine_schedule_view(",
-    ):
-        assert method in combined
-    assert "58 exact" in combined
-    assert "72 public methods" in combined
+    # Measured, not typed: every limousine method the client has today.
+    limousine_methods = {
+        name
+        for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
+        if "limousine" in name and not name.startswith("_")
+    }
+    assert limousine_methods
+    for method in sorted(limousine_methods):
+        assert f"{method}(" in combined, method
+    # 7.0.6 dropped the schedule-view route; the removal record says so.
+    removals = (root / "docs" / "7.0.6-removals.md").read_text(encoding="utf-8")
+    assert "get_limousine_schedule_view()" in removals
+    assert not hasattr(KorailClient, "get_limousine_schedule_view")
     assert "caller-supplied service" in combined
     assert "DynaPath" in combined
     assert "No live" in combined
