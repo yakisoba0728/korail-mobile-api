@@ -86,11 +86,6 @@ def infer_login_input_flag(login_id: str) -> str:
     return KORAIL_LOGIN_TYPE_MEMBER_NO
 
 
-def is_login_success_code(code: str | None) -> bool:
-    """``h_msg_cd`` 가 로그인 성공 코드인지."""
-    return code in KORAIL_LOGIN_SUCCESS_CODES
-
-
 def build_login_authentication_post_data(
     *,
     login_id: str,
@@ -149,7 +144,6 @@ class KorailSessionClient:
             "/file/CACHE/MobileService.cache",
             {"timeStamp": int(time.time() * 1000)},
             include_common=False,
-            raise_on_fail=True,
         )
 
     def get_login_crypto_info(self) -> LoginCryptoInfo:
@@ -168,8 +162,7 @@ class KorailSessionClient:
             ),
             include_common=False,
         )
-        raw = response.raw
-        raw = extract_login_crypto_payload(raw)
+        raw = extract_login_crypto_payload(response.raw)
         idx = str(raw.get("idx") or "")
         key = str(raw.get("key") or "")
         # 참고용입니다. getPwdAESCphd() 의 유일한 사용처는 결제 금액 암호화입니다:
@@ -322,7 +315,7 @@ class KorailSessionClient:
         input_flag: str,
         cust_id: str | None,
     ) -> KorailSession:
-        if not is_login_success_code(response.h_msg_cd):
+        if response.h_msg_cd not in KORAIL_LOGIN_SUCCESS_CODES:
             redirect_url = response.raw.get("strRedirectUrl")
             if redirect_url:
                 raise KorailAuthContinuationRequired(
