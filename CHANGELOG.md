@@ -81,6 +81,14 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
   든 비밀번호는 AES 경로에서 "AES 키/IV 오류"(서버 메타데이터 문제)로, 평문 Base64
   경로에서는 날것의 `UnicodeEncodeError` 로 나왔습니다. 이제 두 경로 모두 비밀번호를
   지목하는 `KorailProtocolError` 이고 원인은 `__cause__` 에 남습니다.
+- **읽기 라우트 여섯 개가 필드 검사 없이 나갔습니다.** `login.Login`,
+  `common.code.do`, `seatMovie.ScheduleView`, `qry.chtnStn.do`,
+  `research.actualTrainSchedule.do`, `EbizMaasStationList.do` 는 필드 계약이 없어
+  호출자가 넣은 이름을 그대로 보냈습니다. 이제 각 빌더가 만드는 집합만 받습니다.
+  로그인은 비밀번호 로그인과 소셜 로그인 두 모양 중 하나여야 하고, 목록 값은
+  `common.code.do` 의 `code` 에만 허용됩니다. DynaPath 를 켜지 않은 로그인은 여전히
+  필드 검사보다 먼저 `KorailDynaPathRequiredError` 로 막힙니다. 소셜 로그인의
+  `custId` 는 이제 가려집니다.
 
 - **비회원 예약 `NetworkApi.postNonMemTicket` 이 동의 없이 나갈 수 있었습니다.**
   조회로 분류돼 `V7MutationConsent` 도 dry-run 도 거치지 않았습니다. 응답이 회원 예약과

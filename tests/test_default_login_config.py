@@ -54,8 +54,8 @@ SEARCH_PATH = "/classes/com.korail.mobile.seatMovie.ScheduleView"
 OK = {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
 # Complete request bodies (minus the common three post_form adds) for the routes
 # these tests use as vehicles. The tests are about where the token goes, not
-# about the routes, but a bare post_form(route) stops being a valid request once
-# the route has a field contract (src plan batch 13).
+# about the routes, but both have a field contract, so a bare post_form(route)
+# is not a valid request.
 LOGIN_FORM = {
     "txtMemberNo": "SYNTHETIC_MEMBER",
     "txtPwd": "SYNTHETIC_PASSWORD",

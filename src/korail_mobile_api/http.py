@@ -180,15 +180,18 @@ class KorailHttpClient:
     def _absolute_url(self, path: str) -> str:
         return f"{self.config.base_url.rstrip('/')}/{path.lstrip('/')}"
 
+    def _refuse_missing_dynapath(self, path: str) -> None:
+        if not self.config.dynapath.enabled and path in DYNAPATH_REQUIRED_PATHS:
+            raise KorailDynaPathRequiredError(
+                f"KORAIL {path} 는 DynaPath 토큰을 요구합니다. "
+                "KorailConfig(enable_dynapath=True) 로 켜거나, 실제 단말 "
+                "값을 쓰려면 build_config_from_env() 를 넘겨야 합니다."
+            )
+
     def _dynapath_headers(self, method: str, path: str) -> dict[str, str]:
         dynapath = self.config.dynapath
         if not dynapath.enabled:
-            if path in DYNAPATH_REQUIRED_PATHS:
-                raise KorailDynaPathRequiredError(
-                    f"KORAIL {path} 는 DynaPath 토큰을 요구합니다. "
-                    "KorailConfig(enable_dynapath=True) 로 켜거나, 실제 단말 "
-                    "값을 쓰려면 build_config_from_env() 를 넘겨야 합니다."
-                )
+            self._refuse_missing_dynapath(path)
             return {}
         if path not in dynapath.allowlist_paths:
             return {}
@@ -234,6 +237,11 @@ class KorailHttpClient:
         """
         assert_korail_origin(str(self._client.base_url))
         assert_read_only_route("POST", path)
+        # Before the field check: login.Login has a field contract, and a caller
+        # who has not turned DynaPath on needs to hear that first -- whatever
+        # the form looks like, the server would refuse it anyway.
+        if include_dynapath:
+            self._refuse_missing_dynapath(path)
         if data is not None and not isinstance(data, (Mapping, Sequence)):
             raise KorailProtocolError(
                 "KORAIL form data must be a mapping or registered ordered sequence"

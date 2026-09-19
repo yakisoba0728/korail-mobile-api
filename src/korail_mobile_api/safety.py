@@ -664,6 +664,44 @@ def assert_netfunnel_request(
         )
 
 
+_LOGIN_PATH = "/classes/com.korail.mobile.login.Login"
+_COMMON_CODE_PATH = "/classes/com.korail.mobile.common.code.do"
+_SCHEDULE_VIEW_PATHS = frozenset(
+    {
+        "/classes/com.korail.mobile.seatMovie.ScheduleView",
+        "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial",
+    }
+)
+
+# login.Login goes out in two shapes, and the union of their names is not a
+# third one. The credential login (session._login) sends the member number and
+# the transformed password, plus custId/etrPath/idx only when it has them; the
+# social login (session.login_social) sends custId and no credentials at all.
+# Each entry is (required, optional). KORAIL_EXACT_REQUEST_FIELDS carries the
+# union, so the route is not skipped, and the checker holds a request to one
+# shape at a time.
+_ALTERNATIVE_REQUEST_FIELD_SHAPES: dict[
+    str, tuple[tuple[frozenset[str], frozenset[str]], ...]
+] = {
+    _LOGIN_PATH: (
+        (
+            frozenset(
+                {
+                    "Device", "Version", "Key", "txtMemberNo", "txtPwd",
+                    "txtInputFlg", "checkValidPw",
+                }
+            ),
+            frozenset({"custId", "etrPath", "idx"}),
+        ),
+        (
+            frozenset(
+                {"Device", "Version", "Key", "txtInputFlg", "custId", "checkValidPw"}
+            ),
+            frozenset(),
+        ),
+    ),
+}
+
 KORAIL_EXACT_REQUEST_FIELDS = {
     "/file/CACHE/MobileService.cache": frozenset({"timeStamp"}),
     "/file/CACHE/prdMobilePlusMain.cache": frozenset({"timeStamp", "srtCheckYn"}),
@@ -1104,6 +1142,48 @@ KORAIL_EXACT_REQUEST_FIELDS = {
     "/classes/com.korail.mobile.research.tripChgOgtk.do": frozenset(
         {"Device", "Version", "Key", "tkCnt"}
     ),
+    # The six below went out with whatever a caller put in until 2026-09-19;
+    # each set is what its builder produces. login.Login's is the union of the
+    # two shapes in _ALTERNATIVE_REQUEST_FIELD_SHAPES.
+    _LOGIN_PATH: frozenset().union(
+        *(
+            required | optional
+            for required, optional in _ALTERNATIVE_REQUEST_FIELD_SHAPES[_LOGIN_PATH]
+        )
+    ),
+    # build_common_code_form. `code` is the one list value any read route may
+    # carry -- see _is_common_code_list below.
+    _COMMON_CODE_PATH: frozenset(
+        {
+            "Device", "Version", "Key", "code", "deviceWidth", "deviceHeight",
+            "OSVersion", "departDate", "arrivalDate", "holidayYn",
+        }
+    ),
+    # build_train_search_form: Sid and no Key, unlike ScheduleViewSpecial.
+    "/classes/com.korail.mobile.seatMovie.ScheduleView": frozenset(
+        {
+            "Device", "Version", "Sid", "txtMenuId", "radJobId",
+            "selGoTrain", "txtTrnGpCd", "txtGoStart", "txtGoEnd",
+            "txtGoAbrdDt", "txtGoHour", "txtPsgFlg_1", "txtPsgFlg_2",
+            "txtPsgFlg_3", "txtPsgFlg_4", "txtPsgFlg_5",
+            "txtSeatAttCd_2", "txtSeatAttCd_3", "txtSeatAttCd_4",
+            "ebizCrossCheck", "srtCheckYn", "rtYn",
+            "adjStnScdlOfrFlg", "mbCrdNo", "qryDvCd", "qryStNo",
+            "qryStTrnNo", "qryStTrnNo2", "pgPrCnt", "chtnCnt",
+            "trnGpCnt", "trnGpCd1",
+        }
+        | {f"chtnRsStnCd{index}" for index in range(1, 33)}
+    ),
+    # KorailClient.get_transfer_stations; post_form adds the common three.
+    "/classes/com.korail.mobile.qry.chtnStn.do": frozenset(
+        {"Device", "Version", "Key", "dptRsStnCd", "arvRsStnCd"}
+    ),
+    # build_train_schedule_form: Device and Version, no Key.
+    "/classes/com.korail.mobile.research.actualTrainSchedule.do": frozenset(
+        {"Device", "Version", "runDt", "trnNo"}
+    ),
+    # build_maas_station_form: the one code and no common fields.
+    "/ebizmaas/EbizMaasStationList.do": frozenset({"addSrvDvCd"}),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 
@@ -1142,6 +1222,15 @@ KORAIL_OPTIONAL_REQUEST_FIELDS: dict[str, frozenset[str]] = {
     ),
     "/classes/com.korail.mobile.research.TResidualSeatsResearch.do": (
         frozenset({"seatAttCd", "gdNo"})
+    ),
+    # build_common_code_form drops each of these when it is empty.
+    _COMMON_CODE_PATH: frozenset({"departDate", "arrivalDate", "holidayYn"}),
+    # build_train_search_form: mbCrdNo only when logged in with a card, and
+    # the connection block only on a filtered transfer search. The paging
+    # fields are always sent, unlike on ScheduleViewSpecial.
+    "/classes/com.korail.mobile.seatMovie.ScheduleView": frozenset(
+        {"mbCrdNo", "chtnCnt", "trnGpCnt", "trnGpCd1"}
+        | {f"chtnRsStnCd{index}" for index in range(1, 33)}
     ),
     # The N-card schedule view's two never-set @Query parameters. NEITHER of
     # the app's two builders (u4/b.java:52-65 and :67-81) ever calls
@@ -1507,6 +1596,12 @@ def assert_read_only_request_fields(
             route_path == _TRIP_CHANGE_ORIGINAL_TICKET_PATH
             and _is_original_ticket_field_order(names, scalar_pairs)
         )
+    elif route_path in _ALTERNATIVE_REQUEST_FIELD_SHAPES:
+        field_set = set(field_names)
+        valid_shape = any(
+            required <= field_set <= required | optional
+            for required, optional in _ALTERNATIVE_REQUEST_FIELD_SHAPES[route_path]
+        )
     else:
         # Every field must belong to the exact set, and every non-optional
         # field must be present. Optional fields (Retrofit null-omitted @Fields)
@@ -1522,7 +1617,8 @@ def assert_read_only_request_fields(
             "KORAIL request fields must exactly match the registered "
             "read-only contract"
         )
-    if route_path == "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial":
+    if route_path in _SCHEDULE_VIEW_PATHS:
+        route_name = route_path.rsplit(".", 1)[-1]
         selected = [
             int(match.group(1))
             for name in field_names
@@ -1534,22 +1630,44 @@ def assert_read_only_request_fields(
                 values_by_name.get("chtnCnt") != str(len(selected))
             ):
                 raise KorailProtocolError(
-                    "KORAIL ScheduleViewSpecial connection stations must be numbered"
+                    f"KORAIL {route_name} connection stations must be numbered"
                 )
         elif "chtnCnt" in values_by_name:
             raise KorailProtocolError(
-                "KORAIL ScheduleViewSpecial connection count requires stations"
+                f"KORAIL {route_name} connection count requires stations"
             )
         if ("trnGpCd1" in values_by_name) != (
             values_by_name.get("trnGpCnt") == "1"
         ):
             raise KorailProtocolError(
-                "KORAIL ScheduleViewSpecial train-group count is inconsistent"
+                f"KORAIL {route_name} train-group count is inconsistent"
             )
-    if any(type(value) not in {str, int} for _, value in scalar_pairs):
+    if any(
+        type(value) not in {str, int}
+        and not (
+            route_path == _COMMON_CODE_PATH
+            and name == "code"
+            and _is_common_code_list(value)
+        )
+        for name, value in scalar_pairs
+    ):
         raise KorailProtocolError(
             "KORAIL request values must be scalar strings or integers"
         )
+
+
+def _is_common_code_list(value: object) -> bool:
+    """common.code.do's ``code``: a non-empty list of strings.
+
+    build_common_code_form always sends a list, and httpx writes it as one
+    repeated ``code`` key per item. No other field on any read route takes a
+    list.
+    """
+    return (
+        type(value) is list
+        and bool(value)
+        and all(type(item) is str for item in value)
+    )
 
 
 SAFETY_DEFAULTS = {

@@ -31,6 +31,9 @@ SENSITIVE_KEYS = frozenset(
         # --- 인증·세션 ---
         "txtMemberNo",
         "txtPwd",
+        # 소셜 로그인의 고객 식별자(session.login_social). login.Login 에 필드
+        # 계약이 생기면서 드러난 빈자리다 -- 그 전에는 어느 계약에도 없었다.
+        "custId",
         "password",
         "JSESSIONID",
         "Cookie",

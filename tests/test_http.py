@@ -53,10 +53,9 @@ from korail_mobile_api.safety import (
 # Complete request bodies for the two read routes the transport tests below
 # use as vehicles, minus the common three that post_form adds itself. The tests
 # are about headers, encoding, origins and error classification, not about
-# these routes, but a bare post_form(route) only works while the route has no
-# field contract -- and login.Login and common.code.do are due one (src plan
-# batch 13). Literal values, not the session builders: this file tests the HTTP
-# layer on its own.
+# these routes, but both have a field contract, so a bare post_form(route) is
+# refused before it is sent. Literal values, not the session builders: this
+# file tests the HTTP layer on its own.
 LOGIN_FORM = {
     "txtMemberNo": "SYNTHETIC_MEMBER",
     "txtPwd": "SYNTHETIC_PASSWORD",
@@ -519,6 +518,151 @@ def test_logout_route_is_post_only_and_carries_timestamp_form():
         assert_read_only_route("GET", logout_path)
     with pytest.raises(KorailProtocolError, match="request fields"):
         assert_read_only_request_fields(logout_path, {"Device": "AD"})
+
+
+# --- the six read routes that had no field contract ----------------------------
+# login.Login, common.code.do, seatMovie.ScheduleView, qry.chtnStn.do,
+# research.actualTrainSchedule.do and EbizMaasStationList.do went out with
+# whatever fields a caller put in. Each now has the exact set its builder
+# produces; these pin both the shapes that pass and the ones that must not.
+
+LOGIN = "/classes/com.korail.mobile.login.Login"
+COMMON3 = {"Device": "AD", "Version": "250601003", "Key": "korail1234567890"}
+CREDENTIAL_LOGIN = {**COMMON3, **LOGIN_FORM}
+SOCIAL_LOGIN = {**COMMON3, "txtInputFlg": "8", "custId": "SYNTHETIC", "checkValidPw": "Y"}
+
+
+@pytest.mark.parametrize(
+    "form",
+    [
+        CREDENTIAL_LOGIN,
+        {**CREDENTIAL_LOGIN, "custId": "C", "etrPath": "E", "idx": "1"},
+        SOCIAL_LOGIN,
+    ],
+    ids=["credential", "credential-with-optionals", "social"],
+)
+def test_login_accepts_exactly_the_two_shapes_the_session_builds(form):
+    assert_read_only_request_fields(LOGIN, form)
+
+
+@pytest.mark.parametrize(
+    "form",
+    [
+        {**COMMON3, "txtInputFlg": "2", "checkValidPw": "Y"},
+        {**COMMON3, "txtMemberNo": "M", "txtInputFlg": "2", "checkValidPw": "Y"},
+        {**CREDENTIAL_LOGIN, "txtUnknown": "x"},
+        {**SOCIAL_LOGIN, "txtPwd": "P"},
+    ],
+    ids=["no-credential-or-custId", "member-without-password", "unknown-name", "mixed-shapes"],
+)
+def test_login_refuses_anything_outside_those_shapes(form):
+    # Each carries every name the two shapes share, so only the shape rule can
+    # refuse it. A loose contract -- the shared names required, the rest
+    # optional -- would pass all but the unknown name.
+    with pytest.raises(KorailProtocolError, match="read-only contract"):
+        assert_read_only_request_fields(LOGIN, form)
+
+
+COMMON_CODE = "/classes/com.korail.mobile.common.code.do"
+
+
+def test_common_code_accepts_its_builder_form_with_a_code_list():
+    from korail_mobile_api.payloads import build_common_code_form
+
+    assert_read_only_request_fields(
+        COMMON_CODE,
+        build_common_code_form(KorailConfig(), ["app.login.cphd", "app.menu.biz"]),
+    )
+    assert_read_only_request_fields(
+        COMMON_CODE,
+        build_common_code_form(
+            KorailConfig(), "x", depart_date="20990101", arrival_date="20990102",
+            holiday_yn="Y",
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("route", "form"),
+    [
+        (COMMON_CODE, {**COMMON3, **COMMON_CODE_FORM, "deviceWidth": ["1080"]}),
+        (COMMON_CODE, {**COMMON3, **COMMON_CODE_FORM, "code": []}),
+        (COMMON_CODE, {**COMMON3, **COMMON_CODE_FORM, "code": ["a", 1]}),
+        (
+            "/classes/com.korail.mobile.qry.chtnStn.do",
+            {**COMMON3, "dptRsStnCd": ["0001"], "arvRsStnCd": "0020"},
+        ),
+    ],
+    ids=["list-in-another-field", "empty-code-list", "non-string-code", "list-on-another-route"],
+)
+def test_the_code_list_exception_is_that_field_on_that_route_only(route, form):
+    with pytest.raises(KorailProtocolError):
+        assert_read_only_request_fields(route, form)
+
+
+@pytest.mark.parametrize(
+    ("route", "form"),
+    [
+        (COMMON_CODE, {**COMMON3, "code": ["x"], "deviceWidth": 1, "deviceHeight": 2}),
+        (COMMON_CODE, {**COMMON3, **COMMON_CODE_FORM, "extra": "x"}),
+        (
+            "/classes/com.korail.mobile.qry.chtnStn.do",
+            {**COMMON3, "dptRsStnCd": "0001", "arvRsStnCd": "0020", "extra": "x"},
+        ),
+        (
+            "/classes/com.korail.mobile.research.actualTrainSchedule.do",
+            {
+                "Device": "AD", "Version": "250601003", "runDt": "20990101",
+                "trnNo": "00101", "Key": "k",
+            },
+        ),
+        ("/ebizmaas/EbizMaasStationList.do", {"addSrvDvCd": "M10", "Device": "AD"}),
+    ],
+    ids=["common-code-missing-OSVersion", "common-code-extra", "chtnStn-extra",
+         "schedule-with-Key", "maas-station-with-common"],
+)
+def test_the_newly_contracted_routes_refuse_extra_or_missing_fields(route, form):
+    with pytest.raises(KorailProtocolError, match="read-only contract"):
+        assert_read_only_request_fields(route, form)
+
+
+SCHEDULE_VIEW = "/classes/com.korail.mobile.seatMovie.ScheduleView"
+
+
+def _schedule_view_form(**query_kwargs):
+    from korail_mobile_api import TrainSearchQuery
+    from korail_mobile_api.payloads import build_train_search_form
+
+    transfer = bool(query_kwargs)
+    return build_train_search_form(
+        KorailConfig(),
+        TrainSearchQuery("서울", "부산", "20990101", **query_kwargs),
+        departure_name="서울",
+        arrival_name="부산",
+        sid="SYNTHETIC_SID",
+        member_card_no="SYNTHETIC_CARD",
+        transfer=transfer,
+    )
+
+
+def test_schedule_view_accepts_its_builder_forms_direct_and_filtered():
+    assert_read_only_request_fields(SCHEDULE_VIEW, _schedule_view_form())
+    assert_read_only_request_fields(
+        SCHEDULE_VIEW,
+        _schedule_view_form(
+            connection_station_codes=("0010", "0015"),
+            connection_train_group_code="100",
+        ),
+    )
+
+
+def test_schedule_view_refuses_a_key_and_misnumbered_connections():
+    form = _schedule_view_form()
+    with pytest.raises(KorailProtocolError, match="read-only contract"):
+        assert_read_only_request_fields(SCHEDULE_VIEW, {**form, "Key": "k"})
+    filtered = _schedule_view_form(connection_station_codes=("0010", "0015"))
+    with pytest.raises(KorailProtocolError, match="numbered"):
+        assert_read_only_request_fields(SCHEDULE_VIEW, {**filtered, "chtnCnt": "3"})
 
 
 def test_exact_form_field_mapping_remains_a_compatibility_alias():
