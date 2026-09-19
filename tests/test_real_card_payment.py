@@ -27,6 +27,8 @@ the only card numbers here are obviously-fake placeholders.
 
 from __future__ import annotations
 
+from urllib.parse import parse_qsl
+
 import httpx
 import pytest
 
@@ -434,16 +436,46 @@ def test_pay_with_card_returns_a_declined_envelope_instead_of_raising():
     assert len(recorder.requests) == 1
 
 
+def _sent_form(request: httpx.Request) -> dict[str, str]:
+    """The decoded form body. A repeated key fails rather than keeping the last."""
+    pairs = parse_qsl(
+        request.content.decode("ascii"),
+        keep_blank_values=True,
+        strict_parsing=True,
+    )
+    form = dict(pairs)
+    assert len(form) == len(pairs), "the payment form repeated a key"
+    return form
+
+
 def test_pay_with_card_sends_the_same_form_pay_with_fake_card_would():
     # The two methods differ only in which consent they accept; the wire shape
     # is one builder, so a real payment cannot drift from the verified one.
+    # Keys AND values: set() over a dict compares the keys alone.
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_SUCCESS})
     client.pay_with_card(_hold(), _placeholder_card(), consent=_real_card_consent())
-    sent = dict(
-        pair.split("=", 1)
-        for pair in recorder.requests[0].content.decode().split("&")
+    client.pay_with_fake_card(
+        _hold(),
+        _placeholder_card(),
+        consent=_real_card_consent(fake_card_only=True, real_card_acknowledged=False),
     )
+    real, fake = (_sent_form(request) for request in recorder.requests)
     expected = build_card_payment_form(
         client.config, _hold(), _placeholder_card()
     )
-    assert set(sent) == set(expected)
+    assert real == expected
+    assert fake == real
+
+
+def test_pay_with_card_transmits_the_card_the_caller_passed():
+    # The test above measures the client against its own builder, so a card
+    # swapped inside the builder would pass it. These pin the charged values
+    # against the caller's literals instead.
+    client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_SUCCESS})
+    client.pay_with_card(_hold(), _placeholder_card(), consent=_real_card_consent())
+    sent = _sent_form(recorder.requests[0])
+    assert sent["hidStlCrCrdNo1"] == PLACEHOLDER_CARD_NUMBER
+    assert sent["hidVanPwd1"] == PLACEHOLDER_CARD_PASSWORD
+    assert sent["hidCrdVlidTrm1"] == PLACEHOLDER_CARD_EXPIRE
+    assert sent["hidAthnVal1"] == PLACEHOLDER_BIRTHDAY
+    assert sent["hidMnsStlAmt1"] == _hold().received_amount
