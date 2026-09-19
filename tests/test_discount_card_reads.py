@@ -16,6 +16,7 @@ import pytest
 
 import korail_mobile_api
 from korail_mobile_api import KorailClient, KorailConfig
+from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
     KorailAppError,
     KorailAuthError,
@@ -82,8 +83,19 @@ def _schedule_request(**overrides: object) -> DiscountCardScheduleRequest:
 
 
 def _client(handler) -> KorailClient:
+    def provider(*args: object, **kwargs: object) -> str:  # pragma: no cover
+        raise AssertionError("DynaPath provider must not be invoked")
+
+    # Neither read is signed. DynaPath is on and both routes are allowlisted,
+    # so a client method that started signing them reaches the provider.
     client = KorailClient(
-        KorailConfig(),
+        KorailConfig(
+            dynapath=DynapathConfig(
+                enabled=True,
+                token_provider=provider,
+                allowlist_paths=frozenset({USAGE_PATH, SCHEDULE_PATH}),
+            )
+        ),
         transport=httpx.MockTransport(handler),
     )
     client.session.current = KorailSession(

@@ -120,9 +120,16 @@ def _client(handler) -> KorailClient:
     def provider(*args: Any, **kwargs: Any) -> str:  # pragma: no cover
         raise AssertionError("DynaPath provider must not be invoked")
 
+    # The provider only runs for an allowlisted path, and neither route is on
+    # the default allowlist, so without naming them here this trap could never
+    # fire: a client method that started signing these reads would pass.
     client = KorailClient(
         KorailConfig(
-            dynapath=DynapathConfig(enabled=True, token_provider=provider)
+            dynapath=DynapathConfig(
+                enabled=True,
+                token_provider=provider,
+                allowlist_paths=frozenset({SEAT_CHANGE_PATH, ORIGINAL_TICKET_PATH}),
+            )
         ),
         transport=httpx.MockTransport(handler),
     )
