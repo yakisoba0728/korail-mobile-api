@@ -417,11 +417,8 @@ def redact_value(value: Any, *, key: str | None = None) -> Any:
 
 
 def redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
-    """매핑의 각 항목을 :func:`redact_value` 로 가립니다."""
-    return {
-        key: redact_value(value, key=str(key))
-        for key, value in data.items()
-    }
+    """매핑의 각 항목을 :func:`redact_value` 로 가립니다 — 매핑에 대한 그것과 같습니다."""
+    return redact_value(data)
 
 
 def redact_payload(
