@@ -52,20 +52,8 @@ from .models import (
     TransferStationListResponse,
     UuidResponse,
 )
-
-
-def _typed_optional_string(
-    data: Mapping[str, Any],
-    key: str,
-    *,
-    context: str,
-) -> str | None:
-    value = data.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a string or null"
-        )
-    return value
+from .read_parsers import _nested_rows, _optional_list
+from .read_parsers import _optional_string as _typed_optional_string
 
 
 def _typed_required_string(
@@ -135,9 +123,10 @@ def _typed_non_negative_integer_value(
     return parsed
 
 
-# Each response family's names for the typed helpers above; the context is
-# what its messages say. Seat inventory accepts a blank required string and
-# stations do not -- a station row without a code or a name is not a station.
+# Each response family's names for the typed helpers -- _typed_optional_string
+# from read_parsers, the rest defined above -- with the context each family's
+# messages say. Seat inventory accepts a blank required string and stations do
+# not -- a station row without a code or a name is not a station.
 _optional_string = partial(_typed_optional_string, context="cache")
 _station_optional_string = partial(_typed_optional_string, context="station")
 _station_required_string = partial(
@@ -549,15 +538,7 @@ def parse_train_calendar_response(
     # so a missing/null runningCalendar yields an empty calendar in the app.
     # Accept absent/null as an empty day tuple; only a present non-list is a
     # genuine shape violation.
-    raw_rows = raw.get("runningCalendar")
-    if raw_rows is None:
-        rows: list[Any] = []
-    elif isinstance(raw_rows, list):
-        rows = raw_rows
-    else:
-        raise KorailProtocolError(
-            "KORAIL train calendar field runningCalendar must be a list"
-        )
+    rows = _optional_list(raw, "runningCalendar", "train calendar")
     days: list[TrainCalendarDay] = []
     for row in rows:
         if not isinstance(row, Mapping):
@@ -892,25 +873,6 @@ def _inventory_required_list(
     return value
 
 
-def _inventory_optional_list(
-    data: Mapping[str, Any],
-    key: str,
-) -> list[Any]:
-    # SearchCarListDao.CarInfo.seatAttInfos is a nullable Gson List
-    # (SearchCarListDao.java:19) and the app null-guards it before use
-    # (SeatSearchActivity.java:254 -> C0804d.isNull(list) || size()==0), so a
-    # null/absent list is a valid "no special-seat attributes" car. Treat it as
-    # empty; only a present-but-non-list value is malformed.
-    value = data.get(key)
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be a list or null"
-        )
-    return value
-
-
 def _inventory_required_int(
     data: Mapping[str, Any],
     key: str,
@@ -932,25 +894,7 @@ def parse_seat_car_list_response(
     입력입니다.
     """
     raw = response.raw
-    container = raw.get("srcar_infos")
-    if container is None:
-        rows = []
-    elif isinstance(container, Mapping):
-        rows_value = container.get("srcar_info")
-        if rows_value is None:
-            rows = []
-        elif isinstance(rows_value, list):
-            rows = rows_value
-        else:
-            raise KorailProtocolError(
-                "KORAIL seat inventory field srcar_info must be a list or "
-                "null"
-            )
-    else:
-        raise KorailProtocolError(
-            "KORAIL seat inventory field srcar_infos must be an object or "
-            "null"
-        )
+    rows = _nested_rows(raw, "srcar_infos", "srcar_info", "seat inventory")
     cars: list[SeatCar] = []
     car_numbers: set[int] = set()
     for row in rows:
@@ -964,7 +908,12 @@ def parse_seat_car_list_response(
                 "KORAIL seat car list contained a duplicate car number"
             )
         car_numbers.add(car_no)
-        attributes_raw = _inventory_optional_list(row, "seatAttInfos")
+        # SearchCarListDao.CarInfo.seatAttInfos is a nullable Gson List
+        # (SearchCarListDao.java:19) and the app null-guards it before use
+        # (SeatSearchActivity.java:254 -> C0804d.isNull(list) || size()==0), so a
+        # null/absent list is a valid "no special-seat attributes" car. Treat it as
+        # empty; only a present-but-non-list value is malformed.
+        attributes_raw = _optional_list(row, "seatAttInfos", "seat inventory")
         attributes: list[SeatAttribute] = []
         for attribute_raw in attributes_raw:
             if not isinstance(attribute_raw, Mapping):
