@@ -429,16 +429,15 @@ def _model_dataclasses():
                 yield f"{module_name}.{name}", obj
 
 
-def test_known_defect_h_msg_txt_is_printed_by_these_responses():
-    """TODAY'S BEHAVIOUR, WHICH IS WRONG. src plan batch 23 empties this list.
+def test_no_response_prints_h_msg_txt_in_repr():
+    """The server can quote the caller's input back in h_msg_txt.
 
-    h_msg_txt is a sensitive key -- the server can quote the caller's input
-    back in it -- and 37 response classes redeclare it repr=False. The field
-    on BaseKorailResponse does not, so every subclass that does not redeclare
-    it prints the text in repr(), and a repr lands in logs and tracebacks.
-    These are the classes that do, today. The set may only shrink: a new
-    response that inherits the exposure fails here. Batch 23 puts repr=False
-    on the base, drops the redeclarations, and turns this into an empty set.
+    It is a sensitive key, and a repr lands in logs and tracebacks. The field
+    on BaseKorailResponse used to print it: 37 response classes redeclared it
+    repr=False, and the 27 that did not, plus the base, printed the text.
+    Now the base hides it and no subclass redeclares it. A new response
+    inherits that, and one that redeclares the field with repr=True fails
+    here.
     """
     exposed = {
         name
@@ -448,36 +447,19 @@ def test_known_defect_h_msg_txt_is_printed_by_these_responses():
             for field_ in dataclasses.fields(cls)
         )
     }
-    assert exposed == {
-        "models.AppDataResponse",
-        "models.BaseKorailResponse",
-        "models.MaasMenuListResponse",
-        "models.NoticeResponse",
-        "models.StationDataResponse",
-        "models.StationInfoResponse",
-        "models.UuidResponse",
-        "mutation_models.CashReceiptIssueResponse",
-        "mutation_models.RefundTicketResponse",
-        "mutation_models.ReservationHoldResponse",
-        "mutation_models.ReservationPaymentResponse",
-        "mutation_models.StationRefundExecutionResponse",
-        "mutation_models.StationRefundVerificationResponse",
-        "read_models.CartListResponse",
-        "read_models.CommuterKindMenuResponse",
-        "read_models.CrewRequestListResponse",
-        "read_models.DelayDiscountTicketListResponse",
-        "read_models.DepositBankListResponse",
-        "read_models.DiscountCouponListResponse",
-        "read_models.PassAvailabilityResponse",
-        "read_models.PassMenuResponse",
-        "read_models.ProductDetailResponse",
-        "read_models.ProductReservationListResponse",
-        "read_models.ReservationHistoryResponse",
-        "read_models.ServiceStatusResponse",
-        "read_models.TicketListResponse",
-        "read_models.TicketReceiptResponse",
-        "read_models.TripMenuResponse",
-    }
+    assert exposed == set()
+
+
+def test_h_msg_txt_stays_out_of_an_actual_repr():
+    from korail_mobile_api.models import BaseKorailResponse, UuidResponse
+
+    marker = "SYNTHETIC-QUOTED-INPUT"
+    for response in (
+        BaseKorailResponse("E1", marker, "FAIL"),
+        UuidResponse(h_msg_txt=marker),
+    ):
+        assert marker not in repr(response)
+        assert response.h_msg_txt == marker
 
 
 def test_no_special_category_label_is_left_in_a_model_repr():

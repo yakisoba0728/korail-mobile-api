@@ -339,7 +339,6 @@ class LimousineSchedule:
 @dataclass(frozen=True)
 class LimousineScheduleResponse(BaseKorailResponse):
     """``lmu.scdlQry.do`` 의 응답."""
-    h_msg_txt: str | None = field(default=None, repr=False)
     following_page_extension: str | None = field(default=None, repr=False)
     long_short_division_code: str | None = None
     schedules: tuple[LimousineSchedule, ...] = ()
@@ -364,7 +363,6 @@ class LimousineSeat:
 @dataclass(frozen=True)
 class LimousineSeatInventoryResponse(BaseKorailResponse):
     """``lms.TResidualSeatsResearch.do`` 의 응답 — 한 호차의 좌석표."""
-    h_msg_txt: str | None = field(default=None, repr=False)
     car_type_code: str | None = None
     car_no: str | None = field(default=None, repr=False)
     seat_arrangement_code: str | None = None
@@ -471,7 +469,6 @@ class LimousineScheduleViewTrain:
 @dataclass(frozen=True)
 class LimousineScheduleViewResponse(BaseKorailResponse):
     """``seatMovie.LimousineScheduleView`` 의 응답(6.5.0 응답 해석용)."""
-    h_msg_txt: str | None = field(default=None, repr=False)
     next_ectb_train_no: str | None = field(default=None, repr=False)
     goods_no: str | None = field(default=None, repr=False)
     next_page_flag: str | None = None

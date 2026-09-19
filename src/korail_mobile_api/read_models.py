@@ -307,7 +307,6 @@ class ReservationHistoryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class FreeSeatCarResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     title: str | None = field(default=None, repr=False)
     car_no: str | None = field(default=None, repr=False)
     content: str | None = field(default=None, repr=False)
@@ -315,7 +314,11 @@ class FreeSeatCarResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class GuideSeatConditionResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
+    """``reservation.guideSeatCnd.do`` 의 응답 — 봉투뿐입니다.
+
+    ``FAIL``/``MRR800011``(도우미 좌석 안내)도 예외가 아니라 이 응답으로 옵니다.
+    안내 문구는 ``h_msg_txt`` 에 있습니다.
+    """
 
 
 @dataclass(frozen=True)
@@ -417,7 +420,6 @@ class PassScheduleMainInfo:
 
 @dataclass(frozen=True)
 class SeatAssignmentScheduleResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     next_page_flag: str | None = None
     merge_reservation_possible_flag: str | None = None
     trains: tuple[TrainScheduleItem, ...] = ()
@@ -440,7 +442,6 @@ class PassPeriodOption:
 
 @dataclass(frozen=True)
 class MergeSeatsInquiryResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     merge_reservation_possible_flag: str | None = None
     intermediate_stations: tuple[IntermediateStation, ...] = ()
     trains: tuple[TrainScheduleItem, ...] = ()
@@ -532,7 +533,6 @@ class CrewRequestListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class PassScheduleResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     main_info: PassScheduleMainInfo | None = None
     schedules: tuple[PassScheduleInfo, ...] = field(
         default=(),
@@ -600,7 +600,6 @@ class KorailPointSummaryResponse(BaseKorailResponse):
     (``MyPageActivity.java:206-212``).
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     #: ``h_korail_point`` — 마이페이지에 뜨는 코레일 포인트 잔액.
     korail_point: str | None = None
     #: ``h_disc_coup_cnt`` — 계정이 가진 할인쿠폰 개수.
@@ -667,7 +666,6 @@ class MileageHistoryResponse(BaseKorailResponse):
     그래서 하나로 합치지 않고 둘 다 내놓습니다.
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     #: ``pgCnt`` — 전체 페이지 수. 앱은 무한 스크롤의 상한으로 씁니다
     #: (``MileageHistoryActivity.java:581``).
     page_count: str | None = None
@@ -720,7 +718,6 @@ class DiscountCardUsageListResponse(BaseKorailResponse):
     하나뿐이라, 전선에 없는 요약 필드를 이 모델도 만들어 붙이지 않습니다.
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     items: tuple[DiscountCardUsage, ...] = ()
 
 
@@ -769,7 +766,6 @@ class DiscountCardScheduleResponse(BaseKorailResponse):
     (``SectionNCardInquiryActivity.java:406-408``).
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     #: ``fllwPgExt`` — 다음 페이지가 있으면 ``"Y"``.
     following_page_exists: str | None = None
     trains: tuple[DiscountCardScheduleTrain, ...] = ()
@@ -790,7 +786,6 @@ class MultiChildDiscountTarget:
 
 @dataclass(frozen=True)
 class MultiChildDiscountTargetResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     targets: tuple[MultiChildDiscountTarget, ...] = field(default=(), repr=False)
 
 
@@ -833,7 +828,6 @@ class CustomerTripInfo:
 
 @dataclass(frozen=True)
 class CustomerTripInfoResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     trips: tuple[CustomerTripInfo, ...] = field(default=(), repr=False)
 
 
@@ -902,13 +896,11 @@ class MaasServiceDetail:
 
 @dataclass(frozen=True)
 class MaasServiceDetailListResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     details: tuple[MaasServiceDetail, ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True)
 class TripChangeDateResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     last_run_date: str | None = field(default=None, repr=False)
     trip_change_date: str | None = field(default=None, repr=False)
     trip_change_dates: tuple[str, ...] = field(default=(), repr=False)
@@ -929,7 +921,6 @@ class TourTrainSeatInfo:
 
 @dataclass(frozen=True)
 class TourTrainInfoResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     seat_infos: tuple[TourTrainSeatInfo, ...] = field(default=(), repr=False)
 
 
@@ -952,7 +943,6 @@ class GiftTicket:
 
 @dataclass(frozen=True)
 class GiftTicketListResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     tickets: tuple[GiftTicket, ...] = field(default=(), repr=False)
     query_count: str | None = field(default=None, repr=False)
     next_query_no: str | None = field(default=None, repr=False)
@@ -969,7 +959,6 @@ class CommuterPassengerOption:
 
 @dataclass(frozen=True)
 class CommuterInfoResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     additional_service_goods_flag: str | None = field(default=None, repr=False)
     companion_flag: str | None = field(default=None, repr=False)
     commuter_kind_code: str | None = field(default=None, repr=False)
@@ -1000,13 +989,11 @@ class PriceFare:
 
 @dataclass(frozen=True)
 class PriceFareQuoteResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     fares: tuple[PriceFare, ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True)
 class DeliveryRecipientResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     acceptance_customer_management_no: str | None = field(
         default=None,
         repr=False,
@@ -1018,7 +1005,6 @@ class DeliveryRecipientResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TicketDuplicationCheckResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     reservation_count: int = field(default=0, repr=False)
 
 
@@ -1059,7 +1045,6 @@ class PbpAcceptanceTicket:
 
 @dataclass(frozen=True)
 class PbpAcceptanceSpecificationResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     tickets: tuple[PbpAcceptanceTicket, ...] = field(default=(), repr=False)
 
 
@@ -1082,7 +1067,6 @@ class PlatformNumberTicket:
 
 @dataclass(frozen=True)
 class PlatformNumberResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     tickets: tuple[PlatformNumberTicket, ...] = field(default=(), repr=False)
 
 
@@ -1135,7 +1119,6 @@ class SelfSeatChangeInfoResponse(BaseKorailResponse):
     가부입니다. 역별 잔여 좌석은 :attr:`stations` 쪽에 있습니다.
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     train_no: str | None = None
     train_class_code: str | None = None
     train_class_name: str | None = None
@@ -1266,7 +1249,6 @@ class OriginalTicketInquiryResponse(BaseKorailResponse):
     (``dao/research/OgTkInquiryDao.java:38-46``).
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     tickets: tuple[OriginalTicket, ...] = field(default=(), repr=False)
 
 
@@ -1289,7 +1271,6 @@ class RecentDeliveryRecipient:
 
 @dataclass(frozen=True)
 class RecentDeliveryHistoryResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     changed_acceptance_reservation_no: str | None = field(default=None, repr=False)
     recipients: tuple[RecentDeliveryRecipient, ...] = field(
         default=(),
@@ -1384,7 +1365,6 @@ class ProductTrain:
 
 @dataclass(frozen=True)
 class ProductTrainInquiryResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     early_train_no_next: str | None = field(default=None, repr=False)
     goods_no: str | None = field(default=None, repr=False)
     next_page_flag: str | None = field(default=None, repr=False)
@@ -1458,7 +1438,6 @@ class TicketReservationDetailResponse(BaseKorailResponse):
     좌석별 금액을 여기서 확인할 수 있습니다.
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     pnr_no: str | None = field(default=None, repr=False)
     window_no: str | None = field(default=None, repr=False)
     journey_count: str | None = None
@@ -1483,7 +1462,6 @@ class RefundCommissionResponse(BaseKorailResponse):
     보내기 전에 먼저 불러야 합니다.
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     #: ``ret_amt`` — 돌려받을 금액.
     refund_amount: str | None = None
     #: ``ret_fee`` — 거기서 떼는 수수료.
@@ -1552,7 +1530,6 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     에 이 응답을 넘겨야 합니다.
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     pnr_no: str | None = field(default=None, repr=False)
     sale_date: str | None = field(default=None, repr=False)
     sale_time: str | None = field(default=None, repr=False)

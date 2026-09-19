@@ -618,7 +618,6 @@ class DiscountCardPurchaseResponse(BaseKorailResponse):
     기다리는 미결제 구매이지 끝난 구매가 아닙니다.
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     #: ``lumpStlTgtNo`` — 결제가 청구할 정산 대상.
     lump_settlement_target_no: str | None = field(default=None, repr=False)
     #: ``dcntCrdStlTgtNo`` — N카드 자체의 정산 대상 번호.

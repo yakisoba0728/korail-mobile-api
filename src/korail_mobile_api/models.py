@@ -67,7 +67,9 @@ class BaseKorailResponse:
     """
 
     h_msg_cd: str | None = None
-    h_msg_txt: str | None = None
+    #: 서버가 호출자의 입력을 되받아 적을 수 있어 repr 에 싣지 않습니다. 하위
+    #: 클래스는 이 선언을 물려받으므로 다시 적을 필요가 없습니다.
+    h_msg_txt: str | None = field(default=None, repr=False)
     str_result: str | None = None
     raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
@@ -233,7 +235,6 @@ class TrainCalendarDay:
 
 @dataclass(frozen=True)
 class TrainCalendarResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     days: tuple[TrainCalendarDay, ...] = ()
 
 
@@ -275,7 +276,6 @@ class TrainScheduleStop:
 
 @dataclass(frozen=True)
 class TrainScheduleResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     delay_detail_reason_content: str | None = field(default=None, repr=False)
     stops: tuple[TrainScheduleStop, ...] = ()
     delay_station_construction_order: str | None = field(
@@ -316,7 +316,6 @@ class TransferStation:
 
 @dataclass(frozen=True)
 class TransferStationListResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     stations: tuple[TransferStation, ...] = ()
 
 
@@ -710,7 +709,6 @@ class SeatCar:
 
 @dataclass(frozen=True)
 class SeatCarListResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     recommended_car_no: int | None = None
     train_no: str | None = field(default=None, repr=False)
     cars: tuple[SeatCar, ...] = ()
@@ -763,7 +761,6 @@ class SeatInventoryResponse(BaseKorailResponse):
     가 이 값을 요구합니다 — 없으면 호차를 직접 적어야 합니다.
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     layout_type: int = 0
     arrangement_code: str = ""
     #: 7.0.6 TResidualSeatsResearchOut DTO에는 이 두 건수 키가 없습니다.
