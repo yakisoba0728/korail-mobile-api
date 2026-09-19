@@ -100,6 +100,16 @@ KORAIL 앱이 보는 값과 다릅니다. 이 라이브러리에는 상관없습
 건 16자 hex 이고, env 경로를 쓰는 이유는 값이 진짜여서가 아니라 프로세스를 넘어
 **안정적**이기 때문입니다. 합성 기본값으로도 실서버 로그인이 됩니다(2026-07-31 확인).
 
+화면 크기와 SDK 정수는 기본값이 두 벌입니다. `build_config_from_env()` 는 따로 주지
+않으면 1440×3088, 33 을 보내고, 패키지 기본값(`KorailConfig()`)은 1080×2400, 35 입니다.
+어느 쪽이 실제 단말 값인지는 기록이 없습니다. 실제 폰 값을 쓰려면 이렇게 읽어서
+넘깁니다.
+
+| 환경변수 | 원본 | 명령 |
+| --- | --- | --- |
+| `KORAIL_DEVICE_WIDTH` / `KORAIL_DEVICE_HEIGHT` | 화면 해상도 | `adb shell wm size` |
+| `KORAIL_ANDROID_SDK_INT` | `Build.VERSION.SDK_INT` | `adb shell getprop ro.build.version.sdk` |
+
 </details>
 
 <details>
