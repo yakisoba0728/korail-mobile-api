@@ -1355,10 +1355,7 @@ def build_refund_form(
         ("sale_sequence", ticket.sale_sequence),
         ("return_password", ticket.return_password),
     ):
-        if not isinstance(value, str) or not value.strip():
-            raise KorailProtocolError(
-                f"KORAIL refund requires a non-empty PaidTicket.{name}"
-            )
+        _required_mutation_text(value, field=f"PaidTicket.{name}", context="refund")
     form = _common_fields(config)
     form.update(
         {
@@ -1421,7 +1418,9 @@ def build_station_refund_execution_form(
         (
             wire_name,
             _required_mutation_text(
-                getattr(request, attribute), field=attribute
+                getattr(request, attribute),
+                field=attribute,
+                context="station refund",
             ),
         )
         for wire_name, attribute in fields
@@ -1429,10 +1428,15 @@ def build_station_refund_execution_form(
     return form
 
 
-def _required_mutation_text(value: object, *, field: str) -> str:
+def _required_mutation_text(
+    value: object,
+    *,
+    field: str,
+    context: str = "discount card request",
+) -> str:
     if not isinstance(value, str) or not value.strip():
         raise KorailProtocolError(
-            f"KORAIL discount card request requires a non-empty {field}"
+            f"KORAIL {context} requires a non-empty {field}"
         )
     return value
 
@@ -1674,11 +1678,9 @@ def build_price_recalculation_form(
             "KORAIL price recalculation requires an exact "
             "PriceRecalculationRequest"
         )
-    pnr_no = request.pnr_no
-    if not isinstance(pnr_no, str) or not pnr_no.strip():
-        raise KorailProtocolError(
-            "KORAIL price recalculation requires a non-empty pnr_no"
-        )
+    pnr_no = _required_mutation_text(
+        request.pnr_no, field="pnr_no", context="price recalculation"
+    )
     rows = tuple(request.rows)
     if not rows or len(rows) > KORAIL_MAX_PASSENGERS_PER_RESERVATION:
         raise KorailProtocolError(
@@ -1771,11 +1773,9 @@ def build_cart_add_form(
         raise KorailProtocolError(
             "KORAIL cart request requires an exact CartAddRequest"
         )
-    pnr_no = request.pnr_no
-    if not isinstance(pnr_no, str) or not pnr_no.strip():
-        raise KorailProtocolError(
-            "KORAIL cart request requires a non-empty pnr_no"
-        )
+    pnr_no = _required_mutation_text(
+        request.pnr_no, field="pnr_no", context="cart request"
+    )
     form = _common_fields(config)
     form["hidPnrNo"] = pnr_no
     return form

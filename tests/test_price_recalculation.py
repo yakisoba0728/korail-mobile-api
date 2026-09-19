@@ -670,3 +670,13 @@ def test_an_unparseable_recalculation_raises_even_with_a_pnr():
             client.recalculate_price(_request(), consent=ALLOWED)
     finally:
         client.close()
+
+
+def test_the_repricing_form_names_a_blank_pnr():
+    request = _request()
+    object.__setattr__(request, "pnr_no", " ")
+    with pytest.raises(
+        KorailProtocolError,
+        match=r"^KORAIL price recalculation requires a non-empty pnr_no$",
+    ):
+        build_price_recalculation_form(KorailConfig(), request)

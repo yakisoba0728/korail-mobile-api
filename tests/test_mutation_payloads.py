@@ -107,10 +107,14 @@ def test_station_refund_execution_form_uses_the_verified_dto_keys():
     # The constructor refuses a blank value as input...
     with pytest.raises(ValueError, match="execution requires refund_amount"):
         replace(request, refund_amount="")
-    # ...and the builder checks again, for an instance altered after that.
+    # ...and the builder checks again, for an instance altered after that,
+    # naming the station refund (it used to say "discount card request").
     tampered = replace(request)
     object.__setattr__(tampered, "refund_amount", "")
-    with pytest.raises(KorailProtocolError, match="refund_amount"):
+    with pytest.raises(
+        KorailProtocolError,
+        match=r"^KORAIL station refund requires a non-empty refund_amount$",
+    ):
         build_station_refund_execution_form(KorailConfig(), tampered)
 
 
@@ -934,3 +938,29 @@ def test_a_padded_declared_total_alone_is_normalised():
     from korail_mobile_api.mutation_parsers import _received_amount
 
     assert _received_amount({"h_tot_rcvd_amt": "0000000000042600"}, []) == "42600"
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["pnr_no", "sale_date", "sale_window_no", "sale_sequence", "return_password"],
+)
+def test_the_refund_form_names_a_blank_ticket_field(field_name):
+    ticket = _paid_ticket()
+    object.__setattr__(ticket, field_name, " ")
+    with pytest.raises(
+        KorailProtocolError,
+        match=rf"^KORAIL refund requires a non-empty PaidTicket\.{field_name}$",
+    ):
+        build_refund_form(KorailConfig(), ticket)
+
+
+def test_the_cart_form_names_a_blank_pnr():
+    from korail_mobile_api.mutation_models import CartAddRequest
+    from korail_mobile_api.mutation_payloads import build_cart_add_form
+
+    request = CartAddRequest(pnr_no="SYNTHETIC_PNR")
+    object.__setattr__(request, "pnr_no", "")
+    with pytest.raises(
+        KorailProtocolError, match=r"^KORAIL cart request requires a non-empty pnr_no$"
+    ):
+        build_cart_add_form(KorailConfig(), request)
