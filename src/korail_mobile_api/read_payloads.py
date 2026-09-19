@@ -36,6 +36,11 @@ from .read_models import (
 )
 
 
+def _device_version(config: KorailConfig) -> dict[str, str]:
+    """The ``Device`` and ``Version`` pair every read form here starts with."""
+    return {"Device": config.device, "Version": config.version}
+
+
 def _positive_int(value: int, name: str) -> str:
     if type(value) is not int or value < 1:
         raise ValueError(f"{name} must be a positive integer")
@@ -459,8 +464,7 @@ def build_pass_availability_form(
 
 def build_trip_menu_form(config: KorailConfig) -> dict[str, str]:
     return {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "timeStamp": str(int(time.time() * 1000)),
     }
 
@@ -828,7 +832,7 @@ def build_maas_service_detail_form(
         query.start_date,
         query.end_date,
     )
-    form = {"Device": config.device, "Version": config.version}
+    form = _device_version(config)
     # The validator above already rejected one date without the other, so
     # testing both is equivalent to testing only ``start_date``.
     if query.start_date is not None and query.end_date is not None:

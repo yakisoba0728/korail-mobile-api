@@ -32,6 +32,11 @@ from .limousine_models import (
 QueryT = TypeVar("QueryT")
 
 
+def _device_version(config: KorailConfig) -> dict[str, str]:
+    """The ``Device`` and ``Version`` pair every read form here starts with."""
+    return {"Device": config.device, "Version": config.version}
+
+
 def _validated_query(
     query: object,
     expected: type[QueryT],
@@ -113,8 +118,7 @@ def build_limousine_schedule_form(
     """
     query = validate_limousine_schedule_query(query)
     return {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "Key": config.key,
         "dptDt": query.departure_date,
         "dptRsStnCd": query.departure_station_code,
@@ -150,8 +154,7 @@ def build_limousine_seat_inventory_form(
     """
     query = validate_limousine_seat_inventory_query(query)
     return {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "Key": config.key,
         "trnClsfCd": query.train_class_code,
         "trnGpCd": query.service_code,
@@ -184,8 +187,7 @@ def build_limousine_schedule_view_form(
     """
     query = validate_limousine_schedule_view_query(query)
     return {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "Sid": _sid(sid),
         "txtMenuId": query.menu_id,
         "radJobId": query.job_id,

@@ -1122,3 +1122,31 @@ def test_docs_name_every_limousine_read_and_record_the_removed_one():
     assert "caller-supplied service" in combined
     assert "DynaPath" in combined
     assert "No live" in combined
+
+
+def test_limousine_forms_keep_their_key_order(schedule_query, seat_query, view_query):
+    # A dict compares equal in any order, so the form tests above cannot see a
+    # field that moved. The order is what the app's @FieldMap serialises.
+    from korail_mobile_api.limousine_payloads import (
+        build_limousine_schedule_form,
+        build_limousine_schedule_view_form,
+        build_limousine_seat_inventory_form,
+    )
+
+    config = KorailConfig()
+    assert list(build_limousine_schedule_form(config, schedule_query)) == [
+        "Device", "Version", "Key", "dptDt", "dptRsStnCd", "arvRsStnCd",
+        "trnGpCd", "psrmClCd", "dptTm", "trnNo", "seatAttCd", "rsvSaleDvCd",
+    ]
+    assert list(build_limousine_seat_inventory_form(config, seat_query)) == [
+        "Device", "Version", "Key", "trnClsfCd", "trnGpCd", "runDt", "trnNo",
+        "srcarNo", "psrmClCd", "dptRsStnCd", "arvRsStnCd", "seatAttCd",
+        "dptStnRunOrdr", "arvStnRunOrdr", "totPsgCnt", "gdNo", "isArrow",
+    ]
+    assert list(build_limousine_schedule_view_form(config, view_query, sid="S")) == [
+        "Device", "Version", "Sid", "txtMenuId", "radJobId", "txtJobDv",
+        "selGoTrain", "txtTrnGpCd", "txtGoTrnNo", "txtGoStart", "txtGoEnd",
+        "txtGoAbrdDt", "txtGoHour", "txtPsgFlg_1", "txtPsgFlg_2", "txtPsgFlg_3",
+        "txtPsgFlg_4", "txtPsgFlg_5", "txtSeatAttCd_2", "txtSeatAttCd_3",
+        "txtSeatAttCd_4", "ebizCrossCheck", "srtCheckYn", "rtYn",
+    ]

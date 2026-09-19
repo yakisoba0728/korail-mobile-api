@@ -816,6 +816,112 @@ def test_an_empty_post_with_fields_is_refused_before_sending(include_common, dat
     assert sent == []
 
 
+# --- read form key order ---------------------------------------------------------
+# The form tests elsewhere compare dicts, which are equal in any order, so none
+# of them sees a field that moved. These pin each read builder's order as the
+# app's @Field declaration order sends it.
+
+def _order_train(**extra):
+    from korail_mobile_api.models import TrainSummary
+
+    return TrainSummary(
+        train_no="123", train_group_code="100", departure_station_code="0001",
+        arrival_station_code="0020", departure_date="20260714",
+        departure_time="060000", run_date="20260714", train_class_code="00",
+        departure_run_order="000001", arrival_run_order="000010", **extra,
+    )
+
+
+_SEAT_CAR_ORDER = [
+    "Device", "Version", "Key", "Sid", "txtMenuId", "txtPsrmClCd", "txtRunDt",
+    "txtDptDt", "txtDptTm", "txtTrnClsfCd", "txtTrnNo", "txtDptRsStnCd",
+    "txtArvRsStnCd", "txtDptStnRunOrdr", "txtArvStnRunOrdr", "txtTrnGpCd",
+    "txtTotPsgCnt",
+]
+_SEAT_INVENTORY_ORDER = [
+    "Device", "Version", "Key", "trnClsfCd", "trnGpCd", "runDt", "trnNo",
+    "srcarNo", "psrmClCd", "dptRsStnCd", "arvRsStnCd", "seatAttCd",
+    "dptStnRunOrdr", "arvStnRunOrdr", "totPsgCnt", "gdNo", "isArrow", "Sid",
+    "ctlDvCd",
+]
+_SEARCH_ORDER = [
+    "Device", "Version", "Sid", "txtMenuId", "radJobId", "selGoTrain",
+    "txtTrnGpCd", "txtGoStart", "txtGoEnd", "txtGoAbrdDt", "txtGoHour",
+    "txtPsgFlg_1", "txtPsgFlg_2", "txtPsgFlg_3", "txtPsgFlg_4", "txtPsgFlg_5",
+    "txtSeatAttCd_2", "txtSeatAttCd_3", "txtSeatAttCd_4", "ebizCrossCheck",
+    "srtCheckYn", "rtYn", "adjStnScdlOfrFlg", "mbCrdNo", "qryDvCd", "qryStNo",
+    "qryStTrnNo", "qryStTrnNo2", "pgPrCnt",
+]
+
+
+def test_read_forms_keep_their_key_order():
+    from korail_mobile_api import TrainSearchQuery
+    from korail_mobile_api import payloads as P
+    from korail_mobile_api import read_payloads as R
+
+    config = KorailConfig()
+    seat_train = _order_train(seat_attribute_code="015", goods_no="G1")
+    cases = {
+        "seat car": (
+            P.build_seat_car_form(config, seat_train, passenger_count=1, sid="S"),
+            [*_SEAT_CAR_ORDER, "txtSeatAttCd", "txtGdNo"],
+        ),
+        "seat car, no attribute or goods": (
+            P.build_seat_car_form(config, _order_train(), passenger_count=1, sid="S"),
+            _SEAT_CAR_ORDER,
+        ),
+        "seat inventory": (
+            P.build_seat_inventory_form(config, seat_train, 3, passenger_count=1, sid="S"),
+            _SEAT_INVENTORY_ORDER,
+        ),
+        "seat inventory, no attribute or goods": (
+            P.build_seat_inventory_form(config, _order_train(), 3, passenger_count=1, sid="S"),
+            [key for key in _SEAT_INVENTORY_ORDER if key not in {"seatAttCd", "gdNo"}],
+        ),
+        "search": (
+            P.build_train_search_form(
+                config, TrainSearchQuery("0001", "0020", "20990101"),
+                departure_name="a", arrival_name="b", sid="S", member_card_no="M",
+            ),
+            _SEARCH_ORDER,
+        ),
+        "search, filtered transfer": (
+            P.build_train_search_form(
+                config,
+                TrainSearchQuery(
+                    "0001", "0020", "20990101",
+                    connection_station_codes=("0010",),
+                    connection_train_group_code="100",
+                ),
+                departure_name="a", arrival_name="b", sid="S", transfer=True,
+            ),
+            [key for key in _SEARCH_ORDER if key != "mbCrdNo"]
+            + ["chtnCnt", "chtnRsStnCd1", "trnGpCnt", "trnGpCd1"],
+        ),
+        "train schedule": (
+            P.build_train_schedule_form(config, "20990101", "101"),
+            ["Device", "Version", "runDt", "trnNo"],
+        ),
+        "common code": (
+            P.build_common_code_form(
+                config, "x", depart_date="1", arrival_date="2", holiday_yn="Y"
+            ),
+            ["Device", "Version", "Key", "code", "deviceWidth", "deviceHeight",
+             "departDate", "arrivalDate", "holidayYn", "OSVersion"],
+        ),
+        "maas menu": (P.build_maas_menu_form(config), ["Device", "Version", "timeStamp"]),
+        "trip menu": (R.build_trip_menu_form(config), ["Device", "Version", "timeStamp"]),
+        "maas service detail": (
+            R.build_maas_service_detail_form(
+                config, R.MaasServiceDetailQuery("20990101", "20990102")
+            ),
+            ["Device", "Version", "qryDtFrom", "qryDtTo"],
+        ),
+    }
+    for name, (form, expected) in cases.items():
+        assert list(form) == expected, name
+
+
 def test_exact_form_field_mapping_remains_a_compatibility_alias():
     assert KORAIL_EXACT_FORM_FIELDS is KORAIL_EXACT_REQUEST_FIELDS
 

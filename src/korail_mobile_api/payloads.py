@@ -28,6 +28,11 @@ from .errors import KorailProtocolError
 from .models import TrainSearchContinuation, TrainSearchQuery, TrainSummary
 
 
+def _device_version(config: KorailConfig) -> dict[str, str]:
+    """The ``Device`` and ``Version`` pair every read form here starts with."""
+    return {"Device": config.device, "Version": config.version}
+
+
 def _required_ascii_digits(
     value: object,
     name: str,
@@ -191,8 +196,7 @@ def build_seat_car_form(
     """
     validate_seat_inventory_inputs(train, passenger_count)
     form = {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "Key": config.key,
         "Sid": _inventory_sid(sid),
         "txtMenuId": "11",
@@ -246,8 +250,7 @@ def build_seat_inventory_form(
         car_no=car_no,
     )
     form = {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "Key": config.key,
         "trnClsfCd": train.train_class_code or "",
         "trnGpCd": train.train_group_code or "",
@@ -340,8 +343,7 @@ def build_train_search_form(
     if not isinstance(query.seat_attribute_code, str) or not query.seat_attribute_code:
         raise ValueError("seat_attribute_code must be a non-empty string")
     form = {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "Sid": sid,
         "txtMenuId": "11",
         "radJobId": (
@@ -481,8 +483,7 @@ def build_train_schedule_form(
     자리로 0 을 채웁니다.
     """
     return {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "runDt": run_date,
         "trnNo": train_no.zfill(5),
     }
@@ -508,8 +509,7 @@ def build_common_code_form(
     (:meth:`~korail_mobile_api.session.KorailSessionClient.get_login_crypto_info`).
     """
     form: dict[str, object] = {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "Key": config.key,
         "code": [code] if isinstance(code, str) else code,
         "deviceWidth": config.device_width,
@@ -583,8 +583,7 @@ def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
     ``Device``·``Version``·``timeStamp`` 만 싣고 ``Key`` 는 붙지 않습니다.
     """
     return {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "timeStamp": str(int(time.time() * 1000)),
     }
 
