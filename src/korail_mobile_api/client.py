@@ -471,11 +471,10 @@ class KorailClient:
             self.clear_session()
             raise
 
-    def _require_session(self) -> None:
+    def _require_session(self, what: str = "account read requires") -> None:
+        """No session, no request: ``KORAIL <what> an authenticated session``."""
         if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL account read requires an authenticated session"
-            )
+            raise KorailAuthError(f"KORAIL {what} an authenticated session")
 
     # ------------------------------------------------------------------
     # Internal helpers: the read skeleton (post → parser → _run_read) and the
@@ -1667,10 +1666,7 @@ class KorailClient:
         ``page_no`` 는 ``h_page_no`` 로 나가고 1 미만은 1 로 올려 보내므로 기본값 ``0`` 도 첫
         페이지를 뜻합니다.
         """
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL ticket list requires an authenticated session"
-            )
+        self._require_session("ticket list requires")
         return self._run_read(
             lambda: parse_ticket_list_response(
                 self.http.post_form(
@@ -1728,10 +1724,7 @@ class KorailClient:
           :meth:`reserve_merge` 가 겁니다.
         """
         require_mutation_consent(consent, "reserve")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL reservation requires an authenticated session"
-            )
+        self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_reservation_form(
             self.config,
@@ -1781,10 +1774,7 @@ class KorailClient:
         ``"reserve"`` 입니다.
         """
         require_mutation_consent(consent, "reserve")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL standby options require an authenticated session"
-            )
+        self._require_session("standby options require")
         route = "/classes/com.korail.mobile.reservationWait.ReservationWait"
         form = build_standby_wait_form(
             self.config,
@@ -1863,10 +1853,7 @@ class KorailClient:
         줄 필요가 없습니다. 확인된 것은 **1인·일반실·편도** 한 건입니다.
         """
         require_mutation_consent(consent, "reserve")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL reservation requires an authenticated session"
-            )
+        self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_transfer_reservation_form(
             self.config,
@@ -1923,10 +1910,7 @@ class KorailClient:
         전송된 적이 없습니다. 여기서 만든 병합 폼이 KORAIL 에 나간 적은 없습니다.
         """
         require_mutation_consent(consent, "reserve")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL reservation requires an authenticated session"
-            )
+        self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_merge_reservation_form(
             self.config,
@@ -1971,10 +1955,7 @@ class KorailClient:
         2026-07-26 과 2026-07-31 에 PNR 하나로 함께 풀렸습니다.
         """
         require_mutation_consent(consent, "cancel")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL cancellation requires an authenticated session"
-            )
+        self._require_session("cancellation requires")
         route = (
             "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
         )
@@ -2004,10 +1985,7 @@ class KorailClient:
                 "pay_with_fake_card requires consent.fake_card_only=True; only "
                 "non-chargeable test cards are supported"
             )
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL payment requires an authenticated session"
-            )
+        self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"
         form = build_card_payment_form(self.config, hold, card)
         if consent.dry_run:
@@ -2073,10 +2051,7 @@ class KorailClient:
                 "that still claims a non-chargeable test card while "
                 "acknowledging a real charge is contradictory and is never sent"
             )
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL payment requires an authenticated session"
-            )
+        self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"
         form = build_card_payment_form(self.config, hold, card)
         if consent.dry_run:
@@ -2133,10 +2108,7 @@ class KorailClient:
         비었습니다. 부분 환불을 노린 API 가 아니라, 이것이 이 라우트의 단위입니다.
         """
         require_mutation_consent(consent, "refund")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL refund requires an authenticated session"
-            )
+        self._require_session("refund requires")
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
         form = build_refund_form(
             self.config,
@@ -2154,7 +2126,7 @@ class KorailClient:
         request: StationRefundVerificationRequest,
     ) -> StationRefundVerificationResponse:
         """Verify an existing station-issued ticket before online refund."""
-        self._require_session()
+        self._require_session("station ticket refund verification requires")
         fields = {
             "strName": request.customer_name,
             "retNo1": request.return_no_1,
@@ -2180,7 +2152,7 @@ class KorailClient:
         consent: V7MutationConsent,
     ) -> V7MutationPreview | StationRefundExecutionResponse:
         """Execute a verified station-ticket refund with method-scoped consent."""
-        self._require_session()
+        self._require_session("station ticket refund requires")
         fields = build_station_refund_execution_form(self.config, request)
         result = self.v7.call(
             "NetworkApi.executeOnlineRefunds", fields, consent=consent
@@ -2203,10 +2175,7 @@ class KorailClient:
         ``require_mutation_consent(consent, "cart")`` 와 로그인 세션을 요구합니다.
         """
         require_mutation_consent(consent, "cart")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL cart add requires an authenticated session"
-            )
+        self._require_session("cart add requires")
         route = "/classes/com.korail.mobile.cart.addCartList"
         form = build_cart_add_form(self.config, request)
         return self._mutation(consent, "cart", route, form)
@@ -2226,11 +2195,7 @@ class KorailClient:
         만들어지는 것은 결제를 기다리는 미결제 구매입니다.
         """
         require_mutation_consent(consent, "discount_card")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL discount card purchase requires an authenticated "
-                "session"
-            )
+        self._require_session("discount card purchase requires")
         route = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
         form = build_discount_card_purchase_form(self.config, request)
         if consent.dry_run:
@@ -2267,11 +2232,7 @@ class KorailClient:
         요구하며 dry-run에서는 전송 대신 preview를 돌려줍니다.
         """
         require_mutation_consent(consent, "discount_card")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL discount card extension requires an authenticated "
-                "session"
-            )
+        self._require_session("discount card extension requires")
         route = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
         query = build_discount_card_extension_query(self.config, ticket)
         if consent.dry_run:
@@ -2311,10 +2272,7 @@ class KorailClient:
         홀드해서도 안 됩니다.
         """
         require_mutation_consent(consent, "reserve")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL reservation requires an authenticated session"
-            )
+        self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_discount_card_reservation_form(
             self.config,
@@ -2363,10 +2321,7 @@ class KorailClient:
         경로를 추적하지 않았습니다. 또 이 경로는 실서버에 한 번도 보낸 적이 없습니다.
         """
         require_mutation_consent(consent, "price_recalculation")
-        if self.session.current is None:
-            raise KorailAuthError(
-                "KORAIL price recalculation requires an authenticated session"
-            )
+        self._require_session("price recalculation requires")
         route = "/classes/com.korail.mobile.certification.PriceReCalculation"
         form = build_price_recalculation_form(self.config, request)
         if consent.dry_run:

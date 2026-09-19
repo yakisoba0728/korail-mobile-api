@@ -140,3 +140,42 @@ def test_station_refund_quote_feeds_execution_without_socket_in_dry_run():
     assert preview.name == "NetworkApi.executeOnlineRefunds"
     assert request.refund_amount == "10000"
     assert request.refund_fee == "0"
+
+
+def test_station_ticket_refund_without_a_session_is_refused_by_name():
+    # Both said "account read requires an authenticated session", which is
+    # not what a refund is. Neither sends anything.
+    import pytest
+
+    from korail_mobile_api import KorailAuthError
+
+    def never(_request):
+        raise AssertionError("nothing may be sent without a session")
+
+    client = KorailClient(transport=httpx.MockTransport(never))
+    request = StationRefundExecutionRequest(
+        "synthetic-pnr", "20260701", "1", "2", "synthetic-password",
+        "kind", "reason", "ticket", "synthetic-phone", "8400", "0",
+        "synthetic-name",
+    )
+    try:
+        with pytest.raises(
+            KorailAuthError,
+            match=r"^KORAIL station ticket refund verification requires an authenticated session$",
+        ):
+            client.verify_station_ticket_refund(
+                StationRefundVerificationRequest("n", "1", "2", "3", "4")
+            )
+        with pytest.raises(
+            KorailAuthError,
+            match=r"^KORAIL station ticket refund requires an authenticated session$",
+        ):
+            client.execute_station_ticket_refund(
+                request,
+                consent=V7MutationConsent(
+                    allow_methods=frozenset({"NetworkApi.executeOnlineRefunds"}),
+                    dry_run=False,
+                ),
+            )
+    finally:
+        client.close()
