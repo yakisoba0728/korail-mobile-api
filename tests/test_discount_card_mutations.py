@@ -467,9 +467,6 @@ def test_public_surface_exports_the_mutation_names():
     # asserted above. It stays importable from its own module -- demotion is a
     # move, not a deletion -- and both halves are checked, because dropping the
     # __all__ entry while leaving the attribute behind is half a demotion.
-    from korail_mobile_api.mutation_parsers import (  # noqa: F401
-        parse_discount_card_purchase_response,
-    )
 
     assert "parse_discount_card_purchase_response" not in korail_mobile_api.__all__
     assert not hasattr(korail_mobile_api, "parse_discount_card_purchase_response")

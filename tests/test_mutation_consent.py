@@ -236,9 +236,6 @@ def test_post_mutation_form_refuses_a_dry_run_consent():
     # The send boundary itself refuses to transmit a dry-run consent, so a
     # preview can never reach the network even via the low-level send path.
     from korail_mobile_api import KorailConfig
-    from korail_mobile_api.mutation_payloads import (
-        build_single_adult_reservation_form,
-    )
 
     client = _no_network_client()
     route = "/classes/com.korail.mobile.certification.TicketReservation"

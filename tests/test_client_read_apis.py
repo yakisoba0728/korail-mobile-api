@@ -236,7 +236,6 @@ def test_ticket_list_history_mode_sends_txtindex_two_with_date_bounds(
 
 
 def test_ticket_list_rejects_unknown_mode(load_json_fixture):
-    from korail_mobile_api.errors import KorailProtocolError
 
     client, _ = _ticket_client(load_json_fixture)
     with pytest.raises(KorailProtocolError, match="mode"):
@@ -331,7 +330,6 @@ def test_train_search_continuation_replays_the_previous_pages_cursor():
 
 
 def test_train_search_continuation_must_be_the_exact_type():
-    from korail_mobile_api.errors import KorailProtocolError
     from korail_mobile_api.payloads import build_train_search_form
 
     with pytest.raises(KorailProtocolError):

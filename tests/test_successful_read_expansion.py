@@ -1320,7 +1320,7 @@ def test_history_no_data_is_typed_empty():
 
 
 def test_unexpected_application_failures_and_p058_remain_typed_errors():
-    from korail_mobile_api.errors import KorailAppError, KorailSessionExpiredError
+    from korail_mobile_api.errors import KorailAppError
 
     for parser in (
         parse_cart_list_response,

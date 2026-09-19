@@ -1245,51 +1245,24 @@ def test_inventory_safety_rejects_wrong_methods_and_adjacent_routes(
         assert_read_only_route(method, path)
 
 
-@pytest.mark.parametrize("path", [CAR_PATH, SEAT_PATH])
-def test_invalid_inventory_forms_fail_before_dynapath_or_transport(path):
-    transport_calls = 0
-    token_calls = 0
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal transport_calls
-        transport_calls += 1
-        raise AssertionError("transport must not run")
-
-    def token_provider(_):
-        nonlocal token_calls
-        token_calls += 1
-        raise AssertionError("DynaPath must not run")
-
-    config = KorailConfig(
-        dynapath=DynapathConfig(
-            enabled=True,
-            token_provider=token_provider,
-            allowlist_paths=frozenset({path}),
-        )
-    )
-    client = KorailClient(config, transport=httpx.MockTransport(handler))
-    try:
-        with pytest.raises(KorailProtocolError, match="fields"):
-            client.http.post_form(
-                path,
-                {"Device": "AD"},
-                include_common=False,
-            )
-    finally:
-        client.close()
-    assert token_calls == 0
-    assert transport_calls == 0
+def _missing_fields_form(path: str) -> dict[str, str]:
+    return {"Device": "AD"}
 
 
-@pytest.mark.parametrize("path", [CAR_PATH, SEAT_PATH])
-def test_duplicate_inventory_forms_fail_before_dynapath_or_transport(path):
-    transport_calls = 0
-    token_calls = 0
+def _duplicate_key_form(path: str) -> _DuplicateFieldMapping:
     fields = KORAIL_EXACT_REQUEST_FIELDS[path]
-    duplicate = _DuplicateFieldMapping(
-        {name: "" for name in fields},
-        next(iter(fields)),
-    )
+    return _DuplicateFieldMapping({name: "" for name in fields}, next(iter(fields)))
+
+
+@pytest.mark.parametrize("path", [CAR_PATH, SEAT_PATH])
+@pytest.mark.parametrize(
+    ("make_form", "match"),
+    [(_missing_fields_form, "fields"), (_duplicate_key_form, "duplicate")],
+    ids=["invalid-fields", "duplicate-fields"],
+)
+def test_bad_inventory_forms_fail_before_dynapath_or_transport(path, make_form, match):
+    transport_calls = 0
+    token_calls = 0
 
     def handler(_: httpx.Request) -> httpx.Response:
         nonlocal transport_calls
@@ -1310,12 +1283,8 @@ def test_duplicate_inventory_forms_fail_before_dynapath_or_transport(path):
     )
     client = KorailClient(config, transport=httpx.MockTransport(handler))
     try:
-        with pytest.raises(KorailProtocolError, match="duplicate"):
-            client.http.post_form(
-                path,
-                duplicate,
-                include_common=False,
-            )
+        with pytest.raises(KorailProtocolError, match=match):
+            client.http.post_form(path, make_form(path), include_common=False)
     finally:
         client.close()
     assert token_calls == 0

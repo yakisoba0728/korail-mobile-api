@@ -667,7 +667,6 @@ def test_reserve_merge_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
     # made a hold (PNR present) but another field will not parse, and the
     # caller must still get the PNR back to cancel it. Without a PNR there is
     # no hold to lose, and the parse error stands.
-    from korail_mobile_api import ReservationHoldResponse
     from korail_mobile_api.errors import KorailProtocolError
 
     body: dict = {}
