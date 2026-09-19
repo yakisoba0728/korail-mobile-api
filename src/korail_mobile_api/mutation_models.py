@@ -258,22 +258,14 @@ class KorailPassengerCounts:
     guide_dog: int = 0
 
     def __post_init__(self) -> None:
-        for name in (
-            "adult",
-            "teenager",
-            "child",
-            "infant",
-            "senior",
-            "severe_disability",
-            "mild_disability",
-            "guide_dog",
-        ):
-            value = getattr(self, name)
+        # 여덟 필드 모두 인원 수다 — _require_every_field 와 같은 방식.
+        for field_ in fields(self):
+            value = getattr(self, field_.name)
             # isinstance 가 아니라 type(...) is int. bool 이 int 의 하위
             # 타입이고, True 는 승객 수가 아니다.
             if type(value) is not int or value < 0:
                 raise ValueError(
-                    f"{name} must be a non-negative integer"
+                    f"{field_.name} must be a non-negative integer"
                 )
         total = self.total
         if total < 1:
@@ -538,11 +530,7 @@ class PaidTicket:
                 f"missing {', '.join(sorted(missing))}"
             )
         return cls(
-            pnr_no=parts["pnr_no"],
-            sale_date=parts["sale_date"],
-            sale_window_no=parts["sale_window_no"],
-            sale_sequence=parts["sale_sequence"],
-            return_password=parts["return_password"],
+            **parts,
             train_no=train_no,
             pbp_acceptance_target_flag=detail.pbp_acceptance_target_flag,
         )
