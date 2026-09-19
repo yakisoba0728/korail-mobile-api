@@ -2281,3 +2281,36 @@ def test_known_defect_a_seat_attribute_override_is_sent_unvalidated(
         seat_attribute_code=override,
     )
     assert car["txtSeatAttCd"] == override
+
+
+_SEAT_STRING_ATTRIBUTES = {
+    "seat_no": "seat_no",
+    "sale_psb_flg": "sale_possible",
+    "dir_seat_att_cd": "direction_code",
+    "etc_seat_att_cd": "other_attribute_code",
+    "rq_seat_att_cd": "requested_attribute_code",
+    "seat_spec": "specification",
+    "sqr_no": "sequence_no",
+    "intg_msg_cd": "message_code",
+    "intg_msg": "message",
+    "vz_msg_dv_cd": "visual_message_division_code",
+}
+
+
+@pytest.mark.parametrize("field_name", sorted(_SEAT_STRING_ATTRIBUTES))
+def test_seat_parser_accepts_a_blank_documented_seat_string(
+    load_json_fixture, field_name
+):
+    """Blank is accepted here and refused for station rows -- today, both.
+
+    _inventory_required_string checks the type only; _station_required_string
+    also refuses a blank (test_station_parser_refuses_a_blank_code_or_name in
+    test_raw_typed_core.py). Src batch 33 merges those helpers; each side is
+    pinned so the merge cannot quietly move one onto the other. If batch 33
+    decides the seat side should refuse blanks as well, it turns this test
+    over in the same commit.
+    """
+    raw = load_json_fixture("seat_inventory_success.json")
+    raw["seatList"][0][field_name] = ""
+    seat = _parse_seat(raw).seats[0]
+    assert getattr(seat, _SEAT_STRING_ATTRIBUTES[field_name]) == ""

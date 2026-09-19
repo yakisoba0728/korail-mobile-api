@@ -925,3 +925,60 @@ def test_search_trains_populates_metadata_without_changing_request(
     assert form["txtGoStart"] == ["Synthetic Departure Name"]
     assert form["txtGoEnd"] == ["Synthetic Arrival Name"]
     assert "Key" not in form
+
+
+@pytest.mark.parametrize("key", ["stn_cd", "stn_nm"])
+@pytest.mark.parametrize("blank", ["", "   "], ids=["empty", "spaces"])
+def test_station_parser_refuses_a_blank_code_or_name(load_json_fixture, key, blank):
+    # The station side of the pair described in test_seat_inventory_reads.py's
+    # blank-string test: a station row without a code or a name is not a
+    # station, whatever src batch 33 does to the helpers underneath.
+    raw = load_json_fixture("raw_typed_station_data.json")
+    raw["stns"]["stn"][0][key] = blank
+    with pytest.raises(
+        KorailProtocolError, match=f"station field {key} must be a non-empty string"
+    ):
+        parsers.parse_station_data_response(_partial_response(raw))
+
+
+_SCHEDULE_OPTIONAL_HEADER = {
+    "dlayDtlRsnCont": "delay_detail_reason_content",
+    "dlayStnConsOrdr": "delay_station_construction_order",
+    "intgMsgCd": "integrated_message_code",
+    "msgCd": "message_code",
+    "msgCont": "message_content",
+    "msgTxt": "message_text",
+    "orgRsStnCd": "origin_station_code",
+    "orgRsStnNm": "origin_station_name",
+    "routCd": "route_code",
+    "routNm": "route_name",
+    "runSegOrdr": "run_segment_order",
+    "saleRgulFlg": "regular_sale_flag",
+    "stlbTrnClsfCd": "standard_train_class_code",
+    "tmnRsStnCd": "terminal_station_code",
+    "tmnRsStnNm": "terminal_station_name",
+    "trnAttCd": "train_attribute_code",
+    "trnDptFlg": "train_departure_flag",
+    "trnNo1": "train_no",
+    "trnSpsFlg": "special_train_flag",
+    "upDnDvCd": "up_down_division_code",
+}
+
+
+@pytest.mark.parametrize("optional_key", sorted(_SCHEDULE_OPTIONAL_HEADER))
+@pytest.mark.parametrize("absent_shape", ["null", "missing"])
+def test_train_schedule_parser_tolerates_every_optional_header_field(
+    load_json_fixture, optional_key, absent_shape
+):
+    # Every header field but runDt1 is optional in the 7.0.6 DTO. Only trnNo1
+    # was tested absent; src batch 33 folds this parser's helpers together, so
+    # each one is pinned. runDt1 stays required.
+    raw = load_json_fixture("raw_typed_train_schedule.json")
+    assert optional_key in raw
+    if absent_shape == "null":
+        raw[optional_key] = None
+    else:
+        raw.pop(optional_key)
+    response = parsers.parse_train_schedule_response(_enveloped_response(raw))
+    assert getattr(response, _SCHEDULE_OPTIONAL_HEADER[optional_key]) is None
+    assert response.run_date == raw["runDt1"]
