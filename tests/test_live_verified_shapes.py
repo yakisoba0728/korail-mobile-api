@@ -207,8 +207,12 @@ def test_get_pass_available_dates_accepts_the_live_success_body(
 #   WRT100002 창구번호미입력,미승인창구 <- h_orgtk_wct_no was read and rejected
 #   WRT100124 반환번호를 확인해주세요   <- the return-number tuple was read
 #
-# The SUCCESS bodies remain UNVERIFIED: producing one requires a real held or
-# paid ticket, which this increment cannot create.
+# No success body was available when these were captured. All three have been
+# seen since, and none is stored here -- this file pins only the error
+# envelopes. certification.ReservationList answered a real hold on 2026-07-25
+# (test_reference_derived_reads.py); refunds.CommissionView and
+# refunds.SelTicketInfo answered during the real-card round trips of 2026-07-31
+# and 2026-09-15 (docs/verification-record.md, docs/7.0.6-live-verification.md).
 # --------------------------------------------------------------------------
 
 TICKET_RESERVATION_DETAIL_PATH = (
@@ -292,7 +296,6 @@ def test_reference_derived_reads_surface_the_live_failure_as_korail_app_error(
         return httpx.Response(200, json=body)
 
     client = _client(handler)
-    _authenticated(client)
     client.session.current = KorailSession(
         jsessionid="synthetic-session-secret",
         member_no="synthetic-member-secret",
