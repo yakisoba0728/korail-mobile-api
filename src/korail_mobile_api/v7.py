@@ -19,7 +19,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Literal, TypedDict, cast
 from urllib.parse import urlencode, urlsplit
 
 import httpx
@@ -75,6 +75,23 @@ _NON_COMMON_OUT_RESPONSE_MODELS = frozenset({
 })
 
 
+V7Effect = Literal["read", "mutation"]
+
+
+class _ContractRow(TypedDict):
+    """One row of ``v7_contract_data.CONTRACT_ROWS``."""
+
+    interface: str
+    method: str
+    http: str
+    route: str
+    params: str
+    form: bool
+    request_model: str | None
+    response_model: str
+    effect: V7Effect
+
+
 @dataclass(frozen=True)
 class V7Contract:
     interface: str
@@ -85,7 +102,7 @@ class V7Contract:
     form: bool
     request_model: str | None
     response_model: str
-    effect: str
+    effect: V7Effect
 
     @property
     def name(self) -> str:
@@ -107,10 +124,18 @@ class V7Contract:
 
 
 def _load_registry() -> dict[str, V7Contract]:
+    rows = cast(tuple[_ContractRow, ...], CONTRACT_ROWS)
+    # What the cast promises, checked: call() gates on effect == "mutation" and
+    # sends anything else as a read, so a misspelled effect would drop consent.
+    # Checked on the rows, before an override could paper over one.
+    if any(row["effect"] not in ("read", "mutation") for row in rows):
+        raise KorailProtocolError(
+            "7.0.6 contract registry has an effect other than read or mutation"
+        )
     contracts = [
         replace(contract, effect="mutation")
         if contract.name in _MUTATION_OVERRIDES else contract
-        for contract in (V7Contract(**row) for row in CONTRACT_ROWS)
+        for contract in (V7Contract(**row) for row in rows)
     ]
     registry = {contract.name: contract for contract in contracts}
     if len(contracts) != 117 or len(registry) != len(contracts):

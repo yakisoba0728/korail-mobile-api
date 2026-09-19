@@ -46,6 +46,26 @@ def _special_form() -> dict[str, str]:
     )
 
 
+@pytest.mark.parametrize("effect", ["write", "Mutation", "", None])
+def test_the_registry_refuses_a_row_whose_effect_is_neither_read_nor_mutation(
+    monkeypatch: pytest.MonkeyPatch, effect: object
+) -> None:
+    # call() gates on `effect == "mutation"` and treats everything else as a
+    # read, so a misspelled effect in the generated rows would send a mutation
+    # with no consent. The loader refuses it instead.
+    from korail_mobile_api import v7
+
+    rows = list(v7.CONTRACT_ROWS)
+    rows[0] = {**rows[0], "effect": effect}
+    monkeypatch.setattr(v7, "CONTRACT_ROWS", tuple(rows))
+    with pytest.raises(KorailProtocolError, match="effect"):
+        v7._load_registry()
+
+
+def test_every_loaded_contract_is_a_read_or_a_mutation() -> None:
+    assert {contract.effect for contract in V7_CONTRACTS.values()} == {"read", "mutation"}
+
+
 def test_non_member_ticket_is_a_method_scoped_mutation() -> None:
     name = "NetworkApi.postNonMemTicket"
     values = {"txtJobId": "synthetic-job", "txtCustNm": "synthetic-name"}
