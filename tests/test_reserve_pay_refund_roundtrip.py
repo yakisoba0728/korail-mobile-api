@@ -283,7 +283,9 @@ def test_module_level_code_is_only_definitions_and_constants():
 
     Every top-level statement must be an import, a definition, a constant
     assignment, or the ``if __name__ == "__main__"`` guard. A stray call at
-    module level would fail here.
+    module level would fail here -- including one on the right-hand side of an
+    assignment (``CLIENT = KorailClient()``), which is why every assigned value
+    must be a literal.
     """
     tree = ast.parse(SCRIPT_SOURCE)
     for node in tree.body:
@@ -302,6 +304,9 @@ def test_module_level_code_is_only_definitions_and_constants():
         ):
             if isinstance(node, ast.Expr):
                 assert isinstance(node.value, ast.Constant), ast.dump(node)
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                assert node.value is not None, ast.dump(node)
+                ast.literal_eval(node.value)
             continue
         assert isinstance(node, ast.If), ast.dump(node)
         assert ast.unparse(node.test) == "__name__ == '__main__'"
