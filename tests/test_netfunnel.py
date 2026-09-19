@@ -726,6 +726,19 @@ def test_max_ttl_is_the_native_sdks_thirty_not_the_js_bundles_five():
     assert (MAX_TTL_SECONDS, MIN_TTL_SECONDS) == (30, 1)
 
 
+def test_a_non_ascii_digit_in_ttl_or_nwait_falls_back_instead_of_crashing():
+    # str.isdigit() accepts Unicode digits like superscript "²" and "¹", but
+    # int() cannot parse them and raises ValueError. Both wait_count and
+    # queue_wait_seconds must fall back to their "not a real number" default
+    # (0, clamped to MIN_TTL_SECONDS by queue_wait_seconds) rather than crash.
+    token = parse_netfunnel_body(
+        "201:key=abcdef1234567890&ttl=²&nwait=¹",
+        action="act_8",
+    )
+    assert queue_wait_seconds(token) == MIN_TTL_SECONDS
+    assert token.wait_count == 0
+
+
 # ---------------------------------------------------------------------------
 # The default-off guarantee.
 # ---------------------------------------------------------------------------

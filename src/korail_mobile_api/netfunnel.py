@@ -114,7 +114,7 @@ class KorailNetFunnelToken:
     def wait_count(self) -> int:
         """``nwait`` — 앞에 몇 명이 서 있는지."""
         raw = self.params.get("nwait", "")
-        return int(raw) if raw.isdigit() else 0
+        return int(raw) if raw.isascii() and raw.isdigit() else 0
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +299,7 @@ def is_queued(token: KorailNetFunnelToken) -> bool:
 def queue_wait_seconds(token: KorailNetFunnelToken) -> int:
     """다음 chkEnter 까지 잘 시간. ``T6/i.java:175-181`` max=30, min=1."""
     raw = token.params.get("ttl", "")
-    ttl = int(raw) if raw.isdigit() else 0
+    ttl = int(raw) if raw.isascii() and raw.isdigit() else 0
     return max(MIN_TTL_SECONDS, min(ttl, MAX_TTL_SECONDS))
 
 
