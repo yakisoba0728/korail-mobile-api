@@ -26,7 +26,7 @@
 """
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar, overload
 
 import httpx
 
@@ -507,6 +507,32 @@ class KorailClient:
             )
         )
 
+    @overload
+    def _mutation(
+        self,
+        consent: MutationConsent,
+        category: MutationCategory,
+        route: str,
+        form: dict[str, str] | dict[str, str | list[str]],
+        *,
+        method: str = ...,
+        parser: None = ...,
+        raise_on_fail: bool = ...,
+    ) -> MutationPreview | BaseKorailResponse: ...
+
+    @overload
+    def _mutation(
+        self,
+        consent: MutationConsent,
+        category: MutationCategory,
+        route: str,
+        form: dict[str, str] | dict[str, str | list[str]],
+        *,
+        method: str = ...,
+        parser: Callable[[Mapping[str, Any]], T],
+        raise_on_fail: bool = ...,
+    ) -> MutationPreview | T: ...
+
     def _mutation(
         self,
         consent: MutationConsent,
@@ -515,9 +541,9 @@ class KorailClient:
         form: dict[str, str] | dict[str, str | list[str]],
         *,
         method: str = "POST",
-        parser: Callable[..., T] | None = None,
+        parser: Callable[[Mapping[str, Any]], T] | None = None,
         raise_on_fail: bool = True,
-    ) -> MutationPreview | T:
+    ) -> MutationPreview | BaseKorailResponse | T:
         """상태변경 메서드의 공통 골격: dry_run 분기 → 전송 → 파싱 → 세션만료 복구."""
         if consent.dry_run:
             return MutationPreview(
@@ -529,7 +555,7 @@ class KorailClient:
         try:
             response = self.http.post_mutation_form(
                 route,
-                form,  # type: ignore[arg-type]
+                form,
                 consent=consent,
                 category=category,
                 raise_on_fail=raise_on_fail,
@@ -540,7 +566,7 @@ class KorailClient:
         if parser is not None:
             raw = response.raw if isinstance(response.raw, dict) else {}
             return parser(raw)
-        return response  # type: ignore[return-value]
+        return response
 
     def get_seat_cars(
         self,
@@ -1380,11 +1406,12 @@ class KorailClient:
             )
         )
 
-    def get_station_info(self, device: str = "AD") -> StationInfoResponse:
+    def get_station_info(self, device: Literal["AD"] = "AD") -> StationInfoResponse:
         """역 데이터의 판본과 수록 역 수를 빈 POST로 조회합니다.
 
         ``device``는 이전 공개 인자 호환용이며 7.0.6 요청에는 실리지 않습니다.
         """
+        # The annotation does not reach an untyped caller; this does.
         if device != "AD":
             raise KorailProtocolError(
                 "7.0.6 station info does not accept a device parameter"
@@ -1620,7 +1647,7 @@ class KorailClient:
         self,
         page_no: int = 0,
         *,
-        mode: str = "1",
+        mode: Literal["1", "2"] = "1",
         boarding_date_from: str = "",
         boarding_date_to: str = "",
     ) -> TicketListResponse:
