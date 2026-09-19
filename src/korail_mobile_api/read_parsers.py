@@ -16,7 +16,7 @@ KORAIL 은 ``String`` 선언 필드를 JSON 숫자로도 보내므로
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 from .errors import (
@@ -304,6 +304,21 @@ def _row(value: Any, context: str) -> Mapping[str, Any]:
             f"KORAIL {context} contained a non-object item"
         )
     return value
+
+
+def _rows(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+    row_context: str | None = None,
+) -> Iterator[Mapping[str, Any]]:
+    """``key`` 리스트의 각 항목을 객체로 검증하며 지연 순회.
+
+    목록 조회(``_optional_list``)는 즉시 실행되고, 항목별 객체 검증
+    (``_row``)은 순회 시점에 지연 실행됩니다.
+    """
+    row_label = row_context if row_context is not None else f"{context} {key}"
+    return (_row(value, row_label) for value in _optional_list(data, key, context))
 
 
 def _optional_string(
@@ -671,20 +686,14 @@ def _parse_pass_menu_data(
             **_nullable_string_fields(row, _PASS_AGE_OPTION_FIELDS, "pass age option"),
             raw=row,
         )
-        for row in (
-            _row(v, f"{context} pass_ageinfo")
-            for v in _optional_list(data, "pass_ageinfo", context)
-        )
+        for row in _rows(data, "pass_ageinfo", context)
     )
     period_options = tuple(
         PassPeriodOption(
             **_nullable_string_fields(row, _PASS_PERIOD_OPTION_FIELDS, "pass period option"),
             raw=row,
         )
-        for row in (
-            _row(v, f"{context} pass_periodinfo")
-            for v in _optional_list(data, "pass_periodinfo", context)
-        )
+        for row in _rows(data, "pass_periodinfo", context)
     )
     return PassMenuData(
         commuter_kind_code=_optional_string(data, "h_cmtr_knd_cd", context),
@@ -705,12 +714,11 @@ def _parse_pass_goods_info(
     passenger_infos = None
     if passenger_infos_data is not None:
         passengers = []
-        for value in _optional_list(
+        for item in _rows(
             passenger_infos_data,
             "psg_info",
             "pass passenger infos",
         ):
-            item = _row(value, "pass passenger infos psg_info")
             passengers.append(
                 PassPassengerInfo(
                     # The live pass menu sends these counts as ZERO-PADDED
@@ -771,8 +779,7 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
     # Live pass.passMenu.do success is result-only (no h_msg_cd/h_msg_txt).
     _validate_strict_read_envelope(raw, allow_result_only_success=True)
     items = []
-    for value in _optional_list(raw, "list", "pass menu"):
-        item = _row(value, "pass menu list")
+    for item in _rows(raw, "list", "pass menu"):
         web_data = _optional_mapping(item, "webData", "pass menu item")
         items.append(
             PassMenuItem(
@@ -820,10 +827,7 @@ def parse_crew_request_list_response(
             **_nullable_string_fields(row, _CREW_REQUEST_OPTION_FIELDS, "crew request option"),
             raw=row,
         )
-        for row in (
-            _row(v, "crew request list prsList")
-            for v in _optional_list(raw, "prsList", "crew request list")
-        )
+        for row in _rows(raw, "prsList", "crew request list")
     )
     return CrewRequestListResponse(items=items, **_response_fields(raw))
 
@@ -859,10 +863,7 @@ def parse_deposit_bank_response(
             **_nullable_string_fields(row, _DEPOSIT_BANK_FIELDS, "deposit bank"),
             raw=row,
         )
-        for row in (
-            _row(v, "deposit bank list dptnBank")
-            for v in _optional_list(raw, "dptnBank", "deposit bank list")
-        )
+        for row in _rows(raw, "dptnBank", "deposit bank list")
     )
     return DepositBankListResponse(items=items, **_response_fields(raw))
 
@@ -960,20 +961,17 @@ def parse_pass_availability_response(
     # parse_pass_menu_response.
     _validate_envelope(raw, allow_result_only_success=True)
     open_dates = []
-    for value in _optional_list(raw, "pass_info", "pass availability"):
-        item = _row(value, "pass availability pass_info")
+    for item in _rows(raw, "pass_info", "pass availability"):
         date = _optional_string(item, "h_use_open_dt", "pass date")
         if date is not None:
             open_dates.append(date)
     ticket_issue_dates = []
-    for value in _optional_list(raw, "ticket_info", "pass availability"):
-        item = _row(value, "pass availability ticket_info")
+    for item in _rows(raw, "ticket_info", "pass availability"):
         date = _optional_string(item, "h_ise_dt2", "ticket issue date")
         if date is not None:
             ticket_issue_dates.append(date)
     offices = []
-    for value in _optional_list(raw, "wct_info", "pass availability"):
-        item = _row(value, "pass availability wct_info")
+    for item in _rows(raw, "wct_info", "pass availability"):
         offices.append(
             PassOffice(
                 code=_optional_string(item, "eng_cd_val", "pass office"),
@@ -994,17 +992,13 @@ def parse_pass_availability_response(
 def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
     _validate_envelope(raw)
     items = []
-    for value in _optional_list(raw, "menuList", "trip menu"):
-        item = _row(value, "trip menu menuList")
+    for item in _rows(raw, "menuList", "trip menu"):
         contents = tuple(
             TripMenuContent(
                 **_nullable_string_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
                 raw=row,
             )
-            for row in (
-                _row(cv, "trip menu contList")
-                for cv in _optional_list(item, "contList", "trip menu")
-            )
+            for row in _rows(item, "contList", "trip menu")
         )
         items.append(
             TripMenuItem(
@@ -1032,10 +1026,7 @@ def parse_product_reservation_list_response(
             **_nullable_string_fields(row, _PRODUCT_RESERVATION_FIELDS, "product reservation"),
             raw=row,
         )
-        for row in (
-            _row(v, "product reservation list entity")
-            for v in _optional_list(main, "entity", "product reservation list")
-        )
+        for row in _rows(main, "entity", "product reservation list")
     )
     return ProductReservationListResponse(
         items=items,
@@ -1052,8 +1043,7 @@ def parse_product_detail_response(
     if main is None:
         return ProductDetailResponse(**_response_fields(raw))
     included_items = []
-    for value in _optional_list(main, "entityOne", "product detail"):
-        item = _row(value, "product detail entityOne")
+    for item in _rows(main, "entityOne", "product detail"):
         name = _optional_string(item, "strGdConsItmNm", "included item")
         if name is not None:
             included_items.append(name)
@@ -1074,8 +1064,7 @@ def parse_ticket_receipt_response(
     for value in rows:
         item = _row(value, "ticket receipt receipt_info")
         payments = []
-        for pv in _optional_list(item, "stl_info", "ticket receipt"):
-            payment = _row(pv, "ticket receipt stl_info")
+        for payment in _rows(item, "stl_info", "ticket receipt"):
             payments.append(
                 ReceiptPayment(
                     **_nullable_string_fields(
@@ -1091,8 +1080,7 @@ def parse_ticket_receipt_response(
                 )
             )
         cash_receipts = []
-        for cv in _optional_list(item, "cash_rcet_info", "ticket receipt"):
-            cash = _row(cv, "ticket receipt cash_rcet_info")
+        for cash in _rows(item, "cash_rcet_info", "ticket receipt"):
             cash_receipts.append(
                 ReceiptCashPayment(
                     **_nullable_string_fields(
@@ -1256,8 +1244,7 @@ def parse_merge_seats_inquiry_response(
 ) -> MergeSeatsInquiryResponse:
     _validate_strict_read_envelope(raw)
     stations = []
-    for value in _optional_list(raw, "midStnList", "merge seats inquiry"):
-        station = _row(value, "merge seats inquiry midStnList")
+    for station in _rows(raw, "midStnList", "merge seats inquiry"):
         stations.append(
             IntermediateStation(
                 code=_optional_string(
@@ -1311,16 +1298,17 @@ def parse_pass_schedule_response(
         else None
     )
     schedules = []
-    for schedule_value in _optional_list(raw, "schedule_info", "pass schedule"):
-        schedule = _row(schedule_value, "pass schedule schedule_info")
+    for schedule in _rows(raw, "schedule_info", "pass schedule"):
         trains = tuple(
             PassScheduleTrain(
                 **_nullable_string_fields(row, _PASS_SCHEDULE_TRAIN_FIELDS, "pass schedule train"),
                 raw=row,
             )
-            for row in (
-                _row(tv, "pass schedule train_list")
-                for tv in _optional_list(schedule, "train_list", "pass schedule schedule_info")
+            for row in _rows(
+                schedule,
+                "train_list",
+                "pass schedule schedule_info",
+                "pass schedule train_list",
             )
         )
         schedules.append(PassScheduleInfo(trains=trains, raw=schedule))
