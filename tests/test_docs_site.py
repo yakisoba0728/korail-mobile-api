@@ -43,6 +43,21 @@ def _reexported_submodules() -> set[str]:
     }
 
 
+def _site_pages() -> set[str]:
+    """The prose pages the site's `nav` lists, outside `reference/`.
+
+    Read from `nav` rather than from `exclude_docs` on purpose: the check below
+    is that every page the navigation shows is also un-excluded, and a list
+    taken from the exclusion block would compare that block with itself.
+    """
+    block = MKDOCS.split("\nnav:\n", maxsplit=1)[1]
+    block = re.split(r"\n(?=\S)", block, maxsplit=1)[0]
+    pages = set(
+        re.findall(r"^\s*-\s*(?:[^:\n]+:\s*)?([\w./-]+\.md)\s*$", block, re.MULTILINE)
+    )
+    return {page for page in pages if not page.startswith("reference/")}
+
+
 def test_every_reexporting_module_has_a_reference_page() -> None:
     modules = _reexported_submodules()
     assert modules
@@ -63,8 +78,10 @@ def test_the_navigation_lists_exactly_those_pages() -> None:
     assert navigated == _reexported_submodules()
 
     # 차례에 있는 쪽이 exclude_docs 로 빠져 있으면 mkdocs 가 조용히 뺀다.
-    for page in ("index.md", "quickstart.md", "safety.md", "errors.md", "changelog.md"):
-        assert f"!/{page}" in MKDOCS
+    pages = _site_pages()
+    assert "index.md" in pages
+    for page in sorted(pages):
+        assert f"!/{page}" in MKDOCS, page
     assert "!/reference/" in MKDOCS
 
 
@@ -164,15 +181,10 @@ def test_no_document_under_docs_is_unreachable():
         path for path in tracked
         if path.endswith(".md") and not path.startswith("docs/internal/")
     }
-    # 색인 자신과 문서 사이트 원본은 mkdocs.yml 의 nav 가 가리킵니다.
-    documents -= {
-        "docs/README.md",
-        "docs/index.md",
-        "docs/quickstart.md",
-        "docs/safety.md",
-        "docs/errors.md",
-        "docs/changelog.md",
-    }
+    # 문서 사이트 원본은 mkdocs.yml 의 nav 가 가리킵니다. docs/README.md 는
+    # 사이트 쪽이 아니라 이 색인 자신이라서 따로 뺍니다.
+    documents -= {f"docs/{page}" for page in _site_pages()}
+    documents -= {"docs/README.md"}
 
     # "어딘가에서" 링크되면 고아가 아닙니다. deep-dive 의 보고서들은 최상위가
     # 아니라 자기 디렉터리의 README 가 가리키고, 그것이 정상입니다.
