@@ -133,53 +133,21 @@ from .read_models import (
 def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListResponse:
     """7.0.6 ``pnr_list`` → ``ticket_list`` 승차권 목록."""
     raw = response.raw
-    reservation_rows = raw.get("pnr_list")
-    if reservation_rows is None:
-        reservation_rows = []
-    if not isinstance(reservation_rows, list):
-        raise KorailProtocolError("KORAIL ticket list pnr_list must be a list or null")
     reservations: list[TicketListReservation] = []
-    for reservation_raw in reservation_rows:
-        if not isinstance(reservation_raw, Mapping):
-            raise KorailProtocolError("KORAIL ticket list reservation must be an object")
-        ticket_rows = reservation_raw.get("ticket_list")
-        if ticket_rows is None:
-            ticket_rows = []
-        if not isinstance(ticket_rows, list):
-            raise KorailProtocolError("KORAIL ticket list ticket_list must be a list or null")
+    for reservation_raw in _rows(raw, "pnr_list", "ticket list", "ticket list reservation"):
         tickets: list[TicketListTicket] = []
-        for ticket_raw in ticket_rows:
-            if not isinstance(ticket_raw, Mapping):
-                raise KorailProtocolError("KORAIL ticket list ticket must be an object")
-            train_rows = ticket_raw.get("jrn_info")
-            if train_rows is None:
-                train_rows = []
-            if not isinstance(train_rows, list) or any(
-                not isinstance(train_row, Mapping) for train_row in train_rows
-            ):
-                raise KorailProtocolError("KORAIL ticket list jrn_info must contain objects")
+        for ticket_raw in _rows(
+            reservation_raw, "ticket_list", "ticket list", "ticket list ticket"
+        ):
+            train_info = tuple(
+                _rows(ticket_raw, "jrn_info", "ticket list", "ticket list jrn_info")
+            )
             tickets.append(
                 TicketListTicket(
-                    pnr_no=_optional_scalar_string(ticket_raw, "h_pnr_no", "ticket list"),
-                    sale_window_no=_optional_scalar_string(
-                        ticket_raw, "h_orgtk_wct_no", "ticket list"
+                    **_nullable_scalar_fields(
+                        ticket_raw, _TICKET_LIST_TICKET_FIELDS, "ticket list"
                     ),
-                    sale_date=_optional_scalar_string(
-                        ticket_raw, "h_orgtk_sale_dt", "ticket list"
-                    ),
-                    return_sale_date=_optional_scalar_string(
-                        ticket_raw, "h_orgtk_ret_sale_dt", "ticket list"
-                    ),
-                    sale_sequence=_optional_scalar_string(
-                        ticket_raw, "h_orgtk_sale_sqno", "ticket list"
-                    ),
-                    return_password=_optional_scalar_string(
-                        ticket_raw, "h_orgtk_ret_pwd", "ticket list"
-                    ),
-                    ticket_status_code=_optional_scalar_string(
-                        ticket_raw, "h_tk_stt_cd", "ticket list"
-                    ),
-                    train_info=tuple(train_rows),
+                    train_info=train_info,
                     raw=ticket_raw,
                 )
             )
@@ -445,6 +413,16 @@ def _nullable_scalar_fields(
 
 
 # ─── Field maps for the first-half parsers ───────────────────────────────────
+
+_TICKET_LIST_TICKET_FIELDS: dict[str, str] = {
+    "pnr_no": "h_pnr_no",
+    "sale_window_no": "h_orgtk_wct_no",
+    "sale_date": "h_orgtk_sale_dt",
+    "return_sale_date": "h_orgtk_ret_sale_dt",
+    "sale_sequence": "h_orgtk_sale_sqno",
+    "return_password": "h_orgtk_ret_pwd",
+    "ticket_status_code": "h_tk_stt_cd",
+}
 
 _CART_ITEM_FIELDS: dict[str, str] = {
     "service_code": "addSrvDvCd",
