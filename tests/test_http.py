@@ -37,6 +37,7 @@ from korail_mobile_api.errors import (
     KorailDynaPathError,
     KorailProtocolError,
     KorailSessionExpiredError,
+    KorailTransportError,
 )
 from korail_mobile_api.http import KorailHttpClient, parse_base_response
 from korail_mobile_api.safety import (
@@ -699,6 +700,120 @@ def test_an_ordered_pair_may_carry_an_int_value():
         assert_read_only_request_fields(
             DELIVERY_HISTORY, (*DELIVERY_HISTORY_HEAD, ("custMgNo", 1.5))
         )
+
+
+# --- the read tail, pinned for all three senders --------------------------------
+# post_form, post_query and get_json each finish the same way: transport
+# failure, HTTP status, JSON decode, then the envelope. Pinned before that tail
+# was shared, messages included.
+
+_READ_SENDERS = {
+    "post_form": (
+        "POST",
+        "/classes/com.korail.mobile.common.code.do",
+        lambda client, path, **kw: client.post_form(path, COMMON_CODE_FORM, **kw),
+    ),
+    "post_query": (
+        "POST",
+        "/classes/com.korail.mobile.passCard.DelayDiscountView",
+        lambda client, path, **kw: client.post_query(
+            path, {"h_page_no": "20991231"}, **kw
+        ),
+    ),
+    "get_json": (
+        "GET",
+        "/classes/com.korail.mobile.push.cmtrKnd.do",
+        lambda client, path, **kw: client.get_json(
+            path, {"cmtrKndCd": "1"}, include_common=True, **kw
+        ),
+    ),
+}
+
+
+def _read_through(sender, answer, **kw):
+    method, path, call = _READ_SENDERS[sender]
+    client = KorailHttpClient(
+        KorailConfig(enable_dynapath=True), transport=httpx.MockTransport(answer)
+    )
+    return method, path, lambda: call(client, path, **kw)
+
+
+@pytest.mark.parametrize("sender", sorted(_READ_SENDERS))
+def test_a_read_that_cannot_be_sent_names_its_method_and_path(sender):
+    def answer(request):
+        raise httpx.ConnectError("synthetic", request=request)
+
+    method, path, send = _read_through(sender, answer)
+    with pytest.raises(KorailTransportError) as raised:
+        send()
+    assert str(raised.value) == f"KORAIL transport failed for {method} {path}"
+
+
+@pytest.mark.parametrize("sender", sorted(_READ_SENDERS))
+@pytest.mark.parametrize("require_envelope", [True, False])
+def test_a_read_answered_with_something_other_than_json_is_refused(
+    sender, require_envelope
+):
+    _, _, send = _read_through(
+        sender,
+        lambda _: httpx.Response(200, text="<html>"),
+        require_envelope=require_envelope,
+    )
+    with pytest.raises(KorailProtocolError, match=r"^KORAIL response body was not valid JSON$"):
+        send()
+
+
+@pytest.mark.parametrize("sender", sorted(_READ_SENDERS))
+def test_a_relaxed_read_takes_any_object_and_parses_a_full_envelope(sender):
+    def run(body, **kw):
+        _, _, send = _read_through(
+            sender, lambda _: httpx.Response(200, json=body), require_envelope=False, **kw
+        )
+        return send()
+
+    # Not an object: refused even when the envelope is optional.
+    with pytest.raises(KorailProtocolError, match=r"^KORAIL response must be a JSON object$"):
+        run([{"h_msg_cd": "S000"}])
+    # Some envelope keys but not all three: kept as it came, not judged.
+    partial = {"strResult": "FAIL", "h_msg_cd": "ERR"}
+    kept = run(partial)
+    assert (kept.raw, kept.str_result, kept.h_msg_cd) == (partial, None, None)
+    # All three: judged like any enveloped answer.
+    full = {"h_msg_cd": "ERR", "h_msg_txt": "no", "strResult": "FAIL"}
+    with pytest.raises(KorailAppError):
+        run(full)
+    assert run(full, raise_on_fail=False).str_result == "FAIL"
+
+
+@pytest.mark.parametrize("sender", sorted(_READ_SENDERS))
+def test_an_enveloped_read_without_its_result_is_a_failure(sender):
+    # 7.0.6 CommonOut fills a missing strResult with its FAIL constant.
+    _, _, send = _read_through(
+        sender, lambda _: httpx.Response(200, json={"h_msg_cd": "S000", "h_msg_txt": "ok"})
+    )
+    with pytest.raises(KorailAppError, match="S000"):
+        send()
+
+
+@pytest.mark.parametrize(
+    ("include_common", "data"), [(True, None), (False, {"x": "1"})]
+)
+def test_an_empty_post_with_fields_is_refused_before_sending(include_common, data):
+    # Which refusal names it first (the empty-POST rule or the field contract)
+    # is not the point; that nothing goes out is.
+    sent = []
+    client = KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(lambda request: sent.append(request)),
+    )
+    with pytest.raises(KorailProtocolError):
+        client.post_form(
+            "/classes/com.korail.mobile.common.stationinfo",
+            data,
+            include_common=include_common,
+            form_encoded=False,
+        )
+    assert sent == []
 
 
 def test_exact_form_field_mapping_remains_a_compatibility_alias():
