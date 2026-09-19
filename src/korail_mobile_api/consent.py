@@ -22,21 +22,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, get_args
 
 from .errors import KorailMutationNotAllowedError
 from .redaction import redact_payload
 
-
-MUTATION_CATEGORIES = (
-    "reserve",
-    "payment",
-    "cancel",
-    "refund",
-    "discount_card",
-    "price_recalculation",
-    "cart",
-)
 
 #: 일곱 가지 상태변경 범주. 각 값은 :class:`MutationConsent` 의 ``allow_<범주>``
 #: 플래그 하나에 대응합니다.
@@ -50,14 +40,10 @@ MutationCategory = Literal[
     "cart",
 ]
 
-_CONSENT_FLAG_BY_CATEGORY = {
-    "reserve": "allow_reserve",
-    "payment": "allow_payment",
-    "cancel": "allow_cancel",
-    "refund": "allow_refund",
-    "discount_card": "allow_discount_card",
-    "price_recalculation": "allow_price_recalculation",
-    "cart": "allow_cart",
+MUTATION_CATEGORIES: tuple[MutationCategory, ...] = get_args(MutationCategory)
+
+_CONSENT_FLAG_BY_CATEGORY: dict[str, str] = {
+    category: f"allow_{category}" for category in MUTATION_CATEGORIES
 }
 
 
