@@ -51,6 +51,10 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
 - 예약 폼은 인원이 있는 승객 종류만 싣고, 열차 행의 좌석속성을 반영하며, 도착시각
   초과 필드를 뺐습니다. 결제 전 취소는 여정 수를 받은 그대로 되돌려 보냅니다.
 - 좌석표·정차역·검색 응답에서 빠진 목록을 APK 처럼 빈 목록으로 받습니다.
+- `get_station_info(device=...)` 가 `"AD"` 가 아닌 값을 `ValueError` 대신
+  `KorailProtocolError` 로 거절합니다. 7.0.6 요청에는 기기 인자가 실리지 않아 다른 값은
+  계속 거절되지만, 이제 `except KorailApiError` 로 이 패키지의 다른 실패와 함께
+  잡힙니다. `ValueError` 로 잡던 호출자는 바꿔야 합니다.
 - `scripts/capture_seat_inventory_evidence.py` 가 자기 스위치
   `KORAIL_LIVE_SEAT_EVIDENCE=1` 을 요구하고 요청 사이를 1.5초 띄웁니다. 라이브
   스크립트 가운데 유일하게 패키지 전역 스위치 하나만으로 실서버에 나가고 간격도 두지

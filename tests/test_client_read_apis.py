@@ -12,7 +12,11 @@ import httpx
 import pytest
 
 from korail_mobile_api import KorailClient, KorailConfig
-from korail_mobile_api.errors import KorailAppError, KorailSessionExpiredError
+from korail_mobile_api.errors import (
+    KorailAppError,
+    KorailProtocolError,
+    KorailSessionExpiredError,
+)
 from korail_mobile_api.models import KorailSession, TrainSearchQuery
 
 
@@ -485,9 +489,9 @@ def test_station_info_refuses_a_device_it_would_not_send() -> None:
     """``device`` survives for the old signature; 7.0.6 sends no such field.
 
     Anything but the default is refused before a request is built, so a caller
-    cannot believe it asked for another platform's data. Today the refusal is a
-    ValueError, which sits outside KorailApiError; src plan batch 12 changes it
-    to KorailProtocolError and turns this assertion over in the same commit.
+    cannot believe it asked for another platform's data. The refusal is a
+    KorailProtocolError, inside KorailApiError, so ``except KorailApiError``
+    catches it like every other failure in this package.
     """
 
     def refuse(request: httpx.Request) -> httpx.Response:  # pragma: no cover
@@ -495,7 +499,7 @@ def test_station_info_refuses_a_device_it_would_not_send() -> None:
 
     client = KorailClient(transport=httpx.MockTransport(refuse))
     try:
-        with pytest.raises(ValueError, match="does not accept a device parameter"):
+        with pytest.raises(KorailProtocolError, match="does not accept a device parameter"):
             client.get_station_info(device="IOS")
     finally:
         client.close()

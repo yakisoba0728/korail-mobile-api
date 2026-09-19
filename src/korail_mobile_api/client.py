@@ -1407,7 +1407,9 @@ class KorailClient:
         ``device``는 이전 공개 인자 호환용이며 7.0.6 요청에는 실리지 않습니다.
         """
         if device != "AD":
-            raise ValueError("7.0.6 station info does not accept a device parameter")
+            raise KorailProtocolError(
+                "7.0.6 station info does not accept a device parameter"
+            )
         return self._run_read(
             lambda: parse_station_info_response(
                 self.http.post_form(
