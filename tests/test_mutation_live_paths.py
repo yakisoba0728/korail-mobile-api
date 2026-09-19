@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """Offline contract tests for the live mutation send paths.
 
 These exercise `reserve(dry_run=False)`, `cancel_unpaid_hold(dry_run=False)`,
@@ -14,20 +22,23 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from _helpers import ReplyRecorder as _Recorder
+from _helpers import client_with_replies as _client_with
+from _mutation_fixtures import eligible_train as _eligible_train
+from _mutation_fixtures import fake_card as _fake_card
+from _mutation_fixtures import paid_hold, paid_ticket
 from korail_mobile_api import (
     BaseKorailResponse,
-    CardPayment,
     KorailClient,
     KorailConfig,
     KorailMutationNotAllowedError,
     KorailProtocolError,
-    KorailSession,
+    KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
     PaidTicket,
     ReservationHoldResponse,
     ReservationPaymentResponse,
-    TrainSummary,
 )
 from korail_mobile_api.mutation_payloads import (
     build_card_payment_form,
@@ -74,48 +85,6 @@ _CANCEL_SUCCESS = {
     "h_msg_cd": "IRP000000",
     "h_msg_txt": "cancelled",
 }
-
-
-def _eligible_train() -> TrainSummary:
-    return TrainSummary(
-        train_no="00209",
-        train_group_code="100",
-        departure_station_code="0001",
-        arrival_station_code="0501",
-        departure_date="20990101",
-        departure_time="100700",
-        arrival_time="102400",
-        run_date="20990101",
-        train_class_code="00",
-        departure_run_order="1",
-        arrival_run_order="2",
-        general_reservation_code="11",
-        departure_construction_order="1",
-        arrival_construction_order="2",
-        seat_attribute_code="015",
-    )
-
-
-class _Recorder:
-    """A MockTransport handler that records requests and replies by path."""
-
-    def __init__(self, replies: dict[str, dict]) -> None:
-        self.replies = replies
-        self.requests: list[httpx.Request] = []
-
-    def __call__(self, request: httpx.Request) -> httpx.Response:
-        self.requests.append(request)
-        reply = self.replies.get(request.url.path)
-        if reply is None:  # pragma: no cover - guards test wiring mistakes
-            raise AssertionError(f"unexpected request to {request.url.path}")
-        return httpx.Response(200, json=reply)
-
-
-def _client_with(replies: dict[str, dict]) -> tuple[KorailClient, _Recorder]:
-    recorder = _Recorder(replies)
-    client = KorailClient(transport=httpx.MockTransport(recorder))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    return client, recorder
 
 
 def _live(**allow: bool) -> MutationConsent:
@@ -330,27 +299,7 @@ def test_post_mutation_form_rejects_category_route_mismatch():
 
 
 def _paid_hold() -> ReservationHoldResponse:
-    return ReservationHoldResponse(
-        h_msg_cd="IRR000018",
-        str_result="SUCC",
-        raw={},
-        pnr_no=SYNTHETIC_PNR,
-        journey_count="0001",
-        window_no="SYNTHETIC_WCT",
-        temporary_job_sequence_1="SYNTHETIC_JOB_1",
-        temporary_job_sequence_2="SYNTHETIC_JOB_2",
-        total_price="8400",
-        received_amount="7560",
-    )
-
-
-def _fake_card() -> CardPayment:
-    return CardPayment(
-        card_number="0000000000000000",
-        card_password="00",
-        card_expire="2612",
-        birthday="900101",
-    )
+    return paid_hold(SYNTHETIC_PNR)
 
 
 _PAYMENT_DECLINE = {
@@ -380,6 +329,7 @@ def test_pay_dry_run_preview_redacts_card_and_sends_nothing():
         "hidWctNo",
         "hidTmpJobSqno1",
         "hidTmpJobSqno2",
+        "hidRsvChgNo",
     ):
         assert preview.payload[key] == "[REDACTED]", key
     joined = "".join(preview.payload.values())
@@ -494,18 +444,12 @@ _REFUND_SUCCESS = {
     "strResult": "SUCC",
     "h_msg_cd": "IRG000000",
     "h_msg_txt": "refunded",
+    "stlList": [],
 }
 
 
 def _paid_ticket() -> PaidTicket:
-    return PaidTicket(
-        pnr_no=SYNTHETIC_PNR,
-        sale_date="20260725",
-        sale_window_no="SYNTHETIC_WCT",
-        sale_sequence="0001",
-        return_password="SYNTHETIC_RETPWD",
-        train_no="00209",
-    )
+    return paid_ticket(SYNTHETIC_PNR)
 
 
 def test_refund_dry_run_preview_redacts_ticket_identity_without_sending():
@@ -619,3 +563,68 @@ def test_refund_documents_that_it_returns_one_ticket_and_not_one_pnr() -> None:
     # 8,400-for-16,800 reply reads as a bug in the library.
     quote_doc = " ".join((_Client.get_refund_commission.__doc__ or "").split())
     assert "승차권 한 장" in quote_doc
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+@pytest.mark.parametrize(
+    ("route", "consent", "send"),
+    [
+        (
+            RESERVE_ROUTE,
+            _live(allow_reserve=True),
+            lambda client, consent: client.reserve(
+                _eligible_train(), consent=consent
+            ),
+        ),
+        (
+            PAYMENT_ROUTE,
+            _live(allow_payment=True),
+            lambda client, consent: client.pay_with_fake_card(
+                _paid_hold(), _fake_card(), consent=consent
+            ),
+        ),
+        (
+            CANCEL_ROUTE,
+            _live(allow_cancel=True),
+            lambda client, consent: client.cancel_unpaid_hold(
+                _hold(), consent=consent
+            ),
+        ),
+        (
+            REFUND_ROUTE,
+            _live(allow_refund=True),
+            lambda client, consent: client.refund(_paid_ticket(), consent=consent),
+        ),
+    ],
+    ids=["reserve", "pay_with_fake_card", "cancel_unpaid_hold", "refund"],
+)
+def test_an_expired_session_on_a_mutation_clears_the_client_before_raising(
+    route, consent, send
+):
+    """P058 on a state-changing send leaves no stale login behind.
+
+    Every mutation method catches KorailSessionExpiredError, clears the local
+    session and re-raises, as the reads do. Nothing tested it: with the
+    clear_session() call taken out of all ten mutation handlers the suite still
+    passed. src batches 42 and 43 fold those handlers into _mutation, so each
+    one is pinned first -- here for reserve, pay_with_fake_card and two of
+    _mutation's own callers, and beside its other tests for the rest.
+
+    The request did go out (one of it); the session and its cookie did not
+    survive the reply.
+    """
+    client, recorder = _client_with({route: _SESSION_EXPIRED})
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    with pytest.raises(KorailSessionExpiredError):
+        send(client, consent)
+    assert len(recorder.requests) == 1
+    assert client.session.current is None
+    assert not client.http.cookies

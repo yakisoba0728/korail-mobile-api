@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """Drive ONE live reserve -> pay -> refund round trip with a REAL card.
 
 This is the operator script for the one thing this package could never do
@@ -44,7 +52,11 @@ Safety posture
   shape, so such a pattern masks the one value that must always get through.
 * Reserve, pay, cancel and refund each go out under their own single-category
   consent; no consent object in this file grants two money-moving categories at
-  once, and each factory asserts that.
+  once, and each factory checks that with a raise rather than an ``assert``.
+* The member number and password come from ``KORAIL_MEMBER_NO`` and
+  ``KORAIL_PASSWORD``, and the device identity from ``KORAIL_DYNAPATH_DEVICE_ID``,
+  ``KORAIL_DYNAPATH_OS_VERSION`` and ``KORAIL_DYNAPATH_DEVICE_MODEL``
+  (:mod:`korail_mobile_api.live`).
 * Every request is paced (default 1.5s minimum spacing) because KORAIL bans IPs
   for macro-like traffic.
 * The module is import-safe: importing it performs no I/O, reads no environment
@@ -95,6 +107,7 @@ from korail_mobile_api import (
     PriceFareLeg,
     PriceFareQuoteRequest,
     RefundCompanion,
+    RefundTicketDetailResponse,
     ReservationHoldResponse,
     TicketReservationDetailRequest,
     TrainSearchQuery,
@@ -907,28 +920,10 @@ class RoundTrip:
             "is PAID and must be refunded by hand"
         )
 
-    def quote_refund(self, reference: OriginalTicketReference) -> None:
+    def quote_refund(self, reference: OriginalTicketReference) -> str | None:
         self.console.say("[g] asking what a refund returns and what it costs")
-        detail = self.client.get_refund_ticket_detail(reference)
-        self.console.say(
-            f"    ticket detail: {_envelope(detail)} "
-            f"refund_possible_flag={detail.refund_possible_flag!r}"
-        )
-        commission = self.client.get_refund_commission(
-            reference,
-            RefundCompanion(
-                name=detail.companion_name or "",
-                certificate_no=detail.companion_birth_date or "",
-            ),
-        )
-        self.console.banner(
-            (
-                f"REFUND AMOUNT: {_won_text(commission.refund_amount)} KRW",
-                f"REFUND FEE:    {_won_text(commission.refund_fee)} KRW",
-                f"proceed flag:  {commission.proceed_possible_flag!r}",
-                f"note:          {commission.secondary_message_text!r}",
-            )
-        )
+        detail = _quote_refund(self.client, self.console, reference)
+        return detail.pbp_acceptance_target_flag
 
     # -- step h ---------------------------------------------------------------
 
@@ -938,6 +933,7 @@ class RoundTrip:
         *,
         pnr_no: str,
         train_no: str,
+        pbp_acceptance_target_flag: str | None = None,
     ) -> bool:
         self.console.say("[h] refunding")
         result = self.client.refund(
@@ -948,6 +944,7 @@ class RoundTrip:
                 sale_sequence=reference.sale_sequence,
                 return_password=reference.return_password,
                 train_no=train_no,
+                pbp_acceptance_target_flag=pbp_acceptance_target_flag,
             ),
             consent=refund_consent(),
         )
@@ -1021,9 +1018,12 @@ class RoundTrip:
                 clean = True
                 return 1
             reference = self.refund_identity(pnr)
-            self.quote_refund(reference)
+            pbp_acceptance_target_flag = self.quote_refund(reference)
             if not self.refund(
-                reference, pnr_no=pnr, train_no=candidate.train.train_no
+                reference,
+                pnr_no=pnr,
+                train_no=candidate.train.train_no,
+                pbp_acceptance_target_flag=pbp_acceptance_target_flag,
             ):
                 raise RoundTripAborted("the refund was refused by the server")
             self.state = "refunded"
@@ -1070,6 +1070,38 @@ def _hold_for_cancel(pnr_no: str) -> ReservationHoldResponse:
     )
 
 
+def _quote_refund(
+    client: KorailClient, console: _Console, reference: OriginalTicketReference
+) -> RefundTicketDetailResponse:
+    """Read what a refund of this ticket returns and costs, and show all of it.
+
+    The round trip and the recovery path both refund through this, so the
+    recovery -- the run where something already went wrong -- shows the
+    operator the same four lines, proceed flag and note included.
+    """
+    detail = client.get_refund_ticket_detail(reference)
+    console.say(
+        f"    ticket detail: {_envelope(detail)} "
+        f"refund_possible_flag={detail.refund_possible_flag!r}"
+    )
+    commission = client.get_refund_commission(
+        reference,
+        RefundCompanion(
+            name=detail.companion_name or "",
+            certificate_no=detail.companion_birth_date or "",
+        ),
+    )
+    console.banner(
+        (
+            f"REFUND AMOUNT: {_won_text(commission.refund_amount)} KRW",
+            f"REFUND FEE:    {_won_text(commission.refund_fee)} KRW",
+            f"proceed flag:  {commission.proceed_possible_flag!r}",
+            f"note:          {commission.secondary_message_text!r}",
+        )
+    )
+    return detail
+
+
 def recover(client: KorailClient, console: _Console, pnr_no: str) -> int:
     console.say(f"[recover] resolving PNR {pnr_no}")
     member_no, password = read_credentials_from_env()
@@ -1083,20 +1115,7 @@ def recover(client: KorailClient, console: _Console, pnr_no: str) -> int:
         reference = find_ticket_identity(history_raw, pnr_no=pnr_no)
     if reference is not None:
         console.say("    the ticket is PAID (it has an original-sale identity)")
-        detail = client.get_refund_ticket_detail(reference)
-        commission = client.get_refund_commission(
-            reference,
-            RefundCompanion(
-                name=detail.companion_name or "",
-                certificate_no=detail.companion_birth_date or "",
-            ),
-        )
-        console.banner(
-            (
-                f"REFUND AMOUNT: {_won_text(commission.refund_amount)} KRW",
-                f"REFUND FEE:    {_won_text(commission.refund_fee)} KRW",
-            )
-        )
+        detail = _quote_refund(client, console, reference)
         train_no = find_train_no(tickets_raw, pnr_no=pnr_no) or find_train_no(
             history_raw, pnr_no=pnr_no
         )
@@ -1108,6 +1127,7 @@ def recover(client: KorailClient, console: _Console, pnr_no: str) -> int:
                 sale_sequence=reference.sale_sequence,
                 return_password=reference.return_password,
                 train_no=train_no,
+                pbp_acceptance_target_flag=detail.pbp_acceptance_target_flag,
             ),
             consent=refund_consent(),
         )
@@ -1215,6 +1235,12 @@ def main(argv: list[str] | None = None) -> int:
             )
         charging = not (args.recover or args.reserve_cancel_only)
         _require_opt_ins(real_charge=charging)
+        # Before any branch: --recover sends requests too, and it used to skip
+        # this check and accept an interval of 0.01s.
+        if args.min_interval < 1.0:
+            raise RoundTripAborted(
+                "--min-interval below 1.0s risks a KORAIL IP ban"
+            )
         if args.recover:
             pnr_no = _required_env(
                 RECOVER_PNR_ENV, why="the PNR to recover"
@@ -1236,10 +1262,6 @@ def main(argv: list[str] | None = None) -> int:
             raise RoundTripAborted("--date must be an 8-digit YYYYMMDD date")
         if args.date < time.strftime("%Y%m%d"):
             raise RoundTripAborted(f"--date {args.date} is in the past")
-        if args.min_interval < 1.0:
-            raise RoundTripAborted(
-                "--min-interval below 1.0s risks a KORAIL IP ban"
-            )
         console.banner(
             (
                 "THIS RUN WILL CHARGE A REAL CARD AND THEN REFUND IT."

@@ -41,6 +41,9 @@ Changelog = "https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGEL
 
 [project.optional-dependencies]
 test = [
+  # tests/test_mkdocs_hooks.py calls the site build hooks directly, and those
+  # import mkdocs. Only mkdocs itself: the theme and plugins stay in "docs".
+  "mkdocs>=1.6,<2",
   "pytest>=8,<10",
 ]
 # CI 의 lint / types 잡이 설치하는 것과 같은 도구. 런타임 의존성이 아니므로
@@ -53,6 +56,7 @@ dev = [
   # tests/scripts 의 규칙별 해제)은 1.1.411 에서 실제로 돌려 오류 0 을 확인한
   # 결과이고, pyright 는 마이너 릴리스마다 진단을 추가한다. 올리는 것은
   # 게이트를 다시 돌려 보고 하는 의도적 행위여야 한다.
+  "mkdocs>=1.6,<2",
   "pyright==1.1.411",
   "pytest>=8,<10",
   "ruff>=0.16,<0.17",
@@ -158,10 +162,10 @@ extraPaths = ["src"]
 pythonVersion = "3.11"  # requires-python 의 하한과 같다
 typeCheckingMode = "basic"
 
-# 전체 strict 는 켜지 않았다: src/ 만 strict 로 돌리면 오류가 468건 남고, 그
-# 대부분은 서버 JSON 을 Any 로 받아 손으로 좁혀 가는 파서·페이로드 코드다
-# (read_parsers.py 156, parsers.py 117, read_models.py 55). 그건 이 단계의
-# 범위가 아니다.
+# 전체 strict 는 켜지 않았다: src/ 만 strict 로 돌리면 오류가 394건 남고(2026-09-19
+# 재측정, 처음 잰 2026-07-28 에는 468건), 그 대부분은 서버 JSON 을 Any 로 받아
+# 손으로 좁혀 가는 파서 코드다(read_parsers.py 150, parsers.py 122; 나머지는
+# 모듈마다 20건 미만). 그건 이 단계의 범위가 아니다.
 #
 # 대신 "이미 strict 로 0 인 모듈"만 strict 에 고정한다. 이 목록은 고른 것이 아니라
 # 잰 것이다 — 모듈마다 strict 로 한 번씩 pyright 를 돌려 0 이 나온 것만 남겼고,
@@ -170,9 +174,11 @@ typeCheckingMode = "basic"
 #
 # 공개면(`__all__` 이 이름을 내보내는 곳) 가운데 config.py / consent.py /
 # constants.py / dynapath.py / errors.py 가 여기 들어 있다. client.py(2) ·
-# models.py(13) · netfunnel.py(2) 는 아직 0 이 아니라 빠졌다. client.py 의 2건은
-# 런타임 방어용 isinstance 검사라 strict 를 만족시키려면 그 방어를 없애야 해서
-# 일부러 두었다.
+# models.py(2) 는 아직 0 이 아니라 빠졌다. 네 건 모두 런타임 방어용 isinstance
+# 검사라 strict 를 만족시키려면 그 방어를 없애야 해서 일부러 두었다.
+#
+# netfunnel.py · read_models.py · limousine_models.py · v7_contract_data.py 는
+# 2026-09-19 재측정에서 0 이 되어 목록에 들어갔다.
 strict = [
   "src/korail_mobile_api/__init__.py",
   "src/korail_mobile_api/config.py",
@@ -181,7 +187,11 @@ strict = [
   "src/korail_mobile_api/crypto.py",
   "src/korail_mobile_api/dynapath.py",
   "src/korail_mobile_api/errors.py",
+  "src/korail_mobile_api/limousine_models.py",
   "src/korail_mobile_api/limousine_payloads.py",
+  "src/korail_mobile_api/netfunnel.py",
+  "src/korail_mobile_api/read_models.py",
+  "src/korail_mobile_api/v7_contract_data.py",
 ]
 
 # tests/ 와 scripts/ 는 배포되지 않고, 일부러 틀린 값을 넣어 가드가 우는지 보거나

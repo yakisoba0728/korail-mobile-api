@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 from urllib.parse import parse_qsl
@@ -6,6 +14,8 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import korail_ok_envelope as _envelope
+from _helpers import make_authenticated_client as _client
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.errors import KorailAuthError, KorailProtocolError
 from korail_mobile_api.models import KorailSession
@@ -50,31 +60,11 @@ WITHHELD_PATHS = (
 )
 
 
-def _envelope(**extra: object) -> dict[str, object]:
-    return {
-        "h_msg_cd": "IRG000000",
-        "h_msg_txt": "정상처리되었습니다",
-        "strResult": "SUCC",
-        **extra,
-    }
 
-
-def _client(handler) -> KorailClient:
-    client = KorailClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    client.session.current = KorailSession(
-        jsessionid="SYNTHETIC_SESSION",
-        member_no="SYNTHETIC_MEMBER_NO",
-        customer_no="SYNTHETIC_CUSTOMER_NO",
-        raw={},
-    )
-    return client
 
 
 def test_only_the_two_password_free_loyalty_reads_are_reachable():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert ("POST", SUMMARY_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", MILEAGE_PATH) in KORAIL_READ_ONLY_ROUTES
     for path in WITHHELD_PATHS:
@@ -210,6 +200,7 @@ def test_mileage_parser_reads_totals_and_rows():
     parsed = parse_mileage_history_response(
         _envelope(
             pgCnt="3",
+            qryCnt="18",
             totAvlRailPontValNum="1000",
             totAvlRailPontValNum1="500",
             totAvlAfltPontValNum="20",
@@ -233,6 +224,7 @@ def test_mileage_parser_reads_totals_and_rows():
     )
     assert type(parsed) is MileageHistoryResponse
     assert parsed.page_count == "3"
+    assert parsed.query_count == "18"
     assert parsed.total_available_rail_point == "1000"
     assert parsed.total_available_rail_point_1 == "500"
     assert parsed.expiring_point_value == "30"
@@ -331,3 +323,46 @@ def test_public_surface_exports_the_loyalty_names():
     # No spending path was added along with the reads.
     assert not hasattr(KorailClient, "spend_mileage")
     assert not hasattr(KorailClient, "get_lpoint")
+
+
+def test_neither_loyalty_read_is_signed_with_dynapath():
+    # The same check test_uuid_maas_read_apis.py makes: DynaPath on and both
+    # routes allowlisted, so a read that asked for a token would reach the
+    # provider. With DynaPath off, "no token header" would hold whatever the
+    # client did.
+    from korail_mobile_api.constants import DYNAPATH_HEADER_NAME
+    from korail_mobile_api.dynapath import DynapathConfig
+
+    provider_calls: list[object] = []
+    seen: list[httpx.Request] = []
+
+    def token_provider(context: object) -> str:
+        provider_calls.append(context)
+        return "SYNTHETIC-TOKEN"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_envelope())
+
+    client = KorailClient(
+        KorailConfig(
+            dynapath=DynapathConfig(
+                enabled=True,
+                token_provider=token_provider,
+                allowlist_paths=frozenset({SUMMARY_PATH, MILEAGE_PATH}),
+            )
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    client.session.current = KorailSession(jsessionid="SYNTHETIC_SESSION")
+    try:
+        client.get_korail_point_summary()
+        client.get_mileage_history(
+            MileageHistoryRequest(start_date="20990101", end_date="20990331")
+        )
+    finally:
+        client.close()
+
+    assert provider_calls == []
+    assert [request.url.path for request in seen] == [SUMMARY_PATH, MILEAGE_PATH]
+    assert all(DYNAPATH_HEADER_NAME not in request.headers for request in seen)

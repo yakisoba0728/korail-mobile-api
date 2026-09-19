@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """HTTP 전송 계층 — 폼·쿼리를 실제로 보내는 유일한 곳.
 
 읽기(:meth:`~KorailHttpClient.post_form`, :meth:`~KorailHttpClient.get_json`)와
@@ -9,7 +17,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 from urllib.parse import urlencode
 
@@ -44,12 +52,31 @@ from .safety import (
 )
 
 
-def parse_base_response(data: Any, *, raise_on_fail: bool = True) -> BaseKorailResponse:
+# 7.0.6 응답 모델이 CommonOut 을 상속하지 않아 봉투 필드가 아예 없는 읽기 경로.
+# StationDataOut(stationdata, EbizMaasStationList)과 StationInfoOut(stationinfo)
+# 이라 strResult 가 빠져도 실패가 아닙니다.
+_NON_COMMON_OUT_READ_PATHS = frozenset({
+    "/classes/com.korail.mobile.common.stationdata",
+    "/classes/com.korail.mobile.common.stationinfo",
+    "/ebizmaas/EbizMaasStationList.do",
+})
+
+
+def parse_base_response(
+    data: Any,
+    *,
+    raise_on_fail: bool = True,
+    require_result: bool = True,
+) -> BaseKorailResponse:
     """응답 봉투를 검사합니다.
 
     ``P058`` → :class:`~korail_mobile_api.errors.KorailSessionExpiredError`.
-    실패 판정은 앱과 같음(``BaseActivity.java:620``): ``strResult == "FAIL"`` 또는
-    ``h_msg_cd == "WRC000288"`` 일 때만 실패.
+    ``strResult == "FAIL"`` 또는 ``h_msg_cd == "WRC000288"`` 이면 실패입니다
+    (``BaseActivity.java:620``). ``require_result`` 가 참(기본)이면 ``strResult``
+    키가 아예 없는 응답도 실패입니다. 7.0.6 ``CommonOut`` 은 빠진 ``strResult`` 를
+    ``commonFail()`` 이 비교하는 바로 그 보호 상수로 채웁니다
+    (``analysis/jadx/sources/com/korail/talk/network/model/CommonOut.java:361,455-462``).
+    ``CommonOut`` 을 상속하지 않는 응답을 받는 호출자만 ``False`` 를 넘깁니다.
     """
     if not isinstance(data, dict):
         raise KorailProtocolError("KORAIL response must be a JSON object")
@@ -63,6 +90,7 @@ def parse_base_response(data: Any, *, raise_on_fail: bool = True) -> BaseKorailR
     if raise_on_fail and (
         response.str_result == "FAIL"
         or response.h_msg_cd == "WRC000288"
+        or (require_result and "strResult" not in data)
     ):
         raise classify_app_error(
             response.h_msg_cd,
@@ -99,6 +127,26 @@ def _raise_for_status(response: httpx.Response, *, path: str) -> None:
             f"KORAIL HTTP {response.status_code} for "
             f"{response.request.method} {response.request.url.path}"
         )
+
+
+def _finish_mutation(
+    response: httpx.Response,
+    *,
+    path: str,
+    raise_on_fail: bool,
+) -> BaseKorailResponse:
+    """The end of both mutation senders: status, JSON and the envelope.
+
+    Mutation senders only, and separate from the read senders' tail on
+    purpose. The envelope is never relaxed here: every mutation route answers
+    with a CommonOut, so a missing strResult is a failure.
+    """
+    _raise_for_status(response, path=path)
+    try:
+        payload = response.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
+    return parse_base_response(payload, raise_on_fail=raise_on_fail, require_result=True)
 
 
 class KorailHttpClient:
@@ -152,15 +200,18 @@ class KorailHttpClient:
     def _absolute_url(self, path: str) -> str:
         return f"{self.config.base_url.rstrip('/')}/{path.lstrip('/')}"
 
+    def _refuse_missing_dynapath(self, path: str) -> None:
+        if not self.config.dynapath.enabled and path in DYNAPATH_REQUIRED_PATHS:
+            raise KorailDynaPathRequiredError(
+                f"KORAIL {path} 는 DynaPath 토큰을 요구합니다. "
+                "KorailConfig(enable_dynapath=True) 로 켜거나, 실제 단말 "
+                "값을 쓰려면 build_config_from_env() 를 넘겨야 합니다."
+            )
+
     def _dynapath_headers(self, method: str, path: str) -> dict[str, str]:
         dynapath = self.config.dynapath
         if not dynapath.enabled:
-            if path in DYNAPATH_REQUIRED_PATHS:
-                raise KorailDynaPathRequiredError(
-                    f"KORAIL {path} 는 DynaPath 토큰을 요구합니다. "
-                    "KorailConfig(enable_dynapath=True) 로 켜거나, 실제 단말 "
-                    "값을 쓰려면 build_config_from_env() 를 넘겨야 합니다."
-                )
+            self._refuse_missing_dynapath(path)
             return {}
         if path not in dynapath.allowlist_paths:
             return {}
@@ -188,6 +239,42 @@ class KorailHttpClient:
             return {}
         return {dynapath.header_name: token}
 
+    def _finish_read(
+        self,
+        send: Callable[[], httpx.Response],
+        *,
+        method: str,
+        path: str,
+        raise_on_fail: bool,
+        require_envelope: bool,
+    ) -> BaseKorailResponse:
+        """The end of every read: send, then status, JSON and the envelope.
+
+        Read senders only. The mutation senders keep their own tail, which
+        never relaxes the envelope.
+        """
+        try:
+            response = send()
+        except httpx.HTTPError as exc:
+            raise KorailTransportError(
+                f"KORAIL transport failed for {method} {path}"
+            ) from exc
+        _raise_for_status(response, path=path)
+        try:
+            payload = response.json()
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
+        if not require_envelope:
+            if not isinstance(payload, dict):
+                raise KorailProtocolError("KORAIL response must be a JSON object")
+            if not all(name in payload for name in ("h_msg_cd", "h_msg_txt", "strResult")):
+                return BaseKorailResponse(raw=payload)
+        return parse_base_response(
+            payload,
+            raise_on_fail=raise_on_fail,
+            require_result=path not in _NON_COMMON_OUT_READ_PATHS,
+        )
+
     def post_form(
         self,
         path: str,
@@ -197,6 +284,7 @@ class KorailHttpClient:
         include_dynapath: bool = True,
         raise_on_fail: bool = True,
         require_envelope: bool = True,
+        form_encoded: bool = True,
     ) -> BaseKorailResponse:
         """읽기 라우트에 폼을 POST 합니다.
 
@@ -205,12 +293,24 @@ class KorailHttpClient:
         """
         assert_korail_origin(str(self._client.base_url))
         assert_read_only_route("POST", path)
+        # Before the field check: login.Login has a field contract, and a caller
+        # who has not turned DynaPath on needs to hear that first -- whatever
+        # the form looks like, the server would refuse it anyway.
+        if include_dynapath:
+            self._refuse_missing_dynapath(path)
         if data is not None and not isinstance(data, (Mapping, Sequence)):
             raise KorailProtocolError(
                 "KORAIL form data must be a mapping or registered ordered sequence"
             )
+        # The caller's data as given, before it is copied: a Mapping can yield
+        # a key twice, and the copy below would collapse that without a word.
+        # The check after the copy cannot see it.
         if not include_common and data is not None:
             assert_read_only_request_fields(path, data)
+        if not form_encoded and (include_common or data):
+            raise KorailProtocolError(
+                "KORAIL empty POST must not contain common or form fields"
+            )
         ordered_form: list[tuple[str, Any]] | None = None
         mapping_form: dict[str, Any] | None = None
         if data is not None and not isinstance(data, Mapping):
@@ -227,44 +327,73 @@ class KorailHttpClient:
             if data:
                 mapping_form.update(data)
             assert_read_only_request_fields(path, mapping_form)
-        headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
+        headers = (
+            {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
+            if form_encoded
+            else {}
+        )
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
-        try:
+
+        def send() -> httpx.Response:
+            if not form_encoded:
+                return self._client.post(path, headers=headers)
             if ordered_form is not None:
-                response = self._client.post(
+                return self._client.post(
                     path,
                     content=urlencode(ordered_form).encode("ascii"),
                     headers=headers,
                 )
-            else:
-                response = self._client.post(
-                    path, data=mapping_form, headers=headers
-                )
-        except httpx.HTTPError as exc:
-            raise KorailTransportError(
-                f"KORAIL transport failed for POST {path}"
-            ) from exc
-        _raise_for_status(response, path=path)
-        try:
-            payload = response.json()
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
-        if not require_envelope:
-            if not isinstance(payload, dict):
-                raise KorailProtocolError(
-                    "KORAIL response must be a JSON object"
-                )
-            if all(
-                name in payload
-                for name in ("h_msg_cd", "h_msg_txt", "strResult")
-            ):
-                return parse_base_response(
-                    payload,
-                    raise_on_fail=raise_on_fail,
-                )
-            return BaseKorailResponse(raw=payload)
-        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+            return self._client.post(path, data=mapping_form, headers=headers)
+
+        return self._finish_read(
+            send,
+            method="POST",
+            path=path,
+            raise_on_fail=raise_on_fail,
+            require_envelope=require_envelope,
+        )
+
+    def post_query(
+        self,
+        path: str,
+        params: Mapping[str, Any],
+        *,
+        include_common: bool = True,
+        include_dynapath: bool = True,
+        raise_on_fail: bool = True,
+        require_envelope: bool = True,
+    ) -> BaseKorailResponse:
+        """Send the 7.0.6 delay-discount POST ``@QueryMap`` request.
+
+        APK ``NetworkApi.postDelayDiscountView`` combines
+        ``@FormUrlEncoded`` and ``@QueryMap``. This reproduces the declared
+        URL position with an empty form body. Its runtime acceptance cannot
+        be inferred from the annotation alone.
+        """
+        if path != "/classes/com.korail.mobile.passCard.DelayDiscountView":
+            raise KorailProtocolError(
+                "KORAIL POST query maps are registered only for DelayDiscountView"
+            )
+        assert_korail_origin(str(self._client.base_url))
+        assert_read_only_route("POST", path)
+        if not isinstance(params, Mapping):
+            raise KorailProtocolError("KORAIL POST query params must be a mapping")
+        query: dict[str, Any] = {}
+        if include_common:
+            query.update(self.common_fields())
+        query.update(params)
+        assert_read_only_request_fields(path, query)
+        headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
+        if include_dynapath:
+            headers.update(self._dynapath_headers("POST", path))
+        return self._finish_read(
+            lambda: self._client.post(path, params=query, content=b"", headers=headers),
+            method="POST",
+            path=path,
+            raise_on_fail=raise_on_fail,
+            require_envelope=require_envelope,
+        )
 
     def post_mutation_form(
         self,
@@ -322,14 +451,7 @@ class KorailHttpClient:
             raise KorailTransportError(
                 f"KORAIL transport failed for POST {path}"
             ) from exc
-        _raise_for_status(response, path=path)
-        try:
-            payload = response.json()
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise KorailProtocolError(
-                "KORAIL response body was not valid JSON"
-            ) from exc
-        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+        return _finish_mutation(response, path=path, raise_on_fail=raise_on_fail)
 
     def get_mutation_query(
         self,
@@ -369,14 +491,7 @@ class KorailHttpClient:
             raise KorailTransportError(
                 f"KORAIL transport failed for GET {path}"
             ) from exc
-        _raise_for_status(response, path=path)
-        try:
-            payload = response.json()
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise KorailProtocolError(
-                "KORAIL response body was not valid JSON"
-            ) from exc
-        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+        return _finish_mutation(response, path=path, raise_on_fail=raise_on_fail)
 
     def get_json(
         self,
@@ -406,27 +521,10 @@ class KorailHttpClient:
             if include_dynapath
             else {}
         )
-        try:
-            response = self._client.get(path, params=query, headers=headers)
-        except httpx.HTTPError as exc:
-            raise KorailTransportError(
-                f"KORAIL transport failed for GET {path}"
-            ) from exc
-        _raise_for_status(response, path=path)
-        try:
-            payload = response.json()
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
-        if not require_envelope:
-            if not isinstance(payload, dict):
-                raise KorailProtocolError("KORAIL response must be a JSON object")
-            if all(
-                key in payload
-                for key in ("h_msg_cd", "h_msg_txt", "strResult")
-            ):
-                return parse_base_response(
-                    payload,
-                    raise_on_fail=raise_on_fail,
-                )
-            return BaseKorailResponse(raw=payload)
-        return parse_base_response(payload, raise_on_fail=raise_on_fail)
+        return self._finish_read(
+            lambda: self._client.get(path, params=query, headers=headers),
+            method="GET",
+            path=path,
+            raise_on_fail=raise_on_fail,
+            require_envelope=require_envelope,
+        )

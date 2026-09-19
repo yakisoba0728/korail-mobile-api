@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """미리보기·로그에 남으면 안 되는 값을 가립니다.
 
 :data:`SENSITIVE_KEYS` = 가려야 할 폼/응답 키 집합. 민감 키의 값은 ``[REDACTED]``,
@@ -23,6 +31,9 @@ SENSITIVE_KEYS = frozenset(
         # --- 인증·세션 ---
         "txtMemberNo",
         "txtPwd",
+        # 소셜 로그인의 고객 식별자(session.login_social). login.Login 에 필드
+        # 계약이 생기면서 드러난 빈자리다 -- 그 전에는 어느 계약에도 없었다.
+        "custId",
         "password",
         "JSESSIONID",
         "Cookie",
@@ -106,7 +117,9 @@ SENSITIVE_KEYS = frozenset(
         "point_no",
         # --- 고객 식별(회원번호·이름·전화·생년) ---
         "custMgNo",
-        "custMgNo_",  # 인덱스 기본(custMgNo_1 등)
+        # custMgNo_1 같은 인덱스 형은 위의 custMgNo 가 이미 가린다(꼬리 인덱스 제거).
+        # 이 항목이 더 막는 것은 번호 없는 "custMgNo_" 철자 하나뿐이고, 방어용으로 둔다.
+        "custMgNo_",
         "acepCustMgFlg",
         "acepCustMgNo",
         "acepCustNm",
@@ -349,8 +362,10 @@ def redact_text(value: str) -> str:
 
 
 def redact_url(value: str) -> str:
-    """URL 쿼리 파라미터를 키 단위로 가립니다.
+    """URL 을 가립니다. 쿼리는 키 단위로, 경로와 fragment 는 :func:`redact_text` 로.
 
+    경로도 봐야 하는 이유: 서블릿은 쿠키가 없으면 세션을 ``;jsessionid=...`` 로
+    경로에 붙이고, fragment 에는 ``key=value`` 가 그대로 실릴 수 있습니다.
     scheme/netloc 없으면 :func:`redact_text` 로 폴백.
     """
     parsed = urlsplit(value)
@@ -364,7 +379,13 @@ def redact_url(value: str) -> str:
         for key, item in parse_qsl(parsed.query, keep_blank_values=True)
     ]
     return urlunsplit(
-        (parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment)
+        (
+            parsed.scheme,
+            parsed.netloc,
+            redact_text(parsed.path),
+            urlencode(query),
+            redact_text(parsed.fragment),
+        )
     )
 
 
@@ -396,11 +417,8 @@ def redact_value(value: Any, *, key: str | None = None) -> Any:
 
 
 def redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
-    """매핑의 각 항목을 :func:`redact_value` 로 가립니다."""
-    return {
-        key: redact_value(value, key=str(key))
-        for key, value in data.items()
-    }
+    """매핑의 각 항목을 :func:`redact_value` 로 가립니다 — 매핑에 대한 그것과 같습니다."""
+    return redact_value(data)
 
 
 def redact_payload(

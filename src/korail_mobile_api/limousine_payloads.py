@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """리무진 연계 조회의 요청 폼 빌더.
 
 :mod:`korail_mobile_api.limousine_models` 의 질의를 전선 키로 옮깁니다.
@@ -22,6 +30,11 @@ from .limousine_models import (
 
 
 QueryT = TypeVar("QueryT")
+
+
+def _device_version(config: KorailConfig) -> dict[str, str]:
+    """The ``Device`` and ``Version`` pair every read form here starts with."""
+    return {"Device": config.device, "Version": config.version}
 
 
 def _validated_query(
@@ -105,13 +118,22 @@ def build_limousine_schedule_form(
     """
     query = validate_limousine_schedule_query(query)
     return {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "Key": config.key,
         "dptDt": query.departure_date,
         "dptRsStnCd": query.departure_station_code,
         "arvRsStnCd": query.arrival_station_code,
-        "tmGpCd": query.service_code,
+        # 6.5.0 의 @Field("tmGpCd") 가 아니라 7.0.6 ScdlQryIn 의 trnGpCd 다. 이 속성엔
+        # @SerialName 이 없고(개명은 Device/Version/Key/lang 뿐), serializer 13개 이름의
+        # AlienGuard 암호문 길이(= 평문 길이) [6,7,3,4,5,10,10,7,8,5,5,9,11] 이 공통 4개와
+        # 속성 9개 이름 길이에 순서대로 맞는다. 속성 9칸 중 7자는 trnGpCd 자리 하나뿐이고
+        # 6자 칸은 없다.
+        # analysis/jadx/sources/com/korail/talk/network/model/ScdlQryIn.java:38,60
+        # analysis/jadx/sources/com/korail/talk/network/model/ScdlQryIn$$serializer.java:32-44
+        # 2026-09-16 실서버: 서버는 이 값으로 거르지 않는다(키 없음·trnGpCd=999·
+        # tmGpCd=999 가 같은 42편). 응답 행은 trnGpCd="980" 을 싣는다
+        # (docs/7.0.6-live-verification.md).
+        "trnGpCd": query.service_code,
         "psrmClCd": query.room_class_code,
         "dptTm": query.departure_time,
         "trnNo": query.train_no,
@@ -132,8 +154,7 @@ def build_limousine_seat_inventory_form(
     """
     query = validate_limousine_seat_inventory_query(query)
     return {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "Key": config.key,
         "trnClsfCd": query.train_class_code,
         "trnGpCd": query.service_code,
@@ -161,11 +182,12 @@ def build_limousine_schedule_view_form(
     """``seatMovie.LimousineScheduleView`` 의 열차 목록 조회 폼을 만듭니다.
 
     ``SeatMovieService.java:16``. 이 폼만은 공통 ``Key`` 대신 호출자가 넘긴
+    ``sid`` 를 싣습니다(:func:`~korail_mobile_api.crypto.generate_sid`). 역은
+    코드가 아니라 **역이름**입니다.
     """
     query = validate_limousine_schedule_view_query(query)
     return {
-        "Device": config.device,
-        "Version": config.version,
+        **_device_version(config),
         "Sid": _sid(sid),
         "txtMenuId": query.menu_id,
         "radJobId": query.job_id,

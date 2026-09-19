@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """Offline contract tests for the 승차권 변경 chain's two new reads.
 
 * ``POST self.seatChgInfo.do``            (``TicketService.java:54-56``)
@@ -17,6 +25,7 @@ below was read from the decompiled APK and re-checked in smali.
 from __future__ import annotations
 
 import inspect
+from functools import partial
 from typing import Any, get_type_hints
 from urllib.parse import parse_qsl
 
@@ -24,6 +33,8 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import secret_ticket_reference as _reference
+from _helpers import synthetic_ok_envelope
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -78,15 +89,6 @@ NEW_ROUTES = {
 }
 
 
-def _reference(suffix: str = "1") -> OriginalTicketReference:
-    return OriginalTicketReference(
-        sale_window_no=f"WINDOW_SECRET_{suffix}",
-        sale_date=f"SALE_DATE_SECRET_{suffix}",
-        sale_sequence=f"SALE_SEQUENCE_SECRET_{suffix}",
-        return_password=f"RETURN_PASSWORD_SECRET_{suffix}",
-    )
-
-
 def _seat_change_request(
     room_class_code: str | None = "1",
 ) -> SelfSeatChangeInfoRequest:
@@ -99,22 +101,23 @@ def _seat_change_request(
     )
 
 
-def _success(**extra: Any) -> dict[str, Any]:
-    return {
-        "h_msg_cd": "SYNTHETIC.OK",
-        "h_msg_txt": "SERVER_MESSAGE",
-        "strResult": "SUCC",
-        **extra,
-    }
+_success = partial(synthetic_ok_envelope, "SERVER_MESSAGE")
 
 
 def _client(handler) -> KorailClient:
     def provider(*args: Any, **kwargs: Any) -> str:  # pragma: no cover
         raise AssertionError("DynaPath provider must not be invoked")
 
+    # The provider only runs for an allowlisted path, and neither route is on
+    # the default allowlist, so without naming them here this trap could never
+    # fire: a client method that started signing these reads would pass.
     client = KorailClient(
         KorailConfig(
-            dynapath=DynapathConfig(enabled=True, token_provider=provider)
+            dynapath=DynapathConfig(
+                enabled=True,
+                token_provider=provider,
+                allowlist_paths=frozenset({SEAT_CHANGE_PATH, ORIGINAL_TICKET_PATH}),
+            )
         ),
         transport=httpx.MockTransport(handler),
     )
@@ -128,7 +131,7 @@ def _client(handler) -> KorailClient:
 
 
 def test_the_two_change_chain_routes_are_registered_reads_only():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert KORAIL_MUTATION_ROUTES.isdisjoint(NEW_ROUTES)
     # Neither is a DynaPath-signed path.

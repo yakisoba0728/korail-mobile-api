@@ -18,22 +18,27 @@ is a bug report.
 
 ## Package boundary and verification summary
 
-The reviewed package boundary contains 60 routes and 77 public methods. All 60
-routes are login/read routes: 58 reads plus the login POST and the server-side
-logout GET. The nine mutation routes are tracked separately and
-are never added to the read-only allowlist. Sixty-four of the methods are the
-audited login/read methods, which transmit only read-only requests. The other
-thirteen, `reserve`, `reserve_transfer`, `reserve_merge`,
+The reviewed package boundary contains 57 routes and 77 public methods. All 57
+routes are login/read routes: 55 reads plus the login POST and the server-side
+logout POST. The 7.0.6 removal decision and its static-evidence limits are
+recorded in [7.0.6-removals.md](7.0.6-removals.md). Historical method notes
+later in this record describe the package as it existed when they were written.
+The nine mutation routes are tracked separately and
+are never added to the read-only allowlist. Sixty-three of the methods are the
+audited login/read methods or local helpers, which never transmit a mutation.
+The other fourteen are consent-gated: `reserve`, `reserve_transfer`, `reserve_merge`,
 `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
 `pay_with_fake_card`, `pay_with_card`, `refund`, `add_to_cart`,
-`register_discount_card`, `extend_discount_card` and `recalculate_price`, are
-the consent-gated mutation methods. Each is denied unless the caller supplies a
+`register_discount_card`, `extend_discount_card`, `recalculate_price`, and
+`execute_station_ticket_refund`. The first thirteen are denied unless the caller supplies a
 `MutationConsent` that opts into its category; with the default `dry_run=True`
 each merely validates its inputs and returns a redacted `MutationPreview` of the
 form that *would* be posted, sending nothing. Only a `dry_run=False` consent
 performs the live state change, and only through the dedicated double-gated send
 path (`post_mutation_form`, which enforces `assert_mutation_route` plus the
-consent check).
+consent check). The station-issued ticket refund uses
+`V7MutationConsent` scoped to `NetworkApi.executeOnlineRefunds`; its default
+dry-run returns a masked `V7MutationPreview` and sends nothing.
 
 The pay call transmits the PAN in the clear, so a payment is gated once more on
 which kind of card the consent claims. `pay_with_fake_card` still refuses unless
@@ -62,7 +67,7 @@ for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. The
-current reviewed offline gate is `2444 passed, 1 deselected`; the one
+current reviewed offline gate is `3128 passed, 1 deselected`; the one
 deselected test is the explicitly opted-in live-service test. Earlier gates in
 this repository's history were `1246 passed, 1 deselected` before the P0
 live-evidence documentation coverage and `1247 passed, 1 deselected` directly
@@ -671,8 +676,11 @@ support in this app, and its wire spelling carries the leading space.
 
 Because `1101` demands an available seat and a standby train usually has none,
 `reserve` skips that check for `1102` and instead requires the flag and the
-일반실 cabin (there is no 특실 standby), and it computes `txtStndFlg` the way
-the app does rather than pinning `"N"`.
+일반실 cabin (there is no 특실 standby), and it pins `txtStndFlg` to `"N"`. The
+earlier rule computed the flag from the row and sent `"Y"` on a sold-out train
+with open standing inventory; a 2026-09-16 live run showed that `"Y"` makes the
+server sell a standing ticket (`IRR000018`, `h_seat_no="입석"`, payment deadline)
+instead of queueing a standby (`IRR000014`).
 
 **Standby is members-only.** The app's reservation request reports itself as
 "not non-member enabled" whenever the job id is `1102`, and the session-expiry

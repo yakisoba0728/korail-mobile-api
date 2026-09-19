@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 import inspect
@@ -207,7 +215,7 @@ def test_request_rejects_malformed_or_ambiguous_values(
 
 def test_safety_registers_one_exact_read_only_contract():
     assert ("POST", PASS_SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert KORAIL_EXACT_REQUEST_FIELDS[PASS_SCHEDULE_PATH] == (
         PASS_SCHEDULE_FIELDS
     )
@@ -348,7 +356,7 @@ def test_parser_maps_only_the_eight_static_train_dto_fields(
 @pytest.mark.parametrize(
     ("mutation", "match"),
     (
-        (lambda raw: raw.pop("h_msg_cd"), "envelope"),
+        (lambda raw: raw.__setitem__("h_msg_cd", []), "h_msg_cd"),
         (lambda raw: raw.__setitem__("strResult", None), "SUCC"),
         (lambda raw: raw.__setitem__("strResult", "SUCCESS"), "SUCC"),
         (lambda raw: raw.__setitem__("schedule_info", {}), "schedule_info"),

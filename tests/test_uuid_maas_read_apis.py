@@ -1,3 +1,13 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
+from urllib.parse import parse_qsl
+
 import httpx
 import pytest
 
@@ -71,10 +81,11 @@ def test_maas_menu_parser_rejects_malformed_known_structure(menu_list):
 def test_maas_menu_form_matches_generic_app_request():
     config = KorailConfig()
 
-    assert payloads.build_maas_menu_form(config) == {
-        "Device": config.device,
-        "Version": config.version,
-    }
+    form = payloads.build_maas_menu_form(config)
+    assert set(form) == {"Device", "Version", "timeStamp"}
+    assert form["Device"] == config.device
+    assert form["Version"] == config.version
+    assert form["timeStamp"].isdigit()
 
 
 def test_uuid_parser_returns_repr_safe_typed_code(load_json_fixture):
@@ -185,7 +196,7 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     assert uuid.verification_code == "fixture-verification-code"
     assert menu.items[0].additional_service_code == "fixture-station-service"
     assert len(stations.stations) == 2
-    assert captured[0].method == "GET"
+    assert captured[0].method == "POST"
     assert captured[0].url.scheme == "https"
     assert captured[0].url.host == "smart.letskorail.com"
     assert captured[0].url.path == "/ebizcross/getUUID.do"
@@ -195,9 +206,10 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     assert captured[1].url.host == "smart.letskorail.com"
     assert captured[1].url.path == "/classes/com.korail.mobile.copt.gdMenuLt.do"
     assert captured[1].url.query == b""
-    assert captured[1].content == (
-        f"Device={client.config.device}&Version={client.config.version}".encode()
-    )
+    menu_form = dict(parse_qsl(captured[1].content.decode()))
+    assert set(menu_form) == {"Device", "Version", "timeStamp"}
+    assert menu_form["Device"] == client.config.device
+    assert menu_form["Version"] == client.config.version
     assert b"Key=" not in captured[1].content
     assert captured[2].method == "POST"
     assert captured[2].url.scheme == "https"
@@ -207,15 +219,31 @@ def test_client_sends_exact_uuid_and_maas_requests(load_json_fixture):
     assert captured[2].content == b"addSrvDvCd=M10"
 
 
-def test_client_maas_menu_requires_complete_common_envelope():
+def test_client_maas_menu_treats_a_missing_str_result_as_failure():
+    # GdMenuLtOut 은 CommonOut 을 상속한다. CommonOut 은 빠진 strResult 를
+    # commonFail() 이 비교하는 보호 상수로 채우므로 "FAIL" 과 같은 판정이다
+    # (analysis/jadx/sources/com/korail/talk/network/model/CommonOut.java:361,455-462).
+    # h_msg_cd/h_msg_txt 만 빠진 응답은 여전히 받는다(아래 성공 픽스처들).
     client = KorailClient(
         transport=httpx.MockTransport(
             lambda _: httpx.Response(200, json={"menuList": []})
         )
     )
     try:
-        with pytest.raises(KorailProtocolError, match="envelope"):
+        with pytest.raises(KorailAppError):
             client.get_maas_menu_list()
+    finally:
+        client.close()
+
+
+def test_client_maas_menu_accepts_a_result_only_envelope():
+    client = KorailClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"strResult": "SUCC", "menuList": []})
+        )
+    )
+    try:
+        assert client.get_maas_menu_list().items == ()
     finally:
         client.close()
 
@@ -261,7 +289,7 @@ def test_client_maas_menu_never_uses_dynapath_when_custom_allowlisted(
 @pytest.mark.parametrize(
     ("method", "path", "fixture_name"),
     [
-        ("GET", "/ebizcross/getUUID.do", "uuid_success.json"),
+            ("POST", "/ebizcross/getUUID.do", "uuid_success.json"),
         (
             "POST",
             "/ebizmaas/EbizMaasStationList.do",
@@ -297,7 +325,7 @@ def test_client_uuid_maas_never_use_dynapath_when_custom_allowlisted(
         transport=httpx.MockTransport(handler),
     )
     try:
-        if method == "GET":
+        if path == "/ebizcross/getUUID.do":
             client.get_uuid()
         else:
             client.get_maas_station_data("M10")
@@ -352,7 +380,7 @@ def test_client_uuid_accepts_live_evidenced_partial_common_envelope():
     assert result.raw["strResult"] == "SUCC"
     assert "fixture-partial-code" not in repr(result)
     assert len(captured) == 1
-    assert captured[0].method == "GET"
+    assert captured[0].method == "POST"
     assert captured[0].url.path == "/ebizcross/getUUID.do"
     assert captured[0].url.query == b""
 

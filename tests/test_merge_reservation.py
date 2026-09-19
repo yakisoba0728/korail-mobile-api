@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """Offline tests for 병합예약 — ONE train split at a mid station, two journeys.
 
 병합 is not a transfer and not a third case of ``C5/a.java``'s journey loop. It
@@ -40,7 +48,9 @@ NOTHING here has been transmitted to the live server.
 from __future__ import annotations
 
 from dataclasses import replace
+from urllib.parse import parse_qsl
 
+import httpx
 import pytest
 
 from korail_mobile_api import (
@@ -54,8 +64,10 @@ from korail_mobile_api import (
     KorailReservationJobType,
     KorailSeatClass,
     KorailSession,
+    KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
+    ReservationHoldResponse,
     TrainScheduleItem,
     TrainSummary,
 )
@@ -70,10 +82,51 @@ from korail_mobile_api.mutation_payloads import (
     build_single_adult_reservation_form,
     is_merge_eligible,
 )
+from korail_mobile_api.read_payloads import (
+    MergeSeatsInquiryRequest,
+    build_merge_seats_inquiry_form,
+    build_product_reservations_query,
+)
 
 
 def _config() -> KorailConfig:
     return KorailConfig()
+
+
+def test_merge_station_lookup_can_precede_station_selection() -> None:
+    request = MergeSeatsInquiryRequest(
+        boarding_datetime="20990101060000",
+        run_datetime="20990101060000",
+        train_no="43",
+        departure_station_name="서울",
+        arrival_station_name="부산",
+        selected_station_name=None,
+        room_class_code="1",
+        seat_attribute_code="015",
+        passenger_count=1,
+    )
+    form = build_merge_seats_inquiry_form(request)
+    assert form["trnNo"] == "00043"
+    assert "selRsStnNm" not in form
+    selected = build_merge_seats_inquiry_form(
+        replace(request, selected_station_name="대전")
+    )
+    assert selected["selRsStnNm"] == "대전"
+
+
+def test_product_status_filters_are_only_sent_when_known() -> None:
+    assert build_product_reservations_query() == {
+        "txtSelPage": "1",
+        "txtCntPerPage": "20",
+    }
+    assert build_product_reservations_query(
+        reservation_status_code="A", payment_status_code="B"
+    ) == {
+        "txtSelPage": "1",
+        "txtCntPerPage": "20",
+        "txtRsvSttCd": "A",
+        "txtStlSttCd": "B",
+    }
 
 
 def _standing_hold_train() -> TrainSummary:
@@ -289,7 +342,7 @@ def test_adding_the_job_type_left_the_other_three_alone() -> None:
 
 
 # The merged form's keys, in the order the app's LinkedHashMaps produce them:
-# the standing hold's own order with journey 2's block appended, and NO arvTm_2.
+# the standing hold's own order with journey 2's block appended.
 PINNED_MERGE_KEYS: tuple[str, ...] = (
     "Device",
     "Version",
@@ -303,27 +356,6 @@ PINNED_MERGE_KEYS: tuple[str, ...] = (
     "txtCompaCnt1",
     "txtPsgTpCd1",
     "txtDiscKndCd1",
-    "txtCompaCnt2",
-    "txtPsgTpCd2",
-    "txtDiscKndCd2",
-    "txtCompaCnt3",
-    "txtPsgTpCd3",
-    "txtDiscKndCd3",
-    "txtCompaCnt4",
-    "txtPsgTpCd4",
-    "txtDiscKndCd4",
-    "txtCompaCnt5",
-    "txtPsgTpCd5",
-    "txtDiscKndCd5",
-    "txtCompaCnt6",
-    "txtPsgTpCd6",
-    "txtDiscKndCd6",
-    "txtCompaCnt7",
-    "txtPsgTpCd7",
-    "txtDiscKndCd7",
-    "txtCompaCnt8",
-    "txtPsgTpCd8",
-    "txtDiscKndCd8",
     "txtSeatAttCd1",
     "txtSeatAttCd2",
     "txtSeatAttCd3",
@@ -341,7 +373,6 @@ PINNED_MERGE_KEYS: tuple[str, ...] = (
     "txtRunDt1",
     "txtDptDt1",
     "txtDptTm1",
-    "arvTm_1",
     "txtDptRsStnCd1",
     "txtDptStnConsOrdr1",
     "txtDptStnRunOrdr1",
@@ -371,14 +402,10 @@ def test_merge_form_key_order_is_pinned() -> None:
     assert tuple(_merge_form()) == PINNED_MERGE_KEYS
 
 
-def test_merge_form_has_no_second_arrival_time() -> None:
-    # The merge loop never calls setArvTm (no such call in
-    # smali/…/DirectInquiryActivity.smali:5730-6010), so leg 2 has none at all
-    # and leg 1 keeps the standing hold's -- the WHOLE ROUTE's arrival time.
+def test_merge_form_omits_arrival_time_outside_the_apk_reservation_dto() -> None:
     form = _merge_form()
     assert "arvTm_2" not in form
-    assert form["arvTm_1"] == _standing_hold_train().arrival_time
-    assert form["arvTm_1"] != _leading_leg().arrival_time
+    assert "arvTm_1" not in form
 
 
 def test_merge_journey_types_differ_per_leg() -> None:
@@ -432,7 +459,9 @@ def test_merge_form_carries_the_passenger_mix_unchanged() -> None:
     )
     assert form["txtTotPsgCnt"] == "3"
     assert form["txtCompaCnt1"] == "2"
-    assert form["txtCompaCnt3"] == "1"
+    assert form["txtCompaCnt2"] == "1"
+    assert form["txtPsgTpCd2"] == "3"
+    assert "txtCompaCnt3" not in form
 
 
 def test_merge_form_carries_no_seat_designation_keys() -> None:
@@ -475,21 +504,33 @@ def test_merge_refuses_wrong_leg_types() -> None:
         )
 
 
-def test_merge_refuses_a_hold_train_without_an_arrival_time() -> None:
-    with pytest.raises(KorailProtocolError, match="arrival_time"):
-        build_merge_reservation_form(
-            _config(),
-            replace(_standing_hold_train(), arrival_time=None),
-            (_leading_leg(), _trailing_leg()),
-        )
+def test_merge_does_not_require_an_unserialized_arrival_time() -> None:
+    form = build_merge_reservation_form(
+        _config(),
+        replace(_standing_hold_train(), arrival_time=None),
+        (_leading_leg(), _trailing_leg()),
+    )
+    assert form["txtJrnyCnt"] == "2"
 
 
 # ---------------------------------------------------------------------------
 # The client method: same route, same category, dry-run by default.
 
 
-def _client() -> KorailClient:
-    client = KorailClient(_config())
+def _refuse(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+    raise AssertionError(
+        f"this test must not send a request (saw {request.method} "
+        f"{request.url.path})"
+    )
+
+
+def _client(handler=_refuse) -> KorailClient:
+    """A logged-in client whose transport fails the test unless one is given.
+
+    It used to be a real client over a real transport: a regression that sent
+    from a dry run would have reached smart.letskorail.com instead of failing.
+    """
+    client = KorailClient(_config(), transport=httpx.MockTransport(handler))
     client.session.current = KorailSession(jsessionid="synthetic-secret")
     return client
 
@@ -534,3 +575,143 @@ def test_reserve_merge_dry_run_previews_the_reserve_route() -> None:
     assert preview.note == "dry-run: not sent"
     assert preview.payload["txtJrnyTpCd1"] == "21"
     assert preview.payload["txtJrnyTpCd2"] == "22"
+
+
+def test_an_acknowledged_merge_sends_the_merge_form_and_returns_the_hold() -> None:
+    """The send path, which nothing reached: returning None from it passed.
+
+    Never sent to KORAIL, so the reply is synthetic; what is pinned is this
+    client's half -- the form it transmits is exactly the merge builder's, and
+    the hold it hands back is the one parsed from the reply.
+    """
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "IRR000018",
+                "h_msg_txt": "예약이 완료되었습니다",
+                "strResult": "SUCC",
+                "h_pnr_no": "SYNTHETIC_PNR",
+                "h_jrny_cnt": "0002",
+                "h_wct_no": "0001",
+                "h_tot_rcvd_amt": "59800",
+            },
+        )
+
+    client = _client(handler)
+    try:
+        hold = client.reserve_merge(
+            _standing_hold_train(),
+            (_leading_leg(), _trailing_leg()),
+            consent=MutationConsent(allow_reserve=True, dry_run=False),
+        )
+    finally:
+        client.close()
+
+    assert type(hold) is ReservationHoldResponse
+    assert hold.pnr_no == "SYNTHETIC_PNR"
+    assert hold.journey_count == "0002"
+    assert len(seen) == 1
+    assert seen[0].method == "POST"
+    assert seen[0].url.path == (
+        "/classes/com.korail.mobile.certification.TicketReservation"
+    )
+    pairs = parse_qsl(
+        seen[0].content.decode("ascii"),
+        keep_blank_values=True,
+        strict_parsing=True,
+    )
+    assert len(dict(pairs)) == len(pairs)
+    assert dict(pairs) == _merge_form()
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+def test_an_expired_session_on_reserve_merge_clears_the_client_before_raising():
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test,
+    # for reserve_merge: one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = _client(handler)
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            client.reserve_merge(
+                _standing_hold_train(),
+                (_leading_leg(), _trailing_leg()),
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies
+
+
+def test_reserve_merge_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
+    # The same fallback test_mutation_live_paths.py pins for reserve: the server
+    # made a hold (PNR present) but another field will not parse, and the
+    # caller must still get the PNR back to cancel it. Without a PNR there is
+    # no hold to lose, and the parse error stands.
+    from korail_mobile_api.errors import KorailProtocolError
+
+    body: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=body)
+
+    client = _client(handler)
+    try:
+        body.update(
+            strResult="SUCC", h_msg_cd="IRR000000", h_msg_txt="ok",
+            h_pnr_no=399999999999999, h_jrny_cnt=2, h_tot_prc={"amount": 1},
+        )
+        hold = client.reserve_merge(
+                _standing_hold_train(),
+                (_leading_leg(), _trailing_leg()),
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+        assert isinstance(hold, ReservationHoldResponse)
+        assert (hold.pnr_no, hold.journey_count) == ("399999999999999", "2")
+        del body["h_pnr_no"]
+        with pytest.raises(KorailProtocolError):
+            client.reserve_merge(
+                _standing_hold_train(),
+                (_leading_leg(), _trailing_leg()),
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+    finally:
+        client.close()
+
+
+def test_the_merge_builders_refusals_are_pinned_word_for_word():
+    # Pinned before the seat-class coercion and the sequence guard were each
+    # folded into one helper shared with the transfer builder.
+    seat = r'^KORAIL reservation seat class must be "1" \(일반실\) or "2" \(특실\)$'
+    with pytest.raises(KorailProtocolError, match=seat):
+        build_merge_reservation_form(
+            KorailConfig(), _standing_hold_train(), (_leading_leg(), _trailing_leg()),
+            seat_class="3",
+        )
+    with pytest.raises(KorailProtocolError, match=seat):
+        is_merge_eligible(_standing_hold_train(), seat_class="3")
+    for legs in ("ab", b"ab", None):
+        with pytest.raises(
+            KorailProtocolError,
+            match=r"^KORAIL 병합 reservation requires a sequence of merge-seat legs$",
+        ):
+            build_merge_reservation_form(KorailConfig(), _standing_hold_train(), legs)

@@ -1,15 +1,26 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """리무진 연계 조회의 요청 질의와 응답 타입.
 
-``lmu.scdlQry.do``(운행 스케줄), ``lms.TResidualSeatsResearch.do``(좌석 재고),
-``seatMovie.LimousineScheduleView``(좌석이동 화면의 열차 목록) 세 라우트가
-씁니다.
+``lmu.scdlQry.do``(운행 스케줄)와 ``lms.TResidualSeatsResearch.do``(좌석 재고)가
+씁니다. ``seatMovie.LimousineScheduleView``(좌석이동 화면의 열차 목록)는 7.0.6
+앱에서 사라져 클라이언트가 더는 보내지 않습니다. 그 질의·응답 타입은 저장해 둔 6.5.0
+응답을 해석할 수 있도록 남겨 두었습니다(``docs/7.0.6-removals.md``).
 
 ``*Query`` 세 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서
 자릿수·형식을 검사합니다. 역은 라우트마다 다르게 줍니다 — 스케줄과 좌석 재고는
 역**코드**(4자리), 좌석이동 목록은 역**이름**입니다. 모든 필드가 ``repr=False``
 라서 질의 객체를 로그에 찍어도 승객 구성이 새지 않습니다.
 
-라이브 미검증 — 요청과 응답 모양은 모두 APK 선언에서 나왔습니다.
+운행 스케줄은 2026-09-16 실서버에서 확인했습니다 — 광명역→인천공항T1 42편을
+파싱했습니다(``docs/7.0.6-live-verification.md``). 좌석 재고와 좌석이동 목록은
+라이브 미검증이며 요청과 응답 모양이 APK 선언에서 나왔습니다.
 """
 from __future__ import annotations
 
@@ -211,7 +222,7 @@ class LimousineSeatInventoryQuery:
 
 @dataclass(frozen=True)
 class LimousineScheduleViewQuery:
-    """``seatMovie.LimousineScheduleView`` 열차 목록 조회의 입력."""
+    """``seatMovie.LimousineScheduleView`` 열차 목록 조회의 입력(7.0.6 에서 제거됨)."""
     menu_id: str = field(repr=False)
     job_id: str = field(repr=False)
     job_division: str = field(repr=False)
@@ -322,13 +333,12 @@ class LimousineSchedule:
     train_no: str | None = field(default=None, repr=False)
     train_order_no: str | None = field(default=None, repr=False)
     yms_application_flag: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
 class LimousineScheduleResponse(BaseKorailResponse):
     """``lmu.scdlQry.do`` 의 응답."""
-    h_msg_txt: str | None = field(default=None, repr=False)
     following_page_extension: str | None = field(default=None, repr=False)
     long_short_division_code: str | None = None
     schedules: tuple[LimousineSchedule, ...] = ()
@@ -347,13 +357,12 @@ class LimousineSeat:
     specification: str | None = field(default=None, repr=False)
     sequence_no: str | None = field(default=None, repr=False)
     visual_message_division_code: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
 class LimousineSeatInventoryResponse(BaseKorailResponse):
     """``lms.TResidualSeatsResearch.do`` 의 응답 — 한 호차의 좌석표."""
-    h_msg_txt: str | None = field(default=None, repr=False)
     car_type_code: str | None = None
     car_no: str | None = field(default=None, repr=False)
     seat_arrangement_code: str | None = None
@@ -372,12 +381,12 @@ class LimousineRecommendedProduct:
     received_fare: str | None = field(default=None, repr=False)
     received_price: str | None = field(default=None, repr=False)
     received_price_secondary: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
 class LimousineScheduleViewTrain:
-    """좌석이동 화면이 쓰는 열차 목록의 한 행."""
+    """좌석이동 화면이 쓰는 열차 목록의 한 행(6.5.0 응답 해석용)."""
     detour_via_popup: str | None = field(default=None, repr=False)
     elevator_damage_control: str | None = field(default=None, repr=False)
     arrival_date: str | None = field(default=None, repr=False)
@@ -454,13 +463,12 @@ class LimousineScheduleViewTrain:
     recommended_products: tuple[LimousineRecommendedProduct, ...] = ()
     total_passenger_count: int = 0
     goods_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
 class LimousineScheduleViewResponse(BaseKorailResponse):
-    """``seatMovie.LimousineScheduleView`` 의 응답."""
-    h_msg_txt: str | None = field(default=None, repr=False)
+    """``seatMovie.LimousineScheduleView`` 의 응답(6.5.0 응답 해석용)."""
     next_ectb_train_no: str | None = field(default=None, repr=False)
     goods_no: str | None = field(default=None, repr=False)
     next_page_flag: str | None = None

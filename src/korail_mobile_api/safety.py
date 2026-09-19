@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """전선에 나가는 것을 제한하는 가드.
 
 이 모듈에는 실행 로직이 없습니다. 목록과 단언뿐입니다. 어떤 origin·라우트·필드 집합이
@@ -63,7 +71,7 @@ EXCLUDED_API_DOMAINS = frozenset(
 )
 
 # Exact (method, path) pairs the read-only send path will transmit to.
-# 60 entries pinned by tests: 58 reads + login POST + logout GET.
+# 57 entries pinned by tests: 55 reads + login and logout POST.
 #
 # NOTE on certification.ReservationList: two Retrofit overloads share the path.
 # Only the read overload (inquiryTicketRsv, CertificationService.java:45-46,
@@ -71,23 +79,23 @@ EXCLUDED_API_DOMAINS = frozenset(
 # :22) is excluded. KORAIL_EXACT_REQUEST_FIELDS pins the four-field set.
 KORAIL_READ_ONLY_ROUTES = frozenset(
     {
-        ("GET", "/file/CACHE/MobileService.cache"),
-        ("GET", "/file/CACHE/prdMobilePlusMain.cache"),
-        ("GET", "/file/CACHE/prdMobilePlusNotice.cache"),
+        ("POST", "/file/CACHE/MobileService.cache"),
+        ("POST", "/file/CACHE/prdMobilePlusMain.cache"),
         ("POST", "/classes/com.korail.mobile.common.code.do"),
         ("POST", "/classes/com.korail.mobile.login.Login"),
-        ("GET", "/classes/com.korail.mobile.login.Logout"),
-        ("GET", "/classes/com.korail.mobile.common.stationinfo"),
-        ("GET", "/classes/com.korail.mobile.common.stationdata"),
-        ("GET", "/classes/com.korail.mobile.schedule.runDt"),
+        ("POST", "/classes/com.korail.mobile.login.Logout"),
+        ("POST", "/classes/com.korail.mobile.common.stationinfo"),
+        ("POST", "/classes/com.korail.mobile.common.stationdata"),
+        ("POST", "/classes/com.korail.mobile.schedule.runDt"),
         ("POST", "/classes/com.korail.mobile.seatMovie.ScheduleView"),
+        ("POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"),
         (
             "POST",
             "/classes/com.korail.mobile.research.actualTrainSchedule.do",
         ),
         ("POST", "/classes/com.korail.mobile.qry.chtnStn.do"),
-        ("POST", "/classes/com.korail.mobile.myTicket.MyTicketList"),
-        ("GET", "/ebizcross/getUUID.do"),
+        ("POST", "/classes/com.korail.mobile.myTicket.MyTicketNewList.do"),
+        ("POST", "/ebizcross/getUUID.do"),
         ("POST", "/classes/com.korail.mobile.copt.gdMenuLt.do"),
         ("POST", "/ebizmaas/EbizMaasStationList.do"),
         ("POST", "/classes/com.korail.mobile.cart.showCartList"),
@@ -104,13 +112,13 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ),
         ("POST", "/classes/com.korail.mobile.pass.trGdMenuLt.do"),
         ("POST", "/classes/com.korail.mobile.pass.passMenu.do"),
-        ("GET", "/classes/com.korail.mobile.push.crwCallRq.do"),
+        ("POST", "/classes/com.korail.mobile.push.crwCallRq.do"),
         ("GET", "/classes/com.korail.mobile.push.cmtrKnd.do"),
         ("GET", "/classes/com.korail.mobile.product.ReservationList"),
         ("GET", "/classes/com.korail.mobile.product.ReservationDetail"),
         ("POST", "/classes/com.korail.mobile.receipt.ReceiptInfo"),
         (
-            "GET",
+            "POST",
             "/classes/com.korail.mobile.reservation.ReservationView",
         ),
         ("POST", "/classes/com.korail.mobile.research.TrainResearch"),
@@ -136,15 +144,10 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
             "POST",
             "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do",
         ),
-        (
-            "POST",
-            "/classes/com.korail.mobile.seatMovie.LimousineScheduleView",
-        ),
         ("POST", "/classes/com.korail.mobile.cust.mchdDcntTgt.do"),
         ("POST", "/classes/com.korail.mobile.research.custTripInfo.do"),
         ("POST", "/classes/com.korail.mobile.copt.gdReqQry.do"),
-        ("POST", "/classes/com.korail.mobile.reservation.tripChgDate.do"),
-        ("POST", "/classes/com.korail.mobile.gift.gdLst.do"),
+        ("GET", "/classes/com.korail.mobile.reservation.tripChgDate.do"),
         ("POST", "/classes/com.korail.mobile.research.cmtrInfo.do"),
         ("POST", "/classes/com.korail.mobile.trn.prcFare.do"),
         ("POST", "/classes/com.korail.mobile.tk.dlvRcvCust.do"),
@@ -153,10 +156,9 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
             "/classes/com.korail.mobile.ticket.ticketDupCheck.do",
         ),
         ("POST", "/classes/com.korail.mobile.tk.pbpAcepSpec.do"),
-        ("POST", "/classes/com.korail.mobile.tk.plfNo.do"),
         ("POST", "/classes/com.korail.mobile.tk.rcntDlvHst.do"),
         (
-            "GET",
+            "POST",
             "/classes/com.korail.mobile.certification.ReservationList",
         ),
         ("POST", "/classes/com.korail.mobile.refunds.CommissionView"),
@@ -170,15 +172,15 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         # EXCLUDED_API_DOMAINS above.
         ("POST", "/classes/com.korail.mobile.xPoint.MyXPointView"),
         ("POST", "/classes/com.korail.mobile.mlg.amtSpec.do"),
-        # 할인카드(N카드) reads. Both are GETs whose only credential is the
+        # 할인카드(N카드) reads. Both are POSTs whose only credential is the
         # session cookie, and neither changes anything: one lists the trips a
         # card has already been spent on, the other lists the trains a card
         # may still be spent on. The two dcntCrd* routes that DO change state
         # (research.dcntCrdInfo.do, reservation.dcntCrdExtn.do) are
         # deliberately absent from this set.
-        ("GET", "/classes/com.korail.mobile.ticket.dcntCrdUseQry.do"),
+        ("POST", "/classes/com.korail.mobile.ticket.dcntCrdUseQry.do"),
         (
-            "GET",
+            "POST",
             "/classes/com.korail.mobile.research.dcntCrdScheduleView.do",
         ),
         # 승차권 변경(자율 좌석/열차 변경) 조회 chain. All three are reads that
@@ -235,7 +237,7 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # refund
         ("POST", "/classes/com.korail.mobile.refunds.RefundsRequest"),
         ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
-        ("GET", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
+        ("POST", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
         # price_recalculation -- 보류된 PNR의 할인 재적용 후 운임 재계산
         # (CertificationService.java:35-37 getDiscountPrice). Its own category:
         # it creates and destroys nothing, but it rewrites what the passenger
@@ -398,7 +400,6 @@ KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
 # keeps a waiting-room popup alive; the other two are administrative and the
 # SDK refuses them (T6/d.java:115-121).
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 KORAIL_NETFUNNEL_ROUTES = frozenset({("GET", KORAIL_NETFUNNEL_PATH)})
 
 KORAIL_NETFUNNEL_QUERY_CONTRACTS: dict[str, tuple[str, ...]] = {
@@ -431,8 +432,8 @@ KORAIL_NETFUNNEL_ACTION_IDS = frozenset(
 # of uppercase hex. Every setComplete therefore failed this check before it was
 # sent, and because a failed release was swallowed there, it failed SILENTLY —
 # every slot leaked until a live run exposed it. Nothing offline could have
-# caught it, which is exactly why the bound here is generous and why
-# KorailNetFunnelClient.release raises instead of swallowing.
+# caught it, which is why the bound here is generous. The release transport
+# failure remains visible even though the v7 SDK ignores the 5004 response body.
 KORAIL_NETFUNNEL_KEY_RE = re.compile(r"[A-Za-z0-9_.:@~-]{1,512}")
 
 # ---------------------------------------------------------------------------
@@ -599,6 +600,25 @@ def korail_netfunnel_node_url(ip: str, port: str) -> str:
     return f"https://{ip}"
 
 
+def _are_name_value_pairs(
+    pairs: tuple[object, ...],
+    *,
+    value_type: type | None = None,
+) -> bool:
+    """Whether every item is a plain 2-tuple with a str name.
+
+    A tuple subclass does not count. With ``value_type`` the value is checked
+    too; without it, the caller checks values itself.
+    """
+    return all(
+        type(pair) is tuple
+        and len(pair) == 2
+        and isinstance(pair[0], str)
+        and (value_type is None or isinstance(pair[1], value_type))
+        for pair in pairs
+    )
+
+
 def assert_netfunnel_request(
     method: str,
     path: str,
@@ -621,13 +641,7 @@ def assert_netfunnel_request(
             f"KORAIL NetFunnel route is not allowed: {route[0]} {route[1]}"
         )
     pairs = tuple(params)
-    if any(
-        type(pair) is not tuple
-        or len(pair) != 2
-        or not isinstance(pair[0], str)
-        or not isinstance(pair[1], str)
-        for pair in pairs
-    ):
+    if not _are_name_value_pairs(pairs, value_type=str):
         raise KorailProtocolError(
             "KORAIL NetFunnel parameters must be ordered string pairs"
         )
@@ -663,9 +677,62 @@ def assert_netfunnel_request(
         )
 
 
-KORAIL_EXACT_REQUEST_FIELDS = {
+_LOGIN_PATH = "/classes/com.korail.mobile.login.Login"
+_COMMON_CODE_PATH = "/classes/com.korail.mobile.common.code.do"
+_SCHEDULE_VIEW_PATHS = frozenset(
+    {
+        "/classes/com.korail.mobile.seatMovie.ScheduleView",
+        "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial",
+    }
+)
+
+# login.Login goes out in two shapes, and the union of their names is not a
+# third one. The credential login (session._login) sends the member number and
+# the transformed password, plus custId/etrPath/idx only when it has them; the
+# social login (session.login_social) sends custId and no credentials at all.
+# Each entry is (required, optional). KORAIL_EXACT_REQUEST_FIELDS carries the
+# union, so the route is not skipped, and the checker holds a request to one
+# shape at a time.
+_ALTERNATIVE_REQUEST_FIELD_SHAPES: dict[
+    str, tuple[tuple[frozenset[str], frozenset[str]], ...]
+] = {
+    _LOGIN_PATH: (
+        (
+            frozenset(
+                {
+                    "Device", "Version", "Key", "txtMemberNo", "txtPwd",
+                    "txtInputFlg", "checkValidPw",
+                }
+            ),
+            frozenset({"custId", "etrPath", "idx"}),
+        ),
+        (
+            frozenset(
+                {"Device", "Version", "Key", "txtInputFlg", "custId", "checkValidPw"}
+            ),
+            frozenset(),
+        ),
+    ),
+}
+
+KORAIL_EXACT_REQUEST_FIELDS: dict[str, frozenset[str]] = {
     "/file/CACHE/MobileService.cache": frozenset({"timeStamp"}),
-    "/classes/com.korail.mobile.login.Logout": frozenset(),
+    "/file/CACHE/prdMobilePlusMain.cache": frozenset({"timeStamp", "srtCheckYn"}),
+    "/ebizcross/getUUID.do": frozenset(),
+    "/classes/com.korail.mobile.common.stationinfo": frozenset(),
+    "/classes/com.korail.mobile.common.stationdata": frozenset(),
+    "/classes/com.korail.mobile.schedule.runDt": frozenset(
+        {"Device", "Version", "Key", "timeStamp"}
+    ),
+    "/classes/com.korail.mobile.login.Logout": frozenset(
+        {"Device", "Version", "Key", "timeStamp"}
+    ),
+    "/classes/com.korail.mobile.myTicket.MyTicketNewList.do": frozenset(
+        {
+            "Device", "Version", "Key", "txtDeviceId", "txtIndex",
+            "h_page_no", "h_abrd_dt_from", "h_abrd_dt_to", "hiduserYn",
+        }
+    ),
     "/classes/com.korail.mobile.cart.showCartList": frozenset(
         {"Device", "Version", "Key", "pnrNo", "addSrvReqNo"}
     ),
@@ -673,7 +740,7 @@ KORAIL_EXACT_REQUEST_FIELDS = {
         {"Device", "Version", "Key"}
     ),
     "/classes/com.korail.mobile.passCard.DelayDiscountView": frozenset(
-        {"Device", "Version", "Key", "dptDtTo"}
+        {"Device", "Version", "Key", "h_page_no"}
     ),
     "/classes/com.korail.mobile.passCard.CouponView": frozenset(
         {"Device", "Version", "Key", "txtSelPage", "pnrNo"}
@@ -708,7 +775,7 @@ KORAIL_EXACT_REQUEST_FIELDS = {
         }
     ),
     "/classes/com.korail.mobile.pass.trGdMenuLt.do": frozenset(
-        {"Device", "Version"}
+        {"Device", "Version", "timeStamp"}
     ),
     "/classes/com.korail.mobile.pass.passMenu.do": frozenset(
         {"Device", "Version", "Key", "menuNo"}
@@ -720,7 +787,10 @@ KORAIL_EXACT_REQUEST_FIELDS = {
         {"Device", "Version", "Key", "cmtrKndCd"}
     ),
     "/classes/com.korail.mobile.product.ReservationList": frozenset(
-        {"Device", "Version", "Key", "txtSelPage", "txtCntPerPage"}
+        {
+            "Device", "Version", "Key", "txtSelPage", "txtCntPerPage",
+            "txtRsvSttCd", "txtStlSttCd",
+        }
     ),
     "/classes/com.korail.mobile.product.ReservationDetail": frozenset(
         {"Device", "Version", "Key", "txtVrRsNo", "txtVrRsvSqNo"}
@@ -734,13 +804,37 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "h_orgtk_wct_no",
             "h_orgtk_sale_sqno",
             "h_orgtk_tk_ret_pwd",
+            "txtIndex",
         }
     ),
     "/classes/com.korail.mobile.reservation.ReservationView": frozenset(
-        {"Device", "Version", "Key"}
+        {"Device", "Version", "Key", "timeStamp"}
     ),
     "/classes/com.korail.mobile.copt.gdMenuLt.do": frozenset(
-        {"Device", "Version"}
+        {
+            "Device",
+            "Version",
+            "Key",
+            "lang",
+            "timeStamp",
+            "pnrNo",
+            "tkRetNo",
+            "addSrvReqNo",
+        }
+    ),
+    "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial": frozenset(
+        {
+            "Device", "Version", "Key", "txtMenuId", "radJobId",
+            "selGoTrain", "txtTrnGpCd", "txtGoStart", "txtGoEnd",
+            "txtGoAbrdDt", "txtGoHour", "txtPsgFlg_1", "txtPsgFlg_2",
+            "txtPsgFlg_3", "txtPsgFlg_4", "txtPsgFlg_5",
+            "txtSeatAttCd_2", "txtSeatAttCd_3", "txtSeatAttCd_4",
+            "ebizCrossCheck", "srtCheckYn", "rtYn",
+            "adjStnScdlOfrFlg", "mbCrdNo", "qryDvCd", "qryStNo",
+            "qryStTrnNo", "qryStTrnNo2", "pgPrCnt", "chtnCnt",
+            "trnGpCnt", "trnGpCd1",
+        }
+        | {f"chtnRsStnCd{index}" for index in range(1, 33)}
     ),
     "/classes/com.korail.mobile.research.TrainResearch": frozenset(
         {
@@ -752,6 +846,7 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "txtPsrmClCd",
             "txtRunDt",
             "txtDptDt",
+            "txtDptTm",
             "txtTrnClsfCd",
             "txtTrnNo",
             "txtDptRsStnCd",
@@ -850,7 +945,7 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "dptDt",
             "dptRsStnCd",
             "arvRsStnCd",
-            "tmGpCd",
+            "trnGpCd",
             "psrmClCd",
             "dptTm",
             "trnNo",
@@ -879,36 +974,6 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "isArrow",
         }
     ),
-    "/classes/com.korail.mobile.seatMovie.LimousineScheduleView": (
-        frozenset(
-            {
-                "Device",
-                "Version",
-                "Sid",
-                "txtMenuId",
-                "radJobId",
-                "txtJobDv",
-                "selGoTrain",
-                "txtTrnGpCd",
-                "txtGoTrnNo",
-                "txtGoStart",
-                "txtGoEnd",
-                "txtGoAbrdDt",
-                "txtGoHour",
-                "txtPsgFlg_1",
-                "txtPsgFlg_2",
-                "txtPsgFlg_3",
-                "txtPsgFlg_4",
-                "txtPsgFlg_5",
-                "txtSeatAttCd_2",
-                "txtSeatAttCd_3",
-                "txtSeatAttCd_4",
-                "ebizCrossCheck",
-                "srtCheckYn",
-                "rtYn",
-            }
-        )
-    ),
     "/classes/com.korail.mobile.cust.mchdDcntTgt.do": frozenset(
         {"Device", "Version", "Key", "dptDt"}
     ),
@@ -921,18 +986,6 @@ KORAIL_EXACT_REQUEST_FIELDS = {
     "/classes/com.korail.mobile.reservation.tripChgDate.do": frozenset(
         {"Device", "Version", "Key", "tripChgDate"}
     ),
-    "/classes/com.korail.mobile.gift.gdLst.do": frozenset(
-        {
-            "Device",
-            "Version",
-            "Key",
-            "qryDvCd",
-            "qryVal",
-            "abrdDtFrom",
-            "abrdDtTo",
-            "usePsbFlg",
-        }
-    ),
     "/classes/com.korail.mobile.research.cmtrInfo.do": frozenset(
         {
             "Device",
@@ -942,7 +995,6 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "cmtrKndCd",
             "psgCnt",
             "cmtrUtlAgeCd",
-            "psgPrnb",
             "ogtkSaleWctNo",
             "ogtkSaleDd",
             "ogtkSaleSqno",
@@ -957,6 +1009,7 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "Key",
             "txtMenuId",
             "chtnDvCd",
+            "trnCnt",
             "dptRsStnCd",
             "arvRsStnCd",
             "runDt",
@@ -982,9 +1035,6 @@ KORAIL_EXACT_REQUEST_FIELDS = {
         {"Device", "Version", "Key", "pnrNo"}
     ),
     "/classes/com.korail.mobile.tk.pbpAcepSpec.do": frozenset(
-        {"Device", "Version", "Key", "tkCnt", "tkRetNo"}
-    ),
-    "/classes/com.korail.mobile.tk.plfNo.do": frozenset(
         {"Device", "Version", "Key", "tkCnt", "tkRetNo"}
     ),
     "/classes/com.korail.mobile.tk.rcntDlvHst.do": frozenset(
@@ -1029,6 +1079,7 @@ KORAIL_EXACT_REQUEST_FIELDS = {
             "h_orgtk_sale_sqno",
             "h_orgtk_ret_pwd",
             "h_purchase_history",
+            "txtIndex",
         }
     ),
     # 마일리지/포인트 요약 (XPointService.java:18-20). point_dv_cd is not a
@@ -1104,6 +1155,48 @@ KORAIL_EXACT_REQUEST_FIELDS = {
     "/classes/com.korail.mobile.research.tripChgOgtk.do": frozenset(
         {"Device", "Version", "Key", "tkCnt"}
     ),
+    # The six below went out with whatever a caller put in until 2026-09-19;
+    # each set is what its builder produces. login.Login's is the union of the
+    # two shapes in _ALTERNATIVE_REQUEST_FIELD_SHAPES.
+    _LOGIN_PATH: frozenset().union(
+        *(
+            required | optional
+            for required, optional in _ALTERNATIVE_REQUEST_FIELD_SHAPES[_LOGIN_PATH]
+        )
+    ),
+    # build_common_code_form. `code` is the one list value any read route may
+    # carry -- see _is_common_code_list below.
+    _COMMON_CODE_PATH: frozenset(
+        {
+            "Device", "Version", "Key", "code", "deviceWidth", "deviceHeight",
+            "OSVersion", "departDate", "arrivalDate", "holidayYn",
+        }
+    ),
+    # build_train_search_form: Sid and no Key, unlike ScheduleViewSpecial.
+    "/classes/com.korail.mobile.seatMovie.ScheduleView": frozenset(
+        {
+            "Device", "Version", "Sid", "txtMenuId", "radJobId",
+            "selGoTrain", "txtTrnGpCd", "txtGoStart", "txtGoEnd",
+            "txtGoAbrdDt", "txtGoHour", "txtPsgFlg_1", "txtPsgFlg_2",
+            "txtPsgFlg_3", "txtPsgFlg_4", "txtPsgFlg_5",
+            "txtSeatAttCd_2", "txtSeatAttCd_3", "txtSeatAttCd_4",
+            "ebizCrossCheck", "srtCheckYn", "rtYn",
+            "adjStnScdlOfrFlg", "mbCrdNo", "qryDvCd", "qryStNo",
+            "qryStTrnNo", "qryStTrnNo2", "pgPrCnt", "chtnCnt",
+            "trnGpCnt", "trnGpCd1",
+        }
+        | {f"chtnRsStnCd{index}" for index in range(1, 33)}
+    ),
+    # KorailClient.get_transfer_stations; post_form adds the common three.
+    "/classes/com.korail.mobile.qry.chtnStn.do": frozenset(
+        {"Device", "Version", "Key", "dptRsStnCd", "arvRsStnCd"}
+    ),
+    # build_train_schedule_form: Device and Version, no Key.
+    "/classes/com.korail.mobile.research.actualTrainSchedule.do": frozenset(
+        {"Device", "Version", "runDt", "trnNo"}
+    ),
+    # build_maas_station_form: the one code and no common fields.
+    "/ebizmaas/EbizMaasStationList.do": frozenset({"addSrvDvCd"}),
 }
 KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 
@@ -1115,11 +1208,42 @@ KORAIL_EXACT_FORM_FIELDS = KORAIL_EXACT_REQUEST_FIELDS
 # code or goods number is contract-conformant. Every other field stays
 # required, and no field outside the exact set is ever accepted.
 KORAIL_OPTIONAL_REQUEST_FIELDS: dict[str, frozenset[str]] = {
+    # The new main-cache model supplies a protected default for srtCheckYn;
+    # its final serialization with encodeDefaults is not visible statically.
+    "/file/CACHE/prdMobilePlusMain.cache": frozenset({"srtCheckYn"}),
+    "/classes/com.korail.mobile.product.ReservationDetail": frozenset(
+        {"txtVrRsvSqNo"}
+    ),
+    "/classes/com.korail.mobile.product.ReservationList": frozenset(
+        {"txtRsvSttCd", "txtStlSttCd"}
+    ),
+    "/classes/com.korail.mobile.receipt.ReceiptInfo": frozenset({"txtIndex"}),
+    "/classes/com.korail.mobile.refunds.SelTicketInfo": frozenset({"txtIndex"}),
     "/classes/com.korail.mobile.research.TrainResearch": frozenset(
         {"txtSeatAttCd", "txtGdNo"}
     ),
+    "/classes/com.korail.mobile.research.mergeSeatsC.do": frozenset(
+        {"selRsStnNm"}
+    ),
+    "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial": frozenset(
+        {
+            "mbCrdNo", "qryStNo", "qryStTrnNo", "qryStTrnNo2",
+            "pgPrCnt", "chtnCnt", "trnGpCnt",
+            "trnGpCd1",
+        }
+        | {f"chtnRsStnCd{index}" for index in range(1, 33)}
+    ),
     "/classes/com.korail.mobile.research.TResidualSeatsResearch.do": (
         frozenset({"seatAttCd", "gdNo"})
+    ),
+    # build_common_code_form drops each of these when it is empty.
+    _COMMON_CODE_PATH: frozenset({"departDate", "arrivalDate", "holidayYn"}),
+    # build_train_search_form: mbCrdNo only when logged in with a card, and
+    # the connection block only on a filtered transfer search. The paging
+    # fields are always sent, unlike on ScheduleViewSpecial.
+    "/classes/com.korail.mobile.seatMovie.ScheduleView": frozenset(
+        {"mbCrdNo", "chtnCnt", "trnGpCnt", "trnGpCd1"}
+        | {f"chtnRsStnCd{index}" for index in range(1, 33)}
     ),
     # The N-card schedule view's two never-set @Query parameters. NEITHER of
     # the app's two builders (u4/b.java:52-65 and :67-81) ever calls
@@ -1145,6 +1269,9 @@ KORAIL_OPTIONAL_REQUEST_FIELDS: dict[str, frozenset[str]] = {
 }
 
 KORAIL_EXACT_REQUEST_FIELD_ORDERS = {
+    "/classes/com.korail.mobile.copt.gdMenuLt.do": (
+        ("Device", "Version", "timeStamp"),
+    ),
     "/classes/com.korail.mobile.cust.mchdDcntTgt.do": (
         ("Device", "Version", "Key", "dptDt"),
     ),
@@ -1157,19 +1284,6 @@ KORAIL_EXACT_REQUEST_FIELD_ORDERS = {
     ),
     "/classes/com.korail.mobile.reservation.tripChgDate.do": (
         ("Device", "Version", "Key", "tripChgDate"),
-    ),
-    "/classes/com.korail.mobile.gift.gdLst.do": (
-        (
-            "Device",
-            "Version",
-            "Key",
-            "qryDvCd",
-            "qryVal",
-            "abrdDtFrom",
-            "abrdDtTo",
-            "usePsbFlg",
-        ),
-        ("Device", "Version", "Key", "qryDvCd", "qryVal"),
     ),
     "/classes/com.korail.mobile.research.cmtrInfo.do": (
         (
@@ -1200,6 +1314,7 @@ KORAIL_EXACT_REQUEST_FIELD_ORDERS = {
             "Key",
             "txtMenuId",
             "chtnDvCd",
+            "trnCnt",
             "dptRsStnCd",
             "arvRsStnCd",
             "runDt",
@@ -1225,7 +1340,6 @@ KORAIL_EXACT_REQUEST_FIELD_ORDERS = {
         ("Device", "Version", "Key", "pnrNo"),
     ),
     "/classes/com.korail.mobile.tk.pbpAcepSpec.do": (),
-    "/classes/com.korail.mobile.tk.plfNo.do": (),
     "/classes/com.korail.mobile.research.tripChgOgtk.do": (),
     "/classes/com.korail.mobile.tk.rcntDlvHst.do": (
         ("Device", "Version", "Key", "custMgNo"),
@@ -1234,14 +1348,27 @@ KORAIL_EXACT_REQUEST_FIELD_ORDERS = {
 
 
 _COMMUTER_INFO_PATH = "/classes/com.korail.mobile.research.cmtrInfo.do"
+_MAAS_MENU_PATH = "/classes/com.korail.mobile.copt.gdMenuLt.do"
 _PBP_ACCEPTANCE_PATH = "/classes/com.korail.mobile.tk.pbpAcepSpec.do"
-_PLATFORM_NUMBER_PATH = "/classes/com.korail.mobile.tk.plfNo.do"
-_REPEATED_TICKET_REFERENCE_PATHS = frozenset(
-    {_PBP_ACCEPTANCE_PATH, _PLATFORM_NUMBER_PATH}
-)
+_REPEATED_TICKET_REFERENCE_PATHS = frozenset({_PBP_ACCEPTANCE_PATH})
 _TRIP_CHANGE_ORIGINAL_TICKET_PATH = (
     "/classes/com.korail.mobile.research.tripChgOgtk.do"
 )
+
+
+def _is_maas_ticket_menu_field_order(names: tuple[str, ...]) -> bool:
+    """Allow the APK's ticket menu FieldMap plus repeated tkRetNo fields."""
+    if names[:3] != ("Device", "Version", "Key"):
+        return False
+    tail = names[3:]
+    if tail[:1] == ("lang",):
+        tail = tail[1:]
+    if tail[:1] != ("pnrNo",):
+        return False
+    tail = tail[1:]
+    if tail[-1:] == ("addSrvReqNo",):
+        tail = tail[:-1]
+    return 1 <= len(tail) <= 8 and all(name == "tkRetNo" for name in tail)
 # The @FieldMap key prefixes of the 원표 lookup, in the order the app's own
 # loops put them (TCBookingActivity.java:169-175, SeatSearchActivity.java:
 # 605-611). Every prefix ends in an underscore in the constant itself --
@@ -1305,13 +1432,10 @@ def _is_commuter_passenger_field_order(
     if names[: len(prefix)] != prefix:
         return False
     remainder = names[len(prefix) :]
-    if not remainder or len(remainder) % 2:
+    if not remainder:
         return False
-    count = len(remainder) // 2
-    if remainder != (
-        *(("cmtrUtlAgeCd",) * count),
-        *(("psgPrnb",) * count),
-    ):
+    count = len(remainder)
+    if remainder != (("cmtrUtlAgeCd",) * count):
         return False
     values = dict(scalar_pairs[: len(prefix)])
     return values.get("jobDvCd") == "b" and values.get("psgCnt") == str(count)
@@ -1329,19 +1453,7 @@ def _is_ticket_reference_field_order(
     if not remainder or remainder != (("tkRetNo",) * len(remainder)):
         return False
     count = scalar_pairs[len(prefix) - 1][1]
-    if route_path == _PBP_ACCEPTANCE_PATH:
-        if type(count) is not int:
-            return False
-    elif route_path == _PLATFORM_NUMBER_PATH:
-        if (
-            not isinstance(count, str)
-            or not count
-            or any(character < "0" or character > "9" for character in count)
-            or str(int(count)) != count
-        ):
-            return False
-        count = int(count)
-    else:
+    if route_path != _PBP_ACCEPTANCE_PATH or type(count) is not int:
         return False
     return count == len(remainder) and all(
         isinstance(value, str) and bool(value)
@@ -1379,13 +1491,17 @@ def assert_korail_origin(base_url: str) -> None:
         raise KorailProtocolError("KORAIL request origin is not allowed")
 
 
-def assert_read_only_route(method: str, path: str) -> None:
-    """읽기 전용 전송 경로가 갈 수 있는 라우트만 허용합니다.
+def _assert_registered_route(
+    method: str,
+    path: str,
+    routes: frozenset[tuple[str, str]],
+    kind: str,
+) -> None:
+    """The skeleton of both route guards; the table and one word differ.
 
-    ``path`` 는 상대 경로여야 합니다 — scheme·netloc·query·fragment 가 붙으면 거부입니다.
-    ``(method, path)`` 쌍이 :data:`KORAIL_READ_ONLY_ROUTES` 의 정확한 원소가 아니면
-    :class:`KorailProtocolError` 이고, 변경 라우트도 여기 없으므로 읽기 경로로는 상태를
-    바꿀 수 없습니다. 변경 쪽 짝은 :func:`assert_mutation_route` 입니다.
+    Each guard passes its own table, looked up when it is called. The two
+    tables are never merged: a route is a read or a mutation, and the send
+    path that checks it decides which.
     """
     parsed = urlsplit(path)
     if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
@@ -1394,10 +1510,21 @@ def assert_read_only_route(method: str, path: str) -> None:
             f"{parsed.path}"
         )
     route = (method.upper(), parsed.path)
-    if route not in KORAIL_READ_ONLY_ROUTES:
+    if route not in routes:
         raise KorailProtocolError(
-            f"KORAIL request route is not allowed: {route[0]} {route[1]}"
+            f"KORAIL {kind} route is not allowed: {route[0]} {route[1]}"
         )
+
+
+def assert_read_only_route(method: str, path: str) -> None:
+    """읽기 전용 전송 경로가 갈 수 있는 라우트만 허용합니다.
+
+    ``path`` 는 상대 경로여야 합니다 — scheme·netloc·query·fragment 가 붙으면 거부입니다.
+    ``(method, path)`` 쌍이 :data:`KORAIL_READ_ONLY_ROUTES` 의 정확한 원소가 아니면
+    :class:`KorailProtocolError` 이고, 변경 라우트도 여기 없으므로 읽기 경로로는 상태를
+    바꿀 수 없습니다. 변경 쪽 짝은 :func:`assert_mutation_route` 입니다.
+    """
+    _assert_registered_route(method, path, KORAIL_READ_ONLY_ROUTES, "request")
 
 
 def assert_mutation_route(method: str, path: str) -> None:
@@ -1408,17 +1535,7 @@ def assert_mutation_route(method: str, path: str) -> None:
     라우트를 포함해 — 거부됩니다. 변경 전송 경로를 임의 엔드포인트나 읽기 엔드포인트로
     돌려쓸 수 없습니다.
     """
-    parsed = urlsplit(path)
-    if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
-        raise KorailProtocolError(
-            "KORAIL request target is not a registered relative path: "
-            f"{parsed.path}"
-        )
-    route = (method.upper(), parsed.path)
-    if route not in KORAIL_MUTATION_ROUTES:
-        raise KorailProtocolError(
-            f"KORAIL mutation route is not allowed: {route[0]} {route[1]}"
-        )
+    _assert_registered_route(method, path, KORAIL_MUTATION_ROUTES, "mutation")
 
 
 def assert_read_only_request_fields(
@@ -1445,12 +1562,7 @@ def assert_read_only_request_fields(
         (str, bytes, bytearray),
     ):
         scalar_pairs = tuple(values)
-        if any(
-            type(pair) is not tuple
-            or len(pair) != 2
-            or not isinstance(pair[0], str)
-            for pair in scalar_pairs
-        ):
+        if not _are_name_value_pairs(scalar_pairs):
             raise KorailProtocolError(
                 "KORAIL ordered request fields must be scalar name/value pairs"
             )
@@ -1469,6 +1581,7 @@ def assert_read_only_request_fields(
     has_duplicates = len(field_names) != len(set(field_names))
     if has_duplicates and route_path not in {
         _COMMUTER_INFO_PATH,
+        _MAAS_MENU_PATH,
         *_REPEATED_TICKET_REFERENCE_PATHS,
     }:
         raise KorailProtocolError(
@@ -1480,6 +1593,9 @@ def assert_read_only_request_fields(
     if ordered_variants is not None:
         names = tuple(field_names)
         valid_shape = names in ordered_variants or (
+            route_path == _MAAS_MENU_PATH
+            and _is_maas_ticket_menu_field_order(names)
+        ) or (
             route_path == _COMMUTER_INFO_PATH
             and _is_commuter_passenger_field_order(names, scalar_pairs)
         ) or (
@@ -1492,6 +1608,12 @@ def assert_read_only_request_fields(
         ) or (
             route_path == _TRIP_CHANGE_ORIGINAL_TICKET_PATH
             and _is_original_ticket_field_order(names, scalar_pairs)
+        )
+    elif route_path in _ALTERNATIVE_REQUEST_FIELD_SHAPES:
+        field_set = set(field_names)
+        valid_shape = any(
+            required <= field_set <= required | optional
+            for required, optional in _ALTERNATIVE_REQUEST_FIELD_SHAPES[route_path]
         )
     else:
         # Every field must belong to the exact set, and every non-optional
@@ -1508,10 +1630,57 @@ def assert_read_only_request_fields(
             "KORAIL request fields must exactly match the registered "
             "read-only contract"
         )
-    if any(type(value) not in {str, int} for _, value in scalar_pairs):
+    if route_path in _SCHEDULE_VIEW_PATHS:
+        route_name = route_path.rsplit(".", 1)[-1]
+        selected = [
+            int(match.group(1))
+            for name in field_names
+            if (match := re.fullmatch(r"chtnRsStnCd(\d+)", name))
+        ]
+        values_by_name = dict(scalar_pairs)
+        if selected:
+            if selected != list(range(1, len(selected) + 1)) or (
+                values_by_name.get("chtnCnt") != str(len(selected))
+            ):
+                raise KorailProtocolError(
+                    f"KORAIL {route_name} connection stations must be numbered"
+                )
+        elif "chtnCnt" in values_by_name:
+            raise KorailProtocolError(
+                f"KORAIL {route_name} connection count requires stations"
+            )
+        if ("trnGpCd1" in values_by_name) != (
+            values_by_name.get("trnGpCnt") == "1"
+        ):
+            raise KorailProtocolError(
+                f"KORAIL {route_name} train-group count is inconsistent"
+            )
+    if any(
+        type(value) not in {str, int}
+        and not (
+            route_path == _COMMON_CODE_PATH
+            and name == "code"
+            and _is_common_code_list(value)
+        )
+        for name, value in scalar_pairs
+    ):
         raise KorailProtocolError(
             "KORAIL request values must be scalar strings or integers"
         )
+
+
+def _is_common_code_list(value: object) -> bool:
+    """common.code.do's ``code``: a non-empty list of strings.
+
+    build_common_code_form always sends a list, and httpx writes it as one
+    repeated ``code`` key per item. No other field on any read route takes a
+    list.
+    """
+    return (
+        type(value) is list
+        and bool(value)
+        and all(type(item) is str for item in value)
+    )
 
 
 SAFETY_DEFAULTS = {

@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """KORAIL 모바일 앱 API 파이썬 클라이언트의 공개면.
 
 여기서 import 할 수 있는 이름이 이 패키지가 지원하는 전부입니다. ``__all__`` 에
@@ -134,6 +142,8 @@ from .models import (
 from .mutation_models import (
     CardPayment,
     CartAddRequest,
+    CashReceiptApprovalItem,
+    CashReceiptIssueResponse,
     DiscountCardAdditionalUser,
     DiscountCardPurchaseRequest,
     DiscountCardPurchaseResponse,
@@ -144,10 +154,16 @@ from .mutation_models import (
     PaidTicket,
     PriceRecalculationRequest,
     PriceRecalculationRow,
+    RefundTicketResponse,
     ReservationHoldResponse,
     ReservationJourney,
     ReservationPaymentCoupon,
     ReservationPaymentResponse,
+    StationRefundExecutionRequest,
+    StationRefundExecutionResponse,
+    StationRefundOriginalTicket,
+    StationRefundVerificationRequest,
+    StationRefundVerificationResponse,
 )
 from .netfunnel import (
     KorailNetFunnelClient,
@@ -184,6 +200,7 @@ from .read_models import (
     IntermediateStation,
     KorailPointSummaryResponse,
     MaasServiceDetail,
+    MaasServiceDetailInfo,
     MaasServiceDetailListResponse,
     MergeSeatsInquiryResponse,
     MileageHistoryEntry,
@@ -205,6 +222,7 @@ from .read_models import (
     PassPassengerInfos,
     PassPeriodOption,
     PassScheduleInfo,
+    PassScheduleMainInfo,
     PassScheduleResponse,
     PassScheduleTrain,
     PbpAcceptanceJourney,
@@ -237,6 +255,9 @@ from .read_models import (
     SelfSeatChangeStation,
     ServiceStatusResponse,
     TicketDuplicationCheckResponse,
+    TicketListReservation,
+    TicketListResponse,
+    TicketListTicket,
     TicketReceipt,
     TicketReceiptResponse,
     TicketReservationDetailResponse,
@@ -278,6 +299,7 @@ from .read_payloads import (
     TicketDuplicationCheckRequest,
     TicketReservationDetailRequest,
 )
+from .v7 import V7MutationConsent, V7MutationPreview
 
 
 __all__ = [
@@ -382,6 +404,7 @@ __all__ = [
     "MaasMenuItem",
     "MaasMenuListResponse",
     "MaasServiceDetail",
+    "MaasServiceDetailInfo",
     "MaasServiceDetailListResponse",
     "MaasServiceDetailQuery",
     "MergeSeatsInquiryRequest",
@@ -417,6 +440,7 @@ __all__ = [
     "PassMenuItem",
     "PassMenuResponse",
     "PassScheduleInfo",
+    "PassScheduleMainInfo",
     "PassScheduleRequest",
     "PassScheduleResponse",
     "PassScheduleTrain",
@@ -447,6 +471,16 @@ __all__ = [
     "RefundTicketDetailResponse",
     "RefundTicketJourney",
     "RefundTicketSeat",
+    "RefundTicketResponse",
+    "CashReceiptApprovalItem",
+    "CashReceiptIssueResponse",
+    "StationRefundExecutionRequest",
+    "StationRefundExecutionResponse",
+    "StationRefundOriginalTicket",
+    "StationRefundVerificationRequest",
+    "StationRefundVerificationResponse",
+    "V7MutationConsent",
+    "V7MutationPreview",
     "ReservationDetailJourney",
     "ReservationHistoryResponse",
     "ReservationHistoryTrain",
@@ -495,6 +529,9 @@ __all__ = [
     "TicketReservationDetailResponse",
     "TicketDuplicationCheckRequest",
     "TicketDuplicationCheckResponse",
+    "TicketListReservation",
+    "TicketListResponse",
+    "TicketListTicket",
     "TripMenuContent",
     "TripMenuItem",
     "TripMenuResponse",

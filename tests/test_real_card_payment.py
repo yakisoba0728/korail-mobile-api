@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """Offline tests for the explicit real-card payment opt-in.
 
 Until this feature existed the package could only ever send a fake card. That
@@ -19,9 +27,13 @@ the only card numbers here are obviously-fake placeholders.
 
 from __future__ import annotations
 
+from urllib.parse import parse_qsl
+
 import httpx
 import pytest
 
+from _helpers import ReplyRecorder as _Recorder
+from _helpers import client_with_replies as _client_with
 from korail_mobile_api import (
     CardPayment,
     KorailAuthError,
@@ -29,6 +41,7 @@ from korail_mobile_api import (
     KorailConfig,
     KorailMutationNotAllowedError,
     KorailSession,
+    KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
     ReservationHoldResponse,
@@ -53,26 +66,6 @@ _PAYMENT_SUCCESS = {
     "h_msg_txt": "paid",
     "h_img_tk_flg": "N",
 }
-
-
-class _Recorder:
-    def __init__(self, replies: dict[str, dict]) -> None:
-        self.replies = replies
-        self.requests: list[httpx.Request] = []
-
-    def __call__(self, request: httpx.Request) -> httpx.Response:
-        self.requests.append(request)
-        reply = self.replies.get(request.url.path)
-        if reply is None:  # pragma: no cover - guards test wiring mistakes
-            raise AssertionError(f"unexpected request to {request.url.path}")
-        return httpx.Response(200, json=reply)
-
-
-def _client_with(replies: dict[str, dict]) -> tuple[KorailClient, _Recorder]:
-    recorder = _Recorder(replies)
-    client = KorailClient(transport=httpx.MockTransport(recorder))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    return client, recorder
 
 
 def _hold() -> ReservationHoldResponse:
@@ -426,16 +419,79 @@ def test_pay_with_card_returns_a_declined_envelope_instead_of_raising():
     assert len(recorder.requests) == 1
 
 
+def _sent_form(request: httpx.Request) -> dict[str, str]:
+    """The decoded form body. A repeated key fails rather than keeping the last."""
+    pairs = parse_qsl(
+        request.content.decode("ascii"),
+        keep_blank_values=True,
+        strict_parsing=True,
+    )
+    form = dict(pairs)
+    assert len(form) == len(pairs), "the payment form repeated a key"
+    return form
+
+
 def test_pay_with_card_sends_the_same_form_pay_with_fake_card_would():
     # The two methods differ only in which consent they accept; the wire shape
     # is one builder, so a real payment cannot drift from the verified one.
+    # Keys AND values: set() over a dict compares the keys alone.
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_SUCCESS})
     client.pay_with_card(_hold(), _placeholder_card(), consent=_real_card_consent())
-    sent = dict(
-        pair.split("=", 1)
-        for pair in recorder.requests[0].content.decode().split("&")
+    client.pay_with_fake_card(
+        _hold(),
+        _placeholder_card(),
+        consent=_real_card_consent(fake_card_only=True, real_card_acknowledged=False),
     )
+    real, fake = (_sent_form(request) for request in recorder.requests)
     expected = build_card_payment_form(
         client.config, _hold(), _placeholder_card()
     )
-    assert set(sent) == set(expected)
+    assert real == expected
+    assert fake == real
+
+
+def test_pay_with_card_transmits_the_card_the_caller_passed():
+    # The test above measures the client against its own builder, so a card
+    # swapped inside the builder would pass it. These pin the charged values
+    # against the caller's literals instead.
+    client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_SUCCESS})
+    client.pay_with_card(_hold(), _placeholder_card(), consent=_real_card_consent())
+    sent = _sent_form(recorder.requests[0])
+    assert sent["hidStlCrCrdNo1"] == PLACEHOLDER_CARD_NUMBER
+    assert sent["hidVanPwd1"] == PLACEHOLDER_CARD_PASSWORD
+    assert sent["hidCrdVlidTrm1"] == PLACEHOLDER_CARD_EXPIRE
+    assert sent["hidAthnVal1"] == PLACEHOLDER_BIRTHDAY
+    assert sent["hidMnsStlAmt1"] == _hold().received_amount
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+def test_an_expired_session_on_pay_with_card_clears_the_client_before_raising():
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test,
+    # for pay_with_card: one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            client.pay_with_card(
+                _hold(), _placeholder_card(), consent=_real_card_consent()
+            )
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies

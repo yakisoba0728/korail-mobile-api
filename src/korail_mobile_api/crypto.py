@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """로그인 비밀번호 변환과 ``Sid`` 생성.
 
 ``S4/C0812l.java`` 의 ``encryptAES`` + ``F4/a.java`` 의 ``encryptBase64`` 를
@@ -45,23 +53,35 @@ def _validate_login_crypto_key(info: LoginCryptoInfo) -> bytes:
 def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
     """``S4/C0812l.getAmountEncrypt`` 재현.
 
-    ``"Y"``: AES-CBC(PKCS7), IV = key[:16] → Base64 DEFAULT → Base64 NO_WRAP.
-    ``"N"``: Base64 NO_WRAP 만.
+    7.0.6 ``LoginRepositoryImpl.login`` chooses AES when ``key`` is nonempty,
+    independent of ``pwdAESCphd``. With an empty key it sends plain Base64.
+    The APK's Base64 wrapper dispatch remains protected, so the AES encoding
+    below retains the previously verified transform pending that evidence.
     키 길이 ∉ {16,24,32} 이면 :class:`~korail_mobile_api.errors.KorailProtocolError`.
     """
-    if info.pwd_aes_cphd == "Y":
+    # Encoded before either branch and outside the cipher's try: a password
+    # that cannot be UTF-8 (a lone surrogate) is the caller's input, and
+    # UnicodeEncodeError is a ValueError that the key/IV handler would
+    # otherwise report as bad server metadata.
+    try:
+        plain = password.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise KorailProtocolError(
+            "KORAIL login password cannot be encoded as UTF-8"
+        ) from exc
+    if info.key:
         key = _validate_login_crypto_key(info)
         iv = key[:16]
         try:
             encrypted = _android_base64_default(
-                _aes_cbc_pkcs7_encrypt(password.encode("utf-8"), key, iv)
+                _aes_cbc_pkcs7_encrypt(plain, key, iv)
             )
         except ValueError as exc:
             raise KorailProtocolError(
                 "KORAIL login crypto metadata contained an invalid AES key/IV"
             ) from exc
         return _base64_no_wrap(encrypted.encode("utf-8"))
-    return _base64_no_wrap(password.encode("utf-8"))
+    return _base64_no_wrap(plain)
 
 
 def generate_sid(*, epoch_ms: int | None = None) -> str:

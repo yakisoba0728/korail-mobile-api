@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """Three read-only routes surfaced by comparing against reference clients.
 
 R150 ``certification.ReservationList`` (GET), R151 ``refunds.CommissionView``
@@ -28,6 +36,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import FrozenInstanceError
+from functools import partial
 from typing import Any, get_type_hints
 from urllib.parse import parse_qsl
 
@@ -37,6 +46,7 @@ import pytest
 import korail_mobile_api
 import korail_mobile_api.read_models as read_models
 import korail_mobile_api.read_payloads as read_payloads
+from _helpers import recording_path_handler, synthetic_ok_envelope
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -79,7 +89,7 @@ R151_PATH = "/classes/com.korail.mobile.refunds.CommissionView"
 R152_PATH = "/classes/com.korail.mobile.refunds.SelTicketInfo"
 
 NEW_ROUTES = {
-    ("GET", R150_PATH),
+    ("POST", R150_PATH),
     ("POST", R151_PATH),
     ("POST", R152_PATH),
 }
@@ -96,13 +106,7 @@ def _ticket() -> OriginalTicketReference:
     )
 
 
-def _success(**extra: Any) -> dict[str, Any]:
-    return {
-        "h_msg_cd": "SYNTHETIC.OK",
-        "h_msg_txt": "SERVER_MESSAGE_SECRET",
-        "strResult": "SUCC",
-        **extra,
-    }
+_success = partial(synthetic_ok_envelope, "SERVER_MESSAGE_SECRET")
 
 
 def _reservation_detail_body() -> dict[str, Any]:
@@ -227,7 +231,10 @@ def _responses() -> dict[str, dict[str, Any]]:
 
 
 def test_routes_fields_exports_and_signatures_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
+    assert (
+        "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
+    ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert len(DYNAPATH_ALLOWLIST_PATHS) == 6
     assert all(path not in DYNAPATH_ALLOWLIST_PATHS for _, path in NEW_ROUTES)
@@ -266,6 +273,7 @@ def test_routes_fields_exports_and_signatures_are_exact():
             "h_orgtk_sale_sqno",
             "h_orgtk_ret_pwd",
             "h_purchase_history",
+            "txtIndex",
         },
     }
     for path, fields in expected_fields.items():
@@ -288,10 +296,11 @@ def test_routes_fields_exports_and_signatures_are_exact():
             },
         ),
         "get_refund_ticket_detail": (
-            ["self", "ticket", "from_purchase_history"],
+            ["self", "ticket", "from_purchase_history", "txt_index"],
             {
                 "ticket": OriginalTicketReference,
                 "from_purchase_history": bool,
+                "txt_index": str | None,
                 "return": RefundTicketDetailResponse,
             },
         ),
@@ -310,6 +319,11 @@ def test_routes_fields_exports_and_signatures_are_exact():
         if not name.startswith("_")
     }
     assert len(public_methods) == 77
+    assert {
+        "login_social",
+        "verify_station_ticket_refund",
+        "execute_station_ticket_refund",
+    } <= public_methods
 
     expected_exports = {
         "TicketReservationDetailRequest": (
@@ -542,8 +556,7 @@ def test_parsers_reject_bad_envelopes_containers_and_scalar_types():
         parse_refund_ticket_detail_response,
     )
     for parser in parsers:
-        with pytest.raises(KorailProtocolError):
-            parser({"strResult": "SUCC"})
+        assert parser({"strResult": "SUCC"}).str_result == "SUCC"
         with pytest.raises(KorailProtocolError):
             parser(_success(strResult="ERROR"))
         with pytest.raises(KorailAppError):
@@ -722,9 +735,7 @@ def test_client_sends_the_apps_exact_wire_shapes_without_dynapath():
     def provider(context: Any) -> str:
         raise AssertionError("DynaPath provider must not be invoked")
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        requests.append(request)
-        return httpx.Response(200, json=responses[request.url.path])
+    handler = recording_path_handler(responses, requests)
 
     config = KorailConfig(
         dynapath=DynapathConfig(
@@ -754,7 +765,7 @@ def test_client_sends_the_apps_exact_wire_shapes_without_dynapath():
         RefundCommissionResponse,
         RefundTicketDetailResponse,
     ]
-    assert [request.method for request in requests] == ["GET", "POST", "POST"]
+    assert [request.method for request in requests] == ["POST", "POST", "POST"]
     assert [request.url.path for request in requests] == [
         R150_PATH,
         R151_PATH,
@@ -765,11 +776,11 @@ def test_client_sends_the_apps_exact_wire_shapes_without_dynapath():
         ("Version", config.version),
         ("Key", config.key),
     ]
-    assert parse_qsl(requests[0].url.query.decode(), keep_blank_values=True) == [
+    assert parse_qsl(requests[0].content.decode(), keep_blank_values=True) == [
         *common,
         ("hidPnrNo", "PNR_SECRET"),
     ]
-    assert requests[0].content == b""
+    assert requests[0].url.query == b""
     bodies = [
         parse_qsl(request.content.decode(), keep_blank_values=True)
         for request in requests[1:]

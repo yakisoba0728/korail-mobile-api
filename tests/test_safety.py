@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """The mutation send boundary's field-shape contract.
 
 The read side has had an exact per-route field contract since early on
@@ -7,7 +15,10 @@ each gated and then the body itself went out unexamined. The 2026-07-27 sweep
 recorded that as the remaining asymmetry between the two boundaries.
 """
 
+import ast
+import inspect
 import re
+import textwrap
 
 import pytest
 
@@ -86,23 +97,183 @@ def test_every_registered_mutation_route_is_reachable_by_the_shape_check():
             safety.assert_mutation_form_shape(path, {**common, "x": 1})
 
 
-def test_every_mutation_send_path_runs_the_shape_check():
-    """Both send paths, asserted structurally rather than by coverage.
+def _called_names(function) -> set[str]:
+    """The names a function calls, read from its syntax tree.
+
+    A comment is not in the tree, so a call that has been commented out is not
+    counted -- which is exactly what a text search of the source got wrong.
+    """
+    tree = ast.parse(textwrap.dedent(inspect.getsource(function)))
+    called = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                called.add(node.func.id)
+            elif isinstance(node.func, ast.Attribute):
+                called.add(node.func.attr)
+    return called
+
+
+def test_every_mutation_send_path_runs_the_shape_check(monkeypatch):
+    """Both send paths, asserted by running them rather than by reading them.
 
     The gate went onto `post_mutation_form` first, and `get_mutation_query`
-    -- the GET half, which exists because `reservation.dcntCrdExtn.do` is
-    declared @GET and mis-registering it as a POST was rejected -- kept
-    sending unexamined values while its own docstring said "every gate of
-    post_mutation_form applies here unchanged". Tracing a suite run is what
-    surfaced it; this makes the next send path fail instead.
+    -- the GET half, which exists because 6.5.0 declared
+    `reservation.dcntCrdExtn.do` @GET -- kept sending unexamined values while
+    its own docstring said "every gate of post_mutation_form applies here
+    unchanged". Tracing a suite run is what surfaced it.
+
+    This used to assert that each method's source contained the text
+    ``assert_mutation_form_shape(``, and a comment satisfies that: with the
+    call commented out the suite stayed green. Now each path is driven to the
+    transport with the check wrapped in a spy, and the transport refuses to
+    answer unless the spy has already seen that form. A path that stops calling
+    the check, or calls it after sending, fails here. A new send path -- any
+    method that calls ``assert_mutation_route`` -- fails the first assertion
+    until it is driven here too.
+
+    7.0.6 declares `dcntCrdExtn.do` @POST, so no registered mutation route is a
+    GET and `get_mutation_query` refuses every real path at the route check.
+    It is still a send path; the test registers a GET route for its own
+    duration to reach the shape check behind that refusal.
     """
-    import inspect
+    import httpx
 
-    from korail_mobile_api.http import KorailHttpClient
+    from korail_mobile_api import http as http_module
+    from korail_mobile_api.config import KorailConfig
+    from korail_mobile_api.consent import MutationConsent
 
-    for name in ("post_mutation_form", "get_mutation_query"):
-        source = inspect.getsource(getattr(KorailHttpClient, name))
-        assert "assert_mutation_form_shape(" in source, name
+    senders = {
+        name
+        for name, member in vars(http_module.KorailHttpClient).items()
+        if inspect.isfunction(member)
+        and "assert_mutation_route" in _called_names(member)
+    }
+    assert senders == {"post_mutation_form", "get_mutation_query"}
+
+    seen: list[tuple[str, dict]] = []
+    shape_check = safety.assert_mutation_form_shape
+
+    def spy(path, values):
+        seen.append((path, dict(values)))
+        shape_check(path, values)
+
+    monkeypatch.setattr(http_module, "assert_mutation_form_shape", spy)
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        assert seen and seen[-1][0] == request.url.path, (
+            f"{request.url.path} was sent before its shape check ran"
+        )
+        return httpx.Response(
+            200,
+            json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": ""},
+        )
+
+    client = http_module.KorailHttpClient(
+        KorailConfig(),
+        transport=httpx.MockTransport(answer),
+    )
+    cart = "/classes/com.korail.mobile.cart.addCartList"
+    extension = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
+    form = {**client.common_fields(), "hidPnrNo": "SYNTHETIC_PNR"}
+    query = {**client.common_fields(), "txtCrdNo": "SYNTHETIC_CARD"}
+    try:
+        client.post_mutation_form(
+            cart,
+            form,
+            consent=MutationConsent(allow_cart=True, dry_run=False),
+            category="cart",
+        )
+        monkeypatch.setattr(
+            safety,
+            "KORAIL_MUTATION_ROUTES",
+            safety.KORAIL_MUTATION_ROUTES | {("GET", extension)},
+        )
+        client.get_mutation_query(
+            extension,
+            query,
+            consent=MutationConsent(allow_discount_card=True, dry_run=False),
+            category="discount_card",
+        )
+    finally:
+        client.close()
+
+    assert seen == [(cart, form), (extension, query)]
+
+
+@pytest.mark.parametrize(
+    ("guard", "routes", "refusal"),
+    [
+        (
+            safety.assert_read_only_route,
+            safety.KORAIL_READ_ONLY_ROUTES,
+            "KORAIL request route is not allowed",
+        ),
+        (
+            safety.assert_mutation_route,
+            safety.KORAIL_MUTATION_ROUTES,
+            "KORAIL mutation route is not allowed",
+        ),
+    ],
+    ids=["read", "mutation"],
+)
+def test_both_route_guards_refuse_the_same_things_the_same_way(
+    guard, routes, refusal
+):
+    """What the two route guards do today, pinned before anyone merges them.
+
+    They differ only in which table they consult and in one word of the
+    refusal. The src plan's batch 40 extracts that shared skeleton, so what
+    the skeleton does is fixed here first: a registered route passes whatever
+    the case of its method, a path carrying a scheme, host, query or fragment
+    is refused before any table is consulted, and an unregistered route is
+    refused with the guard's own message.
+    """
+    method, path = sorted(routes)[0]
+    guard(method.lower(), path)
+    for target in (
+        f"https://smart.letskorail.com{path}",
+        f"//smart.letskorail.com{path}",
+        f"{path}?Key=x",
+        f"{path}#x",
+    ):
+        with pytest.raises(
+            KorailProtocolError,
+            match="KORAIL request target is not a registered relative path",
+        ):
+            guard(method, target)
+    with pytest.raises(KorailProtocolError, match=re.escape(f"{refusal}: {method} /x")):
+        guard(method, "/x")
+
+
+def test_each_route_guard_refuses_every_route_of_the_other_table():
+    """A read route is not a mutation route, and the other way round.
+
+    The two guards share one skeleton and differ in the table they pass it.
+    Handing the mutation guard the read table as well would let the mutation
+    transport send to any read endpoint, and nothing else in the suite would
+    notice: the other guard tests only try an unregistered "/x".
+    """
+    assert not safety.KORAIL_READ_ONLY_ROUTES & safety.KORAIL_MUTATION_ROUTES
+    for method, path in sorted(safety.KORAIL_READ_ONLY_ROUTES):
+        with pytest.raises(KorailProtocolError, match="KORAIL mutation route is not allowed"):
+            safety.assert_mutation_route(method, path)
+    for method, path in sorted(safety.KORAIL_MUTATION_ROUTES):
+        with pytest.raises(KorailProtocolError, match="KORAIL request route is not allowed"):
+            safety.assert_read_only_route(method, path)
+
+
+def test_both_route_guards_call_the_same_things():
+    """If the shared skeleton is extracted, it is extracted from both.
+
+    The reachability scan below passes as soon as ONE guard calls a new
+    helper, so an extraction done on only one side -- the other keeping its
+    inline copy -- would pass everything else. This compares what the two
+    guards call, without naming a helper that does not exist yet.
+    """
+    assert _called_names(safety.assert_read_only_route) == _called_names(
+        safety.assert_mutation_route
+    )
 
 
 def test_the_get_mutation_route_carries_the_common_three_the_check_requires():
@@ -145,8 +316,12 @@ def test_no_module_level_definition_is_unreachable():
 
     Anything genuinely meant to be unused belongs in the allowlist below with
     a reason, so "unused" stays a decision rather than an accident.
+
+    A use is a reference in the syntax tree: a name loaded, an attribute
+    accessed, a name imported. This used to count every whole-word occurrence
+    in the text, comments and strings included, so one comment naming a dead
+    constant was enough to keep it alive.
     """
-    import ast
     from pathlib import Path
 
     #: Public API is exported, not called; dunders are protocol.
@@ -179,10 +354,21 @@ def test_no_module_level_definition_is_unreachable():
     }
     package = Path(__file__).parents[1] / "src" / "korail_mobile_api"
     sources = {path: path.read_text(encoding="utf-8") for path in package.glob("*.py")}
-    corpus = "\n".join(sources.values()) + "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in (Path(__file__).parent).glob("*.py")
-    )
+    referenced: set[str] = set()
+    for text in (
+        *sources.values(),
+        *(
+            path.read_text(encoding="utf-8")
+            for path in (Path(__file__).parent).glob("*.py")
+        ),
+    ):
+        for node in ast.walk(ast.parse(text)):
+            if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Store):
+                referenced.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                referenced.add(node.attr)
+            elif isinstance(node, ast.alias):
+                referenced.add(node.name.rsplit(".", 1)[-1])
 
     import korail_mobile_api
 
@@ -206,8 +392,9 @@ def test_no_module_level_definition_is_unreachable():
                     or name in deliberately_unused
                 ):
                     continue
-                # Its own definition is one occurrence; anything else is a use.
-                if len(re.findall(rf"\b{re.escape(name)}\b", corpus)) <= 1:
+                # A definition stores its name; only a load, an attribute
+                # access or an import refers to it.
+                if name not in referenced:
                     orphans.append(f"{path.name}:{node.lineno} {name}")
 
     assert not orphans, "unreachable module-level definitions:\n  " + "\n  ".join(

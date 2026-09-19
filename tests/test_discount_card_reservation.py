@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """A reservation CAN carry a 할인카드, through the ordinary reserve route.
 
 ``w4/a.java:93-104`` builds a plain ``ReservationRequest``; its only caller,
@@ -14,12 +22,14 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from _helpers import make_authenticated_client as _client
+from _helpers import refuse_transport as _refuse
 from korail_mobile_api import (
     KorailClient,
     KorailConfig,
     KorailMutationNotAllowedError,
     KorailProtocolError,
-    KorailSession,
+    KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
     ReservationHoldResponse,
@@ -64,24 +74,6 @@ def _train() -> TrainSummary:
     )
 
 
-def _client(handler) -> KorailClient:
-    client = KorailClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    client.session.current = KorailSession(
-        jsessionid="SYNTHETIC_SESSION",
-        member_no="SYNTHETIC_MEMBER_NO",
-        customer_no="SYNTHETIC_CUSTOMER_NO",
-        raw={},
-    )
-    return client
-
-
-def _refuse(request: httpx.Request) -> httpx.Response:
-    raise AssertionError(f"nothing may be sent: {request.method} {request.url}")
-
-
 def test_only_the_passenger_block_and_the_menu_id_differ():
     ordinary = build_reservation_form(KorailConfig(), _train())
     carded = build_discount_card_reservation_form(
@@ -98,13 +90,8 @@ def test_only_the_passenger_block_and_the_menu_id_differ():
     }
     # w4/a.java:96-101 -- one row carrying the card, and nothing else new.
     assert added == {CARD_KEY: CARD_NO}
-    # The other seven of the eight rows are gone; row 1 survives with new
-    # values, which is why it shows up under `changed` rather than `removed`.
-    assert removed == {
-        f"{prefix}{index}"
-        for prefix in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd")
-        for index in range(2, 9)
-    }
+    # The ordinary one-adult request already has only one positive row.
+    assert removed == set()
     # SeatAssignBookingActivity.java:159 -- "A2", not "11".
     assert changed == {"txtMenuId", "txtDiscKndCd1"}
     assert carded["txtMenuId"] == KORAIL_DISCOUNT_CARD_MENU_ID == "A2"
@@ -250,16 +237,14 @@ def test_an_acknowledged_send_posts_the_card_row_to_the_reserve_route():
     assert "txtCompaCnt2" not in body
 
 
-def test_the_ordinary_reserve_path_is_completely_unchanged():
-    # The whole point of building this by substitution: adding a discount-card
-    # hold must not have moved a single byte of the live-verified form.
+def test_the_ordinary_reserve_path_remains_one_adult_with_no_card_field():
     expected_menu_id = "11"
     ordinary = build_reservation_form(KorailConfig(), _train())
     assert ordinary["txtMenuId"] == expected_menu_id
     assert CARD_KEY not in ordinary
     assert ordinary["txtDiscKndCd1"] == "000"
     assert [name for name in ordinary if name.startswith("txtCompaCnt")] == [
-        f"txtCompaCnt{index}" for index in range(1, 9)
+        "txtCompaCnt1"
     ]
 
 
@@ -276,3 +261,73 @@ def test_the_outbound_card_key_is_redacted():
     )
     assert CARD_NO not in str(redact_payload(form))
     assert CARD_NO not in str(redact_mapping({CARD_KEY: CARD_NO}))
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+def test_an_expired_session_on_reserve_with_discount_card_clears_the_client_before_raising():
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test,
+    # for reserve_with_discount_card: one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = _client(handler)
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            client.reserve_with_discount_card(
+                _train(),
+                card_no=CARD_NO,
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies
+
+
+def test_reserve_with_discount_card_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
+    # The same fallback test_mutation_live_paths.py pins for reserve: the server
+    # made a hold (PNR present) but another field will not parse, and the
+    # caller must still get the PNR back to cancel it. Without a PNR there is
+    # no hold to lose, and the parse error stands.
+    from korail_mobile_api.errors import KorailProtocolError
+
+    body: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=body)
+
+    client = _client(handler)
+    try:
+        body.update(
+            strResult="SUCC", h_msg_cd="IRR000000", h_msg_txt="ok",
+            h_pnr_no=399999999999999, h_jrny_cnt=2, h_tot_prc={"amount": 1},
+        )
+        hold = client.reserve_with_discount_card(
+                _train(),
+                card_no=CARD_NO,
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+        assert isinstance(hold, ReservationHoldResponse)
+        assert (hold.pnr_no, hold.journey_count) == ("399999999999999", "2")
+        del body["h_pnr_no"]
+        with pytest.raises(KorailProtocolError):
+            client.reserve_with_discount_card(
+                _train(),
+                card_no=CARD_NO,
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+    finally:
+        client.close()

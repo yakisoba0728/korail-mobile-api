@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """상태변경 요청의 동의(consent)와 dry-run 미리보기 타입.
 
 이 모듈 자체는 I/O 없음. 상태변경 메서드가 요구하는 게이트 타입과, 전송 대신
@@ -70,7 +78,8 @@ class MutationConsent:
     allow_discount_card: bool = False
     #: 운임 재계산(``certification.PriceReCalculation``). 서버 미시험.
     allow_price_recalculation: bool = False
-    #: 장바구니(``cart.addCartList``, ``CartService.java:11-13``). 서버 미시험.
+    #: 장바구니(``cart.addCartList``, ``CartService.java:11-13``). 2026-07-27 실서버
+    #: 확인(``SUCC``/``IRZ000002``, ``get_cart_list`` 로 되읽음).
     allow_cart: bool = False
     dry_run: bool = True
     fake_card_only: bool = True

@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 import pytest
 
 from korail_mobile_api.crypto import generate_sid, transform_login_password
@@ -6,8 +14,17 @@ from korail_mobile_api.models import LoginCryptoInfo
 
 
 def test_transform_login_password_base64_only():
-    info = LoginCryptoInfo(idx="IDX", key="1234567890abcdef", pwd_aes_cphd="N")
+    info = LoginCryptoInfo(idx="", key="", pwd_aes_cphd="N")
     assert transform_login_password("pw123", info) == "cHcxMjM="
+
+
+def test_706_login_uses_aes_when_key_present_even_if_metadata_flag_is_n():
+    key = "1234567890abcdef"
+    info_n = LoginCryptoInfo(idx="IDX", key=key, pwd_aes_cphd="N")
+    info_y = LoginCryptoInfo(idx="IDX", key=key, pwd_aes_cphd="Y")
+    assert transform_login_password("pw123", info_n) == transform_login_password(
+        "pw123", info_y
+    )
 
 
 def test_transform_login_password_aes_is_deterministic_and_not_plaintext():
@@ -52,9 +69,35 @@ def test_sid_uses_android_base64_default():
     assert generate_sid(epoch_ms=1712345678901) == "rIPj+3cmqQgizSSxkiLJuA==\n"
 
 
-@pytest.mark.parametrize("key", ["", "short", "1234567890abcdefX"])
+@pytest.mark.parametrize("key", ["short", "1234567890abcdefX"])
 def test_transform_login_password_aes_invalid_key_raises_protocol_error(key: str):
     info = LoginCryptoInfo(idx="IDX", key=key, pwd_aes_cphd="Y")
 
     with pytest.raises(KorailProtocolError):
         transform_login_password("pw123", info)
+
+
+def test_706_empty_key_uses_plain_base64_even_if_flag_is_y():
+    info = LoginCryptoInfo(idx="", key="", pwd_aes_cphd="Y")
+    assert transform_login_password("pw123", info) == "cHcxMjM="
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["0123456789abcdef", ""],
+    ids=["aes", "plain-base64"],
+)
+def test_an_unencodable_password_is_reported_as_the_password(key: str):
+    """A lone surrogate is the password's fault, not the server's key.
+
+    ``password.encode("utf-8")`` used to share a ``try`` with the cipher, and
+    UnicodeEncodeError is a ValueError, so this was reported as "invalid AES
+    key/IV" -- bad server metadata -- with a valid 16-byte key. The plain Base64
+    branch let the raw UnicodeEncodeError out instead. Both now name the
+    password, and keep the encoding error as the cause.
+    """
+    info = LoginCryptoInfo(idx="1" if key else "", key=key, pwd_aes_cphd="Y")
+    with pytest.raises(KorailProtocolError, match="password cannot be encoded") as raised:
+        transform_login_password("pw\ud800", info)
+    assert "AES" not in str(raised.value)
+    assert isinstance(raised.value.__cause__, UnicodeEncodeError)

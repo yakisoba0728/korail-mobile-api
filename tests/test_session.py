@@ -1,3 +1,13 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
+from urllib.parse import parse_qs
+
 import httpx
 import pytest
 
@@ -8,6 +18,9 @@ from korail_mobile_api.errors import (
     KorailAuthError,
     KorailProtocolError,
 )
+from korail_mobile_api.http import KorailHttpClient
+from korail_mobile_api.models import LoginCryptoInfo
+from korail_mobile_api.session import KorailSessionClient
 
 
 SERVICE_CHECK_PATH = "/file/CACHE/MobileService.cache"
@@ -15,6 +28,55 @@ SERVICE_CHECK_PATH = "/file/CACHE/MobileService.cache"
 
 def service_check_response() -> httpx.Response:
     return httpx.Response(200, json={"h_msg_cd": "S000", "h_msg_txt": "OK", "strResult": "SUCC"})
+
+
+def test_social_login_uses_cust_id_without_password_bootstrap(load_json_fixture):
+    posted = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        posted.append(request)
+        assert request.url.path == "/classes/com.korail.mobile.login.Login"
+        return httpx.Response(
+            200,
+            json=load_json_fixture("login_success.json"),
+            headers={"Set-Cookie": "JSESSIONID=social-session; Path=/; HttpOnly"},
+        )
+
+    http = KorailHttpClient(
+        KorailConfig(enable_dynapath=True),
+        transport=httpx.MockTransport(handler),
+    )
+    session = KorailSessionClient(http).login_social(
+        "synthetic-cust-id", input_flag="SYNTHETIC_FLAG", check_valid_pw="SYNTHETIC_CHECK"
+    )
+    fields = parse_qs(posted[0].content.decode())
+    assert fields["txtInputFlg"] == ["SYNTHETIC_FLAG"]
+    assert fields["custId"] == ["synthetic-cust-id"]
+    assert fields["checkValidPw"] == ["SYNTHETIC_CHECK"]
+    assert "txtMemberNo" not in fields
+    assert "txtPwd" not in fields
+    assert "idx" not in fields
+    assert session.jsessionid == "social-session"
+    assert session.member_no is None
+
+
+def test_social_login_rejects_missing_protected_check_flag_before_io():
+    called = False
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        raise AssertionError("no network request should be sent")
+
+    client = KorailSessionClient(
+        KorailHttpClient(
+            KorailConfig(enable_dynapath=True),
+            transport=httpx.MockTransport(handler),
+        )
+    )
+    with pytest.raises(KorailProtocolError, match="explicit check_valid_pw"):
+        client.login_social("synthetic-cust-id", input_flag="SYNTHETIC", check_valid_pw="")
+    assert called is False
 
 
 def make_success_then_failure_client(load_json_fixture):
@@ -112,7 +174,8 @@ def test_login_posts_transformed_password_and_tracks_cookie(load_json_fixture):
     session = client.login("member1", "pw123")
 
     assert "txtMemberNo=member1" in captured["body"]
-    assert "txtPwd=cHcxMjM%3D" in captured["body"]
+    # 7.0.6 selects AES from nonempty key even when pwdAESCphd is N.
+    assert "txtPwd=ZkpkU2JycXlJSzYyeGNxcSsxdUNmUT09Cg%3D%3D" in captured["body"]
     assert "txtInputFlg=2" in captured["body"]
     assert "checkValidPw=Y" in captured["body"]
     assert "code=app.var.data" in captured["bootstrap_body"]
@@ -474,64 +537,152 @@ def test_login_crypto_bootstrap_app_failure_raises_library_error_without_login_p
     assert called_paths == [SERVICE_CHECK_PATH, "/classes/com.korail.mobile.common.code.do"]
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
-        {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"},
-        {
-            "h_msg_cd": "IRG000000",
-            "h_msg_txt": "OK",
-            "strResult": "SUCC",
-            "idx": "IDX",
-            "key": "KEY",
-            "pwdAESCphd": "",
-        },
-        {
-            "h_msg_cd": "IRG000000",
-            "h_msg_txt": "OK",
-            "strResult": "SUCC",
-            "idx": "IDX",
-            "key": "KEY",
-            "pwdAESCphd": "maybe",
-        },
-        {
-            "h_msg_cd": "IRG000000",
-            "h_msg_txt": "OK",
-            "strResult": "SUCC",
-            "idx": "",
-            "key": "KEY",
-            "pwdAESCphd": "Y",
-        },
-        {
-            "h_msg_cd": "IRG000000",
-            "h_msg_txt": "OK",
-            "strResult": "SUCC",
-            "idx": "IDX",
-            "key": "",
-            "pwdAESCphd": "Y",
-        },
-    ],
-)
-def test_login_crypto_bootstrap_requires_complete_metadata(payload):
-    called_paths = []
+BOOTSTRAP_OK = {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+COMMON_CODE_PATH = "/classes/com.korail.mobile.common.code.do"
+TEST_AES_KEY = "1234567890abcdef"
+# "pw123" 을 TEST_AES_KEY 로 AES 한 값과 평문 Base64 값입니다(test_crypto.py 와 같습니다).
+AES_PW123 = "ZkpkU2JycXlJSzYyeGNxcSsxdUNmUT09Cg=="
+PLAIN_PW123 = "cHcxMjM="
+
+
+def make_crypto_bootstrap_client(load_json_fixture, bootstrap):
+    """``common.code.do`` 가 ``bootstrap`` 을 돌려주는 클라이언트와 기록을 만듭니다."""
+    captured = {"paths": []}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        called_paths.append(request.url.path)
+        captured["paths"].append(request.url.path)
         if request.url.path == SERVICE_CHECK_PATH:
             return service_check_response()
-        if request.url.path == "/classes/com.korail.mobile.common.code.do":
-            return httpx.Response(200, json=payload)
+        if request.url.path == COMMON_CODE_PATH:
+            return httpx.Response(200, json=bootstrap)
+        if request.url.path == "/classes/com.korail.mobile.login.Login":
+            captured["body"] = request.content.decode()
+            return httpx.Response(
+                200,
+                json=load_json_fixture("login_success.json"),
+                headers={"Set-Cookie": "JSESSIONID=session-crypto; Path=/; HttpOnly"},
+            )
         raise AssertionError(f"unexpected path {request.url.path}")
 
     client = KorailClient(
         KorailConfig(enable_dynapath=True),
         transport=httpx.MockTransport(handler),
     )
+    return client, captured
 
-    with pytest.raises(KorailProtocolError):
+
+def test_login_takes_aes_path_when_key_and_idx_arrive_without_pwd_aes_cphd(load_json_fixture):
+    # 7.0.6 로그인은 pwdAESCphd 를 읽지 않고 key 로 AES 를 겁니다
+    # (LoginRepositoryImpl.java:922-936). 값이 빠져도 거절하지 않고 AES 로 갑니다.
+    bootstrap = {
+        **BOOTSTRAP_OK,
+        "app.login.cphd": {"idx": "IDX-AES", "key": TEST_AES_KEY},
+    }
+    client, captured = make_crypto_bootstrap_client(load_json_fixture, bootstrap)
+
+    session = client.login("member1", "pw123")
+
+    fields = parse_qs(captured["body"])
+    assert fields["txtPwd"] == [AES_PW123]
+    assert fields["idx"] == ["IDX-AES"]
+    assert session.jsessionid == "session-crypto"
+    # 플래그는 버리지 않고 참고용으로 남깁니다. 없으면 빈 문자열입니다.
+    assert client.session.get_login_crypto_info() == LoginCryptoInfo(
+        idx="IDX-AES", key=TEST_AES_KEY, pwd_aes_cphd=""
+    )
+
+
+@pytest.mark.parametrize(
+    ("crypto_fields", "expected_pwd", "expected_idx"),
+    [
+        pytest.param({}, PLAIN_PW123, None, id="no-metadata"),
+        pytest.param(
+            {"idx": "IDX", "key": TEST_AES_KEY, "pwdAESCphd": ""},
+            AES_PW123,
+            ["IDX"],
+            id="empty-pwdAESCphd",
+        ),
+        pytest.param(
+            {"idx": "IDX", "key": TEST_AES_KEY, "pwdAESCphd": "maybe"},
+            AES_PW123,
+            ["IDX"],
+            id="unknown-pwdAESCphd",
+        ),
+        pytest.param(
+            {"idx": "IDX", "key": TEST_AES_KEY, "loginFlg": "maybe"},
+            AES_PW123,
+            ["IDX"],
+            id="unknown-loginFlg",
+        ),
+    ],
+)
+def test_login_crypto_bootstrap_does_not_gate_on_pwd_aes_cphd(
+    load_json_fixture, crypto_fields, expected_pwd, expected_idx
+):
+    # 없거나 낯선 pwdAESCphd/loginFlg 는 거절 사유가 아닙니다. 비밀번호 변환은 key 만
+    # 보고 정합니다.
+    client, captured = make_crypto_bootstrap_client(
+        load_json_fixture, {**BOOTSTRAP_OK, **crypto_fields}
+    )
+
+    client.login("member1", "pw123")
+
+    fields = parse_qs(captured["body"])
+    assert fields["txtPwd"] == [expected_pwd]
+    assert fields.get("idx") == expected_idx
+
+
+@pytest.mark.parametrize("flag", ["Y", "N"])
+def test_login_sends_aes_without_idx_when_key_arrives_without_idx(load_json_fixture, flag):
+    # APK 는 getIdx() 를 확인 없이 LoginIn 에 넘기고, 폼을 만들 때 빈 값을 뺍니다
+    # (LoginRepositoryImpl.java:932-936, NetworkService.java:15342-15343).
+    # 그래서 key 가 있고 idx 가 비면 idx 없이 AES 로 로그인을 보냅니다.
+    client, captured = make_crypto_bootstrap_client(
+        load_json_fixture,
+        {**BOOTSTRAP_OK, "idx": "", "key": TEST_AES_KEY, "pwdAESCphd": flag},
+    )
+
+    client.login("member1", "pw123")
+
+    fields = parse_qs(captured["body"])
+    assert fields["txtPwd"] == [AES_PW123]
+    assert "idx" not in fields
+
+
+def test_login_crypto_bootstrap_rejects_aes_flag_without_key(load_json_fixture):
+    # "Y" 인데 key 가 없으면 AES 를 걸 수 없습니다. APK 도 빈 key 로 AES 를 부르다
+    # 실패하므로, 평문 Base64 로 내려가지 않고 로그인 POST 전에 멈춥니다.
+    client, captured = make_crypto_bootstrap_client(
+        load_json_fixture,
+        {**BOOTSTRAP_OK, "idx": "IDX", "key": "", "pwdAESCphd": "Y"},
+    )
+
+    with pytest.raises(KorailProtocolError, match="missing valid key"):
         client.login("member1", "pw123")
 
-    assert called_paths == [SERVICE_CHECK_PATH, "/classes/com.korail.mobile.common.code.do"]
+    assert captured["paths"] == [SERVICE_CHECK_PATH, COMMON_CODE_PATH]
+
+
+@pytest.mark.parametrize(
+    "crypto_fields",
+    [
+        pytest.param({"idx": "IDX", "key": "KEY"}, id="no-flag"),
+        pytest.param(
+            {"idx": "IDX", "key": "1234567890abcdefX", "pwdAESCphd": "maybe"},
+            id="unknown-flag",
+        ),
+    ],
+)
+def test_login_crypto_bootstrap_rejects_invalid_length_key(load_json_fixture, crypto_fields):
+    # 플래그 검사는 사라졌지만 key 가 있으면 길이는 여전히 검사합니다.
+    client, captured = make_crypto_bootstrap_client(
+        load_json_fixture, {**BOOTSTRAP_OK, **crypto_fields}
+    )
+
+    with pytest.raises(KorailProtocolError, match="invalid AES key/IV"):
+        client.login("member1", "pw123")
+
+    assert captured["paths"] == [SERVICE_CHECK_PATH, COMMON_CODE_PATH]
 
 
 def test_failed_relogin_clears_old_session_and_cookies(load_json_fixture):
@@ -552,6 +703,91 @@ def test_continuation_keeps_only_pending_state_and_new_cookie():
     assert client.session.pending is exc_info.value
     assert client.http.cookies.get("JSESSIONID") == "session-cont"
     client.clear_session()
+    assert client.session.pending is None
+    assert "JSESSIONID" not in client.http.cookies
+
+
+def _second_login_client(load_json_fixture, second_login: httpx.Response):
+    """A client whose first login.Login succeeds and whose second answers
+    ``second_login``."""
+    logins = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal logins
+        if request.url.path == SERVICE_CHECK_PATH:
+            return service_check_response()
+        if request.url.path == "/classes/com.korail.mobile.common.code.do":
+            return httpx.Response(
+                200, json=load_json_fixture("common_code_login_crypto_n.json")
+            )
+        if request.url.path == "/classes/com.korail.mobile.login.Login":
+            logins += 1
+            if logins == 1:
+                return httpx.Response(
+                    200,
+                    json=load_json_fixture("login_success.json"),
+                    headers={"Set-Cookie": "JSESSIONID=first-session; Path=/"},
+                )
+            return second_login
+        raise AssertionError(f"unexpected path {request.url.path}")
+
+    return KorailClient(
+        KorailConfig(enable_dynapath=True), transport=httpx.MockTransport(handler)
+    )
+
+
+_LOGINS = {
+    "login": lambda client: client.session.login("member1", "pw123"),
+    "login_social": lambda client: client.session.login_social(
+        "synthetic-cust-id", input_flag="SYNTHETIC_FLAG", check_valid_pw="Y"
+    ),
+}
+
+
+@pytest.mark.parametrize("entry", sorted(_LOGINS))
+def test_a_continuation_after_a_login_leaves_no_old_session_behind(
+    load_json_fixture, entry
+):
+    # The failure cleanup never runs for a continuation, so this is what the
+    # clear BEFORE the attempt is for.
+    client = _second_login_client(
+        load_json_fixture,
+        httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "S201",
+                "h_msg_txt": "additional auth",
+                "strResult": "SUCC",
+                "strRedirectUrl": "/classes/com.korail.mobile.onepass.login.do",
+            },
+            headers={"Set-Cookie": "JSESSIONID=session-cont; Path=/"},
+        ),
+    )
+    _LOGINS[entry](client)
+    assert client.session.current is not None
+    with pytest.raises(KorailAuthContinuationRequired) as raised:
+        _LOGINS[entry](client)
+    assert client.session.current is None
+    assert client.session.pending is raised.value
+    assert client.http.cookies.get("JSESSIONID") == "session-cont"
+
+
+@pytest.mark.parametrize("entry", sorted(_LOGINS))
+def test_a_failed_login_drops_the_cookie_its_own_answer_set(load_json_fixture, entry):
+    # The clear before the attempt cannot reach this: the cookie arrives with
+    # the failure. This is what the clear AFTER a failure is for.
+    client = _second_login_client(
+        load_json_fixture,
+        httpx.Response(
+            200,
+            json={"h_msg_cd": "AUTH_FAIL", "h_msg_txt": "bad", "strResult": "FAIL"},
+            headers={"Set-Cookie": "JSESSIONID=failed-session; Path=/"},
+        ),
+    )
+    _LOGINS[entry](client)
+    with pytest.raises(KorailAuthError):
+        _LOGINS[entry](client)
+    assert client.session.current is None
     assert client.session.pending is None
     assert "JSESSIONID" not in client.http.cookies
 
@@ -585,6 +821,7 @@ def make_logged_in_client(load_json_fixture, *, logout_response):
                 {
                     "method": request.method,
                     "query": request.url.query.decode(),
+                    "body": request.content.decode(),
                     "cookie": request.headers.get("cookie"),
                 }
             )
@@ -615,12 +852,12 @@ def test_logout_invalidates_server_session_then_clears_local(load_json_fixture):
 
     client.logout()
 
-    # Server-side invalidation was hit exactly once, as a bare GET with no query
-    # envelope (authenticated purely by the JSESSIONID cookie, LoginService.java:30).
+    # Server-side invalidation uses the 7.0.6 form POST with a timestamp.
     assert len(events["logout_calls"]) == 1
     call = events["logout_calls"][0]
-    assert call["method"] == "GET"
+    assert call["method"] == "POST"
     assert call["query"] == ""
+    assert set(parse_qs(call["body"])) == {"Device", "Version", "Key", "timeStamp"}
     assert "JSESSIONID=logout-sess" in (call["cookie"] or "")
     # Local session state is always cleared afterward.
     assert client.session.current is None

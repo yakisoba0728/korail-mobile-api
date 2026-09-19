@@ -1,13 +1,23 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 import inspect
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl
 
 import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import korail_ok_envelope as _envelope
 from korail_mobile_api import KorailClient, KorailConfig
+from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
     KorailAppError,
     KorailAuthError,
@@ -48,17 +58,11 @@ SCHEDULE_PATH = "/classes/com.korail.mobile.research.dcntCrdScheduleView.do"
 # (ResearchService.java:65-70).
 WRITE_ROUTES = (
     ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
-    ("GET", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
+    ("POST", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
 )
 
 
-def _envelope(**extra: object) -> dict[str, object]:
-    return {
-        "h_msg_cd": "IRG000000",
-        "h_msg_txt": "정상처리되었습니다",
-        "strResult": "SUCC",
-        **extra,
-    }
+
 
 
 def _schedule_request(**overrides: object) -> DiscountCardScheduleRequest:
@@ -74,8 +78,19 @@ def _schedule_request(**overrides: object) -> DiscountCardScheduleRequest:
 
 
 def _client(handler) -> KorailClient:
+    def provider(*args: object, **kwargs: object) -> str:  # pragma: no cover
+        raise AssertionError("DynaPath provider must not be invoked")
+
+    # Neither read is signed. DynaPath is on and both routes are allowlisted,
+    # so a client method that started signing them reaches the provider.
     client = KorailClient(
-        KorailConfig(),
+        KorailConfig(
+            dynapath=DynapathConfig(
+                enabled=True,
+                token_provider=provider,
+                allowlist_paths=frozenset({USAGE_PATH, SCHEDULE_PATH}),
+            )
+        ),
         transport=httpx.MockTransport(handler),
     )
     client.session.current = KorailSession(
@@ -88,9 +103,9 @@ def _client(handler) -> KorailClient:
 
 
 def test_route_boundary_admits_the_two_reads_and_neither_write():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
-    assert ("GET", USAGE_PATH) in KORAIL_READ_ONLY_ROUTES
-    assert ("GET", SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
+    assert ("POST", USAGE_PATH) in KORAIL_READ_ONLY_ROUTES
+    assert ("POST", SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
     # The two state-changing dcntCrd* routes are in the mutation set and in
     # neither direction reachable from the read-only transport.
     for route in WRITE_ROUTES:
@@ -98,12 +113,10 @@ def test_route_boundary_admits_the_two_reads_and_neither_write():
         assert route not in KORAIL_READ_ONLY_ROUTES
         with pytest.raises(KorailProtocolError):
             assert_read_only_route(*route)
-    # Both reads are GET-only; the app declares no POST overload for either
-    # (ResearchService.java:51,54).
-    assert ("POST", USAGE_PATH) not in KORAIL_READ_ONLY_ROUTES
-    assert ("POST", SCHEDULE_PATH) not in KORAIL_READ_ONLY_ROUTES
+    assert ("GET", USAGE_PATH) not in KORAIL_READ_ONLY_ROUTES
+    assert ("GET", SCHEDULE_PATH) not in KORAIL_READ_ONLY_ROUTES
     with pytest.raises(KorailProtocolError):
-        assert_read_only_route("POST", USAGE_PATH)
+        assert_read_only_route("GET", USAGE_PATH)
 
 
 def test_usage_query_is_the_card_number_and_the_common_three():
@@ -273,8 +286,9 @@ def test_schedule_parser_reads_the_ncard_inquiry_dao_shape():
 def test_parsers_refuse_a_non_success_or_malformed_body():
     # WRR000100 입력값 오류(dcntCrdNo) is what this route answered on
     # 2026-07-09 when it was probed without a card number
-    # (docs/api-status-by-service.md:467). It is an application failure, not a
-    # protocol one, so it must arrive as a KorailAppError.
+    # (docs/api-status-by-service.md, row 118, getNCardHistory). It is an
+    # application failure, not a protocol one, so it must arrive as a
+    # KorailAppError.
     with pytest.raises(KorailAppError):
         parse_discount_card_usage_response(
             {
@@ -307,30 +321,32 @@ def test_client_reads_send_exactly_the_registered_shapes():
     finally:
         client.close()
 
-    assert [request.method for request in seen] == ["GET", "GET"]
-    usage = dict(parse_qsl(urlsplit(str(seen[0].url)).query))
+    assert [request.method for request in seen] == ["POST", "POST"]
+    usage = dict(parse_qsl(seen[0].content.decode()))
     assert usage == {
         "Device": "AD",
         "Version": client.config.version,
         "Key": client.config.key,
         "dcntCrdNo": "N123",
     }
-    schedule = dict(parse_qsl(urlsplit(str(seen[1].url)).query))
-    assert set(schedule) == {
-        "Device",
-        "Version",
-        "Key",
-        "dptDt",
-        "dptRsStnNm",
-        "arvRsStnNm",
-        "dptTm",
-        "trnGpCd",
-        "dirtChtnDvCd",
-        "dcntCrdKndCd",
-        "dcntCrdKndMgNo",
-        "usePsbTno",
-    }
-    # DynaPath stays off: neither route is in the six-path allowlist.
+    # Every value and the order, not only the key set: a value moved into the
+    # wrong key, or two keys swapped, keeps the same set.
+    assert parse_qsl(seen[1].content.decode()) == [
+        ("Device", "AD"),
+        ("Version", client.config.version),
+        ("Key", client.config.key),
+        ("dptDt", "20990101"),
+        ("dptRsStnNm", "서울"),
+        ("arvRsStnNm", "부산"),
+        ("dptTm", "000000"),
+        ("trnGpCd", "109"),
+        ("dirtChtnDvCd", "1"),
+        ("dcntCrdKndCd", "MMM"),
+        ("dcntCrdKndMgNo", "B2N23100501"),
+        ("usePsbTno", "10"),
+    ]
+    # Neither read is signed. _client allowlists both routes with a provider
+    # that raises, so a signing read would have failed before this line.
     for request in seen:
         assert "x-dynapath-m-token" not in {
             name.lower() for name in request.headers

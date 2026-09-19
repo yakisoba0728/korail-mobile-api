@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """``h_msg_cd`` → 예외 매핑과 이 패키지의 예외 계층.
 
 .. code-block:: text
@@ -9,6 +17,7 @@
     │   ├── KorailSessionExpiredError     P058
     │   └── KorailAuthContinuationRequired  WebView 후속 인증
     ├── KorailDynaPathError               안티매크로 거절(응답 헤더)
+    ├── KorailDynaPathRequiredError       DynaPath 가 꺼진 채 요구 경로 호출(전송 전)
     ├── KorailAppError                    서버가 h_msg_cd 로 알린 실패
     │   ├── KorailNoResultsError
     │   │   └── KorailNoDirectTrainError
@@ -62,7 +71,16 @@ class KorailProtocolError(KorailApiError):
 
 
 class KorailAuthError(KorailApiError):
-    """로그인 실패 또는 세션 없이 인증 필요 메서드 호출."""
+    """로그인 실패 또는 세션 없이 인증 필요 메서드 호출.
+
+    ``code`` 는 서버가 준 ``h_msg_cd`` 입니다. 로그인 요청이 서버 실패를 받았을 때
+    채워지고, 그 실패가 :class:`KorailAppError` 였다면 원래 예외가 ``__cause__`` 에
+    남습니다. 서버 응답 없이 난 실패(세션 없음, 기기 쪽 인증 등)는 ``None`` 입니다.
+    """
+
+    def __init__(self, *args: object, code: str | None = None) -> None:
+        super().__init__(*args)
+        self.code = code
 
 
 class KorailSessionExpiredError(KorailAuthError):
@@ -79,12 +97,12 @@ class KorailSessionExpiredError(KorailAuthError):
         *,
         raw: object | None = None,
     ) -> None:
-        self.code = code
         self.message = message
         self.raw = raw
         super().__init__(
             f"{code or 'P058'}: "
-            f"{redact_text(message or 'KORAIL session expired')}"
+            f"{redact_text(message or 'KORAIL session expired')}",
+            code=code,
         )
 
 
@@ -103,9 +121,7 @@ class KorailDynaPathError(KorailApiError):
         raw: object | None = None,
     ) -> None:
         self.raw = raw
-        super().__init__(
-            redact_text(message or "KORAIL DynaPath request rejected")
-        )
+        super().__init__(message or "KORAIL DynaPath request rejected")
 
 
 class KorailAuthContinuationRequired(KorailAuthError):
@@ -137,6 +153,11 @@ class KorailAppError(KorailApiError):
         self.code = code
         self.message = message
         self.raw = raw
+        # The base class redacts the joined string, and that alone is not
+        # enough: a code that is itself a sensitive key name ("pnrNo: ...")
+        # takes the message's first word as its value and swallows the
+        # message's own key with it. So the message goes in already redacted.
+        # KorailSessionExpiredError and KorailNetFunnelError do the same.
         super().__init__(
             f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
         )
@@ -255,8 +276,11 @@ class KorailMutationNotAllowedError(KorailApiError):
 class KorailDynaPathRequiredError(KorailApiError):
     """DynaPath 가 필요한 경로인데 설정이 꺼져 있습니다.
 
-    :data:`~korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS` 의 여섯 경로는
-    토큰 없이 부르면 서버가 거절합니다. 이 라이브러리는 전송 전에 막습니다.
+    :data:`~korail_mobile_api.constants.DYNAPATH_REQUIRED_PATHS` 의 경로(지금은
+    ``login.Login`` 하나)는 토큰 없이 부르면 서버가 거절하므로, 설정이 꺼져 있으면
+    이 라이브러리가 전송 전에 막습니다. 허용목록
+    (:data:`~korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS`)의 나머지 다섯
+    경로는 토큰 없이도 나갑니다.
     :class:`KorailDynaPathError` 와 다릅니다 — 그쪽은 토큰을 보냈는데 서버가
     거절한 것이고, 이쪽은 아직 아무것도 보내지 않았습니다.
     """

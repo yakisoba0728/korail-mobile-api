@@ -90,6 +90,9 @@ was discarding.
   **정기권 reads stay** (`get_pass_menu`, `get_pass_available_dates`,
   `get_pass_schedule`); everything that was learned about the purchase is kept
   in README's 정기권 section, including what reviving it would cost to prove.
+  The 7.0.6 gateway (`client.v7`) registers all four pass-purchase contracts,
+  since the APK declares them, and refuses each by name; no
+  `V7MutationConsent` may name one.
   The two `Otr` siblings were never registered and remain out, now for a stated
   reason rather than for scope: they are the 자유이용권 family (내일로 /
   A-PASS / 강릉패스), a different product with a different request shape.
@@ -145,9 +148,15 @@ a live call does.
   This preparation changed no runtime request, route, credential, or live
   behavior and made no live request.
 - The read-only public API stabilization phase is complete.
-- The current package boundary is 60 exact login/read routes and 77 public methods (64 login/read plus the consent-gated mutation methods `reserve`,
-  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `add_to_cart`, `register_discount_card`, `extend_discount_card`, and `recalculate_price`,
-  which return a
+- The 7.0.6 static comparison removed three legacy high-level reads and four
+  legacy send routes; `get_notice()` now reads the nested main-cache notice.
+  The removed route and compatibility details are in
+  [7.0.6-removals.md](7.0.6-removals.md). Older milestones below retain their
+  then-current route counts.
+- The current package boundary is 57 exact login/read routes and 77 public methods (63 login/read or local helpers plus fourteen consent-gated mutation methods: `reserve`,
+  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `add_to_cart`, `register_discount_card`, `extend_discount_card`, `recalculate_price`, and `execute_station_ticket_refund`.
+  The first thirteen use `MutationConsent` and the station-ticket refund uses
+  method-scoped `V7MutationConsent`. The original thirteen methods return a
   redacted preview by default and send a live state change only with a
   `dry_run=False` matching-category consent via the double-gated
   `post_mutation_form`; `pay_with_fake_card` also requires `fake_card_only` and
@@ -314,7 +323,7 @@ was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
 of 165; current inventory is 33 successful, 14 failed, and 118 unexecuted. The
-current package boundary is 60 exact routes and 77 public methods.
+current package boundary is 57 exact routes and 77 public methods.
 
 ## Ticket-reference static read tranche
 
@@ -415,7 +424,7 @@ Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
   for a transfer until it lands
 
 The read-only transport (`post_form`/`get_json`) refuses every mutation route
-and allows 60 exact read/login routes. The reservation, unpaid-cancel, payment,
+and allows 57 exact read/login routes. The reservation, unpaid-cancel, payment,
 and refund routes are callable only through the separate consent-gated send path
 (`post_mutation_form`, `dry_run=False`); check-in, member mutation, and
 point/mileage mutation routes remain not callable.
@@ -468,7 +477,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `2444 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `3128 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -760,14 +769,14 @@ This section consolidates the current-package handoff facts that were previously
 tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/internal/superpowers/specs/`.
 
-The current implementation evidence establishes 60 routes at the exact
+The current implementation evidence establishes 57 routes at the exact
 login/read transport boundary and 77 public methods on `KorailClient`. The
 read-only path exposes no callable mutation route; reservation, unpaid-cancel,
 fake-card payment, acknowledged real-card payment, refund, and cart-add are
 callable only through the separate
 consent-gated `post_mutation_form` path, while check-in, membership, and
-point/mileage mutation routes remain not callable. The current service inventory is 32 successful, 13 failed,
-and 120 unexecuted entries out of 165; the historical pre-revalidation inventory
+point/mileage mutation routes remain not callable. The current service inventory is 33 successful, 14 failed,
+and 118 unexecuted entries out of 165; the historical pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted.
 
 App-level failures are now classified on `h_msg_cd` rather than surfacing as one
@@ -788,7 +797,7 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-The current reviewed offline gate reports `2444 passed, 1 deselected`; the
+The current reviewed offline gate reports `3128 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service

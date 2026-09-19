@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """환경변수로 실기기 값을 고정하고 라이브 스모크를 돌리는 보조 모듈.
 
 :func:`build_config_from_env` 는 DynaPath 의 기기 식별자·OS·모델을 환경변수에서 읽어
@@ -53,7 +61,8 @@ def _required_env(name: str) -> str:
 def build_config_from_env() -> KorailConfig:
     """기기 신원을 환경변수에서 가져온 :class:`KorailConfig`.
 
-    맨손 ``KorailConfig()`` 로도 로그인은 됩니다. 인스턴스마다 합성된 기기 값을 씁니다.
+    맨손 ``KorailConfig()`` 는 DynaPath 가 꺼져 있어 로그인하지 못합니다.
+    ``KorailConfig(enable_dynapath=True)`` 는 인스턴스마다 합성된 기기 값을 씁니다.
     이 함수는 **실제 값**을 고정하는 방법이고, 프로세스를 넘어 안정적인 기기 식별자를
     얻는 유일한 길입니다 — 이 패키지는 아무 상태도 저장하지 않으므로 합성 값은 그럴 수
     없습니다.
@@ -73,8 +82,12 @@ def build_config_from_env() -> KorailConfig:
     ``User-Agent`` 로도 들어갑니다. 그래서 ``KORAIL_USER_AGENT`` 만 따로 덮어쓰면 토큰이
     뒷받침하지 않는 기기를 헤더에서 주장하게 됩니다.
 
-    나머지는 — base URL, 화면 크기, SDK 정수, 광고 식별자, ``KORAIL_DYNAPATH_AS_VALUE`` —
-    패키지 기본값으로 떨어집니다.
+    나머지는 환경변수로 덮어쓸 수 있고, 없으면 이렇게 떨어집니다. 광고 식별자
+    (``KORAIL_ADVERTISING_ID``)와 ``KORAIL_DYNAPATH_AS_VALUE`` 는 패키지 기본값입니다.
+    base URL(``KORAIL_BASE_URL``)은 ``https://smart.letskorail.com:443`` 이고, 화면
+    크기(``KORAIL_DEVICE_WIDTH``/``KORAIL_DEVICE_HEIGHT``)와 SDK 정수
+    (``KORAIL_ANDROID_SDK_INT``)는 패키지 기본값이 아니라 이 함수의 리터럴 1440×3088,
+    33 입니다.
     """
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
@@ -204,7 +217,10 @@ def run_live_smoke_from_env() -> dict[str, Any]:
         stations = (station_data.raw.get("stns") or {}).get("stn")
         return {
             "appDataLoaded": bool(app_data.raw),
-            "noticeLoaded": bool(notice.raw),
+            "noticeLoaded": bool(
+                notice.board_id or notice.post_sequence or notice.post_title
+                or notice.post_content
+            ),
             "uuidLoaded": bool(uuid.verification_code),
             "maasMenuCount": len(maas_menu.items),
             "maasStationTested": maas_stations is not None,

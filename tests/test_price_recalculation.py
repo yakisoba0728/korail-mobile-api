@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,6 +15,8 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import make_authenticated_client as _client
+from _helpers import refuse_transport as _refuse
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.consent import (
     MUTATION_CATEGORIES,
@@ -19,8 +29,8 @@ from korail_mobile_api.errors import (
     KorailAuthError,
     KorailMutationNotAllowedError,
     KorailProtocolError,
+    KorailSessionExpiredError,
 )
-from korail_mobile_api.models import KorailSession
 from korail_mobile_api.mutation_models import (
     PriceRecalculationRequest,
     PriceRecalculationRow,
@@ -41,20 +51,12 @@ from korail_mobile_api.safety import (
 
 ROUTE = "/classes/com.korail.mobile.certification.PriceReCalculation"
 
-OTHER_CATEGORIES = (
-    "reserve",
-    "payment",
-    "cancel",
-    "refund",
-    "discount_card",
+# Every other category, read from MUTATION_CATEGORIES so one added later is
+# covered by the isolation tests below without editing them.
+OTHER_CATEGORIES = tuple(
+    category for category in MUTATION_CATEGORIES if category != "price_recalculation"
 )
-OTHER_FLAGS = (
-    "allow_reserve",
-    "allow_payment",
-    "allow_cancel",
-    "allow_refund",
-    "allow_discount_card",
-)
+OTHER_FLAGS = tuple(f"allow_{category}" for category in OTHER_CATEGORIES)
 
 ALLOWED = MutationConsent(allow_price_recalculation=True, dry_run=False)
 DRY_RUN = MutationConsent(allow_price_recalculation=True)
@@ -88,24 +90,6 @@ def _request(**overrides: object) -> PriceRecalculationRequest:
     }
     fields.update(overrides)
     return PriceRecalculationRequest(**fields)  # type: ignore[arg-type]
-
-
-def _client(handler) -> KorailClient:
-    client = KorailClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    client.session.current = KorailSession(
-        jsessionid="SYNTHETIC_SESSION",
-        member_no="SYNTHETIC_MEMBER_NO",
-        customer_no="SYNTHETIC_CUSTOMER_NO",
-        raw={},
-    )
-    return client
-
-
-def _refuse(request: httpx.Request) -> httpx.Response:
-    raise AssertionError(f"nothing may be sent: {request.method} {request.url}")
 
 
 # --- consent category -------------------------------------------------------
@@ -558,13 +542,10 @@ def test_transport_gate_refuses_this_route_under_any_other_category():
                 client.http.post_mutation_form(
                     ROUTE,
                     {},
+                    # Every other category granted, so what refuses is the
+                    # route's own category, not the consent.
                     consent=MutationConsent(
-                        allow_reserve=True,
-                        allow_payment=True,
-                        allow_cancel=True,
-                        allow_refund=True,
-                        allow_discount_card=True,
-                        dry_run=False,
+                        dry_run=False, **{flag: True for flag in OTHER_FLAGS}
                     ),
                     category=category,
                 )
@@ -592,17 +573,93 @@ def test_models_are_exported():
 
 def test_no_live_path_reaches_this_category():
     root = Path(korail_mobile_api.__file__).parents[2]
-    for relative in (
-        "src/korail_mobile_api/live.py",
-        "tests/test_live.py",
-        "tests/test_live_service.py",
-        "tests/test_mutation_live_paths.py",
-        "scripts/reserve_pay_refund_roundtrip.py",
+    # Every script, not one: each is an operator tool that talks to the live
+    # server, and any of them could gain a call.
+    scripts = sorted((root / "scripts").glob("*.py"))
+    assert scripts, "no scripts found; the scan would pass on nothing"
+    for path in (
+        root / "src/korail_mobile_api/live.py",
+        root / "tests/test_live.py",
+        root / "tests/test_live_service.py",
+        root / "tests/test_mutation_live_paths.py",
+        *scripts,
     ):
-        source = (root / relative).read_text(encoding="utf-8")
+        relative = path.relative_to(root).as_posix()
+        source = path.read_text(encoding="utf-8")
         for name in (
             "recalculate_price",
             "allow_price_recalculation",
             "PriceReCalculation",
         ):
             assert name not in source, f"{relative} reaches {name}"
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+def test_an_expired_session_on_recalculate_price_clears_the_client_before_raising():
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test,
+    # for recalculate_price: one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = _client(handler)
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            client.recalculate_price(
+                _request(),
+                consent=MutationConsent(
+                    allow_price_recalculation=True, dry_run=False
+                ),
+            )
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies
+
+
+def test_an_unparseable_recalculation_raises_even_with_a_pnr():
+    # The reserve methods fall back to a PNR-only hold when a live answer will
+    # not parse, because a new hold must never be lost. A recalculation makes
+    # no hold and its caller already has the PNR, so a failure stays a failure
+    # here instead of coming back as a hold with no fare.
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "IRG000000",
+                "h_msg_txt": "ok",
+                "strResult": "SUCC",
+                "h_pnr_no": "SYNTHETIC_PNR",
+                "h_jrny_cnt": "1",
+                "h_tot_prc": {"amount": 60000},
+            },
+        )
+
+    client = _client(handler)
+    try:
+        with pytest.raises(KorailProtocolError):
+            client.recalculate_price(_request(), consent=ALLOWED)
+    finally:
+        client.close()
+
+
+def test_the_repricing_form_names_a_blank_pnr():
+    request = _request()
+    object.__setattr__(request, "pnr_no", " ")
+    with pytest.raises(
+        KorailProtocolError,
+        match=r"^KORAIL price recalculation requires a non-empty pnr_no$",
+    ):
+        build_price_recalculation_form(KorailConfig(), request)

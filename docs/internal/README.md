@@ -35,6 +35,20 @@ moved is here.
   cross-check, and independent verification passes).
 - `superpowers/specs/` — the design spec written before each feature was
   implemented.
+- `refactor-plan-2026-09-16.md` — a 47-agent sweep of `src/` for bugs, type
+  gaps, exception handling, stale comments and duplication, batched into an
+  ordered refactor plan. It records what the safety gate refused as well as
+  what it approved, and which of its own findings did not survive refutation.
+- `session-handoff-2026-09-18.md` — where the work stands, what is deliberately
+  not in git (`korail.apk`, `analysis/`) and how to regenerate it from a recorded
+  APK hash, which batch to start from, and the traps that keep being
+  rediscovered. Start here if you are picking this up on another machine.
+- `refactor-plan-tests-scripts-2026-09-16.md` — the companion sweep of
+  `tests/` and `scripts/`, which the first plan left untouched. It found that
+  the suite does not pin several things it is relied on to pin — notably that
+  `pay_with_card` sends the card the caller passed — and it carries eight
+  corrections to the first plan. Read the two together; the sequencing between
+  them is in this one.
 
 For the package as it is today, start at the repository root
 [README.md](../../README.md) instead.

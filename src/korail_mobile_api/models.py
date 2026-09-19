@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """공통 응답 봉투와 열차 검색·좌석 조회가 돌려주는 타입.
 
 전부 ``frozen=True`` 데이터클래스입니다. 서버가 준 원본은 어느 모델에서든
@@ -40,7 +48,7 @@ class KorailSession:
 
     jsessionid: str | None = field(default=None, repr=False)
     member_no: str | None = field(default=None, repr=False)
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     member_card_no: str | None = field(default=None, repr=False)
     customer_no: str | None = field(default=None, repr=False)
 
@@ -59,36 +67,29 @@ class BaseKorailResponse:
     """
 
     h_msg_cd: str | None = None
-    h_msg_txt: str | None = None
+    #: 서버가 호출자의 입력을 되받아 적을 수 있어 repr 에 싣지 않습니다. 하위
+    #: 클래스는 이 선언을 물려받으므로 다시 적을 필요가 없습니다.
+    h_msg_txt: str | None = field(default=None, repr=False)
     str_result: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
         """봉투 세 필드를 검증하며 응답을 만듭니다.
 
-        ``h_msg_cd``/``h_msg_txt``/``strResult`` 중 하나라도 없거나
-        문자열도 ``null`` 도 아니면
+        ``h_msg_cd``/``h_msg_txt``/``strResult`` 값이 존재할 때 문자열도
+        ``null`` 도 아니면
         :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 값이
         무엇인지는 보지 않습니다 — 실패 판정은 호출자 몫입니다.
         """
         if not isinstance(raw, dict):
             raise KorailProtocolError("KORAIL response must be a JSON object")
         envelope_fields = ("h_msg_cd", "h_msg_txt", "strResult")
-        missing = [
-            field_name
-            for field_name in envelope_fields
-            if field_name not in raw
-        ]
-        if missing:
-            raise KorailProtocolError(
-                "KORAIL response missing required envelope fields: "
-                + ", ".join(missing)
-            )
         invalid = [
             field_name
             for field_name in envelope_fields
-            if raw[field_name] is not None
+            if field_name in raw
+            and raw[field_name] is not None
             and not isinstance(raw[field_name], str)
         ]
         if invalid:
@@ -117,6 +118,7 @@ class AppDataResponse(BaseKorailResponse):
     airport_bus_msg: str | None = None
     railplus_cardinfo: str | None = None
     version: AppVersionInfo | None = None
+    notice: "NoticeResponse | None" = None
 
 
 @dataclass(frozen=True)
@@ -124,6 +126,7 @@ class NoticeResponse(BaseKorailResponse):
     board_id: str | None = None
     post_sequence: str | None = None
     post_title: str | None = None
+    post_content: str | None = None
 
 
 @dataclass(frozen=True)
@@ -144,7 +147,7 @@ class MaasMenuItem:
     popup_image: str | None = field(default=None, repr=False)
     menu_type: str | None = None
     url: str | None = field(default=None, repr=False)
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
     @property
     def uses_station_selection(self) -> bool:
@@ -189,7 +192,7 @@ class KorailStation:
     name: str
     longitude: str | None = None
     latitude: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     group: str | None = field(default=None, repr=False)
     major: str | None = field(default=None, repr=False)
     popup_type: int | None = None
@@ -224,7 +227,7 @@ class TrainCalendarDay:
     v_train_operation_flag: str | None = None
     x_train_operation_flag: str | None = None
     raw: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict[str, Any],
         repr=False,
         compare=False,
     )
@@ -232,7 +235,6 @@ class TrainCalendarDay:
 
 @dataclass(frozen=True)
 class TrainCalendarResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     days: tuple[TrainCalendarDay, ...] = ()
 
 
@@ -266,7 +268,7 @@ class TrainScheduleStop:
     regular_flag: str | None = None
     service_flag: str | None = None
     raw: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict[str, Any],
         repr=False,
         compare=False,
     )
@@ -274,7 +276,6 @@ class TrainScheduleStop:
 
 @dataclass(frozen=True)
 class TrainScheduleResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     delay_detail_reason_content: str | None = field(default=None, repr=False)
     stops: tuple[TrainScheduleStop, ...] = ()
     delay_station_construction_order: str | None = field(
@@ -307,7 +308,7 @@ class TransferStation:
     station_code: str | None = field(default=None, repr=False)
     station_name: str | None = None
     raw: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict[str, Any],
         repr=False,
         compare=False,
     )
@@ -315,7 +316,6 @@ class TransferStation:
 
 @dataclass(frozen=True)
 class TransferStationListResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     stations: tuple[TransferStation, ...] = ()
 
 
@@ -339,6 +339,10 @@ class TrainSearchQuery:
     ``ebizCrossCheck``/``srtCheckYn`` 한 쌍을 ``"Y"`` 로 만듭니다 — 앱은 이
     둘을 항상 같은 값으로 보냅니다.
 
+    7.0.6 ``ScheduleViewSpecial`` 에서는 환승역 코드 목록과 후속 열차군
+    코드를 지정할 수 있습니다. 정렬별 ``qryDvCd`` 값은 APK에서 보호되므로
+    ``query_division_code`` 는 전선 코드를 알고 있을 때 직접 지정합니다.
+
     :meth:`~korail_mobile_api.client.KorailClient.search_trains` 와
     :meth:`~korail_mobile_api.client.KorailClient.search_transfer_trains` 가
     같은 질의 객체를 받습니다.
@@ -351,6 +355,17 @@ class TrainSearchQuery:
     passengers: int = 1
     train_group_code: str = "109"
     include_srt: bool = False
+    child_passengers: int = 0
+    senior_passengers: int = 0
+    high_disability_passengers: int = 0
+    low_disability_passengers: int = 0
+    seat_attribute_code: str = "015"
+    #: 7.0.6 TrainScheduleIn의 환승역 목록. 코드가 공개된 역만 지정합니다.
+    connection_station_codes: tuple[str, ...] = ()
+    #: 7.0.6 화면은 선택한 후속 열차군 하나를 목록으로 전송합니다.
+    connection_train_group_code: str | None = None
+    #: APK의 정렬 선택별 값은 보호되어 있으므로 전선 코드를 직접 지정합니다.
+    query_division_code: str = "1"
 
 
 def _train_scalar(value: Any, key: str) -> str | None:
@@ -402,6 +417,59 @@ def _train_optional_int(
     return value
 
 
+#: TrainSummary 의 ``train_no``·``goods_no``·``total_passenger_count`` 를 뺀 필드와
+#: 그 필드를 읽는 키. 세 번째 칸이 있으면 첫 키가 없거나 거짓일 때 그 철자를
+#: 읽습니다(``h_trn_gp_cd`` 와 ``trnGpCd`` 등). 오류는 언제나 첫 키 이름으로 냅니다.
+_TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
+    ("train_group_code", "h_trn_gp_cd", "trnGpCd"),
+    ("departure_station_code", "h_dpt_rs_stn_cd", "dptRsStnCd"),
+    ("arrival_station_code", "h_arv_rs_stn_cd", "arvRsStnCd"),
+    ("departure_station_name", "h_dpt_rs_stn_nm", "dptRsStnNm"),
+    ("arrival_station_name", "h_arv_rs_stn_nm", "arvRsStnNm"),
+    ("departure_date", "h_dpt_dt", "dptDt"),
+    ("departure_time", "h_dpt_tm", "dptTm"),
+    ("arrival_time", "h_arv_tm", "arvTm"),
+    ("run_date", "h_run_dt", "runDt"),
+    ("train_class_code", "h_trn_clsf_cd", "trnClsfCd"),
+    ("departure_run_order", "h_dpt_stn_run_ordr", "dptStnRunOrdr"),
+    ("arrival_run_order", "h_arv_stn_run_ordr", "arvStnRunOrdr"),
+    ("seat_map_flag", "h_rd_seat_map_flg", None),
+    ("general_reservation_code", "h_gen_rsv_cd", None),
+    ("departure_construction_order", "h_dpt_stn_cons_ordr", None),
+    ("arrival_construction_order", "h_arv_stn_cons_ordr", None),
+    ("seat_attribute_code", "h_seat_att_cd", None),
+    ("car_type_code", "h_car_tp_cd", None),
+    ("car_type_name", "h_car_tp_nm", None),
+    ("train_class_name", "h_trn_clsf_nm", None),
+    ("train_group_name", "h_trn_gp_nm", None),
+    ("general_room_class_name", "h_gen_psrm_cl_nm", None),
+    ("special_room_class_name", "h_spe_psrm_cl_nm", None),
+    ("secondary_general_reservation_code", "h_gen_rsv_cd2", None),
+    ("special_reservation_code", "h_spe_rsv_cd", None),
+    ("secondary_special_reservation_code", "h_spe_rsv_cd2", None),
+    ("free_reservation_code", "h_free_rsv_cd", None),
+    ("standing_reservation_code", "h_stnd_rsv_cd", None),
+    ("general_availability_name", "h_rsv_psb_nm", None),
+    ("special_availability_name", "h_spe_rsv_psb_nm", None),
+    ("wait_reservation_flag", "h_wait_rsv_flg", None),
+    ("standard_remaining_seat_count", "h_std_rest_seat_cnt", None),
+    ("first_class_remaining_seat_count", "h_fst_rest_seat_cnt", None),
+    ("free_car_count", "h_free_sracar_cnt", None),
+    ("reservation_wait_passenger_count", "h_rsv_wait_ps_cnt", None),
+    ("change_train_sequence", "h_chg_trn_seq", None),
+    ("change_train_division_code", "h_chg_trn_dv_cd", None),
+    ("merge_seat_application_flag", "h_yms_apl_flg", None),
+    ("train_suspension_flag", "h_trn_sps_flg", None),
+)
+
+
+def _train_value(raw: dict[str, Any], key: str, fallback: str | None) -> str | None:
+    value = raw.get(key)
+    if fallback is not None:
+        value = value or raw.get(fallback)
+    return _train_scalar(value, key)
+
+
 @dataclass(frozen=True)
 class TrainSummary:
     """열차 검색 결과의 한 행. 예약 폼이 필요한 값이 전부 여기 있습니다.
@@ -431,7 +499,7 @@ class TrainSummary:
     departure_date: str | None = None
     departure_time: str | None = None
     arrival_time: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     departure_station_name: str | None = None
     arrival_station_name: str | None = None
     run_date: str | None = None
@@ -501,6 +569,8 @@ class TrainSummary:
     #: :data:`~korail_mobile_api.constants.KORAIL_MERGE_SEAT_FLAGS_BY_CABIN`
     #: 참조.
     merge_seat_application_flag: str | None = field(default=None, repr=False)
+    #: 7.0.6 h_trn_sps_flg: 운휴 표시/예약 게이트용 원표 플래그.
+    train_suspension_flag: str | None = field(default=None, repr=False)
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -513,149 +583,19 @@ class TrainSummary:
         return cls(
             # _train_scalar 를 지난 뒤 ""로 기본값을 준다. train_no 만이
             # 이 클래스에서 유일하게 선택적이지 않은 속성이다.
-            train_no=_train_scalar(
-                raw.get("h_trn_no") or raw.get("trnNo"), "h_trn_no"
-            )
-            or "",
-            train_group_code=_train_scalar(
-                raw.get("h_trn_gp_cd") or raw.get("trnGpCd"), "h_trn_gp_cd"
-            ),
-            departure_station_code=_train_scalar(
-                raw.get("h_dpt_rs_stn_cd") or raw.get("dptRsStnCd"),
-                "h_dpt_rs_stn_cd",
-            ),
-            arrival_station_code=_train_scalar(
-                raw.get("h_arv_rs_stn_cd") or raw.get("arvRsStnCd"),
-                "h_arv_rs_stn_cd",
-            ),
-            departure_station_name=_train_scalar(
-                raw.get("h_dpt_rs_stn_nm") or raw.get("dptRsStnNm"),
-                "h_dpt_rs_stn_nm",
-            ),
-            arrival_station_name=_train_scalar(
-                raw.get("h_arv_rs_stn_nm") or raw.get("arvRsStnNm"),
-                "h_arv_rs_stn_nm",
-            ),
-            departure_date=_train_scalar(
-                raw.get("h_dpt_dt") or raw.get("dptDt"), "h_dpt_dt"
-            ),
-            departure_time=_train_scalar(
-                raw.get("h_dpt_tm") or raw.get("dptTm"), "h_dpt_tm"
-            ),
-            arrival_time=_train_scalar(
-                raw.get("h_arv_tm") or raw.get("arvTm"), "h_arv_tm"
-            ),
-            run_date=_train_scalar(
-                raw.get("h_run_dt") or raw.get("runDt"), "h_run_dt"
-            ),
-            train_class_code=_train_scalar(
-                raw.get("h_trn_clsf_cd") or raw.get("trnClsfCd"),
-                "h_trn_clsf_cd",
-            ),
-            departure_run_order=_train_scalar(
-                raw.get("h_dpt_stn_run_ordr") or raw.get("dptStnRunOrdr"),
-                "h_dpt_stn_run_ordr",
-            ),
-            arrival_run_order=_train_scalar(
-                raw.get("h_arv_stn_run_ordr") or raw.get("arvStnRunOrdr"),
-                "h_arv_stn_run_ordr",
-            ),
-            seat_map_flag=_train_optional_string(raw, "h_rd_seat_map_flg"),
-            general_reservation_code=_train_optional_string(
-                raw,
-                "h_gen_rsv_cd",
-            ),
-            departure_construction_order=_train_optional_string(
-                raw,
-                "h_dpt_stn_cons_ordr",
-            ),
-            arrival_construction_order=_train_optional_string(
-                raw,
-                "h_arv_stn_cons_ordr",
-            ),
-            seat_attribute_code=_train_optional_string(
-                raw,
-                "h_seat_att_cd",
-            ),
-            car_type_code=_train_optional_string(raw, "h_car_tp_cd"),
-            car_type_name=_train_optional_string(raw, "h_car_tp_nm"),
-            train_class_name=_train_optional_string(raw, "h_trn_clsf_nm"),
-            train_group_name=_train_optional_string(raw, "h_trn_gp_nm"),
-            general_room_class_name=_train_optional_string(
-                raw,
-                "h_gen_psrm_cl_nm",
-            ),
-            special_room_class_name=_train_optional_string(
-                raw,
-                "h_spe_psrm_cl_nm",
-            ),
-            secondary_general_reservation_code=_train_optional_string(
-                raw,
-                "h_gen_rsv_cd2",
-            ),
-            special_reservation_code=_train_optional_string(
-                raw,
-                "h_spe_rsv_cd",
-            ),
-            secondary_special_reservation_code=_train_optional_string(
-                raw,
-                "h_spe_rsv_cd2",
-            ),
-            free_reservation_code=_train_optional_string(
-                raw,
-                "h_free_rsv_cd",
-            ),
-            standing_reservation_code=_train_optional_string(
-                raw,
-                "h_stnd_rsv_cd",
-            ),
-            general_availability_name=_train_optional_string(
-                raw,
-                "h_rsv_psb_nm",
-            ),
-            special_availability_name=_train_optional_string(
-                raw,
-                "h_spe_rsv_psb_nm",
-            ),
-            wait_reservation_flag=_train_optional_string(
-                raw,
-                "h_wait_rsv_flg",
-            ),
-            standard_remaining_seat_count=_train_optional_string(
-                raw,
-                "h_std_rest_seat_cnt",
-            ),
-            first_class_remaining_seat_count=_train_optional_string(
-                raw,
-                "h_fst_rest_seat_cnt",
-            ),
-            free_car_count=_train_optional_string(
-                raw,
-                "h_free_sracar_cnt",
-            ),
-            reservation_wait_passenger_count=_train_optional_string(
-                raw,
-                "h_rsv_wait_ps_cnt",
-            ),
+            train_no=_train_value(raw, "h_trn_no", "trnNo") or "",
+            **{
+                attr: _train_value(raw, key, fallback)
+                for attr, key, fallback in _TRAIN_SUMMARY_KEYS
+            },
             total_passenger_count=_train_optional_int(raw, "totPsgCnt"),
             # x4/b.java:23 이 좌석 검색의 txtGdNo 를 trainInfo.getTxtGdNo()
             # 에서 가져오므로, 좌석 조회 폼이 넘길 수 있게 열차 행에서
-            # 상품번호(h_gd_no / txtGdNo)를 붙잡아 둔다.
+            # 상품번호(h_gd_no / txtGdNo)를 붙잡아 둔다. 다른 두 철자 필드와
+            # 달리 첫 키가 거짓이어도 먼저 검사한다.
             goods_no=(
                 _train_optional_string(raw, "h_gd_no")
                 or _train_optional_string(raw, "txtGdNo")
-            ),
-            change_train_sequence=_train_optional_string(
-                raw,
-                "h_chg_trn_seq",
-            ),
-            change_train_division_code=_train_optional_string(
-                raw,
-                "h_chg_trn_dv_cd",
-            ),
-            merge_seat_application_flag=_train_optional_string(
-                raw,
-                "h_yms_apl_flg",
             ),
             raw=raw,
         )
@@ -688,7 +628,6 @@ class SeatCar:
 
 @dataclass(frozen=True)
 class SeatCarListResponse(BaseKorailResponse):
-    h_msg_txt: str | None = field(default=None, repr=False)
     recommended_car_no: int | None = None
     train_no: str | None = field(default=None, repr=False)
     cars: tuple[SeatCar, ...] = ()
@@ -741,11 +680,11 @@ class SeatInventoryResponse(BaseKorailResponse):
     가 이 값을 요구합니다 — 없으면 호차를 직접 적어야 합니다.
     """
 
-    h_msg_txt: str | None = field(default=None, repr=False)
     layout_type: int = 0
     arrangement_code: str = ""
-    remaining_count: int = 0
-    total_count: int = 0
+    #: 7.0.6 TResidualSeatsResearchOut DTO에는 이 두 건수 키가 없습니다.
+    remaining_count: int | None = None
+    total_count: int | None = None
     seats: tuple[PhysicalSeat, ...] = ()
     windows: tuple[SeatWindow, ...] = ()
     vr_banner_url: str | None = field(default=None, repr=False)
@@ -761,12 +700,12 @@ class TrainSearchMetadata:
     직접 읽을 일은 거의 없습니다. 다음 페이지는
     :meth:`TrainSearchResult.next_page` 가 이 값들로 만들어 줍니다.
 
-    ``menu_id`` 는 없습니다. ScheduleView 응답에 ``h_menu_id`` 가 없기
-    때문입니다 — 앱의 ``txtMenuId`` 는 클라이언트 쪽 상수
-    (``a5/k.java:92-94`` 의 ``"11"``)이고 서버 값이 아닙니다.
+    7.0.6 ``TrainScheduleOut`` 는 ``h_menu_id`` 를 선언합니다. 요청의
+    ``txtMenuId`` 와 별도로 서버가 되돌려 준 값을 보존합니다.
     """
 
     job_id: str | None = field(default=None, repr=False)
+    menu_id: str | None = field(default=None, repr=False)
     product_no: str | None = field(default=None, repr=False)
     next_page_flag: str | None = None
     next_query_station_no: str | None = field(default=None, repr=False)
@@ -782,17 +721,13 @@ class TrainSearchMetadata:
     #: ``h_notice_msg`` — 서버가 검색 결과에 붙이는 안내 문구
     #: (``RsvInquiryResponse.java:12``).
     notice_message: str | None = None
-    # 아래 네 필드는 APK 근거가 없다. strJobId / h_seat_cnt_first /
-    # h_seat_cnt_second / txtGoHour_first 는 analysis/ 전체에서 0건이고,
-    # RsvInquiryResponse.java:8-17 이 선언하는 아홉 개 최상위 필드에도 없다.
-    # 공개 속성을 지우면 호출자가 깨지므로 남겨 둘 뿐이니, 실제 서버에서는
-    # None 을 예상하라. 같은 이유로 h_menu_id 는 이 모델에서 제외돼 있다.
+    # 7.0.6 TrainScheduleOut 이 셋 다 선언한다(docs/7.0.6-one-to-one-audit.md).
     first_seat_count: str | None = None
     second_seat_count: str | None = None
     first_departure_time: str | None = field(default=None, repr=False)
     merge_reservation_available_flag: str | None = None
     raw: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict[str, Any],
         repr=False,
         compare=False,
     )
@@ -846,7 +781,7 @@ class TrainSearchResult:
 
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:
@@ -980,7 +915,7 @@ class TransferSearchResult:
     itineraries: list[TransferItinerary]
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:

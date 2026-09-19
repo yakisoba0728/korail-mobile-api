@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 import httpx
 import pytest
 
@@ -26,6 +34,18 @@ def make_settings() -> DynapathTokenSettings:
         os_version="13",
         device_model="SM-S928N",
     )
+
+
+# A complete login.Login body minus the common three. These tests are about the
+# token header, and login.Login is only the allowlisted vehicle; a bare
+# post_form(route) stops being a valid request once the route has a field
+# contract (src plan batch 13).
+LOGIN_FORM = {
+    "txtMemberNo": "SYNTHETIC_MEMBER",
+    "txtPwd": "SYNTHETIC_PASSWORD",
+    "txtInputFlg": "2",
+    "checkValidPw": "Y",
+}
 
 
 def success_handler(_: httpx.Request) -> httpx.Response:
@@ -156,7 +176,7 @@ def test_http_client_generates_dynapath_header_from_token_settings():
     )
     client = KorailHttpClient(config, transport=httpx.MockTransport(handler))
 
-    client.post_form("/classes/com.korail.mobile.login.Login")
+    client.post_form("/classes/com.korail.mobile.login.Login", LOGIN_FORM)
 
     assert captured["token"] == generate_dynapath_token(
         settings,
@@ -218,8 +238,8 @@ def test_http_generates_independent_fixed_rt_tokens_across_requests():
         )
     )
     client = KorailHttpClient(config, transport=httpx.MockTransport(handler))
-    client.post_form("/classes/com.korail.mobile.login.Login")
-    client.post_form("/classes/com.korail.mobile.login.Login")
+    client.post_form("/classes/com.korail.mobile.login.Login", LOGIN_FORM)
+    client.post_form("/classes/com.korail.mobile.login.Login", LOGIN_FORM)
     assert captured == [
         generate_dynapath_token(
             settings,

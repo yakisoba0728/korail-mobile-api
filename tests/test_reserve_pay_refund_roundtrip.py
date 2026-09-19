@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """Offline safety tests for the real-card operator script.
 
 ``scripts/reserve_pay_refund_roundtrip.py`` is the one thing in this repository
@@ -77,7 +85,7 @@ HISTORY = "/classes/com.korail.mobile.reservation.ReservationView"
 RESERVE = "/classes/com.korail.mobile.certification.TicketReservation"
 DETAIL = "/classes/com.korail.mobile.certification.ReservationList"
 PAYMENT = "/classes/com.korail.mobile.payment.ReservationPayment"
-TICKETS = "/classes/com.korail.mobile.myTicket.MyTicketList"
+TICKETS = "/classes/com.korail.mobile.myTicket.MyTicketNewList.do"
 SEL_TICKET = "/classes/com.korail.mobile.refunds.SelTicketInfo"
 COMMISSION = "/classes/com.korail.mobile.refunds.CommissionView"
 REFUND = "/classes/com.korail.mobile.refunds.RefundsRequest"
@@ -169,13 +177,18 @@ def _replies(*, pnr: str = SYNTHETIC_PNR, **overrides: Any) -> dict[str, dict[st
         ),
         PAYMENT: _ok(h_img_tk_flg="N"),
         TICKETS: _ok(
-            tickets=[
+            pnr_list=[
                 {
                     "h_pnr_no": pnr,
-                    "h_orgtk_ret_sale_dt": "20990101",
-                    "h_orgtk_wct_no": "SYNTHETIC_WCT",
-                    "h_orgtk_sale_sqno": "0001",
-                    "h_orgtk_ret_pwd": "SYNTHETIC_RETPWD",
+                    "ticket_list": [
+                        {
+                            "h_pnr_no": pnr,
+                            "h_orgtk_ret_sale_dt": "20990101",
+                            "h_orgtk_wct_no": "SYNTHETIC_WCT",
+                            "h_orgtk_sale_sqno": "0001",
+                            "h_orgtk_ret_pwd": "SYNTHETIC_RETPWD",
+                        }
+                    ],
                 }
             ]
         ),
@@ -192,7 +205,7 @@ def _replies(*, pnr: str = SYNTHETIC_PNR, **overrides: Any) -> dict[str, dict[st
             ret_fee="00000000000000",
             prg_psb_flg="Y",
         ),
-        REFUND: _ok(),
+        REFUND: _ok(stlList=[]),
         CANCEL: _ok(),
     }
     base.update(overrides)
@@ -270,7 +283,9 @@ def test_module_level_code_is_only_definitions_and_constants():
 
     Every top-level statement must be an import, a definition, a constant
     assignment, or the ``if __name__ == "__main__"`` guard. A stray call at
-    module level would fail here.
+    module level would fail here -- including one on the right-hand side of an
+    assignment (``CLIENT = KorailClient()``), which is why every assigned value
+    must be a literal.
     """
     tree = ast.parse(SCRIPT_SOURCE)
     for node in tree.body:
@@ -289,6 +304,9 @@ def test_module_level_code_is_only_definitions_and_constants():
         ):
             if isinstance(node, ast.Expr):
                 assert isinstance(node.value, ast.Constant), ast.dump(node)
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                assert node.value is not None, ast.dump(node)
+                ast.literal_eval(node.value)
             continue
         assert isinstance(node, ast.If), ast.dump(node)
         assert ast.unparse(node.test) == "__name__ == '__main__'"
@@ -576,6 +594,35 @@ def test_recover_does_not_need_a_fare_ceiling(monkeypatch: pytest.MonkeyPatch):
     rt._require_opt_ins(real_charge=False)
 
 
+@pytest.mark.parametrize(
+    "mode",
+    [["--recover"], ["--reserve-cancel-only"], []],
+    ids=["recover", "reserve-cancel-only", "charging"],
+)
+def test_every_mode_refuses_an_interval_below_one_second(
+    mode: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    """The pacing floor holds on every path that sends, --recover included.
+
+    --recover used to branch off before the check and accept 0.01s. Everything
+    that could send is replaced with a failure, so a regression cannot reach
+    the network from here -- it would come back as exit 1, not 2.
+    """
+    _all_opt_ins(monkeypatch)
+    monkeypatch.setenv(MAX_FARE_ENV, "5000")
+    monkeypatch.setenv(rt.RECOVER_PNR_ENV, SYNTHETIC_PNR)
+
+    def _never(*args, **kwargs):  # pragma: no cover - must never run
+        raise AssertionError("reached a sending path with a 0.01s interval")
+
+    for name in ("KorailClient", "build_config_from_env", "recover", "read_card_from_env"):
+        monkeypatch.setattr(rt, name, _never)
+    assert rt.main([*mode, "--min-interval", "0.01"]) == 2
+    assert "--min-interval below 1.0s" in capsys.readouterr().out
+
+
 # --- consents ----------------------------------------------------------------
 
 
@@ -688,7 +735,7 @@ def test_a_live_shaped_pnr_reaches_the_operator_through_every_banner(
     # TICKETS returns nothing, so the run fails AFTER paying: this exercises the
     # hold banner and the not-clean failure banner in one pass.
     recorder = _Recorder(
-        _replies(pnr=LIVE_SHAPED_PNR, **{TICKETS: _ok(tickets=[])})
+        _replies(pnr=LIVE_SHAPED_PNR, **{TICKETS: _ok(pnr_list=[])})
     )
     trip = _round_trip(recorder, monkeypatch)
     with pytest.raises(rt.RoundTripAborted):
@@ -898,7 +945,7 @@ def test_a_failure_after_payment_banners_the_pnr_and_the_recovery_command(
     # The payment succeeded but the paid ticket's refund identity cannot be
     # found. This is the worst case the script is designed against: money has
     # moved and the operator must be told exactly what they are holding.
-    recorder = _Recorder(_replies(**{TICKETS: _ok(tickets=[])}))
+    recorder = _Recorder(_replies(**{TICKETS: _ok(pnr_list=[])}))
     trip = _round_trip(recorder, monkeypatch)
     with pytest.raises(rt.RoundTripAborted):
         trip.run()
@@ -1009,11 +1056,22 @@ def test_find_ticket_identity_accepts_an_identity_nested_under_its_pnr():
 # --- recovery mode -----------------------------------------------------------
 
 
+def _recover_client(recorder: _Recorder, monkeypatch: pytest.MonkeyPatch) -> KorailClient:
+    """A client recover() can log in with, answering through ``recorder``."""
+    client = KorailClient(transport=httpx.MockTransport(recorder))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    monkeypatch.setattr(
+        client, "login", lambda *a, **k: KorailSession(jsessionid="s")
+    )
+    monkeypatch.setattr(rt, "read_credentials_from_env", lambda: ("m", "p"))
+    return client
+
+
 def test_recover_cancels_an_unpaid_hold(monkeypatch: pytest.MonkeyPatch):
     recorder = _Recorder(
         _replies(
             **{
-                TICKETS: _ok(tickets=[]),
+                TICKETS: _ok(pnr_list=[]),
                 HISTORY: _ok(
                     jrny_infos={
                         "jrny_info": [
@@ -1033,12 +1091,7 @@ def test_recover_cancels_an_unpaid_hold(monkeypatch: pytest.MonkeyPatch):
             }
         )
     )
-    client = KorailClient(transport=httpx.MockTransport(recorder))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    monkeypatch.setattr(
-        client, "login", lambda *a, **k: KorailSession(jsessionid="s")
-    )
-    monkeypatch.setattr(rt, "read_credentials_from_env", lambda: ("m", "p"))
+    client = _recover_client(recorder, monkeypatch)
     assert rt.recover(client, rt._Console(), SYNTHETIC_PNR) == 0
     assert CANCEL in recorder.paths()
     assert REFUND not in recorder.paths()
@@ -1047,13 +1100,8 @@ def test_recover_cancels_an_unpaid_hold(monkeypatch: pytest.MonkeyPatch):
 def test_recover_reports_and_exits_non_zero_for_an_unknown_pnr(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    recorder = _Recorder(_replies(**{TICKETS: _ok(tickets=[])}))
-    client = KorailClient(transport=httpx.MockTransport(recorder))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    monkeypatch.setattr(
-        client, "login", lambda *a, **k: KorailSession(jsessionid="s")
-    )
-    monkeypatch.setattr(rt, "read_credentials_from_env", lambda: ("m", "p"))
+    recorder = _Recorder(_replies(**{TICKETS: _ok(pnr_list=[])}))
+    client = _recover_client(recorder, monkeypatch)
     assert rt.recover(client, rt._Console(), "NOT_ON_THIS_ACCOUNT") == 1
     # Nothing was cancelled or refunded on a PNR the account does not hold.
     assert CANCEL not in recorder.paths()
@@ -1234,15 +1282,14 @@ def test_recover_refunds_a_paid_ticket_after_printing_its_commission(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ):
     recorder = _Recorder(_replies())
-    client = KorailClient(transport=httpx.MockTransport(recorder))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    monkeypatch.setattr(
-        client, "login", lambda *a, **k: KorailSession(jsessionid="s")
-    )
-    monkeypatch.setattr(rt, "read_credentials_from_env", lambda: ("m", "p"))
+    client = _recover_client(recorder, monkeypatch)
     assert rt.recover(client, rt._Console(), SYNTHETIC_PNR) == 0
     out = capsys.readouterr().out
     assert "REFUND AMOUNT: 8400 KRW" in out
+    # The recovery shows the whole quote, as the round trip does -- the proceed
+    # flag and the server's note included.
+    assert "proceed flag:" in out
+    assert "note:" in out
     assert out.index("REFUND AMOUNT") < out.index("refund: strResult=SUCC")
     assert REFUND in recorder.paths()
     assert CANCEL not in recorder.paths()

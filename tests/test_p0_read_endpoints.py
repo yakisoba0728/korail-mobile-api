@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 import inspect
@@ -659,7 +667,7 @@ def test_null_documented_optional_containers_parse_as_empty_tuples():
 
 def test_safety_registry_has_only_exact_new_read_contracts():
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     for path, expected_fields in EXACT_FIELDS.items():
         assert KORAIL_EXACT_REQUEST_FIELDS[path] == frozenset(
             expected_fields
@@ -672,9 +680,15 @@ def test_safety_registry_has_only_exact_new_read_contracts():
                 {**values, "unexpected": "blocked"},
             )
         missing = dict(values)
-        missing.pop(next(iter(expected_fields)))
+        # Device is required for every route here. The merge inquiry may
+        # legitimately omit selRsStnNm before an intermediate station is chosen.
+        missing.pop("Device")
         with pytest.raises(KorailProtocolError):
             assert_read_only_request_fields(path, missing)
+        if path == MERGE_SEATS_PATH:
+            without_selection = dict(values)
+            without_selection.pop("selRsStnNm")
+            assert_read_only_request_fields(path, without_selection)
         with pytest.raises(KorailProtocolError):
             assert_read_only_route("GET", path)
 
@@ -811,6 +825,30 @@ def test_p058_from_every_new_read_clears_existing_session(
         client.close()
     assert client.session.current is None
     assert "JSESSIONID" not in client.http.cookies
+
+
+def test_helper_seat_guidance_returns_server_advisory_to_caller():
+    """The app displays MRR800011 as seat guidance instead of losing its text."""
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "MRR800011",
+                "h_msg_txt": "synthetic helper-seat eligibility notice",
+                "strResult": "FAIL",
+            },
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    try:
+        result = client.get_guide_seat_condition(_guide_seat_request())
+    finally:
+        client.close()
+
+    assert result.str_result == "FAIL"
+    assert result.h_msg_cd == "MRR800011"
+    assert result.h_msg_txt == "synthetic helper-seat eligibility notice"
 
 
 @pytest.mark.parametrize(

@@ -1,4 +1,13 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 import inspect
+from collections.abc import Sequence
 from typing import get_type_hints
 
 import korail_mobile_api
@@ -8,8 +17,6 @@ from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.limousine_models import (
     LimousineScheduleQuery,
     LimousineScheduleResponse,
-    LimousineScheduleViewQuery,
-    LimousineScheduleViewResponse,
     LimousineSeatInventoryQuery,
     LimousineSeatInventoryResponse,
 )
@@ -20,6 +27,23 @@ from korail_mobile_api.models import (
     TrainSummary,
     UuidResponse,
 )
+from korail_mobile_api.mutation_models import (
+    StationRefundExecutionRequest,
+    StationRefundExecutionResponse,
+    StationRefundVerificationRequest,
+    StationRefundVerificationResponse,
+)
+from korail_mobile_api.v7 import V7MutationConsent, V7MutationPreview
+
+
+def _assert_exported(name: str, expected: object = None) -> None:
+    """``name`` is in ``__all__`` and importable -- and is ``expected`` if given."""
+    assert name in korail_mobile_api.__all__, name
+    exported = getattr(korail_mobile_api, name)
+    if expected is None:
+        assert exported, name
+    else:
+        assert exported is expected, name
 
 
 def test_client_public_method_set_is_stable():
@@ -53,8 +77,6 @@ def test_client_public_method_set_is_stable():
         "get_discount_coupons",
         "get_free_seat_car_info",
         "get_guide_seat_condition",
-        "get_gift_ticket_list",
-        "get_limousine_schedule_view",
         "get_limousine_schedules",
         "get_limousine_seat_inventory",
         "get_korail_point_summary",
@@ -70,7 +92,6 @@ def test_client_public_method_set_is_stable():
         "get_pass_schedule",
         "get_original_ticket_inquiry",
         "get_pbp_acceptance_specifications",
-        "get_platform_numbers",
         "get_product_detail",
         "get_product_reservations",
         "get_price_fare_quote",
@@ -96,6 +117,7 @@ def test_client_public_method_set_is_stable():
         "get_customer_trip_info",
         "get_uuid",
         "login",
+        "login_social",
         "logout",
         "pay_with_card",
         "pay_with_fake_card",
@@ -109,6 +131,8 @@ def test_client_public_method_set_is_stable():
         "search_trains",
         "search_trains_with_transfer_fallback",
         "search_transfer_trains",
+        "verify_station_ticket_refund",
+        "execute_station_ticket_refund",
     }
 
 
@@ -121,10 +145,6 @@ def test_limousine_signatures_types_and_exports_are_public():
         "get_limousine_seat_inventory": (
             LimousineSeatInventoryQuery,
             LimousineSeatInventoryResponse,
-        ),
-        "get_limousine_schedule_view": (
-            LimousineScheduleViewQuery,
-            LimousineScheduleViewResponse,
         ),
     }
     for method_name, (query_type, response_type) in expected.items():
@@ -146,8 +166,7 @@ def test_limousine_signatures_types_and_exports_are_public():
         "LimousineScheduleViewTrain",
         "LimousineScheduleViewResponse",
     ):
-        assert name in korail_mobile_api.__all__
-        assert getattr(korail_mobile_api, name)
+        _assert_exported(name)
 
 
 def test_seat_inventory_signatures_types_and_exports_are_public():
@@ -160,6 +179,7 @@ def test_seat_inventory_signatures_types_and_exports_are_public():
         "train",
         "passenger_count",
         "room_class_code",
+        "seat_attribute_code",
     ]
     assert list(inventory_signature.parameters) == [
         "self",
@@ -186,6 +206,7 @@ def test_seat_inventory_signatures_types_and_exports_are_public():
         "train": TrainSummary,
         "passenger_count": int,
         "room_class_code": str,
+        "seat_attribute_code": str | None,
         "return": models.SeatCarListResponse,
     }
     assert inventory_hints == {
@@ -203,8 +224,7 @@ def test_seat_inventory_signatures_types_and_exports_are_public():
         "SeatWindow",
         "SeatInventoryResponse",
     ):
-        assert name in korail_mobile_api.__all__
-        assert getattr(korail_mobile_api, name) is getattr(models, name)
+        _assert_exported(name, getattr(models, name))
 
 
 def test_uuid_maas_signatures_types_and_exports_are_stable():
@@ -212,7 +232,9 @@ def test_uuid_maas_signatures_types_and_exports_are_stable():
     menu_signature = inspect.signature(KorailClient.get_maas_menu_list)
     maas_signature = inspect.signature(KorailClient.get_maas_station_data)
     assert list(uuid_signature.parameters) == ["self"]
-    assert list(menu_signature.parameters) == ["self"]
+    assert list(menu_signature.parameters) == [
+        "self", "pnr_no", "ticket_return_numbers"
+    ]
     assert list(maas_signature.parameters) == [
         "self",
         "additional_service_code",
@@ -222,6 +244,11 @@ def test_uuid_maas_signatures_types_and_exports_are_stable():
     maas_hints = get_type_hints(KorailClient.get_maas_station_data)
     assert uuid_hints["return"] is UuidResponse
     assert menu_hints["return"] is models.MaasMenuListResponse
+    assert menu_hints["pnr_no"] == str | None
+    assert menu_hints["ticket_return_numbers"] == Sequence[str] | None
+    for name in ("pnr_no", "ticket_return_numbers"):
+        assert menu_signature.parameters[name].default is None
+        assert menu_signature.parameters[name].kind is inspect.Parameter.KEYWORD_ONLY
     assert maas_hints["additional_service_code"] is str
     assert maas_hints["return"] is StationDataResponse
     assert (
@@ -236,8 +263,7 @@ def test_uuid_maas_signatures_types_and_exports_are_stable():
         "StationDataResponse": StationDataResponse,
     }
     for name, model in expected_models.items():
-        assert name in korail_mobile_api.__all__
-        assert getattr(korail_mobile_api, name) is model
+        _assert_exported(name, model)
 
 
 def test_completed_errors_are_exported():
@@ -266,6 +292,43 @@ def test_login_and_ticket_signatures_remain_compatible():
     ]
 
 
+def test_new_social_login_and_station_refund_methods_have_explicit_contracts():
+    social = inspect.signature(KorailClient.login_social)
+    assert list(social.parameters) == [
+        "self", "cust_id", "input_flag", "check_valid_pw"
+    ]
+    assert social.parameters["input_flag"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert social.parameters["check_valid_pw"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert get_type_hints(KorailClient.login_social) == {
+        "cust_id": str,
+        "input_flag": str,
+        "check_valid_pw": str,
+        "return": KorailSession,
+    }
+
+    verify = inspect.signature(KorailClient.verify_station_ticket_refund)
+    execute = inspect.signature(KorailClient.execute_station_ticket_refund)
+    assert list(verify.parameters) == ["self", "request"]
+    assert list(execute.parameters) == ["self", "request", "consent"]
+    assert execute.parameters["consent"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert get_type_hints(KorailClient.verify_station_ticket_refund) == {
+        "request": StationRefundVerificationRequest,
+        "return": StationRefundVerificationResponse,
+    }
+    assert get_type_hints(KorailClient.execute_station_ticket_refund) == {
+        "request": StationRefundExecutionRequest,
+        "consent": V7MutationConsent,
+        "return": V7MutationPreview | StationRefundExecutionResponse,
+    }
+    for name, model in (
+        ("StationRefundVerificationRequest", StationRefundVerificationRequest),
+        ("StationRefundVerificationResponse", StationRefundVerificationResponse),
+        ("StationRefundExecutionRequest", StationRefundExecutionRequest),
+        ("StationRefundExecutionResponse", StationRefundExecutionResponse),
+    ):
+        _assert_exported(name, model)
+
+
 def test_cache_method_signatures_and_types_are_public():
     from korail_mobile_api.models import AppDataResponse, NoticeResponse
 
@@ -278,7 +341,7 @@ def test_cache_method_signatures_and_types_are_public():
     assert app_signature.return_annotation is AppDataResponse
     assert notice_signature.return_annotation is NoticeResponse
     for name in ("AppDataResponse", "AppVersionInfo", "NoticeResponse"):
-        assert getattr(korail_mobile_api, name)
+        _assert_exported(name)
 
 
 def test_config_preserves_baseline_positional_constructor_order():
@@ -365,8 +428,7 @@ def test_raw_typed_core_exports_and_return_hints_are_public():
         "TrainSearchMetadata": models.TrainSearchMetadata,
     }
     for name, model in expected_models.items():
-        assert name in korail_mobile_api.__all__
-        assert getattr(korail_mobile_api, name) is model
+        _assert_exported(name, model)
 
     methods = {
         "get_station_info": (

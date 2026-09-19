@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """읽기 라우트 응답을 :mod:`korail_mobile_api.read_models` 타입으로 변환.
 
 파서 하나가 라우트 하나를 맡습니다. 봉투 확인 후 DAO 필드만 추출하며,
@@ -16,6 +24,7 @@ from .errors import (
     KorailSessionExpiredError,
     classify_app_error,
 )
+from .models import BaseKorailResponse
 from .read_models import (
     CartItem,
     CartListResponse,
@@ -46,6 +55,7 @@ from .read_models import (
     IntermediateStation,
     KorailPointSummaryResponse,
     MaasServiceDetail,
+    MaasServiceDetailInfo,
     MaasServiceDetailListResponse,
     MergeSeatsInquiryResponse,
     MileageHistoryEntry,
@@ -67,6 +77,7 @@ from .read_models import (
     PassPassengerInfos,
     PassPeriodOption,
     PassScheduleInfo,
+    PassScheduleMainInfo,
     PassScheduleResponse,
     PassScheduleTrain,
     PbpAcceptanceJourney,
@@ -102,6 +113,9 @@ from .read_models import (
     SelfSeatChangeStation,
     ServiceStatusResponse,
     TicketDuplicationCheckResponse,
+    TicketListReservation,
+    TicketListResponse,
+    TicketListTicket,
     TicketReceipt,
     TicketReceiptResponse,
     TicketReservationDetailResponse,
@@ -116,54 +130,101 @@ from .read_models import (
 )
 
 
+def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListResponse:
+    """7.0.6 ``pnr_list`` → ``ticket_list`` 승차권 목록."""
+    raw = response.raw
+    reservation_rows = raw.get("pnr_list")
+    if reservation_rows is None:
+        reservation_rows = []
+    if not isinstance(reservation_rows, list):
+        raise KorailProtocolError("KORAIL ticket list pnr_list must be a list or null")
+    reservations: list[TicketListReservation] = []
+    for reservation_raw in reservation_rows:
+        if not isinstance(reservation_raw, Mapping):
+            raise KorailProtocolError("KORAIL ticket list reservation must be an object")
+        ticket_rows = reservation_raw.get("ticket_list")
+        if ticket_rows is None:
+            ticket_rows = []
+        if not isinstance(ticket_rows, list):
+            raise KorailProtocolError("KORAIL ticket list ticket_list must be a list or null")
+        tickets: list[TicketListTicket] = []
+        for ticket_raw in ticket_rows:
+            if not isinstance(ticket_raw, Mapping):
+                raise KorailProtocolError("KORAIL ticket list ticket must be an object")
+            train_rows = ticket_raw.get("jrn_info")
+            if train_rows is None:
+                train_rows = []
+            if not isinstance(train_rows, list) or any(
+                not isinstance(train_row, Mapping) for train_row in train_rows
+            ):
+                raise KorailProtocolError("KORAIL ticket list jrn_info must contain objects")
+            tickets.append(
+                TicketListTicket(
+                    pnr_no=_optional_scalar_string(ticket_raw, "h_pnr_no", "ticket list"),
+                    sale_window_no=_optional_scalar_string(
+                        ticket_raw, "h_orgtk_wct_no", "ticket list"
+                    ),
+                    sale_date=_optional_scalar_string(
+                        ticket_raw, "h_orgtk_sale_dt", "ticket list"
+                    ),
+                    return_sale_date=_optional_scalar_string(
+                        ticket_raw, "h_orgtk_ret_sale_dt", "ticket list"
+                    ),
+                    sale_sequence=_optional_scalar_string(
+                        ticket_raw, "h_orgtk_sale_sqno", "ticket list"
+                    ),
+                    return_password=_optional_scalar_string(
+                        ticket_raw, "h_orgtk_ret_pwd", "ticket list"
+                    ),
+                    ticket_status_code=_optional_scalar_string(
+                        ticket_raw, "h_tk_stt_cd", "ticket list"
+                    ),
+                    train_info=tuple(train_rows),
+                    raw=ticket_raw,
+                )
+            )
+        reservations.append(TicketListReservation(tickets=tuple(tickets), raw=reservation_raw))
+    return TicketListResponse(
+        h_msg_cd=response.h_msg_cd,
+        h_msg_txt=response.h_msg_txt,
+        str_result=response.str_result,
+        raw=raw,
+        reservations=tuple(reservations),
+    )
+
+
 def _validate_envelope(
     raw: Mapping[str, Any],
     *,
     accepted_empty_codes: frozenset[str] = frozenset(),
+    returned_failure_codes: frozenset[str] = frozenset(),
     allow_result_only_success: bool = False,
 ) -> bool:
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
-    required = ("h_msg_cd", "h_msg_txt", "strResult")
-    missing = [name for name in required if name not in raw]
-    invalid = [
-        name
-        for name in required
-        if name in raw
-        and raw[name] is not None
-        and not isinstance(raw[name], str)
-    ]
-    if missing:
-        if allow_result_only_success:
-            if invalid:
-                raise KorailProtocolError(
-                    "KORAIL response envelope fields must be strings or "
-                    "null: "
-                    + ", ".join(invalid)
-                )
-            if set(missing) == {"h_msg_cd", "h_msg_txt"}:
-                if raw.get("strResult") != "SUCC":
-                    raise KorailProtocolError(
-                        "KORAIL result-only envelope requires the exact "
-                        "success result"
-                    )
-                return False
+    # The envelope's value types, checked where every other parser checks
+    # them; the result is not needed here.
+    BaseKorailResponse.from_raw(dict(raw))
+    if "strResult" not in raw:
         raise KorailProtocolError(
-            "KORAIL response missing required envelope fields: "
-            + ", ".join(missing)
+            "KORAIL response omitted strResult; the protected APK default "
+            "cannot be inferred for this typed read"
         )
-    if invalid:
-        raise KorailProtocolError(
-            "KORAIL response envelope fields must be strings or null: "
-            + ", ".join(invalid)
-        )
+    if allow_result_only_success and (
+        "h_msg_cd" not in raw and "h_msg_txt" not in raw
+    ):
+        if raw["strResult"] != "SUCC":
+            raise KorailProtocolError(
+                "KORAIL result-only envelope requires the exact success result"
+            )
+        return False
     code = raw.get("h_msg_cd")
     message = raw.get("h_msg_txt")
     result = raw.get("strResult")
     if code == "P058":
         raise KorailSessionExpiredError(code, message, raw=raw)
     failed = result == "FAIL" or code == "WRC000288"
-    if failed and code not in accepted_empty_codes:
+    if failed and code not in accepted_empty_codes and code not in returned_failure_codes:
         # ``accepted_empty_codes`` still wins: a per-endpoint opt-in returns an
         # empty result without raising anything, so classification never touches
         # it. Only a failure that was already going to be raised gets refined.
@@ -189,7 +250,7 @@ def _validate_strict_read_envelope(
         raw,
         allow_result_only_success=allow_result_only_success,
     )
-    if raw["strResult"] != "SUCC":
+    if raw.get("strResult") != "SUCC":
         raise KorailProtocolError(
             "KORAIL strict read response strResult must be SUCC"
         )
@@ -280,8 +341,9 @@ def _optional_scalar_string(
     """스칼라 필드 — JSON 문자열과 JSON 정수를 모두 수용.
 
     KORAIL 이 ``String`` 선언 필드를 숫자로도 보내는 사례: ``h_jrny_cnt``,
-    ``h_st_prnb``/``h_cls_prnb``, ``h_srcar_no``. ``bool``/``float``/리스트/객체는
-    프로토콜 오류.
+    ``h_srcar_no``. ``bool``/``float``/리스트/객체는 프로토콜 오류. 인원 수
+    ``h_st_prnb``/``h_cls_prnb`` 는 반대로 정수로 읽으므로 :func:`_optional_integer`
+    가 맡습니다.
     """
     value = data.get(key)
     if value is None or isinstance(value, str):
@@ -413,6 +475,9 @@ _PASS_MENU_ITEM_FIELDS: dict[str, str] = {
     "enabled": "enable",
     "item_id": "id",
     "information": "information",
+    "sale_message_1": "saleMsg1",
+    "sale_message_2": "saleMsg2",
+    "sale_message_3": "saleMsg3",
     "expanded": "isExpand",
     "parent_id": "parentId",
     "representative_arrival": "repSegArv",
@@ -564,6 +629,22 @@ _PASS_SCHEDULE_TRAIN_FIELDS: dict[str, str] = {
     "train_no": "h_trn_no",
 }
 
+_PASS_SCHEDULE_MAIN_FIELDS: dict[str, str] = {
+    "sale_window_no": "h_wct_no",
+    "work_date": "h_work_dt",
+    "work_time": "h_work_tm",
+    "job_id": "h_job_id",
+    "version_no": "h_ver_no",
+    "message_code": "h_msg_cd",
+    "selected_count": "h_sel_cnt",
+    "total_selected_count": "h_tot_sel_cnt",
+    "count_per_page": "h_cnt_per_page",
+    "page_count": "h_page_cnt",
+    "next_page_flag": "h_next_pg_flg",
+    "change_train_division_code": "h_chg_trn_dv_cd",
+    "page_no": "h_page_no",
+}
+
 _PASS_AGE_OPTION_FIELDS: dict[str, str] = {
     "commuter_age_code": "h_cmtr_utl_age_cd",
     "display_name": "h_comn_cd_nm",
@@ -587,25 +668,23 @@ def _parse_pass_menu_data(
         return None
     age_options = tuple(
         PassAgeOption(
-            **_nullable_string_fields(
-                _row(v, f"{context} pass_ageinfo"),
-                _PASS_AGE_OPTION_FIELDS,
-                "pass age option",
-            ),
-            raw=_row(v, f"{context} pass_ageinfo"),
+            **_nullable_string_fields(row, _PASS_AGE_OPTION_FIELDS, "pass age option"),
+            raw=row,
         )
-        for v in _optional_list(data, "pass_ageinfo", context)
+        for row in (
+            _row(v, f"{context} pass_ageinfo")
+            for v in _optional_list(data, "pass_ageinfo", context)
+        )
     )
     period_options = tuple(
         PassPeriodOption(
-            **_nullable_string_fields(
-                _row(v, f"{context} pass_periodinfo"),
-                _PASS_PERIOD_OPTION_FIELDS,
-                "pass period option",
-            ),
-            raw=_row(v, f"{context} pass_periodinfo"),
+            **_nullable_string_fields(row, _PASS_PERIOD_OPTION_FIELDS, "pass period option"),
+            raw=row,
         )
-        for v in _optional_list(data, "pass_periodinfo", context)
+        for row in (
+            _row(v, f"{context} pass_periodinfo")
+            for v in _optional_list(data, "pass_periodinfo", context)
+        )
     )
     return PassMenuData(
         commuter_kind_code=_optional_string(data, "h_cmtr_knd_cd", context),
@@ -738,14 +817,13 @@ def parse_crew_request_list_response(
     _validate_strict_read_envelope(raw)
     items = tuple(
         CrewRequestOption(
-            **_nullable_string_fields(
-                _row(v, "crew request list prsList"),
-                _CREW_REQUEST_OPTION_FIELDS,
-                "crew request option",
-            ),
-            raw=_row(v, "crew request list prsList"),
+            **_nullable_string_fields(row, _CREW_REQUEST_OPTION_FIELDS, "crew request option"),
+            raw=row,
         )
-        for v in _optional_list(raw, "prsList", "crew request list")
+        for row in (
+            _row(v, "crew request list prsList")
+            for v in _optional_list(raw, "prsList", "crew request list")
+        )
     )
     return CrewRequestListResponse(items=items, **_response_fields(raw))
 
@@ -778,14 +856,13 @@ def parse_deposit_bank_response(
     _validate_envelope(raw)
     items = tuple(
         DepositBank(
-            **_nullable_string_fields(
-                _row(v, "deposit bank list dptnBank"),
-                _DEPOSIT_BANK_FIELDS,
-                "deposit bank",
-            ),
-            raw=_row(v, "deposit bank list dptnBank"),
+            **_nullable_string_fields(row, _DEPOSIT_BANK_FIELDS, "deposit bank"),
+            raw=row,
         )
-        for v in _optional_list(raw, "dptnBank", "deposit bank list")
+        for row in (
+            _row(v, "deposit bank list dptnBank")
+            for v in _optional_list(raw, "dptnBank", "deposit bank list")
+        )
     )
     return DepositBankListResponse(items=items, **_response_fields(raw))
 
@@ -797,14 +874,13 @@ def parse_delay_discount_ticket_response(
     rows = _nested_rows(raw, "disc_infos", "disc_info", "delay discount ticket list")
     items = tuple(
         DelayDiscountTicket(
-            **_nullable_string_fields(
-                _row(v, "delay discount ticket list disc_info"),
-                _DELAY_DISCOUNT_TICKET_FIELDS,
-                "delay discount ticket",
-            ),
-            raw=_row(v, "delay discount ticket list disc_info"),
+            **_nullable_string_fields(row, _DELAY_DISCOUNT_TICKET_FIELDS, "delay discount ticket"),
+            raw=row,
         )
-        for v in rows
+        for row in (
+            _row(v, "delay discount ticket list disc_info")
+            for v in rows
+        )
     )
     return DelayDiscountTicketListResponse(items=items, **_response_fields(raw))
 
@@ -846,8 +922,14 @@ def parse_discount_coupon_response(
         items.append(
             DiscountCoupon(
                 guide=_optional_string(item, "guide", "discount coupon"),
+                start_date=_optional_string(
+                    item, "h_fdcert_mg_st_dt", "discount coupon"
+                ),
                 expiration_date=_optional_string(
                     item, "h_fdcert_mg_cls_dt", "discount coupon"
+                ),
+                discount_kind_code=_optional_string(
+                    item, "h_dscp_knd_cd", "discount coupon"
                 ),
                 discount_values=discount_values,
                 remarks=remarks,
@@ -863,6 +945,8 @@ def parse_discount_coupon_response(
         total_pages=_optional_integer(
             raw, "h_tot_page_cnt", "coupon response"
         ),
+        total_count=_optional_string(raw, "h_tot_cnt", "coupon response"),
+        row_count=_optional_string(raw, "h_row_cnt", "coupon response"),
         **_response_fields(raw),
     )
 
@@ -914,14 +998,13 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
         item = _row(value, "trip menu menuList")
         contents = tuple(
             TripMenuContent(
-                **_nullable_string_fields(
-                    _row(cv, "trip menu contList"),
-                    _TRIP_MENU_CONTENT_FIELDS,
-                    "trip menu content",
-                ),
-                raw=_row(cv, "trip menu contList"),
+                **_nullable_string_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
+                raw=row,
             )
-            for cv in _optional_list(item, "contList", "trip menu")
+            for row in (
+                _row(cv, "trip menu contList")
+                for cv in _optional_list(item, "contList", "trip menu")
+            )
         )
         items.append(
             TripMenuItem(
@@ -946,14 +1029,13 @@ def parse_product_reservation_list_response(
         return ProductReservationListResponse(**_response_fields(raw))
     items = tuple(
         ProductReservation(
-            **_nullable_string_fields(
-                _row(v, "product reservation list entity"),
-                _PRODUCT_RESERVATION_FIELDS,
-                "product reservation",
-            ),
-            raw=_row(v, "product reservation list entity"),
+            **_nullable_string_fields(row, _PRODUCT_RESERVATION_FIELDS, "product reservation"),
+            raw=row,
         )
-        for v in _optional_list(main, "entity", "product reservation list")
+        for row in (
+            _row(v, "product reservation list entity")
+            for v in _optional_list(main, "entity", "product reservation list")
+        )
     )
     return ProductReservationListResponse(
         items=items,
@@ -1109,7 +1191,15 @@ def parse_free_seat_car_response(
 def parse_guide_seat_condition_response(
     raw: Mapping[str, Any],
 ) -> GuideSeatConditionResponse:
-    _validate_strict_read_envelope(raw)
+    # The helper-seat warning is the text the app shows when selection is gated.
+    # Preserve this advisory as a response; unrelated failures still raise.
+    _validate_envelope(raw, returned_failure_codes=frozenset({"MRR800011"}))
+    if raw.get("strResult") != "SUCC" and not (
+        raw.get("strResult") == "FAIL" and raw.get("h_msg_cd") == "MRR800011"
+    ):
+        raise KorailProtocolError(
+            "KORAIL seat guidance result must be SUCC or FAIL/MRR800011"
+        )
     return GuideSeatConditionResponse(**_response_fields(raw))
 
 
@@ -1209,22 +1299,33 @@ def parse_pass_schedule_response(
         return PassScheduleResponse(**_response_fields(raw))
     if raw["strResult"] != "SUCC":
         raise KorailProtocolError("KORAIL pass schedule strResult must be exact SUCC")
+    main_raw = _optional_mapping(raw, "main_info", "pass schedule")
+    main_info = (
+        PassScheduleMainInfo(
+            **_nullable_string_fields(
+                main_raw, _PASS_SCHEDULE_MAIN_FIELDS, "pass schedule main info"
+            ),
+            raw=main_raw,
+        )
+        if main_raw is not None
+        else None
+    )
     schedules = []
     for schedule_value in _optional_list(raw, "schedule_info", "pass schedule"):
         schedule = _row(schedule_value, "pass schedule schedule_info")
         trains = tuple(
             PassScheduleTrain(
-                **_nullable_string_fields(
-                    _row(tv, "pass schedule train_list"),
-                    _PASS_SCHEDULE_TRAIN_FIELDS,
-                    "pass schedule train",
-                ),
-                raw=_row(tv, "pass schedule train_list"),
+                **_nullable_string_fields(row, _PASS_SCHEDULE_TRAIN_FIELDS, "pass schedule train"),
+                raw=row,
             )
-            for tv in _optional_list(schedule, "train_list", "pass schedule schedule_info")
+            for row in (
+                _row(tv, "pass schedule train_list")
+                for tv in _optional_list(schedule, "train_list", "pass schedule schedule_info")
+            )
         )
         schedules.append(PassScheduleInfo(trains=trains, raw=schedule))
     return PassScheduleResponse(
+        main_info=main_info,
         schedules=tuple(schedules),
         **_response_fields(raw),
     )
@@ -1249,6 +1350,7 @@ _KORAIL_POINT_SUMMARY_FIELDS = {
 
 _MILEAGE_HISTORY_FIELDS = {
     "page_count": "pgCnt",
+    "query_count": "qryCnt",
     "total_available_rail_point": "totAvlRailPontValNum",
     "total_available_rail_point_1": "totAvlRailPontValNum1",
     "total_available_affiliate_point": "totAvlAfltPontValNum",
@@ -1465,9 +1567,43 @@ _MAAS_DETAIL_FIELDS = {
     "pnr_no": "pnrNo",
     "request_date": "reqDt",
     "request_quantity": "reqQnty",
+    "reservation_station_code_name": "rsStnCdNm",
     "reservation_specification_url": "rsvSpecUrl",
     "usage_close_date": "utlClsDt",
     "usage_start_date": "utlStDt",
+}
+
+_MAAS_DETAIL_INFO_FIELDS = {
+    "additional_service_request_no": "addSrvReqNo",
+    "booking_time": "bookTime",
+    "branch_name": "branchName",
+    "partner_name": "coptEntName",
+    "delivery_datetime": "deliveryDtm",
+    "drop_times": "dropTimes",
+    "dropoff_name": "dropoffName",
+    "image": "image",
+    "name": "name",
+    "option_name": "optionName",
+    "pickup_name": "pickupName",
+    "pickup_place": "pickupPlace",
+    "pickup_times": "pickupTimes",
+    "reservation_date": "reserveDt",
+    "return_datetime": "returnDttm",
+    "start_datetime": "startDttm",
+    "cancel_deadline_date": "strCncDlnDt",
+    "cancel_return_amount": "strCncRetAmt",
+    "cancel_return_fee": "strCncRetFee",
+    "goods_sequence": "strGdSqno",
+    "intermediate_value": "strInt11",
+    "received_amount": "strRcvdAmt",
+    "reservation_status_name": "strRsvSttNm",
+    "reservation_passenger_name": "strRsvpsnm",
+    "settlement_deadline_date": "strStlDlnDt",
+    "settlement_deadline_datetime": "strStlDlnDttm",
+    "settlement_status_code": "strStlSttCd",
+    "settlement_status_name": "strStlSttNm",
+    "total_settlement_amount": "strTotStlAmt",
+    "usage_period_content": "strUtlTrmCont",
 }
 
 
@@ -1524,6 +1660,20 @@ def parse_maas_service_detail_list_response(
     details = []
     for value in _optional_list(raw, "addSrvList", "MaaS service details"):
         item = _row(value, "MaaS service details addSrvList")
+        info_raw = _optional_mapping(item, "detailInfo", "MaaS service detail")
+        detail_info = None
+        if info_raw is not None:
+            entity_one = tuple(
+                _row(v, "MaaS service detail detailInfo entityOne")
+                for v in _optional_list(info_raw, "entityOne", "MaaS detail info")
+            )
+            detail_info = MaasServiceDetailInfo(
+                **_nullable_string_fields(
+                    info_raw, _MAAS_DETAIL_INFO_FIELDS, "MaaS detail info"
+                ),
+                entity_one=entity_one,
+                raw=info_raw,
+            )
         details.append(
             MaasServiceDetail(
                 **_nullable_string_fields(
@@ -1531,6 +1681,7 @@ def parse_maas_service_detail_list_response(
                     _MAAS_DETAIL_FIELDS,
                     "MaaS service detail",
                 ),
+                detail_info=detail_info,
                 raw=item,
             )
         )
@@ -2007,6 +2158,9 @@ def parse_recent_delivery_history_response(
             )
         )
     return RecentDeliveryHistoryResponse(
+        changed_acceptance_reservation_no=_optional_string(
+            raw, "chgePbpRsvNo", "recent delivery history"
+        ),
         recipients=tuple(recipients),
         **_response_fields(raw),
     )
@@ -2462,12 +2616,17 @@ def parse_refund_ticket_detail_response(
                 raw=journey,
             )
         )
+    detail_fields = _nullable_scalar_fields(
+        raw, _REFUND_TICKET_DETAIL_FIELDS, "refund ticket detail"
+    )
+    # 7.0.6 TicketDetailOut의 속성명이며 실제 serializer 이름은 보호되어 있다.
+    # 새 이름이 응답에 있으면 사용하고, 기존 wire 키도 계속 읽는다.
+    if "pbpAcepTgtFlg" in raw:
+        detail_fields["pbp_acceptance_target_flag"] = _optional_string(
+            raw, "pbpAcepTgtFlg", "refund ticket detail"
+        )
     return RefundTicketDetailResponse(
-        **_nullable_scalar_fields(
-            raw,
-            _REFUND_TICKET_DETAIL_FIELDS,
-            "refund ticket detail",
-        ),
+        **detail_fields,
         journeys=tuple(journeys),
         discount_card=_discount_card_on_ticket(raw),
         **_response_fields(raw),
@@ -2642,10 +2801,10 @@ def parse_original_ticket_inquiry_response(
 
     ``cmpnList`` 와 ``stlList`` 는 일부러 파싱하지 않습니다. 지연증명 반환번호
     (``Cmpn.java:11-14``)와 카드/승인번호(``Stl.java:5-16``) 같은 소지 자격증명을
-    더 싣는데 변경 과정의 어느 단계도 그것을 필요로 하지 않습니다. 두 목록의 전선
-    키는 :mod:`~korail_mobile_api.redaction` 에 등록돼 있어
-    :attr:`~korail_mobile_api.read_models.OriginalTicket.raw` 안에서도 가려진
-    채로 남습니다.
+    더 싣는데 변경 과정의 어느 단계도 그것을 필요로 하지 않습니다. ``raw`` 는
+    원본을 그대로 보존하므로 그 안의 두 목록도 그대로 남습니다. 로깅 또는 외부
+    직렬화 전에 :func:`~korail_mobile_api.redaction.redact_mapping` 을 적용해야
+    합니다.
     """
     if not isinstance(raw, Mapping):
         raise KorailProtocolError(

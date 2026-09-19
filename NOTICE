@@ -4,6 +4,27 @@ Copyright (c) 2026 yakisoba0728
 This product is licensed under the Apache License, Version 2.0. See LICENSE
 for the full license text.
 
+Every source file in this repository carries a header with the copyright and
+licence notice. Section 4(c) of the licence requires that those notices be
+retained in the Source form of any derivative work, and Section 4(b) requires
+that modified files carry prominent notices stating that they were changed.
+The header is that notice.
+
+A request, not a licence term
+------------------------------
+
+Apache-2.0 permits commercial use and this notice does not restrict it. The
+author nevertheless asks that you do not build a commercial product or service
+on this package.
+
+This is an unofficial client for a live ticketing system that takes real
+payments, reverse-engineered from a decompiled application. KORAIL publishes no
+specification, promises no stability, and has not sanctioned any of this. A
+paying customer of yours would be relying on a contract that nobody agreed to.
+
+Per Section 4(d), the contents of this NOTICE file are for informational
+purposes only and do not modify the License.
+
 Prior-art reference, not derived code
 --------------------------------------
 

@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """NetFunnel 가상 대기열(``nf.letskorail.com``).
 
 앱은 조회·예약·결제·예약목록 경로에 대기열을 물려 두었고 성수기 조회 전용
@@ -29,7 +37,7 @@ SRT 의 WebView ``netfunnel.js`` 와 차이:
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from urllib.parse import urlencode
@@ -61,8 +69,12 @@ from .safety import (
 # ---------------------------------------------------------------------------
 SUCCESS_CODE = "200"
 BYPASS_CODE = "300"
-#: 통과. 200 은 키 발급, 300 은 대기열 건너뜀(키 없음).
-SUCCESS_CODES = frozenset({SUCCESS_CODE, BYPASS_CODE})
+#: ExpressNumber — 300 처럼 키 없이 통과한다.
+EXPRESS_CODE = "303"
+#: 키 없이 통과할 수 있는 코드. 키 없는 토큰 가운데 이것만 우회이고, 놓을 슬롯도 없다.
+KEYLESS_PASS_CODES = frozenset({BYPASS_CODE, EXPRESS_CODE})
+#: 통과. 200 은 키 발급, 300·303 은 키 없이도 통과할 수 있다.
+SUCCESS_CODES = frozenset({SUCCESS_CODE, *KEYLESS_PASS_CODES})
 #: 아직 대기 중(``T6/g.java:451``).
 CONTINUE_CODES = frozenset({"201", "202"})
 #: ``TsErrorAComplete`` — setComplete 에서만 받아들임.
@@ -95,7 +107,7 @@ class KorailNetFunnelToken:
     action: str
     key: str
     code: str
-    params: dict[str, str] = field(default_factory=dict)
+    params: dict[str, str] = field(default_factory=dict[str, str])
     node: str = ""
 
     @property
@@ -227,8 +239,8 @@ def parse_netfunnel_body(body: str, *, action: str) -> KorailNetFunnelToken:
 
 
 def _require_pass_key(token: KorailNetFunnelToken, body: str) -> None:
-    """BYPASS(300)는 키 없음이 정당 — 그 외 200 은 키 필수."""
-    if not token.key and token.code != BYPASS_CODE:
+    """300·303은 키 없이도 성공한다. 슬롯을 가진 200은 키가 필요하다."""
+    if not token.key and token.code not in KEYLESS_PASS_CODES:
         raise KorailNetFunnelError(
             None,
             "KORAIL NetFunnel response did not include a non-empty key",
@@ -378,38 +390,48 @@ class KorailNetFunnelClient:
         return parse_queue_response(body, action=str(action))
 
     def release(self, token: KorailNetFunnelToken) -> None:
-        """5004 — 슬롯을 놓습니다. 실패는 예외.
+        """5004 — 슬롯을 놓습니다. 전송 실패만 예외로 처리합니다.
 
-        키 없는 BYPASS(300)는 놓을 것이 없으므로 즉시 리턴
+        키 없는 BYPASS(300)·ExpressNumber(303)는 놓을 것이 없으므로 즉시 리턴
         (``T6/d.java:70-73`` ``getKey().length() < 1``).
         """
         if not token.key:
-            if token.code == BYPASS_CODE:
+            if token.code in KEYLESS_PASS_CODES:
                 return
             raise KorailNetFunnelError(
                 token.code or None,
                 "KORAIL NetFunnel slot cannot be released because its token "
-                "carries no key, and only a bypass (300) is allowed to; the "
+                "carries no key, and only keyless 300/303 passes may skip release; the "
                 "slot is held until the server times it out",
             )
-        body = self._get(
+        self._get(
             build_set_complete_url(
                 token.node or self.config.netfunnel_url,
                 key=token.key,
             )
         )
-        parse_set_complete_response(body, action=token.action)
+        # 7.0.6 CommandClient.Complete clears its response without parsing it.
 
     def acquire(self, action: str) -> KorailNetFunnelToken:
         """5101→5002 교환 + 대기 폴링. 통과 토큰을 돌려줍니다.
 
-        BYPASS(300)면 키·세션·노드 없이 즉시 리턴. 그 외에는 5002 를 무조건
-        거쳐야 setComplete 가 받는 키를 얻습니다.
+        키 없는 BYPASS(300)·ExpressNumber(303)면 키·세션·노드 없이 즉시 리턴.
+        그 외에는 5002 를 무조건 거쳐야 setComplete 가 받는 키를 얻습니다. 키 없이
+        대기(201/202)를 받으면 폴링할 수 없으므로
+        :class:`~korail_mobile_api.errors.KorailNetFunnelError` 입니다.
 
         상한: :data:`QUEUE_POLL_LIMIT` 또는 :data:`QUEUE_WAIT_LIMIT_SECONDS`.
         """
         token = self.enter(action)
         if not token.key:
+            # parse_queue_response lets a keyless token through for exactly two
+            # reasons: a 300/303 pass, or a wait. Only the first is a bypass.
+            if is_queued(token):
+                raise KorailNetFunnelError(
+                    token.code,
+                    "KORAIL NetFunnel told this request to wait but gave it no "
+                    "key to poll with; only a 300/303 pass may arrive without one",
+                )
             return token  # bypass
         key = token.key
         node = token.node
@@ -445,7 +467,7 @@ class KorailNetFunnelClient:
                 return replace(token, node=node)
 
     @contextmanager
-    def slot(self, action: str) -> Iterator[KorailNetFunnelToken]:
+    def slot(self, action: str) -> Generator[KorailNetFunnelToken, None, None]:
         """한 작업 동안 슬롯을 쥐었다가 놓습니다.
 
         해제는 양쪽 경로에서 일어남(``BaseDaoHelper.java:105-107`` ``onPostExecute``).

@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 import inspect
@@ -88,7 +96,10 @@ PUBLIC_METHODS = {
         "age_code",
     ],
     "get_trip_menu": ["self"],
-    "get_product_reservations": ["self", "page_no", "page_size"],
+    "get_product_reservations": [
+        "self", "page_no", "page_size",
+        "reservation_status_code", "payment_status_code",
+    ],
     "get_product_detail": [
         "self",
         "reservation_no",
@@ -100,6 +111,7 @@ PUBLIC_METHODS = {
         "window_no",
         "sale_sequence",
         "return_password",
+        "txt_index",
     ],
     "get_reservation_history": ["self"],
 }
@@ -114,7 +126,7 @@ NEW_ROUTES = {
     ("GET", "/classes/com.korail.mobile.product.ReservationList"),
     ("GET", "/classes/com.korail.mobile.product.ReservationDetail"),
     ("POST", "/classes/com.korail.mobile.receipt.ReceiptInfo"),
-    ("GET", "/classes/com.korail.mobile.reservation.ReservationView"),
+    ("POST", "/classes/com.korail.mobile.reservation.ReservationView"),
 }
 
 EXACT_FIELDS = {
@@ -135,7 +147,7 @@ EXACT_FIELDS = {
         "Device",
         "Version",
         "Key",
-        "dptDtTo",
+        "h_page_no",
     },
     "/classes/com.korail.mobile.passCard.CouponView": {
         "Device",
@@ -155,6 +167,7 @@ EXACT_FIELDS = {
     "/classes/com.korail.mobile.pass.trGdMenuLt.do": {
         "Device",
         "Version",
+        "timeStamp",
     },
     "/classes/com.korail.mobile.product.ReservationList": {
         "Device",
@@ -162,6 +175,9 @@ EXACT_FIELDS = {
         "Key",
         "txtSelPage",
         "txtCntPerPage",
+        # ProductListIn declares both, but their APK UI defaults are protected.
+        "txtRsvSttCd",
+        "txtStlSttCd",
     },
     "/classes/com.korail.mobile.product.ReservationDetail": {
         "Device",
@@ -178,11 +194,13 @@ EXACT_FIELDS = {
         "h_orgtk_wct_no",
         "h_orgtk_sale_sqno",
         "h_orgtk_tk_ret_pwd",
+        "txtIndex",
     },
     "/classes/com.korail.mobile.reservation.ReservationView": {
         "Device",
         "Version",
         "Key",
+        "timeStamp",
     },
 }
 
@@ -191,7 +209,7 @@ REQUEST_CASES = (
     (
         "get_service_status",
         (1234567890,),
-        "GET",
+        "POST",
         "/file/CACHE/MobileService.cache",
         {"timeStamp": "1234567890"},
         False,
@@ -217,7 +235,7 @@ REQUEST_CASES = (
         ("20260714",),
         "POST",
         "/classes/com.korail.mobile.passCard.DelayDiscountView",
-        {"dptDtTo": "20260714"},
+        {"h_page_no": "20260714"},
         True,
     ),
     (
@@ -280,9 +298,9 @@ REQUEST_CASES = (
     (
         "get_reservation_history",
         (),
-        "GET",
+        "POST",
         "/classes/com.korail.mobile.reservation.ReservationView",
-        {},
+        {"timeStamp": "0"},
         True,
     ),
 )
@@ -362,6 +380,15 @@ MODEL_EXPORTS = {
 }
 
 
+# The success envelope the parser tests below build on; spread first, so the
+# payload keys come after it as before.
+_SYNTHETIC_SUCCESS = {
+    "h_msg_cd": "SYNTHETIC-SUCCESS",
+    "h_msg_txt": "synthetic success",
+    "strResult": "SUCC",
+}
+
+
 def _common_fields(config: KorailConfig) -> dict[str, str]:
     return {
         "Device": config.device,
@@ -371,7 +398,10 @@ def _common_fields(config: KorailConfig) -> dict[str, str]:
 
 
 def test_successful_read_routes_have_exact_final_fields():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
+    assert (
+        "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
+    ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     for path, fields in EXACT_FIELDS.items():
         assert KORAIL_EXACT_REQUEST_FIELDS[path] == fields
@@ -396,7 +426,7 @@ def test_read_payload_builders_emit_only_exact_caller_fields():
     }
     assert build_cart_list_form() == {"pnrNo": "", "addSrvReqNo": ""}
     assert build_delay_discount_ticket_form("20260714") == {
-        "dptDtTo": "20260714"
+        "h_page_no": "20260714"
     }
     assert build_discount_coupon_form() == {"txtSelPage": "1", "pnrNo": ""}
     assert build_pass_availability_form("K", "P", "A") == {
@@ -404,13 +434,27 @@ def test_read_payload_builders_emit_only_exact_caller_fields():
         "txtCmtrUtlTrmCd": "P",
         "txtCmtrUtlAgeCd": "A",
     }
-    assert build_trip_menu_form(config) == {
-        "Device": config.device,
-        "Version": config.version,
-    }
+    trip_menu = build_trip_menu_form(config)
+    assert set(trip_menu) == {"Device", "Version", "timeStamp"}
+    assert trip_menu["Device"] == config.device
+    assert trip_menu["Version"] == config.version
+    assert trip_menu["timeStamp"].isdigit()
     assert build_product_reservations_query() == {
         "txtSelPage": "1",
         "txtCntPerPage": "20",
+    }
+    # ProductListIn declares both status filters, but the APK's UI defaults
+    # are protected. Caller-supplied values must be represented verbatim.
+    assert build_product_reservations_query(
+        2,
+        30,
+        reservation_status_code="SYNTHETIC_RSV_STATUS",
+        payment_status_code="SYNTHETIC_PAY_STATUS",
+    ) == {
+        "txtSelPage": "2",
+        "txtCntPerPage": "30",
+        "txtRsvSttCd": "SYNTHETIC_RSV_STATUS",
+        "txtStlSttCd": "SYNTHETIC_PAY_STATUS",
     }
     assert build_product_detail_query("RESERVATION", "SEQUENCE") == {
         "txtVrRsNo": "RESERVATION",
@@ -422,6 +466,13 @@ def test_read_payload_builders_emit_only_exact_caller_fields():
         "h_orgtk_sale_sqno": "2",
         "h_orgtk_tk_ret_pwd": "pw",
     }
+    assert build_ticket_receipt_form(
+        "20260714", "001", "2", "pw", txt_index="3"
+    )["txtIndex"] == "3"
+    # A live 7.0.6 ticket detail can return a four-digit original-sale field.
+    assert build_ticket_receipt_form("0915", "001", "2", "pw")[
+        "h_orgtk_sale_dt"
+    ] == "0915"
 
 
 def test_read_payload_builders_have_exact_public_signatures():
@@ -436,7 +487,9 @@ def test_read_payload_builders_have_exact_public_signatures():
             "age_code",
         ],
         build_trip_menu_form: ["config"],
-        build_product_reservations_query: ["page_no", "page_size"],
+        build_product_reservations_query: [
+            "page_no", "page_size", "reservation_status_code", "payment_status_code"
+        ],
         build_product_detail_query: [
             "reservation_no",
             "reservation_sequence",
@@ -446,6 +499,7 @@ def test_read_payload_builders_have_exact_public_signatures():
             "window_no",
             "sale_sequence",
             "return_password",
+            "txt_index",
         ],
     }
     for builder, parameter_names in expected.items():
@@ -548,16 +602,69 @@ def test_successful_read_requests_are_exact_single_calls_without_dynapath(
             request.url.query.decode(), keep_blank_values=True
         ) == {key: [value] for key, value in expected_fields.items()}
         assert request.content == b""
+    elif path == "/classes/com.korail.mobile.passCard.DelayDiscountView":
+        # NetworkApi.postDelayDiscountView is @POST + @QueryMap in 7.0.6.
+        assert parse_qs(
+            request.url.query.decode(), keep_blank_values=True
+        ) == {key: [value] for key, value in expected_fields.items()}
+        assert request.content == b""
+        assert request.headers["content-type"].startswith(
+            "application/x-www-form-urlencoded"
+        )
     else:
         assert request.url.query == b""
-        assert parse_qs(
-            request.content.decode(), keep_blank_values=True
-        ) == {key: [value] for key, value in expected_fields.items()}
+        actual_fields = parse_qs(request.content.decode(), keep_blank_values=True)
+        if path == "/classes/com.korail.mobile.pass.trGdMenuLt.do":
+            assert len(actual_fields["timeStamp"]) == 1
+            assert actual_fields.pop("timeStamp")[0].isdigit()
+        assert actual_fields == {key: [value] for key, value in expected_fields.items()}
     assert "x-dynapath-m-token" not in request.headers
     assert provider_contexts == []
     assert result.__class__ is get_type_hints(
         getattr(KorailClient, method_name)
     )["return"]
+
+
+def test_product_reservation_status_filters_reach_the_apk_query_fields():
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "strResult": "SUCC",
+                "h_msg_cd": "SYNTHETIC-SUCCESS",
+                "h_msg_txt": "synthetic success",
+            },
+        )
+
+    config = KorailConfig()
+    client = KorailClient(config, transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(
+        jsessionid="synthetic-session", member_no="synthetic-member"
+    )
+    try:
+        client.get_product_reservations(
+            2,
+            30,
+            reservation_status_code="SYNTHETIC_RSV_STATUS",
+            payment_status_code="SYNTHETIC_PAY_STATUS",
+        )
+    finally:
+        client.close()
+    assert len(requests) == 1
+    request = requests[0]
+    assert request.method == "GET"
+    assert request.url.path == "/classes/com.korail.mobile.product.ReservationList"
+    assert parse_qs(request.url.query.decode(), keep_blank_values=True) == {
+        **{key: [value] for key, value in _common_fields(config).items()},
+        "txtSelPage": ["2"],
+        "txtCntPerPage": ["30"],
+        "txtRsvSttCd": ["SYNTHETIC_RSV_STATUS"],
+        "txtStlSttCd": ["SYNTHETIC_PAY_STATUS"],
+    }
+    assert request.content == b""
 
 
 @pytest.mark.parametrize(("method_name", "args"), INVALID_CALLS)
@@ -1096,9 +1203,7 @@ def test_read_parsers_reject_wrong_wrapper_list_and_item_shapes(
     match,
 ):
     raw = {
-        "h_msg_cd": "SYNTHETIC-SUCCESS",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
+        **_SYNTHETIC_SUCCESS,
         **payload,
     }
     with pytest.raises(KorailProtocolError, match=match):
@@ -1108,9 +1213,7 @@ def test_read_parsers_reject_wrong_wrapper_list_and_item_shapes(
 @pytest.mark.parametrize("value", [True, False, "12.5", "１２", [], {}])
 def test_known_numeric_fields_reject_non_ascii_decimal_values(value):
     raw = {
-        "h_msg_cd": "SYNTHETIC-SUCCESS",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
+        **_SYNTHETIC_SUCCESS,
         "cart_infos": {"cart_info": [{"h_tk_cnt": value}]},
     }
     with pytest.raises(KorailProtocolError, match="h_tk_cnt"):
@@ -1120,9 +1223,7 @@ def test_known_numeric_fields_reject_non_ascii_decimal_values(value):
 @pytest.mark.parametrize("value", [2, "2"])
 def test_known_numeric_fields_accept_integers_and_ascii_decimal_strings(value):
     raw = {
-        "h_msg_cd": "SYNTHETIC-SUCCESS",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
+        **_SYNTHETIC_SUCCESS,
         "cart_infos": {"cart_info": [{"h_tk_cnt": value}]},
     }
     assert parse_cart_list_response(raw).items[0].ticket_count == 2
@@ -1146,9 +1247,7 @@ def test_missing_nested_collections_normalize_to_typed_empty_tuples(
     collection_name,
 ):
     raw = {
-        "h_msg_cd": "SYNTHETIC-SUCCESS",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
+        **_SYNTHETIC_SUCCESS,
     }
     assert getattr(parser(raw), collection_name) == ()
 
@@ -1192,9 +1291,7 @@ def test_null_nested_collections_normalize_to_typed_empty_tuples(
     collection_name,
 ):
     raw = {
-        "h_msg_cd": "SYNTHETIC-SUCCESS",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
+        **_SYNTHETIC_SUCCESS,
         **payload,
     }
     assert getattr(parser(raw), collection_name) == ()
@@ -1223,7 +1320,7 @@ def test_history_no_data_is_typed_empty():
 
 
 def test_unexpected_application_failures_and_p058_remain_typed_errors():
-    from korail_mobile_api.errors import KorailAppError, KorailSessionExpiredError
+    from korail_mobile_api.errors import KorailAppError
 
     for parser in (
         parse_cart_list_response,

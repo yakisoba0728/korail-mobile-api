@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """상태를 바꾸는 라우트의 요청 폼 빌더.
 
 예약(직통·환승·병합·예약대기·좌석지정), 미결제 취소, 카드 결제, 환불, 운임
@@ -9,16 +17,18 @@
 :meth:`~korail_mobile_api.http.KorailHttpClient.post_mutation_form` 하나이고 그
 앞에 consent 와 라우트 가드가 있습니다.
 
-**라이브로 확인된 조합은 좁습니다.** 성인 1명·일반실·직통 즉시예약
-(``txtJobId="1101"``)의 예약 → 취소 왕복만 KORAIL 이 받아들이는 것이
-확인됐습니다. 환승·병합·예약대기·좌석지정 폼과 다인·특실 조합, 할인카드 관련
-폼은 전부 APK 의 요청 빌더를 그대로 옮긴 것이며 전송된 적이 없습니다. 각
-빌더의 docstring 이 그 경계를 따로 적어 둡니다.
+**라이브로 확인된 것과 아닌 것.** 즉시·좌석지정·예약대기·입석+좌석 홀드(다인·특실
+포함), 환승 홀드, 결제 전 취소, 카드 결제, 환불, 장바구니 담기는 실서버가 받아들인
+것을 확인했습니다. 병합예약의 두 번째 홀드(:func:`build_merge_reservation_form`),
+운임 재계산, 할인카드 구매·연장·예약 폼은 전송된 적이 없습니다. 날짜와 응답 코드는
+``docs/MUTATION_HANDOFF.md`` 의 상태표에 있고, 예약대기에서 입석 플래그를 ``"N"`` 으로
+박는 근거는 :func:`_build_journey_reservation_form` 안의 주석에 있습니다.
 """
 from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from typing import TypeVar
 
 from .config import KorailConfig
 from .constants import (
@@ -53,6 +63,7 @@ from .mutation_models import (
     PriceRecalculationRequest,
     PriceRecalculationRow,
     ReservationHoldResponse,
+    StationRefundExecutionRequest,
 )
 from .read_models import TrainScheduleItem
 
@@ -91,12 +102,9 @@ def _common_fields(config: KorailConfig) -> dict[str, str]:
     }
 
 
-# The eight passenger rows the app's reservation request ALWAYS carries, in the
-# order w4/a.java:49-73 writes them into OPsg. OPsg is a LinkedHashMap
-# (OPsg.java:6) whose keys are "txtCompaCnt"/"txtPsgTpCd"/"txtDiscKndCd" plus the
-# row number (OPsg.java:8-10, 17-27), so the build order below IS the wire order.
-# Only the count varies with the mix; the type and discount codes are fixed per
-# row, which is why a row that carries nobody still goes out as "0".
+# Passenger types are ordered here, but only positive counts are assigned
+# consecutive wire indices. Passengers.toTicketReservationInput filters zero
+# entries before indexing (7.0.6 Passengers.java:743-752).
 _PASSENGER_ROWS: tuple[tuple[str, str, str], ...] = (
     ("adult", "1", "000"),  # 어른
     ("teenager", "1", "P11"),  # 청소년
@@ -109,6 +117,38 @@ _PASSENGER_ROWS: tuple[tuple[str, str, str], ...] = (
 )
 
 
+def _add_passenger_rows(
+    form: dict[str, str], passengers: KorailPassengerCounts
+) -> None:
+    index = 0
+    for attribute, passenger_type, discount_code in _PASSENGER_ROWS:
+        count = getattr(passengers, attribute)
+        if count == 0:
+            continue
+        index += 1
+        form[f"txtCompaCnt{index}"] = str(count)
+        form[f"txtPsgTpCd{index}"] = passenger_type
+        form[f"txtDiscKndCd{index}"] = discount_code
+
+
+def _seat_attribute_code(
+    train: TrainSummary, selected_code: str | None = None
+) -> str:
+    # 7.0.6 TrainScheduleViewModel.java:2914-2930,2982-2999: explicit
+    # wheelchair/seat-type selection wins; otherwise the row's hSeatAttCd is
+    # used when present, falling back to the basic selection code.
+    candidate = (
+        selected_code
+        if selected_code is not None
+        else train.seat_attribute_code or "015"
+    )
+    return _required_pattern(
+        candidate,
+        field="seat_attribute_code",
+        pattern=re.compile(r"[0-9]{3}"),
+    )
+
+
 def _validated_seat_assignments(
     seats: Sequence[KorailSeatAssignment] | None,
     *,
@@ -117,8 +157,8 @@ def _validated_seat_assignments(
 ) -> tuple[KorailSeatAssignment, ...]:
     """한 구간의 좌석지정 목록을 job 종류와 승객 구성에 비추어 검사합니다.
 
+    좌석 목록은 ``"1103"`` 에만 속합니다. 앱도 ``OSrcar`` 맵을 설치하는 바로 그
     자리에서 job id 를 ``"1103"`` 으로 바꾸고(``C5/a.java:143-146``), 평범한
-
     ``"1101"`` 여정을 다시 만들 때마다 그 맵을 비웁니다(``C5/a.java:118``).
     """
     if job_type is not KorailReservationJobType.SEAT_DESIGNATED:
@@ -163,12 +203,16 @@ def build_reservation_form(
     seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
     job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
     seats: Sequence[KorailSeatAssignment] | None = None,
+    seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
     """승객 구성과 좌석 등급으로 예약(홀드) 폼을 만듭니다.
 
+    ``seats`` 는 좌석지정 job 에서만 받습니다. 키는 ``OSrcar`` 의 것이고
     (``OSrcar.java:6-11``) 여정 키 뒤에 붙는 ``@FieldMap`` 입니다
-
     (``CertificationService.java:52-54``). ``txtSrcarCnt`` 가 먼저, 그다음
+    ``txtSrcarNo{i}``/``txtSeatNo{i}`` 가 ``i`` 를 **1**부터 셉니다
+    (``SeatSearchActivity.java:675-683``). ``txtSrcarCnt`` 는 호차 수가 아니라
+    **좌석 수**입니다.
     """
     return _build_journey_reservation_form(
         config,
@@ -177,6 +221,7 @@ def build_reservation_form(
         seat_classes=(seat_class,),
         job_type=job_type,
         leg_seats=None if seats is None else (seats,),
+        seat_attribute_codes=(seat_attribute_code,),
     )
 
 
@@ -190,12 +235,21 @@ def build_transfer_reservation_form(
     ),
     job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
     seats: Sequence[Sequence[KorailSeatAssignment]] | None = None,
+    seat_attribute_codes: Sequence[str | None] | None = None,
 ) -> dict[str, str]:
     """환승 여정의 예약(홀드) 폼을 만듭니다 — 두 구간, PNR 하나.
 
+    :func:`build_reservation_form` 에서 여정 블록이 반복된 것입니다. 앱도 두
     경우를 빌더 하나로 처리하므로(``C5/a.java:52-119``) 필드 구성을 정하는 것은
+    구간 수뿐입니다.
 
     * ``txtJrnyCnt`` 는 배열 길이에서 유도됩니다(``C5/a.java:55``). 플래그가
+      아니므로 직통 예약이 환승 폼을 내보내게 만들 수 없습니다.
+    * 여정 인덱스는 **1부터**입니다(``C5/a.java:57-77``).
+    * ``txtJrnyTpCd{i}`` 는 인덱스가 아니라 **길이**를 봅니다
+      (``C5/a.java:60``). 그래서 환승의 **두** 구간이 모두 ``"14"`` 를 싣습니다.
+    * ``txtJrnySqno{i}`` 는 ``DecimalFormat("000")`` 을 거친 루프 인덱스라
+      1구간이 ``"001"``, 2구간이 ``"002"`` 입니다(``S4/O.java:19-21``).
     """
     return _build_journey_reservation_form(
         config,
@@ -205,6 +259,7 @@ def build_transfer_reservation_form(
         job_type=job_type,
         leg_seats=seats,
         require_legs=KORAIL_MAX_JOURNEY_LEGS,
+        seat_attribute_codes=seat_attribute_codes,
     )
 
 
@@ -215,23 +270,34 @@ def build_merge_reservation_form(
     *,
     passengers: KorailPassengerCounts | None = None,
     seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
+    seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
     """병합예약의 **두 번째** 홀드 폼을 만듭니다 — 열차 하나, 여정 둘.
 
+    병합은 환승이 아닙니다. 물리적으로 한 대인 열차를 중간역에서 갈라 두 구간을
+    다르게 앉히는 것이며(좌석+좌석 또는 좌석+입석), 앱은 자기만의 루프로
     만듭니다(``DirectInquiryActivity.java:576-601``). 다섯 단계 전체 흐름은
+    :data:`~korail_mobile_api.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` 에
+    있습니다.
 
-    인데 여기서는 갈립니다(``smali:5641``).
+    * ``txtJrnyTpCd{i}`` 가 루프 **인덱스**를 봅니다. 1구간은 ``"21"``(병합
+      선행), 2구간은 ``"22"``(병합 후행)입니다. 환승은 두 구간이 모두 ``"14"``
+      인데 여기서는 갈립니다(``smali:5641``).
+    * ``txtStndFlg`` 는 ``isStndSeat`` 에서 유도하지 않고 ``"Y"`` 로 박습니다
+      (``smali:5887-5891``). 전환 대상이 입석 홀드라는 것이 이 흐름의
+      전제이기 때문입니다.
+    * ``txtPsrmClCd2`` 는 ``txtPsrmClCd1`` 에서 **복사**됩니다
+      (``smali:5919-5983``). 그래서 ``seat_class`` 를 구간별이 아니라 **하나**만
+      받습니다 — 앱도 두 반쪽이 서로 다른 등급인 병합 예약을 만들 수 없습니다.
     """
     if type(standing_hold_train) is not TrainSummary:
         raise KorailProtocolError(
             "KORAIL 병합 reservation requires the exact TrainSummary the "
             "입석+좌석 hold was placed on"
         )
-    if isinstance(legs, (str, bytes)) or not isinstance(legs, Sequence):
-        raise KorailProtocolError(
-            "KORAIL 병합 reservation requires a sequence of merge-seat legs"
-        )
-    resolved_legs = tuple(legs)
+    resolved_legs = _resolved_sequence(
+        legs, "KORAIL 병합 reservation requires a sequence of merge-seat legs"
+    )
     for leg in resolved_legs:
         if type(leg) is not TrainScheduleItem:
             raise KorailProtocolError(
@@ -252,12 +318,7 @@ def build_merge_reservation_form(
         raise KorailProtocolError(
             "KORAIL reservation requires an exact KorailPassengerCounts"
         )
-    try:
-        cabin = KorailSeatClass(seat_class)
-    except ValueError:
-        raise KorailProtocolError(
-            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
-        ) from None
+    cabin = _coerced_seat_class(seat_class)
     # The two halves must be the one train the standing hold was placed on.
     # The app never checks this because it cannot be otherwise -- the rows come
     # straight back from mergeSeatsC.do, which was asked about that train
@@ -274,7 +335,7 @@ def build_merge_reservation_form(
                 "KORAIL 병합 reservation splits ONE train: both legs must "
                 f"carry the standing hold's train_no {hold_train_no!r}"
             )
-    journeys = tuple(_merge_leg_fields(leg) for leg in resolved_legs)
+    journeys = tuple(_journey_fields(leg) for leg in resolved_legs)
     form = _common_fields(config)
     form.update(
         {
@@ -290,13 +351,7 @@ def build_merge_reservation_form(
             "txtTotPsgCnt": str(passengers.total),
         }
     )
-    for index, (attribute, passenger_type, discount_code) in enumerate(
-        _PASSENGER_ROWS,
-        start=1,
-    ):
-        form[f"txtCompaCnt{index}"] = str(getattr(passengers, attribute))
-        form[f"txtPsgTpCd{index}"] = passenger_type
-        form[f"txtDiscKndCd{index}"] = discount_code
+    _add_passenger_rows(form, passengers)
     # OSeat. The merge loop re-puts journey 1's pair and appends journey 2's,
     # into the LinkedHashMap the standing hold left behind, so the order is the
     # ordinary two-leg order -- see build_transfer_reservation_form.
@@ -305,12 +360,16 @@ def build_merge_reservation_form(
             "txtSeatAttCd1": "000",
             "txtSeatAttCd2": "000",
             "txtSeatAttCd3": "000",
-            _seat_attribute_key(1): "015",
+            _seat_attribute_key(1): _seat_attribute_code(
+                standing_hold_train, seat_attribute_code
+            ),
             "txtSeatAttCd5": "000",
             "txtPsrmClCd1": cabin.value,
         }
     )
-    form[_seat_attribute_key(2)] = "015"
+    form[_seat_attribute_key(2)] = _seat_attribute_code(
+        standing_hold_train, seat_attribute_code
+    )
     # Copied, not read per leg (smali:5919-5983).
     form["txtPsrmClCd2"] = cabin.value
     form["txtJrnyCnt"] = KORAIL_TRANSFER_ITINERARY_CODE
@@ -331,15 +390,6 @@ def build_merge_reservation_form(
         form[f"txtRunDt{journey}"] = fields["run_date"]
         form[f"txtDptDt{journey}"] = fields["departure_date"]
         form[f"txtDptTm{journey}"] = fields["departure_time"]
-        if journey == 1:
-            # The standing hold's own arvTm_1, kept because the merge loop
-            # never overwrites it. It is the arrival time of the WHOLE route,
-            # not of this half.
-            form["arvTm_1"] = _required_pattern(
-                standing_hold_train.arrival_time,
-                field="arrival_time",
-                pattern=_TIME_RE,
-            )
         form[f"txtDptRsStnCd{journey}"] = fields["departure_station_code"]
         form[f"txtDptStnConsOrdr{journey}"] = fields[
             "departure_construction_order"
@@ -373,76 +423,11 @@ def is_merge_eligible(
         raise KorailProtocolError(
             "KORAIL merge eligibility requires an exact TrainSummary"
         )
-    try:
-        cabin = KorailSeatClass(seat_class)
-    except ValueError:
-        raise KorailProtocolError(
-            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
-        ) from None
+    cabin = _coerced_seat_class(seat_class)
     flag = train.merge_seat_application_flag
     if not isinstance(flag, str):
         return False
     return flag in KORAIL_MERGE_SEAT_FLAGS_BY_CABIN[cabin.value]
-
-
-def _merge_leg_fields(leg: TrainScheduleItem) -> dict[str, str]:
-    """병합된 여정 하나가 싣는 열두 값.
-
-    ``_journey_fields`` 의 집합에서 ``arrival_time`` 을 뺀 것입니다. 병합 루프는
-    ``TrainInfo`` 마다 게터 열둘을 읽고 ``getH_arv_tm()`` 은 그중에 없습니다
-    (``smali/…/DirectInquiryActivity.smali:5730-5880``). 열세 번째 구간 키인
-    ``txtChgFlg{i}`` 는 상수 ``"N"`` 입니다.
-    """
-    return {
-        "train_no": _required_digits(leg.train_no, field="train_no"),
-        "train_group_code": _required_digits(
-            leg.train_group_code,
-            field="train_group_code",
-        ),
-        "train_class_code": _required_digits(
-            leg.train_class_code,
-            field="train_class_code",
-        ),
-        "run_date": _required_pattern(
-            leg.run_date,
-            field="run_date",
-            pattern=_DATE_RE,
-        ),
-        "departure_date": _required_pattern(
-            leg.departure_date,
-            field="departure_date",
-            pattern=_DATE_RE,
-        ),
-        "departure_time": _required_pattern(
-            leg.departure_time,
-            field="departure_time",
-            pattern=_TIME_RE,
-        ),
-        "departure_station_code": _required_digits(
-            leg.departure_station_code,
-            field="departure_station_code",
-        ),
-        "arrival_station_code": _required_digits(
-            leg.arrival_station_code,
-            field="arrival_station_code",
-        ),
-        "departure_construction_order": _required_digits(
-            leg.departure_construction_order,
-            field="departure_construction_order",
-        ),
-        "arrival_construction_order": _required_digits(
-            leg.arrival_construction_order,
-            field="arrival_construction_order",
-        ),
-        "departure_run_order": _required_digits(
-            leg.departure_run_order,
-            field="departure_run_order",
-        ),
-        "arrival_run_order": _required_digits(
-            leg.arrival_run_order,
-            field="arrival_run_order",
-        ),
-    }
 
 
 # The app's own key-selection methods, which are the reason a third leg is
@@ -468,6 +453,26 @@ def _seat_no_key(journey: int, seat: int) -> str:
     return f"txtSeatNo{seat}" if journey == 1 else f"txtSeatNo1_{seat}"
 
 
+_T = TypeVar("_T")
+
+
+def _coerced_seat_class(value: object) -> KorailSeatClass:
+    """``"1"``(일반실)·``"2"``(특실) 또는 :class:`KorailSeatClass` 만 받습니다."""
+    try:
+        return KorailSeatClass(value)
+    except ValueError:
+        raise KorailProtocolError(
+            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
+        ) from None
+
+
+def _resolved_sequence(value: Sequence[_T], message: str) -> tuple[_T, ...]:
+    """구간 목록을 튜플로 굳힙니다. 문자열·바이트는 시퀀스여도 목록이 아닙니다."""
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise KorailProtocolError(message)
+    return tuple(value)
+
+
 def _validated_legs(
     legs: Sequence[TrainSummary],
     *,
@@ -479,11 +484,9 @@ def _validated_legs(
     지원하는 만큼"을 뜻하는 ``None`` 입니다. 단일 구간 빌더는 ``None`` 을 넘기고
     자기 거부 메시지를 유지합니다.
     """
-    if isinstance(legs, (str, bytes)) or not isinstance(legs, Sequence):
-        raise KorailProtocolError(
-            "KORAIL reservation requires a sequence of legs"
-        )
-    resolved = tuple(legs)
+    resolved = _resolved_sequence(
+        legs, "KORAIL reservation requires a sequence of legs"
+    )
     for leg in resolved:
         if type(leg) is not TrainSummary:
             raise KorailProtocolError(
@@ -535,16 +538,7 @@ def _validated_seat_classes(
             f"KORAIL reservation needs one cabin class per leg: {leg_count} "
             f"leg(s), {len(candidates)} class(es)"
         )
-    resolved: list[KorailSeatClass] = []
-    for candidate in candidates:
-        try:
-            resolved.append(KorailSeatClass(candidate))
-        except ValueError:
-            raise KorailProtocolError(
-                'KORAIL reservation seat class must be "1" (일반실) or "2" '
-                "(특실)"
-            ) from None
-    return tuple(resolved)
+    return tuple(_coerced_seat_class(candidate) for candidate in candidates)
 
 
 def _validated_leg_seats(
@@ -592,6 +586,7 @@ def _build_journey_reservation_form(
     job_type: KorailReservationJobType,
     leg_seats: Sequence[Sequence[KorailSeatAssignment]] | None,
     require_legs: int | None = None,
+    seat_attribute_codes: Sequence[str | None] | None = None,
 ) -> dict[str, str]:
     """공개 예약 폼 둘 뒤에 있는 단 하나의 빌더.
 
@@ -600,6 +595,20 @@ def _build_journey_reservation_form(
     호출은 키 순서까지 단일 구간 폼과 동일한 바이트를 냅니다.
     """
     resolved_legs = _validated_legs(legs, require=require_legs)
+    if seat_attribute_codes is None:
+        selected_attributes: tuple[str | None, ...] = (None,) * len(resolved_legs)
+    else:
+        selected_attributes = tuple(seat_attribute_codes)
+        if len(selected_attributes) != len(resolved_legs):
+            raise KorailProtocolError(
+                "KORAIL reservation requires one selected seat attribute per leg"
+            )
+    resolved_attributes = tuple(
+        _seat_attribute_code(train, selected)
+        for train, selected in zip(
+            resolved_legs, selected_attributes, strict=True
+        )
+    )
     if passengers is None:
         passengers = KorailPassengerCounts()
     elif type(passengers) is not KorailPassengerCounts:
@@ -684,9 +693,23 @@ def _build_journey_reservation_form(
             # than of a leg: leg 1 assigns it, and every later leg overwrites it
             # only while it still reads "N" -- so one standing leg makes the
             # whole itinerary standing.
-            "txtStndFlg": _itinerary_standing_flag(
-                resolved_legs,
-                seat_classes=resolved_classes,
+            #
+            # 예약대기("1102")만은 예외로 "N" 을 박습니다. 이 플래그는 서버에게
+            # "입석을 사겠다"는 뜻이고, 예약대기 요청에 실리면 대기가 아니라 입석
+            # 승차권 예약이 만들어집니다. 2026-09-16 실서버에서 같은 예약대기 열차
+            # (h_wait_rsv_flg=" 9", h_gen_rsv_cd="13")에 이 값만 바꿔 두 번 보냈고,
+            # "N" 은 SUCC/IRR000014 "예약대기 가능합니다", "Y" 는
+            # SUCC/IRR000018 "결제하지 않으면 예약이 취소됩니다" 에 h_seat_no="입석",
+            # h_tot_stnd_cnt="00001", 결제 기한까지 붙은 입석 예약을 돌려줬습니다
+            # (docs/7.0.6-live-verification.md). 7.0.6 도 STAND 상태에서만 이 값을
+            # 채우므로 WAIT 행은 거짓입니다(TrainScheduleViewModel.java:2870).
+            "txtStndFlg": (
+                "N"
+                if job_type is KorailReservationJobType.STANDBY
+                else _itinerary_standing_flag(
+                    resolved_legs,
+                    seat_classes=resolved_classes,
+                )
             ),
             # w4/a.java:49 sends the app's TOTAL_PERSON_COUNT, and that is the
             # sum of ALL eight counters -- 동반유아 and 안내견 included
@@ -694,13 +717,7 @@ def _build_journey_reservation_form(
             "txtTotPsgCnt": str(passengers.total),
         }
     )
-    for index, (attribute, passenger_type, discount_code) in enumerate(
-        _PASSENGER_ROWS,
-        start=1,
-    ):
-        form[f"txtCompaCnt{index}"] = str(getattr(passengers, attribute))
-        form[f"txtPsgTpCd{index}"] = passenger_type
-        form[f"txtDiscKndCd{index}"] = discount_code
+    _add_passenger_rows(form, passengers)
     # OSeat, in w4/a.java:82-91's insertion order. The five txtSeatAttCd* keys
     # and txtPsrmClCd1 are written once on the booking-options screen; C5/a.java
     # :84-97 then re-puts journey 1's two and appends journey 2's. Because
@@ -713,7 +730,7 @@ def _build_journey_reservation_form(
             "txtSeatAttCd1": "000",
             "txtSeatAttCd2": "000",
             "txtSeatAttCd3": "000",
-            _seat_attribute_key(1): "015",
+            _seat_attribute_key(1): resolved_attributes[0],
             "txtSeatAttCd5": "000",
             # OSeat.PSRM_CL_CD + journey number (OSeat.java:8,16-18), set from
             # the user's chosen tab: c5/b.java:72 passes
@@ -723,14 +740,12 @@ def _build_journey_reservation_form(
     )
     for journey, seat_class in enumerate(resolved_classes[1:], start=2):
         # C5/a.java:88-97 for the second leg. txtSeatAttCd4_1 carries the same
-        # search-request seat attribute leg 1 does: C5/a.java:90's t2() is
-        # b5/c.java:453-455, the ScheduleView request's txtSeatAttCd_4, which
-        # this package always sends as "015" (K4/p.DEFAULT).
-        form[_seat_attribute_key(journey)] = "015"
+        # 7.0.6 uses each selected row's hSeatAttCd, with seat-type fallback.
+        form[_seat_attribute_key(journey)] = resolved_attributes[journey - 1]
         form[f"txtPsrmClCd{journey}"] = seat_class.value
     # OJrny (OJrny.java:6-27), a LinkedHashMap in C5/a.java:54-76's write order:
-    # the count once, then the sixteen per-leg keys for journey 1, then the same
-    # sixteen for journey 2.
+    # the count once, then the 7.0.6 DTO per-leg keys for journey 1, then
+    # the same keys for journey 2 (without arvTm_).
     form["txtJrnyCnt"] = (
         KORAIL_DIRECT_ITINERARY_CODE
         if len(resolved_legs) == 1
@@ -754,8 +769,6 @@ def _build_journey_reservation_form(
         form[f"txtRunDt{journey}"] = fields["run_date"]
         form[f"txtDptDt{journey}"] = fields["departure_date"]
         form[f"txtDptTm{journey}"] = fields["departure_time"]
-        # OJrny.ARV_TM is "arvTm_", not "txtArvTm" (OJrny.java:12, 40-42).
-        form[f"arvTm_{journey}"] = fields["arrival_time"]
         form[f"txtDptRsStnCd{journey}"] = fields["departure_station_code"]
         form[f"txtDptStnConsOrdr{journey}"] = fields[
             "departure_construction_order"
@@ -856,6 +869,20 @@ def _assert_leg_is_bookable(
     # an explicit "11" counts as available -- and apply it to whichever cabin is
     # being booked. On a transfer it is applied to every leg, because a booking
     # whose second leg is sold out is not bookable either.
+    #
+    # 7.0.6 자유석 분기도 이 규칙이 막습니다. 단일 열차 빌더는 일반실이면서
+    # generalReservationStatus() 가 FREE 인 열차에서 hidFreeFlg 와 txtSeatAttCd4 를
+    # AlienGuard 로 보호된 값으로 바꾸고, 이 패키지는 그 값을 재현할 수 없습니다. FREE 는
+    # h_gen_rsv_cd 가 SOLD_OUT 코드일 때만 나옵니다. 그 코드도
+    # 보호되어 있지만 7.0.6 이전 앱의 평문 리터럴과 2026-07-26 라이브 매진 행은 "13" 이고,
+    # 이 규칙은 "11" 만 통과시키므로 자유석 열차는 I/O 전에 거절됩니다. 보호된 값을
+    # 추측해 홀드를 거는 것보다 거절하는 편이 안전합니다. 환승 빌더는 hidFreeFlg 를
+    # 고정값으로 보내므로 이 분기가 없습니다.
+    #   analysis/jadx/sources/com/korail/talk/ui/screen/train/TrainScheduleViewModel.java:2875
+    #     (:2899-2909 hidFreeFlg, :2914-2915 txtSeatAttCd4, :3004 환승)
+    #   analysis/jadx/sources/com/korail/talk/network/model/TrainScheduleOutTrainInfo.java:2881-2889
+    #   analysis/jadx/sources/com/korail/talk/common/define/TrainReservationCode.java:21,24
+    #   analysis/jadx/sources/com/korail/talk/common/define/SeatType.java:299,307
     if seat_class is KorailSeatClass.SPECIAL:
         if train.special_reservation_code != "11":
             raise KorailProtocolError(
@@ -879,8 +906,13 @@ def _merge_ineligible_message(
     )
 
 
-def _journey_fields(train: TrainSummary) -> dict[str, str]:
-    """구간 하나가 싣는 ``OJrny`` 값 열여섯 개. 전부 모양을 검사합니다."""
+def _journey_fields(train: TrainSummary | TrainScheduleItem) -> dict[str, str]:
+    """구간 하나가 싣는 7.0.6 TicketReservationInJrny 값들을 검사합니다.
+
+    직통·환승 구간(:class:`TrainSummary`)과 병합 여정(:class:`TrainScheduleItem`)이
+    같은 열두 값을 씁니다. 병합 루프가 ``TrainInfo`` 마다 읽는 게터도 이 열둘입니다
+    (``smali/…/DirectInquiryActivity.smali:5730-5880``).
+    """
     return {
         "train_no": _required_digits(train.train_no, field="train_no"),
         "train_group_code": _required_digits(
@@ -904,11 +936,6 @@ def _journey_fields(train: TrainSummary) -> dict[str, str]:
         "departure_time": _required_pattern(
             train.departure_time,
             field="departure_time",
-            pattern=_TIME_RE,
-        ),
-        "arrival_time": _required_pattern(
-            train.arrival_time,
-            field="arrival_time",
             pattern=_TIME_RE,
         ),
         "departure_station_code": _required_digits(
@@ -980,10 +1007,11 @@ def build_single_adult_reservation_form(
     config: KorailConfig,
     train: TrainSummary,
 ) -> dict[str, str]:
-    """성인 1명·일반실 홀드 폼 — 라이브로 확인된 유일한 모양.
+    """성인 1명·일반실 홀드 폼 — 가장 먼저 라이브로 확인된 모양.
 
     :func:`build_reservation_form` 을 두 기본값 그대로 부르는 얇은 함수입니다.
-    이 패키지에서 KORAIL 이 받아들이는 것이 관측된 요청은 이것 하나뿐입니다.
+    실서버가 처음 받아들인 예약 요청이 이 모양이었고, 다른 조합도 그 뒤에
+    확인됐습니다(``docs/MUTATION_HANDOFF.md``).
     """
     return build_reservation_form(config, train)
 
@@ -991,9 +1019,8 @@ def build_single_adult_reservation_form(
 # The app concatenates three phone-number fields, capped at 3 + 4 + 4 digits
 # (res/values/integers.xml:34-35, phone_number_max_length_3 and
 # phone_number_max_length, applied in ReservationWaitActivity.java:88-89), and
-# refuses the dialog when the concatenation is shorter than 10
-# (ReservationWaitActivity.java:220-224). So 10 or 11 digits, nothing else.
-_STANDBY_PHONE_RE = re.compile(r"[0-9]{10,11}")
+# 7.0.6 ReservationWaitViewModel checks the combined length equals 11.
+_STANDBY_PHONE_RE = re.compile(r"[0-9]{11}")
 
 
 def build_standby_wait_form(
@@ -1006,9 +1033,19 @@ def build_standby_wait_form(
 ) -> dict[str, str]:
     """예약대기 홀드의 후속 폼을 만듭니다.
 
+    ``reservationWait.ReservationWait``
     (``ReservationWaitService.java:10-12``)이며 예약대기 예매의 후반부입니다.
+    ``"1102"`` 홀드가 PNR 을 만들고, 이 호출이 예약대기 화면에서 받은 두 옵션을
+    그 PNR 에 기록합니다.
 
     * ``txtPnrNo`` — 홀드의 PNR(``ReservationWaitActivity.java:150``).
+    * ``txtPsrmClChgFlg`` — ``"Y"``/``"N"``, 좌석등급 변경 동의
+      (``:213``/``:219``). 관광열차에는 앱이 이 체크박스를 감추므로(``:115``)
+      거기서는 ``"N"`` 뿐입니다.
+    * ``txtSmsSndFlg`` — ``"Y"``/``"N"``, 배정 시 SMS 알림(``:214``/``:218``).
+    * ``txtCpNo`` — 알림받을 번호. 앱은 SMS 가 켜졌을 때만 넣습니다
+      (``:220-227``). 이 빌더도 그 경우 빈 문자열을 보내는 대신 키를
+      생략합니다.
     """
     if type(hold) is not ReservationHoldResponse:
         raise KorailProtocolError(
@@ -1033,7 +1070,7 @@ def build_standby_wait_form(
             _STANDBY_PHONE_RE.fullmatch(phone_no) is None
         ):
             raise KorailProtocolError(
-                "KORAIL standby SMS notification requires a 10- or 11-digit "
+                "KORAIL standby SMS notification requires an 11-digit "
                 "phone number"
             )
     elif phone_no is not None:
@@ -1060,7 +1097,12 @@ def build_unpaid_reservation_cancel_form(
 ) -> dict[str, str]:
     """미결제 홀드를 취소하는 폼을 만듭니다.
 
+    여정 수는 상수가 아니라 **되울려 보냅니다.**
     ``DReservationConfirmActivity.java:269-278`` 은 ``txtJrnySqno="0001"`` 과
+    ``hidRsvChgNo="000"`` 은 상수로 두면서
+    ``setTxtJrnyCnt(reservationResponse.getH_jrny_cnt())`` 는 그대로
+    통과시킵니다. 환승 홀드는 여정이 둘이므로 여기서 하나만 받아들이면 살아 있는
+    환승 예약을 놓을 방법이 없어집니다.
     """
     if type(response) is not ReservationHoldResponse:
         raise KorailProtocolError(
@@ -1078,13 +1120,15 @@ def build_unpaid_reservation_cancel_form(
     # transfer reservation with no way to release it -- the orphaned hold this
     # whole subsystem exists to prevent.
     journey_count = response.journey_count
+    pnr_no = response.pnr_no
     legs = None
     if isinstance(journey_count, str) and journey_count.strip().isdigit():
         legs = int(journey_count)
     if (
         response.str_result != "SUCC"
-        or not isinstance(response.pnr_no, str)
-        or not response.pnr_no.strip()
+        or not isinstance(pnr_no, str)
+        or not pnr_no.strip()
+        or not isinstance(journey_count, str)
         or legs is None
         or legs < 1
     ):
@@ -1094,9 +1138,9 @@ def build_unpaid_reservation_cancel_form(
     form = _common_fields(config)
     form.update(
         {
-            "txtPnrNo": response.pnr_no,
+            "txtPnrNo": pnr_no,
             "txtJrnySqno": "0001",
-            "txtJrnyCnt": str(legs),
+            "txtJrnyCnt": journey_count,
             # A literal "000" here, NOT the hold's h_rsv_chg_no -- deliberately
             # unlike build_card_payment_form below. Every app flow that cancels
             # a just-created hold from its ReservationResponse hardcodes it,
@@ -1135,7 +1179,11 @@ _ABSENT_JOB_SEQUENCE = "000000"
 def _echoed_job_sequence(value: str | None) -> str:
     """홀드의 ``tmpJobSqno`` 를 결제 폼에 그대로 되울립니다.
 
+    **자릿수를 복원하지 않습니다.** 숫자로 도착한 ``tmpJobSqno`` 는 앞의 0 이
+    사라진 채 전선에 오릅니다. 앱도 그렇게 하기 때문입니다 —
     ``TCReservationDao.java:28,107,183`` 은 ``tmpJobSqno`` 를 평범한 ``String``
+    으로 선언하고 어디에서도 ``addZero`` 가 이 값을 건드리지 않습니다. 여기서
+    0 을 채우면 앱이 보내지 않는 것을 보내게 됩니다.
     """
     if isinstance(value, str) and value.strip():
         return value
@@ -1175,9 +1223,16 @@ def build_card_payment_form(
 ) -> dict[str, str]:
     """미결제 홀드에 대한 단일 카드 ReservationPayment 폼을 만듭니다.
 
+    ``hidTmpJobSqno1/2`` 와 ``hidRsvChgNo`` 는 상수가 아니라 홀드 응답을 되울린
     것입니다(``V4/b.java:39-41``, ``PaymentService.java:14``). ``hidRsvChgNo``
+    는 **첫** 여정의 변경번호이며 앱도 모든 결제 호출 지점에서 같은 식을
+    반복합니다. 프로토콜 상수가 아니라 예약별 상태입니다 — 취소 빌더의 고정된
+    ``"000"`` 은 다른 경우입니다.
 
+    ``hidMnsStlAmt1`` 은 화면의 합계가 아니라 앱의 ``getReceivedAmount()``
     입니다(``AbstractC1269e.java:406`` → ``V4/a.java:27``). ``h_tot_prc`` 는
+    UI 전용 값입니다(``PaymentActivity.java:174,497``). 할인 없는 성인 1명이면
+    두 값이 같지만, 할인이나 두 번째 승객이 끼는 순간 갈라집니다.
     """
     if type(hold) is not ReservationHoldResponse:
         raise KorailProtocolError(
@@ -1265,9 +1320,31 @@ def build_refund_form(
 ) -> dict[str, str]:
     """발권된 승차권의 환불(``refunds.RefundsRequest``) 폼을 만듭니다.
 
-    (``RefundService.java:29`` / ``RefundService.smali:212``). PNR 필드는
+    PNR 필드는 앱의 Retrofit 선언
+    (``RefundService.java:29`` / ``RefundService.smali:212``)대로
+    ``txtPnrNo``(P-n-r)입니다. srtgo 의 ``ktx.py:1082`` 는 이것을 ``txtPrnNo``
+    로 쓰는데, korail2 계보의 오타이며 디컴파일된 앱에 0회 등장합니다. Retrofit
+    ``@Field`` 이름은 정확히 일치해야 하므로 그대로 보내면 PNR 없는 환불이
+    전송됩니다. 신원은 호출자가 :class:`PaidTicket` 로 줍니다.
 
-    (``ticketReturn/a.smali:3149-3153``) 그 값은 출발 전 ``"21"``, 출발 후
+    ``return_times_division_code``
+        ``tk_ret_tms_dv_cd``. 앱은
+        ``RefundCommissionResponse.tk_ret_tms_dv_cd`` 를 그대로 복사하며
+        (``ticketReturn/a.smali:3149-3153``) 그 값은 출발 전 ``"21"``, 출발 후
+        ``"15"`` 입니다(``I4/a.java:5-6``).
+        :meth:`~korail_mobile_api.KorailClient.get_refund_commission` 의
+        :attr:`ticket_return_times_division_code` 에서 읽어 넘기면 됩니다.
+        ``None``(기본)이면 이 키를 보내지 않습니다.
+    ``settle_mileage``
+        ``h_mlg_stl``. 나머지 둘과 달리 서버 에코가 아니라 호출자의
+        결정입니다. 앱은 승차권이 마일리지 정산 대상이고 사용 가능 마일리지가
+        수수료를 덮을 때만 ``"Y"`` 를 보냅니다
+        (``ticketReturn/a.java:185-190``). 기본값은 ``False``(``"N"``).
+    ``pbp_acceptance_target_flag``
+        ``pbpAcepTgtFlg``. ``RefundTicketDetailResponse.pbp_acceptance_target_flag``
+        를 되울립니다(``ticketReturn/a.smali:3165-3171``). ``None``(기본)이면
+        :attr:`PaidTicket.pbp_acceptance_target_flag` 를, 그것도 없으면 ``"N"`` 을
+        보냅니다.
     """
     if type(ticket) is not PaidTicket:
         raise KorailProtocolError("KORAIL refund requires a PaidTicket")
@@ -1278,10 +1355,7 @@ def build_refund_form(
         ("sale_sequence", ticket.sale_sequence),
         ("return_password", ticket.return_password),
     ):
-        if not isinstance(value, str) or not value.strip():
-            raise KorailProtocolError(
-                f"KORAIL refund requires a non-empty PaidTicket.{name}"
-            )
+        _required_mutation_text(value, field=f"PaidTicket.{name}", context="refund")
     form = _common_fields(config)
     form.update(
         {
@@ -1291,28 +1365,78 @@ def build_refund_form(
             "h_orgtk_sale_sqno": ticket.sale_sequence,
             "h_orgtk_ret_pwd": ticket.return_password,
             "h_mlg_stl": "Y" if settle_mileage else "N",
-            "tk_ret_tms_dv_cd": _refund_echo_field(
-                return_times_division_code,
-                default="21",
-                field="return_times_division_code",
-            ),
-            "trnNo": ticket.train_no,
             "pbpAcepTgtFlg": _refund_echo_field(
-                pbp_acceptance_target_flag,
+                (
+                    pbp_acceptance_target_flag
+                    if pbp_acceptance_target_flag is not None
+                    else ticket.pbp_acceptance_target_flag
+                ),
                 default="N",
                 field="pbp_acceptance_target_flag",
             ),
-            "latitude": "",
-            "longitude": "",
         }
+    )
+    if return_times_division_code is not None:
+        form["tk_ret_tms_dv_cd"] = _refund_echo_field(
+            return_times_division_code,
+            default="21",
+            field="return_times_division_code",
+        )
+    return form
+
+
+def build_station_refund_execution_form(
+    config: KorailConfig,
+    request: StationRefundExecutionRequest,
+) -> dict[str, str]:
+    """Build ``ExecuteOnlineRefundsIn`` from a verified station ticket.
+
+    The APK declares these twelve ``@SerialName`` keys in
+    ``ExecuteOnlineRefundsIn.java:60``. This function prepares a form only;
+    execution still requires explicit refund mutation consent.
+    """
+    if type(request) is not StationRefundExecutionRequest:
+        raise KorailProtocolError(
+            "KORAIL station refund requires an exact execution request"
+        )
+    fields = (
+        ("pnrNo", "pnr_no"),
+        ("ogtkSaleDt", "original_sale_date"),
+        ("ogtkSaleWctNo", "original_sale_window_no"),
+        ("ogtkSaleSqno", "original_sale_sequence"),
+        ("ogtkRetPwd", "original_return_password"),
+        ("retDvCd", "refund_division_code"),
+        ("retRsnCd", "refund_reason_code"),
+        ("tkKndCd", "ticket_kind_code"),
+        ("custTeln", "customer_phone"),
+        ("retAmt", "refund_amount"),
+        ("retFee", "refund_fee"),
+        ("acepCustNm", "customer_name"),
+    )
+    form = _common_fields(config)
+    form.update(
+        (
+            wire_name,
+            _required_mutation_text(
+                getattr(request, attribute),
+                field=attribute,
+                context="station refund",
+            ),
+        )
+        for wire_name, attribute in fields
     )
     return form
 
 
-def _required_mutation_text(value: object, *, field: str) -> str:
+def _required_mutation_text(
+    value: object,
+    *,
+    field: str,
+    context: str = "discount card request",
+) -> str:
     if not isinstance(value, str) or not value.strip():
         raise KorailProtocolError(
-            f"KORAIL discount card request requires a non-empty {field}"
+            f"KORAIL {context} requires a non-empty {field}"
         )
     return value
 
@@ -1324,8 +1448,10 @@ def build_discount_card_purchase_form(
     """``research.dcntCrdInfo.do`` — 할인카드(N카드)를 구매합니다.
 
     스칼라 넷에 평평하게 편 맵 둘이며, 순서는 ``ResearchService.java:68-70`` 의
-
+    선언 순서입니다. 두 맵은
+    ``NCardReservationDao.NCardReservationRequest`` 의 ``jrnyInfo``·
     ``apdUsrInfo`` ``HashMap``(``dao/research/NCardReservationDao.java:31-32``)
+    이고, 키는 그 setter 들이 쓰는 인덱스 철자입니다(``:74-124``).
     """
     if type(request) is not DiscountCardPurchaseRequest:
         raise KorailProtocolError(
@@ -1374,7 +1500,10 @@ def build_discount_card_purchase_form(
             section.run_date,
             field="run_date",
         )
-        form[f"trnNo_{index}"] = section.train_no
+        form[f"trnNo_{index}"] = _required_mutation_text(
+            section.train_no,
+            field="train_no",
+        )
         form[f"dptRsStnCd_{index}"] = _required_mutation_text(
             section.departure_station_code,
             field="departure_station_code",
@@ -1384,6 +1513,12 @@ def build_discount_card_purchase_form(
             field="arrival_station_code",
         )
     users = tuple(request.additional_users)
+    # 7.0.6 NCardInfoIn declares apdUsrCnt and only the _1 keys of one
+    # additional user; a second would go out under keys no DTO has.
+    if len(users) > 1:
+        raise KorailProtocolError(
+            "KORAIL discount card purchase takes at most 1 additional user"
+        )
     if users:
         form["apdUsrCnt"] = str(len(users))
         for index, user in enumerate(users, start=1):
@@ -1413,9 +1548,13 @@ def build_discount_card_extension_query(
 ) -> dict[str, str]:
     """``reservation.dcntCrdExtn.do`` — 할인카드의 유효기간을 연장합니다.
 
-    ``@Query`` 일곱 개입니다(``ResearchService.java:65-66``). 공통 셋에 카드
-
+    필드는 일곱 개입니다. 6.5.0 은 이것을 ``@Query`` 로 보냈고
+    (``ResearchService.java:65-66``) 7.0.6 은 같은 경로에 ``@FieldMap`` 폼으로
+    보냅니다(``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:518-520``).
+    공통 셋에 카드 승차권의 네 부분 자격증명이 붙으며, 그 넷은
     ``TicketListActivity.java:1067-1072`` 이 N카드 승차권 행에서
+    ``h_orgtk_wct_no`` / ``h_orgtk_ret_sale_dt`` / ``h_orgtk_sale_sqno`` /
+    ``h_orgtk_ret_pwd`` 로 읽는 값입니다.
     """
     if type(ticket) is not DiscountCardTicket:
         raise KorailProtocolError(
@@ -1446,8 +1585,8 @@ def build_discount_card_extension_query(
     return query
 
 
-#: 보통의 홀드가 싣는 승객 행 키 접두사 여덟 개(``OPsg.java:8-10``).
-#: N카드 홀드는 이 전부를 한 행으로 대체합니다.
+#: 가능한 승객 행 키 접두사 최대 여덟 개. 일반 예약에서는 0명 행을
+#: 전송하지 않으며, N카드 홀드는 존재하는 행을 한 행으로 대체합니다.
 _PASSENGER_ROW_KEYS = frozenset(
     f"{prefix}{index}"
     for prefix in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd")
@@ -1464,8 +1603,9 @@ def build_discount_card_reservation_form(
     """할인카드(N카드)로 좌석 하나를 결제하는 홀드 폼을 만듭니다.
 
     **평범한 예약 라우트입니다.** ``w4/a.java:93-104`` 가 보통의
-
+    ``ReservationRequest`` 를 만들고 보통의 ``ReservationDao`` 로
     ``certification.TicketReservation``(``CertificationService.java:52-54``)에
+    POST 합니다. N카드 예약 엔드포인트는 없고 N카드 승객 블록이 있을 뿐입니다.
     """
     form = build_reservation_form(config, train)
     rebuilt: dict[str, str] = {}
@@ -1515,6 +1655,13 @@ _PRICE_RECALCULATION_ROW_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 
+# 이 폼은 불완전합니다. 7.0.6 PriceReCalculationIn 은 txtPsrmClCd1, txtSeatAttCd2,
+# txtSeatAttCd4, txtSeatAttCd5 도 선언하고, 직렬화기의 요소 이름 길이도 10개 속성과
+# 정확히 맞습니다. 이 빌더는 넷 중 어느 것도 보내지 않습니다. 값이 앱의 화면 상태에서
+# 오는데 그 경로를 추적하지 않았으므로 추측해 채우지 않습니다. 이 경로는 실서버에 보낸
+# 적이 없으므로 미검증입니다.
+#   analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41
+#   analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn$$serializer.java:44-47
 def build_price_recalculation_form(
     config: KorailConfig,
     request: PriceRecalculationRequest,
@@ -1522,19 +1669,18 @@ def build_price_recalculation_form(
     """``certification.PriceReCalculation`` — 홀드된 PNR 의 운임을 다시 계산합니다.
 
     ``CertificationService.java:35-37``(``getDiscountPrice``)이며
-
     ``a6/C1042B.java:265-296``(``k2()``)이 만들고
+    ``DiscountPriceDao.executeDao``(``DiscountPriceDao.java:118-120``)가
+    보냅니다.
     """
     if type(request) is not PriceRecalculationRequest:
         raise KorailProtocolError(
             "KORAIL price recalculation requires an exact "
             "PriceRecalculationRequest"
         )
-    pnr_no = request.pnr_no
-    if not isinstance(pnr_no, str) or not pnr_no.strip():
-        raise KorailProtocolError(
-            "KORAIL price recalculation requires a non-empty pnr_no"
-        )
+    pnr_no = _required_mutation_text(
+        request.pnr_no, field="pnr_no", context="price recalculation"
+    )
     rows = tuple(request.rows)
     if not rows or len(rows) > KORAIL_MAX_PASSENGERS_PER_RESERVATION:
         raise KorailProtocolError(
@@ -1618,18 +1764,18 @@ def build_cart_add_form(
     """``cart.addCartList`` — 홀드된 예약을 장바구니에 담습니다.
 
     공통 셋 외의 필드는 ``hidPnrNo`` 하나입니다(``CartService.java:11-13``,
-
     ``AddCartDao.java:9-24``). DAO 의 응답 타입이 맨 ``BaseResponse`` 라 전용
+    응답 데이터클래스도 파서도 없고,
+    :meth:`~korail_mobile_api.client.KorailClient.add_to_cart` 는 파싱하지 않은
+    봉투를 돌려줍니다.
     """
     if type(request) is not CartAddRequest:
         raise KorailProtocolError(
             "KORAIL cart request requires an exact CartAddRequest"
         )
-    pnr_no = request.pnr_no
-    if not isinstance(pnr_no, str) or not pnr_no.strip():
-        raise KorailProtocolError(
-            "KORAIL cart request requires a non-empty pnr_no"
-        )
+    pnr_no = _required_mutation_text(
+        request.pnr_no, field="pnr_no", context="cart request"
+    )
     form = _common_fields(config)
     form["hidPnrNo"] = pnr_no
     return form

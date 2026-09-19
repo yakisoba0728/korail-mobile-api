@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 import ast
@@ -5,9 +13,9 @@ import importlib.util
 import inspect
 import json
 import math
-from collections.abc import Iterator, Mapping
 from dataclasses import FrozenInstanceError, fields, is_dataclass, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, ClassVar, get_type_hints
 from urllib.parse import parse_qs
 
@@ -16,6 +24,7 @@ import pytest
 
 import korail_mobile_api
 import korail_mobile_api.client as client_module
+from _helpers import DuplicateFieldMapping as _DuplicateFieldMapping
 from korail_mobile_api import (
     KorailClient,
     KorailConfig,
@@ -82,6 +91,7 @@ CAR_FIELDS = frozenset(
         "txtPsrmClCd",
         "txtRunDt",
         "txtDptDt",
+        "txtDptTm",
         "txtTrnClsfCd",
         "txtTrnNo",
         "txtDptRsStnCd",
@@ -146,6 +156,7 @@ def complete_train() -> TrainSummary:
         departure_station_code="0001",
         arrival_station_code="0020",
         departure_date="20260714",
+        departure_time="060000",
         run_date="20260714",
         train_class_code="00",
         departure_run_order="000001",
@@ -215,6 +226,137 @@ def test_new_public_models_are_frozen_dataclasses_and_exported():
         "SeatWindow": SeatWindow,
         "SeatInventoryResponse": SeatInventoryResponse,
     }
+
+
+# Every TrainSummary field and the keys it is read from, written out here and
+# not imported, so a refactor of from_raw is checked against this list rather
+# than against itself. The fallback spelling is the one read when the primary
+# is absent OR falsy (from_raw uses `or`).
+_TRAIN_DUAL_KEYS = (
+    ("train_no", "h_trn_no", "trnNo"),
+    ("train_group_code", "h_trn_gp_cd", "trnGpCd"),
+    ("departure_station_code", "h_dpt_rs_stn_cd", "dptRsStnCd"),
+    ("arrival_station_code", "h_arv_rs_stn_cd", "arvRsStnCd"),
+    ("departure_station_name", "h_dpt_rs_stn_nm", "dptRsStnNm"),
+    ("arrival_station_name", "h_arv_rs_stn_nm", "arvRsStnNm"),
+    ("departure_date", "h_dpt_dt", "dptDt"),
+    ("departure_time", "h_dpt_tm", "dptTm"),
+    ("arrival_time", "h_arv_tm", "arvTm"),
+    ("run_date", "h_run_dt", "runDt"),
+    ("train_class_code", "h_trn_clsf_cd", "trnClsfCd"),
+    ("departure_run_order", "h_dpt_stn_run_ordr", "dptStnRunOrdr"),
+    ("arrival_run_order", "h_arv_stn_run_ordr", "arvStnRunOrdr"),
+)
+_TRAIN_SINGLE_KEYS = (
+    ("seat_map_flag", "h_rd_seat_map_flg"),
+    ("general_reservation_code", "h_gen_rsv_cd"),
+    ("departure_construction_order", "h_dpt_stn_cons_ordr"),
+    ("arrival_construction_order", "h_arv_stn_cons_ordr"),
+    ("seat_attribute_code", "h_seat_att_cd"),
+    ("car_type_code", "h_car_tp_cd"),
+    ("car_type_name", "h_car_tp_nm"),
+    ("train_class_name", "h_trn_clsf_nm"),
+    ("train_group_name", "h_trn_gp_nm"),
+    ("general_room_class_name", "h_gen_psrm_cl_nm"),
+    ("special_room_class_name", "h_spe_psrm_cl_nm"),
+    ("secondary_general_reservation_code", "h_gen_rsv_cd2"),
+    ("special_reservation_code", "h_spe_rsv_cd"),
+    ("secondary_special_reservation_code", "h_spe_rsv_cd2"),
+    ("free_reservation_code", "h_free_rsv_cd"),
+    ("standing_reservation_code", "h_stnd_rsv_cd"),
+    ("general_availability_name", "h_rsv_psb_nm"),
+    ("special_availability_name", "h_spe_rsv_psb_nm"),
+    ("wait_reservation_flag", "h_wait_rsv_flg"),
+    ("standard_remaining_seat_count", "h_std_rest_seat_cnt"),
+    ("first_class_remaining_seat_count", "h_fst_rest_seat_cnt"),
+    ("free_car_count", "h_free_sracar_cnt"),
+    ("reservation_wait_passenger_count", "h_rsv_wait_ps_cnt"),
+    ("change_train_sequence", "h_chg_trn_seq"),
+    ("change_train_division_code", "h_chg_trn_dv_cd"),
+    ("merge_seat_application_flag", "h_yms_apl_flg"),
+    ("train_suspension_flag", "h_trn_sps_flg"),
+)
+
+
+def test_the_train_key_table_covers_every_field():
+    covered = (
+        {attr for attr, _, _ in _TRAIN_DUAL_KEYS}
+        | {attr for attr, _ in _TRAIN_SINGLE_KEYS}
+        | {"goods_no", "total_passenger_count", "raw"}
+    )
+    assert covered == {field_.name for field_ in fields(TrainSummary)}
+
+
+@pytest.mark.parametrize(("attr", "primary", "fallback"), _TRAIN_DUAL_KEYS)
+def test_train_summary_reads_each_dual_key_field_from_either_spelling(
+    attr, primary, fallback
+):
+    def read(raw):
+        return getattr(TrainSummary.from_raw(raw), attr)
+
+    assert read({fallback: "B"}) == "B"
+    assert read({primary: "A", fallback: "B"}) == "A"
+    # A falsy primary falls through to the other spelling, "" and 0 alike.
+    assert read({primary: "", fallback: "B"}) == "B"
+    assert read({primary: 0, fallback: "B"}) == "B"
+    assert read({primary: 7}) == "7"
+    assert read({fallback: 7}) == "7"
+    # Whichever spelling carried it, a bad value is reported by the primary
+    # name.
+    for raw in ({primary: ["x"]}, {fallback: ["x"]}, {primary: [], fallback: True}):
+        with pytest.raises(KorailProtocolError, match=f"field {primary} must be"):
+            read(raw)
+    # ...and a falsy bad primary is not examined at all.
+    assert read({primary: [], fallback: "B"}) == "B"
+
+
+def test_train_summary_dual_key_absence_is_none_except_train_no():
+    train = TrainSummary.from_raw({})
+    assert train.train_no == ""
+    assert train.train_no == TrainSummary.from_raw({"h_trn_no": 0}).train_no
+    for attr, _, _ in _TRAIN_DUAL_KEYS[1:]:
+        assert getattr(train, attr) is None
+
+
+@pytest.mark.parametrize(("attr", "key"), _TRAIN_SINGLE_KEYS)
+def test_train_summary_reads_each_single_key_field_from_one_spelling(attr, key):
+    def read(raw):
+        return getattr(TrainSummary.from_raw(raw), attr)
+
+    assert read({key: "A"}) == "A"
+    assert read({key: 7}) == "7"
+    # No fallback, so a falsy value is kept as it came, and is still checked.
+    assert read({key: ""}) == ""
+    assert read({}) is None
+    with pytest.raises(KorailProtocolError, match=f"field {key} must be"):
+        read({key: []})
+    camel = "".join(
+        part if index == 0 else part.capitalize()
+        for index, part in enumerate(key.removeprefix("h_").split("_"))
+    )
+    assert read({camel: "B"}) is None
+
+
+def test_train_summary_goods_no_checks_both_spellings_before_falling_back():
+    def read(raw):
+        return TrainSummary.from_raw(raw).goods_no
+
+    assert read({"txtGdNo": "B"}) == "B"
+    assert read({"h_gd_no": "A", "txtGdNo": "B"}) == "A"
+    assert read({"h_gd_no": "", "txtGdNo": "B"}) == "B"
+    # Unlike the dual-key fields, the primary is checked before the fallback
+    # is considered, even when it is falsy.
+    with pytest.raises(KorailProtocolError, match="field h_gd_no must be"):
+        read({"h_gd_no": [], "txtGdNo": "B"})
+    with pytest.raises(KorailProtocolError, match="field txtGdNo must be"):
+        read({"txtGdNo": ["x"]})
+
+
+def test_train_summary_total_passenger_count_takes_only_an_int():
+    assert TrainSummary.from_raw({"totPsgCnt": 3}).total_passenger_count == 3
+    assert TrainSummary.from_raw({}).total_passenger_count is None
+    with pytest.raises(KorailProtocolError, match="totPsgCnt must be an integer"):
+        TrainSummary.from_raw({"totPsgCnt": "3"})
 
 
 def test_train_summary_appends_inventory_fields_and_parses_both_key_styles():
@@ -588,10 +730,8 @@ def test_car_parser_rejects_negative_counts_and_duplicate_car_numbers(
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda raw: raw.pop("seatList"),
         lambda raw: raw.__setitem__("seatList", {}),
         lambda raw: raw["seatList"].__setitem__(0, []),
-        lambda raw: raw.pop("windowList"),
         lambda raw: raw.__setitem__("windowList", {}),
         lambda raw: raw["windowList"].__setitem__(0, []),
     ],
@@ -604,6 +744,17 @@ def test_seat_parser_rejects_malformed_containers(
     mutation(raw)
     with pytest.raises(KorailProtocolError):
         _parse_seat(raw)
+
+
+def test_seat_parser_defaults_apk_optional_arrays_and_counts(load_json_fixture):
+    raw = load_json_fixture("seat_inventory_success.json")
+    for key in ("seatList", "windowList", "seat_remain_count", "seat_total_count"):
+        raw.pop(key)
+    parsed = _parse_seat(raw)
+    assert parsed.seats == ()
+    assert parsed.windows == ()
+    assert parsed.remaining_count is None
+    assert parsed.total_count is None
 
 
 @pytest.mark.parametrize(
@@ -750,7 +901,7 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
     # omits both the seat-att @Field (RV3-05) and the txtGdNo @Field (RV4-01);
     # psrmClCd defaults to general "1".
     assert set(car) == CAR_FIELDS - {"txtSeatAttCd", "txtGdNo"}
-    assert len(car) == 16
+    assert len(car) == 17
     assert "sidTest" not in car
     assert "txtSeatAttCd" not in car
     assert "txtGdNo" not in car
@@ -763,6 +914,7 @@ def test_closed_payload_builders_emit_exact_forms_and_fixed_values(
         "txtPsrmClCd": "1",
         "txtRunDt": "20260714",
         "txtDptDt": "20260714",
+        "txtDptTm": "060000",
         "txtTrnClsfCd": "00",
         "txtTrnNo": "00123",
         "txtDptRsStnCd": "0001",
@@ -1016,7 +1168,7 @@ def test_inventory_validation_rejects_missing_non_ascii_and_malformed_train_fiel
 
 
 def test_safety_registers_only_the_two_exact_new_post_contracts():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 60
+    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert ("POST", CAR_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", SEAT_PATH) in KORAIL_READ_ONLY_ROUTES
     assert KORAIL_EXACT_REQUEST_FIELDS[CAR_PATH] == CAR_FIELDS
@@ -1057,21 +1209,6 @@ def test_inventory_safety_rejects_missing_and_extra_fields(
     assert_read_only_request_fields(path, without_optional)
 
 
-class _DuplicateFieldMapping(Mapping[str, str]):
-    def __init__(self, values: dict[str, str], duplicate: str) -> None:
-        self._values = values
-        self._keys = [*values, duplicate]
-
-    def __getitem__(self, key: str) -> str:
-        return self._values[key]
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._keys)
-
-    def __len__(self) -> int:
-        return len(self._keys)
-
-
 @pytest.mark.parametrize(("path", "fields"), [(CAR_PATH, CAR_FIELDS), (SEAT_PATH, SEAT_FIELDS)])
 def test_inventory_safety_rejects_duplicate_prepared_fields(path, fields):
     values = {name: "" for name in fields}
@@ -1108,51 +1245,24 @@ def test_inventory_safety_rejects_wrong_methods_and_adjacent_routes(
         assert_read_only_route(method, path)
 
 
-@pytest.mark.parametrize("path", [CAR_PATH, SEAT_PATH])
-def test_invalid_inventory_forms_fail_before_dynapath_or_transport(path):
-    transport_calls = 0
-    token_calls = 0
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal transport_calls
-        transport_calls += 1
-        raise AssertionError("transport must not run")
-
-    def token_provider(_):
-        nonlocal token_calls
-        token_calls += 1
-        raise AssertionError("DynaPath must not run")
-
-    config = KorailConfig(
-        dynapath=DynapathConfig(
-            enabled=True,
-            token_provider=token_provider,
-            allowlist_paths=frozenset({path}),
-        )
-    )
-    client = KorailClient(config, transport=httpx.MockTransport(handler))
-    try:
-        with pytest.raises(KorailProtocolError, match="fields"):
-            client.http.post_form(
-                path,
-                {"Device": "AD"},
-                include_common=False,
-            )
-    finally:
-        client.close()
-    assert token_calls == 0
-    assert transport_calls == 0
+def _missing_fields_form(path: str) -> dict[str, str]:
+    return {"Device": "AD"}
 
 
-@pytest.mark.parametrize("path", [CAR_PATH, SEAT_PATH])
-def test_duplicate_inventory_forms_fail_before_dynapath_or_transport(path):
-    transport_calls = 0
-    token_calls = 0
+def _duplicate_key_form(path: str) -> _DuplicateFieldMapping:
     fields = KORAIL_EXACT_REQUEST_FIELDS[path]
-    duplicate = _DuplicateFieldMapping(
-        {name: "" for name in fields},
-        next(iter(fields)),
-    )
+    return _DuplicateFieldMapping({name: "" for name in fields}, next(iter(fields)))
+
+
+@pytest.mark.parametrize("path", [CAR_PATH, SEAT_PATH])
+@pytest.mark.parametrize(
+    ("make_form", "match"),
+    [(_missing_fields_form, "fields"), (_duplicate_key_form, "duplicate")],
+    ids=["invalid-fields", "duplicate-fields"],
+)
+def test_bad_inventory_forms_fail_before_dynapath_or_transport(path, make_form, match):
+    transport_calls = 0
+    token_calls = 0
 
     def handler(_: httpx.Request) -> httpx.Response:
         nonlocal transport_calls
@@ -1173,12 +1283,8 @@ def test_duplicate_inventory_forms_fail_before_dynapath_or_transport(path):
     )
     client = KorailClient(config, transport=httpx.MockTransport(handler))
     try:
-        with pytest.raises(KorailProtocolError, match="duplicate"):
-            client.http.post_form(
-                path,
-                duplicate,
-                include_common=False,
-            )
+        with pytest.raises(KorailProtocolError, match=match):
+            client.http.post_form(path, make_form(path), include_common=False)
     finally:
         client.close()
     assert token_calls == 0
@@ -1230,6 +1336,7 @@ def test_inventory_methods_have_exact_public_signatures_and_hints():
         "train",
         "passenger_count",
         "room_class_code",
+        "seat_attribute_code",
     ]
     assert list(seats_signature.parameters) == [
         "self",
@@ -1260,6 +1367,7 @@ def test_inventory_methods_have_exact_public_signatures_and_hints():
         "train": TrainSummary,
         "passenger_count": int,
         "room_class_code": str,
+        "seat_attribute_code": str | None,
         "return": SeatCarListResponse,
     }
     assert seat_hints == {
@@ -1571,6 +1679,8 @@ class _EvidenceFakeClient:
         self.calls.append("init")
         if self.scenario == "init_failed":
             raise RuntimeError("synthetic-init-message-secret")
+        # The script paces through the inner httpx client's request hooks.
+        self.http = SimpleNamespace(_client=SimpleNamespace(event_hooks={}))
 
     def login(self, _member_no: str, _password: str) -> KorailSession:
         self.calls.append("login")
@@ -1706,6 +1816,7 @@ def configured_evidence(monkeypatch, complete_train):
     _EvidenceFakeClient.train = complete_train
     monkeypatch.setattr(evidence, "KorailClient", _EvidenceFakeClient)
     monkeypatch.setattr(evidence, "live_enabled", lambda: True)
+    monkeypatch.setenv("KORAIL_LIVE_SEAT_EVIDENCE", "1")
     monkeypatch.setattr(
         evidence,
         "read_credentials_from_env",
@@ -1930,6 +2041,44 @@ def test_car_evidence_type_checks_every_observed_attribute():
     assert evidence._car_fields_typed(response) is False
 
 
+def test_evidence_needs_its_own_switch_as_well_as_the_live_one(
+    configured_evidence,
+    monkeypatch,
+):
+    # scripts/README.md: every live script needs KORAIL_MOBILE_API_LIVE=1 plus
+    # one switch of its own. Without KORAIL_LIVE_SEAT_EVIDENCE nothing is built.
+    monkeypatch.delenv("KORAIL_LIVE_SEAT_EVIDENCE")
+    result = evidence.capture_evidence()
+    assert result["status"] == "setup_failed"
+    assert configured_evidence.calls == []
+
+
+def test_evidence_client_is_paced_between_requests(configured_evidence, monkeypatch):
+    installed: list[tuple[object, float]] = []
+    monkeypatch.setattr(
+        evidence,
+        "_install_pacing",
+        lambda client, interval: installed.append((client, interval)),
+    )
+    evidence.capture_evidence()
+    assert len(installed) == 1
+    assert installed[0][1] == evidence.MIN_INTERVAL_SECONDS
+
+
+def test_evidence_pacing_waits_out_the_remaining_interval():
+    now = [100.0]
+    slept: list[float] = []
+    client = SimpleNamespace(http=SimpleNamespace(_client=SimpleNamespace(event_hooks={})))
+    evidence._install_pacing(client, 1.5, clock=lambda: now[0], sleep=slept.append)
+    (hook,) = client.http._client.event_hooks["request"]
+    hook(None)
+    now[0] += 0.5
+    hook(None)
+    now[0] += 2.0
+    hook(None)
+    assert slept == [pytest.approx(1.0)]
+
+
 def test_evidence_setup_failures_are_fixed_and_do_not_create_a_client(
     configured_evidence,
     monkeypatch,
@@ -2126,6 +2275,9 @@ def test_evidence_script_has_narrow_import_and_operation_boundaries():
         "os",
         "pathlib",
         "tempfile",
+        # `time` is the request pacing: a monotonic clock and a sleep, nothing
+        # that reaches the network.
+        "time",
         "typing",
         "korail_mobile_api",
     }
@@ -2233,3 +2385,92 @@ def test_evidence_main_validates_output_parent_and_type_before_capture(
     with pytest.raises(expected_error):
         evidence.main(arguments)
     assert capture_calls == 0
+
+
+@pytest.mark.parametrize(
+    "override",
+    ["NOT VALID; injected", "01", "0150", "\uff10\uff11\uff15"],
+    ids=["text", "two-digits", "four-digits", "fullwidth-digits"],
+)
+def test_a_seat_attribute_override_is_checked_like_the_rows_own(
+    complete_train, override
+):
+    """The override that replaces the row's seat_attribute_code gets its check.
+
+    The row's own code has to be three ASCII digits
+    (validate_seat_inventory_inputs). The override argument used to go out as
+    txtSeatAttCd unchecked, whatever it held.
+    """
+    with pytest.raises(
+        KorailProtocolError, match="seat_attribute_code must contain 3 ASCII digit"
+    ):
+        build_seat_car_form(
+            KorailConfig(),
+            complete_train,
+            passenger_count=1,
+            sid="caller-sid-car",
+            seat_attribute_code=override,
+        )
+
+
+def test_a_valid_seat_attribute_override_replaces_the_rows_code(complete_train):
+    train = replace(complete_train, seat_attribute_code="015")
+    car = build_seat_car_form(
+        KorailConfig(), train, passenger_count=1, sid="S", seat_attribute_code="021"
+    )
+    assert car["txtSeatAttCd"] == "021"
+    # An empty override still falls back to the row, as before.
+    car = build_seat_car_form(
+        KorailConfig(), train, passenger_count=1, sid="S", seat_attribute_code=""
+    )
+    assert car["txtSeatAttCd"] == "015"
+
+
+_SEAT_STRING_ATTRIBUTES = {
+    "seat_no": "seat_no",
+    "sale_psb_flg": "sale_possible",
+    "dir_seat_att_cd": "direction_code",
+    "etc_seat_att_cd": "other_attribute_code",
+    "rq_seat_att_cd": "requested_attribute_code",
+    "seat_spec": "specification",
+    "sqr_no": "sequence_no",
+    "intg_msg_cd": "message_code",
+    "intg_msg": "message",
+    "vz_msg_dv_cd": "visual_message_division_code",
+}
+
+
+@pytest.mark.parametrize("field_name", sorted(_SEAT_STRING_ATTRIBUTES))
+def test_seat_parser_accepts_a_blank_documented_seat_string(
+    load_json_fixture, field_name
+):
+    """Blank is accepted here and refused for station rows -- today, both.
+
+    _inventory_required_string checks the type only; _station_required_string
+    also refuses a blank (test_station_parser_refuses_a_blank_code_or_name in
+    test_raw_typed_core.py). Src batch 33 merges those helpers; each side is
+    pinned so the merge cannot quietly move one onto the other. If batch 33
+    decides the seat side should refuse blanks as well, it turns this test
+    over in the same commit.
+    """
+    raw = load_json_fixture("seat_inventory_success.json")
+    raw["seatList"][0][field_name] = ""
+    seat = _parse_seat(raw).seats[0]
+    assert getattr(seat, _SEAT_STRING_ATTRIBUTES[field_name]) == ""
+
+
+@pytest.mark.parametrize("run_date", ["2099010", "209901011", "２０９９０１０１", 20990101])
+def test_the_two_ascii_digit_checks_keep_their_own_errors(run_date):
+    # payloads' check (KorailProtocolError, a set of lengths) and
+    # read_payloads' (ValueError, one length) share one predicate; each keeps
+    # its own exception and wording.
+    from korail_mobile_api.payloads import _required_ascii_digits
+    from korail_mobile_api.read_payloads import FreeSeatCarRequest
+
+    with pytest.raises(ValueError, match=r"^run_date must contain exactly 8 ASCII digits$"):
+        FreeSeatCarRequest(run_date, "101", "1", "2", "1", "2")
+    with pytest.raises(
+        KorailProtocolError, match=r"^run_date must contain 6, 8 ASCII digit\(s\)$"
+    ):
+        _required_ascii_digits(run_date, "run_date", lengths=frozenset({6, 8}))
+    assert _required_ascii_digits("123456", "x", lengths=frozenset({6, 8})) == "123456"

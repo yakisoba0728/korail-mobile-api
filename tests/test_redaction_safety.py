@@ -1,3 +1,14 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
+import dataclasses
+import importlib
+
 import pytest
 
 from korail_mobile_api.errors import (
@@ -44,6 +55,26 @@ def test_redact_mapping_masks_sensitive_values():
 
 def test_redact_text_masks_card_like_values():
     assert "411111" not in redact_text("card 4111-1111-1111-1111")
+
+
+@pytest.mark.parametrize(
+    ("url", "secret"),
+    [
+        # A servlet puts the session in the path when cookies are off.
+        (
+            "https://smart.letskorail.com/classes/x;jsessionid=ABC123SECRET?safe=1",
+            "ABC123SECRET",
+        ),
+        ("https://example.test/pay/4111111111111111/confirm", "4111111111111111"),
+        ("https://example.test/cb?safe=1#txtPwd=hunter2", "hunter2"),
+    ],
+    ids=["session-in-path", "card-in-path", "password-in-fragment"],
+)
+def test_redact_url_masks_the_path_and_fragment_too(url, secret):
+    # Only the query was scrubbed; the rest of the URL went out as it came.
+    redacted = redact_url(url)
+    assert secret not in redacted
+    assert "safe=1" in redacted or "safe" not in url
 
 
 def test_redaction_is_recursive_case_insensitive_and_url_safe():
@@ -177,8 +208,6 @@ def test_raw_trip_menu_wire_values_are_redacted_without_mutation(
         "txtVrRsNo",
         "txtVrRsvSqNo",
         "h_orgtk_sale_dt",
-        "h_orgtk_wct_no",
-        "h_orgtk_sale_sqno",
         "pnr_no",
         "url",
         "image",
@@ -358,7 +387,7 @@ def test_safety_excludes_dangerous_domains_without_stub_apis():
 
 # --------------------------------------------------------------------------
 # The read side, swept whole rather than per-route. The 2026-07-27 audit
-# checked the three routes added that day; this checks all 47 field contracts
+# checked the three routes added that day; this checks every field contract
 # and every model dataclass at once, which is what found that the policy was
 # implemented in one spelling out of five.
 # --------------------------------------------------------------------------
@@ -384,22 +413,65 @@ def test_every_special_category_label_spelling_is_masked():
         assert is_sensitive_key(spelling), spelling
 
 
+_MODEL_MODULES = ("models", "read_models", "mutation_models", "limousine_models")
+
+
+def _model_dataclasses():
+    """Every dataclass defined in the four model modules, as (module.Class, cls)."""
+    for module_name in _MODEL_MODULES:
+        module = importlib.import_module(f"korail_mobile_api.{module_name}")
+        for name, obj in vars(module).items():
+            if (
+                dataclasses.is_dataclass(obj)
+                and isinstance(obj, type)
+                and obj.__module__ == module.__name__
+            ):
+                yield f"{module_name}.{name}", obj
+
+
+def test_no_response_prints_h_msg_txt_in_repr():
+    """The server can quote the caller's input back in h_msg_txt.
+
+    It is a sensitive key, and a repr lands in logs and tracebacks. The field
+    on BaseKorailResponse used to print it: 37 response classes redeclared it
+    repr=False, and the 27 that did not, plus the base, printed the text.
+    Now the base hides it and no subclass redeclares it. A new response
+    inherits that, and one that redeclares the field with repr=True fails
+    here.
+    """
+    exposed = {
+        name
+        for name, cls in _model_dataclasses()
+        if any(
+            field_.name == "h_msg_txt" and field_.repr
+            for field_ in dataclasses.fields(cls)
+        )
+    }
+    assert exposed == set()
+
+
+def test_h_msg_txt_stays_out_of_an_actual_repr():
+    from korail_mobile_api.models import BaseKorailResponse, UuidResponse
+
+    marker = "SYNTHETIC-QUOTED-INPUT"
+    for response in (
+        BaseKorailResponse("E1", marker, "FAIL"),
+        UuidResponse(h_msg_txt=marker),
+    ):
+        assert marker not in repr(response)
+        assert response.h_msg_txt == marker
+
+
 def test_no_special_category_label_is_left_in_a_model_repr():
-    """The other half: masked on the wire, hidden in repr().
+    """The other half: masked on the wire, hidden in repr() -- in every model module.
 
     These were the wrong way round -- welfare_discount_class_CODE was
     repr=False while welfare_discount_class_NAME, the directly readable one,
     was printed. A repr lands in logs and tracebacks, which is the same
     exposure redact_payload exists to prevent.
     """
-    import dataclasses
-
-    from korail_mobile_api import read_models
-
     exposed = []
-    for name, obj in vars(read_models).items():
-        if not dataclasses.is_dataclass(obj):
-            continue
+    for name, obj in _model_dataclasses():
         for field_ in dataclasses.fields(obj):
             if field_.name in {
                 "disability_flag",
@@ -414,7 +486,7 @@ def test_no_special_category_label_is_left_in_a_model_repr():
 
 
 def test_no_read_route_field_contract_carries_an_unmasked_identity_field():
-    """All 47 contracts at once, so a new route cannot quietly add one.
+    """Every field contract at once, so a new route cannot quietly add one.
 
     Station names (dptRsStnNm and friends) are the deliberate exception: they
     name a PLACE, are not tied to a person, and masking them would make every

@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from dataclasses import FrozenInstanceError, is_dataclass
 
 import pytest
@@ -52,6 +60,13 @@ def test_train_summary_exposes_seat_map_flag_and_general_reservation_code():
 
     assert train.seat_map_flag == "Y"
     assert train.general_reservation_code == "11"
+
+
+def test_train_summary_retains_apk_suspension_flag():
+    train = TrainSummary.from_raw(
+        {"h_trn_no": "00001", "h_trn_sps_flg": "SYNTHETIC-SUSPENDED"}
+    )
+    assert train.train_suspension_flag == "SYNTHETIC-SUSPENDED"
 
 
 def test_config_defaults_match_design():
@@ -172,3 +187,38 @@ def test_maas_station_app_routing_markers_are_eligible(app_data):
     )
 
     assert menu.uses_station_selection is True
+
+
+def _raw_fields():
+    import dataclasses
+    import importlib
+
+    for module_name in ("models", "read_models", "limousine_models", "mutation_models"):
+        module = importlib.import_module(f"korail_mobile_api.{module_name}")
+        for name, obj in vars(module).items():
+            if (
+                dataclasses.is_dataclass(obj)
+                and isinstance(obj, type)
+                and obj.__module__ == module.__name__
+            ):
+                for field_ in dataclasses.fields(obj):
+                    if field_.name in {"raw", "detail_raw"}:
+                        yield f"{module_name}.{name}.{field_.name}", field_
+
+
+def test_no_model_compares_or_hashes_its_raw_payload():
+    # raw is the server's JSON kept as evidence, not part of what a parsed
+    # value is. Compared, it made two responses with the same parsed fields
+    # unequal over a key nobody reads, and made every frozen model unhashable.
+    fields = dict(_raw_fields())
+    assert len(fields) >= 78
+    compared = sorted(name for name, field_ in fields.items() if field_.compare)
+    assert compared == []
+
+
+def test_two_responses_that_differ_only_in_raw_are_equal_and_hashable():
+    first = BaseKorailResponse("S000", "ok", "SUCC", raw={"h_msg_cd": "S000"})
+    second = BaseKorailResponse("S000", "ok", "SUCC", raw={"extra": 1})
+    assert first == second
+    assert hash(first) == hash(second)
+    assert first != BaseKorailResponse("S001", "ok", "SUCC", raw={"h_msg_cd": "S000"})

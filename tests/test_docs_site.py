@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """문서 사이트가 패키지와 어긋나면 여기서 먼저 실패합니다.
 
 `mkdocs build --strict` 는 CI 가 돌립니다. 이 모듈은 그 빌드가 돌기 전에, 그리고
@@ -35,6 +43,21 @@ def _reexported_submodules() -> set[str]:
     }
 
 
+def _site_pages() -> set[str]:
+    """The prose pages the site's `nav` lists, outside `reference/`.
+
+    Read from `nav` rather than from `exclude_docs` on purpose: the check below
+    is that every page the navigation shows is also un-excluded, and a list
+    taken from the exclusion block would compare that block with itself.
+    """
+    block = MKDOCS.split("\nnav:\n", maxsplit=1)[1]
+    block = re.split(r"\n(?=\S)", block, maxsplit=1)[0]
+    pages = set(
+        re.findall(r"^\s*-\s*(?:[^:\n]+:\s*)?([\w./-]+\.md)\s*$", block, re.MULTILINE)
+    )
+    return {page for page in pages if not page.startswith("reference/")}
+
+
 def test_every_reexporting_module_has_a_reference_page() -> None:
     modules = _reexported_submodules()
     assert modules
@@ -51,12 +74,14 @@ def test_every_reexporting_module_has_a_reference_page() -> None:
 
 
 def test_the_navigation_lists_exactly_those_pages() -> None:
-    navigated = set(re.findall(r"reference/([a-z_]+)\.md", MKDOCS)) - {"index"}
+    navigated = set(re.findall(r"reference/([a-z0-9_]+)\.md", MKDOCS)) - {"index"}
     assert navigated == _reexported_submodules()
 
     # 차례에 있는 쪽이 exclude_docs 로 빠져 있으면 mkdocs 가 조용히 뺀다.
-    for page in ("index.md", "quickstart.md", "safety.md", "errors.md", "changelog.md"):
-        assert f"!/{page}" in MKDOCS
+    pages = _site_pages()
+    assert "index.md" in pages
+    for page in sorted(pages):
+        assert f"!/{page}" in MKDOCS, page
     assert "!/reference/" in MKDOCS
 
 
@@ -75,7 +100,7 @@ def test_the_exclusion_only_covers_markdown() -> None:
 
 def test_the_reference_index_links_every_module_page() -> None:
     index = (REFERENCE_DIR / "index.md").read_text(encoding="utf-8")
-    linked = set(re.findall(r"\]\(([a-z_]+)\.md\)", index))
+    linked = set(re.findall(r"\]\(([a-z0-9_]+)\.md\)", index))
     assert linked == _reexported_submodules()
 
 
@@ -156,15 +181,10 @@ def test_no_document_under_docs_is_unreachable():
         path for path in tracked
         if path.endswith(".md") and not path.startswith("docs/internal/")
     }
-    # 색인 자신과 문서 사이트 원본은 mkdocs.yml 의 nav 가 가리킵니다.
-    documents -= {
-        "docs/README.md",
-        "docs/index.md",
-        "docs/quickstart.md",
-        "docs/safety.md",
-        "docs/errors.md",
-        "docs/changelog.md",
-    }
+    # 문서 사이트 원본은 mkdocs.yml 의 nav 가 가리킵니다. docs/README.md 는
+    # 사이트 쪽이 아니라 이 색인 자신이라서 따로 뺍니다.
+    documents -= {f"docs/{page}" for page in _site_pages()}
+    documents -= {"docs/README.md"}
 
     # "어딘가에서" 링크되면 고아가 아닙니다. deep-dive 의 보고서들은 최상위가
     # 아니라 자기 디렉터리의 README 가 가리키고, 그것이 정상입니다.

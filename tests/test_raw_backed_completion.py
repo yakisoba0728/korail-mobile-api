@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 import math
@@ -242,13 +250,14 @@ def test_session_coupled_route_parsers_preserve_full_server_expiry(parser):
         )
 
 
-def test_strict_parser_default_rejects_result_only_envelope():
-    with pytest.raises(KorailProtocolError):
-        parse_service_status_response({"strResult": "SUCC"})
+def test_strict_parser_default_accepts_omitted_common_message_fields():
+    result = parse_service_status_response({"strResult": "SUCC"})
+    assert result.str_result == "SUCC"
+    assert result.h_msg_cd is None
 
 
 @pytest.mark.parametrize("method_name", ["post_form", "get_json"])
-def test_http_default_still_requires_the_full_envelope(method_name):
+def test_http_default_accepts_omitted_common_message_fields(method_name):
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -273,11 +282,12 @@ def test_http_default_still_requires_the_full_envelope(method_name):
 
             def call() -> object:
                 return client.get_json(
-                    "/classes/com.korail.mobile.common.stationinfo",
+                    "/classes/com.korail.mobile.product.ReservationList",
+                    {"txtSelPage": "1", "txtCntPerPage": "20"},
+                    include_common=True,
                     include_dynapath=False,
                 )
-        with pytest.raises(KorailProtocolError):
-            call()
+        assert call().str_result == "SUCC"
     finally:
         client.close()
 

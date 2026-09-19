@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """DynaPath 토큰 — 일부 경로에 붙는 안티봇 헤더.
 
 STCLab DynaPath SDK(``b/C1229b.java``, ``B/AbstractC1228a.java``)가 만드는
@@ -11,7 +19,7 @@ import string
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from urllib.parse import quote_plus
 
 from .constants import (
@@ -155,9 +163,7 @@ class DynapathTokenSettings:
     os_type: str = KORAIL_DYNAPATH_OS_TYPE
     sdk_version: str = KORAIL_DYNAPATH_SDK_VERSION
     table_index: int = DYNAPATH_TABLE_INDEX
-    table: str = field(
-        default_factory=lambda: generate_dynapath_encoding_table(DYNAPATH_TABLE_INDEX)
-    )
+    table: str = DYNAPATH_ENCODING_TABLE
     i8: int = DYNAPATH_DEFAULT_I8
     i9: int = DYNAPATH_DEFAULT_I9
     i10: int = DYNAPATH_DEFAULT_I10

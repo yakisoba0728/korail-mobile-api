@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """Offline tests for the two non-default reservation job types.
 
 Everything asserted here is read out of the decompiled app, not out of what the
@@ -31,6 +39,8 @@ from pathlib import Path
 import httpx
 import pytest
 
+from _helpers import logged_in_no_network_client as _logged_in_no_network_client
+from _mutation_fixtures import eligible_train as _eligible_train
 from korail_mobile_api import (
     KORAIL_STANDBY_HOLD_MESSAGE_CODE,
     KorailClient,
@@ -72,26 +82,6 @@ RESERVATION_WAIT_PATH = "/classes/com.korail.mobile.reservationWait.ReservationW
 # never carry. OSrcar.java:7-12 declares exactly these six names (three for
 # journey 1, three for journey 2); this package books one journey.
 OSRCAR_PREFIXES = ("txtSrcarCnt", "txtSrcarNo", "txtSeatNo")
-
-
-def _eligible_train() -> TrainSummary:
-    return TrainSummary(
-        train_no="00209",
-        train_group_code="100",
-        departure_station_code="0001",
-        arrival_station_code="0501",
-        departure_date="20990101",
-        departure_time="100700",
-        arrival_time="102400",
-        run_date="20990101",
-        train_class_code="00",
-        departure_run_order="1",
-        arrival_run_order="2",
-        general_reservation_code="11",
-        departure_construction_order="1",
-        arrival_construction_order="2",
-        seat_attribute_code="015",
-    )
 
 
 def _sold_out_standby_train() -> TrainSummary:
@@ -166,18 +156,6 @@ def _standby_hold(
     )
 
 
-def _logged_in_no_network_client() -> KorailClient:
-    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
-        raise AssertionError(
-            f"a dry run must not send a request (saw {request.method} "
-            f"{request.url.path})"
-        )
-
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    return client
-
-
 # --- job ids -----------------------------------------------------------------
 
 
@@ -203,12 +181,79 @@ def test_default_job_type_reproduces_the_pinned_single_adult_form_exactly():
     assert list(defaulted) == list(explicit) == list(pinned)
 
 
-def test_unknown_job_type_is_refused_before_anything_is_built():
-    with pytest.raises(KorailProtocolError):
+def test_merge_standing_job_type_is_refused_on_a_non_merge_eligible_train():
+    # "1202" is a known job type; what is refused here is the row.
+    with pytest.raises(KorailProtocolError, match="requires a merge-eligible row"):
         build_reservation_form(
             KorailConfig(),
             _eligible_train(),
             job_type="1202",  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize("job_type", ["9999", "", 1101])
+def test_an_unknown_job_type_is_refused_before_anything_is_built(job_type):
+    # 1101 is the right value spelled as a number rather than the wire string.
+    with pytest.raises(
+        KorailProtocolError,
+        match='job type must be one of "1101", "1102", "1103", "1202"',
+    ):
+        build_reservation_form(
+            KorailConfig(),
+            _eligible_train(),
+            job_type=job_type,
+        )
+
+
+# --- 7.0.6 free-seat (자유석) rows -------------------------------------------
+
+
+def _free_seat_train() -> TrainSummary:
+    """A row 7.0.6 would classify as ``TrainReservationStatus.FREE``.
+
+    ``generalReservationStatus()`` returns FREE only when ``h_gen_rsv_cd`` is
+    the SOLD_OUT code, ``h_stnd_rsv_cd`` is not the AVAILABLE code and
+    ``h_free_rsv_cd`` is
+    (analysis/jadx/sources/com/korail/talk/network/model/TrainScheduleOutTrainInfo.java:2881-2889).
+    Those 7.0.6 codes are AlienGuard-protected; "13"/"11" are this package's
+    reading of them (the pre-7.0.6 plain literals, and the 2026-07-26 live
+    sold-out rows).
+    """
+    return replace(
+        _eligible_train(),
+        general_reservation_code="13",
+        standing_reservation_code="13",
+        free_reservation_code="11",
+    )
+
+
+@pytest.mark.parametrize(
+    ("job_type", "seats"),
+    [
+        (KorailReservationJobType.IMMEDIATE, None),
+        (
+            KorailReservationJobType.SEAT_DESIGNATED,
+            (KorailSeatAssignment(car_no=4, seat_no="5A"),),
+        ),
+    ],
+)
+def test_a_free_seat_row_is_refused_before_anything_is_sent(job_type, seats):
+    # On a FREE row the 7.0.6 single-train builder swaps hidFreeFlg and
+    # txtSeatAttCd4 for AlienGuard-protected values
+    # (analysis/jadx/sources/com/korail/talk/ui/screen/train/TrainScheduleViewModel.java:2875,
+    # :2899-2909, :2914-2915) that this package cannot reproduce. The "11"
+    # rule is what keeps such a row out, and it must do so with a live consent
+    # and before the transport is touched.
+    client = _logged_in_no_network_client()
+    with pytest.raises(
+        KorailProtocolError,
+        match="evidenced available general seat",
+    ):
+        client.reserve(
+            _free_seat_train(),
+            consent=MutationConsent(allow_reserve=True, dry_run=False),
+            job_type=job_type,
+            seats=seats,
         )
 
 
@@ -620,20 +665,22 @@ def test_standby_is_general_cabin_only():
 
 
 @pytest.mark.parametrize(
-    ("general", "standing", "expected"),
+    ("general", "standing"),
     [
-        ("13", "11", "Y"),  # 매진 + 입석 open -> the app sends "Y"
-        ("13", "13", "N"),
-        ("13", None, "N"),
-        ("11", "11", "N"),  # not 매진, so not a standing request
+        ("13", "11"),  # 매진 + 입석 open: 입석 구매였다면 "Y" 가 될 행
+        ("13", "13"),
+        ("13", None),
+        ("11", "11"),
     ],
 )
-def test_standby_computes_the_standing_flag_the_way_the_app_does(
-    general,
-    standing,
-    expected,
-):
-    # S4/J.java:83-84's isStndSeat, fed into the request at c5/b.java:69.
+def test_standby_never_sends_the_standing_flag(general, standing):
+    """예약대기에 ``txtStndFlg="Y"`` 를 실으면 대기가 아니라 입석 예약이 된다.
+
+    2026-09-16 실서버에서 같은 예약대기 열차에 이 값만 바꿔 두 번 보냈다. ``"N"``
+    은 ``SUCC``/``IRR000014``(예약대기 가능), ``"Y"`` 는 ``SUCC``/``IRR000018`` 에
+    ``h_seat_no="입석"`` 과 결제 기한이 붙은 입석 예약이었다
+    (``docs/7.0.6-live-verification.md``).
+    """
     train = replace(
         _sold_out_standby_train(),
         general_reservation_code=general,
@@ -644,7 +691,7 @@ def test_standby_computes_the_standing_flag_the_way_the_app_does(
         train,
         job_type=KorailReservationJobType.STANDBY,
     )
-    assert form["txtStndFlg"] == expected
+    assert form["txtStndFlg"] == "N"
 
 
 def test_an_ordinary_hold_still_pins_the_standing_flag_to_no():
@@ -661,7 +708,7 @@ def test_standby_works_with_a_passenger_mix_and_keeps_the_cabin_code():
     )
     assert form["txtTotPsgCnt"] == "3"
     assert form["txtCompaCnt1"] == "2"
-    assert form["txtCompaCnt3"] == "1"
+    assert form["txtCompaCnt2"] == "1"
     assert form["txtPsrmClCd1"] == KorailSeatClass.GENERAL.value
 
 

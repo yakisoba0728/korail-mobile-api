@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """기본 조회 응답을 :mod:`korail_mobile_api.models` 의 타입으로 옮깁니다.
 
 앱 기동 데이터, 공지, 역 목록·상세, 열차 조회 행, 운행달력, 정차역, 호차 목록,
@@ -14,6 +22,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Mapping
+from functools import partial
 from typing import Any
 
 from .errors import KorailProtocolError
@@ -45,15 +54,6 @@ from .models import (
 )
 
 
-def _optional_string(data: Mapping[str, Any], key: str) -> str | None:
-    value = data.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL cache field {key} must be a string or null"
-        )
-    return value
-
-
 def _typed_optional_string(
     data: Mapping[str, Any],
     key: str,
@@ -83,20 +83,6 @@ def _typed_required_string(
     if non_empty and not value.strip():
         raise KorailProtocolError(
             f"KORAIL {context} field {key} must be a non-empty string"
-        )
-    return value
-
-
-def _typed_required_list(
-    data: Mapping[str, Any],
-    key: str,
-    *,
-    context: str,
-) -> list[Any]:
-    value = data.get(key)
-    if not isinstance(value, list):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a list"
         )
     return value
 
@@ -149,6 +135,23 @@ def _typed_non_negative_integer_value(
     return parsed
 
 
+# Each response family's names for the typed helpers above; the context is
+# what its messages say. Seat inventory accepts a blank required string and
+# stations do not -- a station row without a code or a name is not a station.
+_optional_string = partial(_typed_optional_string, context="cache")
+_station_optional_string = partial(_typed_optional_string, context="station")
+_station_required_string = partial(
+    _typed_required_string, context="station", non_empty=True
+)
+_maas_optional_string = partial(_typed_optional_string, context="MAAS menu")
+_inventory_optional_string = partial(_typed_optional_string, context="seat inventory")
+_inventory_required_string = partial(_typed_required_string, context="seat inventory")
+_inventory_integer_value = partial(
+    _typed_non_negative_integer_value, context="seat inventory"
+)
+_inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
+
+
 def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
     """``prdMobilePlusMain.cache`` 를 파싱합니다.
 
@@ -182,6 +185,11 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
         airport_bus_msg=_optional_string(raw, "airportBusMsg"),
         railplus_cardinfo=_optional_string(raw, "railplus_cardinfo"),
         version=version,
+        notice=(
+            parse_notice_response(response)
+            if raw.get("notice") is not None
+            else None
+        ),
     )
 
 
@@ -192,14 +200,24 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
     없는 상태도 정상이라 빈 값이 오류가 아닙니다.
     """
     raw = response.raw
+    nested = raw.get("notice")
+    if nested is not None and not isinstance(nested, Mapping):
+        raise KorailProtocolError("KORAIL cache field notice must be an object or null")
+    notice_raw = nested if isinstance(nested, Mapping) else raw
+    nested_notice = isinstance(nested, Mapping)
     return NoticeResponse(
         h_msg_cd=response.h_msg_cd,
         h_msg_txt=response.h_msg_txt,
         str_result=response.str_result,
         raw=raw,
-        board_id=_optional_string(raw, "bbrdId"),
-        post_sequence=_optional_string(raw, "ptwtSqno"),
-        post_title=_optional_string(raw, "ptwtTtl"),
+        board_id=_optional_string(notice_raw, "BbrdId" if nested_notice else "bbrdId"),
+        post_sequence=_optional_string(
+            notice_raw, "PtwtSqno" if nested_notice else "ptwtSqno"
+        ),
+        post_title=_optional_string(notice_raw, "PtwtTtl" if nested_notice else "ptwtTtl"),
+        post_content=(
+            _optional_string(notice_raw, "PtwtCont") if nested_notice else None
+        ),
     )
 
 
@@ -294,8 +312,7 @@ def parse_train_search_metadata(
     등)가 여기 담깁니다. 병합예약 가능 플래그(``h_merge_rsv_psb_flg``)는 최상위가
     아니라 ``trn_infos`` 안에 있어 거기서 읽습니다.
 
-    ``h_menu_id`` 는 읽지 않습니다. ``txtMenuId`` 는 서버 값이 아니라 앱이 박아
-    넣는 클라이언트 상수입니다.
+    7.0.6 ``TrainScheduleOut`` 의 ``h_menu_id`` 도 보존합니다.
     """
     def optional(key: str) -> str | None:
         return _typed_optional_string(raw, key, context="train search metadata")
@@ -310,8 +327,8 @@ def parse_train_search_metadata(
     else:
         merge_reservation_available_flag = None
     return TrainSearchMetadata(
-        # No h_menu_id: see TrainSearchMetadata. txtMenuId is a client constant.
         job_id=optional("strJobId"),
+        menu_id=optional("h_menu_id"),
         product_no=optional("h_gd_no"),
         next_page_flag=optional("h_next_pg_flg"),
         next_query_station_no=optional("h_qry_st_no_next"),
@@ -330,24 +347,6 @@ def parse_train_search_metadata(
         merge_reservation_available_flag=merge_reservation_available_flag,
         raw=dict(raw),
     )
-
-
-def _station_optional_string(row: Mapping[str, Any], key: str) -> str | None:
-    value = row.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL station field {key} must be a string or null"
-        )
-    return value
-
-
-def _station_required_string(row: Mapping[str, Any], key: str) -> str:
-    value = row.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise KorailProtocolError(
-            f"KORAIL station field {key} must be a non-empty string"
-        )
-    return value
 
 
 def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
@@ -369,18 +368,6 @@ def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
         raw=response.raw,
         verification_code=value,
     )
-
-
-def _maas_optional_string(
-    data: Mapping[str, Any],
-    key: str,
-) -> str | None:
-    value = data.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL MAAS menu field {key} must be a string or null"
-        )
-    return value
 
 
 def parse_maas_menu_list_response(
@@ -676,17 +663,14 @@ def parse_train_schedule_response(
 ) -> TrainScheduleResponse:
     """``research.actualTrainSchedule.do`` 의 정차역·지연 정보를 파싱합니다.
 
-    ``dlayList`` 는 필수 리스트이고 없으면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 행 하나가
+    7.0.6 DTO에서는 ``dlayList`` 가 생략되면 빈 목록입니다. 행 하나가
     정차역 하나이며 도착·출발 시각과 지연 시간이 담깁니다. 개별 필드는
     선택값이라 서버가 빼면 ``None`` 입니다.
     """
     raw = response.raw
-    rows = _typed_required_list(
-        raw,
-        "dlayList",
-        context="train schedule",
-    )
+    rows = raw.get("dlayList", [])
+    if not isinstance(rows, list):
+        raise KorailProtocolError("KORAIL train schedule field dlayList must be a list")
     stops: list[TrainScheduleStop] = []
     for row in rows:
         if not isinstance(row, Mapping):
@@ -839,8 +823,9 @@ def parse_train_schedule_response(
         # trnNo1 is a nullable Gson String (TrainScheduleDao.java:123) and the
         # web-view consumer null-guards it (TrainServiceInfoWebViewActivity.java
         # :200 -> if (!N.isNull(tranNo1))), so a null train number is tolerated
-        # by the app. runDt1/msgCont stay required because their consumers use
-        # them unguarded (convertFormat(runDt1)/msgCont.replaceAll).
+        # by the app. runDt1 stays required because its consumer uses it
+        # unguarded (convertFormat(runDt1)); msgCont is read as optional above,
+        # and a response without it parses to None.
         train_no=optional("trnNo1"),
         special_train_flag=optional("trnSpsFlg"),
         up_down_division_code=optional("upDnDvCd"),
@@ -926,71 +911,11 @@ def _inventory_optional_list(
     return value
 
 
-def _inventory_required_string(
-    data: Mapping[str, Any],
-    key: str,
-) -> str:
-    if key not in data or not isinstance(data[key], str):
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be a string"
-        )
-    return data[key]
-
-
-def _inventory_optional_string(
-    data: Mapping[str, Any],
-    key: str,
-) -> str | None:
-    value = data.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be a string or null"
-        )
-    return value
-
-
-def _inventory_integer_value(value: object, key: str) -> int:
-    if type(value) is int:
-        parsed = value
-    elif (
-        isinstance(value, str)
-        and value
-        and all("0" <= char <= "9" for char in value)
-    ):
-        try:
-            parsed = int(value)
-        except ValueError as exc:
-            raise KorailProtocolError(
-                f"KORAIL seat inventory field {key} has an unsupported "
-                "ASCII-decimal length"
-            ) from exc
-    else:
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be a non-negative "
-            "integer or ASCII-decimal string"
-        )
-    if parsed < 0:
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must not be negative"
-        )
-    return parsed
-
-
 def _inventory_required_int(
     data: Mapping[str, Any],
     key: str,
 ) -> int:
     return _inventory_integer_value(data.get(key), key)
-
-
-def _inventory_optional_int(
-    data: Mapping[str, Any],
-    key: str,
-) -> int | None:
-    value = data.get(key)
-    if value is None:
-        return None
-    return _inventory_integer_value(value, key)
 
 
 def parse_seat_car_list_response(
@@ -1138,10 +1063,9 @@ def parse_seat_inventory_response(
 ) -> SeatInventoryResponse:
     """``research.TResidualSeatsResearch.do`` 의 좌석 배치와 점유 상태를 파싱합니다.
 
-    배치 유형(``layout_type``), 좌석 배열 코드(``seat_ary_cd``), 잔여·전체 좌석
-    수, ``seatList`` 가 모두 필수입니다. 잔여가 전체보다 크면 값의 모양이
-    맞더라도 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다 —
-    서로 모순되는 재고를 그대로 통과시키지 않습니다.
+    7.0.6 DTO는 ``seatList``·``windowList`` 생략 시 빈 목록이며 잔여·전체
+    좌석 수 키는 선언하지 않습니다. 그 두 건수가 함께 오면 모순 여부를
+    검사하고, 없으면 ``None`` 으로 둡니다.
 
     좌석 행은 :class:`~korail_mobile_api.models.PhysicalSeat` 가 됩니다. 창문
     위치 비율은 좌석이 아니라 좌석표를 그리기 위한 값이라
@@ -1150,20 +1074,26 @@ def parse_seat_inventory_response(
     raw = response.raw
     layout_type = _inventory_required_int(raw, "layout_type")
     arrangement_code = _inventory_required_string(raw, "seat_ary_cd")
-    remaining_count = _inventory_required_int(
+    remaining_count = _inventory_optional_int(
         raw,
         "seat_remain_count",
     )
-    total_count = _inventory_required_int(
+    total_count = _inventory_optional_int(
         raw,
         "seat_total_count",
     )
-    if remaining_count > total_count:
+    if (
+        remaining_count is not None
+        and total_count is not None
+        and remaining_count > total_count
+    ):
         raise KorailProtocolError(
             "KORAIL seat inventory remaining count exceeds total count"
         )
 
-    seat_rows = _inventory_required_list(raw, "seatList")
+    seat_rows = (
+        _inventory_required_list(raw, "seatList") if "seatList" in raw else []
+    )
     seats: list[PhysicalSeat] = []
     for row in seat_rows:
         if not isinstance(row, Mapping):
@@ -1208,7 +1138,9 @@ def parse_seat_inventory_response(
             )
         )
 
-    window_rows = _inventory_required_list(raw, "windowList")
+    window_rows = (
+        _inventory_required_list(raw, "windowList") if "windowList" in raw else []
+    )
     windows: list[SeatWindow] = []
     for row in window_rows:
         if not isinstance(row, Mapping):

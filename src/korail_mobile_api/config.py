@@ -1,7 +1,16 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """요청마다 실리는 설정값 — :class:`KorailConfig`.
 
-기본값은 앱 v6.5.0 이 보내는 값이며, DynaPath 기기 값만 설정 객체마다 새로
-만듭니다(:func:`_default_dynapath_config`). 실제 단말 값을 고정하려면
+기본값은 앱 v6.5.0 이 보내는 값입니다. DynaPath 는 기본으로 꺼져 있고,
+``enable_dynapath=True`` 로 켜면 :func:`enabled_dynapath_config` 가 설정 객체마다
+기기 값을 새로 합성합니다. 실제 단말 값을 고정하려면
 :func:`~korail_mobile_api.live.build_config_from_env` 를 씁니다.
 """
 
@@ -71,7 +80,9 @@ class KorailConfig:
     #: :data:`~korail_mobile_api.constants.DYNAPATH_REQUIRED_PATHS` 를 부르면
     #: :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError` 로 막힘.
     #:
-    #: ``dynapath`` 를 직접 넘겼다면 이 플래그는 무시됩니다.
+    #: ``dynapath`` 에 ``enabled=True`` 인 구성을 넘겼다면 이 플래그는 무시됩니다.
+    #: ``enabled=False`` 인 구성을 넘기고 이 플래그를 켜면, 넘긴 구성은 통째로
+    #: :func:`enabled_dynapath_config` 의 것으로 바뀝니다.
     #:
     #: 필드 목록 **맨 끝**. 중간에 끼우면 위치 인자의 뜻이 조용히 바뀝니다.
     enable_dynapath: bool = False

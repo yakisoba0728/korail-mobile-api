@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 import pytest
@@ -5,22 +13,265 @@ import pytest
 from korail_mobile_api import (
     KorailConfig,
     KorailProtocolError,
+    PaidTicket,
     ReservationHoldResponse,
     ReservationPaymentResponse,
 )
+from korail_mobile_api.mutation_models import (
+    StationRefundExecutionRequest,
+    StationRefundVerificationRequest,
+)
 from korail_mobile_api.mutation_parsers import (
+    parse_cash_receipt_issue_response,
+    parse_discount_card_purchase_response,
+    parse_refund_ticket_response,
     parse_reservation_hold_response,
     parse_reservation_payment_response,
+    parse_station_refund_execution_response,
+    parse_station_refund_verification_response,
 )
 from korail_mobile_api.mutation_payloads import (
     build_unpaid_reservation_cancel_form,
 )
-from korail_mobile_api.read_parsers import parse_reservation_history_response
+from korail_mobile_api.read_parsers import (
+    parse_refund_ticket_detail_response,
+    parse_reservation_history_response,
+)
 from korail_mobile_api.redaction import redact_mapping
 
 
 #: 15 decimal digits, the real PNR shape. Synthetic value.
 SYNTHETIC_LIVE_PNR = "399999999999999"
+
+
+def test_refund_result_accepts_nullable_settlement_list_but_requires_the_key():
+    # RefundTicketOut.java:48-53 requires the key and assigns its nullable value.
+    null_result = parse_refund_ticket_response(
+        {"strResult": "SUCC", "stlList": None}
+    )
+    empty_result = parse_refund_ticket_response(
+        {"strResult": "SUCC", "stlList": []}
+    )
+    assert null_result.settlement_method_codes == ()
+    assert null_result.settlement_list_is_null is True
+    assert empty_result.settlement_method_codes == ()
+    assert empty_result.settlement_list_is_null is False
+    with pytest.raises(KorailProtocolError, match="stlList is required"):
+        parse_refund_ticket_response({"strResult": "SUCC"})
+
+
+def test_ncard_purchase_preserves_settlement_and_tax_fields():
+    result = parse_discount_card_purchase_response(
+        {
+            "strResult": "SUCC",
+            "lumpStlTgtNo": "SYNTHETIC_LUMP_TARGET",
+            "dcntCrdStlTgtNo": "SYNTHETIC_NCARD_TARGET",
+            "rcvdAmt": 60000,
+            "stxAmt": 3000,
+            "taxtSplAmt": "57000",
+        }
+    )
+    assert result.lump_settlement_target_no == "SYNTHETIC_LUMP_TARGET"
+    assert result.discount_card_settlement_target_no == "SYNTHETIC_NCARD_TARGET"
+    assert result.received_amount == "60000"
+    assert result.stx_amount == "3000"
+    assert result.taxt_supply_amount == "57000"
+    assert "SYNTHETIC_NCARD_TARGET" not in repr(result)
+
+
+def test_ncard_purchase_tax_fields_allow_null_or_absence():
+    absent = parse_discount_card_purchase_response({"strResult": "SUCC"})
+    present_null = parse_discount_card_purchase_response(
+        {
+            "strResult": "SUCC",
+            "dcntCrdStlTgtNo": None,
+            "stxAmt": None,
+            "taxtSplAmt": None,
+        }
+    )
+    for result in (absent, present_null):
+        assert result.discount_card_settlement_target_no is None
+        assert result.stx_amount is None
+        assert result.taxt_supply_amount is None
+    with pytest.raises(KorailProtocolError):
+        parse_discount_card_purchase_response(
+            {"strResult": "SUCC", "stxAmt": [3000]}
+        )
+
+
+def test_paid_ticket_carries_the_refund_details_pbp_flag():
+    detail = parse_refund_ticket_detail_response(
+        {
+            "strResult": "SUCC",
+            "h_pnr_no": SYNTHETIC_LIVE_PNR,
+            "h_sale_dt": "20990101",
+            "h_orgtk_wct_no": "SYNTHETIC_WINDOW",
+            "h_orgtk_sale_sqno": "SYNTHETIC_SEQUENCE",
+            "h_orgtk_ret_pwd": "SYNTHETIC_RETURN_PASSWORD",
+            "h_pbp_acep_tgt_flg": "Y",
+        }
+    )
+    ticket = PaidTicket.from_refund_detail(detail)
+    assert ticket.pbp_acceptance_target_flag == "Y"
+    assert "SYNTHETIC_RETURN_PASSWORD" not in repr(ticket)
+
+
+def test_cash_receipt_issue_parses_approval_list_and_hides_identifiers():
+    result = parse_cash_receipt_issue_response(
+        {
+            "strResult": "SUCC",
+            "cashRcetTxnDvCd": "SYNTHETIC_TXN",
+            "athnDmnRcgnNo": "SYNTHETIC_AUTH_NO",
+            "totApvAmt": "8400",
+            "apvList": [
+                {
+                    "jobDvCd": "SYNTHETIC_JOB",
+                    "rcptNo": "SYNTHETIC_RECEIPT_NO",
+                    "cashRcetApvNo": "SYNTHETIC_APPROVAL_NO",
+                    "totApvAmt": "8400",
+                }
+            ],
+        }
+    )
+    assert result.total_approved_amount == "8400"
+    assert result.approvals[0].approved_amount == "8400"
+    assert result.approvals[0].cash_receipt_approval_no == "SYNTHETIC_APPROVAL_NO"
+    assert "SYNTHETIC_AUTH_NO" not in repr(result)
+    assert "SYNTHETIC_APPROVAL_NO" not in repr(result.approvals[0])
+    assert parse_cash_receipt_issue_response(
+        {"strResult": "FAIL"}
+    ).approvals == ()
+    assert parse_cash_receipt_issue_response(
+        {"strResult": "SUCC", "apvList": None}
+    ).approval_list_is_null is True
+    with pytest.raises(KorailProtocolError, match="apvList must be a list"):
+        parse_cash_receipt_issue_response({"strResult": "SUCC", "apvList": "bad"})
+
+
+def test_station_refund_execution_uses_verified_original_ticket_and_amounts():
+    verification = parse_station_refund_verification_response(
+        {
+            "strResult": "SUCC",
+            "rcvd_amt": "8400",
+            "ret_amt": "8400",
+            "ret_fee": "0",
+            "orgtkinfo_list": [
+                {
+                    "pnr_no": SYNTHETIC_LIVE_PNR,
+                    "ogtk_sale_dt": "20990101",
+                    "ogtk_sale_wct_no": "SYNTHETIC_WINDOW",
+                    "ogtk_sale_sqno": "SYNTHETIC_SEQUENCE",
+                    "ogtk_ret_pwd": "SYNTHETIC_RETURN_PASSWORD",
+                    "ret_dv_cd": "SYNTHETIC_DIVISION",
+                    "ret_rsn_cd": "SYNTHETIC_REASON",
+                    "tk_knd_cd": "SYNTHETIC_KIND",
+                }
+            ],
+        }
+    )
+    request = StationRefundExecutionRequest.from_verification(
+        verification,
+        customer_phone="SYNTHETIC_PHONE",
+        customer_name="SYNTHETIC_NAME",
+    )
+    assert request.pnr_no == SYNTHETIC_LIVE_PNR
+    assert request.refund_amount == "8400"
+    assert request.refund_fee == "0"
+    assert request.refund_division_code == "SYNTHETIC_DIVISION"
+    assert "SYNTHETIC_RETURN_PASSWORD" not in repr(request)
+    assert "SYNTHETIC_PHONE" not in repr(request)
+    assert parse_station_refund_execution_response(
+        {"strResult": "SUCC", "h_ret_dv_cd": "SYNTHETIC_DIVISION"}
+    ).refund_division_code == "SYNTHETIC_DIVISION"
+
+
+def test_station_refund_verification_request_keeps_return_parts_separate():
+    request = StationRefundVerificationRequest(
+        customer_name="SYNTHETIC_NAME",
+        return_no_1="111",
+        return_no_2="222",
+        return_no_3="333",
+        return_no_4="444",
+    )
+    assert (request.return_no_1, request.return_no_4) == ("111", "444")
+    assert "SYNTHETIC_NAME" not in repr(request)
+    with pytest.raises(ValueError, match="verification requires return_no_4"):
+        StationRefundVerificationRequest(
+            customer_name="SYNTHETIC_NAME",
+            return_no_1="111",
+            return_no_2="222",
+            return_no_3="333",
+            return_no_4="",
+        )
+
+
+_VERIFIED_TICKET = {
+    "pnr_no": SYNTHETIC_LIVE_PNR,
+    "ogtk_sale_dt": "20990101",
+    "ogtk_sale_wct_no": "SYNTHETIC_WINDOW",
+    "ogtk_sale_sqno": "SYNTHETIC_SEQUENCE",
+    "ogtk_ret_pwd": "SYNTHETIC_RETURN_PASSWORD",
+    "ret_dv_cd": "SYNTHETIC_DIVISION",
+    "ret_rsn_cd": "SYNTHETIC_REASON",
+    "tk_knd_cd": "SYNTHETIC_KIND",
+}
+
+
+def _verification(ticket=_VERIFIED_TICKET, **amounts):
+    return parse_station_refund_verification_response(
+        {
+            "strResult": "SUCC",
+            "ret_amt": "8400",
+            "ret_fee": "0",
+            "orgtkinfo_list": [ticket],
+            **amounts,
+        }
+    )
+
+
+def test_station_refund_execution_refuses_unverified_or_missing_echo_values():
+    for raw in (
+        {"strResult": "FAIL", "orgtkinfo_list": []},
+        {"strResult": "SUCC", "orgtkinfo_list": None},
+    ):
+        verification = parse_station_refund_verification_response(raw)
+        with pytest.raises(KorailProtocolError, match="successful verification"):
+            StationRefundExecutionRequest.from_verification(
+                verification,
+                customer_phone="SYNTHETIC_PHONE",
+                customer_name="SYNTHETIC_NAME",
+            )
+    # What the verification should have echoed and did not is the server's
+    # answer falling short, so it is a protocol error that names every
+    # missing value -- blank ones included -- not the first one the
+    # constructor trips on.
+    for verification, missing in (
+        (
+            _verification({"pnr_no": SYNTHETIC_LIVE_PNR}),
+            "original_return_password, original_sale_date, original_sale_sequence, "
+            "original_sale_window_no, refund_division_code, refund_reason_code, "
+            "ticket_kind_code",
+        ),
+        (_verification({**_VERIFIED_TICKET, "tk_knd_cd": "  "}), "ticket_kind_code"),
+        (_verification(ret_fee=None), "refund_fee"),
+    ):
+        with pytest.raises(KorailProtocolError, match=f"is missing {missing}$"):
+            StationRefundExecutionRequest.from_verification(
+                verification,
+                customer_phone="SYNTHETIC_PHONE",
+                customer_name="SYNTHETIC_NAME",
+            )
+
+
+@pytest.mark.parametrize("blank", ["customer_phone", "customer_name"])
+def test_station_refund_execution_checks_the_callers_own_values_as_input(blank):
+    # The phone and name come from the caller, not the server, so the
+    # constructor refuses them as input (ValueError), as it would any directly
+    # built request; the verification's own gaps stay KorailProtocolError.
+    values = {"customer_phone": "SYNTHETIC_PHONE", "customer_name": "SYNTHETIC_NAME"}
+    values[blank] = " "
+    with pytest.raises(ValueError, match=f"execution requires {blank}"):
+        StationRefundExecutionRequest.from_verification(_verification(), **values)
 
 
 def _reservation_history_body() -> dict[str, object]:
@@ -95,7 +346,7 @@ def test_a_hold_can_be_read_back_out_of_the_reservation_history():
         assert recovered.pnr_no == SYNTHETIC_LIVE_PNR
         form = build_unpaid_reservation_cancel_form(KorailConfig(), recovered)
         assert form["txtPnrNo"] == SYNTHETIC_LIVE_PNR
-        assert form["txtJrnyCnt"] == "1"
+        assert form["txtJrnyCnt"] == str(journey_count)
         assert form["txtJrnySqno"] == "0001"
 
 
@@ -486,3 +737,154 @@ def test_reservation_hold_payment_deadline_is_absent_not_invented():
     assert response.payment_deadline_notice is None
     assert response.payment_deadline_date is None
     assert response.payment_deadline_time is None
+
+
+def _mutation_parser(name):
+    from korail_mobile_api import mutation_parsers
+
+    return getattr(mutation_parsers, name)
+
+
+@pytest.mark.parametrize(
+    ("parser", "bad_rows"),
+    [
+        ("parse_refund_ticket_response", {"stlList": ["x"]}),
+        ("parse_cash_receipt_issue_response", {"apvList": ["x"]}),
+        ("parse_station_refund_verification_response", {"orgtkinfo_list": ["x"]}),
+        ("parse_station_refund_execution_response", {}),
+        ("parse_reservation_hold_response", {"jrny_infos": {"jrny_info": ["x"]}}),
+        ("parse_reservation_payment_response", {"tk_coupon_info": ["x"]}),
+        ("parse_discount_card_purchase_response", {}),
+    ],
+)
+def test_a_mutation_parser_judges_the_envelope_before_any_row(parser, bad_rows):
+    # Pinned before the second envelope check in each parser went away: the
+    # envelope is still judged first, whatever is wrong with the rows.
+    with pytest.raises(
+        KorailProtocolError, match="envelope fields must be strings or null: h_msg_cd"
+    ):
+        _mutation_parser(parser)({"h_msg_cd": 1, "strResult": "SUCC", **bad_rows})
+
+
+@pytest.mark.parametrize(
+    ("parser", "body", "message"),
+    [
+        ("parse_refund_ticket_response", {"stlList": ["x"]}, "refund settlement"),
+        ("parse_cash_receipt_issue_response", {"apvList": ["x"]}, "cash receipt ApvItem"),
+        (
+            "parse_station_refund_verification_response",
+            {"orgtkinfo_list": ["x"]},
+            "station refund Orgtkinfo",
+        ),
+        (
+            "parse_reservation_hold_response",
+            {"jrny_infos": {"jrny_info": ["x"]}},
+            "reservation journey",
+        ),
+        (
+            "parse_reservation_hold_response",
+            {"jrny_infos": {"jrny_info": [{"seat_infos": {"seat_info": ["x"]}}]}},
+            "reservation seat_info row",
+        ),
+        ("parse_reservation_payment_response", {"tk_coupon_info": ["x"]}, "payment coupon"),
+    ],
+)
+def test_a_mutation_parser_names_a_row_that_is_not_an_object(parser, body, message):
+    with pytest.raises(KorailProtocolError, match=rf"^KORAIL {message} must be an object$"):
+        _mutation_parser(parser)({"strResult": "SUCC", **body})
+
+
+# Every scalar field of the hold, its journeys and the payment coupons, and the
+# wire key it is read from -- written out here, not imported, so a rewrite of
+# the parsers into field maps is checked against this list and not itself.
+_HOLD_KEYS = (
+    ("pnr_no", "h_pnr_no"),
+    ("journey_count", "h_jrny_cnt"),
+    ("window_no", "h_wct_no"),
+    ("temporary_job_sequence_1", "h_tmp_job_sqno1"),
+    ("temporary_job_sequence_2", "h_tmp_job_sqno2"),
+    ("payment_flag", "h_payment_flg"),
+    ("payment_message", "h_payment_msg"),
+    ("payment_deadline_message", "h_pay_limit_msg"),
+    ("payment_deadline_notice", "h_ntisu_lmt"),
+    ("payment_deadline_date", "h_ntisu_lmt_dt"),
+    ("payment_deadline_time", "h_ntisu_lmt_tm"),
+    ("total_fare", "h_tot_fare"),
+    ("total_price", "h_tot_prc"),
+)
+_JOURNEY_KEYS = (
+    ("journey_sequence", "h_jrny_sqno"),
+    ("reservation_change_no", "h_rsv_chg_no"),
+    ("departure_date", "h_dpt_dt"),
+    ("departure_time", "h_dpt_tm"),
+    ("arrival_time", "h_arv_tm"),
+    ("departure_station_code", "h_dpt_rs_stn_cd"),
+    ("arrival_station_code", "h_arv_rs_stn_cd"),
+    ("train_no", "h_trn_no"),
+)
+_COUPON_KEYS = (
+    ("certificate_password", "h_cert_pwd"),
+    ("coupon_no", "h_coup_no"),
+    ("management_close_date", "h_fdcert_mg_cls_dt"),
+    ("management_start_date", "h_fdcert_mg_st_dt"),
+    ("ticket_return_no", "h_tk_ret_no"),
+)
+
+
+def test_the_hold_key_tables_cover_every_scalar_field():
+    from dataclasses import fields
+
+    from korail_mobile_api.mutation_models import (
+        ReservationHoldResponse,
+        ReservationJourney,
+        ReservationPaymentCoupon,
+    )
+
+    envelope = {"h_msg_cd", "h_msg_txt", "str_result", "raw"}
+    assert {f.name for f in fields(ReservationHoldResponse)} == (
+        {attr for attr, _ in _HOLD_KEYS} | envelope | {"received_amount", "journeys"}
+    )
+    assert {f.name for f in fields(ReservationJourney)} == (
+        {attr for attr, _ in _JOURNEY_KEYS} | {"raw"}
+    )
+    assert {f.name for f in fields(ReservationPaymentCoupon)} == (
+        {attr for attr, _ in _COUPON_KEYS} | {"raw"}
+    )
+
+
+def _hold_field(attr, key, value):
+    return getattr(parse_reservation_hold_response({"strResult": "SUCC", key: value}), attr)
+
+
+def _journey_field(attr, key, value):
+    hold = parse_reservation_hold_response(
+        {"strResult": "SUCC", "jrny_infos": {"jrny_info": [{key: value}]}}
+    )
+    return getattr(hold.journeys[0], attr)
+
+
+def _coupon_field(attr, key, value):
+    payment = parse_reservation_payment_response(
+        {"strResult": "SUCC", "tk_coupon_info": [{key: value}]}
+    )
+    return getattr(payment.coupons[0], attr)
+
+
+@pytest.mark.parametrize(
+    ("read", "attr", "key", "context"),
+    [(_hold_field, a, k, "reservation") for a, k in _HOLD_KEYS]
+    + [(_journey_field, a, k, "reservation journey") for a, k in _JOURNEY_KEYS]
+    + [(_coupon_field, a, k, "payment coupon") for a, k in _COUPON_KEYS],
+    ids=[f"hold-{a}" for a, _ in _HOLD_KEYS]
+    + [f"journey-{a}" for a, _ in _JOURNEY_KEYS]
+    + [f"coupon-{a}" for a, _ in _COUPON_KEYS],
+)
+def test_each_hold_payment_field_reads_its_own_key(read, attr, key, context):
+    assert read(attr, key, "SYNTHETIC-VALUE") == "SYNTHETIC-VALUE"
+    assert read(attr, key, 7) == "7"
+    assert read(attr, key, None) is None
+    with pytest.raises(
+        KorailProtocolError,
+        match=rf"^KORAIL {context} field {key} must be a string, an integer, or null$",
+    ):
+        read(attr, key, [7])

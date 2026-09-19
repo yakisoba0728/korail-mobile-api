@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,6 +14,8 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import make_authenticated_client as _client
+from _helpers import refuse_transport as _refuse
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.consent import (
     MUTATION_CATEGORIES,
@@ -18,9 +28,9 @@ from korail_mobile_api.errors import (
     KorailAuthError,
     KorailMutationNotAllowedError,
     KorailProtocolError,
+    KorailSessionExpiredError,
 )
 from korail_mobile_api.http import KorailHttpClient
-from korail_mobile_api.models import KorailSession
 from korail_mobile_api.mutation_models import (
     DiscountCardAdditionalUser,
     DiscountCardPurchaseRequest,
@@ -82,24 +92,6 @@ def _ticket() -> DiscountCardTicket:
     )
 
 
-def _client(handler) -> KorailClient:
-    client = KorailClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    client.session.current = KorailSession(
-        jsessionid="SYNTHETIC_SESSION",
-        member_no="SYNTHETIC_MEMBER_NO",
-        customer_no="SYNTHETIC_CUSTOMER_NO",
-        raw={},
-    )
-    return client
-
-
-def _refuse(request: httpx.Request) -> httpx.Response:
-    raise AssertionError(f"nothing may be sent: {request.method} {request.url}")
-
-
 def test_discount_card_is_its_own_consent_category():
     assert "discount_card" in MUTATION_CATEGORIES
     assert len(MUTATION_CATEGORIES) == 7
@@ -107,16 +99,13 @@ def test_discount_card_is_its_own_consent_category():
     assert MutationConsent().allow_discount_card is False
     with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(MutationConsent(), "discount_card")
-    # ...and no other category's opt-in unlocks it.
-    for other in (
-        "allow_reserve",
-        "allow_payment",
-        "allow_cancel",
-        "allow_refund",
-    ):
+    # ...and no other category's opt-in unlocks it. The others are read from
+    # MUTATION_CATEGORIES so a category added later is covered here too.
+    others = [category for category in MUTATION_CATEGORIES if category != "discount_card"]
+    for other in others:
         with pytest.raises(KorailMutationNotAllowedError):
             require_mutation_consent(
-                MutationConsent(**{other: True}),
+                MutationConsent(**{f"allow_{other}": True}),
                 "discount_card",
             )
     require_mutation_consent(
@@ -124,7 +113,7 @@ def test_discount_card_is_its_own_consent_category():
         "discount_card",
     )
     # ...and it unlocks nothing else.
-    for category in ("reserve", "payment", "cancel", "refund", "cart"):
+    for category in others:
         with pytest.raises(KorailMutationNotAllowedError):
             require_mutation_consent(
                 MutationConsent(allow_discount_card=True),
@@ -134,9 +123,8 @@ def test_discount_card_is_its_own_consent_category():
 
 def test_both_routes_are_mutation_routes_owned_by_that_category():
     assert ("POST", PURCHASE_ROUTE) in KORAIL_MUTATION_ROUTES
-    # Registered with the method the app actually uses, not coerced to POST.
-    assert ("GET", EXTENSION_ROUTE) in KORAIL_MUTATION_ROUTES
-    assert ("POST", EXTENSION_ROUTE) not in KORAIL_MUTATION_ROUTES
+    assert ("POST", EXTENSION_ROUTE) in KORAIL_MUTATION_ROUTES
+    assert ("GET", EXTENSION_ROUTE) not in KORAIL_MUTATION_ROUTES
     assert len(KORAIL_MUTATION_ROUTES) == 9
     assert KORAIL_MUTATION_ROUTES.isdisjoint(KORAIL_READ_ONLY_ROUTES)
     for route in (PURCHASE_ROUTE, EXTENSION_ROUTE):
@@ -151,7 +139,7 @@ def test_both_routes_are_mutation_routes_owned_by_that_category():
             with pytest.raises(KorailProtocolError):
                 assert_mutation_route_category(route, wrong)
     with pytest.raises(KorailProtocolError):
-        assert_mutation_route("POST", EXTENSION_ROUTE)
+        assert_mutation_route("GET", EXTENSION_ROUTE)
     for route in (PURCHASE_ROUTE, EXTENSION_ROUTE):
         for method in ("GET", "POST"):
             with pytest.raises(KorailProtocolError):
@@ -276,7 +264,7 @@ def test_default_consent_previews_and_sends_nothing():
 
         preview = client.extend_discount_card(_ticket(), consent=DRY_RUN)
         assert type(preview) is MutationPreview
-        assert preview.method == "GET"
+        assert preview.method == "POST"
         assert preview.route == EXTENSION_ROUTE
         assert "SYNTHETIC_PWD" not in str(preview.payload)
     finally:
@@ -410,10 +398,10 @@ def test_an_acknowledged_send_transmits_exactly_the_built_shapes():
     assert purchased.received_amount == "60000"
     assert purchased.validity_end_date == "20990301"
     assert extended.str_result == "SUCC"
-    assert [request.method for request in seen] == ["POST", "GET"]
+    assert [request.method for request in seen] == ["POST", "POST"]
     assert seen[0].url.path == PURCHASE_ROUTE
     assert seen[1].url.path == EXTENSION_ROUTE
-    assert "tkRetPwd=SYNTHETIC_PWD" in str(seen[1].url)
+    assert "tkRetPwd=SYNTHETIC_PWD" in seen[1].content.decode()
 
 
 def test_purchase_parser_reads_the_dao_shape():
@@ -440,14 +428,19 @@ def test_no_live_path_reaches_this_category():
     # is deliberately not live-enabled, and nothing in the repository's live
     # or scripted paths may send it.
     root = Path(korail_mobile_api.__file__).parents[2]
-    for relative in (
-        "src/korail_mobile_api/live.py",
-        "tests/test_live.py",
-        "tests/test_live_service.py",
-        "tests/test_mutation_live_paths.py",
-        "scripts/reserve_pay_refund_roundtrip.py",
+    # Every script, not one: each is an operator tool that talks to the live
+    # server, and any of them could gain a call.
+    scripts = sorted((root / "scripts").glob("*.py"))
+    assert scripts, "no scripts found; the scan would pass on nothing"
+    for path in (
+        root / "src/korail_mobile_api/live.py",
+        root / "tests/test_live.py",
+        root / "tests/test_live_service.py",
+        root / "tests/test_mutation_live_paths.py",
+        *scripts,
     ):
-        source = (root / relative).read_text(encoding="utf-8")
+        relative = path.relative_to(root).as_posix()
+        source = path.read_text(encoding="utf-8")
         for name in (
             "register_discount_card",
             "extend_discount_card",
@@ -474,9 +467,108 @@ def test_public_surface_exports_the_mutation_names():
     # asserted above. It stays importable from its own module -- demotion is a
     # move, not a deletion -- and both halves are checked, because dropping the
     # __all__ entry while leaving the attribute behind is half a demotion.
-    from korail_mobile_api.mutation_parsers import (  # noqa: F401
-        parse_discount_card_purchase_response,
-    )
 
     assert "parse_discount_card_purchase_response" not in korail_mobile_api.__all__
     assert not hasattr(korail_mobile_api, "parse_discount_card_purchase_response")
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+@pytest.mark.parametrize(
+    "send",
+    [
+        lambda client, consent: client.register_discount_card(
+            _purchase(), consent=consent
+        ),
+        lambda client, consent: client.extend_discount_card(
+            _ticket(), consent=consent
+        ),
+    ],
+    ids=["register_discount_card", "extend_discount_card"],
+)
+def test_an_expired_session_on_a_discount_card_mutation_clears_the_client(send):
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test:
+    # one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = _client(handler)
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            send(client, MutationConsent(allow_discount_card=True, dry_run=False))
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies
+
+
+@pytest.mark.parametrize(
+    "send",
+    [
+        lambda client, consent: client.register_discount_card(
+            _purchase(), consent=consent
+        ),
+        lambda client, consent: client.extend_discount_card(
+            _ticket(), consent=consent
+        ),
+    ],
+    ids=["register_discount_card", "extend_discount_card"],
+)
+def test_a_refused_discount_card_mutation_raises(send):
+    # Unlike a card payment, whose decline is an answer to read, a refused
+    # purchase or extension is an error: raise_on_fail stays on.
+    from korail_mobile_api.errors import KorailAppError
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"strResult": "FAIL", "h_msg_cd": "WRD000001", "h_msg_txt": "no"},
+        )
+
+    client = _client(handler)
+    try:
+        with pytest.raises(KorailAppError, match="WRD000001"):
+            send(client, MutationConsent(allow_discount_card=True, dry_run=False))
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("train_no", ["", "   ", None])
+def test_purchase_refuses_a_section_without_a_train(train_no):
+    # The app takes trnNo_ from the train picked in the N-card schedule
+    # (CheckUsageNCardSectionViewModel.java:874), like runDt_ and the station
+    # codes, which were already required. A blank one went out as it was.
+    from dataclasses import replace
+
+    section = replace(_section(), train_no=train_no)
+    with pytest.raises(KorailProtocolError, match="train_no"):
+        build_discount_card_purchase_form(KorailConfig(), _purchase(sections=(section,)))
+
+
+def test_purchase_takes_at_most_one_additional_user():
+    # 7.0.6 NCardInfoIn declares apdUsrCnt and the _1 keys only
+    # (custMgNo_1, apdCustName_1, apdCustTeln_1): a second user would go out
+    # as _2 keys no DTO has.
+    user = DiscountCardAdditionalUser(
+        customer_no="SYNTHETIC_OTHER_CUSTOMER", name="홍길동", phone="01000000000"
+    )
+    form = build_discount_card_purchase_form(
+        KorailConfig(), _purchase(additional_users=(user,))
+    )
+    assert form["apdUsrCnt"] == "1"
+    with pytest.raises(KorailProtocolError, match="at most 1 additional user"):
+        build_discount_card_purchase_form(
+            KorailConfig(), _purchase(additional_users=(user, user))
+        )

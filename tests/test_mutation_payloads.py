@@ -1,9 +1,20 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 from dataclasses import replace
 
 import pytest
 
+from _mutation_fixtures import eligible_train as _eligible_train
+from _mutation_fixtures import fake_card as _fake_card
+from _mutation_fixtures import paid_hold, paid_ticket
 from korail_mobile_api import (
     KORAIL_MAX_PASSENGERS_PER_RESERVATION,
     BaseKorailResponse,
@@ -17,24 +28,20 @@ from korail_mobile_api import (
     ReservationJourney,
     TrainSummary,
 )
+from korail_mobile_api.mutation_models import StationRefundExecutionRequest
 from korail_mobile_api.mutation_payloads import (
     build_card_payment_form,
     build_refund_form,
     build_reservation_form,
     build_single_adult_reservation_form,
+    build_station_refund_execution_form,
+    build_transfer_reservation_form,
     build_unpaid_reservation_cancel_form,
 )
 
 
 def _paid_ticket() -> PaidTicket:
-    return PaidTicket(
-        pnr_no="SYNTHETIC_PNR",
-        sale_date="20260725",
-        sale_window_no="SYNTHETIC_WCT",
-        sale_sequence="0001",
-        return_password="SYNTHETIC_RETPWD",
-        train_no="00209",
-    )
+    return paid_ticket("SYNTHETIC_PNR")
 
 
 def test_refund_form_matches_the_app_refund_contract():
@@ -49,12 +56,62 @@ def test_refund_form_matches_the_app_refund_contract():
         "h_orgtk_sale_sqno": "0001",
         "h_orgtk_ret_pwd": "SYNTHETIC_RETPWD",
         "h_mlg_stl": "N",
-        "tk_ret_tms_dv_cd": "21",
-        "trnNo": "00209",
         "pbpAcepTgtFlg": "N",
-        "latitude": "",
-        "longitude": "",
     }
+
+
+def test_refund_form_echoes_ticket_detail_flag_unless_explicitly_overridden():
+    ticket = replace(_paid_ticket(), pbp_acceptance_target_flag="Y")
+    assert build_refund_form(KorailConfig(), ticket)["pbpAcepTgtFlg"] == "Y"
+    assert build_refund_form(
+        KorailConfig(), ticket, pbp_acceptance_target_flag="N"
+    )["pbpAcepTgtFlg"] == "N"
+
+
+def test_station_refund_execution_form_uses_the_verified_dto_keys():
+    request = StationRefundExecutionRequest(
+        pnr_no="SYNTHETIC_PNR",
+        original_sale_date="20260725",
+        original_sale_window_no="SYNTHETIC_WINDOW",
+        original_sale_sequence="0001",
+        original_return_password="SYNTHETIC_PASSWORD",
+        refund_division_code="21",
+        refund_reason_code="00",
+        ticket_kind_code="01",
+        customer_phone="01000000000",
+        refund_amount="8400",
+        refund_fee="0",
+        customer_name="SYNTHETIC_NAME",
+    )
+    assert build_station_refund_execution_form(KorailConfig(), request) == {
+        "Device": "AD",
+        "Version": "250601003",
+        "Key": "korail1234567890",
+        "pnrNo": "SYNTHETIC_PNR",
+        "ogtkSaleDt": "20260725",
+        "ogtkSaleWctNo": "SYNTHETIC_WINDOW",
+        "ogtkSaleSqno": "0001",
+        "ogtkRetPwd": "SYNTHETIC_PASSWORD",
+        "retDvCd": "21",
+        "retRsnCd": "00",
+        "tkKndCd": "01",
+        "custTeln": "01000000000",
+        "retAmt": "8400",
+        "retFee": "0",
+        "acepCustNm": "SYNTHETIC_NAME",
+    }
+    # The constructor refuses a blank value as input...
+    with pytest.raises(ValueError, match="execution requires refund_amount"):
+        replace(request, refund_amount="")
+    # ...and the builder checks again, for an instance altered after that,
+    # naming the station refund (it used to say "discount card request").
+    tampered = replace(request)
+    object.__setattr__(tampered, "refund_amount", "")
+    with pytest.raises(
+        KorailProtocolError,
+        match=r"^KORAIL station refund requires a non-empty refund_amount$",
+    ):
+        build_station_refund_execution_form(KorailConfig(), tampered)
 
 
 def test_refund_form_spells_the_pnr_field_the_way_the_app_declares_it():
@@ -90,37 +147,7 @@ def test_refund_form_rejects_missing_paid_ticket_identity(field_name):
 
 
 def _paid_hold() -> ReservationHoldResponse:
-    return ReservationHoldResponse(
-        h_msg_cd="IRR000018",
-        h_msg_txt="ok",
-        str_result="SUCC",
-        raw={},
-        pnr_no="SYNTHETIC_PNR",
-        journey_count="0001",
-        window_no="SYNTHETIC_WCT",
-        temporary_job_sequence_1="SYNTHETIC_JOB_1",
-        temporary_job_sequence_2="SYNTHETIC_JOB_2",
-        total_price="8400",
-        received_amount="7560",
-        # Deliberately NOT "000": a builder that regressed to the constant would
-        # otherwise pass against a fixture whose value happened to match the
-        # fallback.
-        journeys=(
-            ReservationJourney(
-                journey_sequence="0001",
-                reservation_change_no="SYNTHETIC_CHG_NO",
-            ),
-        ),
-    )
-
-
-def _fake_card() -> CardPayment:
-    return CardPayment(
-        card_number="0000000000000000",
-        card_password="00",
-        card_expire="2612",
-        birthday="900101",
-    )
+    return paid_hold("SYNTHETIC_PNR")
 
 
 def test_card_payment_form_matches_the_app_pay_with_card_contract():
@@ -293,24 +320,17 @@ def test_card_payment_form_rejects_non_digit_card_number():
         build_card_payment_form(KorailConfig(), _paid_hold(), bad)
 
 
-def _eligible_train() -> TrainSummary:
-    return TrainSummary(
-        train_no="00209",
-        train_group_code="100",
-        departure_station_code="0001",
-        arrival_station_code="0501",
-        departure_date="20990101",
-        departure_time="100700",
-        arrival_time="102400",
-        run_date="20990101",
-        train_class_code="00",
-        departure_run_order="1",
-        arrival_run_order="2",
-        general_reservation_code="11",
-        departure_construction_order="1",
-        arrival_construction_order="2",
-        seat_attribute_code="015",
-    )
+@pytest.mark.parametrize("card_type", ["j", "P", "", "JS", None])
+def test_card_payment_refuses_a_card_type_other_than_j_or_s(card_type):
+    with pytest.raises(ValueError, match="card_type"):
+        replace(_fake_card(), card_type=card_type)
+
+
+def test_card_payment_sends_either_card_type_as_given():
+    for card_type in ("J", "S"):
+        card = replace(_fake_card(), card_type=card_type)
+        form = build_card_payment_form(KorailConfig(), _paid_hold(), card)
+        assert form["hidAthnDvCd1"] == card_type
 
 
 def test_single_adult_reservation_form_matches_the_app_contract_exactly():
@@ -329,27 +349,6 @@ def test_single_adult_reservation_form_matches_the_app_contract_exactly():
         "txtCompaCnt1": "1",
         "txtPsgTpCd1": "1",
         "txtDiscKndCd1": "000",
-        "txtCompaCnt2": "0",
-        "txtPsgTpCd2": "1",
-        "txtDiscKndCd2": "P11",
-        "txtCompaCnt3": "0",
-        "txtPsgTpCd3": "3",
-        "txtDiscKndCd3": "000",
-        "txtCompaCnt4": "0",
-        "txtPsgTpCd4": "3",
-        "txtDiscKndCd4": "321",
-        "txtCompaCnt5": "0",
-        "txtPsgTpCd5": "1",
-        "txtDiscKndCd5": "131",
-        "txtCompaCnt6": "0",
-        "txtPsgTpCd6": "1",
-        "txtDiscKndCd6": "111",
-        "txtCompaCnt7": "0",
-        "txtPsgTpCd7": "1",
-        "txtDiscKndCd7": "112",
-        "txtCompaCnt8": "0",
-        "txtPsgTpCd8": "1",
-        "txtDiscKndCd8": "173",
         "txtSeatAttCd1": "000",
         "txtSeatAttCd2": "000",
         "txtSeatAttCd3": "000",
@@ -365,7 +364,6 @@ def test_single_adult_reservation_form_matches_the_app_contract_exactly():
         "txtRunDt1": "20990101",
         "txtDptDt1": "20990101",
         "txtDptTm1": "100700",
-        "arvTm_1": "102400",
         "txtDptRsStnCd1": "0001",
         "txtDptStnConsOrdr1": "1",
         "txtDptStnRunOrdr1": "1",
@@ -376,12 +374,37 @@ def test_single_adult_reservation_form_matches_the_app_contract_exactly():
     }
 
 
-def test_single_adult_reservation_form_uses_the_apps_fixed_general_seat_attribute():
+def test_single_adult_reservation_form_uses_the_selected_rows_seat_attribute():
     train = replace(_eligible_train(), seat_attribute_code="017")
 
     form = build_single_adult_reservation_form(KorailConfig(), train)
 
-    assert form["txtSeatAttCd4"] == "015"
+    assert form["txtSeatAttCd4"] == "017"
+
+
+def test_selected_seat_type_overrides_the_search_row_attribute():
+    train = replace(_eligible_train(), seat_attribute_code="017")
+    form = build_reservation_form(
+        KorailConfig(), train, seat_attribute_code="019"
+    )
+    assert form["txtSeatAttCd4"] == "019"
+    with pytest.raises(KorailProtocolError, match="seat_attribute_code"):
+        build_reservation_form(
+            KorailConfig(), train, seat_attribute_code="19"
+        )
+
+
+def test_transfer_reservation_keeps_each_legs_seat_attribute():
+    first = replace(_eligible_train(), seat_attribute_code="017")
+    second = replace(_eligible_train(), seat_attribute_code="019")
+    form = build_transfer_reservation_form(KorailConfig(), (first, second))
+    assert form["txtSeatAttCd4"] == "017"
+    assert form["txtSeatAttCd4_1"] == "019"
+    chosen = build_transfer_reservation_form(
+        KorailConfig(), (first, second), seat_attribute_codes=("020", None)
+    )
+    assert chosen["txtSeatAttCd4"] == "020"
+    assert chosen["txtSeatAttCd4_1"] == "019"
 
 
 @pytest.mark.parametrize(
@@ -399,10 +422,9 @@ def test_single_adult_reservation_form_rejects_non_hold_safe_train_shapes(train)
 
 # --- passenger mix and cabin class ------------------------------------------
 #
-# Expectations below are built from w4/a.java:49-73 (the eight rows and their
-# fixed type/discount codes, in OPsg LinkedHashMap insertion order),
-# m5/c.java:330 (the total is every counter summed) and K4/o.java:7-8 (the two
-# cabin codes) -- NOT from what the builder happens to emit.
+# Eight passenger types are possible; 7.0.6 Passengers.java:743-766 filters
+# non-positive counts before serializing them in row order. The total includes
+# every counter, while the cabin field selects one of two room codes.
 
 
 def _special_train() -> TrainSummary:
@@ -444,13 +466,13 @@ def test_explicit_one_adult_general_mix_reproduces_the_pinned_form_exactly():
     ("field_name", "row", "passenger_type", "discount_code"),
     [
         ("adult", 1, "1", "000"),
-        ("teenager", 2, "1", "P11"),
-        ("child", 3, "3", "000"),
-        ("infant", 4, "3", "321"),
-        ("senior", 5, "1", "131"),
-        ("severe_disability", 6, "1", "111"),
-        ("mild_disability", 7, "1", "112"),
-        ("guide_dog", 8, "1", "173"),
+        ("teenager", 1, "1", "P11"),
+        ("child", 1, "3", "000"),
+        ("infant", 1, "3", "321"),
+        ("senior", 1, "1", "131"),
+        ("severe_disability", 1, "1", "111"),
+        ("mild_disability", 1, "1", "112"),
+        ("guide_dog", 1, "1", "173"),
     ],
 )
 def test_each_passenger_type_fills_its_own_app_row(
@@ -475,10 +497,7 @@ def test_each_passenger_type_fills_its_own_app_row(
     assert form[f"txtPsgTpCd{row}"] == passenger_type
     assert form[f"txtDiscKndCd{row}"] == discount_code
     assert form["txtTotPsgCnt"] == "1"
-    # Every other row still goes out, carrying zero.
-    for other in range(1, 9):
-        if other != row:
-            assert form[f"txtCompaCnt{other}"] == "0"
+    assert not any(name.startswith("txtCompaCnt2") for name in form)
 
 
 def test_passenger_rows_keep_the_apps_field_order():
@@ -498,24 +517,6 @@ def test_passenger_rows_keep_the_apps_field_order():
         "txtCompaCnt2",
         "txtPsgTpCd2",
         "txtDiscKndCd2",
-        "txtCompaCnt3",
-        "txtPsgTpCd3",
-        "txtDiscKndCd3",
-        "txtCompaCnt4",
-        "txtPsgTpCd4",
-        "txtDiscKndCd4",
-        "txtCompaCnt5",
-        "txtPsgTpCd5",
-        "txtDiscKndCd5",
-        "txtCompaCnt6",
-        "txtPsgTpCd6",
-        "txtDiscKndCd6",
-        "txtCompaCnt7",
-        "txtPsgTpCd7",
-        "txtDiscKndCd7",
-        "txtCompaCnt8",
-        "txtPsgTpCd8",
-        "txtDiscKndCd8",
     ]
 
 
@@ -534,35 +535,26 @@ def test_mixed_booking_fills_every_row_it_names():
         passengers=passengers,
     )
 
-    assert [form[f"txtCompaCnt{row}"] for row in range(1, 9)] == [
+    assert [form[f"txtCompaCnt{row}"] for row in range(1, 6)] == [
         "2",
         "1",
         "1",
         "1",
         "1",
-        "0",
-        "0",
-        "0",
     ]
-    assert [form[f"txtPsgTpCd{row}"] for row in range(1, 9)] == [
+    assert [form[f"txtPsgTpCd{row}"] for row in range(1, 6)] == [
         "1",
         "1",
         "3",
         "3",
         "1",
-        "1",
-        "1",
-        "1",
     ]
-    assert [form[f"txtDiscKndCd{row}"] for row in range(1, 9)] == [
+    assert [form[f"txtDiscKndCd{row}"] for row in range(1, 6)] == [
         "000",
         "P11",
         "000",
         "321",
         "131",
-        "111",
-        "112",
-        "173",
     ]
     assert form["txtTotPsgCnt"] == "6"
 
@@ -786,7 +778,7 @@ def test_unpaid_reservation_cancel_form_accepts_zero_padded_journey_count():
     )
     form = build_unpaid_reservation_cancel_form(KorailConfig(), response)
     assert form["txtPnrNo"] == "SYNTHETIC_PNR_REFERENCE"
-    assert form["txtJrnyCnt"] == "1"
+    assert form["txtJrnyCnt"] == "0001"
     assert form["txtJrnySqno"] == "0001"
 
 
@@ -892,3 +884,29 @@ def test_a_padded_declared_total_alone_is_normalised():
     from korail_mobile_api.mutation_parsers import _received_amount
 
     assert _received_amount({"h_tot_rcvd_amt": "0000000000042600"}, []) == "42600"
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["pnr_no", "sale_date", "sale_window_no", "sale_sequence", "return_password"],
+)
+def test_the_refund_form_names_a_blank_ticket_field(field_name):
+    ticket = _paid_ticket()
+    object.__setattr__(ticket, field_name, " ")
+    with pytest.raises(
+        KorailProtocolError,
+        match=rf"^KORAIL refund requires a non-empty PaidTicket\.{field_name}$",
+    ):
+        build_refund_form(KorailConfig(), ticket)
+
+
+def test_the_cart_form_names_a_blank_pnr():
+    from korail_mobile_api.mutation_models import CartAddRequest
+    from korail_mobile_api.mutation_payloads import build_cart_add_form
+
+    request = CartAddRequest(pnr_no="SYNTHETIC_PNR")
+    object.__setattr__(request, "pnr_no", "")
+    with pytest.raises(
+        KorailProtocolError, match=r"^KORAIL cart request requires a non-empty pnr_no$"
+    ):
+        build_cart_add_form(KorailConfig(), request)

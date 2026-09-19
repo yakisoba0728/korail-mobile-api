@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 import copy
@@ -36,7 +44,7 @@ CALL_CREW_MUTATION_PATH = "/classes/com.korail.mobile.push.callCrew.do"
 def test_p0_menu_routes_have_exact_read_only_contracts():
     assert {
         ("POST", PASS_MENU_PATH),
-        ("GET", CREW_REQUEST_LIST_PATH),
+        ("POST", CREW_REQUEST_LIST_PATH),
         ("GET", COMMUTER_KIND_MENU_PATH),
     } <= KORAIL_READ_ONLY_ROUTES
     assert KORAIL_EXACT_REQUEST_FIELDS[PASS_MENU_PATH] == {
@@ -405,7 +413,7 @@ CLIENT_CASES = (
     (
         "get_crew_request_list",
         "CALLER-QUERY-DIVISION",
-        "GET",
+        "POST",
         CREW_REQUEST_LIST_PATH,
         "qryDvCd",
         read_models.CrewRequestListResponse,

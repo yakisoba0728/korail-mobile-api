@@ -1,9 +1,17 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """Offline tests for the ``cart`` mutation: adding a PNR to the 장바구니.
 
-Model: ``tests/test_discount_card_mutations.py``, the most recently completed
-mutation category. Same shape: consent gate, route/category cross-check,
-dry-run preview with redaction, and one acknowledged send against a
-``MockTransport`` that records what actually left the process.
+Model: ``tests/test_discount_card_mutations.py``. Same shape: consent gate,
+route/category cross-check, dry-run preview with redaction, and one
+acknowledged send against a ``MockTransport`` that records what actually left
+the process.
 
 ``cart.addCartList`` (``CartService.java:11-13``) takes exactly one request
 field beyond the common three -- ``hidPnrNo`` -- confirmed against
@@ -23,6 +31,8 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import make_authenticated_client as _client
+from _helpers import refuse_transport as _refuse
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.consent import (
     MUTATION_CATEGORIES,
@@ -35,7 +45,7 @@ from korail_mobile_api.errors import (
     KorailMutationNotAllowedError,
     KorailProtocolError,
 )
-from korail_mobile_api.models import BaseKorailResponse, KorailSession
+from korail_mobile_api.models import BaseKorailResponse
 from korail_mobile_api.mutation_models import CartAddRequest
 from korail_mobile_api.mutation_payloads import build_cart_add_form
 from korail_mobile_api.safety import (
@@ -62,24 +72,6 @@ def _request(**overrides: object) -> CartAddRequest:
     fields: dict[str, object] = {"pnr_no": SYNTHETIC_PNR}
     fields.update(overrides)
     return CartAddRequest(**fields)  # type: ignore[arg-type]
-
-
-def _client(handler) -> KorailClient:
-    client = KorailClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    client.session.current = KorailSession(
-        jsessionid="SYNTHETIC_SESSION",
-        member_no="SYNTHETIC_MEMBER_NO",
-        customer_no="SYNTHETIC_CUSTOMER_NO",
-        raw={},
-    )
-    return client
-
-
-def _refuse(request: httpx.Request) -> httpx.Response:
-    raise AssertionError(f"nothing may be sent: {request.method} {request.url}")
 
 
 # --- Consent category -------------------------------------------------------
@@ -286,14 +278,19 @@ def test_no_live_path_reaches_this_category():
     # deliberately not live-enabled, and nothing in the repository's live or
     # scripted paths may send it.
     root = Path(korail_mobile_api.__file__).parents[2]
-    for relative in (
-        "src/korail_mobile_api/live.py",
-        "tests/test_live.py",
-        "tests/test_live_service.py",
-        "tests/test_mutation_live_paths.py",
-        "scripts/reserve_pay_refund_roundtrip.py",
+    # Every script, not one: each is an operator tool that talks to the live
+    # server, and any of them could gain a call.
+    scripts = sorted((root / "scripts").glob("*.py"))
+    assert scripts, "no scripts found; the scan would pass on nothing"
+    for path in (
+        root / "src/korail_mobile_api/live.py",
+        root / "tests/test_live.py",
+        root / "tests/test_live_service.py",
+        root / "tests/test_mutation_live_paths.py",
+        *scripts,
     ):
-        source = (root / relative).read_text(encoding="utf-8")
+        relative = path.relative_to(root).as_posix()
+        source = path.read_text(encoding="utf-8")
         for name in ("add_to_cart", "allow_cart"):
             assert name not in source, f"{relative} reaches {name}"
 

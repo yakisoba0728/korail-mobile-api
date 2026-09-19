@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from __future__ import annotations
 
 import inspect
@@ -430,7 +438,6 @@ def test_train_schedule_parser_accepts_app_model_conformant_response(
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda raw: raw.pop("dlayList"),
         lambda raw: raw.__setitem__("dlayList", {}),
         lambda raw: raw["dlayList"].__setitem__(0, []),
         lambda raw: raw["dlayList"][0].pop("stopStnNm"),
@@ -450,6 +457,12 @@ def test_train_schedule_parser_rejects_malformed_shape(
 
     with pytest.raises(KorailProtocolError):
         parsers.parse_train_schedule_response(_enveloped_response(raw))
+
+
+def test_train_schedule_parser_defaults_missing_delay_list_to_empty(load_json_fixture):
+    raw = load_json_fixture("raw_typed_train_schedule.json")
+    raw.pop("dlayList")
+    assert parsers.parse_train_schedule_response(_enveloped_response(raw)).stops == ()
 
 
 @pytest.mark.parametrize(
@@ -585,15 +598,15 @@ def test_existing_reference_methods_return_typed_models_without_request_changes(
         models.TransferStationListResponse,
     )
     assert [request.method for request in captured] == [
-        "GET",
-        "GET",
-        "GET",
+        "POST",
+        "POST",
+        "POST",
         "POST",
         "POST",
     ]
-    assert captured[0].url.query.decode() == "Device=AD"
-    assert captured[1].url.query == b""
-    assert captured[2].url.query == b""
+    assert all(request.url.query == b"" for request in captured[:3])
+    assert all(request.content == b"" for request in captured[:2])
+    assert parse_qs(captured[2].content.decode())["timeStamp"][0].isdigit()
     assert parse_qs(captured[3].content.decode()) == {
         "Device": ["AD"],
         "Version": ["250601003"],
@@ -635,17 +648,38 @@ def test_train_rows_reject_mixed_object_and_non_object_rows(
         parsers.parse_train_rows(raw)
 
 
+@pytest.mark.parametrize(
+    ("trn_infos", "rows"),
+    [(None, 0), ([], 0), ({"trn_info": []}, 0), ({}, 0)],
+    ids=["null", "bare-list", "empty-list", "no-trn_info"],
+)
+def test_train_rows_read_every_empty_shape_as_no_trains(trn_infos, rows):
+    assert len(parsers.parse_train_rows({"trn_infos": trn_infos})) == rows
+
+
+def test_train_rows_refuse_an_explicit_null_inside_trn_infos():
+    """Pinned, not endorsed: {"trn_infos": {"trn_info": null}} raises today.
+
+    Every other empty shape above means "no trains", and the sibling parsers
+    read a null list as empty. Whether KORAIL ever sends this one is unknown,
+    and the no-live-calls rule means it cannot be looked up, so the current
+    refusal stays until a live answer shows it. Relaxing it should change this
+    test on purpose.
+    """
+    with pytest.raises(KorailProtocolError, match=r"missing trn_infos\.trn_info list"):
+        parsers.parse_train_rows({"trn_infos": {"trn_info": None}})
+
+
 def test_train_search_metadata_preserves_named_server_strings_repr_safely(
     load_json_fixture,
 ):
     raw = load_json_fixture("raw_typed_train_search.json")
+    raw["h_menu_id"] = "SYNTHETIC-MENU-ID"
 
     metadata = parsers.parse_train_search_metadata(raw)
 
     assert isinstance(metadata, models.TrainSearchMetadata)
-    # No menu_id: h_menu_id is not a wire key (zero hits in the app);
-    # txtMenuId is the client constant "11" (a5/k.java:92-94).
-    assert not hasattr(metadata, "menu_id")
+    assert metadata.menu_id == "SYNTHETIC-MENU-ID"
     assert metadata.job_id == "SYNTHETIC-JOB-ID"
     assert metadata.product_no == "SYNTHETIC-PRODUCT-NO"
     assert metadata.next_page_flag == "SYNTHETIC-NEXT-PAGE-FLAG"
@@ -879,9 +913,11 @@ def test_search_trains_populates_metadata_without_changing_request(
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured.append(request)
+        raw = load_json_fixture("raw_typed_train_search.json")
+        raw["h_menu_id"] = "SYNTHETIC-MENU-ID"
         return httpx.Response(
             200,
-            json=load_json_fixture("raw_typed_train_search.json"),
+            json=raw,
         )
 
     client = KorailClient(transport=httpx.MockTransport(handler))
@@ -897,7 +933,7 @@ def test_search_trains_populates_metadata_without_changing_request(
         client.close()
 
     assert isinstance(result.metadata, models.TrainSearchMetadata)
-    assert not hasattr(result.metadata, "menu_id")
+    assert result.metadata.menu_id == "SYNTHETIC-MENU-ID"
     assert result.trains[0].seat_attribute_code == (
         "SYNTHETIC-SEAT-ATTRIBUTE-CODE"
     )
@@ -911,3 +947,60 @@ def test_search_trains_populates_metadata_without_changing_request(
     assert form["txtGoStart"] == ["Synthetic Departure Name"]
     assert form["txtGoEnd"] == ["Synthetic Arrival Name"]
     assert "Key" not in form
+
+
+@pytest.mark.parametrize("key", ["stn_cd", "stn_nm"])
+@pytest.mark.parametrize("blank", ["", "   "], ids=["empty", "spaces"])
+def test_station_parser_refuses_a_blank_code_or_name(load_json_fixture, key, blank):
+    # The station side of the pair described in test_seat_inventory_reads.py's
+    # blank-string test: a station row without a code or a name is not a
+    # station, whatever src batch 33 does to the helpers underneath.
+    raw = load_json_fixture("raw_typed_station_data.json")
+    raw["stns"]["stn"][0][key] = blank
+    with pytest.raises(
+        KorailProtocolError, match=f"station field {key} must be a non-empty string"
+    ):
+        parsers.parse_station_data_response(_partial_response(raw))
+
+
+_SCHEDULE_OPTIONAL_HEADER = {
+    "dlayDtlRsnCont": "delay_detail_reason_content",
+    "dlayStnConsOrdr": "delay_station_construction_order",
+    "intgMsgCd": "integrated_message_code",
+    "msgCd": "message_code",
+    "msgCont": "message_content",
+    "msgTxt": "message_text",
+    "orgRsStnCd": "origin_station_code",
+    "orgRsStnNm": "origin_station_name",
+    "routCd": "route_code",
+    "routNm": "route_name",
+    "runSegOrdr": "run_segment_order",
+    "saleRgulFlg": "regular_sale_flag",
+    "stlbTrnClsfCd": "standard_train_class_code",
+    "tmnRsStnCd": "terminal_station_code",
+    "tmnRsStnNm": "terminal_station_name",
+    "trnAttCd": "train_attribute_code",
+    "trnDptFlg": "train_departure_flag",
+    "trnNo1": "train_no",
+    "trnSpsFlg": "special_train_flag",
+    "upDnDvCd": "up_down_division_code",
+}
+
+
+@pytest.mark.parametrize("optional_key", sorted(_SCHEDULE_OPTIONAL_HEADER))
+@pytest.mark.parametrize("absent_shape", ["null", "missing"])
+def test_train_schedule_parser_tolerates_every_optional_header_field(
+    load_json_fixture, optional_key, absent_shape
+):
+    # Every header field but runDt1 is optional in the 7.0.6 DTO. Only trnNo1
+    # was tested absent; src batch 33 folds this parser's helpers together, so
+    # each one is pinned. runDt1 stays required.
+    raw = load_json_fixture("raw_typed_train_schedule.json")
+    assert optional_key in raw
+    if absent_shape == "null":
+        raw[optional_key] = None
+    else:
+        raw.pop(optional_key)
+    response = parsers.parse_train_schedule_response(_enveloped_response(raw))
+    assert getattr(response, _SCHEDULE_OPTIONAL_HEADER[optional_key]) is None
+    assert response.run_date == raw["runDt1"]

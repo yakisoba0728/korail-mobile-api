@@ -1,10 +1,22 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 from urllib.parse import parse_qs
 
 import httpx
 import pytest
 
 from korail_mobile_api import KorailClient, KorailConfig
-from korail_mobile_api.errors import KorailAppError, KorailSessionExpiredError
+from korail_mobile_api.errors import (
+    KorailAppError,
+    KorailProtocolError,
+    KorailSessionExpiredError,
+)
 from korail_mobile_api.models import KorailSession, TrainSearchQuery
 
 
@@ -83,9 +95,11 @@ def test_common_station_and_calendar_use_exact_endpoint_fields(
     assert common_body["deviceWidth"] == ["1080"]
     assert common_body["deviceHeight"] == ["2400"]
     assert common_body["OSVersion"] == ["35"]
-    assert captured[1]["query"] == "Device=AD"
-    assert captured[2]["query"] == ""
-    assert captured[3]["query"] == ""
+    assert [request["method"] for request in captured[1:]] == ["POST"] * 3
+    assert [request["query"] for request in captured[1:]] == [""] * 3
+    assert captured[1]["body"] == captured[2]["body"] == ""
+    calendar_form = parse_qs(captured[3]["body"])
+    assert set(calendar_form) == {"Device", "Version", "Key", "timeStamp"}
 
 
 def test_search_resolves_codes_to_names_and_parses_nested_rows(load_json_fixture):
@@ -130,7 +144,7 @@ def test_ticket_list_sends_complete_member_form(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
         {
-            "/classes/com.korail.mobile.myTicket.MyTicketList": "ticket_list_empty.json",
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do": "ticket_list_empty.json",
         },
         config=KorailConfig(advertising_id="ad-id"),
     )
@@ -157,7 +171,7 @@ def test_ticket_list_defaults_to_empty_device_id(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
         {
-            "/classes/com.korail.mobile.myTicket.MyTicketList": (
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do": (
                 "ticket_list_empty.json"
             ),
         },
@@ -176,7 +190,7 @@ def _ticket_client(load_json_fixture):
     client, captured = make_client(
         load_json_fixture,
         {
-            "/classes/com.korail.mobile.myTicket.MyTicketList": (
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do": (
                 "ticket_list_empty.json"
             ),
         },
@@ -222,7 +236,6 @@ def test_ticket_list_history_mode_sends_txtindex_two_with_date_bounds(
 
 
 def test_ticket_list_rejects_unknown_mode(load_json_fixture):
-    from korail_mobile_api.errors import KorailProtocolError
 
     client, _ = _ticket_client(load_json_fixture)
     with pytest.raises(KorailProtocolError, match="mode"):
@@ -317,7 +330,6 @@ def test_train_search_continuation_replays_the_previous_pages_cursor():
 
 
 def test_train_search_continuation_must_be_the_exact_type():
-    from korail_mobile_api.errors import KorailProtocolError
     from korail_mobile_api.payloads import build_train_search_form
 
     with pytest.raises(KorailProtocolError):
@@ -469,3 +481,23 @@ def test_session_expiry_clears_client_state_before_raising():
         client.get_train_calendar()
     assert client.session.current is None
     assert "JSESSIONID" not in client.http.cookies
+
+
+def test_station_info_refuses_a_device_it_would_not_send() -> None:
+    """``device`` survives for the old signature; 7.0.6 sends no such field.
+
+    Anything but the default is refused before a request is built, so a caller
+    cannot believe it asked for another platform's data. The refusal is a
+    KorailProtocolError, inside KorailApiError, so ``except KorailApiError``
+    catches it like every other failure in this package.
+    """
+
+    def refuse(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError(f"must not send (saw {request.url.path})")
+
+    client = KorailClient(transport=httpx.MockTransport(refuse))
+    try:
+        with pytest.raises(KorailProtocolError, match="does not accept a device parameter"):
+            client.get_station_info(device="IOS")
+    finally:
+        client.close()

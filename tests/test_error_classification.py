@@ -1,3 +1,11 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """The ``h_msg_cd`` taxonomy: what each server code means, and what it may not do.
 
 The load-bearing property here is NEGATIVE. Classification chooses which
@@ -42,6 +50,7 @@ from korail_mobile_api.errors import (
     classify_app_error,
 )
 from korail_mobile_api.http import KorailHttpClient, parse_base_response
+from korail_mobile_api.payloads import build_train_search_form
 from korail_mobile_api.read_parsers import parse_reservation_history_response
 
 
@@ -279,7 +288,7 @@ def test_classification_over_http_only_refines_an_existing_failure():
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
     with pytest.raises(KorailSoldOutError) as excinfo:
-        client.get_json(STATION_PATH)
+        client.post_form(STATION_PATH, include_common=False, form_encoded=False)
     # Still a KorailAppError, so an existing handler is unaffected.
     assert isinstance(excinfo.value, KorailAppError)
     assert excinfo.value.code == "ERR211161"
@@ -290,7 +299,9 @@ def test_http_raise_on_fail_disabled_still_returns_a_mapped_code():
         return httpx.Response(200, json=_envelope("P100", "없음", result="FAIL"))
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
-    response = client.get_json(STATION_PATH, raise_on_fail=False)
+    response = client.post_form(
+        STATION_PATH, include_common=False, form_encoded=False, raise_on_fail=False
+    )
     assert response.h_msg_cd == "P100"
 
 
@@ -352,9 +363,18 @@ def test_anti_macro_rejection_arrives_as_a_dynapath_error_not_an_app_error():
             json={"message": "비정상적인 접속이 감지되었습니다."},
         )
 
+    # A real ScheduleView body, so the request goes out and the 403 is what is
+    # being classified -- not a refusal of the body before sending.
+    form = build_train_search_form(
+        KorailConfig(),
+        korail_mobile_api.TrainSearchQuery("서울", "부산", "20260810"),
+        departure_name="서울",
+        arrival_name="부산",
+        sid="SYNTHETIC_SID",
+    )
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
     with pytest.raises(KorailDynaPathError) as excinfo:
-        client.post_form(path)
+        client.post_form(path, form, include_common=False)
     assert not isinstance(excinfo.value, KorailAppError)
     assert "비정상적인 접속" in str(excinfo.value)
 
@@ -403,3 +423,26 @@ def test_messages_stay_redacted_through_classification():
     assert "[REDACTED_CARD]" in str(error)
     # ``message`` stays verbatim so a caller can still match on the original.
     assert error.message == "카드 4111111111111111 오류"
+
+
+@pytest.mark.parametrize(
+    "error_class",
+    [KorailAppError, KorailSessionExpiredError, "KorailNetFunnelError"],
+)
+def test_the_message_is_redacted_before_the_code_is_put_in_front_of_it(error_class):
+    """Why these three redact the message and then the whole string again.
+
+    Redacting only the joined "<code>: <message>" is not the same. When the
+    code is itself a sensitive key name, the joined string reads as
+    "pnrNo: <value>", the message's first word becomes that value, and the
+    message's own key is swallowed with it -- so its real value is left in.
+    A fuzz of the two orders found exactly this. It needs a server that sends
+    a key name as its code, but the cost of the first pass is one call.
+    """
+    if isinstance(error_class, str):
+        from korail_mobile_api import errors
+
+        error_class = getattr(errors, error_class)
+    error = error_class("pnrNo", "txtPwd : SYNTHETIC-SECRET")
+    assert "SYNTHETIC-SECRET" not in str(error)
+    assert error.message == "txtPwd : SYNTHETIC-SECRET"

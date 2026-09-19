@@ -1,28 +1,36 @@
-"""Offline tests for the mutation safety-model foundation.
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
-These cover the consent gate, the safe-by-default consent/preview types, the
-payload redaction guarantee, and the route tiering. They deliberately assert
-that NO callable mutation capability exists yet: the infrastructure only
-classifies and gates: it never sends.
+"""Offline tests for the mutation safety model.
+
+These cover the consent gate, the safe-by-default consent and preview types,
+the payload redaction guarantee and the route tiering, and then reserve()
+behind them: refused without its consent or a session, a redacted preview
+under the default dry run, and post_mutation_form refusing a dry-run consent
+outright. Nothing here sends: every client's transport fails the test.
 """
 
 from __future__ import annotations
 
 import dataclasses
 
-import httpx
 import pytest
 
+from _helpers import logged_in_no_network_client as _logged_in_no_network_client
+from _helpers import no_network_client as _no_network_client
+from _mutation_fixtures import eligible_train as _eligible_train
 from korail_mobile_api import (
-    KorailClient,
     KorailMutationNotAllowedError,
     KorailPassengerCounts,
     KorailProtocolError,
     KorailSeatClass,
-    KorailSession,
     MutationConsent,
     MutationPreview,
-    TrainSummary,
     require_mutation_consent,
 )
 from korail_mobile_api.errors import KorailApiError, KorailAuthError
@@ -42,44 +50,6 @@ CATEGORIES = ("reserve", "payment", "cancel", "refund")
 # Obviously-fake, non-chargeable placeholders. No real card / credential.
 FAKE_CARD_NUMBER = "0000000000000000"
 FAKE_PNR = "SYNTHETIC_PNR_REFERENCE"
-
-
-def _eligible_train() -> TrainSummary:
-    # A general seat evidenced as available (general_reservation_code == "11").
-    return TrainSummary(
-        train_no="00209",
-        train_group_code="100",
-        departure_station_code="0001",
-        arrival_station_code="0501",
-        departure_date="20990101",
-        departure_time="100700",
-        arrival_time="102400",
-        run_date="20990101",
-        train_class_code="00",
-        departure_run_order="1",
-        arrival_run_order="2",
-        general_reservation_code="11",
-        departure_construction_order="1",
-        arrival_construction_order="2",
-        seat_attribute_code="015",
-    )
-
-
-def _no_network_client() -> KorailClient:
-    # Any network use is a hard failure: reserve() dry-run must never send.
-    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
-        raise AssertionError(
-            f"reserve() must not send a request (saw {request.method} "
-            f"{request.url.path})"
-        )
-
-    return KorailClient(transport=httpx.MockTransport(handler))
-
-
-def _logged_in_no_network_client() -> KorailClient:
-    client = _no_network_client()
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    return client
 
 
 def _allow(category: str) -> MutationConsent:
@@ -267,9 +237,6 @@ def test_post_mutation_form_refuses_a_dry_run_consent():
     # The send boundary itself refuses to transmit a dry-run consent, so a
     # preview can never reach the network even via the low-level send path.
     from korail_mobile_api import KorailConfig
-    from korail_mobile_api.mutation_payloads import (
-        build_single_adult_reservation_form,
-    )
 
     client = _no_network_client()
     route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -317,8 +284,9 @@ def test_reserve_previews_a_passenger_mix_and_a_special_cabin():
     assert isinstance(preview, MutationPreview)
     assert preview.payload["txtTotPsgCnt"] == "4"
     assert preview.payload["txtCompaCnt1"] == "2"  # 어른
-    assert preview.payload["txtCompaCnt3"] == "1"  # 어린이
-    assert preview.payload["txtCompaCnt5"] == "1"  # 경로
+    assert preview.payload["txtCompaCnt2"] == "1"  # 어린이
+    assert preview.payload["txtCompaCnt3"] == "1"  # 경로
+    assert "txtCompaCnt4" not in preview.payload
     assert preview.payload["txtPsrmClCd1"] == "2"  # 특실
 
 

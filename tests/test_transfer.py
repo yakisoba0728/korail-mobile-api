@@ -1,7 +1,16 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
+# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
+# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
+
 """Offline tests for 환승 — searching two-leg itineraries and booking them.
 
-Everything asserted here was read out of the decompiled app, never out of what
-the builders happen to emit:
+Wire expectations follow the 7.0.6 APK DTO where it differs from the older
+reservation builder, especially positive passenger rows and journey fields.
+The itinerary and transfer structure also draws on decompiled bytecode:
 
 * the two itinerary codes -- ``K4/d.java:5-6``, ``DIRECT_SQ_NO("직통", "1")`` and
   ``TRANSFER_SQ_NO("환승", "2")``, cross-checked in
@@ -17,8 +26,9 @@ the builders happen to emit:
   ``analysis/apktool/smali/C5/a.smali:306-338`` and ``:343``.
 * the sequence-number formatting -- ``S4/O.java:19-21`` into
   ``S4/N.java:32-38``, ``DecimalFormat("000")``.
-* the field names -- ``OJrny.java:6-27`` (note ``arvTm_`` rather than
-  ``txtArvTm``), ``OSeat.java:7-35`` and ``OSrcar.java:6-30``.
+* the field names -- 7.0.6 ``TicketReservationInJrny.java`` omits
+  ``arvTm_``; ``OSeat.java:7-35`` and ``OSrcar.java:6-30`` define the
+  legacy map spellings retained by the high-level builder.
 * two legs and no more -- ``OSeat.java:32-35`` and ``OSrcar.java:21-30`` both
   split on ``i == 1`` alone, ``ReservationRequest.java:114-117`` reads back
   exactly the two seat slots, ``a5/k.java:108-110`` and ``:156-170`` build
@@ -41,11 +51,12 @@ this package has ever reached KORAIL.
 from __future__ import annotations
 
 from dataclasses import replace
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, parse_qsl
 
 import httpx
 import pytest
 
+from _helpers import logged_in_no_network_client as _logged_in_no_network_client
 from korail_mobile_api import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_MAX_JOURNEY_LEGS,
@@ -59,8 +70,10 @@ from korail_mobile_api import (
     KorailSeatAssignment,
     KorailSeatClass,
     KorailSession,
+    KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
+    ReservationHoldResponse,
     TrainSearchContinuation,
     TrainSearchQuery,
     TrainSearchResult,
@@ -82,9 +95,8 @@ from korail_mobile_api.mutation_payloads import (
 from korail_mobile_api.payloads import build_train_search_form
 
 
-# The sixteen per-leg OJrny keys, unsuffixed, in C5/a.java:62-76's write order.
-# Fifteen carry the journey number as a plain suffix; arvTm_ is the one the app
-# spells with an underscore (OJrny.java:12, 40-42).
+# The per-leg keys declared by 7.0.6 TicketReservationInJrny. Arrival time
+# is not a wire field in this APK DTO.
 JOURNEY_FIELDS: tuple[str, ...] = (
     "txtJrnyTpCd",
     "txtJrnySqno",
@@ -94,7 +106,6 @@ JOURNEY_FIELDS: tuple[str, ...] = (
     "txtRunDt",
     "txtDptDt",
     "txtDptTm",
-    "arvTm_",
     "txtDptRsStnCd",
     "txtDptStnConsOrdr",
     "txtDptStnRunOrdr",
@@ -104,9 +115,7 @@ JOURNEY_FIELDS: tuple[str, ...] = (
     "txtChgFlg",
 )
 
-# What build_single_adult_reservation_form has emitted since the live
-# 2026-07-24/25 reserve -> cancel round trip, in order. Generalising the builder
-# to a sequence of legs must not move, add or drop one of these.
+# Current 7.0.6 single-leg wire order, including compact passenger rows.
 PINNED_SINGLE_LEG_KEYS: tuple[str, ...] = (
     "Device",
     "Version",
@@ -120,27 +129,6 @@ PINNED_SINGLE_LEG_KEYS: tuple[str, ...] = (
     "txtCompaCnt1",
     "txtPsgTpCd1",
     "txtDiscKndCd1",
-    "txtCompaCnt2",
-    "txtPsgTpCd2",
-    "txtDiscKndCd2",
-    "txtCompaCnt3",
-    "txtPsgTpCd3",
-    "txtDiscKndCd3",
-    "txtCompaCnt4",
-    "txtPsgTpCd4",
-    "txtDiscKndCd4",
-    "txtCompaCnt5",
-    "txtPsgTpCd5",
-    "txtDiscKndCd5",
-    "txtCompaCnt6",
-    "txtPsgTpCd6",
-    "txtDiscKndCd6",
-    "txtCompaCnt7",
-    "txtPsgTpCd7",
-    "txtDiscKndCd7",
-    "txtCompaCnt8",
-    "txtPsgTpCd8",
-    "txtDiscKndCd8",
     "txtSeatAttCd1",
     "txtSeatAttCd2",
     "txtSeatAttCd3",
@@ -156,7 +144,6 @@ PINNED_SINGLE_LEG_KEYS: tuple[str, ...] = (
     "txtRunDt1",
     "txtDptDt1",
     "txtDptTm1",
-    "arvTm_1",
     "txtDptRsStnCd1",
     "txtDptStnConsOrdr1",
     "txtDptStnRunOrdr1",
@@ -217,18 +204,6 @@ def _legs() -> tuple[TrainSummary, TrainSummary]:
     return (_first_leg(), _second_leg())
 
 
-def _logged_in_no_network_client() -> KorailClient:
-    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
-        raise AssertionError(
-            f"a dry run must not send a request (saw {request.method} "
-            f"{request.url.path})"
-        )
-
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    return client
-
-
 # --- the enum values, read from bytecode ------------------------------------
 
 
@@ -245,10 +220,10 @@ def test_itinerary_and_journey_type_codes_are_the_apps_enum_values():
     assert KORAIL_MAX_JOURNEY_LEGS == 2
 
 
-# --- the single-leg form is untouched ---------------------------------------
+# --- the single-leg form follows the 7.0.6 DTO -------------------------------
 
 
-def test_single_leg_reservation_form_is_byte_for_byte_what_it_was():
+def test_single_leg_reservation_form_matches_the_7_0_6_wire_order():
     config = KorailConfig()
     train = _first_leg()
 
@@ -340,7 +315,7 @@ def test_transfer_journey_values_come_from_the_matching_leg():
     assert form["txtDptRsStnCd1"] == first.departure_station_code
     assert form["txtArvRsStnCd1"] == first.arrival_station_code
     assert form["txtDptTm1"] == first.departure_time
-    assert form["arvTm_1"] == first.arrival_time
+    assert "arvTm_1" not in form
     assert form["txtDptStnConsOrdr1"] == first.departure_construction_order
     assert form["txtArvStnRunOrdr1"] == first.arrival_run_order
 
@@ -348,7 +323,7 @@ def test_transfer_journey_values_come_from_the_matching_leg():
     assert form["txtDptRsStnCd2"] == second.departure_station_code
     assert form["txtArvRsStnCd2"] == second.arrival_station_code
     assert form["txtDptTm2"] == second.departure_time
-    assert form["arvTm_2"] == second.arrival_time
+    assert "arvTm_2" not in form
     assert form["txtDptStnConsOrdr2"] == second.departure_construction_order
     assert form["txtArvStnRunOrdr2"] == second.arrival_run_order
     # The transfer station is stated twice, once as each leg's endpoint, and the
@@ -397,8 +372,7 @@ def test_transfer_key_order_is_the_apps_map_order():
     # (ReservationDao.java:17 into CertificationService.java:52-54), so the
     # whole OSeat block precedes txtJrnyCnt.
     assert keys.index("txtPsrmClCd2") < keys.index("txtJrnyCnt")
-    # Within OJrny: the count, then all sixteen of journey 1, then all sixteen
-    # of journey 2 (C5/a.java:54-76).
+    # Within the journey block: the count, then the 7.0.6 DTO keys for each leg.
     assert keys[keys.index("txtJrnyCnt") + 1 :] == [
         f"{field}1" for field in JOURNEY_FIELDS
     ] + [f"{field}2" for field in JOURNEY_FIELDS]
@@ -460,7 +434,7 @@ def test_every_leg_must_be_bookable_not_just_the_first():
 
 def test_passenger_mix_is_per_booking_not_per_leg():
     # OPsg is built once on the booking-options screen (w4/a.java:47-74) and N0
-    # never touches it, so a transfer carries exactly one set of eight rows.
+    # never touches it, so a transfer carries one compact passenger block.
     form = build_transfer_reservation_form(
         KorailConfig(),
         _legs(),
@@ -469,7 +443,9 @@ def test_passenger_mix_is_per_booking_not_per_leg():
 
     assert form["txtTotPsgCnt"] == "3"
     assert form["txtCompaCnt1"] == "2"
-    assert form["txtCompaCnt3"] == "1"
+    assert form["txtCompaCnt2"] == "1"
+    assert form["txtPsgTpCd2"] == "3"
+    assert "txtCompaCnt3" not in form
     assert "txtCompaCnt1_1" not in form
     assert "txtTotPsgCnt2" not in form
 
@@ -702,6 +678,63 @@ def test_transfer_search_sends_no_pinned_transfer_station_fields():
 
     for key in ("chtnCnt", "chtnRsStnCd1", "trnGpCnt", "trnGpCd1"):
         assert key not in transfer
+
+
+def test_apk_transfer_filters_flatten_into_declared_form_fields():
+    query = TrainSearchQuery(
+        "0001",
+        "0723",
+        "20990101",
+        connection_station_codes=("SYNTHETIC-STATION-1", "SYNTHETIC-STATION-2"),
+        connection_train_group_code="SYNTHETIC-TRAIN-GROUP",
+        query_division_code="SYNTHETIC-SORT-CODE",
+    )
+    form = build_train_search_form(
+        KorailConfig(),
+        query,
+        departure_name="서울",
+        arrival_name="여수엑스포",
+        sid="SYNTHETIC-SID",
+        transfer=True,
+    )
+    assert form["chtnCnt"] == "2"
+    assert form["chtnRsStnCd1"] == "SYNTHETIC-STATION-1"
+    assert form["chtnRsStnCd2"] == "SYNTHETIC-STATION-2"
+    assert form["trnGpCnt"] == "1"
+    assert form["trnGpCd1"] == "SYNTHETIC-TRAIN-GROUP"
+    assert form["qryDvCd"] == "SYNTHETIC-SORT-CODE"
+
+
+def test_apk_schedule_special_uses_key_instead_of_legacy_sid():
+    from korail_mobile_api.payloads import build_train_schedule_special_form
+
+    config = KorailConfig()
+    form = build_train_schedule_special_form(
+        config,
+        TrainSearchQuery("0001", "0723", "20990101"),
+        departure_name="서울",
+        arrival_name="여수엑스포",
+    )
+    assert form["Key"] == config.key
+    assert "Sid" not in form
+    assert not {"qryStNo", "qryStTrnNo", "qryStTrnNo2", "pgPrCnt"} & set(form)
+    assert list(form)[:3] == ["Device", "Version", "Key"]
+
+
+def test_direct_search_rejects_transfer_only_filters():
+    with pytest.raises(ValueError, match="transfer=True"):
+        build_train_search_form(
+            KorailConfig(),
+            TrainSearchQuery(
+                "0001",
+                "0723",
+                "20990101",
+                connection_station_codes=("SYNTHETIC-STATION",),
+            ),
+            departure_name="서울",
+            arrival_name="여수엑스포",
+            sid="SYNTHETIC-SID",
+        )
 
 
 def test_direct_continuation_still_sends_the_empty_second_train_cursor():
@@ -1052,6 +1085,66 @@ def test_reserve_transfer_previews_the_two_leg_form_without_sending():
     assert preview.payload["txtJrnySqno2"] == "002"
 
 
+def test_an_acknowledged_transfer_sends_both_legs_and_returns_one_hold():
+    """The send path, which nothing reached: returning None from it passed.
+
+    The reply is synthetic; the shape is the one the live 2026-07-31 transfer
+    hold came back with (``IRR000018``, two journeys on one PNR). What is pinned
+    is this client's half -- exactly the transfer builder's form goes out, and
+    the hold it hands back is the one parsed from the reply.
+    """
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "IRR000018",
+                "h_msg_txt": "예약이 완료되었습니다",
+                "strResult": "SUCC",
+                "h_pnr_no": "SYNTHETIC_PNR",
+                "h_jrny_cnt": "0002",
+                "h_wct_no": "0001",
+                "h_tot_rcvd_amt": "49700",
+            },
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    try:
+        hold = client.reserve_transfer(
+            _legs(),
+            consent=MutationConsent(allow_reserve=True, dry_run=False),
+        )
+    finally:
+        client.close()
+
+    assert type(hold) is ReservationHoldResponse
+    assert hold.pnr_no == "SYNTHETIC_PNR"
+    assert hold.journey_count == "0002"
+    assert len(seen) == 1
+    assert seen[0].method == "POST"
+    assert seen[0].url.path == (
+        "/classes/com.korail.mobile.certification.TicketReservation"
+    )
+    pairs = parse_qsl(
+        seen[0].content.decode("ascii"),
+        keep_blank_values=True,
+        strict_parsing=True,
+    )
+    sent = dict(pairs)
+    assert len(sent) == len(pairs)
+    assert sent == build_transfer_reservation_form(KorailConfig(), _legs())
+    assert sent["txtJrnyCnt"] == "2"
+    assert (sent["txtJrnyTpCd1"], sent["txtJrnyTpCd2"]) == ("14", "14")
+    assert (sent["txtJrnySqno1"], sent["txtJrnySqno2"]) == ("001", "002")
+    assert (sent["txtTrnNo1"], sent["txtTrnNo2"]) == (
+        _first_leg().train_no,
+        _second_leg().train_no,
+    )
+
+
 def test_reserve_transfer_needs_reserve_consent():
     from korail_mobile_api import KorailMutationNotAllowedError
 
@@ -1114,7 +1207,7 @@ def test_cancel_accepts_a_two_journey_transfer_hold_and_echoes_its_count():
     )
 
     config = KorailConfig()
-    for raw_count, expected in (("2", "2"), ("0002", "2"), ("1", "1"), ("0001", "1")):
+    for raw_count in ("2", "0002", "1", "0001"):
         hold = ReservationHoldResponse(
             h_msg_cd="IRR000018",
             h_msg_txt="",
@@ -1124,7 +1217,7 @@ def test_cancel_accepts_a_two_journey_transfer_hold_and_echoes_its_count():
             journey_count=raw_count,
         )
         form = build_unpaid_reservation_cancel_form(config, hold)
-        assert form["txtJrnyCnt"] == expected, raw_count
+        assert form["txtJrnyCnt"] == raw_count
         # These two stay constant for a freshly created hold, whatever the legs.
         assert form["txtJrnySqno"] == "0001"
         assert form["hidRsvChgNo"] == "000"
@@ -1150,3 +1243,88 @@ def test_cancel_still_refuses_a_hold_with_no_usable_journey_count():
         )
         with pytest.raises(KorailProtocolError):
             build_unpaid_reservation_cancel_form(config, hold)
+
+
+_SESSION_EXPIRED = {
+    "strResult": "FAIL",
+    "h_msg_cd": "P058",
+    "h_msg_txt": "session expired",
+}
+
+
+def test_an_expired_session_on_reserve_transfer_clears_the_client_before_raising():
+    # The same pin as test_mutation_live_paths.py's parametrized P058 test,
+    # for reserve_transfer: one request out, no session or cookie left after P058.
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_SESSION_EXPIRED)
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            client.reserve_transfer(
+                _legs(),
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies
+
+
+def test_reserve_transfer_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
+    # The same fallback test_mutation_live_paths.py pins for reserve: the server
+    # made a hold (PNR present) but another field will not parse, and the
+    # caller must still get the PNR back to cancel it. Without a PNR there is
+    # no hold to lose, and the parse error stands.
+    from korail_mobile_api.errors import KorailProtocolError
+
+    body: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=body)
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    try:
+        body.update(
+            strResult="SUCC", h_msg_cd="IRR000000", h_msg_txt="ok",
+            h_pnr_no=399999999999999, h_jrny_cnt=2, h_tot_prc={"amount": 1},
+        )
+        hold = client.reserve_transfer(
+                _legs(),
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+        assert isinstance(hold, ReservationHoldResponse)
+        assert (hold.pnr_no, hold.journey_count) == ("399999999999999", "2")
+        del body["h_pnr_no"]
+        with pytest.raises(KorailProtocolError):
+            client.reserve_transfer(
+                _legs(),
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+    finally:
+        client.close()
+
+
+def test_the_transfer_builders_refusals_are_pinned_word_for_word():
+    # The other half of the merge builder's pin in test_merge_reservation.py.
+    from korail_mobile_api.errors import KorailProtocolError
+
+    seat = r'^KORAIL reservation seat class must be "1" \(일반실\) or "2" \(특실\)$'
+    with pytest.raises(KorailProtocolError, match=seat):
+        build_transfer_reservation_form(KorailConfig(), _legs(), seat_classes=("1", "3"))
+    with pytest.raises(KorailProtocolError, match=seat):
+        build_reservation_form(KorailConfig(), _legs()[0], seat_class="3")
+    for legs in ("ab", b"ab", None):
+        with pytest.raises(
+            KorailProtocolError, match=r"^KORAIL reservation requires a sequence of legs$"
+        ):
+            build_transfer_reservation_form(KorailConfig(), legs)
