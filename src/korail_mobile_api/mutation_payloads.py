@@ -341,7 +341,7 @@ def build_merge_reservation_form(
                 "KORAIL 병합 reservation splits ONE train: both legs must "
                 f"carry the standing hold's train_no {hold_train_no!r}"
             )
-    journeys = tuple(_merge_leg_fields(leg) for leg in resolved_legs)
+    journeys = tuple(_journey_fields(leg) for leg in resolved_legs)
     form = _common_fields(config)
     form.update(
         {
@@ -439,66 +439,6 @@ def is_merge_eligible(
     if not isinstance(flag, str):
         return False
     return flag in KORAIL_MERGE_SEAT_FLAGS_BY_CABIN[cabin.value]
-
-
-def _merge_leg_fields(leg: TrainScheduleItem) -> dict[str, str]:
-    """병합된 여정 하나가 싣는 열두 값.
-
-    ``_journey_fields`` 의 집합에서 ``arrival_time`` 을 뺀 것입니다. 병합 루프는
-    ``TrainInfo`` 마다 게터 열둘을 읽고 ``getH_arv_tm()`` 은 그중에 없습니다
-    (``smali/…/DirectInquiryActivity.smali:5730-5880``). 열세 번째 구간 키인
-    ``txtChgFlg{i}`` 는 상수 ``"N"`` 입니다.
-    """
-    return {
-        "train_no": _required_digits(leg.train_no, field="train_no"),
-        "train_group_code": _required_digits(
-            leg.train_group_code,
-            field="train_group_code",
-        ),
-        "train_class_code": _required_digits(
-            leg.train_class_code,
-            field="train_class_code",
-        ),
-        "run_date": _required_pattern(
-            leg.run_date,
-            field="run_date",
-            pattern=_DATE_RE,
-        ),
-        "departure_date": _required_pattern(
-            leg.departure_date,
-            field="departure_date",
-            pattern=_DATE_RE,
-        ),
-        "departure_time": _required_pattern(
-            leg.departure_time,
-            field="departure_time",
-            pattern=_TIME_RE,
-        ),
-        "departure_station_code": _required_digits(
-            leg.departure_station_code,
-            field="departure_station_code",
-        ),
-        "arrival_station_code": _required_digits(
-            leg.arrival_station_code,
-            field="arrival_station_code",
-        ),
-        "departure_construction_order": _required_digits(
-            leg.departure_construction_order,
-            field="departure_construction_order",
-        ),
-        "arrival_construction_order": _required_digits(
-            leg.arrival_construction_order,
-            field="arrival_construction_order",
-        ),
-        "departure_run_order": _required_digits(
-            leg.departure_run_order,
-            field="departure_run_order",
-        ),
-        "arrival_run_order": _required_digits(
-            leg.arrival_run_order,
-            field="arrival_run_order",
-        ),
-    }
 
 
 # The app's own key-selection methods, which are the reason a third leg is
@@ -968,8 +908,13 @@ def _merge_ineligible_message(
     )
 
 
-def _journey_fields(train: TrainSummary) -> dict[str, str]:
-    """구간 하나가 싣는 7.0.6 TicketReservationInJrny 값들을 검사합니다."""
+def _journey_fields(train: TrainSummary | TrainScheduleItem) -> dict[str, str]:
+    """구간 하나가 싣는 7.0.6 TicketReservationInJrny 값들을 검사합니다.
+
+    직통·환승 구간(:class:`TrainSummary`)과 병합 여정(:class:`TrainScheduleItem`)이
+    같은 열두 값을 씁니다. 병합 루프가 ``TrainInfo`` 마다 읽는 게터도 이 열둘입니다
+    (``smali/…/DirectInquiryActivity.smali:5730-5880``).
+    """
     return {
         "train_no": _required_digits(train.train_no, field="train_no"),
         "train_group_code": _required_digits(
