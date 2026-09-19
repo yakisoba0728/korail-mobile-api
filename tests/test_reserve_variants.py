@@ -211,12 +211,27 @@ def test_default_job_type_reproduces_the_pinned_single_adult_form_exactly():
     assert list(defaulted) == list(explicit) == list(pinned)
 
 
-def test_unknown_job_type_is_refused_before_anything_is_built():
-    with pytest.raises(KorailProtocolError):
+def test_merge_standing_job_type_is_refused_on_a_non_merge_eligible_train():
+    # "1202" is a known job type; what is refused here is the row.
+    with pytest.raises(KorailProtocolError, match="requires a merge-eligible row"):
         build_reservation_form(
             KorailConfig(),
             _eligible_train(),
             job_type="1202",  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize("job_type", ["9999", "", 1101])
+def test_an_unknown_job_type_is_refused_before_anything_is_built(job_type):
+    # 1101 is the right value spelled as a number rather than the wire string.
+    with pytest.raises(
+        KorailProtocolError,
+        match='job type must be one of "1101", "1102", "1103", "1202"',
+    ):
+        build_reservation_form(
+            KorailConfig(),
+            _eligible_train(),
+            job_type=job_type,
         )
 
 
