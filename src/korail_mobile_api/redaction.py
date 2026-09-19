@@ -359,8 +359,10 @@ def redact_text(value: str) -> str:
 
 
 def redact_url(value: str) -> str:
-    """URL 쿼리 파라미터를 키 단위로 가립니다.
+    """URL 을 가립니다. 쿼리는 키 단위로, 경로와 fragment 는 :func:`redact_text` 로.
 
+    경로도 봐야 하는 이유: 서블릿은 쿠키가 없으면 세션을 ``;jsessionid=...`` 로
+    경로에 붙이고, fragment 에는 ``key=value`` 가 그대로 실릴 수 있습니다.
     scheme/netloc 없으면 :func:`redact_text` 로 폴백.
     """
     parsed = urlsplit(value)
@@ -374,7 +376,13 @@ def redact_url(value: str) -> str:
         for key, item in parse_qsl(parsed.query, keep_blank_values=True)
     ]
     return urlunsplit(
-        (parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment)
+        (
+            parsed.scheme,
+            parsed.netloc,
+            redact_text(parsed.path),
+            urlencode(query),
+            redact_text(parsed.fragment),
+        )
     )
 
 

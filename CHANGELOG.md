@@ -69,6 +69,11 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
 
 7.0.6 디컴파일본과 1:1 로 다시 대조해 찾은 것들입니다.
 
+- **`redact_url` 이 URL 의 쿼리만 가렸습니다.** 경로와 fragment 는 그대로 나가서,
+  서블릿이 쿠키 대신 경로에 붙이는 `;jsessionid=...`, 경로 안의 카드번호 모양,
+  fragment 의 `key=value` 가 미리보기·예외 메시지에 남을 수 있었습니다. 이제 셋 다
+  `redact_text` 를 거칩니다.
+
 - **비회원 예약 `NetworkApi.postNonMemTicket` 이 동의 없이 나갈 수 있었습니다.**
   조회로 분류돼 `V7MutationConsent` 도 dry-run 도 거치지 않았습니다. 응답이 회원 예약과
   같은 `ReservationOut` 인 예약 생성이라 변경으로 재분류했습니다(변경 65 / 조회 52).

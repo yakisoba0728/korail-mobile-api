@@ -57,6 +57,26 @@ def test_redact_text_masks_card_like_values():
     assert "411111" not in redact_text("card 4111-1111-1111-1111")
 
 
+@pytest.mark.parametrize(
+    ("url", "secret"),
+    [
+        # A servlet puts the session in the path when cookies are off.
+        (
+            "https://smart.letskorail.com/classes/x;jsessionid=ABC123SECRET?safe=1",
+            "ABC123SECRET",
+        ),
+        ("https://example.test/pay/4111111111111111/confirm", "4111111111111111"),
+        ("https://example.test/cb?safe=1#txtPwd=hunter2", "hunter2"),
+    ],
+    ids=["session-in-path", "card-in-path", "password-in-fragment"],
+)
+def test_redact_url_masks_the_path_and_fragment_too(url, secret):
+    # Only the query was scrubbed; the rest of the URL went out as it came.
+    redacted = redact_url(url)
+    assert secret not in redacted
+    assert "safe=1" in redacted or "safe" not in url
+
+
 def test_redaction_is_recursive_case_insensitive_and_url_safe():
     value = {
         "outer": [
