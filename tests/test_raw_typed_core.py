@@ -648,6 +648,28 @@ def test_train_rows_reject_mixed_object_and_non_object_rows(
         parsers.parse_train_rows(raw)
 
 
+@pytest.mark.parametrize(
+    ("trn_infos", "rows"),
+    [(None, 0), ([], 0), ({"trn_info": []}, 0), ({}, 0)],
+    ids=["null", "bare-list", "empty-list", "no-trn_info"],
+)
+def test_train_rows_read_every_empty_shape_as_no_trains(trn_infos, rows):
+    assert len(parsers.parse_train_rows({"trn_infos": trn_infos})) == rows
+
+
+def test_train_rows_refuse_an_explicit_null_inside_trn_infos():
+    """Pinned, not endorsed: {"trn_infos": {"trn_info": null}} raises today.
+
+    Every other empty shape above means "no trains", and the sibling parsers
+    read a null list as empty. Whether KORAIL ever sends this one is unknown,
+    and the no-live-calls rule means it cannot be looked up, so the current
+    refusal stays until a live answer shows it. Relaxing it should change this
+    test on purpose.
+    """
+    with pytest.raises(KorailProtocolError, match=r"missing trn_infos\.trn_info list"):
+        parsers.parse_train_rows({"trn_infos": {"trn_info": None}})
+
+
 def test_train_search_metadata_preserves_named_server_strings_repr_safely(
     load_json_fixture,
 ):
