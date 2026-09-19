@@ -380,6 +380,15 @@ MODEL_EXPORTS = {
 }
 
 
+# The success envelope the parser tests below build on; spread first, so the
+# payload keys come after it as before.
+_SYNTHETIC_SUCCESS = {
+    "h_msg_cd": "SYNTHETIC-SUCCESS",
+    "h_msg_txt": "synthetic success",
+    "strResult": "SUCC",
+}
+
+
 def _common_fields(config: KorailConfig) -> dict[str, str]:
     return {
         "Device": config.device,
@@ -1194,9 +1203,7 @@ def test_read_parsers_reject_wrong_wrapper_list_and_item_shapes(
     match,
 ):
     raw = {
-        "h_msg_cd": "SYNTHETIC-SUCCESS",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
+        **_SYNTHETIC_SUCCESS,
         **payload,
     }
     with pytest.raises(KorailProtocolError, match=match):
@@ -1206,9 +1213,7 @@ def test_read_parsers_reject_wrong_wrapper_list_and_item_shapes(
 @pytest.mark.parametrize("value", [True, False, "12.5", "１２", [], {}])
 def test_known_numeric_fields_reject_non_ascii_decimal_values(value):
     raw = {
-        "h_msg_cd": "SYNTHETIC-SUCCESS",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
+        **_SYNTHETIC_SUCCESS,
         "cart_infos": {"cart_info": [{"h_tk_cnt": value}]},
     }
     with pytest.raises(KorailProtocolError, match="h_tk_cnt"):
@@ -1218,9 +1223,7 @@ def test_known_numeric_fields_reject_non_ascii_decimal_values(value):
 @pytest.mark.parametrize("value", [2, "2"])
 def test_known_numeric_fields_accept_integers_and_ascii_decimal_strings(value):
     raw = {
-        "h_msg_cd": "SYNTHETIC-SUCCESS",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
+        **_SYNTHETIC_SUCCESS,
         "cart_infos": {"cart_info": [{"h_tk_cnt": value}]},
     }
     assert parse_cart_list_response(raw).items[0].ticket_count == 2
@@ -1244,9 +1247,7 @@ def test_missing_nested_collections_normalize_to_typed_empty_tuples(
     collection_name,
 ):
     raw = {
-        "h_msg_cd": "SYNTHETIC-SUCCESS",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
+        **_SYNTHETIC_SUCCESS,
     }
     assert getattr(parser(raw), collection_name) == ()
 
@@ -1290,9 +1291,7 @@ def test_null_nested_collections_normalize_to_typed_empty_tuples(
     collection_name,
 ):
     raw = {
-        "h_msg_cd": "SYNTHETIC-SUCCESS",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
+        **_SYNTHETIC_SUCCESS,
         **payload,
     }
     assert getattr(parser(raw), collection_name) == ()

@@ -64,6 +64,8 @@ LOGIN_FORM = {
     "txtInputFlg": "2",
     "checkValidPw": "Y",
 }
+# The plain success answer most transport tests reply with.
+_IRG_OK = {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
 COMMON_CODE_FORM = {
     "code": ["app.login.cphd"],
     "deviceWidth": 1080,
@@ -139,7 +141,7 @@ def test_post_form_adds_common_fields_and_form_encoding():
         captured["connection"] = request.headers["connection"]
         captured["body"] = request.content.decode()
         return httpx.Response(
-            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+            200, json=_IRG_OK
         )
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
@@ -215,7 +217,7 @@ def test_post_form_adds_dynapath_header_for_allowlisted_path():
     def handler(request: httpx.Request) -> httpx.Response:
         captured["token"] = request.headers.get(DYNAPATH_HEADER_NAME)
         return httpx.Response(
-            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+            200, json=_IRG_OK
         )
 
     config = KorailConfig(dynapath=DynapathConfig(enabled=True, token_provider=token_provider))
@@ -242,7 +244,7 @@ def test_dynapath_provider_is_not_called_for_non_allowlisted_path():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers.get(DYNAPATH_HEADER_NAME) is None
         return httpx.Response(
-            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+            200, json=_IRG_OK
         )
 
     config = KorailConfig(dynapath=DynapathConfig(enabled=True, token_provider=token_provider))
@@ -302,7 +304,7 @@ def test_get_json_returns_parsed_response():
         captured["url"] = str(request.url)
         captured["query"] = request.url.query.decode()
         return httpx.Response(
-            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+            200, json=_IRG_OK
         )
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
@@ -443,7 +445,7 @@ def test_http_client_blocks_excluded_domains_before_post(blocked_domain: str):
         nonlocal called
         called = True
         return httpx.Response(
-            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+            200, json=_IRG_OK
         )
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
@@ -462,7 +464,7 @@ def test_http_client_blocks_excluded_domains_before_get(blocked_domain: str):
         nonlocal called
         called = True
         return httpx.Response(
-            200, json={"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+            200, json=_IRG_OK
         )
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
