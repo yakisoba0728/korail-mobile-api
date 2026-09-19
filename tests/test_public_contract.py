@@ -36,6 +36,16 @@ from korail_mobile_api.mutation_models import (
 from korail_mobile_api.v7 import V7MutationConsent, V7MutationPreview
 
 
+def _assert_exported(name: str, expected: object = None) -> None:
+    """``name`` is in ``__all__`` and importable -- and is ``expected`` if given."""
+    assert name in korail_mobile_api.__all__, name
+    exported = getattr(korail_mobile_api, name)
+    if expected is None:
+        assert exported, name
+    else:
+        assert exported is expected, name
+
+
 def test_client_public_method_set_is_stable():
     methods = {
         name
@@ -156,8 +166,7 @@ def test_limousine_signatures_types_and_exports_are_public():
         "LimousineScheduleViewTrain",
         "LimousineScheduleViewResponse",
     ):
-        assert name in korail_mobile_api.__all__
-        assert getattr(korail_mobile_api, name)
+        _assert_exported(name)
 
 
 def test_seat_inventory_signatures_types_and_exports_are_public():
@@ -215,8 +224,7 @@ def test_seat_inventory_signatures_types_and_exports_are_public():
         "SeatWindow",
         "SeatInventoryResponse",
     ):
-        assert name in korail_mobile_api.__all__
-        assert getattr(korail_mobile_api, name) is getattr(models, name)
+        _assert_exported(name, getattr(models, name))
 
 
 def test_uuid_maas_signatures_types_and_exports_are_stable():
@@ -255,8 +263,7 @@ def test_uuid_maas_signatures_types_and_exports_are_stable():
         "StationDataResponse": StationDataResponse,
     }
     for name, model in expected_models.items():
-        assert name in korail_mobile_api.__all__
-        assert getattr(korail_mobile_api, name) is model
+        _assert_exported(name, model)
 
 
 def test_completed_errors_are_exported():
@@ -319,8 +326,7 @@ def test_new_social_login_and_station_refund_methods_have_explicit_contracts():
         ("StationRefundExecutionRequest", StationRefundExecutionRequest),
         ("StationRefundExecutionResponse", StationRefundExecutionResponse),
     ):
-        assert name in korail_mobile_api.__all__
-        assert getattr(korail_mobile_api, name) is model
+        _assert_exported(name, model)
 
 
 def test_cache_method_signatures_and_types_are_public():
@@ -335,7 +341,7 @@ def test_cache_method_signatures_and_types_are_public():
     assert app_signature.return_annotation is AppDataResponse
     assert notice_signature.return_annotation is NoticeResponse
     for name in ("AppDataResponse", "AppVersionInfo", "NoticeResponse"):
-        assert getattr(korail_mobile_api, name)
+        _assert_exported(name)
 
 
 def test_config_preserves_baseline_positional_constructor_order():
@@ -422,8 +428,7 @@ def test_raw_typed_core_exports_and_return_hints_are_public():
         "TrainSearchMetadata": models.TrainSearchMetadata,
     }
     for name, model in expected_models.items():
-        assert name in korail_mobile_api.__all__
-        assert getattr(korail_mobile_api, name) is model
+        _assert_exported(name, model)
 
     methods = {
         "get_station_info": (
