@@ -1439,8 +1439,7 @@ def parse_discount_card_usage_response(
 ) -> DiscountCardUsageListResponse:
     _validate_strict_read_envelope(raw)
     items = []
-    for value in _optional_list(raw, "tkUseList", "discount card usage"):
-        item = _row(value, "discount card usage tkUseList")
+    for item in _rows(raw, "tkUseList", "discount card usage"):
         items.append(
             DiscountCardUsage(
                 **_nullable_string_fields(
@@ -1462,8 +1461,7 @@ def parse_discount_card_schedule_response(
 ) -> DiscountCardScheduleResponse:
     _validate_strict_read_envelope(raw)
     trains = []
-    for value in _optional_list(raw, "trnScdlList", "discount card schedule"):
-        item = _row(value, "discount card schedule trnScdlList")
+    for item in _rows(raw, "trnScdlList", "discount card schedule"):
         trains.append(
             DiscountCardScheduleTrain(
                 # Scalar rather than string: cmtrPrc is a fare and the
@@ -1600,8 +1598,7 @@ def parse_multi_child_discount_target_response(
 ) -> MultiChildDiscountTargetResponse:
     _validate_strict_read_envelope(raw)
     targets = []
-    for value in _optional_list(raw, "fmlyList", "multi-child targets"):
-        item = _row(value, "multi-child targets fmlyList")
+    for item in _rows(raw, "fmlyList", "multi-child targets"):
         targets.append(
             MultiChildDiscountTarget(
                 **_nullable_string_fields(
@@ -1623,8 +1620,7 @@ def parse_customer_trip_info_response(
 ) -> CustomerTripInfoResponse:
     _validate_strict_read_envelope(raw)
     trips = []
-    for value in _optional_list(raw, "mainList", "customer trip info"):
-        item = _row(value, "customer trip info mainList")
+    for item in _rows(raw, "mainList", "customer trip info"):
         trips.append(
             CustomerTripInfo(
                 **_nullable_string_fields(
@@ -1646,8 +1642,7 @@ def parse_maas_service_detail_list_response(
 ) -> MaasServiceDetailListResponse:
     _validate_strict_read_envelope(raw)
     details = []
-    for value in _optional_list(raw, "addSrvList", "MaaS service details"):
-        item = _row(value, "MaaS service details addSrvList")
+    for item in _rows(raw, "addSrvList", "MaaS service details"):
         info_raw = _optional_mapping(item, "detailInfo", "MaaS service detail")
         detail_info = None
         if info_raw is not None:
@@ -1829,8 +1824,7 @@ def parse_commuter_info_response(
 ) -> CommuterInfoResponse:
     _validate_strict_read_envelope(raw)
     passenger_options = []
-    for value in _optional_list(raw, "psgList", "commuter info"):
-        item = _row(value, "commuter info psgList")
+    for item in _rows(raw, "psgList", "commuter info"):
         passenger_options.append(
             CommuterPassengerOption(
                 commuter_usage_age_code=_optional_string(
@@ -1916,8 +1910,7 @@ def parse_price_fare_quote_response(
 ) -> PriceFareQuoteResponse:
     _validate_strict_read_envelope(raw)
     fares = []
-    for value in _optional_list(raw, "prcList", "price fare quote"):
-        item = _row(value, "price fare quote prcList")
+    for item in _rows(raw, "prcList", "price fare quote"):
         fares.append(
             PriceFare(
                 **_nullable_string_fields(
@@ -2021,26 +2014,11 @@ def parse_pbp_acceptance_specification_response(
 ) -> PbpAcceptanceSpecificationResponse:
     _validate_strict_read_envelope(raw)
     tickets = []
-    for ticket_value in _optional_list(
-        raw,
-        "tkList",
-        "PBP acceptance specification",
-    ):
-        ticket = _row(ticket_value, "PBP acceptance specification tkList")
+    for ticket in _rows(raw, "tkList", "PBP acceptance specification"):
         journeys = []
-        for journey_value in _optional_list(
-            ticket,
-            "jrnyList",
-            "PBP acceptance ticket",
-        ):
-            journey = _row(journey_value, "PBP acceptance ticket jrnyList")
+        for journey in _rows(ticket, "jrnyList", "PBP acceptance ticket"):
             seats = []
-            for seat_value in _optional_list(
-                journey,
-                "seatList",
-                "PBP acceptance journey",
-            ):
-                seat = _row(seat_value, "PBP acceptance journey seatList")
+            for seat in _rows(journey, "seatList", "PBP acceptance journey"):
                 seats.append(
                     PbpAcceptanceSeat(
                         **_nullable_string_fields(
@@ -2092,15 +2070,9 @@ def parse_platform_number_response(
 ) -> PlatformNumberResponse:
     _validate_strict_read_envelope(raw)
     tickets = []
-    for ticket_value in _optional_list(raw, "tkList", "platform number"):
-        ticket = _row(ticket_value, "platform number tkList")
+    for ticket in _rows(raw, "tkList", "platform number"):
         journeys = []
-        for journey_value in _optional_list(
-            ticket,
-            "jrnyList",
-            "platform number ticket",
-        ):
-            journey = _row(journey_value, "platform number ticket jrnyList")
+        for journey in _rows(ticket, "jrnyList", "platform number ticket"):
             journeys.append(
                 PlatformNumberJourney(
                     platform_no=_optional_string(
@@ -2133,8 +2105,7 @@ def parse_recent_delivery_history_response(
 ) -> RecentDeliveryHistoryResponse:
     _validate_strict_read_envelope(raw)
     recipients = []
-    for value in _optional_list(raw, "acepList", "recent delivery history"):
-        recipient = _row(value, "recent delivery history acepList")
+    for recipient in _rows(raw, "acepList", "recent delivery history"):
         recipients.append(
             RecentDeliveryRecipient(
                 **_nullable_string_fields(
