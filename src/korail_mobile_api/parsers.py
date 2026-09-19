@@ -139,6 +139,15 @@ _inventory_integer_value = partial(
 _inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
 
 
+def _response_fields(response: BaseKorailResponse) -> dict[str, Any]:
+    return {
+        "h_msg_cd": response.h_msg_cd,
+        "h_msg_txt": response.h_msg_txt,
+        "str_result": response.str_result,
+        "raw": response.raw,
+    }
+
+
 def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
     """``prdMobilePlusMain.cache`` 를 파싱합니다.
 
@@ -160,10 +169,7 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
             new_version=_optional_string(version_raw, "NEWDVERSION"),
         )
     return AppDataResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         disability_certification_msg=_optional_string(
             raw,
             "disability_certification_msg",
@@ -193,10 +199,7 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
     notice_raw = nested if isinstance(nested, Mapping) else raw
     nested_notice = isinstance(nested, Mapping)
     return NoticeResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         board_id=_optional_string(notice_raw, "BbrdId" if nested_notice else "bbrdId"),
         post_sequence=_optional_string(
             notice_raw, "PtwtSqno" if nested_notice else "ptwtSqno"
@@ -349,10 +352,7 @@ def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
             "KORAIL UUID response mutMrkVrfCd must be a non-empty string"
         )
     return UuidResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=response.raw,
+        **_response_fields(response),
         verification_code=value,
     )
 
@@ -480,10 +480,7 @@ def parse_station_data_response(
             )
         )
     return StationDataResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=response.raw,
+        **_response_fields(response),
         stations=tuple(stations),
     )
 
@@ -500,10 +497,7 @@ def parse_station_info_response(
     """
     raw = response.raw
     return StationInfoResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         count=_typed_non_negative_integer_value(
             raw.get("count"),
             "count",
@@ -634,10 +628,7 @@ def parse_train_calendar_response(
             )
         )
     return TrainCalendarResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         days=tuple(days),
     )
 
@@ -776,10 +767,7 @@ def parse_train_schedule_response(
         return _typed_optional_string(raw, key, context="train schedule")
 
     return TrainScheduleResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         delay_detail_reason_content=optional("dlayDtlRsnCont"),
         stops=tuple(stops),
         delay_station_construction_order=optional("dlayStnConsOrdr"),
@@ -856,10 +844,7 @@ def parse_transfer_station_list_response(
             )
         )
     return TransferStationListResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         stations=tuple(stations),
     )
 
@@ -964,10 +949,7 @@ def parse_seat_car_list_response(
             )
         )
     return SeatCarListResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         recommended_car_no=_inventory_optional_int(
             raw,
             "h_rcmd_srcar_no",
@@ -1107,10 +1089,7 @@ def parse_seat_inventory_response(
         )
 
     return SeatInventoryResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         layout_type=layout_type,
         arrangement_code=arrangement_code,
         remaining_count=remaining_count,

@@ -31,6 +31,7 @@ from .limousine_models import (
     LimousineSeatInventoryResponse,
 )
 from .models import BaseKorailResponse
+from .parsers import _response_fields
 from .read_parsers import _optional_list as _nullable_list
 from .read_parsers import _optional_string, _row
 
@@ -61,15 +62,6 @@ def _optional_nonnegative_integer(
             f"KORAIL {context} field {key} must be a non-negative integer"
         )
     return value
-
-
-def _response_fields(response: BaseKorailResponse) -> dict[str, Any]:
-    return {
-        "h_msg_cd": response.h_msg_cd,
-        "h_msg_txt": response.h_msg_txt,
-        "str_result": response.str_result,
-        "raw": response.raw,
-    }
 
 
 def _require_exact_success(response: BaseKorailResponse) -> None:
