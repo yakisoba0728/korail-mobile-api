@@ -563,3 +563,32 @@ def test_a_refused_discount_card_mutation_raises(send):
             send(client, MutationConsent(allow_discount_card=True, dry_run=False))
     finally:
         client.close()
+
+
+@pytest.mark.parametrize("train_no", ["", "   ", None])
+def test_purchase_refuses_a_section_without_a_train(train_no):
+    # The app takes trnNo_ from the train picked in the N-card schedule
+    # (CheckUsageNCardSectionViewModel.java:874), like runDt_ and the station
+    # codes, which were already required. A blank one went out as it was.
+    from dataclasses import replace
+
+    section = replace(_section(), train_no=train_no)
+    with pytest.raises(KorailProtocolError, match="train_no"):
+        build_discount_card_purchase_form(KorailConfig(), _purchase(sections=(section,)))
+
+
+def test_purchase_takes_at_most_one_additional_user():
+    # 7.0.6 NCardInfoIn declares apdUsrCnt and the _1 keys only
+    # (custMgNo_1, apdCustName_1, apdCustTeln_1): a second user would go out
+    # as _2 keys no DTO has.
+    user = DiscountCardAdditionalUser(
+        customer_no="SYNTHETIC_OTHER_CUSTOMER", name="홍길동", phone="01000000000"
+    )
+    form = build_discount_card_purchase_form(
+        KorailConfig(), _purchase(additional_users=(user,))
+    )
+    assert form["apdUsrCnt"] == "1"
+    with pytest.raises(KorailProtocolError, match="at most 1 additional user"):
+        build_discount_card_purchase_form(
+            KorailConfig(), _purchase(additional_users=(user, user))
+        )

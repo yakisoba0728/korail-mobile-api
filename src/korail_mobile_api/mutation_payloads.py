@@ -1553,7 +1553,10 @@ def build_discount_card_purchase_form(
             section.run_date,
             field="run_date",
         )
-        form[f"trnNo_{index}"] = section.train_no
+        form[f"trnNo_{index}"] = _required_mutation_text(
+            section.train_no,
+            field="train_no",
+        )
         form[f"dptRsStnCd_{index}"] = _required_mutation_text(
             section.departure_station_code,
             field="departure_station_code",
@@ -1563,6 +1566,12 @@ def build_discount_card_purchase_form(
             field="arrival_station_code",
         )
     users = tuple(request.additional_users)
+    # 7.0.6 NCardInfoIn declares apdUsrCnt and only the _1 keys of one
+    # additional user; a second would go out under keys no DTO has.
+    if len(users) > 1:
+        raise KorailProtocolError(
+            "KORAIL discount card purchase takes at most 1 additional user"
+        )
     if users:
         form["apdUsrCnt"] = str(len(users))
         for index, user in enumerate(users, start=1):
