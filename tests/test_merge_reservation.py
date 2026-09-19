@@ -697,3 +697,22 @@ def test_reserve_merge_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
             )
     finally:
         client.close()
+
+
+def test_the_merge_builders_refusals_are_pinned_word_for_word():
+    # Pinned before the seat-class coercion and the sequence guard were each
+    # folded into one helper shared with the transfer builder.
+    seat = r'^KORAIL reservation seat class must be "1" \(일반실\) or "2" \(특실\)$'
+    with pytest.raises(KorailProtocolError, match=seat):
+        build_merge_reservation_form(
+            KorailConfig(), _standing_hold_train(), (_leading_leg(), _trailing_leg()),
+            seat_class="3",
+        )
+    with pytest.raises(KorailProtocolError, match=seat):
+        is_merge_eligible(_standing_hold_train(), seat_class="3")
+    for legs in ("ab", b"ab", None):
+        with pytest.raises(
+            KorailProtocolError,
+            match=r"^KORAIL 병합 reservation requires a sequence of merge-seat legs$",
+        ):
+            build_merge_reservation_form(KorailConfig(), _standing_hold_train(), legs)

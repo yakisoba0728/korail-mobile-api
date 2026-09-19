@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from typing import TypeVar
 
 from .config import KorailConfig
 from .constants import (
@@ -294,11 +295,9 @@ def build_merge_reservation_form(
             "KORAIL 병합 reservation requires the exact TrainSummary the "
             "입석+좌석 hold was placed on"
         )
-    if isinstance(legs, (str, bytes)) or not isinstance(legs, Sequence):
-        raise KorailProtocolError(
-            "KORAIL 병합 reservation requires a sequence of merge-seat legs"
-        )
-    resolved_legs = tuple(legs)
+    resolved_legs = _resolved_sequence(
+        legs, "KORAIL 병합 reservation requires a sequence of merge-seat legs"
+    )
     for leg in resolved_legs:
         if type(leg) is not TrainScheduleItem:
             raise KorailProtocolError(
@@ -319,12 +318,7 @@ def build_merge_reservation_form(
         raise KorailProtocolError(
             "KORAIL reservation requires an exact KorailPassengerCounts"
         )
-    try:
-        cabin = KorailSeatClass(seat_class)
-    except ValueError:
-        raise KorailProtocolError(
-            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
-        ) from None
+    cabin = _coerced_seat_class(seat_class)
     # The two halves must be the one train the standing hold was placed on.
     # The app never checks this because it cannot be otherwise -- the rows come
     # straight back from mergeSeatsC.do, which was asked about that train
@@ -429,12 +423,7 @@ def is_merge_eligible(
         raise KorailProtocolError(
             "KORAIL merge eligibility requires an exact TrainSummary"
         )
-    try:
-        cabin = KorailSeatClass(seat_class)
-    except ValueError:
-        raise KorailProtocolError(
-            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
-        ) from None
+    cabin = _coerced_seat_class(seat_class)
     flag = train.merge_seat_application_flag
     if not isinstance(flag, str):
         return False
@@ -464,6 +453,26 @@ def _seat_no_key(journey: int, seat: int) -> str:
     return f"txtSeatNo{seat}" if journey == 1 else f"txtSeatNo1_{seat}"
 
 
+_T = TypeVar("_T")
+
+
+def _coerced_seat_class(value: object) -> KorailSeatClass:
+    """``"1"``(일반실)·``"2"``(특실) 또는 :class:`KorailSeatClass` 만 받습니다."""
+    try:
+        return KorailSeatClass(value)
+    except ValueError:
+        raise KorailProtocolError(
+            'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
+        ) from None
+
+
+def _resolved_sequence(value: Sequence[_T], message: str) -> tuple[_T, ...]:
+    """구간 목록을 튜플로 굳힙니다. 문자열·바이트는 시퀀스여도 목록이 아닙니다."""
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise KorailProtocolError(message)
+    return tuple(value)
+
+
 def _validated_legs(
     legs: Sequence[TrainSummary],
     *,
@@ -475,11 +484,9 @@ def _validated_legs(
     지원하는 만큼"을 뜻하는 ``None`` 입니다. 단일 구간 빌더는 ``None`` 을 넘기고
     자기 거부 메시지를 유지합니다.
     """
-    if isinstance(legs, (str, bytes)) or not isinstance(legs, Sequence):
-        raise KorailProtocolError(
-            "KORAIL reservation requires a sequence of legs"
-        )
-    resolved = tuple(legs)
+    resolved = _resolved_sequence(
+        legs, "KORAIL reservation requires a sequence of legs"
+    )
     for leg in resolved:
         if type(leg) is not TrainSummary:
             raise KorailProtocolError(
@@ -531,16 +538,7 @@ def _validated_seat_classes(
             f"KORAIL reservation needs one cabin class per leg: {leg_count} "
             f"leg(s), {len(candidates)} class(es)"
         )
-    resolved: list[KorailSeatClass] = []
-    for candidate in candidates:
-        try:
-            resolved.append(KorailSeatClass(candidate))
-        except ValueError:
-            raise KorailProtocolError(
-                'KORAIL reservation seat class must be "1" (일반실) or "2" '
-                "(특실)"
-            ) from None
-    return tuple(resolved)
+    return tuple(_coerced_seat_class(candidate) for candidate in candidates)
 
 
 def _validated_leg_seats(

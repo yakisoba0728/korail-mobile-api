@@ -1324,3 +1324,19 @@ def test_reserve_transfer_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
             )
     finally:
         client.close()
+
+
+def test_the_transfer_builders_refusals_are_pinned_word_for_word():
+    # The other half of the merge builder's pin in test_merge_reservation.py.
+    from korail_mobile_api.errors import KorailProtocolError
+
+    seat = r'^KORAIL reservation seat class must be "1" \(일반실\) or "2" \(특실\)$'
+    with pytest.raises(KorailProtocolError, match=seat):
+        build_transfer_reservation_form(KorailConfig(), _legs(), seat_classes=("1", "3"))
+    with pytest.raises(KorailProtocolError, match=seat):
+        build_reservation_form(KorailConfig(), _legs()[0], seat_class="3")
+    for legs in ("ab", b"ab", None):
+        with pytest.raises(
+            KorailProtocolError, match=r"^KORAIL reservation requires a sequence of legs$"
+        ):
+            build_transfer_reservation_form(KorailConfig(), legs)
