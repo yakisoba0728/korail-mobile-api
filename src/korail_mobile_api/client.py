@@ -282,6 +282,7 @@ from .read_payloads import (
     build_seat_assignment_schedule_form,
     build_self_seat_change_info_form,
     build_service_status_query,
+    build_station_refund_verification_form,
     build_ticket_duplication_check_form,
     build_ticket_receipt_form,
     build_ticket_reservation_detail_query,
@@ -2084,13 +2085,7 @@ class KorailClient:
     ) -> StationRefundVerificationResponse:
         """Verify an existing station-issued ticket before online refund."""
         self._require_session("station ticket refund verification requires")
-        fields = {
-            "strName": request.customer_name,
-            "retNo1": request.return_no_1,
-            "retNo2": request.return_no_2,
-            "retNo3": request.return_no_3,
-            "retNo4": request.return_no_4,
-        }
+        fields = build_station_refund_verification_form(request)
         def run() -> StationRefundVerificationResponse:
             result = self.v7.call(
                 "NetworkApi.verifyOnlineRefunds", fields, include_common=True

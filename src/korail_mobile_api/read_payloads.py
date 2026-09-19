@@ -21,7 +21,7 @@ import time
 from calendar import monthrange
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from .config import KorailConfig
 from .payloads import build_cache_query
@@ -34,6 +34,10 @@ from .read_models import (
     PassPassengerInfos,
     ProductTrainInquiryResponse,
 )
+
+
+if TYPE_CHECKING:
+    from .mutation_models import StationRefundVerificationRequest
 
 
 def _device_version(config: KorailConfig) -> dict[str, str]:
@@ -1704,6 +1708,23 @@ def _exact_refund_companion(companion: RefundCompanion) -> RefundCompanion:
         raise TypeError("companion must be an exact RefundCompanion")
     _validate_refund_companion(companion)
     return companion
+
+
+def build_station_refund_verification_form(
+    request: StationRefundVerificationRequest,
+) -> dict[str, str]:
+    """``NetworkApi.verifyOnlineRefunds`` 의 입력(``VerifyOnlineRefundsIn``).
+
+    7.0.6 계약이 조회로 등록한 라우트라 여기 있습니다. 공통 필드는 7.0.6
+    게이트웨이가 붙입니다. 값은 요청 객체가 이미 검사했습니다.
+    """
+    return {
+        "strName": request.customer_name,
+        "retNo1": request.return_no_1,
+        "retNo2": request.return_no_2,
+        "retNo3": request.return_no_3,
+        "retNo4": request.return_no_4,
+    }
 
 
 def build_refund_commission_form(
