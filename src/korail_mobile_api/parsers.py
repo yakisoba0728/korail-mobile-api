@@ -844,8 +844,9 @@ def parse_train_schedule_response(
         # trnNo1 is a nullable Gson String (TrainScheduleDao.java:123) and the
         # web-view consumer null-guards it (TrainServiceInfoWebViewActivity.java
         # :200 -> if (!N.isNull(tranNo1))), so a null train number is tolerated
-        # by the app. runDt1/msgCont stay required because their consumers use
-        # them unguarded (convertFormat(runDt1)/msgCont.replaceAll).
+        # by the app. runDt1 stays required because its consumer uses it
+        # unguarded (convertFormat(runDt1)); msgCont is read as optional above,
+        # and a response without it parses to None.
         train_no=optional("trnNo1"),
         special_train_flag=optional("trnSpsFlg"),
         up_down_division_code=optional("upDnDvCd"),

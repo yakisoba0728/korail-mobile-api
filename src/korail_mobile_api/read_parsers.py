@@ -351,8 +351,9 @@ def _optional_scalar_string(
     """스칼라 필드 — JSON 문자열과 JSON 정수를 모두 수용.
 
     KORAIL 이 ``String`` 선언 필드를 숫자로도 보내는 사례: ``h_jrny_cnt``,
-    ``h_st_prnb``/``h_cls_prnb``, ``h_srcar_no``. ``bool``/``float``/리스트/객체는
-    프로토콜 오류.
+    ``h_srcar_no``. ``bool``/``float``/리스트/객체는 프로토콜 오류. 인원 수
+    ``h_st_prnb``/``h_cls_prnb`` 는 반대로 정수로 읽으므로 :func:`_optional_integer`
+    가 맡습니다.
     """
     value = data.get(key)
     if value is None or isinstance(value, str):
