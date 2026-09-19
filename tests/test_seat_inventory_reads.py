@@ -2255,3 +2255,29 @@ def test_evidence_main_validates_output_parent_and_type_before_capture(
     with pytest.raises(expected_error):
         evidence.main(arguments)
     assert capture_calls == 0
+
+
+@pytest.mark.parametrize(
+    "override",
+    ["NOT VALID; injected", "01", "0150", "\uff10\uff11\uff15"],
+    ids=["text", "two-digits", "four-digits", "fullwidth-digits"],
+)
+def test_known_defect_a_seat_attribute_override_is_sent_unvalidated(
+    complete_train, override
+):
+    """TODAY'S BEHAVIOUR, WHICH IS WRONG. src plan batch 38 flips this test.
+
+    The row's own seat_attribute_code has to be three ASCII digits
+    (validate_seat_inventory_inputs). The override argument that replaces it is
+    not checked at all, and whatever it holds goes out as txtSeatAttCd. Batch
+    38 gives the override the row's check and, in the same commit, makes this
+    expect a KorailProtocolError instead.
+    """
+    car = build_seat_car_form(
+        KorailConfig(),
+        complete_train,
+        passenger_count=1,
+        sid="caller-sid-car",
+        seat_attribute_code=override,
+    )
+    assert car["txtSeatAttCd"] == override

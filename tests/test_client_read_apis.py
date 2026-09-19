@@ -479,3 +479,23 @@ def test_session_expiry_clears_client_state_before_raising():
         client.get_train_calendar()
     assert client.session.current is None
     assert "JSESSIONID" not in client.http.cookies
+
+
+def test_station_info_refuses_a_device_it_would_not_send() -> None:
+    """``device`` survives for the old signature; 7.0.6 sends no such field.
+
+    Anything but the default is refused before a request is built, so a caller
+    cannot believe it asked for another platform's data. Today the refusal is a
+    ValueError, which sits outside KorailApiError; src plan batch 12 changes it
+    to KorailProtocolError and turns this assertion over in the same commit.
+    """
+
+    def refuse(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError(f"must not send (saw {request.url.path})")
+
+    client = KorailClient(transport=httpx.MockTransport(refuse))
+    try:
+        with pytest.raises(ValueError, match="does not accept a device parameter"):
+            client.get_station_info(device="IOS")
+    finally:
+        client.close()
