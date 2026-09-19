@@ -12,6 +12,12 @@ Two opt-ins are required: ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live
 switch) and ``KORAIL_LIVE_RETRY_READS=1`` (this script). Neither alone runs.
 Credentials are prompted in memory. Nothing from the raw server body, account,
 ticket identity, or PNR is printed or written to disk.
+
+The device identity comes from ``KORAIL_DYNAPATH_DEVICE_ID``,
+``KORAIL_DYNAPATH_OS_VERSION`` and ``KORAIL_DYNAPATH_DEVICE_MODEL``
+(``korail_mobile_api.live.build_config_from_env``; README says where to read
+them), so every run is made from the same device. Without them it stops, with
+exit code 2, before asking for anything.
 """
 
 from __future__ import annotations
@@ -26,12 +32,12 @@ from typing import Any
 
 from korail_mobile_api import (
     KorailClient,
-    KorailConfig,
     MergeSeatsInquiryRequest,
     PriceFareLeg,
     PriceFareQuoteRequest,
     TrainSearchQuery,
 )
+from korail_mobile_api.live import build_config_from_env
 
 
 # How far ahead every read looks. Two weeks is inside the window these routes
@@ -83,11 +89,19 @@ def main() -> int:
         raise SystemExit(
             "Set KORAIL_MOBILE_API_LIVE=1 and KORAIL_LIVE_RETRY_READS=1 to run live reads"
         )
+    # The device identity comes from the environment, as it does for the
+    # real-card scripts, so every run is made from the same real device, not a
+    # new synthetic one. Checked before any secret is asked for.
+    try:
+        config = build_config_from_env()
+    except RuntimeError as exc:
+        print(f"ABORTED: {exc}")
+        return 2
     travel_date = _query_date()
     print(f"travel_date: {travel_date}")
     member = getpass.getpass("member (hidden): ")
     password = getpass.getpass("password (hidden): ")
-    client = KorailClient(KorailConfig(enable_dynapath=True))
+    client = KorailClient(config)
     last_request = 0.0
 
     def pace(_request: Any) -> None:

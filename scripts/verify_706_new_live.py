@@ -13,6 +13,12 @@ switch) and ``KORAIL_LIVE_706_READS=1`` (this script). Neither alone runs.
 No raw body, credential, cookie, PNR or ticket identity is printed or saved.
 Authenticated checks prompt for a member and password in memory. This script
 never sends a reservation, payment, refund, or other mutation.
+
+The device identity comes from ``KORAIL_DYNAPATH_DEVICE_ID``,
+``KORAIL_DYNAPATH_OS_VERSION`` and ``KORAIL_DYNAPATH_DEVICE_MODEL``
+(``korail_mobile_api.live.build_config_from_env``; README says where to read
+them), so every run is made from the same device. Without them it stops, with
+exit code 2, before asking for anything.
 """
 
 from __future__ import annotations
@@ -25,7 +31,8 @@ from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
 
-from korail_mobile_api import KorailClient, KorailConfig, TrainSearchQuery
+from korail_mobile_api import KorailClient, TrainSearchQuery
+from korail_mobile_api.live import build_config_from_env
 
 
 MIN_INTERVAL_SECONDS = 1.5
@@ -74,7 +81,15 @@ def main() -> int:
             "Set KORAIL_MOBILE_API_LIVE=1 and KORAIL_LIVE_706_READS=1 to run live checks"
         )
 
-    client = KorailClient(KorailConfig(enable_dynapath=True))
+    # The device identity comes from the environment, as it does for the
+    # real-card scripts, so every run is made from the same real device, not a
+    # new synthetic one. Checked before any secret is asked for.
+    try:
+        config = build_config_from_env()
+    except RuntimeError as exc:
+        print(f"ABORTED: {exc}")
+        return 2
+    client = KorailClient(config)
     last_send = 0.0
 
     def pace(_request: Any) -> None:

@@ -188,15 +188,20 @@ def test_delivery_round_trip_uses_the_parent_scripts_gate(
     assert "the parent gate said no" in capsys.readouterr().out
 
 
-def test_delivery_round_trip_needs_a_real_device_identity_before_any_prompt(
+@pytest.mark.parametrize("name", sorted(OPT_INS))
+def test_each_live_script_needs_a_real_device_identity_before_any_prompt(
+    name: str,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Every switch set, no DynaPath device values: the config is built from the
-    # environment like the parent's, so this stops before a secret is asked for.
-    module = _load("retry_delivery_roundtrip", monkeypatch)
+    # environment, so this stops before a secret is asked for. The two read
+    # scripts used to make up a new synthetic device on every run; each run now
+    # comes from the same, real one, as the real-card scripts already did.
+    module = _load(name, monkeypatch)
     monkeypatch.setattr(os, "environ", dict(os.environ))
-    for switch in OPT_INS["retry_delivery_roundtrip"]:
+    monkeypatch.setattr(sys, "argv", [f"{name}.py"])
+    for switch in OPT_INS[name]:
         monkeypatch.setenv(switch, "1")
     for name in (
         "KORAIL_DYNAPATH_DEVICE_ID",
@@ -358,6 +363,7 @@ def test_retry_reads_exits_non_zero_when_login_fails(
     for switch in OPT_INS["retry_unprotected_live"]:
         monkeypatch.setenv(switch, "1")
     monkeypatch.setattr(module.getpass, "getpass", lambda prompt: "synthetic")
+    monkeypatch.setattr(module, "build_config_from_env", lambda: "synthetic-config")
 
     class _RefusingClient:
         def __init__(self, config) -> None:
@@ -403,6 +409,7 @@ def test_retry_reads_exits_non_zero_when_the_search_finds_nothing(
     for switch in OPT_INS["retry_unprotected_live"]:
         monkeypatch.setenv(switch, "1")
     monkeypatch.setattr(module.getpass, "getpass", lambda prompt: "synthetic")
+    monkeypatch.setattr(module, "build_config_from_env", lambda: "synthetic-config")
     monkeypatch.setattr(module, "_query_date", lambda: "20991231")
     searched: list[object] = []
 
