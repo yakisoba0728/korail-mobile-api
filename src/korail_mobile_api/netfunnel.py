@@ -411,13 +411,23 @@ class KorailNetFunnelClient:
     def acquire(self, action: str) -> KorailNetFunnelToken:
         """5101→5002 교환 + 대기 폴링. 통과 토큰을 돌려줍니다.
 
-        BYPASS(300)면 키·세션·노드 없이 즉시 리턴. 그 외에는 5002 를 무조건
-        거쳐야 setComplete 가 받는 키를 얻습니다.
+        키 없는 BYPASS(300)·ExpressNumber(303)면 키·세션·노드 없이 즉시 리턴.
+        그 외에는 5002 를 무조건 거쳐야 setComplete 가 받는 키를 얻습니다. 키 없이
+        대기(201/202)를 받으면 폴링할 수 없으므로
+        :class:`~korail_mobile_api.errors.KorailNetFunnelError` 입니다.
 
         상한: :data:`QUEUE_POLL_LIMIT` 또는 :data:`QUEUE_WAIT_LIMIT_SECONDS`.
         """
         token = self.enter(action)
         if not token.key:
+            # parse_queue_response lets a keyless token through for exactly two
+            # reasons: a 300/303 pass, or a wait. Only the first is a bypass.
+            if is_queued(token):
+                raise KorailNetFunnelError(
+                    token.code,
+                    "KORAIL NetFunnel told this request to wait but gave it no "
+                    "key to poll with; only a 300/303 pass may arrive without one",
+                )
             return token  # bypass
         key = token.key
         node = token.node

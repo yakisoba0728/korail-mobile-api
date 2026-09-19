@@ -89,6 +89,11 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
   `common.code.do` 의 `code` 에만 허용됩니다. DynaPath 를 켜지 않은 로그인은 여전히
   필드 검사보다 먼저 `KorailDynaPathRequiredError` 로 막힙니다. 소셜 로그인의
   `custId` 는 이제 가려집니다.
+- **NetFunnel 이 키 없는 대기 응답을 통과로 받았습니다.** `acquire()` 는 "키 없음"을
+  우회(300)로 읽었기 때문에, 5101 이 `201`/`202`(기다려라)를 키 없이 돌려주면 5002
+  폴링도 대기도 없이 그 토큰을 돌려줬습니다. `slot()` 안에서는 호출자의 작업이 먼저
+  실행된 뒤에야 해제가 거절됐습니다. 이제 키 없이 통과하는 것은 `300`/`303` 뿐이고,
+  키 없는 대기는 `KorailNetFunnelError` 입니다.
 
 - **비회원 예약 `NetworkApi.postNonMemTicket` 이 동의 없이 나갈 수 있었습니다.**
   조회로 분류돼 `V7MutationConsent` 도 dry-run 도 거치지 않았습니다. 응답이 회원 예약과

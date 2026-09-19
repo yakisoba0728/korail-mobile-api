@@ -50,6 +50,7 @@ from korail_mobile_api.errors import (
     KorailTransportError,
 )
 from korail_mobile_api.netfunnel import (
+    CONTINUE_CODES,
     KORAIL_NETFUNNEL_GATED_OPERATIONS,
     MAX_TTL_SECONDS,
     MIN_TTL_SECONDS,
@@ -1194,11 +1195,13 @@ def test_release_refuses_a_keyless_token_that_is_not_a_bypass():
     assert calls == []
 
 
-def test_a_bypass_still_skips_the_5002_and_the_5004():
+@pytest.mark.parametrize("code", ["300", "303"])
+def test_a_bypass_still_skips_the_5002_and_the_5004(code):
     # 300 issues no key because there is no line, so there is nothing to
-    # exchange and nothing to release.
+    # exchange and nothing to release. 303 (ExpressNumber) passes the same way;
+    # a keyless 201/202 does not (see the keyless-continue test below).
     seen: list[tuple[str, str, str]] = []
-    client = _client(_sequence_handler({"5101": "300:"}, seen))
+    client = _client(_sequence_handler({"5101": f"{code}:"}, seen))
 
     with client.slot(KorailNetFunnelAction.INQUIRY) as token:
         assert token.key == ""
@@ -1282,30 +1285,35 @@ def test_polling_stops_as_soon_as_the_queue_admits_us():
     assert clock.slept == [2, 2]
 
 
-def test_known_defect_a_keyless_continue_from_the_front_door_is_not_polled():
-    """TODAY'S BEHAVIOUR, WHICH IS WRONG. src plan batch 14 flips this test.
+@pytest.mark.parametrize("code", sorted(CONTINUE_CODES))
+def test_a_keyless_continue_from_the_front_door_is_refused_not_admitted(code):
+    """A 5101 that says "wait" and carries no key cannot be polled.
 
-    acquire() takes "no key" to mean the bypass, so a 5101 answer that says
-    "wait" (201) and carries no key is handed back as if the queue had let us
-    in: no 5002 goes out, nothing sleeps, and the caller holds a 201 token.
-    Inside slot() the caller's work would then run before the release refuses
-    that token. The bypass is a code, not an absent key. Batch 14 decides on
-    the code and, in the same commit, turns these assertions into what should
-    happen instead.
+    acquire() used to read "no key" as the bypass and hand this token back as
+    if the queue had let us in: no 5002, no sleep, and inside slot() the
+    caller's work ran before the release refused the token. The bypass is a
+    code (300/303), not an absent key; a wait with nothing to poll with is a
+    queue failure.
     """
     clock = _FakeClock()
     seen: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request.url.params["opcode"])
-        return httpx.Response(200, text="201:nwait=5&ttl=2")
+        return httpx.Response(200, text=f"{code}:nwait=5&ttl=2")
 
     client = _client(handler, sleeper=clock.sleep, clock=clock)
-    token = client.acquire(KorailNetFunnelAction.INQUIRY)
+    with pytest.raises(KorailNetFunnelError, match="no key") as raised:
+        client.acquire(KorailNetFunnelAction.INQUIRY)
+    assert raised.value.code == code
     assert seen == ["5101"]
-    assert token.code == "201"
-    assert token.key == ""
     assert clock.slept == []
+
+    body_ran = False
+    with pytest.raises(KorailNetFunnelError, match="no key"):
+        with client.slot(KorailNetFunnelAction.INQUIRY):
+            body_ran = True
+    assert body_ran is False
 
 
 def test_polling_gives_up_on_the_iteration_cap():
