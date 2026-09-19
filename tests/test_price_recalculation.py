@@ -644,3 +644,29 @@ def test_an_expired_session_on_recalculate_price_clears_the_client_before_raisin
     assert len(seen) == 1
     assert client.session.current is None
     assert not client.http.cookies
+
+
+def test_an_unparseable_recalculation_raises_even_with_a_pnr():
+    # The reserve methods fall back to a PNR-only hold when a live answer will
+    # not parse, because a new hold must never be lost. A recalculation makes
+    # no hold and its caller already has the PNR, so a failure stays a failure
+    # here instead of coming back as a hold with no fare.
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "IRG000000",
+                "h_msg_txt": "ok",
+                "strResult": "SUCC",
+                "h_pnr_no": "SYNTHETIC_PNR",
+                "h_jrny_cnt": "1",
+                "h_tot_prc": {"amount": 60000},
+            },
+        )
+
+    client = _client(handler)
+    try:
+        with pytest.raises(KorailProtocolError):
+            client.recalculate_price(_request(), consent=ALLOWED)
+    finally:
+        client.close()

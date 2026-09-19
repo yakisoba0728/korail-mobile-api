@@ -532,3 +532,34 @@ def test_an_expired_session_on_a_discount_card_mutation_clears_the_client(send):
     assert len(seen) == 1
     assert client.session.current is None
     assert not client.http.cookies
+
+
+@pytest.mark.parametrize(
+    "send",
+    [
+        lambda client, consent: client.register_discount_card(
+            _purchase(), consent=consent
+        ),
+        lambda client, consent: client.extend_discount_card(
+            _ticket(), consent=consent
+        ),
+    ],
+    ids=["register_discount_card", "extend_discount_card"],
+)
+def test_a_refused_discount_card_mutation_raises(send):
+    # Unlike a card payment, whose decline is an answer to read, a refused
+    # purchase or extension is an error: raise_on_fail stays on.
+    from korail_mobile_api.errors import KorailAppError
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"strResult": "FAIL", "h_msg_cd": "WRD000001", "h_msg_txt": "no"},
+        )
+
+    client = _client(handler)
+    try:
+        with pytest.raises(KorailAppError, match="WRD000001"):
+            send(client, MutationConsent(allow_discount_card=True, dry_run=False))
+    finally:
+        client.close()

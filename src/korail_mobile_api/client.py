@@ -1963,25 +1963,16 @@ class KorailClient:
         self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"
         form = build_card_payment_form(self.config, hold, card)
-        if consent.dry_run:
-            return MutationPreview(
-                category="payment",
-                method="POST",
-                route=route,
-                payload=form,
-            )
-        try:
-            response = self.http.post_mutation_form(
-                route,
-                form,
-                consent=consent,
-                category="payment",
-                raise_on_fail=False,
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
-        return parse_reservation_payment_response(response.raw)
+        # raise_on_fail=False: a declined card is an answer to read, not an
+        # error to raise.
+        return self._mutation(
+            consent,
+            "payment",
+            route,
+            form,
+            parser=parse_reservation_payment_response,
+            raise_on_fail=False,
+        )
 
     def pay_with_card(
         self,
@@ -2029,25 +2020,16 @@ class KorailClient:
         self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"
         form = build_card_payment_form(self.config, hold, card)
-        if consent.dry_run:
-            return MutationPreview(
-                category="payment",
-                method="POST",
-                route=route,
-                payload=form,
-            )
-        try:
-            response = self.http.post_mutation_form(
-                route,
-                form,
-                consent=consent,
-                category="payment",
-                raise_on_fail=False,
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
-        return parse_reservation_payment_response(response.raw)
+        # raise_on_fail=False: a declined card is an answer to read, not an
+        # error to raise.
+        return self._mutation(
+            consent,
+            "payment",
+            route,
+            form,
+            parser=parse_reservation_payment_response,
+            raise_on_fail=False,
+        )
 
     def refund(
         self,
@@ -2173,25 +2155,13 @@ class KorailClient:
         self._require_session("discount card purchase requires")
         route = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
         form = build_discount_card_purchase_form(self.config, request)
-        if consent.dry_run:
-            return MutationPreview(
-                category="discount_card",
-                method="POST",
-                route=route,
-                payload=form,
-            )
-        try:
-            return parse_discount_card_purchase_response(
-                self.http.post_mutation_form(
-                    route,
-                    form,
-                    consent=consent,
-                    category="discount_card",
-                ).raw
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
+        return self._mutation(
+            consent,
+            "discount_card",
+            route,
+            form,
+            parser=parse_discount_card_purchase_response,
+        )
 
     def extend_discount_card(
         self,
@@ -2210,23 +2180,7 @@ class KorailClient:
         self._require_session("discount card extension requires")
         route = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
         query = build_discount_card_extension_query(self.config, ticket)
-        if consent.dry_run:
-            return MutationPreview(
-                category="discount_card",
-                method="POST",
-                route=route,
-                payload=query,
-            )
-        try:
-            return self.http.post_mutation_form(
-                route,
-                query,
-                consent=consent,
-                category="discount_card",
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
+        return self._mutation(consent, "discount_card", route, query)
 
     def reserve_with_discount_card(
         self,
@@ -2291,23 +2245,15 @@ class KorailClient:
         self._require_session("price recalculation requires")
         route = "/classes/com.korail.mobile.certification.PriceReCalculation"
         form = build_price_recalculation_form(self.config, request)
-        if consent.dry_run:
-            return MutationPreview(
-                category="price_recalculation",
-                method="POST",
-                route=route,
-                payload=form,
-            )
-        try:
-            response = self.http.post_mutation_form(
-                route,
-                form,
-                consent=consent,
-                category="price_recalculation",
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
-        raw = response.raw if isinstance(response.raw, dict) else {}
-        return parse_reservation_hold_response(raw)
+        # Strict parsing, not the reserve methods' PNR-keeping fallback: a
+        # recalculation creates no hold, and the caller already has the PNR it
+        # asked about. A fallback here would only hide a parse failure on a
+        # path that has never been sent live.
+        return self._mutation(
+            consent,
+            "price_recalculation",
+            route,
+            form,
+            parser=parse_reservation_hold_response,
+        )
 
