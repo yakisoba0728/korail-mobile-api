@@ -399,8 +399,12 @@ class V7Gateway:
         if include_common:
             if contract.interface != "NetworkApi" or is_body:
                 raise KorailProtocolError("common fields only apply to main form/query contracts")
-            for key, value in self.http.common_fields().items():
-                data.setdefault(key, value)
+            # Every CommonIn subclass serializes CommonIn first
+            # (VerifyOnlineRefundsIn.java:123-124; PushUpdateIn.java's
+            # write$Self calls CommonIn.write$Self first), so Device/Version/
+            # Key must lead the wire form, not trail the caller's fields.
+            common = {k: v for k, v in self.http.common_fields().items() if k not in data}
+            data = {**common, **data}
         if any(not isinstance(key, str) or not _NAME.fullmatch(key) for key in data):
             raise KorailProtocolError("invalid wire field name")
         if not set(header_map) <= contract.headers:

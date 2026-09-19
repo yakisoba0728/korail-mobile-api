@@ -239,3 +239,37 @@ def test_station_refund_verification_form_is_the_five_dto_fields_in_order():
         ("retNo3", "33"),
         ("retNo4", "44"),
     ]
+
+
+def test_v7_call_with_common_fields_puts_device_version_key_first():
+    # Every CommonIn subclass serializes CommonIn first (VerifyOnlineRefundsIn
+    # .java:123-124), so the wire form must carry Device/Version/Key ahead of
+    # the DTO's own fields, not after them.
+    from korail_mobile_api.config import KorailConfig
+    from korail_mobile_api.http import KorailHttpClient
+    from korail_mobile_api.read_payloads import build_station_refund_verification_form
+    from korail_mobile_api.v7 import V7Gateway
+
+    captured: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(200, json={"strResult": "SUCC"})
+
+    http = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(respond))
+    gw = V7Gateway(http)
+    try:
+        gw.call(
+            "NetworkApi.verifyOnlineRefunds",
+            build_station_refund_verification_form(
+                StationRefundVerificationRequest("synthetic-name", "11", "22", "33", "44")
+            ),
+            include_common=True,
+        )
+    finally:
+        http.close()
+    assert len(captured) == 1
+    body = parse_qsl(captured[0].content.decode())
+    assert [key for key, _ in body] == [
+        "Device", "Version", "Key", "strName", "retNo1", "retNo2", "retNo3", "retNo4",
+    ]
