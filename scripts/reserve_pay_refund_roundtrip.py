@@ -1231,6 +1231,12 @@ def main(argv: list[str] | None = None) -> int:
             )
         charging = not (args.recover or args.reserve_cancel_only)
         _require_opt_ins(real_charge=charging)
+        # Before any branch: --recover sends requests too, and it used to skip
+        # this check and accept an interval of 0.01s.
+        if args.min_interval < 1.0:
+            raise RoundTripAborted(
+                "--min-interval below 1.0s risks a KORAIL IP ban"
+            )
         if args.recover:
             pnr_no = _required_env(
                 RECOVER_PNR_ENV, why="the PNR to recover"
@@ -1252,10 +1258,6 @@ def main(argv: list[str] | None = None) -> int:
             raise RoundTripAborted("--date must be an 8-digit YYYYMMDD date")
         if args.date < time.strftime("%Y%m%d"):
             raise RoundTripAborted(f"--date {args.date} is in the past")
-        if args.min_interval < 1.0:
-            raise RoundTripAborted(
-                "--min-interval below 1.0s risks a KORAIL IP ban"
-            )
         console.banner(
             (
                 "THIS RUN WILL CHARGE A REAL CARD AND THEN REFUND IT."

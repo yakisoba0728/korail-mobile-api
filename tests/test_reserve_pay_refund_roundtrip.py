@@ -594,6 +594,35 @@ def test_recover_does_not_need_a_fare_ceiling(monkeypatch: pytest.MonkeyPatch):
     rt._require_opt_ins(real_charge=False)
 
 
+@pytest.mark.parametrize(
+    "mode",
+    [["--recover"], ["--reserve-cancel-only"], []],
+    ids=["recover", "reserve-cancel-only", "charging"],
+)
+def test_every_mode_refuses_an_interval_below_one_second(
+    mode: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    """The pacing floor holds on every path that sends, --recover included.
+
+    --recover used to branch off before the check and accept 0.01s. Everything
+    that could send is replaced with a failure, so a regression cannot reach
+    the network from here -- it would come back as exit 1, not 2.
+    """
+    _all_opt_ins(monkeypatch)
+    monkeypatch.setenv(MAX_FARE_ENV, "5000")
+    monkeypatch.setenv(rt.RECOVER_PNR_ENV, SYNTHETIC_PNR)
+
+    def _never(*args, **kwargs):  # pragma: no cover - must never run
+        raise AssertionError("reached a sending path with a 0.01s interval")
+
+    for name in ("KorailClient", "build_config_from_env", "recover", "read_card_from_env"):
+        monkeypatch.setattr(rt, name, _never)
+    assert rt.main([*mode, "--min-interval", "0.01"]) == 2
+    assert "--min-interval below 1.0s" in capsys.readouterr().out
+
+
 # --- consents ----------------------------------------------------------------
 
 
