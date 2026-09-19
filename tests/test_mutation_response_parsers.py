@@ -205,24 +205,72 @@ def test_station_refund_verification_request_keeps_return_parts_separate():
         )
 
 
-def test_station_refund_execution_refuses_unverified_or_missing_echo_values():
-    for raw in (
-        {"strResult": "FAIL", "orgtkinfo_list": []},
-        {"strResult": "SUCC", "orgtkinfo_list": None},
+_VERIFIED_TICKET = {
+    "pnr_no": SYNTHETIC_LIVE_PNR,
+    "ogtk_sale_dt": "20990101",
+    "ogtk_sale_wct_no": "SYNTHETIC_WINDOW",
+    "ogtk_sale_sqno": "SYNTHETIC_SEQUENCE",
+    "ogtk_ret_pwd": "SYNTHETIC_RETURN_PASSWORD",
+    "ret_dv_cd": "SYNTHETIC_DIVISION",
+    "ret_rsn_cd": "SYNTHETIC_REASON",
+    "tk_knd_cd": "SYNTHETIC_KIND",
+}
+
+
+def _verification(ticket=_VERIFIED_TICKET, **amounts):
+    return parse_station_refund_verification_response(
         {
             "strResult": "SUCC",
             "ret_amt": "8400",
             "ret_fee": "0",
-            "orgtkinfo_list": [{"pnr_no": SYNTHETIC_LIVE_PNR}],
-        },
+            "orgtkinfo_list": [ticket],
+            **amounts,
+        }
+    )
+
+
+def test_station_refund_execution_refuses_unverified_or_missing_echo_values():
+    for raw in (
+        {"strResult": "FAIL", "orgtkinfo_list": []},
+        {"strResult": "SUCC", "orgtkinfo_list": None},
     ):
         verification = parse_station_refund_verification_response(raw)
-        with pytest.raises(KorailProtocolError):
+        with pytest.raises(KorailProtocolError, match="successful verification"):
             StationRefundExecutionRequest.from_verification(
                 verification,
                 customer_phone="SYNTHETIC_PHONE",
                 customer_name="SYNTHETIC_NAME",
             )
+    # What the verification should have echoed and did not is the server's
+    # answer falling short, so it is a protocol error that names every
+    # missing value -- blank ones included -- not the first one the
+    # constructor trips on.
+    for verification, missing in (
+        (
+            _verification({"pnr_no": SYNTHETIC_LIVE_PNR}),
+            "original_return_password, original_sale_date, original_sale_sequence, "
+            "original_sale_window_no, refund_division_code, refund_reason_code, "
+            "ticket_kind_code",
+        ),
+        (_verification({**_VERIFIED_TICKET, "tk_knd_cd": "  "}), "ticket_kind_code"),
+        (_verification(ret_fee=None), "refund_fee"),
+    ):
+        with pytest.raises(KorailProtocolError, match=f"is missing {missing}$"):
+            StationRefundExecutionRequest.from_verification(
+                verification,
+                customer_phone="SYNTHETIC_PHONE",
+                customer_name="SYNTHETIC_NAME",
+            )
+
+
+@pytest.mark.parametrize("blank", ["customer_phone", "customer_name"])
+def test_station_refund_execution_checks_the_callers_own_values_as_input(blank):
+    # The phone and name come from the caller, not the server, so the
+    # constructor refuses them, as it would any directly built request.
+    values = {"customer_phone": "SYNTHETIC_PHONE", "customer_name": "SYNTHETIC_NAME"}
+    values[blank] = " "
+    with pytest.raises(KorailProtocolError, match=f"execution requires {blank}"):
+        StationRefundExecutionRequest.from_verification(_verification(), **values)
 
 
 def _reservation_history_body() -> dict[str, object]:

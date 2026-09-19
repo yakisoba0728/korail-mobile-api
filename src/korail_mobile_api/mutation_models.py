@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Any
 
 from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
@@ -87,6 +87,19 @@ class StationRefundOriginalTicket:
     raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
+def _require_every_field(
+    request: StationRefundVerificationRequest | StationRefundExecutionRequest,
+    step: str,
+) -> None:
+    """Every field of a station refund request is a required non-blank string."""
+    for field_ in fields(request):
+        value = getattr(request, field_.name)
+        if not isinstance(value, str) or not value.strip():
+            raise KorailProtocolError(
+                f"KORAIL station refund {step} requires {field_.name}"
+            )
+
+
 @dataclass(frozen=True)
 class StationRefundVerificationRequest:
     """``VerifyOnlineRefundsIn`` name and four station-ticket return parts."""
@@ -98,18 +111,7 @@ class StationRefundVerificationRequest:
     return_no_4: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        for name in (
-            "customer_name",
-            "return_no_1",
-            "return_no_2",
-            "return_no_3",
-            "return_no_4",
-        ):
-            value = getattr(self, name)
-            if not isinstance(value, str) or not value.strip():
-                raise KorailProtocolError(
-                    f"KORAIL station refund verification requires {name}"
-                )
+        _require_every_field(self, "verification")
 
 
 @dataclass(frozen=True)
@@ -147,25 +149,7 @@ class StationRefundExecutionRequest:
     customer_name: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        for name in (
-            "pnr_no",
-            "original_sale_date",
-            "original_sale_window_no",
-            "original_sale_sequence",
-            "original_return_password",
-            "refund_division_code",
-            "refund_reason_code",
-            "ticket_kind_code",
-            "customer_phone",
-            "refund_amount",
-            "refund_fee",
-            "customer_name",
-        ):
-            value = getattr(self, name)
-            if not isinstance(value, str) or not value.strip():
-                raise KorailProtocolError(
-                    f"KORAIL station refund execution requires {name}"
-                )
+        _require_every_field(self, "execution")
 
     @classmethod
     def from_verification(
@@ -182,7 +166,7 @@ class StationRefundExecutionRequest:
                 "with an original ticket"
             )
         ticket = verification.original_tickets[0]
-        values = {
+        echoed = {
             "pnr_no": ticket.pnr_no,
             "original_sale_date": ticket.original_sale_date,
             "original_sale_window_no": ticket.original_sale_window_no,
@@ -191,12 +175,25 @@ class StationRefundExecutionRequest:
             "refund_division_code": ticket.refund_division_code,
             "refund_reason_code": ticket.refund_reason_code,
             "ticket_kind_code": ticket.ticket_kind_code,
-            "customer_phone": customer_phone,
             "refund_amount": verification.refund_amount,
             "refund_fee": verification.refund_fee,
-            "customer_name": customer_name,
         }
-        return cls(**values)  # type: ignore[arg-type]
+        # A value the verification should have echoed and did not is the
+        # server's answer falling short. The caller's phone and name are
+        # input, and the constructor checks those.
+        parts: dict[str, str] = {}
+        missing: list[str] = []
+        for name, value in echoed.items():
+            if value and value.strip():
+                parts[name] = value
+            else:
+                missing.append(name)
+        if missing:
+            raise KorailProtocolError(
+                "KORAIL station refund verification is missing "
+                + ", ".join(sorted(missing))
+            )
+        return cls(**parts, customer_phone=customer_phone, customer_name=customer_name)
 
 
 @dataclass(frozen=True)
