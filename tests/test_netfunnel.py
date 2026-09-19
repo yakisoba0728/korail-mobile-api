@@ -1528,7 +1528,9 @@ def test_gated_operations_map_to_the_action_ids_the_apk_pairs_them_with():
         "get_reservation_history": KorailNetFunnelAction.RESERVED,
     }
     # act_4 and act_22 are declared by the app and reached by nothing in it, so
-    # they are exposed as constants but map to no operation here.
+    # they are exposed as constants but map to no operation here. act_8_2 is
+    # reached too, but through inquiry_action() on a peak-season date rather
+    # than through this static table.
     unmapped = KORAIL_NETFUNNEL_ACTION_IDS - {
         action.value for action in KORAIL_NETFUNNEL_GATED_OPERATIONS.values()
     }
