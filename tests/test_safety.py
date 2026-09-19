@@ -246,6 +246,23 @@ def test_both_route_guards_refuse_the_same_things_the_same_way(
         guard(method, "/x")
 
 
+def test_each_route_guard_refuses_every_route_of_the_other_table():
+    """A read route is not a mutation route, and the other way round.
+
+    The two guards share one skeleton and differ in the table they pass it.
+    Handing the mutation guard the read table as well would let the mutation
+    transport send to any read endpoint, and nothing else in the suite would
+    notice: the other guard tests only try an unregistered "/x".
+    """
+    assert not safety.KORAIL_READ_ONLY_ROUTES & safety.KORAIL_MUTATION_ROUTES
+    for method, path in sorted(safety.KORAIL_READ_ONLY_ROUTES):
+        with pytest.raises(KorailProtocolError, match="KORAIL mutation route is not allowed"):
+            safety.assert_mutation_route(method, path)
+    for method, path in sorted(safety.KORAIL_MUTATION_ROUTES):
+        with pytest.raises(KorailProtocolError, match="KORAIL request route is not allowed"):
+            safety.assert_read_only_route(method, path)
+
+
 def test_both_route_guards_call_the_same_things():
     """If the shared skeleton is extracted, it is extracted from both.
 

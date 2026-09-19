@@ -1491,13 +1491,17 @@ def assert_korail_origin(base_url: str) -> None:
         raise KorailProtocolError("KORAIL request origin is not allowed")
 
 
-def assert_read_only_route(method: str, path: str) -> None:
-    """읽기 전용 전송 경로가 갈 수 있는 라우트만 허용합니다.
+def _assert_registered_route(
+    method: str,
+    path: str,
+    routes: frozenset[tuple[str, str]],
+    kind: str,
+) -> None:
+    """The skeleton of both route guards; the table and one word differ.
 
-    ``path`` 는 상대 경로여야 합니다 — scheme·netloc·query·fragment 가 붙으면 거부입니다.
-    ``(method, path)`` 쌍이 :data:`KORAIL_READ_ONLY_ROUTES` 의 정확한 원소가 아니면
-    :class:`KorailProtocolError` 이고, 변경 라우트도 여기 없으므로 읽기 경로로는 상태를
-    바꿀 수 없습니다. 변경 쪽 짝은 :func:`assert_mutation_route` 입니다.
+    Each guard passes its own table, looked up when it is called. The two
+    tables are never merged: a route is a read or a mutation, and the send
+    path that checks it decides which.
     """
     parsed = urlsplit(path)
     if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
@@ -1506,10 +1510,21 @@ def assert_read_only_route(method: str, path: str) -> None:
             f"{parsed.path}"
         )
     route = (method.upper(), parsed.path)
-    if route not in KORAIL_READ_ONLY_ROUTES:
+    if route not in routes:
         raise KorailProtocolError(
-            f"KORAIL request route is not allowed: {route[0]} {route[1]}"
+            f"KORAIL {kind} route is not allowed: {route[0]} {route[1]}"
         )
+
+
+def assert_read_only_route(method: str, path: str) -> None:
+    """읽기 전용 전송 경로가 갈 수 있는 라우트만 허용합니다.
+
+    ``path`` 는 상대 경로여야 합니다 — scheme·netloc·query·fragment 가 붙으면 거부입니다.
+    ``(method, path)`` 쌍이 :data:`KORAIL_READ_ONLY_ROUTES` 의 정확한 원소가 아니면
+    :class:`KorailProtocolError` 이고, 변경 라우트도 여기 없으므로 읽기 경로로는 상태를
+    바꿀 수 없습니다. 변경 쪽 짝은 :func:`assert_mutation_route` 입니다.
+    """
+    _assert_registered_route(method, path, KORAIL_READ_ONLY_ROUTES, "request")
 
 
 def assert_mutation_route(method: str, path: str) -> None:
@@ -1520,17 +1535,7 @@ def assert_mutation_route(method: str, path: str) -> None:
     라우트를 포함해 — 거부됩니다. 변경 전송 경로를 임의 엔드포인트나 읽기 엔드포인트로
     돌려쓸 수 없습니다.
     """
-    parsed = urlsplit(path)
-    if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
-        raise KorailProtocolError(
-            "KORAIL request target is not a registered relative path: "
-            f"{parsed.path}"
-        )
-    route = (method.upper(), parsed.path)
-    if route not in KORAIL_MUTATION_ROUTES:
-        raise KorailProtocolError(
-            f"KORAIL mutation route is not allowed: {route[0]} {route[1]}"
-        )
+    _assert_registered_route(method, path, KORAIL_MUTATION_ROUTES, "mutation")
 
 
 def assert_read_only_request_fields(
