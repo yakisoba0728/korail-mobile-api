@@ -311,3 +311,122 @@ def test_push_web_host_uses_main_http_client_and_cookie_scope() -> None:
     assert main[0].method == "GET"
     assert main[0].url.path == "/classes/com.korail.mobile.push.update"
     assert main[0].headers["cookie"] == "JSESSIONID=test-session"
+
+
+LOTTE_COUNT = "LotteRentalCarNetworkApi.getLotteRentalCarCount"
+
+
+def _partner_client(seen: list[httpx.Request]) -> KorailClient:
+    def refuse_main(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError(f"unexpected main-host request {request.url.path}")
+
+    def partner(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"count": 0})
+
+    return KorailClient(
+        transport=httpx.MockTransport(refuse_main),
+        partner_origins={"LotteRentalCarNetworkApi": "https://partner.example"},
+        partner_transport=httpx.MockTransport(partner),
+    )
+
+
+def test_a_declared_header_reaches_the_partner_request() -> None:
+    # @Header(Authentication) is this contract's only parameter.
+    assert V7_CONTRACTS[LOTTE_COUNT].headers == {"Authentication"}
+    seen: list[httpx.Request] = []
+    client = _partner_client(seen)
+    try:
+        client.v7.call(LOTTE_COUNT, {}, headers={"Authentication": "Bearer synthetic"})
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert seen[0].url.host == "partner.example"
+    assert seen[0].headers["authentication"] == "Bearer synthetic"
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"X-Undeclared": "value"},
+        {"Authentication": "Bearer synthetic", "X-Undeclared": "value"},
+        {"Authentication": "Bearer synthetic\r\nX-Injected: 1"},
+        {"Authentication": "Bearer synthetic\nX-Injected: 1"},
+    ],
+    ids=["undeclared", "declared-plus-undeclared", "crlf", "lf"],
+)
+def test_a_header_the_contract_does_not_declare_or_a_split_value_never_leaves(
+    headers,
+) -> None:
+    # Only @Header names may be sent, and a value cannot smuggle a second
+    # header in with a line break.
+    seen: list[httpx.Request] = []
+    client = _partner_client(seen)
+    try:
+        with pytest.raises(KorailProtocolError, match="header"):
+            client.v7.call(LOTTE_COUNT, {}, headers=headers)
+    finally:
+        client.close()
+    assert seen == []
+
+
+SPAY_ORDER = "NetworkApi.postSpayOrdNo"
+
+
+@pytest.mark.parametrize(
+    ("fake_card_only", "real_card_acknowledged"),
+    [(False, False), (True, True)],
+    ids=["neither", "both"],
+)
+def test_a_card_bearing_v7_mutation_refuses_an_unstated_card_kind(
+    fake_card_only, real_card_acknowledged
+) -> None:
+    # The V7 twin of post_mutation_form's card gate: exactly one card kind, or
+    # nothing is sent -- and not even previewed.
+    calls: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        calls.append(request)
+        return httpx.Response(200, json={"strResult": "SUCC"})
+
+    client = KorailClient(transport=httpx.MockTransport(respond))
+    try:
+        for dry_run in (False, True):
+            consent = V7MutationConsent(
+                allow_methods=frozenset({SPAY_ORDER}),
+                dry_run=dry_run,
+                fake_card_only=fake_card_only,
+                real_card_acknowledged=real_card_acknowledged,
+            )
+            with pytest.raises(
+                KorailMutationNotAllowedError, match="explicit card kind"
+            ):
+                client.v7.call(SPAY_ORDER, {"lumpStlTgtNo": "SYNTHETIC"}, consent=consent)
+    finally:
+        client.close()
+    assert calls == []
+
+
+def test_a_card_bearing_v7_mutation_with_one_card_kind_is_sent() -> None:
+    calls: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(
+            200, json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": ""}
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(respond))
+    try:
+        client.v7.call(
+            SPAY_ORDER,
+            {"lumpStlTgtNo": "SYNTHETIC"},
+            consent=V7MutationConsent(
+                allow_methods=frozenset({SPAY_ORDER}), dry_run=False
+            ),
+        )
+    finally:
+        client.close()
+    assert len(calls) == 1
+    assert calls[0].url.path == V7_CONTRACTS[SPAY_ORDER].route
+    assert parse_qs(calls[0].content.decode()) == {"lumpStlTgtNo": ["SYNTHETIC"]}
