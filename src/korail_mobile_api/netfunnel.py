@@ -37,7 +37,7 @@ SRT 의 WebView ``netfunnel.js`` 와 차이:
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from urllib.parse import urlencode
@@ -69,8 +69,12 @@ from .safety import (
 # ---------------------------------------------------------------------------
 SUCCESS_CODE = "200"
 BYPASS_CODE = "300"
+#: ExpressNumber — 300 처럼 키 없이 통과한다.
+EXPRESS_CODE = "303"
+#: 키 없이 통과할 수 있는 코드. 키 없는 토큰 가운데 이것만 우회이고, 놓을 슬롯도 없다.
+KEYLESS_PASS_CODES = frozenset({BYPASS_CODE, EXPRESS_CODE})
 #: 통과. 200 은 키 발급, 300·303 은 키 없이도 통과할 수 있다.
-SUCCESS_CODES = frozenset({SUCCESS_CODE, BYPASS_CODE, "303"})
+SUCCESS_CODES = frozenset({SUCCESS_CODE, *KEYLESS_PASS_CODES})
 #: 아직 대기 중(``T6/g.java:451``).
 CONTINUE_CODES = frozenset({"201", "202"})
 #: ``TsErrorAComplete`` — setComplete 에서만 받아들임.
@@ -103,7 +107,7 @@ class KorailNetFunnelToken:
     action: str
     key: str
     code: str
-    params: dict[str, str] = field(default_factory=dict)
+    params: dict[str, str] = field(default_factory=dict[str, str])
     node: str = ""
 
     @property
@@ -236,7 +240,7 @@ def parse_netfunnel_body(body: str, *, action: str) -> KorailNetFunnelToken:
 
 def _require_pass_key(token: KorailNetFunnelToken, body: str) -> None:
     """300·303은 키 없이도 성공한다. 슬롯을 가진 200은 키가 필요하다."""
-    if not token.key and token.code not in {BYPASS_CODE, "303"}:
+    if not token.key and token.code not in KEYLESS_PASS_CODES:
         raise KorailNetFunnelError(
             None,
             "KORAIL NetFunnel response did not include a non-empty key",
@@ -392,7 +396,7 @@ class KorailNetFunnelClient:
         (``T6/d.java:70-73`` ``getKey().length() < 1``).
         """
         if not token.key:
-            if token.code in {BYPASS_CODE, "303"}:
+            if token.code in KEYLESS_PASS_CODES:
                 return
             raise KorailNetFunnelError(
                 token.code or None,
@@ -463,7 +467,7 @@ class KorailNetFunnelClient:
                 return replace(token, node=node)
 
     @contextmanager
-    def slot(self, action: str) -> Iterator[KorailNetFunnelToken]:
+    def slot(self, action: str) -> Generator[KorailNetFunnelToken, None, None]:
         """한 작업 동안 슬롯을 쥐었다가 놓습니다.
 
         해제는 양쪽 경로에서 일어남(``BaseDaoHelper.java:105-107`` ``onPostExecute``).

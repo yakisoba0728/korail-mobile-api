@@ -19,7 +19,7 @@ import string
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from urllib.parse import quote_plus
 
 from .constants import (
@@ -163,9 +163,7 @@ class DynapathTokenSettings:
     os_type: str = KORAIL_DYNAPATH_OS_TYPE
     sdk_version: str = KORAIL_DYNAPATH_SDK_VERSION
     table_index: int = DYNAPATH_TABLE_INDEX
-    table: str = field(
-        default_factory=lambda: generate_dynapath_encoding_table(DYNAPATH_TABLE_INDEX)
-    )
+    table: str = DYNAPATH_ENCODING_TABLE
     i8: int = DYNAPATH_DEFAULT_I8
     i9: int = DYNAPATH_DEFAULT_I9
     i10: int = DYNAPATH_DEFAULT_I10

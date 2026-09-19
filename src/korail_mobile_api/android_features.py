@@ -19,7 +19,7 @@ from __future__ import annotations
 import hmac
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from .errors import KorailAuthError, KorailProtocolError
 from .v7 import V7MutationConsent, V7MutationPreview, V7Response
@@ -190,9 +190,14 @@ class AndroidFeatures:
         self.records.write("loginInfoDao", "current", vars(info))
 
     def auto_login(
-        self, current_customer_no: str, *, login_type: str = "MEMBER"
+        self,
+        current_customer_no: str,
+        *,
+        login_type: Literal["MEMBER", "NONE"] = "MEMBER",
     ) -> Any | None:
         """회원 로그인에서만 고객번호를 대조하고 저장 수단 코드로 로그인한다."""
+        # Kept although the annotation says the same: callers are not type
+        # checked, and any other value would skip the customer-number match.
         if login_type not in {"MEMBER", "NONE"}:
             raise KorailProtocolError("unknown Android login type")
         row = self.records.read("loginInfoDao", "current")

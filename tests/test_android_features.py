@@ -125,6 +125,21 @@ def test_auto_login_requires_saved_flag_and_customer_match() -> None:
     assert client.logins[-1] == ("member", "secret", "P")
 
 
+@pytest.mark.parametrize("login_type", ["member", "", "SOCIAL"])
+def test_auto_login_refuses_an_unknown_login_type_before_logging_in(login_type) -> None:
+    # Only "MEMBER" runs the customer-number match. Any other value that got
+    # past the guard would log in without it, so the guard stays although the
+    # parameter is annotated Literal["MEMBER", "NONE"].
+    records, client = Records(), Client()
+    features = AndroidFeatures(client, records=records, cipher=Cipher())
+    features.save_auto_login(
+        "member", "secret", "customer", input_flag="P", auto=True, save_id=True
+    )
+    with pytest.raises(KorailProtocolError, match="unknown Android login type"):
+        features.auto_login("other", login_type=login_type)
+    assert client.logins == []
+
+
 @pytest.mark.parametrize(
     ("auto", "save_id", "expected_id", "expected_password"),
     [
