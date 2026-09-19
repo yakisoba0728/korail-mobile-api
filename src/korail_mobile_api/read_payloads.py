@@ -24,7 +24,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Literal
 
 from .config import KorailConfig
-from .payloads import _is_ascii_digits, build_cache_query
+from .payloads import _device_version, _is_ascii_digits, build_cache_query
 from .read_models import (
     CommuterInfoResponse,
     CommuterPassengerOption,
@@ -38,11 +38,6 @@ from .read_models import (
 
 if TYPE_CHECKING:
     from .mutation_models import StationRefundVerificationRequest
-
-
-def _device_version(config: KorailConfig) -> dict[str, str]:
-    """The ``Device`` and ``Version`` pair every read form here starts with."""
-    return {"Device": config.device, "Version": config.version}
 
 
 def _positive_int(value: int, name: str) -> str:
@@ -63,11 +58,7 @@ def _required_text(value: str | None, name: str) -> str:
 
 
 def _ascii_date(value: str, name: str) -> str:
-    if (
-        not isinstance(value, str)
-        or len(value) != 8
-        or any(ch < "0" or ch > "9" for ch in value)
-    ):
+    if not _is_ascii_digits(value, frozenset({8})):
         raise ValueError(f"{name} must use ASCII YYYYMMDD")
     return value
 
@@ -78,11 +69,7 @@ def _ticket_return_sale_date(value: str) -> str:
     ``ReceiptInfo`` 에는 승차권 상세의 ``h_orgtk_ret_sale_dt`` 를 해석하거나 날짜를
     보충하지 않고 그대로 복사합니다.
     """
-    if (
-        not isinstance(value, str)
-        or len(value) not in (4, 8)
-        or any(ch < "0" or ch > "9" for ch in value)
-    ):
+    if not _is_ascii_digits(value, frozenset({4, 8})):
         raise ValueError("sale_date must be the ASCII ticket return sale date")
     return value
 
