@@ -24,6 +24,7 @@ from datetime import date
 from typing import Literal
 
 from .config import KorailConfig
+from .payloads import build_cache_query
 from .read_models import (
     CommuterInfoResponse,
     CommuterPassengerOption,
@@ -403,16 +404,8 @@ def build_pass_schedule_form(
 def build_service_status_query(
     timestamp_ms: int | None = None,
 ) -> dict[str, str]:
-    if timestamp_ms is not None and (
-        type(timestamp_ms) is not int or timestamp_ms < 0
-    ):
-        raise ValueError(
-            "timestamp_ms must be a non-negative integer or None"
-        )
-    resolved = (
-        int(time.time() * 1000) if timestamp_ms is None else timestamp_ms
-    )
-    return {"timeStamp": str(resolved)}
+    """``MobileService.cache`` 의 ``timeStamp`` 쿼리 — 캐시 파일 요청과 같은 모양입니다."""
+    return build_cache_query(timestamp_ms)
 
 
 def build_cart_list_form(
