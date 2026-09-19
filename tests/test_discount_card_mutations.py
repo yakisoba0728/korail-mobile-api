@@ -116,16 +116,13 @@ def test_discount_card_is_its_own_consent_category():
     assert MutationConsent().allow_discount_card is False
     with pytest.raises(KorailMutationNotAllowedError):
         require_mutation_consent(MutationConsent(), "discount_card")
-    # ...and no other category's opt-in unlocks it.
-    for other in (
-        "allow_reserve",
-        "allow_payment",
-        "allow_cancel",
-        "allow_refund",
-    ):
+    # ...and no other category's opt-in unlocks it. The others are read from
+    # MUTATION_CATEGORIES so a category added later is covered here too.
+    others = [category for category in MUTATION_CATEGORIES if category != "discount_card"]
+    for other in others:
         with pytest.raises(KorailMutationNotAllowedError):
             require_mutation_consent(
-                MutationConsent(**{other: True}),
+                MutationConsent(**{f"allow_{other}": True}),
                 "discount_card",
             )
     require_mutation_consent(
@@ -133,7 +130,7 @@ def test_discount_card_is_its_own_consent_category():
         "discount_card",
     )
     # ...and it unlocks nothing else.
-    for category in ("reserve", "payment", "cancel", "refund", "cart"):
+    for category in others:
         with pytest.raises(KorailMutationNotAllowedError):
             require_mutation_consent(
                 MutationConsent(allow_discount_card=True),

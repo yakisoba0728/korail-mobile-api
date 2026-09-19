@@ -50,20 +50,12 @@ from korail_mobile_api.safety import (
 
 ROUTE = "/classes/com.korail.mobile.certification.PriceReCalculation"
 
-OTHER_CATEGORIES = (
-    "reserve",
-    "payment",
-    "cancel",
-    "refund",
-    "discount_card",
+# Every other category, read from MUTATION_CATEGORIES so one added later is
+# covered by the isolation tests below without editing them.
+OTHER_CATEGORIES = tuple(
+    category for category in MUTATION_CATEGORIES if category != "price_recalculation"
 )
-OTHER_FLAGS = (
-    "allow_reserve",
-    "allow_payment",
-    "allow_cancel",
-    "allow_refund",
-    "allow_discount_card",
-)
+OTHER_FLAGS = tuple(f"allow_{category}" for category in OTHER_CATEGORIES)
 
 ALLOWED = MutationConsent(allow_price_recalculation=True, dry_run=False)
 DRY_RUN = MutationConsent(allow_price_recalculation=True)
@@ -567,13 +559,10 @@ def test_transport_gate_refuses_this_route_under_any_other_category():
                 client.http.post_mutation_form(
                     ROUTE,
                     {},
+                    # Every other category granted, so what refuses is the
+                    # route's own category, not the consent.
                     consent=MutationConsent(
-                        allow_reserve=True,
-                        allow_payment=True,
-                        allow_cancel=True,
-                        allow_refund=True,
-                        allow_discount_card=True,
-                        dry_run=False,
+                        dry_run=False, **{flag: True for flag in OTHER_FLAGS}
                     ),
                     category=category,
                 )
