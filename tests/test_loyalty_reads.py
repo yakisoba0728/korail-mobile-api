@@ -14,6 +14,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import make_authenticated_client as _client
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.errors import KorailAuthError, KorailProtocolError
 from korail_mobile_api.models import KorailSession
@@ -65,20 +66,6 @@ def _envelope(**extra: object) -> dict[str, object]:
         "strResult": "SUCC",
         **extra,
     }
-
-
-def _client(handler) -> KorailClient:
-    client = KorailClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    client.session.current = KorailSession(
-        jsessionid="SYNTHETIC_SESSION",
-        member_no="SYNTHETIC_MEMBER_NO",
-        customer_no="SYNTHETIC_CUSTOMER_NO",
-        raw={},
-    )
-    return client
 
 
 def test_only_the_two_password_free_loyalty_reads_are_reachable():

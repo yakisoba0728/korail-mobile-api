@@ -22,12 +22,13 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from _helpers import make_authenticated_client as _client
+from _helpers import refuse_transport as _refuse
 from korail_mobile_api import (
     KorailClient,
     KorailConfig,
     KorailMutationNotAllowedError,
     KorailProtocolError,
-    KorailSession,
     KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
@@ -71,24 +72,6 @@ def _train() -> TrainSummary:
         arrival_construction_order="2",
         seat_attribute_code="015",
     )
-
-
-def _client(handler) -> KorailClient:
-    client = KorailClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    client.session.current = KorailSession(
-        jsessionid="SYNTHETIC_SESSION",
-        member_no="SYNTHETIC_MEMBER_NO",
-        customer_no="SYNTHETIC_CUSTOMER_NO",
-        raw={},
-    )
-    return client
-
-
-def _refuse(request: httpx.Request) -> httpx.Response:
-    raise AssertionError(f"nothing may be sent: {request.method} {request.url}")
 
 
 def test_only_the_passenger_block_and_the_menu_id_differ():

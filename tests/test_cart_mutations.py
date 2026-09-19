@@ -31,6 +31,8 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import make_authenticated_client as _client
+from _helpers import refuse_transport as _refuse
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.consent import (
     MUTATION_CATEGORIES,
@@ -43,7 +45,7 @@ from korail_mobile_api.errors import (
     KorailMutationNotAllowedError,
     KorailProtocolError,
 )
-from korail_mobile_api.models import BaseKorailResponse, KorailSession
+from korail_mobile_api.models import BaseKorailResponse
 from korail_mobile_api.mutation_models import CartAddRequest
 from korail_mobile_api.mutation_payloads import build_cart_add_form
 from korail_mobile_api.safety import (
@@ -70,24 +72,6 @@ def _request(**overrides: object) -> CartAddRequest:
     fields: dict[str, object] = {"pnr_no": SYNTHETIC_PNR}
     fields.update(overrides)
     return CartAddRequest(**fields)  # type: ignore[arg-type]
-
-
-def _client(handler) -> KorailClient:
-    client = KorailClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    client.session.current = KorailSession(
-        jsessionid="SYNTHETIC_SESSION",
-        member_no="SYNTHETIC_MEMBER_NO",
-        customer_no="SYNTHETIC_CUSTOMER_NO",
-        raw={},
-    )
-    return client
-
-
-def _refuse(request: httpx.Request) -> httpx.Response:
-    raise AssertionError(f"nothing may be sent: {request.method} {request.url}")
 
 
 # --- Consent category -------------------------------------------------------
