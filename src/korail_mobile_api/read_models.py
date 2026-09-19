@@ -31,13 +31,13 @@ class TicketListTicket:
     return_password: str | None = field(default=None, repr=False)
     ticket_status_code: str | None = None
     train_info: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
 class TicketListReservation:
     tickets: tuple[TicketListTicket, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,7 @@ class CartItem:
     lump_sum_target_no: str | None = field(default=None, repr=False)
     customer_no: str | None = field(default=None, repr=False)
     virtual_reservation_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
     @property
     def usage_window(
@@ -90,7 +90,7 @@ class CartListResponse(BaseKorailResponse):
 class DepositBank:
     code: str | None = None
     display_name: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -106,7 +106,7 @@ class DelayDiscountTicket:
     window_no: str | None = field(default=None, repr=False)
     sale_sequence: str | None = field(default=None, repr=False)
     return_password: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -123,7 +123,7 @@ class DiscountCoupon:
     discount_values: tuple[str, ...] = ()
     remarks: tuple[str, ...] = ()
     coupon_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -139,7 +139,7 @@ class DiscountCouponListResponse(BaseKorailResponse):
 class PassOffice:
     code: str | None = None
     display_name: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -159,7 +159,7 @@ class TripMenuContent:
     info: str | None = None
     image: str | None = field(default=None, repr=False)
     url: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -170,7 +170,7 @@ class TripMenuItem:
     button: str | None = None
     contents: tuple[TripMenuContent, ...] = ()
     url: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -186,7 +186,7 @@ class ProductReservation:
     payment_deadline: str | None = None
     payment_status: str | None = None
     virtual_reservation_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -207,7 +207,7 @@ class ProductDetailResponse(BaseKorailResponse):
     usage_period: str | None = None
     included_item_names: tuple[str, ...] = ()
     virtual_reservation_no: str | None = field(default=None, repr=False)
-    detail_raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    detail_raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -220,7 +220,7 @@ class ReceiptPayment:
     approval_no: str | None = field(default=None, repr=False)
     card_no: str | None = field(default=None, repr=False)
     point_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -234,7 +234,7 @@ class ReceiptCashPayment:
     cash_receipt_approval_no: str | None = field(default=None, repr=False)
     cash_receipt_transaction_division_code: str | None = None
     total_approved_amount: int | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -268,7 +268,7 @@ class TicketReceipt:
     #: ``cash_rcet_info`` — 현금영수증 줄들.
     cash_receipts: tuple[ReceiptCashPayment, ...] = ()
     member_card_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -293,7 +293,7 @@ class ReservationHistoryTrain:
     seat_count: int | None = None
     standing_count: int | None = None
     pnr_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -363,7 +363,7 @@ class TrainScheduleItem:
     )
     info_text: str | None = field(default=None, repr=False)
     popup_message: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -376,7 +376,7 @@ class PassScheduleTrain:
     schedule_price: str | None = field(default=None, repr=False)
     train_group_code: str | None = field(default=None, repr=False)
     train_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -385,7 +385,7 @@ class PassAgeOption:
     display_name: str | None = None
     minimum_age: str | None = None
     maximum_age: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -394,7 +394,7 @@ class PassScheduleInfo:
         default=(),
         repr=False,
     )
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -412,7 +412,7 @@ class PassScheduleMainInfo:
     next_page_flag: str | None = None
     change_train_division_code: str | None = None
     page_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -428,14 +428,14 @@ class IntermediateStation:
     code: str | None = field(default=None, repr=False)
     name: str | None = field(default=None, repr=False)
     run_order: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
 class PassPeriodOption:
     commuter_period_code: str | None = None
     display_name: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -452,7 +452,7 @@ class PassMenuData:
     station_selection: str | None = None
     age_options: tuple[PassAgeOption, ...] = ()
     period_options: tuple[PassPeriodOption, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -460,7 +460,7 @@ class PassPassengerInfo:
     h_cls_prnb: int | None = None
     h_dcnt_knd_cd: str | None = None
     h_st_prnb: int | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -469,14 +469,14 @@ class PassPassengerInfos:
     h_max_cnt: str | None = None
     h_min_cnt: str | None = None
     psg_info: tuple[PassPassengerInfo, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
 class PassGoodsInfo:
     h_cnd_flg_disc_no: str | None = field(default=None, repr=False)
     psg_infos: PassPassengerInfos | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -501,7 +501,7 @@ class PassMenuItem:
     goods_data: PassGoodsInfo | None = None
     pass_data: PassMenuData | None = None
     url: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -522,7 +522,7 @@ class CommuterKindMenuResponse(BaseKorailResponse):
 class CrewRequestOption:
     message_code: str | None = None
     content: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -562,7 +562,7 @@ class DiscountCardSection:
     #: ``stlbDturDvNm`` — 경유 이름. 앱이 좌석지정 시각표 요청에 그대로
     #: 넘깁니다(``u4/b.java:104``).
     detour_division_name: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -588,7 +588,7 @@ class DiscountCardOnTicket:
     #: (``Y4/C0907b.java:301`` → ``Y4/Q.java:1013-1026``).
     term_extension_possible_flag: str | None = None
     sections: tuple[DiscountCardSection, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -651,7 +651,7 @@ class MileageHistoryEntry:
     saved_point_value: str | None = field(default=None, repr=False)
     #: ``stlAmt`` — 이 줄이 나온 정산 운임.
     settlement_amount: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -708,7 +708,7 @@ class DiscountCardUsage:
     #: ``apdUsrFlg`` — 카드 소유자가 아니라 **두 번째** 등록 사용자가 탔으면
     #: ``"Y"`` 입니다(N카드 2인용).
     additional_user_flag: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -754,7 +754,7 @@ class DiscountCardScheduleTrain:
     route_code: str | None = field(default=None, repr=False)
     #: ``stationStringInfo`` — 앱이 서식을 입혀 그리는 중간 정차역 줄입니다.
     station_string_info: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -785,7 +785,7 @@ class MultiChildDiscountTarget:
     passenger_type_name: str | None = field(default=None, repr=False)
     room_class_code: str | None = field(default=None, repr=False)
     requested_discount_kind_code: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -828,7 +828,7 @@ class CustomerTripInfo:
     train_connection_flag: str | None = field(default=None, repr=False)
     train_group_code: str | None = field(default=None, repr=False)
     usage_day_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -870,7 +870,7 @@ class MaasServiceDetailInfo:
     total_settlement_amount: str | None = None
     usage_period_content: str | None = None
     entity_one: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -897,7 +897,7 @@ class MaasServiceDetail:
     usage_close_date: str | None = field(default=None, repr=False)
     usage_start_date: str | None = field(default=None, repr=False)
     detail_info: MaasServiceDetailInfo | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -917,14 +917,14 @@ class TripChangeDateResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class TourTrainSeatAdditionalInfo:
     passenger_count: int = field(repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
 class TourTrainSeatInfo:
     seat_attribute_code: str | None = field(default=None, repr=False)
     additional_infos: tuple[TourTrainSeatAdditionalInfo, ...] = field(default=(), repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -947,7 +947,7 @@ class GiftTicket:
     usage_close_date: str | None = field(default=None, repr=False)
     used_point_value: str | None = field(default=None, repr=False)
     usable_flag: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -964,7 +964,7 @@ class CommuterPassengerOption:
     common_code_name: str | None = field(default=None, repr=False)
     passenger_count_from: int = field(default=0, repr=False)
     passenger_count_to: int = field(default=0, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -995,7 +995,7 @@ class PriceFare:
     received_price: str | None = field(default=None, repr=False)
     total_amount: str | None = field(default=None, repr=False)
     train_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1029,7 +1029,7 @@ class PbpAcceptanceSeat:
     room_class_name: str | None = field(default=None, repr=False)
     car_no: int = field(default=0, repr=False)
     seat_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1043,7 +1043,7 @@ class PbpAcceptanceJourney:
     registered_date: str | None = field(default=None, repr=False)
     withdrawal_possible_flag: str | None = field(default=None, repr=False)
     seats: tuple[PbpAcceptanceSeat, ...] = field(default=(), repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1054,7 +1054,7 @@ class PbpAcceptanceTicket:
     sale_window_no: str | None = field(default=None, repr=False)
     return_password: str | None = field(default=None, repr=False)
     journeys: tuple[PbpAcceptanceJourney, ...] = field(default=(), repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1066,7 +1066,7 @@ class PbpAcceptanceSpecificationResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class PlatformNumberJourney:
     platform_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1077,7 +1077,7 @@ class PlatformNumberTicket:
     ticket_return_no: str | None = field(default=None, repr=False)
     return_password: str | None = field(default=None, repr=False)
     journeys: tuple[PlatformNumberJourney, ...] = field(default=(), repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1109,7 +1109,7 @@ class SelfSeatChangeStation:
     departure_run_order: str | None = None
     general_remaining_seats: str | None = None
     special_remaining_seats: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1119,7 +1119,7 @@ class SelfSeatChangeReason:
     query_code: str | None = None
     query_order: str | None = None
     reason_text: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1186,7 +1186,7 @@ class OriginalTicketSeat:
     smoking_seat_attribute_code: str | None = None
     additional_seat_attribute_code: str | None = None
     etc_seat_attribute_code: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1220,7 +1220,7 @@ class OriginalTicketJourney:
     general_change_allowed_flag: str | None = None
     single_ticket_flag: str | None = None
     seats: tuple[OriginalTicketSeat, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1255,7 +1255,7 @@ class OriginalTicket:
     sms_send_flag: str | None = None
     forced_sale_reason_text: str | None = None
     journeys: tuple[OriginalTicketJourney, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1284,7 +1284,7 @@ class RecentDeliveryRecipient:
     acceptance_customer_phone: str | None = field(default=None, repr=False)
     acceptance_customer_phone_2: str | None = field(default=None, repr=False)
     member_card_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1307,7 +1307,7 @@ class ProductRecommendation:
     received_fare: str | None = field(default=None, repr=False)
     received_price: str | None = field(default=None, repr=False)
     received_price_2: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1379,7 +1379,7 @@ class ProductTrain:
         default=(),
         repr=False,
     )
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1427,7 +1427,7 @@ class ReservationSeatDetail:
     seat_price: str | None = None
     seat_fare: str | None = None
     seat_group_name: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1445,7 +1445,7 @@ class ReservationDetailJourney:
     train_no: str | None = field(default=None, repr=False)
     train_class_name: str | None = None
     seats: tuple[ReservationSeatDetail, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1512,7 +1512,7 @@ class RefundTicketSeat:
     passenger_type_code: str | None = field(default=None, repr=False)
     passenger_type_name: str | None = field(default=None, repr=False)
     seat_group_name: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1532,7 +1532,7 @@ class RefundTicketJourney:
     room_class_name: str | None = field(default=None, repr=False)
     platform_no: str | None = field(default=None, repr=False)
     seats: tuple[RefundTicketSeat, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)

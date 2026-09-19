@@ -48,7 +48,7 @@ class KorailSession:
 
     jsessionid: str | None = field(default=None, repr=False)
     member_no: str | None = field(default=None, repr=False)
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     member_card_no: str | None = field(default=None, repr=False)
     customer_no: str | None = field(default=None, repr=False)
 
@@ -69,7 +69,7 @@ class BaseKorailResponse:
     h_msg_cd: str | None = None
     h_msg_txt: str | None = None
     str_result: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
@@ -145,7 +145,7 @@ class MaasMenuItem:
     popup_image: str | None = field(default=None, repr=False)
     menu_type: str | None = None
     url: str | None = field(default=None, repr=False)
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
     @property
     def uses_station_selection(self) -> bool:
@@ -190,7 +190,7 @@ class KorailStation:
     name: str
     longitude: str | None = None
     latitude: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     group: str | None = field(default=None, repr=False)
     major: str | None = field(default=None, repr=False)
     popup_type: int | None = None
@@ -225,7 +225,7 @@ class TrainCalendarDay:
     v_train_operation_flag: str | None = None
     x_train_operation_flag: str | None = None
     raw: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict[str, Any],
         repr=False,
         compare=False,
     )
@@ -267,7 +267,7 @@ class TrainScheduleStop:
     regular_flag: str | None = None
     service_flag: str | None = None
     raw: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict[str, Any],
         repr=False,
         compare=False,
     )
@@ -308,7 +308,7 @@ class TransferStation:
     station_code: str | None = field(default=None, repr=False)
     station_name: str | None = None
     raw: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict[str, Any],
         repr=False,
         compare=False,
     )
@@ -447,7 +447,7 @@ class TrainSummary:
     departure_date: str | None = None
     departure_time: str | None = None
     arrival_time: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     departure_station_name: str | None = None
     arrival_station_name: str | None = None
     run_date: str | None = None
@@ -805,14 +805,13 @@ class TrainSearchMetadata:
     #: ``h_notice_msg`` — 서버가 검색 결과에 붙이는 안내 문구
     #: (``RsvInquiryResponse.java:12``).
     notice_message: str | None = None
-    # 7.0.6 TrainScheduleOut은 세 필드를 모두 선언한다. 이전
-    # RsvInquiryResponse 분석에 근거한 주석을 더 이상 적용하지 않는다.
+    # 7.0.6 TrainScheduleOut 이 셋 다 선언한다(docs/7.0.6-one-to-one-audit.md).
     first_seat_count: str | None = None
     second_seat_count: str | None = None
     first_departure_time: str | None = field(default=None, repr=False)
     merge_reservation_available_flag: str | None = None
     raw: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict[str, Any],
         repr=False,
         compare=False,
     )
@@ -866,7 +865,7 @@ class TrainSearchResult:
 
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:
@@ -1000,7 +999,7 @@ class TransferSearchResult:
     itineraries: list[TransferItinerary]
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:

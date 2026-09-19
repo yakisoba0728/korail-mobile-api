@@ -57,7 +57,7 @@ class CashReceiptApprovalItem:
     sale_date: str | None = None
     sale_window_no: str | None = field(default=None, repr=False)
     sale_sequence: str | None = field(default=None, repr=False)
-    raw: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -84,7 +84,7 @@ class StationRefundOriginalTicket:
     ticket_kind_code: str | None = None
     refund_division_code: str | None = None
     refund_reason_code: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -382,7 +382,7 @@ class ReservationJourney:
     arrival_station_code: str | None = field(default=None, repr=False)
     train_no: str | None = field(default=None, repr=False)
     raw: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict[str, Any],
         repr=False,
         compare=False,
     )
@@ -433,7 +433,7 @@ class ReservationPaymentCoupon:
     management_start_date: str | None = None
     ticket_return_no: str | None = field(default=None, repr=False)
     raw: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict[str, Any],
         repr=False,
         compare=False,
     )

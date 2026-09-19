@@ -333,7 +333,7 @@ class LimousineSchedule:
     train_no: str | None = field(default=None, repr=False)
     train_order_no: str | None = field(default=None, repr=False)
     yms_application_flag: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -358,7 +358,7 @@ class LimousineSeat:
     specification: str | None = field(default=None, repr=False)
     sequence_no: str | None = field(default=None, repr=False)
     visual_message_division_code: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -383,7 +383,7 @@ class LimousineRecommendedProduct:
     received_fare: str | None = field(default=None, repr=False)
     received_price: str | None = field(default=None, repr=False)
     received_price_secondary: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -465,7 +465,7 @@ class LimousineScheduleViewTrain:
     recommended_products: tuple[LimousineRecommendedProduct, ...] = ()
     total_passenger_count: int = 0
     goods_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
