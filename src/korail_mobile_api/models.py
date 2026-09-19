@@ -398,13 +398,6 @@ def _train_scalar(value: Any, key: str) -> str | None:
     )
 
 
-def _train_optional_string(
-    raw: dict[str, Any],
-    key: str,
-) -> str | None:
-    return _train_scalar(raw.get(key), key)
-
-
 def _train_optional_int(
     raw: dict[str, Any],
     key: str,
@@ -594,8 +587,7 @@ class TrainSummary:
             # 상품번호(h_gd_no / txtGdNo)를 붙잡아 둔다. 다른 두 철자 필드와
             # 달리 첫 키가 거짓이어도 먼저 검사한다.
             goods_no=(
-                _train_optional_string(raw, "h_gd_no")
-                or _train_optional_string(raw, "txtGdNo")
+                _train_value(raw, "h_gd_no", None) or _train_value(raw, "txtGdNo", None)
             ),
             raw=raw,
         )
@@ -768,6 +760,26 @@ class TrainSearchContinuation:
             )
 
 
+def _train_search_continuation(
+    metadata: TrainSearchMetadata,
+    *,
+    query_train_no: str,
+    query_train_no2: str = "",
+) -> TrainSearchContinuation | None:
+    """직통·환승 ``next_page`` 가 공유하는 다음 페이지 게이트 겸 커서 생성기."""
+    if metadata.next_page_flag != "Y":
+        return None
+    try:
+        return TrainSearchContinuation(
+            query_station_no=metadata.next_query_station_no or "",
+            query_train_no=query_train_no,
+            page_count=metadata.result_count or "10",
+            query_train_no2=query_train_no2,
+        )
+    except ValueError:
+        return None
+
+
 @dataclass(frozen=True)
 class TrainSearchResult:
     """직통 열차 검색 한 페이지.
@@ -793,16 +805,9 @@ class TrainSearchResult:
         요청하기 때문입니다.
         """
         metadata = self.metadata
-        if metadata.next_page_flag != "Y":
-            return None
-        try:
-            return TrainSearchContinuation(
-                query_station_no=metadata.next_query_station_no or "",
-                query_train_no=metadata.next_train_no or "",
-                page_count=metadata.result_count or "10",
-            )
-        except ValueError:
-            return None
+        return _train_search_continuation(
+            metadata, query_train_no=metadata.next_train_no or ""
+        )
 
 
 @dataclass(frozen=True)
@@ -845,17 +850,13 @@ class TransferItinerary:
         됩니다.
         """
         arrival = self.first.arrival_station_code
-        if arrival is not None and arrival == self.second.departure_station_code:
-            return arrival
-        return None
+        return arrival if arrival == self.second.departure_station_code else None
 
     @property
     def transfer_station_name(self) -> str | None:
         """환승역 이름. 같으면 그 이름, 다르면 ``None`` — 코드 쪽과 같은 규칙입니다."""
         arrival = self.first.arrival_station_name
-        if arrival is not None and arrival == self.second.departure_station_name:
-            return arrival
-        return None
+        return arrival if arrival == self.second.departure_station_name else None
 
 
 def pair_transfer_itineraries(
@@ -930,19 +931,11 @@ class TransferSearchResult:
         같습니다. 하나라도 없으면 직통과 같은 커서를 그대로 씁니다.
         """
         metadata = self.metadata
-        if metadata.next_page_flag != "Y":
-            return None
         preceding = metadata.next_preceding_train_no or ""
         connecting = metadata.next_connecting_train_no or ""
         transfer_cursor = bool(preceding.strip()) and bool(connecting.strip())
-        try:
-            return TrainSearchContinuation(
-                query_station_no=metadata.next_query_station_no or "",
-                query_train_no=(
-                    preceding if transfer_cursor else metadata.next_train_no or ""
-                ),
-                page_count=metadata.result_count or "10",
-                query_train_no2=connecting if transfer_cursor else "",
-            )
-        except ValueError:
-            return None
+        return _train_search_continuation(
+            metadata,
+            query_train_no=preceding if transfer_cursor else metadata.next_train_no or "",
+            query_train_no2=connecting if transfer_cursor else "",
+        )
