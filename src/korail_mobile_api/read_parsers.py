@@ -362,21 +362,9 @@ def _optional_integer(
     key: str,
     context: str,
 ) -> int | None:
-    value = data.get(key)
-    if value is None:
+    if data.get(key) is None:
         return None
-    if type(value) is int:
-        return value
-    if (
-        isinstance(value, str)
-        and value
-        and all("0" <= character <= "9" for character in value)
-    ):
-        return int(value)
-    raise KorailProtocolError(
-        f"KORAIL {context} field {key} must be an integer, "
-        "an ASCII decimal string, or null"
-    )
+    return _required_integer(data, key, context)
 
 
 def _required_integer(
