@@ -52,7 +52,7 @@ from .models import (
     TransferStationListResponse,
     UuidResponse,
 )
-from .read_parsers import _nested_rows, _optional_list
+from .read_parsers import _nested_rows, _nullable_string_fields, _optional_list
 from .read_parsers import _optional_string as _typed_optional_string
 
 
@@ -128,11 +128,9 @@ def _typed_non_negative_integer_value(
 # messages say. Seat inventory accepts a blank required string and stations do
 # not -- a station row without a code or a name is not a station.
 _optional_string = partial(_typed_optional_string, context="cache")
-_station_optional_string = partial(_typed_optional_string, context="station")
 _station_required_string = partial(
     _typed_required_string, context="station", non_empty=True
 )
-_maas_optional_string = partial(_typed_optional_string, context="MAAS menu")
 _inventory_optional_string = partial(_typed_optional_string, context="seat inventory")
 _inventory_required_string = partial(_typed_required_string, context="seat inventory")
 _inventory_integer_value = partial(
@@ -359,6 +357,33 @@ def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
     )
 
 
+# Field maps (attribute -> wire key) for the MAAS menu parser, in the field
+# order parse_maas_menu_list_response has always used.
+_MAAS_ITEM_FIELDS: dict[str, str] = {
+    "active": "active",
+    "additional_service_code": "addSrvDvCd",
+    "app_data": "appData",
+    "icon_off": "iconOff",
+    "icon_on": "iconOn",
+    "info": "info",
+    "login_required": "login",
+    "name": "name",
+    "popup_image": "poppImg",
+    "menu_type": "type",
+    "url": "url",
+}
+
+_MAAS_RESPONSE_FIELDS: dict[str, str] = {
+    "departure_elevator_url": "dElevatorUrl",
+    "departure_navigation_url": "dLeadNaviUrl",
+    "departure_parking_url": "dParkingLotUrl",
+    "arrival_elevator_url": "aElevatorUrl",
+    "arrival_bus_info_url": "aBisInfoUrl",
+    "arrival_parking_url": "aParkingLotUrl",
+    "arrival_baggage_transfer_robot_url": "aBggTrsfRbtUrl",
+}
+
+
 def parse_maas_menu_list_response(
     response: BaseKorailResponse,
 ) -> MaasMenuListResponse:
@@ -383,24 +408,10 @@ def parse_maas_menu_list_response(
             raise KorailProtocolError(
                 "KORAIL MAAS menuList contained a non-object row"
             )
-        raw = dict(row)
         items.append(
             MaasMenuItem(
-                active=_maas_optional_string(row, "active"),
-                additional_service_code=_maas_optional_string(
-                    row,
-                    "addSrvDvCd",
-                ),
-                app_data=_maas_optional_string(row, "appData"),
-                icon_off=_maas_optional_string(row, "iconOff"),
-                icon_on=_maas_optional_string(row, "iconOn"),
-                info=_maas_optional_string(row, "info"),
-                login_required=_maas_optional_string(row, "login"),
-                name=_maas_optional_string(row, "name"),
-                popup_image=_maas_optional_string(row, "poppImg"),
-                menu_type=_maas_optional_string(row, "type"),
-                url=_maas_optional_string(row, "url"),
-                raw=raw,
+                **_nullable_string_fields(row, _MAAS_ITEM_FIELDS, "MAAS menu"),
+                raw=dict(row),
             )
         )
     raw = response.raw
@@ -410,17 +421,21 @@ def parse_maas_menu_list_response(
         str_result=response.str_result,
         raw=raw,
         items=tuple(items),
-        departure_elevator_url=_maas_optional_string(raw, "dElevatorUrl"),
-        departure_navigation_url=_maas_optional_string(raw, "dLeadNaviUrl"),
-        departure_parking_url=_maas_optional_string(raw, "dParkingLotUrl"),
-        arrival_elevator_url=_maas_optional_string(raw, "aElevatorUrl"),
-        arrival_bus_info_url=_maas_optional_string(raw, "aBisInfoUrl"),
-        arrival_parking_url=_maas_optional_string(raw, "aParkingLotUrl"),
-        arrival_baggage_transfer_robot_url=_maas_optional_string(
-            raw,
-            "aBggTrsfRbtUrl",
-        ),
+        **_nullable_string_fields(raw, _MAAS_RESPONSE_FIELDS, "MAAS menu"),
     )
+
+
+# Field map (attribute -> wire key) for the station data parser's optional
+# strings, in the field order parse_station_data_response has always used.
+_STATION_OPTIONAL_STRING_FIELDS: dict[str, str] = {
+    "longitude": "longitude",
+    "latitude": "latitude",
+    "group": "group",
+    "major": "major",
+    "popup_message": "popupMessage",
+    "popup_link_title": "popupLinkTitle",
+    "popup_link_url": "popupLinkUrl",
+}
 
 
 def parse_station_data_response(
@@ -447,32 +462,20 @@ def parse_station_data_response(
             raise KorailProtocolError(
                 "KORAIL station data contained a non-object row"
             )
-        raw = dict(row)
         stations.append(
             KorailStation(
                 code=_station_required_string(row, "stn_cd"),
                 name=_station_required_string(row, "stn_nm"),
-                longitude=_station_optional_string(row, "longitude"),
-                latitude=_station_optional_string(row, "latitude"),
-                raw=raw,
-                group=_station_optional_string(row, "group"),
-                major=_station_optional_string(row, "major"),
+                raw=dict(row),
                 popup_type=_typed_optional_int(
                     row,
                     "popupType",
                     context="station",
                 ),
-                popup_message=_station_optional_string(
+                **_nullable_string_fields(
                     row,
-                    "popupMessage",
-                ),
-                popup_link_title=_station_optional_string(
-                    row,
-                    "popupLinkTitle",
-                ),
-                popup_link_url=_station_optional_string(
-                    row,
-                    "popupLinkUrl",
+                    _STATION_OPTIONAL_STRING_FIELDS,
+                    "station",
                 ),
             )
         )
