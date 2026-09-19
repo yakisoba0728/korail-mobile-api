@@ -103,6 +103,7 @@ from korail_mobile_api import (
     PriceFareLeg,
     PriceFareQuoteRequest,
     RefundCompanion,
+    RefundTicketDetailResponse,
     ReservationHoldResponse,
     TicketReservationDetailRequest,
     TrainSearchQuery,
@@ -917,26 +918,7 @@ class RoundTrip:
 
     def quote_refund(self, reference: OriginalTicketReference) -> str | None:
         self.console.say("[g] asking what a refund returns and what it costs")
-        detail = self.client.get_refund_ticket_detail(reference)
-        self.console.say(
-            f"    ticket detail: {_envelope(detail)} "
-            f"refund_possible_flag={detail.refund_possible_flag!r}"
-        )
-        commission = self.client.get_refund_commission(
-            reference,
-            RefundCompanion(
-                name=detail.companion_name or "",
-                certificate_no=detail.companion_birth_date or "",
-            ),
-        )
-        self.console.banner(
-            (
-                f"REFUND AMOUNT: {_won_text(commission.refund_amount)} KRW",
-                f"REFUND FEE:    {_won_text(commission.refund_fee)} KRW",
-                f"proceed flag:  {commission.proceed_possible_flag!r}",
-                f"note:          {commission.secondary_message_text!r}",
-            )
-        )
+        detail = _quote_refund(self.client, self.console, reference)
         return detail.pbp_acceptance_target_flag
 
     # -- step h ---------------------------------------------------------------
@@ -1084,6 +1066,38 @@ def _hold_for_cancel(pnr_no: str) -> ReservationHoldResponse:
     )
 
 
+def _quote_refund(
+    client: KorailClient, console: _Console, reference: OriginalTicketReference
+) -> RefundTicketDetailResponse:
+    """Read what a refund of this ticket returns and costs, and show all of it.
+
+    The round trip and the recovery path both refund through this, so the
+    recovery -- the run where something already went wrong -- shows the
+    operator the same four lines, proceed flag and note included.
+    """
+    detail = client.get_refund_ticket_detail(reference)
+    console.say(
+        f"    ticket detail: {_envelope(detail)} "
+        f"refund_possible_flag={detail.refund_possible_flag!r}"
+    )
+    commission = client.get_refund_commission(
+        reference,
+        RefundCompanion(
+            name=detail.companion_name or "",
+            certificate_no=detail.companion_birth_date or "",
+        ),
+    )
+    console.banner(
+        (
+            f"REFUND AMOUNT: {_won_text(commission.refund_amount)} KRW",
+            f"REFUND FEE:    {_won_text(commission.refund_fee)} KRW",
+            f"proceed flag:  {commission.proceed_possible_flag!r}",
+            f"note:          {commission.secondary_message_text!r}",
+        )
+    )
+    return detail
+
+
 def recover(client: KorailClient, console: _Console, pnr_no: str) -> int:
     console.say(f"[recover] resolving PNR {pnr_no}")
     member_no, password = read_credentials_from_env()
@@ -1097,20 +1111,7 @@ def recover(client: KorailClient, console: _Console, pnr_no: str) -> int:
         reference = find_ticket_identity(history_raw, pnr_no=pnr_no)
     if reference is not None:
         console.say("    the ticket is PAID (it has an original-sale identity)")
-        detail = client.get_refund_ticket_detail(reference)
-        commission = client.get_refund_commission(
-            reference,
-            RefundCompanion(
-                name=detail.companion_name or "",
-                certificate_no=detail.companion_birth_date or "",
-            ),
-        )
-        console.banner(
-            (
-                f"REFUND AMOUNT: {_won_text(commission.refund_amount)} KRW",
-                f"REFUND FEE:    {_won_text(commission.refund_fee)} KRW",
-            )
-        )
+        detail = _quote_refund(client, console, reference)
         train_no = find_train_no(tickets_raw, pnr_no=pnr_no) or find_train_no(
             history_raw, pnr_no=pnr_no
         )

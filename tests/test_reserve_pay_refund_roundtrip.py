@@ -1027,6 +1027,17 @@ def test_find_ticket_identity_accepts_an_identity_nested_under_its_pnr():
 # --- recovery mode -----------------------------------------------------------
 
 
+def _recover_client(recorder: _Recorder, monkeypatch: pytest.MonkeyPatch) -> KorailClient:
+    """A client recover() can log in with, answering through ``recorder``."""
+    client = KorailClient(transport=httpx.MockTransport(recorder))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    monkeypatch.setattr(
+        client, "login", lambda *a, **k: KorailSession(jsessionid="s")
+    )
+    monkeypatch.setattr(rt, "read_credentials_from_env", lambda: ("m", "p"))
+    return client
+
+
 def test_recover_cancels_an_unpaid_hold(monkeypatch: pytest.MonkeyPatch):
     recorder = _Recorder(
         _replies(
@@ -1051,12 +1062,7 @@ def test_recover_cancels_an_unpaid_hold(monkeypatch: pytest.MonkeyPatch):
             }
         )
     )
-    client = KorailClient(transport=httpx.MockTransport(recorder))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    monkeypatch.setattr(
-        client, "login", lambda *a, **k: KorailSession(jsessionid="s")
-    )
-    monkeypatch.setattr(rt, "read_credentials_from_env", lambda: ("m", "p"))
+    client = _recover_client(recorder, monkeypatch)
     assert rt.recover(client, rt._Console(), SYNTHETIC_PNR) == 0
     assert CANCEL in recorder.paths()
     assert REFUND not in recorder.paths()
@@ -1066,12 +1072,7 @@ def test_recover_reports_and_exits_non_zero_for_an_unknown_pnr(
     monkeypatch: pytest.MonkeyPatch,
 ):
     recorder = _Recorder(_replies(**{TICKETS: _ok(pnr_list=[])}))
-    client = KorailClient(transport=httpx.MockTransport(recorder))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    monkeypatch.setattr(
-        client, "login", lambda *a, **k: KorailSession(jsessionid="s")
-    )
-    monkeypatch.setattr(rt, "read_credentials_from_env", lambda: ("m", "p"))
+    client = _recover_client(recorder, monkeypatch)
     assert rt.recover(client, rt._Console(), "NOT_ON_THIS_ACCOUNT") == 1
     # Nothing was cancelled or refunded on a PNR the account does not hold.
     assert CANCEL not in recorder.paths()
@@ -1252,15 +1253,14 @@ def test_recover_refunds_a_paid_ticket_after_printing_its_commission(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ):
     recorder = _Recorder(_replies())
-    client = KorailClient(transport=httpx.MockTransport(recorder))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    monkeypatch.setattr(
-        client, "login", lambda *a, **k: KorailSession(jsessionid="s")
-    )
-    monkeypatch.setattr(rt, "read_credentials_from_env", lambda: ("m", "p"))
+    client = _recover_client(recorder, monkeypatch)
     assert rt.recover(client, rt._Console(), SYNTHETIC_PNR) == 0
     out = capsys.readouterr().out
     assert "REFUND AMOUNT: 8400 KRW" in out
+    # The recovery shows the whole quote, as the round trip does -- the proceed
+    # flag and the server's note included.
+    assert "proceed flag:" in out
+    assert "note:" in out
     assert out.index("REFUND AMOUNT") < out.index("refund: strResult=SUCC")
     assert REFUND in recorder.paths()
     assert CANCEL not in recorder.paths()
