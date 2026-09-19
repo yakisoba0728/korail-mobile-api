@@ -6,13 +6,14 @@
 # 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
 # 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
-"""Offline safety tests for the three live scripts added with 7.0.6.
+"""Offline safety tests for the live scripts that had none.
 
 ``verify_706_new_live.py``, ``retry_unprotected_live.py`` and
-``retry_delivery_roundtrip.py`` talk to the live server, and the last one
-charges a real card. None of them had a test. These hold them to the rules
-``scripts/README.md`` states for every live script, the same way
-``test_reserve_pay_refund_roundtrip.py`` holds its script:
+``retry_delivery_roundtrip.py`` came with 7.0.6; ``capture_live_read_surface.py``
+predates them and can make and cancel a real hold. All four talk to the live
+server, and ``retry_delivery_roundtrip.py`` charges a real card. These hold
+them to the rules ``scripts/README.md`` states for every live script, the same
+way ``test_reserve_pay_refund_roundtrip.py`` holds its script:
 
 * importing does nothing -- only imports, definitions, literal constants and
   the ``__main__`` guard at module level, and no environment read or file open
@@ -37,6 +38,7 @@ from types import SimpleNamespace
 import pytest
 
 from korail_mobile_api import OriginalTicketReference
+from korail_mobile_api.consent import MUTATION_CATEGORIES
 
 
 SCRIPTS = Path(__file__).parents[1] / "scripts"
@@ -51,6 +53,9 @@ OPT_INS = {
         "KORAIL_LIVE_REAL_CHARGE",
     ),
 }
+# Scripts held to the import rules. capture_live_read_surface's opt-ins depend
+# on its arguments (--reserve adds a third), so its main() has its own tests.
+IMPORT_SAFE = (*sorted(OPT_INS), "capture_live_read_surface")
 
 
 def _load(name: str, monkeypatch: pytest.MonkeyPatch, *, as_name: str | None = None):
@@ -66,7 +71,7 @@ def _load(name: str, monkeypatch: pytest.MonkeyPatch, *, as_name: str | None = N
     return module
 
 
-@pytest.mark.parametrize("name", sorted(OPT_INS))
+@pytest.mark.parametrize("name", IMPORT_SAFE)
 def test_module_level_code_is_only_definitions_and_literal_constants(name: str) -> None:
     """Every top-level statement is inert, and every assignment is a literal.
 
@@ -88,7 +93,7 @@ def test_module_level_code_is_only_definitions_and_literal_constants(name: str) 
         assert ast.unparse(node.test) == "__name__ == '__main__'"
 
 
-@pytest.mark.parametrize("name", sorted(OPT_INS))
+@pytest.mark.parametrize("name", IMPORT_SAFE)
 def test_importing_reads_no_environment_variable_and_opens_no_file(
     name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -186,3 +191,75 @@ def test_delivery_round_trip_refunds_with_the_flag_the_server_gave(
         return_password="0000",
     )
     assert trip.quote_refund(reference) == "Y"
+
+
+# --- capture_live_read_surface: one hold, one cancel, nothing else -------------
+
+
+def test_capture_consents_open_exactly_one_category_each(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--reserve makes one hold and cancels it; its consents can do no more.
+
+    Checked against every category rather than the payment and refund pair the
+    helpers assert themselves, so a category added later is covered too.
+    """
+    module = _load("capture_live_read_surface", monkeypatch)
+    for helper, opened in (
+        (module._reserve_consent, "reserve"),
+        (module._cancel_consent, "cancel"),
+    ):
+        consent = helper()
+        assert consent.dry_run is False
+        for category in MUTATION_CATEGORIES:
+            assert getattr(consent, f"allow_{category}") is (category == opened), (
+                helper.__name__,
+                category,
+            )
+        assert consent.fake_card_only is True
+        assert consent.real_card_acknowledged is False
+
+
+@pytest.mark.parametrize(
+    ("switches", "reserve", "refusal"),
+    [
+        ((), False, "KORAIL_MOBILE_API_LIVE=1"),
+        (("KORAIL_MOBILE_API_LIVE",), False, "KORAIL_LIVE_READ_SURFACE=1"),
+        (("KORAIL_LIVE_READ_SURFACE",), False, "KORAIL_MOBILE_API_LIVE=1"),
+        (
+            ("KORAIL_MOBILE_API_LIVE", "KORAIL_LIVE_READ_SURFACE"),
+            True,
+            "KORAIL_LIVE_ALLOW_RESERVE=1",
+        ),
+    ],
+    ids=["none", "live-only", "surface-only", "reserve-without-its-switch"],
+)
+def test_capture_main_refuses_before_building_anything(
+    switches: tuple[str, ...],
+    reserve: bool,
+    refusal: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load("capture_live_read_surface", monkeypatch)
+    for switch in (
+        "KORAIL_MOBILE_API_LIVE",
+        "KORAIL_LIVE_READ_SURFACE",
+        "KORAIL_LIVE_ALLOW_RESERVE",
+    ):
+        monkeypatch.delenv(switch, raising=False)
+    for switch in switches:
+        monkeypatch.setenv(switch, "1")
+
+    def _no_client(*args, **kwargs):  # pragma: no cover - must never run
+        raise AssertionError("built a client despite a missing opt-in")
+
+    monkeypatch.setattr(module, "KorailClient", _no_client)
+    monkeypatch.setattr(module, "build_config_from_env", _no_client)
+    out = tmp_path / "capture"
+    argv = ["--out", str(out), "--date", "20990101"]
+    if reserve:
+        argv.append("--reserve")
+    with pytest.raises(SystemExit, match=refusal):
+        module.main(argv)
+    assert not out.exists()
