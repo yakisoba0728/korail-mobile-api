@@ -30,6 +30,7 @@ sleeper and clock so a bounded wait costs no wall-clock time.
 
 import pathlib
 import re
+from typing import NamedTuple
 
 import httpx
 import pytest
@@ -301,6 +302,36 @@ def test_safety_rejects_extra_and_missing_parameters():
             KORAIL_NETFUNNEL_PATH,
             (("opcode", "5101"), ("sid", KORAIL_NETFUNNEL_SERVICE_ID)),
         )
+
+
+class _NamedPair(NamedTuple):
+    name: str
+    value: str
+
+
+@pytest.mark.parametrize(
+    "key_pair",
+    [
+        ["key", REAL_LENGTH_KEY],
+        ("key",),
+        ("key", REAL_LENGTH_KEY, "x"),
+        (1, REAL_LENGTH_KEY),
+        ("key", 1),
+        _NamedPair("key", REAL_LENGTH_KEY),
+    ],
+    ids=["list", "one-item", "three-items", "int-name", "int-value", "tuple-subclass"],
+)
+def test_safety_refuses_anything_but_exact_string_pairs(key_pair):
+    # Pinned before the pair check was shared with the read-side guard: the
+    # message, and that this side -- unlike that one -- requires a str VALUE
+    # and refuses a tuple subclass.
+    with pytest.raises(KorailProtocolError, match="must be ordered string pairs"):
+        assert_netfunnel_request(
+            "GET", KORAIL_NETFUNNEL_PATH, (("opcode", "5002"), key_pair)
+        )
+    assert_netfunnel_request(
+        "GET", KORAIL_NETFUNNEL_PATH, (("opcode", "5002"), ("key", REAL_LENGTH_KEY))
+    )
 
 
 def test_safety_rejects_a_foreign_route_or_method():

@@ -665,6 +665,42 @@ def test_schedule_view_refuses_a_key_and_misnumbered_connections():
         assert_read_only_request_fields(SCHEDULE_VIEW, {**filtered, "chtnCnt": "3"})
 
 
+# --- ordered pairs --------------------------------------------------------------
+# Pinned before this check was shared with assert_netfunnel_request. The read
+# side checks the NAME here and leaves the value to the scalar check after the
+# contract, which allows an int -- the NetFunnel side does not.
+
+DELIVERY_HISTORY = "/classes/com.korail.mobile.tk.rcntDlvHst.do"
+DELIVERY_HISTORY_HEAD = (("Device", "AD"), ("Version", "250601003"), ("Key", "k"))
+
+
+@pytest.mark.parametrize(
+    "last_pair",
+    [
+        ["custMgNo", "C"],
+        ("custMgNo",),
+        ("custMgNo", "C", "x"),
+        (1, "C"),
+    ],
+    ids=["list", "one-item", "three-items", "int-name"],
+)
+def test_ordered_request_fields_must_be_name_value_tuples(last_pair):
+    with pytest.raises(KorailProtocolError, match="must be scalar name/value pairs"):
+        assert_read_only_request_fields(
+            DELIVERY_HISTORY, (*DELIVERY_HISTORY_HEAD, last_pair)
+        )
+
+
+def test_an_ordered_pair_may_carry_an_int_value():
+    assert_read_only_request_fields(
+        DELIVERY_HISTORY, (*DELIVERY_HISTORY_HEAD, ("custMgNo", 1))
+    )
+    with pytest.raises(KorailProtocolError, match="scalar strings or integers"):
+        assert_read_only_request_fields(
+            DELIVERY_HISTORY, (*DELIVERY_HISTORY_HEAD, ("custMgNo", 1.5))
+        )
+
+
 def test_exact_form_field_mapping_remains_a_compatibility_alias():
     assert KORAIL_EXACT_FORM_FIELDS is KORAIL_EXACT_REQUEST_FIELDS
 

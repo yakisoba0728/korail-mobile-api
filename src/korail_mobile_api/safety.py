@@ -600,6 +600,25 @@ def korail_netfunnel_node_url(ip: str, port: str) -> str:
     return f"https://{ip}"
 
 
+def _are_name_value_pairs(
+    pairs: tuple[object, ...],
+    *,
+    value_type: type | None = None,
+) -> bool:
+    """Whether every item is a plain 2-tuple with a str name.
+
+    A tuple subclass does not count. With ``value_type`` the value is checked
+    too; without it, the caller checks values itself.
+    """
+    return all(
+        type(pair) is tuple
+        and len(pair) == 2
+        and isinstance(pair[0], str)
+        and (value_type is None or isinstance(pair[1], value_type))
+        for pair in pairs
+    )
+
+
 def assert_netfunnel_request(
     method: str,
     path: str,
@@ -622,13 +641,7 @@ def assert_netfunnel_request(
             f"KORAIL NetFunnel route is not allowed: {route[0]} {route[1]}"
         )
     pairs = tuple(params)
-    if any(
-        type(pair) is not tuple
-        or len(pair) != 2
-        or not isinstance(pair[0], str)
-        or not isinstance(pair[1], str)
-        for pair in pairs
-    ):
+    if not _are_name_value_pairs(pairs, value_type=str):
         raise KorailProtocolError(
             "KORAIL NetFunnel parameters must be ordered string pairs"
         )
@@ -1544,12 +1557,7 @@ def assert_read_only_request_fields(
         (str, bytes, bytearray),
     ):
         scalar_pairs = tuple(values)
-        if any(
-            type(pair) is not tuple
-            or len(pair) != 2
-            or not isinstance(pair[0], str)
-            for pair in scalar_pairs
-        ):
+        if not _are_name_value_pairs(scalar_pairs):
             raise KorailProtocolError(
                 "KORAIL ordered request fields must be scalar name/value pairs"
             )
