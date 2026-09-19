@@ -537,13 +537,7 @@ def build_ticket_list_form(
     boarding_date_from: str = "",
     boarding_date_to: str = "",
 ) -> dict[str, str]:
-    # txtIndex is a fixed list-mode selector, not a page cursor:
-    # TicketListActivity.java:937-939 sends "1" for the active/current ticket
-    # list and TicketPurchaseHistoryActivity.java:276-278 sends "2" for the
-    # purchase-history list (MyTicketService getTicketList). The page rides
-    # h_page_no (both app call sites pin it to "1"); history mode additionally
-    # carries h_abrd_dt_from/h_abrd_dt_to boarding-date bounds.
-    """``myTicket.MyTicketList`` 의 승차권 목록 조회 폼을 만듭니다.
+    """``myTicket.MyTicketNewList.do`` 의 승차권 목록 조회 폼을 만듭니다.
 
     ``txtIndex``(``mode``)는 페이지 커서가 아니라 **목록 종류**입니다. ``"1"`` 은
     현재 승차권(``TicketListActivity.java:937-939``), ``"2"`` 는 구매이력
@@ -554,7 +548,8 @@ def build_ticket_list_form(
     앱도 그 화면에서 언제나 두 날짜를 갖춰 보냅니다(``:277-280``). ``"1"`` 은 두
     값을 빈 문자열로 보냅니다(``TicketListActivity.java:939-941``).
 
-    페이지는 ``h_page_no`` 로 나가며 1 미만은 1 로 올립니다.
+    페이지는 ``h_page_no`` 로 나가며 1 미만은 1 로 올립니다. 앱의 두 호출 지점은
+    언제나 ``"1"`` 을 보냅니다.
     """
     if mode not in {TICKET_LIST_MODE_ACTIVE, TICKET_LIST_MODE_HISTORY}:
         raise KorailProtocolError(
@@ -562,10 +557,9 @@ def build_ticket_list_form(
         )
     # History mode without the bounds is a form the app never builds: every
     # entry point into TicketPurchaseHistoryActivity (:365, :372, :719) arrives
-    # with both dates formatted, and :277-280 sends them. The comment above has
-    # always said history "carries" them; this makes that true rather than
-    # aspirational. Mode "1" deliberately keeps the empty strings, because
-    # TicketListActivity.java:939-941 transmits them empty.
+    # with both dates formatted, and :277-280 sends them. Mode "1" deliberately
+    # keeps the empty strings, because TicketListActivity.java:939-941 transmits
+    # them empty.
     if mode == TICKET_LIST_MODE_HISTORY and not (
         boarding_date_from.strip() and boarding_date_to.strip()
     ):
@@ -586,7 +580,7 @@ def build_ticket_list_form(
 def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
     """``copt.gdMenuLt.do`` 의 MaaS 메뉴 조회 폼.
 
-    ``Key`` 도 붙지 않습니다.
+    ``Device``·``Version``·``timeStamp`` 만 싣고 ``Key`` 는 붙지 않습니다.
     """
     return {
         "Device": config.device,

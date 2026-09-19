@@ -63,10 +63,10 @@ def _ascii_date(value: str, name: str) -> str:
 
 
 def _ticket_return_sale_date(value: str) -> str:
-    """원표일자는 서버가 4자리 또는 8자리 숫자로 돌려준다.
+    """원표일자는 서버가 4자리 또는 8자리 숫자로 돌려줍니다.
 
-    ReceiptInfo에는 승차권 상세의 ``h_orgtk_ret_sale_dt``를 해석하거나
-    날짜를 보충하지 않고 그대로 복사한다.
+    ``ReceiptInfo`` 에는 승차권 상세의 ``h_orgtk_ret_sale_dt`` 를 해석하거나 날짜를
+    보충하지 않고 그대로 복사합니다.
     """
     if (
         not isinstance(value, str)

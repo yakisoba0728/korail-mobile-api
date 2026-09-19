@@ -17,11 +17,12 @@
 :meth:`~korail_mobile_api.http.KorailHttpClient.post_mutation_form` 하나이고 그
 앞에 consent 와 라우트 가드가 있습니다.
 
-**라이브로 확인된 조합은 좁습니다.** 성인 1명·일반실·직통 즉시예약
-(``txtJobId="1101"``)의 예약 → 취소 왕복만 KORAIL 이 받아들이는 것이
-확인됐습니다. 환승·병합·예약대기·좌석지정 폼과 다인·특실 조합, 할인카드 관련
-폼은 전부 APK 의 요청 빌더를 그대로 옮긴 것이며 전송된 적이 없습니다. 각
-빌더의 docstring 이 그 경계를 따로 적어 둡니다.
+**라이브로 확인된 것과 아닌 것.** 즉시·좌석지정·예약대기·입석+좌석 홀드(다인·특실
+포함), 환승 홀드, 결제 전 취소, 카드 결제, 환불, 장바구니 담기는 실서버가 받아들인
+것을 확인했습니다. 병합예약의 두 번째 홀드(:func:`build_merge_reservation_form`),
+운임 재계산, 할인카드 구매·연장·예약 폼은 전송된 적이 없습니다. 날짜와 응답 코드는
+``docs/MUTATION_HANDOFF.md`` 의 상태표에 있고, 예약대기에서 입석 플래그를 ``"N"`` 으로
+박는 근거는 :func:`_build_journey_reservation_form` 안의 주석에 있습니다.
 """
 from __future__ import annotations
 
@@ -1063,10 +1064,11 @@ def build_single_adult_reservation_form(
     config: KorailConfig,
     train: TrainSummary,
 ) -> dict[str, str]:
-    """성인 1명·일반실 홀드 폼 — 라이브로 확인된 유일한 모양.
+    """성인 1명·일반실 홀드 폼 — 가장 먼저 라이브로 확인된 모양.
 
     :func:`build_reservation_form` 을 두 기본값 그대로 부르는 얇은 함수입니다.
-    이 패키지에서 KORAIL 이 받아들이는 것이 관측된 요청은 이것 하나뿐입니다.
+    실서버가 처음 받아들인 예약 요청이 이 모양이었고, 다른 조합도 그 뒤에
+    확인됐습니다(``docs/MUTATION_HANDOFF.md``).
     """
     return build_reservation_form(config, train)
 
