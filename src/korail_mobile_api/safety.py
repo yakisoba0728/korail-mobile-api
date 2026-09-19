@@ -213,8 +213,9 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
 #
 # All categories have a callable client method and CAN transmit. What bounds
 # them is the gate: post_mutation_form requires a MutationConsent with the
-# matching category, refuses dry_run=True, refuses payment unless
-# fake_card_only is set, and re-checks both assert_mutation_route and
+# matching category, refuses dry_run=True, refuses a card-bearing category
+# (payment) unless the consent states exactly one of fake_card_only=True or
+# real_card_acknowledged=True, and re-checks both assert_mutation_route and
 # assert_mutation_route_category before the POST.
 #
 # Each tuple is (HTTP method, exact relative path).
@@ -715,6 +716,39 @@ _ALTERNATIVE_REQUEST_FIELD_SHAPES: dict[
     ),
 }
 
+#: The 17 fields shared by lms and research TResidualSeatsResearch.do.
+_TRESIDUAL_SEATS_RESEARCH_FIELDS = frozenset(
+    {
+        "Device", "Version", "Key", "trnClsfCd", "trnGpCd", "runDt",
+        "trnNo", "srcarNo", "psrmClCd", "dptRsStnCd", "arvRsStnCd",
+        "seatAttCd", "dptStnRunOrdr", "arvStnRunOrdr", "totPsgCnt",
+        "gdNo", "isArrow",
+    }
+)
+#: The chtnRsStnCd1..32 connection-station block shared by both schedule views.
+_CONNECTION_STATION_FIELDS = frozenset(f"chtnRsStnCd{index}" for index in range(1, 33))
+#: ScheduleViewSpecial's exact field set.
+_SCHEDULE_VIEW_SPECIAL_FIELDS = (
+    frozenset(
+        {
+            "Device", "Version", "Key", "txtMenuId", "radJobId",
+            "selGoTrain", "txtTrnGpCd", "txtGoStart", "txtGoEnd",
+            "txtGoAbrdDt", "txtGoHour", "txtPsgFlg_1", "txtPsgFlg_2",
+            "txtPsgFlg_3", "txtPsgFlg_4", "txtPsgFlg_5",
+            "txtSeatAttCd_2", "txtSeatAttCd_3", "txtSeatAttCd_4",
+            "ebizCrossCheck", "srtCheckYn", "rtYn",
+            "adjStnScdlOfrFlg", "mbCrdNo", "qryDvCd", "qryStNo",
+            "qryStTrnNo", "qryStTrnNo2", "pgPrCnt", "chtnCnt",
+            "trnGpCnt", "trnGpCd1",
+        }
+    )
+    | _CONNECTION_STATION_FIELDS
+)
+#: The optional fields both schedule views share.
+_SCHEDULE_VIEW_OPTIONAL_FIELDS = (
+    frozenset({"mbCrdNo", "chtnCnt", "trnGpCnt", "trnGpCd1"}) | _CONNECTION_STATION_FIELDS
+)
+
 KORAIL_EXACT_REQUEST_FIELDS: dict[str, frozenset[str]] = {
     "/file/CACHE/MobileService.cache": frozenset({"timeStamp"}),
     "/file/CACHE/prdMobilePlusMain.cache": frozenset({"timeStamp", "srtCheckYn"}),
@@ -822,20 +856,7 @@ KORAIL_EXACT_REQUEST_FIELDS: dict[str, frozenset[str]] = {
             "addSrvReqNo",
         }
     ),
-    "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial": frozenset(
-        {
-            "Device", "Version", "Key", "txtMenuId", "radJobId",
-            "selGoTrain", "txtTrnGpCd", "txtGoStart", "txtGoEnd",
-            "txtGoAbrdDt", "txtGoHour", "txtPsgFlg_1", "txtPsgFlg_2",
-            "txtPsgFlg_3", "txtPsgFlg_4", "txtPsgFlg_5",
-            "txtSeatAttCd_2", "txtSeatAttCd_3", "txtSeatAttCd_4",
-            "ebizCrossCheck", "srtCheckYn", "rtYn",
-            "adjStnScdlOfrFlg", "mbCrdNo", "qryDvCd", "qryStNo",
-            "qryStTrnNo", "qryStTrnNo2", "pgPrCnt", "chtnCnt",
-            "trnGpCnt", "trnGpCd1",
-        }
-        | {f"chtnRsStnCd{index}" for index in range(1, 33)}
-    ),
+    "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial": _SCHEDULE_VIEW_SPECIAL_FIELDS,
     "/classes/com.korail.mobile.research.TrainResearch": frozenset(
         {
             "Device",
@@ -860,29 +881,7 @@ KORAIL_EXACT_REQUEST_FIELDS: dict[str, frozenset[str]] = {
         }
     ),
     "/classes/com.korail.mobile.research.TResidualSeatsResearch.do": (
-        frozenset(
-            {
-                "Device",
-                "Version",
-                "Key",
-                "trnClsfCd",
-                "trnGpCd",
-                "runDt",
-                "trnNo",
-                "srcarNo",
-                "psrmClCd",
-                "dptRsStnCd",
-                "arvRsStnCd",
-                "seatAttCd",
-                "dptStnRunOrdr",
-                "arvStnRunOrdr",
-                "totPsgCnt",
-                "gdNo",
-                "isArrow",
-                "Sid",
-                "ctlDvCd",
-            }
-        )
+        _TRESIDUAL_SEATS_RESEARCH_FIELDS | {"Sid", "ctlDvCd"}
     ),
     "/classes/com.korail.mobile.trn.fresScar.do": frozenset(
         {
@@ -953,26 +952,8 @@ KORAIL_EXACT_REQUEST_FIELDS: dict[str, frozenset[str]] = {
             "rsvSaleDvCd",
         }
     ),
-    "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do": frozenset(
-        {
-            "Device",
-            "Version",
-            "Key",
-            "trnClsfCd",
-            "trnGpCd",
-            "runDt",
-            "trnNo",
-            "srcarNo",
-            "psrmClCd",
-            "dptRsStnCd",
-            "arvRsStnCd",
-            "seatAttCd",
-            "dptStnRunOrdr",
-            "arvStnRunOrdr",
-            "totPsgCnt",
-            "gdNo",
-            "isArrow",
-        }
+    "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do": (
+        _TRESIDUAL_SEATS_RESEARCH_FIELDS
     ),
     "/classes/com.korail.mobile.cust.mchdDcntTgt.do": frozenset(
         {"Device", "Version", "Key", "dptDt"}
@@ -1173,19 +1154,8 @@ KORAIL_EXACT_REQUEST_FIELDS: dict[str, frozenset[str]] = {
         }
     ),
     # build_train_search_form: Sid and no Key, unlike ScheduleViewSpecial.
-    "/classes/com.korail.mobile.seatMovie.ScheduleView": frozenset(
-        {
-            "Device", "Version", "Sid", "txtMenuId", "radJobId",
-            "selGoTrain", "txtTrnGpCd", "txtGoStart", "txtGoEnd",
-            "txtGoAbrdDt", "txtGoHour", "txtPsgFlg_1", "txtPsgFlg_2",
-            "txtPsgFlg_3", "txtPsgFlg_4", "txtPsgFlg_5",
-            "txtSeatAttCd_2", "txtSeatAttCd_3", "txtSeatAttCd_4",
-            "ebizCrossCheck", "srtCheckYn", "rtYn",
-            "adjStnScdlOfrFlg", "mbCrdNo", "qryDvCd", "qryStNo",
-            "qryStTrnNo", "qryStTrnNo2", "pgPrCnt", "chtnCnt",
-            "trnGpCnt", "trnGpCd1",
-        }
-        | {f"chtnRsStnCd{index}" for index in range(1, 33)}
+    "/classes/com.korail.mobile.seatMovie.ScheduleView": (
+        (_SCHEDULE_VIEW_SPECIAL_FIELDS - {"Key"}) | {"Sid"}
     ),
     # KorailClient.get_transfer_stations; post_form adds the common three.
     "/classes/com.korail.mobile.qry.chtnStn.do": frozenset(
@@ -1225,13 +1195,9 @@ KORAIL_OPTIONAL_REQUEST_FIELDS: dict[str, frozenset[str]] = {
     "/classes/com.korail.mobile.research.mergeSeatsC.do": frozenset(
         {"selRsStnNm"}
     ),
-    "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial": frozenset(
-        {
-            "mbCrdNo", "qryStNo", "qryStTrnNo", "qryStTrnNo2",
-            "pgPrCnt", "chtnCnt", "trnGpCnt",
-            "trnGpCd1",
-        }
-        | {f"chtnRsStnCd{index}" for index in range(1, 33)}
+    "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial": (
+        _SCHEDULE_VIEW_OPTIONAL_FIELDS
+        | {"qryStNo", "qryStTrnNo", "qryStTrnNo2", "pgPrCnt"}
     ),
     "/classes/com.korail.mobile.research.TResidualSeatsResearch.do": (
         frozenset({"seatAttCd", "gdNo"})
@@ -1241,10 +1207,7 @@ KORAIL_OPTIONAL_REQUEST_FIELDS: dict[str, frozenset[str]] = {
     # build_train_search_form: mbCrdNo only when logged in with a card, and
     # the connection block only on a filtered transfer search. The paging
     # fields are always sent, unlike on ScheduleViewSpecial.
-    "/classes/com.korail.mobile.seatMovie.ScheduleView": frozenset(
-        {"mbCrdNo", "chtnCnt", "trnGpCnt", "trnGpCd1"}
-        | {f"chtnRsStnCd{index}" for index in range(1, 33)}
-    ),
+    "/classes/com.korail.mobile.seatMovie.ScheduleView": _SCHEDULE_VIEW_OPTIONAL_FIELDS,
     # The N-card schedule view's two never-set @Query parameters. NEITHER of
     # the app's two builders (u4/b.java:52-65 and :67-81) ever calls
     # setQryPgNo, so qryPgNo is always null and Retrofit drops it; and the
