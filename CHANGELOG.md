@@ -73,6 +73,10 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
   서블릿이 쿠키 대신 경로에 붙이는 `;jsessionid=...`, 경로 안의 카드번호 모양,
   fragment 의 `key=value` 가 미리보기·예외 메시지에 남을 수 있었습니다. 이제 셋 다
   `redact_text` 를 거칩니다.
+- **UTF-8 로 인코딩할 수 없는 비밀번호가 서버 탓으로 보고됐습니다.** 짝 없는 서로게이트가
+  든 비밀번호는 AES 경로에서 "AES 키/IV 오류"(서버 메타데이터 문제)로, 평문 Base64
+  경로에서는 날것의 `UnicodeEncodeError` 로 나왔습니다. 이제 두 경로 모두 비밀번호를
+  지목하는 `KorailProtocolError` 이고 원인은 `__cause__` 에 남습니다.
 
 - **비회원 예약 `NetworkApi.postNonMemTicket` 이 동의 없이 나갈 수 있었습니다.**
   조회로 분류돼 `V7MutationConsent` 도 dry-run 도 거치지 않았습니다. 응답이 회원 예약과

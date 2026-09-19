@@ -59,19 +59,29 @@ def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
     below retains the previously verified transform pending that evidence.
     키 길이 ∉ {16,24,32} 이면 :class:`~korail_mobile_api.errors.KorailProtocolError`.
     """
+    # Encoded before either branch and outside the cipher's try: a password
+    # that cannot be UTF-8 (a lone surrogate) is the caller's input, and
+    # UnicodeEncodeError is a ValueError that the key/IV handler would
+    # otherwise report as bad server metadata.
+    try:
+        plain = password.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise KorailProtocolError(
+            "KORAIL login password cannot be encoded as UTF-8"
+        ) from exc
     if info.key:
         key = _validate_login_crypto_key(info)
         iv = key[:16]
         try:
             encrypted = _android_base64_default(
-                _aes_cbc_pkcs7_encrypt(password.encode("utf-8"), key, iv)
+                _aes_cbc_pkcs7_encrypt(plain, key, iv)
             )
         except ValueError as exc:
             raise KorailProtocolError(
                 "KORAIL login crypto metadata contained an invalid AES key/IV"
             ) from exc
         return _base64_no_wrap(encrypted.encode("utf-8"))
-    return _base64_no_wrap(password.encode("utf-8"))
+    return _base64_no_wrap(plain)
 
 
 def generate_sid(*, epoch_ms: int | None = None) -> str:

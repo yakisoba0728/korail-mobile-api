@@ -82,16 +82,22 @@ def test_706_empty_key_uses_plain_base64_even_if_flag_is_y():
     assert transform_login_password("pw123", info) == "cHcxMjM="
 
 
-def test_known_defect_an_unencodable_password_is_blamed_on_the_key():
-    """TODAY'S BEHAVIOUR, WHICH IS WRONG. src plan batch 11 flips this test.
+@pytest.mark.parametrize(
+    "key",
+    ["0123456789abcdef", ""],
+    ids=["aes", "plain-base64"],
+)
+def test_an_unencodable_password_is_reported_as_the_password(key: str):
+    """A lone surrogate is the password's fault, not the server's key.
 
-    ``password.encode("utf-8")`` sits inside the same ``try`` as the cipher, and
-    UnicodeEncodeError is a ValueError, so a password holding a lone surrogate
-    is reported as bad server metadata. The key here is a valid 16 bytes; the
-    cause says what really failed. Batch 11 separates the two and, in the same
-    commit, makes this assert a message that names the password.
+    ``password.encode("utf-8")`` used to share a ``try`` with the cipher, and
+    UnicodeEncodeError is a ValueError, so this was reported as "invalid AES
+    key/IV" -- bad server metadata -- with a valid 16-byte key. The plain Base64
+    branch let the raw UnicodeEncodeError out instead. Both now name the
+    password, and keep the encoding error as the cause.
     """
-    info = LoginCryptoInfo(idx="1", key="0123456789abcdef", pwd_aes_cphd="Y")
-    with pytest.raises(KorailProtocolError, match="invalid AES key/IV") as raised:
+    info = LoginCryptoInfo(idx="1" if key else "", key=key, pwd_aes_cphd="Y")
+    with pytest.raises(KorailProtocolError, match="password cannot be encoded") as raised:
         transform_login_password("pw\ud800", info)
+    assert "AES" not in str(raised.value)
     assert isinstance(raised.value.__cause__, UnicodeEncodeError)
