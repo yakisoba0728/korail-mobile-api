@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 
 from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 from .crypto import transform_login_password
@@ -206,9 +207,8 @@ class KorailSessionClient:
         ``strRedirectUrl`` 이 오면
         :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired`.
         """
-        self.clear_session()
-        try:
-            return self._login(
+        return self._run_login(
+            lambda: self._login(
                 member_no,
                 password,
                 input_flag=input_flag,
@@ -216,12 +216,7 @@ class KorailSessionClient:
                 cust_id=cust_id,
                 etr_path=etr_path,
             )
-        except KorailAuthContinuationRequired as exc:
-            self.pending = exc
-            raise
-        except Exception:
-            self.clear_session()
-            raise
+        )
 
     def login_social(
         self,
@@ -243,21 +238,30 @@ class KorailSessionClient:
                 "KORAIL social login requires cust_id, input_flag, and "
                 "an explicit check_valid_pw value"
             )
-        self.clear_session()
-        try:
-            response = self._post_login(
-                {
-                    "txtInputFlg": input_flag,
-                    "custId": cust_id,
-                    "checkValidPw": check_valid_pw,
-                }
-            )
-            return self._finish_login(
-                response,
+        return self._run_login(
+            lambda: self._finish_login(
+                self._post_login(
+                    {
+                        "txtInputFlg": input_flag,
+                        "custId": cust_id,
+                        "checkValidPw": check_valid_pw,
+                    }
+                ),
                 login_id="",
                 input_flag=input_flag,
                 cust_id=cust_id,
             )
+        )
+
+    def _run_login(self, attempt: Callable[[], KorailSession]) -> KorailSession:
+        """Both logins start from no session and end with one or none.
+
+        A WebView continuation is kept in ``pending`` for the caller to
+        resume; any other failure leaves no session behind.
+        """
+        self.clear_session()
+        try:
+            return attempt()
         except KorailAuthContinuationRequired as exc:
             self.pending = exc
             raise

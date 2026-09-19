@@ -707,6 +707,91 @@ def test_continuation_keeps_only_pending_state_and_new_cookie():
     assert "JSESSIONID" not in client.http.cookies
 
 
+def _second_login_client(load_json_fixture, second_login: httpx.Response):
+    """A client whose first login.Login succeeds and whose second answers
+    ``second_login``."""
+    logins = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal logins
+        if request.url.path == SERVICE_CHECK_PATH:
+            return service_check_response()
+        if request.url.path == "/classes/com.korail.mobile.common.code.do":
+            return httpx.Response(
+                200, json=load_json_fixture("common_code_login_crypto_n.json")
+            )
+        if request.url.path == "/classes/com.korail.mobile.login.Login":
+            logins += 1
+            if logins == 1:
+                return httpx.Response(
+                    200,
+                    json=load_json_fixture("login_success.json"),
+                    headers={"Set-Cookie": "JSESSIONID=first-session; Path=/"},
+                )
+            return second_login
+        raise AssertionError(f"unexpected path {request.url.path}")
+
+    return KorailClient(
+        KorailConfig(enable_dynapath=True), transport=httpx.MockTransport(handler)
+    )
+
+
+_LOGINS = {
+    "login": lambda client: client.session.login("member1", "pw123"),
+    "login_social": lambda client: client.session.login_social(
+        "synthetic-cust-id", input_flag="SYNTHETIC_FLAG", check_valid_pw="Y"
+    ),
+}
+
+
+@pytest.mark.parametrize("entry", sorted(_LOGINS))
+def test_a_continuation_after_a_login_leaves_no_old_session_behind(
+    load_json_fixture, entry
+):
+    # The failure cleanup never runs for a continuation, so this is what the
+    # clear BEFORE the attempt is for.
+    client = _second_login_client(
+        load_json_fixture,
+        httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "S201",
+                "h_msg_txt": "additional auth",
+                "strResult": "SUCC",
+                "strRedirectUrl": "/classes/com.korail.mobile.onepass.login.do",
+            },
+            headers={"Set-Cookie": "JSESSIONID=session-cont; Path=/"},
+        ),
+    )
+    _LOGINS[entry](client)
+    assert client.session.current is not None
+    with pytest.raises(KorailAuthContinuationRequired) as raised:
+        _LOGINS[entry](client)
+    assert client.session.current is None
+    assert client.session.pending is raised.value
+    assert client.http.cookies.get("JSESSIONID") == "session-cont"
+
+
+@pytest.mark.parametrize("entry", sorted(_LOGINS))
+def test_a_failed_login_drops_the_cookie_its_own_answer_set(load_json_fixture, entry):
+    # The clear before the attempt cannot reach this: the cookie arrives with
+    # the failure. This is what the clear AFTER a failure is for.
+    client = _second_login_client(
+        load_json_fixture,
+        httpx.Response(
+            200,
+            json={"h_msg_cd": "AUTH_FAIL", "h_msg_txt": "bad", "strResult": "FAIL"},
+            headers={"Set-Cookie": "JSESSIONID=failed-session; Path=/"},
+        ),
+    )
+    _LOGINS[entry](client)
+    with pytest.raises(KorailAuthError):
+        _LOGINS[entry](client)
+    assert client.session.current is None
+    assert client.session.pending is None
+    assert "JSESSIONID" not in client.http.cookies
+
+
 LOGOUT_PATH = "/classes/com.korail.mobile.login.Logout"
 
 
