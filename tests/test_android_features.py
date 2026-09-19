@@ -21,6 +21,7 @@ from korail_mobile_api.android_features import (
     AndroidFeatures,
 )
 from korail_mobile_api.errors import KorailAuthError, KorailProtocolError
+from korail_mobile_api.models import KorailSession
 from korail_mobile_api.v7 import V7MutationConsent, V7MutationPreview
 
 
@@ -300,3 +301,64 @@ def test_local_namespaces_push_and_logout_cleanup() -> None:
     mutable_data = records.read("appMutableData", "current")
     assert mutable_data is not None
     assert mutable_data["hasShownPhoneAuthPopup"] is False
+
+
+def test_login_registers_push_from_a_session_object_too() -> None:
+    # KorailClient.login returns a KorailSession, not a mapping, and the push
+    # registration reads its customer_no attribute for that case. Only the
+    # mapping shape was ever exercised.
+    records, client, push = Records(), Client(), Push()
+    features = AndroidFeatures(client, records=records, cipher=Cipher(), push=push)
+    client.login_result = KorailSession(jsessionid="synthetic", customer_no="customer")
+    assert features.login("member", "secret") is client.login_result
+    assert push.registered_customers == ["customer"]
+    # A session without a customer number registers nothing.
+    client.login_result = KorailSession(jsessionid="synthetic")
+    features.login("member", "secret")
+    assert push.registered_customers == ["customer"]
+
+
+def test_local_records_round_trip_through_the_namespace_gate() -> None:
+    records = Records()
+    features = AndroidFeatures(Client(), records=records, cipher=Cipher())
+    features.write_local("ticketDao", "current", {"ticket": "kept"})
+    assert features.read_local("ticketDao", "current") == {"ticket": "kept"}
+    features.delete_local("ticketDao", "current")
+    assert features.read_local("ticketDao", "current") is None
+    for touch in (
+        lambda: features.read_local("notADao", "current"),
+        lambda: features.write_local("notADao", "current", {"x": "y"}),
+        lambda: features.delete_local("notADao", "current"),
+    ):
+        with pytest.raises(KorailProtocolError, match="unknown Android local namespace"):
+            touch()
+    with pytest.raises(KorailProtocolError, match="key is required"):
+        features.write_local("ticketDao", "", {"ticket": "orphan"})
+    assert records.rows == {}
+
+
+def test_clear_login_state_cleans_up_locally_without_a_server_logout() -> None:
+    # The local half of logout(): the saved-ID policy and the whole cleanup,
+    # and no call to the server.
+    records, client, push, widgets = Records(), Client(), Push(), Widgets()
+    features = AndroidFeatures(
+        client, records=records, cipher=Cipher(), push=push, widgets=widgets
+    )
+    features.write_local("ticketWidgetDao", "current", {"ticket": "encrypted"})
+    features.write_local("userData", "current", {
+        "loginType": "MEMBER", "autoLogin": True,
+        "memberData": {"customer": "secret"}, "intgFlg": "Y",
+    })
+    features.save_auto_login(
+        "member", "secret", "customer", input_flag="P", auto=True, save_id=False
+    )
+    features.clear_login_state()
+    assert client.logouts == 0
+    saved = records.read("loginInfoDao", "current")
+    assert saved is not None
+    assert (saved["enc_id"], saved["enc_password"], saved["auto"]) == ("", "", False)
+    assert records.read("ticketWidgetDao", "current") is None
+    user_data = records.read("userData", "current")
+    assert user_data is not None and user_data["loginType"] == "NONE"
+    assert push.states == [False]
+    assert widgets.redraws == 1
