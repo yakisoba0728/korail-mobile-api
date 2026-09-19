@@ -158,10 +158,10 @@ extraPaths = ["src"]
 pythonVersion = "3.11"  # requires-python 의 하한과 같다
 typeCheckingMode = "basic"
 
-# 전체 strict 는 켜지 않았다: src/ 만 strict 로 돌리면 오류가 468건 남고, 그
-# 대부분은 서버 JSON 을 Any 로 받아 손으로 좁혀 가는 파서·페이로드 코드다
-# (read_parsers.py 156, parsers.py 117, read_models.py 55). 그건 이 단계의
-# 범위가 아니다.
+# 전체 strict 는 켜지 않았다: src/ 만 strict 로 돌리면 오류가 420건 남고(2026-09-19
+# 재측정, 처음 잰 2026-07-28 에는 468건), 그 대부분은 서버 JSON 을 Any 로 받아
+# 손으로 좁혀 가는 파서·페이로드 코드다(read_parsers.py 150, parsers.py 122,
+# mutation_parsers.py 38). 그건 이 단계의 범위가 아니다.
 #
 # 대신 "이미 strict 로 0 인 모듈"만 strict 에 고정한다. 이 목록은 고른 것이 아니라
 # 잰 것이다 — 모듈마다 strict 로 한 번씩 pyright 를 돌려 0 이 나온 것만 남겼고,
@@ -170,9 +170,12 @@ typeCheckingMode = "basic"
 #
 # 공개면(`__all__` 이 이름을 내보내는 곳) 가운데 config.py / consent.py /
 # constants.py / dynapath.py / errors.py 가 여기 들어 있다. client.py(2) ·
-# models.py(13) · netfunnel.py(2) 는 아직 0 이 아니라 빠졌다. client.py 의 2건은
-# 런타임 방어용 isinstance 검사라 strict 를 만족시키려면 그 방어를 없애야 해서
-# 일부러 두었다.
+# models.py(2) 는 아직 0 이 아니라 빠졌다. 네 건 모두 런타임 방어용 isinstance
+# 검사라 strict 를 만족시키려면 그 방어를 없애야 해서 일부러 두었다.
+#
+# 2026-09-19 재측정에서 netfunnel.py · read_models.py · limousine_models.py ·
+# v7_contract_data.py 도 0 이 됐지만 아직 목록에 넣지 않았다. 넣으면 그 모듈의
+# 이후 변경이 strict 를 지켜야 하므로, 넣을지는 따로 정한다.
 strict = [
   "src/korail_mobile_api/__init__.py",
   "src/korail_mobile_api/config.py",
