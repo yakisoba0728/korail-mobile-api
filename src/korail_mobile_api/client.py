@@ -478,7 +478,7 @@ class KorailClient:
             )
 
     # ------------------------------------------------------------------
-    # Internal helpers: the read skeletons (post → parser → _run_read) and the
+    # Internal helpers: the read skeleton (post → parser → _run_read) and the
     # mutation skeleton (_mutation: dry-run branch → send → parse)
     # ------------------------------------------------------------------
 
@@ -504,27 +504,6 @@ class KorailClient:
                     require_envelope=require_envelope,
                     raise_on_fail=raise_on_fail,
                 ).raw
-            )
-        )
-
-    def _get_read(
-        self,
-        route: str,
-        query: dict[str, str] | None = None,
-        *,
-        parser: Callable[..., T],
-        include_dynapath: bool = False,
-        require_envelope: bool = True,
-    ) -> T:
-        """GET 읽기의 공통 골격: GET → 파싱 → 세션만료 복구."""
-        return self._run_read(
-            lambda: parser(
-                self.http.get_json(
-                    route,
-                    query,
-                    include_dynapath=include_dynapath,
-                    require_envelope=require_envelope,
-                )
             )
         )
 
