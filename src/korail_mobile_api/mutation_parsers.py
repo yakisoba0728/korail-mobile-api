@@ -279,6 +279,14 @@ def _received_amount(
         declared = declared.strip()
         if not _DIGITS_RE.fullmatch(declared):
             declared = None
+    declared_int: int | None
+    if declared is None:
+        declared_int = None
+    else:
+        try:
+            declared_int = int(declared)
+        except ValueError:
+            declared_int = None
 
     summed = 0
     seats_seen = 0
@@ -308,12 +316,17 @@ def _received_amount(
                 # One unreadable seat makes the whole sum wrong, so refuse the
                 # whole sum rather than under-charge the settlement.
                 return None
-            summed += int(amount)
+            try:
+                summed += int(amount)
+            except ValueError:
+                # Same refusal as an unreadable seat: a digit string past
+                # Python's int-string conversion limit is unusable, not zero.
+                return None
             seats_seen += 1
     if seats_seen == 0:
         # No seat rows to recompute from; the declared total is all there is.
         # Normalised the same way as the sum, for the same reason as below.
-        return None if declared is None else str(int(declared))
+        return None if declared_int is None else str(declared_int)
     seat_total = str(summed)
     # Compare NUMERICALLY. Both of these arrive zero-padded, to different
     # widths, and the padding is not part of the number: a live 2026-07-27 hold
@@ -323,10 +336,10 @@ def _received_amount(
     # payment builder turns into a refusal to build the form. The synthetic
     # fixtures behind the offline tests were unpadded, so only a real response
     # could show this.
-    if declared is not None and int(declared) != summed:
+    if declared_int is not None and declared_int != summed:
         raise KorailProtocolError(
             "KORAIL reservation settlement amount is ambiguous: the seat rows "
-            f"sum to {summed} but h_tot_rcvd_amt says {int(declared)}. The app "
+            f"sum to {summed} but h_tot_rcvd_amt says {declared_int}. The app "
             "settles the seat sum; refusing rather than guessing which one to "
             "charge."
         )

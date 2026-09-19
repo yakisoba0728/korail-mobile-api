@@ -384,7 +384,13 @@ def _required_integer(
         and value
         and all("0" <= character <= "9" for character in value)
     ):
-        return int(value)
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise KorailProtocolError(
+                f"KORAIL {context} field {key} has an unsupported "
+                "ASCII-decimal length"
+            ) from exc
     raise KorailProtocolError(
         f"KORAIL {context} field {key} must be an integer or an "
         "ASCII decimal string"

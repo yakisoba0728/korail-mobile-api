@@ -540,6 +540,51 @@ def test_reservation_hold_parser_reports_no_received_amount_when_unknowable(
     assert response.received_amount is None
 
 
+def test_reservation_hold_parser_reports_no_received_amount_when_oversized():
+    # A digit string past Python's int-string conversion limit (4300 digits,
+    # sys.int_info.default_max_str_digits) used to leak a bare ValueError out
+    # of int(). Both the total and a per-seat amount are unreadable, so the
+    # parser reports no received amount, the same as any other unreadable one.
+    huge = "9" * 5000
+    no_seats = parse_reservation_hold_response(
+        {
+            "strResult": "SUCC",
+            "h_msg_cd": "IRR000000",
+            "h_msg_txt": "success",
+            "h_tot_prc": "8400",
+            "h_tot_rcvd_amt": huge,
+            "jrny_infos": None,
+        }
+    )
+    assert no_seats.received_amount is None
+
+    one_seat = parse_reservation_hold_response(
+        {
+            "strResult": "SUCC",
+            "h_msg_cd": "IRR000000",
+            "h_msg_txt": "success",
+            "h_tot_prc": "8400",
+            "jrny_infos": {
+                "jrny_info": [
+                    {
+                        "h_jrny_sqno": "0001",
+                        "seat_infos": {
+                            "seat_info": [
+                                {
+                                    "h_seat_prc": "8400",
+                                    "h_seat_fare": "0",
+                                    "h_rcvd_amt": huge,
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+        }
+    )
+    assert one_seat.received_amount is None
+
+
 def test_reservation_payment_parser_accepts_failure_envelope_without_card_data():
     raw = {
         "strResult": "FAIL",

@@ -237,6 +237,16 @@ def test_coupon_apk_counts_kind_and_validity_start_are_typed():
     assert result.raw is raw
 
 
+def test_coupon_response_rejects_an_oversized_ascii_decimal_page_number():
+    # h_page_no goes through _required_integer, whose bare int(value) let a
+    # digit string past Python's int-string conversion limit (4300 digits,
+    # sys.int_info.default_max_str_digits) leak a ValueError instead of the
+    # KorailProtocolError every other malformed field raises.
+    raw = _success(h_page_no="9" * 5000)
+    with pytest.raises(KorailProtocolError, match="h_page_no"):
+        parse_discount_coupon_response(raw)
+
+
 def test_pass_menu_sales_messages_and_schedule_page_info_are_typed():
     menu = parse_pass_menu_response(
         _success(list=[{"saleMsg1": "A", "saleMsg2": "B", "saleMsg3": "C"}])
