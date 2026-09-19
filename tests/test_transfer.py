@@ -1288,3 +1288,39 @@ def test_an_expired_session_on_reserve_transfer_clears_the_client_before_raising
     assert len(seen) == 1
     assert client.session.current is None
     assert not client.http.cookies
+
+
+def test_reserve_transfer_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
+    # The same fallback test_mutation_live_paths.py pins for reserve: the server
+    # made a hold (PNR present) but another field will not parse, and the
+    # caller must still get the PNR back to cancel it. Without a PNR there is
+    # no hold to lose, and the parse error stands.
+    from korail_mobile_api import ReservationHoldResponse
+    from korail_mobile_api.errors import KorailProtocolError
+
+    body: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=body)
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    try:
+        body.update(
+            strResult="SUCC", h_msg_cd="IRR000000", h_msg_txt="ok",
+            h_pnr_no=399999999999999, h_jrny_cnt=2, h_tot_prc={"amount": 1},
+        )
+        hold = client.reserve_transfer(
+                _legs(),
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+        assert isinstance(hold, ReservationHoldResponse)
+        assert (hold.pnr_no, hold.journey_count) == ("399999999999999", "2")
+        del body["h_pnr_no"]
+        with pytest.raises(KorailProtocolError):
+            client.reserve_transfer(
+                _legs(),
+                consent=MutationConsent(allow_reserve=True, dry_run=False),
+            )
+    finally:
+        client.close()

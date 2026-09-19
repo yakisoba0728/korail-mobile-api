@@ -528,7 +528,7 @@ class KorailClient:
         form: dict[str, str] | dict[str, str | list[str]],
         *,
         method: str = ...,
-        parser: Callable[[Mapping[str, Any]], T],
+        parser: Callable[[dict[str, Any]], T],
         raise_on_fail: bool = ...,
     ) -> MutationPreview | T: ...
 
@@ -540,7 +540,7 @@ class KorailClient:
         form: dict[str, str] | dict[str, str | list[str]],
         *,
         method: str = "POST",
-        parser: Callable[[Mapping[str, Any]], T] | None = None,
+        parser: Callable[[dict[str, Any]], T] | None = None,
         raise_on_fail: bool = True,
     ) -> MutationPreview | BaseKorailResponse | T:
         """상태변경 메서드의 공통 골격: dry_run 분기 → 전송 → 파싱 → 세션만료 복구."""
@@ -1735,21 +1735,13 @@ class KorailClient:
             seats=seats,
             seat_attribute_code=seat_attribute_code,
         )
-        if consent.dry_run:
-            return MutationPreview(
-                category="reserve",
-                method="POST",
-                route=route,
-                payload=form,
-            )
-        try:
-            response = self.http.post_mutation_form(
-                route, form, consent=consent, category="reserve"
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
-        return self._hold_from_reservation_response(response)
+        return self._mutation(
+            consent,
+            "reserve",
+            route,
+            form,
+            parser=self._hold_from_reservation_response,
+        )
 
     def confirm_standby_hold(
         self,
@@ -1787,7 +1779,7 @@ class KorailClient:
 
     @staticmethod
     def _hold_from_reservation_response(
-        response: BaseKorailResponse,
+        raw: dict[str, Any],
     ) -> ReservationHoldResponse:
         # A live reserve may create a real hold on the server; we must NEVER
         # lose the identity needed to cancel it. Strict parsing can raise on an
@@ -1795,7 +1787,6 @@ class KorailClient:
         # does we fall back to a minimal hold that still carries the PNR and
         # journey count, letting the caller auto-cancel. We only re-raise when
         # no PNR was returned (no hold to orphan).
-        raw = response.raw if isinstance(response.raw, dict) else {}
         try:
             return parse_reservation_hold_response(raw)
         except KorailProtocolError:
@@ -1864,21 +1855,13 @@ class KorailClient:
             seats=seats,
             seat_attribute_codes=seat_attribute_codes,
         )
-        if consent.dry_run:
-            return MutationPreview(
-                category="reserve",
-                method="POST",
-                route=route,
-                payload=form,
-            )
-        try:
-            response = self.http.post_mutation_form(
-                route, form, consent=consent, category="reserve"
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
-        return self._hold_from_reservation_response(response)
+        return self._mutation(
+            consent,
+            "reserve",
+            route,
+            form,
+            parser=self._hold_from_reservation_response,
+        )
 
     def reserve_merge(
         self,
@@ -1920,21 +1903,13 @@ class KorailClient:
             seat_class=seat_class,
             seat_attribute_code=seat_attribute_code,
         )
-        if consent.dry_run:
-            return MutationPreview(
-                category="reserve",
-                method="POST",
-                route=route,
-                payload=form,
-            )
-        try:
-            response = self.http.post_mutation_form(
-                route, form, consent=consent, category="reserve"
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
-        return self._hold_from_reservation_response(response)
+        return self._mutation(
+            consent,
+            "reserve",
+            route,
+            form,
+            parser=self._hold_from_reservation_response,
+        )
 
     def cancel_unpaid_hold(
         self,
@@ -2279,21 +2254,13 @@ class KorailClient:
             train,
             card_no=card_no,
         )
-        if consent.dry_run:
-            return MutationPreview(
-                category="reserve",
-                method="POST",
-                route=route,
-                payload=form,
-            )
-        try:
-            response = self.http.post_mutation_form(
-                route, form, consent=consent, category="reserve"
-            )
-        except KorailSessionExpiredError:
-            self.clear_session()
-            raise
-        return self._hold_from_reservation_response(response)
+        return self._mutation(
+            consent,
+            "reserve",
+            route,
+            form,
+            parser=self._hold_from_reservation_response,
+        )
 
     def recalculate_price(
         self,
