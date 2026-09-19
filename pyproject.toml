@@ -158,10 +158,10 @@ extraPaths = ["src"]
 pythonVersion = "3.11"  # requires-python 의 하한과 같다
 typeCheckingMode = "basic"
 
-# 전체 strict 는 켜지 않았다: src/ 만 strict 로 돌리면 오류가 420건 남고(2026-09-19
+# 전체 strict 는 켜지 않았다: src/ 만 strict 로 돌리면 오류가 394건 남고(2026-09-19
 # 재측정, 처음 잰 2026-07-28 에는 468건), 그 대부분은 서버 JSON 을 Any 로 받아
-# 손으로 좁혀 가는 파서·페이로드 코드다(read_parsers.py 150, parsers.py 122,
-# mutation_parsers.py 38). 그건 이 단계의 범위가 아니다.
+# 손으로 좁혀 가는 파서 코드다(read_parsers.py 150, parsers.py 122; 나머지는
+# 모듈마다 20건 미만). 그건 이 단계의 범위가 아니다.
 #
 # 대신 "이미 strict 로 0 인 모듈"만 strict 에 고정한다. 이 목록은 고른 것이 아니라
 # 잰 것이다 — 모듈마다 strict 로 한 번씩 pyright 를 돌려 0 이 나온 것만 남겼고,
