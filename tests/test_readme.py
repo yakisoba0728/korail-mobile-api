@@ -35,6 +35,14 @@ CHANGELOG = Path(__file__).parents[1] / "CHANGELOG.md"
 SECURITY = Path(__file__).parents[1] / "SECURITY.md"
 
 
+def _public_client_method_names() -> set[str]:
+    return {
+        name
+        for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
+        if not name.startswith("_")
+    }
+
+
 def _consent_gated_client_methods() -> set[str]:
     return {
         name
@@ -113,13 +121,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     from korail_mobile_api import safety
 
     route_count = len(set(safety.KORAIL_READ_ONLY_ROUTES))
-    public_count = len(
-        [
-            name
-            for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
-            if not name.startswith("_")
-        ]
-    )
+    public_count = len(_public_client_method_names())
     status = STATUS.read_text(encoding="utf-8")
     assert "| 성공 | 33 |" in status
     assert "| 실패 | 14 |" in status
@@ -257,15 +259,7 @@ def test_status_and_progress_documents_match_current_inventory_and_coverage():
     # moved to 74 while the assertion still passed, because an older sentence
     # elsewhere in the same file satisfied the substring. A stale number in
     # prose is now a failure with the real figure in the message.
-    actual_public_methods = len(
-        [
-            name
-            for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
-            if not name.startswith("_")
-        ]
-    )
-    assert actual_public_methods == public_count
-    assert f"{actual_public_methods} public methods" in progress
+    assert f"{public_count} public methods" in progress
     # ...and no sentence may claim the old figure as the CURRENT one. The
     # number survives in a milestone bullet, which is legitimate history, so
     # the check is on tense rather than on the digits: "exposed 72" records the
@@ -445,13 +439,7 @@ def test_docs_document_bounded_live_p0_train_reads_and_closed_requests():
     from korail_mobile_api import safety
 
     route_count = len(set(safety.KORAIL_READ_ONLY_ROUTES))
-    method_count = len(
-        [
-            name
-            for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
-            if not name.startswith("_")
-        ]
-    )
+    method_count = len(_public_client_method_names())
     assert (
         f"라우트 {route_count}개와 공개 메서드 {method_count}개"
         in README.read_text(encoding="utf-8")
@@ -480,16 +468,6 @@ def test_docs_document_bounded_live_p0_train_reads_and_closed_requests():
         "getMergeSeatsInquiry",
     ):
         assert java_name in text
-    from korail_mobile_api import safety
-
-    route_count = len(set(safety.KORAIL_READ_ONLY_ROUTES))
-    method_count = len(
-        [
-            name
-            for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
-            if not name.startswith("_")
-        ]
-    )
     assert f"{route_count} routes and {method_count} public methods" in text
     assert "synthetic fixtures" in text
     assert "does not accept `TrainSummary`" in text
@@ -593,9 +571,9 @@ def test_docs_document_static_only_limousine_read_contracts():
 
 def test_docs_record_fixed_account_reads_and_tour_train_holdback():
     # CHANGELOG.md is not in this loop: it is Korean, and these are the English
-    # spellings of the evidence documents. The three that remain are the ones
-    # that carry the inventory sentence, so the contract still holds in three
-    # places rather than four.
+    # spellings of the evidence documents. The list names three, but HANDOFF
+    # and PROGRESS are the same file (IMPLEMENTATION_PROGRESS.md), so the
+    # contract holds in two documents.
     documents = [
         RECORD.read_text(encoding="utf-8"),
         PROGRESS.read_text(encoding="utf-8"),
@@ -636,8 +614,9 @@ def test_docs_record_fixed_account_reads_and_tour_train_holdback():
 
 def test_docs_record_next_safe_read_bounded_live_evidence_without_secrets():
     # CHANGELOG.md is not in this mapping: it is Korean, and every string below
-    # is an English spelling. Five evidence documents still carry each one, and
-    # the changelog states the same run in Korean.
+    # is an English spelling. The mapping has five keys over four documents --
+    # handoff and progress are one file -- and the changelog states the same
+    # run in Korean.
     documents = {
         "record": RECORD.read_text(encoding="utf-8"),
         "progress": PROGRESS.read_text(encoding="utf-8"),
@@ -982,11 +961,7 @@ def test_the_route_decomposition_is_measured_not_asserted():
     reads = len(routes) - len(auth)
 
     gated = _consent_gated_client_methods()
-    public = {
-        name
-        for name, _ in inspect.getmembers(KorailClient, inspect.isfunction)
-        if not name.startswith("_")
-    }
+    public = _public_client_method_names()
 
     readme = README.read_text(encoding="utf-8")
     normalized = " ".join(readme.split())
@@ -1003,10 +978,8 @@ def test_the_route_decomposition_is_measured_not_asserted():
     # to decide something -- how much of the surface can spend money, how much
     # of it carries the anti-automation token, how many people fit on one PNR --
     # so none of them may be a number somebody typed once.
+    from korail_mobile_api import KORAIL_MAX_PASSENGERS_PER_RESERVATION
     from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
-    from korail_mobile_api.redaction import (
-        KORAIL_MAX_PASSENGERS_PER_RESERVATION,
-    )
 
     assert f"변경 라우트 {len(safety.KORAIL_MUTATION_ROUTES)}개" in normalized
     assert f"{len(DYNAPATH_ALLOWLIST_PATHS)}개 경로" in normalized
