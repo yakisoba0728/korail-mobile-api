@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Iterator, Mapping
 from dataclasses import FrozenInstanceError, fields, is_dataclass, replace
 from pathlib import Path
 from typing import Any, get_type_hints
@@ -20,6 +19,8 @@ import pytest
 
 import korail_mobile_api
 import korail_mobile_api.client as client_module
+from _helpers import DuplicateFieldMapping as _DuplicateFieldMapping
+from _helpers import recording_path_handler
 from korail_mobile_api import (
     KorailClient,
     KorailConfig,
@@ -835,21 +836,6 @@ def test_limousine_safety_rejects_missing_and_extra_fields(
         assert_read_only_request_fields(path, extra)
 
 
-class _DuplicateFieldMapping(Mapping[str, str]):
-    def __init__(self, values: dict[str, str], duplicate: str) -> None:
-        self._values = values
-        self._keys = [*values, duplicate]
-
-    def __getitem__(self, key: str) -> str:
-        return self._values[key]
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._keys)
-
-    def __len__(self) -> int:
-        return len(self._keys)
-
-
 @pytest.mark.parametrize(
     ("path", "request_fields"),
     [
@@ -934,9 +920,7 @@ def test_limousine_methods_post_once_without_session_or_dynapath(
         token_contexts.append(context)
         raise AssertionError("DynaPath must not run")
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        requests.append(request)
-        return httpx.Response(200, json=payloads[request.url.path])
+    handler = recording_path_handler(payloads, requests)
 
     monkeypatch.setattr(client_module, "generate_sid", fake_sid)
     config = KorailConfig(

@@ -33,6 +33,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import secret_ticket_reference as _reference
 from _helpers import synthetic_ok_envelope
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
@@ -86,15 +87,6 @@ NEW_ROUTES = {
     ("POST", SEAT_CHANGE_PATH),
     ("POST", ORIGINAL_TICKET_PATH),
 }
-
-
-def _reference(suffix: str = "1") -> OriginalTicketReference:
-    return OriginalTicketReference(
-        sale_window_no=f"WINDOW_SECRET_{suffix}",
-        sale_date=f"SALE_DATE_SECRET_{suffix}",
-        sale_sequence=f"SALE_SEQUENCE_SECRET_{suffix}",
-        return_password=f"RETURN_PASSWORD_SECRET_{suffix}",
-    )
 
 
 def _seat_change_request(

@@ -20,7 +20,8 @@ import pytest
 import korail_mobile_api
 import korail_mobile_api.read_models as read_models
 import korail_mobile_api.read_payloads as read_payloads
-from _helpers import synthetic_ok_envelope
+from _helpers import recording_path_handler, synthetic_ok_envelope
+from _helpers import secret_ticket_reference as _reference
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -74,15 +75,6 @@ NEW_ROUTES = {
     ("POST", R146_PATH),
     ("POST", R149_PATH),
 }
-
-
-def _reference(suffix: str = "1") -> OriginalTicketReference:
-    return OriginalTicketReference(
-        sale_window_no=f"WINDOW_SECRET_{suffix}",
-        sale_date=f"SALE_DATE_SECRET_{suffix}",
-        sale_sequence=f"SALE_SEQUENCE_SECRET_{suffix}",
-        return_password=f"RETURN_PASSWORD_SECRET_{suffix}",
-    )
 
 
 _success = partial(synthetic_ok_envelope, "SERVER_MESSAGE_SECRET")
@@ -529,9 +521,7 @@ def test_client_uses_one_shot_exact_forms_session_customer_and_no_dynapath():
         provider_calls.append(context)
         raise AssertionError("DynaPath provider must not be invoked")
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        requests.append(request)
-        return httpx.Response(200, json=responses[request.url.path])
+    handler = recording_path_handler(responses, requests)
 
     config = KorailConfig(
         dynapath=DynapathConfig(

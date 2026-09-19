@@ -19,10 +19,14 @@ name never means two different things.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any
+
 import httpx
 
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.models import KorailSession
+from korail_mobile_api.read_payloads import OriginalTicketReference
 
 
 def make_authenticated_client(handler) -> KorailClient:
@@ -84,3 +88,47 @@ def synthetic_ok_envelope(message: str, /, **extra: object) -> dict[str, object]
         "strResult": "SUCC",
         **extra,
     }
+
+
+def secret_ticket_reference(suffix: str = "1") -> OriginalTicketReference:
+    """A ticket reference whose every value says SECRET, for redaction checks."""
+    return OriginalTicketReference(
+        sale_window_no=f"WINDOW_SECRET_{suffix}",
+        sale_date=f"SALE_DATE_SECRET_{suffix}",
+        sale_sequence=f"SALE_SEQUENCE_SECRET_{suffix}",
+        return_password=f"RETURN_PASSWORD_SECRET_{suffix}",
+    )
+
+
+class DuplicateFieldMapping(Mapping[str, str]):
+    """A Mapping that yields one key twice, as no dict can.
+
+    The field checks have to catch it before the form is copied into a dict,
+    which would collapse the duplicate without a word.
+    """
+
+    def __init__(self, values: dict[str, str], duplicate: str) -> None:
+        self._values = values
+        self._keys = [*values, duplicate]
+
+    def __getitem__(self, key: str) -> str:
+        return self._values[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._keys)
+
+    def __len__(self) -> int:
+        return len(self._keys)
+
+
+def recording_path_handler(
+    responses: Mapping[str, Any],
+    requests: list[httpx.Request],
+) -> Callable[[httpx.Request], httpx.Response]:
+    """A transport handler that records each request and answers by its path."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=responses[request.url.path])
+
+    return handler

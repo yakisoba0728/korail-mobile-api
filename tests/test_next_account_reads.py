@@ -18,7 +18,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
-from _helpers import synthetic_ok_envelope
+from _helpers import recording_path_handler, synthetic_ok_envelope
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -308,9 +308,7 @@ def _recording_client(
         provider_calls.append(context)
         raise AssertionError("DynaPath provider must not be invoked")
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        requests.append(request)
-        return httpx.Response(200, json=responses[request.url.path])
+    handler = recording_path_handler(responses, requests)
 
     config = KorailConfig(
         dynapath=DynapathConfig(

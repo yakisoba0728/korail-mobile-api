@@ -13,7 +13,6 @@ import importlib.util
 import inspect
 import json
 import math
-from collections.abc import Iterator, Mapping
 from dataclasses import FrozenInstanceError, fields, is_dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,6 +24,7 @@ import pytest
 
 import korail_mobile_api
 import korail_mobile_api.client as client_module
+from _helpers import DuplicateFieldMapping as _DuplicateFieldMapping
 from korail_mobile_api import (
     KorailClient,
     KorailConfig,
@@ -1207,21 +1207,6 @@ def test_inventory_safety_rejects_missing_and_extra_fields(
     # request WITHOUT it is contract-conformant (RV3-05).
     without_optional = {name: "" for name in fields - {optional}}
     assert_read_only_request_fields(path, without_optional)
-
-
-class _DuplicateFieldMapping(Mapping[str, str]):
-    def __init__(self, values: dict[str, str], duplicate: str) -> None:
-        self._values = values
-        self._keys = [*values, duplicate]
-
-    def __getitem__(self, key: str) -> str:
-        return self._values[key]
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._keys)
-
-    def __len__(self) -> int:
-        return len(self._keys)
 
 
 @pytest.mark.parametrize(("path", "fields"), [(CAR_PATH, CAR_FIELDS), (SEAT_PATH, SEAT_FIELDS)])
