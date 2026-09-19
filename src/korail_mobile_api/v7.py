@@ -72,6 +72,30 @@ _NEVER_SENT = frozenset({
     "NetworkApi.passOtrReserve",
     "NetworkApi.postPassOtrPayIssue",
 })
+# The mutation contracts that settle a payment, so a consent must say which
+# card kind it means: exactly one of fake_card_only / real_card_acknowledged.
+# This was a keyword match on the method and route ("pay", "payment",
+# "autocharge", ".pay.", ".payment."); these are the fourteen it matched. The
+# APK was checked on 2026-09-19 for payment-card fields it could have missed:
+# postShinhanEncrypt's value is the locked amount (PayViewModel
+# .executeSeedEncrypt), postMaasCancel carries settlement ids, and
+# postAcpnMlgSave's *MbCrdNo are membership cards, so none of them is here.
+_CARD_BEARING = frozenset({
+    "NetworkApi.paymentMassStatusIn",
+    "NetworkApi.postIntgStl",
+    "NetworkApi.postKrPassPayment",
+    "NetworkApi.postNaverPayMoneyRsv",
+    "NetworkApi.postNaverPayRsv",
+    "NetworkApi.postPassOtrPayIssue",
+    "NetworkApi.postPassPayIssue",
+    "NetworkApi.postPayco",
+    "NetworkApi.postRailplusAutoCharge",
+    "NetworkApi.postSpayOrdNo",
+    "NetworkApi.postStbkAcnt",
+    "NetworkApi.postStbkRegBank",
+    "NetworkApi.postStlKeyPrs",
+    "NetworkApi.postTossautoC",
+})
 # NetworkApi response models that do not extend CommonOut. Three declare their
 # own strResult defaulting to null or "" rather than CommonOut's FAIL constant
 # (CacheCheckResponse.java:62, AcpnMlgSaveResponse.java:101,
@@ -410,11 +434,7 @@ class V7Gateway:
         if contract.effect == "mutation":
             if not isinstance(consent, V7MutationConsent) or name not in consent.allow_methods:
                 raise KorailMutationNotAllowedError(f"{name} requires method-scoped consent")
-            card_bearing = any(
-                word in contract.method.lower() for word in ("pay", "payment", "autocharge")
-            ) or any(
-                word in contract.route.lower() for word in (".pay.", ".payment.")
-            )
+            card_bearing = name in _CARD_BEARING
             if consent.fake_card_only == consent.real_card_acknowledged and card_bearing:
                 raise KorailMutationNotAllowedError("payment method requires an explicit card kind")
             if consent.dry_run:

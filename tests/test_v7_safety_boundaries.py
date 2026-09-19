@@ -333,3 +333,58 @@ def test_the_gateway_refuses_a_pass_purchase_even_with_a_forged_consent(
             client.v7.call(name, {}, consent=consent)
     finally:
         client.close()
+
+
+# The mutation contracts that settle a payment, and so need a consent that
+# says which card kind it means. Written out here, not imported.
+_CARD_BEARING = (
+    "NetworkApi.paymentMassStatusIn",
+    "NetworkApi.postIntgStl",
+    "NetworkApi.postKrPassPayment",
+    "NetworkApi.postNaverPayMoneyRsv",
+    "NetworkApi.postNaverPayRsv",
+    "NetworkApi.postPayco",
+    "NetworkApi.postRailplusAutoCharge",
+    "NetworkApi.postSpayOrdNo",
+    "NetworkApi.postStbkAcnt",
+    "NetworkApi.postStbkRegBank",
+    "NetworkApi.postStlKeyPrs",
+    "NetworkApi.postTossautoC",
+)
+
+
+def _unstated_card_kind(name: str) -> V7MutationConsent:
+    # Neither claim: fake_card_only and real_card_acknowledged both False.
+    return V7MutationConsent(allow_methods=frozenset({name}), fake_card_only=False)
+
+
+@pytest.mark.parametrize("name", _CARD_BEARING)
+def test_a_payment_contract_needs_a_stated_card_kind(name: str) -> None:
+    client = KorailClient(transport=httpx.MockTransport(_never_send))
+    try:
+        with pytest.raises(KorailMutationNotAllowedError, match="explicit card kind"):
+            client.v7.call(name, {}, consent=_unstated_card_kind(name))
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["NetworkApi.postShinhanEncrypt", "NetworkApi.postMaasCancel", "NetworkApi.postAcpnMlgSave"],
+)
+def test_a_mutation_that_carries_no_payment_card_does_not(name: str) -> None:
+    # Checked against the APK: postShinhanEncrypt's value is the locked amount
+    # (PayViewModel.executeSeedEncrypt), postMaasCancel carries settlement ids,
+    # and postAcpnMlgSave's *MbCrdNo fields are membership card numbers.
+    values, include_common = _wire_values(name)
+    client = KorailClient(transport=httpx.MockTransport(_never_send))
+    try:
+        preview = client.v7.call(
+            name,
+            values,
+            consent=_unstated_card_kind(name),
+            include_common=include_common,
+        )
+    finally:
+        client.close()
+    assert isinstance(preview, V7MutationPreview)
