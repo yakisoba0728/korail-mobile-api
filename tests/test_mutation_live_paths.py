@@ -22,9 +22,10 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from _mutation_fixtures import eligible_train as _eligible_train
+from _mutation_fixtures import fake_card as _fake_card
 from korail_mobile_api import (
     BaseKorailResponse,
-    CardPayment,
     KorailClient,
     KorailConfig,
     KorailMutationNotAllowedError,
@@ -36,7 +37,6 @@ from korail_mobile_api import (
     PaidTicket,
     ReservationHoldResponse,
     ReservationPaymentResponse,
-    TrainSummary,
 )
 from korail_mobile_api.mutation_payloads import (
     build_card_payment_form,
@@ -83,26 +83,6 @@ _CANCEL_SUCCESS = {
     "h_msg_cd": "IRP000000",
     "h_msg_txt": "cancelled",
 }
-
-
-def _eligible_train() -> TrainSummary:
-    return TrainSummary(
-        train_no="00209",
-        train_group_code="100",
-        departure_station_code="0001",
-        arrival_station_code="0501",
-        departure_date="20990101",
-        departure_time="100700",
-        arrival_time="102400",
-        run_date="20990101",
-        train_class_code="00",
-        departure_run_order="1",
-        arrival_run_order="2",
-        general_reservation_code="11",
-        departure_construction_order="1",
-        arrival_construction_order="2",
-        seat_attribute_code="015",
-    )
 
 
 class _Recorder:
@@ -350,15 +330,6 @@ def _paid_hold() -> ReservationHoldResponse:
         temporary_job_sequence_2="SYNTHETIC_JOB_2",
         total_price="8400",
         received_amount="7560",
-    )
-
-
-def _fake_card() -> CardPayment:
-    return CardPayment(
-        card_number="0000000000000000",
-        card_password="00",
-        card_expire="2612",
-        birthday="900101",
     )
 
 

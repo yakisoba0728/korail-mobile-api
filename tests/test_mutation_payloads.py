@@ -12,6 +12,8 @@ from dataclasses import replace
 
 import pytest
 
+from _mutation_fixtures import eligible_train as _eligible_train
+from _mutation_fixtures import fake_card as _fake_card
 from korail_mobile_api import (
     KORAIL_MAX_PASSENGERS_PER_RESERVATION,
     BaseKorailResponse,
@@ -172,15 +174,6 @@ def _paid_hold() -> ReservationHoldResponse:
                 reservation_change_no="SYNTHETIC_CHG_NO",
             ),
         ),
-    )
-
-
-def _fake_card() -> CardPayment:
-    return CardPayment(
-        card_number="0000000000000000",
-        card_password="00",
-        card_expire="2612",
-        birthday="900101",
     )
 
 
@@ -365,26 +358,6 @@ def test_card_payment_sends_either_card_type_as_given():
         card = replace(_fake_card(), card_type=card_type)
         form = build_card_payment_form(KorailConfig(), _paid_hold(), card)
         assert form["hidAthnDvCd1"] == card_type
-
-
-def _eligible_train() -> TrainSummary:
-    return TrainSummary(
-        train_no="00209",
-        train_group_code="100",
-        departure_station_code="0001",
-        arrival_station_code="0501",
-        departure_date="20990101",
-        departure_time="100700",
-        arrival_time="102400",
-        run_date="20990101",
-        train_class_code="00",
-        departure_run_order="1",
-        arrival_run_order="2",
-        general_reservation_code="11",
-        departure_construction_order="1",
-        arrival_construction_order="2",
-        seat_attribute_code="015",
-    )
 
 
 def test_single_adult_reservation_form_matches_the_app_contract_exactly():

@@ -22,6 +22,7 @@ import pytest
 
 from _helpers import logged_in_no_network_client as _logged_in_no_network_client
 from _helpers import no_network_client as _no_network_client
+from _mutation_fixtures import eligible_train as _eligible_train
 from korail_mobile_api import (
     KorailMutationNotAllowedError,
     KorailPassengerCounts,
@@ -29,7 +30,6 @@ from korail_mobile_api import (
     KorailSeatClass,
     MutationConsent,
     MutationPreview,
-    TrainSummary,
     require_mutation_consent,
 )
 from korail_mobile_api.errors import KorailApiError, KorailAuthError
@@ -49,27 +49,6 @@ CATEGORIES = ("reserve", "payment", "cancel", "refund")
 # Obviously-fake, non-chargeable placeholders. No real card / credential.
 FAKE_CARD_NUMBER = "0000000000000000"
 FAKE_PNR = "SYNTHETIC_PNR_REFERENCE"
-
-
-def _eligible_train() -> TrainSummary:
-    # A general seat evidenced as available (general_reservation_code == "11").
-    return TrainSummary(
-        train_no="00209",
-        train_group_code="100",
-        departure_station_code="0001",
-        arrival_station_code="0501",
-        departure_date="20990101",
-        departure_time="100700",
-        arrival_time="102400",
-        run_date="20990101",
-        train_class_code="00",
-        departure_run_order="1",
-        arrival_run_order="2",
-        general_reservation_code="11",
-        departure_construction_order="1",
-        arrival_construction_order="2",
-        seat_attribute_code="015",
-    )
 
 
 def _allow(category: str) -> MutationConsent:

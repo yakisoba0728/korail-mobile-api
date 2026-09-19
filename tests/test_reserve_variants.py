@@ -40,6 +40,7 @@ import httpx
 import pytest
 
 from _helpers import logged_in_no_network_client as _logged_in_no_network_client
+from _mutation_fixtures import eligible_train as _eligible_train
 from korail_mobile_api import (
     KORAIL_STANDBY_HOLD_MESSAGE_CODE,
     KorailClient,
@@ -81,26 +82,6 @@ RESERVATION_WAIT_PATH = "/classes/com.korail.mobile.reservationWait.ReservationW
 # never carry. OSrcar.java:7-12 declares exactly these six names (three for
 # journey 1, three for journey 2); this package books one journey.
 OSRCAR_PREFIXES = ("txtSrcarCnt", "txtSrcarNo", "txtSeatNo")
-
-
-def _eligible_train() -> TrainSummary:
-    return TrainSummary(
-        train_no="00209",
-        train_group_code="100",
-        departure_station_code="0001",
-        arrival_station_code="0501",
-        departure_date="20990101",
-        departure_time="100700",
-        arrival_time="102400",
-        run_date="20990101",
-        train_class_code="00",
-        departure_run_order="1",
-        arrival_run_order="2",
-        general_reservation_code="11",
-        departure_construction_order="1",
-        arrival_construction_order="2",
-        seat_attribute_code="015",
-    )
 
 
 def _sold_out_standby_train() -> TrainSummary:
