@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from urllib.parse import parse_qsl
 
@@ -136,3 +137,143 @@ def test_contract_on_high_level_mutation_route_is_refused(
             client.v7.call(name, {"txtJobId": "synthetic-job"}, consent=consent)
     finally:
         client.close()
+
+
+# --------------------------------------------------------------------------
+# Every contract, one at a time. The registry and the gateway share one source,
+# so a round trip alone cannot notice a row that was edited wrongly: the row
+# and the request would agree. The structural test holds each row to
+# Retrofit's own rules instead, which do not come from that source.
+# --------------------------------------------------------------------------
+
+_CONTRACT_NAMES = sorted(V7_CONTRACTS)
+_BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
+_PARTNER_ORIGINS = {
+    interface: f"https://{interface.lower()}.example"
+    for interface in {contract.interface for contract in V7_CONTRACTS.values()}
+    if interface != "NetworkApi"
+}
+
+
+def _bare_params(params: str) -> set[str]:
+    return {
+        token.strip()
+        for token in params.split(",")
+        if token.strip() and "(" not in token
+    }
+
+
+@pytest.mark.parametrize("name", _CONTRACT_NAMES)
+def test_every_contract_obeys_retrofits_own_rules(name: str) -> None:
+    """@Field, @FieldMap and @Body need a request body; a GET has none.
+
+    Retrofit refuses @Field without @FormUrlEncoded, and @FormUrlEncoded or
+    @Body on a method with no body. A row that turned a field-carrying POST
+    into a GET would still round-trip -- the gateway sends what the row says
+    -- but it describes a call the app cannot make.
+    """
+    contract = V7_CONTRACTS[name]
+    bare = _bare_params(contract.params)
+    carries_fields = bool(contract.fields) or "FieldMap" in bare
+    carries_body = "Body" in bare
+    if carries_fields or carries_body:
+        assert contract.http in _BODY_METHODS
+    assert contract.form == carries_fields
+    assert not (carries_fields and carries_body)
+    if contract.http == "GET":
+        assert not contract.fields and "FieldMap" not in bare
+
+
+def _wire_values(name: str) -> tuple[dict, bool]:
+    """A valid set of wire values for one contract, and whether to merge common."""
+    contract = V7_CONTRACTS[name]
+    if name == SPECIAL:
+        form = _special_form()
+        return (
+            {k: v for k, v in form.items() if k not in {"Device", "Version", "Key"}},
+            True,
+        )
+    if name == "NetworkApi.productCancel":
+        return {"txtVrRsNo": "v-reservation", "txtGdSqno": "v-product"}, False
+    if contract.request_model == "com.korail.talk.network.model.GreenCarDetailRequest":
+        return {"first": "v-first", "second": "v-second"}, False
+    if contract.request_model == "com.korail.talk.data.CacheCheckRequest":
+        return {"versions": {"station": "1"}}, False
+    declared = contract.fields if contract.form else contract.queries
+    values: dict = {key: f"v-{key}" for key in sorted(declared)}
+    if ("FieldMap" if contract.form else "QueryMap") in _bare_params(contract.params):
+        values["mapKey"] = "v-mapKey"
+    return values, False
+
+
+@pytest.mark.parametrize("name", _CONTRACT_NAMES)
+def test_every_contract_goes_out_as_its_row_describes(name: str) -> None:
+    """Method, host, path, headers and encoding, for each of the 117.
+
+    Mutations are sent with a consent naming that one method; a card-bearing
+    one gets the fake-card claim, which is the default.
+    """
+    contract = V7_CONTRACTS[name]
+    values, include_common = _wire_values(name)
+    headers = {header: f"v-{header}" for header in sorted(contract.headers)}
+    seen: list[httpx.Request] = []
+
+    def main(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200, json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": ""}
+        )
+
+    def partner(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"ok": True})
+
+    consent = (
+        V7MutationConsent(allow_methods=frozenset({name}), dry_run=False)
+        if contract.effect == "mutation"
+        else None
+    )
+    client = KorailClient(
+        transport=httpx.MockTransport(main),
+        partner_origins=_PARTNER_ORIGINS,
+        partner_transport=httpx.MockTransport(partner),
+    )
+    try:
+        result = client.v7.call(
+            name,
+            values,
+            headers=headers,
+            consent=consent,
+            include_common=include_common,
+        )
+    finally:
+        client.close()
+
+    assert isinstance(result, V7Response)
+    assert len(seen) == 1
+    request = seen[0]
+    assert request.method == contract.http
+    # One route is relative in its annotation (SamsungWalletApi's
+    # "wallet/cmn/..."). Retrofit resolves that against the base URL, and a
+    # partner origin here is path-less by rule, so it lands at the root.
+    assert request.url.path == "/" + contract.route.lstrip("/")
+    expected_host = (
+        "smart.letskorail.com"
+        if contract.interface == "NetworkApi"
+        else httpx.URL(_PARTNER_ORIGINS[contract.interface]).host
+    )
+    assert request.url.host == expected_host
+    for header, value in headers.items():
+        assert request.headers[header] == value
+    if "Body" in _bare_params(contract.params):
+        assert request.headers["content-type"] == "application/json"
+        assert json.loads(request.content) == values
+    elif contract.form:
+        sent = parse_qsl(request.content.decode("ascii"), keep_blank_values=True)
+        expected = {**(client.http.common_fields() if include_common else {}), **values}
+        assert dict(sent) == expected
+        assert len(sent) == len(expected)
+        assert not request.url.query
+    else:
+        assert dict(request.url.params) == values
+        assert request.content == b""
