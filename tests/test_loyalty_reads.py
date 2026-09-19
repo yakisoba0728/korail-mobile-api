@@ -14,6 +14,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import korail_ok_envelope as _envelope
 from _helpers import make_authenticated_client as _client
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.errors import KorailAuthError, KorailProtocolError
@@ -59,13 +60,7 @@ WITHHELD_PATHS = (
 )
 
 
-def _envelope(**extra: object) -> dict[str, object]:
-    return {
-        "h_msg_cd": "IRG000000",
-        "h_msg_txt": "정상처리되었습니다",
-        "strResult": "SUCC",
-        **extra,
-    }
+
 
 
 def test_only_the_two_password_free_loyalty_reads_are_reachable():

@@ -25,6 +25,7 @@ below was read from the decompiled APK and re-checked in smali.
 from __future__ import annotations
 
 import inspect
+from functools import partial
 from typing import Any, get_type_hints
 from urllib.parse import parse_qsl
 
@@ -32,6 +33,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import synthetic_ok_envelope
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -107,13 +109,7 @@ def _seat_change_request(
     )
 
 
-def _success(**extra: Any) -> dict[str, Any]:
-    return {
-        "h_msg_cd": "SYNTHETIC.OK",
-        "h_msg_txt": "SERVER_MESSAGE",
-        "strResult": "SUCC",
-        **extra,
-    }
+_success = partial(synthetic_ok_envelope, "SERVER_MESSAGE")
 
 
 def _client(handler) -> KorailClient:

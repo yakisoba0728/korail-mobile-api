@@ -59,3 +59,28 @@ def logged_in_no_network_client() -> KorailClient:
     client = no_network_client()
     client.session.current = KorailSession(jsessionid="synthetic-secret")
     return client
+
+
+def korail_ok_envelope(**extra: object) -> dict[str, object]:
+    """KORAIL's own success envelope (IRG000000, 정상처리되었습니다) plus ``extra``."""
+    return {
+        "h_msg_cd": "IRG000000",
+        "h_msg_txt": "정상처리되었습니다",
+        "strResult": "SUCC",
+        **extra,
+    }
+
+
+def synthetic_ok_envelope(message: str, /, **extra: object) -> dict[str, object]:
+    """A success envelope whose ``h_msg_txt`` is ``message``, plus ``extra``.
+
+    ``message`` is required on purpose. Several files use a ``...SECRET`` text
+    here to prove a response's repr hides h_msg_txt; a shared default would
+    quietly take that canary away from whichever file stopped passing one.
+    """
+    return {
+        "h_msg_cd": "SYNTHETIC.OK",
+        "h_msg_txt": message,
+        "strResult": "SUCC",
+        **extra,
+    }

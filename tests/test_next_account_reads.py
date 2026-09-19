@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import FrozenInstanceError, fields, is_dataclass
+from functools import partial
 from typing import Any, get_type_hints
 from urllib.parse import parse_qsl
 
@@ -17,6 +18,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import synthetic_ok_envelope
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -208,13 +210,7 @@ R43_ATTRS = (
 )
 
 
-def _success(**extra: Any) -> dict[str, Any]:
-    return {
-        "h_msg_cd": "SYNTHETIC.OK",
-        "h_msg_txt": "synthetic success",
-        "strResult": "SUCC",
-        **extra,
-    }
+_success = partial(synthetic_ok_envelope, "synthetic success")
 
 
 def test_coupon_apk_counts_kind_and_validity_start_are_typed():

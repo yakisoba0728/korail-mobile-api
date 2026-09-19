@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import FrozenInstanceError
+from functools import partial
 from typing import Any, get_type_hints
 from urllib.parse import parse_qsl
 
@@ -45,6 +46,7 @@ import pytest
 import korail_mobile_api
 import korail_mobile_api.read_models as read_models
 import korail_mobile_api.read_payloads as read_payloads
+from _helpers import synthetic_ok_envelope
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -104,13 +106,7 @@ def _ticket() -> OriginalTicketReference:
     )
 
 
-def _success(**extra: Any) -> dict[str, Any]:
-    return {
-        "h_msg_cd": "SYNTHETIC.OK",
-        "h_msg_txt": "SERVER_MESSAGE_SECRET",
-        "strResult": "SUCC",
-        **extra,
-    }
+_success = partial(synthetic_ok_envelope, "SERVER_MESSAGE_SECRET")
 
 
 def _reservation_detail_body() -> dict[str, Any]:
