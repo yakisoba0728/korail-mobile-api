@@ -27,7 +27,7 @@ from korail_mobile_api.live import live_enabled
 
 
 class RecipientRoundTrip(operator.RoundTrip):
-    def quote_refund(self, reference: OriginalTicketReference) -> None:
+    def quote_refund(self, reference: OriginalTicketReference) -> str | None:
         detail = self.client.get_refund_ticket_detail(reference)
         fields = (
             detail.sale_date,
@@ -57,7 +57,7 @@ class RecipientRoundTrip(operator.RoundTrip):
                 )
         else:
             self.console.say("delivery_recipient: skipped (paid detail lacks exact fields)")
-        super().quote_refund(reference)
+        return super().quote_refund(reference)
 
 
 def main() -> int:

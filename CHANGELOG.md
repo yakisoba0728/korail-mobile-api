@@ -116,6 +116,10 @@ APK 와 무관하게 함께 고친 것들입니다.
   2026-07-25 에 부모 스크립트가 겪은 바로 그 문제입니다. 이제 부모 스크립트의 콘솔을
   그대로 써서 PNR 을 온전히 출력합니다. `KORAIL_MOBILE_API_LIVE=1` 도 스스로 켜지 않고
   설정돼 있는지 확인합니다.
+- **`scripts/retry_delivery_roundtrip.py` 의 환불이 서버가 알려 준 `pbpAcepTgtFlg` 를
+  버렸습니다.** 이 스크립트가 덮어쓴 `quote_refund` 가 부모의 반환값을 돌려주지 않아,
+  환불 폼의 `pbpAcepTgtFlg` 는 환불 상세 응답과 상관없이 늘 기본값 `"N"` 으로
+  나갔습니다. 이제 부모가 읽은 값을 그대로 넘깁니다.
 - **`scripts/retry_unprotected_live.py` 는 스위치 없이 실서버에 나갔습니다.**
   `KORAIL_MOBILE_API_LIVE=1` 을 스스로 켰고, `scripts/verify_706_new_live.py` 는 그
   스위치 하나만 확인했습니다. 이제 다른 라이브 스크립트처럼 자기 스위치를 하나씩 더
