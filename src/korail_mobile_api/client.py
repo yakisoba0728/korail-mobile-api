@@ -485,9 +485,9 @@ class KorailClient:
     def _post_read(
         self,
         route: str,
-        form: Any = None,
+        form: Mapping[str, Any] | Sequence[tuple[str, Any]] | None = None,
         *,
-        parser: Callable[..., T],
+        parser: Callable[[dict[str, Any]], T],
         include_common: bool = True,
         include_dynapath: bool = False,
         require_envelope: bool = True,
@@ -672,15 +672,11 @@ class KorailClient:
     ) -> ServiceStatusResponse:
         """예매 서비스가 열려 있는지를 서버 봉투로 확인합니다."""
         query = build_service_status_query(timestamp_ms)
-        return self._run_read(
-            lambda: parse_service_status_response(
-                self.http.post_form(
-                    "/file/CACHE/MobileService.cache",
-                    query,
-                    include_common=False,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._post_read(
+            "/file/CACHE/MobileService.cache",
+            query,
+            parser=parse_service_status_response,
+            include_common=False,
         )
 
     def get_cart_list(
@@ -694,15 +690,11 @@ class KorailClient:
             pnr_no,
             additional_service_request_no,
         )
-        return self._run_read(
-            lambda: parse_cart_list_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.cart.showCartList",
-                    form,
-                    include_dynapath=False,
-                    require_envelope=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.cart.showCartList",
+            form,
+            parser=parse_cart_list_response,
+            require_envelope=False,
         )
 
     def get_deposit_banks(self) -> DepositBankListResponse:
@@ -781,15 +773,10 @@ class KorailClient:
         """할인카드(N카드) 한 장을 이미 사용한 여행 내역을 조회합니다."""
         self._require_session()
         query = build_discount_card_usage_query(card_no)
-        return self._run_read(
-            lambda: parse_discount_card_usage_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.ticket.dcntCrdUseQry.do",
-                    query,
-                    include_common=True,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.ticket.dcntCrdUseQry.do",
+            query,
+            parser=parse_discount_card_usage_response,
         )
 
     def get_discount_card_schedule(
@@ -799,18 +786,10 @@ class KorailClient:
         """할인카드로 아직 탈 수 있는 열차를 한 구간에 대해 조회합니다."""
         self._require_session()
         query = build_discount_card_schedule_query(request)
-        return self._run_read(
-            lambda: parse_discount_card_schedule_response(
-                self.http.post_form(
-                    (
-                        "/classes/com.korail.mobile.research."
-                        "dcntCrdScheduleView.do"
-                    ),
-                    query,
-                    include_common=True,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.research.dcntCrdScheduleView.do",
+            query,
+            parser=parse_discount_card_schedule_response,
         )
 
     def get_pass_available_dates(
@@ -825,19 +804,15 @@ class KorailClient:
             period_code,
             age_code,
         )
-        return self._run_read(
-            lambda: parse_pass_availability_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.pass.passInfoList",
-                    form,
-                    include_dynapath=False,
-                    # A success body carries strResult only (its code lives in
-                    # main_info), so the envelope gate would reject it before
-                    # the parser ever saw it. A P058/FAIL body still carries the
-                    # full envelope and is still raised on.
-                    require_envelope=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.pass.passInfoList",
+            form,
+            parser=parse_pass_availability_response,
+            # A success body carries strResult only (its code lives in
+            # main_info), so the envelope gate would reject it before
+            # the parser ever saw it. A P058/FAIL body still carries the
+            # full envelope and is still raised on.
+            require_envelope=False,
         )
 
     def get_pass_schedule(
@@ -868,19 +843,15 @@ class KorailClient:
     def get_pass_menu(self, menu_no: str) -> PassMenuResponse:
         """정기권·패스 메뉴 한 갈래의 화면 구성 항목을 조회합니다."""
         form = build_pass_menu_form(menu_no)
-        return self._run_read(
-            lambda: parse_pass_menu_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.pass.passMenu.do",
-                    form,
-                    include_dynapath=False,
-                    # A success body is {"list": [...], "strResult": "SUCC"}
-                    # with no h_msg_cd/h_msg_txt, so the envelope gate would
-                    # reject it before the parser ever saw it. A P058/FAIL body
-                    # still carries the full envelope and is still raised on.
-                    require_envelope=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.pass.passMenu.do",
+            form,
+            parser=parse_pass_menu_response,
+            # A success body is {"list": [...], "strResult": "SUCC"}
+            # with no h_msg_cd/h_msg_txt, so the envelope gate would
+            # reject it before the parser ever saw it. A P058/FAIL body
+            # still carries the full envelope and is still raised on.
+            require_envelope=False,
         )
 
     def get_crew_request_list(
@@ -889,15 +860,10 @@ class KorailClient:
     ) -> CrewRequestListResponse:
         """승무원 호출 화면에 띄울 요청 사유 선택지를 조회합니다."""
         query = build_crew_request_list_query(query_division_code)
-        return self._run_read(
-            lambda: parse_crew_request_list_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.push.crwCallRq.do",
-                    query,
-                    include_common=True,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.push.crwCallRq.do",
+            query,
+            parser=parse_crew_request_list_response,
         )
 
     def get_commuter_kind_menu(
@@ -988,29 +954,20 @@ class KorailClient:
             return_password,
             txt_index,
         )
-        return self._run_read(
-            lambda: parse_ticket_receipt_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.receipt.ReceiptInfo",
-                    form,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.receipt.ReceiptInfo",
+            form,
+            parser=parse_ticket_receipt_response,
         )
 
     def get_reservation_history(self) -> ReservationHistoryResponse:
         """로그인 계정에 아직 살아 있는 예약(미결제 홀드 포함)을 조회합니다."""
         self._require_session()
-        return self._run_read(
-            lambda: parse_reservation_history_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.reservation.ReservationView",
-                    {"timeStamp": 0},
-                    include_common=True,
-                    include_dynapath=False,
-                    raise_on_fail=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.reservation.ReservationView",
+            {"timeStamp": 0},
+            parser=parse_reservation_history_response,
+            raise_on_fail=False,
         )
 
     def get_free_seat_car_info(
@@ -1135,13 +1092,11 @@ class KorailClient:
     ) -> PriceFareQuoteResponse:
         """열차 한두 편의 운임을 예매 전에 미리 계산해 받습니다."""
         form = build_price_fare_quote_form(request)
-        return self._run_read(
-            lambda: parse_price_fare_quote_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.trn.prcFare.do",
-                    form,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.trn.prcFare.do",
+            form,
+            parser=parse_price_fare_quote_response,
+            include_dynapath=True,
         )
 
     def get_delivery_recipient(
@@ -1192,14 +1147,10 @@ class KorailClient:
             tickets,
             ticket_count=ticket_count,
         )
-        return self._run_read(
-            lambda: parse_original_ticket_inquiry_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.research.tripChgOgtk.do",
-                    form,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.research.tripChgOgtk.do",
+            form,
+            parser=parse_original_ticket_inquiry_response,
         )
 
     def get_self_seat_change_info(
@@ -1236,15 +1187,10 @@ class KorailClient:
         """홀드된 예약 하나의 여정·좌석 상세를 PNR 로 되읽습니다."""
         self._require_session()
         query = build_ticket_reservation_detail_query(request)
-        return self._run_read(
-            lambda: parse_ticket_reservation_detail_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.certification.ReservationList",
-                    query,
-                    include_common=True,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.certification.ReservationList",
+            query,
+            parser=parse_ticket_reservation_detail_response,
         )
 
     def get_refund_commission(
@@ -1280,14 +1226,10 @@ class KorailClient:
             from_purchase_history=from_purchase_history,
             txt_index=txt_index,
         )
-        return self._run_read(
-            lambda: parse_refund_ticket_detail_response(
-                self.http.post_form(
-                    "/classes/com.korail.mobile.refunds.SelTicketInfo",
-                    form,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._post_read(
+            "/classes/com.korail.mobile.refunds.SelTicketInfo",
+            form,
+            parser=parse_refund_ticket_detail_response,
         )
 
     def get_common_code(self, code: str = "") -> BaseKorailResponse:
