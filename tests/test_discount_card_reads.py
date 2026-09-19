@@ -334,22 +334,24 @@ def test_client_reads_send_exactly_the_registered_shapes():
         "Key": client.config.key,
         "dcntCrdNo": "N123",
     }
-    schedule = dict(parse_qsl(seen[1].content.decode()))
-    assert set(schedule) == {
-        "Device",
-        "Version",
-        "Key",
-        "dptDt",
-        "dptRsStnNm",
-        "arvRsStnNm",
-        "dptTm",
-        "trnGpCd",
-        "dirtChtnDvCd",
-        "dcntCrdKndCd",
-        "dcntCrdKndMgNo",
-        "usePsbTno",
-    }
-    # DynaPath stays off: neither route is in the six-path allowlist.
+    # Every value and the order, not only the key set: a value moved into the
+    # wrong key, or two keys swapped, keeps the same set.
+    assert parse_qsl(seen[1].content.decode()) == [
+        ("Device", "AD"),
+        ("Version", client.config.version),
+        ("Key", client.config.key),
+        ("dptDt", "20990101"),
+        ("dptRsStnNm", "서울"),
+        ("arvRsStnNm", "부산"),
+        ("dptTm", "000000"),
+        ("trnGpCd", "109"),
+        ("dirtChtnDvCd", "1"),
+        ("dcntCrdKndCd", "MMM"),
+        ("dcntCrdKndMgNo", "B2N23100501"),
+        ("usePsbTno", "10"),
+    ]
+    # Neither read is signed. _client allowlists both routes with a provider
+    # that raises, so a signing read would have failed before this line.
     for request in seen:
         assert "x-dynapath-m-token" not in {
             name.lower() for name in request.headers

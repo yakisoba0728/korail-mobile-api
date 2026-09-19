@@ -341,3 +341,46 @@ def test_public_surface_exports_the_loyalty_names():
     # No spending path was added along with the reads.
     assert not hasattr(KorailClient, "spend_mileage")
     assert not hasattr(KorailClient, "get_lpoint")
+
+
+def test_neither_loyalty_read_is_signed_with_dynapath():
+    # The same check test_uuid_maas_read_apis.py makes: DynaPath on and both
+    # routes allowlisted, so a read that asked for a token would reach the
+    # provider. With DynaPath off, "no token header" would hold whatever the
+    # client did.
+    from korail_mobile_api.constants import DYNAPATH_HEADER_NAME
+    from korail_mobile_api.dynapath import DynapathConfig
+
+    provider_calls: list[object] = []
+    seen: list[httpx.Request] = []
+
+    def token_provider(context: object) -> str:
+        provider_calls.append(context)
+        return "SYNTHETIC-TOKEN"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=_envelope())
+
+    client = KorailClient(
+        KorailConfig(
+            dynapath=DynapathConfig(
+                enabled=True,
+                token_provider=token_provider,
+                allowlist_paths=frozenset({SUMMARY_PATH, MILEAGE_PATH}),
+            )
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    client.session.current = KorailSession(jsessionid="SYNTHETIC_SESSION")
+    try:
+        client.get_korail_point_summary()
+        client.get_mileage_history(
+            MileageHistoryRequest(start_date="20990101", end_date="20990331")
+        )
+    finally:
+        client.close()
+
+    assert provider_calls == []
+    assert [request.url.path for request in seen] == [SUMMARY_PATH, MILEAGE_PATH]
+    assert all(DYNAPATH_HEADER_NAME not in request.headers for request in seen)
