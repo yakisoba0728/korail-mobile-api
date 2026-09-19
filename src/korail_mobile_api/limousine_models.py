@@ -92,48 +92,18 @@ class LimousineScheduleQuery:
     reservation_sale_division_code: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        _ascii_digits(
-            self.departure_date,
-            "departure_date",
-            lengths=frozenset({8}),
+        digit_fields: tuple[tuple[str, str, frozenset[int], bool], ...] = (
+            (self.departure_date, "departure_date", frozenset({8}), False),
+            (self.departure_station_code, "departure_station_code", frozenset({4}), False),
+            (self.arrival_station_code, "arrival_station_code", frozenset({4}), False),
+            (self.service_code, "service_code", frozenset({1, 2, 3}), False),
+            (self.room_class_code, "room_class_code", frozenset({1, 2}), False),
+            (self.departure_time, "departure_time", frozenset({6}), False),
+            (self.train_no, "train_no", frozenset({1, 2, 3, 4, 5}), True),
+            (self.seat_attribute_code, "seat_attribute_code", frozenset({3}), True),
         )
-        _ascii_digits(
-            self.departure_station_code,
-            "departure_station_code",
-            lengths=frozenset({4}),
-        )
-        _ascii_digits(
-            self.arrival_station_code,
-            "arrival_station_code",
-            lengths=frozenset({4}),
-        )
-        _ascii_digits(
-            self.service_code,
-            "service_code",
-            lengths=frozenset({1, 2, 3}),
-        )
-        _ascii_digits(
-            self.room_class_code,
-            "room_class_code",
-            lengths=frozenset({1, 2}),
-        )
-        _ascii_digits(
-            self.departure_time,
-            "departure_time",
-            lengths=frozenset({6}),
-        )
-        _ascii_digits(
-            self.train_no,
-            "train_no",
-            lengths=frozenset({1, 2, 3, 4, 5}),
-            allow_empty=True,
-        )
-        _ascii_digits(
-            self.seat_attribute_code,
-            "seat_attribute_code",
-            lengths=frozenset({3}),
-            allow_empty=True,
-        )
+        for value, name, lengths, allow_empty in digit_fields:
+            _ascii_digits(value, name, lengths=lengths, allow_empty=allow_empty)
         _required_text(
             self.reservation_sale_division_code,
             "reservation_sale_division_code",
@@ -159,58 +129,21 @@ class LimousineSeatInventoryQuery:
     is_arrow: bool = field(repr=False)
 
     def __post_init__(self) -> None:
-        _ascii_digits(
-            self.train_class_code,
-            "train_class_code",
-            lengths=frozenset({2}),
+        digit_fields: tuple[tuple[str, str, frozenset[int], bool], ...] = (
+            (self.train_class_code, "train_class_code", frozenset({2}), False),
+            (self.service_code, "service_code", frozenset({1, 2, 3}), False),
+            (self.run_date, "run_date", frozenset({8}), False),
+            (self.train_no, "train_no", frozenset({1, 2, 3, 4, 5}), False),
+            (self.car_no, "car_no", frozenset({1, 2, 3, 4}), False),
+            (self.room_class_code, "room_class_code", frozenset({1, 2}), False),
+            (self.departure_station_code, "departure_station_code", frozenset({4}), False),
+            (self.arrival_station_code, "arrival_station_code", frozenset({4}), False),
+            (self.seat_attribute_code, "seat_attribute_code", frozenset({3}), True),
+            (self.departure_run_order, "departure_run_order", frozenset({6}), False),
+            (self.arrival_run_order, "arrival_run_order", frozenset({6}), False),
         )
-        _ascii_digits(
-            self.service_code,
-            "service_code",
-            lengths=frozenset({1, 2, 3}),
-        )
-        _ascii_digits(self.run_date, "run_date", lengths=frozenset({8}))
-        _ascii_digits(
-            self.train_no,
-            "train_no",
-            lengths=frozenset({1, 2, 3, 4, 5}),
-        )
-        _ascii_digits(
-            self.car_no,
-            "car_no",
-            lengths=frozenset({1, 2, 3, 4}),
-        )
-        _ascii_digits(
-            self.room_class_code,
-            "room_class_code",
-            lengths=frozenset({1, 2}),
-        )
-        _ascii_digits(
-            self.departure_station_code,
-            "departure_station_code",
-            lengths=frozenset({4}),
-        )
-        _ascii_digits(
-            self.arrival_station_code,
-            "arrival_station_code",
-            lengths=frozenset({4}),
-        )
-        _ascii_digits(
-            self.seat_attribute_code,
-            "seat_attribute_code",
-            lengths=frozenset({3}),
-            allow_empty=True,
-        )
-        _ascii_digits(
-            self.departure_run_order,
-            "departure_run_order",
-            lengths=frozenset({6}),
-        )
-        _ascii_digits(
-            self.arrival_run_order,
-            "arrival_run_order",
-            lengths=frozenset({6}),
-        )
+        for value, name, lengths, allow_empty in digit_fields:
+            _ascii_digits(value, name, lengths=lengths, allow_empty=allow_empty)
         _passenger_count(
             self.passenger_count,
             "passenger_count",
