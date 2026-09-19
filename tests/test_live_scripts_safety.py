@@ -53,6 +53,11 @@ OPT_INS = {
         "KORAIL_LIVE_REAL_CHARGE",
     ),
 }
+# What main() may write to the environment before it refuses. Only the delivery
+# round trip writes anything: its fixed fare ceiling, which the parent's gate
+# requires to be present before it will judge the charging path. Never a secret.
+ALLOWED_WRITES_BEFORE_REFUSAL = {"retry_delivery_roundtrip": {"KORAIL_MAX_FARE"}}
+
 # Scripts held to the import rules. capture_live_read_surface's opt-ins depend
 # on its arguments (--reserve adds a third), so its main() has its own tests.
 IMPORT_SAFE = (*sorted(OPT_INS), "capture_live_read_surface")
@@ -128,6 +133,9 @@ def test_main_refuses_until_every_opt_in_is_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = _load(name, monkeypatch)
+    # A private copy of the environment, so whatever main() writes is both
+    # visible here and gone after the test.
+    monkeypatch.setattr(os, "environ", dict(os.environ))
     for switch in OPT_INS[name]:
         monkeypatch.delenv(switch, raising=False)
     for switch in present:
@@ -149,7 +157,63 @@ def test_main_refuses_until_every_opt_in_is_set(
         assert "KORAIL_MOBILE_API_LIVE=1" in str(refusal.code)
     else:
         assert result == 2
-    assert dict(os.environ) == before
+    written = {
+        key
+        for key in set(before) | set(os.environ)
+        if before.get(key) != os.environ.get(key)
+    }
+    assert written <= ALLOWED_WRITES_BEFORE_REFUSAL.get(name, set())
+
+
+def test_delivery_round_trip_uses_the_parent_scripts_gate(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Not a copy of the gate: whatever the parent's _require_opt_ins refuses,
+    # this script refuses with it, before prompting or building anything.
+    module = _load("retry_delivery_roundtrip", monkeypatch)
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+
+    def parent_gate(*, real_charge: bool) -> None:
+        assert real_charge is True
+        raise module.operator.RoundTripAborted("the parent gate said no")
+
+    def _no_prompt(*args, **kwargs):  # pragma: no cover - must never run
+        raise AssertionError("prompted for a secret after the gate refused")
+
+    monkeypatch.setattr(module.operator, "_require_opt_ins", parent_gate)
+    monkeypatch.setattr(module.getpass, "getpass", _no_prompt)
+    assert module.main() == 2
+    assert "the parent gate said no" in capsys.readouterr().out
+
+
+def test_delivery_round_trip_needs_a_real_device_identity_before_any_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Every switch set, no DynaPath device values: the config is built from the
+    # environment like the parent's, so this stops before a secret is asked for.
+    module = _load("retry_delivery_roundtrip", monkeypatch)
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    for switch in OPT_INS["retry_delivery_roundtrip"]:
+        monkeypatch.setenv(switch, "1")
+    for name in (
+        "KORAIL_DYNAPATH_DEVICE_ID",
+        "KORAIL_DYNAPATH_OS_VERSION",
+        "KORAIL_DYNAPATH_DEVICE_MODEL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    def _no_prompt(*args, **kwargs):  # pragma: no cover - must never run
+        raise AssertionError("prompted for a secret without a device identity")
+
+    def _no_client(*args, **kwargs):  # pragma: no cover - must never run
+        raise AssertionError("built a client without a device identity")
+
+    monkeypatch.setattr(module.getpass, "getpass", _no_prompt)
+    monkeypatch.setattr(module, "KorailClient", _no_client)
+    assert module.main() == 2
+    assert "KORAIL_DYNAPATH_DEVICE_ID" in capsys.readouterr().out
 
 
 def test_delivery_round_trip_refunds_with_the_flag_the_server_gave(

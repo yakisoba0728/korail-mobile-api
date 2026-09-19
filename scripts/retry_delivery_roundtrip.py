@@ -22,8 +22,7 @@ import getpass
 import os
 
 import reserve_pay_refund_roundtrip as operator
-from korail_mobile_api import KorailClient, KorailConfig, OriginalTicketReference
-from korail_mobile_api.live import live_enabled
+from korail_mobile_api import KorailClient, OriginalTicketReference
 
 
 class RecipientRoundTrip(operator.RoundTrip):
@@ -61,17 +60,20 @@ class RecipientRoundTrip(operator.RoundTrip):
 
 
 def main() -> int:
-    if (
-        not live_enabled()
-        or os.environ.get("KORAIL_LIVE_MUTATION") != "1"
-        or os.environ.get("KORAIL_LIVE_REAL_CHARGE") != "1"
-    ):
-        print(
-            "Set KORAIL_MOBILE_API_LIVE=1, KORAIL_LIVE_MUTATION=1 and "
-            "KORAIL_LIVE_REAL_CHARGE=1"
-        )
+    # This script always runs under a 5,000 won ceiling. The parent's gate
+    # refuses the charging path unless a ceiling is set, so it goes in first.
+    os.environ[operator.MAX_FARE_ENV] = "5000"
+    try:
+        # The parent's own gate, not a copy of it: a safeguard added there
+        # applies here too. The device identity comes from the environment the
+        # same way, so the real-card run is made from a stable device rather
+        # than a new synthetic one each time. Both fail before any secret is
+        # asked for.
+        operator._require_opt_ins(real_charge=True)
+        config = operator.build_config_from_env()
+    except (operator.RoundTripAborted, RuntimeError) as exc:
+        print(f"ABORTED: {exc}")
         return 2
-    os.environ["KORAIL_MAX_FARE"] = "5000"
     os.environ["KORAIL_DEPARTURE_STATION"] = "서울"
     os.environ["KORAIL_ARRIVAL_STATION"] = "영등포"
     os.environ["KORAIL_DEPARTURE_TIME"] = "060000"
@@ -83,7 +85,7 @@ def main() -> int:
     os.environ["KORAIL_CARD_BIRTHDAY"] = getpass.getpass("birth YYMMDD (hidden): ")
     card = operator.read_card_from_env()
     console = operator._console_for(card)
-    client = KorailClient(KorailConfig(enable_dynapath=True))
+    client = KorailClient(config)
     operator._install_pacing(client, operator._Pacer(1.5))
     args = argparse.Namespace(date=operator._default_date(), min_interval=1.5)
     trip = RecipientRoundTrip(client, console, card, args)
