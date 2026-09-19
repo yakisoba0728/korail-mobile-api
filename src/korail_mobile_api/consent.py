@@ -78,7 +78,8 @@ class MutationConsent:
     allow_discount_card: bool = False
     #: 운임 재계산(``certification.PriceReCalculation``). 서버 미시험.
     allow_price_recalculation: bool = False
-    #: 장바구니(``cart.addCartList``, ``CartService.java:11-13``). 서버 미시험.
+    #: 장바구니(``cart.addCartList``, ``CartService.java:11-13``). 2026-07-27 실서버
+    #: 확인(``SUCC``/``IRZ000002``, ``get_cart_list`` 로 되읽음).
     allow_cart: bool = False
     dry_run: bool = True
     fake_card_only: bool = True

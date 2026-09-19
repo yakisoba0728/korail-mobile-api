@@ -114,7 +114,9 @@ SENSITIVE_KEYS = frozenset(
         "point_no",
         # --- 고객 식별(회원번호·이름·전화·생년) ---
         "custMgNo",
-        "custMgNo_",  # 인덱스 기본(custMgNo_1 등)
+        # custMgNo_1 같은 인덱스 형은 위의 custMgNo 가 이미 가린다(꼬리 인덱스 제거).
+        # 이 항목이 더 막는 것은 번호 없는 "custMgNo_" 철자 하나뿐이고, 방어용으로 둔다.
+        "custMgNo_",
         "acepCustMgFlg",
         "acepCustMgNo",
         "acepCustNm",
