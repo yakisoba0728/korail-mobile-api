@@ -132,3 +132,32 @@ def recording_path_handler(
         return httpx.Response(200, json=responses[request.url.path])
 
     return handler
+
+
+class ReplyRecorder:
+    """A MockTransport handler that records requests and replies by path.
+
+    A path with no reply fails the test, which catches a request the test did
+    not expect as well as a wiring mistake.
+    """
+
+    def __init__(self, replies: dict[str, dict]) -> None:
+        self.replies = replies
+        self.requests: list[httpx.Request] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        reply = self.replies.get(request.url.path)
+        if reply is None:  # pragma: no cover - guards test wiring mistakes
+            raise AssertionError(f"unexpected request to {request.url.path}")
+        return httpx.Response(200, json=reply)
+
+
+def client_with_replies(
+    replies: dict[str, dict],
+) -> tuple[KorailClient, ReplyRecorder]:
+    """A logged-in client answering from ``replies``, and the recorder it uses."""
+    recorder = ReplyRecorder(replies)
+    client = KorailClient(transport=httpx.MockTransport(recorder))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    return client, recorder

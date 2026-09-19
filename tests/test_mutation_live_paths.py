@@ -22,6 +22,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from _helpers import ReplyRecorder as _Recorder
+from _helpers import client_with_replies as _client_with
 from _mutation_fixtures import eligible_train as _eligible_train
 from _mutation_fixtures import fake_card as _fake_card
 from _mutation_fixtures import paid_hold, paid_ticket
@@ -31,7 +33,6 @@ from korail_mobile_api import (
     KorailConfig,
     KorailMutationNotAllowedError,
     KorailProtocolError,
-    KorailSession,
     KorailSessionExpiredError,
     MutationConsent,
     MutationPreview,
@@ -84,28 +85,6 @@ _CANCEL_SUCCESS = {
     "h_msg_cd": "IRP000000",
     "h_msg_txt": "cancelled",
 }
-
-
-class _Recorder:
-    """A MockTransport handler that records requests and replies by path."""
-
-    def __init__(self, replies: dict[str, dict]) -> None:
-        self.replies = replies
-        self.requests: list[httpx.Request] = []
-
-    def __call__(self, request: httpx.Request) -> httpx.Response:
-        self.requests.append(request)
-        reply = self.replies.get(request.url.path)
-        if reply is None:  # pragma: no cover - guards test wiring mistakes
-            raise AssertionError(f"unexpected request to {request.url.path}")
-        return httpx.Response(200, json=reply)
-
-
-def _client_with(replies: dict[str, dict]) -> tuple[KorailClient, _Recorder]:
-    recorder = _Recorder(replies)
-    client = KorailClient(transport=httpx.MockTransport(recorder))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    return client, recorder
 
 
 def _live(**allow: bool) -> MutationConsent:

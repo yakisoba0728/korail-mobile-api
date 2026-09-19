@@ -32,6 +32,8 @@ from urllib.parse import parse_qsl
 import httpx
 import pytest
 
+from _helpers import ReplyRecorder as _Recorder
+from _helpers import client_with_replies as _client_with
 from korail_mobile_api import (
     CardPayment,
     KorailAuthError,
@@ -64,26 +66,6 @@ _PAYMENT_SUCCESS = {
     "h_msg_txt": "paid",
     "h_img_tk_flg": "N",
 }
-
-
-class _Recorder:
-    def __init__(self, replies: dict[str, dict]) -> None:
-        self.replies = replies
-        self.requests: list[httpx.Request] = []
-
-    def __call__(self, request: httpx.Request) -> httpx.Response:
-        self.requests.append(request)
-        reply = self.replies.get(request.url.path)
-        if reply is None:  # pragma: no cover - guards test wiring mistakes
-            raise AssertionError(f"unexpected request to {request.url.path}")
-        return httpx.Response(200, json=reply)
-
-
-def _client_with(replies: dict[str, dict]) -> tuple[KorailClient, _Recorder]:
-    recorder = _Recorder(replies)
-    client = KorailClient(transport=httpx.MockTransport(recorder))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    return client, recorder
 
 
 def _hold() -> ReservationHoldResponse:
