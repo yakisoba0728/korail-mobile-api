@@ -52,7 +52,11 @@ Safety posture
   shape, so such a pattern masks the one value that must always get through.
 * Reserve, pay, cancel and refund each go out under their own single-category
   consent; no consent object in this file grants two money-moving categories at
-  once, and each factory asserts that.
+  once, and each factory checks that with a raise rather than an ``assert``.
+* The member number and password come from ``KORAIL_MEMBER_NO`` and
+  ``KORAIL_PASSWORD``, and the device identity from ``KORAIL_DYNAPATH_DEVICE_ID``,
+  ``KORAIL_DYNAPATH_OS_VERSION`` and ``KORAIL_DYNAPATH_DEVICE_MODEL``
+  (:mod:`korail_mobile_api.live`).
 * Every request is paced (default 1.5s minimum spacing) because KORAIL bans IPs
   for macro-like traffic.
 * The module is import-safe: importing it performs no I/O, reads no environment

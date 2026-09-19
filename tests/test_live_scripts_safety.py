@@ -327,3 +327,50 @@ def test_capture_main_refuses_before_building_anything(
     with pytest.raises(SystemExit, match=refusal):
         module.main(argv)
     assert not out.exists()
+
+
+def test_no_script_guards_anything_with_assert() -> None:
+    """``python -O`` strips ``assert``; a guard in a live script must survive it.
+
+    The capture script's consent factories used to check the money categories
+    with ``assert``. The round trip already raised instead, and said why.
+    """
+    offenders = []
+    for path in sorted(SCRIPTS.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        offenders.extend(
+            f"{path.name}:{node.lineno}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assert)
+        )
+    assert offenders == []
+
+
+def test_retry_reads_exits_non_zero_when_login_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # main() returned None, so the process exited 0 even when it could not log
+    # in and read nothing.
+    module = _load("retry_unprotected_live", monkeypatch)
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    for switch in OPT_INS["retry_unprotected_live"]:
+        monkeypatch.setenv(switch, "1")
+    monkeypatch.setattr(module.getpass, "getpass", lambda prompt: "synthetic")
+
+    class _RefusingClient:
+        def __init__(self, config) -> None:
+            self.http = SimpleNamespace(_client=SimpleNamespace(event_hooks={"request": []}))
+
+        def login(self, member, password):
+            raise RuntimeError("synthetic login refusal")
+
+        def logout(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(module, "KorailClient", _RefusingClient)
+    assert module.main() == 1
+    assert "login: RuntimeError" in capsys.readouterr().out

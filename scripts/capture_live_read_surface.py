@@ -29,7 +29,13 @@ Safety posture
   or ``PaidTicket``, and the only :class:`MutationConsent` it can build sets
   ``allow_reserve``/``allow_cancel`` -- ``allow_payment`` and ``allow_refund``
   are never passed. :func:`_reserve_consent` and :func:`_cancel_consent` are the
-  only consent factories, and both are asserted to withhold money categories.
+  only consent factories, and both refuse -- with a raise, which ``python -O``
+  cannot strip the way it strips ``assert`` -- to hand back a consent that opens
+  a money category.
+* Credentials come from ``KORAIL_MEMBER_NO``/``KORAIL_PASSWORD`` and the device
+  identity from ``KORAIL_DYNAPATH_DEVICE_ID``/``KORAIL_DYNAPATH_OS_VERSION``/
+  ``KORAIL_DYNAPATH_DEVICE_MODEL`` (:mod:`korail_mobile_api.live`), never from
+  an argument.
 * ``--reserve`` (gated additionally by ``KORAIL_LIVE_ALLOW_RESERVE=1``) performs
   ONE hold and immediately cancels it. The PNR is printed the instant it exists,
   the cancel is retried once on failure, and an uncancelled hold aborts the run
@@ -162,14 +168,16 @@ def _install_hooks(
 def _reserve_consent() -> MutationConsent:
     """Consent that permits exactly one live hold and nothing else."""
     consent = MutationConsent(allow_reserve=True, dry_run=False)
-    assert not consent.allow_payment and not consent.allow_refund
+    if consent.allow_payment or consent.allow_refund:
+        raise RuntimeError("the reserve consent opened a money category")
     return consent
 
 
 def _cancel_consent() -> MutationConsent:
     """Consent that permits exactly one live cancellation and nothing else."""
     consent = MutationConsent(allow_cancel=True, dry_run=False)
-    assert not consent.allow_payment and not consent.allow_refund
+    if consent.allow_payment or consent.allow_refund:
+        raise RuntimeError("the cancel consent opened a money category")
     return consent
 
 

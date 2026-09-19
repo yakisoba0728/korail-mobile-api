@@ -25,8 +25,11 @@ the rule says how.
   client makes internally are throttled too. Do not lower it.
 - **Importing is safe.** Each script performs no I/O, reads no environment
   variable and builds no client at import time; everything happens under
-  `main()`. `tests/` asserts this structurally. The three 7.0.6 scripts have the
-  same shape, but no test checks them yet.
+  `main()`. `tests/` asserts this structurally for every live script:
+  `test_reserve_pay_refund_roundtrip.py` for the round trip,
+  `test_seat_inventory_reads.py` for the seat evidence, and
+  `test_live_scripts_safety.py` for the other four. The same file checks that no
+  script guards anything with `assert`, which `python -O` strips.
 - **They run against YOUR account.** These exist so a maintainer can check the
   client against the live service once. They are not example code, not a
   scraper, and not something to run on a schedule.
@@ -55,8 +58,9 @@ stdout and the summary are redacted; the raw bodies are not.
 
 ### `capture_seat_inventory_evidence.py` — live, reads only
 
-Narrower version of the same idea for the seat-map reads: one login, one search,
-one car list, one seat list. Its own switch is `KORAIL_LIVE_SEAT_EVIDENCE=1`, and
+A separate, smaller capture for the seat-map reads with its own contract: one
+login, one search, one car list, one seat list, and a sanitized JSON result
+rather than raw bodies. Its own switch is `KORAIL_LIVE_SEAT_EVIDENCE=1`, and
 it paces requests 1.5s apart like the others. `docs/verification-record.md`
 shows the invocation that produced the evidence recorded there; that run
 predates the second switch, which now has to be set as well.
@@ -108,11 +112,14 @@ Re-runs reads whose inputs must come from a real earlier response: a V7 read
 at a real middle station, and a fare quote built from the server's own goods
 number. `--post-refund` reads only the reservation history and active tickets.
 `--fallback-routes` tries the transfer fallback on two routes with no direct
-train. The travel date is fixed in the code at 2026-09-29.
+train. The default run ends with a late-night 서울 → 부산 search through the
+transfer fallback (`direct_transfer_fallback_late`). The travel date is fixed in
+the code at 2026-09-29.
 
 It needs `KORAIL_MOBILE_API_LIVE=1` and its own `KORAIL_LIVE_RETRY_READS=1`, and
 always logs in, so it prompts for the member number and password. It prints the
-type, the result, the code and the counts.
+type, the result, the code and the counts. It exits 1 when login fails and 0
+otherwise; a read that fails is printed and is part of what the run reports.
 
 ### `retry_delivery_roundtrip.py` — live, and it MOVES MONEY
 

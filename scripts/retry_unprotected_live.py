@@ -59,7 +59,7 @@ def _try(name: str, function: Callable[[], Any]) -> Any | None:
     return value
 
 
-def main() -> None:
+def main() -> int:
     if (
         os.environ.get("KORAIL_MOBILE_API_LIVE") != "1"
         or os.environ.get("KORAIL_LIVE_RETRY_READS") != "1"
@@ -82,11 +82,11 @@ def main() -> None:
     client.http._client.event_hooks["request"].append(pace)
     try:
         if _try("login", lambda: client.login(member, password)) is None:
-            return
+            return 1
         if "--post-refund" in sys.argv[1:]:
             _try("reservation_history", client.get_reservation_history)
             _try("active_ticket_list", client.get_ticket_list)
-            return
+            return 0
         if "--fallback-routes" in sys.argv[1:]:
             for departure, arrival in (("포항", "목포"), ("진주", "강릉")):
                 query = TrainSearchQuery(departure, arrival, "20260929", "060000")
@@ -94,13 +94,13 @@ def main() -> None:
                     f"fallback_{departure}_{arrival}",
                     lambda query=query: client.search_trains_with_transfer_fallback(query),
                 )
-            return
+            return 0
         _try("v7_specific_date", lambda: client.v7.call("NetworkApi.postSpecificDateData"))
         _try("multi_child_20260929", lambda: client.get_multi_child_discount_targets("20260929"))
         route = TrainSearchQuery("서울", "부산", "20260929", "000000")
         search = _try("search_seoul_busan", lambda: client.search_trains(route))
         if search is None or not search.trains:
-            return
+            return 0
         train = search.trains[0]
         schedule = _try(
             "schedule_selected_train",
@@ -165,6 +165,7 @@ def main() -> None:
             "direct_transfer_fallback_late",
             lambda: client.search_trains_with_transfer_fallback(late),
         )
+        return 0
     finally:
         try:
             client.logout()
@@ -174,4 +175,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
