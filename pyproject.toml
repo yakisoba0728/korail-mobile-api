@@ -173,9 +173,8 @@ typeCheckingMode = "basic"
 # models.py(2) 는 아직 0 이 아니라 빠졌다. 네 건 모두 런타임 방어용 isinstance
 # 검사라 strict 를 만족시키려면 그 방어를 없애야 해서 일부러 두었다.
 #
-# 2026-09-19 재측정에서 netfunnel.py · read_models.py · limousine_models.py ·
-# v7_contract_data.py 도 0 이 됐지만 아직 목록에 넣지 않았다. 넣으면 그 모듈의
-# 이후 변경이 strict 를 지켜야 하므로, 넣을지는 따로 정한다.
+# netfunnel.py · read_models.py · limousine_models.py · v7_contract_data.py 는
+# 2026-09-19 재측정에서 0 이 되어 목록에 들어갔다.
 strict = [
   "src/korail_mobile_api/__init__.py",
   "src/korail_mobile_api/config.py",
@@ -184,7 +183,11 @@ strict = [
   "src/korail_mobile_api/crypto.py",
   "src/korail_mobile_api/dynapath.py",
   "src/korail_mobile_api/errors.py",
+  "src/korail_mobile_api/limousine_models.py",
   "src/korail_mobile_api/limousine_payloads.py",
+  "src/korail_mobile_api/netfunnel.py",
+  "src/korail_mobile_api/read_models.py",
+  "src/korail_mobile_api/v7_contract_data.py",
 ]
 
 # tests/ 와 scripts/ 는 배포되지 않고, 일부러 틀린 값을 넣어 가드가 우는지 보거나
