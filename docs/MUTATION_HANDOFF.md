@@ -24,7 +24,7 @@ state-changing request can leave the process only through the dedicated
 | refund | ✅ `refund`, **live-verified 2026-07-31** (`IRT200277`, one ticket per call) and again 2026-09-15 on 7.0.6 | ⛔ not implemented — route tiered only, not live-enabled |
 | reserve (`1202`, 입석+좌석 — the first half of 병합예약) | ✅ live-verified 2026-07-26 (`IRR000018`, two journeys, 중간연결역 prompt present) | ⛔ not implemented |
 | 병합예약 second hold (`reserve_merge`) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
-| 정기권 예약/결제 (`pass.passReserve` / `passPayIssue`) | ⛔ **not implemented — implemented once, then removed**; the routes are not on the mutation allowlist and no method can reach them | ⛔ not implemented |
+| 정기권 예약/결제 (`pass.passReserve` / `passPayIssue`) | ⛔ **not implemented — implemented once, then removed**; the routes are not on the mutation allowlist, no method can reach them, and the 7.0.6 gateway (`client.v7`) refuses all four pass-purchase contracts by name | ⛔ not implemented |
 | 운임 재계산 (`certification.PriceReCalculation`) | ⚠️ `recalculate_price`, own `price_recalculation` consent, **never live-run**; the form omits the 7.0.6 DTO's `txtPsrmClCd1`/`txtSeatAttCd2`/`txtSeatAttCd4`/`txtSeatAttCd5` (`analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41`), so treat it as unverified | ⛔ not implemented |
 | 장바구니 담기 (`cart.addCartList`) | ✅ `add_to_cart`, own `cart` consent, live 2026-07-27 (`SUCC`/`IRZ000002`, read back via `get_cart_list`) | ⛔ not implemented |
 
@@ -623,6 +623,11 @@ back to the hold.
   answer, not an omission.** The purchase pair was implemented and then removed;
   no method, route registration or consent category for it survives, so no
   amount of consent can send `passReserve` or `passPayIssue` from this package.
+  The 7.0.6 gateway lists them among its 117 contracts because the APK declares
+  them, together with `passOtrReserve`/`postPassOtrPayIssue`, and refuses all
+  four by name before anything else: no `V7MutationConsent` may name one. That
+  refusal was added on 2026-09-19; until then `client.v7` could send them with
+  a method-scoped consent, which this paragraph said was impossible.
   The reasoning, in operator terms: the settlement is roughly ₩150,000–₩250,000
   for a 1개월 pass with **no refund path and no cancel route here**, and the
   shipped app cannot issue `passPayIssue` either — its `isCommPaymentRequest()`

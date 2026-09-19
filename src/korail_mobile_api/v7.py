@@ -59,6 +59,19 @@ _MUTATION_OVERRIDES = frozenset({
     # postNonMemTicketList stays a read (lookup).
     "NetworkApi.postNonMemTicket",
 })
+# 정기권/패스 purchase and issue. The APK declares these contracts, so the
+# registry lists them, but this package never sends one: a settlement is
+# ₩150,000-₩250,000 with no refund or cancel route here, and the shipped app
+# never reaches passPayIssue itself (PaymentActivity.isCommPaymentRequest()
+# tests a Response type where a Request is required). A purchase pair was
+# implemented on 2026-07-26 and removed the same day; MUTATION_HANDOFF records
+# why. No V7MutationConsent may name one, and call() refuses them first.
+_NEVER_SENT = frozenset({
+    "NetworkApi.postPassReserve",
+    "NetworkApi.postPassPayIssue",
+    "NetworkApi.passOtrReserve",
+    "NetworkApi.postPassOtrPayIssue",
+})
 # NetworkApi response models that do not extend CommonOut. Three declare their
 # own strResult defaulting to null or "" rather than CommonOut's FAIL constant
 # (CacheCheckResponse.java:62, AcpnMlgSaveResponse.java:101,
@@ -175,6 +188,7 @@ class V7MutationConsent:
                 not isinstance(name, str)
                 or name not in V7_CONTRACTS
                 or V7_CONTRACTS[name].effect != "mutation"
+                or name in _NEVER_SENT
                 for name in self.allow_methods
             )
             or any(type(value) is not bool for value in (
@@ -350,6 +364,11 @@ class V7Gateway:
         contract = V7_CONTRACTS.get(name)
         if contract is None:
             raise KorailProtocolError(f"unknown 7.0.6 method: {name}")
+        if name in _NEVER_SENT:
+            raise KorailMutationNotAllowedError(
+                f"{name} is a 정기권/패스 purchase, which this package never sends: "
+                "it has no refund or cancel route here"
+            )
         data = dict(values or {})
         header_map = dict(headers or {})
         is_body = "Body" in contract.params

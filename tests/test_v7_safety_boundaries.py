@@ -166,7 +166,16 @@ def test_contract_on_high_level_mutation_route_is_refused(
 # Retrofit's own rules instead, which do not come from that source.
 # --------------------------------------------------------------------------
 
+# The 정기권/패스 purchases the gateway refuses by name; they are pinned by the
+# refusal tests at the end of this file, not sent here.
+_PASS_PURCHASES = (
+    "NetworkApi.postPassReserve",
+    "NetworkApi.postPassPayIssue",
+    "NetworkApi.passOtrReserve",
+    "NetworkApi.postPassOtrPayIssue",
+)
 _CONTRACT_NAMES = sorted(V7_CONTRACTS)
+_SENT_CONTRACT_NAMES = sorted(set(V7_CONTRACTS) - set(_PASS_PURCHASES))
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
 _PARTNER_ORIGINS = {
     interface: f"https://{interface.lower()}.example"
@@ -226,9 +235,11 @@ def _wire_values(name: str) -> tuple[dict, bool]:
     return values, False
 
 
-@pytest.mark.parametrize("name", _CONTRACT_NAMES)
+@pytest.mark.parametrize("name", _SENT_CONTRACT_NAMES)
 def test_every_contract_goes_out_as_its_row_describes(name: str) -> None:
-    """Method, host, path, headers and encoding, for each of the 117.
+    """Method, host, path, headers and encoding, for each of the 113 it sends.
+
+    The other four of the 117 are the pass purchases, refused by name.
 
     Mutations are sent with a consent naming that one method; a card-bearing
     one gets the fake-card claim, which is the default.
@@ -297,3 +308,28 @@ def test_every_contract_goes_out_as_its_row_describes(name: str) -> None:
     else:
         assert dict(request.url.params) == values
         assert request.content == b""
+
+
+@pytest.mark.parametrize("name", _PASS_PURCHASES)
+def test_no_consent_can_name_a_pass_purchase(name: str) -> None:
+    # A 정기권/패스 settlement is ₩150,000-₩250,000 with no refund or cancel
+    # route here, and the shipped app never sends passPayIssue at all.
+    # MUTATION_HANDOFF promises no amount of consent can send one; the 7.0.6
+    # gateway lists the contracts because the APK declares them.
+    assert V7_CONTRACTS[name].effect == "mutation"
+    with pytest.raises(KorailProtocolError):
+        V7MutationConsent(allow_methods=frozenset({name}), dry_run=False)
+
+
+@pytest.mark.parametrize("name", _PASS_PURCHASES)
+def test_the_gateway_refuses_a_pass_purchase_even_with_a_forged_consent(
+    name: str,
+) -> None:
+    consent = V7MutationConsent(dry_run=False, real_card_acknowledged=True, fake_card_only=False)
+    object.__setattr__(consent, "allow_methods", frozenset({name}))
+    client = KorailClient(transport=httpx.MockTransport(_never_send))
+    try:
+        with pytest.raises(KorailMutationNotAllowedError, match="never sends"):
+            client.v7.call(name, {}, consent=consent)
+    finally:
+        client.close()

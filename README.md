@@ -10,7 +10,7 @@
 [![문서](https://img.shields.io/badge/%EB%AC%B8%EC%84%9C-yaki.kr-1f6feb?style=flat-square)](https://yaki.kr/korail-mobile-api/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776ab?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
 [![타입](https://img.shields.io/badge/typed-py.typed-2f6f4e?style=flat-square)](src/korail_mobile_api/py.typed)
-[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-3078-4c1?style=flat-square)](#문서)
+[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-3082-4c1?style=flat-square)](#문서)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square)](LICENSE)
 
 [문서](https://yaki.kr/korail-mobile-api/) ·
@@ -303,7 +303,8 @@ Retrofit 계약은 [별도 구현 기록](docs/7.0.6-additions.md)에 정리했�
 
 - **신원 서류 제출** — 주민등록번호 조각을 보내는데 검증할 방법이 없습니다.
 - **비밀번호를 싣는 포인트 라우트** — 틀리면 계정이 잠깁니다.
-- **정기권 구매** — 15만~25만원인데 취소·환불 라우트가 없습니다.
+- **정기권 구매** — 15만~25만원인데 취소·환불 라우트가 없습니다. 7.0.6 계약
+  게이트웨이도 정기권·패스 구매 계약 네 개는 이름으로 거부합니다.
 - **여행변경과 롤백, 예약 인원 변경** — 깨끗한 되돌리기가 없습니다.
 - **비회원 오프라인 반환, 체크인, 회원정보 변경** — 이 버전에 없습니다.
 - **승무원 호출** — `/classes/com.korail.mobile.push.callCrew.do` 는 기존
@@ -329,7 +330,7 @@ Retrofit 계약은 [별도 구현 기록](docs/7.0.6-additions.md)에 정리했�
 | [CHANGELOG.md](CHANGELOG.md) | 무엇이 바뀌었나 |
 
 게이트는 `python3 -m pytest -q -m "not live"` 이고 네트워크를 쓰지 않습니다 —
-`3078 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 이 있을 때만 도는
+`3082 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 이 있을 때만 도는
 실서버 테스트입니다. 기여는 [CONTRIBUTING.md](CONTRIBUTING.md), 규범은
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 참고.
 

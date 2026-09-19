@@ -90,6 +90,9 @@ was discarding.
   **정기권 reads stay** (`get_pass_menu`, `get_pass_available_dates`,
   `get_pass_schedule`); everything that was learned about the purchase is kept
   in README's 정기권 section, including what reviving it would cost to prove.
+  The 7.0.6 gateway (`client.v7`) registers all four pass-purchase contracts,
+  since the APK declares them, and refuses each by name; no
+  `V7MutationConsent` may name one.
   The two `Otr` siblings were never registered and remain out, now for a stated
   reason rather than for scope: they are the 자유이용권 family (내일로 /
   A-PASS / 강릉패스), a different product with a different request shape.
@@ -474,7 +477,7 @@ no payment request and printed or persisted no raw response or identifier.
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
 - The current full offline release gate reports
-  `3078 passed, 1 deselected`; only the explicitly opted-in live-service test
+  `3082 passed, 1 deselected`; only the explicitly opted-in live-service test
   is deselected. Historically the same gate reported `1246 passed, 1 deselected`
   before the P0 live-evidence documentation contract test and
   `1247 passed, 1 deselected` directly after it.
@@ -794,7 +797,7 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-The current reviewed offline gate reports `3078 passed, 1 deselected`; the
+The current reviewed offline gate reports `3082 passed, 1 deselected`; the
 historical gates were `1246 passed, 1 deselected` and, after the P0
 live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
 of those gates, the deselected test is the explicitly opted-in live-service
