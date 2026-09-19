@@ -844,12 +844,16 @@ class KorailClient:
         self,
         request: PassScheduleRequest,
     ) -> PassScheduleResponse:
-        """정기권으로 탈 수 있는 열차 스케줄 한 페이지를 조회합니다."""
+        """정기권으로 탈 수 있는 열차 스케줄 한 페이지를 조회합니다.
+
+        보유분 없으면 ``WRG000000`` 으로 빈 결과(예외 아님).
+        """
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.pass.passScheduleInfoList",
             build_pass_schedule_form(request),
             parser=parse_pass_schedule_response,
+            raise_on_fail=False,
         )
 
     def get_trip_menu(self) -> TripMenuResponse:

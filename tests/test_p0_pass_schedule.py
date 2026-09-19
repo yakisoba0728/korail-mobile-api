@@ -433,6 +433,45 @@ def test_client_clears_session_on_p058(load_json_fixture):
     assert client.session.current is None
 
 
+def test_client_returns_empty_schedules_on_wrg000000():
+    # RV4-02: CommutationInquiryActivity.java:182 treats WRG000000 as a
+    # non-fatal empty result, so the client must not raise KorailNoResultsError
+    # for it (matching get_discount_coupons/get_reservation_history).
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "WRG000000",
+                "h_msg_txt": "none",
+                "strResult": "FAIL",
+            },
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+
+    response = client.get_pass_schedule(_request())
+    assert response.schedules == ()
+
+
+def test_client_still_raises_on_other_fail_codes():
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "WRG999999",
+                "h_msg_txt": "synthetic-other-failure-secret",
+                "strResult": "FAIL",
+            },
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+
+    with pytest.raises(KorailAppError):
+        client.get_pass_schedule(_request())
+
+
 def test_documentation_keeps_unverified_session_and_mutation_boundary():
     root = Path(__file__).resolve().parents[1]
     document = (root / "docs/pass-schedule-read.md").read_text(encoding="utf-8")
