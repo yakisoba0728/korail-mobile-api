@@ -18,6 +18,7 @@ APK 의 Retrofit 선언에서 나왔고, :mod:`korail_mobile_api.safety` 의 필
 전송 직전에 그것을 다시 확인합니다.
 """
 import time
+from typing import TypeGuard
 
 from .config import KorailConfig
 from .constants import (
@@ -33,17 +34,26 @@ def _device_version(config: KorailConfig) -> dict[str, str]:
     return {"Device": config.device, "Version": config.version}
 
 
+def _is_ascii_digits(value: object, lengths: frozenset[int]) -> TypeGuard[str]:
+    """``value`` 가 ``lengths`` 중 한 길이의 ASCII 숫자 문자열인지.
+
+    ``str.isdigit`` 은 전각 숫자도 받으므로 쓰지 않습니다. read_payloads 도 이것을
+    씁니다; 거절할 때의 예외와 문구는 각 모듈이 정합니다.
+    """
+    return (
+        isinstance(value, str)
+        and len(value) in lengths
+        and all("0" <= character <= "9" for character in value)
+    )
+
+
 def _required_ascii_digits(
     value: object,
     name: str,
     *,
     lengths: frozenset[int],
 ) -> str:
-    if (
-        not isinstance(value, str)
-        or len(value) not in lengths
-        or any(character < "0" or character > "9" for character in value)
-    ):
+    if not _is_ascii_digits(value, lengths):
         expected = ", ".join(str(length) for length in sorted(lengths))
         raise KorailProtocolError(
             f"{name} must contain {expected} ASCII digit(s)"

@@ -24,7 +24,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Literal
 
 from .config import KorailConfig
-from .payloads import build_cache_query
+from .payloads import _is_ascii_digits, build_cache_query
 from .read_models import (
     CommuterInfoResponse,
     CommuterPassengerOption,
@@ -94,11 +94,7 @@ def _optional_text(value: str, name: str) -> str:
 
 
 def _ascii_digits(value: str, name: str, length: int) -> str:
-    if (
-        not isinstance(value, str)
-        or len(value) != length
-        or any(character < "0" or character > "9" for character in value)
-    ):
+    if not _is_ascii_digits(value, frozenset({length})):
         raise ValueError(
             f"{name} must contain exactly {length} ASCII digits"
         )

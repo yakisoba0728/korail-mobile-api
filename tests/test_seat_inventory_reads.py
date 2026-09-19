@@ -2503,3 +2503,20 @@ def test_seat_parser_accepts_a_blank_documented_seat_string(
     raw["seatList"][0][field_name] = ""
     seat = _parse_seat(raw).seats[0]
     assert getattr(seat, _SEAT_STRING_ATTRIBUTES[field_name]) == ""
+
+
+@pytest.mark.parametrize("run_date", ["2099010", "209901011", "２０９９０１０１", 20990101])
+def test_the_two_ascii_digit_checks_keep_their_own_errors(run_date):
+    # payloads' check (KorailProtocolError, a set of lengths) and
+    # read_payloads' (ValueError, one length) share one predicate; each keeps
+    # its own exception and wording.
+    from korail_mobile_api.payloads import _required_ascii_digits
+    from korail_mobile_api.read_payloads import FreeSeatCarRequest
+
+    with pytest.raises(ValueError, match=r"^run_date must contain exactly 8 ASCII digits$"):
+        FreeSeatCarRequest(run_date, "101", "1", "2", "1", "2")
+    with pytest.raises(
+        KorailProtocolError, match=r"^run_date must contain 6, 8 ASCII digit\(s\)$"
+    ):
+        _required_ascii_digits(run_date, "run_date", lengths=frozenset({6, 8}))
+    assert _required_ascii_digits("123456", "x", lengths=frozenset({6, 8})) == "123456"
