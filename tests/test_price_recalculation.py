@@ -590,14 +590,19 @@ def test_models_are_exported():
 
 def test_no_live_path_reaches_this_category():
     root = Path(korail_mobile_api.__file__).parents[2]
-    for relative in (
-        "src/korail_mobile_api/live.py",
-        "tests/test_live.py",
-        "tests/test_live_service.py",
-        "tests/test_mutation_live_paths.py",
-        "scripts/reserve_pay_refund_roundtrip.py",
+    # Every script, not one: each is an operator tool that talks to the live
+    # server, and any of them could gain a call.
+    scripts = sorted((root / "scripts").glob("*.py"))
+    assert scripts, "no scripts found; the scan would pass on nothing"
+    for path in (
+        root / "src/korail_mobile_api/live.py",
+        root / "tests/test_live.py",
+        root / "tests/test_live_service.py",
+        root / "tests/test_mutation_live_paths.py",
+        *scripts,
     ):
-        source = (root / relative).read_text(encoding="utf-8")
+        relative = path.relative_to(root).as_posix()
+        source = path.read_text(encoding="utf-8")
         for name in (
             "recalculate_price",
             "allow_price_recalculation",
