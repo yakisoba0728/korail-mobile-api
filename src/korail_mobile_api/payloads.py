@@ -135,15 +135,6 @@ def _validated_room_class_code(value: str) -> str:
     return value
 
 
-def _resolved_goods_no(train: TrainSummary) -> str | None:
-    # x4/b.java:23 forwards trainInfo.getTxtGdNo() verbatim, which is null for a
-    # normal (non-goods) train (SeatSearchRequest.txtGdNo defaults to null), and
-    # Retrofit drops null @Field params (ResearchService getCarList txtGdNo:37 /
-    # getSeatList gdNo:59). So the app OMITS the field for standard searches;
-    # return None here and let the builders leave the key out when there is none.
-    return train.goods_no or None
-
-
 def _inventory_sid(value: str) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError("sid must be a non-empty string")
@@ -178,7 +169,6 @@ def build_seat_car_form(
             seat_attribute_code, "seat_attribute_code", lengths=frozenset({3})
         )
     seat_attribute = seat_attribute_code or train.seat_attribute_code
-    goods_no = _resolved_goods_no(train)
     return {
         **_device_version(config),
         "Key": config.key,
@@ -201,7 +191,12 @@ def build_seat_car_form(
         # omits the @Field (getCarList txtSeatAttCd, ResearchService:37), so
         # omit it here rather than substituting a general-seat "015".
         **({"txtSeatAttCd": seat_attribute} if seat_attribute else {}),
-        **({"txtGdNo": goods_no} if goods_no is not None else {}),
+        # x4/b.java:23 forwards trainInfo.getTxtGdNo() verbatim, which is null for
+        # a normal (non-goods) train (SeatSearchRequest.txtGdNo defaults to null),
+        # and Retrofit drops null @Field params (ResearchService getCarList
+        # txtGdNo:37 / getSeatList gdNo:59). So the app OMITS the field for
+        # standard searches; leave the key out here when there is none.
+        **({"txtGdNo": train.goods_no} if train.goods_no else {}),
     }
 
 
@@ -229,7 +224,6 @@ def build_seat_inventory_form(
         car_no=car_no,
     )
     seat_attribute = train.seat_attribute_code
-    goods_no = _resolved_goods_no(train)
     return {
         **_device_version(config),
         "Key": config.key,
@@ -248,7 +242,8 @@ def build_seat_inventory_form(
         "dptStnRunOrdr": train.departure_run_order or "",
         "arvStnRunOrdr": train.arrival_run_order or "",
         "totPsgCnt": str(passenger_count),
-        **({"gdNo": goods_no} if goods_no is not None else {}),
+        # Same null-@Field omission as build_seat_car_form's txtGdNo, above.
+        **({"gdNo": train.goods_no} if train.goods_no else {}),
         "isArrow": "true",
         "Sid": _inventory_sid(sid),
         "ctlDvCd": "",
