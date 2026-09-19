@@ -8,10 +8,10 @@
 
 """Offline tests for the ``cart`` mutation: adding a PNR to the 장바구니.
 
-Model: ``tests/test_discount_card_mutations.py``, the most recently completed
-mutation category. Same shape: consent gate, route/category cross-check,
-dry-run preview with redaction, and one acknowledged send against a
-``MockTransport`` that records what actually left the process.
+Model: ``tests/test_discount_card_mutations.py``. Same shape: consent gate,
+route/category cross-check, dry-run preview with redaction, and one
+acknowledged send against a ``MockTransport`` that records what actually left
+the process.
 
 ``cart.addCartList`` (``CartService.java:11-13``) takes exactly one request
 field beyond the common three -- ``hidPnrNo`` -- confirmed against

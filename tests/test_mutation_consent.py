@@ -6,12 +6,13 @@
 # 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
 # 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
-"""Offline tests for the mutation safety-model foundation.
+"""Offline tests for the mutation safety model.
 
-These cover the consent gate, the safe-by-default consent/preview types, the
-payload redaction guarantee, and the route tiering. They deliberately assert
-that NO callable mutation capability exists yet: the infrastructure only
-classifies and gates: it never sends.
+These cover the consent gate, the safe-by-default consent and preview types,
+the payload redaction guarantee and the route tiering, and then reserve()
+behind them: refused without its consent or a session, a redacted preview
+under the default dry run, and post_mutation_form refusing a dry-run consent
+outright. Nothing here sends: every client's transport fails the test.
 """
 
 from __future__ import annotations
