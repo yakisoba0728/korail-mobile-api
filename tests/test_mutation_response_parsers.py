@@ -792,3 +792,99 @@ def test_a_mutation_parser_judges_the_envelope_before_any_row(parser, bad_rows):
 def test_a_mutation_parser_names_a_row_that_is_not_an_object(parser, body, message):
     with pytest.raises(KorailProtocolError, match=rf"^KORAIL {message} must be an object$"):
         _mutation_parser(parser)({"strResult": "SUCC", **body})
+
+
+# Every scalar field of the hold, its journeys and the payment coupons, and the
+# wire key it is read from -- written out here, not imported, so a rewrite of
+# the parsers into field maps is checked against this list and not itself.
+_HOLD_KEYS = (
+    ("pnr_no", "h_pnr_no"),
+    ("journey_count", "h_jrny_cnt"),
+    ("window_no", "h_wct_no"),
+    ("temporary_job_sequence_1", "h_tmp_job_sqno1"),
+    ("temporary_job_sequence_2", "h_tmp_job_sqno2"),
+    ("payment_flag", "h_payment_flg"),
+    ("payment_message", "h_payment_msg"),
+    ("payment_deadline_message", "h_pay_limit_msg"),
+    ("payment_deadline_notice", "h_ntisu_lmt"),
+    ("payment_deadline_date", "h_ntisu_lmt_dt"),
+    ("payment_deadline_time", "h_ntisu_lmt_tm"),
+    ("total_fare", "h_tot_fare"),
+    ("total_price", "h_tot_prc"),
+)
+_JOURNEY_KEYS = (
+    ("journey_sequence", "h_jrny_sqno"),
+    ("reservation_change_no", "h_rsv_chg_no"),
+    ("departure_date", "h_dpt_dt"),
+    ("departure_time", "h_dpt_tm"),
+    ("arrival_time", "h_arv_tm"),
+    ("departure_station_code", "h_dpt_rs_stn_cd"),
+    ("arrival_station_code", "h_arv_rs_stn_cd"),
+    ("train_no", "h_trn_no"),
+)
+_COUPON_KEYS = (
+    ("certificate_password", "h_cert_pwd"),
+    ("coupon_no", "h_coup_no"),
+    ("management_close_date", "h_fdcert_mg_cls_dt"),
+    ("management_start_date", "h_fdcert_mg_st_dt"),
+    ("ticket_return_no", "h_tk_ret_no"),
+)
+
+
+def test_the_hold_key_tables_cover_every_scalar_field():
+    from dataclasses import fields
+
+    from korail_mobile_api.mutation_models import (
+        ReservationHoldResponse,
+        ReservationJourney,
+        ReservationPaymentCoupon,
+    )
+
+    envelope = {"h_msg_cd", "h_msg_txt", "str_result", "raw"}
+    assert {f.name for f in fields(ReservationHoldResponse)} == (
+        {attr for attr, _ in _HOLD_KEYS} | envelope | {"received_amount", "journeys"}
+    )
+    assert {f.name for f in fields(ReservationJourney)} == (
+        {attr for attr, _ in _JOURNEY_KEYS} | {"raw"}
+    )
+    assert {f.name for f in fields(ReservationPaymentCoupon)} == (
+        {attr for attr, _ in _COUPON_KEYS} | {"raw"}
+    )
+
+
+def _hold_field(attr, key, value):
+    return getattr(parse_reservation_hold_response({"strResult": "SUCC", key: value}), attr)
+
+
+def _journey_field(attr, key, value):
+    hold = parse_reservation_hold_response(
+        {"strResult": "SUCC", "jrny_infos": {"jrny_info": [{key: value}]}}
+    )
+    return getattr(hold.journeys[0], attr)
+
+
+def _coupon_field(attr, key, value):
+    payment = parse_reservation_payment_response(
+        {"strResult": "SUCC", "tk_coupon_info": [{key: value}]}
+    )
+    return getattr(payment.coupons[0], attr)
+
+
+@pytest.mark.parametrize(
+    ("read", "attr", "key", "context"),
+    [(_hold_field, a, k, "reservation") for a, k in _HOLD_KEYS]
+    + [(_journey_field, a, k, "reservation journey") for a, k in _JOURNEY_KEYS]
+    + [(_coupon_field, a, k, "payment coupon") for a, k in _COUPON_KEYS],
+    ids=[f"hold-{a}" for a, _ in _HOLD_KEYS]
+    + [f"journey-{a}" for a, _ in _JOURNEY_KEYS]
+    + [f"coupon-{a}" for a, _ in _COUPON_KEYS],
+)
+def test_each_hold_payment_field_reads_its_own_key(read, attr, key, context):
+    assert read(attr, key, "SYNTHETIC-VALUE") == "SYNTHETIC-VALUE"
+    assert read(attr, key, 7) == "7"
+    assert read(attr, key, None) is None
+    with pytest.raises(
+        KorailProtocolError,
+        match=rf"^KORAIL {context} field {key} must be a string, an integer, or null$",
+    ):
+        read(attr, key, [7])

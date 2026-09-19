@@ -344,6 +344,46 @@ def _base_fields(base: BaseKorailResponse) -> dict[str, Any]:
     }
 
 
+# The hold's scalar fields and their wire keys. received_amount and journeys
+# are computed and stay out of it.
+_RESERVATION_HOLD_FIELDS = {
+    "pnr_no": "h_pnr_no",
+    "journey_count": "h_jrny_cnt",
+    "window_no": "h_wct_no",
+    "temporary_job_sequence_1": "h_tmp_job_sqno1",
+    "temporary_job_sequence_2": "h_tmp_job_sqno2",
+    "payment_flag": "h_payment_flg",
+    "payment_message": "h_payment_msg",
+    "payment_deadline_message": "h_pay_limit_msg",
+    "payment_deadline_notice": "h_ntisu_lmt",
+    "payment_deadline_date": "h_ntisu_lmt_dt",
+    "payment_deadline_time": "h_ntisu_lmt_tm",
+    "total_fare": "h_tot_fare",
+    "total_price": "h_tot_prc",
+}
+
+# A reserved journey's fields, one jrny_info row each.
+_RESERVATION_JOURNEY_FIELDS = {
+    "journey_sequence": "h_jrny_sqno",
+    "reservation_change_no": "h_rsv_chg_no",
+    "departure_date": "h_dpt_dt",
+    "departure_time": "h_dpt_tm",
+    "arrival_time": "h_arv_tm",
+    "departure_station_code": "h_dpt_rs_stn_cd",
+    "arrival_station_code": "h_arv_rs_stn_cd",
+    "train_no": "h_trn_no",
+}
+
+# A paid ticket's coupon fields, one tk_coupon_info row each.
+_PAYMENT_COUPON_FIELDS = {
+    "certificate_password": "h_cert_pwd",
+    "coupon_no": "h_coup_no",
+    "management_close_date": "h_fdcert_mg_cls_dt",
+    "management_start_date": "h_fdcert_mg_st_dt",
+    "ticket_return_no": "h_tk_ret_no",
+}
+
+
 def parse_reservation_hold_response(
     raw: Mapping[str, Any],
 ) -> ReservationHoldResponse:
@@ -387,109 +427,25 @@ def parse_reservation_hold_response(
         row = dict(_row(value, "reservation journey"))
         journeys.append(
             ReservationJourney(
-                journey_sequence=_optional_string(
-                    row,
-                    "h_jrny_sqno",
-                    context="reservation journey",
-                ),
-                reservation_change_no=_optional_string(
-                    row,
-                    "h_rsv_chg_no",
-                    context="reservation journey",
-                ),
-                departure_date=_optional_string(
-                    row,
-                    "h_dpt_dt",
-                    context="reservation journey",
-                ),
-                departure_time=_optional_string(
-                    row,
-                    "h_dpt_tm",
-                    context="reservation journey",
-                ),
-                arrival_time=_optional_string(
-                    row,
-                    "h_arv_tm",
-                    context="reservation journey",
-                ),
-                departure_station_code=_optional_string(
-                    row,
-                    "h_dpt_rs_stn_cd",
-                    context="reservation journey",
-                ),
-                arrival_station_code=_optional_string(
-                    row,
-                    "h_arv_rs_stn_cd",
-                    context="reservation journey",
-                ),
-                train_no=_optional_string(
-                    row,
-                    "h_trn_no",
-                    context="reservation journey",
-                ),
+                **{
+                    attr: _optional_string(row, wire_key, context="reservation journey")
+                    for attr, wire_key in _RESERVATION_JOURNEY_FIELDS.items()
+                },
                 raw=row,
             )
         )
 
     return ReservationHoldResponse(
-        **_base_fields(base),
-        pnr_no=_optional_string(copied, "h_pnr_no", context="reservation"),
-        journey_count=_optional_string(
-            copied,
-            "h_jrny_cnt",
-            context="reservation",
-        ),
-        window_no=_optional_string(copied, "h_wct_no", context="reservation"),
-        temporary_job_sequence_1=_optional_string(
-            copied,
-            "h_tmp_job_sqno1",
-            context="reservation",
-        ),
-        temporary_job_sequence_2=_optional_string(
-            copied,
-            "h_tmp_job_sqno2",
-            context="reservation",
-        ),
-        payment_flag=_optional_string(
-            copied,
-            "h_payment_flg",
-            context="reservation",
-        ),
-        payment_message=_optional_string(
-            copied,
-            "h_payment_msg",
-            context="reservation",
-        ),
-        payment_deadline_message=_optional_string(
-            copied,
-            "h_pay_limit_msg",
-            context="reservation",
-        ),
-        payment_deadline_notice=_optional_string(
-            copied,
-            "h_ntisu_lmt",
-            context="reservation",
-        ),
-        payment_deadline_date=_optional_string(
-            copied,
-            "h_ntisu_lmt_dt",
-            context="reservation",
-        ),
-        payment_deadline_time=_optional_string(
-            copied,
-            "h_ntisu_lmt_tm",
-            context="reservation",
-        ),
-        total_fare=_optional_string(
-            copied,
-            "h_tot_fare",
-            context="reservation",
-        ),
-        total_price=_optional_string(
-            copied,
-            "h_tot_prc",
-            context="reservation",
-        ),
+        # Spelled out rather than **_base_fields(base): with the field map
+        # also unpacked, the type checker cannot tell which one fills raw.
+        h_msg_cd=base.h_msg_cd,
+        h_msg_txt=base.h_msg_txt,
+        str_result=base.str_result,
+        raw=base.raw,
+        **{
+            attr: _optional_string(copied, wire_key, context="reservation")
+            for attr, wire_key in _RESERVATION_HOLD_FIELDS.items()
+        },
         received_amount=_received_amount(
             copied,
             [journey.raw for journey in journeys],
@@ -525,31 +481,10 @@ def parse_reservation_payment_response(
         row = dict(_row(value, "payment coupon"))
         coupons.append(
             ReservationPaymentCoupon(
-                certificate_password=_optional_string(
-                    row,
-                    "h_cert_pwd",
-                    context="payment coupon",
-                ),
-                coupon_no=_optional_string(
-                    row,
-                    "h_coup_no",
-                    context="payment coupon",
-                ),
-                management_close_date=_optional_string(
-                    row,
-                    "h_fdcert_mg_cls_dt",
-                    context="payment coupon",
-                ),
-                management_start_date=_optional_string(
-                    row,
-                    "h_fdcert_mg_st_dt",
-                    context="payment coupon",
-                ),
-                ticket_return_no=_optional_string(
-                    row,
-                    "h_tk_ret_no",
-                    context="payment coupon",
-                ),
+                **{
+                    attr: _optional_string(row, wire_key, context="payment coupon")
+                    for attr, wire_key in _PAYMENT_COUPON_FIELDS.items()
+                },
                 raw=row,
             )
         )
