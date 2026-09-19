@@ -478,8 +478,8 @@ class KorailClient:
             raise KorailAuthError(f"KORAIL {what} an authenticated session")
 
     # ------------------------------------------------------------------
-    # Internal helpers: the read skeleton (post → parser → _run_read) and the
-    # mutation skeleton (_mutation: dry-run branch → send → parse)
+    # Internal helpers: the read skeleton (post/get → parser → _run_read) and
+    # the mutation skeleton (_mutation: dry-run branch → send → parse)
     # ------------------------------------------------------------------
 
     def _post_read(
@@ -503,6 +503,27 @@ class KorailClient:
                     include_dynapath=include_dynapath,
                     require_envelope=require_envelope,
                     raise_on_fail=raise_on_fail,
+                ).raw
+            )
+        )
+
+    def _get_read(
+        self,
+        route: str,
+        params: Mapping[str, Any] | None = None,
+        *,
+        parser: Callable[[dict[str, Any]], T],
+        require_envelope: bool = True,
+    ) -> T:
+        """GET 읽기의 공통 골격: GET → 파싱 → 세션만료 복구."""
+        return self._run_read(
+            lambda: parser(
+                self.http.get_json(
+                    route,
+                    params,
+                    include_common=True,
+                    include_dynapath=False,
+                    require_envelope=require_envelope,
                 ).raw
             )
         )
@@ -872,15 +893,10 @@ class KorailClient:
     ) -> CommuterKindMenuResponse:
         """정기권 종류 하나의 안내 문구와 조회 파라미터를 받아 옵니다."""
         query = build_commuter_kind_menu_query(commuter_kind_code)
-        return self._run_read(
-            lambda: parse_commuter_kind_menu_response(
-                self.http.get_json(
-                    "/classes/com.korail.mobile.push.cmtrKnd.do",
-                    query,
-                    include_common=True,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._get_read(
+            "/classes/com.korail.mobile.push.cmtrKnd.do",
+            query,
+            parser=parse_commuter_kind_menu_response,
         )
 
     def get_product_reservations(
@@ -899,16 +915,11 @@ class KorailClient:
             reservation_status_code=reservation_status_code,
             payment_status_code=payment_status_code,
         )
-        return self._run_read(
-            lambda: parse_product_reservation_list_response(
-                self.http.get_json(
-                    "/classes/com.korail.mobile.product.ReservationList",
-                    query,
-                    include_common=True,
-                    include_dynapath=False,
-                    require_envelope=False,
-                ).raw
-            )
+        return self._get_read(
+            "/classes/com.korail.mobile.product.ReservationList",
+            query,
+            parser=parse_product_reservation_list_response,
+            require_envelope=False,
         )
 
     def get_product_detail(
@@ -922,15 +933,10 @@ class KorailClient:
             reservation_no,
             reservation_sequence,
         )
-        return self._run_read(
-            lambda: parse_product_detail_response(
-                self.http.get_json(
-                    "/classes/com.korail.mobile.product.ReservationDetail",
-                    query,
-                    include_common=True,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._get_read(
+            "/classes/com.korail.mobile.product.ReservationDetail",
+            query,
+            parser=parse_product_detail_response,
         )
 
     def get_ticket_receipt(
@@ -1063,15 +1069,10 @@ class KorailClient:
     ) -> TripChangeDateResponse:
         """승차권 변경으로 옮겨 갈 수 있는 날짜 목록을 조회합니다."""
         self._require_session()
-        return self._run_read(
-            lambda: parse_trip_change_date_response(
-                self.http.get_json(
-                    "/classes/com.korail.mobile.reservation.tripChgDate.do",
-                    build_trip_change_date_form(departure_date),
-                    include_common=True,
-                    include_dynapath=False,
-                ).raw
-            )
+        return self._get_read(
+            "/classes/com.korail.mobile.reservation.tripChgDate.do",
+            build_trip_change_date_form(departure_date),
+            parser=parse_trip_change_date_response,
         )
 
     def get_commuter_info(
