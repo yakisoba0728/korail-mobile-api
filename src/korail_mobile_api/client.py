@@ -478,6 +478,15 @@ class KorailClient:
         if self.session.current is None:
             raise KorailAuthError(f"KORAIL {what} an authenticated session")
 
+    def _require_customer_no(self, what: str) -> str:
+        """No session or customer number: ``KORAIL <what> requires a login customer number``."""
+        self._require_session()
+        session = self.session.current
+        customer_no = session.customer_no if session is not None else None
+        if not isinstance(customer_no, str) or not customer_no.strip():
+            raise KorailAuthError(f"KORAIL {what} requires a login customer number")
+        return customer_no
+
     # ------------------------------------------------------------------
     # Internal helpers: the read skeleton (post/get → parser → _run_read) and
     # the mutation skeleton (_mutation: dry-run branch → _run_read → parse),
@@ -1031,13 +1040,7 @@ class KorailClient:
 
     def get_customer_trip_info(self) -> CustomerTripInfoResponse:
         """로그인 계정에 저장된 여행 편의설정을 조회합니다."""
-        self._require_session()
-        session = self.session.current
-        customer_no = session.customer_no if session is not None else None
-        if not isinstance(customer_no, str) or not customer_no.strip():
-            raise KorailAuthError(
-                "KORAIL customer trip read requires a login customer number"
-            )
+        customer_no = self._require_customer_no("customer trip read")
         return self._post_read(
             "/classes/com.korail.mobile.research.custTripInfo.do",
             build_customer_trip_info_form(customer_no),
@@ -1164,13 +1167,7 @@ class KorailClient:
 
     def get_recent_delivery_history(self) -> RecentDeliveryHistoryResponse:
         """최근에 승차권을 전달했던 수령자 목록을 조회합니다."""
-        self._require_session()
-        session = self.session.current
-        customer_no = session.customer_no if session is not None else None
-        if not isinstance(customer_no, str) or not customer_no.strip():
-            raise KorailAuthError(
-                "KORAIL delivery history read requires a login customer number"
-            )
+        customer_no = self._require_customer_no("delivery history read")
         return self._post_read(
             "/classes/com.korail.mobile.tk.rcntDlvHst.do",
             build_recent_delivery_history_form(customer_no),
