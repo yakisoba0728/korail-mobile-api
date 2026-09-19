@@ -144,23 +144,36 @@ def get_tid_chk_enter_params(
     )
 
 
+def _keyed_opcode_params(
+    opcode: KorailNetFunnelOpcode,
+    key: str,
+    *,
+    purpose: str,
+) -> tuple[tuple[str, str], ...]:
+    """``opcode``+``key`` 만 싣는 요청 파라미터 — 5002/5004 공통 형태."""
+    if not key:
+        raise ValueError(f"{purpose} requires a non-empty key")
+    return (
+        ("opcode", opcode.value),
+        ("key", key),
+    )
+
+
 def chk_enter_params(key: str) -> tuple[tuple[str, str], ...]:
     """5002 파라미터: ``opcode``, ``key`` (``T6/d.java:54-55``)."""
-    if not key:
-        raise ValueError("chkEnter requires the key the queue issued")
-    return (
-        ("opcode", KorailNetFunnelOpcode.CHK_ENTER.value),
-        ("key", key),
+    return _keyed_opcode_params(
+        KorailNetFunnelOpcode.CHK_ENTER,
+        key,
+        purpose="chkEnter",
     )
 
 
 def set_complete_params(key: str) -> tuple[tuple[str, str], ...]:
     """5004 파라미터: ``opcode``, ``key`` (``T6/d.java:78-79``)."""
-    if not key:
-        raise ValueError("setComplete requires the key whose slot is released")
-    return (
-        ("opcode", KorailNetFunnelOpcode.SET_COMPLETE.value),
-        ("key", key),
+    return _keyed_opcode_params(
+        KorailNetFunnelOpcode.SET_COMPLETE,
+        key,
+        purpose="setComplete",
     )
 
 
@@ -390,10 +403,12 @@ class KorailNetFunnelClient:
         return parse_queue_response(body, action=str(action))
 
     def release(self, token: KorailNetFunnelToken) -> None:
-        """5004 — 슬롯을 놓습니다. 전송 실패만 예외로 처리합니다.
+        """5004 — 슬롯을 놓습니다.
 
         키 없는 BYPASS(300)·ExpressNumber(303)는 놓을 것이 없으므로 즉시 리턴
-        (``T6/d.java:70-73`` ``getKey().length() < 1``).
+        (``T6/d.java:70-73`` ``getKey().length() < 1``). 그 외의 키 없는 토큰
+        (코드가 300/303 이 아님)은 네트워크를 건드리지 않고 바로
+        :class:`~korail_mobile_api.errors.KorailNetFunnelError` 를 냅니다.
         """
         if not token.key:
             if token.code in KEYLESS_PASS_CODES:
