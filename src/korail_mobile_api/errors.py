@@ -17,6 +17,7 @@
     │   ├── KorailSessionExpiredError     P058
     │   └── KorailAuthContinuationRequired  WebView 후속 인증
     ├── KorailDynaPathError               안티매크로 거절(응답 헤더)
+    ├── KorailDynaPathRequiredError       DynaPath 가 꺼진 채 요구 경로 호출(전송 전)
     ├── KorailAppError                    서버가 h_msg_cd 로 알린 실패
     │   ├── KorailNoResultsError
     │   │   └── KorailNoDirectTrainError
@@ -272,8 +273,11 @@ class KorailMutationNotAllowedError(KorailApiError):
 class KorailDynaPathRequiredError(KorailApiError):
     """DynaPath 가 필요한 경로인데 설정이 꺼져 있습니다.
 
-    :data:`~korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS` 의 여섯 경로는
-    토큰 없이 부르면 서버가 거절합니다. 이 라이브러리는 전송 전에 막습니다.
+    :data:`~korail_mobile_api.constants.DYNAPATH_REQUIRED_PATHS` 의 경로(지금은
+    ``login.Login`` 하나)는 토큰 없이 부르면 서버가 거절하므로, 설정이 꺼져 있으면
+    이 라이브러리가 전송 전에 막습니다. 허용목록
+    (:data:`~korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS`)의 나머지 다섯
+    경로는 토큰 없이도 나갑니다.
     :class:`KorailDynaPathError` 와 다릅니다 — 그쪽은 토큰을 보냈는데 서버가
     거절한 것이고, 이쪽은 아직 아무것도 보내지 않았습니다.
     """
