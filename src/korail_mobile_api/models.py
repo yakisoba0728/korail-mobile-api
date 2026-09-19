@@ -417,6 +417,59 @@ def _train_optional_int(
     return value
 
 
+#: TrainSummary 의 ``train_no``·``goods_no``·``total_passenger_count`` 를 뺀 필드와
+#: 그 필드를 읽는 키. 세 번째 칸이 있으면 첫 키가 없거나 거짓일 때 그 철자를
+#: 읽습니다(``h_trn_gp_cd`` 와 ``trnGpCd`` 등). 오류는 언제나 첫 키 이름으로 냅니다.
+_TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
+    ("train_group_code", "h_trn_gp_cd", "trnGpCd"),
+    ("departure_station_code", "h_dpt_rs_stn_cd", "dptRsStnCd"),
+    ("arrival_station_code", "h_arv_rs_stn_cd", "arvRsStnCd"),
+    ("departure_station_name", "h_dpt_rs_stn_nm", "dptRsStnNm"),
+    ("arrival_station_name", "h_arv_rs_stn_nm", "arvRsStnNm"),
+    ("departure_date", "h_dpt_dt", "dptDt"),
+    ("departure_time", "h_dpt_tm", "dptTm"),
+    ("arrival_time", "h_arv_tm", "arvTm"),
+    ("run_date", "h_run_dt", "runDt"),
+    ("train_class_code", "h_trn_clsf_cd", "trnClsfCd"),
+    ("departure_run_order", "h_dpt_stn_run_ordr", "dptStnRunOrdr"),
+    ("arrival_run_order", "h_arv_stn_run_ordr", "arvStnRunOrdr"),
+    ("seat_map_flag", "h_rd_seat_map_flg", None),
+    ("general_reservation_code", "h_gen_rsv_cd", None),
+    ("departure_construction_order", "h_dpt_stn_cons_ordr", None),
+    ("arrival_construction_order", "h_arv_stn_cons_ordr", None),
+    ("seat_attribute_code", "h_seat_att_cd", None),
+    ("car_type_code", "h_car_tp_cd", None),
+    ("car_type_name", "h_car_tp_nm", None),
+    ("train_class_name", "h_trn_clsf_nm", None),
+    ("train_group_name", "h_trn_gp_nm", None),
+    ("general_room_class_name", "h_gen_psrm_cl_nm", None),
+    ("special_room_class_name", "h_spe_psrm_cl_nm", None),
+    ("secondary_general_reservation_code", "h_gen_rsv_cd2", None),
+    ("special_reservation_code", "h_spe_rsv_cd", None),
+    ("secondary_special_reservation_code", "h_spe_rsv_cd2", None),
+    ("free_reservation_code", "h_free_rsv_cd", None),
+    ("standing_reservation_code", "h_stnd_rsv_cd", None),
+    ("general_availability_name", "h_rsv_psb_nm", None),
+    ("special_availability_name", "h_spe_rsv_psb_nm", None),
+    ("wait_reservation_flag", "h_wait_rsv_flg", None),
+    ("standard_remaining_seat_count", "h_std_rest_seat_cnt", None),
+    ("first_class_remaining_seat_count", "h_fst_rest_seat_cnt", None),
+    ("free_car_count", "h_free_sracar_cnt", None),
+    ("reservation_wait_passenger_count", "h_rsv_wait_ps_cnt", None),
+    ("change_train_sequence", "h_chg_trn_seq", None),
+    ("change_train_division_code", "h_chg_trn_dv_cd", None),
+    ("merge_seat_application_flag", "h_yms_apl_flg", None),
+    ("train_suspension_flag", "h_trn_sps_flg", None),
+)
+
+
+def _train_value(raw: dict[str, Any], key: str, fallback: str | None) -> str | None:
+    value = raw.get(key)
+    if fallback is not None:
+        value = value or raw.get(fallback)
+    return _train_scalar(value, key)
+
+
 @dataclass(frozen=True)
 class TrainSummary:
     """열차 검색 결과의 한 행. 예약 폼이 필요한 값이 전부 여기 있습니다.
@@ -530,153 +583,19 @@ class TrainSummary:
         return cls(
             # _train_scalar 를 지난 뒤 ""로 기본값을 준다. train_no 만이
             # 이 클래스에서 유일하게 선택적이지 않은 속성이다.
-            train_no=_train_scalar(
-                raw.get("h_trn_no") or raw.get("trnNo"), "h_trn_no"
-            )
-            or "",
-            train_group_code=_train_scalar(
-                raw.get("h_trn_gp_cd") or raw.get("trnGpCd"), "h_trn_gp_cd"
-            ),
-            departure_station_code=_train_scalar(
-                raw.get("h_dpt_rs_stn_cd") or raw.get("dptRsStnCd"),
-                "h_dpt_rs_stn_cd",
-            ),
-            arrival_station_code=_train_scalar(
-                raw.get("h_arv_rs_stn_cd") or raw.get("arvRsStnCd"),
-                "h_arv_rs_stn_cd",
-            ),
-            departure_station_name=_train_scalar(
-                raw.get("h_dpt_rs_stn_nm") or raw.get("dptRsStnNm"),
-                "h_dpt_rs_stn_nm",
-            ),
-            arrival_station_name=_train_scalar(
-                raw.get("h_arv_rs_stn_nm") or raw.get("arvRsStnNm"),
-                "h_arv_rs_stn_nm",
-            ),
-            departure_date=_train_scalar(
-                raw.get("h_dpt_dt") or raw.get("dptDt"), "h_dpt_dt"
-            ),
-            departure_time=_train_scalar(
-                raw.get("h_dpt_tm") or raw.get("dptTm"), "h_dpt_tm"
-            ),
-            arrival_time=_train_scalar(
-                raw.get("h_arv_tm") or raw.get("arvTm"), "h_arv_tm"
-            ),
-            run_date=_train_scalar(
-                raw.get("h_run_dt") or raw.get("runDt"), "h_run_dt"
-            ),
-            train_class_code=_train_scalar(
-                raw.get("h_trn_clsf_cd") or raw.get("trnClsfCd"),
-                "h_trn_clsf_cd",
-            ),
-            departure_run_order=_train_scalar(
-                raw.get("h_dpt_stn_run_ordr") or raw.get("dptStnRunOrdr"),
-                "h_dpt_stn_run_ordr",
-            ),
-            arrival_run_order=_train_scalar(
-                raw.get("h_arv_stn_run_ordr") or raw.get("arvStnRunOrdr"),
-                "h_arv_stn_run_ordr",
-            ),
-            seat_map_flag=_train_optional_string(raw, "h_rd_seat_map_flg"),
-            general_reservation_code=_train_optional_string(
-                raw,
-                "h_gen_rsv_cd",
-            ),
-            departure_construction_order=_train_optional_string(
-                raw,
-                "h_dpt_stn_cons_ordr",
-            ),
-            arrival_construction_order=_train_optional_string(
-                raw,
-                "h_arv_stn_cons_ordr",
-            ),
-            seat_attribute_code=_train_optional_string(
-                raw,
-                "h_seat_att_cd",
-            ),
-            car_type_code=_train_optional_string(raw, "h_car_tp_cd"),
-            car_type_name=_train_optional_string(raw, "h_car_tp_nm"),
-            train_class_name=_train_optional_string(raw, "h_trn_clsf_nm"),
-            train_group_name=_train_optional_string(raw, "h_trn_gp_nm"),
-            general_room_class_name=_train_optional_string(
-                raw,
-                "h_gen_psrm_cl_nm",
-            ),
-            special_room_class_name=_train_optional_string(
-                raw,
-                "h_spe_psrm_cl_nm",
-            ),
-            secondary_general_reservation_code=_train_optional_string(
-                raw,
-                "h_gen_rsv_cd2",
-            ),
-            special_reservation_code=_train_optional_string(
-                raw,
-                "h_spe_rsv_cd",
-            ),
-            secondary_special_reservation_code=_train_optional_string(
-                raw,
-                "h_spe_rsv_cd2",
-            ),
-            free_reservation_code=_train_optional_string(
-                raw,
-                "h_free_rsv_cd",
-            ),
-            standing_reservation_code=_train_optional_string(
-                raw,
-                "h_stnd_rsv_cd",
-            ),
-            general_availability_name=_train_optional_string(
-                raw,
-                "h_rsv_psb_nm",
-            ),
-            special_availability_name=_train_optional_string(
-                raw,
-                "h_spe_rsv_psb_nm",
-            ),
-            wait_reservation_flag=_train_optional_string(
-                raw,
-                "h_wait_rsv_flg",
-            ),
-            standard_remaining_seat_count=_train_optional_string(
-                raw,
-                "h_std_rest_seat_cnt",
-            ),
-            first_class_remaining_seat_count=_train_optional_string(
-                raw,
-                "h_fst_rest_seat_cnt",
-            ),
-            free_car_count=_train_optional_string(
-                raw,
-                "h_free_sracar_cnt",
-            ),
-            reservation_wait_passenger_count=_train_optional_string(
-                raw,
-                "h_rsv_wait_ps_cnt",
-            ),
+            train_no=_train_value(raw, "h_trn_no", "trnNo") or "",
+            **{
+                attr: _train_value(raw, key, fallback)
+                for attr, key, fallback in _TRAIN_SUMMARY_KEYS
+            },
             total_passenger_count=_train_optional_int(raw, "totPsgCnt"),
             # x4/b.java:23 이 좌석 검색의 txtGdNo 를 trainInfo.getTxtGdNo()
             # 에서 가져오므로, 좌석 조회 폼이 넘길 수 있게 열차 행에서
-            # 상품번호(h_gd_no / txtGdNo)를 붙잡아 둔다.
+            # 상품번호(h_gd_no / txtGdNo)를 붙잡아 둔다. 다른 두 철자 필드와
+            # 달리 첫 키가 거짓이어도 먼저 검사한다.
             goods_no=(
                 _train_optional_string(raw, "h_gd_no")
                 or _train_optional_string(raw, "txtGdNo")
-            ),
-            change_train_sequence=_train_optional_string(
-                raw,
-                "h_chg_trn_seq",
-            ),
-            change_train_division_code=_train_optional_string(
-                raw,
-                "h_chg_trn_dv_cd",
-            ),
-            merge_seat_application_flag=_train_optional_string(
-                raw,
-                "h_yms_apl_flg",
-            ),
-            train_suspension_flag=_train_optional_string(
-                raw,
-                "h_trn_sps_flg",
             ),
             raw=raw,
         )

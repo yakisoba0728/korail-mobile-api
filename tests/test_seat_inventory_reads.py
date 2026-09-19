@@ -228,6 +228,137 @@ def test_new_public_models_are_frozen_dataclasses_and_exported():
     }
 
 
+# Every TrainSummary field and the keys it is read from, written out here and
+# not imported, so a refactor of from_raw is checked against this list rather
+# than against itself. The fallback spelling is the one read when the primary
+# is absent OR falsy (from_raw uses `or`).
+_TRAIN_DUAL_KEYS = (
+    ("train_no", "h_trn_no", "trnNo"),
+    ("train_group_code", "h_trn_gp_cd", "trnGpCd"),
+    ("departure_station_code", "h_dpt_rs_stn_cd", "dptRsStnCd"),
+    ("arrival_station_code", "h_arv_rs_stn_cd", "arvRsStnCd"),
+    ("departure_station_name", "h_dpt_rs_stn_nm", "dptRsStnNm"),
+    ("arrival_station_name", "h_arv_rs_stn_nm", "arvRsStnNm"),
+    ("departure_date", "h_dpt_dt", "dptDt"),
+    ("departure_time", "h_dpt_tm", "dptTm"),
+    ("arrival_time", "h_arv_tm", "arvTm"),
+    ("run_date", "h_run_dt", "runDt"),
+    ("train_class_code", "h_trn_clsf_cd", "trnClsfCd"),
+    ("departure_run_order", "h_dpt_stn_run_ordr", "dptStnRunOrdr"),
+    ("arrival_run_order", "h_arv_stn_run_ordr", "arvStnRunOrdr"),
+)
+_TRAIN_SINGLE_KEYS = (
+    ("seat_map_flag", "h_rd_seat_map_flg"),
+    ("general_reservation_code", "h_gen_rsv_cd"),
+    ("departure_construction_order", "h_dpt_stn_cons_ordr"),
+    ("arrival_construction_order", "h_arv_stn_cons_ordr"),
+    ("seat_attribute_code", "h_seat_att_cd"),
+    ("car_type_code", "h_car_tp_cd"),
+    ("car_type_name", "h_car_tp_nm"),
+    ("train_class_name", "h_trn_clsf_nm"),
+    ("train_group_name", "h_trn_gp_nm"),
+    ("general_room_class_name", "h_gen_psrm_cl_nm"),
+    ("special_room_class_name", "h_spe_psrm_cl_nm"),
+    ("secondary_general_reservation_code", "h_gen_rsv_cd2"),
+    ("special_reservation_code", "h_spe_rsv_cd"),
+    ("secondary_special_reservation_code", "h_spe_rsv_cd2"),
+    ("free_reservation_code", "h_free_rsv_cd"),
+    ("standing_reservation_code", "h_stnd_rsv_cd"),
+    ("general_availability_name", "h_rsv_psb_nm"),
+    ("special_availability_name", "h_spe_rsv_psb_nm"),
+    ("wait_reservation_flag", "h_wait_rsv_flg"),
+    ("standard_remaining_seat_count", "h_std_rest_seat_cnt"),
+    ("first_class_remaining_seat_count", "h_fst_rest_seat_cnt"),
+    ("free_car_count", "h_free_sracar_cnt"),
+    ("reservation_wait_passenger_count", "h_rsv_wait_ps_cnt"),
+    ("change_train_sequence", "h_chg_trn_seq"),
+    ("change_train_division_code", "h_chg_trn_dv_cd"),
+    ("merge_seat_application_flag", "h_yms_apl_flg"),
+    ("train_suspension_flag", "h_trn_sps_flg"),
+)
+
+
+def test_the_train_key_table_covers_every_field():
+    covered = (
+        {attr for attr, _, _ in _TRAIN_DUAL_KEYS}
+        | {attr for attr, _ in _TRAIN_SINGLE_KEYS}
+        | {"goods_no", "total_passenger_count", "raw"}
+    )
+    assert covered == {field_.name for field_ in fields(TrainSummary)}
+
+
+@pytest.mark.parametrize(("attr", "primary", "fallback"), _TRAIN_DUAL_KEYS)
+def test_train_summary_reads_each_dual_key_field_from_either_spelling(
+    attr, primary, fallback
+):
+    def read(raw):
+        return getattr(TrainSummary.from_raw(raw), attr)
+
+    assert read({fallback: "B"}) == "B"
+    assert read({primary: "A", fallback: "B"}) == "A"
+    # A falsy primary falls through to the other spelling, "" and 0 alike.
+    assert read({primary: "", fallback: "B"}) == "B"
+    assert read({primary: 0, fallback: "B"}) == "B"
+    assert read({primary: 7}) == "7"
+    assert read({fallback: 7}) == "7"
+    # Whichever spelling carried it, a bad value is reported by the primary
+    # name.
+    for raw in ({primary: ["x"]}, {fallback: ["x"]}, {primary: [], fallback: True}):
+        with pytest.raises(KorailProtocolError, match=f"field {primary} must be"):
+            read(raw)
+    # ...and a falsy bad primary is not examined at all.
+    assert read({primary: [], fallback: "B"}) == "B"
+
+
+def test_train_summary_dual_key_absence_is_none_except_train_no():
+    train = TrainSummary.from_raw({})
+    assert train.train_no == ""
+    assert train.train_no == TrainSummary.from_raw({"h_trn_no": 0}).train_no
+    for attr, _, _ in _TRAIN_DUAL_KEYS[1:]:
+        assert getattr(train, attr) is None
+
+
+@pytest.mark.parametrize(("attr", "key"), _TRAIN_SINGLE_KEYS)
+def test_train_summary_reads_each_single_key_field_from_one_spelling(attr, key):
+    def read(raw):
+        return getattr(TrainSummary.from_raw(raw), attr)
+
+    assert read({key: "A"}) == "A"
+    assert read({key: 7}) == "7"
+    # No fallback, so a falsy value is kept as it came, and is still checked.
+    assert read({key: ""}) == ""
+    assert read({}) is None
+    with pytest.raises(KorailProtocolError, match=f"field {key} must be"):
+        read({key: []})
+    camel = "".join(
+        part if index == 0 else part.capitalize()
+        for index, part in enumerate(key.removeprefix("h_").split("_"))
+    )
+    assert read({camel: "B"}) is None
+
+
+def test_train_summary_goods_no_checks_both_spellings_before_falling_back():
+    def read(raw):
+        return TrainSummary.from_raw(raw).goods_no
+
+    assert read({"txtGdNo": "B"}) == "B"
+    assert read({"h_gd_no": "A", "txtGdNo": "B"}) == "A"
+    assert read({"h_gd_no": "", "txtGdNo": "B"}) == "B"
+    # Unlike the dual-key fields, the primary is checked before the fallback
+    # is considered, even when it is falsy.
+    with pytest.raises(KorailProtocolError, match="field h_gd_no must be"):
+        read({"h_gd_no": [], "txtGdNo": "B"})
+    with pytest.raises(KorailProtocolError, match="field txtGdNo must be"):
+        read({"txtGdNo": ["x"]})
+
+
+def test_train_summary_total_passenger_count_takes_only_an_int():
+    assert TrainSummary.from_raw({"totPsgCnt": 3}).total_passenger_count == 3
+    assert TrainSummary.from_raw({}).total_passenger_count is None
+    with pytest.raises(KorailProtocolError, match="totPsgCnt must be an integer"):
+        TrainSummary.from_raw({"totPsgCnt": "3"})
+
+
 def test_train_summary_appends_inventory_fields_and_parses_both_key_styles():
     raw = {
         "h_trn_no": "00123",
