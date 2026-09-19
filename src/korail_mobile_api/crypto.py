@@ -44,7 +44,12 @@ def _android_base64_default(data: bytes) -> str:
 
 
 def _validate_login_crypto_key(info: LoginCryptoInfo) -> bytes:
-    key = info.key.encode("utf-8")
+    try:
+        key = info.key.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise KorailProtocolError(
+            "KORAIL login crypto metadata contained an invalid AES key/IV"
+        ) from exc
     if len(key) not in {16, 24, 32}:
         raise KorailProtocolError("KORAIL login crypto metadata contained an invalid AES key/IV")
     return key
