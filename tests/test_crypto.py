@@ -80,3 +80,18 @@ def test_transform_login_password_aes_invalid_key_raises_protocol_error(key: str
 def test_706_empty_key_uses_plain_base64_even_if_flag_is_y():
     info = LoginCryptoInfo(idx="", key="", pwd_aes_cphd="Y")
     assert transform_login_password("pw123", info) == "cHcxMjM="
+
+
+def test_known_defect_an_unencodable_password_is_blamed_on_the_key():
+    """TODAY'S BEHAVIOUR, WHICH IS WRONG. src plan batch 11 flips this test.
+
+    ``password.encode("utf-8")`` sits inside the same ``try`` as the cipher, and
+    UnicodeEncodeError is a ValueError, so a password holding a lone surrogate
+    is reported as bad server metadata. The key here is a valid 16 bytes; the
+    cause says what really failed. Batch 11 separates the two and, in the same
+    commit, makes this assert a message that names the password.
+    """
+    info = LoginCryptoInfo(idx="1", key="0123456789abcdef", pwd_aes_cphd="Y")
+    with pytest.raises(KorailProtocolError, match="invalid AES key/IV") as raised:
+        transform_login_password("pw\ud800", info)
+    assert isinstance(raised.value.__cause__, UnicodeEncodeError)

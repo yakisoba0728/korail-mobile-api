@@ -1282,6 +1282,32 @@ def test_polling_stops_as_soon_as_the_queue_admits_us():
     assert clock.slept == [2, 2]
 
 
+def test_known_defect_a_keyless_continue_from_the_front_door_is_not_polled():
+    """TODAY'S BEHAVIOUR, WHICH IS WRONG. src plan batch 14 flips this test.
+
+    acquire() takes "no key" to mean the bypass, so a 5101 answer that says
+    "wait" (201) and carries no key is handed back as if the queue had let us
+    in: no 5002 goes out, nothing sleeps, and the caller holds a 201 token.
+    Inside slot() the caller's work would then run before the release refuses
+    that token. The bypass is a code, not an absent key. Batch 14 decides on
+    the code and, in the same commit, turns these assertions into what should
+    happen instead.
+    """
+    clock = _FakeClock()
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.params["opcode"])
+        return httpx.Response(200, text="201:nwait=5&ttl=2")
+
+    client = _client(handler, sleeper=clock.sleep, clock=clock)
+    token = client.acquire(KorailNetFunnelAction.INQUIRY)
+    assert seen == ["5101"]
+    assert token.code == "201"
+    assert token.key == ""
+    assert clock.slept == []
+
+
 def test_polling_gives_up_on_the_iteration_cap():
     clock = _FakeClock()
     calls: list[int] = []
