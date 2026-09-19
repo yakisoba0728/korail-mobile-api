@@ -22,6 +22,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Mapping
+from functools import partial
 from typing import Any
 
 from .errors import KorailProtocolError
@@ -51,15 +52,6 @@ from .models import (
     TransferStationListResponse,
     UuidResponse,
 )
-
-
-def _optional_string(data: Mapping[str, Any], key: str) -> str | None:
-    value = data.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL cache field {key} must be a string or null"
-        )
-    return value
 
 
 def _typed_optional_string(
@@ -141,6 +133,23 @@ def _typed_non_negative_integer_value(
             f"KORAIL {context} field {key} must not be negative"
         )
     return parsed
+
+
+# Each response family's names for the typed helpers above; the context is
+# what its messages say. Seat inventory accepts a blank required string and
+# stations do not -- a station row without a code or a name is not a station.
+_optional_string = partial(_typed_optional_string, context="cache")
+_station_optional_string = partial(_typed_optional_string, context="station")
+_station_required_string = partial(
+    _typed_required_string, context="station", non_empty=True
+)
+_maas_optional_string = partial(_typed_optional_string, context="MAAS menu")
+_inventory_optional_string = partial(_typed_optional_string, context="seat inventory")
+_inventory_required_string = partial(_typed_required_string, context="seat inventory")
+_inventory_integer_value = partial(
+    _typed_non_negative_integer_value, context="seat inventory"
+)
+_inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
 
 
 def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
@@ -340,24 +349,6 @@ def parse_train_search_metadata(
     )
 
 
-def _station_optional_string(row: Mapping[str, Any], key: str) -> str | None:
-    value = row.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL station field {key} must be a string or null"
-        )
-    return value
-
-
-def _station_required_string(row: Mapping[str, Any], key: str) -> str:
-    value = row.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise KorailProtocolError(
-            f"KORAIL station field {key} must be a non-empty string"
-        )
-    return value
-
-
 def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
     """``ebizcross/getUUID.do`` 를 파싱합니다.
 
@@ -377,18 +368,6 @@ def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
         raw=response.raw,
         verification_code=value,
     )
-
-
-def _maas_optional_string(
-    data: Mapping[str, Any],
-    key: str,
-) -> str | None:
-    value = data.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL MAAS menu field {key} must be a string or null"
-        )
-    return value
 
 
 def parse_maas_menu_list_response(
@@ -932,71 +911,11 @@ def _inventory_optional_list(
     return value
 
 
-def _inventory_required_string(
-    data: Mapping[str, Any],
-    key: str,
-) -> str:
-    if key not in data or not isinstance(data[key], str):
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be a string"
-        )
-    return data[key]
-
-
-def _inventory_optional_string(
-    data: Mapping[str, Any],
-    key: str,
-) -> str | None:
-    value = data.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be a string or null"
-        )
-    return value
-
-
-def _inventory_integer_value(value: object, key: str) -> int:
-    if type(value) is int:
-        parsed = value
-    elif (
-        isinstance(value, str)
-        and value
-        and all("0" <= char <= "9" for char in value)
-    ):
-        try:
-            parsed = int(value)
-        except ValueError as exc:
-            raise KorailProtocolError(
-                f"KORAIL seat inventory field {key} has an unsupported "
-                "ASCII-decimal length"
-            ) from exc
-    else:
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be a non-negative "
-            "integer or ASCII-decimal string"
-        )
-    if parsed < 0:
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must not be negative"
-        )
-    return parsed
-
-
 def _inventory_required_int(
     data: Mapping[str, Any],
     key: str,
 ) -> int:
     return _inventory_integer_value(data.get(key), key)
-
-
-def _inventory_optional_int(
-    data: Mapping[str, Any],
-    key: str,
-) -> int | None:
-    value = data.get(key)
-    if value is None:
-        return None
-    return _inventory_integer_value(value, key)
 
 
 def parse_seat_car_list_response(
