@@ -58,10 +58,7 @@ def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse
             raise KorailProtocolError("KORAIL refund stl_mns_cd is required")
         codes.append(code)
     return RefundTicketResponse(
-        h_msg_cd=base.h_msg_cd,
-        h_msg_txt=base.h_msg_txt,
-        str_result=base.str_result,
-        raw=copied,
+        **_base_fields(base),
         settlement_method_codes=tuple(codes),
         settlement_list_is_null=rows is None,
     )
@@ -105,10 +102,7 @@ def parse_cash_receipt_issue_response(
         }
         approvals.append(CashReceiptApprovalItem(**approval_fields, raw=dict(row)))
     return CashReceiptIssueResponse(
-        h_msg_cd=base.h_msg_cd,
-        h_msg_txt=base.h_msg_txt,
-        str_result=base.str_result,
-        raw=copied,
+        **_base_fields(base),
         transaction_division_code=_optional_string(
             copied, "cashRcetTxnDvCd", context="cash receipt issue"
         ),
@@ -163,10 +157,7 @@ def parse_station_refund_verification_response(
             )
         )
     return StationRefundVerificationResponse(
-        h_msg_cd=base.h_msg_cd,
-        h_msg_txt=base.h_msg_txt,
-        str_result=base.str_result,
-        raw=copied,
+        **_base_fields(base),
         received_amount=_optional_string(
             copied, "rcvd_amt", context="station refund verification"
         ),
@@ -193,10 +184,7 @@ def parse_station_refund_execution_response(
     """Parse ``ExecuteOnlineRefundsOut`` without dropping its refund type."""
     copied, base = _response_mapping(raw)
     return StationRefundExecutionResponse(
-        h_msg_cd=base.h_msg_cd,
-        h_msg_txt=base.h_msg_txt,
-        str_result=base.str_result,
-        raw=copied,
+        **_base_fields(base),
         refund_division_code=_optional_string(
             copied, "h_ret_dv_cd", context="station refund execution"
         ),
