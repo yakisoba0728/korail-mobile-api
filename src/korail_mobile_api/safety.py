@@ -400,7 +400,6 @@ KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
 # keeps a waiting-room popup alive; the other two are administrative and the
 # SDK refuses them (T6/d.java:115-121).
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 KORAIL_NETFUNNEL_ROUTES = frozenset({("GET", KORAIL_NETFUNNEL_PATH)})
 
 KORAIL_NETFUNNEL_QUERY_CONTRACTS: dict[str, tuple[str, ...]] = {
