@@ -51,7 +51,7 @@ this package has ever reached KORAIL.
 from __future__ import annotations
 
 from dataclasses import replace
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, parse_qsl
 
 import httpx
 import pytest
@@ -71,6 +71,7 @@ from korail_mobile_api import (
     KorailSession,
     MutationConsent,
     MutationPreview,
+    ReservationHoldResponse,
     TrainSearchContinuation,
     TrainSearchQuery,
     TrainSearchResult,
@@ -1092,6 +1093,66 @@ def test_reserve_transfer_previews_the_two_leg_form_without_sending():
     assert preview.payload["txtJrnyCnt"] == "2"
     assert preview.payload["txtJrnyTpCd2"] == "14"
     assert preview.payload["txtJrnySqno2"] == "002"
+
+
+def test_an_acknowledged_transfer_sends_both_legs_and_returns_one_hold():
+    """The send path, which nothing reached: returning None from it passed.
+
+    The reply is synthetic; the shape is the one the live 2026-07-31 transfer
+    hold came back with (``IRR000018``, two journeys on one PNR). What is pinned
+    is this client's half -- exactly the transfer builder's form goes out, and
+    the hold it hands back is the one parsed from the reply.
+    """
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "IRR000018",
+                "h_msg_txt": "예약이 완료되었습니다",
+                "strResult": "SUCC",
+                "h_pnr_no": "SYNTHETIC_PNR",
+                "h_jrny_cnt": "0002",
+                "h_wct_no": "0001",
+                "h_tot_rcvd_amt": "49700",
+            },
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    try:
+        hold = client.reserve_transfer(
+            _legs(),
+            consent=MutationConsent(allow_reserve=True, dry_run=False),
+        )
+    finally:
+        client.close()
+
+    assert type(hold) is ReservationHoldResponse
+    assert hold.pnr_no == "SYNTHETIC_PNR"
+    assert hold.journey_count == "0002"
+    assert len(seen) == 1
+    assert seen[0].method == "POST"
+    assert seen[0].url.path == (
+        "/classes/com.korail.mobile.certification.TicketReservation"
+    )
+    pairs = parse_qsl(
+        seen[0].content.decode("ascii"),
+        keep_blank_values=True,
+        strict_parsing=True,
+    )
+    sent = dict(pairs)
+    assert len(sent) == len(pairs)
+    assert sent == build_transfer_reservation_form(KorailConfig(), _legs())
+    assert sent["txtJrnyCnt"] == "2"
+    assert (sent["txtJrnyTpCd1"], sent["txtJrnyTpCd2"]) == ("14", "14")
+    assert (sent["txtJrnySqno1"], sent["txtJrnySqno2"]) == ("001", "002")
+    assert (sent["txtTrnNo1"], sent["txtTrnNo2"]) == (
+        _first_leg().train_no,
+        _second_leg().train_no,
+    )
 
 
 def test_reserve_transfer_needs_reserve_consent():

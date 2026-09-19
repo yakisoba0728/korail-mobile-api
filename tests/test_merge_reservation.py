@@ -48,7 +48,9 @@ NOTHING here has been transmitted to the live server.
 from __future__ import annotations
 
 from dataclasses import replace
+from urllib.parse import parse_qsl
 
+import httpx
 import pytest
 
 from korail_mobile_api import (
@@ -64,6 +66,7 @@ from korail_mobile_api import (
     KorailSession,
     MutationConsent,
     MutationPreview,
+    ReservationHoldResponse,
     TrainScheduleItem,
     TrainSummary,
 )
@@ -513,8 +516,20 @@ def test_merge_does_not_require_an_unserialized_arrival_time() -> None:
 # The client method: same route, same category, dry-run by default.
 
 
-def _client() -> KorailClient:
-    client = KorailClient(_config())
+def _refuse(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+    raise AssertionError(
+        f"this test must not send a request (saw {request.method} "
+        f"{request.url.path})"
+    )
+
+
+def _client(handler=_refuse) -> KorailClient:
+    """A logged-in client whose transport fails the test unless one is given.
+
+    It used to be a real client over a real transport: a regression that sent
+    from a dry run would have reached smart.letskorail.com instead of failing.
+    """
+    client = KorailClient(_config(), transport=httpx.MockTransport(handler))
     client.session.current = KorailSession(jsessionid="synthetic-secret")
     return client
 
@@ -559,3 +574,54 @@ def test_reserve_merge_dry_run_previews_the_reserve_route() -> None:
     assert preview.note == "dry-run: not sent"
     assert preview.payload["txtJrnyTpCd1"] == "21"
     assert preview.payload["txtJrnyTpCd2"] == "22"
+
+
+def test_an_acknowledged_merge_sends_the_merge_form_and_returns_the_hold() -> None:
+    """The send path, which nothing reached: returning None from it passed.
+
+    Never sent to KORAIL, so the reply is synthetic; what is pinned is this
+    client's half -- the form it transmits is exactly the merge builder's, and
+    the hold it hands back is the one parsed from the reply.
+    """
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "IRR000018",
+                "h_msg_txt": "예약이 완료되었습니다",
+                "strResult": "SUCC",
+                "h_pnr_no": "SYNTHETIC_PNR",
+                "h_jrny_cnt": "0002",
+                "h_wct_no": "0001",
+                "h_tot_rcvd_amt": "59800",
+            },
+        )
+
+    client = _client(handler)
+    try:
+        hold = client.reserve_merge(
+            _standing_hold_train(),
+            (_leading_leg(), _trailing_leg()),
+            consent=MutationConsent(allow_reserve=True, dry_run=False),
+        )
+    finally:
+        client.close()
+
+    assert type(hold) is ReservationHoldResponse
+    assert hold.pnr_no == "SYNTHETIC_PNR"
+    assert hold.journey_count == "0002"
+    assert len(seen) == 1
+    assert seen[0].method == "POST"
+    assert seen[0].url.path == (
+        "/classes/com.korail.mobile.certification.TicketReservation"
+    )
+    pairs = parse_qsl(
+        seen[0].content.decode("ascii"),
+        keep_blank_values=True,
+        strict_parsing=True,
+    )
+    assert len(dict(pairs)) == len(pairs)
+    assert dict(pairs) == _merge_form()
