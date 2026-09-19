@@ -55,6 +55,12 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
   `raw` 가 달라도 `==` 이고, 목록 필드가 없는 frozen 모델은 이제 `hash()` 할 수
   있습니다. 전에는 `raw` 의 dict 때문에 모든 응답이 해시 불가였습니다. 열차 행·여정 같은
   일부 모델은 이미 그랬습니다.
+- `StationRefundVerificationRequest`·`StationRefundExecutionRequest` 생성자가 빈 값을
+  `KorailProtocolError` 대신 `ValueError` 로 거절합니다. 이 파일의 다른 요청 생성자와
+  같은 기준입니다 — 호출자의 입력 오류이지 서버 응답 문제가 아닙니다.
+  `from_verification` 이 검증 응답에서 빠진 값을 찾으면 그것은 여전히
+  `KorailProtocolError` 이고, 이제 빠진 값을 한 번에 모두 적습니다. 생성자 오류를
+  `KorailProtocolError` 로 잡던 호출자는 바꿔야 합니다.
 - `get_station_info(device=...)` 가 `"AD"` 가 아닌 값을 `ValueError` 대신
   `KorailProtocolError` 로 거절합니다. 7.0.6 요청에는 기기 인자가 실리지 않아 다른 값은
   계속 거절되지만, 이제 `except KorailApiError` 로 이 패키지의 다른 실패와 함께

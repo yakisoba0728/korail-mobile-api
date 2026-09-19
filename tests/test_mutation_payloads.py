@@ -104,10 +104,14 @@ def test_station_refund_execution_form_uses_the_verified_dto_keys():
         "retFee": "0",
         "acepCustNm": "SYNTHETIC_NAME",
     }
+    # The constructor refuses a blank value as input...
+    with pytest.raises(ValueError, match="execution requires refund_amount"):
+        replace(request, refund_amount="")
+    # ...and the builder checks again, for an instance altered after that.
+    tampered = replace(request)
+    object.__setattr__(tampered, "refund_amount", "")
     with pytest.raises(KorailProtocolError, match="refund_amount"):
-        build_station_refund_execution_form(
-            KorailConfig(), replace(request, refund_amount="")
-        )
+        build_station_refund_execution_form(KorailConfig(), tampered)
 
 
 def test_refund_form_spells_the_pnr_field_the_way_the_app_declares_it():

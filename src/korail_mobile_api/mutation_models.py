@@ -91,11 +91,17 @@ def _require_every_field(
     request: StationRefundVerificationRequest | StationRefundExecutionRequest,
     step: str,
 ) -> None:
-    """Every field of a station refund request is a required non-blank string."""
+    """Every field of a station refund request is a required non-blank string.
+
+    ``ValueError``, like the other request constructors here: this is the
+    caller's input. A verification response that falls short is refused
+    separately, as :class:`KorailProtocolError`, by
+    :meth:`StationRefundExecutionRequest.from_verification`.
+    """
     for field_ in fields(request):
         value = getattr(request, field_.name)
         if not isinstance(value, str) or not value.strip():
-            raise KorailProtocolError(
+            raise ValueError(
                 f"KORAIL station refund {step} requires {field_.name}"
             )
 

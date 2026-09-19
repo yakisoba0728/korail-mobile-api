@@ -195,7 +195,7 @@ def test_station_refund_verification_request_keeps_return_parts_separate():
     )
     assert (request.return_no_1, request.return_no_4) == ("111", "444")
     assert "SYNTHETIC_NAME" not in repr(request)
-    with pytest.raises(KorailProtocolError):
+    with pytest.raises(ValueError, match="verification requires return_no_4"):
         StationRefundVerificationRequest(
             customer_name="SYNTHETIC_NAME",
             return_no_1="111",
@@ -266,10 +266,11 @@ def test_station_refund_execution_refuses_unverified_or_missing_echo_values():
 @pytest.mark.parametrize("blank", ["customer_phone", "customer_name"])
 def test_station_refund_execution_checks_the_callers_own_values_as_input(blank):
     # The phone and name come from the caller, not the server, so the
-    # constructor refuses them, as it would any directly built request.
+    # constructor refuses them as input (ValueError), as it would any directly
+    # built request; the verification's own gaps stay KorailProtocolError.
     values = {"customer_phone": "SYNTHETIC_PHONE", "customer_name": "SYNTHETIC_NAME"}
     values[blank] = " "
-    with pytest.raises(KorailProtocolError, match=f"execution requires {blank}"):
+    with pytest.raises(ValueError, match=f"execution requires {blank}"):
         StationRefundExecutionRequest.from_verification(_verification(), **values)
 
 
