@@ -2111,9 +2111,15 @@ class KorailClient:
         """Execute a verified station-ticket refund with method-scoped consent."""
         self._require_session("station ticket refund requires")
         fields = build_station_refund_execution_form(self.config, request)
-        result = self.v7.call(
-            "NetworkApi.executeOnlineRefunds", fields, consent=consent
-        )
+        # The same P058 handling as _mutation, which this call cannot use: it
+        # goes through the 7.0.6 gateway and its method-scoped consent.
+        try:
+            result = self.v7.call(
+                "NetworkApi.executeOnlineRefunds", fields, consent=consent
+            )
+        except KorailSessionExpiredError:
+            self.clear_session()
+            raise
         if isinstance(result, V7MutationPreview):
             return result
         return parse_station_refund_execution_response(result.raw)

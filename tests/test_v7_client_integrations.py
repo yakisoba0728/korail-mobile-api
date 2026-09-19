@@ -179,3 +179,46 @@ def test_station_ticket_refund_without_a_session_is_refused_by_name():
             )
     finally:
         client.close()
+
+
+def test_an_expired_session_on_a_station_ticket_refund_clears_the_client():
+    # The same pin as test_mutation_live_paths.py's P058 test, for the one
+    # mutation that goes through client.v7: one request out, no session or
+    # cookie left after P058.
+    import pytest
+
+    from korail_mobile_api.errors import KorailSessionExpiredError
+
+    seen: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={"strResult": "FAIL", "h_msg_cd": "P058", "h_msg_txt": "expired"},
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(respond))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+    client.http.cookies.set(
+        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
+    )
+    request = StationRefundExecutionRequest(
+        "synthetic-pnr", "20260701", "1", "2", "synthetic-password",
+        "kind", "reason", "ticket", "synthetic-phone", "8400", "0",
+        "synthetic-name",
+    )
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            client.execute_station_ticket_refund(
+                request,
+                consent=V7MutationConsent(
+                    allow_methods=frozenset({"NetworkApi.executeOnlineRefunds"}),
+                    dry_run=False,
+                ),
+            )
+    finally:
+        client.close()
+    assert len(seen) == 1
+    assert client.session.current is None
+    assert not client.http.cookies
