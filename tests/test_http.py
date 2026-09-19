@@ -50,6 +50,27 @@ from korail_mobile_api.safety import (
 )
 
 
+# Complete request bodies for the two read routes the transport tests below
+# use as vehicles, minus the common three that post_form adds itself. The tests
+# are about headers, encoding, origins and error classification, not about
+# these routes, but a bare post_form(route) only works while the route has no
+# field contract -- and login.Login and common.code.do are due one (src plan
+# batch 13). Literal values, not the session builders: this file tests the HTTP
+# layer on its own.
+LOGIN_FORM = {
+    "txtMemberNo": "SYNTHETIC_MEMBER",
+    "txtPwd": "SYNTHETIC_PASSWORD",
+    "txtInputFlg": "2",
+    "checkValidPw": "Y",
+}
+COMMON_CODE_FORM = {
+    "code": ["app.login.cphd"],
+    "deviceWidth": 1080,
+    "deviceHeight": 2400,
+    "OSVersion": 35,
+}
+
+
 def test_delay_discount_post_query_map_places_fields_in_url_and_empty_form_body():
     captured = {}
     path = "/classes/com.korail.mobile.passCard.DelayDiscountView"
@@ -123,7 +144,7 @@ def test_post_form_adds_common_fields_and_form_encoding():
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
     response = client.post_form(
         "/classes/com.korail.mobile.common.code.do",
-        {"custom": "value"},
+        COMMON_CODE_FORM,
     )
 
     assert captured["url"] == (
@@ -134,7 +155,8 @@ def test_post_form_adds_common_fields_and_form_encoding():
     assert "Device=AD" in captured["body"]
     assert "Version=250601003" in captured["body"]
     assert "Key=korail1234567890" in captured["body"]
-    assert "custom=value" in captured["body"]
+    assert "code=app.login.cphd" in captured["body"]
+    assert "OSVersion=35" in captured["body"]
     assert response.h_msg_cd == "IRG000000"
 
 
@@ -197,7 +219,7 @@ def test_post_form_adds_dynapath_header_for_allowlisted_path():
 
     config = KorailConfig(dynapath=DynapathConfig(enabled=True, token_provider=token_provider))
     client = KorailHttpClient(config, transport=httpx.MockTransport(handler))
-    response = client.post_form("/classes/com.korail.mobile.login.Login")
+    response = client.post_form("/classes/com.korail.mobile.login.Login", LOGIN_FORM)
 
     assert response.str_result == "SUCC"
     assert captured["token"] == "dynapath-token"
@@ -224,7 +246,7 @@ def test_dynapath_provider_is_not_called_for_non_allowlisted_path():
 
     config = KorailConfig(dynapath=DynapathConfig(enabled=True, token_provider=token_provider))
     client = KorailHttpClient(config, transport=httpx.MockTransport(handler))
-    client.post_form("/classes/com.korail.mobile.common.code.do")
+    client.post_form("/classes/com.korail.mobile.common.code.do", COMMON_CODE_FORM)
 
     assert called is False
 
@@ -377,17 +399,21 @@ def test_parse_base_response_rejects_non_string_envelope_values(field, value):
 
 
 def test_post_form_raises_protocol_error_for_non_json_response():
+    # The request must actually go out, or this passes on whatever else raises
+    # KorailProtocolError first -- a field contract, an origin check -- and the
+    # non-JSON branch could be deleted without a failure here.
+    answered = False
+
     def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal answered
+        answered = True
         return httpx.Response(200, text="<html>not json</html>")
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
 
-    try:
-        client.post_form("/classes/com.korail.mobile.common.code.do")
-    except KorailProtocolError:
-        pass
-    else:
-        raise AssertionError("KorailProtocolError was not raised")
+    with pytest.raises(KorailProtocolError, match="valid JSON"):
+        client.post_form("/classes/com.korail.mobile.common.code.do", COMMON_CODE_FORM)
+    assert answered
 
 
 def test_get_json_raises_protocol_error_for_non_json_response():
@@ -1003,7 +1029,7 @@ def test_allowlisted_403_is_classified_as_dynapath_error(load_json_fixture):
         transport=httpx.MockTransport(handler),
     )
     with pytest.raises(KorailDynaPathError, match="macro protection"):
-        client.post_form("/classes/com.korail.mobile.login.Login")
+        client.post_form("/classes/com.korail.mobile.login.Login", LOGIN_FORM)
 
 
 @pytest.mark.parametrize(
@@ -1084,6 +1110,6 @@ def test_exact_https_korail_origin_is_accepted(base_url):
         ),
     )
     response = client.post_form(
-        "/classes/com.korail.mobile.common.code.do"
+        "/classes/com.korail.mobile.common.code.do", COMMON_CODE_FORM
     )
     assert response.str_result == "SUCC"

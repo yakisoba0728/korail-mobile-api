@@ -36,6 +36,18 @@ def make_settings() -> DynapathTokenSettings:
     )
 
 
+# A complete login.Login body minus the common three. These tests are about the
+# token header, and login.Login is only the allowlisted vehicle; a bare
+# post_form(route) stops being a valid request once the route has a field
+# contract (src plan batch 13).
+LOGIN_FORM = {
+    "txtMemberNo": "SYNTHETIC_MEMBER",
+    "txtPwd": "SYNTHETIC_PASSWORD",
+    "txtInputFlg": "2",
+    "checkValidPw": "Y",
+}
+
+
 def success_handler(_: httpx.Request) -> httpx.Response:
     return httpx.Response(
         200,
@@ -164,7 +176,7 @@ def test_http_client_generates_dynapath_header_from_token_settings():
     )
     client = KorailHttpClient(config, transport=httpx.MockTransport(handler))
 
-    client.post_form("/classes/com.korail.mobile.login.Login")
+    client.post_form("/classes/com.korail.mobile.login.Login", LOGIN_FORM)
 
     assert captured["token"] == generate_dynapath_token(
         settings,
@@ -226,8 +238,8 @@ def test_http_generates_independent_fixed_rt_tokens_across_requests():
         )
     )
     client = KorailHttpClient(config, transport=httpx.MockTransport(handler))
-    client.post_form("/classes/com.korail.mobile.login.Login")
-    client.post_form("/classes/com.korail.mobile.login.Login")
+    client.post_form("/classes/com.korail.mobile.login.Login", LOGIN_FORM)
+    client.post_form("/classes/com.korail.mobile.login.Login", LOGIN_FORM)
     assert captured == [
         generate_dynapath_token(
             settings,

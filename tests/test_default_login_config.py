@@ -33,7 +33,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
-from korail_mobile_api import KorailConfig
+from korail_mobile_api import KorailConfig, TrainSearchQuery
 from korail_mobile_api.constants import (
     DYNAPATH_ALLOWLIST_PATHS,
     DYNAPATH_HEADER_NAME,
@@ -44,6 +44,7 @@ from korail_mobile_api.constants import (
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import KorailDynaPathRequiredError
 from korail_mobile_api.http import KorailHttpClient
+from korail_mobile_api.payloads import build_train_search_form
 
 
 README = Path(__file__).parents[1] / "README.md"
@@ -51,6 +52,33 @@ CHANGELOG = Path(__file__).parents[1] / "CHANGELOG.md"
 LOGIN_PATH = "/classes/com.korail.mobile.login.Login"
 SEARCH_PATH = "/classes/com.korail.mobile.seatMovie.ScheduleView"
 OK = {"h_msg_cd": "IRG000000", "h_msg_txt": "OK", "strResult": "SUCC"}
+# Complete request bodies (minus the common three post_form adds) for the routes
+# these tests use as vehicles. The tests are about where the token goes, not
+# about the routes, but a bare post_form(route) stops being a valid request once
+# the route has a field contract (src plan batch 13).
+LOGIN_FORM = {
+    "txtMemberNo": "SYNTHETIC_MEMBER",
+    "txtPwd": "SYNTHETIC_PASSWORD",
+    "txtInputFlg": "2",
+    "checkValidPw": "Y",
+}
+COMMON_CODE_FORM = {
+    "code": ["app.login.cphd"],
+    "deviceWidth": 1080,
+    "deviceHeight": 2400,
+    "OSVersion": 35,
+}
+
+
+def _search_form() -> dict[str, str]:
+    """A ScheduleView body from the real builder; it carries its own common fields."""
+    return build_train_search_form(
+        KorailConfig(),
+        TrainSearchQuery("서울", "부산", "20260810"),
+        departure_name="서울",
+        arrival_name="부산",
+        sid="SYNTHETIC_SID",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +106,9 @@ def test_a_bare_client_refuses_the_login_path_before_sending_anything():
         transport=httpx.MockTransport(handler),
     )
 
+    # Deliberately bare. The guidance to turn DynaPath on has to come before any
+    # other refusal, a malformed body included; filling the form here would
+    # stop this from noticing a field check that runs first.
     with pytest.raises(KorailDynaPathRequiredError) as raised:
         client.post_form(LOGIN_PATH)
 
@@ -111,7 +142,7 @@ def test_an_allowlisted_but_not_required_path_still_goes_out_untokened():
         KorailConfig(),
         transport=httpx.MockTransport(handler),
     )
-    client.post_form(SEARCH_PATH)
+    client.post_form(SEARCH_PATH, _search_form(), include_common=False)
 
     assert seen == [None]
 
@@ -143,7 +174,7 @@ def test_an_enabled_client_puts_the_token_on_the_login_request():
         KorailConfig(enable_dynapath=True),
         transport=httpx.MockTransport(handler),
     )
-    client.post_form(LOGIN_PATH)
+    client.post_form(LOGIN_PATH, LOGIN_FORM)
 
     # 사슬의 끝 — 플래그에서 생성기를 거쳐 실제 헤더까지. 위의 것들이 모양이라면
     # 이것은 도착한다는 진술이다.
@@ -162,7 +193,7 @@ def test_the_token_stays_confined_to_the_allowlisted_paths():
         KorailConfig(enable_dynapath=True),
         transport=httpx.MockTransport(handler),
     )
-    client.post_form("/classes/com.korail.mobile.common.code.do")
+    client.post_form("/classes/com.korail.mobile.common.code.do", COMMON_CODE_FORM)
 
     # 켜는 것은 토큰을 **언제** 보내는지를 넓힐 뿐 **어디로** 보내는지를 넓히지
     # 않는다.

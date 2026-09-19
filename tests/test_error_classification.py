@@ -50,6 +50,7 @@ from korail_mobile_api.errors import (
     classify_app_error,
 )
 from korail_mobile_api.http import KorailHttpClient, parse_base_response
+from korail_mobile_api.payloads import build_train_search_form
 from korail_mobile_api.read_parsers import parse_reservation_history_response
 
 
@@ -362,9 +363,18 @@ def test_anti_macro_rejection_arrives_as_a_dynapath_error_not_an_app_error():
             json={"message": "비정상적인 접속이 감지되었습니다."},
         )
 
+    # A real ScheduleView body, so the request goes out and the 403 is what is
+    # being classified -- not a refusal of the body before sending.
+    form = build_train_search_form(
+        KorailConfig(),
+        korail_mobile_api.TrainSearchQuery("서울", "부산", "20260810"),
+        departure_name="서울",
+        arrival_name="부산",
+        sid="SYNTHETIC_SID",
+    )
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
     with pytest.raises(KorailDynaPathError) as excinfo:
-        client.post_form(path)
+        client.post_form(path, form, include_common=False)
     assert not isinstance(excinfo.value, KorailAppError)
     assert "비정상적인 접속" in str(excinfo.value)
 
