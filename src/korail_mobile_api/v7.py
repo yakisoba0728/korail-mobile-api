@@ -108,19 +108,22 @@ class V7Contract:
     def name(self) -> str:
         return f"{self.interface}.{self.method}"
 
+    def _names(self, kind: str) -> frozenset[str]:
+        return frozenset(
+            name for found, name in _ANNOTATION.findall(self.params) if found == kind
+        )
+
     @property
     def fields(self) -> frozenset[str]:
-        return frozenset(name for kind, name in _ANNOTATION.findall(self.params) if kind == "Field")
+        return self._names("Field")
 
     @property
     def queries(self) -> frozenset[str]:
-        return frozenset(name for kind, name in _ANNOTATION.findall(self.params) if kind == "Query")
+        return self._names("Query")
 
     @property
     def headers(self) -> frozenset[str]:
-        return frozenset(
-            name for kind, name in _ANNOTATION.findall(self.params) if kind == "Header"
-        )
+        return self._names("Header")
 
 
 def _load_registry() -> dict[str, V7Contract]:
