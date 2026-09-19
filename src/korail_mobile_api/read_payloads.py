@@ -1356,7 +1356,12 @@ def build_price_fare_quote_form(
         *(
             (
                 wire_name,
-                ",".join(getattr(leg, attribute) for leg in request.legs),
+                # Validated above; through _wire_component again so the join
+                # sees str rather than getattr's Any.
+                ",".join(
+                    _wire_component(getattr(leg, attribute), attribute)
+                    for leg in request.legs
+                ),
             )
             for wire_name, attribute in columns
         ),
@@ -1690,12 +1695,8 @@ class RefundCompanion:
 
 
 def _validate_refund_companion(companion: RefundCompanion) -> None:
-    for value, name in (
-        (companion.name, "name"),
-        (companion.certificate_no, "certificate_no"),
-    ):
-        if not isinstance(value, str):
-            raise ValueError(f"{name} must be a string")
+    _optional_text(companion.name, "name")
+    _optional_text(companion.certificate_no, "certificate_no")
 
 
 def _exact_refund_companion(companion: RefundCompanion) -> RefundCompanion:
