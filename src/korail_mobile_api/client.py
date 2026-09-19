@@ -15,10 +15,14 @@
 메서드 하나로 만듭니다.
 
 공개 메서드는 두 종류뿐입니다. 로그인·읽기 메서드는 인자만 받고, 상태를 바꾸는
-메서드는 키워드 전용 ``consent`` 를 함께 요구합니다. 후자는 예외 없이
+메서드는 키워드 전용 ``consent`` 를 함께 요구합니다. 후자는
 :func:`~korail_mobile_api.consent.require_mutation_consent` 로 시작하므로, 폼을
 만들기도 전에 거절됩니다. 어떤 범주가 어떤 라우트를 소유하는지는
 :mod:`korail_mobile_api.safety` 가 정하고 전송 직전에 다시 검사합니다.
+
+예외가 하나 있습니다. 7.0.6 계약으로 나가는 :meth:`KorailClient.execute_station_ticket_refund`
+는 범주가 아니라 메서드 이름을 여는 :class:`~korail_mobile_api.v7.V7MutationConsent` 를
+받습니다. 같은 동의 체계가 ``client.v7`` 게이트웨이의 7.0.6 계약 전부에 쓰입니다.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -307,17 +311,22 @@ def _scalar_text(value: object) -> str | None:
 class KorailClient:
     """KORAIL 모바일 앱(코레일톡)의 비공개 API 를 그대로 부르는 클라이언트.
 
-    ``KorailClient()`` — 인자 없이 — 만들면 바로 동작합니다.
     :class:`~korail_mobile_api.config.KorailConfig` 기본값이 앱의
-    ``Device``/``Version``/``Key`` 와 DynaPath 안티오토메이션을 켠 상태로 채워지기
-    때문입니다. ``transport`` 는 시험용 :mod:`httpx` 전송로를 끼워 넣는 자리입니다.
+    ``Device``/``Version``/``Key`` 를 채우므로 읽기는 ``KorailClient()`` 로 바로 됩니다.
+    DynaPath 안티오토메이션은 기본으로 **꺼져** 있어, 로그인하려면
+    ``KorailClient(KorailConfig(enable_dynapath=True))`` 로 켜야 합니다. 끈 채
+    :meth:`login` 을 부르면 전송 전에
+    :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError` 로 막힙니다.
+    ``transport`` 는 시험용 :mod:`httpx` 전송로를 끼워 넣는 자리입니다.
 
-    읽기 메서드는 게이트가 없습니다. 상태를 바꾸는 메서드는 모두
+    읽기 메서드는 게이트가 없습니다. 상태를 바꾸는 메서드는
     :class:`~korail_mobile_api.consent.MutationConsent` 를 키워드로 요구하며, 기본
     consent 는 어느 범주도 허용하지 않아
     :class:`~korail_mobile_api.errors.KorailMutationNotAllowedError` 로 막힙니다.
     범주를 허용해도 ``dry_run`` 이 기본 참이라 아무것도 전송하지 않고
-    :class:`~korail_mobile_api.consent.MutationPreview` 가 돌아옵니다.
+    :class:`~korail_mobile_api.consent.MutationPreview` 가 돌아옵니다. 7.0.6 계약으로
+    나가는 :meth:`execute_station_ticket_refund` 만 메서드 단위
+    :class:`~korail_mobile_api.v7.V7MutationConsent` 를 받습니다.
 
     자원 정리는 :meth:`close` 입니다. ``__enter__``/``__exit__`` 를 정의하지 않으므로
     ``with`` 문으로는 쓸 수 없습니다. :meth:`close` 는 커넥션 풀만 닫으니 로그인까지
@@ -326,9 +335,9 @@ class KorailClient:
 
     .. code-block:: python
 
-        from korail_mobile_api import KorailClient, TrainSearchQuery
+        from korail_mobile_api import KorailClient, KorailConfig, TrainSearchQuery
 
-        client = KorailClient()
+        client = KorailClient(KorailConfig(enable_dynapath=True))
         client.login("1234567890", "비밀번호")
         result = client.search_trains(
             TrainSearchQuery(
@@ -469,7 +478,8 @@ class KorailClient:
             )
 
     # ------------------------------------------------------------------
-    # Internal helpers: read pattern (post_form → parser → _run_read)
+    # Internal helpers: the read skeletons (post → parser → _run_read) and the
+    # mutation skeleton (_mutation: dry-run branch → send → parse)
     # ------------------------------------------------------------------
 
     def _post_read(
@@ -1948,7 +1958,9 @@ class KorailClient:
         이중 게이트 전송로로 POST 한 뒤 파싱한 봉투를 돌려줍니다.
 
         앱의 취소 호출 두 개 중 뒤쪽(``ReservationCancelChk``)만 보냅니다. 앞의
-        ``ReservationCancel`` 을 생략해도 취소가 성립하는 것은 라이브로 확인했습니다.
+        ``ReservationCancel`` 을 생략해도 취소가 성립하는 것은 라이브로 확인했습니다 —
+        2026-07-31 직통 홀드가 ``IRG000000`` 으로 풀렸고, 두 여정짜리 환승 홀드는
+        2026-07-26 과 2026-07-31 에 PNR 하나로 함께 풀렸습니다.
         """
         require_mutation_consent(consent, "cancel")
         if self.session.current is None:
@@ -2033,6 +2045,11 @@ class KorailClient:
 
         ``consent.dry_run`` 이 참이면 카드·신원을 가린 :class:`MutationPreview` 만
         돌려주고 아무것도 전송하지 않습니다.
+
+        실제 돈으로 확인했습니다. 2026-07-31 에 8,400원 한 장이 ``IRT000000`` 으로
+        결제·발권됐고 같은 날 2인 PNR 도 결제했으며, 2026-09-15 에 7.0.6 판으로 다시
+        결제·전액 환불했습니다(``docs/verification-record.md``,
+        ``docs/7.0.6-live-verification.md``).
         """
         require_mutation_consent(consent, "payment")
         if not consent.real_card_acknowledged:
