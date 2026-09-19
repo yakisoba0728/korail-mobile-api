@@ -6,6 +6,9 @@
 # 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
 # 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
+import dataclasses
+import importlib
+
 import pytest
 
 from korail_mobile_api.errors import (
@@ -390,22 +393,83 @@ def test_every_special_category_label_spelling_is_masked():
         assert is_sensitive_key(spelling), spelling
 
 
+_MODEL_MODULES = ("models", "read_models", "mutation_models", "limousine_models")
+
+
+def _model_dataclasses():
+    """Every dataclass defined in the four model modules, as (module.Class, cls)."""
+    for module_name in _MODEL_MODULES:
+        module = importlib.import_module(f"korail_mobile_api.{module_name}")
+        for name, obj in vars(module).items():
+            if (
+                dataclasses.is_dataclass(obj)
+                and isinstance(obj, type)
+                and obj.__module__ == module.__name__
+            ):
+                yield f"{module_name}.{name}", obj
+
+
+def test_known_defect_h_msg_txt_is_printed_by_these_responses():
+    """TODAY'S BEHAVIOUR, WHICH IS WRONG. src plan batch 23 empties this list.
+
+    h_msg_txt is a sensitive key -- the server can quote the caller's input
+    back in it -- and 37 response classes redeclare it repr=False. The field
+    on BaseKorailResponse does not, so every subclass that does not redeclare
+    it prints the text in repr(), and a repr lands in logs and tracebacks.
+    These are the classes that do, today. The set may only shrink: a new
+    response that inherits the exposure fails here. Batch 23 puts repr=False
+    on the base, drops the redeclarations, and turns this into an empty set.
+    """
+    exposed = {
+        name
+        for name, cls in _model_dataclasses()
+        if any(
+            field_.name == "h_msg_txt" and field_.repr
+            for field_ in dataclasses.fields(cls)
+        )
+    }
+    assert exposed == {
+        "models.AppDataResponse",
+        "models.BaseKorailResponse",
+        "models.MaasMenuListResponse",
+        "models.NoticeResponse",
+        "models.StationDataResponse",
+        "models.StationInfoResponse",
+        "models.UuidResponse",
+        "mutation_models.CashReceiptIssueResponse",
+        "mutation_models.RefundTicketResponse",
+        "mutation_models.ReservationHoldResponse",
+        "mutation_models.ReservationPaymentResponse",
+        "mutation_models.StationRefundExecutionResponse",
+        "mutation_models.StationRefundVerificationResponse",
+        "read_models.CartListResponse",
+        "read_models.CommuterKindMenuResponse",
+        "read_models.CrewRequestListResponse",
+        "read_models.DelayDiscountTicketListResponse",
+        "read_models.DepositBankListResponse",
+        "read_models.DiscountCouponListResponse",
+        "read_models.PassAvailabilityResponse",
+        "read_models.PassMenuResponse",
+        "read_models.ProductDetailResponse",
+        "read_models.ProductReservationListResponse",
+        "read_models.ReservationHistoryResponse",
+        "read_models.ServiceStatusResponse",
+        "read_models.TicketListResponse",
+        "read_models.TicketReceiptResponse",
+        "read_models.TripMenuResponse",
+    }
+
+
 def test_no_special_category_label_is_left_in_a_model_repr():
-    """The other half: masked on the wire, hidden in repr().
+    """The other half: masked on the wire, hidden in repr() -- in every model module.
 
     These were the wrong way round -- welfare_discount_class_CODE was
     repr=False while welfare_discount_class_NAME, the directly readable one,
     was printed. A repr lands in logs and tracebacks, which is the same
     exposure redact_payload exists to prevent.
     """
-    import dataclasses
-
-    from korail_mobile_api import read_models
-
     exposed = []
-    for name, obj in vars(read_models).items():
-        if not dataclasses.is_dataclass(obj):
-            continue
+    for name, obj in _model_dataclasses():
         for field_ in dataclasses.fields(obj):
             if field_.name in {
                 "disability_flag",
