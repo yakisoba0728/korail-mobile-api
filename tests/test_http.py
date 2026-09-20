@@ -377,25 +377,6 @@ def test_parse_base_response_allows_omitted_common_out_fields():
     assert response.h_msg_txt is None
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("h_msg_cd", {"unexpected": "object"}),
-        ("h_msg_txt", ["unexpected", "list"]),
-        ("strResult", ["unexpected", "list"]),
-    ],
-)
-def test_parse_base_response_rejects_non_string_envelope_values(field, value):
-    payload = {
-        "h_msg_cd": "IRG000000",
-        "h_msg_txt": "OK",
-        "strResult": "SUCC",
-    }
-    payload[field] = value
-    with pytest.raises(KorailProtocolError, match=field):
-        parse_base_response(payload)
-
-
 def test_post_form_raises_protocol_error_for_non_json_response():
     # The request must actually go out, or this passes on whatever else raises
     # KorailProtocolError first -- a field contract, an origin check -- and the

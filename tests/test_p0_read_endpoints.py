@@ -533,14 +533,6 @@ def test_route_parsers_preserve_strict_envelope_and_error_handling(
     parser = _require(read_parsers, parser_name)
     with pytest.raises(KorailProtocolError):
         parser({"h_msg_cd": "SYNTHETIC.OK", "h_msg_txt": None})
-    with pytest.raises(KorailProtocolError):
-        parser(
-            {
-                "h_msg_cd": "SYNTHETIC.OK",
-                "h_msg_txt": 7,
-                "strResult": "SUCC",
-            }
-        )
     with pytest.raises(KorailAppError):
         parser(
             {

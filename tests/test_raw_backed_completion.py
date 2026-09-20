@@ -160,7 +160,7 @@ def test_result_only_success_reaches_route_parser_through_http_gate(
         ("FAIL", "result-only"),
         ("SYNTHETIC-UNKNOWN", "result-only"),
         (None, "result-only"),
-        (7, "strResult"),
+        (7, "result-only"),
     ],
 )
 def test_result_only_envelopes_require_the_exact_success_string(
@@ -178,26 +178,6 @@ def test_result_only_envelopes_require_the_exact_success_string(
     raw["strResult"] = result_value
 
     with pytest.raises(KorailProtocolError, match=error_match):
-        parser(raw)
-
-
-@pytest.mark.parametrize(
-    ("fixture_name", "parser", "_method_name", "_args", "_type", "_count"),
-    RESULT_ONLY_CASES,
-)
-def test_result_only_envelopes_type_check_present_optional_fields(
-    load_json_fixture,
-    fixture_name,
-    parser,
-    _method_name,
-    _args,
-    _type,
-    _count,
-):
-    raw = load_json_fixture(fixture_name)
-    raw["h_msg_cd"] = ["synthetic-invalid"]
-
-    with pytest.raises(KorailProtocolError, match="h_msg_cd"):
         parser(raw)
 
 

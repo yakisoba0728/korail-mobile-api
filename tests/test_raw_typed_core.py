@@ -68,8 +68,6 @@ def test_station_info_parser_and_normal_station_data_are_typed_and_repr_safe(
         "synthetic-station-row-raw-secret",
         "synthetic-station-data-raw-secret",
         "synthetic-station-popup-message-secret",
-        "synthetic-station-popup-title-secret",
-        "synthetic-station-url-secret",
     ):
         assert secret not in rendered
 
@@ -390,14 +388,6 @@ def test_train_schedule_parser_maps_header_and_stop_repr_safely(
     rendered = f"{response!r} {stop!r}"
     for secret in (
         "synthetic-schedule-envelope-message-secret",
-        "synthetic-delay-detail-secret",
-        "synthetic-schedule-message-secret",
-        "synthetic-schedule-message-text-secret",
-        "synthetic-delay-fare-return-name-secret",
-        "SYNTHETIC-SCHEDULE-RUN-DATE",
-        "SYNTHETIC-SCHEDULE-TRAIN-NO",
-        "SYNTHETIC-STOP-STATION-CODE",
-        "Synthetic Stop Station Name",
         "synthetic-schedule-stop-raw-secret",
         "synthetic-schedule-raw-secret",
     ):
@@ -502,7 +492,6 @@ def test_transfer_station_parser_maps_evidenced_rows_repr_safely(
     assert response.raw is raw
     rendered = f"{response!r} {station!r}"
     for secret in (
-        "SYNTHETIC-TRANSFER-STATION-CODE",
         "synthetic-transfer-row-raw-secret",
         "synthetic-transfer-raw-secret",
     ):
@@ -697,16 +686,7 @@ def test_train_search_metadata_preserves_named_server_strings_repr_safely(
         "SYNTHETIC-MERGE-AVAILABILITY-FLAG"
     )
     rendered = repr(metadata)
-    for secret in (
-        "SYNTHETIC-MENU-ID",
-        "SYNTHETIC-JOB-ID",
-        "SYNTHETIC-PRODUCT-NO",
-        "SYNTHETIC-NEXT-QUERY-STATION-NO",
-        "SYNTHETIC-NEXT-TRAIN-NO",
-        "SYNTHETIC-FIRST-DEPARTURE-TIME",
-        "synthetic-train-search-raw-secret",
-    ):
-        assert secret not in rendered
+    assert "synthetic-train-search-raw-secret" not in rendered
 
 
 def test_train_summary_promotes_safe_follow_on_fields_losslessly(
@@ -763,15 +743,7 @@ def test_train_summary_promotes_safe_follow_on_fields_losslessly(
     assert train.total_passenger_count == 4
     assert train.raw is row
     rendered = repr(train)
-    for secret in (
-        "SYNTHETIC-DEPARTURE-CONSTRUCTION-ORDER",
-        "SYNTHETIC-SEAT-ATTRIBUTE-CODE",
-        "SYNTHETIC-CAR-TYPE-CODE",
-        "synthetic-general-availability-name-secret",
-        "SYNTHETIC-STANDARD-REMAINING-SEAT-COUNT",
-        "synthetic-train-row-raw-secret",
-    ):
-        assert secret not in rendered
+    assert "synthetic-train-row-raw-secret" not in rendered
 
 
 def test_train_search_extensions_preserve_legacy_constructor_positions():

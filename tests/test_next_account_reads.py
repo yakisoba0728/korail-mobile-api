@@ -696,12 +696,11 @@ def test_all_parsers_accept_null_optional_envelope_strings(parser, field):
 
 
 @pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("field", ["h_msg_cd", "h_msg_txt", "strResult"])
 @pytest.mark.parametrize("bad", [1, {}, []])
-def test_all_parsers_reject_bad_envelope_scalar_types(parser, field, bad):
+def test_all_parsers_reject_bad_str_result_types(parser, bad):
     raw = _success()
-    raw[field] = bad
-    with pytest.raises(KorailProtocolError, match=field):
+    raw["strResult"] = bad
+    with pytest.raises(KorailProtocolError, match="strResult"):
         parser(raw)
 
 

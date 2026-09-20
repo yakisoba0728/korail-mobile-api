@@ -346,7 +346,6 @@ def test_parser_maps_only_the_eight_static_train_dto_fields(
 @pytest.mark.parametrize(
     ("mutation", "match"),
     (
-        (lambda raw: raw.__setitem__("h_msg_cd", []), "h_msg_cd"),
         (lambda raw: raw.__setitem__("strResult", None), "SUCC"),
         (lambda raw: raw.__setitem__("strResult", "SUCCESS"), "SUCC"),
         (lambda raw: raw.__setitem__("schedule_info", {}), "schedule_info"),

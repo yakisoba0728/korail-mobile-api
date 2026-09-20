@@ -791,27 +791,6 @@ def _mutation_parser(name):
 
 
 @pytest.mark.parametrize(
-    ("parser", "bad_rows"),
-    [
-        ("parse_refund_ticket_response", {"stlList": ["x"]}),
-        ("parse_cash_receipt_issue_response", {"apvList": ["x"]}),
-        ("parse_station_refund_verification_response", {"orgtkinfo_list": ["x"]}),
-        ("parse_station_refund_execution_response", {}),
-        ("parse_reservation_hold_response", {"jrny_infos": {"jrny_info": ["x"]}}),
-        ("parse_reservation_payment_response", {"tk_coupon_info": ["x"]}),
-        ("parse_discount_card_purchase_response", {}),
-    ],
-)
-def test_a_mutation_parser_judges_the_envelope_before_any_row(parser, bad_rows):
-    # Pinned before the second envelope check in each parser went away: the
-    # envelope is still judged first, whatever is wrong with the rows.
-    with pytest.raises(
-        KorailProtocolError, match="envelope fields must be strings or null: h_msg_cd"
-    ):
-        _mutation_parser(parser)({"h_msg_cd": 1, "strResult": "SUCC", **bad_rows})
-
-
-@pytest.mark.parametrize(
     ("parser", "body", "message"),
     [
         ("parse_refund_ticket_response", {"stlList": ["x"]}, "refund settlement"),

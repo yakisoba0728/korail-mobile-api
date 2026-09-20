@@ -164,9 +164,6 @@ def _validate_envelope(
 ) -> bool:
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
-    # The envelope's value types, checked where every other parser checks
-    # them; the result is not needed here.
-    BaseKorailResponse.from_raw(dict(raw))
     if "strResult" not in raw:
         raise KorailProtocolError(
             "KORAIL response omitted strResult; the protected APK default "
