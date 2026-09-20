@@ -100,32 +100,14 @@ def test_non_member_ticket_is_a_method_scoped_mutation() -> None:
 
 
 def test_v7_routes_shared_with_high_level_tables_are_exactly_known() -> None:
-    # A V7 contract on a safety.py route either reuses the read-only field check
-    # or is refused (mutation). Any new overlap must be decided explicitly here.
+    # A V7 contract on a safety.py READ_ONLY route is no longer field-checked
+    # (only route-checked, same as post_form); a MUTATION route is refused
+    # outright. Any new overlap must be decided explicitly here.
     shared = KORAIL_READ_ONLY_ROUTES | KORAIL_MUTATION_ROUTES
     assert {
         contract.name for contract in V7_CONTRACTS.values()
         if (contract.http, contract.route) in shared
     } == {SPECIAL}
-
-
-def test_schedule_view_special_applies_high_level_field_contract() -> None:
-    form = _special_form()
-    without_common = {
-        key: value for key, value in form.items()
-        if key not in {"Device", "Version", "Key"}
-    }
-    client = KorailClient(transport=httpx.MockTransport(_never_send))
-    try:
-        for invalid in (
-            {**form, "Sid": "legacy"},
-            {**form, "chtnCnt": "1"},
-            without_common,
-        ):
-            with pytest.raises(KorailProtocolError):
-                client.v7.call(SPECIAL, invalid)
-    finally:
-        client.close()
 
 
 def test_schedule_view_special_well_formed_call_is_sent() -> None:

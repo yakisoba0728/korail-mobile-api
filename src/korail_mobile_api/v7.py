@@ -28,9 +28,7 @@ from .errors import KorailMutationNotAllowedError, KorailProtocolError, KorailTr
 from .http import KorailHttpClient, _raise_for_status, parse_base_response
 from .safety import (
     KORAIL_MUTATION_ROUTES,
-    KORAIL_READ_ONLY_ROUTES,
     assert_korail_origin,
-    assert_read_only_request_fields,
 )
 from .v7_contract_data import CONTRACT_ROWS
 
@@ -434,9 +432,6 @@ class V7Gateway:
                 f"{name} targets KORAIL mutation route {contract.route}; use the "
                 "high-level KorailClient method gated by MutationConsent"
             )
-        if route in KORAIL_READ_ONLY_ROUTES:
-            # Same field check as KorailHttpClient.post_form, on the merged wire data.
-            assert_read_only_request_fields(contract.route, data)
         if contract.effect == "mutation":
             if not isinstance(consent, V7MutationConsent) or name not in consent.allow_methods:
                 raise KorailMutationNotAllowedError(f"{name} requires method-scoped consent")

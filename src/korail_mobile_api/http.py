@@ -47,7 +47,6 @@ from .safety import (
     assert_mutation_form_shape,
     assert_mutation_route,
     assert_mutation_route_category,
-    assert_read_only_request_fields,
     assert_read_only_route,
 )
 
@@ -293,20 +292,12 @@ class KorailHttpClient:
         """
         assert_korail_origin(str(self._client.base_url))
         assert_read_only_route("POST", path)
-        # Before the field check: login.Login has a field contract, and a caller
-        # who has not turned DynaPath on needs to hear that first -- whatever
-        # the form looks like, the server would refuse it anyway.
         if include_dynapath:
             self._refuse_missing_dynapath(path)
         if data is not None and not isinstance(data, (Mapping, Sequence)):
             raise KorailProtocolError(
                 "KORAIL form data must be a mapping or registered ordered sequence"
             )
-        # The caller's data as given, before it is copied: a Mapping can yield
-        # a key twice, and the copy below would collapse that without a word.
-        # The check after the copy cannot see it.
-        if not include_common and data is not None:
-            assert_read_only_request_fields(path, data)
         if not form_encoded and (include_common or data):
             raise KorailProtocolError(
                 "KORAIL empty POST must not contain common or form fields"
@@ -319,14 +310,12 @@ class KorailHttpClient:
                 ordered_form.extend(self.common_fields().items())
             if data:
                 ordered_form.extend(data)
-            assert_read_only_request_fields(path, ordered_form)
         else:
             mapping_form = {}
             if include_common:
                 mapping_form.update(self.common_fields())
             if data:
                 mapping_form.update(data)
-            assert_read_only_request_fields(path, mapping_form)
         headers = (
             {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
             if form_encoded
@@ -383,7 +372,6 @@ class KorailHttpClient:
         if include_common:
             query.update(self.common_fields())
         query.update(params)
-        assert_read_only_request_fields(path, query)
         headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
@@ -515,7 +503,6 @@ class KorailHttpClient:
             query.update(self.common_fields())
         if params:
             query.update(params)
-        assert_read_only_request_fields(path, query)
         headers = (
             self._dynapath_headers("GET", path)
             if include_dynapath

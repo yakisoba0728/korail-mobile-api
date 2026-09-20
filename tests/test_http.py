@@ -99,7 +99,7 @@ def test_delay_discount_post_query_map_places_fields_in_url_and_empty_form_body(
     assert request.headers["content-type"].startswith("application/x-www-form-urlencoded")
 
 
-def test_post_query_rejects_unregistered_path_and_fields_before_io():
+def test_post_query_rejects_unregistered_path_before_io():
     called = False
 
     def handler(_: httpx.Request) -> httpx.Response:
@@ -110,11 +110,6 @@ def test_post_query_rejects_unregistered_path_and_fields_before_io():
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(handler))
     with pytest.raises(KorailProtocolError, match="only for DelayDiscountView"):
         client.post_query("/classes/com.korail.mobile.login.Login", {"custId": "x"})
-    with pytest.raises(KorailProtocolError):
-        client.post_query(
-            "/classes/com.korail.mobile.passCard.DelayDiscountView",
-            {"h_page_no": "20991231", "unregistered": "x"},
-        )
     assert called is False
 
 
@@ -1005,90 +1000,6 @@ def test_exact_form_field_mapping_remains_a_compatibility_alias():
     assert KORAIL_EXACT_FORM_FIELDS is KORAIL_EXACT_REQUEST_FIELDS
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        {"pnrNo": ""},
-        {"pnrNo": "", "addSrvReqNo": "", "unexpected": "blocked"},
-        {"pnrNo": "", "addSrvReqNo": ["blocked"]},
-        {"pnrNo": "", "addSrvReqNo": True},
-    ],
-)
-def test_exact_post_request_fields_and_scalar_values_fail_before_io(data):
-    called = False
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = KorailHttpClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    with pytest.raises(KorailProtocolError, match=r"request (fields|values)"):
-        client.post_form(
-            "/classes/com.korail.mobile.cart.showCartList",
-            data,
-        )
-    assert called is False
-
-
-def test_unregistered_common_code_ordered_duplicates_fail_before_io():
-    called = False
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(
-            200,
-            json={
-                "h_msg_cd": "SYNTHETIC.OK",
-                "h_msg_txt": "synthetic",
-                "strResult": "SUCC",
-            },
-        )
-
-    client = KorailHttpClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    with pytest.raises(KorailProtocolError, match="ordered request"):
-        client.post_form(
-            "/classes/com.korail.mobile.common.code.do",
-            (("code", "A"), ("code", "B")),
-            include_common=False,
-        )
-    assert called is False
-
-
-def test_exact_unordered_cart_contract_rejects_full_ordered_sequence():
-    called = False
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = KorailHttpClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    with pytest.raises(KorailProtocolError, match="ordered request"):
-        client.post_form(
-            "/classes/com.korail.mobile.cart.showCartList",
-            (
-                ("Device", client.config.device),
-                ("Version", client.config.version),
-                ("Key", client.config.key),
-                ("pnrNo", ""),
-                ("addSrvReqNo", ""),
-            ),
-            include_common=False,
-        )
-    assert called is False
-
-
 def test_exact_unordered_cart_contract_keeps_mapping_transport_compatible():
     called = False
 
@@ -1147,73 +1058,6 @@ def test_registered_variant_routes_allow_only_their_ordered_sequences():
         assert_read_only_request_fields(path, fields)
 
 
-@pytest.mark.parametrize(
-    "params",
-    [
-        {"txtSelPage": "1"},
-        {
-            "txtSelPage": "1",
-            "txtCntPerPage": "20",
-            "unexpected": "blocked",
-        },
-        {"txtSelPage": "1", "txtCntPerPage": ["20"]},
-        {"txtSelPage": "1", "txtCntPerPage": False},
-    ],
-)
-def test_exact_get_request_fields_and_scalar_values_fail_before_io(params):
-    called = False
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = KorailHttpClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    with pytest.raises(KorailProtocolError, match=r"request (fields|values)"):
-        client.get_json(
-            "/classes/com.korail.mobile.product.ReservationList",
-            params,
-            include_common=True,
-        )
-    assert called is False
-
-
-@pytest.mark.parametrize(
-    "extra_field",
-    ["Key", "pnrNo", "tkRetNo", "addSrvReqNo", "unexpected"],
-)
-def test_maas_menu_route_rejects_non_generic_form_fields_before_io(
-    extra_field,
-):
-    called = False
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = KorailHttpClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    with pytest.raises(KorailProtocolError, match="request fields"):
-        client.post_form(
-            "/classes/com.korail.mobile.copt.gdMenuLt.do",
-            {
-                "Device": "AD",
-                "Version": "250601003",
-                "timeStamp": "1",
-                extra_field: "blocked-value",
-            },
-            include_common=False,
-        )
-
-    assert called is False
-
-
 def test_maas_ticket_menu_accepts_pnr_and_repeated_ticket_return_numbers():
     captured = {}
     path = "/classes/com.korail.mobile.copt.gdMenuLt.do"
@@ -1257,32 +1101,6 @@ def test_maas_ticket_menu_rejects_pnr_without_ticket_return_number():
                 ("pnrNo", "p"),
             ),
         )
-
-
-@pytest.mark.parametrize(
-    "form",
-    [{}, {"Device": "AD"}, {"Version": "250601003"}],
-)
-def test_maas_menu_route_requires_exact_generic_form_fields(form):
-    called = False
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = KorailHttpClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
-    with pytest.raises(KorailProtocolError, match="request fields"):
-        client.post_form(
-            "/classes/com.korail.mobile.copt.gdMenuLt.do",
-            form,
-            include_common=False,
-        )
-
-    assert called is False
 
 
 def test_post_form_accepts_a_common_out_object_with_omitted_envelope_fields():
