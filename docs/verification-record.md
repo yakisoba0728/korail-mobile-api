@@ -18,8 +18,9 @@ is a bug report.
 
 **1.2.0 note.** Version 1.2.0 removed the consent system most of this record
 describes: `MutationConsent`, `MutationPreview`, `require_mutation_consent`,
-`MutationCategory`, `V7MutationConsent`, `V7MutationPreview`, and
-`src/korail_mobile_api/consent.py` no longer exist. State-changing client
+`V7MutationConsent`, `V7MutationPreview`, and
+`src/korail_mobile_api/consent.py` no longer exist. `MutationCategory` DOES
+still exist, in `safety.py`; only its export was dropped. State-changing client
 methods take no `consent=` argument, return no preview, and have no
 `dry_run` — each sends as soon as it is called, provided a session exists.
 `pay_with_card` and `pay_with_fake_card` remain separate methods, but neither

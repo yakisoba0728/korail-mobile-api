@@ -6,8 +6,10 @@ Last updated: 2026-07-27 KST (1.2.0 note below added 2026-09-20)
 as it stands today; entries below record what was true on the date each was
 written. Version 1.2.0 removed the consent system that most entries below
 assume: `MutationConsent`, `MutationPreview`, `require_mutation_consent`,
-`MutationCategory`, `V7MutationConsent`, `V7MutationPreview`, and
-`src/korail_mobile_api/consent.py` no longer exist. State-changing methods take
+`V7MutationConsent`, `V7MutationPreview`, and
+`src/korail_mobile_api/consent.py` no longer exist. `MutationCategory` DOES
+still exist, in `safety.py`, where it names the seven categories the
+route-to-category check runs on; only its export was dropped. State-changing methods take
 no `consent=` argument, return no preview, and have no `dry_run` — each sends
 as soon as it is called, provided a session exists. What still runs before a
 send is the route allowlist and the route→category cross-check in `safety.py`;
@@ -17,7 +19,7 @@ one. The 7.0.6 contract registry (`client.v7`) went from 117 contracts to 2
 (`verifyOnlineRefunds`, `executeOnlineRefunds`); `android_features.py` and
 `run_live_smoke_from_env` are gone, and `build_config_from_env` stays. The
 current route/method boundary is 58 read routes, 10 mutation routes, 77 public
-client methods, and 231 exported names — recount from `src/korail_mobile_api/safety.py`
+client methods, and 237 exported names — recount from `src/korail_mobile_api/safety.py`
 and `korail_mobile_api.__all__` rather than trusting any figure below, several
 of which record an earlier, smaller boundary as a historical milestone.
 
