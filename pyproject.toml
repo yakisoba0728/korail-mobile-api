@@ -41,32 +41,22 @@ Changelog = "https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGEL
 
 [project.optional-dependencies]
 test = [
-  # tests/test_mkdocs_hooks.py calls the site build hooks directly, and those
-  # import mkdocs. Only mkdocs itself: the theme and plugins stay in "docs".
+  # tests/test_mkdocs_hooks.py imports mkdocs directly, so it is a test dependency.
   "mkdocs>=1.6,<2",
   "pytest>=8,<10",
 ]
-# CI 의 lint / types 잡이 설치하는 것과 같은 도구. 런타임 의존성이 아니므로
-# METADATA 에는 `Requires-Dist: ruff; extra == "dev"` 형태로만 나가고,
-# scripts/verify_distribution.py 는 extra 표시가 붙은 요구사항을 런타임 목록에서
-# 걸러내므로(_normalize_requirement) 배포 계약은 그대로다.
+# CI 도구용, 런타임 의존성이 아니다. pyright 는 strict 오류 0 을 확인한 버전으로
+# 고정했으니, 올릴 때는 게이트를 다시 돌려 확인한다.
 dev = [
   "build>=1,<2",
-  # 측정한 그 버전으로 고정한다. 이 저장소의 pyright 설정(모듈별 strict 목록,
-  # tests/scripts 의 규칙별 해제)은 1.1.411 에서 실제로 돌려 오류 0 을 확인한
-  # 결과이고, pyright 는 마이너 릴리스마다 진단을 추가한다. 올리는 것은
-  # 게이트를 다시 돌려 보고 하는 의도적 행위여야 한다.
   "mkdocs>=1.6,<2",
   "pyright==1.1.411",
   "pytest>=8,<10",
   "ruff>=0.16,<0.17",
 ]
-# 문서 사이트(mkdocs.yml)를 빌드하는 데 필요한 것. dev 와 마찬가지로 런타임
-# 의존성이 아니라 `Requires-Dist: ...; extra == "docs"` 로만 나간다.
-# 상한을 붙인 이유는 두 가지다. mkdocs-material 은 MkDocs 2.0 에서 플러그인
-# 체계가 사라진다고 예고했고, mkdocstrings-python 2.x 와 griffe 2.x 는 이
-# 저장소의 docstring 을 실제로 렌더링해 본 첫 조합이다. 올리는 것은
-# `mkdocs build --strict` 를 다시 돌려 보고 하는 의도적 행위여야 한다.
+# 문서 사이트 빌드용, 런타임 의존성이 아니다. 상한은 mkdocs-material 의 MkDocs 2.0
+# 플러그인-체계 폐지 예고와, mkdocstrings-python 2.x/griffe 2.x 가 이 저장소에서
+# 실제로 검증한 첫 조합이라는 데서 온다.
 docs = [
   "mkdocs>=1.6,<2",
   "mkdocs-material>=9.5,<10",
@@ -94,15 +84,10 @@ markers = [
 ]
 
 [tool.ruff]
-# 이 저장소에서 주석과 docstring 은 근거 그 자체다 — 어느 APK 파일 몇 번째 줄에서
-# 나온 필드인지가 거기 적혀 있다. 그래서 `ruff format` 은 채택하지 않았다. 손으로
-# 열을 맞춘 표와 주석 블록을 재배치해 버리기 때문이다. 게이트는 `ruff check` 뿐이다.
+# `ruff format` 은 채택하지 않았다 — 손으로 열을 맞춘 APK-인용 표와 주석 블록을
+# 재배치해 버리기 때문이다. 게이트는 `ruff check` 뿐이다.
 #
-# line-length 는 취향이 아니라 실측이다. ruff 의 E501 은 동아시아 문자를 2칸으로
-# 세므로(터미널 폭과 같다 — 1칸으로 센다는 통념은 틀렸다) 그 기준으로 잰 src +
-# tests + scripts 57,180 줄의 분포는 p95 77 / p99 81 / p99.9 94 이고, 100칸을
-# 넘는 줄은 29개(0.05%)다. 그 29줄 가운데 한글이 든 줄은 단 1개라, 100 이라는
-# 한계는 한국어 산문에 사실상 아무 비용도 물리지 않는다.
+# line-length 100 은 취향이 아니라 실측이다(근거는 git 이력 참고).
 line-length = 100
 target-version = "py311"
 src = ["src", "tests", "scripts"]
@@ -162,23 +147,9 @@ extraPaths = ["src"]
 pythonVersion = "3.11"  # requires-python 의 하한과 같다
 typeCheckingMode = "basic"
 
-# 전체 strict 는 켜지 않았다: src/ 만 strict 로 돌리면 오류가 394건 남고(2026-09-19
-# 재측정, 처음 잰 2026-07-28 에는 468건), 그 대부분은 서버 JSON 을 Any 로 받아
-# 손으로 좁혀 가는 파서 코드다(read_parsers.py 150, parsers.py 122; 나머지는
-# 모듈마다 20건 미만). 그건 이 단계의 범위가 아니다.
-#
-# 대신 "이미 strict 로 0 인 모듈"만 strict 에 고정한다. 이 목록은 고른 것이 아니라
-# 잰 것이다 — 모듈마다 strict 로 한 번씩 pyright 를 돌려 0 이 나온 것만 남겼고,
-# 같은 방법으로 언제든 다시 유도할 수 있다. 여기에 있는 파일이 하나라도 늘어난
-# 오류를 내면 그건 회귀이지 설정 문제가 아니다.
-#
-# 공개면(`__all__` 이 이름을 내보내는 곳) 가운데 config.py / consent.py /
-# constants.py / dynapath.py / errors.py 가 여기 들어 있다. client.py(2) ·
-# models.py(2) 는 아직 0 이 아니라 빠졌다. 네 건 모두 런타임 방어용 isinstance
-# 검사라 strict 를 만족시키려면 그 방어를 없애야 해서 일부러 두었다.
-#
-# netfunnel.py · read_models.py · limousine_models.py · v7_contract_data.py 는
-# 2026-09-19 재측정에서 0 이 되어 목록에 들어갔다.
+# 전체 strict 는 켜지 않았다: 대부분이 서버 JSON 을 손으로 좁혀 가는 파서 코드라
+# 이 단계의 범위가 아니다. 대신 이미 strict 로 오류 0 인 모듈만 strict 에 고정했고,
+# 그 목록은 모듈별로 pyright --strict 를 다시 돌려 언제든 재도출할 수 있다.
 strict = [
   "src/korail_mobile_api/__init__.py",
   "src/korail_mobile_api/config.py",
@@ -194,12 +165,9 @@ strict = [
   "src/korail_mobile_api/v7_contract_data.py",
 ]
 
-# tests/ 와 scripts/ 는 배포되지 않고, 일부러 틀린 값을 넣어 가드가 우는지 보거나
-# 유니온 반환값을 테스트가 아는 쪽으로 좁혀 쓴다. 그래서 basic 으로도 123건이 뜨는데
-# 전부 그 성격이다. 아래 5개는 그 123건이 실제로 사용하는 규칙을 세어서 뽑은 것이지
-# 짐작이 아니다(`pyright --outputjson tests/ scripts/` 의 rule 집계).
-# executionEnvironments 안에서 `typeCheckingMode = "off"` 는 pyright 1.1.411 이
-# 무시한다(형제 저장소에서 실측: 73 -> 70). 규칙별로 끄는 이 방식만 실제로 0 이 된다.
+# tests/scripts 는 가드 검증과 유니온 좁히기 때문에 basic 에서도 걸린다;
+# typeCheckingMode="off" 는 executionEnvironments 안에서 이 pyright 버전이
+# 무시하므로, 실제로 걸리는 규칙만 골라 규칙별로 끈다.
 [[tool.pyright.executionEnvironments]]
 root = "tests"
 reportArgumentType = "none"

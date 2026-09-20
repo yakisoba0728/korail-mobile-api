@@ -42,11 +42,10 @@ SCRIPTS = Path(__file__).parents[1] / "scripts"
 
 # Each script and the switches its main() requires, all of them.
 OPT_INS = {
-    "verify_706_new_live": ("KORAIL_MOBILE_API_LIVE", "KORAIL_LIVE_706_READS"),
-    "retry_unprotected_live": ("KORAIL_MOBILE_API_LIVE", "KORAIL_LIVE_RETRY_READS"),
+    "verify_706_new_live": ("KORAIL_MOBILE_API_LIVE",),
+    "retry_unprotected_live": ("KORAIL_MOBILE_API_LIVE",),
     "retry_delivery_roundtrip": (
         "KORAIL_MOBILE_API_LIVE",
-        "KORAIL_LIVE_MUTATION",
         "KORAIL_LIVE_REAL_CHARGE",
     ),
 }

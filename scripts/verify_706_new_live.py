@@ -8,8 +8,8 @@
 
 """Redacted, paced live checks for the newly connected 7.0.6 reads.
 
-Two opt-ins are required: ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live
-switch) and ``KORAIL_LIVE_706_READS=1`` (this script). Neither alone runs.
+One opt-in is required: ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live
+switch). Without it, nothing runs.
 No raw body, credential, cookie, PNR or ticket identity is printed or saved.
 Authenticated checks prompt for a member and password in memory. This script
 never sends a reservation, payment, refund, or other mutation.
@@ -26,11 +26,11 @@ from __future__ import annotations
 import argparse
 import getpass
 import os
-import time
 from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
 
+from _live_common import Pacer, device_identity_or_abort, install_pacing
 from korail_mobile_api import KorailClient, TrainSearchQuery
 from korail_mobile_api.live import build_config_from_env
 
@@ -73,33 +73,18 @@ def main() -> int:
     parser.add_argument("--special-only", action="store_true")
     parser.add_argument("--ticket-maas-history", action="store_true")
     args = parser.parse_args()
-    if (
-        os.environ.get("KORAIL_MOBILE_API_LIVE") != "1"
-        or os.environ.get("KORAIL_LIVE_706_READS") != "1"
-    ):
-        raise SystemExit(
-            "Set KORAIL_MOBILE_API_LIVE=1 and KORAIL_LIVE_706_READS=1 to run live checks"
-        )
+    if os.environ.get("KORAIL_MOBILE_API_LIVE") != "1":
+        raise SystemExit("Set KORAIL_MOBILE_API_LIVE=1 to run live checks")
 
     # The device identity comes from the environment, as it does for the
     # real-card scripts, so every run is made from the same real device, not a
     # new synthetic one. Checked before any secret is asked for.
-    try:
-        config = build_config_from_env()
-    except RuntimeError as exc:
-        print(f"ABORTED: {exc}")
+    config = device_identity_or_abort(build_config_from_env)
+    if config is None:
         return 2
     client = KorailClient(config)
-    last_send = 0.0
-
-    def pace(_request: Any) -> None:
-        nonlocal last_send
-        elapsed = time.monotonic() - last_send
-        if last_send and elapsed < MIN_INTERVAL_SECONDS:
-            time.sleep(MIN_INTERVAL_SECONDS - elapsed)
-        last_send = time.monotonic()
-
-    client.http._client.event_hooks["request"].append(pace)
+    pacer = Pacer(MIN_INTERVAL_SECONDS)
+    install_pacing(client, pacer)
     try:
         if args.ticket_maas_history:
             member = getpass.getpass("member (hidden): ")

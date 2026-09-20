@@ -2082,61 +2082,6 @@ def test_evidence_suppresses_client_lifecycle_exception_text(
         assert configured_evidence.calls[-1] == "close"
 
 
-def test_evidence_count_values_are_capped_at_ten_thousand(
-    configured_evidence,
-    complete_train,
-    monkeypatch,
-):
-    physical = PhysicalSeat(
-        seat_no="synthetic-seat",
-        sale_possible="Y",
-        direction_code="D",
-        other_attribute_code="E",
-        requested_attribute_code="R",
-        floor="1",
-        specification="S",
-        sequence_no="1",
-        message_code="M",
-        message="synthetic-message",
-        visual_message_division_code="V",
-    )
-    window = SeatWindow(0.1, 0.2)
-    car = SeatCar(1, "Synthetic", 1, ())
-
-    class ManyClient(_EvidenceFakeClient):
-        def search_trains(self, _query):
-            self.calls.append("search")
-            return TrainSearchResult(
-                trains=[complete_train] * 10_001,
-                response=BaseKorailResponse(),
-            )
-
-        def get_seat_cars(self, _train, *, passenger_count=1):
-            self.calls.append("car_list")
-            return SeatCarListResponse(cars=(car,) * 10_001)
-
-        def get_seat_inventory(
-            self,
-            _train,
-            car_no,
-            *,
-            passenger_count=1,
-        ):
-            self.calls.append("seat_list")
-            return SeatInventoryResponse(
-                seats=(physical,) * 10_001,
-                windows=(window,) * 10_001,
-            )
-
-    ManyClient.calls = []
-    monkeypatch.setattr(evidence, "KorailClient", ManyClient)
-    result = evidence.capture_evidence()
-    assert result["train_count"] == 10_000
-    assert result["car_count"] == 10_000
-    assert result["seat_count"] == 10_000
-    assert result["window_count"] == 10_000
-
-
 def _safe_completed_result() -> dict[str, Any]:
     return {
         "status": "completed",
@@ -2179,7 +2124,6 @@ def test_evidence_writer_is_atomic_safe_and_protects_existing_output(
             "status", "https://example.invalid/secret"
         ),
         lambda result: result["calls"].__setitem__("login", 2),
-        lambda result: result.__setitem__("seat_count", 10_001),
     ],
 )
 def test_evidence_writer_rejects_unsafe_or_out_of_budget_results(

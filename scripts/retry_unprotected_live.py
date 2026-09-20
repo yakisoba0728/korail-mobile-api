@@ -8,10 +8,10 @@
 
 """Bounded, redacted live retry for reads with server-derived inputs.
 
-Two opt-ins are required: ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live
-switch) and ``KORAIL_LIVE_RETRY_READS=1`` (this script). Neither alone runs.
-Credentials are prompted in memory. Nothing from the raw server body, account,
-ticket identity, or PNR is printed or written to disk.
+One opt-in is required: ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live
+switch). Without it, nothing runs. Credentials are prompted in memory. Nothing
+from the raw server body, account, ticket identity, or PNR is printed or
+written to disk.
 
 The device identity comes from ``KORAIL_DYNAPATH_DEVICE_ID``,
 ``KORAIL_DYNAPATH_OS_VERSION`` and ``KORAIL_DYNAPATH_DEVICE_MODEL``
@@ -25,11 +25,11 @@ from __future__ import annotations
 import getpass
 import os
 import sys
-import time
 from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
 
+from _live_common import Pacer, device_identity_or_abort, install_pacing
 from korail_mobile_api import (
     KorailClient,
     MergeSeatsInquiryRequest,
@@ -82,36 +82,21 @@ def _try(name: str, function: Callable[[], Any]) -> Any | None:
 
 
 def main() -> int:
-    if (
-        os.environ.get("KORAIL_MOBILE_API_LIVE") != "1"
-        or os.environ.get("KORAIL_LIVE_RETRY_READS") != "1"
-    ):
-        raise SystemExit(
-            "Set KORAIL_MOBILE_API_LIVE=1 and KORAIL_LIVE_RETRY_READS=1 to run live reads"
-        )
+    if os.environ.get("KORAIL_MOBILE_API_LIVE") != "1":
+        raise SystemExit("Set KORAIL_MOBILE_API_LIVE=1 to run live reads")
     # The device identity comes from the environment, as it does for the
     # real-card scripts, so every run is made from the same real device, not a
     # new synthetic one. Checked before any secret is asked for.
-    try:
-        config = build_config_from_env()
-    except RuntimeError as exc:
-        print(f"ABORTED: {exc}")
+    config = device_identity_or_abort(build_config_from_env)
+    if config is None:
         return 2
     travel_date = _query_date()
     print(f"travel_date: {travel_date}")
     member = getpass.getpass("member (hidden): ")
     password = getpass.getpass("password (hidden): ")
     client = KorailClient(config)
-    last_request = 0.0
-
-    def pace(_request: Any) -> None:
-        nonlocal last_request
-        elapsed = time.monotonic() - last_request
-        if last_request and elapsed < 1.5:
-            time.sleep(1.5 - elapsed)
-        last_request = time.monotonic()
-
-    client.http._client.event_hooks["request"].append(pace)
+    pacer = Pacer(1.5)
+    install_pacing(client, pacer)
     try:
         if _try("login", lambda: client.login(member, password)) is None:
             return 1

@@ -21,12 +21,12 @@ the card and the two charging opt-ins, which it does not use.
 
 Safety posture
 --------------
-* THREE opt-ins are required, and none of them alone runs anything:
-  ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live switch),
-  ``KORAIL_LIVE_MUTATION=1`` (this run may change state), and
-  ``KORAIL_LIVE_REAL_CHARGE=1`` (this run may charge a real card). The third is
-  not required by ``--reserve-cancel-only`` or ``--recover``, neither of which
-  can charge; the first two always are.
+* ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live switch) is always
+  required, and alone runs nothing. Alongside it, the charging run (the
+  default, with neither ``--recover`` nor ``--reserve-cancel-only``) needs
+  ``KORAIL_LIVE_REAL_CHARGE=1``; ``--recover`` and ``--reserve-cancel-only``,
+  which cannot charge, need ``KORAIL_LIVE_MUTATION=1`` instead. The two are
+  never both required for the same run.
 * ``KORAIL_MAX_FARE`` -- a ceiling in won -- is REQUIRED on the charging path,
   not a suggestion. It is the only thing that caps what may be charged, and it
   is checked before the card is read, before login, and before any request. A
@@ -98,6 +98,8 @@ import sys
 import time
 from typing import Any, NamedTuple
 
+from _live_common import Pacer as _Pacer
+from _live_common import install_pacing as _install_pacing
 from korail_mobile_api import (
     CardPayment,
     KorailClient,
@@ -216,32 +218,6 @@ class _Console:
             self.say(f"!! {line}")
         self.say(rule)
         self.say("")
-
-
-class _Pacer:
-    """Enforce a minimum spacing between outbound requests."""
-
-    def __init__(self, min_interval_s: float) -> None:
-        self.min_interval_s = min_interval_s
-        self._last: float | None = None
-
-    def wait(self) -> None:
-        now = time.monotonic()
-        if self._last is not None:
-            remaining = self.min_interval_s - (now - self._last)
-            if remaining > 0:
-                time.sleep(remaining)
-        self._last = time.monotonic()
-
-
-def _install_pacing(client: KorailClient, pacer: _Pacer) -> None:
-    inner = client.http._client
-    hooks = dict(inner.event_hooks)
-    hooks["request"] = [
-        *hooks.get("request", []),
-        lambda request: pacer.wait(),
-    ]
-    inner.event_hooks = hooks
 
 
 # --- environment inputs ------------------------------------------------------
@@ -1137,14 +1113,16 @@ def _require_opt_ins(*, real_charge: bool) -> None:
         raise RoundTripAborted(
             "Set KORAIL_MOBILE_API_LIVE=1 to touch the live server"
         )
-    if os.environ.get(LIVE_MUTATION_ENV) != "1":
-        raise RoundTripAborted(
-            f"Set {LIVE_MUTATION_ENV}=1 to opt in to changing state"
-        )
-    if real_charge and os.environ.get(LIVE_REAL_CHARGE_ENV) != "1":
-        raise RoundTripAborted(
-            f"Set {LIVE_REAL_CHARGE_ENV}=1 to opt in to charging a REAL card"
-        )
+    if real_charge:
+        if os.environ.get(LIVE_REAL_CHARGE_ENV) != "1":
+            raise RoundTripAborted(
+                f"Set {LIVE_REAL_CHARGE_ENV}=1 to opt in to charging a REAL card"
+            )
+    else:
+        if os.environ.get(LIVE_MUTATION_ENV) != "1":
+            raise RoundTripAborted(
+                f"Set {LIVE_MUTATION_ENV}=1 to opt in to changing state"
+            )
     # A ceiling is not optional on the charging path. Step (d) compares the
     # amount owed against self.max_fare, and when that is None the comparison
     # is skipped -- i.e. the script would pay whatever the server says. The

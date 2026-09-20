@@ -70,7 +70,7 @@ predates the second switch, which now has to be set as well.
 The script here that charges a real card (`retry_delivery_roundtrip.py` below
 drives the same run). It reserves one adult, pays, and refunds, on your own
 account, inside the fee-free refund window. It needs
-three opt-in switches *and* `KORAIL_MAX_FARE`, a ceiling in won: without a
+two opt-in switches *and* `KORAIL_MAX_FARE`, a ceiling in won: without a
 ceiling the run would accept whatever amount the server says is owed, so the
 script refuses to start rather than default to unbounded. The ceiling is checked
 before the card is read and before any request goes out.
@@ -101,8 +101,8 @@ session, delay-discount tickets, product reservations and coupons.
 and asks for the ticket MaaS menu with a reference taken from the past year's
 tickets. It prints the result, the code and the row counts, nothing else.
 
-It needs `KORAIL_MOBILE_API_LIVE=1` and its own `KORAIL_LIVE_706_READS=1`. Only
-the modes that log in prompt for the member number and password.
+It needs `KORAIL_MOBILE_API_LIVE=1`. Only the modes that log in prompt for the
+member number and password.
 
 ### `retry_unprotected_live.py` — live, reads only
 
@@ -113,13 +113,13 @@ at a real middle station, and a fare quote built from the server's own goods
 number. `--post-refund` reads only the reservation history and active tickets.
 `--fallback-routes` tries the transfer fallback on two routes with no direct
 train. The default run ends with a late-night 서울 → 부산 search through the
-transfer fallback (`direct_transfer_fallback_late`). The travel date is fixed in
-the code at 2026-09-29.
+transfer fallback (`direct_transfer_fallback_late`). The travel date is always
+14 days from today, so the search never goes stale.
 
-It needs `KORAIL_MOBILE_API_LIVE=1` and its own `KORAIL_LIVE_RETRY_READS=1`, and
-always logs in, so it prompts for the member number and password. It prints the
-type, the result, the code and the counts. It exits 1 when login fails and 0
-otherwise; a read that fails is printed and is part of what the run reports.
+It needs `KORAIL_MOBILE_API_LIVE=1`, and always logs in, so it prompts for the
+member number and password. It prints the type, the result, the code and the
+counts. It exits 1 when login fails and 0 otherwise; a read that fails is
+printed and is part of what the run reports.
 
 ### `retry_delivery_roundtrip.py` — live, and it MOVES MONEY
 
@@ -129,10 +129,10 @@ subclasses that script's `RoundTrip`) and adds one read before the refund:
 route, time and ceiling are fixed in the code: 서울 → 영등포, 06:00, and
 `KORAIL_MAX_FARE=5000`. These override whatever the environment says.
 
-It needs `KORAIL_MOBILE_API_LIVE=1`, `KORAIL_LIVE_MUTATION=1` and
-`KORAIL_LIVE_REAL_CHARGE=1`, checked by the parent script's own gate, and the
-same three `KORAIL_DYNAPATH_*` device values the parent reads, so the charge is
-made from a stable device identity. Both are checked before anything is
+It needs `KORAIL_MOBILE_API_LIVE=1` and `KORAIL_LIVE_REAL_CHARGE=1`, checked by
+the parent script's own gate, and the same three `KORAIL_DYNAPATH_*` device
+values the parent reads, so the charge is made from a stable device identity.
+Both are checked before anything is
 prompted. The member number, password and the four card values are prompted
 with `getpass`. It prints through the parent script's
 console, so the PNR comes out in full and the card values never do. If the run
