@@ -1195,6 +1195,14 @@ def test_read_parsers_reject_wrong_wrapper_list_and_item_shapes(
         parser(raw)
 
 
+def test_cart_parser_rejects_a_non_string_str_result_instead_of_accepting_it():
+    # _validate_envelope only compared strResult to "FAIL"; a non-string value
+    # (e.g. an object) is never equal to "FAIL", so the envelope was judged a
+    # quiet success instead of the malformed response it actually is.
+    with pytest.raises(KorailProtocolError, match="strResult"):
+        parse_cart_list_response({"h_msg_cd": "X", "h_msg_txt": "y", "strResult": {}})
+
+
 @pytest.mark.parametrize("value", [True, False, "12.5", "１２", [], {}])
 def test_known_numeric_fields_reject_non_ascii_decimal_values(value):
     raw = {

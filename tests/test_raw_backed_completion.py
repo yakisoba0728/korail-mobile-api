@@ -156,7 +156,9 @@ def test_result_only_success_reaches_route_parser_through_http_gate(
         ("FAIL", "result-only"),
         ("SYNTHETIC-UNKNOWN", "result-only"),
         (None, "result-only"),
-        (7, "result-only"),
+        # A non-string strResult is now caught by the envelope type check
+        # before the result-only "exact SUCC" comparison ever runs.
+        (7, "strResult"),
     ],
 )
 def test_result_only_envelopes_require_the_exact_success_string(

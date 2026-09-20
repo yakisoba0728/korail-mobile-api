@@ -160,6 +160,21 @@ def _validate_envelope(
 ) -> bool:
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
+    # http.parse_base_response 의 것과 같은 판정을 앞에 둔다. 이 함수는 raw 를
+    # 직접 받는 호출자(파서를 단위로 부르는 코드, 이 아래의 frozenset 멤버십
+    # 검사 자체)가 있어 http.py 를 반드시 거치지 않으므로, 값이 무엇인지 보기
+    # 전에 여기서도 따로 확인해야 한다 — 그러지 않으면 h_msg_cd 가 리스트·객체로
+    # 오면 아래 ``code not in accepted_empty_codes`` 가 TypeError 로 죽는다.
+    invalid = [
+        name
+        for name in ("h_msg_cd", "h_msg_txt", "strResult")
+        if name in raw and raw[name] is not None and not isinstance(raw[name], str)
+    ]
+    if invalid:
+        raise KorailProtocolError(
+            "KORAIL response envelope fields must be strings or null: "
+            f"{', '.join(invalid)}"
+        )
     if "strResult" not in raw:
         raise KorailProtocolError(
             "KORAIL response omitted strResult; the protected APK default "

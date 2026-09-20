@@ -50,6 +50,31 @@ _NON_COMMON_OUT_READ_PATHS = frozenset({
     "/ebizmaas/EbizMaasStationList.do",
 })
 
+#: ``parse_base_response`` 가 값 판정 전에 타입을 확인하는 세 봉투 필드.
+_ENVELOPE_STRING_FIELDS = ("h_msg_cd", "h_msg_txt", "strResult")
+
+
+def _reject_non_string_envelope_fields(data: dict[str, Any]) -> None:
+    """봉투 필드가 있으면 문자열이거나 ``null`` 이어야 합니다.
+
+    ``errors.classify_app_error`` 는 ``h_msg_cd`` 로 dict 조회를 하고,
+    ``read_parsers._validate_envelope`` 는 같은 값으로 frozenset 멤버십을
+    검사합니다. 둘 다 리스트·객체가 오면 ``TypeError`` 로 죽습니다 — 이 패키지가
+    올려야 할 :class:`~korail_mobile_api.errors.KorailProtocolError` 대신.
+    ``BaseKorailResponse.from_raw`` 는 일부러 이 판정을 하지 않으므로(문서화된
+    대로 호출자 몫), 값을 실제로 쓰는 이 함수가 판정보다 먼저 검사합니다.
+    """
+    invalid = [
+        name
+        for name in _ENVELOPE_STRING_FIELDS
+        if name in data and data[name] is not None and not isinstance(data[name], str)
+    ]
+    if invalid:
+        raise KorailProtocolError(
+            "KORAIL response envelope fields must be strings or null: "
+            f"{', '.join(invalid)}"
+        )
+
 
 def parse_base_response(
     data: Any,
@@ -69,6 +94,7 @@ def parse_base_response(
     """
     if not isinstance(data, dict):
         raise KorailProtocolError("KORAIL response must be a JSON object")
+    _reject_non_string_envelope_fields(data)
     response = BaseKorailResponse.from_raw(data)
     if response.h_msg_cd == "P058":
         raise KorailSessionExpiredError(
