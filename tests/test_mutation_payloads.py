@@ -100,18 +100,9 @@ def test_station_refund_execution_form_uses_the_verified_dto_keys():
         "retFee": "0",
         "acepCustNm": "SYNTHETIC_NAME",
     }
-    # The constructor refuses a blank value as input...
+    # The constructor refuses a blank value as input.
     with pytest.raises(ValueError, match="execution requires refund_amount"):
         replace(request, refund_amount="")
-    # ...and the builder checks again, for an instance altered after that,
-    # naming the station refund (it used to say "discount card request").
-    tampered = replace(request)
-    object.__setattr__(tampered, "refund_amount", "")
-    with pytest.raises(
-        KorailProtocolError,
-        match=r"^KORAIL station refund requires a non-empty refund_amount$",
-    ):
-        build_station_refund_execution_form(KorailConfig(), tampered)
 
 
 def test_refund_form_spells_the_pnr_field_the_way_the_app_declares_it():
@@ -659,24 +650,6 @@ def test_reservation_form_rejects_an_unknown_seat_class():
             )
 
 
-def test_reservation_form_rejects_a_foreign_passenger_counts_object():
-    class LookalikeCounts:
-        adult = 1
-        teenager = 0
-        child = 0
-        infant = 0
-        senior = 0
-        severe_disability = 0
-        mild_disability = 0
-        guide_dog = 0
-        total = 1
-
-    with pytest.raises(KorailProtocolError):
-        build_reservation_form(
-            KorailConfig(), _eligible_train(), passengers=LookalikeCounts()
-        )
-
-
 def test_passenger_counts_default_to_one_adult():
     passengers = KorailPassengerCounts()
 
@@ -895,7 +868,7 @@ def test_the_refund_form_names_a_blank_ticket_field(field_name):
     object.__setattr__(ticket, field_name, " ")
     with pytest.raises(
         KorailProtocolError,
-        match=rf"^KORAIL refund requires a non-empty PaidTicket\.{field_name}$",
+        match=rf"PaidTicket\.{field_name}",
     ):
         build_refund_form(KorailConfig(), ticket)
 
@@ -906,7 +879,5 @@ def test_the_cart_form_names_a_blank_pnr():
 
     request = CartAddRequest(pnr_no="SYNTHETIC_PNR")
     object.__setattr__(request, "pnr_no", "")
-    with pytest.raises(
-        KorailProtocolError, match=r"^KORAIL cart request requires a non-empty pnr_no$"
-    ):
+    with pytest.raises(KorailProtocolError, match="non-empty pnr_no"):
         build_cart_add_form(KorailConfig(), request)

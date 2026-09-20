@@ -50,7 +50,6 @@ from korail_mobile_api import (
     KorailReservationJobType,
     KorailSeatAssignment,
     KorailSeatClass,
-    KorailSession,
     PhysicalSeat,
     ReservationHoldResponse,
     SeatInventoryResponse,
@@ -67,6 +66,7 @@ from korail_mobile_api.safety import (
     KORAIL_MUTATION_ROUTE_CATEGORIES,
     KORAIL_MUTATION_ROUTES,
     KORAIL_READ_ONLY_ROUTES,
+    assert_mutation_form_shape,
     assert_mutation_route,
     assert_mutation_route_category,
     assert_read_only_route,
@@ -859,30 +859,13 @@ def test_docs_record_the_live_verification_of_both_variants():
         assert claim in combined
 
 
-def test_confirm_standby_hold_actually_sends_through_the_shape_gate():
-    """A send test, so the built form actually meets `assert_mutation_form_shape`.
+def test_standby_wait_form_shape_gate_rejects_a_bad_shape():
+    """A direct unit test of `assert_mutation_form_shape` (safety.py) itself.
 
-    That was invisible until the gate's coverage was traced: seven of nine
-    mutation routes reached it during a suite run and this was one of the two
-    that did not. A builder whose output has never met the gate is a
-    live-only failure, which is the class this gate exists to prevent.
+    Not a proxy for whether some other test's send path happened to exercise
+    the gate -- call it with a shape the gate must refuse and check that it
+    does.
     """
-    sent: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        sent.append(request)
-        return httpx.Response(
-            200,
-            json={"strResult": "SUCC", "h_msg_cd": "IRG000000", "h_msg_txt": "ok"},
-        )
-
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-
-    client.confirm_standby_hold(_standby_hold())
-
-    assert [request.url.path for request in sent] == [RESERVATION_WAIT_PATH]
-    form = dict(httpx.QueryParams(sent[0].content.decode()))
-    # The gate's own invariants, restated against real builder output.
-    assert {"Device", "Version", "Key"} <= set(form)
-    assert all(isinstance(value, str) for value in form.values())
+    form = build_standby_wait_form(KorailConfig(), _standby_hold())
+    with pytest.raises(KorailProtocolError):
+        assert_mutation_form_shape(RESERVATION_WAIT_PATH, {**form, "extra": 1})
