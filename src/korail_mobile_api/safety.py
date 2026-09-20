@@ -29,7 +29,7 @@
 """
 import re
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 from .constants import (
@@ -212,11 +212,9 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
 # the read-only send path refuses every route in this set.
 #
 # All categories have a callable client method and CAN transmit. What bounds
-# them is the gate: post_mutation_form requires a MutationConsent with the
-# matching category, refuses dry_run=True, refuses a card-bearing category
-# (payment) unless the consent states exactly one of fake_card_only=True or
-# real_card_acknowledged=True, and re-checks both assert_mutation_route and
-# assert_mutation_route_category before the POST.
+# them is the route: post_mutation_form sends once assert_mutation_route and
+# assert_mutation_route_category both pass, checking the caller's declared
+# category against the route's registered one immediately before the POST.
 #
 # Each tuple is (HTTP method, exact relative path).
 KORAIL_MUTATION_ROUTES = frozenset(
@@ -257,8 +255,7 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # A category of its own rather than a reuse of "reserve": the hold
         # this acts on already exists, the route creates and destroys nothing
         # server-side that this package can observe, and it carries no card
-        # number, so it is deliberately absent from
-        # KORAIL_CARD_BEARING_MUTATION_CATEGORIES. Confirmed against
+        # number. Confirmed against
         # AddCartDao.java:9-24 and CartService.smali / AddCartDao$AddCartRequest.smali:
         # the request is exactly the common three fields plus "hidPnrNo", and
         # the DAO's response type is a bare BaseResponse (CartService.java:13),
@@ -271,10 +268,21 @@ KORAIL_MUTATION_ROUTES = frozenset(
     }
 )
 
-# The consent category each mutation route belongs to. The mutation send path
-# cross-checks the caller-supplied category against the route so a consent for
-# one category (e.g. "reserve") can never be used to POST a different category's
-# route (e.g. the refund route).
+#: 일곱 가지 상태변경 범주.
+MutationCategory = Literal[
+    "reserve",
+    "payment",
+    "cancel",
+    "refund",
+    "discount_card",
+    "price_recalculation",
+    "cart",
+]
+
+# The category each mutation route belongs to. The mutation send path
+# cross-checks the caller-supplied category against the route so a category
+# declared for one route (e.g. "reserve") can never be used to POST a
+# different category's route (e.g. the refund route).
 KORAIL_MUTATION_ROUTE_CATEGORIES = {
     "/classes/com.korail.mobile.certification.TicketReservation": "reserve",
     "/classes/com.korail.mobile.reservationWait.ReservationWait": "reserve",
@@ -291,29 +299,12 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
     "/classes/com.korail.mobile.cart.addCartList": "cart",
 }
 
-# Consent categories whose forms carry a chargeable PAN.
-#
-# The transmit gate refuses to send unless the consent states exactly one of
-# fake_card_only=True or real_card_acknowledged=True.
-#
-# A SET, not a literal "payment" equality test, because the question "does this
-# route carry a PAN" and "which category owns this route" are independent. The
-# invariant — no card-bearing category owns a GET mutation route — is stated
-# against this name.
-#
-# "reserve" is deliberately NOT here: txtCardNo_1 on a reservation is a prepaid
-# N카드 serial, not a payment instrument. Membership gates fake_card_only, so
-# adding it would demand a card acknowledgement from every caller who only
-# wanted to hold a seat.
-KORAIL_CARD_BEARING_MUTATION_CATEGORIES = frozenset({"payment"})
-
 
 def assert_mutation_route_category(path: str, category: str) -> None:
     """``category`` 가 변경 라우트 ``path`` 를 소유한 범주인지 확인합니다.
 
-    알려진 변경 라우트가 아니거나 호출자의 범주가 그 라우트의 범주와 다르면
-    :class:`KorailProtocolError` 입니다. 한 범주로 받은 consent 를 다른 범주의 라우트로
-    돌려쓸 수 없습니다.
+    알려진 변경 라우트가 아니거나 호출자가 선언한 범주가 그 라우트에 등록된 범주와
+    다르면 :class:`KorailProtocolError` 입니다.
     """
     parsed_path = urlsplit(path).path
     expected = KORAIL_MUTATION_ROUTE_CATEGORIES.get(parsed_path)
@@ -1644,12 +1635,3 @@ def _is_common_code_list(value: object) -> bool:
         and bool(value)
         and all(type(item) is str for item in value)
     )
-
-
-SAFETY_DEFAULTS = {
-    "조회성 API": "실제 호출 허용 가능. 단, 계정/티켓 개인정보 로그 마스킹",
-    "예약 생성/취소/변경": "기본 비활성화. 명시적 opt-in과 dry-run marker 필요",
-    "결제/포인트/현금영수증 발급": "기본 비활성화. 테스트 카드라도 운영 PG endpoint 직접 호출 금지",
-    "환불/반환/체크인/회원탈퇴": "기본 비활성화. 별도 confirmation token 필요",
-    "PNR/발권번호/N카드 기반 API": "실제 값 없으면 schema-only 테스트만 수행",
-}

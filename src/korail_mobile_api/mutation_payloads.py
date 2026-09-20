@@ -15,7 +15,7 @@
 
 여기 함수들은 dict 를 만들 뿐 아무것도 보내지 않습니다. 실제 전송은
 :meth:`~korail_mobile_api.http.KorailHttpClient.post_mutation_form` 하나이고 그
-앞에 consent 와 라우트 가드가 있습니다.
+앞에 라우트 가드가 있습니다.
 
 **라이브로 확인된 것과 아닌 것.** 즉시·좌석지정·예약대기·입석+좌석 홀드(다인·특실
 포함), 환승 홀드, 결제 전 취소, 카드 결제, 환불, 장바구니 담기는 실서버가 받아들인
@@ -1384,7 +1384,8 @@ def build_station_refund_execution_form(
 
     The APK declares these twelve ``@SerialName`` keys in
     ``ExecuteOnlineRefundsIn.java:60``. This function prepares a form only;
-    execution still requires explicit refund mutation consent.
+    execution still requires an authenticated session and the refund category
+    route.
     """
     if type(request) is not StationRefundExecutionRequest:
         raise KorailProtocolError(

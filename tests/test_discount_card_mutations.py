@@ -17,16 +17,9 @@ import korail_mobile_api
 from _helpers import make_authenticated_client as _client
 from _helpers import refuse_transport as _refuse
 from korail_mobile_api import KorailClient, KorailConfig
-from korail_mobile_api.consent import (
-    MUTATION_CATEGORIES,
-    MutationConsent,
-    MutationPreview,
-    require_mutation_consent,
-)
 from korail_mobile_api.constants import KORAIL_MAX_DISCOUNT_CARD_SECTIONS
 from korail_mobile_api.errors import (
     KorailAuthError,
-    KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSessionExpiredError,
 )
@@ -58,9 +51,6 @@ from korail_mobile_api.safety import (
 PURCHASE_ROUTE = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
 EXTENSION_ROUTE = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
 
-ALLOWED = MutationConsent(allow_discount_card=True, dry_run=False)
-DRY_RUN = MutationConsent(allow_discount_card=True)
-
 
 def _section(index: int = 1) -> DiscountCardSectionRequest:
     return DiscountCardSectionRequest(
@@ -90,35 +80,6 @@ def _ticket() -> DiscountCardTicket:
         sale_sequence="0001",
         return_password="SYNTHETIC_PWD",
     )
-
-
-def test_discount_card_is_its_own_consent_category():
-    assert "discount_card" in MUTATION_CATEGORIES
-    assert len(MUTATION_CATEGORIES) == 7
-    # A default consent grants it no more than it grants anything else.
-    assert MutationConsent().allow_discount_card is False
-    with pytest.raises(KorailMutationNotAllowedError):
-        require_mutation_consent(MutationConsent(), "discount_card")
-    # ...and no other category's opt-in unlocks it. The others are read from
-    # MUTATION_CATEGORIES so a category added later is covered here too.
-    others = [category for category in MUTATION_CATEGORIES if category != "discount_card"]
-    for other in others:
-        with pytest.raises(KorailMutationNotAllowedError):
-            require_mutation_consent(
-                MutationConsent(**{f"allow_{other}": True}),
-                "discount_card",
-            )
-    require_mutation_consent(
-        MutationConsent(allow_discount_card=True),
-        "discount_card",
-    )
-    # ...and it unlocks nothing else.
-    for category in others:
-        with pytest.raises(KorailMutationNotAllowedError):
-            require_mutation_consent(
-                MutationConsent(allow_discount_card=True),
-                category,
-            )
 
 
 def test_both_routes_are_mutation_routes_owned_by_that_category():
@@ -250,53 +211,16 @@ def test_extension_query_is_the_card_tickets_own_credential():
         )
 
 
-def test_default_consent_previews_and_sends_nothing():
-    client = _client(_refuse)
-    try:
-        preview = client.register_discount_card(_purchase(), consent=DRY_RUN)
-        assert type(preview) is MutationPreview
-        assert preview.category == "discount_card"
-        assert preview.method == "POST"
-        assert preview.route == PURCHASE_ROUTE
-        # custMgNo is PII and is redacted even in a preview that never left.
-        assert "SYNTHETIC_CUSTOMER_NO" not in str(preview.payload)
-
-        preview = client.extend_discount_card(_ticket(), consent=DRY_RUN)
-        assert type(preview) is MutationPreview
-        assert preview.method == "POST"
-        assert preview.route == EXTENSION_ROUTE
-        assert "SYNTHETIC_PWD" not in str(preview.payload)
-    finally:
-        client.close()
-
-
-def test_methods_refuse_without_the_matching_consent():
-    client = _client(_refuse)
-    try:
-        for consent in (
-            None,
-            MutationConsent(),
-            MutationConsent(allow_reserve=True, dry_run=False),
-            MutationConsent(allow_payment=True, dry_run=False),
-        ):
-            with pytest.raises(KorailMutationNotAllowedError):
-                client.register_discount_card(_purchase(), consent=consent)
-            with pytest.raises(KorailMutationNotAllowedError):
-                client.extend_discount_card(_ticket(), consent=consent)
-    finally:
-        client.close()
-
-
-def test_methods_require_a_session_even_with_consent():
+def test_methods_require_a_session():
     client = KorailClient(
         KorailConfig(),
         transport=httpx.MockTransport(_refuse),
     )
     try:
         with pytest.raises(KorailAuthError):
-            client.register_discount_card(_purchase(), consent=DRY_RUN)
+            client.register_discount_card(_purchase())
         with pytest.raises(KorailAuthError):
-            client.extend_discount_card(_ticket(), consent=DRY_RUN)
+            client.extend_discount_card(_ticket())
     finally:
         client.close()
 
@@ -307,47 +231,29 @@ def test_get_mutation_query_carries_every_gate_post_mutation_form_does():
         transport=httpx.MockTransport(_refuse),
     )
     try:
-        # No consent, wrong category, dry-run, wrong route, wrong method.
-        with pytest.raises(KorailMutationNotAllowedError):
-            http.get_mutation_query(
-                EXTENSION_ROUTE,
-                {},
-                consent=MutationConsent(),
-                category="discount_card",
-            )
-        with pytest.raises(KorailMutationNotAllowedError):
-            http.get_mutation_query(
-                EXTENSION_ROUTE,
-                {},
-                consent=DRY_RUN,
-                category="discount_card",
-            )
+        # Wrong category, wrong route, wrong method.
         with pytest.raises(KorailProtocolError):
             http.get_mutation_query(
                 EXTENSION_ROUTE,
                 {},
-                consent=MutationConsent(allow_refund=True, dry_run=False),
                 category="refund",
             )
         with pytest.raises(KorailProtocolError):
             http.get_mutation_query(
                 "/classes/com.korail.mobile.common.stationdata",
                 {},
-                consent=ALLOWED,
                 category="discount_card",
             )
         with pytest.raises(KorailProtocolError):
             http.get_mutation_query(
                 PURCHASE_ROUTE,
                 {},
-                consent=ALLOWED,
                 category="discount_card",
             )
         with pytest.raises(KorailProtocolError):
             http.get_mutation_query(
                 EXTENSION_ROUTE,
                 "not a mapping",
-                consent=ALLOWED,
                 category="discount_card",
             )
     finally:
@@ -384,11 +290,8 @@ def test_an_acknowledged_send_transmits_exactly_the_built_shapes():
 
     client = _client(handler)
     try:
-        purchased = client.register_discount_card(
-            _purchase(),
-            consent=ALLOWED,
-        )
-        extended = client.extend_discount_card(_ticket(), consent=ALLOWED)
+        purchased = client.register_discount_card(_purchase())
+        extended = client.extend_discount_card(_ticket())
     finally:
         client.close()
 
@@ -481,12 +384,8 @@ _SESSION_EXPIRED = {
 @pytest.mark.parametrize(
     "send",
     [
-        lambda client, consent: client.register_discount_card(
-            _purchase(), consent=consent
-        ),
-        lambda client, consent: client.extend_discount_card(
-            _ticket(), consent=consent
-        ),
+        lambda client: client.register_discount_card(_purchase()),
+        lambda client: client.extend_discount_card(_ticket()),
     ],
     ids=["register_discount_card", "extend_discount_card"],
 )
@@ -505,7 +404,7 @@ def test_an_expired_session_on_a_discount_card_mutation_clears_the_client(send):
     )
     try:
         with pytest.raises(KorailSessionExpiredError):
-            send(client, MutationConsent(allow_discount_card=True, dry_run=False))
+            send(client)
     finally:
         client.close()
     assert len(seen) == 1
@@ -516,12 +415,8 @@ def test_an_expired_session_on_a_discount_card_mutation_clears_the_client(send):
 @pytest.mark.parametrize(
     "send",
     [
-        lambda client, consent: client.register_discount_card(
-            _purchase(), consent=consent
-        ),
-        lambda client, consent: client.extend_discount_card(
-            _ticket(), consent=consent
-        ),
+        lambda client: client.register_discount_card(_purchase()),
+        lambda client: client.extend_discount_card(_ticket()),
     ],
     ids=["register_discount_card", "extend_discount_card"],
 )
@@ -539,7 +434,7 @@ def test_a_refused_discount_card_mutation_raises(send):
     client = _client(handler)
     try:
         with pytest.raises(KorailAppError, match="WRD000001"):
-            send(client, MutationConsent(allow_discount_card=True, dry_run=False))
+            send(client)
     finally:
         client.close()
 

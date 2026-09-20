@@ -11,11 +11,10 @@
 여기서 import 할 수 있는 이름이 이 패키지가 지원하는 전부입니다. ``__all__`` 에
 없는 것은 하위 모듈에 있더라도 예고 없이 바뀝니다.
 
-시작점은 셋입니다 — :class:`~korail_mobile_api.client.KorailClient`(모든 호출),
-:class:`~korail_mobile_api.config.KorailConfig`(기기 신원과 타임아웃),
-:class:`~korail_mobile_api.consent.MutationConsent`(상태를 바꾸는 호출을 여는
-열쇠). 대기열은 :class:`~korail_mobile_api.netfunnel.KorailNetFunnelClient` 로
-따로 떨어져 있고 기본적으로 꺼져 있습니다.
+시작점은 둘입니다 — :class:`~korail_mobile_api.client.KorailClient`(모든 호출),
+:class:`~korail_mobile_api.config.KorailConfig`(기기 신원과 타임아웃). 대기열은
+:class:`~korail_mobile_api.netfunnel.KorailNetFunnelClient` 로 따로 떨어져 있고
+기본적으로 꺼져 있습니다.
 
 실패는 :class:`~korail_mobile_api.errors.KorailApiError` 아래로 모이며,
 ``h_msg_cd`` 를 예외 클래스로 옮기는 규칙은
@@ -26,16 +25,10 @@
 #: 집합이 아니고, ``from korail_mobile_api import *`` 가 이것을 실어 나른 적이
 #: 없다. ``pyproject.toml`` 의 ``project.version`` 과 같은지는
 #: ``tests/test_release_readiness.py`` 만 지킨다. 빌드가 둘을 맞춰 주지 않는다.
-__version__ = "1.1.1"
+__version__ = "2.0.0"
 
 from .client import KorailClient
 from .config import KorailConfig, enabled_dynapath_config
-from .consent import (
-    MutationCategory,
-    MutationConsent,
-    MutationPreview,
-    require_mutation_consent,
-)
 from .constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_MAX_DISCOUNT_CARD_SECTIONS,
@@ -422,9 +415,6 @@ __all__ = [
     "MileageHistoryResponse",
     "MultiChildDiscountTarget",
     "MultiChildDiscountTargetResponse",
-    "MutationCategory",
-    "MutationConsent",
-    "MutationPreview",
     "NoticeResponse",
     "OriginalTicket",
     "OriginalTicketInquiryResponse",
@@ -505,7 +495,6 @@ __all__ = [
     "ServiceStatusResponse",
     "build_config_from_env",
     "inquiry_action",
-    "require_mutation_consent",
     "StationDataResponse",
     "StationInfoResponse",
     "TrainCalendarDay",

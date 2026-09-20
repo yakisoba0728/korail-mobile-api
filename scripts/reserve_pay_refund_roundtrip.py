@@ -50,9 +50,9 @@ Safety posture
   runnable recovery command, on any later failure. No digit-run pattern is
   applied to this output: a PNR is 15 digits and cannot be told from a PAN by
   shape, so such a pattern masks the one value that must always get through.
-* Reserve, pay, cancel and refund each go out under their own single-category
-  consent; no consent object in this file grants two money-moving categories at
-  once, and each factory checks that with a raise rather than an ``assert``.
+* Reserve, pay, cancel and refund are called by name, one at a time -- calling
+  the method IS the category statement, so no step can be mistaken for
+  another.
 * The member number and password come from ``KORAIL_MEMBER_NO`` and
   ``KORAIL_PASSWORD``, and the device identity from ``KORAIL_DYNAPATH_DEVICE_ID``,
   ``KORAIL_DYNAPATH_OS_VERSION`` and ``KORAIL_DYNAPATH_DEVICE_MODEL``
@@ -101,7 +101,6 @@ from typing import Any, NamedTuple
 from korail_mobile_api import (
     CardPayment,
     KorailClient,
-    MutationConsent,
     OriginalTicketReference,
     PaidTicket,
     PriceFareLeg,
@@ -328,60 +327,6 @@ def _max_fare_from_env() -> int | None:
     if not raw.isdigit():
         raise RoundTripAborted(f"{MAX_FARE_ENV} must be a whole number of won")
     return int(raw)
-
-
-# --- consents ----------------------------------------------------------------
-
-
-def _single_category_consent(category: str, **extra: bool) -> MutationConsent:
-    """One consent, one category. Never two money-moving categories at once.
-
-    The check raises rather than asserts on purpose: ``python -O`` strips
-    ``assert``, and this is exactly the kind of invariant that must not quietly
-    disappear under an optimisation flag.
-    """
-    consent = MutationConsent(
-        **{f"allow_{category}": True}, dry_run=False, **extra
-    )
-    granted = [
-        name
-        for name in ("reserve", "payment", "cancel", "refund")
-        if getattr(consent, f"allow_{name}")
-    ]
-    if granted != [category]:
-        raise RoundTripAborted(
-            f"consent for {category!r} unexpectedly granted {granted}"
-        )
-    return consent
-
-
-def reserve_consent() -> MutationConsent:
-    return _single_category_consent("reserve")
-
-
-def cancel_consent() -> MutationConsent:
-    return _single_category_consent("cancel")
-
-
-def refund_consent() -> MutationConsent:
-    return _single_category_consent("refund")
-
-
-def real_card_payment_consent() -> MutationConsent:
-    """The ONLY consent in this file that can move money.
-
-    Both halves are stated deliberately: ``fake_card_only=False`` (this is not a
-    test card) and ``real_card_acknowledged=True`` (yes, charge it). Setting one
-    without the other is refused by both ``pay_with_card`` and the transmit gate.
-    """
-    consent = _single_category_consent(
-        "payment", fake_card_only=False, real_card_acknowledged=True
-    )
-    if not consent.real_card_acknowledged or consent.fake_card_only:
-        raise RoundTripAborted(
-            "the real-card payment consent is not what it claims to be"
-        )
-    return consent
 
 
 # --- helpers -----------------------------------------------------------------
@@ -800,7 +745,7 @@ class RoundTrip:
 
     def reserve(self, train: TrainSummary) -> ReservationHoldResponse:
         self.console.say("[c] reserving ONE adult, cheapest class")
-        hold = self.client.reserve(train, consent=reserve_consent())
+        hold = self.client.reserve(train)
         if not isinstance(hold, ReservationHoldResponse):
             raise RoundTripAborted(
                 "reserve returned a preview instead of a live hold"
@@ -874,9 +819,7 @@ class RoundTrip:
         # before it. pay_with_card only raises when it never got an envelope,
         # so the state is narrowed the moment one arrives.
         self.state = "paying"
-        result = self.client.pay_with_card(
-            hold, self.card, consent=real_card_payment_consent()
-        )
+        result = self.client.pay_with_card(hold, self.card)
         self.console.say(f"    {_envelope(result)}")
         self.console.say(f"    coupons returned: {len(result.coupons)}")
         if not _succeeded(result):
@@ -889,7 +832,7 @@ class RoundTrip:
 
     def cancel_unpaid(self, hold: ReservationHoldResponse) -> bool:
         self.console.say("[f] cancelling the still-unpaid hold")
-        result = self.client.cancel_unpaid_hold(hold, consent=cancel_consent())
+        result = self.client.cancel_unpaid_hold(hold)
         self.console.say(f"    {_envelope(result)}")
         if _succeeded(result):
             self.state = "none"
@@ -946,7 +889,6 @@ class RoundTrip:
                 train_no=train_no,
                 pbp_acceptance_target_flag=pbp_acceptance_target_flag,
             ),
-            consent=refund_consent(),
         )
         self.console.say(f"    {_envelope(result)}")
         return _succeeded(result)
@@ -962,8 +904,8 @@ class RoundTrip:
         library changes, and :meth:`run` cannot do that: it always charges a
         real card.
 
-        No payment consent is constructed on this path and :meth:`pay` is never
-        called, so a charge is not merely disallowed, it is unreachable.
+        :meth:`pay` is never called on this path, so a charge is not merely
+        disallowed, it is unreachable.
         """
         self.login()
         self.require_zero_reservations("before starting")
@@ -1129,7 +1071,6 @@ def recover(client: KorailClient, console: _Console, pnr_no: str) -> int:
                 train_no=train_no,
                 pbp_acceptance_target_flag=detail.pbp_acceptance_target_flag,
             ),
-            consent=refund_consent(),
         )
         console.say(f"    refund: {_envelope(result)}")
         return 0 if _succeeded(result) else 1
@@ -1142,9 +1083,7 @@ def recover(client: KorailClient, console: _Console, pnr_no: str) -> int:
         )
         return 1
     console.say("    the reservation is UNPAID; cancelling it")
-    result = client.cancel_unpaid_hold(
-        _hold_for_cancel(pnr_no), consent=cancel_consent()
-    )
+    result = client.cancel_unpaid_hold(_hold_for_cancel(pnr_no))
     console.say(f"    cancel: {_envelope(result)}")
     return 0 if _succeeded(result) else 1
 

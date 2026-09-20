@@ -26,12 +26,8 @@ Safety posture
   pacing is enforced at the HTTP hook, so calls the client makes internally are
   throttled too.
 * This script NEVER pays and NEVER refunds. It does not import ``CardPayment``
-  or ``PaidTicket``, and the only :class:`MutationConsent` it can build sets
-  ``allow_reserve``/``allow_cancel`` -- ``allow_payment`` and ``allow_refund``
-  are never passed. :func:`_reserve_consent` and :func:`_cancel_consent` are the
-  only consent factories, and both refuse -- with a raise, which ``python -O``
-  cannot strip the way it strips ``assert`` -- to hand back a consent that opens
-  a money category.
+  or ``PaidTicket``, and it calls only ``reserve``/``cancel_unpaid_hold`` --
+  ``pay_with_card``, ``pay_with_fake_card`` and ``refund`` are never called.
 * Credentials come from ``KORAIL_MEMBER_NO``/``KORAIL_PASSWORD`` and the device
   identity from ``KORAIL_DYNAPATH_DEVICE_ID``/``KORAIL_DYNAPATH_OS_VERSION``/
   ``KORAIL_DYNAPATH_DEVICE_MODEL`` (:mod:`korail_mobile_api.live`), never from
@@ -73,7 +69,6 @@ from korail_mobile_api import (
     LimousineScheduleQuery,
     LimousineSeatInventoryQuery,
     MergeSeatsInquiryRequest,
-    MutationConsent,
     OriginalTicketReference,
     PassMenuData,
     PassScheduleRequest,
@@ -163,22 +158,6 @@ def _install_hooks(
     hooks["request"] = [*hooks.get("request", []), on_request]
     hooks["response"] = [*hooks.get("response", []), on_response]
     inner.event_hooks = hooks
-
-
-def _reserve_consent() -> MutationConsent:
-    """Consent that permits exactly one live hold and nothing else."""
-    consent = MutationConsent(allow_reserve=True, dry_run=False)
-    if consent.allow_payment or consent.allow_refund:
-        raise RuntimeError("the reserve consent opened a money category")
-    return consent
-
-
-def _cancel_consent() -> MutationConsent:
-    """Consent that permits exactly one live cancellation and nothing else."""
-    consent = MutationConsent(allow_cancel=True, dry_run=False)
-    if consent.allow_payment or consent.allow_refund:
-        raise RuntimeError("the cancel consent opened a money category")
-    return consent
 
 
 class SurfaceRunner:
@@ -755,7 +734,7 @@ def _run_reserve_round_trip(runner: SurfaceRunner, train: TrainSummary) -> None:
     client = runner.client
     print("-- reserve/cancel round trip --")
     hold = runner.run(
-        "reserve", "reserve", lambda: client.reserve(train, consent=_reserve_consent())
+        "reserve", "reserve", lambda: client.reserve(train)
     )
     if hold is None:
         # The call failed, but the server may still have committed a hold (for
@@ -791,7 +770,7 @@ def _run_reserve_round_trip(runner: SurfaceRunner, train: TrainSummary) -> None:
         cancel = runner.run(
             f"cancel_unpaid_hold_attempt_{attempt}",
             "cancel_unpaid_hold",
-            lambda: client.cancel_unpaid_hold(hold, consent=_cancel_consent()),
+            lambda: client.cancel_unpaid_hold(hold),
         )
         if cancel is not None and cancel.str_result == "SUCC":
             print(

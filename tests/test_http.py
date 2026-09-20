@@ -910,14 +910,12 @@ _EXTENSION = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
 
 def _mutate_through(sender, answer, monkeypatch, **kw):
     from korail_mobile_api import safety
-    from korail_mobile_api.consent import MutationConsent
 
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(answer))
     if sender == "post_mutation_form":
         return "POST", _CART, lambda: client.post_mutation_form(
             _CART,
             {**client.common_fields(), "hidPnrNo": "SYNTHETIC_PNR"},
-            consent=MutationConsent(allow_cart=True, dry_run=False),
             category="cart",
             **kw,
         )
@@ -929,7 +927,6 @@ def _mutate_through(sender, answer, monkeypatch, **kw):
     return "GET", _EXTENSION, lambda: client.get_mutation_query(
         _EXTENSION,
         {**client.common_fields(), "txtCrdNo": "SYNTHETIC_CARD"},
-        consent=MutationConsent(allow_discount_card=True, dry_run=False),
         category="discount_card",
         **kw,
     )

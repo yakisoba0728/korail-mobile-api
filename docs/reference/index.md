@@ -13,7 +13,6 @@
 | --- | --- |
 | [client](client.md) | `KorailClient`. 로그인·읽기·변경 메서드 전부 |
 | [config](config.md) | `KorailConfig`, `build_config_from_env` — 기기 신원과 기본값 |
-| [consent](consent.md) | `MutationConsent`, `MutationCategory`, `require_mutation_consent` |
 | [constants](constants.md) | 호스트, 앱 버전, DynaPath 허용목록 같은 고정값 |
 | [dynapath](dynapath.md) | `DynapathConfig` 와 토큰 설정 |
 | [errors](errors.md) | 예외 계층과 `classify_app_error` |

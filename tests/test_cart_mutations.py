@@ -8,10 +8,9 @@
 
 """Offline tests for the ``cart`` mutation: adding a PNR to the 장바구니.
 
-Model: ``tests/test_discount_card_mutations.py``. Same shape: consent gate,
-route/category cross-check, dry-run preview with redaction, and one
-acknowledged send against a ``MockTransport`` that records what actually left
-the process.
+Model: ``tests/test_discount_card_mutations.py``. Same shape: route/category
+cross-check and one acknowledged send against a ``MockTransport`` that
+records what actually left the process.
 
 ``cart.addCartList`` (``CartService.java:11-13``) takes exactly one request
 field beyond the common three -- ``hidPnrNo`` -- confirmed against
@@ -34,15 +33,8 @@ import korail_mobile_api
 from _helpers import make_authenticated_client as _client
 from _helpers import refuse_transport as _refuse
 from korail_mobile_api import KorailClient, KorailConfig
-from korail_mobile_api.consent import (
-    MUTATION_CATEGORIES,
-    MutationConsent,
-    MutationPreview,
-    require_mutation_consent,
-)
 from korail_mobile_api.errors import (
     KorailAuthError,
-    KorailMutationNotAllowedError,
     KorailProtocolError,
 )
 from korail_mobile_api.models import BaseKorailResponse
@@ -64,59 +56,11 @@ CART_ADD_ROUTE = "/classes/com.korail.mobile.cart.addCartList"
 # Synthetic, non-secret placeholder -- never a real PNR.
 SYNTHETIC_PNR = "SYNTHETIC_PNR_REFERENCE"
 
-ALLOWED = MutationConsent(allow_cart=True, dry_run=False)
-DRY_RUN = MutationConsent(allow_cart=True)
-
 
 def _request(**overrides: object) -> CartAddRequest:
     fields: dict[str, object] = {"pnr_no": SYNTHETIC_PNR}
     fields.update(overrides)
     return CartAddRequest(**fields)  # type: ignore[arg-type]
-
-
-# --- Consent category -------------------------------------------------------
-
-
-def test_cart_is_its_own_consent_category():
-    assert "cart" in MUTATION_CATEGORIES
-    assert len(MUTATION_CATEGORIES) == 7
-    # A default consent grants it no more than it grants anything else.
-    assert MutationConsent().allow_cart is False
-    with pytest.raises(KorailMutationNotAllowedError):
-        require_mutation_consent(MutationConsent(), "cart")
-    # ...and no other category's opt-in unlocks it.
-    for other in (
-        "allow_reserve",
-        "allow_payment",
-        "allow_cancel",
-        "allow_refund",
-        "allow_discount_card",
-        "allow_price_recalculation",
-    ):
-        with pytest.raises(KorailMutationNotAllowedError):
-            require_mutation_consent(
-                MutationConsent(**{other: True}),
-                "cart",
-            )
-    require_mutation_consent(MutationConsent(allow_cart=True), "cart")
-    # ...and it unlocks nothing else.
-    for category in (
-        "reserve",
-        "payment",
-        "cancel",
-        "refund",
-        "discount_card",
-        "price_recalculation",
-    ):
-        with pytest.raises(KorailMutationNotAllowedError):
-            require_mutation_consent(MutationConsent(allow_cart=True), category)
-
-
-def test_require_mutation_consent_rejects_none_and_non_consent_for_cart():
-    with pytest.raises(KorailMutationNotAllowedError):
-        require_mutation_consent(None, "cart")
-    with pytest.raises(KorailMutationNotAllowedError):
-        require_mutation_consent(object(), "cart")  # type: ignore[arg-type]
 
 
 # --- Route tiering: bidirectional route<->category binding ------------------
@@ -192,48 +136,17 @@ def test_add_to_cart_form_refuses_a_non_exact_request_type():
         build_cart_add_form(KorailConfig(), "not a request")  # type: ignore[arg-type]
 
 
-# --- add_to_cart(): consent-gated, dry-run by default, never sends ----------
+# --- add_to_cart(): sends immediately once a session exists ----------------
 
 
-def test_default_consent_previews_and_sends_nothing():
-    client = _client(_refuse)
-    try:
-        preview = client.add_to_cart(_request(), consent=DRY_RUN)
-        assert type(preview) is MutationPreview
-        assert preview.category == "cart"
-        assert preview.method == "POST"
-        assert preview.route == CART_ADD_ROUTE
-        assert preview.note == "dry-run: not sent"
-        # hidPnrNo is PII and is redacted even in a preview that never left.
-        assert preview.payload["hidPnrNo"] == "[REDACTED]"
-        assert SYNTHETIC_PNR not in str(preview.payload)
-    finally:
-        client.close()
-
-
-def test_add_to_cart_refuses_without_the_matching_consent():
-    client = _client(_refuse)
-    try:
-        for consent in (
-            None,
-            MutationConsent(),
-            MutationConsent(allow_reserve=True, dry_run=False),
-            MutationConsent(allow_discount_card=True, dry_run=False),
-        ):
-            with pytest.raises(KorailMutationNotAllowedError):
-                client.add_to_cart(_request(), consent=consent)
-    finally:
-        client.close()
-
-
-def test_add_to_cart_requires_a_session_even_with_consent():
+def test_add_to_cart_requires_a_session():
     client = KorailClient(
         KorailConfig(),
         transport=httpx.MockTransport(_refuse),
     )
     try:
         with pytest.raises(KorailAuthError):
-            client.add_to_cart(_request(), consent=DRY_RUN)
+            client.add_to_cart(_request())
     finally:
         client.close()
 
@@ -254,7 +167,7 @@ def test_an_acknowledged_send_transmits_exactly_the_built_shape():
 
     client = _client(handler)
     try:
-        result = client.add_to_cart(_request(), consent=ALLOWED)
+        result = client.add_to_cart(_request())
     finally:
         client.close()
 

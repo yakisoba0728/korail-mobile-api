@@ -623,38 +623,6 @@ def test_every_mode_refuses_an_interval_below_one_second(
     assert "--min-interval below 1.0s" in capsys.readouterr().out
 
 
-# --- consents ----------------------------------------------------------------
-
-
-def test_every_consent_grants_exactly_one_category():
-    for consent in (
-        rt.reserve_consent(),
-        rt.cancel_consent(),
-        rt.refund_consent(),
-        rt.real_card_payment_consent(),
-    ):
-        granted = [
-            name
-            for name in ("reserve", "payment", "cancel", "refund")
-            if getattr(consent, f"allow_{name}")
-        ]
-        assert len(granted) == 1, granted
-        assert consent.dry_run is False
-
-
-def test_only_the_payment_consent_acknowledges_a_real_charge():
-    payment = rt.real_card_payment_consent()
-    assert payment.real_card_acknowledged is True
-    assert payment.fake_card_only is False
-    for consent in (
-        rt.reserve_consent(),
-        rt.cancel_consent(),
-        rt.refund_consent(),
-    ):
-        assert consent.real_card_acknowledged is False
-        assert consent.fake_card_only is True
-
-
 # --- refusing to start -------------------------------------------------------
 
 

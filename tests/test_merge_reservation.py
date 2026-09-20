@@ -65,8 +65,6 @@ from korail_mobile_api import (
     KorailSeatClass,
     KorailSession,
     KorailSessionExpiredError,
-    MutationConsent,
-    MutationPreview,
     ReservationHoldResponse,
     TrainScheduleItem,
     TrainSummary,
@@ -535,48 +533,6 @@ def _client(handler=_refuse) -> KorailClient:
     return client
 
 
-def test_reserve_merge_is_denied_without_consent() -> None:
-    from korail_mobile_api import KorailMutationNotAllowedError
-
-    client = _client()
-    try:
-        with pytest.raises(KorailMutationNotAllowedError):
-            client.reserve_merge(
-                _standing_hold_train(),
-                (_leading_leg(), _trailing_leg()),
-                consent=MutationConsent(),
-            )
-        with pytest.raises(KorailMutationNotAllowedError):
-            client.reserve_merge(
-                _standing_hold_train(),
-                (_leading_leg(), _trailing_leg()),
-                consent=MutationConsent(allow_cancel=True),
-            )
-    finally:
-        client.close()
-
-
-def test_reserve_merge_dry_run_previews_the_reserve_route() -> None:
-    client = _client()
-    try:
-        preview = client.reserve_merge(
-            _standing_hold_train(),
-            (_leading_leg(), _trailing_leg()),
-            consent=MutationConsent(allow_reserve=True),
-        )
-    finally:
-        client.close()
-    assert type(preview) is MutationPreview
-    assert preview.category == "reserve"
-    assert preview.method == "POST"
-    assert preview.route == (
-        "/classes/com.korail.mobile.certification.TicketReservation"
-    )
-    assert preview.note == "dry-run: not sent"
-    assert preview.payload["txtJrnyTpCd1"] == "21"
-    assert preview.payload["txtJrnyTpCd2"] == "22"
-
-
 def test_an_acknowledged_merge_sends_the_merge_form_and_returns_the_hold() -> None:
     """The send path, which nothing reached: returning None from it passed.
 
@@ -606,7 +562,6 @@ def test_an_acknowledged_merge_sends_the_merge_form_and_returns_the_hold() -> No
         hold = client.reserve_merge(
             _standing_hold_train(),
             (_leading_leg(), _trailing_leg()),
-            consent=MutationConsent(allow_reserve=True, dry_run=False),
         )
     finally:
         client.close()
@@ -653,7 +608,6 @@ def test_an_expired_session_on_reserve_merge_clears_the_client_before_raising():
             client.reserve_merge(
                 _standing_hold_train(),
                 (_leading_leg(), _trailing_leg()),
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
             )
     finally:
         client.close()
@@ -683,7 +637,6 @@ def test_reserve_merge_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
         hold = client.reserve_merge(
                 _standing_hold_train(),
                 (_leading_leg(), _trailing_leg()),
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
             )
         assert isinstance(hold, ReservationHoldResponse)
         assert (hold.pnr_no, hold.journey_count) == ("399999999999999", "2")
@@ -692,7 +645,6 @@ def test_reserve_merge_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
             client.reserve_merge(
                 _standing_hold_train(),
                 (_leading_leg(), _trailing_leg()),
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
             )
     finally:
         client.close()

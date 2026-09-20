@@ -62,14 +62,13 @@ CLIENT_CLASS_NAME = "KorailClient"
 
 #: Modules whose module-level *functions* may appear in ``__all__``. These are
 #: the entry points and the vocabulary a caller uses directly: constructing a
-#: client, building a config, naming an error, stating consent, entering the
-#: queue. A function exported from anywhere else is, by construction, a step
-#: the client already performs for the caller.
+#: client, building a config, naming an error, entering the queue. A function
+#: exported from anywhere else is, by construction, a step the client already
+#: performs for the caller.
 FUNCTION_EXPORTING_MODULES = frozenset(
     {
         "client",
         "config",
-        "consent",
         "errors",
         "live",
         "netfunnel",

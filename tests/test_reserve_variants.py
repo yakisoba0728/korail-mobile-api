@@ -45,15 +45,12 @@ from korail_mobile_api import (
     KORAIL_STANDBY_HOLD_MESSAGE_CODE,
     KorailClient,
     KorailConfig,
-    KorailMutationNotAllowedError,
     KorailPassengerCounts,
     KorailProtocolError,
     KorailReservationJobType,
     KorailSeatAssignment,
     KorailSeatClass,
     KorailSession,
-    MutationConsent,
-    MutationPreview,
     PhysicalSeat,
     ReservationHoldResponse,
     SeatInventoryResponse,
@@ -242,8 +239,8 @@ def test_a_free_seat_row_is_refused_before_anything_is_sent(job_type, seats):
     # txtSeatAttCd4 for AlienGuard-protected values
     # (analysis/jadx/sources/com/korail/talk/ui/screen/train/TrainScheduleViewModel.java:2875,
     # :2899-2909, :2914-2915) that this package cannot reproduce. The "11"
-    # rule is what keeps such a row out, and it must do so with a live consent
-    # and before the transport is touched.
+    # rule is what keeps such a row out, and it must do so before the
+    # transport is touched.
     client = _logged_in_no_network_client()
     with pytest.raises(
         KorailProtocolError,
@@ -251,7 +248,6 @@ def test_a_free_seat_row_is_refused_before_anything_is_sent(job_type, seats):
     ):
         client.reserve(
             _free_seat_train(),
-            consent=MutationConsent(allow_reserve=True, dry_run=False),
             job_type=job_type,
             seats=seats,
         )
@@ -544,50 +540,6 @@ def test_seat_assignment_rejects_an_unusable_identifier(car_no, seat_no):
         KorailSeatAssignment(car_no=car_no, seat_no=seat_no)
 
 
-# --- client-level previews for both variants ---------------------------------
-
-
-def test_reserve_seat_designated_dry_run_previews_the_osrcar_keys_redacted():
-    client = _logged_in_no_network_client()
-    preview = client.reserve(
-        _eligible_train(),
-        consent=MutationConsent(allow_reserve=True),
-        passengers=KorailPassengerCounts(adult=2),
-        job_type=KorailReservationJobType.SEAT_DESIGNATED,
-        seats=(
-            KorailSeatAssignment(car_no=4, seat_no="5A"),
-            KorailSeatAssignment(car_no=4, seat_no="5B"),
-        ),
-    )
-    assert isinstance(preview, MutationPreview)
-    assert preview.category == "reserve"
-    assert preview.route.endswith("certification.TicketReservation")
-    assert preview.payload["txtJobId"] == "1103"
-    assert preview.payload["txtSrcarCnt"] == "2"
-    # The seat identity is PII-adjacent and redacted like every other seat read.
-    assert preview.payload["txtSrcarNo1"] == "[REDACTED]"
-    assert preview.payload["txtSeatNo1"] == "[REDACTED]"
-
-
-def test_reserve_with_no_job_type_is_unchanged_at_the_client_surface():
-    client = _logged_in_no_network_client()
-    train = _eligible_train()
-    consent = MutationConsent(allow_reserve=True)
-
-    defaulted = client.reserve(train, consent=consent)
-    explicit = client.reserve(
-        train,
-        consent=consent,
-        job_type=KorailReservationJobType.IMMEDIATE,
-        seats=None,
-    )
-    assert isinstance(defaulted, MutationPreview)
-    assert isinstance(explicit, MutationPreview)
-    assert defaulted.payload == explicit.payload
-    assert list(defaulted.payload) == list(explicit.payload)
-    assert defaulted.payload["txtJobId"] == "1101"
-
-
 # --- B. standby (1102) -------------------------------------------------------
 
 
@@ -737,7 +689,6 @@ def test_standby_reserve_requires_a_logged_in_member_session():
     with pytest.raises(KorailAuthError):
         client.reserve(
             _sold_out_standby_train(),
-            consent=MutationConsent(allow_reserve=True),
             job_type=KorailReservationJobType.STANDBY,
         )
 
@@ -858,59 +809,13 @@ def test_reservation_wait_is_a_gated_reserve_category_mutation_route():
             assert_mutation_route_category(RESERVATION_WAIT_PATH, category)
 
 
-def test_confirm_standby_hold_is_denied_without_a_reserve_consent():
-    client = _logged_in_no_network_client()
-    for consent in (MutationConsent(), None, MutationConsent(allow_cancel=True)):
-        with pytest.raises(KorailMutationNotAllowedError):
-            client.confirm_standby_hold(
-                _standby_hold(),
-                consent=consent,  # type: ignore[arg-type]
-            )
-
-
 def test_confirm_standby_hold_requires_an_authenticated_session():
     def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
         raise AssertionError("no request may be sent")
 
     client = KorailClient(transport=httpx.MockTransport(handler))
     with pytest.raises(KorailAuthError):
-        client.confirm_standby_hold(
-            _standby_hold(),
-            consent=MutationConsent(allow_reserve=True),
-        )
-
-
-def test_confirm_standby_hold_dry_run_previews_without_sending():
-    client = _logged_in_no_network_client()
-    preview = client.confirm_standby_hold(
-        _standby_hold(),
-        consent=MutationConsent(allow_reserve=True),
-        sms_notify=True,
-        phone_no="01012345678",
-    )
-    assert isinstance(preview, MutationPreview)
-    assert preview.category == "reserve"
-    assert preview.method == "POST"
-    assert preview.route == RESERVATION_WAIT_PATH
-    assert preview.note == "dry-run: not sent"
-    assert preview.payload["txtSmsSndFlg"] == "Y"
-    assert preview.payload["txtPsrmClChgFlg"] == "N"
-    # The PNR and the phone number never survive into a preview.
-    assert preview.payload["txtPnrNo"] == "[REDACTED]"
-    assert preview.payload["txtCpNo"] == "[REDACTED]"
-    assert "01012345678" not in str(preview.payload)
-
-
-def test_reserve_standby_dry_run_previews_the_standby_job_id():
-    client = _logged_in_no_network_client()
-    preview = client.reserve(
-        _sold_out_standby_train(),
-        consent=MutationConsent(allow_reserve=True),
-        job_type=KorailReservationJobType.STANDBY,
-    )
-    assert isinstance(preview, MutationPreview)
-    assert preview.payload["txtJobId"] == "1102"
-    assert "txtSrcarCnt" not in preview.payload
+        client.confirm_standby_hold(_standby_hold())
 
 
 # --- documentation contract -------------------------------------------------
@@ -958,14 +863,12 @@ def test_docs_record_the_live_verification_of_both_variants():
 
 
 def test_confirm_standby_hold_actually_sends_through_the_shape_gate():
-    """A send test, not a preview test -- the gate only runs on the send path.
+    """A send test, so the built form actually meets `assert_mutation_form_shape`.
 
-    Every other test for this method stops at consent or at dry_run, so the
-    form it builds had never been through `assert_mutation_form_shape`. That
-    was invisible until the gate's coverage was traced: seven of nine mutation
-    routes reached it during a suite run and this was one of the two that did
-    not. A builder whose output has never met the gate is a live-only failure,
-    which is the class this gate exists to prevent.
+    That was invisible until the gate's coverage was traced: seven of nine
+    mutation routes reached it during a suite run and this was one of the two
+    that did not. A builder whose output has never met the gate is a
+    live-only failure, which is the class this gate exists to prevent.
     """
     sent: list[httpx.Request] = []
 
@@ -979,10 +882,7 @@ def test_confirm_standby_hold_actually_sends_through_the_shape_gate():
     client = KorailClient(transport=httpx.MockTransport(handler))
     client.session.current = KorailSession(jsessionid="synthetic-secret")
 
-    client.confirm_standby_hold(
-        _standby_hold(),
-        consent=MutationConsent(allow_reserve=True, dry_run=False),
-    )
+    client.confirm_standby_hold(_standby_hold())
 
     assert [request.url.path for request in sent] == [RESERVATION_WAIT_PATH]
     form = dict(httpx.QueryParams(sent[0].content.decode()))

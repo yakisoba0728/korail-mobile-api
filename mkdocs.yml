@@ -34,7 +34,6 @@ nav:
       - reference/index.md
       - client: reference/client.md
       - config: reference/config.md
-      - consent: reference/consent.md
       - constants: reference/constants.md
       - dynapath: reference/dynapath.md
       - errors: reference/errors.md

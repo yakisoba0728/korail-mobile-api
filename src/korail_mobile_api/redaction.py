@@ -424,7 +424,7 @@ def redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
 def redact_payload(
     payload: Mapping[str, object],
 ) -> dict[str, str | list[str]]:
-    """:class:`~korail_mobile_api.consent.MutationPreview` 용 변경 폼 마스킹.
+    """변경 폼(mutation form) 마스킹 — 로그/에러 메시지에 쓰입니다.
 
     민감 키는 ``[REDACTED]``, 나머지는 :func:`redact_text`. 리스트 값은 원소별로
     가리고 길이 유지(``CertificationService.java:35-37`` 의 ``List @Field``).

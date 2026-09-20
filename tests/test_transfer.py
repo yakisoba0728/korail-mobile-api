@@ -56,7 +56,6 @@ from urllib.parse import parse_qs, parse_qsl
 import httpx
 import pytest
 
-from _helpers import logged_in_no_network_client as _logged_in_no_network_client
 from korail_mobile_api import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_MAX_JOURNEY_LEGS,
@@ -71,8 +70,6 @@ from korail_mobile_api import (
     KorailSeatClass,
     KorailSession,
     KorailSessionExpiredError,
-    MutationConsent,
-    MutationPreview,
     ReservationHoldResponse,
     TrainSearchContinuation,
     TrainSearchQuery,
@@ -1067,24 +1064,6 @@ def test_fallback_does_not_swallow_any_other_failure():
     assert len(captured) == 1
 
 
-def test_reserve_transfer_previews_the_two_leg_form_without_sending():
-    client = _logged_in_no_network_client()
-
-    preview = client.reserve_transfer(
-        _legs(),
-        consent=MutationConsent(allow_reserve=True),
-    )
-
-    assert isinstance(preview, MutationPreview)
-    assert preview.category == "reserve"
-    assert preview.route == (
-        "/classes/com.korail.mobile.certification.TicketReservation"
-    )
-    assert preview.payload["txtJrnyCnt"] == "2"
-    assert preview.payload["txtJrnyTpCd2"] == "14"
-    assert preview.payload["txtJrnySqno2"] == "002"
-
-
 def test_an_acknowledged_transfer_sends_both_legs_and_returns_one_hold():
     """The send path, which nothing reached: returning None from it passed.
 
@@ -1113,10 +1092,7 @@ def test_an_acknowledged_transfer_sends_both_legs_and_returns_one_hold():
     client = KorailClient(transport=httpx.MockTransport(handler))
     client.session.current = KorailSession(jsessionid="synthetic-secret")
     try:
-        hold = client.reserve_transfer(
-            _legs(),
-            consent=MutationConsent(allow_reserve=True, dry_run=False),
-        )
+        hold = client.reserve_transfer(_legs())
     finally:
         client.close()
 
@@ -1145,15 +1121,6 @@ def test_an_acknowledged_transfer_sends_both_legs_and_returns_one_hold():
     )
 
 
-def test_reserve_transfer_needs_reserve_consent():
-    from korail_mobile_api import KorailMutationNotAllowedError
-
-    client = _logged_in_no_network_client()
-
-    with pytest.raises(KorailMutationNotAllowedError):
-        client.reserve_transfer(_legs(), consent=MutationConsent())
-
-
 def test_reserve_transfer_needs_a_session():
     def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
         raise AssertionError("must not send")
@@ -1163,10 +1130,7 @@ def test_reserve_transfer_needs_a_session():
     client = KorailClient(transport=httpx.MockTransport(handler))
 
     with pytest.raises(KorailAuthError):
-        client.reserve_transfer(
-            _legs(),
-            consent=MutationConsent(allow_reserve=True),
-        )
+        client.reserve_transfer(_legs())
 
 
 def test_single_leg_rejection_messages_are_unchanged():
@@ -1268,10 +1232,7 @@ def test_an_expired_session_on_reserve_transfer_clears_the_client_before_raising
     )
     try:
         with pytest.raises(KorailSessionExpiredError):
-            client.reserve_transfer(
-                _legs(),
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+            client.reserve_transfer(_legs())
     finally:
         client.close()
     assert len(seen) == 1
@@ -1298,18 +1259,12 @@ def test_reserve_transfer_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
             strResult="SUCC", h_msg_cd="IRR000000", h_msg_txt="ok",
             h_pnr_no=399999999999999, h_jrny_cnt=2, h_tot_prc={"amount": 1},
         )
-        hold = client.reserve_transfer(
-                _legs(),
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+        hold = client.reserve_transfer(_legs())
         assert isinstance(hold, ReservationHoldResponse)
         assert (hold.pnr_no, hold.journey_count) == ("399999999999999", "2")
         del body["h_pnr_no"]
         with pytest.raises(KorailProtocolError):
-            client.reserve_transfer(
-                _legs(),
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+            client.reserve_transfer(_legs())
     finally:
         client.close()
 

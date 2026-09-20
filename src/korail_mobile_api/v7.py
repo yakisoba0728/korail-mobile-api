@@ -359,10 +359,10 @@ class V7Gateway:
             _assert_body_shape(contract, data)
         route = (contract.http, contract.route)
         if route in KORAIL_MUTATION_ROUTES:
-            # The high-level mutation transport owns the consent-category check.
+            # The high-level mutation transport owns the route/category check.
             raise KorailProtocolError(
                 f"{name} targets KORAIL mutation route {contract.route}; use the "
-                "high-level KorailClient method gated by MutationConsent"
+                "high-level KorailClient method for it"
             )
         client = self._client_for(contract)
         target = self._target_for(contract)

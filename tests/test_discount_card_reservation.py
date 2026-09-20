@@ -27,11 +27,8 @@ from _helpers import refuse_transport as _refuse
 from korail_mobile_api import (
     KorailClient,
     KorailConfig,
-    KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSessionExpiredError,
-    MutationConsent,
-    MutationPreview,
     ReservationHoldResponse,
     TrainSummary,
 )
@@ -150,35 +147,10 @@ def test_the_builder_refuses_an_empty_card():
             )
 
 
-def test_it_is_a_reserve_and_is_gated_as_one():
+def test_it_is_a_reserve_and_is_owned_by_that_category():
     # Same route, so necessarily the same category: a discount card does not
     # make a reservation something other than a reservation.
     assert KORAIL_MUTATION_ROUTE_CATEGORIES[ROUTE] == "reserve"
-    client = _client(_refuse)
-    try:
-        for consent in (
-            None,
-            MutationConsent(),
-            MutationConsent(allow_discount_card=True, dry_run=False),
-            MutationConsent(allow_payment=True, dry_run=False),
-        ):
-            with pytest.raises(KorailMutationNotAllowedError):
-                client.reserve_with_discount_card(
-                    _train(),
-                    card_no=CARD_NO,
-                    consent=consent,
-                )
-        preview = client.reserve_with_discount_card(
-            _train(),
-            card_no=CARD_NO,
-            consent=MutationConsent(allow_reserve=True),
-        )
-        assert type(preview) is MutationPreview
-        assert preview.category == "reserve"
-        assert preview.route == ROUTE
-        assert CARD_NO not in str(preview.payload)
-    finally:
-        client.close()
 
 
 def test_it_requires_a_session():
@@ -188,11 +160,7 @@ def test_it_requires_a_session():
     )
     try:
         with pytest.raises(KorailAuthError):
-            client.reserve_with_discount_card(
-                _train(),
-                card_no=CARD_NO,
-                consent=MutationConsent(allow_reserve=True),
-            )
+            client.reserve_with_discount_card(_train(), card_no=CARD_NO)
     finally:
         client.close()
 
@@ -217,11 +185,7 @@ def test_an_acknowledged_send_posts_the_card_row_to_the_reserve_route():
 
     client = _client(handler)
     try:
-        hold = client.reserve_with_discount_card(
-            _train(),
-            card_no=CARD_NO,
-            consent=MutationConsent(allow_reserve=True, dry_run=False),
-        )
+        hold = client.reserve_with_discount_card(_train(), card_no=CARD_NO)
     finally:
         client.close()
 
@@ -285,11 +249,7 @@ def test_an_expired_session_on_reserve_with_discount_card_clears_the_client_befo
     )
     try:
         with pytest.raises(KorailSessionExpiredError):
-            client.reserve_with_discount_card(
-                _train(),
-                card_no=CARD_NO,
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+            client.reserve_with_discount_card(_train(), card_no=CARD_NO)
     finally:
         client.close()
     assert len(seen) == 1
@@ -315,19 +275,11 @@ def test_reserve_with_discount_card_keeps_the_pnr_of_a_hold_it_cannot_fully_pars
             strResult="SUCC", h_msg_cd="IRR000000", h_msg_txt="ok",
             h_pnr_no=399999999999999, h_jrny_cnt=2, h_tot_prc={"amount": 1},
         )
-        hold = client.reserve_with_discount_card(
-                _train(),
-                card_no=CARD_NO,
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+        hold = client.reserve_with_discount_card(_train(), card_no=CARD_NO)
         assert isinstance(hold, ReservationHoldResponse)
         assert (hold.pnr_no, hold.journey_count) == ("399999999999999", "2")
         del body["h_pnr_no"]
         with pytest.raises(KorailProtocolError):
-            client.reserve_with_discount_card(
-                _train(),
-                card_no=CARD_NO,
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+            client.reserve_with_discount_card(_train(), card_no=CARD_NO)
     finally:
         client.close()

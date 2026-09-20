@@ -9,13 +9,12 @@
 """상태변경 요청이 받는 입력 타입과 그 응답 타입.
 
 여기 있는 것은 값 객체일 뿐이라 아무것도 전송하지 않습니다. 실제로 보내려면
-:class:`~korail_mobile_api.consent.MutationConsent` 로 범주를 열고
-``dry_run=False`` 로 꺼야 합니다 — 그 규칙은
-:mod:`korail_mobile_api.consent` 에 있습니다.
+인증된 세션이 있는 :class:`~korail_mobile_api.client.KorailClient` 로 해당
+메서드를 부르기만 하면 됩니다.
 
 민감한 필드는 ``repr=False`` 라 객체를 찍어도 값이 보이지 않고, 전선 이름이
-:mod:`korail_mobile_api.redaction` 에 등록돼 있어
-:class:`~korail_mobile_api.consent.MutationPreview` 에서도 마스킹됩니다.
+:mod:`korail_mobile_api.redaction` 에 등록돼 있어 페이로드가 되비칠 때도 어디서나
+마스킹됩니다.
 """
 
 from __future__ import annotations

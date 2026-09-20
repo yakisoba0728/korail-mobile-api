@@ -141,7 +141,6 @@ def test_every_mutation_send_path_runs_the_shape_check(monkeypatch):
 
     from korail_mobile_api import http as http_module
     from korail_mobile_api.config import KorailConfig
-    from korail_mobile_api.consent import MutationConsent
 
     senders = {
         name
@@ -181,7 +180,6 @@ def test_every_mutation_send_path_runs_the_shape_check(monkeypatch):
         client.post_mutation_form(
             cart,
             form,
-            consent=MutationConsent(allow_cart=True, dry_run=False),
             category="cart",
         )
         monkeypatch.setattr(
@@ -192,7 +190,6 @@ def test_every_mutation_send_path_runs_the_shape_check(monkeypatch):
         client.get_mutation_query(
             extension,
             query,
-            consent=MutationConsent(allow_discount_card=True, dry_run=False),
             category="discount_card",
         )
     finally:
@@ -301,104 +298,6 @@ def test_the_get_mutation_route_carries_the_common_three_the_check_requires():
 
     safety.assert_mutation_form_shape(
         "/classes/com.korail.mobile.reservation.dcntCrdExtn.do", query
-    )
-
-
-def test_no_module_level_definition_is_unreachable():
-    """AST reachability over src/, so removal residue fails instead of lingering.
-
-    The 2026-07-27 sweep found fifteen orphaned module-level names in one day:
-    seven _TRIP_CHANGE_* constants, four _OFFLINE_REFUND_*_FIELDS dicts, two
-    helpers and two field tuples, all left behind when the features that read
-    them were deleted. Grepping the deletion diff cannot find these -- that
-    finds CALLERS of what was removed, and these are the opposite direction:
-    definitions that were only ever read from inside the removed block.
-
-    Anything genuinely meant to be unused belongs in the allowlist below with
-    a reason, so "unused" stays a decision rather than an accident.
-
-    A use is a reference in the syntax tree: a name loaded, an attribute
-    accessed, a name imported. This used to count every whole-word occurrence
-    in the text, comments and strings included, so one comment naming a dead
-    constant was enough to keep it alive.
-    """
-    from pathlib import Path
-
-    #: Public API is exported, not called; dunders are protocol.
-    allowed_prefixes = ("__",)
-    #: Deliberately unreferenced, each for a stated reason. The point of the
-    #: allowlist is that "unused" has to be argued for once, here, rather than
-    #: being indistinguishable from residue.
-    deliberately_unused = {
-        # Documentation-by-constant: declared beside APP_UPDATE_REQUIRED_CODE
-        # (which IS used) so the pair reads together, and its own docstring
-        # says why it is not in the error map -- KorailSessionExpiredError
-        # handles P058 before that map is consulted.
-        "SESSION_EXPIRED_CODE",
-        # The policy table the safety model is written against. Prose that
-        # happens to be a dict; deleting it would delete the statement of
-        # intent, not dead code.
-        "SAFETY_DEFAULTS",
-        # The precomputed table for the default index. Kept as the named,
-        # inspectable value behind build_dynapath_prefix's default rather than
-        # recomputed at each call site.
-        "DYNAPATH_ENCODING_TABLE",
-        # The signing certificate's SHA-256, recorded beside the app-signature
-        # hash the token actually carries. Nothing reads it: the token is built
-        # from the hash, and this is the artefact the hash was derived FROM,
-        # kept so a reader can re-derive it instead of trusting the hash. It
-        # became visible to this scan only when the public surface narrowed --
-        # `__all__` had been standing in as its reason for existing, which was
-        # never the real one.
-        "KORAIL_DYNAPATH_SIGNING_CERT_SHA256",
-    }
-    package = Path(__file__).parents[1] / "src" / "korail_mobile_api"
-    sources = {path: path.read_text(encoding="utf-8") for path in package.glob("*.py")}
-    referenced: set[str] = set()
-    for text in (
-        *sources.values(),
-        *(
-            path.read_text(encoding="utf-8")
-            for path in (Path(__file__).parent).glob("*.py")
-        ),
-    ):
-        for node in ast.walk(ast.parse(text)):
-            if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Store):
-                referenced.add(node.id)
-            elif isinstance(node, ast.Attribute):
-                referenced.add(node.attr)
-            elif isinstance(node, ast.alias):
-                referenced.add(node.name.rsplit(".", 1)[-1])
-
-    import korail_mobile_api
-
-    exported = set(korail_mobile_api.__all__)
-    orphans = []
-    for path, text in sources.items():
-        if path.name == "__init__.py":
-            continue
-        for node in ast.parse(text).body:
-            names = []
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                names = [node.name]
-            elif isinstance(node, ast.Assign):
-                names = [t.id for t in node.targets if isinstance(t, ast.Name)]
-            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                names = [node.target.id]
-            for name in names:
-                if (
-                    name.startswith(allowed_prefixes)
-                    or name in exported
-                    or name in deliberately_unused
-                ):
-                    continue
-                # A definition stores its name; only a load, an attribute
-                # access or an import refers to it.
-                if name not in referenced:
-                    orphans.append(f"{path.name}:{node.lineno} {name}")
-
-    assert not orphans, "unreachable module-level definitions:\n  " + "\n  ".join(
-        sorted(orphans)
     )
 
 

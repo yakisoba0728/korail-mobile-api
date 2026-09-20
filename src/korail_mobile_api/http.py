@@ -24,17 +24,11 @@ from urllib.parse import urlencode
 import httpx
 
 from .config import KorailConfig
-from .consent import (
-    MutationCategory,
-    MutationConsent,
-    require_mutation_consent,
-)
 from .constants import DYNAPATH_ALLOWLIST_PATHS, DYNAPATH_REQUIRED_PATHS
 from .dynapath import DynapathRequestContext, DynapathTokenGenerator
 from .errors import (
     KorailDynaPathError,
     KorailDynaPathRequiredError,
-    KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSessionExpiredError,
     KorailTransportError,
@@ -42,7 +36,7 @@ from .errors import (
 )
 from .models import BaseKorailResponse
 from .safety import (
-    KORAIL_CARD_BEARING_MUTATION_CATEGORIES,
+    MutationCategory,
     assert_korail_origin,
     assert_mutation_form_shape,
     assert_mutation_route,
@@ -388,39 +382,14 @@ class KorailHttpClient:
         path: str,
         data: Mapping[str, Any],
         *,
-        consent: MutationConsent,
         category: MutationCategory,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
         """변경 라우트로 폼을 보냅니다.
 
-        ``require_mutation_consent`` + ``consent.dry_run=False`` +
         ``assert_mutation_route`` + ``assert_mutation_route_category`` 를 모두
-        통과해야 합니다. 카드 보유 범주는 추가로
-        ``fake_card_only``/``real_card_acknowledged`` 중 정확히 하나를 요구합니다.
+        통과해야 합니다.
         """
-        require_mutation_consent(consent, category)
-        if consent.dry_run:
-            raise KorailMutationNotAllowedError(
-                "post_mutation_form requires consent.dry_run=False; a dry-run "
-                "preview must never be transmitted"
-            )
-        if category in KORAIL_CARD_BEARING_MUTATION_CATEGORIES:
-            if consent.fake_card_only and consent.real_card_acknowledged:
-                raise KorailMutationNotAllowedError(
-                    "payment mutations refuse a contradictory consent: "
-                    "fake_card_only=True claims a non-chargeable test card "
-                    "while real_card_acknowledged=True acknowledges a real "
-                    "charge; set exactly one"
-                )
-            if not consent.fake_card_only and not consent.real_card_acknowledged:
-                raise KorailMutationNotAllowedError(
-                    "payment mutations require consent.fake_card_only=True (a "
-                    "non-chargeable test card) or "
-                    "consent.real_card_acknowledged=True (an acknowledged real "
-                    "charge); the PAN is transmitted in the clear, so an "
-                    "unstated card kind is never sent"
-                )
         assert_korail_origin(str(self._client.base_url))
         assert_mutation_route("POST", path)
         assert_mutation_route_category(path, category)
@@ -446,20 +415,13 @@ class KorailHttpClient:
         path: str,
         params: Mapping[str, Any],
         *,
-        consent: MutationConsent,
         category: MutationCategory,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
         """:meth:`post_mutation_form` 의 GET 판(``reservation.dcntCrdExtn.do``).
 
-        동일한 게이트 적용. 카드 분기 없음.
+        동일한 라우트/범주 게이트 적용.
         """
-        require_mutation_consent(consent, category)
-        if consent.dry_run:
-            raise KorailMutationNotAllowedError(
-                "get_mutation_query requires consent.dry_run=False; a dry-run "
-                "preview must never be transmitted"
-            )
         assert_korail_origin(str(self._client.base_url))
         assert_mutation_route("GET", path)
         assert_mutation_route_category(path, category)

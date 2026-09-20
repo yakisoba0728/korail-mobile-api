@@ -36,7 +36,6 @@ from types import SimpleNamespace
 import pytest
 
 from korail_mobile_api import OriginalTicketReference
-from korail_mobile_api.consent import MUTATION_CATEGORIES
 
 
 SCRIPTS = Path(__file__).parents[1] / "scripts"
@@ -236,33 +235,6 @@ def test_delivery_round_trip_refunds_with_the_flag_the_server_gave(
         return_password="0000",
     )
     assert trip.quote_refund(reference) == "Y"
-
-
-# --- capture_live_read_surface: one hold, one cancel, nothing else -------------
-
-
-def test_capture_consents_open_exactly_one_category_each(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """--reserve makes one hold and cancels it; its consents can do no more.
-
-    Checked against every category rather than the payment and refund pair the
-    helpers assert themselves, so a category added later is covered too.
-    """
-    module = _load("capture_live_read_surface", monkeypatch)
-    for helper, opened in (
-        (module._reserve_consent, "reserve"),
-        (module._cancel_consent, "cancel"),
-    ):
-        consent = helper()
-        assert consent.dry_run is False
-        for category in MUTATION_CATEGORIES:
-            assert getattr(consent, f"allow_{category}") is (category == opened), (
-                helper.__name__,
-                category,
-            )
-        assert consent.fake_card_only is True
-        assert consent.real_card_acknowledged is False
 
 
 @pytest.mark.parametrize(
