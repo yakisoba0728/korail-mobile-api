@@ -1,6 +1,25 @@
 # KORAIL Python Package Implementation Progress
 
-Last updated: 2026-07-27 KST
+Last updated: 2026-07-27 KST (2.0.0 note below added 2026-09-20)
+
+**2.0.0 note.** This is a dated progress log, not a description of the package
+as it stands today; entries below record what was true on the date each was
+written. Version 2.0.0 removed the consent system that most entries below
+assume: `MutationConsent`, `MutationPreview`, `require_mutation_consent`,
+`MutationCategory`, `V7MutationConsent`, `V7MutationPreview`, and
+`src/korail_mobile_api/consent.py` no longer exist. State-changing methods take
+no `consent=` argument, return no preview, and have no `dry_run` — each sends
+as soon as it is called, provided a session exists. What still runs before a
+send is the route allowlist and the route→category cross-check in `safety.py`;
+`pay_with_card` and `pay_with_fake_card` remain separate methods, and the
+method name is now the only thing that distinguishes a real charge from a test
+one. The 7.0.6 contract registry (`client.v7`) went from 117 contracts to 2
+(`verifyOnlineRefunds`, `executeOnlineRefunds`); `android_features.py` and
+`run_live_smoke_from_env` are gone, and `build_config_from_env` stays. The
+current route/method boundary is 58 read routes, 10 mutation routes, 77 public
+client methods, and 231 exported names — recount from `src/korail_mobile_api/safety.py`
+and `korail_mobile_api.__all__` rather than trusting any figure below, several
+of which record an earlier, smaller boundary as a historical milestone.
 
 ## 할인 / 복지 / 쿠폰 survey and what the operator must settle (2026-07-26)
 
@@ -96,6 +115,13 @@ was discarding.
   The two `Otr` siblings were never registered and remain out, now for a stated
   reason rather than for scope: they are the 자유이용권 family (내일로 /
   A-PASS / 강릉패스), a different product with a different request shape.
+  [2.0.0: `client.v7`'s contract registry no longer carries any of the four
+  pass-purchase contracts — it shrank from 117 rows to 2
+  (`verifyOnlineRefunds`, `executeOnlineRefunds`), and `V7MutationConsent` no
+  longer exists. The refusal survives anyway: `V7Gateway.call` still rejects
+  `postPassReserve`/`postPassPayIssue`/`passOtrReserve`/`postPassOtrPayIssue`
+  by name, unconditionally, before it ever looks the name up in the registry
+  (`src/korail_mobile_api/v7.py`, `_NEVER_SENT`).]
 
 ### What only a live call can settle
 
@@ -114,7 +140,9 @@ was discarding.
    populates `jrnyInfo`/`apdUsrInfo` — only the setters that would. Whether a
    1-section card must still send a section, and whether `apdUsrCnt` must be
    present as `"0"` rather than omitted for a 1인용 card, is unknown. Send a
-   dry run first and inspect the preview.
+   dry run first and inspect the preview. [2.0.0: there is no dry run and no
+   preview any more — `register_discount_card` sends as soon as it is called
+   on a live session, so settle this by reading the response it returns.]
 5. **`extend_discount_card`'s reply and cost.** The DAO's response type is a
    bare `BaseResponse`, so a successful extension's shape — and whether it
    charges — is unknown.
@@ -153,16 +181,27 @@ a live call does.
   The removed route and compatibility details are in
   [7.0.6-removals.md](7.0.6-removals.md). Older milestones below retain their
   then-current route counts.
-- The current package boundary is 57 exact login/read routes and 77 public methods (63 login/read or local helpers plus fourteen consent-gated mutation methods: `reserve`,
-  `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`, `add_to_cart`, `register_discount_card`, `extend_discount_card`, `recalculate_price`, and `execute_station_ticket_refund`.
-  The first thirteen use `MutationConsent` and the station-ticket refund uses
-  method-scoped `V7MutationConsent`. The original thirteen methods return a
-  redacted preview by default and send a live state change only with a
-  `dry_run=False` matching-category consent via the double-gated
-  `post_mutation_form`; `pay_with_fake_card` also requires `fake_card_only` and
-  still sends only test cards, while `pay_with_card` requires
-  `real_card_acknowledged=True` together with `fake_card_only=False` and is the
-  only path that can move real money.
+- The current package boundary is 58 exact login/read routes, 10 mutation
+  routes, and 77 public methods (63 login/read or local helpers plus fourteen
+  state-changing mutation methods: `reserve`, `reserve_transfer`,
+  `reserve_merge`, `reserve_with_discount_card`, `confirm_standby_hold`,
+  `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`,
+  `add_to_cart`, `register_discount_card`, `extend_discount_card`,
+  `recalculate_price`, and `execute_station_ticket_refund`).
+  None of the fourteen takes a `consent=` argument any more: 2.0.0 deleted
+  `consent.py` (`MutationConsent`, `MutationPreview`,
+  `require_mutation_consent`) and the 7.0.6 gateway's method-scoped
+  `V7MutationConsent`/`V7MutationPreview` along with it. There is no dry run
+  and no preview — each of the fourteen sends as soon as it is called,
+  provided a login session exists. What still runs immediately before the
+  POST is `safety.py`'s route allowlist and its route→category cross-check
+  (`assert_mutation_route`, `assert_mutation_route_category`) inside the same
+  `post_mutation_form`/`V7Gateway.call` send paths as before.
+  `pay_with_fake_card` and `pay_with_card` are still two separate methods, but
+  neither takes a `fake_card_only` or `real_card_acknowledged` flag any more —
+  both build the identical form and go out through the identical send path, so
+  the method name the caller chose is now the only thing standing between a
+  test card and a real, chargeable one.
   reserve/cancel/pay were verified live; `pay_with_card` and `refund` were
   verified live on 2026-07-31 with a real card, for one lump-sum charge on one
   journey — `IRT000000` then `IRT200277`, 8,400 KRW, zero refund
@@ -323,7 +362,9 @@ was 28 successful, 9 failed, and 128 unexecuted out of 165; it also made no
 credential access, `.env` read, secure-raw access, or mutation expansion. The
 pre-R149 inventory was 31 successful, 10 failed, and 124 unexecuted entries out
 of 165; current inventory is 33 successful, 14 failed, and 118 unexecuted. The
-current package boundary is 57 exact routes and 77 public methods.
+current package boundary is 58 exact read routes, 10 mutation routes, and 77
+public methods (recount from `src/korail_mobile_api/safety.py`; the "57" above
+was the boundary at an earlier point in this log, not today's).
 
 ## Ticket-reference static read tranche
 
@@ -386,7 +427,7 @@ Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
 - Static-only limousine schedule-list, seat-inventory, and schedule-view lookup
 - Client-gated pass-schedule candidate lookup with caller-supplied runtime
   values; no pass reservation or payment operation
-- Consent-gated reservation hold for an arbitrary passenger mix
+- State-changing reservation hold for an arbitrary passenger mix
   (`KorailPassengerCounts`: 어른, 청소년, 어린이, 동반유아, 경로, 1~3급 장애,
   4~6급 장애, 안내견) in either cabin (`KorailSeatClass`: 일반실 / 특실). Both
   `reserve` parameters are keyword-only and default to one adult in a general
@@ -395,7 +436,7 @@ Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
   it; the mix is capped at `KORAIL_MAX_PASSENGERS_PER_RESERVATION` (9). Only
   the one-adult general-seat form is live-verified; the multi-passenger and
   특실 wire shapes are static-evidenced and have never been transmitted
-- Consent-gated 환승 (transfer) search and reservation — `search_transfer_trains`,
+- State-changing 환승 (transfer) search and reservation — `search_transfer_trains`,
   `search_trains_with_transfer_fallback` and `reserve_transfer`. **Reserve and
   cancel are live-verified (2026-07-26, again 2026-07-31); transfer PAYMENT is
   NOT live-verified** — no transfer ticket has ever been paid for. See the
@@ -424,10 +465,12 @@ Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
   for a transfer until it lands
 
 The read-only transport (`post_form`/`get_json`) refuses every mutation route
-and allows 57 exact read/login routes. The reservation, unpaid-cancel, payment,
-and refund routes are callable only through the separate consent-gated send path
-(`post_mutation_form`, `dry_run=False`); check-in, member mutation, and
-point/mileage mutation routes remain not callable.
+and allows 58 exact read/login routes. The reservation, unpaid-cancel, payment,
+and refund routes are callable only through the separate `post_mutation_form`
+send path, which checks the route allowlist and the route→category match and
+then sends immediately — there is no consent object and no `dry_run` any more;
+check-in, member mutation, and point/mileage mutation routes remain not
+callable.
 
 Pure offline parsers now cover the evidenced reservation-hold and reservation-
 payment response shapes, including nested journey/coupon rows and recursive
@@ -476,11 +519,13 @@ no payment request and printed or persisted no raw response or identifier.
   expected pre-login `P058` responses, and reported zero unexpected failures;
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
-- The current full offline release gate reports
-  `3119 passed, 1 deselected`; only the explicitly opted-in live-service test
-  is deselected. Historically the same gate reported `1246 passed, 1 deselected`
-  before the P0 live-evidence documentation contract test and
-  `1247 passed, 1 deselected` directly after it.
+- As of 2.0.0, the full offline gate collects 2255 tests and no test carries
+  the `live` marker any more, so `pytest -m "not live"` deselects nothing —
+  there is no longer an opted-in live-service test to deselect. (`3119 passed,
+  1 deselected` below, and the `1246`/`1247` figures before it, were the gate's
+  size at earlier points in this log, not today's; the slim-down that produced
+  2.0.0 removed a large fraction of the test suite along with the consent
+  system and the `android_features`/7.0.6-contract code it tested.)
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
   verifier accepted both artifacts, `git diff --check` passed, and all
@@ -769,13 +814,16 @@ This section consolidates the current-package handoff facts that were previously
 tracked in the removed session-handoff note; their outcomes are preserved here,
 in the CHANGELOG, and under `docs/internal/superpowers/specs/`.
 
-The current implementation evidence establishes 57 routes at the exact
-login/read transport boundary and 77 public methods on `KorailClient`. The
-read-only path exposes no callable mutation route; reservation, unpaid-cancel,
-fake-card payment, acknowledged real-card payment, refund, and cart-add are
-callable only through the separate
-consent-gated `post_mutation_form` path, while check-in, membership, and
-point/mileage mutation routes remain not callable. The current service inventory is 33 successful, 14 failed,
+The current implementation evidence establishes 58 routes at the exact
+login/read transport boundary, 10 mutation routes, and 77 public methods on
+`KorailClient`. The read-only path exposes no callable mutation route;
+reservation, unpaid-cancel, fake-card payment, acknowledged real-card payment,
+refund, and cart-add are callable only through the separate
+`post_mutation_form` path, which checks the route allowlist and the
+route→category match immediately before sending — 2.0.0 removed the consent
+object that used to gate this path, so a login session is now the only thing
+a call needs — while check-in, membership, and point/mileage mutation routes
+remain not callable. The current service inventory is 33 successful, 14 failed,
 and 118 unexecuted entries out of 165; the historical pre-revalidation inventory
 was 28 successful, 9 failed, and 128 unexecuted.
 
@@ -797,11 +845,11 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-The current reviewed offline gate reports `3119 passed, 1 deselected`; the
-historical gates were `1246 passed, 1 deselected` and, after the P0
-live-evidence documentation coverage, `1247 passed, 1 deselected`. In every one
-of those gates, the deselected test is the explicitly opted-in live-service
-test.
+As of 2.0.0, `pytest -m "not live"` collects 2255 tests and deselects none: no
+test in the suite carries the `live` marker any more. `3119 passed, 1
+deselected`, `1246 passed, 1 deselected`, and `1247 passed, 1 deselected` were
+the gate's size at earlier points in this log, each with the then-opted-in
+live-service test as its one deselection; none of those totals is today's.
 
 The bounded seat-inventory structural run returned `IRG000000`/`SUCC` with 5
 cars and 75 seat rows while retaining no raw values; a later post-fix
