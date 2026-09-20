@@ -17,12 +17,12 @@ the card and the two charging opt-ins, which it does not use.
 
 Safety posture
 --------------
-* ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live switch) is always
-  required, and alone runs nothing. Alongside it, the charging run (the
-  default, with neither ``--recover`` nor ``--reserve-cancel-only``) needs
-  ``KORAIL_LIVE_REAL_CHARGE=1``; ``--recover`` and ``--reserve-cancel-only``,
-  which cannot charge, need ``KORAIL_LIVE_MUTATION=1`` instead. The two are
-  never both required for the same run.
+* THREE opt-ins are required, and none of them alone runs anything:
+  ``KORAIL_MOBILE_API_LIVE=1`` (the package-wide live switch),
+  ``KORAIL_LIVE_MUTATION=1`` (this run may change state), and
+  ``KORAIL_LIVE_REAL_CHARGE=1`` (this run may charge a real card). The third is
+  not required by ``--reserve-cancel-only`` or ``--recover``, neither of which
+  can charge; the first two always are.
 * ``KORAIL_MAX_FARE`` -- a ceiling in won -- is REQUIRED on the charging path,
   not a suggestion. It is the only thing that caps what may be charged, and it
   is checked before the card is read, before login, and before any request. A
@@ -1109,16 +1109,14 @@ def _require_opt_ins(*, real_charge: bool) -> None:
         raise RoundTripAborted(
             "Set KORAIL_MOBILE_API_LIVE=1 to touch the live server"
         )
-    if real_charge:
-        if os.environ.get(LIVE_REAL_CHARGE_ENV) != "1":
-            raise RoundTripAborted(
-                f"Set {LIVE_REAL_CHARGE_ENV}=1 to opt in to charging a REAL card"
-            )
-    else:
-        if os.environ.get(LIVE_MUTATION_ENV) != "1":
-            raise RoundTripAborted(
-                f"Set {LIVE_MUTATION_ENV}=1 to opt in to changing state"
-            )
+    if os.environ.get(LIVE_MUTATION_ENV) != "1":
+        raise RoundTripAborted(
+            f"Set {LIVE_MUTATION_ENV}=1 to opt in to changing state"
+        )
+    if real_charge and os.environ.get(LIVE_REAL_CHARGE_ENV) != "1":
+        raise RoundTripAborted(
+            f"Set {LIVE_REAL_CHARGE_ENV}=1 to opt in to charging a REAL card"
+        )
     # A ceiling is not optional on the charging path. Step (d) compares the
     # amount owed against self.max_fare, and when that is None the comparison
     # is skipped -- i.e. the script would pay whatever the server says. The

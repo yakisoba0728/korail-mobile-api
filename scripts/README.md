@@ -72,7 +72,7 @@ predates the second switch, which now has to be set as well.
 The script here that charges a real card (`retry_delivery_roundtrip.py` below
 drives the same run). It reserves one adult, pays, and refunds, on your own
 account, inside the fee-free refund window. It needs
-two opt-in switches *and* `KORAIL_MAX_FARE`, a ceiling in won: without a
+three opt-in switches *and* `KORAIL_MAX_FARE`, a ceiling in won: without a
 ceiling the run would accept whatever amount the server says is owed, so the
 script refuses to start rather than default to unbounded. The ceiling is checked
 before the card is read and before any request goes out.
@@ -131,10 +131,10 @@ subclasses that script's `RoundTrip`) and adds one read before the refund:
 route, time and ceiling are fixed in the code: 서울 → 영등포, 06:00, and
 `KORAIL_MAX_FARE=5000`. These override whatever the environment says.
 
-It needs `KORAIL_MOBILE_API_LIVE=1` and `KORAIL_LIVE_REAL_CHARGE=1`, checked by
-the parent script's own gate, and the same three `KORAIL_DYNAPATH_*` device
-values the parent reads, so the charge is made from a stable device identity.
-Both are checked before anything is
+It needs `KORAIL_MOBILE_API_LIVE=1`, `KORAIL_LIVE_MUTATION=1` and
+`KORAIL_LIVE_REAL_CHARGE=1`, checked by the parent script's own gate, and the
+same three `KORAIL_DYNAPATH_*` device values the parent reads, so the charge is
+made from a stable device identity. Both are checked before anything is
 prompted. The member number, password and the four card values are prompted
 with `getpass`. It prints through the parent script's
 console, so the PNR comes out in full and the card values never do. If the run

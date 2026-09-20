@@ -42,6 +42,7 @@ OPT_INS = {
     "retry_unprotected_live": ("KORAIL_MOBILE_API_LIVE",),
     "retry_delivery_roundtrip": (
         "KORAIL_MOBILE_API_LIVE",
+        "KORAIL_LIVE_MUTATION",
         "KORAIL_LIVE_REAL_CHARGE",
     ),
 }

@@ -453,7 +453,7 @@ def test_console_scrubs_exception_text_too():
         {"KORAIL_MOBILE_API_LIVE": "1", "KORAIL_LIVE_MUTATION": "1"},
     ],
 )
-def test_main_refuses_unless_both_opt_ins_are_set(
+def test_main_refuses_unless_every_opt_in_is_set(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     present: dict[str, str],
@@ -475,21 +475,59 @@ def test_main_refuses_unless_both_opt_ins_are_set(
     assert "ABORTED" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "present",
+    [
+        {},
+        # REAL_CHARGE and a valid ceiling, but no MUTATION: the ceiling check
+        # would happily pass this, so if MUTATION were not enforced this case
+        # would fall through all the way to the card read.
+        {
+            "KORAIL_MOBILE_API_LIVE": "1",
+            "KORAIL_LIVE_REAL_CHARGE": "1",
+            MAX_FARE_ENV: "5000",
+        },
+    ],
+    ids=["nothing-set", "real-charge-and-ceiling-without-mutation"],
+)
 def test_main_refuses_before_reading_the_card_when_opt_ins_are_missing(
     monkeypatch: pytest.MonkeyPatch,
+    present: dict[str, str],
 ):
     for name in (
         "KORAIL_MOBILE_API_LIVE",
         "KORAIL_LIVE_MUTATION",
         "KORAIL_LIVE_REAL_CHARGE",
+        MAX_FARE_ENV,
     ):
         monkeypatch.delenv(name, raising=False)
+    for name, value in present.items():
+        monkeypatch.setenv(name, value)
 
     def _no_card():  # pragma: no cover - must never run
         raise AssertionError("the card was read despite a missing opt-in")
 
     monkeypatch.setattr(rt, "read_card_from_env", _no_card)
     assert rt.main([]) == 2
+
+
+def test_require_opt_ins_refuses_the_charging_path_on_real_charge_alone(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``KORAIL_LIVE_REAL_CHARGE`` no longer implies consent to mutate.
+
+    A prior version treated REAL_CHARGE as sufficient on its own for the
+    charging path, on the theory that agreeing to a real charge already means
+    agreeing to a mutation. That reasoning was reversed: the charging path must
+    still ask for KORAIL_LIVE_MUTATION separately, and MUST refuse -- citing
+    MUTATION, not the fare ceiling -- before ever getting to the ceiling check.
+    """
+    monkeypatch.setenv("KORAIL_MOBILE_API_LIVE", "1")
+    monkeypatch.setenv("KORAIL_LIVE_REAL_CHARGE", "1")
+    monkeypatch.delenv("KORAIL_LIVE_MUTATION", raising=False)
+    monkeypatch.delenv(MAX_FARE_ENV, raising=False)
+    with pytest.raises(rt.RoundTripAborted, match="KORAIL_LIVE_MUTATION"):
+        rt._require_opt_ins(real_charge=True)
 
 
 def _all_opt_ins(monkeypatch: pytest.MonkeyPatch) -> None:
