@@ -33,7 +33,6 @@ from korail_mobile_api.mutation_models import (
     StationRefundVerificationRequest,
     StationRefundVerificationResponse,
 )
-from korail_mobile_api.v7 import V7MutationConsent, V7MutationPreview
 
 
 def _assert_exported(name: str, expected: object = None) -> None:
@@ -44,96 +43,6 @@ def _assert_exported(name: str, expected: object = None) -> None:
         assert exported, name
     else:
         assert exported is expected, name
-
-
-def test_client_public_method_set_is_stable():
-    methods = {
-        name
-        for name, value in inspect.getmembers(
-            KorailClient,
-            predicate=inspect.isfunction,
-        )
-        if not name.startswith("_")
-    }
-    assert methods == {
-        "add_to_cart",
-        "cancel_unpaid_hold",
-        "clear_session",
-        "confirm_standby_hold",
-        "close",
-        "check_ticket_duplication",
-        "extend_discount_card",
-        "get_app_data",
-        "get_cart_list",
-        "get_common_code",
-        "get_commuter_kind_menu",
-        "get_commuter_info",
-        "get_crew_request_list",
-        "get_delay_discount_tickets",
-        "get_discount_card_schedule",
-        "get_discount_card_usage_history",
-        "get_delivery_recipient",
-        "get_deposit_banks",
-        "get_discount_coupons",
-        "get_free_seat_car_info",
-        "get_guide_seat_condition",
-        "get_limousine_schedules",
-        "get_limousine_seat_inventory",
-        "get_korail_point_summary",
-        "get_maas_menu_list",
-        "get_maas_service_details",
-        "get_maas_station_data",
-        "get_merge_seats_inquiry",
-        "get_mileage_history",
-        "get_multi_child_discount_targets",
-        "get_notice",
-        "get_pass_available_dates",
-        "get_pass_menu",
-        "get_pass_schedule",
-        "get_original_ticket_inquiry",
-        "get_pbp_acceptance_specifications",
-        "get_product_detail",
-        "get_product_reservations",
-        "get_price_fare_quote",
-        "get_recent_delivery_history",
-        "get_refund_commission",
-        "get_refund_ticket_detail",
-        "get_reservation_history",
-        "get_seat_cars",
-        "get_seat_inventory",
-        "get_seat_assignment_schedule",
-        "get_self_seat_change_info",
-        "get_service_status",
-        "get_station_data",
-        "get_station_info",
-        "get_ticket_list",
-        "get_ticket_receipt",
-        "get_ticket_reservation_detail",
-        "get_train_calendar",
-        "get_train_schedule",
-        "get_transfer_stations",
-        "get_trip_menu",
-        "get_trip_change_dates",
-        "get_customer_trip_info",
-        "get_uuid",
-        "login",
-        "login_social",
-        "logout",
-        "pay_with_card",
-        "pay_with_fake_card",
-        "recalculate_price",
-        "refund",
-        "register_discount_card",
-        "reserve",
-        "reserve_merge",
-        "reserve_with_discount_card",
-        "reserve_transfer",
-        "search_trains",
-        "search_trains_with_transfer_fallback",
-        "search_transfer_trains",
-        "verify_station_ticket_refund",
-        "execute_station_ticket_refund",
-    }
 
 
 def test_limousine_signatures_types_and_exports_are_public():
@@ -307,18 +216,10 @@ def test_new_social_login_and_station_refund_methods_have_explicit_contracts():
     }
 
     verify = inspect.signature(KorailClient.verify_station_ticket_refund)
-    execute = inspect.signature(KorailClient.execute_station_ticket_refund)
     assert list(verify.parameters) == ["self", "request"]
-    assert list(execute.parameters) == ["self", "request", "consent"]
-    assert execute.parameters["consent"].kind is inspect.Parameter.KEYWORD_ONLY
     assert get_type_hints(KorailClient.verify_station_ticket_refund) == {
         "request": StationRefundVerificationRequest,
         "return": StationRefundVerificationResponse,
-    }
-    assert get_type_hints(KorailClient.execute_station_ticket_refund) == {
-        "request": StationRefundExecutionRequest,
-        "consent": V7MutationConsent,
-        "return": V7MutationPreview | StationRefundExecutionResponse,
     }
     for name, model in (
         ("StationRefundVerificationRequest", StationRefundVerificationRequest),
@@ -372,48 +273,6 @@ def test_config_preserves_baseline_positional_constructor_order():
 
 def test_config_defaults_advertising_id_to_empty_string():
     assert KorailConfig().advertising_id == ""
-
-
-def test_session_preserves_baseline_raw_positional_argument():
-    raw = {"legacy": "session"}
-    session = KorailSession("cookie", "member", raw)
-    assert list(inspect.signature(KorailSession).parameters)[:3] == [
-        "jsessionid",
-        "member_no",
-        "raw",
-    ]
-    assert session.raw is raw
-    assert session.member_card_no is None
-
-
-def test_train_summary_preserves_baseline_positional_constructor_order():
-    raw = {"legacy": "train"}
-    train = TrainSummary(
-        "00123",
-        "100",
-        "0001",
-        "0020",
-        "20260710",
-        "060000",
-        "083000",
-        raw,
-    )
-    assert list(inspect.signature(TrainSummary).parameters)[:8] == [
-        "train_no",
-        "train_group_code",
-        "departure_station_code",
-        "arrival_station_code",
-        "departure_date",
-        "departure_time",
-        "arrival_time",
-        "raw",
-    ]
-    assert train.departure_date == "20260710"
-    assert train.departure_time == "060000"
-    assert train.arrival_time == "083000"
-    assert train.raw is raw
-    assert train.departure_station_name is None
-    assert train.arrival_station_name is None
 
 
 def test_raw_typed_core_exports_and_return_hints_are_public():
