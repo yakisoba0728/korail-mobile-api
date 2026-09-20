@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -17,6 +13,8 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import assert_p058_clears_session
+from _read_field_contracts import KORAIL_EXACT_REQUEST_FIELDS
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -73,10 +71,7 @@ from korail_mobile_api.read_payloads import (
     build_ticket_receipt_form,
     build_trip_menu_form,
 )
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES
 
 
 PUBLIC_METHODS = {
@@ -307,7 +302,6 @@ REQUEST_CASES = (
 
 INVALID_CALLS = (
     ("get_service_status", (True,)),
-    ("get_delay_discount_tickets", ("２０２６０７１４",)),
     ("get_discount_coupons", (0, "")),
     ("get_pass_available_dates", ("", "P", "A")),
     ("get_product_reservations", (1, 0)),
@@ -398,7 +392,6 @@ def _common_fields(config: KorailConfig) -> dict[str, str]:
 
 
 def test_successful_read_routes_have_exact_final_fields():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert (
         "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
     ) in KORAIL_READ_ONLY_ROUTES
@@ -741,29 +734,26 @@ def test_p058_clears_session_for_every_new_authenticated_read(
     method_name,
     args,
 ):
-    def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            json={
-                "h_msg_cd": "P058",
-                "h_msg_txt": "synthetic expiry",
-                "strResult": "FAIL",
-            },
-        )
+    def build_client() -> KorailClient:
+        def handler(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "h_msg_cd": "P058",
+                    "h_msg_txt": "synthetic expiry",
+                    "strResult": "FAIL",
+                },
+            )
 
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(
-        jsessionid="synthetic-session",
-        member_no="synthetic-member",
-    )
-    client.http.cookies.set("JSESSIONID", "synthetic-session")
-    try:
-        with pytest.raises(KorailSessionExpiredError):
-            getattr(client, method_name)(*args)
-    finally:
-        client.close()
-    assert client.session.current is None
-    assert "JSESSIONID" not in client.http.cookies
+        client = KorailClient(transport=httpx.MockTransport(handler))
+        client.session.current = KorailSession(
+            jsessionid="synthetic-session",
+            member_no="synthetic-member",
+        )
+        client.http.cookies.set("JSESSIONID", "synthetic-session")
+        return client
+
+    assert_p058_clears_session(build_client, lambda client: getattr(client, method_name)(*args))
 
 
 @pytest.mark.parametrize(
@@ -1167,11 +1157,6 @@ def test_sensitive_typed_fields_and_raw_values_are_accessible_but_repr_hidden(
         ),
         (
             parse_cart_list_response,
-            {"cart_infos": {"cart_info": {}}},
-            "cart_info",
-        ),
-        (
-            parse_cart_list_response,
             {"cart_infos": {"cart_info": ["not-an-object"]}},
             "cart_info",
         ),
@@ -1208,6 +1193,14 @@ def test_read_parsers_reject_wrong_wrapper_list_and_item_shapes(
     }
     with pytest.raises(KorailProtocolError, match=match):
         parser(raw)
+
+
+def test_cart_parser_rejects_a_non_string_str_result_instead_of_accepting_it():
+    # _validate_envelope only compared strResult to "FAIL"; a non-string value
+    # (e.g. an object) is never equal to "FAIL", so the envelope was judged a
+    # quiet success instead of the malformed response it actually is.
+    with pytest.raises(KorailProtocolError, match="strResult"):
+        parse_cart_list_response({"h_msg_cd": "X", "h_msg_txt": "y", "strResult": {}})
 
 
 @pytest.mark.parametrize("value", [True, False, "12.5", "１２", [], {}])

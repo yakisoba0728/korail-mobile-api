@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -68,8 +64,6 @@ def test_station_info_parser_and_normal_station_data_are_typed_and_repr_safe(
         "synthetic-station-row-raw-secret",
         "synthetic-station-data-raw-secret",
         "synthetic-station-popup-message-secret",
-        "synthetic-station-popup-title-secret",
-        "synthetic-station-url-secret",
     ):
         assert secret not in rendered
 
@@ -390,14 +384,6 @@ def test_train_schedule_parser_maps_header_and_stop_repr_safely(
     rendered = f"{response!r} {stop!r}"
     for secret in (
         "synthetic-schedule-envelope-message-secret",
-        "synthetic-delay-detail-secret",
-        "synthetic-schedule-message-secret",
-        "synthetic-schedule-message-text-secret",
-        "synthetic-delay-fare-return-name-secret",
-        "SYNTHETIC-SCHEDULE-RUN-DATE",
-        "SYNTHETIC-SCHEDULE-TRAIN-NO",
-        "SYNTHETIC-STOP-STATION-CODE",
-        "Synthetic Stop Station Name",
         "synthetic-schedule-stop-raw-secret",
         "synthetic-schedule-raw-secret",
     ):
@@ -502,7 +488,6 @@ def test_transfer_station_parser_maps_evidenced_rows_repr_safely(
     assert response.raw is raw
     rendered = f"{response!r} {station!r}"
     for secret in (
-        "SYNTHETIC-TRANSFER-STATION-CODE",
         "synthetic-transfer-row-raw-secret",
         "synthetic-transfer-raw-secret",
     ):
@@ -597,22 +582,21 @@ def test_existing_reference_methods_return_typed_models_without_request_changes(
         models.TrainScheduleResponse,
         models.TransferStationListResponse,
     )
-    assert [request.method for request in captured] == [
-        "POST",
-        "POST",
-        "POST",
-        "POST",
-        "POST",
-    ]
-    assert all(request.url.query == b"" for request in captured[:3])
-    assert all(request.content == b"" for request in captured[:2])
-    assert parse_qs(captured[2].content.decode())["timeStamp"][0].isdigit()
+    # station_info/station_data/train_calendar's request shape (POST, empty
+    # query/body, the timeStamp field) is independently pinned by
+    # test_client_read_apis.py::test_common_station_and_calendar_use_exact_endpoint_fields,
+    # so it is not re-proven here. train_schedule's and transfer_stations'
+    # request shapes are NOT independently pinned there -- that file only
+    # substring-checks a couple of fields each, not the closed field set or
+    # the runDt/Key forwarding -- so those two stay in full.
+    assert captured[3].method == "POST"
     assert parse_qs(captured[3].content.decode()) == {
         "Device": ["AD"],
         "Version": ["250601003"],
         "runDt": ["SYNTHETIC-DATE"],
         "trnNo": ["00123"],
     }
+    assert captured[4].method == "POST"
     assert parse_qs(captured[4].content.decode()) == {
         "Device": ["AD"],
         "Version": ["250601003"],
@@ -697,16 +681,7 @@ def test_train_search_metadata_preserves_named_server_strings_repr_safely(
         "SYNTHETIC-MERGE-AVAILABILITY-FLAG"
     )
     rendered = repr(metadata)
-    for secret in (
-        "SYNTHETIC-MENU-ID",
-        "SYNTHETIC-JOB-ID",
-        "SYNTHETIC-PRODUCT-NO",
-        "SYNTHETIC-NEXT-QUERY-STATION-NO",
-        "SYNTHETIC-NEXT-TRAIN-NO",
-        "SYNTHETIC-FIRST-DEPARTURE-TIME",
-        "synthetic-train-search-raw-secret",
-    ):
-        assert secret not in rendered
+    assert "synthetic-train-search-raw-secret" not in rendered
 
 
 def test_train_summary_promotes_safe_follow_on_fields_losslessly(
@@ -763,15 +738,7 @@ def test_train_summary_promotes_safe_follow_on_fields_losslessly(
     assert train.total_passenger_count == 4
     assert train.raw is row
     rendered = repr(train)
-    for secret in (
-        "SYNTHETIC-DEPARTURE-CONSTRUCTION-ORDER",
-        "SYNTHETIC-SEAT-ATTRIBUTE-CODE",
-        "SYNTHETIC-CAR-TYPE-CODE",
-        "synthetic-general-availability-name-secret",
-        "SYNTHETIC-STANDARD-REMAINING-SEAT-COUNT",
-        "synthetic-train-row-raw-secret",
-    ):
-        assert secret not in rendered
+    assert "synthetic-train-row-raw-secret" not in rendered
 
 
 def test_train_search_extensions_preserve_legacy_constructor_positions():

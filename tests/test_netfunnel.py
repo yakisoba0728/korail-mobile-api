@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """Offline tests for the NetFunnel virtual waiting room.
 
@@ -190,45 +186,10 @@ def test_real_length_key_is_the_shape_a_live_key_has():
 
 
 # ---------------------------------------------------------------------------
-# The URL of each opcode, parameter ORDER included.
+# The URL of each opcode. Parameter order/membership is pinned once, at the
+# safety-contract layer below (assert_netfunnel_request / KORAIL_NETFUNNEL_
+# QUERY_CONTRACTS), which the send path genuinely exercises.
 # ---------------------------------------------------------------------------
-
-
-def test_get_tid_chk_enter_url_is_opcode_sid_aid_in_that_order():
-    # T6/d.java:99-101 adds opcode, sid, aid — in that order and nothing else.
-    assert build_get_tid_chk_enter_url(
-        KORAIL_NETFUNNEL_URL,
-        action=KorailNetFunnelAction.INQUIRY,
-    ) == (
-        "https://nf.letskorail.com/ts.wseq"
-        "?opcode=5101&sid=service_1&aid=act_8"
-    )
-
-
-def test_get_tid_chk_enter_url_carries_the_peak_season_action():
-    # act_8_2 is a SEPARATE queue from act_8, which is the entire point of it.
-    assert build_get_tid_chk_enter_url(
-        KORAIL_NETFUNNEL_URL,
-        action=KorailNetFunnelAction.PEAK_SEASON_INQUIRY,
-    ).endswith("?opcode=5101&sid=service_1&aid=act_8_2")
-
-
-def test_chk_enter_url_is_opcode_then_key_and_nothing_else():
-    # T6/d.java:54-55. No sid, no aid, no ttl — the native SDK sends neither the
-    # service/action pair (unlike the JS dialect's 5002) nor the previous 201's
-    # ttl (which it keeps client-side, T6/g.java:462-467).
-    url = build_chk_enter_url(KORAIL_NETFUNNEL_URL, key=REAL_LENGTH_KEY)
-    assert url == (
-        f"https://nf.letskorail.com/ts.wseq?opcode=5002&key={REAL_LENGTH_KEY}"
-    )
-
-
-def test_set_complete_url_is_opcode_then_key_and_nothing_else():
-    # T6/d.java:78-79.
-    url = build_set_complete_url(KORAIL_NETFUNNEL_URL, key=REAL_LENGTH_KEY)
-    assert url == (
-        f"https://nf.letskorail.com/ts.wseq?opcode=5004&key={REAL_LENGTH_KEY}"
-    )
 
 
 def test_no_url_carries_the_javascript_dialects_parameters():
@@ -724,6 +685,19 @@ def test_ttl_is_clamped_the_way_the_app_clamps_it(ttl, expected):
 
 def test_max_ttl_is_the_native_sdks_thirty_not_the_js_bundles_five():
     assert (MAX_TTL_SECONDS, MIN_TTL_SECONDS) == (30, 1)
+
+
+def test_a_non_ascii_digit_in_ttl_or_nwait_falls_back_instead_of_crashing():
+    # str.isdigit() accepts Unicode digits like superscript "²" and "¹", but
+    # int() cannot parse them and raises ValueError. Both wait_count and
+    # queue_wait_seconds must fall back to their "not a real number" default
+    # (0, clamped to MIN_TTL_SECONDS by queue_wait_seconds) rather than crash.
+    token = parse_netfunnel_body(
+        "201:key=abcdef1234567890&ttl=²&nwait=¹",
+        action="act_8",
+    )
+    assert queue_wait_seconds(token) == MIN_TTL_SECONDS
+    assert token.wait_count == 0
 
 
 # ---------------------------------------------------------------------------

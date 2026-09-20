@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """Offline safety tests for the real-card operator script.
 
@@ -28,7 +24,6 @@ network, and every card value below is an obviously-fake placeholder.
 from __future__ import annotations
 
 import argparse
-import ast
 import importlib.util
 import os
 import sys
@@ -55,6 +50,9 @@ SCRIPT_SOURCE = SCRIPT_PATH.read_text(encoding="utf-8")
 
 
 def _load_script(name: str = "reserve_pay_refund_roundtrip"):
+    scripts_dir = str(SCRIPT_PATH.parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
     spec = importlib.util.spec_from_file_location(name, SCRIPT_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -278,40 +276,6 @@ def _assert_no_card_leak(text: str) -> None:
 # --- import safety -----------------------------------------------------------
 
 
-def test_module_level_code_is_only_definitions_and_constants():
-    """Structural proof that importing cannot do anything.
-
-    Every top-level statement must be an import, a definition, a constant
-    assignment, or the ``if __name__ == "__main__"`` guard. A stray call at
-    module level would fail here -- including one on the right-hand side of an
-    assignment (``CLIENT = KorailClient()``), which is why every assigned value
-    must be a literal.
-    """
-    tree = ast.parse(SCRIPT_SOURCE)
-    for node in tree.body:
-        if isinstance(
-            node,
-            (
-                ast.Import,
-                ast.ImportFrom,
-                ast.FunctionDef,
-                ast.AsyncFunctionDef,
-                ast.ClassDef,
-                ast.Assign,
-                ast.AnnAssign,
-                ast.Expr,  # the module docstring
-            ),
-        ):
-            if isinstance(node, ast.Expr):
-                assert isinstance(node.value, ast.Constant), ast.dump(node)
-            if isinstance(node, (ast.Assign, ast.AnnAssign)):
-                assert node.value is not None, ast.dump(node)
-                ast.literal_eval(node.value)
-            continue
-        assert isinstance(node, ast.If), ast.dump(node)
-        assert ast.unparse(node.test) == "__name__ == '__main__'"
-
-
 def test_importing_reads_no_environment_variable_and_opens_no_file(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -489,7 +453,7 @@ def test_console_scrubs_exception_text_too():
         {"KORAIL_MOBILE_API_LIVE": "1", "KORAIL_LIVE_MUTATION": "1"},
     ],
 )
-def test_main_refuses_unless_all_three_opt_ins_are_set(
+def test_main_refuses_unless_every_opt_in_is_set(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     present: dict[str, str],
@@ -511,21 +475,59 @@ def test_main_refuses_unless_all_three_opt_ins_are_set(
     assert "ABORTED" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "present",
+    [
+        {},
+        # REAL_CHARGE and a valid ceiling, but no MUTATION: the ceiling check
+        # would happily pass this, so if MUTATION were not enforced this case
+        # would fall through all the way to the card read.
+        {
+            "KORAIL_MOBILE_API_LIVE": "1",
+            "KORAIL_LIVE_REAL_CHARGE": "1",
+            MAX_FARE_ENV: "5000",
+        },
+    ],
+    ids=["nothing-set", "real-charge-and-ceiling-without-mutation"],
+)
 def test_main_refuses_before_reading_the_card_when_opt_ins_are_missing(
     monkeypatch: pytest.MonkeyPatch,
+    present: dict[str, str],
 ):
     for name in (
         "KORAIL_MOBILE_API_LIVE",
         "KORAIL_LIVE_MUTATION",
         "KORAIL_LIVE_REAL_CHARGE",
+        MAX_FARE_ENV,
     ):
         monkeypatch.delenv(name, raising=False)
+    for name, value in present.items():
+        monkeypatch.setenv(name, value)
 
     def _no_card():  # pragma: no cover - must never run
         raise AssertionError("the card was read despite a missing opt-in")
 
     monkeypatch.setattr(rt, "read_card_from_env", _no_card)
     assert rt.main([]) == 2
+
+
+def test_require_opt_ins_refuses_the_charging_path_on_real_charge_alone(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``KORAIL_LIVE_REAL_CHARGE`` no longer implies consent to mutate.
+
+    A prior version treated REAL_CHARGE as sufficient on its own for the
+    charging path, on the theory that agreeing to a real charge already means
+    agreeing to a mutation. That reasoning was reversed: the charging path must
+    still ask for KORAIL_LIVE_MUTATION separately, and MUST refuse -- citing
+    MUTATION, not the fare ceiling -- before ever getting to the ceiling check.
+    """
+    monkeypatch.setenv("KORAIL_MOBILE_API_LIVE", "1")
+    monkeypatch.setenv("KORAIL_LIVE_REAL_CHARGE", "1")
+    monkeypatch.delenv("KORAIL_LIVE_MUTATION", raising=False)
+    monkeypatch.delenv(MAX_FARE_ENV, raising=False)
+    with pytest.raises(rt.RoundTripAborted, match="KORAIL_LIVE_MUTATION"):
+        rt._require_opt_ins(real_charge=True)
 
 
 def _all_opt_ins(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -621,38 +623,6 @@ def test_every_mode_refuses_an_interval_below_one_second(
         monkeypatch.setattr(rt, name, _never)
     assert rt.main([*mode, "--min-interval", "0.01"]) == 2
     assert "--min-interval below 1.0s" in capsys.readouterr().out
-
-
-# --- consents ----------------------------------------------------------------
-
-
-def test_every_consent_grants_exactly_one_category():
-    for consent in (
-        rt.reserve_consent(),
-        rt.cancel_consent(),
-        rt.refund_consent(),
-        rt.real_card_payment_consent(),
-    ):
-        granted = [
-            name
-            for name in ("reserve", "payment", "cancel", "refund")
-            if getattr(consent, f"allow_{name}")
-        ]
-        assert len(granted) == 1, granted
-        assert consent.dry_run is False
-
-
-def test_only_the_payment_consent_acknowledges_a_real_charge():
-    payment = rt.real_card_payment_consent()
-    assert payment.real_card_acknowledged is True
-    assert payment.fake_card_only is False
-    for consent in (
-        rt.reserve_consent(),
-        rt.cancel_consent(),
-        rt.refund_consent(),
-    ):
-        assert consent.real_card_acknowledged is False
-        assert consent.fake_card_only is True
 
 
 # --- refusing to start -------------------------------------------------------

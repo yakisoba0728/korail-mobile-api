@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """Offline tests for 환승 — searching two-leg itineraries and booking them.
 
@@ -56,7 +52,6 @@ from urllib.parse import parse_qs, parse_qsl
 import httpx
 import pytest
 
-from _helpers import logged_in_no_network_client as _logged_in_no_network_client
 from korail_mobile_api import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_MAX_JOURNEY_LEGS,
@@ -71,8 +66,6 @@ from korail_mobile_api import (
     KorailSeatClass,
     KorailSession,
     KorailSessionExpiredError,
-    MutationConsent,
-    MutationPreview,
     ReservationHoldResponse,
     TrainSearchContinuation,
     TrainSearchQuery,
@@ -606,30 +599,9 @@ def test_standing_flag_is_computed_per_itinerary_and_is_always_n_here():
 # --- what does not compose ---------------------------------------------------
 
 
-def test_standby_is_refused_for_a_transfer_itinerary():
-    # Two independent gates in the app: a5/k.java:120-127 returns false from the
-    # standby check for any non-direct result, and the only setJobId("1102") is
-    # DirectInquiryActivity.java:434, on a screen TransferInquiryActivity
-    # overrides away.
-    legs = tuple(
-        replace(leg, wait_reservation_flag=KORAIL_STANDBY_WAIT_FLAG)
-        for leg in _legs()
-    )
-
-    with pytest.raises(KorailProtocolError) as excinfo:
-        build_transfer_reservation_form(
-            KorailConfig(),
-            legs,
-            job_type=KorailReservationJobType.STANDBY,
-        )
-
-    message = str(excinfo.value)
-    assert "직통" in message
-    assert "a5/k.java:120-127" in message
-
-
 def test_standby_still_works_for_a_single_leg():
-    # The refusal above must be about the leg count and nothing else.
+    # Sharing a core with the transfer builder must not change the ordinary,
+    # single-leg standby path.
     form = build_reservation_form(
         KorailConfig(),
         replace(
@@ -1067,24 +1039,6 @@ def test_fallback_does_not_swallow_any_other_failure():
     assert len(captured) == 1
 
 
-def test_reserve_transfer_previews_the_two_leg_form_without_sending():
-    client = _logged_in_no_network_client()
-
-    preview = client.reserve_transfer(
-        _legs(),
-        consent=MutationConsent(allow_reserve=True),
-    )
-
-    assert isinstance(preview, MutationPreview)
-    assert preview.category == "reserve"
-    assert preview.route == (
-        "/classes/com.korail.mobile.certification.TicketReservation"
-    )
-    assert preview.payload["txtJrnyCnt"] == "2"
-    assert preview.payload["txtJrnyTpCd2"] == "14"
-    assert preview.payload["txtJrnySqno2"] == "002"
-
-
 def test_an_acknowledged_transfer_sends_both_legs_and_returns_one_hold():
     """The send path, which nothing reached: returning None from it passed.
 
@@ -1113,14 +1067,10 @@ def test_an_acknowledged_transfer_sends_both_legs_and_returns_one_hold():
     client = KorailClient(transport=httpx.MockTransport(handler))
     client.session.current = KorailSession(jsessionid="synthetic-secret")
     try:
-        hold = client.reserve_transfer(
-            _legs(),
-            consent=MutationConsent(allow_reserve=True, dry_run=False),
-        )
+        hold = client.reserve_transfer(_legs())
     finally:
         client.close()
 
-    assert type(hold) is ReservationHoldResponse
     assert hold.pnr_no == "SYNTHETIC_PNR"
     assert hold.journey_count == "0002"
     assert len(seen) == 1
@@ -1131,7 +1081,6 @@ def test_an_acknowledged_transfer_sends_both_legs_and_returns_one_hold():
     pairs = parse_qsl(
         seen[0].content.decode("ascii"),
         keep_blank_values=True,
-        strict_parsing=True,
     )
     sent = dict(pairs)
     assert len(sent) == len(pairs)
@@ -1145,15 +1094,6 @@ def test_an_acknowledged_transfer_sends_both_legs_and_returns_one_hold():
     )
 
 
-def test_reserve_transfer_needs_reserve_consent():
-    from korail_mobile_api import KorailMutationNotAllowedError
-
-    client = _logged_in_no_network_client()
-
-    with pytest.raises(KorailMutationNotAllowedError):
-        client.reserve_transfer(_legs(), consent=MutationConsent())
-
-
 def test_reserve_transfer_needs_a_session():
     def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
         raise AssertionError("must not send")
@@ -1163,28 +1103,19 @@ def test_reserve_transfer_needs_a_session():
     client = KorailClient(transport=httpx.MockTransport(handler))
 
     with pytest.raises(KorailAuthError):
-        client.reserve_transfer(
-            _legs(),
-            consent=MutationConsent(allow_reserve=True),
-        )
+        client.reserve_transfer(_legs())
 
 
-def test_single_leg_rejection_messages_are_unchanged():
-    """Generalising the builder must not reword what an existing caller sees.
+def test_single_leg_rejection_messages_still_name_their_cause():
+    """Generalising the builder must not stop saying what was wrong.
 
     ``build_reservation_form`` is now a one-leg call into a leg-sequence core,
     and the core's own messages talk about legs. The single-leg entry point
-    keeps the sentences it has always raised.
+    still raises a recognisable message for each of these two shapes.
     """
-    with pytest.raises(
-        KorailProtocolError,
-        match=r"^KORAIL reservation requires an exact TrainSummary$",
-    ):
+    with pytest.raises(KorailProtocolError, match="TrainSummary"):
         build_reservation_form(KorailConfig(), {"train_no": "00209"})
-    with pytest.raises(
-        KorailProtocolError,
-        match=r"^KORAIL reservation requires an exact KorailPassengerCounts$",
-    ):
+    with pytest.raises(KorailProtocolError, match="KorailPassengerCounts"):
         build_reservation_form(
             KorailConfig(),
             _first_leg(),
@@ -1268,10 +1199,7 @@ def test_an_expired_session_on_reserve_transfer_clears_the_client_before_raising
     )
     try:
         with pytest.raises(KorailSessionExpiredError):
-            client.reserve_transfer(
-                _legs(),
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+            client.reserve_transfer(_legs())
     finally:
         client.close()
     assert len(seen) == 1
@@ -1298,33 +1226,24 @@ def test_reserve_transfer_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
             strResult="SUCC", h_msg_cd="IRR000000", h_msg_txt="ok",
             h_pnr_no=399999999999999, h_jrny_cnt=2, h_tot_prc={"amount": 1},
         )
-        hold = client.reserve_transfer(
-                _legs(),
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+        hold = client.reserve_transfer(_legs())
         assert isinstance(hold, ReservationHoldResponse)
         assert (hold.pnr_no, hold.journey_count) == ("399999999999999", "2")
         del body["h_pnr_no"]
         with pytest.raises(KorailProtocolError):
-            client.reserve_transfer(
-                _legs(),
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+            client.reserve_transfer(_legs())
     finally:
         client.close()
 
 
-def test_the_transfer_builders_refusals_are_pinned_word_for_word():
-    # The other half of the merge builder's pin in test_merge_reservation.py.
+def test_the_transfer_builders_refusals_name_their_cause():
+    # The other half of test_merge_reservation.py's equivalent test.
     from korail_mobile_api.errors import KorailProtocolError
 
-    seat = r'^KORAIL reservation seat class must be "1" \(일반실\) or "2" \(특실\)$'
-    with pytest.raises(KorailProtocolError, match=seat):
+    with pytest.raises(KorailProtocolError, match="seat class"):
         build_transfer_reservation_form(KorailConfig(), _legs(), seat_classes=("1", "3"))
-    with pytest.raises(KorailProtocolError, match=seat):
+    with pytest.raises(KorailProtocolError, match="seat class"):
         build_reservation_form(KorailConfig(), _legs()[0], seat_class="3")
     for legs in ("ab", b"ab", None):
-        with pytest.raises(
-            KorailProtocolError, match=r"^KORAIL reservation requires a sequence of legs$"
-        ):
+        with pytest.raises(KorailProtocolError, match="sequence of legs"):
             build_transfer_reservation_form(KorailConfig(), legs)

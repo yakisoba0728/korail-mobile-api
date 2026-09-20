@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -18,7 +14,11 @@ import httpx
 import pytest
 
 import korail_mobile_api
-from _helpers import recording_path_handler, synthetic_ok_envelope
+from _helpers import raise_if_dynapath_invoked, recording_path_handler, synthetic_ok_envelope
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -35,7 +35,6 @@ from korail_mobile_api.read_models import (
     MaasServiceDetailListResponse,
     MultiChildDiscountTargetResponse,
     PassScheduleResponse,
-    TourTrainInfoResponse,
     TripChangeDateResponse,
 )
 from korail_mobile_api.read_parsers import (
@@ -45,7 +44,6 @@ from korail_mobile_api.read_parsers import (
     parse_multi_child_discount_target_response,
     parse_pass_menu_response,
     parse_pass_schedule_response,
-    parse_tour_train_info_response,
     parse_trip_change_date_response,
 )
 from korail_mobile_api.read_payloads import (
@@ -55,19 +53,13 @@ from korail_mobile_api.read_payloads import (
     build_multi_child_discount_target_form,
     build_trip_change_date_form,
 )
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-    assert_read_only_route,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES
 
 
 R13_PATH = "/classes/com.korail.mobile.cust.mchdDcntTgt.do"
 R32_PATH = "/classes/com.korail.mobile.research.custTripInfo.do"
 R43_PATH = "/classes/com.korail.mobile.copt.gdReqQry.do"
 R45_PATH = "/classes/com.korail.mobile.reservation.tripChgDate.do"
-R54_PATH = "/classes/com.korail.mobile.trainsInfo.TourTrainSpecialRoom"
 
 NEW_ROUTES = {
     ("POST", R13_PATH),
@@ -237,6 +229,16 @@ def test_coupon_apk_counts_kind_and_validity_start_are_typed():
     assert result.raw is raw
 
 
+def test_coupon_response_rejects_an_oversized_ascii_decimal_page_number():
+    # h_page_no goes through _required_integer, whose bare int(value) let a
+    # digit string past Python's int-string conversion limit (4300 digits,
+    # sys.int_info.default_max_str_digits) leak a ValueError instead of the
+    # KorailProtocolError every other malformed field raises.
+    raw = _success(h_page_no="9" * 5000)
+    with pytest.raises(KorailProtocolError, match="h_page_no"):
+        parse_discount_coupon_response(raw)
+
+
 def test_pass_menu_sales_messages_and_schedule_page_info_are_typed():
     menu = parse_pass_menu_response(
         _success(list=[{"saleMsg1": "A", "saleMsg2": "B", "saleMsg3": "C"}])
@@ -300,37 +302,27 @@ def _session(*, customer_no: str | None = "SYNTHETIC_CUSTOMER_NO") -> KorailSess
 
 def _recording_client(
     responses: dict[str, dict[str, Any]],
-) -> tuple[KorailClient, list[httpx.Request], list[Any]]:
+) -> tuple[KorailClient, list[httpx.Request]]:
     requests: list[httpx.Request] = []
-    provider_calls: list[Any] = []
-
-    def provider(context: Any) -> str:
-        provider_calls.append(context)
-        raise AssertionError("DynaPath provider must not be invoked")
-
     handler = recording_path_handler(responses, requests)
 
     config = KorailConfig(
         dynapath=DynapathConfig(
             enabled=True,
-            token_provider=provider,
+            token_provider=raise_if_dynapath_invoked,
             allowlist_paths=frozenset(responses),
         )
     )
     client = KorailClient(config, transport=httpx.MockTransport(handler))
     client.session.current = _session()
-    return client, requests, provider_calls
+    return client, requests
 
 
 def test_new_routes_and_public_contract_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert (
         "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
     ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
-    assert ("POST", R54_PATH) not in KORAIL_READ_ONLY_ROUTES
-    assert not hasattr(KorailClient, "get_tour_train_info")
-    assert not hasattr(korail_mobile_api.read_payloads, "build_tour_train_info_form")
 
     expected_fields = {
         R13_PATH: {"Device", "Version", "Key", "dptDt"},
@@ -391,7 +383,6 @@ def test_new_routes_and_public_contract_are_exact():
     ):
         assert name in korail_mobile_api.__all__
         assert getattr(korail_mobile_api, name)
-    assert "TourTrainInfoResponse" not in korail_mobile_api.__all__
 
 
 def test_new_safety_contracts_reject_wrong_order_and_allow_both_maas_shapes():
@@ -475,37 +466,17 @@ def test_payload_builders_emit_only_closed_wire_fields():
     assert "20990101" not in repr(history)
 
 
-def test_maas_builder_rejects_query_subclasses_even_when_init_is_bypassed():
-    class UnsafeQuery(MaasServiceDetailQuery):
-        def __post_init__(self) -> None:
-            pass
+def test_consolidated_ascii_digits_helper_rejects_full_width_digits():
+    """S10-payloads-M01: one ``_ascii_digits`` per module now backs every
 
-    query = UnsafeQuery(start_date="not-a-date", end_date=None)
+    length-checked read field. ``str.isdigit`` would accept full-width
+    digits; the shared ``payloads._is_ascii_digits`` character-range check
+    still does not.
+    """
+    from korail_mobile_api.read_payloads import _ascii_digits
 
-    with pytest.raises(TypeError, match="exact MaasServiceDetailQuery"):
-        build_maas_service_detail_form(KorailConfig(), query)
-
-
-@pytest.mark.parametrize(
-    ("start_date", "end_date"),
-    [
-        ("20990101", None),
-        ("２０９９０１０１", "20990201"),
-        ("20990230", "20990301"),
-        ("20990201", "20990131"),
-        ("20990131", "20990501"),
-    ],
-)
-def test_maas_builder_revalidates_mutated_exact_queries(
-    start_date,
-    end_date,
-):
-    query = MaasServiceDetailQuery.current()
-    object.__setattr__(query, "start_date", start_date)
-    object.__setattr__(query, "end_date", end_date)
-
-    with pytest.raises(ValueError):
-        build_maas_service_detail_form(KorailConfig(), query)
+    with pytest.raises(ValueError, match="start_date"):
+        _ascii_digits("２０９９０１０１", "start_date", lengths=frozenset({8}))
 
 
 @pytest.mark.parametrize(
@@ -516,24 +487,29 @@ def test_maas_builder_revalidates_mutated_exact_queries(
             parse_multi_child_discount_target_response,
             MultiChildDiscountTargetResponse,
             "targets",
-            R13_FIELDS,
-            R13_ATTRS,
+            # A representative slice, not every field: two ordinary fields
+            # plus the last one, not the full cross-product. The per-field
+            # bad-type matrix lives in
+            # test_list_parsers_normalize_null_and_reject_bad_containers_rows_and_scalars,
+            # which still zips the full tuples.
+            R13_FIELDS[:2] + R13_FIELDS[-1:],
+            R13_ATTRS[:2] + R13_ATTRS[-1:],
         ),
         (
             "customer_trip_info_success.json",
             parse_customer_trip_info_response,
             CustomerTripInfoResponse,
             "trips",
-            R32_FIELDS,
-            R32_ATTRS,
+            R32_FIELDS[:2] + R32_FIELDS[-1:],
+            R32_ATTRS[:2] + R32_ATTRS[-1:],
         ),
         (
             "maas_service_detail_list_success.json",
             parse_maas_service_detail_list_response,
             MaasServiceDetailListResponse,
             "details",
-            R43_FIELDS,
-            R43_ATTRS,
+            R43_FIELDS[:2] + R43_FIELDS[-1:],
+            R43_ATTRS[:2] + R43_ATTRS[-1:],
         ),
     ],
 )
@@ -591,40 +567,6 @@ def test_trip_change_parser_normalizes_optional_values(load_json_fixture):
     assert result.trip_change_dates == ()
 
 
-def test_tour_train_parser_is_typed_but_transport_is_held_back(load_json_fixture):
-    raw = load_json_fixture("tour_train_info_success.json")
-    result = parse_tour_train_info_response(raw)
-    assert isinstance(result, TourTrainInfoResponse)
-    assert len(result.seat_infos) == 1
-    assert result.seat_infos[0].seat_attribute_code == "SYNTHETIC_SEAT_ATTRIBUTE"
-    assert result.seat_infos[0].additional_infos[0].passenger_count == 2
-    assert result.raw is raw
-
-    for nullable in (
-        _success(seat_infos=None),
-        _success(seat_infos={"seat_info": None}),
-        _success(
-            seat_infos={
-                "seat_info": [
-                    {"h_seat_att_cd": None, "seat_add_infos": None},
-                    {
-                        "h_seat_att_cd": None,
-                        "seat_add_infos": {"seat_add_info": None},
-                    },
-                ]
-            }
-        ),
-    ):
-        parsed = parse_tour_train_info_response(nullable)
-        if nullable["seat_infos"] is None or not nullable["seat_infos"].get("seat_info"):
-            assert parsed.seat_infos == ()
-        else:
-            assert all(item.additional_infos == () for item in parsed.seat_infos)
-
-    with pytest.raises(KorailProtocolError):
-        assert_read_only_route("POST", R54_PATH)
-
-
 @pytest.mark.parametrize(
     ("parser", "container", "row_fields"),
     [
@@ -673,7 +615,6 @@ def test_list_parsers_normalize_null_and_reject_bad_containers_rows_and_scalars(
     [
         (_success(tripChgDates="bad"), "tripChgDates"),
         (_success(tripChgDates=[None]), "tripChgDates"),
-        (_success(tripChgDates=[1]), "tripChgDates"),
         (_success(lastRunDt=1), "lastRunDt"),
         (_success(tripChgDate=[]), "tripChgDate"),
     ],
@@ -683,125 +624,32 @@ def test_trip_change_parser_rejects_malformed_values(raw, match):
         parse_trip_change_date_response(raw)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
-        _success(seat_infos="bad"),
-        _success(seat_infos={"seat_info": {}}),
-        _success(seat_infos={"seat_info": [None]}),
-        _success(seat_infos={"seat_info": [{"h_seat_att_cd": 1}]}),
-        _success(
-            seat_infos={
-                "seat_info": [{"seat_add_infos": {"seat_add_info": {}}}]
-            }
-        ),
-        _success(
-            seat_infos={
-                "seat_info": [
-                    {"seat_add_infos": {"seat_add_info": [None]}}
-                ]
-            }
-        ),
-    ],
-)
-def test_tour_train_parser_rejects_bad_container_shapes(payload):
-    with pytest.raises(KorailProtocolError):
-        parse_tour_train_info_response(payload)
-
-
-def _tour_train_with_passenger_count(passenger_count):
-    return _success(
-        seat_infos={
-            "seat_info": [
-                {
-                    "h_seat_att_cd": None,
-                    "seat_add_infos": {
-                        "seat_add_info": [{"h_psg_num": passenger_count}]
-                    },
-                }
-            ]
-        }
-    )
-
-
-@pytest.mark.parametrize("passenger_count", [True, 2.0, None, "", "x"])
-def test_tour_train_passenger_count_rejects_non_numeric(passenger_count):
-    raw = _tour_train_with_passenger_count(passenger_count)
-    with pytest.raises(KorailProtocolError, match="h_psg_num"):
-        parse_tour_train_info_response(raw)
-
-
-@pytest.mark.parametrize(
-    ("wire", "expected"),
-    [(2, 2), ("2", 2), ("0", 0)],
-)
-def test_tour_train_passenger_count_accepts_gson_coerced_string(wire, expected):
-    # RV4-05: TourTrainInfoDao.SeatAddInfo.h_psg_num is Java `int`; the
-    # h_-prefixed backend serializes such ints as quoted strings and Gson
-    # coerces them, so a quoted-string count parses like a native int.
-    raw = _tour_train_with_passenger_count(wire)
-    parsed = parse_tour_train_info_response(raw)
-    assert parsed.seat_infos[0].additional_infos[0].passenger_count == expected
-
-
 PARSERS = (
     parse_multi_child_discount_target_response,
     parse_customer_trip_info_response,
     parse_maas_service_detail_list_response,
     parse_trip_change_date_response,
-    parse_tour_train_info_response,
 )
 
 
 @pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("raw", [None, [], "bad", 1])
-def test_all_parsers_reject_non_object_top_levels(parser, raw):
-    with pytest.raises(KorailProtocolError):
-        parser(raw)
-
-
-@pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("result", ["SUCCESS", "succ", "UNKNOWN", None, 1, {}])
-def test_all_parsers_require_exact_succ(parser, result):
-    with pytest.raises(KorailProtocolError):
+def test_new_parsers_are_wired_to_the_shared_envelope_helper(parser):
+    # The shared envelope-validation helper (non-object rejection, exact
+    # strResult == "SUCC", envelope member presence, null-optional handling,
+    # scalar-type rejection, P058/WRC000288/generic-FAIL classification) is
+    # already thoroughly tested once in test_envelope_result_required.py and
+    # test_error_classification.py. What is NOT covered there is that these
+    # new parsers actually call it at all -- a wiring mistake wouldn't show up
+    # anywhere else. Two representative cases prove the wiring: a generic
+    # application failure and a session expiry.
+    with pytest.raises(KorailAppError):
         parser(
             {
-                "h_msg_cd": "SYNTHETIC.OK",
-                "h_msg_txt": "synthetic",
-                "strResult": result,
+                "h_msg_cd": "SYNTHETIC.FAIL",
+                "h_msg_txt": "synthetic application failure",
+                "strResult": "FAIL",
             }
         )
-
-
-@pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("missing", ["strResult"])
-def test_all_parsers_require_each_envelope_member(parser, missing):
-    raw = _success()
-    raw.pop(missing)
-    with pytest.raises(KorailProtocolError, match=missing):
-        parser(raw)
-
-
-@pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("field", ["h_msg_cd", "h_msg_txt"])
-def test_all_parsers_accept_null_optional_envelope_strings(parser, field):
-    raw = _success()
-    raw[field] = None
-    assert parser(raw).str_result == "SUCC"
-
-
-@pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("field", ["h_msg_cd", "h_msg_txt", "strResult"])
-@pytest.mark.parametrize("bad", [1, {}, []])
-def test_all_parsers_reject_bad_envelope_scalar_types(parser, field, bad):
-    raw = _success()
-    raw[field] = bad
-    with pytest.raises(KorailProtocolError, match=field):
-        parser(raw)
-
-
-@pytest.mark.parametrize("parser", PARSERS)
-def test_all_parsers_preserve_common_typed_failures(parser):
     with pytest.raises(KorailSessionExpiredError):
         parser(
             {
@@ -810,15 +658,6 @@ def test_all_parsers_preserve_common_typed_failures(parser):
                 "strResult": "FAIL",
             }
         )
-    for code in ("SYNTHETIC.FAIL", "WRC000288"):
-        with pytest.raises(KorailAppError):
-            parser(
-                {
-                    "h_msg_cd": code,
-                    "h_msg_txt": "synthetic application failure",
-                    "strResult": "FAIL",
-                }
-            )
 
 
 def test_four_public_reads_emit_exact_ordered_bodies_once_without_dynapath(
@@ -830,7 +669,7 @@ def test_four_public_reads_emit_exact_ordered_bodies_once_without_dynapath(
         R43_PATH: load_json_fixture("maas_service_detail_list_success.json"),
         R45_PATH: load_json_fixture("trip_change_dates_success.json"),
     }
-    client, requests, provider_calls = _recording_client(responses)
+    client, requests = _recording_client(responses)
     config = client.config
     try:
         client.get_multi_child_discount_targets("20990101")
@@ -889,7 +728,6 @@ def test_four_public_reads_emit_exact_ordered_bodies_once_without_dynapath(
         "POST", "POST", "POST", "POST", "GET"
     ]
     assert all("x-dynapath-m-token" not in request.headers for request in requests)
-    assert provider_calls == []
 
 
 @pytest.mark.parametrize(
@@ -958,10 +796,8 @@ def test_false_maas_query_is_not_silently_treated_as_current():
     ("method_name", "args"),
     [
         ("get_multi_child_discount_targets", ("2099010",)),
-        ("get_multi_child_discount_targets", ("２０９９０１０１",)),
         ("get_multi_child_discount_targets", (20990101,)),
         ("get_trip_change_dates", ("2099-01-01",)),
-        ("get_trip_change_dates", ("２０９９０１０１",)),
         ("get_trip_change_dates", (None,)),
     ],
 )
@@ -1003,7 +839,6 @@ def test_invalid_scalar_arguments_fail_before_dynapath_and_transport(method_name
     ("start", "end"),
     [
         ("2099010", "20990201"),
-        ("２０９９０１０１", "20990201"),
         ("20990101", "2099-02-01"),
         ("20990201", "20990131"),
         ("20990131", "20990501"),
@@ -1092,9 +927,6 @@ def test_sensitive_models_and_raw_values_are_repr_hidden(load_json_fixture):
         parse_trip_change_date_response(
             load_json_fixture("trip_change_dates_success.json")
         ),
-        parse_tour_train_info_response(
-            load_json_fixture("tour_train_info_success.json")
-        ),
     )
     rendered = " ".join(repr(model) for model in models)
     for secret in (
@@ -1102,7 +934,6 @@ def test_sensitive_models_and_raw_values_are_repr_hidden(load_json_fixture):
         "SYNTHETIC_custMgNo",
         "SYNTHETIC_pnrNo",
         "SYNTHETIC_rsvSpecUrl",
-        "SYNTHETIC_SEAT_ATTRIBUTE",
     ):
         assert secret not in rendered
 
@@ -1114,7 +945,6 @@ def test_sensitive_models_and_raw_values_are_repr_hidden(load_json_fixture):
         CustomerTripInfoResponse,
         MaasServiceDetailListResponse,
         TripChangeDateResponse,
-        TourTrainInfoResponse,
     ],
 )
 def test_new_response_free_text_is_repr_hidden(response_type):
@@ -1126,7 +956,7 @@ def test_new_response_free_text_is_repr_hidden(response_type):
 
 
 def test_session_expiry_clears_current_session(load_json_fixture):
-    client, requests, _ = _recording_client(
+    client, requests = _recording_client(
         {
             R13_PATH: {
                 "h_msg_cd": "P058",

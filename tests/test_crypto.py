@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 import pytest
 
@@ -101,3 +97,15 @@ def test_an_unencodable_password_is_reported_as_the_password(key: str):
         transform_login_password("pw\ud800", info)
     assert "AES" not in str(raised.value)
     assert isinstance(raised.value.__cause__, UnicodeEncodeError)
+
+
+def test_an_unencodable_login_crypto_key_is_reported_as_invalid_metadata():
+    """A lone surrogate in the server-supplied key is bad metadata, not ours.
+
+    ``info.key.encode("utf-8")`` used to run outside any try, so a key
+    containing a lone surrogate raised a bare UnicodeEncodeError instead of
+    the ``KorailProtocolError`` the bad-length check two lines below reports.
+    """
+    info = LoginCryptoInfo(idx="IDX", key=chr(0xD800) * 16, pwd_aes_cphd="Y")
+    with pytest.raises(KorailProtocolError, match="invalid AES key/IV"):
+        transform_login_password("pw123", info)

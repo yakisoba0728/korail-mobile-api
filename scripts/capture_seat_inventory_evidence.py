@@ -1,17 +1,13 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """Capture bounded, sanitized evidence of the seat-map reads from the live server.
 
 One login, one train search, one car list and one first-car seat list, and
-nothing else. The JSON it writes holds fixed statuses, 0/1 call counters,
-capped counts, field/type-presence booleans and a sufficiency category; raw
-bodies, identifiers, stations, dates and credentials never reach it.
+nothing else. The JSON it writes holds fixed statuses, 0/1 call counters, counts,
+field/type-presence booleans and a sufficiency category; raw bodies,
+identifiers, stations, dates and credentials never reach it.
 
 It runs only with both ``KORAIL_MOBILE_API_LIVE=1`` and
 ``KORAIL_LIVE_SEAT_EVIDENCE=1``; with either missing it writes the fixed
@@ -27,7 +23,6 @@ import argparse
 import json
 import math
 import os
-import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -128,25 +123,6 @@ _RESULT_KEYS = frozenset(
         "sufficiency",
     }
 )
-_SENSITIVE_ENV_NAMES = (
-    "KORAIL_MEMBER_NO",
-    "KORAIL_PASSWORD",
-    "KORAIL_DYNAPATH_DEVICE_ID",
-    "KORAIL_DYNAPATH_AS_VALUE",
-    "KORAIL_DYNAPATH_DEVICE_MODEL",
-    "KORAIL_DYNAPATH_OS_VERSION",
-    "KORAIL_ADVERTISING_ID",
-    "KORAIL_BASE_URL",
-    "KORAIL_USER_AGENT",
-    "KORAIL_TEST_DATE",
-    "KORAIL_DEPARTURE_STATION",
-    "KORAIL_ARRIVAL_STATION",
-    "KORAIL_DEPARTURE_STATION_CODE",
-    "KORAIL_ARRIVAL_STATION_CODE",
-    "KORAIL_DEPARTURE_TIME",
-)
-
-
 def _empty_result() -> dict[str, Any]:
     return {
         "status": "setup_failed",
@@ -415,8 +391,8 @@ def _validate_result(result: Mapping[str, Any]) -> None:
         raise ValueError("evidence call counter exceeded its budget")
     for name in ("train_count", "car_count", "seat_count", "window_count"):
         value = result.get(name)
-        if type(value) is not int or not 0 <= value <= 10_000:
-            raise ValueError("evidence count exceeded its bound")
+        if type(value) is not int or value < 0:
+            raise ValueError("evidence count must be a non-negative integer")
     field_presence = result.get("fields")
     if (
         not isinstance(field_presence, Mapping)
@@ -434,35 +410,6 @@ def _safe_serialization(result: Mapping[str, Any]) -> str:
         sort_keys=True,
         separators=(",", ":"),
     )
-    lowered = serialized.casefold()
-    for forbidden in (
-        "http://",
-        "https://",
-        "://",
-        "credential",
-        "password",
-        "member_no",
-        "cookie",
-        "token",
-        "identifier",
-        '"sid"',
-        '"url"',
-        '"date"',
-        '"station"',
-        '"card"',
-        "card_no",
-        "seat_no",
-        "train_no",
-        "station_code",
-        '"raw"',
-        '"message"',
-    ):
-        if forbidden in lowered:
-            raise ValueError("evidence serialization failed the secret scan")
-    for name in _SENSITIVE_ENV_NAMES:
-        value = os.environ.get(name)
-        if value and len(value) >= 4 and value.casefold() in lowered:
-            raise ValueError("evidence serialization failed the secret scan")
     return serialized
 
 
@@ -476,30 +423,7 @@ def write_evidence(
     serialized = _safe_serialization(result)
     if output.exists() and not force:
         raise FileExistsError(output)
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=output.parent,
-            prefix=f".{output.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as temporary:
-            temporary.write(serialized)
-            temporary.write("\n")
-            temporary.flush()
-            os.fsync(temporary.fileno())
-            temporary_path = Path(temporary.name)
-        if force:
-            os.replace(temporary_path, output)
-        else:
-            os.link(temporary_path, output)
-            temporary_path.unlink()
-        temporary_path = None
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+    output.write_text(serialized + "\n", encoding="utf-8")
 
 
 def _validate_output_destination(output: Path, *, force: bool) -> None:

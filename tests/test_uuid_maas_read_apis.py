@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from urllib.parse import parse_qsl
 
@@ -248,48 +244,11 @@ def test_client_maas_menu_accepts_a_result_only_envelope():
         client.close()
 
 
-def test_client_maas_menu_never_uses_dynapath_when_custom_allowlisted(
-    load_json_fixture,
-):
-    path = "/classes/com.korail.mobile.copt.gdMenuLt.do"
-    provider_contexts = []
-    captured: list[httpx.Request] = []
-
-    def token_provider(context):
-        provider_contexts.append(context)
-        return "must-not-be-used"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured.append(request)
-        return httpx.Response(
-            200,
-            json=load_json_fixture("maas_menu_success.json"),
-        )
-
-    client = KorailClient(
-        KorailConfig(
-            dynapath=DynapathConfig(
-                enabled=True,
-                token_provider=token_provider,
-                allowlist_paths=frozenset({path}),
-            )
-        ),
-        transport=httpx.MockTransport(handler),
-    )
-    try:
-        client.get_maas_menu_list()
-    finally:
-        client.close()
-
-    assert provider_contexts == []
-    assert len(captured) == 1
-    assert DYNAPATH_HEADER_NAME not in captured[0].headers
-
-
 @pytest.mark.parametrize(
     ("method", "path", "fixture_name"),
     [
-            ("POST", "/ebizcross/getUUID.do", "uuid_success.json"),
+        ("POST", "/classes/com.korail.mobile.copt.gdMenuLt.do", "maas_menu_success.json"),
+        ("POST", "/ebizcross/getUUID.do", "uuid_success.json"),
         (
             "POST",
             "/ebizmaas/EbizMaasStationList.do",
@@ -325,7 +284,9 @@ def test_client_uuid_maas_never_use_dynapath_when_custom_allowlisted(
         transport=httpx.MockTransport(handler),
     )
     try:
-        if path == "/ebizcross/getUUID.do":
+        if path == "/classes/com.korail.mobile.copt.gdMenuLt.do":
+            client.get_maas_menu_list()
+        elif path == "/ebizcross/getUUID.do":
             client.get_uuid()
         else:
             client.get_maas_station_data("M10")

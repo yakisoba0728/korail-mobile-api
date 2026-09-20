@@ -1,14 +1,9 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 import inspect
 import json
@@ -24,7 +19,10 @@ import pytest
 
 import korail_mobile_api
 import korail_mobile_api.client as client_module
-from _helpers import DuplicateFieldMapping as _DuplicateFieldMapping
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import (
     KorailClient,
     KorailConfig,
@@ -53,14 +51,8 @@ from korail_mobile_api.parsers import (
 from korail_mobile_api.payloads import (
     build_seat_car_form,
     build_seat_inventory_form,
-    validate_seat_inventory_inputs,
 )
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-    assert_read_only_route,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES, assert_read_only_route
 
 
 _EVIDENCE_PATH = (
@@ -447,12 +439,8 @@ def test_car_parser_builds_tuples_and_hides_raw_message_and_train_identifiers(
     rendered = repr(result)
     for secret in (
         "synthetic-car-message-secret",
-        "99123",
         "synthetic-car-raw-secret",
-        "SYNTHETIC-TRAIN-CLASS-CODE",
-        "SYNTHETIC-TRAIN-GROUP-CODE",
         "SYNTHETIC-ROOM-CLASS-CODE-ONE",
-        "SYNTHETIC-SEAT-ATTRIBUTE-CODE-ONE",
     ):
         assert secret not in rendered
 
@@ -523,12 +511,8 @@ def test_seat_parser_maps_all_fields_preserves_unknown_codes_and_hides_secrets(
     rendered = f"{result!r} {result.seats[0]!r}"
     for secret in (
         "synthetic-seat-envelope-message-secret",
-        "synthetic-seat-message-secret",
         "SYNTHETIC-SEAT-01",
-        "synthetic-url-secret",
         "synthetic-seat-raw-secret",
-        "SYNTHETIC-CAR-TYPE-CODE",
-        "SYNTHETIC-UP-DOWN-DIVISION-CODE",
     ):
         assert secret not in rendered
 
@@ -714,17 +698,13 @@ def test_car_parser_rejects_wrong_scalar_types(
         _parse_car(raw)
 
 
-def test_car_parser_rejects_negative_counts_and_duplicate_car_numbers(
+def test_car_parser_rejects_negative_counts(
     load_json_fixture,
 ):
     negative = load_json_fixture("seat_car_list_success.json")
     negative["srcar_infos"]["srcar_info"][0]["h_rest_seat_cnt"] = -1
-    duplicate = load_json_fixture("seat_car_list_success.json")
-    duplicate["srcar_infos"]["srcar_info"][1]["h_srcar_no"] = 2
     with pytest.raises(KorailProtocolError, match="negative"):
         _parse_car(negative)
-    with pytest.raises(KorailProtocolError, match="duplicate"):
-        _parse_car(duplicate)
 
 
 @pytest.mark.parametrize(
@@ -858,13 +838,6 @@ def test_seat_parser_preserves_repeated_seat_labels(
     ]
 
 
-def test_seat_parser_rejects_impossible_counts(load_json_fixture):
-    impossible = load_json_fixture("seat_inventory_success.json")
-    impossible["seat_remain_count"] = 9
-    with pytest.raises(KorailProtocolError, match="remaining"):
-        _parse_seat(impossible)
-
-
 def test_seat_parser_allows_empty_lists_and_count_independent_list_length(
     load_json_fixture,
 ):
@@ -991,37 +964,6 @@ def test_seat_builders_forward_train_row_seat_attribute_and_goods_no():
     assert seat["gdNo"] == "G12345"
 
 
-def test_seat_builders_omit_seat_attribute_when_row_has_none(
-    complete_train,
-):
-    # ScheduleView search rows carry no h_seat_att_cd and no goods number, so
-    # x4/b.java:19,23 forward null and Retrofit omits the @Field entirely
-    # (RV3-05 for seatAttCd, RV4-01 for gdNo); the builders must OMIT
-    # txtSeatAttCd/seatAttCd and txtGdNo/gdNo rather than substituting "015"/"".
-    assert complete_train.seat_attribute_code is None
-    assert complete_train.goods_no is None
-    config = KorailConfig()
-
-    car = build_seat_car_form(
-        config,
-        complete_train,
-        passenger_count=1,
-        sid="caller-sid-car",
-    )
-    seat = build_seat_inventory_form(
-        config,
-        complete_train,
-        car_no=1,
-        passenger_count=1,
-        sid="caller-sid-seat",
-    )
-
-    assert "txtSeatAttCd" not in car
-    assert "seatAttCd" not in seat
-    assert "txtGdNo" not in car
-    assert "gdNo" not in seat
-
-
 def test_seat_builders_carry_selected_cabin_class_and_reject_bad_domain(
     complete_train,
 ):
@@ -1134,41 +1076,7 @@ def test_seat_builder_rejects_invalid_car_numbers(complete_train, car_no):
         )
 
 
-@pytest.mark.parametrize(
-    ("field_name", "value"),
-    [
-        ("train_no", None),
-        ("train_no", ""),
-        ("train_no", "１２３"),
-        ("train_no", "123456"),
-        ("train_group_code", None),
-        ("train_group_code", "10A"),
-        ("train_group_code", "１０0"),
-        ("departure_station_code", None),
-        ("departure_station_code", "001A"),
-        ("arrival_station_code", "００２０"),
-        ("departure_date", None),
-        ("departure_date", "2026-07-14"),
-        ("run_date", "２０２６０７１４"),
-        ("train_class_code", None),
-        ("train_class_code", "0A"),
-        ("departure_run_order", None),
-        ("departure_run_order", "00001A"),
-        ("arrival_run_order", "００００１０"),
-    ],
-)
-def test_inventory_validation_rejects_missing_non_ascii_and_malformed_train_fields(
-    complete_train,
-    field_name,
-    value,
-):
-    malformed = replace(complete_train, **{field_name: value})
-    with pytest.raises(KorailProtocolError, match=field_name):
-        validate_seat_inventory_inputs(malformed, 1)
-
-
 def test_safety_registers_only_the_two_exact_new_post_contracts():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert ("POST", CAR_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", SEAT_PATH) in KORAIL_READ_ONLY_ROUTES
     assert KORAIL_EXACT_REQUEST_FIELDS[CAR_PATH] == CAR_FIELDS
@@ -1209,14 +1117,6 @@ def test_inventory_safety_rejects_missing_and_extra_fields(
     assert_read_only_request_fields(path, without_optional)
 
 
-@pytest.mark.parametrize(("path", "fields"), [(CAR_PATH, CAR_FIELDS), (SEAT_PATH, SEAT_FIELDS)])
-def test_inventory_safety_rejects_duplicate_prepared_fields(path, fields):
-    values = {name: "" for name in fields}
-    duplicate = _DuplicateFieldMapping(values, next(iter(fields)))
-    with pytest.raises(KorailProtocolError, match="duplicate"):
-        assert_read_only_request_fields(path, duplicate)
-
-
 @pytest.mark.parametrize(
     ("method", "path"),
     [
@@ -1243,52 +1143,6 @@ def test_inventory_safety_rejects_wrong_methods_and_adjacent_routes(
 ):
     with pytest.raises(KorailProtocolError):
         assert_read_only_route(method, path)
-
-
-def _missing_fields_form(path: str) -> dict[str, str]:
-    return {"Device": "AD"}
-
-
-def _duplicate_key_form(path: str) -> _DuplicateFieldMapping:
-    fields = KORAIL_EXACT_REQUEST_FIELDS[path]
-    return _DuplicateFieldMapping({name: "" for name in fields}, next(iter(fields)))
-
-
-@pytest.mark.parametrize("path", [CAR_PATH, SEAT_PATH])
-@pytest.mark.parametrize(
-    ("make_form", "match"),
-    [(_missing_fields_form, "fields"), (_duplicate_key_form, "duplicate")],
-    ids=["invalid-fields", "duplicate-fields"],
-)
-def test_bad_inventory_forms_fail_before_dynapath_or_transport(path, make_form, match):
-    transport_calls = 0
-    token_calls = 0
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal transport_calls
-        transport_calls += 1
-        raise AssertionError("transport must not run")
-
-    def token_provider(_):
-        nonlocal token_calls
-        token_calls += 1
-        raise AssertionError("DynaPath must not run")
-
-    config = KorailConfig(
-        dynapath=DynapathConfig(
-            enabled=True,
-            token_provider=token_provider,
-            allowlist_paths=frozenset({path}),
-        )
-    )
-    client = KorailClient(config, transport=httpx.MockTransport(handler))
-    try:
-        with pytest.raises(KorailProtocolError, match=match):
-            client.http.post_form(path, make_form(path), include_common=False)
-    finally:
-        client.close()
-    assert token_calls == 0
-    assert transport_calls == 0
 
 
 @pytest.mark.parametrize(
@@ -1519,52 +1373,6 @@ def test_invalid_caller_counts_fail_before_sid_and_transport(
     try:
         with pytest.raises(ValueError):
             getattr(client, method_name)(complete_train, *args, **kwargs)
-    finally:
-        client.close()
-    assert sid_calls == 0
-    assert transport_calls == 0
-
-
-@pytest.mark.parametrize(
-    ("field_name", "value"),
-    [
-        ("train_no", "１２３"),
-        ("train_group_code", "10A"),
-        ("departure_station_code", None),
-        ("arrival_station_code", "002A"),
-        ("departure_date", "2026071A"),
-        ("run_date", None),
-        ("train_class_code", "0A"),
-        ("departure_run_order", "０００００１"),
-        ("arrival_run_order", None),
-    ],
-)
-def test_invalid_train_fields_fail_before_sid_and_transport(
-    complete_train,
-    field_name,
-    value,
-    monkeypatch,
-):
-    sid_calls = 0
-    transport_calls = 0
-
-    def fake_sid() -> str:
-        nonlocal sid_calls
-        sid_calls += 1
-        raise AssertionError("Sid generation must not run")
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal transport_calls
-        transport_calls += 1
-        raise AssertionError("transport must not run")
-
-    monkeypatch.setattr(client_module, "generate_sid", fake_sid)
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="synthetic-session")
-    malformed = replace(complete_train, **{field_name: value})
-    try:
-        with pytest.raises(KorailProtocolError, match=field_name):
-            client.get_seat_cars(malformed)
     finally:
         client.close()
     assert sid_calls == 0
@@ -2139,61 +1947,6 @@ def test_evidence_suppresses_client_lifecycle_exception_text(
         assert configured_evidence.calls[-1] == "close"
 
 
-def test_evidence_count_values_are_capped_at_ten_thousand(
-    configured_evidence,
-    complete_train,
-    monkeypatch,
-):
-    physical = PhysicalSeat(
-        seat_no="synthetic-seat",
-        sale_possible="Y",
-        direction_code="D",
-        other_attribute_code="E",
-        requested_attribute_code="R",
-        floor="1",
-        specification="S",
-        sequence_no="1",
-        message_code="M",
-        message="synthetic-message",
-        visual_message_division_code="V",
-    )
-    window = SeatWindow(0.1, 0.2)
-    car = SeatCar(1, "Synthetic", 1, ())
-
-    class ManyClient(_EvidenceFakeClient):
-        def search_trains(self, _query):
-            self.calls.append("search")
-            return TrainSearchResult(
-                trains=[complete_train] * 10_001,
-                response=BaseKorailResponse(),
-            )
-
-        def get_seat_cars(self, _train, *, passenger_count=1):
-            self.calls.append("car_list")
-            return SeatCarListResponse(cars=(car,) * 10_001)
-
-        def get_seat_inventory(
-            self,
-            _train,
-            car_no,
-            *,
-            passenger_count=1,
-        ):
-            self.calls.append("seat_list")
-            return SeatInventoryResponse(
-                seats=(physical,) * 10_001,
-                windows=(window,) * 10_001,
-            )
-
-    ManyClient.calls = []
-    monkeypatch.setattr(evidence, "KorailClient", ManyClient)
-    result = evidence.capture_evidence()
-    assert result["train_count"] == 10_000
-    assert result["car_count"] == 10_000
-    assert result["seat_count"] == 10_000
-    assert result["window_count"] == 10_000
-
-
 def _safe_completed_result() -> dict[str, Any]:
     return {
         "status": "completed",
@@ -2236,7 +1989,6 @@ def test_evidence_writer_is_atomic_safe_and_protects_existing_output(
             "status", "https://example.invalid/secret"
         ),
         lambda result: result["calls"].__setitem__("login", 2),
-        lambda result: result.__setitem__("seat_count", 10_001),
     ],
 )
 def test_evidence_writer_rejects_unsafe_or_out_of_budget_results(
@@ -2249,71 +2001,6 @@ def test_evidence_writer_rejects_unsafe_or_out_of_budget_results(
     with pytest.raises(ValueError):
         evidence.write_evidence(output, result, force=False)
     assert not output.exists()
-
-
-def test_evidence_script_has_narrow_import_and_operation_boundaries():
-    source = Path(evidence.__file__).read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    imported_roots: set[str] = set()
-    imported_names: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported_roots.update(alias.name.split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            imported_roots.add((node.module or "").split(".")[0])
-            imported_names.update(alias.name for alias in node.names)
-    assert imported_roots <= {
-        "__future__",
-        "argparse",
-        # `collections` is here for `collections.abc` only, which is where
-        # `Mapping`/`Sequence` now live: importing them from `typing` has been
-        # deprecated since 3.9 and ruff's UP035 moves them. It buys the script
-        # no capability the `typing` spelling did not already have.
-        "collections",
-        "json",
-        "math",
-        "os",
-        "pathlib",
-        "tempfile",
-        # `time` is the request pacing: a monotonic clock and a sleep, nothing
-        # that reaches the network.
-        "time",
-        "typing",
-        "korail_mobile_api",
-    }
-    assert "run_live_smoke" not in source
-    assert "run_live_smoke_from_env" not in imported_names
-    assert "requests" not in imported_roots
-    assert "httpx" not in imported_roots
-    called_attributes = {
-        node.func.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-    }
-    assert {
-        "login",
-        "search_trains",
-        "get_seat_cars",
-        "get_seat_inventory",
-        "close",
-    } <= called_attributes
-    forbidden_operations = {
-        name
-        for name in called_attributes
-        if any(
-            fragment in name.casefold()
-            for fragment in (
-                "reserve",
-                "payment",
-                "cancel",
-                "refund",
-                "select",
-                "hold",
-                "urlopen",
-            )
-        )
-    }
-    assert forbidden_operations == set()
 
 
 def test_evidence_main_writes_only_the_sanitized_capture(

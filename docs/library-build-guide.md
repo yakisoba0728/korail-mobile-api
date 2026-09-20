@@ -74,15 +74,24 @@ authorized mutation on its own. Any mutation interface requires a separate
 safety design, new evidence, independent review, and explicit user
 authorization.
 
-That authorization has since been given for four categories only. The shipped
-client now has consent-gated `reserve`, `cancel_unpaid_hold`,
-`pay_with_fake_card`, `pay_with_card`, and `refund` methods, which send only
-through a dedicated
-gated path and only with an explicit non-preview consent (see `README.md` and
-`docs/MUTATION_HANDOFF.md`). `pay_with_fake_card` and `pay_with_card` are two
-methods on the one payment category: the first accepts only a non-chargeable
-test card, the second only a consent that explicitly acknowledges a real charge
-(`real_card_acknowledged=True` with `fake_card_only=False`). Every other
+That authorization has since been expanded well past the original four
+categories. As of 1.2.0 the shipped client has fourteen state-changing public
+methods across seven categories (`reserve`, `cancel`, `payment`, `refund`,
+`discount_card`, `price_recalculation`, `cart`) over ten registered mutation
+routes: `reserve`, `reserve_transfer`, `reserve_merge`,
+`reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
+`pay_with_fake_card`, `pay_with_card`, `refund`, `add_to_cart`,
+`register_discount_card`, `extend_discount_card`, `recalculate_price`, and
+`execute_station_ticket_refund` (the last through `V7Gateway.call`, not
+`post_mutation_form`) — see `README.md` and `docs/MUTATION_HANDOFF.md`. There
+is no consent object, dry-run flag or preview any more: each method needs only
+a logged-in session and sends the instant it is called, checked only by the
+route allowlist and the route→category cross-check that `post_mutation_form`
+(or, for the station refund, `V7Gateway.call`) runs immediately before the
+POST. `pay_with_fake_card` and `pay_with_card` are still two separate methods
+on the one `payment` category, but nothing distinguishes a real charge from a
+test one except which method name the caller wrote — the library does not
+check the card. Every other
 mutation endpoint listed in this guide
 is still unimplemented and still governed by the baseline policy above.
 
@@ -176,7 +185,7 @@ Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
 | 분류 | 기본 동작 |
 |---|---|
 | 조회성 API | 실제 호출 허용 가능. 단, 계정/티켓 개인정보 로그 마스킹 |
-| 예약/취소/결제/환불 mutation endpoint | consent gate를 통해서만 구현·호출. 기본값은 전송 없는 preview이며, 결제는 비청구 test card만 허용 |
+| 예약/취소/결제/환불/장바구니/할인카드/운임재계산 mutation endpoint (14개 메서드) | 동의 객체·dry-run·preview 없음. 로그인 세션만 있으면 호출 즉시 전송됨. 결제는 `pay_with_fake_card`/`pay_with_card` 두 메서드 이름으로만 구분되며, 코드는 카드 종류를 검사하지 않음 |
 | 그 밖의 모든 mutation endpoint | 현재 라이브러리에서 구현하거나 호출하지 않으며, 위의 비허용 정책을 예외 없이 적용 |
 | PNR/발권번호/N카드 기반 API | 실제 값 없으면 schema-only 테스트만 수행 |
 
@@ -211,5 +220,5 @@ Retrofit annotation 기준 165개 endpoint는 `analysis/reports/api-endpoints.ts
 2. `CommonApi.getCommonCode`, station/cache/config 조회를 구현해 기본 통신을 검증한다.
 3. 로그인은 common-code 기반 암호화와 cookie persistence까지 하나의 integration test로 묶는다.
 4. 열차 조회, 구매이력, 영수증처럼 현재 성공한 조회성 API부터 typed wrapper를 만든다.
-5. Do not expose mutation methods or DTO stubs beyond the four authorized consent-gated categories (reserve, unpaid-hold cancel, payment, refund), exposed as five methods because payment is split into a fake-card path and an explicitly acknowledged real-card path. Any further interface requires a separate safety design, new evidence, independent review, and explicit user authorization.
+5. Do not expose mutation methods or DTO stubs beyond the fourteen authorized state-changing methods across seven categories (`reserve`, `cancel`, `payment`, `refund`, `discount_card`, `price_recalculation`, `cart` — see `docs/MUTATION_HANDOFF.md` for the full list). As of 1.2.0 none of them is consent-gated: a logged-in session is the only precondition, and calling one sends immediately. Any further interface requires a separate safety design, new evidence, independent review, and explicit user authorization, exactly as these fourteen did.
 6. WebView/provider/NetFunnel/DynaPath는 core API와 분리해 optional adapter로 둔다.

@@ -5,12 +5,13 @@
 **KORAIL 앱이 쓰는 API 를, 파이썬에서 그대로.**
 
 로그인하고, 열차를 찾고, 승차권과 예약을 읽습니다.<br>
-좌석을 잡거나 결제·환불하는 일은 consent 객체를 건네야만 일어납니다.
+좌석을 잡거나 결제·환불하는 일은 로그인한 세션만 있으면 곧바로 나갑니다 — 그
+앞을 막는 동의 절차는 없습니다.
 
 [![문서](https://img.shields.io/badge/%EB%AC%B8%EC%84%9C-yaki.kr-1f6feb?style=flat-square)](https://yaki.kr/korail-mobile-api/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776ab?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
 [![타입](https://img.shields.io/badge/typed-py.typed-2f6f4e?style=flat-square)](src/korail_mobile_api/py.typed)
-[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-3128-4c1?style=flat-square)](#문서)
+[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-2257-4c1?style=flat-square)](#문서)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square)](LICENSE)
 
 [문서](https://yaki.kr/korail-mobile-api/) ·
@@ -142,18 +143,18 @@ POST라 이 필드를 보내지 않습니다. 보호된 상수를 추측해서 �
 | `TrainSearchQuery.passengers` | `int`, 기본 `1` | `PassengerCounts` |
 | `TrainSearchQuery.departure_time` | `"000000"` | `"060000"` |
 | `DiscountCoupon` | `coupon_no`, `discount_values` | `coupon_number`, `discount_rate` |
-| `MutationCategory` | 7개 | 5개 (공통 4개) |
 
 </details>
 
 ## 무엇을 할 수 있나
 
-경계 안에 라우트 57개와 공개 메서드 77개가 있습니다. 라우트는 읽기 55개에
-로그인·로그아웃을 더한 것이고, 변경 라우트 9개는 읽기 전용 허용목록에 올라가지
-않습니다. 메서드 중 변경 메서드 14개가 consent 게이트를 지나고, 나머지 63개는
-로그인·읽기만 보내거나 아무것도 보내지 않습니다. 이 라우트 수는 기존
-고수준 전송 경계의 허용목록이며, 7.0.6의 추가 Retrofit 메서드 117개는 별도의
-`V7Gateway` 계약 레지스트리에서 관리합니다.
+경계 안에 라우트 58개와 공개 메서드 77개가 있습니다. 라우트는 읽기 56개에
+로그인·로그아웃을 더한 것이고, 변경 라우트 10개는 읽기 전용 허용목록에 올라가지
+않습니다. 메서드 중 변경 메서드 14개는 로그인 세션만 있으면 곧바로 나가고,
+나머지 63개는 로그인·읽기만 보내거나 아무것도 보내지 않습니다. 이 라우트 수는
+기존 고수준 전송 경계의 허용목록이며, 7.0.6에서 추가됐던 나머지 Retrofit 계약은
+대부분 삭제됐습니다 — 별도의 `V7Gateway` 계약 레지스트리에는 이제 역발행 승차권
+환불의 검증·실행 계약 2개만 남아 있습니다.
 
 ### 읽기
 
@@ -194,13 +195,13 @@ POST라 이 필드를 보내지 않습니다. 보호된 상수를 추측해서 �
 
 ### 상태를 바꾸는 것
 
-| 메서드 | consent | 하는 일 |
+| 메서드 | 범주 | 하는 일 |
 | --- | --- | --- |
 | `cancel_unpaid_hold(hold, …)` | `cancel` | 결제 전 hold 해제 |
 | `pay_with_fake_card(hold, card, …)` | `payment` | 청구되지 않는 테스트 카드 |
-| `pay_with_card(hold, card, …)` | `payment` | 실카드. 기본으로 막힘 |
+| `pay_with_card(hold, card, …)` | `payment` | 실카드. 메서드 이름 말고는 막는 것이 없음 |
 | `refund(ticket, …)` | `refund` | 결제된 승차권 환불 |
-| `execute_station_ticket_refund(request, …)` | `V7MutationConsent`의 `NetworkApi.executeOnlineRefunds` | 역발행 승차권의 온라인 환불 실행 |
+| `execute_station_ticket_refund(request, …)` | `V7Gateway`의 `NetworkApi.executeOnlineRefunds`만 | 역발행 승차권의 온라인 환불 실행 |
 | `recalculate_price(request, …)` | `price_recalculation` | 할인 바뀐 hold 의 운임 재계산 |
 | `add_to_cart(request, …)` | `cart` | 잡힌 PNR 을 장바구니로 |
 | `register_discount_card(request, …)` | `discount_card` | N카드 구매 |
@@ -215,24 +216,37 @@ POST라 이 필드를 보내지 않습니다. 보호된 상수를 추측해서 �
 
 ## 안전 모델
 
-관례가 아니라 코드가 막고, 오프라인 스위트가 그걸 고정합니다.
+동의 객체도 dry-run도 미리보기도 없습니다. 코드가 실제로 막는 것과, 이름만으로
+지키는 것을 구분해서 적습니다. 오프라인 스위트가 코드가 막는 부분을 고정합니다.
 
-- 기존 변경 메서드 13개는 `MutationConsent`, 역발행 승차권 환불 1개는 메서드별 `V7MutationConsent`를 요구합니다.
-- 범주 플래그는 전부 기본 `False` 라, 예약을 허가한 consent 로는 취소하지 못합니다.
-- `dry_run=True` 가 기본입니다. 통신하지 않고 기존 변경 메서드는
-  `MutationPreview`, V7 환불은 마스킹된 `V7MutationPreview`를 돌려줍니다.
-- 기존 변경 라우트 9개는 전용 변경 전송 경계에서 검사하고, 7.0.6 추가 메서드는 `V7Gateway`의 메서드별 동의와 기본 dry-run을 거칩니다.
-- 청구되는 실카드는 `pay_with_card` 로만 갑니다. `real_card_acknowledged` 와
-  `fake_card_only=False` 를 **둘 다** 세워야 하고, 하나만 세우면 전송 게이트가 거절합니다.
+- 상태를 바꾸는 메서드 14개는 로그인 세션을 요구합니다. 세션이 없으면
+  `KorailAuthError`이고 아무것도 나가지 않습니다.
+- 기존 변경 메서드 13개는 `post_mutation_form` 하나로 나갑니다. 전송 직전에
+  라우트가 등록된 변경 라우트인지, 그 메서드가 쓰는 범주가 그 라우트를 소유한
+  범주와 같은지, 폼이 손으로 조립할 수 없는 모양인지를 검사합니다 — 범주는
+  각 메서드에 코드로 고정돼 있고 호출자가 고르는 인자가 아닙니다.
+- `execute_station_ticket_refund`는 `V7Gateway`(`client.v7`)로
+  `NetworkApi.executeOnlineRefunds` 하나만 부릅니다. 이 레지스트리에는 그것과
+  조회용 `verifyOnlineRefunds` 둘만 남아 있고, 정기권/패스 구매 계약 네 개는
+  레지스트리에 없는 채로 무엇을 넘기든 이름으로 거부됩니다.
+- **청구되는 실카드를 막는 코드는 없습니다.** `pay_with_card` 와
+  `pay_with_fake_card` 는 같은 폼을 만들고 같은 경로로 나갑니다. 가르는 것은
+  호출자가 어느 이름을 불렀는가, 그것 하나뿐입니다.
 
 ```python
-from korail_mobile_api import MutationConsent
+from korail_mobile_api import KorailClient, KorailConfig, KorailMutationNotAllowedError
 
-preview = client.reserve(train, consent=MutationConsent(allow_reserve=True))
-preview.payload    # 마스킹된 폼. 아무것도 나가지 않았습니다
-hold = client.reserve(train, consent=MutationConsent(allow_reserve=True, dry_run=False))
-client.cancel_unpaid_hold(hold, consent=MutationConsent(allow_cancel=True, dry_run=False))
+client = KorailClient(KorailConfig())
+try:
+    client.v7.call("NetworkApi.postPassReserve", {})
+except KorailMutationNotAllowedError as error:
+    print(error)  # 정기권/패스 구매는 이름으로 항상 거부됩니다
+client.close()
 ```
+
+이 예제는 로그인도 네트워크도 필요 없습니다 — 거부는 요청을 만들기 전에
+일어납니다. 반대로 세션이 있는 상태에서 `client.reserve(train)`을 부르면 그
+순간 실제 예약 요청이 나갑니다.
 
 ## 에러 처리
 
@@ -318,8 +332,8 @@ Retrofit 계약은 [별도 구현 기록](docs/7.0.6-additions.md)에 정리했�
 - **여행변경과 롤백, 예약 인원 변경** — 깨끗한 되돌리기가 없습니다.
 - **비회원 오프라인 반환, 체크인, 회원정보 변경** — 이 버전에 없습니다.
 - **승무원 호출** — `/classes/com.korail.mobile.push.callCrew.do` 는 기존
-  고수준 메서드와 transport 허용목록에서 제외되어 있습니다. 7.0.6 계약
-  게이트웨이에서는 메서드별 동의와 기본 dry-run으로 진입합니다.
+  고수준 메서드와 transport 허용목록에서 제외되어 있고, 지금 2개로 줄어든
+  `V7Gateway` 계약 레지스트리에도 없어 이 패키지로는 전혀 부를 수 없습니다.
 - **인증·NetFunnel·DynaPath 우회, 범용 WebView 자동화** — 영구히 범위 밖입니다.
 
 ## 문서
@@ -340,9 +354,11 @@ Retrofit 계약은 [별도 구현 기록](docs/7.0.6-additions.md)에 정리했�
 | [CHANGELOG.md](CHANGELOG.md) | 무엇이 바뀌었나 |
 
 게이트는 `python3 -m pytest -q -m "not live"` 이고 네트워크를 쓰지 않습니다 —
-`3128 passed, 1 deselected`. 빠진 하나는 `KORAIL_MOBILE_API_LIVE=1` 이 있을 때만 도는
-실서버 테스트입니다. 기여는 [CONTRIBUTING.md](CONTRIBUTING.md), 규범은
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 참고.
+`2257 passed`. 지금 이 스위트에는 `live` 로 표시된 테스트가 하나도 없어 아무것도
+걸러지지 않습니다. 실서버를 건드리는 것은 `scripts/`의 스크립트들이고, 모두
+`KORAIL_MOBILE_API_LIVE=1` 이 있어야 하며 대부분은 자기 스위치도 따로 있어야
+합니다([scripts/README.md](scripts/README.md)). 기여는 [CONTRIBUTING.md](CONTRIBUTING.md),
+규범은 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 참고.
 
 ## 라이선스
 

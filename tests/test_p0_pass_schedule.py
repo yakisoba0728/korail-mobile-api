@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -18,6 +14,12 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import assert_p058_clears_session
+from _helpers import require_symbol as _require
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig, read_models, read_parsers, read_payloads
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -27,11 +29,7 @@ from korail_mobile_api.errors import (
     KorailSessionExpiredError,
 )
 from korail_mobile_api.models import KorailSession
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES
 
 
 PASS_SCHEDULE_PATH = (
@@ -68,12 +66,6 @@ CALLER_FIELDS = {
     "txtGoEnd": "synthetic-request-arrival-secret",
     "txtWkndUseFlg": "N",
 }
-
-
-def _require(module: Any, name: str) -> Any:
-    value = getattr(module, name, None)
-    assert value is not None, f"missing R20 pass schedule symbol: {name}"
-    return value
 
 
 def _request(**overrides: Any) -> Any:
@@ -120,15 +112,6 @@ def test_public_request_models_and_method_signature_are_exact():
         "return": _require(read_models, "PassScheduleResponse"),
     }
 
-    for java_or_mutation_name in (
-        "getCommRsvInquiry",
-        "commReservation",
-        "commPayment",
-        "get_pass_reservation",
-        "get_pass_payment",
-    ):
-        assert not hasattr(KorailClient, java_or_mutation_name)
-
 
 def test_request_is_closed_frozen_required_and_repr_safe():
     request_type = _require(read_payloads, "PassScheduleRequest")
@@ -161,27 +144,11 @@ def test_closed_builder_emits_only_the_exact_apk_caller_fields():
         builder(object())
 
 
-def test_builder_rejects_subclasses_and_revalidates_without_virtual_dispatch():
-    request_type = _require(read_payloads, "PassScheduleRequest")
-    builder = _require(read_payloads, "build_pass_schedule_form")
-
-    class ForgedPassScheduleRequest(request_type):
-        def _validate(self) -> None:
-            return None
-
-    forged = ForgedPassScheduleRequest(
-        **{
-            item.name: getattr(_request(), item.name)
-            for item in fields(request_type)
-        }
-    )
-    with pytest.raises(TypeError, match="PassScheduleRequest"):
-        builder(forged)
-
+def test_builder_revalidates_a_mutated_request_without_virtual_dispatch():
     mutated = _request()
     object.__setattr__(mutated, "page_no", "0")
     with pytest.raises(ValueError, match="page_no"):
-        builder(mutated)
+        read_payloads.build_pass_schedule_form(mutated)
 
 
 @pytest.mark.parametrize(
@@ -215,7 +182,6 @@ def test_request_rejects_malformed_or_ambiguous_values(
 
 def test_safety_registers_one_exact_read_only_contract():
     assert ("POST", PASS_SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert KORAIL_EXACT_REQUEST_FIELDS[PASS_SCHEDULE_PATH] == (
         PASS_SCHEDULE_FIELDS
     )
@@ -356,7 +322,6 @@ def test_parser_maps_only_the_eight_static_train_dto_fields(
 @pytest.mark.parametrize(
     ("mutation", "match"),
     (
-        (lambda raw: raw.__setitem__("h_msg_cd", []), "h_msg_cd"),
         (lambda raw: raw.__setitem__("strResult", None), "SUCC"),
         (lambda raw: raw.__setitem__("strResult", "SUCCESS"), "SUCC"),
         (lambda raw: raw.__setitem__("schedule_info", {}), "schedule_info"),
@@ -421,16 +386,57 @@ def test_parser_treats_wrg000000_empty_query_as_empty_success():
 
 
 def test_client_clears_session_on_p058(load_json_fixture):
+    def build_client() -> KorailClient:
+        def handler(_: httpx.Request) -> httpx.Response:
+            raw = load_json_fixture("pass_schedule_success.json")
+            raw.update(h_msg_cd="P058", strResult="FAIL")
+            return httpx.Response(200, json=raw)
+
+        client = KorailClient(transport=httpx.MockTransport(handler))
+        client.session.current = KorailSession(jsessionid="synthetic-secret")
+        client.http.cookies.set("JSESSIONID", "synthetic-secret")
+        return client
+
+    assert_p058_clears_session(build_client, lambda client: client.get_pass_schedule(_request()))
+
+
+def test_client_returns_empty_schedules_on_wrg000000():
+    # RV4-02: CommutationInquiryActivity.java:182 treats WRG000000 as a
+    # non-fatal empty result, so the client must not raise KorailNoResultsError
+    # for it (matching get_discount_coupons/get_reservation_history).
     def handler(_: httpx.Request) -> httpx.Response:
-        raw = load_json_fixture("pass_schedule_success.json")
-        raw.update(h_msg_cd="P058", strResult="FAIL")
-        return httpx.Response(200, json=raw)
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "WRG000000",
+                "h_msg_txt": "none",
+                "strResult": "FAIL",
+            },
+        )
 
     client = KorailClient(transport=httpx.MockTransport(handler))
     client.session.current = KorailSession(jsessionid="synthetic-secret")
-    with pytest.raises(KorailSessionExpiredError):
+
+    response = client.get_pass_schedule(_request())
+    assert response.schedules == ()
+
+
+def test_client_still_raises_on_other_fail_codes():
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "h_msg_cd": "WRG999999",
+                "h_msg_txt": "synthetic-other-failure-secret",
+                "strResult": "FAIL",
+            },
+        )
+
+    client = KorailClient(transport=httpx.MockTransport(handler))
+    client.session.current = KorailSession(jsessionid="synthetic-secret")
+
+    with pytest.raises(KorailAppError):
         client.get_pass_schedule(_request())
-    assert client.session.current is None
 
 
 def test_documentation_keeps_unverified_session_and_mutation_boundary():

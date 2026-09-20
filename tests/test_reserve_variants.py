@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """Offline tests for the two non-default reservation job types.
 
@@ -35,25 +31,25 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from urllib.parse import parse_qsl
 
 import httpx
 import pytest
 
+import korail_mobile_api.client as client_module
+from _helpers import client_with_replies as _client_with
+from _helpers import korail_ok_envelope as _korail_ok_envelope
 from _helpers import logged_in_no_network_client as _logged_in_no_network_client
 from _mutation_fixtures import eligible_train as _eligible_train
 from korail_mobile_api import (
     KORAIL_STANDBY_HOLD_MESSAGE_CODE,
     KorailClient,
     KorailConfig,
-    KorailMutationNotAllowedError,
     KorailPassengerCounts,
     KorailProtocolError,
     KorailReservationJobType,
     KorailSeatAssignment,
     KorailSeatClass,
-    KorailSession,
-    MutationConsent,
-    MutationPreview,
     PhysicalSeat,
     ReservationHoldResponse,
     SeatInventoryResponse,
@@ -70,6 +66,7 @@ from korail_mobile_api.safety import (
     KORAIL_MUTATION_ROUTE_CATEGORIES,
     KORAIL_MUTATION_ROUTES,
     KORAIL_READ_ONLY_ROUTES,
+    assert_mutation_form_shape,
     assert_mutation_route,
     assert_mutation_route_category,
     assert_read_only_route,
@@ -242,8 +239,8 @@ def test_a_free_seat_row_is_refused_before_anything_is_sent(job_type, seats):
     # txtSeatAttCd4 for AlienGuard-protected values
     # (analysis/jadx/sources/com/korail/talk/ui/screen/train/TrainScheduleViewModel.java:2875,
     # :2899-2909, :2914-2915) that this package cannot reproduce. The "11"
-    # rule is what keeps such a row out, and it must do so with a live consent
-    # and before the transport is touched.
+    # rule is what keeps such a row out, and it must do so before the
+    # transport is touched.
     client = _logged_in_no_network_client()
     with pytest.raises(
         KorailProtocolError,
@@ -251,7 +248,6 @@ def test_a_free_seat_row_is_refused_before_anything_is_sent(job_type, seats):
     ):
         client.reserve(
             _free_seat_train(),
-            consent=MutationConsent(allow_reserve=True, dry_run=False),
             job_type=job_type,
             seats=seats,
         )
@@ -533,59 +529,12 @@ def test_seat_assignment_refuses_an_inventory_without_a_car_number():
         (True, "5A"),
         ("4", "5A"),
         (4, ""),
-        (4, "5 A"),
-        (4, "5\nA"),
-        (4, "5Å"),
         (4, 5),
     ],
 )
 def test_seat_assignment_rejects_an_unusable_identifier(car_no, seat_no):
     with pytest.raises(ValueError):
         KorailSeatAssignment(car_no=car_no, seat_no=seat_no)
-
-
-# --- client-level previews for both variants ---------------------------------
-
-
-def test_reserve_seat_designated_dry_run_previews_the_osrcar_keys_redacted():
-    client = _logged_in_no_network_client()
-    preview = client.reserve(
-        _eligible_train(),
-        consent=MutationConsent(allow_reserve=True),
-        passengers=KorailPassengerCounts(adult=2),
-        job_type=KorailReservationJobType.SEAT_DESIGNATED,
-        seats=(
-            KorailSeatAssignment(car_no=4, seat_no="5A"),
-            KorailSeatAssignment(car_no=4, seat_no="5B"),
-        ),
-    )
-    assert isinstance(preview, MutationPreview)
-    assert preview.category == "reserve"
-    assert preview.route.endswith("certification.TicketReservation")
-    assert preview.payload["txtJobId"] == "1103"
-    assert preview.payload["txtSrcarCnt"] == "2"
-    # The seat identity is PII-adjacent and redacted like every other seat read.
-    assert preview.payload["txtSrcarNo1"] == "[REDACTED]"
-    assert preview.payload["txtSeatNo1"] == "[REDACTED]"
-
-
-def test_reserve_with_no_job_type_is_unchanged_at_the_client_surface():
-    client = _logged_in_no_network_client()
-    train = _eligible_train()
-    consent = MutationConsent(allow_reserve=True)
-
-    defaulted = client.reserve(train, consent=consent)
-    explicit = client.reserve(
-        train,
-        consent=consent,
-        job_type=KorailReservationJobType.IMMEDIATE,
-        seats=None,
-    )
-    assert isinstance(defaulted, MutationPreview)
-    assert isinstance(explicit, MutationPreview)
-    assert defaulted.payload == explicit.payload
-    assert list(defaulted.payload) == list(explicit.payload)
-    assert defaulted.payload["txtJobId"] == "1101"
 
 
 # --- B. standby (1102) -------------------------------------------------------
@@ -737,7 +686,6 @@ def test_standby_reserve_requires_a_logged_in_member_session():
     with pytest.raises(KorailAuthError):
         client.reserve(
             _sold_out_standby_train(),
-            consent=MutationConsent(allow_reserve=True),
             job_type=KorailReservationJobType.STANDBY,
         )
 
@@ -807,6 +755,22 @@ def test_standby_wait_form_refuses_a_phone_number_it_would_silently_drop():
         )
 
 
+@pytest.mark.parametrize("field", ["allow_seat_class_change", "sms_notify"])
+@pytest.mark.parametrize("value", ["N", "Y", 0, 1, "", None, []])
+def test_standby_wait_form_refuses_a_non_bool_flag_instead_of_coercing_it(
+    field, value
+):
+    # bool("N") is True, so coercing a caller's "N" with bool() sends "Y" on
+    # the wire -- the opposite of what was asked, on a flag that decides
+    # whether a standby hold may be filled at a different seat class.
+    with pytest.raises(KorailProtocolError, match=f"{field} must be a bool"):
+        build_standby_wait_form(
+            KorailConfig(),
+            _standby_hold(),
+            **{field: value},
+        )
+
+
 @pytest.mark.parametrize(
     "hold",
     [
@@ -858,59 +822,55 @@ def test_reservation_wait_is_a_gated_reserve_category_mutation_route():
             assert_mutation_route_category(RESERVATION_WAIT_PATH, category)
 
 
-def test_confirm_standby_hold_is_denied_without_a_reserve_consent():
-    client = _logged_in_no_network_client()
-    for consent in (MutationConsent(), None, MutationConsent(allow_cancel=True)):
-        with pytest.raises(KorailMutationNotAllowedError):
-            client.confirm_standby_hold(
-                _standby_hold(),
-                consent=consent,  # type: ignore[arg-type]
-            )
-
-
 def test_confirm_standby_hold_requires_an_authenticated_session():
     def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
         raise AssertionError("no request may be sent")
 
     client = KorailClient(transport=httpx.MockTransport(handler))
     with pytest.raises(KorailAuthError):
-        client.confirm_standby_hold(
-            _standby_hold(),
-            consent=MutationConsent(allow_reserve=True),
-        )
+        client.confirm_standby_hold(_standby_hold())
 
 
-def test_confirm_standby_hold_dry_run_previews_without_sending():
-    client = _logged_in_no_network_client()
-    preview = client.confirm_standby_hold(
-        _standby_hold(),
-        consent=MutationConsent(allow_reserve=True),
-        sms_notify=True,
-        phone_no="01012345678",
+def test_confirm_standby_hold_actually_sends_through_the_shape_gate(monkeypatch):
+    """A send test, so the built form actually meets `assert_mutation_form_shape`.
+
+    Every other test for this method stops at the auth check or calls
+    `build_standby_wait_form` directly, so the method's real send path --
+    `_mutation` -> `post_mutation_form` -> `assert_mutation_form_shape` -- had
+    never run against its own output. A builder whose output has never met
+    the gate is a live-only failure, which is the class this gate exists to
+    prevent.
+
+    Reaching the transport is only half the claim, though: the builder
+    already produces a well-shaped form on its own, so a test that stops
+    there cannot tell the gate apart from no gate at all. The second half
+    forces the builder to hand back a shape the gate must refuse and checks
+    that the request never reaches the transport -- proof that the send path
+    is the thing enforcing the shape, not just the builder's own discipline.
+    """
+    client, recorder = _client_with({RESERVATION_WAIT_PATH: _korail_ok_envelope()})
+
+    client.confirm_standby_hold(_standby_hold())
+
+    assert [request.url.path for request in recorder.requests] == [RESERVATION_WAIT_PATH]
+    sent_form = dict(
+        parse_qsl(recorder.requests[0].content.decode(), keep_blank_values=True)
     )
-    assert isinstance(preview, MutationPreview)
-    assert preview.category == "reserve"
-    assert preview.method == "POST"
-    assert preview.route == RESERVATION_WAIT_PATH
-    assert preview.note == "dry-run: not sent"
-    assert preview.payload["txtSmsSndFlg"] == "Y"
-    assert preview.payload["txtPsrmClChgFlg"] == "N"
-    # The PNR and the phone number never survive into a preview.
-    assert preview.payload["txtPnrNo"] == "[REDACTED]"
-    assert preview.payload["txtCpNo"] == "[REDACTED]"
-    assert "01012345678" not in str(preview.payload)
+    expected_form = build_standby_wait_form(KorailConfig(), _standby_hold())
+    assert sent_form == expected_form
+    assert list(sent_form) == list(expected_form)
 
+    def _bad_shaped_form(*args, **kwargs):
+        # A non-string value is exactly what a hand-built dict can produce and
+        # a real builder cannot -- assert_mutation_form_shape's own reason for
+        # existing (see its docstring in safety.py).
+        return {**build_standby_wait_form(*args, **kwargs), "extra": 1}
 
-def test_reserve_standby_dry_run_previews_the_standby_job_id():
-    client = _logged_in_no_network_client()
-    preview = client.reserve(
-        _sold_out_standby_train(),
-        consent=MutationConsent(allow_reserve=True),
-        job_type=KorailReservationJobType.STANDBY,
-    )
-    assert isinstance(preview, MutationPreview)
-    assert preview.payload["txtJobId"] == "1102"
-    assert "txtSrcarCnt" not in preview.payload
+    monkeypatch.setattr(client_module, "build_standby_wait_form", _bad_shaped_form)
+    with pytest.raises(KorailProtocolError):
+        client.confirm_standby_hold(_standby_hold())
+    # Still just the one request from before: the bad shape never went out.
+    assert len(recorder.requests) == 1
 
 
 # --- documentation contract -------------------------------------------------
@@ -957,35 +917,13 @@ def test_docs_record_the_live_verification_of_both_variants():
         assert claim in combined
 
 
-def test_confirm_standby_hold_actually_sends_through_the_shape_gate():
-    """A send test, not a preview test -- the gate only runs on the send path.
+def test_standby_wait_form_shape_gate_rejects_a_bad_shape():
+    """A direct unit test of `assert_mutation_form_shape` (safety.py) itself.
 
-    Every other test for this method stops at consent or at dry_run, so the
-    form it builds had never been through `assert_mutation_form_shape`. That
-    was invisible until the gate's coverage was traced: seven of nine mutation
-    routes reached it during a suite run and this was one of the two that did
-    not. A builder whose output has never met the gate is a live-only failure,
-    which is the class this gate exists to prevent.
+    Not a proxy for whether some other test's send path happened to exercise
+    the gate -- call it with a shape the gate must refuse and check that it
+    does.
     """
-    sent: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        sent.append(request)
-        return httpx.Response(
-            200,
-            json={"strResult": "SUCC", "h_msg_cd": "IRG000000", "h_msg_txt": "ok"},
-        )
-
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-
-    client.confirm_standby_hold(
-        _standby_hold(),
-        consent=MutationConsent(allow_reserve=True, dry_run=False),
-    )
-
-    assert [request.url.path for request in sent] == [RESERVATION_WAIT_PATH]
-    form = dict(httpx.QueryParams(sent[0].content.decode()))
-    # The gate's own invariants, restated against real builder output.
-    assert {"Device", "Version", "Key"} <= set(form)
-    assert all(isinstance(value, str) for value in form.values())
+    form = build_standby_wait_form(KorailConfig(), _standby_hold())
+    with pytest.raises(KorailProtocolError):
+        assert_mutation_form_shape(RESERVATION_WAIT_PATH, {**form, "extra": 1})

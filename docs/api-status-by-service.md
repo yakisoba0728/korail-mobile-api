@@ -33,25 +33,28 @@ evidence)에서 나왔고, `cart.addCartList`(성공)와 `self.seatChgInfo.do`(�
 
 상태 기준: `성공`은 실제 호출 성공 또는 HTTP 200 캐시성 응답, `실패`는 실제 호출했으나 404/앱 오류/입력 오류, `미실행`은 운영 상태 변경 가능성 또는 실데이터 부족으로 보류한 항목입니다.
 
-Package coverage: 57 exact login/read routes and 77 public methods. Sixty-three
+Package coverage: 58 exact login/read routes and 77 public methods. Sixty-three
 are audited login/read methods or local helpers; the other fourteen are
-consent-gated mutations: `reserve`,
+state-changing methods: `reserve`,
 `reserve_transfer`, `reserve_merge`, `reserve_with_discount_card`,
 `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`,
 `pay_with_card`, `refund`, `add_to_cart`,
 `register_discount_card`, `extend_discount_card`
-and `recalculate_price`, plus `execute_station_ticket_refund`. The first
-thirteen are denied without a matching-category `MutationConsent`; with the default
-`dry_run=True` each only returns a redacted `MutationPreview` (sending nothing),
-and only a `dry_run=False` consent performs the live state change, exclusively
-through the double-gated `post_mutation_form` path. The station-issued ticket
-refund instead requires a method-scoped `V7MutationConsent` for
-`NetworkApi.executeOnlineRefunds`; its default dry-run also sends nothing.
-`pay_with_fake_card` additionally requires `fake_card_only`, so it still sends only non-chargeable
-test cards; a real, chargeable card is reachable only through `pay_with_card` on
-a consent that explicitly sets `real_card_acknowledged=True` and
-`fake_card_only=False`, and the transmit gate refuses a payment consent that
-claims neither or both. reserve/cancel/pay were verified live (fake card
+and `recalculate_price`, plus `execute_station_ticket_refund`. **As of 1.2.0
+there is no consent object, dry-run flag or preview.** The first thirteen go
+out through the double-gated `post_mutation_form` path, which checks the route
+against the mutation allowlist and the route against its fixed category (the
+category is pinned per method in code, not an argument a caller supplies)
+immediately before the POST; the only precondition is a logged-in session, and
+the call sends the instant it is made. The station-issued ticket refund
+instead goes out through `V7Gateway.call("NetworkApi.executeOnlineRefunds",
+...)`, which applies the same route-allowlist and route-category checks rather
+than a method-scoped consent, and sends just as immediately.
+`pay_with_fake_card` and `pay_with_card` build the identical form and POST it
+to the identical route; nothing in the code inspects which kind of card was
+actually supplied, so the method name the caller chose is the only thing that
+distinguishes a non-chargeable test card from a real charge. reserve/cancel/pay
+were verified live (fake card
 declined, no charge); `pay_with_card` and `refund` were verified live on
 2026-07-31 with a real card, for one lump-sum charge on one journey
 (`IRT000000` / `IRT200277`, 8,400 KRW, zero refund fee). The read-only

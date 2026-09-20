@@ -1,14 +1,11 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import get_args
 from urllib.parse import parse_qsl
 
 import httpx
@@ -18,16 +15,9 @@ import korail_mobile_api
 from _helpers import make_authenticated_client as _client
 from _helpers import refuse_transport as _refuse
 from korail_mobile_api import KorailClient, KorailConfig
-from korail_mobile_api.consent import (
-    MUTATION_CATEGORIES,
-    MutationConsent,
-    MutationPreview,
-    require_mutation_consent,
-)
 from korail_mobile_api.constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from korail_mobile_api.errors import (
     KorailAuthError,
-    KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSessionExpiredError,
 )
@@ -39,10 +29,10 @@ from korail_mobile_api.mutation_models import (
 from korail_mobile_api.mutation_payloads import build_price_recalculation_form
 from korail_mobile_api.redaction import SENSITIVE_KEYS, redact_payload
 from korail_mobile_api.safety import (
-    KORAIL_CARD_BEARING_MUTATION_CATEGORIES,
     KORAIL_MUTATION_ROUTE_CATEGORIES,
     KORAIL_MUTATION_ROUTES,
     KORAIL_READ_ONLY_ROUTES,
+    MutationCategory,
     assert_mutation_route,
     assert_mutation_route_category,
     assert_read_only_route,
@@ -51,15 +41,13 @@ from korail_mobile_api.safety import (
 
 ROUTE = "/classes/com.korail.mobile.certification.PriceReCalculation"
 
-# Every other category, read from MUTATION_CATEGORIES so one added later is
+# Every other category, read from MutationCategory so one added later is
 # covered by the isolation tests below without editing them.
 OTHER_CATEGORIES = tuple(
-    category for category in MUTATION_CATEGORIES if category != "price_recalculation"
+    category
+    for category in get_args(MutationCategory)
+    if category != "price_recalculation"
 )
-OTHER_FLAGS = tuple(f"allow_{category}" for category in OTHER_CATEGORIES)
-
-ALLOWED = MutationConsent(allow_price_recalculation=True, dry_run=False)
-DRY_RUN = MutationConsent(allow_price_recalculation=True)
 
 # The six @Field names of getDiscountPrice that carry a List<String>, in the
 # order CertificationService.java:35-37 declares them.
@@ -92,47 +80,14 @@ def _request(**overrides: object) -> PriceRecalculationRequest:
     return PriceRecalculationRequest(**fields)  # type: ignore[arg-type]
 
 
-# --- consent category -------------------------------------------------------
-
-
-def test_price_recalculation_is_its_own_consent_category():
-    assert "price_recalculation" in MUTATION_CATEGORIES
-    assert len(MUTATION_CATEGORIES) == 7
-    # A default consent grants it no more than it grants anything else.
-    assert MutationConsent().allow_price_recalculation is False
-    with pytest.raises(KorailMutationNotAllowedError):
-        require_mutation_consent(MutationConsent(), "price_recalculation")
-    # ...and no other category's opt-in unlocks it. allow_payment is the one
-    # that matters most: a consent to settle a quoted amount must not also
-    # authorise rewriting what that amount is.
-    for other in OTHER_FLAGS:
-        with pytest.raises(KorailMutationNotAllowedError):
-            require_mutation_consent(
-                MutationConsent(**{other: True}),
-                "price_recalculation",
-            )
-    require_mutation_consent(
-        MutationConsent(allow_price_recalculation=True),
-        "price_recalculation",
-    )
-    # ...and it unlocks nothing else.
-    for category in OTHER_CATEGORIES:
-        with pytest.raises(KorailMutationNotAllowedError):
-            require_mutation_consent(
-                MutationConsent(allow_price_recalculation=True),
-                category,
-            )
-
-
 def test_route_is_a_mutation_route_owned_by_that_category():
     assert ("POST", ROUTE) in KORAIL_MUTATION_ROUTES
     assert ("GET", ROUTE) not in KORAIL_MUTATION_ROUTES
-    assert len(KORAIL_MUTATION_ROUTES) == 9
     assert KORAIL_MUTATION_ROUTES.isdisjoint(KORAIL_READ_ONLY_ROUTES)
     assert KORAIL_MUTATION_ROUTE_CATEGORIES[ROUTE] == "price_recalculation"
     assert_mutation_route("POST", ROUTE)
     assert_mutation_route_category(ROUTE, "price_recalculation")
-    # A consent for another category can never be redirected onto this route.
+    # A category declared for another route can never be redirected onto this one.
     for wrong in OTHER_CATEGORIES:
         with pytest.raises(KorailProtocolError):
             assert_mutation_route_category(ROUTE, wrong)
@@ -140,16 +95,6 @@ def test_route_is_a_mutation_route_owned_by_that_category():
     assert ("POST", ROUTE) not in KORAIL_READ_ONLY_ROUTES
     with pytest.raises(KorailProtocolError):
         assert_read_only_route("POST", ROUTE)
-
-
-def test_category_carries_no_card_and_never_reaches_the_card_gate():
-    # The form has no PAN: its fourteen @Fields are a PNR, a job id, a member
-    # flag/number, a row count and six code/number lists
-    # (CertificationService.java:35-37). It must therefore NOT be registered
-    # as card-bearing, or the payment gate would demand a card kind it has no
-    # card for.
-    assert "price_recalculation" not in KORAIL_CARD_BEARING_MUTATION_CATEGORIES
-    assert KORAIL_CARD_BEARING_MUTATION_CATEGORIES <= set(MUTATION_CATEGORIES)
 
 
 # --- the form ---------------------------------------------------------------
@@ -432,58 +377,14 @@ def test_a_secret_inside_a_list_cannot_hide_behind_the_brackets():
 # --- the client method ------------------------------------------------------
 
 
-def test_default_consent_previews_and_sends_nothing():
-    client = _client(_refuse)
-    try:
-        preview = client.recalculate_price(
-            _request(
-                non_member_no="SYNTHETIC_NONMEMBER",
-                rows=(_row(certificate_no="SYNTHETIC_COUPON"),),
-            ),
-            consent=DRY_RUN,
-        )
-        assert type(preview) is MutationPreview
-        assert preview.category == "price_recalculation"
-        assert preview.method == "POST"
-        assert preview.route == ROUTE
-        rendered = str(preview.payload)
-        for secret in (
-            "SYNTHETIC_PNR",
-            "SYNTHETIC_NONMEMBER",
-            "SYNTHETIC_COUPON",
-        ):
-            assert secret not in rendered
-    finally:
-        client.close()
-
-
-def test_method_refuses_without_the_matching_consent():
-    client = _client(_refuse)
-    try:
-        for consent in (
-            None,
-            MutationConsent(),
-            MutationConsent(allow_reserve=True, dry_run=False),
-            # The reuse that would have been dangerous.
-            MutationConsent(allow_payment=True, dry_run=False),
-            MutationConsent(allow_discount_card=True, dry_run=False),
-        ):
-            with pytest.raises(KorailMutationNotAllowedError):
-                client.recalculate_price(_request(), consent=consent)
-    finally:
-        client.close()
-
-
-def test_method_requires_a_session_even_with_consent():
+def test_method_requires_a_session():
     client = KorailClient(
         KorailConfig(),
         transport=httpx.MockTransport(_refuse),
     )
     try:
         with pytest.raises(KorailAuthError):
-            client.recalculate_price(_request(), consent=DRY_RUN)
-        with pytest.raises(KorailAuthError):
-            client.recalculate_price(_request(), consent=ALLOWED)
+            client.recalculate_price(_request())
     finally:
         client.close()
 
@@ -511,7 +412,6 @@ def test_an_acknowledged_send_transmits_the_repeated_key_body():
     try:
         repriced = client.recalculate_price(
             _request(rows=(_row(), _row(passenger_type_code="3"))),
-            consent=ALLOWED,
         )
     finally:
         client.close()
@@ -542,22 +442,8 @@ def test_transport_gate_refuses_this_route_under_any_other_category():
                 client.http.post_mutation_form(
                     ROUTE,
                     {},
-                    # Every other category granted, so what refuses is the
-                    # route's own category, not the consent.
-                    consent=MutationConsent(
-                        dry_run=False, **{flag: True for flag in OTHER_FLAGS}
-                    ),
                     category=category,
                 )
-        # ...and a dry-run consent never reaches the wire even with the right
-        # category.
-        with pytest.raises(KorailMutationNotAllowedError):
-            client.http.post_mutation_form(
-                ROUTE,
-                {},
-                consent=DRY_RUN,
-                category="price_recalculation",
-            )
     finally:
         client.close()
 
@@ -580,7 +466,6 @@ def test_no_live_path_reaches_this_category():
     for path in (
         root / "src/korail_mobile_api/live.py",
         root / "tests/test_live.py",
-        root / "tests/test_live_service.py",
         root / "tests/test_mutation_live_paths.py",
         *scripts,
     ):
@@ -616,12 +501,7 @@ def test_an_expired_session_on_recalculate_price_clears_the_client_before_raisin
     )
     try:
         with pytest.raises(KorailSessionExpiredError):
-            client.recalculate_price(
-                _request(),
-                consent=MutationConsent(
-                    allow_price_recalculation=True, dry_run=False
-                ),
-            )
+            client.recalculate_price(_request())
     finally:
         client.close()
     assert len(seen) == 1
@@ -650,7 +530,7 @@ def test_an_unparseable_recalculation_raises_even_with_a_pnr():
     client = _client(handler)
     try:
         with pytest.raises(KorailProtocolError):
-            client.recalculate_price(_request(), consent=ALLOWED)
+            client.recalculate_price(_request())
     finally:
         client.close()
 

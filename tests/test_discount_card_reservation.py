@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """A reservation CAN carry a 할인카드, through the ordinary reserve route.
 
@@ -27,11 +23,7 @@ from _helpers import refuse_transport as _refuse
 from korail_mobile_api import (
     KorailClient,
     KorailConfig,
-    KorailMutationNotAllowedError,
     KorailProtocolError,
-    KorailSessionExpiredError,
-    MutationConsent,
-    MutationPreview,
     ReservationHoldResponse,
     TrainSummary,
 )
@@ -150,35 +142,10 @@ def test_the_builder_refuses_an_empty_card():
             )
 
 
-def test_it_is_a_reserve_and_is_gated_as_one():
+def test_it_is_a_reserve_and_is_owned_by_that_category():
     # Same route, so necessarily the same category: a discount card does not
     # make a reservation something other than a reservation.
     assert KORAIL_MUTATION_ROUTE_CATEGORIES[ROUTE] == "reserve"
-    client = _client(_refuse)
-    try:
-        for consent in (
-            None,
-            MutationConsent(),
-            MutationConsent(allow_discount_card=True, dry_run=False),
-            MutationConsent(allow_payment=True, dry_run=False),
-        ):
-            with pytest.raises(KorailMutationNotAllowedError):
-                client.reserve_with_discount_card(
-                    _train(),
-                    card_no=CARD_NO,
-                    consent=consent,
-                )
-        preview = client.reserve_with_discount_card(
-            _train(),
-            card_no=CARD_NO,
-            consent=MutationConsent(allow_reserve=True),
-        )
-        assert type(preview) is MutationPreview
-        assert preview.category == "reserve"
-        assert preview.route == ROUTE
-        assert CARD_NO not in str(preview.payload)
-    finally:
-        client.close()
 
 
 def test_it_requires_a_session():
@@ -188,11 +155,7 @@ def test_it_requires_a_session():
     )
     try:
         with pytest.raises(KorailAuthError):
-            client.reserve_with_discount_card(
-                _train(),
-                card_no=CARD_NO,
-                consent=MutationConsent(allow_reserve=True),
-            )
+            client.reserve_with_discount_card(_train(), card_no=CARD_NO)
     finally:
         client.close()
 
@@ -217,11 +180,7 @@ def test_an_acknowledged_send_posts_the_card_row_to_the_reserve_route():
 
     client = _client(handler)
     try:
-        hold = client.reserve_with_discount_card(
-            _train(),
-            card_no=CARD_NO,
-            consent=MutationConsent(allow_reserve=True, dry_run=False),
-        )
+        hold = client.reserve_with_discount_card(_train(), card_no=CARD_NO)
     finally:
         client.close()
 
@@ -263,40 +222,6 @@ def test_the_outbound_card_key_is_redacted():
     assert CARD_NO not in str(redact_mapping({CARD_KEY: CARD_NO}))
 
 
-_SESSION_EXPIRED = {
-    "strResult": "FAIL",
-    "h_msg_cd": "P058",
-    "h_msg_txt": "session expired",
-}
-
-
-def test_an_expired_session_on_reserve_with_discount_card_clears_the_client_before_raising():
-    # The same pin as test_mutation_live_paths.py's parametrized P058 test,
-    # for reserve_with_discount_card: one request out, no session or cookie left after P058.
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json=_SESSION_EXPIRED)
-
-    client = _client(handler)
-    client.http.cookies.set(
-        "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
-    )
-    try:
-        with pytest.raises(KorailSessionExpiredError):
-            client.reserve_with_discount_card(
-                _train(),
-                card_no=CARD_NO,
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
-    finally:
-        client.close()
-    assert len(seen) == 1
-    assert client.session.current is None
-    assert not client.http.cookies
-
-
 def test_reserve_with_discount_card_keeps_the_pnr_of_a_hold_it_cannot_fully_parse():
     # The same fallback test_mutation_live_paths.py pins for reserve: the server
     # made a hold (PNR present) but another field will not parse, and the
@@ -315,19 +240,11 @@ def test_reserve_with_discount_card_keeps_the_pnr_of_a_hold_it_cannot_fully_pars
             strResult="SUCC", h_msg_cd="IRR000000", h_msg_txt="ok",
             h_pnr_no=399999999999999, h_jrny_cnt=2, h_tot_prc={"amount": 1},
         )
-        hold = client.reserve_with_discount_card(
-                _train(),
-                card_no=CARD_NO,
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+        hold = client.reserve_with_discount_card(_train(), card_no=CARD_NO)
         assert isinstance(hold, ReservationHoldResponse)
         assert (hold.pnr_no, hold.journey_count) == ("399999999999999", "2")
         del body["h_pnr_no"]
         with pytest.raises(KorailProtocolError):
-            client.reserve_with_discount_card(
-                _train(),
-                card_no=CARD_NO,
-                consent=MutationConsent(allow_reserve=True, dry_run=False),
-            )
+            client.reserve_with_discount_card(_train(), card_no=CARD_NO)
     finally:
         client.close()

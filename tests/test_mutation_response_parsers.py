@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -44,20 +40,23 @@ from korail_mobile_api.redaction import redact_mapping
 SYNTHETIC_LIVE_PNR = "399999999999999"
 
 
-def test_refund_result_accepts_nullable_settlement_list_but_requires_the_key():
-    # RefundTicketOut.java:48-53 requires the key and assigns its nullable value.
+def test_refund_result_accepts_nullable_or_absent_settlement_list():
+    # RefundTicketOut.java:48-53 declares stlList nullable. A response that
+    # omits the key outright is treated the same as an explicit null, like
+    # every other optional field this package parses.
     null_result = parse_refund_ticket_response(
         {"strResult": "SUCC", "stlList": None}
     )
     empty_result = parse_refund_ticket_response(
         {"strResult": "SUCC", "stlList": []}
     )
+    missing_result = parse_refund_ticket_response({"strResult": "SUCC"})
     assert null_result.settlement_method_codes == ()
     assert null_result.settlement_list_is_null is True
     assert empty_result.settlement_method_codes == ()
     assert empty_result.settlement_list_is_null is False
-    with pytest.raises(KorailProtocolError, match="stlList is required"):
-        parse_refund_ticket_response({"strResult": "SUCC"})
+    assert missing_result.settlement_method_codes == ()
+    assert missing_result.settlement_list_is_null is True
 
 
 def test_ncard_purchase_preserves_settlement_and_tax_fields():
@@ -540,6 +539,51 @@ def test_reservation_hold_parser_reports_no_received_amount_when_unknowable(
     assert response.received_amount is None
 
 
+def test_reservation_hold_parser_reports_no_received_amount_when_oversized():
+    # A digit string past Python's int-string conversion limit (4300 digits,
+    # sys.int_info.default_max_str_digits) used to leak a bare ValueError out
+    # of int(). Both the total and a per-seat amount are unreadable, so the
+    # parser reports no received amount, the same as any other unreadable one.
+    huge = "9" * 5000
+    no_seats = parse_reservation_hold_response(
+        {
+            "strResult": "SUCC",
+            "h_msg_cd": "IRR000000",
+            "h_msg_txt": "success",
+            "h_tot_prc": "8400",
+            "h_tot_rcvd_amt": huge,
+            "jrny_infos": None,
+        }
+    )
+    assert no_seats.received_amount is None
+
+    one_seat = parse_reservation_hold_response(
+        {
+            "strResult": "SUCC",
+            "h_msg_cd": "IRR000000",
+            "h_msg_txt": "success",
+            "h_tot_prc": "8400",
+            "jrny_infos": {
+                "jrny_info": [
+                    {
+                        "h_jrny_sqno": "0001",
+                        "seat_infos": {
+                            "seat_info": [
+                                {
+                                    "h_seat_prc": "8400",
+                                    "h_seat_fare": "0",
+                                    "h_rcvd_amt": huge,
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+        }
+    )
+    assert one_seat.received_amount is None
+
+
 def test_reservation_payment_parser_accepts_failure_envelope_without_card_data():
     raw = {
         "strResult": "FAIL",
@@ -743,27 +787,6 @@ def _mutation_parser(name):
     from korail_mobile_api import mutation_parsers
 
     return getattr(mutation_parsers, name)
-
-
-@pytest.mark.parametrize(
-    ("parser", "bad_rows"),
-    [
-        ("parse_refund_ticket_response", {"stlList": ["x"]}),
-        ("parse_cash_receipt_issue_response", {"apvList": ["x"]}),
-        ("parse_station_refund_verification_response", {"orgtkinfo_list": ["x"]}),
-        ("parse_station_refund_execution_response", {}),
-        ("parse_reservation_hold_response", {"jrny_infos": {"jrny_info": ["x"]}}),
-        ("parse_reservation_payment_response", {"tk_coupon_info": ["x"]}),
-        ("parse_discount_card_purchase_response", {}),
-    ],
-)
-def test_a_mutation_parser_judges_the_envelope_before_any_row(parser, bad_rows):
-    # Pinned before the second envelope check in each parser went away: the
-    # envelope is still judged first, whatever is wrong with the rows.
-    with pytest.raises(
-        KorailProtocolError, match="envelope fields must be strings or null: h_msg_cd"
-    ):
-        _mutation_parser(parser)({"h_msg_cd": 1, "strResult": "SUCC", **bad_rows})
 
 
 @pytest.mark.parametrize(

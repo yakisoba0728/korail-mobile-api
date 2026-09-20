@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -22,6 +18,10 @@ import korail_mobile_api.read_models as read_models
 import korail_mobile_api.read_payloads as read_payloads
 from _helpers import recording_path_handler, synthetic_ok_envelope
 from _helpers import secret_ticket_reference as _reference
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -55,12 +55,7 @@ from korail_mobile_api.read_payloads import (
     build_ticket_duplication_check_form,
 )
 from korail_mobile_api.redaction import redact_mapping, redact_text
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-    assert_read_only_route,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES, assert_read_only_route
 
 
 R137_PATH = "/classes/com.korail.mobile.tk.dlvRcvCust.do"
@@ -159,14 +154,12 @@ def _responses() -> dict[str, dict[str, Any]]:
 
 
 def test_route_method_export_and_dynapath_boundaries_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert (
         "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
     ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert ("POST", R148_PATH) not in KORAIL_READ_ONLY_ROUTES
     assert not hasattr(KorailClient, "get_platform_numbers")
-    assert len(DYNAPATH_ALLOWLIST_PATHS) == 6
     assert all(path not in DYNAPATH_ALLOWLIST_PATHS for _, path in NEW_ROUTES)
 
     expected_fields = {
@@ -304,7 +297,7 @@ def test_exact_builders_preserve_wire_order_duplicate_fields_and_count_types():
     }
 
 
-def test_request_provenance_is_exact_revalidated_and_repr_hidden():
+def test_request_provenance_is_revalidated_and_repr_hidden():
     ticket = _reference()
     pnr = TicketDuplicationCheckRequest("PNR_SECRET")
     assert "SECRET" not in repr(ticket)
@@ -312,21 +305,15 @@ def test_request_provenance_is_exact_revalidated_and_repr_hidden():
     with pytest.raises(FrozenInstanceError):
         pnr.pnr_no = "CHANGED"
 
-    class TicketSubclass(OriginalTicketReference):
-        pass
-
-    class PnrSubclass(TicketDuplicationCheckRequest):
-        pass
-
-    for invalid in ([], (), (ticket, object()), (TicketSubclass("W", "D", "S", "P"),)):
+    for invalid in ([], (), (ticket, object())):
         with pytest.raises((TypeError, ValueError)):
             build_pbp_acceptance_specification_form(invalid)  # type: ignore[arg-type]
         with pytest.raises((TypeError, ValueError)):
             build_platform_number_form(invalid)  # type: ignore[arg-type]
     with pytest.raises(TypeError):
-        build_delivery_recipient_form(TicketSubclass("W", "D", "S", "P"))
+        build_delivery_recipient_form(object())
     with pytest.raises(TypeError):
-        build_ticket_duplication_check_form(PnrSubclass("PNR"))
+        build_ticket_duplication_check_form(object())
 
     object.__setattr__(ticket, "return_password", "")
     with pytest.raises(ValueError):

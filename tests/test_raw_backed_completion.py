@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -160,6 +156,8 @@ def test_result_only_success_reaches_route_parser_through_http_gate(
         ("FAIL", "result-only"),
         ("SYNTHETIC-UNKNOWN", "result-only"),
         (None, "result-only"),
+        # A non-string strResult is now caught by the envelope type check
+        # before the result-only "exact SUCC" comparison ever runs.
         (7, "strResult"),
     ],
 )
@@ -178,26 +176,6 @@ def test_result_only_envelopes_require_the_exact_success_string(
     raw["strResult"] = result_value
 
     with pytest.raises(KorailProtocolError, match=error_match):
-        parser(raw)
-
-
-@pytest.mark.parametrize(
-    ("fixture_name", "parser", "_method_name", "_args", "_type", "_count"),
-    RESULT_ONLY_CASES,
-)
-def test_result_only_envelopes_type_check_present_optional_fields(
-    load_json_fixture,
-    fixture_name,
-    parser,
-    _method_name,
-    _args,
-    _type,
-    _count,
-):
-    raw = load_json_fixture(fixture_name)
-    raw["h_msg_cd"] = ["synthetic-invalid"]
-
-    with pytest.raises(KorailProtocolError, match="h_msg_cd"):
         parser(raw)
 
 

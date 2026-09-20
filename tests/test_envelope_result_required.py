@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """``strResult`` 가 빠진 응답의 판정을 7.0.6 ``CommonOut`` 에 맞춘다.
 
@@ -80,21 +76,22 @@ def _v7_client(payload: dict[str, object]) -> KorailClient:
 
 
 def test_v7_common_out_model_without_str_result_fails():
-    # SrCheckOut extends CommonOut
-    # (analysis/jadx/sources/com/korail/talk/network/model/SrCheckOut.java).
+    # ExecuteOnlineRefundsOut extends CommonOut (it is NOT in the trimmed
+    # _NON_COMMON_OUT_RESPONSE_MODELS).
     client = _v7_client({"h_msg_cd": "WRG000000", "h_msg_txt": "없음"})
     try:
         with pytest.raises(KorailNoResultsError):
-            client.v7.call("NetworkApi.postSrCheck", {"txtMemberNo": "0"})
+            client.v7.call("NetworkApi.executeOnlineRefunds", {"x": "y"})
     finally:
         client.close()
 
 
 def test_v7_non_common_out_model_without_str_result_is_returned():
-    # SpecificDateDataOut does not extend CommonOut and has no envelope field.
+    # VerifyOnlineRefundsOut does not extend CommonOut (it IS the one entry
+    # left in _NON_COMMON_OUT_RESPONSE_MODELS).
     client = _v7_client({"h_msg_cd": "S000"})
     try:
-        response = client.v7.call("NetworkApi.postSpecificDateData")
+        response = client.v7.call("NetworkApi.verifyOnlineRefunds", {"x": "y"})
     finally:
         client.close()
     assert isinstance(response, V7Response)

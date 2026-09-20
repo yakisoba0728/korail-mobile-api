@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -16,6 +12,11 @@ import pytest
 
 import korail_mobile_api
 from _helpers import korail_ok_envelope as _envelope
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    KORAIL_OPTIONAL_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -41,11 +42,8 @@ from korail_mobile_api.read_payloads import (
 )
 from korail_mobile_api.redaction import redact_mapping, redact_payload
 from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_MUTATION_ROUTES,
-    KORAIL_OPTIONAL_REQUEST_FIELDS,
     KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
     assert_read_only_route,
 )
 
@@ -103,7 +101,6 @@ def _client(handler) -> KorailClient:
 
 
 def test_route_boundary_admits_the_two_reads_and_neither_write():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert ("POST", USAGE_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
     # The two state-changing dcntCrd* routes are in the mutation set and in

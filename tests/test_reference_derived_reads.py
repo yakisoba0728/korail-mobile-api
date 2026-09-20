@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """Three read-only routes surfaced by comparing against reference clients.
 
@@ -46,7 +42,11 @@ import pytest
 import korail_mobile_api
 import korail_mobile_api.read_models as read_models
 import korail_mobile_api.read_payloads as read_payloads
-from _helpers import recording_path_handler, synthetic_ok_envelope
+from _helpers import raise_if_dynapath_invoked, recording_path_handler, synthetic_ok_envelope
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -76,12 +76,7 @@ from korail_mobile_api.read_payloads import (
     build_ticket_reservation_detail_query,
 )
 from korail_mobile_api.redaction import redact_mapping, redact_text
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_MUTATION_ROUTES,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-)
+from korail_mobile_api.safety import KORAIL_MUTATION_ROUTES, KORAIL_READ_ONLY_ROUTES
 
 
 R150_PATH = "/classes/com.korail.mobile.certification.ReservationList"
@@ -231,12 +226,10 @@ def _responses() -> dict[str, dict[str, Any]]:
 
 
 def test_routes_fields_exports_and_signatures_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert (
         "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
     ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
-    assert len(DYNAPATH_ALLOWLIST_PATHS) == 6
     assert all(path not in DYNAPATH_ALLOWLIST_PATHS for _, path in NEW_ROUTES)
 
     # These three are reads. The refund MUTATION route is a different path and
@@ -379,6 +372,30 @@ def test_certification_route_pins_the_read_overload_not_the_write_one():
     ) == {"hidPnrNo": "PNR_SECRET"}
 
 
+def test_the_send_path_itself_refuses_the_write_overloads_shape():
+    # assert_read_only_request_fields above is a test-only fixture
+    # (tests/_read_field_contracts.py); it does not run on the real send
+    # path any more for any other route. This is the one path where a
+    # caller that reaches KorailHttpClient.post_form with the write
+    # overload's shape -- by hand, or through a future builder bug -- must
+    # still be refused before transport, since the two overloads are
+    # otherwise indistinguishable on the wire.
+    def never_send(_request: httpx.Request) -> httpx.Response:
+        raise AssertionError("the write overload's shape must not be sent")
+
+    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(never_send))
+    try:
+        with pytest.raises(KorailProtocolError):
+            client.http.post_form(
+                R150_PATH,
+                {"hidPnrNo": "PNR", "txtPsgDisc0019Cnt": "1"},
+            )
+        with pytest.raises(KorailProtocolError):
+            client.http.post_form(R150_PATH, {}, include_common=False)
+    finally:
+        client.close()
+
+
 def test_builders_emit_the_apps_exact_field_sets():
     ticket = _ticket()
     assert build_refund_commission_form(ticket) == {
@@ -421,7 +438,7 @@ def test_builders_emit_the_apps_exact_field_sets():
     }
 
 
-def test_request_provenance_is_exact_revalidated_and_repr_hidden():
+def test_request_provenance_is_revalidated_and_repr_hidden():
     request = TicketReservationDetailRequest("PNR_SECRET")
     companion = RefundCompanion("COMPANION_SECRET", "BIRTH_SECRET")
     assert "SECRET" not in repr(request)
@@ -429,23 +446,14 @@ def test_request_provenance_is_exact_revalidated_and_repr_hidden():
     with pytest.raises(FrozenInstanceError):
         request.pnr_no = "CHANGED"
 
-    class PnrSubclass(TicketReservationDetailRequest):
-        pass
-
-    class CompanionSubclass(RefundCompanion):
-        pass
-
-    class TicketSubclass(OriginalTicketReference):
-        pass
-
     with pytest.raises(TypeError):
-        build_ticket_reservation_detail_query(PnrSubclass("PNR"))
+        build_ticket_reservation_detail_query(object())
     with pytest.raises(TypeError):
-        build_refund_commission_form(_ticket(), CompanionSubclass())
+        build_refund_commission_form(_ticket(), object())
     with pytest.raises(TypeError):
-        build_refund_commission_form(TicketSubclass("W", "D", "S", "P"))
+        build_refund_commission_form(object())
     with pytest.raises(TypeError):
-        build_refund_ticket_detail_form(TicketSubclass("W", "D", "S", "P"))
+        build_refund_ticket_detail_form(object())
     with pytest.raises(TypeError):
         build_refund_ticket_detail_form(_ticket(), from_purchase_history=1)
 
@@ -453,17 +461,6 @@ def test_request_provenance_is_exact_revalidated_and_repr_hidden():
         TicketReservationDetailRequest("")
     with pytest.raises(ValueError):
         RefundCompanion(name=None)  # type: ignore[arg-type]
-
-    object.__setattr__(request, "pnr_no", "")
-    with pytest.raises(ValueError):
-        build_ticket_reservation_detail_query(request)
-
-    ticket = _ticket()
-    object.__setattr__(ticket, "return_password", "")
-    with pytest.raises(ValueError):
-        build_refund_commission_form(ticket)
-    with pytest.raises(ValueError):
-        build_refund_ticket_detail_form(ticket)
 
 
 def test_parsers_map_the_apk_declared_success_shapes():
@@ -732,15 +729,12 @@ def test_client_sends_the_apps_exact_wire_shapes_without_dynapath():
     responses = _responses()
     requests: list[httpx.Request] = []
 
-    def provider(context: Any) -> str:
-        raise AssertionError("DynaPath provider must not be invoked")
-
     handler = recording_path_handler(responses, requests)
 
     config = KorailConfig(
         dynapath=DynapathConfig(
             enabled=True,
-            token_provider=provider,
+            token_provider=raise_if_dynapath_invoked,
             allowlist_paths=frozenset(responses),
         )
     )

@@ -1,26 +1,20 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """Every exported ``Literal`` alias must still name exactly the values the
 runtime accepts.
 
 A ``Literal`` alias is a hand-written copy of a set that lives somewhere else —
-a frozenset a builder validates against, or the ``allow_*`` flag table a consent
-gate reads. Copies drift, and a drifted alias is worse than no alias: the type
-checker starts refusing a value the library itself accepts, so the caller's only
-escape is ``# type: ignore``. Each test below pins one alias to the runtime
-structure that decides the same question, so widening one without the other
-fails here.
+a frozenset a builder validates against. Copies drift, and a drifted alias is
+worse than no alias: the type checker starts refusing a value the library
+itself accepts, so the caller's only escape is ``# type: ignore``. Each test
+below pins one alias to the runtime structure that decides the same question,
+so widening one without the other fails here.
 """
 
 from typing import get_args
 
-from korail_mobile_api.consent import _CONSENT_FLAG_BY_CATEGORY, MutationCategory
 from korail_mobile_api.read_payloads import (
     _KORAIL_MILEAGE_LEDGERS,
     _KORAIL_MILEAGE_MOVEMENTS,
@@ -44,7 +38,3 @@ def test_self_seat_change_room_class_alias_matches_the_validated_set():
         set(get_args(KorailSelfSeatChangeRoomClassCode))
         == SELF_SEAT_CHANGE_ROOM_CLASS_CODES
     )
-
-
-def test_mutation_category_alias_matches_the_consent_flag_table():
-    assert set(get_args(MutationCategory)) == set(_CONSENT_FLAG_BY_CATEGORY)

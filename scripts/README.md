@@ -11,9 +11,11 @@ the rule says how.
 
 ## The rule for every live script here
 
-- **Nothing runs by accident.** Each live script needs the package-wide switch
-  `KORAIL_MOBILE_API_LIVE=1` *plus* at least one switch of its own. Setting one
-  and not the other runs nothing.
+- **Nothing runs by accident.** Every live script needs the package-wide switch
+  `KORAIL_MOBILE_API_LIVE=1`. Four of the six also need at least one switch of
+  their own on top of it; the two read-only 7.0.6 scripts
+  (`verify_706_new_live.py`, `retry_unprotected_live.py`) run on that single
+  switch alone.
 - **Credentials come from the environment only** — never a file, never a
   command-line argument (argv is world-readable through `ps`), never a default.
   A missing one aborts before login. The variables are named in each script's
@@ -28,8 +30,7 @@ the rule says how.
   `main()`. `tests/` asserts this structurally for every live script:
   `test_reserve_pay_refund_roundtrip.py` for the round trip,
   `test_seat_inventory_reads.py` for the seat evidence, and
-  `test_live_scripts_safety.py` for the other four. The same file checks that no
-  script guards anything with `assert`, which `python -O` strips.
+  `test_live_scripts_safety.py` for the other four.
 - **They run against YOUR account.** These exist so a maintainer can check the
   client against the live service once. They are not example code, not a
   scraper, and not something to run on a schedule.
@@ -48,9 +49,10 @@ Drives the whole read surface once and records the untouched response body for
 every call, so the parsers in `src/` can be checked against what the server
 actually sends. It logs in once, reuses the session, and derives each argument
 from a real previous response. It **never pays and never refunds**: it does not
-import `CardPayment` or `PaidTicket`, and the only consent it can build
-withholds the money categories. `--reserve` (behind its own extra switch) makes
-ONE hold and immediately cancels it.
+import `CardPayment` or `PaidTicket`, and it calls only `reserve` and
+`cancel_unpaid_hold` -- there is no consent object to build any more, and
+nothing here builds one. `--reserve` (behind its own extra switch) makes ONE
+hold and immediately cancels it.
 
 Its captures contain real personal data. Write them **outside the repository**
 — `--out` into a scratch directory, never into a checkout you might commit. The
@@ -101,8 +103,8 @@ session, delay-discount tickets, product reservations and coupons.
 and asks for the ticket MaaS menu with a reference taken from the past year's
 tickets. It prints the result, the code and the row counts, nothing else.
 
-It needs `KORAIL_MOBILE_API_LIVE=1` and its own `KORAIL_LIVE_706_READS=1`. Only
-the modes that log in prompt for the member number and password.
+It needs `KORAIL_MOBILE_API_LIVE=1`. Only the modes that log in prompt for the
+member number and password.
 
 ### `retry_unprotected_live.py` — live, reads only
 
@@ -113,13 +115,13 @@ at a real middle station, and a fare quote built from the server's own goods
 number. `--post-refund` reads only the reservation history and active tickets.
 `--fallback-routes` tries the transfer fallback on two routes with no direct
 train. The default run ends with a late-night 서울 → 부산 search through the
-transfer fallback (`direct_transfer_fallback_late`). The travel date is fixed in
-the code at 2026-09-29.
+transfer fallback (`direct_transfer_fallback_late`). The travel date is always
+14 days from today, so the search never goes stale.
 
-It needs `KORAIL_MOBILE_API_LIVE=1` and its own `KORAIL_LIVE_RETRY_READS=1`, and
-always logs in, so it prompts for the member number and password. It prints the
-type, the result, the code and the counts. It exits 1 when login fails and 0
-otherwise; a read that fails is printed and is part of what the run reports.
+It needs `KORAIL_MOBILE_API_LIVE=1`, and always logs in, so it prompts for the
+member number and password. It prints the type, the result, the code and the
+counts. It exits 1 when login fails and 0 otherwise; a read that fails is
+printed and is part of what the run reports.
 
 ### `retry_delivery_roundtrip.py` — live, and it MOVES MONEY
 

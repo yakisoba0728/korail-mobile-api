@@ -1,3 +1,7 @@
+# korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
+# Copyright (c) 2026 yakisoba0728
+# SPDX-License-Identifier: Apache-2.0
+
 """MkDocs 빌드 훅 넷. 저장소 파일 링크, reST 롤, 쪽을 넘는 앵커, 그리고 자산 확인.
 
 **저장소 파일을 가리키는 링크.** 사이트는 `docs/` 의 일부만 페이지로 올린다.

@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """``h_msg_cd`` → 예외 매핑과 이 패키지의 예외 계층.
 
@@ -30,7 +26,7 @@
     │   └── KorailAppUpdateRequiredError
     ├── KorailNetFunnelError              대기열(nf.letskorail.com)
     │   └── KorailQueueRejectedError
-    └── KorailMutationNotAllowedError     consent 게이트
+    └── KorailMutationNotAllowedError     영구 거절된 상태변경(정기권/패스 구매 등)
 
 실패 판정은 ``strResult``(와 ``WRC000288``)이 합니다. 이 매핑은 이미 올라가기로
 정해진 예외의 클래스만 고릅니다. 경고 코드를 달고 온 성공 응답은 그대로 성공입니다.
@@ -138,6 +134,15 @@ class KorailAuthContinuationRequired(KorailAuthError):
         super().__init__("KORAIL login requires WebView continuation")
 
 
+def _code_message(code: str | None, message: str | None) -> str:
+    """The base class's redaction of the joined string alone is not enough:
+    a code that is itself a sensitive key name ("pnrNo: ...") would take the
+    message's first word as its value, so the message goes in pre-redacted.
+    :class:`KorailSessionExpiredError` does the same inline, with different defaults and no strip.
+    """
+    return f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
+
+
 class KorailAppError(KorailApiError):
     """서버가 앱 수준 실패로 답함 — ``h_msg_cd`` 분류의 뿌리.
 
@@ -153,14 +158,7 @@ class KorailAppError(KorailApiError):
         self.code = code
         self.message = message
         self.raw = raw
-        # The base class redacts the joined string, and that alone is not
-        # enough: a code that is itself a sensitive key name ("pnrNo: ...")
-        # takes the message's first word as its value and swallows the
-        # message's own key with it. So the message goes in already redacted.
-        # KorailSessionExpiredError and KorailNetFunnelError do the same.
-        super().__init__(
-            f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
-        )
+        super().__init__(_code_message(code, message))
 
 
 class KorailNoResultsError(KorailAppError):
@@ -252,9 +250,7 @@ class KorailNetFunnelError(KorailApiError):
         self.code = code
         self.message = message
         self.raw = raw
-        super().__init__(
-            f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
-        )
+        super().__init__(_code_message(code, message))
 
 
 class KorailQueueRejectedError(KorailNetFunnelError):
@@ -266,10 +262,9 @@ class KorailQueueRejectedError(KorailNetFunnelError):
 
 
 class KorailMutationNotAllowedError(KorailApiError):
-    """consent 없이 상태변경 요청을 시도했습니다.
+    """이 라이브러리가 스스로 상태변경 요청을 거절했습니다(예: 정기권/패스 구매).
 
-    서버가 아니라 이 라이브러리가 막은 것입니다. 폼을 만들기도 전에 걸리므로
-    아무것도 전송되지 않습니다.
+    서버는 관여하지 않았고 아무것도 전송되지 않았습니다.
     """
 
 

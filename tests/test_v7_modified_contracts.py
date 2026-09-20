@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """Offline checks for the confirmed KORAIL Talk 7.0.6 contract changes."""
 
@@ -106,12 +102,12 @@ def test_v7_refund_settlement_and_netfunnel_303_are_parsed():
         {"strResult": "SUCC", "stlList": [{"stl_mns_cd": "SYNTHETIC_METHOD"}]}
     )
     assert result.settlement_method_codes == ("SYNTHETIC_METHOD",)
-    for incomplete in (
-        {"strResult": "SUCC"},
-        {"strResult": "SUCC", "stlList": [{}]},
-    ):
-        with pytest.raises(KorailProtocolError):
-            parse_refund_ticket_response(incomplete)
+    # A response that omits stlList outright is treated the same as an
+    # explicit null (see test_mutation_response_parsers.py), not rejected.
+    missing = parse_refund_ticket_response({"strResult": "SUCC"})
+    assert missing.settlement_list_is_null is True
+    with pytest.raises(KorailProtocolError):
+        parse_refund_ticket_response({"strResult": "SUCC", "stlList": [{}]})
     assert parse_queue_response(
         "303:key=ABC123&nwait=0&ttl=0", action="act_8"
     ).code == "303"

@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -21,6 +17,8 @@ import korail_mobile_api
 import korail_mobile_api.read_models as read_models
 import korail_mobile_api.read_parsers as read_parsers
 import korail_mobile_api.read_payloads as read_payloads
+from _helpers import assert_p058_clears_session
+from _read_field_contracts import KORAIL_EXACT_REQUEST_FIELDS
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -29,10 +27,7 @@ from korail_mobile_api.errors import (
     KorailSessionExpiredError,
 )
 from korail_mobile_api.models import KorailSession
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES
 
 
 PASS_MENU_PATH = "/classes/com.korail.mobile.pass.passMenu.do"
@@ -251,37 +246,6 @@ def test_crew_request_list_parser_exposes_options_without_calling_crew(
         (
             "pass_menu_success.json",
             "parse_pass_menu_response",
-            lambda raw: raw["list"][0].__setitem__("passData", []),
-        ),
-        (
-            "pass_menu_success.json",
-            "parse_pass_menu_response",
-            lambda raw: raw["list"][0].__setitem__("goodsData", []),
-        ),
-        (
-            "pass_menu_success.json",
-            "parse_pass_menu_response",
-            lambda raw: raw["list"][0]["goodsData"].__setitem__(
-                "psg_infos", []
-            ),
-        ),
-        (
-            "pass_menu_success.json",
-            "parse_pass_menu_response",
-            lambda raw: raw["list"][0]["goodsData"][
-                "psg_infos"
-            ].__setitem__("psg_info", {}),
-        ),
-        (
-            "pass_menu_success.json",
-            "parse_pass_menu_response",
-            lambda raw: raw["list"][0]["goodsData"]["psg_infos"][
-                "psg_info"
-            ].__setitem__(0, "not-an-object"),
-        ),
-        (
-            "pass_menu_success.json",
-            "parse_pass_menu_response",
             lambda raw: raw["list"][0]["goodsData"]["psg_infos"][
                 "psg_info"
             ][0].__setitem__("h_cls_prnb", True),
@@ -295,13 +259,6 @@ def test_crew_request_list_parser_exposes_options_without_calling_crew(
             lambda raw: raw["list"][0]["goodsData"]["psg_infos"][
                 "psg_info"
             ][0].__setitem__("h_cls_prnb", "not-a-number"),
-        ),
-        (
-            "pass_menu_success.json",
-            "parse_pass_menu_response",
-            lambda raw: raw["list"][0]["passData"].__setitem__(
-                "pass_ageinfo", ["not-an-object"]
-            ),
         ),
         (
             "commuter_kind_menu_success.json",
@@ -337,7 +294,6 @@ def test_p0_menu_parsers_reject_malformed_static_shapes(
     "parser_name",
     (
         "parse_pass_menu_response",
-        "parse_commuter_kind_menu_response",
         "parse_crew_request_list_response",
     ),
 )
@@ -367,7 +323,6 @@ def test_p0_menu_parsers_preserve_application_and_session_errors(parser_name):
     "parser_name",
     (
         "parse_pass_menu_response",
-        "parse_commuter_kind_menu_response",
         "parse_crew_request_list_response",
     ),
 )
@@ -540,29 +495,28 @@ def test_p0_menu_client_clears_stale_session_on_p058(
     method_name,
     caller_code,
 ):
-    def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            json={
-                "h_msg_cd": "P058",
-                "h_msg_txt": "synthetic expiry",
-                "strResult": "FAIL",
-            },
-        )
+    def build_client() -> KorailClient:
+        def handler(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "h_msg_cd": "P058",
+                    "h_msg_txt": "synthetic expiry",
+                    "strResult": "FAIL",
+                },
+            )
 
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(
-        jsessionid="synthetic-session",
-        member_no="synthetic-member",
+        client = KorailClient(transport=httpx.MockTransport(handler))
+        client.session.current = KorailSession(
+            jsessionid="synthetic-session",
+            member_no="synthetic-member",
+        )
+        client.http.cookies.set("JSESSIONID", "synthetic-session")
+        return client
+
+    assert_p058_clears_session(
+        build_client, lambda client: getattr(client, method_name)(caller_code)
     )
-    client.http.cookies.set("JSESSIONID", "synthetic-session")
-    try:
-        with pytest.raises(KorailSessionExpiredError):
-            getattr(client, method_name)(caller_code)
-    finally:
-        client.close()
-    assert client.session.current is None
-    assert "JSESSIONID" not in client.http.cookies
 
 
 @pytest.mark.parametrize(

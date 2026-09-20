@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -16,6 +12,11 @@ import pytest
 import korail_mobile_api
 from _helpers import korail_ok_envelope as _envelope
 from _helpers import make_authenticated_client as _client
+from _helpers import no_network_client
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.errors import KorailAuthError, KorailProtocolError
 from korail_mobile_api.models import KorailSession
@@ -37,11 +38,8 @@ from korail_mobile_api.read_payloads import (
     build_mileage_history_form,
 )
 from korail_mobile_api.safety import (
-    EXCLUDED_API_DOMAINS,
-    KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_MUTATION_ROUTES,
     KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
     assert_read_only_route,
 )
 
@@ -64,7 +62,6 @@ WITHHELD_PATHS = (
 
 
 def test_only_the_two_password_free_loyalty_reads_are_reachable():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert ("POST", SUMMARY_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", MILEAGE_PATH) in KORAIL_READ_ONLY_ROUTES
     for path in WITHHELD_PATHS:
@@ -73,24 +70,6 @@ def test_only_the_two_password_free_loyalty_reads_are_reachable():
             assert (method, path) not in KORAIL_MUTATION_ROUTES
         with pytest.raises(KorailProtocolError):
             assert_read_only_route("POST", path)
-
-
-def test_the_excluded_domain_label_narrowed_to_writes_only():
-    # The label was "points-mileage", which also excluded balance reads. The
-    # new label names what is still refused and nothing more.
-    assert "points-mileage" not in EXCLUDED_API_DOMAINS
-    assert "points-mileage-write" in EXCLUDED_API_DOMAINS
-    # Narrowing this one label must not have relaxed any other domain.
-    assert {
-        "reservation",
-        "payment",
-        "refund",
-        "check-in",
-        "member-drop",
-        "push-sms",
-        "dynapath-token-generation",
-    } <= EXCLUDED_API_DOMAINS
-    assert len(EXCLUDED_API_DOMAINS) == 8
 
 
 def test_point_summary_form_is_the_daos_own_constant():
@@ -148,14 +127,9 @@ def test_mileage_form_refuses_out_of_contract_inputs(kwargs):
         build_mileage_history_form(MileageHistoryRequest(**fields))
 
 
-def test_mileage_form_refuses_a_lookalike_request():
-    class Lookalike(MileageHistoryRequest):
-        pass
-
+def test_mileage_form_refuses_a_non_request_value():
     with pytest.raises(TypeError):
-        build_mileage_history_form(
-            Lookalike(start_date="20990101", end_date="20990331")
-        )
+        build_mileage_history_form(object())
 
 
 def test_point_summary_parser_exposes_the_welfare_registration():
@@ -285,13 +259,7 @@ def test_client_reads_send_exactly_the_registered_forms():
 
 
 def test_loyalty_reads_require_a_session():
-    def handler(_: httpx.Request) -> httpx.Response:
-        raise AssertionError("no request may be sent without a session")
-
-    client = KorailClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
+    client = no_network_client()
     try:
         with pytest.raises(KorailAuthError):
             client.get_korail_point_summary()

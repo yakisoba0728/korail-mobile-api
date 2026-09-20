@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """공통 응답 봉투와 열차 검색·좌석 조회가 돌려주는 타입.
 
@@ -75,28 +71,14 @@ class BaseKorailResponse:
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
-        """봉투 세 필드를 검증하며 응답을 만듭니다.
+        """봉투 세 필드를 그대로 옮겨 담아 응답을 만듭니다.
 
-        ``h_msg_cd``/``h_msg_txt``/``strResult`` 값이 존재할 때 문자열도
-        ``null`` 도 아니면
+        ``raw`` 가 JSON 객체가 아니면
         :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 값이
         무엇인지는 보지 않습니다 — 실패 판정은 호출자 몫입니다.
         """
         if not isinstance(raw, dict):
             raise KorailProtocolError("KORAIL response must be a JSON object")
-        envelope_fields = ("h_msg_cd", "h_msg_txt", "strResult")
-        invalid = [
-            field_name
-            for field_name in envelope_fields
-            if field_name in raw
-            and raw[field_name] is not None
-            and not isinstance(raw[field_name], str)
-        ]
-        if invalid:
-            raise KorailProtocolError(
-                "KORAIL response envelope fields must be strings or null: "
-                f"{', '.join(invalid)}"
-            )
         return cls(
             h_msg_cd=raw.get("h_msg_cd"),
             h_msg_txt=raw.get("h_msg_txt"),
@@ -193,12 +175,12 @@ class KorailStation:
     longitude: str | None = None
     latitude: str | None = None
     raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
-    group: str | None = field(default=None, repr=False)
-    major: str | None = field(default=None, repr=False)
+    group: str | None = None
+    major: str | None = None
     popup_type: int | None = None
     popup_message: str | None = field(default=None, repr=False)
-    popup_link_title: str | None = field(default=None, repr=False)
-    popup_link_url: str | None = field(default=None, repr=False)
+    popup_link_title: str | None = None
+    popup_link_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -209,7 +191,7 @@ class StationDataResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class StationInfoResponse(BaseKorailResponse):
     count: int = 0
-    map_version: str | None = field(default=None, repr=False)
+    map_version: str | None = None
 
 
 @dataclass(frozen=True)
@@ -240,27 +222,21 @@ class TrainCalendarResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TrainScheduleStop:
-    station_code: str | None = field(default=None, repr=False)
-    station_name: str | None = field(default=None, repr=False)
-    station_construction_order: str | None = field(default=None, repr=False)
-    run_order: str | None = field(default=None, repr=False)
+    station_code: str | None = None
+    station_name: str | None = None
+    station_construction_order: str | None = None
+    run_order: str | None = None
     actual_arrival_delay_count: int | None = None
-    actual_arrival_date: str | None = field(default=None, repr=False)
-    actual_arrival_time: str | None = field(default=None, repr=False)
-    actual_departure_date: str | None = field(default=None, repr=False)
-    actual_departure_time: str | None = field(default=None, repr=False)
-    planned_arrival_date: str | None = field(default=None, repr=False)
-    planned_arrival_time: str | None = field(default=None, repr=False)
-    planned_departure_date: str | None = field(default=None, repr=False)
-    planned_departure_time: str | None = field(default=None, repr=False)
-    delay_fare_return_division_code: str | None = field(
-        default=None,
-        repr=False,
-    )
-    delay_fare_return_division_name: str | None = field(
-        default=None,
-        repr=False,
-    )
+    actual_arrival_date: str | None = None
+    actual_arrival_time: str | None = None
+    actual_departure_date: str | None = None
+    actual_departure_time: str | None = None
+    planned_arrival_date: str | None = None
+    planned_arrival_time: str | None = None
+    planned_departure_date: str | None = None
+    planned_departure_time: str | None = None
+    delay_fare_return_division_code: str | None = None
+    delay_fare_return_division_name: str | None = None
     solo_operation_delay_flag: str | None = None
     detour_driver_delay_count: str | None = None
     expected_arrival_delay_count: str | None = None
@@ -276,36 +252,33 @@ class TrainScheduleStop:
 
 @dataclass(frozen=True)
 class TrainScheduleResponse(BaseKorailResponse):
-    delay_detail_reason_content: str | None = field(default=None, repr=False)
+    delay_detail_reason_content: str | None = None
     stops: tuple[TrainScheduleStop, ...] = ()
-    delay_station_construction_order: str | None = field(
-        default=None,
-        repr=False,
-    )
-    integrated_message_code: str | None = field(default=None, repr=False)
-    message_code: str | None = field(default=None, repr=False)
-    message_content: str | None = field(default=None, repr=False)
-    message_text: str | None = field(default=None, repr=False)
-    origin_station_code: str | None = field(default=None, repr=False)
-    origin_station_name: str | None = field(default=None, repr=False)
-    route_code: str | None = field(default=None, repr=False)
-    route_name: str | None = field(default=None, repr=False)
-    run_date: str | None = field(default=None, repr=False)
-    run_segment_order: str | None = field(default=None, repr=False)
+    delay_station_construction_order: str | None = None
+    integrated_message_code: str | None = None
+    message_code: str | None = None
+    message_content: str | None = None
+    message_text: str | None = None
+    origin_station_code: str | None = None
+    origin_station_name: str | None = None
+    route_code: str | None = None
+    route_name: str | None = None
+    run_date: str | None = None
+    run_segment_order: str | None = None
     regular_sale_flag: str | None = None
-    standard_train_class_code: str | None = field(default=None, repr=False)
-    terminal_station_code: str | None = field(default=None, repr=False)
-    terminal_station_name: str | None = field(default=None, repr=False)
-    train_attribute_code: str | None = field(default=None, repr=False)
+    standard_train_class_code: str | None = None
+    terminal_station_code: str | None = None
+    terminal_station_name: str | None = None
+    train_attribute_code: str | None = None
     train_departure_flag: str | None = None
-    train_no: str | None = field(default=None, repr=False)
+    train_no: str | None = None
     special_train_flag: str | None = None
-    up_down_division_code: str | None = field(default=None, repr=False)
+    up_down_division_code: str | None = None
 
 
 @dataclass(frozen=True)
 class TransferStation:
-    station_code: str | None = field(default=None, repr=False)
+    station_code: str | None = None
     station_name: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
@@ -396,13 +369,6 @@ def _train_scalar(value: Any, key: str) -> str | None:
     raise KorailProtocolError(
         f"KORAIL train field {key} must be a string, an integer, or null"
     )
-
-
-def _train_optional_string(
-    raw: dict[str, Any],
-    key: str,
-) -> str | None:
-    return _train_scalar(raw.get(key), key)
 
 
 def _train_optional_int(
@@ -508,47 +474,29 @@ class TrainSummary:
     arrival_run_order: str | None = None
     seat_map_flag: str | None = None
     general_reservation_code: str | None = None
-    departure_construction_order: str | None = field(
-        default=None,
-        repr=False,
-    )
-    arrival_construction_order: str | None = field(default=None, repr=False)
-    seat_attribute_code: str | None = field(default=None, repr=False)
-    car_type_code: str | None = field(default=None, repr=False)
-    car_type_name: str | None = field(default=None, repr=False)
-    train_class_name: str | None = field(default=None, repr=False)
-    train_group_name: str | None = field(default=None, repr=False)
-    general_room_class_name: str | None = field(default=None, repr=False)
-    special_room_class_name: str | None = field(default=None, repr=False)
-    secondary_general_reservation_code: str | None = field(
-        default=None,
-        repr=False,
-    )
-    special_reservation_code: str | None = field(default=None, repr=False)
-    secondary_special_reservation_code: str | None = field(
-        default=None,
-        repr=False,
-    )
-    free_reservation_code: str | None = field(default=None, repr=False)
-    standing_reservation_code: str | None = field(default=None, repr=False)
-    general_availability_name: str | None = field(default=None, repr=False)
-    special_availability_name: str | None = field(default=None, repr=False)
-    wait_reservation_flag: str | None = field(default=None, repr=False)
-    standard_remaining_seat_count: str | None = field(
-        default=None,
-        repr=False,
-    )
-    first_class_remaining_seat_count: str | None = field(
-        default=None,
-        repr=False,
-    )
-    free_car_count: str | None = field(default=None, repr=False)
-    reservation_wait_passenger_count: str | None = field(
-        default=None,
-        repr=False,
-    )
+    departure_construction_order: str | None = None
+    arrival_construction_order: str | None = None
+    seat_attribute_code: str | None = None
+    car_type_code: str | None = None
+    car_type_name: str | None = None
+    train_class_name: str | None = None
+    train_group_name: str | None = None
+    general_room_class_name: str | None = None
+    special_room_class_name: str | None = None
+    secondary_general_reservation_code: str | None = None
+    special_reservation_code: str | None = None
+    secondary_special_reservation_code: str | None = None
+    free_reservation_code: str | None = None
+    standing_reservation_code: str | None = None
+    general_availability_name: str | None = None
+    special_availability_name: str | None = None
+    wait_reservation_flag: str | None = None
+    standard_remaining_seat_count: str | None = None
+    first_class_remaining_seat_count: str | None = None
+    free_car_count: str | None = None
+    reservation_wait_passenger_count: str | None = None
     total_passenger_count: int | None = None
-    goods_no: str | None = field(default=None, repr=False)
+    goods_no: str | None = None
     #: ``h_chg_trn_seq`` — 환승 여정 안에서 이 구간의 위치. 1구간이 ``"1"``,
     #: 2구간이 ``"2"`` 입니다(``RsvInquiryResponse.java:75``). 직통 검색에서는
     #: ``None`` 입니다.
@@ -557,20 +505,20 @@ class TrainSummary:
     #: 기존 행과 중복 제거할 때 ``"2"`` 행을 찾아 **그 앞 행과 함께** 버리고,
     #: ``RsvInquiryRequest.java:164-172`` 는 다음 페이지의 ``txtGoHour`` 를
     #: 마지막 행이 ``"1"`` 이면 그 행에서, 아니면 그 앞 행에서 가져옵니다.
-    change_train_sequence: str | None = field(default=None, repr=False)
+    change_train_sequence: str | None = None
     #: ``h_chg_trn_dv_cd`` — 행의 환승 구분.
     #: ``DirectInquiryActivity.java:194`` 는 널이면 직통으로 채운 뒤
     #: ``chtnDvCd`` 로 넘깁니다. 직통 검색에서는 ``None`` 입니다.
-    change_train_division_code: str | None = field(default=None, repr=False)
+    change_train_division_code: str | None = None
     #: ``h_yms_apl_flg`` — 이 행이 병합(입석+좌석) 대상인지를 정하는 유일한
     #: 입력. ``S4/J.java:61-63`` 의 ``isMixedSeat(객실등급, 플래그)`` 는 행에서
     #: 이것 말고 아무것도 읽지 않고, ``a5/u.java:378-380`` 이 그 결과로 예매
     #: 버튼을 입석+좌석 예매(태그 ``"1202"``)로 바꿉니다.
     #: :data:`~korail_mobile_api.constants.KORAIL_MERGE_SEAT_FLAGS_BY_CABIN`
     #: 참조.
-    merge_seat_application_flag: str | None = field(default=None, repr=False)
+    merge_seat_application_flag: str | None = None
     #: 7.0.6 h_trn_sps_flg: 운휴 표시/예약 게이트용 원표 플래그.
-    train_suspension_flag: str | None = field(default=None, repr=False)
+    train_suspension_flag: str | None = None
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -594,8 +542,7 @@ class TrainSummary:
             # 상품번호(h_gd_no / txtGdNo)를 붙잡아 둔다. 다른 두 철자 필드와
             # 달리 첫 키가 거짓이어도 먼저 검사한다.
             goods_no=(
-                _train_optional_string(raw, "h_gd_no")
-                or _train_optional_string(raw, "txtGdNo")
+                _train_value(raw, "h_gd_no", None) or _train_value(raw, "txtGdNo", None)
             ),
             raw=raw,
         )
@@ -604,7 +551,7 @@ class TrainSummary:
 @dataclass(frozen=True)
 class SeatAttribute:
     name: str
-    code: str | None = field(default=None, repr=False)
+    code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -629,10 +576,10 @@ class SeatCar:
 @dataclass(frozen=True)
 class SeatCarListResponse(BaseKorailResponse):
     recommended_car_no: int | None = None
-    train_no: str | None = field(default=None, repr=False)
+    train_no: str | None = None
     cars: tuple[SeatCar, ...] = ()
-    train_class_code: str | None = field(default=None, repr=False)
-    train_group_code: str | None = field(default=None, repr=False)
+    train_class_code: str | None = None
+    train_group_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -658,7 +605,7 @@ class PhysicalSeat:
     specification: str
     sequence_no: str
     message_code: str
-    message: str = field(repr=False)
+    message: str
     visual_message_division_code: str
 
 
@@ -687,10 +634,10 @@ class SeatInventoryResponse(BaseKorailResponse):
     total_count: int | None = None
     seats: tuple[PhysicalSeat, ...] = ()
     windows: tuple[SeatWindow, ...] = ()
-    vr_banner_url: str | None = field(default=None, repr=False)
-    car_type_code: str | None = field(default=None, repr=False)
+    vr_banner_url: str | None = None
+    car_type_code: str | None = None
     car_no: int | None = None
-    up_down_division_code: str | None = field(default=None, repr=False)
+    up_down_division_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -704,19 +651,19 @@ class TrainSearchMetadata:
     ``txtMenuId`` 와 별도로 서버가 되돌려 준 값을 보존합니다.
     """
 
-    job_id: str | None = field(default=None, repr=False)
-    menu_id: str | None = field(default=None, repr=False)
-    product_no: str | None = field(default=None, repr=False)
+    job_id: str | None = None
+    menu_id: str | None = None
+    product_no: str | None = None
     next_page_flag: str | None = None
-    next_query_station_no: str | None = field(default=None, repr=False)
-    next_train_no: str | None = field(default=None, repr=False)
+    next_query_station_no: str | None = None
+    next_train_no: str | None = None
     #: 커서의 환승 쪽 절반(``h_prcd_trn_no_next``/``h_ectb_trn_no_next``).
     #: ``b5/c.java:192-194`` 는 **둘 다 비어 있지 않을 때만** 이것을 다시 실어,
     #: ``qryStTrnNo`` 를 앞것으로 덮어쓰고 ``qryStTrnNo2`` 를 뒷것으로
     #: 채웁니다(``RsvInquiryRequest.java:212-215``). 직통 검색은 둘 다 비워
     #: 보냅니다.
-    next_preceding_train_no: str | None = field(default=None, repr=False)
-    next_connecting_train_no: str | None = field(default=None, repr=False)
+    next_preceding_train_no: str | None = None
+    next_connecting_train_no: str | None = None
     result_count: str | None = None
     #: ``h_notice_msg`` — 서버가 검색 결과에 붙이는 안내 문구
     #: (``RsvInquiryResponse.java:12``).
@@ -724,7 +671,7 @@ class TrainSearchMetadata:
     # 7.0.6 TrainScheduleOut 이 셋 다 선언한다(docs/7.0.6-one-to-one-audit.md).
     first_seat_count: str | None = None
     second_seat_count: str | None = None
-    first_departure_time: str | None = field(default=None, repr=False)
+    first_departure_time: str | None = None
     merge_reservation_available_flag: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
@@ -750,10 +697,10 @@ class TrainSearchContinuation:
     :meth:`TransferSearchResult.next_page` 가 주는 것을 쓰면 됩니다.
     """
 
-    query_station_no: str = field(repr=False)
-    query_train_no: str = field(repr=False)
+    query_station_no: str
+    query_train_no: str
     page_count: str = "10"
-    query_train_no2: str = field(default="", repr=False)
+    query_train_no2: str = ""
 
     def __post_init__(self) -> None:
         for name in ("query_station_no", "query_train_no", "page_count"):
@@ -766,6 +713,26 @@ class TrainSearchContinuation:
             raise ValueError(
                 "TrainSearchContinuation.query_train_no2 must be a string"
             )
+
+
+def _train_search_continuation(
+    metadata: TrainSearchMetadata,
+    *,
+    query_train_no: str,
+    query_train_no2: str = "",
+) -> TrainSearchContinuation | None:
+    """직통·환승 ``next_page`` 가 공유하는 다음 페이지 게이트 겸 커서 생성기."""
+    if metadata.next_page_flag != "Y":
+        return None
+    try:
+        return TrainSearchContinuation(
+            query_station_no=metadata.next_query_station_no or "",
+            query_train_no=query_train_no,
+            page_count=metadata.result_count or "10",
+            query_train_no2=query_train_no2,
+        )
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -793,16 +760,9 @@ class TrainSearchResult:
         요청하기 때문입니다.
         """
         metadata = self.metadata
-        if metadata.next_page_flag != "Y":
-            return None
-        try:
-            return TrainSearchContinuation(
-                query_station_no=metadata.next_query_station_no or "",
-                query_train_no=metadata.next_train_no or "",
-                page_count=metadata.result_count or "10",
-            )
-        except ValueError:
-            return None
+        return _train_search_continuation(
+            metadata, query_train_no=metadata.next_train_no or ""
+        )
 
 
 @dataclass(frozen=True)
@@ -845,17 +805,13 @@ class TransferItinerary:
         됩니다.
         """
         arrival = self.first.arrival_station_code
-        if arrival is not None and arrival == self.second.departure_station_code:
-            return arrival
-        return None
+        return arrival if arrival == self.second.departure_station_code else None
 
     @property
     def transfer_station_name(self) -> str | None:
         """환승역 이름. 같으면 그 이름, 다르면 ``None`` — 코드 쪽과 같은 규칙입니다."""
         arrival = self.first.arrival_station_name
-        if arrival is not None and arrival == self.second.departure_station_name:
-            return arrival
-        return None
+        return arrival if arrival == self.second.departure_station_name else None
 
 
 def pair_transfer_itineraries(
@@ -930,19 +886,11 @@ class TransferSearchResult:
         같습니다. 하나라도 없으면 직통과 같은 커서를 그대로 씁니다.
         """
         metadata = self.metadata
-        if metadata.next_page_flag != "Y":
-            return None
         preceding = metadata.next_preceding_train_no or ""
         connecting = metadata.next_connecting_train_no or ""
         transfer_cursor = bool(preceding.strip()) and bool(connecting.strip())
-        try:
-            return TrainSearchContinuation(
-                query_station_no=metadata.next_query_station_no or "",
-                query_train_no=(
-                    preceding if transfer_cursor else metadata.next_train_no or ""
-                ),
-                page_count=metadata.result_count or "10",
-                query_train_no2=connecting if transfer_cursor else "",
-            )
-        except ValueError:
-            return None
+        return _train_search_continuation(
+            metadata,
+            query_train_no=preceding if transfer_cursor else metadata.next_train_no or "",
+            query_train_no2=connecting if transfer_cursor else "",
+        )

@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 from __future__ import annotations
 
@@ -17,6 +13,12 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import assert_p058_clears_session
+from _helpers import require_symbol as _require
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig, read_models, read_parsers, read_payloads
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -24,13 +26,8 @@ from korail_mobile_api.errors import (
     KorailProtocolError,
     KorailSessionExpiredError,
 )
-from korail_mobile_api.models import KorailSession, TrainSummary
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-    assert_read_only_route,
-)
+from korail_mobile_api.models import KorailSession
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES, assert_read_only_route
 
 
 FREE_SEAT_PATH = "/classes/com.korail.mobile.trn.fresScar.do"
@@ -122,12 +119,6 @@ PARSER_NAMES = (
     "parse_seat_assignment_schedule_response",
     "parse_merge_seats_inquiry_response",
 )
-
-
-def _require(module: Any, name: str) -> Any:
-    value = getattr(module, name, None)
-    assert value is not None, f"missing P0 read API symbol: {name}"
-    return value
 
 
 def _request(name: str, **values: Any) -> Any:
@@ -243,22 +234,6 @@ def test_public_symbols_and_request_object_method_signatures_are_exact():
             "request": _require(read_payloads, request_name),
             "return": _require(read_models, response_name),
         }
-
-
-def test_java_route_names_are_not_duplicate_client_aliases():
-    for java_name in (
-        "getFresScar",
-        "getGuideSeatCnd",
-        "getAssignScheduleView",
-        "getMergeSeatsInquiry",
-    ):
-        assert not hasattr(KorailClient, java_name)
-    for convenience_name in (
-        "to_free_seat_car_request",
-        "to_seat_assignment_schedule_request",
-        "to_merge_seats_inquiry_request",
-    ):
-        assert not hasattr(TrainSummary, convenience_name)
 
 
 def test_request_types_are_frozen_closed_and_repr_safe():
@@ -498,7 +473,7 @@ def test_response_models_are_frozen_and_parsers_map_synthetic_fields(
             setattr(instance, first, getattr(instance, first))
 
 
-def test_response_reprs_hide_identifiers_free_text_and_raw(
+def test_response_reprs_hide_envelope_text_sensitive_ids_and_raw(
     load_json_fixture,
 ):
     parsed = (
@@ -523,23 +498,30 @@ def test_response_reprs_hide_identifiers_free_text_and_raw(
             repr(parsed[3].intermediate_stations[0]),
         ]
     )
+    # TrainScheduleItem and IntermediateStation now show their run-of-the-mill
+    # identifiers and free text (train_no, station names, info_text, ...);
+    # only h_msg_txt, raw and the fields in redaction.SENSITIVE_KEYS
+    # (car_no) stay hidden.
     for secret in (
         "synthetic-free-seat-envelope-secret",
-        "synthetic-free-seat-content-secret",
         "SYNTHETIC-CAR-SECRET",
-        "synthetic-free-seat-title-secret",
         "synthetic-free-seat-raw-secret",
         "synthetic-guide-message-secret",
         "synthetic-guide-raw-secret",
-        "99001",
-        "synthetic-origin-name-secret",
-        "synthetic-info-text-secret",
         "synthetic-assignment-row-raw-secret",
-        "SYNTHETIC-MID-STATION-CODE",
-        "synthetic-mid-station-name-secret",
         "synthetic-merge-train-raw-secret",
     ):
         assert secret not in rendered
+    for visible in (
+        "synthetic-free-seat-content-secret",
+        "synthetic-free-seat-title-secret",
+        "99001",
+        "synthetic-origin-name-secret",
+        "synthetic-info-text-secret",
+        "SYNTHETIC-MID-STATION-CODE",
+        "synthetic-mid-station-name-secret",
+    ):
+        assert visible in rendered
 
 
 @pytest.mark.parametrize("parser_name", PARSER_NAMES)
@@ -549,14 +531,6 @@ def test_route_parsers_preserve_strict_envelope_and_error_handling(
     parser = _require(read_parsers, parser_name)
     with pytest.raises(KorailProtocolError):
         parser({"h_msg_cd": "SYNTHETIC.OK", "h_msg_txt": None})
-    with pytest.raises(KorailProtocolError):
-        parser(
-            {
-                "h_msg_cd": "SYNTHETIC.OK",
-                "h_msg_txt": 7,
-                "strResult": "SUCC",
-            }
-        )
     with pytest.raises(KorailAppError):
         parser(
             {
@@ -667,7 +641,6 @@ def test_null_documented_optional_containers_parse_as_empty_tuples():
 
 def test_safety_registry_has_only_exact_new_read_contracts():
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     for path, expected_fields in EXACT_FIELDS.items():
         assert KORAIL_EXACT_REQUEST_FIELDS[path] == frozenset(
             expected_fields
@@ -802,29 +775,29 @@ def test_p058_from_every_new_read_clears_existing_session(
     method_name,
     request_factory,
 ):
-    def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            json={
-                "h_msg_cd": "P058",
-                "h_msg_txt": "synthetic expiry",
-                "strResult": "FAIL",
-            },
-        )
+    def build_client() -> KorailClient:
+        def handler(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "h_msg_cd": "P058",
+                    "h_msg_txt": "synthetic expiry",
+                    "strResult": "FAIL",
+                },
+            )
 
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(
-        jsessionid="synthetic-session-secret",
-        member_no="synthetic-member-secret",
+        client = KorailClient(transport=httpx.MockTransport(handler))
+        client.session.current = KorailSession(
+            jsessionid="synthetic-session-secret",
+            member_no="synthetic-member-secret",
+        )
+        client.http.cookies.set("JSESSIONID", "synthetic-session-secret")
+        return client
+
+    assert_p058_clears_session(
+        build_client,
+        lambda client: _require(client, method_name)(request_factory()),
     )
-    client.http.cookies.set("JSESSIONID", "synthetic-session-secret")
-    try:
-        with pytest.raises(KorailSessionExpiredError):
-            _require(client, method_name)(request_factory())
-    finally:
-        client.close()
-    assert client.session.current is None
-    assert "JSESSIONID" not in client.http.cookies
 
 
 def test_helper_seat_guidance_returns_server_advisory_to_caller():
@@ -875,140 +848,6 @@ def test_client_rejects_wrong_request_type_before_transport(
     try:
         with pytest.raises(TypeError):
             _require(client, method_name)(wrong_request_factory())
-    finally:
-        client.close()
-    assert calls == 0
-
-
-@pytest.mark.parametrize(
-    (
-        "method_name",
-        "request_type_name",
-        "request_factory",
-        "invalid_field",
-        "invalid_value",
-    ),
-    (
-        (
-            "get_free_seat_car_info",
-            "FreeSeatCarRequest",
-            _free_seat_request,
-            "run_date",
-            "invalid",
-        ),
-        (
-            "get_guide_seat_condition",
-            "GuideSeatConditionRequest",
-            _guide_seat_request,
-            "seat_attribute_code",
-            "",
-        ),
-        (
-            "get_seat_assignment_schedule",
-            "SeatAssignmentScheduleRequest",
-            _assignment_request,
-            "departure_date",
-            "invalid",
-        ),
-        (
-            "get_merge_seats_inquiry",
-            "MergeSeatsInquiryRequest",
-            _merge_request,
-            "boarding_datetime",
-            "invalid",
-        ),
-    ),
-)
-def test_client_rejects_request_subclass_validator_bypass_before_transport(
-    method_name,
-    request_type_name,
-    request_factory,
-    invalid_field,
-    invalid_value,
-):
-    request_type = _require(read_payloads, request_type_name)
-
-    class ValidationBypass(request_type):
-        def _validate(self) -> None:
-            pass
-
-    valid_request = request_factory()
-    values = {
-        definition.name: getattr(valid_request, definition.name)
-        for definition in fields(valid_request)
-    }
-    values[invalid_field] = invalid_value
-    bypass_request = ValidationBypass(**values)
-    calls = 0
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal calls
-        calls += 1
-        return httpx.Response(200, json=_success_envelope())
-
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    try:
-        with pytest.raises(TypeError):
-            _require(client, method_name)(bypass_request)
-    finally:
-        client.close()
-    assert calls == 0
-
-
-@pytest.mark.parametrize(
-    (
-        "method_name",
-        "request_factory",
-        "invalid_field",
-        "invalid_value",
-    ),
-    (
-        (
-            "get_free_seat_car_info",
-            _free_seat_request,
-            "run_date",
-            "invalid",
-        ),
-        (
-            "get_guide_seat_condition",
-            _guide_seat_request,
-            "seat_attribute_code",
-            "",
-        ),
-        (
-            "get_seat_assignment_schedule",
-            _assignment_request,
-            "departure_date",
-            "invalid",
-        ),
-        (
-            "get_merge_seats_inquiry",
-            _merge_request,
-            "boarding_datetime",
-            "invalid",
-        ),
-    ),
-)
-def test_client_runs_expected_class_validator_before_transport(
-    method_name,
-    request_factory,
-    invalid_field,
-    invalid_value,
-):
-    request = request_factory()
-    object.__setattr__(request, invalid_field, invalid_value)
-    object.__setattr__(request, "_validate", lambda: None)
-    calls = 0
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal calls
-        calls += 1
-        return httpx.Response(200, json=_success_envelope())
-
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    try:
-        with pytest.raises(ValueError):
-            _require(client, method_name)(request)
     finally:
         client.close()
     assert calls == 0

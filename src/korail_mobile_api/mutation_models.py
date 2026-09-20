@@ -1,21 +1,16 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """상태변경 요청이 받는 입력 타입과 그 응답 타입.
 
 여기 있는 것은 값 객체일 뿐이라 아무것도 전송하지 않습니다. 실제로 보내려면
-:class:`~korail_mobile_api.consent.MutationConsent` 로 범주를 열고
-``dry_run=False`` 로 꺼야 합니다 — 그 규칙은
-:mod:`korail_mobile_api.consent` 에 있습니다.
+인증된 세션이 있는 :class:`~korail_mobile_api.client.KorailClient` 로 해당
+메서드를 부르기만 하면 됩니다.
 
 민감한 필드는 ``repr=False`` 라 객체를 찍어도 값이 보이지 않고, 전선 이름이
-:mod:`korail_mobile_api.redaction` 에 등록돼 있어
-:class:`~korail_mobile_api.consent.MutationPreview` 에서도 마스킹됩니다.
+:mod:`korail_mobile_api.redaction` 에 등록돼 있어 페이로드가 되비칠 때도 어디서나
+마스킹됩니다.
 """
 
 from __future__ import annotations
@@ -128,7 +123,7 @@ class StationRefundVerificationResponse(BaseKorailResponse):
     refund_fee: str | None = None
     refund_amount: str | None = None
     popup_message: str | None = field(default=None, repr=False)
-    result_message: str | None = field(default=None, repr=False)
+    result_message: str | None = None
     original_tickets: tuple[StationRefundOriginalTicket, ...] = ()
     original_ticket_list_is_null: bool = False
 
@@ -137,8 +132,8 @@ class StationRefundVerificationResponse(BaseKorailResponse):
 class StationRefundExecutionRequest:
     """``ExecuteOnlineRefundsIn`` values echoed from a verified ticket.
 
-    This object only prepares fields. Sending requires the normal refund
-    mutation consent and a separate execution call.
+    This object only prepares fields. Sending is a separate call, and it
+    goes out on the refund route the moment it is made.
     """
 
     pnr_no: str = field(repr=False)
@@ -258,22 +253,14 @@ class KorailPassengerCounts:
     guide_dog: int = 0
 
     def __post_init__(self) -> None:
-        for name in (
-            "adult",
-            "teenager",
-            "child",
-            "infant",
-            "senior",
-            "severe_disability",
-            "mild_disability",
-            "guide_dog",
-        ):
-            value = getattr(self, name)
+        # 여덟 필드 모두 인원 수다 — _require_every_field 와 같은 방식.
+        for field_ in fields(self):
+            value = getattr(self, field_.name)
             # isinstance 가 아니라 type(...) is int. bool 이 int 의 하위
             # 타입이고, True 는 승객 수가 아니다.
             if type(value) is not int or value < 0:
                 raise ValueError(
-                    f"{name} must be a non-negative integer"
+                    f"{field_.name} must be a non-negative integer"
                 )
         total = self.total
         if total < 1:
@@ -334,15 +321,9 @@ class KorailSeatAssignment:
         if type(self.car_no) is not int or self.car_no < 1:
             raise ValueError("car_no must be a positive integer")
         seat_no = self.seat_no
-        if (
-            not isinstance(seat_no, str)
-            or not seat_no
-            or not seat_no.isascii()
-            or any(character <= " " or character == "\x7f" for character in seat_no)
-        ):
+        if not isinstance(seat_no, str) or not seat_no:
             raise ValueError(
-                "seat_no must be a non-empty printable ASCII value taken from "
-                "a seat-inventory read"
+                "seat_no must be a non-empty value taken from a seat-inventory read"
             )
 
     @classmethod
@@ -352,12 +333,10 @@ class KorailSeatAssignment:
         seat: PhysicalSeat,
     ) -> KorailSeatAssignment:
         """좌석표와 그 안의 좌석 하나를 짝지어 만듭니다. 손으로 옮길 값이 없습니다."""
-        if type(inventory) is not SeatInventoryResponse:
-            raise ValueError(
-                "inventory must be an exact SeatInventoryResponse"
-            )
-        if type(seat) is not PhysicalSeat:
-            raise ValueError("seat must be an exact PhysicalSeat")
+        if not isinstance(inventory, SeatInventoryResponse):
+            raise ValueError("inventory must be a SeatInventoryResponse")
+        if not isinstance(seat, PhysicalSeat):
+            raise ValueError("seat must be a PhysicalSeat")
         car_no = inventory.car_no
         if type(car_no) is not int:
             raise ValueError(
@@ -381,9 +360,9 @@ class ReservationJourney:
     departure_date: str | None = None
     departure_time: str | None = None
     arrival_time: str | None = None
-    departure_station_code: str | None = field(default=None, repr=False)
-    arrival_station_code: str | None = field(default=None, repr=False)
-    train_no: str | None = field(default=None, repr=False)
+    departure_station_code: str | None = None
+    arrival_station_code: str | None = None
+    train_no: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
         repr=False,
@@ -401,14 +380,14 @@ class ReservationHoldResponse(BaseKorailResponse):
     temporary_job_sequence_1: str | None = field(default=None, repr=False)
     temporary_job_sequence_2: str | None = field(default=None, repr=False)
     payment_flag: str | None = None
-    payment_message: str | None = field(default=None, repr=False)
+    payment_message: str | None = None
     #: ``h_pay_limit_msg``. 앱의 ``ReservationResponse`` 에 선언은 돼 있으나
     #: (``:22``, 게터 ``:529``) 어느 화면도 읽지 않고 실제 응답은 비어
     #: 옵니다. **결제 기한이 아닙니다** — 기한은 아래 세 필드입니다.
-    payment_deadline_message: str | None = field(default=None, repr=False)
+    payment_deadline_message: str | None = None
     #: ``h_ntisu_lmt`` — 서버가 문장으로 적어 준 기한. 예: "…까지 미결제시
     #: 승차권이 자동으로 취소됩니다."
-    payment_deadline_notice: str | None = field(default=None, repr=False)
+    payment_deadline_notice: str | None = None
     #: ``h_ntisu_lmt_dt`` / ``h_ntisu_lmt_tm`` — 구조화된 결제 기한. 앱은 둘을
     #: 이어 붙여 ``yyyyMMddHHmmss`` 로 읽고, 미결제 예약이 언제 스스로
     #: 취소되는지 보여 줍니다(``S4/C0816p.java:64-70``,
@@ -538,11 +517,7 @@ class PaidTicket:
                 f"missing {', '.join(sorted(missing))}"
             )
         return cls(
-            pnr_no=parts["pnr_no"],
-            sale_date=parts["sale_date"],
-            sale_window_no=parts["sale_window_no"],
-            sale_sequence=parts["sale_sequence"],
-            return_password=parts["return_password"],
+            **parts,
             train_no=train_no,
             pbp_acceptance_target_flag=detail.pbp_acceptance_target_flag,
         )

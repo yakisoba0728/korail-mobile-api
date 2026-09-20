@@ -1,20 +1,15 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """Offline contract tests for the live mutation send paths.
 
-These exercise `reserve(dry_run=False)`, `cancel_unpaid_hold(dry_run=False)`,
-and the double-gated `KorailHttpClient.post_mutation_form` against an
-`httpx.MockTransport` that records requests and returns synthetic envelopes.
-No real network, no real credentials, no real card. They prove that a live
-mutation goes ONLY to the evidenced mutation route, only with a non-dry-run
-consent that opts into the category, and that the read-only path still refuses
-every mutation route.
+These exercise `reserve`, `cancel_unpaid_hold`, and the route/category-gated
+`KorailHttpClient.post_mutation_form` against an `httpx.MockTransport` that
+records requests and returns synthetic envelopes. No real network, no real
+credentials, no real card. They prove that a mutation goes ONLY to the
+evidenced mutation route, only under its registered category, and that the
+read-only path still refuses every mutation route.
 """
 
 from __future__ import annotations
@@ -31,11 +26,8 @@ from korail_mobile_api import (
     BaseKorailResponse,
     KorailClient,
     KorailConfig,
-    KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSessionExpiredError,
-    MutationConsent,
-    MutationPreview,
     PaidTicket,
     ReservationHoldResponse,
     ReservationPaymentResponse,
@@ -87,16 +79,11 @@ _CANCEL_SUCCESS = {
 }
 
 
-def _live(**allow: bool) -> MutationConsent:
-    return MutationConsent(dry_run=False, **allow)
-
-
-# --- reserve(dry_run=False) live send --------------------------------------
-
+# --- reserve() live send -----------------------------------------------
 
 def test_reserve_live_posts_to_reservation_route_and_returns_hold():
     client, recorder = _client_with({RESERVE_ROUTE: _HOLD_SUCCESS})
-    hold = client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
+    hold = client.reserve(_eligible_train())
     assert isinstance(hold, ReservationHoldResponse)
     assert hold.str_result == "SUCC"
     assert hold.pnr_no == SYNTHETIC_PNR
@@ -105,14 +92,6 @@ def test_reserve_live_posts_to_reservation_route_and_returns_hold():
     assert len(recorder.requests) == 1
     assert recorder.requests[0].method == "POST"
     assert recorder.requests[0].url.path == RESERVE_ROUTE
-
-
-def test_reserve_live_still_requires_matching_consent():
-    client, recorder = _client_with({RESERVE_ROUTE: _HOLD_SUCCESS})
-    # dry_run=False but no allow_reserve: denied before any send.
-    with pytest.raises(KorailMutationNotAllowedError):
-        client.reserve(_eligible_train(), consent=_live(allow_cancel=True))
-    assert recorder.requests == []
 
 
 def test_reserve_live_raises_app_error_on_fail_envelope_and_holds_nothing():
@@ -128,7 +107,7 @@ def test_reserve_live_raises_app_error_on_fail_envelope_and_holds_nothing():
     from korail_mobile_api import KorailAppError
 
     with pytest.raises(KorailAppError):
-        client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
+        client.reserve(_eligible_train())
     assert len(recorder.requests) == 1
 
 
@@ -143,43 +122,23 @@ def _hold() -> ReservationHoldResponse:
     return parse_reservation_hold_response(dict(_HOLD_SUCCESS))
 
 
-def test_cancel_dry_run_returns_redacted_preview_without_sending():
-    client, recorder = _client_with({})
-    preview = client.cancel_unpaid_hold(
-        _hold(), consent=MutationConsent(allow_cancel=True)
-    )
-    assert isinstance(preview, MutationPreview)
-    assert preview.category == "cancel"
-    assert preview.route == CANCEL_ROUTE
-    # PNR is redacted in the preview payload; nothing was sent.
-    assert preview.payload["txtPnrNo"] == "[REDACTED]"
-    assert recorder.requests == []
-
-
 def test_cancel_live_posts_to_cancel_route():
     client, recorder = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
-    result = client.cancel_unpaid_hold(_hold(), consent=_live(allow_cancel=True))
+    result = client.cancel_unpaid_hold(_hold())
     assert isinstance(result, BaseKorailResponse)
     assert result.str_result == "SUCC"
     assert len(recorder.requests) == 1
     assert recorder.requests[0].url.path == CANCEL_ROUTE
 
 
-def test_cancel_requires_matching_consent_and_session():
-    client, recorder = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
-    with pytest.raises(KorailMutationNotAllowedError):
-        client.cancel_unpaid_hold(_hold(), consent=MutationConsent())
-    assert recorder.requests == []
-
+def test_cancel_requires_an_authenticated_session():
     logged_out = KorailClient(
         transport=httpx.MockTransport(_Recorder({CANCEL_ROUTE: _CANCEL_SUCCESS}))
     )
     from korail_mobile_api import KorailAuthError
 
     with pytest.raises(KorailAuthError):
-        logged_out.cancel_unpaid_hold(
-            _hold(), consent=_live(allow_cancel=True)
-        )
+        logged_out.cancel_unpaid_hold(_hold())
 
 
 # --- post_mutation_form double-gate -----------------------------------------
@@ -193,24 +152,18 @@ def test_post_mutation_form_refuses_a_non_mutation_route():
         client.http.post_mutation_form(
             "/classes/com.korail.mobile.myTicket.MyTicketList",
             form,
-            consent=_live(allow_reserve=True),
             category="reserve",
         )
     assert recorder.requests == []
 
 
-def test_post_mutation_form_refuses_none_and_unknown_category():
+def test_post_mutation_form_refuses_an_unknown_category():
     client, recorder = _client_with({RESERVE_ROUTE: _HOLD_SUCCESS})
     form = build_single_adult_reservation_form(KorailConfig(), _eligible_train())
-    with pytest.raises(KorailMutationNotAllowedError):
-        client.http.post_mutation_form(
-            RESERVE_ROUTE, form, consent=None, category="reserve"  # type: ignore[arg-type]
-        )
-    with pytest.raises(KorailMutationNotAllowedError):
+    with pytest.raises(KorailProtocolError):
         client.http.post_mutation_form(
             RESERVE_ROUTE,
             form,
-            consent=_live(allow_reserve=True),
             category="checkin",
         )
     assert recorder.requests == []
@@ -233,14 +186,14 @@ def test_reserve_returns_cancelable_hold_even_if_optional_field_malformed():
         "h_tot_prc": {"amount": 8400},
     }
     client, _recorder = _client_with({RESERVE_ROUTE: malformed})
-    hold = client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
+    hold = client.reserve(_eligible_train())
     assert isinstance(hold, ReservationHoldResponse)
     assert hold.pnr_no == SYNTHETIC_PNR
     assert hold.journey_count == "1"
     assert hold.str_result == "SUCC"
     # And that recovered hold is acceptable to cancel_unpaid_hold.
     client2, _recorder2 = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
-    result = client2.cancel_unpaid_hold(hold, consent=_live(allow_cancel=True))
+    result = client2.cancel_unpaid_hold(hold)
     assert result.str_result == "SUCC"
 
 
@@ -258,16 +211,11 @@ def test_reserve_recovers_a_hold_whose_pnr_arrived_as_a_json_number():
         "h_tot_prc": {"amount": 8400},
     }
     client, _ = _client_with({RESERVE_ROUTE: malformed})
-    hold = client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
+    hold = client.reserve(_eligible_train())
     assert hold.pnr_no == "399999999999999"
     assert hold.journey_count == "1"
     client2, _ = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
-    assert (
-        client2.cancel_unpaid_hold(
-            hold, consent=_live(allow_cancel=True)
-        ).str_result
-        == "SUCC"
-    )
+    assert client2.cancel_unpaid_hold(hold).str_result == "SUCC"
 
 
 def test_reserve_reraises_when_no_pnr_returned():
@@ -281,18 +229,17 @@ def test_reserve_reraises_when_no_pnr_returned():
     }
     client, _ = _client_with({RESERVE_ROUTE: no_pnr})
     with pytest.raises(KorailProtocolError):
-        client.reserve(_eligible_train(), consent=_live(allow_reserve=True))
+        client.reserve(_eligible_train())
 
 
 def test_post_mutation_form_rejects_category_route_mismatch():
-    # A consent/category for one route cannot be used to POST another route.
+    # A category declared for one route cannot be used to POST another route.
     client, recorder = _client_with({CANCEL_ROUTE: _CANCEL_SUCCESS})
     form = build_single_adult_reservation_form(KorailConfig(), _eligible_train())
     with pytest.raises(KorailProtocolError):
         client.http.post_mutation_form(
             CANCEL_ROUTE,  # cancel route ...
             form,
-            consent=_live(allow_reserve=True),
             category="reserve",  # ... but a reserve category
         )
     assert recorder.requests == []
@@ -307,35 +254,6 @@ _PAYMENT_DECLINE = {
     "h_msg_cd": "WRC000123",
     "h_msg_txt": "card declined",
 }
-
-
-def test_pay_dry_run_preview_redacts_card_and_sends_nothing():
-    client, recorder = _client_with({})
-    preview = client.pay_with_fake_card(
-        _paid_hold(), _fake_card(), consent=MutationConsent(allow_payment=True)
-    )
-    assert isinstance(preview, MutationPreview)
-    assert preview.category == "payment"
-    assert preview.route == PAYMENT_ROUTE
-    # Raw PAN, card secrets, and reservation identity are never present.
-    for key in (
-        "hidStlCrCrdNo1",
-        "hidVanPwd1",
-        "hidCrdVlidTrm1",
-        "hidAthnVal1",
-        "hidAthnDvCd1",
-        "hidIsmtMnthNum1",
-        "hidPnrNo",
-        "hidWctNo",
-        "hidTmpJobSqno1",
-        "hidTmpJobSqno2",
-        "hidRsvChgNo",
-    ):
-        assert preview.payload[key] == "[REDACTED]", key
-    joined = "".join(preview.payload.values())
-    for secret in ("0000000000000000", "2612", "900101", SYNTHETIC_PNR):
-        assert secret not in joined, secret
-    assert recorder.requests == []
 
 
 def test_payment_form_from_a_parsed_hold_carries_that_holds_reservation_state():
@@ -371,57 +289,15 @@ def test_cancel_form_from_a_parsed_hold_keeps_the_apps_fixed_change_no():
     assert form["hidRsvChgNo"] == "000"
 
 
-def test_post_mutation_form_refuses_real_card_payment_at_the_send_gate():
-    # Defense-in-depth: even a hand-assembled low-level call cannot transmit a
-    # payment with fake_card_only disabled. The transport gate itself refuses.
-    client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_DECLINE})
-    form = build_card_payment_form(KorailConfig(), _paid_hold(), _fake_card())
-    with pytest.raises(KorailMutationNotAllowedError):
-        client.http.post_mutation_form(
-            PAYMENT_ROUTE,
-            form,
-            consent=MutationConsent(
-                allow_payment=True, dry_run=False, fake_card_only=False
-            ),
-            category="payment",
-        )
-    assert recorder.requests == []
-
-
 def test_pay_live_posts_to_payment_route_and_returns_decline_without_raising():
     client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_DECLINE})
-    result = client.pay_with_fake_card(
-        _paid_hold(),
-        _fake_card(),
-        consent=MutationConsent(allow_payment=True, dry_run=False),
-    )
+    result = client.pay_with_fake_card(_paid_hold(), _fake_card())
     # A decline is a FAIL envelope; pay must NOT raise, so the caller sees it.
     assert isinstance(result, ReservationPaymentResponse)
     assert result.str_result == "FAIL"
     assert result.h_msg_cd == "WRC000123"
     assert len(recorder.requests) == 1
     assert recorder.requests[0].url.path == PAYMENT_ROUTE
-
-
-def test_pay_requires_payment_consent_and_refuses_real_card_mode():
-    client, recorder = _client_with({PAYMENT_ROUTE: _PAYMENT_DECLINE})
-    # Wrong category consent -> denied.
-    with pytest.raises(KorailMutationNotAllowedError):
-        client.pay_with_fake_card(
-            _paid_hold(),
-            _fake_card(),
-            consent=MutationConsent(allow_reserve=True, dry_run=False),
-        )
-    # payment allowed but fake_card_only disabled -> refused (no real cards).
-    with pytest.raises(KorailMutationNotAllowedError):
-        client.pay_with_fake_card(
-            _paid_hold(),
-            _fake_card(),
-            consent=MutationConsent(
-                allow_payment=True, dry_run=False, fake_card_only=False
-            ),
-        )
-    assert recorder.requests == []
 
 
 def test_pay_requires_authenticated_session():
@@ -431,11 +307,7 @@ def test_pay_requires_authenticated_session():
         transport=httpx.MockTransport(_Recorder({PAYMENT_ROUTE: _PAYMENT_DECLINE}))
     )
     with pytest.raises(KorailAuthError):
-        logged_out.pay_with_fake_card(
-            _paid_hold(),
-            _fake_card(),
-            consent=MutationConsent(allow_payment=True, dry_run=False),
-        )
+        logged_out.pay_with_fake_card(_paid_hold(), _fake_card())
 
 
 REFUND_ROUTE = "/classes/com.korail.mobile.refunds.RefundsRequest"
@@ -452,56 +324,23 @@ def _paid_ticket() -> PaidTicket:
     return paid_ticket(SYNTHETIC_PNR)
 
 
-def test_refund_dry_run_preview_redacts_ticket_identity_without_sending():
-    client, recorder = _client_with({})
-    preview = client.refund(
-        _paid_ticket(), consent=MutationConsent(allow_refund=True)
-    )
-    assert isinstance(preview, MutationPreview)
-    assert preview.category == "refund"
-    assert preview.route == REFUND_ROUTE
-    for key in (
-        "txtPnrNo",
-        "h_orgtk_sale_dt",
-        "h_orgtk_sale_wct_no",
-        "h_orgtk_sale_sqno",
-        "h_orgtk_ret_pwd",
-    ):
-        assert preview.payload[key] == "[REDACTED]", key
-    joined = "".join(preview.payload.values())
-    for secret in (SYNTHETIC_PNR, "SYNTHETIC_RETPWD", "SYNTHETIC_WCT"):
-        assert secret not in joined, secret
-    assert recorder.requests == []
-
-
 def test_refund_live_posts_to_refund_route():
     client, recorder = _client_with({REFUND_ROUTE: _REFUND_SUCCESS})
-    result = client.refund(
-        _paid_ticket(),
-        consent=MutationConsent(allow_refund=True, dry_run=False),
-    )
+    result = client.refund(_paid_ticket())
     assert isinstance(result, BaseKorailResponse)
     assert result.str_result == "SUCC"
     assert len(recorder.requests) == 1
     assert recorder.requests[0].url.path == REFUND_ROUTE
 
 
-def test_refund_requires_matching_consent_and_session():
-    client, recorder = _client_with({REFUND_ROUTE: _REFUND_SUCCESS})
-    with pytest.raises(KorailMutationNotAllowedError):
-        client.refund(_paid_ticket(), consent=MutationConsent(allow_cancel=True))
-    assert recorder.requests == []
-
+def test_refund_requires_an_authenticated_session():
     from korail_mobile_api import KorailAuthError
 
     logged_out = KorailClient(
         transport=httpx.MockTransport(_Recorder({REFUND_ROUTE: _REFUND_SUCCESS}))
     )
     with pytest.raises(KorailAuthError):
-        logged_out.refund(
-            _paid_ticket(),
-            consent=MutationConsent(allow_refund=True, dry_run=False),
-        )
+        logged_out.refund(_paid_ticket())
 
 
 def test_read_only_post_form_still_refuses_mutation_routes():
@@ -520,10 +359,9 @@ def test_reserve_then_auto_cancel_round_trip_offline():
     client, recorder = _client_with(
         {RESERVE_ROUTE: _HOLD_SUCCESS, CANCEL_ROUTE: _CANCEL_SUCCESS}
     )
-    consent = _live(allow_reserve=True, allow_cancel=True)
-    hold = client.reserve(_eligible_train(), consent=consent)
+    hold = client.reserve(_eligible_train())
     assert isinstance(hold, ReservationHoldResponse)
-    cancel = client.cancel_unpaid_hold(hold, consent=consent)
+    cancel = client.cancel_unpaid_hold(hold)
     assert cancel.str_result == "SUCC"
     assert [r.url.path for r in recorder.requests] == [
         RESERVE_ROUTE,
@@ -573,39 +411,41 @@ _SESSION_EXPIRED = {
 
 
 @pytest.mark.parametrize(
-    ("route", "consent", "send"),
+    ("route", "send"),
     [
         (
             RESERVE_ROUTE,
-            _live(allow_reserve=True),
-            lambda client, consent: client.reserve(
-                _eligible_train(), consent=consent
+            lambda client: client.reserve(_eligible_train()),
+        ),
+        (
+            RESERVE_ROUTE,
+            lambda client: client.reserve_with_discount_card(
+                _eligible_train(), card_no="SYNTHETICCARD0001"
             ),
         ),
         (
             PAYMENT_ROUTE,
-            _live(allow_payment=True),
-            lambda client, consent: client.pay_with_fake_card(
-                _paid_hold(), _fake_card(), consent=consent
-            ),
+            lambda client: client.pay_with_fake_card(_paid_hold(), _fake_card()),
         ),
         (
             CANCEL_ROUTE,
-            _live(allow_cancel=True),
-            lambda client, consent: client.cancel_unpaid_hold(
-                _hold(), consent=consent
-            ),
+            lambda client: client.cancel_unpaid_hold(_hold()),
         ),
         (
             REFUND_ROUTE,
-            _live(allow_refund=True),
-            lambda client, consent: client.refund(_paid_ticket(), consent=consent),
+            lambda client: client.refund(_paid_ticket()),
         ),
     ],
-    ids=["reserve", "pay_with_fake_card", "cancel_unpaid_hold", "refund"],
+    ids=[
+        "reserve",
+        "reserve_with_discount_card",
+        "pay_with_fake_card",
+        "cancel_unpaid_hold",
+        "refund",
+    ],
 )
 def test_an_expired_session_on_a_mutation_clears_the_client_before_raising(
-    route, consent, send
+    route, send
 ):
     """P058 on a state-changing send leaves no stale login behind.
 
@@ -613,8 +453,13 @@ def test_an_expired_session_on_a_mutation_clears_the_client_before_raising(
     session and re-raises, as the reads do. Nothing tested it: with the
     clear_session() call taken out of all ten mutation handlers the suite still
     passed. src batches 42 and 43 fold those handlers into _mutation, so each
-    one is pinned first -- here for reserve, pay_with_fake_card and two of
-    _mutation's own callers, and beside its other tests for the rest.
+    one is pinned first -- here for reserve, reserve_with_discount_card,
+    pay_with_fake_card and two of _mutation's own callers, and beside its
+    other tests for the rest. The price-recalculation and discount-card
+    purchase/extension mutations stay pinned locally in their own files
+    instead: each of those categories has its own guard elsewhere forbidding
+    its method names from ever showing up in this module's source, since
+    neither category is meant to be reachable from a live-facing test path.
 
     The request did go out (one of it); the session and its cookie did not
     survive the reply.
@@ -624,7 +469,7 @@ def test_an_expired_session_on_a_mutation_clears_the_client_before_raising(
         "JSESSIONID", "synthetic-secret", domain="smart.letskorail.com"
     )
     with pytest.raises(KorailSessionExpiredError):
-        send(client, consent)
+        send(client)
     assert len(recorder.requests) == 1
     assert client.session.current is None
     assert not client.http.cookies

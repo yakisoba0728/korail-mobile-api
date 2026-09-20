@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 import dataclasses
 import importlib
@@ -494,7 +490,7 @@ def test_no_read_route_field_contract_carries_an_unmasked_identity_field():
     """
     import re
 
-    from korail_mobile_api import safety
+    import _read_field_contracts as field_contracts
     from korail_mobile_api.redaction import is_sensitive_key
 
     identity_shaped = re.compile(
@@ -504,7 +500,7 @@ def test_no_read_route_field_contract_carries_an_unmasked_identity_field():
 
     unmasked = {
         field_
-        for fields in safety.KORAIL_EXACT_REQUEST_FIELDS.values()
+        for fields in field_contracts.KORAIL_EXACT_REQUEST_FIELDS.values()
         for field_ in fields
         if identity_shaped.search(field_)
         and not is_sensitive_key(field_)

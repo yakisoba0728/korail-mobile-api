@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """리무진 연계 조회의 요청 폼 빌더.
 
@@ -15,6 +11,10 @@
 세 폼 모두 공통 ``Device``/``Version`` 을 싣습니다.
 :func:`build_limousine_schedule_view_form` 만은 공통 ``Key`` 대신 호출자가 넘긴
 ``Sid``(:func:`~korail_mobile_api.crypto.generate_sid`)를 싣습니다.
+``seatMovie.LimousineScheduleView`` 는 7.0.6 앱에서 사라져 클라이언트가 더는
+보내지 않으며, :func:`build_limousine_schedule_view_form` 은 저장해 둔 6.5.0
+응답을 해석하려는 호출자를 위해서만 남아 있습니다
+(:mod:`korail_mobile_api.limousine_models`).
 """
 from __future__ import annotations
 

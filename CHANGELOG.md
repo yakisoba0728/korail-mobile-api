@@ -4,10 +4,42 @@
 이 프로젝트는 [유의적 버전](https://semver.org/lang/ko/)을 따릅니다.
 1.0.0 이전 기록은 당시 형식·언어 그대로 보존합니다.
 
-## Unreleased
+## 1.2.0 - 2026-09-20
 
-KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠졌으므로 버전 번호는
-릴리스할 때 정합니다.
+KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠졌습니다.
+
+### 파괴적 변경 — 동의 체계와 7.0.6 레지스트리를 배포 전에 걷어냈습니다
+
+이 판을 준비하는 동안, 아래 "Added"·"Changed" 절이 기록하는 소비자 동의(consent) 체계와
+7.0.6 게이트웨이의 메서드별 동의는 한 번도 배포되지 않은 채 다시 걷혔습니다. 그래서 이
+판의 실제 공개 표면은 그 절들이 말하는 것보다 작습니다. 실제로 없어진 것은 이렇습니다.
+
+- **동의 게이트와 dry-run 미리보기가 없어졌습니다.** `consent.py` 의
+  `MutationConsent`/`MutationPreview`/`require_mutation_consent` 가 삭제됐고,
+  상태변경 메서드 열세 개가 더 이상 `consent=` 인자를 받지 않습니다. 인증된 세션만
+  있으면 즉시 전송되고, 남은 게이트는 `safety.py` 의 라우트 허용목록과 라우트-범주
+  교차검사뿐입니다. `pay_with_card` 와 `pay_with_fake_card` 는 여전히 분리된
+  메서드입니다.
+- **7.0.6 계약 레지스트리와 그 메서드별 동의가 없어졌습니다.** `V7Gateway`
+  (`client.v7`)가 부를 수 있는 계약은 117개에서 2개
+  (`NetworkApi.executeOnlineRefunds`, `NetworkApi.verifyOnlineRefunds`)로
+  줄었습니다. `V7MutationConsent`·`V7MutationPreview` 와 나머지 계약 115개는
+  삭제됐습니다.
+- **`android_features` 모듈이 없어졌습니다.** Room DAO 18개·메모리 DataStore
+  8개·Preferences 2개 이름공간을 모델링하던 안드로이드 호스트 주입 프로토콜
+  전체가 빠졌습니다.
+- **읽기 필드-이름/순서 계약이 전송 경로에서 더 이상 돌지 않습니다.** 계약은
+  `tests/_read_field_contracts.py` 의 테스트 전용 픽스처로만 남았고, `safety.py`
+  의 라우트 표는 이를 강제하지 않습니다.
+- **파서와 모델의 검증이 줄었습니다.** 서버가 이미 보장하는 중복 검사, UI 전용
+  거부, 이미 파싱을 거친 값의 재검증이 빌더·파서에서 빠졌습니다 — 예를 들어
+  좌석재고의 모순 카운트 거부, 예약대기·병합예약의 "다리 하나만" 거부,
+  `type(x) is not Y` 형태의 정확한-타입 검사(정당한 서브클래스를 거절하던 것)
+  등입니다.
+- **응답 `repr()` 에 민감하지 않은 필드가 다시 보입니다.** 역·열차 코드, 날짜,
+  안내 문구처럼 그 자체로는 민감하지 않은 필드 100개 이상에서 `repr=False` 를
+  걷어냈습니다. `redaction.py` 의 `SENSITIVE_KEYS` 로 가려지는 필드, 세션
+  자격증명, `raw` 원본 페이로드는 그대로 가려집니다.
 
 ### 소스 파일마다 라이선스 헤더가 생겼습니다
 
@@ -87,6 +119,12 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
 
 - `get_gift_ticket_list()`, `get_limousine_schedule_view()`, `get_platform_numbers()` —
   7.0.6 에 해당 경로가 없습니다. [제거 기록](docs/7.0.6-removals.md) 참고.
+- **라이브 스모크 하니스가 설치되는 패키지에서 빠졌습니다.** `live.py` 의
+  `run_live_smoke_from_env`(실서버에 로그인해 읽기 표면 전체를 도는 관리자 전용
+  스캐폴딩)가 삭제됐습니다. `build_config_from_env`·`live_enabled`·
+  `read_credentials_from_env` 는 그대로입니다 — `scripts/`와 그 테스트가 직접
+  씁니다. 유일하게 그것을 부르던 테스트 `tests/test_live_service.py` 도 함께
+  삭제됐고, 스위트 전체에서 `live` 로 표시된 테스트가 이제 하나도 없습니다.
 
 ### Fixed
 

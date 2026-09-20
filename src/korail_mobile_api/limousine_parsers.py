@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """리무진 연계 조회 응답을 :mod:`korail_mobile_api.limousine_models` 로 옮깁니다.
 
@@ -31,8 +27,9 @@ from .limousine_models import (
     LimousineSeatInventoryResponse,
 )
 from .models import BaseKorailResponse
+from .parsers import _response_fields
+from .read_parsers import _nullable_string_fields, _optional_string, _row
 from .read_parsers import _optional_list as _nullable_list
-from .read_parsers import _optional_string, _row
 
 
 def _required_list(
@@ -61,15 +58,6 @@ def _optional_nonnegative_integer(
             f"KORAIL {context} field {key} must be a non-negative integer"
         )
     return value
-
-
-def _response_fields(response: BaseKorailResponse) -> dict[str, Any]:
-    return {
-        "h_msg_cd": response.h_msg_cd,
-        "h_msg_txt": response.h_msg_txt,
-        "str_result": response.str_result,
-        "raw": response.raw,
-    }
 
 
 def _require_exact_success(response: BaseKorailResponse) -> None:
@@ -114,14 +102,7 @@ def parse_limousine_schedule_response(
         row = _row(value, "limousine schedule trainList")
         schedules.append(
             LimousineSchedule(
-                **{
-                    field_name: _optional_string(
-                        row,
-                        wire_name,
-                        "limousine schedule",
-                    )
-                    for field_name, wire_name in _SCHEDULE_FIELDS.items()
-                },
+                **_nullable_string_fields(row, _SCHEDULE_FIELDS, "limousine schedule"),
                 raw=row,
             )
         )
@@ -172,14 +153,7 @@ def parse_limousine_seat_inventory_response(
         row = _row(value, "limousine seat inventory seatList")
         seats.append(
             LimousineSeat(
-                **{
-                    field_name: _optional_string(
-                        row,
-                        wire_name,
-                        "limousine seat inventory",
-                    )
-                    for field_name, wire_name in _SEAT_FIELDS.items()
-                },
+                **_nullable_string_fields(row, _SEAT_FIELDS, "limousine seat inventory"),
                 raw=row,
             )
         )
@@ -301,14 +275,9 @@ def _recommended_products(
         )
         products.append(
             LimousineRecommendedProduct(
-                **{
-                    field_name: _optional_string(
-                        product,
-                        wire_name,
-                        "limousine recommended product",
-                    )
-                    for field_name, wire_name in _PRODUCT_FIELDS.items()
-                },
+                **_nullable_string_fields(
+                    product, _PRODUCT_FIELDS, "limousine recommended product"
+                ),
                 raw=product,
             )
         )
@@ -343,14 +312,9 @@ def parse_limousine_schedule_view_response(
         row = _row(value, "limousine schedule view trn_info")
         schedules.append(
             LimousineScheduleViewTrain(
-                **{
-                    field_name: _optional_string(
-                        row,
-                        wire_name,
-                        "limousine schedule view train",
-                    )
-                    for field_name, wire_name in _SCHEDULE_VIEW_FIELDS.items()
-                },
+                **_nullable_string_fields(
+                    row, _SCHEDULE_VIEW_FIELDS, "limousine schedule view train"
+                ),
                 recommended_products=_recommended_products(row),
                 total_passenger_count=_optional_nonnegative_integer(
                     row,

@@ -23,7 +23,7 @@ CHANGELOG 의 절을 그대로 끌어다 쓰고(`include-markdown`), `reference/
 | [pass-schedule-read.md](pass-schedule-read.md) | 정기권 조회의 정확한 요청·응답 타입과 라이브 검증 경계 |
 | [verification-record.md](verification-record.md) | 증거 기록. 기능별 APK `파일:줄` 인용과 라이브 실행 결과 |
 | [7.0.6-contract-update.md](7.0.6-contract-update.md) | 7.0.6 APK 정적 대조에서 확인한 기존 호출 변경과 남은 미확인 값 |
-| [7.0.6-additions.md](7.0.6-additions.md) | 7.0.6 추가 Retrofit 계약과 Android 호스트 연동 |
+| [7.0.6-additions.md](7.0.6-additions.md) | 7.0.6 추가 Retrofit 계약. 지금 남은 2개와, 117개이던 시절의 기록 |
 | [7.0.6-removals.md](7.0.6-removals.md) | 7.0.6 APK에서 빠진 호출과 Python 호환성 변경 |
 | [7.0.6-live-verification.md](7.0.6-live-verification.md) | 7.0.6 작업 트리의 실서버 조회·예약·실카드 결제·전액 환불 검증과 미실행 범위 |
 | [7.0.6-one-to-one-audit.md](7.0.6-one-to-one-audit.md) | 7.0.6 디컴파일 결과와 현재 코드의 1:1 정적 대조 |
@@ -35,6 +35,6 @@ CHANGELOG 의 절을 그대로 끌어다 쓰고(`include-markdown`), `reference/
 | [RELEASE.md](RELEASE.md) | 릴리스가 통과하는 테스트·빌드·배포 게이트 |
 | [internal/README.md](internal/README.md) | 개발 기록. 사용자 문서가 아닙니다 |
 
-이 표가 빠짐없는지는 `tests/test_docs_site.py` 가 확인합니다. `docs/` 아래 문서가
-어디에서도 링크되지 않으면 테스트가 실패하므로, 새 문서를 넣으면 여기 한 줄을 더해야
-합니다.
+이 표가 빠짐없는지 확인하던 `tests/test_docs_site.py` 는 1.2.0 슬림다운에서 사라졌습니다.
+`docs/` 아래 문서가 어디에서도 링크되지 않는지 자동으로 검사하는 테스트는 이제 없으므로,
+이 표는 손으로 관리합니다 — 새 문서를 넣으면 여기 한 줄을 직접 더해야 합니다.

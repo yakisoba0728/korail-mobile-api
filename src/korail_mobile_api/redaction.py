@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """미리보기·로그에 남으면 안 되는 값을 가립니다.
 
@@ -424,7 +420,7 @@ def redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
 def redact_payload(
     payload: Mapping[str, object],
 ) -> dict[str, str | list[str]]:
-    """:class:`~korail_mobile_api.consent.MutationPreview` 용 변경 폼 마스킹.
+    """변경 폼(mutation form) 마스킹 — 로그/에러 메시지에 쓰입니다.
 
     민감 키는 ``[REDACTED]``, 나머지는 :func:`redact_text`. 리스트 값은 원소별로
     가리고 길이 유지(``CertificationService.java:35-37`` 의 ``List @Field``).

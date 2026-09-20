@@ -1,16 +1,11 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """HTTP 전송 계층 — 폼·쿼리를 실제로 보내는 유일한 곳.
 
 읽기(:meth:`~KorailHttpClient.post_form`, :meth:`~KorailHttpClient.get_json`)와
-변경(:meth:`~KorailHttpClient.post_mutation_form`,
-:meth:`~KorailHttpClient.get_mutation_query`)이 완전히 갈리며 서로의 라우트에 닿을 수
+변경(:meth:`~KorailHttpClient.post_mutation_form`)이 완전히 갈리며 서로의 라우트에 닿을 수
 없습니다. 공통 세 필드(``Device``/``Version``/``Key``), DynaPath 헤더,
 ``h_msg_cd`` 판정이 여기서 붙습니다.
 """
@@ -24,17 +19,11 @@ from urllib.parse import urlencode
 import httpx
 
 from .config import KorailConfig
-from .consent import (
-    MutationCategory,
-    MutationConsent,
-    require_mutation_consent,
-)
 from .constants import DYNAPATH_ALLOWLIST_PATHS, DYNAPATH_REQUIRED_PATHS
 from .dynapath import DynapathRequestContext, DynapathTokenGenerator
 from .errors import (
     KorailDynaPathError,
     KorailDynaPathRequiredError,
-    KorailMutationNotAllowedError,
     KorailProtocolError,
     KorailSessionExpiredError,
     KorailTransportError,
@@ -42,12 +31,11 @@ from .errors import (
 )
 from .models import BaseKorailResponse
 from .safety import (
-    KORAIL_CARD_BEARING_MUTATION_CATEGORIES,
+    MutationCategory,
     assert_korail_origin,
     assert_mutation_form_shape,
     assert_mutation_route,
     assert_mutation_route_category,
-    assert_read_only_request_fields,
     assert_read_only_route,
 )
 
@@ -60,6 +48,46 @@ _NON_COMMON_OUT_READ_PATHS = frozenset({
     "/classes/com.korail.mobile.common.stationinfo",
     "/ebizmaas/EbizMaasStationList.do",
 })
+
+# certification.ReservationList is the one read-only path this package sends
+# to that CertificationService.java also declares a WRITE Retrofit method on:
+# inquiryTicketRsv (the read this package implements, exactly these four
+# fields) and applyDisabilityCertification (:22, which adds txtPsgDisc0019Cnt
+# and six @QueryMaps to attach a disability certificate to a held
+# reservation). The general per-route field contract that used to keep the
+# write shape off this send path moved into tests/_read_field_contracts.py
+# and is no longer checked here for any other route -- but for this one path
+# a caller (or a future builder bug) that hands post_form the write overload's
+# fields would otherwise reach the wire unexamined, since nothing else on the
+# read send path is route-specific. This is the one targeted exception, not a
+# reinstatement of the general contract.
+_RESERVATION_LIST_PATH = "/classes/com.korail.mobile.certification.ReservationList"
+_RESERVATION_LIST_READ_FIELDS = frozenset({"Device", "Version", "Key", "hidPnrNo"})
+
+#: ``parse_base_response`` 가 값 판정 전에 타입을 확인하는 세 봉투 필드.
+_ENVELOPE_STRING_FIELDS = ("h_msg_cd", "h_msg_txt", "strResult")
+
+
+def _reject_non_string_envelope_fields(data: dict[str, Any]) -> None:
+    """봉투 필드가 있으면 문자열이거나 ``null`` 이어야 합니다.
+
+    ``errors.classify_app_error`` 는 ``h_msg_cd`` 로 dict 조회를 하고,
+    ``read_parsers._validate_envelope`` 는 같은 값으로 frozenset 멤버십을
+    검사합니다. 둘 다 리스트·객체가 오면 ``TypeError`` 로 죽습니다 — 이 패키지가
+    올려야 할 :class:`~korail_mobile_api.errors.KorailProtocolError` 대신.
+    ``BaseKorailResponse.from_raw`` 는 일부러 이 판정을 하지 않으므로(문서화된
+    대로 호출자 몫), 값을 실제로 쓰는 이 함수가 판정보다 먼저 검사합니다.
+    """
+    invalid = [
+        name
+        for name in _ENVELOPE_STRING_FIELDS
+        if name in data and data[name] is not None and not isinstance(data[name], str)
+    ]
+    if invalid:
+        raise KorailProtocolError(
+            "KORAIL response envelope fields must be strings or null: "
+            f"{', '.join(invalid)}"
+        )
 
 
 def parse_base_response(
@@ -80,6 +108,7 @@ def parse_base_response(
     """
     if not isinstance(data, dict):
         raise KorailProtocolError("KORAIL response must be a JSON object")
+    _reject_non_string_envelope_fields(data)
     response = BaseKorailResponse.from_raw(data)
     if response.h_msg_cd == "P058":
         raise KorailSessionExpiredError(
@@ -135,9 +164,9 @@ def _finish_mutation(
     path: str,
     raise_on_fail: bool,
 ) -> BaseKorailResponse:
-    """The end of both mutation senders: status, JSON and the envelope.
+    """The end of post_mutation_form: status, JSON and the envelope.
 
-    Mutation senders only, and separate from the read senders' tail on
+    The mutation sender only, and separate from the read senders' tail on
     purpose. The envelope is never relaxed here: every mutation route answers
     with a CommonOut, so a missing strResult is a failure.
     """
@@ -250,7 +279,7 @@ class KorailHttpClient:
     ) -> BaseKorailResponse:
         """The end of every read: send, then status, JSON and the envelope.
 
-        Read senders only. The mutation senders keep their own tail, which
+        Read senders only. The mutation sender keeps its own tail, which
         never relaxes the envelope.
         """
         try:
@@ -293,20 +322,12 @@ class KorailHttpClient:
         """
         assert_korail_origin(str(self._client.base_url))
         assert_read_only_route("POST", path)
-        # Before the field check: login.Login has a field contract, and a caller
-        # who has not turned DynaPath on needs to hear that first -- whatever
-        # the form looks like, the server would refuse it anyway.
         if include_dynapath:
             self._refuse_missing_dynapath(path)
         if data is not None and not isinstance(data, (Mapping, Sequence)):
             raise KorailProtocolError(
                 "KORAIL form data must be a mapping or registered ordered sequence"
             )
-        # The caller's data as given, before it is copied: a Mapping can yield
-        # a key twice, and the copy below would collapse that without a word.
-        # The check after the copy cannot see it.
-        if not include_common and data is not None:
-            assert_read_only_request_fields(path, data)
         if not form_encoded and (include_common or data):
             raise KorailProtocolError(
                 "KORAIL empty POST must not contain common or form fields"
@@ -319,14 +340,25 @@ class KorailHttpClient:
                 ordered_form.extend(self.common_fields().items())
             if data:
                 ordered_form.extend(data)
-            assert_read_only_request_fields(path, ordered_form)
         else:
             mapping_form = {}
             if include_common:
                 mapping_form.update(self.common_fields())
             if data:
                 mapping_form.update(data)
-            assert_read_only_request_fields(path, mapping_form)
+        if path == _RESERVATION_LIST_PATH:
+            field_names = (
+                {name for name, _value in ordered_form}
+                if ordered_form is not None
+                else set(mapping_form or {})
+            )
+            if field_names != _RESERVATION_LIST_READ_FIELDS:
+                raise KorailProtocolError(
+                    "KORAIL certification.ReservationList shares its path "
+                    "with a write overload (applyDisabilityCertification); "
+                    "the read send path only accepts the read overload's "
+                    "exact fields: " + ", ".join(sorted(_RESERVATION_LIST_READ_FIELDS))
+                )
         headers = (
             {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
             if form_encoded
@@ -383,7 +415,6 @@ class KorailHttpClient:
         if include_common:
             query.update(self.common_fields())
         query.update(params)
-        assert_read_only_request_fields(path, query)
         headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
@@ -400,39 +431,14 @@ class KorailHttpClient:
         path: str,
         data: Mapping[str, Any],
         *,
-        consent: MutationConsent,
         category: MutationCategory,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
         """변경 라우트로 폼을 보냅니다.
 
-        ``require_mutation_consent`` + ``consent.dry_run=False`` +
         ``assert_mutation_route`` + ``assert_mutation_route_category`` 를 모두
-        통과해야 합니다. 카드 보유 범주는 추가로
-        ``fake_card_only``/``real_card_acknowledged`` 중 정확히 하나를 요구합니다.
+        통과해야 합니다.
         """
-        require_mutation_consent(consent, category)
-        if consent.dry_run:
-            raise KorailMutationNotAllowedError(
-                "post_mutation_form requires consent.dry_run=False; a dry-run "
-                "preview must never be transmitted"
-            )
-        if category in KORAIL_CARD_BEARING_MUTATION_CATEGORIES:
-            if consent.fake_card_only and consent.real_card_acknowledged:
-                raise KorailMutationNotAllowedError(
-                    "payment mutations refuse a contradictory consent: "
-                    "fake_card_only=True claims a non-chargeable test card "
-                    "while real_card_acknowledged=True acknowledges a real "
-                    "charge; set exactly one"
-                )
-            if not consent.fake_card_only and not consent.real_card_acknowledged:
-                raise KorailMutationNotAllowedError(
-                    "payment mutations require consent.fake_card_only=True (a "
-                    "non-chargeable test card) or "
-                    "consent.real_card_acknowledged=True (an acknowledged real "
-                    "charge); the PAN is transmitted in the clear, so an "
-                    "unstated card kind is never sent"
-                )
         assert_korail_origin(str(self._client.base_url))
         assert_mutation_route("POST", path)
         assert_mutation_route_category(path, category)
@@ -450,46 +456,6 @@ class KorailHttpClient:
         except httpx.HTTPError as exc:
             raise KorailTransportError(
                 f"KORAIL transport failed for POST {path}"
-            ) from exc
-        return _finish_mutation(response, path=path, raise_on_fail=raise_on_fail)
-
-    def get_mutation_query(
-        self,
-        path: str,
-        params: Mapping[str, Any],
-        *,
-        consent: MutationConsent,
-        category: MutationCategory,
-        raise_on_fail: bool = True,
-    ) -> BaseKorailResponse:
-        """:meth:`post_mutation_form` 의 GET 판(``reservation.dcntCrdExtn.do``).
-
-        동일한 게이트 적용. 카드 분기 없음.
-        """
-        require_mutation_consent(consent, category)
-        if consent.dry_run:
-            raise KorailMutationNotAllowedError(
-                "get_mutation_query requires consent.dry_run=False; a dry-run "
-                "preview must never be transmitted"
-            )
-        assert_korail_origin(str(self._client.base_url))
-        assert_mutation_route("GET", path)
-        assert_mutation_route_category(path, category)
-        if not isinstance(params, Mapping):
-            raise KorailProtocolError(
-                "KORAIL mutation query params must be a mapping"
-            )
-        assert_mutation_form_shape(path, params)
-        headers = self._dynapath_headers("GET", path)
-        try:
-            response = self._client.get(
-                path,
-                params=dict(params),
-                headers=headers,
-            )
-        except httpx.HTTPError as exc:
-            raise KorailTransportError(
-                f"KORAIL transport failed for GET {path}"
             ) from exc
         return _finish_mutation(response, path=path, raise_on_fail=raise_on_fail)
 
@@ -515,7 +481,6 @@ class KorailHttpClient:
             query.update(self.common_fields())
         if params:
             query.update(params)
-        assert_read_only_request_fields(path, query)
         headers = (
             self._dynapath_headers("GET", path)
             if include_dynapath

@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """Plain helpers several test files share. Not fixtures, and not in conftest.
 
@@ -19,12 +15,13 @@ name never means two different things.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import httpx
+import pytest
 
-from korail_mobile_api import KorailClient, KorailConfig
+from korail_mobile_api import KorailClient, KorailConfig, KorailSessionExpiredError
 from korail_mobile_api.models import KorailSession
 from korail_mobile_api.read_payloads import OriginalTicketReference
 
@@ -100,27 +97,6 @@ def secret_ticket_reference(suffix: str = "1") -> OriginalTicketReference:
     )
 
 
-class DuplicateFieldMapping(Mapping[str, str]):
-    """A Mapping that yields one key twice, as no dict can.
-
-    The field checks have to catch it before the form is copied into a dict,
-    which would collapse the duplicate without a word.
-    """
-
-    def __init__(self, values: dict[str, str], duplicate: str) -> None:
-        self._values = values
-        self._keys = [*values, duplicate]
-
-    def __getitem__(self, key: str) -> str:
-        return self._values[key]
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._keys)
-
-    def __len__(self) -> int:
-        return len(self._keys)
-
-
 def recording_path_handler(
     responses: Mapping[str, Any],
     requests: list[httpx.Request],
@@ -161,6 +137,39 @@ def client_with_replies(
     client = KorailClient(transport=httpx.MockTransport(recorder))
     client.session.current = KorailSession(jsessionid="synthetic-secret")
     return client, recorder
+
+
+def require_symbol(module: object, name: str) -> Any:
+    """The attribute ``name`` of ``module``, or a clear assertion if absent."""
+    value = getattr(module, name, None)
+    assert value is not None, f"missing symbol: {name}"
+    return value
+
+
+def assert_p058_clears_session(
+    build_client: Callable[[], KorailClient],
+    call: Callable[[KorailClient], object],
+) -> None:
+    """A P058 envelope on a read must clear the session and cookies.
+
+    ``build_client()`` returns a fresh client, already logged in and cookied,
+    whose transport is wired to answer P058; ``call(client)`` is the read that
+    must see it. Asserts the read raises ``KorailSessionExpiredError`` and
+    that neither the session nor any cookie survives it.
+    """
+    client = build_client()
+    try:
+        with pytest.raises(KorailSessionExpiredError):
+            call(client)
+    finally:
+        client.close()
+    assert client.session.current is None
+    assert not client.http.cookies
+
+
+def raise_if_dynapath_invoked(context: object) -> str:
+    """A DynaPath token provider for reads that must never ask for one."""
+    raise AssertionError("DynaPath provider must not be invoked")
 
 
 def recording_json_handler(

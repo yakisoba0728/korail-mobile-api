@@ -16,42 +16,61 @@ Nothing here is a usage guide, and nothing here is more current than the code:
 where this document and the code disagree, the code is right and the disagreement
 is a bug report.
 
+**1.2.0 note.** Version 1.2.0 removed the consent system most of this record
+describes: `MutationConsent`, `MutationPreview`, `require_mutation_consent`,
+`MutationCategory`, `V7MutationConsent`, `V7MutationPreview`, and
+`src/korail_mobile_api/consent.py` no longer exist. State-changing client
+methods take no `consent=` argument, return no preview, and have no
+`dry_run` — each sends as soon as it is called, provided a session exists.
+`pay_with_card` and `pay_with_fake_card` remain separate methods, but neither
+takes a `fake_card_only`/`real_card_acknowledged` flag any more, so the method
+name is now the only thing distinguishing a real charge. The 7.0.6 contract
+registry (`client.v7`) went from 117 contracts to 2 (`verifyOnlineRefunds`,
+`executeOnlineRefunds`); `android_features.py` and `run_live_smoke_from_env`
+are gone, and `build_config_from_env` stays. What is still enforced before a
+send: both route allowlists in `safety.py`, the route→category check, origin
+pinning, DynaPath's login refusal, NetFunnel's bounds, redaction, `P058`
+session clearing, and the refusal to send 정기권/패스 purchases by name. This
+document is dated evidence below this note — what was observed on the wire on
+a given date stays true regardless of what the code does today — except where
+a passage plainly states how the package works *now*, which this note and the
+edits below it correct.
+
 ## Package boundary and verification summary
 
-The reviewed package boundary contains 57 routes and 77 public methods. All 57
-routes are login/read routes: 55 reads plus the login POST and the server-side
-logout POST. The 7.0.6 removal decision and its static-evidence limits are
-recorded in [7.0.6-removals.md](7.0.6-removals.md). Historical method notes
-later in this record describe the package as it existed when they were written.
-The nine mutation routes are tracked separately and
-are never added to the read-only allowlist. Sixty-three of the methods are the
-audited login/read methods or local helpers, which never transmit a mutation.
-The other fourteen are consent-gated: `reserve`, `reserve_transfer`, `reserve_merge`,
+The reviewed package boundary contains 58 read routes, 10 mutation routes, and
+77 public methods. Recount from `src/korail_mobile_api/safety.py` rather than
+trusting this paragraph -- the exact split drifts as routes are added, most
+recently when the 7.0.6 online-refund pair joined the tables. The 7.0.6 removal
+decision and its static-evidence limits are recorded in
+[7.0.6-removals.md](7.0.6-removals.md). Historical method notes later in this
+record describe the package as it existed when they were written. The 10
+mutation routes are tracked separately and are never added to the read-only
+allowlist. Sixty-three of the 77 public methods are the audited login/read
+methods or local helpers, which never transmit a mutation. The other fourteen
+are the state-changing methods: `reserve`, `reserve_transfer`, `reserve_merge`,
 `reserve_with_discount_card`, `confirm_standby_hold`, `cancel_unpaid_hold`,
 `pay_with_fake_card`, `pay_with_card`, `refund`, `add_to_cart`,
 `register_discount_card`, `extend_discount_card`, `recalculate_price`, and
-`execute_station_ticket_refund`. The first thirteen are denied unless the caller supplies a
-`MutationConsent` that opts into its category; with the default `dry_run=True`
-each merely validates its inputs and returns a redacted `MutationPreview` of the
-form that *would* be posted, sending nothing. Only a `dry_run=False` consent
-performs the live state change, and only through the dedicated double-gated send
-path (`post_mutation_form`, which enforces `assert_mutation_route` plus the
-consent check). The station-issued ticket refund uses
-`V7MutationConsent` scoped to `NetworkApi.executeOnlineRefunds`; its default
-dry-run returns a masked `V7MutationPreview` and sends nothing.
+`execute_station_ticket_refund`. None of the fourteen takes a `consent=`
+argument: 1.2.0 deleted `consent.py` (`MutationConsent`, `MutationPreview`,
+`require_mutation_consent`) and the station-ticket refund's method-scoped
+`V7MutationConsent`/`V7MutationPreview` along with it. There is no dry run and
+no preview -- each of the fourteen sends as soon as it is called, provided a
+login session exists. What still runs immediately before the POST is the same
+`post_mutation_form` (or, for the station refund, `V7Gateway.call`) it always
+ran through, which checks the route against `KORAIL_MUTATION_ROUTES` and the
+caller's declared category against `KORAIL_MUTATION_ROUTE_CATEGORIES` before
+transmitting.
 
-The pay call transmits the PAN in the clear, so a payment is gated once more on
-which kind of card the consent claims. `pay_with_fake_card` still refuses unless
-`fake_card_only` is set and therefore still sends only non-chargeable test
-cards; that method and that guarantee are unchanged. A real, chargeable card is
-possible ONLY through the separate `pay_with_card`, and only on a consent that
-explicitly sets both `real_card_acknowledged=True` and `fake_card_only=False` —
-the acknowledgement that a real PAN goes over the wire and money actually moves.
-Both flags default to the safe side (`fake_card_only=True`,
-`real_card_acknowledged=False`), so every consent that does not name the new
-flag means exactly what it meant before, and the default posture is still
-fake-card-only. The transmit gate independently refuses a payment whose consent
-states neither claim or both, so an ambiguous consent is never sent.
+The pay call transmits the PAN in the clear, and that has not changed, but the
+gate that used to sit on top of it is gone. `pay_with_fake_card` and
+`pay_with_card` build the identical form through the identical send path; the
+`fake_card_only`/`real_card_acknowledged` flags that used to force an explicit,
+separate acknowledgement before a real card could move do not exist any more.
+The method name a caller chooses is now the only thing standing between a
+non-chargeable test card and a real, chargeable one -- there is no runtime
+check that `pay_with_fake_card` was actually given a test card.
 
 `reserve`, `cancel_unpaid_hold`, and
 `pay_with_fake_card` were verified end-to-end against the live server (the fake
@@ -66,12 +85,16 @@ live-verified** -- see [환승 (transfer) itineraries](#환승-transfer-itinerar
 for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
-state-changing request can leave the process by no other route. The
-current reviewed offline gate is `3128 passed, 1 deselected`; the one
-deselected test is the explicitly opted-in live-service test. Earlier gates in
-this repository's history were `1246 passed, 1 deselected` before the P0
-live-evidence documentation coverage and `1247 passed, 1 deselected` directly
-after it.
+state-changing request can leave the process by no other route. As of 1.2.0,
+`pytest -m "not live"` collects 2257 tests and deselects none -- no test in
+the suite carries the `live` marker any more, so there is no opted-in
+live-service test left to deselect. `3119 passed, 1 deselected`,
+`1246 passed, 1 deselected` (before the P0 live-evidence documentation
+coverage), and `1247 passed, 1 deselected` (directly after it) were this
+gate's size at earlier points in this record; none of those totals is
+today's, and the slim-down that produced 1.2.0 removed a large share of the
+suite along with the consent system and the `android_features`/7.0.6-contract
+code it tested.
 
 Current service inventory is 33 successful, 14 failed, and 118 unexecuted
 entries out of 165.
@@ -154,11 +177,13 @@ The project does not provide:
 - Authentication bypass
 - NetFunnel or DynaPath bypass
 - Check-in or member mutation APIs (reservation hold, unpaid-hold cancellation,
-  a fake-card payment attempt, an explicitly acknowledged real card payment, and
-  a paid-ticket refund are provided as consent-gated, dry-run-by-default
-  methods; see the mutation section below. Real card payment is off by default
-  and reachable only through `pay_with_card` on a consent that sets
-  `real_card_acknowledged=True` and `fake_card_only=False`)
+  a fake-card payment attempt, a real card payment, and a paid-ticket refund
+  are provided as ordinary methods that send as soon as they are called,
+  given a login session -- see the mutation section below. As of 1.2.0 there
+  is no consent object, no dry run, and no `real_card_acknowledged`/
+  `fake_card_only` flag; `pay_with_card` and `pay_with_fake_card` are still
+  two separate methods, and the method name a caller picks is the only thing
+  that distinguishes a real charge from a test one)
 - General-purpose runtime WebView automation
 
 Server response values, feature flags, redirect behavior, and server-side
@@ -494,7 +519,7 @@ def get_owned_product_detail(
 The reservation, payment, and mutation routes remain excluded from the
 read-only allowlist, so no read creates, changes, cancels, pays for, refunds, or
 checks in a reservation. State changes occur only through the explicit
-consent-gated mutation methods (`reserve`, `confirm_standby_hold`,
+state-changing methods (`reserve`, `confirm_standby_hold`,
 `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, and `refund`),
 never as a side effect of a read.
 
@@ -504,10 +529,13 @@ reservation-payment JSON: `parse_reservation_hold_response()` and
 models and perform no network request. All five mutation form builders are now
 wired to a client method: reservation and unpaid-hold-cancel to `reserve` and
 `cancel_unpaid_hold`, the 예약대기 follow-up to `confirm_standby_hold`, card
-payment to `pay_with_fake_card` (test cards) and `pay_with_card` (an
-acknowledged real charge), and refund to `refund`. Each sends only via the double-gated mutation path and only with a
-`dry_run=False` consent; with the default consent each returns a redacted
-preview and transmits nothing. `pay_with_card` and `refund` were the last two
+payment to `pay_with_fake_card` (test cards) and `pay_with_card` (a real,
+chargeable card -- separated from `pay_with_fake_card` only by which method
+the caller picked), and refund to `refund`. Each sends via the same
+`post_mutation_form` path as before; as of 1.2.0 that path checks only the
+route allowlist and the route→category match, and sends as soon as it is
+called on a live session -- there is no consent object, no `dry_run`, and no
+preview any more. `pay_with_card` and `refund` were the last two
 send paths without a live-verified success envelope; a bounded authorized run on
 2026-07-31 closed both. It bought one 8,400 KRW 서울→광명 KTX seat for 2026-08-31
 (the far end of the one-month booking window, chosen so the refund fee would be
@@ -543,9 +571,10 @@ defaulted so an existing call is unchanged:
 ```python
 from korail_mobile_api import KorailPassengerCounts, KorailSeatClass
 
-preview = client.reserve(
+# As of 1.2.0 there is no consent object and no dry run: this sends the hold
+# as soon as it is called, provided the client already holds a login session.
+hold = client.reserve(
     train,
-    consent=MutationConsent(allow_reserve=True),
     passengers=KorailPassengerCounts(adult=2, child=1, senior=1),
     seat_class=KorailSeatClass.SPECIAL,
 )
@@ -617,9 +646,9 @@ car = cars.cars[0]                                   # SeatCar.car_no
 inventory = client.get_seat_inventory(train, car.car_no, passenger_count=2)
 free = [seat for seat in inventory.seats if seat.sale_possible == "Y"][:2]
 
-preview = client.reserve(
+# Sends immediately on a live session; no consent object or dry run as of 1.2.0.
+hold = client.reserve(
     train,
-    consent=MutationConsent(allow_reserve=True),
     passengers=KorailPassengerCounts(adult=2),
     job_type=KorailReservationJobType.SEAT_DESIGNATED,
     seats=[KorailSeatAssignment.from_inventory(inventory, seat) for seat in free],
@@ -649,15 +678,14 @@ get a half-booked hold. Booking the same seat twice is refused too.
 #### Standby / 예약대기 (`1102`)
 
 ```python
+# Two calls, each sending immediately -- no consent object as of 1.2.0.
 hold = client.reserve(
     sold_out_train,
-    consent=MutationConsent(allow_reserve=True, dry_run=False),
     job_type=KorailReservationJobType.STANDBY,
 )
 
 client.confirm_standby_hold(
     hold,
-    consent=MutationConsent(allow_reserve=True, dry_run=False),
     allow_seat_class_change=True,
     sms_notify=True,
     phone_no="0101234...",
@@ -698,9 +726,13 @@ opens the 예약대기 screen in the app; that screen then POSTs
 you in a different cabin when it assigns one) and `txtSmsSndFlg` with
 `txtCpNo`, which is sent only when SMS is on and must be 10 or 11 digits. It is
 a state-changing call on an existing PNR, so it goes through the same
-double-gated mutation transport as everything else, on the **`reserve` consent
-category** -- it completes the booking an `allow_reserve` consent authorised,
-moves no money and releases no seat, so it is deliberately not a new category.
+`post_mutation_form` transport as everything else, under the **`reserve`
+mutation category** -- it completes a booking the caller already started with
+`job_type=STANDBY`, moves no money and releases no seat, so it is deliberately
+not a category of its own. (Before 1.2.0 the category was also what an
+`allow_reserve` consent had to opt into; there is no consent any more, so the
+category now only decides which route `assert_mutation_route_category` will
+accept the call against.)
 
 ### 환승 (transfer) itineraries
 
@@ -814,20 +846,21 @@ page puts the same empty string on the wire it always did.
 #### Booking
 
 ```python
-from korail_mobile_api import KorailPassengerCounts, KorailSeatClass, MutationConsent
+from korail_mobile_api import KorailPassengerCounts, KorailSeatClass
 
-preview = client.reserve_transfer(
+# As of 1.2.0 there is no consent object and no dry run: this sends the hold
+# as soon as it is called. There is no pre-send preview to inspect any more --
+# what comes back is the server's own reply.
+hold = client.reserve_transfer(
     itinerary.legs,
-    consent=MutationConsent(allow_reserve=True),     # dry_run=True by default
     passengers=KorailPassengerCounts(adult=2),
     seat_classes=(KorailSeatClass.GENERAL, KorailSeatClass.SPECIAL),
 )
-preview.payload["txtJrnyCnt"]      # "2"
-preview.payload["txtJrnySqno2"]    # "002"
+hold.journey_count    # "0002" -- the server's own h_jrny_cnt, zero-padded
 ```
 
-Same route, same consent category, same double-gated send path as `reserve`; the
-app uses one endpoint for both. What composes and what does not:
+Same route, same mutation category, same `post_mutation_form` send path as
+`reserve`; the app uses one endpoint for both. What composes and what does not:
 
 | feature | composes? | why |
 | --- | --- | --- |
@@ -876,11 +909,11 @@ Nothing below has been run.
    even-length, that `h_chg_trn_seq` alternates `"1"`/`"2"`, and that
    `h_prcd_trn_no_next`/`h_ectb_trn_no_next` are populated (they are the
    transfer paging cursor and no direct response has ever carried them here).
-4. **Dry-run the hold first.** `reserve_transfer(..., consent=MutationConsent(
-   allow_reserve=True))` returns a `MutationPreview` and sends nothing. Compare
-   its payload against the table above before transmitting anything.
-5. **Then the hold.** `dry_run=False`, one adult, 일반실, `IMMEDIATE`. Expect
-   `h_jrny_cnt` to come back as two journeys.
+4. **Send the hold.** One adult, 일반실, `IMMEDIATE`. As of 1.2.0 there is no
+   dry run and no way to inspect the outgoing form before it goes out --
+   `reserve_transfer(...)` transmits as soon as it is called, on a live
+   session. Expect the returned hold's `journey_count` to come back as
+   `"0002"` (zero-padded, as the 2026-07-26/2026-07-31 live holds recorded it).
 
 > **Blocking, and deliberately not fixed here: `cancel_unpaid_hold` cannot
 > release a transfer hold.** It requires a hold whose `h_jrny_cnt` is
@@ -964,9 +997,9 @@ as unrelated same-valued constants**, so all four were resolved from bytecode at
    subclassed only to carry the new trains alongside) and re-books it as one
    reservation of two journeys. `reserve_merge` builds that second hold. The
    cancel is deliberately **not** performed inside it: silently cancelling a
-   live PNR under a `"reserve"` consent is precisely the category confusion the
-   gates exist to prevent, so the caller runs `cancel_unpaid_hold` under its own
-   `"cancel"` consent.
+   live PNR from inside a `"reserve"`-category call is precisely the category
+   confusion `assert_mutation_route_category` exists to prevent, so the caller
+   runs `cancel_unpaid_hold` separately, under its own `"cancel"` category.
 
 #### Where the merged form diverges from a 환승
 
@@ -1004,9 +1037,9 @@ are recorded as settled. Steps 4 and 5 have not.
    `h_yms_apl_flg="A"` together with `h_gen_rsv_cd="13"` (매진), which is why
    the availability guard that demanded `"11"` had to go — 입석+좌석 exists
    BECAUSE the seats are gone.*
-2. **Dry-run the standing hold**, then send it: `reserve(train,
-   job_type=MERGE_STANDING, consent=MutationConsent(allow_reserve=True,
-   dry_run=False))`. **This creates a real unpaid 입석 PNR** and must be
+2. **Send the standing hold**: `reserve(train, job_type=MERGE_STANDING)`. As
+   of 1.2.0 there is no dry run -- this sends on a live session as soon as
+   it is called. **This creates a real unpaid 입석 PNR** and must be
    cancelled or paid. Cost: nothing if cancelled promptly. *Settled: `SUCC` /
    `IRR000018`, `h_jrny_cnt="0002"` matching 선행 `21` / 후행 `22`, 43,600 KRW;
    cancelled `IRG000000`, account back to `P100`, no payment.*
@@ -1155,9 +1188,11 @@ not registered now.
 Restoring the code is cheap — it is one revert away in this repository's history
 (`cd32ea4`, removed in the commit that added this section). Proving it is not:
 
-1. Free: the three reads, and a dry-run of the reserve form against
-   `PassService.java:23-25`.
-2. **A real unpaid reservation.** `passReserve` at `dry_run=False` costs no money
+1. Free: the three reads, and a check of the reserve form against
+   `PassService.java:23-25` before sending it. (This section predates 1.2.0,
+   which removed dry-run/preview entirely -- reviving `passReserve` today
+   would mean sending it for real to see the form, not previewing it.)
+2. **A real unpaid reservation.** `passReserve` costs no money
    directly, but this package has no cancel route for what it creates — release
    it in the KORAIL app or let it expire. This step is the valuable one: its
    `main_info` **is** the payment's first `@FieldMap`, so one real capture
@@ -1167,6 +1202,19 @@ Restoring the code is cheap — it is one revert away in this repository's histo
    anything about `passPayIssue`, and it buys one data point: whether a form no
    app has ever sent is accepted. There is no capture to check it against and no
    refund path here. Nobody should spend that to confirm a field list.
+
+[1.2.0: the paragraph below describes a consent posture -- `MutationConsent`
+categories and a fake-card/real-card gate keyed on
+`KORAIL_CARD_BEARING_MUTATION_CATEGORIES` -- that no longer exists anywhere in
+this package. Nothing has replaced it. Anyone reviving this purchase today
+would be reviving it into a package where every state-changing method sends
+as soon as it is called, with only the mutation-category cross-check in
+`safety.py` standing between a call and the wire, and no runtime distinction
+at all between a test payment and a real one beyond which method the caller
+picked. The paragraph is kept for what it says about the feature's own
+risk (a season pass is a purchase of a different order of magnitude from a
+train ticket, and its settlement carries a PAN in the clear), not as a
+description of a mechanism to plug into.]
 
 Anyone reviving this should also revive its consent posture: a season pass is a
 purchase of a different order of magnitude from a train ticket, so it needs its
@@ -1186,20 +1234,22 @@ before this tranche. Four routes, of which two are reads:
   The trains a card may still be spent on. This is NOT a train search with a
   discount filter: an N카드 is sold against one to three fixed 구간, and the
   route is keyed by the card product and by the section's station NAMES.
-- `register_discount_card(request, consent=...)` —
+- `register_discount_card(request)` —
   `POST research.dcntCrdInfo.do`. A **purchase**, despite the name: it answers
   with a `lumpStlTgtNo` that a payment then settles.
-- `extend_discount_card(ticket, consent=...)` —
+- `extend_discount_card(ticket)` —
   `GET reservation.dcntCrdExtn.do`. 기간연장. A mutation the app performs with a
   GET, sent through `KorailHttpClient.get_mutation_query`.
 
-The two writes sit in their own consent category, `"discount_card"`
-(`MutationConsent.allow_discount_card`, default `False`), which no live path in
-this repository touches.
+The two writes sit in their own mutation category, `"discount_card"`, which
+`assert_mutation_route_category` checks against their routes before either can
+send. Neither call takes a `consent=` argument any more -- 1.2.0 removed
+`MutationConsent` entirely, so both send as soon as they are called on a live
+session -- and no live path in this repository touches either one.
 
 ## 운임 재계산 — re-pricing a held PNR
 
-- `recalculate_price(request, consent=...)` —
+- `recalculate_price(request)` —
   `POST certification.PriceReCalculation` (`CertificationService.java:35-37`).
   The app fires it from the payment screen whenever the discount selection
   changes for a reservation that **already exists** (`a6/C1042B.java:265-296`),
@@ -1239,15 +1289,17 @@ or `"152"`, `T4/a.java:51-53`) must clear `discount_kind_code` to `"000"`. A
 `None` anywhere in the six is refused: Retrofit *skips* a null list element,
 which would shorten one key against the other five and re-pair every later row.
 
-It sits in its own consent category, `"price_recalculation"`
-(`MutationConsent.allow_price_recalculation`, default `False`) — **not**
-`"payment"`, because a payment consent authorises settling an amount that has
-already been quoted and this call rewrites the quote. Nothing here has ever
-been transmitted and no live path in this repository reaches it.
+It sits in its own mutation category, `"price_recalculation"` — **not**
+`"payment"`, because a payment through that category settles an amount that
+has already been quoted and this call rewrites the quote instead.
+`recalculate_price` takes no `consent=` argument as of 1.2.0; it sends as
+soon as it is called on a live session, and `assert_mutation_route_category`
+is what still refuses it under the wrong category. Nothing here has ever been
+transmitted and no live path in this repository reaches it.
 
 ## 장바구니 담기 — add_to_cart
 
-- `add_to_cart(request, consent=...)` — `POST cart.addCartList`
+- `add_to_cart(request)` — `POST cart.addCartList`
   (`CartService.java:11-13`). One request field beyond the common three:
   `hidPnrNo` (`AddCartDao.java:9-24`, request class
   `AddCartDao$AddCartRequest`), confirmed independently against
@@ -1258,11 +1310,15 @@ been transmitted and no live path in this repository reaches it.
   `pnrNo` rather than `hidPnrNo`) already read the cart; this is the write
   half.
 
-It sits in its own consent category, `"cart"` (`MutationConsent.allow_cart`,
-default `False`) — **not** `"reserve"`, because the hold this acts on already
-exists and the call creates and destroys nothing this package can observe. It
-carries no card number and so is deliberately absent from
-`KORAIL_CARD_BEARING_MUTATION_CATEGORIES`. The DAO's response type is a bare
+It sits in its own mutation category, `"cart"` — **not** `"reserve"`, because
+the hold this acts on already exists and the call creates and destroys
+nothing this package can observe. `add_to_cart` takes no `consent=` argument
+as of 1.2.0 (nothing does any more) and sends as soon as it is called on a
+live session; the category only decides which route
+`assert_mutation_route_category` will accept the call against. It carries no
+card number, and the fake-card/real-card distinction this paragraph used to
+describe (`KORAIL_CARD_BEARING_MUTATION_CATEGORIES`) no longer exists for any
+category. The DAO's response type is a bare
 `BaseResponse` (`CartService.java:13`), so `add_to_cart` returns the unparsed
 envelope on a live send — the same shape `extend_discount_card` returns for
 its own bare-`BaseResponse` route — rather than a dedicated response
@@ -1315,8 +1371,10 @@ and the registered 구간 rows — the card number for the usage read, the stati
 names for the schedule read.
 
 **A reservation can carry a discount card, and it uses the ordinary reserve
-route.** `reserve_with_discount_card(train, card_no=..., consent=...)` POSTs to
-`certification.TicketReservation` exactly as `reserve` does. Two fields differ
+route.** `reserve_with_discount_card(train, card_no=...)` POSTs to
+`certification.TicketReservation` exactly as `reserve` does -- no `consent=`
+argument as of 1.2.0, so it sends as soon as it is called on a live session.
+Two fields differ
 from the live-verified one-adult 일반실 hold: the eight passenger rows collapse
 to a single row spelled `txtDiscKndCd1="153"` + `txtCardNo_1=<card>`, and
 `txtMenuId` becomes `"A2"`. Everything else is byte-identical.
@@ -1707,27 +1765,38 @@ environment; it is not a hardcoded service-code source. If no eligible item or
 override exists, the helper reports `maasStationTested=false` and performs no
 station-list request.
 
-Live smoke is opt-in and limited to login plus read/query calls. DynaPath
-device identity values must be supplied explicitly.
-KORAIL_ADVERTISING_ID is optional and defaults to an empty string:
+**1.2.0 removed the `run_live_smoke_from_env` helper this section used to
+show.** `korail_mobile_api.live` no longer exports it — importing the name
+below now raises `ImportError`. What remains is `build_config_from_env`,
+which only builds a `KorailConfig` with the DynaPath device identity pinned
+from three required environment variables; it makes no request and performs
+no login on its own. `KORAIL_ADVERTISING_ID` is still optional and still
+defaults to an empty string. A caller who wants the login-plus-read smoke the
+old helper ran now builds the config and drives `KorailClient` directly:
 
 ```bash
-export KORAIL_MOBILE_API_LIVE=1
-export KORAIL_MEMBER_NO="<member-id>"
-export KORAIL_PASSWORD="<password>"
 export KORAIL_DYNAPATH_DEVICE_ID="<android-id>"
 export KORAIL_DYNAPATH_OS_VERSION="<android-version>"
 export KORAIL_DYNAPATH_DEVICE_MODEL="<device-model>"
 export KORAIL_ADVERTISING_ID=""
-python3 -c "from korail_mobile_api.live import run_live_smoke_from_env; print(run_live_smoke_from_env())"
+PYTHONPATH="$PWD/src" python3 -c "
+from korail_mobile_api import build_config_from_env
+config = build_config_from_env()
+print(type(config).__name__, config.dynapath.enabled)
+"
 ```
 
-The helper performs both cache reads and the generic MAAS menu read before
-login, then performs the session-coupled deposit-bank and trip-menu reads after
-its single login. It emits only booleans, status codes, and bounded counts. Its
-metadata is limited to fields such as `appDataLoaded`, `noticeLoaded`,
-`maasMenuCount`, `depositBankCount`, and `tripMenuCount`; it does not return raw
-account, session, ticket, station, menu, app-data, or notice response bodies.
+That much runs with no credentials and no network access -- it only proves the
+three required DynaPath variables produce a config. `build_config_from_env`
+itself has no `KORAIL_MOBILE_API_LIVE` gate; actually logging in and reading
+still requires `KORAIL_MEMBER_NO`/`KORAIL_PASSWORD`, a `KorailClient` built
+from that config, and an explicit `client.login(...)` call. The
+`KORAIL_MOBILE_API_LIVE` switch itself (`korail_mobile_api.live.live_enabled`)
+still exists and still gates the scripts under `scripts/`, but it is not part
+of the public API any more -- it was never exported from
+`korail_mobile_api.__init__`, and it is the caller's own responsibility to
+check it before doing anything live, the way each script under `scripts/`
+still does.
 
 For the successful-read expansion, the pre-review complete offline suite result
 of `427 passed, 1 skipped` is historical. The independent final whole-feature
@@ -1804,4 +1873,4 @@ still provide a custom `DynapathConfig.token_provider`; the package contains no
 separate probe generator and does not retain request history. Login follows the
 app sequence and treats only `IRZ000001` or `S200` as final success.
 
-Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, an explicitly acknowledged real card payment, and a paid-ticket refund are implemented as consent-gated, dry-run-by-default methods (`reserve`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`). `reserve` accepts an arbitrary passenger mix (`KorailPassengerCounts`), either cabin class (`KorailSeatClass`), and any of the booking screen's three job types (`KorailReservationJobType`: immediate `1101`, seat-designated `1103`, standby/예약대기 `1102`), defaulting to the one-adult, general-seat, immediate request. Two adults in a general seat and one adult in 특실 are live-verified (2026-07-26); the other passenger types and any mix of them are static-evidenced only, and the seat-designated (`1103`), 예약대기 (`1102`) and 입석+좌석 (`1202`) variants are all live-verified (2026-07-26), `confirm_standby_hold` included. Real (chargeable) card payment is off by default: it requires `pay_with_card` plus a consent that sets `real_card_acknowledged=True` and `fake_card_only=False`, and `pay_with_fake_card` still refuses anything but a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.
+Reservation hold, unpaid-hold cancellation, a fake-card payment attempt, a real card payment, and a paid-ticket refund are implemented as ordinary methods (`reserve`, `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`) that send as soon as they are called, provided a login session exists -- as of 1.2.0 there is no consent object and no dry run gating any of them. `reserve` accepts an arbitrary passenger mix (`KorailPassengerCounts`), either cabin class (`KorailSeatClass`), and any of the booking screen's three job types (`KorailReservationJobType`: immediate `1101`, seat-designated `1103`, standby/예약대기 `1102`), defaulting to the one-adult, general-seat, immediate request. Two adults in a general seat and one adult in 특실 are live-verified (2026-07-26); the other passenger types and any mix of them are static-evidenced only, and the seat-designated (`1103`), 예약대기 (`1102`) and 입석+좌석 (`1202`) variants are all live-verified (2026-07-26), `confirm_standby_hold` included. `pay_with_card` and `pay_with_fake_card` remain two separate methods, but neither takes a `real_card_acknowledged`/`fake_card_only` flag any more: both build the same form through the same send path, so the method name the caller picked is the only thing distinguishing a real, chargeable card from a test one -- there is no runtime check that `pay_with_fake_card` was actually given a test card. Check-in, membership mutation, point/mileage mutation, and destructive ticket operations are not implemented in this package version.

@@ -1,17 +1,12 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
-"""환경변수로 실기기 값을 고정하고 라이브 스모크를 돌리는 보조 모듈.
+"""환경변수로 실기기 값을 고정하는 보조 모듈.
 
 :func:`build_config_from_env` 는 DynaPath 의 기기 식별자·OS·모델을 환경변수에서 읽어
 :class:`~korail_mobile_api.config.KorailConfig` 를 만듭니다 — 프로세스를 넘어
-안정적인 기기 식별자를 얻는 유일한 방법입니다. :func:`run_live_smoke_from_env` 는
-실제 서버에 붙어 읽기 표면을 한 바퀴 돕니다.
+안정적인 기기 식별자를 얻는 유일한 방법입니다.
 
 라이브 호출은 ``KORAIL_MOBILE_API_LIVE=1`` 이 없으면 시작하지 않습니다
 (:func:`live_enabled`).
@@ -20,9 +15,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any
 
-from .client import KorailClient
 from .config import KorailConfig
 from .constants import build_dalvik_user_agent
 from .dynapath import (
@@ -30,7 +23,6 @@ from .dynapath import (
     DynapathConfig,
     DynapathTokenSettings,
 )
-from .models import TrainSearchQuery
 
 
 def live_enabled() -> bool:
@@ -127,119 +119,3 @@ def build_config_from_env() -> KorailConfig:
         dynapath=dynapath,
         advertising_id=advertising_id,
     )
-
-
-def run_live_smoke_from_env() -> dict[str, Any]:
-    """실제 서버에 붙어 읽기 표면을 한 바퀴 돌고 결과 요약을 돌려줍니다.
-
-    ``KORAIL_MOBILE_API_LIVE=1`` 이 아니면 시작하지 않고 ``RuntimeError`` 입니다.
-    :func:`build_config_from_env` 로 기기 신원을 고정하고 :func:`read_credentials_from_env`
-    로 로그인한 뒤, 앱 기동 데이터·공지·UUID·MaaS 메뉴·역 목록·열차 조회 같은 계정
-    중립 조회와 로그인이 필요한 조회를 차례로 부릅니다.
-
-    **상태를 바꾸는 라우트는 하나도 부르지 않습니다.** 예약·결제·환불은 이 경로에
-    없습니다.
-    """
-    if not live_enabled():
-        raise RuntimeError("Set KORAIL_MOBILE_API_LIVE=1 to run live smoke")
-    member_no, password = read_credentials_from_env()
-    client = KorailClient(build_config_from_env())
-    try:
-        app_data = client.get_app_data()
-        notice = client.get_notice()
-        uuid = client.get_uuid()
-        maas_menu = client.get_maas_menu_list()
-        maas_service_code = os.environ.get("KORAIL_MAAS_SERVICE_CODE")
-        if not maas_service_code:
-            maas_service_code = next(
-                (
-                    item.additional_service_code
-                    for item in maas_menu.items
-                    if item.uses_station_selection
-                ),
-                None,
-            )
-        session = client.login(member_no, password)
-        deposit_banks = client.get_deposit_banks()
-        trip_menu = client.get_trip_menu()
-        maas_stations = (
-            client.get_maas_station_data(maas_service_code)
-            if maas_service_code
-            else None
-        )
-        common = client.get_common_code("")
-        station_info = client.get_station_info()
-        station_data = client.get_station_data()
-        calendar = client.get_train_calendar()
-        days = (
-            calendar.raw.get("runningCalendar")
-            if isinstance(calendar.raw.get("runningCalendar"), list)
-            else []
-        )
-        departure_date = os.environ.get("KORAIL_TEST_DATE") or (
-            str(days[0].get("runDt"))
-            if days and isinstance(days[0], dict)
-            else ""
-        )
-        if not departure_date:
-            raise RuntimeError(
-                "KORAIL_TEST_DATE is required when the calendar has no run date"
-            )
-        query = TrainSearchQuery(
-            departure_station_code=os.environ.get(
-                "KORAIL_DEPARTURE_STATION",
-                "서울",
-            ),
-            arrival_station_code=os.environ.get(
-                "KORAIL_ARRIVAL_STATION",
-                "부산",
-            ),
-            departure_date=departure_date,
-            departure_time=os.environ.get(
-                "KORAIL_DEPARTURE_TIME",
-                "060000",
-            ),
-        )
-        search = client.search_trains(query)
-        schedule = (
-            client.get_train_schedule(
-                search.trains[0].departure_date or departure_date,
-                search.trains[0].train_no,
-            )
-            if search.trains
-            else None
-        )
-        transfer = client.get_transfer_stations(
-            os.environ.get("KORAIL_DEPARTURE_STATION_CODE", "0001"),
-            os.environ.get("KORAIL_ARRIVAL_STATION_CODE", "0020"),
-        )
-        tickets = client.get_ticket_list()
-        stations = (station_data.raw.get("stns") or {}).get("stn")
-        return {
-            "appDataLoaded": bool(app_data.raw),
-            "noticeLoaded": bool(
-                notice.board_id or notice.post_sequence or notice.post_title
-                or notice.post_content
-            ),
-            "uuidLoaded": bool(uuid.verification_code),
-            "maasMenuCount": len(maas_menu.items),
-            "maasStationTested": maas_stations is not None,
-            "maasStationCount": (
-                len(maas_stations.stations) if maas_stations is not None else 0
-            ),
-            "loggedIn": bool(session.jsessionid),
-            "depositBankCount": len(deposit_banks.items),
-            "tripMenuCount": len(trip_menu.items),
-            "commonCode": common.h_msg_cd,
-            "stationInfoLoaded": bool(station_info.raw),
-            "stationDataCount": (
-                len(stations) if isinstance(stations, list) else 0
-            ),
-            "calendarCode": calendar.h_msg_cd,
-            "trainCount": len(search.trains),
-            "scheduleCode": schedule.h_msg_cd if schedule else None,
-            "transferCode": transfer.h_msg_cd,
-            "ticketCode": tickets.h_msg_cd,
-        }
-    finally:
-        client.close()

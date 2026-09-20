@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """기본 조회 응답을 :mod:`korail_mobile_api.models` 의 타입으로 옮깁니다.
 
@@ -52,20 +48,8 @@ from .models import (
     TransferStationListResponse,
     UuidResponse,
 )
-
-
-def _typed_optional_string(
-    data: Mapping[str, Any],
-    key: str,
-    *,
-    context: str,
-) -> str | None:
-    value = data.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a string or null"
-        )
-    return value
+from .read_parsers import _nested_rows, _nullable_string_fields, _optional_list
+from .read_parsers import _optional_string as _typed_optional_string
 
 
 def _typed_required_string(
@@ -135,21 +119,29 @@ def _typed_non_negative_integer_value(
     return parsed
 
 
-# Each response family's names for the typed helpers above; the context is
-# what its messages say. Seat inventory accepts a blank required string and
-# stations do not -- a station row without a code or a name is not a station.
+# Each response family's names for the typed helpers -- _typed_optional_string
+# from read_parsers, the rest defined above -- with the context each family's
+# messages say. Seat inventory accepts a blank required string and stations do
+# not -- a station row without a code or a name is not a station.
 _optional_string = partial(_typed_optional_string, context="cache")
-_station_optional_string = partial(_typed_optional_string, context="station")
 _station_required_string = partial(
     _typed_required_string, context="station", non_empty=True
 )
-_maas_optional_string = partial(_typed_optional_string, context="MAAS menu")
 _inventory_optional_string = partial(_typed_optional_string, context="seat inventory")
 _inventory_required_string = partial(_typed_required_string, context="seat inventory")
 _inventory_integer_value = partial(
     _typed_non_negative_integer_value, context="seat inventory"
 )
 _inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
+
+
+def _response_fields(response: BaseKorailResponse) -> dict[str, Any]:
+    return {
+        "h_msg_cd": response.h_msg_cd,
+        "h_msg_txt": response.h_msg_txt,
+        "str_result": response.str_result,
+        "raw": response.raw,
+    }
 
 
 def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
@@ -173,10 +165,7 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
             new_version=_optional_string(version_raw, "NEWDVERSION"),
         )
     return AppDataResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         disability_certification_msg=_optional_string(
             raw,
             "disability_certification_msg",
@@ -206,10 +195,7 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
     notice_raw = nested if isinstance(nested, Mapping) else raw
     nested_notice = isinstance(nested, Mapping)
     return NoticeResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         board_id=_optional_string(notice_raw, "BbrdId" if nested_notice else "bbrdId"),
         post_sequence=_optional_string(
             notice_raw, "PtwtSqno" if nested_notice else "ptwtSqno"
@@ -362,12 +348,36 @@ def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
             "KORAIL UUID response mutMrkVrfCd must be a non-empty string"
         )
     return UuidResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=response.raw,
+        **_response_fields(response),
         verification_code=value,
     )
+
+
+# Field maps (attribute -> wire key) for the MAAS menu parser, in the field
+# order parse_maas_menu_list_response has always used.
+_MAAS_ITEM_FIELDS: dict[str, str] = {
+    "active": "active",
+    "additional_service_code": "addSrvDvCd",
+    "app_data": "appData",
+    "icon_off": "iconOff",
+    "icon_on": "iconOn",
+    "info": "info",
+    "login_required": "login",
+    "name": "name",
+    "popup_image": "poppImg",
+    "menu_type": "type",
+    "url": "url",
+}
+
+_MAAS_RESPONSE_FIELDS: dict[str, str] = {
+    "departure_elevator_url": "dElevatorUrl",
+    "departure_navigation_url": "dLeadNaviUrl",
+    "departure_parking_url": "dParkingLotUrl",
+    "arrival_elevator_url": "aElevatorUrl",
+    "arrival_bus_info_url": "aBisInfoUrl",
+    "arrival_parking_url": "aParkingLotUrl",
+    "arrival_baggage_transfer_robot_url": "aBggTrsfRbtUrl",
+}
 
 
 def parse_maas_menu_list_response(
@@ -394,24 +404,10 @@ def parse_maas_menu_list_response(
             raise KorailProtocolError(
                 "KORAIL MAAS menuList contained a non-object row"
             )
-        raw = dict(row)
         items.append(
             MaasMenuItem(
-                active=_maas_optional_string(row, "active"),
-                additional_service_code=_maas_optional_string(
-                    row,
-                    "addSrvDvCd",
-                ),
-                app_data=_maas_optional_string(row, "appData"),
-                icon_off=_maas_optional_string(row, "iconOff"),
-                icon_on=_maas_optional_string(row, "iconOn"),
-                info=_maas_optional_string(row, "info"),
-                login_required=_maas_optional_string(row, "login"),
-                name=_maas_optional_string(row, "name"),
-                popup_image=_maas_optional_string(row, "poppImg"),
-                menu_type=_maas_optional_string(row, "type"),
-                url=_maas_optional_string(row, "url"),
-                raw=raw,
+                **_nullable_string_fields(row, _MAAS_ITEM_FIELDS, "MAAS menu"),
+                raw=dict(row),
             )
         )
     raw = response.raw
@@ -421,17 +417,21 @@ def parse_maas_menu_list_response(
         str_result=response.str_result,
         raw=raw,
         items=tuple(items),
-        departure_elevator_url=_maas_optional_string(raw, "dElevatorUrl"),
-        departure_navigation_url=_maas_optional_string(raw, "dLeadNaviUrl"),
-        departure_parking_url=_maas_optional_string(raw, "dParkingLotUrl"),
-        arrival_elevator_url=_maas_optional_string(raw, "aElevatorUrl"),
-        arrival_bus_info_url=_maas_optional_string(raw, "aBisInfoUrl"),
-        arrival_parking_url=_maas_optional_string(raw, "aParkingLotUrl"),
-        arrival_baggage_transfer_robot_url=_maas_optional_string(
-            raw,
-            "aBggTrsfRbtUrl",
-        ),
+        **_nullable_string_fields(raw, _MAAS_RESPONSE_FIELDS, "MAAS menu"),
     )
+
+
+# Field map (attribute -> wire key) for the station data parser's optional
+# strings, in the field order parse_station_data_response has always used.
+_STATION_OPTIONAL_STRING_FIELDS: dict[str, str] = {
+    "longitude": "longitude",
+    "latitude": "latitude",
+    "group": "group",
+    "major": "major",
+    "popup_message": "popupMessage",
+    "popup_link_title": "popupLinkTitle",
+    "popup_link_url": "popupLinkUrl",
+}
 
 
 def parse_station_data_response(
@@ -458,40 +458,25 @@ def parse_station_data_response(
             raise KorailProtocolError(
                 "KORAIL station data contained a non-object row"
             )
-        raw = dict(row)
         stations.append(
             KorailStation(
                 code=_station_required_string(row, "stn_cd"),
                 name=_station_required_string(row, "stn_nm"),
-                longitude=_station_optional_string(row, "longitude"),
-                latitude=_station_optional_string(row, "latitude"),
-                raw=raw,
-                group=_station_optional_string(row, "group"),
-                major=_station_optional_string(row, "major"),
+                raw=dict(row),
                 popup_type=_typed_optional_int(
                     row,
                     "popupType",
                     context="station",
                 ),
-                popup_message=_station_optional_string(
+                **_nullable_string_fields(
                     row,
-                    "popupMessage",
-                ),
-                popup_link_title=_station_optional_string(
-                    row,
-                    "popupLinkTitle",
-                ),
-                popup_link_url=_station_optional_string(
-                    row,
-                    "popupLinkUrl",
+                    _STATION_OPTIONAL_STRING_FIELDS,
+                    "station",
                 ),
             )
         )
     return StationDataResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=response.raw,
+        **_response_fields(response),
         stations=tuple(stations),
     )
 
@@ -508,10 +493,7 @@ def parse_station_info_response(
     """
     raw = response.raw
     return StationInfoResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         count=_typed_non_negative_integer_value(
             raw.get("count"),
             "count",
@@ -549,15 +531,7 @@ def parse_train_calendar_response(
     # so a missing/null runningCalendar yields an empty calendar in the app.
     # Accept absent/null as an empty day tuple; only a present non-list is a
     # genuine shape violation.
-    raw_rows = raw.get("runningCalendar")
-    if raw_rows is None:
-        rows: list[Any] = []
-    elif isinstance(raw_rows, list):
-        rows = raw_rows
-    else:
-        raise KorailProtocolError(
-            "KORAIL train calendar field runningCalendar must be a list"
-        )
+    rows = _optional_list(raw, "runningCalendar", "train calendar")
     days: list[TrainCalendarDay] = []
     for row in rows:
         if not isinstance(row, Mapping):
@@ -650,10 +624,7 @@ def parse_train_calendar_response(
             )
         )
     return TrainCalendarResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         days=tuple(days),
     )
 
@@ -792,10 +763,7 @@ def parse_train_schedule_response(
         return _typed_optional_string(raw, key, context="train schedule")
 
     return TrainScheduleResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         delay_detail_reason_content=optional("dlayDtlRsnCont"),
         stops=tuple(stops),
         delay_station_construction_order=optional("dlayStnConsOrdr"),
@@ -872,10 +840,7 @@ def parse_transfer_station_list_response(
             )
         )
     return TransferStationListResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         stations=tuple(stations),
     )
 
@@ -888,25 +853,6 @@ def _inventory_required_list(
     if not isinstance(value, list):
         raise KorailProtocolError(
             f"KORAIL seat inventory field {key} must be a list"
-        )
-    return value
-
-
-def _inventory_optional_list(
-    data: Mapping[str, Any],
-    key: str,
-) -> list[Any]:
-    # SearchCarListDao.CarInfo.seatAttInfos is a nullable Gson List
-    # (SearchCarListDao.java:19) and the app null-guards it before use
-    # (SeatSearchActivity.java:254 -> C0804d.isNull(list) || size()==0), so a
-    # null/absent list is a valid "no special-seat attributes" car. Treat it as
-    # empty; only a present-but-non-list value is malformed.
-    value = data.get(key)
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be a list or null"
         )
     return value
 
@@ -932,39 +878,20 @@ def parse_seat_car_list_response(
     입력입니다.
     """
     raw = response.raw
-    container = raw.get("srcar_infos")
-    if container is None:
-        rows = []
-    elif isinstance(container, Mapping):
-        rows_value = container.get("srcar_info")
-        if rows_value is None:
-            rows = []
-        elif isinstance(rows_value, list):
-            rows = rows_value
-        else:
-            raise KorailProtocolError(
-                "KORAIL seat inventory field srcar_info must be a list or "
-                "null"
-            )
-    else:
-        raise KorailProtocolError(
-            "KORAIL seat inventory field srcar_infos must be an object or "
-            "null"
-        )
+    rows = _nested_rows(raw, "srcar_infos", "srcar_info", "seat inventory")
     cars: list[SeatCar] = []
-    car_numbers: set[int] = set()
     for row in rows:
         if not isinstance(row, Mapping):
             raise KorailProtocolError(
                 "KORAIL seat car list contained a non-object row"
             )
         car_no = _inventory_required_int(row, "h_srcar_no")
-        if car_no in car_numbers:
-            raise KorailProtocolError(
-                "KORAIL seat car list contained a duplicate car number"
-            )
-        car_numbers.add(car_no)
-        attributes_raw = _inventory_optional_list(row, "seatAttInfos")
+        # SearchCarListDao.CarInfo.seatAttInfos is a nullable Gson List
+        # (SearchCarListDao.java:19) and the app null-guards it before use
+        # (SeatSearchActivity.java:254 -> C0804d.isNull(list) || size()==0), so a
+        # null/absent list is a valid "no special-seat attributes" car. Treat it as
+        # empty; only a present-but-non-list value is malformed.
+        attributes_raw = _optional_list(row, "seatAttInfos", "seat inventory")
         attributes: list[SeatAttribute] = []
         for attribute_raw in attributes_raw:
             if not isinstance(attribute_raw, Mapping):
@@ -988,13 +915,6 @@ def parse_seat_car_list_response(
             row,
             "h_rest_seat_cnt",
         )
-        if (
-            total_seat_count is not None
-            and remaining_seat_count > total_seat_count
-        ):
-            raise KorailProtocolError(
-                "KORAIL seat car remaining count exceeds total count"
-            )
         cars.append(
             SeatCar(
                 car_no=car_no,
@@ -1012,10 +932,7 @@ def parse_seat_car_list_response(
             )
         )
     return SeatCarListResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         recommended_car_no=_inventory_optional_int(
             raw,
             "h_rcmd_srcar_no",
@@ -1064,8 +981,10 @@ def parse_seat_inventory_response(
     """``research.TResidualSeatsResearch.do`` 의 좌석 배치와 점유 상태를 파싱합니다.
 
     7.0.6 DTO는 ``seatList``·``windowList`` 생략 시 빈 목록이며 잔여·전체
-    좌석 수 키는 선언하지 않습니다. 그 두 건수가 함께 오면 모순 여부를
-    검사하고, 없으면 ``None`` 으로 둡니다.
+    좌석 수 키는 선언하지 않습니다. 있으면 그대로 담고, 없으면 ``None`` 으로
+    둡니다. 두 건수가 서로 모순이어도 서버가 보낸 그대로 돌려줍니다 — 읽기
+    전용 재고 데이터라 서버 자신의 계수기끼리의 불일치는 호출자가 볼 서버
+    이상 현상이지, 이 클라이언트가 응답을 거부할 사유가 아닙니다.
 
     좌석 행은 :class:`~korail_mobile_api.models.PhysicalSeat` 가 됩니다. 창문
     위치 비율은 좌석이 아니라 좌석표를 그리기 위한 값이라
@@ -1082,14 +1001,6 @@ def parse_seat_inventory_response(
         raw,
         "seat_total_count",
     )
-    if (
-        remaining_count is not None
-        and total_count is not None
-        and remaining_count > total_count
-    ):
-        raise KorailProtocolError(
-            "KORAIL seat inventory remaining count exceeds total count"
-        )
 
     seat_rows = (
         _inventory_required_list(raw, "seatList") if "seatList" in raw else []
@@ -1155,10 +1066,7 @@ def parse_seat_inventory_response(
         )
 
     return SeatInventoryResponse(
-        h_msg_cd=response.h_msg_cd,
-        h_msg_txt=response.h_msg_txt,
-        str_result=response.str_result,
-        raw=raw,
+        **_response_fields(response),
         layout_type=layout_type,
         arrangement_code=arrangement_code,
         remaining_count=remaining_count,

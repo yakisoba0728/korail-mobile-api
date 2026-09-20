@@ -1,10 +1,6 @@
 # korail-mobile-api — https://github.com/yakisoba0728/korail-mobile-api
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
-#
-# Apache License 2.0 으로 배포됩니다(전문: LICENSE, 귀속 고지: NOTICE).
-# 재배포 시 이 고지를 소스 형태로 그대로 유지해야 하고(§4(c)), 수정했다면
-# 수정했다는 사실을 눈에 띄게 표시해야 합니다(§4(b)).
 
 """읽기 라우트 응답을 :mod:`korail_mobile_api.read_models` 타입으로 변환.
 
@@ -16,7 +12,7 @@ KORAIL 은 ``String`` 선언 필드를 JSON 숫자로도 보내므로
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 from .errors import (
@@ -90,11 +86,8 @@ from .read_models import (
     PriceFare,
     PriceFareQuoteResponse,
     ProductDetailResponse,
-    ProductRecommendation,
     ProductReservation,
     ProductReservationListResponse,
-    ProductTrain,
-    ProductTrainInquiryResponse,
     ReceiptCashPayment,
     ReceiptPayment,
     RecentDeliveryHistoryResponse,
@@ -119,9 +112,6 @@ from .read_models import (
     TicketReceipt,
     TicketReceiptResponse,
     TicketReservationDetailResponse,
-    TourTrainInfoResponse,
-    TourTrainSeatAdditionalInfo,
-    TourTrainSeatInfo,
     TrainScheduleItem,
     TripChangeDateResponse,
     TripMenuContent,
@@ -133,53 +123,21 @@ from .read_models import (
 def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListResponse:
     """7.0.6 ``pnr_list`` → ``ticket_list`` 승차권 목록."""
     raw = response.raw
-    reservation_rows = raw.get("pnr_list")
-    if reservation_rows is None:
-        reservation_rows = []
-    if not isinstance(reservation_rows, list):
-        raise KorailProtocolError("KORAIL ticket list pnr_list must be a list or null")
     reservations: list[TicketListReservation] = []
-    for reservation_raw in reservation_rows:
-        if not isinstance(reservation_raw, Mapping):
-            raise KorailProtocolError("KORAIL ticket list reservation must be an object")
-        ticket_rows = reservation_raw.get("ticket_list")
-        if ticket_rows is None:
-            ticket_rows = []
-        if not isinstance(ticket_rows, list):
-            raise KorailProtocolError("KORAIL ticket list ticket_list must be a list or null")
+    for reservation_raw in _rows(raw, "pnr_list", "ticket list", "ticket list reservation"):
         tickets: list[TicketListTicket] = []
-        for ticket_raw in ticket_rows:
-            if not isinstance(ticket_raw, Mapping):
-                raise KorailProtocolError("KORAIL ticket list ticket must be an object")
-            train_rows = ticket_raw.get("jrn_info")
-            if train_rows is None:
-                train_rows = []
-            if not isinstance(train_rows, list) or any(
-                not isinstance(train_row, Mapping) for train_row in train_rows
-            ):
-                raise KorailProtocolError("KORAIL ticket list jrn_info must contain objects")
+        for ticket_raw in _rows(
+            reservation_raw, "ticket_list", "ticket list", "ticket list ticket"
+        ):
+            train_info = tuple(
+                _rows(ticket_raw, "jrn_info", "ticket list", "ticket list jrn_info")
+            )
             tickets.append(
                 TicketListTicket(
-                    pnr_no=_optional_scalar_string(ticket_raw, "h_pnr_no", "ticket list"),
-                    sale_window_no=_optional_scalar_string(
-                        ticket_raw, "h_orgtk_wct_no", "ticket list"
+                    **_nullable_scalar_fields(
+                        ticket_raw, _TICKET_LIST_TICKET_FIELDS, "ticket list"
                     ),
-                    sale_date=_optional_scalar_string(
-                        ticket_raw, "h_orgtk_sale_dt", "ticket list"
-                    ),
-                    return_sale_date=_optional_scalar_string(
-                        ticket_raw, "h_orgtk_ret_sale_dt", "ticket list"
-                    ),
-                    sale_sequence=_optional_scalar_string(
-                        ticket_raw, "h_orgtk_sale_sqno", "ticket list"
-                    ),
-                    return_password=_optional_scalar_string(
-                        ticket_raw, "h_orgtk_ret_pwd", "ticket list"
-                    ),
-                    ticket_status_code=_optional_scalar_string(
-                        ticket_raw, "h_tk_stt_cd", "ticket list"
-                    ),
-                    train_info=tuple(train_rows),
+                    train_info=train_info,
                     raw=ticket_raw,
                 )
             )
@@ -202,9 +160,21 @@ def _validate_envelope(
 ) -> bool:
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
-    # The envelope's value types, checked where every other parser checks
-    # them; the result is not needed here.
-    BaseKorailResponse.from_raw(dict(raw))
+    # http.parse_base_response 의 것과 같은 판정을 앞에 둔다. 이 함수는 raw 를
+    # 직접 받는 호출자(파서를 단위로 부르는 코드, 이 아래의 frozenset 멤버십
+    # 검사 자체)가 있어 http.py 를 반드시 거치지 않으므로, 값이 무엇인지 보기
+    # 전에 여기서도 따로 확인해야 한다 — 그러지 않으면 h_msg_cd 가 리스트·객체로
+    # 오면 아래 ``code not in accepted_empty_codes`` 가 TypeError 로 죽는다.
+    invalid = [
+        name
+        for name in ("h_msg_cd", "h_msg_txt", "strResult")
+        if name in raw and raw[name] is not None and not isinstance(raw[name], str)
+    ]
+    if invalid:
+        raise KorailProtocolError(
+            "KORAIL response envelope fields must be strings or null: "
+            f"{', '.join(invalid)}"
+        )
     if "strResult" not in raw:
         raise KorailProtocolError(
             "KORAIL response omitted strResult; the protected APK default "
@@ -306,6 +276,21 @@ def _row(value: Any, context: str) -> Mapping[str, Any]:
     return value
 
 
+def _rows(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+    row_context: str | None = None,
+) -> Iterator[Mapping[str, Any]]:
+    """``key`` 리스트의 각 항목을 객체로 검증하며 지연 순회.
+
+    목록 조회(``_optional_list``)는 즉시 실행되고, 항목별 객체 검증
+    (``_row``)은 순회 시점에 지연 실행됩니다.
+    """
+    row_label = row_context if row_context is not None else f"{context} {key}"
+    return (_row(value, row_label) for value in _optional_list(data, key, context))
+
+
 def _optional_string(
     data: Mapping[str, Any],
     key: str,
@@ -340,10 +325,16 @@ def _optional_scalar_string(
 ) -> str | None:
     """스칼라 필드 — JSON 문자열과 JSON 정수를 모두 수용.
 
-    KORAIL 이 ``String`` 선언 필드를 숫자로도 보내는 사례: ``h_jrny_cnt``,
-    ``h_srcar_no``. ``bool``/``float``/리스트/객체는 프로토콜 오류. 인원 수
-    ``h_st_prnb``/``h_cls_prnb`` 는 반대로 정수로 읽으므로 :func:`_optional_integer`
-    가 맡습니다.
+    KORAIL 은 APK 가 자바 ``String`` 으로 선언한 필드를 둘 중 아무 쪽으로나
+    보냅니다. 예약 응답은 여정 수를 ``h_jrny_cnt="0001"`` 로 보내는데 예약 이력은
+    같은 필드를 JSON 정수 ``1`` 로 보냅니다. 같은 식으로 숫자로도 오는 필드로
+    ``h_srcar_no`` 가 있습니다. 홀드를 이력에서 다시 읽는 것이 PNR 을 잃었을 때의
+    복구 경로이므로 둘 다 파싱돼야 합니다.
+
+    따옴표가 없다고 거부하면 실제 예약이 고아가 되므로, 폼 빌더가 기대하는
+    문자열로 정규화하고 정말로 다른 모양인 것 — ``bool``, ``float``, 리스트,
+    객체 — 만 계속 거부합니다. 인원 수 ``h_st_prnb``/``h_cls_prnb`` 는 반대로
+    정수로 읽으므로 :func:`_optional_integer` 가 맡습니다.
     """
     value = data.get(key)
     if value is None or isinstance(value, str):
@@ -362,21 +353,9 @@ def _optional_integer(
     key: str,
     context: str,
 ) -> int | None:
-    value = data.get(key)
-    if value is None:
+    if data.get(key) is None:
         return None
-    if type(value) is int:
-        return value
-    if (
-        isinstance(value, str)
-        and value
-        and all("0" <= character <= "9" for character in value)
-    ):
-        return int(value)
-    raise KorailProtocolError(
-        f"KORAIL {context} field {key} must be an integer, "
-        "an ASCII decimal string, or null"
-    )
+    return _required_integer(data, key, context)
 
 
 def _required_integer(
@@ -396,7 +375,13 @@ def _required_integer(
         and value
         and all("0" <= character <= "9" for character in value)
     ):
-        return int(value)
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise KorailProtocolError(
+                f"KORAIL {context} field {key} has an unsupported "
+                "ASCII-decimal length"
+            ) from exc
     raise KorailProtocolError(
         f"KORAIL {context} field {key} must be an integer or an "
         "ASCII decimal string"
@@ -430,6 +415,16 @@ def _nullable_scalar_fields(
 
 
 # ─── Field maps for the first-half parsers ───────────────────────────────────
+
+_TICKET_LIST_TICKET_FIELDS: dict[str, str] = {
+    "pnr_no": "h_pnr_no",
+    "sale_window_no": "h_orgtk_wct_no",
+    "sale_date": "h_orgtk_sale_dt",
+    "return_sale_date": "h_orgtk_ret_sale_dt",
+    "sale_sequence": "h_orgtk_sale_sqno",
+    "return_password": "h_orgtk_ret_pwd",
+    "ticket_status_code": "h_tk_stt_cd",
+}
 
 _CART_ITEM_FIELDS: dict[str, str] = {
     "service_code": "addSrvDvCd",
@@ -671,20 +666,14 @@ def _parse_pass_menu_data(
             **_nullable_string_fields(row, _PASS_AGE_OPTION_FIELDS, "pass age option"),
             raw=row,
         )
-        for row in (
-            _row(v, f"{context} pass_ageinfo")
-            for v in _optional_list(data, "pass_ageinfo", context)
-        )
+        for row in _rows(data, "pass_ageinfo", context)
     )
     period_options = tuple(
         PassPeriodOption(
             **_nullable_string_fields(row, _PASS_PERIOD_OPTION_FIELDS, "pass period option"),
             raw=row,
         )
-        for row in (
-            _row(v, f"{context} pass_periodinfo")
-            for v in _optional_list(data, "pass_periodinfo", context)
-        )
+        for row in _rows(data, "pass_periodinfo", context)
     )
     return PassMenuData(
         commuter_kind_code=_optional_string(data, "h_cmtr_knd_cd", context),
@@ -705,12 +694,11 @@ def _parse_pass_goods_info(
     passenger_infos = None
     if passenger_infos_data is not None:
         passengers = []
-        for value in _optional_list(
+        for item in _rows(
             passenger_infos_data,
             "psg_info",
             "pass passenger infos",
         ):
-            item = _row(value, "pass passenger infos psg_info")
             passengers.append(
                 PassPassengerInfo(
                     # The live pass menu sends these counts as ZERO-PADDED
@@ -771,8 +759,7 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
     # Live pass.passMenu.do success is result-only (no h_msg_cd/h_msg_txt).
     _validate_strict_read_envelope(raw, allow_result_only_success=True)
     items = []
-    for value in _optional_list(raw, "list", "pass menu"):
-        item = _row(value, "pass menu list")
+    for item in _rows(raw, "list", "pass menu"):
         web_data = _optional_mapping(item, "webData", "pass menu item")
         items.append(
             PassMenuItem(
@@ -820,10 +807,7 @@ def parse_crew_request_list_response(
             **_nullable_string_fields(row, _CREW_REQUEST_OPTION_FIELDS, "crew request option"),
             raw=row,
         )
-        for row in (
-            _row(v, "crew request list prsList")
-            for v in _optional_list(raw, "prsList", "crew request list")
-        )
+        for row in _rows(raw, "prsList", "crew request list")
     )
     return CrewRequestListResponse(items=items, **_response_fields(raw))
 
@@ -859,10 +843,7 @@ def parse_deposit_bank_response(
             **_nullable_string_fields(row, _DEPOSIT_BANK_FIELDS, "deposit bank"),
             raw=row,
         )
-        for row in (
-            _row(v, "deposit bank list dptnBank")
-            for v in _optional_list(raw, "dptnBank", "deposit bank list")
-        )
+        for row in _rows(raw, "dptnBank", "deposit bank list")
     )
     return DepositBankListResponse(items=items, **_response_fields(raw))
 
@@ -960,20 +941,17 @@ def parse_pass_availability_response(
     # parse_pass_menu_response.
     _validate_envelope(raw, allow_result_only_success=True)
     open_dates = []
-    for value in _optional_list(raw, "pass_info", "pass availability"):
-        item = _row(value, "pass availability pass_info")
+    for item in _rows(raw, "pass_info", "pass availability"):
         date = _optional_string(item, "h_use_open_dt", "pass date")
         if date is not None:
             open_dates.append(date)
     ticket_issue_dates = []
-    for value in _optional_list(raw, "ticket_info", "pass availability"):
-        item = _row(value, "pass availability ticket_info")
+    for item in _rows(raw, "ticket_info", "pass availability"):
         date = _optional_string(item, "h_ise_dt2", "ticket issue date")
         if date is not None:
             ticket_issue_dates.append(date)
     offices = []
-    for value in _optional_list(raw, "wct_info", "pass availability"):
-        item = _row(value, "pass availability wct_info")
+    for item in _rows(raw, "wct_info", "pass availability"):
         offices.append(
             PassOffice(
                 code=_optional_string(item, "eng_cd_val", "pass office"),
@@ -994,17 +972,13 @@ def parse_pass_availability_response(
 def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
     _validate_envelope(raw)
     items = []
-    for value in _optional_list(raw, "menuList", "trip menu"):
-        item = _row(value, "trip menu menuList")
+    for item in _rows(raw, "menuList", "trip menu"):
         contents = tuple(
             TripMenuContent(
                 **_nullable_string_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
                 raw=row,
             )
-            for row in (
-                _row(cv, "trip menu contList")
-                for cv in _optional_list(item, "contList", "trip menu")
-            )
+            for row in _rows(item, "contList", "trip menu")
         )
         items.append(
             TripMenuItem(
@@ -1032,10 +1006,7 @@ def parse_product_reservation_list_response(
             **_nullable_string_fields(row, _PRODUCT_RESERVATION_FIELDS, "product reservation"),
             raw=row,
         )
-        for row in (
-            _row(v, "product reservation list entity")
-            for v in _optional_list(main, "entity", "product reservation list")
-        )
+        for row in _rows(main, "entity", "product reservation list")
     )
     return ProductReservationListResponse(
         items=items,
@@ -1052,8 +1023,7 @@ def parse_product_detail_response(
     if main is None:
         return ProductDetailResponse(**_response_fields(raw))
     included_items = []
-    for value in _optional_list(main, "entityOne", "product detail"):
-        item = _row(value, "product detail entityOne")
+    for item in _rows(main, "entityOne", "product detail"):
         name = _optional_string(item, "strGdConsItmNm", "included item")
         if name is not None:
             included_items.append(name)
@@ -1074,8 +1044,7 @@ def parse_ticket_receipt_response(
     for value in rows:
         item = _row(value, "ticket receipt receipt_info")
         payments = []
-        for pv in _optional_list(item, "stl_info", "ticket receipt"):
-            payment = _row(pv, "ticket receipt stl_info")
+        for payment in _rows(item, "stl_info", "ticket receipt"):
             payments.append(
                 ReceiptPayment(
                     **_nullable_string_fields(
@@ -1091,8 +1060,7 @@ def parse_ticket_receipt_response(
                 )
             )
         cash_receipts = []
-        for cv in _optional_list(item, "cash_rcet_info", "ticket receipt"):
-            cash = _row(cv, "ticket receipt cash_rcet_info")
+        for cash in _rows(item, "cash_rcet_info", "ticket receipt"):
             cash_receipts.append(
                 ReceiptCashPayment(
                     **_nullable_string_fields(
@@ -1136,16 +1104,12 @@ def parse_reservation_history_response(
     if empty:
         return ReservationHistoryResponse(**_response_fields(raw))
     trains = []
-    journeys = _nested_rows(raw, "jrny_infos", "jrny_info", "reservation history")
-    for journey_value in journeys:
+    for journey_value in _nested_rows(
+        raw, "jrny_infos", "jrny_info", "reservation history"
+    ):
         journey = _row(journey_value, "reservation history jrny_info")
-        train_wrapper = _optional_mapping(
-            journey, "train_infos", "reservation history"
-        )
-        if train_wrapper is None:
-            continue
-        for train_value in _optional_list(
-            train_wrapper, "train_info", "reservation history"
+        for train_value in _nested_rows(
+            journey, "train_infos", "train_info", "reservation history"
         ):
             train = _row(train_value, "reservation history train_info")
             trains.append(
@@ -1256,8 +1220,7 @@ def parse_merge_seats_inquiry_response(
 ) -> MergeSeatsInquiryResponse:
     _validate_strict_read_envelope(raw)
     stations = []
-    for value in _optional_list(raw, "midStnList", "merge seats inquiry"):
-        station = _row(value, "merge seats inquiry midStnList")
+    for station in _rows(raw, "midStnList", "merge seats inquiry"):
         stations.append(
             IntermediateStation(
                 code=_optional_string(
@@ -1311,16 +1274,17 @@ def parse_pass_schedule_response(
         else None
     )
     schedules = []
-    for schedule_value in _optional_list(raw, "schedule_info", "pass schedule"):
-        schedule = _row(schedule_value, "pass schedule schedule_info")
+    for schedule in _rows(raw, "schedule_info", "pass schedule"):
         trains = tuple(
             PassScheduleTrain(
                 **_nullable_string_fields(row, _PASS_SCHEDULE_TRAIN_FIELDS, "pass schedule train"),
                 raw=row,
             )
-            for row in (
-                _row(tv, "pass schedule train_list")
-                for tv in _optional_list(schedule, "train_list", "pass schedule schedule_info")
+            for row in _rows(
+                schedule,
+                "train_list",
+                "pass schedule schedule_info",
+                "pass schedule train_list",
             )
         )
         schedules.append(PassScheduleInfo(trains=trains, raw=schedule))
@@ -1451,8 +1415,7 @@ def parse_discount_card_usage_response(
 ) -> DiscountCardUsageListResponse:
     _validate_strict_read_envelope(raw)
     items = []
-    for value in _optional_list(raw, "tkUseList", "discount card usage"):
-        item = _row(value, "discount card usage tkUseList")
+    for item in _rows(raw, "tkUseList", "discount card usage"):
         items.append(
             DiscountCardUsage(
                 **_nullable_string_fields(
@@ -1474,8 +1437,7 @@ def parse_discount_card_schedule_response(
 ) -> DiscountCardScheduleResponse:
     _validate_strict_read_envelope(raw)
     trains = []
-    for value in _optional_list(raw, "trnScdlList", "discount card schedule"):
-        item = _row(value, "discount card schedule trnScdlList")
+    for item in _rows(raw, "trnScdlList", "discount card schedule"):
         trains.append(
             DiscountCardScheduleTrain(
                 # Scalar rather than string: cmtrPrc is a fare and the
@@ -1612,8 +1574,7 @@ def parse_multi_child_discount_target_response(
 ) -> MultiChildDiscountTargetResponse:
     _validate_strict_read_envelope(raw)
     targets = []
-    for value in _optional_list(raw, "fmlyList", "multi-child targets"):
-        item = _row(value, "multi-child targets fmlyList")
+    for item in _rows(raw, "fmlyList", "multi-child targets"):
         targets.append(
             MultiChildDiscountTarget(
                 **_nullable_string_fields(
@@ -1635,8 +1596,7 @@ def parse_customer_trip_info_response(
 ) -> CustomerTripInfoResponse:
     _validate_strict_read_envelope(raw)
     trips = []
-    for value in _optional_list(raw, "mainList", "customer trip info"):
-        item = _row(value, "customer trip info mainList")
+    for item in _rows(raw, "mainList", "customer trip info"):
         trips.append(
             CustomerTripInfo(
                 **_nullable_string_fields(
@@ -1658,8 +1618,7 @@ def parse_maas_service_detail_list_response(
 ) -> MaasServiceDetailListResponse:
     _validate_strict_read_envelope(raw)
     details = []
-    for value in _optional_list(raw, "addSrvList", "MaaS service details"):
-        item = _row(value, "MaaS service details addSrvList")
+    for item in _rows(raw, "addSrvList", "MaaS service details"):
         info_raw = _optional_mapping(item, "detailInfo", "MaaS service detail")
         detail_info = None
         if info_raw is not None:
@@ -1710,68 +1669,6 @@ def parse_trip_change_date_response(
             "trip change dates",
         ),
         trip_change_dates=tuple(dates),
-        **_response_fields(raw),
-    )
-
-
-def parse_tour_train_info_response(
-    raw: Mapping[str, Any],
-) -> TourTrainInfoResponse:
-    _validate_strict_read_envelope(raw)
-    seat_infos = _optional_mapping(raw, "seat_infos", "tour train info")
-    seats = []
-    if seat_infos is not None:
-        for value in _optional_list(
-            seat_infos,
-            "seat_info",
-            "tour train seat infos",
-        ):
-            seat = _row(value, "tour train seat_info")
-            additional_wrapper = _optional_mapping(
-                seat,
-                "seat_add_infos",
-                "tour train seat info",
-            )
-            additional_infos = []
-            if additional_wrapper is not None:
-                for additional_value in _optional_list(
-                    additional_wrapper,
-                    "seat_add_info",
-                    "tour train additional seat infos",
-                ):
-                    additional = _row(
-                        additional_value,
-                        "tour train seat_add_info",
-                    )
-                    # TourTrainInfoDao.SeatAddInfo.h_psg_num is Java `int`
-                    # (TourTrainInfoDao.java:14); the h_-prefixed backend
-                    # serializes such ints as quoted strings on the wire (proven
-                    # for sibling h_srcar_no/h_rest_seat_cnt), and Gson coerces
-                    # them, so accept the string form too.
-                    passenger_count = _required_integer(
-                        additional,
-                        "h_psg_num",
-                        "tour train seat",
-                    )
-                    additional_infos.append(
-                        TourTrainSeatAdditionalInfo(
-                            passenger_count=passenger_count,
-                            raw=additional,
-                        )
-                    )
-            seats.append(
-                TourTrainSeatInfo(
-                    seat_attribute_code=_optional_string(
-                        seat,
-                        "h_seat_att_cd",
-                        "tour train seat info",
-                    ),
-                    additional_infos=tuple(additional_infos),
-                    raw=seat,
-                )
-            )
-    return TourTrainInfoResponse(
-        seat_infos=tuple(seats),
         **_response_fields(raw),
     )
 
@@ -1841,8 +1738,7 @@ def parse_commuter_info_response(
 ) -> CommuterInfoResponse:
     _validate_strict_read_envelope(raw)
     passenger_options = []
-    for value in _optional_list(raw, "psgList", "commuter info"):
-        item = _row(value, "commuter info psgList")
+    for item in _rows(raw, "psgList", "commuter info"):
         passenger_options.append(
             CommuterPassengerOption(
                 commuter_usage_age_code=_optional_string(
@@ -1928,8 +1824,7 @@ def parse_price_fare_quote_response(
 ) -> PriceFareQuoteResponse:
     _validate_strict_read_envelope(raw)
     fares = []
-    for value in _optional_list(raw, "prcList", "price fare quote"):
-        item = _row(value, "price fare quote prcList")
+    for item in _rows(raw, "prcList", "price fare quote"):
         fares.append(
             PriceFare(
                 **_nullable_string_fields(
@@ -2033,26 +1928,11 @@ def parse_pbp_acceptance_specification_response(
 ) -> PbpAcceptanceSpecificationResponse:
     _validate_strict_read_envelope(raw)
     tickets = []
-    for ticket_value in _optional_list(
-        raw,
-        "tkList",
-        "PBP acceptance specification",
-    ):
-        ticket = _row(ticket_value, "PBP acceptance specification tkList")
+    for ticket in _rows(raw, "tkList", "PBP acceptance specification"):
         journeys = []
-        for journey_value in _optional_list(
-            ticket,
-            "jrnyList",
-            "PBP acceptance ticket",
-        ):
-            journey = _row(journey_value, "PBP acceptance ticket jrnyList")
+        for journey in _rows(ticket, "jrnyList", "PBP acceptance ticket"):
             seats = []
-            for seat_value in _optional_list(
-                journey,
-                "seatList",
-                "PBP acceptance journey",
-            ):
-                seat = _row(seat_value, "PBP acceptance journey seatList")
+            for seat in _rows(journey, "seatList", "PBP acceptance journey"):
                 seats.append(
                     PbpAcceptanceSeat(
                         **_nullable_string_fields(
@@ -2104,15 +1984,9 @@ def parse_platform_number_response(
 ) -> PlatformNumberResponse:
     _validate_strict_read_envelope(raw)
     tickets = []
-    for ticket_value in _optional_list(raw, "tkList", "platform number"):
-        ticket = _row(ticket_value, "platform number tkList")
+    for ticket in _rows(raw, "tkList", "platform number"):
         journeys = []
-        for journey_value in _optional_list(
-            ticket,
-            "jrnyList",
-            "platform number ticket",
-        ):
-            journey = _row(journey_value, "platform number ticket jrnyList")
+        for journey in _rows(ticket, "jrnyList", "platform number ticket"):
             journeys.append(
                 PlatformNumberJourney(
                     platform_no=_optional_string(
@@ -2145,8 +2019,7 @@ def parse_recent_delivery_history_response(
 ) -> RecentDeliveryHistoryResponse:
     _validate_strict_read_envelope(raw)
     recipients = []
-    for value in _optional_list(raw, "acepList", "recent delivery history"):
-        recipient = _row(value, "recent delivery history acepList")
+    for recipient in _rows(raw, "acepList", "recent delivery history"):
         recipients.append(
             RecentDeliveryRecipient(
                 **_nullable_string_fields(
@@ -2162,181 +2035,6 @@ def parse_recent_delivery_history_response(
             raw, "chgePbpRsvNo", "recent delivery history"
         ),
         recipients=tuple(recipients),
-        **_response_fields(raw),
-    )
-
-
-_PRODUCT_RECOMMENDATION_FIELDS = {
-    "discount_amount": "dcntAmt",
-    "discount_surcharge_rate": "dcntSurRt",
-    "fare_amount_percent_division_code": "famtPctDvCd",
-    "goods_name": "gdNm",
-    "goods_no": "gdNo",
-    "received_fare": "rcvdFare",
-    "received_price": "rcvdPrc",
-    "received_price_2": "rcvdPrc2",
-}
-
-_PRODUCT_TRAIN_FIELDS = {
-    "detour_via_popup": "dturViaPopp",
-    "elevator_damage_control": "elevDmgCtrl",
-    "arrival_date": "h_arv_dt",
-    "arrival_station_code": "h_arv_rs_stn_cd",
-    "arrival_station_name": "h_arv_rs_stn_nm",
-    "arrival_station_construction_order": "h_arv_stn_cons_ordr",
-    "arrival_station_run_order": "h_arv_stn_run_ordr",
-    "arrival_time": "h_arv_tm",
-    "car_type_name": "h_car_tp_nm",
-    "change_train_division_code": "h_chg_trn_dv_cd",
-    "change_train_sequence": "h_chg_trn_seq",
-    "connection_traffic_need_time": "h_cnec_trfc_nd_hm",
-    "connection_traffic_possible_flag": "h_cnec_trfc_psb_flg",
-    "connection_traffic_received_price": "h_cnec_trfc_rcvd_prc",
-    "delayed_sale_flag": "h_dlay_sale_flg",
-    "departure_date": "h_dpt_dt",
-    "departure_station_code": "h_dpt_rs_stn_cd",
-    "departure_station_name": "h_dpt_rs_stn_nm",
-    "departure_station_construction_order": "h_dpt_stn_cons_ordr",
-    "departure_station_run_order": "h_dpt_stn_run_ordr",
-    "departure_time": "h_dpt_tm",
-    "detour_flag": "h_dtour_flg",
-    "detour_text": "h_dtour_txt",
-    "expected_delay_hour": "h_expct_dlay_hr",
-    "expected_departure_delay_count": "h_expn_dpt_dlay_tnum",
-    "free_reservation_code": "h_free_rsv_cd",
-    "free_seat_car_count": "h_free_sracar_cnt",
-    "general_room_class_name": "h_gen_psrm_cl_nm",
-    "general_reservation_code": "h_gen_rsv_cd",
-    "general_reservation_code_2": "h_gen_rsv_cd2",
-    "information_text": "h_info_txt",
-    "journey_reservation_code": "h_jrny_rsv_cd",
-    "journey_reservation_name": "h_jrny_rsv_nm",
-    "nonstop_message": "h_nonstop_msg",
-    "nonstop_message_text": "h_nonstop_msg_txt",
-    "popup_message": "h_popup_msg",
-    "received_amount": "h_rcvd_amt",
-    "received_fare": "h_rcvd_fare",
-    "received_price_2": "h_rcvd_prc2",
-    "road_seat_map_flag": "h_rd_seat_map_flg",
-    "reservation_possible_name": "h_rsv_psb_nm",
-    "run_date": "h_run_dt",
-    "run_time": "h_run_tm",
-    "seat_attribute_code": "h_seat_att_cd",
-    "simultaneous_train_flag": "h_smns_trn_flg",
-    "special_discount_rate": "h_spe_disc_rt",
-    "special_room_class_name": "h_spe_psrm_cl_nm",
-    "special_reservation_code": "h_spe_rsv_cd",
-    "special_reservation_code_2": "h_spe_rsv_cd2",
-    "special_reservation_possible_name": "h_spe_rsv_psb_nm",
-    "station_popup_message": "h_station_popup_msg",
-    "standing_reservation_code": "h_stnd_rsv_cd",
-    "train_discount_general_rate": "h_train_disc_gen_rt",
-    "train_discount_origin_rate": "h_train_disc_origin_rt",
-    "train_classification_code": "h_trn_clsf_cd",
-    "train_classification_name": "h_trn_clsf_nm",
-    "train_group_code": "h_trn_gp_cd",
-    "train_no": "h_trn_no",
-    "use_time_care_article_content": "h_use_tim_care_atcl_cont",
-    "waiting_reservation_flag": "h_wait_rsv_flg",
-    "youth_mileage_application_flag": "h_yms_apl_flg",
-    "goods_no": "txtGdNo",
-}
-
-
-def parse_product_train_inquiry_response(
-    raw: Mapping[str, Any],
-) -> ProductTrainInquiryResponse:
-    _validate_strict_read_envelope(raw)
-    wrapper = _optional_mapping(raw, "trn_infos", "product train inquiry")
-    merge_flag = None
-    trains = []
-    if wrapper is not None:
-        merge_flag = _optional_string(
-            wrapper,
-            "h_merge_rsv_psb_flg",
-            "product train inquiry trn_infos",
-        )
-        for value in _optional_list(
-            wrapper,
-            "trn_info",
-            "product train inquiry trn_infos",
-        ):
-            item = _row(value, "product train inquiry trn_info")
-            recommendations = []
-            for recommendation_value in _optional_list(
-                item,
-                "rcmdGdList",
-                "product train inquiry train",
-            ):
-                recommendation = _row(
-                    recommendation_value,
-                    "product train inquiry rcmdGdList",
-                )
-                recommendations.append(
-                    ProductRecommendation(
-                        **_nullable_string_fields(
-                            recommendation,
-                            _PRODUCT_RECOMMENDATION_FIELDS,
-                            "product recommendation",
-                        ),
-                        raw=recommendation,
-                    )
-                )
-            trains.append(
-                ProductTrain(
-                    **_nullable_string_fields(
-                        item,
-                        _PRODUCT_TRAIN_FIELDS,
-                        "product train",
-                    ),
-                    total_passenger_count=_primitive_json_integer(
-                        item,
-                        "totPsgCnt",
-                        "product train",
-                    ),
-                    recommendations=tuple(recommendations),
-                    raw=item,
-                )
-            )
-    return ProductTrainInquiryResponse(
-        early_train_no_next=_optional_string(
-            raw,
-            "h_ectb_trn_no_next",
-            "product train inquiry",
-        ),
-        goods_no=_optional_string(raw, "h_gd_no", "product train inquiry"),
-        next_page_flag=_optional_string(
-            raw,
-            "h_next_pg_flg",
-            "product train inquiry",
-        ),
-        notice_message=_optional_string(
-            raw,
-            "h_notice_msg",
-            "product train inquiry",
-        ),
-        preceding_train_no_next=_optional_string(
-            raw,
-            "h_prcd_trn_no_next",
-            "product train inquiry",
-        ),
-        next_query_station_no=_optional_string(
-            raw,
-            "h_qry_st_no_next",
-            "product train inquiry",
-        ),
-        result_count=_optional_string(
-            raw,
-            "h_rslt_cnt",
-            "product train inquiry",
-        ),
-        next_train_no=_optional_string(
-            raw,
-            "h_trn_no_next",
-            "product train inquiry",
-        ),
-        merge_reservation_possible_flag=merge_flag,
-        trains=tuple(trains),
         **_response_fields(raw),
     )
 
@@ -2677,10 +2375,6 @@ def parse_self_seat_change_info_response(
     읽습니다 — 잔여좌석 수와 편성/운행 순서가 맨 JSON 숫자로 오는 것이 관측된
     바로 그런 필드입니다.
     """
-    if not isinstance(raw, Mapping):
-        raise KorailProtocolError(
-            "KORAIL self seat change info response must be a mapping"
-        )
     _validate_strict_read_envelope(raw)
     stations = tuple(
         SelfSeatChangeStation(
@@ -2806,10 +2500,6 @@ def parse_original_ticket_inquiry_response(
     직렬화 전에 :func:`~korail_mobile_api.redaction.redact_mapping` 을 적용해야
     합니다.
     """
-    if not isinstance(raw, Mapping):
-        raise KorailProtocolError(
-            "KORAIL original ticket inquiry response must be a mapping"
-        )
     _validate_strict_read_envelope(raw)
     tickets = []
     for value in _optional_list(raw, "orgTkList", "original ticket inquiry"):
