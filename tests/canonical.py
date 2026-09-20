@@ -178,3 +178,141 @@ SEARCH_QUERY = TrainSearchQuery(
     arrival_station_code="0015",
     departure_date="20260921",
 )
+
+
+# ---------------------------------------------------------------------------
+# 읽기 라우트의 요청 타입. ``_read_field_contracts.py`` 910줄이 덮던 쪽입니다.
+# ---------------------------------------------------------------------------
+
+from korail_mobile_api.mutation_models import (  # noqa: E402
+    StationRefundVerificationRequest,
+)
+from korail_mobile_api.read_models import PassMenuData  # noqa: E402
+from korail_mobile_api.read_payloads import (  # noqa: E402
+    CommuterInitialRequest,
+    DiscountCardScheduleRequest,
+    FreeSeatCarRequest,
+    GuideSeatConditionRequest,
+    MaasServiceDetailQuery,
+    MergeSeatsInquiryRequest,
+    MileageHistoryRequest,
+    OriginalTicketReference,
+    PassScheduleRequest,
+    PriceFareLeg,
+    PriceFareQuoteRequest,
+    RefundCompanion,
+    SeatAssignmentScheduleRequest,
+    SelfSeatChangeInfoRequest,
+    TicketDuplicationCheckRequest,
+    TicketReservationDetailRequest,
+)
+
+
+ORIGINAL_TICKET = OriginalTicketReference(
+    sale_window_no="0001",
+    sale_date="20260921",
+    sale_sequence="0001",
+    return_password="0000",
+)
+
+COMMUTER = CommuterInitialRequest(pass_data=PassMenuData(commuter_kind_code="1"))
+
+DISCOUNT_CARD_SCHEDULE = DiscountCardScheduleRequest(
+    card_kind_management_no="0001",
+    departure_station_name="서울",
+    arrival_station_name="부산",
+    departure_date="20260921",
+)
+
+FREE_SEAT_CAR = FreeSeatCarRequest(
+    run_date="20260921",
+    train_no="0001",
+    departure_construction_order="000001",
+    arrival_construction_order="000015",
+    departure_run_order="000001",
+    arrival_run_order="000015",
+)
+
+GUIDE_SEAT_CONDITION = GuideSeatConditionRequest(seat_attribute_code="015")
+
+MAAS_SERVICE_DETAIL = MaasServiceDetailQuery.current()
+
+MERGE_SEATS = MergeSeatsInquiryRequest(
+    boarding_datetime="20260921080000",
+    run_datetime="20260921080000",
+    train_no="0001",
+    departure_station_name="서울",
+    arrival_station_name="부산",
+    selected_station_name="대전",
+    room_class_code="1",
+    seat_attribute_code="015",
+    passenger_count=1,
+)
+
+MILEAGE_HISTORY = MileageHistoryRequest(start_date="20260901", end_date="20260921")
+
+PASS_SCHEDULE = PassScheduleRequest(
+    selected_train_code="00",
+    departure_date="20260921",
+    departure_time="080000",
+    transfer_type_code="1",
+    pass_kind_code="1",
+    pass_period_code="1",
+    pass_age_code="1",
+    page_no="1",
+    page_size="20",
+    departure_station_name="서울",
+    arrival_station_name="부산",
+    weekend_use_flag="N",
+)
+
+PRICE_FARE_QUOTE = PriceFareQuoteRequest(
+    legs=(
+        PriceFareLeg(
+            departure_station_code="0001",
+            arrival_station_code="0015",
+            run_date="20260921",
+            train_no="0001",
+            goods_no="0001",
+            requested_seat_attribute_code="015",
+            train_group_code="100",
+            standing_train_classification_code="0",
+        ),
+    )
+)
+
+REFUND_COMPANION = RefundCompanion()
+
+SEAT_ASSIGNMENT_SCHEDULE = SeatAssignmentScheduleRequest(
+    menu_id="A2",
+    departure_date="20260921",
+    departure_time="080000",
+    departure_station_name="서울",
+    arrival_station_name="부산",
+    train_group_code="100",
+    room_class_code="1",
+    seat_attribute_code="015",
+    passenger_count=1,
+    standing_detour_division_name="",
+    transfer_type_code="1",
+    connection_arrival_station_name="",
+)
+
+SELF_SEAT_CHANGE = SelfSeatChangeInfoRequest(
+    run_date="20260921",
+    train_no="0001",
+    departure_station_code="0001",
+    arrival_station_code="0015",
+)
+
+STATION_REFUND_VERIFICATION = StationRefundVerificationRequest(
+    customer_name="홍길동",
+    return_no_1="12345",
+    return_no_2="1234",
+    return_no_3="12345",
+    return_no_4="12",
+)
+
+TICKET_DUPLICATION = TicketDuplicationCheckRequest(pnr_no="0000000001")
+
+TICKET_RESERVATION_DETAIL = TicketReservationDetailRequest(pnr_no="0000000001")

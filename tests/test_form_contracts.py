@@ -32,6 +32,7 @@ import pytest
 import canonical as c
 from korail_mobile_api import mutation_payloads as mutation
 from korail_mobile_api import payloads as basic
+from korail_mobile_api import read_payloads as read
 from korail_mobile_api.safety import (
     KORAIL_MUTATION_ROUTE_CATEGORIES,
     assert_mutation_form_shape,
@@ -126,9 +127,86 @@ _READ: dict[str, Callable[[], Any]] = {
     ),
 }
 
+#: 읽기 라우트 쪽. ``ebc4d5f`` 가 "the loss worth naming" 이라 부른
+#: ``tests/_read_field_contracts.py`` 910줄이 덮던 것이 정확히 이 계층입니다.
+_READ_ROUTES: dict[str, Callable[[], Any]] = {
+    "build_cart_list_form": lambda: read.build_cart_list_form(pnr_no="0000000001"),
+    "build_commuter_info_form": lambda: read.build_commuter_info_form(c.COMMUTER),
+    "build_commuter_kind_menu_query": lambda: read.build_commuter_kind_menu_query("1"),
+    "build_crew_request_list_query": lambda: read.build_crew_request_list_query("1"),
+    "build_customer_trip_info_form": lambda: read.build_customer_trip_info_form("0000000000"),
+    "build_delay_discount_ticket_form": lambda: read.build_delay_discount_ticket_form("20260921"),
+    "build_delivery_recipient_form": lambda: read.build_delivery_recipient_form(c.ORIGINAL_TICKET),
+    "build_discount_card_schedule_query": lambda: read.build_discount_card_schedule_query(
+        c.DISCOUNT_CARD_SCHEDULE
+    ),
+    "build_discount_card_usage_query": lambda: read.build_discount_card_usage_query(
+        "0000000000000000"
+    ),
+    "build_discount_coupon_form": lambda: read.build_discount_coupon_form(),
+    "build_free_seat_car_form": lambda: read.build_free_seat_car_form(c.FREE_SEAT_CAR),
+    "build_guide_seat_condition_form": lambda: read.build_guide_seat_condition_form(
+        c.GUIDE_SEAT_CONDITION
+    ),
+    "build_korail_point_summary_form": lambda: read.build_korail_point_summary_form(),
+    "build_maas_service_detail_form": lambda: read.build_maas_service_detail_form(
+        c.CONFIG, c.MAAS_SERVICE_DETAIL
+    ),
+    "build_merge_seats_inquiry_form": lambda: read.build_merge_seats_inquiry_form(c.MERGE_SEATS),
+    "build_mileage_history_form": lambda: read.build_mileage_history_form(c.MILEAGE_HISTORY),
+    "build_multi_child_discount_target_form": (
+        lambda: read.build_multi_child_discount_target_form("20260921")
+    ),
+    "build_original_ticket_inquiry_form": lambda: read.build_original_ticket_inquiry_form(
+        (c.ORIGINAL_TICKET,)
+    ),
+    "build_pass_availability_form": lambda: read.build_pass_availability_form("1", "1", "1"),
+    "build_pass_menu_form": lambda: read.build_pass_menu_form("1"),
+    "build_pass_schedule_form": lambda: read.build_pass_schedule_form(c.PASS_SCHEDULE),
+    "build_pbp_acceptance_specification_form": (
+        lambda: read.build_pbp_acceptance_specification_form((c.ORIGINAL_TICKET,))
+    ),
+    "build_price_fare_quote_form": lambda: read.build_price_fare_quote_form(c.PRICE_FARE_QUOTE),
+    "build_product_detail_query": lambda: read.build_product_detail_query("0000000001"),
+    "build_product_reservations_query": lambda: read.build_product_reservations_query(),
+    "build_recent_delivery_history_form": lambda: read.build_recent_delivery_history_form(
+        "0000000000"
+    ),
+    "build_refund_commission_form": lambda: read.build_refund_commission_form(
+        c.ORIGINAL_TICKET, c.REFUND_COMPANION
+    ),
+    "build_refund_ticket_detail_form": lambda: read.build_refund_ticket_detail_form(
+        c.ORIGINAL_TICKET, txt_index="1"
+    ),
+    "build_seat_assignment_schedule_form": lambda: read.build_seat_assignment_schedule_form(
+        c.SEAT_ASSIGNMENT_SCHEDULE
+    ),
+    "build_self_seat_change_info_form": lambda: read.build_self_seat_change_info_form(
+        c.SELF_SEAT_CHANGE
+    ),
+    "build_service_status_query": lambda: read.build_service_status_query(
+        timestamp_ms=1758412800000
+    ),
+    "build_station_refund_verification_form": (
+        lambda: read.build_station_refund_verification_form(c.STATION_REFUND_VERIFICATION)
+    ),
+    "build_ticket_duplication_check_form": lambda: read.build_ticket_duplication_check_form(
+        c.TICKET_DUPLICATION
+    ),
+    "build_ticket_receipt_form": lambda: read.build_ticket_receipt_form(
+        "20260921", "0001", "0001", "0000"
+    ),
+    "build_ticket_reservation_detail_query": (
+        lambda: read.build_ticket_reservation_detail_query(c.TICKET_RESERVATION_DETAIL)
+    ),
+    "build_trip_change_date_form": lambda: read.build_trip_change_date_form("20260921"),
+    "build_trip_menu_form": lambda: read.build_trip_menu_form(c.CONFIG),
+}
+
 _ALL: dict[str, Callable[[], Any]] = {
     **{name: call for name, (call, _route) in _MUTATION.items()},
     **_READ,
+    **_READ_ROUTES,
 }
 
 

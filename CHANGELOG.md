@@ -9,8 +9,8 @@
 ### Added
 
 - **폼 빌더가 내보내는 이름과 순서를 얼렸습니다.** `tests/test_form_contracts.py`
-  와 `tests/golden/form_field_order.json` — 빌더 24개(상태변경 14 + 기본 조회 10),
-  필드 407개. `ebc4d5f` 가 지운 것 중 저자가 "the loss worth naming" 이라 적은
+  와 `tests/golden/form_field_order.json` — **이 패키지의 폼 빌더 61개 전부**
+  (상태변경 14 + 읽기 47), 필드 542개. `ebc4d5f` 가 지운 것 중 저자가 "the loss worth naming" 이라 적은
   `tests/_read_field_contracts.py` 910줄이 하던 일입니다. 그쪽은 라우트마다 필드
   이름과 **순서**를 들고 있었고, 1.2.0 이 그 계약을 전송 경로 밖으로 옮긴 뒤로
   계약을 말하는 것은 각 빌더의 코드뿐이었습니다.

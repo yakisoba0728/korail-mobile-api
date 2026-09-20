@@ -30,6 +30,10 @@
     "Key",
     "hidPnrNo"
   ],
+  "build_cart_list_form": [
+    "pnrNo",
+    "addSrvReqNo"
+  ],
   "build_common_code_form": [
     "Device",
     "Version",
@@ -38,6 +42,31 @@
     "deviceWidth",
     "deviceHeight",
     "OSVersion"
+  ],
+  "build_commuter_info_form": [
+    "jobDvCd",
+    "cmtrKndCd",
+    "psgCnt"
+  ],
+  "build_commuter_kind_menu_query": [
+    "cmtrKndCd"
+  ],
+  "build_crew_request_list_query": [
+    "qryDvCd"
+  ],
+  "build_customer_trip_info_form": [
+    "custMgNo",
+    "medDvCd",
+    "regSqno"
+  ],
+  "build_delay_discount_ticket_form": [
+    "h_page_no"
+  ],
+  "build_delivery_recipient_form": [
+    "saleWctNo",
+    "saleDt",
+    "saleSqno",
+    "tkRetPwd"
   ],
   "build_discount_card_extension_query": [
     "Device",
@@ -100,10 +129,46 @@
     "txtArvStnRunOrdr1",
     "txtChgFlg1"
   ],
+  "build_discount_card_schedule_query": [
+    "dptDt",
+    "dptRsStnNm",
+    "arvRsStnNm",
+    "dptTm",
+    "trnGpCd",
+    "dirtChtnDvCd",
+    "dcntCrdKndCd",
+    "dcntCrdKndMgNo",
+    "usePsbTno"
+  ],
+  "build_discount_card_usage_query": [
+    "dcntCrdNo"
+  ],
+  "build_discount_coupon_form": [
+    "txtSelPage",
+    "pnrNo"
+  ],
+  "build_free_seat_car_form": [
+    "runDt",
+    "trnNo",
+    "dptStnConsOrdr",
+    "arvStnConsOrdr",
+    "dptStnRunOrdr",
+    "arvStnRunOrdr"
+  ],
+  "build_guide_seat_condition_form": [
+    "rqSeatAttCd"
+  ],
+  "build_korail_point_summary_form": [
+    "point_dv_cd"
+  ],
   "build_maas_menu_form": [
     "Device",
     "Version",
     "timeStamp"
+  ],
+  "build_maas_service_detail_form": [
+    "Device",
+    "Version"
   ],
   "build_maas_station_form": [
     "addSrvDvCd"
@@ -161,6 +226,74 @@
     "txtArvStnRunOrdr2",
     "txtChgFlg2"
   ],
+  "build_merge_seats_inquiry_form": [
+    "abrdDt",
+    "runDt",
+    "trnNo",
+    "dptRsStnNm",
+    "arvRsStnNm",
+    "psrmClCd",
+    "seatAttCd",
+    "totPsgNum",
+    "selRsStnNm"
+  ],
+  "build_mileage_history_form": [
+    "pontTpVal",
+    "qryDvVal",
+    "qryStDt",
+    "qryClsDt",
+    "pgPrCnt",
+    "nowPgNo"
+  ],
+  "build_multi_child_discount_target_form": [
+    "dptDt"
+  ],
+  "build_original_ticket_inquiry_form": [
+    "tkCnt",
+    "ogtkSaleWctNo_1",
+    "ogtkSaleDd_1",
+    "ogtkSaleSqno_1",
+    "ogtkRetPwd_1"
+  ],
+  "build_pass_availability_form": [
+    "txtCmtrKndCd",
+    "txtCmtrUtlTrmCd",
+    "txtCmtrUtlAgeCd"
+  ],
+  "build_pass_menu_form": [
+    "menuNo"
+  ],
+  "build_pass_schedule_form": [
+    "selGoTrain",
+    "selGoAbrdDt",
+    "txtGoHour",
+    "radChgTrnDvCd",
+    "txtCmtrKndCd",
+    "txtCmtrUtlTrmCd",
+    "txtCmtrUtlAgeCd",
+    "txtSelPage",
+    "txtCntPerPage",
+    "txtGoStart",
+    "txtGoEnd",
+    "txtWkndUseFlg"
+  ],
+  "build_pbp_acceptance_specification_form": [
+    "tkCnt",
+    "tkRetNo"
+  ],
+  "build_price_fare_quote_form": [
+    "txtMenuId",
+    "chtnDvCd",
+    "trnCnt",
+    "dptRsStnCd",
+    "arvRsStnCd",
+    "runDt",
+    "trnNo",
+    "gdNo",
+    "rqSeatAttCd",
+    "trnGpCd",
+    "stlbTrnClsfCd"
+  ],
   "build_price_recalculation_form": [
     "Device",
     "Version",
@@ -175,6 +308,24 @@
     "psrm_cl_cd",
     "hidFmlyNo"
   ],
+  "build_product_detail_query": [
+    "txtVrRsNo"
+  ],
+  "build_product_reservations_query": [
+    "txtSelPage",
+    "txtCntPerPage"
+  ],
+  "build_recent_delivery_history_form": [
+    "custMgNo"
+  ],
+  "build_refund_commission_form": [
+    "h_orgtk_ret_sale_dt",
+    "h_orgtk_wct_no",
+    "h_orgtk_sale_sqno",
+    "h_orgtk_ret_pwd",
+    "h_comp_nm",
+    "h_comp_cert_no"
+  ],
   "build_refund_form": [
     "Device",
     "Version",
@@ -186,6 +337,14 @@
     "h_orgtk_ret_pwd",
     "h_mlg_stl",
     "pbpAcepTgtFlg"
+  ],
+  "build_refund_ticket_detail_form": [
+    "h_orgtk_ret_sale_dt",
+    "h_orgtk_wct_no",
+    "h_orgtk_sale_sqno",
+    "h_orgtk_ret_pwd",
+    "h_purchase_history",
+    "txtIndex"
   ],
   "build_reservation_form": [
     "Device",
@@ -222,6 +381,20 @@
     "txtArvStnConsOrdr1",
     "txtArvStnRunOrdr1",
     "txtChgFlg1"
+  ],
+  "build_seat_assignment_schedule_form": [
+    "menuId",
+    "dptDt",
+    "dptTm",
+    "dptRsStnNm",
+    "arvRsStnNm",
+    "trnGpCd",
+    "psrmClCd",
+    "seatAttCd1",
+    "psgNum1",
+    "stlbDturDvNm1",
+    "dirtChtnDvCd",
+    "chtnArvRsStnNm"
   ],
   "build_seat_car_form": [
     "Device",
@@ -260,6 +433,15 @@
     "isArrow",
     "Sid",
     "ctlDvCd"
+  ],
+  "build_self_seat_change_info_form": [
+    "runDt",
+    "trnNo",
+    "dptRsStnCd",
+    "arvRsStnCd"
+  ],
+  "build_service_status_query": [
+    "timeStamp"
   ],
   "build_single_adult_reservation_form": [
     "Device",
@@ -322,6 +504,16 @@
     "retFee",
     "acepCustNm"
   ],
+  "build_station_refund_verification_form": [
+    "strName",
+    "retNo1",
+    "retNo2",
+    "retNo3",
+    "retNo4"
+  ],
+  "build_ticket_duplication_check_form": [
+    "pnrNo"
+  ],
   "build_ticket_list_form": [
     "txtDeviceId",
     "txtIndex",
@@ -329,6 +521,15 @@
     "h_abrd_dt_from",
     "h_abrd_dt_to",
     "hiduserYn"
+  ],
+  "build_ticket_receipt_form": [
+    "h_orgtk_sale_dt",
+    "h_orgtk_wct_no",
+    "h_orgtk_sale_sqno",
+    "h_orgtk_tk_ret_pwd"
+  ],
+  "build_ticket_reservation_detail_query": [
+    "hidPnrNo"
   ],
   "build_train_schedule_form": [
     "Device",
@@ -444,6 +645,14 @@
     "txtArvStnConsOrdr2",
     "txtArvStnRunOrdr2",
     "txtChgFlg2"
+  ],
+  "build_trip_change_date_form": [
+    "tripChgDate"
+  ],
+  "build_trip_menu_form": [
+    "Device",
+    "Version",
+    "timeStamp"
   ],
   "build_unpaid_reservation_cancel_form": [
     "Device",
