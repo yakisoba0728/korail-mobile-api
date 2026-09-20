@@ -186,7 +186,7 @@ Current inventory is 33 successful, 14 failed, and 118 unexecuted out of 165.
 |---|---|
 | 조회성 API | 실제 호출 허용 가능. 단, 계정/티켓 개인정보 로그 마스킹 |
 | 예약/취소/결제/환불/장바구니/할인카드/운임재계산 mutation endpoint (14개 메서드) | 동의 객체·dry-run·preview 없음. 로그인 세션만 있으면 호출 즉시 전송됨. 결제는 `pay_with_fake_card`/`pay_with_card` 두 메서드 이름으로만 구분되며, 코드는 카드 종류를 검사하지 않음 |
-| 그 밖의 모든 mutation endpoint | 현재 라이브러리에서 구현하거나 호출하지 않으며, 위의 비허용 정책을 예외 없이 적용 |
+| 그 밖의 모든 mutation endpoint | 현재 라이브러리에서 구현하지도, 호출하지도 않음. 라우트 허용목록(`KORAIL_MUTATION_ROUTES`)에 없으므로 전송 경계가 거부 |
 | PNR/발권번호/N카드 기반 API | 실제 값 없으면 schema-only 테스트만 수행 |
 
 ## Hidden/Non-Retrofit Surface

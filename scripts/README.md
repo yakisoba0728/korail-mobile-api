@@ -47,8 +47,9 @@ nothing forbidden inside). `docs/RELEASE.md` shows where it fits in a release.
 
 Drives the whole read surface once and records the untouched response body for
 every call, so the parsers in `src/` can be checked against what the server
-actually sends. It logs in once, reuses the session, and derives each argument
-from a real previous response. It **never pays and never refunds**: it does not
+actually sends. It needs `KORAIL_MOBILE_API_LIVE=1` and its own
+`KORAIL_LIVE_READ_SURFACE=1`; neither alone runs anything. It logs in once,
+reuses the session, and derives each argument from a real previous response. It **never pays and never refunds**: it does not
 import `CardPayment` or `PaidTicket`, and it calls only `reserve` and
 `cancel_unpaid_hold` -- there is no consent object to build any more, and
 nothing here builds one. `--reserve` (behind its own extra switch) makes ONE

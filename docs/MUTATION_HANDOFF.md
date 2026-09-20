@@ -27,7 +27,7 @@ are left as they were written.
 | standby follow-up (`reservationWait`) | ✅ `confirm_standby_hold`, **live-verified 2026-07-26** (`IRZ000003`) | ⛔ not implemented |
 | cancel (unpaid hold) | ✅ implemented, **live-verified** | ✅ implemented, live-enabled, **live-verified 2026-07-25** |
 | payment (fake card) | ✅ `pay_with_fake_card`, **live-verified (declined)** | ⛔ not implemented — route tiered only, not live-enabled |
-| payment (real card) | ✅ `pay_with_card`, explicit opt-in, **live-verified 2026-07-31** (`IRT000000`, one and two adults) and again 2026-09-15 on 7.0.6 | ⛔ not implemented — route tiered only, not live-enabled |
+| payment (real card) | ✅ `pay_with_card` (as of 1.2.0 no opt-in flag; the method name is the whole choice), **live-verified 2026-07-31** (`IRT000000`, one and two adults) and again 2026-09-15 on 7.0.6 | ⛔ not implemented — route tiered only, not live-enabled |
 | refund | ✅ `refund`, **live-verified 2026-07-31** (`IRT200277`, one ticket per call) and again 2026-09-15 on 7.0.6 | ⛔ not implemented — route tiered only, not live-enabled |
 | reserve (`1202`, 입석+좌석 — the first half of 병합예약) | ✅ live-verified 2026-07-26 (`IRR000018`, two journeys, 중간연결역 prompt present) | ⛔ not implemented |
 | 병합예약 second hold (`reserve_merge`) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
@@ -654,7 +654,9 @@ back to the hold.
   one-adult, general-seat hold only. `jrnyCnt` > 1 remains unconfirmed on the
   wire, and `SrtClient.cancel` keeps a `journey_count` override for exactly that
   case.
-- **korail refund**: unchanged — only reachable if a real paid ticket is ever
+- **korail refund**: [superseded — a real paid ticket was refunded live on
+  2026-07-31 and again on 2026-09-15; see the status table above.] The note
+  as written in 2026-07-27: only reachable if a real paid ticket is ever
   available (out of normal, no-charge scope).
 - **korail 병합예약** (branch `feat/merge-and-pass`, not merged): the cheap half
   is free. Search any busy corridor and look for a row whose

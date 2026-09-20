@@ -25,6 +25,7 @@ CHANGELOG 의 절을 그대로 끌어다 쓰고(`include-markdown`), `reference/
 | [7.0.6-contract-update.md](7.0.6-contract-update.md) | 7.0.6 APK 정적 대조에서 확인한 기존 호출 변경과 남은 미확인 값 |
 | [7.0.6-additions.md](7.0.6-additions.md) | 7.0.6 추가 Retrofit 계약. 지금 남은 2개와, 117개이던 시절의 기록 |
 | [7.0.6-removals.md](7.0.6-removals.md) | 7.0.6 APK에서 빠진 호출과 Python 호환성 변경 |
+| [7.0.6-implementation-followup.md](7.0.6-implementation-followup.md) | 7.0.6 대조에서 남은 후속 작업과 그 처리 결과 |
 | [7.0.6-live-verification.md](7.0.6-live-verification.md) | 7.0.6 작업 트리의 실서버 조회·예약·실카드 결제·전액 환불 검증과 미실행 범위 |
 | [7.0.6-one-to-one-audit.md](7.0.6-one-to-one-audit.md) | 7.0.6 디컴파일 결과와 현재 코드의 1:1 정적 대조 |
 | [MUTATION_HANDOFF.md](MUTATION_HANDOFF.md) | 상태변경 표면의 운영 인수인계 — 무엇이 증명됐고 무엇이 남았는지 |
