@@ -149,6 +149,7 @@ strict = [
   "src/korail_mobile_api/limousine_models.py",
   "src/korail_mobile_api/limousine_payloads.py",
   "src/korail_mobile_api/netfunnel.py",
+  "src/korail_mobile_api/netfunnel_safety.py",
   "src/korail_mobile_api/read_models.py",
 ]
 

@@ -53,7 +53,7 @@ from .errors import (
     KorailQueueRejectedError,
     KorailTransportError,
 )
-from .safety import (
+from .netfunnel_safety import (
     assert_korail_netfunnel_opcode_origin,
     assert_korail_netfunnel_origin,
     assert_netfunnel_request,
@@ -225,7 +225,7 @@ def parse_netfunnel_body(body: str, *, action: str) -> KorailNetFunnelToken:
     """네이티브 SDK 응답을 코드와 파라미터로 가름. ``T6/i.Parser``(``T6/i.java:35-63``).
 
     첫 ``:`` 앞 = 상태 코드, 나머지 = ``&`` 로 갈라 ``name=value`` 쌍.
-    ``ip``/``port`` 는 :func:`~korail_mobile_api.safety.korail_netfunnel_node_url`
+    ``ip``/``port`` 는 :func:`~korail_mobile_api.netfunnel_safety.korail_netfunnel_node_url`
     을 통과시킵니다 — 풀 밖 호스트는 여기서 예외.
     """
     head, separator, tail = body.strip().partition(":")

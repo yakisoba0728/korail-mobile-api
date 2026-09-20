@@ -12,28 +12,29 @@
 
 * **읽기 경로** — :func:`assert_read_only_route` 가 라우트를
   :data:`KORAIL_READ_ONLY_ROUTES` 의 정확한 원소로 제한합니다. 필드 이름·순서 계약은 이
-  모듈이 강제하지 않으며, 그것을 기록하던 테스트 픽스처도 삭제됐습니다.
+  모듈이 강제하지 않습니다 — 그것은 ``tests/golden/form_field_order.json`` 이 빌더
+  산출물로 고정합니다.
 * **변경 경로** — :func:`assert_mutation_route`,
   :func:`assert_mutation_route_category`, :func:`assert_mutation_form_shape`.
-  읽기 라우트를 포함해 :data:`KORAIL_MUTATION_ROUTES` 밖은 전부 거부합니다.
-* **origin** — :func:`assert_korail_origin` 이 API 호스트를, NetFunnel 쪽 세 함수가
-  대기열 호스트를 고정합니다. 둘은 서로의 호스트에 닿을 수 없습니다.
+  읽기 라우트를 포함해 :data:`KORAIL_MUTATION_ROUTES` 밖은 전부 거부합니다. 상태를
+  바꾸는 메서드 열넷 전부가 이 셋을 지나갑니다 — 하나만 건너뛰던 별도 게이트웨이는
+  없어졌습니다.
+* **origin** — :func:`assert_korail_origin` 이 API 호스트를 고정합니다.
+
+**대기열 호스트는 여기 없습니다.** ``nf.letskorail.com`` 과 그 노드 풀의 규칙은
+:mod:`korail_mobile_api.netfunnel_safety` 에 있습니다. 성격은 같고 파일만 다릅니다 —
+두 호스트는 서로에게 닿을 수 없으므로, 메인 API 의 경계를 읽는 사람이 대기열 노드
+리다이렉션까지 읽을 이유가 없습니다.
 
 목록의 원소는 전부 APK 의 Retrofit 선언에서 나왔습니다. 근거 없는 라우트나 필드는 여기
 없고, 없으면 보낼 수 없습니다.
 """
-import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
 from .constants import (
     KORAIL_BASE_URL,
-    KORAIL_NETFUNNEL_PATH,
-    KORAIL_NETFUNNEL_SERVICE_ID,
-    KORAIL_NETFUNNEL_URL,
-    KorailNetFunnelAction,
-    KorailNetFunnelOpcode,
 )
 from .errors import KorailProtocolError
 
@@ -369,302 +370,6 @@ def assert_mutation_form_shape(
 
 
 KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
-KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
-
-# ---------------------------------------------------------------------------
-# NetFunnel queue protocol: one exact query contract per opcode.
-#
-# Three named contracts for three opcodes on a SEPARATE host (nf.letskorail.com).
-# Each tuple is the sequence of U6.a.addParam calls in T6/d.java:
-#   5101 GetTidCacekedEnter (T6/d.java:99-101)  opcode, sid, aid
-#   5002 CheckedEnter       (T6/d.java:54-55)   opcode, key
-#   5004 Complete           (T6/d.java:78-79)   opcode, key
-#
-# Absent: no `js`, no `nfid`, no `prefix`, no trailing epoch, no `ttl`.
-# Those belong to the JavaScript NetFunnel client that SRT uses.
-# KORAIL embeds the native Android SDK (T6/U6 packages).
-#
-# 5003 ALIVE_NOTICE, 5105 INIT and 5106 STOP are NOT registered: the first
-# keeps a waiting-room popup alive; the other two are administrative and the
-# SDK refuses them (T6/d.java:115-121).
-# ---------------------------------------------------------------------------
-KORAIL_NETFUNNEL_ROUTES = frozenset({("GET", KORAIL_NETFUNNEL_PATH)})
-
-KORAIL_NETFUNNEL_QUERY_CONTRACTS: dict[str, tuple[str, ...]] = {
-    KorailNetFunnelOpcode.GET_TID_CHK_ENTER.value: ("opcode", "sid", "aid"),
-    KorailNetFunnelOpcode.CHK_ENTER.value: ("opcode", "key"),
-    KorailNetFunnelOpcode.SET_COMPLETE.value: ("opcode", "key"),
-}
-
-#: 요청에 슬롯 키를 싣는 opcode. "어느 opcode 에 어느 필드가 있는가"를 코드를
-#: 따라가지 않고 읽어서 답할 수 있도록 계약 옆에 데이터로 둡니다.
-KORAIL_NETFUNNEL_KEYED_OPCODES = frozenset(
-    {
-        KorailNetFunnelOpcode.CHK_ENTER.value,
-        KorailNetFunnelOpcode.SET_COMPLETE.value,
-    }
-)
-
-#: ``aid`` 에 나타날 수 있는 액션 id 전부. 앱이 선언한 여덟 개
-#: (``K4/g.java:43-51``)이며 한 번도 부르지 않는 둘까지 포함하고, 그 밖은
-#: 없습니다. ``aid`` 가 자유 문자열 필드가 되지 않게 하기 위해서입니다.
-KORAIL_NETFUNNEL_ACTION_IDS = frozenset(
-    action.value for action in KorailNetFunnelAction
-)
-
-# The key is opaque and server-issued, so it is validated by SHAPE: a non-empty
-# run of the characters a NetFunnel key is made of.
-#
-# THE 512 BOUND IS A CEILING TAKEN FROM A SCAR, NOT A GUESS. The sibling SRT
-# implementation bounded the same field at 128 while real keys are 256 characters
-# of uppercase hex. Every setComplete therefore failed this check before it was
-# sent, and because a failed release was swallowed there, it failed SILENTLY —
-# every slot leaked until a live run exposed it. Nothing offline could have
-# caught it, which is why the bound here is generous. The release transport
-# failure remains visible even though the v7 SDK ignores the 5004 response body.
-KORAIL_NETFUNNEL_KEY_RE = re.compile(r"[A-Za-z0-9_.:@~-]{1,512}")
-
-# ---------------------------------------------------------------------------
-# THE QUEUE IS A POOL OF NODES, AND FOLLOWING ONE IS NOT OPTIONAL.
-#
-# `nf.letskorail.com` is a front door that load-balances entry calls.
-# The node that issues a session is the only one that can complete it.
-# Replies name the owning node in `ip`/`port` (T6/i.java:50-53), and the
-# app follows it: T6/d.java:17-19 rebuilds the URL from getHost()/getPort()
-# unless host_notmodify is set (default false: T6/h.java:43, :134-135).
-#
-# LIVE EVIDENCE (2026-07-26): sending setComplete to the front door instead
-# of the named node failed ~50% of the time with 503:msg="Wrong Server ID".
-# Observed nodes: rnf12, rnf13, rnf14 — all under letskorail.com, https/443.
-#
-# CONSTRAINED, NOT TRUSTED. The redirection is admitted only into the pool's
-# own naming; a reply naming anything else is a hard error.
-#
-# THE RULE:
-#   * label: `rnf` + decimal 1..99, no leading zero
-#   * parent: exactly `letskorail.com`, whole labels
-#   * lowercase only (as observed on wire)
-#   * https port 443 only
-#   * plus the front door itself (nf.letskorail.com)
-# ---------------------------------------------------------------------------
-
-#: 대기열 응답이 가리킬 수 있는 노드 이름. 각 부분을 왜 이만큼 좁혔는지는
-#: 위의 블록 주석에 있습니다.
-KORAIL_NETFUNNEL_NODE_HOST_RE = re.compile(r"rnf[1-9][0-9]?\.letskorail\.com")
-
-#: 지목된 노드에 허용되는 유일한 포트. 관측된 모든 응답이 443 이었고,
-#: :func:`assert_korail_netfunnel_origin` 이 정문에 허용하는 포트도 그것뿐입니다.
-KORAIL_NETFUNNEL_NODE_PORT = 443
-
-#: **이미 성립한 세션**에 속하는 opcode. 그래서 그 세션을 발급한 노드로 갑니다.
-#: ``5101`` 은 일부러 빠져 있습니다. 진입 호출은 정문이 분산하는 것이고, 노드를
-#: 가리킬 앞선 응답도 없습니다.
-#:
-#: 지금은 :data:`KORAIL_NETFUNNEL_KEYED_OPCODES` 와 같은 집합이며 우연이
-#: 아닙니다 — 세션은 키로 식별되고 자기 노드에 살기 때문에, 키를 싣는 opcode 가
-#: 곧 노드에 닿아야 하는 opcode 입니다. 서로 다른 질문에 답하므로 상수는 따로
-#: 둡니다.
-KORAIL_NETFUNNEL_NODE_OPCODES = frozenset(
-    {
-        KorailNetFunnelOpcode.CHK_ENTER.value,
-        KorailNetFunnelOpcode.SET_COMPLETE.value,
-    }
-)
-
-
-def _assert_netfunnel_origin(netfunnel_url: str, *, allow_nodes: bool) -> None:
-    """대기열 origin 가드 둘의 공통 골격.
-
-    정문과 대기열 노드 사이에서 **어떤 호스트명을 받아들이냐**를 빼면 검사가 동일합니다 —
-    https, userinfo 없음, path·query·fragment 없음, 443 또는 생략된 포트. 그래서 한 번만
-    쓰고 호스트명 규칙만 매개변수로 받습니다.
-    """
-    parsed = urlsplit(netfunnel_url)
-    try:
-        port = parsed.port
-    except ValueError as exc:
-        raise KorailProtocolError(
-            "KORAIL NetFunnel request origin is not allowed"
-        ) from exc
-    hostname = (parsed.hostname or "").casefold()
-    host_allowed = hostname == KORAIL_NETFUNNEL_HTTPS_HOST or (
-        allow_nodes
-        and KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(hostname) is not None
-    )
-    if (
-        parsed.scheme.casefold() != "https"
-        or parsed.hostname is None
-        or not host_allowed
-        or port not in {None, KORAIL_NETFUNNEL_NODE_PORT}
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.path not in {"", "/"}
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise KorailProtocolError(
-            "KORAIL NetFunnel request origin is not allowed"
-        )
-
-
-def assert_korail_netfunnel_origin(netfunnel_url: str) -> None:
-    """대기열 **정문**을 ``https://nf.letskorail.com``(443)으로 고정합니다.
-
-    :func:`assert_korail_origin` 의 NetFunnel 짝이며 상수도 함수도 일부러 분리했습니다.
-    API 클라이언트는 대기열 호스트에 닿을 수 없고 대기열 클라이언트는 API 호스트에 닿을 수
-    없습니다.
-
-    설정된 origin 과 진입 호출(``5101``)에 쓰는 가드이고 정문만 허용합니다 — 대기열 노드는
-    여기서 거부됩니다. 후속 opcode 는 더 넓은
-    :func:`assert_korail_netfunnel_node_origin` 을 쓰며, 어느 opcode 가 어느 쪽인지는
-    :func:`assert_korail_netfunnel_opcode_origin` 이 정합니다.
-    """
-    _assert_netfunnel_origin(netfunnel_url, allow_nodes=False)
-
-
-def assert_korail_netfunnel_node_origin(netfunnel_url: str) -> None:
-    """세션의 origin 을 정문 또는 대기열 자신의 노드로 제한합니다.
-
-    ``https://nf.letskorail.com`` 과 ``https://rnf<N>.letskorail.com`` 을 443 포트로만
-    허용하고 그 밖은 없습니다. 풀이 실재한다는 근거와 경계를 왜 정확히 여기 그었는지는
-    :data:`KORAIL_NETFUNNEL_NODE_HOST_RE` 위의 주석에 있습니다.
-    """
-    _assert_netfunnel_origin(netfunnel_url, allow_nodes=True)
-
-
-def assert_korail_netfunnel_opcode_origin(
-    opcode: str,
-    netfunnel_url: str,
-) -> None:
-    """이 opcode 를 어느 호스트로 보내도 되는지 정합니다.
-
-    ``5101`` getTidChkEnter 는 진입 호출이라 **정문**으로 갑니다. 분산이 정문의 일입니다.
-    ``5002`` chkEnter 와 ``5004`` setComplete 는 세션에 속하므로 그 세션을 발급한
-    **노드**로 갑니다 — 정문은 그 세션의 주인이 아니라서 완료를 요구하면
-    ``503:msg="Wrong Server ID"`` 로 답합니다.
-
-    이 분기가 클라이언트가 아니라 가드에 있는 것은, "이 opcode 는 어느 호스트로 가는가"를
-    URL 을 만든 호출 지점이 아니라 가드가 답하게 하기 위해서입니다.
-    """
-    if opcode in KORAIL_NETFUNNEL_NODE_OPCODES:
-        assert_korail_netfunnel_node_origin(netfunnel_url)
-    else:
-        assert_korail_netfunnel_origin(netfunnel_url)
-
-
-def korail_netfunnel_node_url(ip: str, port: str) -> str:
-    """응답의 ``ip``/``port`` 를 답한 노드의 origin 으로 바꿉니다.
-
-    origin URL(``https://<host>``)을 돌려주고, 응답이 아무 노드도 가리키지 않았으면 ``""``
-    입니다. 후자는 ``T6/d.makeURL`` 의 ``getHost().length() <= 0 || getPort() <= 0``
-    가지이며(``T6/d.java:17-19``), 후속 요청이 정당하게 정문으로 가는 유일한 경우입니다.
-    ``ip`` 와 ``port`` 는 관측된 모든 응답에서 함께 오므로, 한쪽만 온 것은 "노드를 가리키지
-    않았다"가 아니라 "노드를 잘못 가리켰다"로 다룹니다.
-
-    대기열 자신의 노드 이름 규칙 밖 호스트와 443 이 아닌 포트는
-    :class:`KorailProtocolError` 입니다. 그 거부는 일부러 시끄럽습니다. 여기서 조용히
-    정문으로 되돌아가면 잘못된 재지정이 샌 슬롯으로 바뀌고, 샌 슬롯은 아무 소리도 내지
-    않습니다.
-    """
-    if not ip and not port:
-        return ""
-    if (
-        ip != KORAIL_NETFUNNEL_HTTPS_HOST
-        and KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(ip) is None
-    ):
-        raise KorailProtocolError(
-            f"KORAIL NetFunnel reply named {ip!r} as the host for the rest of "
-            "this session, and it is not one of the queue's own nodes "
-            "(rnf<1-99>.letskorail.com, lowercase) nor the front door "
-            f"{KORAIL_NETFUNNEL_HTTPS_HOST!r}; the redirection this queue needs "
-            "is constrained to the pool, never trusted as given"
-        )
-    if port != str(KORAIL_NETFUNNEL_NODE_PORT):
-        raise KorailProtocolError(
-            f"KORAIL NetFunnel reply named port {port!r} for queue node {ip!r}; "
-            f"only {KORAIL_NETFUNNEL_NODE_PORT} is allowed, and the port is no "
-            "more followed on the server's say-so than the host is"
-        )
-    return f"https://{ip}"
-
-
-def _are_name_value_pairs(
-    pairs: tuple[object, ...],
-    *,
-    value_type: type | None = None,
-) -> bool:
-    """Whether every item is a plain 2-tuple with a str name.
-
-    A tuple subclass does not count. With ``value_type`` the value is checked
-    too; without it, the caller checks values itself.
-    """
-    return all(
-        type(pair) is tuple
-        and len(pair) == 2
-        and isinstance(pair[0], str)
-        and (value_type is None or isinstance(pair[1], value_type))
-        for pair in pairs
-    )
-
-
-def assert_netfunnel_request(
-    method: str,
-    path: str,
-    params: Sequence[tuple[str, str]],
-) -> None:
-    """등록된 대기열 opcode 만, 정확히 그 순서의 파라미터로만 허용합니다.
-
-    ``params`` 는 요청이 만들어질 이름/값 쌍을 인코딩 전에 순서 그대로 받습니다. 그래서
-    계약이 파라미터 구성뿐 아니라 **순서**까지 덮습니다. 앱의 순서는 장식이 아니라
-    ``T6/d.java`` 가 만든 리스트를 ``URLEncodedUtils.format`` 이 그대로 뱉은 결과입니다.
-
-    :class:`KorailProtocolError` 가 되는 경우는 등록되지 않은 opcode(5003, 5105, 5106 과
-    지어낸 값), 계약과 정확히 같지 않거나 순서가 다른 파라미터 목록, ``service_1`` 이 아닌
-    ``sid``, :data:`KORAIL_NETFUNNEL_ACTION_IDS` 밖의 ``aid``, NetFunnel 키의 모양이 아닌
-    키입니다.
-    """
-    route = (method.upper(), urlsplit(path).path)
-    if route not in KORAIL_NETFUNNEL_ROUTES:
-        raise KorailProtocolError(
-            f"KORAIL NetFunnel route is not allowed: {route[0]} {route[1]}"
-        )
-    pairs = tuple(params)
-    if not _are_name_value_pairs(pairs, value_type=str):
-        raise KorailProtocolError(
-            "KORAIL NetFunnel parameters must be ordered string pairs"
-        )
-    values = dict(pairs)
-    opcode = values.get("opcode", "")
-    contract = KORAIL_NETFUNNEL_QUERY_CONTRACTS.get(opcode)
-    if contract is None:
-        raise KorailProtocolError(
-            f"KORAIL NetFunnel opcode {opcode!r} is not one of the registered "
-            "queue operations (5101 getTidChkEnter, 5002 chkEnter, "
-            "5004 setComplete)"
-        )
-    if tuple(name for name, _value in pairs) != contract:
-        raise KorailProtocolError(
-            f"KORAIL NetFunnel request is not the registered opcode-{opcode} "
-            "contract: expected exactly " + ", ".join(contract) + " in order"
-        )
-    if opcode in KORAIL_NETFUNNEL_KEYED_OPCODES and (
-        KORAIL_NETFUNNEL_KEY_RE.fullmatch(values["key"]) is None
-    ):
-        raise KorailProtocolError(
-            "KORAIL NetFunnel key parameter is missing or malformed"
-        )
-    if "sid" in values and values["sid"] != KORAIL_NETFUNNEL_SERVICE_ID:
-        raise KorailProtocolError(
-            "KORAIL NetFunnel service id must be "
-            f"{KORAIL_NETFUNNEL_SERVICE_ID!r}"
-        )
-    if "aid" in values and values["aid"] not in KORAIL_NETFUNNEL_ACTION_IDS:
-        raise KorailProtocolError(
-            f"KORAIL NetFunnel action id {values['aid']!r} is not one the app "
-            "declares"
-        )
-
-
 def assert_korail_origin(base_url: str) -> None:
     """API 요청의 origin 을 ``https://smart.letskorail.com``(443)으로 고정합니다.
 

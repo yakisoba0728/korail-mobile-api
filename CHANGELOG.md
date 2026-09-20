@@ -118,6 +118,16 @@
 
 ### Changed
 
+- **대기열 가드가 `safety.py` 에서 나왔습니다.** 새 모듈
+  `korail_mobile_api.netfunnel_safety` 입니다. `safety.py` 는 744줄 가운데 **294줄을
+  대기열에 내주고** 있었습니다 — 메인 API 전송 경계가 무엇을 허용하는지 보려고 그
+  파일을 여는 사람이 관계없는 대기열 노드 리다이렉션 규칙을 함께 읽어야 했습니다.
+  두 호스트는 서로에게 닿을 수 없으므로 두 가드도 함께 놓일 이유가 없습니다.
+  성격은 그대로입니다 — 실행 로직 없이 목록과 단언뿐이고, 옮긴 것은 파일 하나입니다.
+  `safety.py` 449줄, `netfunnel_safety.py` 327줄. `_are_name_value_pairs` 도 함께
+  갔습니다(유일한 호출부가 대기열 요청 단언이었습니다). NetFunnel 을 남길지 뺄지는
+  이 변경이 정하지 않습니다 — 그 판단을 나중에 하기 쉬워질 뿐입니다.
+
 - **코드와 어긋난 서술 열 곳을 고쳤습니다.** 1.2.0 에서 없어진 동의 게이트와 dry-run
   미리보기를 여전히 현재형으로 말하던 문장 일곱 곳(`redaction.py` 모듈 docstring 과
   `redact_payload`, `mutation_models.py`, `read_models.py` 두 곳, `safety.py`,
