@@ -372,6 +372,30 @@ def test_certification_route_pins_the_read_overload_not_the_write_one():
     ) == {"hidPnrNo": "PNR_SECRET"}
 
 
+def test_the_send_path_itself_refuses_the_write_overloads_shape():
+    # assert_read_only_request_fields above is a test-only fixture
+    # (tests/_read_field_contracts.py); it does not run on the real send
+    # path any more for any other route. This is the one path where a
+    # caller that reaches KorailHttpClient.post_form with the write
+    # overload's shape -- by hand, or through a future builder bug -- must
+    # still be refused before transport, since the two overloads are
+    # otherwise indistinguishable on the wire.
+    def never_send(_request: httpx.Request) -> httpx.Response:
+        raise AssertionError("the write overload's shape must not be sent")
+
+    client = KorailClient(KorailConfig(), transport=httpx.MockTransport(never_send))
+    try:
+        with pytest.raises(KorailProtocolError):
+            client.http.post_form(
+                R150_PATH,
+                {"hidPnrNo": "PNR", "txtPsgDisc0019Cnt": "1"},
+            )
+        with pytest.raises(KorailProtocolError):
+            client.http.post_form(R150_PATH, {}, include_common=False)
+    finally:
+        client.close()
+
+
 def test_builders_emit_the_apps_exact_field_sets():
     ticket = _ticket()
     assert build_refund_commission_form(ticket) == {

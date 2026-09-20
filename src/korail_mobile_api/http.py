@@ -50,6 +50,21 @@ _NON_COMMON_OUT_READ_PATHS = frozenset({
     "/ebizmaas/EbizMaasStationList.do",
 })
 
+# certification.ReservationList is the one read-only path this package sends
+# to that CertificationService.java also declares a WRITE Retrofit method on:
+# inquiryTicketRsv (the read this package implements, exactly these four
+# fields) and applyDisabilityCertification (:22, which adds txtPsgDisc0019Cnt
+# and six @QueryMaps to attach a disability certificate to a held
+# reservation). The general per-route field contract that used to keep the
+# write shape off this send path moved into tests/_read_field_contracts.py
+# and is no longer checked here for any other route -- but for this one path
+# a caller (or a future builder bug) that hands post_form the write overload's
+# fields would otherwise reach the wire unexamined, since nothing else on the
+# read send path is route-specific. This is the one targeted exception, not a
+# reinstatement of the general contract.
+_RESERVATION_LIST_PATH = "/classes/com.korail.mobile.certification.ReservationList"
+_RESERVATION_LIST_READ_FIELDS = frozenset({"Device", "Version", "Key", "hidPnrNo"})
+
 #: ``parse_base_response`` 가 값 판정 전에 타입을 확인하는 세 봉투 필드.
 _ENVELOPE_STRING_FIELDS = ("h_msg_cd", "h_msg_txt", "strResult")
 
@@ -332,6 +347,19 @@ class KorailHttpClient:
                 mapping_form.update(self.common_fields())
             if data:
                 mapping_form.update(data)
+        if path == _RESERVATION_LIST_PATH:
+            field_names = (
+                {name for name, _value in ordered_form}
+                if ordered_form is not None
+                else set(mapping_form or {})
+            )
+            if field_names != _RESERVATION_LIST_READ_FIELDS:
+                raise KorailProtocolError(
+                    "KORAIL certification.ReservationList shares its path "
+                    "with a write overload (applyDisabilityCertification); "
+                    "the read send path only accepts the read overload's "
+                    "exact fields: " + ", ".join(sorted(_RESERVATION_LIST_READ_FIELDS))
+                )
         headers = (
             {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
             if form_encoded
