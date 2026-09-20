@@ -111,27 +111,16 @@ def _called_names(function) -> set[str]:
 
 
 def test_every_mutation_send_path_runs_the_shape_check(monkeypatch):
-    """Both send paths, asserted by running them rather than by reading them.
+    """The one send path, asserted by running it rather than by reading it.
 
-    The gate went onto `post_mutation_form` first, and `get_mutation_query`
-    -- the GET half, which exists because 6.5.0 declared
-    `reservation.dcntCrdExtn.do` @GET -- kept sending unexamined values while
-    its own docstring said "every gate of post_mutation_form applies here
-    unchanged". Tracing a suite run is what surfaced it.
-
-    This used to assert that each method's source contained the text
+    This used to assert that the method's source contained the text
     ``assert_mutation_form_shape(``, and a comment satisfies that: with the
-    call commented out the suite stayed green. Now each path is driven to the
+    call commented out the suite stayed green. Now the path is driven to the
     transport with the check wrapped in a spy, and the transport refuses to
     answer unless the spy has already seen that form. A path that stops calling
     the check, or calls it after sending, fails here. A new send path -- any
     method that calls ``assert_mutation_route`` -- fails the first assertion
     until it is driven here too.
-
-    7.0.6 declares `dcntCrdExtn.do` @POST, so no registered mutation route is a
-    GET and `get_mutation_query` refuses every real path at the route check.
-    It is still a send path; the test registers a GET route for its own
-    duration to reach the shape check behind that refusal.
     """
     import httpx
 
@@ -144,7 +133,7 @@ def test_every_mutation_send_path_runs_the_shape_check(monkeypatch):
         if inspect.isfunction(member)
         and "assert_mutation_route" in _called_names(member)
     }
-    assert senders == {"post_mutation_form", "get_mutation_query"}
+    assert senders == {"post_mutation_form"}
 
     seen: list[tuple[str, dict]] = []
     shape_check = safety.assert_mutation_form_shape
@@ -169,29 +158,17 @@ def test_every_mutation_send_path_runs_the_shape_check(monkeypatch):
         transport=httpx.MockTransport(answer),
     )
     cart = "/classes/com.korail.mobile.cart.addCartList"
-    extension = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
     form = {**client.common_fields(), "hidPnrNo": "SYNTHETIC_PNR"}
-    query = {**client.common_fields(), "txtCrdNo": "SYNTHETIC_CARD"}
     try:
         client.post_mutation_form(
             cart,
             form,
             category="cart",
         )
-        monkeypatch.setattr(
-            safety,
-            "KORAIL_MUTATION_ROUTES",
-            safety.KORAIL_MUTATION_ROUTES | {("GET", extension)},
-        )
-        client.get_mutation_query(
-            extension,
-            query,
-            category="discount_card",
-        )
     finally:
         client.close()
 
-    assert seen == [(cart, form), (extension, query)]
+    assert seen == [(cart, form)]
 
 
 @pytest.mark.parametrize(
@@ -290,12 +267,12 @@ def test_both_route_guards_call_the_same_things():
     )
 
 
-def test_the_get_mutation_route_carries_the_common_three_the_check_requires():
-    """The GET mutation is gated by the same rule, so it must satisfy it.
+def test_the_discount_card_extension_query_carries_the_common_three_the_check_requires():
+    """The extension route is gated by the same rule, so it must satisfy it.
 
-    A contract that the one @GET route could not meet would be a contract
-    that gets loosened the first time it fires. It is built by _common_fields
-    exactly like a POST body, so it meets it.
+    A contract that its query could not meet would be a contract that gets
+    loosened the first time it fires. It is built by _common_fields exactly
+    like the POST body it is sent as, so it meets it.
     """
     from korail_mobile_api.config import KorailConfig
     from korail_mobile_api.mutation_models import DiscountCardTicket

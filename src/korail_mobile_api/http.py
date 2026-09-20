@@ -5,8 +5,7 @@
 """HTTP 전송 계층 — 폼·쿼리를 실제로 보내는 유일한 곳.
 
 읽기(:meth:`~KorailHttpClient.post_form`, :meth:`~KorailHttpClient.get_json`)와
-변경(:meth:`~KorailHttpClient.post_mutation_form`,
-:meth:`~KorailHttpClient.get_mutation_query`)이 완전히 갈리며 서로의 라우트에 닿을 수
+변경(:meth:`~KorailHttpClient.post_mutation_form`)이 완전히 갈리며 서로의 라우트에 닿을 수
 없습니다. 공통 세 필드(``Device``/``Version``/``Key``), DynaPath 헤더,
 ``h_msg_cd`` 판정이 여기서 붙습니다.
 """
@@ -165,9 +164,9 @@ def _finish_mutation(
     path: str,
     raise_on_fail: bool,
 ) -> BaseKorailResponse:
-    """The end of both mutation senders: status, JSON and the envelope.
+    """The end of post_mutation_form: status, JSON and the envelope.
 
-    Mutation senders only, and separate from the read senders' tail on
+    The mutation sender only, and separate from the read senders' tail on
     purpose. The envelope is never relaxed here: every mutation route answers
     with a CommonOut, so a missing strResult is a failure.
     """
@@ -280,7 +279,7 @@ class KorailHttpClient:
     ) -> BaseKorailResponse:
         """The end of every read: send, then status, JSON and the envelope.
 
-        Read senders only. The mutation senders keep their own tail, which
+        Read senders only. The mutation sender keeps its own tail, which
         never relaxes the envelope.
         """
         try:
@@ -457,39 +456,6 @@ class KorailHttpClient:
         except httpx.HTTPError as exc:
             raise KorailTransportError(
                 f"KORAIL transport failed for POST {path}"
-            ) from exc
-        return _finish_mutation(response, path=path, raise_on_fail=raise_on_fail)
-
-    def get_mutation_query(
-        self,
-        path: str,
-        params: Mapping[str, Any],
-        *,
-        category: MutationCategory,
-        raise_on_fail: bool = True,
-    ) -> BaseKorailResponse:
-        """:meth:`post_mutation_form` 의 GET 판(``reservation.dcntCrdExtn.do``).
-
-        동일한 라우트/범주 게이트 적용.
-        """
-        assert_korail_origin(str(self._client.base_url))
-        assert_mutation_route("GET", path)
-        assert_mutation_route_category(path, category)
-        if not isinstance(params, Mapping):
-            raise KorailProtocolError(
-                "KORAIL mutation query params must be a mapping"
-            )
-        assert_mutation_form_shape(path, params)
-        headers = self._dynapath_headers("GET", path)
-        try:
-            response = self._client.get(
-                path,
-                params=dict(params),
-                headers=headers,
-            )
-        except httpx.HTTPError as exc:
-            raise KorailTransportError(
-                f"KORAIL transport failed for GET {path}"
             ) from exc
         return _finish_mutation(response, path=path, raise_on_fail=raise_on_fail)
 

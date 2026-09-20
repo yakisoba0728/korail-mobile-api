@@ -221,33 +221,27 @@ def test_methods_require_a_session():
         client.close()
 
 
-def test_get_mutation_query_carries_every_gate_post_mutation_form_does():
+def test_post_mutation_form_gates_the_discount_card_routes():
     http = KorailHttpClient(
         KorailConfig(),
         transport=httpx.MockTransport(_refuse),
     )
     try:
-        # Wrong category, wrong route, wrong method.
+        # Wrong category, wrong route, wrong shape.
         with pytest.raises(KorailProtocolError):
-            http.get_mutation_query(
+            http.post_mutation_form(
                 EXTENSION_ROUTE,
                 {},
                 category="refund",
             )
         with pytest.raises(KorailProtocolError):
-            http.get_mutation_query(
+            http.post_mutation_form(
                 "/classes/com.korail.mobile.common.stationdata",
                 {},
                 category="discount_card",
             )
         with pytest.raises(KorailProtocolError):
-            http.get_mutation_query(
-                PURCHASE_ROUTE,
-                {},
-                category="discount_card",
-            )
-        with pytest.raises(KorailProtocolError):
-            http.get_mutation_query(
+            http.post_mutation_form(
                 EXTENSION_ROUTE,
                 "not a mapping",
                 category="discount_card",

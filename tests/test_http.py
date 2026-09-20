@@ -924,59 +924,36 @@ def test_read_forms_keep_their_key_order():
         assert list(form) == expected, name
 
 
-# --- the mutation tail, pinned for both senders -----------------------------------
-# post_mutation_form and get_mutation_query end the same way after sending:
-# status, JSON, and an envelope that is never relaxed. Pinned before that tail
-# was shared. Nothing here leaves the mock transport. No mutation route is a
-# GET in 7.0.6, so the GET sender gets one for the test's duration, as
-# test_safety does.
+# --- the mutation tail, pinned for post_mutation_form -----------------------------
+# post_mutation_form's tail after sending: status, JSON, and an envelope that
+# is never relaxed. Nothing here leaves the mock transport.
 
 _CART = "/classes/com.korail.mobile.cart.addCartList"
-_EXTENSION = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
 
 
-def _mutate_through(sender, answer, monkeypatch, **kw):
-    from korail_mobile_api import safety
-
+def _mutate_through(answer, **kw):
     client = KorailHttpClient(KorailConfig(), transport=httpx.MockTransport(answer))
-    if sender == "post_mutation_form":
-        return "POST", _CART, lambda: client.post_mutation_form(
-            _CART,
-            {**client.common_fields(), "hidPnrNo": "SYNTHETIC_PNR"},
-            category="cart",
-            **kw,
-        )
-    monkeypatch.setattr(
-        safety,
-        "KORAIL_MUTATION_ROUTES",
-        safety.KORAIL_MUTATION_ROUTES | {("GET", _EXTENSION)},
-    )
-    return "GET", _EXTENSION, lambda: client.get_mutation_query(
-        _EXTENSION,
-        {**client.common_fields(), "txtCrdNo": "SYNTHETIC_CARD"},
-        category="discount_card",
+    return "POST", _CART, lambda: client.post_mutation_form(
+        _CART,
+        {**client.common_fields(), "hidPnrNo": "SYNTHETIC_PNR"},
+        category="cart",
         **kw,
     )
 
 
-_MUTATION_SENDERS = ["get_mutation_query", "post_mutation_form"]
-
-
-@pytest.mark.parametrize("sender", _MUTATION_SENDERS)
-def test_a_mutation_that_cannot_be_sent_names_its_method_and_path(sender, monkeypatch):
+def test_a_mutation_that_cannot_be_sent_names_its_method_and_path():
     def answer(request):
         raise httpx.ConnectError("synthetic", request=request)
 
-    method, path, send = _mutate_through(sender, answer, monkeypatch)
+    method, path, send = _mutate_through(answer)
     with pytest.raises(KorailTransportError) as raised:
         send()
     assert str(raised.value) == f"KORAIL transport failed for {method} {path}"
 
 
-@pytest.mark.parametrize("sender", _MUTATION_SENDERS)
-def test_a_mutation_answer_is_checked_like_an_enveloped_read(sender, monkeypatch):
+def test_a_mutation_answer_is_checked_like_an_enveloped_read():
     def run(response, **kw):
-        _, _, send = _mutate_through(sender, lambda _: response, monkeypatch, **kw)
+        _, _, send = _mutate_through(lambda _: response, **kw)
         return send()
 
     with pytest.raises(KorailApiError, match="HTTP 500"):
