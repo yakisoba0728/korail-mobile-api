@@ -152,27 +152,11 @@ def test_closed_builder_emits_only_the_exact_apk_caller_fields():
         builder(object())
 
 
-def test_builder_rejects_subclasses_and_revalidates_without_virtual_dispatch():
-    request_type = _require(read_payloads, "PassScheduleRequest")
-    builder = _require(read_payloads, "build_pass_schedule_form")
-
-    class ForgedPassScheduleRequest(request_type):
-        def _validate(self) -> None:
-            return None
-
-    forged = ForgedPassScheduleRequest(
-        **{
-            item.name: getattr(_request(), item.name)
-            for item in fields(request_type)
-        }
-    )
-    with pytest.raises(TypeError, match="PassScheduleRequest"):
-        builder(forged)
-
+def test_builder_revalidates_a_mutated_request_without_virtual_dispatch():
     mutated = _request()
     object.__setattr__(mutated, "page_no", "0")
     with pytest.raises(ValueError, match="page_no"):
-        builder(mutated)
+        read_payloads.build_pass_schedule_form(mutated)
 
 
 @pytest.mark.parametrize(

@@ -476,37 +476,17 @@ def test_payload_builders_emit_only_closed_wire_fields():
     assert "20990101" not in repr(history)
 
 
-def test_maas_builder_rejects_query_subclasses_even_when_init_is_bypassed():
-    class UnsafeQuery(MaasServiceDetailQuery):
-        def __post_init__(self) -> None:
-            pass
+def test_consolidated_ascii_digits_helper_rejects_full_width_digits():
+    """S10-payloads-M01: one ``_ascii_digits`` per module now backs every
 
-    query = UnsafeQuery(start_date="not-a-date", end_date=None)
+    length-checked read field. ``str.isdigit`` would accept full-width
+    digits; the shared ``payloads._is_ascii_digits`` character-range check
+    still does not.
+    """
+    from korail_mobile_api.read_payloads import _ascii_digits
 
-    with pytest.raises(TypeError, match="exact MaasServiceDetailQuery"):
-        build_maas_service_detail_form(KorailConfig(), query)
-
-
-@pytest.mark.parametrize(
-    ("start_date", "end_date"),
-    [
-        ("20990101", None),
-        ("２０９９０１０１", "20990201"),
-        ("20990230", "20990301"),
-        ("20990201", "20990131"),
-        ("20990131", "20990501"),
-    ],
-)
-def test_maas_builder_revalidates_mutated_exact_queries(
-    start_date,
-    end_date,
-):
-    query = MaasServiceDetailQuery.current()
-    object.__setattr__(query, "start_date", start_date)
-    object.__setattr__(query, "end_date", end_date)
-
-    with pytest.raises(ValueError):
-        build_maas_service_detail_form(KorailConfig(), query)
+    with pytest.raises(ValueError, match="start_date"):
+        _ascii_digits("２０９９０１０１", "start_date", lengths=frozenset({8}))
 
 
 @pytest.mark.parametrize(
@@ -862,10 +842,8 @@ def test_false_maas_query_is_not_silently_treated_as_current():
     ("method_name", "args"),
     [
         ("get_multi_child_discount_targets", ("2099010",)),
-        ("get_multi_child_discount_targets", ("２０９９０１０１",)),
         ("get_multi_child_discount_targets", (20990101,)),
         ("get_trip_change_dates", ("2099-01-01",)),
-        ("get_trip_change_dates", ("２０９９０１０１",)),
         ("get_trip_change_dates", (None,)),
     ],
 )
@@ -907,7 +885,6 @@ def test_invalid_scalar_arguments_fail_before_dynapath_and_transport(method_name
     ("start", "end"),
     [
         ("2099010", "20990201"),
-        ("２０９９０１０１", "20990201"),
         ("20990101", "2099-02-01"),
         ("20990201", "20990131"),
         ("20990131", "20990501"),

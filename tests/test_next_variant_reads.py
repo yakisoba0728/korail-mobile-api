@@ -375,16 +375,6 @@ def test_commuter_request_provenance_lengths_and_repr_are_strict():
     )
     assert "SECRET" not in repr(reference)
 
-    class UnsafePassData(PassMenuData):
-        pass
-
-    with pytest.raises(TypeError):
-        build_commuter_info_form(
-            CommuterInitialRequest(
-                UnsafePassData(commuter_kind_code="UNSAFE")
-            )
-        )
-
     initial = CommuterInitialRequest(_pass_data())
     object.__setattr__(initial, "pass_data", object())
     with pytest.raises(TypeError):

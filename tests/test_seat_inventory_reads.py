@@ -56,7 +56,6 @@ from korail_mobile_api.parsers import (
 from korail_mobile_api.payloads import (
     build_seat_car_form,
     build_seat_inventory_form,
-    validate_seat_inventory_inputs,
 )
 from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES, assert_read_only_route
 
@@ -1124,39 +1123,6 @@ def test_seat_builder_rejects_invalid_car_numbers(complete_train, car_no):
         )
 
 
-@pytest.mark.parametrize(
-    ("field_name", "value"),
-    [
-        ("train_no", None),
-        ("train_no", ""),
-        ("train_no", "１２３"),
-        ("train_no", "123456"),
-        ("train_group_code", None),
-        ("train_group_code", "10A"),
-        ("train_group_code", "１０0"),
-        ("departure_station_code", None),
-        ("departure_station_code", "001A"),
-        ("arrival_station_code", "００２０"),
-        ("departure_date", None),
-        ("departure_date", "2026-07-14"),
-        ("run_date", "２０２６０７１４"),
-        ("train_class_code", None),
-        ("train_class_code", "0A"),
-        ("departure_run_order", None),
-        ("departure_run_order", "00001A"),
-        ("arrival_run_order", "００００１０"),
-    ],
-)
-def test_inventory_validation_rejects_missing_non_ascii_and_malformed_train_fields(
-    complete_train,
-    field_name,
-    value,
-):
-    malformed = replace(complete_train, **{field_name: value})
-    with pytest.raises(KorailProtocolError, match=field_name):
-        validate_seat_inventory_inputs(malformed, 1)
-
-
 def test_safety_registers_only_the_two_exact_new_post_contracts():
     assert ("POST", CAR_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", SEAT_PATH) in KORAIL_READ_ONLY_ROUTES
@@ -1462,52 +1428,6 @@ def test_invalid_caller_counts_fail_before_sid_and_transport(
     try:
         with pytest.raises(ValueError):
             getattr(client, method_name)(complete_train, *args, **kwargs)
-    finally:
-        client.close()
-    assert sid_calls == 0
-    assert transport_calls == 0
-
-
-@pytest.mark.parametrize(
-    ("field_name", "value"),
-    [
-        ("train_no", "１２３"),
-        ("train_group_code", "10A"),
-        ("departure_station_code", None),
-        ("arrival_station_code", "002A"),
-        ("departure_date", "2026071A"),
-        ("run_date", None),
-        ("train_class_code", "0A"),
-        ("departure_run_order", "０００００１"),
-        ("arrival_run_order", None),
-    ],
-)
-def test_invalid_train_fields_fail_before_sid_and_transport(
-    complete_train,
-    field_name,
-    value,
-    monkeypatch,
-):
-    sid_calls = 0
-    transport_calls = 0
-
-    def fake_sid() -> str:
-        nonlocal sid_calls
-        sid_calls += 1
-        raise AssertionError("Sid generation must not run")
-
-    def handler(_: httpx.Request) -> httpx.Response:
-        nonlocal transport_calls
-        transport_calls += 1
-        raise AssertionError("transport must not run")
-
-    monkeypatch.setattr(client_module, "generate_sid", fake_sid)
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="synthetic-session")
-    malformed = replace(complete_train, **{field_name: value})
-    try:
-        with pytest.raises(KorailProtocolError, match=field_name):
-            client.get_seat_cars(malformed)
     finally:
         client.close()
     assert sid_calls == 0

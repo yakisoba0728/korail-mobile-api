@@ -53,43 +53,41 @@ def _required_text(value: str | None, name: str) -> str:
     return value
 
 
-def _ascii_date(value: str, name: str) -> str:
-    if not _is_ascii_digits(value, frozenset({8})):
-        raise ValueError(f"{name} must use ASCII YYYYMMDD")
-    return value
-
-
-def _ticket_return_sale_date(value: str) -> str:
-    """원표일자는 서버가 4자리 또는 8자리 숫자로 돌려줍니다.
-
-    ``ReceiptInfo`` 에는 승차권 상세의 ``h_orgtk_ret_sale_dt`` 를 해석하거나 날짜를
-    보충하지 않고 그대로 복사합니다.
-    """
-    if not _is_ascii_digits(value, frozenset({4, 8})):
-        raise ValueError("sale_date must be the ASCII ticket return sale date")
-    return value
-
-
 def _optional_text(value: str, name: str) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{name} must be a string")
     return value
 
 
-def _ascii_digits(value: str, name: str, length: int) -> str:
-    if not _is_ascii_digits(value, frozenset({length})):
-        raise ValueError(
-            f"{name} must contain exactly {length} ASCII digits"
-        )
-    return value
-
-
-def _ascii_identifier(
+def _ascii_digits(
     value: str,
     name: str,
     *,
+    lengths: frozenset[int] | None = None,
     maximum_length: int | None = None,
+    allow_empty: bool = False,
 ) -> str:
+    """ASCII 숫자 문자열인지 확인합니다 (``payloads._is_ascii_digits`` 재사용).
+
+    ``lengths`` 를 주면 그 길이 집합에 들어야 합니다 — 날짜(``YYYYMMDD``,
+    8), 시각(6), 원표일자(4 또는 8)처럼 길이가 정해진 필드용입니다.
+    ``lengths`` 를 생략하고 ``maximum_length`` 만 주면 1자리부터 그 자릿수
+    까지, 둘 다 생략하면 자릿수를 보지 않습니다 — 열차번호·순번처럼 길이가
+    자유로운 식별자용입니다. ``allow_empty`` 면 빈 문자열을 그대로
+    통과시킵니다.
+    """
+    if allow_empty and value == "":
+        return value
+    if lengths is not None:
+        if not _is_ascii_digits(value, lengths):
+            if len(lengths) == 1:
+                (length,) = lengths
+                raise ValueError(
+                    f"{name} must contain exactly {length} ASCII digits"
+                )
+            expected = ", ".join(str(length) for length in sorted(lengths))
+            raise ValueError(f"{name} must contain {expected} ASCII digit(s)")
+        return value
     if (
         not isinstance(value, str)
         or not value
@@ -113,16 +111,10 @@ def _positive_ascii_text(
 ) -> str:
     if allow_empty and value == "":
         return value
-    if (
-        not isinstance(value, str)
-        or not value
-        or any(character < "0" or character > "9" for character in value)
-        or not any(character != "0" for character in value)
-    ):
-        raise ValueError(
-            f"{name} must be a positive ASCII decimal string"
-        )
-    return value
+    resolved = _ascii_digits(value, name)
+    if not any(character != "0" for character in resolved):
+        raise ValueError(f"{name} must be a positive ASCII decimal string")
+    return resolved
 
 
 def _passenger_count(value: int, name: str) -> int:
@@ -144,25 +136,25 @@ class FreeSeatCarRequest:
         self._validate()
 
     def _validate(self) -> None:
-        _ascii_digits(self.run_date, "run_date", 8)
-        _ascii_identifier(
+        _ascii_digits(self.run_date, "run_date", lengths=frozenset({8}))
+        _ascii_digits(
             self.train_no,
             "train_no",
             maximum_length=5,
         )
-        _ascii_identifier(
+        _ascii_digits(
             self.departure_construction_order,
             "departure_construction_order",
         )
-        _ascii_identifier(
+        _ascii_digits(
             self.arrival_construction_order,
             "arrival_construction_order",
         )
-        _ascii_identifier(
+        _ascii_digits(
             self.departure_run_order,
             "departure_run_order",
         )
-        _ascii_identifier(
+        _ascii_digits(
             self.arrival_run_order,
             "arrival_run_order",
         )
@@ -199,8 +191,8 @@ class SeatAssignmentScheduleRequest:
 
     def _validate(self) -> None:
         _required_text(self.menu_id, "menu_id")
-        _ascii_digits(self.departure_date, "departure_date", 8)
-        _ascii_digits(self.departure_time, "departure_time", 6)
+        _ascii_digits(self.departure_date, "departure_date", lengths=frozenset({8}))
+        _ascii_digits(self.departure_time, "departure_time", lengths=frozenset({6}))
         _required_text(
             self.departure_station_name,
             "departure_station_name",
@@ -238,9 +230,9 @@ class MergeSeatsInquiryRequest:
         self._validate()
 
     def _validate(self) -> None:
-        _ascii_digits(self.boarding_datetime, "boarding_datetime", 14)
-        _ascii_digits(self.run_datetime, "run_datetime", 14)
-        _ascii_identifier(
+        _ascii_digits(self.boarding_datetime, "boarding_datetime", lengths=frozenset({14}))
+        _ascii_digits(self.run_datetime, "run_datetime", lengths=frozenset({14}))
+        _ascii_digits(
             self.train_no,
             "train_no",
             maximum_length=5,
@@ -260,7 +252,7 @@ class MergeSeatsInquiryRequest:
 def build_free_seat_car_form(
     request: FreeSeatCarRequest,
 ) -> dict[str, str]:
-    if type(request) is not FreeSeatCarRequest:
+    if not isinstance(request, FreeSeatCarRequest):
         raise TypeError("request must be a FreeSeatCarRequest")
     FreeSeatCarRequest._validate(request)
     return {
@@ -276,7 +268,7 @@ def build_free_seat_car_form(
 def build_guide_seat_condition_form(
     request: GuideSeatConditionRequest,
 ) -> dict[str, str]:
-    if type(request) is not GuideSeatConditionRequest:
+    if not isinstance(request, GuideSeatConditionRequest):
         raise TypeError("request must be a GuideSeatConditionRequest")
     GuideSeatConditionRequest._validate(request)
     return {"rqSeatAttCd": request.seat_attribute_code}
@@ -285,7 +277,7 @@ def build_guide_seat_condition_form(
 def build_seat_assignment_schedule_form(
     request: SeatAssignmentScheduleRequest,
 ) -> dict[str, str]:
-    if type(request) is not SeatAssignmentScheduleRequest:
+    if not isinstance(request, SeatAssignmentScheduleRequest):
         raise TypeError("request must be a SeatAssignmentScheduleRequest")
     SeatAssignmentScheduleRequest._validate(request)
     return {
@@ -307,7 +299,7 @@ def build_seat_assignment_schedule_form(
 def build_merge_seats_inquiry_form(
     request: MergeSeatsInquiryRequest,
 ) -> dict[str, str]:
-    if type(request) is not MergeSeatsInquiryRequest:
+    if not isinstance(request, MergeSeatsInquiryRequest):
         raise TypeError("request must be a MergeSeatsInquiryRequest")
     MergeSeatsInquiryRequest._validate(request)
     form = {
@@ -346,8 +338,8 @@ class PassScheduleRequest:
 
 def _validate_pass_schedule_request(request: PassScheduleRequest) -> None:
     _required_text(request.selected_train_code, "selected_train_code")
-    _ascii_digits(request.departure_date, "departure_date", 8)
-    _ascii_digits(request.departure_time, "departure_time", 6)
+    _ascii_digits(request.departure_date, "departure_date", lengths=frozenset({8}))
+    _ascii_digits(request.departure_time, "departure_time", lengths=frozenset({6}))
     _required_text(request.transfer_type_code, "transfer_type_code")
     _required_text(request.pass_kind_code, "pass_kind_code")
     _required_text(request.pass_period_code, "pass_period_code")
@@ -370,8 +362,8 @@ def _validate_pass_schedule_request(request: PassScheduleRequest) -> None:
 def build_pass_schedule_form(
     request: PassScheduleRequest,
 ) -> dict[str, str]:
-    if type(request) is not PassScheduleRequest:
-        raise TypeError("request must be exactly a PassScheduleRequest")
+    if not isinstance(request, PassScheduleRequest):
+        raise TypeError("request must be a PassScheduleRequest")
     _validate_pass_schedule_request(request)
     return {
         "selGoTrain": request.selected_train_code,
@@ -420,7 +412,11 @@ def build_delay_discount_ticket_form(
     # 선언 수준 근거일 뿐이다. 이 입력을 만드는 7.0.6 화면은 찾지 못했다. 2026-09-16
     # 실서버에서 h_page_no=날짜·dptDtTo=날짜·키 없음·h_page_no=1 이 모두 같은 빈 SUCC 였다.
     # 지연할인권이 없는 계정이라 키는 아직 실서버로 가려지지 않았다.
-    return {"h_page_no": _ascii_date(departure_date_to, "departure_date_to")}
+    return {
+        "h_page_no": _ascii_digits(
+            departure_date_to, "departure_date_to", lengths=frozenset({8})
+        )
+    }
 
 
 def build_discount_coupon_form(
@@ -525,7 +521,7 @@ def build_ticket_receipt_form(
     txt_index: str | None = None,
 ) -> dict[str, str]:
     form = {
-        "h_orgtk_sale_dt": _ticket_return_sale_date(sale_date),
+        "h_orgtk_sale_dt": _ascii_digits(sale_date, "sale_date", lengths=frozenset({4, 8})),
         "h_orgtk_wct_no": _required_text(window_no, "window_no"),
         "h_orgtk_sale_sqno": _required_text(
             sale_sequence,
@@ -545,7 +541,7 @@ def build_ticket_receipt_form(
 
 
 def _calendar_date(value: str, name: str) -> date:
-    _ascii_date(value, name)
+    _ascii_digits(value, name, lengths=frozenset({8}))
     try:
         return date(int(value[:4]), int(value[4:6]), int(value[6:]))
     except ValueError as exc:
@@ -604,7 +600,7 @@ class MaasServiceDetailQuery:
 def build_multi_child_discount_target_form(
     departure_date: str,
 ) -> dict[str, str]:
-    return {"dptDt": _ascii_date(departure_date, "departure_date")}
+    return {"dptDt": _ascii_digits(departure_date, "departure_date", lengths=frozenset({8}))}
 
 
 def build_korail_point_summary_form() -> dict[str, str]:
@@ -657,8 +653,8 @@ class MileageHistoryRequest:
 def build_mileage_history_form(
     request: MileageHistoryRequest,
 ) -> dict[str, str]:
-    if type(request) is not MileageHistoryRequest:
-        raise TypeError("request must be an exact MileageHistoryRequest")
+    if not isinstance(request, MileageHistoryRequest):
+        raise TypeError("request must be a MileageHistoryRequest")
     if request.ledger not in _KORAIL_MILEAGE_LEDGERS:
         raise ValueError(
             "ledger must be KORAIL_MILEAGE_LEDGER_KTX or "
@@ -669,8 +665,8 @@ def build_mileage_history_form(
             "movement must be one of KORAIL_MILEAGE_MOVEMENT_ALL, "
             "KORAIL_MILEAGE_MOVEMENT_EARNED, KORAIL_MILEAGE_MOVEMENT_SPENT"
         )
-    start_date = _ascii_date(request.start_date, "start_date")
-    end_date = _ascii_date(request.end_date, "end_date")
+    start_date = _ascii_digits(request.start_date, "start_date", lengths=frozenset({8}))
+    end_date = _ascii_digits(request.end_date, "end_date", lengths=frozenset({8}))
     if start_date > end_date:
         raise ValueError("start_date must not be after end_date")
     return {
@@ -756,7 +752,7 @@ def build_discount_card_schedule_query(
     if type(request) is not DiscountCardScheduleRequest:
         raise TypeError("request must be an exact DiscountCardScheduleRequest")
     query = {
-        "dptDt": _ascii_date(request.departure_date, "departure_date"),
+        "dptDt": _ascii_digits(request.departure_date, "departure_date", lengths=frozenset({8})),
         "dptRsStnNm": _required_text(
             request.departure_station_name,
             "departure_station_name",
@@ -765,7 +761,7 @@ def build_discount_card_schedule_query(
             request.arrival_station_name,
             "arrival_station_name",
         ),
-        "dptTm": _ascii_digits(request.departure_time, "departure_time", 6),
+        "dptTm": _ascii_digits(request.departure_time, "departure_time", lengths=frozenset({6})),
         "trnGpCd": _required_text(
             request.train_group_code,
             "train_group_code",
@@ -809,7 +805,7 @@ def build_maas_service_detail_form(
     config: KorailConfig,
     query: MaasServiceDetailQuery,
 ) -> dict[str, str]:
-    if type(query) is not MaasServiceDetailQuery:
+    if not isinstance(query, MaasServiceDetailQuery):
         raise TypeError("query must be an exact MaasServiceDetailQuery")
     _validate_maas_service_detail_query_values(
         query.start_date,
@@ -825,7 +821,7 @@ def build_maas_service_detail_form(
 
 
 def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
-    return {"tripChgDate": _ascii_date(departure_date, "departure_date")}
+    return {"tripChgDate": _ascii_digits(departure_date, "departure_date", lengths=frozenset({8}))}
 
 
 @dataclass(frozen=True, init=False)
@@ -904,8 +900,8 @@ def build_gift_ticket_list_form(
 
 
 def _exact_server_pass_data(pass_data: PassMenuData) -> str:
-    if type(pass_data) is not PassMenuData:
-        raise TypeError("pass_data must be an exact PassMenuData")
+    if not isinstance(pass_data, PassMenuData):
+        raise TypeError("pass_data must be a PassMenuData")
     return _required_text(
         pass_data.commuter_kind_code,
         "pass_data.commuter_kind_code",
@@ -942,8 +938,8 @@ def _validate_commuter_passenger_request(
     request: CommuterPassengerRequest,
 ) -> tuple[str, ...]:
     _exact_server_pass_data(request.pass_data)
-    if type(request.source) is not CommuterInfoResponse:
-        raise TypeError("source must be an exact CommuterInfoResponse")
+    if not isinstance(request.source, CommuterInfoResponse):
+        raise TypeError("source must be a CommuterInfoResponse")
     if type(request.passenger_counts) is not tuple:
         raise TypeError("passenger_counts must be a tuple")
     age_codes = tuple(
@@ -960,8 +956,8 @@ def _validate_commuter_passenger_request(
         age_codes,
         strict=True,
     ):
-        if type(option) is not CommuterPassengerOption:
-            raise TypeError("response passenger options must use exact types")
+        if not isinstance(option, CommuterPassengerOption):
+            raise TypeError("response passenger options must be CommuterPassengerOption")
         validated_age_codes.append(
             _required_text(age_code, "commuter_usage_age_code")
         )
@@ -999,9 +995,9 @@ def _validate_original_ticket_reference(
 def _exact_original_ticket_reference(
     reference: OriginalTicketReference,
 ) -> OriginalTicketReference:
-    if type(reference) is not OriginalTicketReference:
+    if not isinstance(reference, OriginalTicketReference):
         raise TypeError(
-            "ticket must be an exact OriginalTicketReference"
+            "ticket must be an OriginalTicketReference"
         )
     _validate_original_ticket_reference(reference)
     return reference
@@ -1060,9 +1056,9 @@ def build_delivery_recipient_form(
 def build_ticket_duplication_check_form(
     request: TicketDuplicationCheckRequest,
 ) -> dict[str, str]:
-    if type(request) is not TicketDuplicationCheckRequest:
+    if not isinstance(request, TicketDuplicationCheckRequest):
         raise TypeError(
-            "request must be an exact TicketDuplicationCheckRequest"
+            "request must be a TicketDuplicationCheckRequest"
         )
     _validate_ticket_duplication_check_request(request)
     return {"pnrNo": request.pnr_no}
@@ -1150,8 +1146,8 @@ SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
 def _validate_self_seat_change_info_request(
     request: SelfSeatChangeInfoRequest,
 ) -> None:
-    _ascii_date(request.run_date, "run_date")
-    _ascii_identifier(request.train_no, "train_no", maximum_length=5)
+    _ascii_digits(request.run_date, "run_date", lengths=frozenset({8}))
+    _ascii_digits(request.train_no, "train_no", maximum_length=5)
     _required_text(
         request.departure_station_code,
         "departure_station_code",
@@ -1168,9 +1164,9 @@ def _validate_self_seat_change_info_request(
 def build_self_seat_change_info_form(
     request: SelfSeatChangeInfoRequest,
 ) -> dict[str, str]:
-    if type(request) is not SelfSeatChangeInfoRequest:
+    if not isinstance(request, SelfSeatChangeInfoRequest):
         raise TypeError(
-            "request must be an exact SelfSeatChangeInfoRequest"
+            "request must be a SelfSeatChangeInfoRequest"
         )
     _validate_self_seat_change_info_request(request)
     form = {
@@ -1196,9 +1192,9 @@ class CommuterTicketInquiryRequest:
     def __post_init__(self) -> None:
         if self.inquiry_type not in {"0", "1"}:
             raise ValueError("inquiry_type must be '0' or '1'")
-        if type(self.original_ticket) is not OriginalTicketReference:
+        if not isinstance(self.original_ticket, OriginalTicketReference):
             raise TypeError(
-                "original_ticket must be an exact OriginalTicketReference"
+                "original_ticket must be an OriginalTicketReference"
             )
         _validate_original_ticket_reference(self.original_ticket)
 
@@ -1230,9 +1226,9 @@ def build_commuter_info_form(
             *(("cmtrUtlAgeCd", value) for value in age_codes),
         )
     if type(request) is CommuterTicketInquiryRequest:
-        if type(request.original_ticket) is not OriginalTicketReference:
+        if not isinstance(request.original_ticket, OriginalTicketReference):
             raise TypeError(
-                "original_ticket must be an exact OriginalTicketReference"
+                "original_ticket must be an OriginalTicketReference"
             )
         _validate_original_ticket_reference(request.original_ticket)
         if request.inquiry_type not in {"0", "1"}:
@@ -1311,16 +1307,16 @@ def _validate_price_fare_quote_request(
     if type(request.legs) is not tuple or len(request.legs) not in {1, 2}:
         raise ValueError("legs must be a tuple containing one or two legs")
     for leg in request.legs:
-        if type(leg) is not PriceFareLeg:
-            raise TypeError("legs must contain exact PriceFareLeg values")
+        if not isinstance(leg, PriceFareLeg):
+            raise TypeError("legs must contain PriceFareLeg values")
         _validate_price_fare_leg(leg)
 
 
 def build_price_fare_quote_form(
     request: PriceFareQuoteRequest,
 ) -> tuple[tuple[str, str], ...]:
-    if type(request) is not PriceFareQuoteRequest:
-        raise TypeError("request must be an exact PriceFareQuoteRequest")
+    if not isinstance(request, PriceFareQuoteRequest):
+        raise TypeError("request must be a PriceFareQuoteRequest")
     _validate_price_fare_quote_request(request)
     columns = (
         ("dptRsStnCd", "departure_station_code"),
@@ -1371,9 +1367,9 @@ def build_ticket_reservation_detail_query(
     request: TicketReservationDetailRequest,
 ) -> dict[str, str]:
     """``hidPnrNo`` 하나 — ``CertificationService.java:45-46``."""
-    if type(request) is not TicketReservationDetailRequest:
+    if not isinstance(request, TicketReservationDetailRequest):
         raise TypeError(
-            "request must be an exact TicketReservationDetailRequest"
+            "request must be a TicketReservationDetailRequest"
         )
     _validate_ticket_reservation_detail_request(request)
     return {"hidPnrNo": request.pnr_no}
@@ -1399,8 +1395,8 @@ def _validate_refund_companion(companion: RefundCompanion) -> None:
 
 
 def _exact_refund_companion(companion: RefundCompanion) -> RefundCompanion:
-    if type(companion) is not RefundCompanion:
-        raise TypeError("companion must be an exact RefundCompanion")
+    if not isinstance(companion, RefundCompanion):
+        raise TypeError("companion must be a RefundCompanion")
     _validate_refund_companion(companion)
     return companion
 

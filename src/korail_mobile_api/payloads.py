@@ -69,10 +69,10 @@ def validate_seat_inventory_inputs(
 ) -> None:
     """좌석 조회에 쓸 열차 행과 인원이 전선에 낼 만한지 검사합니다.
 
-    ``train`` 은 :class:`TrainSummary` 여야 하고, 그 행의 식별 필드가 각각 정해진
-    자릿수의 ASCII 숫자여야 합니다 — 열차번호(1~5), 열차그룹코드(3), 양쪽 역코드
-    (4), 출발일자·운행일자(8), 열차종별코드(2), 양쪽 정차 순서(6). 조회 응답에서
-    그대로 넘긴 행이면 통과합니다.
+    ``train`` 은 :class:`TrainSummary` 여야 합니다. 그 행의 열차번호·역코드·날짜
+    등 식별 필드는 여기서 다시 검사하지 않습니다 — 이 값들은 조회 응답을 파싱해서
+    채운 행에서만 오고, 호출자가 손으로 지어낸 값을 넣는 오용은 이 함수의 방어
+    범위 밖입니다.
 
     ``passenger_count`` 는 1~9 의 정수이고, ``car_no`` 를 주면 양의 정수여야
     합니다. :func:`build_seat_car_form` 과 :func:`build_seat_inventory_form` 이
@@ -84,18 +84,6 @@ def validate_seat_inventory_inputs(
         raise ValueError("passenger_count must be an integer from 1 through 9")
     if car_no is not None and (type(car_no) is not int or car_no < 1):
         raise ValueError("car_no must be a positive integer")
-    for value, name, lengths in (
-        (train.train_no, "train_no", frozenset(range(1, 6))),
-        (train.train_group_code, "train_group_code", frozenset({3})),
-        (train.departure_station_code, "departure_station_code", frozenset({4})),
-        (train.arrival_station_code, "arrival_station_code", frozenset({4})),
-        (train.departure_date, "departure_date", frozenset({8})),
-        (train.run_date, "run_date", frozenset({8})),
-        (train.train_class_code, "train_class_code", frozenset({2})),
-        (train.departure_run_order, "departure_run_order", frozenset({6})),
-        (train.arrival_run_order, "arrival_run_order", frozenset({6})),
-    ):
-        _required_ascii_digits(value, name, lengths=lengths)
     # x4/b.java:19,23 derive txtSeatAttCd/txtGdNo from the selected train row
     # rather than pinning them; validate the row's own values when present so
     # the seat-map builders can forward a dynamic-but-well-formed value.
@@ -295,11 +283,11 @@ def build_train_search_form(
     ``chtnCnt``/``chtnRsStnCdN``/``trnGpCnt``/``trnGpCd1`` 을 추가합니다.
     기본 쿼리에서는 이 필드를 생략합니다.
     """
-    if continuation is not None and type(continuation) is not (
-        TrainSearchContinuation
+    if continuation is not None and not isinstance(
+        continuation, TrainSearchContinuation
     ):
         raise KorailProtocolError(
-            "KORAIL train search continuation must be an exact "
+            "KORAIL train search continuation must be a "
             "TrainSearchContinuation"
         )
     counts = (
@@ -517,9 +505,11 @@ def build_ticket_list_form(
     (``TicketPurchaseHistoryActivity.java:276-278``)이고 그 밖의 값은
     :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
 
-    ``"2"`` 는 ``boarding_date_from``·``boarding_date_to`` 를 둘 다 요구합니다.
-    앱도 그 화면에서 언제나 두 날짜를 갖춰 보냅니다(``:277-280``). ``"1"`` 은 두
-    값을 빈 문자열로 보냅니다(``TicketListActivity.java:939-941``).
+    ``boarding_date_from``·``boarding_date_to`` 는 그대로 전달합니다 — 서버가
+    받아들이거나 거절합니다. 화면은 ``"2"`` 에서 언제나 두 날짜를 갖춰 보내고
+    (``TicketPurchaseHistoryActivity.java:277-280``) ``"1"`` 은 빈 문자열로
+    보내지만(``TicketListActivity.java:939-941``), 이 함수는 그 UI 관례를
+    강제하지 않습니다.
 
     페이지는 ``h_page_no`` 로 나가며 1 미만은 1 로 올립니다. 앱의 두 호출 지점은
     언제나 ``"1"`` 을 보냅니다.
@@ -527,18 +517,6 @@ def build_ticket_list_form(
     if mode not in {TICKET_LIST_MODE_ACTIVE, TICKET_LIST_MODE_HISTORY}:
         raise KorailProtocolError(
             'ticket list mode must be "1" (active) or "2" (history)'
-        )
-    # History mode without the bounds is a form the app never builds: every
-    # entry point into TicketPurchaseHistoryActivity (:365, :372, :719) arrives
-    # with both dates formatted, and :277-280 sends them. Mode "1" deliberately
-    # keeps the empty strings, because TicketListActivity.java:939-941 transmits
-    # them empty.
-    if mode == TICKET_LIST_MODE_HISTORY and not (
-        boarding_date_from.strip() and boarding_date_to.strip()
-    ):
-        raise KorailProtocolError(
-            'ticket list mode "2" (history) requires both boarding_date_from '
-            "and boarding_date_to; the app never sends this list without them"
         )
     return {
         "txtDeviceId": config.advertising_id,

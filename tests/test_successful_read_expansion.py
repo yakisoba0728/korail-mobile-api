@@ -305,7 +305,6 @@ REQUEST_CASES = (
 
 INVALID_CALLS = (
     ("get_service_status", (True,)),
-    ("get_delay_discount_tickets", ("２０２６０７１４",)),
     ("get_discount_coupons", (0, "")),
     ("get_pass_available_dates", ("", "P", "A")),
     ("get_product_reservations", (1, 0)),

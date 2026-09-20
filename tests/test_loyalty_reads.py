@@ -130,14 +130,9 @@ def test_mileage_form_refuses_out_of_contract_inputs(kwargs):
         build_mileage_history_form(MileageHistoryRequest(**fields))
 
 
-def test_mileage_form_refuses_a_lookalike_request():
-    class Lookalike(MileageHistoryRequest):
-        pass
-
+def test_mileage_form_refuses_a_non_request_value():
     with pytest.raises(TypeError):
-        build_mileage_history_form(
-            Lookalike(start_date="20990101", end_date="20990331")
-        )
+        build_mileage_history_form(object())
 
 
 def test_point_summary_parser_exposes_the_welfare_registration():

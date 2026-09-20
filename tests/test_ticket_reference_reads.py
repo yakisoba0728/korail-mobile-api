@@ -301,7 +301,7 @@ def test_exact_builders_preserve_wire_order_duplicate_fields_and_count_types():
     }
 
 
-def test_request_provenance_is_exact_revalidated_and_repr_hidden():
+def test_request_provenance_is_revalidated_and_repr_hidden():
     ticket = _reference()
     pnr = TicketDuplicationCheckRequest("PNR_SECRET")
     assert "SECRET" not in repr(ticket)
@@ -309,21 +309,15 @@ def test_request_provenance_is_exact_revalidated_and_repr_hidden():
     with pytest.raises(FrozenInstanceError):
         pnr.pnr_no = "CHANGED"
 
-    class TicketSubclass(OriginalTicketReference):
-        pass
-
-    class PnrSubclass(TicketDuplicationCheckRequest):
-        pass
-
-    for invalid in ([], (), (ticket, object()), (TicketSubclass("W", "D", "S", "P"),)):
+    for invalid in ([], (), (ticket, object())):
         with pytest.raises((TypeError, ValueError)):
             build_pbp_acceptance_specification_form(invalid)  # type: ignore[arg-type]
         with pytest.raises((TypeError, ValueError)):
             build_platform_number_form(invalid)  # type: ignore[arg-type]
     with pytest.raises(TypeError):
-        build_delivery_recipient_form(TicketSubclass("W", "D", "S", "P"))
+        build_delivery_recipient_form(object())
     with pytest.raises(TypeError):
-        build_ticket_duplication_check_form(PnrSubclass("PNR"))
+        build_ticket_duplication_check_form(object())
 
     object.__setattr__(ticket, "return_password", "")
     with pytest.raises(ValueError):
