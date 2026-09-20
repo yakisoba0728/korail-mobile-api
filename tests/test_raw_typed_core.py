@@ -586,22 +586,21 @@ def test_existing_reference_methods_return_typed_models_without_request_changes(
         models.TrainScheduleResponse,
         models.TransferStationListResponse,
     )
-    assert [request.method for request in captured] == [
-        "POST",
-        "POST",
-        "POST",
-        "POST",
-        "POST",
-    ]
-    assert all(request.url.query == b"" for request in captured[:3])
-    assert all(request.content == b"" for request in captured[:2])
-    assert parse_qs(captured[2].content.decode())["timeStamp"][0].isdigit()
+    # station_info/station_data/train_calendar's request shape (POST, empty
+    # query/body, the timeStamp field) is independently pinned by
+    # test_client_read_apis.py::test_common_station_and_calendar_use_exact_endpoint_fields,
+    # so it is not re-proven here. train_schedule's and transfer_stations'
+    # request shapes are NOT independently pinned there -- that file only
+    # substring-checks a couple of fields each, not the closed field set or
+    # the runDt/Key forwarding -- so those two stay in full.
+    assert captured[3].method == "POST"
     assert parse_qs(captured[3].content.decode()) == {
         "Device": ["AD"],
         "Version": ["250601003"],
         "runDt": ["SYNTHETIC-DATE"],
         "trnNo": ["00123"],
     }
+    assert captured[4].method == "POST"
     assert parse_qs(captured[4].content.decode()) == {
         "Device": ["AD"],
         "Version": ["250601003"],

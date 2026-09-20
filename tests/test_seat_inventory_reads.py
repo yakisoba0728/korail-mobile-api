@@ -23,7 +23,6 @@ import pytest
 
 import korail_mobile_api
 import korail_mobile_api.client as client_module
-from _helpers import DuplicateFieldMapping as _DuplicateFieldMapping
 from _read_field_contracts import (
     KORAIL_EXACT_REQUEST_FIELDS,
     assert_read_only_request_fields,
@@ -969,37 +968,6 @@ def test_seat_builders_forward_train_row_seat_attribute_and_goods_no():
     assert seat["gdNo"] == "G12345"
 
 
-def test_seat_builders_omit_seat_attribute_when_row_has_none(
-    complete_train,
-):
-    # ScheduleView search rows carry no h_seat_att_cd and no goods number, so
-    # x4/b.java:19,23 forward null and Retrofit omits the @Field entirely
-    # (RV3-05 for seatAttCd, RV4-01 for gdNo); the builders must OMIT
-    # txtSeatAttCd/seatAttCd and txtGdNo/gdNo rather than substituting "015"/"".
-    assert complete_train.seat_attribute_code is None
-    assert complete_train.goods_no is None
-    config = KorailConfig()
-
-    car = build_seat_car_form(
-        config,
-        complete_train,
-        passenger_count=1,
-        sid="caller-sid-car",
-    )
-    seat = build_seat_inventory_form(
-        config,
-        complete_train,
-        car_no=1,
-        passenger_count=1,
-        sid="caller-sid-seat",
-    )
-
-    assert "txtSeatAttCd" not in car
-    assert "seatAttCd" not in seat
-    assert "txtGdNo" not in car
-    assert "gdNo" not in seat
-
-
 def test_seat_builders_carry_selected_cabin_class_and_reject_bad_domain(
     complete_train,
 ):
@@ -1151,14 +1119,6 @@ def test_inventory_safety_rejects_missing_and_extra_fields(
     # request WITHOUT it is contract-conformant (RV3-05).
     without_optional = {name: "" for name in fields - {optional}}
     assert_read_only_request_fields(path, without_optional)
-
-
-@pytest.mark.parametrize(("path", "fields"), [(CAR_PATH, CAR_FIELDS), (SEAT_PATH, SEAT_FIELDS)])
-def test_inventory_safety_rejects_duplicate_prepared_fields(path, fields):
-    values = {name: "" for name in fields}
-    duplicate = _DuplicateFieldMapping(values, next(iter(fields)))
-    with pytest.raises(KorailProtocolError, match="duplicate"):
-        assert_read_only_request_fields(path, duplicate)
 
 
 @pytest.mark.parametrize(

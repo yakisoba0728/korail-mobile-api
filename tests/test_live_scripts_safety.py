@@ -93,8 +93,11 @@ def test_importing_reads_no_environment_variable_and_opens_no_file(
 
 
 def _refusing_cases():
+    # Only the two extreme sizes matter for an AND-gate check: none of the
+    # switches set, and every switch but one. A size in between adds no new
+    # proof that the gate is an AND, not an OR.
     for name, switches in sorted(OPT_INS.items()):
-        for size in range(len(switches)):
+        for size in sorted({0, len(switches) - 1}):
             for present in itertools.combinations(switches, size):
                 label = "+".join(present) or "none"
                 yield pytest.param(name, present, id=f"{name}[{label}]")

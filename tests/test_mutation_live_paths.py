@@ -422,6 +422,12 @@ _SESSION_EXPIRED = {
             lambda client: client.reserve(_eligible_train()),
         ),
         (
+            RESERVE_ROUTE,
+            lambda client: client.reserve_with_discount_card(
+                _eligible_train(), card_no="SYNTHETICCARD0001"
+            ),
+        ),
+        (
             PAYMENT_ROUTE,
             lambda client: client.pay_with_fake_card(_paid_hold(), _fake_card()),
         ),
@@ -434,7 +440,13 @@ _SESSION_EXPIRED = {
             lambda client: client.refund(_paid_ticket()),
         ),
     ],
-    ids=["reserve", "pay_with_fake_card", "cancel_unpaid_hold", "refund"],
+    ids=[
+        "reserve",
+        "reserve_with_discount_card",
+        "pay_with_fake_card",
+        "cancel_unpaid_hold",
+        "refund",
+    ],
 )
 def test_an_expired_session_on_a_mutation_clears_the_client_before_raising(
     route, send
@@ -445,8 +457,13 @@ def test_an_expired_session_on_a_mutation_clears_the_client_before_raising(
     session and re-raises, as the reads do. Nothing tested it: with the
     clear_session() call taken out of all ten mutation handlers the suite still
     passed. src batches 42 and 43 fold those handlers into _mutation, so each
-    one is pinned first -- here for reserve, pay_with_fake_card and two of
-    _mutation's own callers, and beside its other tests for the rest.
+    one is pinned first -- here for reserve, reserve_with_discount_card,
+    pay_with_fake_card and two of _mutation's own callers, and beside its
+    other tests for the rest. The price-recalculation and discount-card
+    purchase/extension mutations stay pinned locally in their own files
+    instead: each of those categories has its own guard elsewhere forbidding
+    its method names from ever showing up in this module's source, since
+    neither category is meant to be reachable from a live-facing test path.
 
     The request did go out (one of it); the session and its cookie did not
     survive the reply.

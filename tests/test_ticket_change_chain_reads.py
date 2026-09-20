@@ -26,15 +26,15 @@ from __future__ import annotations
 
 import inspect
 from functools import partial
-from typing import Any, get_type_hints
+from typing import get_type_hints
 from urllib.parse import parse_qsl
 
 import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import raise_if_dynapath_invoked, synthetic_ok_envelope
 from _helpers import secret_ticket_reference as _reference
-from _helpers import synthetic_ok_envelope
 from _read_field_contracts import (
     KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_OPTIONAL_REQUEST_FIELDS,
@@ -104,9 +104,6 @@ _success = partial(synthetic_ok_envelope, "SERVER_MESSAGE")
 
 
 def _client(handler) -> KorailClient:
-    def provider(*args: Any, **kwargs: Any) -> str:  # pragma: no cover
-        raise AssertionError("DynaPath provider must not be invoked")
-
     # The provider only runs for an allowlisted path, and neither route is on
     # the default allowlist, so without naming them here this trap could never
     # fire: a client method that started signing these reads would pass.
@@ -114,7 +111,7 @@ def _client(handler) -> KorailClient:
         KorailConfig(
             dynapath=DynapathConfig(
                 enabled=True,
-                token_provider=provider,
+                token_provider=raise_if_dynapath_invoked,
                 allowlist_paths=frozenset({SEAT_CHANGE_PATH, ORIGINAL_TICKET_PATH}),
             )
         ),

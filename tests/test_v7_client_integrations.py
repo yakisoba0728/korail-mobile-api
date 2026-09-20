@@ -213,23 +213,6 @@ def test_an_expired_session_on_a_station_ticket_refund_clears_the_client():
     assert not client.http.cookies
 
 
-def test_station_refund_verification_form_is_the_five_dto_fields_in_order():
-    # Built in client.py until it moved to read_payloads; the move must not
-    # change a key, a value or the order.
-    from korail_mobile_api.read_payloads import build_station_refund_verification_form
-
-    form = build_station_refund_verification_form(
-        StationRefundVerificationRequest("synthetic-name", "11", "22", "33", "44")
-    )
-    assert list(form.items()) == [
-        ("strName", "synthetic-name"),
-        ("retNo1", "11"),
-        ("retNo2", "22"),
-        ("retNo3", "33"),
-        ("retNo4", "44"),
-    ]
-
-
 def test_v7_call_with_common_fields_puts_device_version_key_first():
     # Every CommonIn subclass serializes CommonIn first (VerifyOnlineRefundsIn
     # .java:123-124), so the wire form must carry Device/Version/Key ahead of

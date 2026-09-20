@@ -46,7 +46,7 @@ import pytest
 import korail_mobile_api
 import korail_mobile_api.read_models as read_models
 import korail_mobile_api.read_payloads as read_payloads
-from _helpers import recording_path_handler, synthetic_ok_envelope
+from _helpers import raise_if_dynapath_invoked, recording_path_handler, synthetic_ok_envelope
 from _read_field_contracts import (
     KORAIL_EXACT_REQUEST_FIELDS,
     assert_read_only_request_fields,
@@ -709,15 +709,12 @@ def test_client_sends_the_apps_exact_wire_shapes_without_dynapath():
     responses = _responses()
     requests: list[httpx.Request] = []
 
-    def provider(context: Any) -> str:
-        raise AssertionError("DynaPath provider must not be invoked")
-
     handler = recording_path_handler(responses, requests)
 
     config = KorailConfig(
         dynapath=DynapathConfig(
             enabled=True,
-            token_provider=provider,
+            token_provider=raise_if_dynapath_invoked,
             allowlist_paths=frozenset(responses),
         )
     )

@@ -18,6 +18,8 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import assert_p058_clears_session
+from _helpers import require_symbol as _require
 from _read_field_contracts import (
     KORAIL_EXACT_REQUEST_FIELDS,
     assert_read_only_request_fields,
@@ -68,12 +70,6 @@ CALLER_FIELDS = {
     "txtGoEnd": "synthetic-request-arrival-secret",
     "txtWkndUseFlg": "N",
 }
-
-
-def _require(module: Any, name: str) -> Any:
-    value = getattr(module, name, None)
-    assert value is not None, f"missing R20 pass schedule symbol: {name}"
-    return value
 
 
 def _request(**overrides: Any) -> Any:
@@ -394,16 +390,18 @@ def test_parser_treats_wrg000000_empty_query_as_empty_success():
 
 
 def test_client_clears_session_on_p058(load_json_fixture):
-    def handler(_: httpx.Request) -> httpx.Response:
-        raw = load_json_fixture("pass_schedule_success.json")
-        raw.update(h_msg_cd="P058", strResult="FAIL")
-        return httpx.Response(200, json=raw)
+    def build_client() -> KorailClient:
+        def handler(_: httpx.Request) -> httpx.Response:
+            raw = load_json_fixture("pass_schedule_success.json")
+            raw.update(h_msg_cd="P058", strResult="FAIL")
+            return httpx.Response(200, json=raw)
 
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(jsessionid="synthetic-secret")
-    with pytest.raises(KorailSessionExpiredError):
-        client.get_pass_schedule(_request())
-    assert client.session.current is None
+        client = KorailClient(transport=httpx.MockTransport(handler))
+        client.session.current = KorailSession(jsessionid="synthetic-secret")
+        client.http.cookies.set("JSESSIONID", "synthetic-secret")
+        return client
+
+    assert_p058_clears_session(build_client, lambda client: client.get_pass_schedule(_request()))
 
 
 def test_client_returns_empty_schedules_on_wrg000000():

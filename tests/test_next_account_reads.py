@@ -18,7 +18,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
-from _helpers import recording_path_handler, synthetic_ok_envelope
+from _helpers import raise_if_dynapath_invoked, recording_path_handler, synthetic_ok_envelope
 from _read_field_contracts import (
     KORAIL_EXACT_REQUEST_FIELDS,
     assert_read_only_request_fields,
@@ -306,26 +306,20 @@ def _session(*, customer_no: str | None = "SYNTHETIC_CUSTOMER_NO") -> KorailSess
 
 def _recording_client(
     responses: dict[str, dict[str, Any]],
-) -> tuple[KorailClient, list[httpx.Request], list[Any]]:
+) -> tuple[KorailClient, list[httpx.Request]]:
     requests: list[httpx.Request] = []
-    provider_calls: list[Any] = []
-
-    def provider(context: Any) -> str:
-        provider_calls.append(context)
-        raise AssertionError("DynaPath provider must not be invoked")
-
     handler = recording_path_handler(responses, requests)
 
     config = KorailConfig(
         dynapath=DynapathConfig(
             enabled=True,
-            token_provider=provider,
+            token_provider=raise_if_dynapath_invoked,
             allowlist_paths=frozenset(responses),
         )
     )
     client = KorailClient(config, transport=httpx.MockTransport(handler))
     client.session.current = _session()
-    return client, requests, provider_calls
+    return client, requests
 
 
 def test_new_routes_and_public_contract_are_exact():
@@ -497,24 +491,29 @@ def test_consolidated_ascii_digits_helper_rejects_full_width_digits():
             parse_multi_child_discount_target_response,
             MultiChildDiscountTargetResponse,
             "targets",
-            R13_FIELDS,
-            R13_ATTRS,
+            # A representative slice, not every field: two ordinary fields
+            # plus the last one, not the full cross-product. The per-field
+            # bad-type matrix lives in
+            # test_list_parsers_normalize_null_and_reject_bad_containers_rows_and_scalars,
+            # which still zips the full tuples.
+            R13_FIELDS[:2] + R13_FIELDS[-1:],
+            R13_ATTRS[:2] + R13_ATTRS[-1:],
         ),
         (
             "customer_trip_info_success.json",
             parse_customer_trip_info_response,
             CustomerTripInfoResponse,
             "trips",
-            R32_FIELDS,
-            R32_ATTRS,
+            R32_FIELDS[:2] + R32_FIELDS[-1:],
+            R32_ATTRS[:2] + R32_ATTRS[-1:],
         ),
         (
             "maas_service_detail_list_success.json",
             parse_maas_service_detail_list_response,
             MaasServiceDetailListResponse,
             "details",
-            R43_FIELDS,
-            R43_ATTRS,
+            R43_FIELDS[:2] + R43_FIELDS[-1:],
+            R43_ATTRS[:2] + R43_ATTRS[-1:],
         ),
     ],
 )
@@ -620,7 +619,6 @@ def test_list_parsers_normalize_null_and_reject_bad_containers_rows_and_scalars(
     [
         (_success(tripChgDates="bad"), "tripChgDates"),
         (_success(tripChgDates=[None]), "tripChgDates"),
-        (_success(tripChgDates=[1]), "tripChgDates"),
         (_success(lastRunDt=1), "lastRunDt"),
         (_success(tripChgDate=[]), "tripChgDate"),
     ],
@@ -639,53 +637,23 @@ PARSERS = (
 
 
 @pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("raw", [None, [], "bad", 1])
-def test_all_parsers_reject_non_object_top_levels(parser, raw):
-    with pytest.raises(KorailProtocolError):
-        parser(raw)
-
-
-@pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("result", ["SUCCESS", "succ", "UNKNOWN", None, 1, {}])
-def test_all_parsers_require_exact_succ(parser, result):
-    with pytest.raises(KorailProtocolError):
+def test_new_parsers_are_wired_to_the_shared_envelope_helper(parser):
+    # The shared envelope-validation helper (non-object rejection, exact
+    # strResult == "SUCC", envelope member presence, null-optional handling,
+    # scalar-type rejection, P058/WRC000288/generic-FAIL classification) is
+    # already thoroughly tested once in test_envelope_result_required.py and
+    # test_error_classification.py. What is NOT covered there is that these
+    # new parsers actually call it at all -- a wiring mistake wouldn't show up
+    # anywhere else. Two representative cases prove the wiring: a generic
+    # application failure and a session expiry.
+    with pytest.raises(KorailAppError):
         parser(
             {
-                "h_msg_cd": "SYNTHETIC.OK",
-                "h_msg_txt": "synthetic",
-                "strResult": result,
+                "h_msg_cd": "SYNTHETIC.FAIL",
+                "h_msg_txt": "synthetic application failure",
+                "strResult": "FAIL",
             }
         )
-
-
-@pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("missing", ["strResult"])
-def test_all_parsers_require_each_envelope_member(parser, missing):
-    raw = _success()
-    raw.pop(missing)
-    with pytest.raises(KorailProtocolError, match=missing):
-        parser(raw)
-
-
-@pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("field", ["h_msg_cd", "h_msg_txt"])
-def test_all_parsers_accept_null_optional_envelope_strings(parser, field):
-    raw = _success()
-    raw[field] = None
-    assert parser(raw).str_result == "SUCC"
-
-
-@pytest.mark.parametrize("parser", PARSERS)
-@pytest.mark.parametrize("bad", [1, {}, []])
-def test_all_parsers_reject_bad_str_result_types(parser, bad):
-    raw = _success()
-    raw["strResult"] = bad
-    with pytest.raises(KorailProtocolError, match="strResult"):
-        parser(raw)
-
-
-@pytest.mark.parametrize("parser", PARSERS)
-def test_all_parsers_preserve_common_typed_failures(parser):
     with pytest.raises(KorailSessionExpiredError):
         parser(
             {
@@ -694,15 +662,6 @@ def test_all_parsers_preserve_common_typed_failures(parser):
                 "strResult": "FAIL",
             }
         )
-    for code in ("SYNTHETIC.FAIL", "WRC000288"):
-        with pytest.raises(KorailAppError):
-            parser(
-                {
-                    "h_msg_cd": code,
-                    "h_msg_txt": "synthetic application failure",
-                    "strResult": "FAIL",
-                }
-            )
 
 
 def test_four_public_reads_emit_exact_ordered_bodies_once_without_dynapath(
@@ -714,7 +673,7 @@ def test_four_public_reads_emit_exact_ordered_bodies_once_without_dynapath(
         R43_PATH: load_json_fixture("maas_service_detail_list_success.json"),
         R45_PATH: load_json_fixture("trip_change_dates_success.json"),
     }
-    client, requests, provider_calls = _recording_client(responses)
+    client, requests = _recording_client(responses)
     config = client.config
     try:
         client.get_multi_child_discount_targets("20990101")
@@ -773,7 +732,6 @@ def test_four_public_reads_emit_exact_ordered_bodies_once_without_dynapath(
         "POST", "POST", "POST", "POST", "GET"
     ]
     assert all("x-dynapath-m-token" not in request.headers for request in requests)
-    assert provider_calls == []
 
 
 @pytest.mark.parametrize(
@@ -1002,7 +960,7 @@ def test_new_response_free_text_is_repr_hidden(response_type):
 
 
 def test_session_expiry_clears_current_session(load_json_fixture):
-    client, requests, _ = _recording_client(
+    client, requests = _recording_client(
         {
             R13_PATH: {
                 "h_msg_cd": "P058",

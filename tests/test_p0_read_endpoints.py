@@ -17,6 +17,8 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import assert_p058_clears_session
+from _helpers import require_symbol as _require
 from _read_field_contracts import (
     KORAIL_EXACT_REQUEST_FIELDS,
     assert_read_only_request_fields,
@@ -121,12 +123,6 @@ PARSER_NAMES = (
     "parse_seat_assignment_schedule_response",
     "parse_merge_seats_inquiry_response",
 )
-
-
-def _require(module: Any, name: str) -> Any:
-    value = getattr(module, name, None)
-    assert value is not None, f"missing P0 read API symbol: {name}"
-    return value
 
 
 def _request(name: str, **values: Any) -> Any:
@@ -783,29 +779,29 @@ def test_p058_from_every_new_read_clears_existing_session(
     method_name,
     request_factory,
 ):
-    def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            json={
-                "h_msg_cd": "P058",
-                "h_msg_txt": "synthetic expiry",
-                "strResult": "FAIL",
-            },
-        )
+    def build_client() -> KorailClient:
+        def handler(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "h_msg_cd": "P058",
+                    "h_msg_txt": "synthetic expiry",
+                    "strResult": "FAIL",
+                },
+            )
 
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(
-        jsessionid="synthetic-session-secret",
-        member_no="synthetic-member-secret",
+        client = KorailClient(transport=httpx.MockTransport(handler))
+        client.session.current = KorailSession(
+            jsessionid="synthetic-session-secret",
+            member_no="synthetic-member-secret",
+        )
+        client.http.cookies.set("JSESSIONID", "synthetic-session-secret")
+        return client
+
+    assert_p058_clears_session(
+        build_client,
+        lambda client: _require(client, method_name)(request_factory()),
     )
-    client.http.cookies.set("JSESSIONID", "synthetic-session-secret")
-    try:
-        with pytest.raises(KorailSessionExpiredError):
-            _require(client, method_name)(request_factory())
-    finally:
-        client.close()
-    assert client.session.current is None
-    assert "JSESSIONID" not in client.http.cookies
 
 
 def test_helper_seat_guidance_returns_server_advisory_to_caller():

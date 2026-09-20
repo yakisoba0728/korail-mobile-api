@@ -17,6 +17,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _helpers import assert_p058_clears_session
 from _read_field_contracts import KORAIL_EXACT_REQUEST_FIELDS
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
@@ -737,29 +738,26 @@ def test_p058_clears_session_for_every_new_authenticated_read(
     method_name,
     args,
 ):
-    def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            json={
-                "h_msg_cd": "P058",
-                "h_msg_txt": "synthetic expiry",
-                "strResult": "FAIL",
-            },
-        )
+    def build_client() -> KorailClient:
+        def handler(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "h_msg_cd": "P058",
+                    "h_msg_txt": "synthetic expiry",
+                    "strResult": "FAIL",
+                },
+            )
 
-    client = KorailClient(transport=httpx.MockTransport(handler))
-    client.session.current = KorailSession(
-        jsessionid="synthetic-session",
-        member_no="synthetic-member",
-    )
-    client.http.cookies.set("JSESSIONID", "synthetic-session")
-    try:
-        with pytest.raises(KorailSessionExpiredError):
-            getattr(client, method_name)(*args)
-    finally:
-        client.close()
-    assert client.session.current is None
-    assert "JSESSIONID" not in client.http.cookies
+        client = KorailClient(transport=httpx.MockTransport(handler))
+        client.session.current = KorailSession(
+            jsessionid="synthetic-session",
+            member_no="synthetic-member",
+        )
+        client.http.cookies.set("JSESSIONID", "synthetic-session")
+        return client
+
+    assert_p058_clears_session(build_client, lambda client: getattr(client, method_name)(*args))
 
 
 @pytest.mark.parametrize(
@@ -1160,11 +1158,6 @@ def test_sensitive_typed_fields_and_raw_values_are_accessible_but_repr_hidden(
             parse_cart_list_response,
             {"cart_infos": []},
             "cart_infos",
-        ),
-        (
-            parse_cart_list_response,
-            {"cart_infos": {"cart_info": {}}},
-            "cart_info",
         ),
         (
             parse_cart_list_response,

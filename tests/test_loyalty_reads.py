@@ -16,6 +16,7 @@ import pytest
 import korail_mobile_api
 from _helpers import korail_ok_envelope as _envelope
 from _helpers import make_authenticated_client as _client
+from _helpers import no_network_client
 from _read_field_contracts import (
     KORAIL_EXACT_REQUEST_FIELDS,
     assert_read_only_request_fields,
@@ -262,13 +263,7 @@ def test_client_reads_send_exactly_the_registered_forms():
 
 
 def test_loyalty_reads_require_a_session():
-    def handler(_: httpx.Request) -> httpx.Response:
-        raise AssertionError("no request may be sent without a session")
-
-    client = KorailClient(
-        KorailConfig(),
-        transport=httpx.MockTransport(handler),
-    )
+    client = no_network_client()
     try:
         with pytest.raises(KorailAuthError):
             client.get_korail_point_summary()

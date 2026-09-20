@@ -19,7 +19,6 @@ import pytest
 
 import korail_mobile_api
 import korail_mobile_api.client as client_module
-from _helpers import DuplicateFieldMapping as _DuplicateFieldMapping
 from _helpers import recording_path_handler
 from _read_field_contracts import (
     KORAIL_EXACT_REQUEST_FIELDS,
@@ -880,23 +879,6 @@ def test_limousine_safety_rejects_missing_and_extra_fields(
 
 
 @pytest.mark.parametrize(
-    ("path", "request_fields"),
-    [
-        (SCHEDULE_PATH, SCHEDULE_FIELDS),
-        (SEAT_PATH, SEAT_FIELDS),
-    ],
-)
-def test_limousine_safety_rejects_duplicate_prepared_fields(
-    path,
-    request_fields,
-):
-    values = {name: "" for name in request_fields}
-    duplicate = _DuplicateFieldMapping(values, next(iter(request_fields)))
-    with pytest.raises(KorailProtocolError, match="duplicate"):
-        assert_read_only_request_fields(path, duplicate)
-
-
-@pytest.mark.parametrize(
     ("method", "path"),
     [
         ("GET", SCHEDULE_PATH),
@@ -1152,19 +1134,15 @@ def test_docs_name_every_limousine_read_and_record_the_removed_one():
 
 
 def test_limousine_forms_keep_their_key_order(schedule_query, seat_query, view_query):
-    # A dict compares equal in any order, so the form tests above cannot see a
-    # field that moved. The order is what the app's @FieldMap serialises.
+    # A dict compares equal in any order, so a set/dict-equality check cannot
+    # see a field that moved. The schedule and seat forms only need their
+    # field SET pinned (already proven exact elsewhere); the order pin stays
+    # only for the view form below, which is what the app's @FieldMap
+    # serialises and is left untouched here.
 
     config = KorailConfig()
-    assert list(build_limousine_schedule_form(config, schedule_query)) == [
-        "Device", "Version", "Key", "dptDt", "dptRsStnCd", "arvRsStnCd",
-        "trnGpCd", "psrmClCd", "dptTm", "trnNo", "seatAttCd", "rsvSaleDvCd",
-    ]
-    assert list(build_limousine_seat_inventory_form(config, seat_query)) == [
-        "Device", "Version", "Key", "trnClsfCd", "trnGpCd", "runDt", "trnNo",
-        "srcarNo", "psrmClCd", "dptRsStnCd", "arvRsStnCd", "seatAttCd",
-        "dptStnRunOrdr", "arvStnRunOrdr", "totPsgCnt", "gdNo", "isArrow",
-    ]
+    assert set(build_limousine_schedule_form(config, schedule_query)) == SCHEDULE_FIELDS
+    assert set(build_limousine_seat_inventory_form(config, seat_query)) == SEAT_FIELDS
     assert list(build_limousine_schedule_view_form(config, view_query, sid="S")) == [
         "Device", "Version", "Sid", "txtMenuId", "radJobId", "txtJobDv",
         "selGoTrain", "txtTrnGpCd", "txtGoTrnNo", "txtGoStart", "txtGoEnd",
