@@ -75,7 +75,7 @@ safety design, new evidence, independent review, and explicit user
 authorization.
 
 That authorization has since been expanded well past the original four
-categories. As of 2.0.0 the shipped client has fourteen state-changing public
+categories. As of 1.2.0 the shipped client has fourteen state-changing public
 methods across seven categories (`reserve`, `cancel`, `payment`, `refund`,
 `discount_card`, `price_recalculation`, `cart`) over ten registered mutation
 routes: `reserve`, `reserve_transfer`, `reserve_merge`,
@@ -220,5 +220,5 @@ Retrofit annotation 기준 165개 endpoint는 `analysis/reports/api-endpoints.ts
 2. `CommonApi.getCommonCode`, station/cache/config 조회를 구현해 기본 통신을 검증한다.
 3. 로그인은 common-code 기반 암호화와 cookie persistence까지 하나의 integration test로 묶는다.
 4. 열차 조회, 구매이력, 영수증처럼 현재 성공한 조회성 API부터 typed wrapper를 만든다.
-5. Do not expose mutation methods or DTO stubs beyond the fourteen authorized state-changing methods across seven categories (`reserve`, `cancel`, `payment`, `refund`, `discount_card`, `price_recalculation`, `cart` — see `docs/MUTATION_HANDOFF.md` for the full list). As of 2.0.0 none of them is consent-gated: a logged-in session is the only precondition, and calling one sends immediately. Any further interface requires a separate safety design, new evidence, independent review, and explicit user authorization, exactly as these fourteen did.
+5. Do not expose mutation methods or DTO stubs beyond the fourteen authorized state-changing methods across seven categories (`reserve`, `cancel`, `payment`, `refund`, `discount_card`, `price_recalculation`, `cart` — see `docs/MUTATION_HANDOFF.md` for the full list). As of 1.2.0 none of them is consent-gated: a logged-in session is the only precondition, and calling one sends immediately. Any further interface requires a separate safety design, new evidence, independent review, and explicit user authorization, exactly as these fourteen did.
 6. WebView/provider/NetFunnel/DynaPath는 core API와 분리해 optional adapter로 둔다.

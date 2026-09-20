@@ -13,7 +13,7 @@ documentation. Several of them explicitly record claims that were later
 withdrawn or superseded; that history is kept rather than deleted because it
 is how a later reader can tell a closed question from an open one.
 
-Package version 2.0.0 removed four things this history describes as present:
+Package version 1.2.0 removed four things this history describes as present:
 the mutation-consent system (`MutationConsent`, `MutationPreview`,
 `require_mutation_consent`, `MutationCategory`, `V7MutationConsent`,
 `V7MutationPreview`, and the `consent.py` module itself, along with the

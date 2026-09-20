@@ -35,6 +35,6 @@ CHANGELOG 의 절을 그대로 끌어다 쓰고(`include-markdown`), `reference/
 | [RELEASE.md](RELEASE.md) | 릴리스가 통과하는 테스트·빌드·배포 게이트 |
 | [internal/README.md](internal/README.md) | 개발 기록. 사용자 문서가 아닙니다 |
 
-이 표가 빠짐없는지 확인하던 `tests/test_docs_site.py` 는 2.0.0 슬림다운에서 사라졌습니다.
+이 표가 빠짐없는지 확인하던 `tests/test_docs_site.py` 는 1.2.0 슬림다운에서 사라졌습니다.
 `docs/` 아래 문서가 어디에서도 링크되지 않는지 자동으로 검사하는 테스트는 이제 없으므로,
 이 표는 손으로 관리합니다 — 새 문서를 넣으면 여기 한 줄을 직접 더해야 합니다.

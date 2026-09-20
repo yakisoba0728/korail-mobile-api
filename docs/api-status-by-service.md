@@ -40,7 +40,7 @@ state-changing methods: `reserve`,
 `confirm_standby_hold`, `cancel_unpaid_hold`, `pay_with_fake_card`,
 `pay_with_card`, `refund`, `add_to_cart`,
 `register_discount_card`, `extend_discount_card`
-and `recalculate_price`, plus `execute_station_ticket_refund`. **As of 2.0.0
+and `recalculate_price`, plus `execute_station_ticket_refund`. **As of 1.2.0
 there is no consent object, dry-run flag or preview.** The first thirteen go
 out through the double-gated `post_mutation_form` path, which checks the route
 against the mutation allowlist and the route against its fixed category (the

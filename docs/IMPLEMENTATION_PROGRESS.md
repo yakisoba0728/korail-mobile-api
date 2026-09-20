@@ -1,10 +1,10 @@
 # KORAIL Python Package Implementation Progress
 
-Last updated: 2026-07-27 KST (2.0.0 note below added 2026-09-20)
+Last updated: 2026-07-27 KST (1.2.0 note below added 2026-09-20)
 
-**2.0.0 note.** This is a dated progress log, not a description of the package
+**1.2.0 note.** This is a dated progress log, not a description of the package
 as it stands today; entries below record what was true on the date each was
-written. Version 2.0.0 removed the consent system that most entries below
+written. Version 1.2.0 removed the consent system that most entries below
 assume: `MutationConsent`, `MutationPreview`, `require_mutation_consent`,
 `MutationCategory`, `V7MutationConsent`, `V7MutationPreview`, and
 `src/korail_mobile_api/consent.py` no longer exist. State-changing methods take
@@ -115,7 +115,7 @@ was discarding.
   The two `Otr` siblings were never registered and remain out, now for a stated
   reason rather than for scope: they are the 자유이용권 family (내일로 /
   A-PASS / 강릉패스), a different product with a different request shape.
-  [2.0.0: `client.v7`'s contract registry no longer carries any of the four
+  [1.2.0: `client.v7`'s contract registry no longer carries any of the four
   pass-purchase contracts — it shrank from 117 rows to 2
   (`verifyOnlineRefunds`, `executeOnlineRefunds`), and `V7MutationConsent` no
   longer exists. The refusal survives anyway: `V7Gateway.call` still rejects
@@ -140,7 +140,7 @@ was discarding.
    populates `jrnyInfo`/`apdUsrInfo` — only the setters that would. Whether a
    1-section card must still send a section, and whether `apdUsrCnt` must be
    present as `"0"` rather than omitted for a 1인용 card, is unknown. Send a
-   dry run first and inspect the preview. [2.0.0: there is no dry run and no
+   dry run first and inspect the preview. [1.2.0: there is no dry run and no
    preview any more — `register_discount_card` sends as soon as it is called
    on a live session, so settle this by reading the response it returns.]
 5. **`extend_discount_card`'s reply and cost.** The DAO's response type is a
@@ -188,7 +188,7 @@ a live call does.
   `cancel_unpaid_hold`, `pay_with_fake_card`, `pay_with_card`, `refund`,
   `add_to_cart`, `register_discount_card`, `extend_discount_card`,
   `recalculate_price`, and `execute_station_ticket_refund`).
-  None of the fourteen takes a `consent=` argument any more: 2.0.0 deleted
+  None of the fourteen takes a `consent=` argument any more: 1.2.0 deleted
   `consent.py` (`MutationConsent`, `MutationPreview`,
   `require_mutation_consent`) and the 7.0.6 gateway's method-scoped
   `V7MutationConsent`/`V7MutationPreview` along with it. There is no dry run
@@ -519,12 +519,12 @@ no payment request and printed or persisted no raw response or identifier.
   expected pre-login `P058` responses, and reported zero unexpected failures;
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
-- As of 2.0.0, the full offline gate collects 2257 tests and no test carries
+- As of 1.2.0, the full offline gate collects 2257 tests and no test carries
   the `live` marker any more, so `pytest -m "not live"` deselects nothing —
   there is no longer an opted-in live-service test to deselect. (`3119 passed,
   1 deselected` below, and the `1246`/`1247` figures before it, were the gate's
   size at earlier points in this log, not today's; the slim-down that produced
-  2.0.0 removed a large fraction of the test suite along with the consent
+  1.2.0 removed a large fraction of the test suite along with the consent
   system and the `android_features`/7.0.6-contract code it tested.)
 - Python 3.14 built `korail_mobile_api-0.2.0-py3-none-any.whl` and
   `korail_mobile_api-0.2.0.tar.gz` in a temporary directory. The distribution
@@ -820,7 +820,7 @@ login/read transport boundary, 10 mutation routes, and 77 public methods on
 reservation, unpaid-cancel, fake-card payment, acknowledged real-card payment,
 refund, and cart-add are callable only through the separate
 `post_mutation_form` path, which checks the route allowlist and the
-route→category match immediately before sending — 2.0.0 removed the consent
+route→category match immediately before sending — 1.2.0 removed the consent
 object that used to gate this path, so a login session is now the only thing
 a call needs — while check-in, membership, and point/mileage mutation routes
 remain not callable. The current service inventory is 33 successful, 14 failed,
@@ -845,7 +845,7 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-As of 2.0.0, `pytest -m "not live"` collects 2257 tests and deselects none: no
+As of 1.2.0, `pytest -m "not live"` collects 2257 tests and deselects none: no
 test in the suite carries the `live` marker any more. `3119 passed, 1
 deselected`, `1246 passed, 1 deselected`, and `1247 passed, 1 deselected` were
 the gate's size at earlier points in this log, each with the then-opted-in

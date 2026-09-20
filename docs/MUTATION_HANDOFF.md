@@ -5,7 +5,7 @@ Cross-repo handoff for the mutation work on `korail-mobile-api` and
 live servers, what is **not** settled, the trade-offs taken, and how a later
 session continues.
 
-**korail-mobile-api 2.0.0 removed the consent system this handoff was
+**korail-mobile-api 1.2.0 removed the consent system this handoff was
 originally written around.** There is no `MutationConsent`, no
 `MutationPreview`, no `require_mutation_consent`, and no default
 `dry_run=True` any more: a korail state-changing method needs only a
@@ -52,7 +52,7 @@ code — see the SRT gate note below.
 
 ## Safety model (both repos)
 
-**korail, as of 2.0.0:** none of the bullets below apply to korail any more.
+**korail, as of 1.2.0:** none of the bullets below apply to korail any more.
 `MutationConsent`, `MutationPreview`, `require_mutation_consent` and the whole
 per-category `allow_*`/`dry_run`/`fake_card_only`/`real_card_acknowledged`
 object are gone from this repository. A korail state-changing method needs
@@ -245,7 +245,7 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    more than one passenger, more than one journey, partial refunds, and any
    refund close enough to departure that a fee applies. The run also surfaced
    three padded wire shapes the offline fixtures had guessed wrong — see
-   verification-record.md. **Trade-off:** korail 2.0.0 removed the consent gate
+   verification-record.md. **Trade-off:** korail 1.2.0 removed the consent gate
    this sentence originally described — `pay_with_card` now sends the instant
    it is called, given a session; one successful round trip is evidence for
    that one shape, not a licence to assume the rest.
@@ -293,9 +293,9 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    gained `scripts/recover_hold.py`, which cancels a stranded hold from the PNR
    string alone.
 
-5. **Card-kind enforcement does not exist any more; korail 2.0.0 removed even
+5. **Card-kind enforcement does not exist any more; korail 1.2.0 removed even
    the honor-system claim.** The library cannot verify whether a card is
-   chargeable, and as of 2.0.0 it no longer asks the caller to say so either:
+   chargeable, and as of 1.2.0 it no longer asks the caller to say so either:
    `fake_card_only` and `real_card_acknowledged` are gone along with the rest
    of `MutationConsent`. `pay_with_fake_card` and `pay_with_card` build the
    identical form and send it to the identical route; the only thing that
@@ -453,7 +453,7 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    refund, and the call still goes through `post_mutation_form` like every other
    mutation — never the read path.
 
-   **[korail 2.0.0: `MutationConsent` and `allow_reserve` no longer exist —
+   **[korail 1.2.0: `MutationConsent` and `allow_reserve` no longer exist —
    see "Safety model" above — but the design reasoning stands.
    `confirm_standby_hold` still carries the `"reserve"` category internally,
    fixed in code rather than chosen by a caller, and the route→category
