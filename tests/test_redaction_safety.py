@@ -494,7 +494,7 @@ def test_no_read_route_field_contract_carries_an_unmasked_identity_field():
     """
     import re
 
-    from korail_mobile_api import safety
+    import _read_field_contracts as field_contracts
     from korail_mobile_api.redaction import is_sensitive_key
 
     identity_shaped = re.compile(
@@ -504,7 +504,7 @@ def test_no_read_route_field_contract_carries_an_unmasked_identity_field():
 
     unmasked = {
         field_
-        for fields in safety.KORAIL_EXACT_REQUEST_FIELDS.values()
+        for fields in field_contracts.KORAIL_EXACT_REQUEST_FIELDS.values()
         for field_ in fields
         if identity_shaped.search(field_)
         and not is_sensitive_key(field_)

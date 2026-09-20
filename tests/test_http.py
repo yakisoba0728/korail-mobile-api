@@ -13,6 +13,10 @@ import httpx
 import pytest
 
 import korail_mobile_api as api
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailConfig
 from korail_mobile_api.constants import (
     DYNAPATH_ALLOWLIST_PATHS,
@@ -43,11 +47,8 @@ from korail_mobile_api.errors import (
 from korail_mobile_api.http import KorailHttpClient, parse_base_response
 from korail_mobile_api.safety import (
     EXCLUDED_API_DOMAINS,
-    KORAIL_EXACT_FORM_FIELDS,
-    KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_READ_ONLY_ROUTES,
     assert_korail_origin,
-    assert_read_only_request_fields,
     assert_read_only_route,
 )
 
@@ -972,10 +973,6 @@ def test_a_mutation_answer_is_checked_like_an_enveloped_read(sender, monkeypatch
         )
     ok = run(httpx.Response(200, json={"h_msg_cd": "S000", "h_msg_txt": "ok", "strResult": "SUCC"}))
     assert ok.str_result == "SUCC"
-
-
-def test_exact_form_field_mapping_remains_a_compatibility_alias():
-    assert KORAIL_EXACT_FORM_FIELDS is KORAIL_EXACT_REQUEST_FIELDS
 
 
 def test_exact_unordered_cart_contract_keeps_mapping_transport_compatible():

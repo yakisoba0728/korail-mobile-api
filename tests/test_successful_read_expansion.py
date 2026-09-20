@@ -17,6 +17,7 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _read_field_contracts import KORAIL_EXACT_REQUEST_FIELDS
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -73,10 +74,7 @@ from korail_mobile_api.read_payloads import (
     build_ticket_receipt_form,
     build_trip_menu_form,
 )
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES
 
 
 PUBLIC_METHODS = {

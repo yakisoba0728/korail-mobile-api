@@ -21,6 +21,10 @@ import korail_mobile_api
 import korail_mobile_api.client as client_module
 from _helpers import DuplicateFieldMapping as _DuplicateFieldMapping
 from _helpers import recording_path_handler
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import (
     KorailClient,
     KorailConfig,
@@ -52,12 +56,7 @@ from korail_mobile_api.limousine_payloads import (
     build_limousine_seat_inventory_form,
 )
 from korail_mobile_api.models import BaseKorailResponse, KorailSession
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-    assert_read_only_route,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES, assert_read_only_route
 
 
 SCHEDULE_PATH = "/classes/com.korail.mobile.lmu.scdlQry.do"

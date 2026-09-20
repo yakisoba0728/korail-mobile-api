@@ -47,6 +47,10 @@ import korail_mobile_api
 import korail_mobile_api.read_models as read_models
 import korail_mobile_api.read_payloads as read_payloads
 from _helpers import recording_path_handler, synthetic_ok_envelope
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -76,12 +80,7 @@ from korail_mobile_api.read_payloads import (
     build_ticket_reservation_detail_query,
 )
 from korail_mobile_api.redaction import redact_mapping, redact_text
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_MUTATION_ROUTES,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-)
+from korail_mobile_api.safety import KORAIL_MUTATION_ROUTES, KORAIL_READ_ONLY_ROUTES
 
 
 R150_PATH = "/classes/com.korail.mobile.certification.ReservationList"

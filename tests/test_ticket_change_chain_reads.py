@@ -35,6 +35,11 @@ import pytest
 import korail_mobile_api
 from _helpers import secret_ticket_reference as _reference
 from _helpers import synthetic_ok_envelope
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    KORAIL_OPTIONAL_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -66,13 +71,7 @@ from korail_mobile_api.redaction import (
     redact_url,
     redact_value,
 )
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_MUTATION_ROUTES,
-    KORAIL_OPTIONAL_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-)
+from korail_mobile_api.safety import KORAIL_MUTATION_ROUTES, KORAIL_READ_ONLY_ROUTES
 
 
 SEAT_CHANGE_PATH = "/classes/com.korail.mobile.self.seatChgInfo.do"

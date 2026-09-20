@@ -24,6 +24,10 @@ import pytest
 import korail_mobile_api
 import korail_mobile_api.client as client_module
 from _helpers import DuplicateFieldMapping as _DuplicateFieldMapping
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import (
     KorailClient,
     KorailConfig,
@@ -54,12 +58,7 @@ from korail_mobile_api.payloads import (
     build_seat_inventory_form,
     validate_seat_inventory_inputs,
 )
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-    assert_read_only_route,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES, assert_read_only_route
 
 
 _EVIDENCE_PATH = (

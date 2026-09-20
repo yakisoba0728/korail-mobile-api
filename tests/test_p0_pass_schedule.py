@@ -18,6 +18,10 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig, read_models, read_parsers, read_payloads
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -27,11 +31,7 @@ from korail_mobile_api.errors import (
     KorailSessionExpiredError,
 )
 from korail_mobile_api.models import KorailSession
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES
 
 
 PASS_SCHEDULE_PATH = (

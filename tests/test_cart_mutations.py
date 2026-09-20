@@ -32,6 +32,7 @@ import pytest
 import korail_mobile_api
 from _helpers import make_authenticated_client as _client
 from _helpers import refuse_transport as _refuse
+from _read_field_contracts import KORAIL_EXACT_REQUEST_FIELDS
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.errors import (
     KorailAuthError,
@@ -41,7 +42,6 @@ from korail_mobile_api.models import BaseKorailResponse
 from korail_mobile_api.mutation_models import CartAddRequest
 from korail_mobile_api.mutation_payloads import build_cart_add_form
 from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_MUTATION_ROUTE_CATEGORIES,
     KORAIL_MUTATION_ROUTES,
     KORAIL_READ_ONLY_ROUTES,

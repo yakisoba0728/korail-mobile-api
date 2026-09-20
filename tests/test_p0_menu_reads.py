@@ -21,6 +21,7 @@ import korail_mobile_api
 import korail_mobile_api.read_models as read_models
 import korail_mobile_api.read_parsers as read_parsers
 import korail_mobile_api.read_payloads as read_payloads
+from _read_field_contracts import KORAIL_EXACT_REQUEST_FIELDS
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -29,10 +30,7 @@ from korail_mobile_api.errors import (
     KorailSessionExpiredError,
 )
 from korail_mobile_api.models import KorailSession
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES
 
 
 PASS_MENU_PATH = "/classes/com.korail.mobile.pass.passMenu.do"

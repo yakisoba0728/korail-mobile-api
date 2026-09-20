@@ -19,6 +19,10 @@ import pytest
 
 import korail_mobile_api
 from _helpers import recording_path_handler, synthetic_ok_envelope
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -53,11 +57,7 @@ from korail_mobile_api.read_payloads import (
     build_multi_child_discount_target_form,
     build_trip_change_date_form,
 )
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES
 
 
 R13_PATH = "/classes/com.korail.mobile.cust.mchdDcntTgt.do"

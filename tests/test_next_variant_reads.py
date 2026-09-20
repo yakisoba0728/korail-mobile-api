@@ -17,6 +17,10 @@ import httpx
 import pytest
 
 import korail_mobile_api
+from _read_field_contracts import (
+    KORAIL_EXACT_REQUEST_FIELDS,
+    assert_read_only_request_fields,
+)
 from korail_mobile_api import KorailClient, KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS
 from korail_mobile_api.dynapath import DynapathConfig
@@ -56,12 +60,7 @@ from korail_mobile_api.read_payloads import (
     build_gift_ticket_list_form,
     build_price_fare_quote_form,
 )
-from korail_mobile_api.safety import (
-    KORAIL_EXACT_REQUEST_FIELDS,
-    KORAIL_READ_ONLY_ROUTES,
-    assert_read_only_request_fields,
-    assert_read_only_route,
-)
+from korail_mobile_api.safety import KORAIL_READ_ONLY_ROUTES, assert_read_only_route
 
 
 R17_PATH = "/classes/com.korail.mobile.gift.gdLst.do"
