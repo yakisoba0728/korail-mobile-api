@@ -751,6 +751,22 @@ def test_standby_wait_form_refuses_a_phone_number_it_would_silently_drop():
         )
 
 
+@pytest.mark.parametrize("field", ["allow_seat_class_change", "sms_notify"])
+@pytest.mark.parametrize("value", ["N", "Y", 0, 1, "", None, []])
+def test_standby_wait_form_refuses_a_non_bool_flag_instead_of_coercing_it(
+    field, value
+):
+    # bool("N") is True, so coercing a caller's "N" with bool() sends "Y" on
+    # the wire -- the opposite of what was asked, on a flag that decides
+    # whether a standby hold may be filled at a different seat class.
+    with pytest.raises(KorailProtocolError, match=f"{field} must be a bool"):
+        build_standby_wait_form(
+            KorailConfig(),
+            _standby_hold(),
+            **{field: value},
+        )
+
+
 @pytest.mark.parametrize(
     "hold",
     [

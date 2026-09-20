@@ -1033,11 +1033,15 @@ def build_standby_wait_form(
         hold,
         context="KORAIL standby options require one successful hold with a PNR",
     )
-    # Widened, not narrowed: bool() coerces whatever truthy/falsy value the
-    # caller passed instead of demanding the literal type. The wire only ever
-    # carries "Y"/"N", so an int 1/0 was refused for no functional benefit.
-    allow_seat_class_change = bool(allow_seat_class_change)
-    sms_notify = bool(sms_notify)
+    # Not coerced with bool(): every other flag on the wire is "Y"/"N", and a
+    # caller who passes the string "N" expecting it to read as false would
+    # otherwise get bool("N") is True -- "Y" on the wire, the opposite of what
+    # was asked, on a flag that decides whether a standby hold may be filled
+    # at a different seat class.
+    if not isinstance(allow_seat_class_change, bool):
+        raise KorailProtocolError("allow_seat_class_change must be a bool")
+    if not isinstance(sms_notify, bool):
+        raise KorailProtocolError("sms_notify must be a bool")
     if sms_notify:
         if not isinstance(phone_no, str) or (
             _STANDBY_PHONE_RE.fullmatch(phone_no) is None
