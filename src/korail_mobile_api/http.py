@@ -22,6 +22,7 @@ from .config import KorailConfig
 from .constants import DYNAPATH_ALLOWLIST_PATHS, DYNAPATH_REQUIRED_PATHS
 from .dynapath import DynapathRequestContext, DynapathTokenGenerator
 from .errors import (
+    SESSION_EXPIRED_CODE,
     KorailDynaPathError,
     KorailDynaPathRequiredError,
     KorailProtocolError,
@@ -110,7 +111,7 @@ def parse_base_response(
         raise KorailProtocolError("KORAIL response must be a JSON object")
     _reject_non_string_envelope_fields(data)
     response = BaseKorailResponse.from_raw(data)
-    if response.h_msg_cd == "P058":
+    if response.h_msg_cd == SESSION_EXPIRED_CODE:
         raise KorailSessionExpiredError(
             response.h_msg_cd,
             response.h_msg_txt,

@@ -16,6 +16,7 @@ from collections.abc import Iterator, Mapping
 from typing import Any
 
 from .errors import (
+    SESSION_EXPIRED_CODE,
     KorailProtocolError,
     KorailSessionExpiredError,
     classify_app_error,
@@ -45,8 +46,6 @@ from .read_models import (
     DiscountCoupon,
     DiscountCouponListResponse,
     FreeSeatCarResponse,
-    GiftTicket,
-    GiftTicketListResponse,
     GuideSeatConditionResponse,
     IntermediateStation,
     KorailPointSummaryResponse,
@@ -80,9 +79,6 @@ from .read_models import (
     PbpAcceptanceSeat,
     PbpAcceptanceSpecificationResponse,
     PbpAcceptanceTicket,
-    PlatformNumberJourney,
-    PlatformNumberResponse,
-    PlatformNumberTicket,
     PriceFare,
     PriceFareQuoteResponse,
     ProductDetailResponse,
@@ -191,7 +187,7 @@ def _validate_envelope(
     code = raw.get("h_msg_cd")
     message = raw.get("h_msg_txt")
     result = raw.get("strResult")
-    if code == "P058":
+    if code == SESSION_EXPIRED_CODE:
         raise KorailSessionExpiredError(code, message, raw=raw)
     failed = result == "FAIL" or code == "WRC000288"
     if failed and code not in accepted_empty_codes and code not in returned_failure_codes:
@@ -1673,51 +1669,6 @@ def parse_trip_change_date_response(
     )
 
 
-_GIFT_TICKET_FIELDS = {
-    "integrated_customer_name_1": "intgCustNm1",
-    "integrated_customer_name_2": "intgCustNm2",
-    "current_point_value": "nowPontValNum",
-    "received_date": "rcvDt",
-    "return_amount": "retAmt",
-    "return_date": "retDt",
-    "return_time": "retTm",
-    "ticket_id": "tkId",
-    "transaction_amount": "txnAmt",
-    "usage_close_date": "useClsDt",
-    "used_point_value": "usePontValNum",
-    "usable_flag": "usePsbFlg",
-}
-
-
-def parse_gift_ticket_list_response(
-    raw: Mapping[str, Any],
-) -> GiftTicketListResponse:
-    _validate_strict_read_envelope(raw)
-    tickets = []
-    for value in _optional_list(raw, "gdList", "gift-ticket list"):
-        item = _row(value, "gift-ticket gdList")
-        tickets.append(
-            GiftTicket(
-                **_nullable_string_fields(
-                    item,
-                    _GIFT_TICKET_FIELDS,
-                    "gift-ticket",
-                ),
-                raw=item,
-            )
-        )
-    return GiftTicketListResponse(
-        tickets=tuple(tickets),
-        query_count=_optional_string(raw, "qryCnt", "gift-ticket list"),
-        next_query_no=_optional_string(
-            raw,
-            "qryNumNext",
-            "gift-ticket list",
-        ),
-        **_response_fields(raw),
-    )
-
-
 def _primitive_json_integer(
     data: Mapping[str, Any],
     key: str,
@@ -1874,14 +1825,6 @@ _PBP_ACCEPTANCE_SEAT_FIELDS = {
     "seat_no": "seatNo",
 }
 
-_PLATFORM_NUMBER_TICKET_FIELDS = {
-    "sale_date": "saleDt",
-    "sale_sequence": "saleSqno",
-    "sale_window_no": "saleWctNo",
-    "ticket_return_no": "tkRetNo",
-    "return_password": "tkRetPwd",
-}
-
 _RECENT_DELIVERY_RECIPIENT_FIELDS = {
     "acceptance_customer_management_flag": "acepCustMgFlg",
     "acceptance_customer_management_no": "acepCustMgNo",
@@ -1974,41 +1917,6 @@ def parse_pbp_acceptance_specification_response(
             )
         )
     return PbpAcceptanceSpecificationResponse(
-        tickets=tuple(tickets),
-        **_response_fields(raw),
-    )
-
-
-def parse_platform_number_response(
-    raw: Mapping[str, Any],
-) -> PlatformNumberResponse:
-    _validate_strict_read_envelope(raw)
-    tickets = []
-    for ticket in _rows(raw, "tkList", "platform number"):
-        journeys = []
-        for journey in _rows(ticket, "jrnyList", "platform number ticket"):
-            journeys.append(
-                PlatformNumberJourney(
-                    platform_no=_optional_string(
-                        journey,
-                        "plfNo",
-                        "platform number journey",
-                    ),
-                    raw=journey,
-                )
-            )
-        tickets.append(
-            PlatformNumberTicket(
-                **_nullable_string_fields(
-                    ticket,
-                    _PLATFORM_NUMBER_TICKET_FIELDS,
-                    "platform number ticket",
-                ),
-                journeys=tuple(journeys),
-                raw=ticket,
-            )
-        )
-    return PlatformNumberResponse(
         tickets=tuple(tickets),
         **_response_fields(raw),
     )

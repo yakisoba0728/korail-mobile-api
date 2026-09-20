@@ -38,32 +38,20 @@ from .constants import (
 from .errors import KorailProtocolError
 
 
-# Subject areas the READ-ONLY send path refuses. "Not reachable through
-# post_form/get" — NOT "not implemented". reservation/payment/refund have
-# their own routes in KORAIL_MUTATION_ROUTES; this set stops them travelling
-# on the read path.
+# WHICH SUBJECT AREAS WERE CONSIDERED AND DECLINED. A record, not a guard --
+# the boundary this module actually enforces is KORAIL_READ_ONLY_ROUTES and
+# KORAIL_MUTATION_ROUTES below, and nothing else. A frozenset named
+# EXCLUDED_API_DOMAINS used to sit here restating it in coarser terms; no
+# assert ever read it, so it said "guard" while doing nothing, and it is gone.
 #
-# "points-mileage-write" excludes only writes/auths, not balance reads:
+# Declined: reservation, payment, refund (they have their own mutation routes),
+# check-in, member-drop, push-sms, dynapath-token-generation, and the
+# password-bearing half of points/mileage. That last one excludes writes and
+# auths only, not balance reads:
 #   mlg.lpotAthn.do     -- password auth → pwdErrTno (failure counter = state change)
 #   xPoint.XPointView   -- same (xpoint_no + xpoint_pwd)
 #   xPoint.OkCashbagCertView, mileage.acpnMlgSave.do, mileage.acpnMlgNoti.do
 #                       -- registration/accrual writes
-#
-# The precise boundary is KORAIL_READ_ONLY_ROUTES ∪ KORAIL_MUTATION_ROUTES;
-# this set is the coarser domain-level guard on top, recording which areas
-# were considered and declined.
-EXCLUDED_API_DOMAINS = frozenset(
-    {
-        "reservation",
-        "payment",
-        "refund",
-        "check-in",
-        "member-drop",
-        "push-sms",
-        "points-mileage-write",
-        "dynapath-token-generation",
-    }
-)
 
 # Exact (method, path) pairs the read-only send path will transmit to.
 # 58 entries: 56 reads + login and logout POST. Nothing pins the count any
@@ -170,7 +158,7 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         # itself (KorailPointInquiryDao.java:91), and mlg.amtSpec.do is the
         # 적립/사용 history list. The password-bearing loyalty routes
         # (mlg.lpotAthn.do, xPoint.XPointView) are excluded -- see
-        # EXCLUDED_API_DOMAINS above.
+        # the declined-areas note at the top of this module.
         ("POST", "/classes/com.korail.mobile.xPoint.MyXPointView"),
         ("POST", "/classes/com.korail.mobile.mlg.amtSpec.do"),
         # 할인카드(N카드) reads. Both are POSTs whose only credential is the
@@ -249,7 +237,8 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # (CertificationService.java:35-37 getDiscountPrice). Its own category:
         # it creates and destroys nothing, but it rewrites what the passenger
         # is about to be charged, which is exactly why it must not borrow the
-        # "payment" consent that authorises settling the quoted amount.
+        # "payment" category, which owns the route that settles the quoted
+        # amount.
         #
         # The one route in this set whose form carries REPEATED keys. Its last
         # six @Fields are List<String> and Retrofit emits one key per element

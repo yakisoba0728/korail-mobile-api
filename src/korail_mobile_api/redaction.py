@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""미리보기·로그에 남으면 안 되는 값을 가립니다.
+"""로그·직렬화에 남으면 안 되는 값을 가립니다.
 
 :data:`SENSITIVE_KEYS` = 가려야 할 폼/응답 키 집합. 민감 키의 값은 ``[REDACTED]``,
 그 밖의 값에서 발견된 카드번호 모양은 ``[REDACTED_CARD]``.
@@ -465,7 +465,9 @@ def redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
 def redact_payload(
     payload: Mapping[str, object],
 ) -> dict[str, str | list[str]]:
-    """변경 폼(mutation form) 마스킹 — 로그/에러 메시지에 쓰입니다.
+    """변경 폼(mutation form) 마스킹 — 호출자가 로그·직렬화 전에 부릅니다.
+
+    이 패키지 자신은 부르지 않습니다.
 
     민감 키는 ``[REDACTED]``, 나머지는 :func:`redact_text`. 리스트 값은 원소별로
     가리고 길이 유지(``CertificationService.java:35-37`` 의 ``List @Field``).

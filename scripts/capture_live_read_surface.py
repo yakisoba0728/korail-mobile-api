@@ -59,7 +59,6 @@ import httpx
 from korail_mobile_api import (
     CommuterInitialRequest,
     FreeSeatCarRequest,
-    GiftTicketHistoryRequest,
     GuideSeatConditionRequest,
     KorailClient,
     LimousineScheduleQuery,
@@ -553,13 +552,6 @@ def _drive_reads(runner: SurfaceRunner, args: argparse.Namespace) -> dict[str, A
         "trip_change_dates",
         "get_trip_change_dates",
         lambda: client.get_trip_change_dates(date),
-    )
-    runner.run(
-        "gift_ticket_list",
-        "get_gift_ticket_list",
-        lambda: client.get_gift_ticket_list(
-            GiftTicketHistoryRequest.sent(date, date)
-        ),
     )
     runner.run(
         "commuter_info",

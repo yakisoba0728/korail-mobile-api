@@ -280,34 +280,6 @@ def parse_queue_response(body: str, *, action: str) -> KorailNetFunnelToken:
     return token
 
 
-def parse_set_complete_response(
-    body: str,
-    *,
-    action: str,
-) -> KorailNetFunnelToken:
-    """5004 응답. 200(놓임)과 502(이미 완료)를 받아들입니다.
-
-    502 를 받아들이는 것은 추론 — 앱(``T6/d.java:69-88``)은 응답을 보지 않고
-    상태를 지움. 해제 성공 ``200:key=&...`` 에서 빈 키는 정당(슬롯 소멸).
-    """
-    token = parse_netfunnel_body(body, action=action)
-    if token.code == NOT_COMPLETABLE_CODE:
-        raise _queue_failure(
-            token,
-            "KORAIL NetFunnel setComplete refused this key as a session THIS "
-            "host owns; either the key was never exchanged via chkEnter (5002),"
-            " or the request went to a node that did not issue it",
-            body,
-        )
-    if token.code not in {SUCCESS_CODE, ALREADY_COMPLETE_CODE}:
-        raise _queue_failure(
-            token,
-            "KORAIL NetFunnel setComplete did not release the queue slot",
-            body,
-        )
-    return token
-
-
 def is_queued(token: KorailNetFunnelToken) -> bool:
     """대기열이 "나중에 다시 오라"고 했는지."""
     return token.code in CONTINUE_CODES
@@ -510,24 +482,6 @@ class KorailNetFunnelClient:
 # ---------------------------------------------------------------------------
 # Action routing
 # ---------------------------------------------------------------------------
-
-#: 어느 액션이 어느 작업을 막는지. APK 호출 지점:
-#: INQUIRY/PEAK_SEASON_INQUIRY/PRODUCT — ``b5/c.java:439``
-#: RESERVE — ``DirectInquiryActivity.java:442,469,499``
-#: PAY — ``B6/AbstractC1269e.java:1046``, ``B6/C1270f.java:232``
-#: RESERVED — ``ReservedTicketActivity.java:553``
-#: TEST — ``NetfunnelTestActivity.java:54`` (act_8 사용)
-#: act_4/act_22 — ``K4/g.java:47,50`` 선언만, 호출 지점 없음
-KORAIL_NETFUNNEL_GATED_OPERATIONS: dict[str, KorailNetFunnelAction] = {
-    "search_trains": KorailNetFunnelAction.INQUIRY,
-    "search_product_trains": KorailNetFunnelAction.PRODUCT,
-    "reserve": KorailNetFunnelAction.RESERVE,
-    "confirm_standby_hold": KorailNetFunnelAction.RESERVE,
-    "pay_with_card": KorailNetFunnelAction.PAY,
-    "pay_with_fake_card": KorailNetFunnelAction.PAY,
-    "get_reservation_history": KorailNetFunnelAction.RESERVED,
-}
-
 
 def inquiry_action(*, peak_season: bool) -> KorailNetFunnelAction:
     """열차조회 액션 선택(``b5/c.java:439``).

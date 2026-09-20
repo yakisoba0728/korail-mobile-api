@@ -561,8 +561,8 @@ class DiscountCardOnTicket:
     :attr:`card_no` 를 얻으려고 있는 모델입니다.
     :meth:`~korail_mobile_api.client.KorailClient.get_discount_card_usage_history`
     의 유일한 입력이고, 할인코드 ``"153"`` 과 함께 평범한 예약을 할인 예약으로
-    바꾸는 유일한 입력이기도 합니다(``w4/a.java:100-101``). 미리보기와
-    로그에서 마스킹됩니다.
+    바꾸는 유일한 입력이기도 합니다(``w4/a.java:100-101``).
+    :mod:`korail_mobile_api.redaction` 에 등록돼 있어 마스킹됩니다.
     """
 
     #: ``h_dcnt_crd_no``.
@@ -891,30 +891,6 @@ class TripChangeDateResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
-class GiftTicket:
-    integrated_customer_name_1: str | None = field(default=None, repr=False)
-    integrated_customer_name_2: str | None = field(default=None, repr=False)
-    current_point_value: str | None = field(default=None, repr=False)
-    received_date: str | None = field(default=None, repr=False)
-    return_amount: str | None = field(default=None, repr=False)
-    return_date: str | None = field(default=None, repr=False)
-    return_time: str | None = field(default=None, repr=False)
-    ticket_id: str | None = field(default=None, repr=False)
-    transaction_amount: str | None = field(default=None, repr=False)
-    usage_close_date: str | None = field(default=None, repr=False)
-    used_point_value: str | None = field(default=None, repr=False)
-    usable_flag: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
-
-
-@dataclass(frozen=True)
-class GiftTicketListResponse(BaseKorailResponse):
-    tickets: tuple[GiftTicket, ...] = field(default=(), repr=False)
-    query_count: str | None = field(default=None, repr=False)
-    next_query_no: str | None = field(default=None, repr=False)
-
-
-@dataclass(frozen=True)
 class CommuterPassengerOption:
     commuter_usage_age_code: str | None = None
     common_code_name: str | None = None
@@ -1012,28 +988,6 @@ class PbpAcceptanceSpecificationResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
-class PlatformNumberJourney:
-    platform_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
-
-
-@dataclass(frozen=True)
-class PlatformNumberTicket:
-    sale_date: str | None = field(default=None, repr=False)
-    sale_sequence: str | None = field(default=None, repr=False)
-    sale_window_no: str | None = field(default=None, repr=False)
-    ticket_return_no: str | None = field(default=None, repr=False)
-    return_password: str | None = field(default=None, repr=False)
-    journeys: tuple[PlatformNumberJourney, ...] = field(default=(), repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
-
-
-@dataclass(frozen=True)
-class PlatformNumberResponse(BaseKorailResponse):
-    tickets: tuple[PlatformNumberTicket, ...] = field(default=(), repr=False)
-
-
-@dataclass(frozen=True)
 class SelfSeatChangeStation:
     """자율 좌석 변경으로 옮겨 갈 수 있는 승차역 하나.
 
@@ -1114,7 +1068,8 @@ class SelfSeatChangeInfoResponse(BaseKorailResponse):
 class OriginalTicketSeat:
     """원표의 한 여정에 딸린 좌석 하나(``response/research/Seat.java``).
 
-    좌석 식별자 자체(``scarNo``/``seatNo``)는 미리보기에서 마스킹됩니다.
+    좌석 식별자 자체(``scarNo``/``seatNo``)는
+    :mod:`korail_mobile_api.redaction` 에 등록돼 있습니다.
     """
 
     passenger_sequence: str | None = None

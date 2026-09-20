@@ -8,6 +8,41 @@
 
 ### Removed
 
+- **보낼 수 없는 라우트의 코드가 없어졌습니다.** 기프티켓 목록(`gift.gdLst.do`),
+  승강장 번호(`tk.plfNo.do`), 현금영수증 발급(`cashReceipt.issue.do`), 그리고
+  `seatMovie.LimousineScheduleView` 의 **요청 쪽**. 네 라우트 모두
+  `KORAIL_READ_ONLY_ROUTES` 에도 `KORAIL_MUTATION_ROUTES` 에도 없어 전송 경계가
+  영구히 거부하므로, 폼 빌더·파서·모델이 다 있어도 부를 방법이 없었습니다.
+  `KorailClient` 에 이 라우트를 부르는 메서드도 애초에 없었습니다. 공개면에서
+  `GiftTicket`, `GiftTicketListResponse`, `GiftTicketHistoryRequest`,
+  `GiftTicketPaymentEligibilityRequest`, `PlatformNumberJourney`,
+  `PlatformNumberTicket`, `PlatformNumberResponse`, `CashReceiptApprovalItem`,
+  `CashReceiptIssueResponse`, `LimousineScheduleViewQuery` 열 이름이 빠져
+  `__all__` 이 237개에서 227개가 됐습니다.
+  **리무진 좌석이동의 응답 쪽은 남았습니다** — `LimousineScheduleViewResponse`,
+  `LimousineScheduleViewTrain`, `parse_limousine_schedule_view_response` 는 저장해 둔
+  6.5.0 응답을 해석하는 데 쓸 수 있고 그것이 `docs/7.0.6-removals.md` 가 적어 둔
+  보존 사유입니다. 요청 빌더에는 그 사유가 성립하지 않습니다 — 저장된 응답을 읽는 데
+  요청 폼은 필요 없습니다.
+- **`safety.EXCLUDED_API_DOMAINS` 가 없어졌습니다.** 어떤 단언도 이 frozenset 을
+  읽지 않아, 주석이 "guard" 라 부르는 동안 실제로는 아무것도 하지 않았습니다. 어느
+  영역을 검토하고 제외했는지의 기록은 같은 자리에 주석으로 남겼습니다 — 그쪽이
+  이 값의 실제 성격입니다.
+- **`netfunnel.KORAIL_NETFUNNEL_GATED_OPERATIONS` 가 없어졌습니다.** 읽는 코드가
+  없었고 이미 어긋나 있었습니다 — 키 하나(`search_product_trains`)가 `KorailClient` 에
+  존재한 적 없는 메서드 이름이었습니다. 아무도 대조하지 않는 표는 이렇게 조용히 틀립니다.
+- **`netfunnel.parse_set_complete_response` 가 없어졌습니다.** `release()` 는 5004
+  응답을 일부러 파싱하지 않으므로(앱도 그렇습니다) 이 파서의 503 거절 분기는 한 번도
+  실행되지 않았습니다.
+- **`V7Contract.headers` 와 `V7Gateway._client_for` 의 쓰이지 않던 인자가
+  없어졌습니다.** `headers` 는 어디서도 참조되지 않았고, `_client_for(contract)` 는
+  받은 계약을 쓰지 않았습니다(`_client()` 로 바꿨습니다). 남은 계약 두 개가 둘 다
+  `FieldMap` 이라 `@Header` 어노테이션 파싱은 대상이 없습니다.
+- **`scripts/capture_live_read_surface.py` 의 기프티켓 캡처가 없어졌습니다.**
+  존재한 적 없는 `KorailClient.get_gift_ticket_list` 를 부르고 있었습니다 —
+  `pyproject.toml` 이 `scripts/` 의 `reportAttributeAccessIssue` 를 꺼 두어
+  타입체커가 잡지 못했고, 라이브로 돌려야만 드러나는 자리였습니다.
+
 - **`KorailConfig.live_env_var` 가 없어졌습니다.** 공개 필드였고 레퍼런스 사이트에도
   실렸지만 읽는 코드가 하나도 없었습니다 — `live_enabled()`(`live.py:28-30`)는
   `"KORAIL_MOBILE_API_LIVE"` 를 직접 적어 두고 이 필드를 보지 않습니다. 그래서
@@ -15,6 +50,26 @@
   바꿨다는 인상만 남겼고, 하필 그 게이트가 실거래 스위치입니다. 배선해서 약속을 참으로
   만드는 대신, 호출자가 없는 경로를 늘리지 않는 쪽을 택했습니다. `KorailConfig` 를 위치
   인자로 만드는 코드는 저장소에도 문서에도 없으므로 뒤 필드들의 뜻은 그대로입니다.
+
+### Changed
+
+- **코드와 어긋난 서술 열 곳을 고쳤습니다.** 1.2.0 에서 없어진 동의 게이트와 dry-run
+  미리보기를 여전히 현재형으로 말하던 문장 일곱 곳(`redaction.py` 모듈 docstring 과
+  `redact_payload`, `mutation_models.py`, `read_models.py` 두 곳, `safety.py`,
+  `client.py`), `payloads.py` 가 "`safety` 의 필드 계약이 전송 직전에 다시 확인한다"고
+  적어 `safety.py` 자신의 "필드 계약은 강제하지 않는다"와 정면으로 어긋나던 것, 그리고
+  `mutation_payloads.py` 가 "실제 전송은 `post_mutation_form` 하나"라고 적던 것.
+  마지막 것은 `build_station_refund_execution_form` 이 `V7Gateway.call` 로 나가므로
+  거짓이었고, v7 게이트웨이가 생긴 뒤에 그 문단을 다시 편집하면서도 고쳐지지 않았습니다.
+  이제 전송로가 둘이라는 것과, 폼 모양 단언이 앞쪽 경로에만 있다는 것을 함께 적습니다.
+- **죽어 있던 상수 두 개가 실제로 쓰이게 됐습니다.** `errors.SESSION_EXPIRED_CODE` 는
+  정의만 있고 `"P058"` 은 `http.py` 와 `read_parsers.py` 에 각각 하드코딩돼 있었는데,
+  이제 두 곳이 상수를 씁니다. `dynapath.KORAIL_DYNAPATH_APP_SIGNATURE_HASH` 는
+  `KORAIL_DYNAPATH_SIGNING_CERT_SHA256` 의 앞 32자를 손으로 다시 적은 값이었는데,
+  이제 그 값에서 잘라 냅니다 — 둘이 어긋날 자리가 없어집니다.
+- **`_device_version` 의 복사본이 없어졌습니다.** `payloads.py` 와
+  `limousine_payloads.py` 에 바이트 단위로 같은 함수가 두 벌 있었습니다.
+  `read_payloads.py` 가 이미 하던 대로 `limousine_payloads.py` 도 import 합니다.
 
 ### Fixed
 

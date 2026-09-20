@@ -4,21 +4,24 @@
 
 """상태를 바꾸는 라우트의 요청 폼 빌더.
 
-예약(직통·환승·병합·예약대기·좌석지정), 미결제 취소, 카드 결제, 환불, 운임
-재계산, 할인카드(N카드) 구매·연장·예약, 장바구니 추가의 폼을 만듭니다. 읽기
-쪽은 :mod:`korail_mobile_api.payloads` 와
+예약(직통·환승·병합·예약대기·좌석지정), 미결제 취소, 카드 결제, 환불, 역발행
+승차권 환불, 운임 재계산, 할인카드(N카드) 구매·연장·예약, 장바구니 추가의 폼을
+만듭니다. 읽기 쪽은 :mod:`korail_mobile_api.payloads` 와
 :mod:`korail_mobile_api.read_payloads` 입니다.
 
-여기 함수들은 dict 를 만들 뿐 아무것도 보내지 않습니다. 실제 전송은
-:meth:`~korail_mobile_api.http.KorailHttpClient.post_mutation_form` 하나이고 그
-앞에 라우트 가드가 있습니다.
+여기 함수들은 dict 를 만들 뿐 아무것도 보내지 않습니다. 전송로는 **둘**입니다 —
+열넷은 :meth:`~korail_mobile_api.http.KorailHttpClient.post_mutation_form` 으로,
+역발행 환불(:func:`build_station_refund_execution_form`)만
+:meth:`~korail_mobile_api.v7.V7Gateway.call` 로 나갑니다. 둘 다 앞에 라우트 가드가
+있지만 폼 모양 단언(``assert_mutation_form_shape``)은 앞쪽 경로에만 있습니다.
 
 **라이브로 확인된 것과 아닌 것.** 즉시·좌석지정·예약대기·입석+좌석 홀드(다인·특실
 포함), 환승 홀드, 결제 전 취소, 카드 결제, 환불, 장바구니 담기는 실서버가 받아들인
 것을 확인했습니다. 병합예약의 두 번째 홀드(:func:`build_merge_reservation_form`),
-운임 재계산, 할인카드 구매·연장·예약 폼은 전송된 적이 없습니다. 날짜와 응답 코드는
-``docs/MUTATION_HANDOFF.md`` 의 상태표에 있고, 예약대기에서 입석 플래그를 ``"N"`` 으로
-박는 근거는 :func:`_build_journey_reservation_form` 안의 주석에 있습니다.
+역발행 승차권 환불, 운임 재계산, 할인카드 구매·연장·예약 폼은 전송된 적이 없습니다.
+날짜와 응답 코드는 ``docs/MUTATION_HANDOFF.md`` 의 상태표에 있고, 예약대기에서 입석
+플래그를 ``"N"`` 으로 박는 근거는 :func:`_build_journey_reservation_form` 안의 주석에
+있습니다.
 """
 from __future__ import annotations
 

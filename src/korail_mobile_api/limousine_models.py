@@ -9,10 +9,8 @@
 앱에서 사라져 클라이언트가 더는 보내지 않습니다. 그 질의·응답 타입은 저장해 둔 6.5.0
 응답을 해석할 수 있도록 남겨 두었습니다(``docs/7.0.6-removals.md``).
 
-``*Query`` 세 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서 형식을
-검사합니다. 역은 라우트마다 다르게 줍니다 — 스케줄과 좌석 재고는 역**코드**
-(4자리), 좌석이동 목록은 역**이름**입니다. 승객 구성 프라이버시로 모든 필드를
-``repr=False`` 하는 건 ``LimousineScheduleViewQuery`` 뿐입니다 —
+``*Query`` 두 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서 형식을
+검사합니다. 둘 다 역**코드**(4자리)로 역을 받습니다.
 ``LimousineScheduleQuery``·``LimousineSeatInventoryQuery`` 는 운행/열차 식별자를
 그대로 보여 주고 ``room_class_code``(좌석 재고는 ``car_no`` 도)만 가립니다.
 
@@ -167,96 +165,6 @@ class LimousineSeatInventoryQuery:
         )
         _optional_text(self.product_no, "product_no")
         _boolean(self.is_arrow, "is_arrow")
-
-
-@dataclass(frozen=True)
-class LimousineScheduleViewQuery:
-    """``seatMovie.LimousineScheduleView`` 열차 목록 조회의 입력(7.0.6 에서 제거됨)."""
-    menu_id: str = field(repr=False)
-    job_id: str = field(repr=False)
-    job_division: str = field(repr=False)
-    service_code: str = field(repr=False)
-    train_no: str = field(repr=False)
-    departure_station_name: str = field(repr=False)
-    arrival_station_name: str = field(repr=False)
-    departure_date: str = field(repr=False)
-    departure_time: str = field(repr=False)
-    passenger_group_1_count: int = field(repr=False)
-    passenger_group_2_count: int = field(repr=False)
-    senior_count: int = field(repr=False)
-    severe_disability_count: int = field(repr=False)
-    mild_disability_count: int = field(repr=False)
-    direction_seat_attribute_code: str = field(repr=False)
-    location_seat_attribute_code: str = field(repr=False)
-    room_seat_attribute_code: str = field(repr=False)
-    ebiz_cross_check: bool = field(repr=False)
-    srt_check: bool = field(repr=False)
-    round_trip: bool = field(repr=False)
-
-    def __post_init__(self) -> None:
-        _ascii_digits(
-            self.menu_id,
-            "menu_id",
-            lengths=frozenset({1, 2, 3}),
-        )
-        _ascii_digits(
-            self.job_id,
-            "job_id",
-            lengths=frozenset({1, 2, 3}),
-        )
-        _optional_text(self.job_division, "job_division")
-        _ascii_digits(
-            self.service_code,
-            "service_code",
-            lengths=frozenset({1, 2, 3}),
-        )
-        _ascii_digits(
-            self.train_no,
-            "train_no",
-            lengths=frozenset({1, 2, 3, 4, 5}),
-            allow_empty=True,
-        )
-        _required_text(self.departure_station_name, "departure_station_name")
-        _required_text(self.arrival_station_name, "arrival_station_name")
-        _ascii_digits(
-            self.departure_date,
-            "departure_date",
-            lengths=frozenset({8}),
-        )
-        _ascii_digits(
-            self.departure_time,
-            "departure_time",
-            lengths=frozenset({6}),
-        )
-        passenger_fields = (
-            ("passenger_group_1_count", self.passenger_group_1_count),
-            ("passenger_group_2_count", self.passenger_group_2_count),
-            ("senior_count", self.senior_count),
-            ("severe_disability_count", self.severe_disability_count),
-            ("mild_disability_count", self.mild_disability_count),
-        )
-        for name, value in passenger_fields:
-            _passenger_count(value, name, allow_zero=True)
-        total = sum(value for _, value in passenger_fields)
-        if not 1 <= total <= 9:
-            raise ValueError(
-                "passenger counts must total an integer from 1 through 9"
-            )
-        for name, value in (
-            (
-                "direction_seat_attribute_code",
-                self.direction_seat_attribute_code,
-            ),
-            (
-                "location_seat_attribute_code",
-                self.location_seat_attribute_code,
-            ),
-            ("room_seat_attribute_code", self.room_seat_attribute_code),
-        ):
-            _ascii_digits(value, name, lengths=frozenset({3}))
-        _boolean(self.ebiz_cross_check, "ebiz_cross_check")
-        _boolean(self.srt_check, "srt_check")
-        _boolean(self.round_trip, "round_trip")
 
 
 @dataclass(frozen=True)

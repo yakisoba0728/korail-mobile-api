@@ -462,7 +462,7 @@ class KorailClient:
 
     # ------------------------------------------------------------------
     # Internal helpers: the read skeleton (post/get → parser → _run_read) and
-    # the mutation skeleton (_mutation: dry-run branch → _run_read → parse),
+    # the mutation skeleton (_mutation: post → _run_read → parse),
     # both sharing _run_read's session-expiry handling
     # ------------------------------------------------------------------
 

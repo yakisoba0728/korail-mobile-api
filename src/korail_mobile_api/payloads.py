@@ -10,8 +10,9 @@ MaaS 메뉴의 폼을 만듭니다. 나머지 읽기 라우트는
 :mod:`korail_mobile_api.mutation_payloads` 에 있습니다.
 
 여기 함수들은 dict 를 돌려줄 뿐 아무것도 보내지 않습니다. 필드 이름과 순서는
-APK 의 Retrofit 선언에서 나왔고, :mod:`korail_mobile_api.safety` 의 필드 계약이
-전송 직전에 그것을 다시 확인합니다.
+APK 의 Retrofit 선언에서 나왔습니다. 그것을 고정하던 테스트는 삭제됐고, 지금
+계약을 말하는 것은 각 빌더의 코드뿐입니다 — :mod:`korail_mobile_api.safety` 는
+라우트와 변경 폼의 값 모양만 보고 필드 이름·순서는 강제하지 않습니다.
 """
 import time
 from typing import TypeGuard

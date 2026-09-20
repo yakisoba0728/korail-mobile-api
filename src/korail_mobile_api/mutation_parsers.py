@@ -22,8 +22,6 @@ from typing import Any
 
 from .errors import KorailProtocolError
 from .mutation_models import (
-    CashReceiptApprovalItem,
-    CashReceiptIssueResponse,
     DiscountCardPurchaseResponse,
     RefundTicketResponse,
     ReservationHoldResponse,
@@ -54,62 +52,6 @@ def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse
         **_base_fields(copied),
         settlement_method_codes=tuple(codes),
         settlement_list_is_null=rows is None,
-    )
-
-
-_CASH_RECEIPT_APPROVAL_FIELDS = {
-    "job_division_code": "jobDvCd",
-    "receipt_no": "rcptNo",
-    "approval_date": "apvDt",
-    "cash_receipt_approval_no": "cashRcetApvNo",
-    "approved_amount": "totApvAmt",
-    "approval_processed_at": "apvPrsDttm",
-    "normal_processing_flag": "nmlPrsFlg",
-    "response_message_code": "rspMsgCd",
-    "short_message_content": "shrtMsgCont",
-    "sale_date": "saleDt",
-    "sale_window_no": "saleWctNo",
-    "sale_sequence": "saleSqno",
-}
-
-
-def parse_cash_receipt_issue_response(
-    raw: Mapping[str, Any],
-) -> CashReceiptIssueResponse:
-    """Parse the unprotected ``CashReceiptIssueOut`` and ``ApvItem`` fields.
-
-    The APK defaults an omitted ``apvList`` to an empty list, but the field is
-    nullable. Present lists must contain objects; approval identifiers remain
-    hidden from ``repr``.
-    """
-    copied = _response_mapping(raw)
-    rows = copied.get("apvList", [])
-    if rows is not None and not isinstance(rows, list):
-        raise KorailProtocolError("KORAIL cash receipt apvList must be a list")
-    approvals: list[CashReceiptApprovalItem] = []
-    for row in rows or ():
-        row = _row(row, "cash receipt ApvItem")
-        approval_fields = {
-            attr: _optional_string(row, wire_key, context="cash receipt ApvItem")
-            for attr, wire_key in _CASH_RECEIPT_APPROVAL_FIELDS.items()
-        }
-        approvals.append(CashReceiptApprovalItem(**approval_fields, raw=dict(row)))
-    return CashReceiptIssueResponse(
-        **_base_fields(copied),
-        transaction_division_code=_optional_string(
-            copied, "cashRcetTxnDvCd", context="cash receipt issue"
-        ),
-        authentication_method_code=_optional_string(
-            copied, "cashRcetAthnMtdCd", context="cash receipt issue"
-        ),
-        authentication_recognition_no=_optional_string(
-            copied, "athnDmnRcgnNo", context="cash receipt issue"
-        ),
-        total_approved_amount=_optional_string(
-            copied, "totApvAmt", context="cash receipt issue"
-        ),
-        approvals=tuple(approvals),
-        approval_list_is_null=rows is None,
     )
 
 

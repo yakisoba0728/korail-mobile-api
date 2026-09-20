@@ -820,81 +820,6 @@ def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
     return {"tripChgDate": _ascii_digits(departure_date, "departure_date", lengths=frozenset({8}))}
 
 
-@dataclass(frozen=True, init=False)
-class GiftTicketHistoryRequest:
-    start_date: str = field(repr=False)
-    end_date: str = field(repr=False)
-    _query_division_code: str = field(repr=False)
-
-    @classmethod
-    def sent(
-        cls,
-        start_date: str,
-        end_date: str,
-    ) -> GiftTicketHistoryRequest:
-        return cls._create("A", start_date, end_date)
-
-    @classmethod
-    def received(
-        cls,
-        start_date: str,
-        end_date: str,
-    ) -> GiftTicketHistoryRequest:
-        return cls._create("C", start_date, end_date)
-
-    @classmethod
-    def _create(
-        cls,
-        query_division_code: str,
-        start_date: str,
-        end_date: str,
-    ) -> GiftTicketHistoryRequest:
-        instance = object.__new__(cls)
-        object.__setattr__(instance, "start_date", start_date)
-        object.__setattr__(instance, "end_date", end_date)
-        object.__setattr__(
-            instance,
-            "_query_division_code",
-            query_division_code,
-        )
-        _validate_gift_ticket_history_request(instance)
-        return instance
-
-
-@dataclass(frozen=True)
-class GiftTicketPaymentEligibilityRequest:
-    pass
-
-
-def _validate_gift_ticket_history_request(
-    request: GiftTicketHistoryRequest,
-) -> None:
-    if request._query_division_code not in {"A", "C"}:
-        raise ValueError("gift-ticket history mode is not supported")
-    start = _calendar_date(request.start_date, "start_date")
-    end = _calendar_date(request.end_date, "end_date")
-    if end < start:
-        raise ValueError("end_date must not be before start_date")
-
-
-def build_gift_ticket_list_form(
-    request: GiftTicketHistoryRequest
-    | GiftTicketPaymentEligibilityRequest,
-) -> tuple[tuple[str, str], ...]:
-    if type(request) is GiftTicketHistoryRequest:
-        _validate_gift_ticket_history_request(request)
-        return (
-            ("qryDvCd", request._query_division_code),
-            ("qryVal", "E"),
-            ("abrdDtFrom", request.start_date),
-            ("abrdDtTo", request.end_date),
-            ("usePsbFlg", ""),
-        )
-    if type(request) is GiftTicketPaymentEligibilityRequest:
-        return (("qryDvCd", "F"), ("qryVal", "E"))
-    raise TypeError("request must be an exact gift-ticket request variant")
-
-
 def _exact_server_pass_data(pass_data: PassMenuData) -> str:
     if not isinstance(pass_data, PassMenuData):
         raise TypeError("pass_data must be a PassMenuData")
@@ -1066,16 +991,6 @@ def build_pbp_acceptance_specification_form(
     references = _exact_ticket_reference_tuple(tickets)
     return (
         ("tkCnt", len(references)),
-        *(("tkRetNo", _ticket_return_number(ticket)) for ticket in references),
-    )
-
-
-def build_platform_number_form(
-    tickets: tuple[OriginalTicketReference, ...],
-) -> tuple[tuple[str, str], ...]:
-    references = _exact_ticket_reference_tuple(tickets)
-    return (
-        ("tkCnt", str(len(references))),
         *(("tkRetNo", _ticket_return_number(ticket)) for ticket in references),
     )
 

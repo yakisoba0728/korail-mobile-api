@@ -37,37 +37,6 @@ class RefundTicketResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
-class CashReceiptApprovalItem:
-    """7.0.6 ``ApvItem`` approval row, with the original row retained."""
-
-    job_division_code: str | None = None
-    receipt_no: str | None = field(default=None, repr=False)
-    approval_date: str | None = None
-    cash_receipt_approval_no: str | None = field(default=None, repr=False)
-    approved_amount: str | None = None
-    approval_processed_at: str | None = None
-    normal_processing_flag: str | None = None
-    response_message_code: str | None = None
-    short_message_content: str | None = field(default=None, repr=False)
-    sale_date: str | None = None
-    sale_window_no: str | None = field(default=None, repr=False)
-    sale_sequence: str | None = field(default=None, repr=False)
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
-
-
-@dataclass(frozen=True)
-class CashReceiptIssueResponse(BaseKorailResponse):
-    """7.0.6 ``CashReceiptIssueOut`` result and its approval rows."""
-
-    transaction_division_code: str | None = None
-    authentication_method_code: str | None = None
-    authentication_recognition_no: str | None = field(default=None, repr=False)
-    total_approved_amount: str | None = None
-    approvals: tuple[CashReceiptApprovalItem, ...] = ()
-    approval_list_is_null: bool = False
-
-
-@dataclass(frozen=True)
 class StationRefundOriginalTicket:
     """An ``Orgtkinfo`` row returned by station-issued ticket verification."""
 
@@ -548,7 +517,8 @@ class DiscountCardAdditionalUser:
     ``NCardReservationDao.java:66-72,122-124``. 1인용 카드에서는 앱도 빈
     맵을 보내므로 폼에 필드가 하나도 붙지 않습니다.
 
-    세 필드 모두 개인정보라 ``repr=False`` 이고 미리보기에서도 마스킹됩니다.
+    세 필드 모두 개인정보라 ``repr=False`` 이고, 전선 이름이
+    :mod:`korail_mobile_api.redaction` 에 등록돼 있습니다.
     """
 
     customer_no: str = field(repr=False)
@@ -686,8 +656,6 @@ class PriceRecalculationRequest:
     #: Retrofit 은 널 ``@Field`` 를 빼므로(``RequestBuilder.smali:1531``)
     #: 회원의 폼은 실제로 열네 개가 아니라 열두 개 키를 갖습니다.
     non_member_no: str | None = field(default=None, repr=False)
-
-
 
 
 @dataclass(frozen=True)

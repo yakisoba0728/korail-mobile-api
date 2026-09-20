@@ -31,7 +31,7 @@ from .safety import (
 from .v7_contract_data import CONTRACT_ROWS
 
 
-_ANNOTATION = re.compile(r"(Field|Query|Header)\(([^)]+)\)")
+_ANNOTATION = re.compile(r"(Field|Query)\(([^)]+)\)")
 _NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
 # 정기권/패스 purchase and issue. The APK declares these contracts, so the
 # registry lists them, but this package never sends one: a settlement is
@@ -103,10 +103,6 @@ class V7Contract:
     def queries(self) -> frozenset[str]:
         return self._names("Query")
 
-    @property
-    def headers(self) -> frozenset[str]:
-        return self._names("Header")
-
 
 def _load_registry() -> dict[str, V7Contract]:
     rows = cast(tuple[_ContractRow, ...], CONTRACT_ROWS)
@@ -164,7 +160,7 @@ class V7Gateway:
     def close(self) -> None:
         """더 이상 닫을 별도 클라이언트가 없다."""
 
-    def _client_for(self, contract: V7Contract) -> httpx.Client:
+    def _client(self) -> httpx.Client:
         assert_korail_origin(str(self.http._client.base_url))
         return self.http._client
 
@@ -241,7 +237,7 @@ class V7Gateway:
                 contract.route,
                 KORAIL_MUTATION_ROUTE_CATEGORIES.get(contract.route, ""),
             )
-        client = self._client_for(contract)
+        client = self._client()
         target = contract.route
         request_headers = dict(header_map)
         request_headers.update(self.http._dynapath_headers(contract.http, contract.route))

@@ -9,12 +9,10 @@
 ``__post_init__`` 의 검사를 다시 돌립니다.
 
 세 폼 모두 공통 ``Device``/``Version`` 을 싣습니다.
-:func:`build_limousine_schedule_view_form` 만은 공통 ``Key`` 대신 호출자가 넘긴
-``Sid``(:func:`~korail_mobile_api.crypto.generate_sid`)를 싣습니다.
-``seatMovie.LimousineScheduleView`` 는 7.0.6 앱에서 사라져 클라이언트가 더는
-보내지 않으며, :func:`build_limousine_schedule_view_form` 은 저장해 둔 6.5.0
-응답을 해석하려는 호출자를 위해서만 남아 있습니다
-(:mod:`korail_mobile_api.limousine_models`).
+``seatMovie.LimousineScheduleView`` 는 7.0.6 앱에서 사라졌고, 그 요청을 만들던
+빌더와 질의 타입도 함께 없어졌습니다 — 보낼 수 없는 라우트의 폼을 짓는 함수였기
+때문입니다. 저장해 둔 6.5.0 응답을 해석하는 쪽은 남아 있습니다
+(:func:`~korail_mobile_api.limousine_parsers.parse_limousine_schedule_view_response`).
 """
 from __future__ import annotations
 
@@ -24,17 +22,12 @@ from typing import TypeVar, cast
 from .config import KorailConfig
 from .limousine_models import (
     LimousineScheduleQuery,
-    LimousineScheduleViewQuery,
     LimousineSeatInventoryQuery,
 )
+from .payloads import _device_version
 
 
 QueryT = TypeVar("QueryT")
-
-
-def _device_version(config: KorailConfig) -> dict[str, str]:
-    """The ``Device`` and ``Version`` pair every read form here starts with."""
-    return {"Device": config.device, "Version": config.version}
 
 
 def _validated_query(
@@ -77,20 +70,6 @@ def validate_limousine_seat_inventory_query(
         LimousineSeatInventoryQuery,
         LimousineSeatInventoryQuery.__post_init__,
         "seat inventory",
-    )
-
-
-def validate_limousine_schedule_view_query(
-    query: object,
-) -> LimousineScheduleViewQuery:
-    """``query`` 가 정확히 :class:`LimousineScheduleViewQuery` 인지 확인하고
-    돌려줍니다.
-    """
-    return _validated_query(
-        query,
-        LimousineScheduleViewQuery,
-        LimousineScheduleViewQuery.__post_init__,
-        "schedule view",
     )
 
 
@@ -173,41 +152,3 @@ def build_limousine_seat_inventory_form(
     }
 
 
-def build_limousine_schedule_view_form(
-    config: KorailConfig,
-    query: LimousineScheduleViewQuery,
-    *,
-    sid: str,
-) -> dict[str, str]:
-    """``seatMovie.LimousineScheduleView`` 의 열차 목록 조회 폼을 만듭니다.
-
-    ``SeatMovieService.java:16``. 이 폼만은 공통 ``Key`` 대신 호출자가 넘긴
-    ``sid`` 를 싣습니다(:func:`~korail_mobile_api.crypto.generate_sid`). 역은
-    코드가 아니라 **역이름**입니다.
-    """
-    query = validate_limousine_schedule_view_query(query)
-    return {
-        **_device_version(config),
-        "Sid": _sid(sid),
-        "txtMenuId": query.menu_id,
-        "radJobId": query.job_id,
-        "txtJobDv": query.job_division,
-        "selGoTrain": query.service_code,
-        "txtTrnGpCd": query.service_code,
-        "txtGoTrnNo": query.train_no,
-        "txtGoStart": query.departure_station_name,
-        "txtGoEnd": query.arrival_station_name,
-        "txtGoAbrdDt": query.departure_date,
-        "txtGoHour": query.departure_time,
-        "txtPsgFlg_1": str(query.passenger_group_1_count),
-        "txtPsgFlg_2": str(query.passenger_group_2_count),
-        "txtPsgFlg_3": str(query.senior_count),
-        "txtPsgFlg_4": str(query.severe_disability_count),
-        "txtPsgFlg_5": str(query.mild_disability_count),
-        "txtSeatAttCd_2": query.direction_seat_attribute_code,
-        "txtSeatAttCd_3": query.location_seat_attribute_code,
-        "txtSeatAttCd_4": query.room_seat_attribute_code,
-        "ebizCrossCheck": _wire_flag(query.ebiz_cross_check),
-        "srtCheckYn": _wire_flag(query.srt_check),
-        "rtYn": _wire_flag(query.round_trip),
-    }
