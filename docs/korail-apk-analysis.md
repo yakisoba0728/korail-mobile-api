@@ -2,7 +2,7 @@
 
 분석 대상은 `korail.apk`이며, APK SHA-256은 `0b7ee8ae78e0e54df8577f09bfbbb150d113245f6cc834c0d20e81f0bcf5c088`이다. 정적 분석 기준 앱 패키지는 `com.korail.talk`, 버전은 `6.5.0`, versionCode는 `60500002`, API version은 `250601003`, flavor는 `product`, build type은 `release`다.
 
-이 문서는 APK를 로컬에서 unpack/decompile한 결과를 근거로 작성했다. 생성 산출물은 `analysis/` 아래에 있으며 git에서는 제외했다. 전체 Retrofit API 목록은 [api-endpoints.md](api-endpoints.md)에 별도 정리했다. 요청/응답 field-level 계약과 하위 흐름별 상세 분석을 담던 `deep-dive/` 는 삭제했으며 git 이력에만 남아 있다.
+이 문서는 APK를 로컬에서 unpack/decompile한 결과를 근거로 작성했다. "Non-Retrofit Endpoint Candidates"와 "Hidden / Non-Retrofit Surface" 두 절은 삭제한 `library-build-guide.md` 에서 옮겨 왔다(나머지는 착수 계획과 [api-status-by-service.md](api-status-by-service.md) 중복이라 함께 삭제). 생성 산출물은 `analysis/` 아래에 있으며 git에서는 제외했다. 전체 Retrofit API 목록은 [api-endpoints.md](api-endpoints.md)에 별도 정리했다. 요청/응답 field-level 계약과 하위 흐름별 상세 분석을 담던 `deep-dive/` 는 삭제했으며 git 이력에만 남아 있다.
 
 ## 분석 산출물
 
@@ -65,6 +65,22 @@ Exported activity 중 API/웹 연동과 관련 있는 항목은 `IntroActivity`,
 | Cache/push/receipt | `CacheService`, `PushService`, `ReceiptService`, `IndependentService` | 9 |
 
 모든 endpoint, HTTP method, Java method, 파라미터명은 [api-endpoints.md](api-endpoints.md)에 있다.
+
+### Non-Retrofit Endpoint Candidates
+
+Retrofit annotation 기준 165개 endpoint는 `analysis/reports/api-endpoints.tsv`,
+[api-endpoints.md](api-endpoints.md), JADX source가 서로 일치한다. 별도 문자열 감사에서
+그 TSV 밖에 있는 `/classes/com.korail.mobile.*` 후보는 아래 5개다. WebView·외부 인증·결제
+callback 성격으로 보이며 core Retrofit client와 분리해 다룬다. Retrofit 선언이 없으므로
+이 패키지의 전송 허용목록에는 없고, 어느 것도 호출하지 않는다.
+
+| Candidate path | 추정 영역 |
+|---|---|
+| `/classes/com.korail.mobile.certification.MCertify.do` | 모바일 인증/WebView |
+| `/classes/com.korail.mobile.mypage.mCertify.do` | 마이페이지 인증/WebView |
+| `/classes/com.korail.mobile.onepass.login.do` | Onepass WebView login |
+| `/classes/com.korail.mobile.pay.stbkAcntStlR.do` | STBK 계좌 결제 결과/WebView |
+| `/classes/com.korail.mobile.pay.bcUsrAthnR.do` | BC 사용자 인증 결과/WebView |
 
 ## Core Flows
 
@@ -172,6 +188,22 @@ DynaPath는 macro 방어용으로 보인다. `isMacroEnable=Y`일 때 다음 end
 - Maum AI voice/chat assets and gRPC/protobuf resources.
 - SRT app/web integration via `eapp.srail.kr`, `app.srail.kr`, `teapp.srail.kr`, and package query `kr.co.srail.newapp`.
 - External informational links: `www.korail.com`, `info.korail.com`, `gis.korail.com`, `blog.naver.com/korailblog`, `m.lost112.go.kr`.
+
+### Hidden / Non-Retrofit Surface
+
+위 목록을 Retrofit 밖의 표면까지 넓혀, 각 항목이 라이브러리 설계에 무엇을 요구하는지까지
+적은 표다. Retrofit endpoint 인벤토리에는 잡히지 않지만 앱 동작의 일부다.
+
+| 종류 | 발견 내용 | 라이브러리 영향 |
+|---|---|---|
+| DynaPath SDK | `kr.scripters.dynapath.sdk.android` 패키지와 `x-dynapath-m-token` hook | 로그인/조회/예약 일부 요청의 header provider로 분리 |
+| NetFunnel | `nf.letskorail.com`, `service_1`, action id 계열 | UI flow 수준 gate로 추상화 |
+| H2O SmartAlimi | `com.h2osystech.smartalimi` FCM/push SDK | push API와 실제 FCM 수신은 별도 |
+| Kakao SDK | OAuth/deeplink | API core에는 비필수, 외부 인증 flow에서만 필요 |
+| Naver OAuth | `naver3rdpartylogin://authorize` | NaverPay/Naver login handoff 구분 필요 |
+| Google/Firebase/Ads | FCM, Ads, Play Services 패키지 | core API client에는 불필요 |
+| Card scan | `com.code1system.code1cardscanlib` | 카드 입력 UI 보조. 결제 API와 분리 |
+| Maum AI / WebView bridge | `korailtalk://approve`, `korailtalk://navigation`, 외부 결제/인증 URL | payment/provider flow는 HTTP API + WebView callback 조합 |
 
 ## Security Notes
 

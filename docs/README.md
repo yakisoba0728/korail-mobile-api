@@ -31,7 +31,6 @@ CHANGELOG 의 절을 그대로 끌어다 쓰고(`include-markdown`), `reference/
 | [MUTATION_HANDOFF.md](MUTATION_HANDOFF.md) | 상태변경 표면의 운영 인수인계 — 무엇이 증명됐고 무엇이 남았는지 |
 | [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md) | 패키지 경계와 라우트 인벤토리의 날짜별 진행 기록 |
 | [korail-apk-analysis.md](korail-apk-analysis.md) | APK 자체 — 구조, 호스트, 로그인, 보안, 결제, WebView |
-| [library-build-guide.md](library-build-guide.md) | 정적 분석을 이 라이브러리로 옮긴 과정과 지켜야 할 정책 |
 | [RELEASE.md](RELEASE.md) | 릴리스가 통과하는 테스트·빌드·배포 게이트 |
 
 이 표를 검사하던 테스트는 없습니다 — 손으로 관리합니다. 새 문서를 넣으면 여기 한 줄을
