@@ -119,7 +119,9 @@ extend-immutable-calls = ["korail_mobile_api.read_payloads.RefundCompanion"]
 "src/korail_mobile_api/redaction.py" = ["B033"]
 
 [tool.pytest.ini_options]
-# 이 스위트는 네트워크를 타지 않고 픽스처도 없다 -- 전부 introspection 이다.
+# 이 스위트는 네트워크를 타지 않는다. 대부분은 introspection 이고, 파서 회귀만
+# tests/fixtures/responses/ 의 비식별 응답을 디스크에서 읽는다 -- 그것도 파일
+# 읽기뿐이라 소켓은 열리지 않는다.
 # 라이브 검증은 scripts/ 가 KORAIL_MOBILE_API_LIVE=1 뒤에서 따로 한다.
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
