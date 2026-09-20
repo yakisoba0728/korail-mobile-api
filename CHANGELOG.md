@@ -28,9 +28,10 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
 - **`android_features` 모듈이 없어졌습니다.** Room DAO 18개·메모리 DataStore
   8개·Preferences 2개 이름공간을 모델링하던 안드로이드 호스트 주입 프로토콜
   전체가 빠졌습니다.
-- **읽기 필드-이름/순서 계약이 전송 경로에서 더 이상 돌지 않습니다.** 계약은
-  `tests/_read_field_contracts.py` 의 테스트 전용 픽스처로만 남았고, `safety.py`
-  의 라우트 표는 이를 강제하지 않습니다.
+- **읽기 필드-이름/순서 계약이 없어졌습니다.** 전송 경로에서 빠진 뒤 테스트 전용
+  픽스처로만 남아 있었는데, 그 픽스처도 아래 "테스트 스위트를 걷어냈습니다" 와 함께
+  삭제됐습니다. `safety.py` 의 라우트 표는 이를 강제하지 않으며, 이제 각 라우트의
+  필드 계약을 말하는 것은 빌더의 코드뿐입니다.
 - **파서와 모델의 검증이 줄었습니다.** 서버가 이미 보장하는 중복 검사, UI 전용
   거부, 이미 파싱을 거친 값의 재검증이 빌더·파서에서 빠졌습니다 — 예를 들어
   좌석재고의 모순 카운트 거부, 예약대기·병합예약의 "다리 하나만" 거부,
@@ -69,6 +70,12 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
 - **Android 호스트 브리지 `android_features`.** Room DAO 18개·메모리 DataStore 8개·
   Preferences 2개 이름공간과 자동 로그인·ID 저장, PIN·생체 봉인, 로그아웃 정리를
   주입 프로토콜로 모델링합니다. 스스로 HTTP 를 보내지 않습니다.
+- **마스킹 헬퍼 6개가 공개면에 들어왔습니다.** `is_sensitive_key`, `redact_text`,
+  `redact_url`, `redact_value`, `redact_mapping`, `redact_payload`. 이 패키지의
+  docstring 이 호출자에게 "로깅·직렬화 전에 `redact_mapping` 을 적용하라"고
+  지시하면서 정작 `__all__` 에 없어 비공개 경로로만 꺼낼 수 있었습니다.
+  `SENSITIVE_KEYS` 자체는 일부러 내보내지 않습니다 — 어느 철자가 등록돼 있는가는
+  내부 사정이고, 호출자가 물어야 할 것은 `is_sensitive_key` 입니다.
 - `login_social`, 역발행 승차권 온라인 환불 `verify_station_ticket_refund` /
   `execute_station_ticket_refund`(메서드별 동의), `search_trains(...,
   use_special_schedule=True)`(기본은 `ScheduleView` 유지), 환승역·열차군·정렬 입력,
@@ -117,16 +124,48 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
 
 ### Removed
 
+- **오프라인 테스트 스위트를 통째로 걷어냈습니다.** `tests/` 121 파일(파이썬 58,
+  응답 픽스처 63), 테스트 1,072개, 33,071줄입니다. CI 의 pytest 잡(파이썬 4종 ×
+  3 OS 매트릭스)과 `pyproject.toml` 의 `[tool.pytest.ini_options]`·`test` extras,
+  편집기 테스트 러너 설정도 함께 빠졌습니다. **남은 자동 게이트는 네 잡** —
+  `ruff check`, `pyright`, `mkdocs build --strict`, 그리고 빌드한 wheel 을 새
+  가상환경에 설치해 import 를 확인하는 배포 검증입니다. 그 import 확인 하나를 빼면
+  **동작을 지키는 자동 검사가 없습니다**: 파서가 틀리게 파싱하거나 라우트 가드가
+  뚫려도 네 잡 모두 통과합니다. 스위트가 지키던 것 — 라우트 표 개수, 공개면
+  `__all__`, 파서 회귀, 마스킹 전수 스윕, 배포 검증기 자신의 동작, 문서 색인 —
+  은 이제 손으로 지켜야 합니다.
+- **APK 분석 원본과 개발 기록을 지웠습니다.** `docs/deep-dive/` 25,535줄(6.5.0 APK
+  정적 분석, 병렬 에이전트 보고서 20편과 기계 추출 카탈로그)과 `docs/internal/`
+  11,894줄(감사, 설계 명세, 리팩터 계획)입니다. 둘 다 문서 사이트와 sdist 에
+  올라간 적이 없고, git 이력에 그대로 남아 있습니다. 이 셋을 합쳐 저장소는
+  102,062줄에서 31,428줄로 줄었습니다(-69%).
 - `get_gift_ticket_list()`, `get_limousine_schedule_view()`, `get_platform_numbers()` —
   7.0.6 에 해당 경로가 없습니다. [제거 기록](docs/7.0.6-removals.md) 참고.
 - **라이브 스모크 하니스가 설치되는 패키지에서 빠졌습니다.** `live.py` 의
   `run_live_smoke_from_env`(실서버에 로그인해 읽기 표면 전체를 도는 관리자 전용
   스캐폴딩)가 삭제됐습니다. `build_config_from_env`·`live_enabled`·
-  `read_credentials_from_env` 는 그대로입니다 — `scripts/`와 그 테스트가 직접
-  씁니다. 유일하게 그것을 부르던 테스트 `tests/test_live_service.py` 도 함께
-  삭제됐고, 스위트 전체에서 `live` 로 표시된 테스트가 이제 하나도 없습니다.
+  `read_credentials_from_env` 는 그대로입니다 — `scripts/`가 직접 씁니다. 유일하게
+  그것을 부르던 테스트도 함께 삭제됐고, 그 뒤 스위트 전체가 삭제됐습니다(아래).
 
 ### Fixed
+
+- **마스킹 대상 철자 27개가 빠져 있었습니다.** `redact_value` 는 데이터클래스를
+  **파이썬 속성명**으로 훑는데(`field.name`), 등록된 것은 와이어 키뿐인 경우가
+  있었습니다. 그래서 형제 필드는 `[REDACTED]` 인데 그 필드만 원문으로 남았고,
+  와이어 키가 등록돼 있어 **커버된 것처럼 보였습니다.** 가장 무거운 것은
+  `CardPayment` 로, `card_password`(카드 비밀번호 앞 두 자리)와 `card_expire`(유효
+  기간)가 평문이었습니다 — `card_number` 는 카드번호 정규식에 우연히 걸려 가려지고
+  있었을 뿐, 키로는 가려지지 않았습니다. 승객 이름(`custNm`/`passenger_name`,
+  `strRsvpsnm`/`reservation_passenger_name`), 회원·비회원 번호, 현금영수증 승인번호
+  계열은 속성명과 와이어 키가 **양쪽 다** 등록된 적이 없었습니다.
+  `DiscountCardAdditionalUser.name` 은 남아 있습니다 — 와이어 키 `apdCustName` 은
+  가려지지만, 속성명 `name` 을 등록하면 역명·메뉴명까지 함께 가려집니다.
+- **`KorailNetFunnelClient.check` 가 `KorailApiError` 계층 밖으로 샜습니다.**
+  빈 키를 넘기면 맨 `ValueError` 가 올라와, `errors` 모듈이 계약처럼 선언하는
+  "모든 실패의 뿌리"를 그냥 통과했습니다(`release` 는 키 가드가 있어 이 경로를
+  피합니다). `KorailProtocolError` 로 바꾸고, 그 docstring 에 전송 전 로컬 검증에도
+  쓴다는 것을 명시했습니다. **`ValueError` 의 하위 타입이 아니므로**
+  `except ValueError` 로 이 경로를 잡던 호출자는 고쳐야 합니다.
 
 7.0.6 디컴파일본과 1:1 로 다시 대조해 찾은 것들입니다.
 

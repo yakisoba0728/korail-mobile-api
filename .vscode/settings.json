@@ -4,11 +4,10 @@
   // read; restating any of it here would create a second source of truth that
   // can drift. Nothing below is a style preference.
 
-  // Running the suite from the Test Explorer must not be able to fire a live
-  // request at smart.letskorail.com. `-m "not live"` is the same deselection CI and
-  // CONTRIBUTING.md use; `testpaths` in pyproject.toml supplies the directory.
-  "python.testing.pytestEnabled": true,
-  "python.testing.pytestArgs": ["-m", "not live"],
+  // No test-runner settings: there is no suite. The Test Explorer stays off so
+  // it cannot discover and run anything under `scripts/`, which talks to
+  // smart.letskorail.com for real.
+  "python.testing.pytestEnabled": false,
   "python.testing.unittestEnabled": false,
 
   // `ruff format` is not adopted here — it rewrites the hand-aligned comment

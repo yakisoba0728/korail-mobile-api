@@ -19,8 +19,8 @@
 
 #: 배포된 버전. ``__all__`` 에 넣지 않는 것은 의도다 — 던더는 export 하는 이름
 #: 집합이 아니고, ``from korail_mobile_api import *`` 가 이것을 실어 나른 적이
-#: 없다. ``pyproject.toml`` 의 ``project.version`` 과 같은지는
-#: ``tests/test_release_readiness.py`` 만 지킨다. 빌드가 둘을 맞춰 주지 않는다.
+#: 없다. ``pyproject.toml`` 의 ``project.version`` 과 같은지는 이제 아무것도
+#: 지키지 않는다 — 확인하던 테스트가 삭제됐고, 빌드도 둘을 맞춰 주지 않는다.
 __version__ = "1.2.0"
 
 from .client import KorailClient
@@ -289,6 +289,28 @@ from .read_payloads import (
     TicketReservationDetailRequest,
 )
 
+# 마스킹 헬퍼. 이 패키지의 docstring 들이 호출자에게 **직접 쓰라고 지시하는**
+# 함수들이라 공개면에 있어야 한다 — ``read_parsers`` 의
+# :class:`~korail_mobile_api.read_models.OriginalTicket` 문서가 "로깅 또는 외부
+# 직렬화 전에 ``redact_mapping`` 을 적용해야 합니다" 라고 적고, ``scripts/`` 도
+# ``redact_value`` 로 캡처를 가린다. 그런데 이 모듈 docstring 은 "``__all__`` 에
+# 없는 것은 예고 없이 바뀝니다" 라고 선언한다 — 둘을 함께 두면 문서가 권하는
+# 사용법이 비공개 API 에 기대게 된다. 여섯 개를 한 벌로 내보내는 것은 서로
+# 맞물려 있기 때문이다: ``redact_value`` 는 문자열에 ``redact_url`` 을,
+# ``redact_url`` 은 ``redact_text`` 를 쓰고, ``is_sensitive_key`` 는 셋 모두가
+# 묻는 술어다. 일부만 내보내면 호출자가 나머지를 다시 비공개 경로에서 꺼내 쓴다.
+#
+# ``SENSITIVE_KEYS`` 자체는 일부러 빼 둔다. 어느 철자가 등록돼 있는가는 이
+# 패키지의 내부 사정이고, 호출자가 물어야 할 것은 :func:`is_sensitive_key` 다.
+from .redaction import (
+    is_sensitive_key,
+    redact_mapping,
+    redact_payload,
+    redact_text,
+    redact_url,
+    redact_value,
+)
+
 
 __all__ = [
     "AppDataResponse",
@@ -522,4 +544,11 @@ __all__ = [
     "TransferStationListResponse",
     "UuidResponse",
     "classify_app_error",
+    # redaction — 위 import 블록과 같은 묶음, 같은 순서.
+    "is_sensitive_key",
+    "redact_mapping",
+    "redact_payload",
+    "redact_text",
+    "redact_url",
+    "redact_value",
 ]

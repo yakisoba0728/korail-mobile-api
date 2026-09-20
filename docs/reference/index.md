@@ -23,6 +23,7 @@
 | [netfunnel](netfunnel.md) | 가상대기실 상태와 설정 |
 | [read_models](read_models.md) | 읽기 라우트의 응답 타입 — 가장 큰 묶음입니다 |
 | [read_payloads](read_payloads.md) | 읽기 요청을 만드는 payload 타입 |
+| [redaction](redaction.md) | `redact_value` 외 마스킹 헬퍼 — 로그·직렬화 전에 부르는 것 |
 | [v7](v7.md) | `V7Gateway`(`client.v7`) — 남은 7.0.6 Retrofit 메서드 2개의 전송 |
 
 docstring 이 없는 dataclass 도 필드를 보여 주려고 함께 싣습니다. 설명이 붙어 있지

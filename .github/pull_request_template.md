@@ -19,8 +19,8 @@
 
 ## 체크리스트
 
-- [ ] `pip install -e ".[test]"` 뒤
-      `env -u KORAIL_MOBILE_API_LIVE python3 -m pytest -q -m "not live"` 가 통과합니다
+- [ ] `pip install -e ".[dev]"` 뒤 `ruff check src scripts` 와 `pyright` 가 통과합니다
+      (오프라인 스위트는 없어졌습니다 — 이 둘이 남은 자동 게이트 전부입니다)
 - [ ] 이 변경의 일부로 라이브 서비스(`scripts/`의 스크립트, `KORAIL_MOBILE_API_LIVE=1`)를
       돌리지 않았습니다
 - [ ] 공개 이름·라우트·상태 변경 메서드를 더하거나 바꿨다면 README·SECURITY.md·`docs/`의

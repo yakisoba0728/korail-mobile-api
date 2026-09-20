@@ -2,7 +2,7 @@
 
 분석 대상은 `korail.apk`이며, APK SHA-256은 `0b7ee8ae78e0e54df8577f09bfbbb150d113245f6cc834c0d20e81f0bcf5c088`이다. 정적 분석 기준 앱 패키지는 `com.korail.talk`, 버전은 `6.5.0`, versionCode는 `60500002`, API version은 `250601003`, flavor는 `product`, build type은 `release`다.
 
-이 문서는 APK를 로컬에서 unpack/decompile한 결과를 근거로 작성했다. 생성 산출물은 `analysis/` 아래에 있으며 git에서는 제외했다. 전체 Retrofit API 목록은 [api-endpoints.md](api-endpoints.md)에 별도 정리했다. 요청/응답 field-level 계약과 하위 흐름별 상세 분석은 [deep-dive/README.md](deep-dive/README.md), [deep-dive/api-contracts.md](deep-dive/api-contracts.md), [deep-dive/agent-reports/](deep-dive/agent-reports/)에 둔다.
+이 문서는 APK를 로컬에서 unpack/decompile한 결과를 근거로 작성했다. 생성 산출물은 `analysis/` 아래에 있으며 git에서는 제외했다. 전체 Retrofit API 목록은 [api-endpoints.md](api-endpoints.md)에 별도 정리했다. 요청/응답 field-level 계약과 하위 흐름별 상세 분석을 담던 `deep-dive/` 는 삭제했으며 git 이력에만 남아 있다.
 
 ## 분석 산출물
 
@@ -11,9 +11,7 @@
 - JADX source/resource decode: `analysis/jadx/`
 - Generated API report: `analysis/reports/api-endpoints.tsv`, `analysis/reports/api-endpoints.md`
 - Checked-in API inventory: [api-endpoints.md](api-endpoints.md)
-- Checked-in API contract catalog: [deep-dive/api-contracts.md](deep-dive/api-contracts.md)
-- Checked-in network model field catalog: [deep-dive/network-model-fields.md](deep-dive/network-model-fields.md)
-- Checked-in WebView/URL/local storage catalogs: [deep-dive/webview-and-url-catalog.md](deep-dive/webview-and-url-catalog.md), [deep-dive/local-storage-catalog.md](deep-dive/local-storage-catalog.md)
+- API contract / network model field / WebView·URL·local storage 카탈로그: `deep-dive/` 에 있었고 삭제됨(git 이력 참조)
 
 JADX는 전체 처리 중 일부 라이브러리/복잡 제어흐름에서 decompile warning을 냈다. 주요 네트워크 레이어와 `com.korail.talk.network.*` 패키지는 Java-like source로 확인했고, 필요 시 `analysis/apktool/smali*`가 fallback 근거다.
 

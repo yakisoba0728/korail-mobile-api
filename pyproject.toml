@@ -40,16 +40,12 @@ Issues = "https://github.com/yakisoba0728/korail-mobile-api/issues"
 Changelog = "https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-test = [
-  "pytest>=8,<10",
-]
 # CI 도구용, 런타임 의존성이 아니다. pyright 는 strict 오류 0 을 확인한 버전으로
 # 고정했으니, 올릴 때는 게이트를 다시 돌려 확인한다.
 dev = [
   "build>=1,<2",
   "mkdocs>=1.6,<2",
   "pyright==1.1.411",
-  "pytest>=8,<10",
   "ruff>=0.16,<0.17",
 ]
 # 문서 사이트 빌드용, 런타임 의존성이 아니다. 상한은 mkdocs-material 의 MkDocs 2.0
@@ -69,18 +65,6 @@ where = ["src"]
 [tool.setuptools.package-data]
 korail_mobile_api = ["py.typed"]
 
-[tool.pytest.ini_options]
-addopts = "-ra"
-testpaths = ["tests"]
-# Test the tree pytest was invoked in, not whatever `korail_mobile_api` the
-# editable install happens to resolve to. Without this, running pytest from a
-# git worktree imports the MAIN checkout's src/ and reports a green suite for
-# code that was never under test.
-pythonpath = ["src"]
-markers = [
-  "live: tests that call live KORAIL services and require explicit opt-in",
-]
-
 [tool.ruff]
 # `ruff format` 은 채택하지 않았다 — 손으로 열을 맞춘 APK-인용 표와 주석 블록을
 # 재배치해 버리기 때문이다. 게이트는 `ruff check` 뿐이다.
@@ -88,7 +72,7 @@ markers = [
 # line-length 100 은 취향이 아니라 실측이다(근거는 git 이력 참고).
 line-length = 100
 target-version = "py311"
-src = ["src", "tests", "scripts"]
+src = ["src", "scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "RUF"]
@@ -101,10 +85,9 @@ ignore = [
   "RUF002",
   "RUF003",
   # `__all__` 알파벳 정렬. 지금 `__all__` 는 __init__.py 의 import 블록과 같은
-  # 모듈 순서로 묶여 있다. 남은 export 테스트들은 이름을 집합으로 비교하므로
-  # 정렬해도 통과하지만, 묶음을 지키는 이유는 따로 있다 — 이름 하나를 끌어내릴 때
-  # import 줄과 __all__ 항목을 둘 다 지웠는지 눈으로 대조할 수 있게 하기 위해서다.
-  # 알파벳순은 그 대조를 없앤다.
+  # 모듈 순서로 묶여 있다. 묶음을 지키는 이유는 이름 하나를 끌어내릴 때 import 줄과
+  # __all__ 항목을 둘 다 지웠는지 눈으로 대조할 수 있게 하기 위해서다. 알파벳순은
+  # 그 대조를 없앤다. 그 대조를 대신해 주던 export 테스트는 이제 없다.
   "RUF022",
 ]
 
@@ -133,10 +116,10 @@ extend-immutable-calls = ["korail_mobile_api.read_payloads.RefundCompanion"]
 # VSCode/Pylance 가 그대로 읽는 설정이다. 기준은 하나 — 이 저장소의 파일을 열었을
 # 때 빨간 줄이 없어야 한다. 그래서 아래 값은 고른 것이 아니라 실제로 돌려서 오류
 # 0 이 되는 조합을 찾은 결과다.
-include = ["src", "tests", "scripts"]
+include = ["src", "scripts"]
 # src 레이아웃을 명시한다. pyright 는 ./src 를 알아서 찾아 주기도 하지만, 그건
-# 문서화된 계약이 아니라 휴리스틱이다. pytest 의 `pythonpath = ["src"]` 와 같은
-# 것을 같은 이유로 적어 둔다 — 설치 없이 체크아웃만 열어도 import 가 풀려야 한다.
+# 문서화된 계약이 아니라 휴리스틱이다 — 설치 없이 체크아웃만 열어도 import 가
+# 풀려야 한다.
 extraPaths = ["src"]
 pythonVersion = "3.11"  # requires-python 의 하한과 같다
 typeCheckingMode = "basic"
@@ -158,16 +141,9 @@ strict = [
   "src/korail_mobile_api/v7_contract_data.py",
 ]
 
-# tests/scripts 는 가드 검증과 유니온 좁히기 때문에 basic 에서도 걸린다;
+# scripts 는 가드 검증과 유니온 좁히기 때문에 basic 에서도 걸린다;
 # typeCheckingMode="off" 는 executionEnvironments 안에서 이 pyright 버전이
 # 무시하므로, 실제로 걸리는 규칙만 골라 규칙별로 끈다.
-[[tool.pyright.executionEnvironments]]
-root = "tests"
-reportArgumentType = "none"
-reportAttributeAccessIssue = "none"
-reportCallIssue = "none"
-reportIndexIssue = "none"
-reportOptionalMemberAccess = "none"
 
 [[tool.pyright.executionEnvironments]]
 root = "scripts"

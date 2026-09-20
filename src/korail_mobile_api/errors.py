@@ -63,6 +63,13 @@ class KorailTransportError(KorailApiError):
 class KorailProtocolError(KorailApiError):
     """응답이 JSON 이 아니거나 봉투 필드(``h_msg_cd``/``h_msg_txt``/``strResult``)가
     빠졌거나 타입이 다른 경우. 재시도해도 같은 응답이 옵니다.
+
+    **전송 전 로컬 검증에도 씁니다.** 요청을 만들 수 없는 입력 — 등록되지 않은
+    라우트, 빌더가 만들 수 없는 폼 모양, 빈 대기열 키 — 은 서버에 닿기 전에 이
+    예외로 거절됩니다. 그쪽도 "재시도해도 같다"는 성질은 같고, 무엇보다 이
+    패키지의 실패는 전부 :class:`KorailApiError` 아래에 있어야 합니다. 맨
+    ``ValueError`` 를 올리면 ``except KorailApiError`` 로 받는 호출자를 그냥
+    통과합니다.
     """
 
 
@@ -291,7 +298,7 @@ class KorailDynaPathRequiredError(KorailApiError):
 # 할 수 있다. 성공에 얹혀 오는, 결코 예외가 되어서는 안 되는 코드:
 #   IRR000014, IRT800005, WRS800036, IRZ000001/S200, IRT000000/MRT200105,
 #   WRR664296  (strResult=SUCC 와 취소 가능한 PNR 을 달고 온다)
-# tests/test_error_classification.py 가 그것을 고정한다.
+# 그것을 고정하던 테스트는 삭제됐다. 아래 목록이 유일한 기록이다.
 #
 # 일부러 넣지 않은 것:
 #   IRT010110  APK 전체 0건.

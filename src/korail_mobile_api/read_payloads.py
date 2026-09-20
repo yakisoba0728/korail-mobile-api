@@ -8,8 +8,8 @@
 :mod:`korail_mobile_api.payloads`, 상태 변경은
 :mod:`korail_mobile_api.mutation_payloads`.
 
-필드 이름·순서는 APK Retrofit 선언 기준이며 그 정확한 계약은
-tests/_read_field_contracts.py 가 고정합니다.
+필드 이름·순서는 APK Retrofit 선언 기준입니다. 그 정확한 계약을 고정하던 테스트
+픽스처는 삭제됐고, 지금 계약을 말하는 것은 각 빌더의 코드뿐입니다.
 """
 from __future__ import annotations
 
@@ -743,7 +743,7 @@ def build_discount_card_schedule_query(
 ) -> dict[str, str]:
     """``useTrmDno``/``qryPgNo`` 는 ``None`` 이면 생략 — Retrofit null @Query
     (``ResearchService.java:54-55``; 생략 가능한 필드 목록은
-    tests/_read_field_contracts.py 의 ``KORAIL_OPTIONAL_REQUEST_FIELDS`` 참고).
+    삭제된 테스트 픽스처의 ``KORAIL_OPTIONAL_REQUEST_FIELDS`` 가 이를 기록했었다).
     """
     if type(request) is not DiscountCardScheduleRequest:
         raise TypeError("request must be an exact DiscountCardScheduleRequest")

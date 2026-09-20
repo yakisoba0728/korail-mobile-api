@@ -79,6 +79,11 @@ SENSITIVE_KEYS = frozenset(
         "h_orgtk_sale_wct_no",
         "original_sale_date",
         "original_window_no",
+        # 변경 쪽 모델의 철자. read_models 는 original_window_no 로, mutation_models
+        # (StationRefundOriginalTicket / StationRefundExecutionRequest) 는 이 이름으로
+        # 같은 발매창구번호를 들고 있다. redact_value 는 데이터클래스를 필드명으로
+        # 판정하므로(388-412), 철자 하나가 빠지면 그 경로만 원문이 남는다.
+        "original_sale_window_no",
         "original_sale_sequence",
         "original_return_password",
         "h_lump_stl_tgt_no",
@@ -90,6 +95,13 @@ SENSITIVE_KEYS = frozenset(
         "hidStlCrCrdNo1",
         "hidVanPwd1",
         "hidCrdVlidTrm1",
+        # ``CardPayment`` 의 파이썬 속성명. 바로 위 세 와이어 키와 같은 값인데
+        # redact_value 는 데이터클래스를 ``field.name`` 으로 훑으므로(388-412) 폼
+        # 딕셔너리만 가려지고 객체 경로는 평문이었다. ``card_number`` 는 CARD_RE 가
+        # 우연히 잡아 주지만 그것은 13~19자리 숫자일 때뿐이라 기댈 수 없다.
+        "card_number",
+        "card_password",
+        "card_expire",
         "hidAthnVal1",
         "hidAthnDvCd1",
         "hidIsmtMnthNum1",
@@ -131,6 +143,30 @@ SENSITIVE_KEYS = frozenset(
         "acceptance_customer_name",
         "acceptance_customer_phone",
         "acceptance_customer_phone_2",
+        # 모델의 파이썬 속성명. 위 acep* 와 아래 wire key 들이 폼 딕셔너리 경로를
+        # 덮는 것과 달리, 이 철자들은 redact_value 가 데이터클래스를 필드명으로
+        # 훑는 경로(388-412)에서만 나타난다. 전부 이미 repr=False 인 필드들이다 —
+        # 표시에서는 숨겨 두고 여기 등록만 빠져 있었다.
+        "customer_name",
+        "customer_phone",
+        # 아래 네 개는 위와 달리 **와이어 키도 함께** 빠져 있었다 — 어느 경로로도
+        # 가려진 적이 없다. custNm 은 "이 구간을 실제로 탄 사람의 이름"이고
+        # (read_models.py:684), strRsvpsnm 은 예약 승객명이다.
+        "passenger_name",
+        "custNm",
+        "reservation_passenger_name",
+        "strRsvpsnm",
+        # 회원·비회원 식별자. KorailSession.member_no 와 가격 재계산 요청의
+        # non_member_no 로, 둘 다 개인을 지목한다.
+        "member_no",
+        "non_member_no",
+        "customer_management_no",
+        "customer_family_name",
+        "integrated_customer_name_1",
+        "integrated_customer_name_2",
+        "birth_date",
+        "birthday",
+        "phone",
         "strCpNo",   # 로그인 응답 전화번호(LoginDao.java:84-107)
         "strCustNm",
         "strBtdt",
@@ -147,6 +183,15 @@ SENSITIVE_KEYS = frozenset(
         # 할인카드 등록(NCardReservationDao.java:16,29,30)
         "apdCustName",
         "apdCustTeln",
+        # --- 현금영수증(개인 소득공제에 붙는 번호, 속성명·와이어 키 둘 다 누락돼 있었다) ---
+        "receipt_no",
+        "rcptNo",
+        "cash_receipt_approval_no",
+        "cashRcetApvNo",
+        "h_cash_rcet_apv_no",
+        "authentication_recognition_no",
+        "authentication_domain_recognition_no",
+        "h_athn_dmn_rcgn_no",
         # --- 승객유형명(코드가 아닌 사람이 읽는 라벨) ---
         # 정책: 사람이 읽는 값은 가리고 코드(psg_tp_dv_cd)는 남긴다.
         "psgTpDvNm",

@@ -49,6 +49,7 @@ from .constants import (
 )
 from .errors import (
     KorailNetFunnelError,
+    KorailProtocolError,
     KorailQueueRejectedError,
     KorailTransportError,
 )
@@ -146,9 +147,16 @@ def _keyed_opcode_params(
     *,
     purpose: str,
 ) -> tuple[tuple[str, str], ...]:
-    """``opcode``+``key`` 만 싣는 요청 파라미터 — 5002/5004 공통 형태."""
+    """``opcode``+``key`` 만 싣는 요청 파라미터 — 5002/5004 공통 형태.
+
+    빈 키는 :class:`~korail_mobile_api.errors.KorailProtocolError` 다. 맨
+    ``ValueError`` 였을 때는 :meth:`KorailNetFunnelClient.check` 가 키 가드 없이
+    여기 닿으므로(``release`` 와 달리 ``if not token.key`` 가 없다), 이 패키지의
+    실패를 ``except KorailApiError`` 로 받던 호출자를 그냥 통과해 버렸다 —
+    ``errors`` 모듈이 계약처럼 선언하는 "모든 실패의 뿌리" 밖이었다.
+    """
     if not key:
-        raise ValueError(f"{purpose} requires a non-empty key")
+        raise KorailProtocolError(f"{purpose} requires a non-empty key")
     return (
         ("opcode", opcode.value),
         ("key", key),

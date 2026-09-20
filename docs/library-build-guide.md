@@ -9,11 +9,7 @@
 | [`korail-apk-analysis.md`](korail-apk-analysis.md) | APK 전체 구조, 네트워크/로그인/보안/결제/WebView 요약 |
 | [`api-endpoints.md`](api-endpoints.md) | 165개 Retrofit endpoint의 HTTP method, path, parameter, return type 목록 |
 | [`api-status-by-service.md`](api-status-by-service.md) | 서비스별 endpoint, 역할, 실제 테스트 성공/실패/미실행 상태 |
-| [`deep-dive/api-contracts.md`](deep-dive/api-contracts.md) | endpoint별 request parameter와 response DTO field 계약 |
-| [`deep-dive/network-model-fields.md`](deep-dive/network-model-fields.md) | 요청/응답/model field 전체 카탈로그 |
-| [`deep-dive/webview-and-url-catalog.md`](deep-dive/webview-and-url-catalog.md) | Retrofit 밖 WebView URL, scheme, API-like path 목록 |
-| [`deep-dive/local-storage-catalog.md`](deep-dive/local-storage-catalog.md) | SharedPreferences, DB, 로컬 crypto 저장 구조 |
-| [`deep-dive/agent-reports/`](deep-dive/agent-reports/) | 업무 영역별 caller flow, FieldMap/QueryMap, callback/error 처리 |
+| `deep-dive/` (삭제됨, git 이력) | endpoint별 계약, model field 카탈로그, WebView·URL 목록, SharedPreferences·DB 구조, 업무 영역별 caller flow |
 
 ## Current Inventory
 

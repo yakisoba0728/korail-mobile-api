@@ -6,8 +6,10 @@ Last updated: 2026-07-27 KST (1.2.0 note below added 2026-09-20)
 as it stands today; entries below record what was true on the date each was
 written. Version 1.2.0 removed the consent system that most entries below
 assume: `MutationConsent`, `MutationPreview`, `require_mutation_consent`,
-`MutationCategory`, `V7MutationConsent`, `V7MutationPreview`, and
-`src/korail_mobile_api/consent.py` no longer exist. State-changing methods take
+`V7MutationConsent`, `V7MutationPreview`, and
+`src/korail_mobile_api/consent.py` no longer exist. `MutationCategory` DOES
+still exist, in `safety.py`, where it names the seven categories the
+route-to-category check runs on; only its export was dropped. State-changing methods take
 no `consent=` argument, return no preview, and have no `dry_run` — each sends
 as soon as it is called, provided a session exists. What still runs before a
 send is the route allowlist and the route→category cross-check in `safety.py`;
@@ -17,7 +19,7 @@ one. The 7.0.6 contract registry (`client.v7`) went from 117 contracts to 2
 (`verifyOnlineRefunds`, `executeOnlineRefunds`); `android_features.py` and
 `run_live_smoke_from_env` are gone, and `build_config_from_env` stays. The
 current route/method boundary is 58 read routes, 10 mutation routes, 77 public
-client methods, and 231 exported names — recount from `src/korail_mobile_api/safety.py`
+client methods, and 237 exported names — recount from `src/korail_mobile_api/safety.py`
 and `korail_mobile_api.__all__` rather than trusting any figure below, several
 of which record an earlier, smaller boundary as a historical milestone.
 
@@ -520,9 +522,9 @@ no payment request and printed or persisted no raw response or identifier.
   expected pre-login `P058` responses, and reported zero unexpected failures;
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
-- As of 1.2.0, the full offline gate collects 2260 tests and no test carries
-  the `live` marker any more, so `pytest -m "not live"` deselects nothing —
-  there is no longer an opted-in live-service test to deselect. (`3137 passed,
+- 1.2.0 deleted the offline suite outright, so there is no gate to collect
+  any more. The last figure it reported was 2260 tests, none carrying the
+  `live` marker. (`3137 passed,
   1 deselected` below, and the `1246`/`1247` figures before it, were the gate's
   size at earlier points in this log, not today's; the slim-down that produced
   1.2.0 removed a large fraction of the test suite along with the consent
@@ -846,8 +848,8 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-As of 1.2.0, `pytest -m "not live"` collects 2260 tests and deselects none: no
-test in the suite carries the `live` marker any more. `3137 passed, 1
+1.2.0 deleted the offline suite; the last figure it reported was 2260 tests
+with none carrying the `live` marker. `3137 passed, 1
 deselected`, `1246 passed, 1 deselected`, and `1247 passed, 1 deselected` were
 the gate's size at earlier points in this log, each with the then-opted-in
 live-service test as its one deselection; none of those totals is today's.
