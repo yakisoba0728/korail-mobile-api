@@ -63,36 +63,13 @@ _MUTATION_OVERRIDES = frozenset({
 # never reaches passPayIssue itself (PaymentActivity.isCommPaymentRequest()
 # tests a Response type where a Request is required). A purchase pair was
 # implemented on 2026-07-26 and removed the same day; MUTATION_HANDOFF records
-# why. No V7MutationConsent may name one, and call() refuses them first.
+# why. call() refuses them first, unconditionally, regardless of what the
+# caller sends.
 _NEVER_SENT = frozenset({
     "NetworkApi.postPassReserve",
     "NetworkApi.postPassPayIssue",
     "NetworkApi.passOtrReserve",
     "NetworkApi.postPassOtrPayIssue",
-})
-# The mutation contracts that settle a payment, so a consent must say which
-# card kind it means: exactly one of fake_card_only / real_card_acknowledged.
-# This was a keyword match on the method and route ("pay", "payment",
-# "autocharge", ".pay.", ".payment."); these are the fourteen it matched. The
-# APK was checked on 2026-09-19 for payment-card fields it could have missed:
-# postShinhanEncrypt's value is the locked amount (PayViewModel
-# .executeSeedEncrypt), postMaasCancel carries settlement ids, and
-# postAcpnMlgSave's *MbCrdNo are membership cards, so none of them is here.
-_CARD_BEARING = frozenset({
-    "NetworkApi.paymentMassStatusIn",
-    "NetworkApi.postIntgStl",
-    "NetworkApi.postKrPassPayment",
-    "NetworkApi.postNaverPayMoneyRsv",
-    "NetworkApi.postNaverPayRsv",
-    "NetworkApi.postPassOtrPayIssue",
-    "NetworkApi.postPassPayIssue",
-    "NetworkApi.postPayco",
-    "NetworkApi.postRailplusAutoCharge",
-    "NetworkApi.postSpayOrdNo",
-    "NetworkApi.postStbkAcnt",
-    "NetworkApi.postStbkRegBank",
-    "NetworkApi.postStlKeyPrs",
-    "NetworkApi.postTossautoC",
 })
 # Interfaces sent on the shared KORAIL HTTP client; a partner origin serves the rest.
 _MAIN_HTTP_INTERFACES = frozenset({"NetworkApi", "PushService"})
@@ -165,9 +142,9 @@ class V7Contract:
 
 def _load_registry() -> dict[str, V7Contract]:
     rows = cast(tuple[_ContractRow, ...], CONTRACT_ROWS)
-    # What the cast promises, checked: call() gates on effect == "mutation" and
-    # sends anything else as a read, so a misspelled effect would drop consent.
-    # Checked on the rows, before an override could paper over one.
+    # What the cast promises, checked: rows carry "read" or "mutation" as
+    # documentation of intent, so a misspelled effect would go unnoticed by
+    # call() itself. Checked on the rows, before an override could paper over one.
     if any(row["effect"] not in ("read", "mutation") for row in rows):
         raise KorailProtocolError(
             "7.0.6 contract registry has an effect other than read or mutation"
@@ -197,54 +174,10 @@ V7_CONTRACTS = _load_registry()
 
 
 @dataclass(frozen=True)
-class V7MutationConsent:
-    """추가 라우트의 정확한 메서드 이름만 허용하는 동의."""
-
-    allow_methods: frozenset[str] = frozenset()
-    dry_run: bool = True
-    fake_card_only: bool = True
-    real_card_acknowledged: bool = False
-
-    def __post_init__(self) -> None:
-        if (
-            not isinstance(self.allow_methods, frozenset)
-            or any(
-                not isinstance(name, str)
-                or name not in V7_CONTRACTS
-                or V7_CONTRACTS[name].effect != "mutation"
-                or name in _NEVER_SENT
-                for name in self.allow_methods
-            )
-            or any(type(value) is not bool for value in (
-                self.dry_run, self.fake_card_only, self.real_card_acknowledged
-            ))
-        ):
-            raise KorailProtocolError("invalid 7.0.6 method-scoped consent")
-
-
-@dataclass(frozen=True)
-class V7MutationPreview:
-    name: str
-    http: str
-    route: str
-    payload: dict[str, Any] = field(repr=False)
-    note: str = "dry-run: not sent"
-
-
-@dataclass(frozen=True)
 class V7Response:
     name: str
     response_model: str
     raw: Any = field(repr=False)
-
-
-def _mask_preview(data: Mapping[str, Any]) -> dict[str, str | list[str]]:
-    """원시 wire key의 의미를 모르는 경우 모든 값은 마스킹한다."""
-    return {
-        key: ["[REDACTED]"] * len(value) if isinstance(value, list)
-        else "[REDACTED]"
-        for key, value in data.items()
-    }
 
 
 def _assert_partner_origin(origin: str) -> None:
@@ -371,17 +304,16 @@ class V7Gateway:
         values: Mapping[str, Any] | None = None,
         *,
         headers: Mapping[str, str] | None = None,
-        consent: V7MutationConsent | None = None,
         include_common: bool = False,
         raise_on_fail: bool = True,
-    ) -> V7Response | V7MutationPreview:
+    ) -> V7Response:
         """APK의 메서드 이름을 고르고 원래 어노테이션 형태로 요청한다.
 
         ``values`` 는 DTO의 Python 속성명이 아닌 wire key다. 메서드에
         ``@FieldMap``/``@QueryMap``이 있으면 가변 키가 허용되고, 다른 경우
         어노테이션에 선언된 키만 허용된다. nullable 인자 생략은 키 생략으로
-        표현한다. 상태 변경은 정확한 메서드 동의가
-        필요하며 기본 dry-run은 소켓을 열지 않는다. 상위 API의 읽기 라우트와
+        표현한다. 상태 변경(mutation)은 즉시 전송된다. 단, _NEVER_SENT 에 오른
+        정기권/패스 구매 계약은 이름으로 거절된다. 상위 API의 읽기 라우트와
         겹치는 계약은 같은 ``safety`` 필드 검증을 거치고, 변경 라우트와 겹치는
         계약은 거부된다.
         """
@@ -432,17 +364,6 @@ class V7Gateway:
                 f"{name} targets KORAIL mutation route {contract.route}; use the "
                 "high-level KorailClient method gated by MutationConsent"
             )
-        if contract.effect == "mutation":
-            if not isinstance(consent, V7MutationConsent) or name not in consent.allow_methods:
-                raise KorailMutationNotAllowedError(f"{name} requires method-scoped consent")
-            card_bearing = name in _CARD_BEARING
-            if consent.fake_card_only == consent.real_card_acknowledged and card_bearing:
-                raise KorailMutationNotAllowedError("payment method requires an explicit card kind")
-            if consent.dry_run:
-                return V7MutationPreview(
-                    name=name, http=contract.http, route=contract.route,
-                    payload=_mask_preview(data),
-                )
         client = self._client_for(contract)
         target = self._target_for(contract)
         request_headers = dict(header_map)

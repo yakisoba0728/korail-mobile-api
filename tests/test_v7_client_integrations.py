@@ -17,10 +17,9 @@ from korail_mobile_api import (
     StationRefundExecutionRequest,
     StationRefundVerificationRequest,
     TrainSearchQuery,
-    V7MutationConsent,
-    V7MutationPreview,
 )
 from korail_mobile_api.models import KorailSession
+from korail_mobile_api.mutation_models import StationRefundExecutionResponse
 
 
 def test_special_search_selects_apk_route_and_common_shape(load_json_fixture):
@@ -81,34 +80,41 @@ def test_ticket_maas_menu_preserves_repeated_return_number_fields():
     ]
 
 
-def test_station_refund_quote_feeds_execution_without_socket_in_dry_run():
+def test_station_refund_quote_feeds_execution():
     requests: list[httpx.Request] = []
 
     def respond(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        assert request.url.path == (
-            "/classes/com.korail.mobile.refunds.verifyOnlineRefunds"
-        )
+        if request.url.path == "/classes/com.korail.mobile.refunds.verifyOnlineRefunds":
+            return httpx.Response(
+                200,
+                json={
+                    "strResult": "SUCC",
+                    "h_msg_cd": "API.I00000",
+                    "rcvd_amt": "10000",
+                    "ret_fee": "0",
+                    "ret_amt": "10000",
+                    "orgtkinfo_list": [
+                        {
+                            "pnr_no": "synthetic-pnr",
+                            "ogtk_sale_dt": "20260701",
+                            "ogtk_sale_wct_no": "1",
+                            "ogtk_sale_sqno": "2",
+                            "ogtk_ret_pwd": "synthetic-return-password",
+                            "ret_dv_cd": "synthetic-refund-kind",
+                            "ret_rsn_cd": "synthetic-reason",
+                            "tk_knd_cd": "synthetic-ticket-kind",
+                        }
+                    ],
+                },
+            )
+        assert request.url.path == "/classes/com.korail.mobile.refunds.executeOnlineRefunds"
         return httpx.Response(
             200,
             json={
                 "strResult": "SUCC",
                 "h_msg_cd": "API.I00000",
-                "rcvd_amt": "10000",
-                "ret_fee": "0",
-                "ret_amt": "10000",
-                "orgtkinfo_list": [
-                    {
-                        "pnr_no": "synthetic-pnr",
-                        "ogtk_sale_dt": "20260701",
-                        "ogtk_sale_wct_no": "1",
-                        "ogtk_sale_sqno": "2",
-                        "ogtk_ret_pwd": "synthetic-return-password",
-                        "ret_dv_cd": "synthetic-refund-kind",
-                        "ret_rsn_cd": "synthetic-reason",
-                        "tk_knd_cd": "synthetic-ticket-kind",
-                    }
-                ],
+                "h_ret_dv_cd": "synthetic-refund-kind",
             },
         )
 
@@ -125,19 +131,14 @@ def test_station_refund_quote_feeds_execution_without_socket_in_dry_run():
             customer_phone="synthetic-phone",
             customer_name="synthetic-name",
         )
-        preview = client.execute_station_ticket_refund(
-            request,
-            consent=V7MutationConsent(
-                allow_methods=frozenset({"NetworkApi.executeOnlineRefunds"}),
-            ),
-        )
+        result = client.execute_station_ticket_refund(request)
     finally:
         client.close()
 
     assert parse_qs(requests[0].content.decode())["retNo4"] == ["part-4"]
-    assert len(requests) == 1
-    assert isinstance(preview, V7MutationPreview)
-    assert preview.name == "NetworkApi.executeOnlineRefunds"
+    assert len(requests) == 2
+    assert isinstance(result, StationRefundExecutionResponse)
+    assert result.refund_division_code == "synthetic-refund-kind"
     assert request.refund_amount == "10000"
     assert request.refund_fee == "0"
 
@@ -170,13 +171,7 @@ def test_station_ticket_refund_without_a_session_is_refused_by_name():
             KorailAuthError,
             match=r"^KORAIL station ticket refund requires an authenticated session$",
         ):
-            client.execute_station_ticket_refund(
-                request,
-                consent=V7MutationConsent(
-                    allow_methods=frozenset({"NetworkApi.executeOnlineRefunds"}),
-                    dry_run=False,
-                ),
-            )
+            client.execute_station_ticket_refund(request)
     finally:
         client.close()
 
@@ -210,13 +205,7 @@ def test_an_expired_session_on_a_station_ticket_refund_clears_the_client():
     )
     try:
         with pytest.raises(KorailSessionExpiredError):
-            client.execute_station_ticket_refund(
-                request,
-                consent=V7MutationConsent(
-                    allow_methods=frozenset({"NetworkApi.executeOnlineRefunds"}),
-                    dry_run=False,
-                ),
-            )
+            client.execute_station_ticket_refund(request)
     finally:
         client.close()
     assert len(seen) == 1

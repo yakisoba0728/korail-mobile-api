@@ -299,7 +299,6 @@ from .read_payloads import (
     TicketDuplicationCheckRequest,
     TicketReservationDetailRequest,
 )
-from .v7 import V7MutationConsent, V7MutationPreview
 
 
 __all__ = [
@@ -479,8 +478,6 @@ __all__ = [
     "StationRefundOriginalTicket",
     "StationRefundVerificationRequest",
     "StationRefundVerificationResponse",
-    "V7MutationConsent",
-    "V7MutationPreview",
     "ReservationDetailJourney",
     "ReservationHistoryResponse",
     "ReservationHistoryTrain",

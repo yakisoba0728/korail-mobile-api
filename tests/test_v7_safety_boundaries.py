@@ -21,12 +21,7 @@ from korail_mobile_api import KorailClient, KorailConfig, TrainSearchQuery
 from korail_mobile_api.errors import KorailMutationNotAllowedError, KorailProtocolError
 from korail_mobile_api.payloads import build_train_schedule_special_form
 from korail_mobile_api.safety import KORAIL_MUTATION_ROUTES, KORAIL_READ_ONLY_ROUTES
-from korail_mobile_api.v7 import (
-    V7_CONTRACTS,
-    V7MutationConsent,
-    V7MutationPreview,
-    V7Response,
-)
+from korail_mobile_api.v7 import V7_CONTRACTS, V7Response
 
 
 SPECIAL = "NetworkApi.postScheduleViewSpecial"
@@ -86,17 +81,17 @@ def test_non_member_ticket_is_a_method_scoped_mutation() -> None:
     values = {"txtJobId": "synthetic-job", "txtCustNm": "synthetic-name"}
     assert V7_CONTRACTS[name].effect == "mutation"
     assert V7_CONTRACTS["NetworkApi.postNonMemTicketList"].effect == "read"
-    client = KorailClient(transport=httpx.MockTransport(_never_send))
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"strResult": "SUCC"})
+
+    client = KorailClient(transport=httpx.MockTransport(respond))
     try:
-        with pytest.raises(KorailMutationNotAllowedError):
-            client.v7.call(name, values)
-        consent = V7MutationConsent(allow_methods=frozenset({name}))
-        preview = client.v7.call(name, values, consent=consent)
+        result = client.v7.call(name, values)
     finally:
         client.close()
-    assert isinstance(preview, V7MutationPreview)
-    assert preview.route == "/classes/com.korail.mobile.nonMember.NonMemTicket"
-    assert preview.payload == {"txtJobId": "[REDACTED]", "txtCustNm": "[REDACTED]"}
+    assert isinstance(result, V7Response)
+    assert result.name == name
 
 
 def test_v7_routes_shared_with_high_level_tables_are_exactly_known() -> None:
@@ -147,11 +142,10 @@ def test_contract_on_high_level_mutation_route_is_refused(
         V7_CONTRACTS[name],
         route="/classes/com.korail.mobile.certification.TicketReservation",
     ))
-    consent = V7MutationConsent(allow_methods=frozenset({name}), dry_run=False)
     client = KorailClient(transport=httpx.MockTransport(_never_send))
     try:
         with pytest.raises(KorailProtocolError, match="high-level KorailClient"):
-            client.v7.call(name, {"txtJobId": "synthetic-job"}, consent=consent)
+            client.v7.call(name, {"txtJobId": "synthetic-job"})
     finally:
         client.close()
 
@@ -238,8 +232,8 @@ def test_every_contract_goes_out_as_its_row_describes(name: str) -> None:
 
     The other four of the 117 are the pass purchases, refused by name.
 
-    Mutations are sent with a consent naming that one method; a card-bearing
-    one gets the fake-card claim, which is the default.
+    Every contract sends immediately; there is no separate mutation-consent
+    step any more.
     """
     contract = V7_CONTRACTS[name]
     values, include_common = _wire_values(name)
@@ -256,11 +250,6 @@ def test_every_contract_goes_out_as_its_row_describes(name: str) -> None:
         seen.append(request)
         return httpx.Response(200, json={"ok": True})
 
-    consent = (
-        V7MutationConsent(allow_methods=frozenset({name}), dry_run=False)
-        if contract.effect == "mutation"
-        else None
-    )
     client = KorailClient(
         transport=httpx.MockTransport(main),
         partner_origins=_PARTNER_ORIGINS,
@@ -271,7 +260,6 @@ def test_every_contract_goes_out_as_its_row_describes(name: str) -> None:
             name,
             values,
             headers=headers,
-            consent=consent,
             include_common=include_common,
         )
     finally:
@@ -308,80 +296,10 @@ def test_every_contract_goes_out_as_its_row_describes(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", _PASS_PURCHASES)
-def test_no_consent_can_name_a_pass_purchase(name: str) -> None:
-    # A 정기권/패스 settlement is ₩150,000-₩250,000 with no refund or cancel
-    # route here, and the shipped app never sends passPayIssue at all.
-    # MUTATION_HANDOFF promises no amount of consent can send one; the 7.0.6
-    # gateway lists the contracts because the APK declares them.
-    assert V7_CONTRACTS[name].effect == "mutation"
-    with pytest.raises(KorailProtocolError):
-        V7MutationConsent(allow_methods=frozenset({name}), dry_run=False)
-
-
-@pytest.mark.parametrize("name", _PASS_PURCHASES)
-def test_the_gateway_refuses_a_pass_purchase_even_with_a_forged_consent(
-    name: str,
-) -> None:
-    consent = V7MutationConsent(dry_run=False, real_card_acknowledged=True, fake_card_only=False)
-    object.__setattr__(consent, "allow_methods", frozenset({name}))
+def test_the_gateway_refuses_a_pass_purchase_by_name(name: str) -> None:
     client = KorailClient(transport=httpx.MockTransport(_never_send))
     try:
         with pytest.raises(KorailMutationNotAllowedError, match="never sends"):
-            client.v7.call(name, {}, consent=consent)
+            client.v7.call(name, {})
     finally:
         client.close()
-
-
-# The mutation contracts that settle a payment, and so need a consent that
-# says which card kind it means. Written out here, not imported.
-_CARD_BEARING = (
-    "NetworkApi.paymentMassStatusIn",
-    "NetworkApi.postIntgStl",
-    "NetworkApi.postKrPassPayment",
-    "NetworkApi.postNaverPayMoneyRsv",
-    "NetworkApi.postNaverPayRsv",
-    "NetworkApi.postPayco",
-    "NetworkApi.postRailplusAutoCharge",
-    "NetworkApi.postSpayOrdNo",
-    "NetworkApi.postStbkAcnt",
-    "NetworkApi.postStbkRegBank",
-    "NetworkApi.postStlKeyPrs",
-    "NetworkApi.postTossautoC",
-)
-
-
-def _unstated_card_kind(name: str) -> V7MutationConsent:
-    # Neither claim: fake_card_only and real_card_acknowledged both False.
-    return V7MutationConsent(allow_methods=frozenset({name}), fake_card_only=False)
-
-
-@pytest.mark.parametrize("name", _CARD_BEARING)
-def test_a_payment_contract_needs_a_stated_card_kind(name: str) -> None:
-    client = KorailClient(transport=httpx.MockTransport(_never_send))
-    try:
-        with pytest.raises(KorailMutationNotAllowedError, match="explicit card kind"):
-            client.v7.call(name, {}, consent=_unstated_card_kind(name))
-    finally:
-        client.close()
-
-
-@pytest.mark.parametrize(
-    "name",
-    ["NetworkApi.postShinhanEncrypt", "NetworkApi.postMaasCancel", "NetworkApi.postAcpnMlgSave"],
-)
-def test_a_mutation_that_carries_no_payment_card_does_not(name: str) -> None:
-    # Checked against the APK: postShinhanEncrypt's value is the locked amount
-    # (PayViewModel.executeSeedEncrypt), postMaasCancel carries settlement ids,
-    # and postAcpnMlgSave's *MbCrdNo fields are membership card numbers.
-    values, include_common = _wire_values(name)
-    client = KorailClient(transport=httpx.MockTransport(_never_send))
-    try:
-        preview = client.v7.call(
-            name,
-            values,
-            consent=_unstated_card_kind(name),
-            include_common=include_common,
-        )
-    finally:
-        client.close()
-    assert isinstance(preview, V7MutationPreview)

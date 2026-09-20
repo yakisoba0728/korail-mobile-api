@@ -17,8 +17,8 @@ import pytest
 
 from _helpers import recording_json_handler
 from korail_mobile_api import KorailClient
-from korail_mobile_api.errors import KorailMutationNotAllowedError, KorailProtocolError
-from korail_mobile_api.v7 import V7_CONTRACTS, V7MutationConsent, V7MutationPreview
+from korail_mobile_api.errors import KorailProtocolError
+from korail_mobile_api.v7 import V7_CONTRACTS
 
 
 def test_all_annotated_additions_are_registered() -> None:
@@ -48,44 +48,12 @@ def test_main_read_uses_exact_query_and_existing_session() -> None:
     client.close()
 
 
-def test_mutating_get_requires_exact_method_consent_and_dry_run_never_sends() -> None:
-    calls = 0
-
-    def respond(request: httpx.Request) -> httpx.Response:
-        nonlocal calls
-        calls += 1
-        return httpx.Response(200, json={"strResult": "SUCCESS"})
-
-    client = KorailClient(transport=httpx.MockTransport(respond))
-    with pytest.raises(KorailMutationNotAllowedError):
-        client.v7.call(
-            "NetworkApi.productCancel",
-            {"txtVrRsNo": "reservation", "txtGdSqno": "product"},
-        )
-    consent = V7MutationConsent(allow_methods=frozenset({"NetworkApi.productCancel"}))
-    preview = client.v7.call(
-        "NetworkApi.productCancel",
-        {"txtVrRsNo": "reservation", "txtGdSqno": "product"},
-        consent=consent,
-    )
-    assert isinstance(preview, V7MutationPreview)
-    assert preview.payload["txtVrRsNo"] == "[REDACTED]"
-    assert V7_CONTRACTS["NetworkApi.productCancel"].effect == "mutation"
-    assert calls == 0
-    with pytest.raises(KorailProtocolError):
-        V7MutationConsent(allow_methods=frozenset({"NetworkApi.getSearchMetaData"}))
-    client.close()
-
-
 def test_product_cancel_accepts_only_apk_dto_keys_and_two_identifiers() -> None:
     requests: list[httpx.Request] = []
 
     respond = recording_json_handler(requests, {"strResult": "SUCCESS"})
 
     client = KorailClient(transport=httpx.MockTransport(respond))
-    consent = V7MutationConsent(
-        allow_methods=frozenset({"NetworkApi.productCancel"}), dry_run=False
-    )
     try:
         for invalid in (
             {},
@@ -94,12 +62,11 @@ def test_product_cancel_accepts_only_apk_dto_keys_and_two_identifiers() -> None:
             {"txtVrRsNo": "reservation", "txtGdSqno": "product", "pnrNo": "extra"},
         ):
             with pytest.raises(KorailProtocolError):
-                client.v7.call("NetworkApi.productCancel", invalid, consent=consent)
+                client.v7.call("NetworkApi.productCancel", invalid)
         assert requests == []
         client.v7.call(
             "NetworkApi.productCancel",
             {"txtVrRsNo": "reservation", "txtGdSqno": "product", "lang": "ko"},
-            consent=consent,
             include_common=True,
         )
     finally:
@@ -109,35 +76,6 @@ def test_product_cancel_accepts_only_apk_dto_keys_and_two_identifiers() -> None:
     assert set(requests[0].url.params) == {
         "txtVrRsNo", "txtGdSqno", "lang", "Device", "Version", "Key"
     }
-
-
-def test_auth_checkin_and_payment_status_are_never_unconsented_reads() -> None:
-    calls = 0
-
-    def respond(request: httpx.Request) -> httpx.Response:
-        nonlocal calls
-        calls += 1
-        return httpx.Response(200, json={"strResult": "SUCC"})
-
-    names = (
-        "NetworkApi.postDiscountCheck", "NetworkApi.postInquiryIsMember",
-        "NetworkApi.postLPotAthn", "NetworkApi.postXPointView",
-        "NetworkApi.postOkCashbagCertView", "NetworkApi.postSelfCheckInInfo",
-        "NetworkApi.postSelfCheckInPossible",
-        "NetworkApi.postLocalRailwayTravelQrAuth",
-        "NetworkApi.postMemberVerify", "NetworkApi.paymentMassStatusIn",
-    )
-    client = KorailClient(transport=httpx.MockTransport(respond))
-    for name in names:
-        assert V7_CONTRACTS[name].effect == "mutation"
-        with pytest.raises(KorailMutationNotAllowedError):
-            client.v7.call(name, {})
-        preview = client.v7.call(
-            name, {}, consent=V7MutationConsent(allow_methods=frozenset({name}))
-        )
-        assert isinstance(preview, V7MutationPreview)
-    assert calls == 0
-    client.close()
 
 
 def test_repeated_field_and_partner_origin_are_separate() -> None:
@@ -153,12 +91,9 @@ def test_repeated_field_and_partner_origin_are_separate() -> None:
         partner_transport=httpx.MockTransport(partner_respond),
     )
     client.http.cookies.set("JSESSIONID", "main-only", domain="smart.letskorail.com")
-    consent = V7MutationConsent(
-        allow_methods=frozenset({"NetworkApi.postBuyConfirm"}), dry_run=False
-    )
     client.v7.call(
         "NetworkApi.postBuyConfirm",
-        {"addSrvReqNo": ["a", "b"], "jobDvCd": "Q"}, consent=consent,
+        {"addSrvReqNo": ["a", "b"], "jobDvCd": "Q"},
     )
     assert parse_qs(main[0].content.decode()) == {
         "addSrvReqNo": ["a", "b"], "jobDvCd": ["Q"]
@@ -283,13 +218,11 @@ def test_push_web_host_uses_main_http_client_and_cookie_scope() -> None:
         partner_transport=httpx.MockTransport(partner_respond),
     )
     client.http.cookies.set("JSESSIONID", "test-session", domain="smart.letskorail.com")
-    consent = V7MutationConsent(
-        allow_methods=frozenset({"PushService.pushUpdate"}), dry_run=False
-    )
     try:
-        client.v7.call(
-            "PushService.pushUpdate", {"job_dv_cd": "U"}, consent=consent
-        )
+        # This contract's fate (kept, dropped, or trimmed) is decision #3's
+        # (registry-trim) call, not this batch's — only the consent kwarg is
+        # dropped here.
+        client.v7.call("PushService.pushUpdate", {"job_dv_cd": "U"})
     finally:
         client.close()
     assert len(main) == 1 and partner == []
@@ -353,61 +286,3 @@ def test_a_header_the_contract_does_not_declare_or_a_split_value_never_leaves(
     finally:
         client.close()
     assert seen == []
-
-
-SPAY_ORDER = "NetworkApi.postSpayOrdNo"
-
-
-@pytest.mark.parametrize(
-    ("fake_card_only", "real_card_acknowledged"),
-    [(False, False), (True, True)],
-    ids=["neither", "both"],
-)
-def test_a_card_bearing_v7_mutation_refuses_an_unstated_card_kind(
-    fake_card_only, real_card_acknowledged
-) -> None:
-    # The V7 twin of post_mutation_form's card gate: exactly one card kind, or
-    # nothing is sent -- and not even previewed.
-    calls: list[httpx.Request] = []
-
-    respond = recording_json_handler(calls, {"strResult": "SUCC"})
-
-    client = KorailClient(transport=httpx.MockTransport(respond))
-    try:
-        for dry_run in (False, True):
-            consent = V7MutationConsent(
-                allow_methods=frozenset({SPAY_ORDER}),
-                dry_run=dry_run,
-                fake_card_only=fake_card_only,
-                real_card_acknowledged=real_card_acknowledged,
-            )
-            with pytest.raises(
-                KorailMutationNotAllowedError, match="explicit card kind"
-            ):
-                client.v7.call(SPAY_ORDER, {"lumpStlTgtNo": "SYNTHETIC"}, consent=consent)
-    finally:
-        client.close()
-    assert calls == []
-
-
-def test_a_card_bearing_v7_mutation_with_one_card_kind_is_sent() -> None:
-    calls: list[httpx.Request] = []
-
-    respond = recording_json_handler(
-        calls, {"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": ""}
-    )
-
-    client = KorailClient(transport=httpx.MockTransport(respond))
-    try:
-        client.v7.call(
-            SPAY_ORDER,
-            {"lumpStlTgtNo": "SYNTHETIC"},
-            consent=V7MutationConsent(
-                allow_methods=frozenset({SPAY_ORDER}), dry_run=False
-            ),
-        )
-    finally:
-        client.close()
-    assert len(calls) == 1
-    assert calls[0].url.path == V7_CONTRACTS[SPAY_ORDER].route
-    assert parse_qs(calls[0].content.decode()) == {"lumpStlTgtNo": ["SYNTHETIC"]}

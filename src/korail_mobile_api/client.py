@@ -21,8 +21,7 @@
 :mod:`korail_mobile_api.safety` 가 정하고 전송 직전에 다시 검사합니다.
 
 예외가 하나 있습니다. 7.0.6 계약으로 나가는 :meth:`KorailClient.execute_station_ticket_refund`
-는 범주가 아니라 메서드 이름을 여는 :class:`~korail_mobile_api.v7.V7MutationConsent` 를
-받습니다. 같은 동의 체계가 ``client.v7`` 게이트웨이의 7.0.6 계약 전부에 쓰입니다.
+는 동의 없이 즉시 전송됩니다. ``client.v7`` 게이트웨이의 다른 7.0.6 계약도 마찬가지입니다.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -290,7 +289,7 @@ from .read_payloads import (
     build_trip_menu_form,
 )
 from .session import KorailSessionClient
-from .v7 import V7Gateway, V7MutationConsent, V7MutationPreview
+from .v7 import V7Gateway
 
 
 T = TypeVar("T")
@@ -326,8 +325,7 @@ class KorailClient:
     :class:`~korail_mobile_api.errors.KorailMutationNotAllowedError` 로 막힙니다.
     범주를 허용해도 ``dry_run`` 이 기본 참이라 아무것도 전송하지 않고
     :class:`~korail_mobile_api.consent.MutationPreview` 가 돌아옵니다. 7.0.6 계약으로
-    나가는 :meth:`execute_station_ticket_refund` 만 메서드 단위
-    :class:`~korail_mobile_api.v7.V7MutationConsent` 를 받습니다.
+    나가는 :meth:`execute_station_ticket_refund` 만 예외로, 동의 없이 즉시 전송됩니다.
 
     자원 정리는 :meth:`close` 입니다. ``__enter__``/``__exit__`` 를 정의하지 않으므로
     ``with`` 문으로는 쓸 수 없습니다. :meth:`close` 는 커넥션 풀만 닫으니 로그인까지
@@ -2030,29 +2028,19 @@ class KorailClient:
             result = self.v7.call(
                 "NetworkApi.verifyOnlineRefunds", fields, include_common=True
             )
-            if isinstance(result, V7MutationPreview):
-                raise KorailProtocolError(
-                    "KORAIL station refund verification returned a mutation preview"
-                )
             return parse_station_refund_verification_response(result.raw)
         return self._run_read(run)
 
     def execute_station_ticket_refund(
         self,
         request: StationRefundExecutionRequest,
-        *,
-        consent: V7MutationConsent,
-    ) -> V7MutationPreview | StationRefundExecutionResponse:
-        """Execute a verified station-ticket refund with method-scoped consent."""
+    ) -> StationRefundExecutionResponse:
+        """Execute a verified station-ticket refund."""
         self._require_session("station ticket refund requires")
         fields = build_station_refund_execution_form(self.config, request)
         result = self._run_read(
-            lambda: self.v7.call(
-                "NetworkApi.executeOnlineRefunds", fields, consent=consent
-            )
+            lambda: self.v7.call("NetworkApi.executeOnlineRefunds", fields)
         )
-        if isinstance(result, V7MutationPreview):
-            return result
         return parse_station_refund_execution_response(result.raw)
 
     def add_to_cart(
