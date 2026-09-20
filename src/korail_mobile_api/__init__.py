@@ -88,13 +88,13 @@ from .limousine_models import (
 # ``dir()`` and static checkers cannot see.
 #
 # ``build_config_from_env`` is the ONLY thing exported from this module.
-# ``read_credentials_from_env``, ``live_enabled`` and ``run_live_smoke_from_env``
-# stay unexported: the first reads ``KORAIL_MEMBER_NO``/``KORAIL_PASSWORD``, and
-# exporting it would make this package assert an opinion about where a caller's
-# credentials live, which it deliberately does not have; the other two are this
-# repository's own smoke scaffolding, gated on an env flag, and are not an API
-# anyone else has a reason to call. Configuration is a user's problem;
-# credentials and smoke runs are ours.
+# ``read_credentials_from_env`` and ``live_enabled`` stay unexported: the first
+# reads ``KORAIL_MEMBER_NO``/``KORAIL_PASSWORD``, and exporting it would make
+# this package assert an opinion about where a caller's credentials live,
+# which it deliberately does not have; the other is this repository's own
+# smoke scaffolding, gated on an env flag, and is not an API anyone else has
+# a reason to call. Configuration is a user's problem; credentials and smoke
+# runs are ours.
 from .live import build_config_from_env
 from .models import (
     AppDataResponse,

@@ -4,10 +4,7 @@
 
 from __future__ import annotations
 
-import os
 import re
-import subprocess
-import sys
 import tarfile
 import tomllib
 import warnings
@@ -22,7 +19,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_NAME = "korail_mobile_api"
 PROJECT_NAME = "korail-mobile-api"
-LIVE_ENV = "KORAIL_MOBILE_API_LIVE"
 CLIENT_NAME = "KorailClient"
 EXPECTED_LICENSE_EXPRESSION = "Apache-2.0"
 EXPECTED_LICENSE_FILES = ["LICENSE", "NOTICE"]
@@ -361,57 +357,15 @@ def test_success_output_bounds_the_basename_it_prints(
     assert all(character.isprintable() for character in wheel_display)
 
 
-def _child_pytest(
-    *arguments: str,
-    environment: dict[str, str],
-    timeout: int,
-) -> subprocess.CompletedProcess[str]:
-    """자식 프로세스로 ``pytest`` 를 돌리고 stdout 을 UTF-8 문자열로 받는다.
-
-    ``PYTHONIOENCODING`` 을 세우는 것이 이 함수의 존재 이유다. 파이프에 묶인 자식
-    파이썬은 stdout 인코딩을 로케일에서 가져오므로 한국어 Windows 에서는 cp949 로
-    쓴다. 지금은 이 스위트의 테스트 이름이 전부 ASCII 라서 우연히 통과하지만,
-    한글이 든 이름 하나만 생겨도 ``--collect-only`` 출력이 cp949 바이트가 되고,
-    그것을 부모가 UTF-8 로 읽으면 ``subprocess`` 의 읽기 스레드가
-    ``UnicodeDecodeError`` 로 죽어 ``result.stdout`` 이 문자열이 아니라 ``None``
-    이 된다 (자매 저장소 srt-mobile-api 에서 실제로 그렇게 깨졌다). 자식 쪽
-    인코딩을 못박는 것이 부모 쪽에서 ``errors="replace"`` 로 덮는 것보다 낫다 —
-    뒤엣것은 깨진 글자를 통과시켜 놓고 고쳐진 척한다.
-
-    ``timeout`` 은 호출자가 정한다. Windows 에서 pytest 의 콜드 스타트가 눈에
-    띄게 느려서, 이 값은 "이 하위 프로세스가 멈추지 않았다"만 보장하며 성능을
-    재지 않는다.
-    """
-    return subprocess.run(
-        [sys.executable, "-m", "pytest", *arguments],
-        cwd=ROOT,
-        env={**environment, "PYTHONIOENCODING": "utf-8"},
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=timeout,
-        check=False,
-    )
-
-
-def test_ambient_live_opt_in_is_deselected_by_the_release_command() -> None:
+def test_the_release_command_is_the_offline_one() -> None:
+    # There is no longer a ``@pytest.mark.live`` test in the suite to prove
+    # deselection against (its sole carrier, tests/test_live_service.py, is
+    # gone with the live smoke harness) — so this only pins the command
+    # itself in both places that run it.
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     release = (ROOT / "docs/RELEASE.md").read_text(encoding="utf-8")
     offline_command = 'pytest -q -m "not live"'
     assert offline_command in workflow and offline_command in release
-
-    environment = os.environ.copy()
-    environment[LIVE_ENV] = "1"
-    result = _child_pytest(
-        "-q",
-        "-m",
-        "not live",
-        "tests/test_live_service.py",
-        environment=environment,
-        timeout=60,
-    )
-    assert result.returncode == 5
-    assert "1 deselected" in result.stdout
 
 
 def test_canonical_plan_requires_behavioral_release_verification() -> None:

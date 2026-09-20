@@ -193,7 +193,6 @@ def test_no_live_path_reaches_this_category():
     for path in (
         root / "src/korail_mobile_api/live.py",
         root / "tests/test_live.py",
-        root / "tests/test_live_service.py",
         root / "tests/test_mutation_live_paths.py",
         *scripts,
     ):
