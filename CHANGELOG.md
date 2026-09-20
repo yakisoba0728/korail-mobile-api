@@ -6,6 +6,23 @@
 
 ## Unreleased
 
+### Added
+
+- **손으로 유지하는 불변식을 확인하는 검사가 생겼습니다.** `tests/test_invariants.py`
+  한 파일, 393개 케이스, `test` extra(`pytest` 하나)와 3.11~3.14 CI 잡.
+  `ebc4d5f` 가 121파일 33,071줄을 지우면서 커밋 메시지에 무엇이 남는지를 직접
+  적어 두었고("the route table counts, the `__all__` public surface, parser
+  regressions, the redaction sweep, `verify_distribution.py`'s own behaviour, and
+  the docs index"), 그중 라이브러리가 스스로 확인할 수 있는 것을 덮습니다.
+  전부 introspection 이라 픽스처가 없고 네트워크를 타지 않습니다.
+  **스위트를 되살린 것이 아닙니다** — 그때 지운 이유는 부피였고 그 판단은 그대로입니다.
+  파서 회귀는 골든 픽스처가 있어야 하므로 아직 없습니다.
+
+  덮는 것: 변경 라우트와 범주 표의 키 일치(`8ecd4ce` 가 배포 전에 손으로 잡은 것),
+  두 라우트 표의 상호 배제, 허용목록의 모든 라우트가 실제로 쓰이는지,
+  `__all__` 무결성과 중복, `__version__` ↔ pyproject, **데이터클래스 속성명 마스킹
+  훑기**, 면제 목록이 실재하는 필드만 가리키는지, `docs/README.md` 색인의 완전성.
+
 ### Removed
 
 - **보낼 수 없는 라우트의 코드가 없어졌습니다.** 기프티켓 목록(`gift.gdLst.do`),

@@ -66,6 +66,12 @@ SENSITIVE_KEYS = frozenset(
         "saleDd",  # 세 번째 철자(PaymentService.java:12-14)
         "sale_window_no",
         "sale_date",
+        # 같은 dataclass 안에서 sale_date 옆에 있는데 이 철자만 빠져 있었다:
+        # 와이어 키 h_orgtk_ret_sale_dt 는 등록돼 있어 폼은 가려지지만,
+        # redact_value 는 데이터클래스를 field.name 으로 훑으므로
+        # TicketListTicket.return_sale_date 만 객체 경로에서 평문으로 남았다.
+        # CardPayment.card_password 가 ffb5189 에서 샜던 것과 같은 모양이다.
+        "return_sale_date",
         "sale_sequence",
         "h_wct_no",
         "hidWctNo",
@@ -90,6 +96,10 @@ SENSITIVE_KEYS = frozenset(
         "lump_sum_target_no",
         "lumpStlTgtNo",
         "lump_settlement_target_no",
+        # 바로 위 짝과 같은 성질인데 양쪽 철자 모두 빠져 있었다
+        # (mutation_models.py 가 둘을 나란히 선언한다).
+        "dcntCrdStlTgtNo",
+        "discount_card_settlement_target_no",
         "lump_settlement_target_nos",
         # --- 카드·결제수단(PaymentMethod 맵, CARD_RE 가 못 잡는 변형) ---
         "hidStlCrCrdNo1",

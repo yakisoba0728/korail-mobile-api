@@ -48,6 +48,12 @@ dev = [
   "pyright==1.1.411",
   "ruff>=0.16,<0.17",
 ]
+# 불변식 검사용, 런타임 의존성이 아니다. ebc4d5f 가 지운 "test" extras 와 같은
+# 자리지만 담는 것이 다르다 — 그때는 121파일 1,072개 테스트였고, 지금은 손으로
+# 유지하는 표와 목록이 서로 어긋나지 않는지 보는 한 파일이다.
+test = [
+  "pytest>=8,<10",
+]
 # 문서 사이트 빌드용, 런타임 의존성이 아니다. 상한은 mkdocs-material 의 MkDocs 2.0
 # 플러그인-체계 폐지 예고와, mkdocstrings-python 2.x/griffe 2.x 가 이 저장소에서
 # 실제로 검증한 첫 조합이라는 데서 온다.
@@ -72,7 +78,7 @@ korail_mobile_api = ["py.typed"]
 # line-length 100 은 취향이 아니라 실측이다(근거는 git 이력 참고).
 line-length = 100
 target-version = "py311"
-src = ["src", "scripts"]
+src = ["src", "scripts", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "RUF"]
@@ -111,6 +117,12 @@ extend-immutable-calls = ["korail_mobile_api.read_payloads.RefundCompanion"]
 # OrgTk 응답 필드로도 온다). B033 의 자동수정은 중복만 지우고 주석은 남겨서,
 # 근거가 딸린 대상 없이 떠 있게 만든다.
 "src/korail_mobile_api/redaction.py" = ["B033"]
+
+[tool.pytest.ini_options]
+# 이 스위트는 네트워크를 타지 않고 픽스처도 없다 -- 전부 introspection 이다.
+# 라이브 검증은 scripts/ 가 KORAIL_MOBILE_API_LIVE=1 뒤에서 따로 한다.
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
 
 [tool.pyright]
 # VSCode/Pylance 가 그대로 읽는 설정이다. 기준은 하나 — 이 저장소의 파일을 열었을
