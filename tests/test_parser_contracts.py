@@ -253,6 +253,25 @@ def test_no_count_or_ordinal_is_out_of_scale(name: str) -> None:
             assert int(value) < _COUNT_CEILING, f"{name}.json {path} = {value}"
 
 
+#: 휴대전화 번호 모양. 1차 비식별화는 자릿수만 섞어서 ``010-9359-3454`` 를
+#: 남겼습니다 — 섞었다는 것은 원본이 아니라는 뜻이지 아무의 번호도 아니라는
+#: 뜻이 아닙니다. 합성임이 한눈에 보이는 형태만 받습니다.
+#:
+#: 값 **전체**가 번호일 때만 봅니다. 부분 일치로 훑었더니 상품 코드
+#: ``Y20190313001`` 과 난수 토큰 안에서 번호 모양이 잘려 나왔습니다.
+_PHONE = re.compile(r"01[016789]-?(?:\*{4}|\d{3,4})-?\d{4}")
+_OBVIOUSLY_SYNTHETIC_PHONE = re.compile(r"010-(?:0000|\*{4})-0000")
+
+
+@pytest.mark.parametrize("name", _fixture_names())
+def test_no_value_looks_like_someone_real_phone_number(name: str) -> None:
+    raw = _raw(name)
+    for path, _key, value in _strings(raw):
+        stripped = value.strip()
+        if _PHONE.fullmatch(stripped) and not _OBVIOUSLY_SYNTHETIC_PHONE.fullmatch(stripped):
+            pytest.fail(f"{name}.json {path} = {value}")
+
+
 @pytest.mark.parametrize("name", _fixture_names())
 def test_every_ratio_is_a_percentage(name: str) -> None:
     """``-412.12`` 도 ``6721.20`` 도 비율이 아닙니다.
