@@ -31,10 +31,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from urllib.parse import parse_qsl
 
 import httpx
 import pytest
 
+import korail_mobile_api.client as client_module
+from _helpers import client_with_replies as _client_with
+from _helpers import korail_ok_envelope as _korail_ok_envelope
 from _helpers import logged_in_no_network_client as _logged_in_no_network_client
 from _mutation_fixtures import eligible_train as _eligible_train
 from korail_mobile_api import (
@@ -825,6 +829,48 @@ def test_confirm_standby_hold_requires_an_authenticated_session():
     client = KorailClient(transport=httpx.MockTransport(handler))
     with pytest.raises(KorailAuthError):
         client.confirm_standby_hold(_standby_hold())
+
+
+def test_confirm_standby_hold_actually_sends_through_the_shape_gate(monkeypatch):
+    """A send test, so the built form actually meets `assert_mutation_form_shape`.
+
+    Every other test for this method stops at the auth check or calls
+    `build_standby_wait_form` directly, so the method's real send path --
+    `_mutation` -> `post_mutation_form` -> `assert_mutation_form_shape` -- had
+    never run against its own output. A builder whose output has never met
+    the gate is a live-only failure, which is the class this gate exists to
+    prevent.
+
+    Reaching the transport is only half the claim, though: the builder
+    already produces a well-shaped form on its own, so a test that stops
+    there cannot tell the gate apart from no gate at all. The second half
+    forces the builder to hand back a shape the gate must refuse and checks
+    that the request never reaches the transport -- proof that the send path
+    is the thing enforcing the shape, not just the builder's own discipline.
+    """
+    client, recorder = _client_with({RESERVATION_WAIT_PATH: _korail_ok_envelope()})
+
+    client.confirm_standby_hold(_standby_hold())
+
+    assert [request.url.path for request in recorder.requests] == [RESERVATION_WAIT_PATH]
+    sent_form = dict(
+        parse_qsl(recorder.requests[0].content.decode(), keep_blank_values=True)
+    )
+    expected_form = build_standby_wait_form(KorailConfig(), _standby_hold())
+    assert sent_form == expected_form
+    assert list(sent_form) == list(expected_form)
+
+    def _bad_shaped_form(*args, **kwargs):
+        # A non-string value is exactly what a hand-built dict can produce and
+        # a real builder cannot -- assert_mutation_form_shape's own reason for
+        # existing (see its docstring in safety.py).
+        return {**build_standby_wait_form(*args, **kwargs), "extra": 1}
+
+    monkeypatch.setattr(client_module, "build_standby_wait_form", _bad_shaped_form)
+    with pytest.raises(KorailProtocolError):
+        client.confirm_standby_hold(_standby_hold())
+    # Still just the one request from before: the bad shape never went out.
+    assert len(recorder.requests) == 1
 
 
 # --- documentation contract -------------------------------------------------
