@@ -190,45 +190,10 @@ def test_real_length_key_is_the_shape_a_live_key_has():
 
 
 # ---------------------------------------------------------------------------
-# The URL of each opcode, parameter ORDER included.
+# The URL of each opcode. Parameter order/membership is pinned once, at the
+# safety-contract layer below (assert_netfunnel_request / KORAIL_NETFUNNEL_
+# QUERY_CONTRACTS), which the send path genuinely exercises.
 # ---------------------------------------------------------------------------
-
-
-def test_get_tid_chk_enter_url_is_opcode_sid_aid_in_that_order():
-    # T6/d.java:99-101 adds opcode, sid, aid — in that order and nothing else.
-    assert build_get_tid_chk_enter_url(
-        KORAIL_NETFUNNEL_URL,
-        action=KorailNetFunnelAction.INQUIRY,
-    ) == (
-        "https://nf.letskorail.com/ts.wseq"
-        "?opcode=5101&sid=service_1&aid=act_8"
-    )
-
-
-def test_get_tid_chk_enter_url_carries_the_peak_season_action():
-    # act_8_2 is a SEPARATE queue from act_8, which is the entire point of it.
-    assert build_get_tid_chk_enter_url(
-        KORAIL_NETFUNNEL_URL,
-        action=KorailNetFunnelAction.PEAK_SEASON_INQUIRY,
-    ).endswith("?opcode=5101&sid=service_1&aid=act_8_2")
-
-
-def test_chk_enter_url_is_opcode_then_key_and_nothing_else():
-    # T6/d.java:54-55. No sid, no aid, no ttl — the native SDK sends neither the
-    # service/action pair (unlike the JS dialect's 5002) nor the previous 201's
-    # ttl (which it keeps client-side, T6/g.java:462-467).
-    url = build_chk_enter_url(KORAIL_NETFUNNEL_URL, key=REAL_LENGTH_KEY)
-    assert url == (
-        f"https://nf.letskorail.com/ts.wseq?opcode=5002&key={REAL_LENGTH_KEY}"
-    )
-
-
-def test_set_complete_url_is_opcode_then_key_and_nothing_else():
-    # T6/d.java:78-79.
-    url = build_set_complete_url(KORAIL_NETFUNNEL_URL, key=REAL_LENGTH_KEY)
-    assert url == (
-        f"https://nf.letskorail.com/ts.wseq?opcode=5004&key={REAL_LENGTH_KEY}"
-    )
 
 
 def test_no_url_carries_the_javascript_dialects_parameters():
