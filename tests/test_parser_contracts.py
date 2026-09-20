@@ -55,6 +55,9 @@ _KOREA_LAT = (33.0, 39.0)
 # ``Dt``/``DT``/``Date`` 는 저마다 다른 응답에서 오는 서로 다른 철자입니다.
 _DATE_KEY = re.compile(r"(?:^|_)(?:dt|date|ymd)\d?$|(?:^|_)date_(?:start|end)$|Dt\d?$|DT$|Date$")
 _TIME_KEY = re.compile(r"(?:^|_)(?:tm|time|hm)\d?(?:_qb)?$|Tm\d?$")
+# ``pay`` 는 ``kakaopay``/``payco`` 같은 결제수단 플래그에도 걸립니다. 그쪽 값은
+# ``Y``/``N`` 이고 아래 가드는 숫자만 보므로 지나갑니다 — 우연이 아니라 알고
+# 두는 것입니다.
 _MONEY_KEY = re.compile(r"(amt|fare|price|prc|pay|cash|won|chrg|cost)", re.IGNORECASE)
 _COUNT_KEY = re.compile(r"(?:cnt|ordr|sqno|prnb)$", re.IGNORECASE)
 _RATIO_KEY = re.compile(r"_rt$")
