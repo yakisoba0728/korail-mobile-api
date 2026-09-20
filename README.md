@@ -11,7 +11,7 @@
 [![문서](https://img.shields.io/badge/%EB%AC%B8%EC%84%9C-yaki.kr-1f6feb?style=flat-square)](https://yaki.kr/korail-mobile-api/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776ab?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
 [![타입](https://img.shields.io/badge/typed-py.typed-2f6f4e?style=flat-square)](src/korail_mobile_api/py.typed)
-[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-2233-4c1?style=flat-square)](#문서)
+[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-2255-4c1?style=flat-square)](#문서)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square)](LICENSE)
 
 [문서](https://yaki.kr/korail-mobile-api/) ·
@@ -148,8 +148,8 @@ POST라 이 필드를 보내지 않습니다. 보호된 상수를 추측해서 �
 
 ## 무엇을 할 수 있나
 
-경계 안에 라우트 57개와 공개 메서드 77개가 있습니다. 라우트는 읽기 55개에
-로그인·로그아웃을 더한 것이고, 변경 라우트 9개는 읽기 전용 허용목록에 올라가지
+경계 안에 라우트 58개와 공개 메서드 77개가 있습니다. 라우트는 읽기 56개에
+로그인·로그아웃을 더한 것이고, 변경 라우트 10개는 읽기 전용 허용목록에 올라가지
 않습니다. 메서드 중 변경 메서드 14개는 로그인 세션만 있으면 곧바로 나가고,
 나머지 63개는 로그인·읽기만 보내거나 아무것도 보내지 않습니다. 이 라우트 수는
 기존 고수준 전송 경계의 허용목록이며, 7.0.6에서 추가됐던 나머지 Retrofit 계약은
@@ -354,7 +354,7 @@ Retrofit 계약은 [별도 구현 기록](docs/7.0.6-additions.md)에 정리했�
 | [CHANGELOG.md](CHANGELOG.md) | 무엇이 바뀌었나 |
 
 게이트는 `python3 -m pytest -q -m "not live"` 이고 네트워크를 쓰지 않습니다 —
-`2233 passed`. 지금 이 스위트에는 `live` 로 표시된 테스트가 하나도 없어 아무것도
+`2255 passed`. 지금 이 스위트에는 `live` 로 표시된 테스트가 하나도 없어 아무것도
 걸러지지 않습니다. 실서버를 건드리는 것은 `scripts/`의 스크립트들이고, 모두
 `KORAIL_MOBILE_API_LIVE=1` 이 있어야 하며 대부분은 자기 스위치도 따로 있어야
 합니다([scripts/README.md](scripts/README.md)). 기여는 [CONTRIBUTING.md](CONTRIBUTING.md),

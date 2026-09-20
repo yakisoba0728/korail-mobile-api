@@ -36,7 +36,7 @@
 | `price_recalculation` | `recalculate_price` |
 
 기존 13개 메서드는 로그인 세션을 요구하고(없으면 `KorailAuthError`), 전송은
-`post_mutation_form` 하나로 나갑니다 — 9개 변경 라우트는 모두 POST이고, 6.5.0 때
+`post_mutation_form` 하나로 나갑니다 — 10개 변경 라우트는 모두 POST이고, 6.5.0 때
 `@GET`으로 선언됐던 `dcntCrdExtn.do`도 7.0.6부터 POST로 바뀌어 실제로 닿을 수 있는
 GET 변경 라우트는 없습니다. 각 클라이언트 메서드가 호출하는 범주는 코드에 고정돼
 있고, 호출자가 고를 수 있는 인자가 아닙니다.
