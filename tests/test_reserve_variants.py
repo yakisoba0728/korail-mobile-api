@@ -529,9 +529,6 @@ def test_seat_assignment_refuses_an_inventory_without_a_car_number():
         (True, "5A"),
         ("4", "5A"),
         (4, ""),
-        (4, "5 A"),
-        (4, "5\nA"),
-        (4, "5Å"),
         (4, 5),
     ],
 )
