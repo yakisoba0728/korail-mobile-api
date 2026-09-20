@@ -4,6 +4,45 @@
 이 프로젝트는 [유의적 버전](https://semver.org/lang/ko/)을 따릅니다.
 1.0.0 이전 기록은 당시 형식·언어 그대로 보존합니다.
 
+## Unreleased
+
+### Removed
+
+- **`KorailConfig.live_env_var` 가 없어졌습니다.** 공개 필드였고 레퍼런스 사이트에도
+  실렸지만 읽는 코드가 하나도 없었습니다 — `live_enabled()`(`live.py:28-30`)는
+  `"KORAIL_MOBILE_API_LIVE"` 를 직접 적어 두고 이 필드를 보지 않습니다. 그래서
+  `KorailConfig(live_env_var="MY_GATE")` 로 만든 설정은 게이트 이름을 바꾸지 못한 채
+  바꿨다는 인상만 남겼고, 하필 그 게이트가 실거래 스위치입니다. 배선해서 약속을 참으로
+  만드는 대신, 호출자가 없는 경로를 늘리지 않는 쪽을 택했습니다. `KorailConfig` 를 위치
+  인자로 만드는 코드는 저장소에도 문서에도 없으므로 뒤 필드들의 뜻은 그대로입니다.
+
+### Fixed
+
+- **환불의 마일리지 정산 플래그가 뒤집혔습니다.** `build_refund_form` 이
+  `settle_mileage` 의 타입을 보지 않아, 문자열 `"N"` 을 넘기면 `bool("N")` 이 참이라
+  전선에는 `h_mlg_stl="Y"` 가 실렸습니다 — 호출자가 요청한 것의 정반대이고, 그 플래그는
+  환불에 마일리지를 정산할지를 정합니다. 같은 파일의 `build_standby_wait_form` 은 이
+  모양을 주석 다섯 줄과 함께 이미 거절하고 있었습니다. 환불 빌더도 같은 방식으로
+  거절합니다. **`settle_mileage` 에 `bool` 이 아닌 값을 넘기던 호출자는 이제
+  `KorailProtocolError` 를 받습니다.**
+- **카드번호 검사가 `KorailApiError` 계층 밖으로 샜습니다.** `build_card_payment_form`
+  이 `card.card_number` 를 `isinstance` 없이 정규식에만 걸어, 문자열이 아닌 카드번호는
+  `re` 에서 맨 `TypeError` 를 올렸습니다. "이 패키지의 실패는 전부 `KorailApiError`
+  아래에 있어야 합니다"라고 `KorailProtocolError` 의 docstring 이 선언하는 계약이 하필
+  결제 경로에서 깨져 있었습니다. 네 줄 위의 금액 검사와 형제 헬퍼 `_required_digits` 는
+  둘 다 타입을 먼저 봅니다.
+- **모델 두 개가 해시 불가였습니다.** `TicketListTicket.train_info` 와
+  `MaasServiceDetailInfo.entity_one` 은 같은 모양의 필드 119개 가운데 `compare=False`
+  가 빠진 둘뿐이라, 어느 쪽이든 `hash()` 하면 `TypeError: unhashable type: 'dict'`
+  였습니다. 둘 다 공개면에 있고 둘 다 `read_parsers` 가 실제로 만듭니다. `set` 에
+  넣거나 dict 키로 쓰면 터졌습니다.
+
+역발행 환불의 `retAmt`·`retFee` 는 그대로 두었습니다. `_STRICT_STATION_REFUND_FIELDS`
+위의 주석은 이 목록이 "금액을 어긋나게 할" 값을 막으려 있다고 적지만 실제로 막는 것은 빈
+문자열뿐입니다. 그런데 `verifyOnlineRefunds` 도 `executeOnlineRefunds` 도 한 번도 실행된
+적이 없어 두 금액의 전선 형태가 관측된 적이 없습니다. 여기에 숫자 규칙을 넣는 것은
+추측이고, 틀리면 정상 환불을 거부합니다.
+
 ## 1.2.0 - 2026-09-20
 
 KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠졌습니다.

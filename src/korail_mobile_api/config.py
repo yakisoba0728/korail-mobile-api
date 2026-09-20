@@ -56,7 +56,6 @@ class KorailConfig:
     key: str = KORAIL_APP_KEY
     timeout: float = KORAIL_TIMEOUT_SECONDS
     user_agent: str = KORAIL_USER_AGENT
-    live_env_var: str = "KORAIL_MOBILE_API_LIVE"
     #: DynaPath 구성. 기본은 **꺼짐**. ``enable_dynapath`` 로 켜거나
     #: 여기에 직접 넘기면 됩니다.
     dynapath: DynapathConfig = field(default_factory=DynapathConfig)
