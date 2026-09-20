@@ -8,6 +8,21 @@
 
 ### Added
 
+- **폼 빌더가 내보내는 이름과 순서를 얼렸습니다.** `tests/test_form_contracts.py`
+  와 `tests/golden/form_field_order.json` — 빌더 24개(상태변경 14 + 기본 조회 10),
+  필드 407개. `ebc4d5f` 가 지운 것 중 저자가 "the loss worth naming" 이라 적은
+  `tests/_read_field_contracts.py` 910줄이 하던 일입니다. 그쪽은 라우트마다 필드
+  이름과 **순서**를 들고 있었고, 1.2.0 이 그 계약을 전송 경로 밖으로 옮긴 뒤로
+  계약을 말하는 것은 각 빌더의 코드뿐이었습니다.
+  값이 아니라 키의 나열을 고정합니다 — Retrofit `@Field` 이름은 정확히 일치해야
+  하고(`txtPnrNo` 를 `txtPrnNo` 로 쓰면 PNR 없는 환불이 나갑니다), 순서는 앱이
+  만든 리스트를 `URLEncodedUtils.format` 이 그대로 뱉은 결과입니다. botocore 의
+  `Stubber.expected_params` 는 딕셔너리 비교라 순서를 보지 않으므로 표준 도구로
+  대체되지 않습니다. 넣는 값은 `tests/canonical.py` 의 지어낸 것들이고 실제 계정·
+  카드·PNR 은 들어 있지 않습니다. 골든을 다시 뜨려면 `KORAIL_GOLDEN_UPDATE=1 pytest`.
+  상태변경 빌더 열넷은 산출물이 `assert_mutation_form_shape` 를 통과하는지와 라우트가
+  등록된 것인지도 함께 봅니다.
+
 - **손으로 유지하는 불변식을 확인하는 검사가 생겼습니다.** `tests/test_invariants.py`
   한 파일, 393개 케이스, `test` extra(`pytest` 하나)와 3.11~3.14 CI 잡.
   `ebc4d5f` 가 121파일 33,071줄을 지우면서 커밋 메시지에 무엇이 남는지를 직접
