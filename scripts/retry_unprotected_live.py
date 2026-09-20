@@ -108,7 +108,6 @@ def main() -> int:
                     lambda query=query: client.search_trains_with_transfer_fallback(query),
                 )
             return 0
-        _try("v7_specific_date", lambda: client.v7.call("NetworkApi.postSpecificDateData"))
         _try(
             "multi_child_travel_date",
             lambda: client.get_multi_child_discount_targets(travel_date),

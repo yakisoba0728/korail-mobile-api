@@ -44,7 +44,6 @@ nav:
       - read_models: reference/read_models.md
       - read_payloads: reference/read_payloads.md
       - redaction: reference/redaction.md
-      - v7: reference/v7.md
   - 에러: errors.md
   - 변경 이력: changelog.md
 

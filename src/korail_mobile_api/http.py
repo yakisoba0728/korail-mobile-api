@@ -48,6 +48,11 @@ _NON_COMMON_OUT_READ_PATHS = frozenset({
     "/classes/com.korail.mobile.common.stationdata",
     "/classes/com.korail.mobile.common.stationinfo",
     "/ebizmaas/EbizMaasStationList.do",
+    # VerifyOnlineRefundsOut 도 CommonOut 을 상속하지 않고 strResult 기본값이
+    # null 입니다(VerifyOnlineRefundsOut.java:97). 없는 strResult 를 실패로 읽으면
+    # 성공한 검증이 실패로 분류됩니다. 삭제된 V7Gateway 가 같은 판정을
+    # _NON_COMMON_OUT_RESPONSE_MODELS 로 따로 들고 있던 것을 여기로 옮겼습니다.
+    "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
 })
 
 # certification.ReservationList is the one read-only path this package sends

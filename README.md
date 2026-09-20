@@ -151,9 +151,9 @@ POST라 이 필드를 보내지 않습니다. 보호된 상수를 추측해서 �
 로그인·로그아웃을 더한 것이고, 변경 라우트 10개는 읽기 전용 허용목록에 올라가지
 않습니다. 메서드 중 변경 메서드 14개는 로그인 세션만 있으면 곧바로 나가고,
 나머지 63개는 로그인·읽기만 보내거나 아무것도 보내지 않습니다. 이 라우트 수는
-기존 고수준 전송 경계의 허용목록이며, 7.0.6에서 추가됐던 나머지 Retrofit 계약은
-대부분 삭제됐습니다 — 별도의 `V7Gateway` 계약 레지스트리에는 이제 역발행 승차권
-환불의 검증·실행 계약 2개만 남아 있습니다.
+전송 경계의 허용목록이며, 7.0.6에서 추가됐던 나머지 Retrofit 계약은 삭제됐습니다.
+역발행 승차권 환불의 검증·실행 둘은 별도 게이트웨이를 쓰다가, 다른 메서드와 같은
+전송 경로로 들어왔습니다 — 그 게이트웨이만 폼 모양 검사를 건너뛰고 있었습니다.
 
 ### 읽기
 
@@ -200,7 +200,7 @@ POST라 이 필드를 보내지 않습니다. 보호된 상수를 추측해서 �
 | `pay_with_fake_card(hold, card, …)` | `payment` | 청구되지 않는 테스트 카드 |
 | `pay_with_card(hold, card, …)` | `payment` | 실카드. 메서드 이름 말고는 막는 것이 없음 |
 | `refund(ticket, …)` | `refund` | 결제된 승차권 환불 |
-| `execute_station_ticket_refund(request, …)` | `V7Gateway`의 `NetworkApi.executeOnlineRefunds`만 | 역발행 승차권의 온라인 환불 실행 |
+| `execute_station_ticket_refund(request, …)` | `refund` | 역발행 승차권의 온라인 환불 실행 |
 | `recalculate_price(request, …)` | `price_recalculation` | 할인 바뀐 hold 의 운임 재계산 |
 | `add_to_cart(request, …)` | `cart` | 잡힌 PNR 을 장바구니로 |
 | `register_discount_card(request, …)` | `discount_card` | N카드 구매 |
@@ -221,31 +221,30 @@ POST라 이 필드를 보내지 않습니다. 보호된 상수를 추측해서 �
 
 - 상태를 바꾸는 메서드 14개는 로그인 세션을 요구합니다. 세션이 없으면
   `KorailAuthError`이고 아무것도 나가지 않습니다.
-- 기존 변경 메서드 13개는 `post_mutation_form` 하나로 나갑니다. 전송 직전에
+- 변경 메서드 14개 전부가 `post_mutation_form` 하나로 나갑니다. 전송 직전에
   라우트가 등록된 변경 라우트인지, 그 메서드가 쓰는 범주가 그 라우트를 소유한
   범주와 같은지, 폼이 손으로 조립할 수 없는 모양인지를 검사합니다 — 범주는
   각 메서드에 코드로 고정돼 있고 호출자가 고르는 인자가 아닙니다.
-- `execute_station_ticket_refund`는 `V7Gateway`(`client.v7`)로
-  `NetworkApi.executeOnlineRefunds` 하나만 부릅니다. 이 레지스트리에는 그것과
-  조회용 `verifyOnlineRefunds` 둘만 남아 있고, 정기권/패스 구매 계약 네 개는
-  레지스트리에 없는 채로 무엇을 넘기든 이름으로 거부됩니다.
+  `execute_station_ticket_refund` 도 여기 포함됩니다. 예전에는 이것만 별도
+  게이트웨이로 나가면서 세 검사 중 폼 모양 검사를 건너뛰었습니다.
+- 정기권·패스 구매는 라우트가 두 허용목록 어디에도 없습니다. 이름으로 부를 수
+  있는 진입점도 없으므로, 전송 경로가 아예 존재하지 않습니다.
 - **청구되는 실카드를 막는 코드는 없습니다.** `pay_with_card` 와
   `pay_with_fake_card` 는 같은 폼을 만들고 같은 경로로 나갑니다. 가르는 것은
   호출자가 어느 이름을 불렀는가, 그것 하나뿐입니다.
 
 ```python
-from korail_mobile_api import KorailClient, KorailConfig, KorailMutationNotAllowedError
+from korail_mobile_api import KorailProtocolError
+from korail_mobile_api.safety import assert_mutation_route
 
-client = KorailClient(KorailConfig())
 try:
-    client.v7.call("NetworkApi.postPassReserve", {})
-except KorailMutationNotAllowedError as error:
-    print(error)  # 정기권/패스 구매는 이름으로 항상 거부됩니다
-client.close()
+    assert_mutation_route("POST", "/classes/com.korail.mobile.pass.passReserve")
+except KorailProtocolError as error:
+    print(error)  # 등록되지 않은 변경 라우트는 전송 경계가 거부합니다
 ```
 
-이 예제는 로그인도 네트워크도 필요 없습니다 — 거부는 요청을 만들기 전에
-일어납니다. 반대로 세션이 있는 상태에서 `client.reserve(train)`을 부르면 그
+이 예제는 클라이언트도 로그인도 네트워크도 필요 없습니다 — 거부는 요청을 만들기
+전에 일어납니다. 반대로 세션이 있는 상태에서 `client.reserve(train)`을 부르면 그
 순간 실제 예약 요청이 나갑니다.
 
 ## 에러 처리
@@ -331,9 +330,8 @@ Retrofit 계약은 [별도 구현 기록](docs/7.0.6-additions.md)에 정리했�
   게이트웨이도 정기권·패스 구매 계약 네 개는 이름으로 거부합니다.
 - **여행변경과 롤백, 예약 인원 변경** — 깨끗한 되돌리기가 없습니다.
 - **비회원 오프라인 반환, 체크인, 회원정보 변경** — 이 버전에 없습니다.
-- **승무원 호출** — `/classes/com.korail.mobile.push.callCrew.do` 는 기존
-  고수준 메서드와 transport 허용목록에서 제외되어 있고, 지금 2개로 줄어든
-  `V7Gateway` 계약 레지스트리에도 없어 이 패키지로는 전혀 부를 수 없습니다.
+- **승무원 호출** — `/classes/com.korail.mobile.push.callCrew.do` 는 고수준
+  메서드에도 transport 허용목록에도 없어 이 패키지로는 전혀 부를 수 없습니다.
 - **인증·NetFunnel·DynaPath 우회, 범용 WebView 자동화** — 영구히 범위 밖입니다.
 
 ## 문서

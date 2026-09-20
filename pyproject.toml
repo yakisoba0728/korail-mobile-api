@@ -150,7 +150,6 @@ strict = [
   "src/korail_mobile_api/limousine_payloads.py",
   "src/korail_mobile_api/netfunnel.py",
   "src/korail_mobile_api/read_models.py",
-  "src/korail_mobile_api/v7_contract_data.py",
 ]
 
 # scripts 는 가드 검증과 유니온 좁히기 때문에 basic 에서도 걸린다;

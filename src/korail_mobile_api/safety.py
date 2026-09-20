@@ -148,9 +148,9 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ),
         ("POST", "/classes/com.korail.mobile.refunds.CommissionView"),
         ("POST", "/classes/com.korail.mobile.refunds.SelTicketInfo"),
-        # 7.0.6 NetworkApi.verifyOnlineRefunds (v7_contract_data.CONTRACT_ROWS,
-        # effect="read"). Verifies a station-issued ticket before the online
-        # refund execute route below; it changes nothing itself.
+        # 7.0.6 NetworkApi.verifyOnlineRefunds. Verifies a station-issued ticket
+        # before the online refund execute route below; it changes nothing itself.
+        # Its response does not extend CommonOut -- http._NON_COMMON_OUT_READ_PATHS.
         ("POST", "/classes/com.korail.mobile.refunds.verifyOnlineRefunds"),
         # Loyalty READS. Neither carries a password and neither moves a point:
         # MyXPointView is the my-page summary the app fetches on open
@@ -224,12 +224,10 @@ KORAIL_MUTATION_ROUTES = frozenset(
         ),
         # refund
         ("POST", "/classes/com.korail.mobile.refunds.RefundsRequest"),
-        # 7.0.6 NetworkApi.executeOnlineRefunds (v7_contract_data.CONTRACT_ROWS,
-        # effect="mutation") -- the money-moving half of the station-ticket
-        # refund pair sent through V7Gateway.call, not post_mutation_form. It
-        # settles the amount verifyOnlineRefunds (above, in
-        # KORAIL_READ_ONLY_ROUTES) already quoted, so it is the same "refund"
-        # category as RefundsRequest.
+        # 7.0.6 NetworkApi.executeOnlineRefunds -- the money-moving half of the
+        # station-ticket refund pair. It settles the amount verifyOnlineRefunds
+        # (above, in KORAIL_READ_ONLY_ROUTES) already quoted, so it is the same
+        # "refund" category as RefundsRequest.
         ("POST", "/classes/com.korail.mobile.refunds.executeOnlineRefunds"),
         ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
         ("POST", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),

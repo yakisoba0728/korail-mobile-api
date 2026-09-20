@@ -274,7 +274,6 @@ from .read_payloads import (
 )
 from .safety import MutationCategory
 from .session import KorailSessionClient
-from .v7 import V7Gateway
 
 
 T = TypeVar("T")
@@ -341,11 +340,6 @@ class KorailClient:
     ) -> None:
         self.config = config or KorailConfig()
         self.http = KorailHttpClient(self.config, transport=transport)
-        try:
-            self.v7 = V7Gateway(self.http)
-        except Exception:
-            self.http.close()
-            raise
         self.session = KorailSessionClient(self.http)
         self._station_names: dict[str, str] | None = None
 
@@ -356,7 +350,6 @@ class KorailClient:
         호출을 하지 않습니다. 로그인까지 끝내려면 먼저 :meth:`logout`(서버 세션 무효화)
         이나 :meth:`clear_session`(로컬만 폐기)을 부르면 됩니다.
         """
-        self.v7.close()
         self.http.close()
 
     def login(
@@ -1926,27 +1919,31 @@ class KorailClient:
         self,
         request: StationRefundVerificationRequest,
     ) -> StationRefundVerificationResponse:
-        """Verify an existing station-issued ticket before online refund."""
+        """역 발행 승차권을 온라인 환불 전에 검증합니다.
+
+        응답 ``VerifyOnlineRefundsOut`` 은 ``CommonOut`` 을 상속하지 않아 ``strResult``
+        가 없을 수 있습니다 — :data:`~korail_mobile_api.http._NON_COMMON_OUT_READ_PATHS`
+        가 이 경로를 그렇게 다룹니다.
+        """
         self._require_session("station ticket refund verification requires")
-        fields = build_station_refund_verification_form(request)
-        def run() -> StationRefundVerificationResponse:
-            result = self.v7.call(
-                "NetworkApi.verifyOnlineRefunds", fields, include_common=True
-            )
-            return parse_station_refund_verification_response(result.raw)
-        return self._run_read(run)
+        return self._post_read(
+            "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
+            build_station_refund_verification_form(request),
+            parser=parse_station_refund_verification_response,
+        )
 
     def execute_station_ticket_refund(
         self,
         request: StationRefundExecutionRequest,
     ) -> StationRefundExecutionResponse:
-        """Execute a verified station-ticket refund."""
+        """검증된 역 발행 승차권의 환불을 실행합니다. **실제로 돈이 움직입니다.**"""
         self._require_session("station ticket refund requires")
-        fields = build_station_refund_execution_form(self.config, request)
-        result = self._run_read(
-            lambda: self.v7.call("NetworkApi.executeOnlineRefunds", fields)
+        return self._mutation(
+            "refund",
+            "/classes/com.korail.mobile.refunds.executeOnlineRefunds",
+            build_station_refund_execution_form(self.config, request),
+            parser=parse_station_refund_execution_response,
         )
-        return parse_station_refund_execution_response(result.raw)
 
     def add_to_cart(
         self,

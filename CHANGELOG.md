@@ -40,6 +40,33 @@
 
 ### Removed
 
+- **`V7Gateway` 가 없어졌습니다.** `v7.py` 282줄 + `v7_contract_data.py` 26줄 +
+  `docs/reference/v7.md`. 계약 117개를 이름으로 디스패치하던 범용 게이트웨이였는데
+  1.2.0 에서 115개가 빠지고 둘만 남았고, 둘 다 `FieldMap`·`form=True` 라
+  `@Body`·GET·`QueryMap` 분기와 `V7Contract.queries` 가 전부 도달 불가였습니다.
+  `client.v7` 속성과 `V7Gateway.call` 도 함께 없어집니다.
+
+  **이유는 크기가 아니라 게이트입니다.** `assert_mutation_form_shape` 의 호출부는
+  저장소 전체에서 `http.post_mutation_form` 한 곳인데, 역발행 환불만 이 게이트웨이로
+  나가면서 그 검사를 건너뛰었습니다. 대체 검사였던 어노테이션 필드명 대조도 계약이
+  `FieldMap` 이라 `has_map=True` 로 통째로 건너뛰어졌고, `_assert_wire_value` 는
+  `safety` 가 거부하는 `int` 를 허용했습니다. 실제로 돈을 옮기는 라우트가 세 단언 중
+  하나를 빼고 나가고 있었던 것입니다. `verify_station_ticket_refund` 와
+  `execute_station_ticket_refund` 는 이제 다른 일흔다섯 메서드와 같은
+  `_post_read`/`_mutation` 골격을 씁니다.
+
+  `VerifyOnlineRefundsOut` 이 `CommonOut` 을 상속하지 않는다는 판정은 게이트웨이의
+  `_NON_COMMON_OUT_RESPONSE_MODELS` 에서 `http._NON_COMMON_OUT_READ_PATHS` 로
+  옮겼습니다. 정기권/패스 구매를 이름으로 막던 `_NEVER_SENT` 는 없어졌지만 보장은
+  더 강해집니다 — 네 라우트는 두 허용목록 어디에도 없고, 이제 **이름으로 계약을 부를
+  진입점 자체가 없습니다.**
+- **`KorailClient.__init__` 의 도달 불가 `try`/`except` 가 없어졌습니다.**
+  `V7Gateway(self.http)` 한 줄만 감싸고 있었는데 그 생성자는 속성 대입 한 줄이라
+  예외를 낼 수 없었고, 바로 다음 줄의 `KorailSessionClient(...)` 는 같은 이유로
+  실패할 수 없는데도 감싸지 않아 배치가 비대칭이었습니다.
+- **`scripts/retry_unprotected_live.py` 의 죽은 v7 호출이 없어졌습니다.**
+  레지스트리에 없는 `NetworkApi.postSpecificDateData` 를 부르고 있었습니다.
+
 - **보낼 수 없는 라우트의 코드가 없어졌습니다.** 기프티켓 목록(`gift.gdLst.do`),
   승강장 번호(`tk.plfNo.do`), 현금영수증 발급(`cashReceipt.issue.do`), 그리고
   `seatMovie.LimousineScheduleView` 의 **요청 쪽**. 네 라우트 모두
