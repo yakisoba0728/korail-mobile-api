@@ -60,7 +60,7 @@
 
 다음 중 하나라도 건드리는 풀 리퀘스트에는 "고치는 것뿐"이라는 이유로 낮은 기준이 적용되지
 않습니다. `safety.py` 의 허용 목록에 상태 변경 라우트나 범주를 추가하는 것,
-`post_mutation_form` / `get_mutation_query` / `V7Gateway.call` 이 받아들이는 범위를
+`post_mutation_form` 과 `V7Gateway.call` 이 받아들이는 범위를
 넓히는 것, `v7.py` 의 정기권/패스 구매 거부 목록(`_NEVER_SENT`)을 줄이는 것,
 `redact_payload` 가 민감하다고 보는 대상을 바꾸는 것, `pay_with_card` 와
 `pay_with_fake_card` 를 더 가깝게 만드는 것(예: 하나로 합치기)입니다. 이 경우 다음

@@ -88,7 +88,7 @@ read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. As of 1.2.0,
 `pytest -m "not live"` collects 2257 tests and deselects none -- no test in
 the suite carries the `live` marker any more, so there is no opted-in
-live-service test left to deselect. `3119 passed, 1 deselected`,
+live-service test left to deselect. `3137 passed, 1 deselected`,
 `1246 passed, 1 deselected` (before the P0 live-evidence documentation
 coverage), and `1247 passed, 1 deselected` (directly after it) were this
 gate's size at earlier points in this record; none of those totals is
@@ -912,8 +912,9 @@ Nothing below has been run.
 4. **Send the hold.** One adult, 일반실, `IMMEDIATE`. As of 1.2.0 there is no
    dry run and no way to inspect the outgoing form before it goes out --
    `reserve_transfer(...)` transmits as soon as it is called, on a live
-   session. Expect the returned hold's `journey_count` to come back as
-   `"0002"` (zero-padded, as the 2026-07-26/2026-07-31 live holds recorded it).
+   session. Expect the returned hold's `journey_count` to come back as two
+   journeys. Nothing in this section has been run, so that is an expectation,
+   not a recorded value.
 
 > **Blocking, and deliberately not fixed here: `cancel_unpaid_hold` cannot
 > release a transfer hold.** It requires a hold whose `h_jrny_cnt` is
@@ -1238,8 +1239,10 @@ before this tranche. Four routes, of which two are reads:
   `POST research.dcntCrdInfo.do`. A **purchase**, despite the name: it answers
   with a `lumpStlTgtNo` that a payment then settles.
 - `extend_discount_card(ticket)` —
-  `GET reservation.dcntCrdExtn.do`. 기간연장. A mutation the app performs with a
-  GET, sent through `KorailHttpClient.get_mutation_query`.
+  `POST reservation.dcntCrdExtn.do`. 기간연장. 6.5.0 sent this as a GET; 7.0.6
+  moved it to a form POST, and it goes out through `post_mutation_form` like
+  every other mutation. [1.2.0: the GET mutation sender was deleted — no
+  registered mutation route was reachable through it any more.]
 
 The two writes sit in their own mutation category, `"discount_card"`, which
 `assert_mutation_route_category` checks against their routes before either can

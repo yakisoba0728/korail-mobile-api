@@ -15,9 +15,11 @@ is how a later reader can tell a closed question from an open one.
 
 Package version 1.2.0 removed four things this history describes as present:
 the mutation-consent system (`MutationConsent`, `MutationPreview`,
-`require_mutation_consent`, `MutationCategory`, `V7MutationConsent`,
-`V7MutationPreview`, and the `consent.py` module itself, along with the
-dry-run preview default), the 117-row 7.0.6 contract registry (it now holds
+`require_mutation_consent`, `V7MutationConsent`, `V7MutationPreview`, and
+the `consent.py` module itself, along with the dry-run preview default;
+`MutationCategory` survives in `safety.py`, where it still names the seven
+categories the route-to-category check runs on, but it is no longer exported
+from the package), the 117-row 7.0.6 contract registry (it now holds
 two contracts, `verifyOnlineRefunds` and `executeOnlineRefunds`), the
 `android_features.py` host-injection bridge, and the `run_live_smoke_from_env`
 live-smoke harness. Where a document below describes a consent gate or a
