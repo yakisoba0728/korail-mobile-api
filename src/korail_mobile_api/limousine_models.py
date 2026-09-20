@@ -13,10 +13,12 @@
 앱에서 사라져 클라이언트가 더는 보내지 않습니다. 그 질의·응답 타입은 저장해 둔 6.5.0
 응답을 해석할 수 있도록 남겨 두었습니다(``docs/7.0.6-removals.md``).
 
-``*Query`` 세 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서
-자릿수·형식을 검사합니다. 역은 라우트마다 다르게 줍니다 — 스케줄과 좌석 재고는
-역**코드**(4자리), 좌석이동 목록은 역**이름**입니다. 모든 필드가 ``repr=False``
-라서 질의 객체를 로그에 찍어도 승객 구성이 새지 않습니다.
+``*Query`` 세 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서 형식을
+검사합니다. 역은 라우트마다 다르게 줍니다 — 스케줄과 좌석 재고는 역**코드**
+(4자리), 좌석이동 목록은 역**이름**입니다. 승객 구성 프라이버시로 모든 필드를
+``repr=False`` 하는 건 ``LimousineScheduleViewQuery`` 뿐입니다 —
+``LimousineScheduleQuery``·``LimousineSeatInventoryQuery`` 는 운행/열차 식별자를
+그대로 보여 주고 ``room_class_code``(좌석 재고는 ``car_no`` 도)만 가립니다.
 
 운행 스케줄은 2026-09-16 실서버에서 확인했습니다 — 광명역→인천공항T1 42편을
 파싱했습니다(``docs/7.0.6-live-verification.md``). 좌석 재고와 좌석이동 목록은
@@ -50,6 +52,15 @@ def _ascii_digits(
         raise ValueError(f"{name} must contain {expected} ASCII digit(s)")
 
 
+def _non_empty_ascii(value: object, name: str, *, allow_empty: bool = False) -> None:
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string")
+    if allow_empty and value == "":
+        return
+    if not value or not value.isascii():
+        raise ValueError(f"{name} must be a non-empty ASCII string")
+
+
 def _required_text(value: object, name: str) -> None:
     if not isinstance(value, str):
         raise TypeError(f"{name} must be a string")
@@ -81,29 +92,34 @@ def _boolean(value: object, name: str) -> None:
 @dataclass(frozen=True)
 class LimousineScheduleQuery:
     """``lmu.scdlQry.do`` 운행 스케줄 조회의 입력."""
-    departure_date: str = field(repr=False)
-    departure_station_code: str = field(repr=False)
-    arrival_station_code: str = field(repr=False)
-    service_code: str = field(repr=False)
+    departure_date: str
+    departure_station_code: str
+    arrival_station_code: str
+    service_code: str
     room_class_code: str = field(repr=False)
-    departure_time: str = field(repr=False)
-    train_no: str = field(repr=False)
-    seat_attribute_code: str = field(repr=False)
-    reservation_sale_division_code: str = field(repr=False)
+    departure_time: str
+    train_no: str
+    seat_attribute_code: str
+    reservation_sale_division_code: str
 
     def __post_init__(self) -> None:
-        digit_fields: tuple[tuple[str, str, frozenset[int], bool], ...] = (
-            (self.departure_date, "departure_date", frozenset({8}), False),
-            (self.departure_station_code, "departure_station_code", frozenset({4}), False),
-            (self.arrival_station_code, "arrival_station_code", frozenset({4}), False),
-            (self.service_code, "service_code", frozenset({1, 2, 3}), False),
-            (self.room_class_code, "room_class_code", frozenset({1, 2}), False),
-            (self.departure_time, "departure_time", frozenset({6}), False),
-            (self.train_no, "train_no", frozenset({1, 2, 3, 4, 5}), True),
-            (self.seat_attribute_code, "seat_attribute_code", frozenset({3}), True),
+        # The exact digit-length each field must have on the wire is the
+        # server's format check to make, not this client's -- lmu.scdlQry.do
+        # forwards every one of these straight into the form
+        # (build_limousine_schedule_form) with nothing here branching on a
+        # specific length. Only "is this a real ASCII string" stays.
+        text_fields: tuple[tuple[str, str, bool], ...] = (
+            (self.departure_date, "departure_date", False),
+            (self.departure_station_code, "departure_station_code", False),
+            (self.arrival_station_code, "arrival_station_code", False),
+            (self.service_code, "service_code", False),
+            (self.room_class_code, "room_class_code", False),
+            (self.departure_time, "departure_time", False),
+            (self.train_no, "train_no", True),
+            (self.seat_attribute_code, "seat_attribute_code", True),
         )
-        for value, name, lengths, allow_empty in digit_fields:
-            _ascii_digits(value, name, lengths=lengths, allow_empty=allow_empty)
+        for value, name, allow_empty in text_fields:
+            _non_empty_ascii(value, name, allow_empty=allow_empty)
         _required_text(
             self.reservation_sale_division_code,
             "reservation_sale_division_code",
@@ -113,37 +129,41 @@ class LimousineScheduleQuery:
 @dataclass(frozen=True)
 class LimousineSeatInventoryQuery:
     """``lms.TResidualSeatsResearch.do`` 좌석 재고 조회의 입력."""
-    train_class_code: str = field(repr=False)
-    service_code: str = field(repr=False)
-    run_date: str = field(repr=False)
-    train_no: str = field(repr=False)
+    train_class_code: str
+    service_code: str
+    run_date: str
+    train_no: str
     car_no: str = field(repr=False)
     room_class_code: str = field(repr=False)
-    departure_station_code: str = field(repr=False)
-    arrival_station_code: str = field(repr=False)
-    seat_attribute_code: str = field(repr=False)
-    departure_run_order: str = field(repr=False)
-    arrival_run_order: str = field(repr=False)
-    passenger_count: int = field(repr=False)
-    product_no: str = field(repr=False)
-    is_arrow: bool = field(repr=False)
+    departure_station_code: str
+    arrival_station_code: str
+    seat_attribute_code: str
+    departure_run_order: str
+    arrival_run_order: str
+    passenger_count: int
+    product_no: str
+    is_arrow: bool
 
     def __post_init__(self) -> None:
-        digit_fields: tuple[tuple[str, str, frozenset[int], bool], ...] = (
-            (self.train_class_code, "train_class_code", frozenset({2}), False),
-            (self.service_code, "service_code", frozenset({1, 2, 3}), False),
-            (self.run_date, "run_date", frozenset({8}), False),
-            (self.train_no, "train_no", frozenset({1, 2, 3, 4, 5}), False),
-            (self.car_no, "car_no", frozenset({1, 2, 3, 4}), False),
-            (self.room_class_code, "room_class_code", frozenset({1, 2}), False),
-            (self.departure_station_code, "departure_station_code", frozenset({4}), False),
-            (self.arrival_station_code, "arrival_station_code", frozenset({4}), False),
-            (self.seat_attribute_code, "seat_attribute_code", frozenset({3}), True),
-            (self.departure_run_order, "departure_run_order", frozenset({6}), False),
-            (self.arrival_run_order, "arrival_run_order", frozenset({6}), False),
+        # Same reasoning as LimousineScheduleQuery.__post_init__: exact wire
+        # length is lms.TResidualSeatsResearch.do's format check to make, not
+        # this client's -- build_limousine_seat_inventory_form never branches
+        # on a specific length either.
+        text_fields: tuple[tuple[str, str, bool], ...] = (
+            (self.train_class_code, "train_class_code", False),
+            (self.service_code, "service_code", False),
+            (self.run_date, "run_date", False),
+            (self.train_no, "train_no", False),
+            (self.car_no, "car_no", False),
+            (self.room_class_code, "room_class_code", False),
+            (self.departure_station_code, "departure_station_code", False),
+            (self.arrival_station_code, "arrival_station_code", False),
+            (self.seat_attribute_code, "seat_attribute_code", True),
+            (self.departure_run_order, "departure_run_order", False),
+            (self.arrival_run_order, "arrival_run_order", False),
         )
-        for value, name, lengths, allow_empty in digit_fields:
-            _ascii_digits(value, name, lengths=lengths, allow_empty=allow_empty)
+        for value, name, allow_empty in text_fields:
+            _non_empty_ascii(value, name, allow_empty=allow_empty)
         _passenger_count(
             self.passenger_count,
             "passenger_count",
@@ -246,25 +266,25 @@ class LimousineScheduleViewQuery:
 @dataclass(frozen=True)
 class LimousineSchedule:
     """운행 스케줄 조회 결과의 한 편."""
-    arrival_date: str | None = field(default=None, repr=False)
-    arrival_station_code: str | None = field(default=None, repr=False)
-    arrival_run_order: str | None = field(default=None, repr=False)
-    arrival_time: str | None = field(default=None, repr=False)
-    transfer_division_code: str | None = field(default=None, repr=False)
-    departure_date: str | None = field(default=None, repr=False)
-    departure_station_code: str | None = field(default=None, repr=False)
-    departure_run_order: str | None = field(default=None, repr=False)
-    departure_time: str | None = field(default=None, repr=False)
+    arrival_date: str | None = None
+    arrival_station_code: str | None = None
+    arrival_run_order: str | None = None
+    arrival_time: str | None = None
+    transfer_division_code: str | None = None
+    departure_date: str | None = None
+    departure_station_code: str | None = None
+    departure_run_order: str | None = None
+    departure_time: str | None = None
     general_remaining_seat_count: str | None = None
     delay_minutes: str | None = None
     free_remaining_seat_count: str | None = None
     standing_remaining_seat_count: str | None = None
-    run_date: str | None = field(default=None, repr=False)
+    run_date: str | None = None
     special_remaining_seat_count: str | None = None
-    train_class_code: str | None = field(default=None, repr=False)
-    service_code: str | None = field(default=None, repr=False)
-    train_no: str | None = field(default=None, repr=False)
-    train_order_no: str | None = field(default=None, repr=False)
+    train_class_code: str | None = None
+    service_code: str | None = None
+    train_no: str | None = None
+    train_order_no: str | None = None
     yms_application_flag: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
@@ -272,7 +292,7 @@ class LimousineSchedule:
 @dataclass(frozen=True)
 class LimousineScheduleResponse(BaseKorailResponse):
     """``lmu.scdlQry.do`` 의 응답."""
-    following_page_extension: str | None = field(default=None, repr=False)
+    following_page_extension: str | None = None
     long_short_division_code: str | None = None
     schedules: tuple[LimousineSchedule, ...] = ()
 
@@ -280,16 +300,16 @@ class LimousineScheduleResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class LimousineSeat:
     """좌석표의 좌석 한 자리."""
-    direction_attribute_code: str | None = field(default=None, repr=False)
-    other_attribute_code: str | None = field(default=None, repr=False)
-    integrated_message: str | None = field(default=None, repr=False)
-    integrated_message_code: str | None = field(default=None, repr=False)
-    requested_attribute_code: str | None = field(default=None, repr=False)
+    direction_attribute_code: str | None = None
+    other_attribute_code: str | None = None
+    integrated_message: str | None = None
+    integrated_message_code: str | None = None
+    requested_attribute_code: str | None = None
     sale_possible_flag: str | None = None
     seat_no: str | None = field(default=None, repr=False)
-    specification: str | None = field(default=None, repr=False)
-    sequence_no: str | None = field(default=None, repr=False)
-    visual_message_division_code: str | None = field(default=None, repr=False)
+    specification: str | None = None
+    sequence_no: str | None = None
+    visual_message_division_code: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 

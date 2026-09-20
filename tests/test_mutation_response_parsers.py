@@ -44,20 +44,23 @@ from korail_mobile_api.redaction import redact_mapping
 SYNTHETIC_LIVE_PNR = "399999999999999"
 
 
-def test_refund_result_accepts_nullable_settlement_list_but_requires_the_key():
-    # RefundTicketOut.java:48-53 requires the key and assigns its nullable value.
+def test_refund_result_accepts_nullable_or_absent_settlement_list():
+    # RefundTicketOut.java:48-53 declares stlList nullable. A response that
+    # omits the key outright is treated the same as an explicit null, like
+    # every other optional field this package parses.
     null_result = parse_refund_ticket_response(
         {"strResult": "SUCC", "stlList": None}
     )
     empty_result = parse_refund_ticket_response(
         {"strResult": "SUCC", "stlList": []}
     )
+    missing_result = parse_refund_ticket_response({"strResult": "SUCC"})
     assert null_result.settlement_method_codes == ()
     assert null_result.settlement_list_is_null is True
     assert empty_result.settlement_method_codes == ()
     assert empty_result.settlement_list_is_null is False
-    with pytest.raises(KorailProtocolError, match="stlList is required"):
-        parse_refund_ticket_response({"strResult": "SUCC"})
+    assert missing_result.settlement_method_codes == ()
+    assert missing_result.settlement_list_is_null is True
 
 
 def test_ncard_purchase_preserves_settlement_and_tax_fields():

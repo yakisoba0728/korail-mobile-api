@@ -106,12 +106,12 @@ def test_v7_refund_settlement_and_netfunnel_303_are_parsed():
         {"strResult": "SUCC", "stlList": [{"stl_mns_cd": "SYNTHETIC_METHOD"}]}
     )
     assert result.settlement_method_codes == ("SYNTHETIC_METHOD",)
-    for incomplete in (
-        {"strResult": "SUCC"},
-        {"strResult": "SUCC", "stlList": [{}]},
-    ):
-        with pytest.raises(KorailProtocolError):
-            parse_refund_ticket_response(incomplete)
+    # A response that omits stlList outright is treated the same as an
+    # explicit null (see test_mutation_response_parsers.py), not rejected.
+    missing = parse_refund_ticket_response({"strResult": "SUCC"})
+    assert missing.settlement_list_is_null is True
+    with pytest.raises(KorailProtocolError):
+        parse_refund_ticket_response({"strResult": "SUCC", "stlList": [{}]})
     assert parse_queue_response(
         "303:key=ABC123&nwait=0&ttl=0", action="act_8"
     ).code == "303"

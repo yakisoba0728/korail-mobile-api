@@ -481,7 +481,7 @@ def test_response_models_are_frozen_and_parsers_map_synthetic_fields(
             setattr(instance, first, getattr(instance, first))
 
 
-def test_response_reprs_hide_identifiers_free_text_and_raw(
+def test_response_reprs_hide_envelope_text_sensitive_ids_and_raw(
     load_json_fixture,
 ):
     parsed = (
@@ -506,23 +506,30 @@ def test_response_reprs_hide_identifiers_free_text_and_raw(
             repr(parsed[3].intermediate_stations[0]),
         ]
     )
+    # TrainScheduleItem and IntermediateStation now show their run-of-the-mill
+    # identifiers and free text (train_no, station names, info_text, ...);
+    # only h_msg_txt, raw and the fields in redaction.SENSITIVE_KEYS
+    # (car_no) stay hidden.
     for secret in (
         "synthetic-free-seat-envelope-secret",
-        "synthetic-free-seat-content-secret",
         "SYNTHETIC-CAR-SECRET",
-        "synthetic-free-seat-title-secret",
         "synthetic-free-seat-raw-secret",
         "synthetic-guide-message-secret",
         "synthetic-guide-raw-secret",
-        "99001",
-        "synthetic-origin-name-secret",
-        "synthetic-info-text-secret",
         "synthetic-assignment-row-raw-secret",
-        "SYNTHETIC-MID-STATION-CODE",
-        "synthetic-mid-station-name-secret",
         "synthetic-merge-train-raw-secret",
     ):
         assert secret not in rendered
+    for visible in (
+        "synthetic-free-seat-content-secret",
+        "synthetic-free-seat-title-secret",
+        "99001",
+        "synthetic-origin-name-secret",
+        "synthetic-info-text-secret",
+        "SYNTHETIC-MID-STATION-CODE",
+        "synthetic-mid-station-name-secret",
+    ):
+        assert visible in rendered
 
 
 @pytest.mark.parametrize("parser_name", PARSER_NAMES)

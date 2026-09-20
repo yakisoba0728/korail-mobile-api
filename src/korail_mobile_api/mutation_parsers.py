@@ -25,7 +25,6 @@ from collections.abc import Mapping
 from typing import Any
 
 from .errors import KorailProtocolError
-from .models import BaseKorailResponse
 from .mutation_models import (
     CashReceiptApprovalItem,
     CashReceiptIssueResponse,
@@ -43,10 +42,8 @@ from .read_parsers import _optional_scalar_string as _optional_string
 
 
 def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse:
-    """필수 키 ``stlList``의 nullable 값과 정산 수단 코드를 보존합니다."""
-    copied, base = _response_mapping(raw)
-    if "stlList" not in copied:
-        raise KorailProtocolError("KORAIL refund stlList is required")
+    """``stlList``의 nullable 값과 정산 수단 코드를 보존합니다."""
+    copied = _response_mapping(raw)
     rows = copied.get("stlList")
     if rows is not None and not isinstance(rows, list):
         raise KorailProtocolError("KORAIL refund stlList must be a list")
@@ -58,7 +55,7 @@ def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse
             raise KorailProtocolError("KORAIL refund stl_mns_cd is required")
         codes.append(code)
     return RefundTicketResponse(
-        **_base_fields(base),
+        **_base_fields(copied),
         settlement_method_codes=tuple(codes),
         settlement_list_is_null=rows is None,
     )
@@ -89,7 +86,7 @@ def parse_cash_receipt_issue_response(
     nullable. Present lists must contain objects; approval identifiers remain
     hidden from ``repr``.
     """
-    copied, base = _response_mapping(raw)
+    copied = _response_mapping(raw)
     rows = copied.get("apvList", [])
     if rows is not None and not isinstance(rows, list):
         raise KorailProtocolError("KORAIL cash receipt apvList must be a list")
@@ -102,7 +99,7 @@ def parse_cash_receipt_issue_response(
         }
         approvals.append(CashReceiptApprovalItem(**approval_fields, raw=dict(row)))
     return CashReceiptIssueResponse(
-        **_base_fields(base),
+        **_base_fields(copied),
         transaction_division_code=_optional_string(
             copied, "cashRcetTxnDvCd", context="cash receipt issue"
         ),
@@ -135,7 +132,7 @@ def parse_station_refund_verification_response(
     raw: Mapping[str, Any],
 ) -> StationRefundVerificationResponse:
     """Parse ``VerifyOnlineRefundsOut`` and the original ticket it validates."""
-    copied, base = _response_mapping(raw)
+    copied = _response_mapping(raw)
     rows = copied.get("orgtkinfo_list", [])
     if rows is not None and not isinstance(rows, list):
         raise KorailProtocolError("KORAIL station refund orgtkinfo_list must be a list")
@@ -157,7 +154,7 @@ def parse_station_refund_verification_response(
             )
         )
     return StationRefundVerificationResponse(
-        **_base_fields(base),
+        **_base_fields(copied),
         received_amount=_optional_string(
             copied, "rcvd_amt", context="station refund verification"
         ),
@@ -182,9 +179,9 @@ def parse_station_refund_execution_response(
     raw: Mapping[str, Any],
 ) -> StationRefundExecutionResponse:
     """Parse ``ExecuteOnlineRefundsOut`` without dropping its refund type."""
-    copied, base = _response_mapping(raw)
+    copied = _response_mapping(raw)
     return StationRefundExecutionResponse(
-        **_base_fields(base),
+        **_base_fields(copied),
         refund_division_code=_optional_string(
             copied, "h_ret_dv_cd", context="station refund execution"
         ),
@@ -194,18 +191,19 @@ def parse_station_refund_execution_response(
 _DIGITS_RE = re.compile(r"[0-9]+")
 
 
-def _response_mapping(
-    raw: Mapping[str, Any],
-) -> tuple[dict[str, Any], BaseKorailResponse]:
-    """A copy of the answer and its envelope, checked before anything else.
+def _response_mapping(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """A copy of the answer, checked once before any row.
 
-    Every parser here calls this first, so a bad envelope is reported before
-    any row, and the envelope is not checked a second time.
+    Whether ``raw`` is a JSON object is still worth checking here -- callers
+    do reach these parsers directly, not only through the http layer -- but
+    that is now the only envelope check this module makes. It used to also
+    rebuild and re-check a :class:`~korail_mobile_api.models.BaseKorailResponse`
+    from the same mapping just to read three fields off it; the fields are
+    read straight off ``raw`` instead, the way ``read_parsers.py`` does.
     """
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
-    copied = dict(raw)
-    return copied, BaseKorailResponse.from_raw(copied)
+    return dict(raw)
 
 
 def _row(value: object, context: str) -> Mapping[str, Any]:
@@ -308,12 +306,12 @@ def _received_amount(
     return seat_total
 
 
-def _base_fields(base: BaseKorailResponse) -> dict[str, Any]:
+def _base_fields(copied: Mapping[str, Any]) -> dict[str, Any]:
     return {
-        "h_msg_cd": base.h_msg_cd,
-        "h_msg_txt": base.h_msg_txt,
-        "str_result": base.str_result,
-        "raw": base.raw,
+        "h_msg_cd": copied.get("h_msg_cd"),
+        "h_msg_txt": copied.get("h_msg_txt"),
+        "str_result": copied.get("strResult"),
+        "raw": copied,
     }
 
 
@@ -376,7 +374,7 @@ def parse_reservation_hold_response(
     ``str_result``·``h_msg_cd`` 를 직접 봐야 합니다. 홀드가 실제로 걸렸는데
     파싱이 거부하면 놓을 수 없는 예약이 남기 때문입니다.
     """
-    copied, base = _response_mapping(raw)
+    copied = _response_mapping(raw)
     journeys_container = copied.get("jrny_infos")
     if journeys_container is None:
         journey_rows: list[Any] = []
@@ -409,12 +407,12 @@ def parse_reservation_hold_response(
         )
 
     return ReservationHoldResponse(
-        # Spelled out rather than **_base_fields(base): with the field map
+        # Spelled out rather than **_base_fields(copied): with the field map
         # also unpacked, the type checker cannot tell which one fills raw.
-        h_msg_cd=base.h_msg_cd,
-        h_msg_txt=base.h_msg_txt,
-        str_result=base.str_result,
-        raw=base.raw,
+        h_msg_cd=copied.get("h_msg_cd"),
+        h_msg_txt=copied.get("h_msg_txt"),
+        str_result=copied.get("strResult"),
+        raw=copied,
         **{
             attr: _optional_string(copied, wire_key, context="reservation")
             for attr, wire_key in _RESERVATION_HOLD_FIELDS.items()
@@ -438,7 +436,7 @@ def parse_reservation_payment_response(
     홀드 파서와 마찬가지로 성공 여부는 판정하지 않습니다. 결제가 서버에서 이미
     이뤄졌을 수 있으므로 응답을 버리지 않습니다.
     """
-    copied, base = _response_mapping(raw)
+    copied = _response_mapping(raw)
     value = copied.get("tk_coupon_info")
     if value is None:
         rows: list[Any] = []
@@ -463,7 +461,7 @@ def parse_reservation_payment_response(
         )
 
     return ReservationPaymentResponse(
-        **_base_fields(base),
+        **_base_fields(copied),
         image_ticket_flag=_optional_string(
             copied,
             "h_im_flg",
@@ -499,11 +497,11 @@ def parse_discount_card_purchase_response(
 
     **라이브 미검증.** 전송된 적이 없으므로 관측된 적도 없습니다.
     """
-    data, base = _response_mapping(raw)
+    data = _response_mapping(raw)
     return DiscountCardPurchaseResponse(
-        h_msg_cd=base.h_msg_cd,
-        h_msg_txt=base.h_msg_txt,
-        str_result=base.str_result,
+        h_msg_cd=data.get("h_msg_cd"),
+        h_msg_txt=data.get("h_msg_txt"),
+        str_result=data.get("strResult"),
         raw=data,
         **{
             attribute: _optional_string(

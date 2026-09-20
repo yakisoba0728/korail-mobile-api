@@ -884,18 +884,12 @@ def parse_seat_car_list_response(
     raw = response.raw
     rows = _nested_rows(raw, "srcar_infos", "srcar_info", "seat inventory")
     cars: list[SeatCar] = []
-    car_numbers: set[int] = set()
     for row in rows:
         if not isinstance(row, Mapping):
             raise KorailProtocolError(
                 "KORAIL seat car list contained a non-object row"
             )
         car_no = _inventory_required_int(row, "h_srcar_no")
-        if car_no in car_numbers:
-            raise KorailProtocolError(
-                "KORAIL seat car list contained a duplicate car number"
-            )
-        car_numbers.add(car_no)
         # SearchCarListDao.CarInfo.seatAttInfos is a nullable Gson List
         # (SearchCarListDao.java:19) and the app null-guards it before use
         # (SeatSearchActivity.java:254 -> C0804d.isNull(list) || size()==0), so a
@@ -925,13 +919,6 @@ def parse_seat_car_list_response(
             row,
             "h_rest_seat_cnt",
         )
-        if (
-            total_seat_count is not None
-            and remaining_seat_count > total_seat_count
-        ):
-            raise KorailProtocolError(
-                "KORAIL seat car remaining count exceeds total count"
-            )
         cars.append(
             SeatCar(
                 car_no=car_no,
@@ -998,8 +985,10 @@ def parse_seat_inventory_response(
     """``research.TResidualSeatsResearch.do`` 의 좌석 배치와 점유 상태를 파싱합니다.
 
     7.0.6 DTO는 ``seatList``·``windowList`` 생략 시 빈 목록이며 잔여·전체
-    좌석 수 키는 선언하지 않습니다. 그 두 건수가 함께 오면 모순 여부를
-    검사하고, 없으면 ``None`` 으로 둡니다.
+    좌석 수 키는 선언하지 않습니다. 있으면 그대로 담고, 없으면 ``None`` 으로
+    둡니다. 두 건수가 서로 모순이어도 서버가 보낸 그대로 돌려줍니다 — 읽기
+    전용 재고 데이터라 서버 자신의 계수기끼리의 불일치는 호출자가 볼 서버
+    이상 현상이지, 이 클라이언트가 응답을 거부할 사유가 아닙니다.
 
     좌석 행은 :class:`~korail_mobile_api.models.PhysicalSeat` 가 됩니다. 창문
     위치 비율은 좌석이 아니라 좌석표를 그리기 위한 값이라
@@ -1016,14 +1005,6 @@ def parse_seat_inventory_response(
         raw,
         "seat_total_count",
     )
-    if (
-        remaining_count is not None
-        and total_count is not None
-        and remaining_count > total_count
-    ):
-        raise KorailProtocolError(
-            "KORAIL seat inventory remaining count exceeds total count"
-        )
 
     seat_rows = (
         _inventory_required_list(raw, "seatList") if "seatList" in raw else []

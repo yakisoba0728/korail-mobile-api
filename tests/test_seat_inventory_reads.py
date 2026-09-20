@@ -703,17 +703,13 @@ def test_car_parser_rejects_wrong_scalar_types(
         _parse_car(raw)
 
 
-def test_car_parser_rejects_negative_counts_and_duplicate_car_numbers(
+def test_car_parser_rejects_negative_counts(
     load_json_fixture,
 ):
     negative = load_json_fixture("seat_car_list_success.json")
     negative["srcar_infos"]["srcar_info"][0]["h_rest_seat_cnt"] = -1
-    duplicate = load_json_fixture("seat_car_list_success.json")
-    duplicate["srcar_infos"]["srcar_info"][1]["h_srcar_no"] = 2
     with pytest.raises(KorailProtocolError, match="negative"):
         _parse_car(negative)
-    with pytest.raises(KorailProtocolError, match="duplicate"):
-        _parse_car(duplicate)
 
 
 @pytest.mark.parametrize(
@@ -845,13 +841,6 @@ def test_seat_parser_preserves_repeated_seat_labels(
         ("SYNTHETIC-REPEATED-LABEL", "SYNTHETIC-SEQUENCE-1"),
         ("SYNTHETIC-REPEATED-LABEL", "SYNTHETIC-SEQUENCE-2"),
     ]
-
-
-def test_seat_parser_rejects_impossible_counts(load_json_fixture):
-    impossible = load_json_fixture("seat_inventory_success.json")
-    impossible["seat_remain_count"] = 9
-    with pytest.raises(KorailProtocolError, match="remaining"):
-        _parse_seat(impossible)
 
 
 def test_seat_parser_allows_empty_lists_and_count_independent_list_length(

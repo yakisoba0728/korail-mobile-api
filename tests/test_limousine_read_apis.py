@@ -238,12 +238,13 @@ def test_public_queries_and_response_models_are_frozen_and_exported(
         assert getattr(korail_mobile_api, name) is globals()[name]
 
 
-def test_query_reprs_hide_every_runtime_identifier_and_free_text(
-    schedule_query,
-    seat_query,
+def test_view_query_repr_hides_every_runtime_identifier_and_free_text(
     view_query,
 ):
-    rendered = f"{schedule_query!r} {seat_query!r} {view_query!r}"
+    # LimousineScheduleViewQuery is the one query family decision #2 keeps
+    # fully masked (passenger-composition privacy); its own repr must still
+    # hide every one of these, unlike schedule_query/seat_query below.
+    rendered = repr(view_query)
     for secret in (
         "20991231",
         "9001",
@@ -259,6 +260,39 @@ def test_query_reprs_hide_every_runtime_identifier_and_free_text(
         assert secret not in rendered
 
 
+def test_schedule_and_seat_query_reprs_show_identifiers_hide_room_class_and_car_no(
+    schedule_query,
+    seat_query,
+):
+    schedule_rendered = repr(schedule_query)
+    for shown in (
+        "20991231",
+        "9001",
+        "9002",
+        "777",
+        "220000",
+        "SYNTHETIC-SALE",
+    ):
+        assert shown in schedule_rendered
+    assert "room_class_code" not in schedule_rendered
+
+    seat_rendered = repr(seat_query)
+    for shown in (
+        "77",
+        "20991231",
+        "54321",
+        "9001",
+        "9002",
+        "888",
+        "000123",
+        "000456",
+    ):
+        assert shown in seat_rendered
+    assert "room_class_code" not in seat_rendered
+    assert "car_no" not in seat_rendered
+    assert "0007" not in seat_rendered
+
+
 def test_closed_queries_reject_unknown_fields(schedule_query):
     values = {
         field.name: getattr(schedule_query, field.name)
@@ -272,16 +306,21 @@ def test_closed_queries_reject_unknown_fields(schedule_query):
 @pytest.mark.parametrize(
     ("field_name", "value"),
     [
-        ("departure_date", "2099-12-31"),
+        # lmu.scdlQry.do forwards every one of these straight into the form
+        # with nothing branching on a specific length (see
+        # build_limousine_schedule_form), so this client no longer polices an
+        # exact digit length -- only "wrong type", "empty when required" and
+        # "not ASCII" stay its job.
+        ("departure_date", ""),
+        ("departure_date", 20991231),
         ("departure_date", "２０９９１２３１"),
-        ("departure_station_code", "90A1"),
+        ("departure_station_code", ""),
         ("arrival_station_code", "９００２"),
         ("service_code", ""),
-        ("service_code", "77A"),
         ("room_class_code", ""),
-        ("departure_time", "22:00:00"),
-        ("train_no", "12A"),
-        ("seat_attribute_code", "  "),
+        ("departure_time", ""),
+        ("train_no", "１２"),
+        ("seat_attribute_code", "８８８"),
         ("reservation_sale_division_code", ""),
     ],
 )
@@ -297,17 +336,20 @@ def test_schedule_query_rejects_malformed_runtime_values(
 @pytest.mark.parametrize(
     ("field_name", "value"),
     [
-        ("train_class_code", "7A"),
+        # Same reasoning as the schedule query above --
+        # build_limousine_seat_inventory_form never branches on a specific
+        # length either.
+        ("train_class_code", ""),
         ("service_code", "７７７"),
-        ("run_date", "2099-12-31"),
+        ("run_date", ""),
         ("train_no", ""),
         ("car_no", ""),
-        ("car_no", "7A"),
+        ("car_no", 7),
         ("room_class_code", ""),
-        ("departure_station_code", "901"),
-        ("arrival_station_code", "90020"),
-        ("seat_attribute_code", "88A"),
-        ("departure_run_order", "123"),
+        ("departure_station_code", ""),
+        ("arrival_station_code", "９００２０"),
+        ("seat_attribute_code", "８８８"),
+        ("departure_run_order", None),
         ("arrival_run_order", "１２３４５６"),
         ("passenger_count", True),
         ("passenger_count", 0),
@@ -581,16 +623,17 @@ def test_schedule_parser_maps_every_static_bus_field_and_hides_sensitive_repr(
     assert schedule.yms_application_flag == "SYNTHETIC-YMS"
     assert result.raw is raw
     rendered = f"{result!r} {schedule!r}"
+    # following_page_extension, train_no and the two station codes are no
+    # longer sensitive -- only the envelope message and the raw payloads stay
+    # hidden.
     for secret in (
         "synthetic-schedule-envelope-secret",
-        "SYNTHETIC-FOLLOW",
         "synthetic-schedule-raw-secret",
         "synthetic-schedule-response-raw-secret",
-        "54321",
-        "9001",
-        "9002",
     ):
         assert secret not in rendered
+    for visible in ("SYNTHETIC-FOLLOW", "54321", "9001", "9002"):
+        assert visible in rendered
 
 
 def test_seat_parser_maps_static_inventory_and_hides_ids_messages_and_raw(
@@ -617,15 +660,17 @@ def test_seat_parser_maps_static_inventory_and_hides_ids_messages_and_raw(
     assert seat.visual_message_division_code == "SYNTHETIC-VISUAL-CODE"
     assert result.raw is raw
     rendered = f"{result!r} {seat!r}"
+    # integrated_message is no longer sensitive; seat_no and the response's
+    # car_no stay masked (redaction.SENSITIVE_KEYS), as do the raw payloads.
     for secret in (
         "synthetic-seat-envelope-secret",
-        "synthetic-seat-message-secret",
         "SYNTHETIC-SEAT-01",
         "0007",
         "synthetic-seat-row-raw-secret",
         "synthetic-seat-response-raw-secret",
     ):
         assert secret not in rendered
+    assert "synthetic-seat-message-secret" in rendered
 
 
 def test_schedule_view_parser_maps_static_paging_train_and_product_fields(
