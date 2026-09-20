@@ -101,10 +101,10 @@ ignore = [
   "RUF002",
   "RUF003",
   # `__all__` 알파벳 정렬. 지금 `__all__` 는 __init__.py 의 import 블록과 같은
-  # 모듈 순서로 묶여 있다. tests/test_public_surface_rule.py 는 집합으로
-  # 비교하므로 정렬해도 테스트는 통과한다 — 묶음을 지키는 이유는 그 파일이
-  # 요구하는 "강등은 import 줄과 __all__ 항목을 둘 다 지우는 것"을 눈으로
-  # 대조할 수 있게 하기 위해서다. 알파벳순은 그 대조를 없앤다.
+  # 모듈 순서로 묶여 있다. 남은 export 테스트들은 이름을 집합으로 비교하므로
+  # 정렬해도 통과하지만, 묶음을 지키는 이유는 따로 있다 — 이름 하나를 끌어내릴 때
+  # import 줄과 __all__ 항목을 둘 다 지웠는지 눈으로 대조할 수 있게 하기 위해서다.
+  # 알파벳순은 그 대조를 없앤다.
   "RUF022",
 ]
 
@@ -122,10 +122,6 @@ lines-after-imports = 2
 extend-immutable-calls = ["korail_mobile_api.read_payloads.RefundCompanion"]
 
 [tool.ruff.lint.per-file-ignores]
-# 파일 맨 앞의 "저장소별 상수 블록" 다음에 import 가 온다. 그 배치가 마커 아래를
-# 형제 저장소와 바이트 동일하게 유지하는 방법이라, import 를 위로 올리면 공유가
-# 깨진다(파일 자신의 docstring 이 그렇게 못박아 두었다).
-"tests/test_public_surface_rule.py" = ["E402"]
 # 마스킹 대상 키 집합은 같은 철자를 일부러 여러 번 적는다. 중복 하나하나가 서로
 # 다른 주석 아래 놓여 있고, 그 주석이 "이 철자는 어느 라우트/어느 응답에서
 # 오는가"를 말한다(예: ogtkRetPwd 는 요청 키로도, 인덱스 붙은 @FieldMap 키로도,

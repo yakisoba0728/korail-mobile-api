@@ -119,6 +119,12 @@ KORAIL Talk 7.0.6 APK 에 맞춘 판입니다. 공개 메서드 세 개가 빠�
 
 - `get_gift_ticket_list()`, `get_limousine_schedule_view()`, `get_platform_numbers()` —
   7.0.6 에 해당 경로가 없습니다. [제거 기록](docs/7.0.6-removals.md) 참고.
+- **라이브 스모크 하니스가 설치되는 패키지에서 빠졌습니다.** `live.py` 의
+  `run_live_smoke_from_env`(실서버에 로그인해 읽기 표면 전체를 도는 관리자 전용
+  스캐폴딩)가 삭제됐습니다. `build_config_from_env`·`live_enabled`·
+  `read_credentials_from_env` 는 그대로입니다 — `scripts/`와 그 테스트가 직접
+  씁니다. 유일하게 그것을 부르던 테스트 `tests/test_live_service.py` 도 함께
+  삭제됐고, 스위트 전체에서 `live` 로 표시된 테스트가 이제 하나도 없습니다.
 
 ### Fixed
 
