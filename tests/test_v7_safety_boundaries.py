@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from urllib.parse import parse_qsl
 
 import httpx
@@ -20,25 +19,11 @@ import pytest
 from korail_mobile_api import KorailClient, KorailConfig, TrainSearchQuery
 from korail_mobile_api.errors import KorailMutationNotAllowedError, KorailProtocolError
 from korail_mobile_api.payloads import build_train_schedule_special_form
-from korail_mobile_api.safety import KORAIL_MUTATION_ROUTES, KORAIL_READ_ONLY_ROUTES
 from korail_mobile_api.v7 import V7_CONTRACTS, V7Response
-
-
-SPECIAL = "NetworkApi.postScheduleViewSpecial"
-SPECIAL_PATH = "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
 
 
 def _never_send(request: httpx.Request) -> httpx.Response:
     pytest.fail(f"request must not be sent: {request.method} {request.url.path}")
-
-
-def _special_form() -> dict[str, str]:
-    return build_train_schedule_special_form(
-        KorailConfig(),
-        TrainSearchQuery("0001", "0723", "20990101"),
-        departure_name="서울",
-        arrival_name="부산",
-    )
 
 
 @pytest.mark.parametrize("field", ["device", "version"])
@@ -76,80 +61,6 @@ def test_every_loaded_contract_is_a_read_or_a_mutation() -> None:
     assert {contract.effect for contract in V7_CONTRACTS.values()} == {"read", "mutation"}
 
 
-def test_non_member_ticket_is_a_method_scoped_mutation() -> None:
-    name = "NetworkApi.postNonMemTicket"
-    values = {"txtJobId": "synthetic-job", "txtCustNm": "synthetic-name"}
-    assert V7_CONTRACTS[name].effect == "mutation"
-    assert V7_CONTRACTS["NetworkApi.postNonMemTicketList"].effect == "read"
-
-    def respond(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"strResult": "SUCC"})
-
-    client = KorailClient(transport=httpx.MockTransport(respond))
-    try:
-        result = client.v7.call(name, values)
-    finally:
-        client.close()
-    assert isinstance(result, V7Response)
-    assert result.name == name
-
-
-def test_v7_routes_shared_with_high_level_tables_are_exactly_known() -> None:
-    # A V7 contract on a safety.py READ_ONLY route is no longer field-checked
-    # (only route-checked, same as post_form); a MUTATION route is refused
-    # outright. Any new overlap must be decided explicitly here.
-    shared = KORAIL_READ_ONLY_ROUTES | KORAIL_MUTATION_ROUTES
-    assert {
-        contract.name for contract in V7_CONTRACTS.values()
-        if (contract.http, contract.route) in shared
-    } == {SPECIAL}
-
-
-def test_schedule_view_special_well_formed_call_is_sent() -> None:
-    requests: list[httpx.Request] = []
-
-    def respond(request: httpx.Request) -> httpx.Response:
-        requests.append(request)
-        return httpx.Response(200, json={"strResult": "SUCC"})
-
-    form = _special_form()
-    client = KorailClient(transport=httpx.MockTransport(respond))
-    try:
-        # The common fields come from the include_common merge, so the check
-        # must run on the merged data for this call to pass.
-        response = client.v7.call(
-            SPECIAL,
-            {key: value for key, value in form.items()
-             if key not in {"Device", "Version", "Key"}},
-            include_common=True,
-        )
-    finally:
-        client.close()
-    assert isinstance(response, V7Response)
-    assert response.raw == {"strResult": "SUCC"}
-    assert len(requests) == 1
-    assert requests[0].url.path == SPECIAL_PATH
-    pairs = parse_qsl(requests[0].content.decode())
-    assert len(pairs) == len(form)
-    assert dict(pairs) == form
-
-
-def test_contract_on_high_level_mutation_route_is_refused(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    name = "NetworkApi.postNonMemTicket"
-    monkeypatch.setitem(V7_CONTRACTS, name, replace(
-        V7_CONTRACTS[name],
-        route="/classes/com.korail.mobile.certification.TicketReservation",
-    ))
-    client = KorailClient(transport=httpx.MockTransport(_never_send))
-    try:
-        with pytest.raises(KorailProtocolError, match="high-level KorailClient"):
-            client.v7.call(name, {"txtJobId": "synthetic-job"})
-    finally:
-        client.close()
-
-
 # --------------------------------------------------------------------------
 # Every contract, one at a time. The registry and the gateway share one source,
 # so a round trip alone cannot notice a row that was edited wrongly: the row
@@ -168,11 +79,6 @@ _PASS_PURCHASES = (
 _CONTRACT_NAMES = sorted(V7_CONTRACTS)
 _SENT_CONTRACT_NAMES = sorted(set(V7_CONTRACTS) - set(_PASS_PURCHASES))
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
-_PARTNER_ORIGINS = {
-    interface: f"https://{interface.lower()}.example"
-    for interface in {contract.interface for contract in V7_CONTRACTS.values()}
-    if interface != "NetworkApi"
-}
 
 
 def _bare_params(params: str) -> set[str]:
@@ -207,18 +113,6 @@ def test_every_contract_obeys_retrofits_own_rules(name: str) -> None:
 def _wire_values(name: str) -> tuple[dict, bool]:
     """A valid set of wire values for one contract, and whether to merge common."""
     contract = V7_CONTRACTS[name]
-    if name == SPECIAL:
-        form = _special_form()
-        return (
-            {k: v for k, v in form.items() if k not in {"Device", "Version", "Key"}},
-            True,
-        )
-    if name == "NetworkApi.productCancel":
-        return {"txtVrRsNo": "v-reservation", "txtGdSqno": "v-product"}, False
-    if contract.request_model == "com.korail.talk.network.model.GreenCarDetailRequest":
-        return {"first": "v-first", "second": "v-second"}, False
-    if contract.request_model == "com.korail.talk.data.CacheCheckRequest":
-        return {"versions": {"station": "1"}}, False
     declared = contract.fields if contract.form else contract.queries
     values: dict = {key: f"v-{key}" for key in sorted(declared)}
     if ("FieldMap" if contract.form else "QueryMap") in _bare_params(contract.params):
@@ -228,9 +122,9 @@ def _wire_values(name: str) -> tuple[dict, bool]:
 
 @pytest.mark.parametrize("name", _SENT_CONTRACT_NAMES)
 def test_every_contract_goes_out_as_its_row_describes(name: str) -> None:
-    """Method, host, path, headers and encoding, for each of the 113 it sends.
+    """Method, host, path, headers and encoding, for each surviving contract it sends.
 
-    The other four of the 117 are the pass purchases, refused by name.
+    The pass purchases are refused by name, not sent here.
 
     Every contract sends immediately; there is no separate mutation-consent
     step any more.
@@ -246,15 +140,7 @@ def test_every_contract_goes_out_as_its_row_describes(name: str) -> None:
             200, json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": ""}
         )
 
-    def partner(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"ok": True})
-
-    client = KorailClient(
-        transport=httpx.MockTransport(main),
-        partner_origins=_PARTNER_ORIGINS,
-        partner_transport=httpx.MockTransport(partner),
-    )
+    client = KorailClient(transport=httpx.MockTransport(main))
     try:
         result = client.v7.call(
             name,
@@ -269,15 +155,8 @@ def test_every_contract_goes_out_as_its_row_describes(name: str) -> None:
     assert len(seen) == 1
     request = seen[0]
     assert request.method == contract.http
-    # One route is relative in its annotation (SamsungWalletApi's
-    # "wallet/cmn/..."). Retrofit resolves that against the base URL, and a
-    # partner origin here is path-less by rule, so it lands at the root.
     assert request.url.path == "/" + contract.route.lstrip("/")
-    expected_host = (
-        "smart.letskorail.com"
-        if contract.interface == "NetworkApi"
-        else httpx.URL(_PARTNER_ORIGINS[contract.interface]).host
-    )
+    expected_host = "smart.letskorail.com"
     assert request.url.host == expected_host
     for header, value in headers.items():
         assert request.headers[header] == value

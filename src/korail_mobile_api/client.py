@@ -342,17 +342,11 @@ class KorailClient:
         config: KorailConfig | None = None,
         *,
         transport: httpx.BaseTransport | None = None,
-        partner_origins: Mapping[str, str] | None = None,
-        partner_transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.config = config or KorailConfig()
         self.http = KorailHttpClient(self.config, transport=transport)
         try:
-            self.v7 = V7Gateway(
-                self.http,
-                partner_origins=partner_origins,
-                partner_transport=partner_transport,
-            )
+            self.v7 = V7Gateway(self.http)
         except Exception:
             self.http.close()
             raise

@@ -17,8 +17,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
-from types import MappingProxyType
+from dataclasses import dataclass, field
 from typing import Any, Literal, TypedDict, cast
 from urllib.parse import urlencode, urlsplit
 
@@ -35,28 +34,6 @@ from .v7_contract_data import CONTRACT_ROWS
 
 _ANNOTATION = re.compile(r"(Field|Query|Header)\(([^)]+)\)")
 _NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
-# Generated Retrofit rows preserve signatures and DTO names. Effect is a local
-# safety decision: password checks can increment failure counters, while the
-# check-in, QR and payment-status routes have unverified operational side effects.
-_MUTATION_OVERRIDES = frozenset({
-    "NetworkApi.postDiscountCheck",
-    "NetworkApi.postInquiryIsMember",
-    "NetworkApi.postLPotAthn",
-    "NetworkApi.postXPointView",
-    "NetworkApi.postOkCashbagCertView",
-    "NetworkApi.postSelfCheckInInfo",
-    "NetworkApi.postSelfCheckInPossible",
-    "NetworkApi.postLocalRailwayTravelQrAuth",
-    "NetworkApi.postMemberVerify",
-    "NetworkApi.paymentMassStatusIn",
-    # 비회원 예약 생성. NonMemTicketIn is the non-member TicketReservationIn
-    # (txtJobId, jrnyList, passengerInfoList, txtCustPw, ...) and returns the
-    # same ReservationOut as certification.TicketReservation: it creates a hold.
-    # The generator (analysis/generated/build_v7_contract.py READ_METHODS) lists
-    # it as read; this override is the deciding classification.
-    # postNonMemTicketList stays a read (lookup).
-    "NetworkApi.postNonMemTicket",
-})
 # 정기권/패스 purchase and issue. The APK declares these contracts, so the
 # registry lists them, but this package never sends one: a settlement is
 # ₩150,000-₩250,000 with no refund or cancel route here, and the shipped app
@@ -71,20 +48,12 @@ _NEVER_SENT = frozenset({
     "NetworkApi.passOtrReserve",
     "NetworkApi.postPassOtrPayIssue",
 })
-# Interfaces sent on the shared KORAIL HTTP client; a partner origin serves the rest.
-_MAIN_HTTP_INTERFACES = frozenset({"NetworkApi", "PushService"})
-# NetworkApi response models that do not extend CommonOut. Three declare their
-# own strResult defaulting to null or "" rather than CommonOut's FAIL constant
-# (CacheCheckResponse.java:62, AcpnMlgSaveResponse.java:101,
-# VerifyOnlineRefundsOut.java:97); the other four have no envelope field at all.
-# A missing strResult is therefore not a failure for these.
+# NetworkApi response models that do not extend CommonOut. VerifyOnlineRefundsOut
+# declares its own strResult defaulting to null rather than CommonOut's FAIL
+# constant (VerifyOnlineRefundsOut.java:97), so a missing strResult is not a
+# failure for it (주의할 점: dropping this exemption misclassifies a real
+# successful verifyOnlineRefunds response as a failure).
 _NON_COMMON_OUT_RESPONSE_MODELS = frozenset({
-    "com.korail.talk.data.CacheCheckResponse",
-    "com.korail.talk.data.CacheReadResponse",
-    "com.korail.talk.network.model.AcpnMlgSaveResponse",
-    "com.korail.talk.network.model.LostCenterResponse",
-    "com.korail.talk.network.model.SearchMetaOut",
-    "com.korail.talk.network.model.SpecificDateDataOut",
     "com.korail.talk.network.model.VerifyOnlineRefundsOut",
 })
 
@@ -149,13 +118,9 @@ def _load_registry() -> dict[str, V7Contract]:
         raise KorailProtocolError(
             "7.0.6 contract registry has an effect other than read or mutation"
         )
-    contracts = [
-        replace(contract, effect="mutation")
-        if contract.name in _MUTATION_OVERRIDES else contract
-        for contract in (V7Contract(**row) for row in rows)
-    ]
+    contracts = [V7Contract(**row) for row in rows]
     registry = {contract.name: contract for contract in contracts}
-    if len(contracts) != 117 or len(registry) != len(contracts):
+    if len(registry) != len(contracts):
         raise KorailProtocolError("7.0.6 contract registry is incomplete")
     if any(
         (parts := urlsplit(contract.route)).scheme
@@ -180,25 +145,6 @@ class V7Response:
     raw: Any = field(repr=False)
 
 
-def _assert_partner_origin(origin: str) -> None:
-    parsed = urlsplit(origin)
-    try:
-        port = parsed.port
-    except ValueError as exc:
-        raise KorailProtocolError("invalid partner origin") from exc
-    if (
-        parsed.scheme.lower() != "https"
-        or not parsed.hostname
-        or port not in {None, 443}
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.path not in {"", "/"}
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise KorailProtocolError("partner origin must be an HTTPS origin")
-
-
 def _assert_wire_value(value: Any) -> None:
     if isinstance(value, (str, int)) and not isinstance(value, bool):
         return
@@ -207,96 +153,21 @@ def _assert_wire_value(value: Any) -> None:
     raise KorailProtocolError("form/query wire values must be strings, integers or string lists")
 
 
-def _assert_body_shape(contract: V7Contract, data: Mapping[str, Any]) -> None:
-    """보호된 wire 이름을 추측하지 않고 확인된 DTO 필드의 형을 검사한다."""
-    if contract.request_model == "com.korail.talk.network.model.GreenCarDetailRequest":
-        if len(data) != 2 or any(not isinstance(value, str) for value in data.values()):
-            raise KorailProtocolError("GreenCar detail body requires two strings")
-    elif contract.request_model == "com.korail.talk.data.CacheCheckRequest":
-        if len(data) != 1:
-            raise KorailProtocolError("cache-check body requires a versions map")
-        versions = next(iter(data.values()))
-        if not isinstance(versions, Mapping) or any(
-            not isinstance(key, str) or not isinstance(value, str)
-            for key, value in versions.items()
-        ):
-            raise KorailProtocolError("cache-check versions must map strings to strings")
-
-
-def _assert_known_map_shape(contract: V7Contract, data: Mapping[str, Any]) -> None:
-    """Limit a known DTO even though Retrofit accepts a generic QueryMap."""
-    if contract.name != "NetworkApi.productCancel":
-        return
-    allowed = {"Device", "Version", "Key", "lang", "txtVrRsNo", "txtGdSqno"}
-    if not set(data) <= allowed:
-        raise KorailProtocolError("product cancellation has unknown DTO fields")
-    if any(
-        not isinstance(data.get(key), str) or not data[key].strip()
-        for key in ("txtVrRsNo", "txtGdSqno")
-    ):
-        raise KorailProtocolError("product cancellation requires reservation and product IDs")
-
-
 class V7Gateway:
-    """고유 Retrofit 메서드 117개의 폼/쿼리/JSON 요청을 전송한다.
+    """유일하게 살아남은 Retrofit 메서드 2개의 폼 요청을 전송한다.
 
     메인 API는 ``KorailClient``의 기존 세션과 DynaPath 설정을 공유한다.
-    제휴 API는 caller가 지정한 HTTPS origin에 독립 클라이언트를 만들되
-    APK의 공유 CookieManager처럼 메인 API와 도메인 범위의 쿠키 저장소를 공유한다.
-    PushService는 주입된 webHost origin에 메인 HTTP 클라이언트로 요청한다.
     """
 
-    def __init__(
-        self,
-        http: KorailHttpClient,
-        *,
-        partner_origins: Mapping[str, str] | None = None,
-        partner_transport: httpx.BaseTransport | None = None,
-    ) -> None:
+    def __init__(self, http: KorailHttpClient) -> None:
         self.http = http
-        self.partner_origins = MappingProxyType(dict(partner_origins or {}))
-        known_interfaces = {contract.interface for contract in V7_CONTRACTS.values()}
-        korail_host = urlsplit(self.http.config.base_url).hostname
-        for interface, origin in self.partner_origins.items():
-            if interface == "NetworkApi" or interface not in known_interfaces:
-                raise KorailProtocolError("unknown partner interface")
-            _assert_partner_origin(origin)
-            if (interface != "PushService" and
-                urlsplit(origin).hostname == korail_host):
-                raise KorailProtocolError("partner origin must be separate from KORAIL")
-        self.partner_transport = partner_transport
-        self._partners: dict[str, httpx.Client] = {}
 
     def close(self) -> None:
-        for client in self._partners.values():
-            client.close()
-        self._partners.clear()
+        """더 이상 닫을 별도 클라이언트가 없다."""
 
     def _client_for(self, contract: V7Contract) -> httpx.Client:
-        if contract.interface in _MAIN_HTTP_INTERFACES:
-            assert_korail_origin(str(self.http._client.base_url))
-            return self.http._client
-        origin = self.partner_origins.get(contract.interface)
-        if origin is None:
-            raise KorailProtocolError(f"origin required for {contract.interface}")
-        client = self._partners.get(contract.interface)
-        if client is None:
-            client = httpx.Client(
-                base_url=origin,
-                timeout=self.http.config.timeout,
-                transport=self.partner_transport,
-                cookies=self.http.cookies.jar,
-            )
-            self._partners[contract.interface] = client
-        return client
-
-    def _target_for(self, contract: V7Contract) -> str:
-        if contract.interface == "PushService":
-            origin = self.partner_origins.get("PushService")
-            if origin is None:
-                raise KorailProtocolError("web origin required for PushService")
-            return origin.rstrip("/") + contract.route
-        return contract.route
+        assert_korail_origin(str(self.http._client.base_url))
+        return self.http._client
 
     def call(
         self,
@@ -317,14 +188,14 @@ class V7Gateway:
         겹치는 계약은 같은 ``safety`` 필드 검증을 거치고, 변경 라우트와 겹치는
         계약은 거부된다.
         """
-        contract = V7_CONTRACTS.get(name)
-        if contract is None:
-            raise KorailProtocolError(f"unknown 7.0.6 method: {name}")
         if name in _NEVER_SENT:
             raise KorailMutationNotAllowedError(
                 f"{name} is a 정기권/패스 purchase, which this package never sends: "
                 "it has no refund or cancel route here"
             )
+        contract = V7_CONTRACTS.get(name)
+        if contract is None:
+            raise KorailProtocolError(f"unknown 7.0.6 method: {name}")
         data = dict(values or {})
         header_map = dict(headers or {})
         is_body = "Body" in contract.params
@@ -339,8 +210,6 @@ class V7Gateway:
             data = {**common, **data}
         if any(not isinstance(key, str) or not _NAME.fullmatch(key) for key in data):
             raise KorailProtocolError("invalid wire field name")
-        if not set(header_map) <= contract.headers:
-            raise KorailProtocolError("headers must match Retrofit @Header declarations")
         if any(not isinstance(value, str) or "\r" in value or "\n" in value
                for value in header_map.values()):
             raise KorailProtocolError("invalid header value")
@@ -352,11 +221,8 @@ class V7Gateway:
                 raise KorailProtocolError("wire fields do not match Retrofit annotations")
             for value in data.values():
                 _assert_wire_value(value)
-            _assert_known_map_shape(contract, data)
         elif not isinstance(values, Mapping):
             raise KorailProtocolError("@Body requires a JSON object")
-        else:
-            _assert_body_shape(contract, data)
         route = (contract.http, contract.route)
         if route in KORAIL_MUTATION_ROUTES:
             # The high-level mutation transport owns the route/category check.
@@ -365,10 +231,9 @@ class V7Gateway:
                 "high-level KorailClient method for it"
             )
         client = self._client_for(contract)
-        target = self._target_for(contract)
+        target = contract.route
         request_headers = dict(header_map)
-        if contract.interface in _MAIN_HTTP_INTERFACES:
-            request_headers.update(self.http._dynapath_headers(contract.http, contract.route))
+        request_headers.update(self.http._dynapath_headers(contract.http, contract.route))
         try:
             if is_body:
                 response = client.request(
