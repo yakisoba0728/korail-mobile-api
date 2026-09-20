@@ -19,11 +19,11 @@
 | [limousine_models](limousine_models.md) | 리무진 연계 편의 응답 타입 |
 | [live](live.md) | 라이브 테스트가 쓰는 진입점 |
 | [models](models.md) | 로그인·검색·예약의 요청/응답 타입 |
-| [mutation_models](mutation_models.md) | `MutationPreview` 와 변경 결과 타입 |
+| [mutation_models](mutation_models.md) | 상태변경 요청과 결과 타입 |
 | [netfunnel](netfunnel.md) | 가상대기실 상태와 설정 |
 | [read_models](read_models.md) | 읽기 라우트의 응답 타입 — 가장 큰 묶음입니다 |
 | [read_payloads](read_payloads.md) | 읽기 요청을 만드는 payload 타입 |
-| [v7](v7.md) | 7.0.6 Retrofit 메서드별 상태변경 동의와 dry-run 결과 타입 |
+| [v7](v7.md) | `V7Gateway`(`client.v7`) — 남은 7.0.6 Retrofit 메서드 2개의 전송 |
 
 docstring 이 없는 dataclass 도 필드를 보여 주려고 함께 싣습니다. 설명이 붙어 있지
 않다는 것은 그 타입이 서버 응답을 그대로 담는 그릇이라는 뜻입니다.

@@ -23,9 +23,8 @@ exclude_docs: |
   !/changelog.md
   !/reference/*.md
 
-# reference/ 아래 한 쪽이 모듈 하나다. 그 목록은 tests 가 `__init__.py` 의 import
-# 문에서 유도해 대조한다(test_docs_site.py) — 모듈이 공개면에 새로 들어오면 쪽이
-# 없다는 이유로 오프라인 스위트가 먼저 실패한다.
+# reference/ 아래 한 쪽이 모듈 하나다. 이 목록은 손으로 유지한다 — 모듈이 공개면에
+# 새로 들어오면 이 nav 항목과 docs/reference/ 의 쪽을 함께 더해야 한다.
 nav:
   - 홈: index.md
   - 빠른 시작: quickstart.md

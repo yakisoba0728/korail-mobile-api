@@ -41,8 +41,6 @@ Changelog = "https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGEL
 
 [project.optional-dependencies]
 test = [
-  # tests/test_mkdocs_hooks.py imports mkdocs directly, so it is a test dependency.
-  "mkdocs>=1.6,<2",
   "pytest>=8,<10",
 ]
 # CI 도구용, 런타임 의존성이 아니다. pyright 는 strict 오류 0 을 확인한 버전으로
@@ -153,7 +151,6 @@ typeCheckingMode = "basic"
 strict = [
   "src/korail_mobile_api/__init__.py",
   "src/korail_mobile_api/config.py",
-  "src/korail_mobile_api/consent.py",
   "src/korail_mobile_api/constants.py",
   "src/korail_mobile_api/crypto.py",
   "src/korail_mobile_api/dynapath.py",
