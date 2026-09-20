@@ -178,3 +178,30 @@ def test_the_gateway_refuses_a_pass_purchase_by_name(name: str) -> None:
             client.v7.call(name, {})
     finally:
         client.close()
+
+
+def test_v7_call_refuses_a_mutation_contract_whose_route_is_not_registered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Reproduces the pre-fix gap: the refund execute route was in NEITHER
+    # safety table, and call()'s only table check ("if route in
+    # KORAIL_MUTATION_ROUTES: raise") never fires for a route that is in
+    # neither table -- so it never fired, and the request reached the wire
+    # unchecked. Removing the route from the table here puts call() back in
+    # exactly that state; it must still refuse the request rather than send
+    # it, proving the route is actively checked and not merely assumed
+    # present.
+    from korail_mobile_api import safety
+
+    route = "/classes/com.korail.mobile.refunds.executeOnlineRefunds"
+    monkeypatch.setattr(
+        safety,
+        "KORAIL_MUTATION_ROUTES",
+        safety.KORAIL_MUTATION_ROUTES - {("POST", route)},
+    )
+    client = KorailClient(transport=httpx.MockTransport(_never_send))
+    try:
+        with pytest.raises(KorailProtocolError, match="mutation route is not allowed"):
+            client.v7.call("NetworkApi.executeOnlineRefunds", {"x": "y"})
+    finally:
+        client.close()

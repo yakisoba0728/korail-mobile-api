@@ -67,7 +67,7 @@ EXCLUDED_API_DOMAINS = frozenset(
 )
 
 # Exact (method, path) pairs the read-only send path will transmit to.
-# 57 entries pinned by tests: 55 reads + login and logout POST.
+# 58 entries pinned by tests: 56 reads + login and logout POST.
 #
 # NOTE on certification.ReservationList: two Retrofit overloads share the path.
 # Only the read overload (inquiryTicketRsv, CertificationService.java:45-46,
@@ -160,6 +160,10 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         ),
         ("POST", "/classes/com.korail.mobile.refunds.CommissionView"),
         ("POST", "/classes/com.korail.mobile.refunds.SelTicketInfo"),
+        # 7.0.6 NetworkApi.verifyOnlineRefunds (v7_contract_data.CONTRACT_ROWS,
+        # effect="read"). Verifies a station-issued ticket before the online
+        # refund execute route below; it changes nothing itself.
+        ("POST", "/classes/com.korail.mobile.refunds.verifyOnlineRefunds"),
         # Loyalty READS. Neither carries a password and neither moves a point:
         # MyXPointView is the my-page summary the app fetches on open
         # (MyPageActivity.java:414) with point_dv_cd pinned to "0" by the DAO
@@ -232,6 +236,13 @@ KORAIL_MUTATION_ROUTES = frozenset(
         ),
         # refund
         ("POST", "/classes/com.korail.mobile.refunds.RefundsRequest"),
+        # 7.0.6 NetworkApi.executeOnlineRefunds (v7_contract_data.CONTRACT_ROWS,
+        # effect="mutation") -- the money-moving half of the station-ticket
+        # refund pair sent through V7Gateway.call, not post_mutation_form. It
+        # settles the amount verifyOnlineRefunds (above, in
+        # KORAIL_READ_ONLY_ROUTES) already quoted, so it is the same "refund"
+        # category as RefundsRequest.
+        ("POST", "/classes/com.korail.mobile.refunds.executeOnlineRefunds"),
         ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
         ("POST", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
         # price_recalculation -- 보류된 PNR의 할인 재적용 후 운임 재계산
@@ -288,6 +299,7 @@ KORAIL_MUTATION_ROUTE_CATEGORIES = {
         "cancel"
     ),
     "/classes/com.korail.mobile.refunds.RefundsRequest": "refund",
+    "/classes/com.korail.mobile.refunds.executeOnlineRefunds": "refund",
     "/classes/com.korail.mobile.research.dcntCrdInfo.do": "discount_card",
     "/classes/com.korail.mobile.reservation.dcntCrdExtn.do": "discount_card",
     "/classes/com.korail.mobile.certification.PriceReCalculation": (
@@ -331,7 +343,7 @@ def assert_mutation_form_shape(
     목록이 아닙니다 — 예약 폼은 승객·좌석 행 수가 변하고, 운임 재계산은 여섯 개의
     ``@Field List<String>`` 을 반복 키로 보냅니다.
 
-    아홉 라우트 전부에 걸쳐 변하지 않는 것은 둘입니다. 폼이 문자열→문자열(또는
+    열 라우트 전부에 걸쳐 변하지 않는 것은 둘입니다. 폼이 문자열→문자열(또는
     문자열→문자열 리스트)의 평평한 매핑이라는 것, 그리고 공통 세 필드
     (:data:`KORAIL_MUTATION_COMMON_FIELDS`)를 싣는다는 것입니다.
 

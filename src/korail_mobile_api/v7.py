@@ -22,8 +22,11 @@ import httpx
 from .errors import KorailMutationNotAllowedError, KorailProtocolError, KorailTransportError
 from .http import KorailHttpClient, _raise_for_status, parse_base_response
 from .safety import (
-    KORAIL_MUTATION_ROUTES,
+    KORAIL_MUTATION_ROUTE_CATEGORIES,
     assert_korail_origin,
+    assert_mutation_route,
+    assert_mutation_route_category,
+    assert_read_only_route,
 )
 from .v7_contract_data import CONTRACT_ROWS
 
@@ -180,9 +183,13 @@ class V7Gateway:
         ``@FieldMap``/``@QueryMap``이 있으면 가변 키가 허용되고, 다른 경우
         어노테이션에 선언된 키만 허용된다. nullable 인자 생략은 키 생략으로
         표현한다. 상태 변경(mutation)은 즉시 전송된다. 단, _NEVER_SENT 에 오른
-        정기권/패스 구매 계약은 이름으로 거절된다. 상위 API의 읽기 라우트와
-        겹치는 계약은 같은 ``safety`` 필드 검증을 거치고, 변경 라우트와 겹치는
-        계약은 거부된다.
+        정기권/패스 구매 계약은 이름으로 거절된다. 그 밖의 모든 계약은 상위 API와 같은
+        ``safety`` 라우트 표를 거친다 — ``effect == "read"`` 면
+        :data:`~korail_mobile_api.safety.KORAIL_READ_ONLY_ROUTES` 의 원소여야 하고,
+        ``effect == "mutation"`` 이면
+        :data:`~korail_mobile_api.safety.KORAIL_MUTATION_ROUTES` 의 원소이면서
+        :data:`~korail_mobile_api.safety.KORAIL_MUTATION_ROUTE_CATEGORIES` 에 등록된
+        범주와 일치해야 한다. 근거 없는 라우트는 여기서도 나갈 수 없다.
         """
         if name in _NEVER_SENT:
             raise KorailMutationNotAllowedError(
@@ -219,12 +226,20 @@ class V7Gateway:
                 _assert_wire_value(value)
         elif not isinstance(values, Mapping):
             raise KorailProtocolError("@Body requires a JSON object")
-        route = (contract.http, contract.route)
-        if route in KORAIL_MUTATION_ROUTES:
-            # The high-level mutation transport owns the route/category check.
-            raise KorailProtocolError(
-                f"{name} targets KORAIL mutation route {contract.route}; use the "
-                "high-level KorailClient method for it"
+        # The same route table the high-level senders check, not a separate
+        # v7-only allowlist: a read contract must be a registered read route,
+        # a mutation contract a registered mutation route whose category
+        # matches what safety.py has on file for it. Before this, a 7.0.6
+        # contract with no counterpart in either table -- like the refund
+        # execute/verify pair once was -- reached the wire with no route
+        # check at all.
+        if contract.effect == "read":
+            assert_read_only_route(contract.http, contract.route)
+        else:
+            assert_mutation_route(contract.http, contract.route)
+            assert_mutation_route_category(
+                contract.route,
+                KORAIL_MUTATION_ROUTE_CATEGORIES.get(contract.route, ""),
             )
         client = self._client_for(contract)
         target = contract.route

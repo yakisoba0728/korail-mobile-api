@@ -80,7 +80,7 @@ def test_a_mutation_form_accepts_repeated_keys_as_a_list_of_strings():
 
 
 def test_every_registered_mutation_route_is_reachable_by_the_shape_check():
-    """The check is keyed off nothing route-specific, so it covers all nine.
+    """The check is keyed off nothing route-specific, so it covers all ten.
 
     Stated as a test rather than as a comment because the read side's contract
     IS per-route, and someone reading both would reasonably expect this one to
@@ -254,6 +254,27 @@ def test_each_route_guard_refuses_every_route_of_the_other_table():
     for method, path in sorted(safety.KORAIL_MUTATION_ROUTES):
         with pytest.raises(KorailProtocolError, match="KORAIL request route is not allowed"):
             safety.assert_read_only_route(method, path)
+
+
+def test_the_706_refund_routes_are_registered_like_every_other_route():
+    """The refund pair v7_contract_data.CONTRACT_ROWS declares must be in one
+    of the two route tables, or nothing checks them at all.
+
+    Before this, neither
+    ``/classes/com.korail.mobile.refunds.executeOnlineRefunds`` (mutation) nor
+    ``/classes/com.korail.mobile.refunds.verifyOnlineRefunds`` (read) appeared
+    in either table, and V7Gateway.call's only table check was
+    ``if route in KORAIL_MUTATION_ROUTES: raise`` -- which never fired for a
+    route that was in neither table, so a real money-moving refund went out
+    with no route check at all.
+    """
+    execute = ("POST", "/classes/com.korail.mobile.refunds.executeOnlineRefunds")
+    verify = ("POST", "/classes/com.korail.mobile.refunds.verifyOnlineRefunds")
+    assert execute in safety.KORAIL_MUTATION_ROUTES
+    assert safety.KORAIL_MUTATION_ROUTE_CATEGORIES[execute[1]] == "refund"
+    assert verify in safety.KORAIL_READ_ONLY_ROUTES
+    assert verify not in safety.KORAIL_MUTATION_ROUTES
+    assert execute not in safety.KORAIL_READ_ONLY_ROUTES
 
 
 def test_both_route_guards_call_the_same_things():
