@@ -90,11 +90,8 @@ from .read_models import (
     PriceFare,
     PriceFareQuoteResponse,
     ProductDetailResponse,
-    ProductRecommendation,
     ProductReservation,
     ProductReservationListResponse,
-    ProductTrain,
-    ProductTrainInquiryResponse,
     ReceiptCashPayment,
     ReceiptPayment,
     RecentDeliveryHistoryResponse,
@@ -119,9 +116,6 @@ from .read_models import (
     TicketReceipt,
     TicketReceiptResponse,
     TicketReservationDetailResponse,
-    TourTrainInfoResponse,
-    TourTrainSeatAdditionalInfo,
-    TourTrainSeatInfo,
     TrainScheduleItem,
     TripChangeDateResponse,
     TripMenuContent,
@@ -1671,59 +1665,6 @@ def parse_trip_change_date_response(
     )
 
 
-def parse_tour_train_info_response(
-    raw: Mapping[str, Any],
-) -> TourTrainInfoResponse:
-    _validate_strict_read_envelope(raw)
-    seats = []
-    for value in _nested_rows(
-        raw, "seat_infos", "seat_info", "tour train seat infos"
-    ):
-        seat = _row(value, "tour train seat_info")
-        additional_infos = []
-        for additional_value in _nested_rows(
-            seat,
-            "seat_add_infos",
-            "seat_add_info",
-            "tour train additional seat infos",
-        ):
-            additional = _row(
-                additional_value,
-                "tour train seat_add_info",
-            )
-            # TourTrainInfoDao.SeatAddInfo.h_psg_num is Java `int`
-            # (TourTrainInfoDao.java:14); the h_-prefixed backend
-            # serializes such ints as quoted strings on the wire (proven
-            # for sibling h_srcar_no/h_rest_seat_cnt), and Gson coerces
-            # them, so accept the string form too.
-            passenger_count = _required_integer(
-                additional,
-                "h_psg_num",
-                "tour train seat",
-            )
-            additional_infos.append(
-                TourTrainSeatAdditionalInfo(
-                    passenger_count=passenger_count,
-                    raw=additional,
-                )
-            )
-        seats.append(
-            TourTrainSeatInfo(
-                seat_attribute_code=_optional_string(
-                    seat,
-                    "h_seat_att_cd",
-                    "tour train seat info",
-                ),
-                additional_infos=tuple(additional_infos),
-                raw=seat,
-            )
-        )
-    return TourTrainInfoResponse(
-        seat_infos=tuple(seats),
-        **_response_fields(raw),
-    )
-
-
 _GIFT_TICKET_FIELDS = {
     "integrated_customer_name_1": "intgCustNm1",
     "integrated_customer_name_2": "intgCustNm2",
@@ -2086,181 +2027,6 @@ def parse_recent_delivery_history_response(
             raw, "chgePbpRsvNo", "recent delivery history"
         ),
         recipients=tuple(recipients),
-        **_response_fields(raw),
-    )
-
-
-_PRODUCT_RECOMMENDATION_FIELDS = {
-    "discount_amount": "dcntAmt",
-    "discount_surcharge_rate": "dcntSurRt",
-    "fare_amount_percent_division_code": "famtPctDvCd",
-    "goods_name": "gdNm",
-    "goods_no": "gdNo",
-    "received_fare": "rcvdFare",
-    "received_price": "rcvdPrc",
-    "received_price_2": "rcvdPrc2",
-}
-
-_PRODUCT_TRAIN_FIELDS = {
-    "detour_via_popup": "dturViaPopp",
-    "elevator_damage_control": "elevDmgCtrl",
-    "arrival_date": "h_arv_dt",
-    "arrival_station_code": "h_arv_rs_stn_cd",
-    "arrival_station_name": "h_arv_rs_stn_nm",
-    "arrival_station_construction_order": "h_arv_stn_cons_ordr",
-    "arrival_station_run_order": "h_arv_stn_run_ordr",
-    "arrival_time": "h_arv_tm",
-    "car_type_name": "h_car_tp_nm",
-    "change_train_division_code": "h_chg_trn_dv_cd",
-    "change_train_sequence": "h_chg_trn_seq",
-    "connection_traffic_need_time": "h_cnec_trfc_nd_hm",
-    "connection_traffic_possible_flag": "h_cnec_trfc_psb_flg",
-    "connection_traffic_received_price": "h_cnec_trfc_rcvd_prc",
-    "delayed_sale_flag": "h_dlay_sale_flg",
-    "departure_date": "h_dpt_dt",
-    "departure_station_code": "h_dpt_rs_stn_cd",
-    "departure_station_name": "h_dpt_rs_stn_nm",
-    "departure_station_construction_order": "h_dpt_stn_cons_ordr",
-    "departure_station_run_order": "h_dpt_stn_run_ordr",
-    "departure_time": "h_dpt_tm",
-    "detour_flag": "h_dtour_flg",
-    "detour_text": "h_dtour_txt",
-    "expected_delay_hour": "h_expct_dlay_hr",
-    "expected_departure_delay_count": "h_expn_dpt_dlay_tnum",
-    "free_reservation_code": "h_free_rsv_cd",
-    "free_seat_car_count": "h_free_sracar_cnt",
-    "general_room_class_name": "h_gen_psrm_cl_nm",
-    "general_reservation_code": "h_gen_rsv_cd",
-    "general_reservation_code_2": "h_gen_rsv_cd2",
-    "information_text": "h_info_txt",
-    "journey_reservation_code": "h_jrny_rsv_cd",
-    "journey_reservation_name": "h_jrny_rsv_nm",
-    "nonstop_message": "h_nonstop_msg",
-    "nonstop_message_text": "h_nonstop_msg_txt",
-    "popup_message": "h_popup_msg",
-    "received_amount": "h_rcvd_amt",
-    "received_fare": "h_rcvd_fare",
-    "received_price_2": "h_rcvd_prc2",
-    "road_seat_map_flag": "h_rd_seat_map_flg",
-    "reservation_possible_name": "h_rsv_psb_nm",
-    "run_date": "h_run_dt",
-    "run_time": "h_run_tm",
-    "seat_attribute_code": "h_seat_att_cd",
-    "simultaneous_train_flag": "h_smns_trn_flg",
-    "special_discount_rate": "h_spe_disc_rt",
-    "special_room_class_name": "h_spe_psrm_cl_nm",
-    "special_reservation_code": "h_spe_rsv_cd",
-    "special_reservation_code_2": "h_spe_rsv_cd2",
-    "special_reservation_possible_name": "h_spe_rsv_psb_nm",
-    "station_popup_message": "h_station_popup_msg",
-    "standing_reservation_code": "h_stnd_rsv_cd",
-    "train_discount_general_rate": "h_train_disc_gen_rt",
-    "train_discount_origin_rate": "h_train_disc_origin_rt",
-    "train_classification_code": "h_trn_clsf_cd",
-    "train_classification_name": "h_trn_clsf_nm",
-    "train_group_code": "h_trn_gp_cd",
-    "train_no": "h_trn_no",
-    "use_time_care_article_content": "h_use_tim_care_atcl_cont",
-    "waiting_reservation_flag": "h_wait_rsv_flg",
-    "youth_mileage_application_flag": "h_yms_apl_flg",
-    "goods_no": "txtGdNo",
-}
-
-
-def parse_product_train_inquiry_response(
-    raw: Mapping[str, Any],
-) -> ProductTrainInquiryResponse:
-    _validate_strict_read_envelope(raw)
-    wrapper = _optional_mapping(raw, "trn_infos", "product train inquiry")
-    merge_flag = None
-    trains = []
-    if wrapper is not None:
-        merge_flag = _optional_string(
-            wrapper,
-            "h_merge_rsv_psb_flg",
-            "product train inquiry trn_infos",
-        )
-        for value in _optional_list(
-            wrapper,
-            "trn_info",
-            "product train inquiry trn_infos",
-        ):
-            item = _row(value, "product train inquiry trn_info")
-            recommendations = []
-            for recommendation_value in _optional_list(
-                item,
-                "rcmdGdList",
-                "product train inquiry train",
-            ):
-                recommendation = _row(
-                    recommendation_value,
-                    "product train inquiry rcmdGdList",
-                )
-                recommendations.append(
-                    ProductRecommendation(
-                        **_nullable_string_fields(
-                            recommendation,
-                            _PRODUCT_RECOMMENDATION_FIELDS,
-                            "product recommendation",
-                        ),
-                        raw=recommendation,
-                    )
-                )
-            trains.append(
-                ProductTrain(
-                    **_nullable_string_fields(
-                        item,
-                        _PRODUCT_TRAIN_FIELDS,
-                        "product train",
-                    ),
-                    total_passenger_count=_primitive_json_integer(
-                        item,
-                        "totPsgCnt",
-                        "product train",
-                    ),
-                    recommendations=tuple(recommendations),
-                    raw=item,
-                )
-            )
-    return ProductTrainInquiryResponse(
-        early_train_no_next=_optional_string(
-            raw,
-            "h_ectb_trn_no_next",
-            "product train inquiry",
-        ),
-        goods_no=_optional_string(raw, "h_gd_no", "product train inquiry"),
-        next_page_flag=_optional_string(
-            raw,
-            "h_next_pg_flg",
-            "product train inquiry",
-        ),
-        notice_message=_optional_string(
-            raw,
-            "h_notice_msg",
-            "product train inquiry",
-        ),
-        preceding_train_no_next=_optional_string(
-            raw,
-            "h_prcd_trn_no_next",
-            "product train inquiry",
-        ),
-        next_query_station_no=_optional_string(
-            raw,
-            "h_qry_st_no_next",
-            "product train inquiry",
-        ),
-        result_count=_optional_string(
-            raw,
-            "h_rslt_cnt",
-            "product train inquiry",
-        ),
-        next_train_no=_optional_string(
-            raw,
-            "h_trn_no_next",
-            "product train inquiry",
-        ),
-        merge_reservation_possible_flag=merge_flag,
-        trains=tuple(trains),
         **_response_fields(raw),
     )
 

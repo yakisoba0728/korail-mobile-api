@@ -35,7 +35,6 @@ from korail_mobile_api.read_models import (
     MaasServiceDetailListResponse,
     MultiChildDiscountTargetResponse,
     PassScheduleResponse,
-    TourTrainInfoResponse,
     TripChangeDateResponse,
 )
 from korail_mobile_api.read_parsers import (
@@ -45,7 +44,6 @@ from korail_mobile_api.read_parsers import (
     parse_multi_child_discount_target_response,
     parse_pass_menu_response,
     parse_pass_schedule_response,
-    parse_tour_train_info_response,
     parse_trip_change_date_response,
 )
 from korail_mobile_api.read_payloads import (
@@ -59,7 +57,6 @@ from korail_mobile_api.safety import (
     KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_READ_ONLY_ROUTES,
     assert_read_only_request_fields,
-    assert_read_only_route,
 )
 
 
@@ -67,7 +64,6 @@ R13_PATH = "/classes/com.korail.mobile.cust.mchdDcntTgt.do"
 R32_PATH = "/classes/com.korail.mobile.research.custTripInfo.do"
 R43_PATH = "/classes/com.korail.mobile.copt.gdReqQry.do"
 R45_PATH = "/classes/com.korail.mobile.reservation.tripChgDate.do"
-R54_PATH = "/classes/com.korail.mobile.trainsInfo.TourTrainSpecialRoom"
 
 NEW_ROUTES = {
     ("POST", R13_PATH),
@@ -337,7 +333,6 @@ def test_new_routes_and_public_contract_are_exact():
         "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
     ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
-    assert ("POST", R54_PATH) not in KORAIL_READ_ONLY_ROUTES
 
     expected_fields = {
         R13_PATH: {"Device", "Version", "Key", "dptDt"},
@@ -398,7 +393,6 @@ def test_new_routes_and_public_contract_are_exact():
     ):
         assert name in korail_mobile_api.__all__
         assert getattr(korail_mobile_api, name)
-    assert "TourTrainInfoResponse" not in korail_mobile_api.__all__
 
 
 def test_new_safety_contracts_reject_wrong_order_and_allow_both_maas_shapes():
@@ -598,40 +592,6 @@ def test_trip_change_parser_normalizes_optional_values(load_json_fixture):
     assert result.trip_change_dates == ()
 
 
-def test_tour_train_parser_is_typed_but_transport_is_held_back(load_json_fixture):
-    raw = load_json_fixture("tour_train_info_success.json")
-    result = parse_tour_train_info_response(raw)
-    assert isinstance(result, TourTrainInfoResponse)
-    assert len(result.seat_infos) == 1
-    assert result.seat_infos[0].seat_attribute_code == "SYNTHETIC_SEAT_ATTRIBUTE"
-    assert result.seat_infos[0].additional_infos[0].passenger_count == 2
-    assert result.raw is raw
-
-    for nullable in (
-        _success(seat_infos=None),
-        _success(seat_infos={"seat_info": None}),
-        _success(
-            seat_infos={
-                "seat_info": [
-                    {"h_seat_att_cd": None, "seat_add_infos": None},
-                    {
-                        "h_seat_att_cd": None,
-                        "seat_add_infos": {"seat_add_info": None},
-                    },
-                ]
-            }
-        ),
-    ):
-        parsed = parse_tour_train_info_response(nullable)
-        if nullable["seat_infos"] is None or not nullable["seat_infos"].get("seat_info"):
-            assert parsed.seat_infos == ()
-        else:
-            assert all(item.additional_infos == () for item in parsed.seat_infos)
-
-    with pytest.raises(KorailProtocolError):
-        assert_read_only_route("POST", R54_PATH)
-
-
 @pytest.mark.parametrize(
     ("parser", "container", "row_fields"),
     [
@@ -690,73 +650,11 @@ def test_trip_change_parser_rejects_malformed_values(raw, match):
         parse_trip_change_date_response(raw)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
-        _success(seat_infos="bad"),
-        _success(seat_infos={"seat_info": {}}),
-        _success(seat_infos={"seat_info": [None]}),
-        _success(seat_infos={"seat_info": [{"h_seat_att_cd": 1}]}),
-        _success(
-            seat_infos={
-                "seat_info": [{"seat_add_infos": {"seat_add_info": {}}}]
-            }
-        ),
-        _success(
-            seat_infos={
-                "seat_info": [
-                    {"seat_add_infos": {"seat_add_info": [None]}}
-                ]
-            }
-        ),
-    ],
-)
-def test_tour_train_parser_rejects_bad_container_shapes(payload):
-    with pytest.raises(KorailProtocolError):
-        parse_tour_train_info_response(payload)
-
-
-def _tour_train_with_passenger_count(passenger_count):
-    return _success(
-        seat_infos={
-            "seat_info": [
-                {
-                    "h_seat_att_cd": None,
-                    "seat_add_infos": {
-                        "seat_add_info": [{"h_psg_num": passenger_count}]
-                    },
-                }
-            ]
-        }
-    )
-
-
-@pytest.mark.parametrize("passenger_count", [True, 2.0, None, "", "x"])
-def test_tour_train_passenger_count_rejects_non_numeric(passenger_count):
-    raw = _tour_train_with_passenger_count(passenger_count)
-    with pytest.raises(KorailProtocolError, match="h_psg_num"):
-        parse_tour_train_info_response(raw)
-
-
-@pytest.mark.parametrize(
-    ("wire", "expected"),
-    [(2, 2), ("2", 2), ("0", 0)],
-)
-def test_tour_train_passenger_count_accepts_gson_coerced_string(wire, expected):
-    # RV4-05: TourTrainInfoDao.SeatAddInfo.h_psg_num is Java `int`; the
-    # h_-prefixed backend serializes such ints as quoted strings and Gson
-    # coerces them, so a quoted-string count parses like a native int.
-    raw = _tour_train_with_passenger_count(wire)
-    parsed = parse_tour_train_info_response(raw)
-    assert parsed.seat_infos[0].additional_infos[0].passenger_count == expected
-
-
 PARSERS = (
     parse_multi_child_discount_target_response,
     parse_customer_trip_info_response,
     parse_maas_service_detail_list_response,
     parse_trip_change_date_response,
-    parse_tour_train_info_response,
 )
 
 
@@ -1099,9 +997,6 @@ def test_sensitive_models_and_raw_values_are_repr_hidden(load_json_fixture):
         parse_trip_change_date_response(
             load_json_fixture("trip_change_dates_success.json")
         ),
-        parse_tour_train_info_response(
-            load_json_fixture("tour_train_info_success.json")
-        ),
     )
     rendered = " ".join(repr(model) for model in models)
     for secret in (
@@ -1109,7 +1004,6 @@ def test_sensitive_models_and_raw_values_are_repr_hidden(load_json_fixture):
         "SYNTHETIC_custMgNo",
         "SYNTHETIC_pnrNo",
         "SYNTHETIC_rsvSpecUrl",
-        "SYNTHETIC_SEAT_ATTRIBUTE",
     ):
         assert secret not in rendered
 
@@ -1121,7 +1015,6 @@ def test_sensitive_models_and_raw_values_are_repr_hidden(load_json_fixture):
         CustomerTripInfoResponse,
         MaasServiceDetailListResponse,
         TripChangeDateResponse,
-        TourTrainInfoResponse,
     ],
 )
 def test_new_response_free_text_is_repr_hidden(response_type):
