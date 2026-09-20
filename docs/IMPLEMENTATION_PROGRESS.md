@@ -520,7 +520,7 @@ no payment request and printed or persisted no raw response or identifier.
   expected pre-login `P058` responses, and reported zero unexpected failures;
   it also confirmed ASCII decimal strings for station popup types and actual
   arrival delay counts.
-- As of 1.2.0, the full offline gate collects 2257 tests and no test carries
+- As of 1.2.0, the full offline gate collects 2260 tests and no test carries
   the `live` marker any more, so `pytest -m "not live"` deselects nothing —
   there is no longer an opted-in live-service test to deselect. (`3137 passed,
   1 deselected` below, and the `1246`/`1247` figures before it, were the gate's
@@ -846,7 +846,7 @@ srtgo_plus's `MACRO` substring rule are recorded as third-party-attested only
 and deliberately not encoded; the anti-macro refusal on this app is the
 `DynaPath-Result` header, already carried by `KorailDynaPathError`.
 
-As of 1.2.0, `pytest -m "not live"` collects 2257 tests and deselects none: no
+As of 1.2.0, `pytest -m "not live"` collects 2260 tests and deselects none: no
 test in the suite carries the `live` marker any more. `3137 passed, 1
 deselected`, `1246 passed, 1 deselected`, and `1247 passed, 1 deselected` were
 the gate's size at earlier points in this log, each with the then-opted-in
