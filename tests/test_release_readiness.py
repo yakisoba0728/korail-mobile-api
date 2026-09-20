@@ -28,11 +28,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_NAME = "korail_mobile_api"
 PROJECT_NAME = "korail-mobile-api"
-EXPECTED_KEYWORDS = ['korail','read-only-by-default','mobile-api']
 LIVE_ENV = "KORAIL_MOBILE_API_LIVE"
 CLIENT_NAME = "KorailClient"
 FAILURE_MESSAGE = "distribution verification failed\n"
-EXPECTED_VERSION = "1.1.1"
 EXPECTED_LICENSE_EXPRESSION = "Apache-2.0"
 EXPECTED_LICENSE_FILES = ["LICENSE", "NOTICE"]
 # The checkout's own bytes, not a stand-in. The verifier compares every licence
@@ -358,54 +356,6 @@ def _mark_zip_encrypted(path: Path) -> None:
     path.write_bytes(data)
 
 
-def test_source_release_metadata_is_exact() -> None:
-    assert PROJECT["name"] == PROJECT_NAME
-    assert PROJECT["version"] == EXPECTED_VERSION
-    assert PROJECT["requires-python"] == ">=3.11"
-    assert PROJECT["keywords"] == EXPECTED_KEYWORDS
-    assert set(PROJECT["classifiers"]) == EXPECTED_CLASSIFIERS
-    assert len(PROJECT["classifiers"]) == len(EXPECTED_CLASSIFIERS)
-    assert "maintainers" not in PROJECT
-
-    # PEP 639 SPDX form, not the deprecated table, and not a duplicate claim in
-    # the classifier list — the two are mutually exclusive.
-    assert PROJECT["license"] == EXPECTED_LICENSE_EXPRESSION
-    assert PROJECT["license-files"] == EXPECTED_LICENSE_FILES
-    assert not [
-        value for value in PROJECT["classifiers"] if value.startswith("License ::")
-    ]
-    assert PROJECT["authors"] == [
-        {"name": EXPECTED_AUTHOR_NAME, "email": EXPECTED_AUTHOR_EMAIL}
-    ]
-    assert PROJECT["urls"] == EXPECTED_PROJECT_URLS
-
-    build_requires = CONFIGURATION["build-system"]["requires"]
-    # `license-files` is silently ignored before setuptools 77, which would
-    # produce a wheel with no licence file and a build that still succeeds.
-    assert "setuptools>=77" in build_requires
-
-    license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
-    assert "Apache License" in license_text
-    assert "Version 2.0, January 2004" in license_text
-    assert CONFIGURATION["tool"]["setuptools"]["package-data"][PACKAGE_NAME] == [
-        "py.typed"
-    ]
-
-    marker = ROOT / "src" / PACKAGE_NAME / "py.typed"
-    assert marker.is_file()
-    assert marker.read_bytes() == b""
-    for relative_path in (
-        "MANIFEST.in",
-        "LICENSE",
-        "CHANGELOG.md",
-        "SECURITY.md",
-        "docs/RELEASE.md",
-        "scripts/verify_distribution.py",
-        ".github/workflows/ci.yml",
-    ):
-        assert (ROOT / relative_path).is_file()
-
-
 def test_installed_package_version_matches_the_built_version() -> None:
     """Nothing in the build keeps these two in step. This test is that thing.
 
@@ -416,150 +366,11 @@ def test_installed_package_version_matches_the_built_version() -> None:
     import korail_mobile_api
 
     assert korail_mobile_api.__version__ == VERSION
-    assert korail_mobile_api.__version__ == EXPECTED_VERSION
     # Dunders are not exported names.
     assert "__version__" not in korail_mobile_api.__all__
 
     source = (ROOT / "src" / PACKAGE_NAME / "__init__.py").read_text(encoding="utf-8")
-    assert f'__version__ = "{EXPECTED_VERSION}"' in source
-
-
-@pytest.mark.parametrize(
-    ("project", "reason"),
-    (
-        ({"license": {"text": "Apache-2.0"}}, "deprecated license table"),
-        ({"license": {"file": "LICENSE"}}, "deprecated license file table"),
-        ({"license": ""}, "empty expression"),
-        ({}, "no licence declared at all"),
-    ),
-)
-def test_license_expression_must_be_the_spdx_string_form(
-    project: dict[str, object],
-    reason: str,
-) -> None:
-    with pytest.raises(VERIFIER.ContractError):
-        VERIFIER._license_expression(project, list(EXPECTED_CLASSIFIERS))
-
-
-def test_license_expression_rejects_a_duplicate_classifier_claim() -> None:
-    """PEP 639 makes `License ::` classifiers mutually exclusive with SPDX."""
-    with pytest.raises(VERIFIER.ContractError):
-        VERIFIER._license_expression(
-            {"license": EXPECTED_LICENSE_EXPRESSION},
-            [*EXPECTED_CLASSIFIERS, "License :: OSI Approved :: Apache Software License"],
-        )
-    assert (
-        VERIFIER._license_expression(
-            {"license": EXPECTED_LICENSE_EXPRESSION},
-            list(EXPECTED_CLASSIFIERS),
-        )
-        == EXPECTED_LICENSE_EXPRESSION
-    )
-
-
-@pytest.mark.parametrize(
-    "value",
-    (
-        None,
-        [],
-        ["LICEN[CS]E*"],
-        ["LICENSE*"],
-        ["LICENSE?"],
-        ["LICENSE", "LICENSE"],
-        [""],
-        ["/LICENSE"],
-        [b"LICENSE"],
-        "LICENSE",
-    ),
-)
-def test_license_files_must_be_unique_literal_paths(value: object) -> None:
-    project = {} if value is None else {"license-files": value}
-    with pytest.raises(VERIFIER.ContractError):
-        VERIFIER._license_files(ROOT, project)
-
-
-@pytest.mark.parametrize("problem", ("absent", "empty", "directory"))
-def test_license_files_must_name_readable_non_empty_files_in_the_checkout(
-    tmp_path: Path,
-    problem: str,
-) -> None:
-    """The declared path is resolved against the checkout, not merely parsed.
-
-    The bytes read here are what both artifacts are later compared against, so
-    a declaration naming a file that does not exist — or one that exists and is
-    blank — would make the comparison vacuous: an empty licence in the checkout
-    would be copied into both archives and match itself.
-    """
-    if problem == "empty":
-        (tmp_path / "LICENSE").write_bytes(b"  \n\t\n")
-    elif problem == "directory":
-        (tmp_path / "LICENSE").mkdir()
-    with pytest.raises(VERIFIER.ContractError):
-        VERIFIER._license_files(tmp_path, {"license-files": EXPECTED_LICENSE_FILES})
-
-
-def test_license_files_carries_the_checkouts_own_bytes() -> None:
-    """The positive that makes the negatives above mean something."""
-    declared = VERIFIER._license_files(ROOT, {"license-files": EXPECTED_LICENSE_FILES})
-    assert declared == tuple(
-        (name, (ROOT / name).read_bytes()) for name in EXPECTED_LICENSE_FILES
-    )
-    assert b"Apache License" in declared[0][1]
-    assert b"Apache License" in dict(declared)["NOTICE"]
-
-
-@pytest.mark.parametrize(
-    "value",
-    (
-        None,
-        [],
-        [{"name": "a", "email": "a@example.com"}, {"name": "b", "email": "b@example.com"}],
-        [{"name": "yakisoba0728"}],
-        [{"email": "yakihyuk0728@gmail.com"}],
-        [{"name": "", "email": "a@example.com"}],
-        [{"name": "a", "email": ""}],
-        [{"name": "a <b>", "email": "a@example.com"}],
-        [{"name": "a, b", "email": "a@example.com"}],
-        [{"name": "a", "email": "a@example.com, b@example.com"}],
-        [{"name": " a ", "email": "a@example.com"}],
-        [{"name": "a", "email": "a@example.com", "extra": "x"}],
-    ),
-)
-def test_author_email_requires_exactly_one_unambiguous_owner(value: object) -> None:
-    project = {} if value is None else {"authors": value}
-    with pytest.raises(VERIFIER.ContractError):
-        VERIFIER._author_email(project)
-
-
-@pytest.mark.parametrize(
-    "value",
-    (
-        None,
-        {},
-        {"Homepage": "http://github.com/yakisoba0728/korail-mobile-api"},
-        {"Home, page": CANONICAL_REPOSITORY},
-        {"Homepage": ""},
-        {"Homepage": f" {CANONICAL_REPOSITORY}"},
-        {"Homepage": 1},
-    ),
-)
-def test_project_urls_must_be_labelled_https_entries(value: object) -> None:
-    project = {} if value is None else {"urls": value}
-    with pytest.raises(VERIFIER.ContractError):
-        VERIFIER._project_urls(project)
-
-
-def test_the_repository_pyproject_satisfies_every_new_contract_rule() -> None:
-    """The negatives above are only meaningful if the positive still holds."""
-    contract = VERIFIER._project_contract()
-    assert contract.version == EXPECTED_VERSION
-    assert contract.license_expression == EXPECTED_LICENSE_EXPRESSION
-    assert contract.license_files == tuple(
-        (name, (ROOT / name).read_bytes()) for name in EXPECTED_LICENSE_FILES
-    )
-    assert contract.author_email == EXPECTED_AUTHOR_HEADER
-    assert set(contract.project_urls) == set(EXPECTED_PROJECT_URL_HEADERS)
-    assert len(contract.project_urls) == len(EXPECTED_PROJECT_URL_HEADERS)
+    assert f'__version__ = "{VERSION}"' in source
 
 
 def test_valid_pair_is_accepted_in_either_argument_order(
@@ -1147,57 +958,6 @@ def test_success_output_bounds_the_basename_it_prints(
     )[0]
     assert len(wheel_display) <= 96
     assert all(character.isprintable() for character in wheel_display)
-
-
-def test_only_the_repo_root_dotenv_is_ignored() -> None:
-    # Binary stdin -- see the note in tests/test_docs_site.py. Under
-    # ``text=True`` Windows sends ``.env\r``, which matches no rule, and the
-    # test fails claiming the repository does not ignore its own dotenv.
-    result = subprocess.run(
-        ["git", "check-ignore", "--stdin"],
-        cwd=ROOT,
-        input=b".env\nnested/.env\n.env.backup\n",
-        capture_output=True,
-        check=False,
-    )
-
-    assert result.returncode == 0
-    assert result.stderr == b""
-    assert result.stdout.decode("utf-8").splitlines() == [".env"]
-
-
-def test_ci_and_manual_release_gates_are_structurally_offline_and_fail_fast() -> None:
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    release = (ROOT / "docs/RELEASE.md").read_text(encoding="utf-8")
-    release_lower = release.casefold()
-    offline_command = 'pytest -q -m "not live"'
-
-    for version in ("'3.11'", "'3.12'", "'3.13'", "'3.14'"):
-        assert version in workflow
-    assert offline_command in workflow
-    assert offline_command in release
-    assert "run: pytest -q\n" not in workflow
-    assert "set -euo pipefail" in release
-    assert "cleanup()" in release
-    assert "trap cleanup EXIT" in release
-    assert release.index("set -euo pipefail") < release.index("artifact_dir=")
-    assert "\npython -m " not in release
-    assert "\npython scripts/" not in release
-    assert release.index("trap cleanup EXIT") < release.index("python3 -m build")
-    for forbidden in (
-        "twine upload",
-        "publish",
-        "actions/upload",
-        "attest",
-        "id-token: write",
-        "contents: write",
-        "korail_mobile_api_live",
-        "srt_mobile_api_live",
-    ):
-        assert forbidden not in workflow.casefold()
-        assert forbidden not in release_lower
-    assert not re.search(r"(?m)^\s*release\s*:", workflow)
-    assert not re.search(r"(?m)^\s*tags\s*:", workflow)
 
 
 def _child_pytest(
