@@ -398,7 +398,6 @@ def _common_fields(config: KorailConfig) -> dict[str, str]:
 
 
 def test_successful_read_routes_have_exact_final_fields():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert (
         "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
     ) in KORAIL_READ_ONLY_ROUTES

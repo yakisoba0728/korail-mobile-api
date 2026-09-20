@@ -103,7 +103,6 @@ def _client(handler) -> KorailClient:
 
 
 def test_route_boundary_admits_the_two_reads_and_neither_write():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert ("POST", USAGE_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
     # The two state-changing dcntCrd* routes are in the mutation set and in

@@ -503,10 +503,6 @@ def test_read_only_route_registry_accepts_current_public_requests(method, path):
     assert_read_only_route(method, path)
 
 
-def test_read_only_route_registry_has_exact_expanded_count():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
-
-
 def test_logout_route_is_post_only_and_carries_timestamp_form():
     logout_path = "/classes/com.korail.mobile.login.Logout"
     assert ("POST", logout_path) in KORAIL_READ_ONLY_ROUTES

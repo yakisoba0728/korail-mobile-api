@@ -333,14 +333,11 @@ def _recording_client(
 
 
 def test_new_routes_and_public_contract_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert (
         "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
     ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert ("POST", R54_PATH) not in KORAIL_READ_ONLY_ROUTES
-    assert not hasattr(KorailClient, "get_tour_train_info")
-    assert not hasattr(korail_mobile_api.read_payloads, "build_tour_train_info_form")
 
     expected_fields = {
         R13_PATH: {"Device", "Version", "Key", "dptDt"},

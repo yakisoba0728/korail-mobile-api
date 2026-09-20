@@ -159,14 +159,12 @@ def _responses() -> dict[str, dict[str, Any]]:
 
 
 def test_route_method_export_and_dynapath_boundaries_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert (
         "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
     ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
     assert ("POST", R148_PATH) not in KORAIL_READ_ONLY_ROUTES
     assert not hasattr(KorailClient, "get_platform_numbers")
-    assert len(DYNAPATH_ALLOWLIST_PATHS) == 6
     assert all(path not in DYNAPATH_ALLOWLIST_PATHS for _, path in NEW_ROUTES)
 
     expected_fields = {

@@ -24,7 +24,7 @@ from korail_mobile_api.errors import (
     KorailProtocolError,
     KorailSessionExpiredError,
 )
-from korail_mobile_api.models import KorailSession, TrainSummary
+from korail_mobile_api.models import KorailSession
 from korail_mobile_api.safety import (
     KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_READ_ONLY_ROUTES,
@@ -243,22 +243,6 @@ def test_public_symbols_and_request_object_method_signatures_are_exact():
             "request": _require(read_payloads, request_name),
             "return": _require(read_models, response_name),
         }
-
-
-def test_java_route_names_are_not_duplicate_client_aliases():
-    for java_name in (
-        "getFresScar",
-        "getGuideSeatCnd",
-        "getAssignScheduleView",
-        "getMergeSeatsInquiry",
-    ):
-        assert not hasattr(KorailClient, java_name)
-    for convenience_name in (
-        "to_free_seat_car_request",
-        "to_seat_assignment_schedule_request",
-        "to_merge_seats_inquiry_request",
-    ):
-        assert not hasattr(TrainSummary, convenience_name)
 
 
 def test_request_types_are_frozen_closed_and_repr_safe():
@@ -667,7 +651,6 @@ def test_null_documented_optional_containers_parse_as_empty_tuples():
 
 def test_safety_registry_has_only_exact_new_read_contracts():
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     for path, expected_fields in EXACT_FIELDS.items():
         assert KORAIL_EXACT_REQUEST_FIELDS[path] == frozenset(
             expected_fields

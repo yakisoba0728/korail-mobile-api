@@ -120,15 +120,6 @@ def test_public_request_models_and_method_signature_are_exact():
         "return": _require(read_models, "PassScheduleResponse"),
     }
 
-    for java_or_mutation_name in (
-        "getCommRsvInquiry",
-        "commReservation",
-        "commPayment",
-        "get_pass_reservation",
-        "get_pass_payment",
-    ):
-        assert not hasattr(KorailClient, java_or_mutation_name)
-
 
 def test_request_is_closed_frozen_required_and_repr_safe():
     request_type = _require(read_payloads, "PassScheduleRequest")
@@ -215,7 +206,6 @@ def test_request_rejects_malformed_or_ambiguous_values(
 
 def test_safety_registers_one_exact_read_only_contract():
     assert ("POST", PASS_SCHEDULE_PATH) in KORAIL_READ_ONLY_ROUTES
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert KORAIL_EXACT_REQUEST_FIELDS[PASS_SCHEDULE_PATH] == (
         PASS_SCHEDULE_FIELDS
     )

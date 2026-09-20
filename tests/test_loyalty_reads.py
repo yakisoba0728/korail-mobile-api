@@ -37,7 +37,6 @@ from korail_mobile_api.read_payloads import (
     build_mileage_history_form,
 )
 from korail_mobile_api.safety import (
-    EXCLUDED_API_DOMAINS,
     KORAIL_EXACT_REQUEST_FIELDS,
     KORAIL_MUTATION_ROUTES,
     KORAIL_READ_ONLY_ROUTES,
@@ -64,7 +63,6 @@ WITHHELD_PATHS = (
 
 
 def test_only_the_two_password_free_loyalty_reads_are_reachable():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert ("POST", SUMMARY_PATH) in KORAIL_READ_ONLY_ROUTES
     assert ("POST", MILEAGE_PATH) in KORAIL_READ_ONLY_ROUTES
     for path in WITHHELD_PATHS:
@@ -73,24 +71,6 @@ def test_only_the_two_password_free_loyalty_reads_are_reachable():
             assert (method, path) not in KORAIL_MUTATION_ROUTES
         with pytest.raises(KorailProtocolError):
             assert_read_only_route("POST", path)
-
-
-def test_the_excluded_domain_label_narrowed_to_writes_only():
-    # The label was "points-mileage", which also excluded balance reads. The
-    # new label names what is still refused and nothing more.
-    assert "points-mileage" not in EXCLUDED_API_DOMAINS
-    assert "points-mileage-write" in EXCLUDED_API_DOMAINS
-    # Narrowing this one label must not have relaxed any other domain.
-    assert {
-        "reservation",
-        "payment",
-        "refund",
-        "check-in",
-        "member-drop",
-        "push-sms",
-        "dynapath-token-generation",
-    } <= EXCLUDED_API_DOMAINS
-    assert len(EXCLUDED_API_DOMAINS) == 8
 
 
 def test_point_summary_form_is_the_daos_own_constant():

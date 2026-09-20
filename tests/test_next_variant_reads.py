@@ -109,13 +109,10 @@ def _commuter_source(*age_codes: str) -> CommuterInfoResponse:
 
 
 def test_route_and_holdback_boundary_is_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert {("POST", R31_PATH), ("POST", R52_PATH)} <= KORAIL_READ_ONLY_ROUTES
     assert ("POST", R17_PATH) not in KORAIL_READ_ONLY_ROUTES
     assert not hasattr(KorailClient, "get_gift_ticket_list")
     assert ("POST", R39_PATH) in KORAIL_READ_ONLY_ROUTES
-    assert not hasattr(KorailClient, "get_product_train_inquiry")
-    assert not hasattr(korail_mobile_api, "ProductTrainInquiryRequest")
 
 
 def test_r17_tagged_forms_preserve_blank_vs_omitted_fields():

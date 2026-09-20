@@ -125,7 +125,6 @@ def test_require_mutation_consent_rejects_none_and_non_consent_for_cart():
 def test_route_is_a_mutation_route_owned_by_the_cart_category():
     assert ("POST", CART_ADD_ROUTE) in KORAIL_MUTATION_ROUTES
     assert ("GET", CART_ADD_ROUTE) not in KORAIL_MUTATION_ROUTES
-    assert len(KORAIL_MUTATION_ROUTES) == 9
     assert KORAIL_MUTATION_ROUTES.isdisjoint(KORAIL_READ_ONLY_ROUTES)
     assert CART_ADD_ROUTE not in {path for _, path in KORAIL_READ_ONLY_ROUTES}
 

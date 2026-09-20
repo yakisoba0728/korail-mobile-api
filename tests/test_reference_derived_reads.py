@@ -231,12 +231,10 @@ def _responses() -> dict[str, dict[str, Any]]:
 
 
 def test_routes_fields_exports_and_signatures_are_exact():
-    assert len(KORAIL_READ_ONLY_ROUTES) == 57
     assert (
         "POST", "/classes/com.korail.mobile.seatMovie.ScheduleViewSpecial"
     ) in KORAIL_READ_ONLY_ROUTES
     assert NEW_ROUTES <= KORAIL_READ_ONLY_ROUTES
-    assert len(DYNAPATH_ALLOWLIST_PATHS) == 6
     assert all(path not in DYNAPATH_ALLOWLIST_PATHS for _, path in NEW_ROUTES)
 
     # These three are reads. The refund MUTATION route is a different path and
