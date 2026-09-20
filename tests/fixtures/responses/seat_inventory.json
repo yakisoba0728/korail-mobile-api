@@ -852,28 +852,28 @@
   ],
   "windowList": [
     {
-      "st_loc_rt": "3045.52",
-      "cls_loc_rt": "6721.20"
+      "st_loc_rt": "30.54",
+      "cls_loc_rt": "44.23"
     },
     {
-      "st_loc_rt": "5119.52",
-      "cls_loc_rt": "1431.47"
+      "st_loc_rt": "41.05",
+      "cls_loc_rt": "68.40"
     },
     {
-      "st_loc_rt": "2362.12",
-      "cls_loc_rt": "0573.65"
+      "st_loc_rt": "35.55",
+      "cls_loc_rt": "72.16"
     },
     {
-      "st_loc_rt": "0554.01",
-      "cls_loc_rt": "2151.12"
+      "st_loc_rt": "18.85",
+      "cls_loc_rt": "45.39"
     },
     {
-      "st_loc_rt": "1150.32",
-      "cls_loc_rt": "5578.52"
+      "st_loc_rt": "2.92",
+      "cls_loc_rt": "9.62"
     },
     {
-      "st_loc_rt": "4599.35",
-      "cls_loc_rt": "2390.79"
+      "st_loc_rt": "7.08",
+      "cls_loc_rt": "16.84"
     }
   ],
   "layout_type": 2,

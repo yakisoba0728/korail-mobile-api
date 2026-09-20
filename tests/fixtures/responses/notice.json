@@ -3,17 +3,17 @@
   "forSeatIntg": "Y",
   "refund_msg": {
     "ticket_refund_msg": "합성 ticket_refund_msg 문구 683",
-    "boarding_date_start": "02615102",
-    "ticketing_date_start": "20969840",
-    "ticketing_date_end": "63510421",
-    "boarding_date_end": "63510421"
+    "boarding_date_start": "20260707",
+    "ticketing_date_start": "20261026",
+    "ticketing_date_end": "20270103",
+    "boarding_date_end": "20270103"
   },
   "version": {
     "SMESSAGE": null,
     "AADDMSG": "합성 AADDMSG 문구 479",
     "OLDSVERSION": "0",
     "AADD3MSG": "합성 AADD3MSG 문구 728",
-    "NEWAVERSION": "SYNTH417099",
+    "NEWAVERSION": "3.7.5",
     "DMESSAGE": null,
     "NEWIVERSION": "2.43.8",
     "OLDIVERSION": "5.16.0",
@@ -65,9 +65,9 @@
     "UMSIZE": "F",
     "UMCLSBTN": null,
     "UMEXTR": "Y",
-    "UMSTARTDT": "140422387134",
+    "UMSTARTDT": "202606032024",
     "UMDNS": "1",
-    "UMENDDT": "318070781051",
+    "UMENDDT": "202703211640",
     "UMTALKBTN": "합성 UMTALKBTN 문구 913"
   },
   "startAirportBusDate": "20260801194913"

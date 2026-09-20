@@ -48,12 +48,23 @@ _SOUP_SYLLABLES = set("가나다라마바사아자차카타파하")
 _KOREA_LON = (126.0, 130.0)
 _KOREA_LAT = (33.0, 39.0)
 
-_DATE_KEY = re.compile(r"(dt|date|ymd)$", re.IGNORECASE)
-_TIME_KEY = re.compile(r"(tm|time|hm)$", re.IGNORECASE)
-_MONEY_KEY = re.compile(r"(amt|fare|price|pay|cash|won|chrg|cost)", re.IGNORECASE)
+# 키 규칙은 한 번 틀렸습니다. 끝자리를 ``$`` 로 묶어 두었더니 ``h_dpt_tm_qb`` 의
+# "94:45" 와 ``runDt1`` 의 "21145240" 이 통째로 빠져나갔습니다. 그렇다고 "포함"으로
+# 넓히면 ``h_dtl_dsc_2`` 가 "dt 를 포함하니 날짜"가 되어 버립니다. 마디 경계를
+# 명시하는 것이 그 사이입니다. ``re.IGNORECASE`` 를 쓰지 않는 것도 같은 이유로,
+# ``Dt``/``DT``/``Date`` 는 저마다 다른 응답에서 오는 서로 다른 철자입니다.
+_DATE_KEY = re.compile(r"(?:^|_)(?:dt|date|ymd)\d?$|(?:^|_)date_(?:start|end)$|Dt\d?$|DT$|Date$")
+_TIME_KEY = re.compile(r"(?:^|_)(?:tm|time|hm)\d?(?:_qb)?$|Tm\d?$")
+_MONEY_KEY = re.compile(r"(amt|fare|price|prc|pay|cash|won|chrg|cost)", re.IGNORECASE)
+_COUNT_KEY = re.compile(r"(?:cnt|ordr|sqno|prnb)$", re.IGNORECASE)
+_RATIO_KEY = re.compile(r"_rt$")
 
 #: 원 단위 금액의 상한. 1차 비식별화는 자릿수를 섞어 운임 81조원을 남겼습니다.
 _MONEY_CEILING = 10_000_000
+
+#: 개수·순번의 상한. 한 편성의 좌석도, 조회 결과의 건수도, 역의 순번도 네 자리를
+#: 넘지 않습니다. 1차 비식별화는 잔여석 305,082 석과 6억 건짜리 조회를 남겼습니다.
+_COUNT_CEILING = 10_000
 
 
 def _fixture_names() -> list[str]:
@@ -176,8 +187,16 @@ def test_no_fixture_value_is_syllable_soup(name: str) -> None:
     raw = _raw(name)
     soup = []
     for path, _key, value in _strings(raw):
+        if value.startswith("합성"):  # 이 저장소가 스스로 넣은 대체값
+            continue
         hangul = [c for c in value if "가" <= c <= "힣"]
-        if len(hangul) >= 3 and all(c in _SOUP_SYLLABLES for c in hangul):
+        if not hangul or not all(c in _SOUP_SYLLABLES for c in hangul):
+            continue
+        # 낱말 전체가 수프이거나("자하파마다"), 숫자·라틴문자에 수프가 섞였거나
+        # ("27,516라", "kep 4204 가하"). 뒤쪽은 한글이 두 자뿐이라 예전 규칙을
+        # 빠져나갔습니다 -- 실제 역명 "각계"·"가남" 은 수프 아닌 음절을 지녀
+        # 여기 걸리지 않습니다.
+        if len(hangul) >= 3 or re.search(r"[0-9A-Za-z]", value):
             soup.append((path, value[:40]))
     assert not soup, f"{name}.json 에 뭉개진 한글이 남아 있습니다: {soup[:5]}"
 
@@ -199,12 +218,21 @@ def test_every_coordinate_is_inside_korea(name: str) -> None:
 def test_every_date_and_time_field_is_a_real_date_and_time(name: str) -> None:
     raw = _raw(name)
     for path, key, value in _strings(raw):
-        if _DATE_KEY.search(key) and re.fullmatch(r"\d{8}", value):
-            date(int(value[:4]), int(value[4:6]), int(value[6:]))  # 틀리면 ValueError
-        if _TIME_KEY.search(key) and re.fullmatch(r"\d{6}", value):
-            hour, minute, second = int(value[:2]), int(value[2:4]), int(value[4:])
-            # KORAIL 은 자정을 넘긴 운행을 24시 이후로 적습니다.
-            assert hour <= 29 and minute < 60 and second < 60, f"{name}.json {path}"
+        # 8 자리는 날짜, 12/14 자리는 날짜에 시·분(·초) 가 붙은 것입니다.
+        if _DATE_KEY.search(key) and re.fullmatch(r"\d{8}|\d{12}|\d{14}", value):
+            date(int(value[:4]), int(value[4:6]), int(value[6:8]))  # 틀리면 ValueError
+        if not _TIME_KEY.search(key):
+            continue
+        # ``h_dpt_tm`` 은 ``131139``, 그 거울인 ``h_dpt_tm_qb`` 는 ``13:11`` 입니다.
+        parts = re.fullmatch(r"(\d{2})(\d{2})(\d{2})", value) or re.fullmatch(
+            r"(\d{1,3}):(\d{2})(?::(\d{2}))?", value
+        )
+        if parts is None:
+            continue
+        hour, minute = int(parts.group(1)), int(parts.group(2))
+        second = int(parts.group(3) or 0)
+        # KORAIL 은 자정을 넘긴 운행을 24시 이후로 적습니다.
+        assert hour <= 29 and minute < 60 and second < 60, f"{name}.json {path} = {value}"
 
 
 @pytest.mark.parametrize("name", _fixture_names())
@@ -214,3 +242,25 @@ def test_no_amount_is_larger_than_a_train_fare_can_be(name: str) -> None:
     for path, key, value in _strings(raw):
         if _MONEY_KEY.search(key) and re.fullmatch(r"-?\d+", value):
             assert abs(int(value)) < _MONEY_CEILING, f"{name}.json {path} = {value}"
+
+
+@pytest.mark.parametrize("name", _fixture_names())
+def test_no_count_or_ordinal_is_out_of_scale(name: str) -> None:
+    """잔여석 305,082 석, 6억 건짜리 조회, 97 만 번째 정차역이 남아 있었습니다."""
+    raw = _raw(name)
+    for path, key, value in _strings(raw):
+        if _COUNT_KEY.search(key) and re.fullmatch(r"\d+", value):
+            assert int(value) < _COUNT_CEILING, f"{name}.json {path} = {value}"
+
+
+@pytest.mark.parametrize("name", _fixture_names())
+def test_every_ratio_is_a_percentage(name: str) -> None:
+    """``-412.12`` 도 ``6721.20`` 도 비율이 아닙니다.
+
+    ``h_train_disc_origin_rt`` 처럼 ``_rt`` 로 끝나면서 ``Y``/``N`` 을 담는 필드가
+    있습니다. 숫자인 것만 봅니다 -- 그 철자가 왜 그런지는 따로 적어 두었습니다.
+    """
+    raw = _raw(name)
+    for path, key, value in _strings(raw):
+        if _RATIO_KEY.search(key) and re.fullmatch(r"-?\d+(?:\.\d+)?", value):
+            assert 0.0 <= float(value) <= 100.0, f"{name}.json {path} = {value}"

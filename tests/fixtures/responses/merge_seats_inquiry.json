@@ -1,37 +1,37 @@
 {
   "midStnList": [
     {
-      "runOrdr": "121905",
+      "runOrdr": "22",
       "rsStnCd": "0501",
       "rsStnNm": "광명"
     },
     {
-      "runOrdr": "203893",
+      "runOrdr": "19",
       "rsStnCd": "0502",
       "rsStnNm": "합성역0502"
     },
     {
-      "runOrdr": "492599",
+      "runOrdr": "6",
       "rsStnCd": "0297",
       "rsStnNm": "오송"
     },
     {
-      "runOrdr": "311253",
+      "runOrdr": "29",
       "rsStnCd": "0010",
       "rsStnNm": "대전"
     },
     {
-      "runOrdr": "453730",
+      "runOrdr": "10",
       "rsStnCd": "0507",
       "rsStnNm": "합성역0507"
     },
     {
-      "runOrdr": "478577",
+      "runOrdr": "21",
       "rsStnCd": "0015",
       "rsStnNm": "합성역0015"
     },
     {
-      "runOrdr": "584221",
+      "runOrdr": "20",
       "rsStnCd": "0509",
       "rsStnNm": "합성역0509"
     }
@@ -51,17 +51,17 @@
         "h_dpt_rs_stn_nm": "서울",
         "h_arv_rs_stn_cd": "0001",
         "h_arv_rs_stn_nm": "서울",
-        "h_dpt_stn_run_ordr": "837328",
-        "h_arv_stn_run_ordr": "837328",
-        "h_dpt_stn_cons_ordr": "478577",
-        "h_arv_stn_cons_ordr": "478577",
+        "h_dpt_stn_run_ordr": "7",
+        "h_arv_stn_run_ordr": "10",
+        "h_dpt_stn_cons_ordr": "6",
+        "h_arv_stn_cons_ordr": "11",
         "h_dpt_dt": "20260620",
         "h_arv_dt": "20260620",
         "h_dpt_tm": "162629",
-        "h_dpt_tm_qb": "18:20",
+        "h_dpt_tm_qb": "16:26",
         "h_arv_tm": "181429",
-        "h_arv_tm_qb": "02:10",
-        "h_std_rest_seat_cnt": "305082",
+        "h_arv_tm_qb": "18:14",
+        "h_std_rest_seat_cnt": "345",
         "h_gen_rsv_cd": "11",
         "h_gen_rsv_nm": "합성 h_gen_rsv_nm 문구 639",
         "restStndNum": "-45036",
@@ -83,17 +83,17 @@
         "h_dpt_rs_stn_nm": "서울",
         "h_arv_rs_stn_cd": "0020",
         "h_arv_rs_stn_nm": "부산",
-        "h_dpt_stn_run_ordr": "837328",
-        "h_arv_stn_run_ordr": "317652",
-        "h_dpt_stn_cons_ordr": "478577",
-        "h_arv_stn_cons_ordr": "323488",
+        "h_dpt_stn_run_ordr": "7",
+        "h_arv_stn_run_ordr": "15",
+        "h_dpt_stn_cons_ordr": "6",
+        "h_arv_stn_cons_ordr": "10",
         "h_dpt_dt": "20260620",
         "h_arv_dt": "20260620",
         "h_dpt_tm": "162629",
-        "h_dpt_tm_qb": "18:20",
+        "h_dpt_tm_qb": "16:26",
         "h_arv_tm": "181429",
-        "h_arv_tm_qb": "83:35",
-        "h_std_rest_seat_cnt": "584210",
+        "h_arv_tm_qb": "18:14",
+        "h_std_rest_seat_cnt": "150",
         "h_gen_rsv_cd": "11",
         "h_gen_rsv_nm": "합성 h_gen_rsv_nm 문구 248",
         "restStndNum": "-45036",

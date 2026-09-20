@@ -48,34 +48,34 @@
           "h_sngl_tk_flg": "N",
           "h_gen_chg_allw_flg": "N",
           "h_chtn_allw_flg": "N",
-          "h_dly_max_mrk_qnty": "284741",
+          "h_dly_max_mrk_qnty": "58",
           "psg_info": [
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "000",
-              "h_st_prnb": "209001",
-              "h_cls_prnb": "554078",
+              "h_st_prnb": "20",
+              "h_cls_prnb": "19",
               "h_dcnt_flg": "Y"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "201",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "523212",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "1",
               "h_dcnt_flg": "N"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "202",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "523212",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "1",
               "h_dcnt_flg": "N"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "205",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "523212",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "1",
               "h_dcnt_flg": "N"
             }
           ],
@@ -132,13 +132,13 @@
           "h_sngl_tk_flg": "Y",
           "h_gen_chg_allw_flg": "N",
           "h_chtn_allw_flg": "N",
-          "h_dly_max_mrk_qnty": "284741",
+          "h_dly_max_mrk_qnty": "58",
           "psg_info": [
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "000",
-              "h_st_prnb": "231138",
-              "h_cls_prnb": "231138",
+              "h_st_prnb": "2",
+              "h_cls_prnb": "2",
               "h_dcnt_flg": "Y"
             }
           ],
@@ -195,13 +195,13 @@
           "h_sngl_tk_flg": "Y",
           "h_gen_chg_allw_flg": "N",
           "h_chtn_allw_flg": "N",
-          "h_dly_max_mrk_qnty": "284741",
+          "h_dly_max_mrk_qnty": "58",
           "psg_info": [
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "000",
-              "h_st_prnb": "231138",
-              "h_cls_prnb": "231138",
+              "h_st_prnb": "2",
+              "h_cls_prnb": "2",
               "h_dcnt_flg": "Y"
             }
           ],
@@ -235,7 +235,7 @@
       "enable": "Y",
       "detailType": "",
       "afterDay": "0",
-      "title": "kep 4204 가하",
+      "title": "합성 title 문구 678",
       "isExpand": "",
       "repSegDpt": "서울",
       "repSegArv": "광명",
@@ -247,13 +247,13 @@
       "agree": "합성 agree 문구 279",
       "goodsData": {
         "h_cnd_flg_disc_no": "Y20190313001",
-        "h_cnd_flg_disc_nm": "kep 4204 가하",
+        "h_cnd_flg_disc_nm": "합성 h_cnd_flg_disc_nm 문구 678",
         "h_cnd_flg_disc_stt": "02",
         "h_mrk_st_dt": "20261217",
         "h_mrk_cls_dt": "20270116",
         "h_mrk_open_dttm": null,
         "h_stl_mtd_cd": null,
-        "h_tk_prt_cont": "kep 4204 가하",
+        "h_tk_prt_cont": "합성 h_tk_prt_cont 문구 678",
         "h_trip_chg_allw_flg": "N",
         "h_dtl_info": null,
         "h_dtl_dsc_1": "03",
@@ -276,13 +276,13 @@
           "h_sngl_tk_flg": "N",
           "h_gen_chg_allw_flg": "N",
           "h_chtn_allw_flg": "N",
-          "h_dly_max_mrk_qnty": "284741",
+          "h_dly_max_mrk_qnty": "58",
           "psg_info": [
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "000",
-              "h_st_prnb": "209001",
-              "h_cls_prnb": "131245",
+              "h_st_prnb": "20",
+              "h_cls_prnb": "18",
               "h_dcnt_flg": "Y"
             }
           ],
@@ -357,48 +357,48 @@
           "h_sngl_tk_flg": "Y",
           "h_gen_chg_allw_flg": "Y",
           "h_chtn_allw_flg": "Y",
-          "h_dly_max_mrk_qnty": "284741",
+          "h_dly_max_mrk_qnty": "58",
           "psg_info": [
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "000",
-              "h_st_prnb": "209001",
-              "h_cls_prnb": "192518",
+              "h_st_prnb": "20",
+              "h_cls_prnb": "14",
               "h_dcnt_flg": "Y"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "201",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "209001",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "20",
               "h_dcnt_flg": "Y"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "202",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "209001",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "20",
               "h_dcnt_flg": "Y"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "204",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "209001",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "20",
               "h_dcnt_flg": "Y"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "205",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "209001",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "20",
               "h_dcnt_flg": "Y"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "206",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "209001",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "20",
               "h_dcnt_flg": "Y"
             }
           ],
@@ -455,27 +455,27 @@
           "h_sngl_tk_flg": "Y",
           "h_gen_chg_allw_flg": "N",
           "h_chtn_allw_flg": "Y",
-          "h_dly_max_mrk_qnty": "284741",
+          "h_dly_max_mrk_qnty": "58",
           "psg_info": [
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "000",
-              "h_st_prnb": "209001",
-              "h_cls_prnb": "131245",
+              "h_st_prnb": "20",
+              "h_cls_prnb": "18",
               "h_dcnt_flg": "Y"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "201",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "958116",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "11",
               "h_dcnt_flg": "N"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "202",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "958116",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "11",
               "h_dcnt_flg": "N"
             }
           ],
@@ -532,48 +532,48 @@
           "h_sngl_tk_flg": "N",
           "h_gen_chg_allw_flg": "Y",
           "h_chtn_allw_flg": "Y",
-          "h_dly_max_mrk_qnty": "284741",
+          "h_dly_max_mrk_qnty": "58",
           "psg_info": [
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "000",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "131245",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "18",
               "h_dcnt_flg": "N"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "192518",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "14",
               "h_dcnt_knd_cd": "201",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "131245",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "18",
               "h_dcnt_flg": "N"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "715525",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "11",
               "h_dcnt_knd_cd": "P11",
-              "h_st_prnb": "209001",
-              "h_cls_prnb": "209001",
+              "h_st_prnb": "20",
+              "h_cls_prnb": "20",
               "h_dcnt_flg": "Y"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "231138",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "2",
               "h_dcnt_knd_cd": "205",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "131245",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "18",
               "h_dcnt_flg": "N"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "523212",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "1",
               "h_dcnt_knd_cd": "206",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "131245",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "18",
               "h_dcnt_flg": "N"
             },
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "554078",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "19",
               "h_dcnt_knd_cd": "204",
-              "h_st_prnb": "317104",
-              "h_cls_prnb": "131245",
+              "h_st_prnb": "3",
+              "h_cls_prnb": "18",
               "h_dcnt_flg": "N"
             }
           ],
@@ -630,13 +630,13 @@
           "h_sngl_tk_flg": "N",
           "h_gen_chg_allw_flg": "Y",
           "h_chtn_allw_flg": "Y",
-          "h_dly_max_mrk_qnty": "284741",
+          "h_dly_max_mrk_qnty": "58",
           "psg_info": [
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "000",
-              "h_st_prnb": "209001",
-              "h_cls_prnb": "209001",
+              "h_st_prnb": "20",
+              "h_cls_prnb": "20",
               "h_dcnt_flg": "Y"
             }
           ],
@@ -693,13 +693,13 @@
           "h_sngl_tk_flg": "N",
           "h_gen_chg_allw_flg": "Y",
           "h_chtn_allw_flg": "Y",
-          "h_dly_max_mrk_qnty": "284741",
+          "h_dly_max_mrk_qnty": "58",
           "psg_info": [
             {
-              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "20",
               "h_dcnt_knd_cd": "000",
-              "h_st_prnb": "209001",
-              "h_cls_prnb": "209001",
+              "h_st_prnb": "20",
+              "h_cls_prnb": "20",
               "h_dcnt_flg": "Y"
             }
           ],
@@ -768,112 +768,112 @@
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D010",
-            "h_comn_cd_nm": "33파"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 868"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D011",
-            "h_comn_cd_nm": "73다"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 199"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D012",
-            "h_comn_cd_nm": "11나"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 303"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D013",
-            "h_comn_cd_nm": "55나"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 804"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D014",
-            "h_comn_cd_nm": "98아"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 448"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D015",
-            "h_comn_cd_nm": "75마"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 129"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D016",
-            "h_comn_cd_nm": "59타"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 499"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D017",
-            "h_comn_cd_nm": "31사"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 645"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D018",
-            "h_comn_cd_nm": "71사"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 644"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D019",
-            "h_comn_cd_nm": "41파"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 575"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D020",
-            "h_comn_cd_nm": "29차"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 761"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D021",
-            "h_comn_cd_nm": "17나"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 297"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D022",
-            "h_comn_cd_nm": "21아"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 705"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D023",
-            "h_comn_cd_nm": "89나"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 620"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D024",
-            "h_comn_cd_nm": "73마"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 844"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D025",
-            "h_comn_cd_nm": "52하"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 185"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D026",
-            "h_comn_cd_nm": "01나"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 746"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D027",
-            "h_comn_cd_nm": "20마"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 845"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D028",
-            "h_comn_cd_nm": "80파"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 446"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D029",
-            "h_comn_cd_nm": "30나"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 849"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D030",
-            "h_comn_cd_nm": "49마"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 838"
           },
           {
             "h_cmtr_knd_cd": "0028",
             "h_cmtr_utl_trm_cd": "D031",
-            "h_comn_cd_nm": "42아"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 908"
           }
         ],
         "pass_periodinfo1": [
@@ -1037,12 +1037,12 @@
           {
             "h_cmtr_knd_cd": "0001",
             "h_cmtr_utl_trm_cd": "D010",
-            "h_comn_cd_nm": "33파"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 868"
           },
           {
             "h_cmtr_knd_cd": "0001",
             "h_cmtr_utl_trm_cd": "M001",
-            "h_comn_cd_nm": "0하라"
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 948"
           }
         ],
         "h_min_age": "0",
@@ -1059,7 +1059,7 @@
       "enable": "Y",
       "detailType": "",
       "afterDay": "0",
-      "title": "k아다",
+      "title": "합성 title 문구 600",
       "isExpand": "C",
       "repSegDpt": "",
       "repSegArv": "",
@@ -1095,7 +1095,7 @@
       "enable": "Y",
       "detailType": "SYNTH758714",
       "afterDay": "0",
-      "title": "2라나",
+      "title": "합성 title 문구 855",
       "isExpand": "",
       "repSegDpt": "",
       "repSegArv": "",
@@ -1114,7 +1114,7 @@
       "enable": "Y",
       "detailType": "SYNTH926364",
       "afterDay": "0",
-      "title": "4하하",
+      "title": "합성 title 문구 977",
       "isExpand": "",
       "repSegDpt": "",
       "repSegArv": "",
@@ -1151,7 +1151,7 @@
       "enable": "Y",
       "detailType": "SYNTH434376",
       "afterDay": "0",
-      "title": "2라나",
+      "title": "합성 title 문구 855",
       "isExpand": "",
       "repSegDpt": "",
       "repSegArv": "",
@@ -1170,7 +1170,7 @@
       "enable": "Y",
       "detailType": "SYNTH960399",
       "afterDay": "0",
-      "title": "4하하",
+      "title": "합성 title 문구 977",
       "isExpand": "",
       "repSegDpt": "",
       "repSegArv": "",
@@ -1189,7 +1189,7 @@
       "enable": "Y",
       "detailType": "",
       "afterDay": "0",
-      "title": "oji-라카",
+      "title": "합성 title 문구 557",
       "isExpand": "",
       "repSegDpt": "",
       "repSegArv": "",
@@ -1207,7 +1207,7 @@
       "enable": "Y",
       "detailType": "nCard",
       "afterDay": "0",
-      "title": "2라나",
+      "title": "합성 title 문구 855",
       "isExpand": "",
       "repSegDpt": "",
       "repSegArv": "",
@@ -1226,7 +1226,7 @@
       "enable": "Y",
       "detailType": "SYNTH152877",
       "afterDay": "0",
-      "title": "4하하",
+      "title": "합성 title 문구 977",
       "isExpand": "",
       "repSegDpt": "",
       "repSegArv": "",
