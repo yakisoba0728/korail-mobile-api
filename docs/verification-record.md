@@ -86,7 +86,7 @@ for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
 state-changing request can leave the process by no other route. As of 1.2.0,
-`pytest -m "not live"` collects 2257 tests and deselects none -- no test in
+`pytest -m "not live"` collects 2260 tests and deselects none -- no test in
 the suite carries the `live` marker any more, so there is no opted-in
 live-service test left to deselect. `3137 passed, 1 deselected`,
 `1246 passed, 1 deselected` (before the P0 live-evidence documentation
