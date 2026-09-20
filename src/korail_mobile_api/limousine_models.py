@@ -27,25 +27,6 @@ from typing import Any
 from .models import BaseKorailResponse
 
 
-def _ascii_digits(
-    value: object,
-    name: str,
-    *,
-    lengths: frozenset[int],
-    allow_empty: bool = False,
-) -> None:
-    if not isinstance(value, str):
-        raise TypeError(f"{name} must be a string")
-    if allow_empty and value == "":
-        return
-    if (
-        len(value) not in lengths
-        or any(character < "0" or character > "9" for character in value)
-    ):
-        expected = ", ".join(str(length) for length in sorted(lengths))
-        raise ValueError(f"{name} must contain {expected} ASCII digit(s)")
-
-
 def _non_empty_ascii(value: object, name: str, *, allow_empty: bool = False) -> None:
     if not isinstance(value, str):
         raise TypeError(f"{name} must be a string")

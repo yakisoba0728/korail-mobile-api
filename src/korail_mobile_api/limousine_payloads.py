@@ -24,7 +24,6 @@ from .limousine_models import (
     LimousineScheduleQuery,
     LimousineSeatInventoryQuery,
 )
-from .payloads import _device_version
 
 
 QueryT = TypeVar("QueryT")
@@ -43,6 +42,15 @@ def _validated_query(
     validated = cast(QueryT, query)
     validator(validated)
     return validated
+
+
+# payloads.py 에 같은 함수가 있지만 import 하지 않습니다. 이 모듈은 pyright strict
+# 목록에 있고 strict 는 사적 이름의 모듈 간 사용을 거부합니다(reportPrivateUsage).
+# 제대로 된 답은 형제 모듈들이 함께 쓰는 내부 유틸 모듈이고, 그것은 모듈 분할을
+# 다시 자를 때 할 일입니다.
+def _device_version(config: KorailConfig) -> dict[str, str]:
+    """The ``Device`` and ``Version`` pair every read form here starts with."""
+    return {"Device": config.device, "Version": config.version}
 
 
 def validate_limousine_schedule_query(
@@ -71,18 +79,6 @@ def validate_limousine_seat_inventory_query(
         LimousineSeatInventoryQuery.__post_init__,
         "seat inventory",
     )
-
-
-def _sid(value: object) -> str:
-    if not isinstance(value, str):
-        raise TypeError("sid must be a string")
-    if not value.strip():
-        raise ValueError("sid must not be empty")
-    return value
-
-
-def _wire_flag(value: bool) -> str:
-    return "Y" if value else "N"
 
 
 def build_limousine_schedule_form(
