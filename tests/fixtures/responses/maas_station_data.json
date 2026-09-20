@@ -1,0 +1,951 @@
+{
+  "stns": {
+    "stn": [
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "서울",
+        "stn_cd": "0001",
+        "longitude": "126.5790000",
+        "latitude": "35.7810000",
+        "group": "7",
+        "major": "1"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0002",
+        "stn_cd": "0002",
+        "longitude": "129.8360000",
+        "latitude": "35.6520000",
+        "group": "8",
+        "major": "4"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "수원",
+        "stn_cd": "0003",
+        "longitude": "127.5630000",
+        "latitude": "35.0200000",
+        "group": "7",
+        "major": "5"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "평택",
+        "stn_cd": "0004",
+        "longitude": "127.0820000",
+        "latitude": "33.1450000",
+        "group": "13",
+        "major": "6"
+      },
+      {
+        "popupMessage": "합성 popupMessage 문구 934",
+        "popupType": "3",
+        "stn_nm": "천안",
+        "stn_cd": "0005",
+        "longitude": "129.4000000",
+        "latitude": "33.4117520",
+        "group": "10",
+        "major": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0007",
+        "stn_cd": "0007",
+        "longitude": "129.8190000",
+        "latitude": "38.8260000",
+        "group": "9",
+        "major": "10"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0009",
+        "stn_cd": "0009",
+        "longitude": "126.0170000",
+        "latitude": "35.0700615",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "대전",
+        "stn_cd": "0010",
+        "longitude": "127.5430000",
+        "latitude": "36.9890000",
+        "group": "3",
+        "major": "11"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "김천",
+        "stn_cd": "0012",
+        "longitude": "129.9610000",
+        "latitude": "33.9260000",
+        "group": "1"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "구미",
+        "stn_cd": "0013",
+        "longitude": "126.6740000",
+        "latitude": "34.5020000",
+        "group": "1",
+        "major": "14"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0015",
+        "stn_cd": "0015",
+        "longitude": "128.5330000",
+        "latitude": "34.5660000",
+        "group": "3",
+        "major": "15"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "구포",
+        "stn_cd": "0019",
+        "longitude": "127.1390000",
+        "latitude": "35.7410000",
+        "group": "1",
+        "major": "23"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "부산",
+        "stn_cd": "0020",
+        "longitude": "126.6980000",
+        "latitude": "38.8690000",
+        "group": "6",
+        "major": "22"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "옥천",
+        "stn_cd": "0022",
+        "longitude": "129.3020000",
+        "latitude": "33.7380000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "대구",
+        "stn_cd": "0023",
+        "longitude": "126.6150000",
+        "latitude": "34.8780000",
+        "group": "3",
+        "major": "16"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0025",
+        "stn_cd": "0025",
+        "longitude": "128.9470000",
+        "latitude": "35.3440000",
+        "group": "7",
+        "major": "12"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "논산",
+        "stn_cd": "0027",
+        "longitude": "127.7840000",
+        "latitude": "33.1530000",
+        "group": "2"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "익산",
+        "stn_cd": "0030",
+        "longitude": "128.9440000",
+        "latitude": "33.2280000",
+        "group": "8",
+        "major": "28"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "김제",
+        "stn_cd": "0031",
+        "longitude": "127.4510000",
+        "latitude": "38.8200000",
+        "group": "1"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "정읍",
+        "stn_cd": "0033",
+        "longitude": "127.5590000",
+        "latitude": "33.0670000",
+        "group": "9",
+        "major": "43"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0036",
+        "stn_cd": "0036",
+        "longitude": "128.0300000",
+        "latitude": "35.2270000",
+        "group": "1",
+        "major": "30"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "나주",
+        "stn_cd": "0037",
+        "longitude": "126.9560000",
+        "latitude": "33.7900000",
+        "group": "2",
+        "major": "42"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "목포",
+        "stn_cd": "0041",
+        "longitude": "129.8130000",
+        "latitude": "38.2960000",
+        "group": "5",
+        "major": "31"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "광주",
+        "stn_cd": "0042",
+        "longitude": "126.4770000",
+        "latitude": "36.6290000",
+        "group": "1"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "삼례",
+        "stn_cd": "0044",
+        "longitude": "127.2840000",
+        "latitude": "33.4700000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "전주",
+        "stn_cd": "0045",
+        "longitude": "128.6220000",
+        "latitude": "38.4400000",
+        "group": "9",
+        "major": "29"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "임실",
+        "stn_cd": "0046",
+        "longitude": "126.1050000",
+        "latitude": "38.9520000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "오수",
+        "stn_cd": "0047",
+        "longitude": "126.3580000",
+        "latitude": "35.7930000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "남원",
+        "stn_cd": "0048",
+        "longitude": "127.9840000",
+        "latitude": "33.8320000",
+        "group": "2",
+        "major": "44"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "순천",
+        "stn_cd": "0051",
+        "longitude": "126.2150000",
+        "latitude": "38.9210000",
+        "group": "7",
+        "major": "32"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0053",
+        "stn_cd": "0053",
+        "longitude": "127.3780000",
+        "latitude": "36.1290000",
+        "group": "8",
+        "major": "34"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "창원",
+        "stn_cd": "0057",
+        "longitude": "127.6820000",
+        "latitude": "36.7300000",
+        "group": "10"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "마산",
+        "stn_cd": "0059",
+        "longitude": "128.9550000",
+        "latitude": "35.7250000",
+        "group": "5",
+        "major": "40"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "진주",
+        "stn_cd": "0063",
+        "longitude": "126.8790000",
+        "latitude": "37.9790000",
+        "group": "9"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "청주",
+        "stn_cd": "0070",
+        "longitude": "127.5120000",
+        "latitude": "33.6970000",
+        "group": "10"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "충주",
+        "stn_cd": "0073",
+        "longitude": "127.7240000",
+        "latitude": "35.704204",
+        "group": "10"
+      },
+      {
+        "popupMessage": "합성 popupMessage 문구 843",
+        "popupType": "3",
+        "stn_nm": "합성역0076",
+        "stn_cd": "0076",
+        "longitude": "129.9370000",
+        "latitude": "38.3490000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0077",
+        "stn_cd": "0077",
+        "longitude": "126.9420000",
+        "latitude": "37.6450000",
+        "group": "3"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0078",
+        "stn_cd": "0078",
+        "longitude": "126.8550000",
+        "latitude": "36.7330000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "예산",
+        "stn_cd": "0079",
+        "longitude": "127.1550000",
+        "latitude": "33.1438503",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "삽교",
+        "stn_cd": "0080",
+        "longitude": "127.9490000",
+        "latitude": "38.1810000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "홍성",
+        "stn_cd": "0081",
+        "longitude": "126.5540000",
+        "latitude": "38.0550000",
+        "group": "14"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "광천",
+        "stn_cd": "0082",
+        "longitude": "127.6000000",
+        "latitude": "35.3780000",
+        "group": "1"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "대천",
+        "stn_cd": "0083",
+        "longitude": "127.6300000",
+        "latitude": "34.4327209",
+        "group": "3"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0085",
+        "stn_cd": "0085",
+        "longitude": "128.0750000",
+        "latitude": "33.6080000",
+        "group": "13"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "서천",
+        "stn_cd": "0086",
+        "longitude": "126.0450000",
+        "latitude": "36.0750000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0090",
+        "stn_cd": "0090",
+        "longitude": "128.2490000",
+        "latitude": "38.8250000",
+        "group": "10",
+        "major": "33"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "용산",
+        "stn_cd": "0104",
+        "longitude": "128.4530000",
+        "latitude": "38.5530000",
+        "group": "8",
+        "major": "2"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "강릉",
+        "stn_cd": "0115",
+        "longitude": "127.5110000",
+        "latitude": "36.0400000",
+        "group": "1",
+        "major": "27"
+      },
+      {
+        "popupMessage": "합성 popupMessage 문구 977",
+        "popupType": "2",
+        "stn_nm": "태백",
+        "stn_cd": "0123",
+        "longitude": "129.4960000",
+        "latitude": "33.8450000",
+        "group": "12"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0125",
+        "stn_cd": "0125",
+        "longitude": "127.6440000",
+        "latitude": "36.7830000",
+        "group": "12"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0127",
+        "stn_cd": "0127",
+        "longitude": "127.9720000",
+        "latitude": "37.1800000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0134",
+        "stn_cd": "0134",
+        "longitude": "127.9530000",
+        "latitude": "36.5430000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "안양",
+        "stn_cd": "0135",
+        "longitude": "127.7620000",
+        "latitude": "37.9060000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "여천",
+        "stn_cd": "0139",
+        "longitude": "129.8920000",
+        "latitude": "37.4780000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "오산",
+        "stn_cd": "0141",
+        "longitude": "126.4320000",
+        "latitude": "33.0160000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "강촌",
+        "stn_cd": "0151",
+        "longitude": "127.0980000",
+        "latitude": "33.2930000",
+        "group": "1"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0152",
+        "stn_cd": "0152",
+        "longitude": "127.6400000",
+        "latitude": "33.2150000",
+        "group": "2"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "춘천",
+        "stn_cd": "0153",
+        "longitude": "126.3500000",
+        "latitude": "34.8110000",
+        "group": "10"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "부전",
+        "stn_cd": "0190",
+        "longitude": "129.5950000",
+        "latitude": "34.5600000",
+        "group": "6"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "계룡",
+        "stn_cd": "0218",
+        "longitude": "129.1160000",
+        "latitude": "35.7510000",
+        "group": "1"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "물금",
+        "stn_cd": "0224",
+        "longitude": "128.5070000",
+        "latitude": "35.6060000",
+        "group": "5"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0243",
+        "stn_cd": "0243",
+        "longitude": "129.3750000",
+        "latitude": "34.8300000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "성환",
+        "stn_cd": "0248",
+        "longitude": "127.2820000",
+        "latitude": "37.1620000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0275",
+        "stn_cd": "0275",
+        "longitude": "129.9280000",
+        "latitude": "36.3080000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0276",
+        "stn_cd": "0276",
+        "longitude": "129.1350000",
+        "latitude": "35.8120000",
+        "group": "10"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "신창",
+        "stn_cd": "0281",
+        "longitude": "127.9290000",
+        "latitude": "38.2980000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "오송",
+        "stn_cd": "0297",
+        "longitude": "127.0770000",
+        "latitude": "36.1570000",
+        "group": "8",
+        "major": "9"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "만종",
+        "stn_cd": "0326",
+        "longitude": "129.8350000",
+        "latitude": "34.5090000",
+        "group": "5"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "행신",
+        "stn_cd": "0390",
+        "longitude": "128.2750000",
+        "latitude": "35.774061",
+        "group": "14",
+        "major": "41"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "대곡",
+        "stn_cd": "0392",
+        "longitude": "126.9720000",
+        "latitude": "37.1050000",
+        "group": "3"
+      },
+      {
+        "popupMessage": "합성 popupMessage 문구 116",
+        "popupType": "3",
+        "stn_nm": "원릉",
+        "stn_cd": "0419",
+        "longitude": "129.3320000",
+        "latitude": "35.6540000",
+        "group": "8"
+      },
+      {
+        "stn_nm": "광명",
+        "stn_cd": "0501",
+        "longitude": "129.9160000",
+        "latitude": "35.5290000",
+        "group": "1",
+        "major": "3"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0502",
+        "stn_cd": "0502",
+        "longitude": "126.9340000",
+        "latitude": "38.8190000",
+        "group": "10",
+        "major": "7"
+      },
+      {
+        "popupMessage": "합성 popupMessage 문구 354",
+        "popupType": "3",
+        "stn_nm": "아산",
+        "stn_cd": "0503",
+        "longitude": "127.6130000",
+        "latitude": "37.4820000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "장항",
+        "stn_cd": "0504",
+        "longitude": "129.6100000",
+        "latitude": "35.5170000",
+        "group": "9"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "군산",
+        "stn_cd": "0505",
+        "longitude": "129.4870000",
+        "latitude": "34.0380000",
+        "group": "1"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0506",
+        "stn_cd": "0506",
+        "longitude": "126.9570000",
+        "latitude": "34.4056020",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0507",
+        "stn_cd": "0507",
+        "longitude": "127.3780000",
+        "latitude": "37.3510000",
+        "group": "1",
+        "major": "13"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "경주",
+        "stn_cd": "0508",
+        "longitude": "128.0210000",
+        "latitude": "35.2000000",
+        "group": "1",
+        "major": "17"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0509",
+        "stn_cd": "0509",
+        "longitude": "128.2080000",
+        "latitude": "38.053948",
+        "group": "8",
+        "major": "18"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0512",
+        "stn_cd": "0512",
+        "longitude": "126.6890000",
+        "latitude": "35.2040000",
+        "group": "10",
+        "major": "24"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "공주",
+        "stn_cd": "0514",
+        "longitude": "126.0990000",
+        "latitude": "34.3270000",
+        "group": "1"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "포항",
+        "stn_cd": "0515",
+        "longitude": "126.5670000",
+        "latitude": "33.1430000",
+        "group": "13",
+        "major": "19"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "원주",
+        "stn_cd": "0525",
+        "longitude": "129.8500000",
+        "latitude": "38.4210000",
+        "group": "8",
+        "major": "39"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0535",
+        "stn_cd": "0535",
+        "longitude": "127.4770000",
+        "latitude": "33.7070000",
+        "group": "6"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0536",
+        "stn_cd": "0536",
+        "longitude": "126.0530000",
+        "latitude": "35.2940000",
+        "group": "13"
+      },
+      {
+        "popupMessage": "합성 popupMessage 문구 331",
+        "popupType": "3",
+        "stn_nm": "합성역0537",
+        "popupLinkUrl": "https://example.invalid/synthetic/40738",
+        "stn_cd": "0537",
+        "longitude": "129.0220000",
+        "latitude": "35.7340000",
+        "popupLinkTitle": "합성 popupLinkTitle 문구 503",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0538",
+        "stn_cd": "0538",
+        "longitude": "128.9290000",
+        "latitude": "34.0490000",
+        "group": "14"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "향남",
+        "stn_cd": "0539",
+        "longitude": "129.3740000",
+        "latitude": "38.3310000",
+        "group": "14"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "안중",
+        "stn_cd": "0540",
+        "longitude": "129.8230000",
+        "latitude": "38.8150000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "인주",
+        "stn_cd": "0541",
+        "longitude": "128.8000000",
+        "latitude": "34.0120000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합덕",
+        "stn_cd": "0542",
+        "longitude": "126.2880000",
+        "latitude": "36.0070000",
+        "group": "14"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "수서",
+        "stn_cd": "0551",
+        "longitude": "126.1300000",
+        "latitude": "34.0900000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "동탄",
+        "stn_cd": "0552",
+        "longitude": "129.3480000",
+        "latitude": "36.0580000",
+        "group": "3"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0553",
+        "stn_cd": "0553",
+        "longitude": "129.6430000",
+        "latitude": "37.0680000",
+        "group": "13"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "상봉",
+        "stn_cd": "0635",
+        "longitude": "126.5440000",
+        "latitude": "35.8160000",
+        "group": "7"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0836",
+        "stn_cd": "0836",
+        "longitude": "126.8970000",
+        "latitude": "34.0540000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "옥수",
+        "stn_cd": "0892",
+        "longitude": "127.6630000",
+        "latitude": "33.5590000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0921",
+        "stn_cd": "0921",
+        "longitude": "129.8190000",
+        "latitude": "37.1770000",
+        "group": "8"
+      },
+      {
+        "popupMessage": "",
+        "popupType": "0",
+        "stn_nm": "합성역0923",
+        "stn_cd": "0923",
+        "longitude": "128.3130000",
+        "latitude": "33.2190000",
+        "group": "8"
+      }
+    ]
+  }
+}

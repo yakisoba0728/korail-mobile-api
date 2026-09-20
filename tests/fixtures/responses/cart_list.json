@@ -1,0 +1,26 @@
+{
+  "main_info": {
+    "h_intSelectPageNo": "",
+    "h_msg_cd": "IRT000000",
+    "h_cg_ps_id": "SYNTH1870",
+    "h_abrd_dt_from": "",
+    "h_dv_cd": "",
+    "h_stl_scsn_flg": "N",
+    "h_ver_no": "0",
+    "h_work_dt": "20260516",
+    "h_filler": "",
+    "h_tot_page_cnt": "1",
+    "h_spbk_whl_cnt": "76314852",
+    "h_work_tm": "051839",
+    "h_wct_no": "93281",
+    "h_row_cnt": "76314852",
+    "h_job_id": "1604",
+    "h_abrd_dt_to": "",
+    "h_page_no": "1",
+    "h_cust_no": ""
+  },
+  "strResult": "SUCC",
+  "cart_infos": {
+    "cart_info": []
+  }
+}

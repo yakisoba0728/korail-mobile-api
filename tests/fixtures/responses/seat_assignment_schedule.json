@@ -1,0 +1,15 @@
+{
+  "strResult": "SUCC",
+  "h_msg_cd": "WRG000000",
+  "h_msg_txt": "합성 h_msg_txt 문구 388",
+  "h_menu_id": "",
+  "h_seat_cnt_first": "",
+  "h_seat_cnt_second": "",
+  "h_lgtrm_sttrm_dv_cd": "",
+  "h_next_pg_flg": "",
+  "h_rslt_cnt": "",
+  "h_rest_seat_cnt": "",
+  "trn_infos": {
+    "trn_info": []
+  }
+}

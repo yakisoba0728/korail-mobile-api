@@ -1,0 +1,1262 @@
+{
+  "list": [
+    {
+      "id": "34",
+      "parentId": "17",
+      "type": "SYNTH5737",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 803",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 116",
+      "information": "합성 information 문구 529",
+      "agree": "합성 agree 문구 620",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "Y20260914001",
+        "h_cnd_flg_disc_nm": "합성 h_cnd_flg_disc_nm 문구 414",
+        "h_cnd_flg_disc_stt": "02",
+        "h_mrk_st_dt": "20260829",
+        "h_mrk_cls_dt": "20260928",
+        "h_mrk_open_dttm": null,
+        "h_stl_mtd_cd": null,
+        "h_tk_prt_cont": "합성 h_tk_prt_cont 문구 870",
+        "h_trip_chg_allw_flg": "N",
+        "h_dtl_info": null,
+        "h_dtl_dsc_1": "03",
+        "h_dtl_dsc_2": "35201345",
+        "h_dtl_dsc_3": "4347",
+        "h_dtl_dsc_4": "IM",
+        "h_dtl_dsc_5": null,
+        "h_dtl_dsc_6": null,
+        "h_dtl_dsc_7": null,
+        "h_dtl_dsc_8": null,
+        "h_one_tk_flg": "N",
+        "h_cndn_dcnt_knd_cd": "12",
+        "ln1_dsc_cont": "합성 ln1_dsc_cont 문구 382",
+        "ln2_dsc_cont": "합성 ln2_dsc_cont 문구 775",
+        "psg_infos": {
+          "h_cndn_dcnt_knd_cd": "12",
+          "h_alc_stdr_dv_cd": "03",
+          "h_bkcl_cd": "",
+          "h_cndn_dcnt_wdrw_flg": "Y",
+          "h_sngl_tk_flg": "N",
+          "h_gen_chg_allw_flg": "N",
+          "h_chtn_allw_flg": "N",
+          "h_dly_max_mrk_qnty": "284741",
+          "psg_info": [
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "000",
+              "h_st_prnb": "209001",
+              "h_cls_prnb": "554078",
+              "h_dcnt_flg": "Y"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "201",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "523212",
+              "h_dcnt_flg": "N"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "202",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "523212",
+              "h_dcnt_flg": "N"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "205",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "523212",
+              "h_dcnt_flg": "N"
+            }
+          ],
+          "h_max_cnt": "6",
+          "h_min_cnt": "1"
+        }
+      }
+    },
+    {
+      "id": "35",
+      "parentId": "17",
+      "type": "SYNTH7165",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 249",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 115",
+      "information": "합성 information 문구 175",
+      "agree": "합성 agree 문구 272",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "Y20260916001",
+        "h_cnd_flg_disc_nm": "합성 h_cnd_flg_disc_nm 문구 964",
+        "h_cnd_flg_disc_stt": "02",
+        "h_mrk_st_dt": "20260829",
+        "h_mrk_cls_dt": "20260928",
+        "h_mrk_open_dttm": null,
+        "h_stl_mtd_cd": null,
+        "h_tk_prt_cont": "합성 h_tk_prt_cont 문구 144",
+        "h_trip_chg_allw_flg": "N",
+        "h_dtl_info": null,
+        "h_dtl_dsc_1": "03",
+        "h_dtl_dsc_2": "35201345",
+        "h_dtl_dsc_3": "4347",
+        "h_dtl_dsc_4": "IM",
+        "h_dtl_dsc_5": null,
+        "h_dtl_dsc_6": null,
+        "h_dtl_dsc_7": null,
+        "h_dtl_dsc_8": null,
+        "h_one_tk_flg": "Y",
+        "h_cndn_dcnt_knd_cd": "12",
+        "ln1_dsc_cont": "합성 ln1_dsc_cont 문구 837",
+        "ln2_dsc_cont": "합성 ln2_dsc_cont 문구 636",
+        "psg_infos": {
+          "h_cndn_dcnt_knd_cd": "12",
+          "h_alc_stdr_dv_cd": "03",
+          "h_bkcl_cd": "",
+          "h_cndn_dcnt_wdrw_flg": "Y",
+          "h_sngl_tk_flg": "Y",
+          "h_gen_chg_allw_flg": "N",
+          "h_chtn_allw_flg": "N",
+          "h_dly_max_mrk_qnty": "284741",
+          "psg_info": [
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "000",
+              "h_st_prnb": "231138",
+              "h_cls_prnb": "231138",
+              "h_dcnt_flg": "Y"
+            }
+          ],
+          "h_max_cnt": "4",
+          "h_min_cnt": "4"
+        }
+      }
+    },
+    {
+      "id": "36",
+      "parentId": "17",
+      "type": "SYNTH6497",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 535",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 874",
+      "information": "합성 information 문구 761",
+      "agree": "합성 agree 문구 770",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "Y20260916002",
+        "h_cnd_flg_disc_nm": "합성 h_cnd_flg_disc_nm 문구 700",
+        "h_cnd_flg_disc_stt": "02",
+        "h_mrk_st_dt": "20260510",
+        "h_mrk_cls_dt": "20260810",
+        "h_mrk_open_dttm": null,
+        "h_stl_mtd_cd": null,
+        "h_tk_prt_cont": "합성 h_tk_prt_cont 문구 806",
+        "h_trip_chg_allw_flg": "N",
+        "h_dtl_info": null,
+        "h_dtl_dsc_1": "03",
+        "h_dtl_dsc_2": "35201345",
+        "h_dtl_dsc_3": "4347",
+        "h_dtl_dsc_4": "IM",
+        "h_dtl_dsc_5": null,
+        "h_dtl_dsc_6": null,
+        "h_dtl_dsc_7": null,
+        "h_dtl_dsc_8": null,
+        "h_one_tk_flg": "Y",
+        "h_cndn_dcnt_knd_cd": "12",
+        "ln1_dsc_cont": "합성 ln1_dsc_cont 문구 822",
+        "ln2_dsc_cont": "합성 ln2_dsc_cont 문구 605",
+        "psg_infos": {
+          "h_cndn_dcnt_knd_cd": "12",
+          "h_alc_stdr_dv_cd": "03",
+          "h_bkcl_cd": "",
+          "h_cndn_dcnt_wdrw_flg": "Y",
+          "h_sngl_tk_flg": "Y",
+          "h_gen_chg_allw_flg": "N",
+          "h_chtn_allw_flg": "N",
+          "h_dly_max_mrk_qnty": "284741",
+          "psg_info": [
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "000",
+              "h_st_prnb": "231138",
+              "h_cls_prnb": "231138",
+              "h_dcnt_flg": "Y"
+            }
+          ],
+          "h_max_cnt": "4",
+          "h_min_cnt": "4"
+        }
+      }
+    },
+    {
+      "id": "17",
+      "parentId": "",
+      "type": "SYNTH3837",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 600",
+      "isExpand": "Y",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 306",
+      "information": "",
+      "agree": ""
+    },
+    {
+      "id": "24",
+      "parentId": "17",
+      "type": "SYNTH8293",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "kep 4204 가하",
+      "isExpand": "",
+      "repSegDpt": "서울",
+      "repSegArv": "광명",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 859",
+      "information": "합성 information 문구 605",
+      "agree": "합성 agree 문구 279",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "Y20190313001",
+        "h_cnd_flg_disc_nm": "kep 4204 가하",
+        "h_cnd_flg_disc_stt": "02",
+        "h_mrk_st_dt": "20261217",
+        "h_mrk_cls_dt": "20270116",
+        "h_mrk_open_dttm": null,
+        "h_stl_mtd_cd": null,
+        "h_tk_prt_cont": "kep 4204 가하",
+        "h_trip_chg_allw_flg": "N",
+        "h_dtl_info": null,
+        "h_dtl_dsc_1": "03",
+        "h_dtl_dsc_2": "01105349",
+        "h_dtl_dsc_3": "4347",
+        "h_dtl_dsc_4": "IM",
+        "h_dtl_dsc_5": null,
+        "h_dtl_dsc_6": null,
+        "h_dtl_dsc_7": null,
+        "h_dtl_dsc_8": null,
+        "h_one_tk_flg": "N",
+        "h_cndn_dcnt_knd_cd": "12",
+        "ln1_dsc_cont": "합성 ln1_dsc_cont 문구 704",
+        "ln2_dsc_cont": "합성 ln2_dsc_cont 문구 514",
+        "psg_infos": {
+          "h_cndn_dcnt_knd_cd": "12",
+          "h_alc_stdr_dv_cd": "03",
+          "h_bkcl_cd": "",
+          "h_cndn_dcnt_wdrw_flg": "Y",
+          "h_sngl_tk_flg": "N",
+          "h_gen_chg_allw_flg": "N",
+          "h_chtn_allw_flg": "N",
+          "h_dly_max_mrk_qnty": "284741",
+          "psg_info": [
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "000",
+              "h_st_prnb": "209001",
+              "h_cls_prnb": "131245",
+              "h_dcnt_flg": "Y"
+            }
+          ],
+          "h_max_cnt": "9",
+          "h_min_cnt": "1"
+        }
+      }
+    },
+    {
+      "id": "23",
+      "parentId": "17",
+      "type": "SYNTH7913",
+      "enable": "Y",
+      "detailType": "fourSeater",
+      "afterDay": "0",
+      "title": "합성 title 문구 597",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 730",
+      "information": "합성 information 문구 194",
+      "agree": "합성 agree 문구 727"
+    },
+    {
+      "id": "20",
+      "parentId": "17",
+      "type": "SYNTH5267",
+      "enable": "N",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 604",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 595",
+      "information": "합성 information 문구 854",
+      "agree": "합성 agree 문구 532",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "Y20150924002",
+        "h_cnd_flg_disc_nm": "합성 h_cnd_flg_disc_nm 문구 271",
+        "h_cnd_flg_disc_stt": "02",
+        "h_mrk_st_dt": "20270105",
+        "h_mrk_cls_dt": "20270204",
+        "h_mrk_open_dttm": null,
+        "h_stl_mtd_cd": null,
+        "h_tk_prt_cont": "합성 h_tk_prt_cont 문구 959",
+        "h_trip_chg_allw_flg": "Y",
+        "h_dtl_info": null,
+        "h_dtl_dsc_1": "03",
+        "h_dtl_dsc_2": "81267100",
+        "h_dtl_dsc_3": "0317",
+        "h_dtl_dsc_4": "IM",
+        "h_dtl_dsc_5": null,
+        "h_dtl_dsc_6": null,
+        "h_dtl_dsc_7": null,
+        "h_dtl_dsc_8": null,
+        "h_one_tk_flg": "Y",
+        "h_cndn_dcnt_knd_cd": "12",
+        "ln1_dsc_cont": "합성 ln1_dsc_cont 문구 804",
+        "ln2_dsc_cont": "합성 ln2_dsc_cont 문구 972",
+        "psg_infos": {
+          "h_cndn_dcnt_knd_cd": "12",
+          "h_alc_stdr_dv_cd": "03",
+          "h_bkcl_cd": "",
+          "h_cndn_dcnt_wdrw_flg": "Y",
+          "h_sngl_tk_flg": "Y",
+          "h_gen_chg_allw_flg": "Y",
+          "h_chtn_allw_flg": "Y",
+          "h_dly_max_mrk_qnty": "284741",
+          "psg_info": [
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "000",
+              "h_st_prnb": "209001",
+              "h_cls_prnb": "192518",
+              "h_dcnt_flg": "Y"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "201",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "209001",
+              "h_dcnt_flg": "Y"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "202",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "209001",
+              "h_dcnt_flg": "Y"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "204",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "209001",
+              "h_dcnt_flg": "Y"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "205",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "209001",
+              "h_dcnt_flg": "Y"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "206",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "209001",
+              "h_dcnt_flg": "Y"
+            }
+          ],
+          "h_max_cnt": "2",
+          "h_min_cnt": "1"
+        }
+      }
+    },
+    {
+      "id": "22",
+      "parentId": "17",
+      "type": "SYNTH9287",
+      "enable": "N",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 690",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 417",
+      "information": "합성 information 문구 590",
+      "agree": "합성 agree 문구 182",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "Y20151104001",
+        "h_cnd_flg_disc_nm": "합성 h_cnd_flg_disc_nm 문구 662",
+        "h_cnd_flg_disc_stt": "02",
+        "h_mrk_st_dt": "20260527",
+        "h_mrk_cls_dt": "20261107",
+        "h_mrk_open_dttm": null,
+        "h_stl_mtd_cd": null,
+        "h_tk_prt_cont": "합성 h_tk_prt_cont 문구 332",
+        "h_trip_chg_allw_flg": "Y",
+        "h_dtl_info": null,
+        "h_dtl_dsc_1": "03",
+        "h_dtl_dsc_2": "62628017",
+        "h_dtl_dsc_3": "4347",
+        "h_dtl_dsc_4": "IM",
+        "h_dtl_dsc_5": null,
+        "h_dtl_dsc_6": null,
+        "h_dtl_dsc_7": null,
+        "h_dtl_dsc_8": null,
+        "h_one_tk_flg": "Y",
+        "h_cndn_dcnt_knd_cd": "12",
+        "ln1_dsc_cont": "합성 ln1_dsc_cont 문구 502",
+        "ln2_dsc_cont": "합성 ln2_dsc_cont 문구 920",
+        "psg_infos": {
+          "h_cndn_dcnt_knd_cd": "12",
+          "h_alc_stdr_dv_cd": "02",
+          "h_bkcl_cd": "",
+          "h_cndn_dcnt_wdrw_flg": "Y",
+          "h_sngl_tk_flg": "Y",
+          "h_gen_chg_allw_flg": "N",
+          "h_chtn_allw_flg": "Y",
+          "h_dly_max_mrk_qnty": "284741",
+          "psg_info": [
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "000",
+              "h_st_prnb": "209001",
+              "h_cls_prnb": "131245",
+              "h_dcnt_flg": "Y"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "201",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "958116",
+              "h_dcnt_flg": "N"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "202",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "958116",
+              "h_dcnt_flg": "N"
+            }
+          ],
+          "h_max_cnt": "9",
+          "h_min_cnt": "1"
+        }
+      }
+    },
+    {
+      "id": "18",
+      "parentId": "17",
+      "type": "SYNTH2485",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "1",
+      "title": "합성 title 문구 669",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 923",
+      "information": "합성 information 문구 449",
+      "agree": "합성 agree 문구 980",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "B121410002GY",
+        "h_cnd_flg_disc_nm": "합성 h_cnd_flg_disc_nm 문구 954",
+        "h_cnd_flg_disc_stt": "02",
+        "h_mrk_st_dt": "20260829",
+        "h_mrk_cls_dt": "20261107",
+        "h_mrk_open_dttm": null,
+        "h_stl_mtd_cd": null,
+        "h_tk_prt_cont": "합성 h_tk_prt_cont 문구 742",
+        "h_trip_chg_allw_flg": "Y",
+        "h_dtl_info": null,
+        "h_dtl_dsc_1": "03",
+        "h_dtl_dsc_2": "31453381",
+        "h_dtl_dsc_3": "0317",
+        "h_dtl_dsc_4": "IM",
+        "h_dtl_dsc_5": null,
+        "h_dtl_dsc_6": null,
+        "h_dtl_dsc_7": null,
+        "h_dtl_dsc_8": null,
+        "h_one_tk_flg": "N",
+        "h_cndn_dcnt_knd_cd": "14",
+        "ln1_dsc_cont": "합성 ln1_dsc_cont 문구 254",
+        "ln2_dsc_cont": "합성 ln2_dsc_cont 문구 539",
+        "psg_infos": {
+          "h_cndn_dcnt_knd_cd": "14",
+          "h_alc_stdr_dv_cd": "02",
+          "h_bkcl_cd": "",
+          "h_cndn_dcnt_wdrw_flg": "Y",
+          "h_sngl_tk_flg": "N",
+          "h_gen_chg_allw_flg": "Y",
+          "h_chtn_allw_flg": "Y",
+          "h_dly_max_mrk_qnty": "284741",
+          "psg_info": [
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "000",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "131245",
+              "h_dcnt_flg": "N"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "192518",
+              "h_dcnt_knd_cd": "201",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "131245",
+              "h_dcnt_flg": "N"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "715525",
+              "h_dcnt_knd_cd": "P11",
+              "h_st_prnb": "209001",
+              "h_cls_prnb": "209001",
+              "h_dcnt_flg": "Y"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "231138",
+              "h_dcnt_knd_cd": "205",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "131245",
+              "h_dcnt_flg": "N"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "523212",
+              "h_dcnt_knd_cd": "206",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "131245",
+              "h_dcnt_flg": "N"
+            },
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "554078",
+              "h_dcnt_knd_cd": "204",
+              "h_st_prnb": "317104",
+              "h_cls_prnb": "131245",
+              "h_dcnt_flg": "N"
+            }
+          ],
+          "h_max_cnt": "9",
+          "h_min_cnt": "1"
+        }
+      }
+    },
+    {
+      "id": "19",
+      "parentId": "17",
+      "type": "SYNTH1258",
+      "enable": "N",
+      "detailType": "",
+      "afterDay": "1",
+      "title": "합성 title 문구 218",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 430",
+      "information": "합성 information 문구 126",
+      "agree": "합성 agree 문구 556",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "Y20150924001",
+        "h_cnd_flg_disc_nm": "합성 h_cnd_flg_disc_nm 문구 769",
+        "h_cnd_flg_disc_stt": "02",
+        "h_mrk_st_dt": "20270105",
+        "h_mrk_cls_dt": "20270204",
+        "h_mrk_open_dttm": null,
+        "h_stl_mtd_cd": null,
+        "h_tk_prt_cont": "합성 h_tk_prt_cont 문구 724",
+        "h_trip_chg_allw_flg": "Y",
+        "h_dtl_info": null,
+        "h_dtl_dsc_1": "03",
+        "h_dtl_dsc_2": "81267100",
+        "h_dtl_dsc_3": "0317",
+        "h_dtl_dsc_4": "IM",
+        "h_dtl_dsc_5": null,
+        "h_dtl_dsc_6": null,
+        "h_dtl_dsc_7": null,
+        "h_dtl_dsc_8": null,
+        "h_one_tk_flg": "N",
+        "h_cndn_dcnt_knd_cd": "12",
+        "ln1_dsc_cont": "합성 ln1_dsc_cont 문구 513",
+        "ln2_dsc_cont": "합성 ln2_dsc_cont 문구 479",
+        "psg_infos": {
+          "h_cndn_dcnt_knd_cd": "12",
+          "h_alc_stdr_dv_cd": "02",
+          "h_bkcl_cd": "",
+          "h_cndn_dcnt_wdrw_flg": "Y",
+          "h_sngl_tk_flg": "N",
+          "h_gen_chg_allw_flg": "Y",
+          "h_chtn_allw_flg": "Y",
+          "h_dly_max_mrk_qnty": "284741",
+          "psg_info": [
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "000",
+              "h_st_prnb": "209001",
+              "h_cls_prnb": "209001",
+              "h_dcnt_flg": "Y"
+            }
+          ],
+          "h_max_cnt": "1",
+          "h_min_cnt": "1"
+        }
+      }
+    },
+    {
+      "id": "21",
+      "parentId": "17",
+      "type": "SYNTH7337",
+      "enable": "N",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 710",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 798",
+      "information": "합성 information 문구 976",
+      "agree": "합성 agree 문구 905",
+      "goodsData": {
+        "h_cnd_flg_disc_no": "Y20180208001",
+        "h_cnd_flg_disc_nm": "합성 h_cnd_flg_disc_nm 문구 662",
+        "h_cnd_flg_disc_stt": "02",
+        "h_mrk_st_dt": "20260515",
+        "h_mrk_cls_dt": "20261107",
+        "h_mrk_open_dttm": null,
+        "h_stl_mtd_cd": null,
+        "h_tk_prt_cont": "합성 h_tk_prt_cont 문구 786",
+        "h_trip_chg_allw_flg": "Y",
+        "h_dtl_info": null,
+        "h_dtl_dsc_1": "03",
+        "h_dtl_dsc_2": "43810933",
+        "h_dtl_dsc_3": "4347",
+        "h_dtl_dsc_4": "IM",
+        "h_dtl_dsc_5": null,
+        "h_dtl_dsc_6": null,
+        "h_dtl_dsc_7": null,
+        "h_dtl_dsc_8": null,
+        "h_one_tk_flg": "N",
+        "h_cndn_dcnt_knd_cd": "12",
+        "ln1_dsc_cont": "합성 ln1_dsc_cont 문구 906",
+        "ln2_dsc_cont": "합성 ln2_dsc_cont 문구 270",
+        "psg_infos": {
+          "h_cndn_dcnt_knd_cd": "12",
+          "h_alc_stdr_dv_cd": "02",
+          "h_bkcl_cd": "",
+          "h_cndn_dcnt_wdrw_flg": "Y",
+          "h_sngl_tk_flg": "N",
+          "h_gen_chg_allw_flg": "Y",
+          "h_chtn_allw_flg": "Y",
+          "h_dly_max_mrk_qnty": "284741",
+          "psg_info": [
+            {
+              "h_cndn_dcnt_tgt_psg_tp_sqno": "209001",
+              "h_dcnt_knd_cd": "000",
+              "h_st_prnb": "209001",
+              "h_cls_prnb": "209001",
+              "h_dcnt_flg": "Y"
+            }
+          ],
+          "h_max_cnt": "1",
+          "h_min_cnt": "1"
+        }
+      }
+    },
+    {
+      "id": "0",
+      "parentId": "",
+      "type": "SYNTH2859",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 924",
+      "isExpand": "Y",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 365",
+      "information": "",
+      "agree": ""
+    },
+    {
+      "id": "1",
+      "parentId": "0",
+      "type": "SYNTH547381",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 317",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 671",
+      "information": "합성 information 문구 609",
+      "agree": "",
+      "passData": {
+        "h_cmtr_knd_cd": "0028",
+        "h_cmtr_knd_nm": "합성 h_cmtr_knd_nm 문구 844",
+        "h_cmtr_srt_cd": "01",
+        "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 346",
+        "pass_ageinfo": [
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_age_cd": "011",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 243",
+            "h_min_age": "0",
+            "h_max_age": "24"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_age_cd": "020",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 905",
+            "h_min_age": "25",
+            "h_max_age": "008"
+          }
+        ],
+        "pass_periodinfo": [
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D010",
+            "h_comn_cd_nm": "33파"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D011",
+            "h_comn_cd_nm": "73다"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D012",
+            "h_comn_cd_nm": "11나"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D013",
+            "h_comn_cd_nm": "55나"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D014",
+            "h_comn_cd_nm": "98아"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D015",
+            "h_comn_cd_nm": "75마"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D016",
+            "h_comn_cd_nm": "59타"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D017",
+            "h_comn_cd_nm": "31사"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D018",
+            "h_comn_cd_nm": "71사"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D019",
+            "h_comn_cd_nm": "41파"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D020",
+            "h_comn_cd_nm": "29차"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D021",
+            "h_comn_cd_nm": "17나"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D022",
+            "h_comn_cd_nm": "21아"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D023",
+            "h_comn_cd_nm": "89나"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D024",
+            "h_comn_cd_nm": "73마"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D025",
+            "h_comn_cd_nm": "52하"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D026",
+            "h_comn_cd_nm": "01나"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D027",
+            "h_comn_cd_nm": "20마"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D028",
+            "h_comn_cd_nm": "80파"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D029",
+            "h_comn_cd_nm": "30나"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D030",
+            "h_comn_cd_nm": "49마"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "D031",
+            "h_comn_cd_nm": "42아"
+          }
+        ],
+        "pass_periodinfo1": [
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H010",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 365"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H011",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 982"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H012",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 384"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H013",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 114"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H014",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 743"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H015",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 862"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H016",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 963"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H017",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 997"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H018",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 785"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H019",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 936"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H020",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 715"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H021",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 602"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H022",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 232"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H023",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 190"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H024",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 373"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H025",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 706"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H026",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 479"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H027",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 867"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H028",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 549"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H029",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 581"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H030",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 856"
+          },
+          {
+            "h_cmtr_knd_cd": "0028",
+            "h_cmtr_utl_trm_cd": "H031",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 271"
+          }
+        ],
+        "h_min_age": "0",
+        "h_max_age": "008",
+        "h_select_station": "N",
+        "h_cmtr_sub_knd_nm": "",
+        "h_gender": "A"
+      }
+    },
+    {
+      "id": "2",
+      "parentId": "0",
+      "type": "SYNTH1110",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 295",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 232",
+      "information": "합성 information 문구 112",
+      "agree": "",
+      "passData": {
+        "h_cmtr_knd_cd": "0001",
+        "h_cmtr_knd_nm": "합성 h_cmtr_knd_nm 문구 420",
+        "h_cmtr_srt_cd": "01",
+        "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 258",
+        "pass_ageinfo": [
+          {
+            "h_cmtr_knd_cd": "0001",
+            "h_cmtr_utl_age_cd": "011",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 660",
+            "h_min_age": "0",
+            "h_max_age": "24"
+          },
+          {
+            "h_cmtr_knd_cd": "0001",
+            "h_cmtr_utl_age_cd": "020",
+            "h_comn_cd_nm": "합성 h_comn_cd_nm 문구 243",
+            "h_min_age": "25",
+            "h_max_age": "008"
+          }
+        ],
+        "pass_periodinfo": [
+          {
+            "h_cmtr_knd_cd": "0001",
+            "h_cmtr_utl_trm_cd": "D010",
+            "h_comn_cd_nm": "33파"
+          },
+          {
+            "h_cmtr_knd_cd": "0001",
+            "h_cmtr_utl_trm_cd": "M001",
+            "h_comn_cd_nm": "0하라"
+          }
+        ],
+        "h_min_age": "0",
+        "h_max_age": "008",
+        "h_select_station": "N",
+        "h_cmtr_sub_knd_nm": "",
+        "h_gender": "A"
+      }
+    },
+    {
+      "id": "8",
+      "parentId": "",
+      "type": "SYNTH9932",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "k아다",
+      "isExpand": "C",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 913",
+      "information": "",
+      "agree": ""
+    },
+    {
+      "id": "9",
+      "parentId": "8",
+      "type": "SYNTH1185",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "KTX",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 306",
+      "information": "합성 information 문구 768",
+      "agree": ""
+    },
+    {
+      "id": "10",
+      "parentId": "8",
+      "type": "SYNTH9142",
+      "enable": "Y",
+      "detailType": "SYNTH758714",
+      "afterDay": "0",
+      "title": "2라나",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "trnGpCd": "100",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "",
+      "information": "",
+      "agree": ""
+    },
+    {
+      "id": "11",
+      "parentId": "8",
+      "type": "SYNTH1223",
+      "enable": "Y",
+      "detailType": "SYNTH926364",
+      "afterDay": "0",
+      "title": "4하하",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "trnGpCd": "100",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "",
+      "information": "",
+      "agree": ""
+    },
+    {
+      "id": "30",
+      "parentId": "8",
+      "type": "SYNTH3650",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "합성 title 문구 626",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 721",
+      "information": "합성 information 문구 943",
+      "agree": ""
+    },
+    {
+      "id": "31",
+      "parentId": "8",
+      "type": "SYNTH6586",
+      "enable": "Y",
+      "detailType": "SYNTH434376",
+      "afterDay": "0",
+      "title": "2라나",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "trnGpCd": "101",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "",
+      "information": "",
+      "agree": ""
+    },
+    {
+      "id": "32",
+      "parentId": "8",
+      "type": "SYNTH1637",
+      "enable": "Y",
+      "detailType": "SYNTH960399",
+      "afterDay": "0",
+      "title": "4하하",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "trnGpCd": "101",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "",
+      "information": "",
+      "agree": ""
+    },
+    {
+      "id": "13",
+      "parentId": "8",
+      "type": "SYNTH6446",
+      "enable": "Y",
+      "detailType": "",
+      "afterDay": "0",
+      "title": "oji-라카",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "합성 dtlDsc 문구 545",
+      "information": "합성 information 문구 976",
+      "agree": ""
+    },
+    {
+      "id": "14",
+      "parentId": "8",
+      "type": "SYNTH3462",
+      "enable": "Y",
+      "detailType": "nCard",
+      "afterDay": "0",
+      "title": "2라나",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "trnGpCd": "104",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "",
+      "information": "",
+      "agree": ""
+    },
+    {
+      "id": "15",
+      "parentId": "8",
+      "type": "SYNTH7032",
+      "enable": "Y",
+      "detailType": "SYNTH152877",
+      "afterDay": "0",
+      "title": "4하하",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "trnGpCd": "104",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "",
+      "information": "",
+      "agree": ""
+    },
+    {
+      "id": "16",
+      "parentId": "8",
+      "type": "SYNTH3696",
+      "enable": "Y",
+      "detailType": "SYNTH877209",
+      "afterDay": "0",
+      "title": "합성 title 문구 232",
+      "isExpand": "",
+      "repSegDpt": "",
+      "repSegArv": "",
+      "trnGpCd": "104",
+      "saleMsg1": "",
+      "saleMsg2": "",
+      "saleMsg3": "",
+      "dtlDsc": "",
+      "information": "",
+      "agree": ""
+    }
+  ],
+  "strResult": "SUCC"
+}

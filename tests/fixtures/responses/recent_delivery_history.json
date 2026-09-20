@@ -1,0 +1,17 @@
+{
+  "acepList": [
+    {
+      "acepCustMgNo": "",
+      "acepCustNm": "김철수",
+      "acepCustTeln": "010-9359-3454",
+      "acepCustTeln2": "010-****-7144",
+      "mbCrdNo": "",
+      "acepCustMgFlg": "j"
+    }
+  ],
+  "msgCd": "",
+  "strResult": "SUCC",
+  "h_msg_cd": "",
+  "h_msg_txt": "",
+  "msgTxt": ""
+}

@@ -1,0 +1,21 @@
+{
+  "prsList": [
+    {
+      "intgMsgCd": "IRB800001",
+      "prsCont": "합성 prsCont 문구 157"
+    },
+    {
+      "intgMsgCd": "IRB800007",
+      "prsCont": "합성 prsCont 문구 725"
+    },
+    {
+      "intgMsgCd": "IRB800008",
+      "prsCont": "합성 prsCont 문구 444"
+    }
+  ],
+  "msgTxt": "",
+  "msgCd": "",
+  "strResult": "SUCC",
+  "h_msg_cd": "",
+  "h_msg_txt": ""
+}

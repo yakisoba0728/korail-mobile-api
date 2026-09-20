@@ -1,0 +1,19 @@
+{
+  "poppMsg": null,
+  "cmtrKndCd": null,
+  "psgList": null,
+  "menuId": null,
+  "cmtrUtlAgeCd": null,
+  "avlPrnbFrom": null,
+  "avlPrnbTo": null,
+  "addSrvGdFlg": null,
+  "cmpaFlg": null,
+  "seatAttCd1": null,
+  "prmoMsg": null,
+  "prmoUrl": null,
+  "msgTxt": "합성 msgTxt 문구 880",
+  "msgCd": "ERR000100",
+  "strResult": "FAIL",
+  "h_msg_cd": "ERR000100",
+  "h_msg_txt": "합성 h_msg_txt 문구 895"
+}
