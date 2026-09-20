@@ -122,6 +122,15 @@
 
 ### Fixed
 
+- **마스킹 철자 둘이 또 빠져 있었습니다.** 새 훑기 검사가 **쓰기도 전에** 찾은
+  것입니다. `TicketListTicket.return_sale_date` 는 같은 dataclass 안에서 `sale_date`
+  바로 옆에 있는데, 와이어 키 `h_orgtk_ret_sale_dt` 만 등록돼 있고 파이썬 속성명이
+  빠져서, 객체를 `redact_value` 에 넣으면 `sale_date` 는 `[REDACTED]` 인데 이것만
+  원문으로 남았습니다 — `ffb5189` 의 `card_password` 와 정확히 같은 모양입니다.
+  `discount_card_settlement_target_no` 와 와이어 키 `dcntCrdStlTgtNo` 는 양쪽 철자가
+  모두 없었고, 바로 옆 줄에 선언된 짝(`lump_settlement_target_no`/`lumpStlTgtNo`)은
+  둘 다 등록돼 있습니다.
+
 - **환불의 마일리지 정산 플래그가 뒤집혔습니다.** `build_refund_form` 이
   `settle_mileage` 의 타입을 보지 않아, 문자열 `"N"` 을 넘기면 `bool("N")` 이 참이라
   전선에는 `h_mlg_stl="Y"` 가 실렸습니다 — 호출자가 요청한 것의 정반대이고, 그 플래그는
