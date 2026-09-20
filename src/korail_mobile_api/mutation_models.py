@@ -132,8 +132,8 @@ class StationRefundVerificationResponse(BaseKorailResponse):
 class StationRefundExecutionRequest:
     """``ExecuteOnlineRefundsIn`` values echoed from a verified ticket.
 
-    This object only prepares fields. Sending requires the normal refund
-    mutation consent and a separate execution call.
+    This object only prepares fields. Sending is a separate call, and it
+    goes out on the refund route the moment it is made.
     """
 
     pnr_no: str = field(repr=False)
