@@ -1,14 +1,21 @@
 # Mutation Surface — Handoff & Trade-offs
 
-Cross-repo handoff for the consent-gated mutation work on `korail-mobile-api`
-and `srt-mobile-api`. It records what is implemented, what was verified against
+Cross-repo handoff for the mutation work on `korail-mobile-api` and
+`srt-mobile-api`. It records what is implemented, what was verified against
 live servers, what is **not** settled, the trade-offs taken, and how a later
 session continues.
 
-Both packages remain **read-only by default**: with no `MutationConsent` (or a
-default `dry_run=True` one), the client transmits only login/read requests. A
-state-changing request can leave the process only through the dedicated
-`post_mutation_form` send gate.
+**korail-mobile-api 2.0.0 removed the consent system this handoff was
+originally written around.** There is no `MutationConsent`, no
+`MutationPreview`, no `require_mutation_consent`, and no default
+`dry_run=True` any more: a korail state-changing method needs only a
+logged-in session and sends the instant it is called. What still gates a
+korail send is the route allowlist and the route→category cross-check that
+`post_mutation_form` (and, for the station-ticket refund,
+`V7Gateway.call`) runs immediately before the POST — see "Safety model"
+below for what that means today. SRT's own gate is a different repository,
+unaffected by this change, and is not re-verified here; its sections below
+are left as they were written.
 
 ## Status at a glance
 
@@ -25,8 +32,8 @@ state-changing request can leave the process only through the dedicated
 | reserve (`1202`, 입석+좌석 — the first half of 병합예약) | ✅ live-verified 2026-07-26 (`IRR000018`, two journeys, 중간연결역 prompt present) | ⛔ not implemented |
 | 병합예약 second hold (`reserve_merge`) | ⚠️ implemented, **never live-run** | ⛔ not implemented |
 | 정기권 예약/결제 (`pass.passReserve` / `passPayIssue`) | ⛔ **not implemented — implemented once, then removed**; the routes are not on the mutation allowlist, no method can reach them, and the 7.0.6 gateway (`client.v7`) refuses all four pass-purchase contracts by name | ⛔ not implemented |
-| 운임 재계산 (`certification.PriceReCalculation`) | ⚠️ `recalculate_price`, own `price_recalculation` consent, **never live-run**; the form omits the 7.0.6 DTO's `txtPsrmClCd1`/`txtSeatAttCd2`/`txtSeatAttCd4`/`txtSeatAttCd5` (`analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41`), so treat it as unverified | ⛔ not implemented |
-| 장바구니 담기 (`cart.addCartList`) | ✅ `add_to_cart`, own `cart` consent, live 2026-07-27 (`SUCC`/`IRZ000002`, read back via `get_cart_list`) | ⛔ not implemented |
+| 운임 재계산 (`certification.PriceReCalculation`) | ⚠️ `recalculate_price`, own `price_recalculation` category, **never live-run**; the form omits the 7.0.6 DTO's `txtPsrmClCd1`/`txtSeatAttCd2`/`txtSeatAttCd4`/`txtSeatAttCd5` (`analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41`), so treat it as unverified | ⛔ not implemented |
+| 장바구니 담기 (`cart.addCartList`) | ✅ `add_to_cart`, own `cart` category, live 2026-07-27 (`SUCC`/`IRZ000002`, read back via `get_cart_list`) | ⛔ not implemented |
 
 "Live-verified" on both sides means the request was actually sent and its
 response observed. korail `reserve_merge`, `recalculate_price` and the whole
@@ -44,6 +51,35 @@ returned. The SRT reserve/cancel work sits on branch **`feat/srt-cancel` of
 code — see the SRT gate note below.
 
 ## Safety model (both repos)
+
+**korail, as of 2.0.0:** none of the bullets below apply to korail any more.
+`MutationConsent`, `MutationPreview`, `require_mutation_consent` and the whole
+per-category `allow_*`/`dry_run`/`fake_card_only`/`real_card_acknowledged`
+object are gone from this repository. A korail state-changing method needs
+only a logged-in session and sends the instant it is called. Thirteen of the
+fourteen still go out through `post_mutation_form`, which now double-gates
+rather than triple-gates: `assert_mutation_route` (route allowlist) +
+`assert_mutation_route_category` (the route's registered category checked
+against the category pinned in code for that method — never an argument a
+caller supplies). The fourteenth, `execute_station_ticket_refund`, goes out
+through `V7Gateway.call` instead, under those same two checks, not a
+method-scoped consent. Nothing checks which kind of card was actually given:
+`pay_with_card` and `pay_with_fake_card` build the identical form and POST it
+to the identical route, and the method name the caller chose is the only
+thing that distinguishes a non-chargeable test card from a real charge.
+Redaction that used to protect `MutationPreview.payload` has nothing left to
+protect — there is no preview object any more. What it still guards for
+certain is exception message text: `redact_text` (`redaction.py`) is applied
+to every error message in `errors.py`. `redact_mapping`/`redact_payload`
+remain as utilities a caller is advised to apply before logging or
+serializing a raw response (see the docstrings in `read_parsers.py`), but
+nothing in this package calls them automatically — there is no logging
+subsystem here to wire them into.
+
+The bullets that follow describe the design as it stood when this section was
+written, kept here for the SRT side of the handoff, which this correction
+pass does not touch or re-verify. For korail, read them as history, not as
+current behaviour.
 
 - `MutationConsent` (frozen): per-category `allow_*` (default `False`),
   `dry_run` (default `True`), `fake_card_only` (default `True`),
@@ -209,9 +245,10 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    more than one passenger, more than one journey, partial refunds, and any
    refund close enough to departure that a fee applies. The run also surfaced
    three padded wire shapes the offline fixtures had guessed wrong — see
-   verification-record.md. **Trade-off:** the surface stays consent-gated and
-   dry-run-by-default; one successful round trip is evidence for that one shape,
-   not a licence to assume the rest.
+   verification-record.md. **Trade-off:** korail 2.0.0 removed the consent gate
+   this sentence originally described — `pay_with_card` now sends the instant
+   it is called, given a session; one successful round trip is evidence for
+   that one shape, not a licence to assume the rest.
 
 2. **SRT `payment` and `refund` are still deferred (need live capture) and are
    still kill-switched.** They have no client method, and even a caller reaching
@@ -256,14 +293,16 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    gained `scripts/recover_hold.py`, which cancels a stranded hold from the PNR
    string alone.
 
-5. **Card-kind enforcement is honor-system on the card value.** The library
-   cannot verify whether a card is chargeable; `fake_card_only` and
-   `real_card_acknowledged` are policy claims the caller makes, not facts the
-   library can check. What the gates do enforce is that the claim is stated and
-   unambiguous: `pay_with_fake_card` accepts only the fake-card claim, the
-   separate `pay_with_card` accepts only the acknowledged-real-charge claim, and
-   `post_mutation_form` refuses a payment consent that makes neither claim or
-   both.
+5. **Card-kind enforcement does not exist any more; korail 2.0.0 removed even
+   the honor-system claim.** The library cannot verify whether a card is
+   chargeable, and as of 2.0.0 it no longer asks the caller to say so either:
+   `fake_card_only` and `real_card_acknowledged` are gone along with the rest
+   of `MutationConsent`. `pay_with_fake_card` and `pay_with_card` build the
+   identical form and send it to the identical route; the only thing that
+   distinguishes a non-chargeable test card from a real charge is which method
+   name the caller wrote. Nothing in the code stops a caller from passing a
+   real, chargeable card number to `pay_with_fake_card`, or a test card to
+   `pay_with_card` — the method name is documentation of intent, not a check.
 
 6. **Live-testing risks.** Real unpaid holds (auto-expire, but always
    auto-cancel), anti-bot IP-ban risk, and (SRT) NetFunnel virtual queue. Every
@@ -414,11 +453,19 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    refund, and the call still goes through `post_mutation_form` like every other
    mutation — never the read path.
 
+   **[korail 2.0.0: `MutationConsent` and `allow_reserve` no longer exist —
+   see "Safety model" above — but the design reasoning stands.
+   `confirm_standby_hold` still carries the `"reserve"` category internally,
+   fixed in code rather than chosen by a caller, and the route→category
+   cross-check still stops that category from reaching payment, cancel or
+   refund.]**
+
    **How an operator live-verifies these.** Both need reserve→cancel only; no
    payment.
    - `1103`: pick a train with seats, `get_seat_cars` → `get_seat_inventory` →
      build `KorailSeatAssignment`s → `reserve(..., job_type=SEAT_DESIGNATED,
-     seats=[...])` with `dry_run=False`, then read the hold back with
+     seats=[...])` — **there is no dry-run any more; this sends for real the
+     instant it is called, given a session** — then read the hold back with
      `get_ticket_reservation_detail` and check `h_srcar_no` / `h_seat_no` are
      the seats that were asked for — that is the only thing that proves the
      `OSrcar` keys reached the server rather than being ignored — then
@@ -426,9 +473,11 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
      single seat cannot distinguish "the index is 1-based" from "the server
      ignored the map".
    - `1102`: find a **sold-out** 서울→부산 KTX and check its
-     `TrainSummary.wait_reservation_flag` is `" 9"` first (a dry-run `reserve`
-     with `job_type=STANDBY` will say so without sending anything). Then
-     `dry_run=False`, expect `strResult=SUCC` with `h_msg_cd=IRR000014`, call
+     `TrainSummary.wait_reservation_flag` is `" 9"` first — that is a plain
+     read and costs nothing, but there is no dry-run `reserve` to check
+     further without sending: the next call, `reserve(..., job_type=STANDBY)`,
+     is a live send the moment it is made. Expect `strResult=SUCC` with
+     `h_msg_cd=IRR000014`, call
      `confirm_standby_hold` (start with both options off, so no phone number
      leaves the machine), and `cancel_unpaid_hold` the PNR. Record what
      `h_msg_cd` the follow-up returns — it is completely unknown.
@@ -450,8 +499,9 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    `get_ticket_reservation_detail` to get each seat's `h_psg_tp_cd`,
    `h_psrm_cl_cd` and `h_dcnt_knd_cd1`, build one `PriceRecalculationRow` per
    seat **echoing those values unchanged and applying no discount** (all three
-   discount fields `""`), and call `recalculate_price` with
-   `dry_run=False`. That is the identity case: it should return the hold
+   discount fields `""`), and call `recalculate_price` — there is no dry-run
+   step any more, so this sends for real the instant it is called. That is the
+   identity case: it should return the hold
    re-priced to the amount it already had. Compare `received_amount` against
    the same field from the hold. Then `cancel_unpaid_hold`. Nothing is
    settled at any point, so the run costs nothing but the hold.
@@ -460,7 +510,7 @@ from the gitignored `.env`. Each round trip left reservation history at 0 rows
    then only one whose entitlement the account actually has. **Do not run this
    against a hold anyone intends to pay for**, and do not run it against a
    settled ticket at all: a wrong row changes what the passenger is about to be
-   charged, which is the whole reason it has its own consent category.
+   charged, which is the whole reason it has its own category.
 
    *Unknowns worth recording:* whether the server validates `txtPsgGridcnt`
    against the PNR or trusts it; what it does when `dcnt_knd_cd1` disagrees
@@ -534,7 +584,7 @@ need `KORAIL_LIVE_REAL_CHARGE`, because neither branch charges anything.
 
 `--reserve-cancel-only` is the third mode and the one to reach for after
 changing the library. It runs steps (a)–(c) and then cancels: reserve, release,
-verify the account is clean. No payment consent is constructed and `pay()` is
+verify the account is clean. `pay()` (which calls `pay_with_card`) is
 never reached, so a charge is unreachable rather than merely disallowed, and no
 card is read at all — on that path the process never holds a PAN. Like
 `--recover` it needs neither `KORAIL_LIVE_REAL_CHARGE` nor `KORAIL_MAX_FARE`,
@@ -621,13 +671,16 @@ back to the hold.
   whole route's arrival time rather than leg 1's.
 - **korail 정기권: there is nothing for an operator to run, and that is the
   answer, not an omission.** The purchase pair was implemented and then removed;
-  no method, route registration or consent category for it survives, so no
-  amount of consent can send `passReserve` or `passPayIssue` from this package.
-  The 7.0.6 gateway lists them among its 117 contracts because the APK declares
-  them, together with `passOtrReserve`/`postPassOtrPayIssue`, and refuses all
-  four by name before anything else: no `V7MutationConsent` may name one. That
-  refusal was added on 2026-09-19; until then `client.v7` could send them with
-  a method-scoped consent, which this paragraph said was impossible.
+  no method or route registration for it survives, so nothing a caller passes
+  can send `passReserve` or `passPayIssue` from this package. That pair,
+  together with `passOtrReserve`/`postPassOtrPayIssue` — all four —
+  are not even in the 7.0.6 registry any more — it holds exactly 2 rows now
+  (see `docs/7.0.6-additions.md`) — and even when they were,
+  `V7Gateway.call` refused all four by name before looking anything up in the
+  registry: there is no `V7MutationConsent`, or any other object, for a caller
+  to name one through. That refusal was added on 2026-09-19; until then
+  `client.v7` could send them with a method-scoped consent, which this
+  paragraph said was impossible.
   The reasoning, in operator terms: the settlement is roughly ₩150,000–₩250,000
   for a 1개월 pass with **no refund path and no cancel route here**, and the
   shipped app cannot issue `passPayIssue` either — its `isCommPaymentRequest()`
