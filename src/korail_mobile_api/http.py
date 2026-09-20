@@ -55,8 +55,8 @@ _NON_COMMON_OUT_READ_PATHS = frozenset({
 # fields) and applyDisabilityCertification (:22, which adds txtPsgDisc0019Cnt
 # and six @QueryMaps to attach a disability certificate to a held
 # reservation). The general per-route field contract that used to keep the
-# write shape off this send path moved into tests/_read_field_contracts.py
-# and is no longer checked here for any other route -- but for this one path
+# write shape off this send path moved into the test suite, which has since
+# been deleted, so no other route is checked at all -- but for this one path
 # a caller (or a future builder bug) that hands post_form the write overload's
 # fields would otherwise reach the wire unexamined, since nothing else on the
 # read send path is route-specific. This is the one targeted exception, not a

@@ -12,8 +12,7 @@
 
 * **읽기 경로** — :func:`assert_read_only_route` 가 라우트를
   :data:`KORAIL_READ_ONLY_ROUTES` 의 정확한 원소로 제한합니다. 필드 이름·순서 계약은 이
-  모듈이 아니라 tests/_read_field_contracts.py 에 테스트 전용 픽스처로 있고, 전송 경로에는
-  더 이상 걸리지 않습니다.
+  모듈이 강제하지 않으며, 그것을 기록하던 테스트 픽스처도 삭제됐습니다.
 * **변경 경로** — :func:`assert_mutation_route`,
   :func:`assert_mutation_route_category`, :func:`assert_mutation_form_shape`.
   읽기 라우트를 포함해 :data:`KORAIL_MUTATION_ROUTES` 밖은 전부 거부합니다.
@@ -42,7 +41,7 @@ from .errors import KorailProtocolError
 # Subject areas the READ-ONLY send path refuses. "Not reachable through
 # post_form/get" — NOT "not implemented". reservation/payment/refund have
 # their own routes in KORAIL_MUTATION_ROUTES; this set stops them travelling
-# on the read path (tests/test_http.py parametrized tests).
+# on the read path.
 #
 # "points-mileage-write" excludes only writes/auths, not balance reads:
 #   mlg.lpotAthn.do     -- password auth → pwdErrTno (failure counter = state change)
@@ -67,13 +66,14 @@ EXCLUDED_API_DOMAINS = frozenset(
 )
 
 # Exact (method, path) pairs the read-only send path will transmit to.
-# 58 entries pinned by tests: 56 reads + login and logout POST.
+# 58 entries: 56 reads + login and logout POST. Nothing pins the count any
+# more -- the suite that did was deleted.
 #
 # NOTE on certification.ReservationList: two Retrofit overloads share the path.
 # Only the read overload (inquiryTicketRsv, CertificationService.java:45-46,
 # four query fields) is here; the write overload (applyDisabilityCertification,
-# :22) is excluded. The four-field set itself is pinned by the field-name
-# contract in tests/_read_field_contracts.py, not by this route table.
+# :22) is excluded. The four-field set itself is enforced by http.post_form's
+# one targeted exception for this path, not by this route table.
 KORAIL_READ_ONLY_ROUTES = frozenset(
     {
         ("POST", "/file/CACHE/MobileService.cache"),

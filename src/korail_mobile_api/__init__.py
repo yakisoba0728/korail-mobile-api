@@ -19,8 +19,8 @@
 
 #: 배포된 버전. ``__all__`` 에 넣지 않는 것은 의도다 — 던더는 export 하는 이름
 #: 집합이 아니고, ``from korail_mobile_api import *`` 가 이것을 실어 나른 적이
-#: 없다. ``pyproject.toml`` 의 ``project.version`` 과 같은지는
-#: ``tests/test_release_readiness.py`` 만 지킨다. 빌드가 둘을 맞춰 주지 않는다.
+#: 없다. ``pyproject.toml`` 의 ``project.version`` 과 같은지는 이제 아무것도
+#: 지키지 않는다 — 확인하던 테스트가 삭제됐고, 빌드도 둘을 맞춰 주지 않는다.
 __version__ = "1.2.0"
 
 from .client import KorailClient

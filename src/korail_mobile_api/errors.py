@@ -291,7 +291,7 @@ class KorailDynaPathRequiredError(KorailApiError):
 # 할 수 있다. 성공에 얹혀 오는, 결코 예외가 되어서는 안 되는 코드:
 #   IRR000014, IRT800005, WRS800036, IRZ000001/S200, IRT000000/MRT200105,
 #   WRR664296  (strResult=SUCC 와 취소 가능한 PNR 을 달고 온다)
-# tests/test_error_classification.py 가 그것을 고정한다.
+# 그것을 고정하던 테스트는 삭제됐다. 아래 목록이 유일한 기록이다.
 #
 # 일부러 넣지 않은 것:
 #   IRT010110  APK 전체 0건.

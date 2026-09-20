@@ -11,7 +11,6 @@
 [![문서](https://img.shields.io/badge/%EB%AC%B8%EC%84%9C-yaki.kr-1f6feb?style=flat-square)](https://yaki.kr/korail-mobile-api/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776ab?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
 [![타입](https://img.shields.io/badge/typed-py.typed-2f6f4e?style=flat-square)](src/korail_mobile_api/py.typed)
-[![오프라인 테스트](https://img.shields.io/badge/offline%20tests-2260-4c1?style=flat-square)](#문서)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green?style=flat-square)](LICENSE)
 
 [문서](https://yaki.kr/korail-mobile-api/) ·
@@ -217,7 +216,8 @@ POST라 이 필드를 보내지 않습니다. 보호된 상수를 추측해서 �
 ## 안전 모델
 
 동의 객체도 dry-run도 미리보기도 없습니다. 코드가 실제로 막는 것과, 이름만으로
-지키는 것을 구분해서 적습니다. 오프라인 스위트가 코드가 막는 부분을 고정합니다.
+지키는 것을 구분해서 적습니다. **이 구분을 고정하던 오프라인 스위트는 없앴습니다** —
+아래 내용은 소스를 읽어 확인해야 하고, 어긋나도 아무것도 실패하지 않습니다.
 
 - 상태를 바꾸는 메서드 14개는 로그인 세션을 요구합니다. 세션이 없으면
   `KorailAuthError`이고 아무것도 나가지 않습니다.
@@ -353,9 +353,12 @@ Retrofit 계약은 [별도 구현 기록](docs/7.0.6-additions.md)에 정리했�
 | [docs/README.md](docs/README.md) | 문서 전체 색인 |
 | [CHANGELOG.md](CHANGELOG.md) | 무엇이 바뀌었나 |
 
-게이트는 `python3 -m pytest -q -m "not live"` 이고 네트워크를 쓰지 않습니다 —
-`2260 passed`. 지금 이 스위트에는 `live` 로 표시된 테스트가 하나도 없어 아무것도
-걸러지지 않습니다. 실서버를 건드리는 것은 `scripts/`의 스크립트들이고, 모두
+자동 게이트는 CI 의 네 잡입니다 — `ruff check`, `pyright`, `mkdocs build --strict`,
+그리고 빌드한 wheel 을 새 가상환경에 설치해 `import korail_mobile_api` 가 되는지 보는
+배포 검증. 전부 네트워크를 쓰지 않습니다. 오프라인 테스트 스위트는 없앴으므로
+**동작을 지키는 것은 그 import 확인 하나뿐입니다** — 파서가 틀리게 파싱하거나 라우트
+가드가 뚫려도 네 잡 모두 통과합니다.
+실서버를 건드리는 것은 `scripts/`의 스크립트들이고, 모두
 `KORAIL_MOBILE_API_LIVE=1` 이 있어야 하며 대부분은 자기 스위치도 따로 있어야
 합니다([scripts/README.md](scripts/README.md)). 기여는 [CONTRIBUTING.md](CONTRIBUTING.md),
 규범은 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 참고.

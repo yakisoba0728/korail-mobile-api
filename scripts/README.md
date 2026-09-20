@@ -27,10 +27,9 @@ the rule says how.
   client makes internally are throttled too. Do not lower it.
 - **Importing is safe.** Each script performs no I/O, reads no environment
   variable and builds no client at import time; everything happens under
-  `main()`. `tests/` asserts this structurally for every live script:
-  `test_reserve_pay_refund_roundtrip.py` for the round trip,
-  `test_seat_inventory_reads.py` for the seat evidence, and
-  `test_live_scripts_safety.py` for the other four.
+  `main()`. The suite that asserted this structurally for every live script is
+  gone, so this property is now maintained by hand -- check it when editing a
+  script's module level.
 - **They run against YOUR account.** These exist so a maintainer can check the
   client against the live service once. They are not example code, not a
   scraper, and not something to run on a schedule.

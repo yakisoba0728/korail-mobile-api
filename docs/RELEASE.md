@@ -33,9 +33,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-python3 -m pip install -e ".[test]"
+python3 -m pip install -e ".[dev]"
 python3 -m pip install build
-PYTHONPATH="$PWD/src" pytest -q -m "not live"
+ruff check src scripts
+pyright
 
 artifact_dir="$(mktemp -d)"
 venv_dir="$(mktemp -d)"
@@ -99,11 +100,11 @@ trap - EXIT
 
 ## 동작 기반 검증 계약
 
-배포 검증기(`scripts/verify_distribution.py`)와 그 오프라인 스위트
-(`tests/test_release_readiness.py`)가 강제하는 것은 파일 존재 확인이 아니라 동작 기반
-계약입니다. 스위트는 wheel·sdist 픽스처를 실제로 만들어 검증기의 `main()` 을 돌리고,
-아카이브와 메타데이터가 실제로 거부되는지를 단언합니다. 규칙마다 그것을 노리는 픽스처가
-하나씩 있습니다.
+배포 검증기(`scripts/verify_distribution.py`)가 강제하는 것은 파일 존재 확인이 아니라
+동작 기반 계약입니다. 검증기를 실제 wheel·sdist 픽스처로 돌려 각 규칙이 정말 거부하는지
+확인하던 스위트(`tests/test_release_readiness.py`)는 없앴으므로, **검증기 자신이 맞게
+동작하는지는 이제 아무것도 확인하지 않습니다.** 아래 규칙은 검증기 소스를 읽어 확인해야
+합니다.
 
 - 정규 멤버 경로와 정규화 후 이름. 중복된 멤버를 실은 wheel 이나 sdist 는 거부됩니다.
 - 0바이트 `py.typed` 마커. 두 아카이브 모두에서 일반 파일이면서 비어 있어야 합니다.
@@ -119,9 +120,6 @@ trap - EXIT
 - 잘못됐거나 지원하지 않는 입력에는 고정된 stderr 한 줄만 냅니다. 경로, 트레이스백,
   아카이브 멤버, 예외 문구를 흘리지 않습니다.
 
-게이트 자체는 위에 정의한 `set -euo pipefail`, `EXIT` 뒷정리 트랩, 오프라인 선택
-`pytest -q -m "not live"` 로 돌아갑니다.
-
-[1.2.0 기준 스위트에는 `@pytest.mark.live` 가 붙은 테스트가 하나도 없어서 이 마커는 지금
-아무것도 골라내지 않습니다 — 실행 결과는 마커 없는 전체 스위트와 같습니다. 명령을
-바꾸지 않는 것은 CI 워크플로와 이 문서가 같은 문구를 계속 쓰도록 맞춰 두기 위해서입니다.]
+게이트 자체는 위에 정의한 `set -euo pipefail`, `EXIT` 뒷정리 트랩, 그리고 `ruff check`
+와 `pyright` 로 돌아갑니다. 테스트 스위트가 없어졌으므로 릴리스가 통과해야 하는 동작
+기반 검사도 없습니다 — 남은 것은 린트, 타입, 그리고 배포물 검증기뿐입니다.

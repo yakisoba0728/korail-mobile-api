@@ -54,35 +54,12 @@ jobs:
       - name: Run pyright
         run: pyright
 
-  test:
-    name: pytest ${{ matrix.python-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        # Every supported interpreter on Linux, plus one macOS and one Windows
-        # run at the newest version. The Windows entry is not symmetry for its
-        # own sake: this package's docstrings, comments and fixtures are full
-        # of Korean, and Windows is the platform whose default text encoding is
-        # not UTF-8. A file opened without an explicit encoding fails there and
-        # nowhere else.
-        os: [ubuntu-latest]
-        python-version: ['3.11', '3.12', '3.13', '3.14']
-        include:
-          - os: macos-latest
-            python-version: '3.14'
-          - os: windows-latest
-            python-version: '3.14'
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install test dependencies
-        run: python -m pip install -e ".[test]"
-      - name: Run offline tests
-        run: pytest -q -m "not live"
+  # The test job is gone with the suite it ran. What it covered that nothing
+  # else does: this package's source is full of Korean, and the matrix ran one
+  # Windows leg because Windows is the platform whose default text encoding is
+  # not UTF-8 -- a file opened without an explicit encoding fails there and
+  # nowhere else. `import` is no longer exercised on any interpreter but the
+  # one `pyright` and `package` use.
 
   docs:
     name: mkdocs

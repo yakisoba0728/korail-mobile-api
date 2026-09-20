@@ -85,10 +85,9 @@ live-verified** -- see [환승 (transfer) itineraries](#환승-transfer-itinerar
 for the whole shape, what the operator must do to prove it, and the one thing
 that blocks a clean reserve → cancel round trip. The
 read-only send path continues to refuse every mutation route, so a
-state-changing request can leave the process by no other route. As of 1.2.0,
-`pytest -m "not live"` collects 2260 tests and deselects none -- no test in
-the suite carries the `live` marker any more, so there is no opted-in
-live-service test left to deselect. `3137 passed, 1 deselected`,
+state-changing request can leave the process by no other route. The offline
+suite that recorded these counts has since been deleted; the figures below are
+what it reported while it existed. `3137 passed, 1 deselected`,
 `1246 passed, 1 deselected` (before the P0 live-evidence documentation
 coverage), and `1247 passed, 1 deselected` (directly after it) were this
 gate's size at earlier points in this record; none of those totals is
@@ -122,11 +121,9 @@ offline contract tests are committed.
 Core documents:
 
 - [docs/api-endpoints.md](api-endpoints.md): method/path/request parameter/return type inventory.
-- [docs/deep-dive/api-contracts.md](deep-dive/api-contracts.md): endpoint-by-endpoint request and response field contract.
-- [docs/deep-dive/network-model-fields.md](deep-dive/network-model-fields.md): Java model field catalog from decompiled network classes.
-- [docs/deep-dive/webview-and-url-catalog.md](deep-dive/webview-and-url-catalog.md): WebView bridge, URL, scheme, and API-like path catalog.
-- [docs/deep-dive/local-storage-catalog.md](deep-dive/local-storage-catalog.md): ORMLite DB model and SharedPreferences key catalog.
-- [docs/deep-dive/agent-reports/](deep-dive/agent-reports/): 20 focused subsystem reports.
+- `docs/deep-dive/` held the endpoint-by-endpoint field contract, the Java model
+  field catalog, the WebView/URL catalog, the ORMLite and SharedPreferences
+  catalog, and 20 focused subsystem reports. It was deleted; git history has it.
 
 ## Local Artifacts
 
@@ -194,11 +191,13 @@ authorized live observation.
 
 This repository now contains an installable Python client package under `src/korail_mobile_api`.
 
-Default tests are offline:
+There is no test suite any more -- it was deleted. The offline gates that
+remain are:
 
 ```bash
-pip install -e ".[test]"
-pytest
+pip install -e ".[dev]"
+ruff check src scripts
+pyright
 ```
 
 ### Error taxonomy
@@ -219,7 +218,7 @@ is why a warning attached to a success stays a success: `WRR664296`
 ("…할인은 토/일/공휴일에는 적용되지 않습니다.") arrived with `strResult=SUCC`
 and a real, cancelable PNR, and the APK has its own examples — `IRR000014`
 (waitlist accepted), `IRT800005` (reserved with a notice), `WRS800036` (per-leg
-advisory). `tests/test_error_classification.py` pins that none of them raise.
+advisory). The test that pinned that none of them raise has been deleted.
 
 | Exception | Codes | What a caller should do |
 | --- | --- | --- |
