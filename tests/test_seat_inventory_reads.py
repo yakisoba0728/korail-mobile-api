@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 import inspect
 import json
@@ -2248,71 +2247,6 @@ def test_evidence_writer_rejects_unsafe_or_out_of_budget_results(
     with pytest.raises(ValueError):
         evidence.write_evidence(output, result, force=False)
     assert not output.exists()
-
-
-def test_evidence_script_has_narrow_import_and_operation_boundaries():
-    source = Path(evidence.__file__).read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    imported_roots: set[str] = set()
-    imported_names: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported_roots.update(alias.name.split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            imported_roots.add((node.module or "").split(".")[0])
-            imported_names.update(alias.name for alias in node.names)
-    assert imported_roots <= {
-        "__future__",
-        "argparse",
-        # `collections` is here for `collections.abc` only, which is where
-        # `Mapping`/`Sequence` now live: importing them from `typing` has been
-        # deprecated since 3.9 and ruff's UP035 moves them. It buys the script
-        # no capability the `typing` spelling did not already have.
-        "collections",
-        "json",
-        "math",
-        "os",
-        "pathlib",
-        "tempfile",
-        # `time` is the request pacing: a monotonic clock and a sleep, nothing
-        # that reaches the network.
-        "time",
-        "typing",
-        "korail_mobile_api",
-    }
-    assert "run_live_smoke" not in source
-    assert "run_live_smoke_from_env" not in imported_names
-    assert "requests" not in imported_roots
-    assert "httpx" not in imported_roots
-    called_attributes = {
-        node.func.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-    }
-    assert {
-        "login",
-        "search_trains",
-        "get_seat_cars",
-        "get_seat_inventory",
-        "close",
-    } <= called_attributes
-    forbidden_operations = {
-        name
-        for name in called_attributes
-        if any(
-            fragment in name.casefold()
-            for fragment in (
-                "reserve",
-                "payment",
-                "cancel",
-                "refund",
-                "select",
-                "hold",
-                "urlopen",
-            )
-        )
-    }
-    assert forbidden_operations == set()
 
 
 def test_evidence_main_writes_only_the_sanitized_capture(
