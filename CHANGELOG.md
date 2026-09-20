@@ -8,11 +8,13 @@
 
 ### Added
 
-- **파서 회귀가 마지막 하나로 남아 있다가 채워졌습니다.** `tests/test_parser_contracts.py`
+- **파서 회귀가 채워졌습니다.** `tests/test_parser_contracts.py`
   와 `tests/golden/parser_output.json`, 그리고 `tests/fixtures/responses/` 의
   비식별 응답 38개 + 이름↔파서 표인 `tests/parser_map.py`. `ebc4d5f` 가 남는다고
-  적어 둔 여섯 가지 중 다섯은 `tests/test_invariants.py` 가 덮었고, 파서 회귀만
-  골든 픽스처를 기다리고 있었습니다.
+  적어 둔 여섯 가지 중 넷(라우트 표, `__all__`, 마스킹 훑기, 문서 색인)은
+  `tests/test_invariants.py` 가 덮었고, 다섯째인 파서 회귀가 이것입니다.
+  **여섯째는 아직 안 덮였습니다** — `verify_distribution.py` 자신의 동작은
+  스크립트를 돌려 봐야 하는 것이라 introspection 으로도 픽스처로도 닿지 않습니다.
 
   **값이 아니라 구조를 얼립니다** — 어떤 모델이 나오는지, 어떤 필드가 `None` 이
   아닌지, 목록을 몇 개로 읽는지. 픽스처 38개, 구조 노드 8,036개. 값은 합성이라
