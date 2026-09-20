@@ -51,6 +51,12 @@
   만드는 대신, 호출자가 없는 경로를 늘리지 않는 쪽을 택했습니다. `KorailConfig` 를 위치
   인자로 만드는 코드는 저장소에도 문서에도 없으므로 뒤 필드들의 뜻은 그대로입니다.
 
+- **휠 임포트 CI 가 약속한 인터프리터 전부에서 돕니다.** `requires-python` 과
+  classifiers 는 3.11~3.14 를 약속하는데, 이 패키지의 코드를 실제로 실행하는 유일한
+  잡이 3.14 하나에서만 돌고 있었습니다. 삭제된 pytest 잡에는 4 인터프리터 × 3 OS
+  매트릭스가 있었으므로 이것은 관행의 부재가 아니라 회귀입니다. 인터프리터 넷을
+  되살립니다. OS 매트릭스는 아직입니다.
+
 ### Changed
 
 - **코드와 어긋난 서술 열 곳을 고쳤습니다.** 1.2.0 에서 없어진 동의 게이트와 dry-run
@@ -70,6 +76,32 @@
 - **`_device_version` 의 복사본이 없어졌습니다.** `payloads.py` 와
   `limousine_payloads.py` 에 바이트 단위로 같은 함수가 두 벌 있었습니다.
   `read_payloads.py` 가 이미 하던 대로 `limousine_payloads.py` 도 import 합니다.
+
+- **예외 스물하나 중 열넷이 pickle 왕복에서 죽었습니다.** `KorailAppError` 와 그
+  아홉 하위, `KorailSessionExpiredError`, `KorailNetFunnelError`,
+  `KorailQueueRejectedError`, `KorailAuthContinuationRequired` 가 `(code, message)` 를
+  위치 인자로 받는데, 기반 클래스가 `self.args` 에 합쳐진 문자열 하나만 남기므로
+  기본 `Exception.__reduce__` 가 `TypeError: missing 1 required positional argument`
+  로 죽었습니다. 하필 호출자가 실제로 `except` 해서 분기하는 매진·좌석불가·예약거절·
+  세션만료가 전부 여기 들어 있었고, `ProcessPoolExecutor` 나 Celery 처럼 예외가
+  프로세스 경계를 넘는 경로에서 원래 예외 대신 그 `TypeError` 가 올라왔습니다.
+  botocore 가 `ClientError.__reduce__` 로 푼 것과 같은 방법을 씁니다. 스물하나 전부
+  왕복을 확인했습니다. 예외 계층에 잡을 수 있는 이름이 늘지 않도록 `Exception` 을
+  상속하지 않는 믹스인입니다 — 이 모듈 맨 위의 계층 그림이 계속 사실이어야 합니다.
+- **`KorailApiError` 가 아무 속성도 보장하지 않았습니다.** `.code` 는 스물하나 중
+  열다섯, `.raw` 도 열다섯, `.message` 는 열셋에만 있어서
+  `except KorailApiError as error: error.code` 가 전송 실패·프로토콜 오류·
+  상태변경 거절·DynaPath 요구에서 `AttributeError` 로 죽었습니다. 기반 클래스가
+  셋 다 `None` 기본값으로 선언합니다. stripe `StripeError`, botocore `ClientError`,
+  PyGithub `GithubException` 이 전부 기반에서 보장하는 것입니다.
+- **`KorailConfig` 가 넘겨받은 DynaPath 구성을 말없이 갈아치웠습니다.**
+  `enable_dynapath=True` 와 직접 만든 `DynapathConfig(enabled=False, ...)` 를 함께
+  넘기면, 그 구성이 경고도 예외도 없이 합성 기본값으로 바뀌었습니다. 기기 신원을
+  스스로 정했다고 믿는 호출자가 실제로는 패키지가 지어낸 신원으로 요청을 보냈다는
+  뜻이고, 하필 그 값이 안티오토메이션 토큰이 주장하는 기기입니다. 이제
+  `ValueError` 입니다 — 같은 저장소의 `DynapathConfig.__post_init__` 이 같은 종류의
+  충돌에 이미 그렇게 합니다. 맨손 `KorailConfig(enable_dynapath=True)` 편의 경로는
+  그대로입니다.
 
 ### Fixed
 

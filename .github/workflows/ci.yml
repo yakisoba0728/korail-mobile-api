@@ -81,14 +81,22 @@ jobs:
         run: mkdocs build --strict
 
   package:
-    name: Verify distributions
+    name: Verify distributions (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # requires-python 과 classifiers 가 3.11~3.14 를 약속하는데, 이 잡이 이
+    # 패키지의 코드를 실제로 실행하는 유일한 자리다. 한 인터프리터에서만 돌면
+    # 나머지 셋에 대한 약속은 아무도 확인하지 않는다. 삭제된 pytest 잡에는
+    # 4 인터프리터 × 3 OS 매트릭스가 있었으므로 이것은 관행의 부재가 아니라 회귀다.
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14'
+          python-version: ${{ matrix.python-version }}
       - name: Install build tooling
         run: python -m pip install build
       - name: Build wheel and source distribution

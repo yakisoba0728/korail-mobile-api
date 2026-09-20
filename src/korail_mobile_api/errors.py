@@ -41,7 +41,18 @@ class KorailApiError(Exception):
     """이 패키지의 모든 예외의 최상위.
 
     문자열 인자는 :func:`~korail_mobile_api.redaction.redact_text` 를 거칩니다.
+
+    세 속성은 **여기서 기본값을 보장합니다.** 하위 클래스 절반만 채우던 것이라,
+    ``except KorailApiError as error: error.code`` 가 전송 실패나 프로토콜 오류에서
+    ``AttributeError`` 로 죽었습니다. 이제 채우지 않는 예외에서는 ``None`` 입니다.
     """
+
+    #: 서버가 준 ``h_msg_cd``. 서버 응답 없이 난 실패는 ``None``.
+    code: str | None = None
+    #: 서버가 준 ``h_msg_txt``. 없으면 ``None``.
+    message: str | None = None
+    #: 판정에 쓴 원본 응답. 없으면 ``None``.
+    raw: object | None = None
 
     def __init__(self, *args: object) -> None:
         super().__init__(
@@ -50,6 +61,29 @@ class KorailApiError(Exception):
                 for arg in args
             )
         )
+
+class _CodeMessagePickle:
+    """``(code, message)`` 를 위치 인자로 받는 예외들의 pickle 계약. **믹스인**입니다.
+
+    예외 계층에 클래스를 하나 더 끼우지 않으려고 ``Exception`` 을 상속하지 않습니다 —
+    이 모듈 맨 위의 계층 그림이 계속 사실이어야 하고, 잡을 수 있는 이름이 하나
+    늘어나서도 안 됩니다. 두 애너테이션은 값을 만들지 않습니다 — 실제 값은 언제나
+    :class:`KorailApiError` 가 줍니다. 여기 적는 것은 이 믹스인이 무엇을 요구하는지를
+    타입 검사기에 말하기 위해서입니다.
+
+    기반 :class:`KorailApiError` 가 ``self.args`` 에 합쳐진 문자열 하나만 남기므로,
+    기본 ``Exception.__reduce__`` 는 ``cls(합쳐진문자열)`` 을 시도하고
+    ``TypeError: missing 1 required positional argument: 'message'`` 로 죽습니다.
+    ``ProcessPoolExecutor`` 나 Celery 처럼 예외가 프로세스 경계를 넘는 경로에서
+    원래 예외 대신 그 ``TypeError`` 가 올라오던 자리입니다. botocore 가
+    ``ClientError.__reduce__`` 로 푼 것과 같은 방법입니다.
+    """
+
+    code: str | None
+    message: str | None
+
+    def __reduce__(self) -> tuple[object, ...]:
+        return (self.__class__, (self.code, self.message), dict(self.__dict__))
 
 
 class KorailTransportError(KorailApiError):
@@ -86,7 +120,7 @@ class KorailAuthError(KorailApiError):
         self.code = code
 
 
-class KorailSessionExpiredError(KorailAuthError):
+class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
     """세션 만료. ``P058`` (``BaseActivity.java:610``).
 
     :class:`KorailAuthError` 의 하위이고 :class:`KorailAppError` 가 아닙니다.
@@ -140,6 +174,14 @@ class KorailAuthContinuationRequired(KorailAuthError):
         self.raw = raw
         super().__init__("KORAIL login requires WebView continuation")
 
+    def __reduce__(self) -> tuple[object, ...]:
+        # Same contract as _ReducibleCodeMessage, different positional pair.
+        return (
+            self.__class__,
+            (self.redirect_url, self.post_data),
+            dict(self.__dict__),
+        )
+
 
 def _code_message(code: str | None, message: str | None) -> str:
     """The base class's redaction of the joined string alone is not enough:
@@ -150,7 +192,7 @@ def _code_message(code: str | None, message: str | None) -> str:
     return f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
 
 
-class KorailAppError(KorailApiError):
+class KorailAppError(_CodeMessagePickle, KorailApiError):
     """서버가 앱 수준 실패로 답함 — ``h_msg_cd`` 분류의 뿌리.
 
     ``strResult == "FAIL"`` 이거나 ``h_msg_cd == "WRC000288"`` 일 때 올라갑니다.
@@ -240,7 +282,7 @@ class KorailAppUpdateRequiredError(KorailAppError):
     """
 
 
-class KorailNetFunnelError(KorailApiError):
+class KorailNetFunnelError(_CodeMessagePickle, KorailApiError):
     """NetFunnel 대기열이 거절·오작동·시간 초과.
 
     :class:`KorailAppError` 가 아닙니다 — ``h_msg_cd`` 를 갖지 않는 별도
