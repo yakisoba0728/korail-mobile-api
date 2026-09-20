@@ -26,7 +26,7 @@ class TicketListTicket:
     sale_sequence: str | None = field(default=None, repr=False)
     return_password: str | None = field(default=None, repr=False)
     ticket_status_code: str | None = None
-    train_info: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
+    train_info: tuple[Mapping[str, Any], ...] = field(default=(), repr=False, compare=False)
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
@@ -847,7 +847,7 @@ class MaasServiceDetailInfo:
     settlement_status_name: str | None = None
     total_settlement_amount: str | None = None
     usage_period_content: str | None = None
-    entity_one: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
+    entity_one: tuple[Mapping[str, Any], ...] = field(default=(), repr=False, compare=False)
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 

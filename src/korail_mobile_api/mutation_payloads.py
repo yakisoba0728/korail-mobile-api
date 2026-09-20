@@ -1237,7 +1237,10 @@ def build_card_payment_form(
         )
     # The card number must be all digits (a fake test PAN is still digits); the
     # decline happens server-side at authorization.
-    if _DIGITS_RE.fullmatch(card.card_number) is None:
+    if (
+        not isinstance(card.card_number, str)
+        or _DIGITS_RE.fullmatch(card.card_number) is None
+    ):
         raise KorailProtocolError("KORAIL payment card number must be digits")
     form = _common_fields(config)
     form.update(
@@ -1330,6 +1333,13 @@ def build_refund_form(
         ("return_password", ticket.return_password),
     ):
         _required_mutation_text(value, field=f"PaidTicket.{name}", context="refund")
+    # Not coerced with bool(): the wire flag is "Y"/"N", and a caller who passes
+    # the string "N" expecting it to read as false would otherwise get
+    # bool("N") is True -- "Y" on the wire, the opposite of what was asked, on
+    # the flag that decides whether mileage is settled against this refund.
+    # build_standby_wait_form refuses the same shape for the same reason.
+    if not isinstance(settle_mileage, bool):
+        raise KorailProtocolError("settle_mileage must be a bool")
     form = _common_fields(config)
     form.update(
         {
