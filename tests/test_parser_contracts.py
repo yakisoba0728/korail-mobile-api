@@ -50,6 +50,10 @@ _KOREA_LAT = (33.0, 39.0)
 
 _DATE_KEY = re.compile(r"(dt|date|ymd)$", re.IGNORECASE)
 _TIME_KEY = re.compile(r"(tm|time|hm)$", re.IGNORECASE)
+_MONEY_KEY = re.compile(r"(amt|fare|price|pay|cash|won|chrg|cost)", re.IGNORECASE)
+
+#: 원 단위 금액의 상한. 1차 비식별화는 자릿수를 섞어 운임 81조원을 남겼습니다.
+_MONEY_CEILING = 10_000_000
 
 
 def _fixture_names() -> list[str]:
@@ -146,8 +150,8 @@ def test_wrapped_names_are_all_real_fixtures() -> None:
 # 비식별화가 다시 망가지는 것을 막는 가드.
 #
 # 1차 비식별화는 값을 같은 모양의 합성값으로 바꾸는 대신 자릿수와 음절을 뒤섞어
-# 한국 밖의 좌표, 있을 수 없는 날짜, 열네 음절짜리 한글 뭉치를 남겼습니다.
-# 아래 셋은 그때 실제로 새어 나온 것들이고, 다음에 픽스처를 다시 뜰 때
+# 한국 밖의 좌표, 있을 수 없는 날짜, 조 단위 운임, 열네 음절짜리 한글 뭉치를
+# 남겼습니다. 아래 넷은 그때 실제로 새어 나온 것들이고, 다음에 픽스처를 다시 뜰 때
 # 같은 사고가 커밋되지 않게 막습니다.
 # ---------------------------------------------------------------------------
 
@@ -201,3 +205,12 @@ def test_every_date_and_time_field_is_a_real_date_and_time(name: str) -> None:
             hour, minute, second = int(value[:2]), int(value[2:4]), int(value[4:])
             # KORAIL 은 자정을 넘긴 운행을 24시 이후로 적습니다.
             assert hour <= 29 and minute < 60 and second < 60, f"{name}.json {path}"
+
+
+@pytest.mark.parametrize("name", _fixture_names())
+def test_no_amount_is_larger_than_a_train_fare_can_be(name: str) -> None:
+    """운임은 원 단위로 다섯 자리입니다 — 열네 자리는 자릿수가 섞인 것입니다."""
+    raw = _raw(name)
+    for path, key, value in _strings(raw):
+        if _MONEY_KEY.search(key) and re.fullmatch(r"-?\d+", value):
+            assert abs(int(value)) < _MONEY_CEILING, f"{name}.json {path} = {value}"
