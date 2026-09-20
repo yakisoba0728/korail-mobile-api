@@ -63,6 +63,13 @@ class KorailTransportError(KorailApiError):
 class KorailProtocolError(KorailApiError):
     """응답이 JSON 이 아니거나 봉투 필드(``h_msg_cd``/``h_msg_txt``/``strResult``)가
     빠졌거나 타입이 다른 경우. 재시도해도 같은 응답이 옵니다.
+
+    **전송 전 로컬 검증에도 씁니다.** 요청을 만들 수 없는 입력 — 등록되지 않은
+    라우트, 빌더가 만들 수 없는 폼 모양, 빈 대기열 키 — 은 서버에 닿기 전에 이
+    예외로 거절됩니다. 그쪽도 "재시도해도 같다"는 성질은 같고, 무엇보다 이
+    패키지의 실패는 전부 :class:`KorailApiError` 아래에 있어야 합니다. 맨
+    ``ValueError`` 를 올리면 ``except KorailApiError`` 로 받는 호출자를 그냥
+    통과합니다.
     """
 
 
