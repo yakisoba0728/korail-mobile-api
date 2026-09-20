@@ -10,7 +10,8 @@ surface, parser regressions, the redaction sweep, ``verify_distribution.py``'s o
 behaviour, and the docs index."
 
 이 파일은 그 목록 가운데 **라이브러리가 스스로 확인할 수 있는 것**을 덮습니다.
-파서 회귀는 골든 픽스처가 있어야 하므로 여기 없습니다.
+파서 회귀는 골든 픽스처가 있어야 해서 마지막까지 비어 있었고, 이제
+``tests/test_parser_contracts.py`` 가 덮습니다.
 
 **스위트를 되살리는 것이 아닙니다.** 33,071줄이 지워진 이유는 부피였고, 그 판단을
 되돌리지 않습니다. 여기 있는 것은 전부 introspection 이라 픽스처가 없고 네트워크를
