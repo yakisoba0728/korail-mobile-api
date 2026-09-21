@@ -2102,8 +2102,9 @@ def _primitive_json_integer(
     # zero-padded ASCII-decimal strings for at least custAgeFrom/custAgeTo/
     # psgPrnbFrom/psgPrnbTo ("0000", "0999", ...), not bare JSON integers --
     # live-confirmed 2026-09-21, every commuter-info call with a travel-pass
-    # commuter_kind_code crashed here before this fix. Same Gson-coercion
-    # class of field as _required_integer; mirrors its acceptance rule.
+    # commuter_kind_code crashed here before this fix. Psg.java is a kotlinx
+    # @Serializable, not Gson, but the number-vs-string tolerance is the same
+    # class of problem _required_integer handles; mirrors its acceptance rule.
     value = data.get(key)
     if value is None:
         return 0

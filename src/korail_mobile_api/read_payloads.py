@@ -1191,14 +1191,25 @@ def _wire_component(value: str, name: str) -> str:
 
 @dataclass(frozen=True)
 class PriceFareLeg:
+    """운임 계산 구간 하나 (``PrcFareInItem.java``).
+
+    ``goods_no`` (``gdNo``) 는 **선택입니다.** 일반 열차의 운임 조회에서 앱은
+    이 값을 보내지 않습니다 — ``TrainOpInfoViewModel.java:794`` 의 세 생성자
+    호출이 모두 7번째 인자에 리터럴 ``(String) null`` 과 기본값 마스크 ``64``
+    를 넘기고, DTO 쪽도 ``PrcFareInItem.java:85`` 에서
+    ``this.gdNo = (i & 64) == 0 ? <기본값> : str7`` 로 옵셔널 선언입니다.
+    ``None`` 이면 ``gdNo`` 열 자체를 폼에서 뺍니다(앱과 같은 모양).
+    실서버는 값을 넣든 빼든 같은 응답을 돌려줍니다(2026-09-21 확인).
+    """
+
     departure_station_code: str = field(repr=False)
     arrival_station_code: str = field(repr=False)
     run_date: str = field(repr=False)
     train_no: str = field(repr=False)
-    goods_no: str = field(repr=False)
     requested_seat_attribute_code: str = field(repr=False)
     train_group_code: str = field(repr=False)
     standing_train_classification_code: str = field(repr=False)
+    goods_no: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         _validate_price_fare_leg(self)
@@ -1210,7 +1221,6 @@ def _validate_price_fare_leg(leg: PriceFareLeg) -> None:
         (leg.arrival_station_code, "arrival_station_code"),
         (leg.run_date, "run_date"),
         (leg.train_no, "train_no"),
-        (leg.goods_no, "goods_no"),
         (leg.requested_seat_attribute_code, "requested_seat_attribute_code"),
         (leg.train_group_code, "train_group_code"),
         (
@@ -1219,6 +1229,8 @@ def _validate_price_fare_leg(leg: PriceFareLeg) -> None:
         ),
     ):
         _wire_component(value, name)
+    if leg.goods_no is not None:
+        _wire_component(leg.goods_no, "goods_no")
 
 
 @dataclass(frozen=True)
@@ -1254,16 +1266,28 @@ def build_price_fare_quote_form(
     if not isinstance(request, PriceFareQuoteRequest):
         raise TypeError("request must be a PriceFareQuoteRequest")
     _validate_price_fare_quote_request(request)
-    columns = (
+    columns = [
         ("dptRsStnCd", "departure_station_code"),
         ("arvRsStnCd", "arrival_station_code"),
         ("runDt", "run_date"),
         ("trnNo", "train_no"),
-        ("gdNo", "goods_no"),
         ("rqSeatAttCd", "requested_seat_attribute_code"),
         ("trnGpCd", "train_group_code"),
         ("stlbTrnClsfCd", "standing_train_classification_code"),
-    )
+    ]
+    # gdNo is sent only when the caller actually has a goods number. The app's
+    # ordinary fare check omits it (TrainOpInfoViewModel.java:794 passes a
+    # literal null plus the default mask). A mix of set and unset across legs
+    # has no observed wire shape -- the columns are comma-joined positionally,
+    # so there is nothing to put in an absent leg's slot -- and this library
+    # does not invent one.
+    supplied = [leg.goods_no is not None for leg in request.legs]
+    if any(supplied):
+        if not all(supplied):
+            raise ValueError(
+                "goods_no must be set on every leg or on none of them"
+            )
+        columns.insert(4, ("gdNo", "goods_no"))
     return (
         ("txtMenuId", request.menu_id),
         ("chtnDvCd", str(len(request.legs))),

@@ -872,8 +872,12 @@ def _journey_fields(train: TrainSummary | TrainScheduleItem) -> dict[str, str]:
     """구간 하나가 싣는 7.0.6 TicketReservationInJrny 값들을 검사합니다.
 
     직통·환승 구간(:class:`TrainSummary`)과 병합 여정(:class:`TrainScheduleItem`)이
-    같은 열두 값을 씁니다. 병합 루프가 ``TrainInfo`` 마다 읽는 게터도 이 열둘입니다
-    (``smali/…/DirectInquiryActivity.smali:5730-5880``).
+    같은 열두 값을 씁니다. 7.0.6 기준 전선 이름과 타입은
+    ``TicketReservationInJrny.java:69`` 의 ``@SerialName`` 목록이며
+    (``txtTrnNo``·``txtTrnClsfCd``·``txtTrnGpCd``·``txtRunDt``·``txtDptDt``·
+    ``txtDptTm``·``txtDptRsStnCd``·``txtDptStnConsOrdr``·``txtDptStnRunOrdr``·
+    ``txtArvRsStnCd``·``txtArvStnConsOrdr``·``txtArvStnRunOrdr``), 열둘 다
+    ``String`` 입니다 — 숫자 제약은 어디에도 없습니다.
     """
     return {
         "train_no": _required_digits(train.train_no, field="train_no"),
@@ -1326,10 +1330,12 @@ def build_card_payment_form(
 def _refund_echo_field(value: object, *, field: str) -> str:
     """되울리는 환불 플래그 하나를 그대로 넘깁니다. **비어 있어도 거부하지 않습니다.**
 
-    이 필드는 7.0.6 의 두 실호출부(``MyTicketDetailViewModel.java:1521``,
-    ``FTicketDetailViewModel.java:634``) 모두 서버 응답
-    (``ticketDetailOut.getPbpAcepTgtFlg()``)을 조건 없이 그대로 되울리는
-    자리입니다. 하지만 응답 쪽 DTO(``TicketDetailOut.java:167``)의 이 필드는
+    이 필드를 서버 응답에서 되울리는 실호출부는
+    ``MyTicketDetailViewModel.java:1521`` 하나이고, 거기서
+    ``ticketDetailOut.getPbpAcepTgtFlg()`` 를 조건 없이 그대로 넘깁니다
+    (외국인 승차권 쪽 ``FTicketDetailViewModel.java:634`` 은 이 자리에
+    AlienGuard 리터럴 상수를 넣습니다 — 에코가 아닙니다). 그리고 응답 쪽
+    DTO(``TicketDetailOut.java:167``)의 이 필드는
     **옵셔널**입니다 — kotlinx 역직렬화 비트마스크가 서버가 이 키를 아예
     안 보낸 경우를 대비해 조건부 기본값(디컴파일에서 빈 문자열로 보이는
     AlienGuard 상수)으로 떨어지도록 생성자를 짜 놨습니다. 즉 실앱도 이 값이
@@ -1376,9 +1382,11 @@ def build_refund_form(
         ``False``(``"N"``).
     ``pbp_acceptance_target_flag``
         ``pbpAcepTgtFlg``. **항상 그대로 에코합니다 — 값이 없어도 거부하지
-        않습니다.** 7.0.6 의 두 실호출부(``MyTicketDetailViewModel.java:1521``,
-        ``FTicketDetailViewModel.java:634``)는 예외 없이
-        ``ticketDetailOut.getPbpAcepTgtFlg()`` 를 그대로 되울립니다. DTO
+        않습니다.** 7.0.6 에서 이 값을 서버 응답에서 되울리는 곳은
+        ``MyTicketDetailViewModel.java:1521`` 하나로, 조건 없이
+        ``ticketDetailOut.getPbpAcepTgtFlg()`` 를 넘깁니다(외국인 승차권
+        경로 ``FTicketDetailViewModel.java:634`` 은 에코가 아니라 리터럴
+        상수를 넣습니다). DTO
         (``RefundTicketIn.java:111``)는 이 필드를 non-null 로 강제하지만,
         그건 Kotlin 타입 수준의 제약일 뿐입니다 — 응답 쪽 DTO
         (``TicketDetailOut.java:167``)에서 이 필드는 옵셔널이라 서버가 키를
