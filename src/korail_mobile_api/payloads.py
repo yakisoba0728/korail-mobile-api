@@ -299,8 +299,11 @@ def build_train_search_form(
     않은 기본 쿼리에서는 움직이는 필드가 ``radJobId`` 하나뿐이며
     :data:`~korail_mobile_api.KORAIL_DIRECT_ITINERARY_CODE` 에서
     :data:`~korail_mobile_api.KORAIL_TRANSFER_ITINERARY_CODE` 로 바뀝니다. 앱의
-    환승 재조회도 그게 전부입니다(``DirectInquiryActivity.java:284-296``,
-    ``smali/…/DirectInquiryActivity.smali:1677-1689``).
+    환승 재조회도 그게 전부입니다 — 7.0.6
+    ``TrainScheduleViewModel.buildTrainScheduleIn()`` 의 바로 그 자리
+    (``TrainScheduleViewModel.java:3136`` 의 ``isTransfer()`` 삼항연산이
+    ``:3212`` 에서 ``TrainScheduleIn`` 의 ``radJobId`` 인자로 들어감)이며,
+    환승역 필터가 같이 없으면 이 필드 말고는 바뀌는 게 없습니다.
 
     환승역·후속 열차군을 명시하면 7.0.6 ``TrainScheduleIn`` 목록 계약대로
     ``chtnCnt``/``chtnRsStnCdN``/``trnGpCnt``/``trnGpCd1`` 을 추가합니다.

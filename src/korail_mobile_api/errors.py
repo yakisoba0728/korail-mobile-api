@@ -241,8 +241,16 @@ class KorailNoResultsError(KorailAppError):
 class KorailNoDirectTrainError(KorailNoResultsError):
     """직통 열차 없음, 환승으로는 가능. ``WRD000061``.
 
-    앱은 ``DirectInquiryActivity.java:614-633`` 에서 환승 대화상자를 띄우고
-    ``:284-296`` 에서 같은 질의를 ``TRANSFER_SQ_NO`` 로 다시 보냅니다.
+    7.0.6 확인: ``TrainScheduleViewModel`` 이 ``responseTrainSchedule()`` 에서
+    ``h_msg_cd`` 를 ``WRD000061`` 과 비교해(smali:35513-35521) 확인창을 띄우고
+    (:35550-35566, ``R.string.hm_searchtrain_loading_popup2_body``), 확인을
+    누르면 ``changeFilterTransfer()``(java:3216-3219) →
+    ``updateTrainScheduleFilterData()``(java:11051-11079, 재질의는 :11077)
+    를 거쳐 같은 질의를 다시 보냅니다. 이때 바뀌는 전선 필드는
+    ``radJobId``(``buildTrainScheduleIn()`` java:3136,3212, DTO 선언은
+    ``TrainScheduleIn.java:95``)이지, 예전에 적혀 있던 ``TRANSFER_SQ_NO``
+    가 아닙니다 — 그건 ``K4/d.java`` 의 enum 상수 *이름* 이지 전선 키가
+    아니었습니다.
     """
 
 
@@ -415,7 +423,10 @@ NO_RESULT_CODES = frozenset({
     "ERR000100", "WRT800083", "WRG500116",
 })
 
-#: 직통 없음 → 환승 검색. APK 확인(``DirectInquiryActivity.java:620``).
+#: 직통 없음 → 환승 검색. 7.0.6 확인
+#: (``TrainScheduleViewModel.smali:35513-35521``, ``h_msg_cd`` 를 이 코드와
+#: 비교; ``error_json.json:4051`` 의 "직통열차는 없지만, 환승으로 조회
+#: 가능합니다" 와 대응).
 NO_DIRECT_TRAIN_CODE = "WRD000061"
 
 #: 재고 소진. APK 확인. srtgo 의 ``IRT010110`` 은 전엔 0건이라 제외했으나

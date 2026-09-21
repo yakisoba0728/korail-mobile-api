@@ -1399,9 +1399,12 @@ class KorailClient:
         """직통을 찾고, 하나도 없을 때만 환승으로 한 번 더 찾습니다.
 
         지어낸 편의기능이 아니라 앱의 흐름 그대로입니다. 직통 조회가 아무것도 못 찾으면
-        서버가 ``WRD000061``("직통열차가 없습니다")로 답하는데,
-        ``DirectInquiryActivity.java:615-624`` 는 오직 그 코드만 잡아 확인 창을 띄우고, 확인을
-        누르면 ``:284-296`` 이 ``radJobId="2"`` 로 다시 질의합니다. 이 클라이언트도
+        서버가 ``WRD000061``("직통열차가 없습니다")로 답하는데, 7.0.6
+        ``TrainScheduleViewModel`` 은 ``responseTrainSchedule()`` 에서 오직 그
+        코드만 잡아 확인 창을 띄우고(smali:35513-35566), 확인을 누르면
+        ``changeFilterTransfer()``/``updateTrainScheduleFilterData()``
+        (java:3216-3219, :11051-11079)를 거쳐 ``buildTrainScheduleIn()``
+        (java:3136, :3212)이 ``radJobId="2"`` 로 다시 질의합니다. 이 클라이언트도
         ``WRD000061`` 을 :class:`~korail_mobile_api.KorailNoDirectTrainError` 로 분류하므로
         되돌리는 조건은 그 예외 하나뿐이고 다른 실패는 그대로 올라갑니다.
 
@@ -1816,7 +1819,10 @@ class KorailClient:
         에 적혀 있습니다.
 
         입석 홀드를 대신 취소하지는 않습니다. 앱은 다시 예약하기 전에 그것을
-        취소하지만(``DirectInquiryActivity.java:227-250``), 여기서는 "cancel" 범주
+        취소하지만(7.0.6 ``ReservationMergeViewModel.java:1352``
+        ``requestReservationCancel``, :1556 ``requestReservationCancelChk`` —
+        ``analysis/reports/7.0.6-compare/booking-ticket-payment.md`` 의 기존
+        분석과도 일치), 여기서는 "cancel" 범주
         아래의 :meth:`cancel_unpaid_hold` 로 호출자가 직접 합니다 — "reserve" 범주
         호출로 살아 있는 PNR 을 조용히 취소하는 것은 이 게이트들이 막으려는 범주
         혼동 그 자체입니다.

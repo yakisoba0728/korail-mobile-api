@@ -108,12 +108,20 @@ class KorailReservationJobType(StrEnum):
     ``CertificationService.java:52-54``)로 갑니다.
 
     * :attr:`IMMEDIATE`(``"1101"``) — 기본(``C5/a.java:59``, ``:118``).
-    * :attr:`STANDBY`(``"1102"``) — 예약대기
-      (``DirectInquiryActivity.java:434``).
+    * :attr:`STANDBY`(``"1102"``) — 예약대기. 7.0.6 은 이 상수 자체를
+      ``ReservationJobId.WAIT``(``ReservationJobId.java:21``,
+      ``ReservationJobId.smali:57``)라는 별도 enum 으로 다시 짰습니다 —
+      순서(DEFAULT/WAIT/SEAT/MERGE, +새 5번째 ``GROUP_TICKET_SELECT``)는
+      구 4종과 1:1로 대응하지만, 리터럴 ``"1102"`` 자체는 AlienGuard 로
+      가려져 있어 값 일치는 재확인하지 못했습니다.
     * :attr:`SEAT_DESIGNATED`(``"1103"``) — 좌석 선택 결과
       (``C5/a.java:143-146``).
-    * :attr:`MERGE_STANDING`(``"1202"``) — 입석+좌석
-      (``a5/u.java:394-397``, ``DirectInquiryActivity.java:448-451``).
+    * :attr:`MERGE_STANDING`(``"1202"``) — 입석+좌석. 7.0.6 대응은
+      ``ReservationJobId.MERGE``(``ReservationJobId.java:23``)와
+      ``TicketReservationType.MERGE``(``TicketReservationType.java:42``) —
+      호출부는 이 값으로 홀드 응답의 ``h_jrny_tp_cd`` 를 확인해 병합 화면으로
+      보낼지 정합니다(``TrainScheduleViewModel.java:6774`` 등). ``a5/u.java``
+      는 7.0.6 디컴파일 어디에도 없습니다 — 6.5.0 잔재입니다.
     """
 
     IMMEDIATE = "1101"
@@ -172,12 +180,21 @@ KORAIL_TRANSFER_JOURNEY_TYPE_CODE = "14"
 #   STANDING_SEAT_1 "병합 선행" "21"
 #   STANDING_SEAT_2 "병합 후행" "22"
 #
-# DirectInquiryActivity.java:576-601 이 만들며:
-#   - txtJrnyTpCd{i}: 루프 인덱스 → 1구간="21", 2구간="22"
-#   - txtStndFlg: "Y" 고정(:5887-5891)
-#   - 2구간 객실등급 = 1구간 복사(:5919-5983)
-#   - arvTm 호출 없음 → arvTm_2 키 없음
-# txtJrnyCnt="2", txtJobId="1101", txtJrnySqno="001"/"002".
+# DirectInquiryActivity.java:576-601 (클라이언트가 두 여정을 루프로 만들고
+# txtJrnyCnt="2"/txtJobId="1101" 로 재제출한다는 옛 서술)는 6.5.0 잔재입니다
+# — 그 클래스 자체가 7.0.6 디컴파일 어디에도 없습니다. 7.0.6 정적분석
+# (ReservationMergeViewModel.smali:7223-7821, ticketReservation())으로 다시
+# 확인한 결과, 최종 재제출은 원래 입석 홀드 요청을 TicketReservationIn.copy()
+# 로 복제해 txtStndFlg 와 중간역 3개 필드만 바꾸는 것으로 보입니다 — 즉
+# jrnyList·txtJrnyCnt·txtJobId 는 원본(입석 홀드) 값 그대로 유지되고,
+# 클라이언트가 두 여정을 직접 조립하지 않을 가능성이 있습니다(jadx 디컴파일
+# 실패로 스몰리 재구성에 의존한 결과라 완전히 확정하지는 못했습니다). 다만
+# 아래 "21"/"22" 코드 자체와 이 값으로 두 여정을 구성해 보내는 방식은
+# 2026-09-21 실서버로 직접 확인됐습니다 — 홀드 응답의 h_jrny_tp_cd 가
+# 정확히 "21"/"22" 로 갈려 돌아왔고 입석/좌석 두 구간이 문서대로 분리됐습니다.
+# 그러니 이 라이브러리의 두 여정 조립 방식이 현재 APK 의 클라이언트 구성과
+# 토씨까지 같다고 단정하진 않되, 서버가 실제로 받아들이고 기대한 대로
+# 응답한다는 것은 지어낸 게 아니라 확인된 사실입니다.
 KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE = "21"
 KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE = "22"
 
@@ -223,7 +240,14 @@ class KorailNetFunnelAction(StrEnum):
     PEAK_SEASON_INQUIRY = "act_8_2"
     #: 상품 조회(``b5/c.java:439``).
     PRODUCT = "act_6"
-    #: 예약(``DirectInquiryActivity.java:442``, :469, :499).
+    #: 예약. 7.0.6 은 이 액션을 세 갈래 호출부에서 씁니다 — 셋 다
+    #: ``netFunnelTicketReservation`` 이라는 같은 이름의 메서드입니다
+    #: (``TrainSeatMapViewModel.java:2719``, ``ReservationWaitViewModel.java:578``,
+    #: ``HomeViewModel.java:6231``) — 옛 세 줄 인용(:442/:469/:499)과 개수가
+    #: 맞습니다. 다만 ``"act_14"`` 를 포함한 모든 ``act_*`` 리터럴은 7.0.6
+    #: 전체에서 문자열 그대로는 안 보입니다(AlienGuard 런타임 복호화라
+    #: 정적 검색 불가) — 위치는 확인했지만 리터럴 값 자체는 재확인하지
+    #: 못했습니다.
     RESERVE = "act_14"
     #: 결제(``B6/AbstractC1269e.java:1046``, ``B6/C1270f.java:232``).
     PAY = "act_18"

@@ -553,9 +553,15 @@ class TrainSummary:
     #: ``RsvInquiryRequest.java:164-172`` 는 다음 페이지의 ``txtGoHour`` 를
     #: 마지막 행이 ``"1"`` 이면 그 행에서, 아니면 그 앞 행에서 가져옵니다.
     change_train_sequence: str | None = None
-    #: ``h_chg_trn_dv_cd`` — 행의 환승 구분.
-    #: ``DirectInquiryActivity.java:194`` 는 널이면 직통으로 채운 뒤
-    #: ``chtnDvCd`` 로 넘깁니다. 직통 검색에서는 ``None`` 입니다.
+    #: ``h_chg_trn_dv_cd`` — 행의 환승 구분. 직통 검색에서는 ``None`` 입니다.
+    #: 이 필드를 앱이 널이면 직통으로 채워 되쓴다던 옛 서술
+    #: (``DirectInquiryActivity.java:194``)은 6.5.0 잔재입니다 — 그 클래스는
+    #: 7.0.6 에 없고, ``h_chg_trn_dv_cd``/``getHChgTrnDvCd`` 는 7.0.6 전체
+    #: 소스·스몰리를 뒤져도 DTO 선언 밖에서 읽히는 자리가 없습니다(전수
+    #: grep 확인). 7.0.6 은 대신 서버가 준 ``h_trn_seq`` 로 행을 묶는 것으로
+    #: 보입니다 — 자세한 근거와 한계는
+    #: :func:`~korail_mobile_api.models.pair_transfer_itineraries` 의
+    #: docstring을 보십시오.
     change_train_division_code: str | None = None
     #: ``h_yms_apl_flg`` — 이 행이 병합(입석+좌석) 대상인지를 정하는 유일한
     #: 입력. ``S4/J.java:61-63`` 의 ``isMixedSeat(객실등급, 플래그)`` 는 행에서
@@ -877,22 +883,31 @@ class TransferItinerary:
 def pair_transfer_itineraries(
     trains: list[TrainSummary],
 ) -> list[TransferItinerary]:
-    """평평한 환승 결과 목록을 앱과 같은 방식으로 여정 단위로 묶습니다.
+    """평평한 환승 결과 목록을 여정 단위로 묶습니다.
 
-    ``a5/k.java:156-170`` 그대로입니다. 짝이 안 맞고 남는 마지막 행 처리까지
-    같습니다 — 앱은 ``i % 2 == 1`` 일 때만 목록에 넣으므로 홀로 남은 구간은
+    ``i % 2 == 1`` 일 때만 목록에 넣습니다 — 짝이 안 맞고 남는 마지막 행은
     예약 가능한 반쪽으로 보여 주지 않고 버립니다.
 
     서버가 ``h_chg_trn_seq`` 를 채워 보냈는데 그 값이 ``"1"``, ``"2"`` 순서가
     아니면 :class:`~korail_mobile_api.errors.KorailProtocolError` 를 올립니다.
-    이 검사는 앱에는 없는 이 패키지의 것입니다 — 앱은 눈감고 짝짓습니다.
     어긋난 목록을 그냥 두면 한 여정이 아닌 두 행이
     :meth:`~korail_mobile_api.client.KorailClient.reserve_transfer` 로
     넘어갑니다.
 
-    표시가 아예 없는 응답은 받아들입니다. 앱도 널이면 행의 위치로 채워
-    넣습니다(``DirectInquiryActivity.java:194-195``,
-    ``TransferInquiryActivity.java:44``).
+    표시가 아예 없는 응답도 받아들여 행의 위치로 짝짓습니다. 이 홀짝-위치
+    방식의 근거였던 ``DirectInquiryActivity.java:194-195``/
+    ``TransferInquiryActivity.java:44`` 는 둘 다 6.5.0 잔재입니다 — 7.0.6
+    디컴파일 어디에도 없습니다. 대체 근거를 찾다가 나온 것: 7.0.6 은
+    ``h_chg_trn_dv_cd``(:attr:`TrainSummary.change_train_division_code`)를
+    DTO 선언 밖에서 아예 읽지 않는 것으로 보이고(전수 grep 확인),
+    ``TrainScheduleViewModel`` 의 응답 처리부(jadx 디컴파일 실패, 스몰리
+    재구성)는 대신 서버가 준 ``h_trn_seq`` 로 행을 묶는 것으로 보입니다 —
+    홀짝 위치가 아니라 키 기준 그룹핑입니다. 이 재구성은 스몰리만으로 한
+    것이라 완전히 확정하지는 못했고, ``h_trn_seq`` 가 이 패키지의
+    ``h_chg_trn_seq``(:attr:`TrainSummary.change_train_sequence`)와 같은
+    필드인지도 확인하지 못했습니다. 다만 이 함수의 현재 홀짝 짝짓기 +
+    ``h_chg_trn_seq`` 검증은 2026-09-21 실서버(강릉→목포, 직통 없는 구간)로
+    직접 확인됐습니다 — 그러니 정적분석만으로 바꾸지 않았습니다.
     """
     itineraries: list[TransferItinerary] = []
     for index in range(0, len(trains) - 1, 2):

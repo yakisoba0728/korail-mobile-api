@@ -272,20 +272,25 @@ def build_merge_reservation_form(
     """병합예약의 **두 번째** 홀드 폼을 만듭니다 — 열차 하나, 여정 둘.
 
     병합은 환승이 아닙니다. 물리적으로 한 대인 열차를 중간역에서 갈라 두 구간을
-    다르게 앉히는 것이며(좌석+좌석 또는 좌석+입석), 앱은 자기만의 루프로
-    만듭니다(``DirectInquiryActivity.java:576-601``). 다섯 단계 전체 흐름은
+    다르게 앉히는 것입니다(좌석+좌석 또는 좌석+입석). 다섯 단계 전체 흐름은
     :data:`~korail_mobile_api.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` 에
-    있습니다.
+    있습니다 — 이 폼이 두 여정을 루프로 만든다는 서술의 출처였던
+    ``DirectInquiryActivity.java:576-601`` 은 6.5.0 잔재이며(그 클래스 자체가
+    7.0.6 디컴파일에 없습니다), 7.0.6 이 실제로 최종 재제출을 어떻게 만드는지
+    (정적분석으로 완전히 확정하지 못한 부분 포함)와 이 폼의 아래 세 규칙이
+    실서버로는 검증됐다는 근거는 같은 위치의 주석에 적어 뒀습니다.
 
     * ``txtJrnyTpCd{i}`` 가 루프 **인덱스**를 봅니다. 1구간은 ``"21"``(병합
       선행), 2구간은 ``"22"``(병합 후행)입니다. 환승은 두 구간이 모두 ``"14"``
-      인데 여기서는 갈립니다(``smali:5641``).
-    * ``txtStndFlg`` 는 ``isStndSeat`` 에서 유도하지 않고 ``"Y"`` 로 박습니다
-      (``smali:5887-5891``). 전환 대상이 입석 홀드라는 것이 이 흐름의
-      전제이기 때문입니다.
-    * ``txtPsrmClCd2`` 는 ``txtPsrmClCd1`` 에서 **복사**됩니다
-      (``smali:5919-5983``). 그래서 ``seat_class`` 를 구간별이 아니라 **하나**만
-      받습니다 — 앱도 두 반쪽이 서로 다른 등급인 병합 예약을 만들 수 없습니다.
+      인데 여기서는 갈립니다(``smali:5641`` — 이 스몰리 오프셋은 6.5.0
+      기준이라 7.0.6 에서 같은 줄을 가리키지는 않지만, 값 자체("14" 대
+      "21"/"22")는 이 저장소의 다른 곳(``KORAIL_DIRECT_JOURNEY_TYPE_CODE``
+      등)과 일관됩니다).
+    * ``txtStndFlg`` 를 ``"Y"`` 로 고정해 보냅니다. 전환 대상이 입석 홀드라는
+      것이 이 흐름의 전제이기 때문입니다.
+    * ``txtPsrmClCd2`` 는 ``txtPsrmClCd1`` 에서 **복사**됩니다. 그래서
+      ``seat_class`` 를 구간별이 아니라 **하나**만 받습니다 — 두 반쪽이 서로
+      다른 등급인 병합 예약은 만들 수 없습니다.
     """
     if not isinstance(standing_hold_train, TrainSummary):
         raise KorailProtocolError(
@@ -304,10 +309,8 @@ def build_merge_reservation_form(
     if len(resolved_legs) != KORAIL_MAX_JOURNEY_LEGS:
         raise KorailProtocolError(
             f"KORAIL 병합 reservation books exactly {KORAIL_MAX_JOURNEY_LEGS} "
-            f"journeys on one train, got {len(resolved_legs)}: the merge loop "
-            'writes txtJrnyCnt="2" before it starts '
-            "(DirectInquiryActivity.java:578) and the form has no journey-3 "
-            "spelling at all"
+            f"journeys on one train, got {len(resolved_legs)}: this form has "
+            "no journey-3 spelling at all (KORAIL_MAX_JOURNEY_LEGS)"
         )
     if passengers is None:
         passengers = KorailPassengerCounts()
@@ -318,10 +321,14 @@ def build_merge_reservation_form(
     cabin = _coerced_seat_class(seat_class)
     # The two halves must be the one train the standing hold was placed on.
     # The app never checks this because it cannot be otherwise -- the rows come
-    # straight back from mergeSeatsC.do, which was asked about that train
-    # (DirectInquiryActivity.java:358-360 sends its txtTrnNo1) -- but a caller
-    # assembling the call by hand can get it wrong, and a merged booking of two
-    # unrelated trains is a 환승 spelled with the wrong journey type.
+    # straight back from mergeSeatsC.do, which was asked about that train. 7.0.6:
+    # ReservationMergeViewModel.buildMergeSeatsCInput() (java:760-828, smali
+    # :773-1242) sends it as the wire field "trnNo" (MergeSeatsCIn.java:63,
+    # renamed from the old "txtTrnNo1" -- this form asks about one train, not a
+    # numbered leg) sourced from the standing hold's own echoed journey info
+    # (reservationOutJrnyInfo.getHTrnNo()) -- but a caller assembling the call
+    # by hand can get it wrong, and a merged booking of two unrelated trains is
+    # a 환승 spelled with the wrong journey type.
     hold_train_no = _required_digits(
         standing_hold_train.train_no,
         field="train_no",
@@ -337,9 +344,21 @@ def build_merge_reservation_form(
     form.update(
         {
             "txtMenuId": "11",
-            # Back to "1101". The "1202" job id belongs to the standing hold
-            # this one replaces; the merge loop re-sets it inside the loop
-            # (DirectInquiryActivity.java:583, smali:5573-5575).
+            # Back to "1101". The "1202"/MERGE job id belongs to the standing
+            # hold this one replaces. 7.0.6 static analysis of the actual
+            # resubmission (ReservationMergeViewModel.smali:7736-7772,
+            # TicketReservationIn.copy$default) suggests the app may instead
+            # KEEP the original hold's job id through to the final POST rather
+            # than reset it -- that reading is not fully confirmed (jadx
+            # decompile of this method failed, reconstructed from smali) and
+            # directly contradicts what this line has always sent. Left as
+            # "1101" because that is what this package's own live test
+            # confirmed working end to end (2026-09-21: reserve_merge on
+            # 서울->울산 train 023 returned h_jrny_tp_cd "21"/"22" as expected)
+            # -- changing a live-verified value on unconfirmed static
+            # reconstruction alone would be reckless. If a live test ever
+            # shows "1101" failing where the original hold's job id would
+            # have worked, that is the evidence to act on, not this comment.
             "txtJobId": KorailReservationJobType.IMMEDIATE.value,
             "txtGdNo": "",
             "hidFreeFlg": "N",
@@ -825,9 +844,13 @@ def _assert_leg_is_bookable(
         # precisely the rows the "11" rule rejects. The flag is the gate.
         return
     # The train list checks the availability code of the cabin the user picked,
-    # not always the general one: a5/u.java:319 reads h_gen_rsv_cd for the
-    # standard tab and h_spe_rsv_cd for the suite tab (likewise
-    # DirectInquiryActivity.java:198). Keep this package's stricter rule -- only
+    # not always the general one. 7.0.6: TrainScheduleOutTrainInfo's own
+    # generalReservationStatus()/specialReservationStatus() (java:2810, :3587)
+    # read h_gen_rsv_cd and h_spe_rsv_cd respectively, and
+    # TrainScheduleViewModel.getTrainPsrmTypeInitValue() (java:3457-3458)
+    # picks between them by which cabin's status is actually enabled (a5/u.java
+    # is 6.5.0 jetsam -- that package does not exist in the 7.0.6 decompile).
+    # Keep this package's stricter rule -- only
     # an explicit "11" counts as available -- and apply it to whichever cabin is
     # being booked. On a transfer it is applied to every leg, because a booking
     # whose second leg is sold out is not bookable either.
