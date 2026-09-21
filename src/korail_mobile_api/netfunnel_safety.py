@@ -91,9 +91,31 @@ KORAIL_NETFUNNEL_KEY_RE = re.compile(r"[A-Za-z0-9_.:@~-]{1,512}")
 #
 # `nf.letskorail.com` is a front door that load-balances entry calls.
 # The node that issues a session is the only one that can complete it.
-# Replies name the owning node in `ip`/`port` (T6/i.java:50-53), and the
-# app follows it: T6/d.java:17-19 rebuilds the URL from getHost()/getPort()
-# unless host_notmodify is set (default false: T6/h.java:43, :134-135).
+# Replies name the owning node in `ip`/`port` (T6/i.java:50-53).
+#
+# THE NATIVE SDK'S OWN DEFAULT DOES NOT FOLLOW THAT REDIRECT. Confirmed
+# directly in 7.0.6:
+#   - Property.java:23: `private boolean host_notmodify_ = true;` -- the
+#     compiled default is true.
+#   - CommandClient.makeURL() (CommandClient.java:33-38) only rebuilds the
+#     URL from the response's host/port when `!property.isHostNotmodify()`
+#     -- i.e. only once host_notmodify has been explicitly turned OFF. Left
+#     at its default (true), it falls through to `URL.make(property)` and
+#     stays on whatever host/port the Property already had.
+# No reachable 7.0.6 code path ever flips this default: the sole writer,
+# KorailTalkApplication.setNetFunnel(), only ever passes decoded Strings or
+# bare Integer literals (443, 3, 1) into Property -- no Boolean reaches
+# setHostNotmodify() there -- and the only other candidate,
+# LoadProperty.Parser(), is statically dead (LoadCheck() returns immediately
+# on an empty url_, and setUrl(...) is never called anywhere in 7.0.6). So
+# the SDK, run with its own compiled defaults, would never rebuild the URL
+# from a node reply on its own.
+#
+# THIS FILE FOLLOWS THE REDIRECT ANYWAY, deliberately, and NOT because it
+# mirrors the app's default (an earlier version of this comment claimed the
+# opposite default and was wrong -- corrected here; the functional logic
+# below was not, and is not, changed by this correction). The justification
+# is independent, from observed production behavior:
 #
 # LIVE EVIDENCE (2026-07-26): sending setComplete to the front door instead
 # of the named node failed ~50% of the time with 503:msg="Wrong Server ID".

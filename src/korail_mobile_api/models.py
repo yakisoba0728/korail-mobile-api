@@ -96,8 +96,6 @@ class AppVersionInfo:
 @dataclass(frozen=True)
 class AppDataResponse(BaseKorailResponse):
     disability_certification_msg: str | None = None
-    for_seat_intg: str | None = None
-    airport_bus_msg: str | None = None
     railplus_cardinfo: str | None = None
     version: AppVersionInfo | None = None
     notice: "NoticeResponse | None" = None
@@ -177,7 +175,9 @@ class KorailStation:
     raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
     group: str | None = None
     major: str | None = None
-    popup_type: int | None = None
+    #: 7.0.6 ``StationDataOutStnItem.java:60`` declares
+    #: ``@SerialName("popupType") String`` -- kept as a string, not coerced.
+    popup_type: str | None = None
     popup_message: str | None = field(default=None, repr=False)
     popup_link_title: str | None = None
     popup_link_url: str | None = None
@@ -190,7 +190,10 @@ class StationDataResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class StationInfoResponse(BaseKorailResponse):
-    count: int = 0
+    #: 7.0.6 ``StationInfoOut.java:47`` declares ``@SerialName("count")
+    #: String`` (same non-null String shape as ``map_version``) -- kept as a
+    #: string, not coerced to ``int``.
+    count: str = ""
     map_version: str | None = None
 
 
@@ -401,6 +404,9 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
     ("arrival_run_order", "h_arv_stn_run_ordr", "arvStnRunOrdr"),
     ("seat_map_flag", "h_rd_seat_map_flg", None),
     ("general_reservation_code", "h_gen_rsv_cd", None),
+    #: ``h_gen_rsv_flg`` -- ``TrainScheduleOutTrainInfo.java:83``. 일반실
+    #: 예약가능 플래그 원시값(코드가 아니라 플래그).
+    ("general_reservation_flag", "h_gen_rsv_flg", None),
     ("departure_construction_order", "h_dpt_stn_cons_ordr", None),
     ("arrival_construction_order", "h_arv_stn_cons_ordr", None),
     ("seat_attribute_code", "h_seat_att_cd", None),
@@ -412,14 +418,34 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
     ("special_room_class_name", "h_spe_psrm_cl_nm", None),
     ("secondary_general_reservation_code", "h_gen_rsv_cd2", None),
     ("special_reservation_code", "h_spe_rsv_cd", None),
+    #: ``h_spe_rsv_flg`` -- ``TrainScheduleOutTrainInfo.java:108`` (Java 필드명
+    #: ``hSpRsvFlg``). 특실 예약가능 플래그.
+    ("special_reservation_flag", "h_spe_rsv_flg", None),
     ("secondary_special_reservation_code", "h_spe_rsv_cd2", None),
     ("free_reservation_code", "h_free_rsv_cd", None),
+    #: ``h_free_rsv_flg`` -- ``TrainScheduleOutTrainInfo.java:75``. 자유석
+    #: 예약가능 플래그.
+    ("free_reservation_flag", "h_free_rsv_flg", None),
     ("standing_reservation_code", "h_stnd_rsv_cd", None),
+    #: ``h_stnd_rsv_flg`` -- ``TrainScheduleOutTrainInfo.java:151`` (Java
+    #: 필드명 ``h_stnd_rsv_flg`` 그대로). 입석 예약가능 플래그.
+    ("standing_reservation_flag", "h_stnd_rsv_flg", None),
+    #: ``h_rsv_psb_flg`` -- ``TrainScheduleOutTrainInfo.java:100``. 열차
+    #: 전체의 예약가능 여부를 정하는 최상위 플래그(등급별
+    #: ``*_reservation_flag`` 와 별개).
+    ("reservation_available_flag", "h_rsv_psb_flg", None),
     ("general_availability_name", "h_rsv_psb_nm", None),
     ("special_availability_name", "h_spe_rsv_psb_nm", None),
     ("wait_reservation_flag", "h_wait_rsv_flg", None),
     ("standard_remaining_seat_count", "h_std_rest_seat_cnt", None),
     ("first_class_remaining_seat_count", "h_fst_rest_seat_cnt", None),
+    #: ``h_free_rest_seat_cnt`` -- ``TrainScheduleOutTrainInfo.java:73``.
+    #: 자유석 잔여석 수 -- ``h_std_rest_seat_cnt``/``h_fst_rest_seat_cnt`` 의
+    #: 셋째 등급.
+    ("free_remaining_seat_count", "h_free_rest_seat_cnt", None),
+    #: ``h_stnd_rest_seat_cnt`` -- ``TrainScheduleOutTrainInfo.java:150``
+    #: (Java 필드명 ``h_stnd_rest_seat_cnt`` 그대로). 입석 잔여석 수.
+    ("standing_remaining_seat_count", "h_stnd_rest_seat_cnt", None),
     ("free_car_count", "h_free_sracar_cnt", None),
     ("reservation_wait_passenger_count", "h_rsv_wait_ps_cnt", None),
     ("change_train_sequence", "h_chg_trn_seq", None),
@@ -474,6 +500,9 @@ class TrainSummary:
     arrival_run_order: str | None = None
     seat_map_flag: str | None = None
     general_reservation_code: str | None = None
+    #: ``h_gen_rsv_flg`` -- ``TrainScheduleOutTrainInfo.java:83``. 일반실
+    #: 예약가능 플래그.
+    general_reservation_flag: str | None = None
     departure_construction_order: str | None = None
     arrival_construction_order: str | None = None
     seat_attribute_code: str | None = None
@@ -485,14 +514,32 @@ class TrainSummary:
     special_room_class_name: str | None = None
     secondary_general_reservation_code: str | None = None
     special_reservation_code: str | None = None
+    #: ``h_spe_rsv_flg`` -- ``TrainScheduleOutTrainInfo.java:108`` (Java
+    #: 필드명 ``hSpRsvFlg``). 특실 예약가능 플래그.
+    special_reservation_flag: str | None = None
     secondary_special_reservation_code: str | None = None
     free_reservation_code: str | None = None
+    #: ``h_free_rsv_flg`` -- ``TrainScheduleOutTrainInfo.java:75``. 자유석
+    #: 예약가능 플래그.
+    free_reservation_flag: str | None = None
     standing_reservation_code: str | None = None
+    #: ``h_stnd_rsv_flg`` -- ``TrainScheduleOutTrainInfo.java:151`` (Java
+    #: 필드명 ``h_stnd_rsv_flg`` 그대로). 입석 예약가능 플래그.
+    standing_reservation_flag: str | None = None
+    #: ``h_rsv_psb_flg`` -- ``TrainScheduleOutTrainInfo.java:100``. 열차
+    #: 전체의 예약가능 여부를 정하는 최상위 플래그.
+    reservation_available_flag: str | None = None
     general_availability_name: str | None = None
     special_availability_name: str | None = None
     wait_reservation_flag: str | None = None
     standard_remaining_seat_count: str | None = None
     first_class_remaining_seat_count: str | None = None
+    #: ``h_free_rest_seat_cnt`` -- ``TrainScheduleOutTrainInfo.java:73``.
+    #: 자유석 잔여석 수.
+    free_remaining_seat_count: str | None = None
+    #: ``h_stnd_rest_seat_cnt`` -- ``TrainScheduleOutTrainInfo.java:150``
+    #: (Java 필드명 ``h_stnd_rest_seat_cnt`` 그대로). 입석 잔여석 수.
+    standing_remaining_seat_count: str | None = None
     free_car_count: str | None = None
     reservation_wait_passenger_count: str | None = None
     total_passenger_count: int | None = None
@@ -580,6 +627,11 @@ class SeatCarListResponse(BaseKorailResponse):
     cars: tuple[SeatCar, ...] = ()
     train_class_code: str | None = None
     train_group_code: str | None = None
+    #: ``h_scar_num`` -- ``TrainResearchOut.java:27,105``, one of the DTO's
+    #: 6 own fields (``@SerialName("h_scar_num") String``, nullable). Kept
+    #: as a string like its sibling ``train_no``/``train_class_code``, not
+    #: coerced to ``int``.
+    car_count: str | None = None
 
 
 @dataclass(frozen=True)
@@ -594,6 +646,11 @@ class PhysicalSeat:
 
     ``sale_possible`` 이 ``"Y"`` 인 좌석만 앱이 누를 수 있게 합니다.
     ``direction_code`` 는 순방향/역방향, ``floor`` 는 복층 차량의 층입니다.
+
+    ``floor`` 는 항상 ``None`` 입니다 — ``TResidualSeatsResearchOutSeat`` 의
+    10개 own 필드(``TResidualSeatsResearchOutSeat.java:32-41``) 어디에도
+    ``floor`` 가 없습니다. 복층 차량 층 표시는 이 라우트로는 구조적으로
+    불가능하고, 서버가 그 정보를 다른 경로로 주는지는 확인되지 않았습니다.
     """
 
     seat_no: str = field(repr=False)
@@ -627,7 +684,10 @@ class SeatInventoryResponse(BaseKorailResponse):
     가 이 값을 요구합니다 — 없으면 호차를 직접 적어야 합니다.
     """
 
-    layout_type: int = 0
+    #: 7.0.6 ``TResidualSeatsResearchOut.java:29`` declares
+    #: ``@SerialName("layout_type") String`` -- kept as a string, not
+    #: coerced to ``int``.
+    layout_type: str = ""
     arrangement_code: str = ""
     #: 7.0.6 TResidualSeatsResearchOut DTO에는 이 두 건수 키가 없습니다.
     remaining_count: int | None = None
@@ -672,7 +732,6 @@ class TrainSearchMetadata:
     first_seat_count: str | None = None
     second_seat_count: str | None = None
     first_departure_time: str | None = None
-    merge_reservation_available_flag: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
         repr=False,

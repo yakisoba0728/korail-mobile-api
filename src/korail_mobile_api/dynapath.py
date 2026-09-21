@@ -356,18 +356,29 @@ def generate_dynapath_token(
         ("hk", str(settings.hooked).lower()),
         ("it", settings.app_start_ts),
         ("ts", str(ts)),
-        # 앱은 `rt` 를 요청 간 지연의 배열로 보내고, 쌓인 값이 없으면 필드를 아예
-        # 빼 버린다 (``B/C1229b.java:118-127`` 의 ``if (!isEmpty())``, 델타 계산은
-        # ``:76-91``, ``DynaPathMobileSDK.java:33-36`` 이 토큰 조립 직전에
-        # ``a(now)`` 로 값을 채운다). 여기서 상수 ``"0"`` 을 쓰는 것은 알려진
-        # 의도적 차이다 — 이 생성기는 요청 간 상태를 갖지 않기로 정했고
-        # (:class:`DynapathTokenSettings` 는 ``recent_request_deltas`` 를 받으면
-        # ``TypeError``), 실서버가 받아 준 토큰이 이 값으로 고정돼 있다
-        # (그것을 고정하던 테스트도 스위트와 함께 삭제됐다).
-        # ``rt`` 는 키 유도에 쓰이지 않는다 — ``dyn_key`` 는 ``sv+rand+ts`` 다.
-        # 2026-07-13 fixed-rt 설계 명세는 삭제됐고 git 이력에만 있다.
-        # 감사 5회에서 모두 비버그로 판정됐다.
-        ("rt", "0"),
+        # `rt` is intentionally OMITTED here, not sent as a fixed "0".
+        #
+        # 7.0.6 (analysis/jadx/sources/a/b.java:58-107): the app keeps a
+        # deque of recent request-timing deltas (`a(long j)`, :58-73) and the
+        # encoder (:99-107, :122-134) emits ONE `rt=<value>` pair PER delta
+        # in that deque -- 0 deltas means the key is skipped entirely, N
+        # deltas means N separate `rt=` pairs. It is never a single fixed
+        # scalar and never a bracketed array.
+        #
+        # This generator is deliberately stateless -- it tracks no
+        # inter-request delta history (:class:`DynapathTokenSettings` has no
+        # `recent_request_deltas` field; passing one raises ``TypeError``) --
+        # so its delta collection is, correctly, always empty. The DTO-shape
+        # match for "always empty" is the SDK's own empty-collection
+        # behavior: omit the key. A fixed `("rt", "0")` is a shape no real
+        # device state ever produces (0 or 2+ pairs is normal; a lone
+        # `rt=0` is not) and is a distinguishing signal a bot detector can
+        # key on. Do not reintroduce it. Implementing real delta-tracking to
+        # emit genuine `rt` pairs is a separate, larger design change, not
+        # this fix.
+        #
+        # `rt` is not used in key derivation either way -- `dyn_key` is
+        # `sv+rand+ts`.
         ("os", settings.os_version),
         ("dm", settings.device_model),
         ("st", settings.os_type),

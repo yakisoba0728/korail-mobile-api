@@ -7,9 +7,13 @@
 세 파서가 세 라우트를 맡습니다. 봉투는 정확히 ``SUCC`` 여야 하고 그 밖은
 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
 
-목록 키를 다루는 방식은 라우트마다 다릅니다. 스케줄 조회의 ``trainList`` 와
-좌석이동 목록의 ``trn_infos`` 는 없거나 ``null`` 이어도 빈 결과일 뿐이지만,
-좌석 재고의 ``seatList`` 는 필수라서 키가 없으면 오류입니다.
+목록 키를 다루는 방식은 라우트마다 다르지 않습니다. 스케줄 조회의 ``trainList``,
+좌석이동 목록의 ``trn_infos``, 좌석 재고의 ``seatList`` 모두 없거나 ``null`` 이면
+빈 결과일 뿐입니다 — ``seatList`` 도 마찬가지인 것은 ``TResidualSeatsResearchOut``
+의 컴파일된 기본 생성자가 그렇게 정의하기 때문입니다
+(``TResidualSeatsResearchOut.java:79``:
+``this.seatList = (i & 128) == 0 ? emptyList() : list;``). 키가 있는데 리스트가
+아니면 셋 다 여전히 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
 """
 from __future__ import annotations
 
@@ -26,8 +30,13 @@ from .limousine_models import (
     LimousineSeat,
     LimousineSeatInventoryResponse,
 )
-from .models import BaseKorailResponse
-from .parsers import _response_fields
+from .models import BaseKorailResponse, SeatWindow
+from .parsers import (
+    _inventory_optional_string,
+    _inventory_ratio,
+    _inventory_required_string,
+    _response_fields,
+)
 from .read_parsers import _nullable_string_fields, _optional_string, _row
 from .read_parsers import _optional_list as _nullable_list
 
@@ -141,20 +150,56 @@ def parse_limousine_seat_inventory_response(
 ) -> LimousineSeatInventoryResponse:
     """``lms.TResidualSeatsResearch.do`` 의 응답을 파싱합니다.
 
-    봉투가 정확히 ``SUCC`` 여야 합니다. 스케줄 조회와 달리 ``seatList`` 키는
-    **필수**라서 키가 없으면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 빈 리스트
-    자체는 정상이며 좌석 정보가 하나도 없다는 뜻입니다.
+    봉투가 정확히 ``SUCC`` 여야 합니다. ``seatList`` 키가 없거나 ``null`` 이면
+    빈 결과로 취급합니다 — ``TResidualSeatsResearchOut`` 의 컴파일된 기본
+    생성자가 그렇게 정의합니다(``TResidualSeatsResearchOut.java:79``). 키가
+    있는데 리스트가 아니면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+
+    같은 DTO(``research.TResidualSeatsResearch.do`` 와 공유 —
+    ``NetworkApi.java:271,741``)가 선언하는 ``layout_type``·``vrBnrUrl``·
+    ``windowList`` 도 형제 파서
+    :func:`~korail_mobile_api.parsers.parse_seat_inventory_response` 와 같은
+    규칙으로 읽습니다 — ``layout_type`` 은 필수 문자열,
+    ``vrBnrUrl`` 은 선택, ``windowList`` 는 ``seatList`` 와 같은 컴파일된
+    기본값(없으면 빈 목록, ``TResidualSeatsResearchOut.java:80``) 규칙입니다.
     """
     _require_exact_success(response)
     raw = response.raw
     seats = []
-    for value in _required_list(raw, "seatList", "limousine seat inventory"):
+    # TResidualSeatsResearchOut.java:79 -- the DTO's compiled default
+    # constructor treats an absent seatList as emptyList(), not an error:
+    # `this.seatList = (i & 128) == 0 ? emptyList() : list;`. Mirrors
+    # parsers.py::parse_seat_inventory_response's identical handling of the
+    # same DTO shape (`_inventory_required_list(raw, "seatList") if
+    # "seatList" in raw else []`). A present-but-non-list value is still an
+    # error.
+    for value in (
+        _required_list(raw, "seatList", "limousine seat inventory")
+        if "seatList" in raw
+        else []
+    ):
         row = _row(value, "limousine seat inventory seatList")
         seats.append(
             LimousineSeat(
                 **_nullable_string_fields(row, _SEAT_FIELDS, "limousine seat inventory"),
                 raw=row,
+            )
+        )
+    # Mirrors parsers.py::parse_seat_inventory_response's identical handling
+    # of the same DTO shape.
+    window_rows = (
+        _required_list(raw, "windowList", "limousine seat inventory")
+        if "windowList" in raw
+        else []
+    )
+    windows = []
+    for value in window_rows:
+        window_row = _row(value, "limousine seat inventory windowList")
+        windows.append(
+            SeatWindow(
+                start_location_ratio=_inventory_ratio(window_row, "st_loc_rt"),
+                close_location_ratio=_inventory_ratio(window_row, "cls_loc_rt"),
             )
         )
     return LimousineSeatInventoryResponse(
@@ -173,6 +218,9 @@ def parse_limousine_seat_inventory_response(
             "seat_ary_cd",
             "limousine seat inventory response",
         ),
+        layout_type=_inventory_required_string(raw, "layout_type"),
+        vr_banner_url=_inventory_optional_string(raw, "vrBnrUrl"),
+        windows=tuple(windows),
         up_down_division_code=_optional_string(
             raw,
             "up_dn_dv_cd",

@@ -4,7 +4,13 @@
 
 """앱 v6.5.0 디컴파일에서 읽은 상수 — 엔드포인트, 기기 기본값, 코드값.
 
-각 값 옆에 APK 근거가 ``파일:줄`` 로 붙어 있습니다.
+각 값 옆에 근거가 ``파일:줄`` 로 붙어 있습니다 — 대부분 APK 정적 분석입니다.
+예외 셋: ``KORAIL_DEFAULT_DEVICE_WIDTH``/``KORAIL_DEFAULT_DEVICE_HEIGHT``/
+``KORAIL_DEFAULT_ANDROID_SDK_INT`` 는 APK 정적 분석으로 값 자체를 얻을 수
+없습니다(요청 시점에 ``ContextExKt.getWindowSize(...)``/``Build.VERSION.SDK_INT``
+를 실기기에서 읽습니다 — 아래 각 상수의 주석 참고). 이 셋은 대신 이 저장소에
+있는 유일한 7.0.6 실기기 샘플(``analysis/device-pull/``)에 맞췄습니다 — 그것도
+근거이지 추측이 아니지만, "APK 근거" 는 아닙니다.
 닫힌 코드 집합은 :class:`StrEnum` 으로 둡니다.
 """
 
@@ -25,11 +31,24 @@ KORAIL_DEFAULT_DEVICE_NAME = "Android"
 #: ``Build.VERSION.SDK_INT`` 와 다릅니다 — SDK 정수는 아래
 #: :data:`KORAIL_DEFAULT_ANDROID_SDK_INT`.
 KORAIL_DEFAULT_ANDROID_OS_RELEASE = "15"
-KORAIL_DEFAULT_DEVICE_WIDTH = 1080
-KORAIL_DEFAULT_DEVICE_HEIGHT = 2400
+#: 실기기 근거:
+#: ``analysis/device-pull/2026-09-14_korail-7.0.6/device/summary.tsv:10``
+#: (``wm_size Physical size: 1440x3120``). APK 정적 분석은 이 값을 만들지
+#: 않습니다 — ``NetworkService.java:2002,2014`` 가 요청 시점에
+#: ``ContextExKt.getWindowSize(...)`` 를 실기기에서 읽습니다. 이 저장소에
+#: 있는 유일한 7.0.6 기기 샘플에 맞춘 값이며,
+#: :func:`~korail_mobile_api.live.build_config_from_env` 의 같은 이름
+#: 환경변수 폴백과 일부러 같은 값으로 둡니다 — 둘 다 "더 나은 값이 없어서"
+#: 존재하는 기본값이고, 둘이 달라야 할 근거가 없습니다.
+KORAIL_DEFAULT_DEVICE_WIDTH = 1440
+KORAIL_DEFAULT_DEVICE_HEIGHT = 3120
 #: ``Build.VERSION.SDK_INT``. ``common.code.do`` 의 ``@Field("OSVersion")``
-#: (``CommonService.java:32``). 35 = 안드로이드 15 SDK 레벨.
-KORAIL_DEFAULT_ANDROID_SDK_INT = 35
+#: (``CommonService.java:32``) 는 필드명 근거일 뿐입니다. 37 자체의 근거는
+#: 실기기 샘플입니다: ``summary.tsv:5``(``sdk 37``),
+#: ``getprop.txt:1055``(``[ro.build.version.sdk]: [37]``) 로 교차
+#: 확인됩니다. 이 기기의 ``release`` 도 17 입니다(``summary.tsv:4``) —
+#: 같은 기기 샘플이 안드로이드 릴리스와 SDK 정수를 동시에 보고합니다.
+KORAIL_DEFAULT_ANDROID_SDK_INT = 37
 
 
 def build_dalvik_user_agent(*, os_release: str, device_model: str) -> str:

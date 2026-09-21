@@ -199,10 +199,16 @@ class KorailPassengerCounts:
     ``txtTotPsgCnt`` 에 **들어갑니다**. 앱의 합계도 여덟 계수기를 그냥 더한
     것이고(``m5/c.java:330``), 그 값이 그대로 ``txtTotPsgCnt`` 로 나갑니다.
 
-    할인이 붙은 줄에 카드 필드가 따라붙지 않습니다. ``OPsg`` 가 선언하는 카드
-    필드는 ``txtCardNo_`` 하나뿐이고(``OPsg.java:7``) 그것을 쓰는 곳은 별개인
-    N카드 예약 요청뿐입니다(``w4/a.java:101``). korail2 와 srtgo 가 보내는
-    ``txtCardCode_``/``txtCardPw_`` 는 디컴파일된 앱 어디에도 없습니다.
+    할인이 붙은 줄에 카드 필드가 따라붙지 않습니다. 7.0.6 의 승객 행 DTO
+    ``TicketReservationInPassengerInfo`` 는 정확히 네 필드를 선언하고
+    (``txtCompaCnt``, ``txtPsgTpCd``, ``txtDiscKndCd``, ``txtCardNo_``
+    — ``TicketReservationInPassengerInfo.java:105``), 카드 필드는
+    ``txtCardNo_`` 하나뿐이며 그 밑줄이 이미 ``@SerialName`` 안에 있습니다.
+    이 예약 폼(``_add_passenger_rows``)은 그 필드를 만들지 않고, 별개인
+    N카드 예약 요청(``build_discount_card_reservation_form``)만
+    ``txtCardNo_1`` 을 만듭니다(``mutation_payloads.py:1631``) — W3 finding
+    11 의 접미사 없는 flattening 규칙과 같은 부류입니다. korail2 와 srtgo 가
+    보내는 ``txtCardCode_``/``txtCardPw_`` 는 디컴파일된 앱 어디에도 없습니다.
 
     앱에 있는 규칙 둘은 여기서 강제하지 않습니다 — 동반유아에게는 함께 앉을
     어른/청소년/경로/장애가 하나 이상 필요하고(``m5/c.java:452-455``),
@@ -328,6 +334,10 @@ class ReservationJourney:
     reservation_change_no: str | None = field(default=None, repr=False)
     departure_date: str | None = None
     departure_time: str | None = None
+    #: ``h_arv_dt`` — 도착일. 출발 쪽(``departure_date``)과 짝이며, 심야·익일
+    #: 도착 열차에서 ``arrival_time`` 하나만으로는 날짜를 고정할 수 없어
+    #: 별도 필드로 둡니다(``ReservationOutJrnyInfo.java:86,305``).
+    arrival_date: str | None = None
     arrival_time: str | None = None
     departure_station_code: str | None = None
     arrival_station_code: str | None = None
@@ -391,9 +401,167 @@ class ReservationPaymentCoupon:
 
 
 @dataclass(frozen=True)
+class ReservationPaymentTicket:
+    """``tk_infos.tk_info`` 의 승차권 한 장(``ReservationPaymentOutTkInfo.java``).
+
+    행 신원(발권일련번호·판매일자·판매일련번호)과 운임·할인 금액, 그리고 세
+    민감 필드를 담습니다. 나머지(구간별 열차·좌석 표시용 필드 등)는 ``raw``
+    로만 남습니다.
+    """
+
+    #: ``h_tk_sqno`` — 이 승차권 행의 신원 앵커.
+    ticket_sequence: str | None = None
+    #: ``h_sale_dt``.
+    sale_date: str | None = None
+    #: ``h_sale_sqno``.
+    sale_sequence: str | None = None
+    #: ``h_tk_ret_pwd`` — 승차권 반환 비밀번호. 그 자체로 반환 권한이라
+    #: ``repr=False``.
+    return_password: str | None = field(default=None, repr=False)
+    #: ``h_tk_ret_no``. 이 파일의 :class:`ReservationPaymentCoupon` 이 같은
+    #: 의미의 필드를 ``repr=False`` 로 두는 것과 맞춥니다.
+    return_no: str | None = field(default=None, repr=False)
+    #: ``h_take_name`` — 수령인 성명(PII).
+    recipient_name: str | None = field(default=None, repr=False)
+    #: ``h_disc_card_no`` — 할인카드번호.
+    discount_card_no: str | None = field(default=None, repr=False)
+    #: ``h_tk_prc``.
+    ticket_price: str | None = None
+    #: ``h_tk_fare``.
+    ticket_fare: str | None = None
+    #: ``h_bz5_fare_disc_amt`` — APK 필드명을 보존.
+    bz5_fare_discount_amount: str | None = None
+    #: ``h_bz6_fare_disc_amt`` — APK 필드명을 보존.
+    bz6_fare_discount_amount: str | None = None
+    #: ``h_tot_disc_amt``.
+    total_discount_amount: str | None = None
+    #: ``h_tot_rcvd_amt`` — 이 승차권 행의 수령액.
+    total_received_amount: str | None = None
+    #: ``h_std_seat_prc_fare``.
+    standard_seat_price_fare: str | None = None
+    raw: dict[str, Any] = field(
+        default_factory=dict[str, Any],
+        repr=False,
+        compare=False,
+    )
+
+
+@dataclass(frozen=True)
+class ReservationPaymentSettlement:
+    """``stl_infos.stl_info`` 의 정산 수단 한 줄(``ReservationPaymentOutStlInfo.java``).
+
+    ``h_mix_stl_dv`` 가 복수 행을 암시하는 대로, 결제수단(카드/포인트 등)별로
+    한 행씩입니다. ``acnt_info``(``ReservationPaymentOutActInfo``)는 결제
+    게이트웨이 트랜잭션/에러 기록이라 PII 가 아니므로 ``raw`` 에만 남깁니다.
+    """
+
+    #: ``h_stl_sqno``.
+    settlement_sequence: str | None = None
+    #: ``h_stl_tp_cd``.
+    settlement_type_code: str | None = None
+    #: ``h_stl_rlt``.
+    settlement_result: str | None = None
+    #: ``h_tr_gubun``.
+    transaction_division: str | None = None
+    #: ``h_crd_stl_cnt``.
+    card_installment_count: str | None = None
+    #: ``h_inst_month``.
+    installment_months: str | None = None
+    #: ``h_stl_amt``.
+    settlement_amount: str | None = None
+    #: ``h_stl_crd_no`` — 결제에 쓰인 카드번호.
+    settlement_card_no: str | None = field(default=None, repr=False)
+    #: ``h_crd_corp_cd``.
+    card_company_code: str | None = None
+    #: ``h_crd_corp_nm``.
+    card_company_name: str | None = None
+    #: ``h_apv_dt``.
+    approval_date: str | None = None
+    #: ``h_apv_tm``.
+    approval_time: str | None = None
+    #: ``h_apv_no`` — 결제 승인번호. 최상위
+    #: :attr:`ReservationPaymentResponse.settlement_approval_no` 와 같은
+    #: 성격이라 ``repr=False``.
+    approval_no: str | None = field(default=None, repr=False)
+    #: ``h_xpoint_dv``.
+    point_division: str | None = None
+    #: ``h_xpoint_no`` — 포인트(마일리지) 번호.
+    point_no: str | None = field(default=None, repr=False)
+    #: ``h_xpoint_apv_no`` — 포인트 승인번호.
+    point_approval_no: str | None = field(default=None, repr=False)
+    #: ``h_remnant_amt``.
+    remnant_amount: str | None = None
+    #: ``h_rmt_point``.
+    remote_point: str | None = None
+    raw: dict[str, Any] = field(
+        default_factory=dict[str, Any],
+        repr=False,
+        compare=False,
+    )
+
+
+@dataclass(frozen=True)
+class ReservationPaymentTableSeat:
+    """``tbl_seat_infos.tbl_seat_info`` 의 단체석 한 줄(``ReservationPaymentOutTblSeatInfo.java``).
+
+    두 구간(다리 1/2)이 나란히 선언돼 있는 DTO 를 그대로 반영합니다. 어느
+    필드도 민감하지 않습니다.
+    """
+
+    room_class_name_1: str | None = None
+    car_no_1: str | None = None
+    seat_no_start_1: str | None = None
+    seat_no_end_1: str | None = None
+    seat_count_1: str | None = None
+    group_name_1: str | None = None
+    room_class_name_2: str | None = None
+    car_no_2: str | None = None
+    seat_no_start_2: str | None = None
+    seat_no_end_2: str | None = None
+    seat_count_2: str | None = None
+    group_name_2: str | None = None
+    raw: dict[str, Any] = field(
+        default_factory=dict[str, Any],
+        repr=False,
+        compare=False,
+    )
+
+
+@dataclass(frozen=True)
 class ReservationPaymentResponse(BaseKorailResponse):
     image_ticket_flag: str | None = None
+    #: ``h_rsv_no`` — 이번 결제로 생성/확정된 예약번호.
+    reservation_no: str | None = None
+    #: ``h_stl_cd_apprv_no`` — 결제 승인번호. 그 자체로 결제 증빙이라
+    #: ``repr=False``.
+    settlement_approval_no: str | None = field(default=None, repr=False)
+    #: ``h_tot_rcvd_amt`` — 청구된 총 수령액.
+    total_received_amount: str | None = None
+    #: ``h_stl_amt``.
+    settlement_amount: str | None = None
+    #: ``h_tot_stl_amt``.
+    total_settlement_amount: str | None = None
+    #: ``h_cust_no``.
+    customer_no: str | None = None
+    #: ``h_mb_crd_no`` — 회원카드번호.
+    member_card_no: str | None = field(default=None, repr=False)
+    #: ``h_buy_name`` — 구매자 성명(PII).
+    buyer_name: str | None = field(default=None, repr=False)
+    #: ``h_publ_start_no``.
+    publication_start_no: str | None = None
+    #: ``h_publ_end_no``.
+    publication_end_no: str | None = None
+    #: ``h_mix_stl_dv`` — 혼합결제 구분.
+    mixed_settlement_division: str | None = None
+    #: ``h_cnc_fee``.
+    cancellation_fee: str | None = None
     coupons: tuple[ReservationPaymentCoupon, ...] = ()
+    #: ``tk_infos.tk_info``.
+    tickets: tuple[ReservationPaymentTicket, ...] = ()
+    #: ``stl_infos.stl_info``.
+    settlements: tuple[ReservationPaymentSettlement, ...] = ()
+    #: ``tbl_seat_infos.tbl_seat_info``.
+    table_seats: tuple[ReservationPaymentTableSeat, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -585,6 +753,12 @@ class DiscountCardPurchaseResponse(BaseKorailResponse):
     usable_trip_count: str | None = None
     validity_start_date: str | None = None
     validity_end_date: str | None = None
+    #: ``dcntCrdKndMgNo`` — 서버가 실제로 등록한 할인카드 종류 관리번호.
+    #: 요청의 :attr:`DiscountCardPurchaseRequest.card_kind_management_no`
+    #: ("요청한 값")과 다른 이름을 써서, 호출자가 "무엇을 요청했는지"와
+    #: "서버가 실제로 등록한 것"을 구분할 수 있게 합니다
+    #: (``NCardInfoOut.java:30``, ``dcntCrdStlTgtNo`` 와는 별개 필드).
+    registered_card_kind_management_no: str | None = None
 
 
 @dataclass(frozen=True)

@@ -45,6 +45,10 @@ SENSITIVE_KEYS = frozenset(
         "pnr_no",
         "prnNo",  # 반환 응답 철자(RefundVerifyTicketDao.java:123,151)
         "h_pnr_no",
+        # ReservationPaymentOut 최상위 예약번호 -- pnrNo/h_pnr_no 와 같은 성질의
+        # 식별자인데 철자가 다르다. .raw 로만 나간다
+        # (ReservationPaymentOut.java:319, W3 finding 1).
+        "h_rsv_no",
         "coptEntRsvNo",
         "pbpRsvNo",
         "pbp_reservation_no",
@@ -58,6 +62,10 @@ SENSITIVE_KEYS = frozenset(
         "tkRetPwd",
         "tkRetNo",
         "h_tk_ret_no",
+        # 카드결제 응답 ReservationPaymentOutTkInfo 의 반환 비밀번호 -- 위
+        # h_tk_ret_no 와 다른 철자다. .raw 로만 나간다
+        # (ReservationPaymentOutTkInfo.java:546, W3 finding 1).
+        "h_tk_ret_pwd",
         "ticket_return_no",
         "return_password",
         "saleWctNo",
@@ -120,6 +128,9 @@ SENSITIVE_KEYS = frozenset(
         "strMbCrdNo",
         "member_card_no",
         "h_stl_mb_crd_no",
+        # ReservationPaymentOut 최상위의 회원카드번호 철자 -- 위 세 개와 다르다.
+        # .raw 로만 나간다(ReservationPaymentOut.java:303, W3 finding 1).
+        "h_mb_crd_no",
         "h_stl_crd_no",
         "card_no",
         "stlCrdNo",
@@ -133,6 +144,10 @@ SENSITIVE_KEYS = frozenset(
         "approval_no",
         "h_xpot_no",
         "point_no",
+        # ReservationPaymentOutStlInfo 의 포인트 승인번호 -- h_xpot_no 와 다른
+        # 철자다. .raw 로만 나간다
+        # (ReservationPaymentOutStlInfo.java:346, W3 finding 1).
+        "h_xpoint_apv_no",
         # --- 고객 식별(회원번호·이름·전화·생년) ---
         "custMgNo",
         # custMgNo_1 같은 인덱스 형은 위의 custMgNo 가 이미 가린다(꼬리 인덱스 제거).
@@ -172,9 +187,17 @@ SENSITIVE_KEYS = frozenset(
         "non_member_no",
         "customer_management_no",
         "customer_family_name",
+        # 다자녀 할인 대상자 행(Fmly)의 와이어 키. 파이썬 속성 customer_family_name 은
+        # 이미 repr=False + 위 항목으로 보호되지만, raw=item 으로 나가는 원본 딕트는
+        # 이 리터럴이 없으면 가려지지 않는다(Fmly.java:137, W3 finding 3).
+        "custFmlyNm",
         "integrated_customer_name_1",
         "integrated_customer_name_2",
         "birth_date",
+        # 같은 이유로 다자녀 대상자의 생년월일 와이어 키. birth_date 속성은 이미
+        # repr=False + 위 항목으로 보호되지만 raw=item 경로는 별도다
+        # (Fmly.java:133, W3 finding 3).
+        "btdt",
         "birthday",
         "phone",
         "strCpNo",   # 로그인 응답 전화번호(LoginDao.java:84-107)
@@ -183,11 +206,20 @@ SENSITIVE_KEYS = frozenset(
         "strEmailAdr",
         "txtCpNo",   # 예약대기 전화번호(ReservationWaitService.java:12)
         "custTeln",  # 비회원 반환 전화번호(s5/h.java:123)
+        # 예약 이력(research.reservationView.do) 최상위의 예약자 성명·전화번호.
+        # ReservationHistoryResponse.reservation_passenger_name/phone_no 는 이미
+        # repr=False 로 보호되지만, .raw 경로는 이 리터럴이 없으면 가려지지 않는다
+        # (ReservationViewOut.java:64, h_rsv_ps_nm / h_tel_no).
+        "h_rsv_ps_nm",
+        "h_tel_no",
         # --- 할인카드(N카드) ---
         # h_dcnt_crd_no 는 bearer credential(w4/a.java:100-101)
         "dcntCrdNo",
         "h_dcnt_crd_no",
         "discount_card_no",
+        # ReservationPaymentOutTkInfo 의 할인카드번호 철자 -- 위 두 철자와 다르다.
+        # .raw 로만 나간다(ReservationPaymentOutTkInfo.java:414, W3 finding 1).
+        "h_disc_card_no",
         *(f"txtCardNo_{i}" for i in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)),
         "txtCardNo",
         # 할인카드 등록(NCardReservationDao.java:16,29,30)
@@ -278,8 +310,17 @@ SENSITIVE_KEYS = frozenset(
         # --- 구매자·동반자·좌석그룹 이름 ---
         "h_sgr_nm",
         "h_buy_ps_nm",
+        # ReservationPaymentOutTkInfo 의 수령인 성명. .raw 로만 나간다
+        # (ReservationPaymentOutTkInfo.java:522, W3 finding 1).
+        "h_take_name",
         "h_compa_nm",
         "h_compa_brth",
+        # 동승자(h_compa_nm/h_compa_brth) 바로 옆에 선언된, 탑승자 본인의 성명·
+        # 생년월일. 파싱도 마스킹도 안 되어 있었다 -- s_brth 는 숫자로 끝나지 않아
+        # _index_stripped 가 안 잡으므로 순수 리터럴로 등록한다
+        # (TicketDetailOut.java:410,418, W3 finding 2).
+        "h_abrd_ps_nm",
+        "s_brth",
         "h_comp_nm",
         "h_comp_cert_no",
         "h_wct_nm",
@@ -308,6 +349,10 @@ SENSITIVE_KEYS = frozenset(
         "ogtkSaleDt",
         "ogtkSaleDd",
         "ogtkSaleWctNo",
+        # 예약 이력의 ReservationOrgTk 가 쓰는 발매창구번호 철자 -- 위
+        # ogtkSaleWctNo 와 다르다("Sale" 없음). .raw 로만 나간다
+        # (ReservationOrgTk.java, ReservationHistoryOriginalTicket.window_no).
+        "ogtkWctNo",
         "ogtkSaleSqno",
         "ogtkRetPwd",
         "ogtk_ret_pwd",
@@ -371,7 +416,20 @@ def is_sensitive_key(name: str) -> bool:
     return base is not None and base in SENSITIVE_KEYS
 
 
-CARD_RE = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
+# W4 finding: a bare 13-digit epoch-millisecond timestamp (int(time.time() *
+# 1000) is exactly 13 digits from 2001 through 2286) collides with this
+# pattern's old 13-digit floor. This package builds and sends such a value
+# under the wire key "timeStamp" (payloads.py build_cache_query and friends,
+# MobileServiceIn.java:30 confirms the same shape server-side) -- and since
+# is_sensitive_key("timeStamp") is correctly False, the value still reaches
+# redact_text via redact_url's fallback, so a real diagnostic timestamp was
+# being destroyed as "[REDACTED_CARD]" in any log routed through this module.
+# Raising the floor to 14 digits excludes that collision. The trade-off is
+# narrower coverage for the least common card length (13-digit schemes, e.g.
+# some older Visa numbers) in UNSTRUCTURED text with no key context -- the
+# PRIMARY defense for a known card_number field is still its SENSITIVE_KEYS
+# registration, unaffected by this regex either way.
+CARD_RE = re.compile(r"\b(?:\d[ -]*?){14,19}\b")
 SESSION_RE = re.compile(r"(?i)(JSESSIONID=)[^&;\s]+")
 SENSITIVE_KEY_VALUE_RE = re.compile(
     r"(?P<prefix>(?<![\w-])(?P<key_quote>[\"']?)(?:"

@@ -120,12 +120,6 @@ def _validated_room_class_code(value: str) -> str:
     return value
 
 
-def _inventory_sid(value: str) -> str:
-    if not isinstance(value, str) or not value:
-        raise ValueError("sid must be a non-empty string")
-    return value
-
-
 def build_seat_car_form(
     config: KorailConfig,
     train: TrainSummary,
@@ -134,18 +128,27 @@ def build_seat_car_form(
     sid: str,
     room_class_code: str = "1",
     seat_attribute_code: str | None = None,
+    menu_id: str = "11",
 ) -> dict[str, str]:
     """``research.TrainResearch`` 의 호차 목록 조회 폼을 만듭니다.
 
     ``txtTrnNo`` 는 다섯 자리로 0 을 채웁니다. ``txtSeatAttCd`` 는 열차 행이 좌석
-    속성 코드를 가지고 있을 때만 실립니다 — ``x4/b.java:19`` 가
-    ``trainInfo.getH_seat_att_cd()`` 를 그대로 넘기고, ScheduleView 행처럼 코드가
-    없으면 Retrofit 이 ``@Field`` 를 떨어뜨리기 때문입니다
-    (``ResearchService:37``). 일반석 ``"015"`` 로 대신 채우지 않습니다.
-    ``txtGdNo`` 도 값이 없으면 같은 이유로 빠집니다.
+    속성 코드를 가지고 있을 때만 실립니다 — ``TrainResearchIn.java`` 의
+    ``txtSeatAttCd`` 를 앱이 ``trainInfo.getH_seat_att_cd()`` 그대로 넘기고,
+    ScheduleView 행처럼 코드가 없으면 Retrofit 이 ``@Field`` 를 떨어뜨리기
+    때문입니다(``NetworkApi.java`` 의 ``getCarList``). 일반석 ``"015"`` 로 대신
+    채우지 않습니다. ``txtGdNo`` 도 값이 없으면 같은 이유로 빠집니다.
 
-    ``sid`` 는 요청마다 새로 만듭니다
-    (:func:`~korail_mobile_api.crypto.generate_sid`).
+    ``sid`` 는 받지만 쓰지 않습니다 — 7.0.6 ``TrainResearchIn.java:68`` 의
+    ``@SerialName`` 20개 중 ``Sid`` 는 없으므로 이 라우트에는 애초에 실을 자리가
+    없습니다(6.5.0 잔재). 매개변수를 남겨 두는 것은 클라이언트가 여전히
+    ``sid=generate_sid()`` 를 키워드로 넘기기 때문일 뿐입니다 — 그 호출부를
+    바꾸는 것은 이 파일의 범위 밖입니다.
+
+    ``menu_id`` 는 기본값 ``"11"`` 만 근거가 있습니다. 7.0.6 은 예약 맥락별로
+    ``ReservationMenuId`` 열거형(7개 멤버)에서 값을 고르는데, DEFAULT 이외
+    나머지 6개의 복호값은 AppSuit 로 보호돼 있어 추측하지 않습니다 — 맥락을 아는
+    호출자만 재정의하십시오.
     """
     validate_seat_inventory_inputs(train, passenger_count)
     # The override stands in for the row's code, so it gets the row's check.
@@ -157,8 +160,7 @@ def build_seat_car_form(
     return {
         **_device_version(config),
         "Key": config.key,
-        "Sid": _inventory_sid(sid),
-        "txtMenuId": "11",
+        "txtMenuId": menu_id,
         "txtPsrmClCd": _validated_room_class_code(room_class_code),
         "txtRunDt": train.run_date or "",
         "txtDptDt": train.departure_date or "",
@@ -202,6 +204,11 @@ def build_seat_inventory_form(
     ``seatAttCd`` 와 ``gdNo`` 는 값이 없으면 빠집니다. ``getSeatList`` 도 null
     ``@Field`` 를 떨어뜨리기 때문입니다(``ResearchService:59``). ``isArrow`` 는
     고정 ``"true"``, ``ctlDvCd`` 는 고정 빈 문자열입니다.
+
+    ``sid`` 는 받지만 쓰지 않습니다 — 7.0.6 ``TResidualSeatsResearchIn.java:65``
+    의 ``@SerialName`` 19개 중 ``Sid`` 는 없으므로 이 라우트에도 실을 자리가
+    없습니다(6.5.0 잔재). 매개변수를 남겨 두는 것은 클라이언트가 여전히
+    ``sid=generate_sid()`` 를 키워드로 넘기기 때문일 뿐입니다.
     """
     validate_seat_inventory_inputs(
         train,
@@ -230,7 +237,6 @@ def build_seat_inventory_form(
         # Same null-@Field omission as build_seat_car_form's txtGdNo, above.
         **({"gdNo": train.goods_no} if train.goods_no else {}),
         "isArrow": "true",
-        "Sid": _inventory_sid(sid),
         "ctlDvCd": "",
     }
 
@@ -260,14 +266,34 @@ def build_train_search_form(
     member_card_no: str | None = None,
     continuation: TrainSearchContinuation | None = None,
     transfer: bool = False,
+    menu_id: str = "11",
 ) -> dict[str, str]:
     """``seatMovie.ScheduleView`` 폼을 한 페이지 분량으로 만듭니다.
 
     ``continuation=None`` 이면 앱의 첫 페이지 요청입니다. 그다음 페이지는
     :meth:`TrainSearchResult.next_page` 가 준
-    :class:`TrainSearchContinuation` 을 넘겨 요청하면 됩니다.
-    ``qryDvCd``/``qryStNo``/``pgPrCnt``/``qryStTrnNo``/``qryStTrnNo2`` 는 환승
-    전용 필드가 아니라 모든 검색에 항상 오릅니다(``b5/c.java:145-147``).
+    :class:`TrainSearchContinuation` 을 넘겨 요청하면 됩니다. ``qryDvCd`` 는
+    환승 전용이 아니라 모든 검색에 항상 오릅니다. 반면
+    ``qryStNo``/``qryStTrnNo``/``qryStTrnNo2`` 는 첫 페이지에서 아예 빠지고
+    커서가 있을 때만 실립니다 — 7.0.6 ``TrainScheduleIn.write$Self`` 가 이 셋을
+    ``self.<field> != null`` 일 때만 인코딩하고(``TrainScheduleIn.java:641-647``),
+    첫 페이지를 만드는 유일한 빌더 ``TrainScheduleViewModel.buildTrainScheduleIn()``
+    은 매 신규 빌드마다 넷 다 리터럴 ``null`` 을 넘기기 때문입니다
+    (``TrainScheduleViewModel.java:3212``). ``pgPrCnt`` 는 **어느 페이지에서도**
+    앱이 보내지 않습니다 — 유일한 연속 경로(``TrainScheduleViewModel.java:7340``)
+    가 쓰는 3튜플 커서에는 애초에 ``pgPrCnt`` 자리가 없습니다. 이 함수도 같은
+    모양을 냅니다: 첫 페이지엔 네 키를 전부 생략하고, 다음 페이지엔 커서의
+    ``qryStNo``/``qryStTrnNo``/``qryStTrnNo2`` 세 값만 싣고 ``pgPrCnt`` 는 어느
+    쪽도 싣지 않습니다.
+
+    ``sid`` 는 받지만 쓰지 않습니다 — 7.0.6 ``TrainScheduleIn.java:95`` 의
+    ``@SerialName`` 목록에 ``Sid`` 가 없으므로 이 라우트에도 실을 자리가
+    없습니다(6.5.0 잔재). 매개변수를 남겨 두는 것은 클라이언트가 여전히
+    ``sid=generate_sid()`` 를 키워드로 넘기기 때문일 뿐입니다 — 그 호출부를
+    바꾸는 것은 이 파일의 범위 밖입니다.
+
+    ``menu_id`` 는 기본값 ``"11"`` 만 근거가 있습니다 — 나머지 근거는
+    :func:`build_seat_car_form` 의 같은 매개변수 설명을 보십시오.
 
     ``transfer=True`` 는 직통 대신 환승 여정을 묻습니다. 필터를 지정하지
     않은 기본 쿼리에서는 움직이는 필드가 ``radJobId`` 하나뿐이며
@@ -300,8 +326,8 @@ def build_train_search_form(
         raise ValueError("seat_attribute_code must be a non-empty string")
     form = {
         **_device_version(config),
-        "Sid": sid,
-        "txtMenuId": "11",
+        "Key": config.key,
+        "txtMenuId": menu_id,
         "radJobId": (
             KORAIL_TRANSFER_ITINERARY_CODE
             if transfer
@@ -353,12 +379,16 @@ def build_train_search_form(
     ):
         raise ValueError("connection filters require transfer=True")
     form["qryDvCd"] = query.query_division_code
-    if continuation is None:
-        form["qryStNo"] = "0"
-        form["qryStTrnNo"] = "00000"
-        form["qryStTrnNo2"] = ""
-        form["pgPrCnt"] = "10"
-    else:
+    # buildTrainScheduleIn() leaves qryStNo/qryStTrnNo/qryStTrnNo2/pgPrCnt
+    # literal null on every fresh (first-page) build (TrainScheduleViewModel
+    # .java:3212), and TrainScheduleIn.write$Self only encodes each when it is
+    # non-null (TrainScheduleIn.java:641-650) — so the app sends none of the
+    # four keys on the first page. The only continuation path
+    # (TrainScheduleViewModel.java:7340) overwrites qryStNo/qryStTrnNo/
+    # qryStTrnNo2 from a 3-tuple cursor via copy$default(mask=254) but never
+    # touches pgPrCnt, which stays null (= unsent) forever. Mirror that: omit
+    # all four on the first page, and never send pgPrCnt at all.
+    if continuation is not None:
         form["qryStNo"] = continuation.query_station_no
         form["qryStTrnNo"] = continuation.query_train_no
         # setSelectTransferPages only fires when both transfer cursors came back
@@ -367,7 +397,6 @@ def build_train_search_form(
         # it here: TrainSearchResult.next_page leaves query_train_no2 at "" and
         # TransferSearchResult.next_page fills it from h_ectb_trn_no_next.
         form["qryStTrnNo2"] = continuation.query_train_no2
-        form["pgPrCnt"] = continuation.page_count
     # NetworkService.STLibw flattens TrainScheduleInChtnRsStn / TrnGp arrays
     # as `chtnRsStnCd1`, `trnGpCd1` etc. The selected station or all candidates
     # are supplied by the caller; protected selection/default codes are not
@@ -410,13 +439,12 @@ def build_train_schedule_special_form(
         continuation=continuation,
         transfer=transfer,
     )
-    del form["Sid"]
-    # buildTrainScheduleIn() leaves the four paging fields null on its first
-    # ScheduleViewSpecial request. Retrofit's FieldMap receives no keys for
-    # them; they only appear after the screen has a continuation.
-    if continuation is None:
-        for name in ("qryStNo", "qryStTrnNo", "qryStTrnNo2", "pgPrCnt"):
-            form.pop(name, None)
+    # build_train_search_form already gives this shape: qryStNo/qryStTrnNo/
+    # qryStTrnNo2 are absent on a first page (continuation=None) and present
+    # only once a continuation exists, and pgPrCnt is never present at all —
+    # buildTrainScheduleIn() leaves all four paging fields literal null on
+    # every fresh (first-page) build, and the only continuation path never
+    # touches pgPrCnt either. Nothing further to strip here.
     device = form.pop("Device")
     version = form.pop("Version")
     # NetworkService.STLibw keeps only non-empty JsonPrimitive values; unlike
@@ -528,10 +556,18 @@ def build_ticket_list_form(
 def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
     """``copt.gdMenuLt.do`` 의 MaaS 메뉴 조회 폼.
 
-    ``Device``·``Version``·``timeStamp`` 만 싣고 ``Key`` 는 붙지 않습니다.
+    ``Device``·``Version``·``Key``·``timeStamp`` 를 싣습니다. 7.0.6
+    ``GdMenuLtIn.java:59-61`` 은 ``super(null,null,null,null,15,null)`` 로
+    ``CommonIn`` 의 네 필드(``Device``/``Version``/``Key``/``lang``)를 한꺼번에
+    기본값화하는데, ``CommonIn.write$Self`` 가 그중 ``Device``/``Version``/``Key``
+    에 동일한 인코딩 게이트를 쓰므로(``CommonIn.java:448-465``) 셋 중 둘만 나가는
+    분기는 없습니다 — 이 라우트를 호출하는 곳은 ``include_common=False`` 를 써서
+    :func:`~korail_mobile_api.http.common_fields` 의 주입을 건너뛰므로, ``Key``
+    는 여기서 직접 싣습니다.
     """
     return {
         **_device_version(config),
+        "Key": config.key,
         "timeStamp": str(int(time.time() * 1000)),
     }
 

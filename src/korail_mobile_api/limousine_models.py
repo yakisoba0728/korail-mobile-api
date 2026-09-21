@@ -24,7 +24,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from .models import BaseKorailResponse
+from .models import BaseKorailResponse, SeatWindow
 
 
 def _non_empty_ascii(value: object, name: str, *, allow_empty: bool = False) -> None:
@@ -200,11 +200,32 @@ class LimousineSeat:
 
 @dataclass(frozen=True)
 class LimousineSeatInventoryResponse(BaseKorailResponse):
-    """``lms.TResidualSeatsResearch.do`` 의 응답 — 한 호차의 좌석표."""
+    """``lms.TResidualSeatsResearch.do`` 의 응답 — 한 호차의 좌석표.
+
+    이 라우트와 ``research.TResidualSeatsResearch.do``(열차 좌석표)는 같은
+    DTO(``TResidualSeatsResearchOut.java``)를 돌려받습니다
+    (``NetworkApi.java:271,741``). 형제 파서
+    :func:`~korail_mobile_api.parsers.parse_seat_inventory_response` 가 이미
+    읽는 ``layout_type``·``vrBnrUrl``·``windowList`` 세 필드를 이 응답도
+    같은 DTO 에서 받지만, 좌석표를 그릴 목적이 아니라면 놓쳐도 눈에 띄지
+    않아 리무진 쪽 파서는 오랫동안 세 필드를 읽지 않았습니다
+    (``TResidualSeatsResearchOut.java:29,34-35,114,134,138``).
+    """
     car_type_code: str | None = None
     car_no: str | None = field(default=None, repr=False)
     seat_arrangement_code: str | None = None
     up_down_division_code: str | None = None
+    #: ``layoutType`` — 좌석 배치 형식. 형제 응답
+    #: :class:`~korail_mobile_api.models.SeatInventoryResponse.layout_type`
+    #: 과 같은 DTO 필드이며 와이어 타입은 String 입니다.
+    layout_type: str | None = None
+    #: ``vrBnrUrl`` — VR 배너 URL. 민감하지 않아 ``repr=False`` 없음(형제
+    #: ``SeatInventoryResponse.vr_banner_url`` 과 동일한 판단).
+    vr_banner_url: str | None = None
+    #: ``windowList`` — 창측/통로측 위치 비율 목록.
+    #: :class:`~korail_mobile_api.models.SeatWindow` 를 그대로 재사용합니다 —
+    #: ``{st_loc_rt, cls_loc_rt}`` 구조가 형제 응답과 동일합니다.
+    windows: tuple[SeatWindow, ...] = ()
     seats: tuple[LimousineSeat, ...] = ()
 
 

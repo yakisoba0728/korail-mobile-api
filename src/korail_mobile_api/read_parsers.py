@@ -93,7 +93,12 @@ from .read_models import (
     RefundTicketJourney,
     RefundTicketSeat,
     ReservationDetailJourney,
+    ReservationHistoryJourney,
+    ReservationHistoryOriginalTicket,
+    ReservationHistoryPassenger,
+    ReservationHistoryReservation,
     ReservationHistoryResponse,
+    ReservationHistoryTicket,
     ReservationHistoryTrain,
     ReservationSeatDetail,
     SeatAssignmentScheduleResponse,
@@ -137,7 +142,56 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
                     raw=ticket_raw,
                 )
             )
-        reservations.append(TicketListReservation(tickets=tuple(tickets), raw=reservation_raw))
+        # MyTicketListOutReservation.java — only ticket_list has an explicit
+        # @SerialName; the rest are PROTECTED (Kotlin field names used as
+        # best-effort keys). addSrvInfo (AddSrvItem) and ticketKind
+        # (TicketDefine.TicketKind, an enum) are left unmodeled — they need
+        # their own nested types — and stay reachable through `raw`.
+        reservations.append(
+            TicketListReservation(
+                tickets=tuple(tickets),
+                departure_datetime=_optional_string(
+                    reservation_raw, "hDptDtTm", "ticket list reservation"
+                ),
+                ticket_kind_code=_optional_string(
+                    reservation_raw, "hTkKndCd", "ticket list reservation"
+                ),
+                list_count=_optional_string(
+                    reservation_raw, "listCnt", "ticket list reservation"
+                ),
+                seat_assign_count=_optional_integer(
+                    reservation_raw, "seatAssignCount", "ticket list reservation"
+                ),
+                ticket_status=_optional_string(
+                    reservation_raw, "ticketStatus", "ticket list reservation"
+                ),
+                is_finished=_optional_bool(
+                    reservation_raw, "isFinished", "ticket list reservation"
+                ),
+                is_history=_optional_bool(
+                    reservation_raw, "isHistory", "ticket list reservation"
+                ),
+                is_emergency=_optional_bool(
+                    reservation_raw, "isEmergency", "ticket list reservation"
+                ),
+                display_ticket_name=_optional_string(
+                    reservation_raw, "displayTicketName", "ticket list reservation"
+                ),
+                is_non_member=_optional_bool(
+                    reservation_raw, "isNonMember", "ticket list reservation"
+                ),
+                is_transfer=_optional_bool(
+                    reservation_raw, "isTransfer", "ticket list reservation"
+                ),
+                is_wheelchair_member=_optional_bool(
+                    reservation_raw, "isWheelchairMember", "ticket list reservation"
+                ),
+                is_rail_police_enabled=_optional_bool(
+                    reservation_raw, "isRailPoliceEnabled", "ticket list reservation"
+                ),
+                raw=reservation_raw,
+            )
+        )
     return TicketListResponse(
         h_msg_cd=response.h_msg_cd,
         h_msg_txt=response.h_msg_txt,
@@ -300,6 +354,26 @@ def _optional_string(
     return value
 
 
+def _required_string(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+) -> str:
+    """``_optional_string`` 의 필수 쪽 짝. 키가 없거나 ``None`` 이면 거부합니다.
+
+    W4 finding: ``Seat`` 의 합성 생성자(``Seat.java:53-59``)는 다섯 필드(마스크
+    31) 전부가 없으면 ``throwMissingFieldException`` 을 던집니다 — 7.0.6 이
+    정상 처리하지 않는 응답 모양이므로, 이 필드들을 선택으로 읽으면 그 계약보다
+    느슨해집니다.
+    """
+    value = data.get(key)
+    if not isinstance(value, str):
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be a string"
+        )
+    return value
+
+
 def _present_strings(
     data: Mapping[str, Any],
     keys: tuple[str, ...],
@@ -384,6 +458,24 @@ def _required_integer(
     )
 
 
+def _optional_bool(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+    *,
+    default: bool = False,
+) -> bool:
+    """kotlinx ``Boolean`` 필드를 읽습니다. 없으면 ``default``."""
+    value = data.get(key)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    raise KorailProtocolError(
+        f"KORAIL {context} field {key} must be a boolean or null"
+    )
+
+
 def _nullable_string_fields(
     data: Mapping[str, Any],
     field_map: Mapping[str, str],
@@ -447,11 +539,28 @@ _DEPOSIT_BANK_FIELDS: dict[str, str] = {
 
 _DELAY_DISCOUNT_TICKET_FIELDS: dict[str, str] = {
     "fare": "h_dlay_fare",
-    "usable_until_date": "h_use_psb_dt",
     "original_sale_date": "h_orgtk_ret_sale_dt",
     "window_no": "h_orgtk_wct_no",
     "sale_sequence": "h_orgtk_sale_sqno",
     "return_password": "h_orgtk_ret_pwd",
+    "ticket_sequence": "h_tk_sqno",
+    "ticket_kind_code": "h_tk_knd_cd",
+    "original_ticket_sale_date": "h_orgtk_sale_dt",
+    "received_amount": "h_rcvd_amt",
+    "train_class_code": "h_trn_clsf_cd",
+    "room_class_code": "h_psrm_cl_cd",
+    "train_no": "h_trn_no",
+    "departure_station_code": "h_dpt_rs_stn_cd",
+    "departure_date": "h_dpt_dt",
+    "departure_time": "h_dpt_tm",
+    "arrival_station_code": "h_arv_rs_stn_cd",
+    "arrival_date": "h_arv_dt",
+    "arrival_time": "h_arv_tm",
+    "ticket_status_code": "h_tk_stt_cd",
+    "ticket_status_name": "h_tk_stt_nm",
+    "buyer_name": "h_buy_ps_nm",
+    "passenger_name": "h_abrd_ps_nm",
+    "page_no": "h_page_no",
 }
 
 _CREW_REQUEST_OPTION_FIELDS: dict[str, str] = {
@@ -549,12 +658,15 @@ _TICKET_RECEIPT_FIELDS: dict[str, str] = {
     "commuter_kind_code": "h_cmtr_knd_cd",
     "journey_type_code": "h_jrny_tp_cd",
     "printed_discount_name": "h_prt_disc_knd_nm",
+    "printed_discount_kind_code": "h_prt_disc_knd_cd",
     "print_type": "h_prt_type",
     "seat_class_name": "h_psrm_cl_nm",
     "ticket_kind_code": "h_tk_knd_cd",
+    "ticket_kind_name": "h_tk_knd_nm",
     "ticket_status_code": "h_tk_stt_cd",
     "train_class_code": "h_trn_clsf_cd",
     "train_class_name": "h_trn_clsf_nm",
+    "train_group_code": "h_trn_gp_cd",
     "train_no": "h_trn_no",
     "member_card_no": "h_stl_mb_crd_no",
 }
@@ -572,10 +684,104 @@ _RESERVATION_HISTORY_TRAIN_FIELDS: dict[str, str] = {
     "acceptance_possible_flag": "h_acpt_ps_flg",
     "payment_flag": "h_payment_flg",
     "settlement_flag": "h_stl_flg",
+    # ReservationViewOutTrainInfo.java:496 — the only money field on this row.
+    "reserved_amount": "h_rsv_amt",
     "pnr_no": "h_pnr_no",
 }
 
-_TRAIN_SCHEDULE_ITEM_FIELDS: dict[str, str] = {
+_RESERVATION_HISTORY_TOP_FIELDS: dict[str, str] = {
+    "reservation_passenger_name": "h_rsv_ps_nm",
+    "phone_no": "h_tel_no",
+    "reservation_limit_flag": "h_rsv_lmt_flg",
+    "seatmap_flag": "h_seatmap_flg",
+    "process_flag": "h_proc_flag",
+    "follow_flag": "h_fllw_flag",
+    "customer_no": "h_cust_no",
+    "customer_division_code": "h_cust_dv_cd",
+    "customer_sort_code": "h_cust_srt_cd",
+    "customer_class_code": "h_cust_cl_cd",
+    "journey_count": "h_jrny_cnt",
+}
+
+_RESERVATION_HISTORY_TICKET_FIELDS: dict[str, str] = {
+    "sale_date": "saleDt",
+    "sale_window_no": "saleWctNo",
+    "sale_sequence": "saleSqno",
+    "ticket_kind_code": "tkKndCd",
+    "movie_ticket_flag": "mvieTkFlg",
+    "delay_discount_flag": "dlayDscpFlg",
+}
+
+_RESERVATION_HISTORY_ORIGINAL_TICKET_FIELDS: dict[str, str] = {
+    "sale_date": "ogtkSaleDt",
+    "window_no": "ogtkWctNo",
+    "sale_sequence": "ogtkSaleSqno",
+    "return_password": "ogtkRetPwd",
+}
+
+_RESERVATION_HISTORY_PASSENGER_FIELDS: dict[str, str] = {
+    "passenger_type_code": "h_psg_tp_cd",
+    "passenger_count_per_info": "h_psg_info_per_prnb",
+    "discount_kind_code": "h_dcnt_knd_cd",
+    "discount_kind_code_2": "h_dcnt_knd_cd2",
+    "discount_no": "h_dcsp_no",
+    "discount_no_2": "h_dcsp_no2",
+    "delay_original_window_no": "dlayOgtkWctNo",
+    "delay_original_sale_date": "dlayOgtkSaleDt",
+    "delay_original_sale_sequence": "dlayOgtkSaleSqno",
+    "delay_original_return_password": "dlayOgtkRetPwd",
+}
+
+_RESERVATION_HISTORY_RESERVATION_FIELDS: dict[str, str] = {
+    "pnr_no": "h_pnr_no",
+    "total_fare": "h_tot_fare",
+    "total_price": "h_tot_prc",
+    "total_discount_amount": "h_tot_dcnt_amt",
+    "total_received_amount": "h_tot_rcvd_amt",
+    "payment_flag": "h_payment_flg",
+}
+
+# Two DTOs, each with its own field map (see TrainScheduleItem's docstring in
+# read_models.py for why one shared row map used to be wrong for both):
+#
+# - MergeSeatsCOutTrnInfo (mergeSeatsC.do / parse_merge_seats_inquiry_response)
+# - TrainScheduleOutTrainInfo (assignScheduleView.do /
+#   parse_seat_assignment_schedule_response)
+
+_MERGE_SEATS_TRAIN_FIELDS: dict[str, str] = {
+    "train_no": "h_trn_no",
+    "train_no_qb": "h_trn_no_qb",
+    "train_sequence": "h_trn_seq",
+    "train_group_code": "h_trn_gp_cd",
+    "train_class_code": "h_trn_clsf_cd",
+    "train_class_name": "h_trn_clsf_nm",
+    "shuttle_standing_open_flag": "shtmStndOpFlg",
+    "run_date": "h_run_dt",
+    "departure_station_code": "h_dpt_rs_stn_cd",
+    "departure_station_name": "h_dpt_rs_stn_nm",
+    "arrival_station_code": "h_arv_rs_stn_cd",
+    "arrival_station_name": "h_arv_rs_stn_nm",
+    "departure_run_order": "h_dpt_stn_run_ordr",
+    "arrival_run_order": "h_arv_stn_run_ordr",
+    "departure_construction_order": "h_dpt_stn_cons_ordr",
+    "arrival_construction_order": "h_arv_stn_cons_ordr",
+    "departure_date": "h_dpt_dt",
+    "arrival_date": "h_arv_dt",
+    "departure_time": "h_dpt_tm",
+    "departure_time_qb": "h_dpt_tm_qb",
+    "arrival_time": "h_arv_tm",
+    "arrival_time_qb": "h_arv_tm_qb",
+    "standard_remaining_seat_count": "h_std_rest_seat_cnt",
+    "general_reservation_code": "h_gen_rsv_cd",
+    "general_reservation_name": "h_gen_rsv_nm",
+    "remaining_standing_count": "restStndNum",
+    "standing_reservation_code": "h_stnd_rsv_cd",
+    "standing_reservation_name": "h_stnd_rsv_nm",
+    "journey_reservation_code": "h_jrny_rsv_cd",
+    "journey_reservation_name": "h_jrny_rsv_nm",
+}
+
+_TRAIN_SCHEDULE_OUT_TRAIN_FIELDS: dict[str, str] = {
     "train_no": "h_trn_no",
     "train_group_code": "h_trn_gp_cd",
     "train_class_code": "h_trn_clsf_cd",
@@ -607,6 +813,12 @@ _TRAIN_SCHEDULE_ITEM_FIELDS: dict[str, str] = {
     "special_reservation_possible_name": "h_spe_rsv_psb_nm",
     "info_text": "h_info_txt",
     "popup_message": "h_popup_msg",
+    # TrainScheduleOutTrainInfo.java:1204,1364,1468,1480 — these 4 were
+    # missing from the old shared map.
+    "standard_remaining_seat_count": "h_std_rest_seat_cnt",
+    "first_remaining_seat_count": "h_fst_rest_seat_cnt",
+    "merge_target_flag": "h_yms_apl_flg",
+    "train_suspended_flag": "h_trn_sps_flg",
 }
 
 _PASS_SCHEDULE_TRAIN_FIELDS: dict[str, str] = {
@@ -618,6 +830,20 @@ _PASS_SCHEDULE_TRAIN_FIELDS: dict[str, str] = {
     "schedule_price": "h_schd_prc",
     "train_group_code": "h_trn_gp_cd",
     "train_no": "h_trn_no",
+    # TrainList.java:25-70 declares 20 fields; these 12 were missing,
+    # including h_run_dt — the only date on this row.
+    "train_sequence": "h_trn_seq",
+    "change_train_sequence": "h_chg_trn_seq",
+    "change_train_division_code": "h_chg_trn_dv_cd",
+    "run_date": "h_run_dt",
+    "price_class_code": "h_prc_cl_cd",
+    "route_code": "h_rout_cd",
+    "departure_construction_order": "h_dpt_stn_cons_ordr",
+    "arrival_construction_order": "h_arv_stn_cons_ordr",
+    "car_type_code": "h_car_tp_cd",
+    "train_class_code": "h_trn_clsf_cd",
+    "commuter_use_terminal_code": "h_cmtr_utl_trm_cd",
+    "commuter_use_terminal_name": "h_cmtr_utl_trm_nm",
 }
 
 _PASS_SCHEDULE_MAIN_FIELDS: dict[str, str] = {
@@ -823,7 +1049,8 @@ def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
         items.append(
             CartItem(
                 **_nullable_string_fields(item, _CART_ITEM_FIELDS, "cart item"),
-                ticket_count=_optional_integer(item, "h_tk_cnt", "cart item"),
+                # CartInfo.java:51 declares h_tk_cnt as String, not int.
+                ticket_count=_optional_string(item, "h_tk_cnt", "cart item"),
                 raw=item,
             )
         )
@@ -1090,42 +1317,150 @@ def parse_ticket_receipt_response(
     return TicketReceiptResponse(items=tuple(items), **_response_fields(raw))
 
 
+def _parse_reservation_history_reservation(
+    raw: Mapping[str, Any] | None,
+) -> ReservationHistoryReservation | None:
+    """여정 옆에 매달린 ``ReservationOut`` 층을 읽습니다.
+
+    ``ReservationViewOutJrnyInfo.java:55`` 의 다섯 번째 생성자 인자가 이
+    객체인데 ``@SerialName`` 이 없어 정확한 와이어 키는 PROTECTED 입니다 —
+    코틀린 필드명 ``reservationOut`` 을 최선으로 사용합니다.
+    """
+    if raw is None:
+        return None
+    tickets = tuple(
+        ReservationHistoryTicket(
+            **_nullable_scalar_fields(
+                item, _RESERVATION_HISTORY_TICKET_FIELDS,
+                "reservation history ticket",
+            ),
+            raw=item,
+        )
+        for item in _rows(raw, "tkList", "reservation history reservation")
+    )
+    original_tickets = tuple(
+        ReservationHistoryOriginalTicket(
+            **_nullable_scalar_fields(
+                item, _RESERVATION_HISTORY_ORIGINAL_TICKET_FIELDS,
+                "reservation history original ticket",
+            ),
+            raw=item,
+        )
+        for item in _rows(raw, "orgTkList", "reservation history reservation")
+    )
+    passengers_container = _optional_mapping(
+        raw, "psg_infos", "reservation history reservation"
+    )
+    passengers: tuple[ReservationHistoryPassenger, ...] = ()
+    if passengers_container is not None:
+        passengers = tuple(
+            ReservationHistoryPassenger(
+                **_nullable_scalar_fields(
+                    item, _RESERVATION_HISTORY_PASSENGER_FIELDS,
+                    "reservation history passenger",
+                ),
+                raw=item,
+            )
+            for item in _rows(
+                passengers_container, "psg_info",
+                "reservation history passenger infos",
+            )
+        )
+    return ReservationHistoryReservation(
+        **_nullable_scalar_fields(
+            raw, _RESERVATION_HISTORY_RESERVATION_FIELDS,
+            "reservation history reservation",
+        ),
+        tickets=tickets,
+        original_tickets=original_tickets,
+        passengers=passengers,
+        raw=raw,
+    )
+
+
 def parse_reservation_history_response(
     raw: Mapping[str, Any],
 ) -> ReservationHistoryResponse:
+    """``research.reservationView.do`` — ``ReservationViewOut.java:64``.
+
+    이전에는 ``jrny_infos[].train_infos[]`` 만 읽어 최상위 신원 필드
+    (``h_rsv_ps_nm``/``h_tel_no`` 등)와 여정마다 매달린 ``srv_infos``/
+    ``acmp_infos``, 그리고 그 PNR 의 실제 운임·결제·발권 내용을 담은
+    ``ReservationOut`` 중첩 전체를 건너뛰었습니다.
+    """
     empty = _validate_envelope(
         raw,
         accepted_empty_codes=frozenset({"P100"}),
     )
     if empty:
         return ReservationHistoryResponse(**_response_fields(raw))
-    trains = []
+    guide_infos = _optional_mapping(raw, "guide_infos", "reservation history")
+    guide_info = (
+        _optional_string(guide_infos, "guide_info", "reservation history guide_infos")
+        if guide_infos is not None
+        else None
+    )
+    journeys: list[ReservationHistoryJourney] = []
+    all_trains: list[ReservationHistoryTrain] = []
     for journey_value in _nested_rows(
         raw, "jrny_infos", "jrny_info", "reservation history"
     ):
         journey = _row(journey_value, "reservation history jrny_info")
+        trains: list[ReservationHistoryTrain] = []
         for train_value in _nested_rows(
             journey, "train_infos", "train_info", "reservation history"
         ):
             train = _row(train_value, "reservation history train_info")
-            trains.append(
-                ReservationHistoryTrain(
-                    **_nullable_string_fields(
-                        train, _RESERVATION_HISTORY_TRAIN_FIELDS,
-                        "reservation history train",
-                    ),
-                    seat_count=_optional_integer(
-                        train, "h_tot_seat_cnt",
-                        "reservation history train",
-                    ),
-                    standing_count=_optional_integer(
-                        train, "h_tot_stnd_cnt",
-                        "reservation history train",
-                    ),
-                    raw=train,
-                )
+            history_train = ReservationHistoryTrain(
+                **_nullable_string_fields(
+                    train, _RESERVATION_HISTORY_TRAIN_FIELDS,
+                    "reservation history train",
+                ),
+                seat_count=_optional_integer(
+                    train, "h_tot_seat_cnt",
+                    "reservation history train",
+                ),
+                standing_count=_optional_integer(
+                    train, "h_tot_stnd_cnt",
+                    "reservation history train",
+                ),
+                raw=train,
             )
-    return ReservationHistoryResponse(items=tuple(trains), **_response_fields(raw))
+            trains.append(history_train)
+            all_trains.append(history_train)
+        service_infos = tuple(
+            _row(v, "reservation history srv_info")
+            for v in _nested_rows(
+                journey, "srv_infos", "srv_info", "reservation history journey"
+            )
+        )
+        accompanying_infos = tuple(
+            _row(v, "reservation history acmp_info")
+            for v in _nested_rows(
+                journey, "acmp_infos", "acmp_info", "reservation history journey"
+            )
+        )
+        reservation = _parse_reservation_history_reservation(
+            _optional_mapping(journey, "reservationOut", "reservation history jrny_info")
+        )
+        journeys.append(
+            ReservationHistoryJourney(
+                trains=tuple(trains),
+                service_infos=service_infos,
+                accompanying_infos=accompanying_infos,
+                reservation=reservation,
+                raw=journey,
+            )
+        )
+    return ReservationHistoryResponse(
+        **_nullable_string_fields(
+            raw, _RESERVATION_HISTORY_TOP_FIELDS, "reservation history"
+        ),
+        guide_info=guide_info,
+        journeys=tuple(journeys),
+        items=tuple(all_trains),
+        **_response_fields(raw),
+    )
 
 
 def parse_free_seat_car_response(
@@ -1160,14 +1495,20 @@ def parse_guide_seat_condition_response(
         raise KorailProtocolError(
             "KORAIL seat guidance result must be SUCC or FAIL/MRR800011"
         )
-    return GuideSeatConditionResponse(**_response_fields(raw))
+    # GuideSeatCndOut.java:29 — "timeStamp" has no @SerialName (PROTECTED);
+    # the Kotlin field name is used as a best-effort wire key.
+    return GuideSeatConditionResponse(
+        time_stamp=_optional_integer(raw, "timeStamp", "guide seat condition"),
+        **_response_fields(raw),
+    )
 
 
 def _parse_train_schedule_item(
     raw: Mapping[str, Any],
+    field_map: Mapping[str, str],
 ) -> TrainScheduleItem:
     return TrainScheduleItem(
-        **_nullable_string_fields(raw, _TRAIN_SCHEDULE_ITEM_FIELDS, "train schedule item"),
+        **_nullable_string_fields(raw, field_map, "train schedule item"),
         raw=raw,
     )
 
@@ -1175,17 +1516,29 @@ def _parse_train_schedule_item(
 def _parse_train_schedule_container(
     raw: Mapping[str, Any],
     context: str,
+    field_map: Mapping[str, str],
+    *,
+    read_merge_flag: bool,
 ) -> tuple[str | None, tuple[TrainScheduleItem, ...]]:
+    """``trn_infos`` 컨테이너를 파싱합니다.
+
+    ``read_merge_flag`` 는 호출자가 골라야 합니다 — 같은 컨테이너 키
+    ``trn_infos`` 아래 실제 DTO 가 라우트마다 다릅니다.
+    ``MergeSeatsCOutTrnInfos``(``:25-26``)만 ``h_merge_rsv_psb_flg`` 를
+    선언하고, ``TrainScheduleOutTrainInfos``(``:25-26``)는 ``trn_info``
+    하나뿐입니다. 예전에는 이 구분 없이 두 라우트 모두에서 같은 키를
+    읽어, 좌석배정 시각표 쪽은 항상 죽은 읽기였습니다.
+    """
     container = _optional_mapping(raw, "trn_infos", context)
     if container is None:
         return None, ()
-    merge_flag = _optional_string(
-        container,
-        "h_merge_rsv_psb_flg",
-        context,
+    merge_flag = (
+        _optional_string(container, "h_merge_rsv_psb_flg", context)
+        if read_merge_flag
+        else None
     )
     trains = tuple(
-        _parse_train_schedule_item(_row(value, f"{context} trn_info"))
+        _parse_train_schedule_item(_row(value, f"{context} trn_info"), field_map)
         for value in _optional_list(container, "trn_info", context)
     )
     return merge_flag, trains
@@ -1194,10 +1547,24 @@ def _parse_train_schedule_container(
 def parse_seat_assignment_schedule_response(
     raw: Mapping[str, Any],
 ) -> SeatAssignmentScheduleResponse:
+    """``assignScheduleView.do``.
+
+    ``h_merge_rsv_psb_flg`` 는 읽지 않습니다 — 이 라우트의 ``trn_infos`` 는
+    ``TrainScheduleOutTrainInfos``(``trn_info`` 하나뿐)이고, 그 키는
+    ``MergeSeatsCOutTrnInfo``(``mergeSeatsC.do``)에 속합니다.
+
+    다음 페이지 커서(``strJobId``, ``h_menu_id`` 등)도 같은 ``TrainScheduleOut``
+    생성자(``:67``)가 함께 선언하는데, 이전에는 ``h_next_pg_flg`` 하나만
+    꺼냈습니다. 같은 DTO 모양을 읽는 형제 파서
+    ``parsers.py::parse_train_search_metadata`` 가 이미 이 전체 필드 집합을
+    읽으므로 그 패턴을 그대로 따릅니다.
+    """
     _validate_strict_read_envelope(raw)
     merge_flag, trains = _parse_train_schedule_container(
         raw,
         "seat assignment schedule",
+        _TRAIN_SCHEDULE_OUT_TRAIN_FIELDS,
+        read_merge_flag=False,
     )
     return SeatAssignmentScheduleResponse(
         next_page_flag=_optional_string(
@@ -1206,6 +1573,40 @@ def parse_seat_assignment_schedule_response(
             "seat assignment schedule",
         ),
         merge_reservation_possible_flag=merge_flag,
+        job_id=_optional_string(raw, "strJobId", "seat assignment schedule"),
+        menu_id=_optional_string(raw, "h_menu_id", "seat assignment schedule"),
+        goods_no=_optional_string(raw, "h_gd_no", "seat assignment schedule"),
+        notice_message=_optional_string(
+            raw, "h_notice_msg", "seat assignment schedule"
+        ),
+        first_seat_count=_optional_string(
+            raw, "h_seat_cnt_first", "seat assignment schedule"
+        ),
+        second_seat_count=_optional_string(
+            raw, "h_seat_cnt_second", "seat assignment schedule"
+        ),
+        agreement_text=_optional_string(
+            raw, "h_agree_txt", "seat assignment schedule"
+        ),
+        first_departure_time=_optional_string(
+            raw, "txtGoHour_first", "seat assignment schedule"
+        ),
+        result_count=_optional_string(raw, "h_rslt_cnt", "seat assignment schedule"),
+        next_query_station_no=_optional_string(
+            raw, "h_qry_st_no_next", "seat assignment schedule"
+        ),
+        next_train_no=_optional_string(
+            raw, "h_trn_no_next", "seat assignment schedule"
+        ),
+        next_preceding_train_no=_optional_string(
+            raw, "h_prcd_trn_no_next", "seat assignment schedule"
+        ),
+        next_connecting_train_no=_optional_string(
+            raw, "h_ectb_trn_no_next", "seat assignment schedule"
+        ),
+        remaining_seat_count=_optional_string(
+            raw, "h_rest_seat_cnt", "seat assignment schedule"
+        ),
         trains=trains,
         **_response_fields(raw),
     )
@@ -1240,9 +1641,13 @@ def parse_merge_seats_inquiry_response(
     merge_flag, trains = _parse_train_schedule_container(
         raw,
         "merge seats inquiry",
+        _MERGE_SEATS_TRAIN_FIELDS,
+        read_merge_flag=True,
     )
     return MergeSeatsInquiryResponse(
         merge_reservation_possible_flag=merge_flag,
+        # MergeSeatsCOut.java:29,112 — @SerialName("runDt"), top-level.
+        run_date=_optional_string(raw, "runDt", "merge seats inquiry"),
         intermediate_stations=tuple(stations),
         trains=trains,
         **_response_fields(raw),
@@ -1316,7 +1721,10 @@ _MILEAGE_HISTORY_FIELDS = {
     "total_available_affiliate_point": "totAvlAfltPontValNum",
     "total_accumulated_rail_point_1": "totAcmRailPontValNum1",
     "total_used_rail_point_1": "totUseRailPontValNum1",
-    "rail_now_saved_point_1": "railNowSavePontValNum1",
+    # "railNowSavePontValNum1" was removed: 0 occurrences anywhere in AmtSpecOut
+    # (analysis/jadx/sources/com/korail/talk/network/model/AmtSpecOut.java:29-39)
+    # or its row DTO AmtSpecOutSpecInfo — a phantom key that made
+    # rail_now_saved_point_1 permanently None.
     "expiring_point_value": "delPontValNum",
     "ktx_mileage_info": "ktxMlgInfo",
 }
@@ -1397,12 +1805,20 @@ _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS = {
     "arrival_station_name": "arvRsStnNm",
     "departure_station_order": "dptStnConsOrdr",
     "arrival_station_order": "arvStnConsOrdr",
+    "departure_run_order": "dptStnRunOrdr",
+    "arrival_run_order": "arvStnRunOrdr",
+    "transfer_train_order_no": "chtnTrnOrdrNo",
+    "price_class_code": "prcClCd",
+    "settlement_car_type_code": "stlbCarTpCd",
+    "settlement_train_class_code": "stlbTrnClsfCd",
     "commuter_price": "cmtrPrc",
     "direct_transfer_division_code": "dirtChtnDvCd",
     "detour_code": "dturCd",
     "detour_name": "dturNm",
     "route_code": "routCd",
-    "station_string_info": "stationStringInfo",
+    # "stationStringInfo" is not read: 0 occurrences anywhere in the
+    # decompile. NCardScheduleItem.java:25-49 declares no such field; the app
+    # builds that Spanned label itself from the station names above.
 }
 
 
@@ -1450,12 +1866,13 @@ def parse_discount_card_schedule_response(
                 raw=item,
             )
         )
+    # "fllwPgExt" is not read here: NCardScheduleOut.java:27-28 declares only
+    # trnScdlList — fllwPgExt belongs to a different DTO (ScdlQryOut, the
+    # limousine schedule). NCardScheduleOut has no other field, so this
+    # route's server-side pagination signal is unconfirmed; following_page_exists
+    # stays None rather than being wired to an always-false read. See
+    # DiscountCardScheduleResponse's docstring.
     return DiscountCardScheduleResponse(
-        following_page_exists=_optional_string(
-            raw,
-            "fllwPgExt",
-            "discount card schedule",
-        ),
         trains=tuple(trains),
         **_response_fields(raw),
     )
@@ -1505,6 +1922,9 @@ _CUSTOMER_TRIP_FIELDS = {
     "train_connection_flag": "trnCnecFlg",
     "train_group_code": "trnGpCd",
     "usage_day_no": "utlDno",
+    # CustTripInfo.java:48 — no @SerialName (PROTECTED), Java field name used
+    # as best-effort. 33rd of 33 declared fields; only one missing before.
+    "goods_no": "gdNo",
 }
 
 _MAAS_DETAIL_FIELDS = {
@@ -1657,13 +2077,12 @@ def parse_trip_change_date_response(
                 "KORAIL trip change dates field tripChgDates must contain only strings"
             )
         dates.append(value)
+    # "tripChgDate" (singular) is not read here: TipChgDateInquiryOut.java:28-30
+    # declares only lastRunDt and the plural List<String> tripChgDates.
+    # "tripChgDate" is the *request* DTO's field
+    # (TipChgDateInquiryIn.java:29), not part of this response.
     return TripChangeDateResponse(
         last_run_date=_optional_string(raw, "lastRunDt", "trip change dates"),
-        trip_change_date=_optional_string(
-            raw,
-            "tripChgDate",
-            "trip change dates",
-        ),
         trip_change_dates=tuple(dates),
         **_response_fields(raw),
     )
@@ -1700,6 +2119,18 @@ def parse_commuter_info_response(
                 common_code_name=_optional_string(
                     item,
                     "comnCdNm",
+                    "commuter passenger option",
+                ),
+                # Psg.java:30-31 — int custAgeFrom/custAgeTo, siblings of the
+                # already-read psgPrnbFrom/psgPrnbTo below.
+                customer_age_from=_primitive_json_integer(
+                    item,
+                    "custAgeFrom",
+                    "commuter passenger option",
+                ),
+                customer_age_to=_primitive_json_integer(
+                    item,
+                    "custAgeTo",
                     "commuter passenger option",
                 ),
                 passenger_count_from=_primitive_json_integer(
@@ -1854,10 +2285,13 @@ def parse_ticket_duplication_check_response(
 ) -> TicketDuplicationCheckResponse:
     _validate_strict_read_envelope(raw)
     return TicketDuplicationCheckResponse(
-        # DuplicationCheckResponse.rsvCnt is Java `int`
-        # (TicketDuplicationCheckDao.java:27); Gson coerces a quoted numeric
-        # string, so accept both "0" and 0 like the app.
-        reservation_count=_required_integer(
+        # TicketDupCheckOut.java:28,50 declares rsvCnt as a kotlinx String
+        # field (@SerialName("rsvCnt")), not a Java int — the old comment's
+        # "Gson coerces a quoted numeric string" reasoning does not apply to
+        # this DTO. Read it as a string; behavior was already neutral since
+        # both "0" and 0 were previously accepted, but a future maintainer
+        # trusting the old comment could otherwise drop string handling.
+        reservation_count=_optional_string(
             raw,
             "rsvCnt",
             "ticket duplication check",
@@ -1878,11 +2312,15 @@ def parse_pbp_acceptance_specification_response(
             for seat in _rows(journey, "seatList", "PBP acceptance journey"):
                 seats.append(
                     PbpAcceptanceSeat(
-                        **_nullable_string_fields(
-                            seat,
-                            _PBP_ACCEPTANCE_SEAT_FIELDS,
-                            "PBP acceptance seat",
-                        ),
+                        # Seat.java:53-59's synthetic constructor requires all
+                        # five of these fields (mask 31) -- throws
+                        # MissingFieldException if any is absent. Reading them
+                        # as optional would accept a response shape 7.0.6
+                        # itself refuses to deserialize.
+                        **{
+                            attr: _required_string(seat, wire_key, "PBP acceptance seat")
+                            for attr, wire_key in _PBP_ACCEPTANCE_SEAT_FIELDS.items()
+                        },
                         # PbpAcepSpecDao.Seat.scarNo is Java `int`
                         # (PbpAcepSpecDao.java:102); Gson coerces a quoted
                         # numeric string, so accept both "3" and 3.
@@ -1960,6 +2398,9 @@ _RESERVATION_SEAT_DETAIL_FIELDS = {
     "received_amount": "h_rcvd_amt",
     "seat_price": "h_seat_prc",
     "seat_fare": "h_seat_fare",
+    # ReservationOutSeatInfo.java:269 — @SerialName("h_tot_disc_amt"). The
+    # only one of the four seat-level money fields that was missing.
+    "total_discount_amount": "h_tot_disc_amt",
     "seat_group_name": "h_sgr_nm",
 }
 
@@ -1970,6 +2411,9 @@ _RESERVATION_DETAIL_JOURNEY_FIELDS = {
     "departure_date": "h_dpt_dt",
     "departure_time": "h_dpt_tm",
     "arrival_time": "h_arv_tm",
+    # ReservationOutJrnyInfo.java:86,305 — @SerialName("h_arv_dt"), distinct
+    # from arrival_time (h_arv_tm).
+    "arrival_date": "h_arv_dt",
     "departure_station_name": "h_dpt_rs_stn_nm",
     "arrival_station_name": "h_arv_rs_stn_nm",
     "train_no": "h_trn_no",
@@ -2109,6 +2553,12 @@ _REFUND_TICKET_DETAIL_FIELDS = {
     "total_discount_amount": "h_tot_disc_amt",
     "total_received_amount": "h_tot_rcvd_amt",
     "train_running_flag": "h_trn_running_flg",
+    # h_abrd_ps_nm/s_brth are the RIDER's own name+birthdate pair
+    # (TicketDetailOut.java:410,418) — a single top-level summary pair,
+    # distinct from the LIST psgNmList (below) and from the companion pair
+    # h_compa_nm/h_compa_brth.
+    "passenger_name": "h_abrd_ps_nm",
+    "passenger_birth_date": "s_brth",
     "companion_name": "h_compa_nm",
     "companion_birth_date": "h_compa_brth",
     # Flags the app echoes straight back into the refund it then sends
@@ -2119,14 +2569,15 @@ _REFUND_TICKET_DETAIL_FIELDS = {
     "pbp_acceptance_target_flag": "h_pbp_acep_tgt_flg",
     "delay_flag": "h_dlay_flg",
     "delay_ticket_flag": "h_dlay_tk_flg",
-    "mileage_save_flag": "mlgSaveFlg",
+    # "mlgSaveFlg" is not read: 0 occurrences anywhere in the decompile.
     "additional_service_flag": "addSrvFlg",
     "additional_service_cancel": "addSrvCancel",
 }
 
 
 _DISCOUNT_CARD_SECTION_FIELDS = {
-    "section_sequence": "dcntCrdAplSegSqno",
+    # "dcntCrdAplSegSqno" is not read: 0 occurrences anywhere in the
+    # decompile. journey_sequence (jrnySqno, below) is the real nearby field.
     "departure_station_name": "dptRsStnNm",
     "arrival_station_name": "arvRsStnNm",
     "journey_sequence": "jrnySqno",
@@ -2231,8 +2682,32 @@ def parse_refund_ticket_detail_response(
         detail_fields["pbp_acceptance_target_flag"] = _optional_string(
             raw, "pbpAcepTgtFlg", "refund ticket detail"
         )
+    # h_qrcode has an explicit @SerialName (TicketDetailOut.java:478).
+    qr_code = _optional_string(raw, "h_qrcode", "refund ticket detail")
+    # psgNmList/seatTicketList/limousine/dtlList have NO explicit @SerialName
+    # on TicketDetailOut (PROTECTED wire spelling) — the Kotlin field names
+    # are used as a best-effort key, matching this module's treatment of
+    # other unannotated fields (e.g. GuideSeatCndOut.timeStamp).
+    passenger_names = tuple(
+        _row(v, "refund ticket detail psgNmList")
+        for v in _optional_list(raw, "psgNmList", "refund ticket detail")
+    )
+    seat_tickets = tuple(
+        _row(v, "refund ticket detail seatTicketList")
+        for v in _optional_list(raw, "seatTicketList", "refund ticket detail")
+    )
+    limousine = _optional_mapping(raw, "limousine", "refund ticket detail")
+    delay_details = tuple(
+        _row(v, "refund ticket detail dtlList")
+        for v in _optional_list(raw, "dtlList", "refund ticket detail")
+    )
     return RefundTicketDetailResponse(
         **detail_fields,
+        qr_code=qr_code,
+        passenger_names=passenger_names,
+        seat_tickets=seat_tickets,
+        limousine=limousine,
+        delay_details=delay_details,
         journeys=tuple(journeys),
         discount_card=_discount_card_on_ticket(raw),
         **_response_fields(raw),

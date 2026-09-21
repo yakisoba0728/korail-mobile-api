@@ -32,53 +32,120 @@ KORAIL_LOGIN_TYPE_MEMBER_NO = "2"
 KORAIL_LOGIN_TYPE_PHONE = "4"
 KORAIL_LOGIN_TYPE_EMAIL = "5"
 
-# S4/u.getLoginAuthenticationPostData: Gson serializes LoginResponse DTO in
-# field declaration order, skipping null fields and undeclared keys (strResult,
-# h_msg_txt). h_msg_cd is included because it's annotated on BaseResponse.
+# NOT Gson — the old docstring's "Gson field declaration order" claim was
+# false (this repo's own W2-parsers-and-crypto.md finding 5). LoginOut is a
+# kotlinx.serialization data class; the order below is its own primary
+# constructor's declared parameter order, confirmed two independent ways in
+# analysis/jadx/sources/com/korail/talk/network/model/LoginOut.java:
+#   - the synthetic deserializing constructor at :105
+#   - the `copy()` body's `new LoginOut(key, strCustDvCd, ...)` call at :912
+# Only "key" carries an explicit @SerialName that differs from its Kotlin
+# property name (`@SerialName("Key")`, :383). None of the other 52 fields
+# has an @SerialName annotation, so per this repo's own convention (see
+# analysis/reports/src-verification/00-ground-truth-brief.md §1) their exact
+# wire spelling is PROTECTED; the Kotlin property name is used below as the
+# best-effort guess, same as it was before. The fabricated "coupClsFlg"
+# field — present in neither LoginOut nor anywhere else in the 7.0.6
+# decompile (0 hits in jadx/apktool/raw) — has been removed, and "h_msg_cd"
+# (which belongs to the CommonOut base class, not to LoginOut itself) is no
+# longer appended here.
+#
+# IMPORTANT: this list is *not* known to be what a real login continuation
+# needs. See build_login_authentication_post_data's docstring — the actual
+# 7.0.6 continuation mechanism is not an HTTP POST of these fields at all.
 KORAIL_LOGIN_CONTINUATION_FIELDS: tuple[str, ...] = (
-    "coupClsFlg",
-    "dlayDscpInfo",
-    "encryptCustNo",
-    "encryptHMbCrdNo",
-    "encryptMbCrdNo",
-    "intgFlg",
-    "intgMsgTxt",
-    "intgUrl",
-    "notiTpCd",
-    "strAthnFlg5",
-    "strAthnFlg7",
-    "strBtdt",
-    "strCpNo",
-    "strCustClCd",
+    "Key",
     "strCustDvCd",
-    "strCustLeadFlg",
-    "strCustMgSrtCd",
+    "strCustSrtCd",
+    "strCustClCd",
+    "scedDvCd",
     "strCustNm",
     "strCustNo",
-    "strCustSrtCd",
     "strEmailAdr",
+    "strBtdt",
+    "strMbCrdNo",
+    "strAbrdStnCd",
+    "strGoffStnCd",
+    "strAbrdStnNm",
+    "strGoffStnNm",
+    "strDiscCouponFlg",
+    "strCpNo",
+    "strCnecInfoVal",
+    "strEvtTgtFlg",
+    "strSexDvCd",
+    "strDiscCrdReisuFlg",
+    "strYouthAgrFlg",
+    "strCustMgSrtCd",
+    "strAthnFlg",
+    "strAthnFlg2",
+    "strPrsCnqeMsgCd",
     "strHdcpFlg",
     "strHdcpTpCd",
     "strHdcpTpCdNm",
-    "strLognTpCd6",
-    "strMbCrdNo",
-    "strRedirectUrl",
     "strSubtDcsClCd",
-    "strYouthAgrFlg",
-    "h_msg_cd",
+    "strCustLeadFlg",
+    "strCustLeadFlgNm",
+    "strLognTpCd1",
+    "strLognTpCd2",
+    "strAthnFlg5",
+    "strLognTpCd3",
+    "strLognTpCd4",
+    "notiTpCd",
+    "strLognTpCd5",
+    "strLognTpCd6",
+    "strCustId",
+    "dfpyQryDvCd",
+    "strAthnFlg7",
+    "strRedirectUrl",
+    "encryptMbCrdNo",
+    "encryptCustNo",
+    "athnFlg3",
+    "athnFlg4",
+    "aplClsDt4",
+    "encryptHMbCrdNo",
+    "dlayDscpInfo",
+    "intgFlg",
+    "intgMsgTxt",
+    "intgUrl",
 )
 
 
 def infer_login_input_flag(login_id: str) -> str:
-    """``txtInputFlg`` 판정.
+    """``txtInputFlg`` 판정 —
+    ``LoginViewModel.validateLoginId(loginId, allowEmpty)`` 재현
+    (``analysis/jadx/sources/com/korail/talk/ui/screen/login/LoginViewModel.java:1850-1876``).
 
-    ``@`` → ``"5"``, 01로 시작하는 10~11자리 숫자 → ``"4"``, 그 밖 → ``"2"``.
+    - 숫자만 10자리 → **항상** 회원번호(``"2"``, ``:1865``). 예전 코드가
+      요구하던 ``"01"`` 접두사 조건은 7.0.6 에 없다 — 접두사와 무관하게
+      길이만 본다.
+    - 숫자만 11자리 → 휴대폰(``"4"``, ``:1868``). 실제 앱은 그 뒤 AppSuit 로
+      보호된 추가 형식 검사를 통과해야만 ``4`` 를 반환하지만, 그 검사 내용은
+      정적 분석으로 복원되지 않는다(PROTECTED) — 여기서는 자릿수만으로
+      분류한다. 방향은 맞되 완전히 확인되지는 않았다.
+    - 그 밖의 자릿수(숫자만이지만 10·11자리가 아닌 경우)는 실제 앱이라면
+      무효(``0``, 아무것도 전송하지 않음)를 반환하지만, 이 라이브러리에는
+      "무효" 를 표현하는 반환값이 없어 이전과 같이 보수적으로 회원번호로
+      취급한다 — 이 폴백 자체는 미확인이다.
+    - ``@`` 를 포함하면 ``isValidEmail(loginId) && length >= 7`` 이어야
+      이메일(``"5"``, ``:1873``). 길이가 7 미만이면 7.0.6 이 유효한 입력으로
+      받아들이지 않는 값(``:1876`` 의 ``return 0``)이므로, 다른 타입으로
+      조용히 보내는 대신
+      :class:`~korail_mobile_api.errors.KorailProtocolError` 를 던진다.
     """
     if "@" in login_id:
+        if len(login_id) < 7:
+            raise KorailProtocolError(
+                "KORAIL login id looks like an email address but is "
+                "shorter than 7 characters, which the KORAIL app never "
+                "accepts as valid login input"
+            )
         return KORAIL_LOGIN_TYPE_EMAIL
     digits = "".join(ch for ch in login_id if ch.isdigit())
-    if digits == login_id and digits.startswith("01") and len(digits) in {10, 11}:
-        return KORAIL_LOGIN_TYPE_PHONE
+    if digits == login_id:
+        if len(digits) == 10:
+            return KORAIL_LOGIN_TYPE_MEMBER_NO
+        if len(digits) == 11:
+            return KORAIL_LOGIN_TYPE_PHONE
     return KORAIL_LOGIN_TYPE_MEMBER_NO
 
 
@@ -89,13 +156,56 @@ def build_login_authentication_post_data(
     response_raw: dict[str, object],
     cust_id: str | None = None,
 ) -> str:
-    """2단계 인증 이어달리기 POST 본문(``S4/u.java:33-43``).
+    """로그인 실패 시 서버가 돌려준 ``strRedirectUrl`` 로 이어지는 후속 처리용
+    문자열을 만듭니다.
 
-    ``callLogin=Y&memId=...&inputFlg=...`` 뒤에
-    :data:`KORAIL_LOGIN_CONTINUATION_FIELDS` 순서로 non-null 값을 이어 붙입니다.
+    **확인된 것.** ``strRedirectUrl`` 자체는 실재하는 필드다
+    (``LoginOut.getStrRedirectUrl()``) — 실패 코드에 따라
+    ``LoginViewModel.processLoginWithoutSuccess``
+    (``analysis/jadx/sources/com/korail/talk/ui/screen/login/LoginViewModel.java:1390``)
+    가 이 값을 써서 화면 전환을 만든다.
+
+    **확인되지 않은 것 — 이 함수가 반환하는 문자열의 모양.** 7.0.6 은 여기서
+    HTTP POST 본문을 만들지 않는다. ``callLogin`` 이라는 파라미터는
+    ``analysis/`` 전체(jadx 소스·apktool·raw dex)에 0건이고, 이전 독스트링이
+    주장하던 ``S4/u.java:33-43`` (6.5.0, 디스크에 없음)의 "Gson 필드 선언
+    순서 POST" 는 이 저장소가 검증한 바 없는 날조였다. 실제 메커니즘은
+    ``h_msg_cd`` 값에 따라 분기하는 **WebView GET 내비게이션** 이다:
+
+    - ``h_msg_cd == "-699977554"``(휴면 계정)는
+      ``base_url + strRedirectUrl + "?" + COMMON_PARAMETER + <리터럴> +
+      loginId + <리터럴> + inputFlag`` 를 만들어
+      ``navigationService.goForResult(new SimpleWebRoute(...))`` 로 넘긴다
+      (``LoginViewModel.java:1397-1418``).
+    - ``h_msg_cd == "-699974646"``(비밀번호 변경 필요)는 다른 URL —
+      ``base_url + "/" + strRedirectUrl + "?" + COMMON_PARAMETER + <리터럴>
+      + strMbCrdNo + <리터럴> + strCustNo`` — 를 만든다(``:1435-1443``).
+      ``loginId``/``inputFlag`` 가 아니라
+      ``result.getStrMbCrdNo()``/``result.getStrCustNo()`` 를 쓴다.
+    - 두 경우 모두 파라미터 구분에 쓰는 리터럴 문자열(``&memId=`` 류로
+      추정되나 확정할 수 없음)은 AlienGuard 로 인코딩돼 있어 정적 분석으로
+      복원되지 않는다(PROTECTED).
+    - 그 밖의 ``h_msg_cd`` 값은 다이얼로그만 띄우고 URL 을 만들지 않는다 —
+      즉 이 함수가 뭔가를 반환해도 그 케이스에서는 앱이 아무 URL 도 만들지
+      않았을 수 있다.
+
+    이 함수는 **위 두 케이스에 해당하지 않는 한 실제 7.0.6 이 하는 일과
+    다른 문자열을 만들고, 해당하는 경우에도 리터럴 구분자를 알 수 없어
+    정확히 재현하지 못한다.** 공개 API 모양
+    (:class:`~korail_mobile_api.errors.KorailAuthContinuationRequired`)을
+    유지하기 위해 여전히 ``key=value&...`` 형태의 문자열을 반환하지만,
+    ``memId``/``inputFlg`` 라는 키 이름 자체도 확정된 wire 스펠링이 아닌
+    추정값이다. 날조됐던 ``coupClsFlg`` 필드와, 7.0.6 어디에도 없는
+    ``callLogin`` 파라미터는 제거했다. 호출자는 이 문자열을 실제 WebView
+    요청으로 신뢰하지 말고, ``redirect_url``/``raw`` 를 직접 보고 처리하는
+    편이 안전하다.
     """
     member_id = login_id if login_id else cust_id or ""
-    parts = ["callLogin=Y", f"memId={member_id}", f"inputFlg={input_flag}"]
+    # "memId"/"inputFlg" key spellings are an unconfirmed guess — see the
+    # docstring above. The values themselves (login_id/input_flag) are the
+    # only pieces independently confirmed to be part of the real
+    # dormant-account URL construction.
+    parts = [f"memId={member_id}", f"inputFlg={input_flag}"]
     for key in KORAIL_LOGIN_CONTINUATION_FIELDS:
         value = response_raw.get(key)
         if value is None:
@@ -105,20 +215,20 @@ def build_login_authentication_post_data(
 
 
 def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
-    """``common.code.do`` 응답에서 암호화 파라미터 객체를 꺼냅니다.
+    """``common.code.do`` 응답에서 ``app.login.cphd``(``AppLoginCphd``)를
+    꺼냅니다.
 
-    ``app.login.cphd`` / ``login`` 키를 최상위 → ``data`` 아래 순서로 탐색.
+    7.0.6 ``CommonCodeOut`` 은 이 값을 평탄한 최상위 필드로 선언하고
+    (``@SerialName("app.login.cphd")``,
+    ``analysis/jadx/sources/com/korail/talk/network/model/CommonCodeOut.java:267``),
+    ``LoginRepositoryImpl.java:918-936`` 은 ``commonCode.getAppLoginCphd()``
+    를 인스턴스에서 바로 읽습니다 — 대체 키 ``login`` 도 ``data`` 래퍼도
+    존재하지 않습니다(이전 구현이 시도하던 두 폴백 모두 근거 없이
+    발명된 모양이었습니다).
     """
-    for key in ("app.login.cphd", "login"):
-        value = raw.get(key)
-        if isinstance(value, dict):
-            return value
-    data = raw.get("data")
-    if isinstance(data, dict):
-        for key in ("app.login.cphd", "login"):
-            value = data.get(key)
-            if isinstance(value, dict):
-                return value
+    value = raw.get("app.login.cphd")
+    if isinstance(value, dict):
+        return value
     return raw
 
 
@@ -163,12 +273,19 @@ class KorailSessionClient:
         key = str(raw.get("key") or "")
         # 참고용입니다. getPwdAESCphd() 의 유일한 사용처는 결제 금액 암호화입니다:
         # analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:10991-10999
-        pwd_aes_cphd = str(raw.get("pwdAESCphd") or raw.get("loginFlg") or "").upper()
-        # "Y" 인데 key 가 비었을 때만 거절합니다. APK 도 빈 key 로 AES 를 부르다
-        # 실패하므로(SecretKeySpec), 평문 Base64 로 조용히 내려가지 않습니다:
+        # "loginFlg" 폴백은 제거했습니다 — analysis/jadx/sources/ 전체에 0건인
+        # 필드였고(W2-parsers-and-crypto.md 발견 11), 앱이 절대 만들지 않는
+        # 값을 조용히 대입할 수 있는 죽은 코드였습니다.
+        pwd_aes_cphd = str(raw.get("pwdAESCphd") or "").upper()
+        # key 가 비었으면 pwd_aes_cphd 값과 무관하게 여기서 거절하지 않고
+        # transform_login_password 가 무조건 거절합니다(crypto.py 참고) — 이
+        # 함수 자체가 "Y" 일 때만 거절하던 예전 가드는 pwd_aes_cphd 가 다른
+        # 값이거나 없을 때 평문 폴백으로 새는 구멍이었습니다
+        # (W2-parsers-and-crypto.md 발견 4). 7.0.6 도 key 가 비면 재조회 후
+        # 그래도 비면 AESCrypto 가 크래시할 뿐, 평문으로 내려가는 분기가
+        # 없습니다:
+        # analysis/jadx/sources/com/korail/talk/data/LoginRepositoryImpl.java:1230-1236
         # analysis/jadx/sources/com/korail/talk/crypto/AESCrypto.java:45-57
-        if pwd_aes_cphd == "Y" and not key:
-            raise KorailProtocolError("KORAIL login crypto metadata missing valid key")
         # idx 는 key 가 있어도 요구하지 않습니다. APK 는 getIdx() 를 확인 없이 LoginIn 에
         # 넘기고, 폼을 만들 때 빈 값을 빼므로 idx 없이 로그인을 보냅니다. _login 도 빈
         # idx 를 폼에서 뺍니다. key 길이는 로그인 POST 전에 transform_login_password 가

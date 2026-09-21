@@ -28,10 +28,14 @@ from .mutation_models import (
     ReservationJourney,
     ReservationPaymentCoupon,
     ReservationPaymentResponse,
+    ReservationPaymentSettlement,
+    ReservationPaymentTableSeat,
+    ReservationPaymentTicket,
     StationRefundExecutionResponse,
     StationRefundOriginalTicket,
     StationRefundVerificationResponse,
 )
+from .read_parsers import _nested_rows
 from .read_parsers import _optional_scalar_string as _optional_string
 
 
@@ -277,6 +281,7 @@ _RESERVATION_JOURNEY_FIELDS = {
     "reservation_change_no": "h_rsv_chg_no",
     "departure_date": "h_dpt_dt",
     "departure_time": "h_dpt_tm",
+    "arrival_date": "h_arv_dt",
     "arrival_time": "h_arv_tm",
     "departure_station_code": "h_dpt_rs_stn_cd",
     "arrival_station_code": "h_arv_rs_stn_cd",
@@ -290,6 +295,80 @@ _PAYMENT_COUPON_FIELDS = {
     "management_close_date": "h_fdcert_mg_cls_dt",
     "management_start_date": "h_fdcert_mg_st_dt",
     "ticket_return_no": "h_tk_ret_no",
+}
+
+# ReservationPaymentOut's own scalar fields (ReservationPaymentOut.java:90).
+_RESERVATION_PAYMENT_FIELDS = {
+    "reservation_no": "h_rsv_no",
+    "settlement_approval_no": "h_stl_cd_apprv_no",
+    "total_received_amount": "h_tot_rcvd_amt",
+    "settlement_amount": "h_stl_amt",
+    "total_settlement_amount": "h_tot_stl_amt",
+    "customer_no": "h_cust_no",
+    "member_card_no": "h_mb_crd_no",
+    "buyer_name": "h_buy_name",
+    "publication_start_no": "h_publ_start_no",
+    "publication_end_no": "h_publ_end_no",
+    "mixed_settlement_division": "h_mix_stl_dv",
+    "cancellation_fee": "h_cnc_fee",
+}
+
+# tk_infos.tk_info row fields (ReservationPaymentOutTkInfo.java).
+_RESERVATION_PAYMENT_TICKET_FIELDS = {
+    "ticket_sequence": "h_tk_sqno",
+    "sale_date": "h_sale_dt",
+    "sale_sequence": "h_sale_sqno",
+    "return_password": "h_tk_ret_pwd",
+    "return_no": "h_tk_ret_no",
+    "recipient_name": "h_take_name",
+    "discount_card_no": "h_disc_card_no",
+    "ticket_price": "h_tk_prc",
+    "ticket_fare": "h_tk_fare",
+    "bz5_fare_discount_amount": "h_bz5_fare_disc_amt",
+    "bz6_fare_discount_amount": "h_bz6_fare_disc_amt",
+    "total_discount_amount": "h_tot_disc_amt",
+    "total_received_amount": "h_tot_rcvd_amt",
+    "standard_seat_price_fare": "h_std_seat_prc_fare",
+}
+
+# stl_infos.stl_info row fields (ReservationPaymentOutStlInfo.java). acnt_info
+# (ReservationPaymentOutActInfo -- gateway transaction/error metadata, not
+# bank-account data) is left in raw; it is not modeled here.
+_RESERVATION_PAYMENT_SETTLEMENT_FIELDS = {
+    "settlement_sequence": "h_stl_sqno",
+    "settlement_type_code": "h_stl_tp_cd",
+    "settlement_result": "h_stl_rlt",
+    "transaction_division": "h_tr_gubun",
+    "card_installment_count": "h_crd_stl_cnt",
+    "installment_months": "h_inst_month",
+    "settlement_amount": "h_stl_amt",
+    "settlement_card_no": "h_stl_crd_no",
+    "card_company_code": "h_crd_corp_cd",
+    "card_company_name": "h_crd_corp_nm",
+    "approval_date": "h_apv_dt",
+    "approval_time": "h_apv_tm",
+    "approval_no": "h_apv_no",
+    "point_division": "h_xpoint_dv",
+    "point_no": "h_xpoint_no",
+    "point_approval_no": "h_xpoint_apv_no",
+    "remnant_amount": "h_remnant_amt",
+    "remote_point": "h_rmt_point",
+}
+
+# tbl_seat_infos.tbl_seat_info row fields (ReservationPaymentOutTblSeatInfo.java).
+_RESERVATION_PAYMENT_TABLE_SEAT_FIELDS = {
+    "room_class_name_1": "h_psrm_cl_cd_nm1",
+    "car_no_1": "h_srcar_no1",
+    "seat_no_start_1": "h_tbl_seat_no_sno_1",
+    "seat_no_end_1": "h_tbl_seat_no_eno_1",
+    "seat_count_1": "h_tbl_seat_cnt_1",
+    "group_name_1": "h_sgr_nm_1",
+    "room_class_name_2": "h_psrm_cl_cd_nm2",
+    "car_no_2": "h_srcar_no2",
+    "seat_no_start_2": "h_tbl_seat_no_sno_2",
+    "seat_no_end_2": "h_tbl_seat_no_eno_2",
+    "seat_count_2": "h_tbl_seat_cnt_2",
+    "group_name_2": "h_sgr_nm_2",
 }
 
 
@@ -370,6 +449,15 @@ def parse_reservation_payment_response(
 
     ``tk_coupon_info`` 는 없거나 ``null`` 이어도 되고 그때는 쿠폰이 빈 튜플입니다.
     리스트가 아니면 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+    ``tk_infos``/``stl_infos``/``tbl_seat_infos`` 는 ``{"tk_info": [...]}`` 처럼
+    바깥 객체 하나가 안쪽 리스트 하나를 감싼 모양이고 (:func:`_nested_rows`),
+    셋 다 없거나 ``null`` 이면 빈 튜플입니다.
+
+    이 세 목록을 타입 필드로 파싱하는 것은 기능 문제(결제 승인번호·예약번호·
+    금액이 ``.raw`` 에만 있던 문제)와 보안 문제(``h_tk_ret_pwd``·
+    ``h_take_name``·``h_disc_card_no``·``h_xpoint_apv_no`` 같은 민감 필드가
+    ``.raw`` 를 통해 redaction 을 우회하던 문제)를 동시에 닫습니다 — 두 문제
+    모두 같은 파서가 이 세 목록을 건너뛰던 것이 원인이었습니다.
 
     홀드 파서와 마찬가지로 성공 여부는 판정하지 않습니다. 결제가 서버에서 이미
     이뤄졌을 수 있으므로 응답을 버리지 않습니다.
@@ -398,6 +486,47 @@ def parse_reservation_payment_response(
             )
         )
 
+    tickets: list[ReservationPaymentTicket] = []
+    for value in _nested_rows(copied, "tk_infos", "tk_info", "payment ticket"):
+        row = dict(_row(value, "payment ticket"))
+        tickets.append(
+            ReservationPaymentTicket(
+                **{
+                    attr: _optional_string(row, wire_key, context="payment ticket")
+                    for attr, wire_key in _RESERVATION_PAYMENT_TICKET_FIELDS.items()
+                },
+                raw=row,
+            )
+        )
+
+    settlements: list[ReservationPaymentSettlement] = []
+    for value in _nested_rows(copied, "stl_infos", "stl_info", "payment settlement"):
+        row = dict(_row(value, "payment settlement"))
+        settlements.append(
+            ReservationPaymentSettlement(
+                **{
+                    attr: _optional_string(row, wire_key, context="payment settlement")
+                    for attr, wire_key in _RESERVATION_PAYMENT_SETTLEMENT_FIELDS.items()
+                },
+                raw=row,
+            )
+        )
+
+    table_seats: list[ReservationPaymentTableSeat] = []
+    for value in _nested_rows(
+        copied, "tbl_seat_infos", "tbl_seat_info", "payment table seat"
+    ):
+        row = dict(_row(value, "payment table seat"))
+        table_seats.append(
+            ReservationPaymentTableSeat(
+                **{
+                    attr: _optional_string(row, wire_key, context="payment table seat")
+                    for attr, wire_key in _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS.items()
+                },
+                raw=row,
+            )
+        )
+
     return ReservationPaymentResponse(
         **_base_fields(copied),
         image_ticket_flag=_optional_string(
@@ -405,7 +534,14 @@ def parse_reservation_payment_response(
             "h_im_flg",
             context="payment",
         ),
+        **{
+            attr: _optional_string(copied, wire_key, context="payment")
+            for attr, wire_key in _RESERVATION_PAYMENT_FIELDS.items()
+        },
         coupons=tuple(coupons),
+        tickets=tuple(tickets),
+        settlements=tuple(settlements),
+        table_seats=tuple(table_seats),
     )
 
 
@@ -418,6 +554,10 @@ _DISCOUNT_CARD_PURCHASE_FIELDS = {
     "usable_trip_count": "usePsbTno",
     "validity_start_date": "vlidTrmStDt",
     "validity_end_date": "vlidTrmClsDt",
+    # NCardInfoOut.java:30 -- distinct from dcntCrdStlTgtNo. No @SerialName
+    # is declared, same as its siblings above, so the bare Kotlin property
+    # name is the wire key (established pattern, not a new guess).
+    "registered_card_kind_management_no": "dcntCrdKndMgNo",
 }
 
 

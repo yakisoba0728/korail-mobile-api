@@ -78,8 +78,12 @@ def build_config_from_env() -> KorailConfig:
     (``KORAIL_ADVERTISING_ID``)와 ``KORAIL_DYNAPATH_AS_VALUE`` 는 패키지 기본값입니다.
     base URL(``KORAIL_BASE_URL``)은 ``https://smart.letskorail.com:443`` 이고, 화면
     크기(``KORAIL_DEVICE_WIDTH``/``KORAIL_DEVICE_HEIGHT``)와 SDK 정수
-    (``KORAIL_ANDROID_SDK_INT``)는 패키지 기본값이 아니라 이 함수의 리터럴 1440×3088,
-    33 입니다.
+    (``KORAIL_ANDROID_SDK_INT``)는 패키지 기본값이 아니라 이 함수의 리터럴
+    1440×3120, 37 입니다 — 이제는 근거가 있는 값입니다, 추측이 아닙니다:
+    ``analysis/device-pull/2026-09-14_korail-7.0.6/device/summary.tsv:5,10``
+    (``sdk 37``, ``wm_size Physical size: 1440x3120``). SDK 37 은
+    ``getprop.txt:1055`` 의 ``[ro.build.version.sdk]: [37]`` 로도 교차
+    확인됩니다. 이 저장소에 있는 유일한 7.0.6 실기기 샘플입니다.
     """
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
@@ -113,9 +117,16 @@ def build_config_from_env() -> KorailConfig:
                 device_model=device_model,
             ),
         ),
+        # Fallbacks 1440x3120 / SDK 37 are grounded evidence, not a guess:
+        # analysis/device-pull/2026-09-14_korail-7.0.6/device/summary.tsv:5
+        # (`sdk 37`, cross-confirmed by getprop.txt:1055
+        # `[ro.build.version.sdk]: [37]`) and summary.tsv:10 (`wm_size
+        # Physical size: 1440x3120`) -- the only 7.0.6 device sample in this
+        # repo. Width (1440) already matched the prior literal; height and
+        # SDK did not (3088, 33) and are corrected here.
         device_width=int(os.environ.get("KORAIL_DEVICE_WIDTH", "1440")),
-        device_height=int(os.environ.get("KORAIL_DEVICE_HEIGHT", "3088")),
-        android_sdk_int=int(os.environ.get("KORAIL_ANDROID_SDK_INT", "33")),
+        device_height=int(os.environ.get("KORAIL_DEVICE_HEIGHT", "3120")),
+        android_sdk_int=int(os.environ.get("KORAIL_ANDROID_SDK_INT", "37")),
         dynapath=dynapath,
         advertising_id=advertising_id,
     )

@@ -12,7 +12,7 @@
     ├── KorailAuthError                   로그인·세션
     │   ├── KorailSessionExpiredError     P058
     │   └── KorailAuthContinuationRequired  WebView 후속 인증
-    ├── KorailDynaPathError               안티매크로 거절(응답 헤더)
+    ├── KorailDynaPathError               안티매크로 거절(응답 본문의 정수 필드)
     ├── KorailDynaPathRequiredError       DynaPath 가 꺼진 채 요구 경로 호출(전송 전)
     ├── KorailAppError                    서버가 h_msg_cd 로 알린 실패
     │   ├── KorailNoResultsError
@@ -146,9 +146,16 @@ class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
 class KorailDynaPathError(KorailApiError):
     """DynaPath 계층이 요청을 거절 — 안티매크로.
 
-    ``h_msg_cd`` 가 아니라 응답 헤더(``DynaPath-Result`` 음수)로 옵니다.
-    ``BaseDaoHelper.java:59-86``, ``BaseActivity.java:632-634``,
-    ``ExecuteDao.java:25-47``.
+    ``h_msg_cd`` 도 응답 헤더도 아니라 **응답 본문**의 정수 필드로 옵니다 —
+    HTTP 상태와 무관하게, :data:`~korail_mobile_api.http._DYNAPATH_BLOCK_CODES`
+    에 속하는 값이면 이 예외입니다
+    (``analysis/jadx/sources/com/korail/talk/network/interceptor/DynaPathInterceptor.java:97-124``).
+    그 정수가 담긴 JSON 필드 이름 자체는 AppSuit 로 난독화돼 PROTECTED 이므로,
+    :mod:`~korail_mobile_api.http` 는 이름을 추측하는 대신 응답 본문의 모든
+    최상위 값을 훑어 판정합니다 — 자세한 근거는 그 모듈의
+    ``_dynapath_block_payload`` 독스트링을 참고하십시오. 예전에는 (틀리게)
+    ``DynaPath-Result`` 라는 응답 헤더를 봤습니다 — 그런 헤더는 7.0.6 어디에도
+    없습니다.
     """
 
     def __init__(
@@ -344,7 +351,7 @@ class KorailDynaPathRequiredError(KorailApiError):
 #
 # 일부러 넣지 않은 것:
 #   IRT010110  APK 전체 0건.
-#   "MACRO"    이 앱의 안티매크로는 DynaPath-Result 헤더(KorailDynaPathError).
+#   "MACRO"    이 앱의 안티매크로는 응답 본문의 정수 필드(KorailDynaPathError).
 #   S198       MaaS 전용(BaseActivity.java:621). 이 라이브러리가 구현하지 않는 표면.
 #   ERT800077  앱이 재시도를 권하나 이 라이브러리에 재시도 로직이 없다.
 # ---------------------------------------------------------------------------

@@ -81,6 +81,16 @@ class KorailConfig:
     #:
     #: 필드 목록 **맨 끝**. 중간에 끼우면 위치 인자의 뜻이 조용히 바뀝니다.
     enable_dynapath: bool = False
+    #: 7.0.6 ``CommonIn`` 의 4번째 공통 필드(``@SerialName(Constants.LANG)``,
+    #: ``com/kakao/sdk/common/Constants.java:27`` 의 평문 리터럴 ``"lang"``).
+    #: 실제 앱이 보내는 값은 ``LanguageProvider.getSTLeec()`` 가 반환하는
+    #: AppSuit 보호 값이라 여기서 추측해 채우지 않습니다. ``None`` 은 "이
+    #: 패키지의 예전(불완전한) 동작대로 ``lang`` 을 아예 싣지 않는다" 는
+    #: 뜻이고, 실제 값을 아는 호출자만 직접 넘깁니다.
+    #:
+    #: 이 필드도 **맨 끝**. ``enable_dynapath`` 와 같은 이유로, 위치 인자
+    #: 안전성 때문에 새 필드는 항상 끝에 추가합니다.
+    lang: str | None = None
 
     def __post_init__(self) -> None:
         if not self.enable_dynapath or self.dynapath.enabled:

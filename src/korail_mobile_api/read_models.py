@@ -32,7 +32,28 @@ class TicketListTicket:
 
 @dataclass(frozen=True)
 class TicketListReservation:
+    """``MyTicketListOutReservation.java`` — ``ticket_list`` 만 ``@SerialName``
+    이 있고 나머지 15개 멤버는 없습니다(PROTECTED, 코틀린 필드명이 최선).
+    그중 ``addSrvInfo``(부가서비스, ``AddSrvItem`` 객체)와
+    ``ticketKind``(``TicketDefine.TicketKind`` 열거형)는 중첩 타입이 더
+    필요해 아직 스칼라만 모델링했습니다 — 둘 다 :attr:`raw` 로 계속 닿을 수
+    있습니다.
+    """
+
     tickets: tuple[TicketListTicket, ...] = ()
+    departure_datetime: str | None = field(default=None, repr=False)
+    ticket_kind_code: str | None = None
+    list_count: str | None = None
+    seat_assign_count: int | None = None
+    ticket_status: str | None = None
+    is_finished: bool = False
+    is_history: bool = False
+    is_emergency: bool = False
+    display_ticket_name: str | None = None
+    is_non_member: bool = False
+    is_transfer: bool = False
+    is_wheelchair_member: bool = False
+    is_rail_police_enabled: bool = False
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
@@ -55,7 +76,10 @@ class CartItem:
     departure_date: str | None = None
     received_amount: str | None = None
     reservation_received_date: str | None = None
-    ticket_count: int | None = None
+    #: ``h_tk_cnt`` — ``CartInfo.java:51`` 의 선언은 ``String`` 입니다. 예전에는
+    #: int 로 강제 변환해 읽었습니다(6.5.0 Gson 전제를 잘못 적용한 것 —
+    #: 이 DTO 는 kotlinx 입니다).
+    ticket_count: str | None = None
     usage_start_date: str | None = None
     usage_start_time: str | None = None
     usage_close_time: str | None = None
@@ -96,12 +120,40 @@ class DepositBankListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DelayDiscountTicket:
+    """지연배상 쿠폰 한 장(``DelayCoupon.java:32-55``, 23개 String 필드).
+
+    ``h_use_psb_dt``(사용 가능 기한)는 전 디컴파일에 0건이라 더 이상 읽지
+    않습니다 — 예전에는 이 자리를 채우던 팬텀 키였습니다.
+    """
+
     fare: str | None = None
-    usable_until_date: str | None = None
     original_sale_date: str | None = field(default=None, repr=False)
     window_no: str | None = field(default=None, repr=False)
     sale_sequence: str | None = field(default=None, repr=False)
     return_password: str | None = field(default=None, repr=False)
+    #: ``h_tk_sqno`` — 이 줄이 어느 실물 승차권에 붙었는지를 가리키는 신원 앵커.
+    ticket_sequence: str | None = field(default=None, repr=False)
+    ticket_kind_code: str | None = None
+    #: ``h_orgtk_sale_dt`` — 원표 자체의 발매일. ``original_sale_date``
+    #: (``h_orgtk_ret_sale_dt``, 반환일)와는 다른 필드입니다.
+    original_ticket_sale_date: str | None = field(default=None, repr=False)
+    #: ``h_rcvd_amt`` — ``fare``(``h_dlay_fare``)와 별개인 수령 금액.
+    received_amount: str | None = None
+    train_class_code: str | None = None
+    room_class_code: str | None = None
+    train_no: str | None = None
+    departure_station_code: str | None = None
+    departure_date: str | None = None
+    departure_time: str | None = None
+    arrival_station_code: str | None = None
+    arrival_date: str | None = None
+    arrival_time: str | None = None
+    ticket_status_code: str | None = None
+    ticket_status_name: str | None = None
+    #: ``h_buy_ps_nm``/``h_abrd_ps_nm`` — 구매자·탑승자 성명. 둘 다 개인정보.
+    buyer_name: str | None = field(default=None, repr=False)
+    passenger_name: str | None = field(default=None, repr=False)
+    page_no: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
@@ -209,7 +261,9 @@ class ProductDetailResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class ReceiptPayment:
     payment_method: str | None = None
-    approval_date: str | None = None
+    #: ``h_apv_dt``. 형제 필드(계좌·승인·카드·포인트 번호)는 전부 보호되는데
+    #: 이 필드만 빠져 있었습니다.
+    approval_date: str | None = field(default=None, repr=False)
     installment_months: int | None = None
     amount: int | None = None
     account_no: str | None = field(default=None, repr=False)
@@ -223,7 +277,9 @@ class ReceiptPayment:
 class ReceiptCashPayment:
     """현금영수증 줄 (``ReceiptDao.java:12-40,43-44``)."""
 
-    approval_method_name: str | None = None
+    #: ``h_apv_mtd_nm`` — 사람이 읽는 승인방법 라벨. 형제 필드(인증도메인
+    #: 인식번호·현금영수증 승인번호)는 보호되는데 이 필드만 빠져 있었습니다.
+    approval_method_name: str | None = field(default=None, repr=False)
     authentication_domain_recognition_no: str | None = field(
         default=None, repr=False
     )
@@ -242,13 +298,21 @@ class TicketReceipt:
     arrival_time: str | None = None
     commuter_kind_code: str | None = None
     journey_type_code: str | None = None
+    #: ``h_prt_disc_knd_nm``/``h_prt_disc_knd_cd`` — 영수증에 인쇄된 할인
+    #: 종류의 이름·코드. ``ReceiptInfo.java`` 의 19개 String 중 셋(이 코드
+    #: 포함)이 빠져 있었습니다.
     printed_discount_name: str | None = None
+    printed_discount_kind_code: str | None = None
     print_type: str | None = None
     seat_class_name: str | None = None
     ticket_kind_code: str | None = None
+    #: ``h_tk_knd_nm`` — 승차권 종류의 사람이 읽는 이름.
+    ticket_kind_name: str | None = None
     ticket_status_code: str | None = None
     train_class_code: str | None = None
     train_class_name: str | None = None
+    #: ``h_trn_gp_cd`` — 열차 그룹 코드(KTX/새마을 등).
+    train_group_code: str | None = None
     train_no: str | None = None
     passenger_counts: tuple[int | None, int | None, int | None] = (
         None,
@@ -286,6 +350,9 @@ class ReservationHistoryTrain:
     acceptance_possible_flag: str | None = None
     payment_flag: str | None = None
     settlement_flag: str | None = None
+    #: ``h_rsv_amt`` — 이 열차 행의 유일한 금액 필드
+    #: (``ReservationViewOutTrainInfo.java:496``).
+    reserved_amount: str | None = None
     seat_count: int | None = None
     standing_count: int | None = None
     pnr_no: str | None = field(default=None, repr=False)
@@ -293,7 +360,131 @@ class ReservationHistoryTrain:
 
 
 @dataclass(frozen=True)
+class ReservationHistoryTicket:
+    """예약 이력 여정의 ``ReservationOut.tkList`` 행 하나(``ReservationOutTK.java``).
+
+    할인(``dcntList``)·동반가족(``fmlyList``)·정산(``stlList``) 하위 목록은
+    일부러 :attr:`raw` 에만 남깁니다 — :class:`OriginalTicket` 이 같은 이유로
+    ``cmpnList``/``stlList`` 를 raw 전용으로 두는 것과 같은 판단입니다.
+    """
+
+    sale_date: str | None = None
+    sale_window_no: str | None = field(default=None, repr=False)
+    sale_sequence: str | None = field(default=None, repr=False)
+    ticket_kind_code: str | None = None
+    movie_ticket_flag: str | None = None
+    delay_discount_flag: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class ReservationHistoryOriginalTicket:
+    """예약 이력 여정의 ``ReservationOut.orgTkList`` 행 하나(``ReservationOrgTk.java``)."""
+
+    sale_date: str | None = field(default=None, repr=False)
+    window_no: str | None = field(default=None, repr=False)
+    sale_sequence: str | None = field(default=None, repr=False)
+    #: ``ogtkRetPwd`` — 원표 반환 비밀번호. 그 자체로 반환 권한이라 민감합니다.
+    return_password: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class ReservationHistoryPassenger:
+    """예약 이력 여정의 ``ReservationOut.psgInfos.psgInfo`` 행 하나(``ReservationOutPsgInfo.java``)."""
+
+    passenger_type_code: str | None = None
+    passenger_count_per_info: str | None = None
+    discount_kind_code: str | None = None
+    discount_kind_code_2: str | None = None
+    discount_no: str | None = field(default=None, repr=False)
+    discount_no_2: str | None = field(default=None, repr=False)
+    delay_original_window_no: str | None = field(default=None, repr=False)
+    delay_original_sale_date: str | None = field(default=None, repr=False)
+    delay_original_sale_sequence: str | None = field(default=None, repr=False)
+    #: ``dlayOgtkRetPwd`` — 지연배상 원표의 반환 비밀번호.
+    delay_original_return_password: str | None = field(default=None, repr=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class ReservationHistoryReservation:
+    """예약 이력 여정에 매달린 ``ReservationOut`` — 실제 PNR·운임·결제 층.
+
+    7.0.6 이 이 층 전체를 여정 옆에 익명 중첩으로 선언합니다
+    (``ReservationViewOutJrnyInfo.java:55`` 의 다섯 번째 생성자 인자). 이전에는
+    예약 이력 파서가 여정·열차 층만 읽고 이 층 전체를 건너뛰어, PNR 의 실제
+    운임·결제·발권 내용이 타입 API 어디에도 없었습니다.
+
+    이 중첩 자체의 정확한 와이어 철자는 ``@SerialName`` 이 없어 PROTECTED 입니다
+    — 코틀린 필드명 ``reservationOut`` 을 최선으로 사용합니다
+    (``ReservationViewOutJrnyInfo.java`` 의 ``getReservationOut$annotations()``
+    부재).
+    """
+
+    #: ``h_pnr_no``.
+    pnr_no: str | None = field(default=None, repr=False)
+    total_fare: str | None = None
+    total_price: str | None = None
+    total_discount_amount: str | None = None
+    #: ``h_tot_rcvd_amt`` — 이 PNR 의 실제 결제(정산) 금액.
+    total_received_amount: str | None = None
+    payment_flag: str | None = None
+    tickets: tuple[ReservationHistoryTicket, ...] = ()
+    original_tickets: tuple[ReservationHistoryOriginalTicket, ...] = ()
+    passengers: tuple[ReservationHistoryPassenger, ...] = ()
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class ReservationHistoryJourney:
+    """예약 이력의 여정 하나(``ReservationViewOutJrnyInfo.java``).
+
+    ``srv_infos``/``acmp_infos`` 는 아직 행 단위로 모델링하지 않고 원본 그대로
+    노출합니다 — 이전에는 이 층 자체가 최상위 ``raw`` 블롭에만 남아 타입
+    응답 어디로도 들어오지 못했으므로, 원본 그대로라도 여정 단위로 닿을 수
+    있게 하는 것이 이번 수정의 목적입니다.
+    """
+
+    trains: tuple[ReservationHistoryTrain, ...] = ()
+    service_infos: tuple[Mapping[str, Any], ...] = field(
+        default=(), repr=False, compare=False
+    )
+    accompanying_infos: tuple[Mapping[str, Any], ...] = field(
+        default=(), repr=False, compare=False
+    )
+    reservation: ReservationHistoryReservation | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+
+
+@dataclass(frozen=True)
 class ReservationHistoryResponse(BaseKorailResponse):
+    """``ReservationViewOut`` — 예약 이력(``research.reservationView.do``).
+
+    최상위 신원 필드(``h_rsv_ps_nm``/``h_tel_no`` 등)와 :attr:`journeys` 는
+    이전에는 전혀 파싱되지 않고 최상위 ``raw`` 안에만 있었습니다
+    (``ReservationViewOut.java:64``).
+    """
+
+    #: ``h_rsv_ps_nm`` — 예약자 성명.
+    reservation_passenger_name: str | None = field(default=None, repr=False)
+    #: ``h_tel_no`` — 예약자 전화번호.
+    phone_no: str | None = field(default=None, repr=False)
+    reservation_limit_flag: str | None = None
+    seatmap_flag: str | None = None
+    process_flag: str | None = None
+    follow_flag: str | None = None
+    #: ``h_cust_no`` — 고객관리번호. 신원 식별자라 민감.
+    customer_no: str | None = field(default=None, repr=False)
+    customer_division_code: str | None = None
+    customer_sort_code: str | None = None
+    customer_class_code: str | None = None
+    journey_count: str | None = None
+    #: ``guide_infos.guide_info`` — 단일 안내 문구.
+    guide_info: str | None = None
+    journeys: tuple[ReservationHistoryJourney, ...] = ()
+    #: 모든 여정의 열차 행을 평탄화한 목록입니다. 개별 여정의 돈·PNR 층에
+    #: 닿으려면 :attr:`journeys` 를 쓰십시오.
     items: tuple[ReservationHistoryTrain, ...] = ()
 
     @property
@@ -310,24 +501,54 @@ class FreeSeatCarResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class GuideSeatConditionResponse(BaseKorailResponse):
-    """``reservation.guideSeatCnd.do`` 의 응답 — 봉투뿐입니다.
+    """``reservation.guideSeatCnd.do`` 의 응답.
 
     ``FAIL``/``MRR800011``(도우미 좌석 안내)도 예외가 아니라 이 응답으로 옵니다.
     안내 문구는 ``h_msg_txt`` 에 있습니다.
+
+    ``GuideSeatCndOut`` 이 선언하는 자체 필드는 :attr:`time_stamp`
+    (``long timeStamp``, ``:29``) 하나뿐입니다 — 그래서 이전에는 봉투 밖으로
+    아무것도 읽지 않았습니다. ``@SerialName`` 이 없어 정확한 와이어 철자는
+    PROTECTED 이며, 코틀린 필드명 ``timeStamp`` 를 최선으로 사용합니다.
     """
+
+    time_stamp: int | None = None
 
 
 @dataclass(frozen=True)
 class TrainScheduleItem:
+    """열차 행 하나 — ``assignScheduleView.do``(``TrainScheduleOutTrainInfo``)와
+    ``mergeSeatsC.do``(``MergeSeatsCOutTrnInfo``) 두 라우트가 공유합니다.
+
+    두 DTO 는 서로 다른데(``TrainScheduleOutTrainInfo`` 는 100여 필드,
+    ``MergeSeatsCOutTrnInfo`` 는 30필드) 실제 필드 이름의 상당수가
+    (``train_no``/``run_date``/``departure_*``/``arrival_*``/
+    ``*_reservation_code`` 등) 의미상 겹칩니다. 완전히 별개 데이터클래스로
+    쪼개는 대신, 각 라우트 전용 필드 맵(``_MERGE_SEATS_TRAIN_FIELDS``와
+    ``_TRAIN_SCHEDULE_OUT_TRAIN_FIELDS``, ``read_parsers.py``)으로 각 DTO 의
+    실제 와이어 키만 채우도록 나누고, 이 데이터클래스는 두 DTO 의 필드를
+    합친 상위집합으로 유지합니다 — 한쪽 라우트에서 안 쓰는 필드는 그냥
+    ``None`` 입니다. 필드 맵을 하나로 재사용하던 이전 버그(서로의 DTO 에
+    없는 키를 읽고, 있는 키는 빠뜨림)의 근본 원인이 바로 이 공유였습니다.
+    """
+
     train_no: str | None = None
+    #: ``h_trn_no_qb`` — 병합예약 조회 전용 열차번호(``MergeSeatsCOutTrnInfo``).
+    train_no_qb: str | None = field(default=None, repr=False)
+    #: ``h_trn_seq`` — 열차 순번(``MergeSeatsCOutTrnInfo``).
+    train_sequence: str | None = field(default=None, repr=False)
     train_group_code: str | None = None
     train_class_code: str | None = None
     train_class_name: str | None = None
     run_date: str | None = None
     departure_date: str | None = None
     departure_time: str | None = None
+    #: ``h_dpt_tm_qb``(``MergeSeatsCOutTrnInfo``).
+    departure_time_qb: str | None = field(default=None, repr=False)
     arrival_date: str | None = None
     arrival_time: str | None = None
+    #: ``h_arv_tm_qb``(``MergeSeatsCOutTrnInfo``).
+    arrival_time_qb: str | None = field(default=None, repr=False)
     departure_station_code: str | None = None
     departure_station_name: str | None = None
     arrival_station_code: str | None = None
@@ -340,9 +561,15 @@ class TrainScheduleItem:
     general_room_name: str | None = None
     special_room_name: str | None = None
     general_reservation_code: str | None = None
+    #: ``h_gen_rsv_nm``(``MergeSeatsCOutTrnInfo``).
+    general_reservation_name: str | None = None
     special_reservation_code: str | None = None
     free_seat_reservation_code: str | None = None
     standing_reservation_code: str | None = None
+    standing_reservation_name: str | None = None
+    #: ``h_jrny_rsv_cd``/``h_jrny_rsv_nm``(``MergeSeatsCOutTrnInfo``).
+    journey_reservation_code: str | None = None
+    journey_reservation_name: str | None = None
     seat_map_flag: str | None = None
     delay_sale_flag: str | None = None
     wait_reservation_flag: str | None = None
@@ -350,11 +577,30 @@ class TrainScheduleItem:
     special_reservation_possible_name: str | None = None
     info_text: str | None = None
     popup_message: str | None = field(default=None, repr=False)
+    #: ``shtmStndOpFlg`` — 셔틀 입석 오픈 여부(``MergeSeatsCOutTrnInfo``).
+    shuttle_standing_open_flag: str | None = None
+    #: ``restStndNum`` — 잔여 입석수(``MergeSeatsCOutTrnInfo``).
+    remaining_standing_count: str | None = None
+    #: ``h_std_rest_seat_cnt`` — 일반실 잔여석. 두 DTO 모두 선언합니다.
+    standard_remaining_seat_count: str | None = None
+    #: ``h_fst_rest_seat_cnt`` — 특실 잔여석(``TrainScheduleOutTrainInfo``).
+    first_remaining_seat_count: str | None = None
+    #: ``h_yms_apl_flg`` — 이 행이 병합(입석+좌석) 대상인지를 정하는 유일한
+    #: 입력(``TrainScheduleOutTrainInfo``, ``models.TrainSummary`` 참고).
+    merge_target_flag: str | None = None
+    #: ``h_trn_sps_flg`` — 운휴 표시/예약 게이트(``TrainScheduleOutTrainInfo``).
+    train_suspended_flag: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
 class PassScheduleTrain:
+    """정기권 일정의 열차 한 행(``TrainList.java:25-70``, 20개 필드).
+
+    이전에는 8개만 매핑돼 :attr:`run_date`(``h_run_dt``) — 이 행의 유일한
+    날짜 — 조차 없었습니다.
+    """
+
     arrival_station_code: str | None = None
     arrival_station_name: str | None = None
     departure_station_code: str | None = None
@@ -363,6 +609,21 @@ class PassScheduleTrain:
     schedule_price: str | None = None
     train_group_code: str | None = None
     train_no: str | None = None
+    #: ``h_trn_seq`` — 열차 순번.
+    train_sequence: str | None = field(default=None, repr=False)
+    #: ``h_chg_trn_seq``/``h_chg_trn_dv_cd`` — 변경된 열차의 순번·구분 코드.
+    change_train_sequence: str | None = field(default=None, repr=False)
+    change_train_division_code: str | None = None
+    #: ``h_run_dt`` — 이 행의 유일한 운행일자.
+    run_date: str | None = None
+    price_class_code: str | None = None
+    route_code: str | None = field(default=None, repr=False)
+    departure_construction_order: str | None = field(default=None, repr=False)
+    arrival_construction_order: str | None = field(default=None, repr=False)
+    car_type_code: str | None = None
+    train_class_code: str | None = None
+    commuter_use_terminal_code: str | None = None
+    commuter_use_terminal_name: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
@@ -404,8 +665,30 @@ class PassScheduleMainInfo:
 
 @dataclass(frozen=True)
 class SeatAssignmentScheduleResponse(BaseKorailResponse):
+    """``assignScheduleView.do`` — ``TrainScheduleOut.java:67`` 의 전체 필드.
+
+    이전에는 :attr:`next_page_flag` 만 꺼내 페이징 신호는 있는데 되실을
+    커서가 없었습니다. 같은 DTO 모양을 쓰는 형제 파서
+    ``parsers.py::parse_train_search_metadata``/``TrainSearchMetadata`` 가
+    이미 이 필드 집합을 정확히 이렇게 읽으므로 그 이름을 그대로 따릅니다.
+    """
+
     next_page_flag: str | None = None
     merge_reservation_possible_flag: str | None = None
+    job_id: str | None = None
+    menu_id: str | None = None
+    goods_no: str | None = None
+    notice_message: str | None = None
+    first_seat_count: str | None = None
+    second_seat_count: str | None = None
+    agreement_text: str | None = None
+    first_departure_time: str | None = None
+    result_count: str | None = None
+    next_query_station_no: str | None = None
+    next_train_no: str | None = None
+    next_preceding_train_no: str | None = None
+    next_connecting_train_no: str | None = None
+    remaining_seat_count: str | None = None
     trains: tuple[TrainScheduleItem, ...] = ()
 
 
@@ -427,6 +710,8 @@ class PassPeriodOption:
 @dataclass(frozen=True)
 class MergeSeatsInquiryResponse(BaseKorailResponse):
     merge_reservation_possible_flag: str | None = None
+    #: ``runDt`` — 최상위 운행일자(``MergeSeatsCOut.java:29,112``).
+    run_date: str | None = None
     intermediate_stations: tuple[IntermediateStation, ...] = ()
     trains: tuple[TrainScheduleItem, ...] = ()
 
@@ -536,10 +821,12 @@ class DiscountCardSection:
     때문입니다.
     """
 
-    #: ``dcntCrdAplSegSqno`` — 카드 안에서 이 구간의 순번.
-    section_sequence: str | None = None
     departure_station_name: str | None = None
     arrival_station_name: str | None = None
+    #: ``jrnySqno`` — 이 구간의 순번. 예전에는 존재하지 않는 키
+    #: (``dcntCrdAplSegSqno``, 전 디컴파일 0건)를 ``section_sequence`` 로
+    #: 잘못 읽었는데, 실제로 가장 가까운 필드는 바로 이 ``journey_sequence``
+    #: 입니다.
     journey_sequence: str | None = field(default=None, repr=False)
     journey_type_code: str | None = field(default=None, repr=False)
     train_group_code: str | None = field(default=None, repr=False)
@@ -662,7 +949,6 @@ class MileageHistoryResponse(BaseKorailResponse):
         repr=False,
     )
     total_used_rail_point_1: str | None = field(default=None, repr=False)
-    rail_now_saved_point_1: str | None = field(default=None, repr=False)
     #: ``delPontValNum`` — 이번 달에 소멸하는 포인트.
     expiring_point_value: str | None = None
     ktx_mileage_info: str | None = field(default=None, repr=False)
@@ -712,10 +998,14 @@ class DiscountCardScheduleTrain:
     ``NCardInquiryDao.TrainInfo``
     (``dao/research/NCardInquiryDao.java:144-236``).
 
-    ``stationInfo`` 는 일부러 없습니다. 그것은 앱이
-    :attr:`station_string_info` 로부터 스스로 만들어 내는
-    ``android.text.Spanned`` 이지 전선에서 읽는 값이 아닙니다(``:157``,
-    유일한 기록 지점이 ``:229`` 의 ``setStationInfo``).
+    ``stationInfo`` 는 일부러 없습니다. 그것은 앱이 중간 정차역 문자열로부터
+    스스로 만들어 내는 ``android.text.Spanned`` 이지 전선에서 읽는 값이
+    아닙니다. ``stationStringInfo`` 라는 전선 키 자체가 전 디컴파일에 0건이라
+    더 이상 읽지 않습니다.
+
+    ``NCardScheduleItem`` 은 20개 필드를 선언하는데(``:25-49``) 전부
+    ``@SerialName`` 이 없어 정확한 와이어 철자는 PROTECTED 입니다 — 코틀린
+    필드명을 최선으로 사용합니다.
     """
 
     train_no: str | None = None
@@ -727,14 +1017,24 @@ class DiscountCardScheduleTrain:
     arrival_station_name: str | None = None
     departure_station_order: str | None = field(default=None, repr=False)
     arrival_station_order: str | None = field(default=None, repr=False)
+    #: ``dptStnRunOrdr`` — 승차역 "운행" 순서. ``departure_station_order``
+    #: (``dptStnConsOrdr``, "편성" 순서)와는 다른 필드입니다.
+    departure_run_order: str | None = field(default=None, repr=False)
+    #: ``arvStnRunOrdr`` — 하차역 운행 순서.
+    arrival_run_order: str | None = field(default=None, repr=False)
+    #: ``chtnTrnOrdrNo`` — 환승 열차 순번.
+    transfer_train_order_no: str | None = field(default=None, repr=False)
+    #: ``prcClCd`` — 운임 구분 코드.
+    price_class_code: str | None = None
+    #: ``stlbCarTpCd``/``stlbTrnClsfCd`` — 정산용 호차·열차 종류 코드.
+    settlement_car_type_code: str | None = field(default=None, repr=False)
+    settlement_train_class_code: str | None = field(default=None, repr=False)
     #: ``cmtrPrc`` — 이 카드의 구간에 매겨진 운임.
     commuter_price: str | None = None
     direct_transfer_division_code: str | None = field(default=None, repr=False)
     detour_code: str | None = field(default=None, repr=False)
     detour_name: str | None = field(default=None, repr=False)
     route_code: str | None = field(default=None, repr=False)
-    #: ``stationStringInfo`` — 앱이 서식을 입혀 그리는 중간 정차역 줄입니다.
-    station_string_info: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
@@ -745,12 +1045,16 @@ class DiscountCardScheduleResponse(BaseKorailResponse):
     ``NCardInquiryDao.NCardInquiryResponse``
     (``dao/research/NCardInquiryDao.java:128-142``).
 
-    :attr:`following_page_exists` 가 페이징 신호입니다. 앱은 그 값이 ``"Y"``
-    인 동안 ``qryPgNo`` 를 하나씩 올려 다시 조회합니다
-    (``SectionNCardInquiryActivity.java:406-408``).
+    :attr:`following_page_exists` 는 더 이상 채워지지 않습니다. 7.0.6
+    ``NCardScheduleOut``(``:27-28``)은 ``trnScdlList`` 하나만 선언할 뿐
+    ``fllwPgExt`` 를 갖지 않습니다 — 그 키는 다른 DTO(``ScdlQryOut``, 리무진
+    일정)의 필드입니다. ``NCardScheduleOut`` 자체에는 대체할 다른 페이징
+    신호도 없어(정확히 이 한 필드만 선언), 이 라우트의 서버측 페이징 여부는
+    현재 미확인입니다 — 항상 ``None`` 인 이 필드를 폴링 신호로 쓰지
+    마십시오.
     """
 
-    #: ``fllwPgExt`` — 다음 페이지가 있으면 ``"Y"``.
+    #: 항상 ``None``. 아래 클래스 독스트링 참고.
     following_page_exists: str | None = None
     trains: tuple[DiscountCardScheduleTrain, ...] = ()
 
@@ -807,6 +1111,10 @@ class CustomerTripInfo:
     train_connection_flag: str | None = None
     train_group_code: str | None = None
     usage_day_no: str | None = None
+    #: ``gdNo`` — 상품번호. ``CustTripInfo.java`` 33필드 중 마지막으로
+    #: 빠져 있던 필드. ``@SerialName`` 이 없어 와이어 철자는 PROTECTED 이며
+    #: 코틀린 필드명을 최선으로 사용합니다.
+    goods_no: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
@@ -885,15 +1193,26 @@ class MaasServiceDetailListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TripChangeDateResponse(BaseKorailResponse):
+    """``research.tripChgDateInquiry.do`` (``TipChgDateInquiryOut.java:28-30``).
+
+    ``tripChgDate``(단수)는 **요청** DTO(``TipChgDateInquiryIn.java:29``)의
+    필드입니다 — 응답은 복수형 ``tripChgDates``(``List<String>``)만
+    선언하므로, 여기서는 단수형을 읽지 않습니다.
+    """
+
     last_run_date: str | None = None
-    trip_change_date: str | None = None
     trip_change_dates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class CommuterPassengerOption:
+    """``Psg.java:28-33``, 6개 필드 중 4개만 있으면 연령 하한/상한이 없습니다."""
+
     commuter_usage_age_code: str | None = None
     common_code_name: str | None = None
+    #: ``custAgeFrom``/``custAgeTo`` — 이 옵션이 적용되는 연령 하한/상한.
+    customer_age_from: int = 0
+    customer_age_to: int = 0
     passenger_count_from: int = 0
     passenger_count_to: int = 0
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
@@ -944,7 +1263,12 @@ class DeliveryRecipientResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TicketDuplicationCheckResponse(BaseKorailResponse):
-    reservation_count: int = field(default=0, repr=False)
+    #: ``rsvCnt`` — ``TicketDupCheckOut.java:28`` 의 선언은 ``String`` 입니다.
+    #: 예전 주석은 "Gson 이 DAO 의 Java int 를 강제 변환한다" 고 적었지만 이
+    #: DTO 는 kotlinx이고 끝까지 String 입니다 — 지금까지는 동작이 중립이었을
+    #: 뿐(둘 다 ASCII-decimal 문자열을 받아들이므로), 그 잘못된 근거를 믿고
+    #: 나중에 문자열 처리 경로를 지우는 사고를 막기 위해 고칩니다.
+    reservation_count: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -1225,6 +1549,11 @@ class ReservationSeatDetail:
     received_amount: str | None = None
     seat_price: str | None = None
     seat_fare: str | None = None
+    #: ``h_tot_disc_amt`` — 이 좌석의 총 할인액. 형제 금액 필드(수령액·좌석가·
+    #: 좌석운임)와 함께 있었는데 이 필드만 빠져 있었습니다. 같은 와이어 키를
+    #: ``_REFUND_TICKET_DETAIL_FIELDS`` 가 ``total_discount_amount`` 로 매핑하는
+    #: 것과 이름을 맞춥니다.
+    total_discount_amount: str | None = None
     seat_group_name: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
@@ -1239,6 +1568,10 @@ class ReservationDetailJourney:
     departure_date: str | None = None
     departure_time: str | None = None
     arrival_time: str | None = None
+    #: ``h_arv_dt`` — 도착일. ``arrival_time``(``h_arv_tm``)과 별개 필드라,
+    #: 심야·익일 도착 열차에서 도착 시각을 고정할 날짜가 이 필드 없이는
+    #: 없었습니다.
+    arrival_date: str | None = None
     departure_station_name: str | None = field(default=None, repr=False)
     arrival_station_name: str | None = field(default=None, repr=False)
     train_no: str | None = field(default=None, repr=False)
@@ -1347,6 +1680,9 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     환불 신원을 손으로 조립하지 말고
     :meth:`~korail_mobile_api.mutation_models.PaidTicket.from_refund_detail`
     에 이 응답을 넘겨야 합니다.
+
+    ``mlgSaveFlg``(환불 시 마일리지 복구 여부)는 더 이상 읽지 않습니다 — 전
+    디컴파일에 0건인 팬텀 키였습니다.
     """
 
     pnr_no: str | None = field(default=None, repr=False)
@@ -1357,7 +1693,10 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     original_window_no: str | None = field(default=None, repr=False)
     original_sale_sequence: str | None = field(default=None, repr=False)
     original_return_password: str | None = field(default=None, repr=False)
-    ticket_kind_code: str | None = field(default=None, repr=False)
+    #: ``h_tk_knd_cd`` — 승차권 종류 코드. 개인정보가 아닙니다. 형제 클래스
+    #: ``OriginalTicket``/``StationRefundOriginalTicket`` 에서도 평범한
+    #: 필드라, 그쪽과 표시를 맞춥니다.
+    ticket_kind_code: str | None = None
     ticket_kind_name: str | None = None
     #: ``retPsbFlg`` — 이 승차권이 환불 가능한지 여부. 환불 전에 볼 수 있는
     #: 가장 싼 사전 점검입니다.
@@ -1367,6 +1706,14 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     total_discount_amount: str | None = None
     total_received_amount: str | None = None
     train_running_flag: str | None = None
+    #: ``h_abrd_ps_nm``/``s_brth`` — **탑승자 본인**의 성명·생년월일.
+    #: ``h_compa_nm``/``h_compa_brth``(동승자 쌍, 아래)와는 별개의, 최상위
+    #: 단일 필드 쌍입니다(``TicketDetailOut.java:410,418``). ``psgNmList``
+    #: (아래 :attr:`passenger_names`, 승객 성명 **목록**)와도 서로 다른
+    #: 필드입니다 — 요약 필드 하나와 목록 하나이지 같은 것의 중복이
+    #: 아닙니다.
+    passenger_name: str | None = field(default=None, repr=False)
+    passenger_birth_date: str | None = field(default=None, repr=False)
     #: ``h_compa_nm``/``h_compa_brth`` — CommissionView 요청에
     #: ``h_comp_nm``/``h_comp_cert_no`` 로 그대로 복사돼 나갑니다.
     companion_name: str | None = field(default=None, repr=False)
@@ -1376,12 +1723,28 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     #: ``h_dlay_flg``/``h_dlay_tk_flg`` — 지연 보상 대상 여부.
     delay_flag: str | None = None
     delay_ticket_flag: str | None = None
-    #: ``mlgSaveFlg`` — 환불하면 마일리지가 복구되는지 여부.
-    mileage_save_flag: str | None = None
     #: ``addSrvFlg``/``addSrvCancel`` — 딸린 부가서비스가 있는지, 환불이 그것도
     #: 함께 취소하는지 여부.
     additional_service_flag: str | None = None
     additional_service_cancel: str | None = None
+    #: ``h_qrcode`` — 이 승차권의 QR 코드(``TicketDetailOut.java:478``).
+    qr_code: str | None = field(default=None, repr=False)
+    #: ``psgNmList`` — 승객 성명 목록(``List<PsgNameInfo>``). ``@SerialName``
+    #: 이 없어 와이어 철자는 PROTECTED, 코틀린 필드명을 최선으로 사용합니다.
+    #: 각 원소는 아직 행 단위로 모델링하지 않고 원본 그대로 노출합니다.
+    passenger_names: tuple[Mapping[str, Any], ...] = field(
+        default=(), repr=False, compare=False
+    )
+    #: ``seatTicketList`` — 좌석 배정 목록(``List<SeatAssignInfo>``, PROTECTED).
+    seat_tickets: tuple[Mapping[str, Any], ...] = field(
+        default=(), repr=False, compare=False
+    )
+    #: ``limousine`` — 연계된 리무진 예약(단일 객체, PROTECTED). 없으면 ``None``.
+    limousine: Mapping[str, Any] | None = field(default=None, repr=False, compare=False)
+    #: ``dtlList`` — 지연 정보 목록(``List<DelayInfo>``, PROTECTED).
+    delay_details: tuple[Mapping[str, Any], ...] = field(
+        default=(), repr=False, compare=False
+    )
     journeys: tuple[RefundTicketJourney, ...] = ()
     #: ``dcnt_crd_info`` — 이 "승차권"이 실은 할인카드(N카드)일 때만 있습니다.
     #: 보통 승차권에서는 ``None`` 입니다.

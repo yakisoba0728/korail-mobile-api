@@ -6,7 +6,8 @@
 
 읽기(:meth:`~KorailHttpClient.post_form`, :meth:`~KorailHttpClient.get_json`)와
 변경(:meth:`~KorailHttpClient.post_mutation_form`)이 완전히 갈리며 서로의 라우트에 닿을 수
-없습니다. 공통 세 필드(``Device``/``Version``/``Key``), DynaPath 헤더,
+없습니다. 공통 필드(``Device``/``Version``/``Key``, 그리고 호출자가
+``KorailConfig.lang`` 을 채웠을 때만 ``lang``), DynaPath 헤더,
 ``h_msg_cd`` 판정이 여기서 붙습니다.
 """
 from __future__ import annotations
@@ -135,33 +136,80 @@ def parse_base_response(
     return response
 
 
+#: 7.0.6 ``DynaPathInterceptor`` 의 고정 리터럴 차단 코드 집합
+#: (``DynaPathInterceptor.java:41`` ``STLhns``). 보호 경로 응답 본문의
+#: 정수 필드가 이 중 하나면 차단입니다.
+_DYNAPATH_BLOCK_CODES = frozenset({-1203, -1406, -2000, -8005, -8201, -8202, -8203})
+
+
+def _dynapath_block_payload(payload: Any) -> dict[str, Any] | None:
+    """``payload`` 에 DynaPath 차단 신호가 있으면 그 dict 를, 없으면 ``None``.
+
+    7.0.6 ``DynaPathInterceptor.intercept()``
+    (analysis/jadx/sources/com/korail/talk/network/interceptor/DynaPathInterceptor.java:97-124)
+    는 HTTP 상태와 무관하게 응답 본문을 ``JSONObject`` 로 파싱하고, 정수
+    필드 하나를 ``optInt(<field>, 0)`` 으로 꺼내 :data:`_DYNAPATH_BLOCK_CODES`
+    에 속하면 응답을 닫고 ``DynaPathBlockedException`` 을 던집니다
+    (``:113,122-124``).
+
+    그 ``<field>`` 이름 자체는 같은 파일의 다른 상수들과 똑같이 AlienGuard
+    로 난독화된 바이트 배열 리터럴로 만들어지며(``optInt`` 호출의 키 인자가
+    ``listOf(TuplesKt.to(<난독 문자열A>, <난독 문자열B>)).iterator()`` 에서
+    나온 ``Pair`` 의 ``first`` 입니다), 정적 분석으로 평문을 복원할 수
+    없습니다. 이미 ``analysis/reports/7.0.6-compare/auth-security.md:10`` 가
+    "정확한 JSON 필드명은 불명이다" 로 기록해 두었습니다 — PROTECTED.
+
+    필드 이름을 추측해 박아 넣는 대신(그 자체로 새 UNSUPPORTED 값이 됩니다),
+    최상위 키 전부를 훑어 그 정수 중 하나를 가진 키가 있는지 봅니다. 실제
+    인터셉터보다 넓게 봅니다(키 하나만 읽는 대신 전부 읽음)만, 좁게 보는
+    일은 없으므로 틀린 필드 이름을 골라 실제 차단을 놓치는 경우는 없습니다.
+    정상 응답이 이 특정 음수 센티넬 값을 무관한 용도의 필드로 우연히 가질
+    가능성은 낮다고 보고 받아들입니다.
+    """
+    if not isinstance(payload, dict):
+        return None
+    for value in payload.values():
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int) and value in _DYNAPATH_BLOCK_CODES:
+            return payload
+    return None
+
+
 def _raise_for_status(response: httpx.Response, *, path: str) -> None:
-    dynapath_result = response.headers.get("DynaPath-Result")
-    try:
-        dynapath_rejected = (
-            dynapath_result is not None and int(dynapath_result) < 0
-        )
-    except ValueError:
-        dynapath_rejected = False
-    if (
-        response.status_code == 403
-        and path in DYNAPATH_ALLOWLIST_PATHS
-        and dynapath_rejected
-    ):
+    if path in DYNAPATH_ALLOWLIST_PATHS:
         try:
             payload = response.json()
         except ValueError:
-            payload = {}
-        message = payload.get("message") if isinstance(payload, dict) else None
-        raise KorailDynaPathError(
-            str(message or "KORAIL DynaPath request rejected"),
-            raw=payload,
-        )
+            payload = None
+        blocked_payload = _dynapath_block_payload(payload)
+        if blocked_payload is not None:
+            message = blocked_payload.get("message")
+            raise KorailDynaPathError(
+                str(message or "KORAIL DynaPath request rejected"),
+                raw=blocked_payload,
+            )
     if response.is_error:
         raise KorailTransportError(
             f"KORAIL HTTP {response.status_code} for "
             f"{response.request.method} {response.request.url.path}"
         )
+
+
+def _is_empty_string(value: Any) -> bool:
+    return isinstance(value, str) and value == ""
+
+
+def _drop_empty(mapping: Mapping[str, Any]) -> dict[str, Any]:
+    """빈 문자열(``""``) 값을 가진 항목을 제거한 새 dict 를 돌려줍니다.
+
+    7.0.6 ``NetworkService.java:15342`` 의 평탄화기는 ``JsonPrimitive`` 를
+    문자열 길이가 0보다 클 때만 폼 맵에 담습니다 — 빈 문자열 필드는 ``key=``
+    로 나가지 않고 키 자체가 사라집니다. httpx 는 그런 필터링을 하지 않으므로
+    여기서 앱과 같은 모양으로 맞춥니다. ``None``, 리스트/튜플, 그 밖의 비어
+    있지 않은 값은 건드리지 않습니다 — 문자열의 빈 값만입니다.
+    """
+    return {key: value for key, value in mapping.items() if not _is_empty_string(value)}
 
 
 def _finish_mutation(
@@ -225,12 +273,24 @@ class KorailHttpClient:
         self._client.close()
 
     def common_fields(self) -> dict[str, str]:
-        """공통 세 필드 ``Device``/``Version``/``Key``."""
-        return {
+        """공통 필드 ``Device``/``Version``/``Key`` (+ 선택적 ``lang``).
+
+        7.0.6 ``CommonIn`` 은 실제로 4번째 필드 ``lang``
+        (``@SerialName(Constants.LANG)``, ``CommonIn.java:381``) 도 선언합니다.
+        그 실제 값은 AppSuit 보호(``LanguageProvider.getSTLeec()``)라 추측해
+        채우지 않습니다 — ``self.config.lang`` 이 ``None`` 이면(기본값)
+        이 패키지의 예전 동작대로 ``lang`` 을 아예 보내지 않고, 호출자가
+        실제 값을 :class:`~korail_mobile_api.config.KorailConfig` 에 넘기면
+        그 값을 싣습니다.
+        """
+        fields: dict[str, str] = {
             "Device": self.config.device,
             "Version": self.config.version,
             "Key": self.config.key,
         }
+        if self.config.lang is not None:
+            fields["lang"] = self.config.lang
+        return fields
 
     def _absolute_url(self, path: str) -> str:
         return f"{self.config.base_url.rstrip('/')}/{path.lstrip('/')}"
@@ -290,7 +350,7 @@ class KorailHttpClient:
         """
         try:
             response = send()
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
             raise KorailTransportError(
                 f"KORAIL transport failed for {method} {path}"
             ) from exc
@@ -327,7 +387,7 @@ class KorailHttpClient:
         ``require_envelope=False`` 는 KORAIL 봉투 없는 응답용.
         """
         assert_korail_origin(str(self._client.base_url))
-        assert_read_only_route("POST", path)
+        path = assert_read_only_route("POST", path)
         if include_dynapath:
             self._refuse_missing_dynapath(path)
         if data is not None and not isinstance(data, (Mapping, Sequence)):
@@ -346,12 +406,16 @@ class KorailHttpClient:
                 ordered_form.extend(self.common_fields().items())
             if data:
                 ordered_form.extend(data)
+            ordered_form = [
+                item for item in ordered_form if not _is_empty_string(item[1])
+            ]
         else:
             mapping_form = {}
             if include_common:
                 mapping_form.update(self.common_fields())
             if data:
                 mapping_form.update(data)
+            mapping_form = _drop_empty(mapping_form)
         if path == _RESERVATION_LIST_PATH:
             field_names = (
                 {name for name, _value in ordered_form}
@@ -366,7 +430,7 @@ class KorailHttpClient:
                     "exact fields: " + ", ".join(sorted(_RESERVATION_LIST_READ_FIELDS))
                 )
         headers = (
-            {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
+            {"Content-Type": "application/x-www-form-urlencoded"}
             if form_encoded
             else {}
         )
@@ -414,14 +478,14 @@ class KorailHttpClient:
                 "KORAIL POST query maps are registered only for DelayDiscountView"
             )
         assert_korail_origin(str(self._client.base_url))
-        assert_read_only_route("POST", path)
+        path = assert_read_only_route("POST", path)
         if not isinstance(params, Mapping):
             raise KorailProtocolError("KORAIL POST query params must be a mapping")
         query: dict[str, Any] = {}
         if include_common:
             query.update(self.common_fields())
         query.update(params)
-        headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
         return self._finish_read(
@@ -446,20 +510,26 @@ class KorailHttpClient:
         통과해야 합니다.
         """
         assert_korail_origin(str(self._client.base_url))
-        assert_mutation_route("POST", path)
+        path = assert_mutation_route("POST", path)
         assert_mutation_route_category(path, category)
         if not isinstance(data, Mapping):
             raise KorailProtocolError(
                 "KORAIL mutation form data must be a mapping"
             )
+        # 7.0.6's flattener (NetworkService.java:15342) drops empty-string
+        # fields rather than sending `key=`; filter before the shape guard
+        # below runs so that guard sees the form the wire will actually
+        # carry (and can treat any empty string that still reaches it as a
+        # sign something slipped past this filter).
+        data = _drop_empty(data)
         assert_mutation_form_shape(path, data)
         headers = {
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+            "Content-Type": "application/x-www-form-urlencoded"
         }
         headers.update(self._dynapath_headers("POST", path))
         try:
             response = self._client.post(path, data=dict(data), headers=headers)
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
             raise KorailTransportError(
                 f"KORAIL transport failed for POST {path}"
             ) from exc
@@ -481,7 +551,7 @@ class KorailHttpClient:
         ``require_envelope=False`` 는 봉투 없는 응답용.
         """
         assert_korail_origin(str(self._client.base_url))
-        assert_read_only_route("GET", path)
+        path = assert_read_only_route("GET", path)
         query: dict[str, Any] = {}
         if include_common:
             query.update(self.common_fields())

@@ -170,8 +170,6 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
             raw,
             "disability_certification_msg",
         ),
-        for_seat_intg=_optional_string(raw, "forSeatIntg"),
-        airport_bus_msg=_optional_string(raw, "airportBusMsg"),
         railplus_cardinfo=_optional_string(raw, "railplus_cardinfo"),
         version=version,
         notice=(
@@ -295,23 +293,19 @@ def parse_train_search_metadata(
     """조회 응답에서 열차 행이 아닌 값들 — 페이지 커서와 조회 조건 — 을 꺼냅니다.
 
     다음 페이지 요청에 되실을 커서(``h_next_pg_flg``, ``strJobId``, ``h_gd_no``
-    등)가 여기 담깁니다. 병합예약 가능 플래그(``h_merge_rsv_psb_flg``)는 최상위가
-    아니라 ``trn_infos`` 안에 있어 거기서 읽습니다.
+    등)가 여기 담깁니다.
 
     7.0.6 ``TrainScheduleOut`` 의 ``h_menu_id`` 도 보존합니다.
+
+    ``h_merge_rsv_psb_flg`` 는 더 이상 여기서 읽지 않습니다: 7.0.6
+    ``TrainScheduleOutTrainInfos`` (``trn_infos`` 의 실제 DTO)는 이 키를
+    선언하지 않습니다 — ``trn_info`` 하나만 멤버입니다. 이 이름의 필드는
+    다른 DTO(``MergeSeatsCOutTrnInfos``)에 속하며, 여기서 읽어도 항상
+    ``None`` 이 되는 죽은 읽기였습니다.
     """
     def optional(key: str) -> str | None:
         return _typed_optional_string(raw, key, context="train search metadata")
 
-    train_container = raw.get("trn_infos")
-    if isinstance(train_container, Mapping):
-        merge_reservation_available_flag = _typed_optional_string(
-            train_container,
-            "h_merge_rsv_psb_flg",
-            context="train search metadata",
-        )
-    else:
-        merge_reservation_available_flag = None
     return TrainSearchMetadata(
         job_id=optional("strJobId"),
         menu_id=optional("h_menu_id"),
@@ -330,7 +324,6 @@ def parse_train_search_metadata(
         first_seat_count=optional("h_seat_cnt_first"),
         second_seat_count=optional("h_seat_cnt_second"),
         first_departure_time=optional("txtGoHour_first"),
-        merge_reservation_available_flag=merge_reservation_available_flag,
         raw=dict(raw),
     )
 
@@ -463,7 +456,10 @@ def parse_station_data_response(
                 code=_station_required_string(row, "stn_cd"),
                 name=_station_required_string(row, "stn_nm"),
                 raw=dict(row),
-                popup_type=_typed_optional_int(
+                # StationDataOutStnItem.java:60 declares popupType as a
+                # String (@SerialName("popupType") String), not an int --
+                # read it as an optional string instead of coercing.
+                popup_type=_typed_optional_string(
                     row,
                     "popupType",
                     context="station",
@@ -486,18 +482,23 @@ def parse_station_info_response(
 ) -> StationInfoResponse:
     """``common.stationinfo`` 를 파싱합니다.
 
-    역 목록이 아니라 그 목록의 버전 정보입니다. ``count``(0 이상의 정수)와
-    ``map_version``(비어 있지 않은 문자열) 둘 다 필수이며, 하나라도 어긋나면
+    역 목록이 아니라 그 목록의 버전 정보입니다. ``count``와 ``map_version``
+    둘 다 비어 있지 않은 문자열이어야 하며, 하나라도 어긋나면
     :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 앱은 이 값으로
     캐시한 역 목록을 다시 받을지 판단합니다.
+
+    ``StationInfoOut.java:47`` 은 ``count`` 를 ``@SerialName("count") String``
+    으로 선언합니다(``mapVersion`` 과 동일한 non-null String) — int 로
+    강제 변환하지 않고 그대로 문자열로 둡니다.
     """
     raw = response.raw
     return StationInfoResponse(
         **_response_fields(response),
-        count=_typed_non_negative_integer_value(
-            raw.get("count"),
+        count=_typed_required_string(
+            raw,
             "count",
             context="station info",
+            non_empty=True,
         ),
         map_version=_typed_required_string(
             raw,
@@ -566,10 +567,15 @@ def parse_train_calendar_response(
                     "dayDvCd",
                     context="train calendar",
                 ),
-                # hldyDvCd stays required: isHoliday() calls
-                # this.hldyDvCd.isEmpty() (TrainCalendarDao:60-62) with no
-                # null-guard, so the app itself NPEs on a null value.
-                holiday_division_code=_typed_required_string(
+                # W4 finding: the 6.5.0 rationale above (TrainCalendarDao, not
+                # on disk for 7.0.6) doesn't hold for 7.0.6's RunDateOutItem --
+                # its synthetic constructor supplies a compiled default ("")
+                # for hldyDvCd when the key's mask bit is unset, with no
+                # throwMissingFieldException for it (RunDateOutItem.java:116-
+                # 119). 7.0.6 itself deserializes an absent key fine, so
+                # requiring it here rejects a response shape the real app
+                # accepts.
+                holiday_division_code=_typed_optional_string(
                     row,
                     "hldyDvCd",
                     context="train calendar",
@@ -655,11 +661,15 @@ def parse_train_schedule_response(
                     "stopRsStnCd",
                     context="train schedule stop",
                 ),
-                station_name=_typed_required_string(
+                # W4 finding: ActualTrainScheduleOutDlay.java's synthetic
+                # constructor gives stopStnNm a compiled default (bit 2 of
+                # its mask) like every sibling field on this row -- 7.0.6
+                # never throws for an absent value, so requiring it here
+                # rejects a response 7.0.6 itself accepts.
+                station_name=_typed_optional_string(
                     row,
                     "stopStnNm",
                     context="train schedule stop",
-                    non_empty=True,
                 ),
                 station_construction_order=_typed_optional_string(
                     row,
@@ -775,11 +785,15 @@ def parse_train_schedule_response(
         origin_station_name=optional("orgRsStnNm"),
         route_code=optional("routCd"),
         route_name=optional("routNm"),
-        run_date=_typed_required_string(
+        # W4 finding: ActualTrainScheduleOut.java's synthetic constructor
+        # gives runDt1 a compiled default (bit 4 of its mask) with no
+        # throwMissingFieldException for it -- 7.0.6 deserializes an absent
+        # key fine, so requiring it here rejects a response shape the real
+        # app accepts.
+        run_date=_typed_optional_string(
             raw,
             "runDt1",
             context="train schedule",
-            non_empty=True,
         ),
         run_segment_order=optional("runSegOrdr"),
         regular_sale_flag=optional("saleRgulFlg"),
@@ -824,17 +838,21 @@ def parse_transfer_station_list_response(
             )
         stations.append(
             TransferStation(
-                station_code=_typed_required_string(
+                # W4 finding: ChtnStnOutItem.java's synthetic constructor
+                # gives both chtnRsStnCd (bit 8) and chtnRsStnNm (bit 16)
+                # compiled defaults, same as the third field on this row
+                # (chtnRsStnEngNm) which was already read as optional -- no
+                # throwMissingFieldException for either, so requiring them
+                # here rejects a response shape 7.0.6 itself accepts.
+                station_code=_typed_optional_string(
                     row,
                     "chtnRsStnCd",
                     context="transfer station",
-                    non_empty=True,
                 ),
-                station_name=_typed_required_string(
+                station_name=_typed_optional_string(
                     row,
                     "chtnRsStnNm",
                     context="transfer station",
-                    non_empty=True,
                 ),
                 raw=dict(row),
             )
@@ -885,6 +903,15 @@ def parse_seat_car_list_response(
             raise KorailProtocolError(
                 "KORAIL seat car list contained a non-object row"
             )
+        # TrainResearchOutCarInfo.java:32 declares hSrcarNo as a String
+        # (public final String hSrcarNo;), not an int. Coercing it to int
+        # here loses leading zeros (e.g. "01" -> 1) -- a lossy round-trip.
+        # SeatCar.car_no is kept as int anyway for ergonomics (client.py's
+        # get_seat_inventory(train, car_no: int, ...) and friends depend on
+        # it), but any re-send of this value elsewhere in the codebase
+        # (payloads.py) MUST zero-pad it back to the original wire width or
+        # it will reach the server under a different spelling than the one
+        # the server assigned.
         car_no = _inventory_required_int(row, "h_srcar_no")
         # SearchCarListDao.CarInfo.seatAttInfos is a nullable Gson List
         # (SearchCarListDao.java:19) and the app null-guards it before use
@@ -941,6 +968,9 @@ def parse_seat_car_list_response(
         cars=tuple(cars),
         train_class_code=_inventory_optional_string(raw, "h_trn_clsf_cd"),
         train_group_code=_inventory_optional_string(raw, "h_trn_gp_cd"),
+        # TrainResearchOut.java:27,105 -- one of the DTO's own 6 fields,
+        # previously unread.
+        car_count=_inventory_optional_string(raw, "h_scar_num"),
     )
 
 
@@ -989,9 +1019,14 @@ def parse_seat_inventory_response(
     좌석 행은 :class:`~korail_mobile_api.models.PhysicalSeat` 가 됩니다. 창문
     위치 비율은 좌석이 아니라 좌석표를 그리기 위한 값이라
     :class:`~korail_mobile_api.models.SeatWindow` 로 따로 담깁니다.
+
+    ``TResidualSeatsResearchOut.java:29`` 는 ``layout_type`` 을
+    ``@SerialName("layout_type") String`` 으로 선언합니다 — 같은 DTO 의 형제
+    스칼라(``seat_ary_cd`` 등)처럼 필수지만, int 로 강제 변환하지 않고 문자열
+    그대로 둡니다.
     """
     raw = response.raw
-    layout_type = _inventory_required_int(raw, "layout_type")
+    layout_type = _inventory_required_string(raw, "layout_type")
     arrangement_code = _inventory_required_string(raw, "seat_ary_cd")
     remaining_count = _inventory_optional_int(
         raw,

@@ -189,12 +189,22 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         # removed on 2026-07-27 (22ba4cc); these two reads outlived them.
         ("POST", "/classes/com.korail.mobile.research.tripChgOgtk.do"),
         #
-        # DELIBERATELY ABSENT: 특실 업그레이드 myTicket.reqUpgradeSeat
-        # (MyTicketService.java:23-24). Its RESPONSE mints a lumpStlTgtNo
+        # DELIBERATELY ABSENT: 특실 업그레이드 myTicket.reqUpgradeSeat. The
+        # citations below (MyTicketService.java:23-24, SpecialRoomUpgradeDao,
+        # procUpgradeSeat MyTicketService.java:20-21) are from a 6.5.0
+        # decompile not present on disk; this route may not exist in 7.0.6 at
+        # all -- the 185-method 7.0.6 Retrofit inventory
+        # (analysis/reports/7.0.6-review/network-inventory.md) has zero
+        # "Upgrade"-named methods. That does not make the exclusion wrong --
+        # excluding a route that may not exist is harmless and conservative
+        # -- but the original claims (lumpStlTgtNo minting, a paired write
+        # route) are unverifiable against the current APK and should not be
+        # read as confirmed 7.0.6 facts. The original rationale, for
+        # reference: its RESPONSE was said to mint a lumpStlTgtNo
         # (SpecialRoomUpgradeDao.java:13,19), making it an unpaid purchase
-        # creation — same shape as research.dcntCrdInfo.do. Not registered as a
-        # mutation either: its paired write (procUpgradeSeat,
-        # MyTicketService.java:20-21) is scoped out.
+        # creation — same shape as research.dcntCrdInfo.do — and its paired
+        # write (procUpgradeSeat) was said to be scoped out of the mutation
+        # table as well.
     }
 )
 
@@ -253,9 +263,14 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # server-side that this package can observe, and it carries no card
         # number. Confirmed against
         # AddCartDao.java:9-24 and CartService.smali / AddCartDao$AddCartRequest.smali:
-        # the request is exactly the common three fields plus "hidPnrNo", and
-        # the DAO's response type is a bare BaseResponse (CartService.java:13),
-        # same shape as the discount_card extension route above.
+        # the request is exactly the common three fields plus "hidPnrNo".
+        # The response is NOT a bare BaseResponse, though: 7.0.6's
+        # AddCartListOut (AddCartListOut.java:24-25) extends CommonOut but
+        # also carries a psgDiscAddInfos field (@SerialName("psgDiscAdd_infos"),
+        # per-passenger h_psg_sqno/h_duty_ref_rcgn_ps_dv_cd discount-add info).
+        # The category assignment itself (a standalone "cart" category) is
+        # unaffected by this -- only the earlier claim about response shape
+        # was wrong.
         ("POST", "/classes/com.korail.mobile.cart.addCartList"),
         # DELIBERATELY ABSENT: PassService purchase family (pass.passReserve /
         # passPayIssue, PassService.java:19-44). Settlement can only be proven
@@ -318,6 +333,15 @@ def assert_mutation_route_category(path: str, category: str) -> None:
 
 #: ``mutation_payloads._common_fields`` 가 **모든** 변경 폼에 넣는 세 필드.
 #: 이것 없이 전송 경계에 닿은 폼은 이 패키지의 빌더가 만든 것이 아닙니다.
+#:
+#: 7.0.6 ``CommonIn`` 은 실제로 네 번째 필드 ``lang`` 도 선언합니다
+#: (``CommonIn.java:381``, ``@SerialName(Constants.LANG)``). 그 값은
+#: AppSuit 보호라 :class:`~korail_mobile_api.config.KorailConfig` 는 이를
+#: 추측하지 않고 ``lang: str | None = None`` 으로만 구조를 열어 둡니다 —
+#: 호출자가 실제 값을 넘기면 ``http.KorailHttpClient.common_fields`` 가
+#: 싣습니다. 아래 검사는 일부러 이 셋을 **요구**할 뿐 **전부**라고 못박지
+#: 않습니다: ``missing`` 판정은 집합 차(KORAIL_MUTATION_COMMON_FIELDS -
+#: 넘어온 필드)만 보므로 ``lang`` 이 더 있어도 걸리지 않습니다.
 KORAIL_MUTATION_COMMON_FIELDS = frozenset({"Device", "Version", "Key"})
 
 
@@ -347,6 +371,16 @@ def assert_mutation_form_shape(
                 f"{parsed_path} carries {name!r}"
             )
         if isinstance(value, str):
+            if value == "":
+                raise KorailProtocolError(
+                    f"KORAIL mutation form field {name!r} on {parsed_path} is "
+                    "an empty string. http.post_mutation_form drops "
+                    "empty-string fields before calling this guard (7.0.6's "
+                    "NetworkService.java:15342 flattener never emits an "
+                    "empty JsonPrimitive as key=), so one reaching here "
+                    "means it slipped in through some other path and must "
+                    "fail loudly instead of silently reaching the wire"
+                )
             continue
         if isinstance(value, (list, tuple)) and all(
             isinstance(item, str) for item in value
@@ -405,12 +439,22 @@ def _assert_registered_route(
     path: str,
     routes: frozenset[tuple[str, str]],
     kind: str,
-) -> None:
+) -> str:
     """The skeleton of both route guards; the table and one word differ.
 
     Each guard passes its own table, looked up when it is called. The two
     tables are never merged: a route is a read or a mutation, and the send
     path that checks it decides which.
+
+    Returns the sanitized ``urlsplit(path).path`` that was actually checked
+    against ``routes``. CPython's ``urlsplit`` strips ASCII TAB/CR/LF before
+    parsing (bpo-43882), so a caller-supplied ``path`` containing one of
+    those bytes can pass this guard while differing from the literal string
+    it was validated against. Callers MUST send using this returned value,
+    not the raw ``path`` argument -- otherwise httpx sees the untouched
+    string, can raise ``httpx.InvalidURL`` (which is not a subclass of
+    ``httpx.HTTPError``), and that leaks outside the
+    :class:`~korail_mobile_api.errors.KorailApiError` hierarchy.
     """
     parsed = urlsplit(path)
     if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
@@ -423,27 +467,34 @@ def _assert_registered_route(
         raise KorailProtocolError(
             f"KORAIL {kind} route is not allowed: {route[0]} {route[1]}"
         )
+    return parsed.path
 
 
-def assert_read_only_route(method: str, path: str) -> None:
+def assert_read_only_route(method: str, path: str) -> str:
     """읽기 전용 전송 경로가 갈 수 있는 라우트만 허용합니다.
 
     ``path`` 는 상대 경로여야 합니다 — scheme·netloc·query·fragment 가 붙으면 거부입니다.
     ``(method, path)`` 쌍이 :data:`KORAIL_READ_ONLY_ROUTES` 의 정확한 원소가 아니면
     :class:`KorailProtocolError` 이고, 변경 라우트도 여기 없으므로 읽기 경로로는 상태를
     바꿀 수 없습니다. 변경 쪽 짝은 :func:`assert_mutation_route` 입니다.
+
+    검사에 실제로 쓴 정규화 경로(``urlsplit(path).path``)를 돌려줍니다 — 호출부는
+    이후의 실제 전송(httpx 호출)에 원본 ``path`` 대신 이 반환값을 써야 합니다.
     """
-    _assert_registered_route(method, path, KORAIL_READ_ONLY_ROUTES, "request")
+    return _assert_registered_route(method, path, KORAIL_READ_ONLY_ROUTES, "request")
 
 
-def assert_mutation_route(method: str, path: str) -> None:
+def assert_mutation_route(method: str, path: str) -> str:
     """근거가 확인된 상태 변경 라우트만 허용합니다.
 
     :func:`assert_read_only_route` 의 변경 쪽 짝이며 전용 변경 전송 경로만 사용합니다.
     라우트는 :data:`KORAIL_MUTATION_ROUTES` 의 정확한 원소여야 하고 그 밖은 — 읽기 전용
     라우트를 포함해 — 거부됩니다. 변경 전송 경로를 임의 엔드포인트나 읽기 엔드포인트로
     돌려쓸 수 없습니다.
+
+    :func:`assert_read_only_route` 와 마찬가지로 정규화 경로를 돌려주며, 호출부는
+    이후의 실제 전송에 이 반환값을 써야 합니다.
     """
-    _assert_registered_route(method, path, KORAIL_MUTATION_ROUTES, "mutation")
+    return _assert_registered_route(method, path, KORAIL_MUTATION_ROUTES, "mutation")
 
 

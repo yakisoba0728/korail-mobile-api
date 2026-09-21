@@ -1266,24 +1266,58 @@ def build_card_payment_form(
             "hidIsmtMnthNum1": card.installment,
             "hidAthnDvCd1": card.card_type,
             "hidAthnVal1": card.birthday,
+            # 7.0.6's two payment ViewModels both branch on login state before
+            # setting this field: PayViewModel.java:6600-6604 (domestic) and
+            # FPayViewModel.java:772-778 (foreign) do
+            #   if (userState.isLogin()) { setHiduserYn(<literal A>) }
+            #   else { setHiduserYn(<literal B>); setHidMbCrdNo(<non-member id>) }
+            # The two literals are AppSuit string-encrypted, so neither A nor
+            # B's actual value is recoverable from static analysis -- "Y" is
+            # unconfirmed. But this client's payment methods (pay_with_card,
+            # pay_with_fake_card) both call self._require_session("payment
+            # requires") before reaching build_card_payment_form, and no
+            # client.py method ever builds a payment form without a session --
+            # there is no non-member/guest payment call site anywhere in this
+            # library. The "else" (guest) branch above is therefore
+            # structurally unreachable here regardless of how this field is
+            # fixed, so "Y" is left as the single literal this codebase has
+            # ever sent, rather than inventing hidMbCrdNo plumbing for a path
+            # nothing calls. Contrast build_price_recalculation_form below,
+            # which DOES thread a caller-supplied non_member_no through to a
+            # conditional hiduserYn/hidCustNo pair -- proof this codebase
+            # already knows the correct pattern when a builder's caller
+            # actually offers a non-member identity to branch on. That
+            # builder's client.py call site (recalculate_price) still
+            # requires a login session like this one does; the difference is
+            # only that its request type carries an explicit non_member_no
+            # slot for the caller to populate, while ReservationHoldResponse
+            # (this builder's only input besides the card) carries no such
+            # slot at all -- there is no data here to branch on even if a
+            # branch were added.
             "hiduserYn": "Y",
         }
     )
     return form
 
 
-def _refund_echo_field(value: object, *, default: str, field: str) -> str:
-    """되울리는 환불 플래그 하나를 검사하고, 없으면 앱의 기본값으로 떨어집니다.
+def _refund_echo_field(value: object, *, field: str) -> str:
+    """되울리는 환불 플래그 하나를 검사합니다. **기본값으로 떨어지지 않습니다.**
 
-    ``None`` 은 "호출자가 이 값을 서버에서 읽지 않았다"는 뜻이며 허용됩니다. 그
-    밖에는 비어 있지 않은 문자열이어야 합니다. 빈 값은 서버가 자기 값을 되받기를
-    기대하는 필드를 조용히 지워 버리기 때문입니다.
+    이 필드는 7.0.6 의 두 실호출부(``MyTicketDetailViewModel.java:1521``,
+    ``FTicketDetailViewModel.java:634``) 모두 서버 응답
+    (``ticketDetailOut.getPbpAcepTgtFlg()``)을 조건 없이 그대로 되울리는
+    자리이고, Kotlin 레벨 기본값도 없습니다(non-null, 대체 분기 없음). 예전
+    구현은 호출자가 값을 안 주면 임의로 ``"N"`` 을 대신 보냈는데, 그건 이
+    라이브러리가 서버 대신 값을 지어내는 것과 같습니다 — "서버에서 받은 값
+    그대로" 원칙 위반입니다(W1 finding 7). 그래서 ``None`` 이나 빈 문자열은
+    이제 실패입니다: 호출자가 사전 응답(예: ``RefundTicketDetailResponse`` 나
+    그 상당물)에서 읽은 실제 값을 넘겨야 합니다.
     """
-    if value is None:
-        return default
     if not isinstance(value, str) or not value.strip():
         raise KorailProtocolError(
-            f"KORAIL refund {field} must be a non-empty string when given"
+            f"KORAIL refund {field} must be a non-empty string echoed from a "
+            "prior server response -- KORAIL itself never defaults this "
+            "field, so this library must not guess it either"
         )
     return value
 
@@ -1292,7 +1326,6 @@ def build_refund_form(
     config: KorailConfig,
     ticket: PaidTicket,
     *,
-    return_times_division_code: str | None = None,
     settle_mileage: bool = False,
     pbp_acceptance_target_flag: str | None = None,
 ) -> dict[str, str]:
@@ -1305,24 +1338,41 @@ def build_refund_form(
     ``@Field`` 이름은 정확히 일치해야 하므로 그대로 보내면 PNR 없는 환불이
     전송됩니다. 신원은 호출자가 :class:`PaidTicket` 로 줍니다.
 
-    ``return_times_division_code``
-        ``tk_ret_tms_dv_cd``. 앱은
-        ``RefundCommissionResponse.tk_ret_tms_dv_cd`` 를 그대로 복사하며
-        (``ticketReturn/a.smali:3149-3153``) 그 값은 출발 전 ``"21"``, 출발 후
-        ``"15"`` 입니다(``I4/a.java:5-6``).
-        :meth:`~korail_mobile_api.KorailClient.get_refund_commission` 의
-        :attr:`ticket_return_times_division_code` 에서 읽어 넘기면 됩니다.
-        ``None``(기본)이면 이 키를 보내지 않습니다.
     ``settle_mileage``
-        ``h_mlg_stl``. 나머지 둘과 달리 서버 에코가 아니라 호출자의
-        결정입니다. 앱은 승차권이 마일리지 정산 대상이고 사용 가능 마일리지가
-        수수료를 덮을 때만 ``"Y"`` 를 보냅니다
-        (``ticketReturn/a.java:185-190``). 기본값은 ``False``(``"N"``).
+        ``h_mlg_stl``. 서버 에코가 아니라 호출자의 결정입니다. 앱은 승차권이
+        마일리지 정산 대상이고 사용 가능 마일리지가 수수료를 덮을 때만
+        ``"Y"`` 를 보냅니다(``ticketReturn/a.java:185-190``). 기본값은
+        ``False``(``"N"``).
     ``pbp_acceptance_target_flag``
-        ``pbpAcepTgtFlg``. ``RefundTicketDetailResponse.pbp_acceptance_target_flag``
-        를 되울립니다(``ticketReturn/a.smali:3165-3171``). ``None``(기본)이면
-        :attr:`PaidTicket.pbp_acceptance_target_flag` 를, 그것도 없으면 ``"N"`` 을
-        보냅니다.
+        ``pbpAcepTgtFlg``. **필수 에코이며 기본값이 없습니다.** 7.0.6 의 두
+        실호출부(``MyTicketDetailViewModel.java:1521``,
+        ``FTicketDetailViewModel.java:634``)는 예외 없이
+        ``ticketDetailOut.getPbpAcepTgtFlg()`` 를 그대로 되울리고, DTO
+        (``RefundTicketIn.java:111``)도 이 필드를 non-null 로 강제하며 대체
+        분기가 없습니다. 이전 구현은 값이 없으면 ``"N"`` 을 대신 지어
+        보냈는데, 이는 서버가 준 값을 조용히 대체하는 SUBSTITUTION 이었습니다
+        (W1 finding 7). 이제는 ``None`` 이면(그리고
+        :attr:`PaidTicket.pbp_acceptance_target_flag` 도 ``None`` 이면)
+        :class:`~korail_mobile_api.errors.KorailProtocolError` 를 올립니다 —
+        호출자는 사전에 읽은 서버 값(예: 승차권 상세 조회 응답의
+        ``pbp_acceptance_target_flag``)을 반드시 넘겨야 합니다.
+
+    **더 이상 받지 않는 인자: ``return_times_division_code``.** 이전 버전은
+    이 값을 ``tk_ret_tms_dv_cd`` 로 실었지만, 7.0.6 은 이 필드를 실제
+    환불 제출에 절대 싣지 않습니다 —
+    ``RefundTicketIn.java:135`` 의 컴파일된 기본값이 ``null`` 이고, 이 DTO를
+    만드는 유일한 두 호출부(``MyTicketDetailViewModel.java:1521``,
+    ``FTicketDetailViewModel.java:634``)가 둘 다 리터럴 ``(String) null`` 을
+    넘기며, 두 곳의 "기본값 사용" 비트마스크조차 이 필드의 비트를 포함해
+    "기본값 경로"도 ``null`` 로 떨어집니다. 수수료 응답이 돌려주는 같은
+    이름의 필드는 ``RefundTicketViewModel.java:1012`` 에서 UI 다이얼로그
+    변형을 고르는 데만 쓰이고 제출로 되돌아가지 않습니다(W3 finding 6). 즉
+    이 키는 앱이 한 번도 만든 적 없는 전선 모양이었고, 그 인자를 받아들이는
+    것 자체가 잘못이라 제거했습니다 — PyPI 배포가 보류 중이라 호환성 약속이
+    없으므로 조용한 no-op 대신 시그니처에서 뺐습니다. 여전히 수수료 응답의
+    ``tk_ret_tms_dv_cd`` 를 읽고 싶다면
+    :meth:`~korail_mobile_api.KorailClient.get_refund_commission` 이 돌려주는
+    :attr:`ticket_return_times_division_code` 를 UI 판단용으로만 쓰십시오.
     """
     if not isinstance(ticket, PaidTicket):
         raise KorailProtocolError("KORAIL refund requires a PaidTicket")
@@ -1356,17 +1406,14 @@ def build_refund_form(
                     if pbp_acceptance_target_flag is not None
                     else ticket.pbp_acceptance_target_flag
                 ),
-                default="N",
                 field="pbp_acceptance_target_flag",
             ),
         }
     )
-    if return_times_division_code is not None:
-        form["tk_ret_tms_dv_cd"] = _refund_echo_field(
-            return_times_division_code,
-            default="21",
-            field="return_times_division_code",
-        )
+    # tk_ret_tms_dv_cd is deliberately absent -- see the docstring above.
+    # 7.0.6 never sends this field on a real refund submission (its only two
+    # call sites both pass a literal null), so there is nothing correct to
+    # echo here.
     return form
 
 

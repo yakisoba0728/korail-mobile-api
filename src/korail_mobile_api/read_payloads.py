@@ -449,14 +449,35 @@ def build_pass_menu_form(menu_no: str) -> dict[str, str]:
 
 
 def build_crew_request_list_query(
-    query_division_code: str,
+    timestamp_ms: int | None = None,
 ) -> dict[str, str]:
-    return {
-        "qryDvCd": _required_text(
-            query_division_code,
-            "query_division_code",
-        )
-    }
+    """``crwCallRq.do`` 의 승무원 호출 사유 조회 쿼리를 만듭니다.
+
+    7.0.6 ``CrewCallCommonIn.java:50`` 의 합성 생성자는 ``Device``/``Version``/
+    ``Key``/``lang`` 외에 ``timeStamp``(``long``) 하나만 선언합니다. 이전 구현이
+    보내던 ``qryDvCd`` 는 이 DTO 에 없는 이름입니다 — ``TrainScheduleIn`` 등
+    무관한 다른 DTO 에만 있는 필드였습니다. 유일한 호출부
+    ``NetworkRepositoryImpl.java:4105-4107`` 는 ``new CrewCallCommonIn(timestamp)``
+    만 만듭니다. ``timestamp_ms`` 를 주지 않으면 현재 밀리초 epoch 입니다
+    (``build_cache_query`` 와 같은 패턴).
+
+    이 함수는 이전엔 필수 ``query_division_code: str`` 하나를 받았습니다.
+    ``qryDvCd`` 가 이 라우트에 존재하지 않는 필드라 그 매개변수 자체가
+    UNSUPPORTED 였으므로 제거했습니다. 현재 유일한 호출부인
+    ``client.py::get_crew_request_list`` 는 여전히
+    ``build_crew_request_list_query(query_division_code)`` 로 그 값을 위치
+    인자로 넘기고 있어, 문자열이 ``timestamp_ms`` 자리에 들어가 아래 검증에서
+    :class:`ValueError` 가 됩니다 — client.py 쪽에서 ``get_crew_request_list``
+    의 시그니처와 이 호출을 ``build_crew_request_list_query()`` (또는 호출자가
+    타임스탬프를 지정하고 싶다면 ``build_crew_request_list_query(timestamp_ms=...)``)
+    로 바꾸는 후속 수정이 필요합니다.
+    """
+    if timestamp_ms is not None and (
+        type(timestamp_ms) is not int or timestamp_ms < 0
+    ):
+        raise ValueError("timestamp_ms must be a non-negative integer or None")
+    resolved = int(time.time() * 1000) if timestamp_ms is None else timestamp_ms
+    return {"timeStamp": str(resolved)}
 
 
 def build_commuter_kind_menu_query(

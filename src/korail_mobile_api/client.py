@@ -837,10 +837,19 @@ class KorailClient:
 
     def get_crew_request_list(
         self,
-        query_division_code: str,
+        *,
+        timestamp_ms: int | None = None,
     ) -> CrewRequestListResponse:
-        """승무원 호출 화면에 띄울 요청 사유 선택지를 조회합니다."""
-        query = build_crew_request_list_query(query_division_code)
+        """승무원 호출 화면에 띄울 요청 사유 선택지를 조회합니다.
+
+        이전 시그니처의 ``query_division_code`` 는 삭제됐습니다 — 이 라우트의
+        실제 DTO(``CrewCallCommonIn.java:50``)에는 그런 필드가 없고, 옛 값은
+        무관한 다른 DTO(``TrainScheduleIn`` 등)의 필드명이었습니다. 유일한
+        입력은 ``timeStamp`` 이며, 주지 않으면 호출 시점의 밀리초 epoch 입니다.
+        자세한 근거는 :func:`~korail_mobile_api.read_payloads.build_crew_request_list_query`
+        의 독스트링을 참고하십시오.
+        """
+        query = build_crew_request_list_query(timestamp_ms)
         return self._post_read(
             "/classes/com.korail.mobile.push.crwCallRq.do",
             query,
@@ -1676,21 +1685,55 @@ class KorailClient:
         # no PNR was returned (no hold to orphan).
         try:
             return parse_reservation_hold_response(raw)
-        except KorailProtocolError:
+        except KorailProtocolError as exc:
+            # Bound as `exc` so the original parse failure is nameable and, if
+            # anything below raises a NEW exception, it can be chained with
+            # `from exc` instead of being lost. The bare `raise` just below
+            # re-raises this SAME exception object, which already preserves
+            # its traceback without needing `from exc` -- chaining only
+            # matters when constructing a different exception.
+            #
             # A PNR or journey count that arrived as a JSON number is a hold we
             # can still cancel, so normalise both here the same way the parser
             # does rather than discarding the only identity we have.
             pnr = _scalar_text(raw.get("h_pnr_no"))
             if not (pnr and pnr.strip()):
                 raise
-            base = BaseKorailResponse.from_raw(raw)
+            try:
+                base = BaseKorailResponse.from_raw(raw)
+            except KorailProtocolError as envelope_exc:
+                raise envelope_exc from exc
+            # journey_count deliberately does NOT stay None here. The whole
+            # purpose of this fallback is to preserve enough identity for the
+            # caller to auto-cancel a hold that may have actually been created
+            # server-side via cancel_unpaid_hold(). That path's
+            # build_unpaid_reservation_cancel_form() requires journey_count to
+            # be a digit string (ReservationCancelChkIn.txtJrnyCnt is a
+            # non-null String on the wire -- see
+            # ReservationCancelChkIn.java's synthetic constructor, which has
+            # no null-tolerant slot for this field). If the very field that
+            # failed strict parsing was h_jrny_cnt itself, _scalar_text would
+            # return None here, and a None journey_count would make the cancel
+            # builder raise KorailProtocolError too -- turning one confusing
+            # failure into a second, harder-to-diagnose one on the exact path
+            # this fallback exists to keep open. This library's own reserve()
+            # docstring states single-leg and multi-leg (max
+            # KORAIL_MAX_JOURNEY_LEGS == 2) are the only shapes reserve() ever
+            # produces, so "1" is a conservative single-journey assumption --
+            # not a guess at what the server actually sent, but the minimum
+            # that keeps cancel_unpaid_hold callable. This mirrors the
+            # existing last-resort literals in mutation_payloads.py
+            # (_ABSENT_JOB_SEQUENCE, _ABSENT_RESERVATION_CHANGE_NO): an
+            # explicit, documented fallback instead of a silent None that
+            # fails again downstream.
+            journey_count = _scalar_text(raw.get("h_jrny_cnt")) or "1"
             return ReservationHoldResponse(
                 h_msg_cd=base.h_msg_cd,
                 h_msg_txt=base.h_msg_txt,
                 str_result=base.str_result,
                 raw=raw,
                 pnr_no=pnr,
-                journey_count=_scalar_text(raw.get("h_jrny_cnt")),
+                journey_count=journey_count,
             )
 
     def reserve_transfer(
@@ -1875,7 +1918,6 @@ class KorailClient:
         self,
         ticket: PaidTicket,
         *,
-        return_times_division_code: str | None = None,
         settle_mileage: bool = False,
         pbp_acceptance_target_flag: str | None = None,
     ) -> RefundTicketResponse:
@@ -1895,6 +1937,22 @@ class KorailClient:
         :meth:`get_ticket_list` 응답에서 ``h_orgtk_wct_no``·``h_orgtk_ret_sale_dt``·
         ``h_orgtk_sale_sqno``·``h_orgtk_ret_pwd`` 로 읽습니다.
 
+        ``pbp_acceptance_target_flag`` 는 **필수 에코입니다, 기본값이 없습니다.**
+        승차권 상세 조회 등 사전 서버 응답에서 읽은 실제
+        ``pbp_acceptance_target_flag`` 값을 그대로 넘기십시오. ``None`` 이고
+        ``ticket.pbp_acceptance_target_flag`` 도 ``None`` 이면
+        :class:`~korail_mobile_api.errors.KorailProtocolError` 를 올립니다 —
+        7.0.6 은 이 필드에 대체 분기가 없으므로 이 라이브러리도 값을 지어내지
+        않습니다(W1 finding 7 / :func:`~korail_mobile_api.mutation_payloads.build_refund_form`
+        참고).
+
+        **더 이상 ``return_times_division_code`` 인자를 받지 않습니다.** 7.0.6
+        은 ``tk_ret_tms_dv_cd`` 를 실제 환불 제출에 절대 싣지 않습니다 — 이
+        DTO 를 만드는 두 실호출부 모두 리터럴 ``null`` 을 넘기고, 수수료
+        응답의 같은 이름 필드는 UI 다이얼로그 선택에만 쓰입니다(W3
+        finding 6). PyPI 배포가 보류 중이라 호환성 약속이 없어, 조용한
+        no-op 으로 남기는 대신 시그니처에서 제거했습니다.
+
         2026-07-31 실서버 확인: 성인 2명 16,800원(8,400×2)을 한 PNR 로 결제한 뒤
         이 메서드를 한 번 부르니
         ``SUCC``/``IRT200277`` 과 함께 8,400원만 돌아왔고, 좌석 032 한 장이
@@ -1906,7 +1964,6 @@ class KorailClient:
         form = build_refund_form(
             self.config,
             ticket,
-            return_times_division_code=return_times_division_code,
             settle_mileage=settle_mileage,
             pbp_acceptance_target_flag=pbp_acceptance_target_flag,
         )

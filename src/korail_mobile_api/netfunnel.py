@@ -83,12 +83,22 @@ NOT_COMPLETABLE_CODE = "503"
 #: ``TsExpressNumber``(303)는 성공(``T6/g.java:909`` ``isSuccess()``).
 QUEUE_REJECTED_CODES = frozenset({"301", "302"})
 
-# TTL clamp: ``T6/g.java:462`` → ``T6/i.java:175-181``, max_ttl=30(``T6/h.java:40``), floor=1.
+# TTL clamp: 7.0.6 ``Response.getTTL(int, int)`` 가 정확히 clamp(1, 30) 이고
+# (``com/netfunnel/api/Response.java:59-64``), 모든 호출부가 하한 1 을 넘긴다
+# (``Netfunnel.java:519,634,736,790``). 상한 30 은 ``Property.java:22`` 의
+# 컴파일된 기본값 ``max_ttl_ = 30`` 이며, ``LoadProperty.java:89,92`` 가 원격
+# JSON 으로 override 할 수 있게 해 두어 런타임 실제 값은 PROTECTED 다.
 MAX_TTL_SECONDS = 30
 MIN_TTL_SECONDS = 1
 
-# 이 라이브러리 자체의 폴링 상한 — 앱은 ``while(true)``(``T6/g.java:449``)이지만
-# 대기실 대화상자가 있어 사람이 닫을 수 있다. 이 라이브러리에는 그런 탈출구가 없다.
+# 이 라이브러리 자체의 폴링 상한 — 7.0.6 의 대기 스레드는 정말 무한 루프다
+# (``com/netfunnel/api/Netfunnel.java:503`` ``while (true)``), 반복 횟수도
+# 누적 wall-clock 상한도 없다. 빠져나가는 것은 비-Continue 코드(:505)와
+# ``is_continue_stop_`` 플래그(:528)뿐이고, 그 플래그는 화면이 닫힐 때
+# ``stopNetFunnel()`` 로 켜진다(``TrainScheduleScreenKt.java:205``,
+# ``HomeScreenKt.java:630``, ``PayScreenKt.java:606``) — 이 주석이 말하는
+# "대기실 대화상자" 가 바로 그 탈출구다. 이 라이브러리에는 화면이 없어 그런
+# 탈출구도 없으므로 대신 이 상한을 둔다.
 QUEUE_POLL_LIMIT = 20
 QUEUE_WAIT_LIMIT_SECONDS = 60.0
 
@@ -461,8 +471,14 @@ class KorailNetFunnelClient:
     def slot(self, action: str) -> Generator[KorailNetFunnelToken, None, None]:
         """한 작업 동안 슬롯을 쥐었다가 놓습니다.
 
-        해제는 양쪽 경로에서 일어남(``BaseDaoHelper.java:105-107`` ``onPostExecute``).
-        본문 성공 시 해제 실패는 예외, 본문 실패 시 해제 실패는 note 로 붙임.
+        해제는 양쪽 경로에서 일어남 — 7.0.6 의 실제 연결점은
+        ``ScreenViewModel.withNetFunnel``(``ui/screen/common/ScreenViewModel.java:1719``)
+        이고, 그 종료 헬퍼가 성공/실패 분기 밖에서 무조건
+        ``Netfunnel.getGlobalInstance(nodeId).End()`` 를 부른다(``:893``,
+        전체 분기는 ``:857-896``). 해제가 감싼 블록보다 먼저인지 나중인지는
+        그 지점의 코틀린 코드가 디컴파일되지 않아(``JadxOverflowException``)
+        PROTECTED 다. 본문 성공 시 해제 실패는 예외, 본문 실패 시 해제 실패는
+        note 로 붙임.
         """
         token = self.acquire(action)
         try:
