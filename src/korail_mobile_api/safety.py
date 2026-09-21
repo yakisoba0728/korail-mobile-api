@@ -12,8 +12,8 @@
 
 * **읽기 경로** — :func:`assert_read_only_route` 가 라우트를
   :data:`KORAIL_READ_ONLY_ROUTES` 의 정확한 원소로 제한합니다. 필드 이름·순서 계약은 이
-  모듈이 강제하지 않습니다 — 그것은 ``tests/golden/form_field_order.json`` 이 빌더
-  산출물로 고정합니다.
+  모듈이 강제하지 않습니다 — 그것을 골든으로 고정하던 테스트가 삭제된 뒤로는 각
+  빌더의 코드만이 그 계약을 말합니다.
 * **변경 경로** — :func:`assert_mutation_route`,
   :func:`assert_mutation_route_category`, :func:`assert_mutation_form_shape`.
   읽기 라우트를 포함해 :data:`KORAIL_MUTATION_ROUTES` 밖은 전부 거부합니다. 상태를

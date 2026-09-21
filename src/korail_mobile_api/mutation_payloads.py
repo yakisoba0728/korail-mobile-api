@@ -18,9 +18,8 @@
 포함), 환승 홀드, 결제 전 취소, 카드 결제, 환불, 장바구니 담기는 실서버가 받아들인
 것을 확인했습니다. 병합예약의 두 번째 홀드(:func:`build_merge_reservation_form`),
 역발행 승차권 환불, 운임 재계산, 할인카드 구매·연장·예약 폼은 전송된 적이 없습니다.
-날짜와 응답 코드는 ``docs/MUTATION_HANDOFF.md`` 의 상태표에 있고, 예약대기에서 입석
-플래그를 ``"N"`` 으로 박는 근거는 :func:`_build_journey_reservation_form` 안의 주석에
-있습니다.
+예약대기에서 입석 플래그를 ``"N"`` 으로 박는 근거는
+:func:`_build_journey_reservation_form` 안의 주석에 있습니다.
 """
 from __future__ import annotations
 
@@ -649,8 +648,8 @@ def _build_journey_reservation_form(
             # (h_wait_rsv_flg=" 9", h_gen_rsv_cd="13")에 이 값만 바꿔 두 번 보냈고,
             # "N" 은 SUCC/IRR000014 "예약대기 가능합니다", "Y" 는
             # SUCC/IRR000018 "결제하지 않으면 예약이 취소됩니다" 에 h_seat_no="입석",
-            # h_tot_stnd_cnt="00001", 결제 기한까지 붙은 입석 예약을 돌려줬습니다
-            # (docs/7.0.6-live-verification.md). 7.0.6 도 STAND 상태에서만 이 값을
+            # h_tot_stnd_cnt="00001", 결제 기한까지 붙은 입석 예약을 돌려줬습니다.
+            # 7.0.6 도 STAND 상태에서만 이 값을
             # 채우므로 WAIT 행은 거짓입니다(TrainScheduleViewModel.java:2870).
             "txtStndFlg": (
                 "N"
@@ -974,7 +973,7 @@ def build_single_adult_reservation_form(
 
     :func:`build_reservation_form` 을 두 기본값 그대로 부르는 얇은 함수입니다.
     실서버가 처음 받아들인 예약 요청이 이 모양이었고, 다른 조합도 그 뒤에
-    확인됐습니다(``docs/MUTATION_HANDOFF.md``).
+    확인됐습니다.
     """
     return build_reservation_form(config, train)
 

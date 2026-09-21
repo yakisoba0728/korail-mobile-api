@@ -668,7 +668,7 @@ class TrainSearchMetadata:
     #: ``h_notice_msg`` — 서버가 검색 결과에 붙이는 안내 문구
     #: (``RsvInquiryResponse.java:12``).
     notice_message: str | None = None
-    # 7.0.6 TrainScheduleOut 이 셋 다 선언한다(docs/7.0.6-one-to-one-audit.md).
+    # 7.0.6 TrainScheduleOut 이 셋 다 선언한다.
     first_seat_count: str | None = None
     second_seat_count: str | None = None
     first_departure_time: str | None = None

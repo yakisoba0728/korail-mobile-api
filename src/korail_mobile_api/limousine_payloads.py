@@ -106,8 +106,7 @@ def build_limousine_schedule_form(
         # analysis/jadx/sources/com/korail/talk/network/model/ScdlQryIn.java:38,60
         # analysis/jadx/sources/com/korail/talk/network/model/ScdlQryIn$$serializer.java:32-44
         # 2026-09-16 실서버: 서버는 이 값으로 거르지 않는다(키 없음·trnGpCd=999·
-        # tmGpCd=999 가 같은 42편). 응답 행은 trnGpCd="980" 을 싣는다
-        # (docs/7.0.6-live-verification.md).
+        # tmGpCd=999 가 같은 42편). 응답 행은 trnGpCd="980" 을 싣는다.
         "trnGpCd": query.service_code,
         "psrmClCd": query.room_class_code,
         "dptTm": query.departure_time,

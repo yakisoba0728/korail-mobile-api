@@ -365,8 +365,8 @@ def generate_dynapath_token(
         # ``TypeError``), 실서버가 받아 준 토큰이 이 값으로 고정돼 있다
         # (그것을 고정하던 테스트도 스위트와 함께 삭제됐다).
         # ``rt`` 는 키 유도에 쓰이지 않는다 — ``dyn_key`` 는 ``sv+rand+ts`` 다.
-        # 설계 근거 문서(``docs/internal/`` 의 2026-07-13 fixed-rt 설계 명세)는
-        # 삭제됐고 git 이력에만 있다. 감사 5회에서 모두 비버그로 판정됐다.
+        # 2026-07-13 fixed-rt 설계 명세는 삭제됐고 git 이력에만 있다.
+        # 감사 5회에서 모두 비버그로 판정됐다.
         ("rt", "0"),
         ("os", settings.os_version),
         ("dm", settings.device_model),

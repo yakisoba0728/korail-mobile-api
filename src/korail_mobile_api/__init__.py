@@ -19,8 +19,7 @@
 
 #: 배포된 버전. ``__all__`` 에 넣지 않는 것은 의도다 — 던더는 export 하는 이름
 #: 집합이 아니고, ``from korail_mobile_api import *`` 가 이것을 실어 나른 적이
-#: 없다. ``pyproject.toml`` 의 ``project.version`` 과 같은지는 이제 아무것도
-#: 지키지 않는다 — 확인하던 테스트가 삭제됐고, 빌드도 둘을 맞춰 주지 않는다.
+#: 없다. 패키징 메타데이터가 삭제된 지금 이 값이 유일한 버전 선언이다.
 __version__ = "1.2.0"
 
 from .client import KorailClient
@@ -282,8 +281,8 @@ from .read_payloads import (
 # 마스킹 헬퍼. 이 패키지의 docstring 들이 호출자에게 **직접 쓰라고 지시하는**
 # 함수들이라 공개면에 있어야 한다 — ``read_parsers`` 의
 # :class:`~korail_mobile_api.read_models.OriginalTicket` 문서가 "로깅 또는 외부
-# 직렬화 전에 ``redact_mapping`` 을 적용해야 합니다" 라고 적고, ``scripts/`` 도
-# ``redact_value`` 로 캡처를 가린다. 그런데 이 모듈 docstring 은 "``__all__`` 에
+# 직렬화 전에 ``redact_mapping`` 을 적용해야 합니다" 라고 적는다. 그런데 이
+# 모듈 docstring 은 "``__all__`` 에
 # 없는 것은 예고 없이 바뀝니다" 라고 선언한다 — 둘을 함께 두면 문서가 권하는
 # 사용법이 비공개 API 에 기대게 된다. 여섯 개를 한 벌로 내보내는 것은 서로
 # 맞물려 있기 때문이다: ``redact_value`` 는 문자열에 ``redact_url`` 을,

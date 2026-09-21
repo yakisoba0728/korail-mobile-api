@@ -1856,8 +1856,7 @@ class KorailClient:
 
         실제 돈으로 확인했습니다. 2026-07-31 에 8,400원 한 장이 ``IRT000000`` 으로
         결제·발권됐고 같은 날 2인 PNR 도 결제했으며, 2026-09-15 에 7.0.6 판으로 다시
-        결제·전액 환불했습니다(``docs/verification-record.md``,
-        ``docs/7.0.6-live-verification.md``).
+        결제·전액 환불했습니다.
         """
         self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"
