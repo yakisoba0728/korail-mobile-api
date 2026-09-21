@@ -71,6 +71,37 @@ def _typed_required_string(
     return value
 
 
+def _typed_required_scalar_string(
+    data: Mapping[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> str:
+    """Like :func:`_typed_required_string` but also accepts a JSON integer.
+
+    Live-confirmed against production (2026-09-21, seat inventory for train
+    141/KTX-산천): the server sends ``layout_type`` as a bare JSON integer
+    (``2``), not the ``@SerialName("layout_type") String`` the DAO declares —
+    every call fails otherwise, even though the surrounding seat rows parse
+    fine. Same class of Java-``String``-sent-as-a-JSON-number inconsistency
+    :func:`~korail_mobile_api.read_parsers._optional_scalar_string` already
+    handles for other routes; this is the required-field counterpart.
+    """
+    if key not in data:
+        raise KorailProtocolError(
+            f"KORAIL {context} field {key} must be a string or an integer"
+        )
+    value = data[key]
+    if isinstance(value, str):
+        return value
+    # `type(...) is int` on purpose: bool is an int subclass.
+    if type(value) is int:
+        return str(value)
+    raise KorailProtocolError(
+        f"KORAIL {context} field {key} must be a string or an integer"
+    )
+
+
 def _typed_optional_int(
     data: Mapping[str, Any],
     key: str,
@@ -129,6 +160,9 @@ _station_required_string = partial(
 )
 _inventory_optional_string = partial(_typed_optional_string, context="seat inventory")
 _inventory_required_string = partial(_typed_required_string, context="seat inventory")
+_inventory_required_scalar_string = partial(
+    _typed_required_scalar_string, context="seat inventory"
+)
 _inventory_integer_value = partial(
     _typed_non_negative_integer_value, context="seat inventory"
 )
@@ -1021,12 +1055,14 @@ def parse_seat_inventory_response(
     :class:`~korail_mobile_api.models.SeatWindow` 로 따로 담깁니다.
 
     ``TResidualSeatsResearchOut.java:29`` 는 ``layout_type`` 을
-    ``@SerialName("layout_type") String`` 으로 선언합니다 — 같은 DTO 의 형제
-    스칼라(``seat_ary_cd`` 등)처럼 필수지만, int 로 강제 변환하지 않고 문자열
-    그대로 둡니다.
+    ``@SerialName("layout_type") String`` 으로 선언하지만, 2026-09-21 실서버
+    확인(열차 141/KTX-산천 등 15대) 결과 실제로는 JSON 정수(예: ``2``)로
+    옵니다 — 문자열만 받으면 좌석 데이터가 멀쩡한데도 이 필드 하나 때문에
+    모든 호출이 깨집니다. 그래서 문자열·정수 둘 다 받아 문자열로 정규화합니다
+    (:func:`_typed_required_scalar_string`).
     """
     raw = response.raw
-    layout_type = _inventory_required_string(raw, "layout_type")
+    layout_type = _inventory_required_scalar_string(raw, "layout_type")
     arrangement_code = _inventory_required_string(raw, "seat_ary_cd")
     remaining_count = _inventory_optional_int(
         raw,

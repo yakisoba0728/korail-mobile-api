@@ -587,7 +587,13 @@ class KorailClient:
         passenger_count: int = 1,
         room_class_code: str = "1",
     ) -> SeatInventoryResponse:
-        """한 호차의 좌석 배치와 좌석별 판매 가능 여부를 조회합니다."""
+        """한 호차의 좌석 배치와 좌석별 판매 가능 여부를 조회합니다.
+
+        2026-09-21 실서버 확인: 같은 세션에서 :meth:`get_seat_cars` 를 먼저
+        호출하지 않고 이 메서드를 바로 부르면 ``KorailAppError: [3]인증정보에
+        문제가 있습니다`` 가 돌아올 수 있습니다 — 실앱의 화면 진입 순서(호차
+        목록 → 좌석 배치도)와 같습니다. 호출 순서를 지키십시오.
+        """
         self._require_session()
         validate_seat_inventory_inputs(
             train,
@@ -1815,7 +1821,14 @@ class KorailClient:
         호출로 살아 있는 PNR 을 조용히 취소하는 것은 이 게이트들이 막으려는 범주
         혼동 그 자체입니다.
 
-        전송된 적이 없습니다. 여기서 만든 병합 폼이 KORAIL 에 나간 적은 없습니다.
+        2026-09-21 실서버 확인: 대전→울산(301, 동대구에서 분할)으로 실제
+        호출됨 — 홀드 응답의 ``h_jrny_tp_cd`` 가 두 여정에 각각
+        :data:`~korail_mobile_api.constants.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE`
+        (``"21"``)·
+        :data:`~korail_mobile_api.constants.KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE`
+        (``"22"``)로 정확히 찍혔고, 입석 구간과 좌석 구간이 문서와 같이
+        분리돼 돌아왔습니다. 두 여정 다 단일 :meth:`cancel_unpaid_hold`
+        호출로 함께 풀립니다.
         """
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -1937,13 +1950,14 @@ class KorailClient:
         :meth:`get_ticket_list` 응답에서 ``h_orgtk_wct_no``·``h_orgtk_ret_sale_dt``·
         ``h_orgtk_sale_sqno``·``h_orgtk_ret_pwd`` 로 읽습니다.
 
-        ``pbp_acceptance_target_flag`` 는 **필수 에코입니다, 기본값이 없습니다.**
-        승차권 상세 조회 등 사전 서버 응답에서 읽은 실제
-        ``pbp_acceptance_target_flag`` 값을 그대로 넘기십시오. ``None`` 이고
-        ``ticket.pbp_acceptance_target_flag`` 도 ``None`` 이면
-        :class:`~korail_mobile_api.errors.KorailProtocolError` 를 올립니다 —
-        7.0.6 은 이 필드에 대체 분기가 없으므로 이 라이브러리도 값을 지어내지
-        않습니다(W1 finding 7 / :func:`~korail_mobile_api.mutation_payloads.build_refund_form`
+        ``pbp_acceptance_target_flag`` 는 **항상 그대로 에코합니다.** 승차권
+        상세 조회 등 사전 서버 응답에 실제 값이 있었다면 그 값을 넘기십시오.
+        ``None`` 이고 ``ticket.pbp_acceptance_target_flag`` 도 ``None`` 이면
+        빈 문자열로 에코합니다 — 이 필드는 7.0.6 응답 DTO
+        (``TicketDetailOut.java:167``) 에서도 옵셔널이라 서버가 안 보내면
+        빈 문자열로 떨어지고, 실앱 두 호출부 모두 그 값을 검사 없이 그대로
+        요청에 싣습니다. 값을 지어내는 게 아니라 실앱과 같은 기본값을 쓰는
+        것입니다(W1 finding 7 / :func:`~korail_mobile_api.mutation_payloads.build_refund_form`
         참고).
 
         **더 이상 ``return_times_division_code`` 인자를 받지 않습니다.** 7.0.6

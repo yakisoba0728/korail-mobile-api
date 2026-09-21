@@ -685,8 +685,9 @@ class SeatInventoryResponse(BaseKorailResponse):
     """
 
     #: 7.0.6 ``TResidualSeatsResearchOut.java:29`` declares
-    #: ``@SerialName("layout_type") String`` -- kept as a string, not
-    #: coerced to ``int``.
+    #: ``@SerialName("layout_type") String``, but production sends a JSON
+    #: integer (confirmed live 2026-09-21) -- the parser accepts either and
+    #: normalizes to ``str``, matching this field's Python type.
     layout_type: str = ""
     arrangement_code: str = ""
     #: 7.0.6 TResidualSeatsResearchOut DTO에는 이 두 건수 키가 없습니다.

@@ -125,6 +125,21 @@ def build_limousine_seat_inventory_form(
     ``BusReservationService.java:31``. 두 값만 문자열이 아닌 파이썬 값에서
     옵니다 — ``totPsgCnt`` 는 ``str(int)``, ``isArrow`` 는 ``"Y"``/``"N"`` 이
     아니라 ``"true"``/``"false"`` 입니다.
+
+    ``TResidualSeatsResearchIn`` 은 ``ctlDvCd`` 필드도 선언하지만(``@SerialName``
+    붙은 15번째 필드, 전부 널 허용) 이 폼은 일부러 보내지 않습니다. 이 DTO 는
+    열차 좌석 재고(``research.TResidualSeatsResearch.do``)와 공유되는데
+    (``analysis/reports/src-verification/route-map.tsv:24-25``,
+    ``NetworkApi.java:271,741``), 두 화면의 실제 생성 지점을 비교하면 값이 갈린다:
+    열차 쪽 ``TrainSeatMapViewModel.java:1976`` 는 좌석변경 모드에 따라 실제
+    ``ctlDvCd`` 문자열을 채우지만, 리무진(공항버스) 쪽
+    ``AirportBusSeatMapViewModel.java:865``(그리고 초기화 시점의 :717)는 항상
+    ``null`` 을 넘긴다 — 뒤에 붙는 정수 마스크(``28672``/``32767``)가 ``ctlDvCd``
+    슬롯(비트 ``16384``)을 매번 "기본값 사용"으로 표시하기 때문이다. 서버로 가는
+    ``JsonObject`` 에서 ``null`` 필드는 폼 플래트닝 규칙상 실리지 않으므로(§2),
+    이 폼에 ``ctlDvCd`` 를 넣지 않는 쪽이 7.0.6 리무진 화면이 실제로 보내는 폼과
+    일치한다. (이전 W4 패스가 "도달 불가"로 보류했던 항목을 이번에 위 호출부
+    비교로 확정했다.)
     """
     query = validate_limousine_seat_inventory_query(query)
     return {

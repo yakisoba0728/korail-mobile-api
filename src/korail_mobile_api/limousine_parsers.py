@@ -34,7 +34,7 @@ from .models import BaseKorailResponse, SeatWindow
 from .parsers import (
     _inventory_optional_string,
     _inventory_ratio,
-    _inventory_required_string,
+    _inventory_required_scalar_string,
     _response_fields,
 )
 from .read_parsers import _nullable_string_fields, _optional_string, _row
@@ -95,8 +95,18 @@ _SCHEDULE_FIELDS = {
     "train_class_code": "stlbTrnClsfCd",
     "service_code": "trnGpCd",
     "train_no": "trnNo",
-    "train_order_no": "trnOrdNo",
-    "yms_application_flag": "ymsAplFlg",
+    # ScdlQryOutTrain.java:48,68's Kotlin property names are trnOrdrNo and
+    # ymsAplFlgYMS (the @Metadata d2 property-name array and the plain field
+    # declarations both agree -- neither is AlienGuard-wrapped). The actual
+    # @SerialName element-0/6 index registered in write$Self IS wrapped
+    # (AppSuitLinker1.PQVASJIXBNBDZDUFVAZWWZVRNUMKOQZX), so the exact wire
+    # spelling stays PROTECTED per this package's own rule -- but the prior
+    # spellings here ("trnOrdNo", "ymsAplFlg") were plain typos of the
+    # property name, not even a defensible best-effort guess. Corrected to
+    # match the property names exactly, consistent with how every other
+    # unconfirmed-@SerialName field in this package is spelled.
+    "train_order_no": "trnOrdrNo",
+    "yms_application_flag": "ymsAplFlgYMS",
 }
 
 
@@ -160,9 +170,11 @@ def parse_limousine_seat_inventory_response(
     ``NetworkApi.java:271,741``)가 선언하는 ``layout_type``·``vrBnrUrl``·
     ``windowList`` 도 형제 파서
     :func:`~korail_mobile_api.parsers.parse_seat_inventory_response` 와 같은
-    규칙으로 읽습니다 — ``layout_type`` 은 필수 문자열,
-    ``vrBnrUrl`` 은 선택, ``windowList`` 는 ``seatList`` 와 같은 컴파일된
-    기본값(없으면 빈 목록, ``TResidualSeatsResearchOut.java:80``) 규칙입니다.
+    규칙으로 읽습니다 — ``layout_type`` 은 필수지만 문자열·정수 둘 다
+    받습니다(같은 DTO 를 공유하는 일반 좌석재고 라우트가 2026-09-21 실서버
+    확인에서 JSON 정수로 오는 걸 확인했습니다), ``vrBnrUrl`` 은 선택,
+    ``windowList`` 는 ``seatList`` 와 같은 컴파일된 기본값(없으면 빈 목록,
+    ``TResidualSeatsResearchOut.java:80``) 규칙입니다.
     """
     _require_exact_success(response)
     raw = response.raw
@@ -218,7 +230,7 @@ def parse_limousine_seat_inventory_response(
             "seat_ary_cd",
             "limousine seat inventory response",
         ),
-        layout_type=_inventory_required_string(raw, "layout_type"),
+        layout_type=_inventory_required_scalar_string(raw, "layout_type"),
         vr_banner_url=_inventory_optional_string(raw, "vrBnrUrl"),
         windows=tuple(windows),
         up_down_division_code=_optional_string(

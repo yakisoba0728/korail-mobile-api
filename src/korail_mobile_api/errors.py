@@ -224,7 +224,17 @@ class KorailNoResultsError(KorailAppError):
     (``BaseActivity.java:326-337`` ``setErrorMsgCdNotShowDialog``,
     ``TicketListActivity.java:1393``).
 
-    ``P100``/``WRT300005`` — APK 0건, 실서버 관측만.
+    ``P100``/``WRT300005`` — 이전엔 "APK 0건, 실서버 관측만"이었으나, AppSuit 가
+    건드리지 않는 평문 자산 사전에서 확인됨
+    (``analysis/apktool/assets/error_json.json:374`` "검색된 데이터가 없습니다.",
+    ``:5141`` "조회자료가 없습니다.").
+
+    ``ERR000100``/``WRT800083``/``WRG500116`` — 같은 "조회결과 없음" 문구 패턴을
+    그 사전 전수조사로 추가 확인
+    (``analysis/apktool/assets/error_json.json:2312`` "조회된 자료가 없습니다.",
+    ``:12835`` "조회할 자료가 없습니다.",
+    ``:4241`` "스케줄 조회결과가 없습니다(강릉역의 공사착공으로 정동진역까지만
+    열차가 운행합니다)").
     """
 
 
@@ -241,6 +251,14 @@ class KorailSoldOutError(KorailAppError):
 
     ``TCSOptionsActivity.java:551``, ``SpecialRoomUpgradeActivity.java:314``.
     ``strings.xml:2043`` = "잔여석이 부족하여 서비스를 제공할 수 없습니다."
+
+    ``IRT010110``/``WRT300001``/``ERR800048`` —
+    ``analysis/apktool/assets/error_json.json`` (AppSuit 가 건드리지 않는 평문
+    ``h_msg_cd`` → 안내문구 사전) 전수조사로 추가. ``IRT010110`` 은 이 모듈이 전에
+    "APK 전체 0건"이라 일부러 뺐던 코드인데, 그 판정 자체가 이 사전을 보지 못해서
+    난 오판이었다 — ``:3203`` "잔여석없음". ``WRT300001``/``ERR800048`` 은 같은
+    "매진" 문구로 확인(``:5137`` "좌석이 매진되었습니다.", ``:11062`` "할인승차권의
+    잔여석이 모두 매진되었습니다.").
     """
 
 
@@ -258,20 +276,42 @@ class KorailReservationRefusedError(KorailAppError):
 
     ``WRR800029``, ``ERR911531``, ``ERR911051``.
     ``c5/a.java:174-177``, ``a5/k.java:208-214``.
+
+    ``ERR911501`` — ``ERR911531`` 과 안내문구가 글자 하나까지 같음("개인 고객
+    1인당 구매 한도를 초과하였습니다...1일 최대 20석, 열차별 최대 10석")
+    (``analysis/apktool/assets/error_json.json:2633``).
     """
 
 
 class KorailInvalidRequestError(KorailAppError):
     """필드 수준 검증 거부. 입력을 고쳐야 합니다.
 
-    ``WRG200018``, ``WRT100002``, ``WRT100124``. APK 0건 — 실서버 관측만.
+    ``WRG200018``, ``WRT100002``, ``WRT100124`` — 이전엔 "APK 0건, 실서버 관측만"
+    이었으나, ``analysis/apktool/assets/error_json.json`` (AppSuit 가 건드리지
+    않는 평문 ``h_msg_cd`` → 안내문구 사전) 에서도 확인됨
+    (``:4194`` "입력값오류(PNR번호)", ``:4600`` "창구번호미입력,미승인창구",
+    ``:4625`` "반환번호를 확인해주세요").
+
+    ``WRG200001``~``WRG200020`` (``WRG200018`` 제외 19개) — 같은
+    ``WRG2000xx`` 계열이 "입력값오류(필드명)" 동일 패턴으로 그 사전에
+    연속 나열되어 있어 함께 확인(``:4177-4196``).
     """
 
 
 class KorailNotEntitledError(KorailAppError):
     """이 계정에 그 할인·상품 자격이 없습니다. ``ERR299943``.
 
-    APK 0건 — 실서버 관측만.
+    이전엔 "APK 0건, 실서버 관측만"이었으나,
+    ``analysis/apktool/assets/error_json.json`` (AppSuit 가 건드리지 않는 평문
+    ``h_msg_cd`` → 안내문구 사전) 에서 확인됨
+    (``:2475`` "예약할인이 지원되지 않습니다").
+
+    ``ERR800049``/``WRC000419``/``WRC800030``/``WRR800058`` — 같은
+    "할인·상품 적용대상 아님" 문구 패턴으로 그 사전 전수조사에서 추가 확인
+    (``:11063`` "할인승차권 적용 대상이 아닙니다.",
+    ``:12013`` "키즈카드 발급 대상이 아닙니다(만 12세이하)",
+    ``:12059`` "회원님께서는 해당할인을 이용할 수 있는 대상이 아닙니다.",
+    ``:12492`` "현역병할인 적용대상이 아닙니다.").
     """
 
 
@@ -349,33 +389,69 @@ class KorailDynaPathRequiredError(KorailApiError):
 #   WRR664296  (strResult=SUCC 와 취소 가능한 PNR 을 달고 온다)
 # 그것을 고정하던 테스트는 삭제됐다. 아래 목록이 유일한 기록이다.
 #
+# analysis/apktool/assets/error_json.json — h_msg_cd -> 안내문구 평문 사전. jadx/smali
+# 는 대부분 AppSuit 로 코드 문자열을 감추지만, 이 자산 파일은 컴파일 대상이 아니라서
+# 그대로 풀린다. 이걸로 "APK 0건, 실서버 관측만"이라 적었던 판정 다수가 틀렸음이
+# 드러났다 — 그 판정은 jadx/smali만 훑고 apktool assets 는 보지 않았던 탓이다.
+# IRT010110 이 대표 사례: 전에는 아래 "일부러 넣지 않은 것"에 있었으나, 이 사전에
+# "잔여석없음"으로 나와서 SOLD_OUT_CODES 로 옮겼다. 근거는 각 프로즌셋 주석 참고.
+#
 # 일부러 넣지 않은 것:
-#   IRT010110  APK 전체 0건.
 #   "MACRO"    이 앱의 안티매크로는 응답 본문의 정수 필드(KorailDynaPathError).
+#              error_json.json 전수조사에도 없음 — 재확인.
 #   S198       MaaS 전용(BaseActivity.java:621). 이 라이브러리가 구현하지 않는 표면.
+#              error_json.json: "품절된 상품이 있어 결제를 진행할 수 없습니다.
+#              확인을 누르시면 품절된 상품이 장바구니에서 자동으로 삭제됩니다." —
+#              장바구니(MaaS) 문맥이라는 기존 판단과 일치, 재확인만 되고 번복은 없음.
 #   ERT800077  앱이 재시도를 권하나 이 라이브러리에 재시도 로직이 없다.
+#              error_json.json 전수조사에도 없음 — 재확인.
 # ---------------------------------------------------------------------------
 
-#: 빈 결과. ``WRG000000``/``P114`` APK 확인, ``P100``/``WRT300005`` 실서버 관측만.
-NO_RESULT_CODES = frozenset({"WRG000000", "P114", "P100", "WRT300005"})
+#: 빈 결과. ``WRG000000``/``P114`` APK 확인, ``P100``/``WRT300005`` 는
+#: error_json.json 에서도 확인(:374,5141). ``ERR000100``/``WRT800083``/
+#: ``WRG500116`` 은 같은 "조회결과 없음" 패턴으로 그 사전 전수조사에서 추가.
+NO_RESULT_CODES = frozenset({
+    "WRG000000", "P114", "P100", "WRT300005",
+    "ERR000100", "WRT800083", "WRG500116",
+})
 
 #: 직통 없음 → 환승 검색. APK 확인(``DirectInquiryActivity.java:620``).
 NO_DIRECT_TRAIN_CODE = "WRD000061"
 
-#: 재고 소진. APK 확인. srtgo 의 ``IRT010110`` 은 0건이라 제외.
-SOLD_OUT_CODES = frozenset({"ERR211161"})
+#: 재고 소진. APK 확인. srtgo 의 ``IRT010110`` 은 전엔 0건이라 제외했으나
+#: error_json.json:3203 "잔여석없음"으로 확인되어 포함. ``WRT300001``/
+#: ``ERR800048`` 도 같은 "매진" 패턴으로 그 사전 전수조사에서 추가(:5137,11062).
+SOLD_OUT_CODES = frozenset({"ERR211161", "IRT010110", "WRT300001", "ERR800048"})
 
 #: 좌석 불가. 열차는 아직 예약 가능할 수 있음.
 SEAT_UNAVAILABLE_CODES = frozenset({"WRI411345", "ERR911081", "WRT800176"})
 
-#: 예약 거절. 앱은 예약목록으로 보냄.
-RESERVATION_REFUSED_CODES = frozenset({"WRR800029", "ERR911531", "ERR911051"})
+#: 예약 거절. 앱은 예약목록으로 보냄. ``ERR911501`` 은 ``ERR911531`` 과 안내문구가
+#: 완전히 같아(error_json.json:2633) 그 사전 전수조사에서 추가.
+RESERVATION_REFUSED_CODES = frozenset({
+    "WRR800029", "ERR911531", "ERR911051", "ERR911501",
+})
 
-#: 필드 검증 거부. APK 0건 — 실서버 관측만.
-INVALID_REQUEST_CODES = frozenset({"WRG200018", "WRT100002", "WRT100124"})
+#: 필드 검증 거부. ``WRG200018``/``WRT100002``/``WRT100124`` 는 전엔 "APK 0건,
+#: 실서버 관측만"이었으나 error_json.json 에서 확인됨(:4194,4600,4625).
+#: ``WRG200001``~``WRG200020``(``018`` 제외 19개)은 같은 ``WRG2000xx`` 계열이
+#: "입력값오류(필드명)" 동일 패턴으로 그 사전에 연속 나열되어 있어 함께 추가
+#: (:4177-4196).
+INVALID_REQUEST_CODES = frozenset({
+    "WRG200018", "WRT100002", "WRT100124",
+    "WRG200001", "WRG200002", "WRG200003", "WRG200004", "WRG200005",
+    "WRG200006", "WRG200007", "WRG200008", "WRG200009", "WRG200010",
+    "WRG200011", "WRG200012", "WRG200013", "WRG200014", "WRG200015",
+    "WRG200016", "WRG200017", "WRG200019", "WRG200020",
+})
 
-#: 자격 없음. APK 0건 — 실서버 관측만.
-NOT_ENTITLED_CODES = frozenset({"ERR299943"})
+#: 자격 없음. ``ERR299943`` 은 전엔 "APK 0건, 실서버 관측만"이었으나
+#: error_json.json 에서 확인됨(:2475). ``ERR800049``/``WRC000419``/
+#: ``WRC800030``/``WRR800058`` 은 같은 "할인·상품 적용대상 아님" 패턴으로
+#: 그 사전 전수조사에서 추가(:11063,12013,12059,12492).
+NOT_ENTITLED_CODES = frozenset({
+    "ERR299943", "ERR800049", "WRC000419", "WRC800030", "WRR800058",
+})
 
 #: 백엔드 불가. APK 확인(``BaseActivity.java:608``).
 SERVICE_UNAVAILABLE_CODE = "SEMGTK"

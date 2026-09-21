@@ -1205,6 +1205,22 @@ def build_card_payment_form(
     입니다(``AbstractC1269e.java:406`` → ``V4/a.java:27``). ``h_tot_prc`` 는
     UI 전용 값입니다(``PaymentActivity.java:174,497``). 할인 없는 성인 1명이면
     두 값이 같지만, 할인이나 두 번째 승객이 끼는 순간 갈라집니다.
+
+    **스코프**: 이 빌더는 7.0.6 ``PaymentMethodHelper.getCardRequest``
+    (``analysis/jadx/sources/com/korail/talk/common/helper/PaymentMethodHelper.java:89-137``)
+    중 포인트/마일리지 **미병용** 분기(``pointType`` 이 "없음" 센티넬과 일치해
+    ``:130`` 에서 조기 ``return`` 하는 경로)만 구현합니다. :class:`CardPayment`
+    에 포인트/마일리지 인자가 없는 것과 정확히 대응하는 의도된 스코프입니다.
+    같은 함수가 그 분기를 타지 않을 때 실행하는 병용 경로
+    (``:134``, ``paymentMethod.putAll(getPointRequest(i2 + 1, pointData))`` →
+    ``getPointRequest``, 같은 파일 ``:587-689``, 카드+마일리지/포인트 결합
+    행을 추가로 쌓는 별도의 대형 분기)는 이 라이브러리가 구현하지 않습니다.
+
+    그 조기 반환 분기는 카드 필드들과 별도로 ``hidPontDvCd1`` 도 무조건
+    설정합니다(``:130``). 그 인자는 AppSuit 문자열 암호화(``AlienGuard``)
+    뒤에 있어 실제 값은 PROTECTED — 정적 분석으로 복구 불가합니다. 이
+    빌더는 값을 추측해 채우는 대신 그 키 자체를 보내지 않습니다; 서버가
+    ``hidPontDvCd1`` 없이도 이 요청을 받아들이는지는 미확인입니다.
     """
     if not isinstance(hold, ReservationHoldResponse):
         raise KorailProtocolError(
@@ -1301,23 +1317,31 @@ def build_card_payment_form(
 
 
 def _refund_echo_field(value: object, *, field: str) -> str:
-    """되울리는 환불 플래그 하나를 검사합니다. **기본값으로 떨어지지 않습니다.**
+    """되울리는 환불 플래그 하나를 그대로 넘깁니다. **비어 있어도 거부하지 않습니다.**
 
     이 필드는 7.0.6 의 두 실호출부(``MyTicketDetailViewModel.java:1521``,
     ``FTicketDetailViewModel.java:634``) 모두 서버 응답
     (``ticketDetailOut.getPbpAcepTgtFlg()``)을 조건 없이 그대로 되울리는
-    자리이고, Kotlin 레벨 기본값도 없습니다(non-null, 대체 분기 없음). 예전
-    구현은 호출자가 값을 안 주면 임의로 ``"N"`` 을 대신 보냈는데, 그건 이
-    라이브러리가 서버 대신 값을 지어내는 것과 같습니다 — "서버에서 받은 값
-    그대로" 원칙 위반입니다(W1 finding 7). 그래서 ``None`` 이나 빈 문자열은
-    이제 실패입니다: 호출자가 사전 응답(예: ``RefundTicketDetailResponse`` 나
-    그 상당물)에서 읽은 실제 값을 넘겨야 합니다.
+    자리입니다. 하지만 응답 쪽 DTO(``TicketDetailOut.java:167``)의 이 필드는
+    **옵셔널**입니다 — kotlinx 역직렬화 비트마스크가 서버가 이 키를 아예
+    안 보낸 경우를 대비해 조건부 기본값(디컴파일에서 빈 문자열로 보이는
+    AlienGuard 상수)으로 떨어지도록 생성자를 짜 놨습니다. 즉 실앱도 이 값이
+    빈 채로 요청에 실려 나가는 경우가 실제로 있고, 두 호출부 어디에도 그
+    값을 검사하거나 되살리는 분기가 없습니다 — "non-null 강제"는 Kotlin
+    타입 수준(``null`` 이 아니라는 것)일 뿐이지 "내용이 있어야 한다"는
+    뜻이 아니었습니다. 라이브 발권 승차권(스마트티켓, PNR
+    320260992124056, 2026-09-21 결제)으로 직접 확인했습니다: 승차권 상세
+    조회 응답에 ``pbpAcepTgtFlg``/``h_pbp_acep_tgt_flg`` 키 자체가 없는
+    정상 케이스가 있고, 그때 환불 제출은 빈 문자열을 그대로 실어 보내야
+    성공합니다. ``None`` 만 빈 문자열로 바꾸고, 그 밖의 비문자열 값은
+    여전히 프로그래밍 오류로 거부합니다.
     """
-    if not isinstance(value, str) or not value.strip():
+    if value is None:
+        return ""
+    if not isinstance(value, str):
         raise KorailProtocolError(
-            f"KORAIL refund {field} must be a non-empty string echoed from a "
-            "prior server response -- KORAIL itself never defaults this "
-            "field, so this library must not guess it either"
+            f"KORAIL refund {field} must be a string echoed from a prior "
+            "server response"
         )
     return value
 
@@ -1344,18 +1368,22 @@ def build_refund_form(
         ``"Y"`` 를 보냅니다(``ticketReturn/a.java:185-190``). 기본값은
         ``False``(``"N"``).
     ``pbp_acceptance_target_flag``
-        ``pbpAcepTgtFlg``. **필수 에코이며 기본값이 없습니다.** 7.0.6 의 두
-        실호출부(``MyTicketDetailViewModel.java:1521``,
+        ``pbpAcepTgtFlg``. **항상 그대로 에코합니다 — 값이 없어도 거부하지
+        않습니다.** 7.0.6 의 두 실호출부(``MyTicketDetailViewModel.java:1521``,
         ``FTicketDetailViewModel.java:634``)는 예외 없이
-        ``ticketDetailOut.getPbpAcepTgtFlg()`` 를 그대로 되울리고, DTO
-        (``RefundTicketIn.java:111``)도 이 필드를 non-null 로 강제하며 대체
-        분기가 없습니다. 이전 구현은 값이 없으면 ``"N"`` 을 대신 지어
-        보냈는데, 이는 서버가 준 값을 조용히 대체하는 SUBSTITUTION 이었습니다
-        (W1 finding 7). 이제는 ``None`` 이면(그리고
-        :attr:`PaidTicket.pbp_acceptance_target_flag` 도 ``None`` 이면)
-        :class:`~korail_mobile_api.errors.KorailProtocolError` 를 올립니다 —
-        호출자는 사전에 읽은 서버 값(예: 승차권 상세 조회 응답의
-        ``pbp_acceptance_target_flag``)을 반드시 넘겨야 합니다.
+        ``ticketDetailOut.getPbpAcepTgtFlg()`` 를 그대로 되울립니다. DTO
+        (``RefundTicketIn.java:111``)는 이 필드를 non-null 로 강제하지만,
+        그건 Kotlin 타입 수준의 제약일 뿐입니다 — 응답 쪽 DTO
+        (``TicketDetailOut.java:167``)에서 이 필드는 옵셔널이라 서버가 키를
+        아예 안 보내면 조건부 기본값(빈 문자열)으로 떨어지고, 그 기본값이
+        검사 없이 그대로 요청에 실립니다. 이전 구현은 값이 없으면 ``"N"``
+        을 대신 지어 보냈는데, 이는 서버가 준 값을 조용히 대체하는
+        SUBSTITUTION 이었습니다(W1 finding 7). 지금은 ``None`` 이면(그리고
+        :attr:`PaidTicket.pbp_acceptance_target_flag` 도 ``None`` 이면) 빈
+        문자열로 에코합니다 — 이것도 지어내는 게 아니라 실앱이 같은 상황에서
+        내리는 기본값과 같은 값입니다. 사전 응답에 실제 값이 있었다면(예:
+        승차권 상세 조회 응답의 ``pbp_acceptance_target_flag``) 그 값을
+        넘기십시오; 없었다면 아무것도 넘기지 않아도 됩니다.
 
     **더 이상 받지 않는 인자: ``return_times_division_code``.** 이전 버전은
     이 값을 ``tk_ret_tms_dv_cd`` 로 실었지만, 7.0.6 은 이 필드를 실제

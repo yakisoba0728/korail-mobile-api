@@ -6,8 +6,13 @@
 
 ``lmu.scdlQry.do``(운행 스케줄)와 ``lms.TResidualSeatsResearch.do``(좌석 재고)가
 씁니다. ``seatMovie.LimousineScheduleView``(좌석이동 화면의 열차 목록)는 7.0.6
-앱에서 사라져 클라이언트가 더는 보내지 않습니다. 그 질의·응답 타입은 저장해 둔 6.5.0
-응답을 해석할 수 있도록 남겨 두었습니다.
+앱에서 사라져 클라이언트가 더는 보내지 않습니다 — 두 파일에서 동시에 확인했습니다:
+``analysis/jadx/sources/``·``analysis/apktool/`` 전체에 ``LimousineScheduleView``
+문자열이 한 번도 나오지 않고, ``analysis/reports/src-verification/route-map.tsv`` 에도
+없습니다. 그 요청을 만들던 질의 타입은 :mod:`~korail_mobile_api.limousine_payloads`
+의 빌더와 함께 없어졌습니다. 저장해 둔 6.5.0 응답을 해석할 수 있도록 **응답** 타입만
+남겨 두었습니다 (:class:`LimousineScheduleViewTrain`, :class:`LimousineScheduleViewResponse`,
+:func:`~korail_mobile_api.limousine_parsers.parse_limousine_schedule_view_response`).
 
 ``*Query`` 두 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서 형식을
 검사합니다. 둘 다 역**코드**(4자리)로 역을 받습니다.
@@ -217,7 +222,8 @@ class LimousineSeatInventoryResponse(BaseKorailResponse):
     up_down_division_code: str | None = None
     #: ``layoutType`` — 좌석 배치 형식. 형제 응답
     #: :class:`~korail_mobile_api.models.SeatInventoryResponse.layout_type`
-    #: 과 같은 DTO 필드이며 와이어 타입은 String 입니다.
+    #: 과 같은 DTO 필드이며, DAO 선언은 String 이지만 실서버는 JSON 정수로도
+    #: 보냅니다(2026-09-21 확인) — 파서가 둘 다 받아 문자열로 정규화합니다.
     layout_type: str | None = None
     #: ``vrBnrUrl`` — VR 배너 URL. 민감하지 않아 ``repr=False`` 없음(형제
     #: ``SeatInventoryResponse.vr_banner_url`` 과 동일한 판단).
