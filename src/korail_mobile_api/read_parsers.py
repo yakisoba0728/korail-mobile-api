@@ -700,7 +700,6 @@ _RESERVATION_HISTORY_TOP_FIELDS: dict[str, str] = {
     "customer_division_code": "h_cust_dv_cd",
     "customer_sort_code": "h_cust_srt_cd",
     "customer_class_code": "h_cust_cl_cd",
-    "journey_count": "h_jrny_cnt",
 }
 
 _RESERVATION_HISTORY_TICKET_FIELDS: dict[str, str] = {
@@ -1456,6 +1455,12 @@ def parse_reservation_history_response(
         **_nullable_string_fields(
             raw, _RESERVATION_HISTORY_TOP_FIELDS, "reservation history"
         ),
+        # h_jrny_cnt is the exact cross-endpoint inconsistency
+        # _optional_scalar_string's own docstring already documents: the hold
+        # response sends it quoted ("0001"), reservation history sends it as
+        # a bare JSON integer (1). Live-confirmed 2026-09-21 -- every history
+        # row with an active journey crashed here before this fix.
+        journey_count=_optional_scalar_string(raw, "h_jrny_cnt", "reservation history"),
         guide_info=guide_info,
         journeys=tuple(journeys),
         items=tuple(all_trains),
@@ -2093,14 +2098,33 @@ def _primitive_json_integer(
     key: str,
     context: str,
 ) -> int:
+    # Psg.java declares these Kotlin `Int`, but the live server sends
+    # zero-padded ASCII-decimal strings for at least custAgeFrom/custAgeTo/
+    # psgPrnbFrom/psgPrnbTo ("0000", "0999", ...), not bare JSON integers --
+    # live-confirmed 2026-09-21, every commuter-info call with a travel-pass
+    # commuter_kind_code crashed here before this fix. Same Gson-coercion
+    # class of field as _required_integer; mirrors its acceptance rule.
     value = data.get(key)
     if value is None:
         return 0
-    if type(value) is not int:
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a JSON integer or null"
-        )
-    return value
+    if type(value) is int:
+        return value
+    if (
+        isinstance(value, str)
+        and value
+        and all("0" <= character <= "9" for character in value)
+    ):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise KorailProtocolError(
+                f"KORAIL {context} field {key} has an unsupported "
+                "ASCII-decimal length"
+            ) from exc
+    raise KorailProtocolError(
+        f"KORAIL {context} field {key} must be a JSON integer, an "
+        "ASCII-decimal string, or null"
+    )
 
 
 def parse_commuter_info_response(

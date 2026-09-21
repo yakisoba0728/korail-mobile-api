@@ -710,7 +710,11 @@ class DiscountCardScheduleRequest:
     기본값은 두 빌더 공통 상수. ``dptTm`` ``"000000"``, ``trnGpCd`` ``"109"``
     (``K4/s.java:5``), ``dirtChtnDvCd`` ``"1"`` (``K4/d.java:5``).
 
-    **미검증.** 라이브 호출 없음 — 응답 모양은 APK DAO 선언 기준.
+    2026-09-21 실서버 확인: ``usable_trip_count`` 의 기본값 ``""`` 는 서버가
+    거부합니다(``WRR000100: 입력값 오류(usePsbTno)``) — 이 필드는 사실상
+    필수입니다. 다만 어떤 값이 "맞는" 기본값인지는 여전히 확인되지 않아
+    임의로 채우지 않습니다 — 호출자가 실제 값(예: ``"01"``)을 넘겨야
+    합니다.
     """
 
     card_kind_management_no: str

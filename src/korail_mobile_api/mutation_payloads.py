@@ -881,9 +881,16 @@ def _journey_fields(train: TrainSummary | TrainScheduleItem) -> dict[str, str]:
             train.train_group_code,
             field="train_group_code",
         ),
-        "train_class_code": _required_digits(
+        # Not _required_digits: KTX-산천 legs live-confirmed sending
+        # alphanumeric class codes (e.g. "0A") for h_trn_clsf_cd, which a
+        # decimal-only check rejected outright -- booking became impossible
+        # for any itinerary containing such a leg. The real app never treats
+        # this as a number (TrainSummary.train_class_code is str everywhere
+        # else in this library too); echo it as given.
+        "train_class_code": _required_mutation_text(
             train.train_class_code,
             field="train_class_code",
+            context="reservation train",
         ),
         "run_date": _required_pattern(
             train.run_date,
