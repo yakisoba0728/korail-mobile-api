@@ -842,9 +842,13 @@ class DiscountCardScheduleRequest:
 #: = ``1149041171``/``1149041172``/``1149066157``/``1149066158`` 이고, 이는
 #: ``NCardDefine.java:14-17`` 의 상수
 #: ``B2N19060502``/``B2N19060503``/``B2N19061002``/``B2N19061003`` 의 자바
-#: ``String.hashCode()`` 와 정확히 일치합니다. 매칭되면 ``:1180-1193`` 의
-#: 3바이트 보호 리터럴을, 아니면 ``:1196-1215`` 의 다른 3바이트 보호 리터럴을
+#: ``String.hashCode()`` 와 정확히 일치합니다. 매칭되면
+#: ``NCardDefine.smali:1180-1193`` 의 3바이트 보호 리터럴을, 아니면
+#: 같은 smali ``:1196-1215`` 의 다른 3바이트 보호 리터럴을
 #: 돌려줍니다(둘 다 3자 코드이므로 ``"B2N"``/``"MMM"`` 과 길이는 맞습니다).
+#: — 이 두 줄번호는 **smali** 쪽입니다. 직전 문장이 ``NCardDefine.java:14-17``
+#: 을 인용하므로 생략형으로 적으면 89행짜리 java 파일을 가리키는 것으로
+#: 읽혀 따라갈 수 없습니다.
 #:
 #: 아래 두 값 ``B2N18120402``/``B2N18120403`` 은 해시가
 #: ``286471596``/``286471597`` 로, 그 네 case 에 **없습니다** —
@@ -1198,8 +1202,10 @@ def build_original_ticket_inquiry_form(
     붙는 자리라는 증거이고, 아래 ``rows.append`` 네 줄과 순서가 같습니다.
     (원래 인용 ``ROrtg.java:8-11`` 은 7.0.6 디컴파일에 없는 경로였습니다.)
 
-    ``ticket_count`` 는 ``@SerialName("tkCnt")``(``:81``)이고 DTO 선언이
-    ``int``(``:30``)입니다 — 원래 근거였던
+    ``ticket_count`` 는 ``OgTicketInquiryIn.java:81`` 의
+    ``@SerialName("tkCnt")`` 이고 같은 파일 ``:30`` 의 DTO 선언이
+    ``int`` 입니다(생략형 ``:81``/``:30`` 으로 적으면 직전에 인용한
+    ``ChangeOrtkInfo.java`` 를 가리키는 것으로 읽힙니다) — 원래 근거였던
     ``ResearchService.smali:613,628-632`` 도 없는 경로였으나 결론은 그대로
     유효합니다.
 
@@ -1289,7 +1295,9 @@ class SelfSeatChangeInfoRequest:
 #:
 #: 원래 주석은 ``K4/o.java:7-8`` 을 인용하며 ``ALL("9") 는 제외`` 라고
 #: 적었는데, ① 그 경로는 7.0.6 에 없고 ② 7.0.6 의 ``PsrmType`` 에는 애초에
-#: ``ALL`` 상수가 없습니다(``$values()`` 가 ``:24-29`` 에서 둘만 채웁니다).
+#: ``ALL`` 상수가 없습니다(``PsrmType.java:24-29`` 의 ``$values()`` 가
+#: ``:26``/``:27`` 에서 둘만 채웁니다 — 생략형으로 적으면 직전에 인용한
+#: 없는 경로 ``K4/o.java`` 를 가리키는 것으로 읽힙니다).
 #: 즉 "제외"할 세 번째 값이 존재하지 않습니다 — 그 주장은 미출처입니다.
 SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
 
@@ -1485,8 +1493,12 @@ class PriceFareQuoteRequest:
     ``new PrcFareIn(txtMenuId, chtnDvCd, trnCnt, paramList)``
     (인자 순서는 ``PrcFareIn.java:197`` 의 ``copy`` 로 확인).
 
-    ``txtMenuId`` 가 앱 상수라는 것은 맞습니다 — ``:794`` 의 첫 인자는
-    **2바이트** AlienGuard 리터럴입니다. 다만 **값 ``"11"`` 자체는 7.0.6
+    ``txtMenuId`` 가 앱 상수라는 것은 맞습니다 —
+    ``TrainOpInfoViewModel.java:794`` 의 ``new PrcFareIn(…)`` 두 곳 모두
+    첫 인자가 ``method_name_3(…, new byte[]{47, 109}, false)``, 즉
+    **2바이트** AlienGuard 리터럴입니다. (파일명을 다시 적는 이유: 직전
+    문장이 ``PrcFareIn.java:197`` 을 인용하므로 생략형 ``:794`` 는 274행짜리
+    그 DTO 파일을 가리키는 것으로 읽혀 존재하지 않는 줄이 됩니다.) 다만 **값 ``"11"`` 자체는 7.0.6
     소스로 확인되지 않습니다**(길이만 일치). 원래 인용 ``a5/k.java:92-94`` 와
     ``PriceFareActivity.java:49,62`` 는 둘 다 7.0.6 디컴파일에 없는
     경로였습니다.
@@ -1670,9 +1682,11 @@ def build_refund_commission_form(
     경로였습니다.
 
     판매일자 필드는 ``h_orgtk_ret_sale_dt`` — 영수증 조회의 ``h_orgtk_sale_dt``
-    와 다름. 7.0.6 도 같습니다: ``RefundCommissionIn`` 은 ``hOrgtkRetSaleDt``
-    (``:37``)를, 형제 ``RefundTicketIn`` 은 ``hOrgtkSaleDt``(``:38``)를
-    선언합니다.
+    와 다름. 7.0.6 도 같습니다: ``RefundCommissionIn.java:37`` 이
+    ``hOrgtkRetSaleDt`` 를, 형제 ``RefundTicketIn.java:38`` 이
+    ``hOrgtkSaleDt`` 를 선언합니다 — 서로 다른 두 파일이므로 생략형
+    ``:37``/``:38`` 로 적으면 바로 위에서 인용한(그리고 7.0.6 에 없는)
+    ``RefundService.java`` 를 가리키는 것으로 읽힙니다.
     """
     reference = _exact_original_ticket_reference(ticket)
     party = _exact_refund_companion(companion)

@@ -1274,10 +1274,28 @@ def build_single_adult_reservation_form(
     return build_reservation_form(config, train)
 
 
-# The app concatenates three phone-number fields, capped at 3 + 4 + 4 digits
-# (res/values/integers.xml:34-35, phone_number_max_length_3 and
-# phone_number_max_length, applied in ReservationWaitActivity.java:88-89), and
-# 7.0.6 ReservationWaitViewModel checks the combined length equals 11.
+# 7.0.6 holds the number as a three-part Triple<String, String, String> (the
+# `phoneNo` property of ReservationWaitApplyUiData,
+# ui/screen/train/ReservationWaitApplyUiData.java:85), concatenates the three
+# parts into one string (ui/screen/train/ReservationWaitViewModel.java:503-512,
+# a StringBuilder over phoneNo's first/second/third), and refuses to send
+# unless that concatenation is exactly 11 long -- the gate at :513 is
+# `checkedSMS && length != 11`, and it alerts R.string.error_cellphone
+# ("휴대폰 번호를 정확히 입력해주세요.", res/values/strings.xml:834) instead of
+# building the request. Note it is conditional on the SMS checkbox, which is
+# why build_standby_wait_form below only validates when sms_notify is set.
+#
+# The old citation -- "capped at 3 + 4 + 4 digits (res/values/integers.xml
+# :34-35, phone_number_max_length_3 and phone_number_max_length, applied in
+# ReservationWaitActivity.java:88-89)" -- is wrong twice over for 7.0.6. There
+# is no ReservationWaitActivity class, and 7.0.6's integers.xml contains no
+# phone_number_max_length* entry at all: its whole <resources> block is eleven
+# unrelated integers (abc_config_activityDefaultDur through
+# status_bar_notification_info_maxnum). The 3 + 4 + 4 split survives only as
+# the arity of the Triple; the per-part caps are not in the resources any more.
+# This pattern is also slightly STRICTER than 7.0.6, which tests length alone
+# and would accept eleven non-digits -- deliberately, since a non-numeric
+# txtCpNo cannot be a Korean mobile number and the server would reject it.
 _STANDBY_PHONE_RE = re.compile(r"[0-9]{11}")
 
 
@@ -1308,19 +1326,46 @@ def build_standby_wait_form(
 ) -> dict[str, str]:
     """예약대기 홀드의 후속 폼을 만듭니다.
 
-    ``reservationWait.ReservationWait``
-    (``ReservationWaitService.java:10-12``)이며 예약대기 예매의 후반부입니다.
+    ``reservationWait.ReservationWait`` 이며 예약대기 예매의 후반부입니다.
     ``"1102"`` 홀드가 PNR 을 만들고, 이 호출이 예약대기 화면에서 받은 두 옵션을
-    그 PNR 에 기록합니다.
+    그 PNR 에 기록합니다. 7.0.6 의 라우트 선언은
+    ``@POST("/classes/com.korail.mobile.reservationWait.ReservationWait")``
+    ``postReservationWait(@FieldMap Map<String,String>, …)``
+    (``network/NetworkApi.java:639-640``) 하나뿐이고, 옛 인용
+    ``ReservationWaitService.java:10-12`` 은 6.5.0 잔재입니다 — 그 클래스는
+    7.0.6 디컴파일에 없습니다.
 
-    * ``txtPnrNo`` — 홀드의 PNR(``ReservationWaitActivity.java:150``).
-    * ``txtPsrmClChgFlg`` — ``"Y"``/``"N"``, 좌석등급 변경 동의
-      (``:213``/``:219``). 관광열차에는 앱이 이 체크박스를 감추므로(``:115``)
-      거기서는 ``"N"`` 뿐입니다.
-    * ``txtSmsSndFlg`` — ``"Y"``/``"N"``, 배정 시 SMS 알림(``:214``/``:218``).
-    * ``txtCpNo`` — 알림받을 번호. 앱은 SMS 가 켜졌을 때만 넣습니다
-      (``:220-227``). 이 빌더도 그 경우 빈 문자열을 보내는 대신 키를
-      생략합니다.
+    전선 키 넷은 ``ReservationWaitIn`` 의 ``@SerialName`` 그대로입니다
+    (``network/model/ReservationWaitIn.java:55``, 개별 선언은 ``:111``·``:115``·
+    ``:119``·``:107``). 값을 채우는 곳은 ``ReservationWaitViewModel`` 의
+    ``reservationWait$1`` 하나입니다
+    (``ui/screen/train/ReservationWaitViewModel.java:517-525``).
+
+    * ``txtPnrNo`` — 홀드의 PNR. 7.0.6 은 직전 예약 응답 객체에서
+      ``reservationOut.getHPnrNo()`` 를 읽어 그대로 넣습니다(``:519``, 생성은
+      ``:525``). 옛 인용 ``ReservationWaitActivity.java:150`` 은 6.5.0 잔재.
+    * ``txtPsrmClChgFlg`` — 좌석등급 변경 동의. ``checkedSpecial`` 삼항으로
+      보호된 1바이트 리터럴 둘 중 하나를 고릅니다(``:520``). 암호문 길이가
+      ``"Y"``/``"N"`` 과 일관되고 그 두 값은 이 패키지의 라이브 확인값입니다 —
+      AlienGuard 로 보호되어 정적으로는 읽을 수 없습니다. 관광열차에서 이
+      체크박스가 사라지는 것도 7.0.6 에 그대로 있습니다: 생성자가 1구간의
+      ``txtTrnGpCd`` 로 ``TrainGroup.findBy(...)`` 를 돌려
+      ``isTourGroup``(``common/define/TrainGroup.java:460-461``)이면
+      ``applyUiData`` 를 ``copy$default(…, 62, null)`` 로 덮어 첫 인자
+      ``showSpecial`` 만 ``false`` 로 내립니다
+      (``ReservationWaitViewModel.java:565-572``; 인자 순서는
+      ``ReservationWaitApplyUiData.java:85``). 그러면 ``checkedSpecial`` 은 켤
+      수 없으니 거기서는 ``"N"`` 뿐입니다.
+    * ``txtSmsSndFlg`` — 배정 시 SMS 알림. 같은 모양의 ``checkedSMS`` 삼항
+      (``:521``)입니다.
+    * ``txtCpNo`` — 알림받을 번호. 앱은 SMS 가 켜졌을 때만 싣습니다:
+      ``if (!checkedSMS) str3 = null;``(``:522-524``)로 널을 넘기고, 앱의
+      Json 이 ``explicitNulls = false`` 라 널 필드는 직렬화에서 아예 빠집니다
+      (``NetworkModule.java:860``). 그래서 빈 문자열이 아니라 **키 생략**이
+      맞고, 이 빌더도 그렇게 합니다. DTO 자신도 ``txtCpNo`` 만 기본값을 널로
+      두고 나머지 셋은 빈 문자열로 둡니다(``ReservationWaitIn.java:87``).
+      옛 인용 ``:213``/``:219``/``:115``/``:214``/``:218``/``:220-227`` 은 모두
+      ``ReservationWaitActivity.java`` 의 줄번호이므로 함께 폐기했습니다.
     """
     if not isinstance(hold, ReservationHoldResponse):
         raise KorailProtocolError(
@@ -1371,12 +1416,20 @@ def build_unpaid_reservation_cancel_form(
 ) -> dict[str, str]:
     """미결제 홀드를 취소하는 폼을 만듭니다.
 
-    여정 수는 상수가 아니라 **되울려 보냅니다.**
-    ``DReservationConfirmActivity.java:269-278`` 은 ``txtJrnySqno="0001"`` 과
-    ``hidRsvChgNo="000"`` 은 상수로 두면서
-    ``setTxtJrnyCnt(reservationResponse.getH_jrny_cnt())`` 는 그대로
-    통과시킵니다. 환승 홀드는 여정이 둘이므로 여기서 하나만 받아들이면 살아 있는
-    환승 예약을 놓을 방법이 없어집니다.
+    여정 수는 상수가 아니라 **되울려 보냅니다.** 7.0.6 에서 이것은 예외 없는
+    규칙입니다 — ``new ReservationCancelIn(txtPnrNo, txtJrnySqno, txtJrnyCnt,
+    hidRsvChgNo)``(인자 순서는 ``network/model/ReservationCancelIn.java:74``,
+    전선 키는 ``:53``·``:106``·``:110``·``:114``·``:118``)를 만드는 7.0.6 의
+    호출부 **아홉 곳 전부**가 세 번째 인자로 ``reservationOut.getHJrnyCnt()``
+    를 넘깁니다. 여정 수를 상수로 박는 곳은 한 곳도 없습니다. 환승 홀드는
+    여정이 둘이므로 여기서 하나만 받아들이면 살아 있는 환승 예약을 놓을 방법이
+    없어집니다.
+
+    옛 인용 ``DReservationConfirmActivity.java:269-278`` 은 6.5.0 잔재입니다 —
+    그 클래스는 7.0.6 디컴파일에 없고, 7.0.6 에는
+    ``executeRsvCancel(ReservationResponse)`` 도 ``setTxtJrnyCnt`` 세터도
+    없습니다(요청은 불변 DTO 하나입니다). 그 주장의 내용 자체는 7.0.6 에서도
+    그대로 성립하고, 아래 두 주석에 재도출한 근거를 적어 뒀습니다.
     """
     if not isinstance(response, ReservationHoldResponse):
         raise KorailProtocolError(
@@ -1386,13 +1439,34 @@ def build_unpaid_reservation_cancel_form(
     # (h_jrny_cnt="0001"), not "1", so compare numerically rather than by
     # spelling -- a formatting difference must never make a hold uncancellable.
     #
-    # The count is ECHOED, not fixed at one. DReservationConfirmActivity.java:
-    # 269-278 is decisive: executeRsvCancel(ReservationResponse) sets
-    # txtJrnySqno="0001" and hidRsvChgNo="000" as constants but passes
-    # setTxtJrnyCnt(reservationResponse.getH_jrny_cnt()) straight through. A
-    # 환승 hold carries two journeys, and refusing it here would leave a live
+    # The count is ECHOED, not fixed at one. In 7.0.6 that is settled by
+    # enumeration rather than by one call site: grepping for
+    # `new ReservationCancelIn(` over the whole decompile finds nine call
+    # sites, and every one of them passes reservationOut.getHJrnyCnt() as the
+    # third (txtJrnyCnt) argument --
+    #   ui/screen/train/ReservationWaitViewModel.java:398
+    #   ui/screen/train/ReservationMergeViewModel.java:445
+    #   ui/screen/transit/AirportBusSeatMapViewModel.java:542
+    #   ui/screen/pay/PayViewModel.java:4686, :4725, :4805, :4847
+    #   ui/screen/basketticket/BasketTicketViewModel.java:3232
+    #   ui/screen/myticket/reservation/MyReservationViewModel.java:1557
+    # (plus a retry path, BasketTicketViewModel.java:627, that replays a saved
+    # input verbatim, and ui/screen/sample/Sample09ViewModel.java:197, which is
+    # a sample screen). The same enumeration shows the two constants: those
+    # sites that do NOT read a listed row pass an AlienGuard-protected 4-byte
+    # ciphertext for txtJrnySqno (ReservationWaitViewModel.java:393,
+    # ReservationMergeViewModel.java:445,
+    # AirportBusSeatMapViewModel.java:531) and a 3-byte one for hidRsvChgNo
+    # (:398, :445, :542) -- lengths consistent with "0001" and "000", which are
+    # this package's live-verified readings, not decoded constants.
+    #
+    # A 환승 hold carries two journeys, and refusing it here would leave a live
     # transfer reservation with no way to release it -- the orphaned hold this
     # whole subsystem exists to prevent.
+    #
+    # The old citation DReservationConfirmActivity.java:269-278 is 6.5.0
+    # jetsam: no such class in 7.0.6, and nothing on this path has a
+    # setTxtJrnyCnt setter at all.
     journey_count = response.journey_count
     legs = None
     if isinstance(journey_count, str) and journey_count.strip().isdigit():

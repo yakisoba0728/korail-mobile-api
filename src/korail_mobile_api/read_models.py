@@ -740,9 +740,19 @@ class GuideSeatConditionResponse(BaseKorailResponse):
     안내 문구는 ``h_msg_txt`` 에 있습니다.
 
     ``GuideSeatCndOut`` 이 선언하는 자체 필드는 :attr:`time_stamp`
-    (``long timeStamp``, ``:29``) 하나뿐입니다 — 그래서 이전에는 봉투 밖으로
-    아무것도 읽지 않았습니다. ``@SerialName`` 이 없어 정확한 와이어 철자는
-    PROTECTED 이며, 코틀린 필드명 ``timeStamp`` 를 최선으로 사용합니다.
+    (``GuideSeatCndOut.java:29`` 의 ``public final long timeStamp``)
+    하나뿐입니다 — 그래서 이전에는 봉투 밖으로 아무것도 읽지 않았습니다.
+    (파일명을 여기서 적는 이유: 직전 주석에 다른 파일 인용이 없어 생략형
+    ``:29`` 는 가리킬 선행 파일명이 아예 없었습니다.)
+
+    이전 주석은 와이어 철자를 "PROTECTED" 라고 적었는데 그 표현은
+    정확하지 않습니다. ``GuideSeatCndOut.java:50`` 의 합성 생성자를 보면
+    봉투 두 칸에는 ``@SerialName("h_msg_cd")``/``@SerialName("h_msg_txt")``
+    가 붙어 있고 ``long j``(= ``timeStamp``)에는 아무것도 붙지 않습니다 —
+    즉 AlienGuard 로 난독화된 리터럴이 아니라 ``@SerialName`` 이 없어
+    kotlinx 기본값(= 프로퍼티 이름)이 곧 와이어 키인 경우입니다. 그래서
+    ``timeStamp`` 를 최선으로 쓰되 라이브로 재확인하기 전까지는 추정으로
+    둡니다(아래 ``NCardScheduleItem`` 주석과 같은 구분).
     """
 
     time_stamp: int | None = None
@@ -1118,11 +1128,16 @@ class DiscountCardSection:
     #: 7.0.6 에 그 경로가 없어 사슬을 다시 찾았습니다:
     #: ``NCardReservationViewModel.java:154-158`` 이
     #: ``getDcntCrdInfo().getAppSegList()[index].getStlbDturDvNm()`` 을
-    #: ``Triple`` 에 담아 ``TrainScheduleRoute``(``:164``)로 넘기고,
-    #: ``TrainScheduleViewModel.buildAssignSchedule``(``:2639``)가 그
-    #: ``Triple`` 에서 값을 꺼내(``:2730-2736``) ``AssignScheduleIn`` 의
-    #: 열 번째 인자로 넣습니다(``:2749``/``:2831``) — 그 자리가
-    #: ``AssignScheduleIn.java:41`` 의 ``stlbDturDvNm1`` 입니다.
+    #: ``Triple`` 에 담아 같은 파일 ``:164`` 의 ``new TrainScheduleRoute(…)``
+    #: 로 넘기고, ``TrainScheduleViewModel.java:2639`` 의
+    #: ``buildAssignSchedule`` 이 그 ``Triple`` 에서 값을 꺼내(같은 파일
+    #: ``:2730-2736``) ``AssignScheduleIn`` 의 열 번째 인자로 넣습니다(같은
+    #: 파일 ``:2749``/``:2831`` 의 두 ``return new AssignScheduleIn(…)``,
+    #: 열 번째 인자가 그 ``str2``) — 그 자리가 ``AssignScheduleIn.java:41``
+    #: 의 ``stlbDturDvNm1`` 입니다. ``:2639`` 이하 네 줄번호는
+    #: **TrainScheduleViewModel.java**(11116행) 쪽입니다. 생략형으로 적으면
+    #: 직전에 인용한 431행짜리 ``NCardReservationViewModel.java`` 를
+    #: 가리키는 것으로 읽혀 따라갈 수 없습니다.
     detour_division_name: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
@@ -1386,7 +1401,10 @@ class DiscountCardScheduleTrain:
     아닙니다. ``stationStringInfo`` 라는 전선 키 자체가 전 디컴파일에 0건이라
     더 이상 읽지 않습니다.
 
-    ``NCardScheduleItem`` 은 20개 필드를 선언하는데(``:30-49``) 파일 전체에
+    ``NCardScheduleItem`` 은 20개 필드를 선언하는데
+    (``NCardScheduleItem.java:30-49``; 생략형으로 적으면 직전에 인용한
+    없는 경로 ``dao/research/NCardInquiryDao.java`` 를 가리키는 것으로
+    읽힙니다) 파일 전체에
     ``@SerialName`` 이 0건이어서 코틀린 필드명을 최선으로 사용합니다. 다만
     "PROTECTED" 라는 표현은 정확하지 않습니다 — 난독화된 것이 아니라
     ``@SerialName`` 자체가 없어 kotlinx 기본값(= 프로퍼티 이름)이 곧 와이어
@@ -1437,8 +1455,8 @@ class DiscountCardScheduleResponse(BaseKorailResponse):
     경로였습니다 — 라우트가 같다는 것이 그 옛 클래스의 필드까지 같다는 뜻은
     아니므로, 아래 설명의 근거는 ``NCardScheduleOut`` 자신입니다.
 
-    :attr:`following_page_exists` 는 더 이상 채워지지 않습니다. 7.0.6
-    ``NCardScheduleOut``(``:27-28``)은 ``trnScdlList`` 하나만 선언할 뿐
+    :attr:`following_page_exists` 는 더 이상 채워지지 않습니다. 7.0.6 의
+    ``NCardScheduleOut.java:27-28`` 은 ``trnScdlList`` 하나만 선언할 뿐
     ``fllwPgExt`` 를 갖지 않습니다 — 그 키는 다른 DTO(``ScdlQryOut``, 리무진
     일정)의 필드입니다. ``NCardScheduleOut`` 자체에는 대체할 다른 페이징
     신호도 없어(정확히 이 한 필드만 선언), 이 라우트의 서버측 페이징 여부는
@@ -1990,7 +2008,8 @@ class ReservationSeatDetail:
     ``response/certification/ReservationResponse.java:296-313`` 은 7.0.6
     디컴파일에 없는 파일입니다.
 
-    :attr:`passenger_type_name` 은 ``:81`` 의 ``@SerialName`` 집합에는 없지만
+    :attr:`passenger_type_name` 은 ``ReservationOutSeatInfo.java:81`` 의
+    ``@SerialName`` 집합에는 없지만
     실재하는 키입니다. 예전 주석은 "``h_psg_tp_dv_nm`` 은 디컴파일된 앱 어디에도
     없다 → 서드파티가 지어낸 이름이다" 라고 적었는데 **두 전제가 다 틀렸습니다.**
     ``grep -r h_psg_tp_dv_nm analysis/`` 는 2건을 돌려줍니다 —
@@ -2085,7 +2104,10 @@ class RefundCommissionResponse(BaseKorailResponse):
     원래 인용 ``RefundCommissionDao.RefundCommissionResponse``
     (``dao/refund/RefundCommissionDao.java:70-77``)는 7.0.6 디컴파일에 없는
     경로였습니다. 아래 일곱 속성의 와이어 키는 모두 명시적
-    ``@SerialName``(``:140-164``, 합성 생성자 ``:62``)에서 읽었습니다:
+    ``@SerialName``(``RefundCommissionOut.java:140-164`` 의 애노테이션
+    블록과 같은 파일 ``:62`` 의 합성 생성자 — 둘 사이에 없는 경로
+    ``dao/refund/RefundCommissionDao.java`` 를 인용했으므로 생략형으로는
+    따라갈 수 없습니다)에서 읽었습니다:
     ``ret_fee``/``ret_amt``/``h_msg_cd2``/``h_msg_txt2``/``prg_psb_flg``/
     ``use_psb_mlg_num``/``tk_ret_tms_dv_cd``. 보호되지 않은 리터럴이라
     프로퍼티 이름(``retFee`` 등)이 아니라 이 철자가 실제 전선 키입니다.

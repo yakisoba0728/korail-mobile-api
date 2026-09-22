@@ -82,9 +82,18 @@ def validate_seat_inventory_inputs(
         raise ValueError("passenger_count must be an integer from 1 through 9")
     if car_no is not None and (type(car_no) is not int or car_no < 1):
         raise ValueError("car_no must be a positive integer")
-    # x4/b.java:19,23 derive txtSeatAttCd/txtGdNo from the selected train row
-    # rather than pinning them; validate the row's own values when present so
-    # the seat-map builders can forward a dynamic-but-well-formed value.
+    # txtSeatAttCd/txtGdNo are carried per selected train, not pinned: in
+    # 7.0.6 the seat-map view model fills TrainResearchIn from the reservation
+    # input it was handed -- txtGdNo from ticketReservationIn.getTxtGdNo()
+    # (TrainSeatMapViewModel.java:2527) and the seat attribute from the leg
+    # (:2546 preceding; :2573-2577 trailing, which falls back to an
+    # AlienGuard-protected literal when getTrailingTxtSeatAttCd4() is null, so
+    # the substituted plaintext is not readable). Both are declared on the
+    # request DTO as non-null Strings (TrainResearchIn.java:39 txtGdNo, :43
+    # txtSeatAttCd; @SerialName list at :68). The old citation x4/b.java:19,23
+    # is a 6.5.0 leftover -- no such path exists in 7.0.6. Validate the row's
+    # own values when present so the seat-map builders can forward a
+    # dynamic-but-well-formed value.
     if train.seat_attribute_code:
         _required_ascii_digits(
             train.seat_attribute_code,
@@ -108,12 +117,25 @@ def _wire_goods_no(value: str) -> str:
 
 
 def _validated_room_class_code(value: str) -> str:
-    # psrmClCd / txtPsrmClCd is the user-selected cabin class, not a constant:
-    # c5/c.java:90 reads RSeat.SEAT_PSRM_CL_CD and feeds it into
-    # X4.b.getSearchRequest -> setTxtPsrmClCd (x4/b.java:18). The value comes
-    # from getSelectSeatTypeCode (U4/a.java:87), which only ever yields
-    # K4/o.java GENERAL("1", 일반실) or SPECIAL("2", 특실), so restrict to that
-    # domain and let general ("1") stay the default.
+    # psrmClCd / txtPsrmClCd is the user-selected cabin class, not a constant.
+    # In 7.0.6: the schedule row's price UI picks PsrmType.GENERAL or
+    # PsrmType.SPECIAL from the tap the user makes on that row
+    # (TrainScheduleListContentRowItemPriceKt.java:600,621), the chosen
+    # PsrmType.psrmClCd is what reaches a journey input
+    # (AirportBusScheduleViewModel.java:167 ->
+    # toTicketReservationInput(PsrmType.GENERAL.getPsrmClCd())), and the
+    # seat-map search copies it off the leg into TrainResearchIn.txtPsrmClCd
+    # (TrainSeatMapViewModel.java:2542,2546; DTO field at
+    # TrainResearchIn.java:41).
+    #
+    # The two-member domain is confirmed -- PsrmType declares exactly GENERAL
+    # (PsrmType.java:19) and SPECIAL (:20) -- but their psrmClCd literals
+    # (field at :22) are AlienGuard-protected, so 7.0.6 does NOT let us read
+    # that GENERAL is "1" and SPECIAL is "2"; that mapping rests on live
+    # traffic, not on the APK. The old citations c5/c.java:90,
+    # x4/b.java:18, U4/a.java:87 and K4/o.java are all 6.5.0 leftovers with no
+    # 7.0.6 counterpart. Restrict to the two-value domain and let general
+    # ("1") stay the default.
     if value not in {"1", "2"}:
         raise KorailProtocolError(
             'room_class_code must be "1" (general) or "2" (first class)'
@@ -133,12 +155,32 @@ def build_seat_car_form(
 ) -> dict[str, str]:
     """``research.TrainResearch`` 의 호차 목록 조회 폼을 만듭니다.
 
+    라우트 선언은 ``NetworkApi.java:771-773``
+    (``@FormUrlEncoded`` + ``postTrainResearch(@FieldMap Map<String, String>)``)
+    입니다.
+
     ``txtTrnNo`` 는 다섯 자리로 0 을 채웁니다. ``txtSeatAttCd`` 는 열차 행이 좌석
-    속성 코드를 가지고 있을 때만 실립니다 — ``TrainResearchIn.java`` 의
-    ``txtSeatAttCd`` 를 앱이 ``trainInfo.getH_seat_att_cd()`` 그대로 넘기고,
-    ScheduleView 행처럼 코드가 없으면 Retrofit 이 ``@Field`` 를 떨어뜨리기
-    때문입니다(``NetworkApi.java`` 의 ``getCarList``). 일반석 ``"015"`` 로 대신
-    채우지 않습니다. ``txtGdNo`` 도 값이 없으면 같은 이유로 빠집니다.
+    속성 코드를 가지고 있을 때만 실리고, 일반석 ``"015"`` 로 대신 채우지 않습니다.
+    ``txtGdNo`` 도 값이 없으면 빠집니다.
+
+    **그 이유로 적혀 있던 "Retrofit 이 개별 ``@Field`` 를 떨어뜨린다
+    (``NetworkApi.java`` 의 ``getCarList``)"는 7.0.6 과 다릅니다.** 7.0.6 에는
+    ``getCarList`` 라는 선언도, 이 라우트의 매개변수별 ``@Field`` 바인딩도 없고
+    (위의 ``@FieldMap`` 하나뿐), 요청 DTO 의 필드는 모두 널이 될 수 없는
+    ``String`` 입니다(``TrainResearchIn.java:32-47``). 같은 결과가 나오는 자리는
+    Retrofit 이 아니라 DTO→맵 평탄화입니다: 앱은
+    ``kJson.encodeToJsonElement(TrainResearchIn.serializer(), …)`` 로 만든
+    JSON 을 ``NetworkService.STLibw``(``NetworkService.java:15304``)에 넘기는데,
+    이 함수는 ``JsonPrimitive`` 의 내용 **길이가 0 보다 클 때만** 맵에 넣습니다
+    (``:15335-15343``). 인코딩 단계에서 ``explicitNulls = false``
+    (``NetworkServiceKt.java:28``)가 널을 이미 지우므로, 널이든 빈 문자열이든
+    폼에서 사라집니다 — 이 라우트의 실제 호출 경로는
+    ``NetworkService.java:14524,14528`` 입니다.
+
+    **주의: 그러면 이 함수가 ``""`` 로 채워 보내는 다른 키
+    (``txtRunDt``·``txtDptDt`` 등)는 7.0.6 이라면 폼에서 빠졌을 값입니다.**
+    여기서는 코드를 건드리지 않았습니다 — 현재 모양은 실서버로 검증된 것이고,
+    빈 값을 빼는 편이 앱과 더 닮는다는 것은 정적 근거일 뿐입니다.
 
     ``sid`` 는 받지만 쓰지 않습니다 — 7.0.6 ``TrainResearchIn.java:68`` 의
     ``@SerialName`` 20개 중 ``Sid`` 는 없으므로 이 라우트에는 애초에 실을 자리가
@@ -174,16 +216,24 @@ def build_seat_car_form(
         "txtArvStnRunOrdr": train.arrival_run_order or "",
         "txtTrnGpCd": train.train_group_code or "",
         "txtTotPsgCnt": str(passenger_count),
-        # x4/b.java:19 forwards trainInfo.getH_seat_att_cd() verbatim; when the
-        # selected row carries no code (ScheduleView rows are null) Retrofit
-        # omits the @Field (getCarList txtSeatAttCd, ResearchService:37), so
-        # omit it here rather than substituting a general-seat "015".
+        # The seat attribute rides along per train (TrainResearchIn.java:43,
+        # filled off the leg at TrainSeatMapViewModel.java:2546/:2577), and an
+        # absent one leaves the form empty-handed rather than defaulted: the
+        # DTO-to-@FieldMap flattener keeps only non-empty primitives
+        # (NetworkService.java:15335-15343). So omit the key rather than
+        # substituting a general-seat "015". Old citations x4/b.java:19 and
+        # "getCarList txtSeatAttCd, ResearchService:37" are 6.5.0 leftovers --
+        # 7.0.6 has neither file, and this route takes one bare @FieldMap
+        # (NetworkApi.java:771-773), not per-parameter @Fields.
         **({"txtSeatAttCd": seat_attribute} if seat_attribute else {}),
-        # x4/b.java:23 forwards trainInfo.getTxtGdNo() verbatim, which is null for
-        # a normal (non-goods) train (SeatSearchRequest.txtGdNo defaults to null),
-        # and Retrofit drops null @Field params (ResearchService getCarList
-        # txtGdNo:37 / getSeatList gdNo:59). So the app OMITS the field for
-        # standard searches; leave the key out here when there is none.
+        # Same for txtGdNo (TrainResearchIn.java:39): 7.0.6 forwards
+        # ticketReservationIn.getTxtGdNo() verbatim
+        # (TrainSeatMapViewModel.java:2527) and the flattener drops it when it
+        # encodes to nothing, so a standard (non-goods) search carries no
+        # txtGdNo. Leave the key out here when there is none. The old
+        # citations x4/b.java:23, SeatSearchRequest.txtGdNo and
+        # "ResearchService getCarList txtGdNo:37 / getSeatList gdNo:59" are
+        # 6.5.0 leftovers absent from 7.0.6.
         **({"txtGdNo": train.goods_no} if train.goods_no else {}),
     }
 

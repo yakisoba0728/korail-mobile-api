@@ -1718,9 +1718,13 @@ def _parse_train_schedule_container(
 
     ``read_merge_flag`` 는 호출자가 골라야 합니다 — 같은 컨테이너 키
     ``trn_infos`` 아래 실제 DTO 가 라우트마다 다릅니다.
-    ``MergeSeatsCOutTrnInfos``(``:25-26``)만 ``h_merge_rsv_psb_flg`` 를
-    선언하고, ``TrainScheduleOutTrainInfos``(``:25-26``)는 ``trn_info``
-    하나뿐입니다. 예전에는 이 구분 없이 두 라우트 모두에서 같은 키를
+    ``MergeSeatsCOutTrnInfos.java:25-26`` 만 ``hMergeRsvPsbFlg`` 를
+    선언하고 — 와이어 키는 같은 파일 ``:85`` 의 명시적
+    ``@SerialName("h_merge_rsv_psb_flg")`` 입니다 —
+    ``TrainScheduleOutTrainInfos.java:25-26`` 은 ``trnInfo`` 하나뿐입니다
+    (그쪽 와이어 키도 명시적 ``@SerialName("trn_info")``, 같은 파일 ``:78``).
+    (두 DTO 의 줄번호가 똑같이 ``:25-26`` 이라, 생략형으로 적으면 어느
+    파일인지 구분되지 않습니다 — 서로 다른 두 파일입니다.) 예전에는 이 구분 없이 두 라우트 모두에서 같은 키를
     읽어, 좌석배정 시각표 쪽은 항상 죽은 읽기였습니다.
     """
     container = _optional_mapping(raw, "trn_infos", context)
@@ -1747,8 +1751,9 @@ def parse_seat_assignment_schedule_response(
     ``TrainScheduleOutTrainInfos``(``trn_info`` 하나뿐)이고, 그 키는
     ``MergeSeatsCOutTrnInfo``(``mergeSeatsC.do``)에 속합니다.
 
-    다음 페이지 커서(``strJobId``, ``h_menu_id`` 등)도 같은 ``TrainScheduleOut``
-    생성자(``:67``)가 함께 선언하는데, 이전에는 ``h_next_pg_flg`` 하나만
+    다음 페이지 커서(``strJobId``, ``h_menu_id`` 등)도 같은 DTO 의 합성
+    생성자 ``TrainScheduleOut.java:67`` 이 ``@SerialName("strJobId")``/
+    ``@SerialName("h_menu_id")`` 로 함께 선언하는데, 이전에는 ``h_next_pg_flg`` 하나만
     꺼냈습니다. 같은 DTO 모양을 읽는 형제 파서
     ``parsers.py::parse_train_search_metadata`` 가 이미 이 전체 필드 집합을
     읽으므로 그 패턴을 그대로 따릅니다.
@@ -2862,7 +2867,11 @@ _REFUND_TICKET_DETAIL_FIELDS = {
     # h_pbp_acep_tgt_flg nor the pbpAcepTgtFlg fallback appeared in any of 40
     # responses (20 tickets x from_purchase_history False/True, 2026-09-22),
     # including the 6 whose list row says 'Y'. Decisive: TicketDetailOut declares
-    # pbpAcepTgtFlg NON-FINAL with a setter (:65, setter :1936) and the app
+    # pbpAcepTgtFlg NON-FINAL with a setter (TicketDetailOut.java:65 is a bare
+    # `public String`, and its setPbpAcepTgtFlg is at TicketDetailOut.java:1936
+    # -- spelled out because the nearest preceding citation is
+    # MyTicketListOutTicket.java, so bare :65/:1936 would point at the wrong
+    # file) and the app
     # INJECTS the list row's value right after SelTicketInfo succeeds
     # (MyTicketBaseViewModel.java:769) before echoing it into the refund
     # (MyTicketDetailViewModel.java:1521) — it would not need to if the server
@@ -2917,8 +2926,13 @@ def _discount_card_on_ticket(
     디컴파일에 없습니다(6.5.0 잔재). ② 이 라우트는 Gson 이 아니라
     kotlinx.serialization 으로 읽힙니다(``NetworkServiceKt.java:15-31`` 의
     공유 ``KJson``). ③ ``getAppSeg_info`` 라는 철자는 ``analysis/`` 전체에서
-    0건이고 7.0.6 의 게터는 ``getAppSegList()``(``:244``)입니다. 결론(전선
+    0건이고 7.0.6 의 게터는 ``getAppSegList()``
+    (``DiscountCardInfo.java:244``)입니다. 결론(전선
     키가 ``appSegList``)은 그대로 유효하며 근거만 바뀝니다.
+
+    (파일명을 여기서 다시 적는 이유: 직전 문장이 ``NetworkServiceKt.java``
+    를 인용했으므로 생략형 ``:244`` 는 그 파일을 가리키는 것으로 읽히는데,
+    ``NetworkServiceKt.java`` 는 전체가 39행이라 그 줄이 존재하지 않습니다.)
     """
     info = _optional_mapping(raw, "dcnt_crd_info", "refund ticket detail")
     if info is None:
