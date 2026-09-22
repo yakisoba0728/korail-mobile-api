@@ -616,8 +616,9 @@ def _validated_legs(
         raise KorailProtocolError(
             f"KORAIL 환승 reservation books exactly {require} legs, got "
             f"{len(resolved)}: the reservation form has no journey-{require + 1} "
-            "spelling at all (OSeat.java:32-35 and OSrcar.java:21-30 both split "
-            'on "journey 1 or not"), so a further leg would overwrite leg '
+            "spelling at all (only TicketReservationInSrcar and "
+            "TicketReservationInSrcarTrailing exist, splitting on "
+            '"journey 1 or not"), so a further leg would overwrite leg '
             f"{require} rather than be added"
         )
     if not resolved or len(resolved) > KORAIL_MAX_JOURNEY_LEGS:
@@ -1493,14 +1494,25 @@ def build_unpaid_reservation_cancel_form(
             # executeRsvCancel(ReservationResponse) reads getH_pnr_no() and
             # getH_jrny_cnt() off that very response, even stores the whole
             # object via setReservationResponse, and STILL sets "000" rather
-            # than jrny_info[0].getH_rsv_chg_no(). Likewise
-            # ReservationWaitActivity.java:118-128, a6/x.java:97-106,
-            # LimousineActivity.java:134-143 and
-            # LimousineSelectSeatActivity.java:325. The only cancel call sites
-            # that pass a real change number are the reservation-LIST screens
-            # (ReservedTicketActivity.java:228, BasketTicketActivity.java:276),
-            # which cancel an arbitrary listed row and therefore also pass that
-            # row's own h_jrny_sqno instead of "0001". This builder is the
+            # than jrny_info[0].getH_rsv_chg_no().
+            #
+            # 위 화면 이름들은 전부 6.5.0 클래스이고 7.0.6 에 없습니다. 7.0.6 에서
+            # ``requestReservationCancelChk`` 를 부르는 곳은 일곱 개입니다 --
+            # PayViewModel, ReservationWaitViewModel, ReservationMergeViewModel,
+            # MyReservationViewModel, BasketTicketViewModel,
+            # AirportBusSeatMapViewModel, Sample09ViewModel. 이름만 보면 예전
+            # 목록과 하나씩 대응하는 것처럼 보이지만 **그 대응은 확인하지
+            # 않았습니다** -- 그리고 ``"000"`` 이라는 리터럴 자체가 AlienGuard 로
+            # 보호돼 어느 호출부가 무엇을 넣는지 정적으로 읽을 수 없습니다.
+            # 요청 DTO 는 ``ReservationCancelChkIn`` 이고 필드는 정확히
+            # Device/Version/Key/txtPnrNo/txtJrnyCnt/txtJrnySqno/hidRsvChgNo
+            # 입니다.
+            #
+            # 근거는 대신 라이브입니다: reserve/reserve_transfer/reserve_merge/
+            # recalculate_price 가 돌려준 여정 행 45개 전부에 ``h_rsv_chg_no``
+            # 키가 아예 없었고(2026-09-22), ``"000"`` 으로 보낸 취소가 모두
+            # ``IRG000000`` 으로 성립했습니다. 목록 화면이 실제 변경번호를
+            # 보낸다는 예전 주장은 **미출처**입니다. This builder is the
             # fresh-single-journey-hold flow, so it sends the app's constant.
             "hidRsvChgNo": "000",
         }
@@ -1523,9 +1535,12 @@ def _echoed_job_sequence(value: str | None) -> str:
 
     **자릿수를 복원하지 않습니다.** 숫자로 도착한 ``tmpJobSqno`` 는 앞의 0 이
     사라진 채 전선에 오릅니다. 앱도 그렇게 하기 때문입니다 —
-    ``TCReservationDao.java:28,107,183`` 은 ``tmpJobSqno`` 를 평범한 ``String``
-    으로 선언하고 어디에서도 ``addZero`` 가 이 값을 건드리지 않습니다. 여기서
-    0 을 채우면 앱이 보내지 않는 것을 보내게 됩니다.
+    7.0.6 의 선언은 ``TripChgPrsCIn.java:47`` 의 ``public final String
+    tmpJobSqno`` 입니다 — 평범한 문자열이고, 필드 출현 비트가 없을 때만 보호된
+    기본값이 들어갑니다(``:91``). 자릿수를 맞추는 처리는 이 DTO 어디에도
+    없습니다. 여기서 0 을 채우면 앱이 보내지 않는 것을 보내게 됩니다.
+    (예전 인용 ``TCReservationDao.java:28,107,183`` 은 7.0.6 에 없는
+    6.5.0 클래스였습니다.)
     """
     if isinstance(value, str) and value.strip():
         return value
@@ -1592,7 +1607,10 @@ def build_card_payment_form(
 
     ``hidTmpJobSqno1/2`` 와 ``hidRsvChgNo`` 는 상수가 아니라 홀드 응답을 되울린
     것입니다(``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:6684``,
-    ``PaymentService.java:14``). ``hidRsvChgNo`` 는 **첫** 여정의 변경번호이며
+    라우트 선언은 ``NetworkApi.java:631`` 의 ``postReservationPayment``
+    (``@FieldMap``, 응답 ``ReservationPaymentOut``)이고 ``:647`` 에 같은 경로의
+    오버로드가 하나 더 있습니다 — 예전 인용 ``PaymentService.java:14`` 는 7.0.6
+    에 없는 클래스입니다). ``hidRsvChgNo`` 는 **첫** 여정의 변경번호이며
     앱도 모든 결제 호출 지점에서 같은 식을 반복합니다. 구조상 프로토콜 상수가
     아니라 예약별 상태입니다.
 
@@ -1761,9 +1779,11 @@ def build_refund_form(
 ) -> dict[str, str]:
     """발권된 승차권의 환불(``refunds.RefundsRequest``) 폼을 만듭니다.
 
-    PNR 필드는 앱의 Retrofit 선언
-    (``RefundService.java:29`` / ``RefundService.smali:212``)대로
-    ``txtPnrNo``(P-n-r)입니다. srtgo 의 ``ktx.py:1082`` 는 이것을 ``txtPrnNo``
+    PNR 필드는 앱의 Retrofit 선언대로 ``txtPnrNo``(P-n-r)입니다 —
+    ``NetworkApi.java:603`` 의 ``postRequestRefund`` 가 ``@FieldMap`` 으로
+    보내고, 그 맵의 키는 ``RefundTicketIn.java:194`` 의
+    ``@SerialName("txtPnrNo")`` 입니다. (예전 인용 ``RefundService.java:29`` /
+    ``RefundService.smali:212`` 은 7.0.6 에 없는 클래스였습니다.) srtgo 의 ``ktx.py:1082`` 는 이것을 ``txtPrnNo``
     로 쓰는데, korail2 계보의 오타이며 디컴파일된 앱에 0회 등장합니다. Retrofit
     ``@Field`` 이름은 정확히 일치해야 하므로 그대로 보내면 PNR 없는 환불이
     전송됩니다. 신원은 호출자가 :class:`PaidTicket` 로 줍니다.
@@ -1942,11 +1962,15 @@ def build_discount_card_purchase_form(
 ) -> dict[str, str]:
     """``research.dcntCrdInfo.do`` — 할인카드(N카드)를 구매합니다.
 
-    스칼라 넷에 평평하게 편 맵 둘이며, 순서는 ``ResearchService.java:68-70`` 의
-    선언 순서입니다. 두 맵은
-    ``NCardReservationDao.NCardReservationRequest`` 의 ``jrnyInfo``·
-    ``apdUsrInfo`` ``HashMap``(``dao/research/NCardReservationDao.java:31-32``)
-    이고, 키는 그 setter 들이 쓰는 인덱스 철자입니다(``:74-124``).
+    스칼라 넷에 평평하게 편 맵 둘입니다. 라우트는 ``NetworkApi.java:336`` 의
+    ``postDcntCrdInfo`` 이고 ``@FieldMap Map<String, String>`` 하나만 받으므로
+    (응답은 ``NCardInfoOut``) 평평하게 펴는 것 자체는 7.0.6 과 맞습니다.
+
+    다만 **두 맵의 키 철자와 순서는 미출처입니다.** 근거였던
+    ``ResearchService.java:68-70`` 과
+    ``dao/research/NCardReservationDao.java:31-32,74-124`` 는 둘 다 7.0.6 에
+    없는 6.5.0 클래스이고, ``@FieldMap`` 한 개짜리 선언은 키 이름을 말해주지
+    않습니다. 이 계정은 할인카드가 없어 라이브 확인도 못 했습니다.
     """
     if not isinstance(request, DiscountCardPurchaseRequest):
         raise KorailProtocolError(
@@ -2163,10 +2187,14 @@ def build_price_recalculation_form(
 ) -> dict[str, str | list[str]]:
     """``certification.PriceReCalculation`` — 홀드된 PNR 의 운임을 다시 계산합니다.
 
-    ``CertificationService.java:35-37``(``getDiscountPrice``)이며
-    ``a6/C1042B.java:265-296``(``k2()``)이 만들고
-    ``DiscountPriceDao.executeDao``(``DiscountPriceDao.java:118-120``)가
-    보냅니다.
+    라우트 선언은 ``NetworkApi.java:583`` 의 ``postPriceReCalculation`` 입니다 —
+    ``@FieldMap`` 하나에 ``@Field("psg_tp_dv_cd")``/``@Field("psrm_cl_cd")`` 처럼
+    **병렬 리스트**들이 따로 붙는 모양이고, 그래서 이 폼도 반복 키를 냅니다.
+    요청 DTO 는 ``PriceReCalculationIn.java:31`` 입니다.
+
+    예전에 달려 있던 ``CertificationService.java:35-37``·``a6/C1042B.java``·
+    ``DiscountPriceDao.java`` 는 전부 7.0.6 에 없는 6.5.0 클래스였습니다. 어느
+    화면이 이 호출을 만드는지는 재유도하지 못해 **미출처**입니다.
     """
     if not isinstance(request, PriceRecalculationRequest):
         raise KorailProtocolError(
