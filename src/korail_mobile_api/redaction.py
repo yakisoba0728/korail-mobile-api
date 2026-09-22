@@ -559,21 +559,40 @@ def is_sensitive_key(name: str) -> bool:
 # registration, unaffected by this regex either way.
 _WHITESPACE_RE = re.compile(r"\s")
 
+#: :func:`_json_document_or_none` 의 "JSON 아님" 표식. ``None`` 은 유효한
+#: JSON 값(``null``)이라 구분자로 쓸 수 없습니다.
+_NO_JSON = object()
+
 #: ``scheme://아이디:비밀번호@host`` 의 자격증명. :func:`redact_url` 은 netloc 을
 #: 뜯어보지만 :func:`redact_text` 는 URL 을 파싱하지 않으므로, 로그 한 줄에 박힌
 #: URL 은 여기서 잡아야 합니다. ``://`` 가 앞에 있고 ``@`` 앞에 ``:`` 가 있는
 #: 경우만 봅니다 — 그래야 ``a:b@c`` 같은 평범한 문자열을 건드리지 않습니다.
-URL_USERINFO_RE = re.compile(r"(?<=://)[^/\s@]+:[^/\s@]*@")
+#: ``[^/?#\s]*@`` 가 탐욕적이라 authority 안의 **마지막** ``@`` 까지 먹습니다.
+#: 예전 패턴 ``[^/\s@]+:[^/\s@]*@`` 는 세 가지를 틀렸습니다(2026-09-23 확인):
+#: ``:`` 를 요구해서 ``https://비밀@host`` 처럼 사용자명만 있는 형태를 놓쳤고,
+#: 첫 ``@`` 에서 멈춰 ``user:pass@비밀@host`` 의 꼬리를 남겼으며, ``?``·``#``
+#: 를 경계로 보지 않아 ``https://host:443?contact=a@b`` 의 **호스트와 공개
+#: 쿼리까지** userinfo 로 오인해 지웠습니다.
+URL_USERINFO_RE = re.compile(r"(?<=://)[^/?#\s]*@")
 
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){14,19}\b")
-SESSION_RE = re.compile(r"(?i)(JSESSIONID=)[^&;\s]+")
-#: 키의 ``_`` 는 퍼센트 인코딩된 ``%5F`` 로도 실려 옵니다. 절대 URL 은
-#: :func:`redact_url` 이 키를 디코딩해서 보지만 텍스트 경로는 못 봤습니다 —
-#: 같은 값이 진입점에 따라 갈렸습니다(2026-09-23 확인). 여기서 다루는 것은
-#: ``_`` 하나뿐입니다: 민감 키 이름에 실제로 들어가는 비영숫자가 그것뿐이고,
-#: 임의의 문자까지 인코딩된 형태는 이 경로가 **다루지 않습니다**.
+#: 앞에 시작 경계가 없으면 ``notJSESSIONID=공개값`` 처럼 **민감 키가 아닌**
+#: 이름의 값까지 가렸습니다 — ``is_sensitive_key("notJSESSIONID")`` 는 거짓인데
+#: 이 정규식만 따로 먹었습니다(2026-09-23 확인). 누출은 아니지만 진단 정보가
+#: 사라집니다.
+SESSION_RE = re.compile(r"(?i)(?<![\w-])(JSESSIONID=)[^&;\s]+")
+#: 키의 ``_``/``-`` 는 퍼센트 인코딩된 ``%5F``/``%2D`` 로도 실려 옵니다. 절대
+#: URL 은 :func:`redact_url` 이 키를 디코딩해서 보지만 텍스트 경로는 못 봤습니다
+#: — 같은 값이 진입점에 따라 갈렸습니다(2026-09-23 확인).
+#:
+#: 한때 여기 "민감 키의 비영숫자는 ``_`` 뿐"이라고 적고 밑줄만 다뤘는데
+#: **틀렸습니다** — ``set-cookie`` 와 ``x-dynapath-m-token`` 에 ``-`` 가
+#: 있습니다. 그 둘을 함께 다룹니다. 나머지 문자까지 인코딩된 형태는 이 경로가
+#: 여전히 **다루지 않습니다**.
 def _percent_tolerant(key: str) -> str:
-    return re.escape(key).replace("_", "(?:_|%5[Ff])")
+    escaped = re.escape(key)
+    escaped = escaped.replace("_", "(?:_|%5[Ff])")
+    return escaped.replace(r"\-", "(?:-|%2[Dd])").replace("-", "(?:-|%2[Dd])")
 
 
 SENSITIVE_KEY_VALUE_RE = re.compile(
@@ -591,7 +610,7 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
     # 매치가 안 됐기 때문입니다.
     + r")"
     + _INDEX_SUFFIX_PATTERN
-    + r"?(?P=key_quote)(?![\w-])\s*(?:(?P<eq>=)|:)\s*)"
+    + r"?(?P=key_quote)(?![\w-])\s*(?:(?P<eq>=)|:)(?P<gap>[ \t]+)?)"
     # 값의 끝을 어디로 볼지는 **묶는 기호에 따라 다릅니다**. 한 규칙으로
     # 밀어붙였다가 실제로 누출을 만들었습니다: ``&``/``;`` 를 값에서 무조건
     # 빼도록 고쳤더니 구분자가 값 **안**에 있는 ``Cookie: a=1;other=<비밀>``
@@ -613,9 +632,15 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
     # ``=`` 묶음: 값이 그 자체로 ``키=`` 로 시작하면 그것은 값이 아니라
     # **다음 필드**입니다. 앞의 ``\s*`` 가 공백을 넘어가서
     # ``h_sgr_nm_1= trnNo1=Y`` 의 ``trnNo1=Y`` 를 값으로 먹던 자리입니다.
-    # 값이 구분자로 **시작**하면 그 값은 비어 있고 구분자는 다음 필드의
-    # 것입니다 — ``h_sgr_nm_1=&trnNo1=Y`` 에서 이웃을 통째로 먹던 자리입니다.
-    + r"|(?(eq)(?![&;])(?![\w.\[\]-]+\s*=)[^\s,]+?"
+    # 구분자로 **시작**하는 값: 뒤에 새 ``키=`` 가 붙을 때만 다음 필드로 보고
+    # 비켜 줍니다(``h_sgr_nm_1=&trnNo1=Y``). 그냥 ``txtPwd=&<비밀>`` 이면
+    # ``&<비밀>`` 이 값입니다 — 무조건 막았더니 그 꼬리가 평문으로 남았습니다.
+    #
+    # ``키=`` 로 보이면 다음 필드라는 가드는 **공백이 있었을 때만** 겁니다.
+    # 무조건 걸었더니 ``txtPwd=U0VDUkVUQQ==`` 같은 base64 패딩 값과 ``=`` 를
+    # 품은 값이 통째로 다음 필드 취급돼 평문으로 남았습니다(2026-09-23 확인).
+    # 공백이 없으면 ``키=값`` 한 덩어리이므로 가드가 필요 없습니다.
+    + r"|(?(eq)(?![&;][\w.%\[\]-]+=)(?(gap)(?![\w.\[\]-]+=)|)[^\s,]+?"
     + r"(?=(?:[&;](?=[\w.%\[\]-]+=))|[\s,]|$)"
     + r"|[^\s,]+))",
     re.IGNORECASE,
@@ -634,47 +659,71 @@ def _redact_sensitive_key_value(match: re.Match[str]) -> str:
     return f"{match.group('prefix')}{quote}[REDACTED]{quote}"
 
 
-def _redact_json_document(value: str) -> str | None:
-    """문자열 전체가 JSON 이면 **구조로** 가리고 다시 직렬화합니다. 아니면 ``None``.
+def _json_document_or_none(value: str) -> object:
+    """문자열 전체가 **손실 없이 다시 쓸 수 있는** JSON 이면 파싱 결과, 아니면 ``_NO_JSON``.
 
-    정규식으로는 닿지 않는 두 모양을 여기서 받습니다:
+    JSON 을 구조로 다루면 정규식이 못 보는 두 모양을 받습니다 — escape 된 키
+    (``{"h\\u005fsgr\\u005fnm_1": ...}`` 는 파싱해야 민감 키로 보입니다)와
+    중첩 배열·객체(키의 민감성이 값 **트리 전체**에 걸립니다).
 
-    * escape 된 키 — ``{"h\\u005fsgr\\u005fnm_1": "..."}`` 는 텍스트에서
-      민감 키로 보이지 않지만, 파싱하면 ``h_sgr_nm_1`` 입니다.
-    * 중첩된 배열·객체 — 키의 민감성은 값 **트리 전체**에 걸립니다.
+    대신 파싱 후 다시 직렬화하므로 **원문이 그대로 보존되지 않습니다.** 그게
+    실제로 데이터를 망가뜨리는 경우에는 이 길로 가지 않고 정규식 경로에
+    맡깁니다(원문을 건드리지 않으니 그쪽이 안전합니다). 되돌릴 수 없는
+    것으로 확인된 셋을 막습니다(2026-09-23 확인):
 
-    파싱에 실패하면 손대지 않고 정규식 경로로 넘깁니다. 다시 직렬화하므로
-    공백 같은 원본 서식은 보존되지 않습니다 — 로그 한 줄이 통째로 JSON 인
-    경우에만 타는 길이라 그 편이 낫다고 봤습니다.
+    * **중복 키** — ``{"a":1,"a":2}`` 는 파싱하면 앞 값이 사라집니다.
+    * **무한대·NaN** — ``1e400`` 은 ``Infinity`` 로 다시 쓰여 JSON 이 아닌
+      문자열이 됩니다.
+    * **되돌릴 수 없는 부동소수점** — 자릿수가 줄어 값이 달라집니다.
+
+    짝 없는 surrogate 는 막지 않고 :func:`_dump_json` 의 ``ensure_ascii`` 로
+    처리합니다 — 그쪽이 원문 손실 없이 인코딩까지 안전합니다.
     """
     stripped = value.strip()
     if not stripped or stripped[0] not in '{["':
-        return None
+        return _NO_JSON
+    lossy = False
+
+    def _pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
+        nonlocal lossy
+        if len({key for key, _ in items}) != len(items):
+            lossy = True
+        return dict(items)
+
+    def _float(literal: str) -> float:
+        nonlocal lossy
+        number = float(literal)
+        if repr(number) != literal:
+            lossy = True
+        return number
+
+    def _constant(_name: str) -> float:
+        nonlocal lossy
+        lossy = True
+        return 0.0
+
     try:
-        parsed = json.loads(stripped)
+        parsed = json.loads(
+            stripped,
+            object_pairs_hook=_pairs,
+            parse_float=_float,
+            parse_constant=_constant,
+        )
     except (ValueError, TypeError, RecursionError):
-        # ``{\\"k\\": \\"v\\"}`` 처럼 **백슬래시로 escape 된 채** 로그에
-        # 실린 JSON 은 그 자체로는 파싱되지 않습니다. 한 겹 벗겨서 다시
-        # 시도하고, 성공하면 원래 모양대로 다시 escape 해 돌려줍니다.
-        if '\\"' not in stripped:
-            return None
-        try:
-            inner = json.loads(stripped.replace('\\"', '"'))
-        except (ValueError, TypeError, RecursionError):
-            return None
-        try:
-            dumped = json.dumps(redact_value(inner), ensure_ascii=False)
-        except (TypeError, ValueError, RecursionError):
-            return None
-        return dumped.replace('"', '\\"')
-    # 이중 직렬화 — JSON 문자열 **안에** JSON 이 들어 있는 경우.
-    if isinstance(parsed, str):
-        inner_redacted = redact_text(parsed)
-        if inner_redacted == parsed:
-            return None
-        return json.dumps(inner_redacted, ensure_ascii=False)
+        return _NO_JSON
+    return _NO_JSON if lossy else parsed
+
+
+def _dump_json(value: object) -> str | None:
+    """``ensure_ascii`` 로 다시 씁니다. 실패하면 ``None``.
+
+    ``ensure_ascii=False`` 로 썼더니 짝 없는 surrogate 가 그대로 담긴 문자열이
+    나왔고, :func:`redact_text` 는 성공했는데 **그 문자열을 UTF-8 로 인코딩하는
+    다음 단계가 터졌습니다**(2026-09-23 확인). 마스킹이 로깅을 깨뜨리면
+    안 됩니다. ``ensure_ascii=True`` 는 그것을 ``\\ud800`` escape 로 남깁니다.
+    """
     try:
-        return json.dumps(redact_value(parsed), ensure_ascii=False)
+        return json.dumps(value, allow_nan=False)
     except (TypeError, ValueError, RecursionError):
         return None
 
@@ -693,9 +742,25 @@ def redact_text(value: str) -> str:
     무관하게 전부 가립니다. 폼을 만드는 이 패키지 자신은 언제나 그 경로를
     씁니다(2026-09-23 확인).
     """
-    as_json = _redact_json_document(value)
-    if as_json is not None:
-        return as_json
+    # ``{\\"k\\": \\"v\\"}`` 처럼 백슬래시로 escape 된 채 로그에 실린 JSON 은
+    # 그 자체로는 파싱되지 않습니다. 한 겹 벗겨 보고, 되면 원래 모양대로
+    # 다시 escape 해 돌려줍니다.
+    escaped = False
+    parsed = _json_document_or_none(value)
+    if parsed is _NO_JSON and '\\"' in value:
+        parsed = _json_document_or_none(value.replace('\\"', '"'))
+        escaped = parsed is not _NO_JSON
+    if parsed is not _NO_JSON:
+        dumped = _dump_json(redact_value(parsed))
+        if dumped is not None:
+            if escaped:
+                dumped = dumped.replace('"', '\\"')
+            # 구조 처리로 끝내지 않습니다. 카드번호 모양과 세션 토큰은 키와
+            # 무관하게 값 자체로 잡는 것이라, 여기서 빠뜨리면 JSON 으로 실린
+            # 카드번호만 예외가 됩니다 — 실제로 ``{"debug": 4111…}`` 가
+            # 그대로 남았습니다(2026-09-23 확인).
+            dumped = CARD_RE.sub("[REDACTED_CARD]", dumped)
+            return SESSION_RE.sub(r"\1[REDACTED]", dumped)
     redacted = URL_USERINFO_RE.sub("[REDACTED]@", value)
     redacted = CARD_RE.sub("[REDACTED_CARD]", redacted)
     redacted = SENSITIVE_KEY_VALUE_RE.sub(
