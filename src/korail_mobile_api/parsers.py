@@ -369,7 +369,7 @@ def parse_train_search_metadata(
         # smali_classes5/.../TrainScheduleViewModel.smali:36806-36845 builds
         # Triple(hQryStNoNext, hPrcdTrnNoNext, hEctbTrnNoNext) for the transfer
         # form. Note the app picks that form off the echoed strJobId
-        # (:35651-35698), NOT off "both halves non-empty" -- the both-non-empty
+        # (:35654-35698), NOT off "both halves non-empty" -- the both-non-empty
         # rule that TransferSearchResult.next_page applies is this package's
         # own, live-verified choice, documented there.
         next_preceding_train_no=optional("h_prcd_trn_no_next"),

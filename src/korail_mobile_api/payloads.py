@@ -534,14 +534,39 @@ def build_train_search_form(
         # branch does not read a third cursor off the response at all. That is
         # what supports the shape we forward here.
         #
-        # What 7.0.6 does NOT let us read, and what is therefore still
-        # unsourced: which branch is the transfer one (v3 is a boolean carried
-        # through the coroutine state machine with no static definition in
-        # reach) and the literal's plaintext. The "both cursors non-empty"
-        # wording was wrong as well as unsourced -- 7.0.6 branches on a flag,
-        # not on emptiness. Naming the second branch the transfer one is
-        # inference from the field name (h_ectb_trn_no_next,
-        # TrainScheduleOut.java:67), not from a readable condition. None of
+        # That boolean IS statically readable -- an earlier note of ours said
+        # it had "no static definition in reach", and that was wrong. The
+        # dataflow, all in the same smali file:
+        #   :35654        getStrJobId() -> v0
+        #   :35660-35676  AlienGuard method_name_4(...) -> v1, a literal
+        #                 decoded at runtime from a 1-byte seed
+        #   :35682-35694  filled-new-array {v0, v1}; AppSuitLinker1
+        #                 .djsflxlftm1(null, VTHLSC..., arr) -> boxed Boolean
+        #                 -> booleanValue() -> v0. A 2-arg string compare,
+        #                 dispatched reflectively, so the callee is an index.
+        #   :35696-35698  const/4 v9, 0x1 ; xor-int/2addr v0, v9 -- INVERTED
+        #   :35790        move v3, v0 (flag into v3, before the trnInfo loop)
+        #   :35845        iput v3 -> responseTrainSchedule$1.STLaqs:I
+        #   :34950        iget v3 <- STLaqs (resume, STLr==1)
+        #   :34843        iget v10 <- STLaqs (resume, STLr==2), then :34910
+        #                 move v3, v10 restores the same register convention
+        #   :36812        if-nez v3 -- and nothing writes v3 between the loop
+        #                 exit at :36204 and here
+        # So the selector is  v3 = !(strJobId == <protected literal>):
+        #   strJobId != literal -> Triple(hQryStNoNext, hPrcdTrnNoNext,
+        #                                 hEctbTrnNoNext)   (:36834-36843)
+        #   strJobId == literal -> Triple(hQryStNoNext, hTrnNoNext, <lit>)
+        #                                                    (:36814-36831)
+        #
+        # Two different claims, and only the first is sourced. (a) The flag's
+        # definition and the control flow are fully traceable, as above.
+        # (b) The literal it is compared against is NOT: it is an AlienGuard
+        # blob with no plaintext anywhere in ./analysis, so we cannot say
+        # which strJobId value means transfer. Naming the :36834 branch the
+        # transfer one is still inference from the field name
+        # (h_ectb_trn_no_next, TrainScheduleOut.java:67), not a decoded
+        # condition. The old "both cursors non-empty" wording stays wrong:
+        # 7.0.6 branches on the echoed strJobId, not on emptiness. None of
         # this judges our cursor policy either way: the builder forwards
         # whatever the continuation carries.
         form["qryStTrnNo2"] = continuation.query_train_no2
