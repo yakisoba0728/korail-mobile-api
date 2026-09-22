@@ -560,7 +560,16 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
             reverse=True,
         )
     )
-    + r")(?P=key_quote)(?![\w-])\s*(?:=|:)\s*)"
+    # 꼬리 인덱스와 그 뒤의 밑줄까지 함께 먹습니다 — :func:`_index_stripped`
+    # 와 같은 규칙입니다. 이것이 없으면 ``txtSeatNo`` 는 가려지는데
+    # ``txtSeatNo1_`` 은 그대로 남았습니다: 키 뒤의 ``(?![\w-])`` 가 인덱스
+    # 숫자에서 막혀 아예 매치가 안 됐기 때문입니다. 앱이 실제로 선언하는 것이
+    # 그 인덱스 형태이고(``TicketReservationInSrcarTrailing.java:82-89``,
+    # ``TicketReservationInPassengerInfo.java:105``), 2026-09-22 확인 결과
+    # ``is_sensitive_key`` 는 참인데 :func:`redact_text` 만 놓치고 있었습니다 —
+    # 즉 dict 는 가려지고 같은 값이 문자열·JSON·상대 URL 로 로그에 실리면
+    # 그대로 남았습니다.
+    + r")(?:\d+)?_?(?P=key_quote)(?![\w-])\s*(?:=|:)\s*)"
     + r'(?P<value>"(?:\\.|[^"\\])*(?:"|$)'
     + r"|'(?:\\.|[^'\\])*(?:'|$)"
     + r"|[^\s,]+)",

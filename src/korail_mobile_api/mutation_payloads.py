@@ -1361,8 +1361,12 @@ def build_standby_wait_form(
       (``:521``)입니다.
     * ``txtCpNo`` — 알림받을 번호. 앱은 SMS 가 켜졌을 때만 싣습니다:
       ``if (!checkedSMS) str3 = null;``(``:522-524``)로 널을 넘기고, 앱의
-      Json 이 ``explicitNulls = false`` 라 널 필드는 직렬화에서 아예 빠집니다
-      (``NetworkModule.java:860``). 그래서 빈 문자열이 아니라 **키 생략**이
+      Json 이 ``explicitNulls`` 를 끈 것으로 보여 널 필드는 직렬화에서
+      빠집니다 — ``setExplicitNulls`` 호출은 ``NetworkModule.java:861``
+      입니다(``:860`` 은 ``setCoerceInputValues`` 이고, 예전에 여기 적혀
+      있던 줄번호가 그것이었습니다). **단정이 아니라 추론입니다**: 인자가
+      ``Integer.parseInt(AlienGuard…)`` 로 보호돼 실제 값은 읽을 수 없고,
+      비교 연산자가 ``> 1`` 이라는 것만 평문입니다. 그래서 빈 문자열이 아니라 **키 생략**이
       맞고, 이 빌더도 그렇게 합니다. DTO 자신도 ``txtCpNo`` 만 기본값을 널로
       두고 나머지 셋은 빈 문자열로 둡니다(``ReservationWaitIn.java:87``).
       옛 인용 ``:213``/``:219``/``:115``/``:214``/``:218``/``:220-227`` 은 모두
@@ -1508,11 +1512,18 @@ def build_unpaid_reservation_cancel_form(
             # Device/Version/Key/txtPnrNo/txtJrnyCnt/txtJrnySqno/hidRsvChgNo
             # 입니다.
             #
-            # 근거는 대신 라이브입니다: reserve/reserve_transfer/reserve_merge/
+            # 목록 화면이 **응답의 변경번호를 그대로 넘긴다**는 것은 확인됩니다 --
+            # ``MyReservationViewModel.java:1566`` 이
+            # ``new ReservationCancelChkIn(hPnrNo, ((ReservationOutJrnyInfo) …)``
+            # 로 응답 여정 객체에서 값을 꺼내 넘깁니다. 즉 "모든 취소가 고정
+            # 상수" 는 틀렸고, 한때 여기 적었던 **미출처** 표기도 과했습니다.
+            #
+            # 이 빌더가 ``"000"`` 을 쓰는 근거는 그래서 앱 재현이 아니라
+            # 라이브입니다: reserve/reserve_transfer/reserve_merge/
             # recalculate_price 가 돌려준 여정 행 45개 전부에 ``h_rsv_chg_no``
             # 키가 아예 없었고(2026-09-22), ``"000"`` 으로 보낸 취소가 모두
-            # ``IRG000000`` 으로 성립했습니다. 목록 화면이 실제 변경번호를
-            # 보낸다는 예전 주장은 **미출처**입니다. This builder is the
+            # ``IRG000000`` 으로 성립했습니다. 홀드 응답이 변경번호를 주는
+            # 경우에는 그것을 넘기는 편이 앱에 더 가깝습니다. This builder is the
             # fresh-single-journey-hold flow, so it sends the app's constant.
             "hidRsvChgNo": "000",
         }
@@ -1534,13 +1545,16 @@ def _echoed_job_sequence(value: str | None) -> str:
     """홀드의 ``tmpJobSqno`` 를 결제 폼에 그대로 되울립니다.
 
     **자릿수를 복원하지 않습니다.** 숫자로 도착한 ``tmpJobSqno`` 는 앞의 0 이
-    사라진 채 전선에 오릅니다. 앱도 그렇게 하기 때문입니다 —
-    7.0.6 의 선언은 ``TripChgPrsCIn.java:47`` 의 ``public final String
-    tmpJobSqno`` 입니다 — 평범한 문자열이고, 필드 출현 비트가 없을 때만 보호된
-    기본값이 들어갑니다(``:91``). 자릿수를 맞추는 처리는 이 DTO 어디에도
-    없습니다. 여기서 0 을 채우면 앱이 보내지 않는 것을 보내게 됩니다.
-    (예전 인용 ``TCReservationDao.java:28,107,183`` 은 7.0.6 에 없는
-    6.5.0 클래스였습니다.)
+    사라진 채 전선에 오릅니다.
+
+    다만 **그 근거는 아직 없습니다.** 예전 인용 ``TCReservationDao.java``
+    (6.5.0)를 7.0.6 의 ``TripChgPrsCIn.java:47`` 로 바꿔 적었던 것은 잘못된
+    교체였습니다 — 그쪽은 **여정변경** 입력의 단일 ``tmpJobSqno`` 이고,
+    여기서 문제 삼는 것은 **결제 홀드 응답**의 ``hidTmpJobSqno1``/``2`` 라서
+    같은 필드가 아닙니다. 결제 쪽 두 필드가 어떻게 만들어지는지는 재유도하지
+    못했습니다 — **미출처**입니다.
+
+    0 을 채우지 않는 현재 동작 자체는 라이브로 문제가 없었습니다.
     """
     if isinstance(value, str) and value.strip():
         return value

@@ -28,8 +28,25 @@ from .models import TrainSearchContinuation, TrainSearchQuery, TrainSummary
 
 
 def _device_version(config: KorailConfig) -> dict[str, str]:
-    """The ``Device`` and ``Version`` pair every read form here starts with."""
-    return {"Device": config.device, "Version": config.version}
+    """이 모듈의 읽기 폼이 공통으로 시작하는 ``Device``/``Version``(+ ``lang``).
+
+    ``lang`` 이 여기 있는 이유: 이 헬퍼를 쓰는 폼들은
+    :meth:`~korail_mobile_api.http.KorailHttpClient.post_form` 을
+    ``include_common=False`` 로 부르므로 HTTP 계층의 공통 필드 주입을 받지
+    않습니다. 그래서 ``KorailConfig(lang=...)`` 을 설정해도 열차 검색·호차
+    조회·좌석 조회에는 실리지 않았습니다 — 같은 종류의 누락을 변경 폼에서
+    먼저 고쳤는데(``mutation_payloads._common_fields``) 읽기 쪽이 남아
+    있었습니다.
+
+    세 라우트의 입력 DTO 는 모두 ``@SerialName(Constants.LANG)`` 을 선언합니다
+    (``TrainScheduleIn``/``TrainResearchIn``/``TResidualSeatsResearchIn``).
+    기본값 ``None`` 이면 예전과 똑같이 아무것도 싣지 않으므로, 달라지는 것은
+    실제 값을 넘긴 호출자뿐입니다.
+    """
+    fields = {"Device": config.device, "Version": config.version}
+    if config.lang is not None:
+        fields["lang"] = config.lang
+    return fields
 
 
 def _is_ascii_digits(value: object, lengths: frozenset[int]) -> TypeGuard[str]:
@@ -401,13 +418,19 @@ def build_train_search_form(
         "txtSeatAttCd_2": "000",
         "txtSeatAttCd_3": "000",
         "txtSeatAttCd_4": query.seat_attribute_code,
-        # 두 키를 같은 값으로 묶어 보냅니다. 근거였던
-        # MainBookingActivity.java:775-776 은 6.5.0 클래스라 7.0.6 에 없고,
-        # 재유도도 실패했습니다 -- ``ebizCrossCheck``/``srtCheckYn`` 는
-        # ``TrainScheduleIn.java:33`` 의 DTO 선언 밖에서는 7.0.6 소스 어디에도
-        # 나오지 않습니다(UI 계층 전수 grep 0건, 2026-09-22). 즉 "한 체크박스가
-        # 둘을 함께 정한다" 는 **미출처**입니다. 동작으로는 이 짝을 유지하는
-        # 편이 안전하므로 그대로 두고, 근거만 정직하게 낮춰 적습니다.
+        # 두 키를 같은 값으로 묶어 보냅니다. 7.0.6 에서 재유도했습니다 --
+        # 키 이름으로 grep 하면 DTO 밖에는 안 나오지만(그래서 한때 미출처로
+        # 적었습니다), 값을 고르는 자리는 ``TrainScheduleViewModel.java:3137``
+        # 과 ``:3147`` 의 **같은 조건** 두 개입니다:
+        # ``if (filterUiData.isSrt() || filterUiData.isSuseoTogether())``.
+        # 그 두 지역변수가 ``TrainScheduleIn`` 생성자의 ``ebizCrossCheck`` /
+        # ``srtCheckYn`` 자리로 들어갑니다(``TrainScheduleIn.java:33`` 선언).
+        #
+        # 그래서 "짝으로 움직인다" 는 확인됐지만 두 가지는 아직 아닙니다 --
+        # 고르는 문자열이 ``"Y"``/``"N"`` 인지(리터럴이 AlienGuard 로 보호됨),
+        # 그리고 조건이 SRT 체크박스 **하나**인지(실제로는 수서 함께 조회까지
+        # 포함한 OR). 예전 인용 ``MainBookingActivity.java:775-776`` 은 7.0.6 에
+        # 없는 6.5.0 클래스입니다.
         "ebizCrossCheck": "Y" if query.include_srt else "N",
         "srtCheckYn": "Y" if query.include_srt else "N",
         "rtYn": "N",
