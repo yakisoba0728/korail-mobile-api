@@ -1544,19 +1544,27 @@ def build_unpaid_reservation_cancel_form(
             # 적었던 것은 ``lang`` 을 빠뜨린 오류입니다.
             #
             # **선언 필드 수와 실제로 전송되는 키 수는 다른 주장입니다.**
-            # kotlinx 는 값이 기본값과 같으면 그 원소를 건너뛰므로
-            # (``ReservationCancelChkIn.java:120-150`` 의 ``write$Self``,
-            # ``lang`` 은 ``CommonIn.java:467-474`` 에서 기본값과 같을 때 아예
-            # 쓰지 않고 return) 한 요청이 여덟 키를 다 싣는다는 보장은 없습니다.
+            # kotlinx 가 원소를 건너뛸 수 있어
+            # (``ReservationCancelChkIn.java:120-150`` 의 ``write$Self``)
+            # 한 요청이 여덟 키를 다 싣는다는 보장은 없습니다. 다만 ``lang``
+            # 의 생략은 **값 비교 하나가 아닙니다** -- ``CommonIn.java:467`` 이
+            # 먼저 ``output.shouldEncodeElementDefault(serialDesc, 3)`` 를 묻고,
+            # 그것이 false 인 **경우에만** ``self.lang`` 을
+            # ``languageProvider?.getSTLeec()`` 와 비교해 같을 때 return 합니다
+            # (``:470-471``). 어느 한쪽이라도 어긋나면 ``:474`` 가 ``lang`` 을
+            # 씁니다. 즉 기준값은 정적 기본값이 아니라 **런타임 언어 제공자**의
+            # 값이고, 인코더가 기본값 기록을 요구하면 값이 같아도 실립니다.
             # 이 빌더가 내보내는 키 수도 고정이 아닙니다 -- ``_common_fields``
             # 가 ``config.lang`` 이 ``None`` 이 아닐 때만 ``lang`` 을 붙이므로
             # 기본값에서는 일곱 키, ``lang`` 을 주면 여덟 키입니다.
             #
-            # 이 빌더가 ``"000"`` 을 쓰는 근거는 그래서 앱 재현이 아니라
-            # 라이브입니다: reserve/reserve_transfer/reserve_merge/
-            # recalculate_price 가 돌려준 여정 행 45개 전부에 ``h_rsv_chg_no``
-            # 키가 아예 없었고(2026-09-22), ``"000"`` 으로 보낸 취소가 모두
-            # ``IRG000000`` 으로 성립했습니다. 홀드 응답이 변경번호를 주는
+            # 이 빌더가 ``"000"`` 을 쓰는 근거는 그래서 앱 재현이 아니라 라이브
+            # **관찰**입니다: 2026-09-22 에 reserve/reserve_transfer/
+            # reserve_merge/recalculate_price 응답에서 모은 여정 행 45 개 중
+            # ``h_rsv_chg_no`` 키를 가진 행이 0 개였고, ``"000"`` 으로 보낸
+            # 취소가 그 표본 안에서 모두 ``IRG000000`` 으로 성립했습니다.
+            # **45 개는 유한 표본이지 보장이 아닙니다** -- 그날의 우리 기록일
+            # 뿐이고 재측정된 적이 없습니다. 홀드 응답이 변경번호를 주는
             # 경우에는 그것을 넘기는 편이 앱에 더 가깝습니다. This builder is the
             # fresh-single-journey-hold case: the hold it is handed has no
             # change number to echo, so it sends the constant. That is a
@@ -1664,9 +1672,14 @@ def build_card_payment_form(
     앱도 모든 결제 호출 지점에서 같은 식을 반복합니다. 구조상 프로토콜 상수가
     아니라 예약별 상태입니다.
 
-    다만 **실제로는** ``reserve``/``reserve_transfer``/``reserve_merge`` 가
-    ``h_rsv_chg_no`` 를 한 번도 보내지 않아(2026-09-22, 여정 행 45/45) 이 빌더가
-    내보내는 값은 언제나 ``_ABSENT_RESERVATION_CHANGE_NO``(``"000"``)입니다.
+    다만 **관찰된 범위에서는** ``reserve``/``reserve_transfer``/
+    ``reserve_merge`` 가 ``h_rsv_chg_no`` 를 보낸 적이 없어(2026-09-22,
+    여정 행 45 개 중 0 개) 그 표본에서 이 빌더가 내보낸 값은 모두
+    ``_ABSENT_RESERVATION_CHANGE_NO``(``"000"``)였습니다. 45 개는 유한
+    표본이라 "언제나" 를 세우지 못하며, 재측정된 적도 없습니다 -- 바로 위
+    문단대로 이 필드는 프로토콜 상수가 아니라 예약별 상태이므로, 홀드 응답이
+    변경번호를 실어 주면 ``_echoed_reservation_change_no`` 가 그것을
+    내보냅니다.
     그 리터럴이 왜 안전한지는 그 상수의 주석에 적어 뒀습니다 — 요약하면 같은
     PNR 을 ``certification.ReservationList`` 로 되읽으면 서버 자신이
     ``h_rsv_chg_no='000'`` 을 돌려줍니다(8/8 행). 이전 판은 이 자리를
@@ -1695,11 +1708,24 @@ def build_card_payment_form(
     ``PayViewModel.java:11058`` -- 다만 결제 금액 경로에 직접 들어가는 것은
     ``getOriginalReceivedAmount()``, ``:11027`` 입니다.)
 
-    **여기서 정적으로 끊깁니다**: ``getOriginalReceivedAmount()``
-    (``PayViewModel.java:11027-11028``)는 ``PayAmountUiData`` 의 한 필드를
-    읽는데 그 클래스의 필드명이 전부 난독화(``STL*``,
-    ``ui/screen/pay/data/PayAmountUiData.java:21-34``)돼 있어 **어느 응답 키가
-    그 값을 먹이는지는 확인하지 못했습니다.**
+    **이 체인은 7.0.6 에서 재도출됩니다.** ``getOriginalReceivedAmount()``
+    (``PayViewModel.java:11027-11028``)가 읽는 ``PayAmountUiData`` 필드는
+    ``STLfan`` 이고(``ui/screen/pay/data/PayAmountUiData.java:248-249``),
+    ``STLfan`` 은 생성자의 **11번째** 인자입니다(같은 파일 ``:65``, ``str8``).
+    ``PayViewModel.java:11440`` 의 ``new PayAmountUiData(...)`` 는 그 자리에
+    ``NumberExKt.formatSeparator(j5)`` 를 넣고, 합성 생성자의 기본값 마스크가
+    ``193``(= 비트 0·6·7)이라 11번째 인자는 **마스크에 덮이지 않습니다**.
+    ``j5`` 는 일반 예약 분기에서 ``mReservationOutList`` 의
+    ``getHTotRcvdAmt()`` 합이고(``:11303-11307`` → ``:11368``), 그 전선 키가
+    ``@SerialName("h_tot_rcvd_amt")``(``ReservationOut.java:452``)입니다.
+    여정변경 분기는 대신 ``getScnIndcAmt()`` 를 더하며(``:11297-11301``),
+    장바구니·상품이 있으면 ``h_rcvd_amt`` 합(``:11390``)과 ``strMrkAmtSum``
+    합(``:11405``)이 뒤에 더해집니다.
+
+    **다만 이것이 유일한 경로는 아닙니다** -- 같은 함수의 다른 분기는
+    ``:11486`` 에서 ``j5`` 를 ``PayTicketItem`` 의 ``h_rcvd_amt`` 로 잡아
+    ``:11521`` 에서 ``PayAmountUiData`` 를 한 번 더 만듭니다. 위 유도는 일반
+    예약 분기에 한정된 주장입니다.
 
     ``h_tot_prc`` 가 **UI 전용**이라는 부분도 지금은 정황 증거뿐입니다:
     7.0.6 에서 ``getHTotPrc()`` 를 읽는 곳은 화면 합산·로깅 세 군데
@@ -1876,19 +1902,32 @@ def build_refund_form(
         ``h_mlg_stl``. 서버 에코가 아니라 호출자의 결정입니다. 기본값은
         ``False``(``"N"``).
 
-        7.0.6 에서 재도출되는 것은 **조건부라는 구조**까지입니다 --
-        ``MyTicketDetailViewModel.java:1521`` 이 ``RefundTicketIn`` 의 여섯
-        번째 인자(``h_mlg_stl``, DTO 필드 ``RefundTicketIn.java:36``,
+        7.0.6 에서 **조건 자체를 재도출했습니다.**
+        ``MyTicketDetailViewModel.java:1811`` 의
+        ``checkMileage(RefundCommissionOut, TicketDetailOut)`` 이 평문 정수
+        비교를 합니다 -- ``:1814`` 가 ``refundCommission.getUsePsbMlgNum()``
+        (사용 가능 마일리지)을, ``:1815`` 가 ``getRetFee()``(환불 수수료)를
+        ``TextHelper.getInteger`` 로 읽고, ``:1821`` 이 ``prgPsbFlg``
+        (``:1812``)가 기대 리터럴과 다르거나 ``usePsbMlgNum < retFee`` 이면
+        ``refundTicket$default(this, ticketDetail, false, 2, null)`` 로
+        빠집니다. 마스크 ``2`` 는 ``useMileage`` 를 기본값으로 돌리는데, 그
+        기본값은 ``:2093`` 의 AlienGuard 식이고 같은 식이 ``:1819`` 에서 배열
+        첨자 0 으로 쓰이므로 false 입니다. 둘 다 통과할 때에만 ``:1840`` 의
+        확인 대화가 뜨고, ``:1855-1858`` 이 Positive/Negative 에 서로 다른
+        boolean 을 실어 ``refundTicket(ticketDetail, useMileage)``(``:2074``)
+        를 부릅니다. 거기서 ``useMileage`` 는 ``:2079`` 가 만드는 코루틴 객체의
+        생성자(``:1466-1469``)를 거쳐 필드 ``STLgly`` 로 잡히고, ``:1515`` 가
+        다시 읽어 ``:1521`` 의 ``RefundTicketIn`` 여섯 번째 인자
+        (``h_mlg_stl``, DTO 필드 ``RefundTicketIn.java:36``,
         ``@SerialName("h_mlg_stl")`` 은 ``:146``)에
-        ``z ? <리터럴 A> : <리터럴 B>`` 를 넣습니다.
-        리터럴 둘 다 AlienGuard 로 보호된 1바이트이고(길이만 ``"Y"``/``"N"``
-        과 일치), 조건 ``z`` 는 난독화된 필드
-        (``MyTicketDetailViewModel.java:1515`` 의 ``this.STLgly``)라
-        **"마일리지 정산 대상이고 사용 가능 마일리지가 수수료를 덮을 때"라는
-        규칙 자체는 7.0.6 에서 확인하지 못했습니다.** 예전 인용
+        ``z ? <리터럴 A> : <리터럴 B>`` 로 들어갑니다.
+
+        **아직 평문이 아닌 것**: ``:1821`` 의 ``prgPsbFlg`` 비교 대상,
+        ``:1521`` 의 두 1바이트 값(길이만 ``"Y"``/``"N"`` 과 일치), 그리고
+        ``:1856``/``:1858`` 의 boolean 식이 모두 AlienGuard 로 보호돼 있어
+        **어느 갈래가 "Y" 를 싣는지는 확정하지 못했습니다.** 예전 인용
         ``ticketReturn/a.java:185-190`` 은 철회합니다 -- 6.5.0 경로이고 7.0.6
-        디컴파일에 ``ticketReturn`` 패키지가 없습니다. 그 규칙은 현재
-        **미출처**이며, 그렇다고 이 기본값이 틀렸다는 뜻은 아닙니다.
+        디컴파일에 ``ticketReturn`` 패키지가 없습니다.
     ``pbp_acceptance_target_flag``
         ``pbpAcepTgtFlg``. **항상 그대로 에코합니다 — 값이 없어도 거부하지
         않습니다.** 7.0.6 에서 이 값을 서버 응답에서 되울리는 곳은
@@ -2169,12 +2208,19 @@ def build_discount_card_extension_query(
 ) -> dict[str, str]:
     """``reservation.dcntCrdExtn.do`` — 할인카드의 유효기간을 연장합니다.
 
-    7.0.6 은 이 경로에 ``@FieldMap`` 폼으로 보냅니다
-    (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:518-520``,
-    ``postNCardExtension`` → ``NCardExtensionOut``). "6.5.0 은 ``@Query`` 로
-    보냈다"는 대조는 ``ResearchService.java:65-66`` 에 기대고 있었는데, 그
-    클래스는 이 저장소의 7.0.6 디컴파일에 없어 **여기서는 검증할 수
-    없습니다** -- 6.5.0 시절 기록으로만 남겨 둡니다.
+    7.0.6 은 이 경로에 ``@FieldMap`` 폼으로 보냅니다 --
+    ``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:518-520``
+    이 ``@FormUrlEncoded`` 와
+    ``@POST("/classes/com.korail.mobile.reservation.dcntCrdExtn.do")`` 를 달고
+    ``postNCardExtension(@FieldMap Map<String, String>)`` →
+    ``NCardExtensionOut`` 을 선언합니다. 줄 번호를 믿지 않고 ``@POST`` 문자열을
+    직접 읽었으며, 그 문자열은 이 폼을 붙여 보내는 경로(``client.py:2263``)와
+    정확히 같습니다.
+
+    아직 출처가 없는 것은 **"6.5.0 은 ``@Query`` 로 보냈다"는 대조 하나**
+    입니다 -- 근거였던 ``ResearchService.java:65-66`` 은 이 저장소의 7.0.6
+    디컴파일에 없고, 위 ``NetworkApi`` 줄은 7.0.6 만 말해 주므로 6.5.0 쪽을
+    대신 증명하지 못합니다. 6.5.0 시절 기록으로만 남겨 둡니다.
 
     공통 셋에 카드 승차권의 네 부분 자격증명이 붙습니다. 예전 인용
     ``TicketListActivity.java:1067-1072`` 은 **철회합니다** -- 6.5.0 클래스이고
@@ -2198,9 +2244,14 @@ def build_discount_card_extension_query(
 
     필드 수를 세는 문장은 일부러 뺐습니다 -- DTO 의 **선언** 원소는 공통 넷
     (Device/Version/Key/lang, ``CommonIn`` 상속)에 위 넷을 더해 여덟이지만,
-    kotlinx 가 기본값과 같은 원소를 건너뛰므로 **실제 전송 키 수**는 요청마다
-    다릅니다. 이 빌더는 ``config.lang`` 이 없으면 일곱 키, 있으면 여덟 키를
-    보냅니다.
+    kotlinx 가 원소를 건너뛸 수 있어 **실제 전송 키 수**는 요청마다 다릅니다.
+    다만 ``lang`` 의 생략은 "기본값과 같으면 뺀다" 는 값 비교 하나가
+    아닙니다 -- ``CommonIn.java:467`` 이 먼저
+    ``output.shouldEncodeElementDefault(serialDesc, 3)`` 를 묻고, 그것이
+    false 인 **경우에만** ``self.lang`` 을 ``languageProvider?.getSTLeec()``
+    와 비교해 같을 때 return 합니다(``:470-471``). 어느 한쪽이라도 어긋나면
+    ``:474`` 가 ``lang`` 을 씁니다. 이 빌더는 ``config.lang`` 이 없으면 일곱
+    키, 있으면 여덟 키를 보냅니다.
     """
     if not isinstance(ticket, DiscountCardTicket):
         raise KorailProtocolError(
@@ -2372,8 +2423,21 @@ def build_price_recalculation_form(
     요청 DTO 는 ``PriceReCalculationIn.java:31`` 입니다.
 
     예전에 달려 있던 ``CertificationService.java:35-37``·``a6/C1042B.java``·
-    ``DiscountPriceDao.java`` 는 전부 7.0.6 에 없는 6.5.0 클래스였습니다. 어느
-    화면이 이 호출을 만드는지는 재유도하지 못해 **미출처**입니다.
+    ``DiscountPriceDao.java`` 는 전부 7.0.6 에 없는 6.5.0 클래스였습니다.
+
+    **어느 화면이 이 호출을 만드는지는 재도출했습니다** -- 결제 화면의
+    ``PayViewModel.executeDiscountPrice`` 입니다. smali 쪽:
+    ``PayViewModel.smali:11291`` 이
+    ``.method private final executeDiscountPrice(ILjava/util/List;)V`` 이고,
+    그 본문 ``:11834-11850`` 이 ``PriceReCalculationIn`` 을 생성합니다. 그
+    인스턴스는 ``PayViewModel$executeDiscountPrice$1.smali:420`` 에서 필드
+    ``STLavu`` 로 읽혀 ``:543`` 의
+    ``NetworkRepository.priceReCalculation(PriceReCalculationIn, Continuation)``
+    으로 들어갑니다. jadx 쪽에서도 같은 줄이 보입니다 --
+    ``PayViewModel.java:1233`` 의 ``@DebugMetadata`` 가 그 내부 클래스를
+    ``PayViewModel$executeDiscountPrice$1`` 로 이름 짓고, ``:1308`` 이
+    ``STLavu`` 를 읽어 ``:1316`` 이
+    ``networkRepository.priceReCalculation(...)`` 을 부릅니다.
     """
     if not isinstance(request, PriceRecalculationRequest):
         raise KorailProtocolError(
@@ -2423,9 +2487,10 @@ def build_price_recalculation_form(
                 )
         if row.requested_discount_code == _SOLDIER_DISCOUNT_CODE:
             raise KorailProtocolError(
-                "KORAIL price recalculation never sends 군장병 as "
-                "requested_discount_code: the app moves \"432\" into "
-                "discount_kind_code and blanks this field"
+                "KORAIL price recalculation refuses 군장병 as "
+                "requested_discount_code: this library carries that code in "
+                "discount_kind_code and leaves this field empty. Whether the "
+                "app does the same is not re-derived from the 7.0.6 decompile"
             )
         if (
             row.requested_discount_code in _MERIT_DISCOUNT_CODES
@@ -2433,8 +2498,10 @@ def build_price_recalculation_form(
             and row.discount_kind_code != "000"
         ):
             raise KorailProtocolError(
-                "KORAIL price recalculation must send discount_kind_code "
-                "\"000\" for an integrated 국가유공자 discount"
+                "KORAIL price recalculation sends discount_kind_code "
+                "\"000\" for an integrated 국가유공자 discount; that is this "
+                "library's rule -- the app-side mapping is not re-derived "
+                "from the 7.0.6 decompile"
             )
 
     form: dict[str, str | list[str]] = dict(_common_fields(config))
@@ -2490,18 +2557,26 @@ def build_cart_add_form(
     ``TrainScheduleViewModel.java:370``,
     ``ReservationMergeViewModel.java:164``,
     ``AirportBusSeatMapViewModel.java:159``)이 모두 문자열 **하나**만
-    넘기며, 그 값이 PNR 임을 평문으로 보여 주는 것은
+    넘기며, 그 값이 PNR 임을 평문으로 읽을 수 있는 곳은 **둘**입니다.
     ``ReservationMergeViewModel.java:164``
-    (``new AddCartListIn(…reservationOut.getHPnrNo())``) 하나입니다 -- 나머지
-    넷은 난독화된 지역/필드(``STLapk`` 등)를 넘겨 값의 출처가 정적으로
-    읽히지 않습니다.
+    (``new AddCartListIn(…reservationOut.getHPnrNo())``)이 한 줄로 보여 주고,
+    ``TrainSeatMapViewModel`` 은 한 단계 건너 보여 줍니다 -- ``:968`` 이 예약
+    응답의 ``reservationOut.getHPnrNo()`` 를 지역변수 ``hPnrNo`` 로 잡고,
+    ``:997`` 이 ``addCartList(hPnrNo)`` 를 부르며, ``:1766-1771`` 의
+    ``addCartList(String pnrNo)`` 가 그 값을 코루틴 객체 생성자로 넘겨
+    ``:242-244`` 에서 필드 ``STLapk`` 에 저장하고, ``:267`` 이
+    ``new AddCartListIn(this.STLapk)`` 로 씁니다. 나머지 셋은 여전히
+    난독화된 지역/필드를 넘겨 값의 출처가 정적으로 읽히지 않습니다.
 
     **다만 "응답이 맨 ``BaseResponse``" 라는 부분은 7.0.6 에서 틀렸습니다.**
     ``network/model/AddCartListOut.java:24-25`` 는 ``extends CommonOut`` 에
     더해 ``psgDiscAddInfos`` 를 갖습니다(``@SerialName("psgDiscAdd_infos")``,
-    ``:51``·``:76``). ``CommonOut`` 자체의 맨 형태가
-    ``strResult``/``hMsgCd``/``h_msg_txt`` 세 필드
-    (``network/model/CommonOut.java:42-44``)입니다. 따라서 파서가 없는 것은
+    ``:51``·``:76``). ``CommonOut`` 자체의 맨 형태는 **속성** 셋
+    ``_hMsgTxt``/``hMsgCd``/``strResult``
+    (``network/model/CommonOut.java:42-44``)이고, **전선 키**는 각각
+    ``h_msg_txt``/``h_msg_cd``/``strResult`` 입니다 -- 앞의 둘만
+    ``@SerialName`` 으로 이름이 바뀌고(``:392``, ``:388``), ``strResult`` 는
+    애노테이션이 없어 속성명이 그대로 전선 이름입니다. 따라서 파서가 없는 것은
     응답이 비어 있기 때문이 **아니고**, 이 패키지가 아직 이 응답을 모델링하지
     않았다는 스코프 결정입니다 --
     :meth:`~korail_mobile_api.client.KorailClient.add_to_cart` 는 그래서
