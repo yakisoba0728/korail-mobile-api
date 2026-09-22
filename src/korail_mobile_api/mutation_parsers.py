@@ -22,6 +22,8 @@ from typing import Any
 
 from .errors import KorailProtocolError
 from .mutation_models import (
+    CartAddResponse,
+    CartDiscountAddition,
     DiscountCardPurchaseResponse,
     RefundTicketResponse,
     ReservationHoldResponse,
@@ -663,6 +665,58 @@ def parse_discount_card_purchase_response(
             )
             for attribute, wire_name in _DISCOUNT_CARD_PURCHASE_FIELDS.items()
         },
+    )
+
+
+_CART_DISCOUNT_ADDITION_FIELDS = {
+    "passenger_sequence_no": "h_psg_sqno",
+    "duty_reference_recognition_division_code": "h_duty_ref_rcgn_ps_dv_cd",
+}
+
+
+def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
+    """``cart.addCartList`` 의 응답을 파싱합니다.
+
+    봉투 밖의 자체 속성은 ``psgDiscAdd_infos`` 하나이고
+    (``AddCartListOut.java:76`` 의 ``@SerialName``), 그 안에
+    ``psgDiscAdd_info`` 리스트가 있습니다(``PsgDiscAddInfos.java:81``).
+    행의 두 필드는 ``PsgDiscAddInfo.java:85``(``h_psg_sqno``)와
+    ``:81``(``h_duty_ref_rcgn_ps_dv_cd``)입니다.
+
+    예전에는 이 라우트가 봉투만 돌려준다고 보고
+    :class:`~korail_mobile_api.models.BaseKorailResponse` 를 그대로
+    넘겼습니다. 위 세 DTO 가 그렇지 않다고 말합니다.
+
+    **라이브 미검증** — 실제 응답을 받아 본 적이 없습니다. 행이 없거나
+    바깥 객체가 통째로 없으면 빈 튜플입니다(:func:`_nested_rows` 가 둘 다
+    같은 방식으로 다룹니다).
+    """
+    data = _response_mapping(raw)
+    rows = _nested_rows(
+        data, "psgDiscAdd_infos", "psgDiscAdd_info", "cart add"
+    )
+    additions = tuple(
+        CartDiscountAddition(
+            raw=_row(item, "cart add discount row"),
+            **{
+                attribute: _optional_string(
+                    _row(item, "cart add discount row"),
+                    wire_name,
+                    context="cart add discount row",
+                )
+                for attribute, wire_name in (
+                    _CART_DISCOUNT_ADDITION_FIELDS.items()
+                )
+            },
+        )
+        for item in rows
+    )
+    return CartAddResponse(
+        h_msg_cd=data.get("h_msg_cd"),
+        h_msg_txt=data.get("h_msg_txt"),
+        str_result=data.get("strResult"),
+        raw=data,
+        discount_additions=additions,
     )
 
 

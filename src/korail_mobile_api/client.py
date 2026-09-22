@@ -66,6 +66,7 @@ from .models import (
     pair_transfer_itineraries,
 )
 from .mutation_models import (
+    CartAddResponse,
     CardPayment,
     CartAddRequest,
     DiscountCardPurchaseRequest,
@@ -84,6 +85,7 @@ from .mutation_models import (
     StationRefundVerificationResponse,
 )
 from .mutation_parsers import (
+    parse_cart_add_response,
     parse_discount_card_purchase_response,
     parse_refund_ticket_response,
     parse_reservation_hold_response,
@@ -2205,7 +2207,7 @@ class KorailClient:
     def add_to_cart(
         self,
         request: CartAddRequest,
-    ) -> BaseKorailResponse:
+    ) -> CartAddResponse:
         """홀드 중인 예약의 PNR 을 장바구니에 담습니다.
 
         ``POST cart.addCartList``(``NetworkApi.java:266-267`` —
@@ -2215,12 +2217,28 @@ class KorailClient:
         ``CartService.java:11-13``/``AddCartDao.java:9-24`` 는 둘 다 6.5.0 잔재로
         7.0.6 에 그 파일이 없습니다.
 
+        응답은 봉투만이 아닙니다. ``AddCartListOut.java:24-25`` 가 자체 속성
+        ``psgDiscAddInfos`` 를 달고 있고 전선 키는 ``:76`` 의
+        ``@SerialName("psgDiscAdd_infos")`` 입니다 — 그 안의
+        ``psgDiscAdd_info`` 리스트를
+        :attr:`~korail_mobile_api.CartAddResponse.discount_additions` 로
+        돌려줍니다. 한때 이 라우트를 "빈 응답"으로 적고
+        :class:`~korail_mobile_api.models.BaseKorailResponse` 를 그대로
+        넘겼는데 틀린 설명이었습니다.
+
+        **응답의 행 부분은 라이브 미검증입니다** — 서버가 실제로 무엇을
+        채워 주는지 관측한 적이 없습니다. 반환형은 여전히
+        :class:`~korail_mobile_api.models.BaseKorailResponse` 의 하위형이라
+        기존 호출부는 그대로 동작합니다.
+
         로그인 세션을 요구합니다.
         """
         self._require_session("cart add requires")
         route = "/classes/com.korail.mobile.cart.addCartList"
         form = build_cart_add_form(self.config, request)
-        return self._mutation("cart", route, form)
+        return self._mutation(
+            "cart", route, form, parser=parse_cart_add_response
+        )
 
     def register_discount_card(
         self,
@@ -2323,11 +2341,18 @@ class KorailClient:
 
         로그인 세션을 요구합니다.
 
-        **부분 검증 경로입니다.** 7.0.6 DTO 는 ``txtPsrmClCd1``,
-        ``txtSeatAttCd2``, ``txtSeatAttCd4``, ``txtSeatAttCd5`` 를 더 선언하지만
+        **부분 검증 경로입니다.** 7.0.6 DTO 가 더 선언하는 ``txtPsrmClCd1``,
+        ``txtSeatAttCd2``, ``txtSeatAttCd4``, ``txtSeatAttCd5``
         (``analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41``)
-        이 폼은 넷 중 어느 것도 보내지 않습니다. 그 값은 앱의 화면 상태에서 오는데 그
-        경로를 추적하지 않았습니다.
+        는 이제
+        :class:`~korail_mobile_api.PriceRecalculationRequest` 의
+        ``cabin_class_code`` 와 ``seat_attribute_code_2``/``_4``/``_5`` 로
+        **보낼 수 있습니다.** 넷 다 선택이고 기본값은 ``None`` 이라, 넘기지
+        않으면 예전과 똑같이 하나도 실리지 않습니다 — 앱의 일반 재계산 경로도
+        네 인자를 default-null 로 구성합니다(``PayViewModel.smali:11834-11850``).
+
+        다만 **값을 채워 보낸 적은 없습니다.** 어떤 화면 상태가 그 값을 만드는지는
+        추적하지 않았으므로, 채워 보내는 쪽은 여전히 미검증입니다.
 
         2026-09-22 에 실서버로 처음 나갔습니다. 홀드 중인 PNR 의 좌석에서
         ``h_psg_tp_cd``/``h_psrm_cl_cd``/``h_dcnt_knd_cd1`` 을 그대로 베낀 한 줄을

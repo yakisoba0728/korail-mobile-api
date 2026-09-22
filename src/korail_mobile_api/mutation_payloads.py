@@ -2403,14 +2403,27 @@ _PRICE_RECALCULATION_ROW_FIELDS: tuple[tuple[str, str], ...] = (
     ("hidFmlyNo", "family_sequence_no"),
 )
 
+#: 폼 전체에 하나씩 가는 선택 스칼라 넷. 행 리스트와 달리 개수가 없습니다.
+_PRICE_RECALCULATION_SCALAR_FIELDS: tuple[tuple[str, str], ...] = (
+    ("txtPsrmClCd1", "cabin_class_code"),
+    ("txtSeatAttCd2", "seat_attribute_code_2"),
+    ("txtSeatAttCd4", "seat_attribute_code_4"),
+    ("txtSeatAttCd5", "seat_attribute_code_5"),
+)
 
-# 이 폼은 불완전합니다. 7.0.6 PriceReCalculationIn 은 txtPsrmClCd1, txtSeatAttCd2,
-# txtSeatAttCd4, txtSeatAttCd5 도 선언하고, 직렬화기의 요소 이름 길이도 10개 속성과
-# 정확히 맞습니다. 이 빌더는 넷 중 어느 것도 보내지 않습니다. 값이 앱의 화면 상태에서
-# 오는데 그 경로를 추적하지 않았으므로 추측해 채우지 않습니다. 이 경로는 실서버에 보낸
-# 적이 없으므로 미검증입니다.
+
+# 7.0.6 PriceReCalculationIn 이 선언하는 네 스칼라 txtPsrmClCd1, txtSeatAttCd2,
+# txtSeatAttCd4, txtSeatAttCd5 는 **이제 표현할 자리가 있습니다** —
+# PriceRecalculationRequest 의 cabin_class_code 와 seat_attribute_code_2/4/5 입니다.
+# 넷 다 선택이고 기본값은 None 이라, 넘기지 않으면 예전과 똑같이 하나도 실리지
+# 않습니다. 그 기본 동작이 앱과 어긋나지 않는다는 근거는 PayViewModel.smali
+# :11834-11850 으로, 일반 재계산 경로가 네 인자를 default-null 로 구성합니다.
 #   analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41
+#     -- 넷 다 @SerialName 이 없으므로 전선 키는 속성명 그대로이고, 생성자
+#        :114-133 에서 넷 다 checkNotNullParameter 대상이 아니라 널 허용입니다.
 #   analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn$$serializer.java:44-47
+# 값을 **실제로 채워 보낸 적은 없습니다** — 어떤 화면 상태가 그 값을 만드는지는
+# 추적하지 않았으므로, 채워 보내는 쪽은 여전히 미검증입니다.
 def build_price_recalculation_form(
     config: KorailConfig,
     request: PriceRecalculationRequest,
@@ -2532,6 +2545,18 @@ def build_price_recalculation_form(
     form["txtPsgGridcnt"] = str(len(rows))
     for wire_name, _ in _PRICE_RECALCULATION_ROW_FIELDS:
         form[wire_name] = columns[wire_name]
+    # 네 선택 스칼라. 넘긴 것만 싣습니다 — 기본값 None 이면 키 자체가 없고,
+    # 그것이 앱의 일반 경로와 같습니다(위 주석의 PayViewModel.smali 근거).
+    for wire_name, attribute in _PRICE_RECALCULATION_SCALAR_FIELDS:
+        value = getattr(request, attribute)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not value.strip():
+            raise KorailProtocolError(
+                f"KORAIL price recalculation {attribute} must be a non-empty "
+                "string when present"
+            )
+        form[wire_name] = value
     return form
 
 

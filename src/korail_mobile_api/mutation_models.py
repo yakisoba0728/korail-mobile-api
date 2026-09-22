@@ -1175,6 +1175,68 @@ class PriceRecalculationRequest:
     #: ``RequestBuilder.smali:1531`` 은 7.0.6 의 922행짜리
     #: ``retrofit2/RequestBuilder.smali`` 범위 밖입니다.
     non_member_no: str | None = field(default=None, repr=False)
+    #: ``txtPsrmClCd1`` — 여정의 객실 등급. **행의**
+    #: :attr:`PriceRecalculationRow.room_class_code` (전선 ``psrm_cl_cd``)와
+    #: 다른 자리입니다: 저쪽은 승객 행마다 하나씩 가는 리스트이고 이쪽은 폼
+    #: 전체에 하나입니다. 예약 폼도 같은 키를 여정 등급으로 씁니다
+    #: (``mutation_payloads.build_reservation_form`` 의 ``txtPsrmClCd1``).
+    cabin_class_code: str | None = field(default=None, repr=False)
+    #: ``txtSeatAttCd2`` — 좌석 속성 2번 슬롯.
+    seat_attribute_code_2: str | None = field(default=None, repr=False)
+    #: ``txtSeatAttCd4`` — 좌석 속성 4번 슬롯. 예약 폼에서 **실제 좌석 속성이
+    #: 들어가는 자리**가 이 번호입니다(``_seat_attribute_key(1)``), 2·5번은
+    #: 거기서 ``"000"`` 으로 채워집니다. 재계산 라우트에서도 같은 역할인지는
+    #: 확인하지 않았습니다 — 슬롯 번호만 맞춰 두었습니다.
+    seat_attribute_code_4: str | None = field(default=None, repr=False)
+    #: ``txtSeatAttCd5`` — 좌석 속성 5번 슬롯.
+    seat_attribute_code_5: str | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class CartDiscountAddition:
+    """장바구니 담기 응답이 승객마다 돌려주는 할인 추가 행 하나.
+
+    7.0.6 DTO 는
+    ``analysis/jadx/sources/com/korail/talk/network/model/PsgDiscAddInfo.java``
+    이고 자체 필드는 둘뿐입니다 — ``@SerialName("h_psg_sqno")``(``:85``)와
+    ``@SerialName("h_duty_ref_rcgn_ps_dv_cd")``(``:81``). 둘 다 평문이라
+    전선 키가 그대로 읽힙니다.
+    """
+
+    #: ``h_psg_sqno`` — 이 행이 가리키는 승객의 순번.
+    passenger_sequence_no: str | None = None
+    #: ``h_duty_ref_rcgn_ps_dv_cd`` — APK 필드명을 보존한 구분 코드.
+    #: **뜻은 확인하지 않았습니다.** 전선 키와 이 DTO 에 있다는 것까지가
+    #: 확인된 전부이고, 코드값의 의미나 가능한 값 목록은 미출처입니다.
+    duty_reference_recognition_division_code: str | None = None
+    raw: Mapping[str, Any] = field(
+        default_factory=dict[str, Any], repr=False, compare=False
+    )
+
+
+@dataclass(frozen=True)
+class CartAddResponse(BaseKorailResponse):
+    """``cart.addCartList`` 의 답.
+
+    7.0.6 응답 DTO 는
+    ``analysis/jadx/sources/com/korail/talk/network/model/AddCartListOut.java:24-25``
+    로, ``CommonOut`` 을 상속하고 자체 속성으로 ``psgDiscAddInfos`` 하나를
+    더 답니다 — 전선 키는 ``:76`` 의 ``@SerialName("psgDiscAdd_infos")``.
+    그 안은 ``PsgDiscAddInfos.java:81`` 의
+    ``@SerialName("psgDiscAdd_info")`` 리스트입니다.
+
+    **예전에 "빈 응답"이라고 적었던 것은 틀렸습니다.** 봉투 필드 말고는 아무
+    것도 없다고 보고 :class:`BaseKorailResponse` 를 그대로 돌려줬는데, 위
+    두 줄이 그렇지 않다고 말합니다. 타입 파서가 없던 것은 응답이 비어서가
+    아니라 이 패키지가 거기까지 모델링하지 않았기 때문입니다.
+
+    **라이브 미검증.** 이 경로로 실제 응답을 받아 본 적이 없으므로, 서버가
+    실제로 몇 행을 채워 주는지는 관측된 바 없습니다. 행이 없으면
+    :attr:`discount_additions` 는 빈 튜플입니다.
+    """
+
+    #: ``psgDiscAdd_infos`` → ``psgDiscAdd_info`` 의 각 행.
+    discount_additions: tuple[CartDiscountAddition, ...] = ()
 
 
 @dataclass(frozen=True)

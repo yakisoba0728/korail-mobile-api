@@ -130,6 +130,8 @@ from .models import (
 from .mutation_models import (
     CardPayment,
     CartAddRequest,
+    CartAddResponse,
+    CartDiscountAddition,
     DiscountCardAdditionalUser,
     DiscountCardPurchaseRequest,
     DiscountCardPurchaseResponse,
@@ -314,6 +316,8 @@ __all__ = [
     "AppVersionInfo",
     "BaseKorailResponse",
     "CartAddRequest",
+    "CartAddResponse",
+    "CartDiscountAddition",
     "CartItem",
     "CartListResponse",
     "CommuterKindMenuResponse",
