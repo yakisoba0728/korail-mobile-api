@@ -185,6 +185,18 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
     ``None`` 입니다. ``version`` 이 객체로 오면 앱 업데이트 안내
     (:class:`~korail_mobile_api.models.AppVersionInfo`)이고, 객체도 ``null`` 도
     아니면 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+
+    ``version`` 에서 읽는 세 키가 7.0.6 ``MobilePlusMainVersion`` 이 선언하는
+    필드 전부입니다 — ``MobilePlusMainVersion.java:52`` 의 역직렬화 생성자에
+    ``NEWDVERSION``/``CNTAURL``/``AMESSAGE`` 세 ``@SerialName`` 만 있습니다.
+    ``CNTAURL`` 은 한동안 빠져 있었는데, 앱이 업데이트 팝업의 스토어 버튼
+    링크로 쓰는 값이라(``AppKt.java:1240`` → ``AppKt.java:1635`` 의
+    ``StoreConfirmDialog``) 그것만 없으면 "새 버전이 있다"까지만 알고 어디로
+    보낼지는 모르는 상태가 됩니다. 실서버는 같은 객체에 19개 키를 실어
+    보내지만(2026-09-22 확인) 나머지 16개(``NEWAVERSION``/``NEWIVERSION``/
+    ``CNT{D,I,S}URL``/``{D,I,S}MESSAGE``/``OLD*VERSION``/``AADD*MSG``)는 DTO 에
+    없는 키라 일부러 읽지 않습니다 — 필요하면 ``AppDataResponse.raw`` 에
+    그대로 남아 있습니다.
     """
     raw = response.raw
     version_raw = raw.get("version")
@@ -197,6 +209,7 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
         version = AppVersionInfo(
             message=_optional_string(version_raw, "AMESSAGE"),
             new_version=_optional_string(version_raw, "NEWDVERSION"),
+            store_url=_optional_string(version_raw, "CNTAURL"),
         )
     return AppDataResponse(
         **_response_fields(response),

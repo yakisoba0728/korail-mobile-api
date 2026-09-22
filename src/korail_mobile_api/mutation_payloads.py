@@ -1196,24 +1196,49 @@ def _echoed_job_sequence(value: str | None) -> str:
     return _ABSENT_JOB_SEQUENCE
 
 
-# What the payment form sends when the hold response carried no usable
-# first-journey h_rsv_chg_no. The app never handles that case: V4/b.java:41
-# dereferences getJrny_infos().getJrny_info().get(0) unconditionally, so a hold
-# without a journey row would throw inside the app rather than produce a wire
-# value, and a null h_rsv_chg_no would be forwarded and then dropped by Retrofit
-# -- neither shape is reproducible here without making the @Field conditional,
-# and no observed hold has produced one. "000" is the value this builder has
-# always sent, the value every fresh-hold cancel in the app hardcodes, and the
-# value srtgo uses, so it stays as the explicit last resort. Note V4/b.java:25-30
-# falls back to "0" instead, but only on getRecalculationRsvPaymentRequest,
-# whose source is a previous request object rather than the reservation
-# response; it is not this path's fallback.
+# What the payment form sends for hidRsvChgNo when the hold response carried no
+# usable first-journey h_rsv_chg_no -- which, on this library's reserve routes,
+# is EVERY time.
+#
+# This comment used to call the literal "the explicit last resort" and claim
+# that "no observed hold has produced one". Both were wrong, and backwards: the
+# absent key is not the edge case, it is the only shape certification.Ticket-
+# Reservation has ever answered with. As of 2026-09-22, h_rsv_chg_no was missing
+# from 45 of 45 live journey rows returned by reserve / reserve_transfer /
+# reserve_merge -- direct 일반실 and 특실, 무궁화호, 새마을호, ITX-마음,
+# 어른2+어린이1, 경로, overnight, four 예약대기 holds, both transfer legs, both
+# merge-standing legs and both merge legs. So
+# ReservationJourney.reservation_change_no is always None off a fresh hold and
+# _echoed_reservation_change_no below always returns this literal. Do not
+# "restore" a fallback-flavoured reading of this path: the echo branch is there
+# because the app echoes, not because any observed hold has filled the key.
+#
+# What makes the literal safe is not habit but corroboration: reading the same
+# PNRs back through certification.ReservationList returns h_rsv_chg_no="000" on
+# 8 of 8 journey rows (direct, 예약대기 x4, merge x2, transfer x2). "000" is the
+# server's OWN value for a fresh hold, so emitting it is an echo by another
+# route, not a guess. It is also what every fresh-hold cancel in the app
+# hardcodes and what srtgo sends.
+#
+# Also dropped here: the old sentence that "a null h_rsv_chg_no would be
+# forwarded and then dropped by Retrofit". That is a 6.5.0 story and it cannot
+# happen in 7.0.6 -- ReservationOutJrnyInfo.java:48 declares hRsvChgNo as a
+# NON-nullable String and :138 gives it an AlienGuard-decrypted `new byte[0]`
+# default (i.e. "") whenever the seen1 bit 131072 is clear, so the app would
+# place "" there, never null. The receiving field is equally non-null with the
+# same "" default: RsvPaymentIn.java:28,75. The old citation V4/b.java:41 is
+# unverifiable in this repo (analysis/jadx/sources has no V4 package at all);
+# the 7.0.6 site that actually does this is
+# analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:6684,
+# which sets hidRsvChgNo from the FIRST element of
+# reservationOut.getJrnyInfos().getJrnyInfo().
 _ABSENT_RESERVATION_CHANGE_NO = "000"
 
 
 def _echoed_reservation_change_no(hold: ReservationHoldResponse) -> str:
-    # The FIRST journey specifically, mirroring the app's
-    # getJrny_infos().getJrny_info().get(0).getH_rsv_chg_no() (V4/b.java:41).
+    # The FIRST journey specifically, mirroring 7.0.6's
+    # setHidRsvChgNo(<first>(reservationOut.getJrnyInfos().getJrnyInfo())
+    # .getHRsvChgNo()) at PayViewModel.java:6684.
     journeys = hold.journeys
     if journeys:
         value = journeys[0].reservation_change_no
@@ -1230,10 +1255,19 @@ def build_card_payment_form(
     """미결제 홀드에 대한 단일 카드 ReservationPayment 폼을 만듭니다.
 
     ``hidTmpJobSqno1/2`` 와 ``hidRsvChgNo`` 는 상수가 아니라 홀드 응답을 되울린
-    것입니다(``V4/b.java:39-41``, ``PaymentService.java:14``). ``hidRsvChgNo``
-    는 **첫** 여정의 변경번호이며 앱도 모든 결제 호출 지점에서 같은 식을
-    반복합니다. 프로토콜 상수가 아니라 예약별 상태입니다 — 취소 빌더의 고정된
-    ``"000"`` 은 다른 경우입니다.
+    것입니다(``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:6684``,
+    ``PaymentService.java:14``). ``hidRsvChgNo`` 는 **첫** 여정의 변경번호이며
+    앱도 모든 결제 호출 지점에서 같은 식을 반복합니다. 구조상 프로토콜 상수가
+    아니라 예약별 상태입니다.
+
+    다만 **실제로는** ``reserve``/``reserve_transfer``/``reserve_merge`` 가
+    ``h_rsv_chg_no`` 를 한 번도 보내지 않아(2026-09-22, 여정 행 45/45) 이 빌더가
+    내보내는 값은 언제나 ``_ABSENT_RESERVATION_CHANGE_NO``(``"000"``)입니다.
+    그 리터럴이 왜 안전한지는 그 상수의 주석에 적어 뒀습니다 — 요약하면 같은
+    PNR 을 ``certification.ReservationList`` 로 되읽으면 서버 자신이
+    ``h_rsv_chg_no='000'`` 을 돌려줍니다(8/8 행). 이전 판은 이 자리를
+    ``V4/b.java:39-41`` 로 인용했는데 그 패키지는 이 저장소의 7.0.6 디컴파일에
+    존재하지 않아 확인이 불가능했습니다.
 
     ``hidMnsStlAmt1`` 은 화면의 합계가 아니라 앱의 ``getReceivedAmount()``
     입니다(``AbstractC1269e.java:406`` → ``V4/a.java:27``). ``h_tot_prc`` 는

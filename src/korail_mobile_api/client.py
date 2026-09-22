@@ -732,7 +732,10 @@ class KorailClient:
     def get_korail_point_summary(self) -> KorailPointSummaryResponse:
         """포인트·쿠폰·복지자격 요약. ``POST xPoint.MyXPointView``(``XPointService.java:18-20``).
 
-        로그인 필요. 복지 등록 상태(장애인증·보조견)도 함께 옴 — ``MyPageActivity.java:206-212``.
+        로그인 필요. 복지 등록 상태(장애인증·보조견)도 함께 옵니다. 응답 필드는
+        ``MyXPointViewOut.java:27-74`` 이고 라우트는 ``xPoint.MyXPointView``
+        (``NetworkApi.java:515``) 입니다 — 예전에 적혀 있던
+        ``MyPageActivity`` 는 6.5.0 클래스로 7.0.6 에 없습니다.
         """
         self._require_session()
         return self._post_read(
@@ -966,7 +969,14 @@ class KorailClient:
         self,
         request: GuideSeatConditionRequest,
     ) -> GuideSeatConditionResponse:
-        """좌석 안내 봉투를 받습니다. ``MRR800011`` 문구도 반환합니다."""
+        """도우미석 안내문을 받습니다. 사실상 **정적** 응답입니다.
+
+        요청의 좌석속성코드가 무엇이든 같은 안내가 ``FAIL``/``MRR800011`` 로
+        돌아옵니다(2026-09-22: 14종 전부 동일). 그래서 ``raise_on_fail=False``
+        입니다 — 여기서 ``FAIL`` 은 실패가 아니라 그 안내문을 싣는 방식입니다.
+        :class:`~korail_mobile_api.read_payloads.GuideSeatConditionRequest`
+        참조.
+        """
         return self._post_read(
             "/classes/com.korail.mobile.reservation.guideSeatCnd.do",
             build_guide_seat_condition_form(request),
@@ -978,7 +988,19 @@ class KorailClient:
         self,
         request: SeatAssignmentScheduleRequest,
     ) -> SeatAssignmentScheduleResponse:
-        """좌석배정 예매 화면이 쓰는 열차 목록을 조회합니다."""
+        """좌석배정 예매 화면이 쓰는 열차 목록을 조회합니다.
+
+        ``menu_id`` 가 결과를 정합니다. 일반 검색 메뉴 ``"11"`` 로 부르면
+        서버는 ``SUCC``/``WRG000000`` 에 **빈 목록**으로 답합니다(2026-09-22,
+        7가지 변형 전부). 행이 오는 것은 좌석배정·할인 메뉴 ``"A1"``/``"A2"``
+        (:data:`~korail_mobile_api.constants.KORAIL_DISCOUNT_CARD_MENU_ID`)
+        이고, 7.0.6 도 이 라우트에 일반 검색 메뉴를 보내지 않습니다
+        (``TrainScheduleViewModel.java:2639-2754``). 빈 결과가 곧 "해당 열차
+        없음" 이 아니라 "메뉴가 틀렸음" 일 수 있다는 뜻입니다.
+
+        ``"A1"``/``"A2"`` 라도 날짜·구간에 따라 ``WRD000057``
+        (명절대수송기간)로 거절될 수 있습니다.
+        """
         return self._post_read(
             "/classes/com.korail.mobile.research.assignScheduleView.do",
             build_seat_assignment_schedule_form(request),
@@ -1073,7 +1095,24 @@ class KorailClient:
         self,
         ticket: OriginalTicketReference,
     ) -> DeliveryRecipientResponse:
-        """승차권 한 장을 전달받은 수령자 정보를 조회합니다."""
+        """N카드 2인 승차권을 **전달하기 전에** 수령자 후보를 조회합니다.
+
+        이미 전달된 승차권의 수령자를 보는 곳이 아닙니다 — 예전 서술이
+        그렇게 읽혀 오해를 샀습니다. 7.0.6 은 전달 화면을 만드는 동안에만
+        이것을 부르고, 그나마 ``isNCardTwoPeople()`` 일 때뿐입니다
+        (``DeliveryTicketFormViewModel.java:697-700``, 즉
+        ``TicketDetailOut.pbpAcepPsQryFlg == 'Y'``). 답은
+        ``DeliveryTicketEffect.NCardTwoPeopleUpdated`` 로 흘러갑니다.
+
+        그래서 N카드 2인 승차권이 아니면 ``IRZ000005``("조회된 자료가
+        없습니다")가 **정상 응답**입니다 — 2026-09-22 에 이 계정의 승차권
+        60장이 전부 그랬습니다.
+
+        이미 전달된 승차권의 수령자가 필요하면
+        :meth:`get_pbp_acceptance_specifications` 를 쓰십시오. 그쪽
+        ``jrnyList`` 행에 ``acepCustNm``/``acepCustTeln``/``pbpAcepKndNm``/
+        ``pbpRsvNo`` 가 있습니다.
+        """
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.tk.dlvRcvCust.do",
@@ -1196,8 +1235,37 @@ class KorailClient:
             parser=parse_refund_ticket_detail_response,
         )
 
-    def get_common_code(self, code: str = "") -> BaseKorailResponse:
-        """공통코드 표를 코드 하나만큼 조회합니다."""
+    def get_common_code(
+        self,
+        code: str | Sequence[str] = "",
+    ) -> BaseKorailResponse:
+        """공통코드 표를 조회합니다 — 한 호출에 코드를 여러 개 실을 수 있습니다.
+
+        ``code`` 는 문자열 하나이거나 문자열 시퀀스입니다. 어느 쪽이든 전선에서는
+        ``code`` 라는 같은 이름의 반복 키가 되고, 서버는 요청한 키 전부를 한 본문에
+        담아 돌려줍니다.
+
+        **이전 시그니처는 ``code: str`` 하나였습니다.** 그건 코드 하나마다 왕복
+        하나를 강제하는데, 라우트도 앱도 그렇게 동작하지 않으므로 틀린 좁힘이었습니다
+        — 7.0.6 은 같은 경로에 Retrofit 바인딩을 둘 선언하고
+        (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:317``
+        ``postCommonCode(@FieldMap)``, ``:321`` ``postCommonCodeMulti(@FieldMap,
+        @Field("code") List<String>)``), 부팅 시퀀스는 코드 22 개를 한 리스트로 묶어
+        (``analysis/jadx/sources/com/korail/talk/network/NetworkService.java:2015``,
+        ``DEBUG`` 빌드면 ``:2017-2018`` 에서 둘 더) **한 번**의
+        ``postCommonCodeMulti`` 로 보냅니다(``:2025``). 단일 바인딩을 쓰는 곳은
+        ``NetworkService.java:1829`` 하나뿐입니다. 2026-09-22 실서버 확인:
+        :data:`~korail_mobile_api.constants.KORAIL_COMMON_CODE_BOOTSTRAP_CODES`
+        18 개를 한
+        POST 로 보내 ``API.I00000``/``SUCC`` 와 요청한 18 키 전부가 한 본문에 왔고,
+        같은 코드들을 하나씩 따로 부른 값과 바이트 단위로 같았습니다. 즉 코드 N 개를
+        원하면 왕복도 1 번이면 됩니다.
+
+        모르는 코드는 오류가 아닙니다 — ``raw`` 에 그 이름의 키가 빈 문자열 값으로
+        옵니다(``'app.no.such.code'`` → ``SUCC``, 값 ``''``). 기본값 ``""`` 도
+        거절되지 않고 이름이 ``''`` 인 빈 항목 하나로 돌아옵니다. 둘 다 2026-09-22
+        확인이며, 라이브러리가 오류를 삼킨 게 아니라 서버 응답을 그대로 옮긴 것입니다.
+        """
         return self._run_read(
             lambda: self.http.post_form(
                 "/classes/com.korail.mobile.common.code.do",
@@ -1398,6 +1466,15 @@ class KorailClient:
     ) -> TrainSearchResult | TransferSearchResult:
         """직통을 찾고, 하나도 없을 때만 환승으로 한 번 더 찾습니다.
 
+        .. note::
+
+           "하나도 없을 때" 는 **서버가 ``WRD000061`` 로 답할 때** 뿐입니다.
+           직통 조회가 ``WRG000000``/``SUCC`` 에 행 0개로 오는 경우도 있는데
+           (2026-09-22 확인), 그때는 환승으로 넘어가지 않고 빈
+           :class:`~korail_mobile_api.models.TrainSearchResult` 를 그대로
+           돌려줍니다. 즉 이 메서드가 ``TrainSearchResult`` 를 돌려줬다고 해서
+           직통 열차가 있다는 뜻은 아니므로 ``trains`` 를 확인해야 합니다.
+
         지어낸 편의기능이 아니라 앱의 흐름 그대로입니다. 직통 조회가 아무것도 못 찾으면
         서버가 ``WRD000061``("직통열차가 없습니다")로 답하는데, 7.0.6
         ``TrainScheduleViewModel`` 은 ``responseTrainSchedule()`` 에서 오직 그
@@ -1574,8 +1651,20 @@ class KorailClient:
         승차권(``TicketListActivity.java:937-939``), ``"2"`` 는
         구매이력(``TicketPurchaseHistoryActivity.java:276-278``)이고 그 밖의 값은 거부됩니다.
         ``"2"`` 는 ``boarding_date_from``·``boarding_date_to`` 를 둘 다 ``YYYYMMDD`` 로
-        요구하며 한쪽이라도 비면 요청을 만들기 전에 막습니다. ``"1"`` 은 두 값을 빈 문자열로
-        보냅니다.
+        요구하지만 **이 클라이언트가 그것을 강제하지는 않습니다.** 비었거나 자릿수가
+        틀리거나 앞뒤가 뒤집힌 범위도 그대로 나가고 서버가 ``WRT100101``
+        ("일자를 확인해주세요 / 3개월단위로 조회할 수 있습니다")로 거절합니다 —
+        2026-09-22 에 빈 두 값, ``from`` 만 채운 값(``"20250101"``), 여섯 자리
+        값(``"202501"``/``"202612"``), 뒤집힌 범위(``"20261231"``→``"20250101"``)
+        네 경우를 모두 실서버에서 확인했습니다. 이전 문장은 "한쪽이라도 비면 요청을
+        만들기 전에 막습니다" 라고 적혀 있었는데 그런 검사는 코드에 없습니다
+        (``payloads.build_ticket_list_form`` 은 ``mode`` 만 검증하고 두 날짜는
+        ``h_abrd_dt_from``/``h_abrd_dt_to`` 로 그냥 흘려보냅니다) — 같은 함수의
+        도크스트링이 처음부터 정직했던 쪽입니다. 거꾸로, 서버 문구의 "3개월단위" 도
+        강제되지 않습니다: ``20250101``→``20261231`` 2 년 범위가 128 행,
+        ``20260901``→``20260922`` 가 3 행을 돌려줬습니다. 즉 ``WRT100101`` 을
+        부르는 것은 기간의 길이가 아니라 빠졌거나 폭이 틀렸거나 뒤집힌 범위입니다.
+        ``"1"`` 은 두 값을 빈 문자열로 보냅니다.
 
         ``page_no`` 는 ``h_page_no`` 로 나가고 1 미만은 1 로 올려 보내므로 기본값 ``0`` 도 첫
         페이지를 뜻합니다.
@@ -1811,12 +1900,46 @@ class KorailClient:
 
         병합 흐름의 두 번째이자 마지막 홀드입니다. 첫 번째는
         ``job_type=KorailReservationJobType.MERGE_STANDING``(``"1202"``, 입석+좌석
-        예매)으로 부르는 :meth:`reserve` 이고 그것이 전 구간을 입석으로 잡습니다. 이
-        메서드가 그것을 같은 열차의 두 여정 예약으로 바꾸는데, 나누는 지점은
-        :meth:`get_merge_seats_inquiry` 가 알려준 중간역입니다. 다섯 단계 전체와 그
+        예매)으로 부르는 :meth:`reserve` 입니다. 나누는 지점은
+        :meth:`get_merge_seats_inquiry` 가 알려준 중간역이고, 다섯 단계 전체와 그
         근거는
         :data:`~korail_mobile_api.constants.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE`
         에 적혀 있습니다.
+
+        **이 도크스트링은 두 가지를 틀리게 적고 있었습니다. 되돌리지 마십시오.**
+
+        하나, "``MERGE_STANDING`` 이 전 구간을 입석으로 잡는다" 는 틀립니다. 그
+        첫 홀드가 **이미** ``h_jrny_cnt='0002'`` 에 ``h_jrny_tp_cd``
+        ``"21"``/``"22"`` 인 두 여정으로 중간역에서 쪼개져 돌아옵니다 — 2026-09-22
+        열차 305 대전→울산(통도사) ``20260923``: 선행 대전→동대구
+        ``h_seat_no='입석'``(15,000원), 후행 동대구→울산(통도사) 실좌석
+        ``'10A'``(9,600원). 열차 005 에서도 같은 모양(입석 14,600원 + ``'3C'``
+        9,600원)이었고, 같은 PNR 을 :meth:`get_ticket_reservation_detail` 로
+        되읽어도 ``21``/``22`` 와 같은 좌석이 나옵니다. 즉 입석이 되는 것은 선행
+        구간뿐이고, 아래에서 보듯 아예 한 구간도 입석이 아닐 수 있습니다. 바로 위
+        ``"1202"`` 를 "입석+좌석 예매" 라고 부르는 문구가 처음부터 옳았고, 그 두 줄
+        아래 문장이 그것과 모순돼 있었습니다.
+
+        둘, 이 메서드가 그 홀드를 "바꾼다" 는 것도 틀립니다. **변환이 아니라
+        별도의 두 번째 PNR 을 만듭니다** — 2026-09-22 열차 305 에서 입석 홀드와
+        이 호출의 ``pnr_no`` 가 서로 달랐고, 새 PNR 은 똑같이 ``21``/``22`` 모양에
+        양쪽 다 진짜 좌석(``4C``, ``5A``)이라 입석 구간이 하나도 없었습니다.
+        입석 홀드는 그대로 살아 있으므로 **둘 다** 취소해야 합니다.
+
+        호출 순서도 관측됐습니다. 입석 홀드를 살려 둔 채 이 메서드를 부르면
+        ``WRR664260``("동일한 시간대에 예약 또는 구매하신 승차권이 존재합니다")이
+        오고, 앱과 같은 순서로 입석 홀드를 먼저 취소한 뒤 부르면 완전히 같은
+        호출이 ``IRR000018``("결제하지 않으면 예약이 취소됩니다")로 통과합니다.
+        ``WRR664260`` 은 프로토콜 실패가 아니라 겹치는 홀드에 대한 정상적인
+        업무규칙 응답입니다.
+
+        .. warning::
+           ``WRR664260`` 은 **거절이 아닙니다.** 2026-09-22 확인: 그 응답도
+           ``strResult='SUCC'`` 에 새 ``pnr_no`` 와 좌석(``4C``/``5A``)이 붙은
+           온전한 홀드였고, 예외도 오르지 않았습니다. 이것을 "실패했으니 치울 게
+           없다" 로 읽으면 **실제로 잡힌 좌석을 그대로 흘립니다.** 이 메서드가
+           돌려준 것은 ``h_msg_cd`` 가 무엇이든 ``pnr_no`` 가 있으면 홀드이니
+           :meth:`cancel_unpaid_hold` 로 치우십시오.
 
         입석 홀드를 대신 취소하지는 않습니다. 앱은 다시 예약하기 전에 그것을
         취소하지만(7.0.6 ``ReservationMergeViewModel.java:1352``
@@ -1834,7 +1957,10 @@ class KorailClient:
         :data:`~korail_mobile_api.constants.KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE`
         (``"22"``)로 정확히 찍혔고, 입석 구간과 좌석 구간이 문서와 같이
         분리돼 돌아왔습니다. 두 여정 다 단일 :meth:`cancel_unpaid_hold`
-        호출로 함께 풀립니다.
+        호출로 함께 풀립니다. (2026-09-22 에 밝혀졌듯 그 ``21``/``22`` 분할은 이
+        메서드의 홀드에만 있는 게 아니라 앞선 ``MERGE_STANDING`` 홀드에 이미
+        있습니다 — 위 문단 참고. 이 확인은 분할이 이 메서드 고유의 결과라는
+        뜻으로 읽으면 안 됩니다.)
         """
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -2123,20 +2249,52 @@ class KorailClient:
         이 폼은 넷 중 어느 것도 보내지 않습니다. 그 값은 앱의 화면 상태에서 오는데 그
         경로를 추적하지 않았습니다.
 
-        2026-09-22 에 실서버로 처음 나갔습니다 — 홀드 중인 PNR 의 좌석에서
+        2026-09-22 에 실서버로 처음 나갔습니다. 홀드 중인 PNR 의 좌석에서
         ``h_psg_tp_cd``/``h_psrm_cl_cd``/``h_dcnt_knd_cd1`` 을 그대로 베낀 한 줄을
-        보내자 서버가 ``ERR930202`` ("변경항목이 없습니다")로 답했습니다. 요청이
-        읽히고 해석됐다는 뜻이라 폼의 모양 자체는 유효합니다. 다만 **할인이 실제로
-        바뀌는** 성공 응답은 아직 못 봤습니다 — 그러려면 이 계정에 없는 자격(쿠폰·
-        국가유공자 등)이 필요합니다. 즉 성공 본문 파싱 경로는 여전히 미검증입니다.
+        :attr:`~korail_mobile_api.PriceRecalculationRow.requested_discount_code`
+        를 ``""`` 로 두고 보내면
+        서버가 ``ERR930202``("변경항목이 없습니다")로 답합니다 — 바꾼 게 없으니
+        맞는 답이고, 요청이 읽히고 해석됐다는 뜻이라 폼의 모양 자체도 유효합니다.
+
+        **성공 본문 파싱 경로도 이제 검증됐습니다.** 같은 날 평범한 회원 세션이
+        ``hidDcntKndCd='131'``(경로)을 1인 홀드에 보내자(줄의 앞 세 값은 그 PNR 의
+        좌석에서 복사: ``psg_tp_dv_cd='1'``, ``psrm_cl_cd='1'``,
+        ``dcnt_knd_cd1='000'``) 서버가 ``SUCC``/``IRZ000008``("정상적으로 처리
+        되었습니다")와 함께 ``h_tot_prc``·``h_tot_fare``·``h_tot_dcnt_amt``·
+        ``h_tot_rcvd_amt``·``jrny_infos`` 를 갖춘 온전한 ``ReservationOut`` 본문을
+        돌려줬고, :func:`parse_reservation_hold_response` 가 폴백 없이 그대로
+        파싱했습니다(``window_no`` 등 12 개 스칼라가 모두 살아 있었고, 여정 행에는
+        홀드 응답에 없던 ``h_arv_dt``·``h_jrny_sqno`` 까지 들어 있었습니다).
+        서로 다른 열차 셋(서울→부산 KTX 013·1005, 서울→대전 KTX 207)에서
+        재현했고, 이후 그 PNR 의 좌석은 ``h_dcnt_knd_cd1='204'`` /
+        ``h_dcnt_knd_cd_nm1='경로 할인'`` 으로 읽혔습니다. 이전 판은 "할인이 실제로
+        바뀌는 성공 응답은 아직 못 봤다", "성공 본문 파싱 경로는 여전히 미검증",
+        "이 계정에 없는 자격이 필요하다" 셋을 적어 뒀는데 셋 다 틀렸습니다 —
+        ``131`` 은 아무 자격도 없는 계정에서 동작합니다. 되돌리지 마십시오.
+
+        같은 PNR 에 두 번째 재계산을 거는 경우는 직관과 반대입니다. 서버가 써 넣은
+        값(``204``)을 다시 읽어 ``discount_kind_code`` 로 보내면
+        ``WRE800036``("동일한 할인종류가 입력되었습니다…중복 입력은 불가합니다")로
+        **거절**되고, 오히려 낡은 ``000`` 을 그대로 다시 보내는 쪽이
+        ``SUCC``/``IRZ000008`` 로 통과합니다. 즉 이 필드는 "지금 좌석에 붙어 있는
+        할인" 이 아니라 "요청 당시 베껴 온 원래 값" 으로 두십시오.
+
+        끝으로 금액 주의: ``204`` 가 기록돼도 돈이 늘 움직이지는 않습니다. 토요일
+        두 편에서는 코드만 기록되고 정산액이 그대로였는데, ``WRR664296``
+        ("KTX/새마을호/ITX-청춘 열차의 경로 및 장애인(4-6급)할인은 토/일/공휴일에는
+        적용되지 않습니다")이 그 이유입니다. 평일에는 같은 할인이 실제로 깎입니다
+        (28,600 → 20,000, ``h_tot_dcnt_amt='000008600'``).
         """
         self._require_session("price recalculation requires")
         route = "/classes/com.korail.mobile.certification.PriceReCalculation"
         form = build_price_recalculation_form(self.config, request)
         # Strict parsing, not the reserve methods' PNR-keeping fallback: a
         # recalculation creates no hold, and the caller already has the PNR it
-        # asked about. A fallback here would only hide a parse failure on a
-        # path that has never been sent live.
+        # asked about, so there is no hold to orphan and nothing for a fallback
+        # to rescue -- it would only hide a parse failure. This used to be
+        # justified by the path "never having been sent live"; that is no
+        # longer true (2026-09-22 SUCC/IRZ000008 on two trains, parsed here
+        # without incident), and the justification above is the durable one.
         return self._mutation(
             "price_recalculation",
             route,

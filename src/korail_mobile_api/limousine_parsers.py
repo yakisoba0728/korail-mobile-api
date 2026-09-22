@@ -106,6 +106,11 @@ _SCHEDULE_FIELDS = {
     # ``trnOrdrNo`` 는 아직 라이브로 확인된 적이 없어 속성명 그대로 둡니다.
     "train_order_no": "trnOrdrNo",
     "yms_application_flag": "ymsAplFlg",
+    # ScdlQryOutTrain.java:40 의 rcvdPrc. DTO 가 선언하는 21개 필드 중 이
+    # 하나만 이 맵에 빠져 있어서 행의 유일한 운임이 raw 로만 닿았습니다.
+    # 2026-09-22 라이브 359행 전부에 있었고 값은 0으로 앞을 채운 14자리
+    # 원 단위 문자열입니다 -- 나머지 20개와 같이 문자열 그대로 둡니다.
+    "received_price": "rcvdPrc",
 }
 
 

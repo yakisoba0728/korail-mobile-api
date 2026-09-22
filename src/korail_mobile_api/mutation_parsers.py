@@ -298,6 +298,7 @@ _RESERVATION_HOLD_FIELDS = {
     "payment_deadline_time": "h_ntisu_lmt_tm",
     "total_fare": "h_tot_fare",
     "total_price": "h_tot_prc",
+    "total_discount_amount": "h_tot_dcnt_amt",
 }
 
 # A reserved journey's fields, one jrny_info row each.

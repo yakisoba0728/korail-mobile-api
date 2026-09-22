@@ -330,6 +330,11 @@ class KorailSeatAssignment:
 
 @dataclass(frozen=True)
 class ReservationJourney:
+    #: ``h_jrny_sqno`` — 여정 번호(``ReservationOutJrnyInfo.java:86,361``).
+    #: :attr:`arrival_date` 와 정확히 같은 분포입니다: ``reserve()`` 계열
+    #: 응답에서는 2026-09-22 기준 21/21 행이 이 키를 보내지 않아 항상 ``None``
+    #: 이고, ``recalculate_price`` 응답(4/4 행)과 ``get_ticket_reservation_detail``
+    #: (8/8 행)에는 들어 있습니다.
     journey_sequence: str | None = None
     reservation_change_no: str | None = field(default=None, repr=False)
     departure_date: str | None = None
@@ -337,6 +342,22 @@ class ReservationJourney:
     #: ``h_arv_dt`` — 도착일. 출발 쪽(``departure_date``)과 짝이며, 심야·익일
     #: 도착 열차에서 ``arrival_time`` 하나만으로는 날짜를 고정할 수 없어
     #: 별도 필드로 둡니다(``ReservationOutJrnyInfo.java:86,305``).
+    #:
+    #: **다만 홀드 응답에서는 쓸 수 없습니다.**
+    #: ``certification.TicketReservation`` 은 이 키를 아예 보내지 않습니다 —
+    #: 2026-09-22 에 :meth:`~korail_mobile_api.KorailClient.reserve` /
+    #: :meth:`~korail_mobile_api.KorailClient.reserve_transfer` /
+    #: :meth:`~korail_mobile_api.KorailClient.reserve_merge` 가 돌려준 여정 행
+    #: 21 개 전부에 없었고, 여기에는 일부러 고른 최악의 경우인 KTX 083
+    #: 서울→부산 ``20260926`` 22:28 출발 → 익일 01:04 도착도 포함됩니다. 그
+    #: 홀드에서 얻을 수 있는 것은 ``h_dpt_dt='20260926'`` 과
+    #: ``h_arv_tm='010400'`` 뿐이라 익일이라는 사실이 복원되지 않습니다. 그래서
+    #: 이 클래스가 ``reserve*`` 결과로 올 때 이 필드는 **언제나** ``None`` 이고,
+    #: 익일 날짜는 :meth:`~korail_mobile_api.KorailClient.get_ticket_reservation_detail`
+    #: 에서 받아야 합니다 — 같은 PNR 로 물으면 ``h_arv_dt='20260927'`` 이
+    #: 옵니다(2026-09-22 확인). 죽은 필드는 아닙니다: 같은 클래스를
+    #: :meth:`~korail_mobile_api.KorailClient.recalculate_price` 응답에도 쓰는데
+    #: 거기서는 ``h_arv_dt`` 와 ``h_jrny_sqno`` 가 둘 다 들어옵니다.
     arrival_date: str | None = None
     arrival_time: str | None = None
     departure_station_code: str | None = None
@@ -373,10 +394,27 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: ``ReservedTicketActivity.java:356,365``).
     payment_deadline_date: str | None = None
     payment_deadline_time: str | None = None
+    #: ``h_tot_fare`` — **총액이 아니라 요금(특실 차액) 합계**입니다. 좌석별
+    #: ``h_seat_fare`` 의 합이며, 한국 철도의 운임/요금 이분법에서 뒤쪽입니다
+    #: (``ReservationOut.java:444`` ``@SerialName("h_tot_fare")``). 일반실이면
+    #: 항상 ``"00000000000"`` 입니다 — 2026-09-22 에 KTX·무궁화호·새마을호·
+    #: ITX-마음·입석·예약대기·환승·병합 홀드 전부에서 0 이었고, 앱 자신의 샘플
+    #: ``ReservationOut`` 도 일반실 승차권을 ``h_tot_fare='00000000000'`` /
+    #: ``h_seat_fare='00000000000000'`` 로 적어 둡니다
+    #: (``analysis/jadx/sources/com/korail/talk/ui/screen/basketticket/data/BasketTicketDataKt.java:44``).
+    #: 0 이 아니게 되는 경우는 특실뿐입니다(같은 KTX 013 서울→부산 좌석 하나에
+    #: 24,500원, 2인이면 49,000원). **받을 돈은 이 필드가 아니라
+    #: :attr:`received_amount` 입니다**; 정산식은
+    #: ``total_price + total_fare - total_discount_amount == received_amount``.
     total_fare: str | None = None
     #: ``h_tot_prc`` — **표시용** 합계. ``PaymentActivity.java:174`` 가
     #: ``mTotPrc`` 에 넣고, 그 값은 화면을 위해서만 되읽힙니다(``:497``).
-    #: 앱이 정산하는 금액이 아닙니다.
+    #: 앱이 정산하는 금액이 아닙니다. 구체적으로는 좌석별 ``h_seat_prc`` 의 합,
+    #: 즉 **할인 전·요금 전의 운임 기준액**입니다. 그래서 같은 열차의 일반실
+    #: 홀드와 특실 홀드가 이 값이 똑같이 나옵니다 — 2026-09-22 KTX 013
+    #: 서울→부산에서 둘 다 ``h_tot_prc='00000054400'`` 인데 실제로 받는 돈은
+    #: 53,900원과 78,400원이었습니다. 이 필드로 금액을 판단하면 특실 차액과
+    #: 할인이 통째로 사라집니다.
     total_price: str | None = None
     #: 앱이 실제로 걷는 금액(``hidMnsStlAmt1``). 앱의
     #: ``getReceivedAmount()`` 와 같습니다(``PaymentActivity.java:186-199``).
@@ -384,6 +422,26 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: 좌석별 ``h_rcvd_amt`` 를 더한 값입니다.
     received_amount: str | None = None
     journeys: tuple[ReservationJourney, ...] = ()
+    #: ``h_tot_dcnt_amt`` — 할인 합계. 이 필드가 없어서 홀드 응답만으로는
+    #: :attr:`total_price` 와 :attr:`received_amount` 를 맞춰 볼 수 없었고,
+    #: ``recalculate_price`` 로 할인을 바꿔 놓고도 얼마가 깎였는지 ``raw`` 를
+    #: 뒤지지 않으면 알 수 없었습니다. 앱 DTO 는 처음부터 선언하고 있었고
+    #: (``analysis/jadx/sources/com/korail/talk/network/model/ReservationOut.java:440``
+    #: ``@SerialName("h_tot_dcnt_amt")``, 합성 생성자 ``:100``), 같은
+    #: ``ReservationOut`` 모양을 읽는 이 패키지의 다른 두 파서는 이미 이 키를
+    #: ``total_discount_amount`` 라는 **같은 이름**으로 매핑합니다
+    #: (:attr:`~korail_mobile_api.read_models.ReservationHistoryReservation.total_discount_amount`,
+    #: :attr:`~korail_mobile_api.read_models.TicketReservationDetailResponse.total_discount_amount`)
+    #: — 이름을 맞춘 건 한 전선 키가 패키지 안에서 두 이름을 갖지 않게 하려는
+    #: 것입니다.
+    #:
+    #: 정산식: ``h_tot_prc + h_tot_fare - h_tot_dcnt_amt == h_tot_rcvd_amt``.
+    #: 2026-09-22 에 잡은 홀드 11 건(일반실·특실 1인/2인, 무궁화호·새마을호·
+    #: ITX-마음, 어른2+어린이1, 경로 1인, 환승, 병합 입석, 병합, 예약대기)
+    #: 전부와 ``recalculate_price`` 응답 두 건에서 성립했습니다. 구별력이 있는
+    #: 사례들: 어른2+어린이1 ``163200+0-28500=134700``, 특실 2인
+    #: ``108800+49000-1000=156800``, 경로 1인 ``108800+0-1000=107800``.
+    total_discount_amount: str | None = None
 
 
 @dataclass(frozen=True)
@@ -780,9 +838,16 @@ class PriceRecalculationRow:
 
     * :attr:`requested_discount_code`(``hidDcntKndCd``) — 결제 화면이 이
       승객에게 방금 고른 할인 종류. 없으면 ``""``. 관측된 값:
-      ``"151"``/``"152"``(쿠폰·국가유공자 본인),
+      ``"131"``(경로), ``"151"``/``"152"``(쿠폰·국가유공자 본인),
       ``"171"``/``"172"``(장애인·유공자 보호자), ``"321"``(동반유아),
-      ``"401"``(지연할인), ``"402"``(국회의원).
+      ``"401"``(지연할인), ``"402"``(국회의원). 2026-09-22 에 실서버로 실제
+      성공시켜 본 유일한 값은 ``"131"`` 이고, 아무 자격도 등록되지 않은 평범한
+      회원 계정에서 ``SUCC``/``IRZ000008`` 로 통과했습니다(그 뒤 좌석은
+      ``h_dcnt_knd_cd1='204'``/``'경로 할인'``). 이 목록에 ``"131"`` 이 빠져
+      있었는데, 하필 그게 자격 없이 동작하는 값이라 없을 이유가 없었습니다.
+      반대로 ``"000"`` 은 이 필드에 넣으면 안 됩니다 — 할인 없음을 뜻하는 값이
+      아니라 ``WZZ000001``("단말기할인종류코드 입력이 잘못되었습니다")로
+      거절됩니다. 할인을 고르지 않았으면 ``""`` 입니다.
     * :attr:`certificate_no`(``hidDscpNo``) — 그 할인을 뒷받침하는
       쿠폰·증명 번호(``h_cpn_no``, 또는 네 조각짜리 지연증명 반환번호).
       필요 없는 할인이면 ``""``.

@@ -62,12 +62,14 @@ from .read_models import (
     OriginalTicketJourney,
     OriginalTicketSeat,
     PassAgeOption,
+    PassAvailabilityMainInfo,
     PassAvailabilityResponse,
     PassGoodsInfo,
     PassMenuData,
     PassMenuItem,
     PassMenuResponse,
     PassOffice,
+    PassOpenDate,
     PassPassengerInfo,
     PassPassengerInfos,
     PassPeriodOption,
@@ -537,6 +539,23 @@ _TICKET_LIST_TICKET_FIELDS: dict[str, str] = {
     # (``'72'``/``'스마트티켓'``).
     "ticket_kind_code": "h_tk_knd_cd",
     "ticket_kind_name": "h_tk_knd_nm",
+    # MyTicketListOutTicket.java:92 가 선언하는 31개 @SerialName 중 아래 여섯이
+    # 빠져 있었습니다. 전부 라이브 131/131행에 옵니다(2026-09-22). 특히
+    # h_pbp_acep_tgt_flg 는 **이 행이 유일한 출처** 입니다 — 환불 상세
+    # (refunds.SelTicketInfo)는 이 키를 보내지 않고, 앱도 여기서 읽어 상세 DTO 에
+    # 주입합니다(MyTicketBaseViewModel.java:769).
+    "ticket_sequence": "h_tk_sqno",
+    "ticket_status_name": "h_tk_stt_nm",
+    "return_possible_flag": "h_ret_psb_flg",
+    "use_transaction_no": "h_use_tno",
+    "notify_use_transaction_no": "h_noty_use_tno",
+    "pbp_acceptance_target_flag": "h_pbp_acep_tgt_flg",
+    # jrn_info 는 일부러 타입 없는 Mapping 으로 둡니다(위 parse_ticket_list_response).
+    # 언젠가 타입을 붙이거든 h_srcar_no 는 반드시 _optional_scalar_string 또는
+    # _optional_integer 로 읽으십시오. TicketListTrainInfo.java:47,72,284 는 이
+    # 필드를 non-null String 으로 선언하지만 실서버는 **JSON 정수** 로 보냅니다
+    # (2026-09-22: 138/138행). 앱 DTO 의 선언을 그대로 베껴 _optional_string 을
+    # 쓰면 전 행이 KorailProtocolError 로 죽습니다.
 }
 
 _CART_ITEM_FIELDS: dict[str, str] = {
@@ -588,6 +607,14 @@ _DELAY_DISCOUNT_TICKET_FIELDS: dict[str, str] = {
     "page_no": "h_page_no",
 }
 
+_DELAY_DISCOUNT_MAIN_INFO_FIELDS: dict[str, str] = {
+    "current_page": "h_page_no",
+    "total_pages": "h_tot_page_cnt",
+    "total_count": "h_tot_cnt",
+    "row_count": "h_row_cnt",
+    "last_page_flag": "h_last_page_yn",
+}
+
 _CREW_REQUEST_OPTION_FIELDS: dict[str, str] = {
     "message_code": "intgMsgCd",
     "content": "prsCont",
@@ -633,12 +660,24 @@ _COMMUTER_KIND_MENU_FIELDS: dict[str, str] = {
 _TRIP_MENU_CONTENT_FIELDS: dict[str, str] = {
     "title": "contTitle",
     "detail": "contDetail",
-    "content_type": "detailType",
+    # 예전 속성 이름은 content_type 이었습니다. detailType(TrGdMenuLtOutCont.java:42)
+    # 은 "이 줄의 종류"를 주지 않습니다 — 라이브 60행 중 54행에 키가 없고 6행은
+    # ''(2026-09-22). 이름을 와이어 키에 맞춰 형제 PassMenuItem.detail_type 과
+    # 통일했습니다. 아래 passType 을 content_type 자리로 올리지 마십시오:
+    # 7.0.6 에는 detailType/passType/passActive/passAgree/passInfo 를 읽는
+    # 코드가 한 줄도 없습니다(APK 전수 게터 조사).
+    "detail_type": "detailType",
     "active": "passActive",
     "agree": "passAgree",
     "info": "passInfo",
     "image": "contImage",
     "url": "contUrl",
+    # 반대로 아래 둘은 앱이 실제로 읽는 필드입니다 —
+    # PassConditionViewModel.java:1241 이 contList 를 훑으며 getCmtrKndCd() 를
+    # 목표 코드와 비교하고, :1246 이 getPassData() 를 꺼냅니다.
+    # menuType='P' 메뉴에만 옵니다(2026-09-22: 60행 중 6행).
+    "commuter_kind_code": "cmtrKndCd",
+    "pass_type": "passType",
 }
 
 _TRIP_MENU_ITEM_FIELDS: dict[str, str] = {
@@ -723,6 +762,17 @@ _RESERVATION_HISTORY_TRAIN_FIELDS: dict[str, str] = {
     # ReservationViewOutTrainInfo.java:496 — the only money field on this row.
     "reserved_amount": "h_rsv_amt",
     "pnr_no": "h_pnr_no",
+    # 아래 여섯은 ReservationViewOutTrainInfo.java:94 의 37개 @SerialName 중
+    # 빠져 있던 것들입니다. 앞의 셋이 핵심입니다 — 미결제 홀드의 "언제까지"를
+    # 말하는 값인데, payment_flag/settlement_flag 로 "결제해야 한다"만 알 수
+    # 있었습니다. 이 계정에는 살아 있는 홀드가 없어(2026-09-22: h_msg_cd='P100',
+    # jrny_info == []) 라이브 값은 미확인이고, 근거는 위 선언입니다.
+    "payment_deadline_date": "h_ntisu_lmt_dt",
+    "payment_deadline_time": "h_ntisu_lmt_tm",
+    "payment_message": "h_payment_msg",
+    "payment_possible_date": "h_ntisu_psb_dt",
+    "prepayment_target_flag": "h_pre_stl_tgt_flg",
+    "journey_sequence": "h_jrny_sqno",
 }
 
 _RESERVATION_HISTORY_TOP_FIELDS: dict[str, str] = {
@@ -841,9 +891,21 @@ _TRAIN_SCHEDULE_OUT_TRAIN_FIELDS: dict[str, str] = {
     "special_reservation_code": "h_spe_rsv_cd",
     "free_seat_reservation_code": "h_free_rsv_cd",
     "standing_reservation_code": "h_stnd_rsv_cd",
+    # 네 개의 *_rsv_nm — TrainScheduleOutTrainInfo.java:1228/1380/1344/1196 이
+    # 코드 짝과 나란히 선언하는데 이 맵에 하나도 없어, 전선에 '예약하기'/
+    # '역발매중' 이 와도 전부 None 이었습니다(2026-09-22: menu_id='A1','A2'
+    # 각 10행). general/standing 은 형제 mergeSeatsC 맵에는 이미 있었습니다.
+    "general_reservation_name": "h_gen_rsv_nm",
+    "standing_reservation_name": "h_stnd_rsv_nm",
+    "special_reservation_name": "h_spe_rsv_nm",
+    "free_seat_reservation_name": "h_free_rsv_nm",
     "seat_map_flag": "h_rd_seat_map_flg",
     "delay_sale_flag": "h_dlay_sale_flg",
     "wait_reservation_flag": "h_wait_rsv_flg",
+    # h_rsv_psb_nm 은 이 DTO 자신의 키입니다(:1296). 내용이 메뉴에 따라 바뀌어
+    # ('A1'→'예약가능', 'A2'→'15%할인'/'20%할인', 2026-09-22) 할인 라벨이 튀어
+    # 나오지만 그것은 서버가 보내는 화면 문구이지 매핑 실수가 아닙니다 —
+    # 다른 키로 바꾸지 마십시오.
     "reservation_possible_name": "h_rsv_psb_nm",
     "special_reservation_possible_name": "h_spe_rsv_psb_nm",
     "info_text": "h_info_txt",
@@ -895,6 +957,13 @@ _PASS_SCHEDULE_MAIN_FIELDS: dict[str, str] = {
     "next_page_flag": "h_next_pg_flg",
     "change_train_division_code": "h_chg_trn_dv_cd",
     "page_no": "h_page_no",
+}
+
+_PASS_AVAILABILITY_MAIN_FIELDS: dict[str, str] = {
+    "message_code": "h_msg_cd",
+    "total_count": "h_tot_cnt",
+    "row_count": "h_row_cnt",
+    "selected_page_no": "h_sel_pg_no",
 }
 
 _PASS_AGE_OPTION_FIELDS: dict[str, str] = {
@@ -1120,7 +1189,29 @@ def parse_delay_discount_ticket_response(
             for v in rows
         )
     )
-    return DelayDiscountTicketListResponse(items=items, **_response_fields(raw))
+    # main_info 는 DelayDiscountViewOut.java:24,51 이 선언하지 않는 **서버 추가**
+    # 블록입니다(그 DTO 는 disc_infos 하나뿐). 앱이 읽지 않으니 파서가 놓친 것이
+    # 아니라 아예 없던 표면인데, 형제 DiscountCouponListResponse 는 같은 네
+    # 개념을 이미 내놓고 있었습니다. 중첩 블록을 타입화하는 방식은
+    # parse_pass_schedule_response 의 main_info 를 따릅니다.
+    #
+    # 다섯 값을 문자열로 둡니다: 와이어가 0을 채운 문자열이고
+    # ('0000'/'000000000') h_last_page_yn 은 ''로 와서, 쿠폰 쪽처럼
+    # _optional_integer 를 쓰면 그 빈 문자열이 KorailProtocolError 가 됩니다.
+    # 이 계정에는 지연할인권이 없어 전부 0인 응답만 봤습니다(2026-09-22).
+    main_info = _optional_mapping(raw, "main_info", "delay discount ticket list")
+    pagination: dict[str, str | None] = {}
+    if main_info is not None:
+        pagination = _nullable_string_fields(
+            main_info,
+            _DELAY_DISCOUNT_MAIN_INFO_FIELDS,
+            "delay discount ticket list main_info",
+        )
+    return DelayDiscountTicketListResponse(
+        items=items,
+        **pagination,
+        **_response_fields(raw),
+    )
 
 
 def parse_discount_coupon_response(
@@ -1197,11 +1288,25 @@ def parse_pass_availability_response(
     # rejected every successful response. Same result-only accommodation as
     # parse_pass_menu_response.
     _validate_envelope(raw, allow_result_only_success=True)
+    # PassInfo.java:92,96,100 은 세 필드를 선언하는데 예전에는 h_use_open_dt 만
+    # 뽑아 날짜 문자열 튜플로 납작하게 만들고 h_pnr_no/h_item_sqno 를 버렸습니다
+    # — 같은 응답의 wct_info 로 만드는 PassOffice 는 raw 를 들고 있는데 이쪽만
+    # 그렇지 않았습니다. open_dates 는 그대로 두고(공개 튜플의 원소 형을 바꾸는
+    # 것은 파괴적 변경입니다) 세 값을 다 담은 pass_info 를 나란히 놓습니다.
     open_dates = []
+    pass_rows = []
     for item in _rows(raw, "pass_info", "pass availability"):
         date = _optional_string(item, "h_use_open_dt", "pass date")
         if date is not None:
             open_dates.append(date)
+        pass_rows.append(
+            PassOpenDate(
+                open_date=date,
+                item_sequence=_optional_string(item, "h_item_sqno", "pass date"),
+                pnr_no=_optional_string(item, "h_pnr_no", "pass date"),
+                raw=item,
+            )
+        )
     ticket_issue_dates = []
     for item in _rows(raw, "ticket_info", "pass availability"):
         date = _optional_string(item, "h_ise_dt2", "ticket issue date")
@@ -1218,10 +1323,40 @@ def parse_pass_availability_response(
                 raw=item,
             )
         )
+    # main_info(PassInfoListOut.java:115 → MainInfo.java:103,107,111,115)는 이
+    # 라우트의 유일한 상태 코드가 사는 곳입니다 — 최상위 봉투에는 h_msg_cd 가
+    # 아예 오지 않습니다(2026-09-22: 입력 29종 전부). 예전에는 raw 로만 닿을 수
+    # 있었습니다.
+    #
+    # IRZ000005("조회할 자료가 없습니다")를 KorailNoResultsError 로 올리지는
+    # 않습니다. 형제 라우트들이 ERR000100 에 올리는 것은 strResult 가 'FAIL'
+    # 이기 때문인데, 여기서는 'SUCC' 로 오고 앱도 성공으로 봅니다:
+    # PassInfoListOut 은 isSuccess() 를 재정의하지 않고
+    # CommonOut.isSuccess()→commonFail()(CommonOut.java:455-463)은 strResult 만
+    # 봅니다. 두 소비자(PeriodTicketViewModel.java:796,
+    # PassConditionViewModel.java:904)도 isSuccess() 뒤에 pass_info 가 비었는지로
+    # 분기하고(:797-800, :910,927) main_info 는 읽지 않습니다 — MainInfo 를
+    # 참조하는 파일은 디컴파일 전체에서 PassInfoListOut 과 그 serializer 뿐입니다.
+    # 성공 봉투를 예외로 바꾸면 앱보다 엄격해지고, 채워진 응답의 IRZ000001 까지
+    # 봉투 코드 자리로 끌어올리게 됩니다. 코드가 필요하면
+    # response.main_info.message_code 를 보십시오.
+    main_raw = _optional_mapping(raw, "main_info", "pass availability")
+    main_info = (
+        PassAvailabilityMainInfo(
+            **_nullable_string_fields(
+                main_raw, _PASS_AVAILABILITY_MAIN_FIELDS, "pass availability main info"
+            ),
+            raw=main_raw,
+        )
+        if main_raw is not None
+        else None
+    )
     return PassAvailabilityResponse(
         open_dates=tuple(open_dates),
         ticket_issue_dates=tuple(ticket_issue_dates),
         offices=tuple(offices),
+        pass_info=tuple(pass_rows),
+        main_info=main_info,
         **_response_fields(raw),
     )
 
@@ -1233,6 +1368,13 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
         contents = tuple(
             TripMenuContent(
                 **_nullable_string_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
+                # TrGdMenuLtOutCont.java:45 passData → TrGdMenuLtOutPass.java:29-35.
+                # 정기권 메뉴·종류 라우트가 싣는 것과 같은 모양이라 같은 헬퍼를
+                # 씁니다.
+                pass_data=_parse_pass_menu_data(
+                    _optional_mapping(row, "passData", "trip menu content"),
+                    "trip menu pass data",
+                ),
                 raw=row,
             )
             for row in _rows(item, "contList", "trip menu")
@@ -1240,6 +1382,11 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
         items.append(
             TripMenuItem(
                 **_nullable_string_fields(item, _TRIP_MENU_ITEM_FIELDS, "trip menu item"),
+                # contCount 는 TrGdMenuLtOutMenu.java:27 의 선언이 String 인데
+                # 실서버는 JSON 숫자로 보냅니다(2026-09-22: 11/6/6/4/3). 그래서
+                # 문자열 필드 맵에 넣지 않고 _optional_integer 로 읽습니다 —
+                # 정수와 ASCII 10진 문자열을 모두 받습니다.
+                content_count=_optional_integer(item, "contCount", "trip menu item"),
                 contents=contents,
                 raw=item,
             )
@@ -1535,8 +1682,13 @@ def parse_guide_seat_condition_response(
         raise KorailProtocolError(
             "KORAIL seat guidance result must be SUCC or FAIL/MRR800011"
         )
-    # GuideSeatCndOut.java:29 — "timeStamp" has no @SerialName (PROTECTED);
-    # the Kotlin field name is used as a best-effort wire key.
+    # GuideSeatCndOut.java:29 의 "timeStamp" 에는 @SerialName 이 없지만
+    # 철자는 추측이 아닙니다 -- 생성된 descriptor 의 요소 이름이 9자이고
+    # (GuideSeatCndOut$$serializer.java:39) 그것이 곧 "timeStamp" 입니다.
+    #
+    # 다만 실서버는 이 키를 **아예 보내지 않아** time_stamp 는 언제나 None
+    # 입니다(2026-09-22: 좌석속성코드 14종 전부). 키가 틀린 것이 아니라
+    # 라우트가 안 싣는 것이므로, 값이 없다고 철자를 다시 고치지 마십시오.
     return GuideSeatConditionResponse(
         time_stamp=_optional_integer(raw, "timeStamp", "guide seat condition"),
         **_response_fields(raw),
@@ -1686,7 +1838,13 @@ def parse_merge_seats_inquiry_response(
     )
     return MergeSeatsInquiryResponse(
         merge_reservation_possible_flag=merge_flag,
-        # MergeSeatsCOut.java:29,112 — @SerialName("runDt"), top-level.
+        # MergeSeatsCOut.java:29,112 — @SerialName("runDt"), top-level. 철자는
+        # 맞지만 **서버가 보내지 않습니다**: 실서버 최상위 봉투는 스칼라 5개
+        # (h_msg_cd/h_msg_txt/msgCd/msgTxt/strResult)에 midStnList(:108)와
+        # trn_infos(:116)뿐이고 runDt 가 없어 이 값은 항상 None 입니다
+        # (2026-09-22, 20여 회 호출 전부). 운행일자는 행 단위로 옵니다 —
+        # trains[i].run_date(h_run_dt)가 매번 정확히 돌아옵니다. 다른 키를
+        # 찾아 "고치려" 하지 마십시오; 이 DTO 에 다른 최상위 날짜는 없습니다.
         run_date=_optional_string(raw, "runDt", "merge seats inquiry"),
         intermediate_stations=tuple(stations),
         trains=trains,
@@ -1747,6 +1905,15 @@ _KORAIL_POINT_SUMMARY_FIELDS = {
     "phone_verified_flag": "h_cp_athn_flg",
     "email_verified_flag": "h_emil_athn_flg",
     "contact_channel_content": "h_cntc_chn_cont1",
+    # MyXPointViewOut.java:43,53,54 — 플래그 쪽만 빠져 있어 비대칭이었습니다:
+    # customer_lead_flag_name(h_cust_lead_flg_nm)은 있는데 h_cust_lead_flg 가
+    # 없었고, disability_flag(h_hdcp_flg)는 있는데 유형 코드·이름이 없었습니다.
+    # 셋 다 라이브 48키 응답에 옵니다(2026-09-22).
+    "customer_lead_flag": "h_cust_lead_flg",
+    "disability_type_code": "h_hdcp_tp_cd",
+    "disability_type_name": "h_hdcp_tp_cd_nm",
+    # 아래 넷의 네이버/카카오/구글/애플 **순서는 7.0.6 에서 미확인** 입니다
+    # (read_models.KorailPointSummaryResponse 의 해당 주석 참고).
     "naver_linked_flag": "h_logn_tp_cd1",
     "kakao_linked_flag": "h_logn_tp_cd2",
     "google_linked_flag": "h_logn_tp_cd4",
@@ -1761,10 +1928,21 @@ _MILEAGE_HISTORY_FIELDS = {
     "total_available_affiliate_point": "totAvlAfltPontValNum",
     "total_accumulated_rail_point_1": "totAcmRailPontValNum1",
     "total_used_rail_point_1": "totUseRailPontValNum1",
-    # "railNowSavePontValNum1" was removed: 0 occurrences anywhere in AmtSpecOut
-    # (analysis/jadx/sources/com/korail/talk/network/model/AmtSpecOut.java:29-39)
-    # or its row DTO AmtSpecOutSpecInfo — a phantom key that made
-    # rail_now_saved_point_1 permanently None.
+    # "railNowSavePontValNum1" is deliberately NOT mapped: the 7.0.6 DTO does not
+    # declare it — neither AmtSpecOut
+    # (analysis/jadx/sources/com/korail/talk/network/model/AmtSpecOut.java:29-39,
+    # getters :199-247 = exactly the 9 scalars above plus specList) nor its row
+    # DTO AmtSpecOutSpecInfo.java:29-35.
+    #
+    # The older comment here called it "a phantom key that made
+    # rail_now_saved_point_1 permanently None". Both halves of that were wrong
+    # and the next person must not repeat them. The live server DOES send
+    # railNowSavePontValNum1 on every mlg.amtSpec.do response — a 9-character
+    # string on the KTX and RAIL_POINT ledgers and on every page (2026-09-22),
+    # equal to totAcmRailPontValNum1 on the test account — and the mapping that
+    # was removed used that exact spelling, so it was never None either. The
+    # defensible reason is only the first one: the app does not model it, so
+    # neither do we. It stays reachable through `raw`.
     "expiring_point_value": "delPontValNum",
     "ktx_mileage_info": "ktxMlgInfo",
 }
@@ -1785,11 +1963,17 @@ def parse_korail_point_summary_response(
 ) -> KorailPointSummaryResponse:
     _validate_strict_read_envelope(raw)
     return KorailPointSummaryResponse(
-        # Scalar rather than string: every point total here is a Java String in
-        # the DAO but a number in spirit, and the app reads them back through
-        # N.getInteger / N.getDecimalFormatString
-        # (MileageHistoryActivity.java:574-580), which would not care either
-        # way. Neither shape has been observed live.
+        # Scalar rather than string: every field on MyXPointViewOut.java:27-74 is
+        # a Kotlin String, but the point totals are numbers in spirit and KORAIL
+        # has been caught sending a declared-String number on several reads (see
+        # _optional_scalar_string), so the tolerant reader is the safe default.
+        #
+        # The old comment justified this with "the app reads them back through
+        # N.getInteger / N.getDecimalFormatString (MileageHistoryActivity.java:
+        # 574-580)" — that file does not exist in the 7.0.6 decompile (0 hits in
+        # analysis/jadx and analysis/apktool), so the rationale is the wire
+        # tolerance above, not an app call site. Live, all 48 top-level keys
+        # arrive as strings (2026-09-22).
         **_nullable_scalar_fields(
             raw,
             _KORAIL_POINT_SUMMARY_FIELDS,
@@ -1833,6 +2017,15 @@ _DISCOUNT_CARD_USAGE_FIELDS = {
     "arrival_station_name": "arvStnNm",
     "run_date": "runDt1",
     "additional_user_flag": "apdUsrFlg",
+    # NCardHistoryInfo.java:224 의 copy(runDt1, custNm, dptStnNm, arvStnNm,
+    # apdUsrFlg, saleDt, saleSqno, saleWctNo) — 여덟 중 아래 셋이 빠져
+    # 있었습니다. 근거는 "앱 화면이 다섯 개만 그린다" 였는데(7.0.6 에서도 맞습니다
+    # — NCardHistoryScreenKt.java:431,439,526,528,301), 화면이 안 그리는 것과
+    # DTO 에 없는 것은 다릅니다. @SerialName 이 하나도 없으므로 코틀린 프로퍼티
+    # 이름이 곧 와이어 키입니다.
+    "sale_date": "saleDt",
+    "sale_sequence": "saleSqno",
+    "sale_window_no": "saleWctNo",
 }
 
 _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS = {
@@ -1870,7 +2063,15 @@ def parse_discount_card_usage_response(
     for item in _rows(raw, "tkUseList", "discount card usage"):
         items.append(
             DiscountCardUsage(
-                **_nullable_string_fields(
+                # Scalar rather than string, for the same reason the sibling
+                # NCard route gives below (parse_discount_card_schedule_response):
+                # this route has never been seen populated — every card number
+                # tried answers ERR000100 (2026-09-22) — and saleSqno/saleWctNo
+                # are zero-padded ordinals, exactly the shape KORAIL has already
+                # been caught sending as a JSON number on other reads (see
+                # _optional_scalar_string). The tolerant reader cannot lose data
+                # a string reader would have kept.
+                **_nullable_scalar_fields(
                     item,
                     _DISCOUNT_CARD_USAGE_FIELDS,
                     "discount card usage",
@@ -2450,11 +2651,19 @@ _RESERVATION_SEAT_DETAIL_FIELDS = {
     "seat_no": "h_seat_no",
     "room_class_code": "h_psrm_cl_cd",
     "room_class_name": "h_psrm_cl_nm",
-    # ReservationResponse.SeatInfo declares the passenger type as a CODE
-    # (:304). No h_psg_tp_dv_nm exists anywhere in the decompiled app, so the
-    # display-name variant is deliberately NOT mapped; an unmapped key stays
-    # reachable through `raw`.
+    # The old comment here read "No h_psg_tp_dv_nm exists anywhere in the
+    # decompiled app, so the display-name variant is deliberately NOT mapped"
+    # and concluded it was a third-party invention. Both premises are false.
+    # `grep -r h_psg_tp_dv_nm analysis/` returns 2 hits: the app's OWN captured
+    # sample of this very response, embedded at BasketTicketDataKt.java:44 (and
+    # its smali twin smali_classes6/.../BasketTicketDataKt.smali:89), where it
+    # sits at /jrny_infos/jrny_info[*]/seat_infos/seat_info[0] with the value
+    # '어른'. Live it arrives on 8/8 seat rows next to h_psg_tp_cd (2026-09-22).
+    # It IS absent from ReservationOutSeatInfo's @SerialName set
+    # (ReservationOutSeatInfo.java:81) — that much was right — but a key the app
+    # itself captured and the server always sends is worth modelling.
     "passenger_type_code": "h_psg_tp_cd",
+    "passenger_type_name": "h_psg_tp_dv_nm",
     "received_amount": "h_rcvd_amt",
     "seat_price": "h_seat_prc",
     "seat_fare": "h_seat_fare",
@@ -2621,15 +2830,33 @@ _REFUND_TICKET_DETAIL_FIELDS = {
     "passenger_birth_date": "s_brth",
     "companion_name": "h_compa_nm",
     "companion_birth_date": "h_compa_brth",
-    # Flags the app echoes straight back into the refund it then sends
-    # (TicketDetailDao.java:227-281). h_pbp_acep_tgt_flg is the one
-    # build_refund_form needs: ticketReturn/a.java:430-431 puts this exact value
-    # in pbpAcepTgtFlg, so without parsing it there is no way for a caller to
-    # send anything but a guess.
-    "pbp_acceptance_target_flag": "h_pbp_acep_tgt_flg",
+    # "h_pbp_acep_tgt_flg" was mapped here and is now gone: SelTicketInfo does
+    # not carry it. It is not even a TicketDetailOut serial name — the 32
+    # explicit @SerialName entries at TicketDetailOut.java:117 do not include it;
+    # it belongs to MyTicketListOutTicket.java:92,300. Live, neither
+    # h_pbp_acep_tgt_flg nor the pbpAcepTgtFlg fallback appeared in any of 40
+    # responses (20 tickets x from_purchase_history False/True, 2026-09-22),
+    # including the 6 whose list row says 'Y'. Decisive: TicketDetailOut declares
+    # pbpAcepTgtFlg NON-FINAL with a setter (:65, setter :1936) and the app
+    # INJECTS the list row's value right after SelTicketInfo succeeds
+    # (MyTicketBaseViewModel.java:769) before echoing it into the refund
+    # (MyTicketDetailViewModel.java:1521) — it would not need to if the server
+    # sent it. The old comment's "without parsing it there is no way for a caller
+    # to send anything but a guess" is therefore also wrong: read it from
+    # TicketListTicket.pbp_acceptance_target_flag, which is exactly where the app
+    # reads it. (The old citations TicketDetailDao.java:227-281 and
+    # ticketReturn/a.java:430-431 are 6.5.0 paths absent from the 7.0.6
+    # decompile.) The pbpAcepTgtFlg fallback below stays — it is the correct
+    # default kotlinx name for TicketDetailOut's own field — but note that field
+    # is app-set, not server-sent.
     "delay_flag": "h_dlay_flg",
     "delay_ticket_flag": "h_dlay_tk_flg",
-    # "mlgSaveFlg" is not read: 0 occurrences anywhere in the decompile.
+    # "mlgSaveFlg"/"mlgSaveTgt" are not read: 0 occurrences anywhere in the
+    # decompile (TicketDetailOut.java:39-91 has no mileage-save field and the 32
+    # @SerialName entries at :117 have none). That is a phantom of the APP, not
+    # of the wire — the live server still sends both keys on every
+    # refunds.SelTicketInfo response, always as empty strings (40/40 on
+    # 2026-09-22). Both stay reachable through `raw`.
     "additional_service_flag": "addSrvFlg",
     "additional_service_cancel": "addSrvCancel",
 }
@@ -2736,8 +2963,12 @@ def parse_refund_ticket_detail_response(
     detail_fields = _nullable_scalar_fields(
         raw, _REFUND_TICKET_DETAIL_FIELDS, "refund ticket detail"
     )
-    # 7.0.6 TicketDetailOut의 속성명이며 실제 serializer 이름은 보호되어 있다.
-    # 새 이름이 응답에 있으면 사용하고, 기존 wire 키도 계속 읽는다.
+    # pbpAcepTgtFlg 는 TicketDetailOut.java:65 의 코틀린 필드명입니다(@SerialName
+    # 이 없어 와이어 철자는 PROTECTED). 서버가 언젠가 이 철자로 보내면 읽도록
+    # 폴백을 남겨 둡니다 — 다만 2026-09-22 라이브 40응답 전부에 없었고, 앱에서도
+    # 이 필드는 목록 행에서 주입되는 값이지 서버가 보내는 값이 아닙니다
+    # (위 _REFUND_TICKET_DETAIL_FIELDS 주석). 짝이던 h_pbp_acep_tgt_flg 매핑은
+    # 이 DTO 의 키가 아니어서 제거했습니다.
     if "pbpAcepTgtFlg" in raw:
         detail_fields["pbp_acceptance_target_flag"] = _optional_string(
             raw, "pbpAcepTgtFlg", "refund ticket detail"

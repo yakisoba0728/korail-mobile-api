@@ -154,9 +154,12 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         # Its response does not extend CommonOut -- http._NON_COMMON_OUT_READ_PATHS.
         ("POST", "/classes/com.korail.mobile.refunds.verifyOnlineRefunds"),
         # Loyalty READS. Neither carries a password and neither moves a point:
-        # MyXPointView is the my-page summary the app fetches on open
-        # (MyPageActivity.java:414) with point_dv_cd pinned to "0" by the DAO
-        # itself (KorailPointInquiryDao.java:91), and mlg.amtSpec.do is the
+        # MyXPointView is the my-page summary (NetworkApi.java:515,
+        # response MyXPointViewOut.java:27-74) with point_dv_cd pinned to
+        # "0". Its former sources MyPageActivity and KorailPointInquiryDao
+        # are 6.5.0 classes absent from the 7.0.6 decompile (checked
+        # 2026-09-22), so the pinning is unsourced for now. mlg.amtSpec.do
+        # (NetworkApi.java:274) is the
         # 적립/사용 history list. The password-bearing loyalty routes
         # (mlg.lpotAthn.do, xPoint.XPointView) are excluded -- see
         # the declined-areas note at the top of this module.
@@ -178,13 +181,18 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         #
         # self.seatChgInfo.do (TicketService.java:54-56) answers "which
         # stations and which reasons does this train allow a self seat change
-        # for", keyed by the train the ticket is already on
-        # (TCSOptionsActivity.java:128-140).
+        # for", keyed by the train the ticket is already on. The screen that
+        # fed it, TCSOptionsActivity, is a 6.5.0 class and is ABSENT from the
+        # 7.0.6 decompile (checked 2026-09-22), so the old
+        # TCSOptionsActivity.java:128-140 citation is dropped rather than
+        # re-pointed -- the 7.0.6 caller has not been traced.
         ("POST", "/classes/com.korail.mobile.self.seatChgInfo.do"),
-        # research.tripChgOgtk.do (ResearchService.java:61-63) is the 원표
+        # research.tripChgOgtk.do (NetworkApi.java:235) is the 원표
         # (원승차권) lookup the change chain starts from: it takes N 반환번호
-        # tuples and returns the original tickets' journeys and seats
-        # (OgTkInquiryDao.java:38-53). Its sibling reservation.tripChgDate.do
+        # tuples and returns the original tickets' journeys and seats. The
+        # response shape's old source, OgTkInquiryDao, is likewise a 6.5.0
+        # class absent from 7.0.6, so that citation is dropped too.
+        # Its sibling reservation.tripChgDate.do
         # is already registered above. The chain's three MUTATIONS were
         # removed on 2026-07-27 (22ba4cc); these two reads outlived them.
         ("POST", "/classes/com.korail.mobile.research.tripChgOgtk.do"),

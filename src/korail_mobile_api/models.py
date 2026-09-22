@@ -14,7 +14,7 @@
 :mod:`korail_mobile_api.mutation_models` 에 있습니다.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from .constants import (
@@ -91,6 +91,15 @@ class BaseKorailResponse:
 class AppVersionInfo:
     message: str | None = None
     new_version: str | None = None
+    #: ``CNTAURL`` — 업데이트 안내가 열 스토어 딥링크(2026-09-22 라이브에서
+    #: ``market://details…``로 시작하는 문자열). 7.0.6 DTO 가 선언하는 필드는
+    #: 정확히 셋이고(``MobilePlusMainVersion.java:52`` 의 역직렬화 생성자가
+    #: ``@SerialName("NEWDVERSION")``/``@SerialName("CNTAURL")``/
+    #: ``@SerialName("AMESSAGE")`` 딱 그 셋), 그중 이것만 여기 없었습니다 —
+    #: 안내 문구와 새 버전은 있는데 정작 보낼 곳이 없는 2/3짜리였습니다.
+    #: 앱은 ``AppKt.java:1240``·``:1323`` 에서 ``getCntAUrl()`` 로 읽어
+    #: ``AppKt.java:1635`` 의 ``DialogsKt.StoreConfirmDialog(...)`` 에 넘깁니다.
+    store_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -447,6 +456,15 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
     # 이름·docstring 이 약속하던 ``"매진"``/``"좌석부족"`` 은 앞의 키에만 옵니다.
     ("general_availability_name", "h_gen_rsv_nm", None),
     ("special_availability_name", "h_spe_rsv_nm", None),
+    #: ``h_stnd_rsv_nm``/``h_free_rsv_nm`` -- 입석·자유석 쪽의 같은 화면 문구.
+    #: ``TrainScheduleOutTrainInfo.java:1380``/``:1196`` 의 ``@SerialName``
+    #: 이고, 합성 생성자(``:172``)에서 이미 읽고 있던 일반실
+    #: ``h_gen_rsv_nm``(str42)·특실 ``h_spe_rsv_nm``(str47) 바로 옆의
+    #: str51/str53 입니다. 이 둘이 빠져 있던 동안 입석·자유석은 위의
+    #: ``h_stnd_rsv_cd``/``h_free_rsv_cd`` 코드만 이름이 붙고 정작 화면에
+    #: 찍히는 글자는 ``raw`` 로만 닿았습니다.
+    ("standing_availability_name", "h_stnd_rsv_nm", None),
+    ("free_availability_name", "h_free_rsv_nm", None),
     ("general_fare_text", "h_rsv_psb_nm", None),
     ("special_fare_text", "h_spe_rsv_psb_nm", None),
     ("wait_reservation_flag", "h_wait_rsv_flg", None),
@@ -487,7 +505,10 @@ class TrainSummary:
     ``general_reservation_code``/``special_reservation_code`` 는 일반실·특실의
     예약 가능 코드이고, ``general_availability_name``/
     ``special_availability_name``(``h_gen_rsv_nm``/``h_spe_rsv_nm``)이 화면에
-    찍히는 문구입니다(``"매진"``, ``"매진임박"``, 없으면 ``"-"``).
+    찍히는 문구입니다(``"매진"``, ``"매진임박"``, 없으면 ``"-"``). 입석·자유석도
+    같은 짝이 있습니다 — 코드는
+    ``standing_reservation_code``/``free_reservation_code``, 문구는
+    :attr:`standing_availability_name`/:attr:`free_availability_name`.
 
     ``h_rsv_psb_nm``/``h_spe_rsv_psb_nm`` 은 이름만 "예약가능"이고 값은
     **운임**이라 :attr:`general_fare_text`/:attr:`special_fare_text` 로
@@ -564,15 +585,37 @@ class TrainSummary:
     total_passenger_count: int | None = None
     goods_no: str | None = None
     #: ``h_chg_trn_seq`` — 환승 여정 안에서 이 구간의 위치. 1구간이 ``"1"``,
-    #: 2구간이 ``"2"`` 입니다(``RsvInquiryResponse.java:75``). 직통 검색에서는
-    #: ``None`` 입니다.
+    #: 2구간이 ``"2"`` 입니다(``RsvInquiryResponse.java:75``).
+    #:
+    #: 직통 검색에서 ``None`` 이라던 예전 주석은 틀렸습니다 — 직통도 서버가
+    #: ``"1"`` 을 채워 보냅니다. 2026-09-22 라이브 직통 검색 6건(서울→부산
+    #: 20260925 060000·000000, 서울→부산 20261015, 서울→동대구 20260927,
+    #: 용산→목포 20260926, 동대구→서울 20260927)의 **모든** 행이
+    #: ``h_chg_trn_seq='1'`` 이었습니다. "``None`` 이면 직통"으로 분기하면
+    #: 직통 열차가 한 건도 걸리지 않습니다. 환승 검색에서는 구간별로
+    #: ``"1"``/``"2"`` 가 옵니다(같은 날 강릉→목포 1여정, 목포→강릉 5여정 =
+    #: 12개 구간 전부).
+    #:
+    #: ``h_chg_trn_dv_cd``(:attr:`change_train_division_code`) 와 헷갈리기
+    #: 쉽습니다. 이쪽은 여정 **안에서의 순서**, 저쪽은 여정 **종류**입니다.
     #:
     #: 앱이 두 곳에서 그렇게 읽습니다. ``u4/a.java:111-131`` 은 새 페이지를
     #: 기존 행과 중복 제거할 때 ``"2"`` 행을 찾아 **그 앞 행과 함께** 버리고,
     #: ``RsvInquiryRequest.java:164-172`` 는 다음 페이지의 ``txtGoHour`` 를
     #: 마지막 행이 ``"1"`` 이면 그 행에서, 아니면 그 앞 행에서 가져옵니다.
     change_train_sequence: str | None = None
-    #: ``h_chg_trn_dv_cd`` — 행의 환승 구분. 직통 검색에서는 ``None`` 입니다.
+    #: ``h_chg_trn_dv_cd`` — 행의 환승 구분. 직통 검색에서 ``None`` 이라던
+    #: 예전 주석은 틀렸습니다 — 직통 검색에서도 값이 옵니다. 2026-09-22
+    #: 라이브에서 직통 6건(서울→부산 20260925 060000·000000, 서울→부산
+    #: 20261015, 서울→동대구 20260927, 용산→목포 20260926, 동대구→서울
+    #: 20260927)의 모든 행이 ``'1'``(같은 행의 ``h_chg_trn_dv_nm='직통'``),
+    #: 환승 6여정 12구간(강릉→목포·목포→강릉 20260926)이 전부
+    #: ``'2'``(``h_chg_trn_dv_nm='환승'``)였습니다. 관측된 두 값은
+    #: :data:`~korail_mobile_api.constants.KORAIL_DIRECT_ITINERARY_CODE`/
+    #: :data:`~korail_mobile_api.constants.KORAIL_TRANSFER_ITINERARY_CODE`
+    #: 와 같은 자릿값이지만, 그 상수는 검색 job id 씨앗이라 여기서 쓰지
+    #: 않습니다.
+    #:
     #: 이 필드를 앱이 널이면 직통으로 채워 되쓴다던 옛 서술
     #: (``DirectInquiryActivity.java:194``)은 6.5.0 잔재입니다 — 그 클래스는
     #: 7.0.6 에 없고, ``h_chg_trn_dv_cd``/``getHChgTrnDvCd`` 는 7.0.6 전체
@@ -599,6 +642,18 @@ class TrainSummary:
     #: 내용이 어긋나는 키라, 잔여 문구는 :attr:`special_availability_name`
     #: 에서 읽습니다.
     special_fare_text: str | None = None
+    #: ``h_stnd_rsv_nm`` — 입석 잔여 화면 문구.
+    #: :attr:`standing_reservation_code`(``h_stnd_rsv_cd``)가 코드이고 이쪽이
+    #: 사람이 읽는 글자라, 둘 다 있어야 화면을 그대로 재현할 수 있습니다.
+    #: 2026-09-22 라이브 값: ``'매진'``(서울→부산 20260925, 동대구→서울
+    #: 20260927), ``'역발매중'``(용산→목포 20260926), ``'-'``(서울→부산
+    #: 20261015 일부 행).
+    standing_availability_name: str | None = None
+    #: ``h_free_rsv_nm`` — 자유석 쪽 같은 문구. 값에 줄바꿈이 들어옵니다 —
+    #: 2026-09-22 서울→부산 20261015 에서 ``'역발매중\n(1량)'``,
+    #: ``'역발매중\n(2량)'`` 을 받았습니다. 한 줄에 찍을 곳이라면 호출자가
+    #: 직접 다듬어야 합니다.
+    free_availability_name: str | None = None
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -741,6 +796,12 @@ class TrainSearchMetadata:
     직접 읽을 일은 거의 없습니다. 다음 페이지는
     :meth:`TrainSearchResult.next_page` 가 이 값들로 만들어 줍니다.
 
+    다만 직통 검색에서는 ``next_page_flag='Y'`` 인데
+    ``next_query_station_no``/``next_train_no`` 가 둘 다 ``None`` 으로
+    옵니다(2026-09-22 라이브 6건). 플래그만 보고 "다음 페이지가 있다"고 읽지
+    마십시오 — 자세한 것은 :meth:`TrainSearchResult.next_page` 의 설명에
+    있습니다.
+
     7.0.6 ``TrainScheduleOut`` 는 ``h_menu_id`` 를 선언합니다. 요청의
     ``txtMenuId`` 와 별도로 서버가 되돌려 준 값을 보존합니다.
     """
@@ -832,9 +893,19 @@ def _train_search_continuation(
 class TrainSearchResult:
     """직통 열차 검색 한 페이지.
 
-    ``trains`` 가 그 페이지의 행입니다. 조건에 맞는 직통 열차가 없으면 빈
-    목록이 아니라
-    :class:`~korail_mobile_api.errors.KorailNoDirectTrainError` 가 올라옵니다.
+    ``trains`` 가 그 페이지의 행입니다. 비어 있을 수 있습니다 — 예전 서술
+    ("직통이 없으면 빈 목록이 아니라 예외")은 두 경우 중 하나만 말한 것이라
+    틀렸습니다. 서버는 이렇게 갈립니다(2026-09-22 확인):
+
+    * ``WRD000061`` — 직통은 없지만 **환승 대안이 있는** 경우.
+      :class:`~korail_mobile_api.errors.KorailNoDirectTrainError` 가
+      올라옵니다.
+    * ``WRG000000`` + ``strResult=SUCC`` — ``trn_infos`` 자체가 없는 경우.
+      아무것도 올라오지 않고 ``trains`` 가 빈 목록인 :class:`TrainSearchResult`
+      가 그대로 돌아옵니다.
+
+    그래서 예외를 잡는 것만으로는 부족하고, 호출자는 ``trains`` 가 비었는지도
+    확인해야 합니다.
 
     ``response`` 는 봉투, ``metadata`` 는 페이징 커서입니다.
     """
@@ -847,7 +918,27 @@ class TrainSearchResult:
     def next_page(self) -> TrainSearchContinuation | None:
         """다음 페이지 커서. 다음이 없으면 ``None``.
 
-        앱과 같은 게이트입니다 — ``h_next_pg_flg`` 가 ``"Y"`` 인 동안만
+        **직통 검색에서는 사실상 언제나 ``None`` 입니다.** 서버가
+        ``h_next_pg_flg='Y'`` 를 주면서 커서 두 키(``h_qry_st_no_next``,
+        ``h_trn_no_next``)를 **둘 다** ``null`` 로 보내기 때문입니다 —
+        2026-09-22 라이브 직통 6건(서울→부산 20260925 060000·000000,
+        서울→부산 20261015, 서울→동대구 20260927, 용산→목포 20260926,
+        동대구→서울 20260927)이 전부 그랬고, 반쯤 찬 커서는 아래 게이트가
+        걸러 ``None`` 이 됩니다. 손으로 ``qryStNo`` 를 ``'000010'``/``'10'``/
+        ``'11'``/``'1'`` 로 채우고 마지막 행의 열차번호를 ``qryStTrnNo`` 에
+        실어 봐도 1페이지와 똑같은 10행이 돌아옵니다(같은 날 확인). 환승
+        검색은 정상적으로 커서를 받으므로, 빠지는 쪽은 직통뿐입니다.
+
+        라이브러리가 앱과 달라서 생긴 일이 아닙니다. 7.0.6 의 기본 화면
+        (``ReservationType.DEFAULT`` — ``ReservationType.java:18``)도 직통이면
+        같은 두 키로 커서를 만듭니다: ``nextTrainScheduleData =
+        Triple(getHQryStNoNext(), getHTrnNoNext(), "")``
+        (``TrainScheduleViewModel.smali:36814-36851``, 환승일 때만
+        ``h_prcd_trn_no_next``/``h_ectb_trn_no_next`` 쌍). 그러니 앱의
+        "더 보기"도 같은 벽에 부딪힙니다. 두 번째 페이지가 필요하면
+        :meth:`next_query_from_last_departure` 를 쓰십시오.
+
+        게이트 자체는 앱과 같습니다 — ``h_next_pg_flg`` 가 ``"Y"`` 인 동안만
         "더 보기"가 살아 있습니다(``b5/c.java:381-387``). 커서 필드가 하나라도
         빠져 있어도 ``None`` 입니다. 반쯤 채운 커서는 조용히 1페이지를 다시
         요청하기 때문입니다.
@@ -856,6 +947,52 @@ class TrainSearchResult:
         return _train_search_continuation(
             metadata, query_train_no=metadata.next_train_no or ""
         )
+
+    def next_query_from_last_departure(
+        self,
+        query: TrainSearchQuery,
+    ) -> TrainSearchQuery | None:
+        """마지막 행의 출발일시로 옮겨 적은 다음 질의. 행이 없으면 ``None``.
+
+        :meth:`next_page` 가 직통에서 커서를 못 받으므로, 두 번째 페이지를
+        얻는 길은 이것뿐입니다. ``query`` 를 그대로 복사하면서
+        ``departure_date``/``departure_time`` 만 마지막 행의
+        ``h_dpt_dt``/``h_dpt_tm`` 로 바꿔 돌려줍니다. 아무것도 호출하지
+        않으므로 받은 질의를
+        :meth:`~korail_mobile_api.client.KorailClient.search_trains` 에 다시
+        넘기는 것은 호출자 몫입니다. 두 값 중 하나라도 비어 있으면 ``None``
+        입니다 — 반쯤 옮긴 질의는 엉뚱한 날짜를 조회하기 때문입니다.
+
+        **경계 행 한 줄이 겹칩니다.** 검색은 주어진 시각 "이후"를 포함하니
+        1페이지 마지막 행이 2페이지 첫 행으로 다시 옵니다 — 2026-09-22
+        라이브(서울→부산 20260925 060000, 마지막 행 ``'015'``
+        ``h_dpt_tm='075000'``)에서 2페이지 10행의 첫 행이 같은 ``'015'``,
+        나머지 9행이 새 열차였습니다. 이어 붙일 때 ``train_no`` 로 한 줄을
+        버리십시오.
+
+        앱에도 같은 방식이 있지만 **다른 화면의 것**입니다.
+        ``TrainScheduleViewModel`` 은 마지막 행의
+        ``getHDptDt()``/``getHDptTm()`` 을 ``nextTrainScheduleDataOld`` 에
+        담아 두었다가(smali:36938-36956) ``txtGoAbrdDt``/``txtGoHour``
+        (``TrainScheduleIn.java:872`` ``copy()`` 의 8·9번 인자)로 되싣는데, 그
+        분기는 ``screenMode`` 가 ``MY_N_CARD_RESERVATION``/
+        ``MY_TICKET_RESERVATION``/``MY_PASS_RESERVATION``/
+        ``MY_PASS_RESERVATION_MULTILINGUAL`` 일 때만 탑니다
+        (smali:29590-29616 의 비교가 ``:cond_b``(29740)로 뛰고, 그 복사의
+        마스크 ``-0x181`` 이 smali:29846). 이 라이브러리가 흉내내는
+        ``ReservationType.DEFAULT`` 는 ``:cond_a``(29618)로 떨어져
+        :meth:`next_page` 쪽 커서 분기를 탑니다. 즉 이 메서드는 앱의 기본
+        화면 동작이 아니라, 앱이 다른 화면에서 쓰는 우회로를 빌려 온
+        것입니다 — 그래서 이름도 ``next_page`` 와 섞이지 않게 지었습니다.
+        """
+        if not self.trains:
+            return None
+        last = self.trains[-1]
+        date = last.departure_date
+        time = last.departure_time
+        if not date or not time:
+            return None
+        return replace(query, departure_date=date, departure_time=time)
 
 
 @dataclass(frozen=True)

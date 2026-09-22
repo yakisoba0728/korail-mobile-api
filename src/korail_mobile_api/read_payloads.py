@@ -158,6 +158,14 @@ class FreeSeatCarRequest:
 
 @dataclass(frozen=True)
 class GuideSeatConditionRequest:
+    """``guideSeatCnd.do`` 입력 — 사실상 **정적 안내문** 조회입니다.
+
+    서버는 :attr:`seat_attribute_code` 가 무엇이든 같은 도우미석 안내를
+    ``FAIL``/``MRR800011`` 로 돌려줍니다(2026-09-22: 좌석속성코드 14종 전부
+    동일). 7.0.6 도 ``SeatType.HELPER`` 의 코드 하나만 보냅니다
+    (``TrainOptionViewModel.java:270``). 즉 이 값으로 결과가 갈리지 않습니다.
+    """
+
     seat_attribute_code: str = field(repr=False)
 
     def __post_init__(self) -> None:
@@ -169,6 +177,12 @@ class GuideSeatConditionRequest:
 
 @dataclass(frozen=True)
 class SeatAssignmentScheduleRequest:
+    #: ``menuId`` — 좌석배정·할인 메뉴 코드입니다. 일반 검색 메뉴 ``"11"`` 은
+    #: 빈 목록만 돌려주므로(2026-09-22 확인) 행을 받으려면 ``"A1"``/``"A2"``
+    #: (:data:`~korail_mobile_api.constants.KORAIL_DISCOUNT_CARD_MENU_ID`)를
+    #: 씁니다. 자세한 것은
+    #: :meth:`~korail_mobile_api.client.KorailClient.get_seat_assignment_schedule`
+    #: docstring 참조.
     menu_id: str = field(repr=False)
     departure_date: str = field(repr=False)
     departure_time: str = field(repr=False)
@@ -331,7 +345,14 @@ class PassScheduleRequest:
     pass_kind_code: str = field(repr=False)
     pass_period_code: str = field(repr=False)
     pass_age_code: str = field(repr=False)
+    #: ``txtSelPage`` — **이 라우트는 무시합니다.** 어떤 값을 넣어도 응답의
+    #: ``h_page_no`` 는 ``'1'`` 로 돌아왔고(2026-09-22 실측), 7.0.6 도
+    #: ``CheckUsagePeriodSectionViewModel.java:389`` 에서 ``'1'`` 을 박아
+    #: 보냅니다. 더 받으려면 이 값이 아니라 :attr:`page_size` 를 키우십시오.
+    #: 응답 쪽 페이징 신호도 믿을 수 없습니다 —
+    #: :class:`~korail_mobile_api.read_models.PassScheduleMainInfo` 참조.
     page_no: str = field(repr=False)
+    #: ``txtSelCnt`` — 실제로 결과 수를 정하는 값입니다.
     page_size: str = field(repr=False)
     departure_station_name: str = field(repr=False)
     arrival_station_name: str = field(repr=False)
@@ -639,7 +660,13 @@ def build_multi_child_discount_target_form(
 
 
 def build_korail_point_summary_form() -> dict[str, str]:
-    """Constant form — ``KorailPointInquiryDao.java:87-92``."""
+    """``xPoint.MyXPointView`` 의 고정 폼 (``NetworkApi.java:515``).
+
+    ``point_dv_cd`` 가 ``"0"`` 으로 고정인 근거였던 ``KorailPointInquiryDao``
+    는 6.5.0 클래스라 7.0.6 디컴파일에 없습니다(2026-09-22 확인). 값 자체는
+    라이브로 동작하지만 고정 이유의 출처는 지금 없습니다 — **미출처**로
+    두고, 7.0.6 호출 지점을 찾으면 그때 채우십시오.
+    """
     return {"point_dv_cd": "0"}
 
 
@@ -649,11 +676,13 @@ KorailMileageLedger = Literal["1", "2"]
 #: ``"0"`` 전체, ``"1"`` 적립, ``"2"`` 사용.
 KorailMileageMovement = Literal["0", "1", "2"]
 
-#: ``MileageHistoryActivity.java:289,543`` KTX, ``:313`` 철도포인트.
+#: 원래 근거였던 ``MileageHistoryActivity`` 는 6.5.0 클래스로 7.0.6
+#: 디컴파일에 없습니다(2026-09-22 확인). 두 값 모두 라이브로는 동작하지만
+#: 출처가 없으므로 **미출처** 상수로 둡니다.
 KORAIL_MILEAGE_LEDGER_KTX: KorailMileageLedger = "1"
 KORAIL_MILEAGE_LEDGER_RAIL_POINT: KorailMileageLedger = "2"
 
-#: ``MileageHistoryActivity.java:566`` 드롭다운 인덱스(``:502``).
+#: 위와 같은 이유로 **미출처**입니다(``MileageHistoryActivity`` 부재).
 KORAIL_MILEAGE_MOVEMENT_ALL: KorailMileageMovement = "0"
 KORAIL_MILEAGE_MOVEMENT_EARNED: KorailMileageMovement = "1"
 KORAIL_MILEAGE_MOVEMENT_SPENT: KorailMileageMovement = "2"
@@ -672,7 +701,7 @@ _KORAIL_MILEAGE_MOVEMENTS = frozenset(
 
 @dataclass(frozen=True)
 class MileageHistoryRequest:
-    """마일리지 내역 조회 입력 (``XPointService.java:26-28``).
+    """마일리지 내역 조회 입력 (``mlg.amtSpec.do``, ``NetworkApi.java:274``).
 
     기본값: KTX 마일리지 원장, 전체 증감, 페이지 1.
     ``start_date``/``end_date`` 는 호출자가 반드시 제공해야 합니다.
@@ -709,20 +738,21 @@ def build_mileage_history_form(
         "qryDvVal": request.movement,
         "qryStDt": start_date,
         "qryClsDt": end_date,
-        # MileageHistoryActivity.java:274 -- a literal, every call.
+        # 매 호출 같은 리터럴입니다. 근거였던 MileageHistoryActivity 는
+        # 6.5.0 클래스라 7.0.6 에 없어(2026-09-22 확인) 지금은 미출처입니다.
         "pgPrCnt": "20",
         "nowPgNo": _positive_int(request.page_no, "page_no"),
     }
 
 
 def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
-    """``ticket.dcntCrdUseQry.do`` — ``ResearchService.java:51-52``."""
+    """``ticket.dcntCrdUseQry.do`` — ``NetworkApi.java:218``."""
     return {"dcntCrdNo": _required_text(card_no, "card_no")}
 
 
 @dataclass(frozen=True)
 class DiscountCardScheduleRequest:
-    """할인카드 운행일정 조회 입력 (``ResearchService.java:54-55``).
+    """할인카드 운행일정 조회 입력 (``NetworkApi.java:340``).
 
     1구간 N카드: ``u4/b.java:52-65``, v2 카드: ``u4/b.java:67-81``.
     기본값은 두 빌더 공통 상수. ``dptTm`` ``"000000"``, ``trnGpCd`` ``"109"``
@@ -784,9 +814,23 @@ _B2N_CARD_KIND_MANAGEMENT_NOS = frozenset({"B2N18120402", "B2N18120403"})
 def build_discount_card_schedule_query(
     request: DiscountCardScheduleRequest,
 ) -> dict[str, str]:
-    """``useTrmDno``/``qryPgNo`` 는 ``None`` 이면 생략 — Retrofit null @Query
-    (``ResearchService.java:54-55``; 생략 가능한 필드 목록은
-    삭제된 테스트 픽스처의 ``KORAIL_OPTIONAL_REQUEST_FIELDS`` 가 이를 기록했었다).
+    """``useTrmDno``/``qryPgNo`` 는 ``None`` 이면 생략합니다 — Retrofit 은 널
+    ``@Query`` 를 빼기 때문입니다.
+
+    다만 **앱은 그 둘을 항상 채워 보냅니다.**
+    ``CheckUsageNCardSectionViewModel.java:396`` 의
+    ``new NCardScheduleIn(...)`` 는 인자 11개를 모두 비어 있지 않게 넘기고,
+    기간·횟수는 ``StringExKt.convertOnlyInt`` 를 거친 값입니다. 즉 생략
+    경로는 앱에 없는 모양입니다.
+
+    그래도 기본값을 바꾸지 않은 이유는 **확인할 수 없기 때문**입니다.
+    ``NCardScheduleIn`` 의 ``@SerialName`` 은 공통 셋(``Device``/``Version``/
+    ``Key``)말고는 AlienGuard 로 싸여 있어 두 키의 전선 철자를 정적으로 읽을
+    수 없고, 이 라우트는 할인카드 보유를 먼저 검사해(``EAZ000028``) 카드 없는
+    계정으로는 생략 여부의 차이를 라이브로 볼 수 없습니다. 같은 종류의
+    추측이 리무진 ``ymsAplFlgYMS`` 에서 이미 한 번 필드를 죽였습니다 —
+    속성명을 전선 키로 베껐다가 값이 늘 ``None`` 이었습니다. 카드를 가진
+    계정이 생기면 그때 확인하고 바꾸십시오.
     """
     if type(request) is not DiscountCardScheduleRequest:
         raise TypeError("request must be an exact DiscountCardScheduleRequest")
@@ -954,7 +998,14 @@ class OriginalTicketReference:
         :meth:`~korail_mobile_api.client.KorailClient.get_refund_ticket_detail`,
         :meth:`~korail_mobile_api.client.KorailClient.get_original_ticket_inquiry`,
         그리고 :class:`StationRefundVerificationRequest` 의 ``return_no_2``.
-        8자리를 주면 각각 ``ERZ800027``/``WRT200408``/``WRT100124`` 입니다.
+
+        8자리를 줬을 때 오는 코드는 엔드포인트마다 다릅니다 — 예전에
+        여기 적혀 있던 "각각" 순서는 틀렸습니다(2026-09-22 재확인):
+        ``get_refund_commission`` → ``WRT200408``,
+        ``get_refund_ticket_detail`` → ``ERZ800027``,
+        ``get_original_ticket_inquiry`` → ``ERZ800027``,
+        ``return_no_2`` → ``WRT100124``. 마지막 것은 자릿수 전용이 아니라
+        반환번호가 형식에 안 맞을 때 두루 오는 코드라 6자리에도 옵니다.
 
     8자리 ``YYYYMMDD``(:attr:`~korail_mobile_api.read_models.TicketListTicket.sale_date`)
         :meth:`~korail_mobile_api.client.KorailClient.get_delivery_recipient`
@@ -1079,7 +1130,7 @@ def build_original_ticket_inquiry_form(
     *,
     ticket_count: int | None = None,
 ) -> tuple[tuple[str, str | int], ...]:
-    """원표 조회 순서 폼 (``ResearchService.java:61-63``).
+    """원표 조회 순서 폼 (``research.tripChgOgtk.do``, ``NetworkApi.java:235``).
 
     인덱스 키 순서는 ``ROrtg.java:8-11`` 선언 순서. ``ticket_count`` 는
     호출 지점마다 다른 값을 보냄 — 승객수/행수/리터럴 1

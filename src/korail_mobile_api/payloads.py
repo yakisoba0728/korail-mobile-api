@@ -15,6 +15,7 @@ APK 의 Retrofit 선언에서 나왔습니다. 그것을 고정하던 테스트�
 라우트와 변경 폼의 값 모양만 보고 필드 이름·순서는 강제하지 않습니다.
 """
 import time
+from collections.abc import Sequence
 from typing import TypeGuard
 
 from .config import KorailConfig
@@ -480,7 +481,7 @@ def build_train_schedule_form(
 
 def build_common_code_form(
     config: KorailConfig,
-    code: str | list[str],
+    code: str | Sequence[str],
     *,
     depart_date: str = "",
     arrival_date: str = "",
@@ -488,11 +489,27 @@ def build_common_code_form(
 ) -> dict[str, object]:
     """``common.code.do`` 의 공통코드 조회 폼을 만듭니다.
 
-    ``code`` 는 문자열 하나이거나 목록이며, 하나를 줘도 목록으로 감싸 보냅니다 —
-    전선에서는 같은 이름의 반복 키가 됩니다.
+    ``code`` 는 문자열 하나이거나 시퀀스이며, 하나를 줘도 목록으로 감싸 보냅니다 —
+    전선에서는 같은 이름의 반복 키가 됩니다. 7.0.6 이 같은 경로에 바인딩을 둘
+    선언한 것과 맞습니다: ``postCommonCode(@FieldMap)``
+    (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:317``)와
+    ``postCommonCodeMulti(@FieldMap, @Field("code") List<String>)``(``:321``).
 
     ``depart_date``·``arrival_date``·``holiday_yn`` 은 비어 있으면 키 자체가
     빠집니다. 화면 크기와 ``OSVersion``(안드로이드 SDK 정수)은 설정에서 옵니다.
+
+    **그 세 인자는 7.0.6 에 대응물이 없습니다.** 요청 DTO
+    ``analysis/jadx/sources/com/korail/talk/network/model/CommonCodeIn.java:31-34``
+    와 그 합성 생성자의 ``@SerialName`` 목록(``:55``)이 선언하는 필드는
+    ``Device``·``Version``·``Key``·``Lang``·``code``·``deviceWidth``·
+    ``deviceHeight``·``OSVersion`` 여덟 개뿐이고, ``departDate``·``holidayYn`` 은
+    ``analysis/jadx/sources/com/korail/`` 전체에 검색 결과가 0 입니다. 2026-09-22
+    실서버에서도 무해했습니다 — ``app.holiday.popup`` 을 ``depart_date``
+    ``"20260925"``/``arrival_date`` ``"20260926"``/``holiday_yn`` ``"Y"`` 와 함께
+    보낸 응답 값이 세 키를 뺀 평범한 호출과 같았습니다. 즉 앱이 만든 적 없는
+    전선 모양이면서 서버도 무시하는 값이라, 공개 메서드
+    :meth:`~korail_mobile_api.KorailClient.get_common_code` 는 일부러 노출하지
+    않습니다. 여기 남겨 둔 것은 순전히 그 관측 기록을 위해서입니다.
 
     로그인 직전에 비밀번호 암호화 파라미터를 받아 오는 것도 이 라우트입니다
     (:meth:`~korail_mobile_api.session.KorailSessionClient.get_login_crypto_info`).
@@ -500,7 +517,7 @@ def build_common_code_form(
     form: dict[str, object] = {
         **_device_version(config),
         "Key": config.key,
-        "code": [code] if isinstance(code, str) else code,
+        "code": [code] if isinstance(code, str) else list(code),
         "deviceWidth": config.device_width,
         "deviceHeight": config.device_height,
     }

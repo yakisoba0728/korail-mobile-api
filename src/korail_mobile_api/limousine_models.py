@@ -182,6 +182,22 @@ class LimousineSchedule:
     train_order_no: str | None = None
     yms_application_flag: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    #: ``rcvdPrc`` — 이 편의 운임. 행에 있는 **유일한** 금액 필드인데 한동안
+    #: 이름이 붙어 있지 않아 ``raw`` 로만 닿았습니다. 7.0.6 DTO 는 21개 String
+    #: 필드를 선언하고(``ScdlQryOutTrain.java:29-49``) 그중 ``rcvdPrc`` 는
+    #: ``:40`` 에 있습니다 — 게터 ``getRcvdPrc()`` 가 ``:389``, ``copy()`` 의
+    #: 21번째 인자가 ``:428`` 입니다. 실서버도 빠뜨리지 않습니다:
+    #: 2026-09-22 라이브 9개 변형 359행 전부에 있었습니다.
+    #:
+    #: 값은 0으로 앞을 채운 14자리 원 단위 숫자 문자열입니다 — 2026-09-22
+    #: 광명→인천공항T1 20260925 의 42행이 모두 ``'00000000016000'``(16,000원)
+    #: 이었습니다. 형제 필드들과 마찬가지로 손대지 않은 문자열로 둡니다:
+    #: ``int`` 로 바꾸면 자릿수 채움이 사라지고, 같은 맵의 나머지 20개도 전부
+    #: 널 가능 문자열입니다.
+    #:
+    #: ``raw`` **뒤**에 있는 것은 의도입니다. 앞에 끼워 넣으면 ``raw`` 의
+    #: 위치 인자 자리가 한 칸 밀립니다.
+    received_price: str | None = None
 
 
 @dataclass(frozen=True)
