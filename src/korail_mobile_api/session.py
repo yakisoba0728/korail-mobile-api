@@ -5,7 +5,21 @@
 """로그인·로그아웃과 세션 상태.
 
 :class:`KorailSessionClient` 가 로그인 왕복을 수행합니다.
-로그인 성공 코드: ``IRZ000001``, ``S200``(``S4/u.java:131``).
+로그인 성공 코드: ``IRZ000001``, ``S200`` — :data:`KORAIL_LOGIN_SUCCESS_CODES`.
+옛 인용 ``S4/u.java:131`` 은 6.5.0 이고 7.0.6 디컴파일에 없으며(2026-09-22
+확인), **7.0.6 은 로그인 성공을 이런 코드 화이트리스트로 판정하지 않습니다.**
+``analysis/jadx/sources/com/korail/talk/ui/screen/login/LoginViewModel.java:1216``
+이 ``((LoginOut) success.getData()).isSuccess()`` 를 부르고, 그 구현은
+``network/model/CommonOut.java:550-555`` 의 ``!commonFail()`` 이며,
+``commonFail()``(``:455-463``)은 ``h_msg_cd`` 가 아니라 ``strResult`` 를
+AlienGuard 로 보호된 리터럴 하나와 비교합니다(그 리터럴은 복원되지 않습니다 —
+PROTECTED). 두 코드 자체는 실서버 관측에서 온 것이고, 7.0.6 사전에서
+``IRZ000001`` 은 범용 성공 문구("정상적으로 조회 되었습니다.")이지만
+``S200`` 은 로그인과 무관한 문구로 실려 있습니다("발권하신 승차권 중 운행이
+중지된 열차가 있습니다…", ``analysis/apktool/assets/error_json.json``). 즉
+``S200`` 을 로그인 성공으로 보는 근거는 7.0.6 어디에도 없습니다 — 코드는
+그대로 두되(관측 기반, 좁히는 쪽이 로그인 실패를 낳을 수 있음) 출처는
+미확인으로 적어 둡니다.
 ``txtInputFlg``: ``"2"``=회원번호, ``"4"``=휴대폰, ``"5"``=이메일.
 """
 from __future__ import annotations
@@ -172,12 +186,29 @@ def build_login_authentication_post_data(
     순서 POST" 는 이 저장소가 검증한 바 없는 날조였다. 실제 메커니즘은
     ``h_msg_cd`` 값에 따라 분기하는 **WebView GET 내비게이션** 이다:
 
-    - ``h_msg_cd == "-699977554"``(휴면 계정)는
+    **``-699977554``/``-699974646`` 는 ``h_msg_cd`` 의 평문이 아니다.**
+    ``LoginViewModel.java:1391-1392`` 는 ``hMsgCd`` 를 읽어
+    ``switch (hMsgCd.hashCode())`` 로 분기하므로, 아래 숫자는 Java
+    ``String.hashCode()`` 값이다. 각 ``case`` 안에서 ``hMsgCd`` 를 **다시**
+    AlienGuard 로 보호된 별도 문자열과 비교하므로(``:1394``, ``:1436``) 실제
+    코드 문자열은 바이트코드에서 복원되지 않는다(PROTECTED). 다만 해시가
+    일치하는 후보는 사전에서 찾을 수 있다 —
+    ``hashCode("WRC000116") == -699977554``
+    (``analysis/apktool/assets/error_json.json:3808``, "…휴면고객으로 전환
+    되었습니다…"), ``hashCode("WRC000420") == -699974646``
+    (``:10312``, "6개월 이상 동일한 비밀번호를 사용하고 있습니다…"). 해시
+    일치는 보강 근거일 뿐 보호 문자열의 복호화가 아니다.
+
+    - 해시 ``-699977554``(휴면 계정)는
       ``base_url + strRedirectUrl + "?" + COMMON_PARAMETER + <리터럴> +
       loginId + <리터럴> + inputFlag`` 를 만들어
-      ``navigationService.goForResult(new SimpleWebRoute(...))`` 로 넘긴다
-      (``LoginViewModel.java:1397-1418``).
-    - ``h_msg_cd == "-699974646"``(비밀번호 변경 필요)는 다른 URL —
+      확인 대화상자를 띄우고, 사용자가 긍정을 누르면
+      ``navigationService.goForResult(new SimpleWebRoute(str, …))`` 로 넘긴다
+      (``LoginViewModel.java:1396-1418`` — 문자열 조립은 ``:1399`` 한 줄,
+      대화상자는 ``:1400-1421``, ``goForResult`` 는 그 Positive 콜백 안
+      ``:1416-1418``). ``base_url`` 과 ``strRedirectUrl`` 사이에 ``"/"`` 가
+      없다.
+    - 해시 ``-699974646``(비밀번호 변경 필요)는 다른 URL —
       ``base_url + "/" + strRedirectUrl + "?" + COMMON_PARAMETER + <리터럴>
       + strMbCrdNo + <리터럴> + strCustNo`` — 를 만든다(``:1435-1443``).
       ``loginId``/``inputFlag`` 가 아니라
@@ -306,9 +337,25 @@ class KorailSessionClient:
     ) -> KorailSession:
         """회원 자격증명으로 로그인합니다.
 
-        ``POST login.Login``(``LoginService.java:19``). 필드 순서:
+        ``POST login.Login``
+        (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:458-460``
+        ``postLogin(@FieldMap …)``). 아래 ``_login`` 이 만드는 필드 순서는
         Device, Version, Key, txtMemberNo, txtPwd, txtInputFlg, checkValidPw,
-        custId, etrPath, idx(``LoginDao.java:240``).
+        custId, etrPath, idx 입니다.
+
+        옛 인용 ``LoginService.java:19`` / ``LoginDao.java:240`` 은 6.5.0 이고
+        7.0.6 디컴파일에 없습니다. 7.0.6 의 순서는 요청 DTO 의 직렬화
+        디스크립터에서 읽을 수 있는데 **위 순서와 다릅니다** —
+        ``network/model/LoginIn$$serializer.java:33-43`` 이 11개 원소를
+        등록하고(이름 문자열은 전부 AlienGuard 보호 → PROTECTED), 인덱스와
+        프로퍼티의 대응은 ``LoginIn.java:57-76`` 의 비트마스크로 확정됩니다:
+        0 Device, 1 Version, 2 Key, 3 lang, 4 txtInputFlg, 5 txtMemberNo,
+        6 txtPwd, 7 custId, 8 checkValidPw, 9 etrPath, 10 idx. 즉 7.0.6 은
+        ``txtInputFlg`` 를 ``txtMemberNo``/``txtPwd`` 앞에, ``custId`` 를
+        ``checkValidPw`` 앞에 두고, ``lang`` 을 네 번째 원소로 갖습니다.
+        폼은 ``@FieldMap`` 이라 순서가 계약인지 확인된 바 없고 이 패키지의
+        순서로 실서버 로그인이 성공하므로 코드는 그대로 두되, 옛 주장이
+        7.0.6 근거를 갖지 않는다는 사실을 여기 적어 둡니다.
 
         ``strRedirectUrl`` 이 오면
         :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired`.
@@ -389,8 +436,18 @@ class KorailSessionClient:
         crypto_info = self.get_login_crypto_info()
         transformed = transform_login_password(password, crypto_info)
         resolved_input_flag = input_flag or infer_login_input_flag(member_no)
-        # Field order mirrors LoginService.java:19 / LoginDao.java:240.
-        # Retrofit drops null @Field, so do we.
+        # Field order below is this package's own, not a 7.0.6 replica --
+        # see login_with_member_no's docstring. The old LoginService.java:19 /
+        # LoginDao.java:240 citations are 6.5.0 and absent from the 7.0.6
+        # decompile (checked 2026-09-22); 7.0.6's LoginIn descriptor order is
+        # Device, Version, Key, lang, txtInputFlg, txtMemberNo, txtPwd,
+        # custId, checkValidPw, etrPath, idx
+        # (LoginIn$$serializer.java:33-43 + LoginIn.java:57-76). The field
+        # NAMES here are confirmed as LoginIn's Kotlin property names
+        # (LoginIn.java:29-35); their exact wire spelling is PROTECTED because
+        # LoginIn carries no @SerialName except the CommonIn four.
+        # Retrofit drops null @Field
+        # (retrofit2/ParameterHandler.java:252-259), so do we.
         form = {
             "txtMemberNo": member_no,
             "txtPwd": transformed,

@@ -160,16 +160,33 @@ def _received_amount(
 ) -> str | None:
     """앱이 정산할 금액을 앱이 계산하는 방식대로 복원합니다.
 
-    ``PaymentActivity.G0()``(``:186-199``)은 좌석마다
-    ``h_seat_prc + h_seat_fare`` 를 ``totalAmount`` 에,
-    ``(h_seat_prc + h_seat_fare) - h_rcvd_amt`` 를 ``discountAmount`` 에 더한 뒤
-    ``mReceivedAmount = totalAmount - discountAmount`` 로 둡니다. 대수적으로
-    좌석별 ``h_rcvd_amt`` 의 단순 합입니다.
+    이 함수가 하는 일은 좌석별 ``h_rcvd_amt`` 를 더하고, 응답이 선언한
+    ``h_tot_rcvd_amt`` 와 맞춰 보는 것입니다. 좌석 합을 **1차 출처**로 두는
+    선택은 이 패키지의 것이며, 아래 근거 정정 뒤에도 그대로입니다.
 
-    그래서 여기서도 좌석 합이 **1차 출처**입니다. ``h_tot_rcvd_amt`` 는 지름길로
-    보이지만 APK 안에 그 값이 ``hidMnsStlAmt1`` 에 닿는 살아 있는 경로가 없습니다
-    (``PaymentActivity.java:169`` 가 다시 계산하는 가지를 탑니다). 좌석 행이 아예
-    없는 응답에서만 대체 출처로 씁니다.
+    **인용 정정(2026-09-22).** 종전 독스트링은 ``PaymentActivity.G0()``
+    (``:186-199``)의 좌석별 ``h_seat_prc + h_seat_fare`` 재계산을 근거로
+    들고, ``h_tot_rcvd_amt`` 는 ``hidMnsStlAmt1`` 에 닿는 살아 있는 경로가
+    없다고(``PaymentActivity.java:169``) 단언했습니다. ``PaymentActivity`` 는
+    6.5.0 클래스이고 7.0.6 디컴파일에 없습니다. 7.0.6 에서 실제로 확인되는
+    것은 반대에 가깝습니다:
+
+    * ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:11303-11307``
+      (``initAmountData()``, ``:11222``)이 ``ReservationOut.getHTotRcvdAmt()``
+      를 예약 목록에 걸쳐 **그냥 더합니다**(여정변경 분기는 ``:11297-11301``
+      에서 ``scnIndcAmt``). 즉 ``h_tot_rcvd_amt`` 는 7.0.6 에서 죽은 필드가
+      아닙니다.
+    * 좌석별 ``h_seat_prc``/``h_seat_fare`` 를 다시 더하는 코드는 7.0.6 에
+      없습니다 — ``getHSeatPrc()``/``getHSeatFare()`` 호출자가 0건입니다.
+    * 그 합계가 ``hidMnsStlAmt<N>`` 로 들어가는 마지막 한 걸음은
+      ``analysis/jadx/sources/com/korail/talk/common/helper/PaymentMethodHelper.java:113``
+      (``getCardRequest``, ``:89``)와 ``:211``(``getEasyRequest``, ``:147``)이
+      **AlienGuard 로 보호된 키**로 ``Bundle`` 에서 값을 꺼내는 자리라
+      정적으로 이어 붙을 수 없습니다 — 미출처입니다.
+
+    그러므로 "좌석 합이 1차"라는 규칙은 앱 동작의 재현이 아니라 이 패키지의
+    보수적 선택으로 읽어야 합니다. 좌석 행이 아예 없는 응답에서만
+    ``h_tot_rcvd_amt`` 를 단독 출처로 씁니다.
 
     두 출처를 모두 읽을 수 있는데 값이 다르면 하나를 고르지 않고 거부합니다.
     둘 다 쓸 수 없으면 부분적인 숫자 대신 ``None`` 을 돌려줍니다.

@@ -9,11 +9,25 @@
 
 목록 키를 다루는 방식은 라우트마다 다르지 않습니다. 스케줄 조회의 ``trainList``,
 좌석이동 목록의 ``trn_infos``, 좌석 재고의 ``seatList`` 모두 없거나 ``null`` 이면
-빈 결과일 뿐입니다 — ``seatList`` 도 마찬가지인 것은 ``TResidualSeatsResearchOut``
-의 컴파일된 기본 생성자가 그렇게 정의하기 때문입니다
+빈 결과일 뿐입니다 — ``seatList`` 도 마찬가지인데, 근거는 한 줄이 아니라 두
+군데입니다. **키 누락**은 컴파일된 기본 생성자가 직접 정의합니다
 (``TResidualSeatsResearchOut.java:79``:
-``this.seatList = (i & 128) == 0 ? emptyList() : list;``). 키가 있는데 리스트가
-아니면 셋 다 여전히 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+``this.seatList = (i & 128) == 0 ? emptyList() : list;`` — 출현 비트가 없을
+때만 ``emptyList()`` 이고, 이 줄은 명시적 ``null`` 에 대해서는 아무 말도
+하지 않습니다). **명시적 ``null``** 은 앱의 kotlinx Json 설정이 처리합니다 —
+``coerceInputValues = true`` 라서 널 불가 프로퍼티에 온 ``null`` 이 예외가
+아니라 기본값으로 강제됩니다
+(``analysis/jadx/sources/com/korail/talk/network/di/NetworkModule.java:858-862``
+``providesNetworkJson()``, 같은 설정이
+``analysis/jadx/sources/com/korail/talk/network/NetworkServiceKt.java:25-29``
+``KJson`` 에도 글자까지 같게 있습니다:
+``ignoreUnknownKeys``/``encodeDefaults``/``coerceInputValues``/``isLenient``
+는 참, ``explicitNulls`` 는 거짓. AppSuit 가 불리언 리터럴을
+``Integer.parseInt(AlienGuard…) > 0``(참) / ``> 1``(거짓) 로 바꿔 놓은
+것이어서, 다섯 줄 중 ``setExplicitNulls`` 한 줄만 ``> 1`` 입니다 — 같은 관용구
+판독은 ``ErrorHelper.java:47-49`` 의 ``checkNotNullParameter`` 인수 순서로
+교차 확인됩니다). 키가 있는데 리스트가 아니면 셋 다 여전히
+:class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
 """
 from __future__ import annotations
 
@@ -95,10 +109,14 @@ _SCHEDULE_FIELDS = {
     "train_class_code": "stlbTrnClsfCd",
     "service_code": "trnGpCd",
     "train_no": "trnNo",
-    # ScdlQryOutTrain.java:48,68 의 Kotlin **속성명**은 trnOrdrNo 와
-    # ymsAplFlgYMS 이고, @SerialName 인덱스는 AlienGuard 로 싸여 있어
-    # 정적으로는 전선 철자를 못 읽습니다. 그래서 한때 속성명을 그대로
-    # 베꼬았는데, 전선 키는 속성명이 아니라 @SerialName 입니다 — 실서버는
+    # ScdlQryOutTrain.java:48-49 의 Kotlin **속성명**은 trnOrdrNo 와
+    # ymsAplFlgYMS 입니다. 전에 :48,68 로 적었는데 68행은 빈 줄이었습니다.
+    # 이 클래스에는 @SerialName 이 하나도 없고(파일 전체 0건), 전선 이름은
+    # ScdlQryOutTrain$$serializer.java:35-55 의 addElement() 인수 21개로만
+    # 남는데 전부 AlienGuard 로 싸여 있어 정적으로는 철자를 못 읽습니다
+    # (YMS 칸은 인덱스 5 = :40, write$Self 의 index 5 와 같은 자리).
+    # 그래서 한때 속성명을 그대로 베꼬았는데, 전선 키는 속성명이 아니라 그
+    # descriptor 의 이름입니다 — 실서버는
     # ``ymsAplFlg`` 를 보냅니다(2026-09-22 확인). 속성명을 쓰는 동안
     # ``yms_application_flag`` 는 언제나 ``None`` 이었습니다. 속성명과
     # 전선 철자가 갈리는 자리에서는 **라이브가 근거**입니다.
@@ -165,9 +183,12 @@ def parse_limousine_seat_inventory_response(
     """``lms.TResidualSeatsResearch.do`` 의 응답을 파싱합니다.
 
     봉투가 정확히 ``SUCC`` 여야 합니다. ``seatList`` 키가 없거나 ``null`` 이면
-    빈 결과로 취급합니다 — ``TResidualSeatsResearchOut`` 의 컴파일된 기본
-    생성자가 그렇게 정의합니다(``TResidualSeatsResearchOut.java:79``). 키가
-    있는데 리스트가 아니면
+    빈 결과로 취급하는데, 두 경우의 근거가 다릅니다 — **키 누락**은
+    컴파일된 기본 생성자가(``TResidualSeatsResearchOut.java:79``, 출현 비트가
+    없을 때만 ``emptyList()``), **명시적 ``null``** 은 앱의 Json 설정
+    ``coerceInputValues = true`` 가(``NetworkModule.java:858-862`` 와
+    ``NetworkServiceKt.java:25-29``) 각각 담당합니다. :79 한 줄만으로는 명시
+    ``null`` 을 설명할 수 없습니다. 키가 있는데 리스트가 아니면
     :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
 
     같은 DTO(``research.TResidualSeatsResearch.do`` 와 공유 —

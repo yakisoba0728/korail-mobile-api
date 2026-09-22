@@ -87,7 +87,13 @@ def build_limousine_schedule_form(
 ) -> dict[str, str]:
     """``lmu.scdlQry.do`` 의 운행 스케줄 조회 폼을 만듭니다.
 
-    ``BusReservationService.java:27``. 역은 역이름이 아니라 4자리 역코드
+    ``BusReservationService.java:27`` 을 인용하던 자리입니다. 7.0.6 에 그
+    클래스는 없고, 같은 라우트 선언은
+    ``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:654-656``
+    의 ``postScdlQry()`` 입니다 — ``@FormUrlEncoded`` + ``@POST`` 에
+    ``@FieldMap Map<String, String>`` 이라, 이 빌더가 폼을 만드는 것 자체는
+    거기서 확인됩니다. 필드 이름·분기가 옛 클래스와 같다는 뜻은 아닙니다.
+    역은 역이름이 아니라 4자리 역코드
     (``dptRsStnCd``/``arvRsStnCd``)이고, 날짜는 ``YYYYMMDD``, 시각은
     ``HHMMSS`` 입니다.
     """
@@ -122,7 +128,13 @@ def build_limousine_seat_inventory_form(
 ) -> dict[str, str]:
     """``lms.TResidualSeatsResearch.do`` 의 좌석 재고 조회 폼을 만듭니다.
 
-    ``BusReservationService.java:31``. 두 값만 문자열이 아닌 파이썬 값에서
+    ``BusReservationService.java:31`` 을 인용하던 자리입니다. 7.0.6 에 그
+    클래스는 없고, 같은 라우트 선언은
+    ``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:269-271``
+    의 ``postAirportBusTResidualSeatsResearch()`` 입니다(``@FormUrlEncoded``
+    + ``@POST`` + ``@FieldMap Map<String, String>``, 응답 DTO 는
+    ``TResidualSeatsResearchOut``). 필드 이름·분기가 옛 클래스와 같다는 뜻은
+    아닙니다. 두 값만 문자열이 아닌 파이썬 값에서
     옵니다 — ``totPsgCnt`` 는 ``str(int)``, ``isArrow`` 는 ``"Y"``/``"N"`` 이
     아니라 ``"true"``/``"false"`` 입니다.
 

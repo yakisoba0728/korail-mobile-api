@@ -360,10 +360,18 @@ def parse_train_search_metadata(
         next_page_flag=optional("h_next_pg_flg"),
         next_query_station_no=optional("h_qry_st_no_next"),
         next_train_no=optional("h_trn_no_next"),
-        # The 환승 cursor pair (b5/c.java:370-371). Read on every response
-        # because the app reads them on every response; they simply come back
-        # empty for a direct search, and TransferSearchResult.next_page applies
-        # the app's both-non-empty rule.
+        # The 환승 cursor pair. Both keys are declared on the 7.0.6 response
+        # DTO (TrainScheduleOut.java:28,33; @SerialName list at :67), so they
+        # are read on every response; they simply come back empty for a direct
+        # search. The old citation b5/c.java:370-371 is a 6.5.0 leftover with
+        # no 7.0.6 counterpart. Where 7.0.6 consumes them is only readable in
+        # smali (jadx failed on responseTrainSchedule):
+        # smali_classes5/.../TrainScheduleViewModel.smali:36806-36845 builds
+        # Triple(hQryStNoNext, hPrcdTrnNoNext, hEctbTrnNoNext) for the transfer
+        # form. Note the app picks that form off the echoed strJobId
+        # (:35651-35698), NOT off "both halves non-empty" -- the both-non-empty
+        # rule that TransferSearchResult.next_page applies is this package's
+        # own, live-verified choice, documented there.
         next_preceding_train_no=optional("h_prcd_trn_no_next"),
         next_connecting_train_no=optional("h_ectb_trn_no_next"),
         result_count=optional("h_rslt_cnt"),
@@ -561,22 +569,36 @@ def parse_train_calendar_response(
 ) -> TrainCalendarResponse:
     """``schedule.runDt`` 열차운행달력을 파싱합니다.
 
-    ``runningCalendar`` 가 없거나 ``null`` 이면 빈 날짜 튜플입니다. 앱도 그렇게
-    다룹니다 — ``makeAvailableDatesFactory`` 가 SUCC 응답에서 리스트를 null 검사
-    하고(``C0805e.java:124``) ``getRunningCalendarList``
-    (``TrainCalendarDao:101-103``)가 nullable ``List`` 입니다. 값이 있는데
+    라우트 선언은 ``NetworkApi.java:651-652``(``postRunDate(@FieldMap)``)입니다.
+
+    ``runningCalendar`` 가 없거나 ``null`` 이면 빈 날짜 튜플입니다. 7.0.6 도 없는
+    경우를 빈 목록으로 다룹니다 — ``RunDateOut.java:28`` 의
+    ``List<RunDateOutItem> runningCalendar`` 는 키가 빠지면
+    ``CollectionsKt.emptyList()`` 로 채워지고(``:57-58``, ``:71-73``) 소비 쪽은
+    그래도 null 을 한 번 더 막습니다(``CacheHelper.java:82`` 의
+    ``runDateOut != null && (runningCalendar = ...) != null``;
+    ``NetworkRepositoryImpl.java:12413`` 은 보호된 헬퍼로 비어 있는지 검사).
+    **다만 7.0.6 의 선언은 nullable 이 아니라 기본값 있는 non-null 입니다** —
+    "nullable ``List``" 라던 옛 서술과 그 근거 ``C0805e.java:124`` /
+    ``TrainCalendarDao:101-103`` 은 7.0.6 에 없는 6.5.0 잔재입니다. 값이 있는데
     리스트가 아닐 때만 :class:`~korail_mobile_api.errors.KorailProtocolError`
     입니다.
 
-    행의 날짜(``runDt``)도 선택값이라 ``None`` 인 행이 섞일 수 있습니다. 성수기
+    행의 날짜(``runDt``)를 여기서 선택값으로 두는 것은 이 패키지의 판단입니다 —
+    7.0.6 은 ``RunDateOutItem.java:37,104-105`` 에서 ``runDt`` 를 non-null
+    ``String`` 으로 선언하고 키가 빠지면 AlienGuard 로 보호된 리터럴을 넣습니다
+    (그 평문은 읽히지 않습니다). 생 JSON 을 파싱하는 쪽에서는 서버가 키를 빼는
+    경우를 그래도 견뎌야 하므로 ``None`` 인 행이 섞일 수 있습니다. 성수기
     여부는 이 응답에서 오며
     :func:`~korail_mobile_api.netfunnel.inquiry_action` 이 그것을 봅니다.
     """
     raw = response.raw
-    # makeAvailableDatesFactory null-guards the list on SUCC responses
-    # (C0805e.java:124: `if (isNull(list) || list.size() <= 0) { ...return; }`)
-    # and getRunningCalendarList (TrainCalendarDao:101-103) is a nullable List,
-    # so a missing/null runningCalendar yields an empty calendar in the app.
+    # A missing runningCalendar yields an empty calendar in 7.0.6 too, but by
+    # a default rather than by nullability: RunDateOut.java:57-58,71-73 fill
+    # the field with CollectionsKt.emptyList() when the key is absent, and
+    # consumers still null-guard it (CacheHelper.java:82,
+    # NetworkRepositoryImpl.java:12413). The old citations C0805e.java:124 and
+    # TrainCalendarDao:101-103 are 6.5.0 leftovers absent from 7.0.6.
     # Accept absent/null as an empty day tuple; only a present non-list is a
     # genuine shape violation.
     rows = _optional_list(raw, "runningCalendar", "train calendar")
@@ -588,12 +610,17 @@ def parse_train_calendar_response(
             )
         days.append(
             TrainCalendarDay(
-                # runDt is nullable: getDateStr() (TrainCalendarDao:40-41)
-                # returns the raw field, compareTo null-guards it (:89-94), and
-                # makeAvailableDatesFactory gates use behind
-                # !TextUtils.isEmpty(dateStr) (C0805e.java:140,147) — a null-date
-                # row is silently skipped, never NPEing. So treat it as optional
-                # rather than aborting the whole calendar parse.
+                # runDt is treated as optional here by this package's own
+                # choice, not on the app's authority. 7.0.6 declares it
+                # non-null with an AlienGuard-protected missing-value default
+                # (RunDateOutItem.java:37,104-105) and its reader compares it
+                # through a protected helper (TrainOptionViewModel.java
+                # :1066-1069), so there is no 7.0.6 null-date skip to cite --
+                # the old TrainCalendarDao:40-41,:89-94 / C0805e.java:140,147
+                # chain is a 6.5.0 leftover with no counterpart here. Parsing
+                # raw JSON still has to survive a server that omits the key,
+                # so treat it as optional rather than aborting the whole
+                # calendar parse.
                 run_date=_typed_optional_string(
                     row,
                     "runDt",

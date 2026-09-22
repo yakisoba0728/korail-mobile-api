@@ -49,23 +49,41 @@ _NON_COMMON_OUT_READ_PATHS = frozenset({
     "/classes/com.korail.mobile.common.stationdata",
     "/classes/com.korail.mobile.common.stationinfo",
     "/ebizmaas/EbizMaasStationList.do",
-    # VerifyOnlineRefundsOut 도 CommonOut 을 상속하지 않고 strResult 기본값이
-    # null 입니다(VerifyOnlineRefundsOut.java:97). 없는 strResult 를 실패로 읽으면
-    # 성공한 검증이 실패로 분류됩니다. 삭제된 V7Gateway 가 같은 판정을
-    # _NON_COMMON_OUT_RESPONSE_MODELS 로 따로 들고 있던 것을 여기로 옮겼습니다.
+    # VerifyOnlineRefundsOut 도 CommonOut 을 상속하지 않습니다
+    # (VerifyOnlineRefundsOut.java:29 — extends 절이 없습니다). 예전 주석은 여기에
+    # "strResult 기본값이 null 입니다(:97)" 를 덧붙였는데 둘 다 틀렸습니다: 97행은
+    # hMsgCd 대입이고, strResult 의 누락 기본값 분기는 91-94행이며 그 기본값은 null
+    # 리터럴이 아니라 AlienGuard 로 보호된 문자열 호출입니다(hMsgCd:97, hMsgTxt:102
+    # 과 같은 리터럴) — 값이 무엇인지 APK 에서 읽을 수 없으므로 주장하지 않습니다.
+    # 여기서 중요한 것은 값이 아니라 이 DTO 가 CommonOut 이 아니라는 사실뿐입니다:
+    # 없는 strResult 를 실패로 읽으면 성공한 검증이 실패로 분류됩니다. 삭제된
+    # V7Gateway 가 같은 판정을 _NON_COMMON_OUT_RESPONSE_MODELS 로 따로 들고 있던
+    # 것을 여기로 옮겼습니다.
     "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
 })
 
 # certification.ReservationList is the one read-only path this package sends
-# to that CertificationService.java also declares a WRITE Retrofit method on:
-# inquiryTicketRsv (the read this package implements, exactly these four
-# fields) and applyDisabilityCertification (:22, which adds txtPsgDisc0019Cnt
-# and six @QueryMaps to attach a disability certificate to a held
-# reservation). The general per-route field contract that used to keep the
+# to whose 7.0.6 request DTO also carries WRITE fields. The old wording cited
+# CertificationService.java (a 6.5.0 file with no 7.0.6 counterpart) and a
+# second Retrofit overload applyDisabilityCertification(:22) with six
+# @QueryMaps; neither reproduces. What 7.0.6 actually shows is the same shape
+# arranged differently: the route is declared twice, both times as a plain
+# @FieldMap map (NetworkApi.java:423-424 postInquiryTicketRsv and :627-628
+# postReservationList), and the single request DTO ReservationListIn declares
+# hidPnrNo *together with* txtPsgDisc0019Cnt and psgDisc0019List
+# (ReservationListIn.java:30-32, @SerialName list at :58), whose element type
+# carries exactly six fields -- txtJobDvCd0019_, txtPsgDisc0019Sqno_,
+# txtPsgDisc0019PsDvCd_, txtPsgDisc0019Birth_, txtPsgDisc0019CustNm_,
+# txtPsgDisc0019Grade_ (ReservationListInPsgDisc0019.java:55). So the
+# disability-certificate write rides this very route in 7.0.6 too; it is just
+# a repeated sub-object rather than a separate overload. (The separate
+# certification.disabled.do route at NetworkApi.java:384-385 is a different
+# call and not what this guard is about.)
+# The general per-route field contract that used to keep the
 # write shape off this send path moved into the test suite, which has since
 # been deleted, so no other route is checked at all -- but for this one path
-# a caller (or a future builder bug) that hands post_form the write overload's
-# fields would otherwise reach the wire unexamined, since nothing else on the
+# a caller (or a future builder bug) that hands post_form the disability-
+# certificate fields would otherwise reach the wire unexamined, since nothing else on the
 # read send path is route-specific. This is the one targeted exception, not a
 # reinstatement of the general contract.
 _RESERVATION_LIST_PATH = "/classes/com.korail.mobile.certification.ReservationList"
@@ -106,8 +124,17 @@ def parse_base_response(
     """응답 봉투를 검사합니다.
 
     ``P058`` → :class:`~korail_mobile_api.errors.KorailSessionExpiredError`.
-    ``strResult == "FAIL"`` 또는 ``h_msg_cd == "WRC000288"`` 이면 실패입니다
-    (``BaseActivity.java:620``). ``require_result`` 가 참(기본)이면 ``strResult``
+    ``strResult == "FAIL"`` 또는 ``h_msg_cd == "WRC000288"`` 이면 실패입니다. 앞쪽
+    절반의 7.0.6 근거는 ``CommonOut.commonFail()``
+    (``analysis/jadx/sources/com/korail/talk/network/model/CommonOut.java:455-462``)
+    이 ``strResult`` 를 보호된 상수 하나와만 비교한다는 것입니다 — 그 상수의 평문은
+    APK 에서 읽히지 않고, ``"FAIL"`` 이라는 글자는 실서버 관측에서 왔습니다.
+    **뒤쪽 절반(``h_msg_cd == "WRC000288"`` 도 실패로 친다)은 7.0.6 에서 대응
+    분기를 찾지 못했습니다 — 미출처.** 그 코드는 소스·스몰리 어디에도 평문으로
+    없고(전수 grep), APK 안에서 나오는 유일한 자리는
+    ``analysis/apktool/assets/error_json.json`` 의 로그인 실패 문구 한 줄입니다.
+    옛 인용 ``BaseActivity.java:620`` 은 6.5.0 잔재로 7.0.6 에 그 파일이 없습니다.
+    ``require_result`` 가 참(기본)이면 ``strResult``
     키가 아예 없는 응답도 실패입니다. 7.0.6 ``CommonOut`` 은 빠진 ``strResult`` 를
     ``commonFail()`` 이 비교하는 바로 그 보호 상수로 채웁니다
     (``analysis/jadx/sources/com/korail/talk/network/model/CommonOut.java:361,455-462``).

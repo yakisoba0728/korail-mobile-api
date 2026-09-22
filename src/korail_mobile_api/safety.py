@@ -59,10 +59,30 @@ from .errors import KorailProtocolError
 # more -- the suite that did was deleted.
 #
 # NOTE on certification.ReservationList: two Retrofit overloads share the path.
-# Only the read overload (inquiryTicketRsv, CertificationService.java:45-46,
-# four query fields) is here; the write overload (applyDisabilityCertification,
-# :22) is excluded. The four-field set itself is enforced by http.post_form's
-# one targeted exception for this path, not by this route table.
+# Only the read overload is here; the write overload is excluded. The old
+# CertificationService.java:45-46 / :22 citations are 6.5.0 and that class is
+# absent from the 7.0.6 decompile (checked 2026-09-22). Re-derived against
+# 7.0.6, the split is sharper than the old note said -- the two overloads do
+# not differ by @Query vs @Field at all (both take a bare @FieldMap); they
+# differ by which request DTO feeds the map:
+#   READ  NetworkApi.java:422-424 postInquiryTicketRsv, fed by
+#         TicketRsvInquiryIn (NetworkService.java:6425-6436). That DTO
+#         extends CommonIn and declares exactly ONE own field --
+#         TicketRsvInquiryIn.java:76 @SerialName("hidPnrNo") -- so the whole
+#         request is Device/Version/Key/hidPnrNo plus the optional common
+#         lang. That is byte-for-byte the set http.post_form enforces.
+#   WRITE NetworkApi.java:626-628 postReservationList, fed by
+#         ReservationListIn (NetworkService.java:11322-11333), which adds
+#         txtPsgDisc0019Cnt and a List<ReservationListInPsgDisc0019>
+#         (ReservationListIn.java:29-32). Each list element flattens into six
+#         indexed per-passenger keys --
+#         ReservationListInPsgDisc0019.java:125-145:
+#         txtPsgDisc0019Birth_, txtPsgDisc0019CustNm_, txtPsgDisc0019Grade_,
+#         txtJobDvCd0019_, txtPsgDisc0019PsDvCd_, txtPsgDisc0019Sqno_
+#         (the trailing underscore is part of the @SerialName; the 1-based
+#         index is appended by NetworkService.STLibw, :15304/:15345-15366).
+# The four-field set itself is enforced by http.post_form's one targeted
+# exception for this path, not by this route table.
 KORAIL_READ_ONLY_ROUTES = frozenset(
     {
         ("POST", "/file/CACHE/MobileService.cache"),
@@ -179,9 +199,16 @@ KORAIL_READ_ONLY_ROUTES = frozenset(
         # 승차권 변경(자율 좌석/열차 변경) 조회 chain. All three are reads that
         # precede a change; none of them commits one.
         #
-        # self.seatChgInfo.do (TicketService.java:54-56) answers "which
-        # stations and which reasons does this train allow a self seat change
-        # for", keyed by the train the ticket is already on. The screen that
+        # self.seatChgInfo.do (NetworkApi.java:806-808 seatAvailabilityCall)
+        # answers "which stations and which reasons does this train allow a
+        # self seat change for", keyed by the train the ticket is already on.
+        # The old TicketService.java:54-56 citation is 6.5.0 and that class is
+        # absent from 7.0.6; the claim now rests on the response DTO instead,
+        # SeatAvailabilityOut.java:28-42, which carries exactly that pair --
+        # chgStnList: List<ChgStnInfo> (:32) and chgRsnList: List<ChgRsnInfo>
+        # (:31) -- alongside the train it was asked about (trnNo :42, runDt
+        # :36, trnClsfCd/trnGpCd :38-40). Nothing in it commits a change. The
+        # screen that
         # fed it, TCSOptionsActivity, is a 6.5.0 class and is ABSENT from the
         # 7.0.6 decompile (checked 2026-09-22), so the old
         # TCSOptionsActivity.java:128-140 citation is dropped rather than
@@ -231,8 +258,14 @@ KORAIL_MUTATION_ROUTES = frozenset(
         ("POST", "/classes/com.korail.mobile.certification.TicketReservation"),
         # reserve -- 예약대기 follow-up. Same category as the hold: it changes
         # no money, releases no seat, only records two options (좌석등급 변경 /
-        # SMS 통보) for a PNR the caller just created
-        # (ReservationWaitService.java:10-12).
+        # SMS 통보) for a PNR the caller just created. The old
+        # ReservationWaitService.java:10-12 citation is 6.5.0 and absent from
+        # 7.0.6; re-derived, the request DTO is the whole argument --
+        # ReservationWaitIn.java:107-119 declares four fields and no more:
+        # @SerialName("txtPnrNo") (the PNR), ("txtPsrmClChgFlg") (좌석등급
+        # 변경), ("txtSmsSndFlg") (SMS 통보) and ("txtCpNo") (the phone the SMS
+        # goes to; registered in redaction.py). Route:
+        # NetworkApi.java:638-640 postReservationWait.
         ("POST", "/classes/com.korail.mobile.reservationWait.ReservationWait"),
         # payment
         ("POST", "/classes/com.korail.mobile.payment.ReservationPayment"),
@@ -250,28 +283,53 @@ KORAIL_MUTATION_ROUTES = frozenset(
         ("POST", "/classes/com.korail.mobile.refunds.executeOnlineRefunds"),
         ("POST", "/classes/com.korail.mobile.research.dcntCrdInfo.do"),
         ("POST", "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"),
-        # price_recalculation -- 보류된 PNR의 할인 재적용 후 운임 재계산
-        # (CertificationService.java:35-37 getDiscountPrice). Its own category:
+        # price_recalculation -- 보류된 PNR의 할인 재적용 후 운임 재계산.
+        # The old CertificationService.java:35-37 (getDiscountPrice) citation
+        # is 6.5.0 and absent from 7.0.6. 7.0.6 declares the route at
+        # NetworkApi.java:582-584 (postPriceReCalculation) and the caller that
+        # makes it a re-price rather than a purchase is
+        # PayViewModel.java:6142-6171 executeDiscountPrice -- it sends the
+        # held PNR, a fixed job id (ReservationJobId.DEFAULT, :6166), the row
+        # count and six parallel per-passenger lists, and nothing that
+        # settles. Its own category:
         # it creates and destroys nothing, but it rewrites what the passenger
         # is about to be charged, which is exactly why it must not borrow the
         # "payment" category, which owns the route that settles the quoted
         # amount.
         #
         # The one route in this set whose form carries REPEATED keys. Its last
-        # six @Fields are List<String> and Retrofit emits one key per element
-        # with the name unchanged -- RequestBuilder.smali:1537-1601 takes the
-        # Iterable branch and calls addField(v3, element) in a loop where v3,
-        # the field name, is loop-invariant. There is no index suffix and no
-        # bracket. The builder therefore returns list values, which httpx
-        # encodes identically.
+        # six @Fields are List<String> (NetworkApi.java:584: psg_tp_dv_cd,
+        # psrm_cl_cd, dcnt_knd_cd1, hidDscpNo, hidDcntKndCd, hidFmlyNo) and
+        # Retrofit emits one key per element with the name unchanged. The old
+        # RequestBuilder.smali:1537-1601 citation overshoots that file --
+        # analysis/apktool/smali_classes7/retrofit2/RequestBuilder.smali is
+        # 922 lines long, so those line numbers point at nothing. The real
+        # mechanism is in ParameterHandler:
+        #   ParameterHandler.java:18-31  iterable() re-applies the SAME
+        #       handler instance to every element, so the name cannot vary
+        #       between iterations.
+        #   ParameterHandler.java:240-259  Field holds the name in a final
+        #       field set once in the constructor (:245-250) and apply()
+        #       calls requestBuilder.addFormField(this.name, ...) (:258).
+        #   RequestBuilder.java:164-170  addFormField appends to
+        #       FormBody.Builder -- no dedupe, no index, no bracket.
+        # The builder therefore returns list values, which httpx encodes
+        # identically.
         ("POST", "/classes/com.korail.mobile.certification.PriceReCalculation"),
-        # cart -- 장바구니에 승차권(PNR) 담기 (CartService.java:11-13, addCart).
+        # cart -- 장바구니에 승차권(PNR) 담기
+        # (NetworkApi.java:265-267 postAddCartList).
         # A category of its own rather than a reuse of "reserve": the hold
         # this acts on already exists, the route creates and destroys nothing
         # server-side that this package can observe, and it carries no card
-        # number. Confirmed against
-        # AddCartDao.java:9-24 and CartService.smali / AddCartDao$AddCartRequest.smali:
-        # the request is exactly the common three fields plus "hidPnrNo".
+        # number. The old CartService.java:11-13 / AddCartDao.java:9-24 /
+        # CartService.smali / AddCartDao$AddCartRequest.smali citations are
+        # all 6.5.0 and absent from the 7.0.6 decompile (checked 2026-09-22).
+        # Re-counted against 7.0.6's own request DTO, the field claim still
+        # holds: AddCartListIn.java:25-30 extends CommonIn and declares one
+        # own field, whose wire name is :79 @SerialName("hidPnrNo"). (CommonIn
+        # contributes Device/Version/Key plus the optional lang, so "the
+        # common three fields plus hidPnrNo" is four or five keys on the wire,
+        # not three.)
         # The response is NOT a bare BaseResponse, though: 7.0.6's
         # AddCartListOut (AddCartListOut.java:24-25) extends CommonOut but
         # also carries a psgDiscAddInfos field (@SerialName("psgDiscAdd_infos"),
@@ -280,8 +338,13 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # unaffected by this -- only the earlier claim about response shape
         # was wrong.
         ("POST", "/classes/com.korail.mobile.cart.addCartList"),
-        # DELIBERATELY ABSENT: PassService purchase family (pass.passReserve /
-        # passPayIssue, PassService.java:19-44). Settlement can only be proven
+        # DELIBERATELY ABSENT: the 정기권 purchase family. The old
+        # PassService.java:19-44 citation is 6.5.0 and absent from 7.0.6; the
+        # 7.0.6 declarations are NetworkApi.java:558-560 postPassReserve
+        # (pass.passReserve) and :554-556 postPassPayIssue
+        # (pass.passPayIssue), with the 편도 siblings at :241-243
+        # passOtrReserve and :550-552 postPassOtrPayIssue. Settlement can only
+        # be proven
         # by buying a ₩150,000-250,000 season pass this package cannot refund.
         # 정기권 READS are untouched; no chargeable pass route is here.
     }

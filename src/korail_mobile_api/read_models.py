@@ -46,8 +46,18 @@ class TicketListTicket:
     #: ``h_ret_psb_flg`` — 이 **목록 행** 이 말하는 환불 가능 여부.
     #: :attr:`RefundTicketDetailResponse.refund_possible_flag`(``retPsbFlg``)와
     #: 정면으로 엇갈립니다 — 2026-09-22 라이브에서 이력 143장 전부 여기서는
-    #: ``'N'`` 인데 상세 라우트는 같은 승차권에 ``'Y'`` 를 돌려줍니다. 앱도 이
-    #: 둘을 AND 로 묶습니다(``NormalTicketSectionKt.java:951``).
+    #: ``'N'`` 인데 상세 라우트는 같은 승차권에 ``'Y'`` 를 돌려줍니다.
+    #: **정정(2026-09-22)**: 이 자리에 원래 "앱도 이 둘을 AND 로
+    #: 묶습니다(``NormalTicketSectionKt.java:951``)"라고 적혀 있었는데
+    #: 그 인용이 말하는 AND 의 짝이 틀렸습니다. 951행의 실제 활성화 조건은
+    #: ``Intrinsics.areEqual(<보호된 리터럴>, ticketDetailOut.getRetPsbFlg())
+    #: && !TicketHelper.INSTANCE.isUsedTicketInTrain(reservation)`` 이고,
+    #: 여기에 목록 행의 ``h_ret_psb_flg`` 는 등장하지 않습니다. AND 의 뒷항은
+    #: ``TicketHelper.java:3173-3199`` 로, 예약의 **첫** 승차권
+    #: ``runClsFlg``/``stpvFlg``/``trainInfo`` 로 승차 후 사용 여부를 봅니다.
+    #: 비교 리터럴(``'Y'`` 로 추정)은 AlienGuard 로 보호되어 확인 불가입니다.
+    #: 즉 이 두 키가 라이브에서 엇갈린다는 관측은 유효하지만, 앱이 그 둘을
+    #: AND 한다는 근거는 없습니다 — 그 주장은 미출처입니다.
     return_possible_flag: str | None = None
     #: ``h_use_tno``/``h_noty_use_tno`` — 사용·미통지 사용 거래번호.
     use_transaction_no: str | None = field(default=None, repr=False)
@@ -332,7 +342,14 @@ class PassAvailabilityResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TripMenuContent:
-    """여행상품 메뉴 한 줄(``TrGdMenuLtOutCont.java:25``, 22개 String 필드).
+    """여행상품 메뉴 한 줄(``TrGdMenuLtOutCont.java:25``, 필드 22개).
+
+    **정정(2026-09-22)**: 위 한 줄은 원래 "22개 String 필드"였습니다.
+    ``TrGdMenuLtOutCont.java:26-47`` 을 세어 보면 ``String`` 은 21개이고
+    나머지 하나는 ``TrGdMenuLtOutPass passData``(``:45``) 객체입니다 —
+    합성 생성자(``:72``)의 인수 나열도 ``String`` 21개 + ``TrGdMenuLtOutPass``
+    로 같은 구성을 확인합니다. "전부 String" 으로 읽으면 :attr:`pass_data` 를
+    문자열로 파싱하려는 실수가 나옵니다.
 
     :attr:`detail_type` 은 예전에 ``content_type`` 이라는 이름이었습니다. 이름을
     와이어 키(``detailType``, ``TrGdMenuLtOutCont.java:42``)에 맞춰 되돌린 이유:
@@ -372,8 +389,10 @@ class TripMenuContent:
     #: ``passData``(``:45``, ``TrGdMenuLtOutPass.java:29-35``) — 정기권 조회에
     #: 필요한 연령·기간 선택지 묶음. 정기권 메뉴/종류 라우트가 싣는 것과 같은
     #: 모양이라 ``_parse_pass_menu_data`` 를 그대로 씁니다.
-    #: ``PassConditionViewModel.java:1246`` 은 이것이 ``null`` 이면 화면을
-    #: 되돌립니다.
+    #: ``PassConditionViewModel.java:1244`` 가 이 객체를 꺼내고, 같은 함수의
+    #: ``:1247-1248`` 이 ``null`` 이면 ``backAlert`` 로 화면을 되돌립니다.
+    #: (원래 인용은 ``:1246`` 이었는데 그 줄은 닫는 중괄호입니다 —
+    #: 동작 설명은 맞았고 줄 번호만 한 칸 어긋나 있었습니다.)
     pass_data: PassMenuData | None = None
 
 
@@ -449,7 +468,18 @@ class ReceiptPayment:
 
 @dataclass(frozen=True)
 class ReceiptCashPayment:
-    """현금영수증 줄 (``ReceiptDao.java:12-40,43-44``)."""
+    """현금영수증 줄 (``CashReceiptInfo.java:26-35``).
+
+    원래 인용은 ``ReceiptDao.java:12-40,43-44`` 였는데 7.0.6 에는 그 경로가
+    없습니다(6.5.0 시절 잔재). 7.0.6 의 대응물은
+    ``ReceiptInfo.java:37`` 의 ``List<CashReceiptInfo> cashRcetInfo`` 이고,
+    ``CashReceiptInfo.java:26-35`` 가 필드 다섯을 선언합니다 — ``String`` 넷과
+    ``int hTotApvAmt`` 하나. 아래 다섯 속성과 1:1 로 맞고 와이어 키는
+    합성 생성자의 ``@SerialName``(``CashReceiptInfo.java:52``)에서 읽었습니다:
+    ``h_apv_mtd_nm``/``h_athn_dmn_rcgn_no``/``h_cash_rcet_apv_no``/
+    ``h_cash_rcet_txn_dv_cd``/``h_tot_apv_amt``. 여기는 난독화되지 않은
+    ``@SerialName`` 리터럴이라 속성 이름이 아니라 실제 전선 철자입니다.
+    """
 
     #: ``h_apv_mtd_nm`` — 사람이 읽는 승인방법 라벨. 형제 필드(인증도메인
     #: 인식번호·현금영수증 승인번호)는 보호되는데 이 필드만 빠져 있었습니다.
@@ -1059,8 +1089,15 @@ class PassScheduleResponse(BaseKorailResponse):
 class DiscountCardSection:
     """할인카드가 등록된 구간 하나.
 
-    ``TicketDetailDao.AppSegInfo``
-    (``dao/refund/TicketDetailDao.java:25-64``). N카드는 이런 구간 1~3 개에
+    7.0.6 의 대응 DTO 는 ``AppSegInfo.java:24-37`` 입니다 — ``String`` 아홉
+    (``jrnySqno``/``jrnyTpCd``/``trnGpCd``/``dptRsStnNm``/``dptRsStnCd``/
+    ``arvRsStnNm``/``arvRsStnCd``/``stlbDturDvNm``/``stlbDturDvCd``)이고
+    ``@SerialName`` 이 하나도 없으므로 **프로퍼티 이름이 곧 와이어 키** 입니다.
+    ``DiscountCardInfo.java:28`` 의 ``List<AppSegInfo> appSegList`` 로 실려
+    옵니다. 원래 인용은 ``dao/refund/TicketDetailDao.java:25-64`` 였는데 7.0.6
+    디컴파일에 그 경로가 없습니다(6.5.0 잔재) — 아래 여섯 속성이 위 아홉 중
+    여섯과 1:1 로 맞아 같은 구조로 확인했습니다.
+    N카드는 이런 구간 1~3 개에
     대해 팔리고, 그 구간을 지나는 열차에만 쓸 수 있습니다.
     :meth:`~korail_mobile_api.client.KorailClient.get_discount_card_schedule`
     가 역코드가 아니라 역 **이름** 을 받는 것도 그것이 여기서 나오기
@@ -1076,8 +1113,16 @@ class DiscountCardSection:
     journey_sequence: str | None = field(default=None, repr=False)
     journey_type_code: str | None = field(default=None, repr=False)
     train_group_code: str | None = field(default=None, repr=False)
-    #: ``stlbDturDvNm`` — 경유 이름. 앱이 좌석지정 시각표 요청에 그대로
-    #: 넘깁니다(``u4/b.java:104``).
+    #: ``stlbDturDvNm``(``AppSegInfo.java:36``) — 경유 이름. 앱이 좌석지정
+    #: 시각표 요청에 그대로 넘깁니다. 원래 인용은 ``u4/b.java:104`` 였는데
+    #: 7.0.6 에 그 경로가 없어 사슬을 다시 찾았습니다:
+    #: ``NCardReservationViewModel.java:154-158`` 이
+    #: ``getDcntCrdInfo().getAppSegList()[index].getStlbDturDvNm()`` 을
+    #: ``Triple`` 에 담아 ``TrainScheduleRoute``(``:164``)로 넘기고,
+    #: ``TrainScheduleViewModel.buildAssignSchedule``(``:2639``)가 그
+    #: ``Triple`` 에서 값을 꺼내(``:2730-2736``) ``AssignScheduleIn`` 의
+    #: 열 번째 인자로 넣습니다(``:2749``/``:2831``) — 그 자리가
+    #: ``AssignScheduleIn.java:41`` 의 ``stlbDturDvNm1`` 입니다.
     detour_division_name: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
@@ -1086,23 +1131,44 @@ class DiscountCardSection:
 class DiscountCardOnTicket:
     """승차권 상세가 설명하는 할인카드.
 
-    ``TicketDetailDao.DiscountCardInfo``
-    (``dao/refund/TicketDetailDao.java:123-142``)이며
-    ``TicketDetailResponse.dcnt_crd_info`` 로 옵니다(``:233``). 읽고 있는
+    7.0.6 의 대응 DTO 는 ``DiscountCardInfo.java:27-32`` 입니다
+    (``List<AppSegInfo> appSegList`` + ``String`` 넷). 원래 인용
+    ``dao/refund/TicketDetailDao.java:123-142`` 는 7.0.6 에 없는 경로였습니다.
+    ``TicketDetailOut.java:49`` 의 필드 ``dcntCrdInfo`` 로 달려 오고 와이어
+    키는 ``TicketDetailOut.java:438`` 의 ``@SerialName("dcnt_crd_info")``
+    입니다 — 예전 인용 ``:233`` 은 없어진 Dao 의 줄번호였습니다. 읽고 있는
     "승차권"이 실은 카드일 때만 있고, 보통 승차권에는 이 객체가 없습니다.
 
     :attr:`card_no` 를 얻으려고 있는 모델입니다.
     :meth:`~korail_mobile_api.client.KorailClient.get_discount_card_usage_history`
-    의 유일한 입력이고, 할인코드 ``"153"`` 과 함께 평범한 예약을 할인 예약으로
-    바꾸는 유일한 입력이기도 합니다(``w4/a.java:100-101``).
+    의 유일한 입력이고, N카드 할인종류 코드와 함께 평범한 예약을 할인 예약으로
+    바꾸는 유일한 입력이기도 합니다. 원래 인용 ``w4/a.java:100-101`` 은 7.0.6
+    에 없는 경로이고, 실제 조립 지점은 ``Passengers.java:766`` 입니다 —
+    ``screenMode == ReservationType.MY_N_CARD_RESERVATION`` 일 때만
+    ``TicketReservationInPassengerInfo``(``:26-34``)의 ``txtDiscKndCd`` 에
+    ``ReqDiscount.N_CARD.getDiscKndCd()``(``ReqDiscount.java:36``)를,
+    ``txtCardNo`` 에 카드번호를 넣고 그 밖에는 카드번호를 ``''`` 로 둡니다.
+    ``ReqDiscount.N_CARD`` 의 코드 리터럴 자체는 AlienGuard 로 보호되어
+    디컴파일로는 읽을 수 없습니다 — 이 라이브러리가 쓰는
+    :data:`~korail_mobile_api.constants.KORAIL_DISCOUNT_CARD_DISCOUNT_CODE`
+    (``'153'``)는 라이브 관측에서 온 값이고 7.0.6 소스로 재확인된 것은
+    아닙니다.
     :mod:`korail_mobile_api.redaction` 에 등록돼 있어 마스킹됩니다.
     """
 
-    #: ``h_dcnt_crd_no``.
+    #: ``h_dcnt_crd_no``(``DiscountCardInfo.java:113`` 의 ``@SerialName``).
     card_no: str | None = field(default=None, repr=False)
-    #: ``h_dcnt_crd_trm_extn_psb_flg`` — 기간연장이 가능하면 ``"Y"``.
-    #: 앱에서 "기간연장" 버튼을 켜는 것도 이 값 하나입니다
-    #: (``Y4/C0907b.java:301`` → ``Y4/Q.java:1013-1026``).
+    #: ``h_dcnt_crd_trm_extn_psb_flg``(``DiscountCardInfo.java:117`` 의
+    #: ``@SerialName``, 필드는 ``:30``) — 기간연장이 가능하면 ``"Y"``.
+    #: 앱에서 "기간연장" 버튼을 켜는 것도 이 값 하나입니다. 원래 인용
+    #: ``Y4/C0907b.java:301`` → ``Y4/Q.java:1013-1026`` 은 7.0.6 에 없는
+    #: 경로였습니다. 7.0.6 의 실제 지점은 smali 로만 보입니다(jadx 출력에는
+    #: 이 람다가 남지 않았습니다):
+    #: ``smali_classes6/.../detail/NCardTicketSectionKt.smali:7821-7843`` 이
+    #: ``getDcntCrdInfo().getDcntCrdTrmExtnPsbFlg()`` 를 AlienGuard 1바이트
+    #: 리터럴과 ``Intrinsics.areEqual`` 로 비교하고 그 결과를
+    #: ``TicketDetailMediumContainerButton`` 의 ``enabled`` 인자로 넘깁니다.
+    #: 비교 리터럴(``"Y"`` 로 추정)은 보호되어 확인 불가입니다.
     term_extension_possible_flag: str | None = None
     sections: tuple[DiscountCardSection, ...] = ()
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
@@ -1310,17 +1376,22 @@ class DiscountCardUsageListResponse(BaseKorailResponse):
 class DiscountCardScheduleTrain:
     """할인카드를 아직 쓸 수 있는 열차 하나.
 
-    ``NCardInquiryDao.TrainInfo``
-    (``dao/research/NCardInquiryDao.java:144-236``).
+    7.0.6 의 대응 DTO 는 ``NCardScheduleItem.java:25``(필드 ``:30-49``)
+    입니다. 원래 인용은 ``NCardInquiryDao.TrainInfo``
+    (``dao/research/NCardInquiryDao.java:144-236``)였는데 7.0.6 디컴파일에
+    그 경로가 없습니다(6.5.0 잔재).
 
     ``stationInfo`` 는 일부러 없습니다. 그것은 앱이 중간 정차역 문자열로부터
     스스로 만들어 내는 ``android.text.Spanned`` 이지 전선에서 읽는 값이
     아닙니다. ``stationStringInfo`` 라는 전선 키 자체가 전 디컴파일에 0건이라
     더 이상 읽지 않습니다.
 
-    ``NCardScheduleItem`` 은 20개 필드를 선언하는데(``:25-49``) 전부
-    ``@SerialName`` 이 없어 정확한 와이어 철자는 PROTECTED 입니다 — 코틀린
-    필드명을 최선으로 사용합니다.
+    ``NCardScheduleItem`` 은 20개 필드를 선언하는데(``:30-49``) 파일 전체에
+    ``@SerialName`` 이 0건이어서 코틀린 필드명을 최선으로 사용합니다. 다만
+    "PROTECTED" 라는 표현은 정확하지 않습니다 — 난독화된 것이 아니라
+    ``@SerialName`` 자체가 없어 kotlinx 기본값(= 프로퍼티 이름)이 곧 와이어
+    철자인 경우입니다. 라이브 응답으로 재확인하기 전까지는 추정으로 두되,
+    필드명을 "보호된 리터럴" 로 오해하지 마십시오.
     """
 
     train_no: str | None = None
@@ -1357,8 +1428,14 @@ class DiscountCardScheduleTrain:
 class DiscountCardScheduleResponse(BaseKorailResponse):
     """``research.dcntCrdScheduleView.do`` — 카드로 예약할 수 있는 열차들.
 
+    7.0.6 의 라우트 선언은 ``NetworkApi.java:339-341``
+    (``@FormUrlEncoded @POST(".../research.dcntCrdScheduleView.do")
+    postDcntCrdScheduleView(@FieldMap …) → NCardScheduleOut``)이고 응답 DTO 는
+    ``NCardScheduleOut.java:27-28`` 입니다. 원래 인용
     ``NCardInquiryDao.NCardInquiryResponse``
-    (``dao/research/NCardInquiryDao.java:128-142``).
+    (``dao/research/NCardInquiryDao.java:128-142``)는 7.0.6 디컴파일에 없는
+    경로였습니다 — 라우트가 같다는 것이 그 옛 클래스의 필드까지 같다는 뜻은
+    아니므로, 아래 설명의 근거는 ``NCardScheduleOut`` 자신입니다.
 
     :attr:`following_page_exists` 는 더 이상 채워지지 않습니다. 7.0.6
     ``NCardScheduleOut``(``:27-28``)은 ``trnScdlList`` 하나만 선언할 뿐
@@ -1639,8 +1716,15 @@ class PbpAcceptanceSpecificationResponse(BaseKorailResponse):
 class SelfSeatChangeStation:
     """자율 좌석 변경으로 옮겨 갈 수 있는 승차역 하나.
 
-    ``CallSelfSeatChgInfoDao.ChgStnList``
-    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:157-204``).
+    7.0.6 의 대응 DTO 는 ``ChgStnInfo.java:21-35`` 입니다(``String`` 14개,
+    ``@SerialName`` 0건이므로 프로퍼티 이름이 곧 와이어 키).
+    ``SeatAvailabilityOut.java:32`` 의 ``List<ChgStnInfo> chgStnList`` 로
+    실려 옵니다. 원래 인용 ``CallSelfSeatChgInfoDao.ChgStnList``
+    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:157-204``)는 7.0.6
+    디컴파일에 없는 경로였습니다(6.5.0 잔재).
+    아래 열 속성은 그 14개 중 열과 맞습니다 — 나머지 넷
+    (``arvRsStnCd``/``arvRsStnNm``/``arvStnConsOrdr``/``arvStnRunOrdr``)은
+    DTO 가 선언하지만 이 모델이 아직 읽지 않습니다.
 
     이 줄을 고를 수 있는지는 좌석 수 둘이 정합니다 —
     :attr:`general_remaining_seats`(``gnrmRestSeatNum``)와
@@ -1663,7 +1747,15 @@ class SelfSeatChangeStation:
 
 @dataclass(frozen=True)
 class SelfSeatChangeReason:
-    """좌석 변경 사유 한 줄(``CallSelfSeatChgInfoDao.java:136-155``)."""
+    """좌석 변경 사유 한 줄(``ChgRsnInfo.java:21-24``).
+
+    ``String`` 셋(``frcSaleRsnCont``/``qryCode``/``qryOrdr``)뿐이고
+    ``@SerialName`` 은 0건이라 프로퍼티 이름이 곧 와이어 키입니다. 아래 세
+    속성과 1:1 입니다. ``SeatAvailabilityOut.java:31`` 의
+    ``List<ChgRsnInfo> chgRsnList`` 로 옵니다. 원래 인용
+    ``CallSelfSeatChgInfoDao.java:136-155`` 는 7.0.6 디컴파일에 없는
+    경로였습니다.
+    """
 
     query_code: str | None = None
     query_order: str | None = None
@@ -1675,8 +1767,17 @@ class SelfSeatChangeReason:
 class SelfSeatChangeInfoResponse(BaseKorailResponse):
     """``self.seatChgInfo.do`` — 자율 좌석·열차 변경이 무엇으로 바뀔 수 있는지.
 
+    7.0.6 의 라우트 선언은 ``NetworkApi.java:806-808``
+    (``@FormUrlEncoded @POST(".../self.seatChgInfo.do")
+    seatAvailabilityCall(@FieldMap …) → SeatAvailabilityOut``)이고 응답 DTO 는
+    ``SeatAvailabilityOut.java:28-42`` 입니다 — 스칼라 ``String`` 12개 +
+    ``chgRsnList``/``chgStnList`` 두 목록으로, 아래 필드 구성과 1:1 입니다.
+    봉투 밖 ``@SerialName`` 은 ``CommonOut`` 에서 물려받는
+    ``h_msg_cd``/``h_msg_txt`` 둘뿐(``:68``)이라 나머지는 프로퍼티 이름이 곧
+    와이어 키입니다. 원래 인용
     ``CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse``
-    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:64-134``).
+    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:64-134``)는 7.0.6
+    디컴파일에 없는 경로였습니다.
 
     :attr:`general_reservation_possible_code` /
     :attr:`special_reservation_possible_code`
@@ -1714,7 +1815,16 @@ class SelfSeatChangeInfoResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class OriginalTicketSeat:
-    """원표의 한 여정에 딸린 좌석 하나(``response/research/Seat.java``).
+    """원표의 한 여정에 딸린 좌석 하나(``SeatInfo.java:25-51``).
+
+    원래 인용은 ``response/research/Seat.java`` 였습니다. 7.0.6 에 그 경로는
+    없고, **같은 basename 의 ``model/Seat.java`` 를 대신 인용하면 안 됩니다** —
+    그 ``Seat``(``Seat.java:27-36``)는 필드가 다섯이고 ``scarNo`` 가 ``int``
+    이며, PBP(대리수령) 응답 계열(``DeliveredTicketOut`` → ``Tk`` → ``Jrny``)에
+    딸린 전혀 다른 구조입니다. 원표 조회의 좌석은
+    ``JrnyInfo.java:58`` 의 ``List<SeatInfo> seatList`` 이고 그 원소가
+    ``SeatInfo.java:25``(필드 ``:30-51``, ``String`` 22개)입니다 — 아래 열다섯
+    속성이 그 22개 중 열다섯과 맞습니다.
 
     좌석 식별자 자체(``scarNo``/``seatNo``)는
     :mod:`korail_mobile_api.redaction` 에 등록돼 있습니다.
@@ -1740,7 +1850,16 @@ class OriginalTicketSeat:
 
 @dataclass(frozen=True)
 class OriginalTicketJourney:
-    """원표의 구간 하나(``response/research/Jrny.java``).
+    """원표의 구간 하나(``JrnyInfo.java:29-63``).
+
+    원래 인용은 ``response/research/Jrny.java`` 였습니다. 7.0.6 에 그 경로는
+    없고, **같은 basename 의 ``model/Jrny.java`` 로 바꿔 인용하면 안 됩니다** —
+    그 ``Jrny``(``Jrny.java:29-38``)의 필드는 ``acepCustNm``/``acepCustTeln``/
+    ``pbpAcepKndNm``/``pbpRsvNo``/``wdrwPsbFlg`` 같은 PBP(대리수령) 접수
+    정보이고 ``Tk.java:27`` 이 담는 다른 응답 계열입니다. 원표 조회의 구간은
+    ``OrgTk.java:38`` 의 ``List<JrnyInfo> jrnyList`` 이고 그 원소가
+    ``JrnyInfo.java:29``(필드 ``:30-63``, ``String`` 33개 + ``:58`` 의
+    ``List<SeatInfo> seatList``)입니다.
 
     변경 흐름이 이 줄을 열쇠로 삼습니다 — ``jrnySqno`` 와 출발·도착 역코드·
     운행순서가 뒤따르는 조회들이 그대로 요구하는 인자입니다.
@@ -1774,13 +1893,24 @@ class OriginalTicketJourney:
 
 @dataclass(frozen=True)
 class OriginalTicket:
-    """원표 하나(``response/research/OrgTk.java``).
+    """원표 하나(``OrgTk.java:28-52``).
+
+    원래 인용 ``response/research/OrgTk.java`` 는 7.0.6 에 없는 경로였습니다.
+    7.0.6 의 같은 이름 ``model/OrgTk.java`` 가 이번에는 실제로 같은 구조입니다
+    — ``String`` 21개 + 목록 셋(``cmpnList``/``jrnyList``/``stlList``)이고
+    ``@SerialName`` 은 0건이므로 프로퍼티 이름이 곧 와이어 키입니다.
+    ``OgTicketInquiryOut.java:27`` 의 ``List<OrgTk> orgTkList`` 로 옵니다.
 
     ``original_*`` 네 값은 승차권 자신의 반환번호가 되돌아온 것입니다 — 요청이
     보낸 것과 같은 비밀이라 전선 철자와 속성 철자 양쪽에서 마스킹됩니다.
 
-    ``cmpnList``(동반 할인)와 ``stlList``(정산 줄)는 일부러 :attr:`raw` 에만
-    남깁니다. 지연증명 반환번호, 카드번호, 승인번호 같은 자격증명이 더 들어
+    ``cmpnList``(동반 할인, ``OrgTk.java:32`` → ``Cmpn.java:29-44``)와
+    ``stlList``(정산 줄, ``OrgTk.java:51`` → ``Stl.java:29-40``)는 일부러
+    :attr:`raw` 에만 남깁니다. 지연증명 반환번호
+    (``Cmpn.java:35-38`` 의 ``dlayOgtkRetPwd``/``dlayOgtkSaleDt``/
+    ``dlayOgtkSaleSqno``/``dlayOgtkWctNo``), 카드번호
+    (``Stl.java:32,37`` 의 ``prepCrdNo``/``stlCrdNo``), 승인번호
+    (``Stl.java:29`` 의 ``apvNo``) 같은 자격증명이 더 들어
     있는데 변경 흐름에는 쓸 일이 없기 때문입니다. 그 전선 키들도
     :mod:`korail_mobile_api.redaction` 에 등록돼 있어 ``raw`` 안에서 마스킹된
     채로 있습니다.
@@ -1811,8 +1941,15 @@ class OriginalTicket:
 class OriginalTicketInquiryResponse(BaseKorailResponse):
     """``research.tripChgOgtk.do`` — 변경이 출발점으로 삼을 원표들.
 
-    ``OgTkInquiryDao.OgTkInquiryResponse``
-    (``dao/research/OgTkInquiryDao.java:38-46``).
+    7.0.6 의 라우트 선언은 ``NetworkApi.java:234-236``
+    (``@FormUrlEncoded @POST(".../research.tripChgOgtk.do")
+    getTicketOriginalInquiry(@FieldMap …) → OgTicketInquiryOut``)이고 응답
+    DTO 는 ``OgTicketInquiryOut.java:26-27`` — ``List<OrgTk> orgTkList`` 하나뿐
+    입니다(봉투 ``h_msg_cd``/``h_msg_txt`` 는 ``CommonOut`` 에서, ``:54``).
+    원래 인용 ``OgTkInquiryDao.OgTkInquiryResponse``
+    (``dao/research/OgTkInquiryDao.java:38-46``)는 7.0.6 디컴파일에 없는
+    경로였습니다 — 라우트가 같다는 것만으로 옛 클래스의 필드 구성까지
+    같다고 볼 수는 없으므로, 근거는 ``OgTicketInquiryOut`` 자신입니다.
     """
 
     tickets: tuple[OriginalTicket, ...] = field(default=(), repr=False)
@@ -1942,8 +2079,16 @@ class TicketReservationDetailResponse(BaseKorailResponse):
 class RefundCommissionResponse(BaseKorailResponse):
     """원표 하나의 환불 수수료와 환불액.
 
-    필드는 ``RefundCommissionDao.RefundCommissionResponse``
-    (``dao/refund/RefundCommissionDao.java:70-77``)를 따릅니다.
+    필드는 ``RefundCommissionOut.java:30``(필드 ``:35-41``)을 따릅니다 —
+    라우트는 ``NetworkApi.java:598-600``
+    (``@POST(".../refunds.CommissionView") → RefundCommissionOut``)입니다.
+    원래 인용 ``RefundCommissionDao.RefundCommissionResponse``
+    (``dao/refund/RefundCommissionDao.java:70-77``)는 7.0.6 디컴파일에 없는
+    경로였습니다. 아래 일곱 속성의 와이어 키는 모두 명시적
+    ``@SerialName``(``:140-164``, 합성 생성자 ``:62``)에서 읽었습니다:
+    ``ret_fee``/``ret_amt``/``h_msg_cd2``/``h_msg_txt2``/``prg_psb_flg``/
+    ``use_psb_mlg_num``/``tk_ret_tms_dv_cd``. 보호되지 않은 리터럴이라
+    프로퍼티 이름(``retFee`` 등)이 아니라 이 철자가 실제 전선 키입니다.
 
     "얼마가 돌아오고 수수료는 얼마인가"를 미리 보는 조회입니다. 실제 환불을
     보내기 전에 먼저 불러야 합니다.

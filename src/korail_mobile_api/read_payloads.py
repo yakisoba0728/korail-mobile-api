@@ -754,9 +754,22 @@ def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
 class DiscountCardScheduleRequest:
     """할인카드 운행일정 조회 입력 (``NetworkApi.java:340``).
 
-    1구간 N카드: ``u4/b.java:52-65``, v2 카드: ``u4/b.java:67-81``.
-    기본값은 두 빌더 공통 상수. ``dptTm`` ``"000000"``, ``trnGpCd`` ``"109"``
-    (``K4/s.java:5``), ``dirtChtnDvCd`` ``"1"`` (``K4/d.java:5``).
+    7.0.6 의 입력 DTO 는 ``NCardScheduleIn.java:25``(필드 ``:30-40``)이고,
+    앱이 이것을 조립하는 유일한 지점은
+    ``CheckUsageNCardSectionViewModel.java:390-396`` 입니다. 원래 인용
+    ``u4/b.java:52-65``(1구간 N카드) / ``:67-81``(v2 카드)는 7.0.6 디컴파일에
+    없는 경로였고, **1구간/v2 라는 두 빌더로 갈라진다는 설명 자체도 7.0.6
+    에서는 확인되지 않습니다** — 조립 지점은 위 한 곳뿐입니다.
+
+    기본값 셋(``dptTm`` ``"000000"``, ``trnGpCd`` ``"109"``,
+    ``dirtChtnDvCd`` ``"1"``)의 **값은 7.0.6 소스로 확인할 수 없습니다.**
+    원래 인용 ``K4/s.java:5``/``K4/d.java:5`` 는 없는 경로이고, 7.0.6 의 해당
+    자리는 전부 AlienGuard 로 보호돼 있습니다: ``dptTm`` 은
+    ``CheckUsageNCardSectionViewModel.java:390`` 의 6바이트 보호 리터럴,
+    ``dirtChtnDvCd`` 는 ``:396`` 의 1바이트 보호 리터럴, ``trnGpCd`` 는
+    ``TrainGroup.KTX``(``TrainGroup.java:36``)의 ``trnGpCd``
+    (``:48``)인데 열거 상수의 문자열 인수도 보호됩니다. 길이만 맞고 값은
+    라이브 관측에서 온 것이므로, 이 셋은 "구조 확인 + 값 미출처" 입니다.
 
     2026-09-21 실서버 확인: ``usable_trip_count`` 의 기본값 ``""`` 는 서버가
     거부합니다(``WRR000100: 입력값 오류(usePsbTno)``) — 이 필드는 사실상
@@ -789,7 +802,15 @@ class DiscountCardScheduleRequest:
         usage_period_days: str | None = None,
         page_no: str | None = None,
     ) -> DiscountCardScheduleRequest:
-        """카드 종류에서 ``dcntCrdKndCd`` 를 ``u4/b.java`` 방식으로 유도해 요청을 만듭니다."""
+        """카드 종류에서 ``dcntCrdKndCd`` 를 유도해 요청을 만듭니다.
+
+        원래 이 한 줄은 "``u4/b.java`` 방식으로" 라고 적었는데 그 경로는 7.0.6
+        디컴파일에 없습니다. 7.0.6 의 대응물은
+        ``NCardDefine.findDcntCrdKndCd``(``NCardDefine.java:58-88``)이고,
+        아래 :data:`_B2N_CARD_KIND_MANAGEMENT_NOS` 주석에 적은 대로 **그 함수가
+        특별 취급하는 관리번호 집합이 이 구현과 다릅니다.** 여기서는 코드를
+        바꾸지 않고 사실만 남깁니다.
+        """
         kind_code = (
             "B2N"
             if card_kind_management_no in _B2N_CARD_KIND_MANAGEMENT_NOS
@@ -807,21 +828,57 @@ class DiscountCardScheduleRequest:
         )
 
 
-#: ``"B2N"`` 을 쓰는 두 상품 (``u4/b.java:61``, ``NCard1SectionBookingActivity.java:28``).
+#: ``"B2N"`` 을 쓰는 두 상품. 원래 인용 ``u4/b.java:61`` 과
+#: ``NCard1SectionBookingActivity.java:28`` 은 둘 다 7.0.6 디컴파일에 없는
+#: 경로였습니다.
+#:
+#: **7.0.6 재조사 결과가 이 집합과 어긋납니다(코드는 건드리지 않았습니다).**
+#: 7.0.6 의 분기는 ``NCardDefine.findDcntCrdKndCd``
+#: (``NCardDefine.java:58-88``)이고, jadx 가 이 함수의 case 본문을 잃어버렸으므로
+#: (``:56`` 의 "Code decompiled incorrectly") smali 로 읽었습니다 —
+#: ``smali_classes5/com/korail/talk/common/define/NCardDefine.smali:689``,
+#: 분기표 ``:1219-1225``. sparse-switch 키 네 개는
+#: ``0x447cfa13``/``0x447cfa14``/``0x447d5bad``/``0x447d5bae``
+#: = ``1149041171``/``1149041172``/``1149066157``/``1149066158`` 이고, 이는
+#: ``NCardDefine.java:14-17`` 의 상수
+#: ``B2N19060502``/``B2N19060503``/``B2N19061002``/``B2N19061003`` 의 자바
+#: ``String.hashCode()`` 와 정확히 일치합니다. 매칭되면 ``:1180-1193`` 의
+#: 3바이트 보호 리터럴을, 아니면 ``:1196-1215`` 의 다른 3바이트 보호 리터럴을
+#: 돌려줍니다(둘 다 3자 코드이므로 ``"B2N"``/``"MMM"`` 과 길이는 맞습니다).
+#:
+#: 아래 두 값 ``B2N18120402``/``B2N18120403`` 은 해시가
+#: ``286471596``/``286471597`` 로, 그 네 case 에 **없습니다** —
+#: ``NCardDefine.java:12-13`` 에 상수로는 존재하지만 이 함수가 특별 취급하지는
+#: 않습니다. 즉 7.0.6 기준으로는 이 집합이 뒤바뀐 것으로 보입니다. 어느 쪽이
+#: 실서버에서 맞는지는 할인카드 보유 계정으로만 확인할 수 있어(이 라우트는
+#: 카드 미보유 시 ``EAZ000028`` 로 먼저 끊김) 라이브 대조 전까지 값을 바꾸지
+#: 않았습니다. 바꾸려면 코드 변경이므로 별도 판단이 필요합니다.
 _B2N_CARD_KIND_MANAGEMENT_NOS = frozenset({"B2N18120402", "B2N18120403"})
 
 
 def build_discount_card_schedule_query(
     request: DiscountCardScheduleRequest,
 ) -> dict[str, str]:
-    """``useTrmDno``/``qryPgNo`` 는 ``None`` 이면 생략합니다 — Retrofit 은 널
-    ``@Query`` 를 빼기 때문입니다.
+    """``useTrmDno``/``qryPgNo`` 는 ``None`` 이면 이 딕셔너리에서 생략합니다.
 
-    다만 **앱은 그 둘을 항상 채워 보냅니다.**
+    **정정(2026-09-22)**: 원래 이 자리에 "Retrofit 은 널 ``@Query`` 를 빼기
+    때문입니다" 라고 적혀 있었는데 이 라우트에 ``@Query`` 는 없습니다 —
+    ``NetworkApi.java:339-341`` 은 ``@FormUrlEncoded`` +
+    ``postDcntCrdScheduleView(@FieldMap Map<String, String>)`` 입니다. 앱은
+    ``NCardScheduleIn`` 을 공유 ``KJson`` 으로 직렬화한 뒤
+    ``Map<String, String>`` 으로 펴서 넘깁니다
+    (``NetworkService.java:2387-2393``). 따라서 생략은 Retrofit 의 널
+    처리가 아니라 **이 빌더가 키를 넣지 않는 것** 이 유일한 메커니즘입니다.
+
+    앱은 그 둘을 **항상 키로는 채워 보냅니다** —
     ``CheckUsageNCardSectionViewModel.java:396`` 의
-    ``new NCardScheduleIn(...)`` 는 인자 11개를 모두 비어 있지 않게 넘기고,
-    기간·횟수는 ``StringExKt.convertOnlyInt`` 를 거친 값입니다. 즉 생략
-    경로는 앱에 없는 모양입니다.
+    ``new NCardScheduleIn(...)`` 가 인자 11개를 모두 넘기고, ``KJson`` 이
+    ``encodeDefaults`` 로 직렬화하므로 키가 빠지지 않습니다.
+    다만 원래 주석의 "모두 **비어 있지 않게** 넘긴다"는 보장이 아닙니다:
+    기간·횟수는 ``StringExKt.convertOnlyInt``(``StringExKt.java:121-135``)를
+    거치는데 그 함수는 ``Regex(<보호된 패턴>).replace(str, "")`` 일 뿐이어서
+    숫자가 없는 입력에는 ``""`` 를 돌려줍니다. 즉 "키 생략" 경로는 앱에 없고,
+    "빈 문자열" 경로는 앱에도 있습니다.
 
     그래도 기본값을 바꾸지 않은 이유는 **확인할 수 없기 때문**입니다.
     ``NCardScheduleIn`` 의 ``@SerialName`` 은 공통 셋(``Device``/``Version``/
@@ -1132,11 +1189,30 @@ def build_original_ticket_inquiry_form(
 ) -> tuple[tuple[str, str | int], ...]:
     """원표 조회 순서 폼 (``research.tripChgOgtk.do``, ``NetworkApi.java:235``).
 
-    인덱스 키 순서는 ``ROrtg.java:8-11`` 선언 순서. ``ticket_count`` 는
-    호출 지점마다 다른 값을 보냄 — 승객수/행수/리터럴 1
-    (``TCBookingActivity.java:179``, ``PushHistoryActivity.java:357``,
-    ``SeatSearchActivity.java:615``). ``int`` 전송은
-    ``ResearchService.smali:613,628-632`` 확인.
+    7.0.6 의 입력 DTO 는 ``OgTicketInquiryIn.java:28-30``
+    (``List<ChangeOrtkInfo> ortkList`` + ``int tkCnt``)입니다.
+
+    인덱스 키 순서는 ``ChangeOrtkInfo.java:52`` 의 ``@SerialName`` 선언 순서
+    ``ogtkSaleWctNo_`` → ``ogtkSaleDd_`` → ``ogtkSaleSqno_`` →
+    ``ogtkRetPwd_`` 그대로입니다 — 이름이 밑줄로 끝나는 것이 인덱스 접미사가
+    붙는 자리라는 증거이고, 아래 ``rows.append`` 네 줄과 순서가 같습니다.
+    (원래 인용 ``ROrtg.java:8-11`` 은 7.0.6 디컴파일에 없는 경로였습니다.)
+
+    ``ticket_count`` 는 ``@SerialName("tkCnt")``(``:81``)이고 DTO 선언이
+    ``int``(``:30``)입니다 — 원래 근거였던
+    ``ResearchService.smali:613,628-632`` 도 없는 경로였으나 결론은 그대로
+    유효합니다.
+
+    호출 지점마다 값이 다르다는 관찰은 7.0.6 에서 **부분만** 맞습니다. 이
+    DTO 의 생성 지점은 넷이고, 셋은 목록 **행 수** 를 넣습니다 —
+    ``NotificationViewModel.java:197``, ``PassengerTypeChangeViewModel.java:147``,
+    ``TrainSeatMapViewModel.java:1282`` 이 모두 ``arrayList.size()`` 입니다.
+    넷째 ``RefundTicketViewModel.java:258`` 은 보호된 리터럴(``> 0`` 비교로
+    1)을 한 행짜리 목록과 함께 넣습니다. 즉 "행수"와 "리터럴 1"은 확인되지만
+    원래 주석이 말한 **"승객수"를 보내는 지점은 7.0.6 에 없습니다** — 그
+    셋째 경우는 미출처입니다. 원래 인용 ``TCBookingActivity.java:179`` /
+    ``PushHistoryActivity.java:357`` / ``SeatSearchActivity.java:615`` 는 모두
+    7.0.6 에 없는 경로였습니다.
     """
     references = _exact_ticket_reference_tuple(tickets)
     if ticket_count is None:
@@ -1165,12 +1241,32 @@ KorailSelfSeatChangeRoomClassCode = Literal["1", "2"]
 
 @dataclass(frozen=True)
 class SelfSeatChangeInfoRequest:
-    """자율 좌석/열차 변경 대상 (``TicketService.java:54-56``).
+    """자율 좌석/열차 변경 대상 (``SeatAvailabilityIn.java:25``, 필드 ``:26-30``).
+
+    라우트는 ``NetworkApi.java:806-808``(``.../self.seatChgInfo.do``)이고, 입력
+    DTO 는 ``String`` 다섯(``runDt``/``trnNo``/``dptRsStnCd``/``arvRsStnCd``/
+    ``psrmClCd``)뿐입니다. ``@SerialName`` 은 공통 넷(``Device``/``Version``/
+    ``Key``/``LANG``)에만 붙어 있어(``:55``) 나머지 다섯은 프로퍼티 이름이 곧
+    와이어 키입니다 — 아래 폼 빌더가 쓰는 철자와 같습니다. 원래 인용
+    ``TicketService.java:54-56`` 은 7.0.6 디컴파일에 없는 경로였습니다.
 
     모든 값은 승차권의 ``h_run_dt``/``h_trn_no``/``h_dpt_rs_stn_cd``/
-    ``h_arv_rs_stn_cd`` 에서 복사 (``TCSOptionsActivity.java:131-134``).
-    ``trnNo`` 는 0 채움 없음. :attr:`room_class_code` 는 일반실/특실일 때만
-    전송 (``TCSOptionsActivity.java:135-138``, ``K4/o.java:7-8``).
+    ``h_arv_rs_stn_cd`` 에서 복사합니다 —
+    ``SelfSeatChangeOptionViewModel.java:344`` 가
+    ``new SeatAvailabilityIn(ticketListTrainInfo.getHRunDt(), getHTrnNo(),
+    getHDptRsStnCd(), getHArvRsStnCd(), psrmClCd)`` 로 그대로 넘깁니다(원래
+    인용 ``TCSOptionsActivity.java:131-134`` 는 없는 경로였습니다).
+    ``trnNo`` 는 0 채움 없음.
+
+    **:attr:`room_class_code` 에 대한 정정(2026-09-22).** 원래 주석은
+    "일반실/특실일 때만 전송(``TCSOptionsActivity.java:135-138``,
+    ``K4/o.java:7-8``)" 이라고 했는데 두 경로 모두 7.0.6 에 없고, 7.0.6 의
+    동작도 그와 다릅니다: ``SelfSeatChangeOptionViewModel.java:342-343`` 은
+    ``selfSeatChangeTicket.getPsrmClCd()`` 를 그대로 쓰고 그것이 ``null`` 이
+    아닐 때 요청을 만듭니다 — 값을 두 코드로 걸러 내는 분기가 없습니다.
+    실제로 ``PsrmType`` 은 ``ticketselfseat`` 패키지에서 한 번도 참조되지
+    않습니다. 여기서 ``None`` 일 때 키를 빼는 것은 이 라이브러리의 선택이며
+    앱 동작의 재현이 아닙니다.
     """
 
     run_date: str = field(repr=False)
@@ -1185,7 +1281,16 @@ class SelfSeatChangeInfoRequest:
         _validate_self_seat_change_info_request(self)
 
 
-#: ``K4/o.java:7-8`` GENERAL("1") / SPECIAL("2"). ALL("9") 는 제외.
+#: 7.0.6 의 ``PsrmType``(``PsrmType.java:16``)은 상수가 딱 둘입니다 —
+#: ``GENERAL``(``:19``)과 ``SPECIAL``(``:20``) — 이며 각 상수의 ``psrmClCd``
+#: 문자열(``:22``, 생성자 ``:37``)은 AlienGuard 로 보호되어 정적으로 읽을 수
+#: 없습니다. 따라서 아래 ``"1"``/``"2"`` 는 라이브 관측값이고 7.0.6 소스로
+#: 확인된 것이 아닙니다.
+#:
+#: 원래 주석은 ``K4/o.java:7-8`` 을 인용하며 ``ALL("9") 는 제외`` 라고
+#: 적었는데, ① 그 경로는 7.0.6 에 없고 ② 7.0.6 의 ``PsrmType`` 에는 애초에
+#: ``ALL`` 상수가 없습니다(``$values()`` 가 ``:24-29`` 에서 둘만 채웁니다).
+#: 즉 "제외"할 세 번째 값이 존재하지 않습니다 — 그 주장은 미출처입니다.
 SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
 
 
@@ -1374,8 +1479,17 @@ def _validate_price_fare_leg(leg: PriceFareLeg) -> None:
 class PriceFareQuoteRequest:
     """운임 계산 요청 — 한두 구간 + ``txtMenuId``.
 
-    ``txtMenuId`` 는 앱 상수 ``"11"`` (``a5/k.java:92-94`` →
-    ``PriceFareActivity.java:49,62``).
+    7.0.6 의 입력 DTO 는 ``PrcFareIn.java:27``(필드 ``:28-31``:
+    ``txtMenuId``/``chtnDvCd``/``trnCnt`` + ``List<PrcFareInItem> paramList``)
+    이고, 앱의 유일한 조립 지점은 ``TrainOpInfoViewModel.java:794`` 입니다 —
+    ``new PrcFareIn(txtMenuId, chtnDvCd, trnCnt, paramList)``
+    (인자 순서는 ``PrcFareIn.java:197`` 의 ``copy`` 로 확인).
+
+    ``txtMenuId`` 가 앱 상수라는 것은 맞습니다 — ``:794`` 의 첫 인자는
+    **2바이트** AlienGuard 리터럴입니다. 다만 **값 ``"11"`` 자체는 7.0.6
+    소스로 확인되지 않습니다**(길이만 일치). 원래 인용 ``a5/k.java:92-94`` 와
+    ``PriceFareActivity.java:49,62`` 는 둘 다 7.0.6 디컴파일에 없는
+    경로였습니다.
     """
 
     legs: tuple[PriceFareLeg, ...] = field(repr=False)
@@ -1446,7 +1560,19 @@ def build_price_fare_quote_form(
 
 @dataclass(frozen=True)
 class TicketReservationDetailRequest:
-    """미결제 예약 PNR (``CertificationService.java:45-46``)."""
+    """미결제 예약 PNR (``ReservationListIn.java:30`` 의 ``hidPnrNo``).
+
+    라우트는 ``certification.ReservationList`` 로, 7.0.6 에는 같은 경로가 두
+    번 선언됩니다(``NetworkApi.java:422-424`` ``postInquiryTicketRsv`` 와
+    ``:626-628`` ``postReservationList``) — 둘 다 ``@FormUrlEncoded`` +
+    ``@FieldMap`` 이고 응답은 ``ReservationOut`` 입니다. 입력 DTO
+    ``ReservationListIn.java:29`` 는 ``hidPnrNo``(``:30``) 외에
+    ``txtPsgDisc0019Cnt``(``:32``)와 ``psgDisc0019List``(``:31``)도
+    선언하는데, 이 라이브러리는 PNR 하나만 보냅니다. ``@SerialName`` 은 공통
+    넷에만 있어(``:58``) ``hidPnrNo`` 는 프로퍼티 이름이 곧 와이어 키입니다.
+    원래 인용 ``CertificationService.java:45-46`` 은 7.0.6 디컴파일에 없는
+    경로였습니다.
+    """
 
     pnr_no: str = field(repr=False)
 
@@ -1463,7 +1589,11 @@ def _validate_ticket_reservation_detail_request(
 def build_ticket_reservation_detail_query(
     request: TicketReservationDetailRequest,
 ) -> dict[str, str]:
-    """``hidPnrNo`` 하나 — ``CertificationService.java:45-46``."""
+    """``hidPnrNo`` 하나 — ``ReservationListIn.java:30``.
+
+    (원래 인용 ``CertificationService.java:45-46`` 은 7.0.6 에 없는 경로입니다.
+    클래스 독스트링 참고.)
+    """
     if not isinstance(request, TicketReservationDetailRequest):
         raise TypeError(
             "request must be a TicketReservationDetailRequest"
@@ -1474,9 +1604,21 @@ def build_ticket_reservation_detail_query(
 
 @dataclass(frozen=True)
 class RefundCompanion:
-    """동반자 신원 (``TicketListActivity.java:908-909``, ``ui/ticket/ticketReturn/a.java:355-356``).
+    """동반자 신원 (``RefundCommissionIn.java:34-35``).
 
-    없으면 빈 문자열 전송 — 생략 불가.
+    와이어 키는 ``@SerialName("h_comp_nm")``/``@SerialName("h_comp_cert_no")``
+    (``RefundCommissionIn.java:59``)입니다. 원래 인용
+    ``TicketListActivity.java:908-909`` 과
+    ``ui/ticket/ticketReturn/a.java:355-356`` 은 둘 다 7.0.6 디컴파일에 없는
+    경로였습니다.
+
+    없으면 빈 문자열 전송 — 생략 불가. 7.0.6 에서도 그렇습니다:
+    ``MyTicketDetailViewModel.java:277`` 과
+    ``FTicketDetailViewModel.java:179`` 가 ``ticketDetailOut.getCompaNm()`` 과
+    ``getCompaBrth()`` 를 **조건 없이** 5·6번째 인자로 넘기고, 두 필드는
+    승차권 상세 DTO 에서 기본값 ``""`` 을 가집니다. 6번째 자리가
+    ``h_comp_cert_no`` 인데 앱이 거기 넣는 값은 동반자 **생년월일**
+    (``compaBrth``)이라는 점도 함께 확인됩니다.
     """
 
     name: str = field(default="", repr=False)
@@ -1519,10 +1661,18 @@ def build_refund_commission_form(
     ticket: OriginalTicketReference,
     companion: RefundCompanion = RefundCompanion(),
 ) -> dict[str, str]:
-    """환불 수수료 사전조회 폼 (``RefundService.java:19-21``).
+    """환불 수수료 사전조회 폼 (``refunds.CommissionView``).
+
+    라우트는 ``NetworkApi.java:598-600``, 입력 DTO 는
+    ``RefundCommissionIn.java:27``(필드 ``:32-42``)입니다. 아래 여섯 키는
+    ``:59`` 의 ``@SerialName`` 집합에서 그대로 읽었고 순서도 같습니다.
+    원래 인용 ``RefundService.java:19-21`` 은 7.0.6 디컴파일에 없는
+    경로였습니다.
 
     판매일자 필드는 ``h_orgtk_ret_sale_dt`` — 영수증 조회의 ``h_orgtk_sale_dt``
-    와 다름.
+    와 다름. 7.0.6 도 같습니다: ``RefundCommissionIn`` 은 ``hOrgtkRetSaleDt``
+    (``:37``)를, 형제 ``RefundTicketIn`` 은 ``hOrgtkSaleDt``(``:38``)를
+    선언합니다.
     """
     reference = _exact_original_ticket_reference(ticket)
     party = _exact_refund_companion(companion)
@@ -1542,10 +1692,24 @@ def build_refund_ticket_detail_form(
     from_purchase_history: bool = False,
     txt_index: str | None = None,
 ) -> dict[str, str]:
-    """환불 대상 승차권 상세 (``RefundService.java:23-25``).
+    """환불 대상 승차권 상세 (``refunds.SelTicketInfo``).
 
-    ``h_purchase_history``: "Y" 구매이력(``TicketPurchaseHistoryActivity.java:267``),
-    "N" 승차권 목록(``TicketListActivity.java:926``).
+    라우트는 ``NetworkApi.java:406-408``
+    (``postGetTicketDetail(@FieldMap …) → TicketDetailOut``), 입력 DTO 는
+    ``TicketDetailIn.java:26``(필드 ``:31-36``)입니다. 아래 여섯 키는 모두
+    ``TicketDetailIn.java:57`` 의 ``@SerialName`` 집합입니다 —
+    ``h_orgtk_ret_sale_dt``/``h_orgtk_wct_no``/``h_orgtk_sale_sqno``/
+    ``h_orgtk_ret_pwd``/``h_purchase_history``/``txtIndex``. 원래 인용
+    ``RefundService.java:23-25`` 는 7.0.6 디컴파일에 없는 경로였습니다.
+
+    ``h_purchase_history`` 가 구매이력/승차권목록 두 값으로 갈린다는 관찰은
+    ``MyTicketBaseViewModel.java:696`` 에서 구조로 확인됩니다 —
+    ``new TicketDetailIn(…, z ? <1바이트 리터럴> : <1바이트 리터럴>, txtIndex)``
+    로 불리언 하나에 1바이트 코드 두 개가 걸려 있습니다. **다만 그 두 값이
+    ``"Y"``/``"N"`` 이라는 것은 7.0.6 소스로 확인되지 않습니다** — 리터럴이
+    AlienGuard 로 보호되어 길이(1자)만 맞습니다. 값 자체는 라이브 관측에서
+    왔습니다. 원래 근거였던 ``TicketPurchaseHistoryActivity.java:267`` 과
+    ``TicketListActivity.java:926`` 은 둘 다 7.0.6 에 없는 경로였습니다.
     """
     reference = _exact_original_ticket_reference(ticket)
     if type(from_purchase_history) is not bool:

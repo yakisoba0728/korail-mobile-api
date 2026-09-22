@@ -8,26 +8,71 @@
 액션(``act_8_2``)까지 따로 갖고 있습니다. **기본값은 꺼짐**
 (:attr:`~korail_mobile_api.config.KorailConfig.netfunnel_enabled`).
 
+인용 갱신 (2026-09-22)
+-----------------------
+이 모듈의 ``T6/*``·``U6/*`` 인용은 6.5.0 난독화 이름이었고 7.0.6 디컴파일에
+그 경로가 없습니다. 다행히 7.0.6 의 같은 SDK 는 ``com/netfunnel/api/`` 아래에
+**난독화되지 않은 평문**으로 들어 있어 전부 다시 짚을 수 있었습니다. 대응:
+
+======================  =========================================
+6.5.0 인용              7.0.6 경로
+======================  =========================================
+``T6/a.java``           ``com/netfunnel/api/Code.java``
+``T6/c.java``           ``com/netfunnel/api/Command.java``
+``T6/d.java``           ``com/netfunnel/api/CommandClient.java``
+``T6/g.java``           ``com/netfunnel/api/Netfunnel.java``
+``T6/h.java``           ``com/netfunnel/api/Property.java``
+``T6/i.java``           ``com/netfunnel/api/Response.java``
+``U6/c.java``           ``com/netfunnel/api/http/URL.java``
+                        (+ ``http/Client.java``)
+======================  =========================================
+
+이 대응은 이름 유사성이 아니라 **내용 일치**로 정했습니다 — 각 클래스의
+메서드 이름·enum 값·파라미터 이름이 옛 서술과 그대로 맞습니다(``Command``
+enum 은 줄 번호까지 겹칩니다). 아래 줄 번호는 모두 7.0.6 기준입니다.
+
 KORAIL 은 JS 방언을 쓰지 않습니다
 -----------------------------------
-KORAIL 은 STCLab **네이티브 안드로이드 SDK**(``T6``/``U6`` 패키지)를 씁니다.
-SRT 의 WebView ``netfunnel.js`` 와 차이:
+KORAIL 은 STCLab **네이티브 안드로이드 SDK**(``com.netfunnel.api`` 패키지)를
+씁니다. SRT 의 WebView ``netfunnel.js`` 와 차이:
 
-1. ``js``·``nfid``·``prefix``·epoch 꼬리 없음(``T6/d.java:30-31,54-55,78-79,99-101``).
-2. ``sid``/``aid`` 는 5101 에만(``T6/d.java:99-101``). 5002 에 싣는 JS 방언과 반대.
-3. ``ttl`` 은 되돌려 보내지 않음 — 순수 클라이언트 힌트(``T6/g.java:462,467``).
-4. 응답은 ``<code>:<params>`` (``T6/i.java:36-43``).
+1. ``js``·``nfid``·``prefix``·epoch 꼬리 없음. 요청 파라미터를 싣는 네 곳이
+   ``CommandClient`` 에 다 있고 ``addParam`` 호출이 전부입니다 —
+   5101 ``GetTidCheckedEnter``(``CommandClient.java:59-67``),
+   5002 ``CheckedEnter``(``:122-125``),
+   5004 ``Complete``(``:178-181``),
+   5003 ``AliveNotice``(``:217-220``). 그 밖의 파라미터는 없습니다.
+2. ``sid``/``aid`` 는 5101 에만(``CommandClient.java:61``, ``:63``). 5002 에
+   싣는 JS 방언과 반대이고, 5002/5004 는 ``opcode``+``key`` 뿐입니다.
+3. ``ttl`` 은 되돌려 보내지 않음 — 순수 클라이언트 힌트. 위 네 파라미터
+   블록 어디에도 ``ttl`` 이 없고, 읽은 ``ttl`` 은
+   ``Netfunnel.java:519-521`` 에서 **로컬 sleep 기한**을 계산하는 데만
+   쓰입니다(``getTTL(...)`` → ``currentTimeMillis() + ttl*1000``).
+4. 응답은 ``<code>:<params>`` (``Response.Parser``,
+   ``Response.java:128-137`` — 첫 ``:`` 위치를 ``indexOf`` 로 찾고
+   (``:129``) 없으면 ``Code.ErrorData``(``:130-131``), 있으면 앞을
+   코드로 파싱하고 뒤를 ``&`` 로 쪼개 ``=`` 로 가릅니다(``:135-137``)).
 
 진입 순서: 5101 → 5002 → 5004
 -------------------------------
 5101 표는 ``chkEnter`` 가 더 짧은 세션 키로 바꿔 주고, 그 키만 ``setComplete``
-가 받습니다. 매 단계의 키가 앞 키를 **대체**합니다(``T6/d.java:61,79,107``).
+가 받습니다. 매 단계의 키가 앞 키를 **대체**합니다 — ``CommandClient`` 는
+키만 따로 들지 않고 응답 객체 전체를 갈아 끼웁니다:
+``this.response_ = responseParser.clone()`` 이 5101 뒤(``:80``), 5002 뒤
+(``:137``), 5003 뒤(``:232``)에 있고, 5004 는 대신 비웁니다
+(``this.response_.clear()``, ``:184``).
 
 대기열은 풀이고 세션은 그중 한 노드에 삽니다
 ----------------------------------------------
 ``nf.letskorail.com`` 은 분산 정문. 세션을 완료할 수 있는 곳은 진입이 떨어진
-노드뿐이고, 응답의 ``ip``/``port`` 가 그 노드입니다(``T6/i.java:50-53``,
-``T6/d.makeURL``, ``T6/d.java:17-19``).
+노드뿐이고, 응답의 ``ip``/``port`` 가 그 노드입니다 —
+``Response.Parser`` 가 ``ip`` 를 ``setHost``, ``port`` 를 ``setPort`` 에
+넣고(``Response.java:143-146``), ``CommandClient.makeURL(Property, Response)``
+(``:33-38``)가 그 host/port 로 URL 을 다시 만듭니다. 옛 인용
+``T6/d.makeURL``/``T6/d.java:17-19`` 가 이 메서드입니다.
+**단** 그 재조립에는 ``!property.isHostNotmodify()`` 조건이 붙어 있고 7.0.6
+의 컴파일된 기본값은 ``true`` 입니다 —
+:mod:`korail_mobile_api.netfunnel_safety` 의 같은 대목 참고.
 """
 
 from __future__ import annotations
@@ -62,7 +107,20 @@ from .netfunnel_safety import (
 
 
 # ---------------------------------------------------------------------------
-# Status codes — ``T6/a.java``, smali ``T6/a.smali:228-281,319,510-574``.
+# Status codes — 7.0.6: com/netfunnel/api/Code.java:13-... (평문으로 읽힘).
+# 옛 인용 T6/a.java / smali T6/a.smali:228-281,319,510-574 는 6.5.0 난독화
+# 이름이고 7.0.6 에 그 경로가 없습니다. 아래 상수에 해당하는 항목:
+#   Success(200)            Code.java:27
+#   Continue(201)           :28   ← jadx 가 ComposerKt.providerKey 로 표기;
+#                                   ComposerKt.java:35 에서 201
+#   ContinueDebug(202)      :29   ← ComposerKt.compositionLocalMapKey = 202
+#                                   (ComposerKt.java:29)
+#   TsBypass(300)           :30
+#   TsBlock(301)            :31
+#   TsIpBlock(302)          :32
+#   TsExpressNumber(303)    :33
+#   TsErrorAComplete(502)   :36
+#   TsErrorWrongServer(503) :37
 # ---------------------------------------------------------------------------
 SUCCESS_CODE = "200"
 BYPASS_CODE = "300"
@@ -72,22 +130,51 @@ EXPRESS_CODE = "303"
 KEYLESS_PASS_CODES = frozenset({BYPASS_CODE, EXPRESS_CODE})
 #: 통과. 200 은 키 발급, 300·303 은 키 없이도 통과할 수 있다.
 SUCCESS_CODES = frozenset({SUCCESS_CODE, *KEYLESS_PASS_CODES})
-#: 아직 대기 중(``T6/g.java:451``).
+#: 아직 대기 중. 7.0.6: ``Netfunnel.EvnetCode.isContinue()``
+#: (``Netfunnel.java:106-108``) 이 ``Continue`` 와 ``ContinueInterval``
+#: 둘만 참으로 봅니다(``:62``, ``:65``). 대기 루프의 실제 탈출 조건은
+#: ``Netfunnel.java:505`` 의 ``getCode() != Code.Continue &&
+#: getCode() != Code.ContinueDebug`` 이므로, 와이어 코드로는 201/202 가
+#: 대기입니다(``Code.java:28-29``). 옛 인용 ``T6/g.java:451``.
 CONTINUE_CODES = frozenset({"201", "202"})
 #: ``TsErrorAComplete`` — setComplete 에서만 받아들임.
 ALREADY_COMPLETE_CODE = "502"
 #: 완료 불가. ``503:msg="Wrong Server ID"`` — 5101 표를 setComplete 에 보낸 경우
 #: 또는 엉뚱한 노드에 요청한 경우.
 NOT_COMPLETABLE_CODE = "503"
-#: ``TsBlock``(301)/``TsIpBlock``(302). ``T6/g.java:892-894`` ``isBlocking()``.
-#: ``TsExpressNumber``(303)는 성공(``T6/g.java:909`` ``isSuccess()``).
+#: ``TsBlock``(301)/``TsIpBlock``(302) — ``Code.java:31-32``. 7.0.6 의
+#: ``isBlocking()`` 은 ``Netfunnel.java:114-116`` 이고 정확히 이 둘만
+#: 참입니다(``EvnetCode.Block``/``IpBlock``, ``:67-68``).
+#: ``TsExpressNumber``(303, ``Code.java:33``)는 성공 쪽입니다 —
+#: ``isSuccess()``(``Netfunnel.java:102-104``)가 ``Success``·``NotUsed``·
+#: ``Bypass``·``ErrorBypass``·``ExpressNumber`` 다섯을 참으로 봅니다.
+#: (``NotUsed``/``ErrorBypass`` 는 이 라이브러리가 성공으로 세지 않는
+#: 항목이라 :data:`SUCCESS_CODES` 와 완전히 같지는 않습니다.)
+#: 옛 인용 ``T6/g.java:892-894``/``:909``.
 QUEUE_REJECTED_CODES = frozenset({"301", "302"})
 
-# TTL clamp: 7.0.6 ``Response.getTTL(int, int)`` 가 정확히 clamp(1, 30) 이고
-# (``com/netfunnel/api/Response.java:59-64``), 모든 호출부가 하한 1 을 넘긴다
-# (``Netfunnel.java:519,634,736,790``). 상한 30 은 ``Property.java:22`` 의
-# 컴파일된 기본값 ``max_ttl_ = 30`` 이며, ``LoadProperty.java:89,92`` 가 원격
-# JSON 으로 override 할 수 있게 해 두어 런타임 실제 값은 PROTECTED 다.
+# TTL clamp: 7.0.6 ``Response.getTTL(int, int)`` 는
+# ``com/netfunnel/api/Response.java:59-66`` 이고, 실제 clamp 본문은
+# ``:61-65`` 입니다.
+#
+# 이전 주석은 이 메서드가 "정확히 clamp(1, 30)" 이고 근거가 ``:59-64`` 라고
+# 적었습니다. 둘 다 정확하지 않았습니다:
+#   * ``:59-64`` 는 하한을 적용하는 줄을 빼먹습니다. 상한은 ``:62-64``
+#     (``if (i <= 0 || i3 <= i) i = i3;``), **하한은 ``:65``**
+#     (``return i < i2 ? i2 : i;``) 입니다. ``:60`` 은 DLog 한 줄입니다.
+#   * 1 과 30 은 메서드에 박힌 값이 아니라 **호출자가 넘기는 인자**입니다
+#     (시그니처는 ``getTTL(int max, int min)``). 그래서 메서드 자체는
+#     clamp(min, max) 이고, 상한 인자가 0 이하면 상한을 아예 적용하지
+#     않습니다.
+# 다만 결과는 같습니다 — 네 호출부 전부가 ``getTTL(getProperty().getMaxTTL(),
+# 1)`` 로 부르므로(``Netfunnel.java:519,634,736,790``) 하한은 리터럴 1 이고
+# 상한은 maxTTL 입니다. 상한 30 은 ``Property.java:22`` 의
+# 컴파일된 기본값 ``max_ttl_ = 30`` 이며(게터는 ``Property.java:164``),
+# ``LoadProperty.java:92`` 의 ``setMaxTTL(jSONObject2.getInt("max_ttl"))`` 가
+# 원격 JSON 으로 override 할 수 있게 해 두어 런타임 실제 값은 PROTECTED 다.
+# (이전 주석이 함께 인용한 ``:89`` 는 ``max_ttl`` 이 아니라 ``retry`` 를
+# 읽는 줄입니다 — ``setRetry(...getInt("retry"))``. 같은 ``server`` 객체를
+# 파싱하는 연속된 블록이라 한 칸 밀려 적혀 있었습니다.)
 MAX_TTL_SECONDS = 30
 MIN_TTL_SECONDS = 1
 
@@ -143,7 +230,19 @@ def get_tid_chk_enter_params(
     *,
     service_id: str = KORAIL_NETFUNNEL_SERVICE_ID,
 ) -> tuple[tuple[str, str], ...]:
-    """5101 파라미터: ``opcode``, ``sid``, ``aid`` (``T6/d.java:99-101``)."""
+    """5101 파라미터: ``opcode``, ``sid``, ``aid``.
+
+    7.0.6: ``CommandClient.GetTidCheckedEnter()``
+    (``com/netfunnel/api/CommandClient.java:40-99``)의 ``addParam`` 블록 —
+    ``opcode``(``:59``, 값은 ``Command.GET_TID_CHK_ENTER.value()`` = 5101,
+    ``:57``), ``sid``(``:61``, ``property.getServiceID()``),
+    ``aid``(``:63``, ``property.getActionID()``). 넷째로 ``user_data`` 가
+    있지만 **길이가 0 이 아닐 때만** 붙고(``:65-68``) KORAIL 은 설정하지
+    않습니다(``Property.java:21`` 의 ``user_data_ = ""`` 이 기본값이고
+    ``KorailTalkApplication.setNetFunnel()`` 이 건드리지 않음) — 그래서
+    이 함수도 싣지 않습니다.
+    옛 인용 ``T6/d.java:99-101``.
+    """
     return (
         ("opcode", KorailNetFunnelOpcode.GET_TID_CHK_ENTER.value),
         ("sid", service_id),
@@ -174,7 +273,13 @@ def _keyed_opcode_params(
 
 
 def chk_enter_params(key: str) -> tuple[tuple[str, str], ...]:
-    """5002 파라미터: ``opcode``, ``key`` (``T6/d.java:54-55``)."""
+    """5002 파라미터: ``opcode``, ``key``.
+
+    7.0.6: ``CommandClient.CheckedEnter()``(``CommandClient.java:101-156``)
+    — ``opcode``(``:122``, ``Command.CHK_ENTER.value()`` = 5002, ``:120``)
+    와 ``key``(``:124``, ``this.response_.getKey()``) 둘뿐입니다.
+    옛 인용 ``T6/d.java:54-55``.
+    """
     return _keyed_opcode_params(
         KorailNetFunnelOpcode.CHK_ENTER,
         key,
@@ -183,7 +288,13 @@ def chk_enter_params(key: str) -> tuple[tuple[str, str], ...]:
 
 
 def set_complete_params(key: str) -> tuple[tuple[str, str], ...]:
-    """5004 파라미터: ``opcode``, ``key`` (``T6/d.java:78-79``)."""
+    """5004 파라미터: ``opcode``, ``key``.
+
+    7.0.6: ``CommandClient.Complete()``(``CommandClient.java:158-199``)
+    — ``opcode``(``:178``, ``Command.SET_COMPLETE.value()`` = 5004,
+    ``:176``)와 ``key``(``:180``) 둘뿐입니다.
+    옛 인용 ``T6/d.java:78-79``.
+    """
     return _keyed_opcode_params(
         KorailNetFunnelOpcode.SET_COMPLETE,
         key,
@@ -232,11 +343,29 @@ def _queue_failure(
 
 
 def parse_netfunnel_body(body: str, *, action: str) -> KorailNetFunnelToken:
-    """네이티브 SDK 응답을 코드와 파라미터로 가름. ``T6/i.Parser``(``T6/i.java:35-63``).
+    """네이티브 SDK 응답을 코드와 파라미터로 가름.
 
-    첫 ``:`` 앞 = 상태 코드, 나머지 = ``&`` 로 갈라 ``name=value`` 쌍.
+    7.0.6 원본은 ``Response.Parser(String)``
+    (``com/netfunnel/api/Response.java:128-163``, 평문으로 읽힘).
+    옛 인용 ``T6/i.Parser``/``T6/i.java:35-63`` 이 같은 메서드의 6.5.0
+    난독화 이름입니다.
+
+    첫 ``:`` 앞 = 상태 코드, 나머지 = ``&`` 로 갈라 ``name=value`` 쌍
+    (``Response.java:129-137``). 원본이 이름으로 알아보는 키는 여덟 개뿐
+    입니다 — ``key``(``:139``), ``utime``(``:141``), ``ip``(``:143``),
+    ``port``(``:145``), ``ttl``(``:147``), ``tps``(``:149``),
+    ``nwait``(``:151``), ``nnext``(``:153``) — 그리고 ``=`` 가 없거나
+    조각이 둘 미만이면 **조용히 버립니다**(``:138``). 이 함수는 대신 모든
+    쌍을 :attr:`KorailNetFunnelToken.params` 에 담아 둡니다.
+
     ``ip``/``port`` 는 :func:`~korail_mobile_api.netfunnel_safety.korail_netfunnel_node_url`
     을 통과시킵니다 — 풀 밖 호스트는 여기서 예외.
+
+    .. note::
+       아래 예외 **메시지 문자열** 안에 남아 있는 ``T6/i.java:36-42`` 는
+       7.0.6 에 없는 6.5.0 경로입니다. 주석이 아니라 런타임 메시지라
+       이번 인용 정리(주석·독스트링 한정)에서는 손대지 않았습니다.
+       고칠 때 ``Response.java:129-137`` 로 바꾸면 됩니다.
     """
     head, separator, tail = body.strip().partition(":")
     if not separator or not head.isdigit():
@@ -296,7 +425,16 @@ def is_queued(token: KorailNetFunnelToken) -> bool:
 
 
 def queue_wait_seconds(token: KorailNetFunnelToken) -> int:
-    """다음 chkEnter 까지 잘 시간. ``T6/i.java:175-181`` max=30, min=1."""
+    """다음 chkEnter 까지 잘 시간.
+
+    7.0.6: ``Response.getTTL(int max, int min)``
+    (``com/netfunnel/api/Response.java:59-66``, clamp 본문 ``:61-65``)에
+    네 호출부가 모두 ``(getProperty().getMaxTTL(), 1)`` 을 넘겨
+    (``Netfunnel.java:519,634,736,790``) 결과적으로 clamp(1, 30) 이
+    됩니다 — 자세한 갈래는 위 :data:`MAX_TTL_SECONDS` 주석 참고.
+    옛 인용 ``T6/i.java:175-181``(max=30, min=1)은 7.0.6 에 없는 경로이며,
+    30/1 을 메서드에 박힌 값처럼 읽었던 것도 바로잡았습니다.
+    """
     raw = token.params.get("ttl", "")
     ttl = int(raw) if raw.isascii() and raw.isdigit() else 0
     return max(MIN_TTL_SECONDS, min(ttl, MAX_TTL_SECONDS))
@@ -391,8 +529,12 @@ class KorailNetFunnelClient:
     def release(self, token: KorailNetFunnelToken) -> None:
         """5004 — 슬롯을 놓습니다.
 
-        키 없는 BYPASS(300)·ExpressNumber(303)는 놓을 것이 없으므로 즉시 리턴
-        (``T6/d.java:70-73`` ``getKey().length() < 1``). 그 외의 키 없는 토큰
+        키 없는 BYPASS(300)·ExpressNumber(303)는 놓을 것이 없으므로 즉시 리턴.
+        7.0.6 도 같습니다 — ``CommandClient.Complete()`` 가 본문 맨 앞에서
+        ``response == null || response.getKey().length() < 1`` 이면 로그만
+        남기고 ``return`` 합니다(``com/netfunnel/api/CommandClient.java:161-165``).
+        ``CheckedEnter()`` 에도 같은 가드가 있습니다(``:104-108``).
+        옛 인용 ``T6/d.java:70-73``. 그 외의 키 없는 토큰
         (코드가 300/303 이 아님)은 네트워크를 건드리지 않고 바로
         :class:`~korail_mobile_api.errors.KorailNetFunnelError` 를 냅니다.
         """
@@ -500,10 +642,31 @@ class KorailNetFunnelClient:
 # ---------------------------------------------------------------------------
 
 def inquiry_action(*, peak_season: bool) -> KorailNetFunnelAction:
-    """열차조회 액션 선택(``b5/c.java:439``).
+    """열차조회 액션 선택.
 
-    ``isPeakSeason`` 은 서버 달력 데이터(``S4/C0805e.java:116-121``). 달력을
-    아직 받지 않았으면 ``false``(``:117``). 이 함수는 날짜가 아니라 플래그를 받음.
+    7.0.6 대응 분기는 ``TrainScheduleViewModel.java:5219-5235`` 입니다 —
+    ``getRunDateMap()`` 에서 출발일(``getYyyyMMdd()``, ``:5220``)의
+    ``RunDateOutItem`` 을 꺼내(``:5224``) ``isPeakSeason()`` 으로 갈라
+    ``:5227``/``:5229`` 의 보호된 액션 id 문자열을 고르고, 그것을
+    ``withNetFunnel(str, ...)``(``:5244``)에 넘깁니다.
+    옛 인용 ``b5/c.java:439`` 는 7.0.6 에 없습니다.
+
+    ``isPeakSeason`` 은 서버 달력 데이터입니다 — 7.0.6 에서는
+    ``RunDateOutItem.isPeakSeason()``(``network/model/RunDateOutItem.java:516-523``)
+    이 응답 필드 ``bizDdStgCd``(``:517``)를 어떤 코드값과 견줍니다(비교
+    자체는 AppSuitLinker 뒤라 그 코드값은 PROTECTED).
+    달력을 아직 받지 않았으면 ``runDateOutItem == null`` 이 되어
+    비-성수기 갈래로 갑니다(``TrainScheduleViewModel.java:5225``,
+    ``:5231-5234``) — 옛 서술의 "달력을 아직 받지 않았으면 ``false``" 와
+    같은 뜻입니다. 옛 인용 ``S4/C0805e.java:116-121``/``:117`` 은 7.0.6 에
+    없습니다.
+
+    감사가 후보로 제시한 ``data/CalendarData.java:16`` 은 쓰지 않았습니다 —
+    ``year``/``month``/``date``/``mHour``/``mMinute`` 만 든 날짜 홀더이고
+    (``CalendarData.java:18-22``) 성수기 여부와 무관합니다. 이름이 비슷해
+    보여도 같은 것이 아닙니다.
+
+    이 함수는 날짜가 아니라 플래그를 받음.
     """
     return (
         KorailNetFunnelAction.PEAK_SEASON_INQUIRY

@@ -364,9 +364,10 @@ class KorailClient:
     ) -> KorailSession:
         """회원 자격증명으로 로그인하고 살아 있는 세션을 돌려줍니다.
 
-        ``POST login.Login``(``LoginService.java:17``). 부르는 즉시 기존 세션을 먼저 버리고,
-        서비스 상태 캐시와 비밀번호 암호화 파라미터(``common.code.do``)를 읽은 뒤 변환한
-        비밀번호를 보냅니다.
+        ``POST login.Login``(``NetworkApi.java:459-460`` — ``postLogin(@FieldMap)``).
+        옛 인용 ``LoginService.java:17`` 은 6.5.0 잔재로 7.0.6 에 그 파일이 없습니다.
+        부르는 즉시 기존 세션을 먼저 버리고, 서비스 상태 캐시와 비밀번호 암호화
+        파라미터(``common.code.do``)를 읽은 뒤 변환한 비밀번호를 보냅니다.
 
         ``member_no`` 는 회원번호·휴대폰번호·이메일 중 아무거나 되고, ``input_flag`` 를 주지
         않으면 :func:`~korail_mobile_api.session.infer_login_input_flag` 가 값의 모양을 보고
@@ -685,7 +686,10 @@ class KorailClient:
         )
 
     def get_deposit_banks(self) -> DepositBankListResponse:
-        """입금은행 코드표. ``POST dlay.dptnBank.do``(``DelayService.java:30``). 로그인 필요."""
+        """입금은행 코드표. ``POST dlay.dptnBank.do``
+        (``NetworkApi.java:392-393`` — ``postDptnBank(@Field("Device"), @Field("Version"), @Field("Key"))``;
+        이 라우트만 예외적으로 ``@FieldMap`` 이 아니라 개별 ``@Field`` 세 개입니다).
+        옛 인용 ``DelayService.java:30`` 은 6.5.0 잔재로 7.0.6 에 없습니다. 로그인 필요."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.dlay.dptnBank.do",
@@ -696,7 +700,11 @@ class KorailClient:
         self,
         departure_date_to: str,
     ) -> DelayDiscountTicketListResponse:
-        """지연할인권 조회. ``POST passCard.DelayDiscountView``(``PassCardService.java:20``).
+        """지연할인권 조회. ``POST passCard.DelayDiscountView``
+        (``NetworkApi.java:352-353`` — ``postDelayDiscountView(@QueryMap)``. ``@FormUrlEncoded``
+        선언인데 인자는 ``@QueryMap`` 이라, 7.0.6 도 이 라우트만은 값을 쿼리스트링으로
+        붙입니다 — 이 메서드가 ``post_query`` 를 쓰는 이유입니다).
+        옛 인용 ``PassCardService.java:20`` 은 6.5.0 잔재로 7.0.6 에 없습니다.
 
         로그인 필요.
         """
@@ -717,7 +725,8 @@ class KorailClient:
         page_no: int = 1,
         pnr_no: str = "",
     ) -> DiscountCouponListResponse:
-        """할인쿠폰 조회. ``POST passCard.CouponView``(``PassCardService.java:24``). 로그인 필요.
+        """할인쿠폰 조회. ``POST passCard.CouponView``(``NetworkApi.java:328-329`` — ``postCoupon(@FieldMap)``).
+        옛 인용 ``PassCardService.java:24`` 는 6.5.0 잔재로 7.0.6 에 없습니다. 로그인 필요.
 
         보유분 없으면 ``WRG000000`` 으로 빈 결과(예외 아님).
         """
@@ -730,12 +739,13 @@ class KorailClient:
         )
 
     def get_korail_point_summary(self) -> KorailPointSummaryResponse:
-        """포인트·쿠폰·복지자격 요약. ``POST xPoint.MyXPointView``(``XPointService.java:18-20``).
+        """포인트·쿠폰·복지자격 요약. ``POST xPoint.MyXPointView``.
 
-        로그인 필요. 복지 등록 상태(장애인증·보조견)도 함께 옵니다. 응답 필드는
-        ``MyXPointViewOut.java:27-74`` 이고 라우트는 ``xPoint.MyXPointView``
-        (``NetworkApi.java:515``) 입니다 — 예전에 적혀 있던
-        ``MyPageActivity`` 는 6.5.0 클래스로 7.0.6 에 없습니다.
+        로그인 필요. 복지 등록 상태(장애인증·보조견)도 함께 옵니다. 라우트 선언은
+        ``NetworkApi.java:515-516``(``postMyXPointView(@FieldMap)``), 응답 필드는
+        ``MyXPointViewOut.java:27-74`` 입니다. 예전에 적혀 있던 ``MyPageActivity``
+        와 ``XPointService.java:18-20`` 은 둘 다 6.5.0 클래스로 7.0.6 디컴파일에
+        없습니다 — 라우트만 같고 옛 클래스의 필드·분기까지 같다는 확인은 아닙니다.
         """
         self._require_session()
         return self._post_read(
@@ -1647,9 +1657,18 @@ class KorailClient:
 
         원본 JSON은 ``raw``에 그대로 보존됩니다.
 
-        ``mode`` 는 페이지 커서가 아니라 목록 종류입니다 — ``"1"`` 은 현재
-        승차권(``TicketListActivity.java:937-939``), ``"2"`` 는
-        구매이력(``TicketPurchaseHistoryActivity.java:276-278``)이고 그 밖의 값은 거부됩니다.
+        ``mode`` 는 페이지 커서가 아니라 목록 종류입니다 — ``"1"`` 은 현재 승차권,
+        ``"2"`` 는 구매이력이고 그 밖의 값은 거부됩니다. **이 두 값의 뜻은 7.0.6
+        디컴파일에서 읽어낸 것이 아니라 실서버 관측에서 온 것입니다.** 7.0.6 은 필드
+        자체는 선언합니다(``MyTicketListIn.java:62`` 의 ``@SerialName("txtIndex")``)
+        만, 그 값을 넘기는 유일한 빌더가 ``MyTicketBaseViewModel``
+        ``executeTicketList$app_prodRelease``(``:980``)의 매개변수이고(``:1029`` 에서
+        ``MyTicketListIn`` 첫 인자로 들어감) 리터럴을 직접 주는 두 호출부
+        (``LoginViewModel.java:1083``, ``AppViewModel$executeTicketListForAutoLogin$result$1.java:67``)
+        는 AlienGuard 로 보호된 문자열을 씁니다 — 즉 평문 ``"1"``/``"2"`` 를 APK 에서
+        볼 수 없습니다. 예전에 적혀 있던 ``TicketListActivity.java:937-939`` /
+        ``TicketPurchaseHistoryActivity.java:276-278`` 은 6.5.0 잔재로 7.0.6 에
+        그 클래스가 없습니다.
         ``"2"`` 는 ``boarding_date_from``·``boarding_date_to`` 를 둘 다 ``YYYYMMDD`` 로
         요구하지만 **이 클라이언트가 그것을 강제하지는 않습니다.** 비었거나 자릿수가
         틀리거나 앞뒤가 뒤집힌 범위도 그대로 나가고 서버가 ``WRT100101``
@@ -1714,9 +1733,17 @@ class KorailClient:
           :meth:`get_seat_cars` 와 :meth:`get_seat_inventory` 에서 골라 넘깁니다. 수가
           승객 총원과 맞지 않으면 요청을 만들기 전에 거절합니다.
         * ``STANDBY``(``"1102"``)는 예약대기이고, 검색 행이 대기 가능이라고 말한
-          열차에만 붙습니다. 회원 전용입니다(``ReservationRequest.java:105-119``) — 이
-          클라이언트는 모든 상태 변경이 로그인 세션을 요구하므로 구조적으로 그 조건을
-          만족합니다. 성공한 대기 홀드는 ``h_msg_cd`` 가
+          열차에만 붙습니다. 회원 전용이라는 서술의 **예약대기 전용 게이트는 7.0.6 에
+          대응 근거를 찾지 못했습니다 — 미출처**입니다. 옛 인용
+          ``ReservationRequest.java:105-119`` 는 6.5.0 잔재로 7.0.6 에 그 파일이
+          없습니다. 7.0.6 에서 확인되는 것은 그보다 약한 사실뿐입니다: 이 라우트의 요청
+          DTO ``TicketReservationIn.java:80`` 의 ``@SerialName`` 목록에는 비회원
+          자격증명 필드(``hidName``/``hidTeleNo``/``hidPwd``/``hiduserYn``)가 아예
+          없고, 그런 필드를 가진 DTO 는 승차권 목록 쪽(``MyTicketListIn.java:62``)
+          입니다 — 즉 예약 라우트 **전체**가 회원 경로라는 정황이지 대기 예약만의
+          제한이라는 근거는 아닙니다. 어느 쪽이든 이 클라이언트는 모든 상태 변경이
+          로그인 세션을 요구하므로 구조적으로 그 조건을 만족합니다. 성공한 대기 홀드는
+          ``h_msg_cd`` 가
           :data:`~korail_mobile_api.KORAIL_STANDBY_HOLD_MESSAGE_CODE`(``IRR000014``)로
           오고, :meth:`confirm_standby_hold` 로 알림 옵션을 기록해야 비로소 끝납니다.
         * ``MERGE_STANDING``(``"1202"``)은 병합예약의 첫 홀드입니다. 두 번째 홀드는
@@ -1751,10 +1778,24 @@ class KorailClient:
         """예약대기 홀드에 대기 옵션을 기록합니다.
 
         예약대기는 호출 두 번입니다. ``job_type=STANDBY`` 로 부른 :meth:`reserve` 가
-        PNR 을 만들고 ``h_msg_cd`` = ``IRR000014`` 를 돌려주는데, 앱은 이 코드에서만
-        예약대기 화면을 엽니다(``ui/inquiry/rir/orr/a.java:222-225``). 그 화면이
-        사용자의 선택을 실어 보내는 두 번째 POST 가 이 메서드입니다 —
-        ``reservationWait.ReservationWait``(``ReservationWaitService.java:10-12``).
+        PNR 을 만들고 ``h_msg_cd`` = ``IRR000014`` 를 돌려주며, 그 화면이 사용자의
+        선택을 실어 보내는 두 번째 POST 가 이 메서드입니다 —
+        ``reservationWait.ReservationWait``(``NetworkApi.java:639-640`` —
+        ``postReservationWait(@FieldMap)``). 옛 인용
+        ``ReservationWaitService.java:10-12`` 는 6.5.0 잔재로 7.0.6 에 없습니다.
+
+        **"앱은 이 코드에서만 예약대기 화면을 연다"는 분기는 7.0.6 에서 확인하지
+        못했습니다 — 미출처.** 옛 인용 ``ui/inquiry/rir/orr/a.java:222-225`` 는 7.0.6
+        에 없는 경로이고, ``IRR000014`` 는 7.0.6 전체 소스·스몰리 어디에도 평문으로
+        없습니다(전수 grep). 이 코드가 APK 안에서 나오는 유일한 자리는
+        ``analysis/apktool/assets/error_json.json`` 의 ``"IRR000014": "예약대기
+        가능합니다."`` 한 줄입니다 — 앱의 비교 리터럴은 AlienGuard 로 보호돼 있어
+        어느 분기가 이 코드를 보는지 읽을 수 없습니다. 7.0.6 에서 대응되는 화면
+        자체는 있습니다(``ReservationWaitViewModel.java:68``, 요청 DTO 를
+        ``saveReservationWaitIn`` 으로 들고 있음 — ``:80``), 예약 job id 열거형에도
+        ``ReservationJobId.WAIT`` 멤버가 있습니다(``ReservationJobId.java:21``; 그
+        코드값 역시 보호됨). 즉 두 번 호출이라는 구조는 7.0.6 과 맞고, 트리거가
+        ``IRR000014`` 라는 부분만 실서버 관측에 기댑니다.
 
         로그인 세션을 요구하고, 다른 모든 상태 변경과 같은 이중 게이트 전송로로
         나갑니다. 이미 있는 PNR 의 예약을 마무리할 뿐 돈을 옮기지도 좌석을 놓지도
@@ -1849,7 +1890,15 @@ class KorailClient:
         """환승 여정 하나를 두 구간·한 PNR 로 홀드합니다.
 
         라우트도 범주도 세션 요구도 :meth:`reserve` 와 같습니다. 앱도 엔드포인트와
-        요청 빌더를 하나만 쓰고 구간 수만 폼을 바꿉니다(``C5/a.java:52-119``).
+        요청 DTO 를 하나만 쓰고 구간 수만 폼을 바꿉니다 — 7.0.6 은 직통과 환승에
+        같은 ``certification.TicketReservation`` 선언 하나
+        (``NetworkApi.java:752-753``, ``postTicketReservation(@FieldMap)``)를 쓰고,
+        같은 ``TicketReservationIn`` 이 ``txtJrnyCnt``(여정 수)와 구간별 목록 네 개
+        (``TicketReservationIn.java:34-37`` 의 ``jrnyList``/``passengerInfoList``/
+        ``srcarList``/``trailingSrcarList``, ``@SerialName`` 목록은 ``:80``)를
+        선언합니다. 옛 인용 ``C5/a.java:52-119`` 는 6.5.0 잔재로 7.0.6 에 그 경로가
+        없습니다 — 위 대체 근거는 "한 라우트·한 DTO·여정 수만 다름"까지만 뒷받침하고,
+        옛 클래스의 분기 전체가 같다는 확인은 아닙니다.
         돌려주는 홀드에 대해 :meth:`reserve` 가 말한 것이 그대로 적용됩니다.
 
         ``legs`` 는 탑승 순서대로 정확히 두 개의
@@ -1859,8 +1908,14 @@ class KorailClient:
         만들기 전에 거절합니다(:data:`~korail_mobile_api.KORAIL_MAX_JOURNEY_LEGS`).
 
         ``seat_classes`` 는 두 구간에 하나를 주거나 구간마다 하나를 줍니다 — 앱의 실별
-        선택이 구간별입니다(``C5/a.java:59``, ``:97``). ``seats`` 도 마찬가지로
-        구간마다 한 묶음입니다(``C5/a.java:120-133``).
+        선택이 구간별입니다: 7.0.6 의 구간 DTO ``TicketReservationInJrny.java:69`` 가
+        ``@SerialName("txtPsrmClCd")`` 를 **구간 안에** 두고 있고, 상위
+        ``TicketReservationIn`` 에는 실등급 필드가 없습니다. ``seats`` 도 마찬가지로
+        구간마다 한 묶음입니다 — 선행 구간은 ``TicketReservationInSrcar.java:51``
+        (``txtSrcarNo``/``txtSeatNo``), 후속 구간은
+        ``TicketReservationInSrcarTrailing.java:52``(``txtSrcarNo1_``/``txtSeatNo1_``)
+        로 철자가 갈립니다. 옛 인용 ``C5/a.java:59``/``:97``/``:120-133`` 은 6.5.0
+        잔재로 7.0.6 에 없습니다.
 
         **2026-07-31 실서버 확인.** 서울→여수EXPO 를 :meth:`search_transfer_trains`
         로 찾아 서울→오송(열차 009) + 오송→여수EXPO(열차 503) 를 성인 1명으로 보내
@@ -2153,8 +2208,12 @@ class KorailClient:
     ) -> BaseKorailResponse:
         """홀드 중인 예약의 PNR 을 장바구니에 담습니다.
 
-        ``POST cart.addCartList``(``CartService.java:11-13``). 공통 세 필드 말고 요청
-        필드는 ``hidPnrNo`` 하나뿐입니다(``AddCartDao.java:9-24``, smali 로 교차 확인).
+        ``POST cart.addCartList``(``NetworkApi.java:266-267`` —
+        ``postAddCartList(@FieldMap)``). 요청 DTO 가 선언하는 것은 상속받은
+        ``Device``/``Version``/``Key``/``lang`` 과 ``hidPnrNo`` 뿐입니다
+        (``AddCartListIn.java:52`` 의 ``@SerialName`` 목록 전체). 옛 인용
+        ``CartService.java:11-13``/``AddCartDao.java:9-24`` 는 둘 다 6.5.0 잔재로
+        7.0.6 에 그 파일이 없습니다.
 
         로그인 세션을 요구합니다.
         """
@@ -2169,11 +2228,16 @@ class KorailClient:
     ) -> DiscountCardPurchaseResponse:
         """할인카드(N카드)를 구매합니다.
 
-        ``POST research.dcntCrdInfo.do``(``ResearchService.java:68-70``). 경로에
-        "Info" 가 붙어 있지만 조회가 아니라 구매입니다 — 응답이 ``lumpStlTgtNo`` 와
-        ``rcvdAmt`` 를 주고(``NCardReservationDao.java:127-134``) 앱은 그 대상번호를
-        결제 화면으로 그대로 넘깁니다(``SectionNCardInquiryActivity.java:213-257``).
-        만들어지는 것은 결제를 기다리는 미결제 구매입니다.
+        ``POST research.dcntCrdInfo.do``(``NetworkApi.java:336-337`` —
+        ``postDcntCrdInfo(@FieldMap)``). 경로에 "Info" 가 붙어 있지만 조회가 아니라
+        구매입니다 — 응답 DTO 가 ``lumpStlTgtNo`` 와 ``rcvdAmt`` 를 선언하고
+        (``NCardInfoOut.java:32-33``) 앱은 그 일괄결제 대상번호를 결제 입력으로 그대로
+        넘깁니다(``PayViewModel.java:6628`` —
+        ``intgStlIn.setCart_LumpStlTgtNo(...getNCardInfoOut().getLumpStlTgtNo())``).
+        만들어지는 것은 결제를 기다리는 미결제 구매입니다. 옛 인용
+        ``ResearchService.java:68-70``/``NCardReservationDao.java:127-134``/
+        ``SectionNCardInquiryActivity.java:213-257`` 은 모두 6.5.0 잔재로 7.0.6 에
+        그 파일이 없습니다.
         """
         self._require_session("discount card purchase requires")
         route = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
@@ -2209,11 +2273,16 @@ class KorailClient:
         """할인카드(N카드)로 좌석 하나를 홀드합니다.
 
         라우트도 범주도 :meth:`reserve` 와 같습니다. 같은 호출이기 때문입니다 —
-        ``w4/a.java:93-104`` 이 평범한 ``ReservationRequest`` 를 만들고
-        ``c5/b.java:128-138`` 이 평범한 ``ReservationDao`` 로
-        ``certification.TicketReservation`` 에 보냅니다. N카드 전용 예약 엔드포인트는
-        없고 N카드 승객 블록이 있을 뿐입니다. 그래서 범주도 ``"reserve"`` 입니다 —
-        할인카드를 쓴다고 예약이 예약 아닌 것이 되지 않습니다.
+        7.0.6 ``NetworkApi`` 전체에서 ``certification.TicketReservation`` 선언은
+        ``:752-753`` 하나뿐이고(전수 grep), N카드 카드번호는 전용 DTO 가 아니라 평범한
+        승객 블록 안에 ``@SerialName("txtCardNo_")`` 로 들어 있습니다
+        (``TicketReservationInPassengerInfo.java:55,105`` — 같은 블록의 나머지 셋은
+        ``txtCompaCnt``/``txtPsgTpCd``/``txtDiscKndCd``). 즉 N카드 전용 예약
+        엔드포인트는 없고 N카드 승객 블록이 있을 뿐입니다. 그래서 범주도
+        ``"reserve"`` 입니다 — 할인카드를 쓴다고 예약이 예약 아닌 것이 되지 않습니다.
+        옛 인용 ``w4/a.java:93-104``/``c5/b.java:128-138`` 은 7.0.6 에 그 경로가 없는
+        6.5.0 잔재입니다(같은 basename 의 다른 파일은 있으므로 클래스 전체 부재와는
+        구분합니다).
         """
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -2235,10 +2304,21 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """홀드된 PNR 의 운임을 다른 할인 조합으로 다시 계산합니다.
 
-        ``POST certification.PriceReCalculation``(``CertificationService.java:35-37``,
-        ``getDiscountPrice``)입니다. 앱은 예약의 할인 선택이 바뀔 때마다 결제
-        화면에서 이것을 쏘고(``a6/C1042B.java:265-296``), 응답은 홀드가 돌려주는 것과
-        같은 ``ReservationOut`` 입니다
+        ``POST certification.PriceReCalculation`` 입니다. 7.0.6 선언은
+        ``NetworkApi.java:583-584`` 의 ``postPriceReCalculation`` 이고, 이 라우트만
+        ``@FieldMap`` 하나로 끝나지 않습니다 — ``psg_tp_dv_cd``/``psrm_cl_cd``/
+        ``dcnt_knd_cd1``/``hidDscpNo``/``hidDcntKndCd``/``hidFmlyNo`` 여섯 개가
+        ``@Field(...) List<String>`` 로 따로 붙습니다(반복 키). 옛 인용
+        ``CertificationService.java:35-37``(``getDiscountPrice``)은 6.5.0 잔재로
+        7.0.6 에 그 파일이 없습니다.
+
+        쏘는 쪽은 결제 화면이 맞습니다 — 7.0.6 에서 이 요청을 만드는 자리는
+        ``PayViewModel`` 하나이고(``PayViewModel.java:14278`` 의
+        ``requestPriceReCalculation(PriceReCalculationIn, ...)``, 코루틴 호출부는
+        ``:902``, 레포지토리 호출은 ``:1316``), 옛 인용 ``a6/C1042B.java:265-296`` 은
+        7.0.6 에 없습니다. **다만 "할인 선택이 바뀔 때마다"라는 트리거 조건은 7.0.6
+        에서 확인하지 못했습니다 — 미출처**(그 호출부의 조건 리터럴이 AppSuit 로
+        보호돼 있습니다). 응답은 홀드가 돌려주는 것과 같은 ``ReservationOut`` 입니다
         (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:584,753``).
 
         로그인 세션을 요구합니다.

@@ -177,9 +177,23 @@ class StationRefundExecutionResponse(BaseKorailResponse):
 class KorailPassengerCounts:
     """예약 하나에 실을 승객 종류별 인원 수.
 
-    각 줄은 인원 수 하나에 고정된 승객종류 코드와 할인종류 코드를 달고 있고
-    (``w4/a.java:49-73``), ``OPsg`` 가 ``LinkedHashMap`` 이라
-    (``OPsg.java:6``) 만드는 순서가 곧 전선 순서입니다. 아래 필드는 그
+    각 줄은 인원 수 하나에 고정된 승객종류 코드와 할인종류 코드를 달고 있습니다.
+    옛 인용 ``w4/a.java:49-73`` 은 6.5.0 클래스로 7.0.6 디컴파일에 없고
+    (2026-09-22 확인), 7.0.6 의 대응물은
+    ``analysis/jadx/sources/com/korail/talk/common/define/PassengerType.java:25-45``
+    입니다 — 여덟 enum 상수(``ADULT``/``CHILD``/``BABY``/``SENIOR``/
+    ``DISABILITY_SERIOUS``/``DISABILITY_MILD``/``GUIDE_DOG``/``TEENAGER``)가
+    각각 ``psgTpCd`` 와 ``discKndCd`` 를 들고 있습니다. **다만 그 코드
+    리터럴은 AlienGuard 로 보호돼 있습니다**(``ReqDiscount``/``ResDiscount``
+    의 게터를 거치고, enum 이름 문자열마저
+    ``AlienGuard1789016769018.method_name_*`` 호출입니다). 그래서 아래
+    값 표는 실서버 관측에서 온 것이고 디컴파일로 대조할 수 없습니다.
+
+    인원 맵이 ``LinkedHashMap`` 이라 만드는 순서가 곧 전선 순서입니다 —
+    옛 인용 ``OPsg.java:6`` 의 ``OPsg`` 도 7.0.6 에 없고, 그 자리를
+    ``Passengers.java:50``(``dataMap: Map<PassengerType, Integer>``)과
+    ``Passengers.java:745``(인원 0 을 걸러 낸 뒤 남은 줄을 새
+    ``LinkedHashMap`` 에 옮겨 담는 곳)이 차지합니다. 아래 필드는 그
     순서로 선언돼 있습니다 — 필드, ``txtPsgTpCd``, ``txtDiscKndCd`` 순:
 
     * ``adult`` 어른 — ``"1"``, ``"000"``
@@ -191,13 +205,35 @@ class KorailPassengerCounts:
     * ``mild_disability`` 경증장애 — ``"1"``, ``"112"``
     * ``guide_dog`` 안내견 — ``"1"``, ``"173"``
 
-    인원이 0 인 줄은 보내지 않습니다. 7.0.6 은 0 을 걸러 낸 뒤 남은 줄에만 1부터
-    이어지는 번호를 붙입니다
-    (``analysis/jadx/sources/com/korail/talk/common/define/Passengers.java:743-752``).
+    인원이 0 인 줄은 보내지 않습니다. 이 주장은 7.0.6 에서 **두 곳**에 나뉘어
+    있으므로 인용도 둘입니다 — 종전에는 두 주장을 모두
+    ``Passengers.java:743-752`` 하나로 묶었는데, 그 범위는 필터일 뿐이고
+    번호 붙이기는 그 안에 없습니다. (1) 0 걸러내기:
+    ``analysis/jadx/sources/com/korail/talk/common/define/Passengers.java:743-753``
+    — ``toTicketReservationInput`` 이 ``dataMap`` 을 훑어 값이 0 보다 큰
+    항목만 ``LinkedHashMap`` 에 남깁니다. (2) 남은 줄에 1부터 번호 붙이기:
+    ``analysis/jadx/sources/com/korail/talk/network/NetworkService.java:15345-15366``
+    — ``STLibw(JsonElement, boolean)``(``:15304``, JSON→폼 평탄화)의
+    ``JsonArray`` 분기가 원소 인덱스 ``i10 = i9 + 1``(``:15350``)을 내부 키
+    뒤에 그대로 이어 붙입니다(``:15366``). 대괄호도 0-기반도 아닙니다.
+    번호를 붙이는 쪽은 승객 목록 전용 코드가 아니라 모든 배열에 같은
+    규칙을 적용하는 공통 평탄화입니다.
+
+    참고로 7.0.6 자신의 승객 행 순서는 ``PassengerType.INSTANCE.basicList()``
+    (``PassengerType.java:74-84``: ADULT, CHILD, BABY, SENIOR,
+    DISABILITY_SERIOUS, DISABILITY_MILD, GUIDE_DOG)이고 아래 필드 순서와
+    다릅니다. 줄마다 자기 ``txtPsgTpCd``/``txtDiscKndCd`` 를 달고 가므로 줄
+    순서 자체가 계약은 아니며, 이 순서로 보내는 예약이 실서버에서 통과하는
+    것은 확인돼 있습니다.
 
     ``infant``(동반유아)와 ``guide_dog``(안내견)도 :attr:`total` 에, 따라서
     ``txtTotPsgCnt`` 에 **들어갑니다**. 앱의 합계도 여덟 계수기를 그냥 더한
-    것이고(``m5/c.java:330``), 그 값이 그대로 ``txtTotPsgCnt`` 로 나갑니다.
+    것입니다 — 옛 인용 ``m5/c.java:330`` 은 7.0.6 에 없고, 7.0.6 에서는
+    ``analysis/jadx/sources/com/korail/talk/common/define/Passengers.java:610-616``
+    의 ``sum()`` 이 ``dataMap.values()`` 를 통째로 더합니다(승객 종류를
+    가리지 않으므로 동반유아·안내견도 포함). 같은 파일 ``:48`` 의
+    ``MAX_COUNT = 9`` 가 :data:`~korail_mobile_api.constants.KORAIL_MAX_PASSENGERS_PER_RESERVATION`
+    에 대응합니다.
 
     할인이 붙은 줄에 카드 필드가 따라붙지 않습니다. 7.0.6 의 승객 행 DTO
     ``TicketReservationInPassengerInfo`` 는 정확히 네 필드를 선언하고
@@ -210,12 +246,23 @@ class KorailPassengerCounts:
     11 의 접미사 없는 flattening 규칙과 같은 부류입니다. korail2 와 srtgo 가
     보내는 ``txtCardCode_``/``txtCardPw_`` 는 디컴파일된 앱 어디에도 없습니다.
 
-    앱에 있는 규칙 둘은 여기서 강제하지 않습니다 — 동반유아에게는 함께 앉을
-    어른/청소년/경로/장애가 하나 이상 필요하고(``m5/c.java:452-455``),
-    안내견은 장애 승객 수보다 많을 수 없습니다(``:458-465``). 둘 다 선택기의
-    경고 대화상자일 뿐 전선에 드러나지 않아서, 서버 쪽 규칙을 짐작해 막으면
-    서버가 받아 줄 조합까지 거부하게 됩니다. 다만 어긴 조합은 서버가 거절할
-    가능성이 높습니다.
+    앱에 있는 규칙 둘은 여기서 강제하지 않습니다. 옛 인용
+    ``m5/c.java:452-455``/``:458-465`` 는 7.0.6 에 없고, 7.0.6 에서 두 규칙은
+    ``analysis/jadx/sources/com/korail/talk/ui/bottomsheet/PassengersBottomSheetKt.java:21124-21185``
+    의 ``warningPassengerType(Map<PassengerType, Integer>)`` 한 함수에 있습니다:
+
+    * ``:21132-21161`` — 동반유아(``BABY``)가 1명 이상이면서 **``BABY`` 도
+      ``CHILD`` 도 아닌** 종류의 인원 합이 0 이면 ``BABY`` 를 경고로
+      돌려줍니다. 즉 동반 조건은 "어른/청소년/경로/장애"가 아니라 "유아와
+      어린이를 뺀 아무 종류 하나"이고, 여기에는 ``GUIDE_DOG`` 도 포함됩니다
+      — 종전 설명이 열거로 좁혀 놓았던 것을 바로잡았습니다.
+    * ``:21163-21182`` — 안내견(``GUIDE_DOG``)이 1명 이상이면서
+      ``DISABILITY_SERIOUS`` + ``DISABILITY_MILD`` 합이 안내견 수보다 작으면
+      ``GUIDE_DOG`` 을 경고로 돌려줍니다(안내견 ≤ 장애 승객 수).
+
+    둘 다 선택기의 경고 대화상자일 뿐 전선에 드러나지 않아서, 서버 쪽 규칙을
+    짐작해 막으면 서버가 받아 줄 조합까지 거부하게 됩니다. 다만 어긴 조합은
+    서버가 거절할 가능성이 높습니다.
     """
 
     adult: int = 1
@@ -253,8 +300,11 @@ class KorailPassengerCounts:
     def total(self) -> int:
         """``txtTotPsgCnt`` — 여덟 줄의 합. 동반유아와 안내견도 셉니다.
 
-        앱의 ``TOTAL_PERSON_COUNT`` 와 정확히 같습니다(``m5/c.java:330``,
-        같은 내용의 ``getTotalCount()`` 가 ``:335``).
+        7.0.6 ``Passengers.sum()`` 과 정확히 같습니다
+        (``analysis/jadx/sources/com/korail/talk/common/define/Passengers.java:610-616``
+        — ``dataMap.values()`` 전체 합). 옛 인용이 가리켰던
+        ``m5/c.java:330``/``:335`` 의 ``TOTAL_PERSON_COUNT``/
+        ``getTotalCount()`` 는 6.5.0 이름이고 7.0.6 디컴파일에 없습니다.
         """
         return (
             self.adult
@@ -277,11 +327,28 @@ class KorailSeatAssignment:
       :attr:`~korail_mobile_api.models.SeatCar.car_no`, 즉
       :meth:`~korail_mobile_api.client.KorailClient.get_seat_inventory` 를
       부를 때 넣고 응답이 되돌려 주는 그 번호입니다. 앱도 화면에 떠 있는
-      호차를 그대로 보냅니다(``SeatSearchActivity.java:678``, ``:269-271``).
+      호차를 그대로 보냅니다. 옛 인용 ``SeatSearchActivity.java:678``,
+      ``:269-271`` 은 6.5.0 이고 7.0.6 에 그 클래스가 없습니다; 7.0.6 의
+      대응 위치는
+      ``analysis/jadx/sources/com/korail/talk/ui/screen/train/TrainSeatMapViewModel.java:2210``
+      으로, ``buildTicketReservationIn()``(``:1989``)이
+      ``new TicketReservationInSrcar(trainSeatMapSeatData.getSelectedCarNo(), …)``
+      를 만듭니다 — 좌석표 화면이 선택해 둔 호차를 그대로 씁니다.
+      그 필드의 전선 이름은
+      ``analysis/jadx/sources/com/korail/talk/network/model/TicketReservationInSrcar.java:85-88``
+      의 ``@SerialName("txtSrcarNo")`` 입니다(후속 구간용 형제 DTO
+      ``TicketReservationInSrcarTrailing.java:86-89`` 는
+      ``@SerialName("txtSrcarNo1_")`` — 밑줄이 이미 이름 안에 있습니다).
     * ``seat_no`` 는
       :attr:`~korail_mobile_api.models.PhysicalSeat.seat_no` 를 그대로 넘긴
-      것입니다(``SeatSearchActivity.java:680``). ``seat_spec`` 이
-      **아닙니다** — 그쪽은 앱이 화면에 찍는 사람용 표시("5A")이지 전선
+      것입니다 — 같은 ``TrainSeatMapViewModel.java:2210`` 이 두 번째 인자로
+      ``TResidualSeatsResearchOutSeat.getSeatNo()`` 를 넘기고, 전선 이름은
+      ``TicketReservationInSrcar.java:81-84`` 의 ``@SerialName("txtSeatNo")``
+      입니다(옛 인용 ``SeatSearchActivity.java:680`` 은 7.0.6 에 없습니다).
+      ``seat_spec`` 이 **아닙니다** — 좌석 응답 DTO 는 둘을 따로
+      선언하고(``TResidualSeatsResearchOutSeat.java:172`` ``seat_no`` /
+      ``:176`` ``seat_spec``), 예약 폼이 읽는 쪽은 ``seat_no`` 입니다.
+      ``seat_spec`` 은 앱이 화면에 찍는 사람용 표시("5A")이지 전선
       식별자가 아닙니다.
     """
 
@@ -388,10 +455,25 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: ``h_ntisu_lmt`` — 서버가 문장으로 적어 준 기한. 예: "…까지 미결제시
     #: 승차권이 자동으로 취소됩니다."
     payment_deadline_notice: str | None = None
-    #: ``h_ntisu_lmt_dt`` / ``h_ntisu_lmt_tm`` — 구조화된 결제 기한. 앱은 둘을
-    #: 이어 붙여 ``yyyyMMddHHmmss`` 로 읽고, 미결제 예약이 언제 스스로
-    #: 취소되는지 보여 줍니다(``S4/C0816p.java:64-70``,
-    #: ``ReservedTicketActivity.java:356,365``).
+    #: ``h_ntisu_lmt_dt`` / ``h_ntisu_lmt_tm`` — 구조화된 결제 기한. 두 키는
+    #: 홀드 응답 DTO 에 그대로 선언돼 있고
+    #: (``analysis/jadx/sources/com/korail/talk/network/model/ReservationOut.java:400``
+    #: ``@SerialName("h_ntisu_lmt_dt")`` / ``:404``
+    #: ``@SerialName("h_ntisu_lmt_tm")``), 앱은 둘을 **이어 붙여 하나의
+    #: 날짜시각 문자열로** 읽습니다 —
+    #: ``analysis/jadx/sources/com/korail/talk/ui/screen/myticket/reservation/MyReservationScreenKt.java:6008``
+    #: 이 ``getHNtisuLmtDt() + getHNtisuLmtTm()`` 를 만들어
+    #: ``DateHelper.convertFormat(…)``(``common/helper/DateHelper.java:302``)에
+    #: 넘깁니다(``:6010``). **입력 패턴 리터럴은 AlienGuard 로 보호돼 있어
+    #: ``yyyyMMddHHmmss`` 라는 모양은 두 필드의 자릿수(8+6)에서 나온 추정이고
+    #: 디컴파일로 확인되지 않습니다.** 화면 문구도 "자동 취소"가 아니라
+    #: ``R.string.reserved_ticket_pay_deadline``
+    #: ("%s까지 결제해 주세요.", ``analysis/apktool/res/values/strings.xml:3041``)
+    #: 이고, 자동 취소를 말하는 쪽은 문장형 :attr:`payment_deadline_notice`
+    #: (``h_ntisu_lmt``, ``ReservationOut.java:396``)입니다. 같은 두 키를 쓰는
+    #: 예약조회 DTO 는 ``ReservationViewOutTrainInfo.java:464,468`` 입니다.
+    #: 옛 인용 ``S4/C0816p.java:64-70`` 과 ``ReservedTicketActivity.java:356,365``
+    #: 는 6.5.0 이고 7.0.6 디컴파일에 없습니다(2026-09-22 확인).
     payment_deadline_date: str | None = None
     payment_deadline_time: str | None = None
     #: ``h_tot_fare`` — **총액이 아니라 요금(특실 차액) 합계**입니다. 좌석별
@@ -407,19 +489,37 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: :attr:`received_amount` 입니다**; 정산식은
     #: ``total_price + total_fare - total_discount_amount == received_amount``.
     total_fare: str | None = None
-    #: ``h_tot_prc`` — **표시용** 합계. ``PaymentActivity.java:174`` 가
-    #: ``mTotPrc`` 에 넣고, 그 값은 화면을 위해서만 되읽힙니다(``:497``).
-    #: 앱이 정산하는 금액이 아닙니다. 구체적으로는 좌석별 ``h_seat_prc`` 의 합,
+    #: ``h_tot_prc`` — **표시용** 합계
+    #: (``analysis/jadx/sources/com/korail/talk/network/model/ReservationOut.java:448``
+    #: ``@SerialName("h_tot_prc")``). 옛 인용
+    #: ``PaymentActivity.java:174``/``:497`` 의 ``mTotPrc`` 는 6.5.0 이고
+    #: 7.0.6 에 그 클래스가 없습니다; 7.0.6 의 대응 위치는
+    #: ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:11314-11318``
+    #: 로, ``initAmountData()``(``:11222``)가 이 값을 예약 목록에 걸쳐 더해
+    #: 화면 표시용 금액 묶음의 한 항으로만 씁니다 — 결제 요청 필드로
+    #: 흘러가는 경로는 없습니다. 구체적으로는 좌석별 ``h_seat_prc`` 의 합,
     #: 즉 **할인 전·요금 전의 운임 기준액**입니다. 그래서 같은 열차의 일반실
     #: 홀드와 특실 홀드가 이 값이 똑같이 나옵니다 — 2026-09-22 KTX 013
     #: 서울→부산에서 둘 다 ``h_tot_prc='00000054400'`` 인데 실제로 받는 돈은
     #: 53,900원과 78,400원이었습니다. 이 필드로 금액을 판단하면 특실 차액과
     #: 할인이 통째로 사라집니다.
     total_price: str | None = None
-    #: 앱이 실제로 걷는 금액(``hidMnsStlAmt1``). 앱의
-    #: ``getReceivedAmount()`` 와 같습니다(``PaymentActivity.java:186-199``).
-    #: 예약 응답에 ``h_tot_rcvd_amt`` 가 있으면 그것이고, 없으면 앱이 하듯
-    #: 좌석별 ``h_rcvd_amt`` 를 더한 값입니다.
+    #: 앱이 실제로 걷는 금액(``hidMnsStlAmt1``). 예약 응답에
+    #: ``h_tot_rcvd_amt``(``ReservationOut.java:452``)가 있으면 그것이고,
+    #: 없으면 좌석별 ``h_rcvd_amt`` 를 더한 값입니다.
+    #:
+    #: 옛 인용 ``PaymentActivity.java:186-199`` 의 ``getReceivedAmount()`` 는
+    #: 6.5.0 이고 7.0.6 에 없습니다. 7.0.6 이 실제로 하는 일은 더 단순합니다 —
+    #: ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:11303-11307``
+    #: 이 ``ReservationOut.getHTotRcvdAmt()`` 를 예약 목록에 걸쳐 그냥 더합니다
+    #: (여정변경 분기는 ``:11297-11301`` 에서 ``scnIndcAmt`` 를 씁니다).
+    #: 좌석별 ``h_seat_prc``/``h_seat_fare`` 를 다시 더하는 코드는 7.0.6 에
+    #: 없습니다(``getHSeatPrc()``/``getHSeatFare()`` 호출자 0건). 그 합계가
+    #: ``hidMnsStlAmt<N>`` 로 들어가는 마지막 한 걸음은
+    #: ``analysis/jadx/sources/com/korail/talk/common/helper/PaymentMethodHelper.java:113``
+    #: (``getCardRequest``, ``:89``) / ``:211``(``getEasyRequest``, ``:147``)
+    #: 이 **AlienGuard 로 보호된 키**로 ``Bundle`` 에서 꺼내는 값이므로
+    #: 정적으로 이어 붙일 수 없습니다 — 미출처로 둡니다.
     received_amount: str | None = None
     journeys: tuple[ReservationJourney, ...] = ()
     #: ``h_tot_dcnt_amt`` — 할인 합계. 이 필드가 없어서 홀드 응답만으로는
@@ -635,9 +735,31 @@ class CardPayment:
     birthday: str = field(repr=False)
     #: ``hidIsmtMnthNum1`` — 할부 개월. 일시불은 ``"0"``, 0 **하나** 입니다.
     #: 다른 값도 자릿수를 채우지 않습니다(``"2"``, ``"3"``, ``"12"``,
-    #: ``"24"``). 이 필드에 ``"00"`` 은 APK 어디에도 없습니다 —
-    #: ``K4/h.smali:44-52`` 가 ``const-string "0"`` 으로 상수를 만들고,
-    #: ``v4/a.java:288`` 도 리터럴 ``"0"`` 을 그대로 넘깁니다.
+    #: ``"24"``).
+    #:
+    #: 옛 인용 ``K4/h.smali:44-52``(``const-string "0"``)과 ``v4/a.java:288``
+    #: 은 6.5.0 이고 7.0.6 에 없습니다. 7.0.6 에서 **리터럴 자체는 AlienGuard
+    #: 로 보호돼 있어 읽을 수 없습니다** — 할부 개월 코드는
+    #: ``analysis/jadx/sources/com/korail/talk/common/define/PaymentDefine.java:152-164``
+    #: 의 ``InstallmentType`` enum 이 들고 있고(생성자 ``:185-189`` 의
+    #: ``displayName``/``code`` 둘 다 보호된 문자열, 게터 ``:207-210``),
+    #: 확인할 수 있는 것은 **상수 이름**뿐입니다: ``INS_0``, ``INS_2``,
+    #: ``INS_3``, ``INS_4``, ``INS_5``, ``INS_6``, ``INS_12``, ``INS_24`` —
+    #: 즉 자릿수를 채우지 않은 개월 수이고 ``"00"`` 을 시사하는 이름은
+    #: 없습니다. 기본값이 일시불이라는 것도 이름으로만 확인됩니다
+    #: (``analysis/jadx/sources/com/korail/talk/ui/screen/pay/payment/InstallmentViewModel.java:55``
+    #: 생성자와 ``:94-96`` ``initState()`` 가 둘 다
+    #: ``PaymentDefine.InstallmentType.INS_0`` 을 넣습니다).
+    #: 폼 키에 붙는 ``1`` 은 이름의 일부가 아니라 결제수단 배열의 1-기반
+    #: 인덱스입니다 —
+    #: ``analysis/jadx/sources/com/korail/talk/network/model/PaymentMethod.java:672-694``
+    #: 의 ``setHidIsmtMnthNum(index, value)`` 가 ``ISMT_MNTH_NUM`` 접두사에
+    #: 인덱스를 이어 붙여 키를 만듭니다(``:679-688``). 값을 채우는 쪽은
+    #: ``common/helper/PaymentMethodHelper.java:66``/``:632``/``:646``/``:667``
+    #: (보호된 1자 리터럴)과 ``:213``/``:239``/``:255``/``:503``
+    #: (``easyPayInstallmentType.getCode()``)입니다. 대응 요청 DTO 필드는
+    #: ``network/model/ReservationPaymentInStlInfo.java:33``
+    #: (``@SerialName`` 없음 → 전선 이름이 프로퍼티 이름과 같습니다).
     installment: str = "0"
     #: ``hidAthnDvCd1`` — ``"J"`` 개인 / ``"S"`` 법인.
     card_type: Literal["J", "S"] = "J"
@@ -656,12 +778,36 @@ class PaidTicket:
     .. warning::
        :attr:`sale_date` 는 **현재** 승차권의 ``h_sale_dt`` 이지 원표의
        ``h_orgtk_ret_sale_dt`` 가 아닙니다. 이 값이 채우는 전선 키 이름이
-       ``h_orgtk_sale_dt`` 라서 헷갈리기 쉽습니다. 앱은 명확합니다 —
-       ``TicketListActivity.java:965`` 는
-       ``setH_orgtk_sale_dt(detail.getH_sale_dt())`` 를 하면서 창구·일련번호·
-       비밀번호만 옆의 ``h_orgtk_*`` 에서 가져옵니다
-       (``ticketReturn/a.java:413`` 도 같습니다). ``h_orgtk_ret_sale_dt`` 를
-       원하는 것은 환불수수료 조회 쪽입니다(``ticketReturn/a.java:352``).
+       ``h_orgtk_sale_dt`` 라서 헷갈리기 쉽습니다. 7.0.6 도 명확합니다 —
+       옛 인용 ``TicketListActivity.java:965`` 와
+       ``ticketReturn/a.java:413``/``:352`` 는 6.5.0 이고 디스크에 없지만,
+       같은 사실이 7.0.6 에서 한 줄로 드러납니다:
+
+       ``analysis/jadx/sources/com/korail/talk/ui/screen/myticket/MyTicketDetailViewModel.java:1521``
+
+           new RefundTicketIn(ticketDetailOut.getPnrNo(),
+                              ticketDetailOut.getSaleDt(),
+                              ticketDetailOut.getOrgtkWctNo(),
+                              ticketDetailOut.getOrgtkSaleSqno(),
+                              ticketDetailOut.getOrgtkRetPwd(), …)
+
+       생성자 인자 순서는
+       ``analysis/jadx/sources/com/korail/talk/network/model/RefundTicketIn.java:364``
+       의 ``(txtPnrNo, hOrgtkSaleDt, hOrgtkWctNo, hOrgtkSaleSqno, …)`` 이므로
+       ``h_orgtk_sale_dt``(``RefundTicketIn.java:154``)에 들어가는 값은
+       **현재 승차권의 ``h_sale_dt``** (``TicketDetailOut.java:486``)이고,
+       창구·일련번호·비밀번호만 옆의 ``h_orgtk_*``
+       (``TicketDetailOut.java:470``/``:466``/``:458``)에서 옵니다.
+
+       ``h_orgtk_ret_sale_dt`` 를 원하는 것은 환불수수료 조회 쪽입니다 —
+       같은 파일 ``:277`` 이
+       ``new RefundCommissionIn(ticketDetailOut.getOrgtkRetSaleDt(), …)`` 를
+       만들고, 그 첫 필드의 전선 이름이
+       ``network/model/RefundCommissionIn.java:141``
+       ``@SerialName("h_orgtk_ret_sale_dt")`` 입니다. 두 DTO 는 창구 키
+       철자마저 다릅니다 — 환불은 ``h_orgtk_sale_wct_no``
+       (``RefundTicketIn.java:162``), 수수료는 ``h_orgtk_wct_no``
+       (``RefundCommissionIn.java:149``).
     """
 
     pnr_no: str = field(repr=False)
@@ -689,8 +835,11 @@ class PaidTicket:
         """승차권 상세에서 환불 신원을 앱과 같은 방식으로 만듭니다.
 
         판매일자는 ``h_sale_dt`` 에서, 창구·일련번호·비밀번호는 ``h_orgtk_*``
-        세 개에서 가져옵니다. ``TicketListActivity.java:964-968`` 과 필드
-        단위로 같습니다.
+        세 개에서 가져옵니다. 7.0.6 의
+        ``analysis/jadx/sources/com/korail/talk/ui/screen/myticket/MyTicketDetailViewModel.java:1521``
+        과 필드 단위로 같습니다(위 :class:`PaidTicket` 경고의 인용 참조).
+        옛 인용 ``TicketListActivity.java:964-968`` 은 6.5.0 이고 7.0.6
+        디컴파일에 없습니다.
         """
         candidate_parts = {
             "pnr_no": detail.pnr_no,
@@ -722,11 +871,24 @@ class PaidTicket:
 class DiscountCardSectionRequest:
     """구매하려는 할인카드의 구간 하나(``dcntCrdInfo.do`` 의 ``jrnyInfo``).
 
-    ``NCardReservationDao.NCardReservationRequest``
-    (``dao/research/NCardReservationDao.java:74-108``)가 구간마다 인덱스 키로
-    맵에 넣고, Retrofit 이 그 맵을 폼으로 펼칩니다
-    (``ResearchService.java:68-70``). 구간 하나에 항목 하나, 1~3 개입니다 —
+    7.0.6 의 대응 DTO 는
+    ``analysis/jadx/sources/com/korail/talk/network/model/NCardjrny.java:25-34``
+    이고, 다섯 필드의 전선 이름이 **이미 밑줄로 끝납니다** —
+    ``@SerialName("runDt_")``, ``("trnNo_")``, ``("dptRsStnCd_")``,
+    ``("arvRsStnCd_")``, ``("jrnyTpCd_")``(``:96-112``). 구간 목록은
+    ``NCardInfoIn.java:37`` 의 ``jrnyList: List<NCardjrny>`` 이고, 거기에
+    1-기반 인덱스를 이어 붙여 ``runDt_1`` 같은 폼 키를 만드는 것은 Retrofit
+    이 아니라 그 앞단의 공통 JSON→폼 평탄화입니다
+    (``analysis/jadx/sources/com/korail/talk/network/NetworkService.java:15304``
+    ``STLibw``, 배열 분기 ``:15345-15366``). Retrofit 은 그렇게 만들어진 맵을
+    ``@FieldMap`` 으로 받기만 합니다
+    (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:335-337``
+    ``postDcntCrdInfo``). 구간 하나에 항목 하나, 1~3 개입니다 —
     :data:`~korail_mobile_api.constants.KORAIL_MAX_DISCOUNT_CARD_SECTIONS`.
+
+    옛 인용 ``dao/research/NCardReservationDao.java:74-108`` 과
+    ``ResearchService.java:68-70`` 은 6.5.0 이고 7.0.6 디컴파일에
+    없습니다(2026-09-22 확인).
     """
 
     run_date: str
@@ -740,8 +902,16 @@ class DiscountCardSectionRequest:
 class DiscountCardAdditionalUser:
     """N카드 2인용의 두 번째 등록 사용자(``apdUsrInfo``).
 
-    ``NCardReservationDao.java:66-72,122-124``. 1인용 카드에서는 앱도 빈
-    맵을 보내므로 폼에 필드가 하나도 붙지 않습니다.
+    7.0.6 요청 DTO
+    ``analysis/jadx/sources/com/korail/talk/network/model/NCardInfoIn.java:30-34``
+    가 세 필드를 이름에 ``_1`` 을 박은 채로 선언합니다 — ``apdCustName_1``,
+    ``apdCustTeln_1``, ``custMgNo_1`` (``@SerialName`` 이 없으므로 전선 이름이
+    프로퍼티 이름과 같습니다). 인원 수는 같은 DTO 의 ``apdUsrCnt``
+    (``:32``)입니다. 1인용 카드에서는 앱도 빈 값을 보내므로 폼에 뜻있는
+    값이 붙지 않습니다.
+
+    옛 인용 ``NCardReservationDao.java:66-72,122-124`` 는 6.5.0 이고 7.0.6
+    디컴파일에 없습니다.
 
     세 필드 모두 개인정보라 ``repr=False`` 이고, 전선 이름이
     :mod:`korail_mobile_api.redaction` 에 등록돼 있습니다.
@@ -756,9 +926,17 @@ class DiscountCardAdditionalUser:
 class DiscountCardPurchaseRequest:
     """할인카드를 사는 데 ``research.dcntCrdInfo.do`` 가 요구하는 전부.
 
-    스칼라 절반은 ``w4/a.java:106-113`` 이 만듭니다 — 상품
-    (``dcntCrdKndMgNo``), 로그인한 회원의 고객번호, 유효기간 시작일
-    (``vlidTrmStDt``), 사용 횟수.
+    스칼라 절반은 7.0.6 요청 DTO
+    ``analysis/jadx/sources/com/korail/talk/network/model/NCardInfoIn.java:29-39``
+    에 그대로 선언돼 있습니다 — 상품(``dcntCrdKndMgNo``, ``:35``), 로그인한
+    회원의 고객번호(``custMgNo``, ``:33``), 유효기간 시작일
+    (``vlidTrmStDt``, ``:39``), 사용 횟수(``usePsbTno``, ``:38``). 이 DTO 에는
+    ``@SerialName`` 이 없으므로 전선 이름이 프로퍼티 이름과 같습니다.
+    라우트는 ``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:335-337``
+    (``postDcntCrdInfo`` → ``research.dcntCrdInfo.do``)입니다.
+
+    옛 인용 ``w4/a.java:106-113`` 은 6.5.0 이고 7.0.6 디컴파일에 없습니다 —
+    라우트는 같지만 필드/분기 전체가 같다는 뜻은 아닙니다.
     """
 
     card_kind_management_no: str
@@ -773,10 +951,25 @@ class DiscountCardPurchaseRequest:
 class DiscountCardTicket:
     """기간연장에 쓰는 할인카드의 네 조각짜리 승차권 자격증명.
 
-    ``TicketListActivity.java:1066-1074`` 는 넷 다 N카드 승차권 자신의 행에서
-    읽습니다 — ``h_orgtk_wct_no``, ``h_orgtk_ret_sale_dt``,
-    ``h_orgtk_sale_sqno``, ``h_orgtk_ret_pwd``. 다른 원표 작업이 쓰는 것과
-    같은 자격증명입니다. 넷 다 ``repr=False`` 입니다.
+    7.0.6 은 넷 다 승차권 상세 응답의 ``h_orgtk_*`` 네 칸에서 읽습니다 —
+    ``analysis/jadx/sources/com/korail/talk/ui/screen/myticket/MyTicketDetailViewModel.java:1049``
+
+        new NCardExtensionIn(ticketDetailOut.getOrgtkWctNo(),
+                             ticketDetailOut.getOrgtkRetSaleDt(),
+                             ticketDetailOut.getOrgtkSaleSqno(),
+                             ticketDetailOut.getOrgtkRetPwd())
+
+    생성자 인자 순서는
+    ``analysis/jadx/sources/com/korail/talk/network/model/NCardExtensionIn.java:180``
+    의 ``(saleWctNo, saleDd, saleSqno, tkRetPwd)`` 이고, 네 원본 키는
+    ``TicketDetailOut.java:470``(``h_orgtk_wct_no``) /
+    ``:462``(``h_orgtk_ret_sale_dt``) / ``:466``(``h_orgtk_sale_sqno``) /
+    ``:458``(``h_orgtk_ret_pwd``) 입니다. 다른 원표 작업이 쓰는 것과 같은
+    자격증명입니다. **판매일자만 ``h_orgtk_ret_sale_dt``** 라는 점이
+    :class:`PaidTicket` (환불)과 정반대입니다. 넷 다 ``repr=False`` 입니다.
+
+    옛 인용 ``TicketListActivity.java:1066-1074`` 는 6.5.0 이고 7.0.6
+    디컴파일에 없습니다.
     """
 
     sale_window_no: str = field(repr=False)
@@ -789,13 +982,25 @@ class DiscountCardTicket:
 class DiscountCardPurchaseResponse(BaseKorailResponse):
     """``research.dcntCrdInfo.do`` 의 답. 아직 결제 전입니다.
 
-    ``NCardReservationDao.NCardReservationResponse``
-    (``dao/research/NCardReservationDao.java:127-174``).
+    7.0.6 응답 DTO 는
+    ``analysis/jadx/sources/com/korail/talk/network/model/NCardInfoOut.java:25-38``
+    (``CommonOut`` 상속, ``@SerialName`` 없음 → 전선 이름 = 프로퍼티 이름:
+    ``dcntCrdKndMgNo``, ``dcntCrdStlTgtNo``, ``lumpStlTgtNo``, ``rcvdAmt``,
+    ``stxAmt``, ``taxtSplAmt``, ``usePsbTno``, ``vlidTrmClsDt``,
+    ``vlidTrmStDt``)이고, 라우트는 ``NetworkApi.java:335-337`` 입니다.
+    옛 인용 ``dao/research/NCardReservationDao.java:127-174`` 는 6.5.0 이고
+    7.0.6 디컴파일에 없습니다.
 
     :attr:`lump_settlement_target_no` 를 받으려고 부르는 호출입니다. 앱은 그
-    값을 곧바로 결제 화면으로 넘깁니다
-    (``SectionNCardInquiryActivity.java:213-257``) — 이 응답은 정산을
-    기다리는 미결제 구매이지 끝난 구매가 아닙니다.
+    값을 곧바로 결제로 넘깁니다 —
+    ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:6628``
+    이 ``executePayment``(``:6596``) 안에서
+    ``intgStlIn.setCart_LumpStlTgtNo(payTicketItem.getNCardData().getNCardInfoOut().getLumpStlTgtNo())``
+    를 합니다(``NCardInfoOut`` 자체가 결제 화면 경로 인자로 실려 갑니다 —
+    ``ui/navigation/PayRoute.java:1323`` 의 ``PayTicketNCardData``). 즉 이
+    응답은 정산을 기다리는 미결제 구매이지 끝난 구매가 아닙니다. 옛 인용
+    ``SectionNCardInquiryActivity.java:213-257`` 은 6.5.0 이고 7.0.6 에
+    없습니다.
     """
 
     #: ``lumpStlTgtNo`` — 결제가 청구할 정산 대상.
@@ -823,16 +1028,39 @@ class DiscountCardPurchaseResponse(BaseKorailResponse):
 class PriceRecalculationRow:
     """운임 재계산 요청의 승객 한 줄.
 
-    앱의 ``DiscountPriceParams``
-    (``network/data/certification/DiscountPriceParams.java``) — 여섯 필드짜리
-    평평한 객체이고, 보류된 여정의 좌석 하나마다 하나씩입니다. 요청 전체는
-    이것의 배열이며 ``a6/C1042B.java:275-283`` 이 그것을 DAO 가 선언한 여섯
-    개의 병렬 ``List`` ``@Field`` 로 흩뿌립니다. 그래서 여섯 리스트는
-    **인덱스로 맞물려** 있고, 이 클래스가 그것을 다시 한 줄로 묶은 것입니다.
+    앱의 ``DiscountPriceParams`` — 여섯 필드짜리 평평한 객체이고, 보류된
+    여정의 좌석 하나마다 하나씩입니다. 클래스는 7.0.6 에도 같은 이름으로
+    살아 있고 패키지만 옮겼습니다:
+    ``analysis/jadx/sources/com/korail/talk/data/DiscountPriceParams.java:13-39``
+    — ``psg_tp_dv_cd``, ``psrm_cl_cd``, ``dcnt_knd_cd1``, ``hidDscpNo``,
+    ``hidDcntKndCd``, ``hidFmlyNo`` 여섯 필드 그대로입니다(옛 인용
+    ``network/data/certification/DiscountPriceParams.java`` 의 경로는 7.0.6
+    에 없습니다).
+
+    요청 전체는 이것의 배열입니다. 흩뿌리기는 7.0.6 에서 두 걸음입니다 —
+    ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:6161-6165``
+    가 각 ``DiscountPriceParams`` 를 직렬화 DTO
+    ``PriceReCalculationInPassengerInfo``
+    (``network/model/PriceReCalculationInPassengerInfo.java:31-36``, 같은 여섯
+    키가 ``@SerialName`` 으로 ``:127-148``)로 바꾸고,
+    ``analysis/jadx/sources/com/korail/talk/network/NetworkService.java:9997-10043``
+    이 그 리스트를 여섯 번 ``map`` 해서 여섯 개의 병렬 ``List<String>`` 으로
+    쪼갠 뒤 ``postPriceReCalculation`` 에 넘깁니다. 그 여섯 개가 Retrofit
+    선언의 여섯 ``@Field List<String>`` 입니다
+    (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:582-584``:
+    ``psg_tp_dv_cd``, ``psrm_cl_cd``, ``dcnt_knd_cd1``, ``hidDscpNo``,
+    ``hidDcntKndCd``, ``hidFmlyNo``). 그래서 여섯 리스트는 **인덱스로
+    맞물려** 있고, 이 클래스가 그것을 다시 한 줄로 묶은 것입니다. 옛 인용
+    ``a6/C1042B.java:275-283`` 은 6.5.0 이고 7.0.6 디컴파일에 없습니다.
 
     앞의 세 필드는 보류된 좌석에서 그대로 베낍니다. 호출자가 고르는 값이
-    아닙니다 — ``S4/D.java:176-190`` 이 ``seat_infos.seat_info[i]`` 의
-    ``h_psg_tp_cd`` 와 ``h_psrm_cl_cd`` 를 그대로 읽습니다. 같은 PNR 의
+    아닙니다 —
+    ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:16856-16858``
+    (``getDiscountPriceParamsListData(int)``, ``:16802``)이
+    ``ReservationOutSeatInfo`` 하나에서 ``getHPsgTpCd()`` / ``getHPsrmClCd()``
+    / ``getHDcntKndCd1()`` 을 그대로 읽어 세 필드에 넣습니다(같은 쌍이
+    ``:5518``/``:5520`` ``applyCouponDiscount`` 에도 있습니다). 옛 인용
+    ``S4/D.java:176-190`` 은 6.5.0 이고 7.0.6 에 없습니다. 같은 PNR 의
     :class:`~korail_mobile_api.read_models.ReservationSeatDetail` 에서 읽으면
     됩니다.
 
@@ -852,13 +1080,25 @@ class PriceRecalculationRow:
       쿠폰·증명 번호(``h_cpn_no``, 또는 네 조각짜리 지연증명 반환번호).
       필요 없는 할인이면 ``""``.
     * :attr:`family_sequence_no`(``hidFmlyNo``) — 다자녀 가족 구성원의
-      ``fmlySqno``. 다자녀 말고는 전부 ``""`` 이고, 비어 있지 않게 쓰는 곳은
-      ``a6/C1041A.java:75`` 하나뿐입니다.
+      ``fmlySqno``. 다자녀 말고는 전부 ``""`` 이고, 7.0.6 전체에서 비어 있지
+      않게 쓰는 곳도 한 줄뿐입니다 —
+      ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:16863``
+      의 ``discountPriceParams.setHidFmlyNo(payFmly.getFmly().getFmlySqno())``
+      (출처 키는 ``network/model/Fmly.java:145``
+      ``@SerialName("fmlySqno")``). 같은 메서드의 바로 위 줄들은
+      ``hidDscpNo`` 에 보호된 빈 문자열을 넣습니다(``:16859``). 옛 인용
+      ``a6/C1041A.java:75`` 는 6.5.0 이고 7.0.6 디컴파일에 없습니다.
 
     여섯 값 모두 문자열이어야 하고 ``None`` 이면 안 됩니다. Retrofit 은
-    리스트를 펼칠 때 널 원소를 **건너뛰므로**
-    (``RequestBuilder.smali:1559-1571``) 한 키만 짧아지고, 그 뒤의 모든 줄이
-    조용히 다시 짝지어집니다.
+    리스트를 펼칠 때 널 원소를 **건너뛰므로** 한 키만 짧아지고, 그 뒤의 모든
+    줄이 조용히 다시 짝지어집니다. 근거는
+    ``analysis/jadx/sources/retrofit2/ParameterHandler.java:18-31``
+    (``iterable()`` 이 원소마다 같은 핸들러를 다시 호출 — 이름은 루프
+    불변)과 ``:252-259``(``Field.apply`` 가 값이나 변환 결과가 ``null`` 이면
+    ``addFormField`` 를 부르지 않고 그냥 돌아옵니다)입니다. 옛 인용
+    ``RequestBuilder.smali:1559-1571`` 은 7.0.6
+    ``analysis/apktool/smali_classes7/retrofit2/RequestBuilder.smali`` 의 총
+    922 행을 넘어서는 범위여서 아무것도 가리키지 못합니다.
     """
 
     #: ``psg_tp_dv_cd`` ← 좌석의 ``h_psg_tp_cd``.
@@ -882,18 +1122,40 @@ class PriceRecalculationRow:
 class PriceRecalculationRequest:
     """보류된 PNR 하나의 운임 재계산.
 
-    ``a6/C1042B.java:265-296``(``k2()``)이 만드는 것이 정확히 이것입니다 —
-    PNR, 고정 job id ``"1101"``, 줄 수, 여섯 개의 리스트, 그리고 **비회원일
-    때만** ``hiduserYn="N"`` 과 비회원 번호.
+    7.0.6 의
+    ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:6142-6171``
+    (``executeDiscountPrice(int, List<DiscountPriceParams>)``)이 만드는 것이
+    정확히 이것입니다 — PNR(``:6150``), 고정 job id(``:6166``
+    ``ReservationJobId.DEFAULT.getJobId()``), 줄 수(``:6169-6170``), 여섯 개의
+    리스트가 될 행 목록(``:6161-6165``), 그리고 **비회원일 때만**
+    ``hiduserYn`` 과 비회원 번호(``:6167-6168``). 요청 DTO 의 스칼라 목록은
+    ``network/model/PriceReCalculationIn.java:31-41``
+    (``txtJobId``, ``hidPnrNo``, ``hiduserYn``, ``hidCustNo``,
+    ``txtPsgGridcnt``, ``passengerInfos``, ``txtPsrmClCd1``,
+    ``txtSeatAttCd2``/``4``/``5``)입니다.
+
+    ``"1101"`` 과 ``"N"`` 이라는 **리터럴 자체는 확인할 수 없습니다** —
+    job id 는 ``common/define/ReservationJobId.java:20``(``DEFAULT``)의
+    AlienGuard 로 보호된 생성자 인자이고(생성자 ``:42-45``),
+    ``hiduserYn`` 에 들어가는 값도 ``PayViewModel.java:6167`` 의 보호된 1바이트
+    리터럴입니다. 두 값은 실서버 관측에서 온 것입니다. 옛 인용
+    ``a6/C1042B.java:265-296``(``k2()``)은 6.5.0 이고 7.0.6 에 없습니다.
     """
 
     pnr_no: str = field(repr=False)
     rows: tuple[PriceRecalculationRow, ...] = ()
-    #: ``hidCustNo``. 비회원 세션에서만 채웁니다. ``k2()`` 가 이 값이나
-    #: ``hiduserYn`` 을 쓰는 경우도 그때뿐입니다(``a6/C1042B.java:290-293``).
+    #: ``hidCustNo``. 비회원 세션에서만 채웁니다. 7.0.6 도 이 값과
+    #: ``hiduserYn`` 을 **둘 다 ``!userData.isLogin()`` 일 때만** 넣습니다 —
+    #: ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:6167-6168``
+    #: 이 로그인 상태면 두 인자에 ``null`` 을 넘깁니다(옛 인용
+    #: ``a6/C1042B.java:290-293`` 은 6.5.0 이고 7.0.6 에 없습니다).
     #: 회원이면 ``None`` 이고, 그러면 두 필드 다 전송되지 않습니다 —
-    #: Retrofit 은 널 ``@Field`` 를 빼므로(``RequestBuilder.smali:1531``)
-    #: 회원의 폼은 실제로 열네 개가 아니라 열두 개 키를 갖습니다.
+    #: Retrofit 은 널 ``@Field`` 를 빼므로
+    #: (``analysis/jadx/sources/retrofit2/ParameterHandler.java:252-259``:
+    #: 값이 ``null`` 이면 ``addFormField`` 를 부르지 않고 반환) 회원의 폼은
+    #: 실제로 열네 개가 아니라 열두 개 키를 갖습니다. 옛 인용
+    #: ``RequestBuilder.smali:1531`` 은 7.0.6 의 922행짜리
+    #: ``retrofit2/RequestBuilder.smali`` 범위 밖입니다.
     non_member_no: str | None = field(default=None, repr=False)
 
 
@@ -901,9 +1163,17 @@ class PriceRecalculationRequest:
 class CartAddRequest:
     """보류된 예약의 PNR 을 장바구니에 담습니다.
 
-    ``cart.addCartList``(``CartService.java:11-13``)가 공통 세 필드 말고
-    받는 것은 ``hidPnrNo`` 하나뿐입니다. DAO 도 같은 한 필드입니다
-    (``AddCartDao.java:9-24``, 바이트코드에서도 확인).
+    ``cart.addCartList``
+    (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:265-267``
+    ``postAddCartList(@FieldMap …)``)가 공통 필드 말고 받는 것은
+    ``hidPnrNo`` 하나뿐입니다 — 요청 DTO
+    ``analysis/jadx/sources/com/korail/talk/network/model/AddCartListIn.java:25-30``
+    이 ``CommonIn`` 을 상속하고 자기 필드로는 ``hidPnrNo`` 하나만 선언하며,
+    그 전선 이름이 ``:79`` 의 ``@SerialName("hidPnrNo")`` 입니다
+    (``CommonIn`` 쪽은 ``Device``/``Version``/``Key`` 와 선택적 ``lang``).
+    옛 인용 ``CartService.java:11-13`` 과 ``AddCartDao.java:9-24`` 는 6.5.0
+    이고 7.0.6 디컴파일에 없습니다 — 라우트는 같지만 그것이 필드 전체
+    동일성을 뜻하지는 않으므로, 위 7.0.6 DTO 로 다시 세었습니다.
     """
 
     pnr_no: str = field(repr=False)

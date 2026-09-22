@@ -43,7 +43,15 @@ SENSITIVE_KEYS = frozenset(
         "txtPnrNo",
         "txtPrnNo",
         "pnr_no",
-        "prnNo",  # 반환 응답 철자(RefundVerifyTicketDao.java:123,151)
+        # 반환 응답 철자. 옛 인용 RefundVerifyTicketDao.java:123,151 은 6.5.0
+        # 이고 7.0.6 디컴파일에 없다. "prnNo" 라는 철자 자체도 7.0.6 어디에도
+        # 없다(jadx 소스 전체 0건, 2026-09-22) -- 7.0.6 의 역창구 반환 검증
+        # 응답은 orgtkinfo_list 원소에 "pnr_no" 로 담는다
+        # (network/model/Orgtkinfo.java:163,
+        #  VerifyOnlineRefundsOut.java:141). 그러므로 이 항목은 7.0.6 에
+        # 대응 출처가 없는 방어용 철자다 -- 미출처. 가리는 쪽으로 남겨 두는
+        # 것은 무해하므로 지우지 않는다.
+        "prnNo",
         "h_pnr_no",
         # ReservationPaymentOut 최상위 예약번호 -- pnrNo/h_pnr_no 와 같은 성질의
         # 식별자인데 철자가 다르다. .raw 로만 나간다
@@ -71,7 +79,18 @@ SENSITIVE_KEYS = frozenset(
         "saleWctNo",
         "saleDt",
         "saleSqno",
-        "saleDd",  # 세 번째 철자(PaymentService.java:12-14)
+        # 판매일자의 세 번째 철자. 옛 인용 PaymentService.java:12-14 는 6.5.0
+        # 이고 7.0.6 에 없으며, 7.0.6 의 결제 요청 DTO
+        # (network/model/ReservationPaymentIn.java:29-35) 에는 saleDd 가
+        # 아예 없다. 7.0.6 에서 이 철자를 실제로 쓰는 곳은 다음 넷이다:
+        #   network/model/DelayReturnReceiptIn.java:77
+        #   network/model/SelfCheckInRegisterIn.java:117
+        #   network/model/SelfCheckInPossibleIn.java:115
+        #   network/model/AcpnMlgSaveRequest.java:125
+        # (모두 @SerialName("saleDd")). N카드 기간연장 요청
+        # network/model/NCardExtensionIn.java:31 도 같은 이름을 쓴다
+        # (@SerialName 없음 -> 프로퍼티 이름이 곧 전선 이름).
+        "saleDd",
         "sale_window_no",
         "sale_date",
         # 같은 dataclass 안에서 sale_date 옆에 있는데 이 철자만 빠져 있었다:
@@ -200,12 +219,31 @@ SENSITIVE_KEYS = frozenset(
         "btdt",
         "birthday",
         "phone",
-        "strCpNo",   # 로그인 응답 전화번호(LoginDao.java:84-107)
+        # 로그인 응답 전화번호. 옛 인용 LoginDao.java:84-107 은 6.5.0 이고
+        # 7.0.6 에 없다. 7.0.6 대응물은 network/model/LoginOut.java:54 의
+        # strCpNo 프로퍼티다. LoginOut 은 @SerialName("Key")(:383) 하나만
+        # 명시하고 나머지에는 애노테이션이 없으므로, 이 철자는 프로퍼티
+        # 이름에서 온 최선 추정이고 전선 스펠링 자체는 PROTECTED 다
+        # (session.py 상단의 LoginOut 필드 주석과 같은 판정).
+        "strCpNo",
         "strCustNm",
         "strBtdt",
         "strEmailAdr",
-        "txtCpNo",   # 예약대기 전화번호(ReservationWaitService.java:12)
-        "custTeln",  # 비회원 반환 전화번호(s5/h.java:123)
+        # 예약대기 전화번호. 옛 인용 ReservationWaitService.java:12 는 6.5.0
+        # 이고 7.0.6 에 없다. 7.0.6 대응물은
+        # network/model/ReservationWaitIn.java:107 의 @SerialName("txtCpNo")
+        # 이며(라우트는 NetworkApi.java:638-640
+        # reservationWait.ReservationWait), 같은 DTO 의 나머지 셋은
+        # txtPnrNo/txtPsrmClChgFlg/txtSmsSndFlg(:111-119) 다.
+        "txtCpNo",
+        # 비회원 반환 전화번호. 옛 인용 s5/h.java:123 은 6.5.0 이고 7.0.6 에
+        # 없다. 7.0.6 대응물은
+        # network/model/ExecuteOnlineRefundsIn.java:122 의
+        # @SerialName("custTeln") 이다 -- 역창구 반환 실행
+        # (refunds.executeOnlineRefunds, NetworkApi.java:191-193)의 요청
+        # 필드이고, 같은 DTO 가 acepCustNm(:118)과 ogtk* 넷(:126-138)을 함께
+        # 싣는다.
+        "custTeln",
         # 예약 이력(research.reservationView.do) 최상위의 예약자 성명·전화번호.
         # ReservationHistoryResponse.reservation_passenger_name/phone_no 는 이미
         # repr=False 로 보호되지만, .raw 경로는 이 리터럴이 없으면 가려지지 않는다
@@ -213,7 +251,18 @@ SENSITIVE_KEYS = frozenset(
         "h_rsv_ps_nm",
         "h_tel_no",
         # --- 할인카드(N카드) ---
-        # h_dcnt_crd_no 는 bearer credential(w4/a.java:100-101)
+        # h_dcnt_crd_no 는 bearer credential. 옛 인용 w4/a.java:100-101 은
+        # 6.5.0 이고 7.0.6 에 없다. 7.0.6 에서 bearer 라는 판정을 뒷받침하는
+        # 것은 두 곳이다: 응답 쪽 철자는
+        # network/model/DiscountCardInfo.java:113 의
+        # @SerialName("h_dcnt_crd_no") 이고, 요청 쪽에서는
+        # common/define/Passengers.java:731,766 이 N카드 예약
+        # (ReservationType.MY_N_CARD_RESERVATION)일 때 카드번호 문자열을
+        # 그대로 TicketReservationInPassengerInfo 의 네 번째 인자로 넘긴다 --
+        # 그 필드의 전선 이름이
+        # network/model/TicketReservationInPassengerInfo.java:105 의
+        # @SerialName("txtCardNo_") 이고, 같은 DTO 에 카드 비밀번호 필드는
+        # 없다(:31-34 가 전부). 즉 번호만으로 할인이 붙는다.
         "dcntCrdNo",
         "h_dcnt_crd_no",
         "discount_card_no",
@@ -222,7 +271,13 @@ SENSITIVE_KEYS = frozenset(
         "h_disc_card_no",
         *(f"txtCardNo_{i}" for i in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)),
         "txtCardNo",
-        # 할인카드 등록(NCardReservationDao.java:16,29,30)
+        # 할인카드(N카드) 2인용의 추가 사용자. 옛 인용
+        # NCardReservationDao.java:16,29,30 은 6.5.0 이고 7.0.6 에 없다.
+        # 7.0.6 대응물은 network/model/NCardInfoIn.java:30-31 이고, 거기서는
+        # 이름에 이미 인덱스가 박혀 있다 -- apdCustName_1 / apdCustTeln_1
+        # (@SerialName 없음 -> 프로퍼티 이름이 곧 전선 이름). 아래 두
+        # 리터럴은 인덱스를 뗀 형태이고, is_sensitive_key 가 꼬리 인덱스를
+        # 떼고 다시 보므로 apdCustName_1 도 걸린다.
         "apdCustName",
         "apdCustTeln",
         # --- 현금영수증(개인 소득공제에 붙는 번호, 속성명·와이어 키 둘 다 누락돼 있었다) ---
@@ -263,7 +318,19 @@ SENSITIVE_KEYS = frozenset(
         "h_srcar_no",
         "h_seat_no",
         "h_plf_no",
-        # 좌석 지정 출력(SeatSearchActivity.java:679-680)
+        # 좌석 지정 출력. 옛 인용 SeatSearchActivity.java:679-680 은 6.5.0
+        # 이고 7.0.6 에 없다. 7.0.6 대응물은
+        # network/model/TicketReservationInSrcar.java:81-88 의
+        # @SerialName("txtSeatNo") / @SerialName("txtSrcarNo") 이고, 값을
+        # 채우는 곳은 ui/screen/train/TrainSeatMapViewModel.java:2210
+        # (buildTicketReservationIn(), :1989) 이다.
+        #
+        # 주의: 후속 구간용 형제 DTO
+        # network/model/TicketReservationInSrcarTrailing.java:82-89 는
+        # @SerialName("txtSeatNo1_") / @SerialName("txtSrcarNo1_") -- 인덱스
+        # 뒤에 밑줄이 더 붙는다. _index_stripped 는 꼬리 숫자만 떼므로 그
+        # 철자는 아래 열거에 걸리지 않는다. 규칙을 넓히는 것은 이 작업의
+        # 범위가 아니라 별도 판단이 필요하므로 여기서는 사실만 적어 둔다.
         *(f"txtSrcarNo{i}" for i in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)),
         *(f"txtSeatNo{i}" for i in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)),
         "txtSrcarNo",
@@ -275,7 +342,15 @@ SENSITIVE_KEYS = frozenset(
         "coupon_no",
         "certificate_password",
         "hidDscpNo",
-        "hidFmlyNo",  # 다자녀 가족(a6/C1041A.java:75)
+        # 다자녀 가족 구성원 일련번호. 옛 인용 a6/C1041A.java:75 는 6.5.0
+        # 이고 7.0.6 에 없다. 7.0.6 에서 이 필드에 빈 값이 아닌 것을 넣는
+        # 곳은 ui/screen/pay/PayViewModel.java:16863 한 줄뿐이고
+        # (setHidFmlyNo(payFmly.getFmly().getFmlySqno())), 출처 키는
+        # network/model/Fmly.java:145 의 @SerialName("fmlySqno") 다. 전선
+        # 이름 hidFmlyNo 자체는
+        # network/model/PriceReCalculationInPassengerInfo.java:139 와
+        # NetworkApi.java:584 의 @Field("hidFmlyNo") 에서 확인된다.
+        "hidFmlyNo",
         "hidRsvChgNo",
         "h_rsv_chg_no",
         "reservation_change_no",
@@ -330,8 +405,13 @@ SENSITIVE_KEYS = frozenset(
         "companion_birth_date",
         "window_name",
         "certificate_no",
-        # --- 반환번호 4분할(RefundService.java:33) ---
-        # 16자리가 5/4/5/2 로 분할되어 CARD_RE 에 안 걸림
+        # --- 반환번호 4분할 ---
+        # 16자리가 5/4/5/2 로 분할되어 CARD_RE 에 안 걸림.
+        # 옛 인용 RefundService.java:33 은 6.5.0 이고 7.0.6 에 없다. 7.0.6
+        # 대응물은 network/model/VerifyOnlineRefundsIn.java:102-114 의
+        # @SerialName("retNo1"..."retNo4") 네 개이고, 라우트는
+        # NetworkApi.java:810-812 (refunds.verifyOnlineRefunds) 다. 같은 DTO
+        # 가 요청자 이름 strName(:118)까지 다섯 필드가 전부다.
         "retNo1",
         "retNo2",
         "retNo3",
@@ -342,10 +422,27 @@ SENSITIVE_KEYS = frozenset(
         "return_no_3",
         "return_no_4",
         "return_no",
-        "strName",  # 요청자 이름(s5/c.java:71)
+        # 요청자 이름. 옛 인용 s5/c.java:71 은 6.5.0 이고 7.0.6 에 없다.
+        # 7.0.6 에서 "strName" 이라는 전선 키는 딱 한 군데,
+        # network/model/VerifyOnlineRefundsIn.java:118 의 @SerialName 뿐이다
+        # (위 retNo1~4 와 같은 DTO -- 역창구 반환 검증의 본인 확인 이름).
+        "strName",
         "requester_name",
         "requester_phone",
-        # --- 원표 4분할(ROrtg.java:8-11, RefundService.java:17) ---
+        # --- 원표 4분할 ---
+        # 옛 인용 ROrtg.java:8-11 과 RefundService.java:17 은 6.5.0 이고
+        # 7.0.6 에 없다. 7.0.6 에서 같은 네 조각이 철자 셋으로 갈린다:
+        #   camelCase + "Sale" : network/model/ExecuteOnlineRefundsIn.java
+        #       :126-138 (ogtkRetPwd / ogtkSaleDt / ogtkSaleSqno /
+        #       ogtkSaleWctNo) -- 역창구 반환 실행 요청
+        #   camelCase, "Sale" 없음 : network/model/ReservationOrgTk.java
+        #       :141-153 (ogtkRetPwd / ogtkSaleDt / ogtkSaleSqno / ogtkWctNo)
+        #   snake_case : network/model/Orgtkinfo.java:147-159
+        #       (ogtk_ret_pwd / ogtk_sale_dt / ogtk_sale_sqno /
+        #       ogtk_sale_wct_no) -- verifyOnlineRefunds 응답의
+        #       orgtkinfo_list 원소
+        # ogtkSaleDd 는 또 다른 철자로, network/model/DelayCertificateIn.java
+        # :96 의 @SerialName("ogtkSaleDd") 에서 확인된다.
         "ogtkSaleDt",
         "ogtkSaleDd",
         "ogtkSaleWctNo",
@@ -360,7 +457,14 @@ SENSITIVE_KEYS = frozenset(
         "ogtk_sale_sqno",
         "ogtk_sale_wct_no",
         "original_sale_datetime",
-        # --- 지연증명 원표(response/research/Cmpn.java:11-14) ---
+        # --- 지연증명 원표 ---
+        # 클래스는 7.0.6 에도 같은 이름으로 살아 있고 패키지만 옮겼다:
+        # network/model/Cmpn.java:35-38 이 dlayOgtkRetPwd / dlayOgtkSaleDt /
+        # dlayOgtkSaleSqno / dlayOgtkWctNo 를 선언한다(@SerialName 없음 ->
+        # 프로퍼티 이름이 곧 전선 이름). 옛 경로
+        # response/research/Cmpn.java:11-14 는 7.0.6 에 없다. 같은 네 철자
+        # 중 둘은 예약 응답에도 있다 --
+        # network/model/ReservationOutPsgInfo.java:130,134.
         "dlayOgtkRetPwd",
         "dlayOgtkSaleDt",
         "dlayOgtkSaleSqno",
@@ -371,7 +475,11 @@ SENSITIVE_KEYS = frozenset(
         "delay_certificate_window_no",
         # --- 구매내역 ---
         "h_purchase_history",
-        # --- poppMsg(서버 합성 안내, 입력 인용 가능, RefundVerifyTicketDao.java:66) ---
+        # --- poppMsg(서버 합성 안내, 입력 인용 가능) ---
+        # 옛 인용 RefundVerifyTicketDao.java:66 은 6.5.0 이고 7.0.6 에 없다.
+        # 7.0.6 대응물은 network/model/VerifyOnlineRefundsOut.java:145 의
+        # @SerialName("poppMsg") 다(같은 응답의 나머지는 orgtkinfo_list,
+        # rcvd_amt, ret_amt, ret_fee, strMsg -- :141-165).
         "poppMsg",
         "popup_message",
         # --- 이중 인덱스 키(outer=journey/passenger, inner=seat/discount row) ---
@@ -538,7 +646,15 @@ def redact_payload(
     이 패키지 자신은 부르지 않습니다.
 
     민감 키는 ``[REDACTED]``, 나머지는 :func:`redact_text`. 리스트 값은 원소별로
-    가리고 길이 유지(``CertificationService.java:35-37`` 의 ``List @Field``).
+    가리고 길이를 유지합니다 — 길이가 의미를 갖는 것은 운임 재계산 폼이
+    여섯 개의 ``List @Field`` 를 **인덱스로 맞물려** 보내기 때문입니다
+    (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:582-584``
+    의 ``postPriceReCalculation`` 이 ``psg_tp_dv_cd``/``psrm_cl_cd``/
+    ``dcnt_knd_cd1``/``hidDscpNo``/``hidDcntKndCd``/``hidFmlyNo`` 여섯 개를
+    ``@Field List<String>`` 으로 받고,
+    ``network/NetworkService.java:9997-10043`` 이 승객 행 목록을 그 여섯으로
+    쪼갭니다). 옛 인용 ``CertificationService.java:35-37`` 은 6.5.0 이고
+    7.0.6 디컴파일에 없습니다.
     """
     redacted: dict[str, str | list[str]] = {}
     for key, value in payload.items():

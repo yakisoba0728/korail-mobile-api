@@ -674,7 +674,9 @@ _TRIP_MENU_CONTENT_FIELDS: dict[str, str] = {
     "url": "contUrl",
     # 반대로 아래 둘은 앱이 실제로 읽는 필드입니다 —
     # PassConditionViewModel.java:1241 이 contList 를 훑으며 getCmtrKndCd() 를
-    # 목표 코드와 비교하고, :1246 이 getPassData() 를 꺼냅니다.
+    # 목표 코드와 비교하고, :1244 가 getPassData() 를 꺼냅니다.
+    # (원래는 ":1246" 이라고 적었는데 그 줄은 닫는 중괄호입니다. 같은 함수의
+    # :1247-1248 이 passData == null 이면 backAlert 로 화면을 되돌립니다.)
     # menuType='P' 메뉴에만 옵니다(2026-09-22: 60행 중 6행).
     "commuter_kind_code": "cmtrKndCd",
     "pass_type": "passType",
@@ -1855,7 +1857,15 @@ def parse_merge_seats_inquiry_response(
 def parse_pass_schedule_response(
     raw: Mapping[str, Any],
 ) -> PassScheduleResponse:
-    # WRG000000 is a non-fatal empty result (CommutationInquiryActivity.java:182).
+    # WRG000000 is a non-fatal empty result: error_json.json:4173 spells it
+    # "조회 결과가 없습니다." (EN row 14397: "There is no train in the search
+    # results."). The old citation was CommutationInquiryActivity.java:182,
+    # which does not exist in the 7.0.6 decompile; and no 7.0.6 Java/smali file
+    # contains the literal "WRG000000" at all — the only occurrences anywhere
+    # under analysis/ are the four error_json.json rows. So treating it as
+    # non-fatal is grounded in the message dictionary plus this library's own
+    # live observation, not in an app call site — 미출처로 두는 대신 그 한계를
+    # 여기 적어 둡니다.
     empty = _validate_envelope(raw, accepted_empty_codes=frozenset({"WRG000000"}))
     if empty:
         return PassScheduleResponse(**_response_fields(raw))
@@ -2582,9 +2592,24 @@ def parse_pbp_acceptance_specification_response(
                             attr: _required_string(seat, wire_key, "PBP acceptance seat")
                             for attr, wire_key in _PBP_ACCEPTANCE_SEAT_FIELDS.items()
                         },
-                        # PbpAcepSpecDao.Seat.scarNo is Java `int`
-                        # (PbpAcepSpecDao.java:102); Gson coerces a quoted
-                        # numeric string, so accept both "3" and 3.
+                        # Seat.scarNo is the one non-String field on this row:
+                        # Seat.java:35 declares `public final int scarNo` and
+                        # the synthetic constructor takes it as
+                        # `@SerialName("scarNo") int i2` (Seat.java:53).
+                        # The old citation PbpAcepSpecDao.java:102 is a 6.5.0
+                        # path absent from the 7.0.6 decompile.
+                        #
+                        # The old comment also credited the coercion to Gson.
+                        # 7.0.6 deserializes this route with kotlinx.serialization,
+                        # not Gson: NetworkServiceKt.java:15-31 builds the shared
+                        # `KJson` and calls setIgnoreUnknownKeys/setEncodeDefaults/
+                        # setCoerceInputValues/setLenient with one protected
+                        # literal compared `> 0` and setExplicitNulls with
+                        # another compared `> 1`. The literals are AlienGuard
+                        # protected, so read the values as inferred rather than
+                        # confirmed -- but lenient mode is what makes a quoted
+                        # "3" acceptable for an Int. Either way this reader
+                        # accepts both "3" and 3 on purpose.
                         car_no=_required_integer(
                             seat,
                             "scarNo",
@@ -2879,10 +2904,21 @@ def _discount_card_on_ticket(
 ) -> DiscountCardOnTicket | None:
     """승차권 상세에서 ``dcnt_crd_info`` 를 읽습니다. 없으면 ``None``.
 
-    평범한 승차권에는 없으므로 부재가 오류가 아닙니다. 구간 목록의 전선 키는
-    ``appSegList`` — Gson 이 직렬화하는 자바 **필드** 이름입니다
-    (``TicketDetailDao.java:124``). 게터는 ``getAppSeg_info()`` 로 철자가 다르며
-    그것은 전선 이름이 아닙니다.
+    평범한 승차권에는 없으므로 부재가 오류가 아닙니다. 봉투 키
+    ``dcnt_crd_info`` 는 ``TicketDetailOut.java:438`` 의 ``@SerialName`` 이고,
+    구간 목록의 전선 키 ``appSegList`` 는 ``DiscountCardInfo.java:28`` 의 필드
+    이름입니다 — 이 클래스 안에서 ``appSegList`` 만 ``@SerialName`` 이 없어
+    kotlinx 기본값(= 프로퍼티 이름)이 그대로 전선 철자가 됩니다
+    (나머지 넷은 ``:113-125`` 에 ``h_*`` 이름이 붙어 있습니다).
+
+    원래 주석은 이 자리에 "Gson 이 직렬화하는 자바 필드 이름
+    (``TicketDetailDao.java:124``). 게터는 ``getAppSeg_info()`` 로 철자가
+    다르다" 라고 적었습니다. **세 가지가 틀렸습니다**: ① 그 파일 경로가 7.0.6
+    디컴파일에 없습니다(6.5.0 잔재). ② 이 라우트는 Gson 이 아니라
+    kotlinx.serialization 으로 읽힙니다(``NetworkServiceKt.java:15-31`` 의
+    공유 ``KJson``). ③ ``getAppSeg_info`` 라는 철자는 ``analysis/`` 전체에서
+    0건이고 7.0.6 의 게터는 ``getAppSegList()``(``:244``)입니다. 결론(전선
+    키가 ``appSegList``)은 그대로 유효하며 근거만 바뀝니다.
     """
     info = _optional_mapping(raw, "dcnt_crd_info", "refund ticket detail")
     if info is None:
@@ -3043,9 +3079,13 @@ def parse_self_seat_change_info_response(
 ) -> SelfSeatChangeInfoResponse:
     """``self.seatChgInfo.do`` 를 파싱합니다.
 
-    ``CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse`` 와 그 안의 두 행 타입
-    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:64-204``). DAO 가 선언한
-    필드가 전부 자바 ``String`` 이라 모두 :func:`_optional_scalar_string` 으로
+    7.0.6 의 응답 DTO 는 ``SeatAvailabilityOut.java:28-42``
+    (``NetworkApi.java:806-808`` 의 ``seatAvailabilityCall``)이고 그 안의 두 행
+    타입은 ``ChgStnInfo.java:21-35`` 와 ``ChgRsnInfo.java:21-24`` 입니다.
+    원래 인용 ``CallSelfSeatChgInfoDao.CallSelfSeatChgInfoResponse``
+    (``dao/ticket/change/CallSelfSeatChgInfoDao.java:64-204``)는 7.0.6
+    디컴파일에 없는 경로였습니다. 세 DTO 가 선언한
+    필드가 전부 코틀린 ``String`` 이라 모두 :func:`_optional_scalar_string` 으로
     읽습니다 — 잔여좌석 수와 편성/운행 순서가 맨 JSON 숫자로 오는 것이 관측된
     바로 그런 필드입니다.
     """
@@ -3163,13 +3203,33 @@ def parse_original_ticket_inquiry_response(
 ) -> OriginalTicketInquiryResponse:
     """``research.tripChgOgtk.do`` 를 파싱합니다.
 
-    ``OgTkInquiryDao.OgTkInquiryResponse`` → ``response/research/OrgTk.java`` 의
-    ``orgTkList``. 각 원표는 ``Jrny.java`` 의 ``jrnyList`` 를, 각 여정은
-    ``Seat.java`` 의 ``seatList`` 를 가집니다.
+    7.0.6 의 사슬은 ``NetworkApi.java:234-236``
+    (``@POST(".../research.tripChgOgtk.do") → OgTicketInquiryOut``) →
+    ``OgTicketInquiryOut.java:27`` 의 ``List<OrgTk> orgTkList`` →
+    ``OrgTk.java:38`` 의 ``List<JrnyInfo> jrnyList`` → ``JrnyInfo.java:58`` 의
+    ``List<SeatInfo> seatList`` 입니다.
+
+    **동명 오인 경고.** 원래 주석은 여기서 "각 원표는 ``Jrny.java`` 의
+    ``jrnyList`` 를, 각 여정은 ``Seat.java`` 의 ``seatList`` 를 가집니다"
+    라고 적었습니다(원 인용은 ``response/research/OrgTk.java`` 계열, 7.0.6 에
+    없는 경로). 7.0.6 에 ``model/Jrny.java`` 와 ``model/Seat.java`` 가 실제로
+    있지만 **이 응답의 타입이 아닙니다** — ``Jrny.java:29-38`` 의 필드는
+    ``acepCustNm``/``acepCustTeln``/``pbpAcepKndNm``/``pbpRsvNo``/
+    ``wdrwPsbFlg`` 로 PBP(대리수령) 접수 정보이고, 그것이 담은
+    ``Seat.java:27-36`` 은 필드가 다섯이며 ``scarNo`` 가 ``int`` 입니다. 두
+    클래스는 ``DeliveredTicketOut``(``:27``) → ``Tk``(``:27``) 사슬, 즉
+    ``tk.pbpAcepSpec.do``(``NetworkApi.java:367-369``) 쪽에 속합니다. 원표
+    조회의 여정/좌석은 위의 ``JrnyInfo``/``SeatInfo`` 이고 아래 필드 맵도
+    그쪽 철자를 씁니다. 같은 이름을 보고 갈아 끼우지 마십시오.
 
     ``cmpnList`` 와 ``stlList`` 는 일부러 파싱하지 않습니다. 지연증명 반환번호
-    (``Cmpn.java:11-14``)와 카드/승인번호(``Stl.java:5-16``) 같은 소지 자격증명을
-    더 싣는데 변경 과정의 어느 단계도 그것을 필요로 하지 않습니다. ``raw`` 는
+    (``Cmpn.java:35-38`` 의 ``dlayOgtkRetPwd``/``dlayOgtkSaleDt``/
+    ``dlayOgtkSaleSqno``/``dlayOgtkWctNo``)와 카드/승인번호
+    (``Stl.java:29,32,37`` 의 ``apvNo``/``prepCrdNo``/``stlCrdNo``) 같은 소지
+    자격증명을
+    더 싣는데 변경 과정의 어느 단계도 그것을 필요로 하지 않습니다.
+    (원래 인용 ``Cmpn.java:11-14`` / ``Stl.java:5-16`` 은 두 파일의 ``import``
+    구역이었습니다 — 필드가 아니라 임포트 줄을 가리키고 있었습니다.) ``raw`` 는
     원본을 그대로 보존하므로 그 안의 두 목록도 그대로 남습니다. 로깅 또는 외부
     직렬화 전에 :func:`~korail_mobile_api.redaction.redact_mapping` 을 적용해야
     합니다.
