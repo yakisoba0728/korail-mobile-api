@@ -401,9 +401,13 @@ def build_train_search_form(
         "txtSeatAttCd_2": "000",
         "txtSeatAttCd_3": "000",
         "txtSeatAttCd_4": query.seat_attribute_code,
-        # MainBookingActivity.java:775-776 sets both ebizCrossCheck and
-        # srtCheckYn from the single "include SRT" checkbox (f29041T), so the
-        # app always sends them equal; keep the pair coupled to include_srt.
+        # 두 키를 같은 값으로 묶어 보냅니다. 근거였던
+        # MainBookingActivity.java:775-776 은 6.5.0 클래스라 7.0.6 에 없고,
+        # 재유도도 실패했습니다 -- ``ebizCrossCheck``/``srtCheckYn`` 는
+        # ``TrainScheduleIn.java:33`` 의 DTO 선언 밖에서는 7.0.6 소스 어디에도
+        # 나오지 않습니다(UI 계층 전수 grep 0건, 2026-09-22). 즉 "한 체크박스가
+        # 둘을 함께 정한다" 는 **미출처**입니다. 동작으로는 이 짝을 유지하는
+        # 편이 안전하므로 그대로 두고, 근거만 정직하게 낮춰 적습니다.
         "ebizCrossCheck": "Y" if query.include_srt else "N",
         "srtCheckYn": "Y" if query.include_srt else "N",
         "rtYn": "N",
@@ -411,7 +415,10 @@ def build_train_search_form(
     }
     if member_card_no:
         form["mbCrdNo"] = member_card_no
-    # Declared order in SeatMovieService.java:14 is
+    # 선언 순서의 근거는 이제 요청 DTO 자체입니다 -- ``TrainScheduleIn.java:27``
+    # 의 ``@Metadata`` 속성 배열과 ``:33`` 이후의 필드 선언이 그 순서를 말합니다
+    # (예전 인용 ``SeatMovieService.java:14`` 는 7.0.6 에 없는 클래스입니다).
+    # 순서는
     # ... adjStnScdlOfrFlg, mbCrdNo, tkPsrmClCd, tkRcvdAmt, qryDvCd, qryStNo,
     # qryStTrnNo, qryStTrnNo2, pgPrCnt, chtnCnt, ... so the paging block goes
     # after mbCrdNo. tkPsrmClCd/tkRcvdAmt belong to the ticket-change entry
@@ -596,15 +603,24 @@ def build_ticket_list_form(
     """``myTicket.MyTicketNewList.do`` 의 승차권 목록 조회 폼을 만듭니다.
 
     ``txtIndex``(``mode``)는 페이지 커서가 아니라 **목록 종류**입니다. ``"1"`` 은
-    현재 승차권(``TicketListActivity.java:937-939``), ``"2"`` 는 구매이력
-    (``TicketPurchaseHistoryActivity.java:276-278``)이고 그 밖의 값은
+    현재 승차권, ``"2"`` 는 구매이력이고 그 밖의 값은
     :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
 
+    이 키는 ``MyTicketListIn.java:62`` 의 ``@SerialName("txtIndex")`` 이고 7.0.6
+    호출 지점은 ``MyTicketBaseViewModel.java:1029``·``LoginViewModel.java:1083``·
+    ``AppViewModel$executeTicketListForAutoLogin$result$1.java:67`` 입니다. 다만
+    **값 리터럴은 AlienGuard 로 보호돼** 어느 화면이 ``"1"`` 을 보내고 어느
+    화면이 ``"2"`` 를 보내는지는 정적으로 읽을 수 없습니다 -- 예전에 달려 있던
+    ``TicketListActivity``/``TicketPurchaseHistoryActivity`` 인용은 7.0.6 에 없는
+    6.5.0 클래스였습니다. 두 값의 뜻은 대신 라이브로 확인했습니다(2026-09-22):
+    깨끗한 계정에서 ``"1"`` 은 ``WRT300005``(조회자료 없음), ``"2"`` 는 넓은
+    날짜 범위로 구매이력 128건을 돌려줬습니다.
+
     ``boarding_date_from``·``boarding_date_to`` 는 그대로 전달합니다 — 서버가
-    받아들이거나 거절합니다. 화면은 ``"2"`` 에서 언제나 두 날짜를 갖춰 보내고
-    (``TicketPurchaseHistoryActivity.java:277-280``) ``"1"`` 은 빈 문자열로
-    보내지만(``TicketListActivity.java:939-941``), 이 함수는 그 UI 관례를
-    강제하지 않습니다.
+    받아들이거나 거절합니다. 어느 화면이 두 날짜를 갖춰 보내는지는 위와 같은
+    이유(보호된 리터럴 + 6.5.0 클래스 부재)로 **미출처**이고, 이 함수는 어차피
+    그 UI 관례를 강제하지 않습니다. 잘못된 범위는 서버가 ``WRT100101`` 로
+    거절합니다(2026-09-22 확인).
 
     페이지는 ``h_page_no`` 로 나가며 1 미만은 1 로 올립니다. 앱의 두 호출 지점은
     언제나 ``"1"`` 을 보냅니다.

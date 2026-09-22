@@ -876,12 +876,21 @@ def parse_train_schedule_response(
         terminal_station_name=optional("tmnRsStnNm"),
         train_attribute_code=optional("trnAttCd"),
         train_departure_flag=optional("trnDptFlg"),
-        # trnNo1 is a nullable Gson String (TrainScheduleDao.java:123) and the
-        # web-view consumer null-guards it (TrainServiceInfoWebViewActivity.java
-        # :200 -> if (!N.isNull(tranNo1))), so a null train number is tolerated
-        # by the app. runDt1 stays required because its consumer uses it
-        # unguarded (convertFormat(runDt1)); msgCont is read as optional above,
-        # and a response without it parses to None.
+        # ``trnNo1`` 을 선택값으로 읽습니다. 예전 주석은 "nullable Gson String
+        # (TrainScheduleDao.java:123)" 이라고 했는데 두 군데가 틀렸습니다 --
+        # 앱은 Gson 이 아니라 kotlinx-serialization 을 쓰고,
+        # ``TrainScheduleDao``/``TrainServiceInfoWebViewActivity`` 는 7.0.6 에
+        # 없는 6.5.0 클래스입니다.
+        #
+        # 7.0.6 의 실제 선언은 ``ActualTrainScheduleOut.java:47`` 의 non-null
+        # ``String trnNo1`` 이고, 필드 출현 비트가 없으면 AlienGuard 로 보호된
+        # 기본값이 들어갑니다(``:83-85``) -- 즉 DTO 수준에서는 널이 아니라
+        # **기본값**입니다. ``runDt1`` 도 같은 모양입니다(``:38``, ``:78-80``).
+        # 소비자는 ``MyTicketDetailViewModel.java:2173-2175`` 입니다.
+        #
+        # 그래도 둘 다 선택값으로 읽는 이유는 이 패키지가 DTO 기본값을 재현하지
+        # 않기 때문입니다 -- 서버가 키를 빼면 여기서는 ``None`` 이 맞고, 앱이
+        # 채우는 그 기본값이 무엇인지는 보호돼 알 수 없습니다.
         train_no=optional("trnNo1"),
         special_train_flag=optional("trnSpsFlg"),
         up_down_division_code=optional("upDnDvCd"),
