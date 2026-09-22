@@ -1575,13 +1575,25 @@ def build_unpaid_reservation_cancel_form(
     return form
 
 
-# What the app sends when the hold response withheld the sequence. The app
-# passes whatever getH_tmp_job_sqno1/2() returned, including null, and Retrofit
-# then omits the @Field entirely — a shape this client cannot reproduce without
-# making the field conditional, and one no observed hold has produced (both
-# 2026-07 live holds returned populated sequences). "000000" is the value this
-# builder has always sent and the value srtgo hardcodes, so it stays as the
-# explicit last resort rather than dropping reservation state silently.
+# What this builder sends when the hold response withheld the sequence.
+#
+# 예전 근거였던 "앱이 null 을 넘기면 Retrofit 이 ``@Field`` 를 통째로
+# 생략한다"는 **이 라우트에는 적용되지 않습니다.** 7.0.6 의 결제 오버로드는
+# 둘 다 ``@FieldMap`` 입니다 -- ``NetworkApi.java:630-632``
+# (``postReservationPayment(@FieldMap Map<String, String>, …)``)와
+# ``:646-648`` (``postRsvPayment(@FieldMap …, @FieldMap …, …)``). null 을
+# 조용히 생략하는 규칙은 ``ParameterHandler.java:252-259`` 의 ``Field.apply``
+# 뿐이고(``t == null`` 이면 그냥 ``return``), ``FieldMap.apply``
+# (``:276-293``)는 정반대로 **던집니다** -- 값이 null 이면 ``:286-287`` 의
+# ``Utils.parameterError(…, "Field map contained null value for key '…'")``.
+# 게다가 맵 타입이 ``Map<String, String>`` 이라 null 이 들어갈 자리도
+# 아닙니다.
+#
+# 즉 **앱이 이 키를 비워 보내는 모양은 재도출되지 않았습니다** -- 상류에서
+# 키를 아예 빼는지, 빈 문자열을 넣는지 확인하지 못했습니다. 아래 값은 그래서
+# 앱 재현이 아니라 이 라이브러리의 선택입니다: "000000" 은 이 빌더가 늘 보내
+# 온 값이고 srtgo 가 박는 값이며, 관측된 홀드는 모두 시퀀스를 채워
+# 돌려줬습니다(2026-07 라이브 2건). 값 자체가 맞는지는 별개 문제입니다.
 _ABSENT_JOB_SEQUENCE = "000000"
 
 
@@ -1626,8 +1638,14 @@ def _echoed_job_sequence(value: str | None) -> str:
 # PNRs back through certification.ReservationList returns h_rsv_chg_no="000" on
 # 8 of 8 journey rows (direct, 예약대기 x4, merge x2, transfer x2). "000" is the
 # server's OWN value for a fresh hold, so emitting it is an echo by another
-# route, not a guess. It is also what every fresh-hold cancel in the app
-# hardcodes and what srtgo sends.
+# route, not a guess. srtgo sends the same literal.
+#
+# **다만 "앱은 모든 신선홀드 취소에서 이 상수를 박는다"는 뜻은 아닙니다.**
+# 한때 여기 그렇게 적었는데 틀렸습니다 -- ``PayViewModel.java:4678-4686`` 과
+# ``:4717-4725`` 는 여정 목록이 비었거나 꺼낸 값이 비었을 때에만 AlienGuard
+# 3바이트 리터럴을 쓰고, 그렇지 않으면 ``jrnyInfo[0].getHRsvChgNo()`` 를
+# 그대로 넣습니다. 즉 앱의 취소 폼은 고정 상수가 아니라 **조건부 치환**이고,
+# 위 문장은 변경번호가 비어 오는 홀드에 한정된 관찰입니다.
 #
 # Also dropped here: the old sentence that "a null h_rsv_chg_no would be
 # forwarded and then dropped by Retrofit". That is a 6.5.0 story and it cannot
@@ -1722,10 +1740,25 @@ def build_card_payment_form(
     장바구니·상품이 있으면 ``h_rcvd_amt`` 합(``:11390``)과 ``strMrkAmtSum``
     합(``:11405``)이 뒤에 더해집니다.
 
-    **다만 이것이 유일한 경로는 아닙니다** -- 같은 함수의 다른 분기는
-    ``:11486`` 에서 ``j5`` 를 ``PayTicketItem`` 의 ``h_rcvd_amt`` 로 잡아
-    ``:11521`` 에서 ``PayAmountUiData`` 를 한 번 더 만듭니다. 위 유도는 일반
-    예약 분기에 한정된 주장입니다.
+    **여러 분기가 하나의 생성 지점으로 모입니다.** 한때 여기 "``:11521`` 에서
+    ``PayAmountUiData`` 를 한 번 더 만든다" 고 적었는데 틀렸습니다. jadx 가
+    ``new PayAmountUiData(...)`` 식을 ``:11440`` 과 ``:11521`` 두 번 보여 주는
+    것은 맞지만, ``initAmountData()``(선언 ``:11222``)에는 jadx 의 코드 중복
+    경고가 열 줄 붙어 있습니다(``:11212-11221``,
+    ``JADX WARN: Code duplicated, block: …``). 같은 메서드의 smali
+    (``analysis/apktool/smali_classes5/.../PayViewModel.smali``, 범위
+    ``:25740-27914``)에는 생성이 **하나**뿐입니다 -- ``new-instance``
+    ``:27527``, ``<init>`` ``:27541``. (파일 전체에서 다른 ``new-instance`` 는
+    ``:1116`` 하나이고, 그것은 자바 ``:5321`` 의 StateFlow 초기값입니다.)
+
+    따라서 위 분기들 -- ``:11292-11293`` 트래블패스(``PayTicketItem`` 의
+    ``h_rcvd_amt``), ``:11296-11301`` 여정변경(``getScnIndcAmt``),
+    ``:11303-11307`` 일반 예약(``getHTotRcvdAmt``), ``:11384-11390``
+    장바구니(``CartInfo.getH_rcvd_amt``), ``:11399-11405`` 상품 -- 은 서로
+    다른 객체가 아니라 **같은 한 자리**로 들어가는 서로 다른 입력입니다.
+    ``:11477-11478``/``:11486`` 은 ``:11293`` 과 같은 트래블패스 분기의 중복
+    렌더링이지 별도 경로가 아닙니다. 위 유도는 그 한 자리에 **일반 예약
+    분기**가 넣는 값에 한정된 주장입니다.
 
     ``h_tot_prc`` 가 **UI 전용**이라는 부분도 지금은 정황 증거뿐입니다:
     7.0.6 에서 ``getHTotPrc()`` 를 읽는 곳은 화면 합산·로깅 세 군데
@@ -1762,7 +1795,12 @@ def build_card_payment_form(
         raise KorailProtocolError("KORAIL payment requires a CardPayment")
     window_no = hold.window_no
     # Deliberately NOT hold.total_price: that is the display figure. See the
-    # docstring — the app settles getReceivedAmount(). When a hold response
+    # docstring — the amount the app settles is getOriginalReceivedAmount()
+    # (PayViewModel.java:11027-11028, which reads PayAmountUiData's
+    # getOriginalReceivedAmount at PayAmountUiData.java:248-250), NOT the
+    # separate getReceivedAmount() at PayViewModel.java:11058. This comment
+    # used to name the latter; that was the wrong getter.
+    # When a hold response
     # carries neither h_tot_rcvd_amt nor readable per-seat h_rcvd_amt rows we
     # refuse rather than substitute the display total, because substituting is
     # exactly the defect this replaces.
@@ -1910,9 +1948,26 @@ def build_refund_form(
         ``TextHelper.getInteger`` 로 읽고, ``:1821`` 이 ``prgPsbFlg``
         (``:1812``)가 기대 리터럴과 다르거나 ``usePsbMlgNum < retFee`` 이면
         ``refundTicket$default(this, ticketDetail, false, 2, null)`` 로
-        빠집니다. 마스크 ``2`` 는 ``useMileage`` 를 기본값으로 돌리는데, 그
-        기본값은 ``:2093`` 의 AlienGuard 식이고 같은 식이 ``:1819`` 에서 배열
-        첨자 0 으로 쓰이므로 false 입니다. 둘 다 통과할 때에만 ``:1840`` 의
+        빠집니다.
+
+        **다만 그때 되돌아가는 ``useMileage`` 기본값이 false 라는 것은
+        재도출되지 않았습니다.** 예전 판은 ``:2093`` 의 AlienGuard 식
+        (``method_name_2(1772681635, -406003104, new byte[]{58}, false)`` 을
+        ``Integer.parseInt(...) > 1`` 로 감싼 것)이 ``:1819`` 에서 배열 첨자
+        0 으로 쓰이므로 false 라고 논증했는데, ``:1819`` 의 실제 모양은
+        ``objArr[... > 1 ? (char) 1 : (char) 0]`` 이고 ``:1818`` 이 만드는
+        배열의 길이는 ``... <= 3 ? 2 : 3`` -- 즉 2 아니면 3 입니다. 첨자 0 과
+        1 이 모두 유효하므로 그 논증은 닫히지 않습니다.
+
+        **정황 증거는 있습니다(결정적이지는 않습니다).** ``:1828`` 이 똑같은
+        식을 첨자로 쓰는 배열 ``objArr2`` 는 ``:1827`` 에서 길이가
+        ``... > 0 ? 1 : 0`` 이라 최대 1 입니다. 그 대입이 예외 없이 돈다면
+        첨자는 0 일 수밖에 없고 그러면 식은 false 입니다 -- 그러나 이것은
+        "앱이 실제로 이 줄을 예외 없이 지난다"는 런타임 가정에 기대는
+        추론이지 정적 텍스트만으로 닫히는 결론이 아닙니다.
+
+        그래서 위의 ``False`` 기본값은 **이 라이브러리의 정책**이지 앱의
+        기본값을 확인한 결과가 아닙니다. 둘 다 통과할 때에만 ``:1840`` 의
         확인 대화가 뜨고, ``:1855-1858`` 이 Positive/Negative 에 서로 다른
         boolean 을 실어 ``refundTicket(ticketDetail, useMileage)``(``:2074``)
         를 부릅니다. 거기서 ``useMileage`` 는 ``:2079`` 가 만드는 코루틴 객체의
@@ -2582,16 +2637,38 @@ def build_cart_add_form(
     ``TrainScheduleViewModel.java:370``,
     ``ReservationMergeViewModel.java:164``,
     ``AirportBusSeatMapViewModel.java:159``)이 모두 문자열 **하나**만
-    넘기며, 그 값이 PNR 임을 평문으로 읽을 수 있는 곳은 **둘**입니다.
-    ``ReservationMergeViewModel.java:164``
-    (``new AddCartListIn(…reservationOut.getHPnrNo())``)이 한 줄로 보여 주고,
-    ``TrainSeatMapViewModel`` 은 한 단계 건너 보여 줍니다 -- ``:968`` 이 예약
-    응답의 ``reservationOut.getHPnrNo()`` 를 지역변수 ``hPnrNo`` 로 잡고,
-    ``:997`` 이 ``addCartList(hPnrNo)`` 를 부르며, ``:1766-1771`` 의
-    ``addCartList(String pnrNo)`` 가 그 값을 코루틴 객체 생성자로 넘겨
-    ``:242-244`` 에서 필드 ``STLapk`` 에 저장하고, ``:267`` 이
-    ``new AddCartListIn(this.STLapk)`` 로 씁니다. 나머지 셋은 여전히
-    난독화된 지역/필드를 넘겨 값의 출처가 정적으로 읽히지 않습니다.
+    넘기며, 그 값이 PNR 임을 평문으로 읽을 수 있는 **호출 경로**는 이제 다섯
+    곳 모두에서 하나씩 확인됩니다(예전 판은 "둘"이라고 적었는데 좁았습니다):
+
+      * ``ReservationMergeViewModel.java:164`` --
+        ``new AddCartListIn(…this.reservationOut.getHPnrNo())`` 한 줄.
+      * ``TrainSeatMapViewModel`` -- ``:968`` 이 예약 응답의
+        ``reservationOut.getHPnrNo()`` 를 ``hPnrNo`` 로 잡고, ``:997`` 이
+        ``addCartList(hPnrNo)`` 를 부르며, ``:1766-1771`` 이 코루틴 객체
+        생성자로 넘겨 ``:242-244`` 가 필드 ``STLapk`` 에 저장하고, ``:267`` 이
+        ``new AddCartListIn(this.STLapk)`` 로 씁니다.
+      * ``TrainScheduleViewModel`` -- ``:1452``
+        (``final String hPnrNo = reservationOut.getHPnrNo()``) → ``:1481``
+        ``addCartList(hPnrNo)`` → ``:2572-2577`` → 생성자 ``:345-347``
+        (``this.STLapk = str``) → ``:370`` ``new AddCartListIn(this.STLapk)``.
+      * ``AirportBusSeatMapViewModel`` -- ``:1620``
+        (``((ReservationOut) success.getData()).getHPnrNo()``) → ``:1638``
+        ``addCartList(hPnrNo)`` → ``:735-740`` → 생성자 ``:134-136`` →
+        ``:159`` ``new AddCartListIn(this.STLapk)``.
+      * ``PayViewModel`` -- ``:14427`` 이 **응답이 아니라 재계산 입력**의
+        ``priceReCalculationIn2.getHidPnrNo()`` 를 읽어 ``:14431`` 의
+        ``executeAddCart(hidPnrNo, …)`` 로 넘기고, ``:5920`` 의
+        ``executeAddCart(String str, …)`` 가 ``:5942``
+        ``new AddCartListIn(str)`` 로 씁니다. 앞의 넷과 달리 PNR 이 어느 서버
+        응답에서 왔는지까지는 추적하지 않았습니다.
+
+    **이것은 확인된 호출 경로이지 모든 진입점에 대한 증명이 아닙니다.** 각
+    ViewModel 의 ``addCartList``/``executeAddCart`` 에는 위에서 추적한 것
+    말고도 호출부가 더 있습니다 -- ``TrainScheduleViewModel`` ``:2382``·
+    ``:6478``·``:6729``·``:6926``, ``TrainSeatMapViewModel`` ``:3692``·
+    ``:3769``·``:4363``·``:4573``, ``AirportBusSeatMapViewModel`` ``:1779``,
+    ``PayViewModel`` ``:14563``. 그쪽이 무엇을 넘기는지는 확인하지
+    않았습니다.
 
     **다만 "응답이 맨 ``BaseResponse``" 라는 부분은 7.0.6 에서 틀렸습니다.**
     ``network/model/AddCartListOut.java:24-25`` 는 ``extends CommonOut`` 에
