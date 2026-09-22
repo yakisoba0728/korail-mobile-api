@@ -368,17 +368,42 @@ class TrainSearchQuery:
 def _train_scalar(value: Any, key: str) -> str | None:
     """검색 행의 필드 하나를 JSON 문자열로도 JSON 숫자로도 받아들입니다.
 
-    KORAIL 은 APK 가 Java ``String`` 으로 선언한 필드를 둘 중 어느 쪽으로
-    보낼지 일관되지 않고, 앱은 그것을 알아채지 못합니다 — 이 행들은 Gson 이
-    역직렬화하는데 ``JsonReader.nextString()`` 이 JSON 숫자를 문자열로
-    강제하기 때문입니다. 그래서 ``"h_dpt_tm": 63000`` 으로 온 행도 앱에서는
-    정상 예매되고, 여기서 거부하면 앱이라면 예약했을 열차를 거부하게 됩니다.
+    KORAIL 은 APK 가 ``String`` 으로 선언한 필드를 둘 중 어느 쪽으로 보낼지
+    일관되지 않습니다.
+
+    **"이 행은 Gson 이 읽는다"는 옛 설명은 철회합니다.** 7.0.6 의 이 응답은
+    Gson 이 아니라 kotlinx-serialization 으로 읽힙니다. 라우트는
+    ``network/NetworkApi.java:658-660`` 의 ``postScheduleView`` 이고
+    (``@FormUrlEncoded`` ``@POST(".../seatMovie.ScheduleView")`` →
+    ``Response<TrainScheduleOut>``), 행 DTO
+    ``network/model/TrainScheduleOutTrainInfo.java`` 는 ``:25-27`` 에서
+    ``kotlinx.serialization`` 을 임포트하고 ``:36-37`` 에서 ``@Serializable``
+    로 선언됩니다(``h_dpt_tm`` 은 ``:63`` 의 ``String hDptTm``, 키 표기는
+    ``:1152``). 생성된 ``TrainScheduleOutTrainInfo$$serializer.java:35`` 는
+    ``GeneratedSerializer`` 구현이고, ``:40-44`` 에서
+    ``PluginGeneratedSerialDescriptor.addElement(..., true)`` 로 원소를 전부
+    optional 로 잡은 뒤, ``:162-165`` 의 ``childSerializers()`` 가 내놓는
+    ``StringSerializer.INSTANCE`` 로 ``:439-445`` 에서 원소마다 디코드합니다.
+    ``network/`` 아래 Gson 참조는 전수 grep 에서 0 건입니다.
+
+    **그래서 "앱도 JSON 숫자를 받아 준다"고는 더 이상 말하지 않습니다.**
+    그것을 정하는 것은 ``Json`` 의 ``isLenient`` 인데,
+    ``network/di/NetworkModule.java:862``(``providesNetworkJson``)와
+    ``network/NetworkServiceKt.java:29`` 의 ``setLenient(...)`` 인자가 둘 다
+    AlienGuard 암호문이라 켜졌는지 읽을 수 없습니다. 읽히는 것은 구조뿐입니다
+    — 같은 암호문 리터럴이 ``ignoreUnknownKeys``·``encodeDefaults``·
+    ``coerceInputValues`` 에도 그대로 쓰이고 ``explicitNulls`` 만 다른 리터럴을
+    씁니다.
+
+    따라서 아래의 관대함은 앱 재현이 아니라 **이 패키지의 정책**입니다.
+    ``"h_dpt_tm": 63000`` 으로 온 행을 거부하면 실제로 예약 가능한 열차가
+    목록에서 사라지므로 받아서 문자열로 정규화합니다 — 정책은 그대로 둡니다.
 
     둘을 받는 것이 아무거나 받는 것은 아닙니다. ``bool``, ``float``, 리스트,
     객체는 여전히
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다 — Gson 도
-    그런 것을 String 으로 받지 않고, 문자열로 바꿔 넘기면 정말로 달라진
-    응답을 가리게 됩니다.
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다 — 문자열로
+    바꿔 넘기면 정말로 달라진 응답을 가리게 되기 때문이고, 이 경계 역시 앱
+    인용이 아니라 이 패키지의 결정입니다.
 
     서버가 이미 떨군 자릿수를 되살리지는 못합니다. 여섯 자리
     ``h_dpt_tm`` 이 ``63000`` 으로 왔다면 앞의 0 은 바이트가 도착하기 전에
@@ -1102,24 +1127,36 @@ class TransferItinerary:
     """환승 여정 하나 — 함께 예약되는 두 구간.
 
     환승 검색 응답은 구간을 중첩해 주지 않습니다. 직통과 똑같은 평평한
-    ``trn_infos.trn_info`` 목록을 주고, 이 패키지가 그것을 **위치로** 짝짓습니다 —
-    0/1 행이 한 여정, 2/3 행이 다음 여정이고, 짝이 안 맞고 남는 마지막 행은
-    버립니다.
+    ``trn_infos.trn_info`` 목록을 주고, **이 패키지가** 그것을 **위치로**
+    짝짓습니다 — 0/1 행이 한 여정, 2/3 행이 다음 여정이고, 짝이 안 맞고 남는
+    마지막 행은 버립니다. 이 위치 짝짓기는 이 패키지의 정책이지 앱의 동작이
+    아닙니다. 아래에 둘을 갈라 적습니다.
 
-    **이 위치 기반 짝짓기의 근거였던 ``a5/k.java:142-172`` / ``:108-110`` 은 7.0.6
-    에 없습니다 — 그 경로 자체가 없습니다.** 7.0.6 이 실제로 하는 것은 위치가 아니라
-    키 기준 그룹핑으로 보입니다:
-    ``analysis/apktool/smali_classes5/com/korail/talk/ui/screen/train/TrainScheduleViewModel.smali``
-    의 ``responseTrainSchedule``(선언 ``:34670``)이 ``:37003-37050`` 에서 행마다
-    ``TrainScheduleOutTrainInfo.getHTrnSeq()`` 를 꺼내 맵 키로 쓰고(키가 없으면
-    ``ArrayList`` 를 만들어 ``put``, 있으면 그 리스트에 ``add``) 같은 ``h_trn_seq``
-    끼리 묶습니다. 이 재구성은 스몰리만으로 한 것이고 ``h_trn_seq`` 가 이 패키지의
-    ``h_chg_trn_seq``(:attr:`TrainSummary.change_train_sequence`)와 같은 값인지는
-    확인하지 못했습니다. 위치 짝짓기를 그대로 둔 이유와 한계는
+    **앱이 하는 것 — 키 그룹핑.** 위치 기반 짝짓기의 근거였던
+    ``a5/k.java:142-172`` / ``:108-110`` 은 7.0.6 에 없습니다 — 그 경로 자체가
+    없습니다. 7.0.6 이 하는 것은 위치가 아니라 키 기준 그룹핑입니다:
+    ``TrainScheduleViewModel.smali`` 의 ``responseTrainSchedule``
+    (선언 ``:34670``, 이 구간 전체가 그 메서드 안 — 사이에 ``.end method`` 가
+    없습니다)이 ``:36958-36960`` 에서 ``LinkedHashMap`` 을 만들고, ``:37003``
+    에서 행마다 ``TrainScheduleOutTrainInfo.getHTrnSeq()`` 를 꺼내 그 맵의 키로
+    씁니다. ``:37017`` 에서 그 키의 값이 없으면 ``ArrayList`` 를 만들어 넣고
+    (``:37019-37029``), 있으면 그 리스트에 행을 더합니다(``:37032-37040``) —
+    같은 ``h_trn_seq`` 끼리 묶는 ``getOrPut`` 모양입니다. 맵/리스트 메서드
+    이름은 ``AppSuitLinker1.djsflxlftm1`` 리플렉션 뒤라 호출 모양으로 읽은
+    것이고, 재구성 자체도 스몰리만으로 한 것입니다.
+
+    **이 패키지가 하는 것 — 위치 짝짓기.** 앱의 키를 그대로 쓰지 못하는 이유는
+    ``h_trn_seq`` 와 이 패키지가 읽는
+    ``h_chg_trn_seq``(:attr:`TrainSummary.change_train_sequence`)가 같은 DTO 의
+    **서로 다른 두 원소**이기 때문입니다 —
+    ``network/model/TrainScheduleOutTrainInfo.java:1464`` 의
+    ``@SerialName("h_trn_seq")`` 와 ``:1112`` 의
+    ``@SerialName("h_chg_trn_seq")``. 두 값이 실제로 일치하는지는 확인하지
+    못했습니다. 위치 짝짓기를 그대로 둔 이유와 한계는
     :func:`pair_transfer_itineraries` 의 docstring 에 있습니다.
 
     ``h_chg_trn_seq`` 는 서버가 적어 보낸 같은 위치값입니다(1구간 ``"1"``,
-    2구간 ``"2"``). 이 클래스도 앱처럼 위치로 짝짓고, 서버가 그 표시를 채워
+    2구간 ``"2"``). 이 클래스는 위치로 짝짓고, 서버가 그 표시를 채워
     보냈을 때는 짝짓기 기준이 아니라 검증에 씁니다 —
     :func:`pair_transfer_itineraries`.
     """
@@ -1176,23 +1213,26 @@ def pair_transfer_itineraries(
     :meth:`~korail_mobile_api.client.KorailClient.reserve_transfer` 로
     넘어갑니다.
 
-    표시가 아예 없는 응답도 받아들여 행의 위치로 짝짓습니다. 이 홀짝-위치
-    방식의 근거였던 ``DirectInquiryActivity.java:194-195``/
+    표시가 아예 없는 응답도 받아들여 행의 위치로 짝짓습니다. **이 홀짝-위치
+    방식은 이 패키지의 정책이고, 앱이 그렇게 한다는 근거는 없습니다.** 예전에
+    그 근거로 들었던 ``DirectInquiryActivity.java:194-195``/
     ``TransferInquiryActivity.java:44`` 는 둘 다 6.5.0 잔재입니다 — 7.0.6
-    디컴파일 어디에도 없습니다. 대체 근거를 찾다가 나온 것: 7.0.6 은
+    디컴파일 어디에도 없습니다.
+
+    앱이 하는 것은 :class:`TransferItinerary` 의 docstring 에 적은 대로 키
+    그룹핑입니다 — ``TrainScheduleViewModel.smali`` 의 ``responseTrainSchedule``
+    (선언 ``:34670``)이 ``:36958-36960`` 의 ``LinkedHashMap`` 에 ``:37003`` 의
+    ``getHTrnSeq()`` 를 키로 행을 모읍니다(``:37017-37040``). 곁가지로, 7.0.6 은
     ``h_chg_trn_dv_cd``(:attr:`TrainSummary.change_train_division_code`)를
-    DTO 선언 밖에서 아예 읽지 않는 것으로 보이고(전수 grep 확인),
-    ``TrainScheduleViewModel`` 의 응답 처리부(jadx 디컴파일 실패, 스몰리
-    재구성 —
-    ``analysis/apktool/smali_classes5/com/korail/talk/ui/screen/train/TrainScheduleViewModel.smali``
-    의 ``responseTrainSchedule``, 선언 ``:34670``, 그룹핑 ``:37003-37050``)는
-    대신 서버가 준 ``h_trn_seq`` 로 행을 묶는 것으로 보입니다 —
-    홀짝 위치가 아니라 키 기준 그룹핑입니다. 이 재구성은 스몰리만으로 한
-    것이라 완전히 확정하지는 못했고, ``h_trn_seq`` 가 이 패키지의
-    ``h_chg_trn_seq``(:attr:`TrainSummary.change_train_sequence`)와 같은
-    필드인지도 확인하지 못했습니다. 다만 이 함수의 현재 홀짝 짝짓기 +
-    ``h_chg_trn_seq`` 검증은 2026-09-21 실서버(강릉→목포, 직통 없는 구간)로
-    직접 확인됐습니다 — 그러니 정적분석만으로 바꾸지 않았습니다.
+    DTO 선언 밖에서 아예 읽지 않는 것으로 보입니다(전수 grep 확인).
+
+    그 키를 여기서 그대로 쓰지 않는 이유는 두 가지입니다. 하나, 이 재구성은
+    jadx 디컴파일이 실패해 스몰리만으로 한 것이라 완전히 확정하지 못했습니다.
+    둘, ``h_trn_seq`` 는 이 패키지가 읽는
+    ``h_chg_trn_seq``(:attr:`TrainSummary.change_train_sequence`)와 DTO 상
+    별개 원소라 값이 같은지 확인하지 못했습니다. 반면 이 함수의 현재 홀짝
+    짝짓기 + ``h_chg_trn_seq`` 검증은 2026-09-21 실서버(강릉→목포, 직통 없는
+    구간)로 직접 확인됐습니다 — 그러니 정적분석만으로 바꾸지 않았습니다.
     """
     itineraries: list[TransferItinerary] = []
     for index in range(0, len(trains) - 1, 2):

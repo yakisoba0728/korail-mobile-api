@@ -1113,9 +1113,24 @@ class PriceRecalculationRow:
     #: ``psrm_cl_cd`` ← 좌석의 ``h_psrm_cl_cd``.
     room_class_code: str
     #: ``dcnt_knd_cd1`` ← 좌석이 **이미 갖고 있는** ``h_dcnt_knd_cd1``, 즉 지금
-    #: 보류된 예약에 붙어 있는 할인. 앱의 ``makeDiscountParams`` 가 이 값을
-    #: 덮어쓰는 경우는 둘뿐이고 폼 빌더도 그것을 강제합니다 — 군장병 줄이면
-    #: ``"432"``, 적용 할인이 통합 국가유공자면 ``"000"``.
+    #: 보류된 예약에 붙어 있는 할인.
+    #:
+    #: 7.0.6 에서 읽히는 것: 이 필드에 값을 넣는 곳은
+    #: ``PayViewModel.java:16858`` 의
+    #: ``setDcnt_knd_cd1(reservationOutSeatInfo.getHDcntKndCd1())`` 한 줄뿐이고
+    #: (``setDcnt_knd_cd1`` 호출은 ``analysis/`` 전체에서 이 한 줄), 조건 없는
+    #: 그대로-복사입니다. 덮어쓰기 분기는 **보이지 않습니다.** 같은 메서드
+    #: (``getDiscountPriceParamsListData``, ``:16802``)에서 조건부로 정해지는
+    #: 것은 다른 필드인 ``hidDcntKndCd`` 이고(``:16862``), 그 분기의 값도
+    #: ``ResDiscount``/``ReqDiscount`` enum 과 AlienGuard 리터럴 뒤에 있습니다.
+    #:
+    #: 보호된 것: **"앱이 "432"/"000" 두 경우에만 덮어쓴다"는 규칙은 7.0.6
+    #: 에서 재도출하지 못했습니다.** ``makeDiscountParams`` 라는 이름은 ``analysis/``
+    #: 전체에서 0 회이고, 두 평문 자체도 7.0.6 에서 읽히지 않습니다. 철회 경위는
+    #: ``mutation_payloads`` 의 ``_SOLDIER_DISCOUNT_CODE`` 위 주석에 있습니다.
+    #:
+    #: 폼 빌더의 가드는 그대로 둡니다 — 출처가 없다는 것이 동작이 틀렸다는
+    #: 뜻은 아니며, 값은 6.5.0 판독과 라이브 확인에서 왔습니다.
     discount_kind_code: str
     #: ``hidDcntKndCd`` — 지금 적용하는 할인.
     requested_discount_code: str = ""
