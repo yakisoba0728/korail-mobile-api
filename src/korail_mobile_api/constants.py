@@ -103,8 +103,10 @@ def build_dalvik_user_agent(*, os_release: str, device_model: str) -> str:
 
     **옛 근거는 7.0.6 에 맞지 않습니다.** 이전 서술은 "Retrofit v1 을
     ``HttpURLConnection`` 위에서 쓰므로(``ExecuteDao.java:7-11``) 플랫폼 기본
-    Dalvik 문자열이 나간다" 였습니다. ``ExecuteDao`` 는 7.0.6 디컴파일에
-    없고, 7.0.6 은 **Retrofit 2 + OkHttp** 스택입니다
+    Dalvik 문자열이 나간다" 였습니다. ``ExecuteDao`` 는 6.5.0 시절 이름이고
+    7.0.6 디컴파일에 없습니다 — ``analysis/jadx/sources`` 와
+    ``analysis/apktool`` 전수 검색(basename·DEX 클래스명 모두) 0건이므로
+    철회된 인용입니다. 그리고 7.0.6 은 **Retrofit 2 + OkHttp** 스택입니다
     (``network/di/NetworkModule.java:55-64`` 의 ``okhttp3.OkHttpClient`` /
     ``retrofit2.Retrofit`` import, ``:96`` ``provideApiService(Retrofit)``).
     OkHttp 의 기본 UA 는 ``okhttp3/internal/Util.java:87`` 의
@@ -304,8 +306,14 @@ KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
 #: 7.0.6 에 없습니다. 다만 **판정 헬퍼 자체는 있습니다** --
 #: ``common/helper/DiscountHelper.java:818`` 의
 #: ``public final boolean isNCard(String dcntKndCd)`` 가 넘겨받은 할인코드를
-#: ``ReqDiscount.N_CARD`` 와 비교합니다(호출 예:
-#: ``MyTicketListOutReservation.java:809-813``). 한때 여기 "코드값을 판정하는
+#: ``ReqDiscount.N_CARD`` 와 비교합니다. 호출 예는
+#: ``common/helper/TCReservationRequestHelper.java:284`` 입니다 --
+#: ``STLjgf()``(``:221``) 안에서 ``DiscountHelper.INSTANCE``(``:274``)를 받아
+#: 할인코드 문자열 하나를 넘겨 부릅니다(``!discountHelper.isNCard(...)``).
+#: 옛 인용 ``MyTicketListOutReservation.java:809-813`` 은 호출 예가
+#: 아니었습니다 -- 그 줄은 같은 이름의 **무인자** 메서드 ``isNCard()`` 이고,
+#: 자기 ``ticketKind`` 를 ``TicketDefine.TicketKind.N_CARD`` 와 직접 비교할
+#: 뿐 이 한 인자짜리 헬퍼를 부르지 않습니다. 한때 여기 "코드값을 판정하는
 #: 헬퍼가 없다" 고 적었던 것은 틀렸습니다 -- 화면 라우트의 동명 불리언 인자
 #: (``ui/navigation/PassengerTypeChangeRoute.java:39``)만 보고 내린 결론이었고,
 #: 그 둘은 별개입니다.

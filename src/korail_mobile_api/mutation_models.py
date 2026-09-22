@@ -448,9 +448,16 @@ class ReservationHoldResponse(BaseKorailResponse):
     temporary_job_sequence_2: str | None = field(default=None, repr=False)
     payment_flag: str | None = None
     payment_message: str | None = None
-    #: ``h_pay_limit_msg``. 앱의 ``ReservationResponse`` 에 선언은 돼 있으나
-    #: (``:22``, 게터 ``:529``) 어느 화면도 읽지 않고 실제 응답은 비어
-    #: 옵니다. **결제 기한이 아닙니다** — 기한은 아래 세 필드입니다.
+    #: ``h_pay_limit_msg``. 앱의 ``ReservationOut`` 에 선언은 돼 있으나
+    #: (``ReservationOut.java:49``, ``@SerialName`` 은 ``:408-409``) 어느
+    #: 화면도 읽지 않고(``getHPayLimitMsg()`` 호출자가 DTO 밖에 0건) 실제
+    #: 응답은 비어 옵니다. **결제 기한이 아닙니다** — 기한은 아래 세
+    #: 필드입니다.
+    #:
+    #: 2026-09-23 정정: 여기 적혀 있던 클래스명 ``ReservationResponse`` 와 두
+    #: 줄 번호(``:22``/``:529``)는 모두 틀렸습니다. 그런 클래스는 7.0.6 에
+    #: 없습니다 — 줄 번호가 안 붙은 인용이라 줄 번호를 보는 탐지기에 잡히지
+    #: 않았습니다.
     payment_deadline_message: str | None = None
     #: ``h_ntisu_lmt`` — 서버가 문장으로 적어 준 기한. 예: "…까지 미결제시
     #: 승차권이 자동으로 취소됩니다."
@@ -1150,7 +1157,14 @@ class PriceRecalculationRequest:
     #: 이 로그인 상태면 두 인자에 ``null`` 을 넘깁니다(옛 인용
     #: ``a6/C1042B.java:290-293`` 은 6.5.0 이고 7.0.6 에 없습니다).
     #: 회원이면 ``None`` 이고, 그러면 두 필드 다 전송되지 않아 회원의 폼은
-    #: 열네 개가 아니라 열두 개 키를 갖습니다.
+    #: 비회원보다 키가 두 개 적습니다. 절대 개수는 ``lang`` 설정에 달려
+    #: 있습니다 -- ``KorailConfig(lang=None)``(기본값)이면 회원 **열두 개** /
+    #: 비회원 **열네 개** 이고, ``lang`` 을 실제로 설정하면 공통 필드에
+    #: ``lang`` 이 하나 더 붙어(``mutation_payloads.py`` 의
+    #: ``_common_fields``) 각각 **열세 개** / **열다섯 개** 가 됩니다.
+    #: 2026-09-23 에 ``lang=None`` 과 ``lang="ko"`` 두 경우로 폼을 실제
+    #: 만들어 센 값입니다. 한때 조건 없이 "열두 개 / 열네 개" 라고만 적었던
+    #: 것은 ``lang`` 이 없는 경우에만 맞습니다.
     #:
     #: 다만 그 근거로 적었던 "Retrofit 이 널 ``@Field`` 를 뺀다" 는 이
     #: 라우트에 맞지 않습니다. ``ParameterHandler.Field``(``:252-259``)는

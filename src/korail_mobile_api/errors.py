@@ -387,9 +387,12 @@ class KorailNotEntitledError(KorailAppError):
 class KorailServiceUnavailableError(KorailAppError):
     """KORAIL 백엔드 불가 선언. ``SEMGTK``.
 
-    ``BaseActivity.java:608-609`` 을 인용하던 자리입니다. 그 클래스는 7.0.6 에
-    없고 ``SEMGTK`` 리터럴도 jadx/smali 전체에 0건(AppSuit 보호)이지만, 안내
-    문구 자체가 "앱은 저장된 승차권 화면을 제안합니다"를 그대로 뒷받침합니다 —
+    ``BaseActivity.java:608-609`` 을 인용하던 자리입니다. 그 클래스는 6.5.0
+    시절 이름이고 7.0.6 디컴파일에 없으며(jadx/smali 전수 검색 0건) ``SEMGTK``
+    리터럴도 전체 0건(AppSuit 보호)입니다. 즉 "앱이 그때 무엇을 띄우는가"를
+    보여 주는 **코드** 근거는 7.0.6 에서 재유도하지 못했습니다 — 미출처.
+    다만 안내 문구 자체는 평문 자산 사전에서 확인되고, 그 문구가 "앱은
+    저장된 승차권 화면을 제안합니다"를 그대로 뒷받침합니다 —
     ``analysis/apktool/assets/error_json.json:66`` "인터넷 연결상태(WiFi, 3G,
     4G)가 좋지 않습니다.저장된 승차권화면으로 이동하시겠습니까?".
     """
@@ -432,8 +435,11 @@ class KorailNetFunnelError(_CodeMessagePickle, KorailApiError):
 class KorailQueueRejectedError(KorailNetFunnelError):
     """대기열이 아예 돌려보냄. ``TsBlock``(301) / ``TsIpBlock``(302).
 
-    ``T6/g.java:892-894``/``:909`` 를 인용하던 자리입니다. 7.0.6 에 그 경로는
-    없고, NetFunnel SDK 가 난독화되지 않은 원래 패키지 그대로 들어 있습니다 —
+    ``T6/g.java:892-894``/``:909`` 를 인용하던 자리입니다. ``T6/g`` 는 6.5.0
+    시절 난독화 이름이고 7.0.6 디컴파일에 그 경로가 없습니다 — ``T6`` 최상위
+    패키지가 jadx/smali 어디에도 없으므로 철회된 인용입니다. **다만 주장
+    자체는 7.0.6 에서 다시 확인됩니다**: NetFunnel SDK 가 난독화되지 않은
+    원래 패키지 그대로 들어 있습니다 —
     ``analysis/jadx/sources/com/netfunnel/api/Netfunnel.java:114-116``
     ``EvnetCode.isBlocking()`` 이 ``Block``(301)/``IpBlock``(302)에서만 참이고
     (상수 선언은 ``:67-68``), ``ExpressNumber``(303, 선언 ``:69``)는

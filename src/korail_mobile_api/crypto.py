@@ -45,7 +45,9 @@ def _aes_cbc_pkcs7_encrypt(plaintext: bytes, key: bytes, iv: bytes) -> bytes:
 
 def _base64_no_wrap(data: bytes) -> str:
     """``Base64.encodeToString(..., NO_WRAP)`` — flag 2, 표준 ``+/`` 알파벳,
-    줄바꿈 없음. 스테일 인용 ``F4/a.java:47``; 7.0.6 에서는
+    줄바꿈 없음. ``F4/a.java:47`` 은 6.5.0 시절 난독화 이름이고 그 경로는
+    7.0.6 디컴파일에 없습니다 — ``F4`` 라는 최상위 패키지 자체가 jadx/smali
+    어디에도 없으므로 철회된 인용입니다. 7.0.6 에서는
     ``AESCrypto.java:182`` 의 ``Base64.encodeToString(cipherBytes, 2)`` —
     AES 암호문 바이트를 직접 감싸는 **안쪽** 인코딩이다
     (:func:`transform_login_password` 참고)."""

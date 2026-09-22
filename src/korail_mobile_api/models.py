@@ -704,11 +704,25 @@ class TrainSummary:
             # 자리를 두고 있다(TrainResearchIn.java:68 의
             # @SerialName("txtGdNo"), 직렬화 조건은 :275-278). 다만 옛 주석이
             # 적었던 "x4/b.java:23 이 trainInfo.getTxtGdNo() 에서 가져온다"는
-            # 7.0.6 에 없는 경로다. 7.0.6 이 실제로 채우는 자리는
+            # 6.5.0 시절 난독화 이름이고 7.0.6 디컴파일에 그 경로가 없다(x4
+            # 최상위 패키지가 jadx/smali 어디에도 없음) — 철회된 인용이다.
+            # 좌석 재고 요청을 만드는 7.0.6 자리는
+            # TrainSeatMapViewModel.java:1974-1976 의
+            # buildTResidualSeatsResearch(TrainResearchOutCarInfo,
+            # TrainResearchIn) 이고, :1975 가 trainResearch.getTxtGdNo() 를 읽어
+            # :1976 에서 TResidualSeatsResearchIn 의 13번째 인자로 넘긴다 —
+            # 즉 열차 "행"이 아니라 조회 요청(TrainResearchIn)에서 온다.
+            # 그 TrainResearchIn 을 실제로 채우는 자리는
             # TrainSeatMapViewModel.java:2527(txtGdNo =
             # ticketReservationIn.getTxtGdNo())이고 :2546 에서 TrainResearchIn
-            # 의 16번째 인자로 들어간다 — 즉 열차 행이 아니라 예약 입력에서
-            # 온다. 이 패키지는 예약 입력을 만들기 전에도 좌석 조회를 할 수
+            # 의 16번째 인자로 들어간다 — 결국 예약 입력에서 온다.
+            # 읽기 쪽 철자 h_gd_no 가 7.0.6 에 선언된 곳은 스케줄 응답 봉투
+            # 하나뿐이다(TrainScheduleOut.java:184 의 @SerialName("h_gd_no"),
+            # 필드는 :29, 행 목록 trn_infos 는 :232). 행 DTO
+            # TrainScheduleOutTrainInfo 에는 GdNo 가 0건이므로 "열차 행이 이
+            # 값을 싣는다"는 것 자체는 7.0.6 미출처다 — 서버 응답이 행에
+            # 싣는지는 별개 문제이고, 이 파서는 두 철자 모두 없으면 None 으로
+            # 남긴다. 이 패키지는 예약 입력을 만들기 전에도 좌석 조회를 할 수
             # 있어야 해서 같은 값을 행에 붙여 나른다. 다른 두 철자 필드와
             # 달리 첫 키가 거짓이어도 먼저 검사한다.
             goods_no=(

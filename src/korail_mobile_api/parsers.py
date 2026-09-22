@@ -626,16 +626,40 @@ def parse_train_calendar_response(
                     "runDt",
                     context="train calendar",
                 ),
-                # bizDdStgCd is null-guarded by isPeakSeason()
-                # (N.notNullEqual(this.bizDdStgCd,"5"), TrainCalendarDao:68-70),
-                # so the app tolerates a null/absent value here.
+                # WITHDRAWN CITATION: TrainCalendarDao:68-70
+                # (N.notNullEqual(this.bizDdStgCd,"5")) is a 6.5.0-era class
+                # absent from 7.0.6 -- no file under analysis/, and zero hits
+                # for the name in any of the seven classes*.dex string tables
+                # or the smali trees.
+                #
+                # Re-derived from the real 7.0.6 carrier instead: the
+                # deserializer assigns null to bizDdStgCd when the key's mask
+                # bit is unset, and the class contains no
+                # throwMissingFieldException at all (RunDateOutItem.java
+                # :111-115), so 7.0.6 itself materialises null for an absent
+                # key. Its only reader is isPeakSeason()
+                # (RunDateOutItem.java:516-524, consumed by
+                # TrainScheduleViewModel.java), which passes the field as an
+                # argument into the obfuscated AppSuitLinker1.djsflxlftm1
+                # comparison dispatch. Whether that comparison is itself
+                # null-safe is PROTECTED and is NOT re-derived, so accepting
+                # null/absent here rests on the deserializer evidence, not on
+                # the old "null-guarded accessor" argument.
                 business_day_stage_code=_typed_optional_string(
                     row,
                     "bizDdStgCd",
                     context="train calendar",
                 ),
-                # dayDvCd has no accessor in TrainCalendarDao, so a
-                # null/absent value never reaches app code.
+                # WITHDRAWN CITATION: "no accessor in TrainCalendarDao" --
+                # that 6.5.0-era class is absent from 7.0.6 (see above).
+                #
+                # Re-derived: dayDvCd defaults to null when its mask bit is
+                # unset (RunDateOutItem.java:106-110), and its getter
+                # (RunDateOutItem.java:421-423) has no call site anywhere in
+                # analysis/jadx/sources outside the model itself -- no other
+                # class references the getter or the field. The substance of
+                # the old claim therefore holds on current evidence: a
+                # null/absent dayDvCd is never dereferenced by app code.
                 day_division_code=_typed_optional_string(
                     row,
                     "dayDvCd",
@@ -654,17 +678,37 @@ def parse_train_calendar_response(
                     "hldyDvCd",
                     context="train calendar",
                 ),
-                # saleDdDvCd is only read via constant.equals(this.saleDdDvCd)
-                # in isForSaleDate() (TrainCalendarDao:52-54), which is
-                # null-safe, so a null/absent value is tolerated.
+                # WITHDRAWN CITATION: isForSaleDate() / TrainCalendarDao
+                # :52-54 -- 6.5.0-era, absent from 7.0.6, which has no
+                # isForSaleDate() under any name we could locate.
+                #
+                # Re-derived: saleDdDvCd defaults to null when its mask bit is
+                # unset (RunDateOutItem.java:121-125), and its getter
+                # (RunDateOutItem.java:445-447) has no call site outside the
+                # model, so nothing in 7.0.6 dereferences it. Null/absent is
+                # tolerated on that basis.
                 sale_day_division_code=_typed_optional_string(
                     row,
                     "saleDdDvCd",
                     context="train calendar",
                 ),
-                # Every *TrnOpFlg accessor is BOOL_YES.equals(this.xTrnOpFlg)
-                # (TrainCalendarDao:44-82), null-safe and returning false, so
-                # the app tolerates null/absent flags our parser must not reject.
+                # WITHDRAWN CITATION: TrainCalendarDao:44-82
+                # (BOOL_YES.equals(this.xTrnOpFlg)) -- 6.5.0-era, absent from
+                # 7.0.6.
+                #
+                # Partially re-derived: every *TrnOpFlg field defaults to null
+                # when its mask bit is unset (RunDateOutItem.java:126-160), so
+                # 7.0.6's own deserializer produces null flags for absent
+                # keys. They are read by isRunDate(TrainGroup)
+                # (RunDateOutItem.java:526-590) -- v/s/d/a/g/xTrnOpFlg only;
+                # oTrnOpFlg has no reader anywhere -- and again only through
+                # the obfuscated AppSuitLinker1.djsflxlftm1 comparison, whose
+                # null-handling is PROTECTED. The old "null-safe, returns
+                # false" half of the claim is therefore currently UNSOURCED.
+                # What IS sourced is that absent flag keys legitimately become
+                # null inside 7.0.6, which is why this parser must not reject
+                # them. (Evidence only -- the null-tolerant behavior below is
+                # unchanged and is not a defect.)
                 a_train_operation_flag=_typed_optional_string(
                     row,
                     "aTrnOpFlg",

@@ -287,12 +287,21 @@ def _received_amount(
     if declared_int is not None and declared_int != summed:
         raise KorailProtocolError(
             "KORAIL reservation settlement amount is ambiguous: the seat rows "
-            f"sum to {summed} but h_tot_rcvd_amt says {declared_int}. The app "
-            "settles the seat sum; refusing rather than guessing which one to "
-            "charge."
+            f"sum to {summed} but h_tot_rcvd_amt says {declared_int}. This "
+            "library treats the per-seat sum as its primary source -- that is "
+            "this package's policy, not a rule the app enforces -- so it "
+            "refuses here rather than guess which amount to charge."
         )
-    # Unpadded, because that is what the app settles: PaymentActivity computes
-    # mReceivedAmount as an int and hands the decimal form to hidMnsStlAmt1.
+    # 자리수 0 채움 없이 그대로 돌려줍니다. 예전에는 그 근거로
+    # ``PaymentActivity`` 가 ``mReceivedAmount`` 를 int 로 계산한다고 적었지만,
+    # 셋 다 7.0.6 에 없습니다 — ``PaymentActivity`` 도(6.5.0 클래스),
+    # ``mReceivedAmount`` 도, 번호 붙은 ``hidMnsStlAmt1`` 도 평문 검색 0건이고
+    # 존재하는 것은 번호 없는 ``hidMnsStlAmt``(``ReservationPaymentInStlInfo``,
+    # ``PaymentMethod``) 뿐입니다(2026-09-23 확인). 이 파일 위쪽의 근거 정리와
+    # 정면으로 어긋나 있었습니다: 거기서 이미 ``hidMnsStlAmt<N>`` 로 들어가는
+    # 마지막 한 걸음이 AlienGuard 로 보호되어 **미출처**라고 적고 있습니다.
+    # 따라서 자리수를 채우지 않는 것도 앱 동작의 재현이 아니라 이 패키지의
+    # 선택으로 읽어야 합니다.
     return seat_total
 
 
@@ -615,10 +624,23 @@ def parse_discount_card_purchase_response(
 ) -> DiscountCardPurchaseResponse:
     """``research.dcntCrdInfo.do`` 의 응답을 파싱합니다.
 
-    7.0.6 ``NCardInfoOut.java:30-36`` 이 선언하는 속성은 일곱입니다 --
+    7.0.6 ``NCardInfoOut.java:30-38`` 이 선언하는 자체 속성은 아홉입니다 --
     ``dcntCrdKndMgNo``/``dcntCrdStlTgtNo``/``lumpStlTgtNo``/``rcvdAmt``/
-    ``stxAmt``/``taxtSplAmt``/``usePsbTno``. serializer descriptor 문자열이
-    보호돼 있어 파서는 Kotlin 속성명을 전선 키로 씁니다.
+    ``stxAmt``/``taxtSplAmt``/``usePsbTno``/``vlidTrmClsDt``/``vlidTrmStDt``
+    (``strResult``/``hMsgCd``/``_hMsgTxt`` 는 상위 ``CommonOut`` 것입니다).
+    serializer descriptor 문자열이 보호돼 있어 파서는 Kotlin 속성명을 전선
+    키로 씁니다.
+
+    **인용 정정(2026-09-23).** 종전 독스트링은 범위를 ``:30-36`` 으로 적고
+    속성이 일곱이라고 했습니다. 그 범위가 ``vlidTrmClsDt``(``:37``) 와
+    ``vlidTrmStDt``(``:38``) 를 잘라내는 바람에 둘이 목록에서 빠진 것이고,
+    실제 선언은 ``:30-38`` 의 아홉 줄입니다. **모델링 누락이 아닙니다** --
+    위 :data:`_DISCOUNT_CARD_PURCHASE_FIELDS` 가 두 날짜를 각각
+    ``validity_end_date``/``validity_start_date`` 로 이미 파싱하고,
+    :class:`~korail_mobile_api.mutation_models.DiscountCardPurchaseResponse`
+    에도 같은 이름의 필드가 있습니다. 틀렸던 것은 산문의 숫자와 줄 범위뿐이며,
+    이 문단은 뒤에 읽는 사람이 이것을 커버리지 구멍으로 오해하지 않도록
+    남겨 둡니다.
 
     예전에 여기 적혀 있던 ``mStationInfo``/``mUserNames`` 는 **이 DTO 와 아무
     관계가 없습니다.** 그 둘은 7.0.6 의 ``NCardInfoOut`` 어디에도 없고, 근거로

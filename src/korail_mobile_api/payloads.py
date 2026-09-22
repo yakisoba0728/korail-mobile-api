@@ -194,10 +194,17 @@ def build_seat_car_form(
     폼에서 사라집니다 — 이 라우트의 실제 호출 경로는
     ``NetworkService.java:14524,14528`` 입니다.
 
-    **주의: 그러면 이 함수가 ``""`` 로 채워 보내는 다른 키
-    (``txtRunDt``·``txtDptDt`` 등)는 7.0.6 이라면 폼에서 빠졌을 값입니다.**
-    여기서는 코드를 건드리지 않았습니다 — 현재 모양은 실서버로 검증된 것이고,
-    빈 값을 빼는 편이 앱과 더 닮는다는 것은 정적 근거일 뿐입니다.
+    **이 함수가 ``""`` 로 채우는 다른 키(``txtRunDt``·``txtDptDt`` 등)도
+    전선에는 나가지 않습니다.** 빌더가 *돌려주는* dict 와 실제로 *보내지는* 폼을
+    구분해야 합니다: 반환 dict 에는 키가 ``""`` 로 남지만,
+    :meth:`~korail_mobile_api.http.KorailHttpClient.post_form` 이 보내기 직전에
+    빈 문자열 항목을 걸러 냅니다 -- ``http.py:226-239`` 의
+    ``_is_empty_string``/``_drop_empty`` 이고, 매핑 폼에는 ``http.py:453``,
+    순서 있는 폼에는 ``http.py:444-446`` 에서 적용됩니다. 그러므로 전선 모양은
+    이미 7.0.6 평탄화기와 같습니다. 예전에 여기 적혀 있던 "7.0.6 이라면 빠졌을
+    값인데 우리는 그대로 보낸다"는 설명은 HTTP 계층을 보지 않고 쓴 것이라
+    틀렸습니다. 빌더가 ``""`` 를 남겨 두는 것은 반환 dict 의 키 집합을 호출부와
+    테스트에서 안정적으로 유지하기 위한 것일 뿐입니다.
 
     ``sid`` 는 받지만 쓰지 않습니다 — 7.0.6 ``TrainResearchIn.java:68`` 의
     ``@SerialName`` 20개 중 ``Sid`` 는 없으므로 이 라우트에는 애초에 실을 자리가
@@ -269,9 +276,29 @@ def build_seat_inventory_form(
     :func:`build_seat_car_form` 이 고른 호차 하나를 ``srcarNo`` 로 지목합니다.
     키 철자가 호차 목록 쪽과 다릅니다 — 이쪽은 ``txt`` 접두사가 없습니다.
 
-    ``seatAttCd`` 와 ``gdNo`` 는 값이 없으면 빠집니다. ``getSeatList`` 도 null
-    ``@Field`` 를 떨어뜨리기 때문입니다(``ResearchService:59``). ``isArrow`` 는
-    고정 ``"true"``, ``ctlDvCd`` 는 고정 빈 문자열입니다.
+    ``seatAttCd`` 와 ``gdNo`` 는 값이 없으면 빠집니다. 근거는 7.0.6 에서 다시
+    유도했습니다 -- 이 라우트의 선언은 ``NetworkApi.java:739-741``
+    (``@FormUrlEncoded`` +
+    ``postTResidualSeatsResearch(@FieldMap Map<String, String>)``)로 매개변수별
+    ``@Field`` 바인딩이 없고, 요청 DTO 의 두 필드는 널이 될 수 없는 ``String``
+    입니다(``TResidualSeatsResearchIn.java:39`` ``seatAttCd``, ``:35``
+    ``gdNo``). 같은 결과를 내는 자리는 Retrofit 이 아니라 DTO→맵 평탄화입니다:
+    호출 경로(``NetworkService.java:14800,14803``)가
+    ``kJson.encodeToJsonElement(TResidualSeatsResearchIn.serializer(), …)`` 를
+    ``NetworkService.STLibw``(``NetworkService.java:15304``)에 넘기고, 이 함수는
+    ``JsonPrimitive`` 의 내용 길이가 **0 보다 클 때만** 맵에 넣습니다
+    (``:15335-15343``). 인코딩 단계의 ``explicitNulls = false``
+    (``NetworkServiceKt.java:28``)가 널을 이미 지우므로 널이든 빈 문자열이든
+    폼에서 사라집니다.
+
+    **예전 인용 ``ResearchService:59`` 는 6.5.0 클래스이고 7.0.6 decompile 에
+    존재하지 않습니다** -- ``.java`` 확장자가 없어 낡은 인용 탐지를 계속
+    빠져나갔습니다. 위 재유도가 그 자리를 대신하므로 이 주장은 이제
+    미출처가 아닙니다.
+
+    ``isArrow`` 는 고정 ``"true"``, ``ctlDvCd`` 는 고정 빈 문자열입니다 -- 빈
+    문자열인 ``ctlDvCd`` 는 :func:`build_seat_car_form` 의 ``""`` 키들과 똑같이
+    ``post_form`` 단계에서 빠지므로 전선에는 나가지 않습니다.
 
     ``sid`` 는 받지만 쓰지 않습니다 — 7.0.6 ``TResidualSeatsResearchIn.java:65``
     의 ``@SerialName`` 19개 중 ``Sid`` 는 없으므로 이 라우트에도 실을 자리가
@@ -295,9 +322,15 @@ def build_seat_inventory_form(
         "psrmClCd": _validated_room_class_code(room_class_code),
         "dptRsStnCd": train.departure_station_code or "",
         "arvRsStnCd": train.arrival_station_code or "",
-        # As with getCarList, getSeatList forwards h_seat_att_cd verbatim and
-        # Retrofit omits the @Field when it is null (ResearchService:59), so
-        # omit seatAttCd for a row without a code instead of sending "015".
+        # Omit seatAttCd for a row without a code instead of sending "015".
+        # Re-derived in 7.0.6: this route is one bare @FieldMap
+        # (NetworkApi.java:739-741), the DTO field is a non-null String
+        # (TResidualSeatsResearchIn.java:39), and the DTO-to-map flattener keeps
+        # only primitives whose content length is > 0
+        # (NetworkService.java:15335-15343) on the call path at
+        # NetworkService.java:14800,14803. The old citation "ResearchService:59"
+        # is a 6.5.0 leftover with no 7.0.6 counterpart -- it carries no .java
+        # extension, which is why the stale-citation sweep kept missing it.
         **({"seatAttCd": seat_attribute} if seat_attribute else {}),
         "dptStnRunOrdr": train.departure_run_order or "",
         "arvStnRunOrdr": train.arrival_run_order or "",
@@ -475,11 +508,42 @@ def build_train_search_form(
     if continuation is not None:
         form["qryStNo"] = continuation.query_station_no
         form["qryStTrnNo"] = continuation.query_train_no
-        # setSelectTransferPages only fires when both transfer cursors came back
-        # non-empty (b5/c.java:192-194), which a direct search never does. The
-        # continuation carries the outcome of that rule rather than re-deciding
-        # it here: TrainSearchResult.next_page leaves query_train_no2 at "" and
-        # TransferSearchResult.next_page fills it from h_ectb_trn_no_next.
+        # The continuation carries the outcome of the app's own rule rather
+        # than re-deciding it here: TrainSearchResult.next_page leaves
+        # query_train_no2 at "" and TransferSearchResult.next_page fills it
+        # from h_ectb_trn_no_next.
+        #
+        # The old citation b5/c.java:192-194 ("setSelectTransferPages fires
+        # only when both transfer cursors came back non-empty") is a 6.5.0
+        # path that does not exist in 7.0.6, and no such method name exists
+        # there either. Partially re-derived from the apktool smali instead,
+        # because jadx dropped this block -- the only reads of
+        # getHQryStNoNext/getHTrnNoNext/getHPrcdTrnNoNext/getHEctbTrnNoNext
+        # outside the DTO survive only in
+        # analysis/apktool/smali_classes5/com/korail/talk/ui/screen/train/
+        # TrainScheduleViewModel.smali. There, responseTrainSchedule builds the
+        # 3-tuple cursor in two shapes and branches on a boolean register:
+        #   :36812  if-nez v3 -> Triple(hQryStNoNext, hPrcdTrnNoNext,
+        #                               hEctbTrnNoNext)        (:36834-36843)
+        #   fallthrough        -> Triple(hQryStNoNext, hTrnNoNext, <literal>)
+        #                                                      (:36814-36831)
+        # storing the result at :36851, or null when the guard at :36786/:36804
+        # fails. The third slot on the fallthrough branch is an AlienGuard
+        # literal decoded from an empty byte[] -- the same call shape the DTO
+        # uses for its "" field defaults (TrainScheduleOut.java:106) -- so that
+        # branch does not read a third cursor off the response at all. That is
+        # what supports the shape we forward here.
+        #
+        # What 7.0.6 does NOT let us read, and what is therefore still
+        # unsourced: which branch is the transfer one (v3 is a boolean carried
+        # through the coroutine state machine with no static definition in
+        # reach) and the literal's plaintext. The "both cursors non-empty"
+        # wording was wrong as well as unsourced -- 7.0.6 branches on a flag,
+        # not on emptiness. Naming the second branch the transfer one is
+        # inference from the field name (h_ectb_trn_no_next,
+        # TrainScheduleOut.java:67), not from a readable condition. None of
+        # this judges our cursor policy either way: the builder forwards
+        # whatever the continuation carries.
         form["qryStTrnNo2"] = continuation.query_train_no2
     # NetworkService.STLibw flattens TrainScheduleInChtnRsStn / TrnGp arrays
     # as `chtnRsStnCd1`, `trnGpCd1` etc. The selected station or all candidates
@@ -549,8 +613,16 @@ def build_train_schedule_form(
 ) -> dict[str, str]:
     """``research.actualTrainSchedule.do`` 의 정차역·지연 조회 폼을 만듭니다.
 
-    ``Device``/``Version`` 만 붙고 ``Key`` 는 붙지 않습니다. ``trnNo`` 는 다섯
-    자리로 0 을 채웁니다.
+    공통 키는 :func:`_device_version` 이 주는 ``Device``/``Version`` 과,
+    ``KorailConfig(lang=...)`` 을 설정했을 때만 함께 실리는 ``lang`` 입니다.
+    ``Key`` 는 붙지 않습니다. 예전에 "``Device``/``Version`` 만"이라고 적혀
+    있던 것은 그 헬퍼가 조건부 ``lang`` 을 싣게 된 뒤로 낡은 설명이었습니다 --
+    이 라우트의 입력 DTO 도 ``lang`` 을 선언합니다
+    (``ActualTrainScheduleIn.java:53`` 의 합성 직렬화 생성자가
+    ``@SerialName(Constants.LANG)`` 을 달고 있고, 실제 필드 선언과 인코딩
+    게이트는 상위 ``CommonIn.java:40``·``:432``·``:467-474`` 입니다).
+
+    ``trnNo`` 는 다섯 자리로 0 을 채웁니다.
     """
     return {
         **_device_version(config),
@@ -665,7 +737,10 @@ def build_ticket_list_form(
 def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
     """``copt.gdMenuLt.do`` 의 MaaS 메뉴 조회 폼.
 
-    ``Device``·``Version``·``Key``·``timeStamp`` 를 싣습니다. 7.0.6
+    ``Device``·``Version``·``Key``·``timeStamp`` 를 싣고,
+    ``KorailConfig(lang=...)`` 을 설정했으면 :func:`_device_version` 이 ``lang``
+    도 함께 싣습니다(그 헬퍼가 조건부 ``lang`` 을 갖게 된 뒤로 이 열거도
+    갱신했습니다). 7.0.6
     ``GdMenuLtIn.java:59-61`` 은 ``super(null,null,null,null,15,null)`` 로
     ``CommonIn`` 의 네 필드(``Device``/``Version``/``Key``/``lang``)를 한꺼번에
     기본값화하는데, ``CommonIn.write$Self`` 가 그중 ``Device``/``Version``/``Key``

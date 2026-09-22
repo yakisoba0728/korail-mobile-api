@@ -2084,10 +2084,12 @@ class ReservationDetailJourney:
 class TicketReservationDetailResponse(BaseKorailResponse):
     """PNR 로 다시 읽은 보류 예약(``certification.ReservationList``).
 
-    응답 타입이 예약 요청이 돌려주는 것과 같은 ``ReservationResponse``
-    입니다. 그래서 이 조회는 이 패키지가 이미 만들 수 있는 예약을 **다른
-    출처로** 다시 보는 셈이고, 창구번호(``h_wct_no``)와 결제 폼이 정산할
-    좌석별 금액을 여기서 확인할 수 있습니다.
+    응답 타입이 예약 요청이 돌려주는 것과 같은 ``ReservationOut``
+    입니다(``ReservationOut.java``; 예전에 여기 적혀 있던
+    ``ReservationResponse`` 는 7.0.6 에 없는 이름입니다 — 2026-09-23 정정).
+    그래서 이 조회는 이 패키지가 이미 만들 수 있는 예약을 **다른 출처로**
+    다시 보는 셈이고, 창구번호(``h_wct_no``)와 결제 폼이 정산할 좌석별
+    금액을 여기서 확인할 수 있습니다.
     """
 
     pnr_no: str | None = field(default=None, repr=False)
