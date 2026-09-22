@@ -207,6 +207,7 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
         str_result=response.str_result,
         raw=raw,
         reservations=tuple(reservations),
+        total_count=_optional_string(raw, "h_total_cnt", "ticket list"),
     )
 
 
@@ -472,9 +473,17 @@ def _optional_bool(
     key: str,
     context: str,
     *,
-    default: bool = False,
-) -> bool:
-    """kotlinx ``Boolean`` 필드를 읽습니다. 없으면 ``default``."""
+    default: bool | None = None,
+) -> bool | None:
+    """kotlinx ``Boolean`` 필드를 읽습니다. 없으면 ``default``.
+
+    기본값이 ``False`` 가 아니라 ``None`` 인 이유: 이 헬퍼를 쓰는 자리는
+    전부 ``MyTicketNewList.do`` 의 예약 행인데, 그 행은 실서버에서
+    ``ticket_list`` **하나만** 옵니다(2026-09-22: 예약 128행 전부). 기본이
+    ``False`` 였을 때 ``is_transfer`` 같은 필드가 "환승이 아니다" 라고
+    단정했지만, 실제로는 서버가 그 키를 아예 보내지 않은 것이었습니다 —
+    "없음" 과 "거짓" 은 구분되어야 합니다.
+    """
     value = data.get(key)
     if value is None:
         return default
@@ -521,6 +530,13 @@ _TICKET_LIST_TICKET_FIELDS: dict[str, str] = {
     "sale_sequence": "h_orgtk_sale_sqno",
     "return_password": "h_orgtk_ret_pwd",
     "ticket_status_code": "h_tk_stt_cd",
+    # 승차권 종류는 예약 행이 아니라 여기 있습니다. 예약 행의
+    # ``hTkKndCd`` 는 @SerialName 없는 추측이었고 실서버는 보내지 않습니다
+    # (2026-09-22: 예약 128행 전부 ``ticket_list`` 하나뿐). 반대로 승차권
+    # 행은 131/131 이 ``h_tk_knd_cd``/``h_tk_knd_nm`` 을 싣습니다
+    # (``'72'``/``'스마트티켓'``).
+    "ticket_kind_code": "h_tk_knd_cd",
+    "ticket_kind_name": "h_tk_knd_nm",
 }
 
 _CART_ITEM_FIELDS: dict[str, str] = {
@@ -578,6 +594,17 @@ _CREW_REQUEST_OPTION_FIELDS: dict[str, str] = {
 }
 
 _PASS_MENU_ITEM_FIELDS: dict[str, str] = {
+    # ``afterDay`` 는 문자열입니다 — ``PassMenuOutItem.java:28`` 이
+    # ``public final String afterDay`` 이고, 실서버도 따옴표로 보냅니다
+    # (2026-09-22: ``menu_no`` ``"1"`` 25행·``"2"`` 10행 전부 str). 예전에는
+    # ``_optional_integer`` 로 정수화했는데, 형제
+    # :class:`~korail_mobile_api.read_models.CommuterKindMenuResponse` 는 같은
+    # 키를 문자열로 두고 있어 같은 값이 경로에 따라 형이 달랐습니다. 게다가 이
+    # 라우트는 빈 문자열을 흔하게 보내는데(같은 25행에서 ``detailType``·
+    # ``isExpand``·``saleMsg1-3`` 등이 ``""``), ``_optional_integer`` 는
+    # ``""`` 를 ``KorailProtocolError`` 로 터뜨립니다. 앱은 그 자리에서
+    # ``StringExKt.safeToInt`` 로 파싱 실패 시 0을 쓰므로 예외를 내지 않습니다.
+    "after_day": "afterDay",
     "agreement": "agree",
     "detail_type": "detailType",
     "detail_description": "dtlDsc",
@@ -993,7 +1020,6 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
         web_data = _optional_mapping(item, "webData", "pass menu item")
         items.append(
             PassMenuItem(
-                after_day=_optional_integer(item, "afterDay", "pass menu item"),
                 **_nullable_string_fields(item, _PASS_MENU_ITEM_FIELDS, "pass menu item"),
                 goods_data=_parse_pass_goods_info(
                     _optional_mapping(item, "goodsData", "pass menu item"),

@@ -363,7 +363,15 @@ class KorailHttpClient:
             if not isinstance(payload, dict):
                 raise KorailProtocolError("KORAIL response must be a JSON object")
             if not all(name in payload for name in ("h_msg_cd", "h_msg_txt", "strResult")):
-                return BaseKorailResponse(raw=payload)
+                # ``from_raw``, not ``BaseKorailResponse(raw=...)``: 봉투가
+                # **부분적으로** 있는 응답이 있습니다. ``/ebizcross/getUUID.do``
+                # 는 ``{"mutMrkVrfCd": ..., "strResult": "SUCC"}`` 를 주는데,
+                # 세 키가 다 있어야 통과하는 위 조건에 걸려 예전에는 ``raw`` 만
+                # 채운 객체가 나갔습니다 — 서버가 ``SUCC`` 라고 말했는데
+                # ``str_result`` 는 ``None`` 이었습니다(2026-09-22 확인).
+                # ``from_raw`` 는 있는 것만 그대로 옮기므로 완전한 봉투에서는
+                # 동작이 같고, 없는 키에 대해 새로 예외를 내지도 않습니다.
+                return BaseKorailResponse.from_raw(payload)
         return parse_base_response(
             payload,
             raise_on_fail=raise_on_fail,

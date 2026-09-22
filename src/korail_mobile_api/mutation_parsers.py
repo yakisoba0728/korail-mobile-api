@@ -217,11 +217,36 @@ def _received_amount(
                 # whole sum rather than under-charge the settlement.
                 return None
             try:
-                summed += int(amount)
+                value = int(amount)
             except ValueError:
                 # Same refusal as an unreadable seat: a digit string past
                 # Python's int-string conversion limit is unusable, not zero.
                 return None
+            seat_no = (
+                _optional_string(seat, "h_seat_no", context="reservation seat")
+                or ""
+            )
+            if value == 0 and not seat_no.strip():
+                # 예약대기(``job_type=STANDBY``, ``h_msg_cd`` ``IRR000014``)는
+                # 좌석이 아직 배정되지 않은 행을 하나 보냅니다 -- ``h_seat_no``
+                # ``""``, ``h_srcar_no`` ``"0000"``, ``h_rcvd_amt`` 전부 0.
+                # 그것은 정산 금액이 아니므로 합에 넣지 않습니다. 넣으면 합이
+                # 0이 되어 ``h_tot_rcvd_amt`` 와 "모순" 으로 보이고, 아래
+                # 예외가 올라가 :meth:`KorailClient.reserve` 의 폴백이 PNR 만
+                # 남긴 홀드를 돌려줍니다 -- 전선에 값이 있는 12개 필드와
+                # 여정 목록이 통째로 사라지고, 결제 폼이 그 홀드를 거부해
+                # **확정된 예약대기를 결제할 수 없었습니다**(2026-09-22 재현:
+                # ``h_wct_no='82002'``·``h_tot_rcvd_amt=42600`` 이 살아 있는데
+                # ``window_no``/``received_amount`` 가 ``None``).
+                #
+                # 모순이 아니라는 근거: 같은 PNR 을 독립 경로
+                # ``certification.ReservationList``
+                # (:meth:`KorailClient.get_ticket_reservation_detail`)로 다시
+                # 읽으면 좌석별 ``h_rcvd_amt`` 가 채워져 있고 그 합이
+                # ``h_tot_rcvd_amt`` 와 같습니다. 즉 이 응답의 좌석 행만
+                # 비어 있는 것이고 선언된 총액이 맞는 값입니다.
+                continue
+            summed += value
             seats_seen += 1
     if seats_seen == 0:
         # No seat rows to recompute from; the declared total is all there is.

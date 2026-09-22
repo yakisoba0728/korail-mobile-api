@@ -632,7 +632,10 @@ class MaasServiceDetailQuery:
 def build_multi_child_discount_target_form(
     departure_date: str,
 ) -> dict[str, str]:
-    return {"dptDt": _ascii_digits(departure_date, "departure_date", lengths=frozenset({8}))}
+    # 위 :func:`build_trip_change_date_form` 과 같은 이유로 달력 검증입니다.
+    return {
+        "dptDt": _calendar_date(departure_date, "departure_date").strftime("%Y%m%d")
+    }
 
 
 def build_korail_point_summary_form() -> dict[str, str]:
@@ -857,7 +860,15 @@ def build_maas_service_detail_form(
 
 
 def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
-    return {"tripChgDate": _ascii_digits(departure_date, "departure_date", lengths=frozenset({8}))}
+    # 자릿수만 보던 예전 검증은 ``20260230`` 같은 달력에 없는 날짜를 그대로
+    # 보냈고, 서버는 그것을 빈 목록으로 조용히 돌려줬습니다 -- 호출자는
+    # "변경 가능한 날짜가 없다" 와 "날짜를 잘못 썼다" 를 구분할 수 없었습니다.
+    # ``_calendar_date`` 는 이 모듈이 이미 쓰는 검증기입니다.
+    return {
+        "tripChgDate": _calendar_date(
+            departure_date, "departure_date"
+        ).strftime("%Y%m%d")
+    }
 
 
 def _exact_server_pass_data(pass_data: PassMenuData) -> str:
@@ -1083,6 +1094,11 @@ def build_original_ticket_inquiry_form(
         raise ValueError("ticket_count must be a positive integer")
     else:
         count = ticket_count
+    # ``count`` 가 ``references`` 보다 작으면 서버는 앞의 ``count`` 개
+    # ``ogtkSaleWctNo_N`` 묶음만 읽고 나머지는 **조용히 무시**합니다
+    # (2026-09-22 확인). 앱이 호출 지점마다 다른 값을 보내므로 여기서
+    # 같기를 강제하지는 않지만, 전부 조회하려면 ``ticket_count`` 를 주지
+    # 말거나 ``len(tickets)`` 와 같게 주십시오.
     rows: list[tuple[str, str | int]] = [("tkCnt", count)]
     for index, ticket in enumerate(references, start=1):
         rows.append((f"ogtkSaleWctNo_{index}", ticket.sale_window_no))
@@ -1274,7 +1290,14 @@ class PriceFareLeg:
     train_no: str = field(repr=False)
     requested_seat_attribute_code: str = field(repr=False)
     train_group_code: str = field(repr=False)
-    standing_train_classification_code: str = field(repr=False)
+    #: ``stlbTrnClsfCd`` — 열차 종류 코드입니다. 예전 이름
+    #: ``standing_train_classification_code`` 는 ``stlb`` 를 입석(standing)
+    #: 으로 읽은 오해였습니다 — 같은 전선 키를 이 저장소의 다른 세 곳이
+    #: 전부 열차 종류로 읽습니다(``limousine_parsers.py:95``
+    #: ``train_class_code``, ``parsers.py:834`` ``standard_train_class_code``,
+    #: ``read_parsers.py:1853`` ``settlement_train_class_code``).
+    #: 열차 행의 ``train_class_code`` 를 그대로 옮기면 됩니다.
+    train_class_code: str = field(repr=False)
     goods_no: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
@@ -1289,10 +1312,7 @@ def _validate_price_fare_leg(leg: PriceFareLeg) -> None:
         (leg.train_no, "train_no"),
         (leg.requested_seat_attribute_code, "requested_seat_attribute_code"),
         (leg.train_group_code, "train_group_code"),
-        (
-            leg.standing_train_classification_code,
-            "standing_train_classification_code",
-        ),
+        (leg.train_class_code, "train_class_code"),
     ):
         _wire_component(value, name)
     if leg.goods_no is not None:
@@ -1339,7 +1359,7 @@ def build_price_fare_quote_form(
         ("trnNo", "train_no"),
         ("rqSeatAttCd", "requested_seat_attribute_code"),
         ("trnGpCd", "train_group_code"),
-        ("stlbTrnClsfCd", "standing_train_classification_code"),
+        ("stlbTrnClsfCd", "train_class_code"),
     ]
     # gdNo is sent only when the caller actually has a goods number. The app's
     # ordinary fare check omits it (TrainOpInfoViewModel.java:794 passes a

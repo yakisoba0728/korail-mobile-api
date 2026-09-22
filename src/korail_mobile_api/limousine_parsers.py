@@ -95,18 +95,17 @@ _SCHEDULE_FIELDS = {
     "train_class_code": "stlbTrnClsfCd",
     "service_code": "trnGpCd",
     "train_no": "trnNo",
-    # ScdlQryOutTrain.java:48,68's Kotlin property names are trnOrdrNo and
-    # ymsAplFlgYMS (the @Metadata d2 property-name array and the plain field
-    # declarations both agree -- neither is AlienGuard-wrapped). The actual
-    # @SerialName element-0/6 index registered in write$Self IS wrapped
-    # (AppSuitLinker1.PQVASJIXBNBDZDUFVAZWWZVRNUMKOQZX), so the exact wire
-    # spelling stays PROTECTED per this package's own rule -- but the prior
-    # spellings here ("trnOrdNo", "ymsAplFlg") were plain typos of the
-    # property name, not even a defensible best-effort guess. Corrected to
-    # match the property names exactly, consistent with how every other
-    # unconfirmed-@SerialName field in this package is spelled.
+    # ScdlQryOutTrain.java:48,68 의 Kotlin **속성명**은 trnOrdrNo 와
+    # ymsAplFlgYMS 이고, @SerialName 인덱스는 AlienGuard 로 싸여 있어
+    # 정적으로는 전선 철자를 못 읽습니다. 그래서 한때 속성명을 그대로
+    # 베꼬았는데, 전선 키는 속성명이 아니라 @SerialName 입니다 — 실서버는
+    # ``ymsAplFlg`` 를 보냅니다(2026-09-22 확인). 속성명을 쓰는 동안
+    # ``yms_application_flag`` 는 언제나 ``None`` 이었습니다. 속성명과
+    # 전선 철자가 갈리는 자리에서는 **라이브가 근거**입니다.
+    #
+    # ``trnOrdrNo`` 는 아직 라이브로 확인된 적이 없어 속성명 그대로 둡니다.
     "train_order_no": "trnOrdrNo",
-    "yms_application_flag": "ymsAplFlgYMS",
+    "yms_application_flag": "ymsAplFlg",
 }
 
 

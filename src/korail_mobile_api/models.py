@@ -134,7 +134,13 @@ class MaasMenuItem:
         return (
             self.active == "Y"
             and self.menu_type != "N"
-            and self.app_data in {"Y", "M10", "M30"}
+            # ``appData`` 가 ``"N"`` 일 때만 역 목록이 비어 있습니다. 예전에는
+            # ``{"Y", "M10", "M30"}`` 허용 목록이었는데, 그 목록에 없는 값이
+            # 실제로 옵니다 — 2026-09-22 라이브: ``appData='C'``(부가서비스
+            # 코드 ``604``)가 ``get_maas_station_data`` 로 역 15개를 돌려주는데
+            # 이 속성은 거짓이었습니다. 같은 호출에서 ``'N'``(코드 ``001``)만
+            # 0개였고, ``'Y'``/``'M30'`` 은 25~111개였습니다.
+            and self.app_data not in (None, "", "N")
             and isinstance(self.additional_service_code, str)
             and bool(self.additional_service_code.strip())
         )

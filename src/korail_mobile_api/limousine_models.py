@@ -122,7 +122,12 @@ class LimousineSeatInventoryQuery:
     arrival_run_order: str
     passenger_count: int
     product_no: str
-    is_arrow: bool
+    #: ``isArrow`` — 앱이 보내는 값은 거짓입니다. 참으로 보내면
+    #: ``lms.TResidualSeatsResearch.do`` 가 ``S003`` 로 거절합니다
+    #: (2026-09-22 라이브: 나머지 조건이 같은 질의 3건이 참에서 전부 실패,
+    #: 거짓에서 전부 성공). 호출자가 반드시 골라야 하는 값이 아니라 기본값이
+    #: 있는 값이라 기본을 거짓으로 둡니다.
+    is_arrow: bool = False
 
     def __post_init__(self) -> None:
         # Same reasoning as LimousineScheduleQuery.__post_init__: exact wire

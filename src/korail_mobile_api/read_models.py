@@ -26,6 +26,10 @@ class TicketListTicket:
     sale_sequence: str | None = field(default=None, repr=False)
     return_password: str | None = field(default=None, repr=False)
     ticket_status_code: str | None = None
+    #: ``h_tk_knd_cd``/``h_tk_knd_nm`` — 승차권 종류(``'72'``/``'스마트티켓'``).
+    #: 예약 행이 아니라 승차권 행에 실려 옵니다(라이브 131/131행).
+    ticket_kind_code: str | None = None
+    ticket_kind_name: str | None = None
     train_info: tuple[Mapping[str, Any], ...] = field(default=(), repr=False, compare=False)
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
@@ -41,25 +45,37 @@ class TicketListReservation:
     """
 
     tickets: tuple[TicketListTicket, ...] = ()
+    #: 아래 스칼라들은 모두 ``@SerialName`` 이 없어 코틀린 필드명을 추측한
+    #: 것이고, 실서버 예약 행에는 ``ticket_list`` **하나만** 옵니다
+    #: (2026-09-22: ``mode="2"`` 예약 128행 전부, 다른 키 0개). 따라서 지금은
+    #: 전부 ``None`` 입니다. 불리언들이 ``False`` 가 아니라 ``None`` 인 이유가
+    #: 이것입니다 — 서버가 "거짓" 이라고 말한 것이 아니라 아무 말도 하지
+    #: 않았습니다. 승차권 종류는 예약이 아니라 **승차권** 행에 있습니다
+    #: (:attr:`TicketListTicket.ticket_kind_code`, ``h_tk_knd_cd``, 라이브
+    #: 131/131행).
     departure_datetime: str | None = field(default=None, repr=False)
     ticket_kind_code: str | None = None
     list_count: str | None = None
     seat_assign_count: int | None = None
     ticket_status: str | None = None
-    is_finished: bool = False
-    is_history: bool = False
-    is_emergency: bool = False
+    is_finished: bool | None = None
+    is_history: bool | None = None
+    is_emergency: bool | None = None
     display_ticket_name: str | None = None
-    is_non_member: bool = False
-    is_transfer: bool = False
-    is_wheelchair_member: bool = False
-    is_rail_police_enabled: bool = False
+    is_non_member: bool | None = None
+    is_transfer: bool | None = None
+    is_wheelchair_member: bool | None = None
+    is_rail_police_enabled: bool | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
 
 
 @dataclass(frozen=True)
 class TicketListResponse(BaseKorailResponse):
     reservations: tuple[TicketListReservation, ...] = ()
+    #: ``h_total_cnt`` — 구매이력(``mode="2"``)의 서버측 총건수. 0 을 채운
+    #: 문자열로 오므로(``'0128'``) 문자열로 둡니다. ``mode="1"`` 과 빈
+    #: 응답에는 이 키가 없어 ``None`` 입니다.
+    total_count: str | None = None
 
 
 @dataclass(frozen=True)
@@ -751,7 +767,11 @@ class PassGoodsInfo:
 
 @dataclass(frozen=True)
 class PassMenuItem:
-    after_day: int | None = None
+    #: ``afterDay`` — 서버가 문자열로 보냅니다(``PassMenuOutItem.java:28``
+    #: ``String``). 형제 :class:`CommuterKindMenuResponse.after_day` 와 형이
+    #: 같습니다. 정수가 필요하면 호출자가 변환하십시오 — 앱도 그 자리에서
+    #: ``StringExKt.safeToInt`` 로 파싱 실패 시 0을 씁니다.
+    after_day: str | None = None
     agreement: str | None = None
     detail_type: str | None = None
     detail_description: str | None = None
