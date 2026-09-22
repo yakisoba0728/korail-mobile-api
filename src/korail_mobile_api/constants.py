@@ -300,11 +300,18 @@ KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
 #: 와이어 필드는 ``TicketReservationInPassengerInfo.txtDiscKndCd``
 #: (``TicketReservationInPassengerInfo.java:33``).
 #:
-#: 옛 인용 ``w4/a.java:100``(쓰는 쪽)과 ``t4/a.java:59-61``
-#: ``isNCard()``(읽는 쪽)는 7.0.6 디컴파일에 그 경로가 없습니다. 7.0.6 에서
-#: ``isNCard`` 라는 이름으로 남은 것은 화면 라우트의 불리언 인자
-#: (``ui/navigation/PassengerTypeChangeRoute.java:39``)뿐이고 코드값을
-#: 판정하는 헬퍼가 아닙니다 — 같은 이름에 속지 않도록 적어 둡니다.
+#: 옛 인용 ``w4/a.java:100``(쓰는 쪽)과 ``t4/a.java:59-61``(읽는 쪽)의 경로는
+#: 7.0.6 에 없습니다. 다만 **판정 헬퍼 자체는 있습니다** --
+#: ``common/helper/DiscountHelper.java:818`` 의
+#: ``public final boolean isNCard(String dcntKndCd)`` 가 넘겨받은 할인코드를
+#: ``ReqDiscount.N_CARD`` 와 비교합니다(호출 예:
+#: ``MyTicketListOutReservation.java:809-813``). 한때 여기 "코드값을 판정하는
+#: 헬퍼가 없다" 고 적었던 것은 틀렸습니다 -- 화면 라우트의 동명 불리언 인자
+#: (``ui/navigation/PassengerTypeChangeRoute.java:39``)만 보고 내린 결론이었고,
+#: 그 둘은 별개입니다.
+#:
+#: 비교 대상 ``ReqDiscount.N_CARD`` 의 실제 코드 리터럴은 AppSuit 로 보호돼
+#: 있어, 그것이 여기 적힌 ``"153"`` 과 같은지는 여전히 확인하지 못했습니다.
 KORAIL_DISCOUNT_CARD_DISCOUNT_CODE = "153"
 
 #: N카드 예약 ``txtMenuId``. 와이어 필드는

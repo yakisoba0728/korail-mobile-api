@@ -996,11 +996,18 @@ def parse_seat_car_list_response(
         # it will reach the server under a different spelling than the one
         # the server assigned.
         car_no = _inventory_required_int(row, "h_srcar_no")
-        # SearchCarListDao.CarInfo.seatAttInfos is a nullable Gson List
-        # (SearchCarListDao.java:19) and the app null-guards it before use
-        # (SeatSearchActivity.java:254 -> C0804d.isNull(list) || size()==0), so a
-        # null/absent list is a valid "no special-seat attributes" car. Treat it as
-        # empty; only a present-but-non-list value is malformed.
+        # 없거나 널인 ``seatAttInfos`` 는 "특실 좌석속성이 없는 호차" 로 봅니다.
+        # 예전 근거는 "SearchCarListDao.CarInfo 의 nullable Gson List" 였는데 두
+        # 군데가 틀렸습니다 -- 앱은 Gson 이 아니라 kotlinx-serialization 을 쓰고,
+        # ``SearchCarListDao``/``SeatSearchActivity`` 는 7.0.6 에 없는 6.5.0
+        # 클래스입니다.
+        #
+        # 7.0.6 의 실제 선언은 ``TrainResearchOutCarInfo.java:33`` 의
+        # ``List<TrainResearchOutSeatInfo> seatAttInfos`` 이고, 필드 출현 비트가
+        # 없으면 널이 아니라 **빈 목록**이 들어갑니다(``:81-84``:
+        # ``this.seatAttInfos = CollectionsKt.emptyList()``). 그러니 "없으면
+        # 빈 목록" 은 DTO 자신의 기본값과 같은 결론입니다. 키가 있는데 리스트가
+        # 아니면 여전히 잘못된 응답입니다.
         attributes_raw = _optional_list(row, "seatAttInfos", "seat inventory")
         attributes: list[SeatAttribute] = []
         for attribute_raw in attributes_raw:

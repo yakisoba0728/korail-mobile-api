@@ -544,8 +544,11 @@ class TicketReceiptResponse(BaseKorailResponse):
 class ReservationHistoryTrain:
     """예약 이력 여정의 열차 행 하나.
 
-    와이어 키의 전체 집합은 ``ReservationViewOutTrainInfo.java:94`` 의 합성
-    생성자가 정확히 37개 ``@SerialName`` 으로 선언합니다. 그중 미결제 홀드가
+    ``ReservationViewOutTrainInfo.java:94`` 의 합성 생성자에는 평문
+    ``@SerialName`` 이 37개 있습니다. 그것이 **전부는 아닙니다** — 생성된
+    serializer 의 descriptor 에는 슬롯이 40개라(``…$$serializer.java:39-79``),
+    이름이 평문으로 남지 않은 셋이 더 있습니다. 예전에 "전체 집합이 정확히
+    37개" 라고 적은 것은 부분집합을 전체로 말한 것이었습니다. 그중 미결제 홀드가
     실제로 "무엇에 관한 것인지"를 말하는 결제 기한 삼총사
     (:attr:`payment_deadline_date`/:attr:`payment_deadline_time`/
     :attr:`payment_message`)가 빠져 있었습니다 — :attr:`payment_flag` 와
@@ -1929,9 +1932,15 @@ class OriginalTicket:
     ``dlayOgtkSaleSqno``/``dlayOgtkWctNo``), 카드번호
     (``Stl.java:32,37`` 의 ``prepCrdNo``/``stlCrdNo``), 승인번호
     (``Stl.java:29`` 의 ``apvNo``) 같은 자격증명이 더 들어
-    있는데 변경 흐름에는 쓸 일이 없기 때문입니다. 그 전선 키들도
-    :mod:`korail_mobile_api.redaction` 에 등록돼 있어 ``raw`` 안에서 마스킹된
-    채로 있습니다.
+    있는데 변경 흐름에는 쓸 일이 없기 때문입니다.
+
+    **``raw`` 는 마스킹되지 않습니다.** 그 전선 키들이
+    :mod:`korail_mobile_api.redaction` 에 등록돼 있다는 것은 마스킹 함수가
+    그 이름을 안다는 뜻일 뿐이고, 파서는 원본 매핑을 **그대로** 보존합니다 —
+    로그나 예외에 실을 생각이면 호출자가
+    :func:`~korail_mobile_api.redaction.redact_mapping` 을 직접 불러야
+    합니다. 파서 쪽 문서는 처음부터 그렇게 적고 있었고, 여기만 반대로
+    말하고 있었습니다.
     """
 
     pnr_no: str | None = field(default=None, repr=False)

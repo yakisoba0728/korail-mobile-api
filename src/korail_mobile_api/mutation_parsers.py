@@ -158,7 +158,13 @@ def _received_amount(
     raw: Mapping[str, Any],
     journey_rows: list[Mapping[str, Any]],
 ) -> str | None:
-    """앱이 정산할 금액을 앱이 계산하는 방식대로 복원합니다.
+    """결제에 쓸 금액을 정합니다 — **앱 재현이 아니라 이 패키지의 선택입니다.**
+
+    7.0.6 ``PayViewModel.initAmountData()``(``:11303-11307``)는 일반 분기에서
+    ``h_tot_rcvd_amt`` 를 그대로 합산하고 좌석별로 재계산하지 않습니다. 좌석
+    합을 1차 출처로 두는 것은 좌석 단위로 검산하려는 이 패키지의 판단이며,
+    아래 정정 뒤에도 유지합니다 — 다만 "앱이 계산하는 방식대로" 라고 말하던
+    예전 첫 문장은 사실이 아니었습니다.
 
     이 함수가 하는 일은 좌석별 ``h_rcvd_amt`` 를 더하고, 응답이 선언한
     ``h_tot_rcvd_amt`` 와 맞춰 보는 것입니다. 좌석 합을 **1차 출처**로 두는
@@ -609,12 +615,15 @@ def parse_discount_card_purchase_response(
 ) -> DiscountCardPurchaseResponse:
     """``research.dcntCrdInfo.do`` 의 응답을 파싱합니다.
 
-    7.0.6 ``NCardInfoOut.java:31-39,59-89`` declares the settlement and tax
-    fields. Its serializer descriptor strings are protected, so the parser
-    uses the Kotlin property names, as it already does for ``rcvdAmt`` and
-    ``lumpStlTgtNo``. ``mStationInfo`` 와
-    ``mUserNames`` 는 모델에 없습니다. 앱이 호출 뒤 지역적으로 채우는 값이고
-    (``:167-173``) 서버는 보내지 않습니다.
+    7.0.6 ``NCardInfoOut.java:30-36`` 이 선언하는 속성은 일곱입니다 --
+    ``dcntCrdKndMgNo``/``dcntCrdStlTgtNo``/``lumpStlTgtNo``/``rcvdAmt``/
+    ``stxAmt``/``taxtSplAmt``/``usePsbTno``. serializer descriptor 문자열이
+    보호돼 있어 파서는 Kotlin 속성명을 전선 키로 씁니다.
+
+    예전에 여기 적혀 있던 ``mStationInfo``/``mUserNames`` 는 **이 DTO 와 아무
+    관계가 없습니다.** 그 둘은 7.0.6 의 ``NCardInfoOut`` 어디에도 없고, 근거로
+    달려 있던 ``:167-173`` 은 금액·사용횟수 속성의 직렬화 구간입니다. 잘못된
+    설명이라 지웁니다.
 
     **라이브 미검증.** 전송된 적이 없으므로 관측된 적도 없습니다.
     """

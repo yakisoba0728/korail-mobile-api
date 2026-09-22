@@ -446,8 +446,15 @@ class KorailSessionClient:
         # NAMES here are confirmed as LoginIn's Kotlin property names
         # (LoginIn.java:29-35); their exact wire spelling is PROTECTED because
         # LoginIn carries no @SerialName except the CommonIn four.
-        # Retrofit drops null @Field
-        # (retrofit2/ParameterHandler.java:252-259), so do we.
+        # Retrofit 은 널 ``@Field`` 를 빼므로
+        # (``retrofit2/ParameterHandler.java:252-259``: 값이 널이면
+        # ``addFormField`` 없이 반환) 여기서도 널 키를 만들지 않습니다.
+        #
+        # 주의: 같은 규칙이 ``@FieldMap`` 에는 적용되지 않습니다 --
+        # ``ParameterHandler.FieldMap``(``:276-293``)은 널 값을 만나면
+        # ``"Field map contained null value for key"`` 로 **예외를 냅니다**.
+        # 7.0.6 의 로그인 선언은 ``@FieldMap`` 이므로(``NetworkApi.java:459``),
+        # 널이 빠지는 자리는 Retrofit 이 아니라 그 앞 단계입니다.
         form = {
             "txtMemberNo": member_no,
             "txtPwd": transformed,

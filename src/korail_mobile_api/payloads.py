@@ -581,7 +581,7 @@ def build_common_code_form(
     **그 세 인자는 7.0.6 에 대응물이 없습니다.** 요청 DTO
     ``analysis/jadx/sources/com/korail/talk/network/model/CommonCodeIn.java:31-34``
     와 그 합성 생성자의 ``@SerialName`` 목록(``:55``)이 선언하는 필드는
-    ``Device``·``Version``·``Key``·``Lang``·``code``·``deviceWidth``·
+    ``Device``·``Version``·``Key``·``lang``·``code``·``deviceWidth``·
     ``deviceHeight``·``OSVersion`` 여덟 개뿐이고, ``departDate``·``holidayYn`` 은
     ``analysis/jadx/sources/com/korail/`` 전체에 검색 결과가 0 입니다. 2026-09-22
     실서버에서도 무해했습니다 — ``app.holiday.popup`` 을 ``depart_date``

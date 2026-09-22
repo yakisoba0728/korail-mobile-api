@@ -1149,11 +1149,15 @@ class PriceRecalculationRequest:
     #: ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:6167-6168``
     #: 이 로그인 상태면 두 인자에 ``null`` 을 넘깁니다(옛 인용
     #: ``a6/C1042B.java:290-293`` 은 6.5.0 이고 7.0.6 에 없습니다).
-    #: 회원이면 ``None`` 이고, 그러면 두 필드 다 전송되지 않습니다 —
-    #: Retrofit 은 널 ``@Field`` 를 빼므로
-    #: (``analysis/jadx/sources/retrofit2/ParameterHandler.java:252-259``:
-    #: 값이 ``null`` 이면 ``addFormField`` 를 부르지 않고 반환) 회원의 폼은
-    #: 실제로 열네 개가 아니라 열두 개 키를 갖습니다. 옛 인용
+    #: 회원이면 ``None`` 이고, 그러면 두 필드 다 전송되지 않아 회원의 폼은
+    #: 열네 개가 아니라 열두 개 키를 갖습니다.
+    #:
+    #: 다만 그 근거로 적었던 "Retrofit 이 널 ``@Field`` 를 뺀다" 는 이
+    #: 라우트에 맞지 않습니다. ``ParameterHandler.Field``(``:252-259``)는
+    #: 그렇게 하지만 ``ParameterHandler.FieldMap``(``:276-293``)은 널 값에
+    #: **예외를 냅니다**(``"Field map contained null value for key"``).
+    #: 재계산은 ``@FieldMap`` 선언이므로(``NetworkApi.java:583``), 키가
+    #: 빠지는 것은 이 빌더가 애초에 넣지 않기 때문입니다. 옛 인용
     #: ``RequestBuilder.smali:1531`` 은 7.0.6 의 922행짜리
     #: ``retrofit2/RequestBuilder.smali`` 범위 밖입니다.
     non_member_no: str | None = field(default=None, repr=False)

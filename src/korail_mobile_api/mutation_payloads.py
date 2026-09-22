@@ -854,11 +854,15 @@ def _build_journey_reservation_form(
     # The five txtSeatAttCd* keys, in the order TicketReservationIn declares
     # them: txtSeatAttCd1..5, then the trailing-journey txtSeatAttCd4_1
     # (network/model/TicketReservationIn.java:80 for the @SerialName list,
-    # :139-179 for the declaration order the serializer follows). 7.0.6 has no
-    # LinkedHashMap and no putAll anywhere on this path -- the request is one
-    # kotlinx-serialised DTO whose JSON object is walked in declaration order
-    # by NetworkService.STLibw (network/NetworkService.java:15304-15343), so
-    # the order is fixed by the DTO rather than by insertion into a map.
+    # :139-179 for the declaration order the serializer follows). 순서를 정하는 것은 맵 삽입이
+    # 아니라 DTO 선언입니다 -- 요청은 kotlinx 로 직렬화된 DTO 하나이고, 그
+    # JSON 객체를 NetworkService.STLibw (network/NetworkService.java:15304-15343)
+    # 가 선언 순서대로 훑습니다.
+    #
+    # 예전에 "이 경로에는 LinkedHashMap 이 없다" 고 적었던 것은 틀렸습니다 --
+    # STLibw 자신이 :15306 에서 LinkedHashMap 을 만들어 결과를 담습니다. 맞는
+    # 이야기는 "DTO 를 먼저 직렬화하므로 순서가 맵 삽입에 좌우되지 않는다" 이지
+    # "맵이 없다" 가 아닙니다.
     # txtSeatAttCd1/2/3/5 are not written by either builder and fall to the
     # DTO's protected 3-char default (:96-100), which is consistent with the
     # "000" this builder sends. The old citations w4/a.java:82-91,
@@ -1002,10 +1006,12 @@ def _write_journey_rows(
     1-char literal (TrainScheduleOutTrainInfo.java:3683) whose ciphertext
     length is consistent with "N".
 
-    The old citations OJrny.java:6-27 and C5/a.java:54-76 are 6.5.0 jetsam --
-    neither class exists in the 7.0.6 decompile, and 7.0.6 has no LinkedHashMap
-    on this path at all. ``txtJrnyCnt`` itself is written at each call site,
-    before this helper runs.
+    옛 인용 ``OJrny.java:6-27`` 과 ``C5/a.java:54-76`` 은 7.0.6 에 없는 6.5.0
+    클래스입니다. 다만 그때 함께 적었던 "이 경로에는 LinkedHashMap 이 없다" 는
+    틀렸습니다 -- 평탄화기 ``NetworkService.STLibw`` 가 ``:15306`` 에서
+    ``LinkedHashMap`` 을 만듭니다. 순서가 삽입에 좌우되지 않는 이유는 맵이
+    없어서가 아니라 DTO 를 먼저 직렬화하기 때문입니다.
+    ``txtJrnyCnt`` 자체는 이 헬퍼가 돌기 전에 각 호출부가 씁니다.
     """
     for journey, (fields, journey_type_code) in enumerate(
         zip(journeys, journey_type_codes, strict=True), start=1
@@ -1980,11 +1986,17 @@ def build_discount_card_purchase_form(
     ``postDcntCrdInfo`` 이고 ``@FieldMap Map<String, String>`` 하나만 받으므로
     (응답은 ``NCardInfoOut``) 평평하게 펴는 것 자체는 7.0.6 과 맞습니다.
 
-    다만 **두 맵의 키 철자와 순서는 미출처입니다.** 근거였던
-    ``ResearchService.java:68-70`` 과
-    ``dao/research/NCardReservationDao.java:31-32,74-124`` 는 둘 다 7.0.6 에
-    없는 6.5.0 클래스이고, ``@FieldMap`` 한 개짜리 선언은 키 이름을 말해주지
-    않습니다. 이 계정은 할인카드가 없어 라이브 확인도 못 했습니다.
+    여정 맵의 키 다섯은 **7.0.6 에 평문으로 남아 있습니다** —
+    ``NCardjrny.java`` 의 ``@SerialName`` 이 ``jrnyTpCd_``·``runDt_``·
+    ``trnNo_``·``dptRsStnCd_``·``arvRsStnCd_`` 입니다(전부 꼬리 밑줄).
+    입력 모델은 ``NCardInfoIn.java:29-39`` 이고, 배열을 1-based 로 인덱싱하는
+    분기는 ``NetworkService.java:15345-15367`` 에 있습니다. 한때 여기 "두 맵 다
+    미출처" 라고 적었던 것은 지나쳤습니다.
+
+    아직 확인 못 한 것은 **부가사용자 맵(``apdUsrInfo``) 쪽 키와 기본 인자의
+    실제 값, 그리고 최종 런타임 순서**입니다. 옛 인용
+    ``ResearchService.java:68-70`` 과 ``NCardReservationDao.java`` 는 7.0.6 에
+    없는 6.5.0 클래스이고, 이 계정은 할인카드가 없어 라이브 확인도 못 했습니다.
     """
     if not isinstance(request, DiscountCardPurchaseRequest):
         raise KorailProtocolError(
@@ -2260,8 +2272,7 @@ def build_price_recalculation_form(
             raise KorailProtocolError(
                 "KORAIL price recalculation never sends 군장병 as "
                 "requested_discount_code: the app moves \"432\" into "
-                "discount_kind_code and blanks this field "
-                "(S4/D.java:181-183)"
+                "discount_kind_code and blanks this field"
             )
         if (
             row.requested_discount_code in _MERIT_DISCOUNT_CODES
@@ -2270,8 +2281,7 @@ def build_price_recalculation_form(
         ):
             raise KorailProtocolError(
                 "KORAIL price recalculation must send discount_kind_code "
-                "\"000\" for an integrated 국가유공자 discount "
-                "(S4/D.java:184-186 via T4/a.java:51-53)"
+                "\"000\" for an integrated 국가유공자 discount"
             )
 
     form: dict[str, str | list[str]] = dict(_common_fields(config))
@@ -2284,14 +2294,19 @@ def build_price_recalculation_form(
                 "KORAIL price recalculation non_member_no must be a non-empty "
                 "string when present"
             )
-        # 비회원 세션만 이 둘을 쓰고, 쓸 때는 함께 씁니다 — 다만 이 짝이
-        # **이 라우트에서** 그렇다는 근거는 7.0.6 에 없습니다. 예전 인용
-        # ``a6/C1042B.java:290-293`` 은 사라진 6.5.0 클래스이고,
-        # ``PriceReCalculationIn`` 은 공통 셋(``Device``/``Version``/``Key``)
-        # 밖의 ``@SerialName`` 이 전부 AlienGuard 로 보호돼 두 키가 이 DTO 에
-        # 있는지조차 정적으로 확인할 수 없습니다. 7.0.6 에서 평문으로 읽히는
-        # ``hiduserYn`` 은 통합결제의 다른 DTO(``IntgStlIn.java:30``) 것이므로
-        # 이 라우트의 근거로 쓸 수 없습니다 — **미출처**입니다.
+        # 비회원 세션만 이 둘을 쓰고, 쓸 때는 함께 씁니다. 근거는 7.0.6 에
+        # 있습니다 — ``PriceReCalculationIn.java:32,34`` 가 ``hidCustNo`` 와
+        # ``hiduserYn`` 을 평문 필드로 선언하고(생성자 인자 대응 ``:114-129``),
+        # ``PayViewModel.java:6167-6168`` 이 비로그인 조건에서 두 값을 함께
+        # 준비합니다. 거기서 잘린 구성·전송 단계는 smali 로 이어집니다:
+        # ``PayViewModel.smali:11764-11805`` 가 값을 만들고 ``:11834-11850`` 이
+        # ``PriceReCalculationIn`` 에 넣습니다.
+        #
+        # 한때 여기 "두 키가 이 DTO 에 있는지조차 확인할 수 없다 — 미출처" 라고
+        # 적었던 것은 틀렸습니다. **속성이 보이지 않는 것**과 **@SerialName 전선
+        # 철자가 보호된 것**을 같은 것으로 본 실수였습니다. 아직 확인 못 한 것은
+        # 후자, 그리고 ``"N"`` 리터럴의 평문입니다. 예전 인용
+        # ``a6/C1042B.java:290-293`` 은 7.0.6 에 없는 6.5.0 클래스입니다.
         form["hiduserYn"] = "N"
         form["hidCustNo"] = non_member_no
     form["txtPsgGridcnt"] = str(len(rows))
