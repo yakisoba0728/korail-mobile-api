@@ -510,21 +510,28 @@ SENSITIVE_KEYS = frozenset(
 #: 예전 패턴은 끝의 숫자만 떼서 그 셋을 전부 놓쳤습니다 —
 #: ``is_sensitive_key("txtSrcarNo1_")`` 가 거짓이었고, 카드번호 키까지 포함해
 #: 그대로 로그에 찍힐 수 있었습니다(2026-09-22 확인).
-_INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)_?(?P<index>\d+)_?$")
+#: 인덱스 앞에도 밑줄이 붙는 모양이 있습니다 — ``h_sgr_nm_1``·``h_sgr_nm_2``
+#: (``ReservationPaymentOutTblSeatInfo.java:166-170``). 인덱스 없이 밑줄만
+#: 붙는 모양도 있습니다 — ``txtCardNo_``
+#: (``TicketReservationInPassengerInfo.java:105``).
+#:
+#: 이 패턴 하나를 :func:`_index_stripped` 와 :data:`SENSITIVE_KEY_VALUE_RE` 가
+#: **함께** 씁니다. 나눠 적었을 때 실제로 갈라졌습니다: 키 판정은 인덱스 앞
+#: 밑줄을 떼는데 텍스트 탐지는 안 떼서, ``is_sensitive_key("h_sgr_nm_1")`` 은
+#: 참인데 ``redact_text("h_sgr_nm_1=...")`` 는 값을 그대로 남겼습니다 —
+#: 즉 dict 는 가려지고 같은 값이 문자열·JSON·상대 URL 로 로그에 실리면
+#: 평문이었습니다(2026-09-23 확인).
+_INDEX_SUFFIX_PATTERN = r"(?:_?\d+_?|_)"
+
+_INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)" + _INDEX_SUFFIX_PATTERN + r"$")
 
 
 def _index_stripped(name: str) -> str | None:
     """꼬리 인덱스를 뗀 이름. 없으면 ``None``."""
     match = _INDEX_SUFFIX_RE.match(name)
-    if match is not None:
-        return match.group("base") or None
-    # 인덱스 없이 밑줄만 붙는 모양도 있습니다 — ``txtCardNo_``
-    # (``TicketReservationInPassengerInfo.java:105``). 값 쪽 카드번호 패턴이
-    # 이미 그 값을 가리기는 하지만, 키 판정도 맞아야 값이 카드번호 모양이
-    # 아닐 때(마스킹된 값, 빈 값)까지 덮입니다.
-    if name.endswith("_"):
-        return name[:-1] or None
-    return None
+    if match is None:
+        return None
+    return match.group("base") or None
 
 
 def is_sensitive_key(name: str) -> bool:
@@ -560,19 +567,22 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
             reverse=True,
         )
     )
-    # 꼬리 인덱스와 그 뒤의 밑줄까지 함께 먹습니다 — :func:`_index_stripped`
-    # 와 같은 규칙입니다. 이것이 없으면 ``txtSeatNo`` 는 가려지는데
-    # ``txtSeatNo1_`` 은 그대로 남았습니다: 키 뒤의 ``(?![\w-])`` 가 인덱스
-    # 숫자에서 막혀 아예 매치가 안 됐기 때문입니다. 앱이 실제로 선언하는 것이
-    # 그 인덱스 형태이고(``TicketReservationInSrcarTrailing.java:82-89``,
-    # ``TicketReservationInPassengerInfo.java:105``), 2026-09-22 확인 결과
-    # ``is_sensitive_key`` 는 참인데 :func:`redact_text` 만 놓치고 있었습니다 —
-    # 즉 dict 는 가려지고 같은 값이 문자열·JSON·상대 URL 로 로그에 실리면
-    # 그대로 남았습니다.
-    + r")(?:\d+)?_?(?P=key_quote)(?![\w-])\s*(?:=|:)\s*)"
+    # 꼬리 인덱스는 :data:`_INDEX_SUFFIX_PATTERN` — 키 판정과 **같은** 규칙을
+    # 씁니다. 이것이 없으면 ``txtSeatNo`` 는 가려지는데 ``txtSeatNo1_`` 은
+    # 그대로 남았습니다: 키 뒤의 ``(?![\w-])`` 가 인덱스 숫자에서 막혀 아예
+    # 매치가 안 됐기 때문입니다.
+    + r")"
+    + _INDEX_SUFFIX_PATTERN
+    + r"?(?P=key_quote)(?![\w-])\s*(?:=|:)\s*)"
+    # 인용하지 않은 값은 **구분자에서 멈춥니다**. ``&`` 와 ``;`` 를 빼지
+    # 않았을 때 ``txtSeatNo1_=X&trnNo1=Y`` 의 ``&trnNo1=Y`` 까지 한 값으로
+    # 먹혀서 비민감 쿼리가 함께 사라졌습니다 — 누출은 아니지만 진단 문자열이
+    # 통째로 없어집니다(2026-09-23 확인). 값 안에 날 ``&``·``;`` 가 들어가는
+    # 민감 필드는 없습니다: URL 이면 퍼센트 인코딩이고, JSON 이면 위의 인용
+    # 대안이 받습니다.
     + r'(?P<value>"(?:\\.|[^"\\])*(?:"|$)'
     + r"|'(?:\\.|[^'\\])*(?:'|$)"
-    + r"|[^\s,]+)",
+    + r"|[^\s,&;]+)",
     re.IGNORECASE,
 )
 
@@ -606,8 +616,33 @@ def redact_url(value: str) -> str:
     경로에 붙이고, fragment 에는 ``key=value`` 가 그대로 실릴 수 있습니다.
     scheme/netloc 없으면 :func:`redact_text` 로 폴백.
     """
-    parsed = urlsplit(value)
-    if not parsed.scheme or not parsed.netloc:
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        # ``urlsplit`` 은 URL 이 아닌 문자열에 예외를 냅니다 — 예: 대괄호가
+        # 닫히지 않은 ``https://[`` (IPv6 리터럴로 읽다가 실패). 이 함수는
+        # :func:`redact_value` 를 통해 **임의의 문자열**에 불리므로, 그
+        # 예외는 마스킹을 건너뛰게 만드는 대신 로깅 자체를 깨뜨립니다.
+        # 파싱이 안 되면 URL 이 아닌 것으로 보고 텍스트 경로로 갑니다.
+        return redact_text(value)
+    # 절대 URL 이 아니어도 **경로+쿼리 모양**이면 쿼리를 키 단위로 봅니다.
+    # ``urlsplit`` 은 상대 URL 에서도 ``query`` 를 이미 갈라 주는데, 예전에는
+    # 그것을 버리고 통째로 :func:`redact_text` 로 보냈습니다. 그래서 같은 값이
+    # 진입점에 따라 갈렸습니다: 퍼센트 인코딩된 키(``h%5Fsgr%5Fnm``)가 절대
+    # URL 로는 가려지고 상대 URL 로는 평문으로 남았습니다(2026-09-23 확인) —
+    # 키 단위 경로는 키를 디코딩해서 보고 텍스트 경로는 못 하기 때문입니다.
+    #
+    # ``path`` 가 ``/`` 로 시작할 때만 이 길로 보냅니다. 그 조건이 없으면
+    # ``"오류? a=b"`` 같은 **평범한 문장**이 URL 로 해석돼서 ``urlencode`` 에
+    # 뭉개집니다 — 이 함수는 :func:`redact_value` 를 통해 임의의 문자열에
+    # 불리므로 그쪽이 훨씬 흔합니다.
+    relative_with_query = (
+        not parsed.scheme
+        and not parsed.netloc
+        and parsed.query
+        and parsed.path.startswith("/")
+    )
+    if (not parsed.scheme or not parsed.netloc) and not relative_with_query:
         return redact_text(value)
     query = [
         (

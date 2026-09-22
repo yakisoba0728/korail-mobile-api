@@ -49,8 +49,24 @@ def _validated_query(
 # 제대로 된 답은 형제 모듈들이 함께 쓰는 내부 유틸 모듈이고, 그것은 모듈 분할을
 # 다시 자를 때 할 일입니다.
 def _device_version(config: KorailConfig) -> dict[str, str]:
-    """The ``Device`` and ``Version`` pair every read form here starts with."""
-    return {"Device": config.device, "Version": config.version}
+    """이 모듈의 읽기 폼이 공통으로 시작하는 ``Device``/``Version``(+ ``lang``).
+
+    ``lang`` 이 여기 있는 이유는 :func:`korail_mobile_api.payloads._device_version`
+    과 같습니다: 이 모듈의 두 라우트도
+    :meth:`~korail_mobile_api.http.KorailHttpClient.post_form` 을
+    ``include_common=False`` 로 부르므로(``client.get_limousine_schedules``,
+    ``client.get_limousine_seat_inventory``) HTTP 계층의 공통 필드 주입을 받지
+    않습니다. 두 입력 DTO 는 모두 ``@SerialName(Constants.LANG)`` 을 선언합니다 —
+    ``ScdlQryIn.java:60``, ``TResidualSeatsResearchIn.java:65``.
+
+    위 모듈의 같은 누락을 고칠 때 **이 복사본이 남았습니다**: 모듈이 갈라져
+    있어서 한쪽만 고쳐졌고, ``KorailConfig(lang=...)`` 을 설정해도 리무진
+    두 조회에는 계속 실리지 않았습니다(2026-09-23 확인).
+    """
+    fields = {"Device": config.device, "Version": config.version}
+    if config.lang is not None:
+        fields["lang"] = config.lang
+    return fields
 
 
 def validate_limousine_schedule_query(
@@ -87,8 +103,9 @@ def build_limousine_schedule_form(
 ) -> dict[str, str]:
     """``lmu.scdlQry.do`` 의 운행 스케줄 조회 폼을 만듭니다.
 
-    ``BusReservationService.java:27`` 을 인용하던 자리입니다. 7.0.6 에 그
-    클래스는 없고, 같은 라우트 선언은
+    ``BusReservationService.java:27`` 을 인용하던 자리입니다. 그 클래스는 6.5.0
+    시절 이름이고 7.0.6 디컴파일에 없습니다(jadx/smali 전수 검색 0건) — 철회된
+    인용입니다. 같은 라우트 선언은
     ``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:654-656``
     의 ``postScdlQry()`` 입니다 — ``@FormUrlEncoded`` + ``@POST`` 에
     ``@FieldMap Map<String, String>`` 이라, 이 빌더가 폼을 만드는 것 자체는
@@ -128,8 +145,9 @@ def build_limousine_seat_inventory_form(
 ) -> dict[str, str]:
     """``lms.TResidualSeatsResearch.do`` 의 좌석 재고 조회 폼을 만듭니다.
 
-    ``BusReservationService.java:31`` 을 인용하던 자리입니다. 7.0.6 에 그
-    클래스는 없고, 같은 라우트 선언은
+    ``BusReservationService.java:31`` 을 인용하던 자리입니다. 그 클래스는 6.5.0
+    시절 이름이고 7.0.6 디컴파일에 없습니다(jadx/smali 전수 검색 0건) — 철회된
+    인용입니다. 같은 라우트 선언은
     ``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:269-271``
     의 ``postAirportBusTResidualSeatsResearch()`` 입니다(``@FormUrlEncoded``
     + ``@POST`` + ``@FieldMap Map<String, String>``, 응답 DTO 는
