@@ -37,18 +37,41 @@ KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
 # NetFunnel queue protocol: one exact query contract per opcode.
 #
 # Three named contracts for three opcodes on a SEPARATE host (nf.letskorail.com).
-# Each tuple is the sequence of U6.a.addParam calls in T6/d.java:
-#   5101 GetTidCacekedEnter (T6/d.java:99-101)  opcode, sid, aid
-#   5002 CheckedEnter       (T6/d.java:54-55)   opcode, key
-#   5004 Complete           (T6/d.java:78-79)   opcode, key
+#
+# 옛 인용 T6/d.java / U6/a.java 는 6.5.0 난독화 이름이고 7.0.6 디컴파일에 그
+# 경로가 없습니다. 7.0.6 은 같은 STCLab SDK 를 com/netfunnel/api/ 아래 평문으로
+# 담고 있어 세 계약을 전부 다시 짚었습니다 (T6/d → CommandClient,
+# U6/a.addParam → http/Client.addParam; 대응 근거는
+# korail_mobile_api.netfunnel 머리말의 표 참고).
+#
+# 각 튜플은 com/netfunnel/api/http/Client.addParam(String, String)
+# (http/Client.java:121-127) 호출 순서입니다 — addParam 은 params_ 를
+# List<NameValuePair> (http/Client.java:42) 로 들고 :126 에서 add() 하므로
+# 순서가 그대로 보존됩니다:
+#   5101 GetTidCheckedEnter (CommandClient.java:40-99)    opcode :59, sid :61, aid :63
+#   5002 CheckedEnter       (CommandClient.java:101-156)  opcode :122, key :124
+#   5004 Complete           (CommandClient.java:158-199)  opcode :178, key :180
+# (옛 주석의 "GetTidCacekedEnter" 는 오타였고 7.0.6 의 메서드 이름은
+# GetTidCheckedEnter 입니다.)
 #
 # Absent: no `js`, no `nfid`, no `prefix`, no trailing epoch, no `ttl`.
 # Those belong to the JavaScript NetFunnel client that SRT uses.
-# KORAIL embeds the native Android SDK (T6/U6 packages).
+# KORAIL embeds the native Android SDK (7.0.6: com/netfunnel/api +
+# com/netfunnel/api/http — 6.5.0 의 T6/U6 패키지에 해당). 위 세 블록과 5003
+# AliveNotice (CommandClient.java:217,:219) 를 합친 네 곳이 SDK 의 addParam
+# 호출 전부이고, 그 어디에도 ttl 은 없습니다. 넷째 파라미터 user_data 는 길이가
+# 0 이 아닐 때만 붙는데(CommandClient.java:65-68) KORAIL 은 설정하지 않습니다.
 #
 # 5003 ALIVE_NOTICE, 5105 INIT and 5106 STOP are NOT registered: the first
 # keeps a waiting-room popup alive; the other two are administrative and the
-# SDK refuses them (T6/d.java:115-121).
+# SDK refuses them. 7.0.6 근거는 CommandClient.Stop() (CommandClient.java:253-255)
+# 과 CommandClient.Init() (:257-259) — 둘 다 본문이 한 줄이고 즉시
+# `throw new CodeException(Code.ErrorNotSupport)` 입니다(Code.ErrorNotSupport =
+# 998, Code.java:74). 옛 인용 T6/d.java:115-121 은 그 경로가 없을 뿐 아니라
+# 7.0.6 의 :115-121 은 CheckedEnter 안의 setPort/setURL 줄이므로 줄 번호를
+# 그대로 옮겨서는 안 됩니다. 5003 은 거절되지 않고 온전히 구현돼 있습니다
+# (CommandClient.AliveNotice(), :201-251) — 옛 주석이 "the first keeps a
+# waiting-room popup alive" 로 5003 을 나머지 둘과 갈라 둔 것은 맞습니다.
 # ---------------------------------------------------------------------------
 KORAIL_NETFUNNEL_ROUTES = frozenset({("GET", KORAIL_NETFUNNEL_PATH)})
 
@@ -67,9 +90,33 @@ KORAIL_NETFUNNEL_KEYED_OPCODES = frozenset(
     }
 )
 
-#: ``aid`` 에 나타날 수 있는 액션 id 전부. 앱이 선언한 여덟 개
-#: (``K4/g.java:43-51``)이며 한 번도 부르지 않는 둘까지 포함하고, 그 밖은
-#: 없습니다. ``aid`` 가 자유 문자열 필드가 되지 않게 하기 위해서입니다.
+#: ``aid`` 에 나타날 수 있는 액션 id 전부. ``aid`` 가 자유 문자열 필드가 되지
+#: 않게 하려고 :class:`~korail_mobile_api.constants.KorailNetFunnelAction` 의
+#: 값 집합으로 닫아 둡니다.
+#:
+#: **"앱이 선언한 여덟 개" 라는 옛 서술은 7.0.6 에서 맞지 않습니다.** 옛 인용
+#: ``K4/g.java:43-51`` 은 6.5.0 난독화 이름으로 그 경로가 7.0.6 에 없고,
+#: 7.0.6 의 정본 ``NetworkConstants.Netfunnel``
+#: (``com/korail/talk/common/NetworkConstants.java:80-99``)이 선언하는 액션
+#: 상수는 **일곱 개**입니다 — ``ACTION_ID``(``:88``),
+#: ``ACTION_RESERVE_ID``(``:89``), ``ACTION_PAY_ID``(``:90``),
+#: ``ACTION_PEAK_SEASON_ID``(``:91``), ``ACTION_PRODUCT_ID``(``:92``),
+#: ``ACTION_TEST_ID``(``:93``), ``ACTION_RESERVATION_TICKET_ID``(``:94``).
+#: 환불에 해당하는 이름은 없습니다. 그래서 이 집합이 여덟 개인 것은 앱을
+#: 따른 결과가 아니라, 이 enum 이 7.0.6 에 대응 상수가 없는
+#: :attr:`~korail_mobile_api.constants.KorailNetFunnelAction.REFUND`
+#: (``"act_22"``, 6.5.0 기원이며 **미출처**)를 아직 들고 있기 때문입니다.
+#: 값별 근거 등급은 :class:`~korail_mobile_api.constants.KorailNetFunnelAction`
+#: 의 항목별 주석에 있습니다.
+#:
+#: "한 번도 부르지 않는 둘" 도 7.0.6 에서는 숫자가 다릅니다 — 선언은 있으나
+#: 호출부를 찾지 못한 것이 ``ACTION_PRODUCT_ID``/``ACTION_RESERVATION_TICKET_ID``/
+#: ``ACTION_TEST_ID`` 셋입니다. 다만 ``act_*`` 리터럴이 전부 AlienGuard 런타임
+#: 복호화라 호출부 귀속 자체가 부분적으로 추론이므로, "없다" 가 아니라
+#: "정적으로 찾지 못했다" 로 읽어야 합니다.
+#:
+#: 넓게 잡는 쪽이 안전한 방향입니다 — 이 집합은 나가는 ``aid`` 를 **제한**할
+#: 뿐이고, 여기 없는 값을 보내는 것은 어차피 거절됩니다.
 KORAIL_NETFUNNEL_ACTION_IDS = frozenset(
     action.value for action in KorailNetFunnelAction
 )
@@ -91,7 +138,11 @@ KORAIL_NETFUNNEL_KEY_RE = re.compile(r"[A-Za-z0-9_.:@~-]{1,512}")
 #
 # `nf.letskorail.com` is a front door that load-balances entry calls.
 # The node that issues a session is the only one that can complete it.
-# Replies name the owning node in `ip`/`port` (T6/i.java:50-53).
+# Replies name the owning node in `ip`/`port`. 7.0.6: Response.Parser(String)
+# (com/netfunnel/api/Response.java:128-163) 가 `ip` 를 setHost 로(:143-144),
+# `port` 를 setPort 로(:145-146) 넣습니다 — 이 패키지는 AlienGuard 가 걸려
+# 있지 않아 평문으로 읽힙니다. 옛 인용 T6/i.java:50-53 은 이 클래스의 6.5.0
+# 난독화 이름이고 7.0.6 에 그 경로가 없습니다.
 #
 # THE NATIVE SDK'S OWN DEFAULT DOES NOT FOLLOW THAT REDIRECT. Confirmed
 # directly in 7.0.6:
@@ -240,8 +291,14 @@ def korail_netfunnel_node_url(ip: str, port: str) -> str:
     """응답의 ``ip``/``port`` 를 답한 노드의 origin 으로 바꿉니다.
 
     origin URL(``https://<host>``)을 돌려주고, 응답이 아무 노드도 가리키지 않았으면 ``""``
-    입니다. 후자는 ``T6/d.makeURL`` 의 ``getHost().length() <= 0 || getPort() <= 0``
-    가지이며(``T6/d.java:17-19``), 후속 요청이 정당하게 정문으로 가는 유일한 경우입니다.
+    입니다. 후자는 7.0.6 ``CommandClient.makeURL(Property, Response)``
+    (``com/netfunnel/api/CommandClient.java:33-38``)의 조건이 떨어지는 가지입니다 —
+    ``:34`` 가 ``response != null && !property.isHostNotmodify() &&
+    response.getHost().length() > 0 && response.getPort() > 0`` 을 모두 만족할
+    때만 노드 host/port 로 URL 을 다시 만들고(``:35``), 아니면 ``URL.make(property)``
+    로 정문에 머뭅니다(``:37``). 후속 요청이 정당하게 정문으로 가는 유일한 경우입니다.
+    옛 인용 ``T6/d.makeURL``/``T6/d.java:17-19`` 는 이 메서드의 6.5.0 난독화
+    이름이고 7.0.6 에 그 경로가 없습니다.
     ``ip`` 와 ``port`` 는 관측된 모든 응답에서 함께 오므로, 한쪽만 온 것은 "노드를 가리키지
     않았다"가 아니라 "노드를 잘못 가리켰다"로 다룹니다.
 
@@ -300,7 +357,14 @@ def assert_netfunnel_request(
 
     ``params`` 는 요청이 만들어질 이름/값 쌍을 인코딩 전에 순서 그대로 받습니다. 그래서
     계약이 파라미터 구성뿐 아니라 **순서**까지 덮습니다. 앱의 순서는 장식이 아니라
-    ``T6/d.java`` 가 만든 리스트를 ``URLEncodedUtils.format`` 이 그대로 뱉은 결과입니다.
+    SDK 가 만든 리스트를 ``URLEncodedUtils.format`` 이 그대로 뱉은 결과입니다 —
+    7.0.6 에서 ``CommandClient`` 의 ``addParam`` 호출이
+    ``com/netfunnel/api/http/Client.addParam``(``http/Client.java:121-127``)로
+    가고, 그것이 ``params_``(``:42``, ``List<NameValuePair>``)에 순서대로
+    ``BasicNameValuePair`` 를 add 합니다(``:126``). 그 리스트를 그대로
+    ``URLEncodedUtils.format(list, "utf-8")``(``http/Client.GetParamMerge``,
+    ``http/Client.java:197-212``, 호출은 ``:202``)이 질의 문자열로 폅니다.
+    옛 인용 ``T6/d.java`` 는 ``CommandClient`` 의 6.5.0 난독화 이름입니다.
 
     :class:`KorailProtocolError` 가 되는 경우는 등록되지 않은 opcode(5003, 5105, 5106 과
     지어낸 값), 계약과 정확히 같지 않거나 순서가 다른 파라미터 목록, ``service_1`` 이 아닌

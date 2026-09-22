@@ -503,16 +503,28 @@ SENSITIVE_KEYS = frozenset(
     }
 )
 
-_INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)_?(?P<index>\d+)$")
+#: 꼬리 인덱스는 숫자로 끝나기도 하고 **숫자 뒤에 밑줄**이 더 붙기도 합니다 —
+#: 앱이 실제로 그 모양을 씁니다: ``TicketReservationInSrcarTrailing.java:82-89``
+#: 의 ``@SerialName`` 은 ``txtSrcarNo1_``·``txtSeatNo1_`` 이고,
+#: ``TicketReservationInPassengerInfo.java:105`` 는 ``txtCardNo_`` 입니다.
+#: 예전 패턴은 끝의 숫자만 떼서 그 셋을 전부 놓쳤습니다 —
+#: ``is_sensitive_key("txtSrcarNo1_")`` 가 거짓이었고, 카드번호 키까지 포함해
+#: 그대로 로그에 찍힐 수 있었습니다(2026-09-22 확인).
+_INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)_?(?P<index>\d+)_?$")
 
 
 def _index_stripped(name: str) -> str | None:
     """꼬리 인덱스를 뗀 이름. 없으면 ``None``."""
     match = _INDEX_SUFFIX_RE.match(name)
-    if match is None:
-        return None
-    base = match.group("base")
-    return base or None
+    if match is not None:
+        return match.group("base") or None
+    # 인덱스 없이 밑줄만 붙는 모양도 있습니다 — ``txtCardNo_``
+    # (``TicketReservationInPassengerInfo.java:105``). 값 쪽 카드번호 패턴이
+    # 이미 그 값을 가리기는 하지만, 키 판정도 맞아야 값이 카드번호 모양이
+    # 아닐 때(마스킹된 값, 빈 값)까지 덮입니다.
+    if name.endswith("_"):
+        return name[:-1] or None
+    return None
 
 
 def is_sensitive_key(name: str) -> bool:

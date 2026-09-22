@@ -62,8 +62,13 @@ def build_config_from_env() -> KorailConfig:
     세 변수는 필수이며 기본값이 없습니다. 여기서는 틀린 값이 없는 값보다 나쁩니다.
 
     ``KORAIL_DYNAPATH_DEVICE_ID``
-        DynaPath 의 ``di``. 기기의 ``Settings.Secure.ANDROID_ID``
-        (``AbstractC1228a.java:16``), 소문자 hex 16자.
+        DynaPath 의 ``di``. 기기의 ``Settings.Secure.ANDROID_ID``, 소문자
+        hex 16자. 7.0.6 근거는 DynaPath SDK 팩토리 ``a/a.java:15`` 의
+        ``Settings.Secure.getString(context.getContentResolver(),
+        "android_id")`` 이고, 그 값이 ``a/b.java:85`` 에서 ``di`` 키로
+        실립니다 — 이 SDK 는 AlienGuard 가 걸려 있지 않아 평문으로 읽힙니다.
+        옛 인용 ``AbstractC1228a.java:16`` 은 6.5.0 난독화 이름이고 7.0.6 에
+        그 경로가 없습니다(줄 번호도 16 이 아니라 15).
     ``KORAIL_DYNAPATH_OS_VERSION``
         ``Build.VERSION.RELEASE``. 예: ``"15"``. SDK 정수가 아닙니다.
     ``KORAIL_DYNAPATH_DEVICE_MODEL``

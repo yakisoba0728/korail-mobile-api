@@ -12,7 +12,11 @@
 ``AESCrypto.java:182`` (내부 AES 암호문 인코딩). 안쪽과 바깥쪽이 쓰는
 안드로이드 ``Base64`` 모드는 서로 다릅니다 — 아래 각 헬퍼의 독스트링 참고.
 ``generate_sid`` 는 별개 경로이며 여전히 ``Base64`` 기본 모드(76자마다
-줄바꿈)만 씁니다.
+줄바꿈)만 씁니다. **그 경로는 로그인 비밀번호 쪽과 달리 7.0.6 에서 다시
+확인되지 않았습니다** — ``getSid`` 도, ``Sid`` 와이어 필드도, flag 0
+Base64 호출부도 7.0.6 에 없습니다. 자세한 확인 범위와 결론(미출처)은
+:func:`generate_sid` 와 :func:`_android_base64_default` 의 독스트링에
+있습니다.
 """
 from __future__ import annotations
 
@@ -26,6 +30,9 @@ from .errors import KorailProtocolError
 from .models import LoginCryptoInfo
 
 
+#: ``getSid`` 의 고정 AES 키이자 IV. **미출처** — 6.5.0 기원이며 7.0.6
+#: 디컴파일에 이 리터럴도, 이 값을 쓰는 코드도 없습니다. 왜 그렇게
+#: 판정했는지는 :func:`generate_sid` 의 독스트링에 있습니다.
 SID_KEY = b"2485dd54d9deaa36"
 
 
@@ -46,10 +53,30 @@ def _base64_no_wrap(data: bytes) -> str:
 
 
 def _android_base64_default(data: bytes) -> str:
-    """``Base64.encode(..., DEFAULT)`` — 76자마다 ``\\n``, 표준 알파벳.
-    스테일 인용 ``S4/C0812l.java:23``. 7.0.6 에서는 :func:`generate_sid`
-    에서만 쓰인다 — 로그인 비밀번호의 바깥쪽 인코딩은 이것이 아니라
-    :func:`_android_base64_url_safe_wrapped` 다."""
+    """``Base64.encode(..., DEFAULT)`` — flag 0, 76자마다 ``\\n``, 표준 알파벳.
+
+    **7.0.6 에 대응 호출부가 없습니다 — 미출처.** 스테일 인용
+    ``S4/C0812l.java:23`` 은 6.5.0 난독화 이름이고 그 경로가 7.0.6 디컴파일에
+    없습니다. 그래서 7.0.6 에서 ``android.util.Base64.encodeToString(byte[],
+    int)`` 로 해소되는 디스패처
+    (``AppSuitLinker2.AAISCVWJBPDORLBWPVALUHGTIELXZNGS``)의 호출부를 전수로
+    훑어 플래그를 읽었는데, **여덟 곳 전부 flag 2 아니면 flag 8 이고 flag 0
+    은 하나도 없습니다**:
+
+    * flag 2 (``NO_WRAP``) — ``AESCrypto.java:182``,
+      ``DisabilityViewModel.java:314``, ``PayViewModel.java:11001``, 그리고
+      ``PayViewModel.java:11022``(디스패처 id 를 ``:11018`` 에서 읽고 호출은
+      ``:11022``. 여기만 플래그가 리터럴이 아니라 ``:11017`` 의
+      ``parseInt(AlienGuard…) > 3 ? 3 : 2`` 로 들어오는데, 이 저장소가 확인한
+      AppSuit 정수 관용구에서 그 보호 리터럴은 1 이므로 결과는 2).
+    * flag 8 (``URL_SAFE``) — ``LoginRepositoryImpl.java:931``, ``:1245``,
+      ``CryptoWithKeyStore.java:308``, ``:310``(디스패처 id 는 ``:307``).
+
+    이 함수가 남아 있는 이유는 :func:`generate_sid` 하나뿐인데, 그
+    :func:`generate_sid` 자체도 7.0.6 에 대응이 없습니다(아래 참고).
+    로그인 비밀번호의 바깥쪽 인코딩은 이것이 아니라
+    :func:`_android_base64_url_safe_wrapped` 다.
+    """
     return base64.encodebytes(data).decode("ascii")
 
 
@@ -67,8 +94,14 @@ def _android_base64_url_safe_wrapped(data: bytes) -> str:
     (재조회 분기의 미러는 ``:1245``): ``bArr = 안쪽문자열.getBytes(UTF_8)``
     다음 ``AppSuitLinker2.AAISCVWJBPDORLBWPVALUHGTIELXZNGS(bArr, 8)`` 가
     ``android.util.Base64.encodeToString(byte[], int)`` 로 해소되며 플래그가
-    8 이다. 같은 디스패처의 다른 세 호출부(``AESCrypto.java:182`` 포함)는
-    전부 플래그 2 — 로그인 경로만 이 바깥쪽 인코딩을 쓴다.
+    8 이다. 같은 디스패처의 호출부는 7.0.6 전체에서 여덟 곳이고 flag 2 네 곳
+    (``AESCrypto.java:182``, ``DisabilityViewModel.java:314``,
+    ``PayViewModel.java:11001``, ``:11022``)과 flag 8 네 곳
+    (``LoginRepositoryImpl.java:931``, ``:1245``,
+    ``CryptoWithKeyStore.java:308``, ``:310``)으로 갈린다. (이전 주석은
+    "다른 세 호출부가 전부 플래그 2" 라고 적었는데, 호출부 수를 적게 셌고
+    ``CryptoWithKeyStore`` 의 flag 8 두 곳을 빠뜨린 것이었다 — 다만 **로그인
+    비밀번호 경로에서 안쪽이 2·바깥쪽이 8** 이라는 결론 자체는 그대로다.)
     """
     b64 = base64.urlsafe_b64encode(data).decode("ascii")
     lines = [b64[i : i + 76] for i in range(0, len(b64), 76)]
@@ -145,10 +178,37 @@ def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
 
 
 def generate_sid(*, epoch_ms: int | None = None) -> str:
-    """``S4/C0812l.getSid`` 재현.
+    """6.5.0 ``getSid`` 재현 — **7.0.6 에 대응이 없습니다.**
 
-    ``"AD" + millis`` 를 고정 키(:data:`SID_KEY`)로 AES-CBC 암호화 후
-    Base64 DEFAULT. 키와 IV 가 같습니다(``C0812l.java:45``).
+    ``"AD" + millis`` 를 고정 키(:data:`SID_KEY`)로 AES-CBC 암호화한 뒤
+    Base64 DEFAULT 로 감쌉니다. 키와 IV 가 같습니다.
+
+    **인용 정리 (2026-09-22).** 옛 인용 ``S4/C0812l.getSid`` 와
+    ``C0812l.java:45``("키와 IV 가 같다" 의 근거)는 6.5.0 난독화 이름이고 그
+    경로가 7.0.6 디컴파일에 없습니다. 7.0.6 에서 대응을 찾으려고 세 방향으로
+    훑었지만 전부 빈손이었습니다:
+
+    * ``getSid``/``makeSid`` 라는 이름의 메서드가 ``com/korail/talk/`` 아래에
+      없습니다.
+    * ``Sid`` 를 와이어 키로 쓰는 DTO 가 없습니다 —
+      ``com/korail/talk/network/model/`` 의 1181개 모델 어디에도 ``Sid``
+      ``@SerialName`` 이나 ``sid`` 속성/게터가 없습니다.
+    * 이 함수가 쓰는 flag 0 Base64 도 7.0.6 호출부가 없습니다
+      (:func:`_android_base64_default` 의 전수 목록 참고).
+
+    따라서 :data:`SID_KEY` 의 리터럴 ``2485dd54d9deaa36`` 과 ``"AD" + millis``
+    라는 평문 조립, 키=IV 라는 성질은 셋 다 **미출처**입니다 — 6.5.0 기원이며
+    구버전 APK 없이 확정 불가입니다. 값을 손대지 않은 것은 확인돼서가 아니라
+    이번 정리가 주석·독스트링 한정이기 때문입니다.
+
+    .. note::
+       **이 함수의 결과는 현재 와이어에 실리지 않습니다.**
+       :mod:`korail_mobile_api.client` 가 세 곳에서 ``sid=generate_sid()`` 로
+       넘기지만, 받는 :mod:`korail_mobile_api.payloads` 의 빌더들이 ``sid``
+       를 폼에 넣지 않습니다 — 해당 라우트의 7.0.6 ``@SerialName`` 목록에
+       ``Sid`` 가 없기 때문입니다(그쪽 독스트링에 라우트별로 적혀 있습니다).
+       즉 계산만 하고 버립니다. 지우는 것이 맞아 보이지만 공개면 변경이라
+       여기서는 손대지 않았습니다.
     """
     timestamp = epoch_ms if epoch_ms is not None else int(time.time() * 1000)
     encrypted = _aes_cbc_pkcs7_encrypt(

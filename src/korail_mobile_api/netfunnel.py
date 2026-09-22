@@ -374,7 +374,8 @@ def parse_netfunnel_body(body: str, *, action: str) -> KorailNetFunnelToken:
             "KORAIL NetFunnel response was not the native SDK's "
             "'<code>:<params>' form; a 'NetFunnel.gRtype=...' body would mean "
             "the server answered the JavaScript dialect, which this app's own "
-            "parser (T6/i.java:36-42) cannot read either",
+            "parser (com/netfunnel/api/Response.java:129-137) cannot read "
+            "either",
             raw=body,
         )
     params: dict[str, str] = {}

@@ -4,9 +4,39 @@
 
 """DynaPath 토큰 — 일부 경로에 붙는 안티봇 헤더.
 
-STCLab DynaPath SDK(``b/C1229b.java``, ``B/AbstractC1228a.java``)가 만드는
-``x-dynapath-m-token`` 값을 재현합니다.
+STCLab DynaPath SDK 가 만드는 ``x-dynapath-m-token`` 값을 재현합니다.
 :data:`~korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS` 의 경로에만 붙습니다.
+
+인용 갱신 (2026-09-22)
+-----------------------
+옛 인용 ``b/C1229b.java``/``B/AbstractC1228a.java``/``AbstractC5987i.java`` 는
+6.5.0 난독화 이름이고 7.0.6 디컴파일에 그 경로가 없습니다. 이 SDK 는 다행히
+7.0.6 에서도 **AlienGuard 가 걸려 있지 않아** 평문으로 읽히므로 전부 다시
+짚었습니다. 진입점은 ``kr.scripters.dynapath.sdk.android.DynaPathMobileSDK``
+(``DynaPathMobileSDK.java:29-72``)이고, ``Companion.initialize(Application)``
+(``:55-71``)이 ``:64`` 에서 팩토리를 부르고 ``Companion.generate()``
+(``:31-52``)가 ``:43-44`` 에서 ``currentTimeMillis()`` 를 기록한 뒤 토큰을
+조립합니다. 대응:
+
+======================  ==============================================
+6.5.0 인용              7.0.6 경로
+======================  ==============================================
+``b/C1229b.java``       ``a/b.java`` — 토큰 홀더 + 조립(``a()``,
+                        ``a/b.java:75-227``)
+``B/AbstractC1228a``    ``a/a.java`` — 팩토리(``a/a.java:11-21``),
+                        기기 식별자/시작 시각을 여기서 읽음
+``AbstractC5987i.java`` ``b/e.java`` — 서명 해시(``b/e.java:18-53``,
+                        해시 계산 ``:55-71``)
+======================  ==============================================
+
+이 대응은 이름 유사성이 아니라 **내용 일치**로 정했습니다 — 아래 각 상수·함수
+주석에 어느 줄이 무엇을 말하는지 적어 두었습니다. 토큰 필드 이름은
+``a/b.java:81-118`` 의 ``linkedHashMap.put`` 순서에서 그대로 읽힙니다:
+``ai``(``:81``), ``di``(``:85``), ``as``(``:89``), ``su``(``:91``),
+``dbg``(``:92``), ``emu``(``:93``), ``hk``(``:94``), ``it``(``:95``),
+``ts``(``:98``), ``rt``(``:107``), ``os``(``:111``), ``dm``(``:115``),
+``st``(``:117``, 리터럴 ``"Android"``), ``sv``(``:118``, 리터럴
+``"v1.0.3"``).
 """
 from __future__ import annotations
 
@@ -28,8 +58,16 @@ from .constants import (
 
 DYNAPATH_BASE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 DYNAPATH_TABLE_INDEX = 1
-# Nonce alphabet from b/C1229b.java:164 (smali b.1/b.smali:549):
-# CharsKt.random("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+# Nonce alphabet. 7.0.6 근거: a/b.java:145 —
+#   StringsKt.random("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+#                    Random.INSTANCE)
+# 이 한 글자 뽑기를 IntRange(1, 4)(a/b.java:140) 로 네 번 돌려(:141-146)
+# 이어 붙이고(:147), "v1.0.3+" 접두(:138) + 논스 4자 + '+'(:148) +
+# 마지막 타임스탬프(:149) 모양을 만듭니다. 알파벳 리터럴이 평문으로
+# 그대로 보입니다 — 읽힘.
+# 옛 인용 b/C1229b.java:164 / smali b.1/b.smali:549 는 6.5.0 난독화 이름으로
+# 7.0.6 에 그 경로가 없습니다. 함수 이름도 CharsKt.random 이 아니라
+# StringsKt.random 으로 표기됩니다(같은 코틀린 stdlib 확장의 jadx 표기 차이).
 DYNAPATH_RANDOM_ALPHABET = (
     string.ascii_lowercase + string.ascii_uppercase + string.digits
 )
@@ -43,7 +81,20 @@ KORAIL_DYNAPATH_SDK_VERSION = "v1.0.3"
 KORAIL_DYNAPATH_SIGNING_CERT_SHA256 = (
     "38ff229cb34c7dda8e28220a2d750cceec28db661a36d95ad92d82f6d3c618f9"
 )
-# AbstractC5987i.java truncates to 32 chars → wrapped in ArrayList.toString().
+# 32자 절단 + ArrayList.toString() 으로 감싸기. 7.0.6 근거는 b/e.java 이며
+# 옛 인용 AbstractC5987i.java 가 이 클래스의 6.5.0 난독화 이름입니다
+# (7.0.6 에 그 경로 없음). 사슬 전체가 평문으로 읽힙니다:
+#   b/e.java:55-71  서명 하나의 해시 —
+#                   MessageDigest.getInstance(Constants.CODE_CHALLENGE_ALGORITHM)
+#                   (:57)이고 그 상수는 "SHA-256"
+#                   (com/kakao/sdk/auth/Constants.java:28) → SHA-256 확정.
+#                   바이트마다 b/d.java:20 의 String.format("%02x", ...) 로
+#                   **소문자** hex(:61), 길이가 32 를 넘으면 substring(0, 32)
+#                   (:62-67) — 그래서 위 64자 지문의 앞 32자다.
+#   b/e.java:18-53  서명 목록을 ArrayList 에 모음(:22, :47)
+#   DynaPathMobileSDK.java:64  e.a(context).toString() —
+#                   그 ArrayList 를 toString() 해서 넘기므로 "[...]" 대괄호가
+#                   붙는다(아래 KORAIL_DYNAPATH_AS_VALUE).
 KORAIL_DYNAPATH_APP_SIGNATURE_HASH = KORAIL_DYNAPATH_SIGNING_CERT_SHA256[:32]
 KORAIL_DYNAPATH_AS_VALUE = f"[{KORAIL_DYNAPATH_APP_SIGNATURE_HASH}]"
 
@@ -182,10 +233,18 @@ class DynapathTokenSettings:
 
 
 def generate_dynapath_device_id() -> str:
-    """합성 ``Settings.Secure.ANDROID_ID``(``AbstractC1228a.java:16``).
+    """합성 ``Settings.Secure.ANDROID_ID`` — 토큰의 ``di`` 필드.
 
     64비트 소문자 hex 16자. 부를 때마다 새로 만들고, 하나의
     :class:`~korail_mobile_api.config.KorailConfig` 안에서는 안정적입니다.
+
+    7.0.6 근거: ``a/a.java:15`` —
+    ``Settings.Secure.getString(context.getContentResolver(), "android_id")``
+    가 팩토리(``a/a.java:11-21``)에서 읽혀 두 번째 인자로 ``a/b`` 생성자에
+    들어가고(``:20``), 조립 때 ``di`` 키로 실립니다(``a/b.java:85``).
+    평문으로 읽힘. 옛 인용 ``AbstractC1228a.java:16`` 은 6.5.0 난독화 이름이고
+    7.0.6 에 그 경로가 없습니다 — 줄 번호가 하나 밀려(16 → 15) 그대로 옮기면
+    안 됩니다.
     """
     return uuid.uuid4().hex[:16]
 
@@ -193,8 +252,19 @@ def generate_dynapath_device_id() -> str:
 def build_default_token_settings() -> DynapathTokenSettings:
     """기본 토큰 설정. 모든 필드가 앱 상수이거나 패키지 기본 기기 값.
 
-    ``it``(``app_start_ts``) = 이 함수 호출 시각(``AbstractC1228a.java:14``:
-    ``System.currentTimeMillis()``).
+    ``it``(``app_start_ts``) = 이 함수 호출 시각.
+
+    7.0.6 근거: 팩토리 ``a/a.java:13`` 의
+    ``long jCurrentTimeMillis = System.currentTimeMillis();`` 가 ``:16`` 에서
+    ``Long`` 으로 감싸져 ``a/b`` 생성자의 여덟째 인자로 들어가고(``:20``),
+    필드 ``h``(``a/b.java:38``, 세터 ``:53``)로 보관되다가 조립 때 ``it`` 키로
+    실립니다(``a/b.java:95``). 평문으로 읽힘. 팩토리는
+    ``DynaPathMobileSDK.Companion.initialize()`` 가 한 번 부르므로
+    (``DynaPathMobileSDK.java:64``) 이 값은 **앱 시작 시각**이고, 매 토큰마다
+    갱신되는 ``ts``(``a/b.java:98``, 근거는 ``generate()`` 가 넘기는
+    ``DynaPathMobileSDK.java:43`` 의 ``currentTimeMillis()``)와 다릅니다.
+    옛 인용 ``AbstractC1228a.java:14`` 는 6.5.0 난독화 이름이고 7.0.6 에 그
+    경로가 없습니다.
     """
     return DynapathTokenSettings(
         device_id=generate_dynapath_device_id(),
