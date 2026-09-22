@@ -430,12 +430,22 @@ class KorailHttpClient:
                 if ordered_form is not None
                 else set(mapping_form or {})
             )
-            if field_names != _RESERVATION_LIST_READ_FIELDS:
+            # ``lang`` 은 공통 필드라 빼고 비교합니다. 이 검사가 막으려는 것은
+            # 같은 경로를 쓰는 **쓰기** 오버로드(applyDisabilityCertification)의
+            # 필드이지, ``CommonIn`` 의 4번째 공통 필드가 아닙니다. 예전에는
+            # 정확히 같은지만 봐서, ``KorailConfig(lang=...)`` 를 설정한 호출자는
+            # :meth:`~korail_mobile_api.client.KorailClient.get_ticket_reservation_detail`
+            # 이 서버에 닿기도 전에 ``KorailProtocolError`` 로 막혔습니다 --
+            # ``lang`` 이 ``None``/``""`` 일 때만 통과했으니, 기본값을 쓰는 동안은
+            # 아무도 못 보던 버그입니다(2026-09-22 재현). ``lang`` **하나만**
+            # 예외이고 나머지 여분 필드는 여전히 거절합니다.
+            if field_names - {"lang"} != _RESERVATION_LIST_READ_FIELDS:
                 raise KorailProtocolError(
                     "KORAIL certification.ReservationList shares its path "
                     "with a write overload (applyDisabilityCertification); "
                     "the read send path only accepts the read overload's "
-                    "exact fields: " + ", ".join(sorted(_RESERVATION_LIST_READ_FIELDS))
+                    "exact fields (plus the optional common lang): "
+                    + ", ".join(sorted(_RESERVATION_LIST_READ_FIELDS))
                 )
         headers = (
             {"Content-Type": "application/x-www-form-urlencoded"}

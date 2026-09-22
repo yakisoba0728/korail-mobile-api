@@ -92,11 +92,23 @@ def _required_pattern(
 
 
 def _common_fields(config: KorailConfig) -> dict[str, str]:
-    return {
+    """변경 폼의 공통 필드. 읽기 쪽
+    :meth:`~korail_mobile_api.http.KorailHttpClient.common_fields` 와 같은 규칙입니다.
+
+    ``lang`` 은 ``CommonIn`` 의 4번째 공통 필드이고(``CommonIn.java:381``)
+    ``CommonIn`` 은 읽기·변경 입력 DTO가 모두 상속합니다. 그런데 여기서는
+    빠져 있어서, ``KorailConfig(lang=...)`` 를 설정해도 읽기 요청에만 실리고
+    예약·결제·환불에는 실리지 않았습니다. 기본값 ``None`` 이면 예전과 똑같이
+    아무것도 싣지 않으므로, 달라지는 것은 실제 값을 넘긴 호출자뿐입니다.
+    """
+    fields = {
         "Device": config.device,
         "Version": config.version,
         "Key": config.key,
     }
+    if config.lang is not None:
+        fields["lang"] = config.lang
+    return fields
 
 
 # Passenger types are ordered here, but only positive counts are assigned
