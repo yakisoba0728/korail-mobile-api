@@ -2270,8 +2270,14 @@ def build_price_recalculation_form(
                 "KORAIL price recalculation non_member_no must be a non-empty "
                 "string when present"
             )
-        # Only a non-member session writes these two, and it writes them
-        # together (a6/C1042B.java:290-293).
+        # 비회원 세션만 이 둘을 쓰고, 쓸 때는 함께 씁니다 — 다만 이 짝이
+        # **이 라우트에서** 그렇다는 근거는 7.0.6 에 없습니다. 예전 인용
+        # ``a6/C1042B.java:290-293`` 은 사라진 6.5.0 클래스이고,
+        # ``PriceReCalculationIn`` 은 공통 셋(``Device``/``Version``/``Key``)
+        # 밖의 ``@SerialName`` 이 전부 AlienGuard 로 보호돼 두 키가 이 DTO 에
+        # 있는지조차 정적으로 확인할 수 없습니다. 7.0.6 에서 평문으로 읽히는
+        # ``hiduserYn`` 은 통합결제의 다른 DTO(``IntgStlIn.java:30``) 것이므로
+        # 이 라우트의 근거로 쓸 수 없습니다 — **미출처**입니다.
         form["hiduserYn"] = "N"
         form["hidCustNo"] = non_member_no
     form["txtPsgGridcnt"] = str(len(rows))
