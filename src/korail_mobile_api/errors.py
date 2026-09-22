@@ -42,9 +42,13 @@ class KorailApiError(Exception):
 
     문자열 인자는 :func:`~korail_mobile_api.redaction.redact_text` 를 거칩니다.
 
-    **마스킹의 경계**(2026-09-23 확인). 가려지는 것은 예외 **자신의 문자열
-    인자**뿐입니다. 다음은 가려지지 않습니다:
+    **마스킹의 경계**(2026-09-23 확인). 가려지는 것은 아래 ``__init__`` 이
+    ``isinstance(arg, str)`` 로 골라낸 인자, 곧 예외 **자신의 문자열 인자**
+    뿐입니다. 다음은 가려지지 않습니다:
 
+    * **문자열이 아닌 인자** — 그 검사에 걸리지 않아 마스킹 함수를 아예
+      거치지 않고 ``args`` 에 그대로 들어갑니다. 그 객체의 ``__str__`` 이
+      민감한 값을 내놓으면 ``str(error)`` 에도 가려지지 않은 채 나옵니다.
     * ``__cause__`` — ``raise ... from exc`` 로 엮인 원래 예외. 예를 들어
       ``httpx.ConnectError`` 의 문구에는 쿼리까지 붙은 URL 이 그대로 들어
       있습니다. ``traceback.format_exception`` 도 그 줄을 찍습니다.
@@ -52,10 +56,16 @@ class KorailApiError(Exception):
 
     원래 예외를 끊지 않는 이유는, 그것이 ``ConnectError`` 인지 ``ReadTimeout``
     인지 SSL 오류인지가 호출자에게 실제로 필요한 정보이기 때문입니다.
-    ``from None`` 으로 지우면 그 진단이 통째로 사라집니다.
+    다만 ``raise ... from None`` 이 원래 예외를 **지우는 것은 아닙니다** —
+    CPython 은 ``__cause__`` 를 ``None`` 으로 두고
+    ``__suppress_context__`` 를 참으로 세울 뿐이고, ``__context__`` 에는
+    원래 예외가 그대로 남아 객체에서 꺼낼 수 있습니다. 달라지는 것은 기본
+    traceback 이 그 줄을 **보여 주지 않는다**는 것이고, 그래서 사람이 읽는
+    진단에서 사라집니다.
 
     그래서 **예외 체인이나 traceback 을 찍는 쪽이 로깅 경계에서 다시
-    가려야 합니다.** ``str(error)`` 만 찍는다면 그대로 안전합니다.
+    가려야 합니다.** 보장되는 것은 문자열 인자가 가려진다는 것뿐이며,
+    ``str(error)`` 면 언제나 안전하다는 뜻은 아닙니다.
 
     세 속성은 **여기서 기본값을 보장합니다.** 하위 클래스 절반만 채우던 것이라,
     ``except KorailApiError as error: error.code`` 가 전송 실패나 프로토콜 오류에서

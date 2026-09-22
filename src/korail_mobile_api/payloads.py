@@ -280,9 +280,12 @@ def build_seat_inventory_form(
     유도했습니다 -- 이 라우트의 선언은 ``NetworkApi.java:739-741``
     (``@FormUrlEncoded`` +
     ``postTResidualSeatsResearch(@FieldMap Map<String, String>)``)로 매개변수별
-    ``@Field`` 바인딩이 없고, 요청 DTO 의 두 필드는 널이 될 수 없는 ``String``
-    입니다(``TResidualSeatsResearchIn.java:39`` ``seatAttCd``, ``:35``
-    ``gdNo``). 같은 결과를 내는 자리는 Retrofit 이 아니라 DTO→맵 평탄화입니다:
+    ``@Field`` 바인딩이 없습니다. 요청 DTO 의 두 필드는 **널이 될 수 있습니다**
+    -- 합성 역직렬화 생성자가 페이로드에 없는 필드에 널을 넣습니다
+    (``TResidualSeatsResearchIn.java:107-110`` ``seatAttCd``, ``:127-130``
+    ``gdNo``). jadx 가 찍는 ``public final String`` 선언(``:39``/``:35``)은
+    코틀린 널가능성을 지운 것이라 근거가 되지 못했습니다. 값이 빠지는 일이
+    실제로 일어나는 자리는 Retrofit 이 아니라 DTO→맵 평탄화입니다:
     호출 경로(``NetworkService.java:14800,14803``)가
     ``kJson.encodeToJsonElement(TResidualSeatsResearchIn.serializer(), …)`` 를
     ``NetworkService.STLibw``(``NetworkService.java:15304``)에 넘기고, 이 함수는
