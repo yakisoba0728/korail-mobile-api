@@ -559,6 +559,12 @@ def is_sensitive_key(name: str) -> bool:
 # registration, unaffected by this regex either way.
 _WHITESPACE_RE = re.compile(r"\s")
 
+#: ``scheme://아이디:비밀번호@host`` 의 자격증명. :func:`redact_url` 은 netloc 을
+#: 뜯어보지만 :func:`redact_text` 는 URL 을 파싱하지 않으므로, 로그 한 줄에 박힌
+#: URL 은 여기서 잡아야 합니다. ``://`` 가 앞에 있고 ``@`` 앞에 ``:`` 가 있는
+#: 경우만 봅니다 — 그래야 ``a:b@c`` 같은 평범한 문자열을 건드리지 않습니다.
+URL_USERINFO_RE = re.compile(r"(?<=://)[^/\s@]+:[^/\s@]*@")
+
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){14,19}\b")
 SESSION_RE = re.compile(r"(?i)(JSESSIONID=)[^&;\s]+")
 #: 키의 ``_`` 는 퍼센트 인코딩된 ``%5F`` 로도 실려 옵니다. 절대 URL 은
@@ -607,7 +613,9 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
     # ``=`` 묶음: 값이 그 자체로 ``키=`` 로 시작하면 그것은 값이 아니라
     # **다음 필드**입니다. 앞의 ``\s*`` 가 공백을 넘어가서
     # ``h_sgr_nm_1= trnNo1=Y`` 의 ``trnNo1=Y`` 를 값으로 먹던 자리입니다.
-    + r"|(?(eq)(?![\w.\[\]-]+\s*=)[^\s,]+?"
+    # 값이 구분자로 **시작**하면 그 값은 비어 있고 구분자는 다음 필드의
+    # 것입니다 — ``h_sgr_nm_1=&trnNo1=Y`` 에서 이웃을 통째로 먹던 자리입니다.
+    + r"|(?(eq)(?![&;])(?![\w.\[\]-]+\s*=)[^\s,]+?"
     + r"(?=(?:[&;](?=[\w.%\[\]-]+=))|[\s,]|$)"
     + r"|[^\s,]+))",
     re.IGNORECASE,
@@ -640,12 +648,31 @@ def _redact_json_document(value: str) -> str | None:
     경우에만 타는 길이라 그 편이 낫다고 봤습니다.
     """
     stripped = value.strip()
-    if not stripped or stripped[0] not in "{[":
+    if not stripped or stripped[0] not in '{["':
         return None
     try:
         parsed = json.loads(stripped)
     except (ValueError, TypeError, RecursionError):
-        return None
+        # ``{\\"k\\": \\"v\\"}`` 처럼 **백슬래시로 escape 된 채** 로그에
+        # 실린 JSON 은 그 자체로는 파싱되지 않습니다. 한 겹 벗겨서 다시
+        # 시도하고, 성공하면 원래 모양대로 다시 escape 해 돌려줍니다.
+        if '\\"' not in stripped:
+            return None
+        try:
+            inner = json.loads(stripped.replace('\\"', '"'))
+        except (ValueError, TypeError, RecursionError):
+            return None
+        try:
+            dumped = json.dumps(redact_value(inner), ensure_ascii=False)
+        except (TypeError, ValueError, RecursionError):
+            return None
+        return dumped.replace('"', '\\"')
+    # 이중 직렬화 — JSON 문자열 **안에** JSON 이 들어 있는 경우.
+    if isinstance(parsed, str):
+        inner_redacted = redact_text(parsed)
+        if inner_redacted == parsed:
+            return None
+        return json.dumps(inner_redacted, ensure_ascii=False)
     try:
         return json.dumps(redact_value(parsed), ensure_ascii=False)
     except (TypeError, ValueError, RecursionError):
@@ -653,11 +680,24 @@ def _redact_json_document(value: str) -> str | None:
 
 
 def redact_text(value: str) -> str:
-    """문자열에서 카드번호·세션·민감 키값을 가립니다."""
+    """문자열에서 카드번호·세션·민감 키값을 가립니다.
+
+    **알려진 한계 — 따옴표 없는 값 안의 공백.** ``h_sgr_nm_1=홍 길동`` 처럼
+    인용하지 않은 값에 공백이 있으면 공백까지만 가려지고 뒤가 남습니다.
+    공백을 값의 일부로 보려면 ``h_sgr_nm=X 이후 문장 전체``를 먹어야 해서,
+    로그 한 줄이 통째로 사라집니다. 평문에서 그 둘은 구분할 수 없습니다.
+
+    그래서 이 함수는 **따옴표 없는 값에 공백이 없다고 가정합니다.** 실제로
+    공백이 들어가는 값은 구조화된 입구로 넘기십시오 — ``redact_mapping``·
+    ``redact_payload``·``redact_url`` 은 키 단위로 보므로 값 안의 공백과
+    무관하게 전부 가립니다. 폼을 만드는 이 패키지 자신은 언제나 그 경로를
+    씁니다(2026-09-23 확인).
+    """
     as_json = _redact_json_document(value)
     if as_json is not None:
         return as_json
-    redacted = CARD_RE.sub("[REDACTED_CARD]", value)
+    redacted = URL_USERINFO_RE.sub("[REDACTED]@", value)
+    redacted = CARD_RE.sub("[REDACTED_CARD]", redacted)
     redacted = SENSITIVE_KEY_VALUE_RE.sub(
         _redact_sensitive_key_value,
         redacted,
@@ -714,10 +754,17 @@ def redact_url(value: str) -> str:
         )
         for key, item in parse_qsl(parsed.query, keep_blank_values=True)
     ]
+    # ``https://아이디:비밀번호@host/...`` 의 userinfo 는 netloc 안에 있어서
+    # 쿼리·경로만 보던 예전 코드가 통째로 지나쳤습니다. 회원번호도 비밀번호도
+    # 여기 실릴 수 있으므로 **둘 다** 가립니다(2026-09-23 확인).
+    netloc = parsed.netloc
+    if parsed.username is not None or parsed.password is not None:
+        host = netloc.rsplit("@", 1)[-1]
+        netloc = f"[REDACTED]@{host}"
     return urlunsplit(
         (
             parsed.scheme,
-            parsed.netloc,
+            netloc,
             redact_text(parsed.path),
             urlencode(query),
             redact_text(parsed.fragment),
