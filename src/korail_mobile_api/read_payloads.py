@@ -276,7 +276,7 @@ def build_seat_assignment_schedule_form(
     if not isinstance(request, SeatAssignmentScheduleRequest):
         raise TypeError("request must be a SeatAssignmentScheduleRequest")
     SeatAssignmentScheduleRequest._validate(request)
-    return {
+    form = {
         "menuId": request.menu_id,
         "dptDt": request.departure_date,
         "dptTm": request.departure_time,
@@ -284,12 +284,21 @@ def build_seat_assignment_schedule_form(
         "arvRsStnNm": request.arrival_station_name,
         "trnGpCd": request.train_group_code,
         "psrmClCd": request.room_class_code,
-        "seatAttCd1": request.seat_attribute_code,
-        "psgNum1": str(request.passenger_count),
-        "stlbDturDvNm1": request.standing_detour_division_name,
         "dirtChtnDvCd": request.transfer_type_code,
         "chtnArvRsStnNm": request.connection_arrival_station_name,
     }
+    # ``seatAttCdN``/``psgNumN``/``stlbDturDvNmN`` 은 승객 한 명당 한 벌인
+    # 번호 그룹입니다. ``psgNumN`` 은 그 자리의 **점유 플래그**(0/1)이지
+    # 인원수가 아니라서, 예전처럼 ``psgNum1`` 에 총원을 넣으면 2 이상은
+    # 서버가 전부 ``SUPDATE`` 로 막았습니다 -- 2026-09-22 라이브 확인:
+    # ``psgNum1`` 이 ``"0"``/``"1"`` 이면 ``WRG000000`` 이지만
+    # ``"2"``/``"02"``/``"3"``/``"9"`` 는 SUPDATE 이고, 대신 그룹을 1..9 까지
+    # 늘리면 9명까지 그대로 통과합니다.
+    for slot in range(1, request.passenger_count + 1):
+        form[f"seatAttCd{slot}"] = request.seat_attribute_code
+        form[f"psgNum{slot}"] = "1"
+        form[f"stlbDturDvNm{slot}"] = request.standing_detour_division_name
+    return form
 
 
 def build_merge_seats_inquiry_form(
@@ -538,7 +547,13 @@ def build_ticket_receipt_form(
     txt_index: str | None = None,
 ) -> dict[str, str]:
     form = {
-        "h_orgtk_sale_dt": _ascii_digits(sale_date, "sale_date", lengths=frozenset({4, 8})),
+        # 4자리 ``MMDD`` 만 받습니다. 예전에는 8자리도 통과시켰는데, 서버는
+        # 8자리를 언제나 ``ERZ800027`` 로 되돌려보냅니다 -- 2026-09-22 에 실제
+        # 승차권 128장으로 확인(4자리 128/128 성공). 8자리를 여기서 막지 않으면
+        # 호출자가 ``TicketListTicket.sale_date`` 를 그대로 넘겨 놓고 원인이
+        # 모호한 서버 오류를 받습니다. 자릿수 규칙 전체는
+        # :class:`OriginalTicketReference` 의 docstring 에 있습니다.
+        "h_orgtk_sale_dt": _ascii_digits(sale_date, "sale_date", lengths=frozenset({4})),
         "h_orgtk_wct_no": _required_text(window_no, "window_no"),
         "h_orgtk_sale_sqno": _required_text(
             sale_sequence,
@@ -917,6 +932,34 @@ def _validate_commuter_passenger_request(
 
 @dataclass(frozen=True)
 class OriginalTicketReference:
+    """원표(발권 승차권) 한 장을 가리키는 네 값.
+
+    :attr:`sale_date` 의 자릿수가 **엔드포인트마다 다릅니다.** 같은 객체를
+    아무 데나 넘길 수 없다는 뜻이라, 여기 적어 둡니다 — 2026-09-22 에 실제
+    승차권 128장을 전 엔드포인트에 통과시켜 확인한 결과입니다.
+
+    4자리 ``MMDD``(:attr:`~korail_mobile_api.read_models.TicketListTicket.return_sale_date`)
+        :meth:`~korail_mobile_api.client.KorailClient.get_refund_commission`,
+        :meth:`~korail_mobile_api.client.KorailClient.get_refund_ticket_detail`,
+        :meth:`~korail_mobile_api.client.KorailClient.get_original_ticket_inquiry`,
+        그리고 :class:`StationRefundVerificationRequest` 의 ``return_no_2``.
+        8자리를 주면 각각 ``ERZ800027``/``WRT200408``/``WRT100124`` 입니다.
+
+    8자리 ``YYYYMMDD``(:attr:`~korail_mobile_api.read_models.TicketListTicket.sale_date`)
+        :meth:`~korail_mobile_api.client.KorailClient.get_delivery_recipient`
+        (``saleDt``)와
+        :meth:`~korail_mobile_api.client.KorailClient.get_pbp_acceptance_specifications`
+        (``tkRetNo`` 안). 4자리를 주면 ``ERB000001``
+        ("INPUT 값 검증 도중 오류")입니다.
+
+    두 이름이 비슷해서 실제로 한 번 물렸습니다 — 환불이
+    :attr:`~korail_mobile_api.read_models.TicketListTicket.sale_date` 8자리
+    때문에 ``ERZ800027`` 로 막혔고, 4자리
+    :attr:`~korail_mobile_api.read_models.TicketListTicket.return_sale_date`
+    로 바꾸고서야 통과했습니다. 승차권 목록에서 옮겨 담을 때 어느 쪽인지
+    먼저 확인하십시오.
+    """
+
     sale_window_no: str = field(repr=False)
     sale_date: str = field(repr=False)
     sale_sequence: str = field(repr=False)
@@ -1155,11 +1198,34 @@ def build_commuter_info_form(
     if type(request) is CommuterPassengerRequest:
         kind_code = _exact_server_pass_data(request.pass_data)
         age_codes = _validate_commuter_passenger_request(request)
+        # One ``cmtrUtlAgeCd`` per **passenger**, not per age-code row, and
+        # ``psgCnt`` is their total -- so ``passenger_counts`` decides both.
+        # It used to be ignored here: the form always carried every row once
+        # with ``psgCnt`` = row count, which cannot express any valid
+        # composition for a multi-row pass. Live 2026-09-22 on kind ``0046``
+        # (rows ``E05``/``E06``): the old row-shaped form is rejected
+        # ``WRT800115 유효하지 않은 인원구성입니다``, while ``psgCnt=1``+``E05``,
+        # ``psgCnt=1``+``E06`` and ``psgCnt=2``+``E05``,``E05`` all answer
+        # ``IRZ000008``. Matches ``CommutationInfoIn.java:31,38``
+        # (``cmtrUtlAgeCd: List<String>`` alongside a scalar ``psgCnt: int``).
+        selected = tuple(
+            code
+            for code, count in zip(
+                age_codes,
+                request.passenger_counts,
+                strict=True,
+            )
+            for _ in range(count)
+        )
+        if not selected:
+            raise ValueError(
+                "passenger_counts must select at least one passenger"
+            )
         return (
             ("jobDvCd", "b"),
             ("cmtrKndCd", kind_code),
-            ("psgCnt", str(len(age_codes))),
-            *(("cmtrUtlAgeCd", value) for value in age_codes),
+            ("psgCnt", str(len(selected))),
+            *(("cmtrUtlAgeCd", value) for value in selected),
         )
     if type(request) is CommuterTicketInquiryRequest:
         if not isinstance(request.original_ticket, OriginalTicketReference):

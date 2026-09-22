@@ -2117,11 +2117,18 @@ class KorailClient:
 
         로그인 세션을 요구합니다.
 
-        **미검증 경로로 다뤄야 합니다.** 7.0.6 DTO 는 ``txtPsrmClCd1``,
+        **부분 검증 경로입니다.** 7.0.6 DTO 는 ``txtPsrmClCd1``,
         ``txtSeatAttCd2``, ``txtSeatAttCd4``, ``txtSeatAttCd5`` 를 더 선언하지만
         (``analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41``)
         이 폼은 넷 중 어느 것도 보내지 않습니다. 그 값은 앱의 화면 상태에서 오는데 그
-        경로를 추적하지 않았습니다. 또 이 경로는 실서버에 한 번도 보낸 적이 없습니다.
+        경로를 추적하지 않았습니다.
+
+        2026-09-22 에 실서버로 처음 나갔습니다 — 홀드 중인 PNR 의 좌석에서
+        ``h_psg_tp_cd``/``h_psrm_cl_cd``/``h_dcnt_knd_cd1`` 을 그대로 베낀 한 줄을
+        보내자 서버가 ``ERR930202`` ("변경항목이 없습니다")로 답했습니다. 요청이
+        읽히고 해석됐다는 뜻이라 폼의 모양 자체는 유효합니다. 다만 **할인이 실제로
+        바뀌는** 성공 응답은 아직 못 봤습니다 — 그러려면 이 계정에 없는 자격(쿠폰·
+        국가유공자 등)이 필요합니다. 즉 성공 본문 파싱 경로는 여전히 미검증입니다.
         """
         self._require_session("price recalculation requires")
         route = "/classes/com.korail.mobile.certification.PriceReCalculation"

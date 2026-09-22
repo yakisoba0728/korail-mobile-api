@@ -122,7 +122,16 @@ from .read_models import (
 
 
 def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListResponse:
-    """7.0.6 ``pnr_list`` → ``ticket_list`` 승차권 목록."""
+    """7.0.6 ``pnr_list`` → ``ticket_list`` 승차권 목록.
+
+    결과가 **하나도 없을 때만** 서버가 목록 키를 ``pnr_list`` 대신
+    ``reservation_list`` 로 바꿔 보냅니다(``h_msg_cd`` 는 ``WRT300005``).
+    ``mode`` 와는 무관합니다 — 2026-09-22 확인: 결과가 있는 ``mode="2"`` 는
+    ``pnr_list``(128행), 빈 ``mode="1"`` 과 빈 ``mode="2"`` 는 둘 다
+    ``reservation_list``(0행). 빈 봉투에는 어차피 행이 없으므로 ``pnr_list``
+    만 읽는 것이 맞고, ``reservation_list`` 를 덧대도 얻는 것이 없습니다.
+    앱 DTO 도 ``MyTicketListOut.java:82`` 의 ``@SerialName("pnr_list")`` 하나뿐입니다.
+    """
     raw = response.raw
     reservations: list[TicketListReservation] = []
     for reservation_raw in _rows(raw, "pnr_list", "ticket list", "ticket list reservation"):

@@ -434,8 +434,15 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
     #: 전체의 예약가능 여부를 정하는 최상위 플래그(등급별
     #: ``*_reservation_flag`` 와 별개).
     ("reservation_available_flag", "h_rsv_psb_flg", None),
-    ("general_availability_name", "h_rsv_psb_nm", None),
-    ("special_availability_name", "h_spe_rsv_psb_nm", None),
+    # 잔여 문구는 ``h_gen_rsv_nm``/``h_spe_rsv_nm`` 입니다. 예전에는 이 두
+    # 필드가 ``h_rsv_psb_nm``/``h_spe_rsv_psb_nm`` 를 읽었는데, 그 둘은 문구가
+    # 아니라 **운임**입니다 -- 2026-09-22 라이브(서울→부산 20260925) 확인:
+    # 같은 행에서 ``h_gen_rsv_nm='매진'`` 인데 ``h_rsv_psb_nm='47,500원'``.
+    # 이름·docstring 이 약속하던 ``"매진"``/``"좌석부족"`` 은 앞의 키에만 옵니다.
+    ("general_availability_name", "h_gen_rsv_nm", None),
+    ("special_availability_name", "h_spe_rsv_nm", None),
+    ("general_fare_text", "h_rsv_psb_nm", None),
+    ("special_fare_text", "h_spe_rsv_psb_nm", None),
     ("wait_reservation_flag", "h_wait_rsv_flg", None),
     ("standard_remaining_seat_count", "h_std_rest_seat_cnt", None),
     ("first_class_remaining_seat_count", "h_fst_rest_seat_cnt", None),
@@ -473,9 +480,15 @@ class TrainSummary:
     좌석 여유는 이름이 비슷한 코드가 여럿이라 헷갈리기 쉽습니다.
     ``general_reservation_code``/``special_reservation_code`` 는 일반실·특실의
     예약 가능 코드이고, ``general_availability_name``/
-    ``special_availability_name`` 이 앱이 화면에 찍는 문구입니다(``"매진"``,
-    ``"좌석부족"`` 등). 앱은 예매 버튼을 코드가 아니라 이 **문구** 로
-    막습니다(``a5/u.java:354``).
+    ``special_availability_name``(``h_gen_rsv_nm``/``h_spe_rsv_nm``)이 화면에
+    찍히는 문구입니다(``"매진"``, ``"매진임박"``, 없으면 ``"-"``).
+
+    ``h_rsv_psb_nm``/``h_spe_rsv_psb_nm`` 은 이름만 "예약가능"이고 값은
+    **운임**이라 :attr:`general_fare_text`/:attr:`special_fare_text` 로
+    따로 둡니다 — 2026-09-22 라이브(서울→부산 20260925)에서 한 행이
+    ``h_gen_rsv_nm='매진'`` 과 ``h_rsv_psb_nm='47,500원'`` 을 동시에 줬습니다.
+    예전에는 이 두 키가 ``*_availability_name`` 으로 들어와 있어서, 문구를
+    읽는다고 믿고 쓰면 금액을 받았습니다.
 
     예약대기 가능 여부는 ``wait_reservation_flag`` 하나로 정해지며 값이
     :data:`~korail_mobile_api.constants.KORAIL_STANDBY_WAIT_FLAG` 와 같을
@@ -572,6 +585,14 @@ class TrainSummary:
     merge_seat_application_flag: str | None = None
     #: 7.0.6 h_trn_sps_flg: 운휴 표시/예약 게이트용 원표 플래그.
     train_suspension_flag: str | None = None
+    #: ``h_rsv_psb_nm`` — 일반실 **운임** 문구(``"47,500원"``). 이름이
+    #: 예약가능("rsv_psb")처럼 보이지만 실제로 담겨 오는 값은 금액입니다.
+    #: 잔여 문구는 :attr:`general_availability_name` 쪽입니다.
+    general_fare_text: str | None = None
+    #: ``h_spe_rsv_psb_nm`` — 특실 **운임** 문구. 위와 같은 이유로 이름과
+    #: 내용이 어긋나는 키라, 잔여 문구는 :attr:`special_availability_name`
+    #: 에서 읽습니다.
+    special_fare_text: str | None = None
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":

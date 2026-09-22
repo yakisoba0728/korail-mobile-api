@@ -520,6 +520,12 @@ RESERVATION_REFUSED_CODES = frozenset({
 #: (객실등급)), ``WRT400235``(영화요금입력값오류), ``WRT400356``(여권번호),
 #: ``WRT800053``/``:800074``/``:800075``(휴대폰/국적/이메일).
 INVALID_REQUEST_CODES = frozenset({
+    # ERB000001 "INPUT 값 검증 도중 오류가 발생했습니다." -- 2026-09-22 라이브
+    # 확인: ``get_pbp_acceptance_specifications`` 에 8자리 대신 4자리
+    # ``sale_date`` 를 주면 이 코드가 옵니다(자릿수 규칙은
+    # ``OriginalTicketReference`` docstring). 서버는 이때 ``strResult`` 를
+    # ``SUCC`` 로 주므로 봉투 게이트는 통과하고, 분류만 여기서 걸립니다.
+    "ERB000001",
     "WRG200018", "WRT100002", "WRT100124",
     "WRG200001", "WRG200002", "WRG200003", "WRG200004", "WRG200005",
     "WRG200006", "WRG200007", "WRG200008", "WRG200009", "WRG200010",
