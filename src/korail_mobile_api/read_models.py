@@ -76,10 +76,11 @@ class TicketListTicket:
 class TicketListReservation:
     """``MyTicketListOutReservation.java`` — ``ticket_list`` 만 ``@SerialName``
     이 있고 나머지 15개 멤버는 없습니다(PROTECTED, 코틀린 필드명이 최선).
-    그중 ``addSrvInfo``(부가서비스, ``AddSrvItem`` 객체)와
-    ``ticketKind``(``TicketDefine.TicketKind`` 열거형)는 중첩 타입이 더
-    필요해 아직 스칼라만 모델링했습니다 — 둘 다 :attr:`raw` 로 계속 닿을 수
-    있습니다.
+    그중 ``addSrvInfo``(부가서비스, ``AddSrvItem`` 객체)는
+    :attr:`additional_service`, ``ticketKind``(``TicketDefine.TicketKind``
+    열거형)는 :attr:`ticket_kind` 로 읽습니다. 열거형은 코드값 자체를 읽을 수
+    없어 온 문자열 그대로 둡니다(아래 필드 주석). 물론 둘 다 :attr:`raw` 로도
+    계속 닿을 수 있습니다.
     """
 
     tickets: tuple[TicketListTicket, ...] = ()
@@ -105,6 +106,32 @@ class TicketListReservation:
     is_wheelchair_member: bool | None = None
     is_rail_police_enabled: bool | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    # 아래 둘은 ``raw`` **뒤** 에 붙입니다 — 위 :class:`TicketListTicket` 과 같은
+    # 이유로, 위치 인자로 만들어지는 호출부가 조용히 어긋나지 않게 새 필드는
+    # 언제나 끝에 덧붙입니다.
+    #: ``addSrvInfo`` — 이 예약에 딸린 부가서비스 한 건
+    #: (``MyTicketListOutReservation.java:39``, 타입 ``AddSrvItem``).
+    #: ``AddSrvItem`` 은 MaaS 상세 목록의 행과 **같은 DTO** 이므로
+    #: (``MaasDetailOut.java:27`` 의 ``List<AddSrvItem> addSrvList``)
+    #: :class:`MaasServiceDetail` 을 그대로 재사용합니다
+    #: (``AddSrvItem.java:28-49``, 문자열 21개 + ``detailInfo``).
+    #: 이 멤버에도 ``@SerialName`` 이 없어 키(``addSrvInfo``)는 형제 스칼라들과
+    #: 마찬가지로 코틀린 필드명 추측입니다.
+    additional_service: MaasServiceDetail | None = field(default=None, repr=False)
+    #: ``ticketKind`` — ``MyTicketListOutReservation.java:52``, 타입은
+    #: ``TicketDefine.TicketKind`` 열거형(``TicketDefine.java:1078-1131``, 10개).
+    #: **열거형으로 모델링하지 않고 온 문자열 그대로 둡니다.** 직렬화기가
+    #: ``EnumsKt.createSimpleEnumSerializer`` 로 만들어지는데
+    #: (``MyTicketListOutReservation.java:59``)
+    #: 각 항목의 이름 인자가 ``AlienGuard...method_name_*`` 암호문이라
+    #: (``TicketDefine.java:1092-1094,1113-1130``) 와이어에 실제로 실리는
+    #: 문자열을 읽을 수 없습니다 — jadx 가 보여주는 식별자
+    #: (GENERAL/AIRPORT_BUS/SEAT_ASSIGN/MAAS/COMMUTATION/N_CARD/PASS/
+    #: PASS_SUBURBAN_ONE_DAY/RAIL/KORAIL_PASS)가 그 문자열과 같다는 근거가 없어
+    #: 매핑을 만들지 않았습니다. 앱 기본값은 ``GENERAL`` 이고 직렬화기는 기본값과
+    #: 같으면 키를 아예 생략하므로(``MyTicketListOutReservation.java:134,261``)
+    #: ``None`` 과 ``GENERAL`` 은 구분되지 않습니다.
+    ticket_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -143,6 +170,46 @@ class CartItem:
     customer_no: str | None = field(default=None, repr=False)
     virtual_reservation_no: str | None = field(default=None, repr=False)
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    # ``CartInfo.java`` 는 28개 문자열 필드(선언 28-61행) 전부에 평문
+    # ``@SerialName`` 을 답니다(281-392행). 위에서 16개만 읽고 있었으므로 남은
+    # 열둘을 아래에 덧붙입니다 — ``raw`` **뒤** 인 이유는
+    # :class:`TicketListTicket` 과 같습니다(위치 인자 안전).
+    #: ``h_item_dv_cd`` — :attr:`item_type`(``h_item_dv_nm``)의 코드 짝
+    #: (``CartInfo.java:38``, ``@SerialName`` 은 같은 파일 317행). 앱은 이 코드로
+    #: 장바구니 행을 갈라 보지만(``BasketTicketViewModel.java:4186,4295``) 비교
+    #: 리터럴이 AlienGuard 로 보호돼 있어 코드값 표는 확인하지 못했습니다.
+    item_type_code: str | None = None
+    #: ``h_add_srv_mrk_ent_id`` — :attr:`provider_name`(``h_add_srv_mrk_ent_nm``,
+    #: ``CartInfo.java:32``)의 ID 짝(``CartInfo.java:31``, ``@SerialName`` 289행).
+    provider_id: str | None = field(default=None, repr=False)
+    #: ``h_item_sqno``/``h_jrny_sqno``/``h_jrny_tp_cd`` — 이 행의 항목 일련번호,
+    #: 여정 일련번호, 여정 구분 코드(``CartInfo.java:40,41,42``, ``@SerialName``
+    #: 325/329/333행). 뒤의 둘은 예약·영수증 쪽에서 쓰는 이름을 그대로 씁니다.
+    item_sequence: str | None = field(default=None, repr=False)
+    journey_sequence: str | None = field(default=None, repr=False)
+    journey_type_code: str | None = None
+    #: ``utlClsDt`` — :attr:`usage_close_time`(``utlClsTm``)의 날짜 짝
+    #: (``CartInfo.java:56``, ``@SerialName`` 377행). 앱도 둘을 이어 붙여 한
+    #: 일시로 씁니다(``PayTicketContentKt.java:5234``:
+    #: ``getUtlClsDt() + getUtlClsTm()``). 시작 쪽 짝인 :attr:`usage_start_date`
+    #: 는 이미 있었고 종료 쪽만 날짜가 빠져 있었습니다.
+    usage_close_date: str | None = None
+    #: ``h_stl_lmt_tm`` — 결제 기한(``CartInfo.java:49``, ``@SerialName`` 361행).
+    #: 앱은 장바구니 행들 중 가장 늦은 값을 고른 뒤 이 값 **하나만** 으로 남은
+    #: 초를 셉니다(``PayViewModel.java:11666-11678`` →
+    #: ``DateTimeExKt.java:407-431``). 즉 시각 조각이 아니라 그 자체로 완결된
+    #: 기한 문자열입니다. 다만 파싱에 쓰는 ``SimpleDateFormat`` 패턴이
+    #: AlienGuard 로 보호돼 있어 정확한 자릿수·형식은 확인하지 못했습니다.
+    settlement_limit_time: str | None = None
+    #: 아래 다섯은 ``CartInfo`` 가 선언만 하고(``CartInfo.java:48,50,36,47,35``,
+    #: ``@SerialName`` 357/365/309/353/305행) 디컴파일 어디에서도 게터를 읽는
+    #: 화면 코드를 찾지 못했습니다. 이름은 와이어 키를 그대로 옮긴 것이고 의미는
+    #: 미확인입니다 — 값 해석은 호출자 몫입니다.
+    settlement_extension_transaction_no: str | None = field(default=None, repr=False)
+    settlement_means_allow_value: str | None = None
+    field_settlement_division: str | None = None
+    supervising_station_code: str | None = None
+    filler: str | None = field(default=None, repr=False)
 
     @property
     def usage_window(

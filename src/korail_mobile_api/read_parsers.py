@@ -155,9 +155,23 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
             )
         # MyTicketListOutReservation.java — only ticket_list has an explicit
         # @SerialName; the rest are PROTECTED (Kotlin field names used as
-        # best-effort keys). addSrvInfo (AddSrvItem) and ticketKind
-        # (TicketDefine.TicketKind, an enum) are left unmodeled — they need
-        # their own nested types — and stay reachable through `raw`.
+        # best-effort keys). addSrvInfo (AddSrvItem, :39) is read through the
+        # shared AddSrvItem reader, and ticketKind (TicketDefine.TicketKind,
+        # :52) is kept as the raw string that arrives — the enum's serialized
+        # names are AlienGuard ciphertext (TicketDefine.java:1092-1130), so no
+        # code mapping is claimed. Both stay reachable through `raw` as before.
+        add_srv_raw = _optional_mapping(
+            reservation_raw, "addSrvInfo", "ticket list reservation"
+        )
+        additional_service = (
+            None
+            if add_srv_raw is None
+            else _parse_add_srv_item(
+                add_srv_raw,
+                "ticket list addSrvInfo",
+                "ticket list addSrvInfo detailInfo",
+            )
+        )
         reservations.append(
             TicketListReservation(
                 tickets=tuple(tickets),
@@ -201,6 +215,10 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
                     reservation_raw, "isRailPoliceEnabled", "ticket list reservation"
                 ),
                 raw=reservation_raw,
+                additional_service=additional_service,
+                ticket_kind=_optional_string(
+                    reservation_raw, "ticketKind", "ticket list reservation"
+                ),
             )
         )
     return TicketListResponse(
@@ -574,6 +592,32 @@ _CART_ITEM_FIELDS: dict[str, str] = {
     "lump_sum_target_no": "h_lump_stl_tgt_no",
     "customer_no": "h_cust_no",
     "virtual_reservation_no": "h_vr_rsv_no",
+}
+
+# CartInfo.java 는 28개 문자열 필드(선언 28-61행) **전부** 에 평문
+# ``@SerialName`` 을 답니다(281-392행). 위 지도 + ``h_tk_cnt`` 로 16개를 읽고
+# 있었으므로, 나머지 열둘을 여기서 읽습니다.
+#
+# 엄격한 ``_nullable_string_fields`` 가 아니라 스칼라 쪽인 이유: 장바구니
+# 응답의 라이브 캡처가 없어 KORAIL 이 숫자꼴 키(``h_item_sqno``,
+# ``h_jrny_sqno``, ``h_stl_lmt_tm`` …)를 JSON 정수로 보내는지 확인할 수
+# 없습니다. 앱 DTO 의 ``String`` 선언을 그대로 믿었다가 정수가 오면 행 전체가
+# KorailProtocolError 로 죽습니다 — ``h_srcar_no`` 에서 이미 겪은 일입니다.
+# ``_optional_scalar_string`` 은 문자열과 정수를 모두 받아 문자열로
+# 정규화하므로 지금 되는 응답을 깨뜨릴 수 없습니다(기존 16개는 그대로 둡니다).
+_CART_ITEM_SCALAR_FIELDS: dict[str, str] = {
+    "item_type_code": "h_item_dv_cd",
+    "provider_id": "h_add_srv_mrk_ent_id",
+    "item_sequence": "h_item_sqno",
+    "journey_sequence": "h_jrny_sqno",
+    "journey_type_code": "h_jrny_tp_cd",
+    "usage_close_date": "utlClsDt",
+    "settlement_limit_time": "h_stl_lmt_tm",
+    "settlement_extension_transaction_no": "h_stl_extns_tno",
+    "settlement_means_allow_value": "h_stl_mns_allw_val",
+    "field_settlement_division": "h_fld_stl_dv",
+    "supervising_station_code": "h_spvs_rs_stn_cd",
+    "filler": "h_filler",
 }
 
 _DEPOSIT_BANK_FIELDS: dict[str, str] = {
@@ -1154,6 +1198,9 @@ def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
         items.append(
             CartItem(
                 **_nullable_string_fields(item, _CART_ITEM_FIELDS, "cart item"),
+                **_nullable_scalar_fields(
+                    item, _CART_ITEM_SCALAR_FIELDS, "cart item"
+                ),
                 # CartInfo.java:51 declares h_tk_cnt as String, not int.
                 ticket_count=_optional_string(item, "h_tk_cnt", "cart item"),
                 raw=item,
@@ -2285,36 +2332,48 @@ def parse_customer_trip_info_response(
     )
 
 
+def _parse_add_srv_item(
+    item: Mapping[str, Any],
+    context: str,
+    info_context: str,
+) -> MaasServiceDetail:
+    """``AddSrvItem`` 한 건(``AddSrvItem.java:28-49``).
+
+    이 DTO 는 두 곳에서 같은 모양으로 옵니다 — MaaS 상세 목록의 행
+    (``MaasDetailOut.java:27`` 의 ``List<AddSrvItem> addSrvList``)과 승차권 목록
+    예약 행의 ``addSrvInfo``(``MyTicketListOutReservation.java:39``). 그래서
+    :class:`MaasServiceDetail` 하나로 읽습니다. ``AddSrvItem`` 에는
+    ``@SerialName`` 이 하나도 없어 키는 전부 코틀린 필드명입니다.
+    """
+    info_raw = _optional_mapping(item, "detailInfo", context)
+    detail_info = None
+    if info_raw is not None:
+        entity_one = tuple(
+            _row(v, f"{context} detailInfo entityOne")
+            for v in _optional_list(info_raw, "entityOne", info_context)
+        )
+        detail_info = MaasServiceDetailInfo(
+            **_nullable_string_fields(
+                info_raw, _MAAS_DETAIL_INFO_FIELDS, info_context
+            ),
+            entity_one=entity_one,
+            raw=info_raw,
+        )
+    return MaasServiceDetail(
+        **_nullable_string_fields(item, _MAAS_DETAIL_FIELDS, context),
+        detail_info=detail_info,
+        raw=item,
+    )
+
+
 def parse_maas_service_detail_list_response(
     raw: Mapping[str, Any],
 ) -> MaasServiceDetailListResponse:
     _validate_strict_read_envelope(raw)
     details = []
     for item in _rows(raw, "addSrvList", "MaaS service details"):
-        info_raw = _optional_mapping(item, "detailInfo", "MaaS service detail")
-        detail_info = None
-        if info_raw is not None:
-            entity_one = tuple(
-                _row(v, "MaaS service detail detailInfo entityOne")
-                for v in _optional_list(info_raw, "entityOne", "MaaS detail info")
-            )
-            detail_info = MaasServiceDetailInfo(
-                **_nullable_string_fields(
-                    info_raw, _MAAS_DETAIL_INFO_FIELDS, "MaaS detail info"
-                ),
-                entity_one=entity_one,
-                raw=info_raw,
-            )
         details.append(
-            MaasServiceDetail(
-                **_nullable_string_fields(
-                    item,
-                    _MAAS_DETAIL_FIELDS,
-                    "MaaS service detail",
-                ),
-                detail_info=detail_info,
-                raw=item,
-            )
+            _parse_add_srv_item(item, "MaaS service detail", "MaaS detail info")
         )
     return MaasServiceDetailListResponse(
         details=tuple(details),
