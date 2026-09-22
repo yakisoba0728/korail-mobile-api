@@ -42,6 +42,21 @@ class KorailApiError(Exception):
 
     문자열 인자는 :func:`~korail_mobile_api.redaction.redact_text` 를 거칩니다.
 
+    **마스킹의 경계**(2026-09-23 확인). 가려지는 것은 예외 **자신의 문자열
+    인자**뿐입니다. 다음은 가려지지 않습니다:
+
+    * ``__cause__`` — ``raise ... from exc`` 로 엮인 원래 예외. 예를 들어
+      ``httpx.ConnectError`` 의 문구에는 쿼리까지 붙은 URL 이 그대로 들어
+      있습니다. ``traceback.format_exception`` 도 그 줄을 찍습니다.
+    * :attr:`raw`·:attr:`message` — 서버 원본을 **일부러** 보존합니다.
+
+    원래 예외를 끊지 않는 이유는, 그것이 ``ConnectError`` 인지 ``ReadTimeout``
+    인지 SSL 오류인지가 호출자에게 실제로 필요한 정보이기 때문입니다.
+    ``from None`` 으로 지우면 그 진단이 통째로 사라집니다.
+
+    그래서 **예외 체인이나 traceback 을 찍는 쪽이 로깅 경계에서 다시
+    가려야 합니다.** ``str(error)`` 만 찍는다면 그대로 안전합니다.
+
     세 속성은 **여기서 기본값을 보장합니다.** 하위 클래스 절반만 채우던 것이라,
     ``except KorailApiError as error: error.code`` 가 전송 실패나 프로토콜 오류에서
     ``AttributeError`` 로 죽었습니다. 이제 채우지 않는 예외에서는 ``None`` 입니다.

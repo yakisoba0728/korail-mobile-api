@@ -12,6 +12,7 @@ KORAIL 이 한 필드를 행 번호 붙은 여러 키로 쓰기 때문(``custMgN
 """
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
@@ -556,13 +557,24 @@ def is_sensitive_key(name: str) -> bool:
 # some older Visa numbers) in UNSTRUCTURED text with no key context -- the
 # PRIMARY defense for a known card_number field is still its SENSITIVE_KEYS
 # registration, unaffected by this regex either way.
+_WHITESPACE_RE = re.compile(r"\s")
+
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){14,19}\b")
 SESSION_RE = re.compile(r"(?i)(JSESSIONID=)[^&;\s]+")
+#: 키의 ``_`` 는 퍼센트 인코딩된 ``%5F`` 로도 실려 옵니다. 절대 URL 은
+#: :func:`redact_url` 이 키를 디코딩해서 보지만 텍스트 경로는 못 봤습니다 —
+#: 같은 값이 진입점에 따라 갈렸습니다(2026-09-23 확인). 여기서 다루는 것은
+#: ``_`` 하나뿐입니다: 민감 키 이름에 실제로 들어가는 비영숫자가 그것뿐이고,
+#: 임의의 문자까지 인코딩된 형태는 이 경로가 **다루지 않습니다**.
+def _percent_tolerant(key: str) -> str:
+    return re.escape(key).replace("_", "(?:_|%5[Ff])")
+
+
 SENSITIVE_KEY_VALUE_RE = re.compile(
     r"(?P<prefix>(?<![\w-])(?P<key_quote>[\"']?)(?:"
     + "|".join(
         sorted(
-            (re.escape(key) for key in SENSITIVE_KEYS),
+            (_percent_tolerant(key) for key in SENSITIVE_KEYS),
             key=len,
             reverse=True,
         )
@@ -573,16 +585,31 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
     # 매치가 안 됐기 때문입니다.
     + r")"
     + _INDEX_SUFFIX_PATTERN
-    + r"?(?P=key_quote)(?![\w-])\s*(?:=|:)\s*)"
-    # 인용하지 않은 값은 **구분자에서 멈춥니다**. ``&`` 와 ``;`` 를 빼지
-    # 않았을 때 ``txtSeatNo1_=X&trnNo1=Y`` 의 ``&trnNo1=Y`` 까지 한 값으로
-    # 먹혀서 비민감 쿼리가 함께 사라졌습니다 — 누출은 아니지만 진단 문자열이
-    # 통째로 없어집니다(2026-09-23 확인). 값 안에 날 ``&``·``;`` 가 들어가는
-    # 민감 필드는 없습니다: URL 이면 퍼센트 인코딩이고, JSON 이면 위의 인용
-    # 대안이 받습니다.
+    + r"?(?P=key_quote)(?![\w-])\s*(?:(?P<eq>=)|:)\s*)"
+    # 값의 끝을 어디로 볼지는 **묶는 기호에 따라 다릅니다**. 한 규칙으로
+    # 밀어붙였다가 실제로 누출을 만들었습니다: ``&``/``;`` 를 값에서 무조건
+    # 빼도록 고쳤더니 구분자가 값 **안**에 있는 ``Cookie: a=1;other=<비밀>``
+    # 과 ``txtPwd=HEAD&<비밀>`` 의 꼬리가 평문으로 남았습니다(2026-09-23).
+    # 과잉 마스킹을 누출과 바꾼 셈이라 방향이 틀렸습니다 — 마스킹은 애매하면
+    # 더 가리는 쪽이어야 합니다.
+    #
+    # * ``:`` 로 묶이면(헤더·산문) 값은 공백/쉼표까지 그대로 갑니다. 쿠키
+    #   헤더의 ``;`` 와 ``=`` 는 값의 일부입니다.
+    # * ``=`` 로 묶이면(쿼리 파라미터) ``&``/``;`` 는 **뒤에 새 ``키=`` 가
+    #   따라올 때만** 값을 끝냅니다. 그래야 ``txtSeatNo1_=X&trnNo1=Y`` 의
+    #   이웃은 살고, ``txtPwd=HEAD&<비밀>`` 의 꼬리는 함께 가려집니다.
     + r'(?P<value>"(?:\\.|[^"\\])*(?:"|$)'
     + r"|'(?:\\.|[^'\\])*(?:'|$)"
-    + r"|[^\s,&;]+)",
+    # 직렬화된 배열·객체는 한 덩어리로 먹습니다. scalar 정규식으로 다루면
+    # ``{"hidDscpNo": ["a", "<비밀>"]}`` 가 첫 원소만 가려졌습니다.
+    + r"|\[[^\[\]]*\]"
+    + r"|\{[^{}]*\}"
+    # ``=`` 묶음: 값이 그 자체로 ``키=`` 로 시작하면 그것은 값이 아니라
+    # **다음 필드**입니다. 앞의 ``\s*`` 가 공백을 넘어가서
+    # ``h_sgr_nm_1= trnNo1=Y`` 의 ``trnNo1=Y`` 를 값으로 먹던 자리입니다.
+    + r"|(?(eq)(?![\w.\[\]-]+\s*=)[^\s,]+?"
+    + r"(?=(?:[&;](?=[\w.%\[\]-]+=))|[\s,]|$)"
+    + r"|[^\s,]+))",
     re.IGNORECASE,
 )
 
@@ -599,8 +626,37 @@ def _redact_sensitive_key_value(match: re.Match[str]) -> str:
     return f"{match.group('prefix')}{quote}[REDACTED]{quote}"
 
 
+def _redact_json_document(value: str) -> str | None:
+    """문자열 전체가 JSON 이면 **구조로** 가리고 다시 직렬화합니다. 아니면 ``None``.
+
+    정규식으로는 닿지 않는 두 모양을 여기서 받습니다:
+
+    * escape 된 키 — ``{"h\\u005fsgr\\u005fnm_1": "..."}`` 는 텍스트에서
+      민감 키로 보이지 않지만, 파싱하면 ``h_sgr_nm_1`` 입니다.
+    * 중첩된 배열·객체 — 키의 민감성은 값 **트리 전체**에 걸립니다.
+
+    파싱에 실패하면 손대지 않고 정규식 경로로 넘깁니다. 다시 직렬화하므로
+    공백 같은 원본 서식은 보존되지 않습니다 — 로그 한 줄이 통째로 JSON 인
+    경우에만 타는 길이라 그 편이 낫다고 봤습니다.
+    """
+    stripped = value.strip()
+    if not stripped or stripped[0] not in "{[":
+        return None
+    try:
+        parsed = json.loads(stripped)
+    except (ValueError, TypeError, RecursionError):
+        return None
+    try:
+        return json.dumps(redact_value(parsed), ensure_ascii=False)
+    except (TypeError, ValueError, RecursionError):
+        return None
+
+
 def redact_text(value: str) -> str:
     """문자열에서 카드번호·세션·민감 키값을 가립니다."""
+    as_json = _redact_json_document(value)
+    if as_json is not None:
+        return as_json
     redacted = CARD_RE.sub("[REDACTED_CARD]", value)
     redacted = SENSITIVE_KEY_VALUE_RE.sub(
         _redact_sensitive_key_value,
@@ -614,7 +670,10 @@ def redact_url(value: str) -> str:
 
     경로도 봐야 하는 이유: 서블릿은 쿠키가 없으면 세션을 ``;jsessionid=...`` 로
     경로에 붙이고, fragment 에는 ``key=value`` 가 그대로 실릴 수 있습니다.
-    scheme/netloc 없으면 :func:`redact_text` 로 폴백.
+    폴백 규칙: scheme/netloc 이 없으면 보통 :func:`redact_text` 로 갑니다.
+    **예외가 하나 있습니다** — 경로가 ``/`` 로 시작하고 쿼리에 공백이 없으면
+    상대 URL 로 보고 쿼리를 키 단위로 처리합니다. 그렇게 하지 않으면 퍼센트
+    인코딩된 키가 절대 URL 로는 가려지고 상대 URL 로는 남았습니다.
     """
     try:
         parsed = urlsplit(value)
@@ -636,11 +695,15 @@ def redact_url(value: str) -> str:
     # ``"오류? a=b"`` 같은 **평범한 문장**이 URL 로 해석돼서 ``urlencode`` 에
     # 뭉개집니다 — 이 함수는 :func:`redact_value` 를 통해 임의의 문자열에
     # 불리므로 그쪽이 훨씬 흔합니다.
+    # ``/`` 로 시작한다는 것만으로는 부족했습니다: ``/로그? a=b 입니다`` 같은
+    # **문장**이 쿼리로 해석돼 공백이 ``+`` 로 바뀌었습니다(2026-09-23 확인).
+    # 진짜 쿼리 문자열에는 인코딩되지 않은 공백이 없으므로 그것으로 가릅니다.
     relative_with_query = (
         not parsed.scheme
         and not parsed.netloc
         and parsed.query
         and parsed.path.startswith("/")
+        and not _WHITESPACE_RE.search(parsed.query)
     )
     if (not parsed.scheme or not parsed.netloc) and not relative_with_query:
         return redact_text(value)
