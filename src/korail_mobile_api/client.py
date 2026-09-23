@@ -1708,16 +1708,28 @@ class KorailClient:
     def cancel_unpaid_hold(
         self,
         hold: ReservationHoldResponse,
+        *,
+        check_first: bool = True,
     ) -> BaseKorailResponse:
-        """미결제 홀드를 취소합니다. 앱의 두 단계 중 ReservationCancelChk 만 호출합니다. 2026-07-31 직통은 IRG000000,
-        2026-07-26·2026-07-31 환승은 한 PNR 의 두 여정이 함께 해제됐습니다. 이 표본이 모든 취소 경로의 동일 동작을 보장하지는 않습니다.
+        """미결제 홀드를 취소합니다. 앱처럼 ``ReservationCancel`` 로 먼저 취소 가능 여부를 묻고
+        (``MyReservationViewModel.java:1557,1720-1745`` — 성공이면 확인창, 아니면 ``h_msg_txt`` 안내)
+        그다음 ``ReservationCancelChk`` 로 취소합니다(``:1566``). 두 요청의 폼은 같습니다.
+        확인 단계가 FAIL 이면 코드에 맞는 예외이고 취소는 보내지 않습니다. ``check_first=False`` 면
+        바로 취소합니다.
+
+        2026-09-24: 확인 단계는 SUCC/IRR000011("여정취소 가능합니다.")이었고 그 뒤에도 홀드가
+        남아 있었습니다(확인만 함). 취소는 IRG000000. 2026-07-26·31 환승은 한 PNR 의 두 여정이
+        함께 풀렸습니다.
         """
         self._require_session("cancellation requires")
-        route = (
-            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
-        )
         form = build_unpaid_reservation_cancel_form(self.config, hold)
-        return self._mutation(route, form)
+        if check_first:
+            self._mutation(
+                "/classes/com.korail.mobile.reservationCancel.ReservationCancel", form
+            )
+        return self._mutation(
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk", form
+        )
 
     def pay_with_fake_card(
         self,
