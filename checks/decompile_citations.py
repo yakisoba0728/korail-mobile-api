@@ -44,6 +44,9 @@ def looks_like_class(name):
     if "/" in name: return True
     return bool(re.search(r"[a-z][A-Z]", name.rsplit("/", 1)[-1]))
 
+INCOMPLETE: list[str] = []
+
+
 def _source_files(root: pathlib.Path):
     """읽을 수 있는 ``.py`` 만. 못 읽는 파일은 건너뛰고 알립니다.
 
@@ -53,10 +56,15 @@ def _source_files(root: pathlib.Path):
     (2026-09-23).
     """
     for path in sorted(root.glob("*.py")):
+        if path.name.startswith("._"):
+            continue  # macOS AppleDouble — 소스가 아닙니다.
         try:
             yield path, path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError) as error:
-            print(f"  건너뜀: {path.name} ({type(error).__name__})")
+            # **실제 소스**를 못 읽었으면 검사가 완료된 것이 아닙니다. 건너뜀만
+            # 출력하고 성공으로 끝내던 것을 고쳤습니다(2026-09-23 외부 감사).
+            print(f"  읽지 못함: {path.name} ({type(error).__name__})")
+            INCOMPLETE.append(path.name)
 
 
 ANALYSIS = pathlib.Path("analysis")
@@ -106,7 +114,14 @@ for py, _text in _source_files(pathlib.Path("src/korail_mobile_api")):
             base = t.rsplit("/", 1)[-1]
             cands = by_base.get(base, []) if has_ext else by_stem.get(base, [])
             if "/" in t and cands:
-                cands = [c for c in cands if c.endswith(t)]
+                # 확장자 생략형이면 후보의 확장자를 떼고 비교해야 합니다.
+                # ``c`` 는 ``.java`` 로 끝나는데 ``t`` 에는 확장자가 없어서,
+                # 실재하는 ``pkg/TestCase.java`` 를 ``pkg/TestCase:1`` 로 인용하면
+                # 후보가 전부 지워져 "없음"으로 오판했습니다(2026-09-23 확인).
+                cands = [
+                    c for c in cands
+                    if (c if has_ext else c.rsplit(".", 1)[0]).endswith(t)
+                ]
             start = int(m.group("line"))
             end = int(m.group("end") or m.group("line"))
             bad = None
@@ -138,5 +153,8 @@ for r in sorted(unexpl): print(f"  {r[0]}:{r[1]}  {r[2]}  [{r[3]}]")
 # 실패·스킵·입력 부재를 모두 0 으로 끝내면 자동 점검의 관문으로 쓸 수 없습니다.
 if total == 0:
     print("인용을 하나도 못 찾았습니다 — 저장소 루트에서 실행했습니까?")
+    raise SystemExit(2)
+if INCOMPLETE:
+    print("검사 불완전 — 읽지 못한 소스:", ", ".join(INCOMPLETE))
     raise SystemExit(2)
 raise SystemExit(1 if unexpl else 0)

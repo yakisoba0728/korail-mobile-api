@@ -40,11 +40,24 @@ def _two_entries(v):
     return out
 
 
+def _pairs(text):
+    """JSON 을 **순서 있는 (키, 값) 목록**으로. dict 로 받으면 중복이 사라집니다."""
+    return json.loads(text, object_pairs_hook=lambda items: items)
+
+
 def _dup_kept(v):
-    """중복 키가 **둘 다** 살아남았는지. 개수까지 셉니다."""
+    """중복 키의 순서 있는 (키, 값) 대응이 **그대로**인지.
+
+    예전에는 키 문자열의 출현 횟수와 값 문자열의 존재만 봐서, 두 값이 모두
+    ``SECOND`` 가 되고 ``FIRST`` 는 다른 키로 옮겨 간 출력도 통과했습니다
+    (2026-09-23 확인). 이제 원래 쌍 목록과 통째로 비교합니다.
+    """
     out = redact_text(v)
-    if out.count('"public"') < 2:
-        return out + " <<DUP_DROPPED>>"
+    try:
+        if _pairs(out) != _pairs(v):
+            return out + " <<PAIRS_CHANGED>>"
+    except ValueError:
+        return out + " <<BROKEN_JSON>>"
     return out
 
 
@@ -101,6 +114,28 @@ CASES = [
  ("exc/str",       f"failed h_sgr_nm_1={SEC}&trnNo1={PUB}", lambda s: str(KorailApiError(s)), [SEC],[PUB]),
  # --- 파싱 불가 입력에서 예외 금지
  ("robust/badurl", "https://[invalid",                    redact_value,[], []),
+ # --- v7 회귀: JSON **안의** 로그 문자열. 이 사례가 없어서, 그 수정을
+ # 되돌린 변이가 하네스를 그대로 통과했습니다(2026-09-23 확인).
+ ("v7/json_inner",  '{"detail":"txtPwd=%s"}' % SEC,
+                    redact_text, [SEC], ["detail"]),
+ ("v7/json_inner2", '["txtPwd=%s"]' % SEC,                 redact_text, [SEC], []),
+ ("v7/json_inner3", '{"a":{"b":"Cookie: a=%s"}}' % SEC, redact_text, [SEC], []),
+ # --- v8 회귀: 로그 전체의 escape 를 먼저 풀면 값 안의 \u0022 가 따옴표가 됨
+ ("v8/esc_quote",   'INFO {"txtPwd":"HEAD\\u0022%s"}' % SEC, redact_text, [SEC], []),
+ # --- v8 회귀: 공개 값의 리터럴 escape 는 그대로여야 함
+ ("v8/esc_literal", '{"detail":"\\\\u0061"}',            redact_text, [], ["u0061"]),
+ ("v8/esc_path",    "file C:\\u0041\\u0042\\report.txt",
+                    redact_text, [], ["u0041", "u0042"]),
+ # --- 접두 산문 + escape 된 키 (키 쪽 패턴이 받아야 함)
+ # --- v8: 접두 산문 + 배열/객체 안 문자열의 ``]``·``}``
+ # --- 인덱스 접미사 앞 밑줄까지 escape 된 키 (전 레지스트리 시험에서 1,571건)
+ ("v8/esc_suffix",
+  'INFO {"h\\u005fsgr\\u005fnm\\u005f1":"%s"}' % SEC,
+  redact_text, [SEC], []),
+ ("v8/prefix_arr",  'INFO {"txtPwd":["]","%s"]}' % SEC,     redact_text, [SEC], []),
+ ("v8/prefix_obj",  'INFO {"txtPwd":{"a":"}","b":"%s"}}' % SEC, redact_text, [SEC], []),
+ ("v8/esc_key",     'INFO {"h\\u005fsgr\\u005fnm_1":"%s"}' % SEC,
+                    redact_text, [SEC], []),
  # --- v5 회귀: '=' 를 품은 값 (base64 패딩 포함)
  ("v5/base64pad2",  "txtPwd=U0VDUkVUQQ==",                 redact_text, ["U0VDUkVUQQ"], []),
  ("v5/base64pad1",  "txtPwd=U0VDUkVUQUI=",                 redact_text, ["U0VDUkVUQUI"], []),
