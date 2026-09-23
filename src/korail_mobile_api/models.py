@@ -390,6 +390,7 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
     ("standing_remaining_seat_count", "h_stnd_rest_seat_cnt", None),
     ("free_car_count", "h_free_sracar_cnt", None),
     ("reservation_wait_passenger_count", "h_rsv_wait_ps_cnt", None),
+    ("train_sequence", "h_trn_seq", None),
     ("change_train_sequence", "h_chg_trn_seq", None),
     ("change_train_division_code", "h_chg_trn_dv_cd", None),
     ("merge_seat_application_flag", "h_yms_apl_flg", None),
@@ -467,12 +468,16 @@ class TrainSummary:
     reservation_wait_passenger_count: str | None = None
     total_passenger_count: int | None = None
     goods_no: str | None = None
+    #: h_trn_seq — 환승 여정 번호. 앱은 이 값으로 환승 행을 묶습니다
+    #: (TrainScheduleViewModel.smali:36958-37040, TrainScheduleOutTrainInfo.java:1464).
+    #: 2026-09-24 강릉→목포: 여정마다 000/001, 여정 안의 두 구간이 같은 값.
+    train_sequence: str | None = None
     #: h_chg_trn_seq 는 구간 순서(TrainScheduleOutTrainInfo.java:53,172,1112; TrainList.java:35,234).
     #: 2026-09-22 관측: 직통 6질의의 행도 모두 1, 환승 6여정 12구간은 1/2였습니다. 따라서 이 값의 존재만으로 환승을 판정할 수 없습니다. 여정 종류
     #: h_chg_trn_dv_cd 와도 다릅니다.
     change_train_sequence: str | None = None
     #: h_chg_trn_dv_cd 는 여정 종류. 2026-09-22 직통 6질의는 1/직통, 환승 6여정 12구간은 2/환승을 관측했습니다. 이 값은 검색 job id 와
-    #: 별개입니다. 환승 묶음 정책은 pair_transfer_itineraries 참고.
+    #: 별개입니다. 환승 묶음은 pair_transfer_itineraries 참고.
     change_train_division_code: str | None = None
     #: h_yms_apl_flg 선언: TrainScheduleOutTrainInfo.java:147,1480. 같은 DTO 의
     #: isCombination/isSpecialCombination 이 판정에 사용합니다 (TrainScheduleOutTrainInfo.java:1500-1552). 비교
@@ -690,6 +695,9 @@ class TrainSearchResult:
         조합도 같은 10행을 반환한 기록이 있지만 모든 조건에서 페이지가 없다고 일반화할 수는 없습니다. 필요하면 next_query_from_last_departure 로
         별도 질의를 만드십시오.
         """
+        # 앱은 결과 목록이 비어 있으면 다음 페이지를 부르지 않습니다(TrainScheduleViewModel.smali:36786-36804).
+        if not self.trains:
+            return None
         metadata = self.metadata
         return _train_search_continuation(
             metadata, query_train_no=metadata.next_train_no or ""
@@ -716,7 +724,7 @@ class TrainSearchResult:
 
 @dataclass(frozen=True)
 class TransferItinerary:
-    """두 구간의 환승 여정. 위치 기반 짝짓기는 pair_transfer_itineraries 의 라이브러리 정책입니다. h_trn_seq 와 h_chg_trn_seq 는 서로 다른
+    """두 구간의 환승 여정. 묶는 규칙은 pair_transfer_itineraries 참고. h_trn_seq 와 h_chg_trn_seq 는 서로 다른
     DTO 원소입니다 (TrainScheduleOutTrainInfo.java:1464,1112). 같은 값이라고 가정하지 마십시오.
     """
 
@@ -746,16 +754,27 @@ class TransferItinerary:
 def pair_transfer_itineraries(
     trains: list[TrainSummary],
 ) -> list[TransferItinerary]:
-    """인접한 두 행씩 묶고 짝 없는 마지막 행은 버립니다. h_chg_trn_seq 가 있으면 1/2 순서를 검증해 서로 다른 여정의 결합을 막습니다. 표시가 없으면 위치만
-    사용합니다. 2026-09-21 강릉→목포 관측으로 확인한 정책이며 앱의 동일 구현을 증명하지는 않습니다. 기존 앱 h_trn_seq 그룹핑 근거는
-    TrainScheduleViewModel.smali:36958-37040 입니다. jadx 복원 실패와 smali 미제공으로 그 재구성은 현재 자료에서 재검증하지 못했습니다.
+    """환승 행을 여정으로 묶습니다. 앱처럼 ``h_trn_seq``(:attr:`TrainSummary.train_sequence`)가 같은
+    행끼리 처음 나온 순서대로 묶습니다(TrainScheduleViewModel.smali:36958-37040 의 LinkedHashMap
+    groupBy). 두 구간이 아닌 묶음은 여정으로 만들지 않고 ``trains`` 에만 남습니다. 한 행이라도
+    ``h_trn_seq`` 가 없으면 인접한 두 행씩 짝짓습니다. 어느 쪽이든 ``h_chg_trn_seq`` 가 있으면
+    1/2 순서를 확인합니다.
     """
+    groups: list[list[TrainSummary]]
+    if trains and all(t.train_sequence for t in trains):
+        by_sequence: dict[str, list[TrainSummary]] = {}
+        for train in trains:
+            by_sequence.setdefault(train.train_sequence or "", []).append(train)
+        groups = list(by_sequence.values())
+    else:
+        groups = [trains[i:i + 2] for i in range(0, len(trains) - 1, 2)]
     itineraries: list[TransferItinerary] = []
-    for index in range(0, len(trains) - 1, 2):
-        first = trains[index]
-        second = trains[index + 1]
+    for index, group in enumerate(groups):
+        if len(group) != 2:
+            continue
+        first, second = group
         _assert_leg_sequence(first, index, KORAIL_DIRECT_ITINERARY_CODE)
-        _assert_leg_sequence(second, index + 1, KORAIL_TRANSFER_ITINERARY_CODE)
+        _assert_leg_sequence(second, index, KORAIL_TRANSFER_ITINERARY_CODE)
         itineraries.append(TransferItinerary(first=first, second=second))
     return itineraries
 
@@ -768,14 +787,14 @@ def _assert_leg_sequence(
     sequence = train.change_train_sequence
     if sequence is not None and sequence.strip() and sequence != expected:
         raise KorailProtocolError(
-            "KORAIL transfer search returned a misaligned leg: row "
-            f"{index} carries h_chg_trn_seq {sequence!r}, expected {expected!r}"
+            "KORAIL transfer search returned a misaligned leg: "
+            f"itinerary {index} carries h_chg_trn_seq {sequence!r}, expected {expected!r}"
         )
 
 
 @dataclass(frozen=True)
 class TransferSearchResult:
-    """평평한 trains 와 라이브러리 정책으로 짝지은 itineraries 를 함께 제공합니다. 짝짓기·표시 검증 한계는 pair_transfer_itineraries 참고."""
+    """평평한 trains 와 h_trn_seq 로 묶은 itineraries 를 함께 제공합니다. 묶는 규칙은 pair_transfer_itineraries 참고."""
 
     itineraries: list[TransferItinerary]
     trains: list[TrainSummary]
@@ -788,6 +807,8 @@ class TransferSearchResult:
         조건은 라이브러리 정책입니다. 앱의 3튜플 전달: TrainScheduleViewModel.java:7340. 선택 분기의 기존 근거는
         TrainScheduleViewModel.smali:35654-35698,36806-36845 이며 보호 리터럴은 미확인입니다.
         """
+        if not self.trains:
+            return None
         metadata = self.metadata
         preceding = metadata.next_preceding_train_no or ""
         connecting = metadata.next_connecting_train_no or ""
