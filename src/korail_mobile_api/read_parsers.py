@@ -583,7 +583,11 @@ def _additive_scalar_string(
     """
     try:
         return _optional_scalar_string(data, key, context)
-    except KorailProtocolError:
+    # ``ValueError`` 도 받습니다. 정수를 문자열로 바꿀 때 파이썬의 자릿수 한도
+    # (기본 4,300자리)를 넘으면 ``str()`` 이 ``ValueError`` 를 냅니다 —
+    # ``KorailProtocolError`` 만 잡았더니 ``10**5000`` 한 값이 응답 전체를
+    # 실패시켰습니다(최종 감사 C10).
+    except (KorailProtocolError, ValueError):
         return None
 
 
@@ -1962,11 +1966,13 @@ def parse_merge_seats_inquiry_response(
     return MergeSeatsInquiryResponse(
         merge_reservation_possible_flag=merge_flag,
         # MergeSeatsCOut.java:29,112 — @SerialName("runDt"), top-level. 철자는
-        # 맞지만 **서버가 보내지 않습니다**: 실서버 최상위 봉투는 스칼라 5개
+        # 맞지만 **관측한 응답에는 없었습니다**: 2026-09-22 의 20여 회 호출
+        # 모두에서 실서버 최상위 봉투는 스칼라 5개
         # (h_msg_cd/h_msg_txt/msgCd/msgTxt/strResult)에 midStnList(:108)와
-        # trn_infos(:116)뿐이고 runDt 가 없어 이 값은 항상 None 입니다
-        # (2026-09-22, 20여 회 호출 전부). 운행일자는 행 단위로 옵니다 —
-        # trains[i].run_date(h_run_dt)가 매번 정확히 돌아옵니다. 다른 키를
+        # trn_infos(:116)뿐이었고 runDt 는 한 번도 오지 않아 이 값은 None
+        # 이었습니다. 다른 조건에서 서버가 보내는지는 확인하지 않았습니다.
+        # 운행일자는 행 단위로 왔습니다 — 관측한 호출마다
+        # trains[i].run_date(h_run_dt)가 정확히 돌아왔습니다. 다른 키를
         # 찾아 "고치려" 하지 마십시오; 이 DTO 에 다른 최상위 날짜는 없습니다.
         run_date=_optional_string(raw, "runDt", "merge seats inquiry"),
         intermediate_stations=tuple(stations),
@@ -2412,7 +2418,10 @@ def _parse_add_srv_item(
     (``MaasDetailOut.java:27`` 의 ``List<AddSrvItem> addSrvList``)과 승차권 목록
     예약 행의 ``addSrvInfo``(``MyTicketListOutReservation.java:39``). 그래서
     :class:`MaasServiceDetail` 하나로 읽습니다. ``AddSrvItem`` 에는
-    ``@SerialName`` 이 하나도 없어 키는 전부 코틀린 필드명입니다.
+    ``@SerialName`` 이 하나도 없으므로 키는 코틀린 필드명이라고 **추론**합니다
+    -- kotlinx 의 기본 규칙에 기댄 것입니다. ``AddSrvItem$$serializer.java`` 의
+    디스크립터 원소 이름(``addElement(...)``)은 AlienGuard 로 보호되어 있어
+    직접 확인하지 못했습니다.
     """
     info_raw = _optional_mapping(item, "detailInfo", context)
     detail_info = None
@@ -2460,7 +2469,7 @@ def _additive_add_srv_item(
         if item is None:
             return None
         return _parse_add_srv_item(item, item_context, info_context)
-    except KorailProtocolError:
+    except (KorailProtocolError, ValueError):  # 이유는 _additive_scalar_string
         return None
 
 

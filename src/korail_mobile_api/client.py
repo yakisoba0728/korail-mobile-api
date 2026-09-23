@@ -582,6 +582,18 @@ class KorailClient:
                 if getattr(error, "raw", None) is None:
                     error.raw = response.raw
                 raise
+            except Exception as error:
+                # 파서가 이 패키지의 예외가 아닌 것을 낼 수도 있습니다 — 예를
+                # 들어 자릿수 한도를 넘는 정수를 ``str()`` 로 바꾸다 나는
+                # ``ValueError``. 위의 ``except`` 는 그것을 못 잡아서 ``.raw``
+                # 없이 그대로 빠져나갔습니다(최종 감사 C11). 같은 계약으로
+                # 감쌉니다: 원문을 붙인 :class:`KorailProtocolError`.
+                wrapped = KorailProtocolError(
+                    "KORAIL response was received but could not be parsed:"
+                    f" {type(error).__name__}"
+                )
+                wrapped.raw = response.raw
+                raise wrapped from error
         return response
 
     def get_seat_cars(

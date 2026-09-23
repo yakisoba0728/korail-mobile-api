@@ -15,18 +15,22 @@
 ``this.seatList = (i & 128) == 0 ? emptyList() : list;`` — 출현 비트가 없을
 때만 ``emptyList()`` 이고, 이 줄은 명시적 ``null`` 에 대해서는 아무 말도
 하지 않습니다). **명시적 ``null``** 은 앱의 kotlinx Json 설정이 처리합니다 —
-``coerceInputValues = true`` 라서 널 불가 프로퍼티에 온 ``null`` 이 예외가
-아니라 기본값으로 강제됩니다
+``coerceInputValues = true`` 로 **추론**되므로(아래), 널 불가 프로퍼티에 온
+``null`` 은 예외가 아니라 기본값으로 강제될 것입니다
 (``analysis/jadx/sources/com/korail/talk/network/di/NetworkModule.java:858-862``
 ``providesNetworkJson()``, 같은 설정이
 ``analysis/jadx/sources/com/korail/talk/network/NetworkServiceKt.java:25-29``
 ``KJson`` 에도 글자까지 같게 있습니다:
-``ignoreUnknownKeys``/``encodeDefaults``/``coerceInputValues``/``isLenient``
-는 참, ``explicitNulls`` 는 거짓. AppSuit 가 불리언 리터럴을
-``Integer.parseInt(AlienGuard…) > 0``(참) / ``> 1``(거짓) 로 바꿔 놓은
-것이어서, 다섯 줄 중 ``setExplicitNulls`` 한 줄만 ``> 1`` 입니다 — 같은 관용구
-판독은 ``ErrorHelper.java:47-49`` 의 ``checkNotNullParameter`` 인수 순서로
-교차 확인됩니다). 키가 있는데 리스트가 아니면 셋 다 여전히
+다섯 setter 중 ``ignoreUnknownKeys``/``encodeDefaults``/``coerceInputValues``/
+``isLenient`` 는 ``Integer.parseInt(AlienGuard…) > 0``, ``setExplicitNulls`` 한 줄만
+``> 1`` 입니다).
+
+**읽히는 것은 그 비교식 모양까지입니다.** 복호화된 정수 값 자체는 보호돼 있어
+불리언 값은 직접 확인되지 않습니다. 이 문단은 "``> 0`` 은 참, ``> 1`` 은
+거짓"이라는 관용구 판독에 기대고 있고, 그 판독은 ``ErrorHelper.java:47-49``
+의 ``checkNotNullParameter`` 인수 순서로 **교차 확인했을 뿐 검증한 것이
+아닙니다** — 따라서 ``coerceInputValues = true`` 와 ``explicitNulls = false`` 는
+추론입니다(2026-09-23 최종 감사 D01 과 같은 기준으로 정정). 키가 있는데 리스트가 아니면 셋 다 여전히
 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
 """
 from __future__ import annotations

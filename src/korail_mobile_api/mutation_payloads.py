@@ -2286,8 +2286,10 @@ def build_discount_card_extension_query(
     **같은 주장을 7.0.6 에서 재도출했습니다.** 이 네 필드는
     ``NCardExtensionIn`` 의 ``saleWctNo``/``saleDd``/``saleSqno``/``tkRetPwd``
     이고(``network/model/NCardExtensionIn.java:31-34``, 인자 이름은 ``:158`` 의
-    ``copy`` 시그니처), 넷 다 ``@SerialName`` 이 없어(``:55``) 전선 키가 속성명
-    그대로입니다 -- 이 빌더가 쓰는 키와 일치합니다. 값의 출처는
+    ``copy`` 시그니처), 넷 다 ``@SerialName`` 이 없으므로(``:55``) 전선 키가
+    속성명 그대로라고 **추론**합니다 -- kotlinx 기본 규칙에 기댄 추론이고, 이
+    빌더가 쓰는 키와 일치합니다. ``NCardExtensionIn$$serializer.java`` 의
+    디스크립터 원소 이름은 보호되어 있어 직접 검증하지 못했습니다. 값의 출처는
     ``MyTicketDetailViewModel.java:1049`` 이 ``new NCardExtensionIn(
     ticketDetailOut.getOrgtkWctNo(), …getOrgtkRetSaleDt(), …getOrgtkSaleSqno(),
     …getOrgtkRetPwd())`` 로 넘기는 ``TicketDetailOut`` 의 네 값이며, 그 전선
@@ -2474,9 +2476,12 @@ _PRICE_RECALCULATION_SCALAR_FIELDS: tuple[tuple[str, str], ...] = (
 # 않습니다. 그 기본 동작이 앱과 어긋나지 않는다는 근거는 PayViewModel.smali
 # :11834-11850 으로, 일반 재계산 경로가 네 인자를 default-null 로 구성합니다.
 #   analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41
-#     -- 넷 다 @SerialName 이 없으므로 전선 키는 속성명 그대로이고, 생성자
-#        :114-133 에서 넷 다 checkNotNullParameter 대상이 아니라 널 허용입니다.
+#     -- 넷 다 @SerialName 이 없으므로 전선 키는 속성명 그대로라고 추론합니다
+#        (kotlinx 기본 규칙에 기댄 추론). 생성자 :114-133 에서 넷 다
+#        checkNotNullParameter 대상이 아니라 널 허용입니다.
 #   analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn$$serializer.java:44-47
+#     -- 이 자리의 디스크립터 원소 이름은 AlienGuard 로 보호되어 있어, 위 키
+#        추론을 직접 검증하지 못했습니다.
 # 값을 **실제로 채워 보낸 적은 없습니다** — 어떤 화면 상태가 그 값을 만드는지는
 # 추적하지 않았으므로, 채워 보내는 쪽은 여전히 미검증입니다.
 def build_price_recalculation_form(

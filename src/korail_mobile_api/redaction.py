@@ -585,7 +585,9 @@ _NO_JSON = object()
 #: 첫 ``@`` 에서 멈춰 ``user:pass@비밀@host`` 의 꼬리를 남겼으며, ``?``·``#``
 #: 를 경계로 보지 않아 ``https://host:443?contact=a@b`` 의 **호스트와 공개
 #: 쿼리까지** userinfo 로 오인해 지웠습니다.
-URL_USERINFO_RE = re.compile(r"(?<=://)[^/?#\s]*@")
+#: scheme 을 생략한 ``//user@host`` 도 받습니다(줄 머리 또는 공백 뒤). :func:`redact_url` 과
+#: 같은 모양을 보도록 맞췄습니다(C03).
+URL_USERINFO_RE = re.compile(r"(?:(?<=://)|(?<=^//)|(?<=\s//))[^/?#\s]*@")
 
 CARD_RE = re.compile(r"\b(?:\d[ -]*?){14,19}\b")
 #: 앞에 시작 경계가 없으면 ``notJSESSIONID=공개값`` 처럼 **민감 키가 아닌**
@@ -642,8 +644,11 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
     # * ``=`` 로 묶이면(쿼리 파라미터) ``&``/``;`` 는 **뒤에 새 ``키=`` 가
     #   따라올 때만** 값을 끝냅니다. 그래야 ``txtSeatNo1_=X&trnNo1=Y`` 의
     #   이웃은 살고, ``txtPwd=HEAD&<비밀>`` 의 꼬리는 함께 가려집니다.
-    + r'(?P<value>"(?:\\.|[^"\\])*(?:"|$)'
-    + r"|'(?:\\.|[^'\\])*(?:'|$)"
+    # 따옴표 값 안의 escape 쌍은 ``\\[\s\S]`` 입니다. 예전 ``\\.`` 는 ``.`` 가
+    # 줄바꿈을 받지 않아서, 백슬래시 바로 뒤에 실제 LF 가 온 값에서 escape 쌍이
+    # 끊기고 둘째 줄이 평문으로 남았습니다(2026-09-23 최종 감사 C06).
+    + r'(?P<value>"(?:\\[\s\S]|[^"\\])*(?:"|$)'
+    + r"|'(?:\\[\s\S]|[^'\\])*(?:'|$)"
     # 직렬화된 배열·객체는 한 덩어리로 먹습니다. scalar 정규식으로 다루면
     # ``{"hidDscpNo": ["a", "<비밀>"]}`` 가 첫 원소만 가려졌습니다.
     #
@@ -651,8 +656,8 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
     # 문자열 안의 ``]`` 에서 멈춰, ``INFO {"txtPwd":["]","<비밀>"]}`` 처럼 앞에
     # 산문이 붙어 이 경로로 온 문서의 뒤 원소를 남겼습니다(2026-09-23 확인).
     # 한 겹만 봅니다 — 배열 안의 배열은 여전히 안쪽 ``]`` 에서 끝납니다.
-    + r"""|\[(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\[\]"'])*\]"""
-    + r"""|\{(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^{}"'])*\}"""
+    + r"""|\[(?:"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[^\[\]"'])*\]"""
+    + r"""|\{(?:"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|[^{}"'])*\}"""
     # ``=`` 묶음: 값이 그 자체로 ``키=`` 로 시작하면 그것은 값이 아니라
     # **다음 필드**입니다. 앞의 ``\s*`` 가 공백을 넘어가서
     # ``h_sgr_nm_1= trnNo1=Y`` 의 ``trnNo1=Y`` 를 값으로 먹던 자리입니다.
@@ -732,7 +737,11 @@ def _parse_json_document(value: str) -> object:
     # 붙어 오는 흔한 문자이고, 그것 하나 때문에 첫 문자 검사가 빗나가
     # 구조 경로에 못 들어갔습니다(2026-09-23 확인).
     stripped = value.strip().lstrip("\ufeff").strip()
-    if not stripped or stripped[0] not in '{["':
+    # 맨 숫자도 JSON 문서입니다. 예전에는 ``{``·``[``·``"`` 로 시작할 때만 봐서
+    # ``"4111111111111111"`` 이 텍스트 경로로 가 따옴표 없는 ``[REDACTED_CARD]``
+    # 가 나왔고, JSON 숫자 입력에 대한 출력이 JSON 이 아니었습니다(최종 감사
+    # C04). 아무 것도 가리지 않는 숫자는 위 규칙대로 원문이 그대로 나갑니다.
+    if not stripped or stripped[0] not in '{["-0123456789':
         return _NO_JSON
     try:
         return json.loads(
@@ -746,7 +755,27 @@ def _parse_json_document(value: str) -> object:
         return _NO_JSON
 
 
-def _redact_and_dump_json(root: object) -> str:
+def _mask_card_key(name: str, used: set[str]) -> str:
+    """카드번호 모양이 든 키를 가리되 **같은 객체 안에서 서로 다르게** 둡니다.
+
+    키도 문자열이므로 G5(모든 문자열의 카드번호 모양)의 대상입니다. 한때 키를
+    아예 건드리지 않았는데, 카드번호가 키로 실리면 그대로 남았습니다. 그렇다고
+    한 문자열로 바꾸면 서로 다른 두 키가 같아져 항목이 합쳐집니다 — 실제로 한
+    번 그렇게 망가졌습니다. 그래서 겹치면 ``#2``·``#3`` 을 붙입니다.
+    """
+    masked = CARD_RE.sub("[REDACTED_CARD]", name)
+    if masked == name:
+        used.add(name)
+        return name
+    candidate, number = masked, 1
+    while candidate in used:
+        number += 1
+        candidate = f"{masked}#{number}"
+    used.add(candidate)
+    return candidate
+
+
+def _redact_and_dump_json(root: object) -> tuple[str, bool]:
     """파싱된 JSON 트리를 가리면서 **한 번에** 다시 씁니다.
 
     재귀가 아니라 명시적 스택입니다. 재귀로 짰을 때 깊이 500짜리 1KB 문서가
@@ -756,6 +785,7 @@ def _redact_and_dump_json(root: object) -> str:
     (2026-09-23 확인).
     """
     parts: list[str] = []
+    changed = False
     # (노드, 키) 또는 리터럴 문자열
     stack: list[object] = [(root, None)]
     while stack:
@@ -766,14 +796,19 @@ def _redact_and_dump_json(root: object) -> str:
         node, key = entry  # type: ignore[misc]
         if key is not None and is_sensitive_key(key):
             parts.append(json.dumps("[REDACTED]"))
+            changed = True
             continue
         if isinstance(node, _Pairs):
             parts.append("{")
             pushed: list[object] = []
+            used_keys: set[str] = set()
             for index, (name, item) in enumerate(node.items):
                 if index:
                     pushed.append(", ")
-                pushed.append(f"{json.dumps(name)}: ")
+                shown = _mask_card_key(name, used_keys)
+                changed = changed or shown != name
+                pushed.append(f"{json.dumps(shown)}: ")
+                # 민감성은 **원래** 키로 판정합니다.
                 pushed.append((item, name))
             pushed.append("}")
             stack.extend(reversed(pushed))
@@ -793,14 +828,16 @@ def _redact_and_dump_json(root: object) -> str:
             # JSON 문자열에 :data:`CARD_RE` 를 덧칠했는데, 그러면 치환 문자열에
             # 따옴표가 없어 **출력이 JSON 이 아니게** 되고 숫자 키까지 같은
             # 문자열로 바뀌어 서로 다른 항목이 합쳐졌습니다(2026-09-23 확인).
-            parts.append(
-                json.dumps("[REDACTED_CARD]")
-                if CARD_RE.fullmatch(node.text)
-                else node.text
-            )
+            if CARD_RE.fullmatch(node.text):
+                parts.append(json.dumps("[REDACTED_CARD]"))
+                changed = True
+            else:
+                parts.append(node.text)
             continue
         if isinstance(node, str):
-            parts.append(json.dumps(redact_text(node)))
+            inner = redact_text(node)
+            changed = changed or inner != node
+            parts.append(json.dumps(inner))
             continue
         if node is True:
             parts.append("true")
@@ -810,7 +847,7 @@ def _redact_and_dump_json(root: object) -> str:
             parts.append("null")
         else:
             parts.append(json.dumps(node))
-    return "".join(parts)
+    return "".join(parts), changed
 
 
 def redact_text(value: str) -> str:
@@ -848,7 +885,13 @@ def redact_text(value: str) -> str:
         # 을 돌려 아래 순회가 **같은 작업을 다시** 하게 했습니다. 포장 수마다
         # 두 배씩 늘어 12겹에 8,191번을 불렀습니다(2026-09-23 확인). 이제
         # 겹마다 한 번입니다.
-        dumped = _redact_and_dump_json(parsed)
+        dumped, changed = _redact_and_dump_json(parsed)
+        # 가린 게 없으면 **원문을 그대로** 돌려줍니다. 다시 직렬화한 결과를
+        # 돌려주면 서식만 바뀌는 게 아니었습니다: 문자열 값 ``"[1,2]"`` 가 안쪽에서
+        # JSON 으로 다시 읽혀 ``"[1, 2]"`` 로 **값 자체가** 바뀌었습니다(최종
+        # 감사 C05). 원문을 돌려주면 그 값은 한 글자도 안 바뀝니다.
+        if not changed:
+            return value
         if dumped is not None:
             if escaped:
                 dumped = dumped.replace('"', '\\"')
@@ -888,29 +931,20 @@ def redact_url(value: str) -> str:
     상대 URL 로 보고 쿼리를 키 단위로 처리합니다. 그렇게 하지 않으면 퍼센트
     인코딩된 키가 절대 URL 로는 가려지고 상대 URL 로는 남았습니다.
     """
+    # 어떤 입력에도 예외를 내지 않습니다(G6). ``urlsplit`` 은 닫히지 않은 IPv6
+    # 괄호에서 ``ValueError`` 를, ``urlencode`` 는 짝 없는 surrogate 에서
+    # ``UnicodeEncodeError`` 를 냅니다 — 후자는 최종 감사 C08 에서 드러났습니다.
+    # 구조로 못 다루면 텍스트 경로로 갑니다.
     try:
-        parsed = urlsplit(value)
-    except ValueError:
-        # ``urlsplit`` 은 URL 이 아닌 문자열에 예외를 냅니다 — 예: 대괄호가
-        # 닫히지 않은 ``https://[`` (IPv6 리터럴로 읽다가 실패). 이 함수는
-        # :func:`redact_value` 를 통해 **임의의 문자열**에 불리므로, 그
-        # 예외는 마스킹을 건너뛰게 만드는 대신 로깅 자체를 깨뜨립니다.
-        # 파싱이 안 되면 URL 이 아닌 것으로 보고 텍스트 경로로 갑니다.
+        return _redact_url_structured(value)
+    except (ValueError, UnicodeError):
         return redact_text(value)
-    # 절대 URL 이 아니어도 **경로+쿼리 모양**이면 쿼리를 키 단위로 봅니다.
-    # ``urlsplit`` 은 상대 URL 에서도 ``query`` 를 이미 갈라 주는데, 예전에는
-    # 그것을 버리고 통째로 :func:`redact_text` 로 보냈습니다. 그래서 같은 값이
-    # 진입점에 따라 갈렸습니다: 퍼센트 인코딩된 키(``h%5Fsgr%5Fnm``)가 절대
-    # URL 로는 가려지고 상대 URL 로는 평문으로 남았습니다(2026-09-23 확인) —
-    # 키 단위 경로는 키를 디코딩해서 보고 텍스트 경로는 못 하기 때문입니다.
-    #
-    # ``path`` 가 ``/`` 로 시작할 때만 이 길로 보냅니다. 그 조건이 없으면
-    # ``"오류? a=b"`` 같은 **평범한 문장**이 URL 로 해석돼서 ``urlencode`` 에
-    # 뭉개집니다 — 이 함수는 :func:`redact_value` 를 통해 임의의 문자열에
-    # 불리므로 그쪽이 훨씬 흔합니다.
-    # ``/`` 로 시작한다는 것만으로는 부족했습니다: ``/로그? a=b 입니다`` 같은
-    # **문장**이 쿼리로 해석돼 공백이 ``+`` 로 바뀌었습니다(2026-09-23 확인).
-    # 진짜 쿼리 문자열에는 인코딩되지 않은 공백이 없으므로 그것으로 가릅니다.
+
+
+def _redact_url_structured(value: str) -> str:
+    parsed = urlsplit(value)
+    # ``/`` 로 시작하는 **문장**이 쿼리로 해석돼 공백이 ``+`` 로 바뀌지 않도록,
+    # 진짜 URL 에는 인코딩되지 않은 공백이 없다는 점으로 가릅니다.
     relative_with_query = (
         not parsed.scheme
         and not parsed.netloc
@@ -918,7 +952,17 @@ def redact_url(value: str) -> str:
         and parsed.path.startswith("/")
         and not _WHITESPACE_RE.search(parsed.query)
     )
-    if (not parsed.scheme or not parsed.netloc) and not relative_with_query:
+    # ``//user@host/p`` 같은 scheme 생략 URL 도 netloc 이 있으므로 구조로 봅니다.
+    # 예전에는 scheme 이 없다는 이유로 텍스트 경로에 보냈고, 텍스트 경로의
+    # userinfo 패턴은 ``://`` 뒤만 보므로 자격증명이 그대로 남았습니다(C03).
+    scheme_relative = (
+        not parsed.scheme
+        and parsed.netloc
+        and not _WHITESPACE_RE.search(value)
+    )
+    if not (parsed.scheme and parsed.netloc) and not (
+        relative_with_query or scheme_relative
+    ):
         return redact_text(value)
     query = [
         (
@@ -927,13 +971,12 @@ def redact_url(value: str) -> str:
         )
         for key, item in parse_qsl(parsed.query, keep_blank_values=True)
     ]
-    # ``https://아이디:비밀번호@host/...`` 의 userinfo 는 netloc 안에 있어서
-    # 쿼리·경로만 보던 예전 코드가 통째로 지나쳤습니다. 회원번호도 비밀번호도
-    # 여기 실릴 수 있으므로 **둘 다** 가립니다(2026-09-23 확인).
     netloc = parsed.netloc
-    if parsed.username is not None or parsed.password is not None:
-        host = netloc.rsplit("@", 1)[-1]
-        netloc = f"[REDACTED]@{host}"
+    userinfo, _, host = netloc.rpartition("@")
+    # host 도 봅니다. 카드번호 모양은 어디에 있든 가립니다(G5) — 예전에는 host 를
+    # 손대지 않아 ``https://4111….example/`` 의 숫자가 남았습니다(C07).
+    host = CARD_RE.sub("[REDACTED_CARD]", host)
+    netloc = f"[REDACTED]@{host}" if userinfo else host
     return urlunsplit(
         (
             parsed.scheme,
@@ -946,30 +989,77 @@ def redact_url(value: str) -> str:
 
 
 def redact_value(value: Any, *, key: str | None = None) -> Any:
-    """임의의 값을 재귀적으로 가립니다.
+    """임의의 값을 가립니다.
 
     매핑→키마다, 리스트/튜플→원소마다(컨테이너 타입 유지), 데이터클래스→필드별
     dict, 문자열→:func:`redact_url`. 나머지 타입은 그대로.
+
+    **재귀가 아니라 명시적 스택입니다.** 재귀로 짰을 때 민감 키를 일반 dict
+    1,500겹으로 감싼 입력이 ``RecursionError`` 로 죽었습니다(최종 감사 C02).
+    구조화 입구는 깊이와 무관하게 가려야 합니다(G1).
+
+    같은 컨테이너 객체를 다시 만나면(순환 참조) ``"[CYCLE]"`` 로 둡니다 — 재귀판은
+    그런 입력에서 ``RecursionError`` 를 냈고, 반복판은 막지 않으면 멈추지 않습니다.
     """
-    if key is not None and is_sensitive_key(key):
-        return "[REDACTED]"
-    if isinstance(value, Mapping):
-        return {
-            item_key: redact_value(item, key=str(item_key))
-            for item_key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [redact_value(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(redact_value(item) for item in value)
-    if is_dataclass(value) and not isinstance(value, type):
-        return {
-            field.name: redact_value(getattr(value, field.name), key=field.name)
-            for field in fields(value)
-        }
-    if isinstance(value, str):
-        return redact_url(value)
-    return value
+    result: list[Any] = [None]
+    tuples: list[tuple[list[Any], Any, Any]] = []
+    expanded: set[int] = set()
+    stack: list[tuple[Any, str | None, Any, Any]] = [(value, key, result, 0)]
+    while stack:
+        item, item_key, parent, slot = stack.pop()
+        if item_key is not None and is_sensitive_key(item_key):
+            parent[slot] = "[REDACTED]"
+            continue
+        is_mapping = isinstance(item, Mapping)
+        is_sequence = isinstance(item, (list, tuple))
+        is_record = is_dataclass(item) and not isinstance(item, type)
+        if is_mapping or is_sequence or is_record:
+            if id(item) in expanded:
+                parent[slot] = "[CYCLE]"
+                continue
+            expanded.add(id(item))
+        if is_mapping:
+            mapping_out: dict[Any, Any] = {}
+            parent[slot] = mapping_out
+            used_keys: set[str] = set()
+            for child_key, child in item.items():
+                shown = (
+                    _mask_card_key(child_key, used_keys)
+                    if isinstance(child_key, str)
+                    else child_key
+                )
+                mapping_out[shown] = None
+                # 민감성은 **원래** 키로 판정합니다.
+                stack.append((child, str(child_key), mapping_out, shown))
+        elif is_sequence:
+            sequence_out: list[Any] = [None] * len(item)
+            parent[slot] = sequence_out
+            if isinstance(item, tuple):
+                tuples.append((sequence_out, parent, slot))
+            for index, child in enumerate(item):
+                stack.append((child, None, sequence_out, index))
+        elif is_record:
+            record_out: dict[str, Any] = {}
+            parent[slot] = record_out
+            for record_field in fields(item):
+                record_out[record_field.name] = None
+                stack.append(
+                    (
+                        getattr(item, record_field.name),
+                        record_field.name,
+                        record_out,
+                        record_field.name,
+                    )
+                )
+        elif isinstance(item, str):
+            parent[slot] = redact_url(item)
+        else:
+            parent[slot] = item
+    # 튜플은 다 채운 뒤 바꿉니다. 안쪽이 나중에 쌓였으므로 뒤에서부터 바꿔야
+    # 바깥 튜플이 이미 바뀐 안쪽 튜플을 담습니다.
+    for sequence_out, parent, slot in reversed(tuples):
+        parent[slot] = tuple(sequence_out)
+    return result[0]
 
 
 def redact_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
@@ -995,17 +1085,38 @@ def redact_payload(
     쪼갭니다). 옛 인용 ``CertificationService.java:35-37`` 은 6.5.0 이고
     7.0.6 디컴파일에 없습니다.
     """
+    # 매핑이 아닌 입력에도 예외를 내지 않습니다(G6). 예전에는 ``.items()`` 를
+    # 바로 불러 문자열 하나에 ``AttributeError`` 가 났습니다(최종 감사 C09).
+    if not isinstance(payload, Mapping):
+        return redact_value(payload)  # type: ignore[no-any-return]
     redacted: dict[str, str | list[str]] = {}
     for key, value in payload.items():
         name = str(key)
         sensitive = is_sensitive_key(name)
         if isinstance(value, (list, tuple)):
             redacted[name] = [
-                "[REDACTED]" if sensitive else redact_text(str(item))
+                "[REDACTED]" if sensitive else _redact_form_value(item)
                 for item in value
             ]
         else:
             redacted[name] = (
-                "[REDACTED]" if sensitive else redact_text(str(value))
+                "[REDACTED]" if sensitive else _redact_form_value(value)
             )
     return redacted
+
+
+def _redact_form_value(value: object) -> str:
+    """폼 값 하나를 문자열로. 중첩 구조는 **구조로** 가린 뒤 문자열로 만듭니다.
+
+    예전에는 무엇이든 ``str()`` 로 먼저 바꿔 텍스트 정규식에 넣었습니다. 그러면
+    ``{"outer": {"txtPwd": [["a", "<비밀>"]]}}`` 의 안쪽 민감 키가 Python repr
+    속 텍스트로만 남아, 중첩 배열에서 뒤 원소가 평문으로 남았습니다(최종 감사
+    C01). 구조화 입력은 깊이·타입과 무관하게 가려야 합니다(G1).
+    """
+    if isinstance(value, str):
+        return redact_text(value)
+    if isinstance(value, (Mapping, list, tuple)) or (
+        is_dataclass(value) and not isinstance(value, type)
+    ):
+        return str(redact_value(value))
+    return redact_text(str(value))

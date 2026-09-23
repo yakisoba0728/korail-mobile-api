@@ -62,9 +62,10 @@ class TicketListTicket:
     #: ``h_use_tno``/``h_noty_use_tno`` — 사용·미통지 사용 거래번호.
     use_transaction_no: str | None = field(default=None, repr=False)
     notify_use_transaction_no: str | None = field(default=None, repr=False)
-    #: ``h_pbp_acep_tgt_flg`` — PBP(대리수령) 인수 대상 여부. **여기가 이 값의
-    #: 유일한 출처입니다.** ``refunds.SelTicketInfo`` 상세 응답에는 이 키가 오지
-    #: 않고(2026-09-22: 20장×2조건 = 40응답 전부 부재), 앱도 목록 행의 값을
+    #: ``h_pbp_acep_tgt_flg`` — PBP(대리수령) 인수 대상 여부. **관측한 범위에서는
+    #: 여기서만 이 값이 옵니다.** ``refunds.SelTicketInfo`` 상세 응답에서는 이
+    #: 키를 보지 못했습니다(2026-09-22: 20장×2조건 = 40응답 전부 부재; 다른
+    #: 조건에서 오는지는 미확인). 앱도 목록 행의 값을
     #: 상세 DTO 에 주입해 쓴 뒤(``MyTicketBaseViewModel.java:769``
     #: ``ticketDetailOut.setPbpAcepTgtFlg(myTicketListOutTicket2.getHPbpAcepTgtFlg())``)
     #: 환불 요청에 되돌려 넣습니다(``MyTicketDetailViewModel.java:1521``).
@@ -249,10 +250,15 @@ class CartItem:
     #: 는 이미 있었고 종료 쪽만 날짜가 빠져 있었습니다.
     usage_close_date: str | None = None
     #: ``h_stl_lmt_tm`` — 결제 기한(``CartInfo.java:49``, ``@SerialName`` 361행).
-    #: 앱은 장바구니 행들 중 가장 늦은 값을 고른 뒤 이 값 **하나만** 으로 남은
-    #: 초를 셉니다(``PayViewModel.java:11666-11678`` →
-    #: ``DateTimeExKt.java:407-431``). 즉 시각 조각이 아니라 그 자체로 완결된
-    #: 기한 문자열입니다. 다만 파싱에 쓰는 ``SimpleDateFormat`` 패턴이
+    #: 앱은 ``isOnlyMaasTicket()`` 분기 안에서만 장바구니 행들의 이 값을 차례로
+    #: 비교해 한 행을 고릅니다(``PayViewModel.java:11658-11679``): 현재 후보와
+    #: 다음 행의 값을 보호된 ``AppSuitLinker1`` 호출로 비교하고, 결과가
+    #: ``> 0`` 이면 다음 행으로 바꿉니다. 호출되는 비교 메서드가 보호되어 있어
+    #: 그 선택이 가장 늦은 값인지 가장 이른 값인지는 **확인하지 못했습니다**.
+    #: 고른 행의 이 값(보호된 ``AppSuitLinker2`` 변환을 한 번 거친 것) **하나만**
+    #: 으로 남은 초를 셉니다(→ ``DateTimeExKt.java:407-431``). 즉 시각 조각이
+    #: 아니라 그 자체로 완결된 기한 문자열로 쓰입니다. 파싱에 쓰는
+    #: ``SimpleDateFormat`` 패턴이
     #: AlienGuard 로 보호돼 있어 정확한 자릿수·형식은 확인하지 못했습니다.
     settlement_limit_time: str | None = None
     #: 아래 다섯은 ``CartInfo`` 가 선언만 하고(``CartInfo.java:48,50,36,47,35``,

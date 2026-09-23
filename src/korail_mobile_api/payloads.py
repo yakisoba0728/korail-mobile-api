@@ -189,10 +189,12 @@ def build_seat_car_form(
     ``kJson.encodeToJsonElement(TrainResearchIn.serializer(), …)`` 로 만든
     JSON 을 ``NetworkService.STLibw``(``NetworkService.java:15304``)에 넘기는데,
     이 함수는 ``JsonPrimitive`` 의 내용 **길이가 0 보다 클 때만** 맵에 넣습니다
-    (``:15335-15343``). 인코딩 단계에서 ``explicitNulls = false``
-    (``NetworkServiceKt.java:28``)가 널을 이미 지우므로, 널이든 빈 문자열이든
-    폼에서 사라집니다 — 이 라우트의 실제 호출 경로는
-    ``NetworkService.java:14524,14528`` 입니다.
+    (``:15335-15343``). 그러니 빈 문자열은 폼에서 사라집니다 — 이 라우트의
+    실제 호출 경로는 ``NetworkService.java:14524,14528`` 입니다. (널은 이
+    DTO 필드가 모두 널 불가라 해당하지 않습니다. 인코더의 ``explicitNulls``
+    값은 **미출처**입니다: ``NetworkServiceKt.java:28`` 에 보이는 것은
+    ``setExplicitNulls(<보호된 AlienGuard 호출 결과> > 1)`` 라는 호출과 비교의
+    모양뿐이고, 불리언 값 자체는 읽을 수 없습니다.)
 
     **이 함수가 ``""`` 로 채우는 다른 키(``txtRunDt``·``txtDptDt`` 등)도
     전선에는 나가지 않습니다.** 빌더가 *돌려주는* dict 와 실제로 *보내지는* 폼을
@@ -290,9 +292,14 @@ def build_seat_inventory_form(
     ``kJson.encodeToJsonElement(TResidualSeatsResearchIn.serializer(), …)`` 를
     ``NetworkService.STLibw``(``NetworkService.java:15304``)에 넘기고, 이 함수는
     ``JsonPrimitive`` 의 내용 길이가 **0 보다 클 때만** 맵에 넣습니다
-    (``:15335-15343``). 인코딩 단계의 ``explicitNulls = false``
-    (``NetworkServiceKt.java:28``)가 널을 이미 지우므로 널이든 빈 문자열이든
-    폼에서 사라집니다.
+    (``:15335-15343``). 빈 문자열은 이 검사로 폼에서 사라집니다. **널도
+    사라진다는 부분은 검증되지 않은 가정에 기댑니다**: 인코더가
+    ``explicitNulls = false`` 여서 널 필드를 JSON 에서 아예 빼야 성립합니다.
+    ``NetworkServiceKt.java:28`` 에 보이는 것은
+    ``setExplicitNulls(<보호된 AlienGuard 호출 결과> > 1)`` 라는 호출과 비교의
+    모양뿐이고, 불리언 값 자체는 보호되어 읽을 수 없으므로 미출처입니다.
+    참이라면 널은 ``JsonNull`` 로 인코딩되어 위 길이 검사에 그대로
+    넘겨집니다(그 경우의 폼 모양은 확인하지 않았습니다).
 
     **예전 인용 ``ResearchService:59`` 는 6.5.0 클래스이고 7.0.6 decompile 에
     존재하지 않습니다** -- ``.java`` 확장자가 없어 낡은 인용 탐지를 계속
