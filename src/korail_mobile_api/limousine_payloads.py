@@ -4,44 +4,18 @@
 
 """리무진 연계 조회의 요청 폼 빌더.
 
-:mod:`korail_mobile_api.limousine_models` 의 질의를 전선 키로 옮깁니다.
-``validate_*`` 함수는 질의가 **정확히** 그 타입인지 확인한 뒤
-``__post_init__`` 의 검사를 다시 돌립니다.
-
-세 폼 모두 공통 ``Device``/``Version`` 을 싣습니다.
-``seatMovie.LimousineScheduleView`` 는 7.0.6 앱에서 사라졌고, 그 요청을 만들던
-빌더와 질의 타입도 함께 없어졌습니다 — 보낼 수 없는 라우트의 폼을 짓는 함수였기
-때문입니다. 저장해 둔 6.5.0 응답을 해석하는 쪽은 남아 있습니다
-(:func:`~korail_mobile_api.limousine_parsers.parse_limousine_schedule_view_response`).
+:mod:`korail_mobile_api.limousine_models` 의 질의를 전선 키로 옮깁니다. 값 검사는
+질의의 ``__post_init__`` 가 한 번 합니다. 두 폼 모두 공통 ``Device``/``Version`` 을
+싣습니다.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import TypeVar, cast
-
 from .config import KorailConfig
+from .errors import KorailProtocolError
 from .limousine_models import (
     LimousineScheduleQuery,
     LimousineSeatInventoryQuery,
 )
-
-
-QueryT = TypeVar("QueryT")
-
-
-def _validated_query(
-    query: object,
-    expected: type[QueryT],
-    validator: Callable[[QueryT], None],
-    name: str,
-) -> QueryT:
-    if type(query) is not expected:
-        raise TypeError(
-            f"{name} query must be exactly {expected.__name__}"
-        )
-    validated = cast(QueryT, query)
-    validator(validated)
-    return validated
 
 
 # payloads.py 에 같은 함수가 있지만 import 하지 않습니다. 이 모듈은 pyright strict
@@ -69,34 +43,6 @@ def _device_version(config: KorailConfig) -> dict[str, str]:
     return fields
 
 
-def validate_limousine_schedule_query(
-    query: object,
-) -> LimousineScheduleQuery:
-    """``query`` 가 정확히 :class:`LimousineScheduleQuery` 인지 확인하고 돌려줍니다."""
-    return _validated_query(
-        query,
-        LimousineScheduleQuery,
-        LimousineScheduleQuery.__post_init__,
-        "schedule",
-    )
-
-
-def validate_limousine_seat_inventory_query(
-    query: object,
-) -> LimousineSeatInventoryQuery:
-    """``query`` 가 정확히 :class:`LimousineSeatInventoryQuery` 인지 확인하고
-    돌려줍니다.
-
-    :func:`validate_limousine_schedule_query` 와 같은 규칙입니다.
-    """
-    return _validated_query(
-        query,
-        LimousineSeatInventoryQuery,
-        LimousineSeatInventoryQuery.__post_init__,
-        "seat inventory",
-    )
-
-
 def build_limousine_schedule_form(
     config: KorailConfig,
     query: LimousineScheduleQuery,
@@ -114,7 +60,8 @@ def build_limousine_schedule_form(
     (``dptRsStnCd``/``arvRsStnCd``)이고, 날짜는 ``YYYYMMDD``, 시각은
     ``HHMMSS`` 입니다.
     """
-    query = validate_limousine_schedule_query(query)
+    if not isinstance(query, LimousineScheduleQuery):
+        raise KorailProtocolError("query must be a LimousineScheduleQuery")
     return {
         **_device_version(config),
         "Key": config.key,
@@ -171,7 +118,8 @@ def build_limousine_seat_inventory_form(
     일치한다. (이전 W4 패스가 "도달 불가"로 보류했던 항목을 이번에 위 호출부
     비교로 확정했다.)
     """
-    query = validate_limousine_seat_inventory_query(query)
+    if not isinstance(query, LimousineSeatInventoryQuery):
+        raise KorailProtocolError("query must be a LimousineSeatInventoryQuery")
     return {
         **_device_version(config),
         "Key": config.key,
@@ -190,5 +138,3 @@ def build_limousine_seat_inventory_form(
         "gdNo": query.product_no,
         "isArrow": "true" if query.is_arrow else "false",
     }
-
-

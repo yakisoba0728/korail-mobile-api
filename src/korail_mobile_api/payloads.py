@@ -11,8 +11,9 @@ MaaS 메뉴의 폼을 만듭니다. 나머지 읽기 라우트는
 
 여기 함수들은 dict 를 돌려줄 뿐 아무것도 보내지 않습니다. 필드 이름과 순서는
 APK 의 Retrofit 선언에서 나왔습니다. 그것을 고정하던 테스트는 삭제됐고, 지금
-계약을 말하는 것은 각 빌더의 코드뿐입니다 — :mod:`korail_mobile_api.safety` 는
-라우트와 변경 폼의 값 모양만 보고 필드 이름·순서는 강제하지 않습니다.
+계약을 말하는 것은 각 빌더의 코드뿐입니다. 전송 전 검사는 요청 출처
+(:func:`~korail_mobile_api.http.assert_korail_origin`)뿐이고 필드 이름·순서는
+강제하지 않습니다.
 """
 import time
 from collections.abc import Sequence
@@ -96,9 +97,9 @@ def validate_seat_inventory_inputs(
     if not isinstance(train, TrainSummary):
         raise KorailProtocolError("train must be a TrainSummary")
     if type(passenger_count) is not int or not 1 <= passenger_count <= 9:
-        raise ValueError("passenger_count must be an integer from 1 through 9")
+        raise KorailProtocolError("passenger_count must be an integer from 1 through 9")
     if car_no is not None and (type(car_no) is not int or car_no < 1):
-        raise ValueError("car_no must be a positive integer")
+        raise KorailProtocolError("car_no must be a positive integer")
     # txtSeatAttCd/txtGdNo are carried per selected train, not pinned: in
     # 7.0.6 the seat-map view model fills TrainResearchIn from the reservation
     # input it was handed -- txtGdNo from ticketReservationIn.getTxtGdNo()
@@ -165,7 +166,6 @@ def build_seat_car_form(
     train: TrainSummary,
     *,
     passenger_count: int,
-    sid: str,
     room_class_code: str = "1",
     seat_attribute_code: str | None = None,
     menu_id: str = "11",
@@ -208,11 +208,8 @@ def build_seat_car_form(
     틀렸습니다. 빌더가 ``""`` 를 남겨 두는 것은 반환 dict 의 키 집합을 호출부와
     테스트에서 안정적으로 유지하기 위한 것일 뿐입니다.
 
-    ``sid`` 는 받지만 쓰지 않습니다 — 7.0.6 ``TrainResearchIn.java:68`` 의
-    ``@SerialName`` 20개 중 ``Sid`` 는 없으므로 이 라우트에는 애초에 실을 자리가
-    없습니다(6.5.0 잔재). 매개변수를 남겨 두는 것은 클라이언트가 여전히
-    ``sid=generate_sid()`` 를 키워드로 넘기기 때문일 뿐입니다 — 그 호출부를
-    바꾸는 것은 이 파일의 범위 밖입니다.
+    ``Sid`` 는 싣지 않습니다 — 7.0.6 ``TrainResearchIn.java:68`` 의
+    ``@SerialName`` 20개 중에 없습니다(6.5.0 잔재).
 
     ``menu_id`` 는 기본값 ``"11"`` 만 근거가 있습니다. 7.0.6 은 예약 맥락별로
     ``ReservationMenuId`` 열거형(7개 멤버)에서 값을 고르는데, DEFAULT 이외
@@ -270,7 +267,6 @@ def build_seat_inventory_form(
     car_no: int,
     *,
     passenger_count: int,
-    sid: str,
     room_class_code: str = "1",
 ) -> dict[str, str]:
     """``research.TResidualSeatsResearch.do`` 의 좌석표 조회 폼을 만듭니다.
@@ -310,10 +306,8 @@ def build_seat_inventory_form(
     문자열인 ``ctlDvCd`` 는 :func:`build_seat_car_form` 의 ``""`` 키들과 똑같이
     ``post_form`` 단계에서 빠지므로 전선에는 나가지 않습니다.
 
-    ``sid`` 는 받지만 쓰지 않습니다 — 7.0.6 ``TResidualSeatsResearchIn.java:65``
-    의 ``@SerialName`` 19개 중 ``Sid`` 는 없으므로 이 라우트에도 실을 자리가
-    없습니다(6.5.0 잔재). 매개변수를 남겨 두는 것은 클라이언트가 여전히
-    ``sid=generate_sid()`` 를 키워드로 넘기기 때문일 뿐입니다.
+    ``Sid`` 는 싣지 않습니다 — 7.0.6 ``TResidualSeatsResearchIn.java:65`` 의
+    ``@SerialName`` 19개 중에 없습니다(6.5.0 잔재).
     """
     validate_seat_inventory_inputs(
         train,
@@ -356,13 +350,13 @@ def build_cache_query(timestamp_ms: int | None = None) -> dict[str, str]:
     """캐시 파일 요청의 ``timeStamp`` 쿼리를 만듭니다.
 
     ``timestamp_ms`` 를 주지 않으면 현재 밀리초 epoch 입니다. 음수나 정수가 아닌
-    값은 ``ValueError`` 입니다. 캐시를 우회하려는 값이라 서버가 내용을 보지
+    값은 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 캐시를 우회하려는 값이라 서버가 내용을 보지
     않습니다.
     """
     if timestamp_ms is not None and (
         type(timestamp_ms) is not int or timestamp_ms < 0
     ):
-        raise ValueError("timestamp_ms must be a non-negative integer or None")
+        raise KorailProtocolError("timestamp_ms must be a non-negative integer or None")
     resolved = int(time.time() * 1000) if timestamp_ms is None else timestamp_ms
     return {"timeStamp": str(resolved)}
 
@@ -373,7 +367,6 @@ def build_train_search_form(
     *,
     departure_name: str,
     arrival_name: str,
-    sid: str,
     member_card_no: str | None = None,
     continuation: TrainSearchContinuation | None = None,
     transfer: bool = False,
@@ -397,11 +390,8 @@ def build_train_search_form(
     ``qryStNo``/``qryStTrnNo``/``qryStTrnNo2`` 세 값만 싣고 ``pgPrCnt`` 는 어느
     쪽도 싣지 않습니다.
 
-    ``sid`` 는 받지만 쓰지 않습니다 — 7.0.6 ``TrainScheduleIn.java:95`` 의
-    ``@SerialName`` 목록에 ``Sid`` 가 없으므로 이 라우트에도 실을 자리가
-    없습니다(6.5.0 잔재). 매개변수를 남겨 두는 것은 클라이언트가 여전히
-    ``sid=generate_sid()`` 를 키워드로 넘기기 때문일 뿐입니다 — 그 호출부를
-    바꾸는 것은 이 파일의 범위 밖입니다.
+    ``Sid`` 는 싣지 않습니다 — 7.0.6 ``TrainScheduleIn.java:95`` 의
+    ``@SerialName`` 목록에 없습니다(6.5.0 잔재).
 
     ``menu_id`` 는 기본값 ``"11"`` 만 근거가 있습니다 — 나머지 근거는
     :func:`build_seat_car_form` 의 같은 매개변수 설명을 보십시오.
@@ -435,9 +425,9 @@ def build_train_search_form(
         query.low_disability_passengers,
     )
     if any(type(count) is not int or count < 0 for count in counts) or not sum(counts):
-        raise ValueError("passenger counts must be non-negative integers with a nonzero total")
+        raise KorailProtocolError("passenger counts must be non-negative integers with a nonzero total")
     if not isinstance(query.seat_attribute_code, str) or not query.seat_attribute_code:
-        raise ValueError("seat_attribute_code must be a non-empty string")
+        raise KorailProtocolError("seat_attribute_code must be a non-empty string")
     form = {
         **_device_version(config),
         "Key": config.key,
@@ -491,20 +481,20 @@ def build_train_search_form(
     # point, which this client does not drive, and the app leaves them null
     # there (Retrofit then omits the @Field).
     if not isinstance(query.query_division_code, str) or not query.query_division_code:
-        raise ValueError("query_division_code must be a non-empty string")
+        raise KorailProtocolError("query_division_code must be a non-empty string")
     if not isinstance(query.connection_station_codes, tuple) or any(
         not isinstance(code, str) or not code for code in query.connection_station_codes
     ):
-        raise ValueError("connection_station_codes must be a tuple of non-empty strings")
+        raise KorailProtocolError("connection_station_codes must be a tuple of non-empty strings")
     if query.connection_train_group_code is not None and (
         not isinstance(query.connection_train_group_code, str)
         or not query.connection_train_group_code
     ):
-        raise ValueError("connection_train_group_code must be a non-empty string or None")
+        raise KorailProtocolError("connection_train_group_code must be a non-empty string or None")
     if not transfer and (
         query.connection_station_codes or query.connection_train_group_code is not None
     ):
-        raise ValueError("connection filters require transfer=True")
+        raise KorailProtocolError("connection filters require transfer=True")
     form["qryDvCd"] = query.query_division_code
     # buildTrainScheduleIn() leaves qryStNo/qryStTrnNo/qryStTrnNo2/pgPrCnt
     # literal null on every fresh (first-page) build (TrainScheduleViewModel
@@ -617,7 +607,6 @@ def build_train_schedule_special_form(
         query,
         departure_name=departure_name,
         arrival_name=arrival_name,
-        sid="",
         member_card_no=member_card_no,
         continuation=continuation,
         transfer=transfer,
@@ -669,10 +658,6 @@ def build_train_schedule_form(
 def build_common_code_form(
     config: KorailConfig,
     code: str | Sequence[str],
-    *,
-    depart_date: str = "",
-    arrival_date: str = "",
-    holiday_yn: str = "",
 ) -> dict[str, object]:
     """``common.code.do`` 의 공통코드 조회 폼을 만듭니다.
 
@@ -682,21 +667,11 @@ def build_common_code_form(
     (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:317``)와
     ``postCommonCodeMulti(@FieldMap, @Field("code") List<String>)``(``:321``).
 
-    ``depart_date``·``arrival_date``·``holiday_yn`` 은 비어 있으면 키 자체가
-    빠집니다. 화면 크기와 ``OSVersion``(안드로이드 SDK 정수)은 설정에서 옵니다.
-
-    **그 세 인자는 7.0.6 에 대응물이 없습니다.** 요청 DTO
+    화면 크기와 ``OSVersion``(안드로이드 SDK 정수)은 설정에서 옵니다. 요청 DTO
     ``analysis/jadx/sources/com/korail/talk/network/model/CommonCodeIn.java:31-34``
     와 그 합성 생성자의 ``@SerialName`` 목록(``:55``)이 선언하는 필드는
     ``Device``·``Version``·``Key``·``lang``·``code``·``deviceWidth``·
-    ``deviceHeight``·``OSVersion`` 여덟 개뿐이고, ``departDate``·``holidayYn`` 은
-    ``analysis/jadx/sources/com/korail/`` 전체에 검색 결과가 0 입니다. 2026-09-22
-    실서버에서도 무해했습니다 — ``app.holiday.popup`` 을 ``depart_date``
-    ``"20260925"``/``arrival_date`` ``"20260926"``/``holiday_yn`` ``"Y"`` 와 함께
-    보낸 응답 값이 세 키를 뺀 평범한 호출과 같았습니다. 즉 앱이 만든 적 없는
-    전선 모양이면서 서버도 무시하는 값이라, 공개 메서드
-    :meth:`~korail_mobile_api.KorailClient.get_common_code` 는 일부러 노출하지
-    않습니다. 여기 남겨 둔 것은 순전히 그 관측 기록을 위해서입니다.
+    ``deviceHeight``·``OSVersion`` 여덟 개뿐입니다.
 
     로그인 직전에 비밀번호 암호화 파라미터를 받아 오는 것도 이 라우트입니다
     (:meth:`~korail_mobile_api.session.KorailSessionClient.get_login_crypto_info`).
@@ -708,12 +683,6 @@ def build_common_code_form(
         "deviceWidth": config.device_width,
         "deviceHeight": config.device_height,
     }
-    if depart_date:
-        form["departDate"] = depart_date
-    if arrival_date:
-        form["arrivalDate"] = arrival_date
-    if holiday_yn:
-        form["holidayYn"] = holiday_yn
     form["OSVersion"] = config.android_sdk_int
     return form
 
@@ -796,8 +765,9 @@ def build_maas_station_form(additional_service_code: str) -> dict[str, str]:
 
     부가서비스 코드(``addSrvDvCd``) 하나뿐이고 공통 필드도 붙지 않습니다. 값은
     :meth:`~korail_mobile_api.client.KorailClient.get_maas_menu_list` 결과의
-    항목에서 옵니다. 비어 있으면 ``ValueError`` 입니다.
+    항목에서 옵니다. 비어 있으면
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
     """
     if not isinstance(additional_service_code, str) or not additional_service_code.strip():
-        raise ValueError("additional_service_code must be a non-empty string")
+        raise KorailProtocolError("additional_service_code must be a non-empty string")
     return {"addSrvDvCd": additional_service_code}

@@ -996,11 +996,11 @@ class TrainSearchContinuation:
         for name in ("query_station_no", "query_train_no", "page_count"):
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
-                raise ValueError(
+                raise KorailProtocolError(
                     f"TrainSearchContinuation.{name} must be a non-empty string"
                 )
         if not isinstance(self.query_train_no2, str):
-            raise ValueError(
+            raise KorailProtocolError(
                 "TrainSearchContinuation.query_train_no2 must be a string"
             )
 
@@ -1021,7 +1021,7 @@ def _train_search_continuation(
             page_count=metadata.result_count or "10",
             query_train_no2=query_train_no2,
         )
-    except ValueError:
+    except KorailProtocolError:
         return None
 
 
