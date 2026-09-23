@@ -97,11 +97,7 @@ from .errors import (
     KorailQueueRejectedError,
     KorailTransportError,
 )
-from .netfunnel_safety import (
-    assert_korail_netfunnel_key,
-    assert_korail_netfunnel_origin,
-    korail_netfunnel_node_url,
-)
+from .netfunnel_safety import korail_netfunnel_node_url
 
 T = TypeVar("T")
 
@@ -225,7 +221,7 @@ def parse_netfunnel_body(body: str) -> KorailNetFunnelToken:
 
     첫 ``:`` 앞이 코드, 뒤가 ``&`` 로 나뉜 ``name=value`` 쌍입니다. ``:`` 가 없거나 코드가
     숫자가 아니면 :class:`~korail_mobile_api.errors.KorailNetFunnelError`(앱의
-    ``Code.ErrorData``)입니다. 서버가 준 ``key`` 와 ``ip``/``port`` 는
+    ``Code.ErrorData``)입니다. 서버가 준 ``ip``/``port`` 는
     :mod:`~korail_mobile_api.netfunnel_safety` 의 가드를 통과해야 합니다.
     """
     head, separator, tail = body.strip().partition(":")
@@ -241,8 +237,6 @@ def parse_netfunnel_body(body: str) -> KorailNetFunnelToken:
         if found:
             params[name] = value
     key = params.get("key", "")
-    if key:
-        assert_korail_netfunnel_key(key)
     return KorailNetFunnelToken(
         code=head,
         key=key,
@@ -276,7 +270,6 @@ class KorailNetFunnelClient:
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         config = config or KorailConfig()
-        assert_korail_netfunnel_origin(config.netfunnel_url)
         self.config = config
         self._front = config.netfunnel_url.rstrip("/")
         self._sleep = sleeper

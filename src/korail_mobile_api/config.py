@@ -47,8 +47,8 @@ class KorailConfig:
     """매 요청에 싣는 값들.
 
     ``KorailConfig()`` 인자 없이 만들면 앱 v6.5.0 의 기본값이 채워집니다.
-    ``base_url`` = ``smart.letskorail.com``, ``netfunnel_url`` =
-    ``nf.letskorail.com`` 으로 각각 오리진 검사됩니다.
+    ``base_url``·``netfunnel_url`` 은 검사하지 않고 그대로 씁니다 — 다른 곳을
+    가리키면 로그인 자격증명도 그리로 갑니다.
     """
 
     base_url: str = KORAIL_BASE_URL

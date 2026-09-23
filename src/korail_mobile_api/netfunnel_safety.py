@@ -2,14 +2,9 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""대기열 호스트(``nf.letskorail.com``)로 나가는 곳을 제한하는 가드.
+"""대기열 응답이 지목한 노드(``ip``/``port``)를 따라갈지 정하는 가드.
 
-검사하는 것은 이 라이브러리가 스스로 정하지 않는 값뿐입니다 — 호출자가 넘긴 정문
-origin(:attr:`~korail_mobile_api.config.KorailConfig.netfunnel_url`), 서버가 응답에
-실어 보낸 노드(``ip``/``port``)와 키. 이 라이브러리가 고정 순서로 만드는 질의 문자열
-자체는 검사하지 않습니다.
-
-메인 API 쪽 가드는 :func:`~korail_mobile_api.http.assert_korail_origin` 입니다.
+서버 응답이 정하는 값이라 검사합니다 — 풀 밖 호스트로 대기열 키를 보내지 않습니다.
 """
 import re
 from urllib.parse import urlsplit
@@ -19,11 +14,6 @@ from .errors import KorailProtocolError
 
 
 KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
-
-#: 서버가 발급한 키의 모양. 키는 불투명한 값이라 모양으로만 봅니다.
-#: 실서버 키는 대문자 16진 256자였습니다(2026-07-26). 상한 512 는 여유를 둔 값입니다 —
-#: 너무 좁게 잡으면 정상 키의 완료(5004)가 전송 전에 막혀 슬롯이 조용히 샙니다.
-KORAIL_NETFUNNEL_KEY_RE = re.compile(r"[A-Za-z0-9_.:@~-]{1,512}")
 
 #: 응답이 가리킬 수 있는 대기열 노드 이름.
 #:
@@ -41,34 +31,6 @@ KORAIL_NETFUNNEL_NODE_HOST_RE = re.compile(r"rnf[1-9][0-9]?\.letskorail\.com")
 
 #: 지목된 노드에 허용되는 유일한 포트.
 KORAIL_NETFUNNEL_NODE_PORT = 443
-
-
-def assert_korail_netfunnel_origin(netfunnel_url: str) -> None:
-    """설정된 대기열 정문을 ``https://nf.letskorail.com``(443)으로 고정합니다.
-
-    https 가 아니거나, 호스트가 다르거나, 443 이 아닌 포트·userinfo·path·query·fragment
-    가 붙어 있으면 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
-    """
-    parsed = urlsplit(netfunnel_url)
-    try:
-        port = parsed.port
-    except ValueError as exc:
-        raise KorailProtocolError(
-            "KORAIL NetFunnel request origin is not allowed"
-        ) from exc
-    if (
-        parsed.scheme.casefold() != "https"
-        or (parsed.hostname or "").casefold() != KORAIL_NETFUNNEL_HTTPS_HOST
-        or port not in {None, KORAIL_NETFUNNEL_NODE_PORT}
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.path not in {"", "/"}
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise KorailProtocolError(
-            "KORAIL NetFunnel request origin is not allowed"
-        )
 
 
 def korail_netfunnel_node_url(ip: str, port: str) -> str:
@@ -99,8 +61,3 @@ def korail_netfunnel_node_url(ip: str, port: str) -> str:
         )
     return f"https://{ip}"
 
-
-def assert_korail_netfunnel_key(key: str) -> None:
-    """서버가 준 키가 :data:`KORAIL_NETFUNNEL_KEY_RE` 모양인지 봅니다."""
-    if KORAIL_NETFUNNEL_KEY_RE.fullmatch(key) is None:
-        raise KorailProtocolError("KORAIL NetFunnel reply carried a malformed key")

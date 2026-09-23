@@ -7,7 +7,7 @@
 읽기(:meth:`~KorailHttpClient.post_form`, :meth:`~KorailHttpClient.get_json`)와
 변경(:meth:`~KorailHttpClient.post_mutation_form`)은 응답 봉투 처리만 다릅니다. 라우트
 허용목록은 없습니다 — 라우트는 호출부(:mod:`korail_mobile_api.client`)가 상수로
-고릅니다. API 호스트는 :func:`assert_korail_origin` 이 생성 시점에 고정합니다.
+고릅니다.
 공통 필드(``Device``/``Version``/``Key``, 그리고 호출자가 ``KorailConfig.lang`` 을
 채웠을 때만 ``lang``), DynaPath 헤더, ``h_msg_cd`` 판정이 여기서 붙습니다.
 """
@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode
 
 import httpx
 
@@ -24,7 +24,6 @@ from .config import KorailConfig
 from .constants import (
     DYNAPATH_ALLOWLIST_PATHS,
     DYNAPATH_REQUIRED_PATHS,
-    KORAIL_BASE_URL,
 )
 from .dynapath import DynapathRequestContext, DynapathTokenGenerator
 from .errors import (
@@ -37,39 +36,6 @@ from .errors import (
     classify_app_error,
 )
 from .models import BaseKorailResponse
-
-
-_KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
-
-
-def assert_korail_origin(base_url: str) -> None:
-    """API 요청의 origin 을 ``https://smart.letskorail.com``(443)으로 고정합니다.
-
-    https 가 아니거나, 호스트가 다르거나, 443 이 아닌 포트·userinfo·path·query·fragment 가
-    붙어 있으면 :class:`KorailProtocolError` 입니다.
-    :class:`KorailHttpClient` 가 생성 시점에 부르므로, 다른 호스트를 가리키는 설정은
-    소켓이 생기기 전에 막힙니다. 대기열 호스트는 여기서 거부되며 자기 가드
-    (:func:`~korail_mobile_api.netfunnel_safety.assert_korail_netfunnel_origin`)를 씁니다.
-    """
-    parsed = urlsplit(base_url)
-    try:
-        port = parsed.port
-    except ValueError as exc:
-        raise KorailProtocolError(
-            "KORAIL request origin is not allowed"
-        ) from exc
-    if (
-        parsed.scheme.casefold() != "https"
-        or parsed.hostname is None
-        or parsed.hostname.casefold() != _KORAIL_HTTPS_HOST
-        or port not in {None, 443}
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.path not in {"", "/"}
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise KorailProtocolError("KORAIL request origin is not allowed")
 
 
 # 7.0.6 응답 모델이 CommonOut 을 상속하지 않아 봉투 필드가 아예 없는 읽기 경로.
@@ -261,11 +227,7 @@ def _finish_mutation(
 
 
 class KorailHttpClient:
-    """KORAIL API 호스트에 고정된 HTTP 클라이언트.
-
-    ``assert_korail_origin`` 이 ``config.base_url`` 을
-    ``https://smart.letskorail.com`` 으로 못 박습니다.
-    """
+    """KORAIL API(``config.base_url``)로 요청을 보내는 HTTP 클라이언트."""
 
     def __init__(
         self,
@@ -273,7 +235,6 @@ class KorailHttpClient:
         *,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        assert_korail_origin(config.base_url)
         self.config = config
         self._dynapath_generator = (
             DynapathTokenGenerator(

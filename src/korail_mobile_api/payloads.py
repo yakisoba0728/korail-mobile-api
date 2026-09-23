@@ -11,9 +11,7 @@ MaaS 메뉴의 폼을 만듭니다. 나머지 읽기 라우트는
 
 여기 함수들은 dict 를 돌려줄 뿐 아무것도 보내지 않습니다. 필드 이름과 순서는
 APK 의 Retrofit 선언에서 나왔습니다. 그것을 고정하던 테스트는 삭제됐고, 지금
-계약을 말하는 것은 각 빌더의 코드뿐입니다. 전송 전 검사는 요청 출처
-(:func:`~korail_mobile_api.http.assert_korail_origin`)뿐이고 필드 이름·순서는
-강제하지 않습니다.
+계약을 말하는 것은 각 빌더의 코드뿐입니다.
 """
 import time
 from collections.abc import Sequence
