@@ -1,7 +1,6 @@
-"""합격 기준(``checks/ACCEPTANCE.md``)의 G8(표본)·G9·G10·G11 을 검사합니다.
+"""합격 기준(``checks/ACCEPTANCE.md``)의 G9·G10·G11 을 검사합니다.
 
-수용 범위를 줄이지 않음, 파싱 실패 시 원문 보존, import 무결성, 로그아웃 뒤 로컬
-상태 없음을 봅니다. G8 전체는 ``g8_differential.py`` 가 봅니다.
+파싱 실패 시 원문 보존, import 무결성, 로그아웃 뒤 로컬 상태 없음을 봅니다.
 
 네트워크를 쓰지 않습니다. 만드는 클라이언트는 전부 ``httpx.MockTransport`` 를
 달고, 그 전송이 실제로 불리면(= 가짜로 막지 않은 요청이 나가려 하면) 위반으로
@@ -9,8 +8,7 @@
 
 종료 코드: 0 통과, 1 실패, 2 검사 불완전 — 패키지 import 가 실패해 검사를 돌리지
 못했거나, 검사기 자신이 예상하지 못한 예외로 멈춘 경우입니다. 불완전은 실패보다
-우선합니다(``sphinx_symbols.py`` 와 같은 규칙): 끝까지 보지 못했으면 발견한 실패가
-전부라고 말할 수 없습니다.
+우선합니다: 끝까지 보지 못했으면 발견한 실패가 전부라고 말할 수 없습니다.
 
     python3 checks/contract_api.py
 """
@@ -32,9 +30,7 @@ incomplete: list[str] = []
 
 
 def show(value: object) -> str:
-    """실패 메시지용 표시. 자릿수 한도를 넘는 정수의 ``repr`` 은 그 자체로
-    ``ValueError`` 를 냅니다 — 검사기가 검사하려던 결함에 스스로 걸려 위반을
-    보고하지 못하고 죽었습니다(2026-09-23)."""
+    """실패 메시지용 짧은 표시(``repr`` 이 실패해도 죽지 않음)."""
     if isinstance(value, int) and not isinstance(value, bool):
         return f"<int {value.bit_length()} bits>"
     try:
@@ -76,69 +72,6 @@ def g10(pkg: Any) -> int:
     exec("from korail_mobile_api import *", namespace)  # noqa: S102
     check("G10", all(n in namespace for n in pkg.__all__), "star import 누락")
     return len(modules)
-
-
-# --- G8: 새 선택 필드가 파싱 실패를 만들지 않음 ---------------------------------
-# 여기 있는 것은 **좁은 표본**입니다 — cart 일부 키, ticket 두 필드, cart-add 세
-# 형태. 새로 모델링한 선택 필드군 전체를 필드마다 "예전 파서가 받던 응답을 새
-# 파서도 받는가"로 비교하는 검사는 ``checks/g8_differential.py`` 가 합니다(최종
-# 감사 C38). 이 파일의 G8 을 넓히지 말고 그쪽에 추가하십시오.
-#: ``10**5000`` 은 파이썬의 정수→문자열 자릿수 한도(기본 4,300)를 넘어 ``str()`` 이
-#: ``ValueError`` 를 냅니다. 관대화 코드가 그 예외를 놓쳤습니다(최종 감사 C10).
-ODD = [True, 1.5, [], {}, None, 7, "s", 10**5000]
-NEW_CART_KEYS = [
-    "h_item_dv_cd", "h_add_srv_mrk_ent_id", "h_item_sqno", "h_jrny_sqno",
-    "h_jrny_tp_cd", "utlClsDt", "h_stl_lmt_tm", "h_stl_extns_tno",
-    "h_stl_mns_allw_val", "h_fld_stl_dv", "h_spvs_rs_stn_cd", "h_filler",
-]
-
-
-def g8() -> None:
-    from korail_mobile_api import read_parsers as RP
-    from korail_mobile_api.client import KorailClient
-    from korail_mobile_api.config import KorailConfig
-    from korail_mobile_api.models import BaseKorailResponse
-    from korail_mobile_api.mutation_parsers import parse_cart_add_response
-
-    for value in ODD:
-        for key in NEW_CART_KEYS:
-            try:
-                RP.parse_cart_list_response(
-                    {**ENV, "cart_infos": {"cart_info": [{"h_pnr_no": "1", key: value}]}}
-                )
-            except Exception as error:  # noqa: BLE001
-                check("G8", False, f"cart {key}={show(value)}: {type(error).__name__}")
-        for key in ("ticketKind", "addSrvInfo"):
-            try:
-                RP.parse_ticket_list_response(
-                    BaseKorailResponse.from_raw(
-                        {**ENV, "pnr_list": [{"h_pnr_no": "1", key: value}]}
-                    )
-                )
-            except Exception as error:  # noqa: BLE001
-                check("G8", False, f"ticket {key}={show(value)}: {type(error).__name__}")
-        for shape in (
-            {"psgDiscAdd_infos": value},
-            {"psgDiscAdd_infos": {"psgDiscAdd_info": value}},
-            {"psgDiscAdd_infos": {"psgDiscAdd_info": [{"h_psg_sqno": value}]}},
-        ):
-            try:
-                parse_cart_add_response({**ENV, **shape})
-            except Exception as error:  # noqa: BLE001
-                check("G8", False, f"cart-add {show(shape)}: {type(error).__name__}")
-
-    # 실제 파서가 ``_mutation`` 경로에서 자릿수 한도 초과 정수를 만나는 경우.
-    # G8 사례입니다(파싱이 실패하면 안 됨) — 예전에는 G9 제목 아래 섞여 있었습니다.
-    client = KorailClient(KorailConfig(), transport=_offline_transport())
-    big = {**ENV, "psgDiscAdd_infos": {"psgDiscAdd_info": [{"h_psg_sqno": 10**5000}]}}
-    with patch.object(
-        client.http, "post_mutation_form",
-        side_effect=lambda *_a, **_k: BaseKorailResponse.from_raw(big),
-    ):
-        try:
-            client._mutation("cart", "/x", {}, parser=parse_cart_add_response)
-        except Exception as error:  # noqa: BLE001
-            check("G8", False, f"cart-add 큰 정수(_mutation): {type(error).__name__}")
 
 
 # --- G9: 변경 응답의 typed 파싱 실패 시 .raw 에 원문 전체 ------------------------
@@ -196,7 +129,7 @@ def g9() -> None:
         raised: BaseException | None = None
         with patch.object(client.http, "post_mutation_form", side_effect=fake_post):
             try:
-                client._mutation("cart", "/x", {}, parser=parser)
+                client._mutation("/x", {}, parser=parser)
                 check("G9", False, f"{label}: 파싱 실패가 전파되지 않음")
             except Exception as error:  # noqa: BLE001
                 raised = error
@@ -240,7 +173,7 @@ def g9() -> None:
           f"외부 예외 .raw={show(getattr(error, 'raw', None))}")
 
 
-# --- C26: logout 은 서버 요청이 어떻게 실패해도 로컬 상태를 비움 ------------------
+# --- G11: logout 은 서버 요청이 어떻게 실패해도 로컬 상태를 비움 ------------------
 def logout_state() -> None:
     import httpx
 
@@ -263,10 +196,10 @@ def logout_state() -> None:
         try:
             action()
         except BaseException as error:  # noqa: BLE001
-            check("C26", False, f"{label}: logout 이 {type(error).__name__} 를 냄")
-        check("C26", client.session.current is None, f"{label}: current 가 남음")
-        check("C26", client.session.pending is None, f"{label}: pending 이 남음")
-        check("C26", len(client.http.cookies) == 0,
+            check("G11", False, f"{label}: logout 이 {type(error).__name__} 를 냄")
+        check("G11", client.session.current is None, f"{label}: current 가 남음")
+        check("G11", client.session.pending is None, f"{label}: pending 이 남음")
+        check("G11", len(client.http.cookies) == 0,
               f"{label}: 쿠키 {len(client.http.cookies)}개가 남음")
 
     # a) 전송 계층이 이 패키지 밖 예외를 냄
@@ -303,9 +236,8 @@ def main() -> int:
     module_count = 0
     sections: list[tuple[str, Callable[[], object]]] = [
         ("G10", lambda: g10(pkg)),
-        ("G8", g8),
         ("G9", g9),
-        ("C26", logout_state),
+        ("G11", logout_state),
     ]
     for name, section in sections:
         try:
@@ -334,7 +266,7 @@ def main() -> int:
         return 2
     if failures:
         return 1
-    print(f"G8·G9·G10·G11 통과 (모듈 {module_count}, 공개 심볼 {len(pkg.__all__)})")
+    print(f"G9·G10·G11 통과 (모듈 {module_count}, 공개 심볼 {len(pkg.__all__)})")
     return 0
 
 

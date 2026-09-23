@@ -9,7 +9,10 @@
 :mod:`korail_mobile_api.read_parsers` 에 있습니다.
 
 각 파서는 봉투를 먼저 확인하고 그 라우트의 DAO 선언이 말하는 필드만 꺼냅니다.
-원본 JSON 은 모델의 ``raw`` 에 남습니다. 역이름과 역코드의 대응은
+원본 JSON 은 모델의 ``raw`` 에 남습니다. 선택 필드는 관대하게 읽고(모양이
+어긋나면 ``None``/빈 목록), 필수 필드 — 역 목록의 코드·이름, 열차 조회 행, 좌석
+재고의 좌석 행처럼 예약에 쓰이는 값 — 만 어긋나면
+:class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 역이름과 역코드의 대응은
 :func:`parse_station_name_map` 과 :func:`resolve_station_name` 이 맡으며,
 :class:`~korail_mobile_api.client.KorailClient` 가 그 표를 캐시합니다.
 """
@@ -48,7 +51,13 @@ from .models import (
     TransferStationListResponse,
     UuidResponse,
 )
-from .read_parsers import _additive_scalar_string, _nested_rows, _nullable_string_fields, _optional_list
+from .read_parsers import (
+    _nested_rows,
+    _nullable_string_fields,
+    _optional_integer,
+    _optional_scalar_string,
+    _rows,
+)
 from .read_parsers import _optional_string as _typed_optional_string
 
 
@@ -96,7 +105,12 @@ def _typed_required_scalar_string(
         return value
     # `type(...) is int` on purpose: bool is an int subclass.
     if type(value) is int:
-        return str(value)
+        try:
+            return str(value)
+        except ValueError as exc:  # 파이썬의 정수→문자열 자릿수 한도
+            raise KorailProtocolError(
+                f"KORAIL {context} field {key} is an integer too long to use"
+            ) from exc
     raise KorailProtocolError(
         f"KORAIL {context} field {key} must be a string or an integer"
     )
@@ -108,14 +122,9 @@ def _typed_optional_int(
     *,
     context: str,
 ) -> int | None:
-    value = data.get(key)
-    if value is None:
-        return None
-    return _typed_non_negative_integer_value(
-        value,
-        key,
-        context=context,
-    )
+    """선택 정수 — 음이 아닌 정수나 ASCII 10진 문자열이 아니면 ``None``."""
+    value = _optional_integer(data, key, context)
+    return value if value is not None and value >= 0 else None
 
 
 def _typed_non_negative_integer_value(
@@ -183,8 +192,8 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
 
     캐시 파일이라 KORAIL 봉투가 없습니다. 모든 필드가 선택값이므로 서버가 빼면
     ``None`` 입니다. ``version`` 이 객체로 오면 앱 업데이트 안내
-    (:class:`~korail_mobile_api.models.AppVersionInfo`)이고, 객체도 ``null`` 도
-    아니면 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+    (:class:`~korail_mobile_api.models.AppVersionInfo`)이고, 객체가 아니면 ``None``
+    입니다.
 
     ``version`` 에서 읽는 세 키가 7.0.6 ``MobilePlusMainVersion`` 이 선언하는
     필드 전부입니다 — ``MobilePlusMainVersion.java:52`` 의 역직렬화 생성자에
@@ -200,17 +209,12 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
     """
     raw = response.raw
     version_raw = raw.get("version")
-    if version_raw is not None and not isinstance(version_raw, Mapping):
-        raise KorailProtocolError(
-            "KORAIL cache field version must be an object or null"
-        )
     version = None
     if isinstance(version_raw, Mapping):
         version = AppVersionInfo(
             message=_optional_string(version_raw, "AMESSAGE"),
             new_version=_optional_string(version_raw, "NEWDVERSION"),
-            # 1.1.1 이후 모델링한 필드 — 모양이 어긋나면 None(G8).
-            store_url=_additive_scalar_string(version_raw, "CNTAURL", "app data version"),
+            store_url=_optional_scalar_string(version_raw, "CNTAURL", "app data version"),
         )
     return AppDataResponse(
         **_response_fields(response),
@@ -222,7 +226,7 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
         version=version,
         notice=(
             parse_notice_response(response)
-            if raw.get("notice") is not None
+            if isinstance(raw.get("notice"), Mapping)
             else None
         ),
     )
@@ -236,8 +240,6 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
     """
     raw = response.raw
     nested = raw.get("notice")
-    if nested is not None and not isinstance(nested, Mapping):
-        raise KorailProtocolError("KORAIL cache field notice must be an object or null")
     notice_raw = nested if isinstance(nested, Mapping) else raw
     nested_notice = isinstance(nested, Mapping)
     return NoticeResponse(
@@ -266,11 +268,14 @@ def parse_station_name_map(raw: Mapping[str, Any]) -> dict[str, str]:
     rows = container.get("stn") if isinstance(container, Mapping) else None
     if not isinstance(rows, list):
         raise KorailProtocolError("KORAIL station data missing stns.stn list")
-    names = {
-        str(row.get("stn_cd")): str(row.get("stn_nm"))
-        for row in rows
-        if isinstance(row, Mapping) and row.get("stn_cd") and row.get("stn_nm")
-    }
+    names: dict[str, str] = {}
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        code = _optional_scalar_string(row, "stn_cd")
+        name = _optional_scalar_string(row, "stn_nm")
+        if code and name:
+            names[code] = name
     if not names:
         raise KorailProtocolError(
             "KORAIL station data did not contain usable stations"
@@ -356,8 +361,7 @@ def parse_train_search_metadata(
 
     return TrainSearchMetadata(
         job_id=optional("strJobId"),
-        # 1.1.1 이후 모델링한 필드 — 모양이 어긋나면 None(G8).
-        menu_id=_additive_scalar_string(raw, "h_menu_id", "train search metadata"),
+        menu_id=_optional_scalar_string(raw, "h_menu_id", "train search metadata"),
         product_no=optional("h_gd_no"),
         next_page_flag=optional("h_next_pg_flg"),
         next_query_station_no=optional("h_qry_st_no_next"),
@@ -435,25 +439,14 @@ def parse_maas_menu_list_response(
 ) -> MaasMenuListResponse:
     """``copt.gdMenuLt.do`` 의 MaaS 메뉴 목록을 파싱합니다.
 
-    ``menuList`` 는 없거나 ``null`` 이어도 되고 그때는 빈 목록입니다. 리스트가
-    아니거나 행이 객체가 아니면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+    ``menuList`` 가 리스트가 아니면 빈 목록이고, 객체가 아닌 행은 건너뜁니다.
 
     각 항목은 부가서비스 코드를 가지며, 역 선택을 쓰는 항목의 그 코드가
     :meth:`~korail_mobile_api.client.KorailClient.get_maas_station_data` 의
     입력입니다.
     """
-    rows = response.raw.get("menuList")
-    if rows is None:
-        rows = []
-    if not isinstance(rows, list):
-        raise KorailProtocolError("KORAIL MAAS menuList must be a list or null")
     items: list[MaasMenuItem] = []
-    for row in rows:
-        if not isinstance(row, Mapping):
-            raise KorailProtocolError(
-                "KORAIL MAAS menuList contained a non-object row"
-            )
+    for row in _rows(response.raw, "menuList"):
         items.append(
             MaasMenuItem(
                 **_nullable_string_fields(row, _MAAS_ITEM_FIELDS, "MAAS menu"),
@@ -603,13 +596,8 @@ def parse_train_calendar_response(
     # TrainCalendarDao:101-103 are 6.5.0 leftovers absent from 7.0.6.
     # Accept absent/null as an empty day tuple; only a present non-list is a
     # genuine shape violation.
-    rows = _optional_list(raw, "runningCalendar", "train calendar")
     days: list[TrainCalendarDay] = []
-    for row in rows:
-        if not isinstance(row, Mapping):
-            raise KorailProtocolError(
-                "KORAIL train calendar contained a non-object row"
-            )
+    for row in _rows(raw, "runningCalendar"):
         days.append(
             TrainCalendarDay(
                 # runDt is treated as optional here by this package's own
@@ -765,15 +753,8 @@ def parse_train_schedule_response(
     선택값이라 서버가 빼면 ``None`` 입니다.
     """
     raw = response.raw
-    rows = raw.get("dlayList", [])
-    if not isinstance(rows, list):
-        raise KorailProtocolError("KORAIL train schedule field dlayList must be a list")
     stops: list[TrainScheduleStop] = []
-    for row in rows:
-        if not isinstance(row, Mapping):
-            raise KorailProtocolError(
-                "KORAIL train schedule contained a non-object stop"
-            )
+    for row in _rows(raw, "dlayList"):
         stops.append(
             TrainScheduleStop(
                 station_code=_typed_optional_string(
@@ -1025,13 +1006,8 @@ def parse_seat_car_list_response(
     입력입니다.
     """
     raw = response.raw
-    rows = _nested_rows(raw, "srcar_infos", "srcar_info", "seat inventory")
     cars: list[SeatCar] = []
-    for row in rows:
-        if not isinstance(row, Mapping):
-            raise KorailProtocolError(
-                "KORAIL seat car list contained a non-object row"
-            )
+    for row in _nested_rows(raw, "srcar_infos", "srcar_info", "seat inventory"):
         # TrainResearchOutCarInfo.java:32 declares hSrcarNo as a String
         # (public final String hSrcarNo;), not an int. Coercing it to int
         # here loses leading zeros (e.g. "01" -> 1) -- a lossy round-trip.
@@ -1052,15 +1028,9 @@ def parse_seat_car_list_response(
         # ``List<TrainResearchOutSeatInfo> seatAttInfos`` 이고, 필드 출현 비트가
         # 없으면 널이 아니라 **빈 목록**이 들어갑니다(``:81-84``:
         # ``this.seatAttInfos = CollectionsKt.emptyList()``). 그러니 "없으면
-        # 빈 목록" 은 DTO 자신의 기본값과 같은 결론입니다. 키가 있는데 리스트가
-        # 아니면 여전히 잘못된 응답입니다.
-        attributes_raw = _optional_list(row, "seatAttInfos", "seat inventory")
+        # 빈 목록" 은 DTO 자신의 기본값과 같은 결론입니다.
         attributes: list[SeatAttribute] = []
-        for attribute_raw in attributes_raw:
-            if not isinstance(attribute_raw, Mapping):
-                raise KorailProtocolError(
-                    "KORAIL seat attribute list contained a non-object row"
-                )
+        for attribute_raw in _rows(row, "seatAttInfos"):
             attributes.append(
                 SeatAttribute(
                     name=_inventory_required_string(
@@ -1104,10 +1074,8 @@ def parse_seat_car_list_response(
         cars=tuple(cars),
         train_class_code=_inventory_optional_string(raw, "h_trn_clsf_cd"),
         train_group_code=_inventory_optional_string(raw, "h_trn_gp_cd"),
-        # TrainResearchOut.java:27,105 -- one of the DTO's own 6 fields,
-        # previously unread.
-        # 1.1.1 이후 모델링한 필드라 모양이 어긋나면 None 입니다(G8).
-        car_count=_additive_scalar_string(raw, "h_scar_num", "seat car list"),
+        # TrainResearchOut.java:27,105 -- one of the DTO's own 6 fields.
+        car_count=_optional_scalar_string(raw, "h_scar_num", "seat car list"),
     )
 
 

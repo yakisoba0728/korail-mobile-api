@@ -12,7 +12,7 @@ KORAIL 은 ``String`` 선언 필드를 JSON 숫자로도 보내므로
 """
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from typing import Any
 
 from .errors import (
@@ -150,9 +150,6 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
                     **_nullable_scalar_fields(
                         ticket_raw, _TICKET_LIST_TICKET_FIELDS, "ticket list"
                     ),
-                    **_additive_scalar_fields(
-                        ticket_raw, _TICKET_LIST_TICKET_ADDITIVE_FIELDS, "ticket list"
-                    ),
                     train_info=train_info,
                     raw=ticket_raw,
                 )
@@ -164,64 +161,57 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
         # :52) is kept as the raw string that arrives — the enum's serialized
         # names are AlienGuard ciphertext (TicketDefine.java:1092-1130), so no
         # code mapping is claimed. Both stay reachable through `raw` as before.
-        #
-        # 둘 다 *관대하게* 읽습니다(_additive_add_srv_item /
-        # _additive_scalar_string): 라이브 캡처가 없는 두 키라 모양을 확인할
-        # 길이 없고, 나중에 덧붙인 필드가 예전에 파싱되던 예약 행을
-        # KorailProtocolError 로 바꿔서는 안 됩니다. 모양이 어긋나면 그
-        # 필드만 None 이고 값은 raw 에 남습니다.
-        additional_service = _additive_add_srv_item(
+        additional_service = _optional_add_srv_item(
             reservation_raw,
             "addSrvInfo",
-            "ticket list reservation",
             "ticket list addSrvInfo",
             "ticket list addSrvInfo detailInfo",
         )
         reservations.append(
             TicketListReservation(
                 tickets=tuple(tickets),
-                departure_datetime=_additive_scalar_string(
+                departure_datetime=_optional_scalar_string(
                     reservation_raw, "hDptDtTm", "ticket list reservation"
                 ),
-                ticket_kind_code=_additive_scalar_string(
+                ticket_kind_code=_optional_scalar_string(
                     reservation_raw, "hTkKndCd", "ticket list reservation"
                 ),
-                list_count=_additive_scalar_string(
+                list_count=_optional_scalar_string(
                     reservation_raw, "listCnt", "ticket list reservation"
                 ),
-                seat_assign_count=_additive_integer(
+                seat_assign_count=_optional_integer(
                     reservation_raw, "seatAssignCount", "ticket list reservation"
                 ),
-                ticket_status=_additive_scalar_string(
+                ticket_status=_optional_scalar_string(
                     reservation_raw, "ticketStatus", "ticket list reservation"
                 ),
-                is_finished=_additive_bool(
+                is_finished=_optional_bool(
                     reservation_raw, "isFinished", "ticket list reservation"
                 ),
-                is_history=_additive_bool(
+                is_history=_optional_bool(
                     reservation_raw, "isHistory", "ticket list reservation"
                 ),
-                is_emergency=_additive_bool(
+                is_emergency=_optional_bool(
                     reservation_raw, "isEmergency", "ticket list reservation"
                 ),
-                display_ticket_name=_additive_scalar_string(
+                display_ticket_name=_optional_scalar_string(
                     reservation_raw, "displayTicketName", "ticket list reservation"
                 ),
-                is_non_member=_additive_bool(
+                is_non_member=_optional_bool(
                     reservation_raw, "isNonMember", "ticket list reservation"
                 ),
-                is_transfer=_additive_bool(
+                is_transfer=_optional_bool(
                     reservation_raw, "isTransfer", "ticket list reservation"
                 ),
-                is_wheelchair_member=_additive_bool(
+                is_wheelchair_member=_optional_bool(
                     reservation_raw, "isWheelchairMember", "ticket list reservation"
                 ),
-                is_rail_police_enabled=_additive_bool(
+                is_rail_police_enabled=_optional_bool(
                     reservation_raw, "isRailPoliceEnabled", "ticket list reservation"
                 ),
                 raw=reservation_raw,
                 additional_service=additional_service,
-                ticket_kind=_additive_scalar_string(
+                ticket_kind=_optional_scalar_string(
                     reservation_raw, "ticketKind", "ticket list reservation"
                 ),
             )
@@ -232,7 +222,7 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
         str_result=response.str_result,
         raw=raw,
         reservations=tuple(reservations),
-        total_count=_additive_scalar_string(raw, "h_total_cnt", "ticket list"),
+        total_count=_optional_scalar_string(raw, "h_total_cnt", "ticket list"),
     )
 
 
@@ -311,49 +301,50 @@ def _validate_strict_read_envelope(
         )
 
 
+# ─── 필드 읽기 규칙 ─────────────────────────────────────────────────────────────
+#
+# **선택 필드는 관대하게 읽습니다.** 모양이 어긋난 스칼라는 ``None``, 객체·목록
+# 자리에 다른 값이 오면 ``None``/빈 목록, 목록 안의 객체가 아닌 원소는 건너뜁니다.
+# 선택 필드 하나 때문에 응답 전체를 버리지 않습니다 — 원문은 언제나 ``raw`` 에
+# 있습니다. 필수 필드(봉투, ``_required_*``)만 어긋나면
+# :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+
+
 def _optional_mapping(
     data: Mapping[str, Any],
     key: str,
-    context: str,
+    context: str = "",
 ) -> Mapping[str, Any] | None:
+    """객체면 그대로, 아니면(없음·리스트·스칼라) ``None``."""
     value = data.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, Mapping):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be an object or null"
-        )
-    return value
+    return value if isinstance(value, Mapping) else None
 
 
 def _optional_list(
     data: Mapping[str, Any],
     key: str,
-    context: str,
+    context: str = "",
 ) -> list[Any]:
+    """리스트면 그대로(원소 검사 없음), 아니면 빈 리스트."""
     value = data.get(key)
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a list or null"
-        )
-    return value
+    return value if isinstance(value, list) else []
 
 
 def _nested_rows(
     raw: Mapping[str, Any],
     outer_key: str,
     inner_key: str,
-    context: str,
-) -> list[Any]:
-    outer = _optional_mapping(raw, outer_key, context)
+    context: str = "",
+) -> list[Mapping[str, Any]]:
+    """``{outer: {inner: [...]}}`` 의 객체 원소들. 모양이 어긋나면 빈 리스트."""
+    outer = _optional_mapping(raw, outer_key)
     if outer is None:
         return []
-    return _optional_list(outer, inner_key, context)
+    return [item for item in _optional_list(outer, inner_key) if isinstance(item, Mapping)]
 
 
 def _row(value: Any, context: str) -> Mapping[str, Any]:
+    """필수 객체 — 객체가 아니면 거부합니다."""
     if not isinstance(value, Mapping):
         raise KorailProtocolError(
             f"KORAIL {context} contained a non-object item"
@@ -362,31 +353,25 @@ def _row(value: Any, context: str) -> Mapping[str, Any]:
 
 
 def _rows(
-    data: Mapping[str, Any],
+    data: Mapping[str, Any] | None,
     key: str,
-    context: str,
+    context: str = "",
     row_context: str | None = None,
-) -> Iterator[Mapping[str, Any]]:
-    """``key`` 리스트의 각 항목을 객체로 검증하며 지연 순회.
-
-    목록 조회(``_optional_list``)는 즉시 실행되고, 항목별 객체 검증
-    (``_row``)은 순회 시점에 지연 실행됩니다.
-    """
-    row_label = row_context if row_context is not None else f"{context} {key}"
-    return (_row(value, row_label) for value in _optional_list(data, key, context))
+) -> list[Mapping[str, Any]]:
+    """``key`` 리스트의 객체 원소들. 리스트가 아니면 빈 리스트, 객체가 아닌 원소는 건너뜀."""
+    if not isinstance(data, Mapping):
+        return []
+    return [item for item in _optional_list(data, key) if isinstance(item, Mapping)]
 
 
 def _optional_string(
     data: Mapping[str, Any],
     key: str,
-    context: str,
+    context: str = "",
 ) -> str | None:
+    """문자열이면 그대로, 아니면 ``None``."""
     value = data.get(key)
-    if value is not None and not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a string or null"
-        )
-    return value
+    return value if isinstance(value, str) else None
 
 
 def _required_string(
@@ -394,12 +379,11 @@ def _required_string(
     key: str,
     context: str,
 ) -> str:
-    """``_optional_string`` 의 필수 쪽 짝. 키가 없거나 ``None`` 이면 거부합니다.
+    """필수 문자열. 키가 없거나 문자열이 아니면 거부합니다.
 
-    W4 finding: ``Seat`` 의 합성 생성자(``Seat.java:53-59``)는 다섯 필드(마스크
-    31) 전부가 없으면 ``throwMissingFieldException`` 을 던집니다 — 7.0.6 이
-    정상 처리하지 않는 응답 모양이므로, 이 필드들을 선택으로 읽으면 그 계약보다
-    느슨해집니다.
+    ``Seat`` 의 합성 생성자(``Seat.java:53-59``)는 다섯 필드 중 하나라도 없으면
+    ``throwMissingFieldException`` 을 던집니다 — 7.0.6 도 처리하지 않는 응답
+    모양이므로 선택으로 읽지 않습니다.
     """
     value = data.get(key)
     if not isinstance(value, str):
@@ -423,44 +407,62 @@ def _present_strings(
     return tuple(values)
 
 
-def _optional_scalar_string(
+def _strict_scalar_string(
     data: Mapping[str, Any],
     key: str,
     context: str,
 ) -> str | None:
-    """스칼라 필드 — JSON 문자열과 JSON 정수를 모두 수용.
+    """JSON 문자열·정수·``null`` 을 받고 그 밖의 모양은 **거부**합니다.
 
-    KORAIL 은 APK 가 자바 ``String`` 으로 선언한 필드를 둘 중 아무 쪽으로나
-    보냅니다. 예약 응답은 여정 수를 ``h_jrny_cnt="0001"`` 로 보내는데 예약 이력은
-    같은 필드를 JSON 정수 ``1`` 로 보냅니다. 같은 식으로 숫자로도 오는 필드로
-    ``h_srcar_no`` 가 있습니다. 홀드를 이력에서 다시 읽는 것이 PNR 을 잃었을 때의
-    복구 경로이므로 둘 다 파싱돼야 합니다.
-
-    따옴표가 없다고 거부하면 실제 예약이 고아가 되므로, 폼 빌더가 기대하는
-    문자열로 정규화하고 정말로 다른 모양인 것 — ``bool``, ``float``, 리스트,
-    객체 — 만 계속 거부합니다. 인원 수 ``h_st_prnb``/``h_cls_prnb`` 는 반대로
-    정수로 읽으므로 :func:`_optional_integer` 가 맡습니다.
+    KORAIL 은 APK 가 자바 ``String`` 으로 선언한 필드를 숫자로도 보냅니다(예약
+    응답의 ``h_jrny_cnt="0001"`` 과 예약 이력의 ``1``). 정수는 문자열로
+    정규화합니다. 폼에 되울리는 값처럼 정확해야 하는 필드에만 씁니다 —
+    선택 필드는 :func:`_optional_scalar_string` 입니다.
     """
     value = data.get(key)
     if value is None or isinstance(value, str):
         return value
-    # `type(...) is int` on purpose: bool is an int subclass and `True` is not
-    # a number KORAIL ever sends for one of these fields.
+    # `type(...) is int` on purpose: bool is an int subclass.
     if type(value) is int:
-        return str(value)
+        try:
+            return str(value)
+        except ValueError as exc:  # 파이썬의 정수→문자열 자릿수 한도
+            raise KorailProtocolError(
+                f"KORAIL {context} field {key} is an integer too long to use"
+            ) from exc
     raise KorailProtocolError(
         f"KORAIL {context} field {key} must be a string, an integer, or null"
     )
 
 
+def _optional_scalar_string(
+    data: Mapping[str, Any],
+    key: str,
+    context: str = "",
+) -> str | None:
+    """선택 스칼라 — 문자열은 그대로, JSON 정수는 문자열로, 그 밖은 ``None``."""
+    try:
+        return _strict_scalar_string(data, key, context)
+    except KorailProtocolError:
+        return None
+
+
+#: ``limousine_parsers`` 가 이 이름으로 import 합니다.
+_additive_scalar_string = _optional_scalar_string
+
+
 def _optional_integer(
     data: Mapping[str, Any],
     key: str,
-    context: str,
+    context: str = "",
 ) -> int | None:
+    """선택 정수 — 정수나 ASCII 10진 문자열이면 ``int``, 그 밖은 ``None``."""
     if data.get(key) is None:
         return None
-    return _required_integer(data, key, context)
+    try:
+        return _required_integer(data, key, context)
+    except KorailProtocolError:
+        return None
 
 
 def _required_integer(
@@ -468,28 +470,12 @@ def _required_integer(
     key: str,
     context: str,
 ) -> int:
-    # 이 필드들은 DTO 에서 정수로 선언됩니다. 숫자와 따옴표 친 숫자 문자열을
-    # 모두 받습니다. 앱의 현재 디코더가 실제로 그렇게 합니다:
-    #
-    # * ``StreamingJsonDecoder.decodeInt()``(:394-402)가
-    #   ``consumeNumericLiteral()`` 을 부르고 Int 범위를 검사합니다.
-    # * 그 함수(``JsonReader.java:575-695``)는 첫 문자가 ``"`` 이면 표시해 두고
-    #   (:583-590) 끝에서 닫는 ``"`` 를 요구·소비합니다(:662-672). 이 함수
-    #   안에서 ``isLenient`` 를 읽지 않습니다.
-    # * 여기서 ``JsonReader`` 는 Gson 이 아니라, jadx 가
-    #   ``kotlinx.serialization.json.internal.AbstractJsonLexer`` 를 이름만
-    #   바꾼 것입니다(같은 파일 :18 의 ``renamed from`` 주석).
-    #
-    # 2026-09-23 정정, **두 번째입니다.** 처음엔 Gson 의 ``nextInt()`` 를
-    # 근거로 댔고, 그걸 고치면서 "7.0.6 에 Gson 이 없다"와 "따옴표 친 정수의
-    # 수용은 ``isLenient`` 가 정해 확인할 수 없다"고 적었는데 **둘 다
-    # 틀렸습니다.** Gson 은 APK 에 있습니다(``com/google/gson/Gson.java:48``) —
-    # 다만 이 네트워크 DTO 경로가 쓰지 않을 뿐입니다. 그리고 위처럼 이
-    # 분기는 보호된 설정 없이도 읽힙니다.
-    #
-    # Python 의 수용 범위(ASCII 10진 문자열)가 앱과 **정확히** 같다고 판정한
-    # 것은 아닙니다 — 확인한 것은 위 디코더 분기뿐입니다. null/bool/float/
-    # 비숫자는 계속 거절합니다.
+    """필수 정수. JSON 정수와 따옴표 친 ASCII 10진 문자열을 받습니다.
+
+    앱의 kotlinx 디코더(``StreamingJsonDecoder.decodeInt()`` →
+    ``JsonReader.consumeNumericLiteral()``)도 따옴표 친 숫자를 받습니다.
+    null/bool/float/비숫자는 거부합니다.
+    """
     value = data.get(key)
     if type(value) is int:
         return value
@@ -511,6 +497,16 @@ def _required_integer(
     )
 
 
+def _optional_bool(
+    data: Mapping[str, Any],
+    key: str,
+    context: str = "",
+) -> bool | None:
+    """``bool`` 이면 그대로, 아니면(없음 포함) ``None`` — "없음" 과 "거짓" 을 구분합니다."""
+    value = data.get(key)
+    return value if isinstance(value, bool) else None
+
+
 def _nullable_string_fields(
     data: Mapping[str, Any],
     field_map: Mapping[str, str],
@@ -527,180 +523,9 @@ def _nullable_scalar_fields(
     field_map: Mapping[str, str],
     context: str,
 ) -> dict[str, str | None]:
-    """Like :func:`_nullable_string_fields` but accepts JSON numbers too.
-
-    See :func:`_optional_scalar_string`.
-    """
+    """:func:`_nullable_string_fields` 와 같되 JSON 정수도 문자열로 받습니다."""
     return {
         attribute: _optional_scalar_string(data, wire_name, context)
-        for attribute, wire_name in field_map.items()
-    }
-
-
-def _additive_scalar_string(
-    data: Mapping[str, Any],
-    key: str,
-    context: str,
-) -> str | None:
-    """:func:`_optional_scalar_string` 의 **관대한** 짝 — 모양이 어긋나면 ``None``.
-
-    **뒤늦게 덧붙인 필드 전용입니다.** 그런 필드는 라이브 캡처가 없어 서버가
-    실제로 무엇을 보내는지 모릅니다. 모르는 필드를 엄격하게 읽으면, 예전
-    버전이 ``raw`` 로 멀쩡히 돌려주던 응답이 이제
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 로 죽습니다 —
-    필드를 하나 더 읽겠다는 선택이 라이브러리가 받아들이는 응답의 폭을
-    **좁히는** 셈이고, 그것은 덧붙임이 아닙니다. 그래서 ``bool``/``float``/
-    리스트/객체가 와도 응답 전체를 버리지 않고 이 필드만 ``None`` 으로 둡니다.
-    호출자는 원래 값을 모델의 ``raw`` 에서 그대로 볼 수 있습니다.
-
-    문자열 통과와 JSON 정수 → 문자열 정규화는 :func:`_optional_scalar_string`
-    그대로입니다(KORAIL 이 ``String`` 선언 필드를 숫자로도 보내는 상처).
-
-    **기존 필드에는 쓰지 마십시오** — 기존의 엄격함은 라이브로 확인된 계약이고,
-    그것을 푸는 것은 별개의 변경입니다.
-    """
-    try:
-        return _optional_scalar_string(data, key, context)
-    # ``ValueError`` 도 받습니다. 정수를 문자열로 바꿀 때 파이썬의 자릿수 한도
-    # (기본 4,300자리)를 넘으면 ``str()`` 이 ``ValueError`` 를 냅니다 —
-    # ``KorailProtocolError`` 만 잡았더니 ``10**5000`` 한 값이 응답 전체를
-    # 실패시켰습니다(최종 감사 C10).
-    except (KorailProtocolError, ValueError):
-        return None
-
-
-def _additive_scalar_fields(
-    data: Mapping[str, Any],
-    field_map: Mapping[str, str],
-    context: str,
-) -> dict[str, str | None]:
-    """:func:`_nullable_scalar_fields` 의 관대한 짝.
-
-    왜 관대한지는 :func:`_additive_scalar_string` 을 보십시오.
-    """
-    return {
-        attribute: _additive_scalar_string(data, wire_name, context)
-        for attribute, wire_name in field_map.items()
-    }
-
-
-# ─── 1.1.1 이후에 모델링한 필드 전용 관대 읽기 (G8) ─────────────────────────────
-#
-# 기준은 ``korail_mobile_api-1.1.1`` wheel 입니다(``checks/g8_differential.py``).
-# 1.1.1 이 읽지 않던 키는 1.1.1 에서 어떤 모양으로 와도 응답이 파싱됐습니다.
-# 그 키를 나중에 엄격하게 읽으면 같은 응답이 이제 KorailProtocolError 로
-# 죽습니다 — 필드를 덧붙였을 뿐인데 받아들이는 응답의 폭이 좁아집니다. 그래서
-# 1.1.1 이후에 덧붙인 필드는 아래 헬퍼로만 읽습니다. 모양이 어긋나면 그 필드만
-# ``None``(목록은 빈 튜플)이고, 원래 값은 모델의 ``raw`` 에 그대로 있습니다.
-#
-# **1.1.1 에도 있던 필드에는 쓰지 마십시오.** 그 엄격함은 그대로 둡니다.
-
-#: 관대 읽기가 삼키는 예외. ``ValueError`` 는 파이썬의 정수↔문자열 자릿수
-#: 한도(``10**5000`` 같은 값)에서 나옵니다.
-_ADDITIVE_ERRORS = (KorailProtocolError, ValueError)
-
-
-def _additive_integer(
-    data: Mapping[str, Any],
-    key: str,
-    context: str,
-) -> int | None:
-    """:func:`_optional_integer` 의 관대한 짝 — 모양이 어긋나면 ``None``."""
-    try:
-        return _optional_integer(data, key, context)
-    except _ADDITIVE_ERRORS:
-        return None
-
-
-def _additive_bool(
-    data: Mapping[str, Any],
-    key: str,
-    context: str,
-) -> bool | None:
-    """kotlinx ``Boolean`` 필드를 관대하게 — ``bool`` 이 아니면(없음 포함) ``None``.
-
-    없을 때 ``False`` 가 아니라 ``None`` 인 이유: 쓰는 자리는 전부
-    ``MyTicketNewList.do`` 의 예약 행이고, 2026-09-22 한 계정 관측에서는 그 행에
-    ``ticket_list`` 외의 키가 없었다고 기록돼 있습니다(128행, 재검산 불가·
-    미검증). 기본이 ``False`` 였을 때 ``is_transfer`` 같은 필드가 "환승이
-    아니다" 라고 단정했지만, 실제로는 키가 오지 않은 것이었습니다 — "없음" 과
-    "거짓" 은 구분되어야 합니다.
-
-    예전의 엄격한 ``_optional_bool``(``bool`` 이 아니면 KorailProtocolError)은
-    이 필드들이 1.1.1 이후에 덧붙인 것이라 G8 을 어겨 지웠습니다.
-    """
-    value = data.get(key)
-    return value if isinstance(value, bool) else None
-
-
-def _additive_mapping(
-    data: Mapping[str, Any],
-    key: str,
-) -> Mapping[str, Any] | None:
-    """객체면 그대로, 아니면(없음·리스트·스칼라) ``None``."""
-    value = data.get(key)
-    return value if isinstance(value, Mapping) else None
-
-
-def _additive_rows(
-    data: Mapping[str, Any] | None,
-    key: str,
-) -> list[Mapping[str, Any]]:
-    """``key`` 가 리스트면 그 안의 **객체 원소만**, 아니면 빈 리스트.
-
-    객체가 아닌 원소 하나가 응답 전체를 버리게 하지 않습니다.
-    """
-    if not isinstance(data, Mapping):
-        return []
-    value = data.get(key)
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
-
-
-def _additive_nested_rows(
-    data: Mapping[str, Any],
-    outer_key: str,
-    inner_key: str,
-) -> list[Mapping[str, Any]]:
-    """``{outer: {inner: [...]}}`` 모양을 관대하게 — :func:`_nested_rows` 의 짝."""
-    return _additive_rows(_additive_mapping(data, outer_key), inner_key)
-
-
-def _additive_parse(parse: Any, *args: Any) -> Any:
-    """새로 모델링한 **중첩 객체 하나** 를 파싱하되, 실패하면 ``None``.
-
-    새 객체 안의 필드를 엄격한 헬퍼로 읽더라도(필수 문자열 등), 그 객체의
-    모양이 어긋난 것은 그 객체만의 일입니다 — 응답 전체를 버리지 않습니다.
-    """
-    try:
-        return parse(*args)
-    except _ADDITIVE_ERRORS:
-        return None
-
-
-def _legacy_or_additive_fields(
-    data: Mapping[str, Any],
-    field_map: Mapping[str, str],
-    legacy_wire_keys: frozenset[str],
-    context: str,
-    strict: Any = None,
-) -> dict[str, Any]:
-    """한 지도 안에서 1.1.1 이 읽던 키는 **예전 엄격함 그대로**, 나머지는 관대하게.
-
-    ``legacy_wire_keys`` 는 1.1.1 wheel 의 같은 자리 지도가 읽던 전선 키
-    집합입니다(아래 ``*_111`` 상수들). 그 키는 ``strict``(기본
-    :func:`_optional_string`)로, 그 밖의 키는 :func:`_additive_scalar_string`
-    으로 읽습니다. 지도를 둘로 쪼개지 않는 것은 필드 주석을 그 필드 곁에 두기
-    위해서입니다.
-    """
-    reader = _optional_string if strict is None else strict
-    return {
-        attribute: (
-            reader(data, wire_name, context)
-            if wire_name in legacy_wire_keys
-            else _additive_scalar_string(data, wire_name, context)
-        )
         for attribute, wire_name in field_map.items()
     }
 
@@ -715,13 +540,6 @@ _TICKET_LIST_TICKET_FIELDS: dict[str, str] = {
     "sale_sequence": "h_orgtk_sale_sqno",
     "return_password": "h_orgtk_ret_pwd",
     "ticket_status_code": "h_tk_stt_cd",
-}
-
-# 아래는 1.1.1 이후에 덧붙인 승차권 행 필드입니다. 1.1.1 은 위 일곱만 읽었으므로
-# 이 키들이 어떤 모양으로 와도 응답이 파싱됐습니다 — 그래서 관대하게
-# 읽습니다(G8, :func:`_additive_scalar_fields`). 예약 행(``pnr_list`` 의 원소)의
-# 스칼라와 ``h_total_cnt`` 도 전부 1.1.1 이후의 것이라 같은 이유로 관대합니다.
-_TICKET_LIST_TICKET_ADDITIVE_FIELDS: dict[str, str] = {
     # 승차권 종류 코드는 승차권 행의 ``h_tk_knd_cd``/``h_tk_knd_nm`` 에서 읽습니다.
     # 예약 행의 ``hTkKndCd`` 는 @SerialName 이 없는 Kotlin 속성명을 전선 키로
     # 짐작한 것입니다.
@@ -750,10 +568,8 @@ _TICKET_LIST_TICKET_ADDITIVE_FIELDS: dict[str, str] = {
     # 언젠가 타입을 붙이거든 h_srcar_no 는 반드시 _optional_scalar_string 또는
     # _optional_integer 로 읽으십시오. TicketListTrainInfo.java:47,72,284 는 이
     # 필드를 non-null String 으로 선언하지만, 같은 2026-09-22 한 계정 관측(138행,
-    # 재검산 불가·미검증)에서는 JSON 정수로 왔다고 적혀 있습니다. 서버가 늘
-    # 정수로 보낸다는 보장은 없으니 문자열과 정수를 둘 다 받아야 합니다 — 앱
-    # DTO 의 선언을 그대로 베껴 _optional_string 을 쓰면 정수로 온 행이
-    # KorailProtocolError 로 죽습니다.
+    # 재검산 불가·미검증)에서는 JSON 정수로 왔다고 적혀 있습니다 — 문자열과
+    # 정수를 둘 다 받아야 합니다.
 }
 
 _CART_ITEM_FIELDS: dict[str, str] = {
@@ -778,19 +594,9 @@ _CART_ITEM_FIELDS: dict[str, str] = {
 # ``@SerialName`` 을 답니다(281-392행). 위 지도 + ``h_tk_cnt`` 로 16개를 읽고
 # 있었으므로, 나머지 열둘을 여기서 읽습니다.
 #
-# 엄격한 ``_nullable_string_fields`` 가 아니라 스칼라 쪽인 이유: 장바구니
-# 응답의 라이브 캡처가 없어 KORAIL 이 숫자꼴 키(``h_item_sqno``,
-# ``h_jrny_sqno``, ``h_stl_lmt_tm`` …)를 JSON 정수로 보내는지 확인할 수
-# 없습니다. 앱 DTO 의 ``String`` 선언을 그대로 믿었다가 정수가 오면 행 전체가
-# KorailProtocolError 로 죽습니다 — ``h_srcar_no`` 에서 이미 겪은 일입니다.
-# ``_optional_scalar_string`` 은 문자열과 정수를 모두 받아 문자열로
-# 정규화하므로 지금 되는 응답을 깨뜨릴 수 없습니다(기존 16개는 그대로 둡니다).
-#
-# 같은 이유가 나머지 모양에도 그대로 적용돼서, 읽기는
-# ``_additive_scalar_fields`` 로 합니다: 라이브 캡처가 없는 필드에 ``bool``,
-# ``float``, 리스트, 객체가 와도 그 필드만 ``None`` 이 되고 행 전체는 살아
-# 남습니다. 필드를 덧붙인 일이 예전 버전에서 ``raw`` 로 잘 돌아가던 응답을
-# KorailProtocolError 로 바꾸면 안 됩니다 — 값은 여전히 ``raw`` 에 있습니다.
+# 스칼라로 읽는 이유: 장바구니 응답의 라이브 캡처가 없어 KORAIL 이 숫자꼴
+# 키(``h_item_sqno``, ``h_jrny_sqno``, ``h_stl_lmt_tm`` …)를 JSON 정수로
+# 보내는지 확인할 수 없습니다 — ``h_srcar_no`` 에서 이미 겪은 일입니다.
 _CART_ITEM_SCALAR_FIELDS: dict[str, str] = {
     "item_type_code": "h_item_dv_cd",
     "provider_id": "h_add_srv_mrk_ent_id",
@@ -819,10 +625,7 @@ _DELAY_DISCOUNT_TICKET_FIELDS: dict[str, str] = {
     "return_password": "h_orgtk_ret_pwd",
 }
 
-# 1.1.1 은 위 다섯(과 지금은 빠진 ``h_use_psb_dt``)만 읽었습니다. 아래는 그 뒤에
-# 덧붙인 것이라 관대하게 읽습니다(G8, :func:`_additive_scalar_fields`). 새로 읽는
-# ``main_info`` 블록(:data:`_DELAY_DISCOUNT_MAIN_INFO_FIELDS`)도 마찬가지입니다.
-_DELAY_DISCOUNT_TICKET_ADDITIVE_FIELDS: dict[str, str] = {
+_DELAY_DISCOUNT_TICKET_SCALAR_FIELDS: dict[str, str] = {
     "ticket_sequence": "h_tk_sqno",
     "ticket_kind_code": "h_tk_knd_cd",
     "original_ticket_sale_date": "h_orgtk_sale_dt",
@@ -863,10 +666,8 @@ _PASS_MENU_ITEM_FIELDS: dict[str, str] = {
     # ``_optional_integer`` 로 정수화했는데, 형제
     # :class:`~korail_mobile_api.read_models.CommuterKindMenuResponse` 는 같은
     # 키를 문자열로 두고 있어 같은 값이 경로에 따라 형이 달랐습니다. 게다가 이
-    # 라우트는 빈 문자열을 흔하게 보내는데(같은 25행에서 ``detailType``·
-    # ``isExpand``·``saleMsg1-3`` 등이 ``""``), ``_optional_integer`` 는
-    # ``""`` 를 ``KorailProtocolError`` 로 터뜨립니다. 앱은 그 자리에서
-    # ``StringExKt.safeToInt`` 로 파싱 실패 시 0을 쓰므로 예외를 내지 않습니다.
+    # 라우트는 빈 문자열을 흔하게 보냅니다(같은 25행에서 ``detailType``·
+    # ``isExpand``·``saleMsg1-3`` 등이 ``""``).
     "after_day": "afterDay",
     "agreement": "agree",
     "detail_type": "detailType",
@@ -883,8 +684,7 @@ _PASS_MENU_ITEM_FIELDS: dict[str, str] = {
     "item_type": "type",
 }
 
-# 1.1.1 이후에 덧붙인 셋 — 관대하게 읽습니다(G8, :func:`_additive_scalar_fields`).
-_PASS_MENU_ITEM_ADDITIVE_FIELDS: dict[str, str] = {
+_PASS_MENU_ITEM_SCALAR_FIELDS: dict[str, str] = {
     "sale_message_1": "saleMsg1",
     "sale_message_2": "saleMsg2",
     "sale_message_3": "saleMsg3",
@@ -918,12 +718,6 @@ _TRIP_MENU_CONTENT_FIELDS: dict[str, str] = {
     # (원래는 ":1246" 이라고 적었는데 그 줄은 닫는 중괄호입니다. 같은 함수의
     # :1247-1248 이 passData == null 이면 backAlert 로 화면을 되돌립니다.)
     # menuType='P' 메뉴에만 옵니다(2026-09-22: 60행 중 6행).
-    #
-    # 이 둘은 1.1.1 이후에 덧붙였으므로 _TRIP_MENU_CONTENT_ADDITIVE_FIELDS 에서
-    # 관대하게 읽습니다(G8).
-}
-
-_TRIP_MENU_CONTENT_ADDITIVE_FIELDS: dict[str, str] = {
     "commuter_kind_code": "cmtrKndCd",
     "pass_type": "passType",
 }
@@ -993,44 +787,6 @@ _TICKET_RECEIPT_FIELDS: dict[str, str] = {
     "train_no": "h_trn_no",
     "member_card_no": "h_stl_mb_crd_no",
 }
-
-#: 1.1.1 이 ``receipt_info`` 행에서 읽던 키. 그 밖의 셋(``h_prt_disc_knd_cd``/
-#: ``h_tk_knd_nm``/``h_trn_gp_cd``)은 관대하게 읽습니다(G8).
-_TICKET_RECEIPT_FIELDS_111: frozenset[str] = frozenset({
-    "h_abrd_dt",
-    "h_arv_rs_stn_nm",
-    "h_arv_tm",
-    "h_cmtr_knd_cd",
-    "h_dpt_rs_stn_nm",
-    "h_dpt_tm",
-    "h_jrny_tp_cd",
-    "h_prt_disc_knd_nm",
-    "h_prt_type",
-    "h_psrm_cl_nm",
-    "h_stl_mb_crd_no",
-    "h_tk_knd_cd",
-    "h_tk_stt_cd",
-    "h_trn_clsf_cd",
-    "h_trn_clsf_nm",
-    "h_trn_no",
-})
-
-#: 1.1.1 이 ``train_info`` 행에서 읽던 키. ``h_rsv_amt`` 와 아래 여섯은 관대하게(G8).
-_RESERVATION_HISTORY_TRAIN_FIELDS_111: frozenset[str] = frozenset({
-    "h_acpt_ps_flg",
-    "h_arv_rs_stn_nm",
-    "h_arv_tm",
-    "h_dpt_rs_stn_nm",
-    "h_dpt_tm",
-    "h_payment_flg",
-    "h_pnr_no",
-    "h_rsv_tp_cd",
-    "h_run_dt",
-    "h_stl_flg",
-    "h_trn_clsf_cd",
-    "h_trn_clsf_nm",
-    "h_trn_no",
-})
 
 _RESERVATION_HISTORY_TRAIN_FIELDS: dict[str, str] = {
     "departure_station": "h_dpt_rs_stn_nm",
@@ -1118,42 +874,6 @@ _RESERVATION_HISTORY_RESERVATION_FIELDS: dict[str, str] = {
 # - MergeSeatsCOutTrnInfo (mergeSeatsC.do / parse_merge_seats_inquiry_response)
 # - TrainScheduleOutTrainInfo (assignScheduleView.do /
 #   parse_seat_assignment_schedule_response)
-
-#: 1.1.1 은 두 라우트의 ``trn_info`` 행을 공용 지도 하나로 읽었습니다. 그 지도의
-#: 키만 예전 엄격함으로 읽고, 나중에 덧붙인 키는 관대하게 읽습니다(G8).
-_TRAIN_SCHEDULE_ITEM_FIELDS_111: frozenset[str] = frozenset({
-    "h_arv_dt",
-    "h_arv_rs_stn_cd",
-    "h_arv_rs_stn_nm",
-    "h_arv_stn_cons_ordr",
-    "h_arv_stn_run_ordr",
-    "h_arv_tm",
-    "h_car_tp_nm",
-    "h_dlay_sale_flg",
-    "h_dpt_dt",
-    "h_dpt_rs_stn_cd",
-    "h_dpt_rs_stn_nm",
-    "h_dpt_stn_cons_ordr",
-    "h_dpt_stn_run_ordr",
-    "h_dpt_tm",
-    "h_free_rsv_cd",
-    "h_gen_psrm_cl_nm",
-    "h_gen_rsv_cd",
-    "h_info_txt",
-    "h_popup_msg",
-    "h_rd_seat_map_flg",
-    "h_rsv_psb_nm",
-    "h_run_dt",
-    "h_spe_psrm_cl_nm",
-    "h_spe_rsv_cd",
-    "h_spe_rsv_psb_nm",
-    "h_stnd_rsv_cd",
-    "h_trn_clsf_cd",
-    "h_trn_clsf_nm",
-    "h_trn_gp_cd",
-    "h_trn_no",
-    "h_wait_rsv_flg",
-})
 
 _MERGE_SEATS_TRAIN_FIELDS: dict[str, str] = {
     "train_no": "h_trn_no",
@@ -1264,18 +984,6 @@ _PASS_SCHEDULE_TRAIN_FIELDS: dict[str, str] = {
     "commuter_use_terminal_code": "h_cmtr_utl_trm_cd",
     "commuter_use_terminal_name": "h_cmtr_utl_trm_nm",
 }
-
-#: 1.1.1 이 ``train_list`` 행에서 읽던 여덟. 덧붙인 열둘은 관대하게(G8).
-_PASS_SCHEDULE_TRAIN_FIELDS_111: frozenset[str] = frozenset({
-    "h_arv_rs_stn_cd",
-    "h_arv_rs_stn_nm",
-    "h_dpt_rs_stn_cd",
-    "h_dpt_rs_stn_nm",
-    "h_dtour",
-    "h_schd_prc",
-    "h_trn_gp_cd",
-    "h_trn_no",
-})
 
 _PASS_SCHEDULE_MAIN_FIELDS: dict[str, str] = {
     "sale_window_no": "h_wct_no",
@@ -1424,8 +1132,8 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
         items.append(
             PassMenuItem(
                 **_nullable_string_fields(item, _PASS_MENU_ITEM_FIELDS, "pass menu item"),
-                **_additive_scalar_fields(
-                    item, _PASS_MENU_ITEM_ADDITIVE_FIELDS, "pass menu item"
+                **_nullable_scalar_fields(
+                    item, _PASS_MENU_ITEM_SCALAR_FIELDS, "pass menu item"
                 ),
                 goods_data=_parse_pass_goods_info(
                     _optional_mapping(item, "goodsData", "pass menu item"),
@@ -1484,13 +1192,11 @@ def parse_service_status_response(
 def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
     _validate_envelope(raw, allow_result_only_success=True)
     items = []
-    for value in _nested_rows(raw, "cart_infos", "cart_info", "cart list"):
-        item = _row(value, "cart list cart_info")
+    for item in _nested_rows(raw, "cart_infos", "cart_info", "cart list"):
         items.append(
             CartItem(
                 **_nullable_string_fields(item, _CART_ITEM_FIELDS, "cart item"),
-                # 관대하게: 위 _CART_ITEM_SCALAR_FIELDS 주석 참고.
-                **_additive_scalar_fields(
+                **_nullable_scalar_fields(
                     item, _CART_ITEM_SCALAR_FIELDS, "cart item"
                 ),
                 # CartInfo.java:51 declares h_tk_cnt as String, not int.
@@ -1523,15 +1229,12 @@ def parse_delay_discount_ticket_response(
     items = tuple(
         DelayDiscountTicket(
             **_nullable_string_fields(row, _DELAY_DISCOUNT_TICKET_FIELDS, "delay discount ticket"),
-            **_additive_scalar_fields(
-                row, _DELAY_DISCOUNT_TICKET_ADDITIVE_FIELDS, "delay discount ticket"
+            **_nullable_scalar_fields(
+                row, _DELAY_DISCOUNT_TICKET_SCALAR_FIELDS, "delay discount ticket"
             ),
             raw=row,
         )
-        for row in (
-            _row(v, "delay discount ticket list disc_info")
-            for v in rows
-        )
+        for row in rows
     )
     # main_info 는 DelayDiscountViewOut.java:24,51 이 선언하지 않는 **서버 추가**
     # 블록입니다(그 DTO 는 disc_infos 하나뿐). 앱이 읽지 않으니 파서가 놓친 것이
@@ -1541,16 +1244,12 @@ def parse_delay_discount_ticket_response(
     #
     # 다섯 값을 문자열로 둡니다: 와이어가 0을 채운 문자열이고
     # ('0000'/'000000000') h_last_page_yn 은 ''로 와서, 쿠폰 쪽처럼
-    # _optional_integer 를 쓰면 그 빈 문자열이 KorailProtocolError 가 됩니다.
+    # _optional_integer 를 쓰면 그 빈 문자열이 None 이 됩니다.
     # 이 계정에는 지연할인권이 없어 전부 0인 응답만 봤습니다(2026-09-22).
-    #
-    # 1.1.1 은 main_info 를 읽지 않았으므로 블록과 그 안의 다섯 값을 모두
-    # 관대하게 읽습니다(G8): 객체가 아니면 없는 것으로, 값의 모양이 어긋나면
-    # 그 값만 None 으로.
-    main_info = _additive_mapping(raw, "main_info")
+    main_info = _optional_mapping(raw, "main_info")
     pagination: dict[str, str | None] = {}
     if main_info is not None:
-        pagination = _additive_scalar_fields(
+        pagination = _nullable_scalar_fields(
             main_info,
             _DELAY_DISCOUNT_MAIN_INFO_FIELDS,
             "delay discount ticket list main_info",
@@ -1578,8 +1277,7 @@ def parse_discount_coupon_response(
         "coupon_info",
         "discount coupon list",
     )
-    for value in rows:
-        item = _row(value, "discount coupon list coupon_info")
+    for item in rows:
         discount_values = _present_strings(
             item,
             (
@@ -1599,14 +1297,13 @@ def parse_discount_coupon_response(
         items.append(
             DiscountCoupon(
                 guide=_optional_string(item, "guide", "discount coupon"),
-                # 1.1.1 이후에 덧붙인 둘(시작일·할인 종류)은 관대하게(G8).
-                start_date=_additive_scalar_string(
+                start_date=_optional_scalar_string(
                     item, "h_fdcert_mg_st_dt", "discount coupon"
                 ),
                 expiration_date=_optional_string(
                     item, "h_fdcert_mg_cls_dt", "discount coupon"
                 ),
-                discount_kind_code=_additive_scalar_string(
+                discount_kind_code=_optional_scalar_string(
                     item, "h_dscp_knd_cd", "discount coupon"
                 ),
                 discount_values=discount_values,
@@ -1623,9 +1320,8 @@ def parse_discount_coupon_response(
         total_pages=_optional_integer(
             raw, "h_tot_page_cnt", "coupon response"
         ),
-        # 1.1.1 이후에 덧붙인 둘 — 관대하게(G8).
-        total_count=_additive_scalar_string(raw, "h_tot_cnt", "coupon response"),
-        row_count=_additive_scalar_string(raw, "h_row_cnt", "coupon response"),
+        total_count=_optional_scalar_string(raw, "h_tot_cnt", "coupon response"),
+        row_count=_optional_scalar_string(raw, "h_row_cnt", "coupon response"),
         **_response_fields(raw),
     )
 
@@ -1652,9 +1348,8 @@ def parse_pass_availability_response(
         pass_rows.append(
             PassOpenDate(
                 open_date=date,
-                # 1.1.1 은 h_use_open_dt 만 읽었습니다 — 덧붙인 둘은 관대하게(G8).
-                item_sequence=_additive_scalar_string(item, "h_item_sqno", "pass date"),
-                pnr_no=_additive_scalar_string(item, "h_pnr_no", "pass date"),
+                item_sequence=_optional_scalar_string(item, "h_item_sqno", "pass date"),
+                pnr_no=_optional_scalar_string(item, "h_pnr_no", "pass date"),
                 raw=item,
             )
         )
@@ -1691,12 +1386,10 @@ def parse_pass_availability_response(
     # 성공 봉투를 예외로 바꾸면 앱보다 엄격해지고, 채워진 응답의 IRZ000001 까지
     # 봉투 코드 자리로 끌어올리게 됩니다. 코드가 필요하면
     # response.main_info.message_code 를 보십시오.
-    #
-    # 1.1.1 은 main_info 를 읽지 않았으므로 블록과 값 모두 관대하게 읽습니다(G8).
-    main_raw = _additive_mapping(raw, "main_info")
+    main_raw = _optional_mapping(raw, "main_info")
     main_info = (
         PassAvailabilityMainInfo(
-            **_additive_scalar_fields(
+            **_nullable_scalar_fields(
                 main_raw, _PASS_AVAILABILITY_MAIN_FIELDS, "pass availability main info"
             ),
             raw=main_raw,
@@ -1720,18 +1413,11 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
     for item in _rows(raw, "menuList", "trip menu"):
         contents = tuple(
             TripMenuContent(
-                **_nullable_string_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
-                **_additive_scalar_fields(
-                    row, _TRIP_MENU_CONTENT_ADDITIVE_FIELDS, "trip menu content"
-                ),
+                **_nullable_scalar_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
                 # TrGdMenuLtOutCont.java:45 passData → TrGdMenuLtOutPass.java:29-35.
-                # 정기권 메뉴·종류 라우트가 싣는 것과 같은 모양이라 같은 헬퍼를
-                # 씁니다. 다만 이 라우트에서는 1.1.1 이후에 덧붙인 블록이라
-                # 관대하게 감쌉니다(G8): 객체가 아니거나 안쪽 모양이 어긋나면
-                # pass_data 만 None 이고 메뉴 행은 그대로입니다.
-                pass_data=_additive_parse(
-                    _parse_pass_menu_data,
-                    _additive_mapping(row, "passData"),
+                # 정기권 메뉴·종류 라우트가 싣는 것과 같은 모양이라 같은 헬퍼를 씁니다.
+                pass_data=_parse_pass_menu_data(
+                    _optional_mapping(row, "passData"),
                     "trip menu pass data",
                 ),
                 raw=row,
@@ -1744,9 +1430,8 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
                 # contCount 는 TrGdMenuLtOutMenu.java:27 의 선언이 String 인데
                 # 실서버는 JSON 숫자로 보냅니다(2026-09-22: 11/6/6/4/3). 그래서
                 # 문자열 필드 맵에 넣지 않고 _optional_integer 로 읽습니다 —
-                # 정수와 ASCII 10진 문자열을 모두 받습니다. 1.1.1 이후에 덧붙인
-                # 필드라 그 밖의 모양이면 None 입니다(G8).
-                content_count=_additive_integer(item, "contCount", "trip menu item"),
+                # 정수와 ASCII 10진 문자열을 모두 받습니다.
+                content_count=_optional_integer(item, "contCount", "trip menu item"),
                 contents=contents,
                 raw=item,
             )
@@ -1805,8 +1490,7 @@ def parse_ticket_receipt_response(
     _validate_envelope(raw)
     items = []
     rows = _nested_rows(raw, "receipt_infos", "receipt_info", "ticket receipt")
-    for value in rows:
-        item = _row(value, "ticket receipt receipt_info")
+    for item in rows:
         payments = []
         for payment in _rows(item, "stl_info", "ticket receipt"):
             payments.append(
@@ -1839,9 +1523,7 @@ def parse_ticket_receipt_response(
             )
         items.append(
             TicketReceipt(
-                **_legacy_or_additive_fields(
-                    item, _TICKET_RECEIPT_FIELDS, _TICKET_RECEIPT_FIELDS_111, "ticket receipt"
-                ),
+                **_nullable_scalar_fields(item, _TICKET_RECEIPT_FIELDS, "ticket receipt"),
                 passenger_counts=(
                     _optional_integer(item, "h_psg_type1_cnt", "ticket receipt"),
                     _optional_integer(item, "h_psg_type2_cnt", "ticket receipt"),
@@ -1868,45 +1550,41 @@ def _parse_reservation_history_reservation(
     ``ReservationViewOutJrnyInfo.java:55`` 의 다섯 번째 생성자 인자가 이
     객체인데 ``@SerialName`` 이 없어 정확한 와이어 키는 PROTECTED 입니다 —
     코틀린 필드명 ``reservationOut`` 을 최선으로 사용합니다.
-
-    이 층 전체가 1.1.1 이후에 덧붙인 것이므로 **전부 관대하게** 읽습니다(G8):
-    목록이 리스트가 아니면 빈 튜플, 객체가 아닌 원소는 건너뛰고, 스칼라는
-    모양이 어긋나면 ``None`` 입니다. 원본은 ``raw`` 에 남습니다.
     """
     if raw is None:
         return None
     tickets = tuple(
         ReservationHistoryTicket(
-            **_additive_scalar_fields(
+            **_nullable_scalar_fields(
                 item, _RESERVATION_HISTORY_TICKET_FIELDS,
                 "reservation history ticket",
             ),
             raw=item,
         )
-        for item in _additive_rows(raw, "tkList")
+        for item in _rows(raw, "tkList")
     )
     original_tickets = tuple(
         ReservationHistoryOriginalTicket(
-            **_additive_scalar_fields(
+            **_nullable_scalar_fields(
                 item, _RESERVATION_HISTORY_ORIGINAL_TICKET_FIELDS,
                 "reservation history original ticket",
             ),
             raw=item,
         )
-        for item in _additive_rows(raw, "orgTkList")
+        for item in _rows(raw, "orgTkList")
     )
     passengers = tuple(
         ReservationHistoryPassenger(
-            **_additive_scalar_fields(
+            **_nullable_scalar_fields(
                 item, _RESERVATION_HISTORY_PASSENGER_FIELDS,
                 "reservation history passenger",
             ),
             raw=item,
         )
-        for item in _additive_nested_rows(raw, "psg_infos", "psg_info")
+        for item in _nested_rows(raw, "psg_infos", "psg_info")
     )
     return ReservationHistoryReservation(
-        **_additive_scalar_fields(
+        **_nullable_scalar_fields(
             raw, _RESERVATION_HISTORY_RESERVATION_FIELDS,
             "reservation history reservation",
         ),
@@ -1926,13 +1604,6 @@ def parse_reservation_history_response(
     (``h_rsv_ps_nm``/``h_tel_no`` 등)와 여정마다 매달린 ``srv_infos``/
     ``acmp_infos``, 그리고 그 PNR 의 실제 운임·결제·발권 내용을 담은
     ``ReservationOut`` 중첩 전체를 건너뛰었습니다.
-
-    1.1.1 이 읽던 것은 ``jrny_infos.jrny_info[].train_infos.train_info[]`` 의
-    열차 행(과 그 13개 키, 좌석·입석 수)뿐입니다. 그 뒤에 덧붙인 것 —
-    최상위 신원 필드와 ``h_jrny_cnt``, ``guide_infos``, 여정의
-    ``srv_infos``/``acmp_infos``/``reservationOut``, 열차 행의 새 키 — 은
-    전부 관대하게 읽습니다(G8). 모양이 어긋나면 그 값만 ``None``(목록은 빈
-    튜플)이고, 1.1.1 이 받던 응답은 계속 받습니다.
     """
     empty = _validate_envelope(
         raw,
@@ -1940,28 +1611,24 @@ def parse_reservation_history_response(
     )
     if empty:
         return ReservationHistoryResponse(**_response_fields(raw))
-    guide_infos = _additive_mapping(raw, "guide_infos")
+    guide_infos = _optional_mapping(raw, "guide_infos")
     guide_info = (
-        _additive_scalar_string(guide_infos, "guide_info", "reservation history guide_infos")
+        _optional_scalar_string(guide_infos, "guide_info", "reservation history guide_infos")
         if guide_infos is not None
         else None
     )
     journeys: list[ReservationHistoryJourney] = []
     all_trains: list[ReservationHistoryTrain] = []
-    for journey_value in _nested_rows(
+    for journey in _nested_rows(
         raw, "jrny_infos", "jrny_info", "reservation history"
     ):
-        journey = _row(journey_value, "reservation history jrny_info")
         trains: list[ReservationHistoryTrain] = []
-        for train_value in _nested_rows(
+        for train in _nested_rows(
             journey, "train_infos", "train_info", "reservation history"
         ):
-            train = _row(train_value, "reservation history train_info")
             history_train = ReservationHistoryTrain(
-                **_legacy_or_additive_fields(
-                    train, _RESERVATION_HISTORY_TRAIN_FIELDS,
-                    _RESERVATION_HISTORY_TRAIN_FIELDS_111,
-                    "reservation history train",
+                **_nullable_scalar_fields(
+                    train, _RESERVATION_HISTORY_TRAIN_FIELDS, "reservation history train"
                 ),
                 seat_count=_optional_integer(
                     train, "h_tot_seat_cnt",
@@ -1975,13 +1642,12 @@ def parse_reservation_history_response(
             )
             trains.append(history_train)
             all_trains.append(history_train)
-        service_infos = tuple(_additive_nested_rows(journey, "srv_infos", "srv_info"))
+        service_infos = tuple(_nested_rows(journey, "srv_infos", "srv_info"))
         accompanying_infos = tuple(
-            _additive_nested_rows(journey, "acmp_infos", "acmp_info")
+            _nested_rows(journey, "acmp_infos", "acmp_info")
         )
-        reservation = _additive_parse(
-            _parse_reservation_history_reservation,
-            _additive_mapping(journey, "reservationOut"),
+        reservation = _parse_reservation_history_reservation(
+            _optional_mapping(journey, "reservationOut"),
         )
         journeys.append(
             ReservationHistoryJourney(
@@ -1993,16 +1659,15 @@ def parse_reservation_history_response(
             )
         )
     return ReservationHistoryResponse(
-        **_additive_scalar_fields(
+        **_nullable_scalar_fields(
             raw, _RESERVATION_HISTORY_TOP_FIELDS, "reservation history"
         ),
         # h_jrny_cnt is the exact cross-endpoint inconsistency
         # _optional_scalar_string's own docstring already documents: the hold
         # response sends it quoted ("0001"), reservation history sends it as
         # a bare JSON integer (1). Live-confirmed 2026-09-21 -- every history
-        # row with an active journey crashed here before this fix. Added after
-        # 1.1.1, so anything else is None rather than a rejection (G8).
-        journey_count=_additive_scalar_string(raw, "h_jrny_cnt", "reservation history"),
+        # row with an active journey crashed here before this fix.
+        journey_count=_optional_scalar_string(raw, "h_jrny_cnt", "reservation history"),
         guide_info=guide_info,
         journeys=tuple(journeys),
         items=tuple(all_trains),
@@ -2049,9 +1714,9 @@ def parse_guide_seat_condition_response(
     # 2026-09-22 한 계정 관측(좌석속성코드 14종)에서는 이 키가 오지 않아
     # time_stamp 가 None 이었다고 기록돼 있습니다 — 관측 범위의 이야기이지
     # 서버가 늘 안 보낸다는 뜻은 아닙니다(미검증). 값이 없다고 철자를 다시
-    # 고치지 마십시오. 1.1.1 이후에 덧붙인 필드라 관대하게 읽습니다(G8).
+    # 고치지 마십시오.
     return GuideSeatConditionResponse(
-        time_stamp=_additive_integer(raw, "timeStamp", "guide seat condition"),
+        time_stamp=_optional_integer(raw, "timeStamp", "guide seat condition"),
         **_response_fields(raw),
     )
 
@@ -2060,11 +1725,8 @@ def _parse_train_schedule_item(
     raw: Mapping[str, Any],
     field_map: Mapping[str, str],
 ) -> TrainScheduleItem:
-    # 1.1.1 의 공용 지도에 있던 키만 예전처럼 엄격하게, 덧붙인 키는 관대하게(G8).
     return TrainScheduleItem(
-        **_legacy_or_additive_fields(
-            raw, field_map, _TRAIN_SCHEDULE_ITEM_FIELDS_111, "train schedule item"
-        ),
+        **_nullable_scalar_fields(raw, field_map, "train schedule item"),
         raw=raw,
     )
 
@@ -2098,8 +1760,8 @@ def _parse_train_schedule_container(
         else None
     )
     trains = tuple(
-        _parse_train_schedule_item(_row(value, f"{context} trn_info"), field_map)
-        for value in _optional_list(container, "trn_info", context)
+        _parse_train_schedule_item(value, field_map)
+        for value in _rows(container, "trn_info", context)
     )
     return merge_flag, trains
 
@@ -2134,40 +1796,38 @@ def parse_seat_assignment_schedule_response(
             "seat assignment schedule",
         ),
         merge_reservation_possible_flag=merge_flag,
-        # 아래 커서·안내 필드는 전부 1.1.1 이후에 덧붙였습니다(1.1.1 은
-        # h_next_pg_flg 하나만 읽었습니다). 그래서 관대하게 읽습니다(G8).
-        job_id=_additive_scalar_string(raw, "strJobId", "seat assignment schedule"),
-        menu_id=_additive_scalar_string(raw, "h_menu_id", "seat assignment schedule"),
-        goods_no=_additive_scalar_string(raw, "h_gd_no", "seat assignment schedule"),
-        notice_message=_additive_scalar_string(
+        job_id=_optional_scalar_string(raw, "strJobId", "seat assignment schedule"),
+        menu_id=_optional_scalar_string(raw, "h_menu_id", "seat assignment schedule"),
+        goods_no=_optional_scalar_string(raw, "h_gd_no", "seat assignment schedule"),
+        notice_message=_optional_scalar_string(
             raw, "h_notice_msg", "seat assignment schedule"
         ),
-        first_seat_count=_additive_scalar_string(
+        first_seat_count=_optional_scalar_string(
             raw, "h_seat_cnt_first", "seat assignment schedule"
         ),
-        second_seat_count=_additive_scalar_string(
+        second_seat_count=_optional_scalar_string(
             raw, "h_seat_cnt_second", "seat assignment schedule"
         ),
-        agreement_text=_additive_scalar_string(
+        agreement_text=_optional_scalar_string(
             raw, "h_agree_txt", "seat assignment schedule"
         ),
-        first_departure_time=_additive_scalar_string(
+        first_departure_time=_optional_scalar_string(
             raw, "txtGoHour_first", "seat assignment schedule"
         ),
-        result_count=_additive_scalar_string(raw, "h_rslt_cnt", "seat assignment schedule"),
-        next_query_station_no=_additive_scalar_string(
+        result_count=_optional_scalar_string(raw, "h_rslt_cnt", "seat assignment schedule"),
+        next_query_station_no=_optional_scalar_string(
             raw, "h_qry_st_no_next", "seat assignment schedule"
         ),
-        next_train_no=_additive_scalar_string(
+        next_train_no=_optional_scalar_string(
             raw, "h_trn_no_next", "seat assignment schedule"
         ),
-        next_preceding_train_no=_additive_scalar_string(
+        next_preceding_train_no=_optional_scalar_string(
             raw, "h_prcd_trn_no_next", "seat assignment schedule"
         ),
-        next_connecting_train_no=_additive_scalar_string(
+        next_connecting_train_no=_optional_scalar_string(
             raw, "h_ectb_trn_no_next", "seat assignment schedule"
         ),
-        remaining_seat_count=_additive_scalar_string(
+        remaining_seat_count=_optional_scalar_string(
             raw, "h_rest_seat_cnt", "seat assignment schedule"
         ),
         trains=trains,
@@ -2218,8 +1878,7 @@ def parse_merge_seats_inquiry_response(
         # 운행일자는 행 단위로 왔습니다 — 관측한 호출마다
         # trains[i].run_date(h_run_dt)가 정확히 돌아왔습니다. 다른 키를
         # 찾아 "고치려" 하지 마십시오; 이 DTO 에 다른 최상위 날짜는 없습니다.
-        # 1.1.1 이후에 덧붙인 필드라 관대하게 읽습니다(G8).
-        run_date=_additive_scalar_string(raw, "runDt", "merge seats inquiry"),
+        run_date=_optional_scalar_string(raw, "runDt", "merge seats inquiry"),
         intermediate_stations=tuple(stations),
         trains=trains,
         **_response_fields(raw),
@@ -2243,11 +1902,10 @@ def parse_pass_schedule_response(
         return PassScheduleResponse(**_response_fields(raw))
     if raw["strResult"] != "SUCC":
         raise KorailProtocolError("KORAIL pass schedule strResult must be exact SUCC")
-    # main_info 는 1.1.1 이후에 덧붙인 블록이라 관대하게 읽습니다(G8).
-    main_raw = _additive_mapping(raw, "main_info")
+    main_raw = _optional_mapping(raw, "main_info")
     main_info = (
         PassScheduleMainInfo(
-            **_additive_scalar_fields(
+            **_nullable_scalar_fields(
                 main_raw, _PASS_SCHEDULE_MAIN_FIELDS, "pass schedule main info"
             ),
             raw=main_raw,
@@ -2259,10 +1917,7 @@ def parse_pass_schedule_response(
     for schedule in _rows(raw, "schedule_info", "pass schedule"):
         trains = tuple(
             PassScheduleTrain(
-                **_legacy_or_additive_fields(
-                    row, _PASS_SCHEDULE_TRAIN_FIELDS, _PASS_SCHEDULE_TRAIN_FIELDS_111,
-                    "pass schedule train",
-                ),
+                **_nullable_scalar_fields(row, _PASS_SCHEDULE_TRAIN_FIELDS, "pass schedule train"),
                 raw=row,
             )
             for row in _rows(
@@ -2280,39 +1935,6 @@ def parse_pass_schedule_response(
     )
 
 
-#: 1.1.1 이 같은 자리에서 읽던 전선 키. 이 밖의 키는 관대하게 읽습니다(G8,
-#: :func:`_legacy_or_additive_fields`).
-_KORAIL_POINT_SUMMARY_FIELDS_111: frozenset[str] = frozenset({
-    "h_cntc_chn_cont1",
-    "h_cp_athn_flg",
-    "h_cust_lead_flg_nm",
-    "h_delay_cnt",
-    "h_disc_coup_cnt",
-    "h_emil_athn_flg",
-    "h_hdcp_flg",
-    "h_korail_point",
-    "h_logn_tp_cd1",
-    "h_logn_tp_cd2",
-    "h_logn_tp_cd4",
-    "h_logn_tp_cd5",
-    "h_subt_dcs_cl_cd",
-    "h_subt_dcs_cl_nm",
-})
-
-#: 1.1.1 이 같은 자리에서 읽던 전선 키. 이 밖의 키는 관대하게 읽습니다(G8,
-#: :func:`_legacy_or_additive_fields`).
-_MILEAGE_HISTORY_FIELDS_111: frozenset[str] = frozenset({
-    "delPontValNum",
-    "ktxMlgInfo",
-    "pgCnt",
-    "railNowSavePontValNum1",
-    "totAcmRailPontValNum1",
-    "totAvlAfltPontValNum",
-    "totAvlRailPontValNum",
-    "totAvlRailPontValNum1",
-    "totUseRailPontValNum1",
-})
-
 _KORAIL_POINT_SUMMARY_FIELDS = {
     "korail_point": "h_korail_point",
     "discount_coupon_count": "h_disc_coup_cnt",
@@ -2327,8 +1949,7 @@ _KORAIL_POINT_SUMMARY_FIELDS = {
     # MyXPointViewOut.java:43,53,54 — 플래그 쪽만 빠져 있어 비대칭이었습니다:
     # customer_lead_flag_name(h_cust_lead_flg_nm)은 있는데 h_cust_lead_flg 가
     # 없었고, disability_flag(h_hdcp_flg)는 있는데 유형 코드·이름이 없었습니다.
-    # 셋 다 라이브 48키 응답에 옵니다(2026-09-22). 1.1.1 이후에 덧붙였으므로
-    # 관대하게 읽습니다(G8).
+    # 셋 다 라이브 48키 응답에 옵니다(2026-09-22).
     "customer_lead_flag": "h_cust_lead_flg",
     "disability_type_code": "h_hdcp_tp_cd",
     "disability_type_name": "h_hdcp_tp_cd_nm",
@@ -2394,13 +2015,7 @@ def parse_korail_point_summary_response(
         # analysis/jadx and analysis/apktool), so the rationale is the wire
         # tolerance above, not an app call site. Live, all 48 top-level keys
         # arrive as strings (2026-09-22).
-        **_legacy_or_additive_fields(
-            raw,
-            _KORAIL_POINT_SUMMARY_FIELDS,
-            _KORAIL_POINT_SUMMARY_FIELDS_111,
-            "korail point summary",
-            strict=_optional_scalar_string,
-        ),
+        **_nullable_scalar_fields(raw, _KORAIL_POINT_SUMMARY_FIELDS, "korail point summary"),
         **_response_fields(raw),
     )
 
@@ -2410,8 +2025,7 @@ def parse_mileage_history_response(
 ) -> MileageHistoryResponse:
     _validate_strict_read_envelope(raw)
     entries = []
-    for value in _optional_list(raw, "specList", "mileage history"):
-        item = _row(value, "mileage history specList")
+    for item in _rows(raw, "specList", "mileage history"):
         entries.append(
             MileageHistoryEntry(
                 **_nullable_scalar_fields(
@@ -2423,47 +2037,11 @@ def parse_mileage_history_response(
             )
         )
     return MileageHistoryResponse(
-        **_legacy_or_additive_fields(
-            raw,
-            _MILEAGE_HISTORY_FIELDS,
-            _MILEAGE_HISTORY_FIELDS_111,
-            "mileage history",
-            strict=_optional_scalar_string,
-        ),
+        **_nullable_scalar_fields(raw, _MILEAGE_HISTORY_FIELDS, "mileage history"),
         entries=tuple(entries),
         **_response_fields(raw),
     )
 
-
-#: 1.1.1 이 같은 자리에서 읽던 전선 키. 이 밖의 키는 관대하게 읽습니다(G8,
-#: :func:`_legacy_or_additive_fields`).
-_DISCOUNT_CARD_USAGE_FIELDS_111: frozenset[str] = frozenset({
-    "apdUsrFlg",
-    "arvStnNm",
-    "custNm",
-    "dptStnNm",
-    "runDt1",
-})
-
-#: 1.1.1 이 같은 자리에서 읽던 전선 키. 이 밖의 키는 관대하게 읽습니다(G8,
-#: :func:`_legacy_or_additive_fields`).
-_DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS_111: frozenset[str] = frozenset({
-    "arvRsStnCd",
-    "arvRsStnNm",
-    "arvStnConsOrdr",
-    "cmtrPrc",
-    "dirtChtnDvCd",
-    "dptRsStnCd",
-    "dptRsStnNm",
-    "dptStnConsOrdr",
-    "dturCd",
-    "dturNm",
-    "routCd",
-    "runDt",
-    "stationStringInfo",
-    "trnGpCd",
-    "trnNo",
-})
 
 _DISCOUNT_CARD_USAGE_FIELDS = {
     "passenger_name": "custNm",
@@ -2525,13 +2103,7 @@ def parse_discount_card_usage_response(
                 # been caught sending as a JSON number on other reads (see
                 # _optional_scalar_string). The tolerant reader cannot lose data
                 # a string reader would have kept.
-                **_legacy_or_additive_fields(
-                    item,
-                    _DISCOUNT_CARD_USAGE_FIELDS,
-                    _DISCOUNT_CARD_USAGE_FIELDS_111,
-                    "discount card usage",
-                    strict=_optional_scalar_string,
-                ),
+                **_nullable_scalar_fields(item, _DISCOUNT_CARD_USAGE_FIELDS, "discount card usage"),
                 raw=item,
             )
         )
@@ -2555,13 +2127,7 @@ def parse_discount_card_schedule_response(
                 # separate reads (see _optional_scalar_string). This route has
                 # never been seen live, so the tolerant reader is the correct
                 # default rather than a concession.
-                **_legacy_or_additive_fields(
-                    item,
-                    _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS,
-                    _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS_111,
-                    "discount card schedule train",
-                    strict=_optional_scalar_string,
-                ),
+                **_nullable_scalar_fields(item, _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS, "discount card schedule train"),
                 raw=item,
             )
         )
@@ -2587,68 +2153,6 @@ _MULTI_CHILD_FIELDS = {
     "room_class_code": "psrmClCd",
     "requested_discount_kind_code": "rqDcntKndCd",
 }
-
-#: 1.1.1 이 같은 자리에서 읽던 전선 키. 이 밖의 키는 관대하게 읽습니다(G8,
-#: :func:`_legacy_or_additive_fields`).
-_CUSTOMER_TRIP_FIELDS_111: frozenset[str] = frozenset({
-    "addSeatAttCd",
-    "adltHdcpPrnb",
-    "adulCnt",
-    "arvStnCd",
-    "arvStnNm",
-    "babyAcpnPrnb",
-    "chgDttm",
-    "chgUsrId",
-    "chilCnt",
-    "chldHdcpPrnb",
-    "custMgNo",
-    "dayCd",
-    "dirSeatAttGpCd",
-    "dirtChtnDvCd",
-    "dptStnCd",
-    "dptStnNm",
-    "ectbTrnDptTm",
-    "edrPrnb",
-    "inclFlg",
-    "jobStHr",
-    "locSeatAttGpCd",
-    "medDvCd",
-    "psrmClCd",
-    "ptwtTtl",
-    "regDttm",
-    "regSqno",
-    "regUsrId",
-    "tripDno",
-    "trnClsfCd",
-    "trnCnecFlg",
-    "trnGpCd",
-    "utlDno",
-})
-
-#: 1.1.1 이 같은 자리에서 읽던 전선 키. 이 밖의 키는 관대하게 읽습니다(G8,
-#: :func:`_legacy_or_additive_fields`).
-_MAAS_DETAIL_FIELDS_111: frozenset[str] = frozenset({
-    "addSrvDvCd",
-    "addSrvGdCd",
-    "addSrvId",
-    "addSrvMrkEntId",
-    "addSrvMrkEntNm",
-    "addSrvNm",
-    "addSrvPrgSttCd",
-    "addSrvReqNo",
-    "cgPsRefAtclCont",
-    "coptEntRsvNo",
-    "dlivPsbClsTm",
-    "dlivPsbStTm",
-    "leadMsgCont1",
-    "leadMsgCont2",
-    "pnrNo",
-    "reqDt",
-    "reqQnty",
-    "rsvSpecUrl",
-    "utlClsDt",
-    "utlStDt",
-})
 
 _CUSTOMER_TRIP_FIELDS = {
     "additional_seat_attribute_code": "addSeatAttCd",
@@ -2776,12 +2280,7 @@ def parse_customer_trip_info_response(
     for item in _rows(raw, "mainList", "customer trip info"):
         trips.append(
             CustomerTripInfo(
-                **_legacy_or_additive_fields(
-                    item,
-                    _CUSTOMER_TRIP_FIELDS,
-                    _CUSTOMER_TRIP_FIELDS_111,
-                    "customer trip info",
-                ),
+                **_nullable_scalar_fields(item, _CUSTOMER_TRIP_FIELDS, "customer trip info"),
                 raw=item,
             )
         )
@@ -2807,56 +2306,34 @@ def _parse_add_srv_item(
     디스크립터 원소 이름(``addElement(...)``)은 AlienGuard 로 보호되어 있어
     직접 확인하지 못했습니다.
     """
-    # 1.1.1 은 행의 스칼라(_MAAS_DETAIL_FIELDS_111)만 읽었습니다. detailInfo
-    # 블록과 rsStnCdNm 은 그 뒤에 덧붙인 것이라 관대하게 읽습니다(G8): 블록이
-    # 객체가 아니면 None, entityOne 의 객체 아닌 원소는 건너뜁니다.
-    info_raw = _additive_mapping(item, "detailInfo")
+    info_raw = _optional_mapping(item, "detailInfo")
     detail_info = None
     if info_raw is not None:
         detail_info = MaasServiceDetailInfo(
-            **_additive_scalar_fields(
+            **_nullable_scalar_fields(
                 info_raw, _MAAS_DETAIL_INFO_FIELDS, info_context
             ),
-            entity_one=tuple(_additive_rows(info_raw, "entityOne")),
+            entity_one=tuple(_rows(info_raw, "entityOne")),
             raw=info_raw,
         )
     return MaasServiceDetail(
-        **_legacy_or_additive_fields(
-            item, _MAAS_DETAIL_FIELDS, _MAAS_DETAIL_FIELDS_111, context
-        ),
+        **_nullable_scalar_fields(item, _MAAS_DETAIL_FIELDS, context),
         detail_info=detail_info,
         raw=item,
     )
 
 
-def _additive_add_srv_item(
+def _optional_add_srv_item(
     data: Mapping[str, Any],
     key: str,
-    context: str,
     item_context: str,
     info_context: str,
 ) -> MaasServiceDetail | None:
-    """``addSrvInfo`` 처럼 **뒤늦게 덧붙인** 중첩 객체를 관대하게 읽습니다.
-
-    :func:`_parse_add_srv_item` 를 그대로 쓰되, 모양이 어긋나
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 가 나면 그 필드만
-    ``None`` 으로 둡니다. 이유는 :func:`_additive_scalar_string` 과 같습니다 —
-    이 키에는 라이브 캡처가 없고(오늘 예약 행에는 ``ticket_list`` 만 옵니다),
-    필드를 덧붙인 일이 예전에 ``raw`` 로 잘 파싱되던 응답을 거부하게 만들 수는
-    없습니다. 원본은 :attr:`TicketListReservation.raw` 에 그대로 남습니다.
-
-    MaaS 쪽 ``addSrvList`` 행은 1.1.1 이 읽던 스칼라만 예전처럼 엄격하게
-    읽습니다 — :func:`parse_maas_service_detail_list_response` 는 이 관대한
-    짝을 쓰지 않고, 그 행의 새 필드(``detailInfo``·``rsStnCdNm``)만
-    :func:`_parse_add_srv_item` 안에서 관대하게 읽힙니다.
-    """
-    try:
-        item = _optional_mapping(data, key, context)
-        if item is None:
-            return None
-        return _parse_add_srv_item(item, item_context, info_context)
-    except (KorailProtocolError, ValueError):  # 이유는 _additive_scalar_string
+    """``addSrvInfo`` 같은 선택 ``AddSrvItem`` 객체. 객체가 아니면 ``None``."""
+    item = _optional_mapping(data, key)
+    if item is None:
         return None
+    return _parse_add_srv_item(item, item_context, info_context)
 
 
 def parse_maas_service_detail_list_response(
@@ -2880,11 +2357,8 @@ def parse_trip_change_date_response(
     _validate_strict_read_envelope(raw)
     dates = []
     for value in _optional_list(raw, "tripChgDates", "trip change dates"):
-        if not isinstance(value, str):
-            raise KorailProtocolError(
-                "KORAIL trip change dates field tripChgDates must contain only strings"
-            )
-        dates.append(value)
+        if isinstance(value, str):
+            dates.append(value)
     # "tripChgDate" (singular) is not read here: TipChgDateInquiryOut.java:28-30
     # declares only lastRunDt and the plural List<String> tripChgDates.
     # "tripChgDate" is the *request* DTO's field
@@ -2900,35 +2374,17 @@ def _primitive_json_integer(
     data: Mapping[str, Any],
     key: str,
     context: str,
-) -> int:
-    # Psg.java declares these Kotlin `Int`, but the live server sends
-    # zero-padded ASCII-decimal strings for at least custAgeFrom/custAgeTo/
-    # psgPrnbFrom/psgPrnbTo ("0000", "0999", ...), not bare JSON integers --
-    # live-confirmed 2026-09-21, every commuter-info call with a travel-pass
-    # commuter_kind_code crashed here before this fix. Psg.java is a kotlinx
-    # @Serializable, not Gson, but the number-vs-string tolerance is the same
-    # class of problem _required_integer handles; mirrors its acceptance rule.
-    value = data.get(key)
-    if value is None:
+) -> int | None:
+    """Kotlin ``Int`` 필드 — 없으면 ``0``(앱의 기본값), 읽을 수 없는 모양이면 ``None``.
+
+    Psg.java declares these Kotlin `Int`, but the live server sends
+    zero-padded ASCII-decimal strings for at least custAgeFrom/custAgeTo/
+    psgPrnbFrom/psgPrnbTo ("0000", "0999", ...), not bare JSON integers
+    (live-confirmed 2026-09-21).
+    """
+    if data.get(key) is None:
         return 0
-    if type(value) is int:
-        return value
-    if (
-        isinstance(value, str)
-        and value
-        and all("0" <= character <= "9" for character in value)
-    ):
-        try:
-            return int(value)
-        except ValueError as exc:
-            raise KorailProtocolError(
-                f"KORAIL {context} field {key} has an unsupported "
-                "ASCII-decimal length"
-            ) from exc
-    raise KorailProtocolError(
-        f"KORAIL {context} field {key} must be a JSON integer, an "
-        "ASCII-decimal string, or null"
-    )
+    return _optional_integer(data, key, context)
 
 
 def parse_commuter_info_response(
@@ -2950,17 +2406,13 @@ def parse_commuter_info_response(
                     "commuter passenger option",
                 ),
                 # Psg.java:30-31 — int custAgeFrom/custAgeTo, siblings of the
-                # already-read psgPrnbFrom/psgPrnbTo below. Added after 1.1.1,
-                # so read tolerantly (G8): absent is 0 like its siblings, any
-                # other unreadable shape is None instead of a rejection.
-                customer_age_from=_additive_parse(
-                    _primitive_json_integer,
+                # psgPrnbFrom/psgPrnbTo below.
+                customer_age_from=_primitive_json_integer(
                     item,
                     "custAgeFrom",
                     "commuter passenger option",
                 ),
-                customer_age_to=_additive_parse(
-                    _primitive_json_integer,
+                customer_age_to=_primitive_json_integer(
                     item,
                     "custAgeTo",
                     "commuter passenger option",
@@ -3120,18 +2572,8 @@ def parse_ticket_duplication_check_response(
         # TicketDupCheckOut.java:28,50 declares rsvCnt as a kotlinx String
         # field (@SerialName("rsvCnt")), not a Java int — the old comment's
         # "Gson coerces a quoted numeric string" reasoning does not apply to
-        # this DTO. Read it as a string.
-        #
-        # This is NOT behaviour-neutral (an earlier version of this comment
-        # said it was). 1.1.1 read the field as an integer: JSON 7 and "7"
-        # were both accepted and both returned int 7. Now JSON 7 is rejected
-        # with KorailProtocolError and "7" returns str "7" (and "0007" stays
-        # "0007"). Both the accepted inputs and the returned type changed. The
-        # DTO's String declaration says what the app expects; it is not
-        # evidence that the change is neutral. Kept on purpose -- an existing
-        # field, so outside G8 -- and listed as an allowed existing-field
-        # change by checks/g8_differential.py (audit N03/D09).
-        reservation_count=_optional_string(
+        # this DTO. Read it as a scalar string ("0007" stays "0007").
+        reservation_count=_optional_scalar_string(
             raw,
             "rsvCnt",
             "ticket duplication check",
@@ -3232,43 +2674,13 @@ def parse_recent_delivery_history_response(
             )
         )
     return RecentDeliveryHistoryResponse(
-        # 1.1.1 이후에 덧붙인 필드라 관대하게 읽습니다(G8).
-        changed_acceptance_reservation_no=_additive_scalar_string(
+        changed_acceptance_reservation_no=_optional_scalar_string(
             raw, "chgePbpRsvNo", "recent delivery history"
         ),
         recipients=tuple(recipients),
         **_response_fields(raw),
     )
 
-
-#: 1.1.1 이 같은 자리에서 읽던 전선 키. 이 밖의 키는 관대하게 읽습니다(G8,
-#: :func:`_legacy_or_additive_fields`).
-_RESERVATION_SEAT_DETAIL_FIELDS_111: frozenset[str] = frozenset({
-    "h_psg_tp_cd",
-    "h_psrm_cl_cd",
-    "h_psrm_cl_nm",
-    "h_rcvd_amt",
-    "h_seat_fare",
-    "h_seat_no",
-    "h_seat_prc",
-    "h_sgr_nm",
-    "h_srcar_no",
-})
-
-#: 1.1.1 이 같은 자리에서 읽던 전선 키. 이 밖의 키는 관대하게 읽습니다(G8,
-#: :func:`_legacy_or_additive_fields`).
-_RESERVATION_DETAIL_JOURNEY_FIELDS_111: frozenset[str] = frozenset({
-    "h_arv_rs_stn_nm",
-    "h_arv_tm",
-    "h_dpt_dt",
-    "h_dpt_rs_stn_nm",
-    "h_dpt_tm",
-    "h_jrny_sqno",
-    "h_jrny_tp_cd",
-    "h_rsv_chg_no",
-    "h_trn_clsf_nm",
-    "h_trn_no",
-})
 
 _RESERVATION_SEAT_DETAIL_FIELDS = {
     "car_no": "h_srcar_no",
@@ -3286,8 +2698,7 @@ _RESERVATION_SEAT_DETAIL_FIELDS = {
     # single-account observation (8 seat rows, capture not linked here, so
     # unverified) also saw it next to h_psg_tp_cd. It IS absent from
     # ReservationOutSeatInfo's @SerialName set (ReservationOutSeatInfo.java:81)
-    # — that much was right. Modelled, but read tolerantly because it was added
-    # after 1.1.1 (G8): the server is not known to always send it.
+    # — that much was right. Modelled; the server is not known to always send it.
     "passenger_type_code": "h_psg_tp_cd",
     "passenger_type_name": "h_psg_tp_dv_nm",
     "received_amount": "h_rcvd_amt",
@@ -3332,42 +2743,28 @@ def parse_ticket_reservation_detail_response(
 ) -> TicketReservationDetailResponse:
     _validate_strict_read_envelope(raw)
     journeys = []
-    for value in _nested_rows(
+    for journey in _nested_rows(
         raw,
         "jrny_infos",
         "jrny_info",
         "ticket reservation detail",
     ):
-        journey = _row(value, "ticket reservation detail jrny_info")
         seats = []
-        for seat_value in _nested_rows(
+        for seat in _nested_rows(
             journey,
             "seat_infos",
             "seat_info",
             "ticket reservation detail journey",
         ):
-            seat = _row(seat_value, "ticket reservation detail seat_info")
             seats.append(
                 ReservationSeatDetail(
-                    **_legacy_or_additive_fields(
-                        seat,
-                        _RESERVATION_SEAT_DETAIL_FIELDS,
-                        _RESERVATION_SEAT_DETAIL_FIELDS_111,
-                        "reservation seat detail",
-                        strict=_optional_scalar_string,
-                    ),
+                    **_nullable_scalar_fields(seat, _RESERVATION_SEAT_DETAIL_FIELDS, "reservation seat detail"),
                     raw=seat,
                 )
             )
         journeys.append(
             ReservationDetailJourney(
-                **_legacy_or_additive_fields(
-                    journey,
-                    _RESERVATION_DETAIL_JOURNEY_FIELDS,
-                    _RESERVATION_DETAIL_JOURNEY_FIELDS_111,
-                    "reservation detail journey",
-                    strict=_optional_scalar_string,
-                ),
+                **_nullable_scalar_fields(journey, _RESERVATION_DETAIL_JOURNEY_FIELDS, "reservation detail journey"),
                 seats=tuple(seats),
                 raw=journey,
             )
@@ -3407,35 +2804,6 @@ def parse_refund_commission_response(
         **_response_fields(raw),
     )
 
-
-#: 1.1.1 이 같은 자리에서 읽던 전선 키. 이 밖의 키는 관대하게 읽습니다(G8,
-#: :func:`_legacy_or_additive_fields`).
-_REFUND_TICKET_DETAIL_FIELDS_111: frozenset[str] = frozenset({
-    "addSrvCancel",
-    "addSrvFlg",
-    "h_compa_brth",
-    "h_compa_nm",
-    "h_dlay_flg",
-    "h_dlay_tk_flg",
-    "h_orgtk_ret_pwd",
-    "h_orgtk_ret_sale_dt",
-    "h_orgtk_sale_sqno",
-    "h_orgtk_wct_no",
-    "h_pbp_acep_tgt_flg",
-    "h_pnr_no",
-    "h_ret_flg",
-    "h_sale_dt",
-    "h_sale_tm",
-    "h_tk_knd_cd",
-    "h_tk_knd_nm",
-    "h_tot_disc_amt",
-    "h_tot_fare_amt",
-    "h_tot_rcvd_amt",
-    "h_trn_running_flg",
-    "h_wct_nm",
-    "mlgSaveFlg",
-    "retPsbFlg",
-})
 
 _REFUND_TICKET_SEAT_FIELDS = {
     "car_no": "h_srcar_no",
@@ -3567,12 +2935,11 @@ def _discount_card_on_ticket(
     if info is None:
         return None
     sections = []
-    for value in _optional_list(
+    for item in _rows(
         info,
         "appSegList",
         "refund ticket detail dcnt_crd_info",
     ):
-        item = _row(value, "refund ticket detail appSegList")
         sections.append(
             DiscountCardSection(
                 **_nullable_scalar_fields(
@@ -3604,20 +2971,18 @@ def parse_refund_ticket_detail_response(
 ) -> RefundTicketDetailResponse:
     _validate_strict_read_envelope(raw)
     journeys = []
-    for value in _nested_rows(
+    for journey in _nested_rows(
         raw,
         "ticket_infos",
         "ticket_info",
         "refund ticket detail",
     ):
-        journey = _row(value, "refund ticket detail ticket_info")
         seats = []
-        for seat_value in _optional_list(
+        for seat in _rows(
             journey,
             "tk_seat_info",
             "refund ticket detail ticket_info",
         ):
-            seat = _row(seat_value, "refund ticket detail tk_seat_info")
             seats.append(
                 RefundTicketSeat(
                     **_nullable_scalar_fields(
@@ -3639,9 +3004,8 @@ def parse_refund_ticket_detail_response(
                 raw=journey,
             )
         )
-    detail_fields = _legacy_or_additive_fields(
-        raw, _REFUND_TICKET_DETAIL_FIELDS, _REFUND_TICKET_DETAIL_FIELDS_111,
-        "refund ticket detail", strict=_optional_scalar_string
+    detail_fields = _nullable_scalar_fields(
+        raw, _REFUND_TICKET_DETAIL_FIELDS, "refund ticket detail"
     )
     # pbpAcepTgtFlg 는 TicketDetailOut.java:65 의 코틀린 필드명입니다(@SerialName
     # 이 없어 와이어 철자는 PROTECTED). 서버가 언젠가 이 철자로 보내면 읽도록
@@ -3649,25 +3013,20 @@ def parse_refund_ticket_detail_response(
     # 이 필드는 목록 행에서 주입되는 값이지 서버가 보내는 값이 아닙니다
     # (위 _REFUND_TICKET_DETAIL_FIELDS 주석). 짝이던 h_pbp_acep_tgt_flg 매핑은
     # 이 DTO 의 키가 아니어서 제거했습니다.
-    #
-    # 아래 여섯(pbpAcepTgtFlg, h_qrcode, psgNmList, seatTicketList, limousine,
-    # dtlList)은 모두 1.1.1 이후에 덧붙였으므로 관대하게 읽습니다(G8): 스칼라는
-    # 모양이 어긋나면 None, 목록은 리스트가 아니면 빈 튜플이고 객체가 아닌
-    # 원소는 건너뜁니다, limousine 은 객체가 아니면 None.
     if "pbpAcepTgtFlg" in raw:
-        detail_fields["pbp_acceptance_target_flag"] = _additive_scalar_string(
+        detail_fields["pbp_acceptance_target_flag"] = _optional_scalar_string(
             raw, "pbpAcepTgtFlg", "refund ticket detail"
         )
     # h_qrcode has an explicit @SerialName (TicketDetailOut.java:478).
-    qr_code = _additive_scalar_string(raw, "h_qrcode", "refund ticket detail")
+    qr_code = _optional_scalar_string(raw, "h_qrcode", "refund ticket detail")
     # psgNmList/seatTicketList/limousine/dtlList have NO explicit @SerialName
     # on TicketDetailOut (PROTECTED wire spelling) — the Kotlin field names
     # are used as a best-effort key, matching this module's treatment of
     # other unannotated fields (e.g. GuideSeatCndOut.timeStamp).
-    passenger_names = tuple(_additive_rows(raw, "psgNmList"))
-    seat_tickets = tuple(_additive_rows(raw, "seatTicketList"))
-    limousine = _additive_mapping(raw, "limousine")
-    delay_details = tuple(_additive_rows(raw, "dtlList"))
+    passenger_names = tuple(_rows(raw, "psgNmList"))
+    seat_tickets = tuple(_rows(raw, "seatTicketList"))
+    limousine = _optional_mapping(raw, "limousine")
+    delay_details = tuple(_rows(raw, "dtlList"))
     return RefundTicketDetailResponse(
         **detail_fields,
         qr_code=qr_code,
@@ -3740,8 +3099,8 @@ def parse_self_seat_change_info_response(
             raw=station,
         )
         for station in (
-            _row(value, "self seat change chgStnList")
-            for value in _optional_list(
+            value
+            for value in _rows(
                 raw,
                 "chgStnList",
                 "self seat change info",
@@ -3758,8 +3117,8 @@ def parse_self_seat_change_info_response(
             raw=reason,
         )
         for reason in (
-            _row(value, "self seat change chgRsnList")
-            for value in _optional_list(
+            value
+            for value in _rows(
                 raw,
                 "chgRsnList",
                 "self seat change info",
@@ -3874,15 +3233,13 @@ def parse_original_ticket_inquiry_response(
     """
     _validate_strict_read_envelope(raw)
     tickets = []
-    for value in _optional_list(raw, "orgTkList", "original ticket inquiry"):
-        ticket = _row(value, "original ticket inquiry orgTkList")
+    for ticket in _rows(raw, "orgTkList", "original ticket inquiry"):
         journeys = []
-        for journey_value in _optional_list(
+        for journey in _rows(
             ticket,
             "jrnyList",
             "original ticket",
         ):
-            journey = _row(journey_value, "original ticket jrnyList")
             seats = tuple(
                 OriginalTicketSeat(
                     **_nullable_scalar_fields(
@@ -3893,8 +3250,8 @@ def parse_original_ticket_inquiry_response(
                     raw=seat,
                 )
                 for seat in (
-                    _row(seat_value, "original ticket seatList")
-                    for seat_value in _optional_list(
+                    seat_value
+                    for seat_value in _rows(
                         journey,
                         "seatList",
                         "original ticket journey",

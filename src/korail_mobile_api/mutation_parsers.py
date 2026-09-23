@@ -11,11 +11,11 @@ DTO 는 ``AddCartListOut.java:24-25`` 이고 그 자체 속성의 전선 키는
 :func:`parse_cart_add_response` 가 이것을 파싱합니다. 취소처럼 DAO 의 응답
 타입이 맨 ``BaseResponse`` 인 라우트에는 여전히 전용 파서가 없습니다.
 
-읽기 파서와 다른 점이 하나 있습니다. 여기서 나오는 값은 서버에 **이미 존재할 수
-있는** 예약을 가리킵니다 — PNR, 발권창구번호, 결제 폼이 되울릴 job 일련번호,
-정산 금액. 그래서 값의 표현 형태가 예상과 달라도 최대한 받아들입니다
-(:func:`_optional_string`). 파싱 실패로 실제 예약을 놓치는 것이 이 패키지가 낼
-수 있는 최악의 결과이기 때문입니다.
+선택 필드는 읽기 파서와 같이 관대하게 읽습니다(모양이 어긋나면 ``None``/빈 튜플).
+엄격한 것은 뒤따르는 폼이 되울리는 값뿐입니다 — 홀드의 PNR·발권창구번호·여정
+수·job 일련번호, 첫 여정의 변경번호, 정산 금액(:func:`_received_amount`), 그리고
+역 환불 확인의 원표 목록과 금액. 이 값이 틀린 모양이면 추측하지 않고
+:class:`~korail_mobile_api.errors.KorailProtocolError` 를 냅니다.
 """
 from __future__ import annotations
 
@@ -41,33 +41,26 @@ from .mutation_models import (
     StationRefundVerificationResponse,
 )
 from .read_parsers import (
-    _additive_nested_rows,
-    _additive_scalar_fields,
-    _additive_scalar_string,
     _nested_rows,
+    _nullable_scalar_fields,
+    _optional_scalar_string,
+    _rows,
+    _strict_scalar_string,
 )
-from .read_parsers import _optional_scalar_string as _optional_string
 
 
 def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse:
     """``stlList``의 nullable 값과 정산 수단 코드를 보존합니다."""
     copied = _response_mapping(raw)
-    rows = copied.get("stlList")
-    if rows is not None and not isinstance(rows, list):
-        raise KorailProtocolError("KORAIL refund stlList must be a list")
     codes: list[str] = []
-    for row in rows or ():
-        row = _row(row, "refund settlement")
-        # 1.1.1 과 같이 선택 스칼라(문자열·정수·null)로 읽고 null 은 건너뜁니다.
-        # 한때 문자열 필수로 좁혔는데 근거가 없었고, 환불이 이미 처리된 뒤의
-        # 응답을 거절하게 만듭니다(2026-09-23 G8 차등 검사).
-        code = _optional_string(row, "stl_mns_cd", "refund settlement")
+    for row in _rows(copied, "stlList"):
+        code = _optional_scalar_string(row, "stl_mns_cd", "refund settlement")
         if code is not None:
             codes.append(code)
     return RefundTicketResponse(
         **_base_fields(copied),
         settlement_method_codes=tuple(codes),
-        settlement_list_is_null=rows is None,
+        settlement_list_is_null=copied.get("stlList") is None,
     )
 
 
@@ -85,7 +78,11 @@ _STATION_REFUND_ORIGINAL_FIELDS = {
 def parse_station_refund_verification_response(
     raw: Mapping[str, Any],
 ) -> StationRefundVerificationResponse:
-    """Parse ``VerifyOnlineRefundsOut`` and the original ticket it validates."""
+    """Parse ``VerifyOnlineRefundsOut`` and the original ticket it validates.
+
+    원표 목록·PNR·원표 식별 값과 세 금액은 환불 실행 전 확인값이라 엄격하게
+    읽습니다. 두 안내 문구만 관대합니다.
+    """
     copied = _response_mapping(raw)
     rows = copied.get("orgtkinfo_list", [])
     if rows is not None and not isinstance(rows, list):
@@ -93,11 +90,11 @@ def parse_station_refund_verification_response(
     original_tickets: list[StationRefundOriginalTicket] = []
     for row in rows or ():
         row = _row(row, "station refund Orgtkinfo")
-        pnr_no = _optional_string(row, "pnr_no", context="station refund Orgtkinfo")
+        pnr_no = _strict_scalar_string(row, "pnr_no", "station refund Orgtkinfo")
         if not pnr_no:
             raise KorailProtocolError("KORAIL station refund Orgtkinfo.pnr_no is required")
         identity_fields = {
-            attr: _optional_string(row, wire_key, context="station refund Orgtkinfo")
+            attr: _strict_scalar_string(row, wire_key, "station refund Orgtkinfo")
             for attr, wire_key in _STATION_REFUND_ORIGINAL_FIELDS.items()
         }
         original_tickets.append(
@@ -109,20 +106,20 @@ def parse_station_refund_verification_response(
         )
     return StationRefundVerificationResponse(
         **_base_fields(copied),
-        received_amount=_optional_string(
-            copied, "rcvd_amt", context="station refund verification"
+        received_amount=_strict_scalar_string(
+            copied, "rcvd_amt", "station refund verification"
         ),
-        refund_fee=_optional_string(
-            copied, "ret_fee", context="station refund verification"
+        refund_fee=_strict_scalar_string(
+            copied, "ret_fee", "station refund verification"
         ),
-        refund_amount=_optional_string(
-            copied, "ret_amt", context="station refund verification"
+        refund_amount=_strict_scalar_string(
+            copied, "ret_amt", "station refund verification"
         ),
-        popup_message=_optional_string(
-            copied, "poppMsg", context="station refund verification"
+        popup_message=_optional_scalar_string(
+            copied, "poppMsg", "station refund verification"
         ),
-        result_message=_optional_string(
-            copied, "strMsg", context="station refund verification"
+        result_message=_optional_scalar_string(
+            copied, "strMsg", "station refund verification"
         ),
         original_tickets=tuple(original_tickets),
         original_ticket_list_is_null=rows is None,
@@ -136,8 +133,8 @@ def parse_station_refund_execution_response(
     copied = _response_mapping(raw)
     return StationRefundExecutionResponse(
         **_base_fields(copied),
-        refund_division_code=_optional_string(
-            copied, "h_ret_dv_cd", context="station refund execution"
+        refund_division_code=_optional_scalar_string(
+            copied, "h_ret_dv_cd", "station refund execution"
         ),
     )
 
@@ -214,7 +211,7 @@ def _received_amount(
     두 출처를 모두 읽을 수 있는데 값이 다르면 하나를 고르지 않고 거부합니다.
     둘 다 쓸 수 없으면 부분적인 숫자 대신 ``None`` 을 돌려줍니다.
     """
-    declared = _optional_string(raw, "h_tot_rcvd_amt", context="reservation")
+    declared = _strict_scalar_string(raw, "h_tot_rcvd_amt", "reservation")
     if declared is not None:
         declared = declared.strip()
         if not _DIGITS_RE.fullmatch(declared):
@@ -247,11 +244,7 @@ def _received_amount(
             )
         for seat in seat_rows:
             seat = _row(seat, "reservation seat_info row")
-            amount = _optional_string(
-                seat,
-                "h_rcvd_amt",
-                context="reservation seat",
-            )
+            amount = _strict_scalar_string(seat, "h_rcvd_amt", "reservation seat")
             if amount is None or not _DIGITS_RE.fullmatch(amount.strip()):
                 # One unreadable seat makes the whole sum wrong, so refuse the
                 # whole sum rather than under-charge the settlement.
@@ -263,7 +256,7 @@ def _received_amount(
                 # Python's int-string conversion limit is unusable, not zero.
                 return None
             seat_no = (
-                _optional_string(seat, "h_seat_no", context="reservation seat")
+                _optional_scalar_string(seat, "h_seat_no", "reservation seat")
                 or ""
             )
             if value == 0 and not seat_no.strip():
@@ -331,14 +324,18 @@ def _base_fields(copied: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-# The hold's scalar fields and their wire keys. received_amount and journeys
-# are computed and stay out of it.
-_RESERVATION_HOLD_FIELDS = {
+# The hold's scalar fields that the payment/cancel forms echo back -- read
+# strictly. received_amount and journeys are computed and stay out of it.
+_RESERVATION_HOLD_REQUIRED_FIELDS = {
     "pnr_no": "h_pnr_no",
     "journey_count": "h_jrny_cnt",
     "window_no": "h_wct_no",
     "temporary_job_sequence_1": "h_tmp_job_sqno1",
     "temporary_job_sequence_2": "h_tmp_job_sqno2",
+}
+
+# The rest of the hold's scalars -- display only, read tolerantly.
+_RESERVATION_HOLD_FIELDS = {
     "payment_flag": "h_payment_flg",
     "payment_message": "h_payment_msg",
     "payment_deadline_message": "h_pay_limit_msg",
@@ -347,29 +344,20 @@ _RESERVATION_HOLD_FIELDS = {
     "payment_deadline_time": "h_ntisu_lmt_tm",
     "total_fare": "h_tot_fare",
     "total_price": "h_tot_prc",
-}
-
-# 1.1.1 이후에 덧붙인 홀드 필드. 1.1.1 은 이 키를 읽지 않았으므로 어떤 모양으로
-# 와도 응답이 파싱됐습니다 — 그래서 관대하게 읽습니다(G8,
-# ``read_parsers._additive_scalar_string``). 모양이 어긋나면 그 필드만 ``None``.
-_RESERVATION_HOLD_ADDITIVE_FIELDS = {
     "total_discount_amount": "h_tot_dcnt_amt",
 }
 
-# A reserved journey's fields, one jrny_info row each.
+# A reserved journey's fields, one jrny_info row each. reservation_change_no
+# (h_rsv_chg_no) is read strictly on its own: the payment form echoes the
+# first journey's value.
 _RESERVATION_JOURNEY_FIELDS = {
     "journey_sequence": "h_jrny_sqno",
-    "reservation_change_no": "h_rsv_chg_no",
     "departure_date": "h_dpt_dt",
     "departure_time": "h_dpt_tm",
     "arrival_time": "h_arv_tm",
     "departure_station_code": "h_dpt_rs_stn_cd",
     "arrival_station_code": "h_arv_rs_stn_cd",
     "train_no": "h_trn_no",
-}
-
-# 1.1.1 이후에 덧붙인 여정 필드 — 관대하게 읽습니다(G8).
-_RESERVATION_JOURNEY_ADDITIVE_FIELDS = {
     "arrival_date": "h_arv_dt",
 }
 
@@ -383,13 +371,6 @@ _PAYMENT_COUPON_FIELDS = {
 }
 
 # ReservationPaymentOut's own scalar fields (ReservationPaymentOut.java:90).
-#
-# 이 지도와 아래 세 행 지도는 **전부 1.1.1 이후에 덧붙였습니다** — 1.1.1 의
-# 결제 파서는 ``h_im_flg`` 와 ``tk_coupon_info`` 만 읽었습니다. 그래서 전부
-# 관대하게 읽습니다(G8): 스칼라는 ``_additive_scalar_fields``, 세 목록은
-# ``_additive_nested_rows``(바깥·안쪽 모양이 어긋나면 빈 목록, 객체가 아닌
-# 원소는 건너뜀). 결제가 서버에서 이미 이뤄졌을 수 있는 응답을 새 필드 하나
-# 때문에 버리면 안 됩니다. 원본은 ``raw`` 에 그대로 있습니다.
 _RESERVATION_PAYMENT_FIELDS = {
     "reservation_no": "h_rsv_no",
     "settlement_approval_no": "h_stl_cd_apprv_no",
@@ -476,7 +457,8 @@ def parse_reservation_hold_response(
 
     ``jrny_infos`` 는 없거나 ``null`` 이어도 되고 그때는 여정이 빈 튜플입니다.
     객체가 아니거나 ``jrny_info`` 가 리스트가 아니면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다 — 정산 금액과
+    결제 폼의 변경번호가 여정 행에서 나오기 때문입니다.
 
     **성공 여부는 판정하지 않습니다.** 봉투에서 실제로 확인하는 것은 응답이
     매핑이라는 것 하나뿐입니다(:func:`_response_mapping`).
@@ -485,8 +467,9 @@ def parse_reservation_hold_response(
     리스트·객체로 와도 그대로 통과합니다(합성 응답으로 확인, 2026-09-23).
     실패한 홀드 응답도 그래서 그대로 돌아오므로 호출자가
     ``str_result``·``h_msg_cd`` 를 직접 봐야 합니다. 홀드가 실제로 걸렸는데
-    파싱이 거부하면 놓을 수 없는 예약이 남기 때문입니다. 반대로 모델링된
-    스칼라(``h_pnr_no`` 등)는 :func:`_optional_string` 이 검사합니다.
+    파싱이 거부하면 놓을 수 없는 예약이 남기 때문입니다. 폼이 되울리는
+    스칼라(:data:`_RESERVATION_HOLD_REQUIRED_FIELDS`)는 문자열·정수만 받고, 나머지는
+    관대하게 읽습니다.
     """
     copied = _response_mapping(raw)
     journeys_container = copied.get("jrny_infos")
@@ -512,12 +495,11 @@ def parse_reservation_hold_response(
         row = dict(_row(value, "reservation journey"))
         journeys.append(
             ReservationJourney(
-                **{
-                    attr: _optional_string(row, wire_key, context="reservation journey")
-                    for attr, wire_key in _RESERVATION_JOURNEY_FIELDS.items()
-                },
-                **_additive_scalar_fields(
-                    row, _RESERVATION_JOURNEY_ADDITIVE_FIELDS, "reservation journey"
+                **_nullable_scalar_fields(
+                    row, _RESERVATION_JOURNEY_FIELDS, "reservation journey"
+                ),
+                reservation_change_no=_strict_scalar_string(
+                    row, "h_rsv_chg_no", "reservation journey"
                 ),
                 raw=row,
             )
@@ -531,12 +513,10 @@ def parse_reservation_hold_response(
         str_result=copied.get("strResult"),
         raw=copied,
         **{
-            attr: _optional_string(copied, wire_key, context="reservation")
-            for attr, wire_key in _RESERVATION_HOLD_FIELDS.items()
+            attr: _strict_scalar_string(copied, wire_key, "reservation")
+            for attr, wire_key in _RESERVATION_HOLD_REQUIRED_FIELDS.items()
         },
-        **_additive_scalar_fields(
-            copied, _RESERVATION_HOLD_ADDITIVE_FIELDS, "reservation"
-        ),
+        **_nullable_scalar_fields(copied, _RESERVATION_HOLD_FIELDS, "reservation"),
         received_amount=_received_amount(
             copied,
             [journey.raw for journey in journeys],
@@ -550,15 +530,10 @@ def parse_reservation_payment_response(
 ) -> ReservationPaymentResponse:
     """``payment.ReservationPayment`` 의 응답을 파싱합니다.
 
-    ``tk_coupon_info`` 는 없거나 ``null`` 이어도 되고 그때는 쿠폰이 빈 튜플입니다.
-    리스트가 아니면 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
-    ``tk_infos``/``stl_infos``/``tbl_seat_infos`` 는 ``{"tk_info": [...]}`` 처럼
-    바깥 객체 하나가 안쪽 리스트 하나를 감싼 모양이고, 셋 다 없거나 ``null``
-    이면 빈 튜플입니다. 이 셋과 결제 자체 스칼라(``h_rsv_no`` 등)는 1.1.1
-    이후에 덧붙인 것이라 **관대하게** 읽습니다 — 모양이 어긋나면 그 필드는
-    ``None``, 목록은 빈 튜플이고 객체가 아닌 원소는 건너뜁니다. 1.1.1 이 받던
-    응답을 거부하지 않기 위해서입니다(G8). ``tk_coupon_info``·``h_im_flg`` 는
-    1.1.1 에도 있던 필드라 예전 엄격함 그대로입니다.
+    ``tk_coupon_info`` 는 리스트이고, ``tk_infos``/``stl_infos``/``tbl_seat_infos``
+    는 ``{"tk_info": [...]}`` 처럼 바깥 객체 하나가 안쪽 리스트 하나를 감싼
+    모양입니다. 전부 관대하게 읽습니다 — 모양이 어긋나면 그 필드는 ``None``,
+    목록은 빈 튜플이고 객체가 아닌 원소는 건너뜁니다.
 
     이 세 목록을 타입 필드로 파싱하면 결제 승인번호·예약번호·금액을
     ``.raw`` 없이 꺼낼 수 있습니다.
@@ -570,55 +545,44 @@ def parse_reservation_payment_response(
     이뤄졌을 수 있으므로 응답을 버리지 않습니다.
     """
     copied = _response_mapping(raw)
-    value = copied.get("tk_coupon_info")
-    if value is None:
-        rows: list[Any] = []
-    elif isinstance(value, list):
-        rows = value
-    else:
-        raise KorailProtocolError(
-            "KORAIL payment tk_coupon_info must be a list or null"
-        )
-
     coupons: list[ReservationPaymentCoupon] = []
-    for value in rows:
-        row = dict(_row(value, "payment coupon"))
+    for value in _rows(copied, "tk_coupon_info"):
+        row = dict(value)
         coupons.append(
             ReservationPaymentCoupon(
-                **{
-                    attr: _optional_string(row, wire_key, context="payment coupon")
-                    for attr, wire_key in _PAYMENT_COUPON_FIELDS.items()
-                },
+                **_nullable_scalar_fields(row, _PAYMENT_COUPON_FIELDS, "payment coupon"),
                 raw=row,
             )
         )
 
     tickets: list[ReservationPaymentTicket] = []
-    for value in _additive_nested_rows(copied, "tk_infos", "tk_info"):
+    for value in _nested_rows(copied, "tk_infos", "tk_info"):
         row = dict(value)
         tickets.append(
             ReservationPaymentTicket(
-                **_additive_scalar_fields(row, _RESERVATION_PAYMENT_TICKET_FIELDS, "payment ticket"),
+                **_nullable_scalar_fields(row, _RESERVATION_PAYMENT_TICKET_FIELDS, "payment ticket"),
                 raw=row,
             )
         )
 
     settlements: list[ReservationPaymentSettlement] = []
-    for value in _additive_nested_rows(copied, "stl_infos", "stl_info"):
+    for value in _nested_rows(copied, "stl_infos", "stl_info"):
         row = dict(value)
         settlements.append(
             ReservationPaymentSettlement(
-                **_additive_scalar_fields(row, _RESERVATION_PAYMENT_SETTLEMENT_FIELDS, "payment settlement"),
+                **_nullable_scalar_fields(
+                    row, _RESERVATION_PAYMENT_SETTLEMENT_FIELDS, "payment settlement"
+                ),
                 raw=row,
             )
         )
 
     table_seats: list[ReservationPaymentTableSeat] = []
-    for value in _additive_nested_rows(copied, "tbl_seat_infos", "tbl_seat_info"):
+    for value in _nested_rows(copied, "tbl_seat_infos", "tbl_seat_info"):
         row = dict(value)
         table_seats.append(
             ReservationPaymentTableSeat(
-                **_additive_scalar_fields(
+                **_nullable_scalar_fields(
                     row, _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS, "payment table seat"
                 ),
                 raw=row,
@@ -627,12 +591,8 @@ def parse_reservation_payment_response(
 
     return ReservationPaymentResponse(
         **_base_fields(copied),
-        image_ticket_flag=_optional_string(
-            copied,
-            "h_im_flg",
-            context="payment",
-        ),
-        **_additive_scalar_fields(copied, _RESERVATION_PAYMENT_FIELDS, "payment"),
+        image_ticket_flag=_optional_scalar_string(copied, "h_im_flg", "payment"),
+        **_nullable_scalar_fields(copied, _RESERVATION_PAYMENT_FIELDS, "payment"),
         coupons=tuple(coupons),
         tickets=tuple(tickets),
         settlements=tuple(settlements),
@@ -646,10 +606,6 @@ _DISCOUNT_CARD_PURCHASE_FIELDS = {
     "usable_trip_count": "usePsbTno",
     "validity_start_date": "vlidTrmStDt",
     "validity_end_date": "vlidTrmClsDt",
-}
-
-# 1.1.1 이후에 덧붙인 넷 — 1.1.1 은 읽지 않았으므로 관대하게 읽습니다(G8).
-_DISCOUNT_CARD_PURCHASE_ADDITIVE_FIELDS = {
     "discount_card_settlement_target_no": "dcntCrdStlTgtNo",
     "stx_amount": "stxAmt",
     "taxt_supply_amount": "taxtSplAmt",
@@ -696,16 +652,8 @@ def parse_discount_card_purchase_response(
         h_msg_txt=data.get("h_msg_txt"),
         str_result=data.get("strResult"),
         raw=data,
-        **{
-            attribute: _optional_string(
-                data,
-                wire_name,
-                context="discount card purchase",
-            )
-            for attribute, wire_name in _DISCOUNT_CARD_PURCHASE_FIELDS.items()
-        },
-        **_additive_scalar_fields(
-            data, _DISCOUNT_CARD_PURCHASE_ADDITIVE_FIELDS, "discount card purchase"
+        **_nullable_scalar_fields(
+            data, _DISCOUNT_CARD_PURCHASE_FIELDS, "discount card purchase"
         ),
     )
 
@@ -719,39 +667,16 @@ _CART_DISCOUNT_ADDITION_FIELDS = {
 def _cart_discount_additions(
     data: Mapping[str, Any],
 ) -> tuple[CartDiscountAddition, ...]:
-    """``psgDiscAdd_infos`` 를 **관대하게** 읽습니다.
-
-    이 블록은 통째로 나중에 덧붙였습니다 — 예전 버전은 이 키를 아예 들여다보지
-    않고 봉투만 돌려줬으므로, 키가 어떤 모양으로 오든 파싱은 **성공** 했습니다.
-    라이브 캡처도 없어 서버가 실제로 무엇을 보내는지 모릅니다. 그러니 모양이
-    어긋난다고 응답 전체를 버리면, 필드를 덧붙인 일이 라이브러리가 받아들이는
-    응답의 폭을 좁히는 변경이 됩니다(read_parsers 의
-    ``_additive_scalar_string`` 과 같은 이유).
-
-    그래서: 바깥 객체나 리스트의 모양이 다르면 빈 튜플, 객체가 아닌 행은 건너
-    뛰고, 행 안의 두 필드는 문자열·정수가 아니면 ``None`` 입니다. 무엇이 왔든
-    :attr:`CartAddResponse.raw` 에 원본이 남습니다.
-    """
-    try:
-        rows = _nested_rows(data, "psgDiscAdd_infos", "psgDiscAdd_info", "cart add")
-    except KorailProtocolError:
-        return ()
-    additions = []
-    for item in rows:
-        if not isinstance(item, Mapping):
-            continue
-        additions.append(
-            CartDiscountAddition(
-                raw=item,
-                **{
-                    attribute: _additive_scalar_string(
-                        item, wire_name, "cart add discount row"
-                    )
-                    for attribute, wire_name in _CART_DISCOUNT_ADDITION_FIELDS.items()
-                },
-            )
+    """``psgDiscAdd_infos`` 를 읽습니다. 모양이 어긋나면 빈 튜플, 객체가 아닌 행은 건너뜁니다."""
+    return tuple(
+        CartDiscountAddition(
+            raw=item,
+            **_nullable_scalar_fields(
+                item, _CART_DISCOUNT_ADDITION_FIELDS, "cart add discount row"
+            ),
         )
-    return tuple(additions)
+        for item in _nested_rows(data, "psgDiscAdd_infos", "psgDiscAdd_info")
+    )
 
 
 def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
