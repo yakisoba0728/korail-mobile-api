@@ -24,9 +24,8 @@
     │   ├── KorailNotEntitledError
     │   ├── KorailServiceUnavailableError
     │   └── KorailAppUpdateRequiredError
-    ├── KorailNetFunnelError              대기열(nf.letskorail.com)
-    │   └── KorailQueueRejectedError
-    └── KorailMutationNotAllowedError     영구 거절된 상태변경(정기권/패스 구매 등)
+    └── KorailNetFunnelError              대기열(nf.letskorail.com)
+        └── KorailQueueRejectedError
 
 실패 판정은 ``strResult``(와 ``WRC000288``)이 합니다. 이 매핑은 이미 올라가기로
 정해진 예외의 클래스만 고릅니다. 경고 코드를 달고 온 성공 응답은 그대로 성공입니다.
@@ -175,23 +174,21 @@ class KorailDynaPathError(KorailApiError):
 class KorailAuthContinuationRequired(KorailAuthError):
     """로그인이 WebView 2단계 인증으로 이어져야 합니다.
 
-    :attr:`redirect_url` 과 :attr:`post_data` 를 넘겨 호출자가 브라우저로
-    마쳐야 합니다.
+    서버가 준 :attr:`redirect_url`(``strRedirectUrl``)과 로그인 응답 원문
+    :attr:`raw` 를 싣습니다. 7.0.6 은 이 뒤를 ``h_msg_cd`` 별 WebView GET 으로
+    이어 가는데(``LoginViewModel.java:1390-1443``) 그 URL 의 쿼리 구분자는
+    AlienGuard 로 보호돼 재현할 수 없으므로, 이어 가는 방법은 호출자가
+    ``redirect_url``/``raw`` 를 보고 정합니다.
     """
 
-    def __init__(self, redirect_url: str, post_data: str, *, raw: object | None = None) -> None:
+    def __init__(self, redirect_url: str, *, raw: object | None = None) -> None:
         self.redirect_url = redirect_url
-        self.post_data = post_data
         self.raw = raw
         super().__init__("KORAIL login requires WebView continuation")
 
     def __reduce__(self) -> tuple[object, ...]:
-        # Same contract as _ReducibleCodeMessage, different positional pair.
-        return (
-            self.__class__,
-            (self.redirect_url, self.post_data),
-            dict(self.__dict__),
-        )
+        # Same contract as _CodeMessagePickle, one positional argument.
+        return (self.__class__, (self.redirect_url,), dict(self.__dict__))
 
 
 def _code_message(code: str | None, message: str | None) -> str:
@@ -436,13 +433,6 @@ class KorailQueueRejectedError(KorailNetFunnelError):
     ``TsBlock``/``TsIpBlock``/``TsExpressNumber`` 라는 이름은 별개 열거형인
     ``analysis/jadx/sources/com/netfunnel/api/Code.java:31-33`` 쪽 철자이고,
     같은 301/302/303 입니다.
-    """
-
-
-class KorailMutationNotAllowedError(KorailApiError):
-    """이 라이브러리가 스스로 상태변경 요청을 거절했습니다(예: 정기권/패스 구매).
-
-    서버는 관여하지 않았고 아무것도 전송되지 않았습니다.
     """
 
 

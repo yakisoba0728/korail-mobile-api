@@ -5,14 +5,8 @@
 """리무진 연계 조회의 요청 질의와 응답 타입.
 
 ``lmu.scdlQry.do``(운행 스케줄)와 ``lms.TResidualSeatsResearch.do``(좌석 재고)가
-씁니다. ``seatMovie.LimousineScheduleView``(좌석이동 화면의 열차 목록)는 7.0.6
-앱에서 사라져 클라이언트가 더는 보내지 않습니다 — 두 파일에서 동시에 확인했습니다:
-``analysis/jadx/sources/``·``analysis/apktool/`` 전체에 ``LimousineScheduleView``
-문자열이 한 번도 나오지 않고, ``analysis/reports/src-verification/route-map.tsv`` 에도
-없습니다. 그 요청을 만들던 질의 타입은 :mod:`~korail_mobile_api.limousine_payloads`
-의 빌더와 함께 없어졌습니다. 저장해 둔 6.5.0 응답을 해석할 수 있도록 **응답** 타입만
-남겨 두었습니다 (:class:`LimousineScheduleViewTrain`, :class:`LimousineScheduleViewResponse`,
-:func:`~korail_mobile_api.limousine_parsers.parse_limousine_schedule_view_response`).
+씁니다. 6.5.0 의 ``seatMovie.LimousineScheduleView``(좌석이동 화면의 열차 목록)는
+7.0.6 앱에서 사라져 요청·응답 타입 모두 지웠습니다.
 
 ``*Query`` 두 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서 형식을
 검사합니다. 둘 다 역**코드**(4자리)로 역을 받습니다.
@@ -29,9 +23,6 @@
 (:class:`LimousineSeatInventoryResponse` 의 필드별 해석)은 라이브로 확인하지
 않았고 APK 선언에서 나왔습니다 — ``layout_type`` 이 정수로도 온다는 사실은 같은
 DTO 를 쓰는 일반 좌석재고 라우트의 2026-09-21 관측에서 빌려 온 것입니다.
-좌석이동 목록(``seatMovie.LimousineScheduleView``)은 7.0.6 에 없는 라우트라
-라이브 확인 대상이 아니며, 응답 타입은 저장해 둔 6.5.0 응답을 해석하기 위한
-것입니다.
 """
 from __future__ import annotations
 
@@ -39,44 +30,45 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from .errors import KorailProtocolError
 from .models import BaseKorailResponse, SeatWindow
 
 
 def _non_empty_ascii(value: object, name: str, *, allow_empty: bool = False) -> None:
     if not isinstance(value, str):
-        raise TypeError(f"{name} must be a string")
+        raise KorailProtocolError(f"{name} must be a string")
     if allow_empty and value == "":
         return
     if not value or not value.isascii():
-        raise ValueError(f"{name} must be a non-empty ASCII string")
+        raise KorailProtocolError(f"{name} must be a non-empty ASCII string")
 
 
 def _required_text(value: object, name: str) -> None:
     if not isinstance(value, str):
-        raise TypeError(f"{name} must be a string")
+        raise KorailProtocolError(f"{name} must be a string")
     if not value.strip():
-        raise ValueError(f"{name} must not be empty")
+        raise KorailProtocolError(f"{name} must not be empty")
 
 
 def _optional_text(value: object, name: str) -> None:
     if not isinstance(value, str):
-        raise TypeError(f"{name} must be a string")
+        raise KorailProtocolError(f"{name} must be a string")
     if value and not value.strip():
-        raise ValueError(f"{name} must be empty or contain non-whitespace text")
+        raise KorailProtocolError(f"{name} must be empty or contain non-whitespace text")
 
 
 def _passenger_count(value: object, name: str, *, allow_zero: bool) -> None:
     minimum = 0 if allow_zero else 1
     if type(value) is not int:
-        raise TypeError(f"{name} must be an integer")
+        raise KorailProtocolError(f"{name} must be an integer")
     if not minimum <= value <= 9:
         qualifier = "0 through 9" if allow_zero else "1 through 9"
-        raise ValueError(f"{name} must be an integer from {qualifier}")
+        raise KorailProtocolError(f"{name} must be an integer from {qualifier}")
 
 
 def _boolean(value: object, name: str) -> None:
     if type(value) is not bool:
-        raise TypeError(f"{name} must be a boolean")
+        raise KorailProtocolError(f"{name} must be a boolean")
 
 
 @dataclass(frozen=True)
@@ -264,114 +256,3 @@ class LimousineSeatInventoryResponse(BaseKorailResponse):
     #: ``{st_loc_rt, cls_loc_rt}`` 구조가 형제 응답과 동일합니다.
     windows: tuple[SeatWindow, ...] = ()
     seats: tuple[LimousineSeat, ...] = ()
-
-
-@dataclass(frozen=True)
-class LimousineRecommendedProduct:
-    """열차 행에 딸려 오는 추천 상품 한 건."""
-    discount_amount: str | None = field(default=None, repr=False)
-    discount_rate: str | None = field(default=None, repr=False)
-    fare_amount_division_code: str | None = field(default=None, repr=False)
-    goods_name: str | None = field(default=None, repr=False)
-    goods_no: str | None = field(default=None, repr=False)
-    received_fare: str | None = field(default=None, repr=False)
-    received_price: str | None = field(default=None, repr=False)
-    received_price_secondary: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
-
-
-@dataclass(frozen=True)
-class LimousineScheduleViewTrain:
-    """좌석이동 화면이 쓰는 열차 목록의 한 행(6.5.0 응답 해석용)."""
-    detour_via_popup: str | None = field(default=None, repr=False)
-    elevator_damage_control: str | None = field(default=None, repr=False)
-    arrival_date: str | None = field(default=None, repr=False)
-    arrival_station_code: str | None = field(default=None, repr=False)
-    arrival_station_name: str | None = field(default=None, repr=False)
-    arrival_consist_order: str | None = field(default=None, repr=False)
-    arrival_run_order: str | None = field(default=None, repr=False)
-    arrival_time: str | None = field(default=None, repr=False)
-    car_type_name: str | None = field(default=None, repr=False)
-    change_train_division_code: str | None = field(default=None, repr=False)
-    change_train_sequence: str | None = field(default=None, repr=False)
-    connection_required_time: str | None = field(default=None, repr=False)
-    connection_possible_flag: str | None = field(default=None, repr=False)
-    connection_received_price: str | None = field(default=None, repr=False)
-    delay_sale_flag: str | None = field(default=None, repr=False)
-    departure_date: str | None = field(default=None, repr=False)
-    departure_station_code: str | None = field(default=None, repr=False)
-    departure_station_name: str | None = field(default=None, repr=False)
-    departure_consist_order: str | None = field(default=None, repr=False)
-    departure_run_order: str | None = field(default=None, repr=False)
-    departure_time: str | None = field(default=None, repr=False)
-    detour_flag: str | None = field(default=None, repr=False)
-    detour_text: str | None = field(default=None, repr=False)
-    expected_delay_hours: str | None = field(default=None, repr=False)
-    expected_departure_delay_count: str | None = field(
-        default=None,
-        repr=False,
-    )
-    free_reservation_code: str | None = field(default=None, repr=False)
-    free_car_count: str | None = field(default=None, repr=False)
-    general_room_class_name: str | None = field(default=None, repr=False)
-    general_reservation_code: str | None = field(default=None, repr=False)
-    general_reservation_code_secondary: str | None = field(
-        default=None,
-        repr=False,
-    )
-    information_text: str | None = field(default=None, repr=False)
-    journey_reservation_code: str | None = field(default=None, repr=False)
-    journey_reservation_name: str | None = field(default=None, repr=False)
-    nonstop_message: str | None = field(default=None, repr=False)
-    nonstop_message_text: str | None = field(default=None, repr=False)
-    popup_message: str | None = field(default=None, repr=False)
-    received_amount: str | None = field(default=None, repr=False)
-    received_fare: str | None = field(default=None, repr=False)
-    received_price_secondary: str | None = field(default=None, repr=False)
-    seat_map_flag: str | None = field(default=None, repr=False)
-    reservation_possible_name: str | None = field(default=None, repr=False)
-    run_date: str | None = field(default=None, repr=False)
-    run_time: str | None = field(default=None, repr=False)
-    seat_attribute_code: str | None = field(default=None, repr=False)
-    smns_train_flag: str | None = field(default=None, repr=False)
-    special_discount_rate: str | None = field(default=None, repr=False)
-    special_room_class_name: str | None = field(default=None, repr=False)
-    special_reservation_code: str | None = field(default=None, repr=False)
-    special_reservation_code_secondary: str | None = field(
-        default=None,
-        repr=False,
-    )
-    special_reservation_possible_name: str | None = field(
-        default=None,
-        repr=False,
-    )
-    station_popup_message: str | None = field(default=None, repr=False)
-    standing_reservation_code: str | None = field(default=None, repr=False)
-    general_train_discount_rate: str | None = field(default=None, repr=False)
-    origin_train_discount_rate: str | None = field(default=None, repr=False)
-    train_class_code: str | None = field(default=None, repr=False)
-    train_class_name: str | None = field(default=None, repr=False)
-    service_code: str | None = field(default=None, repr=False)
-    train_no: str | None = field(default=None, repr=False)
-    use_time_care_content: str | None = field(default=None, repr=False)
-    wait_reservation_flag: str | None = field(default=None, repr=False)
-    yms_application_flag: str | None = field(default=None, repr=False)
-    recommended_products: tuple[LimousineRecommendedProduct, ...] = ()
-    total_passenger_count: int = 0
-    goods_no: str | None = field(default=None, repr=False)
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
-
-
-@dataclass(frozen=True)
-class LimousineScheduleViewResponse(BaseKorailResponse):
-    """``seatMovie.LimousineScheduleView`` 의 응답(6.5.0 응답 해석용)."""
-    next_ectb_train_no: str | None = field(default=None, repr=False)
-    goods_no: str | None = field(default=None, repr=False)
-    next_page_flag: str | None = None
-    notice_message: str | None = field(default=None, repr=False)
-    next_preceding_train_no: str | None = field(default=None, repr=False)
-    next_query_station_no: str | None = field(default=None, repr=False)
-    result_count: str | None = None
-    next_train_no: str | None = field(default=None, repr=False)
-    merge_reservation_possible_flag: str | None = None
-    schedules: tuple[LimousineScheduleViewTrain, ...] = ()

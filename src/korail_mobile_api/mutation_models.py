@@ -57,15 +57,15 @@ def _require_every_field(
 ) -> None:
     """Every field of a station refund request is a required non-blank string.
 
-    ``ValueError``, like the other request constructors here: this is the
-    caller's input. A verification response that falls short is refused
+    :class:`KorailProtocolError`, like the other request constructors here:
+    this is the caller's input. A verification response that falls short is refused
     separately, as :class:`KorailProtocolError`, by
     :meth:`StationRefundExecutionRequest.from_verification`.
     """
     for field_ in fields(request):
         value = getattr(request, field_.name)
         if not isinstance(value, str) or not value.strip():
-            raise ValueError(
+            raise KorailProtocolError(
                 f"KORAIL station refund {step} requires {field_.name}"
             )
 
@@ -281,16 +281,16 @@ class KorailPassengerCounts:
             # isinstance 가 아니라 type(...) is int. bool 이 int 의 하위
             # 타입이고, True 는 승객 수가 아니다.
             if type(value) is not int or value < 0:
-                raise ValueError(
+                raise KorailProtocolError(
                     f"{field_.name} must be a non-negative integer"
                 )
         total = self.total
         if total < 1:
-            raise ValueError(
+            raise KorailProtocolError(
                 "a reservation must carry at least one passenger"
             )
         if total > KORAIL_MAX_PASSENGERS_PER_RESERVATION:
-            raise ValueError(
+            raise KorailProtocolError(
                 "a reservation carries at most "
                 f"{KORAIL_MAX_PASSENGERS_PER_RESERVATION} passengers, "
                 f"got {total}"
@@ -361,10 +361,10 @@ class KorailSeatAssignment:
         # 규칙과 같게 두어, 조회할 수 있었던 호차가 여기서 거절되거나 그 반대가
         # 되는 일이 없게 한다.
         if type(self.car_no) is not int or self.car_no < 1:
-            raise ValueError("car_no must be a positive integer")
+            raise KorailProtocolError("car_no must be a positive integer")
         seat_no = self.seat_no
         if not isinstance(seat_no, str) or not seat_no:
-            raise ValueError(
+            raise KorailProtocolError(
                 "seat_no must be a non-empty value taken from a seat-inventory read"
             )
 
@@ -376,19 +376,19 @@ class KorailSeatAssignment:
     ) -> KorailSeatAssignment:
         """좌석표와 그 안의 좌석 하나를 짝지어 만듭니다. 손으로 옮길 값이 없습니다."""
         if not isinstance(inventory, SeatInventoryResponse):
-            raise ValueError("inventory must be a SeatInventoryResponse")
+            raise KorailProtocolError("inventory must be a SeatInventoryResponse")
         if not isinstance(seat, PhysicalSeat):
-            raise ValueError("seat must be a PhysicalSeat")
+            raise KorailProtocolError("seat must be a PhysicalSeat")
         car_no = inventory.car_no
         if type(car_no) is not int:
-            raise ValueError(
+            raise KorailProtocolError(
                 "seat inventory did not echo a car number (scar_no); "
                 "construct KorailSeatAssignment with an explicit car_no"
             )
         if seat not in inventory.seats:
-            raise ValueError("seat does not belong to this seat inventory")
+            raise KorailProtocolError("seat does not belong to this seat inventory")
         if seat.sale_possible != "Y":
-            raise ValueError(
+            raise KorailProtocolError(
                 "seat is not marked sellable by the seat-inventory read "
                 '(sale_psb_flg must be "Y")'
             )
@@ -783,7 +783,7 @@ class CardPayment:
         # The annotation does not reach an untyped caller, and this value goes
         # into a real payment form unexamined, so it is checked here.
         if self.card_type not in ("J", "S"):
-            raise ValueError('card_type must be "J" (personal) or "S" (corporate)')
+            raise KorailProtocolError('card_type must be "J" (personal) or "S" (corporate)')
 
 
 @dataclass(frozen=True)
@@ -1131,13 +1131,9 @@ class PriceRecalculationRow:
     #: 것은 다른 필드인 ``hidDcntKndCd`` 이고(``:16862``), 그 분기의 값도
     #: ``ResDiscount``/``ReqDiscount`` enum 과 AlienGuard 리터럴 뒤에 있습니다.
     #:
-    #: 보호된 것: **"앱이 "432"/"000" 두 경우에만 덮어쓴다"는 규칙은 7.0.6
-    #: 에서 재도출하지 못했습니다.** ``makeDiscountParams`` 라는 이름은 ``analysis/``
-    #: 전체에서 0 회이고, 두 평문 자체도 7.0.6 에서 읽히지 않습니다. 철회 경위는
-    #: ``mutation_payloads`` 의 ``_SOLDIER_DISCOUNT_CODE`` 위 주석에 있습니다.
-    #:
-    #: 폼 빌더의 가드는 그대로 둡니다 — 출처가 없다는 것이 동작이 틀렸다는
-    #: 뜻은 아니며, 값은 6.5.0 판독과 라이브 확인에서 왔습니다.
+    #: 이 라이브러리는 이 값을 검사하거나 바꾸지 않고 그대로 보냅니다 — 예전에
+    #: 있던 군장병(``"432"``)·국가유공자(``"000"``) 거절 규칙은 7.0.6 에서
+    #: 재도출되지 않은 자체 규칙이라 지웠습니다.
     discount_kind_code: str
     #: ``hidDcntKndCd`` — 지금 적용하는 할인.
     requested_discount_code: str = ""

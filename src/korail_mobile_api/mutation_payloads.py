@@ -365,11 +365,6 @@ def build_merge_reservation_form(
       ``seat_class`` 를 구간별이 아니라 **하나**만 받습니다 — 두 반쪽이 서로
       다른 등급인 병합 예약은 만들 수 없습니다.
     """
-    if not isinstance(standing_hold_train, TrainSummary):
-        raise KorailProtocolError(
-            "KORAIL 병합 reservation requires the exact TrainSummary the "
-            "입석+좌석 hold was placed on"
-        )
     resolved_legs = _resolved_sequence(
         legs, "KORAIL 병합 reservation requires a sequence of merge-seat legs"
     )
@@ -1268,19 +1263,6 @@ def _standing_flag(
     return "N"
 
 
-def build_single_adult_reservation_form(
-    config: KorailConfig,
-    train: TrainSummary,
-) -> dict[str, str]:
-    """성인 1명·일반실 홀드 폼 — 가장 먼저 라이브로 확인된 모양.
-
-    :func:`build_reservation_form` 을 두 기본값 그대로 부르는 얇은 함수입니다.
-    실서버가 처음 받아들인 예약 요청이 이 모양이었고, 다른 조합도 그 뒤에
-    확인됐습니다.
-    """
-    return build_reservation_form(config, train)
-
-
 # 7.0.6 holds the number as a three-part Triple<String, String, String> (the
 # `phoneNo` property of ReservationWaitApplyUiData,
 # ui/screen/train/ReservationWaitApplyUiData.java:85), concatenates the three
@@ -1378,10 +1360,6 @@ def build_standby_wait_form(
       옛 인용 ``:213``/``:219``/``:115``/``:214``/``:218``/``:220-227`` 은 모두
       ``ReservationWaitActivity.java`` 의 줄번호이므로 함께 폐기했습니다.
     """
-    if not isinstance(hold, ReservationHoldResponse):
-        raise KorailProtocolError(
-            "KORAIL standby options require an exact reservation hold response"
-        )
     pnr_no = _successful_hold_pnr(
         hold,
         context="KORAIL standby options require one successful hold with a PNR",
@@ -1787,10 +1765,6 @@ def build_card_payment_form(
     빌더는 값을 추측해 채우는 대신 그 키 자체를 보내지 않습니다; 서버가
     ``hidPontDvCd1`` 없이도 이 요청을 받아들이는지는 미확인입니다.
     """
-    if not isinstance(hold, ReservationHoldResponse):
-        raise KorailProtocolError(
-            "KORAIL payment requires an exact reservation hold response"
-        )
     if not isinstance(card, CardPayment):
         raise KorailProtocolError("KORAIL payment requires a CardPayment")
     window_no = hold.window_no
@@ -2020,8 +1994,6 @@ def build_refund_form(
     :meth:`~korail_mobile_api.KorailClient.get_refund_commission` 이 돌려주는
     :attr:`ticket_return_times_division_code` 를 UI 판단용으로만 쓰십시오.
     """
-    if not isinstance(ticket, PaidTicket):
-        raise KorailProtocolError("KORAIL refund requires a PaidTicket")
     for name, value in (
         ("pnr_no", ticket.pnr_no),
         ("sale_date", ticket.sale_date),
@@ -2063,21 +2035,6 @@ def build_refund_form(
     return form
 
 
-#: build_station_refund_execution_form 필드 중 빈 값이 실제로 환불을 잘못된
-#: 자원으로 보내거나(신원) 금액을 어긋나게 할(돈) 수 있는 것만.
-_STRICT_STATION_REFUND_FIELDS = frozenset(
-    {
-        "pnr_no",
-        "original_sale_date",
-        "original_sale_window_no",
-        "original_sale_sequence",
-        "original_return_password",
-        "refund_amount",
-        "refund_fee",
-    }
-)
-
-
 def build_station_refund_execution_form(
     config: KorailConfig,
     request: StationRefundExecutionRequest,
@@ -2087,7 +2044,7 @@ def build_station_refund_execution_form(
     The APK declares these twelve ``@SerialName`` keys in
     ``ExecuteOnlineRefundsIn.java:60``. This function prepares a form only;
     execution still requires an authenticated session and the refund category
-    route.
+    route. Values are validated once, by the request's ``__post_init__``.
     """
     if not isinstance(request, StationRefundExecutionRequest):
         raise KorailProtocolError(
@@ -2108,26 +2065,10 @@ def build_station_refund_execution_form(
         ("acepCustNm", "customer_name"),
     )
     form = _common_fields(config)
+    # StationRefundExecutionRequest.__post_init__ already refused a blank
+    # value on every one of these twelve fields.
     form.update(
-        (
-            wire_name,
-            _required_mutation_text(
-                getattr(request, attribute),
-                field=attribute,
-                context="station refund",
-                # StationRefundExecutionRequest.__post_init__ already refuses a
-                # blank value on every one of these twelve fields, so this is
-                # defence in depth, not the only guard -- and it is worth
-                # keeping strict only where a blank would misdirect the refund
-                # (pnr_no + the original sale identity) or move money
-                # (refund_amount, refund_fee). The rest -- division/reason/
-                # ticket-kind codes, the contact phone, the accepting name --
-                # are classification and contact data a blank value would not
-                # corrupt.
-                allow_blank=attribute not in _STRICT_STATION_REFUND_FIELDS,
-            ),
-        )
-        for wire_name, attribute in fields
+        (wire_name, getattr(request, attribute)) for wire_name, attribute in fields
     )
     return form
 
@@ -2403,54 +2344,6 @@ def build_discount_card_reservation_form(
     return rebuilt
 
 
-# The one wire value ``hidDcntKndCd`` is refused for below.
-#
-# **출처 철회.** 예전 주석은 ``makeDiscountParams``(``S4/D.java:181-183``)가
-# 군장병을 특수 처리해 ``dcnt_knd_cd1`` 에 "432" 를 쓰고 적용할인 필드를
-# 비운다고 했고, ``S4/D.smali`` 의 ``move-object p3, v2`` → ``:goto_1`` →
-# ``setHidDcntKndCd(p3)`` 로 그 blanking 을 못박았다고 했습니다. 그 인용은
-# 전부 철회합니다:
-#
-#   * ``S4`` 패키지 자체가 이 저장소의 7.0.6 디컴파일에 없습니다 --
-#     ``analysis/jadx/sources/`` 에 ``S4/`` 디렉터리도, 어떤 경로의
-#     ``D.java`` 도 없고, ``analysis/apktool/smali*`` 에 ``LS4/D;`` 참조도
-#     없습니다. 따라서 ``S4/D.smali`` 도 존재하지 않습니다.
-#   * ``makeDiscountParams`` 라는 이름은 ``analysis/`` 전체에서 0회입니다.
-#
-# 7.0.6 에서 이 여섯 개 행 필드를 채우는 곳은 ``DiscountPriceParams``
-# (``data/DiscountPriceParams.java``)를 만드는 단 한 군데,
-# ``PayViewModel.java:16855-16863`` 입니다. 그리고 거기서는 군장병 특수 처리가
-# **보이지 않습니다** -- 홀드 좌석의 ``h_psg_tp_cd``/``h_psrm_cl_cd``/
-# ``h_dcnt_knd_cd1`` 을 그대로 복사하고(``:16856-16858``), ``hidDscpNo`` 는
-# 보호된 리터럴로, ``hidDcntKndCd`` 는 동반유아 관련 조건
-# (``ResDiscount.CHILD_ACCOMPANY`` → ``ReqDiscount.BABY.getDiscKndCd()``)으로
-# 정합니다(``:16862``). 군장병 분기가 아닙니다.
-#
-# ``ReqDiscount.SOLDIER``/``ResDiscount.SOLDIER`` 는 7.0.6 에 실재합니다
-# (``common/define/ReqDiscount.java:38``, ``common/define/ResDiscount.java:56``)
-# 그러나 두 enum 의 코드 값이 전부 AlienGuard 암호문이라 **"432" 라는 평문도,
-# 그 분기의 동작도 7.0.6 에서 재도출하지 못했습니다.**
-#
-# 요약: 아래 상수와 그 가드는 지금 **미출처**입니다. 출처가 없다는 것이
-# 동작이 틀렸다는 뜻은 아니며, 값은 6.5.0 판독 + 라이브 확인에서 왔습니다.
-_SOLDIER_DISCOUNT_CODE = "432"
-
-# **출처 철회.** 예전 인용 ``T4/a.java:51-53`` → ``T4/b.java:46,62`` 도
-# 6.5.0 이름이고 7.0.6 디컴파일에 ``T4/`` 패키지가 없습니다(``T4/a.java``,
-# ``T4/b.java`` 모두 부재). 위와 같은 이유로 ``makeDiscountParams`` 가
-# ``dcnt_knd_cd1="000"`` 을 보내 좌석의 기존 할인을 CLEAR 한다는 주장도 7.0.6
-# 에서 재도출하지 못했습니다 -- ``PayViewModel.java:16858`` 은 오히려 좌석의
-# ``h_dcnt_knd_cd1`` 을 그대로 복사합니다.
-#
-# 국가유공자 쪽 enum/데이터는 7.0.6 에 있습니다
-# (``common/define/ResDiscount.java:37`` ``MERIT``, ``:40`` ``NATIONAL_GUARD``,
-# ``:41`` ``MERIT_PROTECTOR``; ``datastore/model/NationMeritDiscountData.java``
-# 의 ``getDiscountNo()``/``getVeteranNo()``, ``:127``·``:135``) 그러나 코드
-# 값과 증서번호 접두사가 모두 난독화/암호화돼 있어 **"151"/"152"/"51" 이라는
-# 평문은 확인할 수 없습니다.** 아래 둘도 현재 미출처입니다.
-_MERIT_DISCOUNT_CODES = frozenset({"151", "152"})
-_MERIT_CERTIFICATE_PREFIX = "51"
-
 _PRICE_RECALCULATION_ROW_FIELDS: tuple[tuple[str, str], ...] = (
     ("psg_tp_dv_cd", "passenger_type_code"),
     ("hidDcntKndCd", "requested_discount_code"),
@@ -2558,24 +2451,6 @@ def build_price_recalculation_form(
                     "KORAIL price recalculation copies "
                     f"{attribute} off the held seat; it must not be empty"
                 )
-        if row.requested_discount_code == _SOLDIER_DISCOUNT_CODE:
-            raise KorailProtocolError(
-                "KORAIL price recalculation refuses 군장병 as "
-                "requested_discount_code: this library carries that code in "
-                "discount_kind_code and leaves this field empty. Whether the "
-                "app does the same is not re-derived from the 7.0.6 decompile"
-            )
-        if (
-            row.requested_discount_code in _MERIT_DISCOUNT_CODES
-            and row.certificate_no.startswith(_MERIT_CERTIFICATE_PREFIX)
-            and row.discount_kind_code != "000"
-        ):
-            raise KorailProtocolError(
-                "KORAIL price recalculation sends discount_kind_code "
-                "\"000\" for an integrated 국가유공자 discount; that is this "
-                "library's rule -- the app-side mapping is not re-derived "
-                "from the 7.0.6 decompile"
-            )
 
     form: dict[str, str | list[str]] = dict(_common_fields(config))
     form["hidPnrNo"] = pnr_no

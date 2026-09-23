@@ -20,6 +20,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Literal
 
 from .config import KorailConfig
+from .errors import KorailProtocolError
 from .payloads import _device_version, _is_ascii_digits, build_cache_query
 from .read_models import (
     CommuterInfoResponse,
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
 
 def _positive_int(value: int, name: str) -> str:
     if type(value) is not int or value < 1:
-        raise ValueError(f"{name} must be a positive integer")
+        raise KorailProtocolError(f"{name} must be a positive integer")
     return str(value)
 
 
@@ -42,16 +43,17 @@ def _required_text(value: str | None, name: str) -> str:
     """``value`` 를 그대로 돌려주되 없거나 빈 문자열이면 거부합니다.
 
     호출자 대부분이 서버 응답에서 파싱한 선택 필드를 그대로 넘기므로, ``None``
-    도 인자로 받아 ``TypeError`` 가 아닌 ``ValueError`` 로 바꿉니다.
+    도 인자로 받아 :class:`~korail_mobile_api.errors.KorailProtocolError` 로
+    거절합니다.
     """
     if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{name} must not be empty")
+        raise KorailProtocolError(f"{name} must not be empty")
     return value
 
 
 def _optional_text(value: str, name: str) -> str:
     if not isinstance(value, str):
-        raise ValueError(f"{name} must be a string")
+        raise KorailProtocolError(f"{name} must be a string")
     return value
 
 
@@ -78,11 +80,11 @@ def _ascii_digits(
         if not _is_ascii_digits(value, lengths):
             if len(lengths) == 1:
                 (length,) = lengths
-                raise ValueError(
+                raise KorailProtocolError(
                     f"{name} must contain exactly {length} ASCII digits"
                 )
             expected = ", ".join(str(length) for length in sorted(lengths))
-            raise ValueError(f"{name} must contain {expected} ASCII digit(s)")
+            raise KorailProtocolError(f"{name} must contain {expected} ASCII digit(s)")
         return value
     if (
         not isinstance(value, str)
@@ -95,7 +97,7 @@ def _ascii_digits(
             if maximum_length is not None
             else ""
         )
-        raise ValueError(f"{name} must be an ASCII decimal string{suffix}")
+        raise KorailProtocolError(f"{name} must be an ASCII decimal string{suffix}")
     return value
 
 
@@ -109,13 +111,13 @@ def _positive_ascii_text(
         return value
     resolved = _ascii_digits(value, name)
     if not any(character != "0" for character in resolved):
-        raise ValueError(f"{name} must be a positive ASCII decimal string")
+        raise KorailProtocolError(f"{name} must be a positive ASCII decimal string")
     return resolved
 
 
 def _passenger_count(value: int, name: str) -> int:
     if type(value) is not int or not 1 <= value <= 9:
-        raise ValueError(f"{name} must be an integer from 1 through 9")
+        raise KorailProtocolError(f"{name} must be an integer from 1 through 9")
     return value
 
 
@@ -129,9 +131,6 @@ class FreeSeatCarRequest:
     arrival_run_order: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        self._validate()
-
-    def _validate(self) -> None:
         _ascii_digits(self.run_date, "run_date", lengths=frozenset({8}))
         _ascii_digits(
             self.train_no,
@@ -169,9 +168,6 @@ class GuideSeatConditionRequest:
     seat_attribute_code: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        self._validate()
-
-    def _validate(self) -> None:
         _required_text(self.seat_attribute_code, "seat_attribute_code")
 
 
@@ -197,9 +193,6 @@ class SeatAssignmentScheduleRequest:
     connection_arrival_station_name: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        self._validate()
-
-    def _validate(self) -> None:
         _required_text(self.menu_id, "menu_id")
         _ascii_digits(self.departure_date, "departure_date", lengths=frozenset({8}))
         _ascii_digits(self.departure_time, "departure_time", lengths=frozenset({6}))
@@ -217,7 +210,7 @@ class SeatAssignmentScheduleRequest:
             "standing_detour_division_name",
         )
         if self.transfer_type_code not in {"1", "2"}:
-            raise ValueError("transfer_type_code must be '1' or '2'")
+            raise KorailProtocolError("transfer_type_code must be '1' or '2'")
         _optional_text(
             self.connection_arrival_station_name,
             "connection_arrival_station_name",
@@ -237,9 +230,6 @@ class MergeSeatsInquiryRequest:
     passenger_count: int = field(repr=False)
 
     def __post_init__(self) -> None:
-        self._validate()
-
-    def _validate(self) -> None:
         _ascii_digits(self.boarding_datetime, "boarding_datetime", lengths=frozenset({14}))
         _ascii_digits(self.run_datetime, "run_datetime", lengths=frozenset({14}))
         _ascii_digits(
@@ -263,8 +253,7 @@ def build_free_seat_car_form(
     request: FreeSeatCarRequest,
 ) -> dict[str, str]:
     if not isinstance(request, FreeSeatCarRequest):
-        raise TypeError("request must be a FreeSeatCarRequest")
-    FreeSeatCarRequest._validate(request)
+        raise KorailProtocolError("request must be a FreeSeatCarRequest")
     return {
         "runDt": request.run_date,
         "trnNo": request.train_no.zfill(5),
@@ -279,8 +268,7 @@ def build_guide_seat_condition_form(
     request: GuideSeatConditionRequest,
 ) -> dict[str, str]:
     if not isinstance(request, GuideSeatConditionRequest):
-        raise TypeError("request must be a GuideSeatConditionRequest")
-    GuideSeatConditionRequest._validate(request)
+        raise KorailProtocolError("request must be a GuideSeatConditionRequest")
     return {"rqSeatAttCd": request.seat_attribute_code}
 
 
@@ -288,8 +276,7 @@ def build_seat_assignment_schedule_form(
     request: SeatAssignmentScheduleRequest,
 ) -> dict[str, str]:
     if not isinstance(request, SeatAssignmentScheduleRequest):
-        raise TypeError("request must be a SeatAssignmentScheduleRequest")
-    SeatAssignmentScheduleRequest._validate(request)
+        raise KorailProtocolError("request must be a SeatAssignmentScheduleRequest")
     form = {
         "menuId": request.menu_id,
         "dptDt": request.departure_date,
@@ -319,8 +306,7 @@ def build_merge_seats_inquiry_form(
     request: MergeSeatsInquiryRequest,
 ) -> dict[str, str]:
     if not isinstance(request, MergeSeatsInquiryRequest):
-        raise TypeError("request must be a MergeSeatsInquiryRequest")
-    MergeSeatsInquiryRequest._validate(request)
+        raise KorailProtocolError("request must be a MergeSeatsInquiryRequest")
     form = {
         "abrdDt": request.boarding_datetime,
         "runDt": request.run_datetime,
@@ -359,38 +345,33 @@ class PassScheduleRequest:
     weekend_use_flag: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        _validate_pass_schedule_request(self)
-
-
-def _validate_pass_schedule_request(request: PassScheduleRequest) -> None:
-    _required_text(request.selected_train_code, "selected_train_code")
-    _ascii_digits(request.departure_date, "departure_date", lengths=frozenset({8}))
-    _ascii_digits(request.departure_time, "departure_time", lengths=frozenset({6}))
-    _required_text(request.transfer_type_code, "transfer_type_code")
-    _required_text(request.pass_kind_code, "pass_kind_code")
-    _required_text(request.pass_period_code, "pass_period_code")
-    _required_text(request.pass_age_code, "pass_age_code")
-    _positive_ascii_text(request.page_no, "page_no")
-    _positive_ascii_text(
-        request.page_size,
-        "page_size",
-        allow_empty=True,
-    )
-    _required_text(
-        request.departure_station_name,
-        "departure_station_name",
-    )
-    _required_text(request.arrival_station_name, "arrival_station_name")
-    if request.weekend_use_flag not in {"Y", "N"}:
-        raise ValueError("weekend_use_flag must be 'Y' or 'N'")
+        _required_text(self.selected_train_code, "selected_train_code")
+        _ascii_digits(self.departure_date, "departure_date", lengths=frozenset({8}))
+        _ascii_digits(self.departure_time, "departure_time", lengths=frozenset({6}))
+        _required_text(self.transfer_type_code, "transfer_type_code")
+        _required_text(self.pass_kind_code, "pass_kind_code")
+        _required_text(self.pass_period_code, "pass_period_code")
+        _required_text(self.pass_age_code, "pass_age_code")
+        _positive_ascii_text(self.page_no, "page_no")
+        _positive_ascii_text(
+            self.page_size,
+            "page_size",
+            allow_empty=True,
+        )
+        _required_text(
+            self.departure_station_name,
+            "departure_station_name",
+        )
+        _required_text(self.arrival_station_name, "arrival_station_name")
+        if self.weekend_use_flag not in {"Y", "N"}:
+            raise KorailProtocolError("weekend_use_flag must be 'Y' or 'N'")
 
 
 def build_pass_schedule_form(
     request: PassScheduleRequest,
 ) -> dict[str, str]:
     if not isinstance(request, PassScheduleRequest):
-        raise TypeError("request must be a PassScheduleRequest")
-    _validate_pass_schedule_request(request)
+        raise KorailProtocolError("request must be a PassScheduleRequest")
     return {
         "selGoTrain": request.selected_train_code,
         "selGoAbrdDt": request.departure_date,
@@ -492,22 +473,11 @@ def build_crew_request_list_query(
     (``build_cache_query`` 와 같은 패턴).
 
     이 함수는 이전엔 필수 ``query_division_code: str`` 하나를 받았습니다.
-    ``qryDvCd`` 가 이 라우트에 존재하지 않는 필드라 그 매개변수 자체가
-    UNSUPPORTED 였으므로 제거했습니다. 현재 유일한 호출부인
-    ``client.py::get_crew_request_list`` 는 여전히
-    ``build_crew_request_list_query(query_division_code)`` 로 그 값을 위치
-    인자로 넘기고 있어, 문자열이 ``timestamp_ms`` 자리에 들어가 아래 검증에서
-    :class:`ValueError` 가 됩니다 — client.py 쪽에서 ``get_crew_request_list``
-    의 시그니처와 이 호출을 ``build_crew_request_list_query()`` (또는 호출자가
-    타임스탬프를 지정하고 싶다면 ``build_crew_request_list_query(timestamp_ms=...)``)
-    로 바꾸는 후속 수정이 필요합니다.
+    ``qryDvCd`` 가 이 라우트에 존재하지 않는 필드라 제거했습니다. 호출부
+    :meth:`~korail_mobile_api.client.KorailClient.get_crew_request_list` 는
+    이제 ``timestamp_ms`` 만 넘깁니다.
     """
-    if timestamp_ms is not None and (
-        type(timestamp_ms) is not int or timestamp_ms < 0
-    ):
-        raise ValueError("timestamp_ms must be a non-negative integer or None")
-    resolved = int(time.time() * 1000) if timestamp_ms is None else timestamp_ms
-    return {"timeStamp": str(resolved)}
+    return build_cache_query(timestamp_ms)
 
 
 def build_commuter_kind_menu_query(
@@ -587,7 +557,7 @@ def build_ticket_receipt_form(
     }
     if txt_index is not None:
         if not isinstance(txt_index, str):
-            raise ValueError("txt_index must be a string or None")
+            raise KorailProtocolError("txt_index must be a string or None")
         if txt_index.strip():
             form["txtIndex"] = txt_index
     return form
@@ -598,7 +568,7 @@ def _calendar_date(value: str, name: str) -> date:
     try:
         return date(int(value[:4]), int(value[4:6]), int(value[6:]))
     except ValueError as exc:
-        raise ValueError(f"{name} must be a valid calendar date") from exc
+        raise KorailProtocolError(f"{name} must be a valid calendar date") from exc
 
 
 def _add_calendar_months(value: date, months: int) -> date:
@@ -614,14 +584,14 @@ def _validate_maas_service_detail_query_values(
 ) -> None:
     if start_date is None or end_date is None:
         if start_date is not None or end_date is not None:
-            raise ValueError("MaaS history requires both dates or neither")
+            raise KorailProtocolError("MaaS history requires both dates or neither")
         return
     start = _calendar_date(start_date, "start_date")
     end = _calendar_date(end_date, "end_date")
     if end < start:
-        raise ValueError("end_date must not be before start_date")
+        raise KorailProtocolError("end_date must not be before start_date")
     if end > _add_calendar_months(start, 3):
-        raise ValueError(
+        raise KorailProtocolError(
             "MaaS history range must be at most three calendar months"
         )
 
@@ -718,21 +688,21 @@ def build_mileage_history_form(
     request: MileageHistoryRequest,
 ) -> dict[str, str]:
     if not isinstance(request, MileageHistoryRequest):
-        raise TypeError("request must be a MileageHistoryRequest")
+        raise KorailProtocolError("request must be a MileageHistoryRequest")
     if request.ledger not in _KORAIL_MILEAGE_LEDGERS:
-        raise ValueError(
+        raise KorailProtocolError(
             "ledger must be KORAIL_MILEAGE_LEDGER_KTX or "
             "KORAIL_MILEAGE_LEDGER_RAIL_POINT"
         )
     if request.movement not in _KORAIL_MILEAGE_MOVEMENTS:
-        raise ValueError(
+        raise KorailProtocolError(
             "movement must be one of KORAIL_MILEAGE_MOVEMENT_ALL, "
             "KORAIL_MILEAGE_MOVEMENT_EARNED, KORAIL_MILEAGE_MOVEMENT_SPENT"
         )
     start_date = _ascii_digits(request.start_date, "start_date", lengths=frozenset({8}))
     end_date = _ascii_digits(request.end_date, "end_date", lengths=frozenset({8}))
     if start_date > end_date:
-        raise ValueError("start_date must not be after end_date")
+        raise KorailProtocolError("start_date must not be after end_date")
     return {
         "pontTpVal": request.ledger,
         "qryDvVal": request.movement,
@@ -894,7 +864,7 @@ def build_discount_card_schedule_query(
     계정이 생기면 그때 확인하고 바꾸십시오.
     """
     if type(request) is not DiscountCardScheduleRequest:
-        raise TypeError("request must be an exact DiscountCardScheduleRequest")
+        raise KorailProtocolError("request must be an exact DiscountCardScheduleRequest")
     query = {
         "dptDt": _ascii_digits(request.departure_date, "departure_date", lengths=frozenset({8})),
         "dptRsStnNm": _required_text(
@@ -950,14 +920,10 @@ def build_maas_service_detail_form(
     query: MaasServiceDetailQuery,
 ) -> dict[str, str]:
     if not isinstance(query, MaasServiceDetailQuery):
-        raise TypeError("query must be an exact MaasServiceDetailQuery")
-    _validate_maas_service_detail_query_values(
-        query.start_date,
-        query.end_date,
-    )
+        raise KorailProtocolError("query must be a MaasServiceDetailQuery")
     form = _device_version(config)
-    # The validator above already rejected one date without the other, so
-    # testing both is equivalent to testing only ``start_date``.
+    # __post_init__ already rejected one date without the other, so testing
+    # both is equivalent to testing only ``start_date``.
     if query.start_date is not None and query.end_date is not None:
         form["qryDtFrom"] = query.start_date
         form["qryDtTo"] = query.end_date
@@ -978,7 +944,7 @@ def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
 
 def _exact_server_pass_data(pass_data: PassMenuData) -> str:
     if not isinstance(pass_data, PassMenuData):
-        raise TypeError("pass_data must be a PassMenuData")
+        raise KorailProtocolError("pass_data must be a PassMenuData")
     return _required_text(
         pass_data.commuter_kind_code,
         "pass_data.commuter_kind_code",
@@ -988,6 +954,9 @@ def _exact_server_pass_data(pass_data: PassMenuData) -> str:
 @dataclass(frozen=True)
 class CommuterInitialRequest:
     pass_data: PassMenuData = field(repr=False)
+
+    def __post_init__(self) -> None:
+        _exact_server_pass_data(self.pass_data)
 
 
 @dataclass(frozen=True, init=False)
@@ -1016,15 +985,15 @@ def _validate_commuter_passenger_request(
 ) -> tuple[str, ...]:
     _exact_server_pass_data(request.pass_data)
     if not isinstance(request.source, CommuterInfoResponse):
-        raise TypeError("source must be a CommuterInfoResponse")
+        raise KorailProtocolError("source must be a CommuterInfoResponse")
     if type(request.passenger_counts) is not tuple:
-        raise TypeError("passenger_counts must be a tuple")
+        raise KorailProtocolError("passenger_counts must be a tuple")
     age_codes = tuple(
         option.commuter_usage_age_code
         for option in request.source.passenger_options
     )
     if not age_codes or len(age_codes) != len(request.passenger_counts):
-        raise ValueError(
+        raise KorailProtocolError(
             "passenger counts must match the response age-code rows"
         )
     validated_age_codes: list[str] = []
@@ -1034,13 +1003,13 @@ def _validate_commuter_passenger_request(
         strict=True,
     ):
         if not isinstance(option, CommuterPassengerOption):
-            raise TypeError("response passenger options must be CommuterPassengerOption")
+            raise KorailProtocolError("response passenger options must be CommuterPassengerOption")
         validated_age_codes.append(
             _required_text(age_code, "commuter_usage_age_code")
         )
     for count in request.passenger_counts:
         if type(count) is not int or count < 0:
-            raise ValueError(
+            raise KorailProtocolError(
                 "passenger counts must be non-negative integers"
             )
     return tuple(validated_age_codes)
@@ -1089,29 +1058,22 @@ class OriginalTicketReference:
     return_password: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        _validate_original_ticket_reference(self)
-
-
-def _validate_original_ticket_reference(
-    reference: OriginalTicketReference,
-) -> None:
-    for value, name in (
-        (reference.sale_window_no, "sale_window_no"),
-        (reference.sale_date, "sale_date"),
-        (reference.sale_sequence, "sale_sequence"),
-        (reference.return_password, "return_password"),
-    ):
-        _required_text(value, name)
+        for value, name in (
+            (self.sale_window_no, "sale_window_no"),
+            (self.sale_date, "sale_date"),
+            (self.sale_sequence, "sale_sequence"),
+            (self.return_password, "return_password"),
+        ):
+            _required_text(value, name)
 
 
 def _exact_original_ticket_reference(
     reference: OriginalTicketReference,
 ) -> OriginalTicketReference:
     if not isinstance(reference, OriginalTicketReference):
-        raise TypeError(
+        raise KorailProtocolError(
             "ticket must be an OriginalTicketReference"
         )
-    _validate_original_ticket_reference(reference)
     return reference
 
 
@@ -1131,9 +1093,9 @@ def _exact_ticket_reference_tuple(
     tickets: tuple[OriginalTicketReference, ...],
 ) -> tuple[OriginalTicketReference, ...]:
     if type(tickets) is not tuple:
-        raise TypeError("tickets must be an exact tuple")
+        raise KorailProtocolError("tickets must be an exact tuple")
     if not tickets:
-        raise ValueError("tickets must contain at least one reference")
+        raise KorailProtocolError("tickets must contain at least one reference")
     for ticket in tickets:
         _exact_original_ticket_reference(ticket)
     return tickets
@@ -1144,13 +1106,7 @@ class TicketDuplicationCheckRequest:
     pnr_no: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        _validate_ticket_duplication_check_request(self)
-
-
-def _validate_ticket_duplication_check_request(
-    request: TicketDuplicationCheckRequest,
-) -> None:
-    _required_text(request.pnr_no, "pnr_no")
+        _required_text(self.pnr_no, "pnr_no")
 
 
 def build_delivery_recipient_form(
@@ -1169,10 +1125,9 @@ def build_ticket_duplication_check_form(
     request: TicketDuplicationCheckRequest,
 ) -> dict[str, str]:
     if not isinstance(request, TicketDuplicationCheckRequest):
-        raise TypeError(
+        raise KorailProtocolError(
             "request must be a TicketDuplicationCheckRequest"
         )
-    _validate_ticket_duplication_check_request(request)
     return {"pnrNo": request.pnr_no}
 
 
@@ -1224,7 +1179,7 @@ def build_original_ticket_inquiry_form(
     if ticket_count is None:
         count = len(references)
     elif type(ticket_count) is not int or ticket_count < 1:
-        raise ValueError("ticket_count must be a positive integer")
+        raise KorailProtocolError("ticket_count must be a positive integer")
     else:
         count = ticket_count
     # ``count`` 가 ``references`` 보다 작으면 서버는 앞의 ``count`` 개
@@ -1284,7 +1239,20 @@ class SelfSeatChangeInfoRequest:
     )
 
     def __post_init__(self) -> None:
-        _validate_self_seat_change_info_request(self)
+        _ascii_digits(self.run_date, "run_date", lengths=frozenset({8}))
+        _ascii_digits(self.train_no, "train_no", maximum_length=5)
+        _required_text(
+            self.departure_station_code,
+            "departure_station_code",
+        )
+        _required_text(self.arrival_station_code, "arrival_station_code")
+        if (
+            self.room_class_code is not None
+            and self.room_class_code not in SELF_SEAT_CHANGE_ROOM_CLASS_CODES
+        ):
+            raise KorailProtocolError(
+                "room_class_code must be '1', '2' or None"
+            )
 
 
 #: 7.0.6 의 ``PsrmType``(``PsrmType.java:16``)은 상수가 딱 둘입니다 —
@@ -1302,32 +1270,13 @@ class SelfSeatChangeInfoRequest:
 SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
 
 
-def _validate_self_seat_change_info_request(
-    request: SelfSeatChangeInfoRequest,
-) -> None:
-    _ascii_digits(request.run_date, "run_date", lengths=frozenset({8}))
-    _ascii_digits(request.train_no, "train_no", maximum_length=5)
-    _required_text(
-        request.departure_station_code,
-        "departure_station_code",
-    )
-    _required_text(request.arrival_station_code, "arrival_station_code")
-    if request.room_class_code is None:
-        return
-    if request.room_class_code not in SELF_SEAT_CHANGE_ROOM_CLASS_CODES:
-        raise ValueError(
-            "room_class_code must be '1', '2' or None"
-        )
-
-
 def build_self_seat_change_info_form(
     request: SelfSeatChangeInfoRequest,
 ) -> dict[str, str]:
     if not isinstance(request, SelfSeatChangeInfoRequest):
-        raise TypeError(
+        raise KorailProtocolError(
             "request must be a SelfSeatChangeInfoRequest"
         )
-    _validate_self_seat_change_info_request(request)
     form = {
         "runDt": request.run_date,
         "trnNo": request.train_no,
@@ -1350,12 +1299,11 @@ class CommuterTicketInquiryRequest:
 
     def __post_init__(self) -> None:
         if self.inquiry_type not in {"0", "1"}:
-            raise ValueError("inquiry_type must be '0' or '1'")
+            raise KorailProtocolError("inquiry_type must be '0' or '1'")
         if not isinstance(self.original_ticket, OriginalTicketReference):
-            raise TypeError(
+            raise KorailProtocolError(
                 "original_ticket must be an OriginalTicketReference"
             )
-        _validate_original_ticket_reference(self.original_ticket)
 
 
 CommuterInfoRequest = (
@@ -1369,15 +1317,16 @@ def build_commuter_info_form(
     request: CommuterInfoRequest,
 ) -> tuple[tuple[str, str], ...]:
     if type(request) is CommuterInitialRequest:
-        kind_code = _exact_server_pass_data(request.pass_data)
         return (
             ("jobDvCd", "a"),
-            ("cmtrKndCd", kind_code),
+            ("cmtrKndCd", request.pass_data.commuter_kind_code),
             ("psgCnt", "0"),
         )
     if type(request) is CommuterPassengerRequest:
-        kind_code = _exact_server_pass_data(request.pass_data)
-        age_codes = _validate_commuter_passenger_request(request)
+        age_codes = tuple(
+            option.commuter_usage_age_code
+            for option in request.source.passenger_options
+        )
         # One ``cmtrUtlAgeCd`` per **passenger**, not per age-code row, and
         # ``psgCnt`` is their total -- so ``passenger_counts`` decides both.
         # It used to be ignored here: the form always carried every row once
@@ -1398,23 +1347,16 @@ def build_commuter_info_form(
             for _ in range(count)
         )
         if not selected:
-            raise ValueError(
+            raise KorailProtocolError(
                 "passenger_counts must select at least one passenger"
             )
         return (
             ("jobDvCd", "b"),
-            ("cmtrKndCd", kind_code),
+            ("cmtrKndCd", request.pass_data.commuter_kind_code),
             ("psgCnt", str(len(selected))),
             *(("cmtrUtlAgeCd", value) for value in selected),
         )
     if type(request) is CommuterTicketInquiryRequest:
-        if not isinstance(request.original_ticket, OriginalTicketReference):
-            raise TypeError(
-                "original_ticket must be an OriginalTicketReference"
-            )
-        _validate_original_ticket_reference(request.original_ticket)
-        if request.inquiry_type not in {"0", "1"}:
-            raise ValueError("inquiry_type must be '0' or '1'")
         ticket = request.original_ticket
         return (
             ("jobDvCd", "c"),
@@ -1425,13 +1367,13 @@ def build_commuter_info_form(
             ("ogtkRetPwd", ticket.return_password),
             ("inquiryType", request.inquiry_type),
         )
-    raise TypeError("request must be an exact commuter request variant")
+    raise KorailProtocolError("request must be an exact commuter request variant")
 
 
 def _wire_component(value: str, name: str) -> str:
     resolved = _required_text(value, name)
     if "," in resolved:
-        raise ValueError(f"{name} must not contain a comma")
+        raise KorailProtocolError(f"{name} must not contain a comma")
     return resolved
 
 
@@ -1465,22 +1407,18 @@ class PriceFareLeg:
     goods_no: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
-        _validate_price_fare_leg(self)
-
-
-def _validate_price_fare_leg(leg: PriceFareLeg) -> None:
-    for value, name in (
-        (leg.departure_station_code, "departure_station_code"),
-        (leg.arrival_station_code, "arrival_station_code"),
-        (leg.run_date, "run_date"),
-        (leg.train_no, "train_no"),
-        (leg.requested_seat_attribute_code, "requested_seat_attribute_code"),
-        (leg.train_group_code, "train_group_code"),
-        (leg.train_class_code, "train_class_code"),
-    ):
-        _wire_component(value, name)
-    if leg.goods_no is not None:
-        _wire_component(leg.goods_no, "goods_no")
+        for value, name in (
+            (self.departure_station_code, "departure_station_code"),
+            (self.arrival_station_code, "arrival_station_code"),
+            (self.run_date, "run_date"),
+            (self.train_no, "train_no"),
+            (self.requested_seat_attribute_code, "requested_seat_attribute_code"),
+            (self.train_group_code, "train_group_code"),
+            (self.train_class_code, "train_class_code"),
+        ):
+            _wire_component(value, name)
+        if self.goods_no is not None:
+            _wire_component(self.goods_no, "goods_no")
 
 
 @dataclass(frozen=True)
@@ -1508,27 +1446,19 @@ class PriceFareQuoteRequest:
     menu_id: str = field(default="11", repr=False)
 
     def __post_init__(self) -> None:
-        _validate_price_fare_quote_request(self)
-
-
-def _validate_price_fare_quote_request(
-    request: PriceFareQuoteRequest,
-) -> None:
-    _wire_component(request.menu_id, "menu_id")
-    if type(request.legs) is not tuple or len(request.legs) not in {1, 2}:
-        raise ValueError("legs must be a tuple containing one or two legs")
-    for leg in request.legs:
-        if not isinstance(leg, PriceFareLeg):
-            raise TypeError("legs must contain PriceFareLeg values")
-        _validate_price_fare_leg(leg)
+        _wire_component(self.menu_id, "menu_id")
+        if type(self.legs) is not tuple or len(self.legs) not in {1, 2}:
+            raise KorailProtocolError("legs must be a tuple containing one or two legs")
+        for leg in self.legs:
+            if not isinstance(leg, PriceFareLeg):
+                raise KorailProtocolError("legs must contain PriceFareLeg values")
 
 
 def build_price_fare_quote_form(
     request: PriceFareQuoteRequest,
 ) -> tuple[tuple[str, str], ...]:
     if not isinstance(request, PriceFareQuoteRequest):
-        raise TypeError("request must be a PriceFareQuoteRequest")
-    _validate_price_fare_quote_request(request)
+        raise KorailProtocolError("request must be a PriceFareQuoteRequest")
     columns = [
         ("dptRsStnCd", "departure_station_code"),
         ("arvRsStnCd", "arrival_station_code"),
@@ -1547,7 +1477,7 @@ def build_price_fare_quote_form(
     supplied = [leg.goods_no is not None for leg in request.legs]
     if any(supplied):
         if not all(supplied):
-            raise ValueError(
+            raise KorailProtocolError(
                 "goods_no must be set on every leg or on none of them"
             )
         columns.insert(4, ("gdNo", "goods_no"))
@@ -1558,12 +1488,7 @@ def build_price_fare_quote_form(
         *(
             (
                 wire_name,
-                # Validated above; through _wire_component again so the join
-                # sees str rather than getattr's Any.
-                ",".join(
-                    _wire_component(getattr(leg, attribute), attribute)
-                    for leg in request.legs
-                ),
+                ",".join(getattr(leg, attribute) for leg in request.legs),
             )
             for wire_name, attribute in columns
         ),
@@ -1589,13 +1514,7 @@ class TicketReservationDetailRequest:
     pnr_no: str = field(repr=False)
 
     def __post_init__(self) -> None:
-        _validate_ticket_reservation_detail_request(self)
-
-
-def _validate_ticket_reservation_detail_request(
-    request: TicketReservationDetailRequest,
-) -> None:
-    _required_text(request.pnr_no, "pnr_no")
+        _required_text(self.pnr_no, "pnr_no")
 
 
 def build_ticket_reservation_detail_query(
@@ -1607,10 +1526,9 @@ def build_ticket_reservation_detail_query(
     클래스 독스트링 참고.)
     """
     if not isinstance(request, TicketReservationDetailRequest):
-        raise TypeError(
+        raise KorailProtocolError(
             "request must be a TicketReservationDetailRequest"
         )
-    _validate_ticket_reservation_detail_request(request)
     return {"hidPnrNo": request.pnr_no}
 
 
@@ -1637,18 +1555,13 @@ class RefundCompanion:
     certificate_no: str = field(default="", repr=False)
 
     def __post_init__(self) -> None:
-        _validate_refund_companion(self)
-
-
-def _validate_refund_companion(companion: RefundCompanion) -> None:
-    _optional_text(companion.name, "name")
-    _optional_text(companion.certificate_no, "certificate_no")
+        _optional_text(self.name, "name")
+        _optional_text(self.certificate_no, "certificate_no")
 
 
 def _exact_refund_companion(companion: RefundCompanion) -> RefundCompanion:
     if not isinstance(companion, RefundCompanion):
-        raise TypeError("companion must be a RefundCompanion")
-    _validate_refund_companion(companion)
+        raise KorailProtocolError("companion must be a RefundCompanion")
     return companion
 
 
@@ -1727,7 +1640,7 @@ def build_refund_ticket_detail_form(
     """
     reference = _exact_original_ticket_reference(ticket)
     if type(from_purchase_history) is not bool:
-        raise TypeError("from_purchase_history must be a bool")
+        raise KorailProtocolError("from_purchase_history must be a bool")
     form = {
         "h_orgtk_ret_sale_dt": reference.sale_date,
         "h_orgtk_wct_no": reference.sale_window_no,

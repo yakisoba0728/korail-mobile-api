@@ -73,84 +73,6 @@ KORAIL_LOGIN_TYPE_MEMBER_NO = "2"
 KORAIL_LOGIN_TYPE_PHONE = "4"
 KORAIL_LOGIN_TYPE_EMAIL = "5"
 
-# NOT Gson — the old docstring's "Gson field declaration order" claim was
-# false (this repo's own W2-parsers-and-crypto.md finding 5). LoginOut is a
-# kotlinx.serialization data class; the order below is its own primary
-# constructor's declared parameter order, confirmed two independent ways in
-# analysis/jadx/sources/com/korail/talk/network/model/LoginOut.java:
-#   - the synthetic deserializing constructor at :105
-#   - the `copy()` body's `new LoginOut(key, strCustDvCd, ...)` call at :912
-# Only "key" carries an explicit @SerialName that differs from its Kotlin
-# property name (`@SerialName("Key")`, :383). None of the other 52 fields
-# has an @SerialName annotation, so per this repo's own convention (see
-# analysis/reports/src-verification/00-ground-truth-brief.md §1) their exact
-# wire spelling is PROTECTED; the Kotlin property name is used below as the
-# best-effort guess, same as it was before. The fabricated "coupClsFlg"
-# field — present in neither LoginOut nor anywhere else in the 7.0.6
-# decompile (0 hits in jadx/apktool/raw) — has been removed, and "h_msg_cd"
-# (which belongs to the CommonOut base class, not to LoginOut itself) is no
-# longer appended here.
-#
-# IMPORTANT: this list is *not* known to be what a real login continuation
-# needs. See build_login_authentication_post_data's docstring — the actual
-# 7.0.6 continuation mechanism is not an HTTP POST of these fields at all.
-KORAIL_LOGIN_CONTINUATION_FIELDS: tuple[str, ...] = (
-    "Key",
-    "strCustDvCd",
-    "strCustSrtCd",
-    "strCustClCd",
-    "scedDvCd",
-    "strCustNm",
-    "strCustNo",
-    "strEmailAdr",
-    "strBtdt",
-    "strMbCrdNo",
-    "strAbrdStnCd",
-    "strGoffStnCd",
-    "strAbrdStnNm",
-    "strGoffStnNm",
-    "strDiscCouponFlg",
-    "strCpNo",
-    "strCnecInfoVal",
-    "strEvtTgtFlg",
-    "strSexDvCd",
-    "strDiscCrdReisuFlg",
-    "strYouthAgrFlg",
-    "strCustMgSrtCd",
-    "strAthnFlg",
-    "strAthnFlg2",
-    "strPrsCnqeMsgCd",
-    "strHdcpFlg",
-    "strHdcpTpCd",
-    "strHdcpTpCdNm",
-    "strSubtDcsClCd",
-    "strCustLeadFlg",
-    "strCustLeadFlgNm",
-    "strLognTpCd1",
-    "strLognTpCd2",
-    "strAthnFlg5",
-    "strLognTpCd3",
-    "strLognTpCd4",
-    "notiTpCd",
-    "strLognTpCd5",
-    "strLognTpCd6",
-    "strCustId",
-    "dfpyQryDvCd",
-    "strAthnFlg7",
-    "strRedirectUrl",
-    "encryptMbCrdNo",
-    "encryptCustNo",
-    "athnFlg3",
-    "athnFlg4",
-    "aplClsDt4",
-    "encryptHMbCrdNo",
-    "dlayDscpInfo",
-    "intgFlg",
-    "intgMsgTxt",
-    "intgUrl",
-)
-
-
 def infer_login_input_flag(login_id: str) -> str:
     """``txtInputFlg`` 판정 —
     ``LoginViewModel.validateLoginId(loginId, allowEmpty)`` 재현
@@ -188,88 +110,6 @@ def infer_login_input_flag(login_id: str) -> str:
         if len(digits) == 11:
             return KORAIL_LOGIN_TYPE_PHONE
     return KORAIL_LOGIN_TYPE_MEMBER_NO
-
-
-def build_login_authentication_post_data(
-    *,
-    login_id: str,
-    input_flag: str,
-    response_raw: dict[str, object],
-    cust_id: str | None = None,
-) -> str:
-    """로그인 실패 시 서버가 돌려준 ``strRedirectUrl`` 로 이어지는 후속 처리용
-    문자열을 만듭니다.
-
-    **확인된 것.** ``strRedirectUrl`` 자체는 실재하는 필드다
-    (``LoginOut.getStrRedirectUrl()``) — 실패 코드에 따라
-    ``LoginViewModel.processLoginWithoutSuccess``
-    (``analysis/jadx/sources/com/korail/talk/ui/screen/login/LoginViewModel.java:1390``)
-    가 이 값을 써서 화면 전환을 만든다.
-
-    **확인되지 않은 것 — 이 함수가 반환하는 문자열의 모양.** 7.0.6 은 여기서
-    HTTP POST 본문을 만들지 않는다. ``callLogin`` 이라는 파라미터는
-    ``analysis/`` 전체(jadx 소스·apktool·raw dex)에 0건이고, 이전 독스트링이
-    주장하던 ``S4/u.java:33-43`` (6.5.0, 디스크에 없음)의 "Gson 필드 선언
-    순서 POST" 는 이 저장소가 검증한 바 없는 날조였다. 실제 메커니즘은
-    ``h_msg_cd`` 값에 따라 분기하는 **WebView GET 내비게이션** 이다:
-
-    **``-699977554``/``-699974646`` 는 ``h_msg_cd`` 의 평문이 아니다.**
-    ``LoginViewModel.java:1391-1392`` 는 ``hMsgCd`` 를 읽어
-    ``switch (hMsgCd.hashCode())`` 로 분기하므로, 아래 숫자는 Java
-    ``String.hashCode()`` 값이다. 각 ``case`` 안에서 ``hMsgCd`` 를 **다시**
-    AlienGuard 로 보호된 별도 문자열과 비교하므로(``:1394``, ``:1436``) 실제
-    코드 문자열은 바이트코드에서 복원되지 않는다(PROTECTED). 다만 해시가
-    일치하는 후보는 사전에서 찾을 수 있다 —
-    ``hashCode("WRC000116") == -699977554``
-    (``analysis/apktool/assets/error_json.json:3808``, "…휴면고객으로 전환
-    되었습니다…"), ``hashCode("WRC000420") == -699974646``
-    (``:10312``, "6개월 이상 동일한 비밀번호를 사용하고 있습니다…"). 해시
-    일치는 보강 근거일 뿐 보호 문자열의 복호화가 아니다.
-
-    - 해시 ``-699977554``(휴면 계정)는
-      ``base_url + strRedirectUrl + "?" + COMMON_PARAMETER + <리터럴> +
-      loginId + <리터럴> + inputFlag`` 를 만들어
-      확인 대화상자를 띄우고, 사용자가 긍정을 누르면
-      ``navigationService.goForResult(new SimpleWebRoute(str, …))`` 로 넘긴다
-      (``LoginViewModel.java:1396-1418`` — 문자열 조립은 ``:1399`` 한 줄,
-      대화상자는 ``:1400-1421``, ``goForResult`` 는 그 Positive 콜백 안
-      ``:1416-1418``). ``base_url`` 과 ``strRedirectUrl`` 사이에 ``"/"`` 가
-      없다.
-    - 해시 ``-699974646``(비밀번호 변경 필요)는 다른 URL —
-      ``base_url + "/" + strRedirectUrl + "?" + COMMON_PARAMETER + <리터럴>
-      + strMbCrdNo + <리터럴> + strCustNo`` — 를 만든다(``:1435-1443``).
-      ``loginId``/``inputFlag`` 가 아니라
-      ``result.getStrMbCrdNo()``/``result.getStrCustNo()`` 를 쓴다.
-    - 두 경우 모두 파라미터 구분에 쓰는 리터럴 문자열(``&memId=`` 류로
-      추정되나 확정할 수 없음)은 AlienGuard 로 인코딩돼 있어 정적 분석으로
-      복원되지 않는다(PROTECTED).
-    - 그 밖의 ``h_msg_cd`` 값은 다이얼로그만 띄우고 URL 을 만들지 않는다 —
-      즉 이 함수가 뭔가를 반환해도 그 케이스에서는 앱이 아무 URL 도 만들지
-      않았을 수 있다.
-
-    이 함수는 **위 두 케이스에 해당하지 않는 한 실제 7.0.6 이 하는 일과
-    다른 문자열을 만들고, 해당하는 경우에도 리터럴 구분자를 알 수 없어
-    정확히 재현하지 못한다.** 공개 API 모양
-    (:class:`~korail_mobile_api.errors.KorailAuthContinuationRequired`)을
-    유지하기 위해 여전히 ``key=value&...`` 형태의 문자열을 반환하지만,
-    ``memId``/``inputFlg`` 라는 키 이름 자체도 확정된 wire 스펠링이 아닌
-    추정값이다. 날조됐던 ``coupClsFlg`` 필드와, 7.0.6 어디에도 없는
-    ``callLogin`` 파라미터는 제거했다. 호출자는 이 문자열을 실제 WebView
-    요청으로 신뢰하지 말고, ``redirect_url``/``raw`` 를 직접 보고 처리하는
-    편이 안전하다.
-    """
-    member_id = login_id if login_id else cust_id or ""
-    # "memId"/"inputFlg" key spellings are an unconfirmed guess — see the
-    # docstring above. The values themselves (login_id/input_flag) are the
-    # only pieces independently confirmed to be part of the real
-    # dormant-account URL construction.
-    parts = [f"memId={member_id}", f"inputFlg={input_flag}"]
-    for key in KORAIL_LOGIN_CONTINUATION_FIELDS:
-        value = response_raw.get(key)
-        if value is None:
-            continue
-        parts.append(f"{key}={value}")
-    return "&".join(parts)
 
 
 def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
@@ -428,8 +268,6 @@ class KorailSessionClient:
                     }
                 ),
                 login_id="",
-                input_flag=input_flag,
-                cust_id=cust_id,
             )
         )
 
@@ -497,8 +335,6 @@ class KorailSessionClient:
         return self._finish_login(
             response,
             login_id=member_no,
-            input_flag=resolved_input_flag,
-            cust_id=cust_id,
         )
 
     def _post_login(self, form: dict[str, str]) -> BaseKorailResponse:
@@ -516,21 +352,12 @@ class KorailSessionClient:
         response: BaseKorailResponse,
         *,
         login_id: str,
-        input_flag: str,
-        cust_id: str | None,
     ) -> KorailSession:
         if response.h_msg_cd not in KORAIL_LOGIN_SUCCESS_CODES:
             redirect_url = response.raw.get("strRedirectUrl")
             if redirect_url:
                 raise KorailAuthContinuationRequired(
-                    str(redirect_url),
-                    build_login_authentication_post_data(
-                        login_id=login_id,
-                        input_flag=input_flag,
-                        response_raw=response.raw,
-                        cust_id=cust_id,
-                    ),
-                    raw=response.raw,
+                    str(redirect_url), raw=response.raw
                 )
             raise KorailAuthError(
                 f"{response.h_msg_cd or 'UNKNOWN'}: "
