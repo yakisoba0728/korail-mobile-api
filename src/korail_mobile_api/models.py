@@ -433,12 +433,9 @@ def _train_optional_int(
     raw: dict[str, Any],
     key: str,
 ) -> int | None:
+    # 선택 필드라 정수가 아니면 None 입니다(bool 도 정수로 치지 않음). 원문은 raw 에.
     value = raw.get(key)
-    if value is not None and type(value) is not int:
-        raise KorailProtocolError(
-            f"KORAIL train field {key} must be an integer or null"
-        )
-    return value
+    return value if type(value) is int else None
 
 
 #: TrainSummary 의 ``train_no``·``goods_no``·``total_passenger_count`` 를 뺀 필드와

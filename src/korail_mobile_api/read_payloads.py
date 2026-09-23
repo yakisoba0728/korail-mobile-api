@@ -14,8 +14,7 @@
 from __future__ import annotations
 
 import time
-from calendar import monthrange
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, Literal
 
@@ -101,20 +100,6 @@ def _ascii_digits(
     return value
 
 
-def _positive_ascii_text(
-    value: str,
-    name: str,
-    *,
-    allow_empty: bool = False,
-) -> str:
-    if allow_empty and value == "":
-        return value
-    resolved = _ascii_digits(value, name)
-    if not any(character != "0" for character in resolved):
-        raise KorailProtocolError(f"{name} must be a positive ASCII decimal string")
-    return resolved
-
-
 def _passenger_count(value: int, name: str) -> int:
     if type(value) is not int or not 1 <= value <= 9:
         raise KorailProtocolError(f"{name} must be an integer from 1 through 9")
@@ -130,30 +115,6 @@ class FreeSeatCarRequest:
     departure_run_order: str
     arrival_run_order: str
 
-    def __post_init__(self) -> None:
-        _ascii_digits(self.run_date, "run_date", lengths=frozenset({8}))
-        _ascii_digits(
-            self.train_no,
-            "train_no",
-            maximum_length=5,
-        )
-        _ascii_digits(
-            self.departure_construction_order,
-            "departure_construction_order",
-        )
-        _ascii_digits(
-            self.arrival_construction_order,
-            "arrival_construction_order",
-        )
-        _ascii_digits(
-            self.departure_run_order,
-            "departure_run_order",
-        )
-        _ascii_digits(
-            self.arrival_run_order,
-            "arrival_run_order",
-        )
-
 
 @dataclass(frozen=True)
 class GuideSeatConditionRequest:
@@ -166,9 +127,6 @@ class GuideSeatConditionRequest:
     """
 
     seat_attribute_code: str
-
-    def __post_init__(self) -> None:
-        _required_text(self.seat_attribute_code, "seat_attribute_code")
 
 
 @dataclass(frozen=True)
@@ -193,28 +151,7 @@ class SeatAssignmentScheduleRequest:
     connection_arrival_station_name: str
 
     def __post_init__(self) -> None:
-        _required_text(self.menu_id, "menu_id")
-        _ascii_digits(self.departure_date, "departure_date", lengths=frozenset({8}))
-        _ascii_digits(self.departure_time, "departure_time", lengths=frozenset({6}))
-        _required_text(
-            self.departure_station_name,
-            "departure_station_name",
-        )
-        _required_text(self.arrival_station_name, "arrival_station_name")
-        _required_text(self.train_group_code, "train_group_code")
-        _required_text(self.room_class_code, "room_class_code")
-        _required_text(self.seat_attribute_code, "seat_attribute_code")
         _passenger_count(self.passenger_count, "passenger_count")
-        _optional_text(
-            self.standing_detour_division_name,
-            "standing_detour_division_name",
-        )
-        if self.transfer_type_code not in {"1", "2"}:
-            raise KorailProtocolError("transfer_type_code must be '1' or '2'")
-        _optional_text(
-            self.connection_arrival_station_name,
-            "connection_arrival_station_name",
-        )
 
 
 @dataclass(frozen=True)
@@ -230,30 +167,12 @@ class MergeSeatsInquiryRequest:
     passenger_count: int
 
     def __post_init__(self) -> None:
-        _ascii_digits(self.boarding_datetime, "boarding_datetime", lengths=frozenset({14}))
-        _ascii_digits(self.run_datetime, "run_datetime", lengths=frozenset({14}))
-        _ascii_digits(
-            self.train_no,
-            "train_no",
-            maximum_length=5,
-        )
-        _required_text(
-            self.departure_station_name,
-            "departure_station_name",
-        )
-        _required_text(self.arrival_station_name, "arrival_station_name")
-        if self.selected_station_name is not None:
-            _required_text(self.selected_station_name, "selected_station_name")
-        _required_text(self.room_class_code, "room_class_code")
-        _required_text(self.seat_attribute_code, "seat_attribute_code")
         _passenger_count(self.passenger_count, "passenger_count")
 
 
 def build_free_seat_car_form(
     request: FreeSeatCarRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, FreeSeatCarRequest):
-        raise KorailProtocolError("request must be a FreeSeatCarRequest")
     return {
         "runDt": request.run_date,
         "trnNo": request.train_no.zfill(5),
@@ -267,16 +186,12 @@ def build_free_seat_car_form(
 def build_guide_seat_condition_form(
     request: GuideSeatConditionRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, GuideSeatConditionRequest):
-        raise KorailProtocolError("request must be a GuideSeatConditionRequest")
     return {"rqSeatAttCd": request.seat_attribute_code}
 
 
 def build_seat_assignment_schedule_form(
     request: SeatAssignmentScheduleRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, SeatAssignmentScheduleRequest):
-        raise KorailProtocolError("request must be a SeatAssignmentScheduleRequest")
     form = {
         "menuId": request.menu_id,
         "dptDt": request.departure_date,
@@ -305,8 +220,6 @@ def build_seat_assignment_schedule_form(
 def build_merge_seats_inquiry_form(
     request: MergeSeatsInquiryRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, MergeSeatsInquiryRequest):
-        raise KorailProtocolError("request must be a MergeSeatsInquiryRequest")
     form = {
         "abrdDt": request.boarding_datetime,
         "runDt": request.run_datetime,
@@ -344,34 +257,10 @@ class PassScheduleRequest:
     arrival_station_name: str
     weekend_use_flag: str
 
-    def __post_init__(self) -> None:
-        _required_text(self.selected_train_code, "selected_train_code")
-        _ascii_digits(self.departure_date, "departure_date", lengths=frozenset({8}))
-        _ascii_digits(self.departure_time, "departure_time", lengths=frozenset({6}))
-        _required_text(self.transfer_type_code, "transfer_type_code")
-        _required_text(self.pass_kind_code, "pass_kind_code")
-        _required_text(self.pass_period_code, "pass_period_code")
-        _required_text(self.pass_age_code, "pass_age_code")
-        _positive_ascii_text(self.page_no, "page_no")
-        _positive_ascii_text(
-            self.page_size,
-            "page_size",
-            allow_empty=True,
-        )
-        _required_text(
-            self.departure_station_name,
-            "departure_station_name",
-        )
-        _required_text(self.arrival_station_name, "arrival_station_name")
-        if self.weekend_use_flag not in {"Y", "N"}:
-            raise KorailProtocolError("weekend_use_flag must be 'Y' or 'N'")
-
 
 def build_pass_schedule_form(
     request: PassScheduleRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, PassScheduleRequest):
-        raise KorailProtocolError("request must be a PassScheduleRequest")
     return {
         "selGoTrain": request.selected_train_code,
         "selGoAbrdDt": request.departure_date,
@@ -571,13 +460,6 @@ def _calendar_date(value: str, name: str) -> date:
         raise KorailProtocolError(f"{name} must be a valid calendar date") from exc
 
 
-def _add_calendar_months(value: date, months: int) -> date:
-    index = value.year * 12 + value.month - 1 + months
-    year, zero_based_month = divmod(index, 12)
-    month = zero_based_month + 1
-    return date(year, month, min(value.day, monthrange(year, month)[1]))
-
-
 def _validate_maas_service_detail_query_values(
     start_date: str | None,
     end_date: str | None,
@@ -590,10 +472,6 @@ def _validate_maas_service_detail_query_values(
     end = _calendar_date(end_date, "end_date")
     if end < start:
         raise KorailProtocolError("end_date must not be before start_date")
-    if end > _add_calendar_months(start, 3):
-        raise KorailProtocolError(
-            "MaaS history range must be at most three calendar months"
-        )
 
 
 @dataclass(frozen=True)
@@ -683,8 +561,6 @@ class MileageHistoryRequest:
 def build_mileage_history_form(
     request: MileageHistoryRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, MileageHistoryRequest):
-        raise KorailProtocolError("request must be a MileageHistoryRequest")
     if request.ledger not in _KORAIL_MILEAGE_LEDGERS:
         raise KorailProtocolError(
             "ledger must be KORAIL_MILEAGE_LEDGER_KTX or "
@@ -848,8 +724,6 @@ def build_discount_card_schedule_query(
     계정으로는 생략 여부의 차이를 라이브로 볼 수 없습니다. 카드를 가진
     계정이 생기면 그때 확인하고 바꾸십시오.
     """
-    if type(request) is not DiscountCardScheduleRequest:
-        raise KorailProtocolError("request must be an exact DiscountCardScheduleRequest")
     query = {
         "dptDt": _ascii_digits(request.departure_date, "departure_date", lengths=frozenset({8})),
         "dptRsStnNm": _required_text(
@@ -904,8 +778,6 @@ def build_maas_service_detail_form(
     config: KorailConfig,
     query: MaasServiceDetailQuery,
 ) -> dict[str, str]:
-    if not isinstance(query, MaasServiceDetailQuery):
-        raise KorailProtocolError("query must be a MaasServiceDetailQuery")
     form = _device_version(config)
     # __post_init__ already rejected one date without the other, so testing
     # both is equivalent to testing only ``start_date``.
@@ -1238,10 +1110,6 @@ SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
 def build_self_seat_change_info_form(
     request: SelfSeatChangeInfoRequest,
 ) -> dict[str, str]:
-    if not isinstance(request, SelfSeatChangeInfoRequest):
-        raise KorailProtocolError(
-            "request must be a SelfSeatChangeInfoRequest"
-        )
     form = {
         "runDt": request.run_date,
         "trnNo": request.train_no,
@@ -1281,13 +1149,13 @@ CommuterInfoRequest = (
 def build_commuter_info_form(
     request: CommuterInfoRequest,
 ) -> tuple[tuple[str, str], ...]:
-    if type(request) is CommuterInitialRequest:
+    if isinstance(request, CommuterInitialRequest):
         return (
             ("jobDvCd", "a"),
             ("cmtrKndCd", request.pass_data.commuter_kind_code),
             ("psgCnt", "0"),
         )
-    if type(request) is CommuterPassengerRequest:
+    if isinstance(request, CommuterPassengerRequest):
         age_codes = tuple(
             option.commuter_usage_age_code
             for option in request.source.passenger_options
@@ -1320,7 +1188,7 @@ def build_commuter_info_form(
             ("psgCnt", str(len(selected))),
             *(("cmtrUtlAgeCd", value) for value in selected),
         )
-    if type(request) is CommuterTicketInquiryRequest:
+    if isinstance(request, CommuterTicketInquiryRequest):
         ticket = request.original_ticket
         return (
             ("jobDvCd", "c"),

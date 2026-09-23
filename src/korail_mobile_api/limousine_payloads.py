@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 from .config import KorailConfig
-from .errors import KorailProtocolError
 from .limousine_models import (
     LimousineScheduleQuery,
     LimousineSeatInventoryQuery,
@@ -58,8 +57,6 @@ def build_limousine_schedule_form(
     (``dptRsStnCd``/``arvRsStnCd``)이고, 날짜는 ``YYYYMMDD``, 시각은
     ``HHMMSS`` 입니다.
     """
-    if not isinstance(query, LimousineScheduleQuery):
-        raise KorailProtocolError("query must be a LimousineScheduleQuery")
     return {
         **_device_version(config),
         "Key": config.key,
@@ -112,8 +109,6 @@ def build_limousine_seat_inventory_form(
     이 폼에 ``ctlDvCd`` 를 넣지 않는 쪽이 7.0.6 리무진 화면이 실제로 보내는 폼과
     일치한다.
     """
-    if not isinstance(query, LimousineSeatInventoryQuery):
-        raise KorailProtocolError("query must be a LimousineSeatInventoryQuery")
     return {
         **_device_version(config),
         "Key": config.key,

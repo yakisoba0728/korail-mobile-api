@@ -7,8 +7,9 @@
 ``lmu.scdlQry.do``(운행 스케줄)와 ``lms.TResidualSeatsResearch.do``(좌석 재고)가
 씁니다.
 
-``*Query`` 두 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서 형식을
-검사합니다. 둘 다 역**코드**(4자리)로 역을 받습니다.
+``*Query`` 두 클래스는 얼어붙은 데이터클래스이고 문자열 형식은 서버가 판정합니다
+(좌석 재고는 인원 1~9 와 ``is_arrow`` 불리언만 봅니다). 둘 다 역**코드**(4자리)로
+역을 받습니다.
 ``LimousineScheduleQuery``·``LimousineSeatInventoryQuery`` 는 운행/열차 식별자를
 그대로 보여 주고 ``room_class_code``(좌석 재고는 ``car_no`` 도)만 가립니다.
 
@@ -31,29 +32,6 @@ from typing import Any
 
 from .errors import KorailProtocolError
 from .models import BaseKorailResponse, SeatWindow
-
-
-def _non_empty_ascii(value: object, name: str, *, allow_empty: bool = False) -> None:
-    if not isinstance(value, str):
-        raise KorailProtocolError(f"{name} must be a string")
-    if allow_empty and value == "":
-        return
-    if not value or not value.isascii():
-        raise KorailProtocolError(f"{name} must be a non-empty ASCII string")
-
-
-def _required_text(value: object, name: str) -> None:
-    if not isinstance(value, str):
-        raise KorailProtocolError(f"{name} must be a string")
-    if not value.strip():
-        raise KorailProtocolError(f"{name} must not be empty")
-
-
-def _optional_text(value: object, name: str) -> None:
-    if not isinstance(value, str):
-        raise KorailProtocolError(f"{name} must be a string")
-    if value and not value.strip():
-        raise KorailProtocolError(f"{name} must be empty or contain non-whitespace text")
 
 
 def _passenger_count(value: object, name: str, *, allow_zero: bool) -> None:
@@ -83,29 +61,6 @@ class LimousineScheduleQuery:
     seat_attribute_code: str
     reservation_sale_division_code: str
 
-    def __post_init__(self) -> None:
-        # The exact digit-length each field must have on the wire is the
-        # server's format check to make, not this client's -- lmu.scdlQry.do
-        # forwards every one of these straight into the form
-        # (build_limousine_schedule_form) with nothing here branching on a
-        # specific length. Only "is this a real ASCII string" stays.
-        text_fields: tuple[tuple[str, str, bool], ...] = (
-            (self.departure_date, "departure_date", False),
-            (self.departure_station_code, "departure_station_code", False),
-            (self.arrival_station_code, "arrival_station_code", False),
-            (self.service_code, "service_code", False),
-            (self.room_class_code, "room_class_code", False),
-            (self.departure_time, "departure_time", False),
-            (self.train_no, "train_no", True),
-            (self.seat_attribute_code, "seat_attribute_code", True),
-        )
-        for value, name, allow_empty in text_fields:
-            _non_empty_ascii(value, name, allow_empty=allow_empty)
-        _required_text(
-            self.reservation_sale_division_code,
-            "reservation_sale_division_code",
-        )
-
 
 @dataclass(frozen=True)
 class LimousineSeatInventoryQuery:
@@ -133,32 +88,11 @@ class LimousineSeatInventoryQuery:
     is_arrow: bool = False
 
     def __post_init__(self) -> None:
-        # Same reasoning as LimousineScheduleQuery.__post_init__: exact wire
-        # length is lms.TResidualSeatsResearch.do's format check to make, not
-        # this client's -- build_limousine_seat_inventory_form never branches
-        # on a specific length either.
-        text_fields: tuple[tuple[str, str, bool], ...] = (
-            (self.train_class_code, "train_class_code", False),
-            (self.service_code, "service_code", False),
-            (self.run_date, "run_date", False),
-            (self.train_no, "train_no", False),
-            (self.car_no, "car_no", False),
-            (self.room_class_code, "room_class_code", False),
-            (self.departure_station_code, "departure_station_code", False),
-            (self.arrival_station_code, "arrival_station_code", False),
-            (self.seat_attribute_code, "seat_attribute_code", True),
-            (self.departure_run_order, "departure_run_order", False),
-            (self.arrival_run_order, "arrival_run_order", False),
-        )
-        for value, name, allow_empty in text_fields:
-            _non_empty_ascii(value, name, allow_empty=allow_empty)
         _passenger_count(
             self.passenger_count,
             "passenger_count",
             allow_zero=False,
         )
-        if self.product_no is not None:
-            _optional_text(self.product_no, "product_no")
         _boolean(self.is_arrow, "is_arrow")
 
 

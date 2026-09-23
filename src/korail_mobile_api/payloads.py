@@ -336,14 +336,9 @@ def build_seat_inventory_form(
 def build_cache_query(timestamp_ms: int | None = None) -> dict[str, str]:
     """캐시 파일 요청의 ``timeStamp`` 쿼리를 만듭니다.
 
-    ``timestamp_ms`` 를 주지 않으면 현재 밀리초 epoch 입니다. 음수나 정수가 아닌
-    값은 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 캐시를 우회하려는 값이라 서버가 내용을 보지
-    않습니다.
+    ``timestamp_ms`` 를 주지 않으면 현재 밀리초 epoch 입니다. 캐시를 우회하려는 값이라
+    서버가 내용을 보지 않습니다.
     """
-    if timestamp_ms is not None and (
-        type(timestamp_ms) is not int or timestamp_ms < 0
-    ):
-        raise KorailProtocolError("timestamp_ms must be a non-negative integer or None")
     resolved = int(time.time() * 1000) if timestamp_ms is None else timestamp_ms
     return {"timeStamp": str(resolved)}
 

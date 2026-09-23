@@ -83,19 +83,10 @@ def infer_login_input_flag(login_id: str) -> str:
       무효(``0``, 아무것도 전송하지 않음)를 반환하지만, 이 라이브러리에는
       "무효" 를 표현하는 반환값이 없어 보수적으로 회원번호로
       취급한다 — 이 폴백 자체는 미확인이다.
-    - ``@`` 를 포함하면 ``isValidEmail(loginId) && length >= 7`` 이어야
-      이메일(``"5"``, ``:1873``). 길이가 7 미만이면 7.0.6 이 유효한 입력으로
-      받아들이지 않는 값(``:1876`` 의 ``return 0``)이므로, 다른 타입으로
-      조용히 보내는 대신
-      :class:`~korail_mobile_api.errors.KorailProtocolError` 를 던진다.
+    - ``@`` 를 포함하면 이메일(``"5"``, ``:1873``). 앱은 ``isValidEmail`` 과
+      7자 이상도 요구하지만 그 판정은 서버에 맡긴다.
     """
     if "@" in login_id:
-        if len(login_id) < 7:
-            raise KorailProtocolError(
-                "KORAIL login id looks like an email address but is "
-                "shorter than 7 characters, which the KORAIL app never "
-                "accepts as valid login input"
-            )
         return KORAIL_LOGIN_TYPE_EMAIL
     digits = "".join(ch for ch in login_id if ch.isdigit())
     if digits == login_id:
