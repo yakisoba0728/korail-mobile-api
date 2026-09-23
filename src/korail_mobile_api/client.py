@@ -21,7 +21,6 @@ import httpx
 
 from .config import KorailConfig
 from .constants import KorailReservationJobType, KorailSeatClass
-from .crypto import generate_sid
 from .errors import (
     KorailApiError,
     KorailAuthError,
@@ -620,7 +619,6 @@ class KorailClient:
             self.config,
             train,
             passenger_count=passenger_count,
-            sid=generate_sid(),
             room_class_code=room_class_code,
             seat_attribute_code=seat_attribute_code,
         )
@@ -661,7 +659,6 @@ class KorailClient:
             train,
             car_no,
             passenger_count=passenger_count,
-            sid=generate_sid(),
             room_class_code=room_class_code,
         )
         return self._run_read(
@@ -1631,7 +1628,6 @@ class KorailClient:
                 query,
                 departure_name=departure_name,
                 arrival_name=arrival_name,
-                sid=generate_sid(),
                 member_card_no=current.member_card_no if current else None,
                 continuation=continuation,
                 transfer=transfer,
