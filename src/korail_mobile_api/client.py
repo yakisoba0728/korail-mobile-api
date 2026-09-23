@@ -24,6 +24,7 @@ from .config import KorailConfig
 from .constants import KorailReservationJobType, KorailSeatClass
 from .crypto import generate_sid
 from .errors import (
+    KorailApiError,
     KorailAuthError,
     KorailNoDirectTrainError,
     KorailProtocolError,
@@ -539,7 +540,13 @@ class KorailClient:
         parser: Callable[[dict[str, Any]], T] | None = None,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse | T:
-        """상태변경 메서드의 공통 골격: 전송 → 파싱 → 세션만료 복구."""
+        """상태변경 메서드의 공통 골격: 전송 → 파싱 → 세션만료 복구.
+
+        타입 파싱이 실패하면 예외의 :attr:`~korail_mobile_api.KorailApiError.raw`
+        에 **응답 원문이 담겨 있습니다.** 거기까지 왔다는 것은 서버 쪽 변경이
+        이미 끝났다는 뜻이므로, 호출자는 그 원문을 보고 판단해야 하며 같은
+        변경을 다시 보내면 안 됩니다.
+        """
         response = self._run_read(
             lambda: self.http.post_mutation_form(
                 route,
@@ -549,7 +556,23 @@ class KorailClient:
             )
         )
         if parser is not None:
-            return parser(response.raw)
+            try:
+                return parser(response.raw)
+            except KorailApiError as error:
+                # **서버 쪽은 이미 끝났습니다.** 여기까지 왔다는 것은 전송이
+                # 성공하고 봉투 검사도 통과했다는 뜻이고, 홀드·결제·장바구니
+                # 담기는 그 시점에 이미 반영돼 있습니다. 그런데 타입 파싱이
+                # 실패하면서 ``.raw`` 가 비어 있으면, 호출자는 무슨 일이
+                # 일어났는지 볼 방법이 없어 **같은 변경을 다시 보내기 쉽습니다**
+                # — 장바구니라면 두 번 담기고 결제라면 더 나쁩니다
+                # (2026-09-23 확인).
+                #
+                # 그래서 응답 원문을 예외에 붙여 줍니다. 파싱 실패를 서버 실패와
+                # 구분해 다룰 수 있어야 합니다. 이미 ``raw`` 가 있는 예외는
+                # 건드리지 않습니다 — 파서가 더 구체적인 것을 넣었을 수 있습니다.
+                if getattr(error, "raw", None) is None:
+                    error.raw = response.raw
+                raise
         return response
 
     def get_seat_cars(
