@@ -9,8 +9,9 @@
 hMsgCd 를 보호된 상수와 비교합니다. 상수가 복원되지 않아 두 코드가 앱과 같은지는 미확인이며 코드는 실서버 관측에서 왔습니다. assets/error_json.json 의
 S200 문구는 운행중지 안내지만 로그인 성공 처리에도 운행중지 분기가 있어(LoginViewModel.java:1307-1322) 무관하다고 볼 수도 없습니다.
 
-2026-09-23 코드 확인 기록: 기본 봉투 검사는 SUCC 승인목록이 아니라 FAIL 등의 거부 목록이므로 빈 문자열·미지의 strResult 도 통과할 수 있습니다. 성공 코드
-하나만으로 세션을 만들지는 않습니다.
+로그인 응답은 앱처럼 ``FAIL`` 이어도 HTTP 계층에서 예외로 바꾸지 않고 :meth:`KorailSessionClient._finish_login`
+이 판정합니다(앱: NetworkService.java:6916-6919 가 재로그인 요구·서비스 오류만 따로 떼고 나머지 LoginOut 을
+화면에 넘김). 성공은 ``strResult`` 가 ``FAIL`` 이 아니고 코드가 허용목록에 있으며 JSESSIONID 가 있을 때뿐입니다.
 """
 from __future__ import annotations
 
@@ -20,9 +21,11 @@ from collections.abc import Callable
 from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 from .crypto import transform_login_password
 from .errors import (
+    KorailAppError,
     KorailAuthContinuationRequired,
     KorailAuthError,
     KorailProtocolError,
+    classify_app_error,
 )
 from .http import KorailHttpClient
 from .models import BaseKorailResponse, KorailSession, LoginCryptoInfo
@@ -30,6 +33,13 @@ from .payloads import build_common_code_form
 
 
 KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
+#: 로그인 실패 가운데 앱이 ``strRedirectUrl`` 웹 화면으로 넘기는 두 코드 — 휴면 해제(``WRC000116``)와
+#: 비밀번호 변경(``WRC000420``). LoginViewModel.processLoginWithoutSuccess(``LoginViewModel.java:1390-1520``)
+#: 는 ``hMsgCd.hashCode()`` 로 분기하므로 보호된 리터럴 대신 case 값(-699977554, -699974646)을
+#: ``error_json.json`` 코드의 Java hashCode 와 맞춰 복원했습니다. 다른 실패 코드(WRC000390 잠김,
+#: WRC000421/WRC000450 미인증, WRR000101/S034 정보 오류, S135 간편로그인 미연결, WRT200320 등)는 앱이
+#: ``h_msg_txt`` 를 안내로 띄울 뿐이라 :class:`~korail_mobile_api.errors.KorailAuthError` 입니다.
+KORAIL_LOGIN_CONTINUATION_CODES = frozenset({"WRC000116", "WRC000420"})
 KORAIL_LOGIN_TYPE_MEMBER_NO = "2"
 KORAIL_LOGIN_TYPE_PHONE = "4"
 KORAIL_LOGIN_TYPE_EMAIL = "5"
@@ -213,7 +223,9 @@ class KorailSessionClient:
         )
 
     def _post_login(self, form: dict[str, str]) -> BaseKorailResponse:
-        return self.http.post_form("/classes/com.korail.mobile.login.Login", form)
+        return self.http.post_form(
+            "/classes/com.korail.mobile.login.Login", form, raise_on_fail=False
+        )
 
     def _finish_login(
         self,
@@ -221,16 +233,23 @@ class KorailSessionClient:
         *,
         login_id: str,
     ) -> KorailSession:
-        if response.h_msg_cd not in KORAIL_LOGIN_SUCCESS_CODES:
-            redirect_url = response.raw.get("strRedirectUrl")
-            if redirect_url:
+        code = response.h_msg_cd
+        if response.str_result == "FAIL" or code not in KORAIL_LOGIN_SUCCESS_CODES:
+            if code in KORAIL_LOGIN_CONTINUATION_CODES:
+                redirect_url = response.raw.get("strRedirectUrl")
                 raise KorailAuthContinuationRequired(
-                    str(redirect_url), raw=response.raw
+                    redirect_url if isinstance(redirect_url, str) else "",
+                    raw=response.raw,
                 )
+            # 서비스 점검·앱 업데이트처럼 이미 따로 분류된 코드는 그 예외로 올립니다.
+            error = classify_app_error(code, response.h_msg_txt, raw=response.raw)
+            if type(error) is not KorailAppError:
+                raise error
             raise KorailAuthError(
                 f"{response.h_msg_cd or 'UNKNOWN'}: "
                 f"{response.h_msg_txt or 'KORAIL login did not complete'}",
                 code=response.h_msg_cd,
+                raw=response.raw,
             )
         jsessionid = self.http.cookies.get("JSESSIONID")
         if not jsessionid:

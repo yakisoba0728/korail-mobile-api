@@ -54,13 +54,17 @@ class KorailProtocolError(KorailApiError):
 class KorailAuthError(KorailApiError):
     """로그인 실패 또는 세션 없이 인증 필요 메서드 호출.
 
-    ``code`` 는 서버가 준 ``h_msg_cd`` 입니다. 로그인 요청이 서버 실패를 받았을 때 채워지고, 그 실패가 :class:`KorailAppError` 였다면 원래
-    예외가 ``__cause__`` 에 남습니다. 서버 응답 없이 난 실패(세션 없음, 기기 쪽 인증 등)는 ``None`` 입니다.
+    ``code`` 는 서버가 준 ``h_msg_cd``, ``raw`` 는 로그인 응답 원문입니다(예: ``WRC000390`` 비밀번호 오류 5회 초과,
+    ``WRR000101``/``S034`` 로그인 정보 오류). 서버 응답 없이 난 실패(세션 없음 등)는 둘 다 ``None`` 입니다.
     """
 
-    def __init__(self, *args: object, code: str | None = None) -> None:
+    def __init__(
+        self, *args: object, code: str | None = None, raw: object | None = None
+    ) -> None:
         super().__init__(*args)
         self.code = code
+        if raw is not None:
+            self.raw = raw
 
 
 class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
@@ -104,17 +108,21 @@ class KorailDynaPathError(KorailApiError):
 
 
 class KorailAuthContinuationRequired(KorailAuthError):
-    """로그인이 WebView 2단계 인증으로 이어져야 합니다.
+    """로그인을 끝내려면 웹 화면에서 조치가 필요합니다 — 휴면 해제(``WRC000116``) 또는 비밀번호 변경(``WRC000420``).
 
-    서버가 준 :attr:`redirect_url`(``strRedirectUrl``)과 로그인 응답 원문 :attr:`raw` 를 싣습니다. 7.0.6 은 이 뒤를
-    ``h_msg_cd`` 별 WebView GET 으로 이어 가는데(``LoginViewModel.java:1390-1443``) 그 URL 의 쿼리 구분자는 AlienGuard
-    로 보호돼 재현할 수 없으므로, 이어 가는 방법은 호출자가 ``redirect_url``/``raw`` 를 보고 정합니다.
+    7.0.6 은 이 두 코드에서만 ``strRedirectUrl`` 웹 화면을 엽니다(``LoginViewModel.java:1390-1520``). 서버가 준
+    :attr:`redirect_url`(없으면 ``""``)과 원문 :attr:`raw`, 코드 :attr:`code` 를 싣습니다. 이 라이브러리는 그 화면을
+    열거나 결과를 이어 받지 않습니다 — 조치 후 다시 로그인하십시오.
     """
 
     def __init__(self, redirect_url: str, *, raw: object | None = None) -> None:
         self.redirect_url = redirect_url
         self.raw = raw
-        super().__init__("KORAIL login requires WebView continuation")
+        code = raw.get("h_msg_cd") if isinstance(raw, dict) else None
+        super().__init__(
+            "KORAIL login requires a web step (dormant account or password change)",
+            code=code if isinstance(code, str) else None,
+        )
 
     def __reduce__(self) -> tuple[object, ...]:
         # 생성자 인자를 보존하는 이유는 _CodeMessagePickle 참고.

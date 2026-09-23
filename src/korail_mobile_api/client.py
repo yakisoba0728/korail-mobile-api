@@ -323,9 +323,12 @@ class KorailClient:
         """기존 세션을 비운 뒤 서비스 상태·암호화 파라미터를 읽고 로그인합니다. 라우트: NetworkApi.java:459-460. member_no 는
         회원번호·휴대폰번호·이메일이며 input_flag 를 생략하면 infer_login_input_flag 가 선택합니다.
 
-        추가 인증이면 KorailAuthContinuationRequired 를 올리고 session.pending 에 남깁니다. 봉투는 통과했지만 성공 코드가 아닌 h_msg_cd 이거나
-        JSESSIONID 가 오지 않으면 KorailAuthError 입니다. 나머지는 감싸지 않고 그대로 전파됩니다 — FAIL 봉투는 코드에 맞는 KorailAppError 하위
-        예외(사전 조회 포함), 전송 실패는 KorailTransportError, JSON·봉투·암호화 파라미터 이상은 KorailProtocolError. 실패 시 세션·쿠키는 비웁니다.
+        로그인 거절은 앱처럼 코드로 가릅니다(:data:`~korail_mobile_api.session.KORAIL_LOGIN_CONTINUATION_CODES`).
+        휴면(WRC000116)·비밀번호 변경(WRC000420)은 KorailAuthContinuationRequired 로 올리고 session.pending 에 남깁니다.
+        서비스 점검 등 따로 분류된 코드는 그 KorailAppError 하위 예외, 그 밖의 거절(잠김 WRC000390, 정보 오류 WRR000101 등)이나
+        JSESSIONID 누락은 ``code``·``raw`` 가 붙은 KorailAuthError 입니다. 사전 조회(MobileService.cache·common.code.do)의 FAIL 은
+        KorailAppError 하위 예외, 전송 실패는 KorailTransportError, JSON·봉투·암호화 파라미터 이상은 KorailProtocolError 로 그대로 올라옵니다.
+        실패 시 세션·쿠키는 비웁니다.
         """
         return self.session.login(
             member_no,
