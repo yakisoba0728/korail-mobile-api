@@ -44,6 +44,21 @@ def looks_like_class(name):
     if "/" in name: return True
     return bool(re.search(r"[a-z][A-Z]", name.rsplit("/", 1)[-1]))
 
+def _source_files(root: pathlib.Path):
+    """읽을 수 있는 ``.py`` 만. 못 읽는 파일은 건너뛰고 알립니다.
+
+    ``glob("*.py")`` 결과를 그대로 열었더니, 아카이브를 그대로 푼 환경에서
+    macOS AppleDouble(``._foo.py``)을 만나 ``UnicodeDecodeError`` 로 **검사기
+    자체가 죽었습니다**. 점검 도구가 환경 부산물 하나에 멈춰서는 안 됩니다
+    (2026-09-23).
+    """
+    for path in sorted(root.glob("*.py")):
+        try:
+            yield path, path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError) as error:
+            print(f"  건너뜀: {path.name} ({type(error).__name__})")
+
+
 ANALYSIS = pathlib.Path("analysis")
 if not ANALYSIS.is_dir():
     print(
@@ -75,8 +90,8 @@ def block(lines, i):
 
 total = shorthand = 0
 unexpl, expl = [], []
-for py in sorted(pathlib.Path("src/korail_mobile_api").glob("*.py")):
-    lines = py.read_text().splitlines()
+for py, _text in _source_files(pathlib.Path("src/korail_mobile_api")):
+    lines = _text.splitlines()
     for i, text in enumerate(lines):
         for m in CITE_RE.finditer(text):
             t = m.group("target")

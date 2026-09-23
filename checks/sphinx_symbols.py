@@ -11,6 +11,21 @@ ROLE_RE = re.compile(r":(?:meth|func|class|attr|data|exc|mod):`~?([A-Za-z_][\w.]
 
 SRC = pathlib.Path("src/korail_mobile_api")
 
+def _source_files(root: pathlib.Path):
+    """읽을 수 있는 ``.py`` 만. 못 읽는 파일은 건너뛰고 알립니다.
+
+    ``glob("*.py")`` 결과를 그대로 열었더니, 아카이브를 그대로 푼 환경에서
+    macOS AppleDouble(``._foo.py``)을 만나 ``UnicodeDecodeError`` 로 **검사기
+    자체가 죽었습니다**. 점검 도구가 환경 부산물 하나에 멈춰서는 안 됩니다
+    (2026-09-23).
+    """
+    for path in sorted(root.glob("*.py")):
+        try:
+            yield path, path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError) as error:
+            print(f"  건너뜀: {path.name} ({type(error).__name__})")
+
+
 defined: set[str] = set()
 #: 클래스 이름 -> 그 클래스가 가진 멤버 이름. 점 있는 인용(``A.b``)은 이쪽으로
 #: 봅니다. 예전에는 모든 정의를 한 집합에 쏟고 **끝 이름만** 비교해서, 소유
@@ -59,8 +74,8 @@ def _member_names(body: list[ast.stmt]) -> set[str]:
     return names
 
 
-for f in sorted(SRC.glob("*.py")):
-    tree = ast.parse(f.read_text(encoding="utf-8"))
+for f, text in _source_files(SRC):
+    tree = ast.parse(text)
     defined.add(f.stem)
     defined.add(f"korail_mobile_api.{f.stem}")
     for node in ast.walk(tree):
@@ -88,8 +103,8 @@ EXTERNAL = {"StrEnum","ValueError","httpx","TypeError","KeyError","Mapping"}
 
 bad = collections.defaultdict(list)
 total = 0
-for f in sorted(SRC.glob("*.py")):
-    for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+for f, text in _source_files(SRC):
+    for i, line in enumerate(text.splitlines(), 1):
         for sym in ROLE_RE.findall(line):
             total += 1
             tail = sym.rsplit(".", 1)[-1]
