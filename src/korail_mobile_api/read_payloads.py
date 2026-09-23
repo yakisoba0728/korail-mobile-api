@@ -290,8 +290,8 @@ def build_seat_assignment_schedule_form(
     }
     # ``seatAttCdN``/``psgNumN``/``stlbDturDvNmN`` 은 승객 한 명당 한 벌인
     # 번호 그룹입니다. ``psgNumN`` 은 그 자리의 **점유 플래그**(0/1)이지
-    # 인원수가 아니라서, 예전처럼 ``psgNum1`` 에 총원을 넣으면 2 이상은
-    # 서버가 전부 ``SUPDATE`` 로 막았습니다 -- 2026-09-22 라이브 확인:
+    # 인원수가 아닙니다. ``psgNum1`` 에 총원을 넣으면 2 이상은
+    # 서버가 전부 ``SUPDATE`` 로 막습니다 -- 2026-09-22 라이브 확인:
     # ``psgNum1`` 이 ``"0"``/``"1"`` 이면 ``WRG000000`` 이지만
     # ``"2"``/``"02"``/``"3"``/``"9"`` 는 SUPDATE 이고, 대신 그룹을 1..9 까지
     # 늘리면 9명까지 그대로 통과합니다.
@@ -538,7 +538,7 @@ def build_ticket_receipt_form(
     txt_index: str | None = None,
 ) -> dict[str, str]:
     form = {
-        # 4자리 ``MMDD`` 만 받습니다. 예전에는 8자리도 통과시켰는데, 서버는
+        # 4자리 ``MMDD`` 만 받습니다. 서버는
         # 8자리를 언제나 ``ERZ800027`` 로 되돌려보냅니다 -- 2026-09-22 에 실제
         # 승차권 128장으로 확인(4자리 128/128 성공). 8자리를 여기서 막지 않으면
         # 호출자가 ``TicketListTicket.sale_date`` 를 그대로 넘겨 놓고 원인이
@@ -632,10 +632,8 @@ def build_multi_child_discount_target_form(
 def build_korail_point_summary_form() -> dict[str, str]:
     """``xPoint.MyXPointView`` 의 고정 폼 (``NetworkApi.java:515``).
 
-    ``point_dv_cd`` 가 ``"0"`` 으로 고정인 근거였던 ``KorailPointInquiryDao``
-    는 6.5.0 클래스라 7.0.6 디컴파일에 없습니다(2026-09-22 확인). 값 자체는
-    라이브로 동작하지만 고정 이유의 출처는 지금 없습니다 — **미출처**로
-    두고, 7.0.6 호출 지점을 찾으면 그때 채우십시오.
+    ``point_dv_cd`` 를 ``"0"`` 으로 고정하는 7.0.6 근거는 찾지 못했습니다
+    (**미출처**). 값 자체는 라이브로 동작합니다.
     """
     return {"point_dv_cd": "0"}
 
@@ -646,13 +644,11 @@ KorailMileageLedger = Literal["1", "2"]
 #: ``"0"`` 전체, ``"1"`` 적립, ``"2"`` 사용.
 KorailMileageMovement = Literal["0", "1", "2"]
 
-#: 원래 근거였던 ``MileageHistoryActivity`` 는 6.5.0 클래스로 7.0.6
-#: 디컴파일에 없습니다(2026-09-22 확인). 두 값 모두 라이브로는 동작하지만
-#: 출처가 없으므로 **미출처** 상수로 둡니다.
+#: 두 값 모두 라이브로는 동작하지만 7.0.6 출처가 없는 **미출처** 상수입니다.
 KORAIL_MILEAGE_LEDGER_KTX: KorailMileageLedger = "1"
 KORAIL_MILEAGE_LEDGER_RAIL_POINT: KorailMileageLedger = "2"
 
-#: 위와 같은 이유로 **미출처**입니다(``MileageHistoryActivity`` 부재).
+#: 위와 같이 **미출처**입니다.
 KORAIL_MILEAGE_MOVEMENT_ALL: KorailMileageMovement = "0"
 KORAIL_MILEAGE_MOVEMENT_EARNED: KorailMileageMovement = "1"
 KORAIL_MILEAGE_MOVEMENT_SPENT: KorailMileageMovement = "2"
@@ -708,8 +704,7 @@ def build_mileage_history_form(
         "qryDvVal": request.movement,
         "qryStDt": start_date,
         "qryClsDt": end_date,
-        # 매 호출 같은 리터럴입니다. 근거였던 MileageHistoryActivity 는
-        # 6.5.0 클래스라 7.0.6 에 없어(2026-09-22 확인) 지금은 미출처입니다.
+        # 매 호출 같은 리터럴입니다(7.0.6 출처 없음, 미출처).
         "pgPrCnt": "20",
         "nowPgNo": _positive_int(request.page_no, "page_no"),
     }
@@ -726,15 +721,12 @@ class DiscountCardScheduleRequest:
 
     7.0.6 의 입력 DTO 는 ``NCardScheduleIn.java:25``(필드 ``:30-40``)이고,
     앱이 이것을 조립하는 유일한 지점은
-    ``CheckUsageNCardSectionViewModel.java:390-396`` 입니다. 원래 인용
-    ``u4/b.java:52-65``(1구간 N카드) / ``:67-81``(v2 카드)는 7.0.6 디컴파일에
-    없는 경로였고, **1구간/v2 라는 두 빌더로 갈라진다는 설명 자체도 7.0.6
-    에서는 확인되지 않습니다** — 조립 지점은 위 한 곳뿐입니다.
+    ``CheckUsageNCardSectionViewModel.java:390-396`` 입니다 — 조립 지점은
+    이 한 곳뿐입니다.
 
     기본값 셋(``dptTm`` ``"000000"``, ``trnGpCd`` ``"109"``,
     ``dirtChtnDvCd`` ``"1"``)의 **값은 7.0.6 소스로 확인할 수 없습니다.**
-    원래 인용 ``K4/s.java:5``/``K4/d.java:5`` 는 없는 경로이고, 7.0.6 의 해당
-    자리는 전부 AlienGuard 로 보호돼 있습니다: ``dptTm`` 은
+    7.0.6 의 해당 자리는 전부 AlienGuard 로 보호돼 있습니다: ``dptTm`` 은
     ``CheckUsageNCardSectionViewModel.java:390`` 의 6바이트 보호 리터럴,
     ``dirtChtnDvCd`` 는 ``:396`` 의 1바이트 보호 리터럴, ``trnGpCd`` 는
     ``TrainGroup.KTX``(``TrainGroup.java:36``)의 ``trnGpCd``
@@ -774,12 +766,10 @@ class DiscountCardScheduleRequest:
     ) -> DiscountCardScheduleRequest:
         """카드 종류에서 ``dcntCrdKndCd`` 를 유도해 요청을 만듭니다.
 
-        원래 이 한 줄은 "``u4/b.java`` 방식으로" 라고 적었는데 그 경로는 7.0.6
-        디컴파일에 없습니다. 7.0.6 의 대응물은
+        7.0.6 의 대응물은
         ``NCardDefine.findDcntCrdKndCd``(``NCardDefine.java:58-88``)이고,
         아래 :data:`_B2N_CARD_KIND_MANAGEMENT_NOS` 주석에 적은 대로 **그 함수가
-        특별 취급하는 관리번호 집합이 이 구현과 다릅니다.** 여기서는 코드를
-        바꾸지 않고 사실만 남깁니다.
+        특별 취급하는 관리번호 집합이 이 구현과 다릅니다.**
         """
         kind_code = (
             "B2N"
@@ -798,11 +788,9 @@ class DiscountCardScheduleRequest:
         )
 
 
-#: ``"B2N"`` 을 쓰는 두 상품. 원래 인용 ``u4/b.java:61`` 과
-#: ``NCard1SectionBookingActivity.java:28`` 은 둘 다 7.0.6 디컴파일에 없는
-#: 경로였습니다.
+#: ``"B2N"`` 을 쓰는 두 상품.
 #:
-#: **7.0.6 재조사 결과가 이 집합과 어긋납니다(코드는 건드리지 않았습니다).**
+#: **7.0.6 의 분기가 이 집합과 어긋납니다.**
 #: 7.0.6 의 분기는 ``NCardDefine.findDcntCrdKndCd``
 #: (``NCardDefine.java:58-88``)이고, jadx 가 이 함수의 case 본문을 잃어버렸으므로
 #: (``:56`` 의 "Code decompiled incorrectly") smali 로 읽었습니다 —
@@ -835,8 +823,7 @@ def build_discount_card_schedule_query(
 ) -> dict[str, str]:
     """``useTrmDno``/``qryPgNo`` 는 ``None`` 이면 이 딕셔너리에서 생략합니다.
 
-    **정정(2026-09-22)**: 원래 이 자리에 "Retrofit 은 널 ``@Query`` 를 빼기
-    때문입니다" 라고 적혀 있었는데 이 라우트에 ``@Query`` 는 없습니다 —
+    이 라우트에 ``@Query`` 는 없습니다 —
     ``NetworkApi.java:339-341`` 은 ``@FormUrlEncoded`` +
     ``postDcntCrdScheduleView(@FieldMap Map<String, String>)`` 입니다. 앱은
     ``NCardScheduleIn`` 을 공유 ``KJson`` 으로 직렬화한 뒤
@@ -848,7 +835,7 @@ def build_discount_card_schedule_query(
     ``CheckUsageNCardSectionViewModel.java:396`` 의
     ``new NCardScheduleIn(...)`` 가 인자 11개를 모두 넘기고, ``KJson`` 이
     ``encodeDefaults`` 로 직렬화하므로 키가 빠지지 않습니다.
-    다만 원래 주석의 "모두 **비어 있지 않게** 넘긴다"는 보장이 아닙니다:
+    다만 값이 **비어 있지 않다는** 보장은 없습니다:
     기간·횟수는 ``StringExKt.convertOnlyInt``(``StringExKt.java:121-135``)를
     거치는데 그 함수는 ``Regex(<보호된 패턴>).replace(str, "")`` 일 뿐이어서
     숫자가 없는 입력에는 ``""`` 를 돌려줍니다. 즉 "키 생략" 경로는 앱에 없고,
@@ -858,9 +845,7 @@ def build_discount_card_schedule_query(
     ``NCardScheduleIn`` 의 ``@SerialName`` 은 공통 셋(``Device``/``Version``/
     ``Key``)말고는 AlienGuard 로 싸여 있어 두 키의 전선 철자를 정적으로 읽을
     수 없고, 이 라우트는 할인카드 보유를 먼저 검사해(``EAZ000028``) 카드 없는
-    계정으로는 생략 여부의 차이를 라이브로 볼 수 없습니다. 같은 종류의
-    추측이 리무진 ``ymsAplFlgYMS`` 에서 이미 한 번 필드를 죽였습니다 —
-    속성명을 전선 키로 베껐다가 값이 늘 ``None`` 이었습니다. 카드를 가진
+    계정으로는 생략 여부의 차이를 라이브로 볼 수 없습니다. 카드를 가진
     계정이 생기면 그때 확인하고 바꾸십시오.
     """
     if type(request) is not DiscountCardScheduleRequest:
@@ -931,9 +916,9 @@ def build_maas_service_detail_form(
 
 
 def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
-    # 자릿수만 보던 예전 검증은 ``20260230`` 같은 달력에 없는 날짜를 그대로
-    # 보냈고, 서버는 그것을 빈 목록으로 조용히 돌려줬습니다 -- 호출자는
-    # "변경 가능한 날짜가 없다" 와 "날짜를 잘못 썼다" 를 구분할 수 없었습니다.
+    # 자릿수만 보면 ``20260230`` 같은 달력에 없는 날짜가 그대로 나가고,
+    # 서버는 그것을 빈 목록으로 조용히 돌려줍니다 -- 호출자는
+    # "변경 가능한 날짜가 없다" 와 "날짜를 잘못 썼다" 를 구분할 수 없습니다.
     # ``_calendar_date`` 는 이 모듈이 이미 쓰는 검증기입니다.
     return {
         "tripChgDate": _calendar_date(
@@ -1029,8 +1014,7 @@ class OriginalTicketReference:
         :meth:`~korail_mobile_api.client.KorailClient.get_original_ticket_inquiry`,
         그리고 :class:`StationRefundVerificationRequest` 의 ``return_no_2``.
 
-        8자리를 줬을 때 오는 코드는 엔드포인트마다 다릅니다 — 예전에
-        여기 적혀 있던 "각각" 순서는 틀렸습니다(2026-09-22 재확인):
+        8자리를 줬을 때 오는 코드는 엔드포인트마다 다릅니다(2026-09-22 확인):
         ``get_refund_commission`` → ``WRT200408``,
         ``get_refund_ticket_detail`` → ``ERZ800027``,
         ``get_original_ticket_inquiry`` → ``ERZ800027``,
@@ -1044,11 +1028,11 @@ class OriginalTicketReference:
         (``tkRetNo`` 안). 4자리를 주면 ``ERB000001``
         ("INPUT 값 검증 도중 오류")입니다.
 
-    두 이름이 비슷해서 실제로 한 번 물렸습니다 — 환불이
-    :attr:`~korail_mobile_api.read_models.TicketListTicket.sale_date` 8자리
-    때문에 ``ERZ800027`` 로 막혔고, 4자리
+    두 이름이 비슷해 헷갈리기 쉽습니다 — 환불에
+    :attr:`~korail_mobile_api.read_models.TicketListTicket.sale_date` 8자리를
+    넘기면 ``ERZ800027`` 로 막히고, 4자리
     :attr:`~korail_mobile_api.read_models.TicketListTicket.return_sale_date`
-    로 바꾸고서야 통과했습니다. 승차권 목록에서 옮겨 담을 때 어느 쪽인지
+    여야 통과합니다. 승차권 목록에서 옮겨 담을 때 어느 쪽인지
     먼저 확인하십시오.
     """
 
@@ -1155,25 +1139,17 @@ def build_original_ticket_inquiry_form(
     ``ogtkSaleWctNo_`` → ``ogtkSaleDd_`` → ``ogtkSaleSqno_`` →
     ``ogtkRetPwd_`` 그대로입니다 — 이름이 밑줄로 끝나는 것이 인덱스 접미사가
     붙는 자리라는 증거이고, 아래 ``rows.append`` 네 줄과 순서가 같습니다.
-    (원래 인용 ``ROrtg.java:8-11`` 은 7.0.6 디컴파일에 없는 경로였습니다.)
 
     ``ticket_count`` 는 ``OgTicketInquiryIn.java:81`` 의
     ``@SerialName("tkCnt")`` 이고 같은 파일 ``:30`` 의 DTO 선언이
     ``int`` 입니다(생략형 ``:81``/``:30`` 으로 적으면 직전에 인용한
-    ``ChangeOrtkInfo.java`` 를 가리키는 것으로 읽힙니다) — 원래 근거였던
-    ``ResearchService.smali:613,628-632`` 도 없는 경로였으나 결론은 그대로
-    유효합니다.
+    ``ChangeOrtkInfo.java`` 를 가리키는 것으로 읽힙니다).
 
-    호출 지점마다 값이 다르다는 관찰은 7.0.6 에서 **부분만** 맞습니다. 이
-    DTO 의 생성 지점은 넷이고, 셋은 목록 **행 수** 를 넣습니다 —
+    호출 지점마다 값이 다릅니다. 이 DTO 의 생성 지점은 넷이고, 셋은 목록 **행 수** 를 넣습니다 —
     ``NotificationViewModel.java:197``, ``PassengerTypeChangeViewModel.java:147``,
     ``TrainSeatMapViewModel.java:1282`` 이 모두 ``arrayList.size()`` 입니다.
     넷째 ``RefundTicketViewModel.java:258`` 은 보호된 리터럴(``> 0`` 비교로
-    1)을 한 행짜리 목록과 함께 넣습니다. 즉 "행수"와 "리터럴 1"은 확인되지만
-    원래 주석이 말한 **"승객수"를 보내는 지점은 7.0.6 에 없습니다** — 그
-    셋째 경우는 미출처입니다. 원래 인용 ``TCBookingActivity.java:179`` /
-    ``PushHistoryActivity.java:357`` / ``SeatSearchActivity.java:615`` 는 모두
-    7.0.6 에 없는 경로였습니다.
+    1)을 한 행짜리 목록과 함께 넣습니다.
     """
     references = _exact_ticket_reference_tuple(tickets)
     if ticket_count is None:
@@ -1208,21 +1184,16 @@ class SelfSeatChangeInfoRequest:
     DTO 는 ``String`` 다섯(``runDt``/``trnNo``/``dptRsStnCd``/``arvRsStnCd``/
     ``psrmClCd``)뿐입니다. ``@SerialName`` 은 공통 넷(``Device``/``Version``/
     ``Key``/``LANG``)에만 붙어 있어(``:55``) 나머지 다섯은 프로퍼티 이름이 곧
-    와이어 키입니다 — 아래 폼 빌더가 쓰는 철자와 같습니다. 원래 인용
-    ``TicketService.java:54-56`` 은 7.0.6 디컴파일에 없는 경로였습니다.
+    와이어 키입니다 — 아래 폼 빌더가 쓰는 철자와 같습니다.
 
     모든 값은 승차권의 ``h_run_dt``/``h_trn_no``/``h_dpt_rs_stn_cd``/
     ``h_arv_rs_stn_cd`` 에서 복사합니다 —
     ``SelfSeatChangeOptionViewModel.java:344`` 가
     ``new SeatAvailabilityIn(ticketListTrainInfo.getHRunDt(), getHTrnNo(),
-    getHDptRsStnCd(), getHArvRsStnCd(), psrmClCd)`` 로 그대로 넘깁니다(원래
-    인용 ``TCSOptionsActivity.java:131-134`` 는 없는 경로였습니다).
+    getHDptRsStnCd(), getHArvRsStnCd(), psrmClCd)`` 로 그대로 넘깁니다.
     ``trnNo`` 는 0 채움 없음.
 
-    **:attr:`room_class_code` 에 대한 정정(2026-09-22).** 원래 주석은
-    "일반실/특실일 때만 전송(``TCSOptionsActivity.java:135-138``,
-    ``K4/o.java:7-8``)" 이라고 했는데 두 경로 모두 7.0.6 에 없고, 7.0.6 의
-    동작도 그와 다릅니다: ``SelfSeatChangeOptionViewModel.java:342-343`` 은
+    **:attr:`room_class_code`.** ``SelfSeatChangeOptionViewModel.java:342-343`` 은
     ``selfSeatChangeTicket.getPsrmClCd()`` 를 그대로 쓰고 그것이 ``null`` 이
     아닐 때 요청을 만듭니다 — 값을 두 코드로 걸러 내는 분기가 없습니다.
     실제로 ``PsrmType`` 은 ``ticketselfseat`` 패키지에서 한 번도 참조되지
@@ -1261,12 +1232,8 @@ class SelfSeatChangeInfoRequest:
 #: 없습니다. 따라서 아래 ``"1"``/``"2"`` 는 라이브 관측값이고 7.0.6 소스로
 #: 확인된 것이 아닙니다.
 #:
-#: 원래 주석은 ``K4/o.java:7-8`` 을 인용하며 ``ALL("9") 는 제외`` 라고
-#: 적었는데, ① 그 경로는 7.0.6 에 없고 ② 7.0.6 의 ``PsrmType`` 에는 애초에
-#: ``ALL`` 상수가 없습니다(``PsrmType.java:24-29`` 의 ``$values()`` 가
-#: ``:26``/``:27`` 에서 둘만 채웁니다 — 생략형으로 적으면 직전에 인용한
-#: 없는 경로 ``K4/o.java`` 를 가리키는 것으로 읽힙니다).
-#: 즉 "제외"할 세 번째 값이 존재하지 않습니다 — 그 주장은 미출처입니다.
+#: ``PsrmType`` 에는 ``ALL`` 상수가 없습니다(``PsrmType.java:24-29`` 의
+#: ``$values()`` 가 ``:26``/``:27`` 에서 둘만 채웁니다).
 SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
 
 
@@ -1329,10 +1296,9 @@ def build_commuter_info_form(
         )
         # One ``cmtrUtlAgeCd`` per **passenger**, not per age-code row, and
         # ``psgCnt`` is their total -- so ``passenger_counts`` decides both.
-        # It used to be ignored here: the form always carried every row once
-        # with ``psgCnt`` = row count, which cannot express any valid
-        # composition for a multi-row pass. Live 2026-09-22 on kind ``0046``
-        # (rows ``E05``/``E06``): the old row-shaped form is rejected
+        # A row-shaped form (every row once, ``psgCnt`` = row count) cannot
+        # express any valid composition for a multi-row pass. Live 2026-09-22
+        # on kind ``0046`` (rows ``E05``/``E06``): that row-shaped form is rejected
         # ``WRT800115 유효하지 않은 인원구성입니다``, while ``psgCnt=1``+``E05``,
         # ``psgCnt=1``+``E06`` and ``psgCnt=2``+``E05``,``E05`` all answer
         # ``IRZ000008``. Matches ``CommutationInfoIn.java:31,38``
@@ -1396,9 +1362,8 @@ class PriceFareLeg:
     train_no: str = field(repr=False)
     requested_seat_attribute_code: str = field(repr=False)
     train_group_code: str = field(repr=False)
-    #: ``stlbTrnClsfCd`` — 열차 종류 코드입니다. 예전 이름
-    #: ``standing_train_classification_code`` 는 ``stlb`` 를 입석(standing)
-    #: 으로 읽은 오해였습니다 — 같은 전선 키를 이 저장소의 다른 세 곳이
+    #: ``stlbTrnClsfCd`` — 열차 종류 코드입니다(``stlb`` 는 입석(standing)이
+    #: 아닙니다). 같은 전선 키를 이 저장소의 다른 세 곳이
     #: 전부 열차 종류로 읽습니다(``limousine_parsers.py:95``
     #: ``train_class_code``, ``parsers.py:834`` ``standard_train_class_code``,
     #: ``read_parsers.py:1853`` ``settlement_train_class_code``).
@@ -1437,9 +1402,7 @@ class PriceFareQuoteRequest:
     **2바이트** AlienGuard 리터럴입니다. (파일명을 다시 적는 이유: 직전
     문장이 ``PrcFareIn.java:197`` 을 인용하므로 생략형 ``:794`` 는 274행짜리
     그 DTO 파일을 가리키는 것으로 읽혀 존재하지 않는 줄이 됩니다.) 다만 **값 ``"11"`` 자체는 7.0.6
-    소스로 확인되지 않습니다**(길이만 일치). 원래 인용 ``a5/k.java:92-94`` 와
-    ``PriceFareActivity.java:49,62`` 는 둘 다 7.0.6 디컴파일에 없는
-    경로였습니다.
+    소스로 확인되지 않습니다**(길이만 일치).
     """
 
     legs: tuple[PriceFareLeg, ...] = field(repr=False)
@@ -1507,8 +1470,6 @@ class TicketReservationDetailRequest:
     ``txtPsgDisc0019Cnt``(``:32``)와 ``psgDisc0019List``(``:31``)도
     선언하는데, 이 라이브러리는 PNR 하나만 보냅니다. ``@SerialName`` 은 공통
     넷에만 있어(``:58``) ``hidPnrNo`` 는 프로퍼티 이름이 곧 와이어 키입니다.
-    원래 인용 ``CertificationService.java:45-46`` 은 7.0.6 디컴파일에 없는
-    경로였습니다.
     """
 
     pnr_no: str = field(repr=False)
@@ -1520,11 +1481,7 @@ class TicketReservationDetailRequest:
 def build_ticket_reservation_detail_query(
     request: TicketReservationDetailRequest,
 ) -> dict[str, str]:
-    """``hidPnrNo`` 하나 — ``ReservationListIn.java:30``.
-
-    (원래 인용 ``CertificationService.java:45-46`` 은 7.0.6 에 없는 경로입니다.
-    클래스 독스트링 참고.)
-    """
+    """``hidPnrNo`` 하나 — ``ReservationListIn.java:30``."""
     if not isinstance(request, TicketReservationDetailRequest):
         raise KorailProtocolError(
             "request must be a TicketReservationDetailRequest"
@@ -1537,10 +1494,7 @@ class RefundCompanion:
     """동반자 신원 (``RefundCommissionIn.java:34-35``).
 
     와이어 키는 ``@SerialName("h_comp_nm")``/``@SerialName("h_comp_cert_no")``
-    (``RefundCommissionIn.java:59``)입니다. 원래 인용
-    ``TicketListActivity.java:908-909`` 과
-    ``ui/ticket/ticketReturn/a.java:355-356`` 은 둘 다 7.0.6 디컴파일에 없는
-    경로였습니다.
+    (``RefundCommissionIn.java:59``)입니다.
 
     없으면 빈 문자열 전송 — 생략 불가. 7.0.6 에서도 그렇습니다:
     ``MyTicketDetailViewModel.java:277`` 과
@@ -1591,15 +1545,11 @@ def build_refund_commission_form(
     라우트는 ``NetworkApi.java:598-600``, 입력 DTO 는
     ``RefundCommissionIn.java:27``(필드 ``:32-42``)입니다. 아래 여섯 키는
     ``:59`` 의 ``@SerialName`` 집합에서 그대로 읽었고 순서도 같습니다.
-    원래 인용 ``RefundService.java:19-21`` 은 7.0.6 디컴파일에 없는
-    경로였습니다.
 
     판매일자 필드는 ``h_orgtk_ret_sale_dt`` — 영수증 조회의 ``h_orgtk_sale_dt``
     와 다름. 7.0.6 도 같습니다: ``RefundCommissionIn.java:37`` 이
     ``hOrgtkRetSaleDt`` 를, 형제 ``RefundTicketIn.java:38`` 이
-    ``hOrgtkSaleDt`` 를 선언합니다 — 서로 다른 두 파일이므로 생략형
-    ``:37``/``:38`` 로 적으면 바로 위에서 인용한(그리고 7.0.6 에 없는)
-    ``RefundService.java`` 를 가리키는 것으로 읽힙니다.
+    ``hOrgtkSaleDt`` 를 선언합니다.
     """
     reference = _exact_original_ticket_reference(ticket)
     party = _exact_refund_companion(companion)
@@ -1626,8 +1576,7 @@ def build_refund_ticket_detail_form(
     ``TicketDetailIn.java:26``(필드 ``:31-36``)입니다. 아래 여섯 키는 모두
     ``TicketDetailIn.java:57`` 의 ``@SerialName`` 집합입니다 —
     ``h_orgtk_ret_sale_dt``/``h_orgtk_wct_no``/``h_orgtk_sale_sqno``/
-    ``h_orgtk_ret_pwd``/``h_purchase_history``/``txtIndex``. 원래 인용
-    ``RefundService.java:23-25`` 는 7.0.6 디컴파일에 없는 경로였습니다.
+    ``h_orgtk_ret_pwd``/``h_purchase_history``/``txtIndex``.
 
     ``h_purchase_history`` 가 구매이력/승차권목록 두 값으로 갈린다는 관찰은
     ``MyTicketBaseViewModel.java:696`` 에서 구조로 확인됩니다 —
@@ -1635,8 +1584,7 @@ def build_refund_ticket_detail_form(
     로 불리언 하나에 1바이트 코드 두 개가 걸려 있습니다. **다만 그 두 값이
     ``"Y"``/``"N"`` 이라는 것은 7.0.6 소스로 확인되지 않습니다** — 리터럴이
     AlienGuard 로 보호되어 길이(1자)만 맞습니다. 값 자체는 라이브 관측에서
-    왔습니다. 원래 근거였던 ``TicketPurchaseHistoryActivity.java:267`` 과
-    ``TicketListActivity.java:926`` 은 둘 다 7.0.6 에 없는 경로였습니다.
+    왔습니다.
     """
     reference = _exact_original_ticket_reference(ticket)
     if type(from_purchase_history) is not bool:
