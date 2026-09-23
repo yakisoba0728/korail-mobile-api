@@ -230,7 +230,6 @@ from .read_payloads import (
     build_cart_list_form,
     build_commuter_info_form,
     build_commuter_kind_menu_query,
-    build_crew_request_list_query,
     build_customer_trip_info_form,
     build_delay_discount_ticket_form,
     build_delivery_recipient_form,
@@ -797,21 +796,15 @@ class KorailClient:
             require_envelope=False,
         )
 
-    def get_crew_request_list(
-        self,
-        *,
-        timestamp_ms: int | None = None,
-    ) -> CrewRequestListResponse:
+    def get_crew_request_list(self) -> CrewRequestListResponse:
         """승무원 호출 화면에 띄울 요청 사유 선택지를 조회합니다.
 
-        이 라우트의 실제 DTO(``CrewCallCommonIn.java:50``)의 유일한 입력은 ``timeStamp`` 이며, 주지 않으면 호출 시점의 밀리초 epoch
-        입니다. 자세한 근거는 :func:`~korail_mobile_api.read_payloads.build_crew_request_list_query` 의 독스트링을
-        참고하십시오.
+        공통 필드만 보냅니다. 앱은 ``CrewCallCommonIn`` 을 만들지만 ``CommonIn.serializer()`` 로
+        인코딩해(``NetworkService.java:3952-3955``) 하위 클래스의 ``timeStamp`` 는 나가지 않습니다.
         """
-        query = build_crew_request_list_query(timestamp_ms)
         return self._post_read(
             "/classes/com.korail.mobile.push.crwCallRq.do",
-            query,
+            {},
             parser=parse_crew_request_list_response,
         )
 

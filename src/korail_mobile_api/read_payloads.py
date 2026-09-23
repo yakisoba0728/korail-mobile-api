@@ -321,15 +321,6 @@ def build_pass_menu_form(menu_no: str) -> dict[str, str]:
     return {"menuNo": _required_text(menu_no, "menu_no")}
 
 
-def build_crew_request_list_query(
-    timestamp_ms: int | None = None,
-) -> dict[str, str]:
-    """승무원 호출 사유 조회. 별도 입력은 timeStamp 뿐입니다(CrewCallCommonIn.java:50,
-    NetworkRepositoryImpl.java:4105-4107). timestamp_ms 를 생략하면 현재 epoch 밀리초입니다.
-    """
-    return build_cache_query(timestamp_ms)
-
-
 def build_commuter_kind_menu_query(
     commuter_kind_code: str,
 ) -> dict[str, str]:
