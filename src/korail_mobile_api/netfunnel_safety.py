@@ -2,20 +2,11 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""대기열 호스트로 나가는 것을 제한하는 가드.
+"""대기열 호스트(``nf.letskorail.com``)로 나가는 것을 제한하는 가드.
 
-:mod:`korail_mobile_api.safety` 와 같은 성격입니다 — 실행 로직이 없고 목록과 단언뿐이며,
-:mod:`korail_mobile_api.netfunnel` 의 요청이 나가기 직전에 이 단언들을 통과합니다.
-파일만 다릅니다.
-
-나뉘기 전 ``safety.py`` 는 744줄 가운데 294줄을 대기열에 내주고 있었습니다. 메인 API
-전송 경계가 무엇을 허용하는지 보려고 그 파일을 여는 사람이, 관계없는 대기열 노드
-리다이렉션 규칙을 함께 읽어야 했습니다. 두 호스트는 서로에게 닿을 수 없으므로 두 가드도
-함께 놓일 이유가 없습니다.
-
-여기 있는 것은 **별도 호스트**(``nf.letskorail.com``)와 그 노드 풀의 규칙입니다.
-메인 API 의 라우트 허용목록과 상태변경 3중 게이트는 :mod:`korail_mobile_api.safety` 에
-있습니다.
+실행 로직이 없고 목록과 단언뿐이며, :mod:`korail_mobile_api.netfunnel` 의 요청이
+나가기 직전에 이 단언들을 통과합니다. 메인 API 쪽 가드는 클라이언트를 만들 때의 origin
+고정(:func:`~korail_mobile_api.http.assert_korail_origin`) 하나만 남았습니다.
 """
 import re
 from collections.abc import Sequence

@@ -429,7 +429,14 @@ def _train_scalar(value: Any, key: str) -> str | None:
     # isinstance 가 아니라 type(...) is int 인 것은 의도다. bool 이 int 의
     # 하위 타입이고, True 는 KORAIL 이 이런 필드로 보내는 숫자가 아니다.
     if type(value) is int:
-        return str(value)
+        try:
+            return str(value)
+        except ValueError:
+            # 파이썬의 정수→문자열 자릿수 한도(기본 4,300자리)를 넘으면 ``str()``
+            # 이 ``ValueError`` 를 냅니다. 이 패키지의 예외로 올립니다.
+            raise KorailProtocolError(
+                f"KORAIL train field {key} integer is too large"
+            ) from None
     raise KorailProtocolError(
         f"KORAIL train field {key} must be a string, an integer, or null"
     )
