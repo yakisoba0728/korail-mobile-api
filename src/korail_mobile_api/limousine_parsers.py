@@ -49,7 +49,7 @@ from .parsers import (
     _inventory_ratio,
     _response_fields,
 )
-from .read_parsers import (
+from ._parsing import (
     _nullable_string_fields,
     _optional_scalar_string,
     _optional_string,
@@ -136,7 +136,7 @@ def parse_limousine_schedule_response(
         row = _row(value, "limousine schedule trainList")
         schedules.append(
             LimousineSchedule(
-                **_nullable_string_fields(row, _SCHEDULE_FIELDS, "limousine schedule"),
+                **_nullable_string_fields(row, _SCHEDULE_FIELDS),
                 **{
                     name: _optional_scalar_string(row, wire, "limousine schedule")
                     for name, wire in _SCHEDULE_ADDED_FIELDS.items()
@@ -148,12 +148,10 @@ def parse_limousine_schedule_response(
         following_page_extension=_optional_string(
             raw,
             "fllwPgExt",
-            "limousine schedule response",
         ),
         long_short_division_code=_optional_string(
             raw,
             "lgtmShtmDvCd",
-            "limousine schedule response",
         ),
         schedules=tuple(schedules),
         **_response_fields(response),
@@ -215,7 +213,7 @@ def parse_limousine_seat_inventory_response(
         row = _row(value, "limousine seat inventory seatList")
         seats.append(
             LimousineSeat(
-                **_nullable_string_fields(row, _SEAT_FIELDS, "limousine seat inventory"),
+                **_nullable_string_fields(row, _SEAT_FIELDS),
                 raw=row,
             )
         )
@@ -242,17 +240,14 @@ def parse_limousine_seat_inventory_response(
         car_type_code=_optional_string(
             raw,
             "car_tp_cd",
-            "limousine seat inventory response",
         ),
         car_no=_optional_string(
             raw,
             "scar_no",
-            "limousine seat inventory response",
         ),
         seat_arrangement_code=_optional_string(
             raw,
             "seat_ary_cd",
-            "limousine seat inventory response",
         ),
         layout_type=_optional_scalar_string(raw, "layout_type", "limousine seat inventory"),
         vr_banner_url=_optional_scalar_string(raw, "vrBnrUrl", "limousine seat inventory"),
@@ -260,7 +255,6 @@ def parse_limousine_seat_inventory_response(
         up_down_division_code=_optional_string(
             raw,
             "up_dn_dv_cd",
-            "limousine seat inventory response",
         ),
         seats=tuple(seats),
         **_response_fields(response),

@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING, Literal
 
 from .config import KorailConfig
 from .errors import KorailProtocolError
-from .payloads import _device_version, _is_ascii_digits, build_cache_query
+from ._payload_helpers import _device_version, _is_ascii_digits
+from .payloads import build_cache_query
 from .read_models import (
     CommuterInfoResponse,
     CommuterPassengerOption,

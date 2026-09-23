@@ -15,8 +15,8 @@ APK 의 Retrofit 선언에서 나왔습니다. 그것을 고정하던 테스트�
 """
 import time
 from collections.abc import Sequence
-from typing import TypeGuard
 
+from ._payload_helpers import _device_version, _is_ascii_digits
 from .config import KorailConfig
 from .constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
@@ -24,39 +24,6 @@ from .constants import (
 )
 from .errors import KorailProtocolError
 from .models import TrainSearchContinuation, TrainSearchQuery, TrainSummary
-
-
-def _device_version(config: KorailConfig) -> dict[str, str]:
-    """이 모듈의 읽기 폼이 공통으로 시작하는 ``Device``/``Version``(+ ``lang``).
-
-    ``lang`` 이 여기 있는 이유: 이 헬퍼를 쓰는 폼들은
-    :meth:`~korail_mobile_api.http.KorailHttpClient.post_form` 을
-    ``include_common=False`` 로 부르므로 HTTP 계층의 공통 필드 주입을 받지
-    않습니다. 여기서 싣지 않으면 ``KorailConfig(lang=...)`` 이 열차 검색·호차
-    조회·좌석 조회에 실리지 않습니다(변경 폼은
-    ``mutation_payloads._common_fields`` 가 맡습니다).
-
-    세 라우트의 입력 DTO 는 모두 ``@SerialName(Constants.LANG)`` 을 선언합니다
-    (``TrainScheduleIn``/``TrainResearchIn``/``TResidualSeatsResearchIn``).
-    기본값 ``None`` 이면 아무것도 싣지 않습니다.
-    """
-    fields = {"Device": config.device, "Version": config.version}
-    if config.lang is not None:
-        fields["lang"] = config.lang
-    return fields
-
-
-def _is_ascii_digits(value: object, lengths: frozenset[int]) -> TypeGuard[str]:
-    """``value`` 가 ``lengths`` 중 한 길이의 ASCII 숫자 문자열인지.
-
-    ``str.isdigit`` 은 전각 숫자도 받으므로 쓰지 않습니다. read_payloads 도 이것을
-    씁니다; 거절할 때의 예외와 문구는 각 모듈이 정합니다.
-    """
-    return (
-        isinstance(value, str)
-        and len(value) in lengths
-        and all("0" <= character <= "9" for character in value)
-    )
 
 
 def _required_ascii_digits(

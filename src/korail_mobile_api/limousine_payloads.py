@@ -10,36 +10,12 @@
 """
 from __future__ import annotations
 
+from ._payload_helpers import _device_version
 from .config import KorailConfig
 from .limousine_models import (
     LimousineScheduleQuery,
     LimousineSeatInventoryQuery,
 )
-
-
-# payloads.py 에 같은 함수가 있지만 import 하지 않습니다. 이 모듈은 pyright strict
-# 목록에 있고 strict 는 사적 이름의 모듈 간 사용을 거부합니다(reportPrivateUsage).
-# 제대로 된 답은 형제 모듈들이 함께 쓰는 내부 유틸 모듈이고, 그것은 모듈 분할을
-# 다시 자를 때 할 일입니다.
-def _device_version(config: KorailConfig) -> dict[str, str]:
-    """이 모듈의 읽기 폼이 공통으로 시작하는 ``Device``/``Version``(+ ``lang``).
-
-    ``lang`` 이 여기 있는 이유는 :func:`korail_mobile_api.payloads._device_version`
-    과 같습니다: 이 모듈의 두 라우트도
-    :meth:`~korail_mobile_api.http.KorailHttpClient.post_form` 을
-    ``include_common=False`` 로 부르므로(``client.get_limousine_schedules``,
-    ``client.get_limousine_seat_inventory``) HTTP 계층의 공통 필드 주입을 받지
-    않습니다. 두 입력 DTO 는 모두 ``@SerialName(Constants.LANG)`` 을 선언합니다 —
-    ``ScdlQryIn.java:60``, ``TResidualSeatsResearchIn.java:65``.
-
-    위 모듈의 같은 누락을 고칠 때 **이 복사본이 남았습니다**: 모듈이 갈라져
-    있어서 한쪽만 고쳐졌고, ``KorailConfig(lang=...)`` 을 설정해도 리무진
-    두 조회에는 계속 실리지 않았습니다(2026-09-23 확인).
-    """
-    fields = {"Device": config.device, "Version": config.version}
-    if config.lang is not None:
-        fields["lang"] = config.lang
-    return fields
 
 
 def build_limousine_schedule_form(

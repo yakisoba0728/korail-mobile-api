@@ -39,7 +39,8 @@ from .mutation_models import (
     StationRefundOriginalTicket,
     StationRefundVerificationResponse,
 )
-from .read_parsers import (
+from ._parsing import _response_fields as _base_fields
+from ._parsing import (
     _nested_rows,
     _nullable_scalar_fields,
     _optional_scalar_string,
@@ -292,15 +293,6 @@ def _received_amount(
     # 보호되어 **미출처**이므로(위 독스트링), 자리수를 채우지 않는 것도 앱
     # 동작의 재현이 아니라 이 패키지의 선택으로 읽어야 합니다.
     return seat_total
-
-
-def _base_fields(copied: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        "h_msg_cd": copied.get("h_msg_cd"),
-        "h_msg_txt": copied.get("h_msg_txt"),
-        "str_result": copied.get("strResult"),
-        "raw": copied,
-    }
 
 
 # The hold's scalar fields that the payment/cancel forms echo back -- read

@@ -51,14 +51,14 @@ from .models import (
     TransferStationListResponse,
     UuidResponse,
 )
-from .read_parsers import (
+from ._parsing import (
     _nested_rows,
     _nullable_string_fields,
     _optional_integer,
     _optional_scalar_string,
     _rows,
 )
-from .read_parsers import _optional_string as _typed_optional_string
+from ._parsing import _optional_string as _typed_optional_string
 
 
 def _typed_required_string(
@@ -175,21 +175,16 @@ def _typed_non_negative_integer_value(
     return parsed
 
 
-# Each response family's names for the typed helpers -- _typed_optional_string
-# from read_parsers, the rest defined above -- with the context each family's
-# messages say. Seat inventory accepts a blank required string and stations do
-# not -- a station row without a code or a name is not a station.
-_optional_string = partial(_typed_optional_string, context="cache")
+# 선택 문자열은 같은 판정을 공유합니다. 필수 문자열만 오류 맥락을 구분하며,
+# 역 코드·역 이름에는 빈 문자열을 허용하지 않습니다.
+_optional_string = _typed_optional_string
 _station_required_string = partial(
     _typed_required_string, context="station", non_empty=True
 )
-_inventory_optional_string = partial(_typed_optional_string, context="seat inventory")
+_inventory_optional_string = _typed_optional_string
 _inventory_required_string = partial(_typed_required_string, context="seat inventory")
 _inventory_required_scalar_string = partial(
     _typed_required_scalar_string, context="seat inventory"
-)
-_inventory_integer_value = partial(
-    _typed_non_negative_integer_value, context="seat inventory"
 )
 _inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
 
@@ -373,7 +368,7 @@ def parse_train_search_metadata(
     ``None`` 입니다.
     """
     def optional(key: str) -> str | None:
-        return _typed_optional_string(raw, key, context="train search metadata")
+        return _typed_optional_string(raw, key)
 
     return TrainSearchMetadata(
         job_id=optional("strJobId"),
@@ -464,7 +459,7 @@ def parse_maas_menu_list_response(
     for row in _rows(response.raw, "menuList"):
         items.append(
             MaasMenuItem(
-                **_nullable_string_fields(row, _MAAS_ITEM_FIELDS, "MAAS menu"),
+                **_nullable_string_fields(row, _MAAS_ITEM_FIELDS),
                 raw=dict(row),
             )
         )
@@ -475,7 +470,7 @@ def parse_maas_menu_list_response(
         str_result=response.str_result,
         raw=raw,
         items=tuple(items),
-        **_nullable_string_fields(raw, _MAAS_RESPONSE_FIELDS, "MAAS menu"),
+        **_nullable_string_fields(raw, _MAAS_RESPONSE_FIELDS),
     )
 
 
@@ -527,12 +522,10 @@ def parse_station_data_response(
                 popup_type=_typed_optional_string(
                     row,
                     "popupType",
-                    context="station",
                 ),
                 **_nullable_string_fields(
                     row,
                     _STATION_OPTIONAL_STRING_FIELDS,
-                    "station",
                 ),
             )
         )
@@ -624,7 +617,6 @@ def parse_train_calendar_response(
                 run_date=_typed_optional_string(
                     row,
                     "runDt",
-                    context="train calendar",
                 ),
                 # The 7.0.6 deserializer assigns null to bizDdStgCd when the key's mask
                 # bit is unset, and the class contains no
@@ -640,7 +632,6 @@ def parse_train_calendar_response(
                 business_day_stage_code=_typed_optional_string(
                     row,
                     "bizDdStgCd",
-                    context="train calendar",
                 ),
                 # dayDvCd defaults to null when its mask bit is
                 # unset (RunDateOutItem.java:106-110), and its getter
@@ -651,7 +642,6 @@ def parse_train_calendar_response(
                 day_division_code=_typed_optional_string(
                     row,
                     "dayDvCd",
-                    context="train calendar",
                 ),
                 # 7.0.6's RunDateOutItem synthetic constructor supplies a compiled default ("")
                 # for hldyDvCd when the key's mask bit is unset, with no
@@ -662,7 +652,6 @@ def parse_train_calendar_response(
                 holiday_division_code=_typed_optional_string(
                     row,
                     "hldyDvCd",
-                    context="train calendar",
                 ),
                 # saleDdDvCd defaults to null when its mask bit is
                 # unset (RunDateOutItem.java:121-125), and its getter
@@ -672,7 +661,6 @@ def parse_train_calendar_response(
                 sale_day_division_code=_typed_optional_string(
                     row,
                     "saleDdDvCd",
-                    context="train calendar",
                 ),
                 # Every *TrnOpFlg field defaults to null
                 # when its mask bit is unset (RunDateOutItem.java:126-160), so
@@ -689,37 +677,30 @@ def parse_train_calendar_response(
                 a_train_operation_flag=_typed_optional_string(
                     row,
                     "aTrnOpFlg",
-                    context="train calendar",
                 ),
                 d_train_operation_flag=_typed_optional_string(
                     row,
                     "dTrnOpFlg",
-                    context="train calendar",
                 ),
                 g_train_operation_flag=_typed_optional_string(
                     row,
                     "gTrnOpFlg",
-                    context="train calendar",
                 ),
                 o_train_operation_flag=_typed_optional_string(
                     row,
                     "oTrnOpFlg",
-                    context="train calendar",
                 ),
                 s_train_operation_flag=_typed_optional_string(
                     row,
                     "sTrnOpFlg",
-                    context="train calendar",
                 ),
                 v_train_operation_flag=_typed_optional_string(
                     row,
                     "vTrnOpFlg",
-                    context="train calendar",
                 ),
                 x_train_operation_flag=_typed_optional_string(
                     row,
                     "xTrnOpFlg",
-                    context="train calendar",
                 ),
                 raw=dict(row),
             )
@@ -747,7 +728,6 @@ def parse_train_schedule_response(
                 station_code=_typed_optional_string(
                     row,
                     "stopRsStnCd",
-                    context="train schedule stop",
                 ),
                 # ActualTrainScheduleOutDlay.java's synthetic
                 # constructor gives stopStnNm a compiled default (bit 2 of
@@ -757,17 +737,14 @@ def parse_train_schedule_response(
                 station_name=_typed_optional_string(
                     row,
                     "stopStnNm",
-                    context="train schedule stop",
                 ),
                 station_construction_order=_typed_optional_string(
                     row,
                     "stnConsOrdr",
-                    context="train schedule stop",
                 ),
                 run_order=_typed_optional_string(
                     row,
                     "runOrdr",
-                    context="train schedule stop",
                 ),
                 actual_arrival_delay_count=_typed_optional_int(
                     row,
@@ -777,88 +754,72 @@ def parse_train_schedule_response(
                 actual_arrival_date=_typed_optional_string(
                     row,
                     "actArvDt",
-                    context="train schedule stop",
                 ),
                 actual_arrival_time=_typed_optional_string(
                     row,
                     "actArvTm",
-                    context="train schedule stop",
                 ),
                 actual_departure_date=_typed_optional_string(
                     row,
                     "actDptDt",
-                    context="train schedule stop",
                 ),
                 actual_departure_time=_typed_optional_string(
                     row,
                     "actDptTm",
-                    context="train schedule stop",
                 ),
                 planned_arrival_date=_typed_optional_string(
                     row,
                     "arvDt",
-                    context="train schedule stop",
                 ),
                 planned_arrival_time=_typed_optional_string(
                     row,
                     "arvTm",
-                    context="train schedule stop",
                 ),
                 planned_departure_date=_typed_optional_string(
                     row,
                     "dptDt",
-                    context="train schedule stop",
                 ),
                 planned_departure_time=_typed_optional_string(
                     row,
                     "dptTm",
-                    context="train schedule stop",
                 ),
                 delay_fare_return_division_code=_typed_optional_string(
                     row,
                     "dlayFareRetDvCd",
-                    context="train schedule stop",
                 ),
                 delay_fare_return_division_name=_typed_optional_string(
                     row,
                     "dlayFareRetDvCdNm",
-                    context="train schedule stop",
                 ),
                 solo_operation_delay_flag=_typed_optional_string(
                     row,
                     "dlaySoloOprFlg",
-                    context="train schedule stop",
                 ),
                 detour_driver_delay_count=_typed_optional_string(
                     row,
                     "dturDrvDlayTnum",
-                    context="train schedule stop",
                 ),
                 expected_arrival_delay_count=_typed_optional_string(
                     row,
                     "expnArvDlayTnum",
-                    context="train schedule stop",
                 ),
                 expected_departure_delay_count=_typed_optional_string(
                     row,
                     "expnDptDlayTnum",
-                    context="train schedule stop",
                 ),
                 regular_flag=_typed_optional_string(
                     row,
                     "rgulFlg",
-                    context="train schedule stop",
                 ),
                 service_flag=_typed_optional_string(
                     row,
                     "saodFlg",
-                    context="train schedule stop",
                 ),
                 raw=dict(row),
             )
         )
     def optional(key: str) -> str | None:
-        return _typed_optional_string(raw, key, context="train schedule")
+        return _typed_optional_string(raw, key)
 
     return TrainScheduleResponse(
         **_response_fields(response),
@@ -881,7 +842,6 @@ def parse_train_schedule_response(
         run_date=_typed_optional_string(
             raw,
             "runDt1",
-            context="train schedule",
         ),
         run_segment_order=optional("runSegOrdr"),
         regular_sale_flag=optional("saleRgulFlg"),
@@ -940,12 +900,10 @@ def parse_transfer_station_list_response(
                 station_code=_typed_optional_string(
                     row,
                     "chtnRsStnCd",
-                    context="transfer station",
                 ),
                 station_name=_typed_optional_string(
                     row,
                     "chtnRsStnNm",
-                    context="transfer station",
                 ),
                 raw=dict(row),
             )
@@ -972,7 +930,9 @@ def _inventory_required_int(
     data: Mapping[str, Any],
     key: str,
 ) -> int:
-    return _inventory_integer_value(data.get(key), key)
+    return _typed_non_negative_integer_value(
+        data.get(key), key, context="seat inventory"
+    )
 
 
 def parse_seat_car_list_response(
@@ -990,7 +950,7 @@ def parse_seat_car_list_response(
     """
     raw = response.raw
     cars: list[SeatCar] = []
-    for row in _nested_rows(raw, "srcar_infos", "srcar_info", "seat inventory"):
+    for row in _nested_rows(raw, "srcar_infos", "srcar_info"):
         # TrainResearchOutCarInfo.java:32 declares hSrcarNo as a String
         # (public final String hSrcarNo;), not an int. Coercing it to int
         # here loses leading zeros (e.g. "01" -> 1) -- a lossy round-trip.
