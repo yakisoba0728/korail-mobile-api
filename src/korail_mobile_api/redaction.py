@@ -13,9 +13,11 @@ KORAIL 이 한 필드를 행 번호 붙은 여러 키로 쓰기 때문(``custMgN
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
+from decimal import Decimal
 from typing import Any
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
@@ -646,6 +648,8 @@ SENSITIVE_KEY_PREFIX_RE = re.compile(
 #: ``&``/``;`` 뒤에 이것이 오면 그 구분자는 **다음 필드**의 시작입니다.
 _NEXT_FIELD_KEY = r"[\w.%\[\]-]+="
 _NEXT_FIELD_RE = re.compile(r"[&;]" + _NEXT_FIELD_KEY)
+#: 값 자체가 ``키=`` 로 시작하는지 — 쿠키 헤더처럼 값이 ``키=값`` 목록인 경우.
+_FIELD_KEY_RE = re.compile(_NEXT_FIELD_KEY)
 #: ``=`` 로 묶인 따옴표 없는 값의 끝: 공백, 또는 새 ``키=`` 앞의 ``&``/``;``.
 #: **쉼표는 끝이 아닙니다.** 쉼표에서 끊었을 때 ``txtPwd=HEAD,<비밀>`` 의 쉼표
 #: 뒤가 평문으로 남았습니다(외부 감사 C05). 애매하면 더 가리는 쪽입니다.
@@ -725,15 +729,15 @@ def _balanced_end(text: str, start: int, memo: dict[int, int | None]) -> int | N
     return None
 
 
-def _unquoted_end(text: str, start: int, eq: bool) -> int:
+def _unquoted_end(text: str, start: int, boundary: bool) -> int:
     """따옴표 없는 값(``text[start]`` 는 공백이 아님)의 끝.
 
-    공백 없는 **최대 길이**입니다. ``=`` 로 묶였으면 ``&``/``;`` 가 새 ``키=`` 앞에
-    올 때만 끝납니다 — 그래야 ``txtSeatNo1_=X&trnNo1=Y`` 의 이웃은 살고
-    ``txtPwd=HEAD&<비밀>`` 의 꼬리는 함께 가려집니다. ``:`` 로 묶이면(헤더·산문)
-    쿠키 헤더의 ``;``·``=`` 도 값의 일부입니다.
+    공백 없는 **최대 길이**입니다. ``boundary`` 면 ``&``/``;`` 가 새 ``키=`` 앞에
+    올 때도 끝납니다 — 그래야 ``txtSeatNo1_=X&trnNo1=Y`` 의 이웃은 살고
+    ``txtPwd=HEAD&<비밀>`` 의 꼬리는 함께 가려집니다. ``boundary`` 를 정하는 것은
+    :func:`_sensitive_value_end` 입니다.
     """
-    end_re = _EQ_VALUE_END_RE if eq else _WHITESPACE_RE
+    end_re = _EQ_VALUE_END_RE if boundary else _WHITESPACE_RE
     match = end_re.search(text, start + 1)
     return match.start() if match else len(text)
 
@@ -755,11 +759,19 @@ def _sensitive_value_end(
     ``=`` 뒤에 서식 공백이 있으면 공백 뒤의 토큰을 값으로 봅니다(한계 L4). 자유
     텍스트에서 ``txtPwd= <base64>`` 와 ``h_sgr_nm_1= trnNo1=X`` 는 구분되지 않고,
     이 함수는 **애매하면 더 가리는 쪽**입니다.
+
+    ``&``·``;`` + ``키=`` 경계(G4)는 ``:`` 로 묶인 값(``txtPwd: <비밀>&lang=ko``,
+    ``"txtPwd": <비밀>&lang=ko``)에도 적용합니다. 예전에는 ``=`` 형식에만 적용해
+    ``lang=ko`` 까지 지웠습니다(재감사 NC06). **예외 하나** — ``:`` 뒤의 값이
+    그 자체로 ``키=`` 로 시작하면(``Cookie: audit=HEAD;other=<비밀>``) 값이
+    ``키=값`` 목록이라 ``;키=`` 는 값의 일부이므로 경계를 두지 않습니다. 둘이
+    부딪칠 때 가리는 쪽입니다.
     """
     length = len(text)
     if start >= length or _WHITESPACE_RE.match(text, start):
         return start
-    if eq and _NEXT_FIELD_RE.match(text, start):
+    boundary = eq or not _FIELD_KEY_RE.match(text, start)
+    if boundary and _NEXT_FIELD_RE.match(text, start):
         return start
     char = text[start]
     if char in "\"'":
@@ -773,11 +785,11 @@ def _sensitive_value_end(
             end >= length
             or text[end] in _AFTER_BRACKET_STOP
             or _WHITESPACE_RE.match(text, end)
-            or (eq and _NEXT_FIELD_RE.match(text, end))
+            or (boundary and _NEXT_FIELD_RE.match(text, end))
         ):
             return end
-        return _unquoted_end(text, end, eq)
-    return _unquoted_end(text, start, eq)
+        return _unquoted_end(text, end, boundary)
+    return _unquoted_end(text, start, boundary)
 
 
 def _redacted_value_token(value: str, key_quote: str) -> str:
@@ -1016,12 +1028,7 @@ def _mask_key(name: str, used: set[str], reserved: set[str]) -> str:
     if masked == name:
         used.add(name)
         return name
-    candidate, number = masked, 1
-    while candidate in used or candidate in reserved:
-        number += 1
-        candidate = f"{masked}#{number}"
-    used.add(candidate)
-    return candidate
+    return _unique_key(masked, used, reserved)
 
 
 #: JSON 숫자 리터럴 안의 카드번호 모양(14~19자리 숫자열). 부호·소수·지수가
@@ -1191,7 +1198,9 @@ def redact_url(value: str) -> str:
     폴백 규칙: scheme/netloc 이 없으면 보통 :func:`redact_text` 로 갑니다.
     **예외가 하나 있습니다** — 경로가 ``/`` 로 시작하고 쿼리에 공백이 없으면
     상대 URL 로 보고 쿼리를 키 단위로 처리합니다. 그렇게 하지 않으면 퍼센트
-    인코딩된 키가 절대 URL 로는 가려지고 상대 URL 로는 남았습니다.
+    인코딩된 키가 절대 URL 로는 가려지고 상대 URL 로는 남았습니다. ``/``·``//``
+    로 시작하는데 공백 때문에 구조로 못 보는 입력은 텍스트 경로가 아니라
+    :func:`_redact_url_fallback` (오류 복구와 같은 폴백)으로 갑니다.
 
     쿼리 **키**와 host 도 가립니다(카드번호 모양·``JSESSIONID=`` 값, G5).
     """
@@ -1219,6 +1228,11 @@ def _redact_url_fallback(value: str) -> str:
     그대로 나갔습니다(외부 감사 C09). 나머지(경로·fragment·카드번호·세션)는
     :func:`redact_text` 가 봅니다. 구분자는 ``&`` 와 ``;`` 를 모두 봅니다 —
     애매하면 더 가리는 쪽입니다.
+
+    쿼리 **키**와 값의 카드번호 모양도 **디코딩해서** 봅니다(G5). 예전에는
+    민감 키의 값만 봐서 ``?%34%31…=public`` 처럼 인코딩된 카드번호 키가 그대로
+    남았습니다(재감사 NC11) — 텍스트 경로는 ``%34`` 를 숫자로 읽지 못합니다.
+    가릴 것이 있을 때만 디코딩한 글자로 바꿔 씁니다.
     """
     head, question, rest = value.partition("?")
     if not question:
@@ -1226,9 +1240,20 @@ def _redact_url_fallback(value: str) -> str:
     query, hash_mark, fragment = rest.partition("#")
     pieces = re.split(r"([&;])", query)
     for position in range(0, len(pieces), 2):
-        name, equals, _item = pieces[position].partition("=")
-        if equals and is_sensitive_key(_decoded_query_key(name)):
-            pieces[position] = f"{name}=[REDACTED]"
+        name, equals, item = pieces[position].partition("=")
+        decoded_name = _decoded_query_key(name)
+        masked_name = _mask_key_text(decoded_name)
+        if masked_name != decoded_name:
+            name = masked_name
+        if equals and is_sensitive_key(decoded_name):
+            item = "[REDACTED]"
+        elif item:
+            decoded_item = _decoded_query_key(item)
+            if decoded_item != item:
+                masked_item = _redact_text(decoded_item)
+                if masked_item != decoded_item:
+                    item = masked_item
+        pieces[position] = f"{name}{equals}{item}"
     return _redact_text(f"{head}?{''.join(pieces)}{hash_mark}{fragment}")
 
 
@@ -1254,6 +1279,12 @@ def _redact_url_structured(value: str) -> str:
     if not (parsed.scheme and parsed.netloc) and not (
         relative_with_query or scheme_relative
     ):
+        # ``/``·``//`` 로 시작하는데 공백 때문에 구조 처리를 포기한 경우도
+        # 오류 복구와 **같은** 폴백으로 갑니다. 예전에는 곧장 텍스트 경로로 보내
+        # ``/?%74xtPwd=<비밀> tail`` 의 인코딩된 키를 못 읽고 값이 남았습니다
+        # (재감사 NC05, G2).
+        if parsed.path.startswith("/") or parsed.netloc:
+            return _redact_url_fallback(value)
         return _redact_text(value)
     # 쿼리 **키**도 문자열입니다(G5). 예전에는 키를 그대로 둬서
     # ``?4111…=public`` 의 숫자가 남았습니다(외부 감사 C02).
@@ -1287,19 +1318,109 @@ def _redact_url_structured(value: str) -> str:
 _LEAVE = object()
 
 
-def _is_card_shaped_int(value: object) -> bool:
-    """14~19자리 정수(``bool`` 제외) — :data:`CARD_RE` 의 정수판."""
-    if isinstance(value, bool) or not isinstance(value, int):
+def _is_card_shaped_number(value: object) -> bool:
+    """카드번호 모양의 숫자(``bool`` 제외) — :data:`CARD_RE` 의 숫자판(G5).
+
+    * 정수: 14~19자리. ``str()`` 은 자릿수 한도를 넘는 정수에서 예외를 내므로
+      크기로 판정합니다.
+    * ``float``·:class:`~decimal.Decimal`: 정수부가 14~19자리이거나, 표기
+      (``repr``·``str``)에 14~19자리 숫자열이 있으면. JSON 숫자 리터럴과 같은
+      규칙(:data:`_NUMBER_CARD_RE`)입니다. 예전에는 정수만 봐서
+      ``{"debug": float(카드번호)}`` 가 그대로 남았습니다(재감사 NC02).
+      ``inf``·``nan`` 은 카드번호가 아닙니다 — 예외 없이 거짓입니다.
+    """
+    if isinstance(value, bool):
         return False
-    return 10**13 <= abs(value) < 10**19
+    if isinstance(value, int):
+        return 10**13 <= abs(value) < 10**19
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return False
+        return 1e13 <= abs(value) < 1e19 or bool(_NUMBER_CARD_RE.search(repr(value)))
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            return False
+        # ``int()`` 는 ``Decimal("1e100000")`` 에서 10만 자리 정수를 만듭니다.
+        # 정수부 자릿수는 ``adjusted()``(최상위 자리의 지수)로 봅니다.
+        return (not value.is_zero() and 13 <= value.adjusted() <= 18) or bool(
+            _NUMBER_CARD_RE.search(str(value))
+        )
+    return False
+
+
+def _safe_repr(value: object) -> str:
+    """``repr()`` 이되 **예외를 내지 않습니다.**
+
+    자릿수 한도(기본 4300자리)를 넘는 정수는 ``repr()`` 에서 ``ValueError`` 를
+    냅니다(재감사 NN03: 비민감 폼 값 ``10**5000``). 그 자리는
+    ``<int N bits>`` 로 둡니다. 그 밖에 ``repr()`` 이 실패하는 잎은 타입 이름만
+    씁니다 — 내용을 모르므로 아무 것도 내보내지 않는 쪽입니다.
+    """
+    try:
+        return repr(value)
+    except Exception:  # noqa: BLE001
+        if isinstance(value, int):
+            return f"<int {value.bit_length()} bits>"
+        return f"<{type(value).__name__} repr failed>"
+
+
+def _safe_str(value: object) -> str:
+    """``str()`` 이되 예외를 내지 않고, 내장 컨테이너는 **재귀 없이** 씁니다."""
+    if type(value) in _REPR_CONTAINERS:
+        return _repr_iterative(value)
+    try:
+        return str(value)
+    except Exception:  # noqa: BLE001
+        return _safe_repr(value)
+
+
+def _unique_key(candidate: str, used: set[str], reserved: set[str]) -> str:
+    """``candidate`` 를 이미 쓴 이름·원래 키와 겹치지 않게 ``#2``·``#3`` 을 붙입니다."""
+    shown, number = candidate, 1
+    while shown in used or shown in reserved:
+        number += 1
+        shown = f"{candidate}#{number}"
+    used.add(shown)
+    return shown
+
+
+def _masked_key_text(key: object) -> str | None:
+    """문자열이 **아닌** 매핑 키를 가린 글자. 가릴 것이 없으면 ``None``.
+
+    키도 G5 의 대상입니다. 예전에는 문자열 키만 봐서 ``{int(카드번호): ...}`` 와
+    ``{(카드번호,): ...}`` 의 카드번호가 그대로 남았습니다(재감사 NC01). 키를
+    :func:`redact_value` 로 가려 보고, 바뀌면 그 결과를 **문자열로** 씁니다 —
+    가린 키끼리(``(K,)`` 와 ``(K2,)``) 같아질 수 있고, 가린 결과가 해시할 수
+    없는 것(dict·list)일 수 있기 때문입니다. 겹침은 호출자가 ``#N`` 으로 풉니다.
+    """
+    masked = redact_value(key)
+    if masked is key:
+        return None
+    try:
+        # 튜플·frozenset 은 새로 만들어지므로 ``is`` 가 아니라 값으로 봅니다.
+        # 아주 깊은 키의 비교는 ``RecursionError`` 를 낼 수 있습니다 — 그러면
+        # 바뀐 것으로 보고 문자열로 씁니다(가리는 쪽).
+        if masked == key:
+            return None
+    except Exception:  # noqa: BLE001
+        pass
+    return masked if isinstance(masked, str) else _repr_iterative(masked)
 
 
 def redact_value(value: Any, *, key: str | None = None) -> Any:
     """임의의 값을 가립니다.
 
     매핑→키마다, 리스트/튜플/set→원소마다(컨테이너 타입 유지), 데이터클래스→필드별
-    dict, 문자열→:func:`redact_url`. 나머지 타입은 그대로. 매핑의 문자열 키도
-    가립니다(카드번호 모양·``JSESSIONID=`` 값).
+    dict, 문자열→:func:`redact_url`, 카드번호 모양의 숫자(정수·``float``·
+    ``Decimal``)→``"[REDACTED_CARD]"``. 나머지 타입은 그대로. 매핑의 키도
+    가립니다(카드번호 모양·``JSESSIONID=`` 값). 문자열이 아닌 키는 가릴 것이
+    있을 때만 **가린 결과의 문자열**로 바뀝니다(:func:`_masked_key_text`).
+
+    set·frozenset 원소를 가린 결과가 해시할 수 없으면(frozen 데이터클래스가
+    dict 가 되는 경우 등) 그 자리는 가린 원소의 **list** 가 됩니다. 예전에는
+    set 에 다시 넣다가 ``TypeError`` 로 죽었습니다(재감사 NC03). 원소의 repr
+    튜플 대신 list 를 고른 것은 가린 구조(dict 의 키·값)를 그대로 보이기
+    때문입니다. 예외도, 누출도 없습니다.
 
     **재귀가 아니라 명시적 스택입니다.** 재귀로 짰을 때 민감 키를 일반 dict
     1,500겹으로 감싼 입력이 ``RecursionError`` 로 죽었습니다(최종 감사 C02).
@@ -1343,14 +1464,20 @@ def redact_value(value: Any, *, key: str | None = None) -> Any:
             used_keys: set[str] = set()
             reserved_keys = {name for name in item.keys() if isinstance(name, str)}
             for child_key, child in item.items():
-                shown = (
-                    _mask_key(child_key, used_keys, reserved_keys)
-                    if isinstance(child_key, str)
-                    else child_key
-                )
+                if isinstance(child_key, str):
+                    shown = _mask_key(child_key, used_keys, reserved_keys)
+                    check_name = child_key
+                else:
+                    masked_text = _masked_key_text(child_key)
+                    shown = (
+                        child_key
+                        if masked_text is None
+                        else _unique_key(masked_text, used_keys, reserved_keys)
+                    )
+                    check_name = _safe_str(child_key)
                 mapping_out[shown] = None
                 # 민감성은 **원래** 키로 판정합니다.
-                stack.append((child, str(child_key), mapping_out, shown))
+                stack.append((child, check_name, mapping_out, shown))
         elif is_sequence:
             sequence_out: list[Any] = [None] * len(item)
             parent[slot] = sequence_out
@@ -1374,16 +1501,20 @@ def redact_value(value: Any, *, key: str | None = None) -> Any:
                 )
         elif isinstance(item, str):
             parent[slot] = redact_url(item)
-        elif _is_card_shaped_int(item):
-            # 정수로 들어온 카드번호(G5). ``str()`` 은 자릿수 한도를 넘는 정수에서
-            # 예외를 내므로 크기로 판정합니다.
+        elif _is_card_shaped_number(item):
+            # 숫자로 들어온 카드번호(G5).
             parent[slot] = "[REDACTED_CARD]"
         else:
             parent[slot] = item
     # 튜플은 다 채운 뒤 바꿉니다. 안쪽이 나중에 쌓였으므로 뒤에서부터 바꿔야
     # 바깥 튜플이 이미 바뀐 안쪽 튜플을 담습니다.
     for sequence_out, parent, slot, restore in reversed(tuples):
-        parent[slot] = restore(sequence_out)
+        try:
+            parent[slot] = restore(sequence_out)
+        except Exception:  # noqa: BLE001
+            # 가린 원소가 해시할 수 없거나(set 에 dict), set 하위 클래스의
+            # 생성자가 list 를 못 받으면 list 로 둡니다. 위 독스트링 참고.
+            parent[slot] = sequence_out
     return result[0]
 
 
@@ -1400,8 +1531,9 @@ def redact_payload(
     이 패키지 자신은 부르지 않습니다.
 
     민감 키는 ``[REDACTED]``, 나머지는 :func:`redact_text`. 키도 가립니다
-    (카드번호 모양·``JSESSIONID=`` 값, 겹치면 ``#2``). 리스트 값은 원소별로
-    가리고 길이를 유지합니다 — 길이가 의미를 갖는 것은 운임 재계산 폼이
+    (카드번호 모양·``JSESSIONID=`` 값, 겹치면 ``#2``). 문자열이 아닌 키는
+    :func:`redact_value` 와 같은 규칙으로 가린 뒤 문자열로 씁니다. 리스트 값은
+    원소별로 가리고 길이를 유지합니다 — 길이가 의미를 갖는 것은 운임 재계산 폼이
     여섯 개의 ``List @Field`` 를 **인덱스로 맞물려** 보내기 때문입니다
     (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:582-584``
     의 ``postPriceReCalculation`` 이 ``psg_tp_dv_cd``/``psrm_cl_cd``/
@@ -1417,13 +1549,24 @@ def redact_payload(
         return redact_value(payload)  # type: ignore[no-any-return]
     redacted: dict[str, str | list[str]] = {}
     used_keys: set[str] = set()
-    reserved_keys = {str(key) for key in payload}
+    reserved_keys = {key for key in payload if isinstance(key, str)}
     for key, value in payload.items():
         # 민감성은 **원래** 키로 판정합니다. 예전에는 키를 그대로 내보내서
         # ``{"4111…": ...}`` 의 카드번호가 남았습니다(외부 감사 C01).
-        original = str(key)
+        if isinstance(key, str):
+            original = key
+            name = _mask_key(original, used_keys, reserved_keys)
+        else:
+            # 문자열이 아닌 키는 문자열로 바뀌므로 원래 문자열 키(``{1: .., "1": ..}``)
+            # 와도 겹칠 수 있습니다 — 언제나 :func:`_unique_key` 를 거칩니다.
+            original = _safe_str(key)
+            masked_text = _masked_key_text(key)
+            name = _unique_key(
+                _mask_key_text(original) if masked_text is None else masked_text,
+                used_keys,
+                reserved_keys,
+            )
         sensitive = is_sensitive_key(original)
-        name = _mask_key(original, used_keys, reserved_keys)
         if isinstance(value, (list, tuple)):
             redacted[name] = [
                 "[REDACTED]" if sensitive else _redact_form_value(item)
@@ -1436,13 +1579,24 @@ def redact_payload(
     return redacted
 
 
-def _repr_iterative(root: object) -> str:
-    """:func:`redact_value` 의 결과를 ``str()`` 과 **같은 글자로**, 재귀 없이 씁니다.
+#: :func:`_repr_iterative` 가 풀어 쓰는 컨테이너 — **정확히 이 타입**만(하위
+#: 클래스는 ``repr`` 이 다르므로 잎으로 둡니다).
+_REPR_CONTAINERS = (dict, list, tuple, set, frozenset)
 
-    ``str()`` 은 중첩 dict 를 재귀로 씁니다. 가리는 쪽을 반복으로 바꾼 뒤에도
+
+def _repr_iterative(root: object) -> str:
+    """``str()`` 과 **같은 글자로**, 재귀 없이 씁니다.
+
+    ``str()`` 은 중첩 컨테이너를 재귀로 씁니다. 가리는 쪽을 반복으로 바꾼 뒤에도
     마지막 ``str()`` 이 남아, 1만 겹 폼 값이 가린 **뒤에** ``RecursionError`` 로
-    죽었습니다(외부 감사 C08). :func:`redact_value` 의 결과는 dict·list·tuple 과
-    그 밖의 잎뿐이므로 그 셋만 풀어 쓰면 됩니다. 잎은 ``repr()`` 입니다.
+    죽었습니다(외부 감사 C08). 그 뒤 :func:`redact_value` 가 set·frozenset 을
+    돌려주게 됐는데 여기서는 dict·list·tuple 만 풀어 써서, frozenset 안의 깊은
+    튜플이 다시 ``RecursionError`` 였습니다(재감사 RC08).
+
+    풀어 쓰는 컨테이너는 :data:`_REPR_CONTAINERS` — ``dict``·``list``·
+    ``tuple``·``set``·``frozenset`` (정확히 그 타입; :func:`redact_value` 가
+    돌려줄 수 있는 컨테이너 전부)입니다. dict 의 **키**도 노드로 씁니다 —
+    튜플 키가 깊을 수 있습니다. 그 밖의 잎은 :func:`_safe_repr` 입니다.
     """
     parts: list[str] = []
     # (리터럴인가, 글자 또는 노드)
@@ -1459,14 +1613,24 @@ def _repr_iterative(root: object) -> str:
             for index, (name, child) in enumerate(node.items()):
                 if index:
                     pushed.append((True, ", "))
-                pushed.append((True, f"{name!r}: "))
+                pushed.append((False, name))
+                pushed.append((True, ": "))
                 pushed.append((False, child))
             pushed.append((True, "}"))
             stack.extend(reversed(pushed))
-        elif kind is list or kind is tuple:
-            opener, closer = ("[", "]") if kind is list else ("(", ")")
-            if kind is tuple and len(node) == 1:
-                closer = ",)"
+        elif kind is list or kind is tuple or kind is set or kind is frozenset:
+            if kind is list:
+                opener, closer = "[", "]"
+            elif kind is tuple:
+                opener, closer = "(", ",)" if len(node) == 1 else ")"
+            elif not node:
+                # ``str(set())`` 은 ``set()`` — ``{}`` 는 dict 입니다.
+                parts.append(f"{kind.__name__}()")
+                continue
+            elif kind is set:
+                opener, closer = "{", "}"
+            else:
+                opener, closer = "frozenset({", "})"
             parts.append(opener)
             pushed = []
             for index, child in enumerate(node):
@@ -1476,22 +1640,31 @@ def _repr_iterative(root: object) -> str:
             pushed.append((True, closer))
             stack.extend(reversed(pushed))
         else:
-            parts.append(repr(node))
+            parts.append(_safe_repr(node))
     return "".join(parts)
 
 
 def _redact_form_value(value: object) -> str:
-    """폼 값 하나를 문자열로. 중첩 구조는 **구조로** 가린 뒤 문자열로 만듭니다.
+    """폼 값 하나를 문자열로. 문자열이 아니면 :func:`redact_value` 로 가린 뒤 씁니다.
 
     예전에는 무엇이든 ``str()`` 로 먼저 바꿔 텍스트 정규식에 넣었습니다. 그러면
     ``{"outer": {"txtPwd": [["a", "<비밀>"]]}}`` 의 안쪽 민감 키가 Python repr
     속 텍스트로만 남아, 중첩 배열에서 뒤 원소가 평문으로 남았습니다(최종 감사
     C01). 구조화 입력은 깊이·타입과 무관하게 가려야 합니다(G1).
+
+    그 뒤에도 set·frozenset 은 ``str()`` 경로에 남아, 원소인 JSON 문자열의
+    ``\\u0074xtPwd`` 가 repr 의 ``\\\\u0074`` 로 두 겹 escape 되어 읽히지 않았고
+    비밀이 남았습니다(재감사 NC04). 이제 **모든** 비문자열 값이
+    :func:`redact_value` 를 거칩니다 — 폼 값 안의 중첩 값은 :func:`redact_value`
+    가 가리는 것과 똑같이 가려집니다. 카드번호 모양의 숫자는
+    ``"[REDACTED_CARD]"`` 입니다.
     """
     if isinstance(value, str):
         return _redact_text(value)
-    if isinstance(value, (Mapping, list, tuple)) or (
-        is_dataclass(value) and not isinstance(value, type)
-    ):
-        return _repr_iterative(redact_value(value))
-    return _redact_text(str(value))
+    masked = redact_value(value)
+    if masked is value:
+        # 가릴 것이 없는 잎(작은 정수·None·임의 객체). ``str()`` 표기를 유지합니다.
+        return _redact_text(_safe_str(value))
+    if isinstance(masked, str):
+        return masked
+    return _repr_iterative(masked)
