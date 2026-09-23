@@ -22,9 +22,7 @@ from .constants import (
     KORAIL_MAX_DISCOUNT_CARD_SECTIONS,
     KORAIL_MAX_JOURNEY_LEGS,
     KORAIL_MAX_PASSENGERS_PER_RESERVATION,
-    KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE,
     KORAIL_MERGE_SEAT_FLAGS_BY_CABIN,
-    KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE,
     KORAIL_STANDBY_WAIT_FLAG,
     KORAIL_TRANSFER_ITINERARY_CODE,
     KORAIL_TRANSFER_JOURNEY_TYPE_CODE,
@@ -236,96 +234,68 @@ def build_transfer_reservation_form(
 def build_merge_reservation_form(
     config: KorailConfig,
     standing_hold_train: TrainSummary,
-    legs: Sequence[TrainScheduleItem],
+    merge_rows: Sequence[TrainScheduleItem],
     *,
     passengers: KorailPassengerCounts | None = None,
     seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
+    job_type: KorailReservationJobType = KorailReservationJobType.MERGE_STANDING,
     seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
-    """한 열차를 분할한 병합의 두 번째 홀드 폼. 첫 홀드와 별도 PNR 이 생길 수 있습니다. 호출 순서·정리 책임·2026-09-21/22 관측은
-    KorailClient.reserve_merge 참고. 구간 종류 21/22, 입석 플래그, 양 구간 공통 객실을 사용합니다. 보호된 앱 최종 재제출과 완전히 같다고 확정하지
-    않으며, 아래 job 값 차이 경고를 보존합니다.
+    """병합의 두 번째 홀드 폼 — 첫 홀드 요청을 그대로 다시 만들고 네 값만 바꿉니다.
+
+    7.0.6 병합 화면은 첫 홀드의 ``TicketReservationIn`` 을 넘겨받아
+    (``ReservationMergeRoute.getTicketReservationIn()``, ``ReservationMergeViewModel.smali:425-435``)
+    ``copy$default`` 마스크 ``0x7ffef`` 로 다시 보냅니다(``:7671-7774``). 바뀌는 것은 인자 4
+    ``txtStndFlg`` 와 인자 19-21 ``txtMidRsStnCd``/``txtMidStnConsOrdr``/``txtMidStnRunOrdr``
+    (``TicketReservationIn.java:486`` 의 인자 순서)뿐이고, 세 중간역 값은 고른
+    ``MergeSeatsCOutTrnInfo`` 행의 도착역 코드·구성순서·운행순서입니다. 여정은 원래대로 하나이고
+    job 도 첫 요청 그대로입니다.
+
+    그래서 ``standing_hold_train``·``passengers``·``seat_class``·``job_type``·``seat_attribute_code`` 는
+    **첫 홀드를 만들 때와 같은 값**이어야 합니다. ``merge_rows`` 는 병합 좌석 조회
+    (:meth:`~korail_mobile_api.client.KorailClient.get_merge_seats_inquiry`)의 ``trains`` 입니다.
+    중간역은 **첫 행**의 도착역이고(``trnInfoList.first()``, ``:7270-7300``), ``txtStndFlg`` 는
+    첫 행이나 마지막 행이 일반석 ``SOLD_OUT``·입석 ``AVAILABLE`` 이면 켭니다(``:7372-7560``;
+    ``TrainReservationCode`` 평문은 보호돼 일반 예약과 같은 13/11 관측값을 씁니다).
+    2026-09-24 서울→부산 175: 행이 서울→영등포(11/11)·영등포→부산(13/11) 두 개였습니다.
     """
-    resolved_legs = _resolved_sequence(
-        legs, "KORAIL 병합 reservation requires a sequence of merge-seat legs"
-    )
-    for leg in resolved_legs:
-        if not isinstance(leg, TrainScheduleItem):
-            raise KorailProtocolError(
-                "KORAIL 병합 reservation legs are the TrainScheduleItem rows "
-                "research.mergeSeatsC.do answers with"
-            )
-    if len(resolved_legs) != KORAIL_MAX_JOURNEY_LEGS:
+    rows = tuple(merge_rows) if not isinstance(merge_rows, (str, bytes)) else ()
+    if not rows or not all(isinstance(row, TrainScheduleItem) for row in rows):
         raise KorailProtocolError(
-            f"KORAIL 병합 reservation books exactly {KORAIL_MAX_JOURNEY_LEGS} "
-            f"journeys on one train, got {len(resolved_legs)}: this form has "
-            "no journey-3 spelling at all (KORAIL_MAX_JOURNEY_LEGS)"
+            "KORAIL 병합 reservation requires the research.mergeSeatsC.do rows"
         )
-    if passengers is None:
-        passengers = KorailPassengerCounts()
-    elif not isinstance(passengers, KorailPassengerCounts):
-        raise KorailProtocolError(
-            "KORAIL reservation requires an exact KorailPassengerCounts"
-        )
-    cabin = _coerced_seat_class(seat_class)
-    # 다른 열차 둘을 병합으로 보내지 않도록 입력을 제한합니다. 앱의 조회는 첫 홀드의 열차번호를
-    # 사용합니다(ReservationMergeViewModel.java:760-828; MergeSeatsCIn.java:63). 원래 기록의 smali 보조 근거는
-    # ReservationMergeViewModel.smali:773-1242 입니다.
-    hold_train_no = _required_digits(
-        standing_hold_train.train_no,
-        field="train_no",
-    )
-    for leg in resolved_legs:
-        if _required_digits(leg.train_no, field="train_no") != hold_train_no:
+    hold_train_no = _required_digits(standing_hold_train.train_no, field="train_no")
+    for row in rows:
+        if _required_digits(row.train_no, field="train_no") != hold_train_no:
             raise KorailProtocolError(
-                "KORAIL 병합 reservation splits ONE train: both legs must "
+                "KORAIL 병합 reservation splits ONE train: every merge row must "
                 f"carry the standing hold's train_no {hold_train_no!r}"
             )
-    journeys = tuple(_journey_fields(leg) for leg in resolved_legs)
-    form = _common_fields(config)
-    form.update(
-        {
-            "txtMenuId": "11",
-            # 라이브러리는 즉시예약 job 을 보냅니다. 2026-09-21 병합 홀드에서 여정 21/22 가 관측됐습니다. 앱이 원래 job 을 유지한다는 기존 재구성은
-            # ReservationMergeViewModel.smali:7736-7772 이며, jadx 복원 실패로 직접 확정되지 않았습니다. 이 값이 앱과 같다는 보장은
-            # 없습니다.
-            "txtJobId": KorailReservationJobType.IMMEDIATE.value,
-            "txtGdNo": "",
-            "hidFreeFlg": "N",
-            # 입석 플래그 고정의 기존 근거: ReservationMergeViewModel.smali:5887-5891. smali 대조 필요.
-            "txtStndFlg": "Y",
-            "txtTotPsgCnt": str(passengers.total),
-        }
+    first, last = rows[0], rows[-1]
+    middle = {
+        "txtMidRsStnCd": first.arrival_station_code,
+        "txtMidStnConsOrdr": first.arrival_construction_order,
+        "txtMidStnRunOrdr": first.arrival_run_order,
+    }
+    missing = [key for key, value in middle.items() if not value]
+    if missing:
+        raise KorailProtocolError(
+            f"KORAIL 병합 reservation first merge row lacks {', '.join(missing)}"
+        )
+    form = build_reservation_form(
+        config,
+        standing_hold_train,
+        passengers=passengers,
+        seat_class=seat_class,
+        job_type=job_type,
+        seat_attribute_code=seat_attribute_code,
     )
-    _add_passenger_rows(form, passengers)
-    # 라이브러리의 두 구간 삽입 순서이며 DTO 전체 순서와의 동등성은 별도입니다.
-    form.update(
-        {
-            "txtSeatAttCd1": "000",
-            "txtSeatAttCd2": "000",
-            "txtSeatAttCd3": "000",
-            _seat_attribute_key(1): _seat_attribute_code(
-                standing_hold_train, seat_attribute_code
-            ),
-            "txtSeatAttCd5": "000",
-            "txtPsrmClCd1": cabin.value,
-        }
+    standing = any(
+        row.general_reservation_code == "13" and row.standing_reservation_code == "11"
+        for row in (first, last)
     )
-    form[_seat_attribute_key(2)] = _seat_attribute_code(
-        standing_hold_train, seat_attribute_code
-    )
-    # 선행 객실 복사의 기존 근거: ReservationMergeViewModel.smali:5919-5983. smali 대조 필요.
-    form["txtPsrmClCd2"] = cabin.value
-    form["txtJrnyCnt"] = KORAIL_TRANSFER_ITINERARY_CODE
-    journey_type_codes = tuple(
-        KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE
-        if journey == 1
-        else KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE
-        for journey in range(1, len(journeys) + 1)
-    )
-    _write_journey_rows(form, journeys, journey_type_codes)
-    # 일반 빌더는 좌석 목록·개수를 채우지 않습니다(TrainScheduleViewModel.java:2932,3004). 기본 빈 목록·null 은
-    # TicketReservationIn.java:182 참고.
+    form["txtStndFlg"] = "Y" if standing else "N"
+    form.update({key: str(value) for key, value in middle.items()})
     return form
 
 

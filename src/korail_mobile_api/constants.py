@@ -131,11 +131,8 @@ KORAIL_TRANSFER_ITINERARY_CODE = "2"
 KORAIL_DIRECT_JOURNEY_TYPE_CODE = "11"
 KORAIL_TRANSFER_JOURNEY_TYPE_CODE = "14"
 
-# 병합 선행·후행: JourneyDefine.java:89-90. "21"/"22" 평문 배정은 보호됨. 2026-09-21 라이브 관측: 두 여정 전송 후
-# h_jrny_tp_cd="21"/"22" 와 입석/좌석 구간 분리 확인. 앱 최종 재제출은 ReservationMergeViewModel.smali:7223-7821 에서 원요청
-# 복제 방식으로 해석된 기록이 있으나 jadx 실패 구간이므로 확정할 수 없습니다. 앱과 같은 조립 방식이라는 보장은 없습니다.
-KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE = "21"
-KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE = "22"
+# 병합 홀드 응답의 여정 종류는 선행 "21"·후행 "22" 입니다(JourneyDefine.java:89-90, 평문 보호; 2026-09-21·22 라이브 관측).
+# 요청은 여정을 나누지 않습니다 — mutation_payloads.build_merge_reservation_form 참고.
 
 #: 객실별 병합 가능 플래그. 필드명: TrainScheduleOutTrainInfo.java:147,1480. 판정 메서드:
 #: TrainScheduleOutTrainInfo.java:1500-1552. 비교 리터럴이 보호돼 있어 이 표의 값 배정은 정적으로 미확인입니다.

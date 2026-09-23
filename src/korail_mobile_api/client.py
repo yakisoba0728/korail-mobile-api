@@ -1665,28 +1665,35 @@ class KorailClient:
     def reserve_merge(
         self,
         standing_hold_train: TrainSummary,
-        legs: Sequence[TrainScheduleItem],
+        merge_rows: Sequence[TrainScheduleItem],
         *,
         passengers: KorailPassengerCounts | None = None,
         seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
+        job_type: KorailReservationJobType = KorailReservationJobType.MERGE_STANDING,
         seat_attribute_code: str | None = None,
     ) -> ReservationHoldResponse:
-        """병합예약의 두 번째 홀드를 만듭니다. 첫 홀드를 수정하는 호출이 아닙니다. MERGE_STANDING 첫 홀드→분할 구간 조회→첫 홀드 취소→이 호출 순서가 필요합니다.
-        앱 취소 경로: ReservationMergeViewModel.java:1352,1556. 첫 홀드 취소는 호출자가 수행합니다.
+        """병합예약의 두 번째 홀드. 첫 홀드 요청을 다시 보내되 ``txtStndFlg`` 와 중간역 세 필드만
+        바꿉니다(앱과 같음 — :func:`~korail_mobile_api.mutation_payloads.build_merge_reservation_form`).
+        열차·승객·등급·job·좌석속성은 첫 홀드와 같은 값을 넘기고, ``merge_rows`` 는
+        :meth:`get_merge_seats_inquiry` 응답의 ``trains`` 를 그대로 넘깁니다.
 
-        2026-09-22: 첫 홀드부터 여정 21/22 로 나뉘었고, 두 번째 호출은 별도 PNR 을 만들었습니다. 첫 홀드는 입석+좌석, 두 번째는 양쪽 좌석인 표본이
-        있으므로 병합 코드가 입석을 보장하지 않습니다. 첫 홀드를 유지한 표본의 WRR664260 도 SUCC 와 새 PNR·좌석이 있는 홀드였습니다. 메시지만 보고 실패로
-        간주하거나 재전송하지 마십시오. 남은 홀드는 각각 확인·취소해야 합니다. 첫 홀드 취소 후 같은 요청은 IRR000018 이었습니다. 2026-09-21 에도 여정
-        21/22 의 두 구간과 한 번의 취소가 관측됐습니다.
+        순서: ``job_type=MERGE_STANDING`` 첫 홀드 → 병합 좌석 조회 → 첫 홀드 취소 → 이 호출.
+        첫 홀드 취소는 호출자가 합니다(앱: ``ReservationMergeViewModel.java:1352,1556``).
+
+        2026-09-22: 첫 홀드부터 여정 21/22 로 나뉘었고 두 번째 호출은 별도 PNR 을 만들었습니다. 첫
+        홀드를 유지한 표본의 ``WRR664260`` 도 SUCC 와 새 PNR·좌석이 있는 홀드였습니다 — 메시지만 보고
+        실패로 간주하거나 재전송하지 마십시오. 남은 홀드는 각각 확인·취소해야 합니다. 첫 홀드 취소 후
+        예전 두 여정 폼은 ``IRR000018`` 이었습니다.
         """
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_merge_reservation_form(
             self.config,
             standing_hold_train,
-            legs,
+            merge_rows,
             passengers=passengers,
             seat_class=seat_class,
+            job_type=job_type,
             seat_attribute_code=seat_attribute_code,
         )
         return self._mutation(
