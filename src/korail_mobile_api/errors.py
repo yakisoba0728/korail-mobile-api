@@ -78,6 +78,9 @@ class KorailApiError(Exception):
     message: str | None = None
     #: 판정에 쓴 원본 응답. 없으면 ``None``.
     raw: object | None = None
+    #: 변경 응답의 typed 파싱이 실패했을 때, 파서가 예외에 붙였던 부분 원본.
+    #: :attr:`raw` 는 그때 받은 응답 전체로 바뀌므로 이쪽에 옮겨 둡니다. 없으면 ``None``.
+    parser_raw: object | None = None
 
     def __init__(self, *args: object) -> None:
         super().__init__(
