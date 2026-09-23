@@ -89,13 +89,6 @@ ALLOWED: dict[tuple[str, str], str] = {
         "기존 필드 필수화: Seat.java:53-59 합성 생성자가 다섯 필드를 요구(W4)",
     ("parse_pbp_acceptance_specification_response", "seatNo"):
         "기존 필드 필수화: Seat.java:53-59 합성 생성자가 다섯 필드를 요구(W4)",
-    # 아래 둘은 같은 한 가지 변경입니다: 1.1.1 은 stl_mns_cd 를 선택 스칼라
-    # (문자열·정수·null)로 읽었고, 지금은 문자열 필수입니다. 코드에 근거가
-    # 적혀 있지 않은 기존 필드 변경이라 G8 과 별도로 보고합니다.
-    ("parse_refund_ticket_response", "stl_mns_cd"):
-        "기존 필드 필수화(근거 미기록 — 별도 검토 필요): stlList 행의 stl_mns_cd 가 문자열 필수",
-    ("parse_refund_ticket_response", "stlList"):
-        "기존 필드 필수화(근거 미기록 — 별도 검토 필요): stl_mns_cd 없는 stlList 행 거절",
 }
 
 

@@ -58,10 +58,12 @@ def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse
     codes: list[str] = []
     for row in rows or ():
         row = _row(row, "refund settlement")
-        code = row.get("stl_mns_cd")
-        if not isinstance(code, str):
-            raise KorailProtocolError("KORAIL refund stl_mns_cd is required")
-        codes.append(code)
+        # 1.1.1 과 같이 선택 스칼라(문자열·정수·null)로 읽고 null 은 건너뜁니다.
+        # 한때 문자열 필수로 좁혔는데 근거가 없었고, 환불이 이미 처리된 뒤의
+        # 응답을 거절하게 만듭니다(2026-09-23 G8 차등 검사).
+        code = _optional_string(row, "stl_mns_cd", "refund settlement")
+        if code is not None:
+            codes.append(code)
     return RefundTicketResponse(
         **_base_fields(copied),
         settlement_method_codes=tuple(codes),
