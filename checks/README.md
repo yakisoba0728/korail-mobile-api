@@ -1,15 +1,24 @@
 # checks
 
-저장소 루트에서 실행하는 **독립 점검 스크립트** 셋입니다. 테스트 스위트가
-아닙니다 — pytest 를 쓰지 않고, 의존성이 없으며, 각자 혼자 돌아갑니다.
+저장소 루트에서 실행하는 **독립 점검 스크립트**입니다. 테스트 스위트가
+아닙니다 — pytest 도 수집도 없고, 각자 혼자 돌아갑니다.
 
 ```sh
-python3 checks/masking_invariants.py
-python3 checks/sphinx_symbols.py
-python3 checks/decompile_citations.py
+python3 checks/masking_invariants.py   # 실패하면 exit 1
+python3 checks/masking_mutants.py      # 위 하네스가 비어 있지 않은지
+python3 checks/sphinx_symbols.py       # 실패하면 exit 1
+python3 checks/decompile_citations.py  # 실패하면 exit 1, analysis/ 없으면 0
 ```
 
-셋 다 **실제로 잡은 것이 있어서** 여기 있습니다. 리뷰만으로는 네 번 놓쳤습니다.
+**"의존성이 없다"는 말은 정확하지 않습니다.** 추가 *테스트 프레임워크*가
+없다는 뜻이고, 마스킹 검사는 패키지를 import 하므로 그 경로에서 ``httpx`` 가
+따라 들어옵니다. ``python -S`` 처럼 사이트 패키지 없이 돌리면 그 import 에서
+멈춥니다.
+
+넷 다 **실제로 잡은 것이 있어서** 여기 있습니다. 리뷰만으로는 네 번
+놓쳤습니다. 그리고 이 스크립트들 **자신도 한 번 틀렸습니다** — 외부 감사가
+거짓 통과 두 건과 집계 버그를 찾아냈습니다. 그래서 ``masking_mutants.py`` 가
+있습니다.
 
 ## `masking_invariants.py`
 
@@ -49,3 +58,11 @@ python3 checks/decompile_citations.py
 
 `analysis/` 가 있어야 합니다(``.gitignore`` 로 빠져 있으므로 로컬에 풀어
 두어야 합니다). 없으면 아무 것도 하지 않고 정상 종료합니다.
+
+## `masking_mutants.py`
+
+``redaction.py`` 에 일부러 결함을 심고 마스킹 하네스가 **실패하는지** 봅니다.
+하네스가 통과한다는 사실은 그 하네스가 잘못된 구현을 실제로 걸러 낼 때만
+의미가 있습니다. 원본은 항상 되돌립니다.
+
+`analysis/` 가 필요 없습니다.

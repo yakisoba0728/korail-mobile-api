@@ -40,6 +40,22 @@ def _two_entries(v):
     return out
 
 
+def _dup_kept(v):
+    """중복 키가 **둘 다** 살아남았는지. 개수까지 셉니다."""
+    out = redact_text(v)
+    if out.count('"public"') < 2:
+        return out + " <<DUP_DROPPED>>"
+    return out
+
+
+def _must_redact(v):
+    """무언가는 반드시 가려져야 하는 사례. 아무 것도 안 가리면 실패."""
+    out = redact_text(v)
+    if "[REDACTED" not in out:
+        return out + " <<NOTHING_REDACTED>>"
+    return out
+
+
 CASES = [
  # --- v3 에서 이미 맞던 것 (회귀 방지)
  ("base/text",     f"h_sgr_nm={SEC}",                     redact_text, [SEC], []),
@@ -59,7 +75,7 @@ CASES = [
  # 2026-09-23: 의도적으로 과잉 마스킹을 택했습니다. gap 가드를 두면
  # ``txtPwd= <base64>`` 가 새므로, 공백 뒤 토큰은 값으로 봅니다. 이웃이
  # 함께 가려지는 것은 진단 손실이지 누출이 아닙니다.
- ("D05/empty",     f"h_sgr_nm_1= trnNo1={PUB}",           redact_text, [], []),
+ ("D05/empty",     f"h_sgr_nm_1= trnNo1={PUB}",           _must_redact, [], []),
  # --- R4-D02 percent-encoded 키
  ("D02/pct_text",  f"h%5Fsgr%5Fnm_1={SEC}",               redact_text, [SEC], []),
  ("D02/pct_get",   f"GET /x?h%5Fsgr%5Fnm_1={SEC}",        redact_value,[SEC], []),
@@ -105,7 +121,9 @@ CASES = [
  ("v5/sess_real",   "JSESSIONID=PRIVATE_SENTINEL",        redact_text, [SEC], []),
  ("v5/hyphen_key",  f"set-cookie={SEC}",                  redact_text, [SEC], []),
  ("v5/hyphen_pct",  f"set%2Dcookie={SEC}",                redact_text, [SEC], []),
- ("v5/json_dupkey", '{"public":"FIRST","public":"SECOND"}', redact_text, [], ["FIRST"]),
+ # 예전에는 ``FIRST`` 보존만 봤습니다. 둘째 값을 지운 구현도 통과했습니다.
+ ("v5/json_dupkey", '{"public":"FIRST","public":"SECOND"}',
+                    _dup_kept, [], ["FIRST", "SECOND"]),
  ("v5/json_surrog", '{"public":"\\ud800"}',               lambda v: redact_text(v).encode("utf-8").decode("utf-8"), [], []),
  # --- v6: 손실 감지로 비켜가도 escape 된 민감 키는 가려져야 함
  ("v6/bail_escaped", '{"x":1,"x":2,"h\\u005fsgr\\u005fnm_1":"%s"}' % SEC, redact_text, [SEC], []),
@@ -133,9 +151,16 @@ CASES = [
  ("M/bs_json",     '{\\"h_sgr_nm_1\\":\\"%s\\"}' % SEC,      redact_text, [SEC], []),
 ]
 
+#: :func:`_json_ok`·:func:`_two_entries` 가 붙이는 결함 표식. 사례마다 금지
+#: 목록에 손으로 넣게 했더니 **빠뜨린 사례가 생겼고**, 깨진 JSON 을 돌려주는
+#: 구현이 그대로 통과했습니다(2026-09-23 확인). 이제 모든 사례에 강제합니다.
+DEFECT_MARK = "<<"
+
+
 def run():
     bad = []
     for cid, inp, fn, leaks, keeps in CASES:
+        leaks = list(leaks) + [DEFECT_MARK]
         try:
             out = str(fn(inp))
         except Exception as e:

@@ -84,11 +84,25 @@ for py in sorted(pathlib.Path("src/korail_mobile_api").glob("*.py")):
             if is_shorthand(t): shorthand += 1; continue
             if not has_ext and not looks_like_class(t): continue
             total += 1
-            cands = by_base.get(t.rsplit("/", 1)[-1], []) if has_ext else by_stem.get(t, [])
-            if "/" in t and cands: cands = [c for c in cands if c.endswith(t)]
+            # 두 색인 모두 **basename** 으로 키를 잡습니다. 확장자 생략형에서
+            # 경로가 붙은 토큰을 그대로 조회하던 탓에, 실재하는
+            # ``pkg/TestCase.java`` 를 ``pkg/TestCase:1`` 로 인용하면 없는
+            # 것으로 오판했습니다(2026-09-23 확인).
+            base = t.rsplit("/", 1)[-1]
+            cands = by_base.get(base, []) if has_ext else by_stem.get(base, [])
+            if "/" in t and cands:
+                cands = [c for c in cands if c.endswith(t)]
+            start = int(m.group("line"))
             end = int(m.group("end") or m.group("line"))
             bad = None
-            if not cands: bad = "absent"
+            if not cands:
+                bad = "absent"
+            # 끝 줄만 보다가 ``File.java:0`` 과 ``File.java:8-3`` 이 통과했습니다.
+            # 줄 번호는 1부터이고 범위는 뒤집히면 안 됩니다.
+            elif start < 1:
+                bad = "line<1"
+            elif end < start:
+                bad = f"range reversed ({start}-{end})"
             elif all(nlines(c) < end for c in cands):
                 bad = f"line>{max(nlines(c) for c in cands)}"
             if not bad: continue
@@ -105,3 +119,9 @@ for f, n in collections.Counter(r[0] for r in unexpl).most_common():
     print(f"  {n:4}  {f}")
 print()
 for r in sorted(unexpl): print(f"  {r[0]}:{r[1]}  {r[2]}  [{r[3]}]")
+
+# 실패·스킵·입력 부재를 모두 0 으로 끝내면 자동 점검의 관문으로 쓸 수 없습니다.
+if total == 0:
+    print("인용을 하나도 못 찾았습니다 — 저장소 루트에서 실행했습니까?")
+    raise SystemExit(2)
+raise SystemExit(1 if unexpl else 0)

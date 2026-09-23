@@ -559,6 +559,10 @@ def is_sensitive_key(name: str) -> bool:
 # registration, unaffected by this regex either way.
 _WHITESPACE_RE = re.compile(r"\s")
 
+#: JSON 의 ``\\uXXXX`` 중 **출력 가능한 ASCII** 로 디코드되는 것만. 그 범위를
+#: 넘으면 건드리지 않습니다 — 제어문자나 비-ASCII 까지 풀면 원문이 달라집니다.
+_ASCII_JSON_ESCAPE_RE = re.compile(r"\\u00([2-7][0-9A-Fa-f])")
+
 #: :func:`_parse_json_document` 의 "JSON 아님" 표식. ``None`` 은 유효한
 #: JSON 값(``null``)이라 구분자로 쓸 수 없습니다.
 _NO_JSON = object()
@@ -705,7 +709,10 @@ def _parse_json_document(value: str) -> object:
     (``{"h\\u005fsgr\\u005fnm_1": ...}`` 는 파싱해야 민감 키로 보입니다)와
     중첩 배열·객체(키의 민감성이 값 **트리 전체**에 걸립니다).
     """
-    stripped = value.strip()
+    # ``strip()`` 은 BOM(``\ufeff``)을 떼지 않습니다. 파일·스트림 앞머리에
+    # 붙어 오는 흔한 문자이고, 그것 하나 때문에 첫 문자 검사가 빗나가
+    # 구조 경로에 못 들어갔습니다(2026-09-23 확인).
+    stripped = value.strip().lstrip("\ufeff").strip()
     if not stripped or stripped[0] not in '{["':
         return _NO_JSON
     try:
@@ -733,62 +740,71 @@ def _redact_json_double_encoded(node: object) -> str | None:
     return json.dumps(inner) if inner != node else None
 
 
-def _redact_json_node(node: object, *, key: str | None = None) -> object:
-    """파싱된 JSON 트리를 가립니다. 키가 민감하면 **값 트리 전체**가 대상입니다."""
-    if key is not None and is_sensitive_key(key):
-        return "[REDACTED]"
-    if isinstance(node, _Pairs):
-        return _Pairs(
-            [(name, _redact_json_node(item, key=name)) for name, item in node.items]
-        )
-    if isinstance(node, list):
-        return [_redact_json_node(item) for item in node]
-    if isinstance(node, _RawNumber):
-        # 카드번호 모양은 키와 무관하게 값 자체로 잡습니다. 예전에는 다 쓴
-        # JSON 문자열에 :data:`CARD_RE` 를 덧칠했는데, 그러면 치환 문자열에
-        # 따옴표가 없어 **출력이 JSON 이 아니게** 되고 숫자 키까지 같은
-        # 문자열로 바뀌어 서로 다른 항목이 합쳐졌습니다(2026-09-23 확인).
-        return (
-            "[REDACTED_CARD]"
-            if CARD_RE.fullmatch(node.text)
-            else node
-        )
-    if isinstance(node, str):
-        return _redact_json_scalar(node)
-    return node
+def _redact_and_dump_json(root: object) -> str:
+    """파싱된 JSON 트리를 가리면서 **한 번에** 다시 씁니다.
 
-
-def _redact_json_scalar(text: str) -> str:
-    """JSON 문자열 값 하나. 키 규칙은 이미 위에서 봤으므로 값 패턴만 겁니다."""
-    masked = URL_USERINFO_RE.sub("[REDACTED]@", text)
-    masked = CARD_RE.sub("[REDACTED_CARD]", masked)
-    return SESSION_RE.sub(r"\1[REDACTED]", masked)
-
-
-def _dump_json(node: object) -> str:
-    """:func:`_parse_json_document` 가 만든 트리를 다시 씁니다.
-
-    ``json.dumps`` 를 쓰지 않는 이유는 :class:`_Pairs` 와 :class:`_RawNumber`
-    때문입니다 — 중복 키와 숫자 원문을 지켜야 합니다. 문자열은 ``json.dumps``
-    에 맡기므로 짝 없는 surrogate 도 ``\\ud800`` escape 로 나가고, 결과를
-    UTF-8 로 인코딩하는 다음 단계가 터지지 않습니다.
+    재귀가 아니라 명시적 스택입니다. 재귀로 짰을 때 깊이 500짜리 1KB 문서가
+    ``RecursionError`` 로 죽었습니다 — 표준 ``json`` 은 C 구현이라 같은 입력을
+    처리하는데 파이썬 재귀는 한도(기본 1000)에 훨씬 빨리 닿습니다. **길이가
+    아니라 깊이가 문제**라서, 100만 자짜리 얕은 문서는 재귀로도 멀쩡했습니다
+    (2026-09-23 확인).
     """
-    if isinstance(node, _Pairs):
-        inner = ", ".join(
-            f"{json.dumps(name)}: {_dump_json(item)}" for name, item in node.items
-        )
-        return "{" + inner + "}"
-    if isinstance(node, list):
-        return "[" + ", ".join(_dump_json(item) for item in node) + "]"
-    if isinstance(node, _RawNumber):
-        return node.text
-    if node is True:
-        return "true"
-    if node is False:
-        return "false"
-    if node is None:
-        return "null"
-    return json.dumps(node)
+    parts: list[str] = []
+    # (노드, 키) 또는 리터럴 문자열
+    stack: list[object] = [(root, None)]
+    while stack:
+        entry = stack.pop()
+        if isinstance(entry, str):
+            parts.append(entry)
+            continue
+        node, key = entry  # type: ignore[misc]
+        if key is not None and is_sensitive_key(key):
+            parts.append(json.dumps("[REDACTED]"))
+            continue
+        if isinstance(node, _Pairs):
+            parts.append("{")
+            pushed: list[object] = []
+            for index, (name, item) in enumerate(node.items):
+                if index:
+                    pushed.append(", ")
+                pushed.append(f"{json.dumps(name)}: ")
+                pushed.append((item, name))
+            pushed.append("}")
+            stack.extend(reversed(pushed))
+            continue
+        if isinstance(node, list):
+            parts.append("[")
+            pushed = []
+            for index, item in enumerate(node):
+                if index:
+                    pushed.append(", ")
+                pushed.append((item, None))
+            pushed.append("]")
+            stack.extend(reversed(pushed))
+            continue
+        if isinstance(node, _RawNumber):
+            # 카드번호 모양은 키와 무관하게 값 자체로 잡습니다. 예전에는 다 쓴
+            # JSON 문자열에 :data:`CARD_RE` 를 덧칠했는데, 그러면 치환 문자열에
+            # 따옴표가 없어 **출력이 JSON 이 아니게** 되고 숫자 키까지 같은
+            # 문자열로 바뀌어 서로 다른 항목이 합쳐졌습니다(2026-09-23 확인).
+            parts.append(
+                json.dumps("[REDACTED_CARD]")
+                if CARD_RE.fullmatch(node.text)
+                else node.text
+            )
+            continue
+        if isinstance(node, str):
+            parts.append(json.dumps(redact_text(node)))
+            continue
+        if node is True:
+            parts.append("true")
+        elif node is False:
+            parts.append("false")
+        elif node is None:
+            parts.append("null")
+        else:
+            parts.append(json.dumps(node))
+    return "".join(parts)
 
 
 def redact_text(value: str) -> str:
@@ -822,7 +838,7 @@ def redact_text(value: str) -> str:
     if parsed is not _NO_JSON:
         dumped = _redact_json_double_encoded(parsed)
         if dumped is None:
-            dumped = _dump_json(_redact_json_node(parsed))
+            dumped = _redact_and_dump_json(parsed)
         if dumped is not None:
             if escaped:
                 dumped = dumped.replace('"', '\\"')
@@ -831,7 +847,17 @@ def redact_text(value: str) -> str:
             # 카드번호만 예외가 됩니다 — 실제로 ``{"debug": 4111…}`` 가
             # 그대로 남았습니다(2026-09-23 확인).
             return dumped
-    redacted = URL_USERINFO_RE.sub("[REDACTED]@", value)
+    # 여기까지 왔다는 것은 문자열 전체가 하나의 JSON 문서가 아니라는 뜻입니다 —
+    # ``INFO {...}`` 처럼 앞에 산문이 붙었거나, JSON 문서가 둘 이상 이어졌거나,
+    # 애초에 JSON 이 아니거나. 그래도 그 안에 JSON 조각이 들어 있을 수 있고,
+    # 조각 안의 키가 ``\u005f`` 로 escape 돼 있으면 아래 정규식은 그것을 민감
+    # 키로 보지 못합니다. ASCII 로 디코드되는 escape 만 먼저 풀어 둡니다 —
+    # JSON 문자열 안에서 ``\u005f`` 와 ``_`` 는 **같은 문자열**이므로 의미가
+    # 달라지지 않습니다(2026-09-23 확인).
+    redacted = _ASCII_JSON_ESCAPE_RE.sub(
+        lambda match: chr(int(match.group(1), 16)), value
+    )
+    redacted = URL_USERINFO_RE.sub("[REDACTED]@", redacted)
     redacted = CARD_RE.sub("[REDACTED_CARD]", redacted)
     redacted = SENSITIVE_KEY_VALUE_RE.sub(
         _redact_sensitive_key_value,

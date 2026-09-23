@@ -464,10 +464,16 @@ def _required_integer(
     key: str,
     context: str,
 ) -> int:
-    # These fields are declared Java `int` in the DAO, and Gson's
-    # JsonReader.nextInt() coerces a quoted numeric string ("2") into the int,
-    # so the app accepts both the number and the string form. Accept either
-    # (int or ASCII-decimal string); keep rejecting null/bool/float/non-numeric.
+    # 이 필드들은 DTO 에서 정수로 선언됩니다. 숫자와 따옴표 친 숫자 문자열을
+    # 모두 받는 것은 **이 패키지의 수용 정책**입니다.
+    #
+    # 예전에는 그 근거로 "Gson 의 JsonReader.nextInt() 가 따옴표 친 숫자를
+    # int 로 강제하므로 앱도 둘 다 받는다"고 적었는데, **7.0.6 에 Gson 이
+    # 없습니다** — 같은 모듈의 다른 설명은 이미 kotlinx 직렬화임을 인정하고
+    # 있었습니다. kotlinx 쪽에서 따옴표 친 숫자를 받는지는 ``Json.isLenient``
+    # 가 정하는데 그 인자가 AlienGuard 로 보호돼 있어 확인되지 않습니다
+    # (2026-09-23 정정). 정책은 그대로 두되 근거는 철회합니다.
+    # null/bool/float/비숫자는 계속 거절합니다.
     value = data.get(key)
     if type(value) is int:
         return value

@@ -192,20 +192,25 @@ class CartItem:
     # =========================  ==========================  ===========
     # 전선 키(필드명)            클래스                      String 필드
     # =========================  ==========================  ===========
-    # ``greenCarPayDetail``      ``GreenCarPayDetail``       36
-    # ``lotteRentalPayDetail``   ``LotteRentalPayDetail``    27
-    # ``loyquPayDetail``         ``LoyquPayDetail``          30
-    # ``skRentalPayDetail``      ``SKRentalCarPayDetail``    39
-    # ``yanoljaDetail``          ``YanoljaDetail``           24
-    # ``zimCarryDetail``         ``ZimCarryDetail``          21
+    # ``greenCarPayDetail``      ``GreenCarPayDetail``       12
+    # ``lotteRentalPayDetail``   ``LotteRentalPayDetail``     9
+    # ``loyquPayDetail``         ``LoyquPayDetail``          10
+    # ``skRentalPayDetail``      ``SKRentalCarPayDetail``    13
+    # ``yanoljaDetail``          ``YanoljaDetail``            8
+    # ``zimCarryDetail``         ``ZimCarryDetail``           7
     # =========================  ==========================  ===========
     #
-    # 합쳐서 177개입니다. 전부 제휴 상품(그린카·롯데렌탈·로이큐·SK렌터카·
+    # 합쳐서 **59개**입니다. 전부 제휴 상품(그린카·롯데렌탈·로이큐·SK렌터카·
     # 야놀자·짐캐리)의 결제 상세라 이 패키지의 핵심 흐름이 건드리지 않고,
     # **라이브 캡처도 없습니다.** 그래서 지금 한꺼번에 모델링하지 않았습니다 —
-    # 검증 안 된 표면을 177개 늘리는 쪽이 ``raw`` 로 두는 쪽보다 낫다고 볼
-    # 근거가 없습니다. 실제 응답을 한 번이라도 보면 그때 좁혀서 넣는 것이
-    # 맞습니다.
+    # 검증 안 된 표면을 늘리는 쪽이 ``raw`` 로 두는 쪽보다 낫다고 볼 근거가
+    # 없습니다. 실제 응답을 한 번이라도 보면 그때 좁혀서 넣는 것이 맞습니다.
+    #
+    # 2026-09-23 정정: 여기 처음 적은 **177은 틀린 수**였습니다.
+    # ``public final String`` 로 시작하는 **줄**을 세는 바람에, 같은 형태로
+    # 선언되는 게터 메서드(``public final String getX()``)까지 함께 셌습니다.
+    # 선언만 세면 59입니다. 숫자가 셋이면 근거를 다시 세십시오 — 필드 선언,
+    # 게터, ``@SerialName`` 은 서로 다른 것을 셉니다.
     #
     # 찾을 때 주의: **필드명과 클래스명이 하나 어긋납니다.**
     # ``skRentalPayDetail`` 의 타입은 ``SkRentalPayDetail`` 이 아니라
