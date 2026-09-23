@@ -5,11 +5,10 @@
 """상태 변경 응답을 :mod:`korail_mobile_api.mutation_models` 의 타입으로 옮깁니다.
 
 예약 홀드, 결제, 할인카드 구매, 장바구니 추가와 7.0.6 환불 결과의 응답을
-파싱합니다. 장바구니 추가는 예전에 봉투만 돌려준다고 적혀 있었으나, 응답
-DTO 는 ``AddCartListOut.java:24-25`` 이고 그 자체 속성의 전선 키는
-``:76-77`` 의 ``@SerialName("psgDiscAdd_infos")`` 입니다 — 지금은
-:func:`parse_cart_add_response` 가 이것을 파싱합니다. 취소처럼 DAO 의 응답
-타입이 맨 ``BaseResponse`` 인 라우트에는 여전히 전용 파서가 없습니다.
+파싱합니다. 장바구니 추가의 응답 DTO 는 ``AddCartListOut.java:24-25`` 이고
+그 자체 속성의 전선 키는 ``:76-77`` 의 ``@SerialName("psgDiscAdd_infos")``
+입니다 — :func:`parse_cart_add_response` 가 이것을 파싱합니다. 취소처럼 DAO 의
+응답 타입이 맨 ``BaseResponse`` 인 라우트에는 전용 파서가 없습니다.
 
 선택 필드는 읽기 파서와 같이 관대하게 읽습니다(모양이 어긋나면 ``None``/빈 튜플).
 엄격한 것은 뒤따르는 폼이 되울리는 값뿐입니다 — 홀드의 PNR·발권창구번호·여정
@@ -147,10 +146,8 @@ def _response_mapping(raw: Mapping[str, Any]) -> dict[str, Any]:
 
     Whether ``raw`` is a JSON object is still worth checking here -- callers
     do reach these parsers directly, not only through the http layer -- but
-    that is now the only envelope check this module makes. It used to also
-    rebuild and re-check a :class:`~korail_mobile_api.models.BaseKorailResponse`
-    from the same mapping just to read three fields off it; the fields are
-    read straight off ``raw`` instead, the way ``read_parsers.py`` does.
+    that is the only envelope check this module makes. The three envelope
+    fields are read straight off ``raw``, the way ``read_parsers.py`` does.
 
     Their *types* are not checked, here or downstream: ``strResult``,
     ``h_msg_cd`` and ``h_msg_txt`` are taken with ``dict.get`` and stored as
@@ -176,20 +173,10 @@ def _received_amount(
 
     7.0.6 ``PayViewModel.initAmountData()``(``:11303-11307``)는 일반 분기에서
     ``h_tot_rcvd_amt`` 를 그대로 합산하고 좌석별로 재계산하지 않습니다. 좌석
-    합을 1차 출처로 두는 것은 좌석 단위로 검산하려는 이 패키지의 판단이며,
-    아래 정정 뒤에도 유지합니다 — 다만 "앱이 계산하는 방식대로" 라고 말하던
-    예전 첫 문장은 사실이 아니었습니다.
+    합을 1차 출처로 두는 것은 좌석 단위로 검산하려는 이 패키지의 판단입니다.
 
     이 함수가 하는 일은 좌석별 ``h_rcvd_amt`` 를 더하고, 응답이 선언한
-    ``h_tot_rcvd_amt`` 와 맞춰 보는 것입니다. 좌석 합을 **1차 출처**로 두는
-    선택은 이 패키지의 것이며, 아래 근거 정정 뒤에도 그대로입니다.
-
-    **인용 정정(2026-09-22).** 종전 독스트링은 ``PaymentActivity.G0()``
-    (``:186-199``)의 좌석별 ``h_seat_prc + h_seat_fare`` 재계산을 근거로
-    들고, ``h_tot_rcvd_amt`` 는 ``hidMnsStlAmt1`` 에 닿는 살아 있는 경로가
-    없다고(``PaymentActivity.java:169``) 단언했습니다. ``PaymentActivity`` 는
-    6.5.0 클래스이고 7.0.6 디컴파일에 없습니다. 7.0.6 에서 실제로 확인되는
-    것은 반대에 가깝습니다:
+    ``h_tot_rcvd_amt`` 와 맞춰 보는 것입니다. 7.0.6 에서 확인되는 것:
 
     * ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:11303-11307``
       (``initAmountData()``, ``:11222``)이 ``ReservationOut.getHTotRcvdAmt()``
@@ -302,16 +289,12 @@ def _received_amount(
             "this package's policy, not a rule the app enforces -- so it "
             "refuses here rather than guess which amount to charge."
         )
-    # 자리수 0 채움 없이 그대로 돌려줍니다. 예전에는 그 근거로
-    # ``PaymentActivity`` 가 ``mReceivedAmount`` 를 int 로 계산한다고 적었지만,
-    # 셋 다 7.0.6 에 없습니다 — ``PaymentActivity`` 도(6.5.0 클래스),
-    # ``mReceivedAmount`` 도, 번호 붙은 ``hidMnsStlAmt1`` 도 평문 검색 0건이고
-    # 존재하는 것은 번호 없는 ``hidMnsStlAmt``(``ReservationPaymentInStlInfo``,
-    # ``PaymentMethod``) 뿐입니다(2026-09-23 확인). 이 파일 위쪽의 근거 정리와
-    # 정면으로 어긋나 있었습니다: 거기서 이미 ``hidMnsStlAmt<N>`` 로 들어가는
-    # 마지막 한 걸음이 AlienGuard 로 보호되어 **미출처**라고 적고 있습니다.
-    # 따라서 자리수를 채우지 않는 것도 앱 동작의 재현이 아니라 이 패키지의
-    # 선택으로 읽어야 합니다.
+    # 자리수 0 채움 없이 그대로 돌려줍니다. 7.0.6 에는 번호 붙은
+    # ``hidMnsStlAmt1`` 이 평문 검색 0건이고, 존재하는 것은 번호 없는
+    # ``hidMnsStlAmt``(``ReservationPaymentInStlInfo``, ``PaymentMethod``)
+    # 뿐입니다. ``hidMnsStlAmt<N>`` 로 들어가는 마지막 한 걸음은 AlienGuard 로
+    # 보호되어 **미출처**이므로(위 독스트링), 자리수를 채우지 않는 것도 앱
+    # 동작의 재현이 아니라 이 패키지의 선택으로 읽어야 합니다.
     return seat_total
 
 
@@ -628,22 +611,6 @@ def parse_discount_card_purchase_response(
     serializer descriptor 문자열이 보호돼 있어 파서는 Kotlin 속성명을 전선
     키로 씁니다.
 
-    **인용 정정(2026-09-23).** 종전 독스트링은 범위를 ``:30-36`` 으로 적고
-    속성이 일곱이라고 했습니다. 그 범위가 ``vlidTrmClsDt``(``:37``) 와
-    ``vlidTrmStDt``(``:38``) 를 잘라내는 바람에 둘이 목록에서 빠진 것이고,
-    실제 선언은 ``:30-38`` 의 아홉 줄입니다. **모델링 누락이 아닙니다** --
-    위 :data:`_DISCOUNT_CARD_PURCHASE_FIELDS` 가 두 날짜를 각각
-    ``validity_end_date``/``validity_start_date`` 로 이미 파싱하고,
-    :class:`~korail_mobile_api.mutation_models.DiscountCardPurchaseResponse`
-    에도 같은 이름의 필드가 있습니다. 틀렸던 것은 산문의 숫자와 줄 범위뿐이며,
-    이 문단은 뒤에 읽는 사람이 이것을 커버리지 구멍으로 오해하지 않도록
-    남겨 둡니다.
-
-    예전에 여기 적혀 있던 ``mStationInfo``/``mUserNames`` 는 **이 DTO 와 아무
-    관계가 없습니다.** 그 둘은 7.0.6 의 ``NCardInfoOut`` 어디에도 없고, 근거로
-    달려 있던 ``:167-173`` 은 금액·사용횟수 속성의 직렬화 구간입니다. 잘못된
-    설명이라 지웁니다.
-
     **라이브 미검증.** 전송된 적이 없으므로 관측된 적도 없습니다.
     """
     data = _response_mapping(raw)
@@ -687,10 +654,6 @@ def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
     ``psgDiscAdd_info`` 리스트가 있습니다(``PsgDiscAddInfos.java:81``).
     행의 두 필드는 ``PsgDiscAddInfo.java:85``(``h_psg_sqno``)와
     ``:81``(``h_duty_ref_rcgn_ps_dv_cd``)입니다.
-
-    예전에는 이 라우트가 봉투만 돌려준다고 보고
-    :class:`~korail_mobile_api.models.BaseKorailResponse` 를 그대로
-    넘겼습니다. 위 세 DTO 가 그렇지 않다고 말합니다.
 
     **라이브 미검증** — 실제 응답을 받아 본 적이 없습니다. 행이 없거나
     바깥 객체가 통째로 없으면 빈 튜플이고, 모양이 어긋나도 봉투는 그대로

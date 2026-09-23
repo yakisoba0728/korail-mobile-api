@@ -11,8 +11,7 @@
 
 여기 함수들은 dict 를 만들 뿐 아무것도 보내지 않습니다. 실제 전송은
 :meth:`~korail_mobile_api.http.KorailHttpClient.post_mutation_form` 하나이고, 그 앞에
-라우트·범주·폼 모양 세 가지 단언이 있습니다. 역발행 환불만 따로 ``V7Gateway.call``
-로 나가면서 그중 폼 모양 단언을 건너뛰던 것은 없어졌습니다.
+라우트·범주·폼 모양 세 가지 단언이 있습니다.
 
 **라이브로 확인된 것과 아닌 것.** 즉시·좌석지정·예약대기·입석+좌석 홀드(다인·특실
 포함), 환승 홀드, 결제 전 취소, 카드 결제, 환불, 장바구니 담기는 실서버가 받아들인
@@ -96,10 +95,9 @@ def _common_fields(config: KorailConfig) -> dict[str, str]:
     :meth:`~korail_mobile_api.http.KorailHttpClient.common_fields` 와 같은 규칙입니다.
 
     ``lang`` 은 ``CommonIn`` 의 4번째 공통 필드이고(``CommonIn.java:381``)
-    ``CommonIn`` 은 읽기·변경 입력 DTO가 모두 상속합니다. 그런데 여기서는
-    빠져 있어서, ``KorailConfig(lang=...)`` 를 설정해도 읽기 요청에만 실리고
-    예약·결제·환불에는 실리지 않았습니다. 기본값 ``None`` 이면 예전과 똑같이
-    아무것도 싣지 않으므로, 달라지는 것은 실제 값을 넘긴 호출자뿐입니다.
+    ``CommonIn`` 은 읽기·변경 입력 DTO가 모두 상속합니다. 그래서
+    ``KorailConfig(lang=...)`` 는 읽기 요청과 예약·결제·환불에 똑같이 실립니다.
+    기본값 ``None`` 이면 아무것도 싣지 않습니다.
     """
     fields = {
         "Device": config.device,
@@ -183,9 +181,6 @@ def _validated_seat_assignments(
     ``null``, ``network/model/TicketReservationIn.java:182``)으로 떨어집니다.
     그래서 ``"1101"``/``"1102"`` 요청에는 좌석 키가 한 개도 실리지 않습니다 —
     "맵을 비운다"가 아니라 "애초에 채우지 않는다"가 7.0.6 의 실제 모양입니다.
-
-    이전 판의 근거 ``C5/a.java:143-146``·``C5/a.java:118`` 은 6.5.0 잔재입니다:
-    7.0.6 디컴파일에 ``C5`` 패키지가 존재하지 않습니다.
     """
     if job_type is not KorailReservationJobType.SEAT_DESIGNATED:
         if seats:
@@ -241,15 +236,12 @@ def build_reservation_form(
     ``txtSrcarNo1_``·``txtSeatNo1_``), 그리고 개수 키 ``txtSrcarCnt``/
     ``txtSrcarCnt1``(``network/model/TicketReservationIn.java:80``)입니다.
 
-    **별도의 ``@FieldMap`` 이 아닙니다.** 이전 판은 이 자리를
-    ``CertificationService.java:52-54`` 로 인용하며 "여정 키 뒤에 붙는
-    ``@FieldMap``"이라고 했지만, 7.0.6 의 ``certification.TicketReservation``
+    **별도의 ``@FieldMap`` 이 아닙니다.** 7.0.6 의 ``certification.TicketReservation``
     선언에는 ``@FieldMap`` 이 **하나**뿐입니다
     (``network/NetworkApi.java:752-753``). 요청 전체가 kotlinx 로 직렬화된
     ``TicketReservationIn`` 하나이고, 그것을 ``NetworkService.STLibw`` 가
     평평한 ``Map<String,String>`` 으로 펴서 그 한 맵으로 보냅니다
     (``network/NetworkService.java:14155-14162``, 펴는 함수는 ``:15304-15420``).
-    ``CertificationService`` 클래스는 7.0.6 디컴파일에 없습니다.
 
     순서는 그래서 화면 코드가 아니라 DTO 선언 순서에서 나옵니다:
     ``TicketReservationIn.java:80`` 에서 ``txtSrcarCnt``/``txtSrcarCnt1`` 이
@@ -259,8 +251,6 @@ def build_reservation_form(
     **좌석 수**입니다 — 7.0.6 은 고른 좌석마다
     ``TicketReservationInSrcar`` 하나를 만들고(``TrainSeatMapViewModel.java
     :2108-2113``) 그 리스트의 크기를 ``txtSrcarCnt`` 로 씁니다(``:2136-2138``).
-    옛 인용 ``OSrcar.java:6-11``·``SeatSearchActivity.java:675-683`` 은 6.5.0
-    잔재이며 두 클래스 모두 7.0.6 에 없습니다.
     """
     return _build_journey_reservation_form(
         config,
@@ -287,15 +277,13 @@ def build_transfer_reservation_form(
 ) -> dict[str, str]:
     """환승 여정의 예약(홀드) 폼을 만듭니다 — 두 구간, PNR 하나.
 
-    :func:`build_reservation_form` 에서 여정 블록이 반복된 것입니다. 이전 판은
-    "앱도 두 경우를 빌더 하나로 처리한다(``C5/a.java:52-119``)"고 적었는데,
+    :func:`build_reservation_form` 에서 여정 블록이 반복된 것입니다.
     7.0.6 은 같은 DTO 를 만드는 **오버로드 두 개**로 갈라져 있습니다 —
     ``TrainScheduleViewModel.buildTicketReservationIn(TrainScheduleOutTrainInfo,
     …)``(``ui/screen/train/TrainScheduleViewModel.java:2849``)가 직통,
     ``…buildTicketReservationIn(List<TrainScheduleOutTrainInfo>, …)``(``:2937``)
     가 환승입니다. 둘 다 같은 ``TicketReservationIn`` 을 채우므로 전선 모양은
-    하나고, 그 모양을 정하는 것은 여전히 구간 수뿐입니다. ``C5`` 패키지는
-    7.0.6 디컴파일에 없습니다.
+    하나고, 그 모양을 정하는 것은 구간 수뿐입니다.
 
     * ``txtJrnyCnt`` 는 배열 길이에서 유도됩니다 — 환승 오버로드가 여정
       리스트의 ``size()`` 를 문자열로 바꿔 그 자리에 넣습니다
@@ -319,7 +307,7 @@ def build_transfer_reservation_form(
       3바이트 보호 리터럴(``:1631``), 2구간은 호출부가 넘기는 다른 3바이트 보호
       리터럴(``TrainScheduleViewModel.java:2968``)입니다 — 포맷팅이 아니라 고정
       상수 두 개입니다. 암호문 길이가 ``"001"``/``"002"`` 와 일관되고 그 두 값은
-      라이브 확인값입니다. 옛 인용 ``S4/O.java:19-21`` 은 6.5.0 잔재입니다.
+      라이브 확인값입니다.
     """
     return _build_journey_reservation_form(
         config,
@@ -347,18 +335,14 @@ def build_merge_reservation_form(
     병합은 환승이 아닙니다. 물리적으로 한 대인 열차를 중간역에서 갈라 두 구간을
     다르게 앉히는 것입니다(좌석+좌석 또는 좌석+입석). 다섯 단계 전체 흐름은
     :data:`~korail_mobile_api.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE` 에
-    있습니다 — 이 폼이 두 여정을 루프로 만든다는 서술의 출처였던
-    ``DirectInquiryActivity.java:576-601`` 은 6.5.0 잔재이며(그 클래스 자체가
-    7.0.6 디컴파일에 없습니다), 7.0.6 이 실제로 최종 재제출을 어떻게 만드는지
+    있습니다 — 7.0.6 이 실제로 최종 재제출을 어떻게 만드는지
     (정적분석으로 완전히 확정하지 못한 부분 포함)와 이 폼의 아래 세 규칙이
     실서버로는 검증됐다는 근거는 같은 위치의 주석에 적어 뒀습니다.
 
     * ``txtJrnyTpCd{i}`` 가 루프 **인덱스**를 봅니다. 1구간은 ``"21"``(병합
       선행), 2구간은 ``"22"``(병합 후행)입니다. 환승은 두 구간이 모두 ``"14"``
-      인데 여기서는 갈립니다(``smali:5641`` — 이 스몰리 오프셋은 6.5.0
-      기준이라 7.0.6 에서 같은 줄을 가리키지는 않지만, 값 자체("14" 대
-      "21"/"22")는 이 저장소의 다른 곳(``KORAIL_DIRECT_JOURNEY_TYPE_CODE``
-      등)과 일관됩니다).
+      인데 여기서는 갈립니다(값 자체("14" 대 "21"/"22")는 이 저장소의 다른
+      곳(``KORAIL_DIRECT_JOURNEY_TYPE_CODE`` 등)과 일관됩니다).
     * ``txtStndFlg`` 를 ``"Y"`` 로 고정해 보냅니다. 전환 대상이 입석 홀드라는
       것이 이 흐름의 전제이기 때문입니다.
     * ``txtPsrmClCd2`` 는 ``txtPsrmClCd1`` 에서 **복사**됩니다. 그래서
@@ -469,8 +453,7 @@ def build_merge_reservation_form(
     # and null (TicketReservationIn.java:182, filled at
     # TrainScheduleViewModel.java:2932 and :3004) -- and an empty list plus a
     # null scalar contribute no form fields at all. So it is "never populated",
-    # not "cleared". The old citation C5/a.java:118 is 6.5.0 jetsam; there is
-    # no C5 package in the 7.0.6 decompile.
+    # not "cleared".
     return form
 
 
@@ -499,9 +482,7 @@ def is_merge_eligible(
     홀드를 걸 수 있으므로 여기서는 좁은 쪽을 그대로 둡니다. 이 함수가 틀릴 수
     있는 방향은 "될 행을 거절"뿐입니다.
 
-    옛 인용 ``S4/J.java:61-63``(``isMixedSeat``)·``a5/u.java:378-380``·``:394-397``
-    은 6.5.0 잔재이며 두 클래스 모두 7.0.6 디컴파일에 없습니다. 예매 버튼
-    문구를 바꾸고 ``"1202"`` 를 붙이는 UI 경로는 7.0.6 에서 다시 찾지
+    예매 버튼 문구를 바꾸고 ``"1202"`` 를 붙이는 UI 경로는 7.0.6 에서 찾지
     못했습니다 — 미출처.
     """
     if not isinstance(train, TrainSummary):
@@ -523,8 +504,7 @@ def _seat_attribute_key(journey: int) -> str:
     ``txtSeatAttCd4``(``@SerialName``,
     ``network/model/TicketReservationIn.java:80``·``:237-239``)와 후행 구간용
     ``txtSeatAttCd4_1``(속성명 ``trailingTxtSeatAttCd4``, 같은 파일 ``:80``·
-    ``:189-191``). 후행 키가 하나뿐이므로 3구간 자리가 없습니다. 옛 인용
-    ``OSeat.java:32-35`` 은 6.5.0 잔재 — 7.0.6 에 ``OSeat`` 클래스가 없습니다.
+    ``:189-191``). 후행 키가 하나뿐이므로 3구간 자리가 없습니다.
     """
     return "txtSeatAttCd4" if journey == 1 else "txtSeatAttCd4_1"
 
@@ -533,7 +513,7 @@ def _srcar_count_key(journey: int) -> str:
     """좌석 수 키 — 7.0.6 ``TicketReservationIn`` 의 ``txtSrcarCnt``
     (``network/model/TicketReservationIn.java:80``·``:245-247``)와 후행 구간용
     ``txtSrcarCnt1``(속성명 ``trailingTxtSrcarCnt``, 같은 파일 ``:80``·
-    ``:193-195``). 옛 인용 ``OSrcar.java:21-23`` 은 6.5.0 잔재입니다.
+    ``:193-195``).
     """
     return "txtSrcarCnt" if journey == 1 else "txtSrcarCnt1"
 
@@ -544,8 +524,7 @@ def _srcar_no_key(journey: int, seat: int) -> str:
     ``TicketReservationInSrcarTrailing`` 의 ``txtSrcarNo1_``
     (``network/model/TicketReservationInSrcarTrailing.java:52``·``:86``).
     좌석 인덱스는 폼 평탄화기가 1부터 붙입니다
-    (``network/NetworkService.java:15350``·``:15366``). 옛 인용
-    ``OSrcar.java:25-30`` 은 6.5.0 잔재입니다.
+    (``network/NetworkService.java:15350``·``:15366``).
     """
     return f"txtSrcarNo{seat}" if journey == 1 else f"txtSrcarNo1_{seat}"
 
@@ -554,7 +533,7 @@ def _seat_no_key(journey: int, seat: int) -> str:
     """좌석번호 키 — 7.0.6 ``TicketReservationInSrcar`` 의 ``txtSeatNo``
     (``network/model/TicketReservationInSrcar.java:51``·``:81``)와 후행 구간용
     ``txtSeatNo1_``(``network/model/TicketReservationInSrcarTrailing.java:52``·
-    ``:82``). 옛 인용 ``OSrcar.java:14-19`` 은 6.5.0 잔재입니다.
+    ``:82``).
     """
     return f"txtSeatNo{seat}" if journey == 1 else f"txtSeatNo1_{seat}"
 
@@ -599,11 +578,7 @@ def _validated_legs(
                 "KORAIL reservation requires an exact TrainSummary"
             )
     if require is not None and len(resolved) != require:
-        # NOTE: the message below still names OSeat.java:32-35 and
-        # OSrcar.java:21-30. Both are 6.5.0 jetsam -- neither class exists in
-        # the 7.0.6 decompile -- but the message is a runtime string, not a
-        # comment, so it is left byte-identical here and reported instead. The
-        # 7.0.6 evidence for the same fact is the DTO itself: TicketReservationIn
+        # The 7.0.6 evidence is the DTO itself: TicketReservationIn
         # declares exactly one trailing-journey spelling per key
         # (txtSeatAttCd4_1 / txtSrcarCnt1, TicketReservationIn.java:80) and one
         # trailing srcar DTO (TicketReservationInSrcarTrailing.java:52), so a
@@ -637,8 +612,7 @@ def _validated_seat_classes(
     ``toTicketReservationInput(…, psrmType.getPsrmClCd(), …)`` 로 넘깁니다
     (``:2968``). 즉 ``txtPsrmClCd`` 는 구간 DTO 의 필드이고
     (``network/model/TicketReservationInJrny.java:69``·``:234``) 인덱스는 폼
-    평탄화기가 붙여 ``txtPsrmClCd1``/``txtPsrmClCd2`` 가 됩니다. 옛 인용
-    ``C5/a.java:59``·``:97`` 은 6.5.0 잔재입니다.
+    평탄화기가 붙여 ``txtPsrmClCd1``/``txtPsrmClCd2`` 가 됩니다.
     """
     if isinstance(seat_classes, (str, KorailSeatClass)):
         candidates: tuple[object, ...] = (seat_classes,) * leg_count
@@ -714,13 +688,11 @@ def _build_journey_reservation_form(
     구현 하나가 직통 예약과 환승 예약을 모두 덮습니다. 다른 것은 구간 수뿐이고,
     구간이 하나인 호출은 키 순서까지 단일 구간 폼과 동일한 바이트를 냅니다.
 
-    이전 판은 이것을 "``C5/a.java:52-119`` 가 열차 배열을 도는 루프 하나"라는
-    근거로 정당화했지만 그 클래스는 6.5.0 잔재입니다. 7.0.6 은 오히려
-    오버로드 **둘**로 갈라져 있습니다 — 직통
+    7.0.6 은 오버로드 **둘**로 갈라져 있습니다 — 직통
     ``ui/screen/train/TrainScheduleViewModel.java:2849``, 환승 ``:2937``.
-    합쳐도 되는 근거는 "앱이 루프 하나"가 아니라 "두 오버로드가 같은
+    합쳐도 되는 근거는 "두 오버로드가 같은
     ``TicketReservationIn``(``network/model/TicketReservationIn.java:139-179``)을
-    채우고, 전선 모양은 그 DTO 하나가 정한다"는 쪽입니다.
+    채우고, 전선 모양은 그 DTO 하나가 정한다"는 것입니다.
     """
     resolved_legs = _validated_legs(legs, require=require_legs)
     if seat_attribute_codes is None:
@@ -756,12 +728,9 @@ def _build_journey_reservation_form(
                 f'"{member.value}"' for member in KorailReservationJobType
             )
         ) from None
-    # STANDBY와 MERGE_STANDING의 "구간 하나만" 규칙은 예전에 여기서도 거절했지만,
-    # 그 근거로 적었던 a5/k.java:120-127, a5/u.java:346-360/:394-397 은 6.5.0
-    # 잔재입니다 — 두 클래스 모두 7.0.6 디컴파일에 없습니다. 그 주장 자체도
-    # "앱 UI가 버튼을 활성화하지 않는다"는 것뿐이었습니다. 이 패키지에는 UI 가
-    # 없고, 잘못된 job_type·구간 수 조합을 받았을 때 서버가 스스로 거절하도록
-    # 둡니다.
+    # STANDBY와 MERGE_STANDING의 "구간 하나만" 규칙은 여기서 거절하지 않습니다.
+    # 이 패키지에는 UI 가 없고, 잘못된 job_type·구간 수 조합을 받았을 때 서버가
+    # 스스로 거절하도록 둡니다.
     #
     # 7.0.6 에서 구조적으로 확인되는 것은 등급 쪽 제약뿐입니다:
     # network/model/TrainScheduleOutTrainInfo.java:3587-3625 의
@@ -808,13 +777,8 @@ def _build_journey_reservation_form(
             # It is a property of the whole booking, not of a leg. 7.0.6's
             # transfer overload evaluates the same predicate per leg and ORs
             # the two: z (leg 1) || z2 (leg 2) -> z3, which is what goes into
-            # txtStndFlg (TrainScheduleViewModel.java:2961-2967). The result is
-            # identical to the old reading ("one standing leg makes the whole
-            # itinerary standing"), but the mechanism is a plain OR of two
-            # booleans, not "leg 1 assigns and later legs overwrite while the
-            # value still reads N". The old citations c5/b.java:69,
-            # S4/J.java:83-85 and C5/a.java:78-82 are 6.5.0 jetsam -- none of
-            # those three classes exists in the 7.0.6 decompile.
+            # txtStndFlg (TrainScheduleViewModel.java:2961-2967): one standing
+            # leg makes the whole itinerary standing.
             #
             # 예약대기("1102")만은 예외로 "N" 을 박습니다. 이 플래그는 서버에게
             # "입석을 사겠다"는 뜻이고, 예약대기 요청에 실리면 대기가 아니라 입석
@@ -840,8 +804,7 @@ def _build_journey_reservation_form(
             # keyed by PassengerType, which has exactly eight entries --
             # ADULT, CHILD, BABY, SENIOR, DISABILITY_SEVERE, DISABILITY_MILD,
             # GUIDE_DOG, TEENAGER (common/define/PassengerType.java:38-45) --
-            # so 동반유아 (BABY) and 안내견 (GUIDE_DOG) are included. The old
-            # citations w4/a.java:49 and m5/c.java:330 are 6.5.0 jetsam.
+            # so 동반유아 (BABY) and 안내견 (GUIDE_DOG) are included.
             "txtTotPsgCnt": str(passengers.total),
         }
     )
@@ -852,18 +815,12 @@ def _build_journey_reservation_form(
     # :139-179 for the declaration order the serializer follows). 순서를 정하는 것은 맵 삽입이
     # 아니라 DTO 선언입니다 -- 요청은 kotlinx 로 직렬화된 DTO 하나이고, 그
     # JSON 객체를 NetworkService.STLibw (network/NetworkService.java:15304-15343)
-    # 가 선언 순서대로 훑습니다.
-    #
-    # 예전에 "이 경로에는 LinkedHashMap 이 없다" 고 적었던 것은 틀렸습니다 --
-    # STLibw 자신이 :15306 에서 LinkedHashMap 을 만들어 결과를 담습니다. 맞는
-    # 이야기는 "DTO 를 먼저 직렬화하므로 순서가 맵 삽입에 좌우되지 않는다" 이지
-    # "맵이 없다" 가 아닙니다.
+    # 가 선언 순서대로 훑습니다. STLibw 자신도 :15306 에서 LinkedHashMap 을
+    # 만들어 결과를 담지만, DTO 를 먼저 직렬화하므로 순서가 맵 삽입에 좌우되지
+    # 않습니다.
     # txtSeatAttCd1/2/3/5 are not written by either builder and fall to the
     # DTO's protected 3-char default (:96-100), which is consistent with the
-    # "000" this builder sends. The old citations w4/a.java:82-91,
-    # C5/a.java:84-97 and ReservationRequest.java:165-167 are 6.5.0 jetsam --
-    # none of those three classes exists in the 7.0.6 decompile, and the
-    # LinkedHashMap/putAll story they carried cannot happen in 7.0.6 at all.
+    # "000" this builder sends.
     form.update(
         {
             "txtSeatAttCd1": "000",
@@ -881,9 +838,7 @@ def _build_journey_reservation_form(
             # PsrmType.getPsrmClCd() (common/define/PsrmType.java:63-65) for
             # GENERAL or SPECIAL (:19-20); both psrmClCd literals are
             # AlienGuard-protected 1-char ciphertexts, so "1"/"2" here are
-            # live-verified readings rather than decoded constants. The old
-            # citations OSeat.java:8,16-18, c5/b.java:72 and U4/a.java:88 are
-            # 6.5.0 jetsam.
+            # live-verified readings rather than decoded constants.
             "txtPsrmClCd1": resolved_classes[0].value,
         }
     )
@@ -893,8 +848,7 @@ def _build_journey_reservation_form(
         # wheelchair/seat-type fallback, and hands leg 1's to txtSeatAttCd4 and
         # leg 2's to txtSeatAttCd4_1 (trailingTxtSeatAttCd4):
         # ui/screen/train/TrainScheduleViewModel.java:2982-3001 computes the
-        # two, :3004 passes both. The old citation C5/a.java:88-97 is 6.5.0
-        # jetsam.
+        # two, :3004 passes both.
         form[_seat_attribute_key(journey)] = resolved_attributes[journey - 1]
         form[f"txtPsrmClCd{journey}"] = seat_class.value
     form["txtJrnyCnt"] = (
@@ -923,20 +877,14 @@ def _build_journey_reservation_form(
     # emitted, which is why a txtSrcarCnt of "0" never appears on the wire.
     #
     # Per leg the order below -- the count, then (car, seat) per index -- is
-    # likewise the DTO's, since txtSrcarCnt precedes srcarList. Unlike 6.5.0
-    # this IS deterministic: 7.0.6 builds an immutable List<
+    # likewise the DTO's, since txtSrcarCnt precedes srcarList. This is
+    # deterministic: 7.0.6 builds an immutable List<
     # TicketReservationInSrcar> in selection order (TrainSeatMapViewModel.java
     # :2099-2113) and the flattener walks it with a 1-based index
-    # (NetworkService.java:15350, :15366). So the old sentence that "the app
-    # itself cannot guarantee it, KORAIL demonstrably tolerates any OSrcar
-    # ordering" no longer describes the app -- emitting the count first and
+    # (NetworkService.java:15350, :15366) -- emitting the count first and
     # then the pairs is what 7.0.6 does, not merely what KORAIL tolerates.
     # Across legs the order is leg 1's block then leg 2's, because srcarList
     # precedes trailingSrcarList in the DTO.
-    #
-    # Old citations dropped as 6.5.0 jetsam: CertificationService.java:52-54,
-    # C5/a.java:118, SeatSearchActivity.java:676-682, C5/a.java:650/:144 and
-    # C5/a.java:120-133 -- none of those classes exists in the 7.0.6 decompile.
     for journey, leg_assignments in enumerate(assignments, start=1):
         for index, assignment in enumerate(leg_assignments, start=1):
             if index == 1:
@@ -947,9 +895,7 @@ def _build_journey_reservation_form(
                 # copy() at :2289). The key is chosen by the JOURNEY index, not
                 # the seat index, because there are only two count keys in the
                 # DTO -- txtSrcarCnt and txtSrcarCnt1
-                # (TicketReservationIn.java:80). Old citations
-                # SeatSearchActivity.java:676 and OSrcar.java:21-23 are 6.5.0
-                # jetsam.
+                # (TicketReservationIn.java:80).
                 form[_srcar_count_key(journey)] = str(len(leg_assignments))
             form[_srcar_no_key(journey, index)] = str(assignment.car_no)
             form[_seat_no_key(journey, index)] = assignment.seat_no
@@ -959,9 +905,7 @@ def _build_journey_reservation_form(
 def _sequence_no(code: str) -> str:
     """여정 일련번호를 세 자리로 채웁니다.
 
-    **7.0.6 에는 이 포맷팅이 없습니다.** 이전 판은 ``S4/O.java:19-21`` →
-    ``S4/N.java:32-38`` 의 ``DecimalFormat("000").format(n)`` 을 근거로 들었지만
-    두 클래스 모두 6.5.0 잔재이며 7.0.6 디컴파일에 없습니다. 7.0.6 은
+    **7.0.6 에는 이 포맷팅이 없습니다.** 7.0.6 은
     ``txtJrnySqno`` 를 계산하지 않고 고정 상수 두 개를 그대로 실어 보냅니다 —
     ``TrainScheduleOutTrainInfo.toTicketReservationInput(…)`` 이 받은
     ``jrnySqno`` 인자를 손대지 않고 DTO 에 넣고
@@ -1001,11 +945,9 @@ def _write_journey_rows(
     1-char literal (TrainScheduleOutTrainInfo.java:3683) whose ciphertext
     length is consistent with "N".
 
-    옛 인용 ``OJrny.java:6-27`` 과 ``C5/a.java:54-76`` 은 7.0.6 에 없는 6.5.0
-    클래스입니다. 다만 그때 함께 적었던 "이 경로에는 LinkedHashMap 이 없다" 는
-    틀렸습니다 -- 평탄화기 ``NetworkService.STLibw`` 가 ``:15306`` 에서
-    ``LinkedHashMap`` 을 만듭니다. 순서가 삽입에 좌우되지 않는 이유는 맵이
-    없어서가 아니라 DTO 를 먼저 직렬화하기 때문입니다.
+    평탄화기 ``NetworkService.STLibw`` 가 ``:15306`` 에서 ``LinkedHashMap`` 을
+    만들지만, 순서가 삽입에 좌우되지 않는 것은 DTO 를 먼저 직렬화하기
+    때문입니다.
     ``txtJrnyCnt`` 자체는 이 헬퍼가 돌기 전에 각 호출부가 씁니다.
     """
     for journey, (fields, journey_type_code) in enumerate(
@@ -1050,9 +992,7 @@ def _assert_leg_is_bookable(
         # DISCOUNT_LACK, SOLD_OUT and AVAILABLE
         # (network/model/TrainScheduleOutTrainInfo.java:3587-3625), while
         # generalReservationStatus() does return WAIT (:2839-2850). So there is
-        # no 특실 standby to ask for. The old citations
-        # smali/U4/a.smali:1969-1981 and a5/u.java:371 are 6.5.0 jetsam -- no
-        # U4 smali and no a5 package exist in the 7.0.6 decompile.
+        # no 특실 standby to ask for.
         if seat_class is not KorailSeatClass.GENERAL:
             raise KorailProtocolError(
                 "KORAIL standby (예약대기) is offered on the 일반실 cabin "
@@ -1076,17 +1016,11 @@ def _assert_leg_is_bookable(
         # state the "11" rule below refuses. 입석+좌석 exists BECAUSE the seats
         # are gone.
         #
-        # This replaced an earlier reading that made the "11" rule additive,
-        # reasoning from a5/u.java:346-360 (6.5.0 jetsam; no a5 package exists
-        # in the 7.0.6 decompile) that the app disables the booking
-        # button while any selected cabin reads 매진 or 좌석부족 and only then
-        # (:394-397) lets isMixedSeat turn it into 입석+좌석 예매. That control
-        # flow is real, but the string it tests is a DISPLAY state assembled in
-        # U4.a.b() -- which jadx cannot decompile -- not h_gen_rsv_cd, and a
-        # sold-out row can still have standing stock.
+        # The "11" rule is not additive here: a sold-out row can still have
+        # standing stock.
         #
         # LIVE 2026-07-26 settled it: 서울->부산 20260731 train 125 came back
-        # with h_gen_rsv_cd="13" AND h_yms_apl_flg="A". On the additive reading
+        # with h_gen_rsv_cd="13" AND h_yms_apl_flg="A". On an additive reading
         # the merge flag could never fire, because the rows that carry it are
         # precisely the rows the "11" rule rejects. The flag is the gate.
         return
@@ -1095,8 +1029,7 @@ def _assert_leg_is_bookable(
     # generalReservationStatus()/specialReservationStatus() (java:2810, :3587)
     # read h_gen_rsv_cd and h_spe_rsv_cd respectively, and
     # TrainScheduleViewModel.getTrainPsrmTypeInitValue() (java:3457-3458)
-    # picks between them by which cabin's status is actually enabled (a5/u.java
-    # is 6.5.0 jetsam -- that package does not exist in the 7.0.6 decompile).
+    # picks between them by which cabin's status is actually enabled.
     # Keep this package's stricter rule -- only
     # an explicit "11" counts as available -- and apply it to whichever cabin is
     # being booked. On a transfer it is applied to every leg, because a booking
@@ -1221,8 +1154,7 @@ def _itinerary_standing_flag(
     (``ui/screen/train/TrainScheduleViewModel.java:2961-2967``, 사용은
     ``:3004``). 여기 구현("1구간은 조건 없이 대입, 이후 구간은 값이 아직 ``"N"``
     일 때만 다시 계산")은 그 OR 과 결과가 동치이고 구간이 최대 둘이므로 차이가
-    나지 않습니다. 이전 판이 근거로 적은 ``C5/a.java:78-82`` 는 6.5.0 잔재이며,
-    "1구간 대입 후 N 일 때만 덮어쓴다"는 서술 자체가 7.0.6 의 모양이 아닙니다.
+    나지 않습니다.
     """
     flag = "N"
     for index, (train, seat_class) in enumerate(zip(legs, seat_classes, strict=True)):
@@ -1251,8 +1183,7 @@ def _standing_flag(
     이 값을 예약 요청에 넣는 호출자는
     ``ui/screen/train/TrainScheduleViewModel.java:2870-2874``(직통) 와
     ``:2961-2967``(환승) 이며, 두 곳 모두 ``psrmType == PsrmType.GENERAL`` 을
-    함께 요구합니다 — 그래서 일반실 조건이 여기에도 남습니다. 옛 인용
-    ``S4/J.java:83-84``(``isStndSeat``)·``c5/b.java:69`` 은 6.5.0 잔재입니다.
+    함께 요구합니다 — 그래서 일반실 조건이 여기에도 남습니다.
     """
     if (
         seat_class is KorailSeatClass.GENERAL
@@ -1274,14 +1205,9 @@ def _standing_flag(
 # building the request. Note it is conditional on the SMS checkbox, which is
 # why build_standby_wait_form below only validates when sms_notify is set.
 #
-# The old citation -- "capped at 3 + 4 + 4 digits (res/values/integers.xml
-# :34-35, phone_number_max_length_3 and phone_number_max_length, applied in
-# ReservationWaitActivity.java:88-89)" -- is wrong twice over for 7.0.6. There
-# is no ReservationWaitActivity class, and 7.0.6's integers.xml contains no
-# phone_number_max_length* entry at all: its whole <resources> block is eleven
-# unrelated integers (abc_config_activityDefaultDur through
-# status_bar_notification_info_maxnum). The 3 + 4 + 4 split survives only as
-# the arity of the Triple; the per-part caps are not in the resources any more.
+# There are no per-part caps: 7.0.6's integers.xml contains no
+# phone_number_max_length* entry, and the 3 + 4 + 4 split survives only as the
+# arity of the Triple.
 # This pattern is also slightly STRICTER than 7.0.6, which tests length alone
 # and would accept eleven non-digits -- deliberately, since a non-numeric
 # txtCpNo cannot be a Korean mobile number and the server would reject it.
@@ -1320,9 +1246,7 @@ def build_standby_wait_form(
     그 PNR 에 기록합니다. 7.0.6 의 라우트 선언은
     ``@POST("/classes/com.korail.mobile.reservationWait.ReservationWait")``
     ``postReservationWait(@FieldMap Map<String,String>, …)``
-    (``network/NetworkApi.java:639-640``) 하나뿐이고, 옛 인용
-    ``ReservationWaitService.java:10-12`` 은 6.5.0 잔재입니다 — 그 클래스는
-    7.0.6 디컴파일에 없습니다.
+    (``network/NetworkApi.java:639-640``) 하나뿐입니다.
 
     전선 키 넷은 ``ReservationWaitIn`` 의 ``@SerialName`` 그대로입니다
     (``network/model/ReservationWaitIn.java:55``, 개별 선언은 ``:111``·``:115``·
@@ -1332,7 +1256,7 @@ def build_standby_wait_form(
 
     * ``txtPnrNo`` — 홀드의 PNR. 7.0.6 은 직전 예약 응답 객체에서
       ``reservationOut.getHPnrNo()`` 를 읽어 그대로 넣습니다(``:519``, 생성은
-      ``:525``). 옛 인용 ``ReservationWaitActivity.java:150`` 은 6.5.0 잔재.
+      ``:525``).
     * ``txtPsrmClChgFlg`` — 좌석등급 변경 동의. ``checkedSpecial`` 삼항으로
       보호된 1바이트 리터럴 둘 중 하나를 고릅니다(``:520``). 암호문 길이가
       ``"Y"``/``"N"`` 과 일관되고 그 두 값은 이 패키지의 라이브 확인값입니다 —
@@ -1351,14 +1275,11 @@ def build_standby_wait_form(
       ``if (!checkedSMS) str3 = null;``(``:522-524``)로 널을 넘기고, 앱의
       Json 이 ``explicitNulls`` 를 끈 것으로 보여 널 필드는 직렬화에서
       빠집니다 — ``setExplicitNulls`` 호출은 ``NetworkModule.java:861``
-      입니다(``:860`` 은 ``setCoerceInputValues`` 이고, 예전에 여기 적혀
-      있던 줄번호가 그것이었습니다). **단정이 아니라 추론입니다**: 인자가
+      입니다. **단정이 아니라 추론입니다**: 인자가
       ``Integer.parseInt(AlienGuard…)`` 로 보호돼 실제 값은 읽을 수 없고,
       비교 연산자가 ``> 1`` 이라는 것만 평문입니다. 그래서 빈 문자열이 아니라 **키 생략**이
       맞고, 이 빌더도 그렇게 합니다. DTO 자신도 ``txtCpNo`` 만 기본값을 널로
       두고 나머지 셋은 빈 문자열로 둡니다(``ReservationWaitIn.java:87``).
-      옛 인용 ``:213``/``:219``/``:115``/``:214``/``:218``/``:220-227`` 은 모두
-      ``ReservationWaitActivity.java`` 의 줄번호이므로 함께 폐기했습니다.
     """
     pnr_no = _successful_hold_pnr(
         hold,
@@ -1413,12 +1334,6 @@ def build_unpaid_reservation_cancel_form(
     를 넘깁니다. 여정 수를 상수로 박는 곳은 한 곳도 없습니다. 환승 홀드는
     여정이 둘이므로 여기서 하나만 받아들이면 살아 있는 환승 예약을 놓을 방법이
     없어집니다.
-
-    옛 인용 ``DReservationConfirmActivity.java:269-278`` 은 6.5.0 잔재입니다 —
-    그 클래스는 7.0.6 디컴파일에 없고, 7.0.6 에는
-    ``executeRsvCancel(ReservationResponse)`` 도 ``setTxtJrnyCnt`` 세터도
-    없습니다(요청은 불변 DTO 하나입니다). 그 주장의 내용 자체는 7.0.6 에서도
-    그대로 성립하고, 아래 두 주석에 재도출한 근거를 적어 뒀습니다.
     """
     if not isinstance(response, ReservationHoldResponse):
         raise KorailProtocolError(
@@ -1452,10 +1367,6 @@ def build_unpaid_reservation_cancel_form(
     # A 환승 hold carries two journeys, and refusing it here would leave a live
     # transfer reservation with no way to release it -- the orphaned hold this
     # whole subsystem exists to prevent.
-    #
-    # The old citation DReservationConfirmActivity.java:269-278 is 6.5.0
-    # jetsam: no such class in 7.0.6, and nothing on this path has a
-    # setTxtJrnyCnt setter at all.
     journey_count = response.journey_count
     legs = None
     if isinstance(journey_count, str) and journey_count.strip().isdigit():
@@ -1477,8 +1388,7 @@ def build_unpaid_reservation_cancel_form(
             # A literal "000" here, NOT the hold's h_rsv_chg_no -- deliberately
             # unlike build_card_payment_form below.
             #
-            # **이것은 "앱은 언제나 고정 상수를 보낸다"는 뜻이 아닙니다.** 예전
-            # 판이 여기 그런 전칭 주장을 적어 두었는데 틀렸습니다. 7.0.6 에서
+            # **이것은 "앱은 언제나 고정 상수를 보낸다"는 뜻이 아닙니다.** 7.0.6 에서
             # ``hidRsvChgNo`` 를 **응답에서 꺼내 넘기는** 화면이 확인된 것만
             # 둘입니다:
             #
@@ -1503,11 +1413,7 @@ def build_unpaid_reservation_cancel_form(
             # 것까지만 말할 수 있습니다. 아래 ``"000"`` 은 이 패키지의 라이브
             # 확인값이지 그 암호문을 복호한 결과가 아닙니다.
             #
-            # 예전 인용 ``DReservationConfirmActivity.java:270-279``
-            # (``executeRsvCancel(ReservationResponse)``,
-            # ``setReservationResponse``)은 **철회합니다** -- 6.5.0 클래스이고
-            # 7.0.6 디컴파일에 그 이름의 파일이 없습니다. 7.0.6 에서
-            # ``requestReservationCancelChk`` 를 부르는 곳은 일곱 개
+            # 7.0.6 에서 ``requestReservationCancelChk`` 를 부르는 곳은 일곱 개
             # (PayViewModel, ReservationWaitViewModel, ReservationMergeViewModel,
             # MyReservationViewModel, BasketTicketViewModel,
             # AirportBusSeatMapViewModel, Sample09ViewModel)이고, 위 둘 말고
@@ -1518,8 +1424,7 @@ def build_unpaid_reservation_cancel_form(
             # 생성자가 ``@SerialName("Device")``/``("Version")``/``("Key")``/
             # ``(Constants.LANG)`` 넷(``CommonIn`` 상속, ``CommonIn.java:40,381``)
             # 에 더해 ``txtPnrNo``/``txtJrnySqno``/``txtJrnyCnt``/``hidRsvChgNo``
-            # 넷(같은 파일 ``:29-32``)을 받습니다. 한때 여기 "정확히 일곱"이라고
-            # 적었던 것은 ``lang`` 을 빠뜨린 오류입니다.
+            # 넷(같은 파일 ``:29-32``)을 받습니다.
             #
             # **선언 필드 수와 실제로 전송되는 키 수는 다른 주장입니다.**
             # kotlinx 가 원소를 건너뛸 수 있어
@@ -1555,8 +1460,8 @@ def build_unpaid_reservation_cancel_form(
 
 # What this builder sends when the hold response withheld the sequence.
 #
-# 예전 근거였던 "앱이 null 을 넘기면 Retrofit 이 ``@Field`` 를 통째로
-# 생략한다"는 **이 라우트에는 적용되지 않습니다.** 7.0.6 의 결제 오버로드는
+# "앱이 null 을 넘기면 Retrofit 이 ``@Field`` 를 통째로 생략한다"는 규칙은
+# **이 라우트에는 적용되지 않습니다.** 7.0.6 의 결제 오버로드는
 # 둘 다 ``@FieldMap`` 입니다 -- ``NetworkApi.java:630-632``
 # (``postReservationPayment(@FieldMap Map<String, String>, …)``)와
 # ``:646-648`` (``postRsvPayment(@FieldMap …, @FieldMap …, …)``). null 을
@@ -1581,10 +1486,8 @@ def _echoed_job_sequence(value: str | None) -> str:
     **자릿수를 복원하지 않습니다.** 숫자로 도착한 ``tmpJobSqno`` 는 앞의 0 이
     사라진 채 전선에 오릅니다.
 
-    다만 **그 근거는 아직 없습니다.** 예전 인용 ``TCReservationDao.java``
-    (6.5.0)를 7.0.6 의 ``TripChgPrsCIn.java:47`` 로 바꿔 적었던 것은 잘못된
-    교체였습니다 — 그쪽은 **여정변경** 입력의 단일 ``tmpJobSqno`` 이고,
-    여기서 문제 삼는 것은 **결제 홀드 응답**의 ``hidTmpJobSqno1``/``2`` 라서
+    다만 **그 근거는 아직 없습니다.** 7.0.6 의 ``TripChgPrsCIn.java:47`` 은
+    **여정변경** 입력의 단일 ``tmpJobSqno`` 이고, 여기서 문제 삼는 것은 **결제 홀드 응답**의 ``hidTmpJobSqno1``/``2`` 라서
     같은 필드가 아닙니다. 결제 쪽 두 필드가 어떻게 만들어지는지는 재유도하지
     못했습니다 — **미출처**입니다.
 
@@ -1599,9 +1502,7 @@ def _echoed_job_sequence(value: str | None) -> str:
 # usable first-journey h_rsv_chg_no -- which, on this library's reserve routes,
 # is EVERY time.
 #
-# This comment used to call the literal "the explicit last resort" and claim
-# that "no observed hold has produced one". Both were wrong, and backwards: the
-# absent key is not the edge case, it is the only shape certification.Ticket-
+# The absent key is not the edge case, it is the only shape certification.Ticket-
 # Reservation has ever answered with. As of 2026-09-22, h_rsv_chg_no was missing
 # from 45 of 45 live journey rows returned by reserve / reserve_transfer /
 # reserve_merge -- direct 일반실 and 특실, 무궁화호, 새마을호, ITX-마음,
@@ -1609,8 +1510,8 @@ def _echoed_job_sequence(value: str | None) -> str:
 # merge-standing legs and both merge legs. So
 # ReservationJourney.reservation_change_no is always None off a fresh hold and
 # _echoed_reservation_change_no below always returns this literal. Do not
-# "restore" a fallback-flavoured reading of this path: the echo branch is there
-# because the app echoes, not because any observed hold has filled the key.
+# read this path as a fallback: the echo branch is there because the app
+# echoes, not because any observed hold has filled the key.
 #
 # What makes the literal safe is not habit but corroboration: reading the same
 # PNRs back through certification.ReservationList returns h_rsv_chg_no="000" on
@@ -1619,21 +1520,17 @@ def _echoed_job_sequence(value: str | None) -> str:
 # route, not a guess. srtgo sends the same literal.
 #
 # **다만 "앱은 모든 신선홀드 취소에서 이 상수를 박는다"는 뜻은 아닙니다.**
-# 한때 여기 그렇게 적었는데 틀렸습니다 -- ``PayViewModel.java:4678-4686`` 과
+# ``PayViewModel.java:4678-4686`` 과
 # ``:4717-4725`` 는 여정 목록이 비었거나 꺼낸 값이 비었을 때에만 AlienGuard
 # 3바이트 리터럴을 쓰고, 그렇지 않으면 ``jrnyInfo[0].getHRsvChgNo()`` 를
 # 그대로 넣습니다. 즉 앱의 취소 폼은 고정 상수가 아니라 **조건부 치환**이고,
 # 위 문장은 변경번호가 비어 오는 홀드에 한정된 관찰입니다.
 #
-# Also dropped here: the old sentence that "a null h_rsv_chg_no would be
-# forwarded and then dropped by Retrofit". That is a 6.5.0 story and it cannot
-# happen in 7.0.6 -- ReservationOutJrnyInfo.java:48 declares hRsvChgNo as a
+# A null h_rsv_chg_no cannot happen in 7.0.6 -- ReservationOutJrnyInfo.java:48 declares hRsvChgNo as a
 # NON-nullable String and :138 gives it an AlienGuard-decrypted `new byte[0]`
 # default (i.e. "") whenever the seen1 bit 131072 is clear, so the app would
 # place "" there, never null. The receiving field is equally non-null with the
-# same "" default: RsvPaymentIn.java:28,75. The old citation V4/b.java:41 is
-# unverifiable in this repo (analysis/jadx/sources has no V4 package at all);
-# the 7.0.6 site that actually does this is
+# same "" default: RsvPaymentIn.java:28,75. The 7.0.6 site that sets it is
 # analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:6684,
 # which sets hidRsvChgNo from the FIRST element of
 # reservationOut.getJrnyInfos().getJrnyInfo().
@@ -1663,8 +1560,7 @@ def build_card_payment_form(
     것입니다(``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:6684``,
     라우트 선언은 ``NetworkApi.java:631`` 의 ``postReservationPayment``
     (``@FieldMap``, 응답 ``ReservationPaymentOut``)이고 ``:647`` 에 같은 경로의
-    오버로드가 하나 더 있습니다 — 예전 인용 ``PaymentService.java:14`` 는 7.0.6
-    에 없는 클래스입니다). ``hidRsvChgNo`` 는 **첫** 여정의 변경번호이며
+    오버로드가 하나 더 있습니다). ``hidRsvChgNo`` 는 **첫** 여정의 변경번호이며
     앱도 모든 결제 호출 지점에서 같은 식을 반복합니다. 구조상 프로토콜 상수가
     아니라 예약별 상태입니다.
 
@@ -1678,17 +1574,11 @@ def build_card_payment_form(
     내보냅니다.
     그 리터럴이 왜 안전한지는 그 상수의 주석에 적어 뒀습니다 — 요약하면 같은
     PNR 을 ``certification.ReservationList`` 로 되읽으면 서버 자신이
-    ``h_rsv_chg_no='000'`` 을 돌려줍니다(8/8 행). 이전 판은 이 자리를
-    ``V4/b.java:39-41`` 로 인용했는데 그 패키지는 이 저장소의 7.0.6 디컴파일에
-    존재하지 않아 확인이 불가능했습니다.
+    ``h_rsv_chg_no='000'`` 을 돌려줍니다(8/8 행).
 
     ``hidMnsStlAmt1`` 은 화면의 합계가 아니라 앱이 계산한 **수령액**입니다.
-    예전 인용 ``AbstractC1269e.java:406`` → ``V4/a.java:27`` 과
-    ``PaymentActivity.java:174,497`` 은 **철회합니다** -- 셋 다 6.5.0 이름이고
-    이 저장소의 7.0.6 디컴파일(``analysis/jadx/sources/``,
-    ``analysis/apktool/smali*``)에 그 이름의 파일도, 클래스 참조도 없습니다.
 
-    7.0.6 에서 재도출한 값 경로는 다음과 같습니다(모두 실재하는 줄입니다):
+    7.0.6 의 값 경로는 다음과 같습니다:
     ``PaymentMethodHelper.java:113`` 이 ``hidMnsStlAmt`` 를 넘겨받은 Bundle
     에서 꺼내 넣고, 그 Bundle 은 ``PayViewModel.java:15571,15573-15575`` 가
     ``getPgAmountForPayment()`` 값으로 채우며,
@@ -1718,10 +1608,9 @@ def build_card_payment_form(
     장바구니·상품이 있으면 ``h_rcvd_amt`` 합(``:11390``)과 ``strMrkAmtSum``
     합(``:11405``)이 뒤에 더해집니다.
 
-    **여러 분기가 하나의 생성 지점으로 모입니다.** 한때 여기 "``:11521`` 에서
-    ``PayAmountUiData`` 를 한 번 더 만든다" 고 적었는데 틀렸습니다. jadx 가
-    ``new PayAmountUiData(...)`` 식을 ``:11440`` 과 ``:11521`` 두 번 보여 주는
-    것은 맞지만, ``initAmountData()``(선언 ``:11222``)에는 jadx 의 코드 중복
+    **여러 분기가 하나의 생성 지점으로 모입니다.** jadx 가
+    ``new PayAmountUiData(...)`` 식을 ``:11440`` 과 ``:11521`` 두 번 보여
+    주지만, ``initAmountData()``(선언 ``:11222``)에는 jadx 의 코드 중복
     경고가 열 줄 붙어 있습니다(``:11212-11221``,
     ``JADX WARN: Code duplicated, block: …``). 같은 메서드의 smali
     (``analysis/apktool/smali_classes5/.../PayViewModel.smali``, 범위
@@ -1772,12 +1661,10 @@ def build_card_payment_form(
     # docstring — the amount the app settles is getOriginalReceivedAmount()
     # (PayViewModel.java:11027-11028, which reads PayAmountUiData's
     # getOriginalReceivedAmount at PayAmountUiData.java:248-250), NOT the
-    # separate getReceivedAmount() at PayViewModel.java:11058. This comment
-    # used to name the latter; that was the wrong getter.
+    # separate getReceivedAmount() at PayViewModel.java:11058.
     # When a hold response
     # carries neither h_tot_rcvd_amt nor readable per-seat h_rcvd_amt rows we
-    # refuse rather than substitute the display total, because substituting is
-    # exactly the defect this replaces.
+    # refuse rather than substitute the display total.
     amount = hold.received_amount
     pnr_no = _successful_hold_pnr(
         hold,
@@ -1904,8 +1791,7 @@ def build_refund_form(
     PNR 필드는 앱의 Retrofit 선언대로 ``txtPnrNo``(P-n-r)입니다 —
     ``NetworkApi.java:603`` 의 ``postRequestRefund`` 가 ``@FieldMap`` 으로
     보내고, 그 맵의 키는 ``RefundTicketIn.java:194`` 의
-    ``@SerialName("txtPnrNo")`` 입니다. (예전 인용 ``RefundService.java:29`` /
-    ``RefundService.smali:212`` 은 7.0.6 에 없는 클래스였습니다.) srtgo 의 ``ktx.py:1082`` 는 이것을 ``txtPrnNo``
+    ``@SerialName("txtPnrNo")`` 입니다. srtgo 의 ``ktx.py:1082`` 는 이것을 ``txtPrnNo``
     로 쓰는데, korail2 계보의 오타이며 디컴파일된 앱에 0회 등장합니다. Retrofit
     ``@Field`` 이름은 정확히 일치해야 하므로 그대로 보내면 PNR 없는 환불이
     전송됩니다. 신원은 호출자가 :class:`PaidTicket` 로 줍니다.
@@ -1925,13 +1811,13 @@ def build_refund_form(
         빠집니다.
 
         **다만 그때 되돌아가는 ``useMileage`` 기본값이 false 라는 것은
-        재도출되지 않았습니다.** 예전 판은 ``:2093`` 의 AlienGuard 식
+        재도출되지 않았습니다.** ``:2093`` 의 AlienGuard 식
         (``method_name_2(1772681635, -406003104, new byte[]{58}, false)`` 을
-        ``Integer.parseInt(...) > 1`` 로 감싼 것)이 ``:1819`` 에서 배열 첨자
-        0 으로 쓰이므로 false 라고 논증했는데, ``:1819`` 의 실제 모양은
+        ``Integer.parseInt(...) > 1`` 로 감싼 것)이 ``:1819`` 에서 배열 첨자로
+        쓰이지만, ``:1819`` 의 실제 모양은
         ``objArr[... > 1 ? (char) 1 : (char) 0]`` 이고 ``:1818`` 이 만드는
         배열의 길이는 ``... <= 3 ? 2 : 3`` -- 즉 2 아니면 3 입니다. 첨자 0 과
-        1 이 모두 유효하므로 그 논증은 닫히지 않습니다.
+        1 이 모두 유효하므로 정적으로는 닫히지 않습니다.
 
         **정황 증거는 있습니다(결정적이지는 않습니다).** ``:1828`` 이 똑같은
         식을 첨자로 쓰는 배열 ``objArr2`` 는 ``:1827`` 에서 길이가
@@ -1954,9 +1840,7 @@ def build_refund_form(
         **아직 평문이 아닌 것**: ``:1821`` 의 ``prgPsbFlg`` 비교 대상,
         ``:1521`` 의 두 1바이트 값(길이만 ``"Y"``/``"N"`` 과 일치), 그리고
         ``:1856``/``:1858`` 의 boolean 식이 모두 AlienGuard 로 보호돼 있어
-        **어느 갈래가 "Y" 를 싣는지는 확정하지 못했습니다.** 예전 인용
-        ``ticketReturn/a.java:185-190`` 은 철회합니다 -- 6.5.0 경로이고 7.0.6
-        디컴파일에 ``ticketReturn`` 패키지가 없습니다.
+        **어느 갈래가 "Y" 를 싣는지는 확정하지 못했습니다.**
     ``pbp_acceptance_target_flag``
         ``pbpAcepTgtFlg``. **항상 그대로 에코합니다 — 값이 없어도 거부하지
         않습니다.** 7.0.6 에서 이 값을 서버 응답에서 되울리는 곳은
@@ -1968,28 +1852,24 @@ def build_refund_form(
         그건 Kotlin 타입 수준의 제약일 뿐입니다 — 응답 쪽 DTO
         (``TicketDetailOut.java:167``)에서 이 필드는 옵셔널이라 서버가 키를
         아예 안 보내면 조건부 기본값(빈 문자열)으로 떨어지고, 그 기본값이
-        검사 없이 그대로 요청에 실립니다. 이전 구현은 값이 없으면 ``"N"``
-        을 대신 지어 보냈는데, 이는 서버가 준 값을 조용히 대체하는
-        SUBSTITUTION 이었습니다(W1 finding 7). 지금은 ``None`` 이면(그리고
+        검사 없이 그대로 요청에 실립니다. 값이 없다고 ``"N"`` 을 지어 보내면
+        서버가 준 값을 조용히 대체하게 됩니다. ``None`` 이면(그리고
         :attr:`PaidTicket.pbp_acceptance_target_flag` 도 ``None`` 이면) 빈
         문자열로 에코합니다 — 이것도 지어내는 게 아니라 실앱이 같은 상황에서
         내리는 기본값과 같은 값입니다. 사전 응답에 실제 값이 있었다면(예:
         승차권 상세 조회 응답의 ``pbp_acceptance_target_flag``) 그 값을
         넘기십시오; 없었다면 아무것도 넘기지 않아도 됩니다.
 
-    **더 이상 받지 않는 인자: ``return_times_division_code``.** 이전 버전은
-    이 값을 ``tk_ret_tms_dv_cd`` 로 실었지만, 7.0.6 은 이 필드를 실제
-    환불 제출에 절대 싣지 않습니다 —
+    **``tk_ret_tms_dv_cd`` 는 싣지 않고, 그것을 받는 인자도 없습니다.**
+    7.0.6 은 이 필드를 실제 환불 제출에 절대 싣지 않습니다 —
     ``RefundTicketIn.java:135`` 의 컴파일된 기본값이 ``null`` 이고, 이 DTO를
     만드는 유일한 두 호출부(``MyTicketDetailViewModel.java:1521``,
     ``FTicketDetailViewModel.java:634``)가 둘 다 리터럴 ``(String) null`` 을
     넘기며, 두 곳의 "기본값 사용" 비트마스크조차 이 필드의 비트를 포함해
     "기본값 경로"도 ``null`` 로 떨어집니다. 수수료 응답이 돌려주는 같은
     이름의 필드는 ``RefundTicketViewModel.java:1012`` 에서 UI 다이얼로그
-    변형을 고르는 데만 쓰이고 제출로 되돌아가지 않습니다(W3 finding 6). 즉
-    이 키는 앱이 한 번도 만든 적 없는 전선 모양이었고, 그 인자를 받아들이는
-    것 자체가 잘못이라 제거했습니다 — PyPI 배포가 보류 중이라 호환성 약속이
-    없으므로 조용한 no-op 대신 시그니처에서 뺐습니다. 여전히 수수료 응답의
+    변형을 고르는 데만 쓰이고 제출로 되돌아가지 않습니다. 즉 이 키는 앱이
+    한 번도 만들지 않는 전선 모양입니다. 수수료 응답의
     ``tk_ret_tms_dv_cd`` 를 읽고 싶다면
     :meth:`~korail_mobile_api.KorailClient.get_refund_commission` 이 돌려주는
     :attr:`ticket_return_times_division_code` 를 UI 판단용으로만 쓰십시오.
@@ -2101,13 +1981,11 @@ def build_discount_card_purchase_form(
     ``NCardjrny.java`` 의 ``@SerialName`` 이 ``jrnyTpCd_``·``runDt_``·
     ``trnNo_``·``dptRsStnCd_``·``arvRsStnCd_`` 입니다(전부 꼬리 밑줄).
     입력 모델은 ``NCardInfoIn.java:29-39`` 이고, 배열을 1-based 로 인덱싱하는
-    분기는 ``NetworkService.java:15345-15367`` 에 있습니다. 한때 여기 "두 맵 다
-    미출처" 라고 적었던 것은 지나쳤습니다.
+    분기는 ``NetworkService.java:15345-15367`` 에 있습니다.
 
     아직 확인 못 한 것은 **부가사용자 맵(``apdUsrInfo``) 쪽 키와 기본 인자의
-    실제 값, 그리고 최종 런타임 순서**입니다. 옛 인용
-    ``ResearchService.java:68-70`` 과 ``NCardReservationDao.java`` 는 7.0.6 에
-    없는 6.5.0 클래스이고, 이 계정은 할인카드가 없어 라이브 확인도 못 했습니다.
+    실제 값, 그리고 최종 런타임 순서**입니다. 이 계정은 할인카드가 없어 라이브
+    확인도 못 했습니다.
     """
     if not isinstance(request, DiscountCardPurchaseRequest):
         raise KorailProtocolError(
@@ -2213,18 +2091,7 @@ def build_discount_card_extension_query(
     직접 읽었으며, 그 문자열은 이 폼을 붙여 보내는 경로(``client.py:2263``)와
     정확히 같습니다.
 
-    아직 출처가 없는 것은 **"6.5.0 은 ``@Query`` 로 보냈다"는 대조 하나**
-    입니다 -- 근거였던 ``ResearchService.java:65-66`` 은 이 저장소의 7.0.6
-    디컴파일에 없고, 위 ``NetworkApi`` 줄은 7.0.6 만 말해 주므로 6.5.0 쪽을
-    대신 증명하지 못합니다. 6.5.0 시절 기록으로만 남겨 둡니다.
-
-    공통 셋에 카드 승차권의 네 부분 자격증명이 붙습니다. 예전 인용
-    ``TicketListActivity.java:1067-1072`` 은 **철회합니다** -- 6.5.0 클래스이고
-    7.0.6 디컴파일에 그 이름의 파일이 없습니다(``analysis/`` 전체에서 그 이름은
-    ``analysis/device-pull/2026-09-14_korail-7.0.6/NOTES.md`` 의 "6.5.0 인용은
-    7.0.6 에서 찾을 수 없다"는 메모에만 나옵니다).
-
-    **같은 주장을 7.0.6 에서 재도출했습니다.** 이 네 필드는
+    공통 셋에 카드 승차권의 네 부분 자격증명이 붙습니다. 이 네 필드는
     ``NCardExtensionIn`` 의 ``saleWctNo``/``saleDd``/``saleSqno``/``tkRetPwd``
     이고(``network/model/NCardExtensionIn.java:31-34``, 인자 이름은 ``:158`` 의
     ``copy`` 시그니처), 넷 다 ``@SerialName`` 이 없으므로(``:55``) 전선 키가
@@ -2240,7 +2107,7 @@ def build_discount_card_extension_query(
     ``:458,462,466,470``). 즉 짝은 ``saleDd`` ← ``h_orgtk_ret_sale_dt``,
     ``tkRetPwd`` ← ``h_orgtk_ret_pwd`` 입니다.
 
-    필드 수를 세는 문장은 일부러 뺐습니다 -- DTO 의 **선언** 원소는 공통 넷
+    필드 수는 고정이 아닙니다 -- DTO 의 **선언** 원소는 공통 넷
     (Device/Version/Key/lang, ``CommonIn`` 상속)에 위 넷을 더해 여덟이지만,
     kotlinx 가 원소를 건너뛸 수 있어 **실제 전송 키 수**는 요청마다 다릅니다.
     다만 ``lang`` 의 생략은 "기본값과 같으면 뺀다" 는 값 비교 하나가
@@ -2297,12 +2164,7 @@ def build_discount_card_reservation_form(
 ) -> dict[str, str]:
     """할인카드(N카드)로 좌석 하나를 결제하는 홀드 폼을 만듭니다.
 
-    **평범한 예약 라우트입니다.** 예전 인용 ``w4/a.java:93-104`` /
-    ``ReservationRequest`` / ``ReservationDao`` /
-    ``CertificationService.java:52-54`` 는 **철회합니다** -- 넷 다 6.5.0
-    이름이고 7.0.6 디컴파일에 그 파일도 클래스도 없습니다.
-
-    **같은 주장을 7.0.6 에서 재도출했습니다.** 라우트는 보통의
+    **평범한 예약 라우트입니다.** 라우트는 보통의
     ``certification.TicketReservation`` 하나이고
     (``network/NetworkApi.java:752-753``, ``postTicketReservation`` →
     ``ReservationOut``), N카드 전용 엔드포인트는 없습니다. N카드는 승객 블록
@@ -2317,7 +2179,7 @@ def build_discount_card_reservation_form(
     ``@SerialName`` 은 ``:105,109,113,117``) -- 이 빌더가 쓰는 키와 같은
     집합입니다(인덱스 ``1`` 은 이 패키지가 붙입니다).
 
-    :data:`KORAIL_DISCOUNT_CARD_DISCOUNT_CODE` 의 **값**은 여전히 미확인입니다
+    :data:`KORAIL_DISCOUNT_CARD_DISCOUNT_CODE` 의 **값**은 미확인입니다
     -- ``ReqDiscount.N_CARD`` 의 코드가 AlienGuard 로 암호화돼 있어
     (``common/define/ReqDiscount.java:36``) 평문을 읽을 수 없습니다. 그 리터럴은
     라이브 확인값이며 앱 소스에서 재도출한 것이 아닙니다.
@@ -2363,9 +2225,9 @@ _PRICE_RECALCULATION_SCALAR_FIELDS: tuple[tuple[str, str], ...] = (
 
 
 # 7.0.6 PriceReCalculationIn 이 선언하는 네 스칼라 txtPsrmClCd1, txtSeatAttCd2,
-# txtSeatAttCd4, txtSeatAttCd5 는 **이제 표현할 자리가 있습니다** —
-# PriceRecalculationRequest 의 cabin_class_code 와 seat_attribute_code_2/4/5 입니다.
-# 넷 다 선택이고 기본값은 None 이라, 넘기지 않으면 예전과 똑같이 하나도 실리지
+# txtSeatAttCd4, txtSeatAttCd5 는 PriceRecalculationRequest 의 cabin_class_code 와
+# seat_attribute_code_2/4/5 입니다.
+# 넷 다 선택이고 기본값은 None 이라, 넘기지 않으면 하나도 실리지
 # 않습니다. 그 기본 동작이 앱과 어긋나지 않는다는 근거는 PayViewModel.smali
 # :11834-11850 으로, 일반 재계산 경로가 네 인자를 default-null 로 구성합니다.
 #   analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41
@@ -2388,10 +2250,7 @@ def build_price_recalculation_form(
     **병렬 리스트**들이 따로 붙는 모양이고, 그래서 이 폼도 반복 키를 냅니다.
     요청 DTO 는 ``PriceReCalculationIn.java:31`` 입니다.
 
-    예전에 달려 있던 ``CertificationService.java:35-37``·``a6/C1042B.java``·
-    ``DiscountPriceDao.java`` 는 전부 7.0.6 에 없는 6.5.0 클래스였습니다.
-
-    **어느 화면이 이 호출을 만드는지는 재도출했습니다** -- 결제 화면의
+    **이 호출을 만드는 화면**은 결제 화면의
     ``PayViewModel.executeDiscountPrice`` 입니다. smali 쪽:
     ``PayViewModel.smali:11291`` 이
     ``.method private final executeDiscountPrice(ILjava/util/List;)V`` 이고,
@@ -2470,11 +2329,8 @@ def build_price_recalculation_form(
         # ``PayViewModel.smali:11764-11805`` 가 값을 만들고 ``:11834-11850`` 이
         # ``PriceReCalculationIn`` 에 넣습니다.
         #
-        # 한때 여기 "두 키가 이 DTO 에 있는지조차 확인할 수 없다 — 미출처" 라고
-        # 적었던 것은 틀렸습니다. **속성이 보이지 않는 것**과 **@SerialName 전선
-        # 철자가 보호된 것**을 같은 것으로 본 실수였습니다. 아직 확인 못 한 것은
-        # 후자, 그리고 ``"N"`` 리터럴의 평문입니다. 예전 인용
-        # ``a6/C1042B.java:290-293`` 은 7.0.6 에 없는 6.5.0 클래스입니다.
+        # 아직 확인 못 한 것은 보호된 @SerialName 전선 철자, 그리고 ``"N"``
+        # 리터럴의 평문입니다.
         form["hiduserYn"] = "N"
         form["hidCustNo"] = non_member_no
     form["txtPsgGridcnt"] = str(len(rows))
@@ -2501,13 +2357,7 @@ def build_cart_add_form(
 ) -> dict[str, str]:
     """``cart.addCartList`` — 홀드된 예약을 장바구니에 담습니다.
 
-    예전 인용 ``CartService.java:11-13`` / ``AddCartDao.java:9-24`` 는
-    **철회합니다** -- 둘 다 6.5.0 이름이고 7.0.6 디컴파일에 그 파일이 없습니다
-    (``AddCartDao`` 는 ``analysis/`` 전체에서 0회, ``CartService`` 는 우리
-    보고서 ``analysis/reports/src-verification/`` 안의 6.5.0→7.0.6 대응표에만
-    나옵니다).
-
-    **같은 필드 주장을 7.0.6 에서 재도출했습니다.** 공통 셋 외의 필드는
+    공통 셋 외의 필드는
     ``hidPnrNo`` 하나입니다 -- ``network/model/AddCartListIn.java:25`` 가
     ``extends CommonIn`` 이고 추가 필드가 ``hidPnrNo``(``:30``) 하나뿐이며
     전선 이름은 ``@SerialName("hidPnrNo")``(``:52``, ``:79``)입니다. 라우트는
@@ -2517,8 +2367,8 @@ def build_cart_add_form(
     ``TrainScheduleViewModel.java:370``,
     ``ReservationMergeViewModel.java:164``,
     ``AirportBusSeatMapViewModel.java:159``)이 모두 문자열 **하나**만
-    넘기며, 그 값이 PNR 임을 평문으로 읽을 수 있는 **호출 경로**는 이제 다섯
-    곳 모두에서 하나씩 확인됩니다(예전 판은 "둘"이라고 적었는데 좁았습니다):
+    넘기며, 그 값이 PNR 임을 평문으로 읽을 수 있는 **호출 경로**는 다섯
+    곳 모두에서 하나씩 확인됩니다:
 
       * ``ReservationMergeViewModel.java:164`` --
         ``new AddCartListIn(…this.reservationOut.getHPnrNo())`` 한 줄.
@@ -2550,7 +2400,7 @@ def build_cart_add_form(
     ``PayViewModel`` ``:14563``. 그쪽이 무엇을 넘기는지는 확인하지
     않았습니다.
 
-    **다만 "응답이 맨 ``BaseResponse``" 라는 부분은 7.0.6 에서 틀렸습니다.**
+    **응답은 맨 ``BaseResponse`` 가 아닙니다.**
     ``network/model/AddCartListOut.java:24-25`` 는 ``extends CommonOut`` 에
     더해 ``psgDiscAddInfos`` 를 갖습니다(``@SerialName("psgDiscAdd_infos")``,
     ``:51``·``:76``). ``CommonOut`` 자체의 맨 형태는 **속성** 셋
@@ -2558,8 +2408,7 @@ def build_cart_add_form(
     (``network/model/CommonOut.java:42-44``)이고, **전선 키**는 각각
     ``h_msg_txt``/``h_msg_cd``/``strResult`` 입니다 -- 앞의 둘만
     ``@SerialName`` 으로 이름이 바뀌고(``:392``, ``:388``), ``strResult`` 는
-    애노테이션이 없어 속성명이 그대로 전선 이름입니다. 한때는 이 응답을
-    모델링하지 않아 전용 파서가 없었지만 **지금은 아닙니다** --
+    애노테이션이 없어 속성명이 그대로 전선 이름입니다.
     :class:`~korail_mobile_api.mutation_models.CartAddResponse` 와
     :func:`~korail_mobile_api.mutation_parsers.parse_cart_add_response` 가
     있고, :meth:`~korail_mobile_api.client.KorailClient.add_to_cart` 는 그
