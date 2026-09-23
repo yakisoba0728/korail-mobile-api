@@ -286,14 +286,28 @@ MUTANTS = [
     ),
     (
         "URL 폴백이 디코딩한 쿼리 값의 카드번호를 안 봄(재감사 NC11)",
-        "                if masked_item != decoded_item:",
-        "                if False:",
+        "            if decoded_item != item and _redact_text(decoded_item) != decoded_item:\n"
+        "                item = \"[REDACTED]\"",
+        "            if False:\n"
+        "                item = \"[REDACTED]\"",
     ),
     (
         # 옛 구현: 자릿수 한도를 넘는 정수의 str()/repr() 이 ValueError.
         "큰 정수의 문자열화가 예외(재감사 NN03)",
         '            return f"<int {value.bit_length()} bits>"',
         "            raise",
+    ),
+    (
+        "URL 폴백이 디코딩한 값으로 바꿔 씀(최종 검토)",
+        "            if decoded_item != item and _redact_text(decoded_item) != decoded_item:\n"
+        "                item = \"[REDACTED]\"",
+        "            if decoded_item != item and _redact_text(decoded_item) != decoded_item:\n"
+        "                item = _redact_text(decoded_item)",
+    ),
+    (
+        "반복형 문자열화가 bytes·객체 잎을 그대로 씀(최종 검토)",
+        "            parts.append(_redact_text(_safe_repr(node)))",
+        "            parts.append(_safe_repr(node))",
     ),
 ]
 

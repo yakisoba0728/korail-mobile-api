@@ -621,11 +621,18 @@ CASES = [
  ("NC11/badhost_key",   f"https://[bad/?{_PCT_CARD}=public",
                         _exact(redact_url, "https://[bad/?[REDACTED_CARD]=public"), [CARD, _PCT_CARD], ["public"]),
  ("NC11/fallback_val",  f"https://[bad/?q={_PCT_CARD}&lang=ko",
-                        _exact(redact_url, "https://[bad/?q=[REDACTED_CARD]&lang=ko"), [CARD, _PCT_CARD], ["lang=ko"]),
+                        _exact(redact_url, "https://[bad/?q=[REDACTED]&lang=ko"), [CARD, _PCT_CARD], ["lang=ko"]),
  # NN03(값싼 수정): 자릿수 한도를 넘는 비민감 정수도 예외 없이.
  ("NN03/pay_huge",      {"public": _HUGE, _HUGE: "k", "n": [_HUGE]},
                         _exact(redact_payload, {"public": _HUGE_TEXT, _HUGE_TEXT: "k", "n": [_HUGE_TEXT]}), [], ["bits"]),
  ("NN03/value_huge",    "huge",                              _huge_key_value, [], [PUB]),
+ # 최종 검토: URL 폴백이 디코딩한 값으로 바꿔 써 뒤꼬리가 샘, set 안 bytes·객체 잎이 그대로.
+ ("F/url_plus_tail",   f"/p?q=txtPwd:{SEC}+{TAIL} tail",     redact_url, [SEC, TAIL], []),
+ ("F/url_quote_tail",  f'/p?q="txtPwd":"{SEC}%22{TAIL}" tail', redact_url, [SEC, TAIL], []),
+ ("F/url_err_tail",    f"https://example.invalid/p?q=txtPwd:{SEC}%20{TAIL}&x=\ud800&lang={PUB}",
+                        redact_url, [SEC, TAIL], [f"lang={PUB}"]),
+ ("F/pay_set_bytes",   {"x": {f"txtPwd={SEC}".encode()}, "y": frozenset({CARD.encode()})},
+                        redact_payload, [SEC, CARD], []),
 ]
 
 #: :func:`_json_ok`·:func:`_two_entries` 가 붙이는 결함 표식. 사례마다 금지

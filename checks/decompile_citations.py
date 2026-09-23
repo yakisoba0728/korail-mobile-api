@@ -173,19 +173,28 @@ class Inventory:
             # 가리키는 인용이 "없음" 으로 보입니다.
             incomplete.append(f"analysis 하위 디렉터리를 못 읽음: {error.filename}")
 
-        seen = set()
+        #: 경로 -> 실제 경로. 조상 판정에 씁니다.
+        real_of = {}
         for dirpath, dirs, filenames in os.walk(analysis, onerror=onerror, followlinks=True):
-            # 링크를 따라가므로 순환을 끊습니다. 같은 실제 디렉터리는 한 번만.
+            # 링크를 따라가므로 **순환**만 끊습니다 — 실제 디렉터리가 자기 조상과 같을 때.
+            # 예전에는 "같은 실제 디렉터리는 한 번만" 이라 먼저 닿은 경로(링크 쪽일 수
+            # 있음)로만 색인해, 실제 경로를 쓴 올바른 인용이 이름 순서에 따라 [absent]
+            # 가 됐습니다(2026-09-23 최종 검토). 이제 도달 가능한 경로마다 색인합니다.
             try:
                 real = os.path.realpath(dirpath)
             except OSError as error:
                 incomplete.append(f"analysis 하위 디렉터리를 못 읽음: {dirpath} ({error})")
                 dirs[:] = []
                 continue
-            if real in seen:
+            parent = os.path.dirname(dirpath)
+            ancestors = set()
+            while parent in real_of:
+                ancestors.add(real_of[parent])
+                parent = os.path.dirname(parent)
+            if real in ancestors:
                 dirs[:] = []
                 continue
-            seen.add(real)
+            real_of[dirpath] = real
             rel = pathlib.Path(dirpath).relative_to(analysis).parts
             for name in filenames:
                 if name.rsplit(".", 1)[-1] not in EXTS or "." not in name:

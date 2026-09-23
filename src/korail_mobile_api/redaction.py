@@ -1232,7 +1232,7 @@ def _redact_url_fallback(value: str) -> str:
     쿼리 **키**와 값의 카드번호 모양도 **디코딩해서** 봅니다(G5). 예전에는
     민감 키의 값만 봐서 ``?%34%31…=public`` 처럼 인코딩된 카드번호 키가 그대로
     남았습니다(재감사 NC11) — 텍스트 경로는 ``%34`` 를 숫자로 읽지 못합니다.
-    가릴 것이 있을 때만 디코딩한 글자로 바꿔 씁니다.
+    디코딩한 값에서 가릴 것이 보이면 그 값 전체를 ``[REDACTED]`` 로 둡니다.
     """
     head, question, rest = value.partition("?")
     if not question:
@@ -1248,11 +1248,13 @@ def _redact_url_fallback(value: str) -> str:
         if equals and is_sensitive_key(decoded_name):
             item = "[REDACTED]"
         elif item:
+            # 디코딩한 값에서 가릴 것이 보이면 값 **전체**를 가립니다. 디코딩한
+            # 글자로 바꿔 쓰면 ``+``·``%20``(공백)·``%22``(따옴표)가 값을 짧게 끊어
+            # 원문 텍스트 경로라면 가렸을 뒤꼬리가 남았습니다
+            # (``?q=txtPwd:SECRET+TAIL`` 의 ``TAIL``, 2026-09-23 최종 검토).
             decoded_item = _decoded_query_key(item)
-            if decoded_item != item:
-                masked_item = _redact_text(decoded_item)
-                if masked_item != decoded_item:
-                    item = masked_item
+            if decoded_item != item and _redact_text(decoded_item) != decoded_item:
+                item = "[REDACTED]"
         pieces[position] = f"{name}{equals}{item}"
     return _redact_text(f"{head}?{''.join(pieces)}{hash_mark}{fragment}")
 
@@ -1639,8 +1641,14 @@ def _repr_iterative(root: object) -> str:
                 pushed.append((False, child))
             pushed.append((True, closer))
             stack.extend(reversed(pushed))
-        else:
+        elif node is None or isinstance(node, (str, int, float, bool)):
             parts.append(_safe_repr(node))
+        else:
+            # bytes·임의 객체처럼 :func:`redact_value` 가 손대지 않은 잎은 표기를
+            # 텍스트로 가립니다. 예전 폼 경로는 set 을 통째로 ``str()`` 뒤 텍스트로
+            # 가렸는데, 반복형 문자열화로 바꾸면서 잎을 그대로 내보내
+            # ``{b"txtPwd=<비밀>"}`` 가 새었습니다(2026-09-23 최종 검토).
+            parts.append(_redact_text(_safe_repr(node)))
     return "".join(parts)
 
 

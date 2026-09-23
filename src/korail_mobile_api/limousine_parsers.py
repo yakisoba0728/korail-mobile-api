@@ -112,7 +112,7 @@ _SCHEDULE_FIELDS = {
     "service_code": "trnGpCd",
     "train_no": "trnNo",
     # ScdlQryOutTrain.java:48-49 의 Kotlin **속성명**은 trnOrdrNo 와
-    # ymsAplFlgYMS 입니다. 전에 :48,68 로 적었는데 68행은 빈 줄이었습니다.
+    # ymsAplFlgYMS 입니다(trnOrdrNo 는 아래 _SCHEDULE_ADDED_FIELDS). 전에 :48,68 로 적었는데 68행은 빈 줄이었습니다.
     # 이 클래스에는 @SerialName 이 하나도 없고(파일 전체 0건), 전선 이름은
     # ScdlQryOutTrain$$serializer.java:35-55 의 addElement() 인수 21개로만
     # 남는데 전부 AlienGuard 로 싸여 있어 정적으로는 철자를 못 읽습니다
@@ -122,15 +122,18 @@ _SCHEDULE_FIELDS = {
     # ``ymsAplFlg`` 를 보냅니다(2026-09-22 확인). 속성명을 쓰는 동안
     # ``yms_application_flag`` 는 언제나 ``None`` 이었습니다. 속성명과
     # 전선 철자가 갈리는 자리에서는 **라이브가 근거**입니다.
-    #
-    # ``trnOrdrNo`` 는 아직 라이브로 확인된 적이 없어 속성명 그대로 둡니다.
     "yms_application_flag": "ymsAplFlg",
-    # ScdlQryOutTrain.java:40 의 rcvdPrc. DTO 가 선언하는 21개 필드 중 이
-    # 하나만 이 맵에 빠져 있어서 행의 유일한 운임이 raw 로만 닿았습니다.
-    # 2026-09-22 라이브 359행 전부에 있었고 값은 0으로 앞을 채운 14자리
-    # 원 단위 문자열입니다 -- 나머지 20개와 같이 문자열 그대로 둡니다.
 }
-#: 1.1.1 이후 모델링한 필드. 모양이 어긋나면 응답 전체가 아니라 이 칸만 None 입니다(G8).
+#: 1.1.1 이 읽지 않던 **전선 키**. 모양이 어긋나면 응답 전체가 아니라 이 칸만
+#: ``None`` 입니다(G8).
+#:
+#: * ``trnOrdrNo`` — ``train_order_no`` 필드 자체는 1.1.1 에도 있었지만 키
+#:   ``trnOrdNo`` 를 엄격하게 읽었습니다. 지금 읽는 ``trnOrdrNo`` 는 1.1.1 이 보지
+#:   않던 키라 관대하게 읽습니다(옛 키는 더 읽지 않으므로 1.1.1 이 받던 응답을
+#:   거절할 일은 없습니다). ScdlQryOutTrain.java:48 의 Kotlin 속성명이며, 라이브로
+#:   확인된 적은 없습니다.
+#: * ``rcvdPrc`` — ScdlQryOutTrain.java:40. 2026-09-22 라이브 359행 전부에 있었고
+#:   값은 0으로 앞을 채운 14자리 원 단위 문자열이었습니다.
 _SCHEDULE_ADDED_FIELDS = {
     "train_order_no": "trnOrdrNo",
     "received_price": "rcvdPrc",

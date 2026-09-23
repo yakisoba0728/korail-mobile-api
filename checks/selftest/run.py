@@ -223,6 +223,11 @@ CASES: list[dict] = [
         "elsewhere/pkg/RealClass.java": "// one\n// two\n",
         "elsewhere/loop": ("dirlink", "elsewhere"),
         "analysis/linked": ("dirlink", "elsewhere")}),
+    # 링크가 실제 경로보다 먼저 닿아도(이름 순서) 실제 경로 인용이 맞아야 함(최종 검토).
+    dict(id="real path cited while an earlier-sorted link aliases it", checker=CITES, expect=0, files={
+        PKG + "a.py": "# analysis/jadx/sources/com/korail/RealClass.java:2\n",
+        "analysis/jadx/sources/com/korail/RealClass.java": "// one\n// two\n",
+        "analysis/aaa": ("dirlink", "analysis/jadx/sources/com")}),
     # -- NC09 사례 수 하한 --------------------------------------------------------
     dict(id="NC09 zero cases is incomplete", meta=True, expect=2, code=(
         "import runpy\nns = runpy.run_path({run!r})\nns['CASES'].clear()\n"
@@ -237,7 +242,7 @@ CASES: list[dict] = [
 #: ``CASES`` 가 비었는데 "실패 0개" 로 통과하던 것을 막습니다(재감사 NC09).
 #: 사례를 더하거나 빼면 이 수도 고치십시오. 모자라면 exit 2, 넘치면 exit 1
 #: (``_self_consistent``)로 알려 줍니다.
-MIN_CASES = 60
+MIN_CASES = 61
 
 
 def _build(root: pathlib.Path, case: dict) -> list[pathlib.Path]:
