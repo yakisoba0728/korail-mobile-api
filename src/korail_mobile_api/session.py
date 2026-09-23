@@ -6,8 +6,7 @@
 
 :class:`KorailSessionClient` 가 로그인 왕복을 수행합니다.
 로그인 성공 코드: ``IRZ000001``, ``S200`` — :data:`KORAIL_LOGIN_SUCCESS_CODES`.
-옛 인용 ``S4/u.java:131`` 은 6.5.0 이고 7.0.6 디컴파일에 없으며(2026-09-22
-확인), **7.0.6 은 로그인 성공을 이런 코드 화이트리스트로 판정하지 않습니다.**
+**7.0.6 은 로그인 성공을 이런 코드 화이트리스트로 판정하지 않습니다.**
 ``analysis/jadx/sources/com/korail/talk/ui/screen/login/LoginViewModel.java:1216``
 이 ``((LoginOut) success.getData()).isSuccess()`` 를 부르고, 그 구현은
 ``network/model/CommonOut.java:550-555`` 의 ``!commonFail()`` 이며,
@@ -45,7 +44,7 @@ DEX 문자열 테이블의 평문은
 ``ui/screen/basketticket/data/BasketTicketDataKt.java:44`` 의 ``STLino``
 안에 한 번 나오는데, 장바구니 화면에 박아 둔 **모의 응답 JSON 문자열**이지
 코드 비교가 아닙니다. ``assets/error_json.json`` 사전에도 이 코드가 따로
-있습니다 — 그러니 "APK 통틀어 한 건"이라고 읽으면 틀립니다. 어느 쪽도
+있습니다. 어느 쪽도
 로그인 whitelist 비교를 입증하지는 않습니다(2026-09-23 확인). 두 코드 모두
 여전히 실서버 관측 기반입니다.
 ``txtInputFlg``: ``"2"``=회원번호, ``"4"``=휴대폰, ``"5"``=이메일.
@@ -78,16 +77,15 @@ def infer_login_input_flag(login_id: str) -> str:
     ``LoginViewModel.validateLoginId(loginId, allowEmpty)`` 재현
     (``analysis/jadx/sources/com/korail/talk/ui/screen/login/LoginViewModel.java:1850-1876``).
 
-    - 숫자만 10자리 → **항상** 회원번호(``"2"``, ``:1865``). 예전 코드가
-      요구하던 ``"01"`` 접두사 조건은 7.0.6 에 없다 — 접두사와 무관하게
-      길이만 본다.
+    - 숫자만 10자리 → **항상** 회원번호(``"2"``, ``:1865``). 접두사와
+      무관하게 길이만 본다.
     - 숫자만 11자리 → 휴대폰(``"4"``, ``:1868``). 실제 앱은 그 뒤 AppSuit 로
       보호된 추가 형식 검사를 통과해야만 ``4`` 를 반환하지만, 그 검사 내용은
       정적 분석으로 복원되지 않는다(PROTECTED) — 여기서는 자릿수만으로
       분류한다. 방향은 맞되 완전히 확인되지는 않았다.
     - 그 밖의 자릿수(숫자만이지만 10·11자리가 아닌 경우)는 실제 앱이라면
       무효(``0``, 아무것도 전송하지 않음)를 반환하지만, 이 라이브러리에는
-      "무효" 를 표현하는 반환값이 없어 이전과 같이 보수적으로 회원번호로
+      "무효" 를 표현하는 반환값이 없어 보수적으로 회원번호로
       취급한다 — 이 폴백 자체는 미확인이다.
     - ``@`` 를 포함하면 ``isValidEmail(loginId) && length >= 7`` 이어야
       이메일(``"5"``, ``:1873``). 길이가 7 미만이면 7.0.6 이 유효한 입력으로
@@ -121,8 +119,7 @@ def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
     ``analysis/jadx/sources/com/korail/talk/network/model/CommonCodeOut.java:267``),
     ``LoginRepositoryImpl.java:918-936`` 은 ``commonCode.getAppLoginCphd()``
     를 인스턴스에서 바로 읽습니다 — 대체 키 ``login`` 도 ``data`` 래퍼도
-    존재하지 않습니다(이전 구현이 시도하던 두 폴백 모두 근거 없이
-    발명된 모양이었습니다).
+    존재하지 않습니다.
     """
     value = raw.get("app.login.cphd")
     if isinstance(value, dict):
@@ -171,15 +168,11 @@ class KorailSessionClient:
         key = str(raw.get("key") or "")
         # 참고용입니다. getPwdAESCphd() 의 유일한 사용처는 결제 금액 암호화입니다:
         # analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:10991-10999
-        # "loginFlg" 폴백은 제거했습니다 — analysis/jadx/sources/ 전체에 0건인
-        # 필드였고(W2-parsers-and-crypto.md 발견 11), 앱이 절대 만들지 않는
-        # 값을 조용히 대입할 수 있는 죽은 코드였습니다.
         pwd_aes_cphd = str(raw.get("pwdAESCphd") or "").upper()
         # key 가 비었으면 pwd_aes_cphd 값과 무관하게 여기서 거절하지 않고
-        # transform_login_password 가 무조건 거절합니다(crypto.py 참고) — 이
-        # 함수 자체가 "Y" 일 때만 거절하던 예전 가드는 pwd_aes_cphd 가 다른
-        # 값이거나 없을 때 평문 폴백으로 새는 구멍이었습니다
-        # (W2-parsers-and-crypto.md 발견 4). 7.0.6 도 key 가 비면 재조회 후
+        # transform_login_password 가 무조건 거절합니다(crypto.py 참고) — "Y"
+        # 일 때만 거절하면 pwd_aes_cphd 가 다른 값이거나 없을 때 평문 폴백으로
+        # 샙니다. 7.0.6 도 key 가 비면 재조회 후
         # 그래도 비면 AESCrypto 가 크래시할 뿐, 평문으로 내려가는 분기가
         # 없습니다:
         # analysis/jadx/sources/com/korail/talk/data/LoginRepositoryImpl.java:1230-1236
@@ -210,8 +203,7 @@ class KorailSessionClient:
         Device, Version, Key, txtMemberNo, txtPwd, txtInputFlg, checkValidPw,
         custId, etrPath, idx 입니다.
 
-        옛 인용 ``LoginService.java:19`` / ``LoginDao.java:240`` 은 6.5.0 이고
-        7.0.6 디컴파일에 없습니다. 7.0.6 의 순서는 요청 DTO 의 직렬화
+        7.0.6 의 순서는 요청 DTO 의 직렬화
         디스크립터에서 읽을 수 있는데 **위 순서와 다릅니다** —
         ``network/model/LoginIn$$serializer.java:33-43`` 이 11개 원소를
         등록하고(이름 문자열은 전부 AlienGuard 보호 → PROTECTED), 인덱스와
@@ -221,8 +213,7 @@ class KorailSessionClient:
         ``txtInputFlg`` 를 ``txtMemberNo``/``txtPwd`` 앞에, ``custId`` 를
         ``checkValidPw`` 앞에 두고, ``lang`` 을 네 번째 원소로 갖습니다.
         폼은 ``@FieldMap`` 이라 순서가 계약인지 확인된 바 없고 이 패키지의
-        순서로 실서버 로그인이 성공하므로 코드는 그대로 두되, 옛 주장이
-        7.0.6 근거를 갖지 않는다는 사실을 여기 적어 둡니다.
+        순서로 실서버 로그인이 성공하므로 코드는 그대로 둡니다.
 
         ``strRedirectUrl`` 이 오면
         :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired`.
@@ -302,9 +293,7 @@ class KorailSessionClient:
         transformed = transform_login_password(password, crypto_info)
         resolved_input_flag = input_flag or infer_login_input_flag(member_no)
         # Field order below is this package's own, not a 7.0.6 replica --
-        # see login_with_member_no's docstring. The old LoginService.java:19 /
-        # LoginDao.java:240 citations are 6.5.0 and absent from the 7.0.6
-        # decompile (checked 2026-09-22); 7.0.6's LoginIn descriptor order is
+        # see login_with_member_no's docstring. 7.0.6's LoginIn descriptor order is
         # Device, Version, Key, lang, txtInputFlg, txtMemberNo, txtPwd,
         # custId, checkValidPw, etrPath, idx
         # (LoginIn$$serializer.java:33-43 + LoginIn.java:57-76). The field
@@ -395,10 +384,8 @@ class KorailSessionClient:
         상태(``current``·``pending``·쿠키)는 **언제나** 비웁니다. 서버 쪽 세션이
         실제로 무효화됐는지는 이 메서드로 알 수 없습니다.
 
-        예전에는 :class:`~korail_mobile_api.errors.KorailApiError` 만 삼켜서, 닫힌
-        HTTP 클라이언트의 ``RuntimeError`` 같은 다른 예외가 나면 그 예외가
-        전파되고 ``current``·쿠키가 남았습니다(최종 감사 C26). 이제 서버 요청의
-        ``Exception`` 은 모두 삼키고, 비우기는 ``finally`` 에서 합니다 —
+        서버 요청의 ``Exception`` 은 모두 삼키고(닫힌 HTTP 클라이언트의
+        ``RuntimeError`` 도 포함), 비우기는 ``finally`` 에서 합니다 —
         ``KeyboardInterrupt`` 처럼 ``Exception`` 이 아닌 것은 전파되지만 그때도
         로컬 상태는 비워진 뒤입니다.
         """

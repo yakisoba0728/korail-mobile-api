@@ -84,9 +84,8 @@ class KorailConfig:
     #: 7.0.6 ``CommonIn`` 의 4번째 공통 필드(``@SerialName(Constants.LANG)``,
     #: ``com/kakao/sdk/common/Constants.java:27`` 의 평문 리터럴 ``"lang"``).
     #: 실제 앱이 보내는 값은 ``LanguageProvider.getSTLeec()`` 가 반환하는
-    #: AppSuit 보호 값이라 여기서 추측해 채우지 않습니다. ``None`` 은 "이
-    #: 패키지의 예전(불완전한) 동작대로 ``lang`` 을 아예 싣지 않는다" 는
-    #: 뜻이고, 실제 값을 아는 호출자만 직접 넘깁니다.
+    #: AppSuit 보호 값이라 여기서 추측해 채우지 않습니다. ``None`` 은 "``lang`` 을
+    #: 아예 싣지 않는다" 는 뜻이고, 실제 값을 아는 호출자만 직접 넘깁니다.
     #:
     #: 이 필드도 **맨 끝**. ``enable_dynapath`` 와 같은 이유로, 위치 인자
     #: 안전성 때문에 새 필드는 항상 끝에 추가합니다.
@@ -97,9 +96,9 @@ class KorailConfig:
             return
         # 편의 경로는 그대로 둡니다 -- 맨손 ``KorailConfig(enable_dynapath=True)`` 는
         # 기기 값을 합성해 채웁니다. 거절하는 것은 호출자가 **직접 만든** 구성을
-        # 함께 넘긴 경우뿐입니다. 예전에는 그 구성이 경고도 예외도 없이 통째로
-        # 갈아치워져, 기기 신원을 스스로 정했다고 믿는 호출자가 실제로는 합성
-        # 신원으로 요청을 보냈습니다 -- 하필 안티오토메이션 토큰이 주장하는 값입니다.
+        # 함께 넘긴 경우뿐입니다. 그 구성을 조용히 갈아치우면, 기기 신원을 스스로
+        # 정했다고 믿는 호출자가 실제로는 합성 신원으로 요청을 보내게 됩니다 --
+        # 하필 안티오토메이션 토큰이 주장하는 값입니다.
         # 같은 종류의 충돌에 :meth:`DynapathConfig.__post_init__` 은 이미
         # ``ValueError`` 를 냅니다.
         if self.dynapath != DynapathConfig():

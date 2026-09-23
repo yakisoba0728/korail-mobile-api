@@ -80,15 +80,12 @@ _NON_COMMON_OUT_READ_PATHS = frozenset({
     "/classes/com.korail.mobile.common.stationinfo",
     "/ebizmaas/EbizMaasStationList.do",
     # VerifyOnlineRefundsOut 도 CommonOut 을 상속하지 않습니다
-    # (VerifyOnlineRefundsOut.java:29 — extends 절이 없습니다). 예전 주석은 여기에
-    # "strResult 기본값이 null 입니다(:97)" 를 덧붙였는데 둘 다 틀렸습니다: 97행은
-    # hMsgCd 대입이고, strResult 의 누락 기본값 분기는 91-94행이며 그 기본값은 null
-    # 리터럴이 아니라 AlienGuard 로 보호된 문자열 호출입니다(hMsgCd:97, hMsgTxt:102
-    # 과 같은 리터럴) — 값이 무엇인지 APK 에서 읽을 수 없으므로 주장하지 않습니다.
-    # 여기서 중요한 것은 값이 아니라 이 DTO 가 CommonOut 이 아니라는 사실뿐입니다:
-    # 없는 strResult 를 실패로 읽으면 성공한 검증이 실패로 분류됩니다. 삭제된
-    # V7Gateway 가 같은 판정을 _NON_COMMON_OUT_RESPONSE_MODELS 로 따로 들고 있던
-    # 것을 여기로 옮겼습니다.
+    # (VerifyOnlineRefundsOut.java:29 — extends 절이 없습니다). strResult 의 누락
+    # 기본값 분기는 91-94행이며 그 기본값은 null 리터럴이 아니라 AlienGuard 로
+    # 보호된 문자열 호출입니다(hMsgCd:97, hMsgTxt:102 과 같은 리터럴) — 값이
+    # 무엇인지 APK 에서 읽을 수 없으므로 주장하지 않습니다. 여기서 중요한 것은
+    # 값이 아니라 이 DTO 가 CommonOut 이 아니라는 사실뿐입니다: 없는 strResult 를
+    # 실패로 읽으면 성공한 검증이 실패로 분류됩니다.
     "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
 })
 
@@ -136,7 +133,6 @@ def parse_base_response(
     분기를 찾지 못했습니다 — 미출처.** 그 코드는 소스·스몰리 어디에도 평문으로
     없고(전수 grep), APK 안에서 나오는 유일한 자리는
     ``analysis/apktool/assets/error_json.json`` 의 로그인 실패 문구 한 줄입니다.
-    옛 인용 ``BaseActivity.java:620`` 은 6.5.0 잔재로 7.0.6 에 그 파일이 없습니다.
     ``require_result`` 가 참(기본)이면 ``strResult``
     키가 아예 없는 응답도 실패입니다. 7.0.6 ``CommonOut`` 은 빠진 ``strResult`` 를
     ``commonFail()`` 이 비교하는 바로 그 보호 상수로 채웁니다
@@ -309,7 +305,7 @@ class KorailHttpClient:
         (``@SerialName(Constants.LANG)``, ``CommonIn.java:381``) 도 선언합니다.
         그 실제 값은 AppSuit 보호(``LanguageProvider.getSTLeec()``)라 추측해
         채우지 않습니다 — ``self.config.lang`` 이 ``None`` 이면(기본값)
-        이 패키지의 예전 동작대로 ``lang`` 을 아예 보내지 않고, 호출자가
+        ``lang`` 을 아예 보내지 않고, 호출자가
         실제 값을 :class:`~korail_mobile_api.config.KorailConfig` 에 넘기면
         그 값을 싣습니다.
         """
@@ -396,9 +392,9 @@ class KorailHttpClient:
                 # ``from_raw``, not ``BaseKorailResponse(raw=...)``: 봉투가
                 # **부분적으로** 있는 응답이 있습니다. ``/ebizcross/getUUID.do``
                 # 는 ``{"mutMrkVrfCd": ..., "strResult": "SUCC"}`` 를 주는데,
-                # 세 키가 다 있어야 통과하는 위 조건에 걸려 예전에는 ``raw`` 만
-                # 채운 객체가 나갔습니다 — 서버가 ``SUCC`` 라고 말했는데
-                # ``str_result`` 는 ``None`` 이었습니다(2026-09-22 확인).
+                # 세 키가 다 있어야 통과하는 위 조건에 걸립니다. 여기서 ``raw`` 만
+                # 채운 객체를 내면 서버가 ``SUCC`` 라고 말했는데 ``str_result`` 는
+                # ``None`` 이 됩니다(2026-09-22 확인).
                 # ``from_raw`` 는 있는 것만 그대로 옮기므로 완전한 봉투에서는
                 # 동작이 같고, 없는 키에 대해 새로 예외를 내지도 않습니다.
                 return BaseKorailResponse.from_raw(payload)

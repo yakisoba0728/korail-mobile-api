@@ -116,9 +116,7 @@ class KorailAuthError(KorailApiError):
 class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
     """세션 만료. ``P058``.
 
-    ``BaseActivity.java:610`` 을 인용하던 자리입니다. 그 클래스는 7.0.6 에
-    없고(앱이 Compose + ViewModel 로 재작성됐습니다), ``P058`` 이라는 문자열도
-    jadx/smali 전체에 0건입니다 — 코드 리터럴이 AppSuit 로 보호돼 PROTECTED
+    ``P058`` 이라는 문자열은 jadx/smali 전체에 0건입니다 — 코드 리터럴이 AppSuit 로 보호돼 PROTECTED
     입니다. 7.0.6 에서 남는 근거는 평문 자산 사전 한 줄뿐입니다:
     ``analysis/apktool/assets/error_json.json:334`` 의 ``"P058"`` 값이
     ``location.replace('/korail/com/login.do')`` 만 담은 JavaScript 조각이라,
@@ -156,9 +154,8 @@ class KorailDynaPathError(KorailApiError):
     그 정수가 담긴 JSON 필드 이름 자체는 AppSuit 로 난독화돼 PROTECTED 이므로,
     :mod:`~korail_mobile_api.http` 는 이름을 추측하는 대신 응답 본문의 모든
     최상위 값을 훑어 판정합니다 — 자세한 근거는 그 모듈의
-    ``_dynapath_block_payload`` 독스트링을 참고하십시오. 예전에는 (틀리게)
-    ``DynaPath-Result`` 라는 응답 헤더를 봤습니다 — 그런 헤더는 7.0.6 어디에도
-    없습니다.
+    ``_dynapath_block_payload`` 독스트링을 참고하십시오. ``DynaPath-Result``
+    같은 응답 헤더는 7.0.6 어디에도 없습니다.
     """
 
     def __init__(
@@ -206,14 +203,13 @@ class KorailAppError(_CodeMessagePickle, KorailApiError):
     입니다 — ``strResult``/``hMsgCd``/``_hMsgTxt`` 를 가진
     ``abstract class CommonOut`` 이고 응답 DTO 141개가 이걸 상속합니다(:53).
 
-    "앱도 인식하지 못한 ``h_msg_cd`` 는 ``FAIL`` 이 아닌 응답에서 그냥 성공으로
-    흘려보낸다"는 서술은 ``BaseActivity.java:629`` 의 ``aVar = null`` 을 근거로
-    달고 있었습니다. 7.0.6 에는 그 클래스도, 코드 전체를 한자리에서 가르는
-    switch 도 없습니다 — ``h_msg_cd`` 분기는 화면별 ViewModel 로 흩어져 있고
+    7.0.6 에는 코드 전체를 한자리에서 가르는 switch 가 없습니다 — ``h_msg_cd``
+    분기는 화면별 ViewModel 로 흩어져 있고
     (``ScreenViewModel.java:1238-1257`` ``networkError()`` 는 전송 계층 오류와
     ``DynaPathBlockedException`` 만 다룹니다), 그래서 "어느 분기에도 걸리지
-    않으면 그대로 지나간다"는 성질만 구조적으로 남습니다. 원문 한 줄에
-    대응하는 7.0.6 위치는 찾지 못했습니다 — 미출처.
+    않으면 그대로 지나간다"는 성질만 구조적으로 남습니다. 앱이 인식하지 못한
+    ``h_msg_cd`` 를 ``FAIL`` 이 아닌 응답에서 성공으로 흘려보낸다는 것을 한 줄로
+    보여 주는 7.0.6 위치는 찾지 못했습니다 — 미출처.
     """
 
     def __init__(self, code: str | None, message: str | None, *, raw: object | None = None) -> None:
@@ -228,18 +224,15 @@ class KorailNoResultsError(KorailAppError):
 
     ``WRG000000``/``P114`` — 평문 자산 사전 확인
     (``analysis/apktool/assets/error_json.json:4173`` "조회 결과가 없습니다.",
-    ``:388`` "조회된 승차권이 없습니다…"). "빈 화면 상태로 처리됨"의 근거로
-    ``BaseActivity.java:326-337`` ``setErrorMsgCdNotShowDialog`` 와
-    ``TicketListActivity.java:1393`` 을 달고 있었으나, 7.0.6 에는 두 클래스도
-    그 메서드 이름도 없습니다(basename·DEX 클래스명 검색 0건). 승차권 목록
-    화면의 현재 자리는 ``MyTicketBaseViewModel.java:101`` 과
-    ``MyTicketDetailViewModel.java:136`` 이지만 거기서 이 두 코드를 확인하지는
+    ``:388`` "조회된 승차권이 없습니다…"). 승차권 목록 화면의 자리는
+    ``MyTicketBaseViewModel.java:101`` 과 ``MyTicketDetailViewModel.java:136``
+    이지만 거기서 이 두 코드를 확인하지는
     못했습니다 — 코드 리터럴이 AppSuit 로 보호돼 jadx/smali 전체에 0건입니다.
     그러니 "빈 화면"이라는 UI 처리는 7.0.6 미출처이고, 이 분류가 서는 근거는
     위 사전 문구입니다.
 
-    ``P100``/``WRT300005`` — 이전엔 "APK 0건, 실서버 관측만"이었으나, AppSuit 가
-    건드리지 않는 평문 자산 사전에서 확인됨
+    ``P100``/``WRT300005`` — 실서버 관측에 더해, AppSuit 가 건드리지 않는
+    평문 자산 사전에서 확인됨
     (``analysis/apktool/assets/error_json.json:374`` "검색된 데이터가 없습니다.",
     ``:5141`` "조회자료가 없습니다.").
 
@@ -262,38 +255,24 @@ class KorailNoDirectTrainError(KorailNoResultsError):
     ``updateTrainScheduleFilterData()``(java:11051-11079, 재질의는 :11077)
     를 거쳐 같은 질의를 다시 보냅니다. 이때 바뀌는 전선 필드는
     ``radJobId``(``buildTrainScheduleIn()`` java:3136,3212, DTO 선언은
-    ``TrainScheduleIn.java:95``)이지, 예전에 적혀 있던 ``TRANSFER_SQ_NO``
-    가 아닙니다 — 그건 ``K4/d.java`` 의 enum 상수 *이름* 이지 전선 키가
-    아니었습니다.
+    ``TrainScheduleIn.java:95``)입니다.
     """
 
 
 class KorailSoldOutError(KorailAppError):
     """재고 소진. ``ERR211161``.
 
-    세 인용이 모두 틀렸던 자리입니다. ``TCSOptionsActivity.java:551`` 과
-    ``SpecialRoomUpgradeActivity.java:314`` 은 7.0.6 에 없는 6.5.0 시절
-    클래스입니다(basename·DEX 클래스명 검색 0건). 좌석변경 옵션 화면의 현재
-    자리는 ``SelfSeatChangeOptionViewModel.java:68`` 이지만 거기에 이 코드
-    리터럴은 없습니다 — ``ERR211161`` 은 jadx/smali 전체에 0건이고 AppSuit
-    로 보호됩니다. 그리고 ``strings.xml:2043`` 은 그 문구가 아니라
-    ``my_ticket_detail_maas_travel_refund_guide``(MaaS 이용권 환불 위약금과
-    영업일 3~5일 처리 안내)입니다. "잔여석이 부족하여 서비스를 제공할 수
-    없습니다."라는 문장은 ``analysis/apktool/res/`` 전체에도
-    ``analysis/apktool/assets/error_json.json`` 에도 없습니다. ``res/values*/``
-    는 16개 디렉터리이지만 ``strings.xml`` 은 ``res/values/`` 하나뿐이고,
-    "잔여석"이라는 낱말 자체가 ``res/`` 전체에 0건입니다 — 그 낱말은 사전에만
-    나오고(``:3579``/``:4334``/``:4335``/``:11744``) 거기서도 ``ERR211161``
-    이 아닌 다른 코드들입니다. 이 코드의 실제 문구는
+    ``ERR211161`` 은 jadx/smali 전체에 0건이고 AppSuit 로 보호됩니다(좌석변경
+    옵션 화면 ``SelfSeatChangeOptionViewModel.java:68`` 에도 이 리터럴은
+    없습니다). 이 코드의 문구는
     ``analysis/apktool/assets/error_json.json:2390`` "고객님께서 요구하신
     열차는 이미 매진되었으므로 다른 열차(시간대)를 선택하여 주시기
     바랍니다."입니다.
 
     ``IRT010110``/``WRT300001``/``ERR800048`` —
     ``analysis/apktool/assets/error_json.json`` (AppSuit 가 건드리지 않는 평문
-    ``h_msg_cd`` → 안내문구 사전) 전수조사로 추가. ``IRT010110`` 은 이 모듈이 전에
-    "APK 전체 0건"이라 일부러 뺐던 코드인데, 그 판정 자체가 이 사전을 보지 못해서
-    난 오판이었다 — ``:3203`` "잔여석없음". ``WRT300001``/``ERR800048`` 은 같은
+    ``h_msg_cd`` → 안내문구 사전) 전수조사로 추가. ``IRT010110`` 은 ``:3203``
+    "잔여석없음". ``WRT300001``/``ERR800048`` 은 같은
     "매진" 문구로 확인(``:5137`` "좌석이 매진되었습니다.", ``:11062`` "할인승차권의
     잔여석이 모두 매진되었습니다.").
     """
@@ -303,19 +282,12 @@ class KorailSeatUnavailableError(KorailAppError):
     """지정한 좌석은 줄 수 없으나 열차는 아직 예약 가능할 수 있습니다.
 
     * ``WRI411345`` — ``analysis/apktool/assets/error_json.json:4340``
-      "요청한 호차 및 좌석번호 예약 불가". 예전엔
-      ``SpecialRoomUpgradeActivity.java:312-313`` 을 달고 "자동 좌석 배정
-      제안"이라 적었으나, 그 클래스는 7.0.6 에 없고 자동 배정 제안이라는 UI
-      동작은 재확인하지 못했습니다 — 그 해석은 미출처입니다.
+      "요청한 호차 및 좌석번호 예약 불가".
     * ``ERR911081`` — ``analysis/apktool/assets/error_json.json:2601``
-      "좌석선택 예약불가". 예전 인용 ``a5/k.java:215-221`` 은 7.0.6 에 없는
-      경로이고, "좌석선택 시간 경과"라는 원인 해석도 그 사전 문구에서는
-      나오지 않습니다 — 미출처.
-    * ``WRT800176`` — 예전 인용 ``TCSOptionsActivity.java:557`` 은 7.0.6 에
-      없습니다. 이 코드는 평문 자산 사전에도 없습니다(``WRT8001xx`` 형제는
-      ``error_json.json:12847`` 부터 줄지어 있으나 ``176`` 만 빠져 있습니다).
-      7.0.6 근거가 전혀 없고 이 분류는 6.5.0 시절 인용에만 기대고 있습니다 —
-      미출처.
+      "좌석선택 예약불가".
+    * ``WRT800176`` — 7.0.6 근거가 전혀 없고 평문 자산 사전에도 없습니다
+      (``WRT8001xx`` 형제는 ``error_json.json:12847`` 부터 줄지어 있으나
+      ``176`` 만 빠져 있습니다). 이 분류는 6.5.0 분석에서 온 것이고 미출처입니다.
     """
 
 
@@ -326,9 +298,8 @@ class KorailReservationRefusedError(KorailAppError):
     확인됩니다(``analysis/apktool/assets/error_json.json:12465`` "동일한 예약
     내역이 있으니, 기존 예약 건을 취소하거나 발권 후 구매하시기 바랍니다.",
     ``:2642`` "개인 고객 1인당 구매 한도를 초과하였습니다…", ``:2599``
-    "전체예약건수가 초과되었습니다."). 예전에 달려 있던 ``c5/a.java:174-177``
-    과 ``a5/k.java:208-214`` 은 7.0.6 에 없는 경로이고(세 코드 리터럴도
-    jadx/smali 전체에 0건 — AppSuit 보호), 위 "앱은 사용자를 기존 예약목록으로
+    "전체예약건수가 초과되었습니다."). 세 코드 리터럴은 jadx/smali 전체에
+    0건(AppSuit 보호)이고, 위 "앱은 사용자를 기존 예약목록으로
     보냅니다"라는 UI 동작은 7.0.6 에서 재확인하지 못했습니다 — 그 부분은
     미출처입니다.
 
@@ -341,9 +312,9 @@ class KorailReservationRefusedError(KorailAppError):
 class KorailInvalidRequestError(KorailAppError):
     """필드 수준 검증 거부. 입력을 고쳐야 합니다.
 
-    ``WRG200018``, ``WRT100002``, ``WRT100124`` — 이전엔 "APK 0건, 실서버 관측만"
-    이었으나, ``analysis/apktool/assets/error_json.json`` (AppSuit 가 건드리지
-    않는 평문 ``h_msg_cd`` → 안내문구 사전) 에서도 확인됨
+    ``WRG200018``, ``WRT100002``, ``WRT100124`` — 실서버 관측에 더해
+    ``analysis/apktool/assets/error_json.json`` (AppSuit 가 건드리지 않는 평문
+    ``h_msg_cd`` → 안내문구 사전) 에서도 확인됨
     (``:4194`` "입력값오류(PNR번호)", ``:4600`` "창구번호미입력,미승인창구",
     ``:4625`` "반환번호를 확인해주세요").
 
@@ -356,7 +327,6 @@ class KorailInvalidRequestError(KorailAppError):
 class KorailNotEntitledError(KorailAppError):
     """이 계정에 그 할인·상품 자격이 없습니다. ``ERR299943``.
 
-    이전엔 "APK 0건, 실서버 관측만"이었으나,
     ``analysis/apktool/assets/error_json.json`` (AppSuit 가 건드리지 않는 평문
     ``h_msg_cd`` → 안내문구 사전) 에서 확인됨
     (``:2475`` "예약할인이 지원되지 않습니다").
@@ -373,9 +343,7 @@ class KorailNotEntitledError(KorailAppError):
 class KorailServiceUnavailableError(KorailAppError):
     """KORAIL 백엔드 불가 선언. ``SEMGTK``.
 
-    ``BaseActivity.java:608-609`` 을 인용하던 자리입니다. 그 클래스는 6.5.0
-    시절 이름이고 7.0.6 디컴파일에 없으며(jadx/smali 전수 검색 0건) ``SEMGTK``
-    리터럴도 전체 0건(AppSuit 보호)입니다. 즉 "앱이 그때 무엇을 띄우는가"를
+    ``SEMGTK`` 리터럴은 jadx/smali 전체 0건(AppSuit 보호)입니다. 즉 "앱이 그때 무엇을 띄우는가"를
     보여 주는 **코드** 근거는 7.0.6 에서 재유도하지 못했습니다 — 미출처.
     다만 안내 문구 자체는 평문 자산 사전에서 확인되고, 그 문구가 "앱은
     저장된 승차권 화면을 제안합니다"를 그대로 뒷받침합니다 —
@@ -387,8 +355,7 @@ class KorailServiceUnavailableError(KorailAppError):
 class KorailAppUpdateRequiredError(KorailAppError):
     """서버가 앱 업데이트를 요구합니다. ``SUPDATE``.
 
-    ``BaseActivity.java:613-619`` 을 인용하던 자리입니다. 그 클래스는 7.0.6 에
-    없고 ``SUPDATE`` 리터럴도 jadx/smali 전체에 0건(AppSuit 보호)입니다. 코드의
+    ``SUPDATE`` 리터럴은 jadx/smali 전체에 0건(AppSuit 보호)입니다. 코드의
     뜻만 평문 자산 사전에서 확인됩니다 —
     ``analysis/apktool/assets/error_json.json:65`` "최신버전으로 업데이트하신
     후 이용하여 주십시오.". "Google Play 로 보냄"은 7.0.6 에서 확인하지
@@ -421,11 +388,8 @@ class KorailNetFunnelError(_CodeMessagePickle, KorailApiError):
 class KorailQueueRejectedError(KorailNetFunnelError):
     """대기열이 아예 돌려보냄. ``TsBlock``(301) / ``TsIpBlock``(302).
 
-    ``T6/g.java:892-894``/``:909`` 를 인용하던 자리입니다. ``T6/g`` 는 6.5.0
-    시절 난독화 이름이고 7.0.6 디컴파일에 그 경로가 없습니다 — ``T6`` 최상위
-    패키지가 jadx/smali 어디에도 없으므로 철회된 인용입니다. **다만 주장
-    자체는 7.0.6 에서 다시 확인됩니다**: NetFunnel SDK 가 난독화되지 않은
-    원래 패키지 그대로 들어 있습니다 —
+    7.0.6 근거: NetFunnel SDK 가 난독화되지 않은 원래 패키지 그대로 들어
+    있습니다 —
     ``analysis/jadx/sources/com/netfunnel/api/Netfunnel.java:114-116``
     ``EvnetCode.isBlocking()`` 이 ``Block``(301)/``IpBlock``(302)에서만 참이고
     (상수 선언은 ``:67-68``), ``ExpressNumber``(303, 선언 ``:69``)는
@@ -452,29 +416,26 @@ class KorailDynaPathRequiredError(KorailApiError):
 # ---------------------------------------------------------------------------
 # h_msg_cd -> exception mapping
 #
-# 코드로 가른다. 근거로 BaseActivity.java:600-649(과 h_msg_txt 표시는 :625)를
-# 달고 있었으나 7.0.6 에는 그 클래스가 없고, 코드 전체를 한자리에서 가르는
-# switch 도 없다 — 분기는 화면별 ViewModel 로 흩어져 있다. 7.0.6 에서 확인되는
+# 코드로 가른다. 7.0.6 에는 코드 전체를 한자리에서 가르는 switch 가 없다 —
+# 분기는 화면별 ViewModel 로 흩어져 있다. 7.0.6 에서 확인되는
 # 것은 (a) 봉투 세 필드의 선언(network/model/CommonOut.java:40-44) 과
 # (b) h_msg_cd 를 키로 안내문구를 꺼내 화면 문구를 만드는
 # common/helper/ErrorHelper.java(두 오버로드 :44-88, :90-114; assets 에서 JSON
 # 을 읽어 :77/:111 에서 optString(code, ...) 하는 것이 전부. 자산 파일 이름
 # 리터럴은 AppSuit 로 보호돼 있으나 assets 에 있는 h_msg_cd→문구 JSON 은
 # error_json.json 하나뿐이다)뿐이다. "코드로 가른다"는 이 라이브러리의
-# 선택이고, 앱이 한자리에서 그렇게 한다는 원래 주장은 7.0.6 미출처다.
+# 선택이다.
 #
 # 이 매핑이 해서는 안 되는 일: 이미 올라가기로 정해진 예외를 더 좁히는 것만
 # 할 수 있다. 성공에 얹혀 오는, 결코 예외가 되어서는 안 되는 코드:
 #   IRR000014, IRT800005, WRS800036, IRZ000001/S200, IRT000000/MRT200105,
 #   WRR664296  (strResult=SUCC 와 취소 가능한 PNR 을 달고 온다)
-# 그것을 고정하던 테스트는 삭제됐다. 아래 목록이 유일한 기록이다.
+# 이것을 고정하는 테스트는 없다. 위 목록이 유일한 기록이다.
 #
 # analysis/apktool/assets/error_json.json — h_msg_cd -> 안내문구 평문 사전. jadx/smali
 # 는 대부분 AppSuit 로 코드 문자열을 감추지만, 이 자산 파일은 컴파일 대상이 아니라서
-# 그대로 풀린다. 이걸로 "APK 0건, 실서버 관측만"이라 적었던 판정 다수가 틀렸음이
-# 드러났다 — 그 판정은 jadx/smali만 훑고 apktool assets 는 보지 않았던 탓이다.
-# IRT010110 이 대표 사례: 전에는 아래 "일부러 넣지 않은 것"에 있었으나, 이 사전에
-# "잔여석없음"으로 나와서 SOLD_OUT_CODES 로 옮겼다. 근거는 각 프로즌셋 주석 참고.
+# 그대로 풀린다 — jadx/smali 에서 0건인 코드도 여기서는 찾을 수 있다. 근거는 각
+# 프로즌셋 주석 참고.
 #
 # 2026-09-21 체계적 재조사: error_json.json 19,919건 전체를 이 라이브러리가 이미
 # 쓰는 전선접두사 15개(ERR/ERT/IRG/IRR/IRT/IRZ/MRR/MRT/WRC/WRD/WRG/WRI/WRR/WRS/WRT
@@ -490,12 +451,11 @@ class KorailDynaPathRequiredError(KorailApiError):
 # 일부러 넣지 않은 것:
 #   "MACRO"    이 앱의 안티매크로는 응답 본문의 정수 필드(KorailDynaPathError).
 #              error_json.json 전수조사에도 없음 — 재확인.
-#   S198       MaaS 전용. BaseActivity.java:621 을 달고 있었으나 7.0.6 에 그
-#              클래스가 없어 그 인용은 미출처다. 이 라이브러리가 구현하지
-#              않는 표면이라는 판단은 아래 문구가 뒷받침한다.
+#   S198       MaaS 전용. 이 라이브러리가 구현하지 않는 표면이라는 판단은
+#              아래 문구가 뒷받침한다.
 #              error_json.json:208: "품절된 상품이 있어 결제를 진행할 수 없습니다.
 #              확인을 누르시면 품절된 상품이 장바구니에서 자동으로 삭제됩니다." —
-#              장바구니(MaaS) 문맥이라는 기존 판단과 일치, 재확인만 되고 번복은 없음.
+#              장바구니(MaaS) 문맥.
 #   ERT800077  앱이 재시도를 권하나 이 라이브러리에 재시도 로직이 없다.
 #              error_json.json 전수조사에도 없음 — 재확인.
 # ---------------------------------------------------------------------------
@@ -529,8 +489,8 @@ NO_RESULT_CODES = frozenset({
 #: 가능합니다" 와 대응).
 NO_DIRECT_TRAIN_CODE = "WRD000061"
 
-#: 재고 소진. APK 확인. srtgo 의 ``IRT010110`` 은 전엔 0건이라 제외했으나
-#: error_json.json:3203 "잔여석없음"으로 확인되어 포함. ``WRT300001``/
+#: 재고 소진. APK 확인. srtgo 의 ``IRT010110`` 은
+#: error_json.json:3203 "잔여석없음"으로 확인. ``WRT300001``/
 #: ``ERR800048`` 도 같은 "매진" 패턴으로 그 사전 전수조사에서 추가(:5137,11062).
 #: 2026-09-21 재조사로 6개 추가: ``IRT010510``/``IRT011010``/
 #: ``IRT011210``/``IRT011310`` 은 ``IRT010110`` 과 메시지가 토씨까지
@@ -572,8 +532,8 @@ RESERVATION_REFUSED_CODES = frozenset({
     "ERR800052", "ERR911421", "ERR911528", "WRR664254", "WRR800045",
 })
 
-#: 필드 검증 거부. ``WRG200018``/``WRT100002``/``WRT100124`` 는 전엔 "APK 0건,
-#: 실서버 관측만"이었으나 error_json.json 에서 확인됨(:4194,4600,4625).
+#: 필드 검증 거부. ``WRG200018``/``WRT100002``/``WRT100124`` 는 실서버 관측에
+#: 더해 error_json.json 에서 확인됨(:4194,4600,4625).
 #: ``WRG200001``~``WRG200020``(``018`` 제외 19개)은 같은 ``WRG2000xx`` 계열이
 #: "입력값오류(필드명)" 동일 패턴으로 그 사전에 연속 나열되어 있어 함께 추가
 #: (:4177-4196).
@@ -620,7 +580,7 @@ INVALID_REQUEST_CODES = frozenset({
     "WRT400356", "WRT800053", "WRT800074", "WRT800075",
 })
 
-#: 자격 없음. ``ERR299943`` 은 전엔 "APK 0건, 실서버 관측만"이었으나
+#: 자격 없음. ``ERR299943`` 은 실서버 관측에 더해
 #: error_json.json 에서 확인됨(:2475). ``ERR800049``/``WRC000419``/
 #: ``WRC800030``/``WRR800058`` 은 같은 "할인·상품 적용대상 아님" 패턴으로
 #: 그 사전 전수조사에서 추가(:11063,12013,12059,12492).
@@ -634,14 +594,12 @@ NOT_ENTITLED_CODES = frozenset({
     "WRC000412", "WRC000446", "WRR664211",
 })
 
-#: 백엔드 불가. ``BaseActivity.java:608`` 을 달고 있었으나 7.0.6 에 그 클래스가
-#: 없다(코드 리터럴도 AppSuit 보호로 jadx/smali 0건). 현재 근거는 평문 자산
+#: 백엔드 불가. 코드 리터럴은 AppSuit 보호로 jadx/smali 0건. 근거는 평문 자산
 #: 사전뿐이다 — ``analysis/apktool/assets/error_json.json:66``
 #: "…저장된 승차권화면으로 이동하시겠습니까?".
 SERVICE_UNAVAILABLE_CODE = "SEMGTK"
 
-#: 앱 업데이트 요구. ``BaseActivity.java:613`` 을 달고 있었으나 7.0.6 에 그
-#: 클래스가 없다(코드 리터럴도 AppSuit 보호로 jadx/smali 0건). 현재 근거는
+#: 앱 업데이트 요구. 코드 리터럴은 AppSuit 보호로 jadx/smali 0건. 근거는
 #: 평문 자산 사전뿐이다 — ``analysis/apktool/assets/error_json.json:65``
 #: "최신버전으로 업데이트하신 후 이용하여 주십시오.".
 APP_UPDATE_REQUIRED_CODE = "SUPDATE"
