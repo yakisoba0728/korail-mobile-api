@@ -381,9 +381,18 @@ class KorailClient:
 
         서버가 ``strRedirectUrl`` 을 주면 2단계 인증이 필요하다는 뜻이라
         :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 를 올리고 그 예외를
-        ``session.pending`` 에 남깁니다. 그 밖의 실패는
-        :class:`~korail_mobile_api.errors.KorailAuthError` 이며, 쿠키가 오지 않은 성공 응답도
-        같은 예외로 막습니다.
+        ``session.pending`` 에 남깁니다.
+
+        :class:`~korail_mobile_api.errors.KorailAuthError` 로 바뀌는 것은 **로그인 요청
+        자체의 앱 수준 거절**(``login.Login`` 이 ``FAIL`` 또는 성공 코드가 아닌
+        ``h_msg_cd`` 로 답함)과, 쿠키(``JSESSIONID``)가 오지 않은 성공 응답뿐입니다.
+        나머지는 **바꾸지 않고 그대로** 전파됩니다 — HTTP 왕복 실패는
+        :class:`~korail_mobile_api.errors.KorailTransportError`, JSON·봉투·암호화
+        파라미터(``key`` 누락·길이) 이상은
+        :class:`~korail_mobile_api.errors.KorailProtocolError`, 로그인 전 단계
+        (``MobileService.cache``·``common.code.do``)의 앱 수준 거절은 해당
+        :class:`~korail_mobile_api.errors.KorailAppError` 하위 예외 그대로입니다.
+        어느 경우든 실패하면 세션·쿠키는 남지 않습니다.
         """
         return self.session.login(
             member_no,
@@ -543,7 +552,9 @@ class KorailClient:
         """상태변경 메서드의 공통 골격: 전송 → 파싱 → 세션만료 복구.
 
         타입 파싱이 실패하면 예외의 :attr:`~korail_mobile_api.KorailApiError.raw`
-        에 **응답 원문이 담겨 있습니다.** 그 사실이 말해 주는 것은 "응답을
+        에 **받은 응답 원문 전체가 담겨 있습니다** — 파서가 이미 ``raw`` 를
+        채운 예외여도 원문 전체로 바꾸고, 파서가 넣었던 값은
+        ``parser_raw`` 속성에 남깁니다. 그 사실이 말해 주는 것은 "응답을
         받았지만 타입 파싱이 실패했다"까지입니다 — 서버 상태가 변경됐는지
         아닌지는 **알 수 없습니다.** 호출자는 원문을 보고 판단해야 하며,
         모르는 채로 같은 변경을 재전송해선 안 됩니다.
@@ -570,17 +581,22 @@ class KorailClient:
                 #
                 # 그래도 **재전송이 위험하다는 결론은 같습니다**: 변경이
                 # 반영됐을 수도 있고 아닐 수도 있는데, 타입 파싱이
-                # 실패하면서 ``.raw`` 가 비어 있으면, 호출자는 무슨 일이
-                # 실패하면 호출자는 그것을 가릴 방법이 없어 **같은 변경을 다시
-                # 보내기 쉽습니다** — 장바구니라면 두 번 담기고 결제라면 더
+                # 실패하면서 ``.raw`` 가 비어 있으면 호출자는 그것을 가릴
+                # 방법이 없어 **같은 변경을 다시 보내기 쉽습니다** — 장바구니라면 두 번 담기고 결제라면 더
                 # 나쁩니다.
                 #
                 # 그래서 응답 원문을 예외에 붙여 줍니다. 호출자가 원문을 보고
                 # 판단해야 하며, 서버 상태를 모르는 채로 같은 변경을 재전송해선
-                # 안 됩니다. 이미 ``raw`` 가 있는 예외는 건드리지 않습니다 —
-                # 파서가 더 구체적인 것을 넣었을 수 있습니다.
-                if getattr(error, "raw", None) is None:
-                    error.raw = response.raw
+                # 안 됩니다.
+                #
+                # ``.raw`` 는 **언제나 받은 응답 전체**입니다. 한때 파서가 이미
+                # ``raw`` 를 채운 예외는 "더 구체적일 수 있다"며 건드리지 않았는데,
+                # 파서가 넣는 값은 보통 응답의 **일부**(실패한 행 하나 등)라
+                # 호출자가 판단에 필요한 원문을 잃었습니다(최종 감사 C27). 파서가
+                # 넣었던 값은 버리지 않고 ``.parser_raw`` 에 옮겨 둡니다(없으면
+                # ``None``).
+                error.parser_raw = getattr(error, "raw", None)
+                error.raw = response.raw
                 raise
             except Exception as error:
                 # 파서가 이 패키지의 예외가 아닌 것을 낼 수도 있습니다 — 예를

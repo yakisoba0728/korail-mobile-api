@@ -20,8 +20,18 @@
 그대로 보여 주고 ``room_class_code``(좌석 재고는 ``car_no`` 도)만 가립니다.
 
 운행 스케줄은 2026-09-16 실서버에서 확인했습니다 — 광명역→인천공항T1 42편을
-파싱했습니다. 좌석 재고와 좌석이동 목록은
-라이브 미검증이며 요청과 응답 모양이 APK 선언에서 나왔습니다.
+파싱했습니다.
+
+좌석 재고(``lms.TResidualSeatsResearch.do``)는 **요청 한 가지만** 라이브로
+확인했습니다: 2026-09-22 나머지 조건이 같은 질의 3건을 ``isArrow`` 참/거짓으로
+보내 참은 3건 모두 ``S003`` 거절, 거짓은 3건 모두 성공 봉투였습니다
+(:attr:`LimousineSeatInventoryQuery.is_arrow`). 그 밖의 요청 필드와 **응답 모양**
+(:class:`LimousineSeatInventoryResponse` 의 필드별 해석)은 라이브로 확인하지
+않았고 APK 선언에서 나왔습니다 — ``layout_type`` 이 정수로도 온다는 사실은 같은
+DTO 를 쓰는 일반 좌석재고 라우트의 2026-09-21 관측에서 빌려 온 것입니다.
+좌석이동 목록(``seatMovie.LimousineScheduleView``)은 7.0.6 에 없는 라우트라
+라이브 확인 대상이 아니며, 응답 타입은 저장해 둔 6.5.0 응답을 해석하기 위한
+것입니다.
 """
 from __future__ import annotations
 

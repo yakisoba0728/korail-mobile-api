@@ -58,7 +58,6 @@ from collections.abc import Callable
 from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 from .crypto import transform_login_password
 from .errors import (
-    KorailApiError,
     KorailAppError,
     KorailAuthContinuationRequired,
     KorailAuthError,
@@ -565,21 +564,35 @@ class KorailSessionClient:
         """서버 세션 무효화 후 로컬 상태 비움.
 
         7.0.6 ``POST login.Logout`` 의 ``timeStamp`` 폼을 보냅니다.
-        최선 노력 — 실패해도 예외 없음.
+        최선 노력 — 서버 요청이 어떻게 실패하든 **예외를 내지 않고**, 로컬
+        상태(``current``·``pending``·쿠키)는 **언제나** 비웁니다. 서버 쪽 세션이
+        실제로 무효화됐는지는 이 메서드로 알 수 없습니다.
+
+        예전에는 :class:`~korail_mobile_api.errors.KorailApiError` 만 삼켜서, 닫힌
+        HTTP 클라이언트의 ``RuntimeError`` 같은 다른 예외가 나면 그 예외가
+        전파되고 ``current``·쿠키가 남았습니다(최종 감사 C26). 이제 서버 요청의
+        ``Exception`` 은 모두 삼키고, 비우기는 ``finally`` 에서 합니다 —
+        ``KeyboardInterrupt`` 처럼 ``Exception`` 이 아닌 것은 전파되지만 그때도
+        로컬 상태는 비워진 뒤입니다.
         """
-        if self.current is not None:
-            try:
+        try:
+            if self.current is not None:
                 self.http.post_form(
                     "/classes/com.korail.mobile.login.Logout",
                     {"timeStamp": int(time.time() * 1000)},
                     raise_on_fail=False,
                 )
-            except KorailApiError:
-                pass
-        self.clear_session()
+        except Exception:  # noqa: BLE001 — 최선 노력, 위 docstring 참고
+            pass
+        finally:
+            self.clear_session()
 
     def clear_session(self) -> None:
-        """요청 없이 쿠키·세션·대기 상태를 비웁니다."""
-        self.http.cookies.clear()
+        """요청 없이 쿠키·세션·대기 상태를 비웁니다.
+
+        세션·대기 상태를 먼저 비웁니다 — 쿠키 저장소가 예외를 내더라도
+        ``current`` 가 남지 않게 하려는 순서입니다.
+        """
         self.current = None
         self.pending = None
+        self.http.cookies.clear()
