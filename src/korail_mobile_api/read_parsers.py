@@ -232,6 +232,7 @@ def _validate_envelope(
     *,
     accepted_empty_codes: frozenset[str] = frozenset(),
     returned_failure_codes: frozenset[str] = frozenset(),
+    return_all_failures: bool = False,
     allow_result_only_success: bool = False,
 ) -> bool:
     if not isinstance(raw, Mapping):
@@ -258,7 +259,12 @@ def _validate_envelope(
     if result == "FAIL" and code == SESSION_EXPIRED_CODE:
         raise KorailSessionExpiredError(code, message, raw=raw)
     failed = result == "FAIL" or code == "WRC000288"
-    if failed and code not in accepted_empty_codes and code not in returned_failure_codes:
+    if (
+        failed
+        and not return_all_failures
+        and code not in accepted_empty_codes
+        and code not in returned_failure_codes
+    ):
         # accepted_empty_codes 로 허용한 빈 응답은 분류하지 않고, 그 외 발생할 오류만 세분화합니다.
         raise classify_app_error(code, message, raw=raw)
     return failed
@@ -1089,8 +1095,8 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
         contents = tuple(
             TripMenuContent(
                 **_nullable_scalar_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
-                # TrGdMenuLtOutCont.java:45 passData → TrGdMenuLtOutPass.java:29-35. 정기권 메뉴·종류 라우트가 싣는
-                # 것과 같은 모양이라 같은 헬퍼를 씁니다.
+                # TrGdMenuLtOutCont.java:45 passData → TrGdMenuLtOutPass.java:29-35. 정기권 메뉴와 구조가 비슷해 같은
+                # 헬퍼를 쓰되, 역 선택 키 철자만 다릅니다(아래).
                 pass_data=_parse_pass_menu_data(
                     _optional_mapping(row, "passData"),
                     # TrGdMenuLtOutPass.java:152 — 여행 메뉴의 키 철자는 별도입니다.
@@ -1365,12 +1371,8 @@ def parse_guide_seat_condition_response(
 ) -> GuideSeatConditionResponse:
     # 7.0.6 은 성공이 아니면 코드와 무관하게 h_msg_txt 를 안내로 띄웁니다
     # (TrainOptionViewModel.java:290-300). 그래서 FAIL 도 예외가 아니라 응답입니다 —
-    # 세션 만료(P058)만 예외입니다.
-    code = raw.get("h_msg_cd") if isinstance(raw, Mapping) else None
-    _validate_envelope(
-        raw,
-        returned_failure_codes=frozenset() if code is None else frozenset({code}),
-    )
+    # FAIL/P058(세션 만료)만 예외입니다.
+    _validate_envelope(raw, return_all_failures=True)
     if raw.get("strResult") not in {"SUCC", "FAIL"}:
         raise KorailProtocolError(
             "KORAIL seat guidance result must be SUCC or FAIL"

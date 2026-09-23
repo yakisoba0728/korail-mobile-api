@@ -140,7 +140,7 @@ _SEAT_FIELDS = {
 def parse_limousine_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> LimousineSeatInventoryResponse:
-    """리무진 좌석 재고. seatList 누락은 빈 목록, 명시적 null·비목록·비객체 행은 오류입니다.
+    """리무진 좌석 재고. seatList 가 없거나 null 이면 빈 목록, 목록이 아니거나 비객체 행이면 오류입니다.
 
     일반 좌석 재고와 응답 DTO 를 공유합니다(NetworkApi.java:271,741). 선택 필드 layout_type 은 문자열·정수를 허용합니다. 정수형 근거는 일반
     좌석 재고의 2026-09-21 관측이며 리무진 응답 자체의 라이브 검증은 아닙니다.

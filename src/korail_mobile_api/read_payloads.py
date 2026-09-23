@@ -321,6 +321,19 @@ def build_pass_menu_form(menu_no: str) -> dict[str, str]:
     return {"menuNo": _required_text(menu_no, "menu_no")}
 
 
+def build_crew_request_list_query(
+    timestamp_ms: int | None = None,
+) -> dict[str, str]:
+    """승무원 호출 사유 조회. 별도 입력은 timeStamp 뿐입니다(CrewCallCommonIn.java:50,
+    NetworkRepositoryImpl.java:4105-4107). timestamp_ms 를 생략하면 현재 epoch 밀리초입니다.
+
+    앱은 CommonIn.serializer() 로 인코딩하지만(NetworkService.java:3952-3955) CommonIn 은 sealed 추상
+    클래스라 그 직렬화기가 CrewCallCommonIn$$serializer 로 넘기므로(CommonIn.java:35,70,220,350)
+    timeStamp 가 나갑니다. 다형 판별 키(type, 값 보호)는 싣지 않습니다.
+    """
+    return build_cache_query(timestamp_ms)
+
+
 def build_commuter_kind_menu_query(
     commuter_kind_code: str,
 ) -> dict[str, str]:
@@ -1003,7 +1016,7 @@ def build_commuter_info_form(
             ("ogtkRetPwd", ticket.return_password),
             ("inquiryType", request.inquiry_type),
         )
-    raise KorailProtocolError("request must be an exact commuter request variant")
+    raise KorailProtocolError("request must be a commuter request variant")
 
 
 def _wire_component(value: str, name: str) -> str:

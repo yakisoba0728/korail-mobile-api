@@ -326,7 +326,7 @@ class TripMenuContent:
     #: ``passType``(``:47``) — 위 6행에서 ``'aPass'``. 7.0.6 에 소비자가 없어 무엇을 뜻하는지는 미확인입니다(클래스 독스트링 참고).
     pass_type: str | None = None
     #: ``passData``(``:45``, ``TrGdMenuLtOutPass.java:29-35``) — 정기권 조회에 필요한 연령·기간 선택지 묶음. 정기권 메뉴/종류
-    #: 라우트가 싣는 것과 같은 모양이라 ``_parse_pass_menu_data`` 를 그대로 씁니다. ``PassConditionViewModel.java:1244`` 가
+    #: 라우트와 구조가 비슷해 ``_parse_pass_menu_data`` 를 쓰되 역 선택 키는 ``h_seiect_station`` 입니다. ``PassConditionViewModel.java:1244`` 가
     #: 이 객체를 꺼내고, 같은 함수의 ``:1247-1248`` 이 ``null`` 이면 ``backAlert`` 로 화면을 되돌립니다.
     pass_data: PassMenuData | None = None
 
@@ -620,7 +620,7 @@ class FreeSeatCarResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class GuideSeatConditionResponse(BaseKorailResponse):
-    """도우미석 안내. 클라이언트는 FAIL/MRR800011 도 응답으로 돌려주며 h_msg_txt 에 안내가 있습니다. 자체 필드 timeStamp 는 long
+    """도우미석 안내. 앱처럼 FAIL 도 코드와 무관하게 응답으로 돌려주며(P058·코드 없는 FAIL 은 예외) h_msg_txt 에 안내가 있습니다. 자체 필드 timeStamp 는 long
     선언(GuideSeatCndOut.java:29,50)이지만 보호된 serializer 이름을 확인하지 못해 전송 키는 속성명에 따른 추정입니다.
     """
 

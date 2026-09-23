@@ -60,8 +60,8 @@ class KorailConfig:
     #: CommonIn.java:381 의 lang. 평문 값은 보호돼 있으므로 None 이면 생략합니다. 필드명 상수:
     #: com/kakao/sdk/common/Constants.java:27. 위치 인자 호환성을 위해 순서를 유지합니다.
     lang: str | None = None
-    #: 누적 대기 상한(초). None 은 상한 없음; 초과하면 요청 없이 KorailNetFunnelError. 앱도 누적 상한이 없지만 비대기 응답·사용자 중단으로 루프를
-    #: 끝냅니다(Netfunnel.java:622-664).
+    #: 누적 대기 상한(초). None 은 상한 없음. 대기열을 빠져나온 시점(통과든 mode=1 의 ErrorBypass 든)에 넘겼으면 요청 없이
+    #: KorailNetFunnelError. SDK 루프에는 상한이 없고(Netfunnel.java:622-664), 앱의 15초 콜백 감시는 netfunnel 모듈 설명 참고.
     netfunnel_wait_limit: float | None = None
     #: 관문 이름 → ``aid`` 덮어쓰기. ``aid`` 리터럴은 7.0.6 에서 보호돼 있어 기본값은 길이·호출부 이름으로 고른 **미검증** 값입니다
     #: (:data:`~korail_mobile_api.netfunnel.KORAIL_NETFUNNEL_GATES`).

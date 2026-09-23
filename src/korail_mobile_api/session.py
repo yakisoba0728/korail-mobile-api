@@ -11,7 +11,8 @@ S200 문구는 운행중지 안내지만 로그인 성공 처리에도 운행중
 
 로그인 응답은 앱처럼 ``FAIL`` 이어도 HTTP 계층에서 예외로 바꾸지 않고 :meth:`KorailSessionClient._finish_login`
 이 판정합니다(앱: NetworkService.java:6916-6919 가 재로그인 요구·서비스 오류만 따로 떼고 나머지 LoginOut 을
-화면에 넘김). 성공은 ``strResult`` 가 ``FAIL`` 이 아니고 코드가 허용목록에 있으며 JSESSIONID 가 있을 때뿐입니다.
+화면에 넘김). 단 FAIL/P058 은 HTTP 계층에서 세션 만료 예외입니다. 성공은 앱의 LoginOut.isSuccess() 처럼 ``strResult`` 가
+아니라 코드가 허용목록에 있을 때이고, 여기에 JSESSIONID 가 있어야 합니다.
 """
 from __future__ import annotations
 
@@ -72,7 +73,7 @@ def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
 class KorailSessionClient:
     """로그인 왕복과 세션 상태.
 
-    :attr:`current` = 살아 있는 세션 또는 ``None``. :attr:`pending` = 2단계 인증 대기 중인 예외.
+    :attr:`current` = 살아 있는 세션 또는 ``None``. :attr:`pending` = 웹 단계(휴면 해제·비밀번호 변경)가 필요한 예외.
     """
 
     def __init__(self, http: KorailHttpClient) -> None:
@@ -127,8 +128,8 @@ class KorailSessionClient:
         """회원 자격증명 로그인. 라우트: NetworkApi.java:458-460.
 
         폼 순서는 라이브러리의 선택입니다. 앱 descriptor 순서는 LoginIn$$serializer.java:33-43, 속성 대응은 LoginIn.java:57-76
-        에 있으며 lang·txtInputFlg·custId 위치가 다릅니다. 성공 코드가 아니면서 strRedirectUrl 이 있으면
-        KorailAuthContinuationRequired 입니다.
+        에 있으며 lang·txtInputFlg·custId 위치가 다릅니다. 거절 코드별 처리는 :meth:`_finish_login` 과
+        :data:`KORAIL_LOGIN_CONTINUATION_CODES` 참고.
         """
         return self._run_login(
             lambda: self._login(
@@ -234,7 +235,7 @@ class KorailSessionClient:
         login_id: str,
     ) -> KorailSession:
         code = response.h_msg_cd
-        if response.str_result == "FAIL" or code not in KORAIL_LOGIN_SUCCESS_CODES:
+        if code not in KORAIL_LOGIN_SUCCESS_CODES:
             if code in KORAIL_LOGIN_CONTINUATION_CODES:
                 redirect_url = response.raw.get("strRedirectUrl")
                 raise KorailAuthContinuationRequired(
@@ -277,7 +278,7 @@ class KorailSessionClient:
     def logout(self) -> None:
         """서버 로그아웃을 시도하고 finally 에서 로컬 세션·쿠키를 비웁니다.
 
-        7.0.6 ``POST login.Logout`` 의 ``timeStamp`` 폼을 보냅니다. 서버의 FAIL 봉투는 예외가 아니지만 전송 오류 같은 실패는 그대로 올라오며,
+        7.0.6 ``POST login.Logout`` 의 ``timeStamp`` 폼을 보냅니다. 서버의 FAIL 봉투는 예외가 아니지만(FAIL/P058 만 세션 만료 예외) 전송 오류 같은 실패는 그대로 올라오며,
         그때도 로컬 상태는 이미 비워져 있습니다. 서버 세션의 실제 무효화 여부는 이 메서드만으로 보장하지 않습니다.
         """
         try:

@@ -65,10 +65,8 @@ def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
         ) from exc
     if not info.key:
         raise KorailProtocolError(
-            "KORAIL login crypto metadata missing an AES key; the 7.0.6 app "
-            "never sends a plaintext password (it retries commonCode once, "
-            "then AESCrypto crashes on an empty key) so this library refuses "
-            "instead of leaking the password"
+            "KORAIL login crypto metadata missing an AES key; this library "
+            "refuses to send the password in plain text"
         )
     key = _validate_login_crypto_key(info)
     iv = key[:16]

@@ -5,14 +5,18 @@
 """NetFunnel 대기열. KORAIL API 요청 전에 관문을 통과하고 키를 반납합니다.
 
 앱 SDK 1.7.18(Netfunnel.java:18)은 5101 로 진입하고 201/202 에서만 TTL 1~30초 대기 후 5002 를
-반복합니다(Netfunnel.java:610-664, com/netfunnel/api/Response.java:59-66). 누적 대기 상한은 없으며 비대기 응답이나 사용자 중단으로 끝납니다.
+반복합니다(Netfunnel.java:610-664, com/netfunnel/api/Response.java:59-66). SDK 루프에는 누적 대기 상한이 없습니다. 다만 앱의
+연결부에는 마지막 콜백과 현재 시계의 차를 15000 과 비교해 finish(false) 로 끝내는 감시가 따로 있습니다
+(ScreenViewModel$withNetFunnel$2$1$5.smali:603-692,875-889; 시계 단위는 보호돼 ms 이면 15초). 콜백이 끊겼을 때의 감시이지
+전체 대기 상한이 아니며, 이 라이브러리에는 없습니다.
 ScreenViewModel.java:837-900,1719,1955,1986 의 연결부는 mode=0 에서 Success 만, mode=1 에서 사용자 중단 이외의 결과를
-통과시킵니다. SDK 는 오류를 기본으로 ErrorBypass 로 바꾸므로(Netfunnel.java:269-270, Property.java:9
+통과시킵니다. SDK 는 오류를 기본으로 ErrorBypass 로 바꾸므로(Netfunnel.java:269-270, com/netfunnel/api/Property.java:9
 ``err_bypass_ = true``) 대기열 서버 장애에도 조회(mode=1)는 나갑니다. aid·sid 평문은 보호돼 있습니다. 키는 대기열용이며 이 라이브러리는 KORAIL 요청에 싣지 않습니다.
 
 앱과 다른 정책:
 * 차단 301/302 는 mode=1 에서도 KorailQueueRejectedError 입니다.
-* 앱은 onPass 코루틴을 띄운 직후 End(), 여기는 응답 뒤 finally 에서 반납합니다 — 슬롯을 요청 한 왕복만큼 더 쥡니다.
+* 반납(5004)은 KORAIL 응답 뒤 finally 에서 보냅니다. 앱 finish(ScreenViewModel.java:857-900)는 onPass 디스패치(:876) 뒤에
+  보호된 디스패치(:893-894)를 두어 요청 직후 End() 로 보이지만 대상이 식별되지 않아 확정하지 않습니다.
 * 5002/5004 는 응답이 지목한 노드로 갑니다(앱의 SDK 기본값은 정문에 머뭅니다). 허용 규칙은 netfunnel_safety.
 * 선택적 netfunnel_wait_limit 초과나 mode=0 비성공은 요청 없이 예외를 냅니다.
 5004 는 재시도·응답 파싱 없이 처리하며 실패는 로그로 남깁니다 (Netfunnel.java:848-880, CommandClient.java:182-184).
@@ -223,8 +227,21 @@ class KorailNetFunnelClient:
         if isinstance(gate, str):
             gate = self.gate(gate)
         slot = _Slot()
+        started = self._clock()
         try:
             self._admit(gate, slot)
+            # 통과(200)든 mode=1 의 ErrorBypass 든, 대기열을 빠져나온 시점에 상한을 넘겼으면
+            # 보내지 않습니다 — _admit 안의 대기 직전 검사만으로는 느린 5101/5002 응답이나
+            # 늦게 실패한 요청이 상한을 건너뜁니다.
+            limit = self.config.netfunnel_wait_limit
+            if limit is not None and self._clock() - started > limit:
+                token = slot.token
+                raise KorailNetFunnelError(
+                    token.code if token is not None else None,
+                    f"KORAIL NetFunnel took longer than netfunnel_wait_limit={limit}s; "
+                    "the API request was not sent",
+                    raw=token.raw if token is not None else None,
+                )
             return send()
         finally:
             self._complete(slot)
@@ -322,16 +339,6 @@ class KorailNetFunnelClient:
                 raw=token.raw,
             )
         if token.code == SUCCESS_CODE or not gate.success_only:
-            # 통과 응답이 늦게 와도 상한을 넘겼으면 보내지 않습니다 — 위 대기
-            # 직전 검사만으로는 느린 5101/5002 응답이 상한을 건너뜁니다.
-            limit = self.config.netfunnel_wait_limit
-            if limit is not None and self._clock() - started > limit:
-                raise KorailNetFunnelError(
-                    token.code,
-                    f"KORAIL NetFunnel admitted this request after "
-                    f"netfunnel_wait_limit={limit}s; the API request was not sent",
-                    raw=token.raw,
-                )
             return
         raise KorailNetFunnelError(
             token.code,

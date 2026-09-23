@@ -13,7 +13,8 @@ from .errors import KorailProtocolError
 KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
 
 #: 응답이 가리킬 수 있는 대기열 노드 이름. SDK 는 기본 host_notmodify=true 로 응답 노드를 따르지 않습니다 (com/netfunnel/api/Response.java:143-146,
-#: CommandClient.java:33-38, com/netfunnel/api/Property.java:23). 앱 설정도 이를 바꾸지 않습니다(KorailTalkApplication.java:361-389). 이 라이브러리는
+#: CommandClient.java:33-38, com/netfunnel/api/Property.java:23). 앱의 기동 설정(KorailTalkApplication.java:361-389)이 이 값을 바꾸는지는 보호된
+#: setter 때문에 확인되지 않습니다. 이 라이브러리는
 #: 일부러 노드를 따르되 rnf<1-99>.letskorail.com(소문자)의 HTTPS/443 으로 제한합니다. 2026-07-26 라이브 관측: 정문 완료(5004)는 약 절반이
 #: 503/Wrong Server ID, 지정 노드(rnf12/rnf13/rnf14) 완료는 수용됐습니다.
 KORAIL_NETFUNNEL_NODE_HOST_RE = re.compile(r"rnf[1-9][0-9]?\.letskorail\.com")

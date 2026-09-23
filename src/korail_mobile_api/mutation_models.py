@@ -579,6 +579,10 @@ class PaidTicket:
                 "KORAIL refund identity is incomplete; the ticket detail is "
                 f"missing {', '.join(sorted(missing))}"
             )
+        # train_no 를 주지 않으면 첫 여정의 열차번호를 씁니다 — 앱 환불 화면이 trnNo 로 싣는 값
+        # (ticketInfos[0].trnNo, RefundTicketViewModel$refundTicket$1.smali:854-868)과 같습니다.
+        if not train_no and detail.journeys:
+            train_no = detail.journeys[0].train_no or ""
         return cls(
             **parts,
             train_no=train_no,

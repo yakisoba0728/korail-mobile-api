@@ -911,8 +911,8 @@ def _echoed_job_sequence(value: str | None) -> str:
     return _ABSENT_JOB_SEQUENCE
 
 
-# 응답 첫 여정의 변경번호가 없을 때의 대체값입니다. 항상 없음으로 가정하지 않습니다. 2026-09-22: reserve/reserve_transfer/reserve_merge 의
-# 45여정 모두 해당 키가 없었고, 같은 예약을 목록으로 되읽으면 000 이었습니다. 표본 밖의 응답을 보장하지 않습니다. 앱은 응답값 또는 보호 기본값을
+# 응답 첫 여정의 변경번호가 없을 때의 대체값입니다. 항상 없음으로 가정하지 않습니다. 2026-09-22: reserve/reserve_transfer/reserve_merge/
+# recalculate_price 의 45여정 모두 해당 키가 없었고, 같은 예약을 목록으로 되읽으면 000 이었습니다. 표본 밖의 응답을 보장하지 않습니다. 앱은 응답값 또는 보호 기본값을
 # 사용합니다(PayViewModel.java:6581-6593). 대체값은 앱 보호 문자열의 복호 결과가 아니라 관측에 근거한 선택입니다.
 _ABSENT_RESERVATION_CHANGE_NO = "000"
 
@@ -1032,10 +1032,10 @@ def build_refund_form(
     보호돼 있습니다.
 
     pbp_acceptance_target_flag 는 명시값 또는 승차권 값을 사용합니다. 값 누락 시 처리와 국내/외국인 차이는 _refund_echo_field 참고. 보호
-    기본값을 빈 문자열로 확정하지 않습니다. tk_ret_tms_dv_cd 는 이 빌더에서 생략합니다. 두 앱 구성 지점은 null 을 넘기고
-    (MyTicketDetailViewModel.java:1521; FTicketDetailViewModel.java:634), DTO 기본값도 null 입니다
-    (RefundTicketIn.java:135). 이 사실만으로 모든 직렬화 설정에서 키가 없다고 단정하지 않습니다. 수수료 응답의 같은 필드는
-    RefundTicketViewModel.java:1012 의 UI 판단에 쓰입니다.
+    기본값을 빈 문자열로 확정하지 않습니다. tk_ret_tms_dv_cd·trnNo 는 commission 을 넘길 때만 싣습니다 — 승차권 상세
+    화면(MyTicketDetailViewModel.java:1521)과 외국인 화면(FTicketDetailViewModel.java:634)은 null 을 넘기고, 환불 화면은
+    수수료 응답 값을 싣습니다(아래 주석). 환불 화면이 싣는 ctlDvCd 는 한국어/외국어로 갈리는 보호 리터럴이라
+    (RefundTicketViewModel$refundTicket$1.smali:1187-1514) 싣지 않습니다.
     """
     for name, value in (
         ("pnr_no", ticket.pnr_no),

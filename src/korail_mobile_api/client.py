@@ -230,6 +230,7 @@ from .read_payloads import (
     build_cart_list_form,
     build_commuter_info_form,
     build_commuter_kind_menu_query,
+    build_crew_request_list_query,
     build_customer_trip_info_form,
     build_delay_discount_ticket_form,
     build_delivery_recipient_form,
@@ -357,14 +358,14 @@ class KorailClient:
     def clear_session(self) -> None:
         """서버에 알리지 않고 로컬 로그인 상태만 버립니다.
 
-        쿠키 저장소(``JSESSIONID`` 포함), 현재 :class:`KorailSession`, 보류 중인 2단계 인증 상태를 모두 비웁니다. 네트워크 호출이 없으므로
+        쿠키 저장소(``JSESSIONID`` 포함), 현재 :class:`KorailSession`, 보류 중인 웹 단계 예외를 모두 비웁니다. 네트워크 호출이 없으므로
         서버 쪽 세션은 스스로 만료될 때까지 살아 있습니다. 서버 세션까지 무효화하려면 :meth:`logout` 을 쓰면 됩니다.
         """
         self.session.clear_session()
 
     def logout(self) -> None:
-        """로그인 상태이면 서버 로그아웃(login.Logout)을 보내고, 어느 경우든 finally 에서 로컬 세션·쿠키를 비웁니다. FAIL 봉투는 예외가 아니지만
-        전송 오류 등은 그대로 전파됩니다. 연결 풀은 close 로 닫습니다.
+        """로그인 상태이면 서버 로그아웃(login.Logout)을 보내고, 어느 경우든 finally 에서 로컬 세션·쿠키를 비웁니다. FAIL 봉투는 예외가 아니지만(FAIL/P058 은
+        세션 만료) 전송 오류 등은 그대로 전파됩니다. 연결 풀은 close 로 닫습니다.
         """
         self.session.logout()
 
@@ -796,15 +797,21 @@ class KorailClient:
             require_envelope=False,
         )
 
-    def get_crew_request_list(self) -> CrewRequestListResponse:
+    def get_crew_request_list(
+        self,
+        *,
+        timestamp_ms: int | None = None,
+    ) -> CrewRequestListResponse:
         """승무원 호출 화면에 띄울 요청 사유 선택지를 조회합니다.
 
-        공통 필드만 보냅니다. 앱은 ``CrewCallCommonIn`` 을 만들지만 ``CommonIn.serializer()`` 로
-        인코딩해(``NetworkService.java:3952-3955``) 하위 클래스의 ``timeStamp`` 는 나가지 않습니다.
+        이 라우트의 실제 DTO(``CrewCallCommonIn.java:50``)의 유일한 입력은 ``timeStamp`` 이며, 주지 않으면 호출 시점의 밀리초 epoch
+        입니다. 자세한 근거는 :func:`~korail_mobile_api.read_payloads.build_crew_request_list_query` 의 독스트링을
+        참고하십시오.
         """
+        query = build_crew_request_list_query(timestamp_ms)
         return self._post_read(
             "/classes/com.korail.mobile.push.crwCallRq.do",
-            {},
+            query,
             parser=parse_crew_request_list_response,
         )
 
@@ -1373,7 +1380,8 @@ class KorailClient:
     ) -> TrainSearchResult | TransferSearchResult:
         """직통 조회가 KorailNoDirectTrainError(WRD000061)일 때만 환승 첫 페이지를 조회합니다. 2026-09-22 관측의 SUCC/WRG000000
         빈 목록은 폴백하지 않습니다. 반환형뿐 아니라 trains 를 확인하십시오. continuation 은 직통 조회에만 전달합니다. 앱은 사용자 확인 후 필터를
-        바꿉니다(TrainScheduleViewModel.java:3216-3219,11051-11079). 이 메서드는 확인창 없이 자동 전환합니다. 오류 분기의 기존 근거
+        바꾸고 열차군을 전체(TrainGroup.ALL, 값 보호)로 바꿉니다(TrainScheduleViewModel.java:3216-3219,11051-11079). 이 메서드는 확인창 없이
+        같은 query(열차군 그대로)로 자동 전환합니다. 오류 분기의 기존 근거
         기록은 TrainScheduleViewModel.smali:35513-35566 이며 jadx 만으로는 재검증되지 않았습니다.
         """
         try:
@@ -1781,8 +1789,7 @@ class KorailClient:
     ) -> RefundTicketResponse:
         """PaidTicket 이 가리키는 발권 승차권 한 장을 환불합니다. PNR 전체 환불이 아닙니다. 여러 장이면 각 승차권의 결과·잔여 목록을 확인해야 합니다. 같은 장을
         무조건 재전송하지 마십시오. 국내 앱의 pbpAcepTgtFlg 는 상세값 에코(MyTicketDetailViewModel.java:1521)이나 외국인 경로는 보호
-        상수(FTicketDetailViewModel.java:634)입니다. 라이브러리는 값이 없으면 빈 문자열을 만들고 전송 단계에서 생략합니다. 반환 횟수 코드는 이
-        메서드의 인자가 아닙니다. 2026-07-31: 성인 2인 16,800원 PNR 에 한 번 호출해 SUCC/IRT200277 과 8,400원이 반환됐고, 남은 한 장에
+        상수(FTicketDetailViewModel.java:634)입니다. 라이브러리는 값이 없으면 빈 문자열을 만들고 전송 단계에서 생략합니다. 2026-07-31: 성인 2인 16,800원 PNR 에 한 번 호출해 SUCC/IRT200277 과 8,400원이 반환됐고, 남은 한 장에
         별도 환불을 한 뒤 목록이 비었습니다.
 
         앱의 환불 화면처럼 먼저 :meth:`get_refund_commission` 으로 수수료를 확인하고 그 응답을

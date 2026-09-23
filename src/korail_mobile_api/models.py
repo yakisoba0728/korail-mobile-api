@@ -10,10 +10,6 @@
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from .constants import (
-    KORAIL_DIRECT_ITINERARY_CODE,
-    KORAIL_TRANSFER_ITINERARY_CODE,
-)
 from .errors import KorailProtocolError
 
 
@@ -754,42 +750,18 @@ class TransferItinerary:
 def pair_transfer_itineraries(
     trains: list[TrainSummary],
 ) -> list[TransferItinerary]:
-    """환승 행을 여정으로 묶습니다. 앱처럼 ``h_trn_seq``(:attr:`TrainSummary.train_sequence`)가 같은
-    행끼리 처음 나온 순서대로 묶습니다(TrainScheduleViewModel.smali:36958-37040 의 LinkedHashMap
-    groupBy). 두 구간이 아닌 묶음은 여정으로 만들지 않고 ``trains`` 에만 남습니다. 한 행이라도
-    ``h_trn_seq`` 가 없으면 인접한 두 행씩 짝짓습니다. 어느 쪽이든 ``h_chg_trn_seq`` 가 있으면
-    1/2 순서를 확인합니다.
+    """환승 행을 여정으로 묶습니다. 앱처럼 ``h_trn_seq``(:attr:`TrainSummary.train_sequence`, 없으면
+    ``None`` 끼리)가 같은 행을 처음 나온 순서대로 묶습니다(TrainScheduleViewModel.smali:36958-37040 의
+    LinkedHashMap groupBy). 두 구간이 아닌 묶음은 여정으로 만들지 않고 ``trains`` 에만 남습니다.
     """
-    groups: list[list[TrainSummary]]
-    if trains and all(t.train_sequence for t in trains):
-        by_sequence: dict[str, list[TrainSummary]] = {}
-        for train in trains:
-            by_sequence.setdefault(train.train_sequence or "", []).append(train)
-        groups = list(by_sequence.values())
-    else:
-        groups = [trains[i:i + 2] for i in range(0, len(trains) - 1, 2)]
-    itineraries: list[TransferItinerary] = []
-    for index, group in enumerate(groups):
-        if len(group) != 2:
-            continue
-        first, second = group
-        _assert_leg_sequence(first, index, KORAIL_DIRECT_ITINERARY_CODE)
-        _assert_leg_sequence(second, index, KORAIL_TRANSFER_ITINERARY_CODE)
-        itineraries.append(TransferItinerary(first=first, second=second))
-    return itineraries
-
-
-def _assert_leg_sequence(
-    train: TrainSummary,
-    index: int,
-    expected: str,
-) -> None:
-    sequence = train.change_train_sequence
-    if sequence is not None and sequence.strip() and sequence != expected:
-        raise KorailProtocolError(
-            "KORAIL transfer search returned a misaligned leg: "
-            f"itinerary {index} carries h_chg_trn_seq {sequence!r}, expected {expected!r}"
-        )
+    by_sequence: dict[str | None, list[TrainSummary]] = {}
+    for train in trains:
+        by_sequence.setdefault(train.train_sequence, []).append(train)
+    return [
+        TransferItinerary(first=group[0], second=group[1])
+        for group in by_sequence.values()
+        if len(group) == 2
+    ]
 
 
 @dataclass(frozen=True)
