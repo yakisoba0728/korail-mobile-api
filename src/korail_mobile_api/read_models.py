@@ -712,7 +712,7 @@ class ReservationHistoryTrain:
     #: ``h_pre_stl_tgt_flg`` — 선결제 대상 여부.
     prepayment_target_flag: str | None = None
     #: ``h_jrny_sqno`` — 이 행이 속한 여정의 순번. 같은 이름을 쓰는 형제
-    #: :attr:`ReservationHistoryPassenger` 쪽과 여정을 맞출 때 필요합니다.
+    #: :class:`ReservationHistoryPassenger` 쪽과 여정을 맞출 때 필요합니다.
     journey_sequence: str | None = field(default=None, repr=False)
 
 
@@ -1158,7 +1158,7 @@ class PassGoodsInfo:
 @dataclass(frozen=True)
 class PassMenuItem:
     #: ``afterDay`` — 서버가 문자열로 보냅니다(``PassMenuOutItem.java:28``
-    #: ``String``). 형제 :class:`CommuterKindMenuResponse.after_day` 와 형이
+    #: ``String``). 형제 :attr:`CommuterKindMenuResponse.after_day` 와 형이
     #: 같습니다. 정수가 필요하면 호출자가 변환하십시오 — 앱도 그 자리에서
     #: ``StringExKt.safeToInt`` 로 파싱 실패 시 0을 씁니다.
     after_day: str | None = None

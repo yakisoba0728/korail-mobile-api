@@ -522,7 +522,17 @@ SENSITIVE_KEYS = frozenset(
 #: 참인데 ``redact_text("h_sgr_nm_1=...")`` 는 값을 그대로 남겼습니다 —
 #: 즉 dict 는 가려지고 같은 값이 문자열·JSON·상대 URL 로 로그에 실리면
 #: 평문이었습니다(2026-09-23 확인).
-_INDEX_SUFFIX_PATTERN = r"(?:_?\d+_?|_)"
+#: 밑줄 하나. 생 ``_`` 와 퍼센트 인코딩 ``%5F``, JSON escape ``\\u005f`` 를 모두
+#: 받습니다. 키 본문(:func:`_percent_tolerant`)과 인덱스 접미사(바로 아래)가
+#: **같은 정의를 씁니다** — 따로 적었을 때 접미사 쪽만 생 ``_`` 로 남아,
+#: ``INFO {"h\\u005fsgr\\u005fnm\\u005f1": ...}`` 처럼 접미사 앞 밑줄까지
+#: escape 된 키를 놓쳤습니다(2026-09-23, 전 레지스트리 시험에서 1,571건).
+_UNDERSCORE = r"(?:_|%5[Ff]|\\u005[Ff])"
+_HYPHEN = r"(?:-|%2[Dd]|\\u002[Dd])"
+
+_INDEX_SUFFIX_PATTERN = (
+    r"(?:" + _UNDERSCORE + r"?\d+" + _UNDERSCORE + r"?|" + _UNDERSCORE + r")"
+)
 
 _INDEX_SUFFIX_RE = re.compile(r"^(?P<base>.*?)" + _INDEX_SUFFIX_PATTERN + r"$")
 
@@ -559,9 +569,6 @@ def is_sensitive_key(name: str) -> bool:
 # registration, unaffected by this regex either way.
 _WHITESPACE_RE = re.compile(r"\s")
 
-#: JSON 의 ``\\uXXXX`` 중 **출력 가능한 ASCII** 로 디코드되는 것만. 그 범위를
-#: 넘으면 건드리지 않습니다 — 제어문자나 비-ASCII 까지 풀면 원문이 달라집니다.
-_ASCII_JSON_ESCAPE_RE = re.compile(r"\\u00([2-7][0-9A-Fa-f])")
 
 #: :func:`_parse_json_document` 의 "JSON 아님" 표식. ``None`` 은 유효한
 #: JSON 값(``null``)이라 구분자로 쓸 수 없습니다.
@@ -595,9 +602,16 @@ SESSION_RE = re.compile(r"(?i)(?<![\w-])(JSESSIONID=)[^&;\s]+")
 #: 있습니다. 그 둘을 함께 다룹니다. 나머지 문자까지 인코딩된 형태는 이 경로가
 #: 여전히 **다루지 않습니다**.
 def _percent_tolerant(key: str) -> str:
+    """키의 ``_``/``-`` 를 ``%5F``·``%2D`` 와 JSON 의 ``\\u005f``·``\\u002d`` 로도 받습니다.
+
+    JSON escape 를 **키 패턴에서만** 받는 이유: 로그 전체의 escape 를 먼저
+    풀면 값 안의 escape 까지 바뀌어 누출과 값 변경이 같이 생겼습니다.
+    """
     escaped = re.escape(key)
-    escaped = escaped.replace("_", "(?:_|%5[Ff])")
-    return escaped.replace(r"\-", "(?:-|%2[Dd])").replace("-", "(?:-|%2[Dd])")
+    underscore = _UNDERSCORE
+    hyphen = _HYPHEN
+    # ``re.escape`` 는 ``-`` 를 ``\-`` 로 바꿉니다. 밑줄은 그대로 둡니다.
+    return escaped.replace("_", underscore).replace("\\-", hyphen)
 
 
 SENSITIVE_KEY_VALUE_RE = re.compile(
@@ -632,8 +646,13 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
     + r"|'(?:\\.|[^'\\])*(?:'|$)"
     # 직렬화된 배열·객체는 한 덩어리로 먹습니다. scalar 정규식으로 다루면
     # ``{"hidDscpNo": ["a", "<비밀>"]}`` 가 첫 원소만 가려졌습니다.
-    + r"|\[[^\[\]]*\]"
-    + r"|\{[^{}]*\}"
+    #
+    # 안쪽의 **따옴표 친 문자열은 통째로** 건너뜁니다. 예전 ``[^\[\]]*`` 는
+    # 문자열 안의 ``]`` 에서 멈춰, ``INFO {"txtPwd":["]","<비밀>"]}`` 처럼 앞에
+    # 산문이 붙어 이 경로로 온 문서의 뒤 원소를 남겼습니다(2026-09-23 확인).
+    # 한 겹만 봅니다 — 배열 안의 배열은 여전히 안쪽 ``]`` 에서 끝납니다.
+    + r"""|\[(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\[\]"'])*\]"""
+    + r"""|\{(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^{}"'])*\}"""
     # ``=`` 묶음: 값이 그 자체로 ``키=`` 로 시작하면 그것은 값이 아니라
     # **다음 필드**입니다. 앞의 ``\s*`` 가 공백을 넘어가서
     # ``h_sgr_nm_1= trnNo1=Y`` 의 ``trnNo1=Y`` 를 값으로 먹던 자리입니다.
@@ -725,19 +744,6 @@ def _parse_json_document(value: str) -> object:
         )
     except (ValueError, TypeError, RecursionError):
         return _NO_JSON
-
-
-def _redact_json_double_encoded(node: object) -> str | None:
-    """JSON **문자열 안에** JSON 이 든 경우. 아니면 ``None``.
-
-    ``"{\\"k\\": \\"v\\"}"`` 처럼 한 겹 더 싸인 모양은 바깥 값이 문자열이라
-    구조 순회가 들어가지 못합니다. 안쪽을 다시 :func:`redact_text` 에 넣고
-    문자열로 다시 씁니다.
-    """
-    if not isinstance(node, str):
-        return None
-    inner = redact_text(node)
-    return json.dumps(inner) if inner != node else None
 
 
 def _redact_and_dump_json(root: object) -> str:
@@ -836,9 +842,13 @@ def redact_text(value: str) -> str:
         parsed = _parse_json_document(value.replace('\\"', '"'))
         escaped = parsed is not _NO_JSON
     if parsed is not _NO_JSON:
-        dumped = _redact_json_double_encoded(parsed)
-        if dumped is None:
-            dumped = _redact_and_dump_json(parsed)
+        # JSON 문자열 안에 JSON 이 든 경우(이중 직렬화)도 여기서 같이 됩니다 —
+        # 루트가 문자열이면 순회가 그 값을 :func:`redact_text` 에 넣습니다.
+        # 한때 이 앞에 따로 "이중 직렬화" 분기를 두고, 바뀐 게 없으면 ``None``
+        # 을 돌려 아래 순회가 **같은 작업을 다시** 하게 했습니다. 포장 수마다
+        # 두 배씩 늘어 12겹에 8,191번을 불렀습니다(2026-09-23 확인). 이제
+        # 겹마다 한 번입니다.
+        dumped = _redact_and_dump_json(parsed)
         if dumped is not None:
             if escaped:
                 dumped = dumped.replace('"', '\\"')
@@ -847,16 +857,18 @@ def redact_text(value: str) -> str:
             # 카드번호만 예외가 됩니다 — 실제로 ``{"debug": 4111…}`` 가
             # 그대로 남았습니다(2026-09-23 확인).
             return dumped
-    # 여기까지 왔다는 것은 문자열 전체가 하나의 JSON 문서가 아니라는 뜻입니다 —
-    # ``INFO {...}`` 처럼 앞에 산문이 붙었거나, JSON 문서가 둘 이상 이어졌거나,
-    # 애초에 JSON 이 아니거나. 그래도 그 안에 JSON 조각이 들어 있을 수 있고,
-    # 조각 안의 키가 ``\u005f`` 로 escape 돼 있으면 아래 정규식은 그것을 민감
-    # 키로 보지 못합니다. ASCII 로 디코드되는 escape 만 먼저 풀어 둡니다 —
-    # JSON 문자열 안에서 ``\u005f`` 와 ``_`` 는 **같은 문자열**이므로 의미가
-    # 달라지지 않습니다(2026-09-23 확인).
-    redacted = _ASCII_JSON_ESCAPE_RE.sub(
-        lambda match: chr(int(match.group(1), 16)), value
-    )
+    # 여기까지 왔다는 것은 문자열 전체가 하나의 JSON 문서가 아니라는 뜻입니다
+    # (``INFO {...}`` 처럼 앞에 산문이 붙었거나, 문서가 둘 이상이거나). 그 안의
+    # ``\u005f`` 로 escape 된 키는 :func:`_percent_tolerant` 가 **키 패턴 쪽에서**
+    # 읽습니다.
+    #
+    # 한때 여기서 ASCII ``\uXXXX`` 를 문자열 전체에 걸쳐 먼저 풀었는데, 값까지
+    # 바꿔 버렸습니다(2026-09-23 확인): 비밀번호 값 안의 ``\u0022`` 가 ``"`` 로
+    # 바뀌어 **값이 거기서 끝난 것으로 읽혀 뒷부분이 남았고**, 공개 문자열의
+    # 리터럴 ``\u0061`` 여섯 글자가 ``a`` 로 바뀌었습니다. 아직 파싱하지 않은
+    # 로그 전체에서는 어느 escape 가 JSON 문자열 안에 있는지 알 수 없으므로,
+    # 값은 건드리지 않습니다.
+    redacted = value
     redacted = URL_USERINFO_RE.sub("[REDACTED]@", redacted)
     redacted = CARD_RE.sub("[REDACTED_CARD]", redacted)
     redacted = SENSITIVE_KEY_VALUE_RE.sub(

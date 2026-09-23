@@ -8,8 +8,16 @@
 :class:`~korail_mobile_api.config.KorailConfig` 를 만듭니다 — 프로세스를 넘어
 안정적인 기기 식별자를 얻는 유일한 방법입니다.
 
-라이브 호출은 ``KORAIL_MOBILE_API_LIVE=1`` 이 없으면 시작하지 않습니다
-(:func:`live_enabled`).
+:func:`live_enabled` 는 ``KORAIL_MOBILE_API_LIVE=1`` 인지 알려 주는 **판정 함수일
+뿐, 전송 차단 장치가 아닙니다.** :class:`~korail_mobile_api.client.KorailClient` 는
+이 값을 보지 않습니다 — 환경변수가 없어도 클라이언트를 만들어 메서드를 부르면
+요청은 나갑니다. 라이브 호출을 막고 싶은 스크립트는 **직접**
+``if not live_enabled(): return`` 처럼 확인해야 합니다.
+
+2026-09-23 정정: 한때 여기 "``LIVE=1`` 이 없으면 라이브 호출이 시작하지
+않는다"고, 아래 함수에는 "라이브 호출의 유일한 스위치"라고 적었습니다. 패키지
+안에서 이 함수를 부르는 곳이 한 군데도 없으므로 둘 다 사실이 아니었고, 그
+문장을 믿으면 실서버를 실수로 칠 수 있었습니다.
 """
 from __future__ import annotations
 
@@ -26,7 +34,11 @@ from .dynapath import (
 
 
 def live_enabled() -> bool:
-    """``KORAIL_MOBILE_API_LIVE=1`` 인지. 라이브 호출의 유일한 스위치입니다."""
+    """``KORAIL_MOBILE_API_LIVE=1`` 인지.
+
+    **호출자가 확인하라고 있는 함수입니다.** 클라이언트가 자동으로 확인하지
+    않으므로, 이것만으로는 아무 요청도 막지 못합니다.
+    """
     return os.environ.get("KORAIL_MOBILE_API_LIVE") == "1"
 
 

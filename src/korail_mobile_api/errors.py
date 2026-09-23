@@ -628,7 +628,7 @@ RESERVATION_REFUSED_CODES = frozenset({
 #: "입력값오류(필드명)" 패턴이고, 괄호 안 필드명 다수가 이 라이브러리가
 #: 실제로 예약 폼에 싣는 값과 그대로 대응합니다 — 예:
 #: ``ERR800001``(동행자수)·``ERR800003``(총승객수)는
-#: :class:`~korail_mobile_api.constants.KorailPassengerCounts`,
+#: :class:`~korail_mobile_api.mutation_models.KorailPassengerCounts`,
 #: ``ERR800016``/``ERR930310``(객실등급/열차속성)은
 #: :func:`~korail_mobile_api.mutation_payloads._journey_fields` 가 보내는
 #: ``txtPsrmClCd``/``txtTrnClsfCd``, ``ERR930260``/``:930261``(출발역/

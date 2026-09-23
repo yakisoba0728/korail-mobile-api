@@ -774,7 +774,7 @@ def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
     기본값화하는데, ``CommonIn.write$Self`` 가 그중 ``Device``/``Version``/``Key``
     에 동일한 인코딩 게이트를 쓰므로(``CommonIn.java:448-465``) 셋 중 둘만 나가는
     분기는 없습니다 — 이 라우트를 호출하는 곳은 ``include_common=False`` 를 써서
-    :func:`~korail_mobile_api.http.common_fields` 의 주입을 건너뛰므로, ``Key``
+    :meth:`~korail_mobile_api.http.KorailHttpClient.common_fields` 의 주입을 건너뛰므로, ``Key``
     는 여기서 직접 싣습니다.
     """
     return {

@@ -100,7 +100,7 @@ class KorailConfig:
         # 함께 넘긴 경우뿐입니다. 예전에는 그 구성이 경고도 예외도 없이 통째로
         # 갈아치워져, 기기 신원을 스스로 정했다고 믿는 호출자가 실제로는 합성
         # 신원으로 요청을 보냈습니다 -- 하필 안티오토메이션 토큰이 주장하는 값입니다.
-        # 같은 종류의 충돌에 :class:`DynapathConfig.__post_init__` 은 이미
+        # 같은 종류의 충돌에 :meth:`DynapathConfig.__post_init__` 은 이미
         # ``ValueError`` 를 냅니다.
         if self.dynapath != DynapathConfig():
             raise ValueError(

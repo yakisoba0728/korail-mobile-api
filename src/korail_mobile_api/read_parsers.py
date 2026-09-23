@@ -465,15 +465,27 @@ def _required_integer(
     context: str,
 ) -> int:
     # 이 필드들은 DTO 에서 정수로 선언됩니다. 숫자와 따옴표 친 숫자 문자열을
-    # 모두 받는 것은 **이 패키지의 수용 정책**입니다.
+    # 모두 받습니다. 앱의 현재 디코더가 실제로 그렇게 합니다:
     #
-    # 예전에는 그 근거로 "Gson 의 JsonReader.nextInt() 가 따옴표 친 숫자를
-    # int 로 강제하므로 앱도 둘 다 받는다"고 적었는데, **7.0.6 에 Gson 이
-    # 없습니다** — 같은 모듈의 다른 설명은 이미 kotlinx 직렬화임을 인정하고
-    # 있었습니다. kotlinx 쪽에서 따옴표 친 숫자를 받는지는 ``Json.isLenient``
-    # 가 정하는데 그 인자가 AlienGuard 로 보호돼 있어 확인되지 않습니다
-    # (2026-09-23 정정). 정책은 그대로 두되 근거는 철회합니다.
-    # null/bool/float/비숫자는 계속 거절합니다.
+    # * ``StreamingJsonDecoder.decodeInt()``(:394-402)가
+    #   ``consumeNumericLiteral()`` 을 부르고 Int 범위를 검사합니다.
+    # * 그 함수(``JsonReader.java:575-695``)는 첫 문자가 ``"`` 이면 표시해 두고
+    #   (:583-590) 끝에서 닫는 ``"`` 를 요구·소비합니다(:662-672). 이 함수
+    #   안에서 ``isLenient`` 를 읽지 않습니다.
+    # * 여기서 ``JsonReader`` 는 Gson 이 아니라, jadx 가
+    #   ``kotlinx.serialization.json.internal.AbstractJsonLexer`` 를 이름만
+    #   바꾼 것입니다(같은 파일 :18 의 ``renamed from`` 주석).
+    #
+    # 2026-09-23 정정, **두 번째입니다.** 처음엔 Gson 의 ``nextInt()`` 를
+    # 근거로 댔고, 그걸 고치면서 "7.0.6 에 Gson 이 없다"와 "따옴표 친 정수의
+    # 수용은 ``isLenient`` 가 정해 확인할 수 없다"고 적었는데 **둘 다
+    # 틀렸습니다.** Gson 은 APK 에 있습니다(``com/google/gson/Gson.java:48``) —
+    # 다만 이 네트워크 DTO 경로가 쓰지 않을 뿐입니다. 그리고 위처럼 이
+    # 분기는 보호된 설정 없이도 읽힙니다.
+    #
+    # Python 의 수용 범위(ASCII 10진 문자열)가 앱과 **정확히** 같다고 판정한
+    # 것은 아닙니다 — 확인한 것은 위 디코더 분기뿐입니다. null/bool/float/
+    # 비숫자는 계속 거절합니다.
     value = data.get(key)
     if type(value) is int:
         return value

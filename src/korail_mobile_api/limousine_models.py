@@ -242,7 +242,7 @@ class LimousineSeatInventoryResponse(BaseKorailResponse):
     seat_arrangement_code: str | None = None
     up_down_division_code: str | None = None
     #: ``layoutType`` — 좌석 배치 형식. 형제 응답
-    #: :class:`~korail_mobile_api.models.SeatInventoryResponse.layout_type`
+    #: :attr:`~korail_mobile_api.models.SeatInventoryResponse.layout_type`
     #: 과 같은 DTO 필드이며, DAO 선언은 String 이지만 실서버는 JSON 정수로도
     #: 보냅니다(2026-09-21 확인) — 파서가 둘 다 받아 문자열로 정규화합니다.
     layout_type: str | None = None
