@@ -5,8 +5,7 @@
 """리무진 연계 조회의 요청 질의와 응답 타입.
 
 ``lmu.scdlQry.do``(운행 스케줄)와 ``lms.TResidualSeatsResearch.do``(좌석 재고)가
-씁니다. 6.5.0 의 ``seatMovie.LimousineScheduleView``(좌석이동 화면의 열차 목록)는
-7.0.6 앱에서 사라져 요청·응답 타입 모두 지웠습니다.
+씁니다.
 
 ``*Query`` 두 클래스는 얼어붙은 데이터클래스이고 ``__post_init__`` 에서 형식을
 검사합니다. 둘 다 역**코드**(4자리)로 역을 받습니다.
