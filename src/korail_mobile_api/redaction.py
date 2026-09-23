@@ -640,7 +640,16 @@ SENSITIVE_KEY_VALUE_RE = re.compile(
     # 무조건 걸었더니 ``txtPwd=U0VDUkVUQQ==`` 같은 base64 패딩 값과 ``=`` 를
     # 품은 값이 통째로 다음 필드 취급돼 평문으로 남았습니다(2026-09-23 확인).
     # 공백이 없으면 ``키=값`` 한 덩어리이므로 가드가 필요 없습니다.
-    + r"|(?(eq)(?![&;][\w.%\[\]-]+=)(?(gap)(?![\w.\[\]-]+=)|)[^\s,]+?"
+    # ``=`` 뒤에 서식 공백이 있을 때 "다음 필드처럼 생겼으면 비켜 준다"는
+    # 가드는 **뺐습니다**. 그 가드는 ``h_sgr_nm_1= trnNo1=X`` 의 이웃을 살리려는
+    # 것이었는데, ``txtPwd= <base64>`` 처럼 ``=`` 를 품은 정상 값까지 다음
+    # 필드로 보고 평문으로 남겼습니다(2026-09-23 확인). 자유 텍스트에서 그
+    # 둘은 구분되지 않습니다. 이 함수는 **애매하면 더 가리는 쪽**이므로,
+    # 공백 뒤의 토큰은 값으로 봅니다 — 이웃 필드가 함께 가려질 수 있고 그것은
+    # 진단 정보 손실이지 누출이 아닙니다. 이웃을 살려야 하는 쪽은 구조화된
+    # 입구(:func:`redact_mapping`·:func:`redact_payload`·:func:`redact_url`)를
+    # 쓰십시오.
+    + r"|(?(eq)(?![&;][\w.%\[\]-]+=)[^\s,]+?"
     + r"(?=(?:[&;](?=[\w.%\[\]-]+=))|[\s,]|$)"
     + r"|[^\s,]+))",
     re.IGNORECASE,
@@ -659,73 +668,126 @@ def _redact_sensitive_key_value(match: re.Match[str]) -> str:
     return f"{match.group('prefix')}{quote}[REDACTED]{quote}"
 
 
-def _json_document_or_none(value: str) -> object:
-    """문자열 전체가 **손실 없이 다시 쓸 수 있는** JSON 이면 파싱 결과, 아니면 ``_NO_JSON``.
+class _Pairs:
+    """JSON 객체를 **키-값 쌍의 순서 있는 목록**으로 들고 있습니다.
 
-    JSON 을 구조로 다루면 정규식이 못 보는 두 모양을 받습니다 — escape 된 키
+    ``dict`` 로 받으면 중복 키의 앞 값이 사라집니다. 그래서 한때 중복 키를
+    감지하면 구조 마스킹을 통째로 포기하고 정규식 경로로 넘겼는데, 그쪽은
+    ``\\u005f`` 로 escape 된 민감 키를 못 봅니다 — **원문을 지키려다 비밀값을
+    남겼습니다**(2026-09-23 확인). 둘을 맞바꿀 필요가 없습니다: 쌍을 그대로
+    들고 다니면 중복 키도 보존하면서 구조로 가릴 수 있습니다.
+    """
+
+    __slots__ = ("items",)
+
+    def __init__(self, items: list[tuple[str, Any]]) -> None:
+        self.items = items
+
+
+class _RawNumber:
+    """JSON 숫자를 **원문 그대로** 들고 있습니다.
+
+    ``float`` 로 받으면 ``0.1234567890123456789`` 의 자릿수가 줄고 ``1e400`` 이
+    ``Infinity`` 가 됩니다. 원문 문자열을 그대로 다시 쓰면 그 손실이 없습니다.
+    """
+
+    __slots__ = ("text",)
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+def _parse_json_document(value: str) -> object:
+    """문자열 전체가 JSON 이면 손실 없는 표현으로, 아니면 ``_NO_JSON``.
+
+    구조로 다뤄야 정규식이 못 보는 두 모양을 받습니다 — escape 된 키
     (``{"h\\u005fsgr\\u005fnm_1": ...}`` 는 파싱해야 민감 키로 보입니다)와
     중첩 배열·객체(키의 민감성이 값 **트리 전체**에 걸립니다).
-
-    대신 파싱 후 다시 직렬화하므로 **원문이 그대로 보존되지 않습니다.** 그게
-    실제로 데이터를 망가뜨리는 경우에는 이 길로 가지 않고 정규식 경로에
-    맡깁니다(원문을 건드리지 않으니 그쪽이 안전합니다). 되돌릴 수 없는
-    것으로 확인된 셋을 막습니다(2026-09-23 확인):
-
-    * **중복 키** — ``{"a":1,"a":2}`` 는 파싱하면 앞 값이 사라집니다.
-    * **무한대·NaN** — ``1e400`` 은 ``Infinity`` 로 다시 쓰여 JSON 이 아닌
-      문자열이 됩니다.
-    * **되돌릴 수 없는 부동소수점** — 자릿수가 줄어 값이 달라집니다.
-
-    짝 없는 surrogate 는 막지 않고 :func:`_dump_json` 의 ``ensure_ascii`` 로
-    처리합니다 — 그쪽이 원문 손실 없이 인코딩까지 안전합니다.
     """
     stripped = value.strip()
     if not stripped or stripped[0] not in '{["':
         return _NO_JSON
-    lossy = False
-
-    def _pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
-        nonlocal lossy
-        if len({key for key, _ in items}) != len(items):
-            lossy = True
-        return dict(items)
-
-    def _float(literal: str) -> float:
-        nonlocal lossy
-        number = float(literal)
-        if repr(number) != literal:
-            lossy = True
-        return number
-
-    def _constant(_name: str) -> float:
-        nonlocal lossy
-        lossy = True
-        return 0.0
-
     try:
-        parsed = json.loads(
+        return json.loads(
             stripped,
-            object_pairs_hook=_pairs,
-            parse_float=_float,
-            parse_constant=_constant,
+            object_pairs_hook=_Pairs,
+            parse_float=_RawNumber,
+            parse_int=_RawNumber,
+            parse_constant=_RawNumber,
         )
     except (ValueError, TypeError, RecursionError):
         return _NO_JSON
-    return _NO_JSON if lossy else parsed
 
 
-def _dump_json(value: object) -> str | None:
-    """``ensure_ascii`` 로 다시 씁니다. 실패하면 ``None``.
+def _redact_json_double_encoded(node: object) -> str | None:
+    """JSON **문자열 안에** JSON 이 든 경우. 아니면 ``None``.
 
-    ``ensure_ascii=False`` 로 썼더니 짝 없는 surrogate 가 그대로 담긴 문자열이
-    나왔고, :func:`redact_text` 는 성공했는데 **그 문자열을 UTF-8 로 인코딩하는
-    다음 단계가 터졌습니다**(2026-09-23 확인). 마스킹이 로깅을 깨뜨리면
-    안 됩니다. ``ensure_ascii=True`` 는 그것을 ``\\ud800`` escape 로 남깁니다.
+    ``"{\\"k\\": \\"v\\"}"`` 처럼 한 겹 더 싸인 모양은 바깥 값이 문자열이라
+    구조 순회가 들어가지 못합니다. 안쪽을 다시 :func:`redact_text` 에 넣고
+    문자열로 다시 씁니다.
     """
-    try:
-        return json.dumps(value, allow_nan=False)
-    except (TypeError, ValueError, RecursionError):
+    if not isinstance(node, str):
         return None
+    inner = redact_text(node)
+    return json.dumps(inner) if inner != node else None
+
+
+def _redact_json_node(node: object, *, key: str | None = None) -> object:
+    """파싱된 JSON 트리를 가립니다. 키가 민감하면 **값 트리 전체**가 대상입니다."""
+    if key is not None and is_sensitive_key(key):
+        return "[REDACTED]"
+    if isinstance(node, _Pairs):
+        return _Pairs(
+            [(name, _redact_json_node(item, key=name)) for name, item in node.items]
+        )
+    if isinstance(node, list):
+        return [_redact_json_node(item) for item in node]
+    if isinstance(node, _RawNumber):
+        # 카드번호 모양은 키와 무관하게 값 자체로 잡습니다. 예전에는 다 쓴
+        # JSON 문자열에 :data:`CARD_RE` 를 덧칠했는데, 그러면 치환 문자열에
+        # 따옴표가 없어 **출력이 JSON 이 아니게** 되고 숫자 키까지 같은
+        # 문자열로 바뀌어 서로 다른 항목이 합쳐졌습니다(2026-09-23 확인).
+        return (
+            "[REDACTED_CARD]"
+            if CARD_RE.fullmatch(node.text)
+            else node
+        )
+    if isinstance(node, str):
+        return _redact_json_scalar(node)
+    return node
+
+
+def _redact_json_scalar(text: str) -> str:
+    """JSON 문자열 값 하나. 키 규칙은 이미 위에서 봤으므로 값 패턴만 겁니다."""
+    masked = URL_USERINFO_RE.sub("[REDACTED]@", text)
+    masked = CARD_RE.sub("[REDACTED_CARD]", masked)
+    return SESSION_RE.sub(r"\1[REDACTED]", masked)
+
+
+def _dump_json(node: object) -> str:
+    """:func:`_parse_json_document` 가 만든 트리를 다시 씁니다.
+
+    ``json.dumps`` 를 쓰지 않는 이유는 :class:`_Pairs` 와 :class:`_RawNumber`
+    때문입니다 — 중복 키와 숫자 원문을 지켜야 합니다. 문자열은 ``json.dumps``
+    에 맡기므로 짝 없는 surrogate 도 ``\\ud800`` escape 로 나가고, 결과를
+    UTF-8 로 인코딩하는 다음 단계가 터지지 않습니다.
+    """
+    if isinstance(node, _Pairs):
+        inner = ", ".join(
+            f"{json.dumps(name)}: {_dump_json(item)}" for name, item in node.items
+        )
+        return "{" + inner + "}"
+    if isinstance(node, list):
+        return "[" + ", ".join(_dump_json(item) for item in node) + "]"
+    if isinstance(node, _RawNumber):
+        return node.text
+    if node is True:
+        return "true"
+    if node is False:
+        return "false"
+    if node is None:
+        return "null"
+    return json.dumps(node)
 
 
 def redact_text(value: str) -> str:
@@ -746,12 +808,14 @@ def redact_text(value: str) -> str:
     # 그 자체로는 파싱되지 않습니다. 한 겹 벗겨 보고, 되면 원래 모양대로
     # 다시 escape 해 돌려줍니다.
     escaped = False
-    parsed = _json_document_or_none(value)
+    parsed = _parse_json_document(value)
     if parsed is _NO_JSON and '\\"' in value:
-        parsed = _json_document_or_none(value.replace('\\"', '"'))
+        parsed = _parse_json_document(value.replace('\\"', '"'))
         escaped = parsed is not _NO_JSON
     if parsed is not _NO_JSON:
-        dumped = _dump_json(redact_value(parsed))
+        dumped = _redact_json_double_encoded(parsed)
+        if dumped is None:
+            dumped = _dump_json(_redact_json_node(parsed))
         if dumped is not None:
             if escaped:
                 dumped = dumped.replace('"', '\\"')
@@ -759,8 +823,7 @@ def redact_text(value: str) -> str:
             # 무관하게 값 자체로 잡는 것이라, 여기서 빠뜨리면 JSON 으로 실린
             # 카드번호만 예외가 됩니다 — 실제로 ``{"debug": 4111…}`` 가
             # 그대로 남았습니다(2026-09-23 확인).
-            dumped = CARD_RE.sub("[REDACTED_CARD]", dumped)
-            return SESSION_RE.sub(r"\1[REDACTED]", dumped)
+            return dumped
     redacted = URL_USERINFO_RE.sub("[REDACTED]@", value)
     redacted = CARD_RE.sub("[REDACTED_CARD]", redacted)
     redacted = SENSITIVE_KEY_VALUE_RE.sub(
