@@ -2,35 +2,12 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""리무진 연계 조회 응답을 :mod:`korail_mobile_api.limousine_models` 로 옮깁니다.
+"""리무진 조회 파서. 봉투는 정확한 SUCC 를 요구합니다.
 
-두 파서가 두 라우트를 맡습니다. 봉투는 정확히 ``SUCC`` 여야 하고 그 밖은
-:class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
-
-목록 키를 다루는 방식은 라우트마다 다르지 않습니다. 스케줄 조회의 ``trainList``,
-좌석 재고의 ``seatList`` 모두 없거나 ``null`` 이면 빈 결과이고, 리스트가 아닌
-값이면 오류입니다. 근거는 두 군데입니다. **키 누락**은 컴파일된 기본 생성자가 직접 정의합니다
-(``TResidualSeatsResearchOut.java:79``:
-``this.seatList = (i & 128) == 0 ? emptyList() : list;`` — 출현 비트가 없을
-때만 ``emptyList()`` 이고, 이 줄은 명시적 ``null`` 에 대해서는 아무 말도
-하지 않습니다). **명시적 ``null``** 은 앱의 kotlinx Json 설정이 처리합니다 —
-``coerceInputValues = true`` 로 **추론**되므로(아래), 널 불가 프로퍼티에 온
-``null`` 은 예외가 아니라 기본값으로 강제될 것입니다
-(``analysis/jadx/sources/com/korail/talk/network/di/NetworkModule.java:858-862``
-``providesNetworkJson()``, 같은 설정이
-``analysis/jadx/sources/com/korail/talk/network/NetworkServiceKt.java:25-29``
-``KJson`` 에도 글자까지 같게 있습니다:
-다섯 setter 중 ``ignoreUnknownKeys``/``encodeDefaults``/``coerceInputValues``/
-``isLenient`` 는 ``Integer.parseInt(AlienGuard…) > 0``, ``setExplicitNulls`` 한 줄만
-``> 1`` 입니다).
-
-**읽히는 것은 그 비교식 모양까지입니다.** 복호화된 정수 값 자체는 보호돼 있어
-불리언 값은 직접 확인되지 않습니다. 이 문단은 "``> 0`` 은 참, ``> 1`` 은
-거짓"이라는 관용구 판독에 기대고 있고, 그 판독은 ``ErrorHelper.java:47-49``
-의 ``checkNotNullParameter`` 인수 순서로 **교차 확인했을 뿐 검증한 것이
-아닙니다** — 따라서 ``coerceInputValues = true`` 와 ``explicitNulls = false`` 는
-추론입니다. 키가 있는데 리스트가 아니면 둘 다 여전히
-:class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+trainList 와 seatList 는 누락·null 이면 빈 목록이고, 키가 있는데 목록이 아니면 KorailProtocolError 입니다. 두 목록의 비객체 행도
+KorailProtocolError 입니다. seatList 누락 기본값의 앱 근거: TResidualSeatsResearchOut.java:79. 앱 Json 설정은 보호돼 있으므로
+null 강제 변환 여부는 확정할 수 없습니다 (NetworkModule.java:858-862, NetworkServiceKt.java:25-29). 배치·배너·windowList
+는 선택 필드로 잘못된 값이나 창측 행을 비웁니다.
 """
 from __future__ import annotations
 
@@ -96,24 +73,12 @@ _SCHEDULE_FIELDS = {
     "train_class_code": "stlbTrnClsfCd",
     "service_code": "trnGpCd",
     "train_no": "trnNo",
-    # ScdlQryOutTrain.java:48-49 의 Kotlin **속성명**은 trnOrdrNo 와
-    # ymsAplFlgYMS 입니다(trnOrdrNo 는 아래 _SCHEDULE_ADDED_FIELDS).
-    # 이 클래스에는 @SerialName 이 하나도 없고(파일 전체 0건), 전선 이름은
-    # ScdlQryOutTrain$$serializer.java:35-55 의 addElement() 인수 21개로만
-    # 남는데 전부 AlienGuard 로 싸여 있어 정적으로는 철자를 못 읽습니다
-    # (YMS 칸은 인덱스 5 = :40, write$Self 의 index 5 와 같은 자리).
-    # 전선 키는 속성명이 아니라 그 descriptor 의 이름입니다 — 실서버는
-    # ``ymsAplFlg`` 를 보냅니다(2026-09-22 확인). 속성명과
-    # 전선 철자가 갈리는 자리에서는 **라이브가 근거**입니다.
+    # 속성 ymsAplFlgYMS(ScdlQryOutTrain.java:48-49)와 전송 키를 구분합니다. serializer 이름은
+    # 보호됨(ScdlQryOutTrain$$serializer.java:35-55). ymsAplFlg 전송 키는 2026-09-22 라이브 관측에 근거합니다.
     "yms_application_flag": "ymsAplFlg",
 }
-#: 스칼라로 관대하게 읽는 **전선 키**. 모양이 어긋나면 응답 전체가 아니라 이 칸만
-#: ``None`` 입니다.
-#:
-#: * ``trnOrdrNo`` — ScdlQryOutTrain.java:48 의 Kotlin 속성명이며, 라이브로
-#:   확인된 적은 없습니다.
-#: * ``rcvdPrc`` — ScdlQryOutTrain.java:40. 2026-09-22 라이브 359행 전부에 있었고
-#:   값은 0으로 앞을 채운 14자리 원 단위 문자열이었습니다.
+#: 선택 스칼라. trnOrdrNo 는 속성 선언만 확인(ScdlQryOutTrain.java:48), 라이브 미확인. rcvdPrc(ScdlQryOutTrain.java:40)는
+#: 2026-09-22 관측 359행 모두 14자리 영 채움 문자열.
 _SCHEDULE_ADDED_FIELDS = {
     "train_order_no": "trnOrdrNo",
     "received_price": "rcvdPrc",
@@ -175,36 +140,15 @@ _SEAT_FIELDS = {
 def parse_limousine_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> LimousineSeatInventoryResponse:
-    """``lms.TResidualSeatsResearch.do`` 의 응답을 파싱합니다.
+    """리무진 좌석 재고. seatList 누락은 빈 목록, 명시적 null·비목록·비객체 행은 오류입니다.
 
-    봉투가 정확히 ``SUCC`` 여야 합니다. ``seatList`` 키가 없거나 ``null`` 이면
-    빈 결과로 취급하는데, 두 경우의 근거가 다릅니다 — **키 누락**은
-    컴파일된 기본 생성자가(``TResidualSeatsResearchOut.java:79``, 출현 비트가
-    없을 때만 ``emptyList()``), **명시적 ``null``** 은 앱의 Json 설정
-    ``coerceInputValues = true`` 가(``NetworkModule.java:858-862`` 와
-    ``NetworkServiceKt.java:25-29``) 각각 담당합니다. :79 한 줄만으로는 명시
-    ``null`` 을 설명할 수 없습니다. 키가 있는데 리스트가 아니면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
-
-    같은 DTO(``research.TResidualSeatsResearch.do`` 와 공유 —
-    ``NetworkApi.java:271,741``)가 선언하는 ``layout_type``·``vrBnrUrl``·
-    ``windowList`` 도 읽습니다. 형제 파서
-    :func:`~korail_mobile_api.parsers.parse_seat_inventory_response` 와 달리 이
-    셋은 선택 필드라 **관대하게** 읽습니다 — 모양이 어긋나면 그
-    칸만 비우고 응답은 받습니다. ``layout_type`` 은 문자열·정수 둘 다
-    받습니다(같은 DTO 를 공유하는 일반 좌석재고 라우트가 2026-09-21 실서버
-    확인에서 JSON 정수로 오는 걸 확인했습니다), ``vrBnrUrl`` 은 선택,
-    ``windowList`` 는 ``seatList`` 와 같은 컴파일된 기본값(없으면 빈 목록,
-    ``TResidualSeatsResearchOut.java:80``) 규칙입니다.
+    일반 좌석 재고와 응답 DTO 를 공유합니다(NetworkApi.java:271,741). 선택 필드 layout_type 은 문자열·정수를 허용합니다. 정수형 근거는 일반
+    좌석 재고의 2026-09-21 관측이며 리무진 응답 자체의 라이브 검증은 아닙니다.
     """
     _require_exact_success(response)
     raw = response.raw
     seats = []
-    # TResidualSeatsResearchOut.java:79 -- the DTO's compiled default
-    # constructor treats an absent seatList as emptyList(), not an error:
-    # `this.seatList = (i & 128) == 0 ? emptyList() : list;`. An explicit null
-    # is empty too (the docstring's coerceInputValues reading). A present
-    # non-list value is still an error.
+    # seatList 누락 기본값은 emptyList()(TResidualSeatsResearchOut.java:79). null 허용 근거는 아닙니다.
     for value in (
         _required_list(raw, "seatList", "limousine seat inventory")
         if raw.get("seatList") is not None
@@ -217,11 +161,7 @@ def parse_limousine_seat_inventory_response(
                 raw=row,
             )
         )
-    # Mirrors parsers.py::parse_seat_inventory_response's identical handling
-    # of the same DTO shape.
-    # ``windowList``·``layout_type``·``vrBnrUrl`` 은 선택 필드입니다. 이 셋
-    # 때문에 응답을 거절하지 않도록 모양이 어긋나면
-    # 그 칸만 비웁니다 — 리스트가 아니면 빈 목록, 망가진 행은 건너뜀.
+    # 선택 창측 목록은 비목록이면 비우고 잘못된 행은 건너뜁니다.
     window_value = raw.get("windowList")
     windows = []
     for value in window_value if isinstance(window_value, list) else ():

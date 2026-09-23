@@ -2,24 +2,13 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""KORAIL 모바일 앱 API 파이썬 클라이언트의 공개면.
+"""KORAIL 7.0.6 기반 클라이언트의 공개 API.
 
-여기서 import 할 수 있는 이름이 이 패키지가 지원하는 전부입니다. ``__all__`` 에
-없는 것은 하위 모듈에 있더라도 예고 없이 바뀝니다.
-
-시작점은 둘입니다 — :class:`~korail_mobile_api.client.KorailClient`(모든 호출),
-:class:`~korail_mobile_api.config.KorailConfig`(기기 신원과 타임아웃). 열차조회·예약·결제·예약내역은
-앱처럼 NetFunnel 대기열(:mod:`korail_mobile_api.netfunnel`)을 먼저 거칩니다(기본 켜짐,
-:attr:`~korail_mobile_api.config.KorailConfig.netfunnel_enabled`).
-
-실패는 :class:`~korail_mobile_api.errors.KorailApiError` 아래로 모이며,
-``h_msg_cd`` 를 예외 클래스로 옮기는 규칙은
-:func:`~korail_mobile_api.errors.classify_app_error` 하나에 있습니다.
+시작점은 KorailClient 와 KorailConfig 입니다. __all__ 밖의 이름은 변경될 수 있습니다. 전송·프로토콜·서버 오류는 KorailApiError 계층으로
+제공하며, 입력 검증은 ValueError 도 낼 수 있습니다.
 """
 
-#: 배포된 버전. ``__all__`` 에 넣지 않는 것은 의도다 — 던더는 export 하는 이름
-#: 집합이 아니고, ``from korail_mobile_api import *`` 가 이것을 실어 나른 적이
-#: 없다. 패키징 메타데이터가 삭제된 지금 이 값이 유일한 버전 선언이다.
+#: 패키지 버전. 공개 API 목록인 __all__ 에는 포함하지 않습니다.
 __version__ = "1.2.0"
 
 from .client import KorailClient
@@ -76,16 +65,7 @@ from .limousine_models import (
     LimousineSeatInventoryResponse,
 )
 
-# Imported LAST among the package's own modules on purpose. ``live`` sits on
-# top of the stack — it imports ``client``, which imports everything else — so
-# pulling it in earlier would make this file's import order decide whether the
-# package loads. There is no cycle to break (nothing under ``client`` imports
-# ``live``), and importing it here rather than lazily keeps ``__all__`` honest:
-# a name in ``__all__`` that only appears after a deferred import is a name
-# ``dir()`` and static checkers cannot see.
-#
-# ``build_config_from_env`` is the only thing in this module. Where a caller
-# keeps credentials is the caller's business, so there is no credential reader.
+# live 는 client 에 의존하므로 패키지의 다른 모듈 뒤에서 가져옵니다.
 from .live import build_config_from_env
 from .models import (
     AppDataResponse,

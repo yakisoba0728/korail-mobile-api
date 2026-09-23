@@ -2,47 +2,15 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""``h_msg_cd`` → 예외 매핑과 이 패키지의 예외 계층.
+"""예외 계층과 h_msg_cd 분류.
 
-.. code-block:: text
-
-    KorailApiError                        모든 실패의 뿌리
-    ├── KorailTransportError              HTTP 왕복 자체가 실패
-    ├── KorailProtocolError               응답 모양이 프로토콜과 다름
-    ├── KorailAuthError                   로그인·세션
-    │   ├── KorailSessionExpiredError     P058
-    │   └── KorailAuthContinuationRequired  WebView 후속 인증
-    ├── KorailDynaPathError               안티매크로 거절(응답 본문의 정수 필드)
-    ├── KorailDynaPathRequiredError       DynaPath 가 꺼진 채 요구 경로 호출(전송 전)
-    ├── KorailAppError                    서버가 h_msg_cd 로 알린 실패
-    │   ├── KorailNoResultsError
-    │   │   └── KorailNoDirectTrainError
-    │   ├── KorailSoldOutError
-    │   ├── KorailSeatUnavailableError
-    │   ├── KorailReservationRefusedError
-    │   ├── KorailInvalidRequestError
-    │   ├── KorailNotEntitledError
-    │   ├── KorailServiceUnavailableError
-    │   └── KorailAppUpdateRequiredError
-    └── KorailNetFunnelError              대기열(nf.letskorail.com)
-        └── KorailQueueRejectedError
-
-실패 판정은 ``strResult``(와 ``WRC000288``)이 합니다. 이 매핑은 이미 올라가기로
-정해진 예외의 클래스만 고릅니다. 경고 코드를 달고 온 성공 응답은 그대로 성공입니다.
-
-메시지는 가리지 않습니다. 이 패키지가 만드는 메시지에는 자격증명·세션 값을 넣지
-않고, 서버가 준 문구(``h_msg_txt``)는 그대로 둡니다. 로그를 어디에 어떻게 남길지는
-호출자가 정합니다.
+KorailApiError 는 전송·프로토콜·인증·앱·대기열 오류의 기반 클래스입니다. 입력 검증에서 발생하는 ValueError 등까지 모두 이 계층에 포함되는 것은 아닙니다.
+classify_app_error 는 이미 실패로 판정한 응답의 예외 유형만 고릅니다. 서버 문구와 raw 는 마스킹하지 않으므로 기록 책임은 호출자에게 있습니다.
 """
 
 
 class KorailApiError(Exception):
-    """이 패키지의 모든 예외의 최상위.
-
-    세 속성은 **여기서 기본값을 보장합니다.** 하위 클래스 절반만 채우던 것이라,
-    ``except KorailApiError as error: error.code`` 가 전송 실패나 프로토콜 오류에서
-    ``AttributeError`` 로 죽었습니다. 이제 채우지 않는 예외에서는 ``None`` 입니다.
-    """
+    """패키지 오류의 기반 클래스. code·message·raw·parser_raw 는 제공되지 않으면 None 입니다."""
 
     #: 서버가 준 ``h_msg_cd``. 서버 응답 없이 난 실패는 ``None``.
     code: str | None = None
@@ -50,26 +18,16 @@ class KorailApiError(Exception):
     message: str | None = None
     #: 판정에 쓴 원본 응답. 없으면 ``None``.
     raw: object | None = None
-    #: 변경 응답의 typed 파싱이 실패했을 때, 파서가 예외에 붙였던 부분 원본.
-    #: :attr:`raw` 는 그때 받은 응답 전체로 바뀌므로 이쪽에 옮겨 둡니다. 없으면 ``None``.
+    #: 변경 응답의 typed 파싱이 실패했을 때, 파서가 예외에 붙였던 부분 원본. :attr:`raw` 는 그때 받은 응답 전체로 바뀌므로 이쪽에 옮겨 둡니다. 없으면
+    #: ``None``.
     parser_raw: object | None = None
 
 
 class _CodeMessagePickle:
-    """``(code, message)`` 를 위치 인자로 받는 예외들의 pickle 계약. **믹스인**입니다.
+    """두 위치 인자(code, message)를 요구하는 예외의 pickle 복원을 지원합니다.
 
-    예외 계층에 클래스를 하나 더 끼우지 않으려고 ``Exception`` 을 상속하지 않습니다 —
-    이 모듈 맨 위의 계층 그림이 계속 사실이어야 하고, 잡을 수 있는 이름이 하나
-    늘어나서도 안 됩니다. 두 애너테이션은 값을 만들지 않습니다 — 실제 값은 언제나
-    :class:`KorailApiError` 가 줍니다. 여기 적는 것은 이 믹스인이 무엇을 요구하는지를
-    타입 검사기에 말하기 위해서입니다.
-
-    기반 :class:`KorailApiError` 가 ``self.args`` 에 합쳐진 문자열 하나만 남기므로,
-    기본 ``Exception.__reduce__`` 는 ``cls(합쳐진문자열)`` 을 시도하고
-    ``TypeError: missing 1 required positional argument: 'message'`` 로 죽습니다.
-    ``ProcessPoolExecutor`` 나 Celery 처럼 예외가 프로세스 경계를 넘는 경로에서
-    원래 예외 대신 그 ``TypeError`` 가 올라오던 자리입니다. botocore 가
-    ``ClientError.__reduce__`` 로 푼 것과 같은 방법입니다.
+    Exception.args 의 합쳐진 문자열만으로는 생성자를 다시 부를 수 없어 인자를 별도로 보존합니다. 예외 계층을 바꾸지 않도록 Exception 을 상속하지 않는
+    믹스인입니다.
     """
 
     code: str | None
@@ -82,30 +40,22 @@ class _CodeMessagePickle:
 class KorailTransportError(KorailApiError):
     """HTTP 왕복이 실패해 앱 수준 응답을 파싱하지 못한 경우.
 
-    읽기라면 재시도 가능. 상태변경이라면 요청이 서버에 닿았는지 알 수 없으므로
-    예약목록·승차권목록으로 결과를 먼저 확인해야 합니다.
+    읽기라면 재시도 가능. 상태변경이라면 요청이 서버에 닿았는지 알 수 없으므로 예약목록·승차권목록으로 결과를 먼저 확인해야 합니다.
     """
 
 
 class KorailProtocolError(KorailApiError):
-    """응답이 JSON 이 아니거나 봉투 필드(``h_msg_cd``/``h_msg_txt``/``strResult``)가
-    빠졌거나 타입이 다른 경우. 재시도해도 같은 응답이 옵니다.
+    """응답 형식 오류 또는 전송 전 입력 검증 실패.
 
-    **전송 전 로컬 검증에도 씁니다.** 요청을 만들 수 없는 입력 — 등록되지 않은
-    라우트, 빌더가 만들 수 없는 폼 모양, 빈 대기열 키 — 은 서버에 닿기 전에 이
-    예외로 거절됩니다. 그쪽도 "재시도해도 같다"는 성질은 같고, 무엇보다 이
-    패키지의 실패는 전부 :class:`KorailApiError` 아래에 있어야 합니다. 맨
-    ``ValueError`` 를 올리면 ``except KorailApiError`` 로 받는 호출자를 그냥
-    통과합니다.
+    변경 응답의 파싱 실패만으로 서버 처리 여부를 판단할 수 없습니다. 같은 변경을 자동 재전송하지 마십시오.
     """
 
 
 class KorailAuthError(KorailApiError):
     """로그인 실패 또는 세션 없이 인증 필요 메서드 호출.
 
-    ``code`` 는 서버가 준 ``h_msg_cd`` 입니다. 로그인 요청이 서버 실패를 받았을 때
-    채워지고, 그 실패가 :class:`KorailAppError` 였다면 원래 예외가 ``__cause__`` 에
-    남습니다. 서버 응답 없이 난 실패(세션 없음, 기기 쪽 인증 등)는 ``None`` 입니다.
+    ``code`` 는 서버가 준 ``h_msg_cd`` 입니다. 로그인 요청이 서버 실패를 받았을 때 채워지고, 그 실패가 :class:`KorailAppError` 였다면 원래
+    예외가 ``__cause__`` 에 남습니다. 서버 응답 없이 난 실패(세션 없음, 기기 쪽 인증 등)는 ``None`` 입니다.
     """
 
     def __init__(self, *args: object, code: str | None = None) -> None:
@@ -114,18 +64,10 @@ class KorailAuthError(KorailApiError):
 
 
 class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
-    """세션 만료. ``P058``.
+    """P058 을 세션 만료로 분류합니다. KorailAppError 가 아니라 KorailAuthError 의 하위입니다.
 
-    ``P058`` 이라는 문자열은 jadx/smali 전체에 0건입니다 — 코드 리터럴이 AppSuit 로 보호돼 PROTECTED
-    입니다. 7.0.6 에서 남는 근거는 평문 자산 사전 한 줄뿐입니다:
-    ``analysis/apktool/assets/error_json.json:334`` 의 ``"P058"`` 값이
-    ``location.replace('/korail/com/login.do')`` 만 담은 JavaScript 조각이라,
-    서버가 이 코드로 로그인 화면 재진입을 지시한다는 성질까지는 확인됩니다.
-    어느 화면이 이걸 세션 만료로 처리하는지는 7.0.6 에서 재확인하지 못했습니다
-    — 그 부분은 미출처입니다.
-
-    :class:`KorailAuthError` 의 하위이고 :class:`KorailAppError` 가 아닙니다.
-    ``except KorailAppError`` 로는 잡히지 않습니다.
+    메시지 근거: assets/error_json.json:334 의 로그인 화면 이동 안내.
+    7.0.6 의 대응 비교 리터럴은 보호돼 화면별 처리와의 동일성은 미확인입니다.
     """
 
     def __init__(
@@ -145,17 +87,10 @@ class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
 
 
 class KorailDynaPathError(KorailApiError):
-    """DynaPath 계층이 요청을 거절 — 안티매크로.
+    """응답 본문의 차단 정수 코드를 감지한 오류.
 
-    ``h_msg_cd`` 도 응답 헤더도 아니라 **응답 본문**의 정수 필드로 옵니다 —
-    HTTP 상태와 무관하게, :data:`~korail_mobile_api.http._DYNAPATH_BLOCK_CODES`
-    에 속하는 값이면 이 예외입니다
-    (``analysis/jadx/sources/com/korail/talk/network/interceptor/DynaPathInterceptor.java:97-124``).
-    그 정수가 담긴 JSON 필드 이름 자체는 AppSuit 로 난독화돼 PROTECTED 이므로,
-    :mod:`~korail_mobile_api.http` 는 이름을 추측하는 대신 응답 본문의 모든
-    최상위 값을 훑어 판정합니다 — 자세한 근거는 그 모듈의
-    ``_dynapath_block_payload`` 독스트링을 참고하십시오. ``DynaPath-Result``
-    같은 응답 헤더는 7.0.6 어디에도 없습니다.
+    앱 근거: DynaPathInterceptor.java:97-124. 키가 보호돼 이 구현은 모든 최상위 값을 검사합니다. 정확한 검사 범위와 한계는
+    http._dynapath_block_payload 참고. 토큰 송신 여부를 뜻하지는 않습니다.
     """
 
     def __init__(
@@ -171,11 +106,9 @@ class KorailDynaPathError(KorailApiError):
 class KorailAuthContinuationRequired(KorailAuthError):
     """로그인이 WebView 2단계 인증으로 이어져야 합니다.
 
-    서버가 준 :attr:`redirect_url`(``strRedirectUrl``)과 로그인 응답 원문
-    :attr:`raw` 를 싣습니다. 7.0.6 은 이 뒤를 ``h_msg_cd`` 별 WebView GET 으로
-    이어 가는데(``LoginViewModel.java:1390-1443``) 그 URL 의 쿼리 구분자는
-    AlienGuard 로 보호돼 재현할 수 없으므로, 이어 가는 방법은 호출자가
-    ``redirect_url``/``raw`` 를 보고 정합니다.
+    서버가 준 :attr:`redirect_url`(``strRedirectUrl``)과 로그인 응답 원문 :attr:`raw` 를 싣습니다. 7.0.6 은 이 뒤를
+    ``h_msg_cd`` 별 WebView GET 으로 이어 가는데(``LoginViewModel.java:1390-1443``) 그 URL 의 쿼리 구분자는 AlienGuard
+    로 보호돼 재현할 수 없으므로, 이어 가는 방법은 호출자가 ``redirect_url``/``raw`` 를 보고 정합니다.
     """
 
     def __init__(self, redirect_url: str, *, raw: object | None = None) -> None:
@@ -184,7 +117,7 @@ class KorailAuthContinuationRequired(KorailAuthError):
         super().__init__("KORAIL login requires WebView continuation")
 
     def __reduce__(self) -> tuple[object, ...]:
-        # Same contract as _CodeMessagePickle, one positional argument.
+        # 생성자 인자를 보존하는 이유는 _CodeMessagePickle 참고.
         return (self.__class__, (self.redirect_url,), dict(self.__dict__))
 
 
@@ -193,23 +126,10 @@ def _code_message(code: str | None, message: str | None) -> str:
 
 
 class KorailAppError(_CodeMessagePickle, KorailApiError):
-    """서버가 앱 수준 실패로 답함 — ``h_msg_cd`` 분류의 뿌리.
+    """서버 앱 수준 오류. 알려지지 않은 h_msg_cd 는 이 클래스 그대로 분류됩니다.
 
-    ``strResult == "FAIL"`` 이거나 ``h_msg_cd == "WRC000288"`` 일 때 올라갑니다.
-    매핑되지 않은 코드는 이 클래스 그대로 옵니다.
-
-    실패 판정은 코드가 아니라 ``strResult`` 가 합니다. 봉투 세 필드의 선언은
-    ``analysis/jadx/sources/com/korail/talk/network/model/CommonOut.java:40-44``
-    입니다 — ``strResult``/``hMsgCd``/``_hMsgTxt`` 를 가진
-    ``abstract class CommonOut`` 이고 응답 DTO 141개가 이걸 상속합니다(:53).
-
-    7.0.6 에는 코드 전체를 한자리에서 가르는 switch 가 없습니다 — ``h_msg_cd``
-    분기는 화면별 ViewModel 로 흩어져 있고
-    (``ScreenViewModel.java:1238-1257`` ``networkError()`` 는 전송 계층 오류와
-    ``DynaPathBlockedException`` 만 다룹니다), 그래서 "어느 분기에도 걸리지
-    않으면 그대로 지나간다"는 성질만 구조적으로 남습니다. 앱이 인식하지 못한
-    ``h_msg_cd`` 를 ``FAIL`` 이 아닌 응답에서 성공으로 흘려보낸다는 것을 한 줄로
-    보여 주는 7.0.6 위치는 찾지 못했습니다 — 미출처.
+    발생 조건은 http.parse_base_response 를 따릅니다. 앱의 봉투 선언은 CommonOut.java:40-44, 공통 오류 처리는
+    ScreenViewModel.java:1238-1257 입니다. 이 예외 분류표는 라이브러리의 선택입니다.
     """
 
     def __init__(self, code: str | None, message: str | None, *, raw: object | None = None) -> None:
@@ -220,161 +140,74 @@ class KorailAppError(_CodeMessagePickle, KorailApiError):
 
 
 class KorailNoResultsError(KorailAppError):
-    """요청은 이해됐고 맞는 것이 없었습니다.
+    """조회 결과 없음. 코드별 메시지 근거는 assets/error_json.json 입니다.
 
-    ``WRG000000``/``P114`` — 평문 자산 사전 확인
-    (``analysis/apktool/assets/error_json.json:4173`` "조회 결과가 없습니다.",
-    ``:388`` "조회된 승차권이 없습니다…"). 승차권 목록 화면의 자리는
-    ``MyTicketBaseViewModel.java:101`` 과 ``MyTicketDetailViewModel.java:136``
-    이지만 거기서 이 두 코드를 확인하지는
-    못했습니다 — 코드 리터럴이 AppSuit 로 보호돼 jadx/smali 전체에 0건입니다.
-    그러니 "빈 화면"이라는 UI 처리는 7.0.6 미출처이고, 이 분류가 서는 근거는
-    위 사전 문구입니다.
-
-    ``P100``/``WRT300005`` — 실서버 관측에 더해, AppSuit 가 건드리지 않는
-    평문 자산 사전에서 확인됨
-    (``analysis/apktool/assets/error_json.json:374`` "검색된 데이터가 없습니다.",
-    ``:5141`` "조회자료가 없습니다.").
-
-    ``ERR000100``/``WRT800083``/``WRG500116`` — 같은 "조회결과 없음" 문구 패턴을
-    그 사전 전수조사로 추가 확인
-    (``analysis/apktool/assets/error_json.json:2312`` "조회된 자료가 없습니다.",
-    ``:12835`` "조회할 자료가 없습니다.",
-    ``:4241`` "스케줄 조회결과가 없습니다(강릉역의 공사착공으로 정동진역까지만
-    열차가 운행합니다)").
+    WRG000000/P114:4173,388; P100/WRT300005:374,5141; ERR000100/WRT800083/WRG500116:2312,12835,4241.
+    메시지 사전만으로 앱의 화면 전환을 단정하지 않습니다.
     """
 
 
 class KorailNoDirectTrainError(KorailNoResultsError):
-    """직통 열차 없음, 환승으로는 가능. ``WRD000061``.
+    """직통 결과 없음(WRD000061). 환승 조회 가능성이지 환승 결과의 존재 보장은 아닙니다.
 
-    7.0.6 확인: ``TrainScheduleViewModel`` 이 ``responseTrainSchedule()`` 에서
-    ``h_msg_cd`` 를 ``WRD000061`` 과 비교해(smali:35513-35521) 확인창을 띄우고
-    (:35550-35566, ``R.string.hm_searchtrain_loading_popup2_body``), 확인을
-    누르면 ``changeFilterTransfer()``(java:3216-3219) →
-    ``updateTrainScheduleFilterData()``(java:11051-11079, 재질의는 :11077)
-    를 거쳐 같은 질의를 다시 보냅니다. 이때 바뀌는 전선 필드는
-    ``radJobId``(``buildTrainScheduleIn()`` java:3136,3212, DTO 선언은
-    ``TrainScheduleIn.java:95``)입니다.
+    앱의 환승 필터 전환: TrainScheduleViewModel.java:3216-3219,11051-11079; 요청 필드: TrainScheduleIn.java:95. 특정
+    오류코드 분기 근거는 TrainScheduleViewModel.smali:35513-35566 에 의존하며 jadx 만으로는 확정하지 않습니다.
     """
 
 
 class KorailSoldOutError(KorailAppError):
-    """재고 소진. ``ERR211161``.
+    """매진·잔여석 없음. 메시지 근거: assets/error_json.json.
 
-    ``ERR211161`` 은 jadx/smali 전체에 0건이고 AppSuit 로 보호됩니다(좌석변경
-    옵션 화면 ``SelfSeatChangeOptionViewModel.java:68`` 에도 이 리터럴은
-    없습니다). 이 코드의 문구는
-    ``analysis/apktool/assets/error_json.json:2390`` "고객님께서 요구하신
-    열차는 이미 매진되었으므로 다른 열차(시간대)를 선택하여 주시기
-    바랍니다."입니다.
-
-    ``IRT010110``/``WRT300001``/``ERR800048`` —
-    ``analysis/apktool/assets/error_json.json`` (AppSuit 가 건드리지 않는 평문
-    ``h_msg_cd`` → 안내문구 사전) 전수조사로 추가. ``IRT010110`` 은 ``:3203``
-    "잔여석없음". ``WRT300001``/``ERR800048`` 은 같은
-    "매진" 문구로 확인(``:5137`` "좌석이 매진되었습니다.", ``:11062`` "할인승차권의
-    잔여석이 모두 매진되었습니다.").
+    ERR211161:2390; IRT010110:3203; WRT300001:5137; ERR800048:11062. 앱의 특정 UI 처리를 재현한다는 뜻은 아닙니다.
     """
 
 
 class KorailSeatUnavailableError(KorailAppError):
-    """지정한 좌석은 줄 수 없으나 열차는 아직 예약 가능할 수 있습니다.
+    """지정 좌석 이용 불가. 다른 좌석의 예약 가능성은 별도입니다.
 
-    * ``WRI411345`` — ``analysis/apktool/assets/error_json.json:4340``
-      "요청한 호차 및 좌석번호 예약 불가".
-    * ``ERR911081`` — ``analysis/apktool/assets/error_json.json:2601``
-      "좌석선택 예약불가".
-    * ``WRT800176`` — 7.0.6 근거가 전혀 없고 평문 자산 사전에도 없습니다
-      (``WRT8001xx`` 형제는 ``error_json.json:12847`` 부터 줄지어 있으나
-      ``176`` 만 빠져 있습니다). 이 분류는 6.5.0 분석에서 온 것이고 미출처입니다.
+    메시지 근거: assets/error_json.json:4340(WRI411345),2601(ERR911081). WRT800176 은 7.0.6 근거가 미확인인 분류값입니다.
     """
 
 
 class KorailReservationRefusedError(KorailAppError):
-    """예약 거절. 앱은 사용자를 기존 예약목록으로 보냅니다.
+    """중복 예약·구매 한도 등의 예약 거절. 앱의 화면 이동은 미확인입니다.
 
-    ``WRR800029``, ``ERR911531``, ``ERR911051`` — 셋 다 평문 자산 사전에서
-    확인됩니다(``analysis/apktool/assets/error_json.json:12465`` "동일한 예약
-    내역이 있으니, 기존 예약 건을 취소하거나 발권 후 구매하시기 바랍니다.",
-    ``:2642`` "개인 고객 1인당 구매 한도를 초과하였습니다…", ``:2599``
-    "전체예약건수가 초과되었습니다."). 세 코드 리터럴은 jadx/smali 전체에
-    0건(AppSuit 보호)이고, 위 "앱은 사용자를 기존 예약목록으로
-    보냅니다"라는 UI 동작은 7.0.6 에서 재확인하지 못했습니다 — 그 부분은
-    미출처입니다.
-
-    ``ERR911501`` — ``ERR911531`` 과 안내문구가 글자 하나까지 같음("개인 고객
-    1인당 구매 한도를 초과하였습니다...1일 최대 20석, 열차별 최대 10석")
-    (``analysis/apktool/assets/error_json.json:2633``).
+    메시지 근거: assets/error_json.json:12465(WRR800029),2642(ERR911531), 2599(ERR911051),2633(ERR911501).
     """
 
 
 class KorailInvalidRequestError(KorailAppError):
-    """필드 수준 검증 거부. 입력을 고쳐야 합니다.
+    """입력 필드 검증 거절.
 
-    ``WRG200018``, ``WRT100002``, ``WRT100124`` — 실서버 관측에 더해
-    ``analysis/apktool/assets/error_json.json`` (AppSuit 가 건드리지 않는 평문
-    ``h_msg_cd`` → 안내문구 사전) 에서도 확인됨
-    (``:4194`` "입력값오류(PNR번호)", ``:4600`` "창구번호미입력,미승인창구",
-    ``:4625`` "반환번호를 확인해주세요").
-
-    ``WRG200001``~``WRG200020`` (``WRG200018`` 제외 19개) — 같은
-    ``WRG2000xx`` 계열이 "입력값오류(필드명)" 동일 패턴으로 그 사전에
-    연속 나열되어 있어 함께 확인(``:4177-4196``).
+    메시지 근거: assets/error_json.json:4194(WRG200018),4600(WRT100002),4625(WRT100124),
+    4177-4196(WRG200001~WRG200020).
     """
 
 
 class KorailNotEntitledError(KorailAppError):
-    """이 계정에 그 할인·상품 자격이 없습니다. ``ERR299943``.
+    """할인·상품 대상이 아님.
 
-    ``analysis/apktool/assets/error_json.json`` (AppSuit 가 건드리지 않는 평문
-    ``h_msg_cd`` → 안내문구 사전) 에서 확인됨
-    (``:2475`` "예약할인이 지원되지 않습니다").
-
-    ``ERR800049``/``WRC000419``/``WRC800030``/``WRR800058`` — 같은
-    "할인·상품 적용대상 아님" 문구 패턴으로 그 사전 전수조사에서 추가 확인
-    (``:11063`` "할인승차권 적용 대상이 아닙니다.",
-    ``:12013`` "키즈카드 발급 대상이 아닙니다(만 12세이하)",
-    ``:12059`` "회원님께서는 해당할인을 이용할 수 있는 대상이 아닙니다.",
-    ``:12492`` "현역병할인 적용대상이 아닙니다.").
+    메시지 근거: assets/error_json.json:2475(ERR299943),11063(ERR800049),12013(WRC000419),
+    12059(WRC800030),12492(WRR800058).
     """
 
 
 class KorailServiceUnavailableError(KorailAppError):
-    """KORAIL 백엔드 불가 선언. ``SEMGTK``.
-
-    ``SEMGTK`` 리터럴은 jadx/smali 전체 0건(AppSuit 보호)입니다. 즉 "앱이 그때 무엇을 띄우는가"를
-    보여 주는 **코드** 근거는 7.0.6 에서 재유도하지 못했습니다 — 미출처.
-    다만 안내 문구 자체는 평문 자산 사전에서 확인되고, 그 문구가 "앱은
-    저장된 승차권 화면을 제안합니다"를 그대로 뒷받침합니다 —
-    ``analysis/apktool/assets/error_json.json:66`` "인터넷 연결상태(WiFi, 3G,
-    4G)가 좋지 않습니다.저장된 승차권화면으로 이동하시겠습니까?".
-    """
+    """서비스/연결 불가 분류(SEMGTK). assets/error_json.json:66 의 저장 승차권 안내가 근거이며 서버 장애만을 확정하지 않습니다."""
 
 
 class KorailAppUpdateRequiredError(KorailAppError):
-    """서버가 앱 업데이트를 요구합니다. ``SUPDATE``.
-
-    ``SUPDATE`` 리터럴은 jadx/smali 전체에 0건(AppSuit 보호)입니다. 코드의
-    뜻만 평문 자산 사전에서 확인됩니다 —
-    ``analysis/apktool/assets/error_json.json:65`` "최신버전으로 업데이트하신
-    후 이용하여 주십시오.". "Google Play 로 보냄"은 7.0.6 에서 확인하지
-    못했습니다 — ``market://details`` 도 ``play.google.com/store/apps`` 도
-    ``jadx/sources/com/korail/`` 아래와 ``res/values/strings.xml`` 에
-    0건입니다. 미출처.
-    """
+    """앱 업데이트 요구(SUPDATE). 메시지 근거: assets/error_json.json:65. 스토어 이동 동작은 미확인입니다."""
 
 
 class KorailNetFunnelError(_CodeMessagePickle, KorailApiError):
     """NetFunnel 대기열을 통과하지 못해 KORAIL 요청을 보내지 않았습니다.
 
-    예약·결제·예약내역(앱의 ``mode=0`` 관문)에서 대기열이 200 이 아닌 답을 했거나 대기열
-    요청 자체가 실패한 경우, 키 없이 대기하라고 한 경우,
-    :attr:`~korail_mobile_api.config.KorailConfig.netfunnel_wait_limit` 를 넘긴 경우입니다.
-    ``code`` 는 대기열 응답 코드(없으면 ``None``), ``raw`` 는 응답 본문입니다.
+    예약·결제·예약내역(앱의 ``mode=0`` 관문)에서 대기열이 200 이 아닌 답을 했거나 대기열 요청 자체가 실패한 경우, 키 없이 대기하라고 한 경우,
+    :attr:`~korail_mobile_api.config.KorailConfig.netfunnel_wait_limit` 를 넘긴 경우입니다. ``code`` 는 대기열 응답
+    코드(없으면 ``None``), ``raw`` 는 응답 본문입니다.
 
-    :class:`KorailAppError` 가 아닙니다 — ``h_msg_cd`` 를 갖지 않는 별도
-    호스트의 별도 프로토콜입니다.
+    :class:`KorailAppError` 가 아닙니다 — ``h_msg_cd`` 를 갖지 않는 별도 호스트의 별도 프로토콜입니다.
     """
 
     def __init__(
@@ -391,30 +224,16 @@ class KorailNetFunnelError(_CodeMessagePickle, KorailApiError):
 
 
 class KorailQueueRejectedError(KorailNetFunnelError):
-    """대기열이 아예 돌려보냄. ``TsBlock``(301) / ``TsIpBlock``(302).
+    """대기열 차단 301/302. Netfunnel.java:67-69,114-116 과 com/netfunnel/api/Code.java:31-33 이 근거입니다.
 
-    7.0.6 근거: NetFunnel SDK 가 난독화되지 않은 원래 패키지 그대로 들어
-    있습니다 —
-    ``analysis/jadx/sources/com/netfunnel/api/Netfunnel.java:114-116``
-    ``EvnetCode.isBlocking()`` 이 ``Block``(301)/``IpBlock``(302)에서만 참이고
-    (상수 선언은 ``:67-68``), ``ExpressNumber``(303, 선언 ``:69``)는
-    ``:102-104`` ``isSuccess()`` 가 성공으로 셉니다. 위에 쓴
-    ``TsBlock``/``TsIpBlock``/``TsExpressNumber`` 라는 이름은 별개 열거형인
-    ``analysis/jadx/sources/com/netfunnel/api/Code.java:31-33`` 쪽 철자이고,
-    같은 301/302/303 입니다.
+    303 은 SDK isSuccess() 에 포함되지만(Netfunnel.java:102-104), 관문 mode 의 수용 규칙과는 별개입니다.
     """
 
 
 class KorailDynaPathRequiredError(KorailApiError):
-    """DynaPath 가 필요한 경로인데 설정이 꺼져 있습니다.
+    """DYNAPATH_REQUIRED_PATHS 를 토큰 비활성 상태로 호출하여 전송 전에 거절됐습니다.
 
-    :data:`~korail_mobile_api.constants.DYNAPATH_REQUIRED_PATHS` 의 경로(지금은
-    ``login.Login`` 하나)는 토큰 없이 부르면 서버가 거절하므로, 설정이 꺼져 있으면
-    이 라이브러리가 전송 전에 막습니다. 허용목록
-    (:data:`~korail_mobile_api.constants.DYNAPATH_ALLOWLIST_PATHS`)의 나머지 다섯
-    경로는 토큰 없이도 나갑니다.
-    :class:`KorailDynaPathError` 와 다릅니다 — 그쪽은 토큰을 보냈는데 서버가
-    거절한 것이고, 이쪽은 아직 아무것도 보내지 않았습니다.
+    KorailDynaPathError 는 응답 차단 신호이며, 이 오류는 서버 응답을 받았다는 뜻이 아닙니다.
     """
 
 
@@ -634,16 +453,9 @@ def classify_app_error(
     *,
     raw: object | None = None,
 ) -> KorailAppError:
-    """``h_msg_cd`` 가 뒷받침하는 가장 구체적인 :class:`KorailAppError` 를 만듭니다.
+    """실패로 판정된 h_msg_cd 에 맞는 예외를 생성하되 직접 raise 하지 않습니다.
 
-    올리지 않고 **돌려줍니다** — 각 호출 지점이 자기 ``raise`` 와 트레이스백을
-    유지하게 하기 위해서입니다. 모르는 코드는 밋밋한 :class:`KorailAppError`.
-
-    이미 올리기로 한 자리에서만 부르십시오. 성공 응답의 코드를 넘기면 서버가
-    알리지도 않은 실패를 만들게 됩니다.
-
-    ``P058`` 은 여기서 다루지 않습니다 — 이 매핑을 보기 전에
-    :class:`KorailSessionExpiredError` 로 처리됩니다.
+    미등록 코드는 KorailAppError. 성공 응답에 임의로 호출하지 마십시오. P058 은 이 분류 전에 KorailSessionExpiredError 로 처리합니다.
     """
     subclass = _APP_ERROR_BY_CODE.get(code or "", KorailAppError)
     return subclass(code, message, raw=raw)

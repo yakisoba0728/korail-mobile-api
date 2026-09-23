@@ -2,12 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""리무진 연계 조회의 요청 폼 빌더.
-
-:mod:`korail_mobile_api.limousine_models` 의 질의를 전선 키로 옮깁니다. 값 검사는
-질의의 ``__post_init__`` 가 한 번 합니다. 두 폼 모두 공통 ``Device``/``Version`` 을
-싣습니다.
-"""
+"""리무진 Query 를 요청 폼으로 옮깁니다. 입력 검증은 Query 의 __post_init__ 에서 수행합니다."""
 from __future__ import annotations
 
 from ._payload_helpers import _device_version
@@ -22,16 +17,8 @@ def build_limousine_schedule_form(
     config: KorailConfig,
     query: LimousineScheduleQuery,
 ) -> dict[str, str]:
-    """``lmu.scdlQry.do`` 의 운행 스케줄 조회 폼을 만듭니다.
-
-    라우트 선언은
-    ``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:654-656``
-    의 ``postScdlQry()`` 입니다 — ``@FormUrlEncoded`` + ``@POST`` 에
-    ``@FieldMap Map<String, String>`` 이라, 이 빌더가 폼을 만드는 것 자체는
-    거기서 확인됩니다.
-    역은 역이름이 아니라 4자리 역코드
-    (``dptRsStnCd``/``arvRsStnCd``)이고, 날짜는 ``YYYYMMDD``, 시각은
-    ``HHMMSS`` 입니다.
+    """리무진 운행 스케줄 폼(NetworkApi.java:654-656, postScdlQry). 역은 역코드, 날짜·시각은 YYYYMMDD·HHMMSS 입니다. 형식 자릿수는
+    서버에서 검사합니다.
     """
     return {
         **_device_version(config),
@@ -39,15 +26,9 @@ def build_limousine_schedule_form(
         "dptDt": query.departure_date,
         "dptRsStnCd": query.departure_station_code,
         "arvRsStnCd": query.arrival_station_code,
-        # tmGpCd 가 아니라 7.0.6 ScdlQryIn 의 trnGpCd 다. 이 속성엔
-        # @SerialName 이 없고(개명은 Device/Version/Key/lang 뿐), serializer 13개 이름의
-        # AlienGuard 암호문 길이(= 평문 길이) [6,7,3,4,5,10,10,7,8,5,5,9,11] 이 공통 4개와
-        # 속성 9개 이름 길이에 순서대로 맞는다. 속성 9칸 중 7자는 trnGpCd 자리 하나뿐이고
-        # 6자 칸은 없다.
-        # analysis/jadx/sources/com/korail/talk/network/model/ScdlQryIn.java:38,60
-        # analysis/jadx/sources/com/korail/talk/network/model/ScdlQryIn$$serializer.java:32-44
-        # 2026-09-16 실서버: 서버는 이 값으로 거르지 않는다(키 없음·trnGpCd=999·
-        # tmGpCd=999 가 같은 42편). 응답 행은 trnGpCd="980" 을 싣는다.
+        # 속성명은 trnGpCd(ScdlQryIn.java:38,60). 보호된 serializer 이름의 길이만으로 전송 키의 평문을 확정할 수는
+        # 없습니다(ScdlQryIn$$serializer.java:32-44). 2026-09-16 관측: 키 생략·trnGpCd=999·tmGpCd=999 모두 같은
+        # 42편; 응답은 trnGpCd="980". 따라서 이 표본은 요청 필터가 적용된다는 증거가 아닙니다.
         "trnGpCd": query.service_code,
         "psrmClCd": query.room_class_code,
         "dptTm": query.departure_time,
@@ -61,29 +42,11 @@ def build_limousine_seat_inventory_form(
     config: KorailConfig,
     query: LimousineSeatInventoryQuery,
 ) -> dict[str, str]:
-    """``lms.TResidualSeatsResearch.do`` 의 좌석 재고 조회 폼을 만듭니다.
+    """리무진 좌석 재고 폼(NetworkApi.java:269-271). isArrow 는 true/false 문자열입니다.
 
-    라우트 선언은
-    ``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:269-271``
-    의 ``postAirportBusTResidualSeatsResearch()`` 입니다(``@FormUrlEncoded``
-    + ``@POST`` + ``@FieldMap Map<String, String>``, 응답 DTO 는
-    ``TResidualSeatsResearchOut``). 두 값만 문자열이 아닌 파이썬 값에서
-    옵니다 — ``totPsgCnt`` 는 ``str(int)``, ``isArrow`` 는 ``"Y"``/``"N"`` 이
-    아니라 ``"true"``/``"false"`` 입니다.
-
-    ``TResidualSeatsResearchIn`` 은 ``ctlDvCd`` 필드도 선언하지만(``@SerialName``
-    붙은 15번째 필드, 전부 널 허용) 이 폼은 일부러 보내지 않습니다. 이 DTO 는
-    열차 좌석 재고(``research.TResidualSeatsResearch.do``)와 공유되는데
-    (``analysis/reports/src-verification/route-map.tsv:24-25``,
-    ``NetworkApi.java:271,741``), 두 화면의 실제 생성 지점을 비교하면 값이 갈린다:
-    열차 쪽 ``TrainSeatMapViewModel.java:1976`` 는 좌석변경 모드에 따라 실제
-    ``ctlDvCd`` 문자열을 채우지만, 리무진(공항버스) 쪽
-    ``AirportBusSeatMapViewModel.java:865``(그리고 초기화 시점의 :717)는 항상
-    ``null`` 을 넘긴다 — 뒤에 붙는 정수 마스크(``28672``/``32767``)가 ``ctlDvCd``
-    슬롯(비트 ``16384``)을 매번 "기본값 사용"으로 표시하기 때문이다. 서버로 가는
-    ``JsonObject`` 에서 ``null`` 필드는 폼 플래트닝 규칙상 실리지 않으므로(§2),
-    이 폼에 ``ctlDvCd`` 를 넣지 않는 쪽이 7.0.6 리무진 화면이 실제로 보내는 폼과
-    일치한다.
+    ctlDvCd 는 공유 DTO 의 필드이나 공항버스 생성자는 기본값 슬롯을 사용합니다 (AirportBusSeatMapViewModel.java:717,865). 열차 좌석변경
+    생성자 (TrainSeatMapViewModel.java:1976)와 달리 이 폼에서는 생략합니다. 보호된 Json 설정만으로 앱의 모든 null 직렬화 동작을 단정하지
+    않습니다.
     """
     return {
         **_device_version(config),

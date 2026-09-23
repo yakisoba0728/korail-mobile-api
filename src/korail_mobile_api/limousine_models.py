@@ -2,27 +2,11 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""리무진 연계 조회의 요청 질의와 응답 타입.
+"""리무진 운행 스케줄·좌석 재고의 요청과 응답 모델.
 
-``lmu.scdlQry.do``(운행 스케줄)와 ``lms.TResidualSeatsResearch.do``(좌석 재고)가
-씁니다.
-
-``*Query`` 두 클래스는 얼어붙은 데이터클래스이고 문자열 형식은 서버가 판정합니다
-(좌석 재고는 인원 1~9 와 ``is_arrow`` 불리언만 봅니다). 둘 다 역**코드**(4자리)로
-역을 받습니다.
-``LimousineScheduleQuery``·``LimousineSeatInventoryQuery`` 는 운행/열차 식별자를
-그대로 보여 주고 ``room_class_code``(좌석 재고는 ``car_no`` 도)만 가립니다.
-
-운행 스케줄은 2026-09-16 실서버에서 확인했습니다 — 광명역→인천공항T1 42편을
-파싱했습니다.
-
-좌석 재고(``lms.TResidualSeatsResearch.do``)는 **요청 한 가지만** 라이브로
-확인했습니다: 2026-09-22 나머지 조건이 같은 질의 3건을 ``isArrow`` 참/거짓으로
-보내 참은 3건 모두 ``S003`` 거절, 거짓은 3건 모두 성공 봉투였습니다
-(:attr:`LimousineSeatInventoryQuery.is_arrow`). 그 밖의 요청 필드와 **응답 모양**
-(:class:`LimousineSeatInventoryResponse` 의 필드별 해석)은 라이브로 확인하지
-않았고 APK 선언에서 나왔습니다 — ``layout_type`` 이 정수로도 온다는 사실은 같은
-DTO 를 쓰는 일반 좌석재고 라우트의 2026-09-21 관측에서 빌려 온 것입니다.
+Query 는 문자열 형식을 검사하지 않고 서버에 맡깁니다(좌석 재고 Query 는 인원 1~9 와 is_arrow 불리언만 검사). 2026-09-16 라이브 관측: 광명→인천공항T1 스케줄 42편.
+2026-09-22 관측: 동일 조건 3쌍에서 isArrow=true 는 S003, false 는 성공 봉투였습니다. 좌석 응답의 필드별 해석은 이 실험으로 검증하지 않았습니다.
+layout_type 정수 허용은 같은 DTO 를 쓰는 일반 좌석 재고의 2026-09-21 관측에 근거합니다.
 """
 from __future__ import annotations
 
@@ -77,14 +61,10 @@ class LimousineSeatInventoryQuery:
     departure_run_order: str
     arrival_run_order: str
     passenger_count: int
-    #: ``gdNo``. 7.0.6 공항버스 화면은 ``null`` 을 넘깁니다
-    #: (``AirportBusSeatMapViewModel.java:865``). ``None`` 이면 폼에서 뺍니다.
+    #: gdNo. 7.0.6 공항버스 화면은 null 을 넘깁니다(AirportBusSeatMapViewModel.java:865). None 이면 폼에서 뺍니다.
     product_no: str | None = None
-    #: ``isArrow`` — 앱이 보내는 값은 거짓입니다. 참으로 보내면
-    #: ``lms.TResidualSeatsResearch.do`` 가 ``S003`` 로 거절합니다
-    #: (2026-09-22 라이브: 나머지 조건이 같은 질의 3건이 참에서 전부 실패,
-    #: 거짓에서 전부 성공). 호출자가 반드시 골라야 하는 값이 아니라 기본값이
-    #: 있는 값이라 기본을 거짓으로 둡니다.
+    #: isArrow 기본값은 거짓. 2026-09-22 동일 조건 3쌍에서 참은 S003, 거짓은 성공. 이 표본만으로 모든 조건의 성공 여부나 보호된 앱 리터럴의 평문은
+    #: 확정하지 않습니다.
     is_arrow: bool = False
 
     def __post_init__(self) -> None:
@@ -120,21 +100,8 @@ class LimousineSchedule:
     train_order_no: str | None = None
     yms_application_flag: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
-    #: ``rcvdPrc`` — 이 편의 운임. 행에 있는 **유일한** 금액 필드인데 한동안
-    #: 이름이 붙어 있지 않아 ``raw`` 로만 닿았습니다. 7.0.6 DTO 는 21개 String
-    #: 필드를 선언하고(``ScdlQryOutTrain.java:29-49``) 그중 ``rcvdPrc`` 는
-    #: ``:40`` 에 있습니다 — 게터 ``getRcvdPrc()`` 가 ``:389``, ``copy()`` 의
-    #: 21번째 인자가 ``:428`` 입니다. 실서버도 빠뜨리지 않습니다:
-    #: 2026-09-22 라이브 9개 변형 359행 전부에 있었습니다.
-    #:
-    #: 값은 0으로 앞을 채운 14자리 원 단위 숫자 문자열입니다 — 2026-09-22
-    #: 광명→인천공항T1 20260925 의 42행이 모두 ``'00000000016000'``(16,000원)
-    #: 이었습니다. 형제 필드들과 마찬가지로 손대지 않은 문자열로 둡니다:
-    #: ``int`` 로 바꾸면 자릿수 채움이 사라지고, 같은 맵의 나머지 20개도 전부
-    #: 널 가능 문자열입니다.
-    #:
-    #: ``raw`` **뒤**에 있는 것은 의도입니다. 앞에 끼워 넣으면 ``raw`` 의
-    #: 위치 인자 자리가 한 칸 밀립니다.
+    #: rcvdPrc 운임 문자열(ScdlQryOutTrain.java:40,389). 2026-09-22 라이브 359행에 존재; 광명→인천공항T1 20260925 의 42행은
+    #: 14자리 영 채움으로 16,000원을 표시했습니다. 영 채움을 보존하며, raw 의 위치 인자 호환성을 위해 raw 뒤에 둡니다.
     received_price: str | None = None
 
 
@@ -164,30 +131,17 @@ class LimousineSeat:
 
 @dataclass(frozen=True)
 class LimousineSeatInventoryResponse(BaseKorailResponse):
-    """``lms.TResidualSeatsResearch.do`` 의 응답 — 한 호차의 좌석표.
-
-    이 라우트와 ``research.TResidualSeatsResearch.do``(열차 좌석표)는 같은
-    DTO(``TResidualSeatsResearchOut.java``)를 돌려받습니다
-    (``NetworkApi.java:271,741``). 형제 파서
-    :func:`~korail_mobile_api.parsers.parse_seat_inventory_response` 가 이미
-    읽는 ``layout_type``·``vrBnrUrl``·``windowList`` 세 필드를 이 응답도
-    같은 DTO 에서 받지만, 좌석표를 그릴 목적이 아니라면 놓쳐도 눈에 띄지
-    않아 리무진 쪽 파서는 오랫동안 세 필드를 읽지 않았습니다
-    (``TResidualSeatsResearchOut.java:29,34-35,114,134,138``).
+    """한 호차 좌석표. 일반 좌석 재고와 TResidualSeatsResearchOut 을 공유합니다 (NetworkApi.java:271,741). 배치·배너·창측 위치의 선언은
+    TResidualSeatsResearchOut.java:29,34-35,114,134,138 참고.
     """
     car_type_code: str | None = None
     car_no: str | None = None
     seat_arrangement_code: str | None = None
     up_down_division_code: str | None = None
-    #: ``layoutType`` — 좌석 배치 형식. 형제 응답
-    #: :attr:`~korail_mobile_api.models.SeatInventoryResponse.layout_type`
-    #: 과 같은 DTO 필드이며, DAO 선언은 String 이지만 실서버는 JSON 정수로도
-    #: 보냅니다(2026-09-21 확인) — 파서가 둘 다 받아 문자열로 정규화합니다.
+    #: layout_type: 선언은 String 이나 일반 좌석 재고에서 JSON 정수도 관측(2026-09-21). 리무진 파서도 문자열·정수를 받아 문자열로 정규화합니다.
     layout_type: str | None = None
-    #: ``vrBnrUrl`` — VR 배너 URL.
+    #: VR 배너 URL. repr 에 표시됩니다.
     vr_banner_url: str | None = None
-    #: ``windowList`` — 창측/통로측 위치 비율 목록.
-    #: :class:`~korail_mobile_api.models.SeatWindow` 를 그대로 재사용합니다 —
-    #: ``{st_loc_rt, cls_loc_rt}`` 구조가 형제 응답과 동일합니다.
+    #: 일반 좌석 재고와 같은 {st_loc_rt, cls_loc_rt} 구조이므로 SeatWindow 를 재사용합니다.
     windows: tuple[SeatWindow, ...] = ()
     seats: tuple[LimousineSeat, ...] = ()

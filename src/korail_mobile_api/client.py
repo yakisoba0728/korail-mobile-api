@@ -2,16 +2,8 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-""":class:`KorailClient` — 이 패키지에 하나뿐인 진입점.
-
-여기에는 클래스가 하나뿐입니다. 라우트를 고르고, 폼을 만들고, 응답을 파싱하는 일은
-전부 :mod:`korail_mobile_api.read_payloads`,
-:mod:`korail_mobile_api.mutation_payloads`,
-:mod:`korail_mobile_api.read_parsers` 에 있고 이 모듈은 그것들을 순서대로 엮어
-메서드 하나로 만듭니다.
-
-로그인·읽기 메서드와 상태를 바꾸는 메서드 모두, 인증된 세션만 있으면 즉시
-전송됩니다.
+"""KorailClient 의 공개 메서드와 전송·빌더·파서 연결. 읽기에도 인증이 필요한 경로가 있습니다. 상태 변경 메서드는 로그인 후 즉시 전송되므로 홀드·결제·환불 호출 전에
+인자를 확인하십시오. 실험에는 MockTransport 를 사용합니다.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -280,48 +272,15 @@ T = TypeVar("T")
 
 
 class KorailClient:
-    """KORAIL 모바일 앱(코레일톡)의 비공개 API 를 그대로 부르는 클라이언트.
+    """KORAIL 7.0.6 기반 비공식 클라이언트.
 
-    :class:`~korail_mobile_api.config.KorailConfig` 기본값이 앱의
-    ``Device``/``Version``/``Key`` 를 채우므로 읽기는 ``KorailClient()`` 로 바로 됩니다.
-    DynaPath 안티오토메이션은 기본으로 **켜져** 있습니다(합성 기기 값).
-    ``KorailConfig(disable_dynapath=True)`` 로 끌 수 있지만, 끈 채 :meth:`login` 을
-    부르면 전송 전에 :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError`
-    로 막히고, 열차조회는 서버가 ``MACRO ERROR`` 로 거절합니다.
-    ``transport`` 는 시험용 :mod:`httpx` 전송로를 끼워 넣는 자리입니다.
+    DynaPath 는 합성 기기 값으로 기본 활성화됩니다. disable_dynapath=True 면 필수 경로의 로그인은 전송 전에 거절됩니다. 서버 수용은 보장하지 않습니다.
+    transport 에 MockTransport 를 넣어 오프라인 시험할 수 있습니다.
 
-    상태를 바꾸는 메서드는 읽기 메서드와 마찬가지로 세션만 있으면 즉시
-    전송됩니다.
+    NetFunnel 은 기본 활성화되며 적용 메서드는 KORAIL_NETFUNNEL_GATES 와 호출부를 따릅니다. 대기·차단 결과를 무시하지 않습니다. 상태 변경은 별도 확인
+    절차 없이 전송됩니다.
 
-    열차조회·예약·결제·예약내역 조회는 앱처럼 NetFunnel 대기열을 먼저 거칩니다
-    (:attr:`~korail_mobile_api.config.KorailConfig.netfunnel_enabled`, 기본 참).
-    대기열이 기다리라고 하면 기다리고, 차단하면
-    :class:`~korail_mobile_api.errors.KorailQueueRejectedError` 입니다. 관문 목록은
-    :data:`~korail_mobile_api.netfunnel.KORAIL_NETFUNNEL_GATES`.
-
-    자원 정리는 :meth:`close` 입니다. ``__enter__``/``__exit__`` 를 정의하지 않으므로
-    ``with`` 문으로는 쓸 수 없습니다. :meth:`close` 는 커넥션 풀만 닫으니 로그인까지
-    끝내려면 :meth:`logout`(서버 세션 무효화)이나 :meth:`clear_session`(로컬만 폐기)을
-    따로 부르면 됩니다.
-
-    .. code-block:: python
-
-        from korail_mobile_api import KorailClient, KorailConfig, TrainSearchQuery
-
-        client = KorailClient()
-        client.login("1234567890", "비밀번호")
-        result = client.search_trains(
-            TrainSearchQuery(
-                departure_station_code="서울",
-                arrival_station_code="부산",
-                departure_date="20260801",
-                departure_time="060000",
-            )
-        )
-        for train in result.trains:
-            print(train.train_no, train.departure_time)
-        client.logout()
-        client.close()
+    with 문은 지원하지 않습니다. close 는 연결 풀만 닫습니다. 서버 로그아웃은 logout, 로컬 상태만 폐기할 때는 clear_session 을 별도로 호출하십시오.
     """
 
     def __init__(
@@ -344,9 +303,8 @@ class KorailClient:
     def close(self) -> None:
         """HTTP 커넥션 풀을 닫습니다. 로그인 상태는 건드리지 않습니다.
 
-        :meth:`~korail_mobile_api.http.KorailHttpClient.close` 로 위임하며 네트워크
-        호출을 하지 않습니다. 로그인까지 끝내려면 먼저 :meth:`logout`(서버 세션 무효화)
-        이나 :meth:`clear_session`(로컬만 폐기)을 부르면 됩니다.
+        :meth:`~korail_mobile_api.http.KorailHttpClient.close` 로 위임하며 네트워크 호출을 하지 않습니다. 로그인까지 끝내려면 먼저
+        :meth:`logout`(서버 세션 무효화) 이나 :meth:`clear_session`(로컬만 폐기)을 부르면 됩니다.
         """
         self.http.close()
         if self.netfunnel is not None:
@@ -362,32 +320,12 @@ class KorailClient:
         cust_id: str | None = "",
         etr_path: str | None = "",
     ) -> KorailSession:
-        """회원 자격증명으로 로그인하고 살아 있는 세션을 돌려줍니다.
+        """기존 세션을 비운 뒤 서비스 상태·암호화 파라미터를 읽고 로그인합니다. 라우트: NetworkApi.java:459-460. member_no 는
+        회원번호·휴대폰번호·이메일이며 input_flag 를 생략하면 infer_login_input_flag 가 선택합니다.
 
-        ``POST login.Login``(``NetworkApi.java:459-460`` — ``postLogin(@FieldMap)``).
-        부르는 즉시 기존 세션을 먼저 버리고, 서비스 상태 캐시와 비밀번호 암호화
-        파라미터(``common.code.do``)를 읽은 뒤 변환한 비밀번호를 보냅니다.
-
-        ``member_no`` 는 회원번호·휴대폰번호·이메일 중 아무거나 되고, ``input_flag`` 를 주지
-        않으면 :func:`~korail_mobile_api.session.infer_login_input_flag` 가 값의 모양을 보고
-        ``"2"``/``"4"``/``"5"`` 중에서 고릅니다.
-
-        :class:`~korail_mobile_api.models.KorailSession` 을 돌려주며 여기에 ``JSESSIONID``,
-        회원카드번호, 고객번호(``strCustNo``)가 담깁니다.
-
-        서버가 ``strRedirectUrl`` 을 주면 2단계 인증이 필요하다는 뜻이라
-        :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 를 올리고 그 예외를
-        ``session.pending`` 에 남깁니다.
-
-        :class:`~korail_mobile_api.errors.KorailAuthError` 는 봉투는 통과했는데 성공
-        코드가 아닌 ``h_msg_cd`` 이거나 쿠키(``JSESSIONID``)가 오지 않은 응답입니다.
-        나머지는 **그대로** 전파됩니다 — ``FAIL`` 봉투는 코드에 맞는
-        :class:`~korail_mobile_api.errors.KorailAppError` 하위 예외(로그인 전 단계
-        ``MobileService.cache``·``common.code.do`` 도 같음), HTTP 왕복 실패는
-        :class:`~korail_mobile_api.errors.KorailTransportError`, JSON·봉투·암호화
-        파라미터(``key`` 누락·길이) 이상은
-        :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
-        어느 경우든 실패하면 세션·쿠키는 남지 않습니다.
+        추가 인증이면 KorailAuthContinuationRequired 를 올리고 session.pending 에 남깁니다. 봉투는 통과했지만 성공 코드가 아닌 h_msg_cd 이거나
+        JSESSIONID 가 오지 않으면 KorailAuthError 입니다. 나머지는 감싸지 않고 그대로 전파됩니다 — FAIL 봉투는 코드에 맞는 KorailAppError 하위
+        예외(사전 조회 포함), 전송 실패는 KorailTransportError, JSON·봉투·암호화 파라미터 이상은 KorailProtocolError. 실패 시 세션·쿠키는 비웁니다.
         """
         return self.session.login(
             member_no,
@@ -405,11 +343,8 @@ class KorailClient:
         input_flag: str,
         check_valid_pw: str,
     ) -> KorailSession:
-        """Use the APK's customer-ID login branch after provider authentication.
-
-        The provider's ``input_flag`` and the APK's protected
-        ``checkValidPw`` value must be supplied by the caller. No provider SDK
-        token exchange or local credential storage occurs here.
+        """외부 제공자 인증 후 고객번호 로그인 분기를 사용합니다. input_flag 와 보호된 checkValidPw 값은 호출자가 제공해야 합니다. 제공자 SDK 토큰
+        교환이나 자격증명 파일 저장은 수행하지 않습니다.
         """
         return self.session.login_social(
             cust_id,
@@ -420,22 +355,14 @@ class KorailClient:
     def clear_session(self) -> None:
         """서버에 알리지 않고 로컬 로그인 상태만 버립니다.
 
-        쿠키 저장소(``JSESSIONID`` 포함), 현재 :class:`KorailSession`, 보류 중인 2단계
-        인증 상태를 모두 비웁니다. 네트워크 호출이 없으므로 서버 쪽 세션은 스스로 만료될
-        때까지 살아 있습니다. 서버 세션까지 무효화하려면 :meth:`logout` 을 쓰면 됩니다.
+        쿠키 저장소(``JSESSIONID`` 포함), 현재 :class:`KorailSession`, 보류 중인 2단계 인증 상태를 모두 비웁니다. 네트워크 호출이 없으므로
+        서버 쪽 세션은 스스로 만료될 때까지 살아 있습니다. 서버 세션까지 무효화하려면 :meth:`logout` 을 쓰면 됩니다.
         """
         self.session.clear_session()
 
     def logout(self) -> None:
-        """서버 세션을 무효화하고 로컬 로그인 상태도 버립니다.
-
-        7.0.6 앱과 같이 ``login.Logout``에 ``timeStamp``와 공통 필드가 든
-        폼 POST를 보냅니다. ``JSESSIONID`` 쿠키로 현재 세션을 가리킵니다.
-
-        로그인 상태가 아니면 요청 자체를 보내지 않습니다. 전송이 실패하면 예외가
-        올라오지만, 로컬 상태(:meth:`clear_session` 이 지우는 것들)는 어느 경우에나
-        비워집니다. HTTP
-        커넥션 풀은 그대로 남으니 :meth:`close` 는 따로 부르면 됩니다.
+        """로그인 상태이면 서버 로그아웃(login.Logout)을 보내고, 어느 경우든 finally 에서 로컬 세션·쿠키를 비웁니다. FAIL 봉투는 예외가 아니지만
+        전송 오류 등은 그대로 전파됩니다. 연결 풀은 close 로 닫습니다.
         """
         self.session.logout()
 
@@ -461,12 +388,12 @@ class KorailClient:
         return "peak_season_inquiry" if peak_season else "inquiry"
 
     def _require_session(self, what: str = "account read requires") -> None:
-        """No session, no request: ``KORAIL <what> an authenticated session``."""
+        """세션이 없으면 요청 전에 인증 오류를 냅니다."""
         if self.session.current is None:
             raise KorailAuthError(f"KORAIL {what} an authenticated session")
 
     def _require_customer_no(self, what: str) -> str:
-        """No session or customer number: ``KORAIL <what> requires a login customer number``."""
+        """세션과 로그인 고객번호가 모두 있어야 후속 요청을 만듭니다."""
         self._require_session()
         session = self.session.current
         customer_no = session.customer_no if session is not None else None
@@ -474,11 +401,6 @@ class KorailClient:
             raise KorailAuthError(f"KORAIL {what} requires a login customer number")
         return customer_no
 
-    # ------------------------------------------------------------------
-    # Internal helpers: the read skeleton (post/get → parser → _run_read) and
-    # the mutation skeleton (_mutation: post → _run_read → parse),
-    # both sharing _run_read's session-expiry handling
-    # ------------------------------------------------------------------
 
     def _post_read(
         self,
@@ -554,15 +476,8 @@ class KorailClient:
         parser: Callable[[dict[str, Any]], T] | None = None,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse | T:
-        """상태변경 메서드의 공통 골격: 전송 → 파싱 → 세션만료 복구.
-
-        타입 파싱이 실패하면 예외의 :attr:`~korail_mobile_api.KorailApiError.raw`
-        에 **받은 응답 원문 전체가 담겨 있습니다** — 파서가 이미 ``raw`` 를
-        채운 예외여도 원문 전체로 바꾸고, 파서가 넣었던 값은
-        ``parser_raw`` 속성에 남깁니다. 그 사실이 말해 주는 것은 "응답을
-        받았지만 타입 파싱이 실패했다"까지입니다 — 서버 상태가 변경됐는지
-        아닌지는 **알 수 없습니다.** 호출자는 원문을 보고 판단해야 하며,
-        모르는 채로 같은 변경을 재전송해선 안 됩니다.
+        """변경 응답 파싱 실패 시 예외 raw 에 응답 전체를, 기존 부분 raw 는 parser_raw 에 보존합니다. 서버 변경 여부는 파싱 실패만으로 알 수 없습니다.
+        상태를 확인하지 않고 재전송하지 마십시오.
         """
         response = self._run_read(
             lambda: self.http.post_mutation_form(
@@ -575,35 +490,15 @@ class KorailClient:
             try:
                 return parser(response.raw)
             except KorailApiError as error:
-                # 여기까지 왔다는 것은 **응답을 받았고 봉투 검사를 통과했다**는
-                # 뜻입니다. 서버 상태가 어떻게 됐는지는 그것만으로 알 수
-                # 없습니다 — ``raise_on_fail=False`` 면 ``FAIL`` 도 여기까지
-                # 오고, 기본 봉투 검사도 성공 allow-list 가 아니라 거부
-                # 목록입니다(``http.py`` 의 ``parse_base_response``).
-                #
-                # 그래도 **재전송은 위험합니다**: 변경이
-                # 반영됐을 수도 있고 아닐 수도 있는데, 타입 파싱이
-                # 실패하면서 ``.raw`` 가 비어 있으면 호출자는 그것을 가릴
-                # 방법이 없어 **같은 변경을 다시 보내기 쉽습니다** — 장바구니라면 두 번 담기고 결제라면 더
-                # 나쁩니다.
-                #
-                # 그래서 응답 원문을 예외에 붙여 줍니다. 호출자가 원문을 보고
-                # 판단해야 하며, 서버 상태를 모르는 채로 같은 변경을 재전송해선
-                # 안 됩니다.
-                #
-                # ``.raw`` 는 **언제나 받은 응답 전체**입니다. 파서가 이미
-                # ``raw`` 를 채웠더라도 그 값은 보통 응답의 **일부**(실패한 행
-                # 하나 등)라 그대로 두면 호출자가 판단에 필요한 원문을 잃습니다.
-                # 파서가 넣었던 값은 버리지 않고 ``.parser_raw`` 에 옮겨 둡니다
-                # (없으면 ``None``).
+                # 봉투 통과는 변경 성공 보장이 아닙니다(raise_on_fail=False 면 FAIL 도 도달). 부분 raw 로 전체 응답을 잃지 않게 하여
+                # 호출자가 서버 상태를 확인할 수 있도록 합니다. 파싱 실패를 재전송 신호로 사용하면 중복 홀드·결제가 생길 수 있습니다.
                 error.parser_raw = getattr(error, "raw", None)
                 error.raw = response.raw
                 raise
             except Exception as error:
-                # 파서가 이 패키지의 예외가 아닌 것을 낼 수도 있습니다 — 예를
-                # 들어 자릿수 한도를 넘는 정수를 ``str()`` 로 바꾸다 나는
-                # ``ValueError``. 위의 ``except`` 는 그것을 못 잡으므로 여기서
-                # 같은 계약으로 감쌉니다: 원문을 붙인 :class:`KorailProtocolError`.
+                # 파서가 이 패키지의 예외가 아닌 것을 낼 수도 있습니다 — 예를 들어 자릿수 한도를 넘는 정수를 ``str()`` 로 바꾸다 나는
+                # ``ValueError``. 위의 ``except`` 는 그것을 못 잡으므로 여기서 같은 계약으로 감쌉니다: 원문을 붙인
+                # :class:`KorailProtocolError`.
                 wrapped = KorailProtocolError(
                     "KORAIL response was received but could not be parsed:"
                     f" {type(error).__name__}"
@@ -651,10 +546,8 @@ class KorailClient:
     ) -> SeatInventoryResponse:
         """한 호차의 좌석 배치와 좌석별 판매 가능 여부를 조회합니다.
 
-        2026-09-21 실서버 확인: 같은 세션에서 :meth:`get_seat_cars` 를 먼저
-        호출하지 않고 이 메서드를 바로 부르면 ``KorailAppError: [3]인증정보에
-        문제가 있습니다`` 가 돌아올 수 있습니다 — 실앱의 화면 진입 순서(호차
-        목록 → 좌석 배치도)와 같습니다. 호출 순서를 지키십시오.
+        2026-09-21 실서버 확인: 같은 세션에서 :meth:`get_seat_cars` 를 먼저 호출하지 않고 이 메서드를 바로 부르면 ``KorailAppError:
+        [3]인증정보에 문제가 있습니다`` 가 돌아올 수 있습니다 — 실앱의 화면 진입 순서(호차 목록 → 좌석 배치도)와 같습니다. 호출 순서를 지키십시오.
         """
         self._require_session()
         form = build_seat_inventory_form(
@@ -742,10 +635,10 @@ class KorailClient:
         )
 
     def get_deposit_banks(self) -> DepositBankListResponse:
-        """입금은행 코드표. ``POST dlay.dptnBank.do``
-        (``NetworkApi.java:392-393`` — ``postDptnBank(@Field("Device"), @Field("Version"), @Field("Key"))``;
-        이 라우트만 예외적으로 ``@FieldMap`` 이 아니라 개별 ``@Field`` 세 개입니다).
-        로그인 필요."""
+        """입금은행 코드표. ``POST dlay.dptnBank.do`` (``NetworkApi.java:392-393`` —
+        ``postDptnBank(@Field("Device"), @Field("Version"), @Field("Key"))``; 이 라우트만 예외적으로
+        ``@FieldMap`` 이 아니라 개별 ``@Field`` 세 개입니다). 로그인 필요.
+        """
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.dlay.dptnBank.do",
@@ -756,10 +649,9 @@ class KorailClient:
         self,
         departure_date_to: str,
     ) -> DelayDiscountTicketListResponse:
-        """지연할인권 조회. ``POST passCard.DelayDiscountView``
-        (``NetworkApi.java:352-353`` — ``postDelayDiscountView(@QueryMap)``. ``@FormUrlEncoded``
-        선언인데 인자는 ``@QueryMap`` 이라, 7.0.6 도 이 라우트만은 값을 쿼리스트링으로
-        붙입니다 — 이 메서드가 ``post_query`` 를 쓰는 이유입니다).
+        """지연할인권 조회. ``POST passCard.DelayDiscountView`` (``NetworkApi.java:352-353`` —
+        ``postDelayDiscountView(@QueryMap)``. ``@FormUrlEncoded`` 선언인데 인자는 ``@QueryMap`` 이라, 7.0.6 도 이
+        라우트만은 값을 쿼리스트링으로 붙입니다 — 이 메서드가 ``post_query`` 를 쓰는 이유입니다).
 
         로그인 필요.
         """
@@ -780,8 +672,8 @@ class KorailClient:
         page_no: int = 1,
         pnr_no: str = "",
     ) -> DiscountCouponListResponse:
-        """할인쿠폰 조회. ``POST passCard.CouponView``(``NetworkApi.java:328-329`` — ``postCoupon(@FieldMap)``).
-        로그인 필요.
+        """할인쿠폰 조회. ``POST passCard.CouponView``(``NetworkApi.java:328-329`` —
+        ``postCoupon(@FieldMap)``). 로그인 필요.
 
         보유분 없으면 ``WRG000000`` 으로 빈 결과(예외 아님).
         """
@@ -861,10 +753,8 @@ class KorailClient:
             "/classes/com.korail.mobile.pass.passInfoList",
             form,
             parser=parse_pass_availability_response,
-            # A success body carries strResult only (its code lives in
-            # main_info), so the envelope gate would reject it before
-            # the parser ever saw it. A P058/FAIL body still carries the
-            # full envelope and is still raised on.
+            # 성공 본문은 strResult 와 main_info 내부 코드인 관측이 있어 완전한 상위 봉투를 요구하지 않습니다. P058 은 공통 전송 계층에서
+            # 처리합니다.
             require_envelope=False,
         )
 
@@ -900,10 +790,7 @@ class KorailClient:
             "/classes/com.korail.mobile.pass.passMenu.do",
             form,
             parser=parse_pass_menu_response,
-            # A success body is {"list": [...], "strResult": "SUCC"}
-            # with no h_msg_cd/h_msg_txt, so the envelope gate would
-            # reject it before the parser ever saw it. A P058/FAIL body
-            # still carries the full envelope and is still raised on.
+            # 성공 본문의 list·strResult 관측을 수용합니다. 상위 메시지 필드를 요구하지 않지만 P058 검사는 공통 전송 계층에 남습니다.
             require_envelope=False,
         )
 
@@ -914,10 +801,9 @@ class KorailClient:
     ) -> CrewRequestListResponse:
         """승무원 호출 화면에 띄울 요청 사유 선택지를 조회합니다.
 
-        이 라우트의 실제 DTO(``CrewCallCommonIn.java:50``)의 유일한 입력은
-        ``timeStamp`` 이며, 주지 않으면 호출 시점의 밀리초 epoch 입니다.
-        자세한 근거는 :func:`~korail_mobile_api.read_payloads.build_crew_request_list_query`
-        의 독스트링을 참고하십시오.
+        이 라우트의 실제 DTO(``CrewCallCommonIn.java:50``)의 유일한 입력은 ``timeStamp`` 이며, 주지 않으면 호출 시점의 밀리초 epoch
+        입니다. 자세한 근거는 :func:`~korail_mobile_api.read_payloads.build_crew_request_list_query` 의 독스트링을
+        참고하십시오.
         """
         query = build_crew_request_list_query(timestamp_ms)
         return self._post_read(
@@ -988,8 +874,7 @@ class KorailClient:
     ) -> TicketReceiptResponse:
         """승차권 한 장의 영수증과 결제수단을 조회합니다.
 
-        네 식별값과 선택적인 ``txt_index`` 는 같은 승차권 상세 응답에서
-        가져와야 합니다. ``sale_date`` 는 반환원표일자입니다.
+        네 식별값과 선택적인 ``txt_index`` 는 같은 승차권 상세 응답에서 가져와야 합니다. ``sale_date`` 는 반환원표일자입니다.
         """
         self._require_session()
         form = build_ticket_receipt_form(
@@ -1033,13 +918,8 @@ class KorailClient:
         self,
         request: GuideSeatConditionRequest,
     ) -> GuideSeatConditionResponse:
-        """도우미석 안내문을 받습니다. 사실상 **정적** 응답입니다.
-
-        요청의 좌석속성코드가 무엇이든 같은 안내가 ``FAIL``/``MRR800011`` 로
-        돌아옵니다(2026-09-22: 14종 전부 동일). 그래서 ``raise_on_fail=False``
-        입니다 — 여기서 ``FAIL`` 은 실패가 아니라 그 안내문을 싣는 방식입니다.
-        :class:`~korail_mobile_api.read_payloads.GuideSeatConditionRequest`
-        참조.
+        """도우미석 안내문을 읽습니다. 2026-09-22 관측에서 좌석속성 14종 모두 같은 FAIL/MRR800011 안내를 반환해 raise_on_fail=False 로
+        읽습니다. 다른 응답도 항상 같은 안내라는 보장은 없으므로 코드·본문을 확인하십시오.
         """
         return self._post_read(
             "/classes/com.korail.mobile.reservation.guideSeatCnd.do",
@@ -1054,21 +934,9 @@ class KorailClient:
         *,
         peak_season: bool = False,
     ) -> SeatAssignmentScheduleResponse:
-        """좌석배정 예매 화면이 쓰는 열차 목록을 조회합니다.
-
-        ``menu_id`` 가 결과를 정합니다. 일반 검색 메뉴 ``"11"`` 로 부르면
-        서버는 ``SUCC``/``WRG000000`` 에 **빈 목록**으로 답합니다(2026-09-22,
-        7가지 변형 전부). 행이 오는 것은 좌석배정·할인 메뉴 ``"A1"``/``"A2"``
-        (:data:`~korail_mobile_api.constants.KORAIL_DISCOUNT_CARD_MENU_ID`)
-        이고, 7.0.6 도 이 라우트에 일반 검색 메뉴를 보내지 않습니다
-        (``TrainScheduleViewModel.java:2639-2754``). 빈 결과가 곧 "해당 열차
-        없음" 이 아니라 "메뉴가 틀렸음" 일 수 있다는 뜻입니다.
-
-        ``"A1"``/``"A2"`` 라도 날짜·구간에 따라 ``WRD000057``
-        (명절대수송기간)로 거절될 수 있습니다.
-
-        열차조회 대기열(``inquiry``, ``peak_season=True`` 면 ``peak_season_inquiry``)을
-        거칩니다 — 앱도 이 라우트를 ``requestTrainSchedule`` 안에서 부릅니다.
+        """좌석배정 예매 화면의 열차 조회. 앱 호출: TrainScheduleViewModel.java:2639-2754. 2026-09-22 일반 검색 메뉴 11 의 7가지
+        변형은 SUCC/WRG000000 과 빈 목록이었습니다. A1/A2 는 행을 반환한 관측값이며, 날짜·구간에 따라 WRD000057 로 거절될 수 있습니다. 빈 결과가
+        열차 부재가 아닌 메뉴 차이일 수 있습니다. 열차조회 대기열을 거칩니다.
         """
         return self._queued(
             self._inquiry_gate(peak_season=peak_season),
@@ -1167,22 +1035,10 @@ class KorailClient:
         self,
         ticket: OriginalTicketReference,
     ) -> DeliveryRecipientResponse:
-        """N카드 2인 승차권을 **전달하기 전에** 수령자 후보를 조회합니다.
-
-        이미 전달된 승차권의 수령자를 보는 곳이 아닙니다. 7.0.6 은 전달 화면을 만드는 동안에만
-        이것을 부르고, 그나마 ``isNCardTwoPeople()`` 일 때뿐입니다
-        (``DeliveryTicketFormViewModel.java:697-700``, 즉
-        ``TicketDetailOut.pbpAcepPsQryFlg == 'Y'``). 답은
-        ``DeliveryTicketEffect.NCardTwoPeopleUpdated`` 로 흘러갑니다.
-
-        그래서 N카드 2인 승차권이 아니면 ``IRZ000005``("조회된 자료가
-        없습니다")가 **정상 응답**입니다 — 2026-09-22 에 이 계정의 승차권
-        60장이 전부 그랬습니다.
-
-        이미 전달된 승차권의 수령자가 필요하면
-        :meth:`get_pbp_acceptance_specifications` 를 쓰십시오. 그쪽
-        ``jrnyList`` 행에 ``acepCustNm``/``acepCustTeln``/``pbpAcepKndNm``/
-        ``pbpRsvNo`` 가 있습니다.
+        """N카드 2인 승차권의 전달 전 수령자 후보를 조회합니다. 앱은 isNCardTwoPeople() 일 때
+        호출합니다(DeliveryTicketFormViewModel.java:697-700). 그 판정의 보호 리터럴을 평문 Y 로 확정하지 않습니다. 2026-09-22 표본
+        60장은 IRZ000005(조회 자료 없음)였습니다. 이 표본만으로 모든 비N카드 응답을 보장하지 않습니다. 전달 완료 내역은
+        get_pbp_acceptance_specifications 참고.
         """
         self._require_session()
         return self._post_read(
@@ -1274,10 +1130,9 @@ class KorailClient:
     ) -> RefundCommissionResponse:
         """환불했을 때 돌려받을 금액과 떼일 수수료를 미리 묻습니다.
 
-        :meth:`refund` 와 같은 단위, 즉 ``ticket`` 이 지목한 **승차권 한 장** 에
-        대한 답입니다. 2인 PNR 의 한 장을 넣으면 8,400원이라고 답하는데, 그것은 결제
-        총액 16,800원을 잘못 센 것이 아니라 그 한 장을 반환하면 실제로 8,400원이
-        돌아온다는 정확한 답입니다. 총액을 알고 싶으면 장마다 물어야 합니다.
+        :meth:`refund` 와 같은 단위, 즉 ``ticket`` 이 지목한 **승차권 한 장** 에 대한 답입니다. 2인 PNR 의 한 장을 넣으면 8,400원이라고
+        답하는데, 그것은 결제 총액 16,800원을 잘못 센 것이 아니라 그 한 장을 반환하면 실제로 8,400원이 돌아온다는 정확한 답입니다. 총액을 알고 싶으면 장마다
+        물어야 합니다.
         """
         self._require_session()
         return self._post_read(
@@ -1310,31 +1165,10 @@ class KorailClient:
         self,
         code: str | Sequence[str] = "",
     ) -> BaseKorailResponse:
-        """공통코드 표를 조회합니다 — 한 호출에 코드를 여러 개 실을 수 있습니다.
-
-        ``code`` 는 문자열 하나이거나 문자열 시퀀스입니다. 어느 쪽이든 전선에서는
-        ``code`` 라는 같은 이름의 반복 키가 되고, 서버는 요청한 키 전부를 한 본문에
-        담아 돌려줍니다.
-
-        문자열 하나만 받으면 코드 하나마다 왕복 하나를 강제하는데, 라우트도 앱도
-        그렇게 동작하지 않습니다 — 7.0.6 은 같은 경로에 Retrofit 바인딩을 둘 선언하고
-        (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:317``
-        ``postCommonCode(@FieldMap)``, ``:321`` ``postCommonCodeMulti(@FieldMap,
-        @Field("code") List<String>)``), 부팅 시퀀스는 코드 22 개를 한 리스트로 묶어
-        (``analysis/jadx/sources/com/korail/talk/network/NetworkService.java:2015``,
-        ``DEBUG`` 빌드면 ``:2017-2018`` 에서 둘 더) **한 번**의
-        ``postCommonCodeMulti`` 로 보냅니다(``:2025``). 단일 바인딩을 쓰는 곳은
-        ``NetworkService.java:1829`` 하나뿐입니다. 2026-09-22 실서버 확인:
-        :data:`~korail_mobile_api.constants.KORAIL_COMMON_CODE_BOOTSTRAP_CODES`
-        18 개를 한
-        POST 로 보내 ``API.I00000``/``SUCC`` 와 요청한 18 키 전부가 한 본문에 왔고,
-        같은 코드들을 하나씩 따로 부른 값과 바이트 단위로 같았습니다. 즉 코드 N 개를
-        원하면 왕복도 1 번이면 됩니다.
-
-        모르는 코드는 오류가 아닙니다 — ``raw`` 에 그 이름의 키가 빈 문자열 값으로
-        옵니다(``'app.no.such.code'`` → ``SUCC``, 값 ``''``). 기본값 ``""`` 도
-        거절되지 않고 이름이 ``''`` 인 빈 항목 하나로 돌아옵니다. 둘 다 2026-09-22
-        확인이며, 라이브러리가 오류를 삼킨 게 아니라 서버 응답을 그대로 옮긴 것입니다.
+        """문자열 하나 또는 문자열 시퀀스를 code 반복 키로 보냅니다. 바인딩: NetworkApi.java:315-321. 앱 부팅은 코드 목록을 한 호출로 전달합니다
+        (NetworkService.java:2015-2025). 2026-09-22: 부팅 상수 18개를 한 POST 로 보내 SUCC/API.I00000 과 18키를
+        받았으며 개별 요청 결과와 같았습니다. 미등록 코드·빈 코드도 SUCC 와 빈 문자열 항목으로 돌아왔습니다. 관측한 응답을 그대로 반환하며 임의의 코드가 항상 지원된다는
+        보장은 없습니다.
         """
         return self._run_read(
             lambda: self.http.post_form(
@@ -1393,11 +1227,8 @@ class KorailClient:
         pnr_no: str | None = None,
         ticket_return_numbers: Sequence[str] | None = None,
     ) -> MaasMenuListResponse:
-        """Read generic or ticket-specific MaaS menus.
-
-        The ticket-detail screen supplies its PNR and one or more original
-        return numbers. The latter are repeated ``tkRetNo`` form fields in the
-        7.0.6 Retrofit declaration, rather than a joined value.
+        """일반 또는 승차권별 MaaS 메뉴를 조회합니다. 원승차권 반환번호는 tkRetNo 반복 필드이며 하나로 합친 문자열이 아닙니다.
+        NetworkApi.java:402-404 의 postGdMenuLt 선언을 따릅니다.
         """
         if pnr_no is None and ticket_return_numbers is None:
             form = build_maas_menu_form(self.config)
@@ -1501,10 +1332,9 @@ class KorailClient:
     ) -> TrainSearchResult:
         """한 구간·한 날짜의 직통 열차 한 페이지를 조회합니다.
 
-        열차조회 대기열을 거칩니다. ``peak_season`` 은 출발일이 성수기인지입니다 — 앱은
-        달력(``RunDateOutItem.isPeakSeason()``)으로 고르지만 그 판정 코드값이 보호돼 있어
-        호출자가 정합니다. 거짓이면 달력이 없는 앱과 같은 ``act_8`` 입니다.
-        ``use_special_schedule`` 이면 ``product_inquiry`` 관문입니다(**추정**).
+        열차조회 대기열을 거칩니다. ``peak_season`` 은 출발일이 성수기인지입니다 — 앱은 달력(``RunDateOutItem.isPeakSeason()``)으로
+        고르지만 그 판정 코드값이 보호돼 있어 호출자가 정합니다. 거짓이면 달력이 없는 앱과 같은 ``act_8`` 입니다. ``use_special_schedule`` 이면
+        ``product_inquiry`` 관문입니다(**추정**).
         """
         return self._run_read(
             lambda: self._search_trains(
@@ -1544,34 +1374,10 @@ class KorailClient:
         use_special_schedule: bool = False,
         peak_season: bool = False,
     ) -> TrainSearchResult | TransferSearchResult:
-        """직통을 찾고, 하나도 없을 때만 환승으로 한 번 더 찾습니다.
-
-        .. note::
-
-           "하나도 없을 때" 는 **서버가 ``WRD000061`` 로 답할 때** 뿐입니다.
-           직통 조회가 ``WRG000000``/``SUCC`` 에 행 0개로 오는 경우도 있는데
-           (2026-09-22 확인), 그때는 환승으로 넘어가지 않고 빈
-           :class:`~korail_mobile_api.models.TrainSearchResult` 를 그대로
-           돌려줍니다. 즉 이 메서드가 ``TrainSearchResult`` 를 돌려줬다고 해서
-           직통 열차가 있다는 뜻은 아니므로 ``trains`` 를 확인해야 합니다.
-
-        지어낸 편의기능이 아니라 앱의 흐름 그대로입니다. 직통 조회가 아무것도 못 찾으면
-        서버가 ``WRD000061``("직통열차가 없습니다")로 답하는데, 7.0.6
-        ``TrainScheduleViewModel`` 은 ``responseTrainSchedule()`` 에서 오직 그
-        코드만 잡아 확인 창을 띄우고(smali:35513-35566), 확인을 누르면
-        ``changeFilterTransfer()``/``updateTrainScheduleFilterData()``
-        (java:3216-3219, :11051-11079)를 거쳐 ``buildTrainScheduleIn()``
-        (java:3136, :3212)이 ``radJobId="2"`` 로 다시 질의합니다. 이 클라이언트도
-        ``WRD000061`` 을 :class:`~korail_mobile_api.KorailNoDirectTrainError` 로 분류하므로
-        되돌리는 조건은 그 예외 하나뿐이고 다른 실패는 그대로 올라갑니다.
-
-        어느 쪽이 일어났는지는 반환 타입이 말해 줍니다 —
-        :class:`~korail_mobile_api.TrainSearchResult` 면 직통이 성공한 것이고,
-        :class:`~korail_mobile_api.TransferSearchResult` 면 직통이 없어서 받아 온 환승
-        대안입니다.
-
-        ``continuation`` 은 직통 조회에만 전달합니다. 커서는 그것을 만든 조회에 묶인 값이라
-        되돌린 환승 조회는 언제나 첫 페이지부터입니다.
+        """직통 조회가 KorailNoDirectTrainError(WRD000061)일 때만 환승 첫 페이지를 조회합니다. 2026-09-22 관측의 SUCC/WRG000000
+        빈 목록은 폴백하지 않습니다. 반환형뿐 아니라 trains 를 확인하십시오. continuation 은 직통 조회에만 전달합니다. 앱은 사용자 확인 후 필터를
+        바꿉니다(TrainScheduleViewModel.java:3216-3219,11051-11079). 이 메서드는 확인창 없이 자동 전환합니다. 오류 분기의 기존 근거
+        기록은 TrainScheduleViewModel.smali:35513-35566 이며 jadx 만으로는 재검증되지 않았습니다.
         """
         try:
             return self.search_trains(
@@ -1729,38 +1535,13 @@ class KorailClient:
         boarding_date_from: str = "",
         boarding_date_to: str = "",
     ) -> TicketListResponse:
-        """로그인 계정의 승차권 목록을 예약→승차권 구조로 돌려줍니다.
+        """승차권 목록을 예약→승차권 구조로 읽습니다. mode 는 페이지 커서가 아닙니다. 1 은 현재 승차권, 2 는 구매이력이라는 뜻은 라이브 관측입니다. 필드 선언은
+        MyTicketListIn.java:62 이지만 호출부 값은 보호돼 있습니다 (MyTicketBaseViewModel.java:980,1029;
+        LoginViewModel.java:1083).
 
-        7.0.6 ``POST myTicket.MyTicketNewList.do``. 로그인 필요.
-
-        원본 JSON은 ``raw``에 그대로 보존됩니다.
-
-        ``mode`` 는 페이지 커서가 아니라 목록 종류입니다 — ``"1"`` 은 현재 승차권,
-        ``"2"`` 는 구매이력이고 그 밖의 값은 거부됩니다. **이 두 값의 뜻은 7.0.6
-        디컴파일에서 읽어낸 것이 아니라 실서버 관측에서 온 것입니다.** 7.0.6 은 필드
-        자체는 선언합니다(``MyTicketListIn.java:62`` 의 ``@SerialName("txtIndex")``)
-        만, 그 값을 넘기는 유일한 빌더가 ``MyTicketBaseViewModel``
-        ``executeTicketList$app_prodRelease``(``:980``)의 매개변수이고(``:1029`` 에서
-        ``MyTicketListIn`` 첫 인자로 들어감) 리터럴을 직접 주는 두 호출부
-        (``LoginViewModel.java:1083``, ``AppViewModel$executeTicketListForAutoLogin$result$1.java:67``)
-        는 AlienGuard 로 보호된 문자열을 씁니다 — 즉 평문 ``"1"``/``"2"`` 를 APK 에서
-        볼 수 없습니다.
-        ``"2"`` 는 ``boarding_date_from``·``boarding_date_to`` 를 둘 다 ``YYYYMMDD`` 로
-        요구하지만 **이 클라이언트가 그것을 강제하지는 않습니다.** 비었거나 자릿수가
-        틀리거나 앞뒤가 뒤집힌 범위도 그대로 나가고 서버가 ``WRT100101``
-        ("일자를 확인해주세요 / 3개월단위로 조회할 수 있습니다")로 거절합니다 —
-        2026-09-22 에 빈 두 값, ``from`` 만 채운 값(``"20250101"``), 여섯 자리
-        값(``"202501"``/``"202612"``), 뒤집힌 범위(``"20261231"``→``"20250101"``)
-        네 경우를 모두 실서버에서 확인했습니다(``payloads.build_ticket_list_form`` 은
-        ``mode`` 만 검증하고 두 날짜는 ``h_abrd_dt_from``/``h_abrd_dt_to`` 로 그냥
-        흘려보냅니다). 거꾸로, 서버 문구의 "3개월단위" 도
-        강제되지 않습니다: ``20250101``→``20261231`` 2 년 범위가 128 행,
-        ``20260901``→``20260922`` 가 3 행을 돌려줬습니다. 즉 ``WRT100101`` 을
-        부르는 것은 기간의 길이가 아니라 빠졌거나 폭이 틀렸거나 뒤집힌 범위입니다.
-        ``"1"`` 은 두 값을 빈 문자열로 보냅니다.
-
-        ``page_no`` 는 ``h_page_no`` 로 나가고 1 미만은 1 로 올려 보내므로 기본값 ``0`` 도 첫
-        페이지를 뜻합니다.
+        mode=2 날짜는 YYYYMMDD 를 사용하십시오. 빌더는 날짜 폭·순서·기간을 검증하지 않습니다. 2026-09-22: 양쪽 누락, 한쪽 누락, 6자리, 역순의 네
+        표본은 WRT100101 이었고, 2년 범위는 128행, 같은 달 범위는 3행이었습니다. 이 관측으로 최대 기간을 보장하지 않습니다. mode=1 의 날짜는 빈 값이며
+        전송 단계에서 생략됩니다. page_no 는 최소 1 로 보정합니다.
         """
         self._require_session("ticket list requires")
         return self._run_read(
@@ -1788,44 +1569,15 @@ class KorailClient:
         seats: Sequence[KorailSeatAssignment] | None = None,
         seat_attribute_code: str | None = None,
     ) -> ReservationHoldResponse:
-        """열차 한 편에 결제 전 예약을 잡습니다.
+        """열차 한 편에 미결제 홀드를 만듭니다. 결제 또는 취소는 호출자 책임입니다. 좌석 속성은 명시값→열차 행→기본값
+        순서입니다(TrainScheduleViewModel.java:2914-2930,2982-2999).
 
-        로그인 세션을 요구합니다. ``train`` 을 검증하고 변경 전송로로 홀드를
-        걸고 파싱한 :class:`ReservationHoldResponse` 를 돌려줍니다. 그 ``pnr_no`` 가
-        :meth:`cancel_unpaid_hold` 의 입력입니다 — 살아 있는 홀드는 미결제 예약이고
-        취소하든 결제하든 호출자 책임입니다.
+        응답 파싱이 실패하면 KorailProtocolError 이고 ``.raw`` 에 응답 전체(h_pnr_no 포함)가 있습니다. 홀드가 잡혔을 수 있으니 재시도하지 말고
+        ``.raw`` 나 get_reservation_history 로 확인하십시오. 네 예약 메서드가 모두 같습니다. job_type 기본은 IMMEDIATE(1101)입니다.
 
-        응답을 받았는데 파싱이 실패하면 :class:`~korail_mobile_api.errors.KorailProtocolError`
-        이고 ``.raw`` 에 응답 전체(``h_pnr_no`` 포함)가 있습니다. 서버에는 홀드가 잡혔을 수
-        있으니 재시도하지 말고 ``.raw`` 를 보거나 :meth:`get_reservation_history` 로
-        확인하십시오. 네 예약 메서드(``reserve``·``reserve_transfer``·``reserve_merge``·
-        ``reserve_with_discount_card``)가 모두 같습니다.
-
-        ``seat_attribute_code`` 는 ``txtSeatAttCd4`` 로 나가는 세 자리 좌석 속성
-        코드입니다. 주지 않으면 열차 행의 ``seat_attribute_code`` 를, 그것도 없으면
-        ``"015"`` 를 씁니다(7.0.6 ``TrainScheduleViewModel.java:2914-2930,2982-2999``).
-
-        ``job_type`` 은 :class:`KorailReservationJobType` 이고 기본이
-        ``IMMEDIATE``(``txtJobId="1101"``)입니다.
-
-        * ``SEAT_DESIGNATED``(``"1103"``)는 좌석지정 예매라 ``seats`` 가 필요합니다 —
-          승객 한 명당 정확히 하나의 :class:`KorailSeatAssignment` 를
-          :meth:`get_seat_cars` 와 :meth:`get_seat_inventory` 에서 골라 넘깁니다. 수가
-          승객 총원과 맞지 않으면 요청을 만들기 전에 거절합니다.
-        * ``STANDBY``(``"1102"``)는 예약대기이고, 검색 행이 대기 가능이라고 말한
-          열차에만 붙습니다. 회원 전용이라는 서술의 **예약대기 전용 게이트는 7.0.6 에
-          대응 근거를 찾지 못했습니다 — 미출처**입니다. 7.0.6 에서 확인되는 것은 그보다 약한 사실뿐입니다: 이 라우트의 요청
-          DTO ``TicketReservationIn.java:80`` 의 ``@SerialName`` 목록에는 비회원
-          자격증명 필드(``hidName``/``hidTeleNo``/``hidPwd``/``hiduserYn``)가 아예
-          없고, 그런 필드를 가진 DTO 는 승차권 목록 쪽(``MyTicketListIn.java:62``)
-          입니다 — 즉 예약 라우트 **전체**가 회원 경로라는 정황이지 대기 예약만의
-          제한이라는 근거는 아닙니다. 어느 쪽이든 이 클라이언트는 모든 상태 변경이
-          로그인 세션을 요구하므로 구조적으로 그 조건을 만족합니다. 성공한 대기 홀드는
-          ``h_msg_cd`` 가
-          :data:`~korail_mobile_api.KORAIL_STANDBY_HOLD_MESSAGE_CODE`(``IRR000014``)로
-          오고, :meth:`confirm_standby_hold` 로 알림 옵션을 기록해야 비로소 끝납니다.
-        * ``MERGE_STANDING``(``"1202"``)은 병합예약의 첫 홀드입니다. 두 번째 홀드는
-          :meth:`reserve_merge` 가 겁니다.
+        SEAT_DESIGNATED 는 승객별 좌석이 필요합니다. STANDBY 는 대기 가능한 행만 받으며, 성공한 대기 홀드는 confirm_standby_hold 로 알림
+        옵션을 기록합니다. IRR000014 의 트리거 의미는 라이브 기록이고 앱 비교값은 보호돼 있습니다. MERGE_STANDING 은 병합 첫 홀드이며 후속 호출은
+        reserve_merge 입니다. 모든 변경 경로가 로그인을 요구합니다. 대기 예약에만 별도 회원 제한이 있다는 근거는 없습니다.
         """
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -1855,29 +1607,9 @@ class KorailClient:
         sms_notify: bool = False,
         phone_no: str | None = None,
     ) -> BaseKorailResponse:
-        """예약대기 홀드에 대기 옵션을 기록합니다.
-
-        예약대기는 호출 두 번입니다. ``job_type=STANDBY`` 로 부른 :meth:`reserve` 가
-        PNR 을 만들고 ``h_msg_cd`` = ``IRR000014`` 를 돌려주며, 그 화면이 사용자의
-        선택을 실어 보내는 두 번째 POST 가 이 메서드입니다 —
-        ``reservationWait.ReservationWait``(``NetworkApi.java:639-640`` —
-        ``postReservationWait(@FieldMap)``).
-
-        **"앱은 이 코드에서만 예약대기 화면을 연다"는 분기는 7.0.6 에서 확인하지
-        못했습니다 — 미출처.** ``IRR000014`` 는 7.0.6 전체 소스·스몰리 어디에도 평문으로
-        없습니다(전수 grep). 이 코드가 APK 안에서 나오는 유일한 자리는
-        ``analysis/apktool/assets/error_json.json`` 의 ``"IRR000014": "예약대기
-        가능합니다."`` 한 줄입니다 — 앱의 비교 리터럴은 AlienGuard 로 보호돼 있어
-        어느 분기가 이 코드를 보는지 읽을 수 없습니다. 7.0.6 에서 대응되는 화면
-        자체는 있습니다(``ReservationWaitViewModel.java:68``, 요청 DTO 를
-        ``saveReservationWaitIn`` 으로 들고 있음 — ``:80``), 예약 job id 열거형에도
-        ``ReservationJobId.WAIT`` 멤버가 있습니다(``ReservationJobId.java:21``; 그
-        코드값 역시 보호됨). 즉 두 번 호출이라는 구조는 7.0.6 과 맞고, 트리거가
-        ``IRR000014`` 라는 부분만 실서버 관측에 기댑니다.
-
-        로그인 세션을 요구하고, 다른 모든 상태 변경과 같은 변경 전송로로
-        나갑니다. 이미 있는 PNR 의 예약을 마무리할 뿐 돈을 옮기지도 좌석을 놓지도
-        않습니다.
+        """이미 만든 예약대기 홀드에 알림·좌석변경 옵션을 기록합니다. 후속 라우트: NetworkApi.java:639-640; 화면과 저장 입력:
+        ReservationWaitViewModel.java:68-80. WAIT enum 은 ReservationJobId.java:21 에 있으나 코드값은 보호돼 있습니다.
+        IRR000014 의 메시지는 error_json.json 에 있고 트리거 의미는 라이브 기록에 근거합니다. 문자열 자산만으로 앱의 분기 조건까지 확정하지 않습니다.
         """
         self._require_session("standby options require")
         route = "/classes/com.korail.mobile.reservationWait.ReservationWait"
@@ -1902,39 +1634,12 @@ class KorailClient:
         seats: Sequence[Sequence[KorailSeatAssignment]] | None = None,
         seat_attribute_codes: Sequence[str | None] | None = None,
     ) -> ReservationHoldResponse:
-        """환승 여정 하나를 두 구간·한 PNR 로 홀드합니다.
-
-        라우트도 세션 요구도 :meth:`reserve` 와 같습니다. 앱도 엔드포인트와
-        요청 DTO 를 하나만 쓰고 구간 수만 폼을 바꿉니다 — 7.0.6 은 직통과 환승에
-        같은 ``certification.TicketReservation`` 선언 하나
-        (``NetworkApi.java:752-753``, ``postTicketReservation(@FieldMap)``)를 쓰고,
-        같은 ``TicketReservationIn`` 이 ``txtJrnyCnt``(여정 수)와 구간별 목록 네 개
-        (``TicketReservationIn.java:34-37`` 의 ``jrnyList``/``passengerInfoList``/
-        ``srcarList``/``trailingSrcarList``, ``@SerialName`` 목록은 ``:80``)를
-        선언합니다 — 이 근거는 "한 라우트·한 DTO·여정 수만 다름"까지만 뒷받침합니다.
-        돌려주는 홀드에 대해 :meth:`reserve` 가 말한 것이 그대로 적용됩니다.
-
-        ``legs`` 는 탑승 순서대로 정확히 두 개의
-        :class:`~korail_mobile_api.TrainSummary` 여야 하고,
-        :meth:`search_transfer_trains` 가 준 :attr:`TransferItinerary.legs
-        <korail_mobile_api.TransferItinerary.legs>` 가 그것입니다. 다른 개수는 폼을
-        만들기 전에 거절합니다(:data:`~korail_mobile_api.KORAIL_MAX_JOURNEY_LEGS`).
-
-        ``seat_classes`` 는 두 구간에 하나를 주거나 구간마다 하나를 줍니다 — 앱의 실별
-        선택이 구간별입니다: 7.0.6 의 구간 DTO ``TicketReservationInJrny.java:69`` 가
-        ``@SerialName("txtPsrmClCd")`` 를 **구간 안에** 두고 있고, 상위
-        ``TicketReservationIn`` 에는 실등급 필드가 없습니다. ``seats`` 도 마찬가지로
-        구간마다 한 묶음입니다 — 선행 구간은 ``TicketReservationInSrcar.java:51``
-        (``txtSrcarNo``/``txtSeatNo``), 후속 구간은
-        ``TicketReservationInSrcarTrailing.java:52``(``txtSrcarNo1_``/``txtSeatNo1_``)
-        로 철자가 갈립니다.
-
-        **2026-07-31 실서버 확인.** 서울→여수EXPO 를 :meth:`search_transfer_trains`
-        로 찾아 서울→오송(열차 009) + 오송→여수EXPO(열차 503) 를 성인 1명으로 보내
-        ``SUCC``/``IRR000018``, 49,700원, PNR 하나를 받았습니다. 되읽은
-        상세의 ``journey_count`` 가 ``"2"`` 였고 :meth:`cancel_unpaid_hold` 가 PNR
-        하나로 두 구간을 함께 해제했습니다 — SRT 쪽과 달리 취소에 여정 수를 따로
-        줄 필요가 없습니다. 확인된 것은 **1인·일반실·편도** 한 건입니다.
+        """탑승 순서의 TrainSummary 두 개를 한 PNR 로 홀드합니다. search_transfer_trains 결과의 TransferItinerary.legs 를 넘길
+        수 있습니다. 같은 라우트·DTO 의 여정 반복입니다(NetworkApi.java:752-753; TicketReservationIn.java:34-37,80).
+        seat_classes 는 공통값 또는 구간별 값이며 좌석 지정도 구간별입니다 (TicketReservationInJrny.java:69;
+        TicketReservationInSrcar.java:51; TicketReservationInSrcarTrailing.java:52). 2026-07-31: 성인
+        1인·일반실·편도 환승이 SUCC/IRR000018, 49,700원, 여정 수 2 의 한 PNR 로 반환됐고 한 번의 cancel_unpaid_hold 로 해제됐습니다.
+        다른 승객·객실 조합까지 검증된 것은 아닙니다.
         """
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -1965,65 +1670,13 @@ class KorailClient:
         seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
         seat_attribute_code: str | None = None,
     ) -> ReservationHoldResponse:
-        """한 열차를 중간역에서 나눈 병합예약을 홀드합니다.
+        """병합예약의 두 번째 홀드를 만듭니다. 첫 홀드를 수정하는 호출이 아닙니다. MERGE_STANDING 첫 홀드→분할 구간 조회→첫 홀드 취소→이 호출 순서가 필요합니다.
+        앱 취소 경로: ReservationMergeViewModel.java:1352,1556. 첫 홀드 취소는 호출자가 수행합니다.
 
-        병합 흐름의 두 번째이자 마지막 홀드입니다. 첫 번째는
-        ``job_type=KorailReservationJobType.MERGE_STANDING``(``"1202"``, 입석+좌석
-        예매)으로 부르는 :meth:`reserve` 입니다. 나누는 지점은
-        :meth:`get_merge_seats_inquiry` 가 알려준 중간역이고, 다섯 단계 전체와 그
-        근거는
-        :data:`~korail_mobile_api.constants.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE`
-        에 적혀 있습니다.
-
-        하나, ``MERGE_STANDING`` 은 전 구간을 입석으로 잡지 않습니다. 그
-        첫 홀드가 **이미** ``h_jrny_cnt='0002'`` 에 ``h_jrny_tp_cd``
-        ``"21"``/``"22"`` 인 두 여정으로 중간역에서 쪼개져 돌아옵니다 — 2026-09-22
-        열차 305 대전→울산(통도사) ``20260923``: 선행 대전→동대구
-        ``h_seat_no='입석'``(15,000원), 후행 동대구→울산(통도사) 실좌석
-        ``'10A'``(9,600원). 열차 005 에서도 같은 모양(입석 14,600원 + ``'3C'``
-        9,600원)이었고, 같은 PNR 을 :meth:`get_ticket_reservation_detail` 로
-        되읽어도 ``21``/``22`` 와 같은 좌석이 나옵니다. 즉 입석이 되는 것은 선행
-        구간뿐이고, 아래에서 보듯 아예 한 구간도 입석이 아닐 수 있습니다.
-
-        둘, 이 메서드는 그 홀드를 바꾸지 않습니다. **변환이 아니라
-        별도의 두 번째 PNR 을 만듭니다** — 2026-09-22 열차 305 에서 입석 홀드와
-        이 호출의 ``pnr_no`` 가 서로 달랐고, 새 PNR 은 똑같이 ``21``/``22`` 모양에
-        양쪽 다 진짜 좌석(``4C``, ``5A``)이라 입석 구간이 하나도 없었습니다.
-        입석 홀드는 그대로 살아 있으므로 **둘 다** 취소해야 합니다.
-
-        호출 순서도 관측됐습니다. 입석 홀드를 살려 둔 채 이 메서드를 부르면
-        ``WRR664260``("동일한 시간대에 예약 또는 구매하신 승차권이 존재합니다")이
-        오고, 앱과 같은 순서로 입석 홀드를 먼저 취소한 뒤 부르면 완전히 같은
-        호출이 ``IRR000018``("결제하지 않으면 예약이 취소됩니다")로 통과합니다.
-        ``WRR664260`` 은 프로토콜 실패가 아니라 겹치는 홀드에 대한 정상적인
-        업무규칙 응답입니다.
-
-        .. warning::
-           ``WRR664260`` 은 **거절이 아닙니다.** 2026-09-22 확인: 그 응답도
-           ``strResult='SUCC'`` 에 새 ``pnr_no`` 와 좌석(``4C``/``5A``)이 붙은
-           온전한 홀드였고, 예외도 오르지 않았습니다. 이것을 "실패했으니 치울 게
-           없다" 로 읽으면 **실제로 잡힌 좌석을 그대로 흘립니다.** 이 메서드가
-           돌려준 것은 ``h_msg_cd`` 가 무엇이든 ``pnr_no`` 가 있으면 홀드이니
-           :meth:`cancel_unpaid_hold` 로 치우십시오.
-
-        입석 홀드를 대신 취소하지는 않습니다. 앱은 다시 예약하기 전에 그것을
-        취소하지만(7.0.6 ``ReservationMergeViewModel.java:1352``
-        ``requestReservationCancel``, :1556 ``requestReservationCancelChk`` —
-        ``analysis/reports/7.0.6-compare/booking-ticket-payment.md`` 의 기존
-        분석과도 일치), 여기서는 :meth:`cancel_unpaid_hold` 로 호출자가 직접
-        합니다 — 예약 호출이 살아 있는 PNR 을 조용히 취소해서는 안 됩니다.
-
-        2026-09-21 실서버 확인: 대전→울산(301, 동대구에서 분할)으로 실제
-        호출됨 — 홀드 응답의 ``h_jrny_tp_cd`` 가 두 여정에 각각
-        :data:`~korail_mobile_api.constants.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE`
-        (``"21"``)·
-        :data:`~korail_mobile_api.constants.KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE`
-        (``"22"``)로 정확히 찍혔고, 입석 구간과 좌석 구간이 문서와 같이
-        분리돼 돌아왔습니다. 두 여정 다 단일 :meth:`cancel_unpaid_hold`
-        호출로 함께 풀립니다. (2026-09-22 에 밝혀졌듯 그 ``21``/``22`` 분할은 이
-        메서드의 홀드에만 있는 게 아니라 앞선 ``MERGE_STANDING`` 홀드에 이미
-        있습니다 — 위 문단 참고. 이 확인은 분할이 이 메서드 고유의 결과라는
-        뜻으로 읽으면 안 됩니다.)
+        2026-09-22: 첫 홀드부터 여정 21/22 로 나뉘었고, 두 번째 호출은 별도 PNR 을 만들었습니다. 첫 홀드는 입석+좌석, 두 번째는 양쪽 좌석인 표본이
+        있으므로 병합 코드가 입석을 보장하지 않습니다. 첫 홀드를 유지한 표본의 WRR664260 도 SUCC 와 새 PNR·좌석이 있는 홀드였습니다. 메시지만 보고 실패로
+        간주하거나 재전송하지 마십시오. 남은 홀드는 각각 확인·취소해야 합니다. 첫 홀드 취소 후 같은 요청은 IRR000018 이었습니다. 2026-09-21 에도 여정
+        21/22 의 두 구간과 한 번의 취소가 관측됐습니다.
         """
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -2045,15 +1698,8 @@ class KorailClient:
         self,
         hold: ReservationHoldResponse,
     ) -> BaseKorailResponse:
-        """결제 전 예약 홀드를 취소합니다. 여정이 몇 개든 상관없습니다.
-
-        로그인 세션을 요구합니다. 변경 전송로로 POST 한 뒤 파싱한 봉투를
-        돌려줍니다.
-
-        앱의 취소 호출 두 개 중 뒤쪽(``ReservationCancelChk``)만 보냅니다. 앞의
-        ``ReservationCancel`` 을 생략해도 취소가 성립하는 것은 라이브로 확인했습니다 —
-        2026-07-31 직통 홀드가 ``IRG000000`` 으로 풀렸고, 두 여정짜리 환승 홀드는
-        2026-07-26 과 2026-07-31 에 PNR 하나로 함께 풀렸습니다.
+        """미결제 홀드를 취소합니다. 앱의 두 단계 중 ReservationCancelChk 만 호출합니다. 2026-07-31 직통은 IRG000000,
+        2026-07-26·2026-07-31 환승은 한 PNR 의 두 여정이 함께 해제됐습니다. 이 표본이 모든 취소 경로의 동일 동작을 보장하지는 않습니다.
         """
         self._require_session("cancellation requires")
         route = (
@@ -2067,19 +1713,13 @@ class KorailClient:
         hold: ReservationHoldResponse,
         card: CardPayment,
     ) -> ReservationPaymentResponse:
-        """미결제 홀드를 비과금 시험카드로 결제 시도합니다.
-
-        로그인 세션을 요구합니다. KORAIL 결제 호출은 카드번호를 평문으로 싣기
-        때문에, ``card`` 는 PG 가 거절할 비과금 시험카드여야 합니다.
-
-        변경 전송로로 POST 하고 파싱한 :class:`ReservationPaymentResponse`
-        를 돌려줍니다.
+        """시험용 카드 객체로 결제 요청을 보냅니다. 오프라인 시뮬레이션이 아닙니다. 실제 결제와 같은 전송 경로이므로 이름만으로 비과금이 보장되지 않습니다. 실험은
+        MockTransport 에서 수행하고 카드 정보가 담긴 폼·raw 를 기록하지 마십시오.
         """
         self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"
         form = build_card_payment_form(self.config, hold, card)
-        # raise_on_fail=False: a declined card is an answer to read, not an
-        # error to raise.
+        # 카드 거절도 응답으로 읽으므로 FAIL 예외를 억제합니다. 결과를 성공으로 바꾸지는 않습니다.
         return self._queued(
             "pay",
             lambda: self._mutation(
@@ -2095,26 +1735,14 @@ class KorailClient:
         hold: ReservationHoldResponse,
         card: CardPayment,
     ) -> ReservationPaymentResponse:
-        """미결제 홀드를 실제 청구되는 카드로 결제합니다.
-
-        로그인 세션을 요구합니다. ``card`` 의 카드번호가 실제로 청구되는 카드여야
-        합니다 — 이 메서드는 :meth:`pay_with_fake_card` 와 별개의 메서드로, 호출자가
-        메서드 이름으로 그 사실을 명시합니다.
-
-        전선 모양은 :meth:`pay_with_fake_card` 와 같습니다. 둘 다 같은
-        ``build_card_payment_form`` 을 만들고 같은
-        :meth:`~korail_mobile_api.http.KorailHttpClient.post_mutation_form` 으로
-        나가므로, 실제 결제가 라이브로 검증된 모양에서 벗어날 수 없습니다.
-
-        실제 돈으로 확인했습니다. 2026-07-31 에 8,400원 한 장이 ``IRT000000`` 으로
-        결제·발권됐고 같은 날 2인 PNR 도 결제했으며, 2026-09-15 에 7.0.6 판으로 다시
-        결제·전액 환불했습니다.
+        """홀드를 카드로 결제합니다. 실제 청구가 발생할 수 있습니다. pay_with_fake_card 와 같은 빌더·전송 경로이며 이름 차이가 폼 검증을 추가하지 않습니다.
+        2026-07-31: 8,400원 1장 IRT000000 발권과 2인 PNR 결제 기록; 2026-09-15: 7.0.6 결제·전액 환불 기록이 있습니다. 모든
+        카드·요청 조합의 성공 보장은 아닙니다.
         """
         self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"
         form = build_card_payment_form(self.config, hold, card)
-        # raise_on_fail=False: a declined card is an answer to read, not an
-        # error to raise.
+        # 카드 거절도 응답으로 읽으므로 FAIL 예외를 억제합니다. 결과를 성공으로 바꾸지는 않습니다.
         return self._queued(
             "pay",
             lambda: self._mutation(
@@ -2132,42 +1760,11 @@ class KorailClient:
         settle_mileage: bool = False,
         pbp_acceptance_target_flag: str | None = None,
     ) -> RefundTicketResponse:
-        """결제까지 끝난 승차권 **한 장** 을 환불합니다.
-
-        ``POST refunds.RefundsRequest``. 로그인 세션을 요구합니다. ``ticket`` 은
-        :class:`~korail_mobile_api.mutation_models.PaidTicket`(PNR + 원발매 자격증명 +
-        반환비밀번호)이어야 합니다. 변경 전송로로 POST 한 뒤 파싱한
-        :class:`RefundTicketResponse` 를 돌려줍니다.
-
-        **PNR 단위가 아니라 승차권 단위입니다.** ``ticket`` 이 PNR 을 싣기는 하지만
-        서버가 되돌리는 것은 ``sale_sequence`` 로 지목된 그 한 장뿐입니다. 승객 2명을
-        한 PNR 로 예약하면 승차권이 2장 생기고, 이 메서드를 한 번 부르면 한 장만
-        반환됩니다 — 나머지는 결제된 상태로 계정에 남고, 예약 목록은 비어 있어서
-        (반환된 것은 예약이 아니라 승차권이므로) 다 끝난 것처럼 보입니다.
-        **여러 장이면 장마다 한 번씩 부르십시오.** 남은 장의 신원은
-        :meth:`get_ticket_list` 응답에서 ``h_orgtk_wct_no``·``h_orgtk_ret_sale_dt``·
-        ``h_orgtk_sale_sqno``·``h_orgtk_ret_pwd`` 로 읽습니다.
-
-        ``pbp_acceptance_target_flag`` 는 **항상 그대로 에코합니다.** 승차권
-        상세 조회 등 사전 서버 응답에 실제 값이 있었다면 그 값을 넘기십시오.
-        ``None`` 이고 ``ticket.pbp_acceptance_target_flag`` 도 ``None`` 이면
-        빈 문자열로 에코합니다 — 이 필드는 7.0.6 응답 DTO
-        (``TicketDetailOut.java:167``) 에서도 옵셔널이라 서버가 안 보내면
-        빈 문자열로 떨어지고, 실앱 두 호출부 모두 그 값을 검사 없이 그대로
-        요청에 싣습니다. 값을 지어내는 게 아니라 실앱과 같은 기본값을 쓰는
-        것입니다(:func:`~korail_mobile_api.mutation_payloads.build_refund_form`
-        참고).
-
-        ``return_times_division_code`` 인자는 없습니다. 7.0.6
-        은 ``tk_ret_tms_dv_cd`` 를 실제 환불 제출에 절대 싣지 않습니다 — 이
-        DTO 를 만드는 두 실호출부 모두 리터럴 ``null`` 을 넘기고, 수수료
-        응답의 같은 이름 필드는 UI 다이얼로그 선택에만 쓰입니다.
-
-        2026-07-31 실서버 확인: 성인 2명 16,800원(8,400×2)을 한 PNR 로 결제한 뒤
-        이 메서드를 한 번 부르니
-        ``SUCC``/``IRT200277`` 과 함께 8,400원만 돌아왔고, 좌석 032 한 장이
-        ``h_rcvd_amt="00000008400"`` 으로 남았습니다. 같은 방식으로 한 번 더 부르니
-        비었습니다. 부분 환불을 노린 API 가 아니라, 이것이 이 라우트의 단위입니다.
+        """PaidTicket 이 가리키는 발권 승차권 한 장을 환불합니다. PNR 전체 환불이 아닙니다. 여러 장이면 각 승차권의 결과·잔여 목록을 확인해야 합니다. 같은 장을
+        무조건 재전송하지 마십시오. 국내 앱의 pbpAcepTgtFlg 는 상세값 에코(MyTicketDetailViewModel.java:1521)이나 외국인 경로는 보호
+        상수(FTicketDetailViewModel.java:634)입니다. 라이브러리는 값이 없으면 빈 문자열을 만들고 전송 단계에서 생략합니다. 반환 횟수 코드는 이
+        메서드의 인자가 아닙니다. 2026-07-31: 성인 2인 16,800원 PNR 에 한 번 호출해 SUCC/IRT200277 과 8,400원이 반환됐고, 남은 한 장에
+        별도 환불을 한 뒤 목록이 비었습니다.
         """
         self._require_session("refund requires")
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
@@ -2187,9 +1784,8 @@ class KorailClient:
     ) -> StationRefundVerificationResponse:
         """역 발행 승차권을 온라인 환불 전에 검증합니다.
 
-        응답 ``VerifyOnlineRefundsOut`` 은 ``CommonOut`` 을 상속하지 않아 ``strResult``
-        가 없을 수 있습니다 — :data:`~korail_mobile_api.http._NON_COMMON_OUT_READ_PATHS`
-        가 이 경로를 그렇게 다룹니다.
+        응답 ``VerifyOnlineRefundsOut`` 은 ``CommonOut`` 을 상속하지 않아 ``strResult`` 가 없을 수 있습니다 —
+        :data:`~korail_mobile_api.http._NON_COMMON_OUT_READ_PATHS` 가 이 경로를 그렇게 다룹니다.
         """
         self._require_session("station ticket refund verification requires")
         return self._post_read(
@@ -2214,26 +1810,9 @@ class KorailClient:
         self,
         request: CartAddRequest,
     ) -> CartAddResponse:
-        """홀드 중인 예약의 PNR 을 장바구니에 담습니다.
-
-        ``POST cart.addCartList``(``NetworkApi.java:266-267`` —
-        ``postAddCartList(@FieldMap)``). 요청 DTO 가 선언하는 것은 상속받은
-        ``Device``/``Version``/``Key``/``lang`` 과 ``hidPnrNo`` 뿐입니다
-        (``AddCartListIn.java:52`` 의 ``@SerialName`` 목록 전체).
-
-        응답은 봉투만이 아닙니다. ``AddCartListOut.java:24-25`` 가 자체 속성
-        ``psgDiscAddInfos`` 를 달고 있고 전선 키는 ``:76`` 의
-        ``@SerialName("psgDiscAdd_infos")`` 입니다 — 그 안의
-        ``psgDiscAdd_info`` 리스트를
-        :attr:`~korail_mobile_api.CartAddResponse.discount_additions` 로
-        돌려줍니다.
-
-        **응답의 행 부분은 라이브 미검증입니다** — 서버가 실제로 무엇을
-        채워 주는지 관측한 적이 없습니다. 반환형은 여전히
-        :class:`~korail_mobile_api.models.BaseKorailResponse` 의 하위형이라
-        기존 호출부는 그대로 동작합니다.
-
-        로그인 세션을 요구합니다.
+        """미결제 예약을 장바구니에 담습니다(NetworkApi.java:266-267; AddCartListIn.java:52).
+        psgDiscAdd_infos.psgDiscAdd_info 는 discount_additions 로 파싱합니다 (AddCartListOut.java:24-25,76).
+        행 내용은 라이브 미검증이며 담기 자체는 상태 변경입니다.
         """
         self._require_session("cart add requires")
         route = "/classes/com.korail.mobile.cart.addCartList"
@@ -2246,15 +1825,8 @@ class KorailClient:
         self,
         request: DiscountCardPurchaseRequest,
     ) -> DiscountCardPurchaseResponse:
-        """할인카드(N카드)를 구매합니다.
-
-        ``POST research.dcntCrdInfo.do``(``NetworkApi.java:336-337`` —
-        ``postDcntCrdInfo(@FieldMap)``). 경로에 "Info" 가 붙어 있지만 조회가 아니라
-        구매입니다 — 응답 DTO 가 ``lumpStlTgtNo`` 와 ``rcvdAmt`` 를 선언하고
-        (``NCardInfoOut.java:32-33``) 앱은 그 일괄결제 대상번호를 결제 입력으로 그대로
-        넘깁니다(``PayViewModel.java:6628`` —
-        ``intgStlIn.setCart_LumpStlTgtNo(...getNCardInfoOut().getLumpStlTgtNo())``).
-        만들어지는 것은 결제를 기다리는 미결제 구매입니다.
+        """N카드 미결제 구매를 만듭니다. 경로 이름의 Info 가 조회를 뜻하지 않습니다. NetworkApi.java:336-337; NCardInfoOut.java:32-33
+        의 일괄결제 대상과 금액은 PayViewModel.java:6628 의 결제 입력으로 이어집니다.
         """
         self._require_session("discount card purchase requires")
         route = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
@@ -2286,15 +1858,8 @@ class KorailClient:
         *,
         card_no: str,
     ) -> ReservationHoldResponse:
-        """할인카드(N카드)로 좌석 하나를 홀드합니다.
-
-        라우트도 :meth:`reserve` 와 같습니다. 같은 호출이기 때문입니다 —
-        7.0.6 ``NetworkApi`` 전체에서 ``certification.TicketReservation`` 선언은
-        ``:752-753`` 하나뿐이고(전수 grep), N카드 카드번호는 전용 DTO 가 아니라 평범한
-        승객 블록 안에 ``@SerialName("txtCardNo_")`` 로 들어 있습니다
-        (``TicketReservationInPassengerInfo.java:55,105`` — 같은 블록의 나머지 셋은
-        ``txtCompaCnt``/``txtPsgTpCd``/``txtDiscKndCd``). 즉 N카드 전용 예약
-        엔드포인트는 없고 N카드 승객 블록이 있을 뿐입니다.
+        """N카드로 좌석을 홀드합니다. 일반 예약 라우트(NetworkApi.java:752-753)에 승객별 txtCardNo_ 를
+        보냅니다(TicketReservationInPassengerInfo.java:55,105).
         """
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -2316,74 +1881,21 @@ class KorailClient:
         self,
         request: PriceRecalculationRequest,
     ) -> ReservationHoldResponse:
-        """홀드된 PNR 의 운임을 다른 할인 조합으로 다시 계산합니다.
+        """홀드의 할인 조합을 재계산합니다. 변경 결과를 읽은 뒤 결제·취소 여부를 판단하십시오. NetworkApi.java:583-584 는 일반 폼 외 여섯 반복 필드를
+        받습니다. 입력 구성은 PayViewModel.java:902,1316,14278 이며 화면의 모든 변경 트리거는 확인되지 않았습니다. 선택 객실·좌석속성 4필드는
+        PriceReCalculationIn.java:38-41 에 있으나 값을 채운 라이브 검증은 없습니다. 일반 경로 default-null 의 기존 근거는
+        PayViewModel.smali:11834-11850 입니다.
 
-        ``POST certification.PriceReCalculation`` 입니다. 7.0.6 선언은
-        ``NetworkApi.java:583-584`` 의 ``postPriceReCalculation`` 이고, 이 라우트만
-        ``@FieldMap`` 하나로 끝나지 않습니다 — ``psg_tp_dv_cd``/``psrm_cl_cd``/
-        ``dcnt_knd_cd1``/``hidDscpNo``/``hidDcntKndCd``/``hidFmlyNo`` 여섯 개가
-        ``@Field(...) List<String>`` 로 따로 붙습니다(반복 키).
-
-        쏘는 쪽은 결제 화면이 맞습니다 — 7.0.6 에서 이 요청을 만드는 자리는
-        ``PayViewModel`` 하나이고(``PayViewModel.java:14278`` 의
-        ``requestPriceReCalculation(PriceReCalculationIn, ...)``, 코루틴 호출부는
-        ``:902``, 레포지토리 호출은 ``:1316``). **다만 "할인 선택이 바뀔 때마다"라는 트리거 조건은 7.0.6
-        에서 확인하지 못했습니다 — 미출처**(그 호출부의 조건 리터럴이 AppSuit 로
-        보호돼 있습니다). 응답은 홀드가 돌려주는 것과 같은 ``ReservationOut`` 입니다
-        (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:584,753``).
-
-        로그인 세션을 요구합니다.
-
-        **부분 검증 경로입니다.** 7.0.6 DTO 가 더 선언하는 ``txtPsrmClCd1``,
-        ``txtSeatAttCd2``, ``txtSeatAttCd4``, ``txtSeatAttCd5``
-        (``analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41``)
-        는
-        :class:`~korail_mobile_api.PriceRecalculationRequest` 의
-        ``cabin_class_code`` 와 ``seat_attribute_code_2``/``_4``/``_5`` 로
-        **보낼 수 있습니다.** 넷 다 선택이고 기본값은 ``None`` 이라, 넘기지
-        않으면 하나도 실리지 않습니다 — 앱의 일반 재계산 경로도
-        네 인자를 default-null 로 구성합니다(``PayViewModel.smali:11834-11850``).
-
-        다만 **값을 채워 보낸 적은 없습니다.** 어떤 화면 상태가 그 값을 만드는지는
-        추적하지 않았으므로, 채워 보내는 쪽은 여전히 미검증입니다.
-
-        2026-09-22 에 실서버로 처음 나갔습니다. 홀드 중인 PNR 의 좌석에서
-        ``h_psg_tp_cd``/``h_psrm_cl_cd``/``h_dcnt_knd_cd1`` 을 그대로 베낀 한 줄을
-        :attr:`~korail_mobile_api.PriceRecalculationRow.requested_discount_code`
-        를 ``""`` 로 두고 보내면
-        서버가 ``ERR930202``("변경항목이 없습니다")로 답합니다 — 바꾼 게 없으니
-        맞는 답이고, 요청이 읽히고 해석됐다는 뜻이라 폼의 모양 자체도 유효합니다.
-
-        **성공 본문 파싱 경로도 검증됐습니다.** 같은 날 평범한 회원 세션이
-        ``hidDcntKndCd='131'``(경로)을 1인 홀드에 보내자(줄의 앞 세 값은 그 PNR 의
-        좌석에서 복사: ``psg_tp_dv_cd='1'``, ``psrm_cl_cd='1'``,
-        ``dcnt_knd_cd1='000'``) 서버가 ``SUCC``/``IRZ000008``("정상적으로 처리
-        되었습니다")와 함께 ``h_tot_prc``·``h_tot_fare``·``h_tot_dcnt_amt``·
-        ``h_tot_rcvd_amt``·``jrny_infos`` 를 갖춘 온전한 ``ReservationOut`` 본문을
-        돌려줬고, :func:`parse_reservation_hold_response` 가 그대로
-        파싱했습니다(``window_no`` 등 12 개 스칼라가 모두 살아 있었고, 여정 행에는
-        홀드 응답에 없던 ``h_arv_dt``·``h_jrny_sqno`` 까지 들어 있었습니다).
-        서로 다른 열차 셋(서울→부산 KTX 013·1005, 서울→대전 KTX 207)에서
-        재현했고, 이후 그 PNR 의 좌석은 ``h_dcnt_knd_cd1='204'`` /
-        ``h_dcnt_knd_cd_nm1='경로 할인'`` 으로 읽혔습니다. ``131`` 은 아무 자격도
-        없는 계정에서 동작합니다.
-
-        같은 PNR 에 두 번째 재계산을 거는 경우는 직관과 반대입니다. 서버가 써 넣은
-        값(``204``)을 다시 읽어 ``discount_kind_code`` 로 보내면
-        ``WRE800036``("동일한 할인종류가 입력되었습니다…중복 입력은 불가합니다")로
-        **거절**되고, 오히려 낡은 ``000`` 을 그대로 다시 보내는 쪽이
-        ``SUCC``/``IRZ000008`` 로 통과합니다. 즉 이 필드는 "지금 좌석에 붙어 있는
-        할인" 이 아니라 "요청 당시 베껴 온 원래 값" 으로 두십시오.
-
-        끝으로 금액 주의: ``204`` 가 기록돼도 돈이 늘 움직이지는 않습니다. 토요일
-        두 편에서는 코드만 기록되고 정산액이 그대로였는데, ``WRR664296``
-        ("KTX/새마을호/ITX-청춘 열차의 경로 및 장애인(4-6급)할인은 토/일/공휴일에는
-        적용되지 않습니다")이 그 이유입니다. 평일에는 같은 할인이 실제로 깎입니다
-        (28,600 → 20,000, ``h_tot_dcnt_amt='000008600'``).
+        2026-09-22: 무변경 요청은 ERR930202, 할인 변경 표본(hidDcntKndCd='131')은 SUCC/IRZ000008 과 ReservationOut 을 반환했고 12스칼라·여정 추가
+        필드도 파싱됐습니다. 3개 열차에서 재현된 기록입니다. 동일 PNR 재요청은 비교값에 따라 WRE800036 또는 성공으로 달랐습니다. 자동 재시도하지 마십시오. 자격
+        검증과 할인 반영이 어긋난 관측도 있으므로 자격 없는 할인을 신청하는 용도로 사용하지 마십시오. 할인 코드 반영만으로 금액 변경을 보장하지 않습니다. 토요일 두 표본은
+        WRR664296 과 금액 유지, 평일 표본은 28,600→20,000원(할인액 8,600원)이었습니다. 이는 표본 기록이지 일반 보장이 아닙니다.
         """
         self._require_session("price recalculation requires")
         route = "/classes/com.korail.mobile.certification.PriceReCalculation"
         form = build_price_recalculation_form(self.config, request)
+        # 변경 응답을 받은 뒤 타입 파싱이 실패할 수 있습니다. 공통 변경 경로가 원문을 보존하며, 홀드가 실제로 변경됐는지 확인하기 전에는 같은 재계산을 다시 보내지
+        # 않습니다.
         return self._mutation(
             route,
             form,

@@ -4,47 +4,13 @@
 
 """로그인·로그아웃과 세션 상태.
 
-:class:`KorailSessionClient` 가 로그인 왕복을 수행합니다.
-로그인 성공 코드: ``IRZ000001``, ``S200`` — :data:`KORAIL_LOGIN_SUCCESS_CODES`.
-7.0.6 도 메시지 코드로 판정합니다 —
-``analysis/jadx/sources/com/korail/talk/ui/screen/login/LoginViewModel.java:1216``
-이 부르는 ``LoginOut.isSuccess()`` 는 ``CommonOut`` 것을 쓰지 않고 재정의돼
-(``network/model/LoginOut.java:1161-1180``) ``hMsgCd`` 를 보호된 상수와 비교합니다.
-그 상수는 복원되지 않아(PROTECTED) 두 코드가 앱과 같은지는 미확인이고, 코드
-자체는 실서버 관측에서 왔습니다. ``S200`` 의 7.0.6 사전 문구는 운행중지
-안내("발권하신 승차권 중 운행이 중지된 열차가 있습니다…",
-``analysis/apktool/assets/error_json.json``)인데, 로그인 성공 처리에도 운행중지
-안내 분기가 있어(``LoginViewModel.java:1307-1322``) 로그인과 무관하다고 볼 수도
-없습니다.
+이 라이브러리는 봉투 검사 뒤 IRZ000001/S200 허용목록과 JSESSIONID 를 확인합니다.
+7.0.6 은 LoginViewModel.java:1216 에서 LoginOut.isSuccess() 를 호출하는데, 이는 CommonOut 것이 아니라 재정의된 것(LoginOut.java:1161-1180)으로
+hMsgCd 를 보호된 상수와 비교합니다. 상수가 복원되지 않아 두 코드가 앱과 같은지는 미확인이며 코드는 실서버 관측에서 왔습니다. assets/error_json.json 의
+S200 문구는 운행중지 안내지만 로그인 성공 처리에도 운행중지 분기가 있어(LoginViewModel.java:1307-1322) 무관하다고 볼 수도 없습니다.
 
-다만 이 whitelist **하나만으로 로그인이 성공하지는 않습니다**. 앞뒤에 검사가
-둘 더 있습니다(2026-09-23 확인):
-
-* 봉투 단계 — ``http.py:153-156`` 이 ``strResult`` 가 ``FAIL`` 이거나
-  ``strResult`` 키 자체가 없으면 거기서 올립니다. 그래서 ``FAIL``/``S200``
-  이나 결과 없는 ``S200`` 은 whitelist 에 닿지도 못합니다.
-
-  **다만 이것은 거부 목록이지 승인 목록이 아닙니다.** ``SUCC`` 동등 비교가
-  아니라서 ``strResult`` 가 빈 문자열이거나 ``UNEXPECTED`` 같은 모르는
-  값이면 그대로 통과합니다(2026-09-23 확인). 좁히지 않은 이유는 관측 기반
-  코드를 좁혔다가 로그인을 깨뜨릴 수 있어서이고, 라이브로 확인하기 전에는
-  손대지 않습니다.
-* 쿠키 단계 — 아래 :meth:`_finish_login` 이 whitelist 를 통과한 뒤에도
-  ``JSESSIONID`` 쿠키가 없으면 :class:`KorailAuthError` 를 올립니다.
-
-즉 ``S200`` 이 실제로 무언가를 통과시키려면 봉투가 이미 성공이고 서버가 세션
-쿠키까지 준 응답이어야 합니다. 출처가 미확인이라는 사실은 그대로지만,
-"코드 하나로 인증이 뚫린다"는 read 는 맞지 않습니다.
-
-``IRZ000001`` 을 APK 에서 찾으면 나오기는 하는데 **비교 근거가 아닙니다**:
-DEX 문자열 테이블의 평문은
-``ui/screen/basketticket/data/BasketTicketDataKt.java:44`` 의 ``STLino``
-안에 한 번 나오는데, 장바구니 화면에 박아 둔 **모의 응답 JSON 문자열**이지
-코드 비교가 아닙니다. ``assets/error_json.json`` 사전에도 이 코드가 따로
-있습니다. 어느 쪽도
-로그인 whitelist 비교를 입증하지는 않습니다(2026-09-23 확인). 두 코드 모두
-여전히 실서버 관측 기반입니다.
-``txtInputFlg``: ``"2"``=회원번호, ``"4"``=휴대폰, ``"5"``=이메일.
+2026-09-23 코드 확인 기록: 기본 봉투 검사는 SUCC 승인목록이 아니라 FAIL 등의 거부 목록이므로 빈 문자열·미지의 strResult 도 통과할 수 있습니다. 성공 코드
+하나만으로 세션을 만들지는 않습니다.
 """
 from __future__ import annotations
 
@@ -69,22 +35,10 @@ KORAIL_LOGIN_TYPE_PHONE = "4"
 KORAIL_LOGIN_TYPE_EMAIL = "5"
 
 def infer_login_input_flag(login_id: str) -> str:
-    """``txtInputFlg`` 판정 —
-    ``LoginViewModel.validateLoginId(loginId, allowEmpty)`` 재현
-    (``analysis/jadx/sources/com/korail/talk/ui/screen/login/LoginViewModel.java:1850-1876``).
+    """로그인 입력 종류: 10자리 숫자=2, 11자리 숫자=4, 이메일=5.
 
-    - 숫자만 10자리 → **항상** 회원번호(``"2"``, ``:1865``). 접두사와
-      무관하게 길이만 본다.
-    - 숫자만 11자리 → 휴대폰(``"4"``, ``:1868``). 실제 앱은 그 뒤 AppSuit 로
-      보호된 추가 형식 검사를 통과해야만 ``4`` 를 반환하지만, 그 검사 내용은
-      정적 분석으로 복원되지 않는다(PROTECTED) — 여기서는 자릿수만으로
-      분류한다. 방향은 맞되 완전히 확인되지는 않았다.
-    - 그 밖의 자릿수(숫자만이지만 10·11자리가 아닌 경우)는 실제 앱이라면
-      무효(``0``, 아무것도 전송하지 않음)를 반환하지만, 이 라이브러리에는
-      "무효" 를 표현하는 반환값이 없어 보수적으로 회원번호로
-      취급한다 — 이 폴백 자체는 미확인이다.
-    - ``@`` 를 포함하면 이메일(``"5"``, ``:1873``). 앱은 ``isValidEmail`` 과
-      7자 이상도 요구하지만 그 판정은 서버에 맡긴다.
+    앱 분기 근거: LoginViewModel.java:1850-1876. 앱의 보호된 전화번호 검사는 재현하지 않습니다. 다른 숫자 길이는 앱의 무효 처리와 달리 회원번호로
+    분류합니다(미확인 폴백). 앱은 이메일에 isValidEmail 과 7자 이상도 요구하지만 그 판정은 서버에 맡깁니다.
     """
     if "@" in login_id:
         return KORAIL_LOGIN_TYPE_EMAIL
@@ -98,16 +52,7 @@ def infer_login_input_flag(login_id: str) -> str:
 
 
 def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
-    """``common.code.do`` 응답에서 ``app.login.cphd``(``AppLoginCphd``)를
-    꺼냅니다.
-
-    7.0.6 ``CommonCodeOut`` 은 이 값을 평탄한 최상위 필드로 선언하고
-    (``@SerialName("app.login.cphd")``,
-    ``analysis/jadx/sources/com/korail/talk/network/model/CommonCodeOut.java:267``),
-    ``LoginRepositoryImpl.java:918-936`` 은 ``commonCode.getAppLoginCphd()``
-    를 인스턴스에서 바로 읽습니다 — 대체 키 ``login`` 도 ``data`` 래퍼도
-    존재하지 않습니다.
-    """
+    """CommonCodeOut.java:267 의 최상위 app.login.cphd 를 읽습니다. 소비부: LoginRepositoryImpl.java:918-936."""
     value = raw.get("app.login.cphd")
     if isinstance(value, dict):
         return value
@@ -117,8 +62,7 @@ def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
 class KorailSessionClient:
     """로그인 왕복과 세션 상태.
 
-    :attr:`current` = 살아 있는 세션 또는 ``None``.
-    :attr:`pending` = 2단계 인증 대기 중인 예외.
+    :attr:`current` = 살아 있는 세션 또는 ``None``. :attr:`pending` = 2단계 인증 대기 중인 예외.
     """
 
     def __init__(self, http: KorailHttpClient) -> None:
@@ -138,9 +82,8 @@ class KorailSessionClient:
         """``common.code.do`` 에서 비밀번호 암호화 파라미터를 읽습니다.
 
         7.0.6 로그인은 ``pwdAESCphd`` 를 읽지 않고 ``key`` 로 곧장 AES 를 겁니다
-        (``analysis/jadx/sources/com/korail/talk/data/LoginRepositoryImpl.java:922-936``).
-        그래서 이 값이 없거나 ``Y``/``N`` 이 아니어도 거절하지 않고, 참고용으로만
-        ``LoginCryptoInfo.pwd_aes_cphd`` 에 담습니다(없으면 ``""``).
+        (``analysis/jadx/sources/com/korail/talk/data/LoginRepositoryImpl.java:922-936``). 그래서 이 값이
+        없거나 ``Y``/``N`` 이 아니어도 거절하지 않고, 참고용으로만 ``LoginCryptoInfo.pwd_aes_cphd`` 에 담습니다(없으면 ``""``).
         """
         response = self.http.post_form(
             "/classes/com.korail.mobile.common.code.do",
@@ -156,20 +99,9 @@ class KorailSessionClient:
         # 참고용입니다. getPwdAESCphd() 의 유일한 사용처는 결제 금액 암호화입니다:
         # analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:10991-10999
         pwd_aes_cphd = str(raw.get("pwdAESCphd") or "").upper()
-        # key 가 비었으면 pwd_aes_cphd 값과 무관하게 여기서 거절하지 않고
-        # transform_login_password 가 무조건 거절합니다(crypto.py 참고) — "Y"
-        # 일 때만 거절하면 pwd_aes_cphd 가 다른 값이거나 없을 때 평문 폴백으로
-        # 샙니다. 7.0.6 도 key 가 비면 재조회 후
-        # 그래도 비면 AESCrypto 가 크래시할 뿐, 평문으로 내려가는 분기가
-        # 없습니다:
-        # analysis/jadx/sources/com/korail/talk/data/LoginRepositoryImpl.java:1230-1236
-        # analysis/jadx/sources/com/korail/talk/crypto/AESCrypto.java:45-57
-        # idx 는 key 가 있어도 요구하지 않습니다. APK 는 getIdx() 를 확인 없이 LoginIn 에
-        # 넘기고, 폼을 만들 때 빈 값을 빼므로 idx 없이 로그인을 보냅니다. _login 도 빈
-        # idx 를 폼에서 뺍니다. key 길이는 로그인 POST 전에 transform_login_password 가
-        # 검사합니다.
-        # analysis/jadx/sources/com/korail/talk/data/LoginRepositoryImpl.java:932-936
-        # analysis/jadx/sources/com/korail/talk/network/NetworkService.java:15342-15343
+        # 키 검증은 transform_login_password 에서 하며 평문으로 폴백하지 않습니다. 앱의 빈 키 재조회:
+        # LoginRepositoryImpl.java:1230-1236; 키 구성: AESCrypto.java:45-57. idx 는 필수가 아니며 빈 값은 폼에서
+        # 빠집니다(LoginRepositoryImpl.java:932-936, NetworkService.java:15342-15343).
         return LoginCryptoInfo(idx=idx, key=key, pwd_aes_cphd=pwd_aes_cphd)
 
     def login(
@@ -182,28 +114,11 @@ class KorailSessionClient:
         cust_id: str | None = None,
         etr_path: str | None = None,
     ) -> KorailSession:
-        """회원 자격증명으로 로그인합니다.
+        """회원 자격증명 로그인. 라우트: NetworkApi.java:458-460.
 
-        ``POST login.Login``
-        (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:458-460``
-        ``postLogin(@FieldMap …)``). 아래 ``_login`` 이 만드는 필드 순서는
-        Device, Version, Key, txtMemberNo, txtPwd, txtInputFlg, checkValidPw,
-        custId, etrPath, idx 입니다.
-
-        7.0.6 의 순서는 요청 DTO 의 직렬화
-        디스크립터에서 읽을 수 있는데 **위 순서와 다릅니다** —
-        ``network/model/LoginIn$$serializer.java:33-43`` 이 11개 원소를
-        등록하고(이름 문자열은 전부 AlienGuard 보호 → PROTECTED), 인덱스와
-        프로퍼티의 대응은 ``LoginIn.java:57-76`` 의 비트마스크로 확정됩니다:
-        0 Device, 1 Version, 2 Key, 3 lang, 4 txtInputFlg, 5 txtMemberNo,
-        6 txtPwd, 7 custId, 8 checkValidPw, 9 etrPath, 10 idx. 즉 7.0.6 은
-        ``txtInputFlg`` 를 ``txtMemberNo``/``txtPwd`` 앞에, ``custId`` 를
-        ``checkValidPw`` 앞에 두고, ``lang`` 을 네 번째 원소로 갖습니다.
-        폼은 ``@FieldMap`` 이라 순서가 계약인지 확인된 바 없고 이 패키지의
-        순서로 실서버 로그인이 성공하므로 코드는 그대로 둡니다.
-
-        ``strRedirectUrl`` 이 오면
-        :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired`.
+        폼 순서는 라이브러리의 선택입니다. 앱 descriptor 순서는 LoginIn$$serializer.java:33-43, 속성 대응은 LoginIn.java:57-76
+        에 있으며 lang·txtInputFlg·custId 위치가 다릅니다. 성공 코드가 아니면서 strRedirectUrl 이 있으면
+        KorailAuthContinuationRequired 입니다.
         """
         return self._run_login(
             lambda: self._login(
@@ -223,13 +138,9 @@ class KorailSessionClient:
         input_flag: str,
         check_valid_pw: str,
     ) -> KorailSession:
-        """Send the APK's ``LoginIn`` social-login branch.
+        """외부 제공자 인증 뒤 custId·input_flag 로 로그인합니다.
 
-        ``LoginRepositoryImpl.socialLogin`` sends the input flag and ``custId``
-        directly to ``NetworkService.login``. It does not fetch a password
-        encryption key or send a member number/password. The APK's value of
-        ``checkValidPw`` is protected, so callers must supply a known value;
-        this method does not invent one.
+        비밀번호 키 조회나 제공자 토큰 교환은 하지 않습니다. 앱의 checkValidPw 값은 보호돼 있으므로 호출자가 알고 있는 값을 넘겨야 합니다.
         """
         def attempt() -> KorailSession:
             # _run_login 안에서 검사해야 잘못된 입력도 이전 세션을 남기지 않습니다.
@@ -252,11 +163,7 @@ class KorailSessionClient:
         return self._run_login(attempt)
 
     def _run_login(self, attempt: Callable[[], KorailSession]) -> KorailSession:
-        """Both logins start from no session and end with one or none.
-
-        A WebView continuation is kept in ``pending`` for the caller to
-        resume; any other failure leaves no session behind.
-        """
+        """시작 시 로컬 세션을 비웁니다. 후속 인증만 pending 에 남기고 다른 실패는 세션을 남기지 않습니다."""
         self.clear_session()
         try:
             return attempt()
@@ -281,23 +188,10 @@ class KorailSessionClient:
         crypto_info = self.get_login_crypto_info()
         transformed = transform_login_password(password, crypto_info)
         resolved_input_flag = input_flag or infer_login_input_flag(member_no)
-        # Field order below is this package's own, not a 7.0.6 replica --
-        # see login_with_member_no's docstring. 7.0.6's LoginIn descriptor order is
-        # Device, Version, Key, lang, txtInputFlg, txtMemberNo, txtPwd,
-        # custId, checkValidPw, etrPath, idx
-        # (LoginIn$$serializer.java:33-43 + LoginIn.java:57-76). The field
-        # NAMES here are confirmed as LoginIn's Kotlin property names
-        # (LoginIn.java:29-35); their exact wire spelling is PROTECTED because
-        # LoginIn carries no @SerialName except the CommonIn four.
-        # Retrofit 은 널 ``@Field`` 를 빼므로
-        # (``retrofit2/ParameterHandler.java:252-259``: 값이 널이면
-        # ``addFormField`` 없이 반환) 여기서도 널 키를 만들지 않습니다.
-        #
-        # 주의: 같은 규칙이 ``@FieldMap`` 에는 적용되지 않습니다 --
-        # ``ParameterHandler.FieldMap``(``:276-293``)은 널 값을 만나면
-        # ``"Field map contained null value for key"`` 로 **예외를 냅니다**.
-        # 7.0.6 의 로그인 선언은 ``@FieldMap`` 이므로(``NetworkApi.java:459``),
-        # 널이 빠지는 자리는 Retrofit 이 아니라 그 앞 단계입니다.
+        # 앱과 다른 폼 순서는 login docstring 참고. LoginIn.java:29-35 의 속성명은 읽히지만 descriptor
+        # 이름(LoginIn$$serializer.java:33-43)은 보호돼 있습니다. 로그인은 @FieldMap(NetworkApi.java:459-460)이므로
+        # null 값은 상류에서 생략해야 합니다. Retrofit 의 @Field null 생략(ParameterHandler.java:252-259)과 달리
+        # @FieldMap 의 null 값은 오류입니다(ParameterHandler.java:276-293).
         form = {
             "txtMemberNo": member_no,
             "txtPwd": transformed,
@@ -359,12 +253,10 @@ class KorailSessionClient:
         return self.current
 
     def logout(self) -> None:
-        """서버 세션 무효화 후 로컬 상태 비움.
+        """서버 로그아웃을 시도하고 finally 에서 로컬 세션·쿠키를 비웁니다.
 
-        7.0.6 ``POST login.Logout`` 의 ``timeStamp`` 폼을 보냅니다.
-        로컬 상태(``current``·``pending``·쿠키)는 ``finally`` 에서 **언제나**
-        비웁니다. 서버의 ``FAIL`` 봉투는 예외가 아니지만, 전송 오류 같은 실패는
-        그대로 올라옵니다 — 그때도 로컬 상태는 이미 비워져 있습니다.
+        7.0.6 ``POST login.Logout`` 의 ``timeStamp`` 폼을 보냅니다. 서버의 FAIL 봉투는 예외가 아니지만 전송 오류 같은 실패는 그대로 올라오며,
+        그때도 로컬 상태는 이미 비워져 있습니다. 서버 세션의 실제 무효화 여부는 이 메서드만으로 보장하지 않습니다.
         """
         try:
             if self.current is not None:
@@ -377,11 +269,7 @@ class KorailSessionClient:
             self.clear_session()
 
     def clear_session(self) -> None:
-        """요청 없이 쿠키·세션·대기 상태를 비웁니다.
-
-        세션·대기 상태를 먼저 비웁니다 — 쿠키 저장소가 예외를 내더라도
-        ``current`` 가 남지 않게 하려는 순서입니다.
-        """
+        """세션·pending 을 먼저 지운 뒤 쿠키를 비웁니다. 쿠키 정리가 실패해도 current 를 남기지 않습니다."""
         self.current = None
         self.pending = None
         self.http.cookies.clear()

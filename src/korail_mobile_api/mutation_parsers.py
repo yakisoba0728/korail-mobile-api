@@ -2,19 +2,10 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""상태 변경 응답을 :mod:`korail_mobile_api.mutation_models` 의 타입으로 옮깁니다.
+"""상태 변경 응답 파서. 성공 여부는 판정하지 않으며 raw 와 봉투 값을 보존합니다.
 
-예약 홀드, 결제, 할인카드 구매, 장바구니 추가와 7.0.6 환불 결과의 응답을
-파싱합니다. 장바구니 추가의 응답 DTO 는 ``AddCartListOut.java:24-25`` 이고
-그 자체 속성의 전선 키는 ``:76-77`` 의 ``@SerialName("psgDiscAdd_infos")``
-입니다 — :func:`parse_cart_add_response` 가 이것을 파싱합니다. 취소처럼 DAO 의
-응답 타입이 맨 ``BaseResponse`` 인 라우트에는 전용 파서가 없습니다.
-
-선택 필드는 읽기 파서와 같이 관대하게 읽습니다(모양이 어긋나면 ``None``/빈 튜플).
-엄격한 것은 뒤따르는 폼이 되울리는 값뿐입니다 — 홀드의 PNR·발권창구번호·여정
-수·job 일련번호, 첫 여정의 변경번호, 정산 금액(:func:`_received_amount`), 그리고
-역 환불 확인의 원표 목록과 금액. 이 값이 틀린 모양이면 추측하지 않고
-:class:`~korail_mobile_api.errors.KorailProtocolError` 를 냅니다.
+PNR·정산 및 후속 폼에 필요한 값 일부는 엄격히 검사하고 선택값은 관대하게 읽습니다. 파싱 실패는 서버 작업 실패를 뜻하지 않습니다. HTTP 계층의 예외 raw 에서 응답 전체를
+확인하고 자동 재전송하지 마십시오. BaseResponse 만 반환하는 취소에는 전용 파서가 없습니다.
 """
 from __future__ import annotations
 
@@ -80,8 +71,7 @@ def parse_station_refund_verification_response(
 ) -> StationRefundVerificationResponse:
     """Parse ``VerifyOnlineRefundsOut`` and the original ticket it validates.
 
-    원표 목록·PNR·원표 식별 값과 세 금액은 환불 실행 전 확인값이라 엄격하게
-    읽습니다. 두 안내 문구만 관대합니다.
+    원표 목록·PNR·원표 식별 값과 세 금액은 환불 실행 전 확인값이라 엄격하게 읽습니다. 두 안내 문구만 관대합니다.
     """
     copied = _response_mapping(raw)
     rows = copied.get("orgtkinfo_list", [])
@@ -129,7 +119,7 @@ def parse_station_refund_verification_response(
 def parse_station_refund_execution_response(
     raw: Mapping[str, Any],
 ) -> StationRefundExecutionResponse:
-    """Parse ``ExecuteOnlineRefundsOut`` without dropping its refund type."""
+    """역발행 환불 실행의 반환 구분을 보존합니다."""
     copied = _response_mapping(raw)
     return StationRefundExecutionResponse(
         **_base_fields(copied),
@@ -143,18 +133,7 @@ _DIGITS_RE = re.compile(r"[0-9]+")
 
 
 def _response_mapping(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """A copy of the answer, checked once before any row.
-
-    Whether ``raw`` is a JSON object is still worth checking here -- callers
-    do reach these parsers directly, not only through the http layer -- but
-    that is the only envelope check this module makes. The three envelope
-    fields are read straight off ``raw``, the way ``read_parsers.py`` does.
-
-    Their *types* are not checked, here or downstream: ``strResult``,
-    ``h_msg_cd`` and ``h_msg_txt`` are taken with ``dict.get`` and stored as
-    they arrive, so a bool, a list or an object passes through as readily as
-    a string does.
-    """
+    """직접 호출도 가능하므로 raw 가 매핑인지 확인하고 복사합니다. 봉투 3필드는 dict.get 으로 읽으며 이 모듈 자체는 타입·성공 여부를 검사하지 않습니다."""
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     return dict(raw)
@@ -170,34 +149,12 @@ def _received_amount(
     raw: Mapping[str, Any],
     journey_rows: list[Mapping[str, Any]],
 ) -> str | None:
-    """결제에 쓸 금액을 정합니다 — **앱 재현이 아니라 이 패키지의 선택입니다.**
+    """좌석별 h_rcvd_amt 합과 선언 총액을 대조하는 라이브러리 정책입니다. 앱은 일반 결제에서 h_tot_rcvd_amt 를
+    합산합니다(PayViewModel.java:11297-11307). 번호 붙은 결제 금액으로의 최종 연결은 보호된 Bundle 키 때문에 미확인입니다
+    (PaymentMethodHelper.java:113,211).
 
-    7.0.6 ``PayViewModel.initAmountData()``(``:11303-11307``)는 일반 분기에서
-    ``h_tot_rcvd_amt`` 를 그대로 합산하고 좌석별로 재계산하지 않습니다. 좌석
-    합을 1차 출처로 두는 것은 좌석 단위로 검산하려는 이 패키지의 판단입니다.
-
-    이 함수가 하는 일은 좌석별 ``h_rcvd_amt`` 를 더하고, 응답이 선언한
-    ``h_tot_rcvd_amt`` 와 맞춰 보는 것입니다. 7.0.6 에서 확인되는 것:
-
-    * ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:11303-11307``
-      (``initAmountData()``, ``:11222``)이 ``ReservationOut.getHTotRcvdAmt()``
-      를 예약 목록에 걸쳐 **그냥 더합니다**(여정변경 분기는 ``:11297-11301``
-      에서 ``scnIndcAmt``). 즉 ``h_tot_rcvd_amt`` 는 7.0.6 에서 죽은 필드가
-      아닙니다.
-    * 좌석별 ``h_seat_prc``/``h_seat_fare`` 를 다시 더하는 코드는 7.0.6 에
-      없습니다 — ``getHSeatPrc()``/``getHSeatFare()`` 호출자가 0건입니다.
-    * 그 합계가 ``hidMnsStlAmt<N>`` 로 들어가는 마지막 한 걸음은
-      ``analysis/jadx/sources/com/korail/talk/common/helper/PaymentMethodHelper.java:113``
-      (``getCardRequest``, ``:89``)와 ``:211``(``getEasyRequest``, ``:147``)이
-      **AlienGuard 로 보호된 키**로 ``Bundle`` 에서 값을 꺼내는 자리라
-      정적으로 이어 붙을 수 없습니다 — 미출처입니다.
-
-    그러므로 "좌석 합이 1차"라는 규칙은 앱 동작의 재현이 아니라 이 패키지의
-    보수적 선택으로 읽어야 합니다. 좌석 행이 아예 없는 응답에서만
-    ``h_tot_rcvd_amt`` 를 단독 출처로 씁니다.
-
-    두 출처를 모두 읽을 수 있는데 값이 다르면 하나를 고르지 않고 거부합니다.
-    둘 다 쓸 수 없으면 부분적인 숫자 대신 ``None`` 을 돌려줍니다.
+    미배정 0원 행은 제외하고, 사용할 좌석 행이 없으면 선언 총액만 씁니다. 한 좌석 금액이 읽히지 않으면 부분 합을 반환하지 않습니다. 두 출처가 다르면 오류, 사용 가능한
+    출처가 없으면 None 입니다.
     """
     declared = _strict_scalar_string(raw, "h_tot_rcvd_amt", "reservation")
     if declared is not None:
@@ -234,50 +191,29 @@ def _received_amount(
             seat = _row(seat, "reservation seat_info row")
             amount = _strict_scalar_string(seat, "h_rcvd_amt", "reservation seat")
             if amount is None or not _DIGITS_RE.fullmatch(amount.strip()):
-                # One unreadable seat makes the whole sum wrong, so refuse the
-                # whole sum rather than under-charge the settlement.
+                # 한 좌석이라도 금액이 없으면 부분 합으로 과소 정산하지 않도록 전체 계산을 포기합니다.
                 return None
             try:
                 value = int(amount)
             except ValueError:
-                # Same refusal as an unreadable seat: a digit string past
-                # Python's int-string conversion limit is unusable, not zero.
+                # 정수 문자열 변환 한도를 넘은 값도 0원으로 취급하지 않습니다.
                 return None
             seat_no = (
                 _optional_scalar_string(seat, "h_seat_no", "reservation seat")
                 or ""
             )
             if value == 0 and not seat_no.strip():
-                # 예약대기(``job_type=STANDBY``, ``h_msg_cd`` ``IRR000014``)는
-                # 좌석이 아직 배정되지 않은 행을 하나 보냅니다 -- ``h_seat_no``
-                # ``""``, ``h_srcar_no`` ``"0000"``, ``h_rcvd_amt`` 전부 0.
-                # 그것은 정산 금액이 아니므로 합에 넣지 않습니다. 넣으면 합이
-                # 0이 되어 ``h_tot_rcvd_amt`` 와 "모순" 으로 보이고, 아래
-                # 예외 때문에 확정된 예약대기를 결제할 수 없게 됩니다
-                # (2026-09-22 재현: ``h_wct_no='82002'``·``h_tot_rcvd_amt=42600``).
-                #
-                # 모순이 아니라는 근거: 같은 PNR 을 독립 경로
-                # ``certification.ReservationList``
-                # (:meth:`KorailClient.get_ticket_reservation_detail`)로 다시
-                # 읽으면 좌석별 ``h_rcvd_amt`` 가 채워져 있고 그 합이
-                # ``h_tot_rcvd_amt`` 와 같습니다. 즉 이 응답의 좌석 행만
-                # 비어 있는 것이고 선언된 총액이 맞는 값입니다.
+                # 2026-09-22 예약대기 관측: 좌석번호 없는 0원 행은 정산 좌석이 아니었습니다. 동일 예약을
+                # get_ticket_reservation_detail 로 조회한 좌석 합은 선언 총액과 일치했습니다. 이 빈 행을 합산하면 잘못된 총액 불일치를
+                # 만들므로 제외합니다.
                 continue
             summed += value
             seats_seen += 1
     if seats_seen == 0:
-        # No seat rows to recompute from; the declared total is all there is.
-        # Normalised the same way as the sum, for the same reason as below.
+        # 합산할 좌석이 없을 때만 선언된 정산액을 사용합니다.
         return None if declared_int is None else str(declared_int)
     seat_total = str(summed)
-    # Compare NUMERICALLY. Both of these arrive zero-padded, to different
-    # widths, and the padding is not part of the number: a live 2026-07-27 hold
-    # answered h_tot_rcvd_amt="0000000000042600" beside h_rcvd_amt="00000042600"
-    # for one seat. Comparing the strings made 42,600 disagree with 42,600, and
-    # every ordinary hold then failed to produce an amount at all -- which the
-    # payment builder turns into a refusal to build the form. The synthetic
-    # fixtures behind the offline tests were unpadded, so only a real response
-    # could show this.
+    # 2026-07-27 라이브: 좌석 금액과 총액의 영 채움 폭이 달랐습니다. 표기 문자열이 아니라 숫자로 비교해야 같은 금액을 모순으로 오인하지 않습니다.
     if declared_int is not None and declared_int != summed:
         raise KorailProtocolError(
             "KORAIL reservation settlement amount is ambiguous: the seat rows "
@@ -286,17 +222,14 @@ def _received_amount(
             "this package's policy, not a rule the app enforces -- so it "
             "refuses here rather than guess which amount to charge."
         )
-    # 자리수 0 채움 없이 그대로 돌려줍니다. 7.0.6 에는 번호 붙은
-    # ``hidMnsStlAmt1`` 이 평문 검색 0건이고, 존재하는 것은 번호 없는
-    # ``hidMnsStlAmt``(``ReservationPaymentInStlInfo``, ``PaymentMethod``)
-    # 뿐입니다. ``hidMnsStlAmt<N>`` 로 들어가는 마지막 한 걸음은 AlienGuard 로
-    # 보호되어 **미출처**이므로(위 독스트링), 자리수를 채우지 않는 것도 앱
-    # 동작의 재현이 아니라 이 패키지의 선택으로 읽어야 합니다.
+    # 자리수 0 채움 없이 그대로 돌려줍니다. 7.0.6 에는 번호 붙은 ``hidMnsStlAmt1`` 이 평문 검색 0건이고, 존재하는 것은 번호 없는
+    # ``hidMnsStlAmt``(``ReservationPaymentInStlInfo``, ``PaymentMethod``) 뿐입니다. ``hidMnsStlAmt<N>`` 로
+    # 들어가는 마지막 한 걸음은 AlienGuard 로 보호되어 **미출처**이므로(위 독스트링), 자리수를 채우지 않는 것도 앱 동작의 재현이 아니라 이 패키지의 선택으로
+    # 읽어야 합니다.
     return seat_total
 
 
-# The hold's scalar fields that the payment/cancel forms echo back -- read
-# strictly. received_amount and journeys are computed and stay out of it.
+# 결제·취소에서 에코하는 홀드 스칼라는 엄격하게 읽습니다. 정산액·여정은 별도로 계산합니다.
 _RESERVATION_HOLD_REQUIRED_FIELDS = {
     "pnr_no": "h_pnr_no",
     "journey_count": "h_jrny_cnt",
@@ -305,7 +238,7 @@ _RESERVATION_HOLD_REQUIRED_FIELDS = {
     "temporary_job_sequence_2": "h_tmp_job_sqno2",
 }
 
-# The rest of the hold's scalars -- display only, read tolerantly.
+# 나머지 홀드 스칼라는 관대하게 읽습니다.
 _RESERVATION_HOLD_FIELDS = {
     "payment_flag": "h_payment_flg",
     "payment_message": "h_payment_msg",
@@ -318,9 +251,7 @@ _RESERVATION_HOLD_FIELDS = {
     "total_discount_amount": "h_tot_dcnt_amt",
 }
 
-# A reserved journey's fields, one jrny_info row each. reservation_change_no
-# (h_rsv_chg_no) is read strictly on its own: the payment form echoes the
-# first journey's value.
+# 여정 행. 첫 여정의 변경번호는 결제에 에코하므로 별도로 검증합니다.
 _RESERVATION_JOURNEY_FIELDS = {
     "journey_sequence": "h_jrny_sqno",
     "departure_date": "h_dpt_dt",
@@ -332,7 +263,7 @@ _RESERVATION_JOURNEY_FIELDS = {
     "arrival_date": "h_arv_dt",
 }
 
-# A paid ticket's coupon fields, one tk_coupon_info row each.
+# 발권 승차권의 쿠폰 행.
 _PAYMENT_COUPON_FIELDS = {
     "certificate_password": "h_cert_pwd",
     "coupon_no": "h_coup_no",
@@ -341,7 +272,7 @@ _PAYMENT_COUPON_FIELDS = {
     "ticket_return_no": "h_tk_ret_no",
 }
 
-# ReservationPaymentOut's own scalar fields (ReservationPaymentOut.java:90).
+# 결제 응답 고유 스칼라(ReservationPaymentOut.java:90).
 _RESERVATION_PAYMENT_FIELDS = {
     "reservation_no": "h_rsv_no",
     "settlement_approval_no": "h_stl_cd_apprv_no",
@@ -357,7 +288,7 @@ _RESERVATION_PAYMENT_FIELDS = {
     "cancellation_fee": "h_cnc_fee",
 }
 
-# tk_infos.tk_info row fields (ReservationPaymentOutTkInfo.java).
+# tk_infos.tk_info 의 필드 대응표.
 _RESERVATION_PAYMENT_TICKET_FIELDS = {
     "ticket_sequence": "h_tk_sqno",
     "sale_date": "h_sale_dt",
@@ -375,9 +306,7 @@ _RESERVATION_PAYMENT_TICKET_FIELDS = {
     "standard_seat_price_fare": "h_std_seat_prc_fare",
 }
 
-# stl_infos.stl_info row fields (ReservationPaymentOutStlInfo.java). acnt_info
-# (ReservationPaymentOutActInfo -- gateway transaction/error metadata, not
-# bank-account data) is left in raw; it is not modeled here.
+# stl_infos.stl_info 의 필드 대응표. acnt_info 의 거래·오류 메타데이터는 raw 에 보존합니다.
 _RESERVATION_PAYMENT_SETTLEMENT_FIELDS = {
     "settlement_sequence": "h_stl_sqno",
     "settlement_type_code": "h_stl_tp_cd",
@@ -399,7 +328,7 @@ _RESERVATION_PAYMENT_SETTLEMENT_FIELDS = {
     "remote_point": "h_rmt_point",
 }
 
-# tbl_seat_infos.tbl_seat_info row fields (ReservationPaymentOutTblSeatInfo.java).
+# tbl_seat_infos.tbl_seat_info 의 필드 대응표.
 _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS = {
     "room_class_name_1": "h_psrm_cl_cd_nm1",
     "car_no_1": "h_srcar_no1",
@@ -419,28 +348,9 @@ _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS = {
 def parse_reservation_hold_response(
     raw: Mapping[str, Any],
 ) -> ReservationHoldResponse:
-    """``certification.TicketReservation`` 의 응답을 파싱합니다.
-
-    성공한 홀드의 PNR·발권창구번호·여정 목록·정산 금액을 꺼냅니다.
-    결제(:func:`~korail_mobile_api.mutation_payloads.build_card_payment_form`)와
-    취소(:func:`~korail_mobile_api.mutation_payloads.build_unpaid_reservation_cancel_form`)
-    가 되울릴 값이 전부 여기서 나옵니다.
-
-    ``jrny_infos`` 는 없거나 ``null`` 이어도 되고 그때는 여정이 빈 튜플입니다.
-    객체가 아니거나 ``jrny_info`` 가 리스트가 아니면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다 — 정산 금액과
-    결제 폼의 변경번호가 여정 행에서 나오기 때문입니다.
-
-    **성공 여부는 판정하지 않습니다.** 봉투에서 실제로 확인하는 것은 응답이
-    매핑이라는 것 하나뿐입니다(:func:`_response_mapping`).
-    ``strResult``·``h_msg_cd``·``h_msg_txt`` 는 ``dict.get`` 으로 꺼내 그대로
-    담을 뿐 **타입을 검사하지 않습니다** -- 없으면 ``None`` 이고, ``bool``·
-    리스트·객체로 와도 그대로 통과합니다(합성 응답으로 확인, 2026-09-23).
-    실패한 홀드 응답도 그래서 그대로 돌아오므로 호출자가
-    ``str_result``·``h_msg_cd`` 를 직접 봐야 합니다. 홀드가 실제로 걸렸는데
-    파싱이 거부하면 놓을 수 없는 예약이 남기 때문입니다. 폼이 되울리는
-    스칼라(:data:`_RESERVATION_HOLD_REQUIRED_FIELDS`)는 문자열·정수만 받고, 나머지는
-    관대하게 읽습니다.
+    """홀드의 후속 결제·취소 값을 읽습니다. 여정 컨테이너·정산값은 엄격히 검사합니다. 성공 여부나 봉투 필드 타입은 검사하지 않습니다. 직접 호출자는
+    str_result·h_msg_cd 를 확인해야 하며, 파싱 오류만 보고 이미 생성됐을 수 있는 예약을 다시 요청하면 안 됩니다. 2026-09-23 합성 응답에서도 봉투의
+    bool·목록·객체 값이 그대로 통과함을 확인한 기록이 있습니다.
     """
     copied = _response_mapping(raw)
     journeys_container = copied.get("jrny_infos")
@@ -477,8 +387,7 @@ def parse_reservation_hold_response(
         )
 
     return ReservationHoldResponse(
-        # Spelled out rather than **_base_fields(copied): with the field map
-        # also unpacked, the type checker cannot tell which one fills raw.
+        # raw 의 할당 위치를 타입 검사기가 알 수 있도록 공통 필드를 명시합니다.
         h_msg_cd=copied.get("h_msg_cd"),
         h_msg_txt=copied.get("h_msg_txt"),
         str_result=copied.get("strResult"),
@@ -499,21 +408,8 @@ def parse_reservation_hold_response(
 def parse_reservation_payment_response(
     raw: Mapping[str, Any],
 ) -> ReservationPaymentResponse:
-    """``payment.ReservationPayment`` 의 응답을 파싱합니다.
-
-    ``tk_coupon_info`` 는 리스트이고, ``tk_infos``/``stl_infos``/``tbl_seat_infos``
-    는 ``{"tk_info": [...]}`` 처럼 바깥 객체 하나가 안쪽 리스트 하나를 감싼
-    모양입니다. 전부 관대하게 읽습니다 — 모양이 어긋나면 그 필드는 ``None``,
-    목록은 빈 튜플이고 객체가 아닌 원소는 건너뜁니다.
-
-    이 세 목록을 타입 필드로 파싱하면 결제 승인번호·예약번호·금액을
-    ``.raw`` 없이 꺼낼 수 있습니다.
-
-    ``h_tk_ret_pwd``·``h_take_name`` 같은 민감 필드는 타입 필드로도 나오고
-    ``.raw`` 에도 그대로 남습니다 — ``raw`` 원문 보존은 의도된 계약입니다.
-
-    홀드 파서와 마찬가지로 성공 여부는 판정하지 않습니다. 결제가 서버에서 이미
-    이뤄졌을 수 있으므로 응답을 버리지 않습니다.
+    """결제 결과의 중첩 목록을 관대하게 읽으며 성공 여부는 판정하지 않습니다. 반환 비밀번호·수령인 등 민감값은 타입 필드와 raw 에 그대로 남습니다. 이미 승인됐을 수 있으므로
+    파싱 결과만 보고 결제를 재전송하지 마십시오.
     """
     copied = _response_mapping(raw)
     coupons: list[ReservationPaymentCoupon] = []
@@ -580,9 +476,8 @@ _DISCOUNT_CARD_PURCHASE_FIELDS = {
     "discount_card_settlement_target_no": "dcntCrdStlTgtNo",
     "stx_amount": "stxAmt",
     "taxt_supply_amount": "taxtSplAmt",
-    # NCardInfoOut.java:30 -- distinct from dcntCrdStlTgtNo. No @SerialName
-    # is declared, same as its siblings above, so the bare Kotlin property
-    # name is the wire key (established pattern, not a new guess).
+    # NCardInfoOut.java:30 의 속성은 dcntCrdStlTgtNo 와 별개입니다. 전송 키는 @SerialName 없는 속성명에서 추정했으며 보호된
+    # descriptor 로 직접 확인되지 않았습니다.
     "registered_card_kind_management_no": "dcntCrdKndMgNo",
 }
 
@@ -590,16 +485,8 @@ _DISCOUNT_CARD_PURCHASE_FIELDS = {
 def parse_discount_card_purchase_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardPurchaseResponse:
-    """``research.dcntCrdInfo.do`` 의 응답을 파싱합니다.
-
-    7.0.6 ``NCardInfoOut.java:30-38`` 이 선언하는 자체 속성은 아홉입니다 --
-    ``dcntCrdKndMgNo``/``dcntCrdStlTgtNo``/``lumpStlTgtNo``/``rcvdAmt``/
-    ``stxAmt``/``taxtSplAmt``/``usePsbTno``/``vlidTrmClsDt``/``vlidTrmStDt``
-    (``strResult``/``hMsgCd``/``_hMsgTxt`` 는 상위 ``CommonOut`` 것입니다).
-    serializer descriptor 문자열이 보호돼 있어 파서는 Kotlin 속성명을 전선
-    키로 씁니다.
-
-    **라이브 미검증.** 전송된 적이 없으므로 관측된 적도 없습니다.
+    """NCardInfoOut.java:30-38 의 자체 속성 9개를 읽습니다. serializer 이름이 보호돼 Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 라이브
+    미검증입니다.
     """
     data = _response_mapping(raw)
     return DiscountCardPurchaseResponse(
@@ -635,17 +522,8 @@ def _cart_discount_additions(
 
 
 def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
-    """``cart.addCartList`` 의 응답을 파싱합니다.
-
-    봉투 밖의 자체 속성은 ``psgDiscAdd_infos`` 하나이고
-    (``AddCartListOut.java:76`` 의 ``@SerialName``), 그 안에
-    ``psgDiscAdd_info`` 리스트가 있습니다(``PsgDiscAddInfos.java:81``).
-    행의 두 필드는 ``PsgDiscAddInfo.java:85``(``h_psg_sqno``)와
-    ``:81``(``h_duty_ref_rcgn_ps_dv_cd``)입니다.
-
-    **라이브 미검증** — 실제 응답을 받아 본 적이 없습니다. 행이 없거나
-    바깥 객체가 통째로 없으면 빈 튜플이고, 모양이 어긋나도 봉투는 그대로
-    돌려줍니다(:func:`_cart_discount_additions`).
+    """장바구니 추가 결과. 키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81, PsgDiscAddInfo.java:81,85.
+    누락·잘못된 선택 목록은 비웁니다. 라이브 미검증입니다.
     """
     data = _response_mapping(raw)
     return CartAddResponse(

@@ -2,19 +2,10 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""기본 조회 응답을 :mod:`korail_mobile_api.models` 의 타입으로 옮깁니다.
+"""기본 조회 응답을 models 로 변환합니다. 나머지 조회는 read_parsers 에 있습니다.
 
-앱 기동 데이터, 공지, 역 목록·상세, 열차 조회 행, 운행달력, 정차역, 호차 목록,
-좌석 재고를 파싱합니다. 나머지 읽기 라우트는
-:mod:`korail_mobile_api.read_parsers` 에 있습니다.
-
-각 파서는 봉투를 먼저 확인하고 그 라우트의 DAO 선언이 말하는 필드만 꺼냅니다.
-원본 JSON 은 모델의 ``raw`` 에 남습니다. 선택 필드는 관대하게 읽고(모양이
-어긋나면 ``None``/빈 목록), 필수 필드 — 역 목록의 코드·이름, 열차 조회 행, 좌석
-재고의 좌석 행처럼 예약에 쓰이는 값 — 만 어긋나면
-:class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 역이름과 역코드의 대응은
-:func:`parse_station_name_map` 과 :func:`resolve_station_name` 이 맡으며,
-:class:`~korail_mobile_api.client.KorailClient` 가 그 표를 캐시합니다.
+일반 봉투 판정은 HTTP 계층에서 수행하며, 개별 파서는 전달된 응답을 읽습니다. 선택 필드는 관대하게 읽지만 역 코드·이름, 열차 행, 좌석 재고의 필수 값은 형식 오류 시
+KorailProtocolError 입니다. 모든 모델이 raw 를 갖는 것은 아닙니다.
 """
 from __future__ import annotations
 
@@ -102,15 +93,8 @@ def _typed_required_scalar_string(
     *,
     context: str,
 ) -> str:
-    """Like :func:`_typed_required_string` but also accepts a JSON integer.
-
-    Live-confirmed against production (2026-09-21, seat inventory for train
-    141/KTX-산천): the server sends ``layout_type`` as a bare JSON integer
-    (``2``), not the ``@SerialName("layout_type") String`` the DAO declares —
-    every call fails otherwise, even though the surrounding seat rows parse
-    fine. Same class of Java-``String``-sent-as-a-JSON-number inconsistency
-    :func:`~korail_mobile_api.read_parsers._optional_scalar_string` already
-    handles for other routes; this is the required-field counterpart.
+    """문자열·JSON 정수를 받는 필수 스칼라. bool 은 제외합니다. 2026-09-21 일반 좌석 재고에서 layout_type 정수가 관측되어 String 선언과 달리
+    허용합니다.
     """
     if key not in data:
         raise KorailProtocolError(
@@ -119,7 +103,7 @@ def _typed_required_scalar_string(
     value = data[key]
     if isinstance(value, str):
         return value
-    # `type(...) is int` on purpose: bool is an int subclass.
+    # bool 을 정수 스칼라로 받지 않습니다.
     if type(value) is int:
         try:
             return str(value)
@@ -175,8 +159,7 @@ def _typed_non_negative_integer_value(
     return parsed
 
 
-# 선택 문자열은 같은 판정을 공유합니다. 필수 문자열만 오류 맥락을 구분하며,
-# 역 코드·역 이름에는 빈 문자열을 허용하지 않습니다.
+# 좌석 재고의 필수 문자열은 빈 값도 허용하지만 역 코드·역명은 빈 값을 허용하지 않습니다.
 _optional_string = _typed_optional_string
 _station_required_string = partial(
     _typed_required_string, context="station", non_empty=True
@@ -199,24 +182,9 @@ def _response_fields(response: BaseKorailResponse) -> dict[str, Any]:
 
 
 def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
-    """``prdMobilePlusMain.cache`` 를 파싱합니다.
-
-    캐시 파일이라 KORAIL 봉투가 없습니다. 모든 필드가 선택값이므로 서버가 빼면
-    ``None`` 입니다. ``version`` 이 객체로 오면 앱 업데이트 안내
-    (:class:`~korail_mobile_api.models.AppVersionInfo`)이고, 객체가 아니면 ``None``
-    입니다.
-
-    ``version`` 에서 읽는 세 키가 7.0.6 ``MobilePlusMainVersion`` 이 선언하는
-    필드 전부입니다 — ``MobilePlusMainVersion.java:52`` 의 역직렬화 생성자에
-    ``NEWDVERSION``/``CNTAURL``/``AMESSAGE`` 세 ``@SerialName`` 만 있습니다.
-    ``CNTAURL`` 은 앱이 업데이트 팝업의 스토어 버튼
-    링크로 쓰는 값이라(``AppKt.java:1240`` → ``AppKt.java:1635`` 의
-    ``StoreConfirmDialog``) 그것만 없으면 "새 버전이 있다"까지만 알고 어디로
-    보낼지는 모르는 상태가 됩니다. 실서버는 같은 객체에 19개 키를 실어
-    보내지만(2026-09-22 확인) 나머지 16개(``NEWAVERSION``/``NEWIVERSION``/
-    ``CNT{D,I,S}URL``/``{D,I,S}MESSAGE``/``OLD*VERSION``/``AADD*MSG``)는 DTO 에
-    없는 키라 일부러 읽지 않습니다 — 필요하면 ``AppDataResponse.raw`` 에
-    그대로 남아 있습니다.
+    """봉투 없는 prdMobilePlusMain.cache 를 읽습니다. 선택 필드의 잘못된 타입은 비웁니다. version 은 MobilePlusMainVersion.java:52
+    의 3개 키를 읽고 나머지는 raw 에 둡니다. 2026-09-22 라이브에는 19개 키가 있었습니다. CNTAURL 은 업데이트 버튼 URL 입니다
+    (AppKt.java:1240,1635).
     """
     raw = response.raw
     version_raw = raw.get("version")
@@ -246,8 +214,7 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
 def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
     """공지 응답을 파싱합니다.
 
-    게시판 아이디·게시물 일련번호·제목 셋만 꺼내며 모두 선택값입니다. 공지가
-    없는 상태도 정상이라 빈 값이 오류가 아닙니다.
+    게시판 아이디·게시물 일련번호·제목 셋만 꺼내며 모두 선택값입니다. 공지가 없는 상태도 정상이라 빈 값이 오류가 아닙니다.
     """
     raw = response.raw
     nested = raw.get("notice")
@@ -267,14 +234,7 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
 
 
 def parse_station_name_map(raw: Mapping[str, Any]) -> dict[str, str]:
-    """역 목록 응답에서 역코드 → 역이름 대응표를 만듭니다.
-
-    ``stns.stn`` 리스트가 없으면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 코드와 이름이
-    둘 다 있는 행만 담으며, 쓸 만한 역이 하나도 없으면 빈 dict 가 아니라 역시
-    예외입니다. :meth:`~korail_mobile_api.client.KorailClient.search_trains` 가
-    역코드를 이름으로 바꾸려고 이 표를 만들어 캐시합니다.
-    """
+    """역코드→이름 캐시용 표. stns.stn 목록이나 사용 가능한 코드·이름 쌍이 없으면 오류입니다."""
     container = raw.get("stns")
     rows = container.get("stn") if isinstance(container, Mapping) else None
     if not isinstance(rows, list):
@@ -297,10 +257,8 @@ def parse_station_name_map(raw: Mapping[str, Any]) -> dict[str, str]:
 def resolve_station_name(reference: str, names: Mapping[str, str]) -> str:
     """역 참조를 조회 폼에 실을 역이름으로 바꿉니다.
 
-    숫자가 아니면 이미 이름이라고 보고 그대로 돌려줍니다. 숫자면 역코드로 보고
-    ``names``(:func:`parse_station_name_map` 의 결과)에서 찾습니다. 빈 참조와
-    표에 없는 코드는 :class:`~korail_mobile_api.errors.KorailProtocolError`
-    입니다.
+    숫자가 아니면 이미 이름이라고 보고 그대로 돌려줍니다. 숫자면 역코드로 보고 ``names``(:func:`parse_station_name_map` 의 결과)에서 찾습니다.
+    빈 참조와 표에 없는 코드는 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
     """
     value = reference.strip()
     if not value:
@@ -316,15 +274,8 @@ def resolve_station_name(reference: str, names: Mapping[str, str]) -> str:
 
 
 def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
-    """조회 응답의 열차 행들을 :class:`~korail_mobile_api.models.TrainSummary` 로
-    만듭니다.
-
-    ``trn_infos`` 는 세 모양을 모두 받습니다 — ``trn_info`` 를 담은 객체, 리스트
-    그 자체, ``null``(결과 없음). 그 밖의 값이거나 행이 객체가 아니면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
-
-    빈 목록 자체는 오류가 아닙니다. 직통 열차가 없다는 판정은 호출자가
-    :class:`~korail_mobile_api.errors.KorailNoDirectTrainError` 로 내립니다.
+    """trn_infos 는 객체 안의 trn_info 목록, 직접 목록, null 을 허용합니다. 그 밖의 컨테이너·비객체 행은 오류입니다. 빈 목록만으로 직통 없음 예외를 만들지는
+    않습니다.
     """
     container = raw.get("trn_infos")
     if isinstance(container, Mapping):
@@ -354,18 +305,8 @@ def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
 def parse_train_search_metadata(
     raw: Mapping[str, Any],
 ) -> TrainSearchMetadata:
-    """조회 응답에서 열차 행이 아닌 값들 — 페이지 커서와 조회 조건 — 을 꺼냅니다.
-
-    다음 페이지 요청에 되실을 커서(``h_next_pg_flg``, ``strJobId``, ``h_gd_no``
-    등)가 여기 담깁니다.
-
-    7.0.6 ``TrainScheduleOut`` 의 ``h_menu_id`` 도 보존합니다.
-
-    ``h_merge_rsv_psb_flg`` 는 여기서 읽지 않습니다: 7.0.6
-    ``TrainScheduleOutTrainInfos`` (``trn_infos`` 의 실제 DTO)는 이 키를
-    선언하지 않습니다 — ``trn_info`` 하나만 멤버입니다. 이 이름의 필드는
-    다른 DTO(``MergeSeatsCOutTrnInfos``)에 속하며, 여기서 읽으면 항상
-    ``None`` 입니다.
+    """페이지 커서와 조회 조건을 읽습니다. h_merge_rsv_psb_flg 는 다른 DTO 의 필드입니다 (TrainScheduleOutTrainInfos.java:25-26,
+    MergeSeatsCOutTrnInfos.java:25-26,85).
     """
     def optional(key: str) -> str | None:
         return _typed_optional_string(raw, key)
@@ -377,17 +318,8 @@ def parse_train_search_metadata(
         next_page_flag=optional("h_next_pg_flg"),
         next_query_station_no=optional("h_qry_st_no_next"),
         next_train_no=optional("h_trn_no_next"),
-        # The 환승 cursor pair. Both keys are declared on the 7.0.6 response
-        # DTO (TrainScheduleOut.java:28,33; @SerialName list at :67), so they
-        # are read on every response; they simply come back empty for a direct
-        # search. Where 7.0.6 consumes them is only readable in
-        # smali (jadx failed on responseTrainSchedule):
-        # smali_classes5/.../TrainScheduleViewModel.smali:36806-36845 builds
-        # Triple(hQryStNoNext, hPrcdTrnNoNext, hEctbTrnNoNext) for the transfer
-        # form. Note the app picks that form off the echoed strJobId
-        # (:35654-35698), NOT off "both halves non-empty" -- the both-non-empty
-        # rule that TransferSearchResult.next_page applies is this package's
-        # own, live-verified choice, documented there.
+        # 환승 커서 선언: TrainScheduleOut.java:28,33,67. 소비 메서드는 jadx 복원 실패로 앱의 선택 조건을 여기서 확정하지 않습니다.
+        # TransferSearchResult.next_page 의 두 필드 비어 있지 않음 조건은 라이브러리 정책입니다.
         next_preceding_train_no=optional("h_prcd_trn_no_next"),
         next_connecting_train_no=optional("h_ectb_trn_no_next"),
         result_count=optional("h_rslt_cnt"),
@@ -402,9 +334,8 @@ def parse_train_search_metadata(
 def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
     """``ebizcross/getUUID.do`` 를 파싱합니다.
 
-    ``mutMrkVrfCd`` 가 비어 있지 않은 문자열이어야 하고 아니면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 이 라우트는
-    KORAIL 봉투를 싣지 않습니다.
+    ``mutMrkVrfCd`` 가 비어 있지 않은 문자열이어야 하고 아니면 :class:`~korail_mobile_api.errors.KorailProtocolError`
+    입니다. 이 라우트는 KORAIL 봉투를 싣지 않습니다.
     """
     value = response.raw.get("mutMrkVrfCd")
     if not isinstance(value, str) or not value.strip():
@@ -417,8 +348,7 @@ def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
     )
 
 
-# Field maps (attribute -> wire key) for the MAAS menu parser, in the field
-# order parse_maas_menu_list_response has always used.
+# MaaS 메뉴 속성과 전송 키의 대응표.
 _MAAS_ITEM_FIELDS: dict[str, str] = {
     "active": "active",
     "additional_service_code": "addSrvDvCd",
@@ -447,14 +377,7 @@ _MAAS_RESPONSE_FIELDS: dict[str, str] = {
 def parse_maas_menu_list_response(
     response: BaseKorailResponse,
 ) -> MaasMenuListResponse:
-    """``copt.gdMenuLt.do`` 의 MaaS 메뉴 목록을 파싱합니다.
-
-    ``menuList`` 가 리스트가 아니면 빈 목록이고, 객체가 아닌 행은 건너뜁니다.
-
-    각 항목은 부가서비스 코드를 가지며, 역 선택을 쓰는 항목의 그 코드가
-    :meth:`~korail_mobile_api.client.KorailClient.get_maas_station_data` 의
-    입력입니다.
-    """
+    """MaaS 메뉴. menuList 의 비목록·비객체 행은 비웁니다. 부가서비스 코드는 역 선택 조회에 사용합니다."""
     items: list[MaasMenuItem] = []
     for row in _rows(response.raw, "menuList"):
         items.append(
@@ -474,8 +397,7 @@ def parse_maas_menu_list_response(
     )
 
 
-# Field map (attribute -> wire key) for the station data parser's optional
-# strings, in the field order parse_station_data_response has always used.
+# 역 정보의 선택 문자열 필드 대응표.
 _STATION_OPTIONAL_STRING_FIELDS: dict[str, str] = {
     "longitude": "longitude",
     "latitude": "latitude",
@@ -490,15 +412,7 @@ _STATION_OPTIONAL_STRING_FIELDS: dict[str, str] = {
 def parse_station_data_response(
     response: BaseKorailResponse,
 ) -> StationDataResponse:
-    """역 목록 응답을 파싱합니다.
-
-    ``common.stationdata`` 와 ``EbizMaasStationList.do`` 가 같은 모양을 씁니다.
-    두 라우트 모두 KORAIL 봉투를 싣지 않지만 ``stns.stn`` 리스트는 필수라서
-    없으면 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
-
-    역마다 코드(``stn_cd``)와 이름(``stn_nm``)은 필수, 위경도·그룹·팝업 문구는
-    선택값입니다.
-    """
+    """봉투 없는 역 목록. stns.stn 과 각 역의 비어 있지 않은 코드·이름은 필수입니다."""
     container = response.raw.get("stns")
     if not isinstance(container, Mapping):
         raise KorailProtocolError("KORAIL station data missing stns object")
@@ -516,9 +430,7 @@ def parse_station_data_response(
                 code=_station_required_string(row, "stn_cd"),
                 name=_station_required_string(row, "stn_nm"),
                 raw=dict(row),
-                # StationDataOutStnItem.java:60 declares popupType as a
-                # String (@SerialName("popupType") String), not an int --
-                # read it as an optional string instead of coercing.
+                # popupType 은 정수로 바꾸지 않고 String 선언대로 읽습니다(StationDataOutStnItem.java:60).
                 popup_type=_typed_optional_string(
                     row,
                     "popupType",
@@ -538,16 +450,8 @@ def parse_station_data_response(
 def parse_station_info_response(
     response: BaseKorailResponse,
 ) -> StationInfoResponse:
-    """``common.stationinfo`` 를 파싱합니다.
-
-    역 목록이 아니라 그 목록의 버전 정보입니다. ``count``와 ``map_version``
-    둘 다 비어 있지 않은 문자열이어야 하며, 하나라도 어긋나면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 앱은 이 값으로
-    캐시한 역 목록을 다시 받을지 판단합니다.
-
-    ``StationInfoOut.java:47`` 은 ``count`` 를 ``@SerialName("count") String``
-    으로 선언합니다(``mapVersion`` 과 동일한 non-null String) — int 로
-    강제 변환하지 않고 그대로 문자열로 둡니다.
+    """역 목록의 버전 정보. count 와 map_version 은 비어 있지 않은 문자열입니다. String 선언을 따라 count 도 정수로 바꾸지
+    않습니다(StationInfoOut.java:47).
     """
     raw = response.raw
     return StationInfoResponse(
@@ -570,110 +474,46 @@ def parse_station_info_response(
 def parse_train_calendar_response(
     response: BaseKorailResponse,
 ) -> TrainCalendarResponse:
-    """``schedule.runDt`` 열차운행달력을 파싱합니다.
-
-    라우트 선언은 ``NetworkApi.java:651-652``(``postRunDate(@FieldMap)``)입니다.
-
-    ``runningCalendar`` 가 없거나 ``null`` 이면 빈 날짜 튜플입니다. 7.0.6 도 없는
-    경우를 빈 목록으로 다룹니다 — ``RunDateOut.java:28`` 의
-    ``List<RunDateOutItem> runningCalendar`` 는 키가 빠지면
-    ``CollectionsKt.emptyList()`` 로 채워지고(``:57-58``, ``:71-73``) 소비 쪽은
-    그래도 null 을 한 번 더 막습니다(``CacheHelper.java:82`` 의
-    ``runDateOut != null && (runningCalendar = ...) != null``;
-    ``NetworkRepositoryImpl.java:12413`` 은 보호된 헬퍼로 비어 있는지 검사).
-    **다만 7.0.6 의 선언은 nullable 이 아니라 기본값 있는 non-null 입니다.** 값이 있는데
-    리스트가 아닐 때만 :class:`~korail_mobile_api.errors.KorailProtocolError`
-    입니다.
-
-    행의 날짜(``runDt``)를 여기서 선택값으로 두는 것은 이 패키지의 판단입니다 —
-    7.0.6 은 ``RunDateOutItem.java:37,104-105`` 에서 ``runDt`` 를 non-null
-    ``String`` 으로 선언하고 키가 빠지면 AlienGuard 로 보호된 리터럴을 넣습니다
-    (그 평문은 읽히지 않습니다). 생 JSON 을 파싱하는 쪽에서는 서버가 키를 빼는
-    경우를 그래도 견뎌야 하므로 ``None`` 인 행이 섞일 수 있습니다. 성수기
-    여부는 이 응답에서 오지만 판정 코드값이 보호돼 있어, 열차조회 대기열의 성수기 관문은
-    호출자가 ``peak_season=True`` 로 고릅니다(:meth:`~korail_mobile_api.KorailClient.search_trains`).
+    """운행 달력(NetworkApi.java:651-652). runningCalendar 는 누락·null·비목록이면 비우고 비객체 행은 건너뜁니다. 날짜·플래그의 선택 처리는
+    라이브러리 정책입니다. 앱의 목록 누락 기본값은 emptyList()(RunDateOut.java:57-58,71-73)이며 날짜 기본값·성수기 판정 리터럴은 보호돼
+    있습니다(RunDateOutItem.java:37,104-105,516-524). 조회 관문은 호출자가 peak_season 으로 선택합니다.
     """
     raw = response.raw
-    # A missing runningCalendar yields an empty calendar in 7.0.6 too, but by
-    # a default rather than by nullability: RunDateOut.java:57-58,71-73 fill
-    # the field with CollectionsKt.emptyList() when the key is absent, and
-    # consumers still null-guard it (CacheHelper.java:82,
-    # NetworkRepositoryImpl.java:12413).
-    # Accept absent/null as an empty day tuple; only a present non-list is a
-    # genuine shape violation.
+    # 앱의 누락 기본값과 라이브러리의 비목록 허용은 별개입니다(RunDateOut.java:57-58,71-73).
     days: list[TrainCalendarDay] = []
     for row in _rows(raw, "runningCalendar"):
         days.append(
             TrainCalendarDay(
-                # runDt is treated as optional here by this package's own
-                # choice, not on the app's authority. 7.0.6 declares it
-                # non-null with an AlienGuard-protected missing-value default
-                # (RunDateOutItem.java:37,104-105) and its reader compares it
-                # through a protected helper (TrainOptionViewModel.java
-                # :1066-1069), so there is no 7.0.6 null-date skip to cite. Parsing
-                # raw JSON still has to survive a server that omits the key,
-                # so treat it as optional rather than aborting the whole
-                # calendar parse.
+                # 보호된 날짜 기본값을 재현하지 않아 누락은 None 입니다(RunDateOutItem.java:37,104-105).
                 run_date=_typed_optional_string(
                     row,
                     "runDt",
                 ),
-                # The 7.0.6 deserializer assigns null to bizDdStgCd when the key's mask
-                # bit is unset, and the class contains no
-                # throwMissingFieldException at all (RunDateOutItem.java
-                # :111-115), so 7.0.6 itself materialises null for an absent
-                # key. Its only reader is isPeakSeason()
-                # (RunDateOutItem.java:516-524, consumed by
-                # TrainScheduleViewModel.java), which passes the field as an
-                # argument into the obfuscated AppSuitLinker1.djsflxlftm1
-                # comparison dispatch. Whether that comparison is itself
-                # null-safe is PROTECTED and is NOT re-derived, so accepting
-                # null/absent here rests on the deserializer evidence.
+                # bizDdStgCd 의 누락 기본값은 null(RunDateOutItem.java:111-115). 판정 헬퍼의 null 처리까지 확인된 것은
+                # 아닙니다(RunDateOutItem.java:516-524).
                 business_day_stage_code=_typed_optional_string(
                     row,
                     "bizDdStgCd",
                 ),
-                # dayDvCd defaults to null when its mask bit is
-                # unset (RunDateOutItem.java:106-110), and its getter
-                # (RunDateOutItem.java:421-423) has no call site anywhere in
-                # analysis/jadx/sources outside the model itself -- no other
-                # class references the getter or the field, so a
-                # null/absent dayDvCd is never dereferenced by app code.
+                # dayDvCd 누락 기본값은 null 입니다(RunDateOutItem.java:106-110). 직접 getter 참조의 부재만으로 반사 호출까지
+                # 없다고 단정하지 않고, 파서는 선택값으로 읽습니다.
                 day_division_code=_typed_optional_string(
                     row,
                     "dayDvCd",
                 ),
-                # 7.0.6's RunDateOutItem synthetic constructor supplies a compiled default ("")
-                # for hldyDvCd when the key's mask bit is unset, with no
-                # throwMissingFieldException for it (RunDateOutItem.java:116-
-                # 119). 7.0.6 itself deserializes an absent key fine, so
-                # requiring it here rejects a response shape the real app
-                # accepts.
+                # hldyDvCd 는 누락 시 보호 기본값을 사용하므로 필수 키가 아닙니다(RunDateOutItem.java:116-119). 보호 기본값의 평문을 빈
+                # 문자열로 확정하지 않습니다.
                 holiday_division_code=_typed_optional_string(
                     row,
                     "hldyDvCd",
                 ),
-                # saleDdDvCd defaults to null when its mask bit is
-                # unset (RunDateOutItem.java:121-125), and its getter
-                # (RunDateOutItem.java:445-447) has no call site outside the
-                # model, so nothing in 7.0.6 dereferences it. Null/absent is
-                # tolerated on that basis.
+                # saleDdDvCd 누락 기본값은 null 이므로 선택값으로 읽습니다(RunDateOutItem.java:121-125).
                 sale_day_division_code=_typed_optional_string(
                     row,
                     "saleDdDvCd",
                 ),
-                # Every *TrnOpFlg field defaults to null
-                # when its mask bit is unset (RunDateOutItem.java:126-160), so
-                # 7.0.6's own deserializer produces null flags for absent
-                # keys. They are read by isRunDate(TrainGroup)
-                # (RunDateOutItem.java:526-590) -- v/s/d/a/g/xTrnOpFlg only;
-                # oTrnOpFlg has no reader anywhere -- and again only through
-                # the obfuscated AppSuitLinker1.djsflxlftm1 comparison, whose
-                # null-handling is PROTECTED, so whether a null flag reads as
-                # false is UNSOURCED. What IS sourced is that absent flag keys legitimately become
-                # null inside 7.0.6, which is why this parser must not reject
-                # them. (Evidence only -- the null-tolerant behavior below is
-                # unchanged and is not a defect.)
+                # 운행 플래그의 누락 기본값은 null(RunDateOutItem.java:126-160). isRunDate 비교 리터럴·null 처리 결과는 보호돼
+                # 있습니다(RunDateOutItem.java:526-590).
                 a_train_operation_flag=_typed_optional_string(
                     row,
                     "aTrnOpFlg",
@@ -717,8 +557,7 @@ def parse_train_schedule_response(
     """``research.actualTrainSchedule.do`` 의 정차역·지연 정보를 파싱합니다.
 
     7.0.6 DTO에서는 ``dlayList`` 가 생략되면 빈 목록입니다. 행 하나가
-    정차역 하나이며 도착·출발 시각과 지연 시간이 담깁니다. 개별 필드는
-    선택값이라 서버가 빼면 ``None`` 입니다.
+    정차역 하나이며 도착·출발 시각과 지연 시간이 담깁니다. 개별 필드는 선택값이라 서버가 빼면 ``None`` 입니다.
     """
     raw = response.raw
     stops: list[TrainScheduleStop] = []
@@ -729,11 +568,7 @@ def parse_train_schedule_response(
                     row,
                     "stopRsStnCd",
                 ),
-                # ActualTrainScheduleOutDlay.java's synthetic
-                # constructor gives stopStnNm a compiled default (bit 2 of
-                # its mask) like every sibling field on this row -- 7.0.6
-                # never throws for an absent value, so requiring it here
-                # rejects a response 7.0.6 itself accepts.
+                # stopStnNm 은 누락 시 기본값을 사용하는 필드입니다(ActualTrainScheduleOutDlay.java:71-76).
                 station_name=_typed_optional_string(
                     row,
                     "stopStnNm",
@@ -834,11 +669,7 @@ def parse_train_schedule_response(
         origin_station_name=optional("orgRsStnNm"),
         route_code=optional("routCd"),
         route_name=optional("routNm"),
-        # ActualTrainScheduleOut.java's synthetic constructor
-        # gives runDt1 a compiled default (bit 4 of its mask) with no
-        # throwMissingFieldException for it -- 7.0.6 deserializes an absent
-        # key fine, so requiring it here rejects a response shape the real
-        # app accepts.
+        # runDt1 은 누락 시 기본값을 사용하는 필드입니다(ActualTrainScheduleOut.java:75-80).
         run_date=_typed_optional_string(
             raw,
             "runDt1",
@@ -850,17 +681,8 @@ def parse_train_schedule_response(
         terminal_station_name=optional("tmnRsStnNm"),
         train_attribute_code=optional("trnAttCd"),
         train_departure_flag=optional("trnDptFlg"),
-        # ``trnNo1`` 을 선택값으로 읽습니다.
-        #
-        # 7.0.6 의 실제 선언은 ``ActualTrainScheduleOut.java:47`` 의 non-null
-        # ``String trnNo1`` 이고, 필드 출현 비트가 없으면 AlienGuard 로 보호된
-        # 기본값이 들어갑니다(``:83-85``) -- 즉 DTO 수준에서는 널이 아니라
-        # **기본값**입니다. ``runDt1`` 도 같은 모양입니다(``:38``, ``:78-80``).
-        # 소비자는 ``MyTicketDetailViewModel.java:2173-2175`` 입니다.
-        #
-        # 그래도 둘 다 선택값으로 읽는 이유는 이 패키지가 DTO 기본값을 재현하지
-        # 않기 때문입니다 -- 서버가 키를 빼면 여기서는 ``None`` 이 맞고, 앱이
-        # 채우는 그 기본값이 무엇인지는 보호돼 알 수 없습니다.
+        # 앱의 trnNo1/runDt1 은 보호된 기본값을 갖습니다(ActualTrainScheduleOut.java:38,47,78-85). 그 기본값을 재현하지 않으므로
+        # 누락은 None 입니다. 소비: MyTicketDetailViewModel.java:2173-2175.
         train_no=optional("trnNo1"),
         special_train_flag=optional("trnSpsFlg"),
         up_down_division_code=optional("upDnDvCd"),
@@ -872,10 +694,9 @@ def parse_transfer_station_list_response(
 ) -> TransferStationListResponse:
     """``qry.chtnStn.do`` 의 환승역 목록을 파싱합니다.
 
-    ``chtnList`` 는 생략 시 빈 목록입니다(``ChtnStnOut.java:54-60``).
-    명시적인 null이나 리스트 이외의 값은
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
-    각 행의 코드와 이름에 대한 기존 검증은 유지합니다.
+    ``chtnList`` 는 생략 시 빈 목록이고(``ChtnStnOut.java:54-60``) 명시적 null 이나 리스트가 아닌 값은
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 역 코드와 이름은 선택값입니다. 빈 리스트는 그
+    구간에 환승역이 없다는 뜻이며 오류가 아닙니다.
     """
     raw = response.raw
     rows = raw.get("chtnList", [])
@@ -891,12 +712,7 @@ def parse_transfer_station_list_response(
             )
         stations.append(
             TransferStation(
-                # ChtnStnOutItem.java's synthetic constructor
-                # gives both chtnRsStnCd (bit 8) and chtnRsStnNm (bit 16)
-                # compiled defaults, same as the third field on this row
-                # (chtnRsStnEngNm), also read as optional -- no
-                # throwMissingFieldException for either, so requiring them
-                # here rejects a response shape 7.0.6 itself accepts.
+                # 환승역 코드·역명은 누락 시 기본값을 사용하므로 선택값으로 읽습니다(ChtnStnOutItem.java:51-61).
                 station_code=_typed_optional_string(
                     row,
                     "chtnRsStnCd",
@@ -938,36 +754,19 @@ def _inventory_required_int(
 def parse_seat_car_list_response(
     response: BaseKorailResponse,
 ) -> SeatCarListResponse:
-    """``research.TrainResearch`` 의 호차 목록을 파싱합니다.
-
-    ``srcar_infos`` 는 없거나 ``null`` 이어도 되고 그때는 빈 목록입니다. 객체면
-    ``srcar_info`` 를 읽으며, 그 값이 리스트도 ``null`` 도 아니면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
-
-    호차마다 좌석 속성(유아동반·휠체어 등) 목록이 함께 오고, 그 호차번호가
-    :meth:`~korail_mobile_api.client.KorailClient.get_seat_inventory` 의
-    입력입니다.
-    """
+    """호차와 좌석 속성 목록. 호차번호를 다음 좌석 재고 조회에 사용합니다. 컨테이너는 선택 목록 헬퍼의 정책을 따릅니다."""
     raw = response.raw
     cars: list[SeatCar] = []
     for row in _nested_rows(raw, "srcar_infos", "srcar_info"):
-        # TrainResearchOutCarInfo.java:32 declares hSrcarNo as a String
-        # (public final String hSrcarNo;), not an int. Coercing it to int
-        # here loses leading zeros (e.g. "01" -> 1) -- a lossy round-trip.
-        # SeatCar.car_no is kept as int anyway for ergonomics (client.py's
-        # get_seat_inventory(train, car_no: int, ...) and friends depend on
-        # it), but any re-send of this value elsewhere in the codebase
-        # (payloads.py) MUST zero-pad it back to the original wire width or
-        # it will reach the server under a different spelling than the one
-        # the server assigned.
+        # 앱은 호차번호를 String 으로 선언합니다(TrainResearchOutCarInfo.java:32). 이 모델은 int 이므로 원래 영 채움은 잃습니다. 재전송
+        # 형식은 요청 빌더에서 결정합니다.
         car_no = _inventory_required_int(row, "h_srcar_no")
         # 없거나 널인 ``seatAttInfos`` 는 "특실 좌석속성이 없는 호차" 로 봅니다.
         #
         # 7.0.6 의 실제 선언은 ``TrainResearchOutCarInfo.java:33`` 의
-        # ``List<TrainResearchOutSeatInfo> seatAttInfos`` 이고, 필드 출현 비트가
-        # 없으면 널이 아니라 **빈 목록**이 들어갑니다(``:81-84``:
-        # ``this.seatAttInfos = CollectionsKt.emptyList()``). 그러니 "없으면
-        # 빈 목록" 은 DTO 자신의 기본값과 같은 결론입니다.
+        # ``List<TrainResearchOutSeatInfo> seatAttInfos`` 이고, 필드 출현 비트가 없으면 널이 아니라 **빈 목록**이
+        # 들어갑니다(``:81-84``: ``this.seatAttInfos = CollectionsKt.emptyList()``). 그러니 "없으면 빈 목록" 은 DTO
+        # 자신의 기본값과 같은 결론입니다.
         attributes: list[SeatAttribute] = []
         for attribute_raw in _rows(row, "seatAttInfos"):
             attributes.append(
@@ -1013,7 +812,7 @@ def parse_seat_car_list_response(
         cars=tuple(cars),
         train_class_code=_inventory_optional_string(raw, "h_trn_clsf_cd"),
         train_group_code=_inventory_optional_string(raw, "h_trn_gp_cd"),
-        # TrainResearchOut.java:27,105 -- one of the DTO's own 6 fields.
+        # TrainResearchOut.java:27,105 의 고유 필드.
         car_count=_optional_scalar_string(raw, "h_scar_num", "seat car list"),
     )
 
@@ -1021,9 +820,7 @@ def parse_seat_car_list_response(
 def _inventory_ratio(data: Mapping[str, Any], key: str) -> float:
     value = data.get(key)
     number: int | float | str
-    # ``type(value) in {int, float}`` deliberately rejects bool and any other
-    # int subclass; the isinstance call is redundant at runtime and is here
-    # only so the type checker can narrow ``value`` for ``float()``.
+    # bool·사용자 정의 숫자 하위형을 제외합니다. isinstance 는 타입 검사기의 float 변환 추론용입니다.
     if type(value) in {int, float} and isinstance(value, (int, float)):
         number = value
     elif (
@@ -1052,24 +849,9 @@ def _inventory_ratio(data: Mapping[str, Any], key: str) -> float:
 def parse_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> SeatInventoryResponse:
-    """``research.TResidualSeatsResearch.do`` 의 좌석 배치와 점유 상태를 파싱합니다.
-
-    7.0.6 DTO는 ``seatList``·``windowList`` 생략 시 빈 목록이며 잔여·전체
-    좌석 수 키는 선언하지 않습니다. 있으면 그대로 담고, 없으면 ``None`` 으로
-    둡니다. 두 건수가 서로 모순이어도 서버가 보낸 그대로 돌려줍니다 — 읽기
-    전용 재고 데이터라 서버 자신의 계수기끼리의 불일치는 호출자가 볼 서버
-    이상 현상이지, 이 클라이언트가 응답을 거부할 사유가 아닙니다.
-
-    좌석 행은 :class:`~korail_mobile_api.models.PhysicalSeat` 가 됩니다. 창문
-    위치 비율은 좌석이 아니라 좌석표를 그리기 위한 값이라
-    :class:`~korail_mobile_api.models.SeatWindow` 로 따로 담깁니다.
-
-    ``TResidualSeatsResearchOut.java:29`` 는 ``layout_type`` 을
-    ``@SerialName("layout_type") String`` 으로 선언하지만, 2026-09-21 실서버
-    확인(열차 141/KTX-산천 등 15대) 결과 실제로는 JSON 정수(예: ``2``)로
-    옵니다 — 문자열만 받으면 좌석 데이터가 멀쩡한데도 이 필드 하나 때문에
-    모든 호출이 깨집니다. 그래서 문자열·정수 둘 다 받아 문자열로 정규화합니다
-    (:func:`_typed_required_scalar_string`).
+    """일반 좌석 재고. seatList·windowList 는 누락만 빈 목록이며 키가 있으면 목록을 요구합니다. 좌석 필수 문자열·창측 비율의 오류는 응답 전체를 거절합니다. 선택
+    건수의 상호 모순은 검증하지 않습니다. layout_type 은 String 선언(TResidualSeatsResearchOut.java:29)과 달리 정수도 허용합니다.
+    2026-09-21 라이브 15대에서 JSON 정수를 관측했습니다.
     """
     raw = response.raw
     layout_type = _inventory_required_scalar_string(raw, "layout_type")
