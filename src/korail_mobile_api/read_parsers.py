@@ -254,7 +254,8 @@ def _validate_envelope(
     code = raw.get("h_msg_cd")
     message = raw.get("h_msg_txt")
     result = raw.get("strResult")
-    if code == SESSION_EXPIRED_CODE:
+    # 앱은 strResult 실패일 때만 로그인 필요로 봅니다(CommonOut.java:426-438).
+    if result == "FAIL" and code == SESSION_EXPIRED_CODE:
         raise KorailSessionExpiredError(code, message, raw=raw)
     failed = result == "FAIL" or code == "WRC000288"
     if failed and code not in accepted_empty_codes and code not in returned_failure_codes:

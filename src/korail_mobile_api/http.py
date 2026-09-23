@@ -53,7 +53,10 @@ def parse_base_response(
     raise_on_fail: bool = True,
     require_result: bool = True,
 ) -> BaseKorailResponse:
-    """봉투 타입 검사 후 P058 을 세션 만료로 처리합니다.
+    """봉투 타입 검사 후 FAIL/P058 을 세션 만료로 처리합니다.
+
+    앱의 CommonOut.checkRequiredLogin() 은 commonFail()(strResult 실패)이 참일 때만 hMsgCd 를 보호된 4바이트
+    리터럴과 비교합니다(CommonOut.java:426-438). 그래서 성공 봉투에 붙은 P058 은 만료가 아닙니다.
 
     raise_on_fail=True 면 FAIL, WRC000288, 또는 require_result=True 일 때 strResult 키 누락을 거절합니다. SUCC 와의 동등
     비교는 아니며 null·빈 문자열·미지의 결과값은 이 단계에서 거절하지 않습니다. 앱은 CommonOut.java:361,455-463 에서 기본값과 실패 비교에 같은 보호
@@ -63,7 +66,7 @@ def parse_base_response(
         raise KorailProtocolError("KORAIL response must be a JSON object")
     _reject_non_string_envelope_fields(data)
     response = BaseKorailResponse.from_raw(data)
-    if response.h_msg_cd == SESSION_EXPIRED_CODE:
+    if response.str_result == "FAIL" and response.h_msg_cd == SESSION_EXPIRED_CODE:
         raise KorailSessionExpiredError(
             response.h_msg_cd,
             response.h_msg_txt,

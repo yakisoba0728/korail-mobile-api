@@ -70,8 +70,9 @@ class KorailAuthError(KorailApiError):
 class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
     """P058 을 세션 만료로 분류합니다. KorailAppError 가 아니라 KorailAuthError 의 하위입니다.
 
-    메시지 근거: assets/error_json.json:334 의 로그인 화면 이동 안내.
-    7.0.6 의 대응 비교 리터럴은 보호돼 화면별 처리와의 동일성은 미확인입니다.
+    ``strResult`` 가 ``FAIL`` 일 때만입니다 — 앱의 ``CommonOut.checkRequiredLogin()`` 이 ``commonFail()`` 뒤에
+    코드를 비교합니다(``CommonOut.java:426-438``). 비교하는 4바이트 리터럴은 보호돼 ``P058`` 과 같은지는 길이만
+    맞습니다. 메시지 근거: assets/error_json.json:334 의 로그인 화면 이동 안내.
     """
 
     def __init__(

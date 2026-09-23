@@ -33,7 +33,7 @@ class KorailSession:
 @dataclass(frozen=True)
 class BaseKorailResponse:
     """공통 봉투의 값 객체. 모든 응답 모델이 이를 상속하는 것은 아닙니다. from_raw 는 성공 여부·봉투 필드 타입을 판정하지 않습니다. HTTP 판정은
-    parse_base_response 참고. P058 은 raise_on_fail 과 무관하게 만료 예외이며, 일반 코드가 존재한다는 사실만으로 실패가 되지는 않습니다. raw
+    parse_base_response 참고. FAIL/P058 은 raise_on_fail 과 무관하게 만료 예외이며, 일반 코드가 존재한다는 사실만으로 실패가 되지는 않습니다. raw
     는 원본 JSON 입니다.
     """
 
