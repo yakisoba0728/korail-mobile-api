@@ -53,10 +53,25 @@ class KorailSession:
 class BaseKorailResponse:
     """모든 응답이 공유하는 봉투. 다른 응답 모델은 전부 이것을 상속합니다.
 
-    ``str_result``(``strResult``)가 성공/실패를 정하는 유일한 값입니다.
-    ``h_msg_cd``/``h_msg_txt`` 는 서버의 코드와 문구이며, 성공에 경고가
-    딸려 오는 경우가 있으므로 코드가 있다고 실패인 것이 아닙니다. 실패일 때
-    코드가 어느 예외가 되는지는
+    이 데이터클래스는 봉투 세 필드를 **담기만** 합니다 -- 무엇이 실패인지는
+    정하지 않습니다(:meth:`from_raw` 는 값을 보지 않습니다). 판정하는 쪽은
+    :func:`~korail_mobile_api.http.parse_base_response` 이고, 거기서 오류를
+    만드는 검사는 ``str_result`` 하나가 아닙니다:
+
+    * ``h_msg_cd`` 가 ``P058``
+      (:data:`~korail_mobile_api.errors.SESSION_EXPIRED_CODE`)이면
+      ``str_result`` 와 무관하게, ``raise_on_fail`` 이 꺼져 있어도
+      :class:`~korail_mobile_api.errors.KorailSessionExpiredError`
+      입니다(``http.py:147-152``).
+    * ``raise_on_fail`` 이 참이면 ``str_result == "FAIL"`` 말고도
+      ``h_msg_cd == "WRC000288"`` 이, 그리고 ``require_result`` 일 때는
+      ``strResult`` 키 부재가 각각 따로 실패가 됩니다
+      (``http.py:153-162``). ``WRC000288`` 을 실패로 치는 7.0.6 근거는
+      ``parse_base_response`` 독스트링이 미출처로 남겨 둡니다.
+
+    ``h_msg_cd``/``h_msg_txt`` 는 서버의 코드와 문구이며, 위 두 코드가 아닌
+    한 코드가 있다고 실패인 것은 아닙니다 -- 성공에 경고가 딸려 오는 경우가
+    있습니다. 실패일 때 코드가 어느 예외가 되는지는
     :func:`~korail_mobile_api.errors.classify_app_error` 를 참조하면 됩니다.
 
     ``raw`` 는 파싱 전 JSON 전체입니다.

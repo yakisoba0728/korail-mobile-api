@@ -147,6 +147,11 @@ def _response_mapping(raw: Mapping[str, Any]) -> dict[str, Any]:
     rebuild and re-check a :class:`~korail_mobile_api.models.BaseKorailResponse`
     from the same mapping just to read three fields off it; the fields are
     read straight off ``raw`` instead, the way ``read_parsers.py`` does.
+
+    Their *types* are not checked, here or downstream: ``strResult``,
+    ``h_msg_cd`` and ``h_msg_txt`` are taken with ``dict.get`` and stored as
+    they arrive, so a bool, a list or an object passes through as readily as
+    a string does.
     """
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
@@ -449,10 +454,15 @@ def parse_reservation_hold_response(
     객체가 아니거나 ``jrny_info`` 가 리스트가 아니면
     :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
 
-    **성공 여부는 판정하지 않습니다.** 봉투의 세 필드는 있으면 문자열이거나
-    ``null`` 인지만 확인하고, 없어도 받으므로 실패한 홀드 응답도 그대로 돌아옵니다. 호출자가
+    **성공 여부는 판정하지 않습니다.** 봉투에서 실제로 확인하는 것은 응답이
+    매핑이라는 것 하나뿐입니다(:func:`_response_mapping`).
+    ``strResult``·``h_msg_cd``·``h_msg_txt`` 는 ``dict.get`` 으로 꺼내 그대로
+    담을 뿐 **타입을 검사하지 않습니다** -- 없으면 ``None`` 이고, ``bool``·
+    리스트·객체로 와도 그대로 통과합니다(합성 응답으로 확인, 2026-09-23).
+    실패한 홀드 응답도 그래서 그대로 돌아오므로 호출자가
     ``str_result``·``h_msg_cd`` 를 직접 봐야 합니다. 홀드가 실제로 걸렸는데
-    파싱이 거부하면 놓을 수 없는 예약이 남기 때문입니다.
+    파싱이 거부하면 놓을 수 없는 예약이 남기 때문입니다. 반대로 모델링된
+    스칼라(``h_pnr_no`` 등)는 :func:`_optional_string` 이 검사합니다.
     """
     copied = _response_mapping(raw)
     journeys_container = copied.get("jrny_infos")

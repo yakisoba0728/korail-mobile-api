@@ -132,9 +132,16 @@ class TicketListReservation:
     #: 문자열을 읽을 수 없습니다 — jadx 가 보여주는 식별자
     #: (GENERAL/AIRPORT_BUS/SEAT_ASSIGN/MAAS/COMMUTATION/N_CARD/PASS/
     #: PASS_SUBURBAN_ONE_DAY/RAIL/KORAIL_PASS)가 그 문자열과 같다는 근거가 없어
-    #: 매핑을 만들지 않았습니다. 앱 기본값은 ``GENERAL`` 이고 직렬화기는 기본값과
-    #: 같으면 키를 아예 생략하므로(``MyTicketListOutReservation.java:134,261``)
-    #: ``None`` 과 ``GENERAL`` 은 구분되지 않습니다.
+    #: 매핑을 만들지 않았습니다. 선언된 기본값은 ``GENERAL`` 입니다 --
+    #: ``MyTicketListOutReservation.java:133-134`` 이 비트가 없을 때 그 값을
+    #: 채웁니다. 다만 키 생략은 "기본값과 같으면 뺀다" 는 값 비교 하나가
+    #: **아닙니다**: ``:261`` 의 ``write$Self`` 게이트는
+    #: ``output.shouldEncodeElementDefault(serialDesc, 6)`` **또는**
+    #: ``ticketKind != GENERAL`` 이면 키를 씁니다(앞쪽 난독화 슬롯은
+    #: ``CommonIn.java:444,467`` 의 ``lang`` 게이트가 쓰는 것과 같은 상수).
+    #: 즉 생략되는 것은 인코더가 기본값 기록을 요구하지 **않고** 값이
+    #: ``GENERAL`` 일 때뿐이고, 그때만 ``None`` 과 ``GENERAL`` 이
+    #: 구분되지 않습니다.
     ticket_kind: str | None = None
 
 

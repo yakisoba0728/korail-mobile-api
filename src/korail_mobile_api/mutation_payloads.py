@@ -2678,11 +2678,14 @@ def build_cart_add_form(
     (``network/model/CommonOut.java:42-44``)이고, **전선 키**는 각각
     ``h_msg_txt``/``h_msg_cd``/``strResult`` 입니다 -- 앞의 둘만
     ``@SerialName`` 으로 이름이 바뀌고(``:392``, ``:388``), ``strResult`` 는
-    애노테이션이 없어 속성명이 그대로 전선 이름입니다. 따라서 파서가 없는 것은
-    응답이 비어 있기 때문이 **아니고**, 이 패키지가 아직 이 응답을 모델링하지
-    않았다는 스코프 결정입니다 --
-    :meth:`~korail_mobile_api.client.KorailClient.add_to_cart` 는 그래서
-    파싱하지 않은 봉투를 돌려줍니다.
+    애노테이션이 없어 속성명이 그대로 전선 이름입니다. 한때는 이 응답을
+    모델링하지 않아 전용 파서가 없었지만 **지금은 아닙니다** --
+    :class:`~korail_mobile_api.mutation_models.CartAddResponse` 와
+    :func:`~korail_mobile_api.mutation_parsers.parse_cart_add_response` 가
+    있고, :meth:`~korail_mobile_api.client.KorailClient.add_to_cart` 는 그
+    파서를 거친 타입을 돌려줍니다. ``psgDiscAdd_infos`` 안의 행은
+    :attr:`~korail_mobile_api.CartAddResponse.discount_additions` 로 나오고
+    원본은 ``raw`` 에 남습니다 -- 다만 행 부분은 라이브 미검증입니다.
     """
     if not isinstance(request, CartAddRequest):
         raise KorailProtocolError(

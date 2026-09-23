@@ -8,9 +8,19 @@
 인증된 세션이 있는 :class:`~korail_mobile_api.client.KorailClient` 로 해당
 메서드를 부르기만 하면 됩니다.
 
-민감한 필드는 ``repr=False`` 라 객체를 찍어도 값이 보이지 않고, 전선 이름이
-:mod:`korail_mobile_api.redaction` 에 등록돼 있어 페이로드가 되비칠 때도 어디서나
-마스킹됩니다.
+민감한 필드는 ``repr=False`` 라 객체를 찍어도 값이 보이지 않습니다. 전선
+이름도 :data:`korail_mobile_api.redaction.SENSITIVE_KEYS` 에 등록돼 있지만,
+그것은 마스킹 함수를 **불렀을 때** 무엇이 가려지는지를 정할 뿐입니다.
+
+**페이로드는 저절로 가려지지 않습니다.** 이 패키지가 스스로 부르는 마스킹은
+예외 생성자 경로 하나뿐이고(``errors.py`` 가 예외의 문자열 인자에
+:func:`~korail_mobile_api.redaction.redact_text` 를 적용), 그 경계도
+:class:`~korail_mobile_api.errors.KorailApiError` 가 적어 둔 만큼만입니다.
+빌더가 만든 폼, 이 모듈의 요청 객체, 응답의 ``raw`` 는 평문 그대로입니다 --
+로그·직렬화 전에 :func:`~korail_mobile_api.redaction.redact_payload` (폼)나
+:func:`~korail_mobile_api.redaction.redact_mapping` /
+:func:`~korail_mobile_api.redaction.redact_value` (매핑·객체)를 부르는 것은
+**호출자의 몫**입니다.
 """
 
 from __future__ import annotations
