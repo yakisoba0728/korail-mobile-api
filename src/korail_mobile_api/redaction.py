@@ -962,7 +962,7 @@ def _load_json_iteratively(text: str) -> object:
             raise _JsonSyntaxError(index)
 
 
-def _parse_json_document(value: str) -> object:
+def _parse_json_document(value: str, scalar_root: bool = False) -> object:
     """문자열 전체가 JSON 이면 손실 없는 표현으로, 아니면 ``_NO_JSON``.
 
     구조로 다뤄야 정규식이 못 보는 두 모양을 받습니다 — escape 된 키
@@ -973,11 +973,13 @@ def _parse_json_document(value: str) -> object:
     # 붙어 오는 흔한 문자이고, 그것 하나 때문에 첫 문자 검사가 빗나가
     # 구조 경로에 못 들어갔습니다(2026-09-23 확인).
     stripped = value.strip().lstrip("﻿").strip()
-    # 맨 숫자도 JSON 문서입니다. 예전에는 ``{``·``[``·``"`` 로 시작할 때만 봐서
-    # ``"4111111111111111"`` 이 텍스트 경로로 가 따옴표 없는 ``[REDACTED_CARD]``
-    # 가 나왔고, JSON 숫자 입력에 대한 출력이 JSON 이 아니었습니다(최종 감사
-    # C04). 아무 것도 가리지 않는 숫자는 위 규칙대로 원문이 그대로 나갑니다.
-    if not stripped or stripped[0] not in '{["-0123456789':
+    # 맨 숫자 루트는 **공개** :func:`redact_text` 의 최상위 호출에서만 JSON 으로
+    # 봅니다(최종 감사 C04: 맨 숫자 문서의 출력도 JSON 이어야 함). 안쪽 문자열
+    # 값·매핑 값·폼 값·URL 조각까지 그렇게 보면 카드번호 **문자열**이 숫자
+    # 문서로 읽혀 ``"[REDACTED_CARD]"`` 에 따옴표가 한 겹 더 붙었습니다
+    # (``{"card": "\"[REDACTED_CARD]\""}``, 2026-09-23).
+    roots = '{["-0123456789' if scalar_root else '{["'
+    if not stripped or stripped[0] not in roots:
         return _NO_JSON
     try:
         return _load_json_iteratively(stripped)
@@ -1092,7 +1094,7 @@ def _redact_and_dump_json(root: object) -> tuple[str, bool]:
                 parts.append(node.text)
             continue
         if isinstance(node, str):
-            inner = redact_text(node)
+            inner = _redact_text(node)
             changed = changed or inner != node
             parts.append(json.dumps(inner))
             continue
@@ -1129,13 +1131,18 @@ def redact_text(value: str) -> str:
     채로** 넘어옵니다. 그것을 로그에 찍기 전에 :func:`redact_payload` 를
     부르는 쪽은 호출자입니다(2026-09-23 확인).
     """
+    return _redact_text(value, scalar_root=True)
+
+
+def _redact_text(value: str, *, scalar_root: bool = False) -> str:
+    """:func:`redact_text` 의 본체. ``scalar_root`` 는 맨 숫자 문서를 JSON 으로 볼지."""
     # ``{\\"k\\": \\"v\\"}`` 처럼 백슬래시로 escape 된 채 로그에 실린 JSON 은
     # 그 자체로는 파싱되지 않습니다. 한 겹 벗겨 보고, 되면 원래 모양대로
     # 다시 escape 해 돌려줍니다.
     escaped = False
-    parsed = _parse_json_document(value)
+    parsed = _parse_json_document(value, scalar_root)
     if parsed is _NO_JSON and '\\"' in value:
-        parsed = _parse_json_document(value.replace('\\"', '"'))
+        parsed = _parse_json_document(value.replace('\\"', '"'), scalar_root)
         escaped = parsed is not _NO_JSON
     if parsed is not _NO_JSON:
         # JSON 문자열 안에 JSON 이 든 경우(이중 직렬화)도 여기서 같이 됩니다 —
@@ -1215,14 +1222,14 @@ def _redact_url_fallback(value: str) -> str:
     """
     head, question, rest = value.partition("?")
     if not question:
-        return redact_text(value)
+        return _redact_text(value)
     query, hash_mark, fragment = rest.partition("#")
     pieces = re.split(r"([&;])", query)
     for position in range(0, len(pieces), 2):
         name, equals, _item = pieces[position].partition("=")
         if equals and is_sensitive_key(_decoded_query_key(name)):
             pieces[position] = f"{name}=[REDACTED]"
-    return redact_text(f"{head}?{''.join(pieces)}{hash_mark}{fragment}")
+    return _redact_text(f"{head}?{''.join(pieces)}{hash_mark}{fragment}")
 
 
 def _redact_url_structured(value: str) -> str:
@@ -1247,13 +1254,13 @@ def _redact_url_structured(value: str) -> str:
     if not (parsed.scheme and parsed.netloc) and not (
         relative_with_query or scheme_relative
     ):
-        return redact_text(value)
+        return _redact_text(value)
     # 쿼리 **키**도 문자열입니다(G5). 예전에는 키를 그대로 둬서
     # ``?4111…=public`` 의 숫자가 남았습니다(외부 감사 C02).
     query = [
         (
             _mask_key_text(key),
-            "[REDACTED]" if is_sensitive_key(key) else redact_text(item),
+            "[REDACTED]" if is_sensitive_key(key) else _redact_text(item),
         )
         for key, item in parse_qsl(parsed.query, keep_blank_values=True)
     ]
@@ -1269,9 +1276,9 @@ def _redact_url_structured(value: str) -> str:
         (
             parsed.scheme,
             netloc,
-            redact_text(parsed.path),
+            _redact_text(parsed.path),
             urlencode(query),
-            redact_text(parsed.fragment),
+            _redact_text(parsed.fragment),
         )
     )
 
@@ -1280,10 +1287,17 @@ def _redact_url_structured(value: str) -> str:
 _LEAVE = object()
 
 
+def _is_card_shaped_int(value: object) -> bool:
+    """14~19자리 정수(``bool`` 제외) — :data:`CARD_RE` 의 정수판."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        return False
+    return 10**13 <= abs(value) < 10**19
+
+
 def redact_value(value: Any, *, key: str | None = None) -> Any:
     """임의의 값을 가립니다.
 
-    매핑→키마다, 리스트/튜플→원소마다(컨테이너 타입 유지), 데이터클래스→필드별
+    매핑→키마다, 리스트/튜플/set→원소마다(컨테이너 타입 유지), 데이터클래스→필드별
     dict, 문자열→:func:`redact_url`. 나머지 타입은 그대로. 매핑의 문자열 키도
     가립니다(카드번호 모양·``JSESSIONID=`` 값).
 
@@ -1299,7 +1313,8 @@ def redact_value(value: Any, *, key: str | None = None) -> Any:
     사라졌습니다(외부 감사 C07). 이제 공유 객체는 나올 때마다 다 가려서 씁니다.
     """
     result: list[Any] = [None]
-    tuples: list[tuple[list[Any], Any, Any]] = []
+    #: 다 채운 뒤 원래 타입으로 바꿀 시퀀스(튜플·set·frozenset).
+    tuples: list[tuple[list[Any], Any, Any, type]] = []
     on_path: set[int] = set()
     stack: list[tuple[Any, Any, Any, Any]] = [(value, key, result, 0)]
     while stack:
@@ -1311,7 +1326,9 @@ def redact_value(value: Any, *, key: str | None = None) -> Any:
             parent[slot] = "[REDACTED]"
             continue
         is_mapping = isinstance(item, Mapping)
-        is_sequence = isinstance(item, (list, tuple))
+        # set·frozenset 도 원소를 가립니다. 예전에는 "나머지 타입" 으로 그대로
+        # 둬서 안의 카드번호 문자열이 남았습니다(2026-09-23).
+        is_sequence = isinstance(item, (list, tuple, set, frozenset))
         is_record = is_dataclass(item) and not isinstance(item, type)
         if is_mapping or is_sequence or is_record:
             if id(item) in on_path:
@@ -1337,8 +1354,9 @@ def redact_value(value: Any, *, key: str | None = None) -> Any:
         elif is_sequence:
             sequence_out: list[Any] = [None] * len(item)
             parent[slot] = sequence_out
-            if isinstance(item, tuple):
-                tuples.append((sequence_out, parent, slot))
+            if isinstance(item, (tuple, set, frozenset)):
+                restore = tuple if isinstance(item, tuple) else type(item)
+                tuples.append((sequence_out, parent, slot, restore))
             for index, child in enumerate(item):
                 stack.append((child, None, sequence_out, index))
         elif is_record:
@@ -1356,12 +1374,16 @@ def redact_value(value: Any, *, key: str | None = None) -> Any:
                 )
         elif isinstance(item, str):
             parent[slot] = redact_url(item)
+        elif _is_card_shaped_int(item):
+            # 정수로 들어온 카드번호(G5). ``str()`` 은 자릿수 한도를 넘는 정수에서
+            # 예외를 내므로 크기로 판정합니다.
+            parent[slot] = "[REDACTED_CARD]"
         else:
             parent[slot] = item
     # 튜플은 다 채운 뒤 바꿉니다. 안쪽이 나중에 쌓였으므로 뒤에서부터 바꿔야
     # 바깥 튜플이 이미 바뀐 안쪽 튜플을 담습니다.
-    for sequence_out, parent, slot in reversed(tuples):
-        parent[slot] = tuple(sequence_out)
+    for sequence_out, parent, slot, restore in reversed(tuples):
+        parent[slot] = restore(sequence_out)
     return result[0]
 
 
@@ -1467,9 +1489,9 @@ def _redact_form_value(value: object) -> str:
     C01). 구조화 입력은 깊이·타입과 무관하게 가려야 합니다(G1).
     """
     if isinstance(value, str):
-        return redact_text(value)
+        return _redact_text(value)
     if isinstance(value, (Mapping, list, tuple)) or (
         is_dataclass(value) and not isinstance(value, type)
     ):
         return _repr_iterative(redact_value(value))
-    return redact_text(str(value))
+    return _redact_text(str(value))

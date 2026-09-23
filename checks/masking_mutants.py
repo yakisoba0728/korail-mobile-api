@@ -61,7 +61,7 @@ MUTANTS = [
     (
         # v7 회귀. 이 변이를 하네스가 통과했었습니다.
         "JSON 안의 문자열에 값 패턴만 적용(v7)",
-        "            inner = redact_text(node)",
+        "            inner = _redact_text(node)",
         "            inner = CARD_RE.sub('[REDACTED_CARD]', node)",
     ),
     (
@@ -202,6 +202,21 @@ MUTANTS = [
         "산문 JSON 에 맨 [REDACTED] 를 넣음(외부 C10)",
         "        wrap = key_quote",
         '        wrap = ""',
+    ),
+    (
+        "맨 숫자를 어디서나 JSON 문서로 봄(카드 문자열에 따옴표 두 겹)",
+        """    roots = '{["-0123456789' if scalar_root else '{["'""",
+        """    roots = '{["-0123456789'""",
+    ),
+    (
+        "set·frozenset 을 그대로 둠",
+        "        is_sequence = isinstance(item, (list, tuple, set, frozenset))",
+        "        is_sequence = isinstance(item, (list, tuple))",
+    ),
+    (
+        "정수 카드번호를 그대로 둠",
+        "        elif _is_card_shaped_int(item):",
+        "        elif False:",
     ),
 ]
 

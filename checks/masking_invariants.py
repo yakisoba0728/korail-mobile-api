@@ -252,6 +252,15 @@ def _prose_json_ok(v):
     return out
 
 
+def _exact(fn, want):
+    """결과가 ``want`` 와 **정확히** 같아야 합니다 — 따옴표가 한 겹 더 붙는 식의
+    변형은 누출 검사로는 안 보입니다(2026-09-23)."""
+    def check(v):
+        out = fn(v)
+        return str(out) if out == want else f"{out!r} <<NOT_EXACT>>"
+    return check
+
+
 CASES = [
  # --- v3 에서 이미 맞던 것 (회귀 방지)
  ("base/text",     f"h_sgr_nm={SEC}",                     redact_text, [SEC], []),
@@ -446,6 +455,19 @@ CASES = [
  # 옛 한계 L6: json.loads 가 거절하는 깊이도 구조로
  ("C10/deep_json",     "deep",                               _deep_json, [SEC], []),
  ("C10/deep_prose",    "deep",                               _deep_prose, [SEC], []),
+ # 병합 후 확인(2026-09-23): 카드번호 문자열 값에 따옴표가 한 겹 더 붙음,
+ # set·frozenset 안의 문자열과 정수 카드번호가 그대로 남음.
+ ("M/json_card_str",   '{"card":"%s","x":1e0}' % CARD,
+                        _exact(redact_text, '{"card": "[REDACTED_CARD]", "x": 1e0}'), [CARD], []),
+ ("M/map_card_str",    {"c": CARD},                          _exact(redact_mapping, {"c": "[REDACTED_CARD]"}), [CARD], []),
+ ("M/pay_card_str",    {"c": CARD},                          _exact(redact_payload, {"c": "[REDACTED_CARD]"}), [CARD], []),
+ # 맨 숫자 문서는 공개 redact_text 최상위에서만 JSON(final/C04). URL·값 경로는 텍스트.
+ ("M/bare_card_url",   CARD,                                 _exact(redact_url, "[REDACTED_CARD]"), [CARD], []),
+ ("M/list_card_str",   [CARD, "-" + CARD],                   _exact(redact_value, ["[REDACTED_CARD]", "-[REDACTED_CARD]"]), [CARD], []),
+ ("M/set_card",        {"s": {CARD, PUB}, "f": frozenset({(CARD,)})},
+                        _exact(redact_value, {"s": {"[REDACTED_CARD]", PUB}, "f": frozenset({("[REDACTED_CARD]",)})}), [CARD], [PUB]),
+ ("M/int_card",        {"n": int(CARD), "small": 12, "flag": True},
+                        _exact(redact_value, {"n": "[REDACTED_CARD]", "small": 12, "flag": True}), [CARD], []),
 ]
 
 #: :func:`_json_ok`·:func:`_two_entries` 가 붙이는 결함 표식. 사례마다 금지
