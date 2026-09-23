@@ -25,7 +25,7 @@ G5 는 키의 민감성과 무관하게 **값·키·숫자 어디에 있든** �
 
 | ID | 보장 |
 |---|---|
-| G8 | 기준 wheel `korail_mobile_api-1.1.1`(분석 묶음 `analysis/reports/7.0.6-additions/dist/`)이 받아들이던 응답을, 1.1.1 이후 모델링한 필드·중첩 객체 때문에 거절하지 않는다. 새 필드 목록은 `checks/g8_differential.py` 가 두 버전을 비교해 기계적으로 뽑는다. 1.1.1 에 이미 있던 필드의 입력·반환 정책 변경은 G8 이 아니라 문서(D)로 다룬다. |
+| G8 | 기준 wheel `korail_mobile_api-1.1.1`(로컬 `analysis/reports/7.0.6-additions/dist/`, 감사 묶음에서는 따로 둔 `korail-g8-baseline-1.1.1.whl` 을 `--wheel` 로)이 받아들이던 응답을, 1.1.1 이후 모델링한 필드·중첩 객체 때문에 거절하지 않는다. 새 필드 목록은 `checks/g8_differential.py` 가 두 버전을 비교해 기계적으로 뽑는다. 1.1.1 에 이미 있던 필드의 입력·반환 정책 변경은 G8 이 아니라 문서(D)로 다룬다. |
 | G9 | 변경(mutation) 요청의 응답을 받은 뒤 typed 파싱이 실패하면, 예외의 `.raw` 는 **받은 응답 전체**다(예외가 이미 부분 raw 를 갖고 있어도). 재전송하지 않는다. |
 | G10 | `from korail_mobile_api import *` 와 모든 하위 모듈 import 가 성공하고, `__all__` 의 모든 이름이 정의돼 있다. |
 | G11 | `logout()` 은 서버 호출이 어떻게 실패하든 로컬 세션·쿠키를 비운다. |
@@ -71,7 +71,7 @@ L 은 G 가 **명시적으로 다루지 않는 입력**에만 적용됩니다. G
 
 ```sh
 python3 checks/contract_api.py         # G6·G9·G10·G11
-python3 checks/g8_differential.py      # G8 (기준 wheel 없으면 2)
+python3 checks/g8_differential.py      # G8 (기준 wheel 없으면 2; --wheel PATH)
 python3 checks/masking_invariants.py   # G1~G7 사례
 python3 checks/masking_mutants.py      # 하네스가 비어 있지 않은지
 python3 checks/sphinx_symbols.py       # 문서의 파이썬 심볼 참조
