@@ -325,7 +325,7 @@ class KorailHttpClient:
         if not self.config.dynapath.enabled and path in DYNAPATH_REQUIRED_PATHS:
             raise KorailDynaPathRequiredError(
                 f"KORAIL {path} 는 DynaPath 토큰을 요구합니다. "
-                "KorailConfig(enable_dynapath=True) 로 켜거나, 실제 단말 "
+                "KorailConfig(disable_dynapath=True) 를 빼거나, 실제 단말 "
                 "값을 쓰려면 build_config_from_env() 를 넘겨야 합니다."
             )
 

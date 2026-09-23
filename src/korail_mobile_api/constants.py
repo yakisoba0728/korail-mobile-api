@@ -602,6 +602,7 @@ DYNAPATH_ALLOWLIST_PATHS = frozenset(
 )
 #: 토큰 **없이는 거절되는** 경로. 끈 설정으로 부르면
 #: :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError`.
-#: 허용목록보다 좁음 — 검색 등 읽기는 토큰 없이 성공 관측됨,
-#: ``login.Login`` 만 거절 관측됨.
+#: 허용목록보다 좁음 — 여기 있는 경로만 **전송 전에** 막습니다. 나머지는 보내지만,
+#: 서버가 거절할 수 있습니다: 2026-09-24 라이브에서 토큰 없는 열차조회
+#: (``ScheduleView``)가 ``MACRO ERROR`` 로 거절됐습니다(예전 관측은 성공이었음).
 DYNAPATH_REQUIRED_PATHS = frozenset({KORAIL_LOGIN_PATH})

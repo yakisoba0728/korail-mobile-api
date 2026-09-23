@@ -298,10 +298,10 @@ class KorailClient:
 
     :class:`~korail_mobile_api.config.KorailConfig` 기본값이 앱의
     ``Device``/``Version``/``Key`` 를 채우므로 읽기는 ``KorailClient()`` 로 바로 됩니다.
-    DynaPath 안티오토메이션은 기본으로 **꺼져** 있어, 로그인하려면
-    ``KorailClient(KorailConfig(enable_dynapath=True))`` 로 켜야 합니다. 끈 채
-    :meth:`login` 을 부르면 전송 전에
-    :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError` 로 막힙니다.
+    DynaPath 안티오토메이션은 기본으로 **켜져** 있습니다(합성 기기 값).
+    ``KorailConfig(disable_dynapath=True)`` 로 끌 수 있지만, 끈 채 :meth:`login` 을
+    부르면 전송 전에 :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError`
+    로 막히고, 열차조회는 서버가 ``MACRO ERROR`` 로 거절합니다.
     ``transport`` 는 시험용 :mod:`httpx` 전송로를 끼워 넣는 자리입니다.
 
     상태를 바꾸는 메서드는 읽기 메서드와 마찬가지로 세션만 있으면 즉시
@@ -322,7 +322,7 @@ class KorailClient:
 
         from korail_mobile_api import KorailClient, KorailConfig, TrainSearchQuery
 
-        client = KorailClient(KorailConfig(enable_dynapath=True))
+        client = KorailClient()
         client.login("1234567890", "비밀번호")
         result = client.search_trains(
             TrainSearchQuery(

@@ -33,8 +33,7 @@ def _required_env(name: str) -> str:
 def build_config_from_env() -> KorailConfig:
     """기기 신원을 환경변수에서 가져온 :class:`KorailConfig`.
 
-    맨손 ``KorailConfig()`` 는 DynaPath 가 꺼져 있어 로그인하지 못합니다.
-    ``KorailConfig(enable_dynapath=True)`` 는 인스턴스마다 합성된 기기 값을 씁니다.
+    맨손 ``KorailConfig()`` 는 인스턴스마다 합성된 기기 값으로 DynaPath 를 켭니다.
     이 함수는 **실제 값**을 고정하는 방법이고, 프로세스를 넘어 안정적인 기기 식별자를
     얻는 유일한 길입니다 — 이 패키지는 아무 상태도 저장하지 않으므로 합성 값은 그럴 수
     없습니다.
