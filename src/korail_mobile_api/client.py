@@ -364,7 +364,6 @@ class KorailClient:
         """회원 자격증명으로 로그인하고 살아 있는 세션을 돌려줍니다.
 
         ``POST login.Login``(``NetworkApi.java:459-460`` — ``postLogin(@FieldMap)``).
-        옛 인용 ``LoginService.java:17`` 은 6.5.0 잔재로 7.0.6 에 그 파일이 없습니다.
         부르는 즉시 기존 세션을 먼저 버리고, 서비스 상태 캐시와 비밀번호 암호화
         파라미터(``common.code.do``)를 읽은 뒤 변환한 비밀번호를 보냅니다.
 
@@ -567,11 +566,9 @@ class KorailClient:
                 # 뜻입니다. 서버 상태가 어떻게 됐는지는 그것만으로 알 수
                 # 없습니다 — ``raise_on_fail=False`` 면 ``FAIL`` 도 여기까지
                 # 오고, 기본 봉투 검사도 성공 allow-list 가 아니라 거부
-                # 목록입니다(``http.py`` 의 ``parse_base_response``). 한때
-                # 여기 "서버 쪽은 이미 끝났다"고 단정해 적었는데 틀렸습니다
-                # (2026-09-23 정정).
+                # 목록입니다(``http.py`` 의 ``parse_base_response``).
                 #
-                # 그래도 **재전송이 위험하다는 결론은 같습니다**: 변경이
+                # 그래도 **재전송은 위험합니다**: 변경이
                 # 반영됐을 수도 있고 아닐 수도 있는데, 타입 파싱이
                 # 실패하면서 ``.raw`` 가 비어 있으면 호출자는 그것을 가릴
                 # 방법이 없어 **같은 변경을 다시 보내기 쉽습니다** — 장바구니라면 두 번 담기고 결제라면 더
@@ -581,21 +578,19 @@ class KorailClient:
                 # 판단해야 하며, 서버 상태를 모르는 채로 같은 변경을 재전송해선
                 # 안 됩니다.
                 #
-                # ``.raw`` 는 **언제나 받은 응답 전체**입니다. 한때 파서가 이미
-                # ``raw`` 를 채운 예외는 "더 구체적일 수 있다"며 건드리지 않았는데,
-                # 파서가 넣는 값은 보통 응답의 **일부**(실패한 행 하나 등)라
-                # 호출자가 판단에 필요한 원문을 잃었습니다(최종 감사 C27). 파서가
-                # 넣었던 값은 버리지 않고 ``.parser_raw`` 에 옮겨 둡니다(없으면
-                # ``None``).
+                # ``.raw`` 는 **언제나 받은 응답 전체**입니다. 파서가 이미
+                # ``raw`` 를 채웠더라도 그 값은 보통 응답의 **일부**(실패한 행
+                # 하나 등)라 그대로 두면 호출자가 판단에 필요한 원문을 잃습니다.
+                # 파서가 넣었던 값은 버리지 않고 ``.parser_raw`` 에 옮겨 둡니다
+                # (없으면 ``None``).
                 error.parser_raw = getattr(error, "raw", None)
                 error.raw = response.raw
                 raise
             except Exception as error:
                 # 파서가 이 패키지의 예외가 아닌 것을 낼 수도 있습니다 — 예를
                 # 들어 자릿수 한도를 넘는 정수를 ``str()`` 로 바꾸다 나는
-                # ``ValueError``. 위의 ``except`` 는 그것을 못 잡아서 ``.raw``
-                # 없이 그대로 빠져나갔습니다(최종 감사 C11). 같은 계약으로
-                # 감쌉니다: 원문을 붙인 :class:`KorailProtocolError`.
+                # ``ValueError``. 위의 ``except`` 는 그것을 못 잡으므로 여기서
+                # 같은 계약으로 감쌉니다: 원문을 붙인 :class:`KorailProtocolError`.
                 wrapped = KorailProtocolError(
                     "KORAIL response was received but could not be parsed:"
                     f" {type(error).__name__}"
@@ -741,7 +736,7 @@ class KorailClient:
         """입금은행 코드표. ``POST dlay.dptnBank.do``
         (``NetworkApi.java:392-393`` — ``postDptnBank(@Field("Device"), @Field("Version"), @Field("Key"))``;
         이 라우트만 예외적으로 ``@FieldMap`` 이 아니라 개별 ``@Field`` 세 개입니다).
-        옛 인용 ``DelayService.java:30`` 은 6.5.0 잔재로 7.0.6 에 없습니다. 로그인 필요."""
+        로그인 필요."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.dlay.dptnBank.do",
@@ -756,7 +751,6 @@ class KorailClient:
         (``NetworkApi.java:352-353`` — ``postDelayDiscountView(@QueryMap)``. ``@FormUrlEncoded``
         선언인데 인자는 ``@QueryMap`` 이라, 7.0.6 도 이 라우트만은 값을 쿼리스트링으로
         붙입니다 — 이 메서드가 ``post_query`` 를 쓰는 이유입니다).
-        옛 인용 ``PassCardService.java:20`` 은 6.5.0 잔재로 7.0.6 에 없습니다.
 
         로그인 필요.
         """
@@ -778,7 +772,7 @@ class KorailClient:
         pnr_no: str = "",
     ) -> DiscountCouponListResponse:
         """할인쿠폰 조회. ``POST passCard.CouponView``(``NetworkApi.java:328-329`` — ``postCoupon(@FieldMap)``).
-        옛 인용 ``PassCardService.java:24`` 는 6.5.0 잔재로 7.0.6 에 없습니다. 로그인 필요.
+        로그인 필요.
 
         보유분 없으면 ``WRG000000`` 으로 빈 결과(예외 아님).
         """
@@ -795,9 +789,7 @@ class KorailClient:
 
         로그인 필요. 복지 등록 상태(장애인증·보조견)도 함께 옵니다. 라우트 선언은
         ``NetworkApi.java:515-516``(``postMyXPointView(@FieldMap)``), 응답 필드는
-        ``MyXPointViewOut.java:27-74`` 입니다. 예전에 적혀 있던 ``MyPageActivity``
-        와 ``XPointService.java:18-20`` 은 둘 다 6.5.0 클래스로 7.0.6 디컴파일에
-        없습니다 — 라우트만 같고 옛 클래스의 필드·분기까지 같다는 확인은 아닙니다.
+        ``MyXPointViewOut.java:27-74`` 입니다.
         """
         self._require_session()
         return self._post_read(
@@ -913,10 +905,8 @@ class KorailClient:
     ) -> CrewRequestListResponse:
         """승무원 호출 화면에 띄울 요청 사유 선택지를 조회합니다.
 
-        이전 시그니처의 ``query_division_code`` 는 삭제됐습니다 — 이 라우트의
-        실제 DTO(``CrewCallCommonIn.java:50``)에는 그런 필드가 없고, 옛 값은
-        무관한 다른 DTO(``TrainScheduleIn`` 등)의 필드명이었습니다. 유일한
-        입력은 ``timeStamp`` 이며, 주지 않으면 호출 시점의 밀리초 epoch 입니다.
+        이 라우트의 실제 DTO(``CrewCallCommonIn.java:50``)의 유일한 입력은
+        ``timeStamp`` 이며, 주지 않으면 호출 시점의 밀리초 epoch 입니다.
         자세한 근거는 :func:`~korail_mobile_api.read_payloads.build_crew_request_list_query`
         의 독스트링을 참고하십시오.
         """
@@ -1159,8 +1149,7 @@ class KorailClient:
     ) -> DeliveryRecipientResponse:
         """N카드 2인 승차권을 **전달하기 전에** 수령자 후보를 조회합니다.
 
-        이미 전달된 승차권의 수령자를 보는 곳이 아닙니다 — 예전 서술이
-        그렇게 읽혀 오해를 샀습니다. 7.0.6 은 전달 화면을 만드는 동안에만
+        이미 전달된 승차권의 수령자를 보는 곳이 아닙니다. 7.0.6 은 전달 화면을 만드는 동안에만
         이것을 부르고, 그나마 ``isNCardTwoPeople()`` 일 때뿐입니다
         (``DeliveryTicketFormViewModel.java:697-700``, 즉
         ``TicketDetailOut.pbpAcepPsQryFlg == 'Y'``). 답은
@@ -1307,9 +1296,8 @@ class KorailClient:
         ``code`` 라는 같은 이름의 반복 키가 되고, 서버는 요청한 키 전부를 한 본문에
         담아 돌려줍니다.
 
-        **이전 시그니처는 ``code: str`` 하나였습니다.** 그건 코드 하나마다 왕복
-        하나를 강제하는데, 라우트도 앱도 그렇게 동작하지 않으므로 틀린 좁힘이었습니다
-        — 7.0.6 은 같은 경로에 Retrofit 바인딩을 둘 선언하고
+        문자열 하나만 받으면 코드 하나마다 왕복 하나를 강제하는데, 라우트도 앱도
+        그렇게 동작하지 않습니다 — 7.0.6 은 같은 경로에 Retrofit 바인딩을 둘 선언하고
         (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:317``
         ``postCommonCode(@FieldMap)``, ``:321`` ``postCommonCodeMulti(@FieldMap,
         @Field("code") List<String>)``), 부팅 시퀀스는 코드 22 개를 한 리스트로 묶어
@@ -1709,20 +1697,16 @@ class KorailClient:
         ``MyTicketListIn`` 첫 인자로 들어감) 리터럴을 직접 주는 두 호출부
         (``LoginViewModel.java:1083``, ``AppViewModel$executeTicketListForAutoLogin$result$1.java:67``)
         는 AlienGuard 로 보호된 문자열을 씁니다 — 즉 평문 ``"1"``/``"2"`` 를 APK 에서
-        볼 수 없습니다. 예전에 적혀 있던 ``TicketListActivity.java:937-939`` /
-        ``TicketPurchaseHistoryActivity.java:276-278`` 은 6.5.0 잔재로 7.0.6 에
-        그 클래스가 없습니다.
+        볼 수 없습니다.
         ``"2"`` 는 ``boarding_date_from``·``boarding_date_to`` 를 둘 다 ``YYYYMMDD`` 로
         요구하지만 **이 클라이언트가 그것을 강제하지는 않습니다.** 비었거나 자릿수가
         틀리거나 앞뒤가 뒤집힌 범위도 그대로 나가고 서버가 ``WRT100101``
         ("일자를 확인해주세요 / 3개월단위로 조회할 수 있습니다")로 거절합니다 —
         2026-09-22 에 빈 두 값, ``from`` 만 채운 값(``"20250101"``), 여섯 자리
         값(``"202501"``/``"202612"``), 뒤집힌 범위(``"20261231"``→``"20250101"``)
-        네 경우를 모두 실서버에서 확인했습니다. 이전 문장은 "한쪽이라도 비면 요청을
-        만들기 전에 막습니다" 라고 적혀 있었는데 그런 검사는 코드에 없습니다
-        (``payloads.build_ticket_list_form`` 은 ``mode`` 만 검증하고 두 날짜는
-        ``h_abrd_dt_from``/``h_abrd_dt_to`` 로 그냥 흘려보냅니다) — 같은 함수의
-        도크스트링이 처음부터 정직했던 쪽입니다. 거꾸로, 서버 문구의 "3개월단위" 도
+        네 경우를 모두 실서버에서 확인했습니다(``payloads.build_ticket_list_form`` 은
+        ``mode`` 만 검증하고 두 날짜는 ``h_abrd_dt_from``/``h_abrd_dt_to`` 로 그냥
+        흘려보냅니다). 거꾸로, 서버 문구의 "3개월단위" 도
         강제되지 않습니다: ``20250101``→``20261231`` 2 년 범위가 128 행,
         ``20260901``→``20260922`` 가 3 행을 돌려줬습니다. 즉 ``WRT100101`` 을
         부르는 것은 기간의 길이가 아니라 빠졌거나 폭이 틀렸거나 뒤집힌 범위입니다.
@@ -1777,9 +1761,7 @@ class KorailClient:
           승객 총원과 맞지 않으면 요청을 만들기 전에 거절합니다.
         * ``STANDBY``(``"1102"``)는 예약대기이고, 검색 행이 대기 가능이라고 말한
           열차에만 붙습니다. 회원 전용이라는 서술의 **예약대기 전용 게이트는 7.0.6 에
-          대응 근거를 찾지 못했습니다 — 미출처**입니다. 옛 인용
-          ``ReservationRequest.java:105-119`` 는 6.5.0 잔재로 7.0.6 에 그 파일이
-          없습니다. 7.0.6 에서 확인되는 것은 그보다 약한 사실뿐입니다: 이 라우트의 요청
+          대응 근거를 찾지 못했습니다 — 미출처**입니다. 7.0.6 에서 확인되는 것은 그보다 약한 사실뿐입니다: 이 라우트의 요청
           DTO ``TicketReservationIn.java:80`` 의 ``@SerialName`` 목록에는 비회원
           자격증명 필드(``hidName``/``hidTeleNo``/``hidPwd``/``hiduserYn``)가 아예
           없고, 그런 필드를 가진 DTO 는 승차권 목록 쪽(``MyTicketListIn.java:62``)
@@ -1823,12 +1805,10 @@ class KorailClient:
         PNR 을 만들고 ``h_msg_cd`` = ``IRR000014`` 를 돌려주며, 그 화면이 사용자의
         선택을 실어 보내는 두 번째 POST 가 이 메서드입니다 —
         ``reservationWait.ReservationWait``(``NetworkApi.java:639-640`` —
-        ``postReservationWait(@FieldMap)``). 옛 인용
-        ``ReservationWaitService.java:10-12`` 는 6.5.0 잔재로 7.0.6 에 없습니다.
+        ``postReservationWait(@FieldMap)``).
 
         **"앱은 이 코드에서만 예약대기 화면을 연다"는 분기는 7.0.6 에서 확인하지
-        못했습니다 — 미출처.** 옛 인용 ``ui/inquiry/rir/orr/a.java:222-225`` 는 7.0.6
-        에 없는 경로이고, ``IRR000014`` 는 7.0.6 전체 소스·스몰리 어디에도 평문으로
+        못했습니다 — 미출처.** ``IRR000014`` 는 7.0.6 전체 소스·스몰리 어디에도 평문으로
         없습니다(전수 grep). 이 코드가 APK 안에서 나오는 유일한 자리는
         ``analysis/apktool/assets/error_json.json`` 의 ``"IRR000014": "예약대기
         가능합니다."`` 한 줄입니다 — 앱의 비교 리터럴은 AlienGuard 로 보호돼 있어
@@ -1938,9 +1918,7 @@ class KorailClient:
         같은 ``TicketReservationIn`` 이 ``txtJrnyCnt``(여정 수)와 구간별 목록 네 개
         (``TicketReservationIn.java:34-37`` 의 ``jrnyList``/``passengerInfoList``/
         ``srcarList``/``trailingSrcarList``, ``@SerialName`` 목록은 ``:80``)를
-        선언합니다. 옛 인용 ``C5/a.java:52-119`` 는 6.5.0 잔재로 7.0.6 에 그 경로가
-        없습니다 — 위 대체 근거는 "한 라우트·한 DTO·여정 수만 다름"까지만 뒷받침하고,
-        옛 클래스의 분기 전체가 같다는 확인은 아닙니다.
+        선언합니다 — 이 근거는 "한 라우트·한 DTO·여정 수만 다름"까지만 뒷받침합니다.
         돌려주는 홀드에 대해 :meth:`reserve` 가 말한 것이 그대로 적용됩니다.
 
         ``legs`` 는 탑승 순서대로 정확히 두 개의
@@ -1956,8 +1934,7 @@ class KorailClient:
         구간마다 한 묶음입니다 — 선행 구간은 ``TicketReservationInSrcar.java:51``
         (``txtSrcarNo``/``txtSeatNo``), 후속 구간은
         ``TicketReservationInSrcarTrailing.java:52``(``txtSrcarNo1_``/``txtSeatNo1_``)
-        로 철자가 갈립니다. 옛 인용 ``C5/a.java:59``/``:97``/``:120-133`` 은 6.5.0
-        잔재로 7.0.6 에 없습니다.
+        로 철자가 갈립니다.
 
         **2026-07-31 실서버 확인.** 서울→여수EXPO 를 :meth:`search_transfer_trains`
         로 찾아 서울→오송(열차 009) + 오송→여수EXPO(열차 503) 를 성인 1명으로 보내
@@ -2002,9 +1979,7 @@ class KorailClient:
         :data:`~korail_mobile_api.constants.KORAIL_MERGE_LEADING_JOURNEY_TYPE_CODE`
         에 적혀 있습니다.
 
-        **이 도크스트링은 두 가지를 틀리게 적고 있었습니다. 되돌리지 마십시오.**
-
-        하나, "``MERGE_STANDING`` 이 전 구간을 입석으로 잡는다" 는 틀립니다. 그
+        하나, ``MERGE_STANDING`` 은 전 구간을 입석으로 잡지 않습니다. 그
         첫 홀드가 **이미** ``h_jrny_cnt='0002'`` 에 ``h_jrny_tp_cd``
         ``"21"``/``"22"`` 인 두 여정으로 중간역에서 쪼개져 돌아옵니다 — 2026-09-22
         열차 305 대전→울산(통도사) ``20260923``: 선행 대전→동대구
@@ -2012,11 +1987,9 @@ class KorailClient:
         ``'10A'``(9,600원). 열차 005 에서도 같은 모양(입석 14,600원 + ``'3C'``
         9,600원)이었고, 같은 PNR 을 :meth:`get_ticket_reservation_detail` 로
         되읽어도 ``21``/``22`` 와 같은 좌석이 나옵니다. 즉 입석이 되는 것은 선행
-        구간뿐이고, 아래에서 보듯 아예 한 구간도 입석이 아닐 수 있습니다. 바로 위
-        ``"1202"`` 를 "입석+좌석 예매" 라고 부르는 문구가 처음부터 옳았고, 그 두 줄
-        아래 문장이 그것과 모순돼 있었습니다.
+        구간뿐이고, 아래에서 보듯 아예 한 구간도 입석이 아닐 수 있습니다.
 
-        둘, 이 메서드가 그 홀드를 "바꾼다" 는 것도 틀립니다. **변환이 아니라
+        둘, 이 메서드는 그 홀드를 바꾸지 않습니다. **변환이 아니라
         별도의 두 번째 PNR 을 만듭니다** — 2026-09-22 열차 305 에서 입석 홀드와
         이 호출의 ``pnr_no`` 가 서로 달랐고, 새 PNR 은 똑같이 ``21``/``22`` 모양에
         양쪽 다 진짜 좌석(``4C``, ``5A``)이라 입석 구간이 하나도 없었습니다.
@@ -2180,15 +2153,13 @@ class KorailClient:
         (``TicketDetailOut.java:167``) 에서도 옵셔널이라 서버가 안 보내면
         빈 문자열로 떨어지고, 실앱 두 호출부 모두 그 값을 검사 없이 그대로
         요청에 싣습니다. 값을 지어내는 게 아니라 실앱과 같은 기본값을 쓰는
-        것입니다(W1 finding 7 / :func:`~korail_mobile_api.mutation_payloads.build_refund_form`
+        것입니다(:func:`~korail_mobile_api.mutation_payloads.build_refund_form`
         참고).
 
-        **더 이상 ``return_times_division_code`` 인자를 받지 않습니다.** 7.0.6
+        ``return_times_division_code`` 인자는 없습니다. 7.0.6
         은 ``tk_ret_tms_dv_cd`` 를 실제 환불 제출에 절대 싣지 않습니다 — 이
         DTO 를 만드는 두 실호출부 모두 리터럴 ``null`` 을 넘기고, 수수료
-        응답의 같은 이름 필드는 UI 다이얼로그 선택에만 쓰입니다(W3
-        finding 6). PyPI 배포가 보류 중이라 호환성 약속이 없어, 조용한
-        no-op 으로 남기는 대신 시그니처에서 제거했습니다.
+        응답의 같은 이름 필드는 UI 다이얼로그 선택에만 쓰입니다.
 
         2026-07-31 실서버 확인: 성인 2명 16,800원(8,400×2)을 한 PNR 로 결제한 뒤
         이 메서드를 한 번 부르니
@@ -2246,18 +2217,14 @@ class KorailClient:
         ``POST cart.addCartList``(``NetworkApi.java:266-267`` —
         ``postAddCartList(@FieldMap)``). 요청 DTO 가 선언하는 것은 상속받은
         ``Device``/``Version``/``Key``/``lang`` 과 ``hidPnrNo`` 뿐입니다
-        (``AddCartListIn.java:52`` 의 ``@SerialName`` 목록 전체). 옛 인용
-        ``CartService.java:11-13``/``AddCartDao.java:9-24`` 는 둘 다 6.5.0 잔재로
-        7.0.6 에 그 파일이 없습니다.
+        (``AddCartListIn.java:52`` 의 ``@SerialName`` 목록 전체).
 
         응답은 봉투만이 아닙니다. ``AddCartListOut.java:24-25`` 가 자체 속성
         ``psgDiscAddInfos`` 를 달고 있고 전선 키는 ``:76`` 의
         ``@SerialName("psgDiscAdd_infos")`` 입니다 — 그 안의
         ``psgDiscAdd_info`` 리스트를
         :attr:`~korail_mobile_api.CartAddResponse.discount_additions` 로
-        돌려줍니다. 한때 이 라우트를 "빈 응답"으로 적고
-        :class:`~korail_mobile_api.models.BaseKorailResponse` 를 그대로
-        넘겼는데 틀린 설명이었습니다.
+        돌려줍니다.
 
         **응답의 행 부분은 라이브 미검증입니다** — 서버가 실제로 무엇을
         채워 주는지 관측한 적이 없습니다. 반환형은 여전히
@@ -2285,10 +2252,7 @@ class KorailClient:
         (``NCardInfoOut.java:32-33``) 앱은 그 일괄결제 대상번호를 결제 입력으로 그대로
         넘깁니다(``PayViewModel.java:6628`` —
         ``intgStlIn.setCart_LumpStlTgtNo(...getNCardInfoOut().getLumpStlTgtNo())``).
-        만들어지는 것은 결제를 기다리는 미결제 구매입니다. 옛 인용
-        ``ResearchService.java:68-70``/``NCardReservationDao.java:127-134``/
-        ``SectionNCardInquiryActivity.java:213-257`` 은 모두 6.5.0 잔재로 7.0.6 에
-        그 파일이 없습니다.
+        만들어지는 것은 결제를 기다리는 미결제 구매입니다.
         """
         self._require_session("discount card purchase requires")
         route = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
@@ -2329,9 +2293,6 @@ class KorailClient:
         (``TicketReservationInPassengerInfo.java:55,105`` — 같은 블록의 나머지 셋은
         ``txtCompaCnt``/``txtPsgTpCd``/``txtDiscKndCd``). 즉 N카드 전용 예약
         엔드포인트는 없고 N카드 승객 블록이 있을 뿐입니다.
-        옛 인용 ``w4/a.java:93-104``/``c5/b.java:128-138`` 은 7.0.6 에 그 경로가 없는
-        6.5.0 잔재입니다(같은 basename 의 다른 파일은 있으므로 클래스 전체 부재와는
-        구분합니다).
         """
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -2356,15 +2317,12 @@ class KorailClient:
         ``NetworkApi.java:583-584`` 의 ``postPriceReCalculation`` 이고, 이 라우트만
         ``@FieldMap`` 하나로 끝나지 않습니다 — ``psg_tp_dv_cd``/``psrm_cl_cd``/
         ``dcnt_knd_cd1``/``hidDscpNo``/``hidDcntKndCd``/``hidFmlyNo`` 여섯 개가
-        ``@Field(...) List<String>`` 로 따로 붙습니다(반복 키). 옛 인용
-        ``CertificationService.java:35-37``(``getDiscountPrice``)은 6.5.0 잔재로
-        7.0.6 에 그 파일이 없습니다.
+        ``@Field(...) List<String>`` 로 따로 붙습니다(반복 키).
 
         쏘는 쪽은 결제 화면이 맞습니다 — 7.0.6 에서 이 요청을 만드는 자리는
         ``PayViewModel`` 하나이고(``PayViewModel.java:14278`` 의
         ``requestPriceReCalculation(PriceReCalculationIn, ...)``, 코루틴 호출부는
-        ``:902``, 레포지토리 호출은 ``:1316``), 옛 인용 ``a6/C1042B.java:265-296`` 은
-        7.0.6 에 없습니다. **다만 "할인 선택이 바뀔 때마다"라는 트리거 조건은 7.0.6
+        ``:902``, 레포지토리 호출은 ``:1316``). **다만 "할인 선택이 바뀔 때마다"라는 트리거 조건은 7.0.6
         에서 확인하지 못했습니다 — 미출처**(그 호출부의 조건 리터럴이 AppSuit 로
         보호돼 있습니다). 응답은 홀드가 돌려주는 것과 같은 ``ReservationOut`` 입니다
         (``analysis/jadx/sources/com/korail/talk/network/NetworkApi.java:584,753``).
@@ -2374,11 +2332,11 @@ class KorailClient:
         **부분 검증 경로입니다.** 7.0.6 DTO 가 더 선언하는 ``txtPsrmClCd1``,
         ``txtSeatAttCd2``, ``txtSeatAttCd4``, ``txtSeatAttCd5``
         (``analysis/jadx/sources/com/korail/talk/network/model/PriceReCalculationIn.java:38-41``)
-        는 이제
+        는
         :class:`~korail_mobile_api.PriceRecalculationRequest` 의
         ``cabin_class_code`` 와 ``seat_attribute_code_2``/``_4``/``_5`` 로
         **보낼 수 있습니다.** 넷 다 선택이고 기본값은 ``None`` 이라, 넘기지
-        않으면 예전과 똑같이 하나도 실리지 않습니다 — 앱의 일반 재계산 경로도
+        않으면 하나도 실리지 않습니다 — 앱의 일반 재계산 경로도
         네 인자를 default-null 로 구성합니다(``PayViewModel.smali:11834-11850``).
 
         다만 **값을 채워 보낸 적은 없습니다.** 어떤 화면 상태가 그 값을 만드는지는
@@ -2391,7 +2349,7 @@ class KorailClient:
         서버가 ``ERR930202``("변경항목이 없습니다")로 답합니다 — 바꾼 게 없으니
         맞는 답이고, 요청이 읽히고 해석됐다는 뜻이라 폼의 모양 자체도 유효합니다.
 
-        **성공 본문 파싱 경로도 이제 검증됐습니다.** 같은 날 평범한 회원 세션이
+        **성공 본문 파싱 경로도 검증됐습니다.** 같은 날 평범한 회원 세션이
         ``hidDcntKndCd='131'``(경로)을 1인 홀드에 보내자(줄의 앞 세 값은 그 PNR 의
         좌석에서 복사: ``psg_tp_dv_cd='1'``, ``psrm_cl_cd='1'``,
         ``dcnt_knd_cd1='000'``) 서버가 ``SUCC``/``IRZ000008``("정상적으로 처리
@@ -2402,10 +2360,8 @@ class KorailClient:
         홀드 응답에 없던 ``h_arv_dt``·``h_jrny_sqno`` 까지 들어 있었습니다).
         서로 다른 열차 셋(서울→부산 KTX 013·1005, 서울→대전 KTX 207)에서
         재현했고, 이후 그 PNR 의 좌석은 ``h_dcnt_knd_cd1='204'`` /
-        ``h_dcnt_knd_cd_nm1='경로 할인'`` 으로 읽혔습니다. 이전 판은 "할인이 실제로
-        바뀌는 성공 응답은 아직 못 봤다", "성공 본문 파싱 경로는 여전히 미검증",
-        "이 계정에 없는 자격이 필요하다" 셋을 적어 뒀는데 셋 다 틀렸습니다 —
-        ``131`` 은 아무 자격도 없는 계정에서 동작합니다. 되돌리지 마십시오.
+        ``h_dcnt_knd_cd_nm1='경로 할인'`` 으로 읽혔습니다. ``131`` 은 아무 자격도
+        없는 계정에서 동작합니다.
 
         같은 PNR 에 두 번째 재계산을 거는 경우는 직관과 반대입니다. 서버가 써 넣은
         값(``204``)을 다시 읽어 ``discount_kind_code`` 로 보내면

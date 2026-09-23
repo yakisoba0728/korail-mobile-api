@@ -47,8 +47,6 @@ def build_config_from_env() -> KorailConfig:
         ``Settings.Secure.getString(context.getContentResolver(),
         "android_id")`` 이고, 그 값이 ``a/b.java:85`` 에서 ``di`` 키로
         실립니다 — 이 SDK 는 AlienGuard 가 걸려 있지 않아 평문으로 읽힙니다.
-        옛 인용 ``AbstractC1228a.java:16`` 은 6.5.0 난독화 이름이고 7.0.6 에
-        그 경로가 없습니다(줄 번호도 16 이 아니라 15).
     ``KORAIL_DYNAPATH_OS_VERSION``
         ``Build.VERSION.RELEASE``. 예: ``"15"``. SDK 정수가 아닙니다.
     ``KORAIL_DYNAPATH_DEVICE_MODEL``

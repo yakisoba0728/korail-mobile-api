@@ -4,9 +4,7 @@
 
 """로그인 비밀번호 변환.
 
-6.5.0 인용(``S4/C0812l.java`` 의 ``encryptAES`` + ``F4/a.java`` 의
-``encryptBase64``)은 스테일하지만 실질은 7.0.6 에서 확인됐습니다:
-``LoginRepositoryImpl.java:929-931,1245`` (로그인 비밀번호 이중 Base64,
+7.0.6 근거: ``LoginRepositoryImpl.java:929-931,1245`` (로그인 비밀번호 이중 Base64,
 ``AppSuitLinker2.AAISCVWJBPDORLBWPVALUHGTIELXZNGS`` →
 ``android.util.Base64.encodeToString(byte[], int)``) 와
 ``AESCrypto.java:182`` (내부 AES 암호문 인코딩). 안쪽과 바깥쪽이 쓰는
@@ -32,9 +30,7 @@ def _aes_cbc_pkcs7_encrypt(plaintext: bytes, key: bytes, iv: bytes) -> bytes:
 
 def _base64_no_wrap(data: bytes) -> str:
     """``Base64.encodeToString(..., NO_WRAP)`` — flag 2, 표준 ``+/`` 알파벳,
-    줄바꿈 없음. ``F4/a.java:47`` 은 6.5.0 시절 난독화 이름이고 그 경로는
-    7.0.6 디컴파일에 없습니다 — ``F4`` 라는 최상위 패키지 자체가 jadx/smali
-    어디에도 없으므로 철회된 인용입니다. 7.0.6 에서는
+    줄바꿈 없음. 7.0.6 에서는
     ``AESCrypto.java:182`` 의 ``Base64.encodeToString(cipherBytes, 2)`` —
     AES 암호문 바이트를 직접 감싸는 **안쪽** 인코딩이다
     (:func:`transform_login_password` 참고)."""
@@ -59,10 +55,8 @@ def _android_base64_url_safe_wrapped(data: bytes) -> str:
     (``AESCrypto.java:182``, ``DisabilityViewModel.java:314``,
     ``PayViewModel.java:11001``, ``:11022``)과 flag 8 네 곳
     (``LoginRepositoryImpl.java:931``, ``:1245``,
-    ``CryptoWithKeyStore.java:308``, ``:310``)으로 갈린다. (이전 주석은
-    "다른 세 호출부가 전부 플래그 2" 라고 적었는데, 호출부 수를 적게 셌고
-    ``CryptoWithKeyStore`` 의 flag 8 두 곳을 빠뜨린 것이었다 — 다만 **로그인
-    비밀번호 경로에서 안쪽이 2·바깥쪽이 8** 이라는 결론 자체는 그대로다.)
+    ``CryptoWithKeyStore.java:308``, ``:310``)으로 갈린다. **로그인
+    비밀번호 경로에서는 안쪽이 2·바깥쪽이 8** 이다.
     """
     b64 = base64.urlsafe_b64encode(data).decode("ascii")
     lines = [b64[i : i + 76] for i in range(0, len(b64), 76)]
@@ -92,10 +86,6 @@ def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
     - 바깥쪽: 안쪽 결과 문자열의 UTF-8 바이트에
       :func:`_android_base64_url_safe_wrapped` — URL_SAFE 알파벳
       (``-``/``_``) 이면서 76자마다 줄바꿈(DEFAULT 와 같은 wrap).
-
-    이전 구현은 이 둘의 wrap/알파벳 배정이 정확히 반대였다(안쪽이 76자
-    wrap+표준, 바깥쪽이 NO_WRAP+표준) — AES 암호문에 ``+``/``/`` 가 하나라도
-    들어가면 최종 ``txtPwd`` 가 앱과 달라지는 결함이었다.
 
     **``key`` 가 빈 경우** — 7.0.6 에는 암호화를 건너뛰고 평문을 보내는
     분기가 없다. ``LoginRepositoryImpl`` 은 ``key.length()==0`` 이면
