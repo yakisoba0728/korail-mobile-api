@@ -3,7 +3,10 @@
 저장소 루트에서 실행하는 **독립 점검 스크립트**입니다. 테스트 스위트가
 아닙니다 — pytest 도 수집도 없고, 각자 혼자 돌아갑니다.
 
+합격 기준은 `ACCEPTANCE.md` 입니다. 감사는 그 문서만 기준으로 합니다.
+
 ```sh
+python3 checks/contract_api.py         # G6·G8·G9·G10, 실패하면 exit 1
 python3 checks/masking_invariants.py   # 실패하면 exit 1
 python3 checks/masking_mutants.py      # 위 하네스가 비어 있지 않은지
 python3 checks/sphinx_symbols.py       # 실패하면 exit 1
