@@ -158,11 +158,11 @@ class MaasMenuItem:
         return (
             self.active == "Y"
             and self.menu_type != "N"
-            # ``appData`` 가 ``"N"`` 일 때만 역 목록이 비어 있습니다. 예전에는
-            # ``{"Y", "M10", "M30"}`` 허용 목록이었는데, 그 목록에 없는 값이
-            # 실제로 옵니다 — 2026-09-22 라이브: ``appData='C'``(부가서비스
-            # 코드 ``604``)가 ``get_maas_station_data`` 로 역 15개를 돌려주는데
-            # 이 속성은 거짓이었습니다. 같은 호출에서 ``'N'``(코드 ``001``)만
+            # ``appData`` 가 ``"N"`` 일 때만 역 목록이 비어 있습니다. 허용
+            # 목록으로 두지 않는 것은 ``{"Y", "M10", "M30"}`` 밖의 값이
+            # 실제로 오기 때문입니다 — 2026-09-22 라이브: ``appData='C'``(부가서비스
+            # 코드 ``604``)가 ``get_maas_station_data`` 로 역 15개를 돌려줬습니다.
+            # 같은 호출에서 ``'N'``(코드 ``001``)만
             # 0개였고, ``'Y'``/``'M30'`` 은 25~111개였습니다.
             and self.app_data not in (None, "", "N")
             and isinstance(self.additional_service_code, str)
@@ -346,8 +346,7 @@ class TrainSearchQuery:
     ``"EMPTY","ALL","KTX",...``). **다만 ``trnGpCd`` 값 ``"109"`` 자체는 7.0.6 에서
     읽을 수 없습니다**: 생성 인자가 ``AlienGuard1789016769018.method_name_4(...)``
     호출이고 ``TrainGroup.smali`` 에는 ``const-string`` 이 한 줄도 없습니다(전수
-    확인). 따라서 이 숫자는 실서버 관측에 기댑니다. 옛 인용 ``K4/s.java:5`` 는
-    6.5.0 잔재로 7.0.6 에 그 경로가 없습니다. ``include_srt`` 는
+    확인). 따라서 이 숫자는 실서버 관측에 기댑니다. ``include_srt`` 는
     ``ebizCrossCheck``/``srtCheckYn`` 한 쌍을 ``"Y"`` 로 만듭니다 — 앱은 이
     둘을 항상 같은 값으로 보냅니다.
 
@@ -386,8 +385,7 @@ def _train_scalar(value: Any, key: str) -> str | None:
     KORAIL 은 APK 가 ``String`` 으로 선언한 필드를 둘 중 어느 쪽으로 보낼지
     일관되지 않습니다.
 
-    **"이 행은 Gson 이 읽는다"는 옛 설명은 철회합니다.** 7.0.6 의 이 응답은
-    Gson 이 아니라 kotlinx-serialization 으로 읽힙니다. 라우트는
+    7.0.6 의 이 응답은 Gson 이 아니라 kotlinx-serialization 으로 읽힙니다. 라우트는
     ``network/NetworkApi.java:658-660`` 의 ``postScheduleView`` 이고
     (``@FormUrlEncoded`` ``@POST(".../seatMovie.ScheduleView")`` →
     ``Response<TrainScheduleOut>``), 행 DTO
@@ -401,8 +399,7 @@ def _train_scalar(value: Any, key: str) -> str | None:
     ``StringSerializer.INSTANCE`` 로 ``:439-445`` 에서 원소마다 디코드합니다.
     ``network/`` 아래 Gson 참조는 전수 grep 에서 0 건입니다.
 
-    **그래서 "앱도 JSON 숫자를 받아 준다"고는 더 이상 말하지 않습니다.**
-    그것을 정하는 것은 ``Json`` 의 ``isLenient`` 인데,
+    **앱도 JSON 숫자를 받아 주는지는 알 수 없습니다.** 그것을 정하는 것은 ``Json`` 의 ``isLenient`` 인데,
     ``network/di/NetworkModule.java:862``(``providesNetworkJson``)와
     ``network/NetworkServiceKt.java:29`` 의 ``setLenient(...)`` 인자가 둘 다
     AlienGuard 암호문이라 켜졌는지 읽을 수 없습니다. 읽히는 것은 구조뿐입니다
@@ -412,7 +409,7 @@ def _train_scalar(value: Any, key: str) -> str | None:
 
     따라서 아래의 관대함은 앱 재현이 아니라 **이 패키지의 정책**입니다.
     ``"h_dpt_tm": 63000`` 으로 온 행을 거부하면 실제로 예약 가능한 열차가
-    목록에서 사라지므로 받아서 문자열로 정규화합니다 — 정책은 그대로 둡니다.
+    목록에서 사라지므로 받아서 문자열로 정규화합니다.
 
     둘을 받는 것이 아무거나 받는 것은 아닙니다. ``bool``, ``float``, 리스트,
     객체는 여전히
@@ -502,20 +499,18 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
     #: 전체의 예약가능 여부를 정하는 최상위 플래그(등급별
     #: ``*_reservation_flag`` 와 별개).
     ("reservation_available_flag", "h_rsv_psb_flg", None),
-    # 잔여 문구는 ``h_gen_rsv_nm``/``h_spe_rsv_nm`` 입니다. 예전에는 이 두
-    # 필드가 ``h_rsv_psb_nm``/``h_spe_rsv_psb_nm`` 를 읽었는데, 그 둘은 문구가
+    # 잔여 문구는 ``h_gen_rsv_nm``/``h_spe_rsv_nm`` 입니다.
+    # ``h_rsv_psb_nm``/``h_spe_rsv_psb_nm`` 는 이름과 달리 문구가
     # 아니라 **운임**입니다 -- 2026-09-22 라이브(서울→부산 20260925) 확인:
     # 같은 행에서 ``h_gen_rsv_nm='매진'`` 인데 ``h_rsv_psb_nm='47,500원'``.
-    # 이름·docstring 이 약속하던 ``"매진"``/``"좌석부족"`` 은 앞의 키에만 옵니다.
+    # ``"매진"``/``"좌석부족"`` 은 앞의 키에만 옵니다.
     ("general_availability_name", "h_gen_rsv_nm", None),
     ("special_availability_name", "h_spe_rsv_nm", None),
     #: ``h_stnd_rsv_nm``/``h_free_rsv_nm`` -- 입석·자유석 쪽의 같은 화면 문구.
     #: ``TrainScheduleOutTrainInfo.java:1380``/``:1196`` 의 ``@SerialName``
     #: 이고, 합성 생성자(``:172``)에서 이미 읽고 있던 일반실
     #: ``h_gen_rsv_nm``(str42)·특실 ``h_spe_rsv_nm``(str47) 바로 옆의
-    #: str51/str53 입니다. 이 둘이 빠져 있던 동안 입석·자유석은 위의
-    #: ``h_stnd_rsv_cd``/``h_free_rsv_cd`` 코드만 이름이 붙고 정작 화면에
-    #: 찍히는 글자는 ``raw`` 로만 닿았습니다.
+    #: str51/str53 입니다.
     ("standing_availability_name", "h_stnd_rsv_nm", None),
     ("free_availability_name", "h_free_rsv_nm", None),
     ("general_fare_text", "h_rsv_psb_nm", None),
@@ -567,8 +562,6 @@ class TrainSummary:
     **운임**이라 :attr:`general_fare_text`/:attr:`special_fare_text` 로
     따로 둡니다 — 2026-09-22 라이브(서울→부산 20260925)에서 한 행이
     ``h_gen_rsv_nm='매진'`` 과 ``h_rsv_psb_nm='47,500원'`` 을 동시에 줬습니다.
-    예전에는 이 두 키가 ``*_availability_name`` 으로 들어와 있어서, 문구를
-    읽는다고 믿고 쓰면 금액을 받았습니다.
 
     예약대기 가능 여부는 ``wait_reservation_flag`` 하나로 정해지며 값이
     :data:`~korail_mobile_api.constants.KORAIL_STANDBY_WAIT_FLAG` 와 같을
@@ -642,10 +635,9 @@ class TrainSummary:
     #: (``TrainScheduleOutTrainInfo.java:53,172,1112`` 의
     #: ``@SerialName("h_chg_trn_seq")``; 같은 키를 ``TrainList.java:35,234`` 도
     #: 선언합니다). **``"1"``/``"2"`` 라는 값의 뜻은 디컴파일이 아니라 아래 실서버
-    #: 관측에서 온 것입니다** — 옛 인용 ``RsvInquiryResponse.java:75`` 는 6.5.0
-    #: 잔재로 7.0.6 에 그 파일이 없습니다.
+    #: 관측에서 온 것입니다.**
     #:
-    #: 직통 검색에서 ``None`` 이라던 예전 주석은 틀렸습니다 — 직통도 서버가
+    #: 직통 검색에서도 ``None`` 이 아닙니다 — 직통도 서버가
     #: ``"1"`` 을 채워 보냅니다. 2026-09-22 라이브 직통 검색 6건(서울→부산
     #: 20260925 060000·000000, 서울→부산 20261015, 서울→동대구 20260927,
     #: 용산→목포 20260926, 동대구→서울 20260927)의 **모든** 행이
@@ -657,17 +649,14 @@ class TrainSummary:
     #: ``h_chg_trn_dv_cd``(:attr:`change_train_division_code`) 와 헷갈리기
     #: 쉽습니다. 이쪽은 여정 **안에서의 순서**, 저쪽은 여정 **종류**입니다.
     #:
-    #: 앱이 두 곳에서 그렇게 읽는다던 옛 서술(``u4/a.java:111-131`` 의 중복 제거,
-    #: ``RsvInquiryRequest.java:164-172`` 의 ``txtGoHour`` 되싣기)은 **7.0.6 에서
-    #: 재현되지 않습니다 — 미출처.** 두 경로 모두 7.0.6 에 없고,
-    #: ``getHChgTrnSeq()`` 를 DTO 밖에서 부르는 자리는 7.0.6 전체에 딱 하나
+    #: 앱이 이 필드로 페이지를 중복 제거하거나 ``txtGoHour`` 를 되싣는지는
+    #: **7.0.6 미출처입니다.** ``getHChgTrnSeq()`` 를 DTO 밖에서 부르는 자리는 7.0.6 전체에 딱 하나
     #: (``SRTWebReserveTrainItem.java:115-137``, SRT 웹 예약 항목 변환)뿐이며 그것도
     #: 비교·대입 리터럴이 AlienGuard 로 보호돼 있어 무엇과 견주는지 읽을 수
     #: 없습니다(전수 grep 확인). 즉 이 필드로 페이지를 중복 제거하거나 다음 질의를
     #: 만드는 7.0.6 근거는 없습니다.
     change_train_sequence: str | None = None
-    #: ``h_chg_trn_dv_cd`` — 행의 환승 구분. 직통 검색에서 ``None`` 이라던
-    #: 예전 주석은 틀렸습니다 — 직통 검색에서도 값이 옵니다. 2026-09-22
+    #: ``h_chg_trn_dv_cd`` — 행의 환승 구분. 직통 검색에서도 값이 옵니다. 2026-09-22
     #: 라이브에서 직통 6건(서울→부산 20260925 060000·000000, 서울→부산
     #: 20261015, 서울→동대구 20260927, 용산→목포 20260926, 동대구→서울
     #: 20260927)의 모든 행이 ``'1'``(같은 행의 ``h_chg_trn_dv_nm='직통'``),
@@ -678,9 +667,7 @@ class TrainSummary:
     #: 와 같은 자릿값이지만, 그 상수는 검색 job id 씨앗이라 여기서 쓰지
     #: 않습니다.
     #:
-    #: 이 필드를 앱이 널이면 직통으로 채워 되쓴다던 옛 서술
-    #: (``DirectInquiryActivity.java:194``)은 6.5.0 잔재입니다 — 그 클래스는
-    #: 7.0.6 에 없고, ``h_chg_trn_dv_cd``/``getHChgTrnDvCd`` 는 7.0.6 전체
+    #: ``h_chg_trn_dv_cd``/``getHChgTrnDvCd`` 는 7.0.6 전체
     #: 소스·스몰리를 뒤져도 DTO 선언 밖에서 읽히는 자리가 없습니다(전수
     #: grep 확인). 7.0.6 은 대신 서버가 준 ``h_trn_seq`` 로 행을 묶는 것으로
     #: 보입니다 — 자세한 근거와 한계는
@@ -692,9 +679,7 @@ class TrainSummary:
     #: ``@SerialName("h_yms_apl_flg")``).
     #:
     #: **"이 행이 병합 대상인지를 정하는 유일한 입력"이라는 서술은 7.0.6 에서
-    #: 뒷받침되지 않습니다 — 미출처.** 근거로 적혀 있던 ``S4/J.java:61-63``
-    #: ``isMixedSeat(객실등급, 플래그)`` 와 ``a5/u.java:378-380`` 은 둘 다 7.0.6 에
-    #: 없는 경로입니다. 이름이 같은 함수는 남아 있는데(``SeatHelper.java:288-327``
+    #: 뒷받침되지 않습니다 — 미출처.** 이름이 맞는 함수는 있는데(``SeatHelper.java:288-327``
     #: ``isMixedSeat(String seatClass, String standingSeatCode)``) 두 번째 인자가
     #: yms 플래그가 아니라 **입석 좌석 코드**로 이름 붙어 있고, 비교 리터럴은
     #: AlienGuard 로 보호돼 있으며, 7.0.6 소스·스몰리 전체에 이 함수를 부르는 자리가
@@ -749,11 +734,7 @@ class TrainSummary:
             # 좌석 조회 폼이 넘길 수 있게 열차 행에서 상품번호
             # (h_gd_no / txtGdNo)를 붙잡아 둔다. 7.0.6 도 이 라우트에 txtGdNo
             # 자리를 두고 있다(TrainResearchIn.java:68 의
-            # @SerialName("txtGdNo"), 직렬화 조건은 :275-278). 다만 옛 주석이
-            # 적었던 "x4/b.java:23 이 trainInfo.getTxtGdNo() 에서 가져온다"는
-            # 6.5.0 시절 난독화 이름이고 7.0.6 디컴파일에 그 경로가 없다(x4
-            # 최상위 패키지가 jadx/smali 어디에도 없음) — 철회된 인용이다.
-            # 좌석 재고 요청을 만드는 7.0.6 자리는
+            # @SerialName("txtGdNo"), 직렬화 조건은 :275-278). 좌석 재고 요청을 만드는 7.0.6 자리는
             # TrainSeatMapViewModel.java:1974-1976 의
             # buildTResidualSeatsResearch(TrainResearchOutCarInfo,
             # TrainResearchIn) 이고, :1975 가 trainResearch.getTxtGdNo() 를 읽어
@@ -925,22 +906,17 @@ class TrainSearchMetadata:
     #: ``TrainScheduleIn.java:95`` 의 ``@SerialName`` 순서대로
     #: ``qryStNo``/``qryStTrnNo``/``qryStTrnNo2`` — 로 넘깁니다.
     #:
-    #: **옛 서술의 "둘 다 비어 있지 않을 때만"은 7.0.6 의 분기 조건이 아닙니다.**
     #: 같은 스몰리 블록에서 직통형과 환승형을 고르는 것은 두 값의 공백 여부가 아니라
     #: ``:35654-35698`` 에서 ``getStrJobId()`` 의 결과를 보호된 리터럴과 견주고
     #: 그 결과를 뒤집은 값입니다 — 즉 서버가 되돌려 준 ``strJobId`` 를 보고
     #: 갈라집니다(그 리터럴의 평문은 AppSuit 보호로 읽히지 않습니다).
     #:
-    #: 예전에 이 자리를 ``!areEqual(...)`` 라고 적었는데 **호출 대상을 과하게
-    #: 특정한 것**이었습니다. 스몰리에 있는 것은 ``Intrinsics.areEqual`` 이
-    #: 아니라 수신자가 ``null`` 인 ``AppSuitLinker1.djsflxlftm1`` 반사 호출이고,
+    #: 비교는 ``Intrinsics.areEqual`` 이 아니라 수신자가 ``null`` 인
+    #: ``AppSuitLinker1.djsflxlftm1`` 반사 호출이고,
     #: 인자 둘을 받아 ``Boolean`` 을 돌려줄 뿐 실제 콜리는 인덱스 뒤에
-    #: 가려집니다. 줄 범위도 ``:35651`` 이 아니라 ``:35654`` 부터입니다 —
-    #: ``:35651`` 은 앞 블록의 ``return-object`` 입니다(2026-09-23 확인).
+    #: 가려집니다(2026-09-23 확인).
     #:
-    #: 옛 인용 ``b5/c.java:192-194`` /
-    #: ``RsvInquiryRequest.java:212-215`` 는 둘 다 7.0.6 에 없는 경로입니다. 이
-    #: 패키지가 여전히 "둘 다 비었으면 직통 커서" 규칙을 쓰는 이유는 실서버에서
+    #: 이 패키지가 "둘 다 비었으면 직통 커서" 규칙을 쓰는 이유는 실서버에서
     #: 검증된 동작이기 때문이며, 앱과의 차이는
     #: :meth:`TransferSearchResult.next_page` 에 적어 두었습니다.
     next_preceding_train_no: str | None = None
@@ -950,8 +926,7 @@ class TrainSearchMetadata:
     #: (``TrainScheduleOut.java:32,67,196`` 의 ``@SerialName("h_notice_msg")``).
     #: 7.0.6 은 이 값이 비어 있지 않으면 그대로 경고 대화상자로 띄웁니다
     #: (``TrainScheduleViewModel.smali:36742-36786`` — ``getHNoticeMsg()`` 길이
-    #: 검사 후 ``ScreenViewModel.alert$default``). 옛 인용
-    #: ``RsvInquiryResponse.java:12`` 는 6.5.0 잔재로 7.0.6 에 없습니다.
+    #: 검사 후 ``ScreenViewModel.alert$default``).
     notice_message: str | None = None
     # 7.0.6 TrainScheduleOut 이 셋 다 선언한다.
     first_seat_count: str | None = None
@@ -977,10 +952,7 @@ class TrainSearchContinuation:
     ``TrainScheduleIn.java:95`` 의 ``@SerialName`` 순서대로
     ``qryStNo``/``qryStTrnNo``/``qryStTrnNo2`` — 에 넣습니다.
 
-    **``pgPrCnt`` 는 그 3튜플에 자리가 없습니다.** 옛 서술은 되싣는 것이
-    ``qryStNo``/``qryStTrnNo``/``pgPrCnt`` 라고 적었지만(인용
-    ``b5/c.java:367-371``, ``:184-194``, ``RsvInquiryRequest.java:174-177``,
-    ``:207-210`` — 모두 7.0.6 에 없는 경로), 7.0.6 의 연속 경로는 ``pgPrCnt``
+    **``pgPrCnt`` 는 그 3튜플에 자리가 없습니다.** 7.0.6 의 연속 경로는 ``pgPrCnt``
     (``TrainScheduleIn`` 37번 요소)를 건드리지 않습니다. 이 클래스의
     ``page_count`` 를 :func:`~korail_mobile_api.payloads.build_train_search_form`
     이 전선에 싣지 않는 것이 그 때문입니다.
@@ -1036,9 +1008,8 @@ def _train_search_continuation(
 class TrainSearchResult:
     """직통 열차 검색 한 페이지.
 
-    ``trains`` 가 그 페이지의 행입니다. 비어 있을 수 있습니다 — 예전 서술
-    ("직통이 없으면 빈 목록이 아니라 예외")은 두 경우 중 하나만 말한 것이라
-    틀렸습니다. 서버는 이렇게 갈립니다(2026-09-22 확인):
+    ``trains`` 가 그 페이지의 행입니다. 비어 있을 수 있습니다 — 직통이 없을
+    때 서버는 이렇게 갈립니다(2026-09-22 확인):
 
     * ``WRD000061`` — 직통은 없지만 **환승 대안이 있는** 경우.
       :class:`~korail_mobile_api.errors.KorailNoDirectTrainError` 가
@@ -1088,7 +1059,7 @@ class TrainSearchResult:
         ``:36786``(``if-eqz`` → 커서 ``null``)입니다. 비교 리터럴이 AppSuit 로
         보호돼 있어 그 값이 ``"Y"`` 라는 것은 실서버 관측에서 왔습니다. 7.0.6 은
         파싱된 행 목록이 비어 있을 때도 커서를 만들지 않습니다(``:36790-36806``).
-        옛 인용 ``b5/c.java:381-387`` 은 7.0.6 에 없는 경로입니다. 커서 필드가 하나라도
+        커서 필드가 하나라도
         빠져 있어도 ``None`` 입니다. 반쯤 채운 커서는 조용히 1페이지를 다시
         요청하기 때문입니다.
         """
@@ -1154,9 +1125,8 @@ class TransferItinerary:
     마지막 행은 버립니다. 이 위치 짝짓기는 이 패키지의 정책이지 앱의 동작이
     아닙니다. 아래에 둘을 갈라 적습니다.
 
-    **앱이 하는 것 — 키 그룹핑.** 위치 기반 짝짓기의 근거였던
-    ``a5/k.java:142-172`` / ``:108-110`` 은 7.0.6 에 없습니다 — 그 경로 자체가
-    없습니다. 7.0.6 이 하는 것은 위치가 아니라 키 기준 그룹핑입니다:
+    **앱이 하는 것 — 키 그룹핑.** 7.0.6 이 하는 것은 위치가 아니라 키 기준
+    그룹핑입니다:
     ``TrainScheduleViewModel.smali`` 의 ``responseTrainSchedule``
     (선언 ``:34670``, 이 구간 전체가 그 메서드 안 — 사이에 ``.end method`` 가
     없습니다)이 ``:36958-36960`` 에서 ``LinkedHashMap`` 을 만들고, ``:37003``
@@ -1202,8 +1172,7 @@ class TransferItinerary:
         ``None`` 은 파싱 실패가 아니라 진짜 답입니다 — 한 역에 내려 다른 역에서
         타는 여정이 실제로 옵니다. **"앱도 두 이름을 각각 찍고 같을 때만 하나로
         합친다"는 서술의 뒷절반(합치기 규칙)은 7.0.6 에서 확인하지 못했습니다 —
-        미출처.** 옛 인용 ``a5/u.java:947-956`` 은 7.0.6 에 없는 경로입니다. 7.0.6
-        에서 볼 수 있는 것은 앞절반뿐입니다: 여정 화면이 구간마다
+        미출처.** 7.0.6 에서 볼 수 있는 것은 앞절반뿐입니다: 여정 화면이 구간마다
         ``JourneyStationRow(hDptRsStnNm, hArvRsStnNm)`` 으로 출발·도착 이름을 따로
         그립니다(예: ``com/korail/talk/ui/component/atomic/DialogsKt.java:170668``,
         ``:170678``). 환승역 이름을 하나로 합치는 자리는 찾지 못했으므로, 아래
@@ -1236,10 +1205,7 @@ def pair_transfer_itineraries(
     넘어갑니다.
 
     표시가 아예 없는 응답도 받아들여 행의 위치로 짝짓습니다. **이 홀짝-위치
-    방식은 이 패키지의 정책이고, 앱이 그렇게 한다는 근거는 없습니다.** 예전에
-    그 근거로 들었던 ``DirectInquiryActivity.java:194-195``/
-    ``TransferInquiryActivity.java:44`` 는 둘 다 6.5.0 잔재입니다 — 7.0.6
-    디컴파일 어디에도 없습니다.
+    방식은 이 패키지의 정책이고, 앱이 그렇게 한다는 근거는 없습니다.**
 
     앱이 하는 것은 :class:`TransferItinerary` 의 docstring 에 적은 대로 키
     그룹핑입니다 — ``TrainScheduleViewModel.smali`` 의 ``responseTrainSchedule``
@@ -1289,9 +1255,8 @@ class TransferSearchResult:
     확인됩니다 — ``TrainScheduleViewModel.smali`` 의 ``responseTrainSchedule``
     (선언 ``:34670``)이 ``:35740-35786`` 에서 ``trn_infos.trn_info`` 를 그대로 훑어
     ``ArrayList`` 를 만들고, ``:37003-37050`` 에서 같은 행들을 ``h_trn_seq`` 키로
-    묶은 맵을 따로 만듭니다. **다만 옛 인용 ``a5/k.java`` 의 ``f236n``/``f237o``
-    라는 두 필드는 7.0.6 에 없습니다** — 그 경로가 없고, 묶는 방식도 ``i * 2``
-    인덱싱이 아니라 키 그룹핑입니다.
+    묶은 맵을 따로 만듭니다. 묶는 방식은 ``i * 2`` 인덱싱이 아니라 키
+    그룹핑입니다.
     """
 
     itineraries: list[TransferItinerary]
@@ -1309,8 +1274,7 @@ class TransferSearchResult:
         채웁니다 — 7.0.6 근거는 ``TrainScheduleViewModel.smali:36806-36845``
         (환승형 ``Triple(getHQryStNoNext(), getHPrcdTrnNoNext(),
         getHEctbTrnNoNext())``)과 그것을 ``qryStNo``/``qryStTrnNo``/``qryStTrnNo2``
-        로 옮기는 ``TrainScheduleViewModel.java:7340`` 입니다. 옛 인용
-        ``RsvInquiryRequest.java:212-215`` 는 7.0.6 에 없습니다.
+        로 옮기는 ``TrainScheduleViewModel.java:7340`` 입니다.
 
         **아래의 "둘 다 비어 있지 않을 때만"은 앱의 조건이 아니라 이 패키지의
         조건입니다.** 7.0.6 이 환승형과 직통형 커서를 고르는 기준은 두 값의 공백

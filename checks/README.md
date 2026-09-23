@@ -9,6 +9,3 @@ python3 checks/contract_api.py   # G9·G10·G11
 
 종료 코드: **0 = 통과, 1 = 실패 발견, 2 = 검사 불완전**(패키지 import 실패, 검사기 자신의
 예상 못 한 예외). 네트워크를 쓰지 않습니다. 패키지를 import 하므로 `httpx` 는 필요합니다.
-
-G8 차등 검사와 문서 검사기들(`sphinx_symbols`·`decompile_citations`·`selftest/`)은
-2026-09-23 에 지웠습니다. 이유는 `ACCEPTANCE.md` §5 에 있습니다.

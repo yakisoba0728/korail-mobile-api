@@ -144,7 +144,7 @@ def g9() -> None:
     check("G9", isinstance(error, KorailProtocolError), f"raw 없음: {type(error).__name__}")
     check("G9", getattr(error, "raw", None) == FULL, f"raw 없음 .raw={show(getattr(error, 'raw', None))}")
 
-    # 2) raw 를 **이미 일부로** 채운 예외들(최종 감사 C27/C39). ``.raw`` 는 받은 응답
+    # 2) raw 를 **이미 일부로** 채운 예외들. ``.raw`` 는 받은 응답
     #    전체여야 하고, 파서가 넣었던 일부는 ``.parser_raw`` 에 남아야 합니다.
     for label, make in _partial_raw_errors():
         prototype = make()
@@ -161,8 +161,8 @@ def g9() -> None:
         check("G9", getattr(error, "parser_raw", None) == PARTIAL,
               f"부분 raw {label}: .parser_raw={show(getattr(error, 'parser_raw', None))}")
 
-    # 3) 이 패키지의 예외가 아닌 것. ``except KorailApiError`` 만 있던 경계를 그대로
-    #    빠져나가 ``.raw`` 가 없었습니다(최종 감사 C11).
+    # 3) 이 패키지의 예외가 아닌 것. ``except KorailApiError`` 만 있는 경계는 이것을
+    #    그대로 내보내 ``.raw`` 가 없게 됩니다.
     def foreign_parser(_raw: object) -> object:
         raise ValueError("synthetic non-package failure")
 

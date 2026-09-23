@@ -4,9 +4,7 @@
 
 """앱 디컴파일에서 읽은 상수 — 엔드포인트, 기기 기본값, 코드값.
 
-이 모듈의 근거는 **7.0.6** 기준으로 다시 유도했습니다. 예전에는 첫 줄이
-"v6.5.0 디컴파일에서 읽은" 이라고 말했는데, 그 트리는 더 이상 디스크에 없고
-본문의 인용은 이미 7.0.6 으로 옮겨졌습니다 — 헤더만 옛 말을 하고 있었습니다.
+이 모듈의 근거는 **7.0.6** 기준입니다.
 7.0.6 에서 대응물을 찾지 못한 값은 그 자리에 **미출처**라고 적혀 있습니다.
 
 각 값 옆에 근거가 ``파일:줄`` 로 붙어 있습니다 — 대부분 APK 정적 분석입니다.
@@ -18,10 +16,9 @@
 근거이지 추측이 아니지만, "APK 근거" 는 아닙니다.
 닫힌 코드 집합은 :class:`StrEnum` 으로 둡니다.
 
-7.0.6 재인용 규칙
------------------
-아래 인용 중 상당수는 2026-09-22 감사에서 6.5.0 잔재(7.0.6 디컴파일에 존재하지
-않는 클래스)로 판정돼 다시 유도한 것입니다. 7.0.6 은 AlienGuard/AppSuit 문자열
+7.0.6 인용 규칙
+---------------
+7.0.6 은 AlienGuard/AppSuit 문자열
 난독화를 쓰므로 코틀린 **속성/필드/enum 이름과 ``@SerialName`` 은 읽히지만
 리터럴 문자열 값은 읽히지 않습니다**(``AlienGuard1789016769018.method_name_*``
 런타임 복호화). 그래서 값 근거를 다음 세 등급으로 나눠 적었습니다.
@@ -37,8 +34,7 @@
   않으므로(같은 길이 후보가 여럿이면 못 가림), 그 경우 필드 **이름**이
   나머지를 맡습니다.
 * **미출처** — 7.0.6 에 대응 근거가 없음. 실서버로 확인된 값이면 그렇게
-  적고, 6.5.0 기원은 구버전 APK 없이 확정 불가라고 적습니다. 지어낸 인용을
-  붙이지 않습니다.
+  적습니다. 지어낸 인용을 붙이지 않습니다.
 """
 
 from enum import StrEnum
@@ -56,15 +52,13 @@ KORAIL_TIMEOUT_SECONDS = 60.0
 #: ``st`` 필드는 별도 리터럴 ``"Android"``(``a/b.java:117``). **읽힘** —
 #: DynaPath SDK 내부(``a``/``b`` 패키지)에는 AlienGuard 가 걸려 있지 않아
 #: ``linkedHashMap.put("st", new String[]{"Android"})`` 가 그대로 보입니다.
-#: 옛 인용 ``b/C1229b.java:132``/``C1229b.java:135`` 는 6.5.0 난독화 이름으로,
-#: 7.0.6 디컴파일에 그 경로가 없습니다. 7.0.6 의 같은 SDK 는
-#: ``kr.scripters.dynapath.sdk.android.DynaPathMobileSDK``
+#: 이 SDK 는 ``kr.scripters.dynapath.sdk.android.DynaPathMobileSDK``
 #: (``DynaPathMobileSDK.java:31-52``, ``:64``)로 들어오고 토큰 조립은
 #: ``a/b.java:75-227`` 의 ``a()`` 입니다.
 KORAIL_DEFAULT_DEVICE_NAME = "Android"
 #: DynaPath ``os`` 필드 = ``Build.VERSION.RELEASE``(``a/b.java:109-112``;
 #: 키는 ``com.kakao.sdk.common.Constants.OS``, 그 값은 ``Constants.java:30``
-#: 의 ``"os"``). **읽힘.** 옛 인용 ``b/C1229b.java:128-131`` 은 6.5.0 잔재.
+#: 의 ``"os"``). **읽힘.**
 #: ``Build.VERSION.SDK_INT`` 와 다릅니다 — SDK 정수는 아래
 #: :data:`KORAIL_DEFAULT_ANDROID_SDK_INT`.
 KORAIL_DEFAULT_ANDROID_OS_RELEASE = "15"
@@ -84,9 +78,7 @@ KORAIL_DEFAULT_DEVICE_HEIGHT = 3120
 #: (코틀린 속성은 ``osVersion``, ``:34``)로 확인됩니다 — ``@SerialName`` 은
 #: 난독화가 안 걸려 **읽힘**. 라우트는 ``NetworkApi.java:315-321``
 #: (``POST /classes/com.korail.mobile.common.code.do``, ``postCommonCode`` 와
-#: ``postCommonCodeMulti`` 두 선언). 옛 인용 ``CommonService.java:32`` 의
-#: ``@Field("OSVersion")`` 은 Retrofit v1 시절 표기이고 그 클래스는 7.0.6
-#: 디컴파일에 없습니다. 어느 쪽이든 **필드명 근거일 뿐**입니다 — 37 자체의 근거는
+#: ``postCommonCodeMulti`` 두 선언). 이것은 **필드명 근거일 뿐**입니다 — 37 자체의 근거는
 #: 실기기 샘플입니다: ``summary.tsv:5``(``sdk 37``),
 #: ``getprop.txt:1055``(``[ro.build.version.sdk]: [37]``) 로 교차
 #: 확인됩니다. 이 기기의 ``release`` 도 17 입니다(``summary.tsv:4``) —
@@ -101,12 +93,7 @@ def build_dalvik_user_agent(*, os_release: str, device_model: str) -> str:
     ``com/korail/talk/network/`` 어디에도 ``User-Agent`` 를 넣는
     ``addHeader``/``.header(...)`` 호출이 없습니다.
 
-    **옛 근거는 7.0.6 에 맞지 않습니다.** 이전 서술은 "Retrofit v1 을
-    ``HttpURLConnection`` 위에서 쓰므로(``ExecuteDao.java:7-11``) 플랫폼 기본
-    Dalvik 문자열이 나간다" 였습니다. ``ExecuteDao`` 는 6.5.0 시절 이름이고
-    7.0.6 디컴파일에 없습니다 — ``analysis/jadx/sources`` 와
-    ``analysis/apktool`` 전수 검색(basename·DEX 클래스명 모두) 0건이므로
-    철회된 인용입니다. 그리고 7.0.6 은 **Retrofit 2 + OkHttp** 스택입니다
+    7.0.6 은 **Retrofit 2 + OkHttp** 스택입니다
     (``network/di/NetworkModule.java:55-64`` 의 ``okhttp3.OkHttpClient`` /
     ``retrofit2.Retrofit`` import, ``:96`` ``provideApiService(Retrofit)``).
     OkHttp 의 기본 UA 는 ``okhttp3/internal/Util.java:87`` 의
@@ -116,8 +103,8 @@ def build_dalvik_user_agent(*, os_release: str, device_model: str) -> str:
     그런데도 이 함수가 만드는 Dalvik 모양을 그대로 두는 이유는 **실서버
     관측**입니다 — Python 패키지 이름이 든 UA 로는 로그인이 거절되고 이
     문자열로는 통과합니다. 즉 이 값은 "앱을 그대로 재현한 값" 이
-    아니라 "서버가 받아 주는 것을 확인한 값" 입니다. 원래 유도 근거(6.5.0 ``ExecuteDao``)는
-    디스크에 없으므로 **미출처**로 둡니다. 서버가 ``okhttp/4.12.0`` 도
+    아니라 "서버가 받아 주는 것을 확인한 값" 이고, APK 근거로는 **미출처**
+    입니다. 서버가 ``okhttp/4.12.0`` 도
     받아 주는지는 확인하지 않았습니다(라이브 호출 필요).
 
     끝의 ``Build/<id>`` 는 뺐습니다 — 기기 모델과 맞지 않는 빌드 id 를
@@ -165,13 +152,9 @@ class KorailSeatClass(StrEnum):
     ``TicketReservationInJrny.java:234`` 의 ``@SerialName("txtPsrmClCd")``
     (속성 ``txtPsrmClCd``, ``:44``)로 **읽힘**.
 
-    옛 인용 ``K4/o.java:7-9``(``GENERAL("일반실","1")``,
-    ``SPECIAL("특실","2")``)의 경로는 7.0.6 에 없습니다 — 6.5.0 잔재입니다.
-
-    ``ALL`` 은 검색 와일드카드이지 객실이 아니어서 여기에 없습니다. 옛 인용
-    ``u4/b.java:101`` 은 7.0.6 에 없고, 7.0.6 ``PsrmType`` 에도 ``ALL``
-    항목이 없으며 "전체" 를 뜻하는 ``psrmClCd`` 리터럴도 찾지 못했습니다 —
-    **미출처**. 이 enum 에 ``ALL`` 을 넣지 않는 선택 자체는 그대로 둡니다.
+    ``ALL`` 은 검색 와일드카드이지 객실이 아니어서 여기에 없습니다. 7.0.6
+    ``PsrmType`` 에도 ``ALL`` 항목이 없으며 "전체" 를 뜻하는 ``psrmClCd``
+    리터럴도 찾지 못했습니다 — **미출처**.
     """
 
     GENERAL = "1"
@@ -184,10 +167,7 @@ class KorailReservationJobType(StrEnum):
     넷 다 같은 경로로 갑니다 — 7.0.6 선언은
     ``NetworkApi.java:751-753``(``@FormUrlEncoded`` +
     ``@POST("/classes/com.korail.mobile.certification.TicketReservation")``
-    + ``postTicketReservation``). **읽힘.** 옛 인용
-    ``CertificationService.java:52-54`` 는 7.0.6 디컴파일에 없습니다 —
-    라우트가 같다는 것만 확인했고, 그 클래스의 필드/분기까지 같다는 뜻은
-    아닙니다.
+    + ``postTicketReservation``). **읽힘.**
 
     네 값은 모두 ``TicketReservationIn.txtJobId``
     (``TicketReservationIn.java:41``)로 실립니다.
@@ -204,29 +184,24 @@ class KorailReservationJobType(StrEnum):
       ``TicketReservationType``(``ui/screen/train/TicketReservationType.java``)
       의 ``DEFAULT``/``STAND``/``FREE`` 세 항목이 모두
       ``ReservationJobId.DEFAULT.getJobId()`` 를 재사용합니다(``:38-40``) —
-      즉 즉시예매·입석·자유석이 한 job id 를 씁니다. 옛 인용
-      ``C5/a.java:59``/``:118`` 은 7.0.6 에 없습니다.
+      즉 즉시예매·입석·자유석이 한 job id 를 씁니다.
     * :attr:`STANDBY`(``"1102"``) — 예약대기. 7.0.6:
       ``ReservationJobId.WAIT``(``ReservationJobId.java:21``) 와
       ``TicketReservationType.WAIT``(``TicketReservationType.java:41``,
       ``ReservationJobId.WAIT.getJobId()`` 를 넘김).
       순서(DEFAULT/WAIT/SEAT/MERGE, +새 5번째 ``GROUP_TICKET_SELECT``,
-      ``:24``)는 구 4종과 1:1로 대응합니다.
+      ``:24``)는 이 enum 의 네 값과 1:1로 대응합니다.
     * :attr:`SEAT_DESIGNATED`(``"1103"``) — 좌석 선택 결과. 7.0.6:
       ``ReservationJobId.SEAT``(``ReservationJobId.java:22``).
       ``TicketReservationType`` 에는 대응 항목이 **없습니다**(다섯 항목이
       DEFAULT/STAND/FREE/WAIT/MERGE) — 좌석지정은 화면 타입이 아니라 job id
-      로만 구분되는 것으로 보입니다. 옛 인용 ``C5/a.java:143-146`` 은 7.0.6
-      에 없습니다.
+      로만 구분되는 것으로 보입니다.
     * :attr:`MERGE_STANDING`(``"1202"``) — 입석+좌석. 7.0.6 대응은
       ``ReservationJobId.MERGE``(``ReservationJobId.java:23``)와
       ``TicketReservationType.MERGE``(``ui/screen/train/TicketReservationType.java:42``).
 
-      **이전 서술은 틀렸습니다.** "호출부는 이 값으로 홀드 응답의
-      ``h_jrny_tp_cd`` 를 확인해 병합 화면으로 보낼지 정한다
-      (``TrainScheduleViewModel.java:6774`` 등)" 고 적혀 있었지만,
-      ``TrainScheduleViewModel.java:6773-6779`` 가 실제로 비교하는 것은
-      **응답이 아니라 자기가 보낸 요청의 ``txtJobId``** 입니다:
+      병합 화면으로 보낼지는 홀드 응답이 아니라 **자기가 보낸 요청의
+      ``txtJobId``** 로 정합니다(``TrainScheduleViewModel.java:6773-6779``):
       ``txtJobId = ticketReservationIn2.getTxtJobId()``(``:6773``) 를
       ``TicketReservationType.MERGE.getJobId()``(``:6774``)와 견주어
       (``:6776``) 참이면 ``ReservationMergeRoute``(``:6777``), 아니면
@@ -235,8 +210,6 @@ class KorailReservationJobType(StrEnum):
       ``PayRoute``(``:6781``)로 갑니다. 응답 쪽 ``h_jrny_tp_cd`` 필드는
       따로 있고(``ReservationOutJrnyInfo.java:47``, ``@SerialName`` 은
       ``:365``), 이 분기는 그 필드를 읽지 않습니다.
-
-      ``a5/u.java`` 는 7.0.6 디컴파일 어디에도 없습니다 — 6.5.0 잔재입니다.
     """
 
     IMMEDIATE = "1101"
@@ -254,10 +227,8 @@ class KorailReservationJobType(StrEnum):
 #: (smali 전수 검색 결과 ``smali_classes6/.../TrainScheduleOutTrainInfo.smali``
 #: 하나) — 소비부는 전부 AppSuitLinker 리플렉션 디스패처를 거치므로
 #: " 9" 와 비교하는 분기를 정적으로 되찾을 수 없습니다.
-#: 옛 인용 ``smali/U4/a.smali:1250-1290``/``:1969-1981`` 은 6.5.0 난독화
-#: 이름이고 7.0.6 에 그 경로가 없습니다. 따라서 리터럴 " 9" 는 **미출처** —
-#: 실서버 동작으로는 맞게 쓰이고 있지만 원 근거는 구버전 APK 없이 확정
-#: 불가입니다. 앞의 공백은 실수가 아니라 원문 그대로입니다.
+#: 따라서 리터럴 " 9" 는 **미출처** — 실서버 동작으로는 맞게 쓰이고
+#: 있습니다. 앞의 공백은 실수가 아니라 원문 그대로입니다.
 KORAIL_STANDBY_WAIT_FLAG = " 9"
 
 #: 예약대기 확인 메시지 코드.
@@ -269,23 +240,17 @@ KORAIL_STANDBY_WAIT_FLAG = " 9"
 #: 뒷받침합니다.
 #:
 #: 다만 "이 코드에서만 예약대기 화면으로 넘어간다" 는 **분기** 주장은
-#: 7.0.6 에서 재확인하지 못했습니다 — 옛 인용
-#: ``ui/inquiry/rir/orr/a.java:222-225`` 의 경로가 없고, 7.0.6 의 대응
-#: 화면(``ui/screen/train/ReservationWaitViewModel.java``)에서 비교되는
+#: 7.0.6 에서 확인하지 못했습니다 — 대응 화면(``ui/screen/train/ReservationWaitViewModel.java``)에서 비교되는
 #: 코드 문자열은 AlienGuard 로 가려져 있습니다. 분기는 **미출처**.
 KORAIL_STANDBY_HOLD_MESSAGE_CODE = "IRR000014"
 
 #: 할인카드(N카드) 최대 구간 수.
 #:
-#: **미출처.** 옛 근거는 화면 클래스 이름의 개수
-#: (``NCard1~3SectionBookingActivity`` 에 넷째가 없음)와 ``K4/f.java:5-11``
-#: 이었습니다. 7.0.6 은 화면을 Compose 로 다시 짜서 그런 액티비티 이름이
-#: 아예 없고(``ui/screen/product/CheckUsageNCardSectionScreenKt.java``,
-#: ``ui/screen/myticket/reservation/NCardReservationViewModel.java`` 하나씩),
-#: ``K4/f.java`` 경로도 없습니다. 3 을 상한으로 두는 상수·배열·비교를
-#: 7.0.6 어디에서도 찾지 못했습니다. 값 자체는 유지하되(실동작과 어긋난
-#: 관측이 없음) 근거는 없다고 적어 둡니다 — 6.5.0 기원은 구버전 APK 없이
-#: 확정 불가.
+#: **미출처.** 7.0.6 의 N카드 화면은 Compose 로 하나씩
+#: (``ui/screen/product/CheckUsageNCardSectionScreenKt.java``,
+#: ``ui/screen/myticket/reservation/NCardReservationViewModel.java``)이고,
+#: 3 을 상한으로 두는 상수·배열·비교를 7.0.6 어디에서도 찾지 못했습니다.
+#: 실동작과 어긋난 관측이 없어 값을 둡니다.
 KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
 
 #: N카드 할인종류 코드.
@@ -302,21 +267,15 @@ KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
 #: 와이어 필드는 ``TicketReservationInPassengerInfo.txtDiscKndCd``
 #: (``TicketReservationInPassengerInfo.java:33``).
 #:
-#: 옛 인용 ``w4/a.java:100``(쓰는 쪽)과 ``t4/a.java:59-61``(읽는 쪽)의 경로는
-#: 7.0.6 에 없습니다. 다만 **판정 헬퍼 자체는 있습니다** --
-#: ``common/helper/DiscountHelper.java:818`` 의
+#: 판정 헬퍼는 ``common/helper/DiscountHelper.java:818`` 의
 #: ``public final boolean isNCard(String dcntKndCd)`` 가 넘겨받은 할인코드를
 #: ``ReqDiscount.N_CARD`` 와 비교합니다. 호출 예는
 #: ``common/helper/TCReservationRequestHelper.java:284`` 입니다 --
 #: ``STLjgf()``(``:221``) 안에서 ``DiscountHelper.INSTANCE``(``:274``)를 받아
 #: 할인코드 문자열 하나를 넘겨 부릅니다(``!discountHelper.isNCard(...)``).
-#: 옛 인용 ``MyTicketListOutReservation.java:809-813`` 은 호출 예가
-#: 아니었습니다 -- 그 줄은 같은 이름의 **무인자** 메서드 ``isNCard()`` 이고,
-#: 자기 ``ticketKind`` 를 ``TicketDefine.TicketKind.N_CARD`` 와 직접 비교할
-#: 뿐 이 한 인자짜리 헬퍼를 부르지 않습니다. 한때 여기 "코드값을 판정하는
-#: 헬퍼가 없다" 고 적었던 것은 틀렸습니다 -- 화면 라우트의 동명 불리언 인자
-#: (``ui/navigation/PassengerTypeChangeRoute.java:39``)만 보고 내린 결론이었고,
-#: 그 둘은 별개입니다.
+#: ``MyTicketListOutReservation.java:809-813`` 의 같은 이름 **무인자**
+#: 메서드 ``isNCard()`` 와 화면 라우트의 동명 불리언 인자
+#: (``ui/navigation/PassengerTypeChangeRoute.java:39``)는 이 헬퍼와 별개입니다.
 #:
 #: 비교 대상 ``ReqDiscount.N_CARD`` 의 실제 코드 리터럴은 AppSuit 로 보호돼
 #: 있어, 그것이 여기 적힌 ``"153"`` 과 같은지는 여전히 확인하지 못했습니다.
@@ -332,14 +291,12 @@ KORAIL_DISCOUNT_CARD_DISCOUNT_CODE = "153"
 #: (**길이 일치**). ``"A2"`` 라는 배정은 AlienGuard 로 가려져 재확인하지
 #: 못했습니다.
 #:
-#: **주의 — 이름이 갈라져 있습니다.** 옛 주석은 "좌석지정은 ``A2``"
-#: (``SeatAssignBookingActivity.java:159``, 7.0.6 에 없는 경로)를 근거로
-#: N카드 예약에 같은 값을 썼습니다. 그런데 7.0.6 은
+#: **주의 — 이름이 갈라져 있습니다.** 이 값은 좌석지정의 ``A2`` 와 같은
+#: 값을 N카드 예약에 씁니다. 그런데 7.0.6 은
 #: ``ReservationMenuId.SEAT_ASSIGN``(``:21``)과
 #: ``ReservationMenuId.N_CARD``(``:22``)를 **별개 항목**으로 둡니다. 둘의
 #: ``menuId`` 가 같은 값인지 다른 값인지는 리터럴이 보호돼 확인할 수
-#: 없습니다. 값은 손대지 않았지만, 두 메뉴 id 를 하나로 합쳐 쓰는 것이
-#: 맞는지는 **열린 문제**입니다.
+#: 없습니다. 두 메뉴 id 를 하나로 합쳐 쓰는 것이 맞는지는 **열린 문제**입니다.
 KORAIL_DISCOUNT_CARD_MENU_ID = "A2"
 
 
@@ -349,15 +306,12 @@ KORAIL_DISCOUNT_CARD_MENU_ID = "A2"
 #: ``public static final int MAX_COUNT = 9;`` — **읽힘**(정수 상수는
 #: AlienGuard 대상이 아님). 같은 클래스 ``:49`` 의 ``UNIT = 1`` 이 증감
 #: 단위이고, 인원은 ``dataMap``(``:50``, ``Map<PassengerType,Integer>``)에
-#: 유형별로 담깁니다 — 즉 9 는 **유형별 상한이 아니라 합계 상한**이라는
-#: 옛 서술과 구조가 맞습니다. 다만 "합계" 로 더하는 검증 함수 본문은
+#: 유형별로 담깁니다 — 즉 9 는 **유형별 상한이 아니라 합계 상한**으로
+#: 봅니다. 다만 "합계" 로 더하는 검증 함수 본문은
 #: ``Passengers.Companion.validation``(``:99-107`` 계열)이 AppSuitLinker
 #: 로 흩어져 있어 9 와 견주는 지점 자체는 정적으로 못 짚었습니다.
 #: 와이어에는 ``TicketReservationIn.txtTotPsgCnt``
 #: (``TicketReservationIn.java:54``)로 실립니다.
-#:
-#: 옛 인용 ``m5/d.java:32-33``(최소 0·최대 9)과 ``m5/c.java:250-252``
-#: (합계 상한)는 6.5.0 난독화 이름으로 7.0.6 에 그 경로가 없습니다.
 KORAIL_MAX_PASSENGERS_PER_RESERVATION = 9
 
 
@@ -367,11 +321,9 @@ KORAIL_MAX_PASSENGERS_PER_RESERVATION = 9
 # 7.0.6 정본: JourneyDefine.SequenceNo(common/define/JourneyDefine.java:22-26).
 #   DIRECT_SQ_NO   :25
 #   TRANSFER_SQ_NO :26
-# 옛 인용 K4/d.java:5-6 은 이 클래스의 6.5.0 난독화 이름이었고, 7.0.6 에는
-# 그 경로가 없습니다. 이름이 그대로 살아 있어 1:1 대응이 확실합니다.
 #
 # 각 항목은 (displayName, code) 를 들고 있고(:27-28), byte[] 길이가
-# 길이 일치로 옛 서술을 그대로 뒷받침합니다:
+# 길이 일치로 아래 값을 뒷받침합니다:
 #   DIRECT_SQ_NO   이름 12, displayName 6, code 1  → "직통"(UTF-8 6바이트), "1"
 #   TRANSFER_SQ_NO 이름 14, displayName 6, code 1  → "환승"(UTF-8 6바이트), "2"
 # 리터럴 자체는 AlienGuard 로 가려져 있지만, 한글 두 글자(6바이트)와 한 자리
@@ -379,8 +331,7 @@ KORAIL_MAX_PASSENGERS_PER_RESERVATION = 9
 #
 # 이 코드는 검색 job id, txtJrnyCnt, txtJrnySqno 씨앗으로 세 가지 일을 합니다.
 #
-# 세 자리 0 채움("001"/"002")은 미출처입니다. 옛 인용 S4/O.java:19-21 은 7.0.6
-# 에 없고, 자리를 받는 필드는 TicketReservationInJrny.txtJrnySqno
+# 세 자리 0 채움("001"/"002")은 미출처입니다. 자리를 받는 필드는 TicketReservationInJrny.txtJrnySqno
 # (TicketReservationInJrny.java:42, @SerialName 은 :226)로 확인되지만, 값을
 # 조립하는 쪽은 AppSuitLinker 리플렉션 뒤에 있어 padStart(3,'0') 에 해당하는
 # 코드를 7.0.6 에서 찾지 못했습니다(읽히는 padStart 호출은 모두 시각 2자리나
@@ -397,13 +348,10 @@ KORAIL_TRANSFER_ITINERARY_CODE = "2"
 # 조회는 findBy(String code)(:101).
 #   DIRECT   :87  이름 6,  displayName 6,  code 2  → "직통", "11"
 #   TRANSFER :88  이름 8,  displayName 6,  code 2  → "환승", "14"
-# 옛 인용 K4/e.java:6-7 / smali/K4/e.smali:40,:68 은 6.5.0 난독화 이름이고
-# 7.0.6 에 그 경로가 없습니다. 위 길이 일치(한글 두 글자 6바이트 + 두 자리
-# 코드 2바이트)와 이름 보존으로 K4/e → JourneyDefine.TypeCode 대응은
-# 확실합니다. "11"/"14" 배정 자체는 리터럴이 보호돼 재확인 못 함.
+# 길이 일치(한글 두 글자 6바이트 + 두 자리 코드 2바이트)까지는 확인됩니다.
+# "11"/"14" 배정 자체는 리터럴이 보호돼 재확인 못 함.
 #
-# "환승은 두 구간 모두 14"(옛 인용 C5/a.java:60, smali/C5/a.smali:306-338)는
-# 미출처입니다 — 두 경로 모두 7.0.6 에 없고, jrnyList
+# "환승은 두 구간 모두 14" 는 미출처입니다 — jrnyList
 # (TicketReservationIn.java:34)를 두 항목으로 채우는 코드는 AppSuitLinker
 # 뒤에 있어 배열 길이를 보고 값을 정하는 분기를 되찾지 못했습니다. 두 구간
 # 모두 이 값으로 보내면 서버가 받아들인다는 것은 실서버로 확인됐습니다.
@@ -417,19 +365,13 @@ KORAIL_TRANSFER_JOURNEY_TYPE_CODE = "14"
 # 의 나머지 두 항목 —
 #   STANDING_SEAT_1 :89  이름 15, displayName 13, code 2
 #   STANDING_SEAT_2 :90  이름 15, displayName 13, code 2
-# 옛 인용 smali/K4/e.smali:31-55 은 이 클래스의 6.5.0 난독화 이름입니다.
-# 길이 일치가 옛 서술과 정확히 맞습니다: "병합 선행"/"병합 후행" 은 UTF-8
-# 로 3+3+1+3+3 = 13바이트이고, "21"/"22" 는 2바이트입니다. 항목 이름
-# STANDING_SEAT_1/2 도 그대로 살아 있으므로 대응은 확실합니다. 리터럴
-# "21"/"22" 자체는 AlienGuard 로 가려져 재확인 못 함 — 다만 아래 실서버
-# 확인이 그 자리를 메웁니다.
+# 길이 일치: "병합 선행"/"병합 후행" 은 UTF-8 로 3+3+1+3+3 = 13바이트이고,
+# "21"/"22" 는 2바이트입니다. 리터럴 "21"/"22" 자체는 AlienGuard 로 가려져
+# 재확인 못 함 — 다만 아래 실서버 확인이 그 자리를 메웁니다.
 #
-# DirectInquiryActivity.java:576-601 (클라이언트가 두 여정을 루프로 만들고
-# txtJrnyCnt="2"/txtJobId="1101" 로 재제출한다는 옛 서술)는 6.5.0 잔재입니다
-# — 그 클래스 자체가 7.0.6 디컴파일 어디에도 없습니다. 7.0.6 정적분석
-# (ReservationMergeViewModel.smali:7223-7821, ticketReservation())으로 다시
-# 확인한 결과, 최종 재제출은 원래 입석 홀드 요청을 TicketReservationIn.copy()
-# 로 복제해 txtStndFlg 와 중간역 3개 필드만 바꾸는 것으로 보입니다 — 즉
+# 7.0.6 정적분석(ReservationMergeViewModel.smali:7223-7821,
+# ticketReservation())으로 보면, 최종 재제출은 원래 입석 홀드 요청을
+# TicketReservationIn.copy() 로 복제해 txtStndFlg 와 중간역 3개 필드만 바꾸는 것으로 보입니다 — 즉
 # jrnyList·txtJrnyCnt·txtJobId 는 원본(입석 홀드) 값 그대로 유지되고,
 # 클라이언트가 두 여정을 직접 조립하지 않을 가능성이 있습니다(jadx 디컴파일
 # 실패로 스몰리 재구성에 의존한 결과라 완전히 확정하지는 못했습니다). 다만
@@ -450,10 +392,7 @@ KORAIL_MERGE_TRAILING_JOURNEY_TYPE_CODE = "22"
 #: 그러나 ``hWaitRsvFlg`` 와 똑같이, 이 게터를 참조하는 곳은 smali 전수
 #: 검색에서 DTO 자신뿐입니다 — 소비부가 전부 AppSuitLinker 리플렉션을
 #: 거치므로 어느 객실 등급에 어느 플래그 집합이 붙는지를 정적으로 되찾을
-#: 수 없습니다. 옛 인용 ``S4/J.java:61-63``(일반실 ``{"A","G"}``, 특실
-#: ``{"A","S"}``)의 경로는 7.0.6 에 없습니다 — 이 표는 **미출처**입니다.
-#: (감사가 후보로 제시한 ``TrainInfo.java:25`` 는 클래스 선언 줄일 뿐이고
-#: ``h_yms_apl_flg`` 를 갖고 있지 않아 쓰지 않았습니다.)
+#: 수 없습니다 — 이 표는 **미출처**입니다.
 KORAIL_MERGE_SEAT_FLAGS_BY_CABIN = {
     "1": frozenset({"A", "G"}),
     "2": frozenset({"A", "S"}),
@@ -475,26 +414,17 @@ KORAIL_MERGE_SEAT_FLAGS_BY_CABIN = {
 #: ``txtSeatNo``/``txtSrcarNo`` — 선행 쪽 ``TicketReservationInSrcar.java:23``
 #: 의 ``:28-29`` 와 같은 모양), "trailing2" 나 셋째 접미사는 없습니다.
 #: 구간 수는 ``txtJrnyCnt``(``:42``)로 실립니다. 이름은 전부 **읽힘**.
-#:
-#: 옛 인용 ``OSeat.java:32-35``, ``OSrcar.java:21-30``
-#: (``i==1`` 분기만), ``ReservationRequest.java:114-117``(두 좌석만 읽음),
-#: ``a5/k.java:108-110``/``:156-170``(``new Bundle[2]``)은 넷 다 7.0.6
-#: 디컴파일에 그 경로가 없습니다 — 6.5.0 잔재입니다. 위 대응은 "이름이
-#: 비슷한 클래스" 가 아니라 라이브러리가 실제로 채우는 필드 집합으로
-#: 맞췄습니다. 감사가 후보로 준 ``PrcFareIn.java:27`` 은
-#: ``txtMenuId``(``:31``)만 겹칠 뿐 구간 수와 무관해 쓰지 않았습니다.
 KORAIL_MAX_JOURNEY_LEGS = 2
 
 # ---------------------------------------------------------------------------
 # NetFunnel — 가상 대기열. 호스트가 따로.
 #
-# 옛 인용 KTApplication.java:79-85 는 7.0.6 디컴파일에 없습니다. 같은 일을
-# 하는 7.0.6 자리는 둘입니다.
+# 7.0.6 근거는 두 자리입니다.
 #
 # (1) 선언: com/korail/talk/common/NetworkConstants.java 의 중첩 object
 #     Netfunnel(:80-99). 정수는 그대로 읽힙니다:
 #       PORT    = 443   (:82)   ← https 기본 포트
-#       RETRY   = 1     (:83)   ← 6.5.0 서술에 없던 항목
+#       RETRY   = 1     (:83)
 #       TIMEOUT = 3     (:84)   ← 아래 타임아웃 상수의 직접 근거
 #     문자열은 AlienGuard 로 보호됐지만 byte[] 길이가 전부 맞습니다
 #     (길이 일치):
@@ -527,10 +457,9 @@ KORAIL_MAX_JOURNEY_LEGS = 2
 # 의 query_ = "ts.wseq"(SDK 기본값이며 KORAIL 이 덮어쓰지 않음). 같은 파일
 # :18 의 service_id_ = "service_1" 도 평문인데, 이것은 SDK 기본값이 마침
 # KORAIL 의 값과 같다는 뜻입니다 — 위 (1)/(2) 의 길이 9 와도 맞습니다.
-# 옛 인용 T6/h.java:31 이 이 Property 의 6.5.0 이름입니다.
 #
-# 앞의 슬래시는 SDK 가 붙입니다. 옛 인용 U6/c.java:26-33 에 해당하는 7.0.6
-# 자리는 com/netfunnel/api/http/URL.java 로, URL.make(Property)(:135-137)가
+# 앞의 슬래시는 SDK 가 붙입니다. com/netfunnel/api/http/URL.java 의
+# URL.make(Property)(:135-137)가
 # property.getQuery() 를 **path** 자리에 넘기고(make(...) :126-133 의
 # setPath(str3)), toString()(:75-108)이 "protocol://host" 뒤에 "/"(:98) +
 # path(:101) + "?" + query(:107) 를 이어 붙입니다. 포트는 https+443 이면
@@ -543,7 +472,6 @@ KORAIL_NETFUNNEL_SERVICE_ID = "service_1"
 #: ``NetworkConstants.java:84`` 의 ``TIMEOUT = 3`` 과
 #: ``KorailTalkApplication.java:387`` 의 ``setTimeout``에 넘기는 ``{3}``.
 #: (``com/netfunnel/api/Property.java:13`` 의 SDK 기본값도 우연히 3 입니다.)
-#: 옛 인용 ``KTApplication.java:85`` 는 7.0.6 에 없습니다.
 KORAIL_NETFUNNEL_TIMEOUT_SECONDS = 3.0
 
 
@@ -552,8 +480,7 @@ class KorailNetFunnelAction(StrEnum):
 
     7.0.6 정본은 ``NetworkConstants.Netfunnel``
     (``com/korail/talk/common/NetworkConstants.java:80-99``)의 액션 상수
-    일곱 개입니다. 옛 인용 ``K4/g.java:43-51`` 은 그 6.5.0 난독화 이름으로,
-    7.0.6 에 그 경로가 없습니다.
+    일곱 개입니다.
 
     이름별 ``byte[]`` 길이가 아래 값들과 모두 맞습니다(**길이 일치**):
 
@@ -584,8 +511,7 @@ class KorailNetFunnelAction(StrEnum):
     #: 일반 조회. 7.0.6: ``NetworkConstants.java:88`` 의 ``ACTION_ID``
     #: (len 5) 와 ``KorailTalkApplication.java:382-386`` 이 setActionID 로
     #: 주입하는 len 5 문자열 — 즉 이것이 Property 에 박히는 **기본 액션**
-    #: 이라는 옛 서술은 맞습니다. 옛 인용 ``KTApplication.java:84`` 는
-    #: 7.0.6 에 없습니다. (``com/netfunnel/api/Property.java:19`` 의 SDK
+    #: 입니다. (``com/netfunnel/api/Property.java:19`` 의 SDK
     #: 기본값은 ``"act_1"`` 로 KORAIL 값과 다릅니다 — 벤더 기본값을
     #: KORAIL 기본값으로 오해하지 않도록 적어 둡니다.)
     INQUIRY = "act_8"
@@ -597,20 +523,16 @@ class KorailNetFunnelAction(StrEnum):
     #: 를 봄)으로 갈라 ``:5227`` 또는 ``:5229`` 의 보호된 문자열을 골라
     #: ``withNetFunnel(str, ...)``(``:5244``)에 넘깁니다. 달력을 아직 받지
     #: 않아 항목이 없으면 ``:5231-5234`` 의 널 분기로 갑니다.
-    #: 옛 인용 ``b5/c.java:439``, ``MainBookingActivity.java:749`` 는 둘 다
-    #: 7.0.6 에 없습니다.
     PEAK_SEASON_INQUIRY = "act_8_2"
     #: 상품 조회. 7.0.6: ``NetworkConstants.java:92``
-    #: ``ACTION_PRODUCT_ID``(len 5). 옛 인용 ``b5/c.java:439`` 는 7.0.6 에
-    #: 없고, 위 성수기 분기(``TrainScheduleViewModel.java:5219-5235``)에는
+    #: ``ACTION_PRODUCT_ID``(len 5). 위 성수기 분기(``TrainScheduleViewModel.java:5219-5235``)에는
     #: 상품 갈래가 없습니다 — 상품 조회 호출부는 따로 찾지 못했습니다
     #: (**미출처**). 상수 선언만 확인됩니다.
     PRODUCT = "act_6"
     #: 예약. 7.0.6 은 이 액션을 세 갈래 호출부에서 씁니다 — 셋 다
     #: ``netFunnelTicketReservation`` 이라는 같은 이름의 메서드입니다
     #: (``TrainSeatMapViewModel.java:2719``, ``ReservationWaitViewModel.java:578``,
-    #: ``HomeViewModel.java:6231``) — 옛 세 줄 인용(:442/:469/:499)과 개수가
-    #: 맞습니다. 다만 ``"act_14"`` 를 포함한 모든 ``act_*`` 리터럴은 7.0.6
+    #: ``HomeViewModel.java:6231``). 다만 ``"act_14"`` 를 포함한 모든 ``act_*`` 리터럴은 7.0.6
     #: 전체에서 문자열 그대로는 안 보입니다(AlienGuard 런타임 복호화라
     #: 정적 검색 불가) — 위치는 확인했지만 리터럴 값 자체는 재확인하지
     #: 못했습니다.
@@ -618,14 +540,10 @@ class KorailNetFunnelAction(StrEnum):
     #: 결제. 7.0.6: ``NetworkConstants.java:90`` ``ACTION_PAY_ID``(len 6).
     #: 호출부는 ``PayViewModel.executePayment`` 안의
     #: ``PayViewModel.java:6724`` — ``ScreenViewModel.withNetFunnel$default``
-    #: 의 첫 인자가 보호된 액션 id 문자열입니다. 옛 인용
-    #: ``B6/AbstractC1269e.java:1046``, ``B6/C1270f.java:232`` 는 둘 다
-    #: 7.0.6 에 없습니다. (감사 후보 ``PayViewModel.java:261`` 은 클래스
-    #: 선언 줄이라 호출부 근거로 쓰지 않았습니다.)
+    #: 의 첫 인자가 보호된 액션 id 문자열입니다.
     PAY = "act_18"
     #: 예약목록. 7.0.6: ``NetworkConstants.java:94``
-    #: ``ACTION_RESERVATION_TICKET_ID``(len 6). 옛 인용
-    #: ``ReservedTicketActivity.java:553`` 은 7.0.6 에 없고, 이 상수를
+    #: ``ACTION_RESERVATION_TICKET_ID``(len 6). 이 상수를
     #: 읽는 호출부는 찾지 못했습니다(상수는 코틀린 ``const`` 가 아니라
     #: AlienGuard 로 초기화되는 ``static final String`` 이라 smali 에도
     #: 선언부만 남습니다) — **호출부 미출처**, 선언만 확인.
@@ -634,14 +552,11 @@ class KorailNetFunnelAction(StrEnum):
     #: ``NetworkConstants.Netfunnel``(``NetworkConstants.java:80-99``)의
     #: 액션 상수는 일곱 개이고 그중 환불에 해당하는 이름이 없습니다
     #: (``ACTION_ID``/``RESERVE``/``PAY``/``PEAK_SEASON``/``PRODUCT``/
-    #: ``TEST``/``RESERVATION_TICKET``). 옛 인용 ``K4/g.java:47`` 도 7.0.6
-    #: 에 없습니다. "APK 에서 참조 없음 — 게이트 미사용" 이라는 옛 서술은
-    #: 7.0.6 에서 한 걸음 더 나아가 **선언 자체가 없다**는 뜻이 됩니다.
-    #: ``"act_22"`` 는 6.5.0 기원이며 구버전 APK 없이 확정 불가입니다.
+    #: ``TEST``/``RESERVATION_TICKET``). 게이트에 쓰이지 않으며,
+    #: ``"act_22"`` 는 7.0.6 으로는 확정할 수 없습니다.
     REFUND = "act_22"
     #: 테스트. 7.0.6: ``NetworkConstants.java:93`` ``ACTION_TEST_ID``
-    #: (len 5) — 선언은 있고 호출부는 없습니다. 옛 인용 ``K4/g.java:50``
-    #: 은 7.0.6 에 없습니다.
+    #: (len 5) — 선언은 있고 호출부는 없습니다.
     TEST = "act_4"
 
 
@@ -662,8 +577,6 @@ class KorailNetFunnelOpcode(StrEnum):
     이름과 값이 이 enum 여섯 항목과 그대로 일치합니다(``:5`` 의
     ``None(0)`` 만 여기 없음). 값은 ``value()``(``:19-21``)로 꺼내
     ``CommandClient`` 가 ``addParam("opcode", ...)`` 에 싣습니다.
-    옛 인용 ``T6/c.java:6-11`` 이 이 클래스의 6.5.0 난독화 이름입니다 —
-    줄 번호까지 그대로 겹치는 1:1 대응입니다.
 
     SRT 의 ``netfunnel.js`` 와 같은 표 — 같은 STCLab NetFunnel SDK.
     """
@@ -701,10 +614,8 @@ KORAIL_LOGIN_PATH = "/classes/com.korail.mobile.login.Login"
 #: -8005, -8201, -8202, -8203}`` 은 **평문으로 읽히는** 차단 코드 집합인데
 #: 이 라이브러리에는 대응 상수가 없습니다.
 #:
-#: 옛 인용 ``ExecuteDao.java:34-39``("배열 그대로")은 7.0.6 디컴파일에
-#: 그 경로가 없습니다 — 6.5.0 잔재입니다. 또한 7.0.6 은 배열이 아니라
-#: ``Set`` 이고, 순서가 없으므로 "배열 그대로" 라는 표현도 더는 맞지
-#: 않습니다. 아래 순서는 이 라이브러리의 것이지 앱의 것이 아닙니다.
+#: 7.0.6 은 ``Set`` 이라 순서가 없습니다. 아래 순서는 이 라이브러리의
+#: 것이지 앱의 것이 아닙니다.
 DYNAPATH_ALLOWLIST_PATHS = frozenset(
     {
         "/classes/com.korail.mobile.certification.TicketReservation",
