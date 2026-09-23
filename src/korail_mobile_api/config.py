@@ -76,8 +76,9 @@ class KorailConfig:
     #: :class:`~korail_mobile_api.errors.KorailDynaPathRequiredError` 로 막힘.
     #:
     #: ``dynapath`` 에 ``enabled=True`` 인 구성을 넘겼다면 이 플래그는 무시됩니다.
-    #: ``enabled=False`` 인 구성을 넘기고 이 플래그를 켜면, 넘긴 구성은 통째로
-    #: :func:`enabled_dynapath_config` 의 것으로 바뀝니다.
+    #: 기본 ``DynapathConfig()`` 와 함께 켜면 :func:`enabled_dynapath_config` 가 기기
+    #: 값을 합성해 채웁니다. 직접 만든 ``enabled=False`` 구성과 함께 켜면
+    #: ``ValueError`` 입니다(넘긴 구성을 조용히 바꾸지 않습니다).
     #:
     #: 필드 목록 **맨 끝**. 중간에 끼우면 위치 인자의 뜻이 조용히 바뀝니다.
     enable_dynapath: bool = False
