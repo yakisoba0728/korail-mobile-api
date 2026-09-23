@@ -663,6 +663,7 @@ class KorailClient:
         *,
         passenger_count: int = 1,
         room_class_code: str = "1",
+        seat_attribute_code: str | None = None,
     ) -> SeatInventoryResponse:
         """한 호차의 좌석 배치와 좌석별 판매 가능 여부를 조회합니다.
 
@@ -683,6 +684,7 @@ class KorailClient:
             car_no,
             passenger_count=passenger_count,
             room_class_code=room_class_code,
+            seat_attribute_code=seat_attribute_code,
         )
         return self._run_read(
             lambda: parse_seat_inventory_response(

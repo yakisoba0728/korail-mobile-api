@@ -215,7 +215,9 @@ def _raise_for_status(response: httpx.Response, *, path: str) -> None:
                 str(message or "KORAIL DynaPath request rejected"),
                 raw=blocked_payload,
             )
-    if response.is_error:
+    # 3xx 도 실패입니다 — Retrofit 은 2xx 가 아닌 응답을 성공 본문으로 넘기지 않습니다
+    # (analysis/jadx/sources/retrofit2/OkHttpCall.java:184-201). 리다이렉트는 따라가지 않습니다.
+    if not 200 <= response.status_code < 300:
         raise KorailTransportError(
             f"KORAIL HTTP {response.status_code} for "
             f"{response.request.method} {response.request.url.path}"

@@ -122,7 +122,9 @@ class LimousineSeatInventoryQuery:
     departure_run_order: str
     arrival_run_order: str
     passenger_count: int
-    product_no: str
+    #: ``gdNo``. 7.0.6 공항버스 화면은 ``null`` 을 넘깁니다
+    #: (``AirportBusSeatMapViewModel.java:865``). ``None`` 이면 폼에서 뺍니다.
+    product_no: str | None = None
     #: ``isArrow`` — 앱이 보내는 값은 거짓입니다. 참으로 보내면
     #: ``lms.TResidualSeatsResearch.do`` 가 ``S003`` 로 거절합니다
     #: (2026-09-22 라이브: 나머지 조건이 같은 질의 3건이 참에서 전부 실패,
@@ -155,7 +157,8 @@ class LimousineSeatInventoryQuery:
             "passenger_count",
             allow_zero=False,
         )
-        _optional_text(self.product_no, "product_no")
+        if self.product_no is not None:
+            _optional_text(self.product_no, "product_no")
         _boolean(self.is_arrow, "is_arrow")
 
 

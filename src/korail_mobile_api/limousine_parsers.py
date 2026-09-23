@@ -8,9 +8,8 @@
 :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
 
 목록 키를 다루는 방식은 라우트마다 다르지 않습니다. 스케줄 조회의 ``trainList``,
-좌석 재고의 ``seatList`` 모두 없거나 ``null`` 이면
-빈 결과일 뿐입니다 — ``seatList`` 도 마찬가지인데, 근거는 한 줄이 아니라 두
-군데입니다. **키 누락**은 컴파일된 기본 생성자가 직접 정의합니다
+좌석 재고의 ``seatList`` 모두 없거나 ``null`` 이면 빈 결과이고, 리스트가 아닌
+값이면 오류입니다. 근거는 두 군데입니다. **키 누락**은 컴파일된 기본 생성자가 직접 정의합니다
 (``TResidualSeatsResearchOut.java:79``:
 ``this.seatList = (i & 128) == 0 ? emptyList() : list;`` — 출현 비트가 없을
 때만 ``emptyList()`` 이고, 이 줄은 명시적 ``null`` 에 대해서는 아무 말도
@@ -51,7 +50,6 @@ from .parsers import (
     _response_fields,
 )
 from .read_parsers import _additive_scalar_string, _nullable_string_fields, _optional_string, _row
-from .read_parsers import _optional_list as _nullable_list
 
 
 def _required_list(
@@ -124,7 +122,12 @@ def parse_limousine_schedule_response(
     _require_exact_success(response)
     raw = response.raw
     schedules = []
-    for value in _nullable_list(raw, "trainList", "limousine schedule"):
+    rows = (
+        []
+        if raw.get("trainList") is None
+        else _required_list(raw, "trainList", "limousine schedule")
+    )
+    for value in rows:
         row = _row(value, "limousine schedule trainList")
         schedules.append(
             LimousineSchedule(
@@ -196,14 +199,12 @@ def parse_limousine_seat_inventory_response(
     seats = []
     # TResidualSeatsResearchOut.java:79 -- the DTO's compiled default
     # constructor treats an absent seatList as emptyList(), not an error:
-    # `this.seatList = (i & 128) == 0 ? emptyList() : list;`. Mirrors
-    # parsers.py::parse_seat_inventory_response's identical handling of the
-    # same DTO shape (`_inventory_required_list(raw, "seatList") if
-    # "seatList" in raw else []`). A present-but-non-list value is still an
-    # error.
+    # `this.seatList = (i & 128) == 0 ? emptyList() : list;`. An explicit null
+    # is empty too (the docstring's coerceInputValues reading). A present
+    # non-list value is still an error.
     for value in (
         _required_list(raw, "seatList", "limousine seat inventory")
-        if "seatList" in raw
+        if raw.get("seatList") is not None
         else []
     ):
         row = _row(value, "limousine seat inventory seatList")

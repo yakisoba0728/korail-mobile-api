@@ -6,19 +6,16 @@
 
 :class:`KorailSessionClient` 가 로그인 왕복을 수행합니다.
 로그인 성공 코드: ``IRZ000001``, ``S200`` — :data:`KORAIL_LOGIN_SUCCESS_CODES`.
-**7.0.6 은 로그인 성공을 이런 코드 화이트리스트로 판정하지 않습니다.**
+7.0.6 도 메시지 코드로 판정합니다 —
 ``analysis/jadx/sources/com/korail/talk/ui/screen/login/LoginViewModel.java:1216``
-이 ``((LoginOut) success.getData()).isSuccess()`` 를 부르고, 그 구현은
-``network/model/CommonOut.java:550-555`` 의 ``!commonFail()`` 이며,
-``commonFail()``(``:455-463``)은 ``h_msg_cd`` 가 아니라 ``strResult`` 를
-AlienGuard 로 보호된 리터럴 하나와 비교합니다(그 리터럴은 복원되지 않습니다 —
-PROTECTED). 두 코드 자체는 실서버 관측에서 온 것이고, 7.0.6 사전에서
-``IRZ000001`` 은 범용 성공 문구("정상적으로 조회 되었습니다.")이지만
-``S200`` 은 로그인과 무관한 문구로 실려 있습니다("발권하신 승차권 중 운행이
-중지된 열차가 있습니다…", ``analysis/apktool/assets/error_json.json``). 즉
-``S200`` 을 로그인 성공으로 보는 근거는 7.0.6 어디에도 없습니다 — 코드는
-그대로 두되(관측 기반, 좁히는 쪽이 로그인 실패를 낳을 수 있음) 출처는
-미확인으로 적어 둡니다.
+이 부르는 ``LoginOut.isSuccess()`` 는 ``CommonOut`` 것을 쓰지 않고 재정의돼
+(``network/model/LoginOut.java:1161-1180``) ``hMsgCd`` 를 보호된 상수와 비교합니다.
+그 상수는 복원되지 않아(PROTECTED) 두 코드가 앱과 같은지는 미확인이고, 코드
+자체는 실서버 관측에서 왔습니다. ``S200`` 의 7.0.6 사전 문구는 운행중지
+안내("발권하신 승차권 중 운행이 중지된 열차가 있습니다…",
+``analysis/apktool/assets/error_json.json``)인데, 로그인 성공 처리에도 운행중지
+안내 분기가 있어(``LoginViewModel.java:1307-1322``) 로그인과 무관하다고 볼 수도
+없습니다.
 
 다만 이 whitelist **하나만으로 로그인이 성공하지는 않습니다**. 앞뒤에 검사가
 둘 더 있습니다(2026-09-23 확인):
@@ -244,13 +241,14 @@ class KorailSessionClient:
         ``checkValidPw`` is protected, so callers must supply a known value;
         this method does not invent one.
         """
-        if not cust_id or not input_flag or not check_valid_pw:
-            raise KorailProtocolError(
-                "KORAIL social login requires cust_id, input_flag, and "
-                "an explicit check_valid_pw value"
-            )
-        return self._run_login(
-            lambda: self._finish_login(
+        def attempt() -> KorailSession:
+            # _run_login 안에서 검사해야 잘못된 입력도 이전 세션을 남기지 않습니다.
+            if not cust_id or not input_flag or not check_valid_pw:
+                raise KorailProtocolError(
+                    "KORAIL social login requires cust_id, input_flag, and "
+                    "an explicit check_valid_pw value"
+                )
+            return self._finish_login(
                 self._post_login(
                     {
                         "txtInputFlg": input_flag,
@@ -260,7 +258,8 @@ class KorailSessionClient:
                 ),
                 login_id="",
             )
-        )
+
+        return self._run_login(attempt)
 
     def _run_login(self, attempt: Callable[[], KorailSession]) -> KorailSession:
         """Both logins start from no session and end with one or none.

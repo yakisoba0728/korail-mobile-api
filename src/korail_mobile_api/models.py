@@ -821,14 +821,14 @@ class PhysicalSeat:
     seat_no: str = field(repr=False)
     sale_possible: str
     direction_code: str
-    other_attribute_code: str
+    other_attribute_code: str | None
     requested_attribute_code: str
     floor: str | None
     specification: str
     sequence_no: str
     message_code: str
     message: str
-    visual_message_division_code: str
+    visual_message_division_code: str | None
 
 
 @dataclass(frozen=True)

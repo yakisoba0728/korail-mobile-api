@@ -418,6 +418,16 @@ class KorailNetFunnelClient:
                 raw=token.raw,
             )
         if token.code == SUCCESS_CODE or not gate.success_only:
+            # 통과 응답이 늦게 와도 상한을 넘겼으면 보내지 않습니다 — 위 대기
+            # 직전 검사만으로는 느린 5101/5002 응답이 상한을 건너뜁니다.
+            limit = self.config.netfunnel_wait_limit
+            if limit is not None and self._clock() - started > limit:
+                raise KorailNetFunnelError(
+                    token.code,
+                    f"KORAIL NetFunnel admitted this request after "
+                    f"netfunnel_wait_limit={limit}s; the API request was not sent",
+                    raw=token.raw,
+                )
             return
         raise KorailNetFunnelError(
             token.code,

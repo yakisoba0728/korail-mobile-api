@@ -80,6 +80,22 @@ def _typed_required_string(
     return value
 
 
+def _seat_nullable_string(data: Mapping[str, Any], key: str) -> str | None:
+    """좌석 DTO의 nullable 문자열만 허용하고 잘못된 타입은 거부합니다.
+
+    TResidualSeatsResearchOutSeat.java:79-82,94-97:
+    etc_seat_att_cd와 vz_msg_dv_cd는 생략 및 null을 허용합니다.
+    """
+    value = data.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be a string or null"
+        )
+    return value
+
+
 def _typed_required_scalar_string(
     data: Mapping[str, Any],
     key: str,
@@ -896,13 +912,13 @@ def parse_transfer_station_list_response(
 ) -> TransferStationListResponse:
     """``qry.chtnStn.do`` 의 환승역 목록을 파싱합니다.
 
-    ``chtnList`` 는 필수 리스트이고 리스트가 아니면
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다. 역마다 코드와
-    이름이 필수입니다. 빈 리스트는 그 구간에 환승역이 없다는 뜻이며 오류가
-    아닙니다.
+    ``chtnList`` 는 생략 시 빈 목록입니다(``ChtnStnOut.java:54-60``).
+    명시적인 null이나 리스트 이외의 값은
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
+    각 행의 코드와 이름에 대한 기존 검증은 유지합니다.
     """
     raw = response.raw
-    rows = raw.get("chtnList")
+    rows = raw.get("chtnList", [])
     if not isinstance(rows, list):
         raise KorailProtocolError(
             "KORAIL transfer station field chtnList must be a list"
@@ -1128,7 +1144,7 @@ def parse_seat_inventory_response(
                     row,
                     "dir_seat_att_cd",
                 ),
-                other_attribute_code=_inventory_required_string(
+                other_attribute_code=_seat_nullable_string(
                     row,
                     "etc_seat_att_cd",
                 ),
@@ -1147,7 +1163,7 @@ def parse_seat_inventory_response(
                     "intg_msg_cd",
                 ),
                 message=_inventory_required_string(row, "intg_msg"),
-                visual_message_division_code=_inventory_required_string(
+                visual_message_division_code=_seat_nullable_string(
                     row,
                     "vz_msg_dv_cd",
                 ),

@@ -1379,80 +1379,24 @@ def build_unpaid_reservation_cancel_form(
         raise KorailProtocolError(
             "KORAIL cancellation requires a fresh successful unpaid hold"
         )
+    # 순번·변경번호는 홀드 응답의 첫 여정 값을 되울립니다. 7.0.6 예약목록
+    # (MyReservationViewModel.java:1557,1566)과 결제 화면
+    # (PayViewModel.java:4678-4686)이 그렇게 하고, 결제 화면은 값이 없을 때만
+    # AlienGuard 로 보호된 대체 리터럴(4·3바이트)을 씁니다. 대체값 "0001"/"000"
+    # 은 복호값이 아니라 라이브 확인값입니다 — 2026-09-22 reserve/
+    # reserve_transfer/reserve_merge/recalculate_price 응답의 여정 행 45개 중
+    # h_rsv_chg_no 를 가진 행은 0개였고, "000" 으로 보낸 취소는 모두
+    # IRG000000 으로 성립했습니다.
+    first = response.journeys[0] if response.journeys else None
+    sequence = first.journey_sequence if first is not None else None
+    change_no = first.reservation_change_no if first is not None else None
     form = _common_fields(config)
     form.update(
         {
             "txtPnrNo": pnr_no,
-            "txtJrnySqno": "0001",
+            "txtJrnySqno": sequence if sequence else "0001",
             "txtJrnyCnt": journey_count,
-            # A literal "000" here, NOT the hold's h_rsv_chg_no -- deliberately
-            # unlike build_card_payment_form below.
-            #
-            # **이것은 "앱은 언제나 고정 상수를 보낸다"는 뜻이 아닙니다.** 7.0.6 에서
-            # ``hidRsvChgNo`` 를 **응답에서 꺼내 넘기는** 화면이 확인된 것만
-            # 둘입니다:
-            #
-            #   * 예약목록 화면 -- ``MyReservationViewModel.java:1566`` 이
-            #     ``new ReservationCancelChkIn(hPnrNo, …getHJrnySqno(),
-            #     …getHJrnyCnt(), …getHRsvChgNo())`` 로 응답 여정 객체의 값을
-            #     네 자리 모두에 그대로 넘깁니다(취소 전 단계인
-            #     ``requestReservationCancel`` 쪽도 같은 모양, ``:1557``).
-            #   * 결제 화면 -- ``PayViewModel.java:4678-4686`` 과 ``:4717-4725``
-            #     (같은 모양이 ``:4798``/``:4805``, ``:4840``/``:4847`` 에 두 번
-            #     더 있습니다)가 ``ReservationCancelIn`` 을 만들면서 여정 목록이
-            #     비었거나 꺼낸 값이 비면 AlienGuard 로 보호된 3바이트 리터럴을
-            #     쓰고, 그렇지 않으면 ``jrnyInfo[0].getHRsvChgNo()`` 를 씁니다 --
-            #     즉 **조건부 치환**이지 고정 상수가 아닙니다. 그렇게 만든
-            #     ``ReservationCancelIn`` 이 ``:15305`` 에서 그대로
-            #     ``ReservationCancelChkIn`` 으로 옮겨져 이 라우트로 나갑니다.
-            #
-            # 앱이 그 조건부 분기에서 쓰는 **대체 리터럴의 평문**은 읽을 수
-            # 없습니다 -- AlienGuard 호출의 3바이트 암호문
-            # (``new byte[]{-110, -122, -15}``, ``PayViewModel.java:4679``·
-            # ``:4683``·``:4718``·``:4722``)이라 길이가 ``"000"`` 과 맞는다는
-            # 것까지만 말할 수 있습니다. 아래 ``"000"`` 은 이 패키지의 라이브
-            # 확인값이지 그 암호문을 복호한 결과가 아닙니다.
-            #
-            # 7.0.6 에서 ``requestReservationCancelChk`` 를 부르는 곳은 일곱 개
-            # (PayViewModel, ReservationWaitViewModel, ReservationMergeViewModel,
-            # MyReservationViewModel, BasketTicketViewModel,
-            # AirportBusSeatMapViewModel, Sample09ViewModel)이고, 위 둘 말고
-            # 나머지 다섯이 무엇을 넣는지는 확인하지 않았습니다.
-            #
-            # 요청 DTO ``ReservationCancelChkIn`` 의 **선언 필드**는 여덟 개이지
-            # 일곱 개가 아닙니다 -- ``ReservationCancelChkIn.java:53`` 의 직렬화
-            # 생성자가 ``@SerialName("Device")``/``("Version")``/``("Key")``/
-            # ``(Constants.LANG)`` 넷(``CommonIn`` 상속, ``CommonIn.java:40,381``)
-            # 에 더해 ``txtPnrNo``/``txtJrnySqno``/``txtJrnyCnt``/``hidRsvChgNo``
-            # 넷(같은 파일 ``:29-32``)을 받습니다.
-            #
-            # **선언 필드 수와 실제로 전송되는 키 수는 다른 주장입니다.**
-            # kotlinx 가 원소를 건너뛸 수 있어
-            # (``ReservationCancelChkIn.java:120-150`` 의 ``write$Self``)
-            # 한 요청이 여덟 키를 다 싣는다는 보장은 없습니다. 다만 ``lang``
-            # 의 생략은 **값 비교 하나가 아닙니다** -- ``CommonIn.java:467`` 이
-            # 먼저 ``output.shouldEncodeElementDefault(serialDesc, 3)`` 를 묻고,
-            # 그것이 false 인 **경우에만** ``self.lang`` 을
-            # ``languageProvider?.getSTLeec()`` 와 비교해 같을 때 return 합니다
-            # (``:470-471``). 어느 한쪽이라도 어긋나면 ``:474`` 가 ``lang`` 을
-            # 씁니다. 즉 기준값은 정적 기본값이 아니라 **런타임 언어 제공자**의
-            # 값이고, 인코더가 기본값 기록을 요구하면 값이 같아도 실립니다.
-            # 이 빌더가 내보내는 키 수도 고정이 아닙니다 -- ``_common_fields``
-            # 가 ``config.lang`` 이 ``None`` 이 아닐 때만 ``lang`` 을 붙이므로
-            # 기본값에서는 일곱 키, ``lang`` 을 주면 여덟 키입니다.
-            #
-            # 이 빌더가 ``"000"`` 을 쓰는 근거는 그래서 앱 재현이 아니라 라이브
-            # **관찰**입니다: 2026-09-22 에 reserve/reserve_transfer/
-            # reserve_merge/recalculate_price 응답에서 모은 여정 행 45 개 중
-            # ``h_rsv_chg_no`` 키를 가진 행이 0 개였고, ``"000"`` 으로 보낸
-            # 취소가 그 표본 안에서 모두 ``IRG000000`` 으로 성립했습니다.
-            # **45 개는 유한 표본이지 보장이 아닙니다** -- 그날의 우리 기록일
-            # 뿐이고 재측정된 적이 없습니다. 홀드 응답이 변경번호를 주는
-            # 경우에는 그것을 넘기는 편이 앱에 더 가깝습니다. This builder is the
-            # fresh-single-journey-hold case: the hold it is handed has no
-            # change number to echo, so it sends the constant. That is a
-            # statement about THIS builder, not about every cancel form.
-            "hidRsvChgNo": "000",
+            "hidRsvChgNo": change_no if change_no else "000",
         }
     )
     return form

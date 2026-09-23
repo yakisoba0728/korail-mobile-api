@@ -129,6 +129,6 @@ def build_limousine_seat_inventory_form(
         "dptStnRunOrdr": query.departure_run_order,
         "arvStnRunOrdr": query.arrival_run_order,
         "totPsgCnt": str(query.passenger_count),
-        "gdNo": query.product_no,
+        **({"gdNo": query.product_no} if query.product_no is not None else {}),
         "isArrow": "true" if query.is_arrow else "false",
     }

@@ -254,6 +254,7 @@ def build_seat_inventory_form(
     *,
     passenger_count: int,
     room_class_code: str = "1",
+    seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
     """``research.TResidualSeatsResearch.do`` 의 좌석표 조회 폼을 만듭니다.
 
@@ -282,9 +283,15 @@ def build_seat_inventory_form(
     참이라면 널은 ``JsonNull`` 로 인코딩되어 위 길이 검사에 그대로
     넘겨집니다(그 경우의 폼 모양은 확인하지 않았습니다).
 
-    ``isArrow`` 는 고정 ``"true"``, ``ctlDvCd`` 는 고정 빈 문자열입니다 -- 빈
-    문자열인 ``ctlDvCd`` 는 :func:`build_seat_car_form` 의 ``""`` 키들과 똑같이
-    ``post_form`` 단계에서 빠지므로 전선에는 나가지 않습니다.
+    ``isArrow`` 는 좌석도 기본 경로의 ``false`` 로 보냅니다.
+    ``TrainSeatMapViewModel.smali:4232-4238`` 의 기본 인자 마스크 ``0x2000`` 과
+    ``TResidualSeatsResearchIn.java:159-160`` 의 기본값이 근거입니다. 인코더의
+    encodeDefaults 값은 보호되어 있어 앱이 false를 명시할지 생략할지는 미확정입니다.
+    ``ctlDvCd`` 의 맥락별 실제 코드는 보호되어 있으므로 기존 생략 정책을 유지합니다.
+
+    호차 목록 조회에서 좌석 속성을 재정의했다면 같은 ``seat_attribute_code`` 를
+    넘기십시오. 앱도 직전 TrainResearchIn의 값을 이어 씁니다
+    (``TrainSeatMapViewModel.smali:4116``).
 
     ``Sid`` 는 싣지 않습니다 — 7.0.6 ``TResidualSeatsResearchIn.java:65`` 의
     ``@SerialName`` 19개 중에 없습니다.
@@ -294,7 +301,11 @@ def build_seat_inventory_form(
         passenger_count,
         car_no=car_no,
     )
-    seat_attribute = train.seat_attribute_code
+    seat_attribute = (
+        train.seat_attribute_code
+        if seat_attribute_code is None
+        else seat_attribute_code
+    )
     return {
         **_device_version(config),
         "Key": config.key,
@@ -319,7 +330,7 @@ def build_seat_inventory_form(
         "totPsgCnt": str(passenger_count),
         # Same null-@Field omission as build_seat_car_form's txtGdNo, above.
         **({"gdNo": train.goods_no} if train.goods_no else {}),
-        "isArrow": "true",
+        "isArrow": "false",
         "ctlDvCd": "",
     }
 

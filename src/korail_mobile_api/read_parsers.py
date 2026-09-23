@@ -1022,6 +1022,8 @@ _PASS_PERIOD_OPTION_FIELDS: dict[str, str] = {
 def _parse_pass_menu_data(
     data: Mapping[str, Any] | None,
     context: str,
+    *,
+    station_selection_key: str = "h_select_station",
 ) -> PassMenuData | None:
     if data is None:
         return None
@@ -1041,7 +1043,7 @@ def _parse_pass_menu_data(
     )
     return PassMenuData(
         commuter_kind_code=_optional_string(data, "h_cmtr_knd_cd", context),
-        station_selection=_optional_string(data, "h_select_station", context),
+        station_selection=_optional_string(data, station_selection_key, context),
         age_options=age_options,
         period_options=period_options,
         raw=data,
@@ -1411,6 +1413,8 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
                 pass_data=_parse_pass_menu_data(
                     _optional_mapping(row, "passData"),
                     "trip menu pass data",
+                    # TrGdMenuLtOutPass.java:152 — 여행 메뉴의 키 철자는 별도입니다.
+                    station_selection_key="h_seiect_station",
                 ),
                 raw=row,
             )
