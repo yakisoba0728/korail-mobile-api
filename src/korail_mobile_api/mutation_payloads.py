@@ -46,7 +46,7 @@ from .mutation_models import (
     ReservationHoldResponse,
     StationRefundExecutionRequest,
 )
-from .read_models import TrainScheduleItem
+from .read_models import RefundCommissionResponse, TrainScheduleItem
 
 
 _DATE_RE = re.compile(r"[0-9]{8}")
@@ -1022,6 +1022,9 @@ def build_refund_form(
     *,
     settle_mileage: bool = False,
     pbp_acceptance_target_flag: str | None = None,
+    commission: RefundCommissionResponse | None = None,
+    latitude: str | None = None,
+    longitude: str | None = None,
 ) -> dict[str, str]:
     """승차권 한 장의 환불 폼. PNR 키는 txtPnrNo 입니다(RefundTicketIn.java:194; NetworkApi.java:603).
     settle_mileage=False 는 라이브러리 기본 정책입니다. 앱의 수수료·마일리지 비교와 선택 흐름은
@@ -1064,7 +1067,20 @@ def build_refund_form(
             ),
         }
     )
-    # tk_ret_tms_dv_cd 는 라이브러리에서 생략합니다. 앱 입력의 null 근거는 위 docstring 참고.
+    # 7.0.6 에는 환불 요청을 만드는 화면이 둘입니다. 승차권 상세(MyTicketDetailViewModel.java:1521)는
+    # 위 필드만 채우고 나머지는 null 입니다. 환불 화면(RefundTicketViewModel$refundTicket$1.smali)은
+    # 먼저 CommissionView 를 부르고 그 응답의 tk_ret_tms_dv_cd(:1132), 첫 승차권의 trnNo(:854-868),
+    # 현재 위치의 위도·경도(:1136-1180, 위치가 없으면 null)를 더 싣습니다. commission 을 넘기면 뒤쪽입니다.
+    if commission is not None:
+        if not isinstance(commission, RefundCommissionResponse):
+            raise KorailProtocolError("commission must be a RefundCommissionResponse")
+        if commission.ticket_return_times_division_code:
+            form["tk_ret_tms_dv_cd"] = commission.ticket_return_times_division_code
+        if ticket.train_no:
+            form["trnNo"] = ticket.train_no
+    for key, value in (("latitude", latitude), ("longitude", longitude)):
+        if value is not None:
+            form[key] = str(value)
     return form
 
 

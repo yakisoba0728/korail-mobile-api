@@ -1767,12 +1767,19 @@ class KorailClient:
         *,
         settle_mileage: bool = False,
         pbp_acceptance_target_flag: str | None = None,
+        commission: RefundCommissionResponse | None = None,
+        latitude: str | None = None,
+        longitude: str | None = None,
     ) -> RefundTicketResponse:
         """PaidTicket 이 가리키는 발권 승차권 한 장을 환불합니다. PNR 전체 환불이 아닙니다. 여러 장이면 각 승차권의 결과·잔여 목록을 확인해야 합니다. 같은 장을
         무조건 재전송하지 마십시오. 국내 앱의 pbpAcepTgtFlg 는 상세값 에코(MyTicketDetailViewModel.java:1521)이나 외국인 경로는 보호
         상수(FTicketDetailViewModel.java:634)입니다. 라이브러리는 값이 없으면 빈 문자열을 만들고 전송 단계에서 생략합니다. 반환 횟수 코드는 이
         메서드의 인자가 아닙니다. 2026-07-31: 성인 2인 16,800원 PNR 에 한 번 호출해 SUCC/IRT200277 과 8,400원이 반환됐고, 남은 한 장에
         별도 환불을 한 뒤 목록이 비었습니다.
+
+        앱의 환불 화면처럼 먼저 :meth:`get_refund_commission` 으로 수수료를 확인하고 그 응답을
+        ``commission`` 으로 넘기면 ``tk_ret_tms_dv_cd``·``trnNo`` 도 싣습니다. ``latitude``/``longitude``
+        는 앱이 위치를 얻었을 때만 싣는 값입니다(:func:`~korail_mobile_api.mutation_payloads.build_refund_form`).
         """
         self._require_session("refund requires")
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
@@ -1781,6 +1788,9 @@ class KorailClient:
             ticket,
             settle_mileage=settle_mileage,
             pbp_acceptance_target_flag=pbp_acceptance_target_flag,
+            commission=commission,
+            latitude=latitude,
+            longitude=longitude,
         )
         return self._mutation(
             route, form, parser=parse_refund_ticket_response
