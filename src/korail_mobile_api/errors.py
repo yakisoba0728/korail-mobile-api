@@ -366,7 +366,12 @@ class KorailAppUpdateRequiredError(KorailAppError):
 
 
 class KorailNetFunnelError(_CodeMessagePickle, KorailApiError):
-    """NetFunnel 대기열이 거절·오작동·시간 초과.
+    """NetFunnel 대기열을 통과하지 못해 KORAIL 요청을 보내지 않았습니다.
+
+    예약·결제·예약내역(앱의 ``mode=0`` 관문)에서 대기열이 200 이 아닌 답을 했거나 대기열
+    요청 자체가 실패한 경우, 키 없이 대기하라고 한 경우,
+    :attr:`~korail_mobile_api.config.KorailConfig.netfunnel_wait_limit` 를 넘긴 경우입니다.
+    ``code`` 는 대기열 응답 코드(없으면 ``None``), ``raw`` 는 응답 본문입니다.
 
     :class:`KorailAppError` 가 아닙니다 — ``h_msg_cd`` 를 갖지 않는 별도
     호스트의 별도 프로토콜입니다.

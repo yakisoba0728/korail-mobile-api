@@ -581,8 +581,8 @@ def parse_train_calendar_response(
     ``String`` 으로 선언하고 키가 빠지면 AlienGuard 로 보호된 리터럴을 넣습니다
     (그 평문은 읽히지 않습니다). 생 JSON 을 파싱하는 쪽에서는 서버가 키를 빼는
     경우를 그래도 견뎌야 하므로 ``None`` 인 행이 섞일 수 있습니다. 성수기
-    여부는 이 응답에서 오며
-    :func:`~korail_mobile_api.netfunnel.inquiry_action` 이 그것을 봅니다.
+    여부는 이 응답에서 오지만 판정 코드값이 보호돼 있어, 열차조회 대기열의 성수기 관문은
+    호출자가 ``peak_season=True`` 로 고릅니다(:meth:`~korail_mobile_api.KorailClient.search_trains`).
     """
     raw = response.raw
     # A missing runningCalendar yields an empty calendar in 7.0.6 too, but by

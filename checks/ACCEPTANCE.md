@@ -35,7 +35,8 @@
 종료 코드: 0 통과, 1 실패, 2 검사 불완전(import 실패, 검사기 자체 예외).
 
 ```sh
-python3 checks/contract_api.py   # G9·G10·G11
+python3 checks/contract_api.py      # G9·G10·G11
+python3 checks/netfunnel_offline.py  # NetFunnel: 즉시 통과·대기 후 통과·차단·KORAIL 실패 시 반납·꺼짐 외
 ```
 
 ## 5. 변경 내역

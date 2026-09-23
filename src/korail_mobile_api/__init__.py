@@ -8,9 +8,9 @@
 없는 것은 하위 모듈에 있더라도 예고 없이 바뀝니다.
 
 시작점은 둘입니다 — :class:`~korail_mobile_api.client.KorailClient`(모든 호출),
-:class:`~korail_mobile_api.config.KorailConfig`(기기 신원과 타임아웃). 대기열은
-:class:`~korail_mobile_api.netfunnel.KorailNetFunnelClient` 로 따로 떨어져 있고
-기본적으로 꺼져 있습니다.
+:class:`~korail_mobile_api.config.KorailConfig`(기기 신원과 타임아웃). 열차조회·예약·결제·예약내역은
+앱처럼 NetFunnel 대기열(:mod:`korail_mobile_api.netfunnel`)을 먼저 거칩니다(기본 켜짐,
+:attr:`~korail_mobile_api.config.KorailConfig.netfunnel_enabled`).
 
 실패는 :class:`~korail_mobile_api.errors.KorailApiError` 아래로 모이며,
 ``h_msg_cd`` 를 예외 클래스로 옮기는 규칙은
@@ -150,9 +150,9 @@ from .mutation_models import (
 )
 from .mutation_payloads import is_merge_eligible
 from .netfunnel import (
+    KORAIL_NETFUNNEL_GATES,
     KorailNetFunnelClient,
-    KorailNetFunnelToken,
-    inquiry_action,
+    KorailNetFunnelGate,
 )
 from .read_models import (
     CartItem,
@@ -337,6 +337,7 @@ __all__ = [
     "KORAIL_DISCOUNT_CARD_MENU_ID",
     "KORAIL_MAX_DISCOUNT_CARD_SECTIONS",
     "KORAIL_MAX_JOURNEY_LEGS",
+    "KORAIL_NETFUNNEL_GATES",
     "KORAIL_MAX_PASSENGERS_PER_RESERVATION",
     "KORAIL_MERGE_SEAT_FLAGS_BY_CABIN",
     "KORAIL_STANDBY_HOLD_MESSAGE_CODE",
@@ -357,7 +358,7 @@ __all__ = [
     "KorailNetFunnelAction",
     "KorailNetFunnelClient",
     "KorailNetFunnelError",
-    "KorailNetFunnelToken",
+    "KorailNetFunnelGate",
     "KorailNoDirectTrainError",
     "KorailNoResultsError",
     "KorailNotEntitledError",
@@ -487,7 +488,6 @@ __all__ = [
     "SelfSeatChangeStation",
     "ServiceStatusResponse",
     "build_config_from_env",
-    "inquiry_action",
     "is_merge_eligible",
     "StationDataResponse",
     "StationInfoResponse",

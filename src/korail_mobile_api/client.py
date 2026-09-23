@@ -29,6 +29,7 @@ from .errors import (
     KorailSessionExpiredError,
 )
 from .http import KorailHttpClient
+from .netfunnel import KorailNetFunnelClient
 from .limousine_models import (
     LimousineScheduleQuery,
     LimousineScheduleResponse,
@@ -306,6 +307,12 @@ class KorailClient:
     상태를 바꾸는 메서드는 읽기 메서드와 마찬가지로 세션만 있으면 즉시
     전송됩니다.
 
+    열차조회·예약·결제·예약내역 조회는 앱처럼 NetFunnel 대기열을 먼저 거칩니다
+    (:attr:`~korail_mobile_api.config.KorailConfig.netfunnel_enabled`, 기본 참).
+    대기열이 기다리라고 하면 기다리고, 차단하면
+    :class:`~korail_mobile_api.errors.KorailQueueRejectedError` 입니다. 관문 목록은
+    :data:`~korail_mobile_api.netfunnel.KORAIL_NETFUNNEL_GATES`.
+
     자원 정리는 :meth:`close` 입니다. ``__enter__``/``__exit__`` 를 정의하지 않으므로
     ``with`` 문으로는 쓸 수 없습니다. :meth:`close` 는 커넥션 풀만 닫으니 로그인까지
     끝내려면 :meth:`logout`(서버 세션 무효화)이나 :meth:`clear_session`(로컬만 폐기)을
@@ -339,6 +346,12 @@ class KorailClient:
     ) -> None:
         self.config = config or KorailConfig()
         self.http = KorailHttpClient(self.config, transport=transport)
+        #: 대기열 클라이언트. ``netfunnel_enabled`` 가 거짓이면 ``None``.
+        self.netfunnel = (
+            KorailNetFunnelClient(self.config, transport=transport)
+            if self.config.netfunnel_enabled
+            else None
+        )
         self.session = KorailSessionClient(self.http)
         self._station_names: dict[str, str] | None = None
 
@@ -350,6 +363,8 @@ class KorailClient:
         이나 :meth:`clear_session`(로컬만 폐기)을 부르면 됩니다.
         """
         self.http.close()
+        if self.netfunnel is not None:
+            self.netfunnel.close()
 
     def login(
         self,
@@ -446,6 +461,19 @@ class KorailClient:
         except KorailSessionExpiredError:
             self.clear_session()
             raise
+
+    def _queued(self, gate: str, send: Callable[[], T]) -> T:
+        """``gate`` 관문의 대기열을 통과한 뒤 ``send()`` — 대기열이 꺼져 있으면 바로 ``send()``."""
+        if self.netfunnel is None:
+            return send()
+        return self.netfunnel.run(gate, send)
+
+    @staticmethod
+    def _inquiry_gate(*, peak_season: bool, special: bool = False) -> str:
+        """열차조회 관문(``TrainScheduleViewModel.java:5213-5235`` 의 aid 선택)."""
+        if special:
+            return "product_inquiry"
+        return "peak_season_inquiry" if peak_season else "inquiry"
 
     def _require_session(self, what: str = "account read requires") -> None:
         """No session, no request: ``KORAIL <what> an authenticated session``."""
@@ -999,11 +1027,14 @@ class KorailClient:
     def get_reservation_history(self) -> ReservationHistoryResponse:
         """로그인 계정에 아직 살아 있는 예약(미결제 홀드 포함)을 조회합니다."""
         self._require_session()
-        return self._post_read(
-            "/classes/com.korail.mobile.reservation.ReservationView",
-            {"timeStamp": 0},
-            parser=parse_reservation_history_response,
-            raise_on_fail=False,
+        return self._queued(
+            "reservation_view",
+            lambda: self._post_read(
+                "/classes/com.korail.mobile.reservation.ReservationView",
+                {"timeStamp": 0},
+                parser=parse_reservation_history_response,
+                raise_on_fail=False,
+            ),
         )
 
     def get_free_seat_car_info(
@@ -1039,6 +1070,8 @@ class KorailClient:
     def get_seat_assignment_schedule(
         self,
         request: SeatAssignmentScheduleRequest,
+        *,
+        peak_season: bool = False,
     ) -> SeatAssignmentScheduleResponse:
         """좌석배정 예매 화면이 쓰는 열차 목록을 조회합니다.
 
@@ -1052,11 +1085,17 @@ class KorailClient:
 
         ``"A1"``/``"A2"`` 라도 날짜·구간에 따라 ``WRD000057``
         (명절대수송기간)로 거절될 수 있습니다.
+
+        열차조회 대기열(``inquiry``, ``peak_season=True`` 면 ``peak_season_inquiry``)을
+        거칩니다 — 앱도 이 라우트를 ``requestTrainSchedule`` 안에서 부릅니다.
         """
-        return self._post_read(
-            "/classes/com.korail.mobile.research.assignScheduleView.do",
-            build_seat_assignment_schedule_form(request),
-            parser=parse_seat_assignment_schedule_response,
+        return self._queued(
+            self._inquiry_gate(peak_season=peak_season),
+            lambda: self._post_read(
+                "/classes/com.korail.mobile.research.assignScheduleView.do",
+                build_seat_assignment_schedule_form(request),
+                parser=parse_seat_assignment_schedule_response,
+            ),
         )
 
     def get_merge_seats_inquiry(
@@ -1477,11 +1516,21 @@ class KorailClient:
         *,
         continuation: TrainSearchContinuation | None = None,
         use_special_schedule: bool = False,
+        peak_season: bool = False,
     ) -> TrainSearchResult:
-        """한 구간·한 날짜의 직통 열차 한 페이지를 조회합니다."""
+        """한 구간·한 날짜의 직통 열차 한 페이지를 조회합니다.
+
+        열차조회 대기열을 거칩니다. ``peak_season`` 은 출발일이 성수기인지입니다 — 앱은
+        달력(``RunDateOutItem.isPeakSeason()``)으로 고르지만 그 판정 코드값이 보호돼 있어
+        호출자가 정합니다. 거짓이면 달력이 없는 앱과 같은 ``act_8`` 입니다.
+        ``use_special_schedule`` 이면 ``product_inquiry`` 관문입니다(**추정**).
+        """
         return self._run_read(
             lambda: self._search_trains(
-                query, continuation, use_special_schedule=use_special_schedule
+                query,
+                continuation,
+                use_special_schedule=use_special_schedule,
+                peak_season=peak_season,
             )
         )
 
@@ -1491,11 +1540,18 @@ class KorailClient:
         *,
         continuation: TrainSearchContinuation | None = None,
         use_special_schedule: bool = False,
+        peak_season: bool = False,
     ) -> TransferSearchResult:
-        """같은 질의를 환승 여정으로 바꿔 한 페이지 조회합니다."""
+        """같은 질의를 환승 여정으로 바꿔 한 페이지 조회합니다.
+
+        대기열은 :meth:`search_trains` 와 같습니다.
+        """
         return self._run_read(
             lambda: self._search_transfer_trains(
-                query, continuation, use_special_schedule=use_special_schedule
+                query,
+                continuation,
+                use_special_schedule=use_special_schedule,
+                peak_season=peak_season,
             )
         )
 
@@ -1505,6 +1561,7 @@ class KorailClient:
         *,
         continuation: TrainSearchContinuation | None = None,
         use_special_schedule: bool = False,
+        peak_season: bool = False,
     ) -> TrainSearchResult | TransferSearchResult:
         """직통을 찾고, 하나도 없을 때만 환승으로 한 번 더 찾습니다.
 
@@ -1540,10 +1597,13 @@ class KorailClient:
                 query,
                 continuation=continuation,
                 use_special_schedule=use_special_schedule,
+                peak_season=peak_season,
             )
         except KorailNoDirectTrainError:
             return self.search_transfer_trains(
-                query, use_special_schedule=use_special_schedule
+                query,
+                use_special_schedule=use_special_schedule,
+                peak_season=peak_season,
             )
 
     def _search_trains(
@@ -1552,10 +1612,12 @@ class KorailClient:
         continuation: TrainSearchContinuation | None = None,
         *,
         use_special_schedule: bool = False,
+        peak_season: bool = False,
     ) -> TrainSearchResult:
         response = self._post_schedule_view(
             query, continuation, transfer=False,
             use_special_schedule=use_special_schedule,
+            peak_season=peak_season,
         )
         return TrainSearchResult(
             trains=parse_train_rows(response.raw),
@@ -1570,10 +1632,12 @@ class KorailClient:
         continuation: TrainSearchContinuation | None = None,
         *,
         use_special_schedule: bool = False,
+        peak_season: bool = False,
     ) -> TransferSearchResult:
         response = self._post_schedule_view(
             query, continuation, transfer=True,
             use_special_schedule=use_special_schedule,
+            peak_season=peak_season,
         )
         trains = parse_train_rows(response.raw)
         return TransferSearchResult(
@@ -1591,6 +1655,7 @@ class KorailClient:
         *,
         transfer: bool,
         use_special_schedule: bool = False,
+        peak_season: bool = False,
     ) -> BaseKorailResponse:
         departure_name = self._resolve_station_reference(
             query.departure_station_code
@@ -1621,10 +1686,11 @@ class KorailClient:
                 transfer=transfer,
             )
             route = "/classes/com.korail.mobile.seatMovie.ScheduleView"
-        return self.http.post_form(
-            route,
-            form,
-            include_common=False,
+        return self._queued(
+            self._inquiry_gate(
+                peak_season=peak_season, special=use_special_schedule
+            ),
+            lambda: self.http.post_form(route, form, include_common=False),
         )
 
     def _resolve_station_reference(self, reference: str) -> str:
@@ -1785,10 +1851,13 @@ class KorailClient:
             seats=seats,
             seat_attribute_code=seat_attribute_code,
         )
-        return self._mutation(
-            route,
-            form,
-            parser=self._hold_from_reservation_response,
+        return self._queued(
+            "reserve",
+            lambda: self._mutation(
+                route,
+                form,
+                parser=self._hold_from_reservation_response,
+            ),
         )
 
     def confirm_standby_hold(
@@ -1954,10 +2023,13 @@ class KorailClient:
             seats=seats,
             seat_attribute_codes=seat_attribute_codes,
         )
-        return self._mutation(
-            route,
-            form,
-            parser=self._hold_from_reservation_response,
+        return self._queued(
+            "reserve",
+            lambda: self._mutation(
+                route,
+                form,
+                parser=self._hold_from_reservation_response,
+            ),
         )
 
     def reserve_merge(
@@ -2084,11 +2156,14 @@ class KorailClient:
         form = build_card_payment_form(self.config, hold, card)
         # raise_on_fail=False: a declined card is an answer to read, not an
         # error to raise.
-        return self._mutation(
-            route,
-            form,
-            parser=parse_reservation_payment_response,
-            raise_on_fail=False,
+        return self._queued(
+            "pay",
+            lambda: self._mutation(
+                route,
+                form,
+                parser=parse_reservation_payment_response,
+                raise_on_fail=False,
+            ),
         )
 
     def pay_with_card(
@@ -2116,11 +2191,14 @@ class KorailClient:
         form = build_card_payment_form(self.config, hold, card)
         # raise_on_fail=False: a declined card is an answer to read, not an
         # error to raise.
-        return self._mutation(
-            route,
-            form,
-            parser=parse_reservation_payment_response,
-            raise_on_fail=False,
+        return self._queued(
+            "pay",
+            lambda: self._mutation(
+                route,
+                form,
+                parser=parse_reservation_payment_response,
+                raise_on_fail=False,
+            ),
         )
 
     def refund(
@@ -2301,10 +2379,13 @@ class KorailClient:
             train,
             card_no=card_no,
         )
-        return self._mutation(
-            route,
-            form,
-            parser=self._hold_from_reservation_response,
+        return self._queued(
+            "reserve",
+            lambda: self._mutation(
+                route,
+                form,
+                parser=self._hold_from_reservation_response,
+            ),
         )
 
     def recalculate_price(

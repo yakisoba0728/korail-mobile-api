@@ -468,21 +468,25 @@ KORAIL_MAX_JOURNEY_LEGS = 2
 KORAIL_NETFUNNEL_URL = "https://nf.letskorail.com"
 KORAIL_NETFUNNEL_PATH = "/ts.wseq"
 KORAIL_NETFUNNEL_SERVICE_ID = "service_1"
-#: 대기열 타임아웃(초). 7.0.6 근거 둘 다 **읽힘** —
+#: 대기열 요청 하나의 타임아웃(초). 7.0.6 근거 둘 다 **읽힘** —
 #: ``NetworkConstants.java:84`` 의 ``TIMEOUT = 3`` 과
 #: ``KorailTalkApplication.java:387`` 의 ``setTimeout``에 넘기는 ``{3}``.
-#: (``com/netfunnel/api/Property.java:13`` 의 SDK 기본값도 우연히 3 입니다.)
 KORAIL_NETFUNNEL_TIMEOUT_SECONDS = 3.0
+#: 실패한 대기열 요청의 재시도 횟수(첫 시도 제외). 7.0.6 근거 **읽힘** —
+#: ``NetworkConstants.java:83`` 의 ``RETRY = 1`` 과 ``KorailTalkApplication.java:388``
+#: 의 ``setRetry``에 넘기는 ``{1}``. SDK 는 실패한 시도 뒤 그 시도가 시작된 때부터
+#: 타임아웃(3초)이 찰 때까지 기다렸다가 다시 보냅니다(``Netfunnel.java:352-363``,
+#: ``Property.java:16`` 의 ``wait_retry_ = true``).
+KORAIL_NETFUNNEL_RETRY = 1
 
 
 class KorailNetFunnelAction(StrEnum):
-    """대기열 액션 id.
+    """대기열 액션 id(``aid``).
 
     7.0.6 정본은 ``NetworkConstants.Netfunnel``
     (``com/korail/talk/common/NetworkConstants.java:80-99``)의 액션 상수
-    일곱 개입니다.
-
-    이름별 ``byte[]`` 길이가 아래 값들과 모두 맞습니다(**길이 일치**):
+    일곱 개입니다. 리터럴은 AlienGuard 런타임 복호화라 평문으로 보이지 않고,
+    이름별 ``byte[]`` 길이가 아래 값과 맞습니다(**길이 일치**):
 
     ====================================  ====  ========
     7.0.6 상수                             len   이 enum
@@ -497,66 +501,36 @@ class KorailNetFunnelAction(StrEnum):
     ``ACTION_TEST_ID`` (``:93``)             5   ``act_4``
     ====================================  ====  ========
 
-    길이만으로는 같은 길이끼리(5: ``act_8``/``act_6``/``act_4``, 6:
-    ``act_14``/``act_18``/``act_21``) 가려지지 않으므로, 어느 상수가 어느
-    값인지는 **상수 이름**이 정합니다. 리터럴 자체는 AlienGuard 런타임
-    복호화라 7.0.6 전체에서 문자열 그대로는 보이지 않습니다.
-
-    여덟째 :attr:`REFUND` 에 대응하는 상수는 7.0.6 에 **없습니다** —
-    아래 주석 참고.
-
-    ``act_8``/``act_8_2`` 는 둘 다 열차조회지만 서버가 따로 계량합니다.
+    같은 길이끼리(5: ``act_8``/``act_6``/``act_4``, 6: ``act_14``/``act_18``/
+    ``act_21``)는 길이로 가려지지 않습니다. 호출부도 상수를 참조하지 않고 보호된
+    문자열을 직접 넘기므로, 어느 호출부가 어느 값인지는 **호출부 메서드 이름으로
+    추정**한 것입니다. 호출부 목록은
+    :data:`~korail_mobile_api.netfunnel.KORAIL_NETFUNNEL_GATES` 에 있습니다.
     """
 
-    #: 일반 조회. 7.0.6: ``NetworkConstants.java:88`` 의 ``ACTION_ID``
-    #: (len 5) 와 ``KorailTalkApplication.java:382-386`` 이 setActionID 로
-    #: 주입하는 len 5 문자열 — 즉 이것이 Property 에 박히는 **기본 액션**
-    #: 입니다. (``com/netfunnel/api/Property.java:19`` 의 SDK
-    #: 기본값은 ``"act_1"`` 로 KORAIL 값과 다릅니다 — 벤더 기본값을
-    #: KORAIL 기본값으로 오해하지 않도록 적어 둡니다.)
+    #: 일반 열차조회. 조회 액션의 기본값 — 달력이 없거나 성수기가 아닌 날
+    #: (``TrainScheduleViewModel.java:5225-5234``). ``KorailTalkApplication.java:382-386``
+    #: 이 Property 에 넣는 기본 aid 도 len 5 입니다.
     INQUIRY = "act_8"
-    #: 성수기 조회. 7.0.6: ``NetworkConstants.java:91``
-    #: ``ACTION_PEAK_SEASON_ID``(len 7). 고르는 지점은
-    #: ``TrainScheduleViewModel.java:5219-5235`` — ``getRunDateMap()`` 에서
-    #: 출발일의 ``RunDateOutItem`` 을 꺼내(``:5219-5224``)
-    #: ``isPeakSeason()``(``RunDateOutItem.java:516-523``, ``bizDdStgCd``
-    #: 를 봄)으로 갈라 ``:5227`` 또는 ``:5229`` 의 보호된 문자열을 골라
-    #: ``withNetFunnel(str, ...)``(``:5244``)에 넘깁니다. 달력을 아직 받지
-    #: 않아 항목이 없으면 ``:5231-5234`` 의 널 분기로 갑니다.
+    #: 성수기 열차조회. ``RunDateOutItem.isPeakSeason()`` 이 참인 날
+    #: (``TrainScheduleViewModel.java:5225-5229``, 판정은 ``bizDdStgCd`` 를 보호된
+    #: 코드값과 비교 — ``RunDateOutItem.java:516-523``).
     PEAK_SEASON_INQUIRY = "act_8_2"
-    #: 상품 조회. 7.0.6: ``NetworkConstants.java:92``
-    #: ``ACTION_PRODUCT_ID``(len 5). 위 성수기 분기(``TrainScheduleViewModel.java:5219-5235``)에는
-    #: 상품 갈래가 없습니다 — 상품 조회 호출부는 따로 찾지 못했습니다
-    #: (**미출처**). 상수 선언만 확인됩니다.
+    #: 상품(특가) 열차조회. ``specialOffer`` 가 있으면(``ACCOMPANY_4`` 제외) 조회
+    #: 액션이 따로 고른 len 5 문자열이 됩니다(``TrainScheduleViewModel.java:5213-5215``).
+    #: 그 문자열이 ``ACTION_PRODUCT_ID`` 라는 것은 **추정(미검증)** 입니다.
     PRODUCT = "act_6"
-    #: 예약. 7.0.6 은 이 액션을 세 갈래 호출부에서 씁니다 — 셋 다
-    #: ``netFunnelTicketReservation`` 이라는 같은 이름의 메서드입니다
-    #: (``TrainSeatMapViewModel.java:2719``, ``ReservationWaitViewModel.java:578``,
-    #: ``HomeViewModel.java:6231``). 다만 ``"act_14"`` 를 포함한 모든 ``act_*`` 리터럴은 7.0.6
-    #: 전체에서 문자열 그대로는 안 보입니다(AlienGuard 런타임 복호화라
-    #: 정적 검색 불가) — 위치는 확인했지만 리터럴 값 자체는 재확인하지
-    #: 못했습니다.
+    #: 예약(회원 ``certification.TicketReservation``·좌석배정 ``reservation.seatAssign.do``
+    #: ·비회원 ``nonMember.NonMemTicket``). 호출부는 ``netFunnelTicketReservation``/
+    #: ``netFunnelNonMemTicket`` 여섯 곳, 모두 len 6.
     RESERVE = "act_14"
-    #: 결제. 7.0.6: ``NetworkConstants.java:90`` ``ACTION_PAY_ID``(len 6).
-    #: 호출부는 ``PayViewModel.executePayment`` 안의
-    #: ``PayViewModel.java:6724`` — ``ScreenViewModel.withNetFunnel$default``
-    #: 의 첫 인자가 보호된 액션 id 문자열입니다.
+    #: 결제(``payment.ReservationPayment`` 외). 호출부는 ``PayViewModel.java:6724``,
+    #: ``FPayViewModel.java:795`` 의 ``executePayment``, len 6.
     PAY = "act_18"
-    #: 예약목록. 7.0.6: ``NetworkConstants.java:94``
-    #: ``ACTION_RESERVATION_TICKET_ID``(len 6). 이 상수를
-    #: 읽는 호출부는 찾지 못했습니다(상수는 코틀린 ``const`` 가 아니라
-    #: AlienGuard 로 초기화되는 ``static final String`` 이라 smali 에도
-    #: 선언부만 남습니다) — **호출부 미출처**, 선언만 확인.
+    #: 예약내역 조회(``reservation.ReservationView``). 호출부는
+    #: ``MyReservationViewModel.java:2528`` 의 ``reqReservationView``, len 6.
     RESERVED = "act_21"
-    #: 환불. **7.0.6 에 대응 상수를 찾지 못했습니다 — 미출처.**
-    #: ``NetworkConstants.Netfunnel``(``NetworkConstants.java:80-99``)의
-    #: 액션 상수는 일곱 개이고 그중 환불에 해당하는 이름이 없습니다
-    #: (``ACTION_ID``/``RESERVE``/``PAY``/``PEAK_SEASON``/``PRODUCT``/
-    #: ``TEST``/``RESERVATION_TICKET``). 게이트에 쓰이지 않으며,
-    #: ``"act_22"`` 는 7.0.6 으로는 확정할 수 없습니다.
-    REFUND = "act_22"
-    #: 테스트. 7.0.6: ``NetworkConstants.java:93`` ``ACTION_TEST_ID``
-    #: (len 5) — 선언은 있고 호출부는 없습니다.
+    #: 테스트. 선언(``NetworkConstants.java:93``)만 있고 호출부는 없습니다.
     TEST = "act_4"
 
 

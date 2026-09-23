@@ -10,6 +10,7 @@
 :func:`~korail_mobile_api.live.build_config_from_env` 를 씁니다.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from .constants import (
@@ -65,11 +66,14 @@ class KorailConfig:
     advertising_id: str = ""
     netfunnel_url: str = KORAIL_NETFUNNEL_URL
     netfunnel_timeout: float = KORAIL_NETFUNNEL_TIMEOUT_SECONDS
-    #: NetFunnel 가상 대기열. 기본 거짓 — 거짓인 동안
-    #: :class:`~korail_mobile_api.netfunnel.KorailNetFunnelClient` 생성 자체가
-    #: 거절됩니다. 대기열 토큰 없이도 모든 호출이 통과하는 상태라 끌 이유가
-    #: 있어야만 켭니다.
-    netfunnel_enabled: bool = False
+    #: NetFunnel 가상 대기열. **기본 참** — 7.0.6 앱은 열차조회·예약·결제·예약내역
+    #: 앞에서 언제나 대기열을 거칩니다(끄는 설정이 없고 SDK 의 ``bypass_`` 도 기본
+    #: 거짓 그대로입니다 — ``com/netfunnel/api/Property.java:8``,
+    #: ``KorailTalkApplication.java:361-389``). 대기열이 한가하면 5101 이 곧바로
+    #: 200 이라 작업마다 대기열 요청 두 번(5101·5004)이 더해질 뿐입니다. 거짓이면
+    #: 대기열을 부르지 않습니다. 관문 목록은
+    #: :data:`~korail_mobile_api.netfunnel.KORAIL_NETFUNNEL_GATES`.
+    netfunnel_enabled: bool = True
     #: DynaPath 안티오토메이션을 켭니다. **기본은 거짓.**
     #: 켜지 않은 채
     #: :data:`~korail_mobile_api.constants.DYNAPATH_REQUIRED_PATHS` 를 부르면
@@ -91,6 +95,15 @@ class KorailConfig:
     #: 이 필드도 **맨 끝**. ``enable_dynapath`` 와 같은 이유로, 위치 인자
     #: 안전성 때문에 새 필드는 항상 끝에 추가합니다.
     lang: str | None = None
+    #: 대기열 대기의 누적 상한(초). ``None``(기본)은 앱처럼 상한 없이 기다립니다 —
+    #: 7.0.6 의 대기 루프는 사용자가 화면을 닫을 때만 멈춥니다
+    #: (``com/netfunnel/api/Netfunnel.java:622-664``). 넘으면 요청을 보내지 않고
+    #: :class:`~korail_mobile_api.errors.KorailNetFunnelError` 입니다.
+    netfunnel_wait_limit: float | None = None
+    #: 관문 이름 → ``aid`` 덮어쓰기. ``aid`` 리터럴은 7.0.6 에서 보호돼 있어 기본값은
+    #: 길이·호출부 이름으로 고른 **미검증** 값입니다
+    #: (:data:`~korail_mobile_api.netfunnel.KORAIL_NETFUNNEL_GATES`).
+    netfunnel_actions: Mapping[str, str] | None = None
 
     def __post_init__(self) -> None:
         if not self.enable_dynapath or self.dynapath.enabled:
