@@ -198,7 +198,7 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
     ``version`` 에서 읽는 세 키가 7.0.6 ``MobilePlusMainVersion`` 이 선언하는
     필드 전부입니다 — ``MobilePlusMainVersion.java:52`` 의 역직렬화 생성자에
     ``NEWDVERSION``/``CNTAURL``/``AMESSAGE`` 세 ``@SerialName`` 만 있습니다.
-    ``CNTAURL`` 은 한동안 빠져 있었는데, 앱이 업데이트 팝업의 스토어 버튼
+    ``CNTAURL`` 은 앱이 업데이트 팝업의 스토어 버튼
     링크로 쓰는 값이라(``AppKt.java:1240`` → ``AppKt.java:1635`` 의
     ``StoreConfirmDialog``) 그것만 없으면 "새 버전이 있다"까지만 알고 어디로
     보낼지는 모르는 상태가 됩니다. 실서버는 같은 객체에 19개 키를 실어
@@ -350,11 +350,11 @@ def parse_train_search_metadata(
 
     7.0.6 ``TrainScheduleOut`` 의 ``h_menu_id`` 도 보존합니다.
 
-    ``h_merge_rsv_psb_flg`` 는 더 이상 여기서 읽지 않습니다: 7.0.6
+    ``h_merge_rsv_psb_flg`` 는 여기서 읽지 않습니다: 7.0.6
     ``TrainScheduleOutTrainInfos`` (``trn_infos`` 의 실제 DTO)는 이 키를
     선언하지 않습니다 — ``trn_info`` 하나만 멤버입니다. 이 이름의 필드는
-    다른 DTO(``MergeSeatsCOutTrnInfos``)에 속하며, 여기서 읽어도 항상
-    ``None`` 이 되는 죽은 읽기였습니다.
+    다른 DTO(``MergeSeatsCOutTrnInfos``)에 속하며, 여기서 읽으면 항상
+    ``None`` 입니다.
     """
     def optional(key: str) -> str | None:
         return _typed_optional_string(raw, key, context="train search metadata")
@@ -369,8 +369,7 @@ def parse_train_search_metadata(
         # The 환승 cursor pair. Both keys are declared on the 7.0.6 response
         # DTO (TrainScheduleOut.java:28,33; @SerialName list at :67), so they
         # are read on every response; they simply come back empty for a direct
-        # search. The old citation b5/c.java:370-371 is a 6.5.0 leftover with
-        # no 7.0.6 counterpart. Where 7.0.6 consumes them is only readable in
+        # search. Where 7.0.6 consumes them is only readable in
         # smali (jadx failed on responseTrainSchedule):
         # smali_classes5/.../TrainScheduleViewModel.smali:36806-36845 builds
         # Triple(hQryStNoNext, hPrcdTrnNoNext, hEctbTrnNoNext) for the transfer
@@ -573,9 +572,7 @@ def parse_train_calendar_response(
     그래도 null 을 한 번 더 막습니다(``CacheHelper.java:82`` 의
     ``runDateOut != null && (runningCalendar = ...) != null``;
     ``NetworkRepositoryImpl.java:12413`` 은 보호된 헬퍼로 비어 있는지 검사).
-    **다만 7.0.6 의 선언은 nullable 이 아니라 기본값 있는 non-null 입니다** —
-    "nullable ``List``" 라던 옛 서술과 그 근거 ``C0805e.java:124`` /
-    ``TrainCalendarDao:101-103`` 은 7.0.6 에 없는 6.5.0 잔재입니다. 값이 있는데
+    **다만 7.0.6 의 선언은 nullable 이 아니라 기본값 있는 non-null 입니다.** 값이 있는데
     리스트가 아닐 때만 :class:`~korail_mobile_api.errors.KorailProtocolError`
     입니다.
 
@@ -592,8 +589,7 @@ def parse_train_calendar_response(
     # a default rather than by nullability: RunDateOut.java:57-58,71-73 fill
     # the field with CollectionsKt.emptyList() when the key is absent, and
     # consumers still null-guard it (CacheHelper.java:82,
-    # NetworkRepositoryImpl.java:12413). The old citations C0805e.java:124 and
-    # TrainCalendarDao:101-103 are 6.5.0 leftovers absent from 7.0.6.
+    # NetworkRepositoryImpl.java:12413).
     # Accept absent/null as an empty day tuple; only a present non-list is a
     # genuine shape violation.
     days: list[TrainCalendarDay] = []
@@ -605,9 +601,7 @@ def parse_train_calendar_response(
                 # non-null with an AlienGuard-protected missing-value default
                 # (RunDateOutItem.java:37,104-105) and its reader compares it
                 # through a protected helper (TrainOptionViewModel.java
-                # :1066-1069), so there is no 7.0.6 null-date skip to cite --
-                # the old TrainCalendarDao:40-41,:89-94 / C0805e.java:140,147
-                # chain is a 6.5.0 leftover with no counterpart here. Parsing
+                # :1066-1069), so there is no 7.0.6 null-date skip to cite. Parsing
                 # raw JSON still has to survive a server that omits the key,
                 # so treat it as optional rather than aborting the whole
                 # calendar parse.
@@ -616,14 +610,7 @@ def parse_train_calendar_response(
                     "runDt",
                     context="train calendar",
                 ),
-                # WITHDRAWN CITATION: TrainCalendarDao:68-70
-                # (N.notNullEqual(this.bizDdStgCd,"5")) is a 6.5.0-era class
-                # absent from 7.0.6 -- no file under analysis/, and zero hits
-                # for the name in any of the seven classes*.dex string tables
-                # or the smali trees.
-                #
-                # Re-derived from the real 7.0.6 carrier instead: the
-                # deserializer assigns null to bizDdStgCd when the key's mask
+                # The 7.0.6 deserializer assigns null to bizDdStgCd when the key's mask
                 # bit is unset, and the class contains no
                 # throwMissingFieldException at all (RunDateOutItem.java
                 # :111-115), so 7.0.6 itself materialises null for an absent
@@ -633,31 +620,24 @@ def parse_train_calendar_response(
                 # argument into the obfuscated AppSuitLinker1.djsflxlftm1
                 # comparison dispatch. Whether that comparison is itself
                 # null-safe is PROTECTED and is NOT re-derived, so accepting
-                # null/absent here rests on the deserializer evidence, not on
-                # the old "null-guarded accessor" argument.
+                # null/absent here rests on the deserializer evidence.
                 business_day_stage_code=_typed_optional_string(
                     row,
                     "bizDdStgCd",
                     context="train calendar",
                 ),
-                # WITHDRAWN CITATION: "no accessor in TrainCalendarDao" --
-                # that 6.5.0-era class is absent from 7.0.6 (see above).
-                #
-                # Re-derived: dayDvCd defaults to null when its mask bit is
+                # dayDvCd defaults to null when its mask bit is
                 # unset (RunDateOutItem.java:106-110), and its getter
                 # (RunDateOutItem.java:421-423) has no call site anywhere in
                 # analysis/jadx/sources outside the model itself -- no other
-                # class references the getter or the field. The substance of
-                # the old claim therefore holds on current evidence: a
+                # class references the getter or the field, so a
                 # null/absent dayDvCd is never dereferenced by app code.
                 day_division_code=_typed_optional_string(
                     row,
                     "dayDvCd",
                     context="train calendar",
                 ),
-                # W4 finding: the 6.5.0 rationale above (TrainCalendarDao, not
-                # on disk for 7.0.6) doesn't hold for 7.0.6's RunDateOutItem --
-                # its synthetic constructor supplies a compiled default ("")
+                # 7.0.6's RunDateOutItem synthetic constructor supplies a compiled default ("")
                 # for hldyDvCd when the key's mask bit is unset, with no
                 # throwMissingFieldException for it (RunDateOutItem.java:116-
                 # 119). 7.0.6 itself deserializes an absent key fine, so
@@ -668,11 +648,7 @@ def parse_train_calendar_response(
                     "hldyDvCd",
                     context="train calendar",
                 ),
-                # WITHDRAWN CITATION: isForSaleDate() / TrainCalendarDao
-                # :52-54 -- 6.5.0-era, absent from 7.0.6, which has no
-                # isForSaleDate() under any name we could locate.
-                #
-                # Re-derived: saleDdDvCd defaults to null when its mask bit is
+                # saleDdDvCd defaults to null when its mask bit is
                 # unset (RunDateOutItem.java:121-125), and its getter
                 # (RunDateOutItem.java:445-447) has no call site outside the
                 # model, so nothing in 7.0.6 dereferences it. Null/absent is
@@ -682,20 +658,15 @@ def parse_train_calendar_response(
                     "saleDdDvCd",
                     context="train calendar",
                 ),
-                # WITHDRAWN CITATION: TrainCalendarDao:44-82
-                # (BOOL_YES.equals(this.xTrnOpFlg)) -- 6.5.0-era, absent from
-                # 7.0.6.
-                #
-                # Partially re-derived: every *TrnOpFlg field defaults to null
+                # Every *TrnOpFlg field defaults to null
                 # when its mask bit is unset (RunDateOutItem.java:126-160), so
                 # 7.0.6's own deserializer produces null flags for absent
                 # keys. They are read by isRunDate(TrainGroup)
                 # (RunDateOutItem.java:526-590) -- v/s/d/a/g/xTrnOpFlg only;
                 # oTrnOpFlg has no reader anywhere -- and again only through
                 # the obfuscated AppSuitLinker1.djsflxlftm1 comparison, whose
-                # null-handling is PROTECTED. The old "null-safe, returns
-                # false" half of the claim is therefore currently UNSOURCED.
-                # What IS sourced is that absent flag keys legitimately become
+                # null-handling is PROTECTED, so whether a null flag reads as
+                # false is UNSOURCED. What IS sourced is that absent flag keys legitimately become
                 # null inside 7.0.6, which is why this parser must not reject
                 # them. (Evidence only -- the null-tolerant behavior below is
                 # unchanged and is not a defect.)
@@ -762,7 +733,7 @@ def parse_train_schedule_response(
                     "stopRsStnCd",
                     context="train schedule stop",
                 ),
-                # W4 finding: ActualTrainScheduleOutDlay.java's synthetic
+                # ActualTrainScheduleOutDlay.java's synthetic
                 # constructor gives stopStnNm a compiled default (bit 2 of
                 # its mask) like every sibling field on this row -- 7.0.6
                 # never throws for an absent value, so requiring it here
@@ -886,7 +857,7 @@ def parse_train_schedule_response(
         origin_station_name=optional("orgRsStnNm"),
         route_code=optional("routCd"),
         route_name=optional("routNm"),
-        # W4 finding: ActualTrainScheduleOut.java's synthetic constructor
+        # ActualTrainScheduleOut.java's synthetic constructor
         # gives runDt1 a compiled default (bit 4 of its mask) with no
         # throwMissingFieldException for it -- 7.0.6 deserializes an absent
         # key fine, so requiring it here rejects a response shape the real
@@ -903,11 +874,7 @@ def parse_train_schedule_response(
         terminal_station_name=optional("tmnRsStnNm"),
         train_attribute_code=optional("trnAttCd"),
         train_departure_flag=optional("trnDptFlg"),
-        # ``trnNo1`` 을 선택값으로 읽습니다. 예전 주석은 "nullable Gson String
-        # (TrainScheduleDao.java:123)" 이라고 했는데 두 군데가 틀렸습니다 --
-        # 앱은 Gson 이 아니라 kotlinx-serialization 을 쓰고,
-        # ``TrainScheduleDao``/``TrainServiceInfoWebViewActivity`` 는 7.0.6 에
-        # 없는 6.5.0 클래스입니다.
+        # ``trnNo1`` 을 선택값으로 읽습니다.
         #
         # 7.0.6 의 실제 선언은 ``ActualTrainScheduleOut.java:47`` 의 non-null
         # ``String trnNo1`` 이고, 필드 출현 비트가 없으면 AlienGuard 로 보호된
@@ -948,10 +915,10 @@ def parse_transfer_station_list_response(
             )
         stations.append(
             TransferStation(
-                # W4 finding: ChtnStnOutItem.java's synthetic constructor
+                # ChtnStnOutItem.java's synthetic constructor
                 # gives both chtnRsStnCd (bit 8) and chtnRsStnNm (bit 16)
                 # compiled defaults, same as the third field on this row
-                # (chtnRsStnEngNm) which was already read as optional -- no
+                # (chtnRsStnEngNm), also read as optional -- no
                 # throwMissingFieldException for either, so requiring them
                 # here rejects a response shape 7.0.6 itself accepts.
                 station_code=_typed_optional_string(
@@ -1019,10 +986,6 @@ def parse_seat_car_list_response(
         # the server assigned.
         car_no = _inventory_required_int(row, "h_srcar_no")
         # 없거나 널인 ``seatAttInfos`` 는 "특실 좌석속성이 없는 호차" 로 봅니다.
-        # 예전 근거는 "SearchCarListDao.CarInfo 의 nullable Gson List" 였는데 두
-        # 군데가 틀렸습니다 -- 앱은 Gson 이 아니라 kotlinx-serialization 을 쓰고,
-        # ``SearchCarListDao``/``SeatSearchActivity`` 는 7.0.6 에 없는 6.5.0
-        # 클래스입니다.
         #
         # 7.0.6 의 실제 선언은 ``TrainResearchOutCarInfo.java:33`` 의
         # ``List<TrainResearchOutSeatInfo> seatAttInfos`` 이고, 필드 출현 비트가
