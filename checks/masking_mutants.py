@@ -83,8 +83,8 @@ MUTANTS = [
     ),
     (
         "폼 값의 중첩 구조를 문자열로 뭉갬(C01)",
-        "        return _repr_iterative(redact_value(value))",
-        "        return redact_text(str(value))",
+        "    return _repr_iterative(masked)\n",
+        "    return redact_text(str(value))\n",
     ),
     # C03(scheme 생략 URL)은 변이로 두지 않습니다. ``redact_url`` 의 구조 경로와
     # 텍스트 경로의 userinfo 패턴 **둘 다** ``//user@host`` 를 가리므로, 한쪽을
@@ -165,8 +165,8 @@ MUTANTS = [
     (
         # 옛 구현은 이미 쓴 이름만 피했습니다.
         "가린 키가 원래 키와 겹쳐도 모름(외부 C06)",
-        "    while candidate in used or candidate in reserved:",
-        "    while candidate in used:",
+        "    while shown in used or shown in reserved:",
+        "    while shown in used:",
     ),
     (
         # 옛 구현: 한 번 본 컨테이너를 전부 기억(전역 방문 집합).
@@ -176,14 +176,14 @@ MUTANTS = [
     ),
     (
         "가린 뒤 str() 로 문자열화(외부 C08)",
-        "        return _repr_iterative(redact_value(value))",
-        "        return str(redact_value(value))",
+        "    return _repr_iterative(masked)\n",
+        "    return str(masked)\n",
     ),
     (
         # 옛 구현: 구조 경로가 실패하면 곧장 텍스트 경로.
         "URL 폴백이 퍼센트 인코딩 키를 못 봄(외부 C09)",
-        "        return _redact_url_fallback(value)",
-        "        return redact_text(value)",
+        "    except (ValueError, UnicodeError):\n        return _redact_url_fallback(value)",
+        "    except (ValueError, UnicodeError):\n        return redact_text(value)",
     ),
     (
         # 옛 정규식은 한 겹만 봤습니다 — 안쪽 여는 괄호를 세지 않으면 첫 닫는
@@ -217,9 +217,83 @@ MUTANTS = [
         "        is_sequence = isinstance(item, (list, tuple))",
     ),
     (
-        "정수 카드번호를 그대로 둠",
-        "        elif _is_card_shaped_int(item):",
+        "숫자 카드번호를 그대로 둠",
+        "        elif _is_card_shaped_number(item):",
         "        elif False:",
+    ),
+    # --- 재감사(2026-09-23) RC08·NC01~NC06·NC11·NN03. 고친 것을 옛 결함 그대로 되돌립니다.
+    (
+        "반복 문자열화가 set·frozenset 을 재귀 repr 로 씀(재감사 RC08)",
+        "        elif kind is list or kind is tuple or kind is set or kind is frozenset:",
+        "        elif kind is list or kind is tuple:",
+    ),
+    (
+        "문자열이 아닌 매핑 키를 그대로 둠(재감사 NC01)",
+        "                    masked_text = _masked_key_text(child_key)\n",
+        "                    masked_text = None\n",
+    ),
+    (
+        # 옛 구현은 이미 쓴 이름만 피했고, 문자열이 아닌 키는 번호 없이 str() 이었습니다.
+        "폼의 문자열 아닌 키가 원래 문자열 키와 겹쳐도 모름(재감사 NC01)",
+        "            name = _unique_key(\n",
+        "            name = (lambda text, _u, _r: text)(\n",
+    ),
+    (
+        "float 카드번호를 그대로 둠(재감사 NC02)",
+        "        return 1e13 <= abs(value) < 1e19 or bool(_NUMBER_CARD_RE.search(repr(value)))",
+        "        return False",
+    ),
+    (
+        "Decimal 카드번호를 그대로 둠(재감사 NC02)",
+        "        if not value.is_finite():",
+        "        if True:",
+    ),
+    (
+        # 옛 구현: 가린 원소를 무조건 set 에 다시 넣음 — dict 원소에서 TypeError.
+        "가린 set 원소가 해시 불가면 예외(재감사 NC03)",
+        "        except Exception:  # noqa: BLE001\n            # 가린 원소가 해시할 수 없거나",
+        "        except ZeroDivisionError:  # noqa: BLE001\n            # 가린 원소가 해시할 수 없거나",
+    ),
+    (
+        # 옛 구현: 폼의 set·frozenset 값은 str() 뒤 텍스트 경로.
+        "폼의 set 값을 str() 로 뭉갬(재감사 NC04)",
+        "    masked = redact_value(value)\n    if masked is value:",
+        "    if isinstance(value, (set, frozenset)):\n        return _redact_text(str(value))\n"
+        "    masked = redact_value(value)\n    if masked is value:",
+    ),
+    (
+        # 옛 구현: 공백 때문에 구조 처리를 포기하면 곧장 텍스트 경로.
+        "상대·scheme 생략 URL 포기 시 텍스트 경로(재감사 NC05)",
+        '        if parsed.path.startswith("/") or parsed.netloc:\n',
+        "        if False:\n",
+    ),
+    (
+        # 옛 구현: &·; + 키= 경계를 = 형식에만.
+        "콜론 형식 값이 &키= 에서 안 끝남(재감사 NC06)",
+        "    boundary = eq or not _FIELD_KEY_RE.match(text, start)",
+        "    boundary = eq",
+    ),
+    (
+        # 반대 방향: 쿠키 헤더 값(키=값 목록)까지 ;키= 에서 끊으면 꼬리가 샙니다.
+        "쿠키 헤더 값을 ;키= 에서 끊음(NC06 의 반대 방향)",
+        "    boundary = eq or not _FIELD_KEY_RE.match(text, start)",
+        "    boundary = True",
+    ),
+    (
+        "URL 폴백이 디코딩한 쿼리 키의 카드번호를 안 봄(재감사 NC11)",
+        "        if masked_name != decoded_name:",
+        "        if False:",
+    ),
+    (
+        "URL 폴백이 디코딩한 쿼리 값의 카드번호를 안 봄(재감사 NC11)",
+        "                if masked_item != decoded_item:",
+        "                if False:",
+    ),
+    (
+        # 옛 구현: 자릿수 한도를 넘는 정수의 str()/repr() 이 ValueError.
+        "큰 정수의 문자열화가 예외(재감사 NN03)",
+        '            return f"<int {value.bit_length()} bits>"',
+        "            raise",
     ),
 ]
 
@@ -264,14 +338,22 @@ def main() -> int:
     if not SRC.is_file():
         print(f"{SRC} 가 없습니다 — 저장소 루트에서 실행했습니까?")
         return 2
+    # 입력을 **먼저** 읽습니다. 읽을 수 없으면(권한 000 등) 검사 불완전입니다 —
+    # 예전에는 기준선 하네스를 돌린 뒤 여기서 ``PermissionError`` traceback 으로
+    # 종료 코드 1(= "실패")이 났습니다(재감사 NC10).
+    try:
+        original = SRC.read_bytes()
+        original.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        print(f"검사 불완전: {SRC} 를 읽지 못했습니다 — {type(error).__name__}: {error}")
+        return 2
+    original_digest = hashlib.sha256(original).hexdigest()
     baseline = _harness_status()
     if baseline != "pass":
         print(f"기준선 {baseline}: 깨끗한 원본에서 하네스가 종료 코드 0 이 아닙니다.")
         print("이 상태에서는 어떤 변이도 '잡혔다'고 말할 수 없습니다.")
         return 1 if baseline == "fail" else 2
 
-    original = SRC.read_bytes()
-    original_digest = _digest(SRC)
     missed = 0
     incomplete = 0
     with tempfile.TemporaryDirectory() as tmp:
@@ -324,4 +406,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # 실행기 자체의 예상 못 한 예외(임시 디렉터리·복사·파일 읽기 실패 등)는
+    # "놓침"이 아니라 **검사 불완전(2)** 입니다. traceback 의 종료 코드 1 은
+    # "실패"와 구분되지 않았습니다(재감사 NC10).
+    try:
+        exit_code = main()
+    except Exception as error:  # noqa: BLE001
+        print(f"검사 불완전: 변이 실행기 오류 — {type(error).__name__}: {error}")
+        exit_code = 2
+    sys.exit(exit_code)

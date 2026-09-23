@@ -261,6 +261,84 @@ def _exact(fn, want):
     return check
 
 
+# --- 재감사 RC08·NC01~NC06·NC11·NN03 용 --------------------------------------
+import dataclasses as _dataclasses
+from decimal import Decimal as _Decimal
+
+#: 백슬래시. 소스에 escape 를 직접 적으면 편집 도구·독자가 한 번 풀어 읽기 쉬워
+#: 글자 단위로 만듭니다.
+_BS = chr(92)
+#: ``{"txtPwd":"<비밀>"}`` — ``t`` 가 JSON escape 된 민감 키(재감사 NC04).
+_ESC_JSON = '{"' + _BS + 'u0074xtPwd":"' + SEC + '"}'
+#: 카드번호의 모든 글자를 퍼센트 인코딩한 것(재감사 NC11).
+_PCT_CARD = "".join("%" + format(ord(c), "02x") for c in CARD)
+_HUGE = 10**5000
+_HUGE_TEXT = f"<int {_HUGE.bit_length()} bits>"
+
+
+@_dataclasses.dataclass(frozen=True)
+class _FrozenRecord:
+    """set 원소가 될 수 있는(해시 가능한) 레코드. 가리면 dict 가 됩니다(NC03)."""
+    txtPwd: str
+    public: str
+
+
+def _exact_repr(fn, want):
+    """``repr(결과)`` 가 ``want`` 와 정확히 같은지 — ``nan`` 처럼 ``==`` 로 못 보는 값용."""
+    def check(v):
+        out = fn(v)
+        text = repr(out)
+        return text if text == want else f"{text} <<NOT_EXACT>>"
+    return check
+
+
+def _deep_frozenset(_tag):
+    """frozenset :data:`DEPTH` 겹 안의 카드번호. 가린 뒤 문자열화에 재귀가 없어야 합니다(RC08).
+
+    frozenset 은 해시를 캐시하므로 이 깊이를 만들어도 C 재귀가 없습니다 — 깊은
+    **튜플**을 set 에 넣으면 해시가 C 스택을 넘어 프로세스가 죽습니다(3.14 에서
+    약 15만 겹). 기대 출력을 글자 그대로 비교합니다.
+    """
+    node = frozenset({CARD})
+    for _ in range(DEPTH):
+        node = frozenset({node})
+    out = redact_payload({"public": node})["public"]
+    want = "frozenset({" * (DEPTH + 1) + "'[REDACTED_CARD]'" + "})" * (DEPTH + 1)
+    if out != want:
+        return out[-80:] + " <<NOT_EXACT>>"
+    return out[-80:]
+
+
+def _deep_tuple_in_frozenset(_tag):
+    """재감사 RC08 의 입력 그대로 — frozenset 안의 튜플 12,000겹(3.13 에서 재귀 한도 초과)."""
+    node = "end"
+    for _ in range(12_000):
+        node = (node,)
+    out = redact_payload({"public": frozenset({node})})["public"]
+    want = "frozenset({" + "(" * 12_000 + "'end'" + ",)" * 12_000 + "})"
+    if out != want:
+        return out[-80:] + " <<NOT_EXACT>>"
+    return out[-80:]
+
+
+def _payload_like_value(v):
+    """폼의 비문자열 값이 :func:`redact_value` 와 **똑같이** 가려지는지(재감사 NC04).
+
+    폼 값은 문자열로 나가므로 ``str(redact_value(값))`` 과 글자째 비교합니다.
+    """
+    out = redact_payload(v)
+    want = {key: str(item) for key, item in redact_value(v).items()}
+    return str(out) if out == want else f"{out!r} <<NOT_LIKE_VALUE {want!r}>>"
+
+
+def _huge_key_value(_tag):
+    """자릿수 한도를 넘는 정수 **키**도 예외 없이 지나가야 합니다(재감사 NN03)."""
+    out = redact_value({_HUGE: PUB, "n": _HUGE})
+    if list(out) != [_HUGE, "n"] or out["n"] != _HUGE or out[_HUGE] != PUB:
+        return "<<HUGE_KEY_CHANGED>>"
+    return PUB
+
+
 CASES = [
  # --- v3 에서 이미 맞던 것 (회귀 방지)
  ("base/text",     f"h_sgr_nm={SEC}",                     redact_text, [SEC], []),
@@ -468,6 +546,86 @@ CASES = [
                         _exact(redact_value, {"s": {"[REDACTED_CARD]", PUB}, "f": frozenset({("[REDACTED_CARD]",)})}), [CARD], [PUB]),
  ("M/int_card",        {"n": int(CARD), "small": 12, "flag": True},
                         _exact(redact_value, {"n": "[REDACTED_CARD]", "small": 12, "flag": True}), [CARD], []),
+ # --- 재감사(2026-09-23) RC08·NC01~NC06·NC11·NN03. 두 방향 + 서식이 중요한 곳은 글자째.
+ # RC08: frozenset·set 도 재귀 없이 문자열화. 얕은 입력은 str() 과 글자째 같아야 합니다.
+ ("RC08/deep_frozenset", "deep",                             _deep_frozenset, [CARD], []),
+ ("RC08/tuple_in_fs",   "deep",                              _deep_tuple_in_frozenset, [], []),
+ ("RC08/shallow_sets",  {"s": {PUB}, "e": set(), "f": frozenset(), "t": frozenset({(CARD,)})},
+                        _exact(redact_payload, {"s": "{'PUBLIC_MARKER'}", "e": "set()", "f": "frozenset()",
+                                                "t": "frozenset({('[REDACTED_CARD]',)})"}), [CARD], [PUB]),
+ # NC01: 문자열이 아닌 키의 카드번호(G5). 가릴 것이 없는 키는 그대로, 겹치면 #N.
+ ("NC01/int_key",       {int(CARD): PUB},                    _exact(redact_value, {"[REDACTED_CARD]": PUB}), [CARD], [PUB]),
+ ("NC01/tuple_key",     {(CARD, "a"): PUB},                  _exact(redact_value, {"('[REDACTED_CARD]', 'a')": PUB}), [CARD], [PUB, "'a'"]),
+ ("NC01/fs_key",        {frozenset({int(CARD)}): PUB},       _exact(redact_value, {"frozenset({'[REDACTED_CARD]'})": PUB}), [CARD], [PUB]),
+ ("NC01/float_key",     {float(CARD): PUB},                  _exact(redact_value, {"[REDACTED_CARD]": PUB}), [CARD], [PUB]),
+ ("NC01/collide",       {int(CARD): "A", CARD: "B", "[REDACTED_CARD]": "C", (CARD,): "D", (int(CARD),): "E"},
+                        _entries_kept(redact_mapping), [CARD], []),
+ ("NC01/collide_exact", {int(CARD): "A", "[REDACTED_CARD]": "C"},
+                        _exact(redact_value, {"[REDACTED_CARD]#2": "A", "[REDACTED_CARD]": "C"}), [CARD], []),
+ ("NC01/keep_keys",     {12: PUB, ("a", 1): "x", None: "y", 1.5: "z"},
+                        _exact(redact_value, {12: PUB, ("a", 1): "x", None: "y", 1.5: "z"}), [], [PUB]),
+ ("NC01/pay_keys",      {int(CARD): PUB, (CARD,): "t", 1: "a", "1": "b"},
+                        _exact(redact_payload, {"[REDACTED_CARD]": PUB, "('[REDACTED_CARD]',)": "t", "1#2": "a", "1": "b"}),
+                        [CARD], [PUB]),
+ # NC02: 카드번호 모양의 float·Decimal(G5). inf·nan·작은 수는 그대로, 예외 없음.
+ ("NC02/float",         {"f": float(CARD), "neg": -float(CARD), "e18": 4.1e18, "frac": float(CARD) + 0.5,
+                         "pub": 1.5, "big": 1e300, "inf": float("inf"), "nan": float("nan")},
+                        _exact_repr(redact_value, "{'f': '[REDACTED_CARD]', 'neg': '[REDACTED_CARD]', "
+                                    "'e18': '[REDACTED_CARD]', 'frac': '[REDACTED_CARD]', 'pub': 1.5, "
+                                    "'big': 1e+300, 'inf': inf, 'nan': nan}"), [CARD], []),
+ ("NC02/decimal",       [_Decimal(CARD), _Decimal(CARD + ".25"), _Decimal("-" + CARD + "E0"), _Decimal("1.5"),
+                         _Decimal("NaN"), _Decimal("-Infinity"), _Decimal("1e100000"), _Decimal(0)],
+                        _exact_repr(redact_value, "['[REDACTED_CARD]', '[REDACTED_CARD]', '[REDACTED_CARD]', "
+                                    "Decimal('1.5'), Decimal('NaN'), Decimal('-Infinity'), Decimal('1E+100000'), "
+                                    "Decimal('0')]"), [CARD], []),
+ ("NC02/pay_float",     {"f": float(CARD), "d": _Decimal(CARD), "p": 1.5, "l": [float(CARD), 2.5]},
+                        _exact(redact_payload, {"f": "[REDACTED_CARD]", "d": "[REDACTED_CARD]", "p": "1.5",
+                                                "l": ["[REDACTED_CARD]", "2.5"]}), [CARD], []),
+ # NC03: 가린 원소가 해시할 수 없으면 list(예외·누출 없음).
+ ("NC03/set_record",    {_FrozenRecord(SEC, PUB)},
+                        _exact(redact_value, [{"txtPwd": "[REDACTED]", "public": PUB}]), [SEC], [PUB]),
+ ("NC03/nested",        {"s": frozenset({(_FrozenRecord(SEC, PUB),)}), "k": {CARD}},
+                        _exact(redact_value, {"s": [({"txtPwd": "[REDACTED]", "public": PUB},)],
+                                              "k": {"[REDACTED_CARD]"}}), [SEC, CARD], [PUB]),
+ ("NC03/pay_record",    {"outer": {_FrozenRecord(SEC, PUB)}},
+                        _exact(redact_payload, {"outer": "[{'txtPwd': '[REDACTED]', 'public': 'PUBLIC_MARKER'}]"}),
+                        [SEC], [PUB]),
+ # NC04: 폼의 set·frozenset 값도 구조로 — redact_value 와 같은 결과.
+ ("NC04/pay_set_json",  {"outer": {_ESC_JSON}},
+                        _exact(redact_payload, {"outer": "{'{\"txtPwd\": \"[REDACTED]\"}'}"}), [SEC], []),
+ ("NC04/like_value",    {"a": {_ESC_JSON}, "b": frozenset({_ESC_JSON, PUB}), "c": {"x": {_ESC_JSON}},
+                         "d": frozenset({(CARD,)}), "e": 7},
+                        _payload_like_value, [SEC, CARD], [PUB]),
+ # NC05: /·// 로 시작하는데 공백 때문에 구조 처리를 포기해도 인코딩된 민감 키는 가림.
+ ("NC05/rel_space",     "/?%74xtPwd=" + SEC + " tail",       _exact(redact_url, "/?%74xtPwd=[REDACTED]"), [SEC], []),
+ ("NC05/schemerel_sp",  "//host.invalid/?lang=ko&%74xtPwd=" + SEC + " tail",
+                        _exact(redact_url, "//host.invalid/?lang=ko&%74xtPwd=[REDACTED]"), [SEC],
+                        ["lang=ko", "host.invalid"]),
+ ("NC05/rel_neigh",     f"/p?%74xtPwd={SEC} x&trnNo1={PUB}",  _exact(redact_url, f"/p?%74xtPwd=[REDACTED]&trnNo1={PUB}"),
+                        [SEC], [f"trnNo1={PUB}"]),
+ # NC06: 콜론 형식도 &·; + 키= 에서 값이 끝남(G4). 값이 키=값 목록이면(쿠키) 끝나지 않음.
+ ("NC06/colon_amp",     f"txtPwd: {SEC}&lang={PUB}",         _exact(redact_text, f"txtPwd: [REDACTED]&lang={PUB}"),
+                        [SEC], [f"lang={PUB}"]),
+ ("NC06/colon_semi",    f"txtPwd: {SEC};trnNo1={PUB}",       _exact(redact_text, f"txtPwd: [REDACTED];trnNo1={PUB}"),
+                        [SEC], [f"trnNo1={PUB}"]),
+ ("NC06/quoted_colon",  f'"txtPwd": {SEC}&lang={PUB}',       _exact(redact_text, f'"txtPwd": "[REDACTED]"&lang={PUB}'),
+                        [SEC], [f"lang={PUB}"]),
+ ("NC06/colon_bracket", f"txtPwd: [{SEC}]&lang={PUB}",       _exact(redact_text, f"txtPwd: [REDACTED]&lang={PUB}"),
+                        [SEC], [f"lang={PUB}"]),
+ ("NC06/colon_tail",    f"txtPwd: HEAD&{SEC}",               redact_text, [SEC], []),
+ ("NC06/cookie_list",   f"Cookie: a=HEAD;lang={SEC}&x={TAIL}", redact_text, [SEC, TAIL], []),
+ # NC11: URL 오류 복구 폴백도 디코딩한 쿼리 키·값의 카드번호를 가림(G5).
+ ("NC11/fallback_key",  f"https://example.invalid/?{_PCT_CARD}={PUB}&q=\ud800&lang=ko",
+                        _exact(redact_url, f"https://example.invalid/?[REDACTED_CARD]={PUB}&q=\ud800&lang=ko"),
+                        [CARD, _PCT_CARD], [PUB, "lang=ko"]),
+ ("NC11/badhost_key",   f"https://[bad/?{_PCT_CARD}=public",
+                        _exact(redact_url, "https://[bad/?[REDACTED_CARD]=public"), [CARD, _PCT_CARD], ["public"]),
+ ("NC11/fallback_val",  f"https://[bad/?q={_PCT_CARD}&lang=ko",
+                        _exact(redact_url, "https://[bad/?q=[REDACTED_CARD]&lang=ko"), [CARD, _PCT_CARD], ["lang=ko"]),
+ # NN03(값싼 수정): 자릿수 한도를 넘는 비민감 정수도 예외 없이.
+ ("NN03/pay_huge",      {"public": _HUGE, _HUGE: "k", "n": [_HUGE]},
+                        _exact(redact_payload, {"public": _HUGE_TEXT, _HUGE_TEXT: "k", "n": [_HUGE_TEXT]}), [], ["bits"]),
+ ("NN03/value_huge",    "huge",                              _huge_key_value, [], [PUB]),
 ]
 
 #: :func:`_json_ok`·:func:`_two_entries` 가 붙이는 결함 표식. 사례마다 금지
