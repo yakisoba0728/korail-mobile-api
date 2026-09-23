@@ -109,6 +109,10 @@ class TicketListReservation:
     # 아래 둘은 ``raw`` **뒤** 에 붙입니다 — 위 :class:`TicketListTicket` 과 같은
     # 이유로, 위치 인자로 만들어지는 호출부가 조용히 어긋나지 않게 새 필드는
     # 언제나 끝에 덧붙입니다.
+    # 둘 다 *관대하게* 읽습니다: 라이브 캡처가 없는 키라, 값이 예상 밖 모양으로
+    # 오면 그 필드만 ``None`` 이 되고 예약 행은 그대로 파싱됩니다 — 필드를
+    # 덧붙인 일이 예전에 되던 응답을 오류로 바꾸면 안 되기 때문입니다. 무엇이
+    # 왔든 :attr:`raw` 에 남습니다(``read_parsers._additive_add_srv_item``).
     #: ``addSrvInfo`` — 이 예약에 딸린 부가서비스 한 건
     #: (``MyTicketListOutReservation.java:39``, 타입 ``AddSrvItem``).
     #: ``AddSrvItem`` 은 MaaS 상세 목록의 행과 **같은 DTO** 이므로
@@ -174,6 +178,12 @@ class CartItem:
     # ``@SerialName`` 을 답니다(281-392행). 위에서 16개만 읽고 있었으므로 남은
     # 열둘을 아래에 덧붙입니다 — ``raw`` **뒤** 인 이유는
     # :class:`TicketListTicket` 과 같습니다(위치 인자 안전).
+    # 열둘 모두 *관대하게* 읽습니다: 라이브 캡처가 없어 서버가 보내는 모양을
+    # 확인할 수 없으므로, ``bool``/``float``/리스트/객체가 와도 그 필드만
+    # ``None`` 이 되고 장바구니 행은 살아 남습니다. 덧붙인 필드가 예전 버전에서
+    # 파싱되던 응답을 오류로 바꾸는 일은 없어야 합니다 — 원본 값은 :attr:`raw`
+    # 에 그대로 있습니다(``read_parsers._additive_scalar_string``). 위 16개는
+    # 예전처럼 엄격합니다.
     #: ``h_item_dv_cd`` — :attr:`item_type`(``h_item_dv_nm``)의 코드 짝
     #: (``CartInfo.java:38``, ``@SerialName`` 은 같은 파일 317행). 앱은 이 코드로
     #: 장바구니 행을 갈라 보지만(``BasketTicketViewModel.java:4186,4295``) 비교

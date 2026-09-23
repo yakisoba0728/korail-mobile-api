@@ -160,17 +160,18 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
         # :52) is kept as the raw string that arrives — the enum's serialized
         # names are AlienGuard ciphertext (TicketDefine.java:1092-1130), so no
         # code mapping is claimed. Both stay reachable through `raw` as before.
-        add_srv_raw = _optional_mapping(
-            reservation_raw, "addSrvInfo", "ticket list reservation"
-        )
-        additional_service = (
-            None
-            if add_srv_raw is None
-            else _parse_add_srv_item(
-                add_srv_raw,
-                "ticket list addSrvInfo",
-                "ticket list addSrvInfo detailInfo",
-            )
+        #
+        # 둘 다 *관대하게* 읽습니다(_additive_add_srv_item /
+        # _additive_scalar_string): 라이브 캡처가 없는 두 키라 모양을 확인할
+        # 길이 없고, 나중에 덧붙인 필드가 예전에 파싱되던 예약 행을
+        # KorailProtocolError 로 바꿔서는 안 됩니다. 모양이 어긋나면 그
+        # 필드만 None 이고 값은 raw 에 남습니다.
+        additional_service = _additive_add_srv_item(
+            reservation_raw,
+            "addSrvInfo",
+            "ticket list reservation",
+            "ticket list addSrvInfo",
+            "ticket list addSrvInfo detailInfo",
         )
         reservations.append(
             TicketListReservation(
@@ -216,7 +217,7 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
                 ),
                 raw=reservation_raw,
                 additional_service=additional_service,
-                ticket_kind=_optional_string(
+                ticket_kind=_additive_scalar_string(
                     reservation_raw, "ticketKind", "ticket list reservation"
                 ),
             )
@@ -540,6 +541,49 @@ def _nullable_scalar_fields(
     }
 
 
+def _additive_scalar_string(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+) -> str | None:
+    """:func:`_optional_scalar_string` 의 **관대한** 짝 — 모양이 어긋나면 ``None``.
+
+    **뒤늦게 덧붙인 필드 전용입니다.** 그런 필드는 라이브 캡처가 없어 서버가
+    실제로 무엇을 보내는지 모릅니다. 모르는 필드를 엄격하게 읽으면, 예전
+    버전이 ``raw`` 로 멀쩡히 돌려주던 응답이 이제
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 로 죽습니다 —
+    필드를 하나 더 읽겠다는 선택이 라이브러리가 받아들이는 응답의 폭을
+    **좁히는** 셈이고, 그것은 덧붙임이 아닙니다. 그래서 ``bool``/``float``/
+    리스트/객체가 와도 응답 전체를 버리지 않고 이 필드만 ``None`` 으로 둡니다.
+    호출자는 원래 값을 모델의 ``raw`` 에서 그대로 볼 수 있습니다.
+
+    문자열 통과와 JSON 정수 → 문자열 정규화는 :func:`_optional_scalar_string`
+    그대로입니다(KORAIL 이 ``String`` 선언 필드를 숫자로도 보내는 상처).
+
+    **기존 필드에는 쓰지 마십시오** — 기존의 엄격함은 라이브로 확인된 계약이고,
+    그것을 푸는 것은 별개의 변경입니다.
+    """
+    try:
+        return _optional_scalar_string(data, key, context)
+    except KorailProtocolError:
+        return None
+
+
+def _additive_scalar_fields(
+    data: Mapping[str, Any],
+    field_map: Mapping[str, str],
+    context: str,
+) -> dict[str, str | None]:
+    """:func:`_nullable_scalar_fields` 의 관대한 짝.
+
+    왜 관대한지는 :func:`_additive_scalar_string` 을 보십시오.
+    """
+    return {
+        attribute: _additive_scalar_string(data, wire_name, context)
+        for attribute, wire_name in field_map.items()
+    }
+
+
 # ─── Field maps for the first-half parsers ───────────────────────────────────
 
 _TICKET_LIST_TICKET_FIELDS: dict[str, str] = {
@@ -605,6 +649,12 @@ _CART_ITEM_FIELDS: dict[str, str] = {
 # KorailProtocolError 로 죽습니다 — ``h_srcar_no`` 에서 이미 겪은 일입니다.
 # ``_optional_scalar_string`` 은 문자열과 정수를 모두 받아 문자열로
 # 정규화하므로 지금 되는 응답을 깨뜨릴 수 없습니다(기존 16개는 그대로 둡니다).
+#
+# 같은 이유가 나머지 모양에도 그대로 적용돼서, 읽기는
+# ``_additive_scalar_fields`` 로 합니다: 라이브 캡처가 없는 필드에 ``bool``,
+# ``float``, 리스트, 객체가 와도 그 필드만 ``None`` 이 되고 행 전체는 살아
+# 남습니다. 필드를 덧붙인 일이 예전 버전에서 ``raw`` 로 잘 돌아가던 응답을
+# KorailProtocolError 로 바꾸면 안 됩니다 — 값은 여전히 ``raw`` 에 있습니다.
 _CART_ITEM_SCALAR_FIELDS: dict[str, str] = {
     "item_type_code": "h_item_dv_cd",
     "provider_id": "h_add_srv_mrk_ent_id",
@@ -1198,7 +1248,8 @@ def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
         items.append(
             CartItem(
                 **_nullable_string_fields(item, _CART_ITEM_FIELDS, "cart item"),
-                **_nullable_scalar_fields(
+                # 관대하게: 위 _CART_ITEM_SCALAR_FIELDS 주석 참고.
+                **_additive_scalar_fields(
                     item, _CART_ITEM_SCALAR_FIELDS, "cart item"
                 ),
                 # CartInfo.java:51 declares h_tk_cnt as String, not int.
@@ -2364,6 +2415,35 @@ def _parse_add_srv_item(
         detail_info=detail_info,
         raw=item,
     )
+
+
+def _additive_add_srv_item(
+    data: Mapping[str, Any],
+    key: str,
+    context: str,
+    item_context: str,
+    info_context: str,
+) -> MaasServiceDetail | None:
+    """``addSrvInfo`` 처럼 **뒤늦게 덧붙인** 중첩 객체를 관대하게 읽습니다.
+
+    :func:`_parse_add_srv_item` 를 그대로 쓰되, 모양이 어긋나
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 가 나면 그 필드만
+    ``None`` 으로 둡니다. 이유는 :func:`_additive_scalar_string` 과 같습니다 —
+    이 키에는 라이브 캡처가 없고(오늘 예약 행에는 ``ticket_list`` 만 옵니다),
+    필드를 덧붙인 일이 예전에 ``raw`` 로 잘 파싱되던 응답을 거부하게 만들 수는
+    없습니다. 원본은 :attr:`TicketListReservation.raw` 에 그대로 남습니다.
+
+    MaaS 쪽 ``addSrvList`` 행은 예전부터 엄격하게 읽었고 그대로 둡니다 —
+    :func:`parse_maas_service_detail_list_response` 는 이 관대한 짝을 쓰지
+    않습니다.
+    """
+    try:
+        item = _optional_mapping(data, key, context)
+        if item is None:
+            return None
+        return _parse_add_srv_item(item, item_context, info_context)
+    except KorailProtocolError:
+        return None
 
 
 def parse_maas_service_detail_list_response(

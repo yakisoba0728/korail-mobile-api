@@ -559,7 +559,7 @@ def is_sensitive_key(name: str) -> bool:
 # registration, unaffected by this regex either way.
 _WHITESPACE_RE = re.compile(r"\s")
 
-#: :func:`_json_document_or_none` 의 "JSON 아님" 표식. ``None`` 은 유효한
+#: :func:`_parse_json_document` 의 "JSON 아님" 표식. ``None`` 은 유효한
 #: JSON 값(``null``)이라 구분자로 쓸 수 없습니다.
 _NO_JSON = object()
 

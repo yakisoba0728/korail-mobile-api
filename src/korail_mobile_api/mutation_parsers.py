@@ -40,7 +40,7 @@ from .mutation_models import (
     StationRefundOriginalTicket,
     StationRefundVerificationResponse,
 )
-from .read_parsers import _nested_rows
+from .read_parsers import _additive_scalar_string, _nested_rows
 from .read_parsers import _optional_scalar_string as _optional_string
 
 
@@ -677,6 +677,44 @@ _CART_DISCOUNT_ADDITION_FIELDS = {
 }
 
 
+def _cart_discount_additions(
+    data: Mapping[str, Any],
+) -> tuple[CartDiscountAddition, ...]:
+    """``psgDiscAdd_infos`` 를 **관대하게** 읽습니다.
+
+    이 블록은 통째로 나중에 덧붙였습니다 — 예전 버전은 이 키를 아예 들여다보지
+    않고 봉투만 돌려줬으므로, 키가 어떤 모양으로 오든 파싱은 **성공** 했습니다.
+    라이브 캡처도 없어 서버가 실제로 무엇을 보내는지 모릅니다. 그러니 모양이
+    어긋난다고 응답 전체를 버리면, 필드를 덧붙인 일이 라이브러리가 받아들이는
+    응답의 폭을 좁히는 변경이 됩니다(read_parsers 의
+    ``_additive_scalar_string`` 과 같은 이유).
+
+    그래서: 바깥 객체나 리스트의 모양이 다르면 빈 튜플, 객체가 아닌 행은 건너
+    뛰고, 행 안의 두 필드는 문자열·정수가 아니면 ``None`` 입니다. 무엇이 왔든
+    :attr:`CartAddResponse.raw` 에 원본이 남습니다.
+    """
+    try:
+        rows = _nested_rows(data, "psgDiscAdd_infos", "psgDiscAdd_info", "cart add")
+    except KorailProtocolError:
+        return ()
+    additions = []
+    for item in rows:
+        if not isinstance(item, Mapping):
+            continue
+        additions.append(
+            CartDiscountAddition(
+                raw=item,
+                **{
+                    attribute: _additive_scalar_string(
+                        item, wire_name, "cart add discount row"
+                    )
+                    for attribute, wire_name in _CART_DISCOUNT_ADDITION_FIELDS.items()
+                },
+            )
+        )
+    return tuple(additions)
+
+
 def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
     """``cart.addCartList`` 의 응답을 파싱합니다.
 
@@ -691,35 +729,16 @@ def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
     넘겼습니다. 위 세 DTO 가 그렇지 않다고 말합니다.
 
     **라이브 미검증** — 실제 응답을 받아 본 적이 없습니다. 행이 없거나
-    바깥 객체가 통째로 없으면 빈 튜플입니다(:func:`_nested_rows` 가 둘 다
-    같은 방식으로 다룹니다).
+    바깥 객체가 통째로 없으면 빈 튜플이고, 모양이 어긋나도 봉투는 그대로
+    돌려줍니다(:func:`_cart_discount_additions`).
     """
     data = _response_mapping(raw)
-    rows = _nested_rows(
-        data, "psgDiscAdd_infos", "psgDiscAdd_info", "cart add"
-    )
-    additions = tuple(
-        CartDiscountAddition(
-            raw=_row(item, "cart add discount row"),
-            **{
-                attribute: _optional_string(
-                    _row(item, "cart add discount row"),
-                    wire_name,
-                    context="cart add discount row",
-                )
-                for attribute, wire_name in (
-                    _CART_DISCOUNT_ADDITION_FIELDS.items()
-                )
-            },
-        )
-        for item in rows
-    )
     return CartAddResponse(
         h_msg_cd=data.get("h_msg_cd"),
         h_msg_txt=data.get("h_msg_txt"),
         str_result=data.get("strResult"),
         raw=data,
-        discount_additions=additions,
+        discount_additions=_cart_discount_additions(data),
     )
 
 
