@@ -11,8 +11,7 @@
 메서드 하나로 만듭니다.
 
 로그인·읽기 메서드와 상태를 바꾸는 메서드 모두, 인증된 세션만 있으면 즉시
-전송됩니다. 어떤 범주가 어떤 라우트를 소유하는지는 :mod:`korail_mobile_api.safety`
-가 정하고 전송 직전에 다시 검사합니다.
+전송됩니다.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -275,7 +274,6 @@ from .read_payloads import (
     build_trip_change_date_form,
     build_trip_menu_form,
 )
-from .safety import MutationCategory
 from .session import KorailSessionClient
 
 
@@ -307,8 +305,7 @@ class KorailClient:
     ``transport`` 는 시험용 :mod:`httpx` 전송로를 끼워 넣는 자리입니다.
 
     상태를 바꾸는 메서드는 읽기 메서드와 마찬가지로 세션만 있으면 즉시
-    전송됩니다. 어떤 라우트가 어떤 범주에 속하는지는
-    :mod:`korail_mobile_api.safety` 가 정하고 전송 직전에 다시 검사합니다.
+    전송됩니다.
 
     자원 정리는 :meth:`close` 입니다. ``__enter__``/``__exit__`` 를 정의하지 않으므로
     ``with`` 문으로는 쓸 수 없습니다. :meth:`close` 는 커넥션 풀만 닫으니 로그인까지
@@ -521,7 +518,6 @@ class KorailClient:
     @overload
     def _mutation(
         self,
-        category: MutationCategory,
         route: str,
         form: dict[str, str] | dict[str, str | list[str]],
         *,
@@ -532,7 +528,6 @@ class KorailClient:
     @overload
     def _mutation(
         self,
-        category: MutationCategory,
         route: str,
         form: dict[str, str] | dict[str, str | list[str]],
         *,
@@ -542,7 +537,6 @@ class KorailClient:
 
     def _mutation(
         self,
-        category: MutationCategory,
         route: str,
         form: dict[str, str] | dict[str, str | list[str]],
         *,
@@ -563,7 +557,6 @@ class KorailClient:
             lambda: self.http.post_mutation_form(
                 route,
                 form,
-                category=category,
                 raise_on_fail=raise_on_fail,
             )
         )
@@ -1456,16 +1449,8 @@ class KorailClient:
             )
         )
 
-    def get_station_info(self, device: Literal["AD"] = "AD") -> StationInfoResponse:
-        """역 데이터의 판본과 수록 역 수를 빈 POST로 조회합니다.
-
-        ``device``는 이전 공개 인자 호환용이며 7.0.6 요청에는 실리지 않습니다.
-        """
-        # The annotation does not reach an untyped caller; this does.
-        if device != "AD":
-            raise KorailProtocolError(
-                "7.0.6 station info does not accept a device parameter"
-            )
+    def get_station_info(self) -> StationInfoResponse:
+        """역 데이터의 판본과 수록 역 수를 빈 POST로 조회합니다."""
         return self._run_read(
             lambda: parse_station_info_response(
                 self.http.post_form(
@@ -1778,7 +1763,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """열차 한 편에 결제 전 예약을 잡습니다.
 
-        로그인 세션을 요구합니다. ``train`` 을 검증하고 이중 게이트 전송로로 홀드를
+        로그인 세션을 요구합니다. ``train`` 을 검증하고 변경 전송로로 홀드를
         걸고 파싱한 :class:`ReservationHoldResponse` 를 돌려줍니다. 그 ``pnr_no`` 가
         :meth:`cancel_unpaid_hold` 의 입력입니다 — 살아 있는 홀드는 미결제 예약이고
         취소하든 결제하든 호출자 책임입니다.
@@ -1823,7 +1808,6 @@ class KorailClient:
             seat_attribute_code=seat_attribute_code,
         )
         return self._mutation(
-            "reserve",
             route,
             form,
             parser=self._hold_from_reservation_response,
@@ -1859,9 +1843,9 @@ class KorailClient:
         코드값 역시 보호됨). 즉 두 번 호출이라는 구조는 7.0.6 과 맞고, 트리거가
         ``IRR000014`` 라는 부분만 실서버 관측에 기댑니다.
 
-        로그인 세션을 요구하고, 다른 모든 상태 변경과 같은 이중 게이트 전송로로
+        로그인 세션을 요구하고, 다른 모든 상태 변경과 같은 변경 전송로로
         나갑니다. 이미 있는 PNR 의 예약을 마무리할 뿐 돈을 옮기지도 좌석을 놓지도
-        않으므로 소비 범주가 ``"reserve"`` 입니다.
+        않습니다.
         """
         self._require_session("standby options require")
         route = "/classes/com.korail.mobile.reservationWait.ReservationWait"
@@ -1872,7 +1856,7 @@ class KorailClient:
             sms_notify=sms_notify,
             phone_no=phone_no,
         )
-        return self._mutation("reserve", route, form)
+        return self._mutation(route, form)
 
     @staticmethod
     def _hold_from_reservation_response(
@@ -1951,7 +1935,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """환승 여정 하나를 두 구간·한 PNR 로 홀드합니다.
 
-        라우트도 범주도 세션 요구도 :meth:`reserve` 와 같습니다. 앱도 엔드포인트와
+        라우트도 세션 요구도 :meth:`reserve` 와 같습니다. 앱도 엔드포인트와
         요청 DTO 를 하나만 쓰고 구간 수만 폼을 바꿉니다 — 7.0.6 은 직통과 환승에
         같은 ``certification.TicketReservation`` 선언 하나
         (``NetworkApi.java:752-753``, ``postTicketReservation(@FieldMap)``)를 쓰고,
@@ -1998,7 +1982,6 @@ class KorailClient:
             seat_attribute_codes=seat_attribute_codes,
         )
         return self._mutation(
-            "reserve",
             route,
             form,
             parser=self._hold_from_reservation_response,
@@ -2062,10 +2045,8 @@ class KorailClient:
         취소하지만(7.0.6 ``ReservationMergeViewModel.java:1352``
         ``requestReservationCancel``, :1556 ``requestReservationCancelChk`` —
         ``analysis/reports/7.0.6-compare/booking-ticket-payment.md`` 의 기존
-        분석과도 일치), 여기서는 "cancel" 범주
-        아래의 :meth:`cancel_unpaid_hold` 로 호출자가 직접 합니다 — "reserve" 범주
-        호출로 살아 있는 PNR 을 조용히 취소하는 것은 이 게이트들이 막으려는 범주
-        혼동 그 자체입니다.
+        분석과도 일치), 여기서는 :meth:`cancel_unpaid_hold` 로 호출자가 직접
+        합니다 — 예약 호출이 살아 있는 PNR 을 조용히 취소해서는 안 됩니다.
 
         2026-09-21 실서버 확인: 대전→울산(301, 동대구에서 분할)으로 실제
         호출됨 — 홀드 응답의 ``h_jrny_tp_cd`` 가 두 여정에 각각
@@ -2090,7 +2071,6 @@ class KorailClient:
             seat_attribute_code=seat_attribute_code,
         )
         return self._mutation(
-            "reserve",
             route,
             form,
             parser=self._hold_from_reservation_response,
@@ -2102,7 +2082,7 @@ class KorailClient:
     ) -> BaseKorailResponse:
         """결제 전 예약 홀드를 취소합니다. 여정이 몇 개든 상관없습니다.
 
-        로그인 세션을 요구합니다. 이중 게이트 전송로로 POST 한 뒤 파싱한 봉투를
+        로그인 세션을 요구합니다. 변경 전송로로 POST 한 뒤 파싱한 봉투를
         돌려줍니다.
 
         앱의 취소 호출 두 개 중 뒤쪽(``ReservationCancelChk``)만 보냅니다. 앞의
@@ -2115,7 +2095,7 @@ class KorailClient:
             "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
         )
         form = build_unpaid_reservation_cancel_form(self.config, hold)
-        return self._mutation("cancel", route, form)
+        return self._mutation(route, form)
 
     def pay_with_fake_card(
         self,
@@ -2127,7 +2107,7 @@ class KorailClient:
         로그인 세션을 요구합니다. KORAIL 결제 호출은 카드번호를 평문으로 싣기
         때문에, ``card`` 는 PG 가 거절할 비과금 시험카드여야 합니다.
 
-        이중 게이트 전송로로 POST 하고 파싱한 :class:`ReservationPaymentResponse`
+        변경 전송로로 POST 하고 파싱한 :class:`ReservationPaymentResponse`
         를 돌려줍니다.
         """
         self._require_session("payment requires")
@@ -2136,7 +2116,6 @@ class KorailClient:
         # raise_on_fail=False: a declined card is an answer to read, not an
         # error to raise.
         return self._mutation(
-            "payment",
             route,
             form,
             parser=parse_reservation_payment_response,
@@ -2155,7 +2134,7 @@ class KorailClient:
         메서드 이름으로 그 사실을 명시합니다.
 
         전선 모양은 :meth:`pay_with_fake_card` 와 같습니다. 둘 다 같은
-        ``build_card_payment_form`` 을 만들고 같은 이중 게이트
+        ``build_card_payment_form`` 을 만들고 같은
         :meth:`~korail_mobile_api.http.KorailHttpClient.post_mutation_form` 으로
         나가므로, 실제 결제가 라이브로 검증된 모양에서 벗어날 수 없습니다.
 
@@ -2169,7 +2148,6 @@ class KorailClient:
         # raise_on_fail=False: a declined card is an answer to read, not an
         # error to raise.
         return self._mutation(
-            "payment",
             route,
             form,
             parser=parse_reservation_payment_response,
@@ -2187,7 +2165,7 @@ class KorailClient:
 
         ``POST refunds.RefundsRequest``. 로그인 세션을 요구합니다. ``ticket`` 은
         :class:`~korail_mobile_api.mutation_models.PaidTicket`(PNR + 원발매 자격증명 +
-        반환비밀번호)이어야 합니다. 이중 게이트 전송로로 POST 한 뒤 파싱한
+        반환비밀번호)이어야 합니다. 변경 전송로로 POST 한 뒤 파싱한
         :class:`RefundTicketResponse` 를 돌려줍니다.
 
         **PNR 단위가 아니라 승차권 단위입니다.** ``ticket`` 이 PNR 을 싣기는 하지만
@@ -2231,7 +2209,7 @@ class KorailClient:
             pbp_acceptance_target_flag=pbp_acceptance_target_flag,
         )
         return self._mutation(
-            "refund", route, form, parser=parse_refund_ticket_response
+            route, form, parser=parse_refund_ticket_response
         )
 
     def verify_station_ticket_refund(
@@ -2258,7 +2236,6 @@ class KorailClient:
         """검증된 역 발행 승차권의 환불을 실행합니다. **실제로 돈이 움직입니다.**"""
         self._require_session("station ticket refund requires")
         return self._mutation(
-            "refund",
             "/classes/com.korail.mobile.refunds.executeOnlineRefunds",
             build_station_refund_execution_form(self.config, request),
             parser=parse_station_refund_execution_response,
@@ -2297,7 +2274,7 @@ class KorailClient:
         route = "/classes/com.korail.mobile.cart.addCartList"
         form = build_cart_add_form(self.config, request)
         return self._mutation(
-            "cart", route, form, parser=parse_cart_add_response
+            route, form, parser=parse_cart_add_response
         )
 
     def register_discount_card(
@@ -2321,7 +2298,6 @@ class KorailClient:
         route = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
         form = build_discount_card_purchase_form(self.config, request)
         return self._mutation(
-            "discount_card",
             route,
             form,
             parser=parse_discount_card_purchase_response,
@@ -2335,12 +2311,12 @@ class KorailClient:
 
         ``POST reservation.dcntCrdExtn.do`` (7.0.6 ``NetworkApi``).
 
-        ``post_mutation_form`` 게이트로 전송합니다. 로그인 상태를 요구합니다.
+        ``post_mutation_form`` 으로 전송합니다. 로그인 상태를 요구합니다.
         """
         self._require_session("discount card extension requires")
         route = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
         query = build_discount_card_extension_query(self.config, ticket)
-        return self._mutation("discount_card", route, query)
+        return self._mutation(route, query)
 
     def reserve_with_discount_card(
         self,
@@ -2350,14 +2326,13 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """할인카드(N카드)로 좌석 하나를 홀드합니다.
 
-        라우트도 범주도 :meth:`reserve` 와 같습니다. 같은 호출이기 때문입니다 —
+        라우트도 :meth:`reserve` 와 같습니다. 같은 호출이기 때문입니다 —
         7.0.6 ``NetworkApi`` 전체에서 ``certification.TicketReservation`` 선언은
         ``:752-753`` 하나뿐이고(전수 grep), N카드 카드번호는 전용 DTO 가 아니라 평범한
         승객 블록 안에 ``@SerialName("txtCardNo_")`` 로 들어 있습니다
         (``TicketReservationInPassengerInfo.java:55,105`` — 같은 블록의 나머지 셋은
         ``txtCompaCnt``/``txtPsgTpCd``/``txtDiscKndCd``). 즉 N카드 전용 예약
-        엔드포인트는 없고 N카드 승객 블록이 있을 뿐입니다. 그래서 범주도
-        ``"reserve"`` 입니다 — 할인카드를 쓴다고 예약이 예약 아닌 것이 되지 않습니다.
+        엔드포인트는 없고 N카드 승객 블록이 있을 뿐입니다.
         옛 인용 ``w4/a.java:93-104``/``c5/b.java:128-138`` 은 7.0.6 에 그 경로가 없는
         6.5.0 잔재입니다(같은 basename 의 다른 파일은 있으므로 클래스 전체 부재와는
         구분합니다).
@@ -2370,7 +2345,6 @@ class KorailClient:
             card_no=card_no,
         )
         return self._mutation(
-            "reserve",
             route,
             form,
             parser=self._hold_from_reservation_response,
@@ -2461,7 +2435,6 @@ class KorailClient:
         # longer true (2026-09-22 SUCC/IRZ000008 on two trains, parsed here
         # without incident), and the justification above is the durable one.
         return self._mutation(
-            "price_recalculation",
             route,
             form,
             parser=parse_reservation_hold_response,

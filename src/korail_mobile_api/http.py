@@ -5,22 +5,27 @@
 """HTTP 전송 계층 — 폼·쿼리를 실제로 보내는 유일한 곳.
 
 읽기(:meth:`~KorailHttpClient.post_form`, :meth:`~KorailHttpClient.get_json`)와
-변경(:meth:`~KorailHttpClient.post_mutation_form`)이 완전히 갈리며 서로의 라우트에 닿을 수
-없습니다. 공통 필드(``Device``/``Version``/``Key``, 그리고 호출자가
-``KorailConfig.lang`` 을 채웠을 때만 ``lang``), DynaPath 헤더,
-``h_msg_cd`` 판정이 여기서 붙습니다.
+변경(:meth:`~KorailHttpClient.post_mutation_form`)은 응답 봉투 처리만 다릅니다. 라우트
+허용목록은 없습니다 — 라우트는 호출부(:mod:`korail_mobile_api.client`)가 상수로
+고릅니다. API 호스트는 :func:`assert_korail_origin` 이 생성 시점에 고정합니다.
+공통 필드(``Device``/``Version``/``Key``, 그리고 호출자가 ``KorailConfig.lang`` 을
+채웠을 때만 ``lang``), DynaPath 헤더, ``h_msg_cd`` 판정이 여기서 붙습니다.
 """
 from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 
 from .config import KorailConfig
-from .constants import DYNAPATH_ALLOWLIST_PATHS, DYNAPATH_REQUIRED_PATHS
+from .constants import (
+    DYNAPATH_ALLOWLIST_PATHS,
+    DYNAPATH_REQUIRED_PATHS,
+    KORAIL_BASE_URL,
+)
 from .dynapath import DynapathRequestContext, DynapathTokenGenerator
 from .errors import (
     SESSION_EXPIRED_CODE,
@@ -32,14 +37,39 @@ from .errors import (
     classify_app_error,
 )
 from .models import BaseKorailResponse
-from .safety import (
-    MutationCategory,
-    assert_korail_origin,
-    assert_mutation_form_shape,
-    assert_mutation_route,
-    assert_mutation_route_category,
-    assert_read_only_route,
-)
+
+
+_KORAIL_HTTPS_HOST = urlsplit(KORAIL_BASE_URL).hostname
+
+
+def assert_korail_origin(base_url: str) -> None:
+    """API 요청의 origin 을 ``https://smart.letskorail.com``(443)으로 고정합니다.
+
+    https 가 아니거나, 호스트가 다르거나, 443 이 아닌 포트·userinfo·path·query·fragment 가
+    붙어 있으면 :class:`KorailProtocolError` 입니다.
+    :class:`KorailHttpClient` 가 생성 시점에 부르므로, 다른 호스트를 가리키는 설정은
+    소켓이 생기기 전에 막힙니다. 대기열 호스트는 여기서 거부되며 자기 가드
+    (:func:`~korail_mobile_api.netfunnel_safety.assert_korail_netfunnel_origin`)를 씁니다.
+    """
+    parsed = urlsplit(base_url)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise KorailProtocolError(
+            "KORAIL request origin is not allowed"
+        ) from exc
+    if (
+        parsed.scheme.casefold() != "https"
+        or parsed.hostname is None
+        or parsed.hostname.casefold() != _KORAIL_HTTPS_HOST
+        or port not in {None, 443}
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise KorailProtocolError("KORAIL request origin is not allowed")
 
 
 # 7.0.6 응답 모델이 CommonOut 을 상속하지 않아 봉투 필드가 아예 없는 읽기 경로.
@@ -61,33 +91,6 @@ _NON_COMMON_OUT_READ_PATHS = frozenset({
     # 것을 여기로 옮겼습니다.
     "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
 })
-
-# certification.ReservationList is the one read-only path this package sends
-# to whose 7.0.6 request DTO also carries WRITE fields. The old wording cited
-# CertificationService.java (a 6.5.0 file with no 7.0.6 counterpart) and a
-# second Retrofit overload applyDisabilityCertification(:22) with six
-# @QueryMaps; neither reproduces. What 7.0.6 actually shows is the same shape
-# arranged differently: the route is declared twice, both times as a plain
-# @FieldMap map (NetworkApi.java:423-424 postInquiryTicketRsv and :627-628
-# postReservationList), and the single request DTO ReservationListIn declares
-# hidPnrNo *together with* txtPsgDisc0019Cnt and psgDisc0019List
-# (ReservationListIn.java:30-32, @SerialName list at :58), whose element type
-# carries exactly six fields -- txtJobDvCd0019_, txtPsgDisc0019Sqno_,
-# txtPsgDisc0019PsDvCd_, txtPsgDisc0019Birth_, txtPsgDisc0019CustNm_,
-# txtPsgDisc0019Grade_ (ReservationListInPsgDisc0019.java:55). So the
-# disability-certificate write rides this very route in 7.0.6 too; it is just
-# a repeated sub-object rather than a separate overload. (The separate
-# certification.disabled.do route at NetworkApi.java:384-385 is a different
-# call and not what this guard is about.)
-# The general per-route field contract that used to keep the
-# write shape off this send path moved into the test suite, which has since
-# been deleted, so no other route is checked at all -- but for this one path
-# a caller (or a future builder bug) that hands post_form the disability-
-# certificate fields would otherwise reach the wire unexamined, since nothing else on the
-# read send path is route-specific. This is the one targeted exception, not a
-# reinstatement of the general contract.
-_RESERVATION_LIST_PATH = "/classes/com.korail.mobile.certification.ReservationList"
-_RESERVATION_LIST_READ_FIELDS = frozenset({"Device", "Version", "Key", "hidPnrNo"})
 
 #: ``parse_base_response`` 가 값 판정 전에 타입을 확인하는 세 봉투 필드.
 _ENVELOPE_STRING_FIELDS = ("h_msg_cd", "h_msg_txt", "strResult")
@@ -421,18 +424,8 @@ class KorailHttpClient:
         ``data`` 는 매핑이거나 순서 있는 ``(이름, 값)`` 시퀀스.
         ``require_envelope=False`` 는 KORAIL 봉투 없는 응답용.
         """
-        assert_korail_origin(str(self._client.base_url))
-        path = assert_read_only_route("POST", path)
         if include_dynapath:
             self._refuse_missing_dynapath(path)
-        if data is not None and not isinstance(data, (Mapping, Sequence)):
-            raise KorailProtocolError(
-                "KORAIL form data must be a mapping or registered ordered sequence"
-            )
-        if not form_encoded and (include_common or data):
-            raise KorailProtocolError(
-                "KORAIL empty POST must not contain common or form fields"
-            )
         ordered_form: list[tuple[str, Any]] | None = None
         mapping_form: dict[str, Any] | None = None
         if data is not None and not isinstance(data, Mapping):
@@ -451,29 +444,6 @@ class KorailHttpClient:
             if data:
                 mapping_form.update(data)
             mapping_form = _drop_empty(mapping_form)
-        if path == _RESERVATION_LIST_PATH:
-            field_names = (
-                {name for name, _value in ordered_form}
-                if ordered_form is not None
-                else set(mapping_form or {})
-            )
-            # ``lang`` 은 공통 필드라 빼고 비교합니다. 이 검사가 막으려는 것은
-            # 같은 경로를 쓰는 **쓰기** 오버로드(applyDisabilityCertification)의
-            # 필드이지, ``CommonIn`` 의 4번째 공통 필드가 아닙니다. 예전에는
-            # 정확히 같은지만 봐서, ``KorailConfig(lang=...)`` 를 설정한 호출자는
-            # :meth:`~korail_mobile_api.client.KorailClient.get_ticket_reservation_detail`
-            # 이 서버에 닿기도 전에 ``KorailProtocolError`` 로 막혔습니다 --
-            # ``lang`` 이 ``None``/``""`` 일 때만 통과했으니, 기본값을 쓰는 동안은
-            # 아무도 못 보던 버그입니다(2026-09-22 재현). ``lang`` **하나만**
-            # 예외이고 나머지 여분 필드는 여전히 거절합니다.
-            if field_names - {"lang"} != _RESERVATION_LIST_READ_FIELDS:
-                raise KorailProtocolError(
-                    "KORAIL certification.ReservationList shares its path "
-                    "with a write overload (applyDisabilityCertification); "
-                    "the read send path only accepts the read overload's "
-                    "exact fields (plus the optional common lang): "
-                    + ", ".join(sorted(_RESERVATION_LIST_READ_FIELDS))
-                )
         headers = (
             {"Content-Type": "application/x-www-form-urlencoded"}
             if form_encoded
@@ -518,14 +488,6 @@ class KorailHttpClient:
         URL position with an empty form body. Its runtime acceptance cannot
         be inferred from the annotation alone.
         """
-        if path != "/classes/com.korail.mobile.passCard.DelayDiscountView":
-            raise KorailProtocolError(
-                "KORAIL POST query maps are registered only for DelayDiscountView"
-            )
-        assert_korail_origin(str(self._client.base_url))
-        path = assert_read_only_route("POST", path)
-        if not isinstance(params, Mapping):
-            raise KorailProtocolError("KORAIL POST query params must be a mapping")
         query: dict[str, Any] = {}
         if include_common:
             query.update(self.common_fields())
@@ -546,28 +508,16 @@ class KorailHttpClient:
         path: str,
         data: Mapping[str, Any],
         *,
-        category: MutationCategory,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
         """변경 라우트로 폼을 보냅니다.
 
-        ``assert_mutation_route`` + ``assert_mutation_route_category`` 를 모두
-        통과해야 합니다.
+        ``data`` 는 호출부의 빌더가 공통 필드까지 채운 완성 폼입니다. 봉투는
+        읽기와 달리 절대 완화하지 않습니다.
         """
-        assert_korail_origin(str(self._client.base_url))
-        path = assert_mutation_route("POST", path)
-        assert_mutation_route_category(path, category)
-        if not isinstance(data, Mapping):
-            raise KorailProtocolError(
-                "KORAIL mutation form data must be a mapping"
-            )
         # 7.0.6's flattener (NetworkService.java:15342) drops empty-string
-        # fields rather than sending `key=`; filter before the shape guard
-        # below runs so that guard sees the form the wire will actually
-        # carry (and can treat any empty string that still reaches it as a
-        # sign something slipped past this filter).
+        # fields rather than sending `key=`.
         data = _drop_empty(data)
-        assert_mutation_form_shape(path, data)
         headers = {
             "Content-Type": "application/x-www-form-urlencoded"
         }
@@ -595,8 +545,6 @@ class KorailHttpClient:
         ``include_common`` 기본 ``False`` — GET 라우트 대부분이 공통 필드 불필요.
         ``require_envelope=False`` 는 봉투 없는 응답용.
         """
-        assert_korail_origin(str(self._client.base_url))
-        path = assert_read_only_route("GET", path)
         query: dict[str, Any] = {}
         if include_common:
             query.update(self.common_fields())
