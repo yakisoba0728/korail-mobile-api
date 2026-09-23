@@ -6,7 +6,7 @@
 합격 기준은 `ACCEPTANCE.md` 입니다. 감사는 그 문서만 기준으로 합니다.
 
 ```sh
-python3 checks/contract_api.py         # G6·G8·G9·G10
+python3 checks/contract_api.py         # G6·G9·G10·G11
 python3 checks/masking_invariants.py   # G1~G7 사례
 python3 checks/masking_mutants.py      # 위 하네스가 비어 있지 않은지
 python3 checks/sphinx_symbols.py       # 문서의 파이썬 심볼 참조
