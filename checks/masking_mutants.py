@@ -5,7 +5,10 @@
 방법으로 하네스의 거짓 통과를 여러 번 찾아냈습니다.
 
 ``redaction.py`` 에 일부러 결함을 심고 하네스가 **실패하는지** 봅니다.
-원본은 항상 되돌립니다.
+결함은 **임시 복사본**에만 심습니다. 원본 파일은 쓰지 않습니다 — 예전에는 원본에
+심었다가 되돌렸는데, 도중에 프로세스가 죽으면(외부 재현기의 시간 제한) 변이가
+원본에 남았고, 같은 트리를 쓰던 다른 검사가 변이된 코드를 시험했습니다
+(2026-09-23 재현).
 
 성공 조건은 넷 모두입니다. 하나라도 빠지면 0 으로 끝나지 않습니다:
 
@@ -17,8 +20,8 @@
 3. 모든 변이에서 하네스가 **정확히 1**(사례 실패)이어야 합니다. 2 나 그 밖의
    종료, 시간 초과, 문법이 깨진 변이는 "잡음"이 아니라 **검사 불완전**입니다
    (외부 감사 C36).
-4. 원복 후 하네스가 **다시 0** 이어야 합니다. 예전에는 원복 후 결과를 출력만
-   하고 종료 코드에 반영하지 않았습니다.
+4. 변이를 다 돈 뒤 **원본이 바이트 그대로**이고, 원본에서 하네스가 **다시 0** 이어야
+   합니다.
 
 종료 코드: 0 통과, 1 실패(놓친 변이·앵커 문제·기준선 실패), 2 검사 불완전.
 
@@ -225,7 +228,7 @@ MUTANTS = [
 HARNESS_TIMEOUT = 600
 
 
-def _harness_status() -> str:
+def _harness_status(cwd: pathlib.Path | None = None) -> str:
     """하네스 한 번의 결과: ``"pass"``(0) · ``"fail"``(1) · ``"incomplete"``(그 밖).
 
     예전에는 "0 이 아니면 잡음"이었습니다. 그래서 변이 상태에서 **언제나 2**(검사
@@ -235,7 +238,8 @@ def _harness_status() -> str:
     """
     try:
         code = subprocess.run(
-            HARNESS, capture_output=True, text=True, timeout=HARNESS_TIMEOUT
+            HARNESS, capture_output=True, text=True, timeout=HARNESS_TIMEOUT,
+            cwd=cwd,
         ).returncode
     except subprocess.TimeoutExpired:
         return "incomplete"
@@ -271,46 +275,48 @@ def main() -> int:
     missed = 0
     incomplete = 0
     with tempfile.TemporaryDirectory() as tmp:
-        backup = pathlib.Path(tmp) / "redaction.py"
-        shutil.copy(SRC, backup)
-        try:
-            for name, old, new in MUTANTS:
-                text = original.decode("utf-8")
-                count = text.count(old)
-                if count != 1:
-                    # 0 이면 아무 것도 검증 못 하고, 2 이상이면 어느 자리를 바꿨는지
-                    # 알 수 없습니다.
-                    print(f"  앵커 {count}곳  {name}  <-- 정확히 한 곳이어야 함")
-                    missed += 1
-                    continue
-                mutated = text.replace(old, new, 1)
-                if not _compiles(mutated):
-                    print(f"  불완전(문법 오류)  {name}")
-                    incomplete += 1
-                    continue
-                SRC.write_text(mutated, encoding="utf-8")
-                status = _harness_status()
-                if status == "fail":
-                    print(f"  잡음  {name}")
-                elif status == "pass":
-                    print(f"  놓침  <-- 하네스 구멍  {name}")
-                    missed += 1
-                else:
-                    print(f"  불완전(하네스가 0/1 이 아닌 종료)  {name}")
-                    incomplete += 1
-        finally:
-            shutil.copy(backup, SRC)
+        # 하네스는 ``src`` 를 cwd 기준으로 import 하므로 트리째 복사해 거기서 돌립니다.
+        root = pathlib.Path(tmp)
+        shutil.copytree("src", root / "src", ignore=shutil.ignore_patterns("__pycache__"))
+        (root / "checks").mkdir()
+        shutil.copy(HARNESS[1], root / HARNESS[1])
+        target = root / SRC
+        for name, old, new in MUTANTS:
+            text = original.decode("utf-8")
+            count = text.count(old)
+            if count != 1:
+                # 0 이면 아무 것도 검증 못 하고, 2 이상이면 어느 자리를 바꿨는지
+                # 알 수 없습니다.
+                print(f"  앵커 {count}곳  {name}  <-- 정확히 한 곳이어야 함")
+                missed += 1
+                continue
+            mutated = text.replace(old, new, 1)
+            if not _compiles(mutated):
+                print(f"  불완전(문법 오류)  {name}")
+                incomplete += 1
+                continue
+            target.write_text(mutated, encoding="utf-8")
+            status = _harness_status(root)
+            if status == "fail":
+                print(f"  잡음  {name}")
+            elif status == "pass":
+                print(f"  놓침  <-- 하네스 구멍  {name}")
+                missed += 1
+            else:
+                print(f"  불완전(하네스가 0/1 이 아닌 종료)  {name}")
+                incomplete += 1
+        target.write_bytes(original)
 
     if _digest(SRC) != original_digest:
-        print("원복 실패: redaction.py 가 원본과 다릅니다.")
+        print("원본 변경됨: redaction.py 가 실행 중에 바뀌었습니다.")
         return 1
     after = _harness_status()
     if after != "pass":
-        print(f"원복 후 하네스가 {after} 입니다.")
+        print(f"변이 뒤 원본에서 하네스가 {after} 입니다.")
         return 1 if after == "fail" else 2
     print(
         f"변이 {len(MUTANTS)}개, 놓침·앵커 문제 {missed}개, 불완전 {incomplete}개, "
-        "원복 후 기준선 통과"
+        "원본 무변경·기준선 재통과"
     )
     if missed:
         return 1
