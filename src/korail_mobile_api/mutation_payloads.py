@@ -859,10 +859,6 @@ def build_standby_wait_form(
                 "KORAIL standby SMS notification requires an 11-digit "
                 "phone number"
             )
-    elif phone_no is not None:
-        raise KorailProtocolError(
-            "KORAIL standby sends no phone number unless sms_notify is True"
-        )
     form = _common_fields(config)
     form.update(
         {
@@ -871,8 +867,9 @@ def build_standby_wait_form(
             "txtSmsSndFlg": "Y" if sms_notify else "N",
         }
     )
-    if phone_no is not None:
-        form["txtCpNo"] = phone_no
+    # SMS 를 끄면 번호는 싣지 않습니다(위 docstring 의 :522-524).
+    if sms_notify:
+        form["txtCpNo"] = phone_no  # type: ignore[assignment] — 위에서 11자리 문자열로 확인
     return form
 
 

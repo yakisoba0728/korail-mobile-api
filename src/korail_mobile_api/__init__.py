@@ -31,6 +31,8 @@ from .constants import (
 )
 from .dynapath import (
     DynapathConfig,
+    DynapathRequestContext,
+    DynapathTokenProvider,
     DynapathTokenSettings,
 )
 from .errors import (
@@ -287,6 +289,8 @@ __all__ = [
     "CustomerTripInfo",
     "CustomerTripInfoResponse",
     "DynapathConfig",
+    "DynapathRequestContext",
+    "DynapathTokenProvider",
     "DynapathTokenSettings",
     "DelayDiscountTicket",
     "DelayDiscountTicketListResponse",

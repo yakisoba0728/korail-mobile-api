@@ -1362,13 +1362,17 @@ def parse_free_seat_car_response(
 def parse_guide_seat_condition_response(
     raw: Mapping[str, Any],
 ) -> GuideSeatConditionResponse:
-    # 선택 제한 안내를 응답으로 보존합니다. 그 외 오류까지 허용하는 것은 아닙니다.
-    _validate_envelope(raw, returned_failure_codes=frozenset({"MRR800011"}))
-    if raw.get("strResult") != "SUCC" and not (
-        raw.get("strResult") == "FAIL" and raw.get("h_msg_cd") == "MRR800011"
-    ):
+    # 7.0.6 은 성공이 아니면 코드와 무관하게 h_msg_txt 를 안내로 띄웁니다
+    # (TrainOptionViewModel.java:290-300). 그래서 FAIL 도 예외가 아니라 응답입니다 —
+    # 세션 만료(P058)만 예외입니다.
+    code = raw.get("h_msg_cd") if isinstance(raw, Mapping) else None
+    _validate_envelope(
+        raw,
+        returned_failure_codes=frozenset() if code is None else frozenset({code}),
+    )
+    if raw.get("strResult") not in {"SUCC", "FAIL"}:
         raise KorailProtocolError(
-            "KORAIL seat guidance result must be SUCC or FAIL/MRR800011"
+            "KORAIL seat guidance result must be SUCC or FAIL"
         )
     # timeStamp 는 속성명(GuideSeatCndOut.java:29). 보호된 descriptor 의 9자 길이는 평문을 증명하지
     # 않습니다(GuideSeatCndOut$$serializer.java:39). 2026-09-22 한 계정 14종 관측 기록에는 키가 없었습니다. 캡처 미연결로 재검증하지

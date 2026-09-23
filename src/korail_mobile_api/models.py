@@ -192,7 +192,7 @@ class TrainScheduleStop:
     station_name: str | None = None
     station_construction_order: str | None = None
     run_order: str | None = None
-    actual_arrival_delay_count: int | None = None
+    actual_arrival_delay_count: str | None = None
     actual_arrival_date: str | None = None
     actual_arrival_time: str | None = None
     actual_departure_date: str | None = None

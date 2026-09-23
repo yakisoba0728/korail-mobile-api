@@ -581,11 +581,8 @@ def parse_train_schedule_response(
                     row,
                     "runOrdr",
                 ),
-                actual_arrival_delay_count=_typed_optional_int(
-                    row,
-                    "actArvDlayTnum",
-                    context="train schedule stop",
-                ),
+                # ActualTrainScheduleOutDlay.java:30 — 앱 DTO 는 String("001" 등)입니다.
+                actual_arrival_delay_count=_optional_scalar_string(row, "actArvDlayTnum"),
                 actual_arrival_date=_typed_optional_string(
                     row,
                     "actArvDt",

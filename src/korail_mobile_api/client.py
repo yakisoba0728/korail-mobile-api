@@ -918,8 +918,9 @@ class KorailClient:
         self,
         request: GuideSeatConditionRequest,
     ) -> GuideSeatConditionResponse:
-        """도우미석 안내문을 읽습니다. 2026-09-22 관측에서 좌석속성 14종 모두 같은 FAIL/MRR800011 안내를 반환해 raise_on_fail=False 로
-        읽습니다. 다른 응답도 항상 같은 안내라는 보장은 없으므로 코드·본문을 확인하십시오.
+        """도우미석 안내문을 읽습니다. 앱처럼 ``FAIL`` 도 예외가 아니라 안내 응답으로 돌려주므로
+        ``h_msg_cd``·``h_msg_txt`` 를 확인하십시오. 2026-09-22 관측에서 좌석속성 14종 모두 같은
+        FAIL/MRR800011 안내였습니다.
         """
         return self._post_read(
             "/classes/com.korail.mobile.reservation.guideSeatCnd.do",
