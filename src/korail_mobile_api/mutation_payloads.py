@@ -548,7 +548,7 @@ def _coerced_seat_class(value: object) -> KorailSeatClass:
     except ValueError:
         raise KorailProtocolError(
             'KORAIL reservation seat class must be "1" (일반실) or "2" (특실)'
-        ) from None
+        )
 
 
 def _resolved_sequence(value: Sequence[_T], message: str) -> tuple[_T, ...]:
@@ -727,7 +727,7 @@ def _build_journey_reservation_form(
             + ", ".join(
                 f'"{member.value}"' for member in KorailReservationJobType
             )
-        ) from None
+        )
     # STANDBY와 MERGE_STANDING의 "구간 하나만" 규칙은 여기서 거절하지 않습니다.
     # 이 패키지에는 UI 가 없고, 잘못된 job_type·구간 수 조합을 받았을 때 서버가
     # 스스로 거절하도록 둡니다.
@@ -1314,8 +1314,7 @@ def build_standby_wait_form(
             "txtSmsSndFlg": "Y" if sms_notify else "N",
         }
     )
-    if sms_notify:
-        assert phone_no is not None
+    if phone_no is not None:
         form["txtCpNo"] = phone_no
     return form
 

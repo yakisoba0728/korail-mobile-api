@@ -77,7 +77,7 @@ class LimousineScheduleQuery:
     departure_station_code: str
     arrival_station_code: str
     service_code: str
-    room_class_code: str = field(repr=False)
+    room_class_code: str
     departure_time: str
     train_no: str
     seat_attribute_code: str
@@ -114,8 +114,8 @@ class LimousineSeatInventoryQuery:
     service_code: str
     run_date: str
     train_no: str
-    car_no: str = field(repr=False)
-    room_class_code: str = field(repr=False)
+    car_no: str
+    room_class_code: str
     departure_station_code: str
     arrival_station_code: str
     seat_attribute_code: str
@@ -185,7 +185,7 @@ class LimousineSchedule:
     train_no: str | None = None
     train_order_no: str | None = None
     yms_application_flag: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
     #: ``rcvdPrc`` — 이 편의 운임. 행에 있는 **유일한** 금액 필드인데 한동안
     #: 이름이 붙어 있지 않아 ``raw`` 로만 닿았습니다. 7.0.6 DTO 는 21개 String
     #: 필드를 선언하고(``ScdlQryOutTrain.java:29-49``) 그중 ``rcvdPrc`` 는
@@ -221,11 +221,11 @@ class LimousineSeat:
     integrated_message_code: str | None = None
     requested_attribute_code: str | None = None
     sale_possible_flag: str | None = None
-    seat_no: str | None = field(default=None, repr=False)
+    seat_no: str | None = None
     specification: str | None = None
     sequence_no: str | None = None
     visual_message_division_code: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
 @dataclass(frozen=True)
@@ -242,7 +242,7 @@ class LimousineSeatInventoryResponse(BaseKorailResponse):
     (``TResidualSeatsResearchOut.java:29,34-35,114,134,138``).
     """
     car_type_code: str | None = None
-    car_no: str | None = field(default=None, repr=False)
+    car_no: str | None = None
     seat_arrangement_code: str | None = None
     up_down_division_code: str | None = None
     #: ``layoutType`` — 좌석 배치 형식. 형제 응답
@@ -250,8 +250,7 @@ class LimousineSeatInventoryResponse(BaseKorailResponse):
     #: 과 같은 DTO 필드이며, DAO 선언은 String 이지만 실서버는 JSON 정수로도
     #: 보냅니다(2026-09-21 확인) — 파서가 둘 다 받아 문자열로 정규화합니다.
     layout_type: str | None = None
-    #: ``vrBnrUrl`` — VR 배너 URL. 민감하지 않아 ``repr=False`` 없음(형제
-    #: ``SeatInventoryResponse.vr_banner_url`` 과 동일한 판단).
+    #: ``vrBnrUrl`` — VR 배너 URL.
     vr_banner_url: str | None = None
     #: ``windowList`` — 창측/통로측 위치 비율 목록.
     #: :class:`~korail_mobile_api.models.SeatWindow` 를 그대로 재사용합니다 —

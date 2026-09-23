@@ -49,7 +49,12 @@ from .parsers import (
     _inventory_ratio,
     _response_fields,
 )
-from .read_parsers import _additive_scalar_string, _nullable_string_fields, _optional_string, _row
+from .read_parsers import (
+    _nullable_string_fields,
+    _optional_scalar_string,
+    _optional_string,
+    _row,
+)
 
 
 def _required_list(
@@ -133,7 +138,7 @@ def parse_limousine_schedule_response(
             LimousineSchedule(
                 **_nullable_string_fields(row, _SCHEDULE_FIELDS, "limousine schedule"),
                 **{
-                    name: _additive_scalar_string(row, wire, "limousine schedule")
+                    name: _optional_scalar_string(row, wire, "limousine schedule")
                     for name, wire in _SCHEDULE_ADDED_FIELDS.items()
                 },
                 raw=row,
@@ -249,8 +254,8 @@ def parse_limousine_seat_inventory_response(
             "seat_ary_cd",
             "limousine seat inventory response",
         ),
-        layout_type=_additive_scalar_string(raw, "layout_type", "limousine seat inventory"),
-        vr_banner_url=_additive_scalar_string(raw, "vrBnrUrl", "limousine seat inventory"),
+        layout_type=_optional_scalar_string(raw, "layout_type", "limousine seat inventory"),
+        vr_banner_url=_optional_scalar_string(raw, "vrBnrUrl", "limousine seat inventory"),
         windows=tuple(windows),
         up_down_division_code=_optional_string(
             raw,

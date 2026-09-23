@@ -6,8 +6,7 @@
 
 전부 ``frozen=True`` 데이터클래스입니다. 서버가 준 원본은 어느 모델에서든
 ``raw`` 에 그대로 남아 있으므로, 이 패키지가 이름을 붙이지 않은 필드도
-거기서 꺼낼 수 있습니다. ``repr=False`` 인 필드는 로그에 실수로 찍히지 않게
-표현에서 뺀 것이지 값이 없는 것이 아닙니다.
+거기서 꺼낼 수 있습니다.
 
 승차권·환불·마이페이지 쪽 읽기 모델은
 :mod:`korail_mobile_api.read_models`, 상태변경 요청·응답 모델은
@@ -37,16 +36,13 @@ class KorailSession:
     :meth:`~korail_mobile_api.client.KorailClient.get_recent_delivery_history`
     가 따로 요구하는 값입니다. ``member_card_no`` 는 열차 검색 폼에
     ``mbCrdNo`` 로 함께 실립니다.
-
-    전부 ``repr=False`` 입니다 — 세션을 통째로 찍어도 자격증명이 새지
-    않습니다.
     """
 
-    jsessionid: str | None = field(default=None, repr=False)
-    member_no: str | None = field(default=None, repr=False)
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
-    member_card_no: str | None = field(default=None, repr=False)
-    customer_no: str | None = field(default=None, repr=False)
+    jsessionid: str | None = None
+    member_no: str | None = None
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    member_card_no: str | None = None
+    customer_no: str | None = None
 
 
 @dataclass(frozen=True)
@@ -80,9 +76,9 @@ class BaseKorailResponse:
     h_msg_cd: str | None = None
     #: 서버가 호출자의 입력을 되받아 적을 수 있어 repr 에 싣지 않습니다. 하위
     #: 클래스는 이 선언을 물려받으므로 다시 적을 필요가 없습니다.
-    h_msg_txt: str | None = field(default=None, repr=False)
+    h_msg_txt: str | None = None
     str_result: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
@@ -135,23 +131,23 @@ class NoticeResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class UuidResponse(BaseKorailResponse):
-    verification_code: str | None = field(default=None, repr=False)
+    verification_code: str | None = None
 
 
 @dataclass(frozen=True)
 class MaasMenuItem:
     active: str | None = None
-    additional_service_code: str | None = field(default=None, repr=False)
+    additional_service_code: str | None = None
     app_data: str | None = None
-    icon_off: str | None = field(default=None, repr=False)
-    icon_on: str | None = field(default=None, repr=False)
+    icon_off: str | None = None
+    icon_on: str | None = None
     info: str | None = None
     login_required: str | None = None
     name: str | None = None
-    popup_image: str | None = field(default=None, repr=False)
+    popup_image: str | None = None
     menu_type: str | None = None
-    url: str | None = field(default=None, repr=False)
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    url: str | None = None
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
     @property
     def uses_station_selection(self) -> bool:
@@ -173,16 +169,13 @@ class MaasMenuItem:
 @dataclass(frozen=True)
 class MaasMenuListResponse(BaseKorailResponse):
     items: tuple[MaasMenuItem, ...] = ()
-    departure_elevator_url: str | None = field(default=None, repr=False)
-    departure_navigation_url: str | None = field(default=None, repr=False)
-    departure_parking_url: str | None = field(default=None, repr=False)
-    arrival_elevator_url: str | None = field(default=None, repr=False)
-    arrival_bus_info_url: str | None = field(default=None, repr=False)
-    arrival_parking_url: str | None = field(default=None, repr=False)
-    arrival_baggage_transfer_robot_url: str | None = field(
-        default=None,
-        repr=False,
-    )
+    departure_elevator_url: str | None = None
+    departure_navigation_url: str | None = None
+    departure_parking_url: str | None = None
+    arrival_elevator_url: str | None = None
+    arrival_bus_info_url: str | None = None
+    arrival_parking_url: str | None = None
+    arrival_baggage_transfer_robot_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -202,13 +195,13 @@ class KorailStation:
     name: str
     longitude: str | None = None
     latitude: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
     group: str | None = None
     major: str | None = None
     #: 7.0.6 ``StationDataOutStnItem.java:60`` declares
     #: ``@SerialName("popupType") String`` -- kept as a string, not coerced.
     popup_type: str | None = None
-    popup_message: str | None = field(default=None, repr=False)
+    popup_message: str | None = None
     popup_link_title: str | None = None
     popup_link_url: str | None = None
 
@@ -243,7 +236,6 @@ class TrainCalendarDay:
     x_train_operation_flag: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
-        repr=False,
         compare=False,
     )
 
@@ -278,7 +270,6 @@ class TrainScheduleStop:
     service_flag: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
-        repr=False,
         compare=False,
     )
 
@@ -315,7 +306,6 @@ class TransferStation:
     station_name: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
-        repr=False,
         compare=False,
     )
 
@@ -433,7 +423,7 @@ def _train_scalar(value: Any, key: str) -> str | None:
             # 이 ``ValueError`` 를 냅니다. 이 패키지의 예외로 올립니다.
             raise KorailProtocolError(
                 f"KORAIL train field {key} integer is too large"
-            ) from None
+            )
     raise KorailProtocolError(
         f"KORAIL train field {key} must be a string, an integer, or null"
     )
@@ -577,7 +567,7 @@ class TrainSummary:
     departure_date: str | None = None
     departure_time: str | None = None
     arrival_time: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
     departure_station_name: str | None = None
     arrival_station_name: str | None = None
     run_date: str | None = None
@@ -781,7 +771,7 @@ class SeatCar:
     room_class_name: str
     remaining_seat_count: int
     attributes: tuple[SeatAttribute, ...]
-    room_class_code: str | None = field(default=None, repr=False)
+    room_class_code: str | None = None
     total_seat_count: int | None = None
 
 
@@ -818,7 +808,7 @@ class PhysicalSeat:
     불가능하고, 서버가 그 정보를 다른 경로로 주는지는 확인되지 않았습니다.
     """
 
-    seat_no: str = field(repr=False)
+    seat_no: str
     sale_possible: str
     direction_code: str
     other_attribute_code: str | None
@@ -934,7 +924,6 @@ class TrainSearchMetadata:
     first_departure_time: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
-        repr=False,
         compare=False,
     )
 
@@ -1026,7 +1015,7 @@ class TrainSearchResult:
 
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:
@@ -1262,7 +1251,7 @@ class TransferSearchResult:
     itineraries: list[TransferItinerary]
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:

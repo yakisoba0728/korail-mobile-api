@@ -123,12 +123,12 @@ def _passenger_count(value: int, name: str) -> int:
 
 @dataclass(frozen=True)
 class FreeSeatCarRequest:
-    run_date: str = field(repr=False)
-    train_no: str = field(repr=False)
-    departure_construction_order: str = field(repr=False)
-    arrival_construction_order: str = field(repr=False)
-    departure_run_order: str = field(repr=False)
-    arrival_run_order: str = field(repr=False)
+    run_date: str
+    train_no: str
+    departure_construction_order: str
+    arrival_construction_order: str
+    departure_run_order: str
+    arrival_run_order: str
 
     def __post_init__(self) -> None:
         _ascii_digits(self.run_date, "run_date", lengths=frozenset({8}))
@@ -165,7 +165,7 @@ class GuideSeatConditionRequest:
     (``TrainOptionViewModel.java:270``). 즉 이 값으로 결과가 갈리지 않습니다.
     """
 
-    seat_attribute_code: str = field(repr=False)
+    seat_attribute_code: str
 
     def __post_init__(self) -> None:
         _required_text(self.seat_attribute_code, "seat_attribute_code")
@@ -179,18 +179,18 @@ class SeatAssignmentScheduleRequest:
     #: 씁니다. 자세한 것은
     #: :meth:`~korail_mobile_api.client.KorailClient.get_seat_assignment_schedule`
     #: docstring 참조.
-    menu_id: str = field(repr=False)
-    departure_date: str = field(repr=False)
-    departure_time: str = field(repr=False)
-    departure_station_name: str = field(repr=False)
-    arrival_station_name: str = field(repr=False)
-    train_group_code: str = field(repr=False)
-    room_class_code: str = field(repr=False)
-    seat_attribute_code: str = field(repr=False)
-    passenger_count: int = field(repr=False)
-    standing_detour_division_name: str = field(repr=False)
-    transfer_type_code: str = field(repr=False)
-    connection_arrival_station_name: str = field(repr=False)
+    menu_id: str
+    departure_date: str
+    departure_time: str
+    departure_station_name: str
+    arrival_station_name: str
+    train_group_code: str
+    room_class_code: str
+    seat_attribute_code: str
+    passenger_count: int
+    standing_detour_division_name: str
+    transfer_type_code: str
+    connection_arrival_station_name: str
 
     def __post_init__(self) -> None:
         _required_text(self.menu_id, "menu_id")
@@ -219,15 +219,15 @@ class SeatAssignmentScheduleRequest:
 
 @dataclass(frozen=True)
 class MergeSeatsInquiryRequest:
-    boarding_datetime: str = field(repr=False)
-    run_datetime: str = field(repr=False)
-    train_no: str = field(repr=False)
-    departure_station_name: str = field(repr=False)
-    arrival_station_name: str = field(repr=False)
-    selected_station_name: str | None = field(repr=False)
-    room_class_code: str = field(repr=False)
-    seat_attribute_code: str = field(repr=False)
-    passenger_count: int = field(repr=False)
+    boarding_datetime: str
+    run_datetime: str
+    train_no: str
+    departure_station_name: str
+    arrival_station_name: str
+    selected_station_name: str | None
+    room_class_code: str
+    seat_attribute_code: str
+    passenger_count: int
 
     def __post_init__(self) -> None:
         _ascii_digits(self.boarding_datetime, "boarding_datetime", lengths=frozenset({14}))
@@ -324,25 +324,25 @@ def build_merge_seats_inquiry_form(
 
 @dataclass(frozen=True)
 class PassScheduleRequest:
-    selected_train_code: str = field(repr=False)
-    departure_date: str = field(repr=False)
-    departure_time: str = field(repr=False)
-    transfer_type_code: str = field(repr=False)
-    pass_kind_code: str = field(repr=False)
-    pass_period_code: str = field(repr=False)
-    pass_age_code: str = field(repr=False)
+    selected_train_code: str
+    departure_date: str
+    departure_time: str
+    transfer_type_code: str
+    pass_kind_code: str
+    pass_period_code: str
+    pass_age_code: str
     #: ``txtSelPage`` — **이 라우트는 무시합니다.** 어떤 값을 넣어도 응답의
     #: ``h_page_no`` 는 ``'1'`` 로 돌아왔고(2026-09-22 실측), 7.0.6 도
     #: ``CheckUsagePeriodSectionViewModel.java:389`` 에서 ``'1'`` 을 박아
     #: 보냅니다. 더 받으려면 이 값이 아니라 :attr:`page_size` 를 키우십시오.
     #: 응답 쪽 페이징 신호도 믿을 수 없습니다 —
     #: :class:`~korail_mobile_api.read_models.PassScheduleMainInfo` 참조.
-    page_no: str = field(repr=False)
+    page_no: str
     #: ``txtSelCnt`` — 실제로 결과 수를 정하는 값입니다.
-    page_size: str = field(repr=False)
-    departure_station_name: str = field(repr=False)
-    arrival_station_name: str = field(repr=False)
-    weekend_use_flag: str = field(repr=False)
+    page_size: str
+    departure_station_name: str
+    arrival_station_name: str
+    weekend_use_flag: str
 
     def __post_init__(self) -> None:
         _required_text(self.selected_train_code, "selected_train_code")
@@ -598,8 +598,8 @@ def _validate_maas_service_detail_query_values(
 
 @dataclass(frozen=True)
 class MaasServiceDetailQuery:
-    start_date: str | None = field(default=None, repr=False)
-    end_date: str | None = field(default=None, repr=False)
+    start_date: str | None = None
+    end_date: str | None = None
 
     def __post_init__(self) -> None:
         _validate_maas_service_detail_query_values(
@@ -938,7 +938,7 @@ def _exact_server_pass_data(pass_data: PassMenuData) -> str:
 
 @dataclass(frozen=True)
 class CommuterInitialRequest:
-    pass_data: PassMenuData = field(repr=False)
+    pass_data: PassMenuData
 
     def __post_init__(self) -> None:
         _exact_server_pass_data(self.pass_data)
@@ -946,9 +946,9 @@ class CommuterInitialRequest:
 
 @dataclass(frozen=True, init=False)
 class CommuterPassengerRequest:
-    pass_data: PassMenuData = field(repr=False)
-    source: CommuterInfoResponse = field(repr=False)
-    passenger_counts: tuple[int, ...] = field(repr=False)
+    pass_data: PassMenuData
+    source: CommuterInfoResponse
+    passenger_counts: tuple[int, ...]
 
     @classmethod
     def from_response(
@@ -1036,10 +1036,10 @@ class OriginalTicketReference:
     먼저 확인하십시오.
     """
 
-    sale_window_no: str = field(repr=False)
-    sale_date: str = field(repr=False)
-    sale_sequence: str = field(repr=False)
-    return_password: str = field(repr=False)
+    sale_window_no: str
+    sale_date: str
+    sale_sequence: str
+    return_password: str
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -1087,7 +1087,7 @@ def _exact_ticket_reference_tuple(
 
 @dataclass(frozen=True)
 class TicketDuplicationCheckRequest:
-    pnr_no: str = field(repr=False)
+    pnr_no: str
 
     def __post_init__(self) -> None:
         _required_text(self.pnr_no, "pnr_no")
@@ -1201,13 +1201,11 @@ class SelfSeatChangeInfoRequest:
     앱 동작의 재현이 아닙니다.
     """
 
-    run_date: str = field(repr=False)
-    train_no: str = field(repr=False)
-    departure_station_code: str = field(repr=False)
-    arrival_station_code: str = field(repr=False)
-    room_class_code: KorailSelfSeatChangeRoomClassCode | None = field(
-        default=None, repr=False
-    )
+    run_date: str
+    train_no: str
+    departure_station_code: str
+    arrival_station_code: str
+    room_class_code: KorailSelfSeatChangeRoomClassCode | None = None
 
     def __post_init__(self) -> None:
         _ascii_digits(self.run_date, "run_date", lengths=frozenset({8}))
@@ -1261,8 +1259,8 @@ def build_recent_delivery_history_form(customer_no: str) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class CommuterTicketInquiryRequest:
-    original_ticket: OriginalTicketReference = field(repr=False)
-    inquiry_type: str = field(default="0", repr=False)
+    original_ticket: OriginalTicketReference
+    inquiry_type: str = "0"
 
     def __post_init__(self) -> None:
         if self.inquiry_type not in {"0", "1"}:
@@ -1356,20 +1354,20 @@ class PriceFareLeg:
     실서버는 값을 넣든 빼든 같은 응답을 돌려줍니다(2026-09-21 확인).
     """
 
-    departure_station_code: str = field(repr=False)
-    arrival_station_code: str = field(repr=False)
-    run_date: str = field(repr=False)
-    train_no: str = field(repr=False)
-    requested_seat_attribute_code: str = field(repr=False)
-    train_group_code: str = field(repr=False)
+    departure_station_code: str
+    arrival_station_code: str
+    run_date: str
+    train_no: str
+    requested_seat_attribute_code: str
+    train_group_code: str
     #: ``stlbTrnClsfCd`` — 열차 종류 코드입니다(``stlb`` 는 입석(standing)이
     #: 아닙니다). 같은 전선 키를 이 저장소의 다른 세 곳이
     #: 전부 열차 종류로 읽습니다(``limousine_parsers.py:95``
     #: ``train_class_code``, ``parsers.py:834`` ``standard_train_class_code``,
     #: ``read_parsers.py:1853`` ``settlement_train_class_code``).
     #: 열차 행의 ``train_class_code`` 를 그대로 옮기면 됩니다.
-    train_class_code: str = field(repr=False)
-    goods_no: str | None = field(default=None, repr=False)
+    train_class_code: str
+    goods_no: str | None = None
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -1405,8 +1403,8 @@ class PriceFareQuoteRequest:
     소스로 확인되지 않습니다**(길이만 일치).
     """
 
-    legs: tuple[PriceFareLeg, ...] = field(repr=False)
-    menu_id: str = field(default="11", repr=False)
+    legs: tuple[PriceFareLeg, ...]
+    menu_id: str = "11"
 
     def __post_init__(self) -> None:
         _wire_component(self.menu_id, "menu_id")
@@ -1472,7 +1470,7 @@ class TicketReservationDetailRequest:
     넷에만 있어(``:58``) ``hidPnrNo`` 는 프로퍼티 이름이 곧 와이어 키입니다.
     """
 
-    pnr_no: str = field(repr=False)
+    pnr_no: str
 
     def __post_init__(self) -> None:
         _required_text(self.pnr_no, "pnr_no")
@@ -1505,8 +1503,8 @@ class RefundCompanion:
     (``compaBrth``)이라는 점도 함께 확인됩니다.
     """
 
-    name: str = field(default="", repr=False)
-    certificate_no: str = field(default="", repr=False)
+    name: str = ""
+    certificate_no: str = ""
 
     def __post_init__(self) -> None:
         _optional_text(self.name, "name")

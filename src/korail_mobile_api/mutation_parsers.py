@@ -252,12 +252,8 @@ def _received_amount(
                 # ``""``, ``h_srcar_no`` ``"0000"``, ``h_rcvd_amt`` 전부 0.
                 # 그것은 정산 금액이 아니므로 합에 넣지 않습니다. 넣으면 합이
                 # 0이 되어 ``h_tot_rcvd_amt`` 와 "모순" 으로 보이고, 아래
-                # 예외가 올라가 :meth:`KorailClient.reserve` 의 폴백이 PNR 만
-                # 남긴 홀드를 돌려줍니다 -- 전선에 값이 있는 12개 필드와
-                # 여정 목록이 통째로 사라지고, 결제 폼이 그 홀드를 거부해
-                # **확정된 예약대기를 결제할 수 없었습니다**(2026-09-22 재현:
-                # ``h_wct_no='82002'``·``h_tot_rcvd_amt=42600`` 이 살아 있는데
-                # ``window_no``/``received_amount`` 가 ``None``).
+                # 예외 때문에 확정된 예약대기를 결제할 수 없게 됩니다
+                # (2026-09-22 재현: ``h_wct_no='82002'``·``h_tot_rcvd_amt=42600``).
                 #
                 # 모순이 아니라는 근거: 같은 PNR 을 독립 경로
                 # ``certification.ReservationList``

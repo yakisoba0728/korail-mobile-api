@@ -54,7 +54,6 @@ from collections.abc import Callable
 from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 from .crypto import transform_login_password
 from .errors import (
-    KorailAppError,
     KorailAuthContinuationRequired,
     KorailAuthError,
     KorailProtocolError,
@@ -326,14 +325,7 @@ class KorailSessionClient:
         )
 
     def _post_login(self, form: dict[str, str]) -> BaseKorailResponse:
-        try:
-            return self.http.post_form(
-                "/classes/com.korail.mobile.login.Login", form
-            )
-        except KorailAppError as exc:
-            raise KorailAuthError(
-                exc.message or "KORAIL login failed", code=exc.code
-            ) from exc
+        return self.http.post_form("/classes/com.korail.mobile.login.Login", form)
 
     def _finish_login(
         self,
@@ -379,14 +371,9 @@ class KorailSessionClient:
         """서버 세션 무효화 후 로컬 상태 비움.
 
         7.0.6 ``POST login.Logout`` 의 ``timeStamp`` 폼을 보냅니다.
-        최선 노력 — 서버 요청이 어떻게 실패하든 **예외를 내지 않고**, 로컬
-        상태(``current``·``pending``·쿠키)는 **언제나** 비웁니다. 서버 쪽 세션이
-        실제로 무효화됐는지는 이 메서드로 알 수 없습니다.
-
-        서버 요청의 ``Exception`` 은 모두 삼키고(닫힌 HTTP 클라이언트의
-        ``RuntimeError`` 도 포함), 비우기는 ``finally`` 에서 합니다 —
-        ``KeyboardInterrupt`` 처럼 ``Exception`` 이 아닌 것은 전파되지만 그때도
-        로컬 상태는 비워진 뒤입니다.
+        로컬 상태(``current``·``pending``·쿠키)는 ``finally`` 에서 **언제나**
+        비웁니다. 서버의 ``FAIL`` 봉투는 예외가 아니지만, 전송 오류 같은 실패는
+        그대로 올라옵니다 — 그때도 로컬 상태는 이미 비워져 있습니다.
         """
         try:
             if self.current is not None:
@@ -395,8 +382,6 @@ class KorailSessionClient:
                     {"timeStamp": int(time.time() * 1000)},
                     raise_on_fail=False,
                 )
-        except Exception:  # noqa: BLE001 — 최선 노력, 위 docstring 참고
-            pass
         finally:
             self.clear_session()
 

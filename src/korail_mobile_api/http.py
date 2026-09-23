@@ -422,8 +422,6 @@ class KorailHttpClient:
         ``data`` 는 매핑이거나 순서 있는 ``(이름, 값)`` 시퀀스.
         ``require_envelope=False`` 는 KORAIL 봉투 없는 응답용.
         """
-        if include_dynapath:
-            self._refuse_missing_dynapath(path)
         ordered_form: list[tuple[str, Any]] | None = None
         mapping_form: dict[str, Any] | None = None
         if data is not None and not isinstance(data, Mapping):

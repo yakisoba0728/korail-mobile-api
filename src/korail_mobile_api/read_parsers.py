@@ -447,9 +447,6 @@ def _optional_scalar_string(
         return None
 
 
-#: ``limousine_parsers`` 가 이 이름으로 import 합니다.
-_additive_scalar_string = _optional_scalar_string
-
 
 def _optional_integer(
     data: Mapping[str, Any],

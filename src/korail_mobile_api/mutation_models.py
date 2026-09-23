@@ -8,9 +8,7 @@
 인증된 세션이 있는 :class:`~korail_mobile_api.client.KorailClient` 로 해당
 메서드를 부르기만 하면 됩니다.
 
-민감한 필드는 ``repr=False`` 라 객체를 찍어도 값이 보이지 않습니다. 빌더가
-만든 폼과 응답의 ``raw`` 는 평문 그대로입니다 — 무엇을 어디에 기록할지는
-호출자가 정합니다.
+무엇을 어디에 기록할지는 호출자가 정합니다 — 이 패키지는 값을 가리지 않습니다.
 """
 
 from __future__ import annotations
@@ -41,15 +39,15 @@ class RefundTicketResponse(BaseKorailResponse):
 class StationRefundOriginalTicket:
     """An ``Orgtkinfo`` row returned by station-issued ticket verification."""
 
-    pnr_no: str = field(repr=False)
-    original_sale_date: str | None = field(default=None, repr=False)
-    original_sale_window_no: str | None = field(default=None, repr=False)
-    original_sale_sequence: str | None = field(default=None, repr=False)
-    original_return_password: str | None = field(default=None, repr=False)
+    pnr_no: str
+    original_sale_date: str | None = None
+    original_sale_window_no: str | None = None
+    original_sale_sequence: str | None = None
+    original_return_password: str | None = None
     ticket_kind_code: str | None = None
     refund_division_code: str | None = None
     refund_reason_code: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
 def _require_every_field(
@@ -75,11 +73,11 @@ def _require_every_field(
 class StationRefundVerificationRequest:
     """``VerifyOnlineRefundsIn`` name and four station-ticket return parts."""
 
-    customer_name: str = field(repr=False)
-    return_no_1: str = field(repr=False)
-    return_no_2: str = field(repr=False)
-    return_no_3: str = field(repr=False)
-    return_no_4: str = field(repr=False)
+    customer_name: str
+    return_no_1: str
+    return_no_2: str
+    return_no_3: str
+    return_no_4: str
 
     def __post_init__(self) -> None:
         _require_every_field(self, "verification")
@@ -92,7 +90,7 @@ class StationRefundVerificationResponse(BaseKorailResponse):
     received_amount: str | None = None
     refund_fee: str | None = None
     refund_amount: str | None = None
-    popup_message: str | None = field(default=None, repr=False)
+    popup_message: str | None = None
     result_message: str | None = None
     original_tickets: tuple[StationRefundOriginalTicket, ...] = ()
     original_ticket_list_is_null: bool = False
@@ -106,18 +104,18 @@ class StationRefundExecutionRequest:
     goes out on the refund route the moment it is made.
     """
 
-    pnr_no: str = field(repr=False)
-    original_sale_date: str = field(repr=False)
-    original_sale_window_no: str = field(repr=False)
-    original_sale_sequence: str = field(repr=False)
-    original_return_password: str = field(repr=False)
+    pnr_no: str
+    original_sale_date: str
+    original_sale_window_no: str
+    original_sale_sequence: str
+    original_return_password: str
     refund_division_code: str
     refund_reason_code: str
     ticket_kind_code: str
-    customer_phone: str = field(repr=False)
+    customer_phone: str
     refund_amount: str
     refund_fee: str
-    customer_name: str = field(repr=False)
+    customer_name: str
 
     def __post_init__(self) -> None:
         _require_every_field(self, "execution")
@@ -393,7 +391,7 @@ class ReservationJourney:
     #: 이고, ``recalculate_price`` 응답(4/4 행)과 ``get_ticket_reservation_detail``
     #: (8/8 행)에는 들어 있습니다.
     journey_sequence: str | None = None
-    reservation_change_no: str | None = field(default=None, repr=False)
+    reservation_change_no: str | None = None
     departure_date: str | None = None
     departure_time: str | None = None
     #: ``h_arv_dt`` — 도착일. 출발 쪽(``departure_date``)과 짝이며, 심야·익일
@@ -422,7 +420,6 @@ class ReservationJourney:
     train_no: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
-        repr=False,
         compare=False,
     )
 
@@ -431,11 +428,11 @@ class ReservationJourney:
 class ReservationHoldResponse(BaseKorailResponse):
     """예약이 잡혔을 때 서버가 주는 것. 아직 결제 전입니다."""
 
-    pnr_no: str | None = field(default=None, repr=False)
+    pnr_no: str | None = None
     journey_count: str | None = None
-    window_no: str | None = field(default=None, repr=False)
-    temporary_job_sequence_1: str | None = field(default=None, repr=False)
-    temporary_job_sequence_2: str | None = field(default=None, repr=False)
+    window_no: str | None = None
+    temporary_job_sequence_1: str | None = None
+    temporary_job_sequence_2: str | None = None
     payment_flag: str | None = None
     payment_message: str | None = None
     #: ``h_pay_limit_msg``. 앱의 ``ReservationOut`` 에 선언은 돼 있으나
@@ -541,14 +538,13 @@ class ReservationHoldResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class ReservationPaymentCoupon:
-    certificate_password: str | None = field(default=None, repr=False)
-    coupon_no: str | None = field(default=None, repr=False)
+    certificate_password: str | None = None
+    coupon_no: str | None = None
     management_close_date: str | None = None
     management_start_date: str | None = None
-    ticket_return_no: str | None = field(default=None, repr=False)
+    ticket_return_no: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
-        repr=False,
         compare=False,
     )
 
@@ -568,16 +564,14 @@ class ReservationPaymentTicket:
     sale_date: str | None = None
     #: ``h_sale_sqno``.
     sale_sequence: str | None = None
-    #: ``h_tk_ret_pwd`` — 승차권 반환 비밀번호. 그 자체로 반환 권한이라
-    #: ``repr=False``.
-    return_password: str | None = field(default=None, repr=False)
-    #: ``h_tk_ret_no``. 이 파일의 :class:`ReservationPaymentCoupon` 이 같은
-    #: 의미의 필드를 ``repr=False`` 로 두는 것과 맞춥니다.
-    return_no: str | None = field(default=None, repr=False)
+    #: ``h_tk_ret_pwd`` — 승차권 반환 비밀번호.
+    return_password: str | None = None
+    #: ``h_tk_ret_no``.
+    return_no: str | None = None
     #: ``h_take_name`` — 수령인 성명(PII).
-    recipient_name: str | None = field(default=None, repr=False)
+    recipient_name: str | None = None
     #: ``h_disc_card_no`` — 할인카드번호.
-    discount_card_no: str | None = field(default=None, repr=False)
+    discount_card_no: str | None = None
     #: ``h_tk_prc``.
     ticket_price: str | None = None
     #: ``h_tk_fare``.
@@ -594,7 +588,6 @@ class ReservationPaymentTicket:
     standard_seat_price_fare: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
-        repr=False,
         compare=False,
     )
 
@@ -623,7 +616,7 @@ class ReservationPaymentSettlement:
     #: ``h_stl_amt``.
     settlement_amount: str | None = None
     #: ``h_stl_crd_no`` — 결제에 쓰인 카드번호.
-    settlement_card_no: str | None = field(default=None, repr=False)
+    settlement_card_no: str | None = None
     #: ``h_crd_corp_cd``.
     card_company_code: str | None = None
     #: ``h_crd_corp_nm``.
@@ -632,23 +625,20 @@ class ReservationPaymentSettlement:
     approval_date: str | None = None
     #: ``h_apv_tm``.
     approval_time: str | None = None
-    #: ``h_apv_no`` — 결제 승인번호. 최상위
-    #: :attr:`ReservationPaymentResponse.settlement_approval_no` 와 같은
-    #: 성격이라 ``repr=False``.
-    approval_no: str | None = field(default=None, repr=False)
+    #: ``h_apv_no`` — 결제 승인번호.
+    approval_no: str | None = None
     #: ``h_xpoint_dv``.
     point_division: str | None = None
     #: ``h_xpoint_no`` — 포인트(마일리지) 번호.
-    point_no: str | None = field(default=None, repr=False)
+    point_no: str | None = None
     #: ``h_xpoint_apv_no`` — 포인트 승인번호.
-    point_approval_no: str | None = field(default=None, repr=False)
+    point_approval_no: str | None = None
     #: ``h_remnant_amt``.
     remnant_amount: str | None = None
     #: ``h_rmt_point``.
     remote_point: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
-        repr=False,
         compare=False,
     )
 
@@ -675,7 +665,6 @@ class ReservationPaymentTableSeat:
     group_name_2: str | None = None
     raw: dict[str, Any] = field(
         default_factory=dict[str, Any],
-        repr=False,
         compare=False,
     )
 
@@ -685,9 +674,8 @@ class ReservationPaymentResponse(BaseKorailResponse):
     image_ticket_flag: str | None = None
     #: ``h_rsv_no`` — 이번 결제로 생성/확정된 예약번호.
     reservation_no: str | None = None
-    #: ``h_stl_cd_apprv_no`` — 결제 승인번호. 그 자체로 결제 증빙이라
-    #: ``repr=False``.
-    settlement_approval_no: str | None = field(default=None, repr=False)
+    #: ``h_stl_cd_apprv_no`` — 결제 승인번호.
+    settlement_approval_no: str | None = None
     #: ``h_tot_rcvd_amt`` — 청구된 총 수령액.
     total_received_amount: str | None = None
     #: ``h_stl_amt``.
@@ -697,9 +685,9 @@ class ReservationPaymentResponse(BaseKorailResponse):
     #: ``h_cust_no``.
     customer_no: str | None = None
     #: ``h_mb_crd_no`` — 회원카드번호.
-    member_card_no: str | None = field(default=None, repr=False)
+    member_card_no: str | None = None
     #: ``h_buy_name`` — 구매자 성명(PII).
-    buyer_name: str | None = field(default=None, repr=False)
+    buyer_name: str | None = None
     #: ``h_publ_start_no``.
     publication_start_no: str | None = None
     #: ``h_publ_end_no``.
@@ -721,13 +709,13 @@ class ReservationPaymentResponse(BaseKorailResponse):
 class CardPayment:
     """예약 결제의 카드 입력(정산코드 02)."""
 
-    card_number: str = field(repr=False)
+    card_number: str
     #: 카드 비밀번호 앞 두 자리.
-    card_password: str = field(repr=False)
+    card_password: str
     #: 유효기간 ``YYMM``.
-    card_expire: str = field(repr=False)
+    card_expire: str
     #: 개인 인증이면 생년월일 ``YYMMDD``, 법인이면 사업자번호.
-    birthday: str = field(repr=False)
+    birthday: str
     #: ``hidIsmtMnthNum1`` — 할부 개월. 일시불은 ``"0"``, 0 **하나** 입니다.
     #: 다른 값도 자릿수를 채우지 않습니다(``"2"``, ``"3"``, ``"12"``,
     #: ``"24"``).
@@ -802,16 +790,16 @@ class PaidTicket:
        (``RefundCommissionIn.java:149``).
     """
 
-    pnr_no: str = field(repr=False)
+    pnr_no: str
     #: **현재** 승차권의 ``h_sale_dt``. 전선 키 ``h_orgtk_sale_dt`` 를 채우지만
     #: 재발행된 승차권에서는 원표의 판매일자와 같지 않습니다 — 위 경고 참조.
-    sale_date: str = field(repr=False)
+    sale_date: str
     #: ``h_orgtk_wct_no`` → 전선 키 ``h_orgtk_sale_wct_no``.
-    sale_window_no: str = field(repr=False)
+    sale_window_no: str
     #: ``h_orgtk_sale_sqno``.
-    sale_sequence: str = field(repr=False)
+    sale_sequence: str
     #: ``h_orgtk_ret_pwd``.
-    return_password: str = field(repr=False)
+    return_password: str
     #: ``trnNo``.
     train_no: str = ""
     #: ``pbpAcepTgtFlg`` — 상세 응답의 값을 환불 요청에 그대로 되울립니다.
@@ -895,13 +883,11 @@ class DiscountCardAdditionalUser:
     프로퍼티 이름과 같습니다). 인원 수는 같은 DTO 의 ``apdUsrCnt``
     (``:32``)입니다. 1인용 카드에서는 앱도 빈 값을 보내므로 폼에 뜻있는
     값이 붙지 않습니다.
-
-    세 필드 모두 개인정보라 ``repr=False`` 입니다.
     """
 
-    customer_no: str = field(repr=False)
-    name: str = field(repr=False)
-    phone: str = field(repr=False)
+    customer_no: str
+    name: str
+    phone: str
 
 
 @dataclass(frozen=True)
@@ -919,7 +905,7 @@ class DiscountCardPurchaseRequest:
     """
 
     card_kind_management_no: str
-    customer_no: str = field(repr=False)
+    customer_no: str
     validity_start_date: str = ""
     usable_trip_count: str = ""
     sections: tuple[DiscountCardSectionRequest, ...] = ()
@@ -945,13 +931,13 @@ class DiscountCardTicket:
     ``:462``(``h_orgtk_ret_sale_dt``) / ``:466``(``h_orgtk_sale_sqno``) /
     ``:458``(``h_orgtk_ret_pwd``) 입니다. 다른 원표 작업이 쓰는 것과 같은
     자격증명입니다. **판매일자만 ``h_orgtk_ret_sale_dt``** 라는 점이
-    :class:`PaidTicket` (환불)과 정반대입니다. 넷 다 ``repr=False`` 입니다.
+    :class:`PaidTicket` (환불)과 정반대입니다.
     """
 
-    sale_window_no: str = field(repr=False)
-    sale_date: str = field(repr=False)
-    sale_sequence: str = field(repr=False)
-    return_password: str = field(repr=False)
+    sale_window_no: str
+    sale_date: str
+    sale_sequence: str
+    return_password: str
 
 
 @dataclass(frozen=True)
@@ -976,9 +962,9 @@ class DiscountCardPurchaseResponse(BaseKorailResponse):
     """
 
     #: ``lumpStlTgtNo`` — 결제가 청구할 정산 대상.
-    lump_settlement_target_no: str | None = field(default=None, repr=False)
+    lump_settlement_target_no: str | None = None
     #: ``dcntCrdStlTgtNo`` — N카드 자체의 정산 대상 번호.
-    discount_card_settlement_target_no: str | None = field(default=None, repr=False)
+    discount_card_settlement_target_no: str | None = None
     #: ``rcvdAmt`` — 그 정산의 금액.
     received_amount: str | None = None
     #: ``stxAmt`` — APK 필드명을 보존한 세액.
@@ -1086,9 +1072,9 @@ class PriceRecalculationRow:
     #: ``hidDcntKndCd`` — 지금 적용하는 할인.
     requested_discount_code: str = ""
     #: ``hidDscpNo`` — 쓸 수 있는 쿠폰·증명 번호.
-    certificate_no: str = field(default="", repr=False)
+    certificate_no: str = ""
     #: ``hidFmlyNo`` — 다자녀 가족 구성원 일련번호.
-    family_sequence_no: str = field(default="", repr=False)
+    family_sequence_no: str = ""
 
 
 @dataclass(frozen=True)
@@ -1114,7 +1100,7 @@ class PriceRecalculationRequest:
     리터럴입니다. 두 값은 실서버 관측에서 온 것입니다.
     """
 
-    pnr_no: str = field(repr=False)
+    pnr_no: str
     rows: tuple[PriceRecalculationRow, ...] = ()
     #: ``hidCustNo``. 비회원 세션에서만 채웁니다. 7.0.6 도 이 값과
     #: ``hiduserYn`` 을 **둘 다 ``!userData.isLogin()`` 일 때만** 넣습니다 —
@@ -1134,22 +1120,22 @@ class PriceRecalculationRequest:
     #: **예외를 냅니다**(``"Field map contained null value for key"``).
     #: 재계산은 ``@FieldMap`` 선언이므로(``NetworkApi.java:583``), 키가
     #: 빠지는 것은 이 빌더가 애초에 넣지 않기 때문입니다.
-    non_member_no: str | None = field(default=None, repr=False)
+    non_member_no: str | None = None
     #: ``txtPsrmClCd1`` — 여정의 객실 등급. **행의**
     #: :attr:`PriceRecalculationRow.room_class_code` (전선 ``psrm_cl_cd``)와
     #: 다른 자리입니다: 저쪽은 승객 행마다 하나씩 가는 리스트이고 이쪽은 폼
     #: 전체에 하나입니다. 예약 폼도 같은 키를 여정 등급으로 씁니다
     #: (``mutation_payloads.build_reservation_form`` 의 ``txtPsrmClCd1``).
-    cabin_class_code: str | None = field(default=None, repr=False)
+    cabin_class_code: str | None = None
     #: ``txtSeatAttCd2`` — 좌석 속성 2번 슬롯.
-    seat_attribute_code_2: str | None = field(default=None, repr=False)
+    seat_attribute_code_2: str | None = None
     #: ``txtSeatAttCd4`` — 좌석 속성 4번 슬롯. 예약 폼에서 **실제 좌석 속성이
     #: 들어가는 자리**가 이 번호입니다(``_seat_attribute_key(1)``), 2·5번은
     #: 거기서 ``"000"`` 으로 채워집니다. 재계산 라우트에서도 같은 역할인지는
     #: 확인하지 않았습니다 — 슬롯 번호만 맞춰 두었습니다.
-    seat_attribute_code_4: str | None = field(default=None, repr=False)
+    seat_attribute_code_4: str | None = None
     #: ``txtSeatAttCd5`` — 좌석 속성 5번 슬롯.
-    seat_attribute_code_5: str | None = field(default=None, repr=False)
+    seat_attribute_code_5: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1170,7 +1156,7 @@ class CartDiscountAddition:
     #: 확인된 전부이고, 코드값의 의미나 가능한 값 목록은 미출처입니다.
     duty_reference_recognition_division_code: str | None = None
     raw: Mapping[str, Any] = field(
-        default_factory=dict[str, Any], repr=False, compare=False
+        default_factory=dict[str, Any], compare=False
     )
 
 
@@ -1208,4 +1194,4 @@ class CartAddRequest:
     (``CommonIn`` 쪽은 ``Device``/``Version``/``Key`` 와 선택적 ``lang``).
     """
 
-    pnr_no: str = field(repr=False)
+    pnr_no: str

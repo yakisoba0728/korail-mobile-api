@@ -173,7 +173,7 @@ def g9() -> None:
           f"외부 예외 .raw={show(getattr(error, 'raw', None))}")
 
 
-# --- G11: logout 은 서버 요청이 어떻게 실패해도 로컬 상태를 비움 ------------------
+# --- G11: logout 은 서버 요청이 어떻게 실패해도 로컬 상태를 비움(실패는 올라와도 됨) ---
 def logout_state() -> None:
     import httpx
 
@@ -195,8 +195,8 @@ def logout_state() -> None:
     def assert_cleared(label: str, client: Any, action: Callable[[], None]) -> None:
         try:
             action()
-        except BaseException as error:  # noqa: BLE001
-            check("G11", False, f"{label}: logout 이 {type(error).__name__} 를 냄")
+        except Exception:  # noqa: BLE001 — 실패가 올라오는 것은 허용, 상태만 봅니다
+            pass
         check("G11", client.session.current is None, f"{label}: current 가 남음")
         check("G11", client.session.pending is None, f"{label}: pending 이 남음")
         check("G11", len(client.http.cookies) == 0,

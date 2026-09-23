@@ -135,7 +135,6 @@ from .payloads import (
     build_train_schedule_form,
     build_train_schedule_special_form,
     build_train_search_form,
-    validate_seat_inventory_inputs,
 )
 from .read_models import (
     CartListResponse,
@@ -280,19 +279,6 @@ from .session import KorailSessionClient
 T = TypeVar("T")
 
 
-def _scalar_text(value: object) -> str | None:
-    """KORAIL 스칼라를 텍스트로. 따옴표로 왔든 숫자로 왔든 같게 만듭니다.
-
-    ``type(...) is int`` 는 bool 을 제외합니다. bool 은 int 의 하위 타입이지만
-    KORAIL 의 신원 값으로 오는 일이 없습니다.
-    """
-    if isinstance(value, str):
-        return value
-    if type(value) is int:
-        return str(value)
-    return None
-
-
 class KorailClient:
     """KORAIL 모바일 앱(코레일톡)의 비공개 API 를 그대로 부르는 클라이언트.
 
@@ -393,15 +379,14 @@ class KorailClient:
         :class:`~korail_mobile_api.errors.KorailAuthContinuationRequired` 를 올리고 그 예외를
         ``session.pending`` 에 남깁니다.
 
-        :class:`~korail_mobile_api.errors.KorailAuthError` 로 바뀌는 것은 **로그인 요청
-        자체의 앱 수준 거절**(``login.Login`` 이 ``FAIL`` 또는 성공 코드가 아닌
-        ``h_msg_cd`` 로 답함)과, 쿠키(``JSESSIONID``)가 오지 않은 성공 응답뿐입니다.
-        나머지는 **바꾸지 않고 그대로** 전파됩니다 — HTTP 왕복 실패는
+        :class:`~korail_mobile_api.errors.KorailAuthError` 는 봉투는 통과했는데 성공
+        코드가 아닌 ``h_msg_cd`` 이거나 쿠키(``JSESSIONID``)가 오지 않은 응답입니다.
+        나머지는 **그대로** 전파됩니다 — ``FAIL`` 봉투는 코드에 맞는
+        :class:`~korail_mobile_api.errors.KorailAppError` 하위 예외(로그인 전 단계
+        ``MobileService.cache``·``common.code.do`` 도 같음), HTTP 왕복 실패는
         :class:`~korail_mobile_api.errors.KorailTransportError`, JSON·봉투·암호화
         파라미터(``key`` 누락·길이) 이상은
-        :class:`~korail_mobile_api.errors.KorailProtocolError`, 로그인 전 단계
-        (``MobileService.cache``·``common.code.do``)의 앱 수준 거절은 해당
-        :class:`~korail_mobile_api.errors.KorailAppError` 하위 예외 그대로입니다.
+        :class:`~korail_mobile_api.errors.KorailProtocolError` 입니다.
         어느 경우든 실패하면 세션·쿠키는 남지 않습니다.
         """
         return self.session.login(
@@ -447,9 +432,9 @@ class KorailClient:
         7.0.6 앱과 같이 ``login.Logout``에 ``timeStamp``와 공통 필드가 든
         폼 POST를 보냅니다. ``JSESSIONID`` 쿠키로 현재 세션을 가리킵니다.
 
-        로그인 상태가 아니면 요청 자체를 보내지 않습니다. 서버 무효화는 최선노력이라
-        전송이 실패하거나 세션이 이미 만료돼 있어도 예외를 올리지 않고, 로컬
-        상태(:meth:`clear_session` 이 지우는 것들)는 어느 경우에나 비워집니다. HTTP
+        로그인 상태가 아니면 요청 자체를 보내지 않습니다. 전송이 실패하면 예외가
+        올라오지만, 로컬 상태(:meth:`clear_session` 이 지우는 것들)는 어느 경우에나
+        비워집니다. HTTP
         커넥션 풀은 그대로 남으니 :meth:`close` 는 따로 부르면 됩니다.
         """
         self.session.logout()
@@ -637,7 +622,6 @@ class KorailClient:
     ) -> SeatCarListResponse:
         """좌석지정 화면이 쓰는 한 열차의 호차 목록을 조회합니다."""
         self._require_session()
-        validate_seat_inventory_inputs(train, passenger_count)
         form = build_seat_car_form(
             self.config,
             train,
@@ -673,11 +657,6 @@ class KorailClient:
         목록 → 좌석 배치도)와 같습니다. 호출 순서를 지키십시오.
         """
         self._require_session()
-        validate_seat_inventory_inputs(
-            train,
-            passenger_count,
-            car_no=car_no,
-        )
         form = build_seat_inventory_form(
             self.config,
             train,
@@ -1816,6 +1795,12 @@ class KorailClient:
         :meth:`cancel_unpaid_hold` 의 입력입니다 — 살아 있는 홀드는 미결제 예약이고
         취소하든 결제하든 호출자 책임입니다.
 
+        응답을 받았는데 파싱이 실패하면 :class:`~korail_mobile_api.errors.KorailProtocolError`
+        이고 ``.raw`` 에 응답 전체(``h_pnr_no`` 포함)가 있습니다. 서버에는 홀드가 잡혔을 수
+        있으니 재시도하지 말고 ``.raw`` 를 보거나 :meth:`get_reservation_history` 로
+        확인하십시오. 네 예약 메서드(``reserve``·``reserve_transfer``·``reserve_merge``·
+        ``reserve_with_discount_card``)가 모두 같습니다.
+
         ``seat_attribute_code`` 는 ``txtSeatAttCd4`` 로 나가는 세 자리 좌석 속성
         코드입니다. 주지 않으면 열차 행의 ``seat_attribute_code`` 를, 그것도 없으면
         ``"015"`` 를 씁니다(7.0.6 ``TrainScheduleViewModel.java:2914-2930,2982-2999``).
@@ -1858,7 +1843,7 @@ class KorailClient:
             lambda: self._mutation(
                 route,
                 form,
-                parser=self._hold_from_reservation_response,
+                parser=parse_reservation_hold_response,
             ),
         )
 
@@ -1904,69 +1889,6 @@ class KorailClient:
             phone_no=phone_no,
         )
         return self._mutation(route, form)
-
-    @staticmethod
-    def _hold_from_reservation_response(
-        raw: dict[str, Any],
-    ) -> ReservationHoldResponse:
-        # A live reserve may create a real hold on the server; we must NEVER
-        # lose the identity needed to cancel it. Strict parsing can raise on an
-        # unrelated malformed optional field AFTER the hold exists, so when it
-        # does we fall back to a minimal hold that still carries the PNR and
-        # journey count, letting the caller auto-cancel. We only re-raise when
-        # no PNR was returned (no hold to orphan).
-        try:
-            return parse_reservation_hold_response(raw)
-        except KorailProtocolError as exc:
-            # Bound as `exc` so the original parse failure is nameable and, if
-            # anything below raises a NEW exception, it can be chained with
-            # `from exc` instead of being lost. The bare `raise` just below
-            # re-raises this SAME exception object, which already preserves
-            # its traceback without needing `from exc` -- chaining only
-            # matters when constructing a different exception.
-            #
-            # A PNR or journey count that arrived as a JSON number is a hold we
-            # can still cancel, so normalise both here the same way the parser
-            # does rather than discarding the only identity we have.
-            pnr = _scalar_text(raw.get("h_pnr_no"))
-            if not (pnr and pnr.strip()):
-                raise
-            try:
-                base = BaseKorailResponse.from_raw(raw)
-            except KorailProtocolError as envelope_exc:
-                raise envelope_exc from exc
-            # journey_count deliberately does NOT stay None here. The whole
-            # purpose of this fallback is to preserve enough identity for the
-            # caller to auto-cancel a hold that may have actually been created
-            # server-side via cancel_unpaid_hold(). That path's
-            # build_unpaid_reservation_cancel_form() requires journey_count to
-            # be a digit string (ReservationCancelChkIn.txtJrnyCnt is a
-            # non-null String on the wire -- see
-            # ReservationCancelChkIn.java's synthetic constructor, which has
-            # no null-tolerant slot for this field). If the very field that
-            # failed strict parsing was h_jrny_cnt itself, _scalar_text would
-            # return None here, and a None journey_count would make the cancel
-            # builder raise KorailProtocolError too -- turning one confusing
-            # failure into a second, harder-to-diagnose one on the exact path
-            # this fallback exists to keep open. This library's own reserve()
-            # docstring states single-leg and multi-leg (max
-            # KORAIL_MAX_JOURNEY_LEGS == 2) are the only shapes reserve() ever
-            # produces, so "1" is a conservative single-journey assumption --
-            # not a guess at what the server actually sent, but the minimum
-            # that keeps cancel_unpaid_hold callable. This mirrors the
-            # existing last-resort literals in mutation_payloads.py
-            # (_ABSENT_JOB_SEQUENCE, _ABSENT_RESERVATION_CHANGE_NO): an
-            # explicit, documented fallback instead of a silent None that
-            # fails again downstream.
-            journey_count = _scalar_text(raw.get("h_jrny_cnt")) or "1"
-            return ReservationHoldResponse(
-                h_msg_cd=base.h_msg_cd,
-                h_msg_txt=base.h_msg_txt,
-                str_result=base.str_result,
-                raw=raw,
-                pnr_no=pnr,
-                journey_count=journey_count,
-            )
 
     def reserve_transfer(
         self,
@@ -2030,7 +1952,7 @@ class KorailClient:
             lambda: self._mutation(
                 route,
                 form,
-                parser=self._hold_from_reservation_response,
+                parser=parse_reservation_hold_response,
             ),
         )
 
@@ -2116,7 +2038,7 @@ class KorailClient:
         return self._mutation(
             route,
             form,
-            parser=self._hold_from_reservation_response,
+            parser=parse_reservation_hold_response,
         )
 
     def cancel_unpaid_hold(
@@ -2386,7 +2308,7 @@ class KorailClient:
             lambda: self._mutation(
                 route,
                 form,
-                parser=self._hold_from_reservation_response,
+                parser=parse_reservation_hold_response,
             ),
         )
 
@@ -2438,7 +2360,7 @@ class KorailClient:
         ``dcnt_knd_cd1='000'``) 서버가 ``SUCC``/``IRZ000008``("정상적으로 처리
         되었습니다")와 함께 ``h_tot_prc``·``h_tot_fare``·``h_tot_dcnt_amt``·
         ``h_tot_rcvd_amt``·``jrny_infos`` 를 갖춘 온전한 ``ReservationOut`` 본문을
-        돌려줬고, :func:`parse_reservation_hold_response` 가 폴백 없이 그대로
+        돌려줬고, :func:`parse_reservation_hold_response` 가 그대로
         파싱했습니다(``window_no`` 등 12 개 스칼라가 모두 살아 있었고, 여정 행에는
         홀드 응답에 없던 ``h_arv_dt``·``h_jrny_sqno`` 까지 들어 있었습니다).
         서로 다른 열차 셋(서울→부산 KTX 013·1005, 서울→대전 KTX 207)에서
@@ -2462,13 +2384,6 @@ class KorailClient:
         self._require_session("price recalculation requires")
         route = "/classes/com.korail.mobile.certification.PriceReCalculation"
         form = build_price_recalculation_form(self.config, request)
-        # Strict parsing, not the reserve methods' PNR-keeping fallback: a
-        # recalculation creates no hold, and the caller already has the PNR it
-        # asked about, so there is no hold to orphan and nothing for a fallback
-        # to rescue -- it would only hide a parse failure. This used to be
-        # justified by the path "never having been sent live"; that is no
-        # longer true (2026-09-22 SUCC/IRZ000008 on two trains, parsed here
-        # without incident), and the justification above is the durable one.
         return self._mutation(
             route,
             form,
