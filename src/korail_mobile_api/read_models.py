@@ -27,7 +27,9 @@ class TicketListTicket:
     return_password: str | None = field(default=None, repr=False)
     ticket_status_code: str | None = None
     #: ``h_tk_knd_cd``/``h_tk_knd_nm`` — 승차권 종류(``'72'``/``'스마트티켓'``).
-    #: 예약 행이 아니라 승차권 행에 실려 옵니다(라이브 131/131행).
+    #: 예약 행이 아니라 승차권 행에서 읽습니다. 2026-09-22 한 계정 관측에서
+    #: 131행 모두에 있었다고 적혀 있으나 캡처가 연결돼 있지 않아 재검산할 수
+    #: 없습니다(미검증). 1.1.1 이후에 덧붙인 필드라 관대하게 읽습니다(G8).
     ticket_kind_code: str | None = None
     ticket_kind_name: str | None = None
     train_info: tuple[Mapping[str, Any], ...] = field(default=(), repr=False, compare=False)
@@ -36,7 +38,8 @@ class TicketListTicket:
     # 만들어지는 곳이 있을 수 있어, 중간에 끼우면 기존 위치 인자의 의미가 조용히
     # 바뀝니다. 새 필드는 항상 끝에 덧붙입니다.
     #: ``h_tk_sqno`` — 이 승차권 행의 신원 앵커. ``MyTicketListOutTicket.java:92``
-    #: 가 선언하는 31개 키 중 하나이고 라이브 131/131행에 옵니다(2026-09-22).
+    #: 가 선언하는 31개 키 중 하나입니다(2026-09-22 한 계정 관측에서 131행
+    #: 모두에 있었다는 기록은 재검산 불가·미검증).
     #: 형제 :attr:`DelayDiscountTicket.ticket_sequence` 와 같은 와이어 키입니다.
     ticket_sequence: str | None = field(default=None, repr=False)
     #: ``h_tk_stt_nm`` — :attr:`ticket_status_code`(``h_tk_stt_cd``)의 사람이 읽는
@@ -69,7 +72,8 @@ class TicketListTicket:
     #: 상세 DTO 에 주입해 쓴 뒤(``MyTicketBaseViewModel.java:769``
     #: ``ticketDetailOut.setPbpAcepTgtFlg(myTicketListOutTicket2.getHPbpAcepTgtFlg())``)
     #: 환불 요청에 되돌려 넣습니다(``MyTicketDetailViewModel.java:1521``).
-    #: 라이브 131/131행에 있고 ``'N'`` 125 / ``'Y'`` 6 입니다.
+    #: 2026-09-22 한 계정 관측 기록으로는 131행 모두에 있었고 ``'N'`` 125 /
+    #: ``'Y'`` 6 이었습니다 — 캡처가 연결돼 있지 않아 재검산할 수 없습니다.
     pbp_acceptance_target_flag: str | None = None
 
 
@@ -86,13 +90,16 @@ class TicketListReservation:
 
     tickets: tuple[TicketListTicket, ...] = ()
     #: 아래 스칼라들은 모두 ``@SerialName`` 이 없어 코틀린 필드명을 추측한
-    #: 것이고, 실서버 예약 행에는 ``ticket_list`` **하나만** 옵니다
-    #: (2026-09-22: ``mode="2"`` 예약 128행 전부, 다른 키 0개). 따라서 지금은
-    #: 전부 ``None`` 입니다. 불리언들이 ``False`` 가 아니라 ``None`` 인 이유가
-    #: 이것입니다 — 서버가 "거짓" 이라고 말한 것이 아니라 아무 말도 하지
-    #: 않았습니다. 승차권 종류는 예약이 아니라 **승차권** 행에 있습니다
-    #: (:attr:`TicketListTicket.ticket_kind_code`, ``h_tk_knd_cd``, 라이브
-    #: 131/131행).
+    #: 것입니다. 2026-09-22 한 계정 관측(``mode="2"``)에서는 예약 행 128개가
+    #: ``ticket_list`` 외의 키를 싣지 않았다고 기록돼 있습니다 — 캡처가 연결돼
+    #: 있지 않아 재검산할 수 없고 서버 전반의 동작으로 일반화할 근거도 없습니다
+    #: (미검증). 그 관측에서라면 전부 ``None`` 입니다. 불리언들이 ``False`` 가
+    #: 아니라 ``None`` 인 이유가 이것입니다 — 키가 없으면 "거짓" 이 아니라
+    #: "모름" 입니다. 승차권 종류 코드는 **승차권** 행에서 읽습니다
+    #: (:attr:`TicketListTicket.ticket_kind_code`, ``h_tk_knd_cd``).
+    #:
+    #: 전부 1.1.1 이후에 덧붙인 필드라 관대하게 읽습니다(G8): 모양이 어긋나면
+    #: 그 필드만 ``None`` 이고 예약 행은 그대로 파싱됩니다.
     departure_datetime: str | None = field(default=None, repr=False)
     ticket_kind_code: str | None = None
     list_count: str | None = None
@@ -1751,8 +1758,10 @@ class CommuterPassengerOption:
     commuter_usage_age_code: str | None = None
     common_code_name: str | None = None
     #: ``custAgeFrom``/``custAgeTo`` — 이 옵션이 적용되는 연령 하한/상한.
-    customer_age_from: int = 0
-    customer_age_to: int = 0
+    #: 키가 없으면 형제 필드처럼 ``0`` 입니다. 1.1.1 이후에 덧붙인 필드라
+    #: 정수로 읽을 수 없는 모양이면 응답을 거부하지 않고 ``None`` 입니다(G8).
+    customer_age_from: int | None = 0
+    customer_age_to: int | None = 0
     passenger_count_from: int = 0
     passenger_count_to: int = 0
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], repr=False, compare=False)
@@ -1814,9 +1823,19 @@ class DeliveryRecipientResponse(BaseKorailResponse):
 class TicketDuplicationCheckResponse(BaseKorailResponse):
     #: ``rsvCnt`` — ``TicketDupCheckOut.java:28`` 의 선언은 ``String`` 입니다.
     #: 예전 주석은 "Gson 이 DAO 의 Java int 를 강제 변환한다" 고 적었지만 이
-    #: DTO 는 kotlinx이고 끝까지 String 입니다 — 지금까지는 동작이 중립이었을
-    #: 뿐(둘 다 ASCII-decimal 문자열을 받아들이므로), 그 잘못된 근거를 믿고
-    #: 나중에 문자열 처리 경로를 지우는 사고를 막기 위해 고칩니다.
+    #: DTO 는 kotlinx 이고 String 입니다.
+    #:
+    #: **이 변경은 동작 중립이 아닙니다**(예전 주석이 "중립" 이라고 적은 것은
+    #: 틀렸습니다). 1.1.1 은 이 필드를 정수로 읽어 JSON 정수 ``7`` 과 문자열
+    #: ``"7"`` 을 **둘 다** 받아 ``int`` ``7`` 을 돌려줬습니다(``""`` 는 거부).
+    #: 지금은 문자열만 받습니다: ``7`` 은 KorailProtocolError 로 거부되고
+    #: ``"7"`` 은 ``str`` ``"7"`` 그대로(``"0007"`` 도 그대로, ``""`` 도 받음)
+    #: 돌아옵니다 — 수용 범위와 반환 형이 모두 바뀌었습니다. DTO 의 ``String``
+    #: 선언은 앱이 무엇을 기대하는지의 근거일 뿐, 이 변경이 중립이라는 근거가
+    #: 아닙니다. 서버가 이 값을 JSON 정수로 보낸 적이 있는지는 확인하지
+    #: 않았습니다. 1.1.1 에도 있던 필드의 의도적인 형 변경이라 G8(새 필드)
+    #: 대상은 아니며, ``checks/g8_differential.py`` 가 "허용된 기존 필드 변경"
+    #: 으로 매번 출력합니다(감사 N03/D09).
     reservation_count: str | None = field(default=None, repr=False)
 
 

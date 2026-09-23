@@ -493,18 +493,26 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: 는 6.5.0 이고 7.0.6 디컴파일에 없습니다(2026-09-22 확인).
     payment_deadline_date: str | None = None
     payment_deadline_time: str | None = None
-    #: ``h_tot_fare`` — **총액이 아니라 요금(특실 차액) 합계**입니다. 좌석별
-    #: ``h_seat_fare`` 의 합이며, 한국 철도의 운임/요금 이분법에서 뒤쪽입니다
-    #: (``ReservationOut.java:444`` ``@SerialName("h_tot_fare")``). 일반실이면
-    #: 항상 ``"00000000000"`` 입니다 — 2026-09-22 에 KTX·무궁화호·새마을호·
-    #: ITX-마음·입석·예약대기·환승·병합 홀드 전부에서 0 이었고, 앱 자신의 샘플
-    #: ``ReservationOut`` 도 일반실 승차권을 ``h_tot_fare='00000000000'`` /
-    #: ``h_seat_fare='00000000000000'`` 로 적어 둡니다
-    #: (``analysis/jadx/sources/com/korail/talk/ui/screen/basketticket/data/BasketTicketDataKt.java:44``).
-    #: 0 이 아니게 되는 경우는 특실뿐입니다(같은 KTX 013 서울→부산 좌석 하나에
-    #: 24,500원, 2인이면 49,000원). **받을 돈은 이 필드가 아니라
-    #: :attr:`received_amount` 입니다**; 정산식은
-    #: ``total_price + total_fare - total_discount_amount == received_amount``.
+    #: ``h_tot_fare`` — 전선 키의 근거는 ``ReservationOut.java:444`` 의
+    #: ``@SerialName("h_tot_fare")`` **필드 선언뿐**입니다. 그 선언은 이 값이
+    #: 무엇을 합한 것인지, 언제 0 인지 말하지 않습니다.
+    #:
+    #: 아래는 **미검증 추론**입니다. 좌석별 ``h_seat_fare`` 의 합, 즉 한국 철도의
+    #: 운임/요금 이분법에서 "요금"(특실 차액 등) 쪽 합계로 보입니다. 근거는 둘 —
+    #: (1) 2026-09-22 에 개발자가 한 계정으로 건 몇 가지 홀드(KTX·무궁화호·
+    #: 새마을호·ITX-마음·입석·예약대기·환승·병합)에서 일반실은 0, 같은 KTX 013
+    #: 서울→부산 특실 좌석 하나에서 24,500(2인 49,000)이었다는 관측 기록(캡처가
+    #: 이 저장소에 연결돼 있지 않아 재검산 불가), (2) 앱에 박힌 **샘플 하나**
+    #: (``analysis/jadx/sources/com/korail/talk/ui/screen/basketticket/data/BasketTicketDataKt.java:44``)
+    #: 가 일반실 승차권을 ``h_tot_fare='00000000000'`` /
+    #: ``h_seat_fare='00000000000000'`` 로 적은 것. 둘 다 사례이지 규칙이 아니므로
+    #: "일반실이면 항상 0" 이나 "0 이 아닌 것은 특실뿐" 으로 읽지 마십시오 — 다른
+    #: 요금 상황(할증·특수 좌석 등)에서 어떤 값이 오는지는 확인하지 않았습니다.
+    #:
+    #: **받을 돈은 이 필드가 아니라 :attr:`received_amount` 입니다.**
+    #: ``total_price + total_fare - total_discount_amount == received_amount``
+    #: 라는 정산식도 위 관측 사례에서 맞았다는 것뿐, 앱 코드나 선언이 보장하는
+    #: 관계가 아닙니다(미검증).
     total_fare: str | None = None
     #: ``h_tot_prc`` — **표시용** 합계
     #: (``analysis/jadx/sources/com/korail/talk/network/model/ReservationOut.java:448``
@@ -514,12 +522,12 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: ``analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:11314-11318``
     #: 로, ``initAmountData()``(``:11222``)가 이 값을 예약 목록에 걸쳐 더해
     #: 화면 표시용 금액 묶음의 한 항으로만 씁니다 — 결제 요청 필드로
-    #: 흘러가는 경로는 없습니다. 구체적으로는 좌석별 ``h_seat_prc`` 의 합,
-    #: 즉 **할인 전·요금 전의 운임 기준액**입니다. 그래서 같은 열차의 일반실
-    #: 홀드와 특실 홀드가 이 값이 똑같이 나옵니다 — 2026-09-22 KTX 013
-    #: 서울→부산에서 둘 다 ``h_tot_prc='00000054400'`` 인데 실제로 받는 돈은
-    #: 53,900원과 78,400원이었습니다. 이 필드로 금액을 판단하면 특실 차액과
-    #: 할인이 통째로 사라집니다.
+    #: 흘러가는 경로는 없습니다. 값의 의미는 **미검증 추론**입니다: 좌석별
+    #: ``h_seat_prc`` 의 합, 즉 할인 전·요금 전의 운임 기준액으로 보입니다 —
+    #: 2026-09-22 한 계정 관측(KTX 013 서울→부산, 재검산 불가)에서 일반실·특실
+    #: 홀드가 둘 다 ``h_tot_prc='00000054400'`` 이었고 실제로 받는 돈은
+    #: 53,900원과 78,400원이었다는 기록이 근거의 전부입니다. 어느 쪽이든 이
+    #: 필드로 결제 금액을 판단하지 마십시오(:attr:`received_amount`).
     total_price: str | None = None
     #: 앱이 실제로 걷는 금액(``hidMnsStlAmt1``). 예약 응답에
     #: ``h_tot_rcvd_amt``(``ReservationOut.java:452``)가 있으면 그것이고,
