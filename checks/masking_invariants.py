@@ -8,11 +8,19 @@
 import sys, json
 
 # 저장소 루트에서 실행하십시오: ``python3 checks/masking_invariants.py``
+#
+# 종료 코드: 0 통과, 1 사례 실패, 2 검사 불완전(대상 모듈을 import 조차 못 함).
+# 변이 시험(``masking_mutants.py``)은 **1 만** "잡았다"로 셉니다. import 실패의
+# traceback 도 종료 코드 1 이라, 문법이 깨진 변이가 "잡힌" 것으로 셈해졌습니다.
 sys.path.insert(0, "src")
-from korail_mobile_api.redaction import (
-    redact_text, redact_url, redact_value, redact_payload, redact_mapping,
-)
-from korail_mobile_api.errors import KorailApiError
+try:
+    from korail_mobile_api.redaction import (
+        redact_text, redact_url, redact_value, redact_payload, redact_mapping,
+    )
+    from korail_mobile_api.errors import KorailApiError
+except Exception as _import_error:  # noqa: BLE001
+    print(f"검사 불완전: 마스킹 모듈 import 실패 — {type(_import_error).__name__}: {_import_error}")
+    sys.exit(2)
 
 SEC = "PRIVATE_SENTINEL"; TAIL = "PRIVATE_TAIL"; PUB = "PUBLIC_MARKER"
 
@@ -93,6 +101,155 @@ def _deep_mapping(_tag):
     for _ in range(1500):
         node = {"x": node}
     return str(redact_mapping(node))
+
+
+# --- 외부 감사 C01~C10·C37 용 판정 함수 -------------------------------------
+CARD = "4111111111111111"
+#: 깊은 사례의 겹 수. 감사(Python 3.13)는 1만 겹에서 ``json.loads`` 와 ``str()`` 이
+#: ``RecursionError`` 를 냈지만, 3.14 는 C 스택 기준이라 1만 겹은 통과하고 각각
+#: 약 20만·10만 겹에서 실패합니다(2026-09-23, macOS 3.14.7 확인). 1만 겹으로 두면
+#: 3.14 에서는 옛 구현도 통과해 사례가 아무 것도 못 잡습니다. 두 버전 모두에서
+#: 표준 구현이 실패하는 깊이로 둡니다.
+DEPTH = 300_000
+
+
+def _numbers_kept(v):
+    """카드번호 모양이 아닌 숫자 리터럴이 **한 글자도** 안 바뀌는지(C37).
+
+    ``1e0`` 이 ``1.0`` 으로, ``-0.10`` 이 ``-0.1`` 로 바뀌어도 값은 같아서, 값만
+    비교하는 사례로는 숫자를 정규화하는 구현을 못 잡았습니다.
+    """
+    out = redact_text(v)
+    try:
+        def literals(text):
+            return [
+                (k, x) for k, x in json.loads(
+                    text,
+                    object_pairs_hook=lambda items: items,
+                    parse_float=lambda s: ("NUM", s),
+                    parse_int=lambda s: ("NUM", s),
+                )
+                if isinstance(x, tuple)
+            ]
+        if literals(out) != literals(v):
+            return out + " <<NUMBER_CHANGED>>"
+    except ValueError:
+        return out + " <<BROKEN_JSON>>"
+    return out
+
+
+def _entries_kept(fn):
+    """가린 키끼리, 또는 가린 키와 원래 키가 **겹쳐 항목이 사라지지 않는지**(C06)."""
+    def check(v):
+        out = fn(v)
+        if isinstance(out, str):
+            try:
+                pairs = _pairs(out)
+            except ValueError:
+                return out + " <<BROKEN_JSON>>"
+            keys = [k for k, _ in pairs]
+            values = sorted(x for _, x in pairs)
+        else:
+            keys = list(out)
+            values = sorted(out.values())
+        if len(set(keys)) != len(keys) or len(keys) != len(v):
+            return f"{out} <<KEYS_COLLIDED>>"
+        if values != sorted(v.values()):
+            return f"{out} <<VALUES_LOST>>"
+        return str(out)
+    return check
+
+
+def _entries_json(v):
+    """JSON 판 :func:`_entries_kept`. 없던 중복 키가 생기면 실패입니다."""
+    out = redact_text(v)
+    try:
+        pairs = _pairs(out)
+    except ValueError:
+        return out + " <<BROKEN_JSON>>"
+    keys = [k for k, _ in pairs]
+    if len(set(keys)) != len(keys) or len(keys) != len(_pairs(v)):
+        return out + " <<KEYS_COLLIDED>>"
+    if sorted(x for _, x in pairs) != sorted(x for _, x in _pairs(v)):
+        return out + " <<VALUES_LOST>>"
+    return out
+
+
+def _shared_kept(_tag):
+    """순환하지 않는 공유 객체는 나올 때마다 **다 가려서** 써야 합니다(C07)."""
+    shared = {"public": PUB, "txtPwd": SEC}
+    out = redact_mapping({"left": shared, "right": shared, "list": [shared]})
+    want = {"public": PUB, "txtPwd": "[REDACTED]"}
+    if out["left"] != want or out["right"] != want or out["list"] != [want]:
+        return f"{out} <<SHARED_LOST>>"
+    return str(out)
+
+
+def _cycle_marked(_tag):
+    """진짜 순환은 여전히 ``[CYCLE]`` 이고, 멈춰야 합니다."""
+    node = {"public": PUB, "txtPwd": SEC}
+    node["self"] = node
+    node["via"] = [node]
+    out = redact_mapping(node)
+    if out["self"] != "[CYCLE]" or out["via"] != ["[CYCLE]"]:
+        return f"{out} <<CYCLE_NOT_MARKED>>"
+    return str(out)
+
+
+def _deep_payload(_tag):
+    """폼 값 :data:`DEPTH` 겹. 가린 **뒤** 의 문자열화까지 재귀가 없어야 합니다(C08)."""
+    node = {"txtPwd": SEC}
+    for _ in range(DEPTH):
+        node = {"child": node}
+    out = redact_payload(node)["child"]
+    if "'txtPwd': '[REDACTED]'" not in out:
+        return out[-80:] + " <<NOT_REDACTED>>"
+    return out[-80:]
+
+
+_DEEP_DOC = (
+    '{"public":' * DEPTH
+    + '{"txtPwd":{"a":{"b":1},"tail":"%s"}}' % SEC
+    + "}" * DEPTH
+)
+
+
+def _deep_json(_tag):
+    """표준 ``json.loads`` 가 거절하는 :data:`DEPTH` 겹 JSON 도 **구조로** 가려야 합니다.
+
+    예전(옛 한계 L6)에는 자유 텍스트 경로로 가서 안쪽 괄호에서 끊겨 비밀이 남았고,
+    따옴표 없는 ``[REDACTED]`` 가 들어가 JSON 이 아니었습니다. 기대 출력을 글자
+    그대로 비교합니다 — 이 깊이는 표준 json 으로 다시 읽어 확인할 수 없습니다.
+    """
+    out = redact_text(_DEEP_DOC)
+    want = (
+        '{"public": ' * DEPTH + '{"txtPwd": "[REDACTED]"}' + "}" * DEPTH
+    )
+    if out != want:
+        return out[DEPTH * 10 : DEPTH * 10 + 120] + " <<NOT_STRUCTURAL>>"
+    return out[-60:]
+
+
+def _deep_prose(_tag):
+    """산문 뒤의 :data:`DEPTH` 겹 JSON. 비밀도, 따옴표 없는 ``[REDACTED]`` 도 없어야 합니다."""
+    out = redact_text("INFO " + _DEEP_DOC)
+    want = (
+        "INFO " + '{"public":' * DEPTH + '{"txtPwd":"[REDACTED]"}' + "}" * DEPTH
+    )
+    if out != want:
+        return out[DEPTH * 10 : DEPTH * 10 + 120] + " <<PROSE_DEEP_WRONG>>"
+    return out[-60:]
+
+
+def _prose_json_ok(v):
+    """``INFO `` 뒤에 박힌 JSON 조각이 가린 뒤에도 JSON 인지(따옴표 없는 치환 금지)."""
+    out = redact_text(v)
+    head, _, body = out.partition(" ")
+    try:
+        json.loads(body)
+    except ValueError:
+        return out + " <<BROKEN_EMBEDDED_JSON>>"
+    return out
 
 
 CASES = [
@@ -236,6 +393,59 @@ CASES = [
  ("M/empty_amp",   f"h_sgr_nm_1=&trnNo1={PUB}",           redact_text, [], [PUB]),
  ("M/empty_semi",  f"h_sgr_nm_1=;trnNo1={PUB}",           redact_text, [], [PUB]),
  ("M/bs_json",     '{\\"h_sgr_nm_1\\":\\"%s\\"}' % SEC,      redact_text, [SEC], []),
+ # --- 외부 감사 C01~C10·C37. 두 방향 모두: 새지 않고, 계약이 남기라는 이웃은 남긴다.
+ # C01: 폼 키의 카드번호
+ ("C01/pay_cardkey",   {CARD: PUB},                          redact_payload, [CARD], [PUB]),
+ ("C01/pay_keepkey",   {"lang": PUB, CARD: "x"},             redact_payload, [CARD], ["'lang'", PUB]),
+ # C02: 쿼리 키의 카드번호
+ ("C02/url_cardkey",   f"https://example.invalid/?{CARD}={PUB}&lang=ko",
+                        redact_url, [CARD], [PUB, "lang=ko", "example.invalid"]),
+ ("C02/relurl_cardkey", f"/p?{CARD}={PUB}",                  redact_url, [CARD], [PUB]),
+ # C03: 키·host 의 JSESSIONID= 값
+ ("C03/json_sesskey",  json.dumps({f"JSESSIONID={SEC}": PUB}), _json_ok, [SEC], [PUB, "JSESSIONID="]),
+ ("C03/map_sesskey",   {f"JSESSIONID={SEC}": PUB},           redact_mapping, [SEC], [PUB]),
+ ("C03/pay_sesskey",   {f"JSESSIONID={SEC}": PUB},           redact_payload, [SEC], [PUB]),
+ ("C03/url_host",      f"https://JSESSIONID={SEC}.example.invalid/?lang={PUB}",
+                        redact_url, [SEC], [PUB]),
+ # C04: 부호·소수·지수가 붙은 JSON 숫자의 카드번호. 출력은 여전히 JSON.
+ ("C04/neg",           '{"n":-%s,"p":"%s"}' % (CARD, PUB),   _json_ok, [CARD], [PUB]),
+ ("C04/decimal",       '{"n":%s.5}' % CARD,                  _json_ok, [CARD], []),
+ ("C04/exponent",      '[%se5, 1.%sE-3]' % (CARD, CARD),     _json_ok, [CARD], []),
+ # C37: 카드번호 모양이 아닌 숫자는 글자 그대로
+ ("C37/numbers",       '{"n":1e0,"m":-0.10,"big":12345678901234567890,"txtPwd":"%s"}' % SEC,
+                        _numbers_kept, [SEC], ["1e0", "-0.10", "12345678901234567890"]),
+ # C05: 쉼표는 따옴표 없는 값을 끝내지 않음. G7 이웃은 그대로.
+ ("C05/comma",         f"txtPwd=HEAD,{SEC}",                 redact_text, [SEC], []),
+ ("C05/comma_colon",   f"txtPwd: HEAD,{SEC} next",           redact_text, [SEC], ["next"]),
+ ("C05/comma_neigh",   f"txtGoHour={PUB}&txtPwd=HEAD,{SEC}&trnNo1={PUB}1;lang={PUB}2&psgNum1_={PUB}3",
+                        redact_text, [SEC], [f"txtGoHour={PUB}", f"trnNo1={PUB}1", f"lang={PUB}2", f"psgNum1_={PUB}3"]),
+ # C06: 가린 키가 원래 키와 겹쳐 항목이 사라지거나 중복 키가 생기면 안 됨
+ ("C06/map_collision", {CARD: "A", "[REDACTED_CARD]": "B"},  _entries_kept(redact_mapping), [CARD], []),
+ ("C06/pay_collision", {CARD: "A", "[REDACTED_CARD]": "B"},  _entries_kept(redact_payload), [CARD], []),
+ ("C06/json_collision", json.dumps({CARD: "A", "[REDACTED_CARD]": "B", "[REDACTED_CARD]#2": "C"}),
+                        _entries_json, [CARD], []),
+ # C07: 공유 객체는 순환이 아님. 진짜 순환은 [CYCLE].
+ ("C07/shared",        "shared",                             _shared_kept, [SEC], [PUB]),
+ ("C07/cycle",         "cycle",                              _cycle_marked, [SEC], [PUB, "[CYCLE]"]),
+ # C08: 깊은 폼 값(:data:`DEPTH` 겹)
+ ("C08/pay_deep",      "deep",                               _deep_payload, [SEC], []),
+ # C09: 구조 경로 실패(짝 없는 surrogate) 후에도 퍼센트 인코딩 키의 값은 가림
+ ("C09/fallback_pct",  f"https://example.invalid/?%74xtPwd={SEC}&q=\ud800&lang={PUB}",
+                        redact_url, [SEC], [PUB, "example.invalid"]),
+ ("C09/fallback_plain", f"https://example.invalid/p?txt%50wd={SEC}&q=\ud800#f",
+                        redact_url, [SEC], ["example.invalid", "#f"]),
+ # C10: 괄호 값은 깊이와 무관하게 짝이 맞는 곳까지. 뒤 이웃은 그대로.
+ ("C10/prose_nested",  'INFO {"txtPwd":{"a":{"b":1},"other":"%s"},"pub":"%s"}' % (SEC, PUB),
+                        _prose_json_ok, [SEC], [PUB]),
+ ("C10/prose_arr",     'INFO {"hidDscpNo":[["a"],["]","%s"]],"pub":"%s"}' % (SEC, PUB),
+                        _prose_json_ok, [SEC], [PUB]),
+ ("C10/eq_nested",     'txtPwd={"a":{"b":1},"c":"%s"}&trnNo1=%s' % (SEC, PUB),
+                        redact_text, [SEC], [f"trnNo1={PUB}"]),
+ ("C10/unbalanced",    'INFO {"txtPwd":{"a":"%s' % SEC,       redact_text, [SEC], []),
+ ("C10/after_bracket", f"txtPwd=[a]{SEC}",                   redact_text, [SEC], []),
+ # 옛 한계 L6: json.loads 가 거절하는 깊이도 구조로
+ ("C10/deep_json",     "deep",                               _deep_json, [SEC], []),
+ ("C10/deep_prose",    "deep",                               _deep_prose, [SEC], []),
 ]
 
 #: :func:`_json_ok`·:func:`_two_entries` 가 붙이는 결함 표식. 사례마다 금지
@@ -257,8 +467,18 @@ def run():
         for s in keeps:
             if s not in out: bad.append((cid, f"OVER lost {s!r} -> {out[:70]}"))
     print(f"cases: {len(CASES)}  failures: {len(bad)}")
-    for c, m in bad: print(f"  {c:16} {m}")
+    # 출력에 짝 없는 surrogate 가 섞일 수 있습니다(C09 사례). 그대로 찍으면
+    # 보고하려던 실패가 UnicodeEncodeError 로 바뀝니다.
+    for c, m in bad:
+        print(f"  {c:16} {m}".encode("utf-8", "backslashreplace").decode("utf-8"))
     return len(bad)
 
 if __name__ == "__main__":
-    sys.exit(1 if run() else 0)
+    # 사례 안의 예외는 run() 이 실패로 셉니다. 여기까지 올라온 예외는 하네스
+    # 자체의 고장이므로 "사례 실패(1)"가 아니라 "검사 불완전(2)"입니다.
+    try:
+        failed = run()
+    except Exception as error:  # noqa: BLE001
+        print(f"검사 불완전: 하네스 오류 — {type(error).__name__}: {error}")
+        sys.exit(2)
+    sys.exit(1 if failed else 0)
