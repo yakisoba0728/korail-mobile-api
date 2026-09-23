@@ -33,8 +33,8 @@ HARNESS = [sys.executable, "checks/masking_invariants.py"]
 MUTANTS = [
     (
         "JSON 출력을 깨뜨림",
-        "parts.append(json.dumps(redact_text(node)))",
-        "parts.append(json.dumps(redact_text(node))[:-1])",
+        "            parts.append(json.dumps(inner))",
+        "            parts.append(json.dumps(inner)[:-1])",
     ),
     (
         "중복 키의 둘째를 버림",
@@ -56,8 +56,8 @@ MUTANTS = [
     (
         # v7 회귀. 이 변이를 하네스가 통과했었습니다.
         "JSON 안의 문자열에 값 패턴만 적용(v7)",
-        "parts.append(json.dumps(redact_text(node)))",
-        "parts.append(json.dumps(CARD_RE.sub('[REDACTED_CARD]', node)))",
+        "            inner = redact_text(node)",
+        "            inner = CARD_RE.sub('[REDACTED_CARD]', node)",
     ),
     (
         # 키 본문과 인덱스 접미사가 밑줄 정의를 따로 가졌을 때의 누락.
@@ -65,6 +65,48 @@ MUTANTS = [
         '    r"(?:" + _UNDERSCORE + r"?\\d+" + _UNDERSCORE'
         ' + r"?|" + _UNDERSCORE + r")"',
         '    r"(?:_?\\d+_?|_)"',
+    ),
+    # --- 최종 감사 C01~C09·C12. 고친 것을 하나씩 되돌립니다.
+    (
+        # C12: 감사가 쓴 변이 그대로 — 구조 마스킹을 최상위 한 겹만.
+        "구조 마스킹이 최상위 한 겹만(C12)",
+        "        if is_mapping:\n            mapping_out",
+        "        if is_mapping and parent is result:\n            mapping_out",
+    ),
+    (
+        "폼 값의 중첩 구조를 문자열로 뭉갬(C01)",
+        "        return str(redact_value(value))",
+        "        return redact_text(str(value))",
+    ),
+    # C03(scheme 생략 URL)은 변이로 두지 않습니다. ``redact_url`` 의 구조 경로와
+    # 텍스트 경로의 userinfo 패턴 **둘 다** ``//user@host`` 를 가리므로, 한쪽을
+    # 되돌려도 마스킹 결과가 같습니다 — 어떤 마스킹 사례로도 죽일 수 없는 동등
+    # 변이입니다. 두 층을 한꺼번에 끄는 변이는 C03 이 아니라 전혀 다른 것을
+    # 시험하게 됩니다. C03 자체는 하네스의 ``final/C03_schemerel`` 이 봅니다.
+    (
+        "가린 게 없어도 재직렬화(C05)",
+        "        if not changed:\n            return value",
+        "        if False:\n            return value",
+    ),
+    (
+        "따옴표 값 escape 쌍이 줄바꿈 못 넘음(C06)",
+        "(?P<value>\"(?:\\\\[\\s\\S]|",
+        "(?P<value>\"(?:\\\\.|",
+    ),
+    (
+        "host 의 카드번호를 안 봄(C07)",
+        '    host = CARD_RE.sub("[REDACTED_CARD]", host)',
+        "    host = host",
+    ),
+    (
+        "URL 처리 예외를 안 삼킴(C08)",
+        "    except (ValueError, UnicodeError):\n        return redact_text(value)",
+        "    except ZeroDivisionError:\n        return redact_text(value)",
+    ),
+    (
+        "JSON 키의 카드번호를 안 가림(G5)",
+        "                shown = _mask_card_key(name, used_keys)",
+        "                shown = name",
     ),
     (
         # v8 회귀. 로그 전체의 escape 를 먼저 풀어 값을 바꿨습니다.

@@ -74,7 +74,9 @@ if not ANALYSIS.is_dir():
         "그 트리는 .gitignore 로 빠져 있습니다(앱 바이너리는 재배포 대상이"
         " 아닙니다). 로컬에 풀어 둔 뒤 다시 실행하십시오."
     )
-    raise SystemExit(0)
+    # 검사하지 않았으면 **통과가 아니라 검사 불완전**입니다(exit 2). 예전에는
+    # 0 으로 끝나서, 합격 기준의 "2 = 검사 불완전" 과 모순됐습니다(최종 감사 D05).
+    raise SystemExit(2)
 
 EXT_GLOBS = ("*.java", "*.smali", "*.xml", "*.json", "*.tsv", "*.kt")
 inv = [str(f) for g in EXT_GLOBS for f in ANALYSIS.rglob(g)]

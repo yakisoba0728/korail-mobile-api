@@ -69,6 +69,32 @@ def _must_redact(v):
     return out
 
 
+def _dup_kept_masked(v):
+    """민감 필드가 **섞인** 중복 키 문서에서, 비민감 쌍이 순서째 그대로인지.
+
+    민감 필드가 없는 문서는 "가린 게 없으면 원문 반환" 규칙 때문에 순회를 아예
+    타지 않습니다. 그래서 중복 키를 버리는 순회 결함을 그 사례로는 못 잡았고,
+    변이 시험이 그것을 드러냈습니다(2026-09-23).
+    """
+    out = redact_text(v)
+    try:
+        def public(pairs):
+            return [(k, x) for k, x in pairs if k != "txtPwd"]
+        if public(_pairs(out)) != public(_pairs(v)):
+            return out + " <<PAIRS_CHANGED>>"
+    except ValueError:
+        return out + " <<BROKEN_JSON>>"
+    return out
+
+
+def _deep_mapping(_tag):
+    """민감 키를 dict 1,500겹으로 감쌉니다. 재귀판은 여기서 죽었습니다(C02)."""
+    node = {"txtPwd": SEC}
+    for _ in range(1500):
+        node = {"x": node}
+    return str(redact_mapping(node))
+
+
 CASES = [
  # --- v3 에서 이미 맞던 것 (회귀 방지)
  ("base/text",     f"h_sgr_nm={SEC}",                     redact_text, [SEC], []),
@@ -132,6 +158,32 @@ CASES = [
  ("v8/esc_suffix",
   'INFO {"h\\u005fsgr\\u005fnm\\u005f1":"%s"}' % SEC,
   redact_text, [SEC], []),
+ # --- 최종 감사 C01~C09. 구조화 입력은 깊이·타입과 무관하게(G1).
+ # C12: 이 묶음이 없어서 "최상위 한 겹만 가리는" 구현이 하네스를 통과했습니다.
+ ("final/dup_masked",
+  '{"public":"FIRST","public":"SECOND","txtPwd":"%s"}' % SEC,
+  _dup_kept_masked, [SEC], ["FIRST", "SECOND"]),
+ ("final/nested_map",   {"outer": {"txtPwd": SEC}},
+                         redact_mapping, [SEC], ["outer"]),
+ ("final/nested_list",  {"a": [{"b": {"txtPwd": SEC}}]},    redact_value,   [SEC], []),
+ ("final/C01_payload",  {"outer": {"txtPwd": [["a", SEC]]}},
+                         redact_payload, [SEC], []),
+ ("final/C02_deep",     "deep1500",                          _deep_mapping,  [SEC], []),
+ ("final/C03_schemerel", "//%s@example.invalid/p" % SEC,     redact_url,     [SEC],
+                         ["example.invalid"]),
+ ("final/C04_barecard", "4111111111111111",                  _json_ok,
+                         ["4111111111111111"], []),
+ ("final/C05_strval",   '{"detail":"[1,2]"}',
+                         redact_text, [], ['"[1,2]"']),
+ ("final/C06_quotelf",  'txtPwd="HEAD\\\n%s"' % SEC,         redact_text, [SEC], []),
+ ("final/C07_host",     "https://4111111111111111.example.invalid/p",
+                         redact_url, ["4111111111111111"], ["example.invalid"]),
+ ("final/C08_surrogate", "https://example.invalid/p?q=\ud800",
+                         redact_url, [], ["example.invalid"]),
+ ("final/C09_payloadstr", "plain txtPwd=%s" % SEC,             redact_payload, [SEC],
+                         ["plain"]),
+ ("final/G5_cardkey",   '{"4111111111111111":"A","5555555555554444":"B"}',
+                         _two_entries, ["4111111111111111", "5555555555554444"], []),
  ("v8/prefix_arr",  'INFO {"txtPwd":["]","%s"]}' % SEC,     redact_text, [SEC], []),
  ("v8/prefix_obj",  'INFO {"txtPwd":{"a":"}","b":"%s"}}' % SEC, redact_text, [SEC], []),
  ("v8/esc_key",     'INFO {"h\\u005fsgr\\u005fnm_1":"%s"}' % SEC,

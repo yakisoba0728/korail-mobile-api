@@ -10,7 +10,7 @@ python3 checks/contract_api.py         # G6·G8·G9·G10, 실패하면 exit 1
 python3 checks/masking_invariants.py   # 실패하면 exit 1
 python3 checks/masking_mutants.py      # 위 하네스가 비어 있지 않은지
 python3 checks/sphinx_symbols.py       # 실패하면 exit 1
-python3 checks/decompile_citations.py  # 실패하면 exit 1, analysis/ 없으면 0
+python3 checks/decompile_citations.py  # 실패하면 exit 1, analysis/ 없으면 2
 ```
 
 **"의존성이 없다"는 말은 정확하지 않습니다.** 추가 *테스트 프레임워크*가
@@ -60,7 +60,8 @@ python3 checks/decompile_citations.py  # 실패하면 exit 1, analysis/ 없으�
   그런 자리에 틀린 주장이 여럿 살아남았습니다.
 
 `analysis/` 가 있어야 합니다(``.gitignore`` 로 빠져 있으므로 로컬에 풀어
-두어야 합니다). 없으면 아무 것도 하지 않고 정상 종료합니다.
+두어야 합니다). 없으면 검사하지 않고 **exit 2(검사 불완전)** 로 끝납니다 —
+통과로 끝내면 검사하지 않은 것을 통과시킨 셈이 됩니다.
 
 ## `masking_mutants.py`
 
