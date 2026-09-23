@@ -238,7 +238,7 @@ class KorailPassengerCounts:
     ``txtCardNo_`` 하나뿐이며 그 밑줄이 이미 ``@SerialName`` 안에 있습니다.
     이 예약 폼(``_add_passenger_rows``)은 그 필드를 만들지 않고, 별개인
     N카드 예약 요청(``build_discount_card_reservation_form``)만
-    ``txtCardNo_1`` 을 만듭니다(``mutation_payloads.py:1631``). korail2 와 srtgo 가
+    ``txtCardNo_1`` 을 만듭니다. korail2 와 srtgo 가
     보내는 ``txtCardCode_``/``txtCardPw_`` 는 디컴파일된 앱 어디에도 없습니다.
 
     앱에 있는 규칙 둘은 여기서 강제하지 않습니다. 7.0.6 에서 두 규칙은
