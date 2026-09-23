@@ -1305,7 +1305,6 @@ class DiscountCardOnTicket:
     :data:`~korail_mobile_api.constants.KORAIL_DISCOUNT_CARD_DISCOUNT_CODE`
     (``'153'``)는 라이브 관측에서 온 값이고 7.0.6 소스로 재확인된 것은
     아닙니다.
-    :mod:`korail_mobile_api.redaction` 에 등록돼 있어 마스킹됩니다.
     """
 
     #: ``h_dcnt_crd_no``(``DiscountCardInfo.java:113`` 의 ``@SerialName``).
@@ -1992,9 +1991,6 @@ class OriginalTicketSeat:
     ``JrnyInfo.java:58`` 의 ``List<SeatInfo> seatList`` 이고 그 원소가
     ``SeatInfo.java:25``(필드 ``:30-51``, ``String`` 22개)입니다 — 아래 열다섯
     속성이 그 22개 중 열다섯과 맞습니다.
-
-    좌석 식별자 자체(``scarNo``/``seatNo``)는
-    :mod:`korail_mobile_api.redaction` 에 등록돼 있습니다.
     """
 
     passenger_sequence: str | None = None
@@ -2069,7 +2065,7 @@ class OriginalTicket:
     ``OgTicketInquiryOut.java:27`` 의 ``List<OrgTk> orgTkList`` 로 옵니다.
 
     ``original_*`` 네 값은 승차권 자신의 반환번호가 되돌아온 것입니다 — 요청이
-    보낸 것과 같은 비밀이라 전선 철자와 속성 철자 양쪽에서 마스킹됩니다.
+    보낸 것과 같은 비밀이라 ``repr=False`` 입니다.
 
     ``cmpnList``(동반 할인, ``OrgTk.java:32`` → ``Cmpn.java:29-44``)와
     ``stlList``(정산 줄, ``OrgTk.java:51`` → ``Stl.java:29-40``)는 일부러
@@ -2080,13 +2076,7 @@ class OriginalTicket:
     (``Stl.java:29`` 의 ``apvNo``) 같은 자격증명이 더 들어
     있는데 변경 흐름에는 쓸 일이 없기 때문입니다.
 
-    **``raw`` 는 마스킹되지 않습니다.** 그 전선 키들이
-    :mod:`korail_mobile_api.redaction` 에 등록돼 있다는 것은 마스킹 함수가
-    그 이름을 안다는 뜻일 뿐이고, 파서는 원본 매핑을 **그대로** 보존합니다 —
-    로그나 예외에 실을 생각이면 호출자가
-    :func:`~korail_mobile_api.redaction.redact_mapping` 을 직접 불러야
-    합니다. 파서 쪽 문서는 처음부터 그렇게 적고 있었고, 여기만 반대로
-    말하고 있었습니다.
+    ``raw`` 는 원본 매핑을 **그대로** 보존합니다.
     """
 
     pnr_no: str | None = field(default=None, repr=False)

@@ -31,41 +31,14 @@
 실패 판정은 ``strResult``(와 ``WRC000288``)이 합니다. 이 매핑은 이미 올라가기로
 정해진 예외의 클래스만 고릅니다. 경고 코드를 달고 온 성공 응답은 그대로 성공입니다.
 
-모든 메시지 문자열은 :func:`~korail_mobile_api.redaction.redact_text` 를 통과합니다.
+메시지는 가리지 않습니다. 이 패키지가 만드는 메시지에는 자격증명·세션 값을 넣지
+않고, 서버가 준 문구(``h_msg_txt``)는 그대로 둡니다. 로그를 어디에 어떻게 남길지는
+호출자가 정합니다.
 """
-
-from .redaction import redact_text
 
 
 class KorailApiError(Exception):
     """이 패키지의 모든 예외의 최상위.
-
-    문자열 인자는 :func:`~korail_mobile_api.redaction.redact_text` 를 거칩니다.
-
-    **마스킹의 경계**(2026-09-23 확인). 가려지는 것은 아래 ``__init__`` 이
-    ``isinstance(arg, str)`` 로 골라낸 인자, 곧 예외 **자신의 문자열 인자**
-    뿐입니다. 다음은 가려지지 않습니다:
-
-    * **문자열이 아닌 인자** — 그 검사에 걸리지 않아 마스킹 함수를 아예
-      거치지 않고 ``args`` 에 그대로 들어갑니다. 그 객체의 ``__str__`` 이
-      민감한 값을 내놓으면 ``str(error)`` 에도 가려지지 않은 채 나옵니다.
-    * ``__cause__`` — ``raise ... from exc`` 로 엮인 원래 예외. 예를 들어
-      ``httpx.ConnectError`` 의 문구에는 쿼리까지 붙은 URL 이 그대로 들어
-      있습니다. ``traceback.format_exception`` 도 그 줄을 찍습니다.
-    * :attr:`raw`·:attr:`message` — 서버 원본을 **일부러** 보존합니다.
-
-    원래 예외를 끊지 않는 이유는, 그것이 ``ConnectError`` 인지 ``ReadTimeout``
-    인지 SSL 오류인지가 호출자에게 실제로 필요한 정보이기 때문입니다.
-    다만 ``raise ... from None`` 이 원래 예외를 **지우는 것은 아닙니다** —
-    CPython 은 ``__cause__`` 를 ``None`` 으로 두고
-    ``__suppress_context__`` 를 참으로 세울 뿐이고, ``__context__`` 에는
-    원래 예외가 그대로 남아 객체에서 꺼낼 수 있습니다. 달라지는 것은 기본
-    traceback 이 그 줄을 **보여 주지 않는다**는 것이고, 그래서 사람이 읽는
-    진단에서 사라집니다.
-
-    그래서 **예외 체인이나 traceback 을 찍는 쪽이 로깅 경계에서 다시
-    가려야 합니다.** 보장되는 것은 문자열 인자가 가려진다는 것뿐이며,
-    ``str(error)`` 면 언제나 안전하다는 뜻은 아닙니다.
 
     세 속성은 **여기서 기본값을 보장합니다.** 하위 클래스 절반만 채우던 것이라,
     ``except KorailApiError as error: error.code`` 가 전송 실패나 프로토콜 오류에서
@@ -82,13 +55,6 @@ class KorailApiError(Exception):
     #: :attr:`raw` 는 그때 받은 응답 전체로 바뀌므로 이쪽에 옮겨 둡니다. 없으면 ``None``.
     parser_raw: object | None = None
 
-    def __init__(self, *args: object) -> None:
-        super().__init__(
-            *(
-                redact_text(arg) if isinstance(arg, str) else arg
-                for arg in args
-            )
-        )
 
 class _CodeMessagePickle:
     """``(code, message)`` 를 위치 인자로 받는 예외들의 pickle 계약. **믹스인**입니다.
@@ -176,7 +142,7 @@ class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
         self.raw = raw
         super().__init__(
             f"{code or 'P058'}: "
-            f"{redact_text(message or 'KORAIL session expired')}",
+            f"{message or 'KORAIL session expired'}",
             code=code,
         )
 
@@ -229,12 +195,7 @@ class KorailAuthContinuationRequired(KorailAuthError):
 
 
 def _code_message(code: str | None, message: str | None) -> str:
-    """The base class's redaction of the joined string alone is not enough:
-    a code that is itself a sensitive key name ("pnrNo: ...") would take the
-    message's first word as its value, so the message goes in pre-redacted.
-    :class:`KorailSessionExpiredError` does the same inline, with different defaults and no strip.
-    """
-    return f"{code or 'UNKNOWN'}: {redact_text(message or '')}".strip()
+    return f"{code or 'UNKNOWN'}: {message or ''}".strip()
 
 
 class KorailAppError(_CodeMessagePickle, KorailApiError):

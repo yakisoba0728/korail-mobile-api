@@ -3870,9 +3870,7 @@ def parse_original_ticket_inquiry_response(
     더 싣는데 변경 과정의 어느 단계도 그것을 필요로 하지 않습니다.
     (원래 인용 ``Cmpn.java:11-14`` / ``Stl.java:5-16`` 은 두 파일의 ``import``
     구역이었습니다 — 필드가 아니라 임포트 줄을 가리키고 있었습니다.) ``raw`` 는
-    원본을 그대로 보존하므로 그 안의 두 목록도 그대로 남습니다. 로깅 또는 외부
-    직렬화 전에 :func:`~korail_mobile_api.redaction.redact_mapping` 을 적용해야
-    합니다.
+    원본을 그대로 보존하므로 그 안의 두 목록도 그대로 남습니다.
     """
     _validate_strict_read_envelope(raw)
     tickets = []

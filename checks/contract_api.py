@@ -1,8 +1,7 @@
-"""합격 기준(``checks/ACCEPTANCE.md``)의 G6·G8·G9·G10 과 로그아웃 상태 계약을 검사합니다.
+"""합격 기준(``checks/ACCEPTANCE.md``)의 G8(표본)·G9·G10·G11 을 검사합니다.
 
-마스킹 사례 검사(G1~G7)는 ``masking_invariants.py`` 가 합니다. 이 스크립트는
-나머지 계약 — 예외를 내지 않음, 수용 범위를 줄이지 않음, 파싱 실패 시 원문 보존,
-import 무결성, 로그아웃 뒤 로컬 상태 없음 — 을 봅니다.
+수용 범위를 줄이지 않음, 파싱 실패 시 원문 보존, import 무결성, 로그아웃 뒤 로컬
+상태 없음을 봅니다. G8 전체는 ``g8_differential.py`` 가 봅니다.
 
 네트워크를 쓰지 않습니다. 만드는 클라이언트는 전부 ``httpx.MockTransport`` 를
 달고, 그 전송이 실제로 불리면(= 가짜로 막지 않은 요청이 나가려 하면) 위반으로
@@ -77,44 +76,6 @@ def g10(pkg: Any) -> int:
     exec("from korail_mobile_api import *", namespace)  # noqa: S102
     check("G10", all(n in namespace for n in pkg.__all__), "star import 누락")
     return len(modules)
-
-
-# --- G6: 어떤 redact_* 도 str 입력에 예외를 내지 않음 ---------------------------
-B = "\\"
-NASTY = [
-    "", " ", "﻿", "https://[invalid", "http://", "://", "?", "/?", "/?&=&",
-    "[" * 20000 + "]" * 20000, "{" * 5000, '{"a":' * 3000, '"' * 1000,
-    '{"x":NaN}', '{"x":1e999}', '{"x":"' + B + 'ud800"}', B + "u", B + "u00",
-    "txtPwd=", "txtPwd=" + "&" * 100, "a" * 1_000_000, "\x00\x01\x7f",
-    "h" + B + "u005fsgr=" + B + "u0022", 'INFO {"txtPwd":["]"', "JSESSIONID=",
-    # 최종 감사: 쿼리의 짝 없는 surrogate(C08), scheme 생략 URL, 맨 숫자.
-    "https://example.invalid/p?q=\ud800", "//user@host/p?q=\ud800",
-    "//" + "a" * 5000 + "@h", "4111111111111111", "-", "1e999999",
-]
-
-
-def g6() -> None:
-    from korail_mobile_api import redaction as R
-
-    #: G6 은 "어떤 ``redact_*`` 도 **str 입력에** 예외를 내지 않는다" 입니다. 예전에는
-    #: ``redact_payload``·``redact_mapping`` 에 문자열을 직접 넣지 않고 dict 값으로
-    #: 감싸서, 정작 명시된 조건을 검사하지 않았습니다(최종 감사 C09).
-    functions = (
-        R.redact_text, R.redact_url, R.redact_value, R.redact_payload, R.redact_mapping,
-    )
-    for text in NASTY:
-        for fn in functions:
-            try:
-                fn(text)
-            except Exception as error:  # noqa: BLE001
-                where = f"{fn.__name__}({show(text[:24])})"
-                check("G6", False, f"{where}: {type(error).__name__}")
-        try:
-            R.redact_payload({"k": text, "l": [text]})
-            R.redact_mapping({"k": text})
-        except Exception as error:  # noqa: BLE001
-            where = f"payload/mapping({show(text[:24])})"
-            check("G6", False, f"{where}: {type(error).__name__}")
 
 
 # --- G8: 새 선택 필드가 파싱 실패를 만들지 않음 ---------------------------------
@@ -342,7 +303,6 @@ def main() -> int:
     module_count = 0
     sections: list[tuple[str, Callable[[], object]]] = [
         ("G10", lambda: g10(pkg)),
-        ("G6", g6),
         ("G8", g8),
         ("G9", g9),
         ("C26", logout_state),
@@ -374,8 +334,7 @@ def main() -> int:
         return 2
     if failures:
         return 1
-    print(f"G6·G8·G9·G10·C26 통과 (모듈 {module_count}, 공개 심볼 {len(pkg.__all__)},"
-          f" G6 입력 {len(NASTY)}종)")
+    print(f"G8·G9·G10·G11 통과 (모듈 {module_count}, 공개 심볼 {len(pkg.__all__)})")
     return 0
 
 

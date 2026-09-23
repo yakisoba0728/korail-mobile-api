@@ -6,9 +6,7 @@
 합격 기준은 `ACCEPTANCE.md` 입니다. 감사는 그 문서만 기준으로 합니다.
 
 ```sh
-python3 checks/contract_api.py         # G6·G9·G10·G11
-python3 checks/masking_invariants.py   # G1~G7 사례
-python3 checks/masking_mutants.py      # 위 하네스가 비어 있지 않은지
+python3 checks/contract_api.py         # G8(표본)·G9·G10·G11
 python3 checks/sphinx_symbols.py       # 문서의 파이썬 심볼 참조
 python3 checks/decompile_citations.py  # 문서의 디컴파일 인용 (analysis/ 필요)
 python3 checks/g8_differential.py      # G8 차등 검사
@@ -22,31 +20,18 @@ python3 checks/selftest/run.py         # 위 두 문서 검사기 자신의 회�
 되기 때문입니다. 나머지 스크립트의 2 는 각 파일의 머리말을 보십시오.
 
 **"의존성이 없다"는 말은 정확하지 않습니다.** 추가 *테스트 프레임워크*가
-없다는 뜻이고, 마스킹 검사는 패키지를 import 하므로 그 경로에서 ``httpx`` 가
+없다는 뜻이고, 계약 검사는 패키지를 import 하므로 그 경로에서 ``httpx`` 가
 따라 들어옵니다. ``python -S`` 처럼 사이트 패키지 없이 돌리면 그 import 에서
 멈춥니다.
 
-스크립트는 여섯 개(`contract_api`·`masking_invariants`·`masking_mutants`·
-`sphinx_symbols`·`decompile_citations`·`g8_differential`)와 자체 시험
-`selftest/run.py` 하나입니다. 처음 다섯은 **실제로 잡은 것이 있어서** 여기
-있습니다. 그리고 이 스크립트들 **자신도 여러 번 틀렸습니다** — 외부 감사가 거짓 통과와
-집계 버그를 찾아냈고, 최종 감사는 문서 검사기 둘에서 거짓 통과·거짓 실패·
-traceback 을 여덟 건(C28–C35) 더 찾았습니다. 그래서 마스킹 쪽에는
-``masking_mutants.py`` 가, 문서 검사기 쪽에는 ``selftest/run.py`` 가 있습니다.
+스크립트는 다섯 개(`contract_api`·`sphinx_symbols`·`decompile_citations`·
+`g8_differential`, 그리고 문서 검사기 둘의 자체 시험 `selftest/run.py`)입니다.
+이 스크립트들 **자신도 여러 번 틀렸습니다** — 외부 감사가 거짓 통과·거짓 실패·
+traceback 을 여러 건 찾았고, 그래서 문서 검사기 쪽에 ``selftest/run.py`` 가 있습니다.
 
-## `masking_invariants.py`
-
-마스킹을 **양방향으로** 겁니다.
-
-* 민감 값이 결과에 남으면 실패(누출)
-* 비민감 토큰이 결과에서 사라지면 실패(과잉 마스킹)
-
-한쪽만 보다가 과잉 마스킹을 고치면서 누출을 만든 적이 있습니다. 그래서 두
-방향을 같은 표에 넣었습니다. 케이스마다 그것이 **왜** 있는지 주석이 붙어
-있으니, 하나가 실패하면 먼저 그 주석을 읽으십시오 — 몇 개는 의도적으로
-과잉 마스킹을 택한 자리입니다.
-
-`analysis/` 가 필요 없습니다.
+마스킹(``redaction.py``)과 그 검사 두 개(``masking_invariants``·``masking_mutants``)는
+2026-09-23 에 지웠습니다. 개인이 자기 계정으로 쓰는 라이브러리가 로그 마스킹까지
+보장할 이유가 없었고, 보장을 지키느라 감사가 끝나지 않았습니다.
 
 ## `sphinx_symbols.py`
 
@@ -99,17 +84,5 @@ G8(이전에 파싱되던 응답이 새 선택 필드 때문에 파싱 실패로
 ``--root`` 로 그 트리에 돌려 종료 코드를 확인합니다. 고친 뒤에도 맞는 입력이
 통과하는지(거짓 실패가 없는지)를 함께 봅니다. 두 검사기는 ``--root DIR`` 또는
 환경 변수 ``KORAIL_CHECK_ROOT`` 로 저장소 루트를 바꿀 수 있습니다.
-
-`analysis/` 가 필요 없습니다.
-
-## `masking_mutants.py`
-
-``redaction.py`` 에 일부러 결함을 심고 마스킹 하네스가 **실패하는지** 봅니다.
-하네스가 통과한다는 사실은 그 하네스가 잘못된 구현을 실제로 걸러 낼 때만
-의미가 있습니다. 결함은 `src/` 를 통째로 복사한 **임시 디렉터리의 사본**에만
-심고, 하네스도 그 사본에서 돌립니다. 원본 `redaction.py` 는 한 번도 쓰지 않으며,
-끝에 원본이 바이트 그대로인지(해시)와 원본에서 하네스가 다시 0 인지를 확인합니다.
-도중에 프로세스가 죽어도 원본에 변이가 남지 않습니다. 원본을 읽지 못하거나
-실행기 자체가 예외를 내면 종료 코드 2(검사 불완전)입니다.
 
 `analysis/` 가 필요 없습니다.

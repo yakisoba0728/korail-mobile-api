@@ -264,7 +264,7 @@ KORAIL_MUTATION_ROUTES = frozenset(
         # ReservationWaitIn.java:107-119 declares four fields and no more:
         # @SerialName("txtPnrNo") (the PNR), ("txtPsrmClChgFlg") (좌석등급
         # 변경), ("txtSmsSndFlg") (SMS 통보) and ("txtCpNo") (the phone the SMS
-        # goes to; registered in redaction.py). Route:
+        # goes to). Route:
         # NetworkApi.java:638-640 postReservationWait.
         ("POST", "/classes/com.korail.mobile.reservationWait.ReservationWait"),
         # payment

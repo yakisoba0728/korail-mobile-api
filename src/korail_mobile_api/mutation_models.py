@@ -8,19 +8,9 @@
 인증된 세션이 있는 :class:`~korail_mobile_api.client.KorailClient` 로 해당
 메서드를 부르기만 하면 됩니다.
 
-민감한 필드는 ``repr=False`` 라 객체를 찍어도 값이 보이지 않습니다. 전선
-이름도 :data:`korail_mobile_api.redaction.SENSITIVE_KEYS` 에 등록돼 있지만,
-그것은 마스킹 함수를 **불렀을 때** 무엇이 가려지는지를 정할 뿐입니다.
-
-**페이로드는 저절로 가려지지 않습니다.** 이 패키지가 스스로 부르는 마스킹은
-예외 생성자 경로 하나뿐이고(``errors.py`` 가 예외의 문자열 인자에
-:func:`~korail_mobile_api.redaction.redact_text` 를 적용), 그 경계도
-:class:`~korail_mobile_api.errors.KorailApiError` 가 적어 둔 만큼만입니다.
-빌더가 만든 폼, 이 모듈의 요청 객체, 응답의 ``raw`` 는 평문 그대로입니다 --
-로그·직렬화 전에 :func:`~korail_mobile_api.redaction.redact_payload` (폼)나
-:func:`~korail_mobile_api.redaction.redact_mapping` /
-:func:`~korail_mobile_api.redaction.redact_value` (매핑·객체)를 부르는 것은
-**호출자의 몫**입니다.
+민감한 필드는 ``repr=False`` 라 객체를 찍어도 값이 보이지 않습니다. 빌더가
+만든 폼과 응답의 ``raw`` 는 평문 그대로입니다 — 무엇을 어디에 기록할지는
+호출자가 정합니다.
 """
 
 from __future__ import annotations
@@ -938,8 +928,7 @@ class DiscountCardAdditionalUser:
     옛 인용 ``NCardReservationDao.java:66-72,122-124`` 는 6.5.0 이고 7.0.6
     디컴파일에 없습니다.
 
-    세 필드 모두 개인정보라 ``repr=False`` 이고, 전선 이름이
-    :mod:`korail_mobile_api.redaction` 에 등록돼 있습니다.
+    세 필드 모두 개인정보라 ``repr=False`` 입니다.
     """
 
     customer_no: str = field(repr=False)
@@ -1152,9 +1141,9 @@ class PriceRecalculationRow:
     discount_kind_code: str
     #: ``hidDcntKndCd`` — 지금 적용하는 할인.
     requested_discount_code: str = ""
-    #: ``hidDscpNo`` — 쓸 수 있는 쿠폰·증명 번호. 마스킹됩니다.
+    #: ``hidDscpNo`` — 쓸 수 있는 쿠폰·증명 번호.
     certificate_no: str = field(default="", repr=False)
-    #: ``hidFmlyNo`` — 다자녀 가족 구성원 일련번호. 마스킹됩니다.
+    #: ``hidFmlyNo`` — 다자녀 가족 구성원 일련번호.
     family_sequence_no: str = field(default="", repr=False)
 
 
