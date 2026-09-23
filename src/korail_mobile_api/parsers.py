@@ -48,7 +48,7 @@ from .models import (
     TransferStationListResponse,
     UuidResponse,
 )
-from .read_parsers import _nested_rows, _nullable_string_fields, _optional_list
+from .read_parsers import _additive_scalar_string, _nested_rows, _nullable_string_fields, _optional_list
 from .read_parsers import _optional_string as _typed_optional_string
 
 
@@ -209,7 +209,8 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
         version = AppVersionInfo(
             message=_optional_string(version_raw, "AMESSAGE"),
             new_version=_optional_string(version_raw, "NEWDVERSION"),
-            store_url=_optional_string(version_raw, "CNTAURL"),
+            # 1.1.1 이후 모델링한 필드 — 모양이 어긋나면 None(G8).
+            store_url=_additive_scalar_string(version_raw, "CNTAURL", "app data version"),
         )
     return AppDataResponse(
         **_response_fields(response),
@@ -355,7 +356,8 @@ def parse_train_search_metadata(
 
     return TrainSearchMetadata(
         job_id=optional("strJobId"),
-        menu_id=optional("h_menu_id"),
+        # 1.1.1 이후 모델링한 필드 — 모양이 어긋나면 None(G8).
+        menu_id=_additive_scalar_string(raw, "h_menu_id", "train search metadata"),
         product_no=optional("h_gd_no"),
         next_page_flag=optional("h_next_pg_flg"),
         next_query_station_no=optional("h_qry_st_no_next"),
@@ -1104,7 +1106,8 @@ def parse_seat_car_list_response(
         train_group_code=_inventory_optional_string(raw, "h_trn_gp_cd"),
         # TrainResearchOut.java:27,105 -- one of the DTO's own 6 fields,
         # previously unread.
-        car_count=_inventory_optional_string(raw, "h_scar_num"),
+        # 1.1.1 이후 모델링한 필드라 모양이 어긋나면 None 입니다(G8).
+        car_count=_additive_scalar_string(raw, "h_scar_num", "seat car list"),
     )
 
 

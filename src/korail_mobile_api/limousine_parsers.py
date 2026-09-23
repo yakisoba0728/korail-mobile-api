@@ -50,12 +50,10 @@ from .limousine_models import (
 )
 from .models import BaseKorailResponse, SeatWindow
 from .parsers import (
-    _inventory_optional_string,
     _inventory_ratio,
-    _inventory_required_scalar_string,
     _response_fields,
 )
-from .read_parsers import _nullable_string_fields, _optional_string, _row
+from .read_parsers import _additive_scalar_string, _nullable_string_fields, _optional_string, _row
 from .read_parsers import _optional_list as _nullable_list
 
 
@@ -126,12 +124,15 @@ _SCHEDULE_FIELDS = {
     # 전선 철자가 갈리는 자리에서는 **라이브가 근거**입니다.
     #
     # ``trnOrdrNo`` 는 아직 라이브로 확인된 적이 없어 속성명 그대로 둡니다.
-    "train_order_no": "trnOrdrNo",
     "yms_application_flag": "ymsAplFlg",
     # ScdlQryOutTrain.java:40 의 rcvdPrc. DTO 가 선언하는 21개 필드 중 이
     # 하나만 이 맵에 빠져 있어서 행의 유일한 운임이 raw 로만 닿았습니다.
     # 2026-09-22 라이브 359행 전부에 있었고 값은 0으로 앞을 채운 14자리
     # 원 단위 문자열입니다 -- 나머지 20개와 같이 문자열 그대로 둡니다.
+}
+#: 1.1.1 이후 모델링한 필드. 모양이 어긋나면 응답 전체가 아니라 이 칸만 None 입니다(G8).
+_SCHEDULE_ADDED_FIELDS = {
+    "train_order_no": "trnOrdrNo",
     "received_price": "rcvdPrc",
 }
 
@@ -148,6 +149,10 @@ def parse_limousine_schedule_response(
         schedules.append(
             LimousineSchedule(
                 **_nullable_string_fields(row, _SCHEDULE_FIELDS, "limousine schedule"),
+                **{
+                    name: _additive_scalar_string(row, wire, "limousine schedule")
+                    for name, wire in _SCHEDULE_ADDED_FIELDS.items()
+                },
                 raw=row,
             )
         )
@@ -197,9 +202,10 @@ def parse_limousine_seat_inventory_response(
 
     같은 DTO(``research.TResidualSeatsResearch.do`` 와 공유 —
     ``NetworkApi.java:271,741``)가 선언하는 ``layout_type``·``vrBnrUrl``·
-    ``windowList`` 도 형제 파서
-    :func:`~korail_mobile_api.parsers.parse_seat_inventory_response` 와 같은
-    규칙으로 읽습니다 — ``layout_type`` 은 필수지만 문자열·정수 둘 다
+    ``windowList`` 도 읽습니다. 형제 파서
+    :func:`~korail_mobile_api.parsers.parse_seat_inventory_response` 와 달리 이
+    셋은 1.1.1 이후 모델링한 필드라 **관대하게** 읽습니다 — 모양이 어긋나면 그
+    칸만 비우고 응답은 받습니다(G8). ``layout_type`` 은 문자열·정수 둘 다
     받습니다(같은 DTO 를 공유하는 일반 좌석재고 라우트가 2026-09-21 실서버
     확인에서 JSON 정수로 오는 걸 확인했습니다), ``vrBnrUrl`` 은 선택,
     ``windowList`` 는 ``seatList`` 와 같은 컴파일된 기본값(없으면 빈 목록,
@@ -229,20 +235,25 @@ def parse_limousine_seat_inventory_response(
         )
     # Mirrors parsers.py::parse_seat_inventory_response's identical handling
     # of the same DTO shape.
-    window_rows = (
-        _required_list(raw, "windowList", "limousine seat inventory")
-        if "windowList" in raw
-        else []
-    )
+    # ``windowList``·``layout_type``·``vrBnrUrl`` 은 1.1.1 이후 모델링한 필드입니다.
+    # 1.1.1 이 받던 응답을 이 셋 때문에 거절하면 안 되므로(G8) 모양이 어긋나면
+    # 그 칸만 비웁니다 — 리스트가 아니면 빈 목록, 망가진 행은 건너뜀. 한때
+    # ``layout_type`` 을 **필수**로 읽어, 그 키가 없는 응답을 전부 거절했습니다
+    # (2026-09-23, G8 차등 검사를 이 모듈까지 넓히고 발견).
+    window_value = raw.get("windowList")
     windows = []
-    for value in window_rows:
-        window_row = _row(value, "limousine seat inventory windowList")
-        windows.append(
-            SeatWindow(
-                start_location_ratio=_inventory_ratio(window_row, "st_loc_rt"),
-                close_location_ratio=_inventory_ratio(window_row, "cls_loc_rt"),
+    for value in window_value if isinstance(window_value, list) else ():
+        if not isinstance(value, Mapping):
+            continue
+        try:
+            windows.append(
+                SeatWindow(
+                    start_location_ratio=_inventory_ratio(value, "st_loc_rt"),
+                    close_location_ratio=_inventory_ratio(value, "cls_loc_rt"),
+                )
             )
-        )
+        except (KorailProtocolError, ValueError, OverflowError):
+            continue
     return LimousineSeatInventoryResponse(
         car_type_code=_optional_string(
             raw,
@@ -259,8 +270,8 @@ def parse_limousine_seat_inventory_response(
             "seat_ary_cd",
             "limousine seat inventory response",
         ),
-        layout_type=_inventory_required_scalar_string(raw, "layout_type"),
-        vr_banner_url=_inventory_optional_string(raw, "vrBnrUrl"),
+        layout_type=_additive_scalar_string(raw, "layout_type", "limousine seat inventory"),
+        vr_banner_url=_additive_scalar_string(raw, "vrBnrUrl", "limousine seat inventory"),
         windows=tuple(windows),
         up_down_division_code=_optional_string(
             raw,

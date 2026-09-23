@@ -22,7 +22,8 @@
    ``None``, 정수, ``10**5000``, 문자열 …)을 넣고, 리스트 위치에는 객체가
    아닌 원소도 섞습니다. wheel 이 받았는데 지금 거절하면 회귀입니다.
 
-종료 코드: 0 통과, 1 회귀 있음, 2 wheel 을 찾거나 불러오지 못함.
+종료 코드: 0 통과, 1 회귀 있음(또는 1.1.1 파서가 허용 목록 없이 사라짐),
+2 검사 불완전(wheel·src 를 불러오지 못함, 시그니처 때문에 비교 못 한 파서가 있음).
 
     python3 checks/g8_differential.py [--wheel PATH] [--src PATH]
 
@@ -50,7 +51,20 @@ SRC = ROOT / "src"
 WHEEL_NAME = "korail_mobile_api-1.1.1-py3-none-any.whl"
 WHEEL_REL = Path("analysis/reports/7.0.6-additions/dist") / WHEEL_NAME
 WHEEL_PKG = "korail_mobile_api_g8_wheel"
-MODULES = ("read_parsers", "mutation_parsers")
+#: 1.1.1 wheel 에서 ``parse_*`` 를 정의한 모듈 전부. 예전에는 두 모듈만 봐서
+#: 나머지 넷의 파서는 비교 대상에 들지도 않았습니다(2026-09-23 재감사 NC08 확인 중).
+MODULES = (
+    "read_parsers", "mutation_parsers", "limousine_parsers", "parsers", "netfunnel", "http",
+)
+#: 1.1.1 이후 **일부러** 지운 파서와 그 커밋. 여기 없는 파서가 사라지면 실패입니다
+#: — 예전에는 현재 쪽에 없는 이름을 조용히 목록에서 뺐습니다.
+REMOVED = {
+    "read_parsers.parse_gift_ticket_list_response": "40d58b8 도달 불가 체인 제거",
+    "read_parsers.parse_platform_number_response": "40d58b8 도달 불가 체인 제거",
+    "netfunnel.parse_set_complete_response": "40d58b8 도달 불가 체인 제거",
+    "read_parsers.parse_product_train_inquiry_response": "c822876 도달 불가 조회 코드 제거",
+    "read_parsers.parse_tour_train_info_response": "c822876 도달 불가 조회 코드 제거",
+}
 ENV = {"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": "ok"}
 KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,40}$")
 MAX_DEPTH = 6
@@ -283,7 +297,7 @@ def main(argv: list[str]) -> int:
             src = Path(argv[argv.index("--src") + 1]) if "--src" in argv else SRC
             versions = load_versions(wheel, scratch, src)
         except Exception as error:  # noqa: BLE001
-            print(f"wheel 을 불러오지 못함: {type(error).__name__}: {error}")
+            print(f"검사 불완전 — wheel 또는 현재 src 를 불러오지 못함: {type(error).__name__}: {error}")
             return 2
         return run(versions)
     finally:
@@ -296,14 +310,22 @@ def run(versions: dict[str, dict[str, Any]]) -> int:
     #: 엄격하게 읽었는가" — 같은 자리에 던진 값 중 하나라도 wheel 이 거절했으면
     #: 1.1.1 에도 있던(읽던) 필드, 전부 받았으면 1.1.1 이 읽지 않던 필드입니다.
     groups: dict[tuple[str, str, str], dict[str, Any]] = {}
-    totals = {"functions": 0, "skipped": 0, "inputs": 0, "wheel_accepted": 0, "locations": 0}
+    totals = {"functions": 0, "skipped": 0, "missing": 0, "inputs": 0, "wheel_accepted": 0, "locations": 0}
     for module in MODULES:
         wmod, cmod = wheel_v["mods"][module], current_v["mods"][module]
-        names = sorted(
+        all_names = sorted(
             n for n, f in inspect.getmembers(wmod, inspect.isfunction)
             if n.startswith("parse_") and f.__module__ == wmod.__name__
-            and callable(getattr(cmod, n, None))
         )
+        names = []
+        for n in all_names:
+            if callable(getattr(cmod, n, None)):
+                names.append(n)
+            elif f"{module}.{n}" in REMOVED:
+                print(f"  제거됨(허용): {module}.{n}  [{REMOVED[f'{module}.{n}']}]")
+            else:
+                totals["missing"] += 1
+                print(f"  사라짐: {module}.{n}  <-- 1.1.1 에 있던 파서가 없습니다")
         for name in names:
             old = make_caller(getattr(wmod, name), wheel_v["base"])
             new = make_caller(getattr(cmod, name), current_v["base"])
@@ -373,7 +395,7 @@ def run(versions: dict[str, dict[str, Any]]) -> int:
     new_field = {g: v for g, v in regressions.items() if not v["existing"]}
     existing = {g: v for g, v in regressions.items() if v["existing"]}
     print(
-        f"함수 {totals['functions']} (건너뜀 {totals['skipped']}), 위치 {totals['locations']}, "
+        f"함수 {totals['functions']} (건너뜀 {totals['skipped']}, 사라짐 {totals['missing']}), 위치 {totals['locations']}, "
         f"입력 {totals['inputs']}, wheel 수용 {totals['wheel_accepted']}"
     )
     print(
@@ -389,7 +411,14 @@ def run(versions: dict[str, dict[str, Any]]) -> int:
         for (function, where, key), info in sorted(table.items()):
             print(f"  {label} {function} @{where} {key}: {', '.join(info['values'][:6])}"
                   + (" …" if len(info["values"]) > 6 else ""))
-    return 1 if regressions else 0
+    if regressions or totals["missing"]:
+        return 1
+    if totals["skipped"]:
+        # 비교하지 못한 파서가 있으면 통과라고 말할 수 없습니다. 예전에는 필수 인자가
+        # 늘어난 파서를 건너뛰고 exit 0 이었습니다(재감사 NC08).
+        print(f"검사 불완전: 시그니처 때문에 {totals['skipped']}개 파서를 비교하지 못했습니다.")
+        return 2
+    return 0
 
 
 if __name__ == "__main__":
