@@ -22,9 +22,15 @@ Three false-positive classes are excluded deliberately:
 ``There is no`` 같은 흔한 구절이 있으면 면제해서, "There is no reason to
 doubt…" 한 줄이 무관한 없는 인용을 덮었습니다.
 
-줄 번호가 터무니없으면(9자리 초과) **틀린 인용**(exit 1)으로 셉니다. 폐기
-표기로 면제되지 않습니다 — 없는 파일의 옛 줄 번호라도 그런 숫자는 오타입니다.
-예전엔 5,000자리 숫자에서 ``int()`` 가 죽어 traceback 과 exit 1 을 냈습니다(C34).
+줄 번호가 터무니없으면(**원문 숫자열이** 9자리 초과, 앞의 0 포함) **틀린
+인용**(exit 1)으로 셉니다. 폐기 표기로 면제되지 않습니다 — 없는 파일의 옛 줄
+번호라도 그런 숫자는 오타입니다. 예전엔 5,000자리 숫자에서 ``int()`` 가 죽어
+traceback 과 exit 1 을 냈고(C34), 그 뒤엔 앞의 0 을 떼고 길이를 재서 ``0``
+5,000개 + ``1`` 이 통과한 뒤 ``int()`` 가 죽었습니다(재감사 RC34).
+
+``analysis/`` 아래의 **디렉터리 심볼릭 링크도 따라갑니다**(순환은 실제 경로로
+한 번만). 예전엔 ``os.walk`` 가 링크된 하위 디렉터리에 들어가지 않아, 그
+안을 가리키는 인용이 전부 "absent" 로 보였습니다.
 
 인용된 파일을 **못 읽으면**(권한 없음, 끊긴 심볼릭 링크 등) 그 인용의 줄 범위를
 판정할 수 없으므로 **검사 불완전**(exit 2)입니다. 예전엔 길이 0 으로 취급해
@@ -62,8 +68,15 @@ MAX_LINE_DIGITS = 9
 # 더했습니다. 최종 감사(C33)에서 반대 방향이 드러났습니다 — ``There is no``,
 # ``is wrong``, ``0건``, ``그 클래스는`` 처럼 **철회와 무관하게도 흔히 쓰는**
 # 구절이 들어 있었고, 판정 범위가 문장이 아니라 주변 40줄이었습니다. 흔한
-# 구절은 뺐습니다. ``없습니다``·``없다`` 는 **같은 문장 안에서만** 보므로
-# 남깁니다 — "Foo.java:12 는 7.0.6 에 없습니다" 가 가장 흔한 정직한 표기입니다.
+# 구절은 뺐습니다.
+#
+# 재감사(RC33): 같은 문장이어도 ``없습니다``·``없다`` 만으로는 부족했습니다 —
+# "MissingClass.java:1 의 구현에는 문제가 없습니다" 가 면제됐습니다. 이제는
+# **무엇이** 없는지까지 말해야 합니다("7.0.6 에 없", "7.0.6 에는 그 클래스가
+# 없", "디컴파일에 없", "존재하지 않", "없는 파일"…). 같은 이유로 ``찾지 못``·
+# ``확인하지 못``·``no such``·``absent``·``부재``·``not exist`` 같은 일반
+# 부정도 뺐습니다(영어는 "does not exist", "no longer exists" 처럼 대상의
+# 부재를 말하는 꼴만).
 MARKERS = [
     # 그 인용이 옛 판·옛 서술의 것이라는 표기
     "6.5.0", "옛 인용", "예전 인용", "원래 인용", "원래 근거", "옛 근거",
@@ -71,17 +84,24 @@ MARKERS = [
     "old citation", "The original rationale", "the original claim",
     # 철회
     "폐기", "철회", "withdrawn", "withdraw", "stale", "스테일",
-    # 부재
-    "없습니다", "없다", "없는 경로", "없는 파일", "없는 이름", "없는 클래스",
-    "존재하지", "does not exist", "not exist", "no such", "absent", "부재",
-    "no longer", "디컴파일에 없", "7.0.6 에 없",
-    # 미출처·재확인
-    "미출처", "출처 없", "재도출", "확인하지 못", "찾지 못",
+    # 부재 — 인용 대상이 없다는 말이어야 합니다
+    "없는 경로", "없는 파일", "없는 이름", "없는 클래스",
+    "존재하지 않", "does not exist", "doesn't exist", "no longer exist",
+    "no longer present", "not in the 7.0.6", "absent from the 7.0.6",
+    "absent from 7.0.6", "no such file", "no such class", "no such path",
+    "디컴파일에 없", "7.0.6 에 없", "7.0.6에 없",
+    # 미출처·재도출
+    "미출처", "출처 없", "재도출",
 ]
 _MARKER_RE = re.compile(
     "|".join(re.escape(k) for k in MARKERS)
     # "The old ``X.smali:1-2`` citation" — 인용이 사이에 끼는 꼴
     + r"|\bold\s+\S+\s+citation"
+    # "7.0.6 에는 그 클래스가 없고", "7.0.6 에는 두 클래스도 그 메서드 이름도
+    # 없습니다" — 판 번호 바로 뒤에 **인용 대상을 가리키는 명사**가 와야 합니다.
+    # "7.0.6 에는 문제가 없습니다" 는 맞지 않습니다.
+    + r"|7\.0\.6\s*에(?:는|도|서는|서도)?\s+(?:그|두|세|이|해당)?\s*"
+      r"(?:클래스|파일|경로|메서드|심볼)[^.。]{0,40}?없"
 )
 #: 바로 **다음** 문장이 앞 인용을 되받아 설명하는 꼴. 이 말로 시작하는 다음
 #: 문장에 철회·부재 표현이 있으면 그 인용의 설명으로 봅니다("… BaseActivity
@@ -153,7 +173,19 @@ class Inventory:
             # 가리키는 인용이 "없음" 으로 보입니다.
             incomplete.append(f"analysis 하위 디렉터리를 못 읽음: {error.filename}")
 
-        for dirpath, _dirs, filenames in os.walk(analysis, onerror=onerror):
+        seen = set()
+        for dirpath, dirs, filenames in os.walk(analysis, onerror=onerror, followlinks=True):
+            # 링크를 따라가므로 순환을 끊습니다. 같은 실제 디렉터리는 한 번만.
+            try:
+                real = os.path.realpath(dirpath)
+            except OSError as error:
+                incomplete.append(f"analysis 하위 디렉터리를 못 읽음: {dirpath} ({error})")
+                dirs[:] = []
+                continue
+            if real in seen:
+                dirs[:] = []
+                continue
+            seen.add(real)
             rel = pathlib.Path(dirpath).relative_to(analysis).parts
             for name in filenames:
                 if name.rsplit(".", 1)[-1] not in EXTS or "." not in name:
@@ -284,9 +316,13 @@ def main(argv):
                 rec_where = (py.name, i + 1, t)
                 start_s = m.group("line")
                 end_s = m.group("end") or start_s
-                if max(len(start_s.lstrip("0")), len(end_s.lstrip("0"))) > MAX_LINE_DIGITS:
+                # **원문 숫자열 길이**로 거릅니다. 앞의 0 도 셉니다 — ``lstrip("0")``
+                # 뒤의 길이를 보면 ``0``×5000 + ``1`` 이 통과해 ``int()`` 가 죽었습니다
+                # (재감사 RC34). 이 검사 전에는 ``int()`` 를 부르지 않습니다.
+                longest = max(start_s, end_s, key=len)
+                if len(longest) > MAX_LINE_DIGITS:
                     # 면제 없이 틀린 인용입니다. 숫자는 잘라서 보여 줍니다.
-                    shown = start_s if len(start_s) <= 20 else f"{start_s[:8]}…({len(start_s)}자리)"
+                    shown = longest if len(longest) <= 20 else f"{longest[:8]}…({len(longest)}자리)"
                     unexpl.append((*rec_where, f"line number not plausible: {shown}"))
                     continue
                 start, end = int(start_s), int(end_s)
