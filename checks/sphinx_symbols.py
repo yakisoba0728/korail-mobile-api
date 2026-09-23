@@ -10,35 +10,48 @@
 통과했고, 함수에 ``:class:`` 를 붙여도, 지역 함수를 전역 ``:func:`` 로 불러도
 통과했습니다(2026-09-23 외부 감사). 지금은 이렇게 봅니다:
 
-* 모듈 이름으로 시작하면 **그 모듈 안에서만** 찾습니다.
+* 모듈 이름으로 시작하면 **그 모듈 안에서만** 찾습니다. 그 모듈이
+  ``from .a import Real`` (``as R`` 포함)로 들여온 이름도 그 모듈의 이름으로
+  셉니다 — 종류는 원래 정의를 따라갑니다(최종 감사 C29).
 * ``A.b`` 에서 ``A`` 가 우리 클래스가 아니면 **실패**입니다. 전역 끝 이름으로
   되돌아가지 않습니다.
 * 역할이 심볼 종류와 맞아야 합니다(``:class:`` 는 클래스, ``:meth:`` 는 메서드…).
+  ``:exc:`` 는 클래스이면서 우리 클래스나 내장 예외 이름을 거쳐
+  ``BaseException`` 에 닿아야 합니다. 평범한 클래스는 실패입니다(C28).
 * 모듈 최상위 정의만 ``:func:``/``:class:`` 의 대상입니다. 함수 안의 지역 함수는
   아닙니다.
 * 클래스 멤버는 클래스 본문의 정의와, 그 클래스 메서드 안의 ``self.x = …``
   뿐입니다. 다른 객체의 ``other.x = …`` 는 셈하지 않습니다.
-* 상속은 부모를 따라 올라갑니다. ``Base as Parent`` 같은 import 별칭과
-  ``base.Base`` 같은 속성형 부모도 풉니다.
+* 상속은 부모를 따라 올라가되, 부모 이름은 **그 모듈의 import 를 따라**
+  풉니다(``from .a import Parent``, ``from . import a`` + ``a.Parent``, 별칭).
+  예전에는 전역에서 처음 만난 같은 이름의 클래스로 풀어서, 관계없는 모듈의
+  멤버로 통과했습니다(C30). 정말 풀 수 없을 때만 이름으로 찾고, 그 경우는
+  **모호함**으로 세어 보고합니다.
 
 한계: 모듈 없이 짧은 클래스 이름만 쓴 ``Config.x`` 는 같은 이름의 클래스가 여러
 모듈에 있으면 **그중 하나라도** ``x`` 를 가지면 통과합니다 — 문맥 없이는 어느
 ``Config`` 인지 알 수 없습니다. 이 경우를 따로 세어 보고합니다.
 
-종료 코드: 0 = 전부 해석됨, 1 = 해석 실패 있음, 2 = 검사 불완전(소스를 못 읽음
-또는 인용 0건).
+종료 코드: 0 = 전부 해석됨, 1 = 해석 실패 있음, 2 = 검사 불완전(소스를 못 읽음,
+구문 오류로 못 풂, 인용 0건, 검사기 자체의 예상 못 한 예외).
 
-    python3 checks/sphinx_symbols.py
+    python3 checks/sphinx_symbols.py [--root DIR]
+
+``--root`` (또는 환경 변수 ``KORAIL_CHECK_ROOT``)는 저장소 루트를 바꿉니다.
+기본은 현재 디렉터리이고, ``checks/selftest/run.py`` 가 가짜 트리에 씁니다.
 """
 from __future__ import annotations
 
 import ast
+import builtins
 import collections
+import importlib
+import os
 import pathlib
 import re
 import sys
+import traceback
 
-SRC = pathlib.Path("src/korail_mobile_api")
 PACKAGE = "korail_mobile_api"
 
 ROLE_RE = re.compile(
@@ -70,6 +83,24 @@ EXTERNAL_NAMES = {
 }
 
 
+def _builtin_exception(name: str) -> bool | None:
+    """내장 이름이면 예외인지 여부, 내장 이름이 아니면 ``None``."""
+    obj = getattr(builtins, name, None)
+    if not isinstance(obj, type):
+        return None
+    return issubclass(obj, BaseException)
+
+
+def _root_from_argv(argv: list[str]) -> pathlib.Path:
+    if "--root" in argv:
+        i = argv.index("--root")
+        if i + 1 >= len(argv):
+            print("--root 뒤에 디렉터리가 필요합니다", file=sys.stderr)
+            raise SystemExit(2)
+        return pathlib.Path(argv[i + 1])
+    return pathlib.Path(os.environ.get("KORAIL_CHECK_ROOT", "."))
+
+
 def _source_files(root: pathlib.Path, incomplete: list[str]):
     """읽을 수 있는 ``.py``. AppleDouble(``._*``)은 조용히 넘기고, 그 밖에 못
     읽는 파일은 **검사 불완전**으로 기록합니다 — 실제 소스를 못 읽고서 성공으로
@@ -91,19 +122,53 @@ def _is_property(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return False
 
 
+def _dotted(node: ast.expr) -> str | None:
+    """``a.b.C`` / ``C`` / ``Generic[T]`` 의 점 표기. 그 밖의 식은 ``None``."""
+    if isinstance(node, ast.Subscript):
+        node = node.value
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        parts.append(node.id)
+        return ".".join(reversed(parts))
+    return None
+
+
+def _toplevel_statements(body: list[ast.stmt]):
+    """모듈 최상위 문장. ``if TYPE_CHECKING:``·``try:`` 안의 import 도 포함."""
+    for node in body:
+        yield node
+        if isinstance(node, ast.If):
+            yield from _toplevel_statements(node.body)
+            yield from _toplevel_statements(node.orelse)
+        elif isinstance(node, ast.Try):
+            for part in (node.body, node.orelse, node.finalbody):
+                yield from _toplevel_statements(part)
+            for handler in node.handlers:
+                yield from _toplevel_statements(handler.body)
+
+
+#: import 해석 결과. ("mod", 모듈) / ("sym", 모듈, 이름) / ("ext", 점 표기)
+Target = tuple
+
+
 class Index:
     def __init__(self) -> None:
         self.modules: set[str] = set()
-        #: 모듈 -> {최상위 이름: 종류}
+        #: 모듈 -> {최상위 정의 이름: 종류}. import 는 여기 없습니다.
         self.toplevel: dict[str, dict[str, str]] = collections.defaultdict(dict)
+        #: 모듈 -> {지역 이름: (level, from 모듈 또는 None, 원래 이름, is_import)}
+        self.imports: dict[str, dict[str, tuple]] = collections.defaultdict(dict)
         #: (모듈, 클래스) -> {멤버 이름: 종류}
         self.members: dict[tuple[str, str], dict[str, str]] = {}
-        #: (모듈, 클래스) -> 부모 이름(별칭 풀기 전)
+        #: (모듈, 클래스) -> 부모 식의 점 표기
         self.bases: dict[tuple[str, str], list[str]] = {}
         #: 짧은 클래스 이름 -> [(모듈, 클래스)]
         self.by_name: dict[str, list[tuple[str, str]]] = collections.defaultdict(list)
-        #: 모듈 -> {별칭: 원래 이름}
-        self.aliases: dict[str, dict[str, str]] = collections.defaultdict(dict)
+
+    # -- 색인 ---------------------------------------------------------------
 
     def add_module(self, mod: str, tree: ast.Module) -> None:
         self.modules.add(mod)
@@ -119,10 +184,20 @@ class Index:
                 for t in node.targets:
                     if isinstance(t, ast.Name):
                         self.toplevel[mod][t.id] = "data"
-            elif isinstance(node, ast.ImportFrom):
+        for node in _toplevel_statements(tree.body):
+            if isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name == "*":
+                        continue
+                    local = alias.asname or alias.name
+                    self.imports[mod][local] = (node.level, node.module, alias.name, False)
+            elif isinstance(node, ast.Import):
                 for alias in node.names:
                     if alias.asname:
-                        self.aliases[mod][alias.asname] = alias.name
+                        self.imports[mod][alias.asname] = (0, None, alias.name, True)
+                    else:
+                        head = alias.name.split(".", 1)[0]
+                        self.imports[mod][head] = (0, None, head, True)
 
     def _add_class(self, mod: str, node: ast.ClassDef) -> None:
         key = (mod, node.name)
@@ -153,25 +228,90 @@ class Index:
                     if isinstance(t, ast.Name):
                         members[t.id] = "attribute"
         self.members[key] = members
-        bases: list[str] = []
-        for b in node.bases:
-            if isinstance(b, ast.Name):
-                bases.append(b.id)
-            elif isinstance(b, ast.Attribute):
-                bases.append(b.attr)
-        self.bases[key] = bases
+        self.bases[key] = [d for b in node.bases if (d := _dotted(b)) is not None]
         self.by_name[node.name].append(key)
 
-    def _resolve_base(self, mod: str, name: str) -> list[tuple[str, str]]:
-        original = self.aliases[mod].get(name, name)
-        same_module = (mod, original)
-        if same_module in self.members:
-            return [same_module]
-        return list(self.by_name.get(original, []))
+    # -- import 따라가기 -----------------------------------------------------
 
-    def member_kind(self, key: tuple[str, str], name: str) -> str | None:
+    def _import_target(self, mod: str, local: str) -> Target | None:
+        """``mod`` 의 지역 이름 ``local`` 이 import 로 가리키는 곳."""
+        entry = self.imports[mod].get(local)
+        if entry is None:
+            return None
+        level, frm, name, is_import = entry
+        if is_import:  # ``import x.y as z`` / ``import x``
+            if name == PACKAGE:
+                return ("mod", "__init__")
+            if name.startswith(PACKAGE + "."):
+                sub = name[len(PACKAGE) + 1:]
+                return ("mod", sub) if sub in self.modules else None
+            return ("ext", name)
+        if level == 1 or (level == 0 and frm and (frm == PACKAGE or frm.startswith(PACKAGE + "."))):
+            if level == 1:
+                pkgmod = frm or ""
+            else:
+                pkgmod = "" if frm == PACKAGE else frm[len(PACKAGE) + 1:]
+            if pkgmod == "":  # ``from . import a`` / ``from korail_mobile_api import X``
+                if name in self.modules and name != "__init__":
+                    return ("mod", name)
+                return ("sym", "__init__", name)
+            if pkgmod in self.modules:
+                return ("sym", pkgmod, name)
+            return None  # 패키지 안인데 그런 모듈이 없습니다.
+        if level > 1:
+            return None  # 패키지 밖 상대 import — 우리 트리가 아닙니다.
+        return ("ext", f"{frm}.{name}" if frm else name)
+
+    def lookup(self, mod: str, name: str, _seen: frozenset = frozenset()) -> Target | None:
+        """``mod.name`` 의 정체. 재노출을 원래 정의까지 따라갑니다.
+
+        반환: ("def", 모듈, 이름, 종류) / ("mod", 모듈) / ("ext", 점 표기) / None
+        """
+        if (mod, name) in _seen or mod not in self.modules:
+            return None
+        kind = self.toplevel[mod].get(name)
+        if kind is not None:
+            return ("def", mod, name, kind)
+        target = self._import_target(mod, name)
+        if target is None:
+            return None
+        if target[0] == "sym":
+            return self.lookup(target[1], target[2], _seen | {(mod, name)})
+        return target
+
+    def _resolve_base(
+        self, mod: str, expr: str
+    ) -> tuple[list[tuple[str, str]], list[str], bool]:
+        """부모 식 ``expr`` 을 ``mod`` 의 import 문맥에서 풉니다.
+
+        반환: (우리 클래스 키들, 외부/내장 점 표기들, 이름으로만 찾았는가)
+        """
+        parts = expr.split(".")
+        head = self.lookup(mod, parts[0])
+        rest = parts[1:]
+        while head is not None and head[0] == "mod" and rest:
+            head = self.lookup(head[1], rest[0])
+            rest = rest[1:]
+        if head is not None and not rest:
+            if head[0] == "def":
+                if head[3] == "class":
+                    return [(head[1], head[2])], [], False
+                return [], [], False  # 클래스가 아닌 것을 상속 — 멤버 없음
+            if head[0] == "ext":
+                return [], [head[1]], False
+            return [], [], False
+        if head is not None and head[0] == "ext":
+            return [], [".".join([head[1], *rest])], False
+        if head is None and len(parts) == 1 and _builtin_exception(parts[0]) is not None:
+            return [], [parts[0]], False
+        # 정말 풀 수 없습니다. 이름으로만 찾고 모호함으로 셉니다.
+        return list(self.by_name.get(parts[-1], [])), [], True
+
+    def member_kind(self, key: tuple[str, str], name: str) -> tuple[str | None, bool]:
+        """(멤버 종류 또는 None, 이름으로만 푼 부모를 거쳤는가)."""
         seen: set[tuple[str, str]] = set()
         stack = [key]
+        ambiguous = False
         while stack:
             current = stack.pop()
             if current in seen or current not in self.members:
@@ -179,37 +319,89 @@ class Index:
             seen.add(current)
             kind = self.members[current].get(name)
             if kind is not None:
-                return kind
+                return kind, ambiguous
             for base in self.bases.get(current, []):
-                stack.extend(self._resolve_base(current[0], base))
+                keys, _external, loose = self._resolve_base(current[0], base)
+                ambiguous |= loose and bool(keys)
+                stack.extend(keys)
+        return None, ambiguous
+
+    def is_exception(self, key: tuple[str, str]) -> tuple[bool | None, bool]:
+        """(예외 계열인가 — None 은 확인 불가, 이름으로만 푼 부모를 거쳤는가)."""
+        seen: set[tuple[str, str]] = set()
+        stack = [key]
+        ambiguous = False
+        unknown = False
+        while stack:
+            current = stack.pop()
+            if current in seen or current not in self.members:
+                continue
+            seen.add(current)
+            for base in self.bases.get(current, []):
+                keys, external, loose = self._resolve_base(current[0], base)
+                ambiguous |= loose and bool(keys)
+                stack.extend(keys)
+                for dotted in external:
+                    verdict = _external_is_exception(dotted)
+                    if verdict:
+                        return True, ambiguous
+                    if verdict is None:
+                        unknown = True
+        return (None if unknown else False), ambiguous
+
+
+def _external_is_exception(dotted: str) -> bool | None:
+    """외부 부모가 예외 계열인가. 내장 이름은 바로, 그 밖은 import 해 봅니다.
+    import 할 수 없으면 ``None``(확인 불가)."""
+    if "." not in dotted:
+        verdict = _builtin_exception(dotted)
+        return verdict if verdict is not None else None
+    module, _, attr = dotted.rpartition(".")
+    try:
+        obj = getattr(importlib.import_module(module), attr)
+    except Exception:
         return None
+    return isinstance(obj, type) and issubclass(obj, BaseException)
 
 
-def resolve(index: Index, sym: str) -> tuple[set[str] | None, bool]:
-    """``sym`` 의 가능한 종류 집합과 '짧은 이름이라 모호함' 여부.
+class Resolution:
+    """``kinds``: None = 해석 실패, 빈 집합 = 검사 대상 아님(외부 이름).
+    ``classes``: 클래스로 풀렸다면 그 키들. ``ambiguous``: 이름으로만 풀었는가."""
 
-    ``None`` 은 해석 실패, 빈 집합은 검사 대상 아님(외부 이름).
-    """
+    def __init__(self, kinds, ambiguous=False, classes=()):
+        self.kinds = kinds
+        self.ambiguous = ambiguous
+        self.classes = list(classes)
+
+
+def resolve(index: Index, sym: str) -> Resolution:
     if sym.startswith(PACKAGE + "."):
         sym = sym[len(PACKAGE) + 1:]
     elif sym == PACKAGE:
-        return {"module"}, False
+        return Resolution({"module"})
     parts = sym.split(".")
     if parts[0] in EXTERNAL_ROOTS or sym in EXTERNAL_NAMES:
-        return set(), False
+        return Resolution(set())
 
     if parts[0] in index.modules:
-        mod, rest = parts[0], parts[1:]
+        target: Target | None = ("mod", parts[0])
+        rest = parts[1:]
+        while target is not None and target[0] == "mod" and rest:
+            target = index.lookup(target[1], rest[0])
+            rest = rest[1:]
+        if target is None:
+            return Resolution(None)
+        if target[0] == "ext":
+            return Resolution(set())  # 외부 이름의 재노출 — 검사 대상 아님
+        if target[0] == "mod":
+            return Resolution({"module"}) if not rest else Resolution(None)
+        _, mod, name, kind = target
         if not rest:
-            return {"module"}, False
-        top = index.toplevel[mod]
-        if len(rest) == 1:
-            kind = top.get(rest[0])
-            return ({kind} if kind else None), False
-        if len(rest) == 2 and top.get(rest[0]) == "class":
-            kind = index.member_kind((mod, rest[0]), rest[1])
-            return ({kind} if kind else None), False
-        return None, False
+            return Resolution({kind}, classes=[(mod, name)] if kind == "class" else [])
+        if len(rest) == 1 and kind == "class":
+            member, loose = index.member_kind((mod, name), rest[0])
+            return Resolution({member} if member else None, loose)
+        return Resolution(None)
 
     if len(parts) == 1:
         kinds = {
@@ -218,57 +410,89 @@ def resolve(index: Index, sym: str) -> tuple[set[str] | None, bool]:
         for members in index.members.values():
             if parts[0] in members:
                 kinds.add(members[parts[0]])
-        return (kinds or None), False
+        classes = index.by_name.get(parts[0], [])
+        return Resolution(kinds or None, len(classes) > 1, classes)
 
     if len(parts) == 2:
         candidates = index.by_name.get(parts[0], [])
         if not candidates:
             # 소유 클래스가 우리 코드에 없습니다. 끝 이름으로 되돌아가지 않습니다.
-            return None, False
-        kinds = {
-            k for key in candidates
-            if (k := index.member_kind(key, parts[1])) is not None
-        }
-        return (kinds or None), len(candidates) > 1
+            return Resolution(None)
+        kinds: set[str] = set()
+        loose_any = False
+        for key in candidates:
+            member, loose = index.member_kind(key, parts[1])
+            loose_any |= loose
+            if member is not None:
+                kinds.add(member)
+        return Resolution(kinds or None, len(candidates) > 1 or loose_any)
 
-    return None, False
+    return Resolution(None)
 
 
-def main() -> int:
+def main(argv: list[str]) -> int:
+    root = _root_from_argv(argv)
+    src = root / "src" / PACKAGE
     incomplete: list[str] = []
-    files = list(_source_files(SRC, incomplete))
+    files = list(_source_files(src, incomplete))
     index = Index()
     for path, text in files:
-        index.add_module(path.stem, ast.parse(text))
+        try:
+            tree = ast.parse(text, filename=str(path))
+        except SyntaxError as error:
+            # 이 모듈의 정의를 모르면, 이 모듈을 가리키는 인용의 성패를 알 수
+            # 없습니다. 실패로 세지 않고 검사 불완전으로 끝냅니다(C31).
+            incomplete.append(f"{path.name}:{error.lineno} (SyntaxError: {error.msg})")
+            continue
+        index.add_module(path.stem, tree)
 
     total = 0
     ambiguous = 0
+    unverifiable: list[str] = []
     bad: dict[tuple[str, str], list[str]] = collections.defaultdict(list)
     for path, text in files:
         for lineno, line in enumerate(text.splitlines(), 1):
             for m in ROLE_RE.finditer(line):
                 role, sym = m.group("role"), m.group("sym")
+                where = f"{path.name}:{lineno}"
                 total += 1
-                kinds, is_ambiguous = resolve(index, sym)
-                if kinds is not None and not kinds:
-                    continue  # 외부 이름
-                ambiguous += is_ambiguous
-                if kinds is None:
-                    bad[(role, sym)].append(f"{path.name}:{lineno}")
-                elif not kinds & ROLE_KINDS[role]:
-                    bad[(f"{role}≠{'/'.join(sorted(kinds))}", sym)].append(
-                        f"{path.name}:{lineno}"
-                    )
+                res = resolve(index, sym)
+                if res.kinds is not None and not res.kinds:
+                    # 외부 이름. ``:exc:`` 인데 내장 비예외 이름이면 그래도 틀립니다.
+                    if role == "exc" and _builtin_exception(sym.rsplit(".", 1)[-1]) is False:
+                        bad[("exc≠non-exception", sym)].append(where)
+                    continue
+                ambiguous += res.ambiguous
+                if res.kinds is None:
+                    bad[(role, sym)].append(where)
+                    continue
+                if not res.kinds & ROLE_KINDS[role]:
+                    bad[(f"{role}≠{'/'.join(sorted(res.kinds))}", sym)].append(where)
+                    continue
+                if role == "exc":
+                    verdicts = []
+                    for key in res.classes:
+                        verdict, loose = index.is_exception(key)
+                        ambiguous += loose
+                        verdicts.append(verdict)
+                    if any(v is True for v in verdicts):
+                        continue
+                    if any(v is None for v in verdicts):
+                        unverifiable.append(f":exc:`{sym}` {where}")
+                    else:
+                        bad[("exc≠non-exception", sym)].append(where)
 
     failures = sum(len(where) for where in bad.values())
     print(
         f"Sphinx 심볼 인용 {total}건, 해석 실패 {failures}건"
-        f" (짧은 클래스 이름이 모호해 느슨하게 통과: {ambiguous}건)"
+        f" (이름만으로 풀어 느슨하게 통과: {ambiguous}건)"
     )
     for (role, sym), where in sorted(bad.items()):
         print(f"  :{role}:`{sym}`  {', '.join(where[:4])}")
+    if unverifiable:
+        incomplete.append("예외 계열 확인 불가(외부 부모를 import 못 함): " + ", ".join(unverifiable))
     if incomplete:
-        print("검사 불완전 — 읽지 못한 소스:", ", ".join(incomplete))
+        print("검사 불완전 —", "; ".join(incomplete))
         return 2
     if total == 0:
         print("심볼 인용을 하나도 못 찾았습니다 — 저장소 루트에서 실행했습니까?")
@@ -277,4 +501,14 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        code = main(sys.argv[1:])
+    except SystemExit:
+        raise
+    except Exception:
+        # 검사기 자신이 죽었으면 검사가 끝난 것이 아닙니다. traceback 의
+        # exit 1 을 "실패 발견" 과 구별할 수 없으므로 2 로 끝냅니다.
+        traceback.print_exc()
+        print("검사 불완전 — 검사기 내부 오류", file=sys.stderr)
+        code = 2
+    sys.exit(code)

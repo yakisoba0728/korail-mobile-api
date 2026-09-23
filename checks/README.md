@@ -6,22 +6,33 @@
 합격 기준은 `ACCEPTANCE.md` 입니다. 감사는 그 문서만 기준으로 합니다.
 
 ```sh
-python3 checks/contract_api.py         # G6·G8·G9·G10, 실패하면 exit 1
-python3 checks/masking_invariants.py   # 실패하면 exit 1
+python3 checks/contract_api.py         # G6·G8·G9·G10
+python3 checks/masking_invariants.py   # G1~G7 사례
 python3 checks/masking_mutants.py      # 위 하네스가 비어 있지 않은지
-python3 checks/sphinx_symbols.py       # 실패하면 exit 1
-python3 checks/decompile_citations.py  # 실패하면 exit 1, analysis/ 없으면 2
+python3 checks/sphinx_symbols.py       # 문서의 파이썬 심볼 참조
+python3 checks/decompile_citations.py  # 문서의 디컴파일 인용 (analysis/ 필요)
+python3 checks/g8_differential.py      # G8 차등 검사
+python3 checks/selftest/run.py         # 위 두 문서 검사기 자신의 회귀 시험
 ```
+
+종료 코드 약속(`ACCEPTANCE.md` §6): **0 = 통과, 1 = 실패 발견, 2 = 검사
+불완전**. `sphinx_symbols`·`decompile_citations`·`selftest/run.py` 는 입력을 못
+읽음, 필요한 트리가 없음, 검사 대상 0건, **검사기 자신의 예상 못 한 예외**를
+전부 2 로 끝냅니다 — traceback 으로 끝나는 exit 1 은 "실패 발견" 과 구별이 안
+되기 때문입니다. 나머지 스크립트의 2 는 각 파일의 머리말을 보십시오.
 
 **"의존성이 없다"는 말은 정확하지 않습니다.** 추가 *테스트 프레임워크*가
 없다는 뜻이고, 마스킹 검사는 패키지를 import 하므로 그 경로에서 ``httpx`` 가
 따라 들어옵니다. ``python -S`` 처럼 사이트 패키지 없이 돌리면 그 import 에서
 멈춥니다.
 
-넷 다 **실제로 잡은 것이 있어서** 여기 있습니다. 리뷰만으로는 네 번
-놓쳤습니다. 그리고 이 스크립트들 **자신도 한 번 틀렸습니다** — 외부 감사가
-거짓 통과 두 건과 집계 버그를 찾아냈습니다. 그래서 ``masking_mutants.py`` 가
-있습니다.
+스크립트는 여섯 개(`contract_api`·`masking_invariants`·`masking_mutants`·
+`sphinx_symbols`·`decompile_citations`·`g8_differential`)와 자체 시험
+`selftest/run.py` 하나입니다. 처음 다섯은 **실제로 잡은 것이 있어서** 여기
+있습니다. 그리고 이 스크립트들 **자신도 여러 번 틀렸습니다** — 외부 감사가 거짓 통과와
+집계 버그를 찾아냈고, 최종 감사는 문서 검사기 둘에서 거짓 통과·거짓 실패·
+traceback 을 여덟 건(C28–C35) 더 찾았습니다. 그래서 마스킹 쪽에는
+``masking_mutants.py`` 가, 문서 검사기 쪽에는 ``selftest/run.py`` 가 있습니다.
 
 ## `masking_invariants.py`
 
@@ -44,6 +55,11 @@ python3 checks/decompile_citations.py  # 실패하면 exit 1, analysis/ 없으�
 봅니다 — 대상이 남의 코드가 아니라 우리 코드이기 때문입니다. 존재한 적 없는
 메서드 인용과, 함수 이름을 바꾸고 남은 참조를 각각 한 번씩 잡았습니다.
 
+``:exc:`` 는 예외 계열 클래스여야 하고, 모듈이 ``from .a import X`` 로 들여온
+이름은 그 모듈의 이름으로 셉니다. 부모 클래스는 그 모듈의 import 를 따라
+풉니다 — 못 풀 때만 이름으로 찾고 "느슨하게 통과" 로 따로 셉니다. 소스에 구문
+오류가 있으면 파일과 줄을 알리고 exit 2 입니다.
+
 `analysis/` 가 필요 없습니다.
 
 ## `decompile_citations.py`
@@ -59,9 +75,32 @@ python3 checks/decompile_citations.py  # 실패하면 exit 1, analysis/ 없으�
 * 줄 번호가 **없는** 인용(산문에 클래스 이름만 적은 것)은 못 봅니다. 실제로
   그런 자리에 틀린 주장이 여럿 살아남았습니다.
 
+판정 규칙:
+
+* 경로는 **구성 요소 단위**로 맞춥니다. ``pkg/X.java`` 는 ``notpkg/X.java`` 에
+  맞지 않습니다.
+* 폐기 표기 면제는 **그 인용이 든 문장**에 철회·부재 표현이 있을 때만입니다.
+  바로 다음 문장은 "그 클래스"·"Both are" 처럼 앞 인용을 되받을 때만 봅니다.
+* 9자리를 넘는 줄 번호는 틀린 인용(exit 1)이고 면제되지 않습니다.
+* 인용 대상 파일을 못 읽으면(권한, 끊긴 링크) 판정할 수 없으므로 exit 2 입니다.
+
 `analysis/` 가 있어야 합니다(``.gitignore`` 로 빠져 있으므로 로컬에 풀어
 두어야 합니다). 없으면 검사하지 않고 **exit 2(검사 불완전)** 로 끝납니다 —
 통과로 끝내면 검사하지 않은 것을 통과시킨 셈이 됩니다.
+
+## `g8_differential.py`
+
+G8(이전에 파싱되던 응답이 새 선택 필드 때문에 파싱 실패로 바뀌지 않음)을
+차등으로 검사합니다. 종료 코드는 위와 같습니다.
+
+## `selftest/run.py`
+
+최종 감사가 문서 검사기 둘에 쓴 탐침(C28–C35)을 임시 트리에 짓고, 검사기를
+``--root`` 로 그 트리에 돌려 종료 코드를 확인합니다. 고친 뒤에도 맞는 입력이
+통과하는지(거짓 실패가 없는지)를 함께 봅니다. 두 검사기는 ``--root DIR`` 또는
+환경 변수 ``KORAIL_CHECK_ROOT`` 로 저장소 루트를 바꿀 수 있습니다.
+
+`analysis/` 가 필요 없습니다.
 
 ## `masking_mutants.py`
 
