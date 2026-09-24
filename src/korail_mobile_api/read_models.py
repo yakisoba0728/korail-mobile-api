@@ -1232,8 +1232,8 @@ class MaasServiceDetailListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class MaasCancelFeeResponse(BaseKorailResponse):
-    """결제된 부가서비스의 환불 수수료(maas.cncFee.do, MaasCancelFeeOut.java). 앱은 "환불수수료 N원" 확인창에 보여 준 뒤 그 값으로 환불을
-    요청합니다(MyTicketDetailViewModel.java:840-860,1922)."""
+    """사용하지 않음(기록용, _maas_unsupported 참고). 결제된 부가서비스의 환불 수수료(maas.cncFee.do, MaasCancelFeeOut.java). 앱은 "환불수수료
+    N원" 확인창에 보여 준 뒤 그 값으로 환불을 요청합니다(MyTicketDetailViewModel.java:840-860,1922)."""
 
     #: ``cncRetFee`` — 환불 수수료.
     cancel_fee: str | None = None

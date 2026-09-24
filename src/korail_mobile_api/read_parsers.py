@@ -1939,7 +1939,8 @@ def _optional_add_srv_item(
 
 @_preserve_read_raw
 def parse_maas_cancel_fee_response(raw: Mapping[str, Any]) -> MaasCancelFeeResponse:
-    """maas.cncFee.do 응답. cncRetFee 는 선택 스칼라로 읽습니다(MaasCancelFeeOut.java)."""
+    """사용하지 않음(기록용, _maas_unsupported 참고). maas.cncFee.do 응답. cncRetFee 는 선택 스칼라로
+    읽습니다(MaasCancelFeeOut.java)."""
     _validate_envelope(raw)
     return MaasCancelFeeResponse(
         cancel_fee=_optional_scalar_string(raw, "cncRetFee", "MaaS cancel fee"),

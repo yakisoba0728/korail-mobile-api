@@ -707,7 +707,7 @@ class CartAddResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class MaasCancelResponse(BaseKorailResponse):
-    """미결제 부가서비스 해제 결과(addService.cancelPay.do, MaasCancelOut.java)."""
+    """사용하지 않음(기록용, _maas_unsupported 참고). 미결제 부가서비스 해제 결과(addService.cancelPay.do, MaasCancelOut.java)."""
 
     #: ``intgMsgCd`` — 통합 메시지 코드.
     integrated_message_code: str | None = None

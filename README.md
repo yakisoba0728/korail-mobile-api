@@ -18,3 +18,18 @@
 > **One journey ended. Another begins here.**
 >
 > → [`srt-mobile-api` — Final Stop](https://github.com/yakisoba0728/srt-mobile-api)
+
+## 직접 지원하지 않는 기능
+
+### 부가서비스(MaaS) 구매·결제·환불
+
+렌터카·카셰어링·짐배송·레저이용권·관광택시·주차 같은 부가서비스는 KORAIL 앱의 자체 기능이 아니라 제휴사 서비스입니다.
+
+- **예약은 제휴사 사이트에서만 됩니다.** 앱 메뉴의 중계 페이지(`/ebizmaas/EbizMaasShopView.do`)가 요청번호를 발급하고, 암호화된 본인 정보를 제휴사 사이트(야놀자, 짐캐리, 로이쿠, SK·롯데 렌터카, 그린카, KN파킹)로 넘깁니다. 제휴사에서 상품을 고르면 그때 KORAIL 장바구니에 결제 전 항목이 생깁니다. KORAIL API로는 이 항목을 만들 수 없습니다.
+- **결제와 환불은 폼 값을 알 수 없습니다.** 부가서비스 결제(`pay.intgStl.do`)와 환불(`addService.coptCnc.do`)에 들어가는 상수가 앱에서 보호돼 있습니다.
+
+그래서 부가서비스는 조회만 지원합니다: `get_maas_menu_list`, `get_maas_station_data`, `get_maas_service_details`, `get_cart_list`.
+
+앱 코드와 같게 만들어 두었지만 실서버에서 확인하지 못한 세 호출(환불 수수료 `maas.cncFee.do`, 결제 전 상태 확인 `maas.rsvStt.do`, 결제 전 해제 `addService.cancelPay.do`)은 공개 API에서 빼고 기록용으로 `src/korail_mobile_api/_maas_unsupported.py`에 남겨 두었습니다. 이 모듈은 어디에서도 쓰지 않습니다.
+
+공항버스는 KORAIL 자체 예약이라 조회·예약·결제·환불·취소를 모두 지원합니다(`reserve_limousine`).

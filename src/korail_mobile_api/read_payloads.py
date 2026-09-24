@@ -651,8 +651,8 @@ def build_customer_trip_info_form(customer_no: str) -> dict[str, str]:
 
 
 def build_maas_cancel_fee_form(item: MaasServiceDetail) -> dict[str, str]:
-    """부가서비스 환불 수수료 조회(maas.cncFee.do). MaasCancelFeeIn.java 의 세 속성이며 값은 get_maas_service_details 행에서 옵니다
-    (MyTicketDetailViewModel.java:840-860)."""
+    """사용하지 않음(기록용, _maas_unsupported 참고). 부가서비스 환불 수수료 조회(maas.cncFee.do). MaasCancelFeeIn.java 의 세 속성이며 값은
+    get_maas_service_details 행에서 옵니다 (MyTicketDetailViewModel.java:840-860)."""
     if not isinstance(item, MaasServiceDetail):
         raise KorailProtocolError("item must be a MaasServiceDetail from get_maas_service_details")
     return {
@@ -675,8 +675,9 @@ def _maas_cart_item(item: CartItem) -> CartItem:
 
 
 def build_maas_cart_status_form(item: CartItem) -> dict[str, str]:
-    """결제 직전 부가서비스 예약 상태 확인(maas.rsvStt.do, ProductMassStatusIn.java). 앱은 선택한 행들의 값을 보호된 1글자 구분자로 잇는데
-    (BasketTicketViewModel.java:1690-1750), 구분자를 모르므로 이 빌더는 한 행만 받습니다. seletedPos 는 전송되지 않습니다(:93)."""
+    """사용하지 않음(기록용, _maas_unsupported 참고). 결제 직전 부가서비스 예약 상태 확인(maas.rsvStt.do, ProductMassStatusIn.java). 앱은
+    선택한 행들의 값을 보호된 1글자 구분자로 잇는데 (BasketTicketViewModel.java:1690-1750), 구분자를 모르므로 이 빌더는 한 행만 받습니다. seletedPos 는
+    전송되지 않습니다(:93)."""
     row = _maas_cart_item(item)
     return {
         "addSrvDvCd": _required_text(row.service_code, "service_code"),

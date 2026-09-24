@@ -530,7 +530,8 @@ def _cart_discount_additions(
 
 
 def parse_maas_cancel_response(raw: Mapping[str, Any]) -> MaasCancelResponse:
-    """addService.cancelPay.do 응답. intgMsgCd 는 선택 스칼라입니다(MaasCancelOut.java)."""
+    """사용하지 않음(기록용, _maas_unsupported 참고). addService.cancelPay.do 응답. intgMsgCd 는 선택
+    스칼라입니다(MaasCancelOut.java)."""
     data = _response_mapping(raw)
     return MaasCancelResponse(
         **_base_fields(data),
