@@ -124,6 +124,7 @@ from .read_models import (
     TicketListReservation,
     TicketListResponse,
     TicketListTicket,
+    TicketListTrain,
     TicketReceipt,
     TicketReceiptResponse,
     TicketReservationDetailResponse,
@@ -156,6 +157,13 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
                     ),
                     train_info=train_info,
                     raw=ticket_raw,
+                    trains=tuple(
+                        TicketListTrain(
+                            **_nullable_scalar_fields(row, _TICKET_LIST_TRAIN_FIELDS, "ticket list jrn_info"),
+                            raw=row,
+                        )
+                        for row in train_info
+                    ),
                 )
             )
         # ticket_list 외 키는 MyTicketListOutReservation 의 속성명에서 추정합니다. addSrvInfo 는 공통 파서로 읽고 ticketKind 는 보호 enum
@@ -307,9 +315,32 @@ _TICKET_LIST_TICKET_FIELDS: dict[str, str] = {
     "use_transaction_no": "h_use_tno",
     "notify_use_transaction_no": "h_noty_use_tno",
     "pbp_acceptance_target_flag": "h_pbp_acep_tgt_flg",
-    # jrn_info 는 일부러 타입 없는 Mapping 으로 둡니다(위 parse_ticket_list_response). 언젠가 타입을 붙이거든 h_srcar_no 는 반드시
-    # _optional_scalar_string 또는 _optional_integer 로 읽으십시오. TicketListTrainInfo.java:47,72,284 는 이 필드를 non-null
-    # String 으로 선언하지만, 같은 2026-09-22 한 계정 관측(138행, 재검산 불가·미검증)에서는 JSON 정수로 왔다고 적혀 있습니다 — 문자열과 정수를 둘 다 받아야 합니다.
+}
+
+#: jrn_info 행(TicketListTrainInfo.java:72 의 @SerialName 21개). h_srcar_no 는 String 선언이지만 JSON 정수로 오므로 스칼라로 읽습니다
+#: (2026-09-24 라이브 139행 전부 정수).
+_TICKET_LIST_TRAIN_FIELDS: dict[str, str] = {
+    "journey_sequence": "h_jrny_sqno",
+    "run_date": "h_run_dt",
+    "train_no": "h_trn_no",
+    "train_class_code": "h_trn_clsf_cd",
+    "train_class_name": "h_trn_clsf_nm",
+    "departure_station_code": "h_dpt_rs_stn_cd",
+    "departure_station_name": "h_dpt_rs_stn_nm",
+    "departure_date": "h_dpt_dt",
+    "departure_time": "h_dpt_tm",
+    "arrival_station_code": "h_arv_rs_stn_cd",
+    "arrival_station_name": "h_arv_rs_stn_nm",
+    "arrival_date": "h_arv_dt",
+    "arrival_time": "h_arv_tm",
+    "car_no": "h_srcar_no",
+    "seat_no": "h_seat_no",
+    "seat_count": "h_seat_cnt",
+    "passenger_type_code": "h_psg_tp_cd",
+    "received_amount": "h_rcvd_amt",
+    "buyer_name": "h_buy_ps_nm",
+    "passenger_name": "h_abrd_ps_nm",
+    "train_suspension_flag": "trnSpsFlg",
 }
 
 _CART_ITEM_FIELDS: dict[str, str] = {

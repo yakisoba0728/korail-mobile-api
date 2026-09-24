@@ -17,6 +17,37 @@ from .models import BaseKorailResponse
 
 
 @dataclass(frozen=True)
+class TicketListTrain:
+    """승차권 한 장의 구간 한 줄(``jrn_info``, TicketListTrainInfo.java:72 의 String 21개). 선택값으로 관대하게 읽습니다.
+
+    2026-09-24 라이브 이력 139행: 21개 키가 모두 있었고 ``h_srcar_no`` 는 String 선언과 달리 모두 JSON 정수였습니다(문자열로 받습니다).
+    DTO 밖의 ``h_psrm_cl_cd``·``h_seat_no_end``·``h_sgr_nm_1``/``_2``·``srtStnFlg`` 도 왔으며 raw 에 남습니다."""
+
+    journey_sequence: str | None = None
+    run_date: str | None = None
+    train_no: str | None = None
+    train_class_code: str | None = None
+    train_class_name: str | None = None
+    departure_station_code: str | None = None
+    departure_station_name: str | None = None
+    departure_date: str | None = None
+    departure_time: str | None = None
+    arrival_station_code: str | None = None
+    arrival_station_name: str | None = None
+    arrival_date: str | None = None
+    arrival_time: str | None = None
+    car_no: str | None = None
+    seat_no: str | None = None
+    seat_count: str | None = None
+    passenger_type_code: str | None = None
+    received_amount: str | None = None
+    buyer_name: str | None = None
+    passenger_name: str | None = None
+    train_suspension_flag: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+
+
+@dataclass(frozen=True)
 class TicketListTicket:
     pnr_no: str | None = None
     sale_window_no: str | None = None
@@ -46,6 +77,8 @@ class TicketListTicket:
     #: PBP 인수 대상. 앱은 목록 값을 상세에 주입합니다(MyTicketBaseViewModel.java:769, MyTicketDetailViewModel.java:1521).
     #: 2026-09-22 상세 40응답에는 두 후보 키가 없었습니다. 같은 날 목록 131행은 N 125/Y 6이라는 기록이 있으나 캡처 미연결로 재검산하지 못했습니다.
     pbp_acceptance_target_flag: str | None = None
+    #: :attr:`train_info` 의 행을 :class:`TicketListTrain` 으로 읽은 것. 2026-09-24 이력에서 승차권 132장 중 7장이 두 구간이었습니다.
+    trains: tuple[TicketListTrain, ...] = ()
 
 
 @dataclass(frozen=True)
