@@ -196,6 +196,9 @@ def build_train_search_form(
         query.senior_passengers,
         query.high_disability_passengers,
         query.low_disability_passengers,
+        query.teenager_passengers,
+        query.infant_passengers,
+        query.guide_dog_passengers,
     )
     # 인원은 문자열로 옮기므로 정수인지만 봅니다. 범위·합계는 앱 DTO 가 검사하지 않아 서버에 맡깁니다(TrainScheduleIn.java:95).
     if any(type(count) is not int for count in counts):
@@ -213,8 +216,9 @@ def build_train_search_form(
         "txtGoEnd": arrival_name,
         "txtGoAbrdDt": query.departure_date,
         "txtGoHour": query.departure_time,
-        "txtPsgFlg_1": str(query.passengers),
-        "txtPsgFlg_2": str(query.child_passengers),
+        # 앱의 다섯 칸 묶음은 TrainSearchQuery.teenager_passengers 참고.
+        "txtPsgFlg_1": str(query.passengers + query.teenager_passengers + query.guide_dog_passengers),
+        "txtPsgFlg_2": str(query.child_passengers + query.infant_passengers),
         "txtPsgFlg_3": str(query.senior_passengers),
         "txtPsgFlg_4": str(query.high_disability_passengers),
         "txtPsgFlg_5": str(query.low_disability_passengers),

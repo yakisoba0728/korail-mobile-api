@@ -62,6 +62,8 @@ for index, train in enumerate(search.trains):
 
 로그인 ID는 숫자만 쓴 회원번호·전화번호(하이픈 없이 11자리) 또는 이메일입니다. `input_flag`를 생략하면 `010-1234-5678`처럼 숫자만도 이메일도 아닌 입력은 앱처럼 보내지 않고 `KorailProtocolError`로 거절합니다. 실패한 로그인은 계정 잠금 횟수에 들어갈 수 있습니다.
 
+청소년·유아·안내견은 `teenager_passengers`·`infant_passengers`·`guide_dog_passengers`로 넣으면 앱처럼 어른·어린이 칸에 합쳐 조회합니다. 예약할 `KorailPassengerCounts`와 같은 구성으로 조회하십시오.
+
 `departure_station_code`와 `arrival_station_code`에는 역 이름도 넣을 수 있습니다. 숫자 역 코드를 넣으면 역 데이터를 조회해 이름으로 변환합니다. 날짜와 시간은 각각 `YYYYMMDD`, `HHMMSS` 형식입니다. 한 번의 조회가 모든 페이지나 모든 열차를 반환한다는 보장은 없습니다.
 
 ### 2. 실제 좌석 예약

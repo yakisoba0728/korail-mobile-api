@@ -309,6 +309,11 @@ class TrainSearchQuery:
     connection_train_group_code: str | None = None
     #: APK의 정렬 선택별 값은 보호되어 있으므로 전송 코드를 직접 지정합니다.
     query_division_code: str = "1"
+    #: 앱처럼 청소년·안내견은 어른 칸(txtPsgFlg_1)에, 유아는 어린이 칸(txtPsgFlg_2)에 더해 보냅니다
+    #: (TrainScheduleViewModel.java:280-306,3050-3075). 예약의 KorailPassengerCounts 와 같은 구성으로 조회하십시오.
+    teenager_passengers: int = 0
+    infant_passengers: int = 0
+    guide_dog_passengers: int = 0
 
 
 def _train_scalar(value: object, key: str, *, required: bool = False) -> str | None:

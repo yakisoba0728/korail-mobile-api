@@ -842,6 +842,26 @@ def test_missing_sequence_groups_and_non_two_leg_groups_remain_raw(size, rig):
     assert len(result.trains) == size and result.raw["trn_infos"]["trn_info"] == rows
 
 
+def test_search_groups_teenager_infant_and_guide_dog_like_the_app(rig):
+    """TrainScheduleViewModel.java:280-306,3050-3075: TEENAGER/GUIDE_DOG join ADULT (_1), BABY joins CHILD
+    (_2)."""
+    query = replace(
+        QUERY,
+        passengers=1,
+        teenager_passengers=2,
+        guide_dog_passengers=1,
+        child_passengers=1,
+        infant_passengers=1,
+        senior_passengers=1,
+    )
+    client, calls, _ = rig([SEARCH])
+    client.search_trains(query)
+    sent = dict(parse_qsl(calls[0].content.decode()))
+    assert [sent[f"txtPsgFlg_{index}"] for index in range(1, 6)] == ["4", "2", "1", "0", "0"]
+    with pytest.raises(KorailProtocolError):
+        client.search_trains(replace(QUERY, infant_passengers="1"))
+
+
 @pytest.mark.parametrize("special", [False, True])
 def test_exact_form_options_and_three_continuation_fields(special, rig):
     """TrainScheduleIn.java:95-285; ViewModel.java:7340 copies exactly three cursor fields."""

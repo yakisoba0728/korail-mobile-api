@@ -904,6 +904,7 @@ class KorailClient:
 
     def get_ticket_receipt(
         self,
+        *,
         sale_date: str,
         window_no: str,
         sale_sequence: str,
@@ -912,7 +913,8 @@ class KorailClient:
     ) -> TicketReceiptResponse:
         """승차권 한 장의 영수증과 결제수단을 조회합니다.
 
-        네 식별값과 선택적인 ``txt_index`` 는 같은 승차권 상세 응답에서 가져와야 합니다. ``sale_date`` 는 반환원표일자입니다."""
+        네 식별값과 선택적인 ``txt_index`` 는 같은 승차권 상세 응답에서 가져와야 합니다. ``sale_date`` 는 반환원표일자입니다. 비슷한
+        OriginalTicketReference 와 날짜·창구번호 순서가 반대라 위치 인자로 넘기면 서로 바뀌므로 키워드로만 받습니다."""
         self._require_session()
         form = build_ticket_receipt_form(
             sale_date,

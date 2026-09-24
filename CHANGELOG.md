@@ -31,6 +31,8 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 - `get_station_info(device)` 인자 제거
 - `refund` 의 `return_times_division_code` 제거
 - `reserve_merge` 의 둘째 인자 이름 `legs` → `merge_rows`
+- `get_ticket_receipt` 의 식별값은 키워드로만 받습니다. 비슷한 `OriginalTicketReference` 와 날짜·창구번호 순서가 반대라 위치 인자로 넘기면
+  서로 바뀌었습니다.
 - `get_ticket_list` 의 `page_no` 기본값 0 → 1. `mode` 는 1·2 밖의 값도 거르지 않고 보냅니다(앱 호출 리터럴이 보호돼 있음).
 - `get_ticket_list`·`refund`·`add_to_cart` 는 전용 응답 모델을 돌려줍니다. 모두 `BaseKorailResponse` 하위 형입니다.
 
@@ -76,6 +78,8 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 - 메서드 4개: `cancel_product_reservation`, `reserve_limousine`, `verify_station_ticket_refund`, `execute_station_ticket_refund`.
 - 기존 메서드의 키워드 인자(예: `seat_attribute_code`, `use_special_schedule`, `peak_season`, `check_first`, `commission`, `txt_index`)와
   공개 모델 28개(예: `ProductCancelResponse`).
+- `TrainSearchQuery` 의 `teenager_passengers`·`infant_passengers`·`guide_dog_passengers`: 앱처럼 청소년·안내견은 어른 칸, 유아는 어린이
+  칸에 더해 조회합니다(TrainScheduleViewModel.java:280-306,3050-3075).
 - `ReservationHoldResponse.payable`: 앱은 예약대기 홀드를 결제하지 않고 대기 옵션만 저장합니다. `reserve`·`reserve_transfer` 가 STANDBY
   홀드에 `False` 를 넣고 `pay_with_card` 는 전송 전에 거절합니다. 병합 첫 홀드는 앱의 병합 화면에서도 결제할 수 있어 `True` 입니다.
 - 77개 공개 메서드의 합성 HTTP 스모크, 오프라인 패키징 검사, CI 의 최소 의존성 작업과 `mypy --strict`. CI 에는 업로드 작업이 없습니다.

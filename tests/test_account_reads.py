@@ -1198,6 +1198,14 @@ def test_required_integer_retains_zero_padding_only_in_raw(make_client) -> None:
     assert result.raw == payload
 
 
+def test_ticket_receipt_identifiers_are_keyword_only(make_client) -> None:
+    """OriginalTicketReference takes window before date; positional receipt calls would silently swap them."""
+    client, calls = make_client(RECEIPT_BODY)
+    with pytest.raises(TypeError):
+        client.get_ticket_receipt("0102", "TEST-WINDOW", "TEST-SEQUENCE", "TEST-RETURN")  # type: ignore[misc]
+    assert not calls
+
+
 @pytest.mark.parametrize(("wire", "expected"), [("-1200", -1200), ("-0", 0)])
 def test_required_integer_accepts_a_leading_minus_like_kotlinx(wire, expected, make_client) -> None:
     """JsonReader.java:575-640: a quoted Int may start with '-'."""
