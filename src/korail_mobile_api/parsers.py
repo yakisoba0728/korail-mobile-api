@@ -43,13 +43,13 @@ from .models import (
 )
 from ._parsing import (
     _nested_rows,
-    _nullable_string_fields,
+    _nullable_scalar_fields,
     _optional_integer,
     _optional_scalar_string,
     _preserve_read_raw,
     _rows,
 )
-from ._parsing import _optional_string as _typed_optional_string
+from ._parsing import _optional_scalar_string as _typed_optional_string
 
 
 def _typed_required_string(
@@ -59,11 +59,7 @@ def _typed_required_string(
     context: str,
     non_empty: bool = False,
 ) -> str:
-    if key not in data or not isinstance(data[key], str):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a string"
-        )
-    value = data[key]
+    value = _typed_required_scalar_string(data, key, context=context)
     if non_empty and not value.strip():
         raise KorailProtocolError(
             f"KORAIL {context} field {key} must be a non-empty string"
@@ -313,13 +309,11 @@ def parse_train_search_metadata(
 
 @_preserve_read_raw
 def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
-    """ebizcross/getUUID.do 의 비어 있지 않은 문자열 mutMrkVrfCd 를 읽고 없으면 KorailProtocolError 입니다. 완전한 KORAIL 봉투는 요구하지
+    """ebizcross/getUUID.do 의 mutMrkVrfCd 를 문자열로 정규화하며 없거나 비면 KorailProtocolError 입니다. 완전한 KORAIL 봉투는 요구하지
     않습니다. strResult 만 동반된 2026-09-22 관측과 부분 봉투 보존은 http.KorailHttpClient._finish_read 참고."""
-    value = response.raw.get("mutMrkVrfCd")
-    if not isinstance(value, str) or not value.strip():
-        raise KorailProtocolError(
-            "KORAIL UUID response mutMrkVrfCd must be a non-empty string"
-        )
+    value = _typed_required_string(
+        response.raw, "mutMrkVrfCd", context="UUID response", non_empty=True
+    )
     return UuidResponse(
         **_response_fields(response),
         verification_code=value,
@@ -360,7 +354,7 @@ def parse_maas_menu_list_response(
     for row in _rows(response.raw, "menuList"):
         items.append(
             MaasMenuItem(
-                **_nullable_string_fields(row, _MAAS_ITEM_FIELDS),
+                **_nullable_scalar_fields(row, _MAAS_ITEM_FIELDS, context="train read"),
                 raw=dict(row),
             )
         )
@@ -371,7 +365,7 @@ def parse_maas_menu_list_response(
         str_result=response.str_result,
         raw=raw,
         items=tuple(items),
-        **_nullable_string_fields(raw, _MAAS_RESPONSE_FIELDS),
+        **_nullable_scalar_fields(raw, _MAAS_RESPONSE_FIELDS, context="train read"),
     )
 
 
@@ -416,9 +410,10 @@ def parse_station_data_response(
                     row,
                     "popupType",
                 ),
-                **_nullable_string_fields(
+                **_nullable_scalar_fields(
                     row,
                     _STATION_OPTIONAL_STRING_FIELDS,
+                    context="train read",
                 ),
             )
         )
@@ -432,8 +427,8 @@ def parse_station_data_response(
 def parse_station_info_response(
     response: BaseKorailResponse,
 ) -> StationInfoResponse:
-    """역 목록의 버전 정보. count 와 map_version 은 반드시 있는 문자열입니다(StationInfoOut.java:47-49 의 필수 필드). 빈 값은 DTO 도
-    거절하지 않으므로 그대로 받습니다. String 선언을 따라 count 도 정수로 바꾸지 않습니다."""
+    """역 목록의 버전 정보. count 와 map_version 은 필수 문자열 필드입니다(StationInfoOut.java:47-49 의 필수 필드). 빈 값은 DTO 도
+    거절하지 않으므로 그대로 받습니다. 공통 String/정수 호환 규칙에 따라 정수 입력도 문자열로 정규화합니다."""
     raw = response.raw
     return StationInfoResponse(
         **_response_fields(response),
@@ -456,7 +451,7 @@ def parse_train_calendar_response(
         days.append(
             TrainCalendarDay(
                 # 보호된 날짜 기본값을 재현하지 않아 누락은 None 입니다(RunDateOutItem.java:37,104-105).
-                **_nullable_string_fields(row, {
+                **_nullable_scalar_fields(row, {
                     "run_date": "runDt",
                     # bizDdStgCd 의 누락 기본값은 null(RunDateOutItem.java:111-115). 판정 헬퍼의 null 처리까지 확인된 것은
                     # 아닙니다(RunDateOutItem.java:516-524).
@@ -478,7 +473,7 @@ def parse_train_calendar_response(
                     "s_train_operation_flag": "sTrnOpFlg",
                     "v_train_operation_flag": "vTrnOpFlg",
                     "x_train_operation_flag": "xTrnOpFlg",
-                }),
+                }, context="train read"),
                 raw=dict(row),
             )
         )
@@ -501,16 +496,16 @@ def parse_train_schedule_response(
     for row in _rows(raw, "dlayList"):
         stops.append(
             TrainScheduleStop(
-                **_nullable_string_fields(row, {
+                **_nullable_scalar_fields(row, {
                     "station_code": "stopRsStnCd",
                     # stopStnNm 은 누락 시 기본값을 사용하는 필드입니다(ActualTrainScheduleOutDlay.java:71-76).
                     "station_name": "stopStnNm",
                     "station_construction_order": "stnConsOrdr",
                     "run_order": "runOrdr",
-                }),
+                }, context="train read"),
                 # ActualTrainScheduleOutDlay.java:30 — 앱 DTO 는 String("001" 등)입니다.
                 actual_arrival_delay_count=_optional_scalar_string(row, "actArvDlayTnum"),
-                **_nullable_string_fields(row, {
+                **_nullable_scalar_fields(row, {
                     "actual_arrival_date": "actArvDt",
                     "actual_arrival_time": "actArvTm",
                     "actual_departure_date": "actDptDt",
@@ -527,7 +522,7 @@ def parse_train_schedule_response(
                     "expected_departure_delay_count": "expnDptDlayTnum",
                     "regular_flag": "rgulFlg",
                     "service_flag": "saodFlg",
-                }),
+                }, context="train read"),
                 raw=dict(row),
             )
         )

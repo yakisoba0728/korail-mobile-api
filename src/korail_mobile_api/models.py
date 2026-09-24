@@ -310,7 +310,7 @@ def _train_optional_int(
 
 
 #: TrainSummary 의 ``train_no``·``goods_no``·``total_passenger_count`` 를 뺀 필드와 그 필드를 읽는 키. 세 번째 칸이 있으면 첫 키가 없거나
-#: 거짓일 때 그 철자를 읽습니다(``h_trn_gp_cd`` 와 ``trnGpCd`` 등). 오류는 언제나 첫 키 이름으로 냅니다.
+#: 거짓일 때(정수 0 제외) 그 철자를 읽습니다(``h_trn_gp_cd`` 와 ``trnGpCd`` 등). 오류는 언제나 첫 키 이름으로 냅니다.
 _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
     ("train_group_code", "h_trn_gp_cd", "trnGpCd"),
     ("departure_station_code", "h_dpt_rs_stn_cd", "dptRsStnCd"),
@@ -389,7 +389,7 @@ def _train_value(
     raw: dict[str, Any], key: str, fallback: str | None, *, required: bool = False
 ) -> str | None:
     value = raw.get(key)
-    if fallback is not None:
+    if fallback is not None and type(value) is not int:
         value = value or raw.get(fallback)
     return _train_scalar(value, key, required=required)
 

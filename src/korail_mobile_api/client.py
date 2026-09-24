@@ -940,8 +940,8 @@ class KorailClient:
         self,
         request: GuideSeatConditionRequest,
     ) -> GuideSeatConditionResponse:
-        """도우미석 안내문을 읽습니다. FAIL 도 예외가 아닌 안내 응답으로 반환하므로 h_msg_cd·h_msg_txt 를 확인하십시오. 날짜 있는 비교 관측은
-        GuideSeatConditionRequest 참고."""
+        """도우미석 안내문을 읽습니다. 일반 FAIL 은 안내 응답으로 반환하지만 FAIL/P058 은 세션을 비우고 만료 예외를 냅니다.
+        h_msg_cd·h_msg_txt 를 확인하십시오. 날짜 있는 비교 관측은 GuideSeatConditionRequest 참고."""
         return self._post_read(
             "/classes/com.korail.mobile.reservation.guideSeatCnd.do",
             build_guide_seat_condition_form(request),

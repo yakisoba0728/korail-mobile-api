@@ -1411,11 +1411,11 @@ def parse_free_seat_car_response(
 ) -> FreeSeatCarResponse:
     _validate_strict_read_envelope(raw)
     return FreeSeatCarResponse(
-        **_nullable_string_fields(raw, {
+        **_nullable_scalar_fields(raw, {
             "title": "fresTtl",
             "car_no": "fresScarNo",
             "content": "fresCont",
-        }),
+        }, context="train read"),
         **_response_fields(raw),
     )
 
@@ -1461,7 +1461,7 @@ def _parse_train_schedule_container(
     if container is None:
         return None, ()
     merge_flag = (
-        _optional_string(container, "h_merge_rsv_psb_flg")
+        _optional_scalar_string(container, "h_merge_rsv_psb_flg")
         if read_merge_flag
         else None
     )
@@ -1520,11 +1520,11 @@ def parse_merge_seats_inquiry_response(
     for station in _rows(raw, "midStnList"):
         stations.append(
             IntermediateStation(
-                **_nullable_string_fields(station, {
+                **_nullable_scalar_fields(station, {
                     "code": "rsStnCd",
                     "name": "rsStnNm",
                     "run_order": "runOrdr",
-                }),
+                }, context="train read"),
                 raw=station,
             )
         )
@@ -2088,9 +2088,10 @@ def parse_price_fare_quote_response(
     for item in _rows(raw, "prcList"):
         fares.append(
             PriceFare(
-                **_nullable_string_fields(
+                **_nullable_scalar_fields(
                     item,
                     _PRICE_FARE_FIELDS,
+                    context="train read",
                 ),
                 raw=item,
             )
