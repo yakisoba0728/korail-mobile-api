@@ -242,13 +242,13 @@ def case_wait_limit_and_override() -> None:
 
 
 def case_bad_node() -> None:
-    from korail_mobile_api import KorailProtocolError
-
+    """허용 범위 밖 노드는 무시하고 정문으로 반납합니다. 그 호스트로는 아무것도 보내지 않습니다."""
     world = World(["200:key=K1&ip=evil.example.com&port=443"])
     client, _ = make_client(world)
     error = raises(client.get_reservation_history)
-    check("i", isinstance(error, KorailProtocolError), f"{type(error).__name__}")
-    check("i", world.opcodes() == ["5101"], f"순서 {world.opcodes()}")
+    check("i", error is None, f"{type(error).__name__}: {error}")
+    check("i", world.opcodes() == ["5101", "KORAIL", "5004"], f"순서 {world.opcodes()}")
+    check("i", world.completes() == [("nf.letskorail.com", "K1")], f"반납 {world.completes()}")
 
 
 CASES = [

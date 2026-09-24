@@ -25,7 +25,7 @@ from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS, KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 from korail_mobile_api.crypto import transform_login_password
-from korail_mobile_api.dynapath import DynapathConfig
+from korail_mobile_api.dynapath import DynapathConfig, DynapathTokenGenerator, DynapathTokenSettings
 from korail_mobile_api.http import parse_base_response
 from korail_mobile_api.models import LoginCryptoInfo
 from korail_mobile_api.session import infer_login_input_flag
@@ -292,11 +292,21 @@ def test_login_overrides_and_common_code_repeated_fields(factory):
 
 @pytest.mark.parametrize(
     "login_id, flag",
-    [("0000000000", "2"), ("00000000000", "4"), ("synthetic@example.invalid", "5"), ("x", "2")],
+    [("0000000000", "2"), ("00000000000", "4"), ("synthetic@example.invalid", "5"), ("000", "2")],
 )
 def test_input_flag_policy(login_id, flag):
-    """LoginViewModel.java:1850-1876. Invalid-ID fallback is library policy, not Android validation."""
+    """LoginViewModel.java:1850-1876. The other-digit-length fallback is library policy, not Android
+    validation."""
     assert infer_login_input_flag(login_id) == flag
+
+
+@pytest.mark.parametrize("login_id", ["000-0000-0000", "x", " 0000000000", "０００００００００００"])
+def test_login_id_the_app_would_not_send_is_rejected_before_any_request(factory, login_id):
+    """LoginViewModel.java:1850-1876 returns 0 (invalid) unless the ID is all digits or an email."""
+    client, requests = factory()
+    with pytest.raises(E.KorailProtocolError, match="digits only"):
+        client.login(login_id, PASSWORD)
+    assert not requests
 
 
 @pytest.mark.parametrize("require_result, common_out", [(True, None), (False, True)])
@@ -553,6 +563,43 @@ def test_explicit_disable_and_raw_header_bypass_policy(factory):
     assert "x-dynapath-m-token" not in requests[0].headers
 
 
+# 앱 SDK(b/b.java, a/b.java:75-227)를 이 패키지와 따로 옮긴 코드로 계산한 토큰입니다. 첫 토큰은 rt=ts-it, 둘째는 두 시간차를 싣습니다.
+DYNAPATH_GOLDEN_FIRST = (
+    "bEeEPLYj144a44lDf3kjqdDd4ffdDw4GR4GR4fGKguFvmDwKF5JMd1dlJMfmDwJKG5q4JlvPj13qk1JyEFaEdqEuJdwlmlqm"
+    "nJ3vlPjv5JPP5dKqjdYR3EwEFymnmEvlm4G3FFm9l3YudwP1MRm9ymRfEkamn33Y1EkuPj45MR3dJJll3YEmMR3Dn3dJJll3"
+    "YE3v55MR3dJJll3YE3uuKF4mDv55kPjl5nm1nndyf1JP1JP1JP1JP13g5gKdMFEjw1JP1JP1JyEFaEdqPjC5nm1nJEvlEfuJ"
+    "MkdMFEfu3FEKFa3jf3vJyC5y4l5ffP599DEPj45nmKCf3FDJMPmjR5uYKaE1nf1JGau"
+)
+DYNAPATH_GOLDEN_SECOND = (
+    "bEeEPLYj144a44lDvaJ4E4fy4ffdDw4GR4GR4fm4GRFqCkvu3FGYfqfwGYJCkvGuMFKEGwg9nqlKmqGP5345fK5dGfvwCwKC"
+    "aGlgw9ngFG99FfuKnfjDl5v53PCaC5gwCEMl33Cywljdfv9qYDCyPCDJ5m4Calljq5md9nEFYDlfGGwwlj5CYDlkalfGGwwl"
+    "j5lgFFYDlfGGwwlj5lddu3ECkgFFm9nwFaCqaafPJqG9qG9qG9qG9ql1F1ufY35nvqG9qG9qGP5m4qG99nRFaCqaG5gw5JdF"
+    "JFfY45dC5JdGYmfY35Jdl35u34lnJlgGPRFPEwFJJ9Fyyk59nEFaCuRJl3kGY9CnDFdju45qaJqGM4d"
+)
+
+
+def test_dynapath_tokens_match_sdk_golden_vectors_with_rt_history():
+    """DynaPathMobileSDK.java:43-44 adds an interval before a/b.java:75 builds the token, so rt is always
+    present."""
+    settings = DynapathTokenSettings(
+        device_id="0123456789abcdef",
+        as_value="[38ff229cb34c7dda8e28220a2d750cce]",
+        app_start_ts="1790000000000",
+        os_version="15",
+        device_model="Pixel 9 Pro~x",
+    )
+    times = iter([1790000012345, 1790000015000, *range(1790000016000, 1790000021000, 1000)])
+    rands = iter(["aZ09", "Qq11", *["abcd"] * 5])
+    generator = DynapathTokenGenerator(
+        settings, timestamp_ms_provider=lambda: next(times), random_text_provider=lambda: next(rands)
+    )
+    assert generator() == DYNAPATH_GOLDEN_FIRST
+    assert generator() == DYNAPATH_GOLDEN_SECOND
+    for _ in range(5):
+        generator()
+    assert list(generator._intervals) == [1000] * 5
+
+
 def test_default_configuration_and_explicit_overrides():
     # Construction only: no token generation formula is executed or inspected.
     config = KorailConfig()
@@ -601,6 +648,58 @@ def test_logout_without_current_session_is_local(factory):
     client.session.pending = E.KorailAuthContinuationRequired("/synthetic", raw=envelope("WRC000116", "FAIL"))
     client.logout()
     assert not requests and not client.http.cookies and client.session.pending is None
+
+
+def test_login_with_two_jsessionid_cookies_keeps_the_session(factory):
+    """httpx cookies.get raises CookieConflict for same-name cookies on different paths; the jar still sends
+    both."""
+    both = httpx.Response(
+        200,
+        json=envelope(),
+        headers=[
+            ("Set-Cookie", f"JSESSIONID={COOKIE}; Path=/"),
+            ("Set-Cookie", "JSESSIONID=synthetic-other; Path=/classes"),
+        ],
+    )
+    client, _ = factory([*bootstrap(), both])
+    session = client.login(ID, PASSWORD)
+    assert session.jsessionid in {COOKIE, "synthetic-other"}
+
+
+def test_closed_client_raises_library_error_without_sending(factory):
+    client, requests = factory([envelope()])
+    client.close()
+    with pytest.raises(E.KorailProtocolError, match="closed"):
+        client.http.post_form(SERVICE)
+    assert not requests
+
+
+def test_ordered_and_mapping_forms_encode_none_and_bool_alike(factory):
+    client, requests = factory([envelope(), envelope()])
+    values = {"a": None, "b": True, "c": False, "d": 3}
+    client.http.post_form(SERVICE, values, include_common=False, omit_empty_fields=False)
+    client.http.post_form(SERVICE, list(values.items()), include_common=False, omit_empty_fields=False)
+    assert requests[0].content == requests[1].content == b"a=&b=true&c=false&d=3"
+
+
+def test_failed_netfunnel_setup_closes_the_http_client(monkeypatch):
+    import korail_mobile_api.client as client_module
+
+    created = []
+    real = client_module.KorailHttpClient
+
+    def recording(*args, **kwargs):
+        created.append(real(*args, **kwargs))
+        return created[-1]
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("synthetic NetFunnel setup failure")
+
+    monkeypatch.setattr(client_module, "KorailHttpClient", recording)
+    monkeypatch.setattr(client_module, "KorailNetFunnelClient", broken)
+    with pytest.raises(RuntimeError):
+        KorailClient(KorailConfig(base_url="https://offline.invalid"))
+    assert created and created[0]._client.is_closed
 
 
 def test_clear_session_is_local(factory):

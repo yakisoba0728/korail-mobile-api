@@ -51,6 +51,8 @@ from .read_models import CartItem, ProductDetailResponse, RefundCommissionRespon
 _DATE_RE = re.compile(r"[0-9]{8}")
 _TIME_RE = re.compile(r"[0-9]{6}")
 _DIGITS_RE = re.compile(r"[0-9]+")
+_CARD_NUMBER_RE = re.compile(r"[0-9]{13,16}")
+_INSTALLMENT_RE = re.compile(r"[0-9]{1,2}")
 _KST = timezone(timedelta(hours=9))
 
 
@@ -242,6 +244,12 @@ def build_merge_reservation_form(
             raise KorailProtocolError(
                 "KORAIL 병합 reservation splits ONE train: every merge row must "
                 f"carry the standing hold's train_no {hold_train_no!r}"
+            )
+        # 행별 h_run_dt 는 2026-09-22 관측에 있었지만 없는 행도 받습니다. 있으면 다른 날 조회한 행을 거절합니다.
+        if row.run_date is not None and row.run_date != standing_hold_train.run_date:
+            raise KorailProtocolError(
+                f"KORAIL 병합 reservation merge rows must share the standing hold's run_date "
+                f"{standing_hold_train.run_date!r}"
             )
     first, last = rows[0], rows[-1]
     middle = {
@@ -563,6 +571,7 @@ def _build_journey_reservation_form(
     for leg, seat_class in zip(resolved_legs, resolved_classes, strict=True):
         _assert_leg_is_bookable(leg, seat_class=seat_class, job_type=job_type)
     journeys = tuple(_journey_fields(leg) for leg in resolved_legs)
+    _assert_boarding_order(resolved_legs, journeys)
     form = _common_fields(config)
     form.update(
         {
@@ -697,7 +706,34 @@ def _assert_leg_is_bookable(
         if train.special_reservation_code != "11":
             raise KorailProtocolError("KORAIL reservation requires an evidenced available special seat")
     elif train.general_reservation_code != "11":
+        # 앱은 일반 job 에서 일반실이 STAND 이면 입석 홀드를 보냅니다(TrainScheduleViewModel.java:2856-2874). 그러나 STAND 는 운행중지·대기·
+        # 병합 판정을 먼저 거친 뒤에만 나오고(TrainScheduleOutTrainInfo.java:2810-2885,3557-3567) 그 비교값이 보호돼 있어, 13/11 만으로는
+        # 앱이 입석 홀드를 만들 행인지 알 수 없습니다. 그래서 입석 전용 홀드는 보내지 않습니다. 입석+좌석은 MERGE_STANDING 입니다.
         raise KorailProtocolError("KORAIL reservation requires an evidenced available general seat")
+
+
+def _assert_boarding_order(
+    legs: Sequence[TrainSummary],
+    journeys: Sequence[dict[str, str]],
+) -> None:
+    """환승 구간이 서로 다른 열차이고 탑승 순서인지 확인합니다. 앱은 환승 조회가 묶은 두 행으로만 폼을 만듭니다
+    (TrainScheduleViewModel.java:2952-2968). 두 역 코드가 다른 환승도 있어 역 연결은 보지 않습니다
+    (TransferItinerary.transfer_station_code)."""
+    for index in range(1, len(journeys)):
+        earlier, later = journeys[index - 1], journeys[index]
+        if (earlier["train_no"], earlier["run_date"]) == (later["train_no"], later["run_date"]):
+            raise KorailProtocolError("KORAIL 환승 reservation legs must be different trains")
+        departs = later["departure_date"] + later["departure_time"]
+        previous = legs[index - 1]
+        if departs <= earlier["departure_date"] + earlier["departure_time"] or (
+            isinstance(previous.arrival_date, str)
+            and isinstance(previous.arrival_time, str)
+            and departs < previous.arrival_date + previous.arrival_time
+        ):
+            raise KorailProtocolError(
+                "KORAIL 환승 reservation legs must be in boarding order: "
+                "each leg departs after the previous one arrives"
+            )
 
 
 def _merge_ineligible_message(
@@ -919,6 +955,10 @@ def build_card_payment_form(
     모르므로 라이브러리는 생략합니다. 관측된 결제 성공이 누락 필드·시퀀스 폴백·모든 카드 조합의 성공을 보장하지 않습니다. 카드 정보는 폼에 들어가므로 로그·예외 원문 노출에 주의하십시오."""
     if not isinstance(card, CardPayment):
         raise KorailProtocolError("KORAIL payment requires a CardPayment")
+    if not hold.payable:
+        raise KorailProtocolError(
+            "KORAIL payment refuses a standby (예약대기) hold: the app saves its wait options instead of paying it"
+        )
     window_no = hold.window_no
     amount = hold.received_amount
     pnr_no = _successful_hold_pnr(
@@ -938,9 +978,12 @@ def build_card_payment_form(
             "KORAIL payment requires a fresh successful unpaid hold with a "
             "PNR, window number, and numeric received amount"
         )
-    # 숫자 모양 검사만으로 카드 유효성이나 비과금을 보장하지 않습니다.
-    if not isinstance(card.card_number, str) or _DIGITS_RE.fullmatch(card.card_number) is None:
-        raise KorailProtocolError("KORAIL payment card number must be digits")
+    # 숫자 모양 검사만으로 카드 유효성이나 비과금을 보장하지 않습니다. 앱은 앞 세 칸의 길이와 넷째 칸의 최소 길이를 검사하지만 길이 값은
+    # 보호돼 있습니다(PayViewModel.java:16196-16210). 13~16자리는 라이브러리 기준이며 앱 값과 같다는 근거는 없습니다.
+    if not isinstance(card.card_number, str) or _CARD_NUMBER_RE.fullmatch(card.card_number) is None:
+        raise KorailProtocolError("KORAIL payment card number must be 13 to 16 digits")
+    if not isinstance(card.installment, str) or _INSTALLMENT_RE.fullmatch(card.installment) is None:
+        raise KorailProtocolError('KORAIL payment installment must be one or two digits, "0" for a lump sum')
     # 유효기간: 앱은 월 1~12 와 만료 여부(현재 yyyyMM <= 카드 yyyyMM)를 결제 전에 검사합니다(PayViewModel.java:16211-16224). 이 라이브러리의 입력은
     # 라이브 결제에서 쓴 YYMM 입니다.
     expire = card.card_expire
@@ -950,11 +993,12 @@ def build_card_payment_form(
     if not 1 <= month <= 12 or _current_year_month() > (2000 + int(expire[:2])) * 100 + month:
         raise KorailProtocolError("KORAIL payment card has expired or has an invalid month")
     # PayViewModel.java:16233-16243; smali:53727-53863 (국내 직접입력 카드).
-    if not isinstance(card.card_password, str) or len(card.card_password) != 2:
-        raise KorailProtocolError("KORAIL payment requires a two-character card password")
+    # 앱은 길이만 보지만 두 값 모두 숫자 입력이므로 숫자만 받습니다.
+    if not isinstance(card.card_password, str) or re.fullmatch(r"[0-9]{2}", card.card_password) is None:
+        raise KorailProtocolError("KORAIL payment requires the first two card password digits")
     auth_length = 6 if card.card_type == "J" else 10
-    if not isinstance(card.birthday, str) or len(card.birthday) != auth_length:
-        raise KorailProtocolError("KORAIL payment card authentication value has an invalid length")
+    if not isinstance(card.birthday, str) or re.fullmatch(rf"[0-9]{{{auth_length}}}", card.birthday) is None:
+        raise KorailProtocolError("KORAIL payment card authentication value must be 6 or 10 digits")
     form = _common_fields(config)
     form.update(
         {

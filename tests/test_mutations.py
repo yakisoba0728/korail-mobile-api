@@ -894,9 +894,18 @@ def test_refund_rejects_non_succ_commission_before_http(result: Any) -> None:
         {"card_expire": "AB12"},
         {"card_number": ""},
         {"card_number": "0000-0000"},
+        {"card_number": "0" * 12},
+        {"card_number": "0" * 17},
+        {"card_password": "ab"},
+        {"birthday": "abcdef"},
+        {"installment": ""},
+        {"installment": None},
+        {"installment": 3},
+        {"installment": "xyz"},
+        {"installment": "123"},
     ],
 )
-def test_card_input_rejected_before_http(changes: dict[str, str]) -> None:
+def test_card_input_rejected_before_http(changes: dict[str, Any]) -> None:
     """PayViewModel.smali:53511-53710,53727-53863: password 2, auth 6/10, month/current yyyyMM."""
     h = Harness([], "POST", (), {})
     try:
@@ -1329,6 +1338,125 @@ def test_standby_initial_form_is_not_standing_reservation() -> None:
         h.client.reserve(
             train(general_reservation_code="13", standing_reservation_code="11"), job_type=Job.STANDBY
         )
+    finally:
+        h.close()
+
+
+def test_standby_holds_are_not_payable() -> None:
+    """TrainScheduleViewModel.java:5096-5101; ReservationWaitViewModel.java:1155-1160: WAIT saves options, never
+    pays."""
+    row = train(general_reservation_code="13", standing_reservation_code="11")
+    expected = reservation_form(job="1102")
+    h = Harness([hold_raw()], "POST", ("certification.TicketReservation",), expected)
+    try:
+        result = h.client.reserve(row, job_type=Job.STANDBY)
+        assert result.payable is False
+        with pytest.raises(KorailProtocolError, match="standby"):
+            h.client.pay_with_card(result, card())
+        assert len(h.seen) == 1
+    finally:
+        h.close()
+
+
+def test_transfer_standby_hold_is_not_payable() -> None:
+    expected = reservation_form(transfer=True, job="1102")
+    h = Harness([hold_raw()], "POST", ("certification.TicketReservation",), expected)
+    try:
+        assert h.client.reserve_transfer([train(), train(True)], job_type=Job.STANDBY).payable is False
+    finally:
+        h.close()
+
+
+def test_merge_first_and_follow_up_holds_stay_payable() -> None:
+    """ReservationMergeViewModel.java:2094-2107: the merge screen's pay button pays the held reservation."""
+    first = Harness(
+        [hold_raw()], "POST", ("certification.TicketReservation",), reservation_form(job="1202", stnd="N")
+    )
+    try:
+        assert first.client.reserve(train(), job_type=Job.MERGE_STANDING).payable is True
+    finally:
+        first.close()
+    merged = {
+        **reservation_form(job="1202"),
+        "txtStndFlg": "Y",
+        "txtMidRsStnCd": "9099",
+        "txtMidStnConsOrdr": "004",
+        "txtMidStnRunOrdr": "003",
+    }
+    follow_up = Harness([hold_raw()], "POST", ("certification.TicketReservation",), merged)
+    try:
+        assert follow_up.client.reserve_merge(train(), merge_rows()).payable is True
+    finally:
+        follow_up.close()
+    assert hold().payable is True
+
+
+def test_standing_only_row_is_not_booked_as_immediate() -> None:
+    """TrainScheduleOutTrainInfo.java:2810-2885: STAND is decided only after protected suspend/wait/merge
+    checks, so 13/11 alone cannot tell whether the app would send a standing-only hold."""
+    h = Harness([], "POST", (), {})
+    try:
+        with pytest.raises(KorailProtocolError, match="available general seat"):
+            h.client.reserve(train(general_reservation_code="13", standing_reservation_code="11"))
+        assert not h.seen
+    finally:
+        h.close()
+
+
+@pytest.mark.parametrize(
+    "legs",
+    [
+        pytest.param([train(True), train()], id="reversed"),
+        pytest.param([train(), train()], id="same-train"),
+        pytest.param(
+            [train(arrival_date="20991230"), train(True, departure_time="110000")], id="departs-before-arrival"
+        ),
+    ],
+)
+def test_transfer_legs_must_be_distinct_and_in_boarding_order(legs: list[TrainSummary]) -> None:
+    """TrainScheduleViewModel.java:2952-2968 builds the form from one transfer search pair only."""
+    h = Harness([], "POST", (), {})
+    try:
+        with pytest.raises(KorailProtocolError, match="different trains|boarding order"):
+            h.client.reserve_transfer(legs)
+        assert not h.seen
+    finally:
+        h.close()
+
+
+def test_merge_rows_with_the_same_run_date_are_accepted() -> None:
+    rows = tuple(TrainScheduleItem(**{**row.__dict__, "run_date": "20991230"}) for row in merge_rows())
+    merged = {
+        **reservation_form(job="1202"),
+        "txtStndFlg": "Y",
+        "txtMidRsStnCd": "9099",
+        "txtMidStnConsOrdr": "004",
+        "txtMidStnRunOrdr": "003",
+    }
+    h = Harness([hold_raw()], "POST", ("certification.TicketReservation",), merged)
+    try:
+        h.client.reserve_merge(train(), rows)
+        assert len(h.seen) == 1
+    finally:
+        h.close()
+
+
+def test_mutation_parsers_read_integer_envelope_fields_as_strings() -> None:
+    from korail_mobile_api.mutation_parsers import parse_reservation_hold_response
+
+    raw = {**hold_raw(), "h_msg_cd": 0, "h_msg_txt": 7}
+    result = parse_reservation_hold_response(raw)
+    assert (result.h_msg_cd, result.h_msg_txt) == ("0", "7")
+
+
+def test_merge_rows_from_another_run_date_are_rejected() -> None:
+    first, second = merge_rows()
+    rows = (first, TrainScheduleItem(**{**second.__dict__, "run_date": "20991231"}))
+    h = Harness([], "POST", (), {})
+    try:
+        with pytest.raises(KorailProtocolError, match="run_date"):
+            h.client.reserve_merge(train(), rows)
+        assert not h.seen
     finally:
         h.close()
 

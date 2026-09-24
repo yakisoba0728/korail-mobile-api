@@ -514,6 +514,7 @@ def build_mileage_history_form(
         "qryDvVal": request.movement,
         "qryStDt": start_date,
         "qryClsDt": end_date,
+        # 앱은 보호된 상수를 씁니다(MileageHistoryViewModelKt.java:11). 20 은 **미출처** 값입니다.
         "pgPrCnt": "20",
         "nowPgNo": _int_text(request.page_no, "page_no"),
     }
@@ -627,6 +628,7 @@ def build_discount_card_schedule_query(
 
 
 def build_customer_trip_info_form(customer_no: str) -> dict[str, str]:
+    # 앱의 두 값은 보호돼 있습니다(HomeViewModel.java:4335). 03·0 은 **미출처** 값입니다.
     return {
         "custMgNo": _required_text(customer_no, "customer_no"),
         "medDvCd": "03",
@@ -797,16 +799,16 @@ def _ticket_return_number(reference: OriginalTicketReference) -> str:
     )
 
 
-def _exact_ticket_reference_tuple(
-    tickets: tuple[OriginalTicketReference, ...],
+def _ticket_reference_tuple(
+    tickets: Sequence[OriginalTicketReference],
 ) -> tuple[OriginalTicketReference, ...]:
-    if type(tickets) is not tuple:
-        raise KorailProtocolError("tickets must be an exact tuple")
+    if isinstance(tickets, (str, bytes)) or not isinstance(tickets, Sequence):
+        raise KorailProtocolError("tickets must be a sequence of OriginalTicketReference")
     if not tickets:
         raise KorailProtocolError("tickets must contain at least one reference")
     for ticket in tickets:
         _exact_original_ticket_reference(ticket)
-    return tickets
+    return tuple(tickets)
 
 
 @dataclass(frozen=True)
@@ -841,9 +843,9 @@ def build_ticket_duplication_check_form(
 
 
 def build_pbp_acceptance_specification_form(
-    tickets: tuple[OriginalTicketReference, ...],
+    tickets: Sequence[OriginalTicketReference],
 ) -> tuple[tuple[str, str | int], ...]:
-    references = _exact_ticket_reference_tuple(tickets)
+    references = _ticket_reference_tuple(tickets)
     return (
         ("tkCnt", len(references)),
         *(("tkRetNo", _ticket_return_number(ticket)) for ticket in references),
@@ -851,7 +853,7 @@ def build_pbp_acceptance_specification_form(
 
 
 def build_original_ticket_inquiry_form(
-    tickets: tuple[OriginalTicketReference, ...],
+    tickets: Sequence[OriginalTicketReference],
     *,
     ticket_count: int | None = None,
 ) -> tuple[tuple[str, str | int], ...]:
@@ -859,7 +861,7 @@ def build_original_ticket_inquiry_form(
     OgTicketInquiryIn.java:30,81 의 정수이며 이 빌더는 목록 길이를 사용합니다. 앱의 행 수 사용: NotificationViewModel.java:197,
     PassengerTypeChangeViewModel.java:147, TrainSeatMapViewModel.java:1282. RefundTicketViewModel.java:258 의
     리터럴은 보호돼 있습니다."""
-    references = _exact_ticket_reference_tuple(tickets)
+    references = _ticket_reference_tuple(tickets)
     if ticket_count is None:
         count = len(references)
     elif type(ticket_count) is not int:

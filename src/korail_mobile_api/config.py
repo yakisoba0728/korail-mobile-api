@@ -51,7 +51,7 @@ class KorailConfig:
     advertising_id: str = ""
     netfunnel_url: str = KORAIL_NETFUNNEL_URL
     netfunnel_timeout: float = KORAIL_NETFUNNEL_TIMEOUT_SECONDS
-    #: 기본 활성화. 관문 목록은 netfunnel.KORAIL_NETFUNNEL_GATES 참고. 7.0.6 SDK 기본 bypass 는
+    #: 기본 활성화. 관문 목록은 아래 netfunnel_actions 참고. 7.0.6 SDK 기본 bypass 는
     #: 거짓(com/netfunnel/api/Property.java:8), 앱 설정은 KorailTalkApplication.java:361-389. 실제 호출 여부는 각 클라이언트 메서드와 앱
     #: 호출부에 따릅니다.
     netfunnel_enabled: bool = True
@@ -60,8 +60,9 @@ class KorailConfig:
     #: 누적 대기 상한(초)이며 None이면 제한하지 않습니다. 초과 시 API를 보내지 않습니다. SDK 루프에는 상한이 없으며(Netfunnel.java:622-664), 앱 콜백 감시의
     #: 단위·차이는 netfunnel 모듈을 따릅니다.
     netfunnel_wait_limit: float | None = None
-    #: 관문 이름 → ``aid`` 덮어쓰기. ``aid`` 리터럴은 7.0.6 에서 보호돼 있어 기본값은 길이·호출부 이름으로 고른 **미검증** 값입니다
-    #: (``netfunnel.KORAIL_NETFUNNEL_GATES``).
+    #: 관문 이름 → ``aid`` 덮어쓰기. 이름은 inquiry·peak_season_inquiry·product_inquiry·reserve·pay·reservation_view
+    #: 입니다. ``aid`` 리터럴은 7.0.6 에서 보호돼 있어 기본값은 길이·호출부 이름으로 고른 **미검증** 값입니다
+    #: (netfunnel.KORAIL_NETFUNNEL_GATES).
     netfunnel_actions: Mapping[str, str] | None = None
 
     #: disable_dynapath는 명시적으로 토큰을 끕니다. 필수 경로는 전송 전에 거절됩니다. 2026-09-24 토큰 없는 조회의 차단 관측은

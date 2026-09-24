@@ -1198,6 +1198,63 @@ def test_required_integer_retains_zero_padding_only_in_raw(make_client) -> None:
     assert result.raw == payload
 
 
+@pytest.mark.parametrize(("wire", "expected"), [("-1200", -1200), ("-0", 0)])
+def test_required_integer_accepts_a_leading_minus_like_kotlinx(wire, expected, make_client) -> None:
+    """JsonReader.java:575-640: a quoted Int may start with '-'."""
+    payload = deepcopy(RECEIPT_BODY)
+    payload["receipt_infos"]["receipt_info"][0]["h_rcvd_amt"] = wire
+    client, _ = make_client(payload)
+    assert (
+        client.get_ticket_receipt(**BY_NAME["get_ticket_receipt"].kwargs).items[0].received_amount == expected
+    )
+
+
+@pytest.mark.parametrize("wire", ["-", "--1", "1-", "1e3", "+1"])
+def test_required_integer_still_rejects_other_signed_shapes(wire, make_client) -> None:
+    payload = deepcopy(RECEIPT_BODY)
+    payload["receipt_infos"]["receipt_info"][0]["h_rcvd_amt"] = wire
+    client, _ = make_client(payload)
+    with pytest.raises(KorailProtocolError):
+        client.get_ticket_receipt(**BY_NAME["get_ticket_receipt"].kwargs)
+
+
+@pytest.mark.parametrize("method", ["get_pbp_acceptance_specifications", "get_original_ticket_inquiry"])
+def test_ticket_reference_list_is_sent_like_a_tuple(method, make_client) -> None:
+    entry = BY_NAME[method]
+    client, calls = make_client(entry.response)
+    getattr(client, method)(**entry.kwargs)
+    getattr(client, method)(**{**entry.kwargs, "tickets": list(entry.kwargs["tickets"])})
+    assert calls[0].content == calls[1].content
+    with pytest.raises(KorailProtocolError):
+        getattr(client, method)(**{**entry.kwargs, "tickets": "not-a-sequence-of-references"})
+
+
+def test_coupon_discount_values_keep_their_field(make_client) -> None:
+    """CouponOutInfo.java:63: all 13 fields are optional, so each value keeps its own attribute."""
+    weekday = {"h_cpn_no": "TEST-WEEKDAY", "h_disc_rt_amt_dv_cd": "1", "h_inwk_fare_disc_rt_amt": 10}
+    weekend = {"h_cpn_no": "TEST-WEEKEND", "h_disc_rt_amt_dv_cd": "1", "h_wknd_fare_disc_rt_amt": "10"}
+    payload = success(coupon_infos={"coupon_info": [weekday, weekend]})
+    client, _ = make_client(payload)
+    first, second = client.get_discount_coupons(**BY_NAME["get_discount_coupons"].kwargs).items
+    assert (first.weekday_fare_discount, first.weekend_fare_discount) == ("10", None)
+    assert (second.weekday_fare_discount, second.weekend_fare_discount) == (None, "10")
+    assert first.discount_rate_amount_division_code == second.discount_rate_amount_division_code == "1"
+
+
+@pytest.mark.parametrize("entry", CASES, ids=lambda c: c.method)
+def test_integer_envelope_fields_are_read_as_strings(entry, make_client) -> None:
+    """2026-09-21 observation: JSON integers in String fields. http.parse_base_response and the read parsers
+    share _parsing._envelope, so a transport-accepted envelope is not rejected again by the parser."""
+    payload = deepcopy(entry.response)
+    payload["h_msg_cd"] = 0
+    payload["h_msg_txt"] = 7
+    client, calls = make_client(payload)
+    result = getattr(client, entry.method)(**entry.kwargs)
+    assert (result.h_msg_cd, result.h_msg_txt) == ("0", "7")
+    assert result.raw == payload
+    assert len(calls) == 1
+
+
 @pytest.mark.parametrize("entry", CASES, ids=lambda c: c.method)
 @pytest.mark.parametrize("field", ("strResult", "h_msg_cd", "h_msg_txt"))
 def test_malformed_envelope_preserves_entire_response(entry, field, make_client) -> None:

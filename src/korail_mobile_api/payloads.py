@@ -43,16 +43,18 @@ def validate_seat_inventory_inputs(
         raise KorailProtocolError("passenger_count must be an integer from 1 through 9")
     if car_no is not None and (type(car_no) is not int or car_no < 1):
         raise KorailProtocolError("car_no must be a positive integer")
-    # 좌석 속성과 상품번호는 선택된 예약 구간에서 옵니다(TrainSeatMapViewModel.java:2527,2546,2573-2577). 선언:
-    # TrainResearchIn.java:39,43,68. 후행 속성의 앱 기본 리터럴은 보호돼 있습니다.
-    if train.seat_attribute_code:
-        _required_ascii_digits(
-            train.seat_attribute_code,
-            "seat_attribute_code",
-            lengths=frozenset({3}),
-        )
     if train.goods_no:
         _wire_goods_no(train.goods_no)
+
+
+def _seat_attribute(train: TrainSummary, override: str | None) -> str:
+    """좌석 속성은 선택된 예약 구간에서 옵니다(TrainSeatMapViewModel.java:2527,2546,2573-2577;
+    TrainResearchIn.java:39,43,68). 두 좌석 조회 모두 명시값이 있으면 그것만, 없으면(None·"") 행 값을 3자리 숫자로 검사해 씁니다.
+    빈 값이면 필드를 뺍니다."""
+    value = override or train.seat_attribute_code
+    if value:
+        _required_ascii_digits(value, "seat_attribute_code", lengths=frozenset({3}))
+    return value or ""
 
 
 def _wire_goods_no(value: str) -> str:
@@ -90,9 +92,7 @@ def build_seat_car_form(
     평탄화합니다(NetworkService.java:14524-14528,15335-15343). 보호된 explicitNulls 설정은 확정할 수 없으므로 빈 문자열 처리와 null 처리를
     혼동하지 마십시오(NetworkServiceKt.java:28). menu_id 의 기본값 밖 코드는 보호돼 있으므로 맥락을 아는 호출자만 재정의하십시오."""
     validate_seat_inventory_inputs(train, passenger_count)
-    if seat_attribute_code:
-        _required_ascii_digits(seat_attribute_code, "seat_attribute_code", lengths=frozenset({3}))
-    seat_attribute = seat_attribute_code or train.seat_attribute_code
+    seat_attribute = _seat_attribute(train, seat_attribute_code)
     return {
         **_device_version(config),
         "Key": config.key,
@@ -141,7 +141,7 @@ def build_seat_inventory_form(
         passenger_count,
         car_no=car_no,
     )
-    seat_attribute = train.seat_attribute_code if seat_attribute_code is None else seat_attribute_code
+    seat_attribute = _seat_attribute(train, seat_attribute_code)
     return {
         **_device_version(config),
         "Key": config.key,

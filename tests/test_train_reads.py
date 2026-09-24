@@ -1033,6 +1033,27 @@ def test_optional_goods_and_seat_attribute_are_not_invented(method, rig):
     exact_request(calls[0], BY_NAME[method][3], expected)
 
 
+@pytest.mark.parametrize("method", ["get_seat_cars", "get_seat_inventory"])
+def test_seat_attribute_override_follows_one_rule_for_both_seat_reads(method, rig):
+    """An explicit value replaces the row value (even an unusable one); "" and None both fall back to the
+    row."""
+    response = CARS if method == "get_seat_cars" else INVENTORY
+    key = "txtSeatAttCd" if method == "get_seat_cars" else "seatAttCd"
+    args = (1,) if method == "get_seat_inventory" else ()
+    client, calls, _ = rig([response, response], auth=True)
+    getattr(client, method)(
+        replace(TRAIN, seat_attribute_code="15"), *args, passenger_count=2, seat_attribute_code="021"
+    )
+    getattr(client, method)(
+        replace(TRAIN, seat_attribute_code="031"), *args, passenger_count=2, seat_attribute_code=""
+    )
+    sent = [dict(parse_qsl(call.content.decode()))[key] for call in calls]
+    assert sent == ["021", "031"]
+    with pytest.raises(KorailProtocolError):
+        getattr(client, method)(TRAIN, *args, passenger_count=2, seat_attribute_code="abc")
+    assert len(calls) == 2
+
+
 def test_notice_missing_and_optional_lists_empty(rig):
     """MobilePlusMainOut.java:57-77; RunDateOut.java:55-62; optional list defaults."""
     client, _, _ = rig([{}, ENVELOPE, ENVELOPE, ENVELOPE])

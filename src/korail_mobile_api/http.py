@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from ._parsing import _reject_non_string_envelope_fields
+from ._parsing import _envelope
 from .config import KorailConfig
 from .constants import (
     DYNAPATH_ALLOWLIST_PATHS,
@@ -69,15 +69,7 @@ def parse_base_response(
         error = KorailProtocolError("KORAIL response must be a JSON object")
         error.raw = data
         raise error
-    envelope = {name: data.get(name) for name in ("h_msg_cd", "h_msg_txt", "strResult")}
-    for name, value in envelope.items():
-        if isinstance(value, int) and not isinstance(value, bool):
-            envelope[name] = str(value)
-    try:
-        _reject_non_string_envelope_fields(envelope)
-    except KorailProtocolError as error:
-        error.raw = data
-        raise
+    envelope = _envelope(data)
     response = BaseKorailResponse(
         h_msg_cd=envelope["h_msg_cd"],
         h_msg_txt=envelope["h_msg_txt"],
@@ -123,7 +115,12 @@ def _dynapath_block_payload(payload: object) -> dict[str, Any] | None:
     return None
 
 
-def _send(send: Callable[[], httpx.Response], *, method: str, path: str) -> httpx.Response:
+def _send(
+    client: httpx.Client, send: Callable[[], httpx.Response], *, method: str, path: str
+) -> httpx.Response:
+    # 닫힌 httpx 클라이언트는 RuntimeError 를 내므로 KorailApiError 계층으로 바꿉니다. 이때 요청은 나가지 않았습니다.
+    if client.is_closed:
+        raise KorailProtocolError(f"KORAIL client is closed; {method} {path} was not sent")
     try:
         return send()
     except (httpx.HTTPError, httpx.InvalidURL) as exc:
@@ -168,6 +165,15 @@ def _drop_empty(mapping: Mapping[str, Any]) -> dict[str, Any]:
 
     앱의 평탄화기 근거: NetworkService.java:15342. key= 로 보내는 것과 구분해야 합니다."""
     return {key: value for key, value in mapping.items() if not _is_empty_string(value)}
+
+
+def _form_value(value: Any) -> str:
+    """순서 있는 폼 값을 httpx 의 data= 인코딩과 같게 씁니다. None 은 빈 값, bool 은 true/false 입니다."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
 
 
 class KorailHttpClient:
@@ -270,7 +276,7 @@ class KorailHttpClient:
         require_envelope: bool,
     ) -> BaseKorailResponse:
         """읽기 응답을 처리합니다. require_envelope 및 경로별 봉투 생략 규칙에 따릅니다."""
-        payload = _decode_response(_send(send, method=method, path=path), path=path)
+        payload = _decode_response(_send(self._client, send, method=method, path=path), path=path)
         # 2026-09-22 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다. 봉투 누락 허용과 존재하는 FAIL/P058 판정은 별개이며 raw 는
         # 그대로 보존합니다.
         common_out = path not in _NON_COMMON_OUT_READ_PATHS
@@ -324,7 +330,9 @@ class KorailHttpClient:
             if ordered_form is not None:
                 return self._client.post(
                     path,
-                    content=urlencode(ordered_form).encode("ascii"),
+                    content=urlencode([(name, _form_value(value)) for name, value in ordered_form]).encode(
+                        "ascii"
+                    ),
                     headers=headers,
                 )
             return self._client.post(path, data=mapping_form, headers=headers)
@@ -382,7 +390,10 @@ class KorailHttpClient:
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         headers.update(self._dynapath_headers("POST", path))
         response = _send(
-            lambda: self._client.post(path, data=dict(data), headers=headers), method="POST", path=path
+            self._client,
+            lambda: self._client.post(path, data=dict(data), headers=headers),
+            method="POST",
+            path=path,
         )
         payload = _decode_response(response, path=path)
         return parse_base_response(payload, raise_on_fail=raise_on_fail, require_result=True)

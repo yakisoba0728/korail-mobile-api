@@ -18,6 +18,7 @@ from .errors import (
     KorailAppUpdateRequiredError,
     KorailAuthContinuationRequired,
     KorailAuthError,
+    KorailProtocolError,
     KorailServiceUnavailableError,
     classify_app_error,
 )
@@ -38,12 +39,16 @@ KORAIL_LOGIN_TYPE_EMAIL = "5"
 def infer_login_input_flag(login_id: str) -> str:
     """회원번호·전화번호·이메일 형식으로 로그인 입력 종류를 선택합니다.
 
-    앱 분기 근거: LoginViewModel.java:1850-1876. 앱의 보호된 전화번호 검사는 재현하지 않습니다. 다른 숫자 길이는 앱의 무효 처리와 달리 회원번호로 분류합니다(미확인
-    폴백). 앱은 이메일에 isValidEmail 과 7자 이상도 요구하지만 그 판정은 서버에 맡깁니다."""
+    앱 분기 근거: LoginViewModel.java:1850-1876. 앱은 숫자만이거나 이메일인 입력만 보내므로, 하이픈이 든 전화번호처럼 둘 다 아닌 입력은 전송 전에
+    거절합니다. 실패한 로그인 시도는 잠금 횟수에 들어갈 수 있습니다. 앱의 보호된 전화번호 검사는 재현하지 않습니다. 다른 숫자 길이는 앱의 무효 처리와 달리
+    회원번호로 분류합니다(미확인 폴백). 앱은 이메일에 isValidEmail 과 7자 이상도 요구하지만 그 판정은 서버에 맡깁니다."""
     if "@" in login_id:
         return KORAIL_LOGIN_TYPE_EMAIL
-    digits = "".join(ch for ch in login_id if ch.isdigit())
-    if digits == login_id and len(digits) == 11:
+    if not (login_id.isascii() and login_id.isdigit()):
+        raise KorailProtocolError(
+            "KORAIL login ID must be digits only (member number, or phone number without hyphens) or an email"
+        )
+    if len(login_id) == 11:
         return KORAIL_LOGIN_TYPE_PHONE
     return KORAIL_LOGIN_TYPE_MEMBER_NO
 
@@ -152,10 +157,10 @@ class KorailSessionClient:
     ) -> KorailSession:
         # 앱은 앱 시작 때 받아 둔 공통코드의 키를 쓰고 비었을 때만 다시 받습니다 (LoginRepositoryImpl.java:1229-1253). 여기서는 로그인마다 새로 받습니다 —
         # 캐시한 키가 서버에서 바뀌면 비밀번호 오류로 보이고, 반복되면 계정이 잠깁니다.
+        resolved_input_flag = input_flag or infer_login_input_flag(member_no)
         self.check_service()
         crypto_info = self.get_login_crypto_info()
         transformed = transform_login_password(password, crypto_info)
-        resolved_input_flag = input_flag or infer_login_input_flag(member_no)
         # 폼 순서는 login 설명을 따릅니다. 속성명은 LoginIn.java:29-35, 보호된 descriptor는 LoginIn$$serializer.java:33-43입니다.
         # @FieldMap(NetworkApi.java:459-460)은 null 값을 거절하므로 생략해야 합니다(ParameterHandler.java:276-293). null
         # @Field를 생략하는 규칙(ParameterHandler.java:252-259)과 구별합니다.
@@ -200,7 +205,12 @@ class KorailSessionClient:
                 code=response.h_msg_cd,
                 raw=response.raw,
             )
-        jsessionid = self.http.cookies.get("JSESSIONID")
+        # 경로·도메인만 다른 JSESSIONID 가 여럿이면 cookies.get 이 httpx.CookieConflict 를 냅니다. 요청에는 경로·도메인이 맞는 쿠키가
+        # 실리므로 세션 기록에는 저장소 순서의 첫 값을 씁니다.
+        jsessionid = next(
+            (cookie.value for cookie in self.http.cookies.jar if cookie.name == "JSESSIONID" and cookie.value),
+            None,
+        )
         if not jsessionid:
             raise KorailAuthError(
                 "KORAIL login did not return a usable session",

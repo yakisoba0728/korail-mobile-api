@@ -40,6 +40,7 @@ from .constants import (
 )
 from .errors import (
     KorailNetFunnelError,
+    KorailProtocolError,
     KorailQueueRejectedError,
     KorailTransportError,
 )
@@ -229,6 +230,10 @@ class KorailNetFunnelClient:
         return f"{origin}{KORAIL_NETFUNNEL_PATH}?{urlencode(params)}"
 
     def _get(self, url: str) -> str:
+        if self._client.is_closed:
+            raise KorailProtocolError(
+                f"KORAIL NetFunnel client is closed; GET {KORAIL_NETFUNNEL_PATH} was not sent"
+            )
         try:
             response = self._client.get(url)
         except httpx.HTTPError as exc:
@@ -352,5 +357,6 @@ class KorailNetFunnelClient:
                     ),
                 )
             )
-        except KorailTransportError as exc:
+        except Exception as exc:
+            # 반납은 finally 에서 불리므로 어떤 실패도 API 쪽 원래 예외를 가리지 않게 로그만 남깁니다.
             _log.warning("KORAIL NetFunnel setComplete failed: %s", exc)

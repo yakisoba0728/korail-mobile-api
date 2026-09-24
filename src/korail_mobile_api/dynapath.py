@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import random
 import string
+import threading
 import time
 import uuid
-from collections.abc import Callable
+from collections import deque
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from urllib.parse import quote_plus
 
@@ -332,7 +334,10 @@ def generate_dynapath_token(
     *,
     timestamp_ms: int | None = None,
     random_text: str | None = None,
+    recent_intervals: Sequence[int] = (),
 ) -> str:
+    """토큰 하나를 만듭니다. recent_intervals 는 rt 값이며 비어 있으면 SDK 처럼 키를 뺍니다(a/b.java:100-108). SDK 의 generate() 는
+    만들기 직전에 이력을 추가하므로 앱 토큰에는 rt 가 늘 있습니다. 이력은 DynapathTokenGenerator 가 관리합니다."""
     ts = _timestamp_ms() if timestamp_ms is None else timestamp_ms
     rand = _random_text() if random_text is None else random_text
     fields = [
@@ -345,8 +350,7 @@ def generate_dynapath_token(
         ("hk", str(settings.hooked).lower()),
         ("it", settings.app_start_ts),
         ("ts", str(ts)),
-        # 요청 간 시간차 이력을 저장하지 않으므로 rt 를 생략합니다. SDK 도 빈 이력은 키를 생략하며, 값이 있으면 항목별 rt 를 씁니다(a/b.java:58-107,122-134).
-        # 이 생성기는 실기기의 요청 이력까지 재현하지 않습니다.
+        *(("rt", str(interval)) for interval in recent_intervals),
         ("os", settings.os_version),
         ("dm", settings.device_model),
         ("st", settings.os_type),
@@ -383,7 +387,8 @@ def generate_dynapath_token(
 
 
 class DynapathTokenGenerator:
-    """설정된 기기값으로 요청별 DynaPath 토큰을 제공합니다."""
+    """설정된 기기값으로 요청별 DynaPath 토큰을 제공합니다. SDK 처럼 토큰마다 직전 토큰(첫 토큰은 it)과의 시간차를 최근 5개까지 기록해 rt 로
+    보냅니다(DynaPathMobileSDK.java:43-44, a/b.java:58-68). SDK 도 초기화 때 빈 이력으로 시작합니다(a/a.java:17)."""
 
     def __init__(
         self,
@@ -395,10 +400,19 @@ class DynapathTokenGenerator:
         self.settings = settings
         self._timestamp_ms_provider = timestamp_ms_provider or _timestamp_ms
         self._random_text_provider = random_text_provider or _random_text
+        self._lock = threading.Lock()
+        self._last_ts = int(settings.app_start_ts)
+        self._intervals: deque[int] = deque(maxlen=5)
 
     def __call__(self, _context: DynapathRequestContext | None = None) -> str:
+        with self._lock:
+            ts = self._timestamp_ms_provider()
+            self._intervals.append(ts - self._last_ts)
+            self._last_ts = ts
+            intervals = tuple(self._intervals)
         return generate_dynapath_token(
             self.settings,
-            timestamp_ms=self._timestamp_ms_provider(),
+            timestamp_ms=ts,
             random_text=self._random_text_provider(),
+            recent_intervals=intervals,
         )

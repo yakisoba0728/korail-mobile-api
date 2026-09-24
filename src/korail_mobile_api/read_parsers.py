@@ -12,6 +12,7 @@ from typing import Any
 
 from ._parsing import (
     RESERVATION_OUT_EXTRA_FIELDS,
+    _envelope,
     _nested_rows,
     _nullable_scalar_fields,
     _nullable_string_fields,
@@ -22,7 +23,6 @@ from ._parsing import (
     _optional_string,
     _present_strings,
     _preserve_read_raw,
-    _reject_non_string_envelope_fields,
     _required_integer,
     _reservation_passengers,
     _response_fields,
@@ -225,7 +225,7 @@ def _validate_envelope(
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     # raw 를 직접 받는 호출자는 http.parse_base_response 를 거치지 않으므로 봉투 필드 타입을 여기서도 확인합니다.
-    _reject_non_string_envelope_fields(raw)
+    envelope = _envelope(raw)
     if "strResult" not in raw:
         raise KorailProtocolError(
             "KORAIL response omitted strResult; the protected APK default "
@@ -235,9 +235,9 @@ def _validate_envelope(
         if raw["strResult"] != "SUCC":
             raise KorailProtocolError("KORAIL result-only envelope requires the exact success result")
         return False
-    code = raw.get("h_msg_cd")
-    message = raw.get("h_msg_txt")
-    result = raw.get("strResult")
+    code = envelope["h_msg_cd"]
+    message = envelope["h_msg_txt"]
+    result = envelope["strResult"]
     # 앱은 strResult 실패일 때만 로그인 필요로 봅니다(CommonOut.java:426-438).
     if result == "FAIL" and code == SESSION_EXPIRED_CODE:
         raise KorailSessionExpiredError(code, message, raw=raw)
@@ -942,6 +942,21 @@ def parse_delay_discount_ticket_response(
     )
 
 
+# CouponOutInfo.java:63 의 13필드는 모두 선택입니다.
+_DISCOUNT_COUPON_FIELDS = {
+    "guide": "guide",
+    "start_date": "h_fdcert_mg_st_dt",
+    "expiration_date": "h_fdcert_mg_cls_dt",
+    "discount_kind_code": "h_dscp_knd_cd",
+    "discount_rate_amount_division_code": "h_disc_rt_amt_dv_cd",
+    "weekday_fare_discount": "h_inwk_fare_disc_rt_amt",
+    "weekday_price_discount": "h_inwk_prc_disc_rt_amt",
+    "weekend_fare_discount": "h_wknd_fare_disc_rt_amt",
+    "weekend_price_discount": "h_wknd_prc_disc_rt_amt",
+    "coupon_no": "h_cpn_no",
+}
+
+
 @_preserve_read_raw
 def parse_discount_coupon_response(
     raw: Mapping[str, Any],
@@ -959,29 +974,10 @@ def parse_discount_coupon_response(
         "coupon_info",
     )
     for item in rows:
-        discount_values = _present_strings(
-            item,
-            (
-                "h_disc_rt_amt_dv_cd",
-                "h_inwk_fare_disc_rt_amt",
-                "h_inwk_prc_disc_rt_amt",
-                "h_wknd_fare_disc_rt_amt",
-                "h_wknd_prc_disc_rt_amt",
-            ),
-        )
-        remarks = _present_strings(
-            item,
-            ("h_rmk_1_cont", "h_rmk_2_cont", "h_rmk_3_cont"),
-        )
         items.append(
             DiscountCoupon(
-                guide=_optional_string(item, "guide"),
-                start_date=_optional_scalar_string(item, "h_fdcert_mg_st_dt", "discount coupon"),
-                expiration_date=_optional_string(item, "h_fdcert_mg_cls_dt"),
-                discount_kind_code=_optional_scalar_string(item, "h_dscp_knd_cd", "discount coupon"),
-                discount_values=discount_values,
-                remarks=remarks,
-                coupon_no=_optional_string(item, "h_cpn_no"),
+                **_nullable_scalar_fields(item, _DISCOUNT_COUPON_FIELDS, "discount coupon"),
+                remarks=_present_strings(item, ("h_rmk_1_cont", "h_rmk_2_cont", "h_rmk_3_cont")),
                 raw=item,
             )
         )

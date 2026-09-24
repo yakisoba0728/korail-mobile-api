@@ -2,13 +2,16 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""대기열 응답의 노드 주소를 검사합니다. 대기열 키가 허용 범위 밖 호스트로 전송되지 않도록 ip·port를 제한합니다."""
+"""대기열 응답의 노드 주소를 검사합니다. 대기열 키가 허용 범위 밖 호스트로 전송되지 않도록 ip·port를 제한하고, 벗어난 노드는 무시해 정문으로
+계속 진행합니다."""
 
+import logging
 import re
 from urllib.parse import urlsplit
 
 from .constants import KORAIL_NETFUNNEL_URL
-from .errors import KorailProtocolError
+
+_log = logging.getLogger(__name__)
 
 KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
 
@@ -22,18 +25,18 @@ KORAIL_NETFUNNEL_NODE_PORT = 443
 
 
 def korail_netfunnel_node_url(ip: str, port: str) -> str:
-    """허용된 대기열 노드의 HTTPS 원점 주소를 반환하며, 노드가 없으면 빈 문자열을 반환합니다."""
+    """허용된 대기열 노드의 HTTPS 원점 주소를 반환합니다. 노드가 없거나 허용 범위 밖이면 빈 문자열이며, 호출자는 정문을 씁니다. 앱은 기본값대로
+    노드를 따르지 않으므로(Property.java:23) 무시해도 앱의 동작에서 벗어나지 않습니다."""
     if not ip and not port:
         return ""
-    if ip != KORAIL_NETFUNNEL_HTTPS_HOST and KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(ip) is None:
-        raise KorailProtocolError(
-            f"KORAIL NetFunnel reply named {ip!r} as its node; only "
-            "rnf<1-99>.letskorail.com (lowercase) or the front door "
-            f"{KORAIL_NETFUNNEL_HTTPS_HOST!r} are followed"
+    host_allowed = ip == KORAIL_NETFUNNEL_HTTPS_HOST or KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(ip) is not None
+    if not host_allowed or port != str(KORAIL_NETFUNNEL_NODE_PORT):
+        _log.warning(
+            "KORAIL NetFunnel reply named node %r port %r; only rnf<1-99>.letskorail.com (lowercase) or the "
+            "front door on %d are followed, so the front door is used",
+            ip,
+            port,
+            KORAIL_NETFUNNEL_NODE_PORT,
         )
-    if port != str(KORAIL_NETFUNNEL_NODE_PORT):
-        raise KorailProtocolError(
-            f"KORAIL NetFunnel reply named port {port!r} for node {ip!r}; "
-            f"only {KORAIL_NETFUNNEL_NODE_PORT} is followed"
-        )
+        return ""
     return f"https://{ip}"

@@ -37,26 +37,33 @@ def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
     return wrapped
 
 
-def _reject_non_string_envelope_fields(data: Mapping[str, Any]) -> None:
-    """봉투의 세 필드는 문자열 또는 null이어야 합니다. 성공 판정은 호출자가 맡습니다."""
-    invalid = [
-        name
-        for name in ("h_msg_cd", "h_msg_txt", "strResult")
-        if name in data and data[name] is not None and not isinstance(data[name], str)
-    ]
+def _envelope(data: Mapping[str, Any]) -> dict[str, str | None]:
+    """봉투의 세 필드를 읽습니다. JSON 정수는 2026-09-21 관측에 따라 문자열로 읽고, 다른 비문자열 값은 거절합니다. 성공 판정은 호출자가 맡습니다."""
+    envelope: dict[str, str | None] = {}
+    invalid = []
+    for name in ("h_msg_cd", "h_msg_txt", "strResult"):
+        value = data.get(name)
+        if isinstance(value, int) and not isinstance(value, bool):
+            envelope[name] = str(value)
+        elif value is None or isinstance(value, str):
+            envelope[name] = value
+        else:
+            invalid.append(name)
     if invalid:
         error = KorailProtocolError(
             f"KORAIL response envelope fields must be strings or null: {', '.join(invalid)}"
         )
         error.raw = data
         raise error
+    return envelope
 
 
 def _response_fields(raw: Mapping[str, Any]) -> dict[str, Any]:
+    envelope = _envelope(raw)
     return {
-        "h_msg_cd": raw.get("h_msg_cd"),
-        "h_msg_txt": raw.get("h_msg_txt"),
-        "str_result": raw.get("strResult"),
+        "h_msg_cd": envelope["h_msg_cd"],
+        "h_msg_txt": envelope["h_msg_txt"],
+        "str_result": envelope["strResult"],
         "raw": raw,
     }
 
@@ -104,9 +111,8 @@ def _optional_string(
     data: Mapping[str, object],
     key: str,
 ) -> str | None:
-    """문자열을 그대로 반환하고 그 밖의 값은 None으로 처리합니다."""
-    value = data.get(key)
-    return value if isinstance(value, str) else None
+    """문자열을 반환하고 JSON 정수는 2026-09-21 관측에 따라 문자열로 읽습니다. 그 밖의 값은 None 입니다."""
+    return _optional_scalar_string(data, key)
 
 
 def _required_string(
@@ -189,19 +195,22 @@ def _required_integer(
     key: str,
     context: str,
 ) -> int:
-    """필수 정수: JSON int(음수 포함) 또는 비어 있지 않은 ASCII 숫자 문자열을 받습니다. null/bool/float 와 부호 있는 문자열은 거절합니다. 앱의 따옴표 숫자 처리는
-    StreamingJsonDecoder.java:395-403 → kotlinx/serialization/json/internal/JsonReader.java:575-589 에 있습니다.
-    Python 정수 범위까지 앱과 같다는 뜻은 아닙니다."""
+    """필수 정수: JSON int 또는 ASCII 숫자 문자열(앞의 ``-`` 하나 허용)을 받습니다. null/bool/float·지수 표기는 거절합니다.
+    앱의 따옴표 숫자 처리는 StreamingJsonDecoder.java:395-403 →
+    kotlinx/serialization/json/internal/JsonReader.java:575-640 에 있고, 첫 글자의 ``-`` 만 부호로 받습니다. Python 정수
+    범위까지 앱과 같다는 뜻은 아닙니다."""
     value = data.get(key)
     if type(value) is int:
         return value
-    if isinstance(value, str) and value and all("0" <= character <= "9" for character in value):
-        try:
-            return int(value)
-        except ValueError as exc:
-            raise KorailProtocolError(
-                f"KORAIL {context} field {key} has an unsupported ASCII-decimal length"
-            ) from exc
+    if isinstance(value, str):
+        digits = value[1:] if value.startswith("-") else value
+        if digits and all("0" <= character <= "9" for character in digits):
+            try:
+                return int(value)
+            except ValueError as exc:
+                raise KorailProtocolError(
+                    f"KORAIL {context} field {key} has an unsupported ASCII-decimal length"
+                ) from exc
     raise KorailProtocolError(f"KORAIL {context} field {key} must be an integer or an ASCII decimal string")
 
 
@@ -228,7 +237,7 @@ def _nullable_scalar_fields(
     field_map: Mapping[str, str],
     context: str,
 ) -> dict[str, Any]:
-    """:func:`_nullable_string_fields` 와 같되 JSON 정수도 문자열로 받습니다."""
+    """선택 문자열(JSON 정수 포함)을 읽습니다. :func:`_nullable_string_fields` 와 결과가 같고 context 는 오류 문맥용입니다."""
     return {
         attribute: _optional_scalar_string(data, wire_name, context)
         for attribute, wire_name in field_map.items()

@@ -135,7 +135,8 @@ _DIGITS_RE = re.compile(r"[0-9]+")
 
 
 def _response_mapping(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """직접 호출도 가능하므로 raw 가 매핑인지 확인하고 복사합니다. 봉투 3필드는 dict.get 으로 읽으며 이 모듈 자체는 타입·성공 여부를 검사하지 않습니다."""
+    """직접 호출도 가능하므로 raw 가 매핑인지 확인하고 복사합니다. 봉투 3필드의 타입은 _parsing._envelope 가 검사하며 성공 여부는 이 모듈이
+    검사하지 않습니다."""
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     return dict(raw)
@@ -347,8 +348,8 @@ _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS = {
 def parse_reservation_hold_response(
     raw: Mapping[str, Any],
 ) -> ReservationHoldResponse:
-    """홀드의 후속 결제·취소 값을 읽습니다. 여정·정산값은 엄격히 검사하되 성공 여부·봉투 필드 타입은 재검사하지 않습니다. 직접 호출자는 str_result·h_msg_cd 를 확인하고, 파싱
-    실패만 보고 다시 요청하지 마십시오 — 예약이 이미 생성됐을 수 있습니다."""
+    """홀드의 후속 결제·취소 값을 읽습니다. 여정·정산값은 엄격히 검사하되 성공 여부는 재검사하지 않습니다. 직접 호출자는 str_result·h_msg_cd 를
+    확인하고, 파싱 실패만 보고 다시 요청하지 마십시오 — 예약이 이미 생성됐을 수 있습니다."""
     copied = _response_mapping(raw)
     journeys_container = copied.get("jrny_infos")
     if journeys_container is None:
@@ -375,15 +376,13 @@ def parse_reservation_hold_response(
             )
         )
 
+    required: dict[str, Any] = {
+        attr: _strict_scalar_string(copied, wire_key, "reservation")
+        for attr, wire_key in _RESERVATION_HOLD_REQUIRED_FIELDS.items()
+    }
     return ReservationHoldResponse(
-        h_msg_cd=copied.get("h_msg_cd"),
-        h_msg_txt=copied.get("h_msg_txt"),
-        str_result=copied.get("strResult"),
-        raw=copied,
-        **{
-            attr: _strict_scalar_string(copied, wire_key, "reservation")
-            for attr, wire_key in _RESERVATION_HOLD_REQUIRED_FIELDS.items()
-        },
+        **_base_fields(copied),
+        **required,
         **_nullable_scalar_fields(copied, _RESERVATION_HOLD_FIELDS, "reservation"),
         received_amount=_received_amount(
             copied,
@@ -474,10 +473,7 @@ def parse_discount_card_purchase_response(
     Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 실서버 검증 못 함입니다."""
     data = _response_mapping(raw)
     return DiscountCardPurchaseResponse(
-        h_msg_cd=data.get("h_msg_cd"),
-        h_msg_txt=data.get("h_msg_txt"),
-        str_result=data.get("strResult"),
-        raw=data,
+        **_base_fields(data),
         **_nullable_scalar_fields(data, _DISCOUNT_CARD_PURCHASE_FIELDS, "discount card purchase"),
     )
 
@@ -524,9 +520,6 @@ def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
     PsgDiscAddInfo.java:81,85. 누락·잘못된 선택 목록은 비웁니다."""
     data = _response_mapping(raw)
     return CartAddResponse(
-        h_msg_cd=data.get("h_msg_cd"),
-        h_msg_txt=data.get("h_msg_txt"),
-        str_result=data.get("strResult"),
-        raw=data,
+        **_base_fields(data),
         discount_additions=_cart_discount_additions(data),
     )

@@ -187,8 +187,8 @@ class KorailAppUpdateRequiredError(KorailAppError):
 
 class KorailNetFunnelError(_CodeMessagePickle, KorailApiError):
     """대기열 통과 실패 또는 잘못된 응답 형식을 나타냅니다. 클라이언트 관문에서는 성공 전용 관문의 비성공 종료·통신 오류나 누적 대기 상한 초과 시 API를 보내지 않습니다. 201/202는
-    즉시 오류가 아니라 대기 대상이며 키가 비어 있어도 반복합니다. code는 대기열 코드, raw는 제공된 경우의 응답 본문입니다. h_msg_cd를 분류하는 KorailAppError와
-    다릅니다."""
+    즉시 오류가 아니라 대기 대상이지만, 키가 비어 있으면 5002 를 보낼 수 없으므로 이 예외로 끝냅니다. code는 대기열 코드, raw는 제공된 경우의 응답 본문입니다.
+    h_msg_cd를 분류하는 KorailAppError와 다릅니다."""
 
     def __init__(
         self,

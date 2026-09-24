@@ -264,7 +264,13 @@ class DiscountCoupon:
     start_date: str | None = None
     expiration_date: str | None = None
     discount_kind_code: str | None = None
-    discount_values: tuple[str, ...] = ()
+    #: ``h_disc_rt_amt_dv_cd`` — 아래 네 할인값이 율인지 금액인지 나누는 코드입니다. 코드 값의 의미는 미확인입니다(CouponOutInfo.java:63).
+    discount_rate_amount_division_code: str | None = None
+    weekday_fare_discount: str | None = None
+    weekday_price_discount: str | None = None
+    weekend_fare_discount: str | None = None
+    weekend_price_discount: str | None = None
+    #: ``h_rmk_1_cont``~``h_rmk_3_cont`` 중 온 줄만 순서대로 담습니다.
     remarks: tuple[str, ...] = ()
     coupon_no: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)

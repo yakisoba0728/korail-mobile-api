@@ -310,6 +310,11 @@ class ReservationHoldResponse(BaseKorailResponse):
     issue_possible_date: str | None = None
     issue_possible_time: str | None = None
     passengers: tuple[ReservationPassengerInfo, ...] = ()
+    #: 앱은 예약대기 홀드를 결제하지 않고 대기 옵션만 저장합니다(TrainScheduleViewModel.java:5096-5101;
+    #: ReservationWaitViewModel.java:1155-1160). reserve·reserve_transfer 가 STANDBY 홀드에 False 를 넣고
+    #: pay_with_card 는 전송 전에 거절합니다. 병합 첫 홀드는 앱의 병합 화면에서도 결제할 수 있어 True 입니다
+    #: (ReservationMergeViewModel.java:2094-2107).
+    payable: bool = True
 
 
 @dataclass(frozen=True)

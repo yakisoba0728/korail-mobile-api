@@ -424,26 +424,61 @@ BAD_NODES = [
 
 @pytest.mark.parametrize("host,port", BAD_NODES)
 @pytest.mark.parametrize("mode", [0, 1])
-def test_rejected_node_never_falls_back_to_unqueued_api(queue_factory, host: str, port: str, mode: int) -> None:
-    """Library guard is a ProtocolError, intentionally not caught by ErrorBypass."""
+def test_rejected_node_is_ignored_and_front_door_releases(
+    queue_factory, host: str, port: str, mode: int
+) -> None:
+    """The key never reaches a node outside the allowlist; like the app (Property.java:23 host_notmodify), the
+    queue continues at the front door and the pass is released there."""
     client, gate, world, _ = queue_factory([Reply(f"200:key=SYNTHETIC&ip={host}&port={port}")], mode=mode)
-    with pytest.raises(KorailProtocolError):
-        client.run(gate, world.send)
-    assert world.ops() == ["5101"] and world.sent == 0
+    assert client.run(gate, world.send) == "SYNTHETIC-RESULT"
+    assert world.ops() == ["5101", "API", "5004"]
+    assert [e[1] for e in world.events] == ["nf.letskorail.com", "api.invalid", "nf.letskorail.com"]
+    assert world.events[-1][2] == {"opcode": "5004", "key": "SYNTHETIC"}
 
 
-def test_rejected_poll_node_releases_previous_trusted_slot(queue_factory) -> None:
+def test_rejected_poll_node_falls_back_to_front_door(queue_factory) -> None:
     client, gate, world, _ = queue_factory(
         [
             Reply("201:key=SYNTHETIC-OLD&ttl=1&ip=rnf12.letskorail.com&port=443"),
-            Reply("200:key=SYNTHETIC-BAD&ip=elsewhere.invalid&port=443"),
+            Reply("200:key=SYNTHETIC-NEW&ip=elsewhere.invalid&port=443"),
         ],
-        mode=1,
+        mode=0,
     )
-    with pytest.raises(KorailProtocolError):
+    client.run(gate, world.send)
+    assert world.ops() == ["5101", "5002", "API", "5004"]
+    assert [e[1] for e in world.events] == [
+        "nf.letskorail.com",
+        "rnf12.letskorail.com",
+        "api.invalid",
+        "nf.letskorail.com",
+    ]
+    assert world.events[-1][2] == {"opcode": "5004", "key": "SYNTHETIC-NEW"}
+
+
+def test_release_failure_of_any_kind_never_masks_the_api_error(queue_factory, monkeypatch) -> None:
+    """_complete runs in finally; a non-transport failure (e.g. a closed httpx client) is logged, not raised."""
+    client, gate, world, _ = queue_factory([Reply()], mode=0)
+    real_get = client._get
+
+    def get(url: str) -> str:
+        if "opcode=5004" in url:
+            raise RuntimeError("synthetic release failure")
+        return real_get(url)
+
+    def send() -> str:
+        raise ValueError("synthetic API failure")
+
+    monkeypatch.setattr(client, "_get", get)
+    with pytest.raises(ValueError, match="synthetic API failure"):
+        client.run(gate, send)
+
+
+def test_closed_queue_client_sends_nothing(queue_factory) -> None:
+    client, gate, world, _ = queue_factory([Reply()], mode=1)
+    client.close()
+    with pytest.raises(KorailProtocolError, match="closed"):
         client.run(gate, world.send)
-    assert world.ops() == ["5101", "5002", "5004"]
-    assert world.events[-1][1:3] == ("rnf12.letskorail.com", {"opcode": "5004", "key": "SYNTHETIC-OLD"})
+    assert world.events == [] and world.sent == 0
 
 
 @pytest.mark.parametrize("text", ["201:ttl=1", "202:ttl=1"])

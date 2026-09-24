@@ -6,6 +6,7 @@
 상태를 먼저 확인하십시오."""
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from typing import Any, Literal, TypeVar, overload
 
 import httpx
@@ -274,13 +275,20 @@ from .session import KorailSessionClient
 T = TypeVar("T")
 
 
+def _hold_for_job(hold: ReservationHoldResponse, job_type: KorailReservationJobType) -> ReservationHoldResponse:
+    # 앱은 예약대기 홀드를 결제하지 않습니다. 근거는 ReservationHoldResponse.payable 참고.
+    if KorailReservationJobType(job_type) is KorailReservationJobType.STANDBY:
+        return replace(hold, payable=False)
+    return hold
+
+
 class KorailClient:
     """KORAIL 7.0.6의 조회·예약·결제 기능을 제공하는 비공식 클라이언트입니다.
 
     DynaPath 는 합성 기기 값으로 기본 활성화됩니다. disable_dynapath=True 면 필수 경로의 로그인은 전송 전에 거절됩니다. 서버 수용은 보장하지 않습니다. transport
     에 MockTransport 를 넣어 오프라인 시험할 수 있습니다.
 
-    NetFunnel 은 기본 활성화되며 적용 메서드는 KORAIL_NETFUNNEL_GATES 와 호출부를 따릅니다. 대기·차단 결과를 무시하지 않습니다. 상태 변경은 별도 확인 절차 없이
+    NetFunnel 은 기본 활성화되며 관문 이름은 KorailConfig.netfunnel_actions 설명을 따릅니다. 대기·차단 결과를 무시하지 않습니다. 상태 변경은 별도 확인 절차 없이
     전송됩니다.
 
     with 문은 지원하지 않습니다. close 는 연결 풀만 닫습니다. 서버 로그아웃은 logout, 로컬 상태만 폐기할 때는 clear_session 을 별도로 호출하십시오."""
@@ -293,9 +301,15 @@ class KorailClient:
     ) -> None:
         self.config = config or KorailConfig()
         self.http = KorailHttpClient(self.config, transport=transport)
-        self.netfunnel = (
-            KorailNetFunnelClient(self.config, transport=transport) if self.config.netfunnel_enabled else None
-        )
+        try:
+            self.netfunnel = (
+                KorailNetFunnelClient(self.config, transport=transport)
+                if self.config.netfunnel_enabled
+                else None
+            )
+        except BaseException:
+            self.http.close()
+            raise
         self.session = KorailSessionClient(self.http)
         self._station_names: dict[str, str] | None = None
 
@@ -327,7 +341,8 @@ class KorailClient:
         ``code``·``raw`` 가 붙은 KorailAuthError 입니다. 사전 조회(MobileService.cache·common.code.do)의 FAIL 은
         KorailAppError 하위 예외, 전송 실패는 KorailTransportError, JSON·봉투·암호화 파라미터 이상은 KorailProtocolError 로 그대로 올라옵니다.
         일반 실패 시 세션·쿠키를 비우지만, 웹 단계 예외는 current=None 인 채 pending 과 응답 쿠키를 보존합니다.
-        청구·예약 변경은 없습니다. 기존 실서버 로그인 확인: 2026-09-24(korail-api-status.html); 웹 단계의 실서버 확인은 별도입니다."""
+        청구·예약 변경은 없습니다. 기존 실서버 로그인 확인: 2026-09-24; 웹 단계의 실서버 확인은 별도입니다.
+        input_flag 를 생략하면 숫자만도 이메일도 아닌 ID(예: 하이픈이 든 전화번호)는 앱처럼 보내지 않고 KorailProtocolError 입니다."""
         return self.session.login(
             member_no,
             password,
@@ -348,7 +363,7 @@ class KorailClient:
     def logout(self) -> None:
         """로그인 상태이면 서버 로그아웃(login.Logout)을 보내고, 어느 경우든 finally 에서 로컬 세션·쿠키를 비웁니다. FAIL 봉투는 예외가 아니지만(FAIL/P058 은
         세션 만료) 전송 오류 등은 그대로 전파됩니다. 서버 세션 무효화까지 보장하지 않으며 연결 풀은 close 로 닫습니다.
-        청구·예약 변경은 없습니다. 기존 실서버 확인: 2026-09-24, 로그아웃 뒤 FAIL/P058(korail-api-status.html)."""
+        청구·예약 변경은 없습니다. 기존 실서버 확인: 2026-09-24, 로그아웃 뒤 FAIL/P058."""
         self.session.logout()
 
     def _run_read(self, operation: Callable[[], T]) -> T:
@@ -626,8 +641,8 @@ class KorailClient:
 
     def get_deposit_banks(self) -> DepositBankListResponse:
         """입금 가능한 은행의 코드와 이름 목록을 조회합니다. ``POST dlay.dptnBank.do`` (``NetworkApi.java:392-393`` —
-        ``postDptnBank(@Field("Device"), @Field("Version"), @Field("Key"))``; 이 라우트만 예외적으로 ``@FieldMap`` 이
-        아니라 개별 ``@Field`` 세 개입니다). 로그인 필요."""
+        ``postDptnBank(@Field("Device"), @Field("Version"), @Field("Key"))``; ``@FieldMap`` 이 아니라 개별
+        ``@Field`` 세 개이며 postCashRfn·postDecrypt 도 같은 방식입니다). 로그인 필요."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.dlay.dptnBank.do",
@@ -1079,7 +1094,7 @@ class KorailClient:
 
     def get_pbp_acceptance_specifications(
         self,
-        tickets: tuple[OriginalTicketReference, ...],
+        tickets: Sequence[OriginalTicketReference],
     ) -> PbpAcceptanceSpecificationResponse:
         """승차권 여러 장의 PBP 수락 내역을 여정·좌석 단위로 조회합니다."""
         self._require_session()
@@ -1091,7 +1106,7 @@ class KorailClient:
 
     def get_original_ticket_inquiry(
         self,
-        tickets: tuple[OriginalTicketReference, ...],
+        tickets: Sequence[OriginalTicketReference],
         *,
         ticket_count: int | None = None,
     ) -> OriginalTicketInquiryResponse:
@@ -1578,7 +1593,8 @@ class KorailClient:
 
         SEAT_DESIGNATED 는 승객별 좌석이 필요합니다. STANDBY 는 대기 가능한 행만 받으며, 성공한 대기 홀드는 confirm_standby_hold 로 알림 옵션을
         기록합니다. IRR000014 의 트리거 의미는 라이브 기록이고 앱 비교값은 보호돼 있습니다. MERGE_STANDING 은 병합 첫 홀드이며 후속 호출은 reserve_merge
-        입니다. 모든 변경 경로가 로그인을 요구합니다. 대기 예약에만 별도 회원 제한이 있다는 근거는 없습니다."""
+        입니다. STANDBY 홀드는 ``payable=False`` 라 pay_with_card 가 거절합니다. 모든 변경 경로가 로그인을 요구합니다. 대기 예약에만 별도 회원 제한이
+        있다는 근거는 없습니다."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_reservation_form(
@@ -1590,7 +1606,7 @@ class KorailClient:
             seats=seats,
             seat_attribute_code=seat_attribute_code,
         )
-        return self._queued(
+        hold = self._queued(
             "reserve",
             lambda: self._mutation(
                 route,
@@ -1598,6 +1614,7 @@ class KorailClient:
                 parser=parse_reservation_hold_response,
             ),
         )
+        return _hold_for_job(hold, job_type)
 
     def confirm_standby_hold(
         self,
@@ -1650,7 +1667,7 @@ class KorailClient:
             seats=seats,
             seat_attribute_codes=seat_attribute_codes,
         )
-        return self._queued(
+        hold = self._queued(
             "reserve",
             lambda: self._mutation(
                 route,
@@ -1658,6 +1675,7 @@ class KorailClient:
                 parser=parse_reservation_hold_response,
             ),
         )
+        return _hold_for_job(hold, job_type)
 
     def reserve_merge(
         self,
@@ -1888,7 +1906,9 @@ class KorailClient:
         PayViewModel.smali:11834-11850 입니다.
 
         2026-09-22: 무변경 요청은 ERR930202, 할인 변경 표본(hidDcntKndCd='131')은 SUCC/IRZ000008 과 ReservationOut 을 반환했고
-        12스칼라·여정 추가 필드도 파싱됐습니다. 3개 열차에서 재현된 기록입니다. 동일 PNR 재요청은 비교값에 따라 WRE800036 또는 성공으로 달랐습니다. 자동 재시도하지 마십시오.
+        12스칼라·여정 추가 필드도 파싱됐습니다. 3개 열차에서 재현된 기록입니다. 결제에는 원래 홀드가 아니라 이 메서드가 돌려준 홀드를 넘기십시오. 원래 홀드의
+        received_amount 는 재계산 전 금액입니다. 앱은 결제 화면에서만 재계산하므로 예약대기 PNR 에는 쓰지 마십시오.
+        동일 PNR 재요청은 비교값에 따라 WRE800036 또는 성공으로 달랐습니다. 자동 재시도하지 마십시오.
         자격 검증과 할인 반영이 어긋난 관측도 있으므로 자격 없는 할인을 신청하는 용도로 사용하지 마십시오. 할인 코드 반영만으로 금액 변경을 보장하지 않습니다. 토요일 두 표본은
         WRR664296 과 금액 유지, 평일 표본은 28,600→20,000원(할인액 8,600원)이었습니다. 이는 표본 기록이지 일반 보장이 아닙니다."""
         self._require_session("price recalculation requires")
