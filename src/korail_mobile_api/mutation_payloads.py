@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from datetime import datetime, timedelta, timezone
 from typing import TypeVar
 
 from .config import KorailConfig
@@ -52,6 +53,13 @@ from .read_models import RefundCommissionResponse, TrainScheduleItem
 _DATE_RE = re.compile(r"[0-9]{8}")
 _TIME_RE = re.compile(r"[0-9]{6}")
 _DIGITS_RE = re.compile(r"[0-9]+")
+_KST = timezone(timedelta(hours=9))
+
+
+def _current_year_month() -> int:
+    """앱의 DateTimeBuilder.now() 처럼 현재 시각의 yyyyMM 입니다. 한국 시간 기준입니다."""
+    now = datetime.now(_KST)
+    return now.year * 100 + now.month
 
 
 def _required_digits(value: str | None, *, field: str) -> str:
@@ -936,6 +944,14 @@ def build_card_payment_form(
         or _DIGITS_RE.fullmatch(card.card_number) is None
     ):
         raise KorailProtocolError("KORAIL payment card number must be digits")
+    # 유효기간: 앱은 월 1~12 와 만료 여부(현재 yyyyMM <= 카드 yyyyMM)를 결제 전에 검사합니다(PayViewModel.java:16211-16224). 이
+    # 라이브러리의 입력은 라이브 결제에서 쓴 YYMM 입니다.
+    expire = card.card_expire
+    if not isinstance(expire, str) or len(expire) != 4 or _DIGITS_RE.fullmatch(expire) is None:
+        raise KorailProtocolError("KORAIL payment card_expire must be YYMM digits")
+    month = int(expire[2:])
+    if not 1 <= month <= 12 or _current_year_month() > (2000 + int(expire[:2])) * 100 + month:
+        raise KorailProtocolError("KORAIL payment card has expired or has an invalid month")
     # PayViewModel.java:16233-16243; smali:53727-53863 (국내 직접입력 카드).
     if not isinstance(card.card_password, str) or len(card.card_password) != 2:
         raise KorailProtocolError("KORAIL payment requires a two-character card password")
