@@ -70,7 +70,8 @@ class KorailAuthError(KorailApiError):
 class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
     """P058 을 세션 만료로 분류합니다. KorailAppError 가 아니라 KorailAuthError 의 하위입니다.
 
-    ``strResult`` 가 ``FAIL`` 일 때만입니다 — 앱의 ``CommonOut.checkRequiredLogin()`` 이 ``commonFail()`` 뒤에
+    ``strResult`` 가 ``FAIL`` 이거나 CommonOut 봉투에서 키가 누락된 때입니다(CommonOut.java:361).
+    앱의 ``CommonOut.checkRequiredLogin()`` 이 ``commonFail()`` 뒤에
     코드를 비교합니다(``CommonOut.java:426-438``). 비교하는 4바이트 리터럴은 보호돼 ``P058`` 과 같은지는 길이만
     맞습니다. 메시지 근거: assets/error_json.json:334 의 로그인 화면 이동 안내.
     """
@@ -159,8 +160,8 @@ class KorailNoResultsError(KorailAppError):
 class KorailNoDirectTrainError(KorailNoResultsError):
     """직통 결과 없음(WRD000061). 환승 조회 가능성이지 환승 결과의 존재 보장은 아닙니다.
 
-    앱의 환승 필터 전환: TrainScheduleViewModel.java:3216-3219,11051-11079; 요청 필드: TrainScheduleIn.java:95. 특정
-    오류코드 분기 근거는 TrainScheduleViewModel.smali:35513-35566 에 의존하며 jadx 만으로는 확정하지 않습니다.
+    앱의 환승 필터 전환: TrainScheduleViewModel.java:3216-3219,11051-11079; 요청 필드: TrainScheduleIn.java:95.
+    TrainScheduleViewModel.smali:35514-35548 의 비교 리터럴도 보호돼 있어 WRD000061 배정까지 확정하지는 못합니다.
     """
 
 
@@ -174,12 +175,12 @@ class KorailSoldOutError(KorailAppError):
 class KorailSeatUnavailableError(KorailAppError):
     """지정 좌석 이용 불가. 다른 좌석의 예약 가능성은 별도입니다.
 
-    메시지 근거: assets/error_json.json:4340(WRI411345),2601(ERR911081). WRT800176 은 7.0.6 근거가 미확인인 분류값입니다.
+    메시지 근거: assets/error_json.json:4340(WRI411345). WRT800176 은 7.0.6 근거가 미확인인 분류값입니다.
     """
 
 
 class KorailReservationRefusedError(KorailAppError):
-    """중복 예약·구매 한도 등의 예약 거절. 앱의 화면 이동은 미확인입니다.
+    """중복 예약·구매 한도·예약 가능 시간 경과 등의 거절. 앱의 화면 이동은 미확인입니다.
 
     메시지 근거: assets/error_json.json:12465(WRR800029),2642(ERR911531), 2599(ERR911051),2633(ERR911501).
     """
@@ -316,10 +317,9 @@ NO_RESULT_CODES = frozenset({
     "WRT100192", "WRT200125", "WRT300003", "WRT800091",
 })
 
-#: 직통 없음 → 환승 검색. 7.0.6 확인
-#: (``TrainScheduleViewModel.smali:35513-35521``, ``h_msg_cd`` 를 이 코드와
-#: 비교; ``error_json.json:4051`` 의 "직통열차는 없지만, 환승으로 조회
-#: 가능합니다" 와 대응).
+#: 직통 없음 → 환승 검색. 메시지 근거: error_json.json:4051.
+#: TrainScheduleViewModel.smali:35514-35548 의 h_msg_cd 비교는 보호된 9바이트
+#: 리터럴이므로 이 코드와의 동일성은 미확인입니다.
 NO_DIRECT_TRAIN_CODE = "WRD000061"
 
 #: 재고 소진. APK 확인. srtgo 의 ``IRT010110`` 은
@@ -334,6 +334,8 @@ SOLD_OUT_CODES = frozenset({
     "ERR211161", "IRT010110", "WRT300001", "ERR800048",
     "IRT010510", "IRT011010", "IRT011210", "IRT011310", "WRG500113",
     "WRG500114",
+    # TicketReservationKt.java:103,135; smali 의 공통 SOLD_OUT 분기.
+    "ERI411321", "EAZ000038",
 })
 
 #: 좌석 불가. 열차는 아직 예약 가능할 수 있음.
@@ -341,7 +343,7 @@ SOLD_OUT_CODES = frozenset({
 #: ``ERR521128``(복구좌석), ``WRS200019``/``WRS600242``(복구할 좌석),
 #: ``WRS800009``(속성이 변경된 좌석), ``WRS900309``(우대석 남길 호차/좌석).
 SEAT_UNAVAILABLE_CODES = frozenset({
-    "WRI411345", "ERR911081", "WRT800176",
+    "WRI411345", "WRT800176",
     "ERR521128", "WRS200019", "WRS600242", "WRS800009", "WRS900309",
 })
 
@@ -363,6 +365,9 @@ RESERVATION_REFUSED_CODES = frozenset({
     "ERR299935", "ERR299936", "ERR299937", "ERR299939", "ERR299941",
     "ERR299992", "ERR299993", "ERR521143", "ERR521158", "ERR521185",
     "ERR800052", "ERR911421", "ERR911528", "WRR664254", "WRR800045",
+    # TicketReservationKt.java:95-123: LATE/EXIST. ERR911081 은 좌석 불가가 아닌 LATE.
+    "ERR911081", "ERR800056", "S-ERR911411", "S021", "WRR664325",
+    "WRR700001", "WRX000007",
 })
 
 #: 필드 검증 거부. ``WRG200018``/``WRT100002``/``WRT100124`` 는 실서버 관측에
@@ -427,7 +432,7 @@ NOT_ENTITLED_CODES = frozenset({
     "WRC000412", "WRC000446", "WRR664211",
 })
 
-#: 백엔드 불가. 코드 리터럴은 AppSuit 보호로 jadx/smali 0건. 근거는 평문 자산
+#: 서비스/연결 불가. 코드 리터럴은 AppSuit 보호로 jadx/smali 0건. 근거는 평문 자산
 #: 사전뿐이다 — ``analysis/apktool/assets/error_json.json:66``
 #: "…저장된 승차권화면으로 이동하시겠습니까?".
 SERVICE_UNAVAILABLE_CODE = "SEMGTK"

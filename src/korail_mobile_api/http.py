@@ -55,6 +55,7 @@ def parse_base_response(
 ) -> BaseKorailResponse:
     """봉투 타입 검사 후 FAIL/P058 을 세션 만료로 처리합니다.
 
+    CommonOut 의 strResult 누락은 실패 기본값입니다(CommonOut.java:361,455-463).
     앱의 CommonOut.checkRequiredLogin() 은 commonFail()(strResult 실패)이 참일 때만 hMsgCd 를 보호된 4바이트
     리터럴과 비교합니다(CommonOut.java:426-438). 그래서 성공 봉투에 붙은 P058 은 만료가 아닙니다.
 
@@ -66,16 +67,17 @@ def parse_base_response(
         raise KorailProtocolError("KORAIL response must be a JSON object")
     _reject_non_string_envelope_fields(data)
     response = BaseKorailResponse.from_raw(data)
-    if response.str_result == "FAIL" and response.h_msg_cd == SESSION_EXPIRED_CODE:
+    failed = response.str_result == "FAIL" or (
+        require_result and "strResult" not in data
+    )
+    if failed and response.h_msg_cd == SESSION_EXPIRED_CODE:
         raise KorailSessionExpiredError(
             response.h_msg_cd,
             response.h_msg_txt,
             raw=data,
         )
     if raise_on_fail and (
-        response.str_result == "FAIL"
-        or response.h_msg_cd == "WRC000288"
-        or (require_result and "strResult" not in data)
+        failed or response.h_msg_cd == "WRC000288"
     ):
         raise classify_app_error(
             response.h_msg_cd,
@@ -246,7 +248,7 @@ class KorailHttpClient:
                 token = None
         except Exception as exc:
             raise KorailProtocolError("KORAIL DynaPath token provider failed") from exc
-        if not token:
+        if token is None:
             return {}
         return {dynapath.header_name: token}
 
@@ -271,17 +273,12 @@ class KorailHttpClient:
             payload = response.json()
         except (json.JSONDecodeError, ValueError) as exc:
             raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
-        if not require_envelope:
-            if not isinstance(payload, dict):
-                raise KorailProtocolError("KORAIL response must be a JSON object")
-            if not all(name in payload for name in ("h_msg_cd", "h_msg_txt", "strResult")):
-                # 부분 봉투도 보존합니다. 2026-09-22 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환. raw 만 채우면
-                # 존재하는 strResult 를 잃으므로 from_raw 를 사용합니다.
-                return BaseKorailResponse.from_raw(payload)
+        # 2026-09-22 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다.
+        # 봉투 누락 허용과 존재하는 FAIL/P058 판정은 별개이며 raw 는 그대로 보존합니다.
         return parse_base_response(
             payload,
             raise_on_fail=raise_on_fail,
-            require_result=path not in _NON_COMMON_OUT_READ_PATHS,
+            require_result=require_envelope and path not in _NON_COMMON_OUT_READ_PATHS,
         )
 
     def post_form(

@@ -22,7 +22,8 @@ from collections.abc import Callable
 from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 from .crypto import transform_login_password
 from .errors import (
-    KorailAppError,
+    KorailAppUpdateRequiredError,
+    KorailServiceUnavailableError,
     KorailAuthContinuationRequired,
     KorailAuthError,
     KorailProtocolError,
@@ -39,7 +40,7 @@ KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
 #: 는 ``hMsgCd.hashCode()`` 로 분기하므로 보호된 리터럴 대신 case 값(-699977554, -699974646)을
 #: ``error_json.json`` 코드의 Java hashCode 와 맞춰 복원했습니다. 다른 실패 코드(WRC000390 잠김,
 #: WRC000421/WRC000450 미인증, WRR000101/S034 정보 오류, S135 간편로그인 미연결, WRT200320 등)는 앱이
-#: ``h_msg_txt`` 를 안내로 띄울 뿐이라 :class:`~korail_mobile_api.errors.KorailAuthError` 입니다.
+#: 잠김·미인증·미연결 등의 안내로 처리하므로 :class:`~korail_mobile_api.errors.KorailAuthError` 입니다.
 KORAIL_LOGIN_CONTINUATION_CODES = frozenset({"WRC000116", "WRC000420"})
 KORAIL_LOGIN_TYPE_MEMBER_NO = "2"
 KORAIL_LOGIN_TYPE_PHONE = "4"
@@ -244,7 +245,7 @@ class KorailSessionClient:
                 )
             # 서비스 점검·앱 업데이트처럼 이미 따로 분류된 코드는 그 예외로 올립니다.
             error = classify_app_error(code, response.h_msg_txt, raw=response.raw)
-            if type(error) is not KorailAppError:
+            if isinstance(error, (KorailServiceUnavailableError, KorailAppUpdateRequiredError)):
                 raise error
             raise KorailAuthError(
                 f"{response.h_msg_cd or 'UNKNOWN'}: "
@@ -254,7 +255,11 @@ class KorailSessionClient:
             )
         jsessionid = self.http.cookies.get("JSESSIONID")
         if not jsessionid:
-            raise KorailAuthError("KORAIL login did not return a usable session")
+            raise KorailAuthError(
+                "KORAIL login did not return a usable session",
+                code=response.h_msg_cd,
+                raw=response.raw,
+            )
         member_card_no = str(
             response.raw.get("mbCrdNo")
             or response.raw.get("strMbCrdNo")
