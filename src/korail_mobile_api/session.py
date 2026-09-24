@@ -24,7 +24,6 @@ from .errors import (
     KorailServiceUnavailableError,
     KorailAuthContinuationRequired,
     KorailAuthError,
-    KorailProtocolError,
     classify_app_error,
 )
 from .http import KorailHttpClient
@@ -138,36 +137,6 @@ class KorailSessionClient:
                 etr_path=etr_path,
             )
         )
-
-    def login_social(
-        self,
-        cust_id: str,
-        *,
-        input_flag: str,
-        check_valid_pw: str,
-    ) -> KorailSession:
-        """외부 제공자 인증 뒤 custId·input_flag 로 로그인합니다.
-
-        비밀번호 키 조회나 제공자 토큰 교환은 하지 않습니다. 앱의 checkValidPw 값은 보호돼 있으므로 호출자가 알고 있는 값을 넘겨야 합니다."""
-        def attempt() -> KorailSession:
-            # 빈 자격증명 전송을 막는 라이브러리 검사입니다. _run_login 안에서 검사해야 잘못된 입력도 이전 세션을 남기지 않습니다.
-            if not cust_id or not input_flag or not check_valid_pw:
-                raise KorailProtocolError(
-                    "KORAIL social login requires cust_id, input_flag, and "
-                    "an explicit check_valid_pw value"
-                )
-            return self._finish_login(
-                self._post_login(
-                    {
-                        "txtInputFlg": input_flag,
-                        "custId": cust_id,
-                        "checkValidPw": check_valid_pw,
-                    }
-                ),
-                login_id="",
-            )
-
-        return self._run_login(attempt)
 
     def _run_login(self, attempt: Callable[[], KorailSession]) -> KorailSession:
         """시작 시 로컬 세션을 비웁니다. 후속 인증만 pending 에 남기고 다른 실패는 세션을 남기지 않습니다."""

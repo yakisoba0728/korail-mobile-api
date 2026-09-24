@@ -340,21 +340,6 @@ class KorailClient:
             etr_path=etr_path,
         )
 
-    def login_social(
-        self,
-        cust_id: str,
-        *,
-        input_flag: str,
-        check_valid_pw: str,
-    ) -> KorailSession:
-        """외부 제공자 인증 후 고객번호 로그인 분기를 사용합니다. input_flag 와 보호된 checkValidPw 값은 호출자가 제공해야 합니다. 제공자 SDK 토큰 교환이나 자격증명
-        파일 저장은 수행하지 않습니다."""
-        return self.session.login_social(
-            cust_id,
-            input_flag=input_flag,
-            check_valid_pw=check_valid_pw,
-        )
-
     def clear_session(self) -> None:
         """서버에 알리지 않고 로컬 로그인 상태만 버립니다.
 
@@ -719,7 +704,8 @@ class KorailClient:
         self,
         card_no: str,
     ) -> DiscountCardUsageListResponse:
-        """할인카드(N카드) 한 장을 이미 사용한 여행 내역을 조회합니다."""
+        """할인카드(N카드) 한 장을 이미 사용한 여행 내역을 조회합니다. 검증 못 함: N카드가 없는 계정이라 성공 응답을 본 적이 없습니다(2026-09-24 ERR000100 조회 자료
+        없음)."""
         self._require_session()
         query = build_discount_card_usage_query(card_no)
         return self._post_read(
@@ -732,7 +718,8 @@ class KorailClient:
         self,
         request: DiscountCardScheduleRequest,
     ) -> DiscountCardScheduleResponse:
-        """할인카드로 아직 탈 수 있는 열차를 한 구간에 대해 조회합니다."""
+        """할인카드로 아직 탈 수 있는 열차를 한 구간에 대해 조회합니다. 검증 못 함: N카드가 없는 계정이라 성공 응답을 본 적이 없습니다(2026-09-24 WRR000100 사용횟수
+        입력값 오류)."""
         self._require_session()
         query = build_discount_card_schedule_query(request)
         return self._post_read(
@@ -1859,7 +1846,7 @@ class KorailClient:
         request: DiscountCardPurchaseRequest,
     ) -> DiscountCardPurchaseResponse:
         """N카드 미결제 구매를 만듭니다. 경로 이름의 Info 가 조회를 뜻하지 않습니다. NetworkApi.java:336-337; NCardInfoOut.java:32-33 의 일괄결제
-        대상과 금액은 PayViewModel.java:6628 의 결제 입력으로 이어집니다."""
+        대상과 금액은 PayViewModel.java:6628 의 결제 입력으로 이어집니다. 검증 못 함: 실제 N카드 구매(결제)로 이어지므로 실서버에서 시도하지 않았습니다."""
         self._require_session("discount card purchase requires")
         route = "/classes/com.korail.mobile.research.dcntCrdInfo.do"
         form = build_discount_card_purchase_form(self.config, request)
@@ -1877,7 +1864,7 @@ class KorailClient:
 
         ``POST reservation.dcntCrdExtn.do`` (7.0.6 ``NetworkApi``).
 
-        ``post_mutation_form`` 으로 전송합니다. 로그인 상태를 요구합니다."""
+        ``post_mutation_form`` 으로 전송합니다. 로그인 상태를 요구합니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
         self._require_session("discount card extension requires")
         route = "/classes/com.korail.mobile.reservation.dcntCrdExtn.do"
         query = build_discount_card_extension_query(self.config, ticket)
@@ -1890,7 +1877,7 @@ class KorailClient:
         card_no: str,
     ) -> ReservationHoldResponse:
         """N카드로 좌석을 홀드합니다. 일반 예약 라우트(NetworkApi.java:752-753)에 승객별 txtCardNo_ 를
-        보냅니다(TicketReservationInPassengerInfo.java:55,105)."""
+        보냅니다(TicketReservationInPassengerInfo.java:55,105). 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_discount_card_reservation_form(

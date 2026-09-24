@@ -39,3 +39,23 @@
 지역 여행상품·테마열차 같은 KORAIL 여행상품은 KORAIL 웹(`/ebizmk/prd/rvStep1.do` → `rvStep2.do` → `reservation.do`)에서만 예약할 수 있고, 앱에는 예약을 만드는 API가 없습니다. 웹의 결제 버튼은 앱으로 넘기는 링크(`korailtalk://payment`)이고, 앱은 통합결제(`pay.intgStl.do`)로 결제하는데 그 폼의 `stlPrsJobId`가 앱에서 보호돼 있습니다.
 
 그래서 라이브러리는 이미 만들어진 여행상품 예약의 조회(`get_product_reservations`, `get_product_detail`)와 취소(`cancel_product_reservation`)만 지원합니다. 2026-09-24에 웹에서 만든 결제 전 예약으로 조회와 취소(수수료 0원)를 확인했습니다. 결제된 여행상품의 환불은 결제를 할 수 없어 확인하지 못했습니다.
+
+### 간편(소셜) 로그인
+
+앱의 카카오·네이버·구글 로그인은 각 제공자 SDK로 먼저 인증한 뒤, 그 결과로 받은 고객 식별값을 KORAIL 로그인에 보냅니다. 제공자 인증은 기기와 앱에 묶인 외부 SDK 흐름이라 라이브러리가 대신할 수 없고, 함께 보내는 `checkValidPw` 값도 앱에서 보호돼 있습니다. 소셜 계정으로 실서버에서 확인한 적도 없어서, `login_social`은 공개 API에서 빼고 기록용으로 `src/korail_mobile_api/_social_login_unsupported.py`에 남겨 두었습니다. 로그인은 회원번호·전화번호·이메일과 비밀번호(`login`)로 합니다.
+
+## 지원하지만 검증하지 못한 기능
+
+### N카드(할인카드)
+
+N카드 관련 메서드는 앱 코드와 같게 만들어 두었지만, N카드가 없는 계정이라 성공 응답을 실서버에서 확인하지 못했습니다.
+
+| 메서드 | 역할 | 실서버 |
+|---|---|---|
+| `get_discount_card_usage_history` | N카드 사용 내역 | 서버 응답은 받음(`ERR000100` 조회 자료 없음) |
+| `get_discount_card_schedule` | N카드로 탈 수 있는 열차 | 서버 응답은 받음(`WRR000100` 입력값 오류) |
+| `register_discount_card` | N카드 구매(결제 전 생성) | 실제 구매로 이어져 시도하지 않음 |
+| `extend_discount_card` | N카드 기간 연장 | 확인 못 함 |
+| `reserve_with_discount_card` | N카드로 좌석 홀드 | 확인 못 함 |
+
+N카드 결제는 여행상품과 같은 통합결제(`pay.intgStl.do`)라 역시 보호 상수 `stlPrsJobId`에 막혀 있습니다.
