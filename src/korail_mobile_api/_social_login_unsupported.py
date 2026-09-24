@@ -2,12 +2,10 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""사용하지 않는 간편(소셜) 로그인 — 기록용입니다. 패키지 어디에서도 import 하지 않고 KorailClient 에도 없습니다.
+"""공개하지 않는 소셜 로그인 호출을 기록합니다. 패키지 내부에서 가져오지 않으며 KorailClient에도 노출하지 않습니다.
 
-직접 지원하지 않는 이유: 앱은 카카오·네이버·구글 SDK(com.kakao.sdk, com.navercorp.nid, GoogleLoginViewModel)로 제공자 인증을 먼저
-끝내고, 그 결과로 얻은 고객 식별값(custId)을 login.Login 에 보냅니다. 제공자 인증은 기기와 앱 서명에 묶인 외부 SDK 흐름이라 이 라이브러리가
-대신할 수 없고, 함께 보내는 checkValidPw 값도 앱에서 보호돼 있습니다. 소셜 계정으로 실서버에서 확인한 적도 없어 공개 API 에서
-뺐습니다(2026-09-24). 아래 함수는 빠지기 전 KorailSessionClient.login_social 과 같은 내용입니다."""
+앱은 카카오·네이버·구글 SDK(com.kakao.sdk, com.navercorp.nid, GoogleLoginViewModel)로 인증한 뒤 custId를 login.Login에 보냅니다. 이
+라이브러리는 기기·앱 서명에 연결된 제공자 인증을 구현하지 않으며 checkValidPw도 보호돼 있습니다. 2026-09-24 기준 소셜 계정으로 실서버 검증 못 함이므로 지원하지 않습니다."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

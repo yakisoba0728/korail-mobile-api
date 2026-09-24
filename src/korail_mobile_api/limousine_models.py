@@ -2,10 +2,9 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""리무진 운행·좌석 모델. Query 의 문자열 형식은 서버에 맡기며 좌석 Query 는 인원·is_arrow 의 타입만 검사합니다.
-
-2026-09-16 라이브: 광명→인천공항T1 스케줄 42편. 2026-09-22 동일 조건 3쌍에서는 isArrow=true 가 S003, false 가 성공 봉투였습니다. 이 표본으로 모든 조건의
-성공·좌석 필드 의미·보호된 앱 값의 평문을 확정하지 않습니다. layout_type 정수 허용은 같은 DTO 를 쓰는 일반 좌석 재고의 2026-09-21 관측에 근거합니다."""
+"""공항버스 운행·좌석 조회 모델을 제공합니다. 문자열 형식과 인원 범위는 서버에 맡기며 좌석 조회 입력의 passenger_count는 int, is_arrow는 bool인지 확인합니다.
+2026-09-16: 광명→인천공항T1 스케줄 42편을 확인했습니다. 2026-09-22 동일 조건 3쌍은 isArrow=true에서 S003, false에서 성공 봉투를 반환했습니다. 모든
+조건의 성공·좌석 필드 의미·보호된 값의 평문을 보장하지 않습니다. layout_type 정수 허용은 같은 DTO를 쓰는 일반 좌석 재고의 2026-09-21 관측에 근거합니다."""
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -18,7 +17,7 @@ from .models import BaseKorailResponse, SeatWindow
 
 @dataclass(frozen=True)
 class LimousineScheduleQuery:
-    """``lmu.scdlQry.do`` 운행 스케줄 조회의 입력."""
+    """공항버스 운행 스케줄 조회 조건을 구성합니다."""
     departure_date: str
     departure_station_code: str
     arrival_station_code: str
@@ -32,7 +31,7 @@ class LimousineScheduleQuery:
 
 @dataclass(frozen=True)
 class LimousineSeatInventoryQuery:
-    """``lms.TResidualSeatsResearch.do`` 좌석 재고 조회의 입력."""
+    """공항버스 한 호차의 좌석 조회 조건을 구성합니다."""
     train_class_code: str
     service_code: str
     run_date: str
@@ -51,7 +50,6 @@ class LimousineSeatInventoryQuery:
     is_arrow: bool = False
 
     def __post_init__(self) -> None:
-        # 인원 범위는 앱 DTO 에 검사가 없어 서버에 맡깁니다. 두 값은 문자열로 바꿔 보내므로 타입만 확인합니다.
         if type(self.passenger_count) is not int:
             raise KorailProtocolError("passenger_count must be an integer")
         if type(self.is_arrow) is not bool:
@@ -60,7 +58,7 @@ class LimousineSeatInventoryQuery:
 
 @dataclass(frozen=True)
 class LimousineSchedule:
-    """운행 스케줄 조회 결과의 한 편."""
+    """조회된 공항버스 한 편의 구간·운행·운임 정보를 담습니다."""
     arrival_date: str | None = None
     arrival_station_code: str | None = None
     arrival_run_order: str | None = None
@@ -83,13 +81,13 @@ class LimousineSchedule:
     yms_application_flag: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
     #: rcvdPrc 운임 문자열(ScdlQryOutTrain.java:40,389). 2026-09-22 라이브 359행 모두 14자리 영 채움 문자열이었고 광명→인천공항T1 20260925 의
-    #: 42행은 16,000원을 표시했습니다. 영 채움과 raw 의 위치 인자 호환을 보존합니다.
+    #: 42행은 16,000원을 표시했습니다. 영 채움을 보존합니다.
     received_price: str | None = None
 
 
 @dataclass(frozen=True)
 class LimousineScheduleResponse(BaseKorailResponse):
-    """``lmu.scdlQry.do`` 의 응답."""
+    """공항버스 운행 스케줄 한 페이지를 담습니다."""
     following_page_extension: str | None = None
     long_short_division_code: str | None = None
     schedules: tuple[LimousineSchedule, ...] = ()
@@ -97,7 +95,7 @@ class LimousineScheduleResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class LimousineSeat:
-    """좌석표의 좌석 한 자리."""
+    """공항버스 좌석표 한 자리의 식별자와 점유 상태를 담습니다."""
     direction_attribute_code: str | None = None
     other_attribute_code: str | None = None
     integrated_message: str | None = None
@@ -113,16 +111,13 @@ class LimousineSeat:
 
 @dataclass(frozen=True)
 class LimousineSeatInventoryResponse(BaseKorailResponse):
-    """한 호차 좌석표. 일반 좌석 재고와 TResidualSeatsResearchOut 을 공유합니다 (NetworkApi.java:271,741). 배치·배너·창측 위치의 선언은
-    TResidualSeatsResearchOut.java:29,34-35,114,134,138 참고."""
+    """공항버스 한 호차의 좌석표와 배치 정보를 담습니다. 일반 좌석 재고와 TResidualSeatsResearchOut 을 공유합니다 (NetworkApi.java:271,741).
+    배치·배너·창측 위치의 선언은 TResidualSeatsResearchOut.java:29,34-35,114,134,138 참고."""
     car_type_code: str | None = None
     car_no: str | None = None
     seat_arrangement_code: str | None = None
     up_down_division_code: str | None = None
-    #: layout_type 은 문자열·정수를 문자열로 정규화합니다. 일반 좌석 재고에 근거한 관측 한계는 모듈 설명 참고.
     layout_type: str | None = None
-    #: VR 배너 URL. repr 에 표시됩니다.
     vr_banner_url: str | None = None
-    #: 일반 좌석 재고와 같은 {st_loc_rt, cls_loc_rt} 구조이므로 SeatWindow 를 재사용합니다.
     windows: tuple[SeatWindow, ...] = ()
     seats: tuple[LimousineSeat, ...] = ()

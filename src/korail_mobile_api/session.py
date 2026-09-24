@@ -2,16 +2,10 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""로그인·로그아웃과 세션 상태.
-
-이 라이브러리는 봉투 검사 뒤 IRZ000001/S200 허용목록과 JSESSIONID 를 확인합니다. 7.0.6 은 LoginViewModel.java:1216 에서
-LoginOut.isSuccess() 를 호출하는데, 이는 CommonOut 것이 아니라 재정의된 것(LoginOut.java:1161-1180)으로 hMsgCd 를 보호된 상수와 비교합니다. 상수가
-복원되지 않아 두 코드가 앱과 같은지는 미확인이며 코드는 실서버 관측에서 왔습니다. assets/error_json.json 의 S200 문구는 운행중지 안내지만 로그인 성공 처리에도 운행중지 분기가
-있어(LoginViewModel.java:1307-1322) 무관하다고 볼 수도 없습니다.
-
-로그인 응답은 앱처럼 ``FAIL`` 이어도 HTTP 계층에서 예외로 바꾸지 않고 :meth:`KorailSessionClient._finish_login` 이 판정합니다(앱:
-NetworkService.java:6916-6919 가 재로그인 요구·서비스 오류만 따로 떼고 나머지 LoginOut 을 화면에 넘김). 단 FAIL/P058 은 HTTP 계층에서 세션 만료
-예외입니다. 성공은 앱의 LoginOut.isSuccess() 처럼 ``strResult`` 가 아니라 코드가 허용목록에 있을 때이고, 여기에 JSESSIONID 가 있어야 합니다."""
+"""로그인·로그아웃과 로컬 세션 상태를 관리합니다. 로그인은 봉투 검사 후 IRZ000001/S200과 JSESSIONID를 확인합니다. 앱도 LoginOut.isSuccess()에서 코드로
+판정하지만 비교 상수는 보호돼 있어 코드 대응은 정적으로 검증하지 못했습니다(LoginViewModel.java:1216; LoginOut.java:1161-1180). 두 코드는 실서버
+관측값입니다. FAIL도 _finish_login에서 판정하되 FAIL/P058은 HTTP 계층에서 세션 만료 예외가 됩니다. 앱도 재로그인·서비스 오류 외의 LoginOut은 화면에서
+처리합니다(NetworkService.java:6916-6919). 앱의 성공 후 코드별 안내 분기는 LoginViewModel.java:1307-1322를 따르며 비교 리터럴은 보호돼 있습니다."""
 from __future__ import annotations
 
 import time
@@ -32,18 +26,16 @@ from .payloads import build_common_code_form
 
 
 KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
-#: 로그인 실패 가운데 앱이 ``strRedirectUrl`` 웹 화면으로 넘기는 두 코드 — 휴면 해제(``WRC000116``)와 비밀번호 변경(``WRC000420``).
-#: LoginViewModel.processLoginWithoutSuccess(``LoginViewModel.java:1390-1520``) 는 ``hMsgCd.hashCode()`` 로 분기하므로
-#: 보호된 리터럴 대신 case 값(-699977554, -699974646)을 ``error_json.json`` 코드의 Java hashCode 와 맞춰 복원했습니다. 다른 실패
-#: 코드(WRC000390 잠김, WRC000421/WRC000450 미인증, WRR000101/S034 정보 오류, S135 간편로그인 미연결, WRT200320 등)는 앱이
-#: 잠김·미인증·미연결 등의 안내로 처리하므로 :class:`~korail_mobile_api.errors.KorailAuthError` 입니다.
+#: 로그인 후 웹 조치가 필요한 코드는 휴면 해제 WRC000116과 비밀번호 변경 WRC000420입니다. LoginViewModel.java:1390-1520의 hashCode 분기
+#: -699977554·-699974646은 error_json.json의 해당 코드와 일치합니다. 다른 거절은 앱 오류 분류 또는 KorailAuthError로 처리하며 웹 조치를 자동으로 이어
+#: 가지 않습니다.
 KORAIL_LOGIN_CONTINUATION_CODES = frozenset({"WRC000116", "WRC000420"})
 KORAIL_LOGIN_TYPE_MEMBER_NO = "2"
 KORAIL_LOGIN_TYPE_PHONE = "4"
 KORAIL_LOGIN_TYPE_EMAIL = "5"
 
 def infer_login_input_flag(login_id: str) -> str:
-    """로그인 입력 종류: 10자리 숫자=2, 11자리 숫자=4, 이메일=5.
+    """회원번호·전화번호·이메일 형식으로 로그인 입력 종류를 선택합니다.
 
     앱 분기 근거: LoginViewModel.java:1850-1876. 앱의 보호된 전화번호 검사는 재현하지 않습니다. 다른 숫자 길이는 앱의 무효 처리와 달리 회원번호로 분류합니다(미확인
     폴백). 앱은 이메일에 isValidEmail 과 7자 이상도 요구하지만 그 판정은 서버에 맡깁니다."""
@@ -56,8 +48,8 @@ def infer_login_input_flag(login_id: str) -> str:
 
 
 def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
-    """CommonCodeOut.java:267 의 최상위 app.login.cphd 객체를 읽습니다(없으면 빈 dict). 소비부: LoginRepositoryImpl.java:918-936.
-    2026-09-24 라이브: idx·key·pwdAESCphd 는 이 객체 안에만 문자열로 있었고 최상위에는 없었습니다."""
+    """최상위 app.login.cphd 객체를 읽고 없으면 빈 사전을 반환합니다. 앱 근거: CommonCodeOut.java:267. 소비부:
+    LoginRepositoryImpl.java:918-936. 2026-09-24 라이브: idx·key·pwdAESCphd 는 이 객체 안에만 문자열로 있었고 최상위에는 없었습니다."""
     value = raw.get("app.login.cphd")
     return value if isinstance(value, dict) else {}
 
@@ -67,7 +59,7 @@ def _text(value: object) -> str:
 
 
 class KorailSessionClient:
-    """로그인 왕복과 세션 상태.
+    """로그인·로그아웃 요청과 로컬 세션 상태를 관리합니다.
 
     :attr:`current` = 살아 있는 세션 또는 ``None``. :attr:`pending` = 웹 단계(휴면 해제·비밀번호 변경)가 필요한 예외."""
 
@@ -77,7 +69,7 @@ class KorailSessionClient:
         self.pending: KorailAuthContinuationRequired | None = None
 
     def check_service(self) -> None:
-        """``MobileService.cache`` 읽기 — 서버 점검 중이면 여기서 멈춤."""
+        """예매 서비스 상태를 조회하고 운영 중이 아니면 오류를 냅니다."""
         self.http.post_form(
             "/file/CACHE/MobileService.cache",
             {"timeStamp": int(time.time() * 1000)},
@@ -119,7 +111,7 @@ class KorailSessionClient:
         cust_id: str | None = None,
         etr_path: str | None = None,
     ) -> KorailSession:
-        """회원 자격증명 로그인. 라우트: NetworkApi.java:458-460.
+        """회원 자격증명으로 로그인합니다. 라우트: NetworkApi.java:458-460.
 
         폼 순서는 라이브러리의 선택입니다. 앱 descriptor 순서는 LoginIn$$serializer.java:33-43, 속성 대응은 LoginIn.java:57-76 에 있으며
         lang·txtInputFlg·custId 위치가 다릅니다. 거절 코드별 처리는 :meth:`_finish_login` 과
@@ -163,10 +155,9 @@ class KorailSessionClient:
         crypto_info = self.get_login_crypto_info()
         transformed = transform_login_password(password, crypto_info)
         resolved_input_flag = input_flag or infer_login_input_flag(member_no)
-        # 앱과 다른 폼 순서는 login docstring 참고. LoginIn.java:29-35 의 속성명은 읽히지만 descriptor
-        # 이름(LoginIn$$serializer.java:33-43)은 보호돼 있습니다. 로그인은 @FieldMap(NetworkApi.java:459-460)이므로 null 값은 상류에서
-        # 생략해야 합니다. Retrofit 의 @Field null 생략(ParameterHandler.java:252-259)과 달리 @FieldMap 의 null 값은
-        # 오류입니다(ParameterHandler.java:276-293).
+        # 폼 순서는 login 설명을 따릅니다. 속성명은 LoginIn.java:29-35, 보호된 descriptor는 LoginIn$$serializer.java:33-43입니다.
+        # @FieldMap(NetworkApi.java:459-460)은 null 값을 거절하므로 생략해야 합니다(ParameterHandler.java:276-293). null
+        # @Field를 생략하는 규칙(ParameterHandler.java:252-259)과 구별합니다.
         form = {
             "txtMemberNo": member_no,
             "txtPwd": transformed,

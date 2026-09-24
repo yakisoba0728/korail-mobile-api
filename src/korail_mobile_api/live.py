@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""환경변수로 기기 값을 고정하는 보조 함수. DynapathConfig 를 직접 구성하는 방법도 있습니다."""
+"""환경변수에서 기기 설정을 읽습니다. DynapathConfig 를 직접 구성하는 방법도 있습니다."""
 from __future__ import annotations
 
 import os
@@ -66,7 +66,6 @@ def build_config_from_env() -> KorailConfig:
                 device_model=device_model,
             ),
         ),
-        # 화면·SDK 기본값의 실기기 표본 근거는 함수 docstring 참고.
         device_width=int(os.environ.get("KORAIL_DEVICE_WIDTH", "1440")),
         device_height=int(os.environ.get("KORAIL_DEVICE_HEIGHT", "3120")),
         android_sdk_int=int(os.environ.get("KORAIL_ANDROID_SDK_INT", "37")),

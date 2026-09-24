@@ -2,26 +2,22 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""NetFunnel 대기열. KORAIL API 요청 전에 관문을 통과하고 키를 반납합니다.
+"""API 요청 전에 대기열을 통과하고 처리 후 키를 반납합니다.
 
-앱 SDK 1.7.18(Netfunnel.java:18)은 5101 로 진입하고 201/202 에서만 TTL 1~30초 대기 후 5002 를 반복합니다(Netfunnel.java:610-664,
-com/netfunnel/api/Response.java:59-66). SDK 루프에는 누적 대기 상한이 없습니다. 다만 앱의 연결부에는 마지막 콜백과 현재 시계의 차를 15000 과 비교해
-finish(false) 로 끝내는 감시가 따로 있습니다 (ScreenViewModel$withNetFunnel$2$1$5.smali:603-692,875-889; 시계 단위는 보호돼 ms 이면
-15초). 콜백이 끊겼을 때의 감시이지 전체 대기 상한이 아니며, 이 라이브러리에는 없습니다. ScreenViewModel.java:837-900,1719,1955,1986 의 연결부는 mode=0
-에서 Success 만, mode=1 에서 사용자 중단 이외의 결과를 통과시킵니다. SDK 는 오류를 기본으로 ErrorBypass 로 바꾸므로(Netfunnel.java:269-270,
-com/netfunnel/api/Property.java:9 ``err_bypass_ = true``) 대기열 서버 장애에도 조회(mode=1)는 나갑니다. aid·sid 평문은 보호돼 있습니다. 키는
-대기열용이며 이 라이브러리는 KORAIL 요청에 싣지 않습니다.
+앱 SDK 1.7.18(Netfunnel.java:18)은 5101 진입 후 201/202에서만 TTL 1~30초마다 5002를 반복합니다 (Netfunnel.java:610-664;
+com/netfunnel/api/Response.java:59-66). SDK에는 누적 상한이 없습니다. 앱의 별도 콜백 감시는 시계 차를 15000과 비교하지만 단위는 보호돼 있으며, 전체 대기
+상한이 아닙니다 (ScreenViewModel$withNetFunnel$2$1$5.smali:603-692,875-889). 라이브러리는 이 감시를 구현하지 않습니다.
 
-앱과 다른 정책:
-* 차단 301/302 는 mode=1 에서도 KorailQueueRejectedError 입니다.
-* 반납(5004)은 KORAIL 응답 뒤 finally 에서 보냅니다. 앱 finish(ScreenViewModel.java:857-900)는 onPass 디스패치(:876) 뒤에
-  보호된 디스패치(:893-894)를 두어 요청 직후 End() 로 보이지만 대상이 식별되지 않아 확정하지 않습니다.
-* 5002/5004 는 응답이 지목한 노드로 갑니다(앱의 SDK 기본값은 정문에 머뭅니다). 허용 규칙은 netfunnel_safety.
-* 선택적 netfunnel_wait_limit 초과나 mode=0 비성공은 요청 없이 예외를 냅니다.
-5004 는 재시도·응답 파싱 없이 처리하며 실패는 로그로 남깁니다 (Netfunnel.java:848-880, CommandClient.java:182-184).
+앱은 mode=0에서 Success만, mode=1에서 사용자 중단 이외의 결과를 통과시킵니다 (ScreenViewModel.java:837-900,1719,1955,1986). SDK의 기본 오류
+처리는 ErrorBypass입니다 (Netfunnel.java:269-270; com/netfunnel/api/Property.java:9). aid·sid 평문은 보호돼 있습니다. 라이브러리는
+301/302를 항상 거절하고, mode=0 비성공·설정된 누적 상한 초과 시 API를 보내지 않습니다. 5002/5004의 노드는 netfunnel_safety로 제한하며, 키를 KORAIL 요청에
+싣지 않습니다.
 
-2026-09-24 라이브 관측(비로그인 inquiry 2회): 5101→201→5002→200→ScheduleView→5004(200), 5101→200→ScheduleView→5004(200).
-202·301/302·300/303 과 예약·결제 mode=0 은 라이브 미검증입니다."""
+5004는 API 응답 뒤 finally에서 한 번 보내며, 실패는 로그만 남깁니다(Netfunnel.java:848-880; CommandClient.java:182-184). 앱의 onPass 뒤
+디스패치 대상은 보호돼 있어 같은 반납 시점인지는 검증 못 함입니다(ScreenViewModel.java:857-900).
+
+2026-09-24 비로그인 조회에서 5101→201→5002→200→ScheduleView→5004(200)와 5101→200→ScheduleView→5004(200)를 확인했습니다.
+202·301/302·300/303 분기는 검증 못 함입니다. 예약·결제 API의 성공 기록은 보호된 앱 mode=0 배정이나 비성공 분기의 검증과는 구별합니다."""
 
 from __future__ import annotations
 
@@ -74,7 +70,7 @@ _APP_HEADERS = {
 
 @dataclass(frozen=True)
 class KorailNetFunnelGate:
-    """action 은 aid, success_only 는 mode=0 에 해당합니다. 앱과의 정책 차이는 모듈 설명 참고."""
+    """대기열 관문의 액션과 통과 조건을 담습니다. action은 aid, success_only는 라이브러리의 성공 전용 관문입니다. 앱 mode와의 대응 한계는 모듈 설명을 따릅니다."""
 
     name: str
     action: str
@@ -89,9 +85,9 @@ def _gate(name: str, action: KorailNetFunnelAction, *, success_only: bool) -> Ko
 #: inquiry/peak_season_inquiry/product_inquiry: TrainScheduleViewModel.java:5208-5244, 다음 페이지 :1126, 요청 :7216.
 #: 상품 aid·라우트 연결은 추정입니다. reserve: TrainScheduleViewModel.java:5003,5104, TrainSeatMapViewModel.java:2627,2719,
 #: HomeViewModel.java:6231, ReservationWaitViewModel.java:578. pay: PayViewModel.java:6724,
-#: FPayViewModel.java:795. reservation_view: MyReservationViewModel.java:2528. mode 리터럴이 보호돼 0 배정은 미검증. 관광열차의 선택값과
-#: 직접 요청 분기의 조건도 보호돼 연결을 확정하지 않습니다(TrainScheduleViewModel.java:5216-5242). 그 밖의 작업 연결 여부는 client.py 를 보십시오.
-#: 이 표가 모든 앱 호출을 증명하지는 않습니다.
+#: FPayViewModel.java:795. reservation_view: MyReservationViewModel.java:2528. mode 리터럴이 보호돼 0 배정은 미검증.
+#: 관광열차의 선택값과 직접 요청 분기의 조건도 보호돼 연결을 확정하지 않습니다(TrainScheduleViewModel.java:5216-5242).
+#: 그 밖의 작업 연결 여부는 client.py 를 보십시오. 이 표가 모든 앱 호출을 증명하지는 않습니다.
 KORAIL_NETFUNNEL_GATES: Mapping[str, KorailNetFunnelGate] = {
     gate.name: gate
     for gate in (
@@ -111,9 +107,7 @@ KORAIL_NETFUNNEL_GATES: Mapping[str, KorailNetFunnelGate] = {
 
 @dataclass(frozen=True)
 class KorailNetFunnelToken:
-    """대기열 응답 하나(``<code>:<name>=<value>&...``).
-
-    ``node`` 는 응답이 지목한 노드 origin(없으면 ``""``), ``raw`` 는 받은 본문입니다."""
+    """대기열 응답의 코드·키·대기 조건을 담습니다. node는 응답 노드의 원점 주소이며, raw는 응답 본문입니다."""
 
     code: str
     key: str = ""
@@ -123,12 +117,12 @@ class KorailNetFunnelToken:
 
     @property
     def wait_count(self) -> int:
-        """``nwait`` — 앞에 선 사람 수."""
+        """앞에서 기다리는 요청 수를 반환합니다."""
         return _digits(self.params.get("nwait", ""))
 
     @property
     def wait_seconds(self) -> int:
-        """다음 5002 까지 잘 시간 — ``ttl`` 을 [1, 30] 으로 묶은 값(``com/netfunnel/api/Response.java:59-66``)."""
+        """다음 대기 확인까지의 시간을 1~30초로 제한해 반환합니다. 앱 근거: com/netfunnel/api/Response.java:59-66."""
         ttl = _digits(self.params.get("ttl", ""))
         return max(MIN_TTL_SECONDS, min(ttl, MAX_TTL_SECONDS))
 
@@ -140,9 +134,8 @@ def _digits(raw: str) -> int:
 def parse_netfunnel_body(body: str) -> KorailNetFunnelToken:
     """응답 본문을 코드와 파라미터로 가릅니다(``Response.Parser``, ``com/netfunnel/api/Response.java:128-163``).
 
-    첫 ``:`` 앞이 코드, 뒤가 ``&`` 로 나뉜 ``name=value`` 쌍입니다. ``:`` 가 없거나 코드가 숫자가 아니면
-    :class:`~korail_mobile_api.errors.KorailNetFunnelError`(앱의 ``Code.ErrorData``)입니다. 서버가 준 ``ip``/``port`` 는
-    :mod:`~korail_mobile_api.netfunnel_safety` 의 가드를 통과해야 합니다."""
+    첫 ``:`` 앞이 코드, 뒤가 ``&`` 로 나뉜 ``name=value`` 쌍입니다. ``:`` 가 없거나 코드가 숫자가 아니면 ``errors.KorailNetFunnelError``(앱의
+    ``Code.ErrorData``)입니다. 서버가 준 ``ip``/``port`` 는 ``netfunnel_safety`` 의 가드를 통과해야 합니다."""
     head, separator, tail = body.strip().partition(":")
     if not separator or not head.isascii() or not head.isdigit():
         raise KorailNetFunnelError(
@@ -166,7 +159,7 @@ def parse_netfunnel_body(body: str) -> KorailNetFunnelToken:
 
 
 class _Slot:
-    """가장 최근에 받은 응답 — 앱의 ``CommandClient.response_`` 처럼 응답마다 통째로 바뀝니다."""
+    """대기열 처리 중 최신 응답·노드·재시도 예산을 보관합니다."""
 
     def __init__(self) -> None:
         self.token: KorailNetFunnelToken | None = None
@@ -175,8 +168,7 @@ class _Slot:
 
 
 class KorailNetFunnelClient:
-    """설정된 netfunnel_url 과 netfunnel_safety 검사를 통과한 응답 노드로 요청하는 대기열 클라이언트입니다. sleeper/clock 은 오프라인 시험용으로 주입할 수
-    있습니다."""
+    """API 요청 전 대기열 통과와 처리 후 키 반납을 수행합니다. sleeper/clock 은 오프라인 시험용으로 주입할 수 있습니다."""
 
     def __init__(
         self,
@@ -203,7 +195,7 @@ class KorailNetFunnelClient:
         self._client.close()
 
     def gate(self, name: str) -> KorailNetFunnelGate:
-        """:data:`KORAIL_NETFUNNEL_GATES` 의 관문에 설정의 ``aid`` 덮어쓰기를 적용합니다."""
+        """관문 설정을 읽고 netfunnel_actions의 aid 덮어쓰기를 적용합니다."""
         gate = KORAIL_NETFUNNEL_GATES[name]
         override = (self.config.netfunnel_actions or {}).get(name)
         if override:
@@ -211,10 +203,8 @@ class KorailNetFunnelClient:
         return gate
 
     def run(self, gate: KorailNetFunnelGate | str, send: Callable[[], T]) -> T:
-        """관문 통과 후 send 를 호출하고 finally 에서 최신 키를 한 번 반납합니다.
-
-        차단은 KorailQueueRejectedError. mode=1 은 대기열 통신 오류 시 키 없이 진행할 수 있으나, mode=0 은 요청하지 않고 KorailNetFunnelError
-        를 냅니다. 반납 실패는 로그만 남깁니다."""
+        """관문을 통과한 뒤 send를 호출하고 최신 키를 한 번 반납합니다. 차단은 KorailQueueRejectedError이며, mode=1은 통신 오류에도 진행할 수 있지만
+        mode=0은 API를 보내지 않습니다. 반납 실패는 로그만 남기며, 전체 정책과 앱의 차이는 모듈 설명을 따릅니다."""
         if isinstance(gate, str):
             gate = self.gate(gate)
         slot = _Slot()
@@ -335,7 +325,7 @@ class KorailNetFunnelClient:
         )
 
     def _error_bypass(self, gate: KorailNetFunnelGate, exc: Exception) -> None:
-        """대기열 요청이 실패했을 때 — ``mode=1`` 은 통과, ``mode=0`` 은 요청하지 않음."""
+        """대기열 오류 시 mode=1만 통과시키고 mode=0은 요청 전에 거절합니다."""
         if gate.success_only:
             raise KorailNetFunnelError(
                 None,

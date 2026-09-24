@@ -2,10 +2,8 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""KORAIL API 전송·공통 필드·응답 봉투 처리.
-
-origin(``config.base_url``)은 검사하지 않고 라우트 허용목록도 없습니다 — 라우트는 호출부가 상수로 고릅니다. 공통 필드 주입은 호출 옵션에 따르며 ``lang`` 은
-``KorailConfig.lang`` 을 채웠을 때만 붙습니다. 대기열은 별도 netfunnel 모듈이 전송합니다."""
+"""KORAIL API를 전송하고 공통 필드와 응답 봉투를 처리합니다. config.base_url은 검사하지 않으며 라우트는 호출부가 선택합니다. 공통 필드는 호출 옵션에 따라 주입하고, lang은
+KorailConfig.lang이 설정된 경우에만 붙입니다. 대기열 전송은 netfunnel 모듈이 담당합니다."""
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
@@ -54,16 +52,16 @@ def parse_base_response(
     """봉투 타입 검사 후 FAIL/P058 을 세션 만료로 처리합니다.
 
     CommonOut 의 strResult 누락은 실패 기본값입니다(CommonOut.java:361,455-463). 앱의 CommonOut.checkRequiredLogin() 은
-    commonFail()(strResult 실패)이 참일 때만 hMsgCd 를 보호된 4바이트 리터럴과 비교합니다(CommonOut.java:426-438). 그래서 성공
-    봉투에 붙은 P058 은 만료가 아닙니다.
+    commonFail()(strResult 실패)이 참일 때만 hMsgCd 를 보호된 4바이트 리터럴과 비교합니다(CommonOut.java:426-438). 그래서 성공 봉투에 붙은 P058 은
+    만료가 아닙니다.
 
     raise_on_fail=True 면 FAIL 또는 require_result=True 일 때 strResult 키 누락을 거절합니다. SUCC 와의 동등 비교는 아니며
     null·빈 문자열·미지의 결과값은 이 단계에서 거절하지 않습니다. 앱은 CommonOut.java:361,455-463 에서 기본값과 실패 비교에 같은 보호 리터럴을 사용합니다.
     FAIL 평문은 관측값입니다. 문자열 필드의 JSON 정수는 2026-09-21 관측에 따라 문자열로 읽되 raw 는 바꾸지 않습니다.
 
-    common_out(기본값은 require_result)이 참이면 strResult 누락도 P058 판정에서는 실패로 봅니다. 봉투가 선택인 CommonOut 읽기
-    경로용입니다: 앱은 CommonOut 이면 checkRequiredLogin 을 부르지만(NetworkService.java:6916-6919) 그 밖의 코드는 화면마다
-    다르게 다루므로, 이 경우 다른 코드는 거절하지 않습니다."""
+    common_out(기본값은 require_result)이 참이면 strResult 누락도 P058 판정에서는 실패로 봅니다. 봉투가 선택인 CommonOut 읽기 경로용입니다: 앱은
+    CommonOut 이면 checkRequiredLogin 을 부르지만(NetworkService.java:6916-6919) 그 밖의 코드는 화면마다 다르게 다루므로, 이 경우 다른 코드는
+    거절하지 않습니다."""
     if not isinstance(data, dict):
         error = KorailProtocolError("KORAIL response must be a JSON object")
         error.raw = data
@@ -171,7 +169,7 @@ def _drop_empty(mapping: Mapping[str, Any]) -> dict[str, Any]:
 
 
 class KorailHttpClient:
-    """KORAIL API(``config.base_url``)로 요청을 보내는 HTTP 클라이언트. ``base_url`` 은 검사하지 않습니다."""
+    """설정된 API 서버에 요청을 보내고 응답 봉투를 판정합니다. ``base_url`` 은 검사하지 않습니다."""
 
     def __init__(
         self,
@@ -198,7 +196,7 @@ class KorailHttpClient:
 
     @property
     def cookies(self) -> httpx.Cookies:
-        """``JSESSIONID`` 가 담기는 쿠키 저장소."""
+        """세션 쿠키를 저장하는 쿠키 저장소를 반환합니다."""
         return self._client.cookies
 
     def close(self) -> None:
@@ -271,8 +269,8 @@ class KorailHttpClient:
     ) -> BaseKorailResponse:
         """읽기 응답을 처리합니다. require_envelope 및 경로별 봉투 생략 규칙에 따릅니다."""
         payload = _decode_response(_send(send, method=method, path=path), path=path)
-        # 2026-09-22 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다.
-        # 봉투 누락 허용과 존재하는 FAIL/P058 판정은 별개이며 raw 는 그대로 보존합니다.
+        # 2026-09-22 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다. 봉투 누락 허용과 존재하는 FAIL/P058 판정은 별개이며 raw 는
+        # 그대로 보존합니다.
         common_out = path not in _NON_COMMON_OUT_READ_PATHS
         return parse_base_response(
             payload,
@@ -354,10 +352,8 @@ class KorailHttpClient:
         require_envelope: bool = True,
         omit_empty_fields: bool = False,
     ) -> BaseKorailResponse:
-        """지연할인 POST 의 URL 쿼리를 보냅니다. 폼 본문은 비어 있습니다.
-
-        NetworkApi 의 postDelayDiscountView 는 @FormUrlEncoded 와 @QueryMap 을 함께 선언합니다. 애너테이션만으로 이 빈 본문의 실서버 수용 여부를
-        보장하지 않습니다."""
+        """지연할인권 조회 조건을 POST 요청의 URL 쿼리로 보냅니다. 폼 본문은 비어 있습니다. NetworkApi.java:352-353의 @FormUrlEncoded·@QueryMap
+        조합이며, 2026-09-24에는 이 방식으로 할인권 0행 응답을 확인했습니다. 할인권이 있는 응답까지 검증된 것은 아닙니다."""
         query: dict[str, Any] = {}
         if include_common:
             query.update(self.common_fields())

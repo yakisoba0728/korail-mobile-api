@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""DynaPath 대상 경로의 토큰 생성.
+"""DynaPath 대상 경로의 인증 토큰을 생성합니다.
 
 7.0.6 평문 근거: DynaPathMobileSDK.java:29-72(초기화·생성), a/a.java:11-21(기기 정보), a/b.java:75-227(조립), b/e.java:18-71(서명
 해시). 기본 기기 값은 합성값입니다."""
@@ -130,6 +130,7 @@ def build_dynapath_prefix(
 
 @dataclass(frozen=True)
 class DynapathRequestContext:
+    """DynaPath 토큰 공급자에게 전달할 요청 메타데이터를 담습니다."""
     method: str
     path: str
     url: str
@@ -148,6 +149,7 @@ RandomTextProvider = Callable[[], str]
 
 @dataclass(frozen=True)
 class DynapathTokenSettings:
+    """DynaPath 토큰 생성에 사용할 기기값과 시각 공급자를 구성합니다."""
     device_id: str
     as_value: str
     app_start_ts: str
@@ -180,7 +182,7 @@ class DynapathTokenSettings:
 
 
 def generate_dynapath_device_id() -> str:
-    """설정마다 새로 만드는 합성 64비트 기기 ID(소문자 hex 16자).
+    """설정마다 사용할 합성 64비트 기기 식별자를 생성합니다.
 
     앱은 실제 android_id 를 읽습니다(a/a.java:15-20); 토큰 필드는 a/b.java:85 의 di 입니다."""
     return uuid.uuid4().hex[:16]
@@ -202,7 +204,7 @@ def build_default_token_settings() -> DynapathTokenSettings:
 
 @dataclass(frozen=True)
 class DynapathConfig:
-    """DynaPath 켜짐/꺼짐 + 토큰 소스 구성.
+    """DynaPath 활성화 여부와 토큰 공급 방식을 구성합니다.
 
     ``enabled=True`` 일 때 ``token_provider`` 또는 ``token_settings`` 중 정확히 하나를 요구합니다."""
 
@@ -387,6 +389,7 @@ def generate_dynapath_token(
 
 
 class DynapathTokenGenerator:
+    """설정된 기기값으로 요청별 DynaPath 토큰을 제공합니다."""
     def __init__(
         self,
         settings: DynapathTokenSettings,

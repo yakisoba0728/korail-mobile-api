@@ -2,10 +2,8 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""상태 변경 응답 파서. 성공 여부를 별도로 판정하지 않으며 봉투·raw 를 보존합니다. 필수 신원·금액은 엄격히, 선택 필드는 관대하게 읽습니다.
-
-KorailClient._mutation 은 파싱 중 KorailApiError 의 raw 를 전체 응답으로 바꾸고 기존 원문을 parser_raw 에 둡니다. 다른 예외는 전체 raw 를 가진
-KorailProtocolError 로 감쌉니다. 서버 처리 실패의 증거가 아니므로 자동 재전송하지 마십시오. BaseKorailResponse 만 반환하는 취소에는 전용 파서가 없습니다."""
+"""상태 변경 응답을 모델로 변환하고 원문을 보존합니다. 성공 여부는 전송 계층에서 판정하며 필수 신원·금액은 엄격히, 선택값은 관대하게 읽습니다. 파싱 실패는 서버 처리 실패의 증거가 아닙니다.
+자동 재전송하지 마십시오. 클라이언트의 예외 원문 보존 규칙은 KorailClient._mutation을 따릅니다."""
 from __future__ import annotations
 
 import re
@@ -87,9 +85,7 @@ _STATION_REFUND_ORIGINAL_FIELDS = {
 def parse_station_refund_verification_response(
     raw: Mapping[str, Any],
 ) -> StationRefundVerificationResponse:
-    """Parse ``VerifyOnlineRefundsOut`` and the original ticket it validates.
-
-    원표 목록·PNR·원표 식별 값과 세 금액은 환불 실행 전 확인값이라 엄격하게 읽습니다. 두 안내 문구만 관대합니다."""
+    """역발행 승차권 환불 확인 응답과 원승차권 목록을 읽습니다. 원표 목록·PNR·원표 식별자·세 금액은 실제 환불의 확인값이므로 엄격히 읽고 두 안내 문구만 관대하게 읽습니다."""
     copied = _response_mapping(raw)
     rows = copied.get("orgtkinfo_list", [])
     if rows is not None and not isinstance(rows, list):
@@ -207,12 +203,11 @@ def _received_amount(
             seat = _row(seat, "reservation seat_info row")
             amount = _strict_scalar_string(seat, "h_rcvd_amt", "reservation seat")
             if amount is None or not _DIGITS_RE.fullmatch(amount.strip()):
-                # 한 좌석이라도 금액이 없으면 부분 합으로 과소 정산하지 않도록 전체 계산을 포기합니다.
                 return None
             try:
                 value = int(amount)
             except ValueError:
-                # 정수 문자열 변환 한도를 넘은 값도 0원으로 취급하지 않습니다.
+                # 큰 정수의 문자열 변환 실패도 0원으로 취급하지 않습니다.
                 return None
             seat_no = (
                 _optional_scalar_string(seat, "h_seat_no", "reservation seat")
@@ -225,7 +220,6 @@ def _received_amount(
             summed += value
             seats_seen += 1
     if seats_seen == 0:
-        # 합산할 좌석이 없을 때만 선언된 정산액을 사용합니다.
         return None if declared_int is None else str(declared_int)
     seat_total = str(summed)
     # 2026-07-27 라이브: 좌석 금액과 총액의 영 채움 폭이 달랐습니다. 표기 문자열이 아니라 숫자로 비교해야 같은 금액을 모순으로 오인하지 않습니다.
@@ -242,7 +236,6 @@ def _received_amount(
     return seat_total
 
 
-# 결제·취소에서 에코하는 홀드 스칼라는 엄격하게 읽습니다. 정산액·여정은 별도로 계산합니다.
 _RESERVATION_HOLD_REQUIRED_FIELDS = {
     "pnr_no": "h_pnr_no",
     "journey_count": "h_jrny_cnt",
@@ -263,7 +256,6 @@ _RESERVATION_HOLD_FIELDS = {
     "total_discount_amount": "h_tot_dcnt_amt",
 }
 
-# 여정 행. 첫 여정의 변경번호는 결제에 에코하므로 별도로 검증합니다.
 _RESERVATION_JOURNEY_FIELDS = {
     "journey_sequence": "h_jrny_sqno",
     "departure_date": "h_dpt_dt",
@@ -333,7 +325,6 @@ _RESERVATION_PAYMENT_TICKET_FIELDS = {
     "standard_seat_price_fare": "h_std_seat_prc_fare",
 }
 
-# stl_infos.stl_info 의 필드 대응표. acnt_info 의 거래·오류 메타데이터는 raw 에 보존합니다.
 _RESERVATION_PAYMENT_SETTLEMENT_FIELDS = {
     "settlement_sequence": "h_stl_sqno",
     "settlement_type_code": "h_stl_tp_cd",
@@ -411,7 +402,6 @@ def parse_reservation_hold_response(
         )
 
     return ReservationHoldResponse(
-        # raw 의 할당 위치를 타입 검사기가 알 수 있도록 공통 필드를 명시합니다.
         h_msg_cd=copied.get("h_msg_cd"),
         h_msg_txt=copied.get("h_msg_txt"),
         str_result=copied.get("strResult"),
@@ -511,7 +501,7 @@ def parse_discount_card_purchase_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardPurchaseResponse:
     """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. NCardInfoOut.java:30-38 의 자체 속성 9개를 읽습니다. serializer 이름이 보호돼
-    Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 라이브 미검증입니다."""
+    Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 실서버 검증 못 함입니다."""
     data = _response_mapping(raw)
     return DiscountCardPurchaseResponse(
         h_msg_cd=data.get("h_msg_cd"),
@@ -546,7 +536,7 @@ def _cart_discount_additions(
 
 
 def parse_product_cancel_response(raw: Mapping[str, Any]) -> ProductCancelResponse:
-    """product.ReservationCancel 응답. intgMsgCd 는 선택 스칼라입니다(ProductCancelOut.java)."""
+    """여행상품 예약 취소 응답을 읽습니다. intgMsgCd 는 선택 스칼라입니다(ProductCancelOut.java)."""
     data = _response_mapping(raw)
     return ProductCancelResponse(
         **_base_fields(data),
@@ -555,8 +545,7 @@ def parse_product_cancel_response(raw: Mapping[str, Any]) -> ProductCancelRespon
 
 
 def parse_maas_cancel_response(raw: Mapping[str, Any]) -> MaasCancelResponse:
-    """사용하지 않음(기록용, _maas_unsupported 참고). addService.cancelPay.do 응답. intgMsgCd 는 선택
-    스칼라입니다(MaasCancelOut.java)."""
+    """지원하지 않는 미결제 부가서비스 해제 응답을 읽습니다. addService.cancelPay.do 응답. intgMsgCd 는 선택 스칼라입니다(MaasCancelOut.java)."""
     data = _response_mapping(raw)
     return MaasCancelResponse(
         **_base_fields(data),
@@ -565,8 +554,8 @@ def parse_maas_cancel_response(raw: Mapping[str, Any]) -> MaasCancelResponse:
 
 
 def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
-    """장바구니 추가 결과. 키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81, PsgDiscAddInfo.java:81,85. 누락·잘못된 선택
-    목록은 비웁니다."""
+    """장바구니 추가 결과와 할인 목록을 읽습니다. 키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81,
+    PsgDiscAddInfo.java:81,85. 누락·잘못된 선택 목록은 비웁니다."""
     data = _response_mapping(raw)
     return CartAddResponse(
         h_msg_cd=data.get("h_msg_cd"),

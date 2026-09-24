@@ -2,10 +2,8 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""KORAIL 7.0.6 근거와 라이브러리 기본값.
-
-평문 선언·@SerialName 은 직접 근거입니다. 보호 문자열의 byte[] 길이 일치는 후보 제약일 뿐 평문이나 enum 값 배정을 증명하지 않습니다. 미확인 값은 그 한계를 각 항목에 남깁니다.
-화면 크기·SDK 기본값은 device-pull 실기기 기록에 근거하며 APK 상수가 아닙니다."""
+"""KORAIL 7.0.6 근거가 있는 상수와 라이브러리 기본값을 제공합니다. 평문 선언·@SerialName과 달리 보호 문자열의 바이트 길이는 평문이나 enum 값 배정을 증명하지 않습니다.
+미확인 값은 항목별 한계를 따릅니다. 화면 크기·SDK 기본값은 APK 상수가 아닌 device-pull 실기기 기록입니다."""
 
 from enum import StrEnum
 
@@ -31,10 +29,10 @@ KORAIL_DEFAULT_ANDROID_SDK_INT = 37
 
 
 def build_dalvik_user_agent(*, os_release: str, device_model: str) -> str:
-    """서버 수용 관측에 근거한 Dalvik 모양 UA. 앱 UA 의 재현이라고 단정하지 않습니다.
+    """서버 수용 기록에 근거한 Dalvik 형식의 User-Agent를 만듭니다. 앱 UA 의 재현이라고 단정하지 않습니다.
 
     7.0.6 은 OkHttp 를 사용하며(NetworkModule.java:55-64), 기본 UA 는 okhttp3/internal/Util.java:87 의 okhttp/4.12.0 입니다.
-    실제 송신 UA 는 미확인입니다. 기존 라이브 관측상 Python 패키지 이름 UA 는 로그인 거절, 이 문자열은 수용됐습니다. 기기와 맞지 않는 Build ID 는 만들지 않습니다."""
+    실제 송신 UA 는 미확인입니다. 실서버 관측상 Python 패키지 이름 UA 는 로그인 거절, 이 문자열은 수용됐습니다. 기기와 맞지 않는 Build ID 는 만들지 않습니다."""
     return f"Dalvik/2.1.0 (Linux; U; Android {os_release}; {device_model})"
 
 
@@ -66,7 +64,7 @@ KORAIL_COMMON_CODE_BOOTSTRAP_CODES = (
 )
 
 class KorailSeatClass(StrEnum):
-    """객실 등급. PsrmType.java:19-22 에 GENERAL/SPECIAL 과 psrmClCd 가 있습니다.
+    """예약할 객실 등급을 나타냅니다. PsrmType.java:19-22 에 GENERAL/SPECIAL 과 psrmClCd 가 있습니다.
 
     "1"/"2" 배정은 보호돼 미확인입니다. 필드명 근거: TicketReservationInJrny.java:234. ALL 은 이 enum 의 객실 등급이 아닙니다."""
 
@@ -75,7 +73,7 @@ class KorailSeatClass(StrEnum):
 
 
 class KorailReservationJobType(StrEnum):
-    """예약 작업 종류. 공통 라우트: NetworkApi.java:751-753.
+    """일반·좌석지정·예약대기·병합 예약 작업을 구분합니다. 공통 라우트: NetworkApi.java:751-753.
 
     ReservationJobId.java:20-24 의 DEFAULT/WAIT/SEAT/MERGE 등에 대응하나 코드 평문은 보호돼 있습니다.
     TicketReservationType.java:38-42 는 DEFAULT/STAND/FREE 에 같은 DEFAULT job 을 사용합니다. 앱의 병합·대기·결제 화면 분기는 응답 여정종류가
@@ -138,24 +136,22 @@ KORAIL_MERGE_SEAT_FLAGS_BY_CABIN = {
 #: 선언합니다(TicketReservationInSrcarTrailing.java:24-30). 이것은 두 구간 좌석 구성의 근거이며 모든 앱 여정의 하드 상한을 증명하지는 않습니다.
 KORAIL_MAX_JOURNEY_LEGS = 2
 
-# NetFunnel 설정: NetworkConstants.java:80-99, 주입: KorailTalkApplication.java:361-389. PORT=443 / RETRY=1 /
-# TIMEOUT=3 은 평문; 호스트·프로토콜·액션 리터럴은 보호됨. "nf.letskorail.com" 은 라이브 수용값입니다. SDK 기본 호스트는
-# 다릅니다(com/netfunnel/api/Property.java:11). ts.wseq 와 service_1 은 SDK 평문
-# 기본값(com/netfunnel/api/Property.java:17-18)입니다. URL.java:75-108,126-137 이 경로 앞에 / 를 붙이므로 경로 상수에도 / 를 포함합니다.
+# NetFunnel 설정·주입은 NetworkConstants.java:80-99와 KorailTalkApplication.java:361-389을 따릅니다.
+# PORT=443·RETRY=1·TIMEOUT=3은 평문이며 호스트·프로토콜·액션은 보호돼 있습니다. nf.letskorail.com은 실서버 수용값이며 SDK 기본 호스트와
+# 다릅니다(com/netfunnel/api/Property.java:11). ts.wseq·service_1은 SDK 기본값(com/netfunnel/api/Property.java:17-18)이며
+# 경로의 /는 URL.java:75-108,126-137을 따릅니다.
 KORAIL_NETFUNNEL_URL = "https://nf.letskorail.com"
 KORAIL_NETFUNNEL_PATH = "/ts.wseq"
 KORAIL_NETFUNNEL_SERVICE_ID = "service_1"
-#: 대기열 요청 하나의 타임아웃(초). 7.0.6 근거 둘 다 **읽힘** — ``NetworkConstants.java:84`` 의 ``TIMEOUT = 3`` 과
-#: ``KorailTalkApplication.java:387`` 의 ``setTimeout``에 넘기는 ``{3}``.
+#: 요청당 제한시간은 3초입니다(NetworkConstants.java:84; KorailTalkApplication.java:387).
 KORAIL_NETFUNNEL_TIMEOUT_SECONDS = 3.0
-#: 실패한 대기열 요청의 재시도 횟수(첫 시도 제외). 7.0.6 근거 **읽힘** — ``NetworkConstants.java:83`` 의 ``RETRY = 1`` 과
-#: ``KorailTalkApplication.java:388`` 의 ``setRetry``에 넘기는 ``{1}``. SDK 는 실패한 시도 뒤 그 시도가 시작된 때부터 타임아웃(3초)이 찰 때까지
-#: 기다렸다가 다시 보냅니다(``Netfunnel.java:352-363``, ``com/netfunnel/api/Property.java:16`` 의 ``wait_retry_ = true``).
+#: 재시도는 첫 시도 외 1회입니다(NetworkConstants.java:83; KorailTalkApplication.java:388). SDK는 실패한 시도 시작부터 제한시간을 채운 뒤
+#: 재시도합니다 (Netfunnel.java:352-363; com/netfunnel/api/Property.java:16의 wait_retry_=true).
 KORAIL_NETFUNNEL_RETRY = 1
 
 
 class KorailNetFunnelAction(StrEnum):
-    """대기열 aid. NetworkConstants.java:88-94 에 액션 상수 일곱 개가 있습니다.
+    """대기열 관문에 사용할 액션 식별자를 나타냅니다. NetworkConstants.java:88-94 에 액션 상수 일곱 개가 있습니다.
 
     값은 보호돼 있으며 같은 길이의 후보들을 길이만으로 구별할 수 없습니다. 이 enum 의 값 배정과 호출부 연결은 이름·라이브 관측에 기반하며 완전히 검증되지 않았습니다. 관문별 호출 근거는
     netfunnel.KORAIL_NETFUNNEL_GATES 를 참고하십시오."""
@@ -184,7 +180,7 @@ class KorailNetFunnelAction(StrEnum):
 
 
 class KorailNetFunnelOpcode(StrEnum):
-    """대기열 요청 코드. 7.0.6 평문 근거: com/netfunnel/api/Command.java:4-21."""
+    """대기열 진입·대기·반납 요청 코드를 나타냅니다. 7.0.6 평문 근거: com/netfunnel/api/Command.java:4-21."""
 
     CHK_ENTER = "5002"
     ALIVE_NOTICE = "5003"
@@ -209,6 +205,6 @@ DYNAPATH_ALLOWLIST_PATHS = frozenset(
         KORAIL_LOGIN_PATH,
     }
 )
-#: DynaPath 비활성화 시 전송 전에 거절할 경로이며 허용목록보다 좁습니다. 나머지도 서버에서 거절될 수 있습니다.
-#: 2026-09-24 라이브: 토큰 없는 ScheduleView 가 ``MACRO ERROR`` 로 거절됐습니다(예전 관측은 성공이었음).
+#: DynaPath 비활성화 시 전송 전에 거절하는 경로입니다. 다른 경로도 서버에서 거절될 수 있습니다. 2026-09-24: 토큰 없는 ScheduleView는 MACRO ERROR로
+#: 거절됐습니다.
 DYNAPATH_REQUIRED_PATHS = frozenset({KORAIL_LOGIN_PATH})

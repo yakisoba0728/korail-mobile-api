@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""도메인 모델에 의존하지 않는 내부 JSON 필드 읽기 도구.
+"""도메인 모델에 의존하지 않고 JSON 필드를 읽습니다.
 
 선택 필드의 관대한 변환과 필수 필드의 오류 문구는 구분해서 유지합니다. 응답 봉투의 성공·실패 정책과 raw 복사 여부는 각 호출자가 결정합니다."""
 from __future__ import annotations
@@ -106,7 +106,7 @@ def _optional_string(
     data: Mapping[str, object],
     key: str,
 ) -> str | None:
-    """문자열이면 그대로, 아니면 ``None``."""
+    """문자열을 그대로 반환하고 그 밖의 값은 None으로 처리합니다."""
     value = data.get(key)
     return value if isinstance(value, str) else None
 
@@ -116,7 +116,7 @@ def _required_string(
     key: str,
     context: str,
 ) -> str:
-    """필수 문자열. 키가 없거나 문자열이 아니면 거부합니다.
+    """필수 문자열을 읽고 누락·다른 타입을 거절합니다. 키가 없거나 문자열이 아니면 거부합니다.
 
     ``Seat`` 의 합성 생성자(``Seat.java:53-59``)는 다섯 필드 중 하나라도 없으면 ``throwMissingFieldException`` 을 던집니다 — 7.0.6 도
     처리하지 않는 응답 모양이므로 선택으로 읽지 않습니다."""
@@ -153,7 +153,7 @@ def _strict_scalar_string(
     value = data.get(key)
     if value is None or isinstance(value, str):
         return value
-    # `type(...) is int` on purpose: bool is an int subclass.
+    # bool은 int의 하위 타입이므로 정확한 int만 허용합니다.
     if type(value) is int:
         try:
             return str(value)
@@ -171,7 +171,7 @@ def _optional_scalar_string(
     key: str,
     context: str = "",
 ) -> str | None:
-    """선택 스칼라 — 문자열은 그대로, JSON 정수는 문자열로, 그 밖은 ``None``."""
+    """선택 스칼라를 문자열로 읽고 잘못된 값은 None으로 처리합니다."""
     try:
         return _strict_scalar_string(data, key, context)
     except KorailProtocolError:
@@ -183,7 +183,7 @@ def _optional_integer(
     key: str,
     context: str = "",
 ) -> int | None:
-    """선택 정수 — 정수나 ASCII 10진 문자열이면 ``int``, 그 밖은 ``None``."""
+    """JSON 정수나 ASCII 숫자 문자열을 정수로 읽고 그 밖의 값은 None으로 처리합니다."""
     if data.get(key) is None:
         return None
     try:
@@ -225,7 +225,7 @@ def _optional_bool(
     data: Mapping[str, object],
     key: str,
 ) -> bool | None:
-    """``bool`` 이면 그대로, 아니면(없음 포함) ``None`` — "없음" 과 "거짓" 을 구분합니다."""
+    """불리언을 그대로 반환하고 누락·다른 타입은 None으로 처리합니다."""
     value = data.get(key)
     return value if isinstance(value, bool) else None
 
