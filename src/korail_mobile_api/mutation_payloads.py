@@ -334,6 +334,9 @@ def build_limousine_reservation_form(
     )
     if len(seats) != passengers.total:
         raise KorailProtocolError("KORAIL airport bus reservation needs exactly one seat per passenger")
+    # 앱은 seat_no 를 토글하므로 같은 좌석을 두 번 선택할 수 없습니다(AirportBusSeatMapViewModel.java:1996-2038).
+    if len(set(seats)) != len(seats):
+        raise KorailProtocolError("KORAIL airport bus reservation requires distinct seat numbers")
     remaining = schedule.general_remaining_seat_count
     # 앱은 잔여석이 인원보다 적은 행을 고를 수 없게 합니다(AirportBusScheduleViewModel.java:407-426).
     if isinstance(remaining, str) and remaining.isdigit() and int(remaining) < passengers.total:

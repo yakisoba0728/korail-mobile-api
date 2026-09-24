@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""리무진 운행·좌석 모델. Query 의 문자열 형식은 서버에 맡기며 좌석 Query 는 인원 1~9·is_arrow 불리언만 검사합니다.
+"""리무진 운행·좌석 모델. Query 의 문자열 형식은 서버에 맡기며 좌석 Query 는 인원·is_arrow 의 타입만 검사합니다.
 
 2026-09-16 라이브: 광명→인천공항T1 스케줄 42편. 2026-09-22 동일 조건 3쌍에서는 isArrow=true 가 S003, false 가 성공 봉투였습니다. 이 표본으로 모든 조건의
 성공·좌석 필드 의미·보호된 앱 값의 평문을 확정하지 않습니다. layout_type 정수 허용은 같은 DTO 를 쓰는 일반 좌석 재고의 2026-09-21 관측에 근거합니다."""
@@ -47,7 +47,7 @@ class LimousineSeatInventoryQuery:
     passenger_count: int
     #: gdNo. 7.0.6 공항버스 화면은 null 을 넘깁니다(AirportBusSeatMapViewModel.java:865). None 이면 폼에서 뺍니다.
     product_no: str | None = None
-    #: isArrow 기본값은 거짓입니다. 비교 관측과 보호된 앱 값의 한계는 모듈 설명 참고.
+    #: isArrow 기본값은 거짓입니다(TResidualSeatsResearchIn.java:132; AirportBusSeatMapViewModel.java:865 의 기본값 마스크).
     is_arrow: bool = False
 
     def __post_init__(self) -> None:

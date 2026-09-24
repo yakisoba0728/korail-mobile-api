@@ -89,8 +89,9 @@ def _gate(name: str, action: KorailNetFunnelAction, *, success_only: bool) -> Ko
 #: inquiry/peak_season_inquiry/product_inquiry: TrainScheduleViewModel.java:5208-5244, 다음 페이지 :1126, 요청 :7216.
 #: 상품 aid·라우트 연결은 추정입니다. reserve: TrainScheduleViewModel.java:5003,5104, TrainSeatMapViewModel.java:2627,2719,
 #: HomeViewModel.java:6231, ReservationWaitViewModel.java:578. pay: PayViewModel.java:6724,
-#: FPayViewModel.java:795. reservation_view: MyReservationViewModel.java:2528. mode 리터럴이 보호돼 0 배정은 미검증. 관광열차 분기는
-#: 관문 없이 요청(TrainScheduleViewModel.java:5216-5242). 그 밖의 작업 연결 여부는 client.py 를 보십시오. 이 표가 모든 앱 호출을 증명하지는 않습니다.
+#: FPayViewModel.java:795. reservation_view: MyReservationViewModel.java:2528. mode 리터럴이 보호돼 0 배정은 미검증. 관광열차의 선택값과
+#: 직접 요청 분기의 조건도 보호돼 연결을 확정하지 않습니다(TrainScheduleViewModel.java:5216-5242). 그 밖의 작업 연결 여부는 client.py 를 보십시오.
+#: 이 표가 모든 앱 호출을 증명하지는 않습니다.
 KORAIL_NETFUNNEL_GATES: Mapping[str, KorailNetFunnelGate] = {
     gate.name: gate
     for gate in (

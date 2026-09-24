@@ -26,9 +26,8 @@ from .parsers import (
     _response_fields,
 )
 from ._parsing import (
-    _nullable_string_fields,
+    _nullable_scalar_fields,
     _optional_scalar_string,
-    _optional_string,
     _preserve_read_raw,
     _row,
 )
@@ -102,7 +101,7 @@ def parse_limousine_schedule_response(
         row = _row(value, "limousine schedule trainList")
         schedules.append(
             LimousineSchedule(
-                **_nullable_string_fields(row, _SCHEDULE_FIELDS),
+                **_nullable_scalar_fields(row, _SCHEDULE_FIELDS, "limousine schedule"),
                 **{
                     name: _optional_scalar_string(row, wire, "limousine schedule")
                     for name, wire in _SCHEDULE_ADDED_FIELDS.items()
@@ -111,13 +110,15 @@ def parse_limousine_schedule_response(
             )
         )
     return LimousineScheduleResponse(
-        following_page_extension=_optional_string(
+        following_page_extension=_optional_scalar_string(
             raw,
             "fllwPgExt",
+            "limousine schedule",
         ),
-        long_short_division_code=_optional_string(
+        long_short_division_code=_optional_scalar_string(
             raw,
             "lgtmShtmDvCd",
+            "limousine schedule",
         ),
         schedules=tuple(schedules),
         **_response_fields(response),
@@ -158,7 +159,7 @@ def parse_limousine_seat_inventory_response(
         row = _row(value, "limousine seat inventory seatList")
         seats.append(
             LimousineSeat(
-                **_nullable_string_fields(row, _SEAT_FIELDS),
+                **_nullable_scalar_fields(row, _SEAT_FIELDS, "limousine seat inventory"),
                 raw=row,
             )
         )
@@ -178,17 +179,18 @@ def parse_limousine_seat_inventory_response(
         except (KorailProtocolError, ValueError, OverflowError):
             continue
     return LimousineSeatInventoryResponse(
-        **_nullable_string_fields(raw, {
+        **_nullable_scalar_fields(raw, {
             "car_type_code": "car_tp_cd",
             "car_no": "scar_no",
             "seat_arrangement_code": "seat_ary_cd",
-        }),
+        }, "limousine seat inventory"),
         layout_type=_optional_scalar_string(raw, "layout_type", "limousine seat inventory"),
         vr_banner_url=_optional_scalar_string(raw, "vrBnrUrl", "limousine seat inventory"),
         windows=tuple(windows),
-        up_down_division_code=_optional_string(
+        up_down_division_code=_optional_scalar_string(
             raw,
             "up_dn_dv_cd",
+            "limousine seat inventory",
         ),
         seats=tuple(seats),
         **_response_fields(response),

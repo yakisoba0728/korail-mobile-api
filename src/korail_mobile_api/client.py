@@ -1353,7 +1353,7 @@ class KorailClient:
         """한 구간·한 날짜의 직통 열차 한 페이지를 조회합니다.
 
         열차조회 대기열을 거칩니다. ``peak_season`` 은 출발일이 성수기인지입니다 — 앱은 달력(``RunDateOutItem.isPeakSeason()``)으로 고르지만 그 판정
-        코드값이 보호돼 있어 호출자가 정합니다. 거짓이면 달력이 없는 앱과 같은 ``act_8`` 입니다. ``use_special_schedule`` 이면 ``product_inquiry``
+        코드값이 보호돼 있어 호출자가 정합니다. 거짓이면 라이브러리 기본 관문 ``act_8`` 이며 앱 aid 평문은 미확인입니다. ``use_special_schedule`` 이면 ``product_inquiry``
         관문입니다(**추정**)."""
         return self._run_read(
             lambda: self._search_trains(
@@ -1591,7 +1591,7 @@ class KorailClient:
         순서입니다(TrainScheduleViewModel.java:2914-2930,2982-2999).
 
         응답 파싱이 실패하면 KorailProtocolError 이고 ``.raw`` 에 응답 전체(h_pnr_no 포함)가 있습니다. 홀드가 잡혔을 수 있으니 재시도하지 말고 ``.raw``
-        나 get_reservation_history 로 확인하십시오. 네 예약 메서드가 모두 같습니다. job_type 기본은 IMMEDIATE(1101)입니다.
+        나 get_reservation_history 로 확인하십시오. 이 주의사항은 다른 예약 메서드에도 적용됩니다. job_type 기본은 IMMEDIATE(1101)입니다.
 
         SEAT_DESIGNATED 는 승객별 좌석이 필요합니다. STANDBY 는 대기 가능한 행만 받으며, 성공한 대기 홀드는 confirm_standby_hold 로 알림 옵션을
         기록합니다. IRR000014 의 트리거 의미는 라이브 기록이고 앱 비교값은 보호돼 있습니다. MERGE_STANDING 은 병합 첫 홀드이며 후속 호출은 reserve_merge
