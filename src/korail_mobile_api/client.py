@@ -22,6 +22,7 @@ from .errors import (
 from .http import KorailHttpClient
 from .netfunnel import KorailNetFunnelClient
 from .limousine_models import (
+    LimousineSchedule,
     LimousineScheduleQuery,
     LimousineScheduleResponse,
     LimousineSeatInventoryQuery,
@@ -90,6 +91,7 @@ from .mutation_payloads import (
     build_discount_card_extension_query,
     build_discount_card_purchase_form,
     build_discount_card_reservation_form,
+    build_limousine_reservation_form,
     build_merge_reservation_form,
     build_price_recalculation_form,
     build_refund_form,
@@ -1682,6 +1684,25 @@ class KorailClient:
         )
         return self._mutation(
             route,
+            form,
+            parser=parse_reservation_hold_response,
+        )
+
+    def reserve_limousine(
+        self,
+        schedule: LimousineSchedule,
+        seat_nos: Sequence[str],
+        *,
+        passengers: KorailPassengerCounts | None = None,
+    ) -> ReservationHoldResponse:
+        """공항버스 좌석을 홀드합니다(결제 전). schedule 은 get_limousine_schedules 의 행, seat_nos 는 get_limousine_seat_inventory
+        의 좌석번호이며 인원 수만큼 줍니다. 승객은 어른·어린이만 됩니다. 앱처럼 대기열 없이 열차 예약과 같은 경로로 보내고, 결제는 pay_with_card, 취소는
+        cancel_unpaid_hold 입니다. 폼과 확인된 값은 mutation_payloads.build_limousine_reservation_form 참고. 2026-09-24 라이브:
+        광명→인천공항 T1 어른 1명 SUCC/IRR000018(16,000원), cancel_unpaid_hold 로 IRG000000·P100."""
+        self._require_session("reservation requires")
+        form = build_limousine_reservation_form(self.config, schedule, seat_nos, passengers=passengers)
+        return self._mutation(
+            "/classes/com.korail.mobile.certification.TicketReservation",
             form,
             parser=parse_reservation_hold_response,
         )

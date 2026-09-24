@@ -31,6 +31,7 @@ from .constants import (
     KorailSeatClass,
 )
 from .errors import KorailProtocolError
+from .limousine_models import LimousineSchedule
 from .models import TrainSummary
 from .mutation_models import (
     CardPayment,
@@ -295,6 +296,91 @@ def build_merge_reservation_form(
     )
     form["txtStndFlg"] = "Y" if standing else "N"
     form.update({key: str(value) for key, value in middle.items()})
+    return form
+
+
+#: 공항버스 좌석의 호차 번호. 앱 상수 DEFINE_SRCARNO(AirportBusSeatMapViewModel.java:101)는 보호된 4바이트이며 좌석 조회와 예약에 같은 값을
+#: 씁니다(:766-783,853,865). 2026-09-24 라이브: 좌석 조회는 1·01·0001 모두 호차 0001 을 돌려줬고 0001 로 홀드가 성공했습니다.
+LIMOUSINE_CAR_NO = "0001"
+
+
+def build_limousine_reservation_form(
+    config: KorailConfig,
+    schedule: LimousineSchedule,
+    seat_nos: Sequence[str],
+    *,
+    passengers: KorailPassengerCounts | None = None,
+    car_no: str = LIMOUSINE_CAR_NO,
+) -> dict[str, str]:
+    """공항버스 홀드 폼. 앱은 열차와 같은 TicketReservation DTO 로 보냅니다(AirportBusScheduleViewModel.java:167-184,488-495;
+    AirportBusSeatMapViewModel.java:752-788,1989-1993). 열차와 다른 점: 작업 코드는 좌석이 있어도 기본값이고, 구성순서·변경플래그는
+    보내지 않으며(ScdlQryOutTrain.java:613-621 에 해당 필드 없음), 좌석속성은 BASIC, 객실은 일반실, 호차는 상수입니다. 승객은 어른·어린이만
+    고를 수 있고(PassengerType.java:56-63), 좌석 수가 인원 수와 같아야 예약 버튼이 켜집니다(AirportBusSeatMapViewModel.java:1914).
+
+    메뉴·작업 코드, 두 플래그, 여정 종류·순번, 호차 번호는 앱에서 보호된 값입니다. 여기의 값은 2026-09-24 라이브 홀드(광명→인천공항 T1,
+    어른 1명, SUCC/IRR000018, 16,000원, 즉시 취소 IRG000000)로 확인한 것입니다."""
+    if not isinstance(schedule, LimousineSchedule):
+        raise KorailProtocolError("KORAIL airport bus reservation requires a LimousineSchedule")
+    if passengers is None:
+        passengers = KorailPassengerCounts()
+    elif not isinstance(passengers, KorailPassengerCounts):
+        raise KorailProtocolError("KORAIL reservation requires an exact KorailPassengerCounts")
+    if passengers.total - passengers.adult - passengers.child:
+        raise KorailProtocolError("KORAIL airport bus passengers can only be adults and children")
+    if isinstance(seat_nos, (str, bytes)) or not isinstance(seat_nos, Sequence):
+        raise KorailProtocolError("seat_nos must be a sequence of seat numbers")
+    seats = tuple(
+        _required_mutation_text(seat, field="seat_no", context="airport bus reservation") for seat in seat_nos
+    )
+    if len(seats) != passengers.total:
+        raise KorailProtocolError("KORAIL airport bus reservation needs exactly one seat per passenger")
+    remaining = schedule.general_remaining_seat_count
+    # 앱은 잔여석이 인원보다 적은 행을 고를 수 없게 합니다(AirportBusScheduleViewModel.java:407-426).
+    if isinstance(remaining, str) and remaining.isdigit() and int(remaining) < passengers.total:
+        raise KorailProtocolError("KORAIL airport bus schedule has fewer remaining seats than passengers")
+    context = "airport bus reservation"
+    journey = {
+        "txtTrnNo1": _required_mutation_text(schedule.train_no, field="train_no", context=context),
+        "txtTrnClsfCd1": _required_mutation_text(schedule.train_class_code, field="train_class_code", context=context),
+        "txtTrnGpCd1": _required_mutation_text(schedule.service_code, field="service_code", context=context),
+        "txtRunDt1": _required_pattern(schedule.run_date, field="run_date", pattern=_DATE_RE),
+        "txtDptDt1": _required_pattern(schedule.departure_date, field="departure_date", pattern=_DATE_RE),
+        "txtDptTm1": _required_pattern(schedule.departure_time, field="departure_time", pattern=_TIME_RE),
+        "txtDptRsStnCd1": _required_digits(schedule.departure_station_code, field="departure_station_code"),
+        "txtDptStnRunOrdr1": _required_digits(schedule.departure_run_order, field="departure_run_order"),
+        "txtArvRsStnCd1": _required_digits(schedule.arrival_station_code, field="arrival_station_code"),
+        "txtArvStnRunOrdr1": _required_digits(schedule.arrival_run_order, field="arrival_run_order"),
+    }
+    car = _required_mutation_text(car_no, field="car_no", context=context)
+    form = _common_fields(config)
+    form.update(
+        {
+            "txtMenuId": "11",
+            "txtJobId": KorailReservationJobType.IMMEDIATE.value,
+            "hidFreeFlg": "N",
+            "txtStndFlg": "N",
+            "txtTotPsgCnt": str(passengers.total),
+        }
+    )
+    _add_passenger_rows(form, passengers)
+    form.update(
+        {
+            "txtSeatAttCd1": "000",
+            "txtSeatAttCd2": "000",
+            "txtSeatAttCd3": "000",
+            "txtSeatAttCd4": "015",
+            "txtSeatAttCd5": "000",
+            "txtPsrmClCd1": KorailSeatClass.GENERAL.value,
+            "txtJrnyCnt": KORAIL_DIRECT_ITINERARY_CODE,
+            "txtJrnyTpCd1": KORAIL_DIRECT_JOURNEY_TYPE_CODE,
+            "txtJrnySqno1": _sequence_no(KORAIL_DIRECT_ITINERARY_CODE),
+            **journey,
+            "txtSrcarCnt": str(len(seats)),
+        }
+    )
+    for index, seat in enumerate(seats, start=1):
+        form[_srcar_no_key(1, index)] = car
+        form[_seat_no_key(1, index)] = seat
     return form
 
 
