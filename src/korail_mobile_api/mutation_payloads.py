@@ -1160,22 +1160,13 @@ def build_discount_card_purchase_form(
     form = _common_fields(config)
     form.update(
         {
-            "dcntCrdKndMgNo": _required_mutation_text(
-                request.card_kind_management_no,
-                field="card_kind_management_no",
-            ),
-            "custMgNo": _required_mutation_text(
-                request.customer_no,
-                field="customer_no",
-            ),
-            "vlidTrmStDt": _required_mutation_text(
-                request.validity_start_date,
-                field="validity_start_date",
-            ),
-            "usePsbTno": _required_mutation_text(
-                request.usable_trip_count,
-                field="usable_trip_count",
-            ),
+            wire: _required_mutation_text(getattr(request, attr), field=attr)
+            for wire, attr in (
+                ("dcntCrdKndMgNo", "card_kind_management_no"),
+                ("custMgNo", "customer_no"),
+                ("vlidTrmStDt", "validity_start_date"),
+                ("usePsbTno", "usable_trip_count"),
+            )
         }
     )
     sections = tuple(request.sections)
@@ -1191,26 +1182,16 @@ def build_discount_card_purchase_form(
                 "KORAIL discount card purchase requires exact "
                 "DiscountCardSectionRequest values"
             )
-        form[f"jrnyTpCd_{index}"] = _required_mutation_text(
-            section.journey_type_code,
-            field="journey_type_code",
-        )
-        form[f"runDt_{index}"] = _required_mutation_text(
-            section.run_date,
-            field="run_date",
-        )
-        form[f"trnNo_{index}"] = _required_mutation_text(
-            section.train_no,
-            field="train_no",
-        )
-        form[f"dptRsStnCd_{index}"] = _required_mutation_text(
-            section.departure_station_code,
-            field="departure_station_code",
-        )
-        form[f"arvRsStnCd_{index}"] = _required_mutation_text(
-            section.arrival_station_code,
-            field="arrival_station_code",
-        )
+        for wire, attr in (
+            ("jrnyTpCd", "journey_type_code"),
+            ("runDt", "run_date"),
+            ("trnNo", "train_no"),
+            ("dptRsStnCd", "departure_station_code"),
+            ("arvRsStnCd", "arrival_station_code"),
+        ):
+            form[f"{wire}_{index}"] = _required_mutation_text(
+                getattr(section, attr), field=attr,
+            )
     users = tuple(request.additional_users)
     # 이 입력 모델은 부가사용자 _1 키 한 묶음만 표현합니다(NCardInfoIn.java:29-39).
     if len(users) > 1:
@@ -1225,18 +1206,14 @@ def build_discount_card_purchase_form(
                     "KORAIL discount card purchase requires exact "
                     "DiscountCardAdditionalUser values"
                 )
-            form[f"custMgNo_{index}"] = _required_mutation_text(
-                user.customer_no,
-                field="additional user customer_no",
-            )
-            form[f"apdCustName_{index}"] = _required_mutation_text(
-                user.name,
-                field="additional user name",
-            )
-            form[f"apdCustTeln_{index}"] = _required_mutation_text(
-                user.phone,
-                field="additional user phone",
-            )
+            for wire, attr in (
+                ("custMgNo", "customer_no"),
+                ("apdCustName", "name"),
+                ("apdCustTeln", "phone"),
+            ):
+                form[f"{wire}_{index}"] = _required_mutation_text(
+                    getattr(user, attr), field=f"additional user {attr}",
+                )
     return form
 
 
@@ -1257,22 +1234,13 @@ def build_discount_card_extension_query(
     query = _common_fields(config)
     query.update(
         {
-            "saleWctNo": _required_mutation_text(
-                ticket.sale_window_no,
-                field="sale_window_no",
-            ),
-            "saleDd": _required_mutation_text(
-                ticket.sale_date,
-                field="sale_date",
-            ),
-            "saleSqno": _required_mutation_text(
-                ticket.sale_sequence,
-                field="sale_sequence",
-            ),
-            "tkRetPwd": _required_mutation_text(
-                ticket.return_password,
-                field="return_password",
-            ),
+            wire: _required_mutation_text(getattr(ticket, attr), field=attr)
+            for wire, attr in (
+                ("saleWctNo", "sale_window_no"),
+                ("saleDd", "sale_date"),
+                ("saleSqno", "sale_sequence"),
+                ("tkRetPwd", "return_password"),
+            )
         }
     )
     return query

@@ -180,18 +180,11 @@ def parse_limousine_seat_inventory_response(
         except (KorailProtocolError, ValueError, OverflowError):
             continue
     return LimousineSeatInventoryResponse(
-        car_type_code=_optional_string(
-            raw,
-            "car_tp_cd",
-        ),
-        car_no=_optional_string(
-            raw,
-            "scar_no",
-        ),
-        seat_arrangement_code=_optional_string(
-            raw,
-            "seat_ary_cd",
-        ),
+        **_nullable_string_fields(raw, {
+            "car_type_code": "car_tp_cd",
+            "car_no": "scar_no",
+            "seat_arrangement_code": "seat_ary_cd",
+        }),
         layout_type=_optional_scalar_string(raw, "layout_type", "limousine seat inventory"),
         vr_banner_url=_optional_scalar_string(raw, "vrBnrUrl", "limousine seat inventory"),
         windows=tuple(windows),

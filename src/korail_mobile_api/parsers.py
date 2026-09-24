@@ -500,63 +500,29 @@ def parse_train_calendar_response(
         days.append(
             TrainCalendarDay(
                 # 보호된 날짜 기본값을 재현하지 않아 누락은 None 입니다(RunDateOutItem.java:37,104-105).
-                run_date=_typed_optional_string(
-                    row,
-                    "runDt",
-                ),
-                # bizDdStgCd 의 누락 기본값은 null(RunDateOutItem.java:111-115). 판정 헬퍼의 null 처리까지 확인된 것은
-                # 아닙니다(RunDateOutItem.java:516-524).
-                business_day_stage_code=_typed_optional_string(
-                    row,
-                    "bizDdStgCd",
-                ),
-                # dayDvCd 누락 기본값은 null 입니다(RunDateOutItem.java:106-110). 직접 getter 참조의 부재만으로 반사 호출까지
-                # 없다고 단정하지 않고, 파서는 선택값으로 읽습니다.
-                day_division_code=_typed_optional_string(
-                    row,
-                    "dayDvCd",
-                ),
-                # hldyDvCd 는 누락 시 보호 기본값을 사용하므로 필수 키가 아닙니다(RunDateOutItem.java:116-119). 보호 기본값의 평문을 빈
-                # 문자열로 확정하지 않습니다.
-                holiday_division_code=_typed_optional_string(
-                    row,
-                    "hldyDvCd",
-                ),
-                # saleDdDvCd 누락 기본값은 null 이므로 선택값으로 읽습니다(RunDateOutItem.java:121-125).
-                sale_day_division_code=_typed_optional_string(
-                    row,
-                    "saleDdDvCd",
-                ),
-                # 운행 플래그의 누락 기본값은 null(RunDateOutItem.java:126-160). isRunDate 비교 리터럴·null 처리 결과는 보호돼
-                # 있습니다(RunDateOutItem.java:526-590).
-                a_train_operation_flag=_typed_optional_string(
-                    row,
-                    "aTrnOpFlg",
-                ),
-                d_train_operation_flag=_typed_optional_string(
-                    row,
-                    "dTrnOpFlg",
-                ),
-                g_train_operation_flag=_typed_optional_string(
-                    row,
-                    "gTrnOpFlg",
-                ),
-                o_train_operation_flag=_typed_optional_string(
-                    row,
-                    "oTrnOpFlg",
-                ),
-                s_train_operation_flag=_typed_optional_string(
-                    row,
-                    "sTrnOpFlg",
-                ),
-                v_train_operation_flag=_typed_optional_string(
-                    row,
-                    "vTrnOpFlg",
-                ),
-                x_train_operation_flag=_typed_optional_string(
-                    row,
-                    "xTrnOpFlg",
-                ),
+                **_nullable_string_fields(row, {
+                    "run_date": "runDt",
+                    # bizDdStgCd 의 누락 기본값은 null(RunDateOutItem.java:111-115). 판정 헬퍼의 null 처리까지 확인된 것은
+                    # 아닙니다(RunDateOutItem.java:516-524).
+                    "business_day_stage_code": "bizDdStgCd",
+                    # dayDvCd 누락 기본값은 null 입니다(RunDateOutItem.java:106-110). 직접 getter 참조의 부재만으로 반사 호출까지
+                    # 없다고 단정하지 않고, 파서는 선택값으로 읽습니다.
+                    "day_division_code": "dayDvCd",
+                    # hldyDvCd 는 누락 시 보호 기본값을 사용하므로 필수 키가 아닙니다(RunDateOutItem.java:116-119). 보호 기본값의 평문을 빈
+                    # 문자열로 확정하지 않습니다.
+                    "holiday_division_code": "hldyDvCd",
+                    # saleDdDvCd 누락 기본값은 null 이므로 선택값으로 읽습니다(RunDateOutItem.java:121-125).
+                    "sale_day_division_code": "saleDdDvCd",
+                    # 운행 플래그의 누락 기본값은 null(RunDateOutItem.java:126-160). isRunDate 비교 리터럴·null 처리 결과는 보호돼
+                    # 있습니다(RunDateOutItem.java:526-590).
+                    "a_train_operation_flag": "aTrnOpFlg",
+                    "d_train_operation_flag": "dTrnOpFlg",
+                    "g_train_operation_flag": "gTrnOpFlg",
+                    "o_train_operation_flag": "oTrnOpFlg",
+                    "s_train_operation_flag": "sTrnOpFlg",
+                    "v_train_operation_flag": "vTrnOpFlg",
+                    "x_train_operation_flag": "xTrnOpFlg",
+                }),
                 raw=dict(row),
             )
         )
@@ -580,89 +546,33 @@ def parse_train_schedule_response(
     for row in _rows(raw, "dlayList"):
         stops.append(
             TrainScheduleStop(
-                station_code=_typed_optional_string(
-                    row,
-                    "stopRsStnCd",
-                ),
-                # stopStnNm 은 누락 시 기본값을 사용하는 필드입니다(ActualTrainScheduleOutDlay.java:71-76).
-                station_name=_typed_optional_string(
-                    row,
-                    "stopStnNm",
-                ),
-                station_construction_order=_typed_optional_string(
-                    row,
-                    "stnConsOrdr",
-                ),
-                run_order=_typed_optional_string(
-                    row,
-                    "runOrdr",
-                ),
+                **_nullable_string_fields(row, {
+                    "station_code": "stopRsStnCd",
+                    # stopStnNm 은 누락 시 기본값을 사용하는 필드입니다(ActualTrainScheduleOutDlay.java:71-76).
+                    "station_name": "stopStnNm",
+                    "station_construction_order": "stnConsOrdr",
+                    "run_order": "runOrdr",
+                }),
                 # ActualTrainScheduleOutDlay.java:30 — 앱 DTO 는 String("001" 등)입니다.
                 actual_arrival_delay_count=_optional_scalar_string(row, "actArvDlayTnum"),
-                actual_arrival_date=_typed_optional_string(
-                    row,
-                    "actArvDt",
-                ),
-                actual_arrival_time=_typed_optional_string(
-                    row,
-                    "actArvTm",
-                ),
-                actual_departure_date=_typed_optional_string(
-                    row,
-                    "actDptDt",
-                ),
-                actual_departure_time=_typed_optional_string(
-                    row,
-                    "actDptTm",
-                ),
-                planned_arrival_date=_typed_optional_string(
-                    row,
-                    "arvDt",
-                ),
-                planned_arrival_time=_typed_optional_string(
-                    row,
-                    "arvTm",
-                ),
-                planned_departure_date=_typed_optional_string(
-                    row,
-                    "dptDt",
-                ),
-                planned_departure_time=_typed_optional_string(
-                    row,
-                    "dptTm",
-                ),
-                delay_fare_return_division_code=_typed_optional_string(
-                    row,
-                    "dlayFareRetDvCd",
-                ),
-                delay_fare_return_division_name=_typed_optional_string(
-                    row,
-                    "dlayFareRetDvCdNm",
-                ),
-                solo_operation_delay_flag=_typed_optional_string(
-                    row,
-                    "dlaySoloOprFlg",
-                ),
-                detour_driver_delay_count=_typed_optional_string(
-                    row,
-                    "dturDrvDlayTnum",
-                ),
-                expected_arrival_delay_count=_typed_optional_string(
-                    row,
-                    "expnArvDlayTnum",
-                ),
-                expected_departure_delay_count=_typed_optional_string(
-                    row,
-                    "expnDptDlayTnum",
-                ),
-                regular_flag=_typed_optional_string(
-                    row,
-                    "rgulFlg",
-                ),
-                service_flag=_typed_optional_string(
-                    row,
-                    "saodFlg",
-                ),
+                **_nullable_string_fields(row, {
+                    "actual_arrival_date": "actArvDt",
+                    "actual_arrival_time": "actArvTm",
+                    "actual_departure_date": "actDptDt",
+                    "actual_departure_time": "actDptTm",
+                    "planned_arrival_date": "arvDt",
+                    "planned_arrival_time": "arvTm",
+                    "planned_departure_date": "dptDt",
+                    "planned_departure_time": "dptTm",
+                    "delay_fare_return_division_code": "dlayFareRetDvCd",
+                    "delay_fare_return_division_name": "dlayFareRetDvCdNm",
+                    "solo_operation_delay_flag": "dlaySoloOprFlg",
+                    "detour_driver_delay_count": "dturDrvDlayTnum",
+                    "expected_arrival_delay_count": "expnArvDlayTnum",
+                    "expected_departure_delay_count": "expnDptDlayTnum",
+                    "regular_flag": "rgulFlg",
+                    "service_flag": "saodFlg",
+                }),
                 raw=dict(row),
             )
         )

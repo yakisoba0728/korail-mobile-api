@@ -173,15 +173,11 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
         reservations.append(
             TicketListReservation(
                 tickets=tuple(tickets),
-                departure_datetime=_optional_scalar_string(
-                    reservation_raw, "hDptDtTm", "ticket list reservation"
-                ),
-                ticket_kind_code=_optional_scalar_string(
-                    reservation_raw, "hTkKndCd", "ticket list reservation"
-                ),
-                list_count=_optional_scalar_string(
-                    reservation_raw, "listCnt", "ticket list reservation"
-                ),
+                **_nullable_scalar_fields(reservation_raw, {
+                    "departure_datetime": "hDptDtTm",
+                    "ticket_kind_code": "hTkKndCd",
+                    "list_count": "listCnt",
+                }, "ticket list reservation"),
                 seat_assign_count=_optional_integer(
                     reservation_raw, "seatAssignCount", "ticket list reservation"
                 ),
@@ -814,18 +810,11 @@ def _parse_pass_goods_info(
                 )
             )
         passenger_infos = PassPassengerInfos(
-            h_chtn_allw_flg=_optional_string(
-                passenger_infos_data,
-                "h_chtn_allw_flg",
-            ),
-            h_max_cnt=_optional_string(
-                passenger_infos_data,
-                "h_max_cnt",
-            ),
-            h_min_cnt=_optional_string(
-                passenger_infos_data,
-                "h_min_cnt",
-            ),
+            **_nullable_string_fields(passenger_infos_data, {
+                "h_chtn_allw_flg": "h_chtn_allw_flg",
+                "h_max_cnt": "h_max_cnt",
+                "h_min_cnt": "h_min_cnt",
+            }),
             psg_info=tuple(passengers),
             raw=passenger_infos_data,
         )
@@ -1397,15 +1386,11 @@ def parse_free_seat_car_response(
 ) -> FreeSeatCarResponse:
     _validate_strict_read_envelope(raw)
     return FreeSeatCarResponse(
-        title=_optional_string(raw, "fresTtl"),
-        car_no=_optional_string(
-            raw,
-            "fresScarNo",
-        ),
-        content=_optional_string(
-            raw,
-            "fresCont",
-        ),
+        **_nullable_string_fields(raw, {
+            "title": "fresTtl",
+            "car_no": "fresScarNo",
+            "content": "fresCont",
+        }),
         **_response_fields(raw),
     )
 
@@ -1484,40 +1469,22 @@ def parse_seat_assignment_schedule_response(
             "h_next_pg_flg",
         ),
         merge_reservation_possible_flag=merge_flag,
-        job_id=_optional_scalar_string(raw, "strJobId", "seat assignment schedule"),
-        menu_id=_optional_scalar_string(raw, "h_menu_id", "seat assignment schedule"),
-        goods_no=_optional_scalar_string(raw, "h_gd_no", "seat assignment schedule"),
-        notice_message=_optional_scalar_string(
-            raw, "h_notice_msg", "seat assignment schedule"
-        ),
-        first_seat_count=_optional_scalar_string(
-            raw, "h_seat_cnt_first", "seat assignment schedule"
-        ),
-        second_seat_count=_optional_scalar_string(
-            raw, "h_seat_cnt_second", "seat assignment schedule"
-        ),
-        agreement_text=_optional_scalar_string(
-            raw, "h_agree_txt", "seat assignment schedule"
-        ),
-        first_departure_time=_optional_scalar_string(
-            raw, "txtGoHour_first", "seat assignment schedule"
-        ),
-        result_count=_optional_scalar_string(raw, "h_rslt_cnt", "seat assignment schedule"),
-        next_query_station_no=_optional_scalar_string(
-            raw, "h_qry_st_no_next", "seat assignment schedule"
-        ),
-        next_train_no=_optional_scalar_string(
-            raw, "h_trn_no_next", "seat assignment schedule"
-        ),
-        next_preceding_train_no=_optional_scalar_string(
-            raw, "h_prcd_trn_no_next", "seat assignment schedule"
-        ),
-        next_connecting_train_no=_optional_scalar_string(
-            raw, "h_ectb_trn_no_next", "seat assignment schedule"
-        ),
-        remaining_seat_count=_optional_scalar_string(
-            raw, "h_rest_seat_cnt", "seat assignment schedule"
-        ),
+        **_nullable_scalar_fields(raw, {
+            "job_id": "strJobId",
+            "menu_id": "h_menu_id",
+            "goods_no": "h_gd_no",
+            "notice_message": "h_notice_msg",
+            "first_seat_count": "h_seat_cnt_first",
+            "second_seat_count": "h_seat_cnt_second",
+            "agreement_text": "h_agree_txt",
+            "first_departure_time": "txtGoHour_first",
+            "result_count": "h_rslt_cnt",
+            "next_query_station_no": "h_qry_st_no_next",
+            "next_train_no": "h_trn_no_next",
+            "next_preceding_train_no": "h_prcd_trn_no_next",
+            "next_connecting_train_no": "h_ectb_trn_no_next",
+            "remaining_seat_count": "h_rest_seat_cnt",
+        }, "seat assignment schedule"),
         trains=trains,
         **_response_fields(raw),
     )
@@ -1532,18 +1499,11 @@ def parse_merge_seats_inquiry_response(
     for station in _rows(raw, "midStnList"):
         stations.append(
             IntermediateStation(
-                code=_optional_string(
-                    station,
-                    "rsStnCd",
-                ),
-                name=_optional_string(
-                    station,
-                    "rsStnNm",
-                ),
-                run_order=_optional_string(
-                    station,
-                    "runOrdr",
-                ),
+                **_nullable_string_fields(station, {
+                    "code": "rsStnCd",
+                    "name": "rsStnNm",
+                    "run_order": "runOrdr",
+                }),
                 raw=station,
             )
         )
@@ -2052,30 +2012,17 @@ def parse_commuter_info_response(
             )
         )
     return CommuterInfoResponse(
-        additional_service_goods_flag=_optional_string(
-            raw,
-            "addSrvGdFlg",
-        ),
-        companion_flag=_optional_string(raw, "cmpaFlg"),
-        commuter_kind_code=_optional_string(
-            raw,
-            "cmtrKndCd",
-        ),
-        commuter_usage_age_code=_optional_string(
-            raw,
-            "cmtrUtlAgeCd",
-        ),
-        menu_id=_optional_string(raw, "menuId"),
-        popup_message=_optional_string(raw, "poppMsg"),
-        promotion_message=_optional_string(
-            raw,
-            "prmoMsg",
-        ),
-        promotion_url=_optional_string(raw, "prmoUrl"),
-        seat_attribute_code=_optional_string(
-            raw,
-            "seatAttCd1",
-        ),
+        **_nullable_string_fields(raw, {
+            "additional_service_goods_flag": "addSrvGdFlg",
+            "companion_flag": "cmpaFlg",
+            "commuter_kind_code": "cmtrKndCd",
+            "commuter_usage_age_code": "cmtrUtlAgeCd",
+            "menu_id": "menuId",
+            "popup_message": "poppMsg",
+            "promotion_message": "prmoMsg",
+            "promotion_url": "prmoUrl",
+            "seat_attribute_code": "seatAttCd1",
+        }),
         available_passenger_count_from=_primitive_json_integer(
             raw,
             "avlPrnbFrom",
