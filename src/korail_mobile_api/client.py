@@ -479,24 +479,28 @@ class KorailClient:
             )
         )
         if parser is not None:
-            try:
-                return parser(response.raw)
-            except KorailApiError as error:
-                # 봉투 통과는 변경 성공 보장이 아닙니다(raise_on_fail=False 면 FAIL 도 도달). 부분 raw 로 전체 응답을 잃지 않게 하여 호출자가 서버 상태를
-                # 확인할 수 있도록 합니다. 파싱 실패를 재전송 신호로 사용하면 중복 홀드·결제가 생길 수 있습니다.
-                error.parser_raw = getattr(error, "raw", None)
-                error.raw = response.raw
-                raise
-            except Exception as error:
-                # 파서가 이 패키지의 예외가 아닌 것을 낼 수도 있습니다 — 예를 들어 자릿수 한도를 넘는 정수를 ``str()`` 로 바꾸다 나는 ``ValueError``. 위의
-                # ``except`` 는 그것을 못 잡으므로 여기서 같은 계약으로 감쌉니다: 원문을 붙인 :class:`KorailProtocolError`.
-                wrapped = KorailProtocolError(
-                    "KORAIL response was received but could not be parsed:"
-                    f" {type(error).__name__}"
-                )
-                wrapped.raw = response.raw
-                raise wrapped from error
+            return self._parse_mutation_response(response.raw, parser)
         return response
+
+    @staticmethod
+    def _parse_mutation_response(
+        raw: dict[str, Any],
+        parser: Callable[[dict[str, Any]], T],
+    ) -> T:
+        """POST·GET 변경 및 환불 검증의 파싱 오류에 전체 응답을 보존합니다. 재전송하지 않습니다."""
+        try:
+            return parser(raw)
+        except KorailApiError as error:
+            error.parser_raw = getattr(error, "raw", None)
+            error.raw = raw
+            raise
+        except Exception as error:
+            wrapped = KorailProtocolError(
+                "KORAIL response was received but could not be parsed:"
+                f" {type(error).__name__}"
+            )
+            wrapped.raw = raw
+            raise wrapped from error
 
     def get_seat_cars(
         self,
@@ -877,13 +881,14 @@ class KorailClient:
         self._require_session("product cancel requires")
         query = build_product_cancel_query(detail)
         return self._run_read(
-            lambda: parse_product_cancel_response(
+            lambda: self._parse_mutation_response(
                 self.http.get_json(
                     "/classes/com.korail.mobile.product.ReservationCancel",
                     query,
                     include_common=True,
                     include_dynapath=False,
-                ).raw
+                ).raw,
+                parse_product_cancel_response,
             )
         )
 
@@ -1621,7 +1626,8 @@ class KorailClient:
     ) -> BaseKorailResponse:
         """이미 만든 예약대기 홀드에 알림·좌석변경 옵션을 기록합니다. 후속 라우트: NetworkApi.java:639-640; 화면과 저장 입력:
         ReservationWaitViewModel.java:68-80. WAIT enum 은 ReservationJobId.java:21 에 있으나 코드값은 보호돼 있습니다. IRR000014
-        의 메시지는 error_json.json 에 있고 트리거 의미는 라이브 기록에 근거합니다. 문자열 자산만으로 앱의 분기 조건까지 확정하지 않습니다."""
+        의 메시지는 error_json.json 에 있고 트리거 의미는 라이브 기록에 근거합니다. 문자열 자산만으로 앱의 분기 조건까지 확정하지 않습니다.
+        이 호출은 새 홀드나 결제를 만들지 않습니다. 2026-09-16 대기 홀드 생성 기록과 별개로 이 옵션 저장 호출의 실서버 성공은 미확인입니다."""
         self._require_session("standby options require")
         route = "/classes/com.korail.mobile.reservationWait.ReservationWait"
         form = build_standby_wait_form(
@@ -1790,7 +1796,9 @@ class KorailClient:
 
         앱의 환불 화면처럼 먼저 :meth:`get_refund_commission` 으로 수수료를 확인하고 그 응답을 ``commission`` 으로 넘기면
         ``tk_ret_tms_dv_cd``·``trnNo`` 도 싣습니다. ``latitude``/``longitude`` 는 앱이 위치를 얻었을 때만 싣는
-        값입니다(:func:`~korail_mobile_api.mutation_payloads.build_refund_form`)."""
+        값입니다(:func:`~korail_mobile_api.mutation_payloads.build_refund_form`). commission 은 자동 조회하지 않으며,
+        넘긴 응답이 SUCC 가 아니면 금액 보호를 위해 전송 전에 거절합니다. 앱의 검사 자체는 CommonOut.isSuccess() 입니다.
+        환불 화면의 보호된 ctlDvCd 는 생략하므로 그 경로의 전체 폼이 앱과 동일하다고 보장하지 않습니다."""
         self._require_session("refund requires")
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
         form = build_refund_form(
@@ -1813,19 +1821,23 @@ class KorailClient:
         """역 발행 승차권을 온라인 환불 전에 검증합니다.
 
         응답 ``VerifyOnlineRefundsOut`` 은 ``CommonOut`` 을 상속하지 않아 ``strResult`` 가 없을 수 있습니다 —
-        :data:`~korail_mobile_api.http._NON_COMMON_OUT_READ_PATHS` 가 이 경로를 그렇게 다룹니다."""
+        :data:`~korail_mobile_api.http._NON_COMMON_OUT_READ_PATHS` 가 이 경로를 그렇게 다룹니다.
+        이 호출만으로 환불을 실행하지 않습니다. 역 발행 승차권이 없어 실서버에서는 검증하지 못했습니다."""
         self._require_session("station ticket refund verification requires")
         return self._post_read(
             "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
             build_station_refund_verification_form(request),
-            parser=parse_station_refund_verification_response,
+            parser=lambda raw: self._parse_mutation_response(
+                raw, parse_station_refund_verification_response
+            ),
         )
 
     def execute_station_ticket_refund(
         self,
         request: StationRefundExecutionRequest,
     ) -> StationRefundExecutionResponse:
-        """검증된 역 발행 승차권의 환불을 실행합니다. **실제로 돈이 움직입니다.**"""
+        """검증된 역 발행 승차권의 환불을 요청합니다. 실제 환불·접수 상태를 바꿀 수 있으므로 반환 구분과 결과를 확인하십시오.
+        역 발행 승차권이 없어 실서버에서는 검증하지 못했습니다."""
         self._require_session("station ticket refund requires")
         return self._mutation(
             "/classes/com.korail.mobile.refunds.executeOnlineRefunds",

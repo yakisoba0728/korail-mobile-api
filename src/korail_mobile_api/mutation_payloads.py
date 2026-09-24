@@ -975,8 +975,8 @@ _ABSENT_JOB_SEQUENCE = "000000"
 
 
 def _echoed_job_sequence(value: str | None) -> str:
-    """홀드 시퀀스를 에코합니다. 숫자로 온 값의 앞자리 0 을 복원하지 않습니다. 결제 응답→hidTmpJobSqno 경로의 앱 근거는 미확인입니다. TripChgPrsCIn.java:47 은
-    여정변경 입력이므로 그 근거로 대체하지 않습니다."""
+    """홀드 시퀀스를 에코합니다(PayViewModel.java:6682-6683). 숫자로 온 값의 앞자리 0 을 복원하지 않습니다.
+    값이 없을 때의 000000 폴백은 앱 근거·실서버 검증이 없습니다."""
     if isinstance(value, str) and value.strip():
         return value
     return _ABSENT_JOB_SEQUENCE
@@ -984,7 +984,8 @@ def _echoed_job_sequence(value: str | None) -> str:
 
 # 응답 첫 여정의 변경번호가 없을 때의 대체값입니다. 항상 없음으로 가정하지 않습니다. 2026-09-22: reserve/reserve_transfer/reserve_merge/
 # recalculate_price 의 45여정 모두 해당 키가 없었고, 같은 예약을 목록으로 되읽으면 000 이었습니다. 표본 밖의 응답을 보장하지 않습니다. 앱은 응답값 또는 보호 기본값을
-# 사용합니다(PayViewModel.java:6581-6593). 대체값은 앱 보호 문자열의 복호 결과가 아니라 관측에 근거한 선택입니다.
+# 사용합니다(PayViewModel.java:6684 및 취소 경로 :4678-4686). 결제 변경번호 대체값의 직접 앱 근거는 미확인이며,
+# 대체값은 앱 보호 문자열의 복호 결과가 아니라 관측에 근거한 선택입니다.
 _ABSENT_RESERVATION_CHANGE_NO = "000"
 
 

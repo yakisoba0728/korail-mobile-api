@@ -44,17 +44,32 @@ from ._parsing import (
 
 
 def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse:
-    """``stlList``의 nullable 값과 정산 수단 코드를 보존합니다."""
+    """필수·nullable stlList 와 각 행의 필수 stl_mns_cd 를 읽습니다.
+
+    RefundTicketOut.java:48-53 의 마스크는 8, StlList.java:46-55 는 1입니다.
+    누락·잘못된 정산 행을 빈 성공 결과로 바꾸지 않습니다.
+    """
     copied = _response_mapping(raw)
+    if "stlList" not in copied:
+        raise KorailProtocolError("KORAIL refund stlList is required")
+    rows = copied["stlList"]
+    if rows is not None and not isinstance(rows, list):
+        raise KorailProtocolError("KORAIL refund stlList must be a list or null")
     codes: list[str] = []
-    for row in _rows(copied, "stlList"):
-        code = _optional_scalar_string(row, "stl_mns_cd", "refund settlement")
-        if code is not None:
-            codes.append(code)
+    for value in rows or ():
+        try:
+            row = _row(value, "refund settlement")
+            code = _strict_scalar_string(row, "stl_mns_cd", "refund settlement")
+            if code is None:
+                raise KorailProtocolError("KORAIL refund stl_mns_cd is required and non-null")
+        except KorailProtocolError as error:
+            error.raw = value
+            raise
+        codes.append(code)
     return RefundTicketResponse(
         **_base_fields(copied),
         settlement_method_codes=tuple(codes),
-        settlement_list_is_null=copied.get("stlList") is None,
+        settlement_list_is_null=rows is None,
     )
 
 

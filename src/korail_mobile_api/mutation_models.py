@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RefundTicketResponse(BaseKorailResponse):
-    """7.0.6 환불 결과의 nullable ``stlList`` 정산 수단 코드."""
+    """7.0.6 환불 결과의 필수·nullable ``stlList`` 정산 수단 코드(RefundTicketOut.java:48-53)."""
 
     settlement_method_codes: tuple[str, ...] = ()
     #: stlList 의 null 과 빈 목록을 구분해 보존합니다.
