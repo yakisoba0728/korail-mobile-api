@@ -341,7 +341,9 @@ def build_limousine_reservation_form(
     context = "airport bus reservation"
     journey = {
         "txtTrnNo1": _required_mutation_text(schedule.train_no, field="train_no", context=context),
-        "txtTrnClsfCd1": _required_mutation_text(schedule.train_class_code, field="train_class_code", context=context),
+        "txtTrnClsfCd1": _required_mutation_text(
+            schedule.train_class_code, field="train_class_code", context=context
+        ),
         "txtTrnGpCd1": _required_mutation_text(schedule.service_code, field="service_code", context=context),
         "txtRunDt1": _required_pattern(schedule.run_date, field="run_date", pattern=_DATE_RE),
         "txtDptDt1": _required_pattern(schedule.departure_date, field="departure_date", pattern=_DATE_RE),
