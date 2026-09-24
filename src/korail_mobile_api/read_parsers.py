@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from ._parsing import (
+    RESERVATION_OUT_EXTRA_FIELDS,
     _nested_rows,
     _nullable_scalar_fields,
     _nullable_string_fields,
@@ -23,6 +24,7 @@ from ._parsing import (
     _reject_non_string_envelope_fields,
     _required_integer,
     _required_string,
+    _reservation_passengers,
     _response_fields,
     _rows,
     _strict_scalar_string,
@@ -2318,6 +2320,8 @@ def parse_ticket_reservation_detail_response(
             "ticket reservation detail",
         ),
         journeys=tuple(journeys),
+        **_nullable_scalar_fields(raw, RESERVATION_OUT_EXTRA_FIELDS, "ticket reservation detail"),
+        passengers=_reservation_passengers(raw),
         **_response_fields(raw),
     )
 

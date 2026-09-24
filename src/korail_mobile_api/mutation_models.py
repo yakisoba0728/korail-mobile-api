@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from .errors import KorailProtocolError
-from .models import BaseKorailResponse, PhysicalSeat, SeatInventoryResponse
+from .models import BaseKorailResponse, PhysicalSeat, ReservationPassengerInfo, SeatInventoryResponse
 
 
 if TYPE_CHECKING:
@@ -316,6 +316,19 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: 가 성립했습니다. 혼합 승객 163200+0-28500=134700, 특실 2인 108800+49000-1000=156800, 경로 표본 108800+0-1000=107800. 관측
     #: 사례이며 보장된 정산식은 아닙니다.
     total_discount_amount: str | None = None
+    #: ReservationOut 의 추가 스칼라(_parsing.RESERVATION_OUT_EXTRA_FIELDS). 발권 가능 일시 h_ise_psb_dt/tm, 선결제 대상
+    #: h_pre_stl_tgt_flg, 특실 운임 h_sprm_fare 등이며 의미는 속성명에 따른 것입니다.
+    customer_management_no: str | None = None
+    mandatory_message: str | None = None
+    additional_service_flag: str | None = None
+    disability_certificate_number: str | None = None
+    pre_settlement_target_flag: str | None = None
+    family_info_confirm_flag: str | None = None
+    special_room_fare: str | None = None
+    issue_possible_date: str | None = None
+    issue_possible_time: str | None = None
+    #: psg_infos 의 승객 유형별 행(:class:`~korail_mobile_api.models.ReservationPassengerInfo`).
+    passengers: tuple[ReservationPassengerInfo, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -422,7 +435,8 @@ class ReservationPaymentTableSeat:
 @dataclass(frozen=True)
 class ReservationPaymentResponse(BaseKorailResponse):
     image_ticket_flag: str | None = None
-    #: ``h_rsv_no`` — 이번 결제로 생성/확정된 예약번호.
+    #: ``h_rsv_no``. 2026-09-24 카드 결제 응답에서는 빈 문자열이었고 PNR(h_pnr_no)은 결제 응답에 없습니다. 결제한 승차권은 홀드의 pnr_no 로
+    #: 찾으십시오(같은 날 승차권 목록의 h_pnr_no 와 같았습니다).
     reservation_no: str | None = None
     #: ``h_stl_cd_apprv_no`` — 결제 승인번호.
     settlement_approval_no: str | None = None
@@ -444,6 +458,25 @@ class ReservationPaymentResponse(BaseKorailResponse):
     tickets: tuple[ReservationPaymentTicket, ...] = ()
     settlements: tuple[ReservationPaymentSettlement, ...] = ()
     table_seats: tuple[ReservationPaymentTableSeat, ...] = ()
+    #: ReservationPaymentOut 의 나머지 스칼라(ReservationPaymentOut.java:90 의 @SerialName). 2026-09-24 라이브 결제 응답에 모두
+    #: 있었습니다.
+    window_no: str | None = None
+    settlement_count: str | None = None
+    discount_card_count: str | None = None
+    total_price: str | None = None
+    total_fare: str | None = None
+    total_discount_amount: str | None = None
+    adult_count: str | None = None
+    child_count: str | None = None
+    table_seat_count: str | None = None
+    ticket_count: str | None = None
+    settlement_type_code: str | None = None
+    trade_division: str | None = None
+    remark: str | None = None
+    survey_flag: str | None = None
+    survey_title: str | None = None
+    survey_text: str | None = None
+    survey_url: str | None = None
 
 
 @dataclass(frozen=True)

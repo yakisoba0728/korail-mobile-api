@@ -12,6 +12,7 @@ from functools import wraps
 from typing import Any, ParamSpec, TypeVar
 
 from .errors import KorailApiError, KorailProtocolError
+from .models import ReservationPassengerInfo
 
 
 _P = ParamSpec("_P")
@@ -247,3 +248,47 @@ def _nullable_scalar_fields(
         attribute: _optional_scalar_string(data, wire_name, context)
         for attribute, wire_name in field_map.items()
     }
+
+
+#: ReservationOut 을 공유하는 홀드·예약 상세 응답의 추가 스칼라(ReservationOut.java 의 @SerialName). 2026-09-24 라이브: 홀드에는
+#: h_cust_mg_no·h_hdcp_ctfc_num 을 뺀 7개가, 예약 상세에는 h_cust_mg_no·h_sprm_fare·h_fmly_info_cfm_flg 가 있었습니다.
+RESERVATION_OUT_EXTRA_FIELDS: dict[str, str] = {
+    "customer_management_no": "h_cust_mg_no",
+    "mandatory_message": "h_msg_mndry",
+    "additional_service_flag": "h_add_srv_flg",
+    "disability_certificate_number": "h_hdcp_ctfc_num",
+    "pre_settlement_target_flag": "h_pre_stl_tgt_flg",
+    "family_info_confirm_flag": "h_fmly_info_cfm_flg",
+    "special_room_fare": "h_sprm_fare",
+    "issue_possible_date": "h_ise_psb_dt",
+    "issue_possible_time": "h_ise_psb_tm",
+}
+
+_RESERVATION_PASSENGER_FIELDS: dict[str, str] = {
+    "passenger_type_code": "h_psg_tp_cd",
+    "passenger_count": "h_psg_info_per_prnb",
+    "discount_kind_code": "h_dcnt_knd_cd",
+    "discount_kind_code_2": "h_dcnt_knd_cd2",
+    "discount_proof_no": "h_dcsp_no",
+    "discount_proof_no_2": "h_dcsp_no2",
+    "delay_original_window_no": "dlayOgtkWctNo",
+    "delay_original_sale_date": "dlayOgtkSaleDt",
+    "delay_original_sale_sequence": "dlayOgtkSaleSqno",
+    "delay_original_return_password": "dlayOgtkRetPwd",
+}
+
+
+def _reservation_passengers(raw: Mapping[str, Any]) -> tuple[ReservationPassengerInfo, ...]:
+    """psg_infos.psg_info 행을 관대하게 읽습니다. 컨테이너가 없거나 모양이 다르면 빈 튜플이고 원문은 raw 에 남습니다."""
+    container = raw.get("psg_infos")
+    rows = container.get("psg_info") if isinstance(container, Mapping) else None
+    if not isinstance(rows, list):
+        return ()
+    return tuple(
+        ReservationPassengerInfo(
+            **_nullable_scalar_fields(row, _RESERVATION_PASSENGER_FIELDS, "reservation passenger"),
+            raw=dict(row),
+        )
+        for row in rows
+        if isinstance(row, Mapping)
+    )

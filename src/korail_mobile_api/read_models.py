@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from .models import BaseKorailResponse
+from .models import BaseKorailResponse, ReservationPassengerInfo
 
 
 @dataclass(frozen=True)
@@ -1562,6 +1562,19 @@ class TicketReservationDetailResponse(BaseKorailResponse):
     total_received_amount: str | None = None
     payment_flag: str | None = None
     journeys: tuple[ReservationDetailJourney, ...] = ()
+    #: ReservationOut 의 추가 스칼라(_parsing.RESERVATION_OUT_EXTRA_FIELDS). 발권 가능 일시 h_ise_psb_dt/tm, 선결제 대상
+    #: h_pre_stl_tgt_flg, 특실 운임 h_sprm_fare 등이며 의미는 속성명에 따른 것입니다.
+    customer_management_no: str | None = None
+    mandatory_message: str | None = None
+    additional_service_flag: str | None = None
+    disability_certificate_number: str | None = None
+    pre_settlement_target_flag: str | None = None
+    family_info_confirm_flag: str | None = None
+    special_room_fare: str | None = None
+    issue_possible_date: str | None = None
+    issue_possible_time: str | None = None
+    #: psg_infos 의 승객 유형별 행(:class:`~korail_mobile_api.models.ReservationPassengerInfo`).
+    passengers: tuple[ReservationPassengerInfo, ...] = ()
 
 
 @dataclass(frozen=True)

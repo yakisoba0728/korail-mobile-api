@@ -510,6 +510,24 @@ class TrainSummary:
 
 
 @dataclass(frozen=True)
+class ReservationPassengerInfo:
+    """``ReservationOut.psg_infos.psg_info`` 한 행 — 승객 유형별 인원과 할인(ReservationOutPsgInfo.java 의 @SerialName 10개).
+    선택값으로 관대하게 읽습니다. 2026-09-24 라이브 홀드: 성인 1명 행 하나에 앞의 6개 키가 있었고 할인·증빙 값은 빈 문자열이었습니다."""
+
+    passenger_type_code: str | None = None
+    passenger_count: str | None = None
+    discount_kind_code: str | None = None
+    discount_kind_code_2: str | None = None
+    discount_proof_no: str | None = None
+    discount_proof_no_2: str | None = None
+    delay_original_window_no: str | None = None
+    delay_original_sale_date: str | None = None
+    delay_original_sale_sequence: str | None = None
+    delay_original_return_password: str | None = None
+    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+
+
+@dataclass(frozen=True)
 class SeatAttribute:
     name: str
     code: str | None = None

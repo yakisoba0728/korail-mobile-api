@@ -31,9 +31,11 @@ from .mutation_models import (
 )
 from ._parsing import _response_fields as _base_fields
 from ._parsing import (
+    RESERVATION_OUT_EXTRA_FIELDS,
     _nested_rows,
     _nullable_scalar_fields,
     _optional_scalar_string,
+    _reservation_passengers,
     _rows,
     _strict_scalar_string,
 )
@@ -278,6 +280,23 @@ _RESERVATION_PAYMENT_FIELDS = {
     "publication_end_no": "h_publ_end_no",
     "mixed_settlement_division": "h_mix_stl_dv",
     "cancellation_fee": "h_cnc_fee",
+    "window_no": "h_wct_no",
+    "settlement_count": "h_stl_cnt",
+    "discount_card_count": "h_disc_card_cnt",
+    "total_price": "h_tot_prc",
+    "total_fare": "h_tot_fare",
+    "total_discount_amount": "h_tot_disc_amt",
+    "adult_count": "h_adult_cnt",
+    "child_count": "h_child_cnt",
+    "table_seat_count": "h_tbl_seat_cnt",
+    "ticket_count": "h_tk_cnt",
+    "settlement_type_code": "h_stl_tp_cd",
+    "trade_division": "h_trade_gbn",
+    "remark": "h_bigo",
+    "survey_flag": "h_survey_flg",
+    "survey_title": "h_survey_title",
+    "survey_text": "h_survey_text",
+    "survey_url": "h_survey_url",
 }
 
 _RESERVATION_PAYMENT_TICKET_FIELDS = {
@@ -390,6 +409,8 @@ def parse_reservation_hold_response(
             [journey.raw for journey in journeys],
         ),
         journeys=tuple(journeys),
+        **_nullable_scalar_fields(copied, RESERVATION_OUT_EXTRA_FIELDS, "reservation"),
+        passengers=_reservation_passengers(copied),
     )
 
 
