@@ -448,8 +448,11 @@ class MaasServiceDetailQuery:
 def build_multi_child_discount_target_form(
     departure_date: str,
 ) -> dict[str, str]:
-    # 달력 검증은 변경 가능일 조회에만 라이브 근거가 있어(build_trip_change_date_form) 여기서는 YYYYMMDD 형식만 봅니다.
-    return {"dptDt": _ascii_digits(departure_date, "departure_date", lengths=frozenset({8}))}
+    # 달력 검증은 앱에 없는 라이브러리 검사입니다. 2026-09-22 라이브 기록(커밋 28b3fd6): 20260230 이 빈 목록으로 조용히 돌아왔습니다.
+    # 2026-09-24 에는 다자녀 대상이 아닌 계정이라 20260230·정상 날짜 모두 FAIL/WRC800029 여서 다시 재현하지 못했습니다.
+    return {
+        "dptDt": _calendar_date(departure_date, "departure_date").strftime("%Y%m%d")
+    }
 
 
 def build_korail_point_summary_form() -> dict[str, str]:
