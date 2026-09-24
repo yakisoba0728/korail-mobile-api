@@ -210,7 +210,10 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
 
 @_preserve_read_raw
 def parse_station_name_map(raw: Mapping[str, Any]) -> dict[str, str]:
-    """역코드→이름 캐시용 표. stns.stn 목록이나 사용 가능한 코드·이름 쌍이 없으면 오류입니다."""
+    """역코드→이름 캐시용 표. stns.stn 목록이나 사용 가능한 코드·이름 쌍이 없으면 오류입니다.
+
+    조회 폼에 역이름을 채우는 용도라 :func:`parse_station_data_response` 보다 관대합니다: 비객체 행과 코드·이름이 빈 행은 건너뛰고
+    숫자 코드는 문자열로 받습니다. 앱은 같은 응답을 로컬 역 DB 에 넣고 거기서 이름을 찾습니다(StationDataRepositoryImpl.java:282-283)."""
     container = raw.get("stns")
     rows = container.get("stn") if isinstance(container, Mapping) else None
     if not isinstance(rows, list):
@@ -389,7 +392,8 @@ _STATION_OPTIONAL_STRING_FIELDS: dict[str, str] = {
 def parse_station_data_response(
     response: BaseKorailResponse,
 ) -> StationDataResponse:
-    """봉투 없는 역 목록. stns.stn 과 각 역의 비어 있지 않은 코드·이름은 필수입니다."""
+    """봉투 없는 역 목록. stns.stn 과 각 역의 비어 있지 않은 코드·이름은 필수입니다. 역명 조회용 표는 이상한 행을 건너뛰는
+    :func:`parse_station_name_map` 을 씁니다."""
     container = response.raw.get("stns")
     if not isinstance(container, Mapping):
         raise KorailProtocolError("KORAIL station data missing stns object")
@@ -428,23 +432,13 @@ def parse_station_data_response(
 def parse_station_info_response(
     response: BaseKorailResponse,
 ) -> StationInfoResponse:
-    """역 목록의 버전 정보. count 와 map_version 은 비어 있지 않은 문자열입니다. String 선언을 따라 count 도 정수로 바꾸지
-    않습니다(StationInfoOut.java:47)."""
+    """역 목록의 버전 정보. count 와 map_version 은 반드시 있는 문자열입니다(StationInfoOut.java:47-49 의 필수 필드). 빈 값은 DTO 도
+    거절하지 않으므로 그대로 받습니다. String 선언을 따라 count 도 정수로 바꾸지 않습니다."""
     raw = response.raw
     return StationInfoResponse(
         **_response_fields(response),
-        count=_typed_required_string(
-            raw,
-            "count",
-            context="station info",
-            non_empty=True,
-        ),
-        map_version=_typed_required_string(
-            raw,
-            "map_version",
-            context="station info",
-            non_empty=True,
-        ),
+        count=_typed_required_string(raw, "count", context="station info"),
+        map_version=_typed_required_string(raw, "map_version", context="station info"),
     )
 
 

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, Literal
@@ -17,7 +18,6 @@ from ._payload_helpers import _device_version, _is_ascii_digits
 from .payloads import build_cache_query
 from .read_models import (
     CommuterInfoResponse,
-    CommuterPassengerOption,
     PassMenuData,
 )
 
@@ -414,14 +414,11 @@ def _validate_maas_service_detail_query_values(
     start_date: str | None,
     end_date: str | None,
 ) -> None:
-    if start_date is None or end_date is None:
-        if start_date is not None or end_date is not None:
-            raise KorailProtocolError("MaaS history requires both dates or neither")
-        return
-    start = _calendar_date(start_date, "start_date")
-    end = _calendar_date(end_date, "end_date")
-    if end < start:
-        raise KorailProtocolError("end_date must not be before start_date")
+    # 앱은 두 날짜를 따로 nullable 로 넘깁니다(MaasDetailIn.java:65-68, MyTicketBaseViewModel$executeMaasList$1.java:117).
+    # 짝·순서는 검사하지 않고, 주어진 값의 YYYYMMDD 형식만 봅니다.
+    for value, name in ((start_date, "start_date"), (end_date, "end_date")):
+        if value is not None:
+            _ascii_digits(value, name, lengths=frozenset({8}))
 
 
 @dataclass(frozen=True)
@@ -451,10 +448,8 @@ class MaasServiceDetailQuery:
 def build_multi_child_discount_target_form(
     departure_date: str,
 ) -> dict[str, str]:
-    # 위 :func:`build_trip_change_date_form` 과 같은 이유로 달력 검증입니다.
-    return {
-        "dptDt": _calendar_date(departure_date, "departure_date").strftime("%Y%m%d")
-    }
+    # 달력 검증은 변경 가능일 조회에만 라이브 근거가 있어(build_trip_change_date_form) 여기서는 YYYYMMDD 형식만 봅니다.
+    return {"dptDt": _ascii_digits(departure_date, "departure_date", lengths=frozenset({8}))}
 
 
 def build_korail_point_summary_form() -> dict[str, str]:
@@ -655,9 +650,9 @@ def build_maas_service_detail_form(
     query: MaasServiceDetailQuery,
 ) -> dict[str, str]:
     form = _device_version(config)
-    # 두 날짜의 동시 지정은 __post_init__ 에서 검사합니다.
-    if query.start_date is not None and query.end_date is not None:
+    if query.start_date is not None:
         form["qryDtFrom"] = query.start_date
+    if query.end_date is not None:
         form["qryDtTo"] = query.end_date
     return form
 
@@ -674,10 +669,9 @@ def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
 
 
 def _exact_server_pass_data(pass_data: PassMenuData) -> str:
-    if not isinstance(pass_data, PassMenuData):
-        raise KorailProtocolError("pass_data must be a PassMenuData")
+    """정기권 종류 코드를 꺼냅니다. 빌더가 쓰는 값은 이것 하나라 객체 출처(PassMenuData 등)는 가리지 않습니다."""
     return _required_text(
-        pass_data.commuter_kind_code,
+        getattr(pass_data, "commuter_kind_code", None),
         "pass_data.commuter_kind_code",
     )
 
@@ -706,7 +700,9 @@ class CommuterPassengerRequest:
         instance = object.__new__(cls)
         object.__setattr__(instance, "pass_data", pass_data)
         object.__setattr__(instance, "source", source)
-        object.__setattr__(instance, "passenger_counts", passenger_counts)
+        if isinstance(passenger_counts, (str, bytes)) or not isinstance(passenger_counts, Sequence):
+            raise KorailProtocolError("passenger_counts must be a sequence of integers")
+        object.__setattr__(instance, "passenger_counts", tuple(passenger_counts))
         _validate_commuter_passenger_request(instance)
         return instance
 
@@ -715,28 +711,17 @@ def _validate_commuter_passenger_request(
     request: CommuterPassengerRequest,
 ) -> tuple[str, ...]:
     _exact_server_pass_data(request.pass_data)
-    if not isinstance(request.source, CommuterInfoResponse):
-        raise KorailProtocolError("source must be a CommuterInfoResponse")
-    if type(request.passenger_counts) is not tuple:
-        raise KorailProtocolError("passenger_counts must be a tuple")
-    age_codes = tuple(
-        option.commuter_usage_age_code
-        for option in request.source.passenger_options
-    )
-    if not age_codes or len(age_codes) != len(request.passenger_counts):
+    # 인원 행은 초기 조회 응답(source.passenger_options)의 연령 코드와 1:1 입니다. 0명 선택 거절은 빌더에 남습니다.
+    options = getattr(request.source, "passenger_options", None)
+    if not isinstance(options, Sequence) or isinstance(options, (str, bytes)):
+        raise KorailProtocolError("source must carry passenger_options")
+    validated_age_codes = [
+        _required_text(getattr(option, "commuter_usage_age_code", None), "commuter_usage_age_code")
+        for option in options
+    ]
+    if not validated_age_codes or len(validated_age_codes) != len(request.passenger_counts):
         raise KorailProtocolError(
             "passenger counts must match the response age-code rows"
-        )
-    validated_age_codes: list[str] = []
-    for option, age_code in zip(
-        request.source.passenger_options,
-        age_codes,
-        strict=True,
-    ):
-        if not isinstance(option, CommuterPassengerOption):
-            raise KorailProtocolError("response passenger options must be CommuterPassengerOption")
-        validated_age_codes.append(
-            _required_text(age_code, "commuter_usage_age_code")
         )
     for count in request.passenger_counts:
         if type(count) is not int or count < 0:
@@ -855,8 +840,8 @@ def build_original_ticket_inquiry_form(
     references = _exact_ticket_reference_tuple(tickets)
     if ticket_count is None:
         count = len(references)
-    elif type(ticket_count) is not int or ticket_count < 1:
-        raise KorailProtocolError("ticket_count must be a positive integer")
+    elif type(ticket_count) is not int:
+        raise KorailProtocolError("ticket_count must be an integer")
     else:
         count = ticket_count
     # 2026-09-22 라이브: ticket_count 를 len(tickets) 보다 작게 보내면 앞의 해당 개수만 조회됐습니다. 전부 조회하려면 ticket_count 를 생략하거나
@@ -1038,8 +1023,12 @@ class PriceFareQuoteRequest:
 
     def __post_init__(self) -> None:
         _wire_component(self.menu_id, "menu_id")
-        if type(self.legs) is not tuple or len(self.legs) not in {1, 2}:
-            raise KorailProtocolError("legs must be a tuple containing one or two legs")
+        # 구간 수가 chtnDvCd·trnCnt 가 되므로 직통 1·환승 2 만 받습니다. 목록 타입은 가리지 않고 tuple 로 고정합니다.
+        if isinstance(self.legs, (str, bytes)) or not isinstance(self.legs, Sequence):
+            raise KorailProtocolError("legs must be a sequence of one or two legs")
+        object.__setattr__(self, "legs", tuple(self.legs))
+        if len(self.legs) not in {1, 2}:
+            raise KorailProtocolError("legs must contain one or two legs")
         for leg in self.legs:
             if not isinstance(leg, PriceFareLeg):
                 raise KorailProtocolError("legs must contain PriceFareLeg values")

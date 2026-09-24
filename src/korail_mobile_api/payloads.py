@@ -198,8 +198,8 @@ def build_train_search_form(
     """열차 한 페이지의 폼. 첫 페이지는 커서 4개를 생략하고 다음 페이지는 continuation 의 3개 값만 싣습니다. pgPrCnt 는 보내지
     않습니다(TrainScheduleIn.java:641-650, TrainScheduleViewModel.java:3212,7340). qryDvCd 는 커서와 별개로 항상 포함합니다.
 
-    transfer 는 radJobId 를 바꾸며(TrainScheduleViewModel.java:3136,3212), 명시한 환승역· 후속 열차군은 목록 필드로 추가합니다. Sid 는 DTO 에
-    없습니다(TrainScheduleIn.java:95). menu_id 기본값 밖의 보호 코드는 build_seat_car_form 의 경고를 따릅니다."""
+    transfer 는 radJobId 를 바꾸며(TrainScheduleViewModel.java:3136,3212), 명시한 환승역·후속 열차군은 transfer 여부와 관계없이 목록 필드로
+    추가합니다. Sid 는 DTO 에 없습니다(TrainScheduleIn.java:95). menu_id 기본값 밖의 보호 코드는 build_seat_car_form 의 경고를 따릅니다."""
     if continuation is not None and not isinstance(
         continuation, TrainSearchContinuation
     ):
@@ -214,8 +214,9 @@ def build_train_search_form(
         query.high_disability_passengers,
         query.low_disability_passengers,
     )
-    if any(type(count) is not int or count < 0 for count in counts) or not sum(counts):
-        raise KorailProtocolError("passenger counts must be non-negative integers with a nonzero total")
+    # 인원은 문자열로 옮기므로 정수인지만 봅니다. 범위·합계는 앱 DTO 가 검사하지 않아 서버에 맡깁니다(TrainScheduleIn.java:95).
+    if any(type(count) is not int for count in counts):
+        raise KorailProtocolError("passenger counts must be integers")
     if not isinstance(query.seat_attribute_code, str) or not query.seat_attribute_code:
         raise KorailProtocolError("seat_attribute_code must be a non-empty string")
     form = {
@@ -254,19 +255,16 @@ def build_train_search_form(
     # 생략은 @Field 바인딩이 아니라 직렬화·평탄화 과정입니다.
     if not isinstance(query.query_division_code, str) or not query.query_division_code:
         raise KorailProtocolError("query_division_code must be a non-empty string")
-    if not isinstance(query.connection_station_codes, tuple) or any(
-        not isinstance(code, str) or not code for code in query.connection_station_codes
+    connection_station_codes = query.connection_station_codes
+    if isinstance(connection_station_codes, (str, bytes)) or any(
+        not isinstance(code, str) or not code for code in connection_station_codes
     ):
-        raise KorailProtocolError("connection_station_codes must be a tuple of non-empty strings")
+        raise KorailProtocolError("connection_station_codes must be a sequence of non-empty strings")
     if query.connection_train_group_code is not None and (
         not isinstance(query.connection_train_group_code, str)
         or not query.connection_train_group_code
     ):
         raise KorailProtocolError("connection_train_group_code must be a non-empty string or None")
-    if not transfer and (
-        query.connection_station_codes or query.connection_train_group_code is not None
-    ):
-        raise KorailProtocolError("connection filters require transfer=True")
     form["qryDvCd"] = query.query_division_code
     # 신규 빌드의 커서 4개는 null(TrainScheduleViewModel.java:3212). 다음 페이지의 3튜플만 복사하며 pgPrCnt 는 추가하지
     # 않습니다(TrainScheduleViewModel.java:7340).
@@ -279,9 +277,9 @@ def build_train_search_form(
         # 여부 조건은 라이브러리 정책입니다.
         form["qryStTrnNo2"] = continuation.query_train_no2
     # 배열에 1기반 접미사를 붙입니다. 선택역·후보 목록은 호출자가 주며 보호된 선택값은 추정하지 않습니다.
-    if query.connection_station_codes:
-        form["chtnCnt"] = str(len(query.connection_station_codes))
-        for index, code in enumerate(query.connection_station_codes, 1):
+    if connection_station_codes:
+        form["chtnCnt"] = str(len(connection_station_codes))
+        for index, code in enumerate(connection_station_codes, 1):
             form[f"chtnRsStnCd{index}"] = code
     if query.connection_train_group_code is not None:
         form["trnGpCnt"] = "1"
