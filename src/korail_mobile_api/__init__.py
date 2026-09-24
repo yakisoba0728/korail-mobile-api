@@ -4,11 +4,9 @@
 
 """KORAIL 7.0.6 기반 클라이언트의 공개 API.
 
-시작점은 KorailClient 와 KorailConfig 입니다. __all__ 밖의 이름은 변경될 수 있습니다. 전송·프로토콜·서버 오류는 KorailApiError 계층으로
-제공하며, 입력 검증은 ValueError 도 낼 수 있습니다.
-"""
+시작점은 KorailClient 와 KorailConfig 입니다. __all__ 밖의 이름은 변경될 수 있습니다. 전송·프로토콜·서버 오류는 KorailApiError 계층으로 제공하며, 입력 검증은
+ValueError 도 낼 수 있습니다."""
 
-#: 패키지 버전. 공개 API 목록인 __all__ 에는 포함하지 않습니다.
 __version__ = "1.2.0"
 
 from .client import KorailClient

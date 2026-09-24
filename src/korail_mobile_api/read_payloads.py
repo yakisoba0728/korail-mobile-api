@@ -2,9 +2,8 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""승차권·예약·환불·마일리지·할인카드·MaaS 조회 폼 빌더. 기본 조회는 payloads, 상태 변경은 mutation_payloads 에 있습니다. 키 근거는 DTO·호출부이며
-FieldMap 선언 자체가 키 이름·순서를 검증하지는 않습니다.
-"""
+"""승차권·예약·환불·마일리지·할인카드·MaaS 조회 폼 빌더. 기본 조회는 payloads, 상태 변경은 mutation_payloads 에 있습니다. 키 근거는 DTO·호출부이며 FieldMap 선언
+자체가 키 이름·순서를 검증하지는 않습니다."""
 from __future__ import annotations
 
 import time
@@ -37,8 +36,7 @@ def _required_text(value: str | None, name: str) -> str:
     """``value`` 를 그대로 돌려주되 없거나 빈 문자열이면 거부합니다.
 
     호출자 대부분이 서버 응답에서 파싱한 선택 필드를 그대로 넘기므로, ``None`` 도 인자로 받아
-    :class:`~korail_mobile_api.errors.KorailProtocolError` 로 거절합니다.
-    """
+    :class:`~korail_mobile_api.errors.KorailProtocolError` 로 거절합니다."""
     if not isinstance(value, str) or not value.strip():
         raise KorailProtocolError(f"{name} must not be empty")
     return value
@@ -58,9 +56,8 @@ def _ascii_digits(
     maximum_length: int | None = None,
     allow_empty: bool = False,
 ) -> str:
-    """ASCII 숫자 검사. lengths 는 허용 길이 집합, maximum_length 는 상한입니다. 둘 다 없으면 길이를 제한하지 않고 allow_empty=True 이면 빈
-    문자열도 허용합니다.
-    """
+    """ASCII 숫자 검사. lengths 는 허용 길이 집합, maximum_length 는 상한입니다. 둘 다 없으면 길이를 제한하지 않고 allow_empty=True 이면 빈 문자열도
+    허용합니다."""
     if allow_empty and value == "":
         return value
     if lengths is not None:
@@ -106,21 +103,17 @@ class FreeSeatCarRequest:
 
 @dataclass(frozen=True)
 class GuideSeatConditionRequest:
-    """``guideSeatCnd.do`` 입력 — 사실상 **정적 안내문** 조회입니다.
-
-    서버는 :attr:`seat_attribute_code` 가 무엇이든 같은 도우미석 안내를 ``FAIL``/``MRR800011`` 로 돌려줍니다(2026-09-22:
-    좌석속성코드 14종 전부 동일). 7.0.6 도 ``SeatType.HELPER`` 의 코드 하나만 보냅니다 (``TrainOptionViewModel.java:270``).
-    즉 이 값으로 결과가 갈리지 않습니다.
-    """
+    """guideSeatCnd.do 입력. 2026-09-22 라이브에서는 좌석속성코드 14종이 같은 도우미석 안내(FAIL/MRR800011)를 반환했습니다. 앱은 SeatType.HELPER 코드를
+    사용합니다(TrainOptionViewModel.java:270). 이 표본만으로 모든 입력·시점의 응답이 같다고 보장하지 않습니다."""
 
     seat_attribute_code: str
 
 
 @dataclass(frozen=True)
 class SeatAssignmentScheduleRequest:
-    #: ``menuId`` — 좌석배정·할인 메뉴 코드입니다. 일반 검색 메뉴 ``"11"`` 은 빈 목록만 돌려주므로(2026-09-22 확인) 행을 받으려면
-    #: ``"A1"``/``"A2"`` (:data:`~korail_mobile_api.constants.KORAIL_DISCOUNT_CARD_MENU_ID`)를 씁니다. 자세한
-    #: 것은 :meth:`~korail_mobile_api.client.KorailClient.get_seat_assignment_schedule` docstring 참조.
+    #: ``menuId`` — 좌석배정·할인 메뉴 코드입니다. 일반 검색 메뉴 ``"11"`` 은 빈 목록만 돌려주므로(2026-09-22 확인) 행을 받으려면 ``"A1"``/``"A2"``
+    #: (:data:`~korail_mobile_api.constants.KORAIL_DISCOUNT_CARD_MENU_ID`)를 씁니다. 자세한 것은
+    #: :meth:`~korail_mobile_api.client.KorailClient.get_seat_assignment_schedule` docstring 참조.
     menu_id: str
     departure_date: str
     departure_time: str
@@ -187,10 +180,8 @@ def build_seat_assignment_schedule_form(
         "dirtChtnDvCd": request.transfer_type_code,
         "chtnArvRsStnNm": request.connection_arrival_station_name,
     }
-    # ``seatAttCdN``/``psgNumN``/``stlbDturDvNmN`` 은 승객 한 명당 한 벌인 번호 그룹입니다. ``psgNumN`` 은 그 자리의 **점유
-    # 플래그**(0/1)이지 인원수가 아닙니다. ``psgNum1`` 에 총원을 넣으면 2 이상은 서버가 전부 ``SUPDATE`` 로 막습니다 -- 2026-09-22 라이브
-    # 확인: ``psgNum1`` 이 ``"0"``/``"1"`` 이면 ``WRG000000`` 이지만 ``"2"``/``"02"``/``"3"``/``"9"`` 는
-    # SUPDATE 이고, 대신 그룹을 1..9 까지 늘리면 9명까지 그대로 통과합니다.
+    # seatAttCdN/psgNumN/stlbDturDvNmN 은 승객별 번호 그룹이고 psgNumN 은 인원수가 아니라 그 자리의 점유 플래그(0/1)입니다. 2026-09-22
+    # 라이브: psgNum1=0/1 은 WRG000000, 2/02/3/9 는 SUPDATE 였고 그룹을 1..9 로 늘린 요청은 통과했습니다.
     for slot in range(1, request.passenger_count + 1):
         form[f"seatAttCd{slot}"] = request.seat_attribute_code
         form[f"psgNum{slot}"] = "1"
@@ -225,10 +216,9 @@ class PassScheduleRequest:
     pass_kind_code: str
     pass_period_code: str
     pass_age_code: str
-    #: ``txtSelPage`` — **이 라우트는 무시합니다.** 어떤 값을 넣어도 응답의 ``h_page_no`` 는 ``'1'`` 로 돌아왔고(2026-09-22 실측),
-    #: 7.0.6 도 ``CheckUsagePeriodSectionViewModel.java:389`` 에서 ``'1'`` 을 박아 보냅니다. 더 받으려면 이 값이 아니라
-    #: :attr:`page_size` 를 키우십시오. 응답 쪽 페이징 신호도 믿을 수 없습니다 —
-    #: :class:`~korail_mobile_api.read_models.PassScheduleMainInfo` 참조.
+    #: txtSelPage: 2026-09-22 관측에서 요청값을 바꿔도 h_page_no=1 이었습니다. 앱의 해당 인자도 고정이지만 평문은 보호돼
+    #: 있습니다(CheckUsagePeriodSectionViewModel.java:389). page_size 로 요청 건수를 정하며 페이징 신호의 관측 한계는
+    #: PassScheduleMainInfo 참고.
     page_no: str
     #: ``txtCntPerPage`` — 실제로 결과 수를 정하는 값입니다.
     page_size: str
@@ -279,8 +269,8 @@ def build_cart_list_form(
 def build_delay_discount_ticket_form(
     departure_date_to: str,
 ) -> dict[str, str]:
-    # dptDtTo 속성의 전송 키는 명시적 h_page_no(DelayDiscountViewIn.java:50,77). 2026-09-16 관측: 날짜·1·다른 후보 키·키
-    # 생략 모두 같은 빈 SUCC. 할인권 없는 계정이므로 이 표본은 실제 필터 동작을 입증하지 못합니다.
+    # dptDtTo 속성의 전송 키는 명시적 h_page_no(DelayDiscountViewIn.java:50,77). 2026-09-16 관측: 날짜·1·다른 후보 키·키 생략 모두 같은 빈
+    # SUCC. 할인권 없는 계정이므로 이 표본은 실제 필터 동작을 입증하지 못합니다.
     return {
         "h_page_no": _ascii_digits(
             departure_date_to, "departure_date_to", lengths=frozenset({8})
@@ -324,13 +314,12 @@ def build_pass_menu_form(menu_no: str) -> dict[str, str]:
 def build_crew_request_list_query(
     timestamp_ms: int | None = None,
 ) -> dict[str, str]:
-    """승무원 호출 사유 조회. 별도 입력은 timeStamp 뿐입니다(CrewCallCommonIn.java:50,
-    NetworkRepositoryImpl.java:4105-4107). timestamp_ms 를 생략하면 현재 epoch 밀리초입니다.
+    """승무원 호출 사유 조회. 별도 입력은 timeStamp 뿐입니다(CrewCallCommonIn.java:50, NetworkRepositoryImpl.java:4105-4107).
+    timestamp_ms 를 생략하면 현재 epoch 밀리초입니다.
 
-    앱은 CommonIn.serializer() 로 인코딩하지만(NetworkService.java:3952-3955) CommonIn 은 sealed 추상
-    클래스라 그 직렬화기가 CrewCallCommonIn$$serializer 로 넘기므로(CommonIn.java:35,70,220,350)
-    timeStamp 가 나갑니다. 다형 판별 키(type, 값 보호)는 싣지 않습니다.
-    """
+    앱은 CommonIn.serializer() 로 인코딩하지만(NetworkService.java:3952-3955) CommonIn 은 sealed 추상 클래스라 그 직렬화기가
+    CrewCallCommonIn$$serializer 로 넘기므로(CommonIn.java:35,70,220,350) timeStamp 가 나갑니다. 다형 판별 키(type, 값 보호)는 싣지
+    않습니다."""
     return build_cache_query(timestamp_ms)
 
 
@@ -390,9 +379,8 @@ def build_ticket_receipt_form(
     txt_index: str | None = None,
 ) -> dict[str, str]:
     form = {
-        # 4자리 ``MMDD`` 만 받습니다. 서버는 8자리를 언제나 ``ERZ800027`` 로 되돌려보냅니다 -- 2026-09-22 에 실제 승차권 128장으로
-        # 확인(4자리 128/128 성공). 8자리를 여기서 막지 않으면 호출자가 ``TicketListTicket.sale_date`` 를 그대로 넘겨 놓고 원인이 모호한
-        # 서버 오류를 받습니다. 자릿수 규칙 전체는 :class:`OriginalTicketReference` 의 docstring 에 있습니다.
+        # 4자리 MMDD 만 허용합니다. 2026-09-22 라이브 승차권 128장은 4자리 128/128 성공, 8자리 ERZ800027 이었습니다. 여기서 막지 않으면
+        # TicketListTicket.sale_date 를 그대로 넘긴 호출자가 원인이 모호한 서버 오류를 받습니다. 라우트별 차이는 OriginalTicketReference 참고.
         "h_orgtk_sale_dt": _ascii_digits(sale_date, "sale_date", lengths=frozenset({4})),
         "h_orgtk_wct_no": _required_text(window_no, "window_no"),
         "h_orgtk_sale_sqno": _required_text(
@@ -470,8 +458,7 @@ def build_multi_child_discount_target_form(
 def build_korail_point_summary_form() -> dict[str, str]:
     """``xPoint.MyXPointView`` 의 고정 폼 (``NetworkApi.java:515``).
 
-    ``point_dv_cd`` 를 ``"0"`` 으로 고정하는 7.0.6 근거는 찾지 못했습니다 (**미출처**). 값 자체는 라이브로 동작합니다.
-    """
+    ``point_dv_cd`` 를 ``"0"`` 으로 고정하는 7.0.6 근거는 찾지 못했습니다 (**미출처**). 값 자체는 라이브로 동작합니다."""
     return {"point_dv_cd": "0"}
 
 
@@ -506,8 +493,7 @@ _KORAIL_MILEAGE_MOVEMENTS = frozenset(
 class MileageHistoryRequest:
     """마일리지 내역 조회 입력 (``mlg.amtSpec.do``, ``NetworkApi.java:274``).
 
-    기본값: KTX 마일리지 원장, 전체 증감, 페이지 1. ``start_date``/``end_date`` 는 호출자가 반드시 제공해야 합니다.
-    """
+    기본값: KTX 마일리지 원장, 전체 증감, 페이지 1. ``start_date``/``end_date`` 는 호출자가 반드시 제공해야 합니다."""
 
     start_date: str
     end_date: str
@@ -552,10 +538,9 @@ def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
 @dataclass(frozen=True)
 class DiscountCardScheduleRequest:
     """할인카드 운행일정 입력(NetworkApi.java:340, NCardScheduleIn.java:30-40). 앱 생성자:
-    CheckUsageNCardSectionViewModel.java:390-396. dptTm·dirtChtnDvCd· TrainGroup.KTX 의 값은 보호돼 기본값
-    000000/1/109 의 평문 근거가 아닙니다(TrainGroup.java:36,48). 2026-09-21 관측: usable_trip_count="" 는
-    WRR000100(usePsbTno)으로 거절됐습니다. 올바른 기본값은 미확인이라 호출자가 실제 카드의 값을 제공해야 합니다.
-    """
+    CheckUsageNCardSectionViewModel.java:390-396. dptTm·dirtChtnDvCd· TrainGroup.KTX 의 값은 보호돼 기본값 000000/1/109 의
+    평문 근거가 아닙니다(TrainGroup.java:36,48). 2026-09-21 관측: usable_trip_count="" 는 WRR000100(usePsbTno)으로 거절됐습니다. 올바른
+    기본값은 미확인이라 호출자가 실제 카드의 값을 제공해야 합니다."""
 
     card_kind_management_no: str
     departure_station_name: str
@@ -581,12 +566,8 @@ class DiscountCardScheduleRequest:
         usage_period_days: str | None = None,
         page_no: str | None = None,
     ) -> DiscountCardScheduleRequest:
-        """카드 종류에서 ``dcntCrdKndCd`` 를 유도해 요청을 만듭니다.
-
-        7.0.6 의 대응물은
-        ``NCardDefine.findDcntCrdKndCd``(``NCardDefine.java:58-88``)이고, 아래
-        :data:`_B2N_CARD_KIND_MANAGEMENT_NOS` 주석에 적은 대로 **그 함수가 특별 취급하는 관리번호 집합이 이 구현과 다릅니다.**
-        """
+        """카드 종류에서 dcntCrdKndCd 를 유도합니다. 앱 대응 함수는 NCardDefine.findDcntCrdKndCd(NCardDefine.java:58-88)이며
+        그 함수가 특별 취급하는 관리번호 집합은 이 구현과 다릅니다(_B2N_CARD_KIND_MANAGEMENT_NOS 참고)."""
         kind_code = (
             "B2N"
             if card_kind_management_no in _B2N_CARD_KIND_MANAGEMENT_NOS
@@ -604,10 +585,9 @@ class DiscountCardScheduleRequest:
         )
 
 
-#: 라이브러리의 B2N 상품 집합. 앱과 일치한다고 보장하지 않습니다. NCardDefine.java:56-88 은 jadx 복원 실패입니다. 기존 smali 기록은
-#: NCardDefine.smali:689,1180-1225 의 분기가 B2N19060502/03·B2N19061002/03 (NCardDefine.java:14-17)에 대응한다고
-#: 설명합니다. 아래 B2N18120402/03 과 다릅니다. smali 와 보호된 반환 리터럴은 현재 자료로 재검증하지 못했고 카드 미보유 응답은 EAZ000028 이므로 서버
-#: 대조도 미확인입니다. 값은 근거 없이 바꾸지 않습니다.
+#: 라이브러리 B2N 상품 집합으로 앱과의 일치는 미확인입니다. NCardDefine.java:56-88 은 jadx 복원 실패이며 NCardDefine.smali:689,1180-1225 에 분기와
+#: 보호된 반환값이 있습니다. B2N19060502/03·B2N19061002/03 은 NCardDefine.java:14-17 에 선언돼 있으나 아래 B2N18120402/03 과 다릅니다. 보호된
+#: 반환 평문은 복원하지 않았고 카드 미보유 응답 EAZ000028 로는 집합의 정합성을 검증할 수 없습니다. 값은 근거 없이 바꾸지 않습니다.
 _B2N_CARD_KIND_MANAGEMENT_NOS = frozenset({"B2N18120402", "B2N18120403"})
 
 
@@ -615,10 +595,9 @@ def build_discount_card_schedule_query(
     request: DiscountCardScheduleRequest,
 ) -> dict[str, str]:
     """useTrmDno·qryPgNo 가 None 이면 폼에서 생략합니다. 앱은 DTO→KJson→FieldMap 경로입니다(NetworkApi.java:339-341,
-    NetworkService.java:2387-2393). 생성자가 값을 넘긴다는 사실(CheckUsageNCardSectionViewModel.java:396)만으로 실제 전송
-    키가 항상 존재한다고 단정할 수 없습니다. 빈 값은 후속 평탄화에서 제거될 수 있고 encodeDefaults·전송 키의 보호 리터럴도 미확인입니다. 카드 없는 계정은
-    EAZ000028 로 중단돼 이 차이를 라이브 검증하지 못했습니다.
-    """
+    NetworkService.java:2387-2393). 생성자가 값을 넘긴다는 사실(CheckUsageNCardSectionViewModel.java:396)만으로 실제 전송 키가 항상
+    존재한다고 단정할 수 없습니다. 빈 값은 후속 평탄화에서 제거될 수 있고 encodeDefaults·전송 키의 보호 리터럴도 미확인입니다. 카드 없는 계정은 EAZ000028 로 중단돼 이
+    차이를 라이브 검증하지 못했습니다."""
     query = {
         "dptDt": _ascii_digits(request.departure_date, "departure_date", lengths=frozenset({8})),
         "dptRsStnNm": _required_text(
@@ -682,8 +661,8 @@ def build_maas_service_detail_form(
 
 
 def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
-    # 자릿수만 보면 ``20260230`` 같은 달력에 없는 날짜가 그대로 나가고, 서버는 그것을 빈 목록으로 조용히 돌려줍니다 -- 호출자는 "변경 가능한 날짜가 없다" 와
-    # "날짜를 잘못 썼다" 를 구분할 수 없습니다. ``_calendar_date`` 는 이 모듈이 이미 쓰는 검증기입니다.
+    # 자릿수만 보면 ``20260230`` 같은 달력에 없는 날짜가 그대로 나가고, 서버는 그것을 빈 목록으로 조용히 돌려줍니다 -- 호출자는 "변경 가능한 날짜가 없다" 와 "날짜를 잘못 썼다" 를
+    # 구분할 수 없습니다. ``_calendar_date`` 는 이 모듈이 이미 쓰는 검증기입니다.
     return {
         "tripChgDate": _calendar_date(
             departure_date, "departure_date"
@@ -768,11 +747,10 @@ def _validate_commuter_passenger_request(
 class OriginalTicketReference:
     """원표 식별자. sale_date 형식은 라우트별로 다르므로 같은 객체를 무조건 재사용하지 마십시오.
 
-    2026-09-22 관측 기록(128승차권): 환불 수수료·환불 상세·원표 조회·역 환불 return_no_2 는 return_sale_date(MMDD)를 사용합니다.
-    YYYYMMDD 를 넣으면 각각 WRT200408·ERZ800027·ERZ800027·WRT100124 를 관측했습니다. WRT100124 는 자릿수 전용 코드가 아니며
-    6자리에도 관측됐습니다. 수령자 후보 조회 saleDt 와 대리수령 tkRetNo 는 sale_date(YYYYMMDD)를 사용하며 MMDD 를 넣으면 ERB000001 을
-    관측했습니다. 이 기록을 다른 조건의 성공 보장으로 해석하지 마십시오.
-    """
+    2026-09-22 관측 기록(승차권 128장): 환불 수수료·환불 상세·원표 조회·역 환불 return_no_2 는 return_sale_date(MMDD)를 사용합니다. YYYYMMDD 를
+    넣으면 각각 WRT200408·ERZ800027·ERZ800027·WRT100124 를 관측했습니다. WRT100124 는 자릿수 전용 코드가 아니며 6자리에도 관측됐습니다. 수령자 후보 조회
+    saleDt 와 대리수령 tkRetNo 는 sale_date(YYYYMMDD)를 사용하며 MMDD 를 넣으면 ERB000001 을 관측했습니다. 이 기록을 다른 조건의 성공 보장으로 해석하지
+    마십시오."""
 
     sale_window_no: str
     sale_date: str
@@ -868,11 +846,9 @@ def build_original_ticket_inquiry_form(
     *,
     ticket_count: int | None = None,
 ) -> tuple[tuple[str, str | int], ...]:
-    """원표 조회(NetworkApi.java:235). 키 접두사·순서: ChangeOrtkInfo.java:52. 건수 tkCnt 는
-    OgTicketInquiryIn.java:30,81 의 정수이며 이 빌더는 목록 길이를 사용합니다. 앱의 행 수 사용: NotificationViewModel.java:197,
-    PassengerTypeChangeViewModel.java:147, TrainSeatMapViewModel.java:1282.
-    RefundTicketViewModel.java:258 의 리터럴은 보호돼 있습니다.
-    """
+    """원표 조회(NetworkApi.java:235). 키 접두사·순서: ChangeOrtkInfo.java:52. 건수 tkCnt 는 OgTicketInquiryIn.java:30,81 의 정수이며
+    이 빌더는 목록 길이를 사용합니다. 앱의 행 수 사용: NotificationViewModel.java:197, PassengerTypeChangeViewModel.java:147,
+    TrainSeatMapViewModel.java:1282. RefundTicketViewModel.java:258 의 리터럴은 보호돼 있습니다."""
     references = _exact_ticket_reference_tuple(tickets)
     if ticket_count is None:
         count = len(references)
@@ -880,9 +856,8 @@ def build_original_ticket_inquiry_form(
         raise KorailProtocolError("ticket_count must be a positive integer")
     else:
         count = ticket_count
-    # ``count`` 가 ``references`` 보다 작으면 서버는 앞의 ``count`` 개 ``ogtkSaleWctNo_N`` 묶음만 읽고 나머지는 **조용히
-    # 무시**합니다 (2026-09-22 확인). 앱이 호출 지점마다 다른 값을 보내므로 여기서 같기를 강제하지는 않지만, 전부 조회하려면 ``ticket_count`` 를 주지
-    # 말거나 ``len(tickets)`` 와 같게 주십시오.
+    # 2026-09-22 라이브: ticket_count 를 len(tickets) 보다 작게 보내면 앞의 해당 개수만 조회됐습니다. 전부 조회하려면 ticket_count 를 생략하거나
+    # len(tickets) 로 주십시오. 앱 호출별 값이 달라 길이 일치를 강제하지는 않습니다.
     rows: list[tuple[str, str | int]] = [("tkCnt", count)]
     for index, ticket in enumerate(references, start=1):
         rows.append((f"ogtkSaleWctNo_{index}", ticket.sale_window_no))
@@ -898,10 +873,9 @@ KorailSelfSeatChangeRoomClassCode = Literal["1", "2"]
 
 @dataclass(frozen=True)
 class SelfSeatChangeInfoRequest:
-    """자율 좌석변경 입력(NetworkApi.java:806-808, SeatAvailabilityIn.java:26-30,55). 5개 자체 필드의 전송 키는 속성명에 따른
-    추정입니다. 앱은 승차권의 식별자를 복사하고 객실 값이 null 이 아닐 때 요청합니다(SelfSeatChangeOptionViewModel.java:342-344). 여기서
-    room_class_code=None 이면 생략하는 것은 앱과 다른 라이브러리 정책입니다.
-    """
+    """자율 좌석변경 입력(NetworkApi.java:806-808, SeatAvailabilityIn.java:26-30,55). 5개 자체 필드의 전송 키는 속성명에 따른 추정입니다. 앱은
+    승차권의 식별자를 복사하고 객실 값이 null 이 아닐 때 요청합니다(SelfSeatChangeOptionViewModel.java:342-344). 여기서 room_class_code=None
+    이면 생략하는 것은 앱과 다른 라이브러리 정책입니다."""
 
     run_date: str
     train_no: str
@@ -926,8 +900,8 @@ class SelfSeatChangeInfoRequest:
             )
 
 
-#: GENERAL/SPECIAL 두 상수는 PsrmType.java:19-29 에 선언돼 있지만 코드 리터럴은 보호됩니다. 아래 1/2 배정은 라이브 기록에 의존하며 앱 소스로
-#: 평문을 확인한 값이 아닙니다.
+#: GENERAL/SPECIAL 두 상수는 PsrmType.java:19-29 에 선언돼 있지만 코드 리터럴은 보호됩니다. 아래 1/2 배정은 라이브 기록에 의존하며 앱 소스로 평문을 확인한 값이
+#: 아닙니다.
 SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
 
 
@@ -984,8 +958,8 @@ def build_commuter_info_form(
             option.commuter_usage_age_code
             for option in request.source.passenger_options
         )
-        # cmtrUtlAgeCd 는 종류 행당이 아니라 승객당 반복합니다(CommutationInfoIn.java:31,38). 2026-09-22 kind=0046 관측:
-        # E05/E06 을 행당 한 번 보내면 WRT800115, 인원 1+E05, 1+E06, 2+E05/E05 는 IRZ000008 이었습니다.
+        # cmtrUtlAgeCd 는 종류 행당이 아니라 승객당 반복합니다(CommutationInfoIn.java:31,38). 2026-09-22 kind=0046 관측: E05/E06 을
+        # 행당 한 번 보내면 WRT800115, 인원 1+E05, 1+E06, 2+E05/E05 는 IRZ000008 이었습니다.
         selected = tuple(
             code
             for code, count in zip(
@@ -1028,10 +1002,8 @@ def _wire_component(value: str, name: str) -> str:
 
 @dataclass(frozen=True)
 class PriceFareLeg:
-    """운임 구간. goods_no=None 이면 gdNo 를 생략합니다. 앱의 일반 열차 생성자는 기본값 마스크 64 를
-    사용합니다(TrainOpInfoViewModel.java:794, PrcFareInItem.java:85). 보호된 기본값·직렬화 때문에 이것만으로 실제 폼 생략은 확정하지
-    않습니다. 2026-09-21 관측에서는 gdNo 유무에 따른 응답 차이가 없었습니다.
-    """
+    """운임 구간. goods_no=None 이면 gdNo 를 생략합니다. 앱의 일반 열차 생성자는 기본값 마스크 64 를 사용합니다(TrainOpInfoViewModel.java:794,
+    PrcFareInItem.java:85). 보호된 기본값·직렬화 때문에 이것만으로 실제 폼 생략은 확정하지 않습니다. 2026-09-21 관측에서는 gdNo 유무에 따른 응답 차이가 없었습니다."""
 
     departure_station_code: str
     arrival_station_code: str
@@ -1039,10 +1011,8 @@ class PriceFareLeg:
     train_no: str
     requested_seat_attribute_code: str
     train_group_code: str
-    #: ``stlbTrnClsfCd`` — 열차 종류 코드입니다(``stlb`` 는 입석(standing)이 아닙니다). 같은 전선 키를 이 저장소의 다른 세 곳이 전부 열차
-    #: 종류로 읽습니다(``limousine_parsers.py:95`` ``train_class_code``, ``parsers.py:834``
-    #: ``standard_train_class_code``, ``read_parsers.py:1853`` ``settlement_train_class_code``). 열차 행의
-    #: ``train_class_code`` 를 그대로 옮기면 됩니다.
+    #: stlbTrnClsfCd 는 정산용 열차 종류이지 입석 코드가 아닙니다. 호출자는 열차 행의 train_class_code 를 그대로 옮기십시오. 다른 대응은
+    #: limousine_parsers·parsers·read_parsers 의 stlbTrnClsfCd 매핑 참고.
     train_class_code: str
     goods_no: str | None = None
 
@@ -1063,9 +1033,8 @@ class PriceFareLeg:
 
 @dataclass(frozen=True)
 class PriceFareQuoteRequest:
-    """운임 조회의 한두 구간과 메뉴. DTO: PrcFareIn.java:28-31,197. 생성자 TrainOpInfoViewModel.java:794 의 메뉴 리터럴은 보호됨.
-    길이 2가 기본값 11 을 증명하지 않습니다.
-    """
+    """운임 조회의 한두 구간과 메뉴. DTO: PrcFareIn.java:28-31,197. 생성자 TrainOpInfoViewModel.java:794 의 메뉴 리터럴은 보호됨. 길이 2가 기본값
+    11 을 증명하지 않습니다."""
 
     legs: tuple[PriceFareLeg, ...]
     menu_id: str = "11"
@@ -1119,8 +1088,7 @@ def build_price_fare_quote_form(
 @dataclass(frozen=True)
 class TicketReservationDetailRequest:
     """PNR 로 예약 상세를 조회합니다(NetworkApi.java:422-424,626-628). DTO 는 PNR 외 할인승객 목록도 선언하나 이 빌더는 PNR 만 보냅니다
-    (ReservationListIn.java:29-32,58). hidPnrNo 전송 키는 속성명에 따른 추정입니다.
-    """
+    (ReservationListIn.java:29-32,58). hidPnrNo 전송 키는 속성명에 따른 추정입니다."""
 
     pnr_no: str
 
@@ -1142,9 +1110,8 @@ def build_ticket_reservation_detail_query(
 @dataclass(frozen=True)
 class RefundCompanion:
     """환불 수수료 조회의 동반자 이름·생년월일(RefundCommissionIn.java:34-35,59). 앱 호출자는 compaNm/compaBrth 를
-    전달합니다(MyTicketDetailViewModel.java:277, FTicketDetailViewModel.java:179). 빌더의 빈 문자열은 HTTP 단계에서
-    제거되므로 빈 값을 반드시 전송한다고 보장하지 않습니다.
-    """
+    전달합니다(MyTicketDetailViewModel.java:277, FTicketDetailViewModel.java:179). 빌더의 빈 문자열은 HTTP 단계에서 제거되므로 빈 값을
+    반드시 전송한다고 보장하지 않습니다."""
 
     name: str = ""
     certificate_no: str = ""
@@ -1163,11 +1130,7 @@ def _exact_refund_companion(companion: RefundCompanion) -> RefundCompanion:
 def build_station_refund_verification_form(
     request: StationRefundVerificationRequest,
 ) -> dict[str, str]:
-    """``NetworkApi.verifyOnlineRefunds`` 의 입력(``VerifyOnlineRefundsIn``).
-
-    7.0.6 계약이 조회로 등록한 라우트라 여기 있습니다. 공통 필드는 7.0.6
-    게이트웨이가 붙입니다. 값은 요청 객체가 이미 검사했습니다.
-    """
+    """NetworkApi.verifyOnlineRefunds 의 VerifyOnlineRefundsIn 폼. 요청 객체가 값을 검사하며 공통 필드는 KorailHttpClient 가 추가합니다."""
     return {
         "strName": request.customer_name,
         "retNo1": request.return_no_1,
@@ -1181,9 +1144,8 @@ def build_refund_commission_form(
     ticket: OriginalTicketReference,
     companion: RefundCompanion = RefundCompanion(),
 ) -> dict[str, str]:
-    """환불 수수료 사전조회(NetworkApi.java:598-600, RefundCommissionIn.java:32-42,59). 판매일 키는 h_orgtk_ret_sale_dt
-    로, 영수증 쪽 h_orgtk_sale_dt 와 다릅니다(RefundTicketIn.java:38).
-    """
+    """환불 수수료 사전조회(NetworkApi.java:598-600, RefundCommissionIn.java:32-42,59). 판매일 키 h_orgtk_ret_sale_dt 는 환불 실행의
+    h_orgtk_sale_dt 와 다릅니다(RefundTicketIn.java:38)."""
     reference = _exact_original_ticket_reference(ticket)
     party = _exact_refund_companion(companion)
     return {
@@ -1202,9 +1164,8 @@ def build_refund_ticket_detail_form(
     from_purchase_history: bool = False,
     txt_index: str | None = None,
 ) -> dict[str, str]:
-    """환불 상세(NetworkApi.java:406-408). 여섯 키는 TicketDetailIn.java:57 의 @SerialName 입니다. h_purchase_history
-    는 앱에서 불리언에 따라 선택하지만 리터럴은 보호돼 있습니다 (MyTicketBaseViewModel.java:696). Y/N 배정은 라이브 기록에 의존합니다.
-    """
+    """환불 상세(NetworkApi.java:406-408). 여섯 키는 TicketDetailIn.java:57 의 @SerialName 입니다. h_purchase_history 는 앱에서
+    불리언에 따라 선택하지만 리터럴은 보호돼 있습니다 (MyTicketBaseViewModel.java:696). Y/N 배정은 라이브 기록에 의존합니다."""
     reference = _exact_original_ticket_reference(ticket)
     if type(from_purchase_history) is not bool:
         raise KorailProtocolError("from_purchase_history must be a bool")

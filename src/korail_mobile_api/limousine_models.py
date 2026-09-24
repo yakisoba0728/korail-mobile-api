@@ -2,12 +2,10 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""리무진 운행 스케줄·좌석 재고의 요청과 응답 모델.
+"""리무진 운행·좌석 모델. Query 의 문자열 형식은 서버에 맡기며 좌석 Query 는 인원 1~9·is_arrow 불리언만 검사합니다.
 
-Query 는 문자열 형식을 검사하지 않고 서버에 맡깁니다(좌석 재고 Query 는 인원 1~9 와 is_arrow 불리언만 검사). 2026-09-16 라이브 관측: 광명→인천공항T1 스케줄 42편.
-2026-09-22 관측: 동일 조건 3쌍에서 isArrow=true 는 S003, false 는 성공 봉투였습니다. 좌석 응답의 필드별 해석은 이 실험으로 검증하지 않았습니다.
-layout_type 정수 허용은 같은 DTO 를 쓰는 일반 좌석 재고의 2026-09-21 관측에 근거합니다.
-"""
+2026-09-16 라이브: 광명→인천공항T1 스케줄 42편. 2026-09-22 동일 조건 3쌍에서는 isArrow=true 가 S003, false 가 성공 봉투였습니다. 이 표본으로 모든 조건의
+성공·좌석 필드 의미·보호된 앱 값의 평문을 확정하지 않습니다. layout_type 정수 허용은 같은 DTO 를 쓰는 일반 좌석 재고의 2026-09-21 관측에 근거합니다."""
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -63,8 +61,7 @@ class LimousineSeatInventoryQuery:
     passenger_count: int
     #: gdNo. 7.0.6 공항버스 화면은 null 을 넘깁니다(AirportBusSeatMapViewModel.java:865). None 이면 폼에서 뺍니다.
     product_no: str | None = None
-    #: isArrow 기본값은 거짓. 2026-09-22 동일 조건 3쌍에서 참은 S003, 거짓은 성공. 이 표본만으로 모든 조건의 성공 여부나 보호된 앱 리터럴의 평문은
-    #: 확정하지 않습니다.
+    #: isArrow 기본값은 거짓입니다. 비교 관측과 보호된 앱 값의 한계는 모듈 설명 참고.
     is_arrow: bool = False
 
     def __post_init__(self) -> None:
@@ -100,8 +97,8 @@ class LimousineSchedule:
     train_order_no: str | None = None
     yms_application_flag: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
-    #: rcvdPrc 운임 문자열(ScdlQryOutTrain.java:40,389). 2026-09-22 라이브 359행에 존재; 광명→인천공항T1 20260925 의 42행은
-    #: 14자리 영 채움으로 16,000원을 표시했습니다. 영 채움을 보존하며, raw 의 위치 인자 호환성을 위해 raw 뒤에 둡니다.
+    #: rcvdPrc 운임 문자열(ScdlQryOutTrain.java:40,389). 2026-09-22 라이브 359행 모두 14자리 영 채움 문자열이었고 광명→인천공항T1 20260925 의
+    #: 42행은 16,000원을 표시했습니다. 영 채움과 raw 의 위치 인자 호환을 보존합니다.
     received_price: str | None = None
 
 
@@ -132,13 +129,12 @@ class LimousineSeat:
 @dataclass(frozen=True)
 class LimousineSeatInventoryResponse(BaseKorailResponse):
     """한 호차 좌석표. 일반 좌석 재고와 TResidualSeatsResearchOut 을 공유합니다 (NetworkApi.java:271,741). 배치·배너·창측 위치의 선언은
-    TResidualSeatsResearchOut.java:29,34-35,114,134,138 참고.
-    """
+    TResidualSeatsResearchOut.java:29,34-35,114,134,138 참고."""
     car_type_code: str | None = None
     car_no: str | None = None
     seat_arrangement_code: str | None = None
     up_down_division_code: str | None = None
-    #: layout_type: 선언은 String 이나 일반 좌석 재고에서 JSON 정수도 관측(2026-09-21). 리무진 파서도 문자열·정수를 받아 문자열로 정규화합니다.
+    #: layout_type 은 문자열·정수를 문자열로 정규화합니다. 일반 좌석 재고에 근거한 관측 한계는 모듈 설명 참고.
     layout_type: str | None = None
     #: VR 배너 URL. repr 에 표시됩니다.
     vr_banner_url: str | None = None

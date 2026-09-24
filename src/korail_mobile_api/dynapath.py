@@ -4,9 +4,8 @@
 
 """DynaPath 대상 경로의 토큰 생성.
 
-7.0.6 평문 근거: DynaPathMobileSDK.java:29-72(초기화·생성), a/a.java:11-21(기기 정보),
-a/b.java:75-227(조립), b/e.java:18-71(서명 해시). 기본 기기 값은 합성값입니다.
-"""
+7.0.6 평문 근거: DynaPathMobileSDK.java:29-72(초기화·생성), a/a.java:11-21(기기 정보), a/b.java:75-227(조립), b/e.java:18-71(서명
+해시). 기본 기기 값은 합성값입니다."""
 from __future__ import annotations
 
 import random
@@ -41,9 +40,8 @@ KORAIL_DYNAPATH_SDK_VERSION = "v1.0.3"
 KORAIL_DYNAPATH_SIGNING_CERT_SHA256 = (
     "38ff229cb34c7dda8e28220a2d750cceec28db661a36d95ad92d82f6d3c618f9"
 )
-# b/e.java:55-71 은 서명 해시를 소문자 hex 32자로 절단합니다(b/d.java:20). SHA-256 상수:
-# com/kakao/sdk/auth/Constants.java:28. 서명 목록을 문자열화하므로 대괄호가 붙습니다(b/e.java:18-53,
-# DynaPathMobileSDK.java:64).
+# b/e.java:55-71 은 서명 해시를 소문자 hex 32자로 절단합니다(b/d.java:20). SHA-256 상수: com/kakao/sdk/auth/Constants.java:28. 서명
+# 목록을 문자열화하므로 대괄호가 붙습니다(b/e.java:18-53, DynaPathMobileSDK.java:64).
 KORAIL_DYNAPATH_APP_SIGNATURE_HASH = KORAIL_DYNAPATH_SIGNING_CERT_SHA256[:32]
 KORAIL_DYNAPATH_AS_VALUE = f"[{KORAIL_DYNAPATH_APP_SIGNATURE_HASH}]"
 
@@ -184,8 +182,7 @@ class DynapathTokenSettings:
 def generate_dynapath_device_id() -> str:
     """설정마다 새로 만드는 합성 64비트 기기 ID(소문자 hex 16자).
 
-    앱은 실제 android_id 를 읽습니다(a/a.java:15-20); 토큰 필드는 a/b.java:85 의 di 입니다.
-    """
+    앱은 실제 android_id 를 읽습니다(a/a.java:15-20); 토큰 필드는 a/b.java:85 의 di 입니다."""
     return uuid.uuid4().hex[:16]
 
 
@@ -193,8 +190,7 @@ def build_default_token_settings() -> DynapathTokenSettings:
     """앱 상수·합성 기기 값으로 토큰 설정을 만듭니다. it 는 이 함수 호출 시각입니다.
 
     앱의 it 는 초기화 시각(a/a.java:13-20, a/b.java:95, DynaPathMobileSDK.java:64), ts 는 토큰 생성
-    시각(DynaPathMobileSDK.java:43, a/b.java:98)으로 서로 다릅니다.
-    """
+    시각(DynaPathMobileSDK.java:43, a/b.java:98)으로 서로 다릅니다."""
     return DynapathTokenSettings(
         device_id=generate_dynapath_device_id(),
         as_value=KORAIL_DYNAPATH_AS_VALUE,
@@ -208,8 +204,7 @@ def build_default_token_settings() -> DynapathTokenSettings:
 class DynapathConfig:
     """DynaPath 켜짐/꺼짐 + 토큰 소스 구성.
 
-    ``enabled=True`` 일 때 ``token_provider`` 또는 ``token_settings`` 중 정확히 하나를 요구합니다.
-    """
+    ``enabled=True`` 일 때 ``token_provider`` 또는 ``token_settings`` 중 정확히 하나를 요구합니다."""
 
     enabled: bool = False
     token_provider: DynapathTokenProvider | None = None
@@ -354,8 +349,8 @@ def generate_dynapath_token(
         ("hk", str(settings.hooked).lower()),
         ("it", settings.app_start_ts),
         ("ts", str(ts)),
-        # 요청 간 시간차 이력을 저장하지 않으므로 rt 를 생략합니다. SDK 도 빈 이력은 키를 생략하며, 값이 있으면 항목별 rt 를
-        # 씁니다(a/b.java:58-107,122-134). 이 생성기는 실기기의 요청 이력까지 재현하지 않습니다.
+        # 요청 간 시간차 이력을 저장하지 않으므로 rt 를 생략합니다. SDK 도 빈 이력은 키를 생략하며, 값이 있으면 항목별 rt 를 씁니다(a/b.java:58-107,122-134).
+        # 이 생성기는 실기기의 요청 이력까지 재현하지 않습니다.
         ("os", settings.os_version),
         ("dm", settings.device_model),
         ("st", settings.os_type),

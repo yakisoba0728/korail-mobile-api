@@ -2,11 +2,10 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""상태 변경 응답 파서. 성공 여부는 판정하지 않으며 raw 와 봉투 값을 보존합니다.
+"""상태 변경 응답 파서. 성공 여부를 별도로 판정하지 않으며 봉투·raw 를 보존합니다. 필수 신원·금액은 엄격히, 선택 필드는 관대하게 읽습니다.
 
-PNR·정산 및 후속 폼에 필요한 값 일부는 엄격히 검사하고 선택값은 관대하게 읽습니다. 파싱 실패는 서버 작업 실패를 뜻하지 않습니다. HTTP 계층의 예외 raw 에서 응답 전체를
-확인하고 자동 재전송하지 마십시오. BaseResponse 만 반환하는 취소에는 전용 파서가 없습니다.
-"""
+KorailClient._mutation 은 파싱 중 KorailApiError 의 raw 를 전체 응답으로 바꾸고 기존 원문을 parser_raw 에 둡니다. 다른 예외는 전체 raw 를 가진
+KorailProtocolError 로 감쌉니다. 서버 처리 실패의 증거가 아니므로 자동 재전송하지 마십시오. BaseKorailResponse 만 반환하는 취소에는 전용 파서가 없습니다."""
 from __future__ import annotations
 
 import re
@@ -71,8 +70,7 @@ def parse_station_refund_verification_response(
 ) -> StationRefundVerificationResponse:
     """Parse ``VerifyOnlineRefundsOut`` and the original ticket it validates.
 
-    원표 목록·PNR·원표 식별 값과 세 금액은 환불 실행 전 확인값이라 엄격하게 읽습니다. 두 안내 문구만 관대합니다.
-    """
+    원표 목록·PNR·원표 식별 값과 세 금액은 환불 실행 전 확인값이라 엄격하게 읽습니다. 두 안내 문구만 관대합니다."""
     copied = _response_mapping(raw)
     rows = copied.get("orgtkinfo_list", [])
     if rows is not None and not isinstance(rows, list):
@@ -149,13 +147,11 @@ def _received_amount(
     raw: Mapping[str, Any],
     journey_rows: list[Mapping[str, Any]],
 ) -> str | None:
-    """좌석별 h_rcvd_amt 합과 선언 총액을 대조하는 라이브러리 정책입니다. 앱은 일반 결제에서 h_tot_rcvd_amt 를
-    합산합니다(PayViewModel.java:11297-11307). 번호 붙은 결제 금액으로의 최종 연결은 보호된 Bundle 키 때문에 미확인입니다
-    (PaymentMethodHelper.java:113,211).
+    """좌석별 h_rcvd_amt 합과 선언 총액을 대조하는 라이브러리 정책입니다. 앱은 일반 결제에서 h_tot_rcvd_amt 를 합산합니다(PayViewModel.java:11297-11307).
+    번호 붙은 결제 금액으로의 최종 연결은 보호된 Bundle 키 때문에 미확인입니다 (PaymentMethodHelper.java:113,211).
 
-    미배정 0원 행은 제외하고, 사용할 좌석 행이 없으면 선언 총액만 씁니다. 한 좌석 금액이 읽히지 않으면 부분 합을 반환하지 않습니다. 두 출처가 다르면 오류, 사용 가능한
-    출처가 없으면 None 입니다.
-    """
+    미배정 0원 행은 제외하고, 사용할 좌석 행이 없으면 선언 총액만 씁니다. 한 좌석 금액이 읽히지 않으면 부분 합을 반환하지 않습니다. 두 출처가 다르면 오류, 사용 가능한 출처가 없으면
+    None 입니다."""
     declared = _strict_scalar_string(raw, "h_tot_rcvd_amt", "reservation")
     if declared is not None:
         declared = declared.strip()
@@ -203,9 +199,8 @@ def _received_amount(
                 or ""
             )
             if value == 0 and not seat_no.strip():
-                # 2026-09-22 예약대기 관측: 좌석번호 없는 0원 행은 정산 좌석이 아니었습니다. 동일 예약을
-                # get_ticket_reservation_detail 로 조회한 좌석 합은 선언 총액과 일치했습니다. 이 빈 행을 합산하면 잘못된 총액 불일치를
-                # 만들므로 제외합니다.
+                # 2026-09-22 예약대기 관측: 좌석번호 없는 0원 행은 정산 좌석이 아니었습니다. 동일 예약을 get_ticket_reservation_detail 로 조회한 좌석
+                # 합은 선언 총액과 일치했습니다. 이 빈 행을 합산하면 잘못된 총액 불일치를 만들므로 제외합니다.
                 continue
             summed += value
             seats_seen += 1
@@ -222,10 +217,8 @@ def _received_amount(
             "this package's policy, not a rule the app enforces -- so it "
             "refuses here rather than guess which amount to charge."
         )
-    # 자리수 0 채움 없이 그대로 돌려줍니다. 7.0.6 에는 번호 붙은 ``hidMnsStlAmt1`` 이 평문 검색 0건이고, 존재하는 것은 번호 없는
-    # ``hidMnsStlAmt``(``ReservationPaymentInStlInfo``, ``PaymentMethod``) 뿐입니다. ``hidMnsStlAmt<N>`` 로
-    # 들어가는 마지막 한 걸음은 AlienGuard 로 보호되어 **미출처**이므로(위 독스트링), 자리수를 채우지 않는 것도 앱 동작의 재현이 아니라 이 패키지의 선택으로
-    # 읽어야 합니다.
+    # 0 채움 없는 정산액 반환은 앱 재현이 아닌 라이브러리 정책입니다. 7.0.6 에는 번호 붙은 hidMnsStlAmt1 이 평문 0건이고 번호 없는
+    # hidMnsStlAmt(ReservationPaymentInStlInfo, PaymentMethod)만 있습니다. hidMnsStlAmt<N> 으로 가는 마지막 단계는 보호돼 있습니다.
     return seat_total
 
 
@@ -238,7 +231,6 @@ _RESERVATION_HOLD_REQUIRED_FIELDS = {
     "temporary_job_sequence_2": "h_tmp_job_sqno2",
 }
 
-# 나머지 홀드 스칼라는 관대하게 읽습니다.
 _RESERVATION_HOLD_FIELDS = {
     "payment_flag": "h_payment_flg",
     "payment_message": "h_payment_msg",
@@ -263,7 +255,6 @@ _RESERVATION_JOURNEY_FIELDS = {
     "arrival_date": "h_arv_dt",
 }
 
-# 발권 승차권의 쿠폰 행.
 _PAYMENT_COUPON_FIELDS = {
     "certificate_password": "h_cert_pwd",
     "coupon_no": "h_coup_no",
@@ -288,7 +279,6 @@ _RESERVATION_PAYMENT_FIELDS = {
     "cancellation_fee": "h_cnc_fee",
 }
 
-# tk_infos.tk_info 의 필드 대응표.
 _RESERVATION_PAYMENT_TICKET_FIELDS = {
     "ticket_sequence": "h_tk_sqno",
     "sale_date": "h_sale_dt",
@@ -328,7 +318,6 @@ _RESERVATION_PAYMENT_SETTLEMENT_FIELDS = {
     "remote_point": "h_rmt_point",
 }
 
-# tbl_seat_infos.tbl_seat_info 의 필드 대응표.
 _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS = {
     "room_class_name_1": "h_psrm_cl_cd_nm1",
     "car_no_1": "h_srcar_no1",
@@ -348,10 +337,8 @@ _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS = {
 def parse_reservation_hold_response(
     raw: Mapping[str, Any],
 ) -> ReservationHoldResponse:
-    """홀드의 후속 결제·취소 값을 읽습니다. 여정 컨테이너·정산값은 엄격히 검사합니다. 성공 여부나 봉투 필드 타입은 검사하지 않습니다. 직접 호출자는
-    str_result·h_msg_cd 를 확인해야 하며, 파싱 오류만 보고 이미 생성됐을 수 있는 예약을 다시 요청하면 안 됩니다. 2026-09-23 합성 응답에서도 봉투의
-    bool·목록·객체 값이 그대로 통과함을 확인한 기록이 있습니다.
-    """
+    """홀드의 후속 결제·취소 값을 읽습니다. 여정·정산값은 엄격히 검사하되 성공 여부·봉투 필드 타입은 재검사하지 않습니다. 직접 호출자는 str_result·h_msg_cd 를 확인하고, 파싱
+    실패만 보고 다시 요청하지 마십시오 — 예약이 이미 생성됐을 수 있습니다."""
     copied = _response_mapping(raw)
     journeys_container = copied.get("jrny_infos")
     if journeys_container is None:
@@ -408,9 +395,8 @@ def parse_reservation_hold_response(
 def parse_reservation_payment_response(
     raw: Mapping[str, Any],
 ) -> ReservationPaymentResponse:
-    """결제 결과의 중첩 목록을 관대하게 읽으며 성공 여부는 판정하지 않습니다. 반환 비밀번호·수령인 등 민감값은 타입 필드와 raw 에 그대로 남습니다. 이미 승인됐을 수 있으므로
-    파싱 결과만 보고 결제를 재전송하지 마십시오.
-    """
+    """결제 결과의 중첩 목록을 관대하게 읽으며 성공 여부는 판정하지 않습니다. 반환 비밀번호·수령인 등 민감값은 타입 필드와 raw 에 그대로 남습니다. 이미 승인됐을 수 있으므로 파싱 결과만 보고
+    결제를 재전송하지 마십시오."""
     copied = _response_mapping(raw)
     coupons: list[ReservationPaymentCoupon] = []
     for value in _rows(copied, "tk_coupon_info"):
@@ -476,8 +462,8 @@ _DISCOUNT_CARD_PURCHASE_FIELDS = {
     "discount_card_settlement_target_no": "dcntCrdStlTgtNo",
     "stx_amount": "stxAmt",
     "taxt_supply_amount": "taxtSplAmt",
-    # NCardInfoOut.java:30 의 속성은 dcntCrdStlTgtNo 와 별개입니다. 전송 키는 @SerialName 없는 속성명에서 추정했으며 보호된
-    # descriptor 로 직접 확인되지 않았습니다.
+    # NCardInfoOut.java:30 의 속성은 dcntCrdStlTgtNo 와 별개입니다. 전송 키는 @SerialName 없는 속성명에서 추정했으며 보호된 descriptor 로 직접
+    # 확인되지 않았습니다.
     "registered_card_kind_management_no": "dcntCrdKndMgNo",
 }
 
@@ -485,9 +471,7 @@ _DISCOUNT_CARD_PURCHASE_FIELDS = {
 def parse_discount_card_purchase_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardPurchaseResponse:
-    """NCardInfoOut.java:30-38 의 자체 속성 9개를 읽습니다. serializer 이름이 보호돼 Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 라이브
-    미검증입니다.
-    """
+    """NCardInfoOut.java:30-38 의 자체 속성 9개를 읽습니다. serializer 이름이 보호돼 Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 라이브 미검증입니다."""
     data = _response_mapping(raw)
     return DiscountCardPurchaseResponse(
         h_msg_cd=data.get("h_msg_cd"),
@@ -522,9 +506,8 @@ def _cart_discount_additions(
 
 
 def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
-    """장바구니 추가 결과. 키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81, PsgDiscAddInfo.java:81,85.
-    누락·잘못된 선택 목록은 비웁니다. 라이브 미검증입니다.
-    """
+    """장바구니 추가 결과. 키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81, PsgDiscAddInfo.java:81,85. 누락·잘못된 선택 목록은
+    비웁니다. 라이브 미검증입니다."""
     data = _response_mapping(raw)
     return CartAddResponse(
         h_msg_cd=data.get("h_msg_cd"),

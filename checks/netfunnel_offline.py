@@ -1,4 +1,4 @@
-"""NetFunnel 대기열 연결을 오프라인으로 검사합니다(``ACCEPTANCE.md`` §4).
+"""NetFunnel 대기열 연결을 오프라인으로 검사합니다(실행 방법: ``checks/README.md``).
 
 :class:`~korail_mobile_api.client.KorailClient` 가 대기열이 걸린 작업에서 앱처럼
 5101 → (대기면 ttl 만큼 자고 5002) → KORAIL 요청 → 5004 순서를 지키는지 봅니다.

@@ -5,10 +5,9 @@
 """리무진 조회 파서. 봉투는 정확한 SUCC 를 요구합니다.
 
 trainList 와 seatList 는 누락·null 이면 빈 목록이고, 키가 있는데 목록이 아니면 KorailProtocolError 입니다. 두 목록의 비객체 행도
-KorailProtocolError 입니다. seatList 누락 기본값의 앱 근거: TResidualSeatsResearchOut.java:79. 앱 Json 설정은 보호돼 있으므로
-null 강제 변환 여부는 확정할 수 없습니다 (NetworkModule.java:858-862, NetworkServiceKt.java:25-29). 배치·배너·windowList
-는 선택 필드로 잘못된 값이나 창측 행을 비웁니다.
-"""
+KorailProtocolError 입니다. seatList 누락 기본값의 앱 근거: TResidualSeatsResearchOut.java:79. 앱 Json 설정은 보호돼 있으므로 null 강제
+변환 여부는 확정할 수 없습니다 (NetworkModule.java:858-862, NetworkServiceKt.java:25-29). 배치·배너·windowList 는 선택 필드로 잘못된 값이나
+창측 행을 비웁니다."""
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -78,8 +77,8 @@ _SCHEDULE_FIELDS = {
     # 보호됨(ScdlQryOutTrain$$serializer.java:35-55). ymsAplFlg 전송 키는 2026-09-22 라이브 관측에 근거합니다.
     "yms_application_flag": "ymsAplFlg",
 }
-#: 선택 스칼라. trnOrdrNo 는 속성 선언만 확인(ScdlQryOutTrain.java:48), 라이브 미확인. rcvdPrc(ScdlQryOutTrain.java:40)는
-#: 2026-09-22 관측 359행 모두 14자리 영 채움 문자열.
+#: 선택 스칼라. trnOrdrNo 는 속성 선언만 확인돼 라이브 미검증입니다(ScdlQryOutTrain.java:48). rcvdPrc 의 선언(ScdlQryOutTrain.java:40)과 날짜
+#: 있는 359행 관측은 LimousineSchedule.received_price 설명 참고.
 _SCHEDULE_ADDED_FIELDS = {
     "train_order_no": "trnOrdrNo",
     "received_price": "rcvdPrc",
@@ -143,11 +142,10 @@ _SEAT_FIELDS = {
 def parse_limousine_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> LimousineSeatInventoryResponse:
-    """리무진 좌석 재고. seatList 가 없거나 null 이면 빈 목록, 목록이 아니거나 비객체 행이면 오류입니다.
+    """리무진 좌석 재고. seatList 생략·null 은 빈 목록, 비목록·비객체 행은 오류입니다.
 
-    일반 좌석 재고와 응답 DTO 를 공유합니다(NetworkApi.java:271,741). 선택 필드 layout_type 은 문자열·정수를 허용합니다. 정수형 근거는 일반
-    좌석 재고의 2026-09-21 관측이며 리무진 응답 자체의 라이브 검증은 아닙니다.
-    """
+    일반 좌석 재고와 DTO 를 공유합니다(NetworkApi.java:271,741). layout_type 은 문자열·정수를 허용합니다. 정수형 근거는 일반 좌석 재고의
+    2026-09-21 관측이며 리무진 응답 자체의 라이브 검증은 아닙니다."""
     _require_exact_success(response)
     raw = response.raw
     seats = []

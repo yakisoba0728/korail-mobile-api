@@ -4,9 +4,7 @@
 
 """도메인 모델에 의존하지 않는 내부 JSON 필드 읽기 도구.
 
-선택 필드의 관대한 변환과 필수 필드의 오류 문구는 구분해서 유지합니다.
-응답 봉투의 성공·실패 정책과 raw 복사 여부는 각 호출자가 결정합니다.
-"""
+선택 필드의 관대한 변환과 필수 필드의 오류 문구는 구분해서 유지합니다. 응답 봉투의 성공·실패 정책과 raw 복사 여부는 각 호출자가 결정합니다."""
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -64,7 +62,6 @@ def _optional_mapping(
     data: Mapping[str, Any],
     key: str,
 ) -> Mapping[str, Any] | None:
-    """객체면 그대로, 아니면(없음·리스트·스칼라) ``None``."""
     value = data.get(key)
     return value if isinstance(value, Mapping) else None
 
@@ -73,7 +70,6 @@ def _optional_list(
     data: Mapping[str, Any],
     key: str,
 ) -> list[Any]:
-    """리스트면 그대로(원소 검사 없음), 아니면 빈 리스트."""
     value = data.get(key)
     return value if isinstance(value, list) else []
 
@@ -83,12 +79,10 @@ def _nested_rows(
     outer_key: str,
     inner_key: str,
 ) -> list[Mapping[str, Any]]:
-    """``{outer: {inner: [...]}}`` 의 객체 원소들. 모양이 어긋나면 빈 리스트."""
     return _rows(_optional_mapping(raw, outer_key), inner_key)
 
 
 def _row(value: Any, context: str) -> Mapping[str, Any]:
-    """필수 객체 — 객체가 아니면 거부합니다."""
     if not isinstance(value, Mapping):
         raise KorailProtocolError(
             f"KORAIL {context} contained a non-object item"
@@ -100,7 +94,6 @@ def _rows(
     data: Mapping[str, Any] | None,
     key: str,
 ) -> list[Mapping[str, Any]]:
-    """``key`` 리스트의 객체 원소들. 리스트가 아니면 빈 리스트, 객체가 아닌 원소는 건너뜀."""
     if not isinstance(data, Mapping):
         return []
     return [item for item in _optional_list(data, key) if isinstance(item, Mapping)]
@@ -122,10 +115,8 @@ def _required_string(
 ) -> str:
     """필수 문자열. 키가 없거나 문자열이 아니면 거부합니다.
 
-    ``Seat`` 의 합성 생성자(``Seat.java:53-59``)는 다섯 필드 중 하나라도 없으면
-    ``throwMissingFieldException`` 을 던집니다 — 7.0.6 도 처리하지 않는 응답
-    모양이므로 선택으로 읽지 않습니다.
-    """
+    ``Seat`` 의 합성 생성자(``Seat.java:53-59``)는 다섯 필드 중 하나라도 없으면 ``throwMissingFieldException`` 을 던집니다 — 7.0.6 도
+    처리하지 않는 응답 모양이므로 선택으로 읽지 않습니다."""
     value = data.get(key)
     if not isinstance(value, str):
         raise KorailProtocolError(
@@ -154,11 +145,8 @@ def _strict_scalar_string(
 ) -> str | None:
     """JSON 문자열·정수·``null`` 을 받고 그 밖의 모양은 **거부**합니다.
 
-    KORAIL 은 APK 가 자바 ``String`` 으로 선언한 필드를 숫자로도 보냅니다(예약
-    응답의 ``h_jrny_cnt="0001"`` 과 예약 이력의 ``1``). 정수는 문자열로
-    정규화합니다. 폼에 되울리는 값처럼 정확해야 하는 필드에만 씁니다 —
-    선택 필드는 :func:`_optional_scalar_string` 입니다.
-    """
+    KORAIL 은 APK 가 자바 ``String`` 으로 선언한 필드를 숫자로도 보냅니다(예약 응답의 ``h_jrny_cnt="0001"`` 과 예약 이력의 ``1``). 정수는 문자열로
+    정규화합니다. 폼에 되울리는 값처럼 정확해야 하는 필드에만 씁니다 — 선택 필드는 :func:`_optional_scalar_string` 입니다."""
     value = data.get(key)
     if value is None or isinstance(value, str):
         return value
@@ -206,12 +194,9 @@ def _required_integer(
     key: str,
     context: str,
 ) -> int:
-    """필수 정수. JSON 정수와 따옴표 친 ASCII 10진 문자열을 받습니다.
-
-    앱의 kotlinx 디코더(``StreamingJsonDecoder.decodeInt()`` →
-    ``JsonReader.consumeNumericLiteral()``)도 따옴표 친 숫자를 받습니다.
-    null/bool/float/비숫자는 거부합니다.
-    """
+    """필수 정수: JSON int(음수 포함) 또는 비어 있지 않은 ASCII 숫자 문자열을 받습니다. null/bool/float 와 부호 있는 문자열은 거절합니다. 앱의 따옴표 숫자 처리는
+    StreamingJsonDecoder.java:395-403 → kotlinx/serialization/json/internal/JsonReader.java:575-589 에 있습니다.
+    Python 정수 범위까지 앱과 같다는 뜻은 아닙니다."""
     value = data.get(key)
     if type(value) is int:
         return value
