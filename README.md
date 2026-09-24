@@ -60,6 +60,8 @@ for index, train in enumerate(search.trains):
     print(index, train.train_no, train.departure_time, train.arrival_time)
 ```
 
+로그인 ID는 숫자만 쓴 회원번호·전화번호(하이픈 없이 11자리) 또는 이메일입니다. `input_flag`를 생략하면 `010-1234-5678`처럼 숫자만도 이메일도 아닌 입력은 앱처럼 보내지 않고 `KorailProtocolError`로 거절합니다. 실패한 로그인은 계정 잠금 횟수에 들어갈 수 있습니다.
+
 `departure_station_code`와 `arrival_station_code`에는 역 이름도 넣을 수 있습니다. 숫자 역 코드를 넣으면 역 데이터를 조회해 이름으로 변환합니다. 날짜와 시간은 각각 `YYYYMMDD`, `HHMMSS` 형식입니다. 한 번의 조회가 모든 페이지나 모든 열차를 반환한다는 보장은 없습니다.
 
 ### 2. 실제 좌석 예약
@@ -70,7 +72,7 @@ hold = client.reserve(selected)
 print("예약 결과:", hold.str_result, hold.h_msg_cd)
 ```
 
-`reserve`는 단순 가격 조회가 아니라 결제 전 예약을 만듭니다. 조회와 예약의 승객 구성은 일치시켜야 합니다. 이 예시는 기본 성인 1명입니다. 예약대기 응답은 일반 좌석 확보와 같지 않으므로 응답과 결제기한을 확인하고 필요한 경우 별도의 `confirm_standby_hold` 흐름을 사용하십시오. 결제하지 않을 홀드는 `client.cancel_unpaid_hold(hold)`로 취소할 수 있습니다. 결제한 승차권에는 이 취소 대신 환불을 사용합니다.
+`reserve`는 단순 가격 조회가 아니라 결제 전 예약을 만듭니다. 조회와 예약의 승객 구성은 일치시켜야 합니다. 이 예시는 기본 성인 1명입니다. 예약대기 응답은 일반 좌석 확보와 같지 않으므로 응답과 결제기한을 확인하고 필요한 경우 별도의 `confirm_standby_hold` 흐름을 사용하십시오. 예약대기 홀드는 앱처럼 결제하지 않으며 `hold.payable`이 `False`이고 `pay_with_card`가 전송 전에 거절합니다. 결제하지 않을 홀드는 `client.cancel_unpaid_hold(hold)`로 취소할 수 있습니다. 결제한 승차권에는 이 취소 대신 환불을 사용합니다.
 
 ### 3. 카드 결제 — 실제 청구
 
@@ -161,12 +163,12 @@ except KorailAuthError:
 except KorailNoResultsError:
     print("조회 결과가 없습니다.")
 except (KorailTransportError, KorailProtocolError):
-    print("통신 또는 응답 처리 실패입니다. 상태 변경 작업은 결과 확인 없이 재시도하지 마십시오.")
+    print("통신·응답 처리 실패 또는 입력 오류입니다. 상태 변경 작업은 결과 확인 없이 재시도하지 마십시오.")
 except KorailApiError as error:
     print("KORAIL 처리 실패 코드:", error.code)
 ```
 
-`KorailApiError` 계층의 `code`, `message`, `raw`, `parser_raw`는 제공되지 않으면 `None`입니다. `raw`는 원문이며 마스킹되지 않습니다. 입력 검증의 `ValueError`·`TypeError` 등 모든 Python 오류가 이 계층에 포함되지는 않습니다. 일부 메서드는 실패 봉투도 타입화된 응답으로 반환하므로 메서드별 반환 계약을 함께 확인하십시오. 특히 결제는 위의 `str_result` 확인이 필수입니다.
+`KorailApiError` 계층의 `code`, `message`, `raw`, `parser_raw`는 제공되지 않으면 `None`입니다. `raw`는 원문이며 마스킹되지 않습니다. 전송 전 입력 검증(잘못된 카드 입력, 좌석 중복, 결제할 수 없는 홀드, 닫힌 클라이언트 등)도 대부분 `KorailProtocolError`입니다. 이 예외나 `raw` 유무만으로는 요청이 서버에 닿았는지 알 수 없으므로 상태 변경 뒤에는 예약·승차권 목록으로 먼저 확인하십시오. 설정 객체 생성 같은 일부 검증은 `ValueError`·`TypeError`를 낼 수 있어 모든 Python 오류가 이 계층에 포함되지는 않습니다. 일부 메서드는 실패 봉투도 타입화된 응답으로 반환하므로 메서드별 반환 계약을 함께 확인하십시오. 특히 결제는 위의 `str_result` 확인이 필수입니다.
 
 ## DynaPath와 NetFunnel
 
@@ -185,7 +187,7 @@ config = KorailConfig(netfunnel_wait_limit=120.0)
 
 ## 공개 API와 버전 정책
 
-첫 공개 배포부터 **SemVer(major.minor.patch)**를 따릅니다. 버전의 단일 원본은 `korail_mobile_api.__version__`이며 wheel·sdist 메타데이터는 이 값을 읽습니다. 첫 PyPI 버전은 기존 소스와의 일관성을 위해 현재 값 `1.2.0` 유지를 제안하며, 이 문서가 업로드 완료를 뜻하지는 않습니다.
+**SemVer(major.minor.patch)**를 따릅니다. 버전의 단일 원본은 `korail_mobile_api.__version__`이며 wheel·sdist 메타데이터는 이 값을 읽습니다. v1.0.0~v1.1.1은 GitHub 릴리스로만 공개했고 PyPI에는 아직 올리지 않았습니다. 현재 소스는 v1.1.1과 호환되지 않는 변경을 포함하므로([변경 이력](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)) SemVer로는 major 변경에 해당합니다. 첫 PyPI 버전 번호는 배포 때 정하며, 이 문서가 업로드 완료를 뜻하지는 않습니다.
 
 호환성 약속은 최상위 `__all__`의 클라이언트·설정·요청/응답 모델·열거형·예외·타입 별칭, `KorailClient`의 공개 메서드 서명과 명시된 의미, 공개 모델의 필드·생성자, 문서화된 예외 종류와 `code`·`raw` 보존 계약입니다. 이름 제거, 호환되지 않는 서명·반환 타입 변경, 지원 Python 하한 상향은 major 변경으로 다룹니다. 호환되는 기능 추가는 minor, 기존 계약의 오류 수정은 patch입니다. 모델 필드 추가도 기존 위치 인자 호출을 깨지 않는 경우에만 minor로 다룹니다.
 
@@ -198,14 +200,13 @@ python -m pip install -e '.[dev]'
 python -m ruff check src checks tests
 python -m ruff format --check src checks tests
 python -m mypy
+python -m pyright
 python -m pytest tests/
 python -m build
 python -m twine check dist/*
 ```
 
 `pytest`는 테스트 전체의 소켓 연결을 차단하고 `httpx.MockTransport`로만 응답합니다. 기존 `checks/contract_api.py`(G9/G10/G11)와 `checks/netfunnel_offline.py`도 pytest에서 실행합니다. 패키징 테스트는 네트워크 없는 자식 프로세스에서 선택한 PEP 517 백엔드로 sdist와 wheel을 실제 빌드하며, CI는 별도로 표준 `python -m build`와 `twine check`를 실행합니다. **실서버 수용 테스트가 아닙니다.**
-
-코드 전체 서식 정리는 다른 세션 패치를 합친 후 `python -m ruff check --fix src checks tests`와 `python -m ruff format src checks tests`로 수행하고 diff를 검토하십시오. 이 배포 준비 패치에는 전체 서식 변경을 포함하지 않습니다.
 
 [검사 안내](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/README.md) · [수용 기준](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/ACCEPTANCE.md) · [변경 이력](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md) · [라이선스](https://github.com/yakisoba0728/korail-mobile-api/blob/main/LICENSE)
 

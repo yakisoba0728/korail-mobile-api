@@ -41,6 +41,7 @@ dev = [
     "twine>=6.1",
     "ruff>=0.11",
     "mypy>=1.15",
+    "pyright>=1.1.400",
     "setuptools>=78.1.1",
     "packaging>=24.2",
 ]
@@ -75,6 +76,10 @@ select = ["E4", "E7", "E9", "F", "I"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.11"
 
 [tool.mypy]
 python_version = "3.11"

@@ -60,12 +60,15 @@ jobs:
       - name: Ruff lint
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: python -m ruff check src checks tests
-      - name: Ruff format check (format after session integration)
+      - name: Ruff format check
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: python -m ruff format --check src checks tests
       - name: Mypy strict
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: python -m mypy
+      - name: Pyright
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' && matrix.dependencies == 'current' }}
+        run: python -m pyright
       - name: Offline tests, including both original checks
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: python -m pytest tests/
