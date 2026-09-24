@@ -4,7 +4,8 @@
 
 """요청 설정. 기본값은 constants 의 라이브러리 기본값이며 앱의 실기기 값과 같다는 보장은 없습니다.
 
-DynaPath 는 기본으로 켜지고 기기 값은 설정마다 합성됩니다. 실기기 환경변수는 live.build_config_from_env, 명시적 비활성화는 disable_dynapath 를 사용합니다."""
+DynaPath 는 기본으로 켜지고 기기 값은 설정마다 합성됩니다. 실기기 환경변수는 live.build_config_from_env, 명시적 비활성화는 disable_dynapath 를
+사용합니다."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field

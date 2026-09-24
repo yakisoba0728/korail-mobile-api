@@ -159,8 +159,8 @@ class StationRefundExecutionResponse(BaseKorailResponse):
 class KorailPassengerCounts:
     """승객 종류별 인원. 코드 표는 mutation_payloads 를 따르며 PassengerType.java:25-45 의 보호된 enum 평문은 미확인입니다.
 
-    0명 행은 생략(Passengers.java:743-753), 배열 번호는 1부터 시작합니다(NetworkService.java:15345-15366). 청소년 포함 순서는 앱 basicList 와
-    다릅니다(PassengerType.java:74-84). 유아·안내견 포함 합계 상한은 9명입니다(Passengers.java:48,610-616). 일반 예약은 카드 필드를 만들지 않으며
+    0명 행은 생략(Passengers.java:743-753), 배열 번호는 1부터 시작합니다(NetworkService.java:15345-15366). 청소년 포함 순서는 앱 basicList
+    와 다릅니다(PassengerType.java:74-84). 유아·안내견 포함 합계 상한은 9명입니다(Passengers.java:48,610-616). 일반 예약은 카드 필드를 만들지 않으며
     DTO 카드 키는 txtCardNo_ 하나입니다(TicketReservationInPassengerInfo.java:105).
 
     앱의 유아 동반 인원(BABY·CHILD 외 인원 필요)·안내견 수(장애 승객 합계 이하) 경고는 강제하지 않습니다(PassengersBottomSheetKt.java:21124-21185);
@@ -312,8 +312,8 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: 연결은 보호돼 있어 앱 계산을 그대로 재현한 것으로 보장하지 않습니다.
     received_amount: str | None = None
     journeys: tuple[ReservationJourney, ...] = ()
-    #: 할인 합계 h_tot_dcnt_amt. 다른 예약 모델과 같은 이름을 사용합니다. 2026-09-22 기록: 홀드 11건과 재계산 2건에서 prc+fare-discount=received 가
-    #: 성립했습니다. 혼합 승객 163200+0-28500=134700, 특실 2인 108800+49000-1000=156800, 경로 표본 108800+0-1000=107800. 관측
+    #: 할인 합계 h_tot_dcnt_amt. 다른 예약 모델과 같은 이름을 사용합니다. 2026-09-22 기록: 홀드 11건과 재계산 2건에서 prc+fare-discount=received
+    #: 가 성립했습니다. 혼합 승객 163200+0-28500=134700, 특실 2인 108800+49000-1000=156800, 경로 표본 108800+0-1000=107800. 관측
     #: 사례이며 보장된 정산식은 아닙니다.
     total_discount_amount: str | None = None
 
@@ -333,8 +333,8 @@ class ReservationPaymentCoupon:
 
 @dataclass(frozen=True)
 class ReservationPaymentTicket:
-    """tk_infos.tk_info 의 승차권 한 장(ReservationPaymentOutTkInfo.java). 타입화한 신원·운임·할인 외 필드는 raw 에 남으며 민감정보 경고는 모듈 설명을
-    따릅니다."""
+    """tk_infos.tk_info 의 승차권 한 장(ReservationPaymentOutTkInfo.java). 타입화한 신원·운임·할인 외 필드는 raw 에 남으며 민감정보 경고는 모듈
+    설명을 따릅니다."""
 
     #: ``h_tk_sqno`` — 이 승차권 행의 신원 앵커.
     ticket_sequence: str | None = None
@@ -398,8 +398,8 @@ class ReservationPaymentSettlement:
 
 @dataclass(frozen=True)
 class ReservationPaymentTableSeat:
-    """tbl_seat_infos.tbl_seat_info 의 두 구간 단체석(ReservationPaymentOutTblSeatInfo.java). 단체명·좌석도 노출될 수 있으며 기록 경고는 모듈
-    설명을 따릅니다."""
+    """tbl_seat_infos.tbl_seat_info 의 두 구간 단체석(ReservationPaymentOutTblSeatInfo.java). 단체명·좌석도 노출될 수 있으며 기록 경고는
+    모듈 설명을 따릅니다."""
 
     room_class_name_1: str | None = None
     car_no_1: str | None = None
@@ -533,8 +533,8 @@ class PaidTicket:
 
 @dataclass(frozen=True)
 class DiscountCardSectionRequest:
-    """N카드 구매 구간. DTO 키는 밑줄로 끝나며(NCardjrny.java:96-112) 공통 평탄화가 1-기반 인덱스를 붙입니다(NetworkService.java:15345-15366). 구간
-    목록 선언: NCardInfoIn.java:37, 라우트: NetworkApi.java:335-337. 허용 1~3구간은 라이브러리 상한입니다."""
+    """N카드 구매 구간. DTO 키는 밑줄로 끝나며(NCardjrny.java:96-112) 공통 평탄화가 1-기반 인덱스를 붙입니다(NetworkService.java:15345-15366).
+    구간 목록 선언: NCardInfoIn.java:37, 라우트: NetworkApi.java:335-337. 허용 1~3구간은 라이브러리 상한입니다."""
 
     run_date: str
     train_no: str
@@ -554,8 +554,8 @@ class DiscountCardAdditionalUser:
 
 @dataclass(frozen=True)
 class DiscountCardPurchaseRequest:
-    """N카드 구매 정보(NetworkApi.java:335-337). 자체 필드는 NCardInfoIn.java:29-39 참고. 명시적 별칭이 없는 필드의 전송 키는 보호된 serializer 대신
-    속성명을 사용한 추정입니다."""
+    """N카드 구매 정보(NetworkApi.java:335-337). 자체 필드는 NCardInfoIn.java:29-39 참고. 명시적 별칭이 없는 필드의 전송 키는 보호된 serializer
+    대신 속성명을 사용한 추정입니다."""
 
     card_kind_management_no: str
     customer_no: str
@@ -567,8 +567,8 @@ class DiscountCardPurchaseRequest:
 
 @dataclass(frozen=True)
 class DiscountCardTicket:
-    """기간연장용 원표 식별자(MyTicketDetailViewModel.java:1049, NCardExtensionIn.java:180). 판매일은 h_orgtk_ret_sale_dt 이므로 현재
-    h_sale_dt 를 쓰는 PaidTicket 환불과 다릅니다. 출처: TicketDetailOut.java:458,462,466,470."""
+    """기간연장용 원표 식별자(MyTicketDetailViewModel.java:1049, NCardExtensionIn.java:180). 판매일은 h_orgtk_ret_sale_dt 이므로
+    현재 h_sale_dt 를 쓰는 PaidTicket 환불과 다릅니다. 출처: TicketDetailOut.java:458,462,466,470."""
 
     sale_window_no: str
     sale_date: str
@@ -609,8 +609,8 @@ class PriceRecalculationRow:
 
     여섯 값은 None 아닌 문자열이어야 합니다. Retrofit 이 null 원소를 건너뛰면 병렬 목록의 인덱스가 어긋납니다(ParameterHandler.java:18-31,252-259).
     할인 미선택은 빈 문자열입니다. 2026-09-22 관측: 요청 할인 131 은 SUCC/IRZ000008 및 응답 할인 204, 000 은 WZZ000001 이었습니다. 다른 코드들은 이
-    실험으로 검증하지 않았습니다. 성공 봉투는 할인 자격의 보장이 아니며 실제 자격에 맞는 값만 사용해야 합니다. certificate_no 는 필요한 증명번호, family_sequence_no 는
-    다자녀 fmlySqno 입니다(Fmly.java:145)."""
+    실험으로 검증하지 않았습니다. 성공 봉투는 할인 자격의 보장이 아니며 실제 자격에 맞는 값만 사용해야 합니다. certificate_no 는 필요한 증명번호, family_sequence_no
+    는 다자녀 fmlySqno 입니다(Fmly.java:145)."""
 
     #: ``psg_tp_dv_cd`` ← 좌석의 ``h_psg_tp_cd``.
     passenger_type_code: str
@@ -628,8 +628,8 @@ class PriceRecalculationRow:
 
 @dataclass(frozen=True)
 class PriceRecalculationRequest:
-    """PNR 한 건의 재계산(PayViewModel.java:6142-6171, PriceReCalculationIn.java:31-41). 비회원일 때만 hiduserYn·hidCustNo 를 함께
-    넣습니다. job id·N 리터럴은 보호돼 있으며 라이브러리의 값은 라이브 기록에 의존합니다(ReservationJobId.java:20,42-45)."""
+    """PNR 한 건의 재계산(PayViewModel.java:6142-6171, PriceReCalculationIn.java:31-41). 비회원일 때만 hiduserYn·hidCustNo 를
+    함께 넣습니다. job id·N 리터럴은 보호돼 있으며 라이브러리의 값은 라이브 기록에 의존합니다(ReservationJobId.java:20,42-45)."""
 
     pnr_no: str
     rows: tuple[PriceRecalculationRow, ...] = ()
@@ -665,8 +665,8 @@ class CartDiscountAddition:
 
 @dataclass(frozen=True)
 class CartAddResponse(BaseKorailResponse):
-    """장바구니 추가 결과. 구조: AddCartListOut.java:24-25,76 → PsgDiscAddInfos.java:81. 라이브 미검증이며 행이 없으면 discount_additions 는
-    빈 튜플입니다."""
+    """장바구니 추가 결과. 구조: AddCartListOut.java:24-25,76 → PsgDiscAddInfos.java:81. 라이브 미검증이며 행이 없으면
+    discount_additions 는 빈 튜플입니다."""
 
     #: ``psgDiscAdd_infos`` → ``psgDiscAdd_info`` 의 각 행.
     discount_additions: tuple[CartDiscountAddition, ...] = ()

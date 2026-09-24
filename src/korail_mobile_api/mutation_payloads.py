@@ -136,8 +136,8 @@ def _validated_seat_assignments(
     job_type: KorailReservationJobType,
     passenger_total: int,
 ) -> tuple[KorailSeatAssignment, ...]:
-    """좌석지정은 승객당 좌석 하나를 요구합니다. 앱도 좌석 목록·개수와 SEAT job 을 함께 설정합니다 (TrainSeatMapViewModel.java:2135-2138,2289). 1103 은
-    관측값이며 enum 평문은 보호돼 있습니다 (ReservationJobId.java:22). 일반 빌더는 좌석 목록·개수를 채우지 않습니다
+    """좌석지정은 승객당 좌석 하나를 요구합니다. 앱도 좌석 목록·개수와 SEAT job 을 함께 설정합니다 (TrainSeatMapViewModel.java:2135-2138,2289).
+    1103 은 관측값이며 enum 평문은 보호돼 있습니다 (ReservationJobId.java:22). 일반 빌더는 좌석 목록·개수를 채우지 않습니다
     (TrainScheduleViewModel.java:2932,3004; TicketReservationIn.java:182)."""
     if job_type is not KorailReservationJobType.SEAT_DESIGNATED:
         if seats:
@@ -183,9 +183,9 @@ def build_reservation_form(
     seats: Sequence[KorailSeatAssignment] | None = None,
     seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
-    """단일 열차의 홀드 폼. 좌석 지정 키는 TicketReservationInSrcar.java:51, 후행 키는 TicketReservationInSrcarTrailing.java:52, 개수는
-    TicketReservationIn.java:80 입니다. 앱은 한 FieldMap 으로 전송하고(NetworkApi.java:752-753), DTO 를 평탄화하며 배열에 1기반 인덱스를
-    붙입니다(NetworkService.java:14155-14162,15350,15366). txtSrcarCnt 는 호차 수가 아닌 좌석
+    """단일 열차의 홀드 폼. 좌석 지정 키는 TicketReservationInSrcar.java:51, 후행 키는 TicketReservationInSrcarTrailing.java:52,
+    개수는 TicketReservationIn.java:80 입니다. 앱은 한 FieldMap 으로 전송하고(NetworkApi.java:752-753), DTO 를 평탄화하며 배열에 1기반
+    인덱스를 붙입니다(NetworkService.java:14155-14162,15350,15366). txtSrcarCnt 는 호차 수가 아닌 좌석
     수입니다(TrainSeatMapViewModel.java:2108-2113,2136-2138). 라이브러리의 삽입 순서가 DTO 의 모든 필드 순서와 같다는 보장은 없습니다."""
     return _build_journey_reservation_form(
         config,
@@ -516,8 +516,8 @@ def _build_journey_reservation_form(
             "txtJobId": job_type.value,
             "txtGdNo": "",
             "hidFreeFlg": "N",
-            # 일반 입석 판정은 _standing_flag 참고. 환승은 구간별 판정의 OR 입니다 (TrainScheduleViewModel.java:2961-2967). 예약대기만 N 으로
-            # 고정합니다. 2026-09-16 같은 대기 열차에 N 은 SUCC/IRR000014, Y 는 SUCC/IRR000018 과 입석 좌석·입석 인원 1·결제기한을
+            # 일반 입석 판정은 _standing_flag 참고. 환승은 구간별 판정의 OR 입니다 (TrainScheduleViewModel.java:2961-2967). 예약대기만 N
+            # 으로 고정합니다. 2026-09-16 같은 대기 열차에 N 은 SUCC/IRR000014, Y 는 SUCC/IRR000018 과 입석 좌석·입석 인원 1·결제기한을
             # 돌려줬습니다. 대기를 입석 홀드로 바꾸지 않기 위한 구분입니다. 앱의 STAND 판정 사용은 TrainScheduleViewModel.java:2870-2874 참고.
             "txtStndFlg": (
                 "N"
@@ -673,8 +673,8 @@ def _merge_ineligible_message(
 
 
 def _journey_fields(train: TrainSummary | TrainScheduleItem) -> dict[str, str]:
-    """구간 입력의 12개 신원·운행 값을 읽습니다(TicketReservationInJrny.java:69). DTO 는 String 이지만 그 선언만으로 서버의 숫자·날짜 제약 부재를 증명하지는
-    않습니다."""
+    """구간 입력의 12개 신원·운행 값을 읽습니다(TicketReservationInJrny.java:69). DTO 는 String 이지만 그 선언만으로 서버의 숫자·날짜 제약 부재를
+    증명하지는 않습니다."""
     return {
         "train_no": _required_digits(train.train_no, field="train_no"),
         "train_group_code": _required_digits(
@@ -901,10 +901,10 @@ def build_card_payment_form(
     hold: ReservationHoldResponse,
     card: CardPayment,
 ) -> dict[str, str]:
-    """홀드·카드 입력으로 결제 폼을 만듭니다. 실제 전송은 결제 시도를 일으킬 수 있습니다. 정산액은 hold.received_amount 를 사용하며 total_price 로 대체하지 않습니다.
-    일반 예약의 앱 금액 흐름은 PayViewModel.java:11027-11028,11303-11307,11368,11440 과 PayAmountUiData.java:65,248-249,
-    ReservationOut.java:452 참고. initAmountData 의 jadx 중복 경고로 모든 분기 수를 확정할 수 없습니다. 기존 smali 근거는
-    PayViewModel.smali:25740-27914 입니다. h_tot_prc 가 UI 전용이라는 주장은 하지 않습니다.
+    """홀드·카드 입력으로 결제 폼을 만듭니다. 실제 전송은 결제 시도를 일으킬 수 있습니다. 정산액은 hold.received_amount 를 사용하며 total_price 로 대체하지
+    않습니다. 일반 예약의 앱 금액 흐름은 PayViewModel.java:11027-11028,11303-11307,11368,11440 과
+    PayAmountUiData.java:65,248-249, ReservationOut.java:452 참고. initAmountData 의 jadx 중복 경고로 모든 분기 수를 확정할 수
+    없습니다. 기존 smali 근거는 PayViewModel.smali:25740-27914 입니다. h_tot_prc 가 UI 전용이라는 주장은 하지 않습니다.
 
     포인트·마일리지 병용은 구현하지 않습니다(PaymentMethodHelper.java:89-137,587-689). 앱의 미병용 경로는 hidPontDvCd1 도 넣지만(:130) 보호값을
     모르므로 라이브러리는 생략합니다. 관측된 결제 성공이 누락 필드·시퀀스 폴백·모든 카드 조합의 성공을 보장하지 않습니다. 카드 정보는 폼에 들어가므로 로그·예외 원문 노출에 주의하십시오."""
@@ -1266,9 +1266,9 @@ def build_price_recalculation_form(
     config: KorailConfig,
     request: PriceRecalculationRequest,
 ) -> dict[str, str | list[str]]:
-    """할인 재계산 폼. NetworkApi.java:583-584 의 여섯 병렬 List 필드를 반복 키로 보냅니다. 결제 화면 입력은 PayViewModel.java:1233,1308-1316 으로
-    이어집니다. 입력 생성의 기존 근거는 PayViewModel.smali:11291,11834-11850, PayViewModel$executeDiscountPrice$1.smali:420,543 이며
-    jadx 복원 실패 부분은 smali 대조가 필요합니다."""
+    """할인 재계산 폼. NetworkApi.java:583-584 의 여섯 병렬 List 필드를 반복 키로 보냅니다. 결제 화면 입력은 PayViewModel.java:1233,1308-1316
+    으로 이어집니다. 입력 생성의 기존 근거는 PayViewModel.smali:11291,11834-11850,
+    PayViewModel$executeDiscountPrice$1.smali:420,543 이며 jadx 복원 실패 부분은 smali 대조가 필요합니다."""
     if not isinstance(request, PriceRecalculationRequest):
         raise KorailProtocolError(
             "KORAIL price recalculation requires an exact "

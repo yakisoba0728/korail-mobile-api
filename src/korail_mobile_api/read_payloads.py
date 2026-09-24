@@ -2,8 +2,8 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""승차권·예약·환불·마일리지·할인카드·MaaS 조회 폼 빌더. 기본 조회는 payloads, 상태 변경은 mutation_payloads 에 있습니다. 키 근거는 DTO·호출부이며 FieldMap 선언
-자체가 키 이름·순서를 검증하지는 않습니다."""
+"""승차권·예약·환불·마일리지·할인카드·MaaS 조회 폼 빌더. 기본 조회는 payloads, 상태 변경은 mutation_payloads 에 있습니다. 키 근거는 DTO·호출부이며 FieldMap
+선언 자체가 키 이름·순서를 검증하지는 않습니다."""
 from __future__ import annotations
 
 import time
@@ -105,8 +105,8 @@ class FreeSeatCarRequest:
 
 @dataclass(frozen=True)
 class GuideSeatConditionRequest:
-    """guideSeatCnd.do 입력. 2026-09-22 라이브에서는 좌석속성코드 14종이 같은 도우미석 안내(FAIL/MRR800011)를 반환했습니다. 앱은 SeatType.HELPER 코드를
-    사용합니다(TrainOptionViewModel.java:270). 이 표본만으로 모든 입력·시점의 응답이 같다고 보장하지 않습니다."""
+    """guideSeatCnd.do 입력. 2026-09-22 라이브에서는 좌석속성코드 14종이 같은 도우미석 안내(FAIL/MRR800011)를 반환했습니다. 앱은 SeatType.HELPER
+    코드를 사용합니다(TrainOptionViewModel.java:270). 이 표본만으로 모든 입력·시점의 응답이 같다고 보장하지 않습니다."""
 
     seat_attribute_code: str
 
@@ -849,8 +849,8 @@ def build_original_ticket_inquiry_form(
     *,
     ticket_count: int | None = None,
 ) -> tuple[tuple[str, str | int], ...]:
-    """원표 조회(NetworkApi.java:235). 키 접두사·순서: ChangeOrtkInfo.java:52. 건수 tkCnt 는 OgTicketInquiryIn.java:30,81 의 정수이며
-    이 빌더는 목록 길이를 사용합니다. 앱의 행 수 사용: NotificationViewModel.java:197, PassengerTypeChangeViewModel.java:147,
+    """원표 조회(NetworkApi.java:235). 키 접두사·순서: ChangeOrtkInfo.java:52. 건수 tkCnt 는 OgTicketInquiryIn.java:30,81 의
+    정수이며 이 빌더는 목록 길이를 사용합니다. 앱의 행 수 사용: NotificationViewModel.java:197, PassengerTypeChangeViewModel.java:147,
     TrainSeatMapViewModel.java:1282. RefundTicketViewModel.java:258 의 리터럴은 보호돼 있습니다."""
     references = _exact_ticket_reference_tuple(tickets)
     if ticket_count is None:
@@ -999,7 +999,8 @@ def _wire_component(value: str, name: str) -> str:
 @dataclass(frozen=True)
 class PriceFareLeg:
     """운임 구간. goods_no=None 이면 gdNo 를 생략합니다. 앱의 일반 열차 생성자는 기본값 마스크 64 를 사용합니다(TrainOpInfoViewModel.java:794,
-    PrcFareInItem.java:85). 보호된 기본값·직렬화 때문에 이것만으로 실제 폼 생략은 확정하지 않습니다. 2026-09-21 관측에서는 gdNo 유무에 따른 응답 차이가 없었습니다."""
+    PrcFareInItem.java:85). 보호된 기본값·직렬화 때문에 이것만으로 실제 폼 생략은 확정하지 않습니다. 2026-09-21 관측에서는 gdNo 유무에 따른 응답 차이가
+    없었습니다."""
 
     departure_station_code: str
     arrival_station_code: str
@@ -1029,8 +1030,8 @@ class PriceFareLeg:
 
 @dataclass(frozen=True)
 class PriceFareQuoteRequest:
-    """운임 조회의 한두 구간과 메뉴. DTO: PrcFareIn.java:28-31,197. 생성자 TrainOpInfoViewModel.java:794 의 메뉴 리터럴은 보호됨. 길이 2가 기본값
-    11 을 증명하지 않습니다."""
+    """운임 조회의 한두 구간과 메뉴. DTO: PrcFareIn.java:28-31,197. 생성자 TrainOpInfoViewModel.java:794 의 메뉴 리터럴은 보호됨. 길이 2가
+    기본값 11 을 증명하지 않습니다."""
 
     legs: tuple[PriceFareLeg, ...]
     menu_id: str = "11"
@@ -1126,7 +1127,8 @@ def _exact_refund_companion(companion: RefundCompanion) -> RefundCompanion:
 def build_station_refund_verification_form(
     request: StationRefundVerificationRequest,
 ) -> dict[str, str]:
-    """NetworkApi.verifyOnlineRefunds 의 VerifyOnlineRefundsIn 폼. 요청 객체가 값을 검사하며 공통 필드는 KorailHttpClient 가 추가합니다."""
+    """NetworkApi.verifyOnlineRefunds 의 VerifyOnlineRefundsIn 폼. 요청 객체가 값을 검사하며 공통 필드는 KorailHttpClient 가
+    추가합니다."""
     return {
         "strName": request.customer_name,
         "retNo1": request.return_no_1,
@@ -1140,8 +1142,8 @@ def build_refund_commission_form(
     ticket: OriginalTicketReference,
     companion: RefundCompanion = RefundCompanion(),
 ) -> dict[str, str]:
-    """환불 수수료 사전조회(NetworkApi.java:598-600, RefundCommissionIn.java:32-42,59). 판매일 키 h_orgtk_ret_sale_dt 는 환불 실행의
-    h_orgtk_sale_dt 와 다릅니다(RefundTicketIn.java:38)."""
+    """환불 수수료 사전조회(NetworkApi.java:598-600, RefundCommissionIn.java:32-42,59). 판매일 키 h_orgtk_ret_sale_dt 는 환불
+    실행의 h_orgtk_sale_dt 와 다릅니다(RefundTicketIn.java:38)."""
     reference = _exact_original_ticket_reference(ticket)
     party = _exact_refund_companion(companion)
     return {

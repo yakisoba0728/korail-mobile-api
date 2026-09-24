@@ -13,8 +13,8 @@ from .errors import KorailProtocolError
 
 @dataclass(frozen=True)
 class KorailSession:
-    """로그인 쿠키와 계정 식별자. client.session.current 에 저장됩니다. customer_no 는 회원번호와 다른 고객번호이며 member_card_no 는 검색의 mbCrdNo 에
-    사용합니다. 필드는 repr 에도 원문 그대로 나옵니다."""
+    """로그인 쿠키와 계정 식별자. client.session.current 에 저장됩니다. customer_no 는 회원번호와 다른 고객번호이며 member_card_no 는 검색의
+    mbCrdNo 에 사용합니다. 필드는 repr 에도 원문 그대로 나옵니다."""
 
     jsessionid: str | None = None
     member_no: str | None = None
@@ -25,8 +25,9 @@ class KorailSession:
 
 @dataclass(frozen=True)
 class BaseKorailResponse:
-    """공통 봉투의 값 객체. 모든 응답 모델이 이를 상속하는 것은 아닙니다. from_raw 는 성공 여부·봉투 필드 타입을 판정하지 않습니다. HTTP 판정은 parse_base_response
-    참고. FAIL/P058 은 raise_on_fail 과 무관하게 만료 예외이며, 일반 코드가 존재한다는 사실만으로 실패가 되지는 않습니다. raw 는 원본 JSON 입니다."""
+    """공통 봉투의 값 객체. 모든 응답 모델이 이를 상속하는 것은 아닙니다. from_raw 는 성공 여부·봉투 필드 타입을 판정하지 않습니다. HTTP 판정은
+    parse_base_response 참고. FAIL/P058 은 raise_on_fail 과 무관하게 만료 예외이며, 일반 코드가 존재한다는 사실만으로 실패가 되지는 않습니다. raw 는 원본
+    JSON 입니다."""
 
     h_msg_cd: str | None = None
     h_msg_txt: str | None = None
@@ -471,8 +472,8 @@ class TrainSummary:
     #: ``h_rsv_psb_nm`` — 일반실 **운임** 문구(``"47,500원"``). 이름이 예약가능("rsv_psb")처럼 보이지만 실제로 담겨 오는 값은 금액입니다. 잔여 문구는
     #: :attr:`general_availability_name` 쪽입니다.
     general_fare_text: str | None = None
-    #: ``h_spe_rsv_psb_nm`` — 특실 **운임** 문구. 위와 같은 이유로 이름과 내용이 어긋나는 키라, 잔여 문구는 :attr:`special_availability_name` 에서
-    #: 읽습니다.
+    #: ``h_spe_rsv_psb_nm`` — 특실 **운임** 문구. 위와 같은 이유로 이름과 내용이 어긋나는 키라, 잔여 문구는 :attr:`special_availability_name`
+    #: 에서 읽습니다.
     special_fare_text: str | None = None
     #: ``h_stnd_rsv_nm`` — 입석 잔여 화면 문구. :attr:`standing_reservation_code`(``h_stnd_rsv_cd``)가 코드이고 이쪽이 사람이 읽는
     #: 글자라, 둘 다 있어야 화면을 그대로 재현할 수 있습니다. 2026-09-22 라이브 값: ``'매진'``(서울→부산 20260925, 동대구→서울 20260927),
@@ -583,8 +584,8 @@ class SeatInventoryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TrainSearchMetadata:
-    """행 이외의 검색 조건·커서. 2026-09-22 직통 6질의는 다음 페이지 Y 여도 필수 커서가 없었습니다. 플래그만으로 다음 요청 가능 여부를 판단하지 마십시오. h_menu_id 는 요청
-    txtMenuId 와 별도로 받은 값입니다."""
+    """행 이외의 검색 조건·커서. 2026-09-22 직통 6질의는 다음 페이지 Y 여도 필수 커서가 없었습니다. 플래그만으로 다음 요청 가능 여부를 판단하지 마십시오. h_menu_id 는
+    요청 txtMenuId 와 별도로 받은 값입니다."""
 
     job_id: str | None = None
     menu_id: str | None = None
@@ -668,8 +669,8 @@ class TrainSearchResult:
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:
-        """다음 페이지 Y 와 필수 커서가 모두 있을 때만 continuation 을 반환합니다. 2026-09-22 직통 6질의는 커서가 없어 None 이었습니다. 수동 커서 조합도 같은 10행을
-        반환한 기록이 있지만 모든 조건에서 페이지가 없다고 일반화할 수는 없습니다. 필요하면 next_query_from_last_departure 로 별도 질의를 만드십시오."""
+        """다음 페이지 Y 와 필수 커서가 모두 있을 때만 continuation 을 반환합니다. 2026-09-22 직통 6질의는 커서가 없어 None 이었습니다. 수동 커서 조합도 같은
+        10행을 반환한 기록이 있지만 모든 조건에서 페이지가 없다고 일반화할 수는 없습니다. 필요하면 next_query_from_last_departure 로 별도 질의를 만드십시오."""
         # 앱은 결과 목록이 비어 있으면 다음 페이지를 부르지 않습니다(TrainScheduleViewModel.smali:36786-36804).
         if not self.trains:
             return None
@@ -682,9 +683,10 @@ class TrainSearchResult:
         self,
         query: TrainSearchQuery,
     ) -> TrainSearchQuery | None:
-        """마지막 행의 출발 날짜·시각을 복사한 질의만 만들며 전송하지 않습니다. 행이나 날짜·시각이 없으면 None 입니다. 날짜 없이 시각만 옮기지 않습니다. 2026-09-22 관측: 재조회
-        10행 중 첫 행이 앞 페이지 마지막 열차와 겹치고 9행이 새로 왔습니다. 결합 시 열차번호뿐 아니라 운행일·구간도 고려해 동일한 경계 행을 제거하십시오. 앱 기본 화면의 동일 동작은
-        보장하지 않습니다. 기존 다른 화면의 근거 기록은 TrainScheduleViewModel.smali:29590-29846,36938-36956 이며 현재 자료로 재검증하지 못했습니다."""
+        """마지막 행의 출발 날짜·시각을 복사한 질의만 만들며 전송하지 않습니다. 행이나 날짜·시각이 없으면 None 입니다. 날짜 없이 시각만 옮기지 않습니다. 2026-09-22 관측:
+        재조회 10행 중 첫 행이 앞 페이지 마지막 열차와 겹치고 9행이 새로 왔습니다. 결합 시 열차번호뿐 아니라 운행일·구간도 고려해 동일한 경계 행을 제거하십시오. 앱 기본 화면의 동일
+        동작은 보장하지 않습니다. 기존 다른 화면의 근거 기록은 TrainScheduleViewModel.smali:29590-29846,36938-36956 이며 현재 자료로 재검증하지
+        못했습니다."""
         if not self.trains:
             return None
         last = self.trains[-1]
@@ -710,8 +712,8 @@ class TransferItinerary:
 
     @property
     def transfer_station_code(self) -> str | None:
-        """첫 구간 도착역과 다음 구간 출발역이 같을 때만 그 코드를 반환합니다. 다르면 None 이며 두 역을 직접 읽어야 합니다. 합치기 규칙은 라이브러리 정책입니다. 앱의 구간별 이름 표시는
-        DialogsKt.java:170668,170678 참고."""
+        """첫 구간 도착역과 다음 구간 출발역이 같을 때만 그 코드를 반환합니다. 다르면 None 이며 두 역을 직접 읽어야 합니다. 합치기 규칙은 라이브러리 정책입니다. 앱의 구간별 이름
+        표시는 DialogsKt.java:170668,170678 참고."""
         arrival = self.first.arrival_station_code
         return arrival if arrival == self.second.departure_station_code else None
 
@@ -725,9 +727,9 @@ class TransferItinerary:
 def pair_transfer_itineraries(
     trains: list[TrainSummary],
 ) -> list[TransferItinerary]:
-    """환승 행을 여정으로 묶습니다. 앱처럼 ``h_trn_seq``(:attr:`TrainSummary.train_sequence`, 없으면 ``None`` 끼리)가 같은 행을 처음 나온 순서대로
-    묶습니다(TrainScheduleViewModel.smali:36958-37040 의 LinkedHashMap groupBy). 두 구간이 아닌 묶음은 여정으로 만들지 않고 ``trains``
-    에만 남습니다."""
+    """환승 행을 여정으로 묶습니다. 앱처럼 ``h_trn_seq``(:attr:`TrainSummary.train_sequence`, 없으면 ``None`` 끼리)가 같은 행을 처음 나온
+    순서대로 묶습니다(TrainScheduleViewModel.smali:36958-37040 의 LinkedHashMap groupBy). 두 구간이 아닌 묶음은 여정으로 만들지 않고
+    ``trains`` 에만 남습니다."""
     by_sequence: dict[str | None, list[TrainSummary]] = {}
     for train in trains:
         by_sequence.setdefault(train.train_sequence, []).append(train)

@@ -7,8 +7,8 @@
 앱 SDK 1.7.18(Netfunnel.java:18)은 5101 로 진입하고 201/202 에서만 TTL 1~30초 대기 후 5002 를 반복합니다(Netfunnel.java:610-664,
 com/netfunnel/api/Response.java:59-66). SDK 루프에는 누적 대기 상한이 없습니다. 다만 앱의 연결부에는 마지막 콜백과 현재 시계의 차를 15000 과 비교해
 finish(false) 로 끝내는 감시가 따로 있습니다 (ScreenViewModel$withNetFunnel$2$1$5.smali:603-692,875-889; 시계 단위는 보호돼 ms 이면
-15초). 콜백이 끊겼을 때의 감시이지 전체 대기 상한이 아니며, 이 라이브러리에는 없습니다. ScreenViewModel.java:837-900,1719,1955,1986 의 연결부는 mode=0 에서
-Success 만, mode=1 에서 사용자 중단 이외의 결과를 통과시킵니다. SDK 는 오류를 기본으로 ErrorBypass 로 바꾸므로(Netfunnel.java:269-270,
+15초). 콜백이 끊겼을 때의 감시이지 전체 대기 상한이 아니며, 이 라이브러리에는 없습니다. ScreenViewModel.java:837-900,1719,1955,1986 의 연결부는 mode=0
+에서 Success 만, mode=1 에서 사용자 중단 이외의 결과를 통과시킵니다. SDK 는 오류를 기본으로 ErrorBypass 로 바꾸므로(Netfunnel.java:269-270,
 com/netfunnel/api/Property.java:9 ``err_bypass_ = true``) 대기열 서버 장애에도 조회(mode=1)는 나갑니다. aid·sid 평문은 보호돼 있습니다. 키는
 대기열용이며 이 라이브러리는 KORAIL 요청에 싣지 않습니다.
 
@@ -212,8 +212,8 @@ class KorailNetFunnelClient:
     def run(self, gate: KorailNetFunnelGate | str, send: Callable[[], T]) -> T:
         """관문 통과 후 send 를 호출하고 finally 에서 최신 키를 한 번 반납합니다.
 
-        차단은 KorailQueueRejectedError. mode=1 은 대기열 통신 오류 시 키 없이 진행할 수 있으나, mode=0 은 요청하지 않고 KorailNetFunnelError 를
-        냅니다. 반납 실패는 로그만 남깁니다."""
+        차단은 KorailQueueRejectedError. mode=1 은 대기열 통신 오류 시 키 없이 진행할 수 있으나, mode=0 은 요청하지 않고 KorailNetFunnelError
+        를 냅니다. 반납 실패는 로그만 남깁니다."""
         if isinstance(gate, str):
             gate = self.gate(gate)
         slot = _Slot()
@@ -349,8 +349,8 @@ class KorailNetFunnelClient:
         )
 
     def _complete(self, slot: _Slot) -> None:
-        """최신 키가 있을 때만 5004 를 보냅니다. 재시도·응답 파싱은 하지 않습니다 (Netfunnel.java:848-880, CommandClient.java:158-199). 실패는 경고
-        로그만 남깁니다."""
+        """최신 키가 있을 때만 5004 를 보냅니다. 재시도·응답 파싱은 하지 않습니다 (Netfunnel.java:848-880, CommandClient.java:158-199). 실패는
+        경고 로그만 남깁니다."""
         token = slot.token
         if token is None or not token.key:
             return

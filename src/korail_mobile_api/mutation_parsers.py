@@ -147,8 +147,9 @@ def _received_amount(
     raw: Mapping[str, Any],
     journey_rows: list[Mapping[str, Any]],
 ) -> str | None:
-    """좌석별 h_rcvd_amt 합과 선언 총액을 대조하는 라이브러리 정책입니다. 앱은 일반 결제에서 h_tot_rcvd_amt 를 합산합니다(PayViewModel.java:11297-11307).
-    번호 붙은 결제 금액으로의 최종 연결은 보호된 Bundle 키 때문에 미확인입니다 (PaymentMethodHelper.java:113,211).
+    """좌석별 h_rcvd_amt 합과 선언 총액을 대조하는 라이브러리 정책입니다. 앱은 일반 결제에서 h_tot_rcvd_amt 를
+    합산합니다(PayViewModel.java:11297-11307). 번호 붙은 결제 금액으로의 최종 연결은 보호된 Bundle 키 때문에 미확인입니다
+    (PaymentMethodHelper.java:113,211).
 
     미배정 0원 행은 제외하고, 사용할 좌석 행이 없으면 선언 총액만 씁니다. 한 좌석 금액이 읽히지 않으면 부분 합을 반환하지 않습니다. 두 출처가 다르면 오류, 사용 가능한 출처가 없으면
     None 입니다."""
@@ -395,8 +396,8 @@ def parse_reservation_hold_response(
 def parse_reservation_payment_response(
     raw: Mapping[str, Any],
 ) -> ReservationPaymentResponse:
-    """결제 결과의 중첩 목록을 관대하게 읽으며 성공 여부는 판정하지 않습니다. 반환 비밀번호·수령인 등 민감값은 타입 필드와 raw 에 그대로 남습니다. 이미 승인됐을 수 있으므로 파싱 결과만 보고
-    결제를 재전송하지 마십시오."""
+    """결제 결과의 중첩 목록을 관대하게 읽으며 성공 여부는 판정하지 않습니다. 반환 비밀번호·수령인 등 민감값은 타입 필드와 raw 에 그대로 남습니다. 이미 승인됐을 수 있으므로 파싱 결과만
+    보고 결제를 재전송하지 마십시오."""
     copied = _response_mapping(raw)
     coupons: list[ReservationPaymentCoupon] = []
     for value in _rows(copied, "tk_coupon_info"):
@@ -471,7 +472,8 @@ _DISCOUNT_CARD_PURCHASE_FIELDS = {
 def parse_discount_card_purchase_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardPurchaseResponse:
-    """NCardInfoOut.java:30-38 의 자체 속성 9개를 읽습니다. serializer 이름이 보호돼 Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 라이브 미검증입니다."""
+    """NCardInfoOut.java:30-38 의 자체 속성 9개를 읽습니다. serializer 이름이 보호돼 Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 라이브
+    미검증입니다."""
     data = _response_mapping(raw)
     return DiscountCardPurchaseResponse(
         h_msg_cd=data.get("h_msg_cd"),
@@ -506,8 +508,8 @@ def _cart_discount_additions(
 
 
 def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
-    """장바구니 추가 결과. 키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81, PsgDiscAddInfo.java:81,85. 누락·잘못된 선택 목록은
-    비웁니다. 라이브 미검증입니다."""
+    """장바구니 추가 결과. 키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81, PsgDiscAddInfo.java:81,85. 누락·잘못된 선택
+    목록은 비웁니다. 라이브 미검증입니다."""
     data = _response_mapping(raw)
     return CartAddResponse(
         h_msg_cd=data.get("h_msg_cd"),

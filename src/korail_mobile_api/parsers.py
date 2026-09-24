@@ -165,8 +165,8 @@ def _response_fields(response: BaseKorailResponse) -> dict[str, Any]:
 
 @_preserve_read_raw
 def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
-    """봉투 없는 prdMobilePlusMain.cache 를 읽습니다. 선택 필드의 잘못된 타입은 비웁니다. version 은 MobilePlusMainVersion.java:52 의 3개 키를
-    읽고 나머지는 raw 에 둡니다. 2026-09-22 라이브에는 19개 키가 있었습니다. CNTAURL 은 업데이트 버튼 URL 입니다 (AppKt.java:1240,1635)."""
+    """봉투 없는 prdMobilePlusMain.cache 를 읽습니다. 선택 필드의 잘못된 타입은 비웁니다. version 은 MobilePlusMainVersion.java:52 의 3개
+    키를 읽고 나머지는 raw 에 둡니다. 2026-09-22 라이브에는 19개 키가 있었습니다. CNTAURL 은 업데이트 버튼 URL 입니다 (AppKt.java:1240,1635)."""
     raw = response.raw
     version_raw = raw.get("version")
     version = None
@@ -250,7 +250,8 @@ def resolve_station_name(reference: str, names: Mapping[str, str]) -> str:
 
 @_preserve_read_raw
 def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
-    """trn_infos 는 객체 안의 trn_info 목록, 직접 목록, null 을 허용합니다. 그 밖의 컨테이너·비객체 행은 오류입니다. 빈 목록만으로 직통 없음 예외를 만들지는 않습니다."""
+    """trn_infos 는 객체 안의 trn_info 목록, 직접 목록, null 을 허용합니다. 그 밖의 컨테이너·비객체 행은 오류입니다. 빈 목록만으로 직통 없음 예외를 만들지는
+    않습니다."""
     container = raw.get("trn_infos")
     if isinstance(container, Mapping):
         rows = container.get("trn_info", [])
@@ -309,8 +310,8 @@ def parse_train_search_metadata(
 
 @_preserve_read_raw
 def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
-    """ebizcross/getUUID.do 의 비어 있지 않은 문자열 mutMrkVrfCd 를 읽고 없으면 KorailProtocolError 입니다. 완전한 KORAIL 봉투는 요구하지 않습니다.
-    strResult 만 동반된 2026-09-22 관측과 부분 봉투 보존은 http.KorailHttpClient._finish_read 참고."""
+    """ebizcross/getUUID.do 의 비어 있지 않은 문자열 mutMrkVrfCd 를 읽고 없으면 KorailProtocolError 입니다. 완전한 KORAIL 봉투는 요구하지
+    않습니다. strResult 만 동반된 2026-09-22 관측과 부분 봉투 보존은 http.KorailHttpClient._finish_read 참고."""
     value = response.raw.get("mutMrkVrfCd")
     if not isinstance(value, str) or not value.strip():
         raise KorailProtocolError(
@@ -499,7 +500,8 @@ def parse_train_schedule_response(
 ) -> TrainScheduleResponse:
     """``research.actualTrainSchedule.do`` 의 정차역·지연 정보를 파싱합니다.
 
-    7.0.6 DTO에서는 ``dlayList`` 가 생략되면 빈 목록입니다. 행 하나가 정차역 하나이며 도착·출발 시각과 지연 시간이 담깁니다. 개별 필드는 선택값이라 서버가 빼면 ``None`` 입니다."""
+    7.0.6 DTO에서는 ``dlayList`` 가 생략되면 빈 목록입니다. 행 하나가 정차역 하나이며 도착·출발 시각과 지연 시간이 담깁니다. 개별 필드는 선택값이라 서버가 빼면 ``None``
+    입니다."""
     raw = response.raw
     stops: list[TrainScheduleStop] = []
     for row in _rows(raw, "dlayList"):
@@ -563,8 +565,8 @@ def parse_train_schedule_response(
         terminal_station_name=optional("tmnRsStnNm"),
         train_attribute_code=optional("trnAttCd"),
         train_departure_flag=optional("trnDptFlg"),
-        # 앱의 trnNo1/runDt1 은 보호된 기본값을 갖습니다(ActualTrainScheduleOut.java:38,47,78-85). 그 기본값을 재현하지 않으므로 누락은 None 입니다.
-        # 소비: MyTicketDetailViewModel.java:2173-2175.
+        # 앱의 trnNo1/runDt1 은 보호된 기본값을 갖습니다(ActualTrainScheduleOut.java:38,47,78-85). 그 기본값을 재현하지 않으므로 누락은 None
+        # 입니다. 소비: MyTicketDetailViewModel.java:2173-2175.
         train_no=optional("trnNo1"),
         special_train_flag=optional("trnSpsFlg"),
         up_down_division_code=optional("upDnDvCd"),
@@ -575,8 +577,8 @@ def parse_train_schedule_response(
 def parse_transfer_station_list_response(
     response: BaseKorailResponse,
 ) -> TransferStationListResponse:
-    """qry.chtnStn.do 의 환승역 목록. chtnList 생략은 빈 목록(ChtnStnOut.java:54-60), 명시적 null·비목록은 KorailProtocolError 입니다. 역
-    코드·이름은 선택값이며 빈 목록 자체는 오류가 아닙니다."""
+    """qry.chtnStn.do 의 환승역 목록. chtnList 생략은 빈 목록(ChtnStnOut.java:54-60), 명시적 null·비목록은 KorailProtocolError 입니다.
+    역 코드·이름은 선택값이며 빈 목록 자체는 오류가 아닙니다."""
     raw = response.raw
     rows = raw.get("chtnList", [])
     if not isinstance(rows, list):
@@ -762,7 +764,8 @@ def parse_seat_inventory_response(
                     row,
                     "dir_seat_att_cd",
                 ),
-                # etc_seat_att_cd·vz_msg_dv_cd 는 생략·null 을 허용합니다(TResidualSeatsResearchOutSeat.java:79-82,94-97).
+                # etc_seat_att_cd·vz_msg_dv_cd 는 생략·null 을
+                # 허용합니다(TResidualSeatsResearchOutSeat.java:79-82,94-97).
                 other_attribute_code=_inventory_optional_string(row, "etc_seat_att_cd"),
                 requested_attribute_code=_inventory_required_string(
                     row,

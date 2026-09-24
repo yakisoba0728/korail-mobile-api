@@ -137,8 +137,8 @@ def build_seat_inventory_form(
 ) -> dict[str, str]:
     """좌석 재고(NetworkApi.java:739-741). 호차 키는 txt 접두사 없는 srcarNo 입니다. seatAttCd·gdNo 는 없으면 생략합니다. 앱 DTO 의 누락 기본값도
     null 입니다 (TResidualSeatsResearchIn.java:107-110,127-130). ctlDvCd 는 빈 문자열이며 전송 때 제거됩니다. Sid 는 싣지
-    않습니다(TResidualSeatsResearchIn.java:65). 앱 평탄화 호출: NetworkService.java:14800-14803,15335-15343. explicitNulls 의
-    보호 리터럴 때문에 앱 null 생략까지 확정한 것은 아닙니다(NetworkServiceKt.java:28).
+    않습니다(TResidualSeatsResearchIn.java:65). 앱 평탄화 호출: NetworkService.java:14800-14803,15335-15343. explicitNulls
+    의 보호 리터럴 때문에 앱 null 생략까지 확정한 것은 아닙니다(NetworkServiceKt.java:28).
 
     isArrow 는 좌석도 기본 경로의 false 입니다. 기본 인자 마스크 0x2000(TrainSeatMapViewModel.smali:4232-4238)과 DTO 기본값
     (TResidualSeatsResearchIn.java:159-160)이 근거이며, encodeDefaults 가 보호되어 앱이 false 를 명시하는지 생략하는지는 미확정입니다. 호차 목록
@@ -299,7 +299,8 @@ def build_train_schedule_special_form(
     continuation: TrainSearchContinuation | None = None,
     transfer: bool = False,
 ) -> dict[str, str]:
-    """ScheduleViewSpecial 의 FieldMap. 기본 조회 키를 공유하며 Key 를 포함하고 Sid 는 제외합니다. 보호된 qryDvCd 값은 재구성하지 않고 query 에서 받습니다."""
+    """ScheduleViewSpecial 의 FieldMap. 기본 조회 키를 공유하며 Key 를 포함하고 Sid 는 제외합니다. 보호된 qryDvCd 값은 재구성하지 않고 query 에서
+    받습니다."""
     form = build_train_search_form(
         config,
         query,
@@ -366,9 +367,9 @@ def build_ticket_list_form(
     boarding_date_to: str = "",
 ) -> dict[str, str]:
     """txtIndex 는 페이지가 아닌 목록 종류입니다(MyTicketListIn.java:62). 앱 호출 리터럴은 보호돼 있어(MyTicketBaseViewModel.java:1029,
-    LoginViewModel.java:1083, AppViewModel$executeTicketListForAutoLogin$result$1.java:67) mode·페이지 값을 거르거나 보정하지 않고
-    그대로 보냅니다. 2026-09-22 관측: 1 은 빈 현재 목록 WRT300005, 2 는 구매이력 128건. 날짜 범위도 그대로 전달하며 잘못된 범위는
-    WRT100101 을 관측했습니다. 이 표본으로 다른 mode 값의 의미를 단정하지 않습니다."""
+    LoginViewModel.java:1083, AppViewModel$executeTicketListForAutoLogin$result$1.java:67) mode·페이지 값을 거르거나 보정하지
+    않고 그대로 보냅니다. 2026-09-22 관측: 1 은 빈 현재 목록 WRT300005, 2 는 구매이력 128건. 날짜 범위도 그대로 전달하며 잘못된 범위는 WRT100101 을
+    관측했습니다. 이 표본으로 다른 mode 값의 의미를 단정하지 않습니다."""
     if not isinstance(mode, str) or not mode:
         raise KorailProtocolError("ticket list mode must be a non-empty string")
     if type(page_no) is not int:
@@ -384,8 +385,8 @@ def build_ticket_list_form(
 
 
 def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
-    """MaaS 메뉴. include_common=False 이므로 Key 를 이 빌더에서 넣습니다. 앱 DTO 는 CommonIn 기본 생성자를 사용합니다(GdMenuLtIn.java:59-61).
-    공통 필드 인코딩: CommonIn.java:448-465. 보호된 기본값의 실제 포함 여부와는 구분합니다."""
+    """MaaS 메뉴. include_common=False 이므로 Key 를 이 빌더에서 넣습니다. 앱 DTO 는 CommonIn 기본 생성자를
+    사용합니다(GdMenuLtIn.java:59-61). 공통 필드 인코딩: CommonIn.java:448-465. 보호된 기본값의 실제 포함 여부와는 구분합니다."""
     return {
         **_device_version(config),
         "Key": config.key,

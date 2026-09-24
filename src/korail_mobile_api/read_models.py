@@ -50,8 +50,8 @@ class TicketListTicket:
 
 @dataclass(frozen=True)
 class TicketListReservation:
-    """예약 단위 승차권 목록. MyTicketListOutReservation 의 명시적 키는 ticket_list 이며 나머지는 보호된 serializer 대신 속성명으로 읽는 추정입니다. 추가
-    서비스·종류도 raw 에 남습니다."""
+    """예약 단위 승차권 목록. MyTicketListOutReservation 의 명시적 키는 ticket_list 이며 나머지는 보호된 serializer 대신 속성명으로 읽는 추정입니다.
+    추가 서비스·종류도 raw 에 남습니다."""
 
     tickets: tuple[TicketListTicket, ...] = ()
     #: 선택 스칼라의 전송 키는 속성명에 따른 추정입니다. 2026-09-22 mode=2 의 예약 128행은 ticket_list 외 키가 없었다는 기록이 있으나 캡처 미연결로 재검산하지
@@ -207,9 +207,9 @@ class DelayDiscountTicket:
 
 @dataclass(frozen=True)
 class DelayDiscountTicketListResponse(BaseKorailResponse):
-    """지연할인권 페이지. main_info 는 DTO 밖 서버 추가 블록(DelayDiscountViewOut.java:24,51). 2026-09-22 날짜 입력 8종에서 12키를 관측했지만 할인권
-    없는 응답뿐이었습니다. 영 채움·빈 문자열을 보존하려고 페이징 값을 문자열로 둡니다. 선택 정수 헬퍼는 빈 값을 None 으로 처리하므로 예외가 난다는 설명은 맞지 않습니다. 채워진 응답의
-    의미는 미확인입니다."""
+    """지연할인권 페이지. main_info 는 DTO 밖 서버 추가 블록(DelayDiscountViewOut.java:24,51). 2026-09-22 날짜 입력 8종에서 12키를 관측했지만
+    할인권 없는 응답뿐이었습니다. 영 채움·빈 문자열을 보존하려고 페이징 값을 문자열로 둡니다. 선택 정수 헬퍼는 빈 값을 None 으로 처리하므로 예외가 난다는 설명은 맞지 않습니다. 채워진
+    응답의 의미는 미확인입니다."""
 
     items: tuple[DelayDiscountTicket, ...] = ()
     current_page: str | None = None
@@ -262,7 +262,8 @@ class PassOpenDate:
 class PassAvailabilityMainInfo:
     """pass.passInfoList 의 중첩 상태·건수(MainInfo.java:103,107,111,115,172). 2026-09-22 관측 29종은 최상위 h_msg_cd 없이 이 블록에
     IRZ000001/IRZ000005 등을 담았습니다. 중첩 코드를 실패 예외로 승격하지 않습니다. 앱도 isSuccess 이후 pass_info 를 확인합니다
-    (PeriodTicketViewModel.java:796-800, PassConditionViewModel.java:904-927). 다른 조건에서도 이것이 유일한 코드라고 보장하지는 않습니다."""
+    (PeriodTicketViewModel.java:796-800, PassConditionViewModel.java:904-927). 다른 조건에서도 이것이 유일한 코드라고 보장하지는
+    않습니다."""
 
     message_code: str | None = None
     total_count: str | None = None
@@ -284,8 +285,8 @@ class PassAvailabilityResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TripMenuContent:
-    """여행상품 메뉴. 21개 문자열과 passData 객체입니다(TrGdMenuLtOutCont.java:26-47,72). 2026-09-22 2회 60행은 detailType 누락 54/빈 값
-    6으로 유효한 값을 보지 못했습니다. passType 을 검증된 메뉴 종류 코드로 승격하지 마십시오. DTO 속성과 실제 소비 의미는 별개입니다."""
+    """여행상품 메뉴. 21개 문자열과 passData 객체입니다(TrGdMenuLtOutCont.java:26-47,72). 2026-09-22 2회 60행은 detailType 누락 54/빈
+    값 6으로 유효한 값을 보지 못했습니다. passType 을 검증된 메뉴 종류 코드로 승격하지 마십시오. DTO 속성과 실제 소비 의미는 별개입니다."""
 
     title: str | None = None
     detail: str | None = None
@@ -304,8 +305,8 @@ class TripMenuContent:
     #: ``passType``(``:47``) — 위 6행에서 ``'aPass'``. 7.0.6 에 소비자가 없어 무엇을 뜻하는지는 미확인입니다(클래스 독스트링 참고).
     pass_type: str | None = None
     #: ``passData``(``:45``, ``TrGdMenuLtOutPass.java:29-35``) — 정기권 조회에 필요한 연령·기간 선택지 묶음. 정기권 메뉴/종류 라우트와 구조가
-    #: 비슷해 ``_parse_pass_menu_data`` 를 쓰되 역 선택 키는 ``h_seiect_station`` 입니다. ``PassConditionViewModel.java:1244`` 가
-    #: 이 객체를 꺼내고, 같은 함수의 ``:1247-1248`` 이 ``null`` 이면 ``backAlert`` 로 화면을 되돌립니다.
+    #: 비슷해 ``_parse_pass_menu_data`` 를 쓰되 역 선택 키는 ``h_seiect_station`` 입니다. ``PassConditionViewModel.java:1244``
+    #: 가 이 객체를 꺼내고, 같은 함수의 ``:1247-1248`` 이 ``null`` 이면 ``backAlert`` 로 화면을 되돌립니다.
     pass_data: PassMenuData | None = None
 
 
@@ -377,7 +378,8 @@ class ReceiptPayment:
 
 @dataclass(frozen=True)
 class ReceiptCashPayment:
-    """현금영수증 행(ReceiptInfo.java:37). String 4개·int 금액 1개이며 전송 키는 CashReceiptInfo.java:26-35,52 의 명시적 @SerialName 입니다."""
+    """현금영수증 행(ReceiptInfo.java:37). String 4개·int 금액 1개이며 전송 키는 CashReceiptInfo.java:26-35,52 의 명시적 @SerialName
+    입니다."""
 
     #: h_apv_mtd_nm — 승인방법 라벨. 인증도메인 인식번호·현금영수증 승인번호도 마스킹하지 않습니다.
     approval_method_name: str | None = None
@@ -518,8 +520,8 @@ class ReservationHistoryPassenger:
 
 @dataclass(frozen=True)
 class ReservationHistoryReservation:
-    """예약 이력의 ReservationOut 중첩(ReservationViewOutJrnyInfo.java:55). 전송 키 reservationOut 은 보호된 serializer 대신 속성명을
-    사용한 추정입니다."""
+    """예약 이력의 ReservationOut 중첩(ReservationViewOutJrnyInfo.java:55). 전송 키 reservationOut 은 보호된 serializer 대신
+    속성명을 사용한 추정입니다."""
 
     pnr_no: str | None = None
     total_fare: str | None = None
@@ -595,7 +597,8 @@ class GuideSeatConditionResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TrainScheduleItem:
-    """좌석배정·병합 조회의 열차 모델 상위집합. 각 DTO 는 다르므로 read_parsers 의 라우트별 필드 맵으로 채웁니다. 한쪽에 없는 필드는 None 이며 맵을 하나로 합치면 안 됩니다."""
+    """좌석배정·병합 조회의 열차 모델 상위집합. 각 DTO 는 다르므로 read_parsers 의 라우트별 필드 맵으로 채웁니다. 한쪽에 없는 필드는 None 이며 맵을 하나로 합치면 안
+    됩니다."""
 
     train_no: str | None = None
     #: ``h_trn_no_qb`` — 병합예약 조회 전용 열차번호(``MergeSeatsCOutTrnInfo``).
@@ -878,8 +881,8 @@ class PassScheduleResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DiscountCardSection:
-    """N카드 적용 구간(AppSegInfo.java:24-37, DiscountCardInfo.java:28). @SerialName 별칭이 없는 키는 보호된 serializer 대신 속성명을 사용한
-    추정입니다. 일정 조회가 받는 역 이름을 구간에서 확인할 수 있습니다."""
+    """N카드 적용 구간(AppSegInfo.java:24-37, DiscountCardInfo.java:28). @SerialName 별칭이 없는 키는 보호된 serializer 대신 속성명을
+    사용한 추정입니다. 일정 조회가 받는 역 이름을 구간에서 확인할 수 있습니다."""
 
     departure_station_name: str | None = None
     arrival_station_name: str | None = None
@@ -940,8 +943,8 @@ class KorailPointSummaryResponse(BaseKorailResponse):
     # 새 필드는 끝에 덧붙입니다(위치 인자 의미 보존). ``h_cust_lead_flg``(``MyXPointViewOut.java:43``) — 보조견 등록 플래그 그 자체. 사람이 읽는 짝은
     # :attr:`customer_lead_flag_name`(``:44``)입니다.
     customer_lead_flag: str | None = None
-    #: ``h_hdcp_tp_cd``/``h_hdcp_tp_cd_nm``(``:53,54``) — 장애 유형 코드와 이름. 유형은 :attr:`disability_flag`(``h_hdcp_flg``)가
-    #: 아니라 이 둘에 있습니다. 셋 다 라이브 응답에 옵니다(2026-09-22).
+    #: ``h_hdcp_tp_cd``/``h_hdcp_tp_cd_nm``(``:53,54``) — 장애 유형 코드와 이름. 유형은
+    #: :attr:`disability_flag`(``h_hdcp_flg``)가 아니라 이 둘에 있습니다. 셋 다 라이브 응답에 옵니다(2026-09-22).
     disability_type_code: str | None = None
     disability_type_name: str | None = None
 
@@ -972,8 +975,8 @@ class MileageHistoryEntry:
 
 @dataclass(frozen=True)
 class MileageHistoryResponse(BaseKorailResponse):
-    """마일리지 페이지(AmtSpecOut.java:29-39,199-247). 별도로 선언된 합계 필드는 합치지 않습니다. 2026-09-22 KTX/RAIL_POINT 의 3페이지에서 DTO 밖
-    railNowSavePontValNum1 을 관측했으며 해당 계정에서는 totAcmRailPontValNum1 과 같았습니다. 추가 키는 raw 로 제공합니다."""
+    """마일리지 페이지(AmtSpecOut.java:29-39,199-247). 별도로 선언된 합계 필드는 합치지 않습니다. 2026-09-22 KTX/RAIL_POINT 의 3페이지에서 DTO
+    밖 railNowSavePontValNum1 을 관측했으며 해당 계정에서는 totAcmRailPontValNum1 과 같았습니다. 추가 키는 raw 로 제공합니다."""
 
     #: ``pgCnt`` — 전체 페이지 수(``AmtSpecOut.java:32``).
     page_count: str | None = None
@@ -1017,15 +1020,16 @@ class DiscountCardUsage:
 class DiscountCardUsageListResponse(BaseKorailResponse):
     """``ticket.dcntCrdUseQry.do`` — 카드가 쓰인 여행 목록.
 
-    ``NCardHistoryOut.java:27,82`` 가 싣는 것은 ``@SerialName("tkUseList")`` 하나뿐이라, 전선에 없는 요약 필드를 이 모델도 만들어 붙이지 않습니다."""
+    ``NCardHistoryOut.java:27,82`` 가 싣는 것은 ``@SerialName("tkUseList")`` 하나뿐이라, 전선에 없는 요약 필드를 이 모델도 만들어 붙이지
+    않습니다."""
 
     items: tuple[DiscountCardUsage, ...] = ()
 
 
 @dataclass(frozen=True)
 class DiscountCardScheduleTrain:
-    """N카드 사용 가능 열차(NCardScheduleItem.java:30-49). 보호된 serializer 대신 속성명으로 읽습니다. 앱이 표시용으로 만드는 Spanned stationInfo 를
-    서버 필드로 모델링하지 않습니다. 명시적 @SerialName 이 없다는 사실만으로 실제 전송 키를 확정할 수는 없습니다."""
+    """N카드 사용 가능 열차(NCardScheduleItem.java:30-49). 보호된 serializer 대신 속성명으로 읽습니다. 앱이 표시용으로 만드는 Spanned
+    stationInfo 를 서버 필드로 모델링하지 않습니다. 명시적 @SerialName 이 없다는 사실만으로 실제 전송 키를 확정할 수는 없습니다."""
 
     train_no: str | None = None
     train_group_code: str | None = None
@@ -1390,7 +1394,8 @@ class OriginalTicketSeat:
 
 @dataclass(frozen=True)
 class OriginalTicketJourney:
-    """원표 구간(OrgTk.java:38, JrnyInfo.java:29-63). 대리수령용 Jrny.java:29-38 과 다릅니다. 여정 순번·역코드·운행순서를 후속 변경 조회에 재사용합니다."""
+    """원표 구간(OrgTk.java:38, JrnyInfo.java:29-63). 대리수령용 Jrny.java:29-38 과 다릅니다. 여정 순번·역코드·운행순서를 후속 변경 조회에
+    재사용합니다."""
 
     journey_sequence: str | None = None
     journey_order: str | None = None
@@ -1419,9 +1424,9 @@ class OriginalTicketJourney:
 
 @dataclass(frozen=True)
 class OriginalTicket:
-    """원표(OrgTk.java:28-52, OgTicketInquiryOut.java:27). 전송 키는 속성명에 따른 추정입니다. original_* 는 요청한 승차권 자신의 반환번호가 되돌아온
-    값이며 repr 에서 숨기지 않습니다. 변경에 필요하지 않은 cmpnList·stlList 는 타입화하지 않지만 raw 에 지연증명·결제 자격증명이 그대로 남습니다(Cmpn.java:35-38,
-    Stl.java:29,32,37)."""
+    """원표(OrgTk.java:28-52, OgTicketInquiryOut.java:27). 전송 키는 속성명에 따른 추정입니다. original_* 는 요청한 승차권 자신의 반환번호가
+    되돌아온 값이며 repr 에서 숨기지 않습니다. 변경에 필요하지 않은 cmpnList·stlList 는 타입화하지 않지만 raw 에 지연증명·결제 자격증명이 그대로
+    남습니다(Cmpn.java:35-38, Stl.java:29,32,37)."""
 
     pnr_no: str | None = None
     ticket_kind_code: str | None = None
@@ -1484,8 +1489,8 @@ class ReservationSeatDetail:
     received_amount: str | None = None
     seat_price: str | None = None
     seat_fare: str | None = None
-    #: ``h_tot_disc_amt`` — 이 좌석의 총 할인액. 같은 와이어 키를 ``_REFUND_TICKET_DETAIL_FIELDS`` 가 ``total_discount_amount`` 로
-    #: 매핑하는 것과 이름을 맞춥니다.
+    #: ``h_tot_disc_amt`` — 이 좌석의 총 할인액. 같은 와이어 키를 ``_REFUND_TICKET_DETAIL_FIELDS`` 가 ``total_discount_amount``
+    #: 로 매핑하는 것과 이름을 맞춥니다.
     total_discount_amount: str | None = None
     seat_group_name: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
@@ -1532,8 +1537,8 @@ class TicketReservationDetailResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class RefundCommissionResponse(BaseKorailResponse):
-    """환불 전 수수료·예상 환불액 조회(NetworkApi.java:598-600). 키 근거: RefundCommissionOut.java:35-41,62,140-164. 이 응답 자체는 실제 환불
-    완료가 아닙니다."""
+    """환불 전 수수료·예상 환불액 조회(NetworkApi.java:598-600). 키 근거: RefundCommissionOut.java:35-41,62,140-164. 이 응답 자체는 실제
+    환불 완료가 아닙니다."""
 
     #: ``ret_amt`` — 돌려받을 금액.
     refund_amount: str | None = None

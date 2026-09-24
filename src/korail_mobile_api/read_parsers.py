@@ -2,8 +2,8 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""조회 응답을 read_models 로 변환합니다. 일반 봉투 판정은 HTTP 계층에 있습니다. 선택값은 관대하게 읽고 원문은 응답 raw 에 보존합니다. String 선언 필드도 JSON 정수로 오는
-경우가 있어 _optional_scalar_string 은 두 타입을 허용합니다."""
+"""조회 응답을 read_models 로 변환합니다. 일반 봉투 판정은 HTTP 계층에 있습니다. 선택값은 관대하게 읽고 원문은 응답 raw 에 보존합니다. String 선언 필드도 JSON 정수로
+오는 경우가 있어 _optional_scalar_string 은 두 타입을 허용합니다."""
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -158,8 +158,8 @@ def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListRespon
                     raw=ticket_raw,
                 )
             )
-        # ticket_list 외 키는 MyTicketListOutReservation 의 속성명에서 추정합니다. addSrvInfo 는 공통 파서로 읽고 ticketKind 는 보호 enum 을
-        # 임의 매핑하지 않습니다 (MyTicketListOutReservation.java:39,52; TicketDefine.java:1092-1130).
+        # ticket_list 외 키는 MyTicketListOutReservation 의 속성명에서 추정합니다. addSrvInfo 는 공통 파서로 읽고 ticketKind 는 보호 enum
+        # 을 임의 매핑하지 않습니다 (MyTicketListOutReservation.java:39,52; TicketDefine.java:1092-1130).
         additional_service = _optional_add_srv_item(
             reservation_raw,
             "addSrvInfo",
@@ -1705,7 +1705,9 @@ def parse_discount_card_schedule_response(
         trains.append(
             DiscountCardScheduleTrain(
                 # 운임·역 순번의 문자열/정수 변동을 허용합니다. 이 라우트의 라이브 근거는 없으며 파서 정책입니다.
-                **_nullable_scalar_fields(item, _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS, "discount card schedule train"),
+                **_nullable_scalar_fields(
+                    item, _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS, "discount card schedule train"
+                ),
                 raw=item,
             )
         )
@@ -2207,8 +2209,8 @@ _RESERVATION_SEAT_DETAIL_FIELDS = {
     "seat_no": "h_seat_no",
     "room_class_code": "h_psrm_cl_cd",
     "room_class_name": "h_psrm_cl_nm",
-    # h_psg_tp_dv_nm 은 앱 내장 응답 예시에 존재(BasketTicketDataKt.java:44)하나 ReservationOutSeatInfo.java:81 의 @SerialName 에는
-    # 없습니다. 2026-09-22 한 계정 8좌석 관측 기록도 있으나 캡처 미연결이며 항상 전송된다는 보장은 없습니다.
+    # h_psg_tp_dv_nm 은 앱 내장 응답 예시에 존재(BasketTicketDataKt.java:44)하나 ReservationOutSeatInfo.java:81 의 @SerialName
+    # 에는 없습니다. 2026-09-22 한 계정 8좌석 관측 기록도 있으나 캡처 미연결이며 항상 전송된다는 보장은 없습니다.
     "passenger_type_code": "h_psg_tp_cd",
     "passenger_type_name": "h_psg_tp_dv_nm",
     "received_amount": "h_rcvd_amt",
@@ -2271,7 +2273,9 @@ def parse_ticket_reservation_detail_response(
             )
         journeys.append(
             ReservationDetailJourney(
-                **_nullable_scalar_fields(journey, _RESERVATION_DETAIL_JOURNEY_FIELDS, "reservation detail journey"),
+                **_nullable_scalar_fields(
+                    journey, _RESERVATION_DETAIL_JOURNEY_FIELDS, "reservation detail journey"
+                ),
                 seats=tuple(seats),
                 raw=journey,
             )

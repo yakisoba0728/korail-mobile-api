@@ -2,8 +2,8 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""KorailClient 의 공개 메서드와 전송·빌더·파서 연결. 읽기에도 인증이 필요한 경로가 있습니다. 상태 변경 메서드는 로그인 후 즉시 전송되므로 홀드·결제·환불 호출 전에 인자를 확인하십시오.
-실험에는 MockTransport 를 사용합니다."""
+"""KorailClient 의 공개 메서드와 전송·빌더·파서 연결. 읽기에도 인증이 필요한 경로가 있습니다. 상태 변경 메서드는 로그인 후 즉시 전송되므로 홀드·결제·환불 호출 전에 인자를
+확인하십시오. 실험에는 MockTransport 를 사용합니다."""
 
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Literal, TypeVar, overload
@@ -273,8 +273,8 @@ T = TypeVar("T")
 class KorailClient:
     """KORAIL 7.0.6 기반 비공식 클라이언트.
 
-    DynaPath 는 합성 기기 값으로 기본 활성화됩니다. disable_dynapath=True 면 필수 경로의 로그인은 전송 전에 거절됩니다. 서버 수용은 보장하지 않습니다. transport 에
-    MockTransport 를 넣어 오프라인 시험할 수 있습니다.
+    DynaPath 는 합성 기기 값으로 기본 활성화됩니다. disable_dynapath=True 면 필수 경로의 로그인은 전송 전에 거절됩니다. 서버 수용은 보장하지 않습니다. transport
+    에 MockTransport 를 넣어 오프라인 시험할 수 있습니다.
 
     NetFunnel 은 기본 활성화되며 적용 메서드는 KORAIL_NETFUNNEL_GATES 와 호출부를 따릅니다. 대기·차단 결과를 무시하지 않습니다. 상태 변경은 별도 확인 절차 없이
     전송됩니다.
@@ -342,8 +342,8 @@ class KorailClient:
         input_flag: str,
         check_valid_pw: str,
     ) -> KorailSession:
-        """외부 제공자 인증 후 고객번호 로그인 분기를 사용합니다. input_flag 와 보호된 checkValidPw 값은 호출자가 제공해야 합니다. 제공자 SDK 토큰 교환이나 자격증명 파일
-        저장은 수행하지 않습니다."""
+        """외부 제공자 인증 후 고객번호 로그인 분기를 사용합니다. input_flag 와 보호된 checkValidPw 값은 호출자가 제공해야 합니다. 제공자 SDK 토큰 교환이나 자격증명
+        파일 저장은 수행하지 않습니다."""
         return self.session.login_social(
             cust_id,
             input_flag=input_flag,
@@ -358,8 +358,8 @@ class KorailClient:
         self.session.clear_session()
 
     def logout(self) -> None:
-        """로그인 상태이면 서버 로그아웃(login.Logout)을 보내고, 어느 경우든 finally 에서 로컬 세션·쿠키를 비웁니다. FAIL 봉투는 예외가 아니지만(FAIL/P058 은 세션
-        만료) 전송 오류 등은 그대로 전파됩니다. 연결 풀은 close 로 닫습니다."""
+        """로그인 상태이면 서버 로그아웃(login.Logout)을 보내고, 어느 경우든 finally 에서 로컬 세션·쿠키를 비웁니다. FAIL 봉투는 예외가 아니지만(FAIL/P058 은
+        세션 만료) 전송 오류 등은 그대로 전파됩니다. 연결 풀은 close 로 닫습니다."""
         self.session.logout()
 
     def _run_read(self, operation: Callable[[], T]) -> T:
@@ -474,8 +474,8 @@ class KorailClient:
         parser: Callable[[dict[str, Any]], T] | None = None,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse | T:
-        """변경 응답 파싱 실패 시 예외 raw 에 응답 전체를, 기존 부분 raw 는 parser_raw 에 보존합니다. 서버 변경 여부는 파싱 실패만으로 알 수 없습니다. 상태를 확인하지 않고
-        재전송하지 마십시오."""
+        """변경 응답 파싱 실패 시 예외 raw 에 응답 전체를, 기존 부분 raw 는 parser_raw 에 보존합니다. 서버 변경 여부는 파싱 실패만으로 알 수 없습니다. 상태를 확인하지
+        않고 재전송하지 마십시오."""
         response = self._run_read(
             lambda: self.http.post_mutation_form(
                 route,
@@ -672,7 +672,8 @@ class KorailClient:
         page_no: int = 1,
         pnr_no: str = "",
     ) -> DiscountCouponListResponse:
-        """할인쿠폰 조회. ``POST passCard.CouponView``(``NetworkApi.java:328-329`` — ``postCoupon(@FieldMap)``). 로그인 필요.
+        """할인쿠폰 조회. ``POST passCard.CouponView``(``NetworkApi.java:328-329`` — ``postCoupon(@FieldMap)``). 로그인
+        필요.
 
         보유분 없으면 ``WRG000000`` 으로 빈 결과(예외 아님)."""
         self._require_session()
@@ -687,7 +688,8 @@ class KorailClient:
         """포인트·쿠폰·복지자격 요약. ``POST xPoint.MyXPointView``.
 
         로그인 필요. 복지 등록 상태(장애인증·보조견)도 함께 옵니다. 라우트 선언은
-        ``NetworkApi.java:515-516``(``postMyXPointView(@FieldMap)``), 응답 필드는 ``MyXPointViewOut.java:27-74`` 입니다."""
+        ``NetworkApi.java:515-516``(``postMyXPointView(@FieldMap)``), 응답 필드는 ``MyXPointViewOut.java:27-74``
+        입니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.xPoint.MyXPointView",
@@ -1035,7 +1037,8 @@ class KorailClient:
     ) -> DeliveryRecipientResponse:
         """N카드 2인 승차권의 전달 전 수령자 후보를 조회합니다. 앱은 isNCardTwoPeople() 일 때
         호출합니다(DeliveryTicketFormViewModel.java:697-700). 그 판정의 보호 리터럴을 평문 Y 로 확정하지 않습니다. 2026-09-22 표본 60장은
-        IRZ000005(조회 자료 없음)였습니다. 이 표본만으로 모든 비N카드 응답을 보장하지 않습니다. 전달 완료 내역은 get_pbp_acceptance_specifications 참고."""
+        IRZ000005(조회 자료 없음)였습니다. 이 표본만으로 모든 비N카드 응답을 보장하지 않습니다. 전달 완료 내역은 get_pbp_acceptance_specifications
+        참고."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.tk.dlvRcvCust.do",
@@ -1561,12 +1564,12 @@ class KorailClient:
         """열차 한 편에 미결제 홀드를 만듭니다. 결제 또는 취소는 호출자 책임입니다. 좌석 속성은 명시값→열차 행→기본값
         순서입니다(TrainScheduleViewModel.java:2914-2930,2982-2999).
 
-        응답 파싱이 실패하면 KorailProtocolError 이고 ``.raw`` 에 응답 전체(h_pnr_no 포함)가 있습니다. 홀드가 잡혔을 수 있으니 재시도하지 말고 ``.raw`` 나
-        get_reservation_history 로 확인하십시오. 네 예약 메서드가 모두 같습니다. job_type 기본은 IMMEDIATE(1101)입니다.
+        응답 파싱이 실패하면 KorailProtocolError 이고 ``.raw`` 에 응답 전체(h_pnr_no 포함)가 있습니다. 홀드가 잡혔을 수 있으니 재시도하지 말고 ``.raw``
+        나 get_reservation_history 로 확인하십시오. 네 예약 메서드가 모두 같습니다. job_type 기본은 IMMEDIATE(1101)입니다.
 
         SEAT_DESIGNATED 는 승객별 좌석이 필요합니다. STANDBY 는 대기 가능한 행만 받으며, 성공한 대기 홀드는 confirm_standby_hold 로 알림 옵션을
-        기록합니다. IRR000014 의 트리거 의미는 라이브 기록이고 앱 비교값은 보호돼 있습니다. MERGE_STANDING 은 병합 첫 홀드이며 후속 호출은 reserve_merge 입니다.
-        모든 변경 경로가 로그인을 요구합니다. 대기 예약에만 별도 회원 제한이 있다는 근거는 없습니다."""
+        기록합니다. IRR000014 의 트리거 의미는 라이브 기록이고 앱 비교값은 보호돼 있습니다. MERGE_STANDING 은 병합 첫 홀드이며 후속 호출은 reserve_merge
+        입니다. 모든 변경 경로가 로그인을 요구합니다. 대기 예약에만 별도 회원 제한이 있다는 근거는 없습니다."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_reservation_form(
@@ -1596,8 +1599,8 @@ class KorailClient:
         phone_no: str | None = None,
     ) -> BaseKorailResponse:
         """이미 만든 예약대기 홀드에 알림·좌석변경 옵션을 기록합니다. 후속 라우트: NetworkApi.java:639-640; 화면과 저장 입력:
-        ReservationWaitViewModel.java:68-80. WAIT enum 은 ReservationJobId.java:21 에 있으나 코드값은 보호돼 있습니다. IRR000014 의
-        메시지는 error_json.json 에 있고 트리거 의미는 라이브 기록에 근거합니다. 문자열 자산만으로 앱의 분기 조건까지 확정하지 않습니다."""
+        ReservationWaitViewModel.java:68-80. WAIT enum 은 ReservationJobId.java:21 에 있으나 코드값은 보호돼 있습니다. IRR000014
+        의 메시지는 error_json.json 에 있고 트리거 의미는 라이브 기록에 근거합니다. 문자열 자산만으로 앱의 분기 조건까지 확정하지 않습니다."""
         self._require_session("standby options require")
         route = "/classes/com.korail.mobile.reservationWait.ReservationWait"
         form = build_standby_wait_form(
@@ -1621,11 +1624,11 @@ class KorailClient:
         seats: Sequence[Sequence[KorailSeatAssignment]] | None = None,
         seat_attribute_codes: Sequence[str | None] | None = None,
     ) -> ReservationHoldResponse:
-        """탑승 순서의 TrainSummary 두 개를 한 PNR 로 홀드합니다. search_transfer_trains 결과의 TransferItinerary.legs 를 넘길 수 있습니다.
-        같은 라우트·DTO 의 여정 반복입니다(NetworkApi.java:752-753; TicketReservationIn.java:34-37,80). seat_classes 는 공통값 또는
-        구간별 값이며 좌석 지정도 구간별입니다 (TicketReservationInJrny.java:69; TicketReservationInSrcar.java:51;
-        TicketReservationInSrcarTrailing.java:52). 2026-07-31: 성인 1인·일반실·편도 환승이 SUCC/IRR000018, 49,700원, 여정 수 2 의
-        한 PNR 로 반환됐고 한 번의 cancel_unpaid_hold 로 해제됐습니다. 다른 승객·객실 조합까지 검증된 것은 아닙니다."""
+        """탑승 순서의 TrainSummary 두 개를 한 PNR 로 홀드합니다. search_transfer_trains 결과의 TransferItinerary.legs 를 넘길 수
+        있습니다. 같은 라우트·DTO 의 여정 반복입니다(NetworkApi.java:752-753; TicketReservationIn.java:34-37,80). seat_classes 는
+        공통값 또는 구간별 값이며 좌석 지정도 구간별입니다 (TicketReservationInJrny.java:69; TicketReservationInSrcar.java:51;
+        TicketReservationInSrcarTrailing.java:52). 2026-07-31: 성인 1인·일반실·편도 환승이 SUCC/IRR000018, 49,700원, 여정 수 2
+        의 한 PNR 로 반환됐고 한 번의 cancel_unpaid_hold 로 해제됐습니다. 다른 승객·객실 조합까지 검증된 것은 아닙니다."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
         form = build_transfer_reservation_form(
@@ -1738,8 +1741,8 @@ class KorailClient:
         latitude: str | None = None,
         longitude: str | None = None,
     ) -> RefundTicketResponse:
-        """PaidTicket 이 가리키는 발권 승차권 한 장을 환불합니다. PNR 전체 환불이 아닙니다. 여러 장이면 각 승차권의 결과·잔여 목록을 확인해야 합니다. 같은 장을 무조건 재전송하지
-        마십시오. 국내 앱의 pbpAcepTgtFlg 는 상세값 에코(MyTicketDetailViewModel.java:1521)이나 외국인 경로는 보호
+        """PaidTicket 이 가리키는 발권 승차권 한 장을 환불합니다. PNR 전체 환불이 아닙니다. 여러 장이면 각 승차권의 결과·잔여 목록을 확인해야 합니다. 같은 장을 무조건
+        재전송하지 마십시오. 국내 앱의 pbpAcepTgtFlg 는 상세값 에코(MyTicketDetailViewModel.java:1521)이나 외국인 경로는 보호
         상수(FTicketDetailViewModel.java:634)입니다. 라이브러리는 값이 없으면 빈 문자열을 만들고 전송 단계에서 생략합니다. 2026-07-31: 성인 2인
         16,800원 PNR 에 한 번 호출해 SUCC/IRT200277 과 8,400원이 반환됐고, 남은 한 장에 별도 환불을 한 뒤 목록이 비었습니다.
 
@@ -1792,8 +1795,8 @@ class KorailClient:
         self,
         request: CartAddRequest,
     ) -> CartAddResponse:
-        """미결제 예약을 장바구니에 담습니다(NetworkApi.java:266-267; AddCartListIn.java:52). psgDiscAdd_infos.psgDiscAdd_info 는
-        discount_additions 로 파싱합니다 (AddCartListOut.java:24-25,76). 행 내용은 라이브 미검증이며 담기 자체는 상태 변경입니다."""
+        """미결제 예약을 장바구니에 담습니다(NetworkApi.java:266-267; AddCartListIn.java:52). psgDiscAdd_infos.psgDiscAdd_info
+        는 discount_additions 로 파싱합니다 (AddCartListOut.java:24-25,76). 행 내용은 라이브 미검증이며 담기 자체는 상태 변경입니다."""
         self._require_session("cart add requires")
         route = "/classes/com.korail.mobile.cart.addCartList"
         form = build_cart_add_form(self.config, request)
@@ -1858,8 +1861,8 @@ class KorailClient:
         self,
         request: PriceRecalculationRequest,
     ) -> ReservationHoldResponse:
-        """홀드의 할인 조합을 재계산합니다. 변경 결과를 읽은 뒤 결제·취소 여부를 판단하십시오. NetworkApi.java:583-584 는 일반 폼 외 여섯 반복 필드를 받습니다. 입력 구성은
-        PayViewModel.java:902,1316,14278 이며 화면의 모든 변경 트리거는 확인되지 않았습니다. 선택 객실·좌석속성 4필드는
+        """홀드의 할인 조합을 재계산합니다. 변경 결과를 읽은 뒤 결제·취소 여부를 판단하십시오. NetworkApi.java:583-584 는 일반 폼 외 여섯 반복 필드를 받습니다. 입력
+        구성은 PayViewModel.java:902,1316,14278 이며 화면의 모든 변경 트리거는 확인되지 않았습니다. 선택 객실·좌석속성 4필드는
         PriceReCalculationIn.java:38-41 에 있으나 값을 채운 라이브 검증은 없습니다. 일반 경로 default-null 의 기존 근거는
         PayViewModel.smali:11834-11850 입니다.
 

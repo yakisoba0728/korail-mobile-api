@@ -314,8 +314,8 @@ NOT_ENTITLED_CODES = frozenset({
     "WRC000412", "WRC000446", "WRR664211",
 })
 
-#: 서비스/연결 불가. 코드 리터럴은 AppSuit 보호로 jadx/smali 0건. 근거는 평문 자산 사전뿐이다 — ``analysis/apktool/assets/error_json.json:66``
-#: "…저장된 승차권화면으로 이동하시겠습니까?".
+#: 서비스/연결 불가. 코드 리터럴은 AppSuit 보호로 jadx/smali 0건. 근거는 평문 자산 사전뿐이다 —
+#: ``analysis/apktool/assets/error_json.json:66`` "…저장된 승차권화면으로 이동하시겠습니까?".
 SERVICE_UNAVAILABLE_CODE = "SEMGTK"
 
 #: 앱 업데이트 요구. 코드 리터럴은 AppSuit 보호로 jadx/smali 0건. 근거는 평문 자산 사전뿐이다 —

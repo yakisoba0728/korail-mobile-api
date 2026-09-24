@@ -17,7 +17,8 @@ def build_limousine_schedule_form(
     config: KorailConfig,
     query: LimousineScheduleQuery,
 ) -> dict[str, str]:
-    """리무진 운행 스케줄 폼(NetworkApi.java:654-656, postScdlQry). 역은 역코드, 날짜·시각은 YYYYMMDD·HHMMSS 입니다. 형식 자릿수는 서버에서 검사합니다."""
+    """리무진 운행 스케줄 폼(NetworkApi.java:654-656, postScdlQry). 역은 역코드, 날짜·시각은 YYYYMMDD·HHMMSS 입니다. 형식 자릿수는 서버에서
+    검사합니다."""
     return {
         **_device_version(config),
         "Key": config.key,
