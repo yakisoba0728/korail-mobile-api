@@ -365,18 +365,18 @@ def build_ticket_list_form(
     boarding_date_from: str = "",
     boarding_date_to: str = "",
 ) -> dict[str, str]:
-    """txtIndex 는 페이지가 아닌 목록 종류입니다(MyTicketListIn.java:62). mode 는 1/2 만 허용하며 h_page_no 는 최소 1 입니다. 앱 호출 리터럴은 보호돼
-    있습니다 (MyTicketBaseViewModel.java:1029, LoginViewModel.java:1083,
-    AppViewModel$executeTicketListForAutoLogin$result$1.java:67). 2026-09-22 관측: 1 은 빈 현재 목록 WRT300005, 2 는 구매이력
-    128건. 날짜 범위는 그대로 전달하며 잘못된 범위는 WRT100101 을 관측했습니다. 이 표본으로 모든 계정·앱의 페이지 값을 단정하지 않습니다."""
-    if mode not in {TICKET_LIST_MODE_ACTIVE, TICKET_LIST_MODE_HISTORY}:
-        raise KorailProtocolError(
-            'ticket list mode must be "1" (active) or "2" (history)'
-        )
+    """txtIndex 는 페이지가 아닌 목록 종류입니다(MyTicketListIn.java:62). 앱 호출 리터럴은 보호돼 있어(MyTicketBaseViewModel.java:1029,
+    LoginViewModel.java:1083, AppViewModel$executeTicketListForAutoLogin$result$1.java:67) mode·페이지 값을 거르거나 보정하지 않고
+    그대로 보냅니다. 2026-09-22 관측: 1 은 빈 현재 목록 WRT300005, 2 는 구매이력 128건. 날짜 범위도 그대로 전달하며 잘못된 범위는
+    WRT100101 을 관측했습니다. 이 표본으로 다른 mode 값의 의미를 단정하지 않습니다."""
+    if not isinstance(mode, str) or not mode:
+        raise KorailProtocolError("ticket list mode must be a non-empty string")
+    if type(page_no) is not int:
+        raise KorailProtocolError("page_no must be an integer")
     return {
         "txtDeviceId": config.advertising_id,
         "txtIndex": mode,
-        "h_page_no": str(max(1, page_no)),
+        "h_page_no": str(page_no),
         "h_abrd_dt_from": boarding_date_from,
         "h_abrd_dt_to": boarding_date_to,
         "hiduserYn": "Y",

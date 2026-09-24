@@ -280,10 +280,11 @@ class TrainSearchQuery:
     query_division_code: str = "1"
 
 
-def _train_scalar(value: Any, key: str) -> str | None:
-    """검색 스칼라는 문자열·JSON 정수를 허용하고 bool·float·목록·객체는 거절합니다. String 선언(TrainScheduleOutTrainInfo.java:63,1152)보다 넓게 받는
-    라이브러리 정책입니다. 앱 Json 설정은 보호돼 있어 이 인용만으로 동일한 숫자 허용을 증명하지는 못합니다 (NetworkModule.java:862,
-    NetworkServiceKt.java:29). 이미 사라진 영 채움은 복원하지 않습니다. 후속 빌더가 모든 자릿수를 검증한다는 보장도 없습니다."""
+def _train_scalar(value: Any, key: str, *, required: bool = False) -> str | None:
+    """검색 스칼라는 문자열·JSON 정수를 받습니다. String 선언(TrainScheduleOutTrainInfo.java:63,1152)보다 넓게 받는 라이브러리 정책이며
+    앱 Json 설정은 보호돼 있습니다(NetworkModule.java:862, NetworkServiceKt.java:29). 그 밖의 모양은 선택 필드면 None, ``required``
+    (train_no)면 KorailProtocolError 입니다. 원문은 raw 에 남고, 예약 빌더가 에코하는 값을 다시 검사합니다. 이미 사라진 영 채움은
+    복원하지 않습니다."""
     if value is None or isinstance(value, str):
         return value
     # bool 을 숫자로 받지 않도록 정확한 int 타입만 허용합니다.
@@ -291,13 +292,11 @@ def _train_scalar(value: Any, key: str) -> str | None:
         try:
             return str(value)
         except ValueError:
-            # 파이썬의 정수→문자열 자릿수 한도(기본 4,300자리)를 넘으면 ``str()`` 이 ``ValueError`` 를 냅니다. 이 패키지의 예외로 올립니다.
-            raise KorailProtocolError(
-                f"KORAIL train field {key} integer is too large"
-            )
-    raise KorailProtocolError(
-        f"KORAIL train field {key} must be a string, an integer, or null"
-    )
+            # 파이썬의 정수→문자열 자릿수 한도(기본 4,300자리)를 넘은 값입니다.
+            pass
+    if required:
+        raise KorailProtocolError(f"KORAIL train field {key} must be a string, an integer, or null")
+    return None
 
 
 def _train_optional_int(
@@ -385,11 +384,13 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
 )
 
 
-def _train_value(raw: dict[str, Any], key: str, fallback: str | None) -> str | None:
+def _train_value(
+    raw: dict[str, Any], key: str, fallback: str | None, *, required: bool = False
+) -> str | None:
     value = raw.get(key)
     if fallback is not None:
         value = value or raw.get(fallback)
-    return _train_scalar(value, key)
+    return _train_scalar(value, key, required=required)
 
 
 @dataclass(frozen=True)
@@ -487,10 +488,10 @@ class TrainSummary:
         """검색 응답의 행 하나를 :class:`TrainSummary` 로 만듭니다.
 
         주요 값은 ``h_`` 접두 철자와 접두 없는 철자를 둘 다 찾습니다 (``h_trn_no`` 와 ``trnNo`` 등). 모든 스칼라는 :func:`_train_scalar` 를
-        지나므로 숫자로 온 값도 받아들입니다."""
+        지나므로 숫자로 온 값도 받아들이고, 선택 필드의 그 밖의 모양은 None 이 됩니다."""
         return cls(
             # _train_scalar 를 지난 뒤 ""로 기본값을 준다. train_no 만이 이 클래스에서 유일하게 선택적이지 않은 속성이다.
-            train_no=_train_value(raw, "h_trn_no", "trnNo") or "",
+            train_no=_train_value(raw, "h_trn_no", "trnNo", required=True) or "",
             **{
                 attr: _train_value(raw, key, fallback)
                 for attr, key, fallback in _TRAIN_SUMMARY_KEYS
@@ -617,16 +618,15 @@ class TrainSearchMetadata:
 @dataclass(frozen=True)
 class TrainSearchContinuation:
     """다음 요청에 전달하는 3튜플 커서(TrainScheduleViewModel.java:205,7340,10262-10279). 대상 필드: TrainScheduleIn.java:95 의
-    qryStNo/qryStTrnNo/qryStTrnNo2. page_count 는 이 폼에서 전송하지 않습니다. query_train_no2 만 빈 문자열을 허용합니다. 직접 구성하기보다 검색
+    qryStNo/qryStTrnNo/qryStTrnNo2. query_train_no2 만 빈 문자열을 허용합니다. 직접 구성하기보다 검색
     결과의 next_page 를 사용하십시오."""
 
     query_station_no: str
     query_train_no: str
-    page_count: str = "10"
     query_train_no2: str = ""
 
     def __post_init__(self) -> None:
-        for name in ("query_station_no", "query_train_no", "page_count"):
+        for name in ("query_station_no", "query_train_no"):
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
                 raise KorailProtocolError(
@@ -651,7 +651,6 @@ def _train_search_continuation(
         return TrainSearchContinuation(
             query_station_no=metadata.next_query_station_no or "",
             query_train_no=query_train_no,
-            page_count=metadata.result_count or "10",
             query_train_no2=query_train_no2,
         )
     except KorailProtocolError:

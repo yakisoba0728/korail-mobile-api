@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""리무진 Query 를 요청 폼으로 옮깁니다. 좌석 재고 Query 만 인원·is_arrow 를 검사하고 문자열 형식은 서버가 판정합니다."""
+"""리무진 Query 를 요청 폼으로 옮깁니다. 좌석 재고 Query 만 인원·is_arrow 의 타입을 검사하고 문자열 형식은 서버가 판정합니다."""
 from __future__ import annotations
 
 from ._payload_helpers import _device_version

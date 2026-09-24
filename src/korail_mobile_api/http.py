@@ -50,6 +50,7 @@ def parse_base_response(
     *,
     raise_on_fail: bool = True,
     require_result: bool = True,
+    common_out: bool | None = None,
 ) -> BaseKorailResponse:
     """봉투 타입 검사 후 FAIL/P058 을 세션 만료로 처리합니다.
 
@@ -59,15 +60,20 @@ def parse_base_response(
 
     raise_on_fail=True 면 FAIL, WRC000288, 또는 require_result=True 일 때 strResult 키 누락을 거절합니다. SUCC 와의 동등 비교는 아니며
     null·빈 문자열·미지의 결과값은 이 단계에서 거절하지 않습니다. 앱은 CommonOut.java:361,455-463 에서 기본값과 실패 비교에 같은 보호 리터럴을 사용합니다. FAIL
-    평문은 관측값이고 WRC000288 별도 실패 분기는 앱 근거가 미확인입니다."""
+    평문은 관측값이고 WRC000288 별도 실패 분기는 앱 근거가 미확인입니다.
+
+    common_out(기본값은 require_result)이 참이면 strResult 누락도 P058 판정에서는 실패로 봅니다. 봉투가 선택인 CommonOut 읽기
+    경로용입니다: 앱은 CommonOut 이면 checkRequiredLogin 을 부르지만(NetworkService.java:6916-6919) 그 밖의 코드는 화면마다
+    다르게 다루므로, 이 경우 다른 코드는 거절하지 않습니다."""
     if not isinstance(data, dict):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     _reject_non_string_envelope_fields(data)
     response = BaseKorailResponse.from_raw(data)
-    failed = response.str_result == "FAIL" or (
-        require_result and "strResult" not in data
-    )
-    if failed and response.h_msg_cd == SESSION_EXPIRED_CODE:
+    missing_result = "strResult" not in data
+    failed = response.str_result == "FAIL" or (require_result and missing_result)
+    if common_out is None:
+        common_out = require_result
+    if (failed or (common_out and missing_result)) and response.h_msg_cd == SESSION_EXPIRED_CODE:
         raise KorailSessionExpiredError(
             response.h_msg_cd,
             response.h_msg_txt,
@@ -267,10 +273,12 @@ class KorailHttpClient:
             raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
         # 2026-09-22 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다.
         # 봉투 누락 허용과 존재하는 FAIL/P058 판정은 별개이며 raw 는 그대로 보존합니다.
+        common_out = path not in _NON_COMMON_OUT_READ_PATHS
         return parse_base_response(
             payload,
             raise_on_fail=raise_on_fail,
-            require_result=require_envelope and path not in _NON_COMMON_OUT_READ_PATHS,
+            require_result=require_envelope and common_out,
+            common_out=common_out,
         )
 
     def post_form(

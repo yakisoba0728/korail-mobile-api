@@ -26,9 +26,11 @@ if TYPE_CHECKING:
     from .mutation_models import StationRefundVerificationRequest
 
 
-def _positive_int(value: int, name: str) -> str:
-    if type(value) is not int or value < 1:
-        raise KorailProtocolError(f"{name} must be a positive integer")
+def _int_text(value: int, name: str) -> str:
+    """페이지 값을 문자열 DTO 필드로 옮깁니다. 앱 DTO 는 String 이고 범위 검사가 없어 값의 판정은 서버에 맡깁니다
+    (CouponIn.java:29-30, ProductListIn.java:30-35, AmtSpecIn.java:30-36)."""
+    if type(value) is not int:
+        raise KorailProtocolError(f"{name} must be an integer")
     return str(value)
 
 
@@ -283,7 +285,7 @@ def build_discount_coupon_form(
     pnr_no: str = "",
 ) -> dict[str, str]:
     return {
-        "txtSelPage": _positive_int(page_no, "page_no"),
+        "txtSelPage": _int_text(page_no, "page_no"),
         "pnrNo": _optional_text(pnr_no, "pnr_no"),
     }
 
@@ -342,8 +344,8 @@ def build_product_reservations_query(
     payment_status_code: str | None = None,
 ) -> dict[str, str]:
     query = {
-        "txtSelPage": _positive_int(page_no, "page_no"),
-        "txtCntPerPage": _positive_int(page_size, "page_size"),
+        "txtSelPage": _int_text(page_no, "page_no"),
+        "txtCntPerPage": _int_text(page_size, "page_size"),
     }
     # 상태 기본값은 보호돼 있습니다(ProductReservationViewModel.java:836). 입력 DTO 의 두 상태 필드는 호출자가 관측한 값으로 지정해야 합니다.
     if reservation_status_code is not None:
@@ -526,7 +528,7 @@ def build_mileage_history_form(
         "qryClsDt": end_date,
         # 매 호출 같은 리터럴입니다(7.0.6 출처 없음, 미출처).
         "pgPrCnt": "20",
-        "nowPgNo": _positive_int(request.page_no, "page_no"),
+        "nowPgNo": _int_text(request.page_no, "page_no"),
     }
 
 
@@ -661,8 +663,9 @@ def build_maas_service_detail_form(
 
 
 def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
-    # 자릿수만 보면 ``20260230`` 같은 달력에 없는 날짜가 그대로 나가고, 서버는 그것을 빈 목록으로 조용히 돌려줍니다 -- 호출자는 "변경 가능한 날짜가 없다" 와 "날짜를 잘못 썼다" 를
-    # 구분할 수 없습니다. ``_calendar_date`` 는 이 모듈이 이미 쓰는 검증기입니다.
+    # 달력 검증은 앱에 없는 라이브러리 검사입니다(앱은 날짜 선택기 값만 보냅니다). 2026-09-24 라이브: 20260230·20261340 은
+    # SUCC/API.I00000 에 tripChgDates 없이 돌아왔고, 정상 날짜는 변경 가능일이 없어도 빈 tripChgDates 를 실었습니다(20250101·20991231 등).
+    # 로컬에서 막지 않으면 잘못 쓴 날짜가 성공 봉투로 돌아옵니다.
     return {
         "tripChgDate": _calendar_date(
             departure_date, "departure_date"
@@ -867,7 +870,7 @@ def build_original_ticket_inquiry_form(
     return tuple(rows)
 
 
-#: ``"1"`` 일반실, ``"2"`` 특실, ``None`` 은 필드 생략.
+#: ``"1"`` 일반실, ``"2"`` 특실(라이브 기록에 따른 값; PsrmType.java:19-29 의 리터럴은 보호됨), ``None`` 은 필드 생략.
 KorailSelfSeatChangeRoomClassCode = Literal["1", "2"]
 
 
@@ -891,18 +894,9 @@ class SelfSeatChangeInfoRequest:
             "departure_station_code",
         )
         _required_text(self.arrival_station_code, "arrival_station_code")
-        if (
-            self.room_class_code is not None
-            and self.room_class_code not in SELF_SEAT_CHANGE_ROOM_CLASS_CODES
-        ):
-            raise KorailProtocolError(
-                "room_class_code must be '1', '2' or None"
-            )
-
-
-#: GENERAL/SPECIAL 두 상수는 PsrmType.java:19-29 에 선언돼 있지만 코드 리터럴은 보호됩니다. 아래 1/2 배정은 라이브 기록에 의존하며 앱 소스로 평문을 확인한 값이
-#: 아닙니다.
-SELF_SEAT_CHANGE_ROOM_CLASS_CODES = frozenset({"1", "2"})
+        # 객실 코드는 허용목록으로 거르지 않습니다: 앱 DTO 는 String 이고 코드 리터럴은 보호돼 있습니다(PsrmType.java:19-29).
+        if self.room_class_code is not None:
+            _required_text(self.room_class_code, "room_class_code")
 
 
 def build_self_seat_change_info_form(
@@ -959,7 +953,9 @@ def build_commuter_info_form(
             for option in request.source.passenger_options
         )
         # cmtrUtlAgeCd 는 종류 행당이 아니라 승객당 반복합니다(CommutationInfoIn.java:31,38). 2026-09-22 kind=0046 관측: E05/E06 을
-        # 행당 한 번 보내면 WRT800115, 인원 1+E05, 1+E06, 2+E05/E05 는 IRZ000008 이었습니다.
+        # 행당 한 번 보내면 WRT800115, 인원 1+E05, 1+E06, 2+E05/E05 는 IRZ000008 이었습니다. 2026-09-24: 이 키를 빼면 1명·2명 모두
+        # FAIL/ERR000100 이었습니다. 앱의 폼 평탄화(NetworkService.java:15345-15355)는 객체 배열만 펼치는 것으로 읽히지만 서버는 이 키를
+        # 요구하므로, 앱이 이 필드를 어떻게 싣는지는 미확인입니다.
         selected = tuple(
             code
             for code, count in zip(

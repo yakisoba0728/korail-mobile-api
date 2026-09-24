@@ -16,20 +16,6 @@ from .errors import KorailProtocolError
 from .models import BaseKorailResponse, SeatWindow
 
 
-def _passenger_count(value: object, name: str, *, allow_zero: bool) -> None:
-    minimum = 0 if allow_zero else 1
-    if type(value) is not int:
-        raise KorailProtocolError(f"{name} must be an integer")
-    if not minimum <= value <= 9:
-        qualifier = "0 through 9" if allow_zero else "1 through 9"
-        raise KorailProtocolError(f"{name} must be an integer from {qualifier}")
-
-
-def _boolean(value: object, name: str) -> None:
-    if type(value) is not bool:
-        raise KorailProtocolError(f"{name} must be a boolean")
-
-
 @dataclass(frozen=True)
 class LimousineScheduleQuery:
     """``lmu.scdlQry.do`` 운행 스케줄 조회의 입력."""
@@ -65,12 +51,11 @@ class LimousineSeatInventoryQuery:
     is_arrow: bool = False
 
     def __post_init__(self) -> None:
-        _passenger_count(
-            self.passenger_count,
-            "passenger_count",
-            allow_zero=False,
-        )
-        _boolean(self.is_arrow, "is_arrow")
+        # 인원 범위는 앱 DTO 에 검사가 없어 서버에 맡깁니다. 두 값은 문자열로 바꿔 보내므로 타입만 확인합니다.
+        if type(self.passenger_count) is not int:
+            raise KorailProtocolError("passenger_count must be an integer")
+        if type(self.is_arrow) is not bool:
+            raise KorailProtocolError("is_arrow must be a boolean")
 
 
 @dataclass(frozen=True)

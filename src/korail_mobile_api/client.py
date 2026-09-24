@@ -301,9 +301,11 @@ class KorailClient:
     def close(self) -> None:
         """HTTP·NetFunnel 연결 풀을 닫습니다. 네트워크 호출을 하지 않으며 로그인 상태도 그대로 둡니다. 로그인까지 끝내려면 먼저
         :meth:`logout`(서버 세션 무효화)이나 :meth:`clear_session`(로컬만 폐기)을 부르십시오."""
-        self.http.close()
-        if self.netfunnel is not None:
-            self.netfunnel.close()
+        try:
+            self.http.close()
+        finally:
+            if self.netfunnel is not None:
+                self.netfunnel.close()
 
     def login(
         self,
@@ -1231,14 +1233,14 @@ class KorailClient:
             if (
                 ticket_return_numbers is None
                 or isinstance(ticket_return_numbers, (str, bytes))
-                or not 1 <= len(ticket_return_numbers) <= 8
+                or not ticket_return_numbers
                 or any(
                     not isinstance(number, str) or not number.strip()
                     for number in ticket_return_numbers
                 )
             ):
                 raise KorailProtocolError(
-                    "KORAIL ticket MaaS menu requires 1-8 return numbers"
+                    "KORAIL ticket MaaS menu requires at least one return number"
                 )
             form = [
                 ("pnrNo", pnr_no),
@@ -1517,7 +1519,7 @@ class KorailClient:
 
     def get_ticket_list(
         self,
-        page_no: int = 0,
+        page_no: int = 1,
         *,
         mode: Literal["1", "2"] = "1",
         boarding_date_from: str = "",
@@ -1529,7 +1531,7 @@ class KorailClient:
 
         mode=2 날짜는 YYYYMMDD 를 사용하십시오. 빌더는 날짜 폭·순서·기간을 검증하지 않습니다. 2026-09-22: 양쪽 누락, 한쪽 누락, 6자리, 역순의 네 표본은
         WRT100101 이었고, 2년 범위는 128행, 같은 달 범위는 3행이었습니다. 이 관측으로 최대 기간을 보장하지 않습니다. mode=1 의 날짜는 빈 값이며 전송 단계에서 생략됩니다.
-        page_no 는 최소 1 로 보정합니다."""
+        page_no 는 보정하지 않고 그대로 보냅니다(라이브에서 확인한 값은 1)."""
         self._require_session("ticket list requires")
         return self._run_read(
             lambda: parse_ticket_list_response(

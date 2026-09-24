@@ -71,20 +71,6 @@ def _typed_required_string(
     return value
 
 
-def _seat_nullable_string(data: Mapping[str, Any], key: str) -> str | None:
-    """좌석 DTO의 nullable 문자열만 허용하고 잘못된 타입은 거부합니다.
-
-    TResidualSeatsResearchOutSeat.java:79-82,94-97: etc_seat_att_cd와 vz_msg_dv_cd는 생략 및 null을 허용합니다."""
-    value = data.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be a string or null"
-        )
-    return value
-
-
 def _typed_required_scalar_string(
     data: Mapping[str, Any],
     key: str,
@@ -208,23 +194,17 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
 
 @_preserve_read_raw
 def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
-    """공지 응답을 파싱합니다.
+    """메인 캐시의 중첩 ``notice`` 를 파싱합니다(MobilePlusMainOut.java:57, MobilePlusMainNotice.java:52).
 
     게시판 아이디·게시물 일련번호·제목·본문은 모두 선택값입니다. 공지가 없는 상태도 정상입니다."""
-    raw = response.raw
-    nested = raw.get("notice")
-    notice_raw = nested if isinstance(nested, Mapping) else raw
-    nested_notice = isinstance(nested, Mapping)
+    nested = response.raw.get("notice")
+    notice_raw = nested if isinstance(nested, Mapping) else {}
     return NoticeResponse(
         **_response_fields(response),
-        board_id=_optional_string(notice_raw, "BbrdId" if nested_notice else "bbrdId"),
-        post_sequence=_optional_string(
-            notice_raw, "PtwtSqno" if nested_notice else "ptwtSqno"
-        ),
-        post_title=_optional_string(notice_raw, "PtwtTtl" if nested_notice else "ptwtTtl"),
-        post_content=(
-            _optional_string(notice_raw, "PtwtCont") if nested_notice else None
-        ),
+        board_id=_optional_string(notice_raw, "BbrdId"),
+        post_sequence=_optional_string(notice_raw, "PtwtSqno"),
+        post_title=_optional_string(notice_raw, "PtwtTtl"),
+        post_content=_optional_string(notice_raw, "PtwtCont"),
     )
 
 
@@ -782,10 +762,8 @@ def parse_seat_inventory_response(
                     row,
                     "dir_seat_att_cd",
                 ),
-                other_attribute_code=_seat_nullable_string(
-                    row,
-                    "etc_seat_att_cd",
-                ),
+                # etc_seat_att_cd·vz_msg_dv_cd 는 생략·null 을 허용합니다(TResidualSeatsResearchOutSeat.java:79-82,94-97).
+                other_attribute_code=_inventory_optional_string(row, "etc_seat_att_cd"),
                 requested_attribute_code=_inventory_required_string(
                     row,
                     "rq_seat_att_cd",
@@ -801,10 +779,7 @@ def parse_seat_inventory_response(
                     "intg_msg_cd",
                 ),
                 message=_inventory_required_string(row, "intg_msg"),
-                visual_message_division_code=_seat_nullable_string(
-                    row,
-                    "vz_msg_dv_cd",
-                ),
+                visual_message_division_code=_inventory_optional_string(row, "vz_msg_dv_cd"),
             )
         )
 
