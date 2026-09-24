@@ -1242,6 +1242,7 @@ class KorailClient:
     ) -> MaasMenuListResponse:
         """일반 또는 승차권별 MaaS 메뉴를 조회합니다. 원승차권 반환번호는 tkRetNo 반복 필드이며 하나로 합친 문자열이 아닙니다. NetworkApi.java:402-404 의
         postGdMenuLt 선언을 따릅니다."""
+        form: Mapping[str, str] | list[tuple[str, str]]
         if pnr_no is None and ticket_return_numbers is None:
             form = build_maas_menu_form(self.config)
             include_common = False

@@ -928,7 +928,7 @@ def parse_delay_discount_ticket_response(
     # main_info 는 DTO 밖 서버 추가 블록(DelayDiscountViewOut.java:24,51). 2026-09-22 관측은 할인권 없는 계정의 0 값뿐입니다. 영 채움과 빈
     # 문자열을 보존합니다.
     main_info = _optional_mapping(raw, "main_info")
-    pagination: dict[str, str | None] = {}
+    pagination: dict[str, Any] = {}
     if main_info is not None:
         pagination = _nullable_scalar_fields(
             main_info,
@@ -1144,7 +1144,7 @@ def _required_read_strings(
     data: Mapping[str, Any],
     fields: Mapping[str, str],
     context: str,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """필수 문자열 필드를 읽습니다. 누락·null 은 거절하고, JSON 정수는 문자열로 받습니다(String 선언 필드가 정수로 온 2026-09-21 관측,
     :func:`_strict_scalar_string`)."""
     values = {}

@@ -217,7 +217,9 @@ def _optional_bool(
 def _nullable_string_fields(
     data: Mapping[str, Any],
     field_map: Mapping[str, str],
-) -> dict[str, str | None]:
+) -> dict[str, Any]:
+    # 값은 str | None 이지만 모델 생성자에 ** 로 풀어 넣으므로 Any 로 둡니다. 타입 검사기는 풀어 넣는 dict 의 값 타입을
+    # raw 같은 다른 매개변수에도 맞춰 보기 때문입니다.
     return {attribute: _optional_string(data, wire_name) for attribute, wire_name in field_map.items()}
 
 
@@ -225,7 +227,7 @@ def _nullable_scalar_fields(
     data: Mapping[str, Any],
     field_map: Mapping[str, str],
     context: str,
-) -> dict[str, str | None]:
+) -> dict[str, Any]:
     """:func:`_nullable_string_fields` 와 같되 JSON 정수도 문자열로 받습니다."""
     return {
         attribute: _optional_scalar_string(data, wire_name, context)

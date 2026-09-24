@@ -1308,8 +1308,9 @@ class CommuterPassengerOption:
     #: 연령 범위는 키가 없으면 0이며 정수로 읽을 수 없는 값이면 None입니다.
     customer_age_from: int | None = 0
     customer_age_to: int | None = 0
-    passenger_count_from: int = 0
-    passenger_count_to: int = 0
+    #: 인원 범위도 같습니다. 키가 없으면 0, 정수로 읽을 수 없는 값이면 None입니다.
+    passenger_count_from: int | None = 0
+    passenger_count_to: int | None = 0
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
@@ -1329,8 +1330,9 @@ class CommuterInfoResponse(BaseKorailResponse):
     promotion_message: str | None = None
     promotion_url: str | None = None
     seat_attribute_code: str | None = None
-    available_passenger_count_from: int = 0
-    available_passenger_count_to: int = 0
+    #: 키가 없으면 0, 정수로 읽을 수 없는 값이면 None입니다.
+    available_passenger_count_from: int | None = 0
+    available_passenger_count_to: int | None = 0
     passenger_options: tuple[CommuterPassengerOption, ...] = ()
 
 

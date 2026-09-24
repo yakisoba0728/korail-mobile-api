@@ -405,6 +405,8 @@ _T = TypeVar("_T")
 def _coerced_seat_class(value: object) -> KorailSeatClass:
     """``"1"``(일반실)·``"2"``(특실) 또는 :class:`KorailSeatClass` 만 받습니다."""
     try:
+        if not isinstance(value, str):
+            raise ValueError(value)
         return KorailSeatClass(value)
     except ValueError:
         raise KorailProtocolError('KORAIL reservation seat class must be "1" (일반실) or "2" (특실)')
@@ -1055,9 +1057,9 @@ def build_refund_form(
             form["tk_ret_tms_dv_cd"] = commission.ticket_return_times_division_code
         if ticket.train_no:
             form["trnNo"] = ticket.train_no
-    for key, value in (("latitude", latitude), ("longitude", longitude)):
-        if value is not None:
-            form[key] = str(value)
+    for key, coordinate in (("latitude", latitude), ("longitude", longitude)):
+        if coordinate is not None:
+            form[key] = str(coordinate)
     return form
 
 
