@@ -969,6 +969,14 @@ def build_card_payment_form(
         or _DIGITS_RE.fullmatch(card.card_number) is None
     ):
         raise KorailProtocolError("KORAIL payment card number must be digits")
+    # PayViewModel.java:16233-16243; smali:53727-53863 (국내 직접입력 카드).
+    if not isinstance(card.card_password, str) or len(card.card_password) != 2:
+        raise KorailProtocolError("KORAIL payment requires a two-character card password")
+    auth_length = 6 if card.card_type == "J" else 10
+    if not isinstance(card.birthday, str) or len(card.birthday) != auth_length:
+        raise KorailProtocolError(
+            "KORAIL payment card authentication value has an invalid length"
+        )
     form = _common_fields(config)
     form.update(
         {
@@ -1074,6 +1082,11 @@ def build_refund_form(
     if commission is not None:
         if not isinstance(commission, RefundCommissionResponse):
             raise KorailProtocolError("commission must be a RefundCommissionResponse")
+        # RefundTicketViewModel$executeRefundCommission$2.smali:1045-1086.
+        if commission.str_result != "SUCC":
+            error = KorailProtocolError("KORAIL refund requires a successful commission response")
+            error.raw = commission.raw
+            raise error
         if commission.ticket_return_times_division_code:
             form["tk_ret_tms_dv_cd"] = commission.ticket_return_times_division_code
         if ticket.train_no:
