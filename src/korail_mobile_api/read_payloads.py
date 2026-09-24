@@ -230,7 +230,7 @@ class PassScheduleRequest:
     #: :attr:`page_size` 를 키우십시오. 응답 쪽 페이징 신호도 믿을 수 없습니다 —
     #: :class:`~korail_mobile_api.read_models.PassScheduleMainInfo` 참조.
     page_no: str
-    #: ``txtSelCnt`` — 실제로 결과 수를 정하는 값입니다.
+    #: ``txtCntPerPage`` — 실제로 결과 수를 정하는 값입니다.
     page_size: str
     departure_station_name: str
     arrival_station_name: str

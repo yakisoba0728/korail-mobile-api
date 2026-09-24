@@ -16,7 +16,6 @@ from ._parsing import (
     _nullable_string_fields,
     _optional_bool,
     _optional_integer,
-    _optional_list,
     _optional_mapping,
     _optional_scalar_string,
     _optional_string,
@@ -27,6 +26,7 @@ from ._parsing import (
     _required_string,
     _response_fields,
     _rows,
+    _strict_scalar_string,
 )
 from .errors import (
     SESSION_EXPIRED_CODE,
@@ -136,6 +136,7 @@ from .read_models import (
 )
 
 
+@_preserve_read_raw
 def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListResponse:
     """승차권 목록의 pnr_list 를 읽습니다(MyTicketListOut.java:82). 2026-09-22 한 계정 기록: 결과가 있는 mode=2 는 pnr_list
     128행, 빈 mode=1/2 는 WRT300005 와 reservation_list 0행이었습니다. 캡처가 연결되지 않아 건수는 재검산할 수 없으며 모든 응답에 일반화하지
@@ -838,6 +839,7 @@ def _parse_pass_goods_info(
     )
 
 
+@_preserve_read_raw
 def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
     # 패스 메뉴 성공 표본은 strResult 만 있고 상위 메시지 필드는 없습니다.
     _validate_strict_read_envelope(raw, allow_result_only_success=True)
@@ -867,6 +869,7 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
     return PassMenuResponse(items=tuple(items), **_response_fields(raw))
 
 
+@_preserve_read_raw
 def parse_commuter_kind_menu_response(
     raw: Mapping[str, Any],
 ) -> CommuterKindMenuResponse:
@@ -880,6 +883,7 @@ def parse_commuter_kind_menu_response(
     )
 
 
+@_preserve_read_raw
 def parse_crew_request_list_response(
     raw: Mapping[str, Any],
 ) -> CrewRequestListResponse:
@@ -902,6 +906,7 @@ def parse_service_status_response(
     return ServiceStatusResponse(**_response_fields(raw))
 
 
+@_preserve_read_raw
 def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
     _validate_envelope(raw, allow_result_only_success=True)
     items = []
@@ -920,6 +925,7 @@ def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
     return CartListResponse(items=tuple(items), **_response_fields(raw))
 
 
+@_preserve_read_raw
 def parse_deposit_bank_response(
     raw: Mapping[str, Any],
 ) -> DepositBankListResponse:
@@ -934,6 +940,7 @@ def parse_deposit_bank_response(
     return DepositBankListResponse(items=items, **_response_fields(raw))
 
 
+@_preserve_read_raw
 def parse_delay_discount_ticket_response(
     raw: Mapping[str, Any],
 ) -> DelayDiscountTicketListResponse:
@@ -966,6 +973,7 @@ def parse_delay_discount_ticket_response(
     )
 
 
+@_preserve_read_raw
 def parse_discount_coupon_response(
     raw: Mapping[str, Any],
 ) -> DiscountCouponListResponse:
@@ -1028,6 +1036,7 @@ def parse_discount_coupon_response(
     )
 
 
+@_preserve_read_raw
 def parse_pass_availability_response(
     raw: Mapping[str, Any],
 ) -> PassAvailabilityResponse:
@@ -1090,6 +1099,7 @@ def parse_pass_availability_response(
     )
 
 
+@_preserve_read_raw
 def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
     _validate_envelope(raw)
     items = []
@@ -1126,6 +1136,7 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
     )
 
 
+@_preserve_read_raw
 def parse_product_reservation_list_response(
     raw: Mapping[str, Any],
 ) -> ProductReservationListResponse:
@@ -1147,6 +1158,7 @@ def parse_product_reservation_list_response(
     )
 
 
+@_preserve_read_raw
 def parse_product_detail_response(
     raw: Mapping[str, Any],
 ) -> ProductDetailResponse:
@@ -1167,37 +1179,65 @@ def parse_product_detail_response(
     )
 
 
+def _required_read_rows(
+    data: Mapping[str, Any], key: str, context: str,
+) -> list[Mapping[str, Any]]:
+    """필수 객체 목록. 누락·null·비객체 행은 거절합니다(ReceiptInfos.java:49, DeliveredTicketOut.java:50 의 필수 마스크)."""
+    value = data.get(key)
+    if not isinstance(value, list) or any(not isinstance(row, Mapping) for row in value):
+        raise KorailProtocolError(f"KORAIL {context} field {key} must be an object list")
+    return value
+
+
+def _required_read_strings(
+    data: Mapping[str, Any], fields: Mapping[str, str], context: str,
+) -> dict[str, str]:
+    """필수 String 필드. 누락·null 은 거절하고, JSON 정수는 문자열로 받습니다(String 선언 필드가 정수로 온 2026-09-21 관측,
+    :func:`_strict_scalar_string`)."""
+    values = {}
+    for attr, key in fields.items():
+        value = _strict_scalar_string(data, key, context)
+        if value is None:
+            raise KorailProtocolError(f"KORAIL {context} field {key} is required")
+        values[attr] = value
+    return values
+
+
+@_preserve_read_raw
 def parse_ticket_receipt_response(
     raw: Mapping[str, Any],
 ) -> TicketReceiptResponse:
     _validate_envelope(raw)
     items = []
-    rows = _nested_rows(raw, "receipt_infos", "receipt_info")
+    receipt_infos = raw.get("receipt_infos")
+    if not isinstance(receipt_infos, Mapping):
+        raise KorailProtocolError("KORAIL receipt_infos must be an object")
+    rows = _required_read_rows(receipt_infos, "receipt_info", "ticket receipt")
     for item in rows:
         payments = []
-        for payment in _rows(item, "stl_info"):
+        for payment in _required_read_rows(item, "stl_info", "ticket receipt"):
             payments.append(
                 ReceiptPayment(
-                    **_nullable_string_fields(
-                        payment, _RECEIPT_PAYMENT_FIELDS
+                    **_required_read_strings(
+                        payment, _RECEIPT_PAYMENT_FIELDS, "receipt payment"
                     ),
-                    installment_months=_optional_integer(
+                    installment_months=_required_integer(
                         payment, "h_ismt_mnth_num", "receipt payment"
                     ),
-                    amount=_optional_integer(
+                    amount=_required_integer(
                         payment, "h_stl_amt", "receipt payment"
                     ),
                     raw=payment,
                 )
             )
         cash_receipts = []
-        for cash in _rows(item, "cash_rcet_info"):
+        for cash in _required_read_rows(item, "cash_rcet_info", "ticket receipt"):
             cash_receipts.append(
                 ReceiptCashPayment(
-                    **_nullable_string_fields(
-                        cash, _RECEIPT_CASH_PAYMENT_FIELDS,
+                    **_required_read_strings(
+                        cash, _RECEIPT_CASH_PAYMENT_FIELDS, "receipt cash payment",
                     ),
-                    total_approved_amount=_optional_integer(
+                    total_approved_amount=_required_integer(
                         cash, "h_tot_apv_amt", "receipt cash payment"
                     ),
                     raw=cash,
@@ -1205,17 +1245,17 @@ def parse_ticket_receipt_response(
             )
         items.append(
             TicketReceipt(
-                **_nullable_scalar_fields(item, _TICKET_RECEIPT_FIELDS, "ticket receipt"),
+                **_required_read_strings(item, _TICKET_RECEIPT_FIELDS, "ticket receipt"),
                 passenger_counts=(
-                    _optional_integer(item, "h_psg_type1_cnt", "ticket receipt"),
-                    _optional_integer(item, "h_psg_type2_cnt", "ticket receipt"),
-                    _optional_integer(item, "h_psg_type3_cnt", "ticket receipt"),
+                    _required_integer(item, "h_psg_type1_cnt", "ticket receipt"),
+                    _required_integer(item, "h_psg_type2_cnt", "ticket receipt"),
+                    _required_integer(item, "h_psg_type3_cnt", "ticket receipt"),
                 ),
-                received_amount=_optional_integer(item, "h_rcvd_amt", "ticket receipt"),
-                card_refund_amount=_optional_integer(item, "h_crd_ret_amt", "ticket receipt"),
-                refund_fee=_optional_integer(item, "h_ret_fee", "ticket receipt"),
-                refund_received_amount=_optional_integer(item, "h_ret_rcvd_amt", "ticket receipt"),
-                point_refund_amount=_optional_integer(item, "h_xpoint_ret_amt", "ticket receipt"),
+                received_amount=_required_integer(item, "h_rcvd_amt", "ticket receipt"),
+                card_refund_amount=_required_integer(item, "h_crd_ret_amt", "ticket receipt"),
+                refund_fee=_required_integer(item, "h_ret_fee", "ticket receipt"),
+                refund_received_amount=_required_integer(item, "h_ret_rcvd_amt", "ticket receipt"),
+                point_refund_amount=_required_integer(item, "h_xpoint_ret_amt", "ticket receipt"),
                 payments=tuple(payments),
                 cash_receipts=tuple(cash_receipts),
                 raw=item,
@@ -1276,10 +1316,11 @@ def _parse_reservation_history_reservation(
     )
 
 
+@_preserve_read_raw
 def parse_reservation_history_response(
     raw: Mapping[str, Any],
 ) -> ReservationHistoryResponse:
-    """``research.reservationView.do`` — ``ReservationViewOut.java:64``.
+    """``reservation.ReservationView`` — ``ReservationViewOut.java:64``.
 
     ``jrny_infos[].train_infos[]`` 뿐 아니라 최상위 신원 필드 (``h_rsv_ps_nm``/``h_tel_no`` 등)와 여정마다 매달린
     ``srv_infos``/ ``acmp_infos``, 그리고 그 PNR 의 실제 운임·결제·발권 내용을 담은 ``ReservationOut`` 중첩 전체도 읽습니다.
@@ -1424,6 +1465,7 @@ def _parse_train_schedule_container(
     return merge_flag, trains
 
 
+@_preserve_read_raw
 def parse_seat_assignment_schedule_response(
     raw: Mapping[str, Any],
 ) -> SeatAssignmentScheduleResponse:
@@ -1521,6 +1563,7 @@ def parse_merge_seats_inquiry_response(
     )
 
 
+@_preserve_read_raw
 def parse_pass_schedule_response(
     raw: Mapping[str, Any],
 ) -> PassScheduleResponse:
@@ -1612,6 +1655,7 @@ _MILEAGE_HISTORY_ENTRY_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_korail_point_summary_response(
     raw: Mapping[str, Any],
 ) -> KorailPointSummaryResponse:
@@ -1624,6 +1668,7 @@ def parse_korail_point_summary_response(
     )
 
 
+@_preserve_read_raw
 def parse_mileage_history_response(
     raw: Mapping[str, Any],
 ) -> MileageHistoryResponse:
@@ -1688,6 +1733,7 @@ _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_discount_card_usage_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardUsageListResponse:
@@ -1708,6 +1754,7 @@ def parse_discount_card_usage_response(
     )
 
 
+@_preserve_read_raw
 def parse_discount_card_schedule_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardScheduleResponse:
@@ -1835,6 +1882,7 @@ _MAAS_DETAIL_INFO_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_multi_child_discount_target_response(
     raw: Mapping[str, Any],
 ) -> MultiChildDiscountTargetResponse:
@@ -1856,6 +1904,7 @@ def parse_multi_child_discount_target_response(
     )
 
 
+@_preserve_read_raw
 def parse_customer_trip_info_response(
     raw: Mapping[str, Any],
 ) -> CustomerTripInfoResponse:
@@ -1928,14 +1977,14 @@ def parse_maas_service_detail_list_response(
     )
 
 
+@_preserve_read_raw
 def parse_trip_change_date_response(
     raw: Mapping[str, Any],
 ) -> TripChangeDateResponse:
     _validate_strict_read_envelope(raw)
-    dates = []
-    for value in _optional_list(raw, "tripChgDates"):
-        if isinstance(value, str):
-            dates.append(value)
+    dates = raw.get("tripChgDates")
+    if not isinstance(dates, list) or any(not isinstance(value, str) for value in dates):
+        raise KorailProtocolError("KORAIL tripChgDates must be a string list")
     # 응답은 복수형 tripChgDates 입니다(TipChgDateInquiryOut.java:28-30). 단수형 tripChgDate 는 요청
     # 필드(TipChgDateInquiryIn.java:29)이므로 응답 별칭으로 쓰지 않습니다.
     return TripChangeDateResponse(
@@ -1961,6 +2010,7 @@ def _primitive_json_integer(
     return _optional_integer(data, key, context)
 
 
+@_preserve_read_raw
 def parse_commuter_info_response(
     raw: Mapping[str, Any],
 ) -> CommuterInfoResponse:
@@ -2097,6 +2147,7 @@ _PBP_ACCEPTANCE_JOURNEY_FIELDS = {
     "pbp_reservation_no": "pbpRsvNo",
     "registered_date": "regDt",
     "withdrawal_possible_flag": "wdrwPsbFlg",
+    "member_card_no": "mbCrdNo",
 }
 
 _PBP_ACCEPTANCE_SEAT_FIELDS = {
@@ -2116,19 +2167,21 @@ _RECENT_DELIVERY_RECIPIENT_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_delivery_recipient_response(
     raw: Mapping[str, Any],
 ) -> DeliveryRecipientResponse:
     _validate_strict_read_envelope(raw)
     return DeliveryRecipientResponse(
-        **_nullable_string_fields(
+        **_required_read_strings(
             raw,
-            _DELIVERY_RECIPIENT_FIELDS,
+            _DELIVERY_RECIPIENT_FIELDS, "delivery recipient",
         ),
         **_response_fields(raw),
     )
 
 
+@_preserve_read_raw
 def parse_ticket_duplication_check_response(
     raw: Mapping[str, Any],
 ) -> TicketDuplicationCheckResponse:
@@ -2144,16 +2197,17 @@ def parse_ticket_duplication_check_response(
     )
 
 
+@_preserve_read_raw
 def parse_pbp_acceptance_specification_response(
     raw: Mapping[str, Any],
 ) -> PbpAcceptanceSpecificationResponse:
     _validate_strict_read_envelope(raw)
     tickets = []
-    for ticket in _rows(raw, "tkList"):
+    for ticket in _required_read_rows(raw, "tkList", "PBP acceptance"):
         journeys = []
-        for journey in _rows(ticket, "jrnyList"):
+        for journey in _required_read_rows(ticket, "jrnyList", "PBP ticket"):
             seats = []
-            for seat in _rows(journey, "seatList"):
+            for seat in _required_read_rows(journey, "seatList", "PBP journey"):
                 seats.append(
                     PbpAcceptanceSeat(
                         # Seat.java:53-59 는 마스크 31 로 다섯 필드 누락을 거절하므로 필수로 읽습니다.
@@ -2173,9 +2227,9 @@ def parse_pbp_acceptance_specification_response(
                 )
             journeys.append(
                 PbpAcceptanceJourney(
-                    **_nullable_string_fields(
+                    **_required_read_strings(
                         journey,
-                        _PBP_ACCEPTANCE_JOURNEY_FIELDS,
+                        _PBP_ACCEPTANCE_JOURNEY_FIELDS, "PBP journey",
                     ),
                     seats=tuple(seats),
                     raw=journey,
@@ -2183,9 +2237,9 @@ def parse_pbp_acceptance_specification_response(
             )
         tickets.append(
             PbpAcceptanceTicket(
-                **_nullable_string_fields(
+                **_required_read_strings(
                     ticket,
-                    _PBP_ACCEPTANCE_TICKET_FIELDS,
+                    _PBP_ACCEPTANCE_TICKET_FIELDS, "PBP ticket",
                 ),
                 journeys=tuple(journeys),
                 raw=ticket,
@@ -2197,6 +2251,7 @@ def parse_pbp_acceptance_specification_response(
     )
 
 
+@_preserve_read_raw
 def parse_recent_delivery_history_response(
     raw: Mapping[str, Any],
 ) -> RecentDeliveryHistoryResponse:
@@ -2205,9 +2260,9 @@ def parse_recent_delivery_history_response(
     for recipient in _rows(raw, "acepList"):
         recipients.append(
             RecentDeliveryRecipient(
-                **_nullable_string_fields(
+                **_required_read_strings(
                     recipient,
-                    _RECENT_DELIVERY_RECIPIENT_FIELDS,
+                    _RECENT_DELIVERY_RECIPIENT_FIELDS, "recent delivery recipient",
                 ),
                 raw=recipient,
             )
@@ -2265,6 +2320,7 @@ _TICKET_RESERVATION_DETAIL_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_ticket_reservation_detail_response(
     raw: Mapping[str, Any],
 ) -> TicketReservationDetailResponse:
@@ -2316,6 +2372,7 @@ _REFUND_COMMISSION_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_refund_commission_response(
     raw: Mapping[str, Any],
 ) -> RefundCommissionResponse:
@@ -2443,6 +2500,7 @@ def _discount_card_on_ticket(
     )
 
 
+@_preserve_read_raw
 def parse_refund_ticket_detail_response(
     raw: Mapping[str, Any],
 ) -> RefundTicketDetailResponse:
@@ -2543,6 +2601,7 @@ _SELF_SEAT_CHANGE_INFO_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_self_seat_change_info_response(
     raw: Mapping[str, Any],
 ) -> SelfSeatChangeInfoResponse:
@@ -2656,6 +2715,7 @@ _ORIGINAL_TICKET_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_original_ticket_inquiry_response(
     raw: Mapping[str, Any],
 ) -> OriginalTicketInquiryResponse:

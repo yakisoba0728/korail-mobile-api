@@ -30,6 +30,7 @@ from ._parsing import (
     _nullable_string_fields,
     _optional_scalar_string,
     _optional_string,
+    _preserve_read_raw,
     _row,
 )
 
@@ -85,6 +86,7 @@ _SCHEDULE_ADDED_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_limousine_schedule_response(
     response: BaseKorailResponse,
 ) -> LimousineScheduleResponse:
@@ -137,6 +139,7 @@ _SEAT_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_limousine_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> LimousineSeatInventoryResponse:

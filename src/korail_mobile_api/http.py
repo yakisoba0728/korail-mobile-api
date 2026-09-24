@@ -291,6 +291,7 @@ class KorailHttpClient:
         raise_on_fail: bool = True,
         require_envelope: bool = True,
         form_encoded: bool = True,
+        omit_empty_fields: bool = True,
     ) -> BaseKorailResponse:
         """읽기 라우트에 폼을 POST 합니다.
 
@@ -304,16 +305,18 @@ class KorailHttpClient:
                 ordered_form.extend(self.common_fields().items())
             if data:
                 ordered_form.extend(data)
-            ordered_form = [
-                item for item in ordered_form if not _is_empty_string(item[1])
-            ]
+            if omit_empty_fields:
+                ordered_form = [
+                    item for item in ordered_form if not _is_empty_string(item[1])
+                ]
         else:
             mapping_form = {}
             if include_common:
                 mapping_form.update(self.common_fields())
             if data:
                 mapping_form.update(data)
-            mapping_form = _drop_empty(mapping_form)
+            if omit_empty_fields:
+                mapping_form = _drop_empty(mapping_form)
         headers = (
             {"Content-Type": "application/x-www-form-urlencoded"}
             if form_encoded
@@ -350,6 +353,7 @@ class KorailHttpClient:
         include_dynapath: bool = True,
         raise_on_fail: bool = True,
         require_envelope: bool = True,
+        omit_empty_fields: bool = False,
     ) -> BaseKorailResponse:
         """지연할인 POST 의 URL 쿼리를 보냅니다. 폼 본문은 비어 있습니다.
 
@@ -360,6 +364,8 @@ class KorailHttpClient:
         if include_common:
             query.update(self.common_fields())
         query.update(params)
+        if omit_empty_fields:
+            query = _drop_empty(query)
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
@@ -405,6 +411,7 @@ class KorailHttpClient:
         include_dynapath: bool = True,
         raise_on_fail: bool = True,
         require_envelope: bool = True,
+        omit_empty_fields: bool = False,
     ) -> BaseKorailResponse:
         """읽기 라우트에 GET 합니다.
 
@@ -416,6 +423,8 @@ class KorailHttpClient:
             query.update(self.common_fields())
         if params:
             query.update(params)
+        if omit_empty_fields:
+            query = _drop_empty(query)
         headers = (
             self._dynapath_headers("GET", path)
             if include_dynapath

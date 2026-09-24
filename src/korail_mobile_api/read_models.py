@@ -1348,6 +1348,7 @@ class PbpAcceptanceJourney:
     withdrawal_possible_flag: str | None = None
     seats: tuple[PbpAcceptanceSeat, ...] = ()
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    member_card_no: str | None = None
 
 
 @dataclass(frozen=True)

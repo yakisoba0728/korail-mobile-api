@@ -415,6 +415,7 @@ class KorailClient:
         include_dynapath: bool = False,
         require_envelope: bool = True,
         raise_on_fail: bool = True,
+        omit_empty_fields: bool = True,
     ) -> T:
         """POST 읽기의 공통 골격: POST → 파싱 → 세션만료 복구."""
         return self._run_read(
@@ -426,6 +427,7 @@ class KorailClient:
                     include_dynapath=include_dynapath,
                     require_envelope=require_envelope,
                     raise_on_fail=raise_on_fail,
+                    omit_empty_fields=omit_empty_fields,
                 ).raw
             )
         )
@@ -437,6 +439,8 @@ class KorailClient:
         *,
         parser: Callable[[dict[str, Any]], T],
         require_envelope: bool = True,
+        include_common: bool = True,
+        omit_empty_fields: bool = False,
     ) -> T:
         """GET 읽기의 공통 골격: GET → 파싱 → 세션만료 복구."""
         return self._run_read(
@@ -444,9 +448,10 @@ class KorailClient:
                 self.http.get_json(
                     route,
                     params,
-                    include_common=True,
+                    include_common=include_common,
                     include_dynapath=False,
                     require_envelope=require_envelope,
+                    omit_empty_fields=omit_empty_fields,
                 ).raw
             )
         )
@@ -645,7 +650,14 @@ class KorailClient:
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.dlay.dptnBank.do",
+            {
+                "Device": self.config.device,
+                "Version": self.config.version,
+                "Key": self.config.key,
+            },
             parser=parse_deposit_bank_response,
+            include_common=False,
+            omit_empty_fields=False,
         )
 
     def get_delay_discount_tickets(
@@ -665,6 +677,7 @@ class KorailClient:
                     "/classes/com.korail.mobile.passCard.DelayDiscountView",
                     build_delay_discount_ticket_form(departure_date_to),
                     include_dynapath=False,
+                    omit_empty_fields=True,
                     require_envelope=False,
                 ).raw
             )
@@ -783,7 +796,7 @@ class KorailClient:
         return self._post_read(
             "/classes/com.korail.mobile.pass.trGdMenuLt.do",
             build_trip_menu_form(self.config),
-            parser=parse_trip_menu_response, include_common=False,
+            parser=parse_trip_menu_response,
         )
 
     def get_pass_menu(self, menu_no: str) -> PassMenuResponse:
@@ -823,8 +836,14 @@ class KorailClient:
         query = build_commuter_kind_menu_query(commuter_kind_code)
         return self._get_read(
             "/classes/com.korail.mobile.push.cmtrKnd.do",
-            query,
+            {
+                "Device": self.config.device,
+                "Version": self.config.version,
+                "Key": self.config.key,
+                **query,
+            },
             parser=parse_commuter_kind_menu_response,
+            include_common=False,
         )
 
     def get_product_reservations(
@@ -846,6 +865,7 @@ class KorailClient:
         return self._get_read(
             "/classes/com.korail.mobile.product.ReservationList",
             query,
+            omit_empty_fields=True,
             parser=parse_product_reservation_list_response,
             require_envelope=False,
         )
@@ -864,6 +884,7 @@ class KorailClient:
         return self._get_read(
             "/classes/com.korail.mobile.product.ReservationDetail",
             query,
+            omit_empty_fields=True,
             parser=parse_product_detail_response,
         )
 
@@ -1007,6 +1028,7 @@ class KorailClient:
         return self._get_read(
             "/classes/com.korail.mobile.reservation.tripChgDate.do",
             build_trip_change_date_form(departure_date),
+            omit_empty_fields=True,
             parser=parse_trip_change_date_response,
         )
 
