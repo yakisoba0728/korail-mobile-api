@@ -1054,7 +1054,7 @@ class KorailClient:
         """N카드 2인 승차권의 전달 전 수령자 후보를 조회합니다. 앱은 isNCardTwoPeople() 일 때
         호출합니다(DeliveryTicketFormViewModel.java:697-700). 그 판정의 보호 리터럴을 평문 Y 로 확정하지 않습니다. 2026-09-22 표본 60장은
         IRZ000005(조회 자료 없음)였습니다. 이 표본만으로 모든 비N카드 응답을 보장하지 않습니다. 전달 완료 내역은 get_pbp_acceptance_specifications
-        참고."""
+        참고. 검증 못 함: 자료가 있는 응답을 본 적이 없습니다(2026-09-22 표본 60장, 2026-09-24 모두 IRZ000005)."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.tk.dlvRcvCust.do",

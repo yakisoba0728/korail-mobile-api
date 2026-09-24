@@ -495,8 +495,8 @@ _DISCOUNT_CARD_PURCHASE_FIELDS = {
 def parse_discount_card_purchase_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardPurchaseResponse:
-    """NCardInfoOut.java:30-38 의 자체 속성 9개를 읽습니다. serializer 이름이 보호돼 Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 라이브
-    미검증입니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. NCardInfoOut.java:30-38 의 자체 속성 9개를 읽습니다. serializer 이름이 보호돼
+    Kotlin 속성명을 전송 키로 사용하는 부분은 추정이며 라이브 미검증입니다."""
     data = _response_mapping(raw)
     return DiscountCardPurchaseResponse(
         h_msg_cd=data.get("h_msg_cd"),

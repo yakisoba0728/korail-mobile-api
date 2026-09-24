@@ -1218,8 +1218,9 @@ def build_discount_card_purchase_form(
     config: KorailConfig,
     request: DiscountCardPurchaseRequest,
 ) -> dict[str, str]:
-    """N카드 미결제 구매 폼. 단일 FieldMap 라우트(NetworkApi.java:336-337)와 NCardInfoIn.java:29-39, NCardjrny.java:55 의
-    @SerialName 을 따릅니다. 배열 평탄화: NetworkService.java:15345-15367. 부가사용자 키·보호 기본값·최종 순서와 실제 구매 수용 여부는 미검증입니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 미결제 구매 폼. 단일 FieldMap 라우트(NetworkApi.java:336-337)와
+    NCardInfoIn.java:29-39, NCardjrny.java:55 의 @SerialName 을 따릅니다. 배열 평탄화: NetworkService.java:15345-15367.
+    부가사용자 키·보호 기본값·최종 순서와 실제 구매 수용 여부는 미검증입니다."""
     if not isinstance(request, DiscountCardPurchaseRequest):
         raise KorailProtocolError(
             "KORAIL discount card purchase requires an exact "
@@ -1289,10 +1290,11 @@ def build_discount_card_extension_query(
     config: KorailConfig,
     ticket: DiscountCardTicket,
 ) -> dict[str, str]:
-    """N카드 연장용 POST 폼입니다. 이름의 query 와 달리 GET 요청이 아닙니다 (NetworkApi.java:518-520). 원승차권의 네 자격증명은
-    MyTicketDetailViewModel.java:1049 에서 읽습니다(TicketDetailOut.java:117,458-470). 키
-    saleWctNo/saleDd/saleSqno/tkRetPwd 는 NCardExtensionIn.java:31-34,55,158 의 속성명에서 추정했으며 serializer 이름은 보호돼
-    있습니다. lang 포함 여부로 빌더 필드 수가 달라집니다 (CommonIn.java:467-474). 라이브 연장은 미검증입니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 연장용 POST 폼입니다. 이름의 query 와 달리 GET 요청이 아닙니다
+    (NetworkApi.java:518-520). 원승차권의 네 자격증명은 MyTicketDetailViewModel.java:1049 에서
+    읽습니다(TicketDetailOut.java:117,458-470). 키 saleWctNo/saleDd/saleSqno/tkRetPwd 는
+    NCardExtensionIn.java:31-34,55,158 의 속성명에서 추정했으며 serializer 이름은 보호돼 있습니다. lang 포함 여부로 빌더 필드 수가 달라집니다
+    (CommonIn.java:467-474). 라이브 연장은 미검증입니다."""
     if not isinstance(ticket, DiscountCardTicket):
         raise KorailProtocolError(
             "KORAIL discount card extension requires an exact "
@@ -1327,9 +1329,10 @@ def build_discount_card_reservation_form(
     *,
     card_no: str,
 ) -> dict[str, str]:
-    """N카드 승객 블록으로 미결제 홀드를 만듭니다. 결제를 수행하지 않습니다. 같은 예약 라우트(NetworkApi.java:752-753)에서 N카드 분기는
-    Passengers.java:731,765-766, 네 승객 키는 TicketReservationInPassengerInfo.java:55,105-117 입니다.
-    ReqDiscount.java:36 의 N_CARD 코드 평문은 보호돼 있고 이 경로의 라이브 수용은 미검증입니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 승객 블록으로 미결제 홀드를 만듭니다. 결제를 수행하지 않습니다. 같은 예약
+    라우트(NetworkApi.java:752-753)에서 N카드 분기는 Passengers.java:731,765-766, 네 승객 키는
+    TicketReservationInPassengerInfo.java:55,105-117 입니다. ReqDiscount.java:36 의 N_CARD 코드 평문은 보호돼 있고 이 경로의 라이브
+    수용은 미검증입니다."""
     form = build_reservation_form(config, train)
     rebuilt: dict[str, str] = {}
     for name, value in form.items():

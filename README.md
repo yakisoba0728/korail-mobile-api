@@ -48,14 +48,15 @@
 
 ### N카드(할인카드)
 
-N카드 관련 메서드는 앱 코드와 같게 만들어 두었지만, N카드가 없는 계정이라 성공 응답을 실서버에서 확인하지 못했습니다.
+N카드 관련 기능은 앱 코드와 같게 만들어 두었지만, N카드가 없는 계정이라 **모두 검증 못 함**입니다. 코드에서도 해당 메서드·요청 빌더·파서·모델 설명에 "검증 못 함"을 달아 두었습니다.
 
-| 메서드 | 역할 | 실서버 |
+| 메서드 | 역할 | 검증 못 한 이유 |
 |---|---|---|
-| `get_discount_card_usage_history` | N카드 사용 내역 | 서버 응답은 받음(`ERR000100` 조회 자료 없음) |
-| `get_discount_card_schedule` | N카드로 탈 수 있는 열차 | 서버 응답은 받음(`WRR000100` 입력값 오류) |
+| `get_discount_card_usage_history` | N카드 사용 내역 | N카드 없음(서버는 `ERR000100` 조회 자료 없음) |
+| `get_discount_card_schedule` | N카드로 탈 수 있는 열차 | N카드 없음(서버는 `WRR000100` 입력값 오류) |
+| `get_delivery_recipient` | N카드 2인 승차권의 수령자 후보 | N카드 승차권 없음(서버는 `IRZ000005` 조회 자료 없음) |
 | `register_discount_card` | N카드 구매(결제 전 생성) | 실제 구매로 이어져 시도하지 않음 |
-| `extend_discount_card` | N카드 기간 연장 | 확인 못 함 |
-| `reserve_with_discount_card` | N카드로 좌석 홀드 | 확인 못 함 |
+| `extend_discount_card` | N카드 기간 연장 | N카드 없음 |
+| `reserve_with_discount_card` | N카드로 좌석 홀드 | N카드 없음 |
 
 N카드 결제는 여행상품과 같은 통합결제(`pay.intgStl.do`)라 역시 보호 상수 `stlPrsJobId`에 막혀 있습니다.

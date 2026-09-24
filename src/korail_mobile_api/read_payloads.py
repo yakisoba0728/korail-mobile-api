@@ -533,16 +533,16 @@ def build_mileage_history_form(
 
 
 def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
-    """``ticket.dcntCrdUseQry.do`` — ``NetworkApi.java:218``."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. ``ticket.dcntCrdUseQry.do`` — ``NetworkApi.java:218``."""
     return {"dcntCrdNo": _required_text(card_no, "card_no")}
 
 
 @dataclass(frozen=True)
 class DiscountCardScheduleRequest:
-    """할인카드 운행일정 입력(NetworkApi.java:340, NCardScheduleIn.java:30-40). 앱 생성자:
-    CheckUsageNCardSectionViewModel.java:390-396. dptTm·dirtChtnDvCd· TrainGroup.KTX 의 값은 보호돼 기본값 000000/1/109 의
-    평문 근거가 아닙니다(TrainGroup.java:36,48). 2026-09-21 관측: usable_trip_count="" 는 WRR000100(usePsbTno)으로 거절됐습니다. 올바른
-    기본값은 미확인이라 호출자가 실제 카드의 값을 제공해야 합니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 할인카드 운행일정 입력(NetworkApi.java:340, NCardScheduleIn.java:30-40). 앱
+    생성자: CheckUsageNCardSectionViewModel.java:390-396. dptTm·dirtChtnDvCd· TrainGroup.KTX 의 값은 보호돼 기본값
+    000000/1/109 의 평문 근거가 아닙니다(TrainGroup.java:36,48). 2026-09-21 관측: usable_trip_count="" 는
+    WRR000100(usePsbTno)으로 거절됐습니다. 올바른 기본값은 미확인이라 호출자가 실제 카드의 값을 제공해야 합니다."""
 
     card_kind_management_no: str
     departure_station_name: str
@@ -596,10 +596,10 @@ _B2N_CARD_KIND_MANAGEMENT_NOS = frozenset({"B2N18120402", "B2N18120403"})
 def build_discount_card_schedule_query(
     request: DiscountCardScheduleRequest,
 ) -> dict[str, str]:
-    """useTrmDno·qryPgNo 가 None 이면 폼에서 생략합니다. 앱은 DTO→KJson→FieldMap 경로입니다(NetworkApi.java:339-341,
-    NetworkService.java:2387-2393). 생성자가 값을 넘긴다는 사실(CheckUsageNCardSectionViewModel.java:396)만으로 실제 전송 키가 항상
-    존재한다고 단정할 수 없습니다. 빈 값은 후속 평탄화에서 제거될 수 있고 encodeDefaults·전송 키의 보호 리터럴도 미확인입니다. 카드 없는 계정은 EAZ000028 로 중단돼 이
-    차이를 라이브 검증하지 못했습니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. useTrmDno·qryPgNo 가 None 이면 폼에서 생략합니다. 앱은 DTO→KJson→FieldMap
+    경로입니다(NetworkApi.java:339-341, NetworkService.java:2387-2393). 생성자가 값을 넘긴다는
+    사실(CheckUsageNCardSectionViewModel.java:396)만으로 실제 전송 키가 항상 존재한다고 단정할 수 없습니다. 빈 값은 후속 평탄화에서 제거될 수 있고
+    encodeDefaults·전송 키의 보호 리터럴도 미확인입니다. 카드 없는 계정은 EAZ000028 로 중단돼 이 차이를 라이브 검증하지 못했습니다."""
     query = {
         "dptDt": _ascii_digits(request.departure_date, "departure_date", lengths=frozenset({8})),
         "dptRsStnNm": _required_text(
@@ -842,6 +842,7 @@ class TicketDuplicationCheckRequest:
 def build_delivery_recipient_form(
     ticket: OriginalTicketReference,
 ) -> dict[str, str]:
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
     reference = _exact_original_ticket_reference(ticket)
     return {
         "saleWctNo": reference.sale_window_no,

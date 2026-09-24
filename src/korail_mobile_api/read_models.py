@@ -918,8 +918,8 @@ class PassScheduleResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DiscountCardSection:
-    """N카드 적용 구간(AppSegInfo.java:24-37, DiscountCardInfo.java:28). @SerialName 별칭이 없는 키는 보호된 serializer 대신 속성명을
-    사용한 추정입니다. 일정 조회가 받는 역 이름을 구간에서 확인할 수 있습니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 적용 구간(AppSegInfo.java:24-37, DiscountCardInfo.java:28).
+    @SerialName 별칭이 없는 키는 보호된 serializer 대신 속성명을 사용한 추정입니다. 일정 조회가 받는 역 이름을 구간에서 확인할 수 있습니다."""
 
     departure_station_name: str | None = None
     arrival_station_name: str | None = None
@@ -936,9 +936,10 @@ class DiscountCardSection:
 
 @dataclass(frozen=True)
 class DiscountCardOnTicket:
-    """상세의 선택 할인카드(DiscountCardInfo.java:27-32, TicketDetailOut.java:49,438). 카드번호는 사용내역·할인 예약에 사용합니다. 앱도 N카드 예약
-    모드에서 승객 행에 넣습니다 (Passengers.java:766, TicketReservationInPassengerInfo.java:26-34). 할인 코드 153 은 라이브 기록에 의존하며
-    ReqDiscount.java:36 의 보호된 평문은 미확인입니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 상세의 선택 할인카드(DiscountCardInfo.java:27-32,
+    TicketDetailOut.java:49,438). 카드번호는 사용내역·할인 예약에 사용합니다. 앱도 N카드 예약 모드에서 승객 행에 넣습니다 (Passengers.java:766,
+    TicketReservationInPassengerInfo.java:26-34). 할인 코드 153 은 라이브 기록에 의존하며 ReqDiscount.java:36 의 보호된 평문은
+    미확인입니다."""
 
     #: ``h_dcnt_crd_no``(``DiscountCardInfo.java:113`` 의 ``@SerialName``).
     card_no: str | None = None
@@ -1031,8 +1032,8 @@ class MileageHistoryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DiscountCardUsage:
-    """N카드 사용 내역(NCardHistoryInfo.java:22,224). 전송 키는 속성명에 따른 추정입니다. 화면 사용:
-    NCardHistoryScreenKt.java:301,431,439,526,528, NCardHistoryViewModel.java:123,141.
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 사용 내역(NCardHistoryInfo.java:22,224). 전송 키는 속성명에 따른 추정입니다. 화면
+    사용: NCardHistoryScreenKt.java:301,431,439,526,528, NCardHistoryViewModel.java:123,141.
     sale_date/sequence/window_no 가 OriginalTicketReference 로 바로 호환된다고 가정하지 마십시오. 2026-09-22 카드번호 4종은 모두
     ERR000100 으로 채워진 응답을 확인하지 못했습니다."""
 
@@ -1055,7 +1056,7 @@ class DiscountCardUsage:
 
 @dataclass(frozen=True)
 class DiscountCardUsageListResponse(BaseKorailResponse):
-    """``ticket.dcntCrdUseQry.do`` — 카드가 쓰인 여행 목록.
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. ``ticket.dcntCrdUseQry.do`` — 카드가 쓰인 여행 목록.
 
     ``NCardHistoryOut.java:27,82`` 가 싣는 것은 ``@SerialName("tkUseList")`` 하나뿐이라, 전선에 없는 요약 필드를 이 모델도 만들어 붙이지
     않습니다."""
@@ -1065,8 +1066,9 @@ class DiscountCardUsageListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DiscountCardScheduleTrain:
-    """N카드 사용 가능 열차(NCardScheduleItem.java:30-49). 보호된 serializer 대신 속성명으로 읽습니다. 앱이 표시용으로 만드는 Spanned
-    stationInfo 를 서버 필드로 모델링하지 않습니다. 명시적 @SerialName 이 없다는 사실만으로 실제 전송 키를 확정할 수는 없습니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 사용 가능 열차(NCardScheduleItem.java:30-49). 보호된 serializer 대신
+    속성명으로 읽습니다. 앱이 표시용으로 만드는 Spanned stationInfo 를 서버 필드로 모델링하지 않습니다. 명시적 @SerialName 이 없다는 사실만으로 실제 전송 키를 확정할
+    수는 없습니다."""
 
     train_no: str | None = None
     train_group_code: str | None = None
@@ -1099,8 +1101,9 @@ class DiscountCardScheduleTrain:
 
 @dataclass(frozen=True)
 class DiscountCardScheduleResponse(BaseKorailResponse):
-    """N카드 일정(NetworkApi.java:339-341, NCardScheduleOut.java:27-28). DTO 는 trnScdlList 만 선언합니다. 이 파서는
-    following_page_exists 를 채우지 않으므로 이 필드를 폴링 신호로 쓰지 마십시오. 실제 서버의 페이지 지원 여부는 미확인입니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 일정(NetworkApi.java:339-341, NCardScheduleOut.java:27-28). DTO
+    는 trnScdlList 만 선언합니다. 이 파서는 following_page_exists 를 채우지 않으므로 이 필드를 폴링 신호로 쓰지 마십시오. 실제 서버의 페이지 지원 여부는
+    미확인입니다."""
 
     #: 항상 None. DiscountCardScheduleResponse 설명 참고.
     following_page_exists: str | None = None
@@ -1310,6 +1313,7 @@ class PriceFareQuoteResponse(BaseKorailResponse):
 
 @dataclass(frozen=True, kw_only=True)
 class DeliveryRecipientResponse(BaseKorailResponse):
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
     acceptance_customer_management_no: str
     acceptance_customer_name: str
     acceptance_customer_phone: str

@@ -566,8 +566,9 @@ class PaidTicket:
 
 @dataclass(frozen=True)
 class DiscountCardSectionRequest:
-    """N카드 구매 구간. DTO 키는 밑줄로 끝나며(NCardjrny.java:96-112) 공통 평탄화가 1-기반 인덱스를 붙입니다(NetworkService.java:15345-15366).
-    구간 목록 선언: NCardInfoIn.java:37, 라우트: NetworkApi.java:335-337. 허용 1~3구간은 라이브러리 상한입니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 구매 구간. DTO 키는 밑줄로 끝나며(NCardjrny.java:96-112) 공통 평탄화가 1-기반 인덱스를
+    붙입니다(NetworkService.java:15345-15366). 구간 목록 선언: NCardInfoIn.java:37, 라우트: NetworkApi.java:335-337. 허용
+    1~3구간은 라이브러리 상한입니다."""
 
     run_date: str
     train_no: str
@@ -578,7 +579,8 @@ class DiscountCardSectionRequest:
 
 @dataclass(frozen=True)
 class DiscountCardAdditionalUser:
-    """2인용 N카드의 추가 사용자. NCardInfoIn.java:30-34 의 속성명 자체에 _1 이 포함됩니다. serializer 이름은 보호돼 전송 키는 속성명에 따른 추정입니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 2인용 N카드의 추가 사용자. NCardInfoIn.java:30-34 의 속성명 자체에 _1 이 포함됩니다.
+    serializer 이름은 보호돼 전송 키는 속성명에 따른 추정입니다."""
 
     customer_no: str
     name: str
@@ -587,8 +589,8 @@ class DiscountCardAdditionalUser:
 
 @dataclass(frozen=True)
 class DiscountCardPurchaseRequest:
-    """N카드 구매 정보(NetworkApi.java:335-337). 자체 필드는 NCardInfoIn.java:29-39 참고. 명시적 별칭이 없는 필드의 전송 키는 보호된 serializer
-    대신 속성명을 사용한 추정입니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 구매 정보(NetworkApi.java:335-337). 자체 필드는 NCardInfoIn.java:29-39
+    참고. 명시적 별칭이 없는 필드의 전송 키는 보호된 serializer 대신 속성명을 사용한 추정입니다."""
 
     card_kind_management_no: str
     customer_no: str
@@ -600,8 +602,9 @@ class DiscountCardPurchaseRequest:
 
 @dataclass(frozen=True)
 class DiscountCardTicket:
-    """기간연장용 원표 식별자(MyTicketDetailViewModel.java:1049, NCardExtensionIn.java:180). 판매일은 h_orgtk_ret_sale_dt 이므로
-    현재 h_sale_dt 를 쓰는 PaidTicket 환불과 다릅니다. 출처: TicketDetailOut.java:458,462,466,470."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 기간연장용 원표 식별자(MyTicketDetailViewModel.java:1049,
+    NCardExtensionIn.java:180). 판매일은 h_orgtk_ret_sale_dt 이므로 현재 h_sale_dt 를 쓰는 PaidTicket 환불과 다릅니다. 출처:
+    TicketDetailOut.java:458,462,466,470."""
 
     sale_window_no: str
     sale_date: str
@@ -611,9 +614,9 @@ class DiscountCardTicket:
 
 @dataclass(frozen=True)
 class DiscountCardPurchaseResponse(BaseKorailResponse):
-    """N카드 구매의 결제 전 응답(NCardInfoOut.java:25-38, NetworkApi.java:335-337). 자체 전송 키는 속성명에 따른 추정입니다.
-    lump_settlement_target_no 를 받았다고 결제 완료는 아닙니다. 앱은 이를 결제 화면에 전달해 별도 정산에 사용합니다(PayRoute.java:1323,
-    PayViewModel.java:6628)."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 구매의 결제 전 응답(NCardInfoOut.java:25-38, NetworkApi.java:335-337).
+    자체 전송 키는 속성명에 따른 추정입니다. lump_settlement_target_no 를 받았다고 결제 완료는 아닙니다. 앱은 이를 결제 화면에 전달해 별도 정산에
+    사용합니다(PayRoute.java:1323, PayViewModel.java:6628)."""
 
     #: ``lumpStlTgtNo`` — 결제가 청구할 정산 대상.
     lump_settlement_target_no: str | None = None

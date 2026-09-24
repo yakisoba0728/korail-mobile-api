@@ -1715,6 +1715,7 @@ _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS = {
 def parse_discount_card_usage_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardUsageListResponse:
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
     _validate_strict_read_envelope(raw)
     items = []
     for item in _rows(raw, "tkUseList"):
@@ -1736,6 +1737,7 @@ def parse_discount_card_usage_response(
 def parse_discount_card_schedule_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardScheduleResponse:
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
     _validate_strict_read_envelope(raw)
     trains = []
     for item in _rows(raw, "trnScdlList"):
@@ -2147,6 +2149,7 @@ _RECENT_DELIVERY_RECIPIENT_FIELDS = {
 def parse_delivery_recipient_response(
     raw: Mapping[str, Any],
 ) -> DeliveryRecipientResponse:
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
     _validate_strict_read_envelope(raw)
     return DeliveryRecipientResponse(
         **_required_read_strings(
@@ -2444,8 +2447,9 @@ _DISCOUNT_CARD_SECTION_FIELDS = {
 def _discount_card_on_ticket(
     raw: Mapping[str, Any],
 ) -> DiscountCardOnTicket | None:
-    """상세의 선택 dcnt_crd_info(TicketDetailOut.java:438). 없으면 None 입니다. 구간 키 appSegList 는 속성명에 따른
-    추정(DiscountCardInfo.java:28,244)이며 나머지 4개 이름은 명시적 @SerialName 입니다(DiscountCardInfo.java:113-125)."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 상세의 선택 dcnt_crd_info(TicketDetailOut.java:438). 없으면 None 입니다. 구간 키
+    appSegList 는 속성명에 따른 추정(DiscountCardInfo.java:28,244)이며 나머지 4개 이름은 명시적 @SerialName
+    입니다(DiscountCardInfo.java:113-125)."""
     info = _optional_mapping(raw, "dcnt_crd_info")
     if info is None:
         return None
