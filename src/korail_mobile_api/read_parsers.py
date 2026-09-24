@@ -498,6 +498,8 @@ _PRODUCT_RESERVATION_FIELDS: dict[str, str] = {
     "payment_deadline": "strStlDlnDt",
     "payment_status": "strStlSttCd",
     "virtual_reservation_no": "strVrRsvNo",
+    "reservation_sequence": "strVrRsvSqno",
+    "reservation_status_code": "strRsvSttCd",
 }
 
 _PRODUCT_DETAIL_FIELDS: dict[str, str] = {
@@ -510,6 +512,7 @@ _PRODUCT_DETAIL_FIELDS: dict[str, str] = {
     "total_amount": "strTotStlAmt",
     "usage_period": "strUtlTrmCont",
     "virtual_reservation_no": "strVrRsvNo",
+    "goods_sequence": "strGdSqno",
 }
 
 _RECEIPT_PAYMENT_FIELDS: dict[str, str] = {

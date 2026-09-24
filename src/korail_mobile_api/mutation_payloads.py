@@ -48,7 +48,7 @@ from .mutation_models import (
     ReservationHoldResponse,
     StationRefundExecutionRequest,
 )
-from .read_models import CartItem, RefundCommissionResponse, TrainScheduleItem
+from .read_models import CartItem, ProductDetailResponse, RefundCommissionResponse, TrainScheduleItem
 
 
 _DATE_RE = re.compile(r"[0-9]{8}")
@@ -1453,6 +1453,22 @@ def build_price_recalculation_form(
             )
         form[wire_name] = value
     return form
+
+
+def build_product_cancel_query(detail: ProductDetailResponse) -> dict[str, str]:
+    """여행상품 예약 취소 쿼리(product.ReservationCancel, GET). ProductCancelIn.java:67-70 의 txtVrRsNo·txtGdSqno 이며 둘 다
+    get_product_detail 결과에서 옵니다(ProductReservationListScreenKt.java:1252-1253,
+    MyTicketDetailViewModel.java:3290)."""
+    if not isinstance(detail, ProductDetailResponse):
+        raise KorailProtocolError("detail must be a ProductDetailResponse from get_product_detail")
+    return {
+        "txtVrRsNo": _required_mutation_text(
+            detail.virtual_reservation_no, field="virtual_reservation_no", context="product cancel"
+        ),
+        "txtGdSqno": _required_mutation_text(
+            detail.goods_sequence, field="goods_sequence", context="product cancel"
+        ),
+    }
 
 
 def build_maas_cancel_form(

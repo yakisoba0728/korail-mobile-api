@@ -706,6 +706,14 @@ class CartAddResponse(BaseKorailResponse):
 
 
 @dataclass(frozen=True)
+class ProductCancelResponse(BaseKorailResponse):
+    """여행상품 예약 취소 결과(product.ReservationCancel, ProductCancelOut.java)."""
+
+    #: ``intgMsgCd`` — 통합 메시지 코드.
+    integrated_message_code: str | None = None
+
+
+@dataclass(frozen=True)
 class MaasCancelResponse(BaseKorailResponse):
     """사용하지 않음(기록용, _maas_unsupported 참고). 미결제 부가서비스 해제 결과(addService.cancelPay.do, MaasCancelOut.java)."""
 

@@ -372,6 +372,11 @@ class ProductReservation:
     payment_status: str | None = None
     virtual_reservation_no: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    #: ``strVrRsvSqno`` — 예약 상품 순번. 앱 장바구니는 결제정보 조회에 이 값을 씁니다
+    #: (BasketTicketViewModel$getPaymentDataForSelectedItems$2$deferredList$1$1.java:235-238).
+    reservation_sequence: str | None = None
+    #: ``strRsvSttCd`` — 예약 상태 코드. 결제·취소 버튼을 가르는 앱의 비교값은 보호돼 있습니다(ProductReservationListScreenKt.java:744-749).
+    reservation_status_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -393,6 +398,9 @@ class ProductDetailResponse(BaseKorailResponse):
     included_item_names: tuple[str, ...] = ()
     virtual_reservation_no: str | None = None
     detail_raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    #: ``mainInfo.strGdSqno`` — 상품 순번. 여행상품 취소(product.ReservationCancel 의 txtGdSqno)에 씁니다
+    #: (ProductReservationListScreenKt.java:1252-1253, MyTicketDetailViewModel.java:3290).
+    goods_sequence: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)

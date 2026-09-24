@@ -16,6 +16,7 @@ from .errors import KorailProtocolError
 from .mutation_models import (
     CartAddResponse,
     MaasCancelResponse,
+    ProductCancelResponse,
     CartDiscountAddition,
     DiscountCardPurchaseResponse,
     RefundTicketResponse,
@@ -526,6 +527,15 @@ def _cart_discount_additions(
             ),
         )
         for item in _nested_rows(data, "psgDiscAdd_infos", "psgDiscAdd_info")
+    )
+
+
+def parse_product_cancel_response(raw: Mapping[str, Any]) -> ProductCancelResponse:
+    """product.ReservationCancel 응답. intgMsgCd 는 선택 스칼라입니다(ProductCancelOut.java)."""
+    data = _response_mapping(raw)
+    return ProductCancelResponse(
+        **_base_fields(data),
+        integrated_message_code=_optional_scalar_string(data, "intgMsgCd", "product cancel"),
     )
 
 

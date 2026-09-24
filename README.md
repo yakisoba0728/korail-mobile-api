@@ -33,3 +33,9 @@
 앱 코드와 같게 만들어 두었지만 실서버에서 확인하지 못한 세 호출(환불 수수료 `maas.cncFee.do`, 결제 전 상태 확인 `maas.rsvStt.do`, 결제 전 해제 `addService.cancelPay.do`)은 공개 API에서 빼고 기록용으로 `src/korail_mobile_api/_maas_unsupported.py`에 남겨 두었습니다. 이 모듈은 어디에서도 쓰지 않습니다.
 
 공항버스는 KORAIL 자체 예약이라 조회·예약·결제·환불·취소를 모두 지원합니다(`reserve_limousine`).
+
+### 여행상품 예약·결제·환불
+
+지역 여행상품·테마열차 같은 KORAIL 여행상품은 KORAIL 웹(`/ebizmk/prd/rvStep1.do` → `rvStep2.do` → `reservation.do`)에서만 예약할 수 있고, 앱에는 예약을 만드는 API가 없습니다. 웹의 결제 버튼은 앱으로 넘기는 링크(`korailtalk://payment`)이고, 앱은 통합결제(`pay.intgStl.do`)로 결제하는데 그 폼의 `stlPrsJobId`가 앱에서 보호돼 있습니다.
+
+그래서 라이브러리는 이미 만들어진 여행상품 예약의 조회(`get_product_reservations`, `get_product_detail`)와 취소(`cancel_product_reservation`)만 지원합니다. 2026-09-24에 웹에서 만든 결제 전 예약으로 조회와 취소(수수료 0원)를 확인했습니다. 결제된 여행상품의 환불은 결제를 할 수 없어 확인하지 못했습니다.

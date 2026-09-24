@@ -59,6 +59,7 @@ from .models import (
 )
 from .mutation_models import (
     CartAddResponse,
+    ProductCancelResponse,
     CardPayment,
     CartAddRequest,
     DiscountCardPurchaseRequest,
@@ -78,6 +79,7 @@ from .mutation_models import (
 )
 from .mutation_parsers import (
     parse_cart_add_response,
+    parse_product_cancel_response,
     parse_discount_card_purchase_response,
     parse_refund_ticket_response,
     parse_reservation_hold_response,
@@ -88,6 +90,7 @@ from .mutation_parsers import (
 from .mutation_payloads import (
     build_card_payment_form,
     build_cart_add_form,
+    build_product_cancel_query,
     build_discount_card_extension_query,
     build_discount_card_purchase_form,
     build_discount_card_reservation_form,
@@ -835,7 +838,9 @@ class KorailClient:
         reservation_status_code: str | None = None,
         payment_status_code: str | None = None,
     ) -> ProductReservationListResponse:
-        """로그인 계정이 예약한 여행상품 목록 한 페이지를 조회합니다."""
+        """로그인 계정이 예약한 여행상품 목록 한 페이지를 조회합니다. 여행상품 예약은 KORAIL 웹(/ebizmk/prd/rvStep1.do →
+        rvStep2.do → reservation.do)에서만 만들어집니다. 2026-09-24 라이브: 웹에서 만든 결제 전 예약 1건이 예약확정(03)·결제상태 01 로
+        나왔고, 취소 뒤에는 목록에 예약취소(고객)(05)로 남았습니다."""
         self._require_session()
         query = build_product_reservations_query(
             page_no,
@@ -856,7 +861,9 @@ class KorailClient:
         reservation_no: str,
         reservation_sequence: str | None = None,
     ) -> ProductDetailResponse:
-        """여행상품 예약 한 건의 상세와 취소 조건을 조회합니다."""
+        """여행상품 예약 한 건의 상세와 취소 조건을 조회합니다. reservation_sequence 는 목록 행의 reservation_sequence 입니다.
+        2026-09-24 라이브: 고흥군 당일 자유여행 결제 전 예약에서 받을 금액 15,400원, 취소 수수료 0원, goods_sequence 0001, 포함
+        항목(무궁화 1972·1977 열차)을 읽었습니다."""
         self._require_session()
         query = build_product_detail_query(
             reservation_no,
@@ -867,6 +874,25 @@ class KorailClient:
             query,
             omit_empty_fields=True,
             parser=parse_product_detail_response,
+        )
+
+    def cancel_product_reservation(self, detail: ProductDetailResponse) -> ProductCancelResponse:
+        """여행상품 예약을 취소합니다(product.ReservationCancel, GET). detail 은 get_product_detail 의 결과입니다. 앱은 결제 전 예약은 이
+        호출로 해제하고(여행상품 목록의 X 버튼, 장바구니 삭제), 결제된 예약은 같은 호출로 환불합니다(MyTicketDetailViewModel.java:1183-1192,
+        3271-3291). 수수료는 따로 묻지 않고 상세의 cancellation_fee·cancellation_amount 로 보여 줄 뿐이니 먼저 확인하십시오. 변경 요청이므로
+        실패해도 자동으로 다시 보내지 않습니다. 2026-09-24 라이브: 결제 전 예약을 SUCC 로 취소했고 목록 상태가 05 로 바뀌었습니다. 결제된 예약의
+        환불은 확인하지 못했습니다(여행상품 결제는 pay.intgStl.do 의 보호 상수 stlPrsJobId 때문에 라이브러리로 할 수 없습니다)."""
+        self._require_session("product cancel requires")
+        query = build_product_cancel_query(detail)
+        return self._run_read(
+            lambda: parse_product_cancel_response(
+                self.http.get_json(
+                    "/classes/com.korail.mobile.product.ReservationCancel",
+                    query,
+                    include_common=True,
+                    include_dynapath=False,
+                ).raw
+            )
         )
 
     def get_ticket_receipt(
