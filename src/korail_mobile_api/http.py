@@ -8,7 +8,6 @@ origin(``config.base_url``)은 검사하지 않고 라우트 허용목록도 없
 ``KorailConfig.lang`` 을 채웠을 때만 붙습니다. 대기열은 별도 netfunnel 모듈이 전송합니다."""
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 from urllib.parse import urlencode
@@ -110,12 +109,20 @@ def _dynapath_block_payload(payload: Any) -> dict[str, Any] | None:
     return None
 
 
-def _raise_for_status(response: httpx.Response, *, path: str) -> None:
+def _send(send: Callable[[], httpx.Response], *, method: str, path: str) -> httpx.Response:
+    try:
+        return send()
+    except (httpx.HTTPError, httpx.InvalidURL) as exc:
+        raise KorailTransportError(f"KORAIL transport failed for {method} {path}") from exc
+
+
+def _decode_response(response: httpx.Response, *, path: str) -> Any:
+    """본문을 한 번만 해석합니다. 판정 순서: DynaPath 차단(보호 경로, 상태 코드와 무관) → 2xx 가 아닌 상태 → JSON 오류."""
+    try:
+        payload, decoded = response.json(), True
+    except ValueError:
+        payload, decoded = None, False
     if path in DYNAPATH_ALLOWLIST_PATHS:
-        try:
-            payload = response.json()
-        except ValueError:
-            payload = None
         blocked_payload = _dynapath_block_payload(payload)
         if blocked_payload is not None:
             message = blocked_payload.get("message")
@@ -130,6 +137,9 @@ def _raise_for_status(response: httpx.Response, *, path: str) -> None:
             f"KORAIL HTTP {response.status_code} for "
             f"{response.request.method} {response.request.url.path}"
         )
+    if not decoded:
+        raise KorailProtocolError("KORAIL response body was not valid JSON")
+    return payload
 
 
 def _is_empty_string(value: Any) -> bool:
@@ -141,23 +151,6 @@ def _drop_empty(mapping: Mapping[str, Any]) -> dict[str, Any]:
 
     앱의 평탄화기 근거: NetworkService.java:15342. key= 로 보내는 것과 구분해야 합니다."""
     return {key: value for key, value in mapping.items() if not _is_empty_string(value)}
-
-
-def _finish_mutation(
-    response: httpx.Response,
-    *,
-    path: str,
-    raise_on_fail: bool,
-) -> BaseKorailResponse:
-    """변경 응답의 HTTP 상태·JSON·봉투를 처리합니다.
-
-    기본적으로 strResult 를 요구하되 raise_on_fail=False 는 실패 판정을 완화합니다. 봉투 타입 검사와 P058 처리는 그대로입니다."""
-    _raise_for_status(response, path=path)
-    try:
-        payload = response.json()
-    except (json.JSONDecodeError, ValueError) as exc:
-        raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
-    return parse_base_response(payload, raise_on_fail=raise_on_fail, require_result=True)
 
 
 class KorailHttpClient:
@@ -260,17 +253,7 @@ class KorailHttpClient:
         require_envelope: bool,
     ) -> BaseKorailResponse:
         """읽기 응답을 처리합니다. require_envelope 및 경로별 봉투 생략 규칙에 따릅니다."""
-        try:
-            response = send()
-        except (httpx.HTTPError, httpx.InvalidURL) as exc:
-            raise KorailTransportError(
-                f"KORAIL transport failed for {method} {path}"
-            ) from exc
-        _raise_for_status(response, path=path)
-        try:
-            payload = response.json()
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise KorailProtocolError("KORAIL response body was not valid JSON") from exc
+        payload = _decode_response(_send(send, method=method, path=path), path=path)
         # 2026-09-22 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다.
         # 봉투 누락 허용과 존재하는 FAIL/P058 판정은 별개이며 raw 는 그대로 보존합니다.
         common_out = path not in _NON_COMMON_OUT_READ_PATHS
@@ -384,20 +367,18 @@ class KorailHttpClient:
     ) -> BaseKorailResponse:
         """공통 필드까지 완성된 변경 폼을 전송합니다.
 
-        기본 봉투 검사는 _finish_mutation 에 따릅니다. raise_on_fail=False 는 실패 판정을 완화합니다."""
+        strResult 를 요구하며 raise_on_fail=False 는 실패 판정만 완화합니다. 봉투 타입 검사와 P058 처리는 그대로입니다."""
         # 빈 문자열 생략 규칙과 근거는 _drop_empty 참고.
         data = _drop_empty(data)
         headers = {
             "Content-Type": "application/x-www-form-urlencoded"
         }
         headers.update(self._dynapath_headers("POST", path))
-        try:
-            response = self._client.post(path, data=dict(data), headers=headers)
-        except (httpx.HTTPError, httpx.InvalidURL) as exc:
-            raise KorailTransportError(
-                f"KORAIL transport failed for POST {path}"
-            ) from exc
-        return _finish_mutation(response, path=path, raise_on_fail=raise_on_fail)
+        response = _send(
+            lambda: self._client.post(path, data=dict(data), headers=headers), method="POST", path=path
+        )
+        payload = _decode_response(response, path=path)
+        return parse_base_response(payload, raise_on_fail=raise_on_fail, require_result=True)
 
     def get_json(
         self,
