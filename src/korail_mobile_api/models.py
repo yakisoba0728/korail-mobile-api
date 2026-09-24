@@ -143,6 +143,8 @@ class KorailStation:
     popup_message: str | None = None
     popup_link_title: str | None = None
     popup_link_url: str | None = None
+    area: str | None = None
+    stop: str | None = None
 
 
 @dataclass(frozen=True)
@@ -330,6 +332,8 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
     ("departure_date", "h_dpt_dt", "dptDt"),
     ("departure_time", "h_dpt_tm", "dptTm"),
     ("arrival_time", "h_arv_tm", "arvTm"),
+    #: ``h_arv_dt`` 도착일(TrainScheduleOutTrainInfo.java:1068). 자정을 넘는 열차는 출발일과 다릅니다.
+    ("arrival_date", "h_arv_dt", None),
     ("run_date", "h_run_dt", "runDt"),
     ("train_class_code", "h_trn_clsf_cd", "trnClsfCd"),
     ("departure_run_order", "h_dpt_stn_run_ordr", "dptStnRunOrdr"),
@@ -495,6 +499,7 @@ class TrainSummary:
     #: ``h_free_rsv_nm`` — 자유석 쪽 같은 문구. 값에 줄바꿈이 들어옵니다 — 2026-09-22 서울→부산 20261015 에서 ``'역발매중\n(1량)'``,
     #: ``'역발매중\n(2량)'`` 을 받았습니다. 한 줄에 찍을 곳이라면 호출자가 직접 다듬어야 합니다.
     free_availability_name: str | None = None
+    arrival_date: str | None = None
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
@@ -628,6 +633,8 @@ class TrainSearchMetadata:
         default_factory=dict[str, Any],
         compare=False,
     )
+    agreement_text: str | None = None
+    remaining_seat_count: str | None = None
 
 
 @dataclass(frozen=True)

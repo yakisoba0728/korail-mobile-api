@@ -21,6 +21,7 @@ from ._parsing import (
     _optional_scalar_string,
     _optional_string,
     _present_strings,
+    _preserve_read_raw,
     _reject_non_string_envelope_fields,
     _required_integer,
     _required_string,
@@ -893,6 +894,7 @@ def parse_crew_request_list_response(
     return CrewRequestListResponse(items=items, **_response_fields(raw))
 
 
+@_preserve_read_raw
 def parse_service_status_response(
     raw: Mapping[str, Any],
 ) -> ServiceStatusResponse:
@@ -1348,6 +1350,7 @@ def parse_reservation_history_response(
     )
 
 
+@_preserve_read_raw
 def parse_free_seat_car_response(
     raw: Mapping[str, Any],
 ) -> FreeSeatCarResponse:
@@ -1366,6 +1369,7 @@ def parse_free_seat_car_response(
     )
 
 
+@_preserve_read_raw
 def parse_guide_seat_condition_response(
     raw: Mapping[str, Any],
 ) -> GuideSeatConditionResponse:
@@ -1477,6 +1481,7 @@ def parse_seat_assignment_schedule_response(
     )
 
 
+@_preserve_read_raw
 def parse_merge_seats_inquiry_response(
     raw: Mapping[str, Any],
 ) -> MergeSeatsInquiryResponse:
@@ -1907,6 +1912,7 @@ def _optional_add_srv_item(
     return _parse_add_srv_item(item, item_context, info_context)
 
 
+@_preserve_read_raw
 def parse_maas_service_detail_list_response(
     raw: Mapping[str, Any],
 ) -> MaasServiceDetailListResponse:
@@ -2045,6 +2051,7 @@ _PRICE_FARE_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_price_fare_quote_response(
     raw: Mapping[str, Any],
 ) -> PriceFareQuoteResponse:

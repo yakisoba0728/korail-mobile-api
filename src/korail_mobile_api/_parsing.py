@@ -9,10 +9,32 @@
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Callable, Mapping
+from functools import wraps
+from typing import Any, ParamSpec, TypeVar
 
-from .errors import KorailProtocolError
+from .errors import KorailApiError, KorailProtocolError
+
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
+    """조회 파서가 거절한 응답 전체를 기존 예외에 남깁니다. 검사·재전송은 하지 않습니다."""
+    @wraps(parser)
+    def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        try:
+            return parser(*args, **kwargs)
+        except KorailApiError as error:
+            response = args[0] if args else kwargs.get("raw", kwargs.get("response"))
+            raw = response if isinstance(response, Mapping) else getattr(response, "raw", response)
+            if error.raw is not raw:
+                error.parser_raw = error.raw
+                error.raw = raw
+            raise
+
+    return wrapped
 
 
 def _reject_non_string_envelope_fields(data: Mapping[str, Any]) -> None:

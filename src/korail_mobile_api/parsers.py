@@ -47,6 +47,7 @@ from ._parsing import (
     _nullable_string_fields,
     _optional_integer,
     _optional_scalar_string,
+    _preserve_read_raw,
     _rows,
 )
 from ._parsing import _optional_string as _typed_optional_string
@@ -181,6 +182,7 @@ def _response_fields(response: BaseKorailResponse) -> dict[str, Any]:
     }
 
 
+@_preserve_read_raw
 def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
     """봉투 없는 prdMobilePlusMain.cache 를 읽습니다. 선택 필드의 잘못된 타입은 비웁니다. version 은 MobilePlusMainVersion.java:52
     의 3개 키를 읽고 나머지는 raw 에 둡니다. 2026-09-22 라이브에는 19개 키가 있었습니다. CNTAURL 은 업데이트 버튼 URL 입니다
@@ -211,10 +213,11 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
     )
 
 
+@_preserve_read_raw
 def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
     """공지 응답을 파싱합니다.
 
-    게시판 아이디·게시물 일련번호·제목 셋만 꺼내며 모두 선택값입니다. 공지가 없는 상태도 정상이라 빈 값이 오류가 아닙니다.
+    게시판 아이디·게시물 일련번호·제목·본문은 모두 선택값입니다. 공지가 없는 상태도 정상입니다.
     """
     raw = response.raw
     nested = raw.get("notice")
@@ -233,6 +236,7 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
     )
 
 
+@_preserve_read_raw
 def parse_station_name_map(raw: Mapping[str, Any]) -> dict[str, str]:
     """역코드→이름 캐시용 표. stns.stn 목록이나 사용 가능한 코드·이름 쌍이 없으면 오류입니다."""
     container = raw.get("stns")
@@ -273,6 +277,7 @@ def resolve_station_name(reference: str, names: Mapping[str, str]) -> str:
         ) from exc
 
 
+@_preserve_read_raw
 def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
     """trn_infos 는 객체 안의 trn_info 목록, 직접 목록, null 을 허용합니다. 그 밖의 컨테이너·비객체 행은 오류입니다. 빈 목록만으로 직통 없음 예외를 만들지는
     않습니다.
@@ -302,6 +307,7 @@ def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
     ]
 
 
+@_preserve_read_raw
 def parse_train_search_metadata(
     raw: Mapping[str, Any],
 ) -> TrainSearchMetadata:
@@ -327,10 +333,13 @@ def parse_train_search_metadata(
         first_seat_count=optional("h_seat_cnt_first"),
         second_seat_count=optional("h_seat_cnt_second"),
         first_departure_time=optional("txtGoHour_first"),
+        agreement_text=optional("h_agree_txt"),
+        remaining_seat_count=optional("h_rest_seat_cnt"),
         raw=dict(raw),
     )
 
 
+@_preserve_read_raw
 def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
     """``ebizcross/getUUID.do`` 를 파싱합니다.
 
@@ -374,6 +383,7 @@ _MAAS_RESPONSE_FIELDS: dict[str, str] = {
 }
 
 
+@_preserve_read_raw
 def parse_maas_menu_list_response(
     response: BaseKorailResponse,
 ) -> MaasMenuListResponse:
@@ -406,9 +416,12 @@ _STATION_OPTIONAL_STRING_FIELDS: dict[str, str] = {
     "popup_message": "popupMessage",
     "popup_link_title": "popupLinkTitle",
     "popup_link_url": "popupLinkUrl",
+    "area": "area",
+    "stop": "stop",
 }
 
 
+@_preserve_read_raw
 def parse_station_data_response(
     response: BaseKorailResponse,
 ) -> StationDataResponse:
@@ -447,6 +460,7 @@ def parse_station_data_response(
     )
 
 
+@_preserve_read_raw
 def parse_station_info_response(
     response: BaseKorailResponse,
 ) -> StationInfoResponse:
@@ -471,6 +485,7 @@ def parse_station_info_response(
     )
 
 
+@_preserve_read_raw
 def parse_train_calendar_response(
     response: BaseKorailResponse,
 ) -> TrainCalendarResponse:
@@ -551,6 +566,7 @@ def parse_train_calendar_response(
     )
 
 
+@_preserve_read_raw
 def parse_train_schedule_response(
     response: BaseKorailResponse,
 ) -> TrainScheduleResponse:
@@ -686,6 +702,7 @@ def parse_train_schedule_response(
     )
 
 
+@_preserve_read_raw
 def parse_transfer_station_list_response(
     response: BaseKorailResponse,
 ) -> TransferStationListResponse:
@@ -748,6 +765,7 @@ def _inventory_required_int(
     )
 
 
+@_preserve_read_raw
 def parse_seat_car_list_response(
     response: BaseKorailResponse,
 ) -> SeatCarListResponse:
@@ -843,6 +861,7 @@ def _inventory_ratio(data: Mapping[str, Any], key: str) -> float:
     return ratio
 
 
+@_preserve_read_raw
 def parse_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> SeatInventoryResponse:
