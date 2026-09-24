@@ -57,17 +57,33 @@ def parse_base_response(
     commonFail()(strResult 실패)이 참일 때만 hMsgCd 를 보호된 4바이트 리터럴과 비교합니다(CommonOut.java:426-438). 그래서 성공
     봉투에 붙은 P058 은 만료가 아닙니다.
 
-    raise_on_fail=True 면 FAIL, WRC000288, 또는 require_result=True 일 때 strResult 키 누락을 거절합니다. SUCC 와의 동등 비교는 아니며
-    null·빈 문자열·미지의 결과값은 이 단계에서 거절하지 않습니다. 앱은 CommonOut.java:361,455-463 에서 기본값과 실패 비교에 같은 보호 리터럴을 사용합니다. FAIL
-    평문은 관측값이고 WRC000288 별도 실패 분기는 앱 근거가 미확인입니다.
+    raise_on_fail=True 면 FAIL 또는 require_result=True 일 때 strResult 키 누락을 거절합니다. SUCC 와의 동등 비교는 아니며
+    null·빈 문자열·미지의 결과값은 이 단계에서 거절하지 않습니다. 앱은 CommonOut.java:361,455-463 에서 기본값과 실패 비교에 같은 보호 리터럴을 사용합니다.
+    FAIL 평문은 관측값입니다. 문자열 필드의 JSON 정수는 2026-09-21 관측에 따라 문자열로 읽되 raw 는 바꾸지 않습니다.
 
     common_out(기본값은 require_result)이 참이면 strResult 누락도 P058 판정에서는 실패로 봅니다. 봉투가 선택인 CommonOut 읽기
     경로용입니다: 앱은 CommonOut 이면 checkRequiredLogin 을 부르지만(NetworkService.java:6916-6919) 그 밖의 코드는 화면마다
     다르게 다루므로, 이 경우 다른 코드는 거절하지 않습니다."""
     if not isinstance(data, dict):
-        raise KorailProtocolError("KORAIL response must be a JSON object")
-    _reject_non_string_envelope_fields(data)
-    response = BaseKorailResponse.from_raw(data)
+        error = KorailProtocolError("KORAIL response must be a JSON object")
+        error.raw = data
+        raise error
+    envelope = {name: data.get(name) for name in ("h_msg_cd", "h_msg_txt", "strResult")}
+    for name, value in envelope.items():
+        if isinstance(value, int) and not isinstance(value, bool):
+            envelope[name] = str(value)
+    try:
+        _reject_non_string_envelope_fields(envelope)
+    except KorailProtocolError as error:
+        error.parser_raw = error.raw
+        error.raw = data
+        raise
+    response = BaseKorailResponse(
+        h_msg_cd=envelope["h_msg_cd"],
+        h_msg_txt=envelope["h_msg_txt"],
+        str_result=envelope["strResult"],
+        raw=data,
+    )
     missing_result = "strResult" not in data
     failed = response.str_result == "FAIL" or (require_result and missing_result)
     if common_out is None:
@@ -78,9 +94,7 @@ def parse_base_response(
             response.h_msg_txt,
             raw=data,
         )
-    if raise_on_fail and (
-        failed or response.h_msg_cd == "WRC000288"
-    ):
+    if raise_on_fail and failed:
         raise classify_app_error(
             response.h_msg_cd,
             response.h_msg_txt,
@@ -133,12 +147,16 @@ def _decode_response(response: httpx.Response, *, path: str) -> Any:
     # 3xx 도 실패입니다 — Retrofit 은 2xx 가 아닌 응답을 성공 본문으로 넘기지 않습니다
     # (analysis/jadx/sources/retrofit2/OkHttpCall.java:184-201). 리다이렉트는 따라가지 않습니다.
     if not 200 <= response.status_code < 300:
-        raise KorailTransportError(
+        transport_error = KorailTransportError(
             f"KORAIL HTTP {response.status_code} for "
             f"{response.request.method} {response.request.url.path}"
         )
+        transport_error.raw = payload if decoded else response.content
+        raise transport_error
     if not decoded:
-        raise KorailProtocolError("KORAIL response body was not valid JSON")
+        protocol_error = KorailProtocolError("KORAIL response body was not valid JSON")
+        protocol_error.raw = response.content
+        raise protocol_error
     return payload
 
 

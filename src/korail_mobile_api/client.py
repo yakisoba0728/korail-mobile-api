@@ -304,8 +304,10 @@ class KorailClient:
         self._station_names: dict[str, str] | None = None
 
     def close(self) -> None:
-        """HTTP·NetFunnel 연결 풀을 닫습니다. 네트워크 호출을 하지 않으며 로그인 상태도 그대로 둡니다. 로그인까지 끝내려면 먼저
-        :meth:`logout`(서버 세션 무효화)이나 :meth:`clear_session`(로컬만 폐기)을 부르십시오."""
+        """HTTP·NetFunnel 연결 풀을 닫습니다. 네트워크 호출 없이 로그인 상태·쿠키를 그대로 둡니다.
+
+        로그인도 끝내려면 먼저 :meth:`logout`(서버 로그아웃 시도)이나 :meth:`clear_session`(로컬만 폐기)을 부르십시오.
+        청구·예약 변경은 없습니다. 로컬 처리이며 실서버 확인 대상이 아닙니다."""
         try:
             self.http.close()
         finally:
@@ -330,7 +332,8 @@ class KorailClient:
         따로 분류된 코드는 그 KorailAppError 하위 예외, 그 밖의 거절(잠김 WRC000390, 정보 오류 WRR000101 등)이나 JSESSIONID 누락은
         ``code``·``raw`` 가 붙은 KorailAuthError 입니다. 사전 조회(MobileService.cache·common.code.do)의 FAIL 은
         KorailAppError 하위 예외, 전송 실패는 KorailTransportError, JSON·봉투·암호화 파라미터 이상은 KorailProtocolError 로 그대로 올라옵니다.
-        실패 시 세션·쿠키는 비웁니다."""
+        일반 실패 시 세션·쿠키를 비우지만, 웹 단계 예외는 current=None 인 채 pending 과 응답 쿠키를 보존합니다.
+        청구·예약 변경은 없습니다. 기존 실서버 로그인 확인: 2026-09-24(korail-api-status.html); 웹 단계의 실서버 확인은 별도입니다."""
         return self.session.login(
             member_no,
             password,
@@ -343,13 +346,15 @@ class KorailClient:
     def clear_session(self) -> None:
         """서버에 알리지 않고 로컬 로그인 상태만 버립니다.
 
-        쿠키 저장소(``JSESSIONID`` 포함), 현재 :class:`KorailSession`, 보류 중인 웹 단계 예외를 모두 비웁니다. 네트워크 호출이 없으므로 서버 쪽 세션은 스스로
-        만료될 때까지 살아 있습니다. 서버 세션까지 무효화하려면 :meth:`logout` 을 쓰면 됩니다."""
+        쿠키 저장소(``JSESSIONID`` 포함), 현재 :class:`KorailSession`, 보류 중인 웹 단계 예외를 모두 비웁니다.
+        서버 세션 무효화는 요청하지 않습니다. 서버 로그아웃을 시도하려면 :meth:`logout` 을 쓰십시오.
+        청구·예약 변경은 없습니다. 로컬 처리이며 실서버 확인 대상이 아닙니다."""
         self.session.clear_session()
 
     def logout(self) -> None:
         """로그인 상태이면 서버 로그아웃(login.Logout)을 보내고, 어느 경우든 finally 에서 로컬 세션·쿠키를 비웁니다. FAIL 봉투는 예외가 아니지만(FAIL/P058 은
-        세션 만료) 전송 오류 등은 그대로 전파됩니다. 연결 풀은 close 로 닫습니다."""
+        세션 만료) 전송 오류 등은 그대로 전파됩니다. 서버 세션 무효화까지 보장하지 않으며 연결 풀은 close 로 닫습니다.
+        청구·예약 변경은 없습니다. 기존 실서버 확인: 2026-09-24, 로그아웃 뒤 FAIL/P058(korail-api-status.html)."""
         self.session.logout()
 
     def _run_read(self, operation: Callable[[], T]) -> T:
