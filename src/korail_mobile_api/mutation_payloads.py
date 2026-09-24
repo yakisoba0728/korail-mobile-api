@@ -491,6 +491,12 @@ def _build_journey_reservation_form(
         raise KorailProtocolError(
             "KORAIL reservation requires an exact KorailPassengerCounts"
         )
+    # 앱 인원 선택기는 이 두 조합을 고를 수 없게 합니다(PassengersBottomSheetKt.java:20715-20729,21124-21185 의 warningPassengerType):
+    # 유아가 있으면 유아·어린이 외 인원(안내견 포함)이 있어야 하고, 안내견은 중증·경증 장애 승객 합계를 넘을 수 없습니다.
+    if passengers.infant and passengers.total - passengers.infant - passengers.child == 0:
+        raise KorailProtocolError("KORAIL infant passengers require an accompanying passenger")
+    if passengers.guide_dog > passengers.severe_disability + passengers.mild_disability:
+        raise KorailProtocolError("KORAIL guide dogs cannot outnumber disability passengers")
     resolved_classes = _validated_seat_classes(
         seat_classes,
         leg_count=len(resolved_legs),

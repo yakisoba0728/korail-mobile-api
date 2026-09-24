@@ -163,8 +163,8 @@ class KorailPassengerCounts:
     와 다릅니다(PassengerType.java:74-84). 유아·안내견 포함 합계 상한은 9명입니다(Passengers.java:48,610-616). 일반 예약은 카드 필드를 만들지 않으며
     DTO 카드 키는 txtCardNo_ 하나입니다(TicketReservationInPassengerInfo.java:105).
 
-    앱의 유아 동반 인원(BABY·CHILD 외 인원 필요)·안내견 수(장애 승객 합계 이하) 경고는 강제하지 않습니다(PassengersBottomSheetKt.java:21124-21185);
-    서버 수용은 별도입니다."""
+    앱 선택기의 유아 동반(유아·어린이 외 인원 필요)·안내견 수(장애 승객 합계 이하) 조건은 이 객체가 아니라 예약 폼 빌더가 검사합니다
+    (PassengersBottomSheetKt.java:21124-21185). 서버 수용은 별도입니다."""
 
     adult: int = 1
     teenager: int = 0
