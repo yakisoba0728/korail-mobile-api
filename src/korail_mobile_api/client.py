@@ -1704,38 +1704,18 @@ class KorailClient:
             "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk", form
         )
 
-    def pay_with_fake_card(
-        self,
-        hold: ReservationHoldResponse,
-        card: CardPayment,
-    ) -> ReservationPaymentResponse:
-        """시험용 카드 객체로 결제 요청을 보냅니다. 오프라인 시뮬레이션이 아닙니다. 실제 결제와 같은 전송 경로이므로 이름만으로 비과금이 보장되지 않습니다. 실험은 MockTransport 에서
-        수행하고 카드 정보가 담긴 폼·raw 를 기록하지 마십시오."""
-        self._require_session("payment requires")
-        route = "/classes/com.korail.mobile.payment.ReservationPayment"
-        form = build_card_payment_form(self.config, hold, card)
-        # 카드 거절도 응답으로 읽으므로 FAIL 예외를 억제합니다. 결과를 성공으로 바꾸지는 않습니다.
-        return self._queued(
-            "pay",
-            lambda: self._mutation(
-                route,
-                form,
-                parser=parse_reservation_payment_response,
-                raise_on_fail=False,
-            ),
-        )
-
     def pay_with_card(
         self,
         hold: ReservationHoldResponse,
         card: CardPayment,
     ) -> ReservationPaymentResponse:
-        """홀드를 카드로 결제합니다. 실제 청구가 발생할 수 있습니다. pay_with_fake_card 와 같은 빌더·전송 경로이며 이름 차이가 폼 검증을 추가하지 않습니다. 2026-07-31:
-        8,400원 1장 IRT000000 발권과 2인 PNR 결제 기록; 2026-09-15: 7.0.6 결제·전액 환불 기록이 있습니다. 모든 카드·요청 조합의 성공 보장은 아닙니다."""
+        """홀드를 카드로 결제합니다. 실제 청구가 발생합니다. 카드 거절은 예외가 아니라 FAIL 응답으로 돌아오므로 str_result·h_msg_cd 를
+        확인하십시오. 2026-07-31: 8,400원 1장 IRT000000 발권과 2인 PNR 결제 기록; 2026-09-15: 7.0.6 결제·전액 환불 기록;
+        2026-09-24: 결제 후 refund(commission=) 로 수수료 0원 전액 환불. 모든 카드·요청 조합의 성공 보장은 아닙니다."""
         self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"
         form = build_card_payment_form(self.config, hold, card)
-        # 카드 거절의 FAIL 봉투 처리도 pay_with_fake_card 와 같습니다.
+        # 카드 거절도 응답으로 읽으므로 FAIL 예외를 억제합니다. 결과를 성공으로 바꾸지는 않습니다.
         return self._queued(
             "pay",
             lambda: self._mutation(
