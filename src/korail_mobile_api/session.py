@@ -60,11 +60,14 @@ def infer_login_input_flag(login_id: str) -> str:
 
 
 def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
-    """CommonCodeOut.java:267 의 최상위 app.login.cphd 를 읽습니다. 소비부: LoginRepositoryImpl.java:918-936."""
+    """CommonCodeOut.java:267 의 최상위 app.login.cphd 객체를 읽습니다(없으면 빈 dict). 소비부: LoginRepositoryImpl.java:918-936.
+    2026-09-24 라이브: idx·key·pwdAESCphd 는 이 객체 안에만 문자열로 있었고 최상위에는 없었습니다."""
     value = raw.get("app.login.cphd")
-    if isinstance(value, dict):
-        return value
-    return raw
+    return value if isinstance(value, dict) else {}
+
+
+def _text(value: object) -> str:
+    return value if isinstance(value, str) else ""
 
 
 class KorailSessionClient:
@@ -100,11 +103,11 @@ class KorailSessionClient:
             include_common=False,
         )
         raw = extract_login_crypto_payload(response.raw)
-        idx = str(raw.get("idx") or "")
-        key = str(raw.get("key") or "")
+        idx = _text(raw.get("idx"))
+        key = _text(raw.get("key"))
         # 참고용입니다. getPwdAESCphd() 의 유일한 사용처는 결제 금액 암호화입니다:
         # analysis/jadx/sources/com/korail/talk/ui/screen/pay/PayViewModel.java:10991-10999
-        pwd_aes_cphd = str(raw.get("pwdAESCphd") or "").upper()
+        pwd_aes_cphd = _text(raw.get("pwdAESCphd")).upper()
         # 키 검증은 transform_login_password 에서 하며 평문으로 폴백하지 않습니다. 앱의 빈 키 재조회: LoginRepositoryImpl.java:1230-1236; 키
         # 구성: AESCrypto.java:45-57. idx 는 필수가 아니며 빈 값은 폼에서 빠집니다(LoginRepositoryImpl.java:932-936,
         # NetworkService.java:15342-15343).
@@ -147,7 +150,7 @@ class KorailSessionClient:
 
         비밀번호 키 조회나 제공자 토큰 교환은 하지 않습니다. 앱의 checkValidPw 값은 보호돼 있으므로 호출자가 알고 있는 값을 넘겨야 합니다."""
         def attempt() -> KorailSession:
-            # _run_login 안에서 검사해야 잘못된 입력도 이전 세션을 남기지 않습니다.
+            # 빈 자격증명 전송을 막는 라이브러리 검사입니다. _run_login 안에서 검사해야 잘못된 입력도 이전 세션을 남기지 않습니다.
             if not cust_id or not input_flag or not check_valid_pw:
                 raise KorailProtocolError(
                     "KORAIL social login requires cust_id, input_flag, and "
@@ -251,11 +254,8 @@ class KorailSessionClient:
                 code=response.h_msg_cd,
                 raw=response.raw,
             )
-        member_card_no = str(
-            response.raw.get("mbCrdNo")
-            or response.raw.get("strMbCrdNo")
-            or ""
-        ) or None
+        # 앱은 LoginOut.strMbCrdNo 를 읽습니다(LoginOut.java:62,79,113,116). 2026-09-24 라이브 로그인 응답에 mbCrdNo 는 없었습니다.
+        member_card_no = _text(response.raw.get("strMbCrdNo")) or None
         raw_customer_no = response.raw.get("strCustNo")
         customer_no = (
             raw_customer_no

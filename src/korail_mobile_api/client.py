@@ -383,6 +383,7 @@ class KorailClient:
         return "peak_season_inquiry" if peak_season else "inquiry"
 
     def _require_session(self, what: str = "account read requires") -> None:
+        """세션이 없으면 요청 전에 인증 오류를 냅니다. 앱에는 없는 라이브러리 검사입니다(서버라면 P058 로 답합니다)."""
         if self.session.current is None:
             raise KorailAuthError(f"KORAIL {what} an authenticated session")
 
@@ -393,7 +394,6 @@ class KorailClient:
         if not isinstance(customer_no, str) or not customer_no.strip():
             raise KorailAuthError(f"KORAIL {what} requires a login customer number")
         return customer_no
-
 
     def _post_read(
         self,
