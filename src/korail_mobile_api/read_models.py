@@ -395,71 +395,67 @@ class ProductDetailResponse(BaseKorailResponse):
     detail_raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReceiptPayment:
-    payment_method: str | None = None
+    payment_method: str
     #: h_apv_dt. 계좌·승인·카드·포인트 번호를 포함한 기록 경고는 모듈 설명 참고.
-    approval_date: str | None = None
-    installment_months: int | None = None
-    amount: int | None = None
-    account_no: str | None = None
-    approval_no: str | None = None
-    card_no: str | None = None
-    point_no: str | None = None
+    approval_date: str
+    installment_months: int
+    amount: int
+    account_no: str
+    approval_no: str
+    card_no: str
+    point_no: str
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ReceiptCashPayment:
     """현금영수증 행(ReceiptInfo.java:37). String 4개·int 금액 1개이며 전송 키는 CashReceiptInfo.java:26-35,52 의 명시적 @SerialName
     입니다."""
 
     #: h_apv_mtd_nm — 승인방법 라벨. 인증도메인 인식번호·현금영수증 승인번호도 마스킹하지 않습니다.
-    approval_method_name: str | None = None
-    authentication_domain_recognition_no: str | None = None
-    cash_receipt_approval_no: str | None = None
-    cash_receipt_transaction_division_code: str | None = None
-    total_approved_amount: int | None = None
+    approval_method_name: str
+    authentication_domain_recognition_no: str
+    cash_receipt_approval_no: str
+    cash_receipt_transaction_division_code: str
+    total_approved_amount: int
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TicketReceipt:
-    travel_date: str | None = None
-    departure_station: str | None = None
-    departure_time: str | None = None
-    arrival_station: str | None = None
-    arrival_time: str | None = None
-    commuter_kind_code: str | None = None
-    journey_type_code: str | None = None
+    travel_date: str
+    departure_station: str
+    departure_time: str
+    arrival_station: str
+    arrival_time: str
+    commuter_kind_code: str
+    journey_type_code: str
     #: ``h_prt_disc_knd_nm``/``h_prt_disc_knd_cd`` — 영수증에 인쇄된 할인 종류의 이름·코드.
-    printed_discount_name: str | None = None
-    printed_discount_kind_code: str | None = None
-    print_type: str | None = None
-    seat_class_name: str | None = None
-    ticket_kind_code: str | None = None
+    printed_discount_name: str
+    printed_discount_kind_code: str
+    print_type: str
+    seat_class_name: str
+    ticket_kind_code: str
     #: ``h_tk_knd_nm`` — 승차권 종류의 사람이 읽는 이름.
-    ticket_kind_name: str | None = None
-    ticket_status_code: str | None = None
-    train_class_code: str | None = None
-    train_class_name: str | None = None
+    ticket_kind_name: str
+    ticket_status_code: str
+    train_class_code: str
+    train_class_name: str
     #: ``h_trn_gp_cd`` — 열차 그룹 코드(KTX/새마을 등).
-    train_group_code: str | None = None
-    train_no: str | None = None
-    passenger_counts: tuple[int | None, int | None, int | None] = (
-        None,
-        None,
-        None,
-    )
-    received_amount: int | None = None
-    card_refund_amount: int | None = None
-    refund_fee: int | None = None
-    refund_received_amount: int | None = None
-    point_refund_amount: int | None = None
+    train_group_code: str
+    train_no: str
+    passenger_counts: tuple[int, int, int]
+    received_amount: int
+    card_refund_amount: int
+    refund_fee: int
+    refund_received_amount: int
+    point_refund_amount: int
     payments: tuple[ReceiptPayment, ...] = ()
     #: ``cash_rcet_info`` — 현금영수증 줄들.
     cash_receipts: tuple[ReceiptCashPayment, ...] = ()
-    member_card_no: str | None = None
+    member_card_no: str
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
@@ -1295,12 +1291,12 @@ class PriceFareQuoteResponse(BaseKorailResponse):
     fares: tuple[PriceFare, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class DeliveryRecipientResponse(BaseKorailResponse):
-    acceptance_customer_management_no: str | None = None
-    acceptance_customer_name: str | None = None
-    acceptance_customer_phone: str | None = None
-    member_card_no: str | None = None
+    acceptance_customer_management_no: str
+    acceptance_customer_name: str
+    acceptance_customer_phone: str
+    member_card_no: str
 
 
 @dataclass(frozen=True)
@@ -1310,38 +1306,38 @@ class TicketDuplicationCheckResponse(BaseKorailResponse):
     reservation_count: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceSeat:
-    passenger_type_division_name: str | None = None
-    room_class_code: str | None = None
-    room_class_name: str | None = None
-    car_no: int = 0
-    seat_no: str | None = None
+    passenger_type_division_name: str
+    room_class_code: str
+    room_class_name: str
+    car_no: int
+    seat_no: str
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceJourney:
-    acceptance_customer_name: str | None = None
-    acceptance_customer_phone: str | None = None
-    journey_type_code: str | None = None
-    member_division_name: str | None = None
-    acceptance_kind_name: str | None = None
-    pbp_reservation_no: str | None = None
-    registered_date: str | None = None
-    withdrawal_possible_flag: str | None = None
+    acceptance_customer_name: str
+    acceptance_customer_phone: str
+    journey_type_code: str
+    member_division_name: str
+    acceptance_kind_name: str
+    pbp_reservation_no: str
+    registered_date: str
+    withdrawal_possible_flag: str
     seats: tuple[PbpAcceptanceSeat, ...] = ()
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
-    member_card_no: str | None = None
+    member_card_no: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceTicket:
-    pnr_no: str | None = None
-    sale_date: str | None = None
-    sale_sequence: str | None = None
-    sale_window_no: str | None = None
-    return_password: str | None = None
+    pnr_no: str
+    sale_date: str
+    sale_sequence: str
+    sale_window_no: str
+    return_password: str
     journeys: tuple[PbpAcceptanceJourney, ...] = ()
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
@@ -1489,14 +1485,14 @@ class OriginalTicketInquiryResponse(BaseKorailResponse):
     tickets: tuple[OriginalTicket, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RecentDeliveryRecipient:
-    acceptance_customer_management_flag: str | None = None
-    acceptance_customer_management_no: str | None = None
-    acceptance_customer_name: str | None = None
-    acceptance_customer_phone: str | None = None
-    acceptance_customer_phone_2: str | None = None
-    member_card_no: str | None = None
+    acceptance_customer_management_flag: str
+    acceptance_customer_management_no: str
+    acceptance_customer_name: str
+    acceptance_customer_phone: str
+    acceptance_customer_phone_2: str
+    member_card_no: str
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
