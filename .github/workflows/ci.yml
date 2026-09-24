@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Python ${{ matrix.python }} / ${{ matrix.dependencies }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13', '3.14']
+        dependencies: [current]
+        include:
+          - python: '3.11'
+            dependencies: minimum
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install test and build tools
+        id: tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[dev]'
+      - name: Install exact declared dependency lower bounds
+        if: matrix.dependencies == 'minimum'
+        run: |
+          python - <<'PY'
+          import subprocess
+          import sys
+          import tomllib
+          from packaging.requirements import Requirement
+
+          with open('pyproject.toml', 'rb') as stream:
+              config = tomllib.load(stream)
+          requirements = config['project']['dependencies'] + config['build-system']['requires']
+          pins = []
+          for text in requirements:
+              requirement = Requirement(text)
+              bounds = list(requirement.specifier)
+              assert len(bounds) == 1 and bounds[0].operator == '>='
+              pins.append(f'{requirement.name}=={bounds[0].version}')
+          subprocess.check_call([sys.executable, '-m', 'pip', 'install', *pins])
+          PY
+      - name: Ruff lint
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: python -m ruff check src checks tests
+      - name: Ruff format check (format after session integration)
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: python -m ruff format --check src checks tests
+      - name: Mypy strict
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: python -m mypy
+      - name: Offline tests, including both original checks
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: python -m pytest tests/
+      - name: Build wheel and sdist
+        id: build
+        if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
+        run: python -m build
+      - name: Check distribution metadata and README
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: python -m twine check dist/*
+      - name: Install wheel into clean venv and run installed-package checks
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import shutil
+          import subprocess
+          import sys
+          import tempfile
+          import tomllib
+          import venv
+          from packaging.requirements import Requirement
+
+          root = pathlib.Path.cwd()
+          target = pathlib.Path(tempfile.mkdtemp(prefix='f8-installed-'))
+          venv.EnvBuilder(with_pip=True).create(target / 'venv')
+          python = target / 'venv/bin/python'
+          clean = target / 'exercise'
+          clean.mkdir()
+          wheel, = (root / 'dist').glob('*.whl')
+          args = [str(python), '-m', 'pip', 'install', str(wheel)]
+          if '${{ matrix.dependencies }}' == 'minimum':
+              config = tomllib.loads((root / 'pyproject.toml').read_text())
+              for text in config['project']['dependencies']:
+                  requirement = Requirement(text)
+                  bound, = requirement.specifier
+                  args.append(f'{requirement.name}=={bound.version}')
+          subprocess.check_call(args, cwd=clean)
+          subprocess.check_call([str(python), '-m', 'pip', 'check'], cwd=clean)
+          shutil.copytree(root / 'checks', clean / 'checks')
+          # Read the guard literal without importing pytest/conftest in the clean venv.
+          import ast
+          tree = ast.parse((root / 'tests/conftest.py').read_text())
+          node, = [n for n in tree.body if isinstance(n, ast.Assign) and any(
+              isinstance(t, ast.Name) and t.id == '_F8_SOCKET_GUARD' for t in n.targets)]
+          (clean / 'sitecustomize.py').write_text(ast.literal_eval(node.value))
+          env = dict(os.environ, PYTHONPATH=str(clean), PYTHONNOUSERSITE='1', PIP_NO_INDEX='1')
+          command = (
+              'import importlib.metadata as m, pathlib,sys; import korail_mobile_api as k; '
+              'assert pathlib.Path(k.__file__).is_relative_to(sys.prefix); '
+              'assert k.__version__ == m.version("korail-mobile-api"); '
+              'print(k.__version__, k.__file__)'
+          )
+          subprocess.check_call([str(python), '-c', command], cwd=clean, env=env)
+          for check in ('contract_api.py', 'netfunnel_offline.py'):
+              subprocess.check_call([str(python), str(clean / 'checks' / check)], cwd=clean, env=env)
+          PY

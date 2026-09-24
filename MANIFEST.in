@@ -1,0 +1,15 @@
+global-exclude *
+include pyproject.toml MANIFEST.in LICENSE README.md CHANGELOG.md
+recursive-include src/korail_mobile_api *.py
+include src/korail_mobile_api/py.typed
+recursive-include checks *.py *.md
+recursive-include tests *.py
+prune analysis
+prune .git
+prune .github
+prune build
+prune dist
+global-exclude *.apk *.apks *.aab *.dex *.so *.dll *.dylib
+global-exclude *.pem *.key *.p12 *.pfx *.jks *.keystore
+global-exclude .env .env.* *.env .pypirc *credentials* *credential* *secrets*
+global-exclude *.pyc *.pyo .DS_Store

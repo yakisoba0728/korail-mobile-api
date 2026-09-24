@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=78.1.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "korail-mobile-api"
+dynamic = ["version"]
+description = "Unofficial synchronous Python client for the KORAIL mobile API"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{name = "yakisoba0728"}]
+# The full offline suite passes on Python 3.11 with these exact versions; CI's minimum job installs them.
+dependencies = ["httpx>=0.24.1", "cryptography>=42.0.8"]
+keywords = ["korail", "railway", "api", "client"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/yakisoba0728/korail-mobile-api"
+Repository = "https://github.com/yakisoba0728/korail-mobile-api"
+Issues = "https://github.com/yakisoba0728/korail-mobile-api/issues"
+Changelog = "https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "build>=1.2.2",
+    "twine>=6.1",
+    "ruff>=0.11",
+    "mypy>=1.15",
+    "setuptools>=78.1.1",
+    "packaging>=24.2",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["korail_mobile_api"]
+include-package-data = false
+
+[tool.setuptools.dynamic]
+version = {attr = "korail_mobile_api.__version__"}
+
+[tool.setuptools.package-data]
+korail_mobile_api = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-config --strict-markers"
+markers = ["packaging: build and inspect release archives without network access"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 112
+src = ["src"]
+extend-exclude = ["analysis", "build", "dist", ".venv", ".venv-min", ".venv-wheel"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "src"
+files = ["src/korail_mobile_api"]
+strict = true
+show_error_codes = true
+pretty = true
