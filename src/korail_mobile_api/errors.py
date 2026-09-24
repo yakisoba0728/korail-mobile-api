@@ -47,9 +47,7 @@ class KorailAuthError(KorailApiError):
     ``code`` 는 서버가 준 ``h_msg_cd``, ``raw`` 는 로그인 응답 원문입니다(예: ``WRC000390`` 비밀번호 오류 5회 초과, ``WRR000101``/``S034``
     로그인 정보 오류). 서버 응답 없이 난 실패(세션 없음 등)는 둘 다 ``None`` 입니다."""
 
-    def __init__(
-        self, *args: object, code: str | None = None, raw: object | None = None
-    ) -> None:
+    def __init__(self, *args: object, code: str | None = None, raw: object | None = None) -> None:
         super().__init__(*args)
         self.code = code
         if raw is not None:
@@ -73,8 +71,7 @@ class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
         self.message = message
         self.raw = raw
         super().__init__(
-            f"{code or 'P058'}: "
-            f"{message or 'KORAIL session expired'}",
+            f"{code or 'P058'}: {message or 'KORAIL session expired'}",
             code=code,
         )
 
@@ -225,77 +222,220 @@ class KorailDynaPathRequiredError(KorailApiError):
 # 달리 자동 재시도는 하지 않습니다.
 
 #: 빈 결과 분류. 메시지 근거·한계는 KorailNoResultsError 참고.
-NO_RESULT_CODES = frozenset({
-    "WRG000000", "P114", "P100", "WRT300005",
-    "ERR000100", "WRT800083", "WRG500116",
-    "IRR800002", "IRT200279", "IRZ000005", "MRT200648", "WRC000008",
-    "WRC000256", "WRD000016", "WRS600208", "WRS600209", "WRS600210",
-    "WRT100192", "WRT200125", "WRT300003", "WRT800091",
-})
+NO_RESULT_CODES = frozenset(
+    {
+        "WRG000000",
+        "P114",
+        "P100",
+        "WRT300005",
+        "ERR000100",
+        "WRT800083",
+        "WRG500116",
+        "IRR800002",
+        "IRT200279",
+        "IRZ000005",
+        "MRT200648",
+        "WRC000008",
+        "WRC000256",
+        "WRD000016",
+        "WRS600208",
+        "WRS600209",
+        "WRS600210",
+        "WRT100192",
+        "WRT200125",
+        "WRT300003",
+        "WRT800091",
+    }
+)
 
 #: 직통 없음 분류: KorailNoDirectTrainError 참고. 앱 비교 리터럴과 이 코드의 동일성은 미확인입니다.
 NO_DIRECT_TRAIN_CODE = "WRD000061"
 
 #: 재고 소진 분류. 메시지 근거는 KorailSoldOutError 참고. WRG500113/WRG500114 는 error_json.json:4238-4239(왕편·복편)의 매진 문구입니다.
-SOLD_OUT_CODES = frozenset({
-    "ERR211161", "IRT010110", "WRT300001", "ERR800048",
-    "IRT010510", "IRT011010", "IRT011210", "IRT011310", "WRG500113",
-    "WRG500114",
-    # TicketReservationKt.java:103,135; smali 의 공통 SOLD_OUT 분기.
-    "ERI411321", "EAZ000038",
-})
+SOLD_OUT_CODES = frozenset(
+    {
+        "ERR211161",
+        "IRT010110",
+        "WRT300001",
+        "ERR800048",
+        "IRT010510",
+        "IRT011010",
+        "IRT011210",
+        "IRT011310",
+        "WRG500113",
+        "WRG500114",
+        # TicketReservationKt.java:103,135; smali 의 공통 SOLD_OUT 분기.
+        "ERI411321",
+        "EAZ000038",
+    }
+)
 
 #: 좌석 불가 분류. 다른 좌석의 예약 가능성과 메시지 근거는 KorailSeatUnavailableError 참고.
-SEAT_UNAVAILABLE_CODES = frozenset({
-    "WRI411345", "WRT800176",
-    "ERR521128", "WRS200019", "WRS600242", "WRS800009", "WRS900309",
-})
+SEAT_UNAVAILABLE_CODES = frozenset(
+    {
+        "WRI411345",
+        "WRT800176",
+        "ERR521128",
+        "WRS200019",
+        "WRS600242",
+        "WRS800009",
+        "WRS900309",
+    }
+)
 
 #: 예약 거절 분류. ERR911501 문구는 ERR911531 과 같습니다(error_json.json:2633); 앱의 화면 전환은 미확인입니다. 2026-09-21 라이브: 결제 완료 승차권에
 #: cancel_unpaid_hold 를 호출하자 ERR800052(예약내역 확인 안내)가 반환됐습니다.
-RESERVATION_REFUSED_CODES = frozenset({
-    "WRR800029", "ERR911531", "ERR911051", "ERR911501",
-    "ERR299920", "ERR299922", "ERR299932", "ERR299933", "ERR299934",
-    "ERR299935", "ERR299936", "ERR299937", "ERR299939", "ERR299941",
-    "ERR299992", "ERR299993", "ERR521143", "ERR521158", "ERR521185",
-    "ERR800052", "ERR911421", "ERR911528", "WRR664254", "WRR800045",
-    # TicketReservationKt.java:95-123: LATE/EXIST. ERR911081 은 좌석 불가가 아닌 LATE.
-    "ERR911081", "ERR800056", "S-ERR911411", "S021", "WRR664325",
-    "WRR700001", "WRX000007",
-})
+RESERVATION_REFUSED_CODES = frozenset(
+    {
+        "WRR800029",
+        "ERR911531",
+        "ERR911051",
+        "ERR911501",
+        "ERR299920",
+        "ERR299922",
+        "ERR299932",
+        "ERR299933",
+        "ERR299934",
+        "ERR299935",
+        "ERR299936",
+        "ERR299937",
+        "ERR299939",
+        "ERR299941",
+        "ERR299992",
+        "ERR299993",
+        "ERR521143",
+        "ERR521158",
+        "ERR521185",
+        "ERR800052",
+        "ERR911421",
+        "ERR911528",
+        "WRR664254",
+        "WRR800045",
+        # TicketReservationKt.java:95-123: LATE/EXIST. ERR911081 은 좌석 불가가 아닌 LATE.
+        "ERR911081",
+        "ERR800056",
+        "S-ERR911411",
+        "S021",
+        "WRR664325",
+        "WRR700001",
+        "WRX000007",
+    }
+)
 
 #: 입력 거절 분류. KorailInvalidRequestError 와 error_json.json:4177-4196,11019-11060,11097 이후의 입력값 오류 문구를 근거로 합니다.
-INVALID_REQUEST_CODES = frozenset({
-    # 2026-09-22 라이브: get_pbp_acceptance_specifications 에 4자리 sale_date 를 주자 SUCC/ERB000001 이 반환됐습니다(자릿수는
-    # OriginalTicketReference 참고). SUCC 는 이 코드만으로 예외가 되지 않습니다. 이 집합은 http.parse_base_response 가 실패로 판정한 뒤에만
-    # 사용됩니다.
-    "ERB000001",
-    "WRG200018", "WRT100002", "WRT100124",
-    "WRG200001", "WRG200002", "WRG200003", "WRG200004", "WRG200005",
-    "WRG200006", "WRG200007", "WRG200008", "WRG200009", "WRG200010",
-    "WRG200011", "WRG200012", "WRG200013", "WRG200014", "WRG200015",
-    "WRG200016", "WRG200017", "WRG200019", "WRG200020",
-    "ERR800001", "ERR800002", "ERR800003", "ERR800004", "ERR800005",
-    "ERR800006", "ERR800008", "ERR800009", "ERR800010", "ERR800011",
-    "ERR800012", "ERR800014", "ERR800015", "ERR800016", "ERR800017",
-    "ERR800018", "ERR800019", "ERR800020", "ERR800021", "ERR800022",
-    "ERR800023", "ERR800024", "ERR800025", "ERR800026", "ERR800029",
-    "ERR800030", "ERR800031", "ERR800033", "ERR800034", "ERR800035",
-    "ERR800036", "ERR800037", "ERR800038", "ERR930224", "ERR930226",
-    "ERR930227", "ERR930228", "ERR930250", "ERR930260", "ERR930261",
-    "ERR930267", "ERR930268", "ERR930278", "ERR930279", "ERR930280",
-    "ERR930292", "ERR930293", "ERR930310", "ERR930312", "ERR930328",
-    "ERR930329", "WRC000063", "WRC000210", "WRC000260", "WRC000370",
-    "WRC000392", "WRC000436", "WRR664227", "WRT400191", "WRT400235",
-    "WRT400356", "WRT800053", "WRT800074", "WRT800075",
-})
+INVALID_REQUEST_CODES = frozenset(
+    {
+        # 2026-09-22 라이브: get_pbp_acceptance_specifications 에 4자리 sale_date 를 주자 SUCC/ERB000001 이 반환됐습니다(자릿수는
+        # OriginalTicketReference 참고). SUCC 는 이 코드만으로 예외가 되지 않습니다. 이 집합은 http.parse_base_response 가 실패로 판정한 뒤에만
+        # 사용됩니다.
+        "ERB000001",
+        "WRG200018",
+        "WRT100002",
+        "WRT100124",
+        "WRG200001",
+        "WRG200002",
+        "WRG200003",
+        "WRG200004",
+        "WRG200005",
+        "WRG200006",
+        "WRG200007",
+        "WRG200008",
+        "WRG200009",
+        "WRG200010",
+        "WRG200011",
+        "WRG200012",
+        "WRG200013",
+        "WRG200014",
+        "WRG200015",
+        "WRG200016",
+        "WRG200017",
+        "WRG200019",
+        "WRG200020",
+        "ERR800001",
+        "ERR800002",
+        "ERR800003",
+        "ERR800004",
+        "ERR800005",
+        "ERR800006",
+        "ERR800008",
+        "ERR800009",
+        "ERR800010",
+        "ERR800011",
+        "ERR800012",
+        "ERR800014",
+        "ERR800015",
+        "ERR800016",
+        "ERR800017",
+        "ERR800018",
+        "ERR800019",
+        "ERR800020",
+        "ERR800021",
+        "ERR800022",
+        "ERR800023",
+        "ERR800024",
+        "ERR800025",
+        "ERR800026",
+        "ERR800029",
+        "ERR800030",
+        "ERR800031",
+        "ERR800033",
+        "ERR800034",
+        "ERR800035",
+        "ERR800036",
+        "ERR800037",
+        "ERR800038",
+        "ERR930224",
+        "ERR930226",
+        "ERR930227",
+        "ERR930228",
+        "ERR930250",
+        "ERR930260",
+        "ERR930261",
+        "ERR930267",
+        "ERR930268",
+        "ERR930278",
+        "ERR930279",
+        "ERR930280",
+        "ERR930292",
+        "ERR930293",
+        "ERR930310",
+        "ERR930312",
+        "ERR930328",
+        "ERR930329",
+        "WRC000063",
+        "WRC000210",
+        "WRC000260",
+        "WRC000370",
+        "WRC000392",
+        "WRC000436",
+        "WRR664227",
+        "WRT400191",
+        "WRT400235",
+        "WRT400356",
+        "WRT800053",
+        "WRT800074",
+        "WRT800075",
+    }
+)
 
 #: 자격 없음 분류. 메시지 근거·한계는 KorailNotEntitledError 참고.
-NOT_ENTITLED_CODES = frozenset({
-    "ERR299943", "ERR800049", "WRC000419", "WRC800030", "WRR800058",
-    "MRR000008", "MRT200005", "WRC000107", "WRC000302", "WRC000373",
-    "WRC000412", "WRC000446", "WRR664211",
-})
+NOT_ENTITLED_CODES = frozenset(
+    {
+        "ERR299943",
+        "ERR800049",
+        "WRC000419",
+        "WRC800030",
+        "WRR800058",
+        "MRR000008",
+        "MRT200005",
+        "WRC000107",
+        "WRC000302",
+        "WRC000373",
+        "WRC000412",
+        "WRC000446",
+        "WRR664211",
+    }
+)
 
 #: SEMGTK의 저장 승차권 안내는 analysis/apktool/assets/error_json.json:66을 따릅니다. 앱 분기 리터럴은 보호돼 있으며 서버 장애만을 뜻한다고 단정하지
 #: 않습니다.
@@ -312,10 +452,7 @@ _APP_ERROR_BY_CODE: dict[str, type[KorailAppError]] = {
     NO_DIRECT_TRAIN_CODE: KorailNoDirectTrainError,
     **{code: KorailSoldOutError for code in SOLD_OUT_CODES},
     **{code: KorailSeatUnavailableError for code in SEAT_UNAVAILABLE_CODES},
-    **{
-        code: KorailReservationRefusedError
-        for code in RESERVATION_REFUSED_CODES
-    },
+    **{code: KorailReservationRefusedError for code in RESERVATION_REFUSED_CODES},
     **{code: KorailInvalidRequestError for code in INVALID_REQUEST_CODES},
     **{code: KorailNotEntitledError for code in NOT_ENTITLED_CODES},
     SERVICE_UNAVAILABLE_CODE: KorailServiceUnavailableError,

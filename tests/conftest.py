@@ -1,4 +1,5 @@
 """Shared release fixtures; f8_ names do not collide with domain-session fixtures."""
+
 from __future__ import annotations
 
 import os
@@ -12,7 +13,7 @@ import pytest
 from korail_mobile_api import KorailClient, KorailConfig, KorailSession
 
 # Also installed as sitecustomize in child processes used for packaging checks.
-_F8_SOCKET_GUARD = '''\
+_F8_SOCKET_GUARD = """\
 import socket
 
 def _f8_denied(*args, **kwargs):
@@ -24,17 +25,17 @@ for _name in ("create_connection", "getaddrinfo", "gethostbyname", "gethostbynam
 for _name in ("connect", "connect_ex", "sendto", "sendmsg"):
     if hasattr(socket.socket, _name):
         setattr(socket.socket, _name, _f8_denied)
-'''
+"""
 
 
 @pytest.fixture(autouse=True)
 def f8_block_sockets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Block TCP, DNS and unconnected UDP for every test, including other sessions."""
+
     def denied(*args: object, **kwargs: object) -> None:
         raise AssertionError("f8: network access is forbidden; use httpx.MockTransport")
 
-    for name in ("create_connection", "getaddrinfo", "gethostbyname", "gethostbyname_ex",
-                 "gethostbyaddr"):
+    for name in ("create_connection", "getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr"):
         monkeypatch.setattr(socket, name, denied)
     for name in ("connect", "connect_ex", "sendto", "sendmsg"):
         if hasattr(socket.socket, name):
@@ -67,7 +68,8 @@ def f8_client_factory(
         config: KorailConfig | None = None,
     ) -> KorailClient:
         client = KorailClient(
-            config or KorailConfig(
+            config
+            or KorailConfig(
                 base_url="https://api.example.invalid",
                 netfunnel_url="https://queue.example.invalid",
                 key="SYNTHETIC-APP-KEY",
@@ -92,11 +94,13 @@ def f8_subprocess_env(tmp_path: Path) -> dict[str, str]:
     guard.mkdir()
     (guard / "sitecustomize.py").write_text(_F8_SOCKET_GUARD, encoding="utf-8")
     env = dict(os.environ)
-    env.update({
-        "PYTHONPATH": str(guard),
-        "PYTHONNOUSERSITE": "1",
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "PIP_NO_INDEX": "1",
-        "PIP_DISABLE_PIP_VERSION_CHECK": "1",
-    })
+    env.update(
+        {
+            "PYTHONPATH": str(guard),
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PIP_NO_INDEX": "1",
+            "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+        }
+    )
     return env

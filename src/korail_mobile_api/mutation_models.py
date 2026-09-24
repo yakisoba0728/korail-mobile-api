@@ -15,7 +15,6 @@ from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from .errors import KorailProtocolError
 from .models import BaseKorailResponse, PhysicalSeat, ReservationPassengerInfo, SeatInventoryResponse
 
-
 if TYPE_CHECKING:
     from .read_models import RefundTicketDetailResponse
 
@@ -51,9 +50,7 @@ def _require_every_field(
     for field_ in fields(request):
         value = getattr(request, field_.name)
         if not isinstance(value, str) or not value.strip():
-            raise KorailProtocolError(
-                f"KORAIL station refund {step} requires {field_.name}"
-            )
+            raise KorailProtocolError(f"KORAIL station refund {step} requires {field_.name}")
 
 
 @dataclass(frozen=True)
@@ -114,8 +111,7 @@ class StationRefundExecutionRequest:
         """첫 Orgtkinfo 행과 확인된 금액으로 실행 입력을 만듭니다."""
         if verification.str_result != "SUCC" or not verification.original_tickets:
             raise KorailProtocolError(
-                "KORAIL station refund requires a successful verification "
-                "with an original ticket"
+                "KORAIL station refund requires a successful verification with an original ticket"
             )
         ticket = verification.original_tickets[0]
         echoed = {
@@ -140,8 +136,7 @@ class StationRefundExecutionRequest:
                 missing.append(name)
         if missing:
             raise KorailProtocolError(
-                "KORAIL station refund verification is missing "
-                + ", ".join(sorted(missing))
+                "KORAIL station refund verification is missing " + ", ".join(sorted(missing))
             )
         return cls(**parts, customer_phone=customer_phone, customer_name=customer_name)
 
@@ -178,19 +173,13 @@ class KorailPassengerCounts:
             value = getattr(self, field_.name)
             # bool 을 인원으로 받지 않도록 정확한 int 타입만 허용합니다.
             if type(value) is not int or value < 0:
-                raise KorailProtocolError(
-                    f"{field_.name} must be a non-negative integer"
-                )
+                raise KorailProtocolError(f"{field_.name} must be a non-negative integer")
         total = self.total
         if total < 1:
-            raise KorailProtocolError(
-                "a reservation must carry at least one passenger"
-            )
+            raise KorailProtocolError("a reservation must carry at least one passenger")
         if total > KORAIL_MAX_PASSENGERS_PER_RESERVATION:
             raise KorailProtocolError(
-                "a reservation carries at most "
-                f"{KORAIL_MAX_PASSENGERS_PER_RESERVATION} passengers, "
-                f"got {total}"
+                f"a reservation carries at most {KORAIL_MAX_PASSENGERS_PER_RESERVATION} passengers, got {total}"
             )
 
     @property
@@ -223,9 +212,7 @@ class KorailSeatAssignment:
             raise KorailProtocolError("car_no must be a positive integer")
         seat_no = self.seat_no
         if not isinstance(seat_no, str) or not seat_no:
-            raise KorailProtocolError(
-                "seat_no must be a non-empty value taken from a seat-inventory read"
-            )
+            raise KorailProtocolError("seat_no must be a non-empty value taken from a seat-inventory read")
 
     @classmethod
     def from_inventory(
@@ -248,8 +235,7 @@ class KorailSeatAssignment:
             raise KorailProtocolError("seat does not belong to this seat inventory")
         if seat.sale_possible != "Y":
             raise KorailProtocolError(
-                "seat is not marked sellable by the seat-inventory read "
-                '(sale_psb_flg must be "Y")'
+                'seat is not marked sellable by the seat-inventory read (sale_psb_flg must be "Y")'
             )
         return cls(car_no=car_no, seat_no=seat.seat_no)
 
@@ -257,6 +243,7 @@ class KorailSeatAssignment:
 @dataclass(frozen=True)
 class ReservationJourney:
     """예약된 여정 한 개의 열차·구간·변경 식별자를 담습니다."""
+
     #: 여정 순번은 h_jrny_sqno입니다(ReservationOutJrnyInfo.java:86,361). 2026-09-22: 예약 생성 응답 21/21행에는 없고 재계산 4/4행·예약
     #: 상세 8/8행에는 있었습니다. 이 관측이 모든 예약 생성 응답에서 None임을 보장하지는 않습니다.
     journey_sequence: str | None = None
@@ -328,6 +315,7 @@ class ReservationHoldResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class ReservationPaymentCoupon:
     """결제 결과에 포함된 쿠폰 정보를 담습니다."""
+
     certificate_password: str | None = None
     coupon_no: str | None = None
     management_close_date: str | None = None
@@ -426,6 +414,7 @@ class ReservationPaymentTableSeat:
 @dataclass(frozen=True)
 class ReservationPaymentResponse(BaseKorailResponse):
     """카드 결제 시도의 발권·정산·좌석 결과를 담습니다."""
+
     image_ticket_flag: str | None = None
     #: ``h_rsv_no``. 2026-09-24 카드 결제 응답에서는 빈 문자열이었고 PNR(h_pnr_no)은 결제 응답에 없습니다. 결제한 승차권은 홀드의 pnr_no 로 찾으십시오(같은
     #: 날 승차권 목록의 h_pnr_no 와 같았습니다).
@@ -669,9 +658,7 @@ class CartDiscountAddition:
     passenger_sequence_no: str | None = None
     #: h_duty_ref_rcgn_ps_dv_cd 는 DTO 에 선언된 구분 코드이며(APK 필드명 보존) 의미·가능한 값은 미확인입니다.
     duty_reference_recognition_division_code: str | None = None
-    raw: Mapping[str, Any] = field(
-        default_factory=dict[str, Any], compare=False
-    )
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
 @dataclass(frozen=True)

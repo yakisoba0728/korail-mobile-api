@@ -6,6 +6,7 @@
 
 7.0.6 평문 근거: DynaPathMobileSDK.java:29-72(초기화·생성), a/a.java:11-21(기기 정보), a/b.java:75-227(조립), b/e.java:18-71(서명
 해시). 기본 기기 값은 합성값입니다."""
+
 from __future__ import annotations
 
 import random
@@ -23,13 +24,10 @@ from .constants import (
     KORAIL_DEFAULT_DEVICE_NAME,
 )
 
-
 DYNAPATH_BASE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 DYNAPATH_TABLE_INDEX = 1
 # 논스 알파벳과 4회 추출: a/b.java:138-149. SDK 의 평문 리터럴입니다.
-DYNAPATH_RANDOM_ALPHABET = (
-    string.ascii_lowercase + string.ascii_uppercase + string.digits
-)
+DYNAPATH_RANDOM_ALPHABET = string.ascii_lowercase + string.ascii_uppercase + string.digits
 DYNAPATH_DEFAULT_I8 = 161
 DYNAPATH_DEFAULT_I9 = 30
 DYNAPATH_DEFAULT_I10 = 2
@@ -37,9 +35,7 @@ KORAIL_DYNAPATH_APP_ID = "com.korail.talk"
 KORAIL_DYNAPATH_OS_TYPE = "Android"
 KORAIL_DYNAPATH_SDK_VERSION = "v1.0.3"
 # APK 서명 인증서 SHA-256. 원 근거: META-INF/BNDLTOOL.RSA(별도 APK 필요).
-KORAIL_DYNAPATH_SIGNING_CERT_SHA256 = (
-    "38ff229cb34c7dda8e28220a2d750cceec28db661a36d95ad92d82f6d3c618f9"
-)
+KORAIL_DYNAPATH_SIGNING_CERT_SHA256 = "38ff229cb34c7dda8e28220a2d750cceec28db661a36d95ad92d82f6d3c618f9"
 # b/e.java:55-71 은 서명 해시를 소문자 hex 32자로 절단합니다(b/d.java:20). SHA-256 상수: com/kakao/sdk/auth/Constants.java:28. 서명
 # 목록을 문자열화하므로 대괄호가 붙습니다(b/e.java:18-53, DynaPathMobileSDK.java:64).
 KORAIL_DYNAPATH_APP_SIGNATURE_HASH = KORAIL_DYNAPATH_SIGNING_CERT_SHA256[:32]
@@ -131,6 +127,7 @@ def build_dynapath_prefix(
 @dataclass(frozen=True)
 class DynapathRequestContext:
     """DynaPath 토큰 공급자에게 전달할 요청 메타데이터를 담습니다."""
+
     method: str
     path: str
     url: str
@@ -150,6 +147,7 @@ RandomTextProvider = Callable[[], str]
 @dataclass(frozen=True)
 class DynapathTokenSettings:
     """DynaPath 토큰 생성에 사용할 기기값과 시각 공급자를 구성합니다."""
+
     device_id: str
     as_value: str
     app_start_ts: str
@@ -219,12 +217,8 @@ class DynapathConfig:
     os_version: str = KORAIL_DEFAULT_ANDROID_OS_RELEASE
 
     def __post_init__(self) -> None:
-        if self.enabled and (
-            (self.token_provider is None) == (self.token_settings is None)
-        ):
-            raise ValueError(
-                "enabled DynaPath requires exactly one token provider or token settings"
-            )
+        if self.enabled and ((self.token_provider is None) == (self.token_settings is None)):
+            raise ValueError("enabled DynaPath requires exactly one token provider or token settings")
 
 
 def string_to_xa1s(data: str) -> list[int]:
@@ -390,6 +384,7 @@ def generate_dynapath_token(
 
 class DynapathTokenGenerator:
     """설정된 기기값으로 요청별 DynaPath 토큰을 제공합니다."""
+
     def __init__(
         self,
         settings: DynapathTokenSettings,

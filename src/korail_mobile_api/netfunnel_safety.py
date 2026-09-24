@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """대기열 응답의 노드 주소를 검사합니다. 대기열 키가 허용 범위 밖 호스트로 전송되지 않도록 ip·port를 제한합니다."""
+
 import re
 from urllib.parse import urlsplit
 
 from .constants import KORAIL_NETFUNNEL_URL
 from .errors import KorailProtocolError
-
 
 KORAIL_NETFUNNEL_HTTPS_HOST = urlsplit(KORAIL_NETFUNNEL_URL).hostname
 
@@ -25,10 +25,7 @@ def korail_netfunnel_node_url(ip: str, port: str) -> str:
     """허용된 대기열 노드의 HTTPS 원점 주소를 반환하며, 노드가 없으면 빈 문자열을 반환합니다."""
     if not ip and not port:
         return ""
-    if (
-        ip != KORAIL_NETFUNNEL_HTTPS_HOST
-        and KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(ip) is None
-    ):
+    if ip != KORAIL_NETFUNNEL_HTTPS_HOST and KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(ip) is None:
         raise KorailProtocolError(
             f"KORAIL NetFunnel reply named {ip!r} as its node; only "
             "rnf<1-99>.letskorail.com (lowercase) or the front door "
@@ -40,4 +37,3 @@ def korail_netfunnel_node_url(ip: str, port: str) -> str:
             f"only {KORAIL_NETFUNNEL_NODE_PORT} is followed"
         )
     return f"https://{ip}"
-

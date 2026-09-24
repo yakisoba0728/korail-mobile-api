@@ -4,17 +4,19 @@
 
 """승차권·예약·환불·마일리지·할인카드·부가서비스의 조회 필드를 구성합니다. 기본 조회는 payloads, 상태 변경은 mutation_payloads 에 있습니다. 키 근거는 DTO·호출부이며
 FieldMap 선언 자체가 키 이름·순서를 검증하지는 않습니다."""
+
 from __future__ import annotations
 
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import TYPE_CHECKING, Literal, cast as _cast
+from typing import TYPE_CHECKING, Literal
+from typing import cast as _cast
 
+from ._payload_helpers import _device_version, _is_ascii_digits
 from .config import KorailConfig
 from .errors import KorailProtocolError
-from ._payload_helpers import _device_version, _is_ascii_digits
 from .payloads import build_cache_query
 from .read_models import (
     CartItem,
@@ -22,7 +24,6 @@ from .read_models import (
     MaasServiceDetail,
     PassMenuData,
 )
-
 
 if TYPE_CHECKING:
     from .mutation_models import StationRefundVerificationRequest
@@ -67,9 +68,7 @@ def _ascii_digits(
         if not _is_ascii_digits(value, lengths):
             if len(lengths) == 1:
                 (length,) = lengths
-                raise KorailProtocolError(
-                    f"{name} must contain exactly {length} ASCII digits"
-                )
+                raise KorailProtocolError(f"{name} must contain exactly {length} ASCII digits")
             expected = ", ".join(str(length) for length in sorted(lengths))
             raise KorailProtocolError(f"{name} must contain {expected} ASCII digit(s)")
         return value
@@ -79,11 +78,7 @@ def _ascii_digits(
         or any(character < "0" or character > "9" for character in value)
         or (maximum_length is not None and len(value) > maximum_length)
     ):
-        suffix = (
-            f" with at most {maximum_length} digits"
-            if maximum_length is not None
-            else ""
-        )
+        suffix = f" with at most {maximum_length} digits" if maximum_length is not None else ""
         raise KorailProtocolError(f"{name} must be an ASCII decimal string{suffix}")
     return value
 
@@ -97,6 +92,7 @@ def _passenger_count(value: int, name: str) -> int:
 @dataclass(frozen=True)
 class FreeSeatCarRequest:
     """열차 한 편의 자유석 호차 조회 조건을 구성합니다."""
+
     run_date: str
     train_no: str
     departure_construction_order: str
@@ -116,6 +112,7 @@ class GuideSeatConditionRequest:
 @dataclass(frozen=True)
 class SeatAssignmentScheduleRequest:
     """좌석배정 화면의 열차 조회 조건을 구성합니다."""
+
     #: ``menuId`` — 좌석배정·할인 메뉴 코드입니다. 일반 검색 메뉴 ``"11"`` 은 빈 목록만 돌려주므로(2026-09-22 확인) 행을 받으려면 ``"A1"``/``"A2"``
     #: (``constants.KORAIL_DISCOUNT_CARD_MENU_ID``)를 씁니다. 자세한 것은
     #: ``client.KorailClient.get_seat_assignment_schedule`` docstring 참조.
@@ -139,6 +136,7 @@ class SeatAssignmentScheduleRequest:
 @dataclass(frozen=True)
 class MergeSeatsInquiryRequest:
     """병합 가능한 좌석과 중간역 조회 조건을 구성합니다."""
+
     boarding_datetime: str
     run_datetime: str
     train_no: str
@@ -216,6 +214,7 @@ def build_merge_seats_inquiry_form(
 @dataclass(frozen=True)
 class PassScheduleRequest:
     """정기권으로 이용 가능한 열차 조회 조건을 구성합니다."""
+
     selected_train_code: str
     departure_date: str
     departure_time: str
@@ -277,11 +276,7 @@ def build_delay_discount_ticket_form(
 ) -> dict[str, str]:
     # dptDtTo 속성의 전송 키는 명시적 h_page_no(DelayDiscountViewIn.java:50,77). 2026-09-16 관측: 날짜·1·다른 후보 키·키 생략 모두 같은 빈
     # SUCC. 할인권 없는 계정이므로 이 표본은 실제 필터 동작을 입증하지 못합니다.
-    return {
-        "h_page_no": _ascii_digits(
-            departure_date_to, "departure_date_to", lengths=frozenset({8})
-        )
-    }
+    return {"h_page_no": _ascii_digits(departure_date_to, "departure_date_to", lengths=frozenset({8}))}
 
 
 def build_discount_coupon_form(
@@ -353,13 +348,9 @@ def build_product_reservations_query(
     }
     # 상태 기본값은 보호돼 있습니다(ProductReservationViewModel.java:836). 입력 DTO 의 두 상태 필드는 호출자가 관측한 값으로 지정해야 합니다.
     if reservation_status_code is not None:
-        query["txtRsvSttCd"] = _required_text(
-            reservation_status_code, "reservation_status_code"
-        )
+        query["txtRsvSttCd"] = _required_text(reservation_status_code, "reservation_status_code")
     if payment_status_code is not None:
-        query["txtStlSttCd"] = _required_text(
-            payment_status_code, "payment_status_code"
-        )
+        query["txtStlSttCd"] = _required_text(payment_status_code, "payment_status_code")
     return query
 
 
@@ -371,9 +362,7 @@ def build_product_detail_query(
         "txtVrRsNo": _required_text(reservation_no, "reservation_no"),
     }
     if reservation_sequence is not None:
-        query["txtVrRsvSqNo"] = _required_text(
-            reservation_sequence, "reservation_sequence"
-        )
+        query["txtVrRsvSqNo"] = _required_text(reservation_sequence, "reservation_sequence")
     return query
 
 
@@ -428,6 +417,7 @@ def _validate_maas_service_detail_query_values(
 @dataclass(frozen=True)
 class MaasServiceDetailQuery:
     """부가서비스 이용 내역의 조회 기간을 구성합니다."""
+
     start_date: str | None = None
     end_date: str | None = None
 
@@ -455,9 +445,7 @@ def build_multi_child_discount_target_form(
 ) -> dict[str, str]:
     # 2026-09-22의 20260230 입력은 빈 목록이었습니다. 2026-09-24에는 다자녀 비대상 계정에서 정상·잘못된 날짜 모두 FAIL/WRC800029여서 재현하지 못했습니다. 달력
     # 검증은 라이브러리 정책입니다.
-    return {
-        "dptDt": _calendar_date(departure_date, "departure_date").strftime("%Y%m%d")
-    }
+    return {"dptDt": _calendar_date(departure_date, "departure_date").strftime("%Y%m%d")}
 
 
 def build_korail_point_summary_form() -> dict[str, str]:
@@ -482,9 +470,7 @@ KORAIL_MILEAGE_MOVEMENT_ALL: KorailMileageMovement = "0"
 KORAIL_MILEAGE_MOVEMENT_EARNED: KorailMileageMovement = "1"
 KORAIL_MILEAGE_MOVEMENT_SPENT: KorailMileageMovement = "2"
 
-_KORAIL_MILEAGE_LEDGERS = frozenset(
-    {KORAIL_MILEAGE_LEDGER_KTX, KORAIL_MILEAGE_LEDGER_RAIL_POINT}
-)
+_KORAIL_MILEAGE_LEDGERS = frozenset({KORAIL_MILEAGE_LEDGER_KTX, KORAIL_MILEAGE_LEDGER_RAIL_POINT})
 _KORAIL_MILEAGE_MOVEMENTS = frozenset(
     {
         KORAIL_MILEAGE_MOVEMENT_ALL,
@@ -512,8 +498,7 @@ def build_mileage_history_form(
 ) -> dict[str, str]:
     if request.ledger not in _KORAIL_MILEAGE_LEDGERS:
         raise KorailProtocolError(
-            "ledger must be KORAIL_MILEAGE_LEDGER_KTX or "
-            "KORAIL_MILEAGE_LEDGER_RAIL_POINT"
+            "ledger must be KORAIL_MILEAGE_LEDGER_KTX or KORAIL_MILEAGE_LEDGER_RAIL_POINT"
         )
     if request.movement not in _KORAIL_MILEAGE_MOVEMENTS:
         raise KorailProtocolError(
@@ -573,11 +558,7 @@ class DiscountCardScheduleRequest:
     ) -> DiscountCardScheduleRequest:
         """카드 종류에서 dcntCrdKndCd 를 유도합니다. 앱 대응 함수는 NCardDefine.findDcntCrdKndCd(NCardDefine.java:58-88)이며 그 함수가
         특별 취급하는 관리번호 집합은 이 구현과 다릅니다(_B2N_CARD_KIND_MANAGEMENT_NOS 참고)."""
-        kind_code = (
-            "B2N"
-            if card_kind_management_no in _B2N_CARD_KIND_MANAGEMENT_NOS
-            else "MMM"
-        )
+        kind_code = "B2N" if card_kind_management_no in _B2N_CARD_KIND_MANAGEMENT_NOS else "MMM"
         return cls(
             card_kind_management_no=card_kind_management_no,
             departure_station_name=departure_station_name,
@@ -706,11 +687,7 @@ def build_trip_change_date_form(departure_date: str) -> dict[str, str]:
     # 달력 검증은 앱에 없는 라이브러리 검사입니다(앱은 날짜 선택기 값만 보냅니다). 2026-09-24 라이브: 20260230·20261340 은 SUCC/API.I00000 에
     # tripChgDates 없이 돌아왔고, 정상 날짜는 변경 가능일이 없어도 빈 tripChgDates 를 실었습니다(20250101·20991231 등). 로컬에서 막지 않으면 잘못 쓴 날짜가
     # 성공 봉투로 돌아옵니다.
-    return {
-        "tripChgDate": _calendar_date(
-            departure_date, "departure_date"
-        ).strftime("%Y%m%d")
-    }
+    return {"tripChgDate": _calendar_date(departure_date, "departure_date").strftime("%Y%m%d")}
 
 
 def _exact_server_pass_data(pass_data: PassMenuData) -> str:
@@ -724,6 +701,7 @@ def _exact_server_pass_data(pass_data: PassMenuData) -> str:
 @dataclass(frozen=True)
 class CommuterInitialRequest:
     """정기권 예매의 초기 조건 조회 입력을 구성합니다."""
+
     pass_data: PassMenuData
 
     def __post_init__(self) -> None:
@@ -733,6 +711,7 @@ class CommuterInitialRequest:
 @dataclass(frozen=True, init=False)
 class CommuterPassengerRequest:
     """정기권 예매의 승객·인원 조건 조회 입력을 구성합니다."""
+
     pass_data: PassMenuData
     source: CommuterInfoResponse
     passenger_counts: tuple[int, ...]
@@ -767,14 +746,10 @@ def _validate_commuter_passenger_request(
         for option in options
     ]
     if not validated_age_codes or len(validated_age_codes) != len(request.passenger_counts):
-        raise KorailProtocolError(
-            "passenger counts must match the response age-code rows"
-        )
+        raise KorailProtocolError("passenger counts must match the response age-code rows")
     for count in request.passenger_counts:
         if type(count) is not int or count < 0:
-            raise KorailProtocolError(
-                "passenger counts must be non-negative integers"
-            )
+            raise KorailProtocolError("passenger counts must be non-negative integers")
     return tuple(validated_age_codes)
 
 
@@ -806,9 +781,7 @@ def _exact_original_ticket_reference(
     reference: OriginalTicketReference,
 ) -> OriginalTicketReference:
     if not isinstance(reference, OriginalTicketReference):
-        raise KorailProtocolError(
-            "ticket must be an OriginalTicketReference"
-        )
+        raise KorailProtocolError("ticket must be an OriginalTicketReference")
     return reference
 
 
@@ -839,6 +812,7 @@ def _exact_ticket_reference_tuple(
 @dataclass(frozen=True)
 class TicketDuplicationCheckRequest:
     """PNR 기준 중복 예약 확인 입력을 구성합니다."""
+
     pnr_no: str
 
     def __post_init__(self) -> None:
@@ -862,9 +836,7 @@ def build_ticket_duplication_check_form(
     request: TicketDuplicationCheckRequest,
 ) -> dict[str, str]:
     if not isinstance(request, TicketDuplicationCheckRequest):
-        raise KorailProtocolError(
-            "request must be a TicketDuplicationCheckRequest"
-        )
+        raise KorailProtocolError("request must be a TicketDuplicationCheckRequest")
     return {"pnrNo": request.pnr_no}
 
 
@@ -955,6 +927,7 @@ def build_recent_delivery_history_form(customer_no: str) -> dict[str, str]:
 @dataclass(frozen=True)
 class CommuterTicketInquiryRequest:
     """정기권 예매의 원승차권 조회 입력을 구성합니다."""
+
     original_ticket: OriginalTicketReference
     inquiry_type: Literal["0", "1"] = "0"
 
@@ -962,16 +935,10 @@ class CommuterTicketInquiryRequest:
         if self.inquiry_type not in {"0", "1"}:
             raise KorailProtocolError("inquiry_type must be '0' or '1'")
         if not isinstance(self.original_ticket, OriginalTicketReference):
-            raise KorailProtocolError(
-                "original_ticket must be an OriginalTicketReference"
-            )
+            raise KorailProtocolError("original_ticket must be an OriginalTicketReference")
 
 
-CommuterInfoRequest = (
-    CommuterInitialRequest
-    | CommuterPassengerRequest
-    | CommuterTicketInquiryRequest
-)
+CommuterInfoRequest = CommuterInitialRequest | CommuterPassengerRequest | CommuterTicketInquiryRequest
 
 
 def build_commuter_info_form(
@@ -985,8 +952,7 @@ def build_commuter_info_form(
         )
     if isinstance(request, CommuterPassengerRequest):
         age_codes = tuple(
-            _cast(str, option.commuter_usage_age_code)
-            for option in request.source.passenger_options
+            _cast(str, option.commuter_usage_age_code) for option in request.source.passenger_options
         )
         # cmtrUtlAgeCd 는 종류 행당이 아니라 승객당 반복합니다(CommutationInfoIn.java:31,38). 2026-09-22 kind=0046 관측: E05/E06 을
         # 행당 한 번 보내면 WRT800115, 인원 1+E05, 1+E06, 2+E05/E05 는 IRZ000008 이었습니다. 2026-09-24: 이 키를 빼면 1명·2명 모두
@@ -1002,9 +968,7 @@ def build_commuter_info_form(
             for _ in range(count)
         )
         if not selected:
-            raise KorailProtocolError(
-                "passenger_counts must select at least one passenger"
-            )
+            raise KorailProtocolError("passenger_counts must select at least one passenger")
         return (
             ("jobDvCd", "b"),
             ("cmtrKndCd", _cast(str, request.pass_data.commuter_kind_code)),
@@ -1104,9 +1068,7 @@ def build_price_fare_quote_form(
     supplied = [leg.goods_no is not None for leg in request.legs]
     if any(supplied):
         if not all(supplied):
-            raise KorailProtocolError(
-                "goods_no must be set on every leg or on none of them"
-            )
+            raise KorailProtocolError("goods_no must be set on every leg or on none of them")
         columns.insert(4, ("gdNo", "goods_no"))
     return (
         ("txtMenuId", request.menu_id),
@@ -1138,9 +1100,7 @@ def build_ticket_reservation_detail_query(
 ) -> dict[str, str]:
     """예약번호를 담은 예약 상세 조회 쿼리를 구성합니다. 전송 키 ``hidPnrNo`` 는 TicketRsvInquiryIn.java:51 에 명시돼 있습니다."""
     if not isinstance(request, TicketReservationDetailRequest):
-        raise KorailProtocolError(
-            "request must be a TicketReservationDetailRequest"
-        )
+        raise KorailProtocolError("request must be a TicketReservationDetailRequest")
     return {"hidPnrNo": request.pnr_no}
 
 

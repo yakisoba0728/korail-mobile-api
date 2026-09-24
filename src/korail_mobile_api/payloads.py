@@ -4,6 +4,7 @@
 
 """열차·좌석·공통 조회의 요청 필드를 구성하며 전송하지 않습니다. @FieldMap만으로 개별 키·순서는 입증되지 않습니다. 나머지 조회는 read_payloads, 상태 변경은
 mutation_payloads에서 구성합니다."""
+
 import time
 from collections.abc import Sequence
 
@@ -25,9 +26,7 @@ def _required_ascii_digits(
 ) -> str:
     if not _is_ascii_digits(value, lengths):
         expected = ", ".join(str(length) for length in sorted(lengths))
-        raise KorailProtocolError(
-            f"{name} must contain {expected} ASCII digit(s)"
-        )
+        raise KorailProtocolError(f"{name} must contain {expected} ASCII digit(s)")
     return value
 
 
@@ -62,9 +61,7 @@ def _wire_goods_no(value: str) -> str:
         or not value.isascii()
         or any(character <= " " or character == "\x7f" for character in value)
     ):
-        raise KorailProtocolError(
-            "goods_no must be a printable ASCII value"
-        )
+        raise KorailProtocolError("goods_no must be a printable ASCII value")
     return value
 
 
@@ -73,9 +70,7 @@ def _validated_room_class_code(value: str) -> str:
     # 복사합니다(TrainSeatMapViewModel.java:2542,2546). PsrmType.java:19-22 의 GENERAL/SPECIAL 값은 보호됨. 이 코드의 1/2 배정은
     # 라이브 기록에 의존합니다.
     if value not in {"1", "2"}:
-        raise KorailProtocolError(
-            'room_class_code must be "1" (general) or "2" (first class)'
-        )
+        raise KorailProtocolError('room_class_code must be "1" (general) or "2" (first class)')
     return value
 
 
@@ -96,9 +91,7 @@ def build_seat_car_form(
     혼동하지 마십시오(NetworkServiceKt.java:28). menu_id 의 기본값 밖 코드는 보호돼 있으므로 맥락을 아는 호출자만 재정의하십시오."""
     validate_seat_inventory_inputs(train, passenger_count)
     if seat_attribute_code:
-        _required_ascii_digits(
-            seat_attribute_code, "seat_attribute_code", lengths=frozenset({3})
-        )
+        _required_ascii_digits(seat_attribute_code, "seat_attribute_code", lengths=frozenset({3}))
     seat_attribute = seat_attribute_code or train.seat_attribute_code
     return {
         **_device_version(config),
@@ -148,11 +141,7 @@ def build_seat_inventory_form(
         passenger_count,
         car_no=car_no,
     )
-    seat_attribute = (
-        train.seat_attribute_code
-        if seat_attribute_code is None
-        else seat_attribute_code
-    )
+    seat_attribute = train.seat_attribute_code if seat_attribute_code is None else seat_attribute_code
     return {
         **_device_version(config),
         "Key": config.key,
@@ -199,13 +188,8 @@ def build_train_search_form(
 
     transfer 는 radJobId 를 바꾸며(TrainScheduleViewModel.java:3136,3212), 명시한 환승역·후속 열차군은 transfer 여부와 관계없이 목록 필드로
     추가합니다. Sid 는 DTO 에 없습니다(TrainScheduleIn.java:95). menu_id 기본값 밖의 보호 코드는 build_seat_car_form 의 경고를 따릅니다."""
-    if continuation is not None and not isinstance(
-        continuation, TrainSearchContinuation
-    ):
-        raise KorailProtocolError(
-            "KORAIL train search continuation must be a "
-            "TrainSearchContinuation"
-        )
+    if continuation is not None and not isinstance(continuation, TrainSearchContinuation):
+        raise KorailProtocolError("KORAIL train search continuation must be a TrainSearchContinuation")
     counts = (
         query.passengers,
         query.child_passengers,
@@ -222,11 +206,7 @@ def build_train_search_form(
         **_device_version(config),
         "Key": config.key,
         "txtMenuId": menu_id,
-        "radJobId": (
-            KORAIL_TRANSFER_ITINERARY_CODE
-            if transfer
-            else KORAIL_DIRECT_ITINERARY_CODE
-        ),
+        "radJobId": (KORAIL_TRANSFER_ITINERARY_CODE if transfer else KORAIL_DIRECT_ITINERARY_CODE),
         "selGoTrain": query.train_group_code,
         "txtTrnGpCd": query.train_group_code,
         "txtGoStart": departure_name,
@@ -260,8 +240,7 @@ def build_train_search_form(
     ):
         raise KorailProtocolError("connection_station_codes must be a sequence of non-empty strings")
     if query.connection_train_group_code is not None and (
-        not isinstance(query.connection_train_group_code, str)
-        or not query.connection_train_group_code
+        not isinstance(query.connection_train_group_code, str) or not query.connection_train_group_code
     ):
         raise KorailProtocolError("connection_train_group_code must be a non-empty string or None")
     form["qryDvCd"] = query.query_division_code

@@ -48,6 +48,7 @@ class TicketListTrain:
 @dataclass(frozen=True)
 class TicketListTicket:
     """승차권 한 장의 식별자·상태와 열차 구간을 담습니다."""
+
     pnr_no: str | None = None
     sale_window_no: str | None = None
     sale_date: str | None = None
@@ -111,6 +112,7 @@ class TicketListReservation:
 @dataclass(frozen=True)
 class TicketListResponse(BaseKorailResponse):
     """현재 승차권 또는 구매 이력을 예약별로 묶어 담습니다."""
+
     reservations: tuple[TicketListReservation, ...] = ()
     #: h_total_cnt는 구매이력(mode="2")의 총건수이며 영 채움을 보존합니다. 키가 없으면 None입니다.
     total_count: str | None = None
@@ -119,12 +121,14 @@ class TicketListResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class ServiceStatusResponse(BaseKorailResponse):
     """예매 서비스의 운영 상태 응답을 담습니다."""
+
     pass
 
 
 @dataclass(frozen=True)
 class CartItem:
     """장바구니의 열차·공항버스 예약 또는 부가서비스 한 행을 담습니다."""
+
     service_code: str | None = None
     provider_name: str | None = None
     product_name: str | None = None
@@ -184,12 +188,14 @@ class CartItem:
 @dataclass(frozen=True)
 class CartListResponse(BaseKorailResponse):
     """로그인 계정의 장바구니 목록을 담습니다."""
+
     items: tuple[CartItem, ...] = ()
 
 
 @dataclass(frozen=True)
 class DepositBank:
     """입금 가능한 은행의 코드와 이름을 담습니다."""
+
     code: str | None = None
     display_name: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
@@ -198,6 +204,7 @@ class DepositBank:
 @dataclass(frozen=True)
 class DepositBankListResponse(BaseKorailResponse):
     """입금 가능한 은행 목록을 담습니다."""
+
     items: tuple[DepositBank, ...] = ()
 
 
@@ -252,6 +259,7 @@ class DelayDiscountTicketListResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class DiscountCoupon:
     """할인쿠폰 한 장의 조건과 유효기간을 담습니다."""
+
     guide: str | None = None
     start_date: str | None = None
     expiration_date: str | None = None
@@ -265,6 +273,7 @@ class DiscountCoupon:
 @dataclass(frozen=True)
 class DiscountCouponListResponse(BaseKorailResponse):
     """할인쿠폰 목록과 안내를 담습니다."""
+
     items: tuple[DiscountCoupon, ...] = ()
     current_page: int | None = None
     total_pages: int | None = None
@@ -275,6 +284,7 @@ class DiscountCouponListResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class PassOffice:
     """패스 조회의 발권처 코드와 표시 이름을 담습니다."""
+
     code: str | None = None
     display_name: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
@@ -309,6 +319,7 @@ class PassAvailabilityMainInfo:
 @dataclass(frozen=True)
 class PassAvailabilityResponse(BaseKorailResponse):
     """패스의 사용 개시일·발권 가능일·창구 목록을 담습니다."""
+
     #: open_dates는 pass_info의 날짜만 모으므로 날짜가 없는 행을 건너뜁니다. 전체 행은 pass_info를 사용하십시오.
     open_dates: tuple[str, ...] = ()
     ticket_issue_dates: tuple[str, ...] = ()
@@ -346,6 +357,7 @@ class TripMenuContent:
 @dataclass(frozen=True)
 class TripMenuItem:
     """여행상품 메뉴 한 항목과 그 안내 목록을 담습니다."""
+
     title: str | None = None
     detail: str | None = None
     menu_type: str | None = None
@@ -362,6 +374,7 @@ class TripMenuItem:
 @dataclass(frozen=True)
 class TripMenuResponse(BaseKorailResponse):
     """여행상품 메뉴 목록을 담습니다."""
+
     items: tuple[TripMenuItem, ...] = ()
     popup_message: str | None = None
 
@@ -369,6 +382,7 @@ class TripMenuResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class ProductReservation:
     """여행상품 예약 한 건의 식별자와 상태를 담습니다."""
+
     product_name: str | None = None
     reservation_status: str | None = None
     payment_deadline: str | None = None
@@ -385,6 +399,7 @@ class ProductReservation:
 @dataclass(frozen=True)
 class ProductReservationListResponse(BaseKorailResponse):
     """여행상품 예약 목록 한 페이지를 담습니다."""
+
     items: tuple[ProductReservation, ...] = ()
     total_count: int | None = None
 
@@ -392,6 +407,7 @@ class ProductReservationListResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class ProductDetailResponse(BaseKorailResponse):
     """여행상품 예약의 상세·금액·취소 조건을 담습니다."""
+
     product_name: str | None = None
     reservation_status: str | None = None
     cancellation_deadline: str | None = None
@@ -411,6 +427,7 @@ class ProductDetailResponse(BaseKorailResponse):
 @dataclass(frozen=True, kw_only=True)
 class ReceiptPayment:
     """영수증의 결제수단 한 행을 담습니다."""
+
     payment_method: str
     #: h_apv_dt. 계좌·승인·카드·포인트 번호를 포함한 기록 경고는 모듈 설명 참고.
     approval_date: str
@@ -440,6 +457,7 @@ class ReceiptCashPayment:
 @dataclass(frozen=True, kw_only=True)
 class TicketReceipt:
     """승차권 영수증의 이용 내역과 결제 정보를 담습니다."""
+
     travel_date: str
     departure_station: str
     departure_time: str
@@ -474,6 +492,7 @@ class TicketReceipt:
 @dataclass(frozen=True)
 class TicketReceiptResponse(BaseKorailResponse):
     """승차권 영수증 조회 결과를 담습니다."""
+
     items: tuple[TicketReceipt, ...] = ()
 
 
@@ -618,6 +637,7 @@ class ReservationHistoryResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class FreeSeatCarResponse(BaseKorailResponse):
     """열차의 자유석 호차와 안내 문구를 담습니다."""
+
     title: str | None = None
     car_no: str | None = None
     content: str | None = None
@@ -726,6 +746,7 @@ class PassScheduleTrain:
 @dataclass(frozen=True)
 class PassAgeOption:
     """패스 예매에 사용할 연령 선택 항목을 담습니다."""
+
     commuter_age_code: str | None = None
     display_name: str | None = None
     minimum_age: str | None = None
@@ -736,6 +757,7 @@ class PassAgeOption:
 @dataclass(frozen=True)
 class PassScheduleInfo:
     """정기권 열차 조회의 조건과 부가 정보를 담습니다."""
+
     trains: tuple[PassScheduleTrain, ...] = ()
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
@@ -743,6 +765,7 @@ class PassScheduleInfo:
 @dataclass(frozen=True)
 class PassScheduleMainInfo:
     """정기권 열차 조회의 중첩 상태와 조건을 담습니다."""
+
     sale_window_no: str | None = None
     work_date: str | None = None
     work_time: str | None = None
@@ -790,6 +813,7 @@ class SeatAssignmentScheduleResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class IntermediateStation:
     """좌석 병합 구간이 나뉘는 중간역을 담습니다."""
+
     code: str | None = None
     name: str | None = None
     run_order: str | None = None
@@ -799,6 +823,7 @@ class IntermediateStation:
 @dataclass(frozen=True)
 class PassPeriodOption:
     """패스 예매에 사용할 기간 선택 항목을 담습니다."""
+
     commuter_period_code: str | None = None
     display_name: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
@@ -807,6 +832,7 @@ class PassPeriodOption:
 @dataclass(frozen=True)
 class MergeSeatsInquiryResponse(BaseKorailResponse):
     """병합 가능한 열차와 중간역 목록을 담습니다."""
+
     merge_reservation_possible_flag: str | None = None
     #: 최상위 runDt 선언: MergeSeatsCOut.java:29,112. 2026-09-22 관측 20여 회에는 없었고 행의 h_run_dt 는 존재했습니다. 필요하면
     #: trains[i].run_date 를 확인하십시오. 항상 None 이라는 보장은 아닙니다.
@@ -818,6 +844,7 @@ class MergeSeatsInquiryResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class PassMenuData:
     """패스 메뉴의 역 선택 조건과 상품 코드를 담습니다."""
+
     commuter_kind_code: str | None = None
     station_selection: str | None = None
     age_options: tuple[PassAgeOption, ...] = ()
@@ -828,6 +855,7 @@ class PassMenuData:
 @dataclass(frozen=True)
 class PassPassengerInfo:
     """패스의 승객 종류별 인원 조건을 담습니다."""
+
     h_cls_prnb: int | None = None
     h_dcnt_knd_cd: str | None = None
     h_st_prnb: int | None = None
@@ -837,6 +865,7 @@ class PassPassengerInfo:
 @dataclass(frozen=True)
 class PassPassengerInfos:
     """패스 승객 조건 목록을 담습니다."""
+
     h_chtn_allw_flg: str | None = None
     h_max_cnt: str | None = None
     h_min_cnt: str | None = None
@@ -847,6 +876,7 @@ class PassPassengerInfos:
 @dataclass(frozen=True)
 class PassGoodsInfo:
     """패스 메뉴에 연결된 상품 정보를 담습니다."""
+
     h_cnd_flg_disc_no: str | None = None
     psg_infos: PassPassengerInfos | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
@@ -855,6 +885,7 @@ class PassGoodsInfo:
 @dataclass(frozen=True)
 class PassMenuItem:
     """정기권·패스 메뉴 한 항목과 안내를 담습니다."""
+
     #: ``afterDay`` — 서버가 문자열로 보냅니다(``PassMenuOutItem.java:28`` ``String``). 형제
     #: :attr:`CommuterKindMenuResponse.after_day` 와 형이 같습니다. 정수가 필요하면 호출자가 변환하십시오 — 앱도 그 자리에서
     #: ``StringExKt.safeToInt`` 로 파싱 실패 시 0을 씁니다.
@@ -884,12 +915,14 @@ class PassMenuItem:
 @dataclass(frozen=True)
 class PassMenuResponse(BaseKorailResponse):
     """정기권·패스 메뉴 목록을 담습니다."""
+
     items: tuple[PassMenuItem, ...] = ()
 
 
 @dataclass(frozen=True)
 class CommuterKindMenuResponse(BaseKorailResponse):
     """정기권 종류별 안내와 예매 조건을 담습니다."""
+
     after_day: str | None = None
     agreement: str | None = None
     information: str | None = None
@@ -900,6 +933,7 @@ class CommuterKindMenuResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class CrewRequestOption:
     """승무원 호출 시 선택할 요청 사유를 담습니다."""
+
     message_code: str | None = None
     content: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
@@ -908,12 +942,14 @@ class CrewRequestOption:
 @dataclass(frozen=True)
 class CrewRequestListResponse(BaseKorailResponse):
     """승무원 호출 사유 목록을 담습니다."""
+
     items: tuple[CrewRequestOption, ...] = ()
 
 
 @dataclass(frozen=True)
 class PassScheduleResponse(BaseKorailResponse):
     """정기권으로 이용 가능한 열차 목록을 담습니다."""
+
     main_info: PassScheduleMainInfo | None = None
     schedules: tuple[PassScheduleInfo, ...] = ()
 
@@ -1103,6 +1139,7 @@ class DiscountCardScheduleResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class MultiChildDiscountTarget:
     """다자녀 할인 대상으로 등록된 가족 한 명을 담습니다."""
+
     birth_date: str | None = None
     customer_family_name: str | None = None
     discount_kind_code: str | None = None
@@ -1117,12 +1154,14 @@ class MultiChildDiscountTarget:
 @dataclass(frozen=True)
 class MultiChildDiscountTargetResponse(BaseKorailResponse):
     """다자녀 할인 대상 가족 목록을 담습니다."""
+
     targets: tuple[MultiChildDiscountTarget, ...] = ()
 
 
 @dataclass(frozen=True)
 class CustomerTripInfo:
     """계정에 저장된 여행 편의설정을 담습니다."""
+
     additional_seat_attribute_code: str | None = None
     adult_disabled_person_count: str | None = None
     adult_count: str | None = None
@@ -1163,12 +1202,14 @@ class CustomerTripInfo:
 @dataclass(frozen=True)
 class CustomerTripInfoResponse(BaseKorailResponse):
     """여행 편의설정 조회 결과를 담습니다."""
+
     trips: tuple[CustomerTripInfo, ...] = ()
 
 
 @dataclass(frozen=True)
 class MaasServiceDetailInfo:
     """부가서비스의 상품·이용·결제 상세를 담습니다."""
+
     additional_service_request_no: str | None = None
     booking_time: str | None = None
     branch_name: str | None = None
@@ -1206,6 +1247,7 @@ class MaasServiceDetailInfo:
 @dataclass(frozen=True)
 class MaasServiceDetail:
     """신청한 부가서비스 한 건과 그 상세를 담습니다."""
+
     additional_service_division_code: str | None = None
     additional_service_goods_code: str | None = None
     additional_service_id: str | None = None
@@ -1234,6 +1276,7 @@ class MaasServiceDetail:
 @dataclass(frozen=True)
 class MaasServiceDetailListResponse(BaseKorailResponse):
     """신청한 부가서비스 목록을 담습니다."""
+
     details: tuple[MaasServiceDetail, ...] = ()
 
 
@@ -1273,6 +1316,7 @@ class CommuterPassengerOption:
 @dataclass(frozen=True)
 class CommuterInfoResponse(BaseKorailResponse):
     """정기권 예매 단계별 조건·승객·원표 정보를 담습니다."""
+
     additional_service_goods_flag: str | None = None
     companion_flag: str | None = None
     commuter_kind_code: str | None = None
@@ -1293,6 +1337,7 @@ class CommuterInfoResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class PriceFare:
     """열차 한 구간의 운임 정보를 담습니다."""
+
     journey_sequence: str | None = None
     room_class_name: str | None = None
     received_fare: str | None = None
@@ -1305,12 +1350,14 @@ class PriceFare:
 @dataclass(frozen=True)
 class PriceFareQuoteResponse(BaseKorailResponse):
     """예매 전 운임 조회 결과를 담습니다."""
+
     fares: tuple[PriceFare, ...] = ()
 
 
 @dataclass(frozen=True, kw_only=True)
 class DeliveryRecipientResponse(BaseKorailResponse):
     """N카드 2인 승차권의 전달 수령자 후보를 담습니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
+
     acceptance_customer_management_no: str
     acceptance_customer_name: str
     acceptance_customer_phone: str
@@ -1320,6 +1367,7 @@ class DeliveryRecipientResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class TicketDuplicationCheckResponse(BaseKorailResponse):
     """PNR 기준 중복 예약 확인 결과를 담습니다."""
+
     #: ``rsvCnt`` — ``TicketDupCheckOut.java:28`` 의 선언은 ``String`` 이고 이 DTO 는 kotlinx 이므로 문자열로 읽습니다(``"0007"`` 은
     #: 그대로). 서버가 이 값을 JSON 정수로 보낸 적이 있는지는 확인하지 않았습니다.
     reservation_count: str | None = None
@@ -1328,6 +1376,7 @@ class TicketDuplicationCheckResponse(BaseKorailResponse):
 @dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceSeat:
     """PBP 수락 내역의 좌석 한 자리를 담습니다."""
+
     passenger_type_division_name: str
     room_class_code: str
     room_class_name: str
@@ -1339,6 +1388,7 @@ class PbpAcceptanceSeat:
 @dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceJourney:
     """PBP 수락 내역의 여정과 좌석 목록을 담습니다."""
+
     acceptance_customer_name: str
     acceptance_customer_phone: str
     journey_type_code: str
@@ -1355,6 +1405,7 @@ class PbpAcceptanceJourney:
 @dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceTicket:
     """PBP 수락 내역의 승차권과 여정 목록을 담습니다."""
+
     pnr_no: str
     sale_date: str
     sale_sequence: str
@@ -1367,6 +1418,7 @@ class PbpAcceptanceTicket:
 @dataclass(frozen=True)
 class PbpAcceptanceSpecificationResponse(BaseKorailResponse):
     """승차권별 PBP 수락 내역 목록을 담습니다."""
+
     tickets: tuple[PbpAcceptanceTicket, ...] = ()
 
 
@@ -1511,6 +1563,7 @@ class OriginalTicketInquiryResponse(BaseKorailResponse):
 @dataclass(frozen=True, kw_only=True)
 class RecentDeliveryRecipient:
     """최근 승차권을 전달한 수령자 한 명을 담습니다."""
+
     acceptance_customer_management_flag: str
     acceptance_customer_management_no: str
     acceptance_customer_name: str
@@ -1523,6 +1576,7 @@ class RecentDeliveryRecipient:
 @dataclass(frozen=True)
 class RecentDeliveryHistoryResponse(BaseKorailResponse):
     """최근 승차권 전달 수령자 목록을 담습니다."""
+
     changed_acceptance_reservation_no: str | None = None
     recipients: tuple[RecentDeliveryRecipient, ...] = ()
 

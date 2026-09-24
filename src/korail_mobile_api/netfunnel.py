@@ -225,7 +225,6 @@ class KorailNetFunnelClient:
         finally:
             self._complete(slot)
 
-
     def _url(self, origin: str, params: tuple[tuple[str, str], ...]) -> str:
         return f"{origin}{KORAIL_NETFUNNEL_PATH}?{urlencode(params)}"
 
@@ -238,8 +237,7 @@ class KorailNetFunnelClient:
             ) from exc
         if response.is_error:
             raise KorailTransportError(
-                f"KORAIL NetFunnel HTTP {response.status_code} for GET "
-                f"{KORAIL_NETFUNNEL_PATH}"
+                f"KORAIL NetFunnel HTTP {response.status_code} for GET {KORAIL_NETFUNNEL_PATH}"
             )
         return response.text
 
@@ -333,8 +331,7 @@ class KorailNetFunnelClient:
                 "app does not send it then, so neither does this client",
             ) from exc
         _log.warning(
-            "KORAIL NetFunnel failed (%s); sending %r without a queue pass as "
-            "the app does (ErrorBypass)",
+            "KORAIL NetFunnel failed (%s); sending %r without a queue pass as the app does (ErrorBypass)",
             exc,
             gate.name,
         )

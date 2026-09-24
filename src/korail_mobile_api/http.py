@@ -4,6 +4,7 @@
 
 """KORAIL API를 전송하고 공통 필드와 응답 봉투를 처리합니다. config.base_url은 검사하지 않으며 라우트는 호출부가 선택합니다. 공통 필드는 호출 옵션에 따라 주입하고, lang은
 KorailConfig.lang이 설정된 경우에만 붙입니다. 대기열 전송은 netfunnel 모듈이 담당합니다."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
@@ -12,6 +13,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from ._parsing import _reject_non_string_envelope_fields
 from .config import KorailConfig
 from .constants import (
     DYNAPATH_ALLOWLIST_PATHS,
@@ -27,20 +29,21 @@ from .errors import (
     KorailTransportError,
     classify_app_error,
 )
-from ._parsing import _reject_non_string_envelope_fields
 from .models import BaseKorailResponse
-
 
 # 응답 모델이 CommonOut 을 상속하지 않아 strResult 누락이 실패가 아닌 읽기 경로: StationDataOut(stationdata, EbizMaasStationList),
 # StationInfoOut(stationinfo). 이 경로라도 존재하는 봉투 필드는 보존합니다.
-_NON_COMMON_OUT_READ_PATHS = frozenset({
-    "/classes/com.korail.mobile.common.stationdata",
-    "/classes/com.korail.mobile.common.stationinfo",
-    "/ebizmaas/EbizMaasStationList.do",
-    # VerifyOnlineRefundsOut.java:29 는 CommonOut 을 상속하지 않습니다. strResult 누락 기본값(:91-94)은 null 이 아니라 보호 문자열입니다. 이
-    # 경로는 봉투 키 누락을 허용하되 존재하는 필드는 보존합니다.
-    "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
-})
+_NON_COMMON_OUT_READ_PATHS = frozenset(
+    {
+        "/classes/com.korail.mobile.common.stationdata",
+        "/classes/com.korail.mobile.common.stationinfo",
+        "/ebizmaas/EbizMaasStationList.do",
+        # VerifyOnlineRefundsOut.java:29 는 CommonOut 을 상속하지 않습니다. strResult 누락 기본값(:91-94)은 null 이 아니라
+        # 보호 문자열입니다. 이 경로는 봉투 키 누락을 허용하되 존재하는 필드는 보존합니다.
+        "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
+    }
+)
+
 
 def parse_base_response(
     data: object,
@@ -145,8 +148,7 @@ def _decode_response(response: httpx.Response, *, path: str) -> Any:
     # (analysis/jadx/sources/retrofit2/OkHttpCall.java:184-201). 리다이렉트는 따라가지 않습니다.
     if not 200 <= response.status_code < 300:
         transport_error = KorailTransportError(
-            f"KORAIL HTTP {response.status_code} for "
-            f"{response.request.method} {response.request.url.path}"
+            f"KORAIL HTTP {response.status_code} for {response.request.method} {response.request.url.path}"
         )
         transport_error.raw = payload if decoded else response.content
         raise transport_error
@@ -303,9 +305,7 @@ class KorailHttpClient:
             if data:
                 ordered_form.extend(data)
             if omit_empty_fields:
-                ordered_form = [
-                    item for item in ordered_form if not _is_empty_string(item[1])
-                ]
+                ordered_form = [item for item in ordered_form if not _is_empty_string(item[1])]
         else:
             mapping_form = {}
             if include_common:
@@ -314,11 +314,7 @@ class KorailHttpClient:
                 mapping_form.update(data)
             if omit_empty_fields:
                 mapping_form = _drop_empty(mapping_form)
-        headers = (
-            {"Content-Type": "application/x-www-form-urlencoded"}
-            if form_encoded
-            else {}
-        )
+        headers = {"Content-Type": "application/x-www-form-urlencoded"} if form_encoded else {}
         if include_dynapath:
             headers.update(self._dynapath_headers("POST", path))
 
@@ -383,9 +379,7 @@ class KorailHttpClient:
         strResult 를 요구하며 raise_on_fail=False 는 실패 판정만 완화합니다. 봉투 타입 검사와 P058 처리는 그대로입니다."""
         # 빈 문자열 생략 규칙과 근거는 _drop_empty 참고.
         data = _drop_empty(data)
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
         headers.update(self._dynapath_headers("POST", path))
         response = _send(
             lambda: self._client.post(path, data=dict(data), headers=headers), method="POST", path=path
@@ -414,11 +408,7 @@ class KorailHttpClient:
             query.update(params)
         if omit_empty_fields:
             query = _drop_empty(query)
-        headers = (
-            self._dynapath_headers("GET", path)
-            if include_dynapath
-            else {}
-        )
+        headers = self._dynapath_headers("GET", path) if include_dynapath else {}
         return self._finish_read(
             lambda: self._client.get(path, params=query, headers=headers),
             method="GET",

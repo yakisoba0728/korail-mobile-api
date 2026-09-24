@@ -34,8 +34,8 @@ def enabled_dynapath_config() -> DynapathConfig:
 
 @dataclass(frozen=True)
 class KorailConfig:
-    """API·대기열·기기·인증 토큰의 요청 설정을 구성합니다. base_url·netfunnel_url 은 검사하지 않고 그대로 씁니다 — 다른 곳을 가리키면 로그인 자격증명도 그리로 갑니다.
-    """
+    """API·대기열·기기·인증 토큰의 요청 설정을 구성합니다. base_url·netfunnel_url 은 검사하지 않고 그대로 씁니다 — 다른 곳을 가리키면 로그인 자격증명도 그리로
+    갑니다."""
 
     base_url: str = KORAIL_BASE_URL
     device: str = KORAIL_DEVICE_ANDROID
@@ -72,9 +72,7 @@ class KorailConfig:
         default = DynapathConfig()
         if self.disable_dynapath:
             if self.dynapath.enabled:
-                raise ValueError(
-                    "disable_dynapath=True conflicts with an enabled DynapathConfig"
-                )
+                raise ValueError("disable_dynapath=True conflicts with an enabled DynapathConfig")
             return
         if self.dynapath.enabled:
             return

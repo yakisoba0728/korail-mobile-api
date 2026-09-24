@@ -12,6 +12,7 @@
 
     python3 checks/contract_api.py
 """
+
 from __future__ import annotations
 
 import importlib
@@ -98,12 +99,15 @@ def _partial_raw_errors() -> list[tuple[str, Callable[[], Exception]]]:
         ("KorailTransportError", lambda: with_raw(E.KorailTransportError("synthetic"))),
         ("KorailAuthError", lambda: with_raw(E.KorailAuthError("synthetic"))),
         ("KorailAppError", lambda: E.KorailAppError("E0000", "synthetic", raw=dict(PARTIAL))),
-        ("KorailSoldOutError",
-         lambda: E.KorailSoldOutError("ERR211161", "synthetic", raw=dict(PARTIAL))),
-        ("KorailInvalidRequestError",
-         lambda: E.KorailInvalidRequestError("E0001", "synthetic", raw=dict(PARTIAL))),
-        ("KorailSessionExpiredError",
-         lambda: E.KorailSessionExpiredError("P058", "synthetic", raw=dict(PARTIAL))),
+        ("KorailSoldOutError", lambda: E.KorailSoldOutError("ERR211161", "synthetic", raw=dict(PARTIAL))),
+        (
+            "KorailInvalidRequestError",
+            lambda: E.KorailInvalidRequestError("E0001", "synthetic", raw=dict(PARTIAL)),
+        ),
+        (
+            "KorailSessionExpiredError",
+            lambda: E.KorailSessionExpiredError("P058", "synthetic", raw=dict(PARTIAL)),
+        ),
         ("KorailDynaPathError", lambda: E.KorailDynaPathError("synthetic", raw=dict(PARTIAL))),
     ]
 
@@ -153,13 +157,20 @@ def g9() -> None:
             raise _make()
 
         error = run(f"부분 raw {label}", partial_parser)
-        check("G9", type(error) is type(prototype),
-              f"부분 raw {label}: 예외 종류가 바뀜 → {type(error).__name__}")
+        check(
+            "G9", type(error) is type(prototype), f"부분 raw {label}: 예외 종류가 바뀜 → {type(error).__name__}"
+        )
         check("G9", isinstance(error, KorailApiError), f"부분 raw {label}: 패키지 예외 아님")
-        check("G9", getattr(error, "raw", None) == FULL,
-              f"부분 raw {label}: .raw={show(getattr(error, 'raw', None))} (전체여야)")
-        check("G9", getattr(error, "parser_raw", None) == PARTIAL,
-              f"부분 raw {label}: .parser_raw={show(getattr(error, 'parser_raw', None))}")
+        check(
+            "G9",
+            getattr(error, "raw", None) == FULL,
+            f"부분 raw {label}: .raw={show(getattr(error, 'raw', None))} (전체여야)",
+        )
+        check(
+            "G9",
+            getattr(error, "parser_raw", None) == PARTIAL,
+            f"부분 raw {label}: .parser_raw={show(getattr(error, 'parser_raw', None))}",
+        )
 
     # 3) 이 패키지의 예외가 아닌 것. ``except KorailApiError`` 만 있는 경계는 이것을
     #    그대로 내보내 ``.raw`` 가 없게 됩니다.
@@ -167,10 +178,8 @@ def g9() -> None:
         raise ValueError("synthetic non-package failure")
 
     error = run("외부 예외", foreign_parser)
-    check("G9", isinstance(error, KorailProtocolError),
-          f"외부 예외가 감싸지지 않음: {type(error).__name__}")
-    check("G9", getattr(error, "raw", None) == FULL,
-          f"외부 예외 .raw={show(getattr(error, 'raw', None))}")
+    check("G9", isinstance(error, KorailProtocolError), f"외부 예외가 감싸지지 않음: {type(error).__name__}")
+    check("G9", getattr(error, "raw", None) == FULL, f"외부 예외 .raw={show(getattr(error, 'raw', None))}")
 
 
 # --- G11: logout 은 서버 요청이 어떻게 실패해도 로컬 상태를 비움(실패는 올라와도 됨) ---
@@ -185,11 +194,10 @@ def logout_state() -> None:
     def logged_in(transport: Any) -> Any:
         client = KorailClient(KorailConfig(), transport=transport)
         client.session.current = KorailSession(
-            jsessionid="SYNTHETIC-JSESSIONID", member_no="0000000000",
+            jsessionid="SYNTHETIC-JSESSIONID",
+            member_no="0000000000",
         )
-        client.http.cookies.set(
-            "JSESSIONID", "SYNTHETIC-JSESSIONID", domain="smart.letskorail.com"
-        )
+        client.http.cookies.set("JSESSIONID", "SYNTHETIC-JSESSIONID", domain="smart.letskorail.com")
         return client
 
     def assert_cleared(label: str, client: Any, action: Callable[[], None]) -> None:
@@ -199,8 +207,7 @@ def logout_state() -> None:
             pass
         check("G11", client.session.current is None, f"{label}: current 가 남음")
         check("G11", client.session.pending is None, f"{label}: pending 이 남음")
-        check("G11", len(client.http.cookies) == 0,
-              f"{label}: 쿠키 {len(client.http.cookies)}개가 남음")
+        check("G11", len(client.http.cookies) == 0, f"{label}: 쿠키 {len(client.http.cookies)}개가 남음")
 
     # a) 전송 계층이 이 패키지 밖 예외를 냄
     for label, exc in (

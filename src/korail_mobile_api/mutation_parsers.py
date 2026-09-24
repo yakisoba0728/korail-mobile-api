@@ -4,19 +4,30 @@
 
 """상태 변경 응답을 모델로 변환하고 원문을 보존합니다. 성공 여부는 전송 계층에서 판정하며 필수 신원·금액은 엄격히, 선택값은 관대하게 읽습니다. 파싱 실패는 서버 처리 실패의 증거가 아닙니다.
 자동 재전송하지 마십시오. 클라이언트의 예외 원문 보존 규칙은 KorailClient._mutation을 따릅니다."""
+
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping
 from typing import Any
 
+from ._parsing import (
+    RESERVATION_OUT_EXTRA_FIELDS,
+    _nested_rows,
+    _nullable_scalar_fields,
+    _optional_scalar_string,
+    _reservation_passengers,
+    _rows,
+    _strict_scalar_string,
+)
+from ._parsing import _response_fields as _base_fields
 from .errors import KorailProtocolError
 from .mutation_models import (
     CartAddResponse,
-    MaasCancelResponse,
-    ProductCancelResponse,
     CartDiscountAddition,
     DiscountCardPurchaseResponse,
+    MaasCancelResponse,
+    ProductCancelResponse,
     RefundTicketResponse,
     ReservationHoldResponse,
     ReservationJourney,
@@ -28,16 +39,6 @@ from .mutation_models import (
     StationRefundExecutionResponse,
     StationRefundOriginalTicket,
     StationRefundVerificationResponse,
-)
-from ._parsing import _response_fields as _base_fields
-from ._parsing import (
-    RESERVATION_OUT_EXTRA_FIELDS,
-    _nested_rows,
-    _nullable_scalar_fields,
-    _optional_scalar_string,
-    _reservation_passengers,
-    _rows,
-    _strict_scalar_string,
 )
 
 
@@ -109,21 +110,11 @@ def parse_station_refund_verification_response(
         )
     return StationRefundVerificationResponse(
         **_base_fields(copied),
-        received_amount=_strict_scalar_string(
-            copied, "rcvd_amt", "station refund verification"
-        ),
-        refund_fee=_strict_scalar_string(
-            copied, "ret_fee", "station refund verification"
-        ),
-        refund_amount=_strict_scalar_string(
-            copied, "ret_amt", "station refund verification"
-        ),
-        popup_message=_optional_scalar_string(
-            copied, "poppMsg", "station refund verification"
-        ),
-        result_message=_optional_scalar_string(
-            copied, "strMsg", "station refund verification"
-        ),
+        received_amount=_strict_scalar_string(copied, "rcvd_amt", "station refund verification"),
+        refund_fee=_strict_scalar_string(copied, "ret_fee", "station refund verification"),
+        refund_amount=_strict_scalar_string(copied, "ret_amt", "station refund verification"),
+        popup_message=_optional_scalar_string(copied, "poppMsg", "station refund verification"),
+        result_message=_optional_scalar_string(copied, "strMsg", "station refund verification"),
         original_tickets=tuple(original_tickets),
         original_ticket_list_is_null=rows is None,
     )
@@ -136,9 +127,7 @@ def parse_station_refund_execution_response(
     copied = _response_mapping(raw)
     return StationRefundExecutionResponse(
         **_base_fields(copied),
-        refund_division_code=_optional_scalar_string(
-            copied, "h_ret_dv_cd", "station refund execution"
-        ),
+        refund_division_code=_optional_scalar_string(copied, "h_ret_dv_cd", "station refund execution"),
     )
 
 
@@ -189,16 +178,12 @@ def _received_amount(
         if container is None:
             continue
         if not isinstance(container, Mapping):
-            raise KorailProtocolError(
-                "KORAIL reservation seat_infos must be an object or null"
-            )
+            raise KorailProtocolError("KORAIL reservation seat_infos must be an object or null")
         seat_rows = container.get("seat_info")
         if seat_rows is None:
             continue
         if not isinstance(seat_rows, list):
-            raise KorailProtocolError(
-                "KORAIL reservation seat_infos.seat_info must be a list or null"
-            )
+            raise KorailProtocolError("KORAIL reservation seat_infos.seat_info must be a list or null")
         for seat in seat_rows:
             seat = _row(seat, "reservation seat_info row")
             amount = _strict_scalar_string(seat, "h_rcvd_amt", "reservation seat")
@@ -209,10 +194,7 @@ def _received_amount(
             except ValueError:
                 # 큰 정수의 문자열 변환 실패도 0원으로 취급하지 않습니다.
                 return None
-            seat_no = (
-                _optional_scalar_string(seat, "h_seat_no", "reservation seat")
-                or ""
-            )
+            seat_no = _optional_scalar_string(seat, "h_seat_no", "reservation seat") or ""
             if value == 0 and not seat_no.strip():
                 # 2026-09-22 예약대기 관측: 좌석번호 없는 0원 행은 정산 좌석이 아니었습니다. 동일 예약을 get_ticket_reservation_detail 로 조회한 좌석
                 # 합은 선언 총액과 일치했습니다. 이 빈 행을 합산하면 잘못된 총액 불일치를 만들므로 제외합니다.
@@ -378,25 +360,17 @@ def parse_reservation_hold_response(
         elif isinstance(value, list):
             journey_rows = value
         else:
-            raise KorailProtocolError(
-                "KORAIL reservation jrny_infos.jrny_info must be a list or null"
-            )
+            raise KorailProtocolError("KORAIL reservation jrny_infos.jrny_info must be a list or null")
     else:
-        raise KorailProtocolError(
-            "KORAIL reservation jrny_infos must be an object or null"
-        )
+        raise KorailProtocolError("KORAIL reservation jrny_infos must be an object or null")
 
     journeys: list[ReservationJourney] = []
     for value in journey_rows:
         row = dict(_row(value, "reservation journey"))
         journeys.append(
             ReservationJourney(
-                **_nullable_scalar_fields(
-                    row, _RESERVATION_JOURNEY_FIELDS, "reservation journey"
-                ),
-                reservation_change_no=_strict_scalar_string(
-                    row, "h_rsv_chg_no", "reservation journey"
-                ),
+                **_nullable_scalar_fields(row, _RESERVATION_JOURNEY_FIELDS, "reservation journey"),
+                reservation_change_no=_strict_scalar_string(row, "h_rsv_chg_no", "reservation journey"),
                 raw=row,
             )
         )
@@ -452,9 +426,7 @@ def parse_reservation_payment_response(
         row = dict(value)
         settlements.append(
             ReservationPaymentSettlement(
-                **_nullable_scalar_fields(
-                    row, _RESERVATION_PAYMENT_SETTLEMENT_FIELDS, "payment settlement"
-                ),
+                **_nullable_scalar_fields(row, _RESERVATION_PAYMENT_SETTLEMENT_FIELDS, "payment settlement"),
                 raw=row,
             )
         )
@@ -464,9 +436,7 @@ def parse_reservation_payment_response(
         row = dict(value)
         table_seats.append(
             ReservationPaymentTableSeat(
-                **_nullable_scalar_fields(
-                    row, _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS, "payment table seat"
-                ),
+                **_nullable_scalar_fields(row, _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS, "payment table seat"),
                 raw=row,
             )
         )
@@ -508,9 +478,7 @@ def parse_discount_card_purchase_response(
         h_msg_txt=data.get("h_msg_txt"),
         str_result=data.get("strResult"),
         raw=data,
-        **_nullable_scalar_fields(
-            data, _DISCOUNT_CARD_PURCHASE_FIELDS, "discount card purchase"
-        ),
+        **_nullable_scalar_fields(data, _DISCOUNT_CARD_PURCHASE_FIELDS, "discount card purchase"),
     )
 
 
@@ -527,9 +495,7 @@ def _cart_discount_additions(
     return tuple(
         CartDiscountAddition(
             raw=item,
-            **_nullable_scalar_fields(
-                item, _CART_DISCOUNT_ADDITION_FIELDS, "cart add discount row"
-            ),
+            **_nullable_scalar_fields(item, _CART_DISCOUNT_ADDITION_FIELDS, "cart add discount row"),
         )
         for item in _nested_rows(data, "psgDiscAdd_infos", "psgDiscAdd_info")
     )
@@ -564,5 +530,3 @@ def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
         raw=data,
         discount_additions=_cart_discount_additions(data),
     )
-
-

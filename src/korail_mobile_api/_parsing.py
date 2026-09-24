@@ -5,6 +5,7 @@
 """도메인 모델에 의존하지 않고 JSON 필드를 읽습니다.
 
 선택 필드의 관대한 변환과 필수 필드의 오류 문구는 구분해서 유지합니다. 응답 봉투의 성공·실패 정책과 raw 복사 여부는 각 호출자가 결정합니다."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -14,13 +15,13 @@ from typing import Any, ParamSpec, TypeVar
 from .errors import KorailApiError, KorailProtocolError
 from .models import ReservationPassengerInfo
 
-
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
 
 def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
     """조회 파서가 거절한 응답 전체를 기존 예외에 남깁니다. 검사·재전송은 하지 않습니다."""
+
     @wraps(parser)
     def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         try:
@@ -45,8 +46,7 @@ def _reject_non_string_envelope_fields(data: Mapping[str, Any]) -> None:
     ]
     if invalid:
         error = KorailProtocolError(
-            "KORAIL response envelope fields must be strings or null: "
-            f"{', '.join(invalid)}"
+            f"KORAIL response envelope fields must be strings or null: {', '.join(invalid)}"
         )
         error.raw = data
         raise error
@@ -87,9 +87,7 @@ def _nested_rows(
 
 def _row(value: Any, context: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
-        raise KorailProtocolError(
-            f"KORAIL {context} contained a non-object item"
-        )
+        raise KorailProtocolError(f"KORAIL {context} contained a non-object item")
     return value
 
 
@@ -122,9 +120,7 @@ def _required_string(
     처리하지 않는 응답 모양이므로 선택으로 읽지 않습니다."""
     value = data.get(key)
     if not isinstance(value, str):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a string"
-        )
+        raise KorailProtocolError(f"KORAIL {context} field {key} must be a string")
     return value
 
 
@@ -158,12 +154,8 @@ def _strict_scalar_string(
         try:
             return str(value)
         except ValueError as exc:  # 파이썬의 정수→문자열 자릿수 한도
-            raise KorailProtocolError(
-                f"KORAIL {context} field {key} is an integer too long to use"
-            ) from exc
-    raise KorailProtocolError(
-        f"KORAIL {context} field {key} must be a string, an integer, or null"
-    )
+            raise KorailProtocolError(f"KORAIL {context} field {key} is an integer too long to use") from exc
+    raise KorailProtocolError(f"KORAIL {context} field {key} must be a string, an integer, or null")
 
 
 def _optional_scalar_string(
@@ -203,22 +195,14 @@ def _required_integer(
     value = data.get(key)
     if type(value) is int:
         return value
-    if (
-        isinstance(value, str)
-        and value
-        and all("0" <= character <= "9" for character in value)
-    ):
+    if isinstance(value, str) and value and all("0" <= character <= "9" for character in value):
         try:
             return int(value)
         except ValueError as exc:
             raise KorailProtocolError(
-                f"KORAIL {context} field {key} has an unsupported "
-                "ASCII-decimal length"
+                f"KORAIL {context} field {key} has an unsupported ASCII-decimal length"
             ) from exc
-    raise KorailProtocolError(
-        f"KORAIL {context} field {key} must be an integer or an "
-        "ASCII decimal string"
-    )
+    raise KorailProtocolError(f"KORAIL {context} field {key} must be an integer or an ASCII decimal string")
 
 
 def _optional_bool(
@@ -234,10 +218,7 @@ def _nullable_string_fields(
     data: Mapping[str, Any],
     field_map: Mapping[str, str],
 ) -> dict[str, str | None]:
-    return {
-        attribute: _optional_string(data, wire_name)
-        for attribute, wire_name in field_map.items()
-    }
+    return {attribute: _optional_string(data, wire_name) for attribute, wire_name in field_map.items()}
 
 
 def _nullable_scalar_fields(

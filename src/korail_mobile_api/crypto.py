@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """로그인 비밀번호를 암호화하고 두 단계의 Base64를 적용합니다. 안쪽·바깥쪽 Base64 의 모드가 다릅니다; 각 헬퍼의 근거를 참고하십시오."""
+
 from __future__ import annotations
 
 import base64
@@ -39,9 +40,7 @@ def _validate_login_crypto_key(info: LoginCryptoInfo) -> bytes:
     try:
         key = info.key.encode("utf-8")
     except UnicodeEncodeError as exc:
-        raise KorailProtocolError(
-            "KORAIL login crypto metadata contained an invalid AES key/IV"
-        ) from exc
+        raise KorailProtocolError("KORAIL login crypto metadata contained an invalid AES key/IV") from exc
     if len(key) not in {16, 24, 32}:
         raise KorailProtocolError("KORAIL login crypto metadata contained an invalid AES key/IV")
     return key
@@ -58,9 +57,7 @@ def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
     try:
         plain = password.encode("utf-8")
     except UnicodeEncodeError as exc:
-        raise KorailProtocolError(
-            "KORAIL login password cannot be encoded as UTF-8"
-        ) from exc
+        raise KorailProtocolError("KORAIL login password cannot be encoded as UTF-8") from exc
     if not info.key:
         raise KorailProtocolError(
             "KORAIL login crypto metadata missing an AES key; this library "
@@ -71,9 +68,6 @@ def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
     try:
         cipher_bytes = _aes_cbc_pkcs7_encrypt(plain, key, iv)
     except ValueError as exc:
-        raise KorailProtocolError(
-            "KORAIL login crypto metadata contained an invalid AES key/IV"
-        ) from exc
+        raise KorailProtocolError("KORAIL login crypto metadata contained an invalid AES key/IV") from exc
     inner = _base64_no_wrap(cipher_bytes)
     return _android_base64_url_safe_wrapped(inner.encode("utf-8"))
-

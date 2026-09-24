@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """환경변수에서 기기 설정을 읽습니다. DynapathConfig 를 직접 구성하는 방법도 있습니다."""
+
 from __future__ import annotations
 
 import os

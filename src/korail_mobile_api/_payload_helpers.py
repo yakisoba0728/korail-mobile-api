@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """조회 요청 빌더가 공유하는 필드·문자열 처리를 제공합니다."""
+
 from typing import TypeGuard
 
 from .config import KorailConfig
@@ -19,7 +20,5 @@ def _device_version(config: KorailConfig) -> dict[str, str]:
 def _is_ascii_digits(value: object, lengths: frozenset[int]) -> TypeGuard[str]:
     """value가 허용된 길이의 ASCII 숫자 문자열인지 검사합니다. str.isdigit은 전각 숫자도 받으므로 사용하지 않으며, 거절 예외와 문구는 각 빌더가 정합니다."""
     return (
-        isinstance(value, str)
-        and len(value) in lengths
-        and all("0" <= character <= "9" for character in value)
+        isinstance(value, str) and len(value) in lengths and all("0" <= character <= "9" for character in value)
     )

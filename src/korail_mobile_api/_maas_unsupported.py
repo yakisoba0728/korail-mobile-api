@@ -10,6 +10,7 @@
 
 관련 빌더는 read_payloads.build_maas_cancel_fee_form·build_maas_cart_status_form과
 mutation_payloads.build_maas_cancel_form이며, 응답은 read_parsers·mutation_parsers에서 처리합니다."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -49,8 +50,8 @@ def check_maas_cart_status(client: KorailClient, item: CartItem) -> BaseKorailRe
 
 
 def cancel_unpaid_maas_item(client: KorailClient, item: CartItem) -> MaasCancelResponse:
-    """미결제 부가서비스를 해제하는 미지원 변경 호출을 기록합니다. pnr_no가 빈 장바구니 행만 받습니다(BasketTicketViewModel.java:3080-3160,5692-5723).
-    """
+    """미결제 부가서비스를 해제하는 미지원 변경 호출을 기록합니다. pnr_no가 빈 장바구니 행만
+    받습니다(BasketTicketViewModel.java:3080-3160,5692-5723)."""
     customer_no = client._require_customer_no("MaaS cancel")
     return client._mutation(
         "/classes/com.korail.mobile.addService.cancelPay.do",

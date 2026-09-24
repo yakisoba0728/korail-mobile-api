@@ -8,11 +8,18 @@ trainList 와 seatList 는 누락·null 이면 빈 목록이고, 키가 있는�
 KorailProtocolError 입니다. seatList 누락 기본값의 앱 근거: TResidualSeatsResearchOut.java:79. 앱 Json 설정은 보호돼 있으므로 null 강제
 변환 여부는 확정할 수 없습니다 (NetworkModule.java:858-862, NetworkServiceKt.java:25-29). 배치·배너·windowList 는 선택 필드로 잘못된 값이나
 창측 행을 비웁니다."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
 
+from ._parsing import (
+    _nullable_scalar_fields,
+    _optional_scalar_string,
+    _preserve_read_raw,
+    _row,
+)
 from .errors import KorailProtocolError
 from .limousine_models import (
     LimousineSchedule,
@@ -25,12 +32,6 @@ from .parsers import (
     _inventory_ratio,
     _response_fields,
 )
-from ._parsing import (
-    _nullable_scalar_fields,
-    _optional_scalar_string,
-    _preserve_read_raw,
-    _row,
-)
 
 
 def _required_list(
@@ -40,17 +41,13 @@ def _required_list(
 ) -> list[Any]:
     value = data.get(key)
     if not isinstance(value, list):
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a list"
-        )
+        raise KorailProtocolError(f"KORAIL {context} field {key} must be a list")
     return value
 
 
 def _require_exact_success(response: BaseKorailResponse) -> None:
     if response.str_result != "SUCC":
-        raise KorailProtocolError(
-            "KORAIL limousine read strResult must be exact SUCC"
-        )
+        raise KorailProtocolError("KORAIL limousine read strResult must be exact SUCC")
 
 
 _SCHEDULE_FIELDS = {
@@ -92,11 +89,7 @@ def parse_limousine_schedule_response(
     _require_exact_success(response)
     raw = response.raw
     schedules = []
-    rows = (
-        []
-        if raw.get("trainList") is None
-        else _required_list(raw, "trainList", "limousine schedule")
-    )
+    rows = [] if raw.get("trainList") is None else _required_list(raw, "trainList", "limousine schedule")
     for value in rows:
         row = _row(value, "limousine schedule trainList")
         schedules.append(
@@ -152,9 +145,7 @@ def parse_limousine_seat_inventory_response(
     seats = []
     # seatList 누락 기본값은 emptyList()(TResidualSeatsResearchOut.java:79). null 허용 근거는 아닙니다.
     for value in (
-        _required_list(raw, "seatList", "limousine seat inventory")
-        if raw.get("seatList") is not None
-        else []
+        _required_list(raw, "seatList", "limousine seat inventory") if raw.get("seatList") is not None else []
     ):
         row = _row(value, "limousine seat inventory seatList")
         seats.append(
@@ -179,11 +170,15 @@ def parse_limousine_seat_inventory_response(
         except (KorailProtocolError, ValueError, OverflowError):
             continue
     return LimousineSeatInventoryResponse(
-        **_nullable_scalar_fields(raw, {
-            "car_type_code": "car_tp_cd",
-            "car_no": "scar_no",
-            "seat_arrangement_code": "seat_ary_cd",
-        }, "limousine seat inventory"),
+        **_nullable_scalar_fields(
+            raw,
+            {
+                "car_type_code": "car_tp_cd",
+                "car_no": "scar_no",
+                "seat_arrangement_code": "seat_ary_cd",
+            },
+            "limousine seat inventory",
+        ),
         layout_type=_optional_scalar_string(raw, "layout_type", "limousine seat inventory"),
         vr_banner_url=_optional_scalar_string(raw, "vrBnrUrl", "limousine seat inventory"),
         windows=tuple(windows),
@@ -195,4 +190,3 @@ def parse_limousine_seat_inventory_response(
         seats=tuple(seats),
         **_response_fields(response),
     )
-

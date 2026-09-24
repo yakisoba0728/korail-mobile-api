@@ -4,13 +4,13 @@ No live server evidence is produced here. MockTransport responses and identifier
 are synthetic. App-parity cases cite supplied 7.0.6 Java/smali; library-policy
 cases are explicitly labelled and must not be read as decrypted app constants.
 """
+
 from __future__ import annotations
 
 import ast
 import inspect
 import socket
 from dataclasses import dataclass, field, replace
-from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs
 
@@ -20,23 +20,33 @@ import pytest
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import (
-    KorailApiError, KorailAuthError, KorailNetFunnelError,
-    KorailProtocolError, KorailQueueRejectedError, KorailTransportError,
+    KorailApiError,
+    KorailAuthError,
+    KorailNetFunnelError,
+    KorailProtocolError,
+    KorailQueueRejectedError,
+    KorailTransportError,
 )
 from korail_mobile_api.limousine_models import (
-    LimousineSchedule, LimousineScheduleQuery, LimousineSeatInventoryQuery,
+    LimousineSchedule,
+    LimousineScheduleQuery,
+    LimousineSeatInventoryQuery,
 )
 from korail_mobile_api.limousine_parsers import (
-    parse_limousine_schedule_response, parse_limousine_seat_inventory_response,
+    parse_limousine_schedule_response,
+    parse_limousine_seat_inventory_response,
 )
 from korail_mobile_api.limousine_payloads import (
-    build_limousine_schedule_form, build_limousine_seat_inventory_form,
+    build_limousine_schedule_form,
+    build_limousine_seat_inventory_form,
 )
 from korail_mobile_api.models import BaseKorailResponse, KorailSession
 from korail_mobile_api.mutation_models import KorailPassengerCounts
 from korail_mobile_api.mutation_payloads import build_limousine_reservation_form
 from korail_mobile_api.netfunnel import (
-    KORAIL_NETFUNNEL_GATES, KorailNetFunnelClient, KorailNetFunnelGate,
+    KORAIL_NETFUNNEL_GATES,
+    KorailNetFunnelClient,
+    KorailNetFunnelGate,
     parse_netfunnel_body,
 )
 from korail_mobile_api.netfunnel_safety import korail_netfunnel_node_url
@@ -46,6 +56,7 @@ from korail_mobile_api.netfunnel_safety import korail_netfunnel_node_url
 def block_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
     def deny(*args: Any, **kwargs: Any) -> Any:
         raise AssertionError("F5: real network is forbidden; use MockTransport")
+
     monkeypatch.setattr(socket.socket, "connect", deny)
     monkeypatch.setattr(socket.socket, "connect_ex", deny)
     monkeypatch.setattr(socket, "create_connection", deny)
@@ -125,15 +136,21 @@ def queue_factory():
     clients: list[KorailNetFunnelClient] = []
 
     def make(
-        replies: list[Reply], *, mode: int = 0, limit: float | None = None,
-        complete: Reply | None = None, overshoot: float = 0.0,
+        replies: list[Reply],
+        *,
+        mode: int = 0,
+        limit: float | None = None,
+        complete: Reply | None = None,
+        overshoot: float = 0.0,
     ):
         clock = Clock(overshoot=overshoot)
         world = QueueWorld(clock, replies, complete or Reply(text="unparsed completion"))
         config = KorailConfig(netfunnel_timeout=3.0, netfunnel_wait_limit=limit)
         client = KorailNetFunnelClient(
-            config, transport=httpx.MockTransport(world.handler),
-            sleeper=clock.sleep, clock=clock,
+            config,
+            transport=httpx.MockTransport(world.handler),
+            sleeper=clock.sleep,
+            clock=clock,
         )
         clients.append(client)
         gate = KorailNetFunnelGate("synthetic", "SYNTHETIC-AID", mode == 0)
@@ -151,7 +168,9 @@ def test_immediate_pass_and_release(queue_factory, mode: int) -> None:
     assert client.run(gate, world.send) == "SYNTHETIC-RESULT"
     assert world.ops() == ["5101", "API", "5004"]
     assert world.events[0][2] == {
-        "opcode": "5101", "sid": "service_1", "aid": "SYNTHETIC-AID",
+        "opcode": "5101",
+        "sid": "service_1",
+        "aid": "SYNTHETIC-AID",
     }  # sid is the library default, NOT a recovered KORAIL app literal.
     assert world.events[2][2] == {"opcode": "5004", "key": "SYNTHETIC-KEY"}
     assert clock.sleeps == []
@@ -163,10 +182,12 @@ def test_immediate_pass_and_release(queue_factory, mode: int) -> None:
 @pytest.mark.parametrize("ttl,expected", [("0", 1), ("1", 1), ("7", 7), ("300", 30)])
 def test_wait_pass_ttl_and_latest_key(queue_factory, code: str, ttl: str, expected: int) -> None:
     """Netfunnel.java:622-664; Response.java:59-66; CommandClient.java:110-137."""
-    client, gate, world, clock = queue_factory([
-        Reply(f"{code}:key=SYNTHETIC-OLD&ttl={ttl}&nwait=5"),
-        Reply("200:key=SYNTHETIC-NEW"),
-    ])
+    client, gate, world, clock = queue_factory(
+        [
+            Reply(f"{code}:key=SYNTHETIC-OLD&ttl={ttl}&nwait=5"),
+            Reply("200:key=SYNTHETIC-NEW"),
+        ]
+    )
     client.run(gate, world.send)
     assert world.ops() == ["5101", "5002", "API", "5004"]
     assert world.events[1][2] == {"opcode": "5002", "key": "SYNTHETIC-OLD"}
@@ -205,8 +226,12 @@ def test_terminal_non_success_modes(queue_factory, code: str, mode: int) -> None
 @pytest.mark.parametrize("mode", [0, 1])
 def test_error_bypass_modes(queue_factory, kind: str, mode: int) -> None:
     """Netfunnel.java:263-276,352-363; ScreenViewModel.java:1986; read retry is library policy."""
-    reply = {"connect": Reply(error="connect"), "read": Reply(error="read"),
-             "http": Reply(status=503), "parse": Reply(text="not a queue response")}[kind]
+    reply = {
+        "connect": Reply(error="connect"),
+        "read": Reply(error="read"),
+        "http": Reply(status=503),
+        "parse": Reply(text="not a queue response"),
+    }[kind]
     client, gate, world, clock = queue_factory([reply, reply], mode=mode)
     if mode == 0:
         with pytest.raises(KorailNetFunnelError):
@@ -221,10 +246,14 @@ def test_error_bypass_modes(queue_factory, kind: str, mode: int) -> None:
 @pytest.mark.parametrize("mode", [0, 1])
 def test_retry_budget_is_shared_between_enter_and_poll(queue_factory, mode: int) -> None:
     """Netfunnel.java:352-363,592: one app retry for the entire Begin operation."""
-    client, gate, world, clock = queue_factory([
-        Reply(error="connect"), Reply("201:key=SYNTHETIC-WAIT&ttl=1"),
-        Reply(error="connect"),
-    ], mode=mode)
+    client, gate, world, clock = queue_factory(
+        [
+            Reply(error="connect"),
+            Reply("201:key=SYNTHETIC-WAIT&ttl=1"),
+            Reply(error="connect"),
+        ],
+        mode=mode,
+    )
     if mode == 0:
         with pytest.raises(KorailNetFunnelError):
             client.run(gate, world.send)
@@ -237,9 +266,14 @@ def test_retry_budget_is_shared_between_enter_and_poll(queue_factory, mode: int)
 @pytest.mark.parametrize("mode", [0, 1])
 def test_waiting_poll_error_with_available_retry(queue_factory, mode: int) -> None:
     """Netfunnel.java:654-664 converts a failed check-enter to an error callback."""
-    client, gate, world, clock = queue_factory([
-        Reply("201:key=SYNTHETIC-WAIT&ttl=1"), Reply(error="connect"), Reply(error="connect"),
-    ], mode=mode)
+    client, gate, world, clock = queue_factory(
+        [
+            Reply("201:key=SYNTHETIC-WAIT&ttl=1"),
+            Reply(error="connect"),
+            Reply(error="connect"),
+        ],
+        mode=mode,
+    )
     if mode == 0:
         with pytest.raises(KorailNetFunnelError):
             client.run(gate, world.send)
@@ -253,9 +287,19 @@ LIMIT_CASES = [
     ("slow-immediate", [Reply(delay=2)], 1.0, 0.0),
     ("ttl-would-exceed", [Reply("201:key=SYNTHETIC-WAIT&ttl=5")], 2.0, 0.0),
     ("slow-poll-success", [Reply("201:key=SYNTHETIC-WAIT&ttl=1"), Reply(delay=2)], 2.0, 0.0),
-    ("cumulative-wait", [Reply("201:key=SYNTHETIC-WAIT&ttl=1"), Reply("202:key=SYNTHETIC-NEXT&ttl=2")], 2.0, 0.0),
+    (
+        "cumulative-wait",
+        [Reply("201:key=SYNTHETIC-WAIT&ttl=1"), Reply("202:key=SYNTHETIC-NEXT&ttl=2")],
+        2.0,
+        0.0,
+    ),
     ("enter-errors", [Reply(error="connect"), Reply(error="connect")], 1.0, 0.0),
-    ("poll-errors", [Reply("201:key=SYNTHETIC-WAIT&ttl=1"), Reply(error="connect"), Reply(error="connect")], 2.0, 0.0),
+    (
+        "poll-errors",
+        [Reply("201:key=SYNTHETIC-WAIT&ttl=1"), Reply(error="connect"), Reply(error="connect")],
+        2.0,
+        0.0,
+    ),
     ("retry-then-success", [Reply(error="connect"), Reply()], 2.0, 0.0),
     ("oversleep-success", [Reply("201:key=SYNTHETIC-WAIT&ttl=1"), Reply()], 1.0, 0.25),
     ("slow-terminal", [Reply("300:key=SYNTHETIC-END", delay=2)], 1.0, 0.0),
@@ -265,7 +309,12 @@ LIMIT_CASES = [
 @pytest.mark.parametrize("mode", [0, 1])
 @pytest.mark.parametrize("label,replies,limit,overshoot", LIMIT_CASES, ids=[x[0] for x in LIMIT_CASES])
 def test_wait_limit_never_starts_api_after_budget(
-    queue_factory, mode: int, label: str, replies: list[Reply], limit: float, overshoot: float,
+    queue_factory,
+    mode: int,
+    label: str,
+    replies: list[Reply],
+    limit: float,
+    overshoot: float,
 ) -> None:
     """Library admission budget, not an app timer; includes every error/pass/wait exit."""
     client, gate, world, _ = queue_factory(replies, mode=mode, limit=limit, overshoot=overshoot)
@@ -287,7 +336,9 @@ def test_wait_limit_inclusive_boundary(queue_factory, mode: int, delay: float, l
 def test_wait_limit_is_not_hard_wall_clock_deadline(queue_factory) -> None:
     """An existing 1s budget can return at 6s, but cannot start the API. No hard-bound claim."""
     client, gate, world, clock = queue_factory(
-        [Reply(error="connect"), Reply(error="connect")], mode=1, limit=1,
+        [Reply(error="connect"), Reply(error="connect")],
+        mode=1,
+        limit=1,
     )
     with pytest.raises(KorailNetFunnelError):
         client.run(gate, world.send)
@@ -297,10 +348,12 @@ def test_wait_limit_is_not_hard_wall_clock_deadline(queue_factory) -> None:
 def test_api_and_completion_time_are_outside_admission_budget(queue_factory) -> None:
     """Library run budget only governs the admission time, not API duration or cleanup."""
     client, gate, world, clock = queue_factory([Reply()], limit=0, complete=Reply(delay=4))
+
     def send() -> str:
         result = world.send()
         clock.now += 9
         return result
+
     assert client.run(gate, send) == "SYNTHETIC-RESULT"
     assert clock.now == 13
     assert world.ops() == ["5101", "API", "5004"]
@@ -308,42 +361,64 @@ def test_api_and_completion_time_are_outside_admission_budget(queue_factory) -> 
 
 def test_no_total_or_callback_timeout_is_implicitly_added(queue_factory) -> None:
     """SDK TTL can be 30s. App 15s callback watchdog is NOT a total wait deadline."""
-    client, gate, world, clock = queue_factory([
-        Reply("201:key=SYNTHETIC-WAIT&ttl=30"), Reply("202:key=SYNTHETIC-WAIT&ttl=30"), Reply(),
-    ])
+    client, gate, world, clock = queue_factory(
+        [
+            Reply("201:key=SYNTHETIC-WAIT&ttl=30"),
+            Reply("202:key=SYNTHETIC-WAIT&ttl=30"),
+            Reply(),
+        ]
+    )
     client.run(gate, world.send)
     assert clock.now == 60 and world.sent == 1
 
 
-@pytest.mark.parametrize("node", ["nf.letskorail.com", "rnf1.letskorail.com", "rnf12.letskorail.com", "rnf99.letskorail.com"])
+@pytest.mark.parametrize(
+    "node", ["nf.letskorail.com", "rnf1.letskorail.com", "rnf12.letskorail.com", "rnf99.letskorail.com"]
+)
 def test_allowed_node_following(queue_factory, node: str) -> None:
     """Library node policy, not proof that app overrides Property.java:23 host_notmodify."""
-    client, gate, world, _ = queue_factory([
-        Reply(f"201:key=SYNTHETIC-WAIT&ttl=1&ip={node}&port=443"),
-        Reply(f"200:key=SYNTHETIC-PASS&ip={node}&port=443"),
-    ])
+    client, gate, world, _ = queue_factory(
+        [
+            Reply(f"201:key=SYNTHETIC-WAIT&ttl=1&ip={node}&port=443"),
+            Reply(f"200:key=SYNTHETIC-PASS&ip={node}&port=443"),
+        ]
+    )
     client.run(gate, world.send)
     assert [e[1] for e in world.events] == ["nf.letskorail.com", node, "api.invalid", node]
 
 
 def test_missing_new_node_resets_to_front(queue_factory) -> None:
     """CommandClient.java:117-137 replaces the response; library does not retain an old node."""
-    client, gate, world, _ = queue_factory([
-        Reply("201:key=SYNTHETIC-A&ttl=1&ip=rnf12.letskorail.com&port=443"),
-        Reply("201:key=SYNTHETIC-B&ttl=1"), Reply("200:key=SYNTHETIC-C"),
-    ])
+    client, gate, world, _ = queue_factory(
+        [
+            Reply("201:key=SYNTHETIC-A&ttl=1&ip=rnf12.letskorail.com&port=443"),
+            Reply("201:key=SYNTHETIC-B&ttl=1"),
+            Reply("200:key=SYNTHETIC-C"),
+        ]
+    )
     client.run(gate, world.send)
     assert [e[1] for e in world.events] == [
-        "nf.letskorail.com", "rnf12.letskorail.com", "nf.letskorail.com", "api.invalid", "nf.letskorail.com",
+        "nf.letskorail.com",
+        "rnf12.letskorail.com",
+        "nf.letskorail.com",
+        "api.invalid",
+        "nf.letskorail.com",
     ]
 
 
 BAD_NODES = [
-    ("elsewhere.invalid", "443"), ("127.0.0.1", "443"), ("rnf0.letskorail.com", "443"),
-    ("rnf100.letskorail.com", "443"), ("rnf01.letskorail.com", "443"),
-    ("RNF12.letskorail.com", "443"), ("rnf12.letskorail.com", "80"),
-    ("rnf12.letskorail.com", "0443"), ("rnf12.letskorail.com", ""), ("", "443"),
-    ("rnf12.letskorail.com.evil.invalid", "443"), ("https://rnf12.letskorail.com", "443"),
+    ("elsewhere.invalid", "443"),
+    ("127.0.0.1", "443"),
+    ("rnf0.letskorail.com", "443"),
+    ("rnf100.letskorail.com", "443"),
+    ("rnf01.letskorail.com", "443"),
+    ("RNF12.letskorail.com", "443"),
+    ("rnf12.letskorail.com", "80"),
+    ("rnf12.letskorail.com", "0443"),
+    ("rnf12.letskorail.com", ""),
+    ("", "443"),
+    ("rnf12.letskorail.com.evil.invalid", "443"),
+    ("https://rnf12.letskorail.com", "443"),
 ]
 
 
@@ -358,10 +433,13 @@ def test_rejected_node_never_falls_back_to_unqueued_api(queue_factory, host: str
 
 
 def test_rejected_poll_node_releases_previous_trusted_slot(queue_factory) -> None:
-    client, gate, world, _ = queue_factory([
-        Reply("201:key=SYNTHETIC-OLD&ttl=1&ip=rnf12.letskorail.com&port=443"),
-        Reply("200:key=SYNTHETIC-BAD&ip=elsewhere.invalid&port=443"),
-    ], mode=1)
+    client, gate, world, _ = queue_factory(
+        [
+            Reply("201:key=SYNTHETIC-OLD&ttl=1&ip=rnf12.letskorail.com&port=443"),
+            Reply("200:key=SYNTHETIC-BAD&ip=elsewhere.invalid&port=443"),
+        ],
+        mode=1,
+    )
     with pytest.raises(KorailProtocolError):
         client.run(gate, world.send)
     assert world.ops() == ["5101", "5002", "5004"]
@@ -383,7 +461,9 @@ def test_empty_final_key_is_not_replaced_by_old_key(queue_factory) -> None:
     assert world.ops() == ["5101", "5002", "API"]
 
 
-@pytest.mark.parametrize("completion", [Reply(text="invalid completion payload"), Reply(status=503), Reply(error="connect")])
+@pytest.mark.parametrize(
+    "completion", [Reply(text="invalid completion payload"), Reply(status=503), Reply(error="connect")]
+)
 def test_complete_once_without_parsing_or_retry(queue_factory, completion: Reply) -> None:
     """CommandClient.java:158-199; Netfunnel.java:848-880, completion failures are not rethrown."""
     client, gate, world, _ = queue_factory([Reply()], complete=completion)
@@ -394,9 +474,11 @@ def test_complete_once_without_parsing_or_retry(queue_factory, completion: Reply
 def test_callback_exception_preserved_and_slot_returned(queue_factory) -> None:
     client, gate, world, _ = queue_factory([Reply()], complete=Reply(error="connect"))
     error = RuntimeError("synthetic callback failure")
+
     def send() -> Any:
         world.send()
         raise error
+
     with pytest.raises(RuntimeError) as raised:
         client.run(gate, send)
     assert raised.value is error and world.ops() == ["5101", "API", "5004"]
@@ -420,14 +502,23 @@ def test_invalid_body_keeps_raw(text: str) -> None:
 
 
 EXPECTED_GATES = {
-    "inquiry": ("act_8", False), "peak_season_inquiry": ("act_8_2", False),
-    "product_inquiry": ("act_6", False), "reserve": ("act_14", True),
-    "pay": ("act_18", True), "reservation_view": ("act_21", True),
+    "inquiry": ("act_8", False),
+    "peak_season_inquiry": ("act_8_2", False),
+    "product_inquiry": ("act_6", False),
+    "reserve": ("act_14", True),
+    "pay": ("act_18", True),
+    "reservation_view": ("act_21", True),
 }
 EXPECTED_GATED_METHODS = {
-    "get_reservation_history", "get_seat_assignment_schedule", "search_trains",
-    "search_transfer_trains", "search_trains_with_transfer_fallback", "reserve",
-    "reserve_transfer", "pay_with_card", "reserve_with_discount_card",
+    "get_reservation_history",
+    "get_seat_assignment_schedule",
+    "search_trains",
+    "search_transfer_trains",
+    "search_trains_with_transfer_fallback",
+    "reserve",
+    "reserve_transfer",
+    "pay_with_card",
+    "reserve_with_discount_card",
 }
 
 
@@ -450,45 +541,68 @@ def test_all_77_public_methods_gate_call_graph() -> None:
     methods = {n.name: n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
     public = {n for n in methods if not n.startswith("_")}
     edges = {
-        name: {call.func.attr for call in ast.walk(node)
-               if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
-               and isinstance(call.func.value, ast.Name) and call.func.value.id == "self"}
+        name: {
+            call.func.attr
+            for call in ast.walk(node)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and isinstance(call.func.value, ast.Name)
+            and call.func.value.id == "self"
+        }
         for name, node in methods.items()
     }
+
     def reaches_queue(name: str, seen: frozenset[str] = frozenset()) -> bool:
         if name in seen or name not in edges:
             return False
         return "_queued" in edges[name] or any(reaches_queue(n, seen | {name}) for n in edges[name])
+
     assert len(public) == 77
     assert {n for n in public if reaches_queue(n)} == EXPECTED_GATED_METHODS
-    calls = [n for n in ast.walk(cls) if isinstance(n, ast.Call)
-             and isinstance(n.func, ast.Attribute) and n.func.attr == "_queued"]
+    calls = [
+        n
+        for n in ast.walk(cls)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "_queued"
+    ]
     assert len(calls) == 7
     direct = {}
     for name, node in methods.items():
         for call in ast.walk(node):
-            if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr == "_queued":
+            if (
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "_queued"
+            ):
                 direct[name] = ast.unparse(call.args[0])
     assert direct == {
         "get_reservation_history": "'reservation_view'",
         "get_seat_assignment_schedule": "self._inquiry_gate(peak_season=peak_season)",
         "_post_schedule_view": "self._inquiry_gate(peak_season=peak_season, special=use_special_schedule)",
-        "reserve": "'reserve'", "reserve_transfer": "'reserve'",
-        "pay_with_card": "'pay'", "reserve_with_discount_card": "'reserve'",
+        "reserve": "'reserve'",
+        "reserve_transfer": "'reserve'",
+        "pay_with_card": "'pay'",
+        "reserve_with_discount_card": "'reserve'",
     }
 
 
-@pytest.mark.parametrize("peak,special,gate", [
-    (False, False, "inquiry"), (True, False, "peak_season_inquiry"),
-    (False, True, "product_inquiry"), (True, True, "product_inquiry"),
-])
+@pytest.mark.parametrize(
+    "peak,special,gate",
+    [
+        (False, False, "inquiry"),
+        (True, False, "peak_season_inquiry"),
+        (False, True, "product_inquiry"),
+        (True, True, "product_inquiry"),
+    ],
+)
 def test_inquiry_gate_selection(peak: bool, special: bool, gate: str) -> None:
     """Library selection priority; TrainScheduleViewModel.java:5208-5244 has protected aid values."""
     assert KorailClient._inquiry_gate(peak_season=peak, special=special) == gate
 
 
 def test_disabled_queue_sends_directly() -> None:
-    client = KorailClient(KorailConfig(netfunnel_enabled=False), transport=httpx.MockTransport(lambda r: httpx.Response(200)))
+    client = KorailClient(
+        KorailConfig(netfunnel_enabled=False), transport=httpx.MockTransport(lambda r: httpx.Response(200))
+    )
     try:
         assert client.netfunnel is None
         assert client._queued("inquiry", lambda: "synthetic") == "synthetic"
@@ -498,7 +612,13 @@ def test_disabled_queue_sends_directly() -> None:
 
 @pytest.fixture
 def config() -> KorailConfig:
-    return KorailConfig(base_url="https://api.invalid", device="SYNTHETIC-DEVICE", version="SYNTHETIC-VERSION", key="SYNTHETIC-KEY", lang="ko")
+    return KorailConfig(
+        base_url="https://api.invalid",
+        device="SYNTHETIC-DEVICE",
+        version="SYNTHETIC-VERSION",
+        key="SYNTHETIC-KEY",
+        lang="ko",
+    )
 
 
 @pytest.fixture
@@ -508,20 +628,49 @@ def schedule_query() -> LimousineScheduleQuery:
 
 @pytest.fixture
 def seat_query() -> LimousineSeatInventoryQuery:
-    return LimousineSeatInventoryQuery("99", "980", "20990101", "99001", "0001", "1", "9001", "9002", "015", "1", "2", 2)
+    return LimousineSeatInventoryQuery(
+        "99", "980", "20990101", "99001", "0001", "1", "9001", "9002", "015", "1", "2", 2
+    )
 
 
 def expected_schedule_form() -> dict[str, str]:
-    return {"Device": "SYNTHETIC-DEVICE", "Version": "SYNTHETIC-VERSION", "Key": "SYNTHETIC-KEY", "lang": "ko",
-            "dptDt": "20990101", "dptRsStnCd": "9001", "arvRsStnCd": "9002", "trnGpCd": "980",
-            "psrmClCd": "1", "dptTm": "120000", "trnNo": "", "seatAttCd": "015", "rsvSaleDvCd": ""}
+    return {
+        "Device": "SYNTHETIC-DEVICE",
+        "Version": "SYNTHETIC-VERSION",
+        "Key": "SYNTHETIC-KEY",
+        "lang": "ko",
+        "dptDt": "20990101",
+        "dptRsStnCd": "9001",
+        "arvRsStnCd": "9002",
+        "trnGpCd": "980",
+        "psrmClCd": "1",
+        "dptTm": "120000",
+        "trnNo": "",
+        "seatAttCd": "015",
+        "rsvSaleDvCd": "",
+    }
 
 
 def expected_seat_form() -> dict[str, str]:
-    return {"Device": "SYNTHETIC-DEVICE", "Version": "SYNTHETIC-VERSION", "Key": "SYNTHETIC-KEY", "lang": "ko",
-            "trnClsfCd": "99", "trnGpCd": "980", "runDt": "20990101", "trnNo": "99001", "srcarNo": "0001",
-            "psrmClCd": "1", "dptRsStnCd": "9001", "arvRsStnCd": "9002", "seatAttCd": "015",
-            "dptStnRunOrdr": "1", "arvStnRunOrdr": "2", "totPsgCnt": "2", "isArrow": "false"}
+    return {
+        "Device": "SYNTHETIC-DEVICE",
+        "Version": "SYNTHETIC-VERSION",
+        "Key": "SYNTHETIC-KEY",
+        "lang": "ko",
+        "trnClsfCd": "99",
+        "trnGpCd": "980",
+        "runDt": "20990101",
+        "trnNo": "99001",
+        "srcarNo": "0001",
+        "psrmClCd": "1",
+        "dptRsStnCd": "9001",
+        "arvRsStnCd": "9002",
+        "seatAttCd": "015",
+        "dptStnRunOrdr": "1",
+        "arvStnRunOrdr": "2",
+        "totPsgCnt": "2",
+        "isArrow": "false",
+    }
 
 
 def test_full_schedule_form(config, schedule_query) -> None:
@@ -534,12 +683,26 @@ def test_full_inventory_form(config, seat_query) -> None:
     """TResidualSeatsResearchIn.java:65-138,163-219; AirportBusSeatMapViewModel.java:843-865."""
     assert build_limousine_seat_inventory_form(config, seat_query) == expected_seat_form()
     q = replace(seat_query, product_no="SYNTHETIC-PRODUCT", is_arrow=True)
-    assert build_limousine_seat_inventory_form(config, q) == {**expected_seat_form(), "gdNo": "SYNTHETIC-PRODUCT", "isArrow": "true"}
+    assert build_limousine_seat_inventory_form(config, q) == {
+        **expected_seat_form(),
+        "gdNo": "SYNTHETIC-PRODUCT",
+        "isArrow": "true",
+    }
     assert "ctlDvCd" not in build_limousine_seat_inventory_form(config, q)
     assert "lang" not in build_limousine_seat_inventory_form(replace(config, lang=None), q)
 
 
-@pytest.mark.parametrize("field_name,value", [("passenger_count", True), ("passenger_count", "2"), ("passenger_count", 1.0), ("is_arrow", 1), ("is_arrow", "false"), ("is_arrow", None)])
+@pytest.mark.parametrize(
+    "field_name,value",
+    [
+        ("passenger_count", True),
+        ("passenger_count", "2"),
+        ("passenger_count", 1.0),
+        ("is_arrow", 1),
+        ("is_arrow", "false"),
+        ("is_arrow", None),
+    ],
+)
 def test_query_type_rejections(seat_query, field_name: str, value: Any) -> None:
     with pytest.raises(KorailProtocolError):
         replace(seat_query, **{field_name: value})
@@ -548,35 +711,72 @@ def test_query_type_rejections(seat_query, field_name: str, value: Any) -> None:
 @pytest.mark.parametrize("count", [-1, 0, 10])
 def test_inventory_query_has_no_reservation_count_range(config, seat_query, count: int) -> None:
     """Read query does NOT impose the reservation 1..9 rule; TResidualSeatsResearchIn.java:65-138."""
-    assert build_limousine_seat_inventory_form(config, replace(seat_query, passenger_count=count))["totPsgCnt"] == str(count)
+    assert build_limousine_seat_inventory_form(config, replace(seat_query, passenger_count=count))[
+        "totPsgCnt"
+    ] == str(count)
 
 
 # Independent field tables from DTO properties/annotations. Protected schedule
 # SerialName strings remain a limitation, even where the library/live keys work.
 SCHEDULE_FIELDS = {
-    "arvDt": "arrival_date", "arvRsStnCd": "arrival_station_code", "arvStnRunOrdr": "arrival_run_order", "arvTm": "arrival_time",
-    "chtnDvCd": "transfer_division_code", "dptDt": "departure_date", "dptRsStnCd": "departure_station_code", "dptStnRunOrdr": "departure_run_order",
-    "dptTm": "departure_time", "gnrmRestSeatNum": "general_remaining_seat_count", "ocurDlayTnum": "delay_minutes", "restFresNum": "free_remaining_seat_count",
-    "restStndNum": "standing_remaining_seat_count", "runDt": "run_date", "sprmRestSeatNum": "special_remaining_seat_count", "stlbTrnClsfCd": "train_class_code",
-    "trnGpCd": "service_code", "trnNo": "train_no", "ymsAplFlg": "yms_application_flag", "trnOrdrNo": "train_order_no", "rcvdPrc": "received_price",
+    "arvDt": "arrival_date",
+    "arvRsStnCd": "arrival_station_code",
+    "arvStnRunOrdr": "arrival_run_order",
+    "arvTm": "arrival_time",
+    "chtnDvCd": "transfer_division_code",
+    "dptDt": "departure_date",
+    "dptRsStnCd": "departure_station_code",
+    "dptStnRunOrdr": "departure_run_order",
+    "dptTm": "departure_time",
+    "gnrmRestSeatNum": "general_remaining_seat_count",
+    "ocurDlayTnum": "delay_minutes",
+    "restFresNum": "free_remaining_seat_count",
+    "restStndNum": "standing_remaining_seat_count",
+    "runDt": "run_date",
+    "sprmRestSeatNum": "special_remaining_seat_count",
+    "stlbTrnClsfCd": "train_class_code",
+    "trnGpCd": "service_code",
+    "trnNo": "train_no",
+    "ymsAplFlg": "yms_application_flag",
+    "trnOrdrNo": "train_order_no",
+    "rcvdPrc": "received_price",
 }
 SEAT_FIELDS = {
-    "dir_seat_att_cd": "direction_attribute_code", "etc_seat_att_cd": "other_attribute_code", "intg_msg": "integrated_message", "intg_msg_cd": "integrated_message_code",
-    "rq_seat_att_cd": "requested_attribute_code", "sale_psb_flg": "sale_possible_flag", "seat_no": "seat_no", "seat_spec": "specification",
-    "sqr_no": "sequence_no", "vz_msg_dv_cd": "visual_message_division_code",
+    "dir_seat_att_cd": "direction_attribute_code",
+    "etc_seat_att_cd": "other_attribute_code",
+    "intg_msg": "integrated_message",
+    "intg_msg_cd": "integrated_message_code",
+    "rq_seat_att_cd": "requested_attribute_code",
+    "sale_psb_flg": "sale_possible_flag",
+    "seat_no": "seat_no",
+    "seat_spec": "specification",
+    "sqr_no": "sequence_no",
+    "vz_msg_dv_cd": "visual_message_division_code",
 }
 SCHEDULE_TOP = {"fllwPgExt": "following_page_extension", "lgtmShtmDvCd": "long_short_division_code"}
-SEAT_TOP = {"car_tp_cd": "car_type_code", "scar_no": "car_no", "seat_ary_cd": "seat_arrangement_code", "up_dn_dv_cd": "up_down_division_code", "layout_type": "layout_type", "vrBnrUrl": "vr_banner_url"}
+SEAT_TOP = {
+    "car_tp_cd": "car_type_code",
+    "scar_no": "car_no",
+    "seat_ary_cd": "seat_arrangement_code",
+    "up_dn_dv_cd": "up_down_division_code",
+    "layout_type": "layout_type",
+    "vrBnrUrl": "vr_banner_url",
+}
 
 
 def envelope(**values: Any) -> BaseKorailResponse:
-    return BaseKorailResponse.from_raw({"strResult": "SUCC", "h_msg_cd": "SYNTHETIC", "h_msg_txt": "synthetic", **values})
+    return BaseKorailResponse.from_raw(
+        {"strResult": "SUCC", "h_msg_cd": "SYNTHETIC", "h_msg_txt": "synthetic", **values}
+    )
 
 
-@pytest.mark.parametrize("parser,list_key,fields", [
-    (parse_limousine_schedule_response, "trainList", SCHEDULE_FIELDS),
-    (parse_limousine_seat_inventory_response, "seatList", SEAT_FIELDS),
-])
+@pytest.mark.parametrize(
+    "parser,list_key,fields",
+    [
+        (parse_limousine_schedule_response, "trainList", SCHEDULE_FIELDS),
+        (parse_limousine_seat_inventory_response, "seatList", SEAT_FIELDS),
+    ],
+)
 def test_every_row_field_string_and_raw(parser, list_key: str, fields: dict[str, str]) -> None:
     """ScdlQryOutTrain.java:70-123; TResidualSeatsResearchOutSeat.java:62-104, optional masks."""
     row = {key: f"000{i}" for i, key in enumerate(fields)}
@@ -605,10 +805,13 @@ def test_seat_integer_string_field_preserved(wire: str, attr: str) -> None:
     assert getattr(result.seats[0], attr) == "7"
 
 
-@pytest.mark.parametrize("parser,wire,attr", [
-    *[(parse_limousine_schedule_response, k, v) for k, v in SCHEDULE_TOP.items()],
-    *[(parse_limousine_seat_inventory_response, k, v) for k, v in SEAT_TOP.items()],
-])
+@pytest.mark.parametrize(
+    "parser,wire,attr",
+    [
+        *[(parse_limousine_schedule_response, k, v) for k, v in SCHEDULE_TOP.items()],
+        *[(parse_limousine_seat_inventory_response, k, v) for k, v in SEAT_TOP.items()],
+    ],
+)
 def test_top_level_integer_string_field_preserved(parser, wire: str, attr: str) -> None:
     """ScdlQryOut.java:58-74; TResidualSeatsResearchOut.java:61-82 optional String fields."""
     response = envelope(**{wire: 7})
@@ -618,22 +821,35 @@ def test_top_level_integer_string_field_preserved(parser, wire: str, attr: str) 
 
 @pytest.mark.parametrize("bad", [True, False, 1.5, [], {}, None])
 def test_optional_bad_scalars_stay_none(bad: Any) -> None:
-    a = parse_limousine_schedule_response(envelope(trainList=[dict.fromkeys(SCHEDULE_FIELDS, bad)], **dict.fromkeys(SCHEDULE_TOP, bad)))
-    b = parse_limousine_seat_inventory_response(envelope(seatList=[dict.fromkeys(SEAT_FIELDS, bad)], **dict.fromkeys(SEAT_TOP, bad)))
+    a = parse_limousine_schedule_response(
+        envelope(trainList=[dict.fromkeys(SCHEDULE_FIELDS, bad)], **dict.fromkeys(SCHEDULE_TOP, bad))
+    )
+    b = parse_limousine_seat_inventory_response(
+        envelope(seatList=[dict.fromkeys(SEAT_FIELDS, bad)], **dict.fromkeys(SEAT_TOP, bad))
+    )
     assert all(getattr(a.schedules[0], attr) is None for attr in SCHEDULE_FIELDS.values())
     assert all(getattr(b.seats[0], attr) is None for attr in SEAT_FIELDS.values())
     assert all(getattr(a, attr) is None for attr in SCHEDULE_TOP.values())
     assert all(getattr(b, attr) is None for attr in SEAT_TOP.values())
 
 
-@pytest.mark.parametrize("parser,key,attr", [(parse_limousine_schedule_response, "trainList", "schedules"), (parse_limousine_seat_inventory_response, "seatList", "seats")])
+@pytest.mark.parametrize(
+    "parser,key,attr",
+    [
+        (parse_limousine_schedule_response, "trainList", "schedules"),
+        (parse_limousine_seat_inventory_response, "seatList", "seats"),
+    ],
+)
 def test_optional_list_defaults(parser, key: str, attr: str) -> None:
     """ScdlQryOut.java:74; TResidualSeatsResearchOut.java:79. Null leniency is library policy."""
     for values in ({}, {key: None}, {key: []}):
         assert getattr(parser(envelope(**values)), attr) == ()
 
 
-@pytest.mark.parametrize("parser,key", [(parse_limousine_schedule_response, "trainList"), (parse_limousine_seat_inventory_response, "seatList")])
+@pytest.mark.parametrize(
+    "parser,key",
+    [(parse_limousine_schedule_response, "trainList"), (parse_limousine_seat_inventory_response, "seatList")],
+)
 @pytest.mark.parametrize("bad", [{}, "bad", 7, [None], ["bad"]])
 def test_bad_lists_preserve_full_error_raw(parser, key: str, bad: Any) -> None:
     """Library ACCEPTANCE list/row contract, stricter than optional-field masks alone."""
@@ -654,13 +870,22 @@ def test_exact_success_envelope(parser, result: Any) -> None:
 
 def test_window_optional_parsing_and_raw() -> None:
     """TResidualSeatsResearchOutWindow.java:51-58; forgiving windows are library policy."""
-    response = envelope(windowList=[
-        {"st_loc_rt": "0.25", "cls_loc_rt": 1}, {"st_loc_rt": -2, "cls_loc_rt": 1.5},
-        None, {}, {"st_loc_rt": True, "cls_loc_rt": 1}, {"st_loc_rt": "NaN", "cls_loc_rt": 1},
-        {"st_loc_rt": float("inf"), "cls_loc_rt": 1},
-    ])
+    response = envelope(
+        windowList=[
+            {"st_loc_rt": "0.25", "cls_loc_rt": 1},
+            {"st_loc_rt": -2, "cls_loc_rt": 1.5},
+            None,
+            {},
+            {"st_loc_rt": True, "cls_loc_rt": 1},
+            {"st_loc_rt": "NaN", "cls_loc_rt": 1},
+            {"st_loc_rt": float("inf"), "cls_loc_rt": 1},
+        ]
+    )
     result = parse_limousine_seat_inventory_response(response)
-    assert [(w.start_location_ratio, w.close_location_ratio) for w in result.windows] == [(0.25, 1.0), (-2.0, 1.5)]
+    assert [(w.start_location_ratio, w.close_location_ratio) for w in result.windows] == [
+        (0.25, 1.0),
+        (-2.0, 1.5),
+    ]
     assert result.raw is response.raw
     assert parse_limousine_seat_inventory_response(envelope(windowList={})).windows == ()
 
@@ -668,28 +893,78 @@ def test_window_optional_parsing_and_raw() -> None:
 @pytest.fixture
 def schedule() -> LimousineSchedule:
     return LimousineSchedule(
-        arrival_date="20990101", arrival_station_code="9002", arrival_run_order="2", arrival_time="140000",
-        departure_date="20990101", departure_station_code="9001", departure_run_order="1", departure_time="120000",
-        general_remaining_seat_count="09", run_date="20990101", train_class_code="99", service_code="980", train_no="99001",
+        arrival_date="20990101",
+        arrival_station_code="9002",
+        arrival_run_order="2",
+        arrival_time="140000",
+        departure_date="20990101",
+        departure_station_code="9001",
+        departure_run_order="1",
+        departure_time="120000",
+        general_remaining_seat_count="09",
+        run_date="20990101",
+        train_class_code="99",
+        service_code="980",
+        train_no="99001",
     )
 
 
 def expected_reservation_form() -> dict[str, str]:
     # Current library wire values / dated accepted observation, NOT recovered protected enums.
-    return {"Device": "SYNTHETIC-DEVICE", "Version": "SYNTHETIC-VERSION", "Key": "SYNTHETIC-KEY", "lang": "ko",
-        "txtMenuId": "11", "txtJobId": "1101", "hidFreeFlg": "N", "txtStndFlg": "N", "txtTotPsgCnt": "2",
-        "txtCompaCnt1": "1", "txtPsgTpCd1": "1", "txtDiscKndCd1": "000",
-        "txtCompaCnt2": "1", "txtPsgTpCd2": "3", "txtDiscKndCd2": "000",
-        "txtSeatAttCd1": "000", "txtSeatAttCd2": "000", "txtSeatAttCd3": "000", "txtSeatAttCd4": "015", "txtSeatAttCd5": "000",
-        "txtPsrmClCd1": "1", "txtJrnyCnt": "1", "txtJrnyTpCd1": "11", "txtJrnySqno1": "001",
-        "txtTrnNo1": "99001", "txtTrnClsfCd1": "99", "txtTrnGpCd1": "980", "txtRunDt1": "20990101", "txtDptDt1": "20990101", "txtDptTm1": "120000",
-        "txtDptRsStnCd1": "9001", "txtDptStnRunOrdr1": "1", "txtArvRsStnCd1": "9002", "txtArvStnRunOrdr1": "2",
-        "txtSrcarCnt": "2", "txtSrcarNo1": "0001", "txtSeatNo1": "SYNTHETIC-SEAT-A", "txtSrcarNo2": "0001", "txtSeatNo2": "SYNTHETIC-SEAT-B"}
+    return {
+        "Device": "SYNTHETIC-DEVICE",
+        "Version": "SYNTHETIC-VERSION",
+        "Key": "SYNTHETIC-KEY",
+        "lang": "ko",
+        "txtMenuId": "11",
+        "txtJobId": "1101",
+        "hidFreeFlg": "N",
+        "txtStndFlg": "N",
+        "txtTotPsgCnt": "2",
+        "txtCompaCnt1": "1",
+        "txtPsgTpCd1": "1",
+        "txtDiscKndCd1": "000",
+        "txtCompaCnt2": "1",
+        "txtPsgTpCd2": "3",
+        "txtDiscKndCd2": "000",
+        "txtSeatAttCd1": "000",
+        "txtSeatAttCd2": "000",
+        "txtSeatAttCd3": "000",
+        "txtSeatAttCd4": "015",
+        "txtSeatAttCd5": "000",
+        "txtPsrmClCd1": "1",
+        "txtJrnyCnt": "1",
+        "txtJrnyTpCd1": "11",
+        "txtJrnySqno1": "001",
+        "txtTrnNo1": "99001",
+        "txtTrnClsfCd1": "99",
+        "txtTrnGpCd1": "980",
+        "txtRunDt1": "20990101",
+        "txtDptDt1": "20990101",
+        "txtDptTm1": "120000",
+        "txtDptRsStnCd1": "9001",
+        "txtDptStnRunOrdr1": "1",
+        "txtArvRsStnCd1": "9002",
+        "txtArvStnRunOrdr1": "2",
+        "txtSrcarCnt": "2",
+        "txtSrcarNo1": "0001",
+        "txtSeatNo1": "SYNTHETIC-SEAT-A",
+        "txtSrcarNo2": "0001",
+        "txtSeatNo2": "SYNTHETIC-SEAT-B",
+    }
 
 
 def test_full_reservation_form_adult_child(config, schedule) -> None:
     """AirportBusScheduleViewModel.java:165-184; AirportBusSeatMapViewModel.java:752-788; ScdlQryOutTrain.java:613-620."""
-    assert build_limousine_reservation_form(config, schedule, ["SYNTHETIC-SEAT-A", "SYNTHETIC-SEAT-B"], passengers=KorailPassengerCounts(adult=1, child=1)) == expected_reservation_form()
+    assert (
+        build_limousine_reservation_form(
+            config,
+            schedule,
+            ["SYNTHETIC-SEAT-A", "SYNTHETIC-SEAT-B"],
+            passengers=KorailPassengerCounts(adult=1, child=1),
+        )
+        == expected_reservation_form()
+    )
 
 
 @pytest.mark.parametrize("adult,child", [(1, 0), (0, 1), (0, 2), (5, 4)])
@@ -700,7 +975,11 @@ def test_reservation_passenger_rows_only_nonzero(config, schedule, adult: int, c
     form = build_limousine_reservation_form(config, schedule, seats, passengers=passengers)
     expected_rows = [(count, kind) for count, kind in [(adult, "1"), (child, "3")] if count]
     for i, (count, kind) in enumerate(expected_rows, 1):
-        assert (form[f"txtCompaCnt{i}"], form[f"txtPsgTpCd{i}"], form[f"txtDiscKndCd{i}"]) == (str(count), kind, "000")
+        assert (form[f"txtCompaCnt{i}"], form[f"txtPsgTpCd{i}"], form[f"txtDiscKndCd{i}"]) == (
+            str(count),
+            kind,
+            "000",
+        )
     assert f"txtCompaCnt{len(expected_rows) + 1}" not in form
     assert form["txtSrcarCnt"] == form["txtTotPsgCnt"] == str(passengers.total)
 
@@ -708,16 +987,22 @@ def test_reservation_passenger_rows_only_nonzero(config, schedule, adult: int, c
 def test_duplicate_seat_rejected(config, schedule) -> None:
     """AirportBusSeatMapViewModel.java:1996-2038 toggles seat_no, so the app never selects it twice."""
     with pytest.raises(KorailProtocolError, match="distinct|duplicate|unique"):
-        build_limousine_reservation_form(config, schedule, ["SYNTHETIC-SEAT-A"] * 2, passengers=KorailPassengerCounts(adult=2))
+        build_limousine_reservation_form(
+            config, schedule, ["SYNTHETIC-SEAT-A"] * 2, passengers=KorailPassengerCounts(adult=2)
+        )
 
 
-@pytest.mark.parametrize("seats", [None, "SYNTHETIC-SEAT-A", b"seat", {"seat"}, [], [""], [" "], [None], [7], [True], ["A", "B"]])
+@pytest.mark.parametrize(
+    "seats", [None, "SYNTHETIC-SEAT-A", b"seat", {"seat"}, [], [""], [" "], [None], [7], [True], ["A", "B"]]
+)
 def test_reservation_seat_input_rejections(config, schedule, seats: Any) -> None:
     with pytest.raises(KorailProtocolError):
         build_limousine_reservation_form(config, schedule, seats)
 
 
-@pytest.mark.parametrize("kind", ["teenager", "infant", "senior", "severe_disability", "mild_disability", "guide_dog"])
+@pytest.mark.parametrize(
+    "kind", ["teenager", "infant", "senior", "severe_disability", "mild_disability", "guide_dog"]
+)
 def test_reservation_only_adult_and_child(config, schedule, kind: str) -> None:
     """PassengerType.java:56-63 airportList contains only ADULT and CHILD."""
     passengers = KorailPassengerCounts(adult=0, **{kind: 1})
@@ -725,18 +1010,30 @@ def test_reservation_only_adult_and_child(config, schedule, kind: str) -> None:
         build_limousine_reservation_form(config, schedule, ["SYNTHETIC-SEAT-A"], passengers=passengers)
 
 
-@pytest.mark.parametrize("kwargs", [{"adult": 0}, {"adult": 10}, {"adult": -1}, {"adult": True}, {"adult": "1"}])
+@pytest.mark.parametrize(
+    "kwargs", [{"adult": 0}, {"adult": 10}, {"adult": -1}, {"adult": True}, {"adult": "1"}]
+)
 def test_passenger_count_rejections(kwargs: dict[str, Any]) -> None:
     with pytest.raises(KorailProtocolError):
         KorailPassengerCounts(**kwargs)
 
 
-@pytest.mark.parametrize("attr,value", [
-    ("train_no", None), ("train_class_code", ""), ("service_code", ""),
-    ("run_date", "2099-01-01"), ("departure_date", "2099010"), ("departure_time", "1200"),
-    ("departure_station_code", "station"), ("arrival_station_code", None),
-    ("departure_run_order", "one"), ("arrival_run_order", ""), ("general_remaining_seat_count", "0"),
-])
+@pytest.mark.parametrize(
+    "attr,value",
+    [
+        ("train_no", None),
+        ("train_class_code", ""),
+        ("service_code", ""),
+        ("run_date", "2099-01-01"),
+        ("departure_date", "2099010"),
+        ("departure_time", "1200"),
+        ("departure_station_code", "station"),
+        ("arrival_station_code", None),
+        ("departure_run_order", "one"),
+        ("arrival_run_order", ""),
+        ("general_remaining_seat_count", "0"),
+    ],
+)
 def test_reservation_bad_schedule_rejected(config, schedule, attr: str, value: Any) -> None:
     with pytest.raises(KorailProtocolError):
         build_limousine_reservation_form(config, replace(schedule, **{attr: value}), ["SYNTHETIC-SEAT-A"])
@@ -756,19 +1053,23 @@ def test_reservation_wrong_types_and_car_override(config, schedule) -> None:
 @pytest.fixture
 def api_factory(config):
     clients: list[KorailClient] = []
+
     def make(payload: dict[str, Any] | Exception, *, authenticated: bool = True):
         requests: list[httpx.Request] = []
+
         def handler(request: httpx.Request) -> httpx.Response:
             assert request.url.host == "api.invalid", "A limousine method unexpectedly entered NetFunnel"
             requests.append(request)
             if isinstance(payload, Exception):
                 raise payload
             return httpx.Response(200, json=payload)
+
         client = KorailClient(config, transport=httpx.MockTransport(handler))
         clients.append(client)
         if authenticated:
             client.session.current = KorailSession(jsessionid="SYNTHETIC-SESSION", member_no="SYNTHETIC-MEMBER")
         return client, requests
+
     yield make
     for client in clients:
         client.close()
@@ -804,9 +1105,16 @@ def test_seat_client_wire_and_parse_no_queue(api_factory, seat_query) -> None:
 
 def test_reserve_client_full_wire_no_queue(api_factory, schedule) -> None:
     """AirportBusSeatMapViewModel.java:638-688,1513-1552: direct reservation, no withNetFunnel."""
-    raw = {"strResult": "SUCC", "h_pnr_no": "SYNTHETIC-NOT-A-REAL-PNR", "h_tot_rcvd_amt": "100", "h_jrny_cnt": "1"}
+    raw = {
+        "strResult": "SUCC",
+        "h_pnr_no": "SYNTHETIC-NOT-A-REAL-PNR",
+        "h_tot_rcvd_amt": "100",
+        "h_jrny_cnt": "1",
+    }
     client, requests = api_factory(raw)
-    result = client.reserve_limousine(schedule, ["SYNTHETIC-SEAT-A", "SYNTHETIC-SEAT-B"], passengers=KorailPassengerCounts(adult=1, child=1))
+    result = client.reserve_limousine(
+        schedule, ["SYNTHETIC-SEAT-A", "SYNTHETIC-SEAT-B"], passengers=KorailPassengerCounts(adult=1, child=1)
+    )
     assert len(requests) == 1 and requests[0].method == "POST"
     assert requests[0].url.path == "/classes/com.korail.mobile.certification.TicketReservation"
     assert decoded_form(requests[0]) == expected_reservation_form()
@@ -829,7 +1137,12 @@ def test_duplicate_rejected_before_any_request(api_factory, schedule) -> None:
 
 
 def test_reservation_parser_failure_preserves_raw_without_retry(api_factory, schedule) -> None:
-    raw = {"strResult": "SUCC", "h_pnr_no": "SYNTHETIC-NOT-A-REAL-PNR", "h_jrny_cnt": [], "synthetic_extra": "keep"}
+    raw = {
+        "strResult": "SUCC",
+        "h_pnr_no": "SYNTHETIC-NOT-A-REAL-PNR",
+        "h_jrny_cnt": [],
+        "synthetic_extra": "keep",
+    }
     client, requests = api_factory(raw)
     with pytest.raises(KorailProtocolError) as raised:
         client.reserve_limousine(schedule, ["SYNTHETIC-SEAT-A"])
@@ -859,9 +1172,11 @@ def test_fallback_wait_budget_restarts_for_each_admission() -> None:
     App confirmation/filter differences are outside this queue contract test.
     """
     from korail_mobile_api.models import TrainSearchQuery
+
     clock = Clock()
     events: list[str] = []
     api_count = 0
+
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal api_count
         if request.url.path == "/ts.wseq":
@@ -874,9 +1189,17 @@ def test_fallback_wait_budget_restarts_for_each_admission() -> None:
         api_count += 1
         events.append("API")
         if api_count == 1:
-            return httpx.Response(200, json={"strResult": "FAIL", "h_msg_cd": "WRD000061", "h_msg_txt": "synthetic"})
-        return httpx.Response(200, json={"strResult": "SUCC", "h_msg_cd": "IRG000000", "h_msg_txt": "synthetic"})
-    client = KorailClient(KorailConfig(base_url="https://api.invalid", netfunnel_wait_limit=1), transport=httpx.MockTransport(handler))
+            return httpx.Response(
+                200, json={"strResult": "FAIL", "h_msg_cd": "WRD000061", "h_msg_txt": "synthetic"}
+            )
+        return httpx.Response(
+            200, json={"strResult": "SUCC", "h_msg_cd": "IRG000000", "h_msg_txt": "synthetic"}
+        )
+
+    client = KorailClient(
+        KorailConfig(base_url="https://api.invalid", netfunnel_wait_limit=1),
+        transport=httpx.MockTransport(handler),
+    )
     try:
         assert client.netfunnel is not None
         client.netfunnel._clock = clock

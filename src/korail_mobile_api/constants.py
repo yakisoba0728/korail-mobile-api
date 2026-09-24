@@ -7,7 +7,6 @@
 
 from enum import StrEnum
 
-
 KORAIL_BASE_URL = "https://smart.letskorail.com"
 KORAIL_DEVICE_ANDROID = "AD"
 KORAIL_API_VERSION = "250601003"
@@ -62,6 +61,7 @@ KORAIL_COMMON_CODE_BOOTSTRAP_CODES = (
     "app.MaaS.test",
     "app.limousine.mainMsg",
 )
+
 
 class KorailSeatClass(StrEnum):
     """예약할 객실 등급을 나타냅니다. PsrmType.java:19-22 에 GENERAL/SPECIAL 과 psrmClCd 가 있습니다.

@@ -6,6 +6,7 @@
 
 일반 봉투 판정은 HTTP 계층에서 수행하며, 개별 파서는 전달된 응답을 읽습니다. 선택 필드는 관대하게 읽지만 역 코드·이름, 열차 행, 좌석 재고의 필수 값은 형식 오류 시
 KorailProtocolError 입니다. 모든 모델이 raw 를 갖는 것은 아닙니다."""
+
 from __future__ import annotations
 
 import math
@@ -14,6 +15,15 @@ from collections.abc import Mapping
 from functools import partial
 from typing import Any
 
+from ._parsing import (
+    _nested_rows,
+    _nullable_scalar_fields,
+    _optional_integer,
+    _optional_scalar_string,
+    _preserve_read_raw,
+    _rows,
+)
+from ._parsing import _optional_scalar_string as _typed_optional_string
 from .errors import KorailProtocolError
 from .models import (
     AppDataResponse,
@@ -41,15 +51,6 @@ from .models import (
     TransferStationListResponse,
     UuidResponse,
 )
-from ._parsing import (
-    _nested_rows,
-    _nullable_scalar_fields,
-    _optional_integer,
-    _optional_scalar_string,
-    _preserve_read_raw,
-    _rows,
-)
-from ._parsing import _optional_scalar_string as _typed_optional_string
 
 
 def _typed_required_string(
@@ -61,9 +62,7 @@ def _typed_required_string(
 ) -> str:
     value = _typed_required_scalar_string(data, key, context=context)
     if non_empty and not value.strip():
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a non-empty string"
-        )
+        raise KorailProtocolError(f"KORAIL {context} field {key} must be a non-empty string")
     return value
 
 
@@ -73,12 +72,10 @@ def _typed_required_scalar_string(
     *,
     context: str,
 ) -> str:
-    """필수 문자열·JSON 정수를 문자열로 읽습니다. bool 은 제외합니다. 2026-09-21 일반 좌석 재고에서 layout_type 정수가 관측되어 String 선언과 달리 허용합니다.
-    """
+    """필수 문자열·JSON 정수를 문자열로 읽습니다. bool 은 제외합니다. 2026-09-21 일반 좌석 재고에서 layout_type 정수가 관측되어 String 선언과 달리
+    허용합니다."""
     if key not in data:
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a string or an integer"
-        )
+        raise KorailProtocolError(f"KORAIL {context} field {key} must be a string or an integer")
     value = data[key]
     if isinstance(value, str):
         return value
@@ -87,12 +84,8 @@ def _typed_required_scalar_string(
         try:
             return str(value)
         except ValueError as exc:  # 파이썬의 정수→문자열 자릿수 한도
-            raise KorailProtocolError(
-                f"KORAIL {context} field {key} is an integer too long to use"
-            ) from exc
-    raise KorailProtocolError(
-        f"KORAIL {context} field {key} must be a string or an integer"
-    )
+            raise KorailProtocolError(f"KORAIL {context} field {key} is an integer too long to use") from exc
+    raise KorailProtocolError(f"KORAIL {context} field {key} must be a string or an integer")
 
 
 def _typed_optional_int(
@@ -114,40 +107,28 @@ def _typed_non_negative_integer_value(
 ) -> int:
     if type(value) is int:
         parsed = value
-    elif (
-        isinstance(value, str)
-        and value
-        and all("0" <= character <= "9" for character in value)
-    ):
+    elif isinstance(value, str) and value and all("0" <= character <= "9" for character in value):
         try:
             parsed = int(value)
         except ValueError as exc:
             raise KorailProtocolError(
-                f"KORAIL {context} field {key} has an unsupported "
-                "ASCII-decimal length"
+                f"KORAIL {context} field {key} has an unsupported ASCII-decimal length"
             ) from exc
     else:
         raise KorailProtocolError(
-            f"KORAIL {context} field {key} must be a non-negative integer "
-            "or ASCII-decimal string"
+            f"KORAIL {context} field {key} must be a non-negative integer or ASCII-decimal string"
         )
     if parsed < 0:
-        raise KorailProtocolError(
-            f"KORAIL {context} field {key} must not be negative"
-        )
+        raise KorailProtocolError(f"KORAIL {context} field {key} must not be negative")
     return parsed
 
 
 # 좌석 재고의 필수 문자열은 빈 값도 허용하지만 역 코드·역명은 빈 값을 허용하지 않습니다.
 _optional_string = _typed_optional_string
-_station_required_string = partial(
-    _typed_required_string, context="station", non_empty=True
-)
+_station_required_string = partial(_typed_required_string, context="station", non_empty=True)
 _inventory_optional_string = _typed_optional_string
 _inventory_required_string = partial(_typed_required_string, context="seat inventory")
-_inventory_required_scalar_string = partial(
-    _typed_required_scalar_string, context="seat inventory"
-)
+_inventory_required_scalar_string = partial(_typed_required_scalar_string, context="seat inventory")
 _inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
 
 
@@ -181,11 +162,7 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
         ),
         railplus_cardinfo=_optional_string(raw, "railplus_cardinfo"),
         version=version,
-        notice=(
-            parse_notice_response(response)
-            if isinstance(raw.get("notice"), Mapping)
-            else None
-        ),
+        notice=(parse_notice_response(response) if isinstance(raw.get("notice"), Mapping) else None),
     )
 
 
@@ -224,9 +201,7 @@ def parse_station_name_map(raw: Mapping[str, Any]) -> dict[str, str]:
         if code and name:
             names[code] = name
     if not names:
-        raise KorailProtocolError(
-            "KORAIL station data did not contain usable stations"
-        )
+        raise KorailProtocolError("KORAIL station data did not contain usable stations")
     return names
 
 
@@ -243,15 +218,13 @@ def resolve_station_name(reference: str, names: Mapping[str, str]) -> str:
     try:
         return names[value]
     except KeyError as exc:
-        raise KorailProtocolError(
-            f"KORAIL station code is unknown: {value}"
-        ) from exc
+        raise KorailProtocolError(f"KORAIL station code is unknown: {value}") from exc
 
 
 @_preserve_read_raw
 def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
-    """trn_infos 는 객체 안의 trn_info 목록, 직접 목록, null 을 허용합니다. 그 밖의 컨테이너·비객체 행은 오류입니다. 빈 목록만으로 직통 없음 예외를 만들지는 않습니다.
-    """
+    """trn_infos 는 객체 안의 trn_info 목록, 직접 목록, null 을 허용합니다. 그 밖의 컨테이너·비객체 행은 오류입니다. 빈 목록만으로 직통 없음 예외를 만들지는
+    않습니다."""
     container = raw.get("trn_infos")
     if isinstance(container, Mapping):
         rows = container.get("trn_info", [])
@@ -260,21 +233,12 @@ def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
     elif container is None:
         rows = []
     else:
-        raise KorailProtocolError(
-            "KORAIL train response had invalid trn_infos"
-        )
+        raise KorailProtocolError("KORAIL train response had invalid trn_infos")
     if not isinstance(rows, list):
-        raise KorailProtocolError(
-            "KORAIL train response missing trn_infos.trn_info list"
-        )
+        raise KorailProtocolError("KORAIL train response missing trn_infos.trn_info list")
     if any(not isinstance(row, Mapping) for row in rows):
-        raise KorailProtocolError(
-            "KORAIL train response contained a non-object row"
-        )
-    return [
-        TrainSummary.from_raw(dict(row))
-        for row in rows
-    ]
+        raise KorailProtocolError("KORAIL train response contained a non-object row")
+    return [TrainSummary.from_raw(dict(row)) for row in rows]
 
 
 @_preserve_read_raw
@@ -283,6 +247,7 @@ def parse_train_search_metadata(
 ) -> TrainSearchMetadata:
     """페이지 커서와 조회 조건을 읽습니다. h_merge_rsv_psb_flg 는 다른 DTO 의 필드입니다 (TrainScheduleOutTrainInfos.java:25-26,
     MergeSeatsCOutTrnInfos.java:25-26,85)."""
+
     def optional(key: str) -> str | None:
         return _typed_optional_string(raw, key)
 
@@ -312,9 +277,7 @@ def parse_train_search_metadata(
 def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
     """ebizcross/getUUID.do 의 mutMrkVrfCd 를 문자열로 정규화하며 없거나 비면 KorailProtocolError 입니다. 완전한 KORAIL 봉투는 요구하지
     않습니다. strResult 만 동반된 2026-09-22 관측과 부분 봉투 보존은 http.KorailHttpClient._finish_read 참고."""
-    value = _typed_required_string(
-        response.raw, "mutMrkVrfCd", context="UUID response", non_empty=True
-    )
+    value = _typed_required_string(response.raw, "mutMrkVrfCd", context="UUID response", non_empty=True)
     return UuidResponse(
         **_response_fields(response),
         verification_code=value,
@@ -397,9 +360,7 @@ def parse_station_data_response(
     stations: list[KorailStation] = []
     for row in rows:
         if not isinstance(row, Mapping):
-            raise KorailProtocolError(
-                "KORAIL station data contained a non-object row"
-            )
+            raise KorailProtocolError("KORAIL station data contained a non-object row")
         stations.append(
             KorailStation(
                 code=_station_required_string(row, "stn_cd"),
@@ -449,29 +410,33 @@ def parse_train_calendar_response(
     days: list[TrainCalendarDay] = [
         TrainCalendarDay(
             # 보호된 날짜 기본값을 재현하지 않아 누락은 None 입니다(RunDateOutItem.java:37,104-105).
-            **_nullable_scalar_fields(row, {
-                "run_date": "runDt",
-                # bizDdStgCd 의 누락 기본값은 null(RunDateOutItem.java:111-115). 판정 헬퍼의 null 처리까지 확인된 것은
-                # 아닙니다(RunDateOutItem.java:516-524).
-                "business_day_stage_code": "bizDdStgCd",
-                # dayDvCd 누락 기본값은 null 입니다(RunDateOutItem.java:106-110). 직접 getter 참조의 부재만으로 반사 호출까지
-                # 없다고 단정하지 않고, 파서는 선택값으로 읽습니다.
-                "day_division_code": "dayDvCd",
-                # hldyDvCd 는 누락 시 보호 기본값을 사용하므로 필수 키가 아닙니다(RunDateOutItem.java:116-119). 보호 기본값의 평문을 빈
-                # 문자열로 확정하지 않습니다.
-                "holiday_division_code": "hldyDvCd",
-                # saleDdDvCd 누락 기본값은 null 이므로 선택값으로 읽습니다(RunDateOutItem.java:121-125).
-                "sale_day_division_code": "saleDdDvCd",
-                # 운행 플래그의 누락 기본값은 null(RunDateOutItem.java:126-160). isRunDate 비교 리터럴·null 처리 결과는 보호돼
-                # 있습니다(RunDateOutItem.java:526-590).
-                "a_train_operation_flag": "aTrnOpFlg",
-                "d_train_operation_flag": "dTrnOpFlg",
-                "g_train_operation_flag": "gTrnOpFlg",
-                "o_train_operation_flag": "oTrnOpFlg",
-                "s_train_operation_flag": "sTrnOpFlg",
-                "v_train_operation_flag": "vTrnOpFlg",
-                "x_train_operation_flag": "xTrnOpFlg",
-            }, context="train read"),
+            **_nullable_scalar_fields(
+                row,
+                {
+                    "run_date": "runDt",
+                    # bizDdStgCd 의 누락 기본값은 null(RunDateOutItem.java:111-115). 판정 헬퍼의 null 처리까지 확인된 것은
+                    # 아닙니다(RunDateOutItem.java:516-524).
+                    "business_day_stage_code": "bizDdStgCd",
+                    # dayDvCd 누락 기본값은 null 입니다(RunDateOutItem.java:106-110). 직접 getter 참조의 부재만으로 반사 호출까지
+                    # 없다고 단정하지 않고, 파서는 선택값으로 읽습니다.
+                    "day_division_code": "dayDvCd",
+                    # hldyDvCd 는 누락 시 보호 기본값을 사용하므로 필수 키가 아닙니다(RunDateOutItem.java:116-119). 보호 기본값의 평문을 빈
+                    # 문자열로 확정하지 않습니다.
+                    "holiday_division_code": "hldyDvCd",
+                    # saleDdDvCd 누락 기본값은 null 이므로 선택값으로 읽습니다(RunDateOutItem.java:121-125).
+                    "sale_day_division_code": "saleDdDvCd",
+                    # 운행 플래그의 누락 기본값은 null(RunDateOutItem.java:126-160). isRunDate 비교 리터럴·null 처리 결과는 보호돼
+                    # 있습니다(RunDateOutItem.java:526-590).
+                    "a_train_operation_flag": "aTrnOpFlg",
+                    "d_train_operation_flag": "dTrnOpFlg",
+                    "g_train_operation_flag": "gTrnOpFlg",
+                    "o_train_operation_flag": "oTrnOpFlg",
+                    "s_train_operation_flag": "sTrnOpFlg",
+                    "v_train_operation_flag": "vTrnOpFlg",
+                    "x_train_operation_flag": "xTrnOpFlg",
+                },
+                context="train read",
+            ),
             raw=dict(row),
         )
         for row in _rows(raw, "runningCalendar")
@@ -493,37 +458,46 @@ def parse_train_schedule_response(
     raw = response.raw
     stops: list[TrainScheduleStop] = [
         TrainScheduleStop(
-            **_nullable_scalar_fields(row, {
-                "station_code": "stopRsStnCd",
-                # stopStnNm 은 누락 시 기본값을 사용하는 필드입니다(ActualTrainScheduleOutDlay.java:71-76).
-                "station_name": "stopStnNm",
-                "station_construction_order": "stnConsOrdr",
-                "run_order": "runOrdr",
-            }, context="train read"),
+            **_nullable_scalar_fields(
+                row,
+                {
+                    "station_code": "stopRsStnCd",
+                    # stopStnNm 은 누락 시 기본값을 사용하는 필드입니다(ActualTrainScheduleOutDlay.java:71-76).
+                    "station_name": "stopStnNm",
+                    "station_construction_order": "stnConsOrdr",
+                    "run_order": "runOrdr",
+                },
+                context="train read",
+            ),
             # ActualTrainScheduleOutDlay.java:30 — 앱 DTO 는 String("001" 등)입니다.
             actual_arrival_delay_count=_optional_scalar_string(row, "actArvDlayTnum"),
-            **_nullable_scalar_fields(row, {
-                "actual_arrival_date": "actArvDt",
-                "actual_arrival_time": "actArvTm",
-                "actual_departure_date": "actDptDt",
-                "actual_departure_time": "actDptTm",
-                "planned_arrival_date": "arvDt",
-                "planned_arrival_time": "arvTm",
-                "planned_departure_date": "dptDt",
-                "planned_departure_time": "dptTm",
-                "delay_fare_return_division_code": "dlayFareRetDvCd",
-                "delay_fare_return_division_name": "dlayFareRetDvCdNm",
-                "solo_operation_delay_flag": "dlaySoloOprFlg",
-                "detour_driver_delay_count": "dturDrvDlayTnum",
-                "expected_arrival_delay_count": "expnArvDlayTnum",
-                "expected_departure_delay_count": "expnDptDlayTnum",
-                "regular_flag": "rgulFlg",
-                "service_flag": "saodFlg",
-            }, context="train read"),
+            **_nullable_scalar_fields(
+                row,
+                {
+                    "actual_arrival_date": "actArvDt",
+                    "actual_arrival_time": "actArvTm",
+                    "actual_departure_date": "actDptDt",
+                    "actual_departure_time": "actDptTm",
+                    "planned_arrival_date": "arvDt",
+                    "planned_arrival_time": "arvTm",
+                    "planned_departure_date": "dptDt",
+                    "planned_departure_time": "dptTm",
+                    "delay_fare_return_division_code": "dlayFareRetDvCd",
+                    "delay_fare_return_division_name": "dlayFareRetDvCdNm",
+                    "solo_operation_delay_flag": "dlaySoloOprFlg",
+                    "detour_driver_delay_count": "dturDrvDlayTnum",
+                    "expected_arrival_delay_count": "expnArvDlayTnum",
+                    "expected_departure_delay_count": "expnDptDlayTnum",
+                    "regular_flag": "rgulFlg",
+                    "service_flag": "saodFlg",
+                },
+                context="train read",
+            ),
             raw=dict(row),
         )
         for row in _rows(raw, "dlayList")
     ]
+
     def optional(key: str) -> str | None:
         return _typed_optional_string(raw, key)
 
@@ -569,15 +543,11 @@ def parse_transfer_station_list_response(
     raw = response.raw
     rows = raw.get("chtnList", [])
     if not isinstance(rows, list):
-        raise KorailProtocolError(
-            "KORAIL transfer station field chtnList must be a list"
-        )
+        raise KorailProtocolError("KORAIL transfer station field chtnList must be a list")
     stations: list[TransferStation] = []
     for row in rows:
         if not isinstance(row, Mapping):
-            raise KorailProtocolError(
-                "KORAIL transfer station list contained a non-object row"
-            )
+            raise KorailProtocolError("KORAIL transfer station list contained a non-object row")
         stations.append(
             TransferStation(
                 # 환승역 코드·역명은 누락 시 기본값을 사용하므로 선택값으로 읽습니다(ChtnStnOutItem.java:51-61).
@@ -604,9 +574,7 @@ def _inventory_required_list(
 ) -> list[Any]:
     value = data.get(key)
     if not isinstance(value, list):
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be a list"
-        )
+        raise KorailProtocolError(f"KORAIL seat inventory field {key} must be a list")
     return value
 
 
@@ -614,9 +582,7 @@ def _inventory_required_int(
     data: Mapping[str, Any],
     key: str,
 ) -> int:
-    return _typed_non_negative_integer_value(
-        data.get(key), key, context="seat inventory"
-    )
+    return _typed_non_negative_integer_value(data.get(key), key, context="seat inventory")
 
 
 @_preserve_read_raw
@@ -688,26 +654,18 @@ def _inventory_ratio(data: Mapping[str, Any], key: str) -> float:
     # bool·사용자 정의 숫자 하위형을 제외합니다. isinstance 는 타입 검사기의 float 변환 추론용입니다.
     if type(value) in {int, float} and isinstance(value, (int, float)):
         number = value
-    elif (
-        isinstance(value, str)
-        and re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value) is not None
-    ):
+    elif isinstance(value, str) and re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value) is not None:
         number = value
     else:
         raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be numeric or an "
-            "ASCII decimal string"
+            f"KORAIL seat inventory field {key} must be numeric or an ASCII decimal string"
         )
     try:
         ratio = float(number)
     except (OverflowError, ValueError) as exc:
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be finite"
-        ) from exc
+        raise KorailProtocolError(f"KORAIL seat inventory field {key} must be finite") from exc
     if not math.isfinite(ratio):
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be finite"
-        )
+        raise KorailProtocolError(f"KORAIL seat inventory field {key} must be finite")
     return ratio
 
 
@@ -730,15 +688,11 @@ def parse_seat_inventory_response(
         "seat_total_count",
     )
 
-    seat_rows = (
-        _inventory_required_list(raw, "seatList") if "seatList" in raw else []
-    )
+    seat_rows = _inventory_required_list(raw, "seatList") if "seatList" in raw else []
     seats: list[PhysicalSeat] = []
     for row in seat_rows:
         if not isinstance(row, Mapping):
-            raise KorailProtocolError(
-                "KORAIL seat inventory contained a non-object seat row"
-            )
+            raise KorailProtocolError("KORAIL seat inventory contained a non-object seat row")
         seat_no = _inventory_required_string(row, "seat_no")
         seats.append(
             PhysicalSeat(
@@ -773,15 +727,11 @@ def parse_seat_inventory_response(
             )
         )
 
-    window_rows = (
-        _inventory_required_list(raw, "windowList") if "windowList" in raw else []
-    )
+    window_rows = _inventory_required_list(raw, "windowList") if "windowList" in raw else []
     windows: list[SeatWindow] = []
     for row in window_rows:
         if not isinstance(row, Mapping):
-            raise KorailProtocolError(
-                "KORAIL seat inventory contained a non-object window row"
-            )
+            raise KorailProtocolError("KORAIL seat inventory contained a non-object window row")
         windows.append(
             SeatWindow(
                 start_location_ratio=_inventory_ratio(row, "st_loc_rt"),

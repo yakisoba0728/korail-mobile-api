@@ -7,6 +7,7 @@ Queue protocol evidence: com/netfunnel/api/Netfunnel.java:610-664,848-880.
 Protected aid/mode literals are not independently verified by these tests.
 The per-method source-line map and limitations are recorded in the release report.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -31,122 +32,256 @@ F8_ENV = {"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": "synthetic"
 
 def _f8_arguments() -> dict[str, dict[str, Any]]:
     train = api.TrainSummary(
-        train_no="90001", train_group_code="100", train_class_code="00",
-        departure_station_code="9901", arrival_station_code="9903",
-        departure_station_name="출발시험역", arrival_station_name="도착시험역",
-        departure_date=F8_DATE, run_date=F8_DATE, departure_time="090000",
-        arrival_date=F8_DATE, arrival_time="110000", departure_run_order="1",
-        arrival_run_order="3", departure_construction_order="1",
-        arrival_construction_order="3", seat_attribute_code="015",
-        general_reservation_code="11", general_reservation_flag="Y",
+        train_no="90001",
+        train_group_code="100",
+        train_class_code="00",
+        departure_station_code="9901",
+        arrival_station_code="9903",
+        departure_station_name="출발시험역",
+        arrival_station_name="도착시험역",
+        departure_date=F8_DATE,
+        run_date=F8_DATE,
+        departure_time="090000",
+        arrival_date=F8_DATE,
+        arrival_time="110000",
+        departure_run_order="1",
+        arrival_run_order="3",
+        departure_construction_order="1",
+        arrival_construction_order="3",
+        seat_attribute_code="015",
+        general_reservation_code="11",
+        general_reservation_flag="Y",
     )
     query = api.TrainSearchQuery("출발시험역", "도착시험역", F8_DATE, "090000")
     hold = api.ReservationHoldResponse(
-        str_result="SUCC", pnr_no="SYNTHETIC-PNR", journey_count="1",
-        window_no="SYNTHETIC-WINDOW", temporary_job_sequence_1="1",
-        temporary_job_sequence_2="2", total_price="1000", received_amount="1000",
+        str_result="SUCC",
+        pnr_no="SYNTHETIC-PNR",
+        journey_count="1",
+        window_no="SYNTHETIC-WINDOW",
+        temporary_job_sequence_1="1",
+        temporary_job_sequence_2="2",
+        total_price="1000",
+        received_amount="1000",
     )
     ticket = api.OriginalTicketReference("SYNTHETIC-WINDOW", F8_DATE, "1", "SYNTHETIC-RETURN")
     schedule = api.LimousineSchedule(
-        departure_date=F8_DATE, run_date=F8_DATE, departure_time="090000",
-        departure_station_code="9901", arrival_station_code="9903",
-        departure_run_order="1", arrival_run_order="3", train_class_code="80",
-        service_code="800", train_no="90001", general_remaining_seat_count="2",
+        departure_date=F8_DATE,
+        run_date=F8_DATE,
+        departure_time="090000",
+        departure_station_code="9901",
+        arrival_station_code="9903",
+        departure_run_order="1",
+        arrival_run_order="3",
+        train_class_code="80",
+        service_code="800",
+        train_no="90001",
+        general_remaining_seat_count="2",
     )
     result: dict[str, dict[str, Any]] = {
         "login": {"member_no": "SYNTHETIC-MEMBER", "password": "SYNTHETIC-PASSWORD"},
-        "logout": {}, "clear_session": {}, "close": {},
+        "logout": {},
+        "clear_session": {},
+        "close": {},
         "search_trains": {"query": query},
         "search_transfer_trains": {"query": query},
         "search_trains_with_transfer_fallback": {"query": query},
         "get_train_schedule": {"run_date": F8_DATE, "train_no": "90001"},
         "get_transfer_stations": {"departure_station_code": "9901", "arrival_station_code": "9903"},
-        "get_train_calendar": {}, "get_seat_cars": {"train": train},
+        "get_train_calendar": {},
+        "get_seat_cars": {"train": train},
         "get_seat_inventory": {"train": train, "car_no": 1},
         "get_free_seat_car_info": {"request": api.FreeSeatCarRequest(F8_DATE, "90001", "1", "3", "1", "3")},
         "get_guide_seat_condition": {"request": api.GuideSeatConditionRequest("015")},
-        "get_merge_seats_inquiry": {"request": api.MergeSeatsInquiryRequest(
-            F8_DATE + "090000", F8_DATE + "090000", "90001", "출발시험역", "도착시험역", None, "1", "015", 1)},
-        "get_price_fare_quote": {"request": api.PriceFareQuoteRequest((api.PriceFareLeg(
-            "9901", "9903", F8_DATE, "90001", "015", "100", "00"),))},
-        "get_station_info": {}, "get_station_data": {},
+        "get_merge_seats_inquiry": {
+            "request": api.MergeSeatsInquiryRequest(
+                F8_DATE + "090000", F8_DATE + "090000", "90001", "출발시험역", "도착시험역", None, "1", "015", 1
+            )
+        },
+        "get_price_fare_quote": {
+            "request": api.PriceFareQuoteRequest(
+                (api.PriceFareLeg("9901", "9903", F8_DATE, "90001", "015", "100", "00"),)
+            )
+        },
+        "get_station_info": {},
+        "get_station_data": {},
         "get_common_code": {"code": ["synthetic.code"]},
-        "get_app_data": {"timestamp_ms": 1}, "get_notice": {"timestamp_ms": 1},
-        "get_uuid": {}, "get_service_status": {"timestamp_ms": 1},
-        "get_maas_menu_list": {}, "get_maas_station_data": {"additional_service_code": "SYNTHETIC-SERVICE"},
+        "get_app_data": {"timestamp_ms": 1},
+        "get_notice": {"timestamp_ms": 1},
+        "get_uuid": {},
+        "get_service_status": {"timestamp_ms": 1},
+        "get_maas_menu_list": {},
+        "get_maas_station_data": {"additional_service_code": "SYNTHETIC-SERVICE"},
         "get_maas_service_details": {"query": api.MaasServiceDetailQuery(F8_DATE, F8_DATE)},
-        "get_cart_list": {"pnr_no": "SYNTHETIC-PNR"}, "get_deposit_banks": {},
+        "get_cart_list": {"pnr_no": "SYNTHETIC-PNR"},
+        "get_deposit_banks": {},
         "get_delay_discount_tickets": {"departure_date_to": F8_DATE},
         "get_discount_coupons": {"page_no": 1, "pnr_no": "SYNTHETIC-PNR"},
         "get_korail_point_summary": {},
         "get_mileage_history": {"request": api.MileageHistoryRequest(F8_DATE, F8_DATE)},
         "get_discount_card_usage_history": {"card_no": "SYNTHETIC-CARD"},
-        "get_discount_card_schedule": {"request": api.DiscountCardScheduleRequest(
-            "SYNTHETIC-KIND", "출발시험역", "도착시험역", F8_DATE)},
+        "get_discount_card_schedule": {
+            "request": api.DiscountCardScheduleRequest("SYNTHETIC-KIND", "출발시험역", "도착시험역", F8_DATE)
+        },
         "get_pass_available_dates": {"kind_code": "SYNTHETIC-KIND", "period_code": "1", "age_code": "1"},
-        "get_pass_schedule": {"request": api.PassScheduleRequest(
-            "100", F8_DATE, "090000", "1", "SYNTHETIC-KIND", "1", "1", "1", "10", "출발시험역", "도착시험역", "N")},
-        "get_trip_menu": {}, "get_pass_menu": {"menu_no": "SYNTHETIC-MENU"},
+        "get_pass_schedule": {
+            "request": api.PassScheduleRequest(
+                "100",
+                F8_DATE,
+                "090000",
+                "1",
+                "SYNTHETIC-KIND",
+                "1",
+                "1",
+                "1",
+                "10",
+                "출발시험역",
+                "도착시험역",
+                "N",
+            )
+        },
+        "get_trip_menu": {},
+        "get_pass_menu": {"menu_no": "SYNTHETIC-MENU"},
         "get_crew_request_list": {"timestamp_ms": 1},
         "get_commuter_kind_menu": {"commuter_kind_code": "SYNTHETIC-KIND"},
         "get_commuter_info": {"request": api.CommuterTicketInquiryRequest(ticket)},
         "get_product_reservations": {"page_no": 1, "page_size": 10},
         "get_product_detail": {"reservation_no": "SYNTHETIC-RESERVATION", "reservation_sequence": "1"},
-        "get_ticket_receipt": {"sale_date": "0102", "window_no": ticket.sale_window_no,
-            "sale_sequence": ticket.sale_sequence, "return_password": ticket.return_password},
+        "get_ticket_receipt": {
+            "sale_date": "0102",
+            "window_no": ticket.sale_window_no,
+            "sale_sequence": ticket.sale_sequence,
+            "return_password": ticket.return_password,
+        },
         "get_reservation_history": {},
-        "get_seat_assignment_schedule": {"request": api.SeatAssignmentScheduleRequest(
-            "11", F8_DATE, "090000", "출발시험역", "도착시험역", "100", "1", "015", 1, "N", "1", "")},
+        "get_seat_assignment_schedule": {
+            "request": api.SeatAssignmentScheduleRequest(
+                "11", F8_DATE, "090000", "출발시험역", "도착시험역", "100", "1", "015", 1, "N", "1", ""
+            )
+        },
         "get_multi_child_discount_targets": {"departure_date": F8_DATE},
-        "get_customer_trip_info": {}, "get_trip_change_dates": {"departure_date": F8_DATE},
+        "get_customer_trip_info": {},
+        "get_trip_change_dates": {"departure_date": F8_DATE},
         "get_delivery_recipient": {"ticket": ticket},
         "check_ticket_duplication": {"request": api.TicketDuplicationCheckRequest("SYNTHETIC-PNR")},
         "get_pbp_acceptance_specifications": {"tickets": (ticket,)},
         "get_original_ticket_inquiry": {"tickets": (ticket,)},
-        "get_self_seat_change_info": {"request": api.SelfSeatChangeInfoRequest(F8_DATE, "90001", "9901", "9903")},
+        "get_self_seat_change_info": {
+            "request": api.SelfSeatChangeInfoRequest(F8_DATE, "90001", "9901", "9903")
+        },
         "get_recent_delivery_history": {},
         "get_ticket_reservation_detail": {"request": api.TicketReservationDetailRequest("SYNTHETIC-PNR")},
-        "get_refund_commission": {"ticket": ticket}, "get_refund_ticket_detail": {"ticket": ticket},
-        "get_ticket_list": {}, "reserve": {"train": train},
-        "reserve_transfer": {"legs": (
-            replace(train, arrival_station_code="9902", arrival_run_order="2", arrival_time="100000"),
-            replace(train, train_no="90002", departure_station_code="9902", departure_run_order="2", departure_time="101000"))},
-        "reserve_merge": {"standing_hold_train": replace(train, merge_seat_application_flag="A"), "merge_rows": (
-            api.TrainScheduleItem(train_no="90001", arrival_station_code="9902",
-                arrival_construction_order="2", arrival_run_order="2",
-                general_reservation_code="11", standing_reservation_code="11"),
-            api.TrainScheduleItem(train_no="90001", arrival_station_code="9903",
-                general_reservation_code="13", standing_reservation_code="11"))},
+        "get_refund_commission": {"ticket": ticket},
+        "get_refund_ticket_detail": {"ticket": ticket},
+        "get_ticket_list": {},
+        "reserve": {"train": train},
+        "reserve_transfer": {
+            "legs": (
+                replace(train, arrival_station_code="9902", arrival_run_order="2", arrival_time="100000"),
+                replace(
+                    train,
+                    train_no="90002",
+                    departure_station_code="9902",
+                    departure_run_order="2",
+                    departure_time="101000",
+                ),
+            )
+        },
+        "reserve_merge": {
+            "standing_hold_train": replace(train, merge_seat_application_flag="A"),
+            "merge_rows": (
+                api.TrainScheduleItem(
+                    train_no="90001",
+                    arrival_station_code="9902",
+                    arrival_construction_order="2",
+                    arrival_run_order="2",
+                    general_reservation_code="11",
+                    standing_reservation_code="11",
+                ),
+                api.TrainScheduleItem(
+                    train_no="90001",
+                    arrival_station_code="9903",
+                    general_reservation_code="13",
+                    standing_reservation_code="11",
+                ),
+            ),
+        },
         "reserve_with_discount_card": {"train": train, "card_no": "SYNTHETIC-CARD"},
-        "confirm_standby_hold": {"hold": hold}, "cancel_unpaid_hold": {"hold": hold},
-        "cancel_product_reservation": {"detail": api.ProductDetailResponse(
-            virtual_reservation_no="SYNTHETIC-RESERVATION", goods_sequence="1")},
+        "confirm_standby_hold": {"hold": hold},
+        "cancel_unpaid_hold": {"hold": hold},
+        "cancel_product_reservation": {
+            "detail": api.ProductDetailResponse(
+                virtual_reservation_no="SYNTHETIC-RESERVATION", goods_sequence="1"
+            )
+        },
         "pay_with_card": {"hold": hold, "card": api.CardPayment("0" * 16, "00", "9912", "000101")},
-        "refund": {"ticket": api.PaidTicket("SYNTHETIC-PNR", F8_DATE, ticket.sale_window_no,
-            ticket.sale_sequence, ticket.return_password, "90001")},
-        "verify_station_ticket_refund": {"request": api.StationRefundVerificationRequest(
-            "SYNTHETIC-NAME", "00000", "00000000", "0000000", "00000")},
-        "execute_station_ticket_refund": {"request": api.StationRefundExecutionRequest(
-            "SYNTHETIC-PNR", F8_DATE, "SYNTHETIC-WINDOW", "1", "SYNTHETIC-RETURN",
-            "1", "1", "1", "00000000000", "1000", "0", "SYNTHETIC-NAME")},
+        "refund": {
+            "ticket": api.PaidTicket(
+                "SYNTHETIC-PNR",
+                F8_DATE,
+                ticket.sale_window_no,
+                ticket.sale_sequence,
+                ticket.return_password,
+                "90001",
+            )
+        },
+        "verify_station_ticket_refund": {
+            "request": api.StationRefundVerificationRequest(
+                "SYNTHETIC-NAME", "00000", "00000000", "0000000", "00000"
+            )
+        },
+        "execute_station_ticket_refund": {
+            "request": api.StationRefundExecutionRequest(
+                "SYNTHETIC-PNR",
+                F8_DATE,
+                "SYNTHETIC-WINDOW",
+                "1",
+                "SYNTHETIC-RETURN",
+                "1",
+                "1",
+                "1",
+                "00000000000",
+                "1000",
+                "0",
+                "SYNTHETIC-NAME",
+            )
+        },
         "add_to_cart": {"request": api.CartAddRequest("SYNTHETIC-PNR")},
-        "register_discount_card": {"request": api.DiscountCardPurchaseRequest(
-            "SYNTHETIC-KIND", "SYNTHETIC-CUSTOMER", F8_DATE, "1",
-            (api.DiscountCardSectionRequest(F8_DATE, "90001", "9901", "9903"),))},
-        "extend_discount_card": {"ticket": api.DiscountCardTicket(
-            ticket.sale_window_no, ticket.sale_date, ticket.sale_sequence, ticket.return_password)},
-        "recalculate_price": {"request": api.PriceRecalculationRequest(
-            "SYNTHETIC-PNR", (api.PriceRecalculationRow("1", "1", "000"),))},
-        "get_limousine_schedules": {"query": api.LimousineScheduleQuery(
-            F8_DATE, "9901", "9903", "800", "1", "090000", "90001", "015", "1")},
-        "get_limousine_seat_inventory": {"query": api.LimousineSeatInventoryQuery(
-            "80", "800", F8_DATE, "90001", "0001", "1", "9901", "9903", "015", "1", "3", 1)},
+        "register_discount_card": {
+            "request": api.DiscountCardPurchaseRequest(
+                "SYNTHETIC-KIND",
+                "SYNTHETIC-CUSTOMER",
+                F8_DATE,
+                "1",
+                (api.DiscountCardSectionRequest(F8_DATE, "90001", "9901", "9903"),),
+            )
+        },
+        "extend_discount_card": {
+            "ticket": api.DiscountCardTicket(
+                ticket.sale_window_no, ticket.sale_date, ticket.sale_sequence, ticket.return_password
+            )
+        },
+        "recalculate_price": {
+            "request": api.PriceRecalculationRequest(
+                "SYNTHETIC-PNR", (api.PriceRecalculationRow("1", "1", "000"),)
+            )
+        },
+        "get_limousine_schedules": {
+            "query": api.LimousineScheduleQuery(
+                F8_DATE, "9901", "9903", "800", "1", "090000", "90001", "015", "1"
+            )
+        },
+        "get_limousine_seat_inventory": {
+            "query": api.LimousineSeatInventoryQuery(
+                "80", "800", F8_DATE, "90001", "0001", "1", "9901", "9903", "015", "1", "3", 1
+            )
+        },
         "reserve_limousine": {"schedule": schedule, "seat_nos": ("1A",)},
     }
     return result
 
+
 # Literal golden exchanges captured from synthetic calls, then route-checked against APK sources.
-F8_CASE_DATA: dict[str, Any] = json.loads(r'''
+F8_CASE_DATA: dict[str, Any] = json.loads(r"""
 {
   "login": {"return_type": "KorailSession","exchanges": [{"method": "POST","path": "/file/CACHE/MobileService.cache","host": "api.example.invalid","query": {},"form": {"timeStamp": ["<DYNAMIC>"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","strCustNo": "SYNTHETIC-CUSTOMER","strMbCrdNo": "SYNTHETIC-MEMBER-CARD"}},{"method": "POST","path": "/classes/com.korail.mobile.common.code.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"code": ["app.display.image","app.menu.railpoint","app.main.popup","app.easyLogin.isShow","app.korail.boss","app.menu.buynow","app.menu.lost112","app.event.easyPay","app.hndy.athn","app.view.visibility","app.menu.biz","app.event.point","app.var.data","app.login.cphd","app.illegal.report","app.holiday.popup","app.MaaS.test","app.limousine.mainMsg"],"deviceWidth": ["1440"],"deviceHeight": ["3120"],"OSVersion": ["37"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","app.login.cphd": {"idx": "1","key": "0123456789abcdef0123456789abcdef","pwdAESCphd": "Y"}}},{"method": "POST","path": "/classes/com.korail.mobile.login.Login","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"txtMemberNo": ["SYNTHETIC-MEMBER"],"txtPwd": ["NEVMMWdrT3FoZ250aUVDOUM3TTlYU2lhMFVJK1dkU3Y0M25ESFBlUmlyWT0=\n"],"txtInputFlg": ["2"],"checkValidPw": ["Y"],"idx": ["1"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","strCustNo": "SYNTHETIC-CUSTOMER","strMbCrdNo": "SYNTHETIC-MEMBER-CARD"}}]},
   "logout": {"return_type": "NoneType","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.login.Logout","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"timeStamp": ["<DYNAMIC>"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic"}}]},
@@ -226,7 +361,7 @@ F8_CASE_DATA: dict[str, Any] = json.loads(r'''
   "get_limousine_seat_inventory": {"return_type": "LimousineSeatInventoryResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"trnClsfCd": ["80"],"trnGpCd": ["800"],"runDt": ["20990102"],"trnNo": ["90001"],"srcarNo": ["0001"],"psrmClCd": ["1"],"dptRsStnCd": ["9901"],"arvRsStnCd": ["9903"],"seatAttCd": ["015"],"dptStnRunOrdr": ["1"],"arvStnRunOrdr": ["3"],"totPsgCnt": ["1"],"isArrow": ["false"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","seatList": [{"seat_no": "1A","sale_psb_flg": "Y"}],"f8_marker": "get_limousine_seat_inventory"}}]},
   "reserve_limousine": {"return_type": "ReservationHoldResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.certification.TicketReservation","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"txtMenuId": ["11"],"txtJobId": ["1101"],"hidFreeFlg": ["N"],"txtStndFlg": ["N"],"txtTotPsgCnt": ["1"],"txtCompaCnt1": ["1"],"txtPsgTpCd1": ["1"],"txtDiscKndCd1": ["000"],"txtSeatAttCd1": ["000"],"txtSeatAttCd2": ["000"],"txtSeatAttCd3": ["000"],"txtSeatAttCd4": ["015"],"txtSeatAttCd5": ["000"],"txtPsrmClCd1": ["1"],"txtJrnyCnt": ["1"],"txtJrnyTpCd1": ["11"],"txtJrnySqno1": ["001"],"txtTrnNo1": ["90001"],"txtTrnClsfCd1": ["80"],"txtTrnGpCd1": ["800"],"txtRunDt1": ["20990102"],"txtDptDt1": ["20990102"],"txtDptTm1": ["090000"],"txtDptRsStnCd1": ["9901"],"txtDptStnRunOrdr1": ["1"],"txtArvRsStnCd1": ["9903"],"txtArvStnRunOrdr1": ["3"],"txtSrcarCnt": ["1"],"txtSrcarNo1": ["0001"],"txtSeatNo1": ["1A"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","h_pnr_no": "SYNTHETIC-PNR","h_jrny_cnt": "1","h_wct_no": "SYNTHETIC-WINDOW","h_tmp_job_sqno1": "1","h_tmp_job_sqno2": "2","h_tot_prc": "1000","h_rcvd_amt": "1000","f8_marker": "recalculate_price"}}]}
 }
-''')
+""")
 
 
 def _f8_match_fields(actual: dict[str, list[str]], expected: dict[str, list[str]]) -> None:
@@ -251,18 +386,18 @@ def _f8_handler(
         assert request.url.scheme == "https"
         assert request.url.host == expected["host"]
         assert request.url.path == expected["path"]
-        _f8_match_fields(parse_qs(request.url.query.decode(), keep_blank_values=True),
-                         expected["query"])
-        _f8_match_fields(parse_qs(request.content.decode(), keep_blank_values=True),
-                         expected["form"])
+        _f8_match_fields(parse_qs(request.url.query.decode(), keep_blank_values=True), expected["query"])
+        _f8_match_fields(parse_qs(request.content.decode(), keep_blank_values=True), expected["form"])
         opcode = request.url.params.get("opcode")
         seen.append(opcode or request.url.path)
         payload = expected["response"]
         if isinstance(payload, str):
             return httpx.Response(200, text=payload)
-        headers = {"set-cookie": "JSESSIONID=SYNTHETIC-SESSION; Path=/"} if (
-            request.url.path.endswith("login.Login")
-        ) else {}
+        headers = (
+            {"set-cookie": "JSESSIONID=SYNTHETIC-SESSION; Path=/"}
+            if (request.url.path.endswith("login.Login"))
+            else {}
+        )
         return httpx.Response(200, json=payload, headers=headers)
 
     # Caller also checks length/sequence: swallowed completion errors cannot pass silently.
@@ -283,8 +418,7 @@ def test_f8_all_public_methods(method_name: str, f8_client_factory: Callable[...
     result = getattr(client, method_name)(**_f8_arguments()[method_name])
     expected_type = type(None) if case["return_type"] == "NoneType" else getattr(api, case["return_type"])
     assert type(result) is expected_type
-    expected_seen = [exchange["query"].get("opcode", [exchange["path"]])[0]
-                     for exchange in case["exchanges"]]
+    expected_seen = [exchange["query"].get("opcode", [exchange["path"]])[0] for exchange in case["exchanges"]]
     assert seen == expected_seen
     if "5101" in seen:
         assert seen[0] == "5101" and seen[-1] == "5004"
@@ -297,14 +431,18 @@ def test_f8_all_public_methods(method_name: str, f8_client_factory: Callable[...
         # Closing twice remains harmless; the factory finalizer also closes all clients.
         client.close()
     elif hasattr(result, "raw"):
-        api_exchanges = [exchange for exchange in case["exchanges"]
-                         if exchange["host"] == "api.example.invalid"]
+        api_exchanges = [
+            exchange for exchange in case["exchanges"] if exchange["host"] == "api.example.invalid"
+        ]
         assert result.raw == api_exchanges[-1]["response"]
 
 
 def test_f8_public_method_inventory() -> None:
-    actual = {name for name, method in inspect.getmembers(api.KorailClient, inspect.isfunction)
-              if not name.startswith("_")}
+    actual = {
+        name
+        for name, method in inspect.getmembers(api.KorailClient, inspect.isfunction)
+        if not name.startswith("_")
+    }
     assert len(actual) == 77
     assert actual == F8_CASE_DATA.keys() == _f8_arguments().keys()
     assert len(api.__all__) == len(set(api.__all__))

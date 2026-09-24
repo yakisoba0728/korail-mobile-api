@@ -3,6 +3,7 @@
 These are package-policy tests, not assertions about Android application behavior.
 The back end must already be installed: no implicit downloading or silent skips.
 """
+
 from __future__ import annotations
 
 import ast
@@ -34,9 +35,12 @@ F8_SENTINEL = b"F8-FORBIDDEN-" + b"SYNTHETIC-CREDENTIAL-SENTINEL"
 
 def _f8_version(source: bytes) -> str:
     tree = ast.parse(source)
-    assignments = [node for node in tree.body if isinstance(node, ast.Assign)
-                   and any(isinstance(target, ast.Name) and target.id == "__version__"
-                           for target in node.targets)]
+    assignments = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "__version__" for target in node.targets)
+    ]
     assert len(assignments) == 1
     value = ast.literal_eval(assignments[0].value)
     assert isinstance(value, str)
@@ -49,8 +53,21 @@ def _f8_safe_name(name: str) -> None:
     assert not {"analysis", "__pycache__", ".git", ".github", ".venv"}.intersection(path.parts)
     lower = name.lower()
     assert path.suffix.lower() not in {
-        ".apk", ".apks", ".aab", ".dex", ".so", ".dll", ".dylib", ".pyc", ".pyo",
-        ".pem", ".key", ".p12", ".pfx", ".jks", ".keystore",
+        ".apk",
+        ".apks",
+        ".aab",
+        ".dex",
+        ".so",
+        ".dll",
+        ".dylib",
+        ".pyc",
+        ".pyo",
+        ".pem",
+        ".key",
+        ".p12",
+        ".pfx",
+        ".jks",
+        ".keystore",
     }
     assert not any(part == ".pypirc" or part.startswith(".env") for part in path.parts)
     assert not any(word in lower for word in ("credentials", "credential", "secrets"))
@@ -64,12 +81,18 @@ def _f8_backend(source: Path, out: Path, kind: str, env: dict[str, str]) -> Path
         "assert 'korail_mobile_api' not in sys.modules, 'version resolution imported runtime code'"
     )
     completed = subprocess.run(
-        [sys.executable, "-c", code, kind, str(out)], cwd=source, env=env,
-        text=True, capture_output=True, timeout=120, check=False,
+        [sys.executable, "-c", code, kind, str(out)],
+        cwd=source,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=120,
+        check=False,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    artifact = next(line.split("=", 1)[1] for line in completed.stdout.splitlines()
-                    if line.startswith("F8_ARTIFACT="))
+    artifact = next(
+        line.split("=", 1)[1] for line in completed.stdout.splitlines() if line.startswith("F8_ARTIFACT=")
+    )
     return out / artifact
 
 
@@ -81,13 +104,21 @@ def f8_built_archives(tmp_path: Path, f8_subprocess_env: dict[str, str]) -> dict
     for name in F8_TOP_FILES:
         shutil.copy2(F8_ROOT / name, source / name)
     for name in ("src", "checks", "tests"):
-        shutil.copytree(F8_ROOT / name, source / name,
-                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info"))
+        shutil.copytree(
+            F8_ROOT / name, source / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info")
+        )
     for name in (
-        "analysis/secret.txt", "korail.apk", ".env", ".env.production", ".pypirc",
-        "credentials.json", "src/korail_mobile_api/credentials.json",
-        "src/korail_mobile_api/client.apk", "src/korail_mobile_api/.env",
-        "checks/credentials.json", "tests/private.key",
+        "analysis/secret.txt",
+        "korail.apk",
+        ".env",
+        ".env.production",
+        ".pypirc",
+        "credentials.json",
+        "src/korail_mobile_api/credentials.json",
+        "src/korail_mobile_api/client.apk",
+        "src/korail_mobile_api/.env",
+        "checks/credentials.json",
+        "tests/private.key",
     ):
         path = source / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -111,15 +142,15 @@ def f8_built_archives(tmp_path: Path, f8_subprocess_env: dict[str, str]) -> dict
             archive.extractall(extracted, members=members, filter="data")
         else:
             archive.extractall(extracted, members=members)
-    sdist_root, = extracted.iterdir()
+    (sdist_root,) = extracted.iterdir()
     rebuilt_out = tmp_path / "rebuilt"
     rebuilt_out.mkdir()
     wheel = _f8_backend(sdist_root, rebuilt_out, "wheel", f8_subprocess_env)
     with tarfile.open(sdist) as archive:
         source_members = {
-            str(PurePosixPath(member.name).relative_to(sdist_root.name)):
-                archive.extractfile(member).read()
-            for member in archive.getmembers() if member.isfile()
+            str(PurePosixPath(member.name).relative_to(sdist_root.name)): archive.extractfile(member).read()
+            for member in archive.getmembers()
+            if member.isfile()
         }
     with zipfile.ZipFile(wheel) as archive:
         wheel_members = {name: archive.read(name) for name in archive.namelist()}
@@ -151,12 +182,14 @@ def test_f8_distribution_contents_and_metadata(f8_built_archives: dict[str, Any]
         assert F8_SENTINEL not in data
     for name, data in source.items():
         _f8_safe_name(name)
-        assert name in F8_TOP_FILES | {"PKG-INFO", "setup.cfg"} or name.startswith((
-            "src/korail_mobile_api/", "src/korail_mobile_api.egg-info/", "checks/", "tests/"))
+        assert name in F8_TOP_FILES | {"PKG-INFO", "setup.cfg"} or name.startswith(
+            ("src/korail_mobile_api/", "src/korail_mobile_api.egg-info/", "checks/", "tests/")
+        )
         assert F8_SENTINEL not in data
     # Runtime modules must be source modules only, plus the PEP 561 marker.
-    expected_runtime = {"korail_mobile_api/" + path.name
-                        for path in (F8_ROOT / "src/korail_mobile_api").glob("*.py")}
+    expected_runtime = {
+        "korail_mobile_api/" + path.name for path in (F8_ROOT / "src/korail_mobile_api").glob("*.py")
+    }
     expected_runtime.add("korail_mobile_api/py.typed")
     assert {name for name in wheel if name.startswith("korail_mobile_api/")} == expected_runtime
     for name in expected_runtime:
@@ -164,10 +197,9 @@ def test_f8_distribution_contents_and_metadata(f8_built_archives: dict[str, Any]
     project = tomllib.loads(source["pyproject.toml"].decode())
     assert project["project"]["dynamic"] == ["version"]
     assert "version" not in project["project"]
-    assert project["tool"]["setuptools"]["dynamic"]["version"] == {
-        "attr": "korail_mobile_api.__version__"}
+    assert project["tool"]["setuptools"]["dynamic"]["version"] == {"attr": "korail_mobile_api.__version__"}
     version = _f8_version(source["src/korail_mobile_api/__init__.py"])
-    metadata_name, = [name for name in wheel if name.endswith(".dist-info/METADATA")]
+    (metadata_name,) = [name for name in wheel if name.endswith(".dist-info/METADATA")]
     metadata = BytesParser().parsebytes(wheel[metadata_name])
     pkg_info = BytesParser().parsebytes(source["PKG-INFO"])
     assert metadata["Name"] == pkg_info["Name"] == "korail-mobile-api"
@@ -183,8 +215,10 @@ def test_f8_distribution_contents_and_metadata(f8_built_archives: dict[str, Any]
     assert set(metadata.get_all("Project-URL", [])) == expected_urls
     requirements = [Requirement(text) for text in metadata.get_all("Requires-Dist", [])]
     runtime = {canonicalize_name(req.name): str(req.specifier) for req in requirements if req.marker is None}
-    declared = {canonicalize_name(req.name): str(req.specifier)
-                for req in map(Requirement, project["project"]["dependencies"])}
+    declared = {
+        canonicalize_name(req.name): str(req.specifier)
+        for req in map(Requirement, project["project"]["dependencies"])
+    }
     assert runtime == declared
     assert set(runtime) == {"httpx", "cryptography"}
     for req in requirements:
@@ -211,8 +245,13 @@ def test_f8_unsupported_modules_are_not_imported(f8_subprocess_env: dict[str, st
         "import json,sys; sys.path.insert(0,sys.argv[1]); import korail_mobile_api as api; "
         "print(json.dumps([n for n in sys.modules if n.startswith('korail_mobile_api.')]))"
     )
-    result = subprocess.run([sys.executable, "-c", code, str(F8_ROOT / "src")],
-                            env=f8_subprocess_env, capture_output=True, text=True, timeout=30)
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(F8_ROOT / "src")],
+        env=f8_subprocess_env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
     assert result.returncode == 0, result.stderr
     modules = json.loads(result.stdout)
     for name in F8_RECORD_MODULES:

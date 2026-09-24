@@ -20,7 +20,6 @@ from .errors import (
     KorailSessionExpiredError,
 )
 from .http import KorailHttpClient
-from .netfunnel import KorailNetFunnelClient
 from .limousine_models import (
     LimousineSchedule,
     LimousineScheduleQuery,
@@ -58,10 +57,9 @@ from .models import (
     pair_transfer_itineraries,
 )
 from .mutation_models import (
-    CartAddResponse,
-    ProductCancelResponse,
     CardPayment,
     CartAddRequest,
+    CartAddResponse,
     DiscountCardPurchaseRequest,
     DiscountCardPurchaseResponse,
     DiscountCardTicket,
@@ -69,6 +67,7 @@ from .mutation_models import (
     KorailSeatAssignment,
     PaidTicket,
     PriceRecalculationRequest,
+    ProductCancelResponse,
     RefundTicketResponse,
     ReservationHoldResponse,
     ReservationPaymentResponse,
@@ -79,8 +78,8 @@ from .mutation_models import (
 )
 from .mutation_parsers import (
     parse_cart_add_response,
-    parse_product_cancel_response,
     parse_discount_card_purchase_response,
+    parse_product_cancel_response,
     parse_refund_ticket_response,
     parse_reservation_hold_response,
     parse_reservation_payment_response,
@@ -90,13 +89,13 @@ from .mutation_parsers import (
 from .mutation_payloads import (
     build_card_payment_form,
     build_cart_add_form,
-    build_product_cancel_query,
     build_discount_card_extension_query,
     build_discount_card_purchase_form,
     build_discount_card_reservation_form,
     build_limousine_reservation_form,
     build_merge_reservation_form,
     build_price_recalculation_form,
+    build_product_cancel_query,
     build_refund_form,
     build_reservation_form,
     build_standby_wait_form,
@@ -104,6 +103,7 @@ from .mutation_payloads import (
     build_transfer_reservation_form,
     build_unpaid_reservation_cancel_form,
 )
+from .netfunnel import KorailNetFunnelClient
 from .parsers import (
     parse_app_data_response,
     parse_maas_menu_list_response,
@@ -271,7 +271,6 @@ from .read_payloads import (
 )
 from .session import KorailSessionClient
 
-
 T = TypeVar("T")
 
 
@@ -295,9 +294,7 @@ class KorailClient:
         self.config = config or KorailConfig()
         self.http = KorailHttpClient(self.config, transport=transport)
         self.netfunnel = (
-            KorailNetFunnelClient(self.config, transport=transport)
-            if self.config.netfunnel_enabled
-            else None
+            KorailNetFunnelClient(self.config, transport=transport) if self.config.netfunnel_enabled else None
         )
         self.session = KorailSessionClient(self.http)
         self._station_names: dict[str, str] | None = None
@@ -495,8 +492,7 @@ class KorailClient:
         except Exception as error:
             # 패키지 밖 예외도 원문을 붙인 KorailProtocolError로 감싸며 재전송하지 않습니다.
             wrapped = KorailProtocolError(
-                "KORAIL response was received but could not be parsed:"
-                f" {type(error).__name__}"
+                f"KORAIL response was received but could not be parsed: {type(error).__name__}"
             )
             wrapped.raw = raw
             raise wrapped from error
@@ -1009,13 +1005,12 @@ class KorailClient:
     ) -> MaasServiceDetailListResponse:
         """계정이 신청한 MaaS 부가서비스 내역을 조회합니다."""
         self._require_session()
-        resolved_query = (
-            query if query is not None else MaasServiceDetailQuery.current()
-        )
+        resolved_query = query if query is not None else MaasServiceDetailQuery.current()
         return self._post_read(
             "/classes/com.korail.mobile.copt.gdReqQry.do",
             build_maas_service_detail_form(self.config, resolved_query),
-            parser=parse_maas_service_detail_list_response, include_common=False,
+            parser=parse_maas_service_detail_list_response,
+            include_common=False,
         )
 
     def get_trip_change_dates(
@@ -1253,21 +1248,14 @@ class KorailClient:
         else:
             self._require_session()
             if not isinstance(pnr_no, str) or not pnr_no.strip():
-                raise KorailProtocolError(
-                    "KORAIL ticket MaaS menu requires a PNR"
-                )
+                raise KorailProtocolError("KORAIL ticket MaaS menu requires a PNR")
             if (
                 ticket_return_numbers is None
                 or isinstance(ticket_return_numbers, (str, bytes))
                 or not ticket_return_numbers
-                or any(
-                    not isinstance(number, str) or not number.strip()
-                    for number in ticket_return_numbers
-                )
+                or any(not isinstance(number, str) or not number.strip() for number in ticket_return_numbers)
             ):
-                raise KorailProtocolError(
-                    "KORAIL ticket MaaS menu requires at least one return number"
-                )
+                raise KorailProtocolError("KORAIL ticket MaaS menu requires at least one return number")
             form = [
                 ("pnrNo", pnr_no),
                 *(("tkRetNo", number) for number in ticket_return_numbers),
@@ -1418,7 +1406,9 @@ class KorailClient:
         peak_season: bool = False,
     ) -> TrainSearchResult:
         response = self._post_schedule_view(
-            query, continuation, transfer=False,
+            query,
+            continuation,
+            transfer=False,
             use_special_schedule=use_special_schedule,
             peak_season=peak_season,
         )
@@ -1438,7 +1428,9 @@ class KorailClient:
         peak_season: bool = False,
     ) -> TransferSearchResult:
         response = self._post_schedule_view(
-            query, continuation, transfer=True,
+            query,
+            continuation,
+            transfer=True,
             use_special_schedule=use_special_schedule,
             peak_season=peak_season,
         )
@@ -1460,12 +1452,8 @@ class KorailClient:
         use_special_schedule: bool = False,
         peak_season: bool = False,
     ) -> BaseKorailResponse:
-        departure_name = self._resolve_station_reference(
-            query.departure_station_code
-        )
-        arrival_name = self._resolve_station_reference(
-            query.arrival_station_code
-        )
+        departure_name = self._resolve_station_reference(query.departure_station_code)
+        arrival_name = self._resolve_station_reference(query.arrival_station_code)
         current = self.session.current
         if use_special_schedule:
             form = build_train_schedule_special_form(
@@ -1490,9 +1478,7 @@ class KorailClient:
             )
             route = "/classes/com.korail.mobile.seatMovie.ScheduleView"
         return self._queued(
-            self._inquiry_gate(
-                peak_season=peak_season, special=use_special_schedule
-            ),
+            self._inquiry_gate(peak_season=peak_season, special=use_special_schedule),
             lambda: self.http.post_form(route, form, include_common=False),
         )
 
@@ -1500,9 +1486,7 @@ class KorailClient:
         if not reference.strip().isdigit():
             return resolve_station_name(reference, {})
         if self._station_names is None:
-            self._station_names = parse_station_name_map(
-                self.get_station_data().raw
-            )
+            self._station_names = parse_station_name_map(self.get_station_data().raw)
         return resolve_station_name(reference, self._station_names)
 
     def get_train_schedule(
@@ -1644,9 +1628,7 @@ class KorailClient:
         legs: Sequence[TrainSummary],
         *,
         passengers: KorailPassengerCounts | None = None,
-        seat_classes: Sequence[KorailSeatClass] | KorailSeatClass = (
-            KorailSeatClass.GENERAL
-        ),
+        seat_classes: Sequence[KorailSeatClass] | KorailSeatClass = (KorailSeatClass.GENERAL),
         job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
         seats: Sequence[Sequence[KorailSeatAssignment]] | None = None,
         seat_attribute_codes: Sequence[str | None] | None = None,
@@ -1747,12 +1729,8 @@ class KorailClient:
         self._require_session("cancellation requires")
         form = build_unpaid_reservation_cancel_form(self.config, hold)
         if check_first:
-            self._mutation(
-                "/classes/com.korail.mobile.reservationCancel.ReservationCancel", form
-            )
-        return self._mutation(
-            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk", form
-        )
+            self._mutation("/classes/com.korail.mobile.reservationCancel.ReservationCancel", form)
+        return self._mutation("/classes/com.korail.mobile.reservationCancel.ReservationCancelChk", form)
 
     def pay_with_card(
         self,
@@ -1807,9 +1785,7 @@ class KorailClient:
             latitude=latitude,
             longitude=longitude,
         )
-        return self._mutation(
-            route, form, parser=parse_refund_ticket_response
-        )
+        return self._mutation(route, form, parser=parse_refund_ticket_response)
 
     def verify_station_ticket_refund(
         self,
@@ -1822,9 +1798,7 @@ class KorailClient:
         return self._post_read(
             "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
             build_station_refund_verification_form(request),
-            parser=lambda raw: self._parse_mutation_response(
-                raw, parse_station_refund_verification_response
-            ),
+            parser=lambda raw: self._parse_mutation_response(raw, parse_station_refund_verification_response),
         )
 
     def execute_station_ticket_refund(
@@ -1851,9 +1825,7 @@ class KorailClient:
         self._require_session("cart add requires")
         route = "/classes/com.korail.mobile.cart.addCartList"
         form = build_cart_add_form(self.config, request)
-        return self._mutation(
-            route, form, parser=parse_cart_add_response
-        )
+        return self._mutation(route, form, parser=parse_cart_add_response)
 
     def register_discount_card(
         self,
@@ -1926,4 +1898,3 @@ class KorailClient:
             form,
             parser=parse_reservation_hold_response,
         )
-

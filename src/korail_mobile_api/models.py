@@ -52,6 +52,7 @@ class BaseKorailResponse:
 @dataclass(frozen=True)
 class AppVersionInfo:
     """앱 버전과 업데이트 안내 주소를 담습니다."""
+
     message: str | None = None
     new_version: str | None = None
     #: 업데이트 주소는 CNTAURL입니다(MobilePlusMainVersion.java:52; AppKt.java:1240,1323,1635). 2026-09-22 실서버에서 스토어 링크를
@@ -62,6 +63,7 @@ class AppVersionInfo:
 @dataclass(frozen=True)
 class AppDataResponse(BaseKorailResponse):
     """앱 메인 캐시의 버전·공지 정보를 담습니다."""
+
     disability_certification_msg: str | None = None
     railplus_cardinfo: str | None = None
     version: AppVersionInfo | None = None
@@ -71,6 +73,7 @@ class AppDataResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class NoticeResponse(BaseKorailResponse):
     """앱 메인 화면의 공지를 담습니다."""
+
     board_id: str | None = None
     post_sequence: str | None = None
     post_title: str | None = None
@@ -80,12 +83,14 @@ class NoticeResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class UuidResponse(BaseKorailResponse):
     """서버가 발급한 단말 검증값을 담습니다."""
+
     verification_code: str | None = None
 
 
 @dataclass(frozen=True)
 class MaasMenuItem:
     """부가서비스 메뉴 한 항목과 역 선택 조건을 담습니다."""
+
     active: str | None = None
     additional_service_code: str | None = None
     app_data: str | None = None
@@ -116,6 +121,7 @@ class MaasMenuItem:
 @dataclass(frozen=True)
 class MaasMenuListResponse(BaseKorailResponse):
     """부가서비스 메뉴 목록을 담습니다."""
+
     items: tuple[MaasMenuItem, ...] = ()
     departure_elevator_url: str | None = None
     departure_navigation_url: str | None = None
@@ -149,12 +155,14 @@ class KorailStation:
 @dataclass(frozen=True)
 class StationDataResponse(BaseKorailResponse):
     """전체 역 목록을 담습니다."""
+
     stations: tuple[KorailStation, ...] = ()
 
 
 @dataclass(frozen=True)
 class StationInfoResponse(BaseKorailResponse):
     """역 데이터의 판본과 역 수를 담습니다."""
+
     #: count 는 String 선언이므로 정수로 바꾸지 않습니다(StationInfoOut.java:47).
     count: str = ""
     map_version: str | None = None
@@ -163,6 +171,7 @@ class StationInfoResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class TrainCalendarDay:
     """열차 운행일 한 날짜와 예매 조건을 담습니다."""
+
     run_date: str | None = None
     business_day_stage_code: str | None = None
     day_division_code: str | None = None
@@ -184,12 +193,14 @@ class TrainCalendarDay:
 @dataclass(frozen=True)
 class TrainCalendarResponse(BaseKorailResponse):
     """예매 가능한 운행일 달력을 담습니다."""
+
     days: tuple[TrainCalendarDay, ...] = ()
 
 
 @dataclass(frozen=True)
 class TrainScheduleStop:
     """열차의 정차역 한 곳과 도착·출발 정보를 담습니다."""
+
     station_code: str | None = None
     station_name: str | None = None
     station_construction_order: str | None = None
@@ -220,6 +231,7 @@ class TrainScheduleStop:
 @dataclass(frozen=True)
 class TrainScheduleResponse(BaseKorailResponse):
     """열차 한 편의 정차역 목록을 담습니다."""
+
     delay_detail_reason_content: str | None = None
     stops: tuple[TrainScheduleStop, ...] = ()
     delay_station_construction_order: str | None = None
@@ -247,6 +259,7 @@ class TrainScheduleResponse(BaseKorailResponse):
 @dataclass(frozen=True)
 class TransferStation:
     """환승 가능한 역 한 곳을 나타냅니다."""
+
     station_code: str | None = None
     station_name: str | None = None
     raw: dict[str, Any] = field(
@@ -258,12 +271,14 @@ class TransferStation:
 @dataclass(frozen=True)
 class TransferStationListResponse(BaseKorailResponse):
     """환승 가능한 역 목록을 담습니다."""
+
     stations: tuple[TransferStation, ...] = ()
 
 
 @dataclass(frozen=True)
 class LoginCryptoInfo:
     """로그인 비밀번호 암호화에 필요한 서버 파라미터를 담습니다."""
+
     idx: str = ""
     key: str = ""
     pwd_aes_cphd: str = "N"
@@ -399,9 +414,7 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
 )
 
 
-def _train_value(
-    raw: dict[str, Any], key: str, fallback: str | None, *, required: bool = False
-) -> str | None:
+def _train_value(raw: dict[str, Any], key: str, fallback: str | None, *, required: bool = False) -> str | None:
     value = raw.get(key)
     if fallback is not None and type(value) is not int:
         value = value or raw.get(fallback)
@@ -497,17 +510,12 @@ class TrainSummary:
         지나므로 숫자로 온 값도 받아들이고, 선택 필드의 그 밖의 모양은 None 이 됩니다."""
         return cls(
             train_no=_train_value(raw, "h_trn_no", "trnNo", required=True) or "",
-            **{
-                attr: _train_value(raw, key, fallback)
-                for attr, key, fallback in _TRAIN_SUMMARY_KEYS
-            },
+            **{attr: _train_value(raw, key, fallback) for attr, key, fallback in _TRAIN_SUMMARY_KEYS},
             total_passenger_count=_train_optional_int(raw, "totPsgCnt"),
             # 예약 입력 없이 좌석을 조회하도록 행의 후보 상품번호를 보관하며 없으면 None입니다. h_gd_no는 봉투 선언이지 행 선언이
             # 아닙니다(TrainScheduleOut.java:29,184,232). 앱은 예약 입력→TrainResearchIn→좌석 조회로 전달합니다
             # (TrainSeatMapViewModel.java:1974-1976,2527,2546; TrainResearchIn.java:68,275-278).
-            goods_no=(
-                _train_value(raw, "h_gd_no", None) or _train_value(raw, "txtGdNo", None)
-            ),
+            goods_no=(_train_value(raw, "h_gd_no", None) or _train_value(raw, "txtGdNo", None)),
             raw=raw,
         )
 
@@ -533,6 +541,7 @@ class ReservationPassengerInfo:
 @dataclass(frozen=True)
 class SeatAttribute:
     """좌석 속성 코드와 표시 이름을 담습니다."""
+
     name: str
     code: str | None = None
 
@@ -552,6 +561,7 @@ class SeatCar:
 @dataclass(frozen=True)
 class SeatCarListResponse(BaseKorailResponse):
     """열차 한 편의 조회 가능한 호차 목록을 담습니다."""
+
     recommended_car_no: int | None = None
     train_no: str | None = None
     cars: tuple[SeatCar, ...] = ()
@@ -583,6 +593,7 @@ class PhysicalSeat:
 @dataclass(frozen=True)
 class SeatWindow:
     """좌석 배치도의 창문 위치 비율을 담습니다."""
+
     start_location_ratio: float
     close_location_ratio: float
 
@@ -651,13 +662,9 @@ class TrainSearchContinuation:
         for name in ("query_station_no", "query_train_no"):
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
-                raise KorailProtocolError(
-                    f"TrainSearchContinuation.{name} must be a non-empty string"
-                )
+                raise KorailProtocolError(f"TrainSearchContinuation.{name} must be a non-empty string")
         if not isinstance(self.query_train_no2, str):
-            raise KorailProtocolError(
-                "TrainSearchContinuation.query_train_no2 must be a string"
-            )
+            raise KorailProtocolError("TrainSearchContinuation.query_train_no2 must be a string")
 
 
 def _train_search_continuation(
@@ -696,9 +703,7 @@ class TrainSearchResult:
         if not self.trains:
             return None
         metadata = self.metadata
-        return _train_search_continuation(
-            metadata, query_train_no=metadata.next_train_no or ""
-        )
+        return _train_search_continuation(metadata, query_train_no=metadata.next_train_no or "")
 
     def next_query_from_last_departure(
         self,
@@ -754,9 +759,7 @@ def pair_transfer_itineraries(
     for train in trains:
         by_sequence.setdefault(train.train_sequence, []).append(train)
     return [
-        TransferItinerary(first=group[0], second=group[1])
-        for group in by_sequence.values()
-        if len(group) == 2
+        TransferItinerary(first=group[0], second=group[1]) for group in by_sequence.values() if len(group) == 2
     ]
 
 

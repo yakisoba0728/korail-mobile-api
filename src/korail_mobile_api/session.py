@@ -6,6 +6,7 @@
 판정하지만 비교 상수는 보호돼 있어 코드 대응은 정적으로 검증하지 못했습니다(LoginViewModel.java:1216; LoginOut.java:1161-1180). 두 코드는 실서버
 관측값입니다. FAIL도 _finish_login에서 판정하되 FAIL/P058은 HTTP 계층에서 세션 만료 예외가 됩니다. 앱도 재로그인·서비스 오류 외의 LoginOut은 화면에서
 처리합니다(NetworkService.java:6916-6919). 앱의 성공 후 코드별 안내 분기는 LoginViewModel.java:1307-1322를 따르며 비교 리터럴은 보호돼 있습니다."""
+
 from __future__ import annotations
 
 import time
@@ -15,15 +16,14 @@ from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 from .crypto import transform_login_password
 from .errors import (
     KorailAppUpdateRequiredError,
-    KorailServiceUnavailableError,
     KorailAuthContinuationRequired,
     KorailAuthError,
+    KorailServiceUnavailableError,
     classify_app_error,
 )
 from .http import KorailHttpClient
 from .models import BaseKorailResponse, KorailSession, LoginCryptoInfo
 from .payloads import build_common_code_form
-
 
 KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
 #: 로그인 후 웹 조치가 필요한 코드는 휴면 해제 WRC000116과 비밀번호 변경 WRC000420입니다. LoginViewModel.java:1390-1520의 hashCode 분기
@@ -33,6 +33,7 @@ KORAIL_LOGIN_CONTINUATION_CODES = frozenset({"WRC000116", "WRC000420"})
 KORAIL_LOGIN_TYPE_MEMBER_NO = "2"
 KORAIL_LOGIN_TYPE_PHONE = "4"
 KORAIL_LOGIN_TYPE_EMAIL = "5"
+
 
 def infer_login_input_flag(login_id: str) -> str:
     """회원번호·전화번호·이메일 형식으로 로그인 입력 종류를 선택합니다.
@@ -167,18 +168,14 @@ class KorailSessionClient:
             "etrPath": etr_path or None,
             "idx": crypto_info.idx or None,
         }
-        response = self._post_login(
-            {name: value for name, value in form.items() if value is not None}
-        )
+        response = self._post_login({name: value for name, value in form.items() if value is not None})
         return self._finish_login(
             response,
             login_id=member_no,
         )
 
     def _post_login(self, form: dict[str, str]) -> BaseKorailResponse:
-        return self.http.post_form(
-            "/classes/com.korail.mobile.login.Login", form, raise_on_fail=False
-        )
+        return self.http.post_form("/classes/com.korail.mobile.login.Login", form, raise_on_fail=False)
 
     def _finish_login(
         self,
@@ -199,8 +196,7 @@ class KorailSessionClient:
             if isinstance(error, (KorailServiceUnavailableError, KorailAppUpdateRequiredError)):
                 raise error
             raise KorailAuthError(
-                f"{response.h_msg_cd or 'UNKNOWN'}: "
-                f"{response.h_msg_txt or 'KORAIL login did not complete'}",
+                f"{response.h_msg_cd or 'UNKNOWN'}: {response.h_msg_txt or 'KORAIL login did not complete'}",
                 code=response.h_msg_cd,
                 raw=response.raw,
             )
@@ -214,11 +210,7 @@ class KorailSessionClient:
         # 앱은 LoginOut.strMbCrdNo 를 읽습니다(LoginOut.java:62,79,113,116). 2026-09-24 라이브 로그인 응답에 mbCrdNo 는 없었습니다.
         member_card_no = _text(response.raw.get("strMbCrdNo")) or None
         raw_customer_no = response.raw.get("strCustNo")
-        customer_no = (
-            raw_customer_no
-            if isinstance(raw_customer_no, str) and raw_customer_no.strip()
-            else None
-        )
+        customer_no = raw_customer_no if isinstance(raw_customer_no, str) and raw_customer_no.strip() else None
         self.current = KorailSession(
             jsessionid=jsessionid,
             member_no=login_id or None,
