@@ -154,8 +154,10 @@ def case_wait_then_pass() -> None:
     keys = [q.get("key") for kind, _h, q in world.log if q.get("opcode") == "5002"]
     check("b", keys == ["K0", "K1", "K2"], f"5002 키 {keys}")
     check("b", sleeps == [5, 30, 1], f"ttl [1,30] 대기 {sleeps}")
-    hosts = {h for kind, h, q in world.log if q.get("opcode") in {"5002", "5004"}}
-    check("b", hosts == {"rnf12.letskorail.com"}, f"노드 {hosts}")
+    # 최신 응답에 노드가 없으면 정문: CommandClient.java:33-38,137.
+    hosts = [h for kind, h, q in world.log if q.get("opcode") in {"5002", "5004"}]
+    check("b", hosts == ["rnf12.letskorail.com", "rnf12.letskorail.com",
+                         "nf.letskorail.com", "rnf12.letskorail.com"], f"노드 {hosts}")
     check("b", world.completes() == [("rnf12.letskorail.com", "K3")], f"반납 {world.completes()}")
 
 
@@ -194,7 +196,7 @@ def case_disabled() -> None:
 
 
 def case_queue_down() -> None:
-    """앱의 ErrorBypass: 조회(mode=1)는 나가고 예약내역(mode=0)은 나가지 않음. 재시도 1회."""
+    """현재 관문 정책: 조회(mode=1)는 우회하고 예약내역(mode=0)은 거절. 재시도 1회."""
     from korail_mobile_api import KorailNetFunnelError
 
     world = World([RuntimeError("down"), RuntimeError("down")])
@@ -202,7 +204,7 @@ def case_queue_down() -> None:
     error = raises(client.get_reservation_history)
     check("f", isinstance(error, KorailNetFunnelError), f"mode=0: {type(error).__name__}")
     check("f", world.opcodes() == ["5101", "5101"], f"mode=0 순서 {world.opcodes()}")
-    check("f", len(sleeps) == 1, f"재시도 전 대기 {sleeps}")
+    check("f", sleeps == [3.0, 3.0], f"마지막 실패도 timeout 대기 {sleeps}")
 
     world = World([RuntimeError("down"), "garbage"], korail=KORAIL_SEARCH)
     client, _ = make_client(world)

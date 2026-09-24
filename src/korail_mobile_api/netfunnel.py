@@ -265,20 +265,18 @@ class KorailNetFunnelClient:
         return response.text
 
     def _request(self, url: str, slot: _Slot) -> KorailNetFunnelToken:
-        """명령 실패 시 재시도합니다. 횟수는 Begin 에서 초기화되어 명령 간 공유됩니다 (Netfunnel.java:280-374,593). 재시도 전에는 해당 시도
-        시작부터의 타임아웃을 채웁니다.
-        """
+        """공유 재시도 예산을 쓰며 마지막 실패도 timeout 을 채웁니다 (Netfunnel.java:352-363,592)."""
         while True:
             started = self._clock()
             try:
                 return parse_netfunnel_body(self._get(url))
             except (KorailTransportError, KorailNetFunnelError):
-                if slot.retries_left <= 0:
-                    raise
-                slot.retries_left -= 1
                 remaining = self.config.netfunnel_timeout - (self._clock() - started)
                 if remaining > 0:
                     self._sleep(remaining)
+                if slot.retries_left <= 0:
+                    raise
+                slot.retries_left -= 1
 
     def _admit(self, gate: KorailNetFunnelGate, slot: _Slot) -> None:
         started = self._clock()
@@ -331,7 +329,7 @@ class KorailNetFunnelClient:
                 # 실패한 5002 는 ErrorCheckEnter→ErrorBypass 로 처리됩니다(Netfunnel.java:654-664).
                 self._error_bypass(gate, exc)
                 return
-            slot.token, slot.node = token, token.node or slot.node
+            slot.token, slot.node = token, token.node
         if token.code in BLOCK_CODES:
             raise KorailQueueRejectedError(
                 token.code,
