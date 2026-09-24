@@ -950,7 +950,7 @@ def parse_deposit_bank_response(
     _validate_envelope(raw)
     items = tuple(
         DepositBank(
-            **_nullable_string_fields(row, _DEPOSIT_BANK_FIELDS),
+            **_required_read_strings(row, _DEPOSIT_BANK_FIELDS, "deposit bank"),
             raw=row,
         )
         for row in _rows(raw, "dptnBank")
@@ -1892,7 +1892,7 @@ def parse_customer_trip_info_response(
 ) -> CustomerTripInfoResponse:
     _validate_strict_read_envelope(raw)
     trips = []
-    for item in _rows(raw, "mainList"):
+    for item in _required_read_rows(raw, "mainList", "customer trip info"):
         trips.append(
             CustomerTripInfo(
                 **_nullable_scalar_fields(item, _CUSTOMER_TRIP_FIELDS, "customer trip info"),
@@ -1975,13 +1975,21 @@ def parse_trip_change_date_response(
 ) -> TripChangeDateResponse:
     _validate_strict_read_envelope(raw)
     dates = raw.get("tripChgDates")
-    if not isinstance(dates, list) or any(not isinstance(value, str) for value in dates):
+    if not isinstance(dates, list):
         raise KorailProtocolError("KORAIL tripChgDates must be a string list")
+    normalized_dates = []
+    for value in dates:
+        date = _strict_scalar_string(
+            {"tripChgDates": value}, "tripChgDates", "trip change dates"
+        )
+        if date is None:
+            raise KorailProtocolError("KORAIL tripChgDates must not contain null")
+        normalized_dates.append(date)
     # 응답은 복수형 tripChgDates 입니다(TipChgDateInquiryOut.java:28-30). 단수형 tripChgDate 는 요청
     # 필드(TipChgDateInquiryIn.java:29)이므로 응답 별칭으로 쓰지 않습니다.
     return TripChangeDateResponse(
         last_run_date=_optional_string(raw, "lastRunDt"),
-        trip_change_dates=tuple(dates),
+        trip_change_dates=tuple(normalized_dates),
         **_response_fields(raw),
     )
 
@@ -2191,10 +2199,9 @@ def parse_pbp_acceptance_specification_response(
                 seats.append(
                     PbpAcceptanceSeat(
                         # Seat.java:53-59 는 마스크 31 로 다섯 필드 누락을 거절하므로 필수로 읽습니다.
-                        **{
-                            attr: _required_string(seat, wire_key, "PBP acceptance seat")
-                            for attr, wire_key in _PBP_ACCEPTANCE_SEAT_FIELDS.items()
-                        },
+                        **_required_read_strings(
+                            seat, _PBP_ACCEPTANCE_SEAT_FIELDS, "PBP acceptance seat"
+                        ),
                         # scarNo 는 int 선언(Seat.java:35,53). 이 파서는 문자열·정수를 모두 허용합니다. 앱 Json 설정 리터럴이 보호돼 있어 인용된
                         # 설정만으로 quoted Int 허용 이유는 확정하지 않습니다 (NetworkServiceKt.java:15-31).
                         car_no=_required_integer(
@@ -2236,6 +2243,8 @@ def parse_recent_delivery_history_response(
     raw: Mapping[str, Any],
 ) -> RecentDeliveryHistoryResponse:
     _validate_strict_read_envelope(raw)
+    # RecentDeliveryHistoryOut.java:51-63 의 마스크는 두 키를 필수로 두지만, 2026-09-24 실서버 응답에는 acepList 만 있고
+    # chgePbpRsvNo 가 없었습니다. 그래서 두 키 모두 필수로 보지 않습니다.
     recipients = []
     for recipient in _rows(raw, "acepList"):
         recipients.append(

@@ -44,10 +44,12 @@ def _reject_non_string_envelope_fields(data: Mapping[str, Any]) -> None:
         if name in data and data[name] is not None and not isinstance(data[name], str)
     ]
     if invalid:
-        raise KorailProtocolError(
+        error = KorailProtocolError(
             "KORAIL response envelope fields must be strings or null: "
             f"{', '.join(invalid)}"
         )
+        error.raw = data
+        raise error
 
 
 def _response_fields(raw: Mapping[str, Any]) -> dict[str, Any]:

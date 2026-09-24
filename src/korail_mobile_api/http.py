@@ -75,7 +75,6 @@ def parse_base_response(
     try:
         _reject_non_string_envelope_fields(envelope)
     except KorailProtocolError as error:
-        error.parser_raw = error.raw
         error.raw = data
         raise
     response = BaseKorailResponse(
@@ -275,18 +274,12 @@ class KorailHttpClient:
         # 2026-09-22 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다.
         # 봉투 누락 허용과 존재하는 FAIL/P058 판정은 별개이며 raw 는 그대로 보존합니다.
         common_out = path not in _NON_COMMON_OUT_READ_PATHS
-        try:
-            return parse_base_response(
-                payload,
-                raise_on_fail=raise_on_fail,
-                require_result=require_envelope and common_out,
-                common_out=common_out,
-            )
-        except KorailProtocolError as error:
-            if error.raw is not payload:
-                error.parser_raw = error.raw
-                error.raw = payload
-            raise
+        return parse_base_response(
+            payload,
+            raise_on_fail=raise_on_fail,
+            require_result=require_envelope and common_out,
+            common_out=common_out,
+        )
 
     def post_form(
         self,

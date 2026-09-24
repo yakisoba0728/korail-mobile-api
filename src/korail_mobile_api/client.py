@@ -757,9 +757,9 @@ class KorailClient:
         self,
         request: PassScheduleRequest,
     ) -> PassScheduleResponse:
-        """정기권으로 탈 수 있는 열차 스케줄 한 페이지를 조회합니다.
+        """정기권으로 탈 수 있는 열차 스케줄 한 페이지를 조회합니다. 구매·예약은 하지 않습니다.
 
-        보유분 없으면 ``WRG000000`` 으로 빈 결과(예외 아님)."""
+        ``WRG000000`` 응답은 빈 결과(예외 아님)로 반환하며, 정기권 보유 여부를 뜻한다고 단정하지 않습니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.pass.passScheduleInfoList",
@@ -1554,7 +1554,7 @@ class KorailClient:
         LoginViewModel.java:1083).
 
         mode=2 날짜는 YYYYMMDD 를 사용하십시오. 빌더는 날짜 폭·순서·기간을 검증하지 않습니다. 2026-09-22: 양쪽 누락, 한쪽 누락, 6자리, 역순의 네 표본은
-        WRT100101 이었고, 2년 범위는 128행, 같은 달 범위는 3행이었습니다. 이 관측으로 최대 기간을 보장하지 않습니다. mode=1 의 날짜는 빈 값이며 전송 단계에서 생략됩니다.
+        WRT100101 이었고, 2년 범위는 128행, 같은 달 범위는 3행이었습니다. 이 관측으로 최대 기간을 보장하지 않습니다. mode=1 도 날짜를 명시하면 그대로 전송하며, 기본 빈 값만 전송 단계에서 생략됩니다.
         page_no 는 보정하지 않고 그대로 보냅니다(라이브에서 확인한 값은 1)."""
         self._require_session("ticket list requires")
         return self._run_read(

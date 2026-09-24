@@ -1116,8 +1116,8 @@ def build_price_fare_quote_form(
 
 @dataclass(frozen=True)
 class TicketReservationDetailRequest:
-    """PNR 로 예약 상세를 조회합니다(NetworkApi.java:422-424,626-628). DTO 는 PNR 외 할인승객 목록도 선언하나 이 빌더는 PNR 만 보냅니다
-    (ReservationListIn.java:29-32,58). hidPnrNo 전송 키는 속성명에 따른 추정입니다."""
+    """PNR 로 예약 상세를 조회합니다. TicketRsvInquiryIn.java:51 의 명시적 hidPnrNo 를 보냅니다(NetworkApi.java:422-424).
+    같은 라우트의 ReservationListIn 은 할인승객 목록을 받는 별도 입력입니다(NetworkApi.java:626-628)."""
 
     pnr_no: str
 
@@ -1128,7 +1128,7 @@ class TicketReservationDetailRequest:
 def build_ticket_reservation_detail_query(
     request: TicketReservationDetailRequest,
 ) -> dict[str, str]:
-    """``hidPnrNo`` 하나 — ``ReservationListIn.java:30``."""
+    """``hidPnrNo`` 하나 — ``TicketRsvInquiryIn.java:51`` 의 명시적 전송 키."""
     if not isinstance(request, TicketReservationDetailRequest):
         raise KorailProtocolError(
             "request must be a TicketReservationDetailRequest"
