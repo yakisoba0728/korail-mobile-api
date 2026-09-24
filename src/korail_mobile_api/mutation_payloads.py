@@ -704,22 +704,18 @@ def _write_journey_rows(
             if journey == 1
             else KORAIL_TRANSFER_ITINERARY_CODE
         )
-        form[f"txtTrnNo{journey}"] = fields["train_no"]
-        form[f"txtTrnClsfCd{journey}"] = fields["train_class_code"]
-        form[f"txtTrnGpCd{journey}"] = fields["train_group_code"]
-        form[f"txtRunDt{journey}"] = fields["run_date"]
-        form[f"txtDptDt{journey}"] = fields["departure_date"]
-        form[f"txtDptTm{journey}"] = fields["departure_time"]
-        form[f"txtDptRsStnCd{journey}"] = fields["departure_station_code"]
-        form[f"txtDptStnConsOrdr{journey}"] = fields[
-            "departure_construction_order"
-        ]
-        form[f"txtDptStnRunOrdr{journey}"] = fields["departure_run_order"]
-        form[f"txtArvRsStnCd{journey}"] = fields["arrival_station_code"]
-        form[f"txtArvStnConsOrdr{journey}"] = fields[
-            "arrival_construction_order"
-        ]
-        form[f"txtArvStnRunOrdr{journey}"] = fields["arrival_run_order"]
+        for wire, attribute in (
+            ("txtTrnNo", "train_no"), ("txtTrnClsfCd", "train_class_code"),
+            ("txtTrnGpCd", "train_group_code"), ("txtRunDt", "run_date"),
+            ("txtDptDt", "departure_date"), ("txtDptTm", "departure_time"),
+            ("txtDptRsStnCd", "departure_station_code"),
+            ("txtDptStnConsOrdr", "departure_construction_order"),
+            ("txtDptStnRunOrdr", "departure_run_order"),
+            ("txtArvRsStnCd", "arrival_station_code"),
+            ("txtArvStnConsOrdr", "arrival_construction_order"),
+            ("txtArvStnRunOrdr", "arrival_run_order"),
+        ):
+            form[f"{wire}{journey}"] = fields[attribute]
         form[f"txtChgFlg{journey}"] = "N"
 
 
@@ -792,45 +788,21 @@ def _journey_fields(train: TrainSummary | TrainScheduleItem) -> dict[str, str]:
             field="train_class_code",
             context="reservation train",
         ),
-        "run_date": _required_pattern(
-            train.run_date,
-            field="run_date",
-            pattern=_DATE_RE,
-        ),
-        "departure_date": _required_pattern(
-            train.departure_date,
-            field="departure_date",
-            pattern=_DATE_RE,
-        ),
-        "departure_time": _required_pattern(
-            train.departure_time,
-            field="departure_time",
-            pattern=_TIME_RE,
-        ),
-        "departure_station_code": _required_digits(
-            train.departure_station_code,
-            field="departure_station_code",
-        ),
-        "arrival_station_code": _required_digits(
-            train.arrival_station_code,
-            field="arrival_station_code",
-        ),
-        "departure_construction_order": _required_digits(
-            train.departure_construction_order,
-            field="departure_construction_order",
-        ),
-        "arrival_construction_order": _required_digits(
-            train.arrival_construction_order,
-            field="arrival_construction_order",
-        ),
-        "departure_run_order": _required_digits(
-            train.departure_run_order,
-            field="departure_run_order",
-        ),
-        "arrival_run_order": _required_digits(
-            train.arrival_run_order,
-            field="arrival_run_order",
-        ),
+        **{
+            attribute: _required_pattern(getattr(train, attribute), field=attribute, pattern=pattern)
+            for attribute, pattern in (
+                ("run_date", _DATE_RE), ("departure_date", _DATE_RE),
+                ("departure_time", _TIME_RE),
+            )
+        },
+        **{
+            attribute: _required_digits(getattr(train, attribute), field=attribute)
+            for attribute in (
+                "departure_station_code", "arrival_station_code",
+                "departure_construction_order", "arrival_construction_order",
+                "departure_run_order", "arrival_run_order",
+            )
+        },
     }
 
 
@@ -902,6 +874,7 @@ def build_standby_wait_form(
         raise KorailProtocolError("allow_seat_class_change must be a bool")
     if not isinstance(sms_notify, bool):
         raise KorailProtocolError("sms_notify must be a bool")
+    contact = ""
     if sms_notify:
         if not isinstance(phone_no, str) or (
             _STANDBY_PHONE_RE.fullmatch(phone_no) is None
@@ -910,6 +883,7 @@ def build_standby_wait_form(
                 "KORAIL standby SMS notification requires an 11-digit "
                 "phone number"
             )
+        contact = phone_no
     form = _common_fields(config)
     form.update(
         {
@@ -920,7 +894,7 @@ def build_standby_wait_form(
     )
     # SMS 를 끄면 번호는 싣지 않습니다(위 docstring 의 :522-524).
     if sms_notify:
-        form["txtCpNo"] = phone_no  # type: ignore[assignment] — 위에서 11자리 문자열로 확인
+        form["txtCpNo"] = contact  # 위에서 11자리 문자열로 확인
     return form
 
 

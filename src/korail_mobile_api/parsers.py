@@ -53,7 +53,7 @@ from ._parsing import _optional_scalar_string as _typed_optional_string
 
 
 def _typed_required_string(
-    data: Mapping[str, Any],
+    data: Mapping[str, object],
     key: str,
     *,
     context: str,
@@ -68,7 +68,7 @@ def _typed_required_string(
 
 
 def _typed_required_scalar_string(
-    data: Mapping[str, Any],
+    data: Mapping[str, object],
     key: str,
     *,
     context: str,
@@ -350,14 +350,13 @@ def parse_maas_menu_list_response(
     response: BaseKorailResponse,
 ) -> MaasMenuListResponse:
     """MaaS 메뉴. menuList 의 비목록·비객체 행은 비웁니다. 부가서비스 코드는 역 선택 조회에 사용합니다."""
-    items: list[MaasMenuItem] = []
-    for row in _rows(response.raw, "menuList"):
-        items.append(
-            MaasMenuItem(
-                **_nullable_scalar_fields(row, _MAAS_ITEM_FIELDS, context="train read"),
-                raw=dict(row),
-            )
+    items: list[MaasMenuItem] = [
+        MaasMenuItem(
+            **_nullable_scalar_fields(row, _MAAS_ITEM_FIELDS, context="train read"),
+            raw=dict(row),
         )
+        for row in _rows(response.raw, "menuList")
+    ]
     raw = response.raw
     return MaasMenuListResponse(
         h_msg_cd=response.h_msg_cd,
@@ -446,37 +445,36 @@ def parse_train_calendar_response(
     있습니다(RunDateOutItem.java:37,104-105,516-524). 조회 관문은 호출자가 peak_season 으로 선택합니다."""
     raw = response.raw
     # 앱의 누락 기본값과 라이브러리의 비목록 허용은 별개입니다(RunDateOut.java:57-58,71-73).
-    days: list[TrainCalendarDay] = []
-    for row in _rows(raw, "runningCalendar"):
-        days.append(
-            TrainCalendarDay(
-                # 보호된 날짜 기본값을 재현하지 않아 누락은 None 입니다(RunDateOutItem.java:37,104-105).
-                **_nullable_scalar_fields(row, {
-                    "run_date": "runDt",
-                    # bizDdStgCd 의 누락 기본값은 null(RunDateOutItem.java:111-115). 판정 헬퍼의 null 처리까지 확인된 것은
-                    # 아닙니다(RunDateOutItem.java:516-524).
-                    "business_day_stage_code": "bizDdStgCd",
-                    # dayDvCd 누락 기본값은 null 입니다(RunDateOutItem.java:106-110). 직접 getter 참조의 부재만으로 반사 호출까지
-                    # 없다고 단정하지 않고, 파서는 선택값으로 읽습니다.
-                    "day_division_code": "dayDvCd",
-                    # hldyDvCd 는 누락 시 보호 기본값을 사용하므로 필수 키가 아닙니다(RunDateOutItem.java:116-119). 보호 기본값의 평문을 빈
-                    # 문자열로 확정하지 않습니다.
-                    "holiday_division_code": "hldyDvCd",
-                    # saleDdDvCd 누락 기본값은 null 이므로 선택값으로 읽습니다(RunDateOutItem.java:121-125).
-                    "sale_day_division_code": "saleDdDvCd",
-                    # 운행 플래그의 누락 기본값은 null(RunDateOutItem.java:126-160). isRunDate 비교 리터럴·null 처리 결과는 보호돼
-                    # 있습니다(RunDateOutItem.java:526-590).
-                    "a_train_operation_flag": "aTrnOpFlg",
-                    "d_train_operation_flag": "dTrnOpFlg",
-                    "g_train_operation_flag": "gTrnOpFlg",
-                    "o_train_operation_flag": "oTrnOpFlg",
-                    "s_train_operation_flag": "sTrnOpFlg",
-                    "v_train_operation_flag": "vTrnOpFlg",
-                    "x_train_operation_flag": "xTrnOpFlg",
-                }, context="train read"),
-                raw=dict(row),
-            )
+    days: list[TrainCalendarDay] = [
+        TrainCalendarDay(
+            # 보호된 날짜 기본값을 재현하지 않아 누락은 None 입니다(RunDateOutItem.java:37,104-105).
+            **_nullable_scalar_fields(row, {
+                "run_date": "runDt",
+                # bizDdStgCd 의 누락 기본값은 null(RunDateOutItem.java:111-115). 판정 헬퍼의 null 처리까지 확인된 것은
+                # 아닙니다(RunDateOutItem.java:516-524).
+                "business_day_stage_code": "bizDdStgCd",
+                # dayDvCd 누락 기본값은 null 입니다(RunDateOutItem.java:106-110). 직접 getter 참조의 부재만으로 반사 호출까지
+                # 없다고 단정하지 않고, 파서는 선택값으로 읽습니다.
+                "day_division_code": "dayDvCd",
+                # hldyDvCd 는 누락 시 보호 기본값을 사용하므로 필수 키가 아닙니다(RunDateOutItem.java:116-119). 보호 기본값의 평문을 빈
+                # 문자열로 확정하지 않습니다.
+                "holiday_division_code": "hldyDvCd",
+                # saleDdDvCd 누락 기본값은 null 이므로 선택값으로 읽습니다(RunDateOutItem.java:121-125).
+                "sale_day_division_code": "saleDdDvCd",
+                # 운행 플래그의 누락 기본값은 null(RunDateOutItem.java:126-160). isRunDate 비교 리터럴·null 처리 결과는 보호돼
+                # 있습니다(RunDateOutItem.java:526-590).
+                "a_train_operation_flag": "aTrnOpFlg",
+                "d_train_operation_flag": "dTrnOpFlg",
+                "g_train_operation_flag": "gTrnOpFlg",
+                "o_train_operation_flag": "oTrnOpFlg",
+                "s_train_operation_flag": "sTrnOpFlg",
+                "v_train_operation_flag": "vTrnOpFlg",
+                "x_train_operation_flag": "xTrnOpFlg",
+            }, context="train read"),
+            raw=dict(row),
         )
+        for row in _rows(raw, "runningCalendar")
+    ]
     return TrainCalendarResponse(
         **_response_fields(response),
         days=tuple(days),
@@ -492,40 +490,39 @@ def parse_train_schedule_response(
     7.0.6 DTO에서는 ``dlayList`` 가 생략되면 빈 목록입니다. 행 하나가 정차역 하나이며 도착·출발 시각과 지연 시간이 담깁니다. 개별 필드는 선택값이라 서버가 빼면 ``None``
     입니다."""
     raw = response.raw
-    stops: list[TrainScheduleStop] = []
-    for row in _rows(raw, "dlayList"):
-        stops.append(
-            TrainScheduleStop(
-                **_nullable_scalar_fields(row, {
-                    "station_code": "stopRsStnCd",
-                    # stopStnNm 은 누락 시 기본값을 사용하는 필드입니다(ActualTrainScheduleOutDlay.java:71-76).
-                    "station_name": "stopStnNm",
-                    "station_construction_order": "stnConsOrdr",
-                    "run_order": "runOrdr",
-                }, context="train read"),
-                # ActualTrainScheduleOutDlay.java:30 — 앱 DTO 는 String("001" 등)입니다.
-                actual_arrival_delay_count=_optional_scalar_string(row, "actArvDlayTnum"),
-                **_nullable_scalar_fields(row, {
-                    "actual_arrival_date": "actArvDt",
-                    "actual_arrival_time": "actArvTm",
-                    "actual_departure_date": "actDptDt",
-                    "actual_departure_time": "actDptTm",
-                    "planned_arrival_date": "arvDt",
-                    "planned_arrival_time": "arvTm",
-                    "planned_departure_date": "dptDt",
-                    "planned_departure_time": "dptTm",
-                    "delay_fare_return_division_code": "dlayFareRetDvCd",
-                    "delay_fare_return_division_name": "dlayFareRetDvCdNm",
-                    "solo_operation_delay_flag": "dlaySoloOprFlg",
-                    "detour_driver_delay_count": "dturDrvDlayTnum",
-                    "expected_arrival_delay_count": "expnArvDlayTnum",
-                    "expected_departure_delay_count": "expnDptDlayTnum",
-                    "regular_flag": "rgulFlg",
-                    "service_flag": "saodFlg",
-                }, context="train read"),
-                raw=dict(row),
-            )
+    stops: list[TrainScheduleStop] = [
+        TrainScheduleStop(
+            **_nullable_scalar_fields(row, {
+                "station_code": "stopRsStnCd",
+                # stopStnNm 은 누락 시 기본값을 사용하는 필드입니다(ActualTrainScheduleOutDlay.java:71-76).
+                "station_name": "stopStnNm",
+                "station_construction_order": "stnConsOrdr",
+                "run_order": "runOrdr",
+            }, context="train read"),
+            # ActualTrainScheduleOutDlay.java:30 — 앱 DTO 는 String("001" 등)입니다.
+            actual_arrival_delay_count=_optional_scalar_string(row, "actArvDlayTnum"),
+            **_nullable_scalar_fields(row, {
+                "actual_arrival_date": "actArvDt",
+                "actual_arrival_time": "actArvTm",
+                "actual_departure_date": "actDptDt",
+                "actual_departure_time": "actDptTm",
+                "planned_arrival_date": "arvDt",
+                "planned_arrival_time": "arvTm",
+                "planned_departure_date": "dptDt",
+                "planned_departure_time": "dptTm",
+                "delay_fare_return_division_code": "dlayFareRetDvCd",
+                "delay_fare_return_division_name": "dlayFareRetDvCdNm",
+                "solo_operation_delay_flag": "dlaySoloOprFlg",
+                "detour_driver_delay_count": "dturDrvDlayTnum",
+                "expected_arrival_delay_count": "expnArvDlayTnum",
+                "expected_departure_delay_count": "expnDptDlayTnum",
+                "regular_flag": "rgulFlg",
+                "service_flag": "saodFlg",
+            }, context="train read"),
+            raw=dict(row),
         )
+        for row in _rows(raw, "dlayList")
+    ]
     def optional(key: str) -> str | None:
         return _typed_optional_string(raw, key)
 

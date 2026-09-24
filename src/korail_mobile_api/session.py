@@ -50,11 +50,8 @@ def infer_login_input_flag(login_id: str) -> str:
     if "@" in login_id:
         return KORAIL_LOGIN_TYPE_EMAIL
     digits = "".join(ch for ch in login_id if ch.isdigit())
-    if digits == login_id:
-        if len(digits) == 10:
-            return KORAIL_LOGIN_TYPE_MEMBER_NO
-        if len(digits) == 11:
-            return KORAIL_LOGIN_TYPE_PHONE
+    if digits == login_id and len(digits) == 11:
+        return KORAIL_LOGIN_TYPE_PHONE
     return KORAIL_LOGIN_TYPE_MEMBER_NO
 
 

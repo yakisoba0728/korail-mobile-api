@@ -281,7 +281,7 @@ class TrainSearchQuery:
     query_division_code: str = "1"
 
 
-def _train_scalar(value: Any, key: str, *, required: bool = False) -> str | None:
+def _train_scalar(value: object, key: str, *, required: bool = False) -> str | None:
     """검색 스칼라는 문자열·JSON 정수를 받습니다. String 선언(TrainScheduleOutTrainInfo.java:63,1152)보다 넓게 받는 라이브러리 정책이며
     앱 Json 설정은 보호돼 있습니다(NetworkModule.java:862, NetworkServiceKt.java:29). 그 밖의 모양은 선택 필드면 None, ``required``
     (train_no)면 KorailProtocolError 입니다. 원문은 raw 에 남고, 예약 빌더가 에코하는 값을 다시 검사합니다. 이미 사라진 영 채움은
@@ -305,7 +305,7 @@ def _train_optional_int(
     key: str,
 ) -> int | None:
     # 선택 필드라 정수가 아니면 None 입니다(bool 도 정수로 치지 않음). 원문은 raw 에.
-    value = raw.get(key)
+    value: object = raw.get(key)
     return value if type(value) is int else None
 
 

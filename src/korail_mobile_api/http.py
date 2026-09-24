@@ -45,7 +45,7 @@ _NON_COMMON_OUT_READ_PATHS = frozenset({
 })
 
 def parse_base_response(
-    data: Any,
+    data: object,
     *,
     raise_on_fail: bool = True,
     require_result: bool = True,
@@ -107,7 +107,7 @@ def parse_base_response(
 _DYNAPATH_BLOCK_CODES = frozenset({-1203, -1406, -2000, -8005, -8201, -8202, -8203})
 
 
-def _dynapath_block_payload(payload: Any) -> dict[str, Any] | None:
+def _dynapath_block_payload(payload: object) -> dict[str, Any] | None:
     """최상위 JSON 값에서 차단 정수 코드를 찾습니다.
 
     앱 근거: DynaPathInterceptor.java:97-124. 앱의 검사 키는 보호돼 있어 이 구현은 모든 키를 봅니다. 따라서 다른 필드의 같은 값도 차단으로 오인할 수 있습니다. 앱
@@ -159,7 +159,7 @@ def _decode_response(response: httpx.Response, *, path: str) -> Any:
     return payload
 
 
-def _is_empty_string(value: Any) -> bool:
+def _is_empty_string(value: object) -> bool:
     return isinstance(value, str) and value == ""
 
 

@@ -103,7 +103,7 @@ def _rows(
 
 
 def _optional_string(
-    data: Mapping[str, Any],
+    data: Mapping[str, object],
     key: str,
 ) -> str | None:
     """문자열이면 그대로, 아니면 ``None``."""
@@ -112,7 +112,7 @@ def _optional_string(
 
 
 def _required_string(
-    data: Mapping[str, Any],
+    data: Mapping[str, object],
     key: str,
     context: str,
 ) -> str:
@@ -142,7 +142,7 @@ def _present_strings(
 
 
 def _strict_scalar_string(
-    data: Mapping[str, Any],
+    data: Mapping[str, object],
     key: str,
     context: str,
 ) -> str | None:
@@ -193,7 +193,7 @@ def _optional_integer(
 
 
 def _required_integer(
-    data: Mapping[str, Any],
+    data: Mapping[str, object],
     key: str,
     context: str,
 ) -> int:
@@ -222,7 +222,7 @@ def _required_integer(
 
 
 def _optional_bool(
-    data: Mapping[str, Any],
+    data: Mapping[str, object],
     key: str,
 ) -> bool | None:
     """``bool`` 이면 그대로, 아니면(없음 포함) ``None`` — "없음" 과 "거짓" 을 구분합니다."""

@@ -10,7 +10,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast as _cast
 
 from .config import KorailConfig
 from .errors import KorailProtocolError
@@ -948,7 +948,7 @@ def build_recent_delivery_history_form(customer_no: str) -> dict[str, str]:
 @dataclass(frozen=True)
 class CommuterTicketInquiryRequest:
     original_ticket: OriginalTicketReference
-    inquiry_type: str = "0"
+    inquiry_type: Literal["0", "1"] = "0"
 
     def __post_init__(self) -> None:
         if self.inquiry_type not in {"0", "1"}:
@@ -972,12 +972,12 @@ def build_commuter_info_form(
     if isinstance(request, CommuterInitialRequest):
         return (
             ("jobDvCd", "a"),
-            ("cmtrKndCd", request.pass_data.commuter_kind_code),
+            ("cmtrKndCd", _cast(str, request.pass_data.commuter_kind_code)),
             ("psgCnt", "0"),
         )
     if isinstance(request, CommuterPassengerRequest):
         age_codes = tuple(
-            option.commuter_usage_age_code
+            _cast(str, option.commuter_usage_age_code)
             for option in request.source.passenger_options
         )
         # cmtrUtlAgeCd 는 종류 행당이 아니라 승객당 반복합니다(CommutationInfoIn.java:31,38). 2026-09-22 kind=0046 관측: E05/E06 을
@@ -999,7 +999,7 @@ def build_commuter_info_form(
             )
         return (
             ("jobDvCd", "b"),
-            ("cmtrKndCd", request.pass_data.commuter_kind_code),
+            ("cmtrKndCd", _cast(str, request.pass_data.commuter_kind_code)),
             ("psgCnt", str(len(selected))),
             *(("cmtrUtlAgeCd", value) for value in selected),
         )

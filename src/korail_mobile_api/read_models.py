@@ -60,7 +60,7 @@ class TicketListTicket:
     #: 관측에서 131행 모두에 있었다고 적혀 있으나 캡처가 연결돼 있지 않아 재검산할 수 없습니다(미검증). 관대하게 읽습니다.
     ticket_kind_code: str | None = None
     ticket_kind_name: str | None = None
-    train_info: tuple[Mapping[str, Any], ...] = field(default=(), compare=False)
+    train_info: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
     # raw 의 위치 인자 자리를 유지하려고 추가 필드를 뒤에 둡니다. h_tk_sqno 선언: MyTicketListOutTicket.java:92. 2026-09-22 표본 131행 모두에
     # 있었다는 원래 관측 기록은 캡처가 연결되지 않아 재검증되지 않았습니다.
@@ -397,7 +397,7 @@ class ProductDetailResponse(BaseKorailResponse):
     usage_period: str | None = None
     included_item_names: tuple[str, ...] = ()
     virtual_reservation_no: str | None = None
-    detail_raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    detail_raw: Mapping[str, object] = field(default_factory=dict[str, Any], compare=False)
     #: ``mainInfo.strGdSqno`` — 상품 순번. 여행상품 취소(product.ReservationCancel 의 txtGdSqno)에 씁니다
     #: (ProductReservationListScreenKt.java:1252-1253, MyTicketDetailViewModel.java:3290).
     goods_sequence: str | None = None
@@ -580,8 +580,8 @@ class ReservationHistoryJourney:
     ``srv_infos``/``acmp_infos`` 는 아직 행 단위로 모델링하지 않고 원본 그대로 노출합니다 — 원본 그대로라도 여정 단위로 닿을 수 있게 하기 위해서입니다."""
 
     trains: tuple[ReservationHistoryTrain, ...] = ()
-    service_infos: tuple[Mapping[str, Any], ...] = field(default=(), compare=False)
-    accompanying_infos: tuple[Mapping[str, Any], ...] = field(default=(), compare=False)
+    service_infos: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
+    accompanying_infos: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     reservation: ReservationHistoryReservation | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
@@ -1205,7 +1205,7 @@ class MaasServiceDetailInfo:
     settlement_status_name: str | None = None
     total_settlement_amount: str | None = None
     usage_period_content: str | None = None
-    entity_one: tuple[Mapping[str, Any], ...] = field(default=(), compare=False)
+    entity_one: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
 
 
@@ -1703,13 +1703,13 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     qr_code: str | None = None
     #: ``psgNmList`` — 승객 성명 목록(``List<PsgNameInfo>``). ``@SerialName`` 이 없어 와이어 철자는 PROTECTED, 코틀린 필드명을 최선으로
     #: 사용합니다. 각 원소는 아직 행 단위로 모델링하지 않고 원본 그대로 노출합니다.
-    passenger_names: tuple[Mapping[str, Any], ...] = field(default=(), compare=False)
+    passenger_names: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     #: ``seatTicketList`` — 좌석 배정 목록(``List<SeatAssignInfo>``, PROTECTED).
-    seat_tickets: tuple[Mapping[str, Any], ...] = field(default=(), compare=False)
+    seat_tickets: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     #: ``limousine`` — 연계된 리무진 예약(단일 객체, PROTECTED). 없으면 ``None``.
-    limousine: Mapping[str, Any] | None = field(default=None, compare=False)
+    limousine: Mapping[str, object] | None = field(default=None, compare=False)
     #: ``dtlList`` — 지연 정보 목록(``List<DelayInfo>``, PROTECTED).
-    delay_details: tuple[Mapping[str, Any], ...] = field(default=(), compare=False)
+    delay_details: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     journeys: tuple[RefundTicketJourney, ...] = ()
     #: ``dcnt_crd_info`` — 이 "승차권"이 실은 할인카드(N카드)일 때만 있습니다. 보통 승차권에서는 ``None`` 입니다.
     discount_card: DiscountCardOnTicket | None = None
