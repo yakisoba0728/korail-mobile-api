@@ -475,7 +475,8 @@ def test_transport_errors_are_wrapped_without_retry(factory, failure):
 
 
 def test_common_fields_headers_override_and_empty_omission(factory):
-    """CommonIn.java:424-474; NetworkService.java:15342-15343. UA/Connection values are library policy."""
+    """CommonIn.java:424-474; NetworkService.java:15342-15343. Connection/Accept-Encoding follow the APK's
+    OkHttp BridgeInterceptor.java:56-68."""
     contexts = []
 
     def provider(context):
@@ -511,7 +512,9 @@ def test_common_fields_headers_override_and_empty_omission(factory):
         "zero": ["0"],
     }
     assert requests[0].headers["User-Agent"] == "synthetic-ua"
-    assert requests[0].headers["Connection"] == "close"
+    assert requests[0].headers["Connection"] == "Keep-Alive"
+    assert requests[0].headers["Accept-Encoding"] == "gzip"
+    assert "Accept" not in requests[0].headers
     assert requests[0].headers["Content-Type"] == "application/x-www-form-urlencoded"
     assert requests[0].headers["X-Synthetic-Token"] == "synthetic-custom-token"
     assert "X-Synthetic-Token" not in requests[1].headers
@@ -598,6 +601,62 @@ def test_dynapath_tokens_match_sdk_golden_vectors_with_rt_history():
     for _ in range(5):
         generator()
     assert list(generator._intervals) == [1000] * 5
+
+
+# BaseWebView.java:61 의 WebView 접미사와 NetworkModule.java:417-418 의 헤더 이름·값 암호문입니다. 모두 4바이트 키 반복 XOR 입니다.
+WEBVIEW_SUFFIX_CIPHER = [
+    109,
+    -27,
+    10,
+    99,
+    44,
+    -25,
+    9,
+    101,
+    44,
+    -30,
+    14,
+    49,
+    12,
+    -2,
+    21,
+    71,
+    40,
+    -4,
+    22,
+    120,
+    34,
+    -32,
+    74,
+    38,
+]
+WEBVIEW_SUFFIX_CIPHER += [99, -66, 75, 39]
+API_HEADER_NAME_CIPHER = [19, -57, -102, 51, 107, -11, -104, 36, 40, -64]
+API_HEADER_VALUE_CIPHER = [-86, 109, -9, 87, -88, 110, -15, 87, -83, 105]
+
+
+def _xor_period_four(cipher, plain):
+    key = [(c & 0xFF) ^ p for c, p in zip(cipher, plain.encode())]
+    return len(cipher) == len(plain) and all(key[i] == key[i % 4] for i in range(len(key)))
+
+
+def test_api_user_agent_is_the_apps_protected_header():
+    """The WebView suffix proves the scheme; the same relation then pins the API header to
+    User-Agent: korailtalk."""
+    from korail_mobile_api.constants import KORAIL_API_USER_AGENT, KORAIL_USER_AGENT
+
+    assert _xor_period_four(WEBVIEW_SUFFIX_CIPHER, " korailtalk AppVersion/7.0.6")
+    assert _xor_period_four(API_HEADER_NAME_CIPHER, "User-Agent")
+    assert not _xor_period_four(API_HEADER_NAME_CIPHER, "user-agent")
+    assert (
+        _xor_period_four(API_HEADER_VALUE_CIPHER, KORAIL_API_USER_AGENT)
+        and KORAIL_API_USER_AGENT == "korailtalk"
+    )
+    config = KorailConfig()
+    assert config.user_agent == "korailtalk"
+    assert config.netfunnel_user_agent == KORAIL_USER_AGENT and KORAIL_USER_AGENT.startswith(
+        "Dalvik/2.1.0 (Linux; U; Android "
+    )
 
 
 def test_default_configuration_and_explicit_overrides():

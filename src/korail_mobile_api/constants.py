@@ -27,15 +27,22 @@ KORAIL_DEFAULT_DEVICE_HEIGHT = 3120
 KORAIL_DEFAULT_ANDROID_SDK_INT = 37
 
 
-def build_dalvik_user_agent(*, os_release: str, device_model: str) -> str:
-    """서버 수용 기록에 근거한 Dalvik 형식의 User-Agent를 만듭니다. 앱 UA 의 재현이라고 단정하지 않습니다.
+#: API 요청의 User-Agent. 앱의 OkHttp 인터셉터는 모든 API 요청에 이름·값이 각각 10바이트인 보호 헤더 하나를 붙입니다
+#: (NetworkModule.java:405-423). 보호 방식은 4바이트 키를 반복하는 XOR 입니다: BaseWebView.java:61 의 28바이트는 6.5.0 평문과 같은
+#: " korailtalk AppVersion/7.0.6" 으로 풀리고 키가 4바이트마다 정확히 반복됩니다. 그래서 암호문만으로 평문[i]^평문[i+4] 여섯 개를 알 수
+#: 있고, 헤더 이름은 "User-Agent", 값은 "korailtalk" 가 그 관계를 모두 만족합니다. 값의 대소문자를 모두 바꾼 문자열도 같은 관계를
+#: 만족하지만 같은 앱의 WebView 접미사가 소문자 korailtalk 입니다. 앱이 이미 붙인 값이므로 OkHttp 기본값 okhttp/4.12.0 은 쓰이지
+#: 않습니다(okhttp3/internal/http/BridgeInterceptor.java:67-68). Python 패키지 이름이 든 UA 로는 로그인이 거절됐습니다(관측).
+KORAIL_API_USER_AGENT = "korailtalk"
 
-    7.0.6 은 OkHttp 를 사용하며(NetworkModule.java:55-64), 기본 UA 는 okhttp3/internal/Util.java:87 의 okhttp/4.12.0 입니다.
-    실제 송신 UA 는 미확인입니다. 실서버 관측상 Python 패키지 이름 UA 는 로그인 거절, 이 문자열은 수용됐습니다. 기기와 맞지 않는 Build ID 는 만들지 않습니다."""
+
+def build_dalvik_user_agent(*, os_release: str, device_model: str) -> str:
+    """안드로이드 HttpURLConnection 기본값 모양의 Dalvik User-Agent 를 만듭니다. 대기열 SDK 가 HttpURLConnection 으로 요청하므로
+    (com/netfunnel/api/http/Client.java:252-260) 대기열 요청에 씁니다. 기기와 맞지 않는 Build ID 는 만들지 않습니다."""
     return f"Dalvik/2.1.0 (Linux; U; Android {os_release}; {device_model})"
 
 
-#: :func:`build_dalvik_user_agent` 로 **유도된** 기본 User-Agent. Python 패키지 이름이 든 UA 로는 로그인이 거절됩니다.
+#: 대기열 요청의 기본 User-Agent 입니다(:func:`build_dalvik_user_agent`).
 KORAIL_USER_AGENT = build_dalvik_user_agent(
     os_release=KORAIL_DEFAULT_ANDROID_OS_RELEASE,
     device_model=KORAIL_DEFAULT_DEVICE_NAME,

@@ -172,6 +172,8 @@ except KorailApiError as error:
 
 ## DynaPath와 NetFunnel
 
+API 요청은 7.0.6 앱처럼 `User-Agent: korailtalk`로, 대기열 요청은 안드로이드 기본값 모양의 Dalvik User-Agent로 보냅니다. 각각 `KorailConfig.user_agent`, `netfunnel_user_agent`로 바꿀 수 있습니다.
+
 DynaPath 요청 헤더는 기본 활성화되고 기기 값은 합성됩니다. 실제 기기를 사용했다는 보장이나 서버 수용 보장이 아닙니다. 설정은 `KorailConfig`와 `DynapathConfig`로 지정합니다. `KorailConfig(disable_dynapath=True)`는 명시적으로 끄는 옵션이지만, DynaPath가 필요한 경로는 토큰 없이 호출할 수 없으며 전송 전에 거절될 수 있습니다. 차단 응답은 `KorailDynaPathError`로 확인합니다. 토큰·기기 식별자·로그인 정보를 공개 이슈에 올리지 마십시오.
 
 NetFunnel은 대기열 프로토콜입니다. 관련 조회·예약·결제 메서드는 관문 진입(5101), 필요 시 대기(5002), 작업 후 반납(5004)을 처리합니다. 대기 중에는 호출이 오래 걸릴 수 있으며 `netfunnel_wait_limit`으로 누적 대기 상한을 설정할 수 있습니다. 기본값 `None`은 상한 없음입니다. 서버의 대기 지시와 실패를 존중하십시오. 일부 앱 `aid`·`mode` 상수는 보호돼 있어 현재 매핑의 완전한 정적 일치를 확인하지 못했습니다. 오프라인 테스트 통과는 대기열 우회나 모든 실서버 동작의 보장이 아닙니다.

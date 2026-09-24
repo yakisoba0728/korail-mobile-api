@@ -176,6 +176,9 @@ def test_immediate_pass_and_release(queue_factory, mode: int) -> None:
     assert clock.sleeps == []
     assert world.requests[0].headers["Accept-Charset"] == "UTF-8"
     assert world.requests[0].headers["Context_Type"] == "application/x-www-form-urlencoded;charset=UTF-8"
+    # The SDK uses HttpURLConnection (http/Client.java:252), so the queue keeps the Dalvik UA, not the API's
+    # korailtalk.
+    assert world.requests[0].headers["User-Agent"].startswith("Dalvik/2.1.0 (Linux; U; Android ")
 
 
 @pytest.mark.parametrize("code", ["201", "202"])

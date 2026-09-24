@@ -186,7 +186,7 @@ class KorailNetFunnelClient:
         self._clock = clock
         self._client = httpx.Client(
             timeout=config.netfunnel_timeout,
-            headers={"User-Agent": config.user_agent, **_APP_HEADERS},
+            headers={"User-Agent": config.netfunnel_user_agent, **_APP_HEADERS},
             follow_redirects=False,
             transport=transport,
         )

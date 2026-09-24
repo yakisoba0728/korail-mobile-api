@@ -195,12 +195,15 @@ class KorailHttpClient:
             if config.dynapath.token_settings is not None
             else None
         )
+        # 앱의 OkHttp 가 API 요청에 붙이는 기본 헤더와 맞춥니다(okhttp3/internal/http/BridgeInterceptor.java:56-68). OkHttp 는
+        # Accept 를 붙이지 않으므로 httpx 기본값을 지웁니다.
         self._client = httpx.Client(
             base_url=config.base_url,
             timeout=config.timeout,
-            headers={"User-Agent": config.user_agent, "Connection": "close"},
+            headers={"User-Agent": config.user_agent, "Connection": "Keep-Alive", "Accept-Encoding": "gzip"},
             transport=transport,
         )
+        del self._client.headers["Accept"]
 
     @property
     def cookies(self) -> httpx.Cookies:
