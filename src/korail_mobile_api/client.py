@@ -1027,7 +1027,9 @@ class KorailClient:
 
     def cancel_unpaid_maas_item(self, item: CartItem) -> MaasCancelResponse:
         """장바구니의 결제 전 부가서비스를 해제합니다(addService.cancelPay.do). pnr_no 가 빈 부가서비스 행만 받고, 열차·공항버스 홀드는
-        cancel_unpaid_hold 로 취소하십시오. 결제된 부가서비스에는 쓰지 않습니다. 부가서비스 장바구니 행이 없어 실서버 확인은 아직입니다."""
+        cancel_unpaid_hold 로 취소하십시오. 결제된 부가서비스에는 쓰지 않습니다. 부가서비스 장바구니 행이 없어 실서버 확인은 아직입니다. 그 행은 메뉴의 중계
+        페이지(/ebizmaas/EbizMaasShopView.do)가 요청번호를 발급하고(EbizMaasAddSrvReqNo.do) 제휴사 사이트로 넘긴 뒤, 제휴사에서 상품을 고를 때만
+        생깁니다(2026-09-24 /js/maas/maas_shop.js 확인)."""
         customer_no = self._require_customer_no("MaaS cancel")
         return self._mutation(
             "/classes/com.korail.mobile.addService.cancelPay.do",
