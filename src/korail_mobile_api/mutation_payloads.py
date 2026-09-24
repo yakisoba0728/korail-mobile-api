@@ -48,7 +48,7 @@ from .mutation_models import (
     ReservationHoldResponse,
     StationRefundExecutionRequest,
 )
-from .read_models import RefundCommissionResponse, TrainScheduleItem
+from .read_models import CartItem, RefundCommissionResponse, TrainScheduleItem
 
 
 _DATE_RE = re.compile(r"[0-9]{8}")
@@ -1452,6 +1452,26 @@ def build_price_recalculation_form(
                 "string when present"
             )
         form[wire_name] = value
+    return form
+
+
+def build_maas_cancel_form(
+    config: KorailConfig, item: CartItem, *, customer_no: str
+) -> dict[str, str]:
+    """미결제 부가서비스 해제(addService.cancelPay.do). MaasCancelIn.java 의 custMgNo(로그인 고객번호)와 lumpStlTgtNo(장바구니 행의
+    h_lump_stl_tgt_no)입니다. 앱은 장바구니 삭제·개별 취소·결제 화면의 예약 취소에서 h_pnr_no 가 빈 행에만 부릅니다
+    (BasketTicketViewModel.java:3080-3160,5692-5723; PayViewModel.java:4574-4870). 결제된 부가서비스는 해제가 아니라 환불 대상입니다."""
+    if not isinstance(item, CartItem):
+        raise KorailProtocolError("item must be a CartItem from get_cart_list")
+    if item.pnr_no:
+        raise KorailProtocolError(
+            "KORAIL cart row with a PNR is a train or bus hold; use cancel_unpaid_hold for it"
+        )
+    form = _common_fields(config)
+    form["custMgNo"] = _required_mutation_text(customer_no, field="customer_no", context="MaaS cancel")
+    form["lumpStlTgtNo"] = _required_mutation_text(
+        item.lump_sum_target_no, field="lump_sum_target_no", context="MaaS cancel"
+    )
     return form
 
 

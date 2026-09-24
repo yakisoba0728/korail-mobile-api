@@ -698,11 +698,19 @@ class CartDiscountAddition:
 
 @dataclass(frozen=True)
 class CartAddResponse(BaseKorailResponse):
-    """장바구니 추가 결과. 구조: AddCartListOut.java:24-25,76 → PsgDiscAddInfos.java:81. 라이브 미검증이며 행이 없으면
-    discount_additions 는 빈 튜플입니다."""
+    """장바구니 추가 결과. 구조: AddCartListOut.java:24-25,76 → PsgDiscAddInfos.java:81. 행이 없으면 discount_additions 는 빈
+    튜플입니다. 2026-09-24 라이브: 열차·공항버스 홀드 PNR 모두 SUCC/IRZ000002 였고 할인 행은 없었습니다."""
 
     #: ``psgDiscAdd_infos`` → ``psgDiscAdd_info`` 의 각 행.
     discount_additions: tuple[CartDiscountAddition, ...] = ()
+
+
+@dataclass(frozen=True)
+class MaasCancelResponse(BaseKorailResponse):
+    """미결제 부가서비스 해제 결과(addService.cancelPay.do, MaasCancelOut.java)."""
+
+    #: ``intgMsgCd`` — 통합 메시지 코드.
+    integrated_message_code: str | None = None
 
 
 @dataclass(frozen=True)

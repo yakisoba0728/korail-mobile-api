@@ -59,6 +59,7 @@ from .models import (
 )
 from .mutation_models import (
     CartAddResponse,
+    MaasCancelResponse,
     CardPayment,
     CartAddRequest,
     DiscountCardPurchaseRequest,
@@ -78,6 +79,7 @@ from .mutation_models import (
 )
 from .mutation_parsers import (
     parse_cart_add_response,
+    parse_maas_cancel_response,
     parse_discount_card_purchase_response,
     parse_refund_ticket_response,
     parse_reservation_hold_response,
@@ -88,6 +90,7 @@ from .mutation_parsers import (
 from .mutation_payloads import (
     build_card_payment_form,
     build_cart_add_form,
+    build_maas_cancel_form,
     build_discount_card_extension_query,
     build_discount_card_purchase_form,
     build_discount_card_reservation_form,
@@ -145,6 +148,9 @@ from .read_models import (
     GuideSeatConditionResponse,
     KorailPointSummaryResponse,
     MaasServiceDetailListResponse,
+    MaasCancelFeeResponse,
+    CartItem,
+    MaasServiceDetail,
     MergeSeatsInquiryResponse,
     MileageHistoryResponse,
     MultiChildDiscountTargetResponse,
@@ -187,6 +193,7 @@ from .read_parsers import (
     parse_guide_seat_condition_response,
     parse_korail_point_summary_response,
     parse_maas_service_detail_list_response,
+    parse_maas_cancel_fee_response,
     parse_merge_seats_inquiry_response,
     parse_mileage_history_response,
     parse_multi_child_discount_target_response,
@@ -242,6 +249,8 @@ from .read_payloads import (
     build_guide_seat_condition_form,
     build_korail_point_summary_form,
     build_maas_service_detail_form,
+    build_maas_cancel_fee_form,
+    build_maas_cart_status_form,
     build_merge_seats_inquiry_form,
     build_mileage_history_form,
     build_multi_child_discount_target_form,
@@ -618,7 +627,8 @@ class KorailClient:
         pnr_no: str = "",
         additional_service_request_no: str = "",
     ) -> CartListResponse:
-        """로그인 계정의 장바구니에 담긴 부가상품 항목을 조회합니다."""
+        """로그인 계정의 장바구니를 조회합니다. 열차·공항버스 홀드 행(pnr_no 있음)과 부가서비스 행(pnr_no 빈 값)이 함께 옵니다. 2026-09-24
+        라이브: add_to_cart 한 열차·공항버스 홀드가 행으로 나왔고, 홀드를 취소하자 장바구니도 비었습니다."""
         self._require_session()
         form = build_cart_list_form(
             pnr_no,
@@ -993,6 +1003,36 @@ class KorailClient:
             "/classes/com.korail.mobile.copt.gdReqQry.do",
             build_maas_service_detail_form(self.config, resolved_query),
             parser=parse_maas_service_detail_list_response, include_common=False,
+        )
+
+    def get_maas_cancel_fee(self, item: MaasServiceDetail) -> MaasCancelFeeResponse:
+        """결제된 부가서비스의 환불 수수료를 조회합니다(maas.cncFee.do). item 은 get_maas_service_details 의 행입니다. 조회만 하며 환불은
+        하지 않습니다. 실서버에서는 아직 결제된 부가서비스가 없어 확인하지 못했습니다."""
+        self._require_session()
+        return self._post_read(
+            "/classes/com.korail.mobile.maas.cncFee.do",
+            build_maas_cancel_fee_form(item),
+            parser=parse_maas_cancel_fee_response,
+        )
+
+    def check_maas_cart_status(self, item: CartItem) -> BaseKorailResponse:
+        """결제하기 전에 장바구니의 부가서비스 행 하나가 아직 결제 가능한지 확인합니다(maas.rsvStt.do). 앱은 실패면 알림을 띄우고 결제 화면으로
+        가지 않습니다(BasketTicketViewModel.java:1778-1800). 응답은 봉투뿐입니다. 부가서비스 장바구니 행이 없어 실서버 확인은 아직입니다."""
+        self._require_session()
+        return self._post_read(
+            "/classes/com.korail.mobile.maas.rsvStt.do",
+            build_maas_cart_status_form(item),
+            parser=BaseKorailResponse.from_raw,
+        )
+
+    def cancel_unpaid_maas_item(self, item: CartItem) -> MaasCancelResponse:
+        """장바구니의 결제 전 부가서비스를 해제합니다(addService.cancelPay.do). pnr_no 가 빈 부가서비스 행만 받고, 열차·공항버스 홀드는
+        cancel_unpaid_hold 로 취소하십시오. 결제된 부가서비스에는 쓰지 않습니다. 부가서비스 장바구니 행이 없어 실서버 확인은 아직입니다."""
+        customer_no = self._require_customer_no("MaaS cancel")
+        return self._mutation(
+            "/classes/com.korail.mobile.addService.cancelPay.do",
+            build_maas_cancel_form(self.config, item, customer_no=customer_no),
+            parser=parse_maas_cancel_response,
         )
 
     def get_trip_change_dates(

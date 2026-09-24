@@ -15,6 +15,7 @@ from typing import Any
 from .errors import KorailProtocolError
 from .mutation_models import (
     CartAddResponse,
+    MaasCancelResponse,
     CartDiscountAddition,
     DiscountCardPurchaseResponse,
     RefundTicketResponse,
@@ -528,9 +529,18 @@ def _cart_discount_additions(
     )
 
 
+def parse_maas_cancel_response(raw: Mapping[str, Any]) -> MaasCancelResponse:
+    """addService.cancelPay.do 응답. intgMsgCd 는 선택 스칼라입니다(MaasCancelOut.java)."""
+    data = _response_mapping(raw)
+    return MaasCancelResponse(
+        **_base_fields(data),
+        integrated_message_code=_optional_scalar_string(data, "intgMsgCd", "MaaS cancel"),
+    )
+
+
 def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
     """장바구니 추가 결과. 키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81, PsgDiscAddInfo.java:81,85. 누락·잘못된 선택
-    목록은 비웁니다. 라이브 미검증입니다."""
+    목록은 비웁니다."""
     data = _response_mapping(raw)
     return CartAddResponse(
         h_msg_cd=data.get("h_msg_cd"),

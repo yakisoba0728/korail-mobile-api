@@ -66,6 +66,7 @@ from .read_models import (
     MaasServiceDetail,
     MaasServiceDetailInfo,
     MaasServiceDetailListResponse,
+    MaasCancelFeeResponse,
     MergeSeatsInquiryResponse,
     MileageHistoryEntry,
     MileageHistoryResponse,
@@ -1934,6 +1935,16 @@ def _optional_add_srv_item(
     if item is None:
         return None
     return _parse_add_srv_item(item, item_context, info_context)
+
+
+@_preserve_read_raw
+def parse_maas_cancel_fee_response(raw: Mapping[str, Any]) -> MaasCancelFeeResponse:
+    """maas.cncFee.do 응답. cncRetFee 는 선택 스칼라로 읽습니다(MaasCancelFeeOut.java)."""
+    _validate_envelope(raw)
+    return MaasCancelFeeResponse(
+        cancel_fee=_optional_scalar_string(raw, "cncRetFee", "MaaS cancel fee"),
+        **_response_fields(raw),
+    )
 
 
 @_preserve_read_raw
