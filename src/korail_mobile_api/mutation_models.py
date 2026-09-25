@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from .errors import KorailProtocolError
@@ -39,7 +39,7 @@ class StationRefundOriginalTicket:
     ticket_kind_code: str | None = None
     refund_division_code: str | None = None
     refund_reason_code: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 def _require_every_field(
@@ -258,8 +258,8 @@ class ReservationJourney:
     departure_station_code: str | None = None
     arrival_station_code: str | None = None
     train_no: str | None = None
-    raw: dict[str, Any] = field(
-        default_factory=dict[str, Any],
+    raw: Mapping[str, object] = field(
+        default_factory=dict[str, object],
         compare=False,
     )
 
@@ -328,8 +328,8 @@ class ReservationPaymentCoupon:
     management_close_date: str | None = None
     management_start_date: str | None = None
     ticket_return_no: str | None = None
-    raw: dict[str, Any] = field(
-        default_factory=dict[str, Any],
+    raw: Mapping[str, object] = field(
+        default_factory=dict[str, object],
         compare=False,
     )
 
@@ -356,8 +356,8 @@ class ReservationPaymentTicket:
     total_discount_amount: str | None = None
     total_received_amount: str | None = None
     standard_seat_price_fare: str | None = None
-    raw: dict[str, Any] = field(
-        default_factory=dict[str, Any],
+    raw: Mapping[str, object] = field(
+        default_factory=dict[str, object],
         compare=False,
     )
 
@@ -389,8 +389,8 @@ class ReservationPaymentSettlement:
     point_approval_no: str | None = None
     remnant_amount: str | None = None
     remote_point: str | None = None
-    raw: dict[str, Any] = field(
-        default_factory=dict[str, Any],
+    raw: Mapping[str, object] = field(
+        default_factory=dict[str, object],
         compare=False,
     )
 
@@ -412,8 +412,8 @@ class ReservationPaymentTableSeat:
     seat_no_end_2: str | None = None
     seat_count_2: str | None = None
     group_name_2: str | None = None
-    raw: dict[str, Any] = field(
-        default_factory=dict[str, Any],
+    raw: Mapping[str, object] = field(
+        default_factory=dict[str, object],
         compare=False,
     )
 
@@ -682,7 +682,7 @@ class PriceRecalculationRequest:
                 f"({len(seats)})"
             )
 
-        def text(seat: Mapping[str, Any], key: str) -> str:
+        def text(seat: Mapping[str, object], key: str) -> str:
             # 좌석 필드는 String 선언입니다(ReservationOutSeatInfo.java:80-109). JSON 정수만 문자열로 받고 bool·객체 등은 보내지 않습니다.
             value = seat.get(key)
             if value is None or isinstance(value, str):
@@ -721,7 +721,7 @@ class CartDiscountAddition:
     passenger_sequence_no: str | None = None
     #: h_duty_ref_rcgn_ps_dv_cd 는 DTO 에 선언된 구분 코드이며(APK 필드명 보존) 의미·가능한 값은 미확인입니다.
     duty_reference_recognition_division_code: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)

@@ -13,6 +13,7 @@ from .config import KorailConfig
 from .constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
     KORAIL_TRANSFER_ITINERARY_CODE,
+    KorailRoomClassCode,
 )
 from .errors import KorailProtocolError
 from .models import TrainSearchContinuation, TrainSearchQuery, TrainSummary
@@ -81,7 +82,7 @@ def build_seat_car_form(
     train: TrainSummary,
     *,
     passenger_count: int,
-    room_class_code: str = "1",
+    room_class_code: KorailRoomClassCode = "1",
     seat_attribute_code: str | None = None,
     menu_id: str = "11",
 ) -> dict[str, str]:
@@ -123,7 +124,7 @@ def build_seat_inventory_form(
     car_no: int,
     *,
     passenger_count: int,
-    room_class_code: str = "1",
+    room_class_code: KorailRoomClassCode = "1",
     seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
     """지정 호차의 좌석 재고 조회 폼을 구성합니다. 앱 근거: NetworkApi.java:739-741. 호차 키는 txt 접두사 없는 srcarNo 입니다. seatAttCd·gdNo 는

@@ -10,7 +10,9 @@ __version__ = "1.2.0"
 from .client import KorailClient
 from .config import KorailConfig
 from .constants import (
+    KorailLoginInputFlag,
     KorailReservationJobType,
+    KorailRoomClassCode,
     KorailSeatClass,
 )
 from .dynapath import (
@@ -317,6 +319,8 @@ __all__ = [
     "KorailNotEntitledError",
     "KorailPassengerCounts",
     "KorailQueueRejectedError",
+    "KorailLoginInputFlag",
+    "KorailRoomClassCode",
     "KorailReservationJobType",
     "KorailReservationRefusedError",
     "KorailProtocolError",

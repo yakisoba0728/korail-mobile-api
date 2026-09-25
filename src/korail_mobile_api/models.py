@@ -5,8 +5,9 @@
 """공통 응답 봉투와 열차·좌석 조회 모델을 제공합니다. raw는 받은 원문을 보존하며 frozen dataclass도 내부 dict·list까지 불변으로 만들지는 않습니다. 필드·raw는
 repr·로그·직렬화에서 마스킹하지 않습니다. 조회 모델은 read_models, 변경 모델은 mutation_models에 있습니다."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Self
 
 from .errors import KorailProtocolError
 
@@ -18,7 +19,7 @@ class KorailSession:
 
     jsessionid: str | None = None
     member_no: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     member_card_no: str | None = None
     customer_no: str | None = None
 
@@ -30,10 +31,10 @@ class BaseKorailResponse:
     h_msg_cd: str | None = None
     h_msg_txt: str | None = None
     str_result: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
     @classmethod
-    def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
+    def from_raw(cls, raw: object) -> Self:
         """직접 생성해도 HTTP 파서와 같은 봉투 변환·원문 보존 규칙을 적용합니다."""
         from ._parsing import _envelope
 
@@ -103,7 +104,7 @@ class MaasMenuItem:
     popup_image: str | None = None
     menu_type: str | None = None
     url: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
     @property
     def uses_station_selection(self) -> bool:
@@ -141,7 +142,7 @@ class KorailStation:
     name: str
     longitude: str | None = None
     latitude: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     group: str | None = None
     major: str | None = None
     #: popupType 은 String 선언이므로 문자열로 유지합니다(StationDataOutStnItem.java:60).
@@ -185,8 +186,8 @@ class TrainCalendarDay:
     s_train_operation_flag: str | None = None
     v_train_operation_flag: str | None = None
     x_train_operation_flag: str | None = None
-    raw: dict[str, Any] = field(
-        default_factory=dict[str, Any],
+    raw: Mapping[str, object] = field(
+        default_factory=dict[str, object],
         compare=False,
     )
 
@@ -223,8 +224,8 @@ class TrainScheduleStop:
     expected_departure_delay_count: str | None = None
     regular_flag: str | None = None
     service_flag: str | None = None
-    raw: dict[str, Any] = field(
-        default_factory=dict[str, Any],
+    raw: Mapping[str, object] = field(
+        default_factory=dict[str, object],
         compare=False,
     )
 
@@ -263,8 +264,8 @@ class TransferStation:
 
     station_code: str | None = None
     station_name: str | None = None
-    raw: dict[str, Any] = field(
-        default_factory=dict[str, Any],
+    raw: Mapping[str, object] = field(
+        default_factory=dict[str, object],
         compare=False,
     )
 
@@ -337,7 +338,7 @@ def _train_scalar(value: object, key: str, *, required: bool = False) -> str | N
 
 
 def _train_optional_int(
-    raw: dict[str, Any],
+    raw: Mapping[str, object],
     key: str,
 ) -> int | None:
     # 선택 필드라 정수가 아니면 None 입니다(bool 도 정수로 치지 않음). 원문은 raw 에.
@@ -422,7 +423,9 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
 )
 
 
-def _train_value(raw: dict[str, Any], key: str, fallback: str | None, *, required: bool = False) -> str | None:
+def _train_value(
+    raw: Mapping[str, object], key: str, fallback: str | None, *, required: bool = False
+) -> str | None:
     value = raw.get(key)
     if fallback is not None and type(value) is not int:
         value = value or raw.get(fallback)
@@ -444,7 +447,7 @@ class TrainSummary:
     departure_date: str | None = None
     departure_time: str | None = None
     arrival_time: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     departure_station_name: str | None = None
     arrival_station_name: str | None = None
     run_date: str | None = None
@@ -511,7 +514,7 @@ class TrainSummary:
     arrival_date: str | None = None
 
     @classmethod
-    def from_raw(cls, raw: dict[str, Any]) -> "TrainSummary":
+    def from_raw(cls, raw: Mapping[str, object]) -> Self:
         """검색 응답의 행 하나를 :class:`TrainSummary` 로 만듭니다.
 
         주요 값은 ``h_`` 접두 철자와 접두 없는 철자를 둘 다 찾습니다 (``h_trn_no`` 와 ``trnNo`` 등). 모든 스칼라는 :func:`_train_scalar` 를
@@ -543,7 +546,7 @@ class ReservationPassengerInfo:
     delay_original_sale_date: str | None = None
     delay_original_sale_sequence: str | None = None
     delay_original_return_password: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -649,8 +652,8 @@ class TrainSearchMetadata:
     first_seat_count: str | None = None
     second_seat_count: str | None = None
     first_departure_time: str | None = None
-    raw: dict[str, Any] = field(
-        default_factory=dict[str, Any],
+    raw: Mapping[str, object] = field(
+        default_factory=dict[str, object],
         compare=False,
     )
     agreement_text: str | None = None
@@ -702,7 +705,7 @@ class TrainSearchResult:
 
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:
@@ -779,7 +782,7 @@ class TransferSearchResult:
     itineraries: list[TransferItinerary]
     trains: list[TrainSummary]
     response: BaseKorailResponse
-    raw: dict[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:

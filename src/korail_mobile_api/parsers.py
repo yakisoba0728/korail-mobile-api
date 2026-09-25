@@ -16,6 +16,7 @@ from functools import partial
 from typing import Any
 
 from ._parsing import (
+    _ResponseFields,
     _nested_rows,
     _nullable_scalar_fields,
     _optional_integer,
@@ -141,7 +142,7 @@ _inventory_string = partial(_typed_defaulted_string, context="seat inventory")
 _inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
 
 
-def _response_fields(response: BaseKorailResponse) -> dict[str, Any]:
+def _response_fields(response: BaseKorailResponse) -> _ResponseFields:
     return {
         "h_msg_cd": response.h_msg_cd,
         "h_msg_txt": response.h_msg_txt,

@@ -6,6 +6,7 @@
 미확인 값은 항목별 한계를 따릅니다. 기기 모델·OS·Build ID·화면 크기·SDK 기본값은 APK 상수가 아닌 device-pull 실기기 기록입니다."""
 
 from enum import StrEnum
+from typing import Literal, TypeAlias
 
 KORAIL_BASE_URL = "https://smart.letskorail.com"
 KORAIL_DEVICE_ANDROID = "AD"
@@ -85,6 +86,11 @@ class KorailSeatClass(StrEnum):
 
     GENERAL = "1"
     SPECIAL = "2"
+
+
+# 입력에 지원하는 기존 코드만 좁힙니다. 서버 응답의 코드는 str로 유지합니다.
+KorailRoomClassCode: TypeAlias = Literal["1", "2"] | KorailSeatClass
+KorailLoginInputFlag: TypeAlias = Literal["2", "4", "5"]
 
 
 class KorailReservationJobType(StrEnum):

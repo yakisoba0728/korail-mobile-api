@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from functools import wraps
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypedDict, TypeVar
 
 from .errors import KorailApiError, KorailProtocolError
 from .models import ReservationPassengerInfo
@@ -64,7 +64,14 @@ def _envelope(data: Mapping[str, Any]) -> dict[str, str | None]:
     return envelope
 
 
-def _response_fields(raw: Mapping[str, Any]) -> dict[str, Any]:
+class _ResponseFields(TypedDict):
+    h_msg_cd: str | None
+    h_msg_txt: str | None
+    str_result: str | None
+    raw: Mapping[str, object]
+
+
+def _response_fields(raw: Mapping[str, object]) -> _ResponseFields:
     envelope = _envelope(raw)
     return {
         "h_msg_cd": envelope["h_msg_cd"],

@@ -12,7 +12,7 @@ from typing import Any, Literal, TypeVar, overload
 import httpx
 
 from .config import KorailConfig
-from .constants import KorailReservationJobType, KorailSeatClass
+from .constants import KorailLoginInputFlag, KorailReservationJobType, KorailRoomClassCode, KorailSeatClass
 from .errors import (
     KorailApiError,
     KorailAuthError,
@@ -350,8 +350,8 @@ class KorailClient:
         member_no: str,
         password: str,
         *,
-        input_flag: str | None = None,
-        check_valid_pw: str = "Y",
+        input_flag: KorailLoginInputFlag | None = None,
+        check_valid_pw: Literal["Y", "N"] = "Y",
         cust_id: str | None = "",
         etr_path: str | None = "",
     ) -> KorailSession:
@@ -427,7 +427,7 @@ class KorailClient:
         route: str,
         form: Mapping[str, Any] | Sequence[tuple[str, Any]] | None = None,
         *,
-        parser: Callable[[dict[str, Any]], T],
+        parser: Callable[[Mapping[str, object]], T],
         include_common: bool = True,
         include_dynapath: bool = False,
         require_envelope: bool = True,
@@ -454,7 +454,7 @@ class KorailClient:
         route: str,
         params: Mapping[str, Any] | None = None,
         *,
-        parser: Callable[[dict[str, Any]], T],
+        parser: Callable[[Mapping[str, object]], T],
         require_envelope: bool = True,
         include_common: bool = True,
         omit_empty_fields: bool = False,
@@ -489,7 +489,7 @@ class KorailClient:
         route: str,
         form: dict[str, str] | dict[str, str | list[str]],
         *,
-        parser: Callable[[dict[str, Any]], T],
+        parser: Callable[[Mapping[str, object]], T],
         raise_on_fail: bool = ...,
     ) -> T: ...
 
@@ -498,7 +498,7 @@ class KorailClient:
         route: str,
         form: dict[str, str] | dict[str, str | list[str]],
         *,
-        parser: Callable[[dict[str, Any]], T] | None = None,
+        parser: Callable[[Mapping[str, object]], T] | None = None,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse | T:
         """상태 변경 폼을 전송하고 선택 파서로 응답을 변환합니다. KorailApiError는 유형을 유지하며 raw에 전체 응답, parser_raw에 기존 부분 원문을 둡니다. 다른 파서
@@ -516,8 +516,8 @@ class KorailClient:
 
     @staticmethod
     def _parse_mutation_response(
-        raw: dict[str, Any],
-        parser: Callable[[dict[str, Any]], T],
+        raw: Mapping[str, object],
+        parser: Callable[[Mapping[str, object]], T],
     ) -> T:
         """POST·GET 변경 및 환불 검증의 파싱 오류에 전체 응답을 보존합니다. 재전송하지 않습니다."""
         try:
@@ -542,7 +542,7 @@ class KorailClient:
         train: TrainSummary,
         *,
         passenger_count: int = 1,
-        room_class_code: str = "1",
+        room_class_code: KorailRoomClassCode = "1",
         seat_attribute_code: str | None = None,
     ) -> SeatCarListResponse:
         """좌석지정 화면이 쓰는 한 열차의 호차 목록을 조회합니다."""
@@ -571,7 +571,7 @@ class KorailClient:
         car_no: int,
         *,
         passenger_count: int = 1,
-        room_class_code: str = "1",
+        room_class_code: KorailRoomClassCode = "1",
         seat_attribute_code: str | None = None,
     ) -> SeatInventoryResponse:
         """한 호차의 좌석 배치와 좌석별 판매 가능 여부를 조회합니다.

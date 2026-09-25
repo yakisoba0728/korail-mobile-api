@@ -10,10 +10,12 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from typing import Literal
 
 from ._parsing import _optional_scalar_string
-from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES
+
+from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES, KorailLoginInputFlag
 from .crypto import transform_login_password
 from .errors import (
     KorailAppUpdateRequiredError,
@@ -32,12 +34,12 @@ KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
 #: -699977554·-699974646은 error_json.json의 해당 코드와 일치합니다. 다른 거절은 앱 오류 분류 또는 KorailAuthError로 처리하며 웹 조치를 자동으로 이어
 #: 가지 않습니다.
 KORAIL_LOGIN_CONTINUATION_CODES = frozenset({"WRC000116", "WRC000420"})
-KORAIL_LOGIN_TYPE_MEMBER_NO = "2"
-KORAIL_LOGIN_TYPE_PHONE = "4"
-KORAIL_LOGIN_TYPE_EMAIL = "5"
+KORAIL_LOGIN_TYPE_MEMBER_NO: KorailLoginInputFlag = "2"
+KORAIL_LOGIN_TYPE_PHONE: KorailLoginInputFlag = "4"
+KORAIL_LOGIN_TYPE_EMAIL: KorailLoginInputFlag = "5"
 
 
-def infer_login_input_flag(login_id: str) -> str:
+def infer_login_input_flag(login_id: str) -> KorailLoginInputFlag:
     """회원번호·전화번호·이메일 형식으로 로그인 입력 종류를 선택합니다.
 
     앱 분기 근거: LoginViewModel.java:1850-1876. 앱은 숫자만이거나 이메일인 입력만 보내므로, 하이픈이 든 전화번호처럼 둘 다 아닌 입력은 전송 전에
@@ -54,7 +56,7 @@ def infer_login_input_flag(login_id: str) -> str:
     return KORAIL_LOGIN_TYPE_MEMBER_NO
 
 
-def extract_login_crypto_payload(raw: dict[str, object]) -> dict[str, object]:
+def extract_login_crypto_payload(raw: Mapping[str, object]) -> dict[str, object]:
     """최상위 app.login.cphd 객체를 읽고 없으면 빈 사전을 반환합니다. 앱 근거: CommonCodeOut.java:267. 소비부:
     LoginRepositoryImpl.java:918-936. 2026-09-24 라이브: idx·key·pwdAESCphd 는 이 객체 안에만 문자열로 있었고 최상위에는 없었습니다."""
     value = raw.get("app.login.cphd")
@@ -113,8 +115,8 @@ class KorailSessionClient:
         member_no: str,
         password: str,
         *,
-        input_flag: str | None = None,
-        check_valid_pw: str = "Y",
+        input_flag: KorailLoginInputFlag | None = None,
+        check_valid_pw: Literal["Y", "N"] = "Y",
         cust_id: str | None = None,
         etr_path: str | None = None,
     ) -> KorailSession:

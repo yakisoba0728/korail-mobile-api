@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
 
 from .models import BaseKorailResponse, ReservationPassengerInfo
 
@@ -42,7 +41,7 @@ class TicketListTrain:
     buyer_name: str | None = None
     passenger_name: str | None = None
     train_suspension_flag: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -61,7 +60,7 @@ class TicketListTicket:
     ticket_kind_code: str | None = None
     ticket_kind_name: str | None = None
     train_info: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # h_tk_sqno 선언: MyTicketListOutTicket.java:92. 2026-09-22 표본 131행 모두에 있었습니다. 다른 조건에서도 필수인지는 검증 못 함입니다.
     ticket_sequence: str | None = None
     #: ticket_status_name은 h_tk_stt_nm을 읽으며 상태 코드를 임의의 이름으로 번역하지 않습니다.
@@ -99,7 +98,7 @@ class TicketListReservation:
     is_transfer: bool | None = None
     is_wheelchair_member: bool | None = None
     is_rail_police_enabled: bool | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # 선택값의 타입이 어긋나면 해당 값만 비웁니다. addSrvInfo(MyTicketListOutReservation.java:39)는 MaaS 의 AddSrvItem 과 같은 타입이라 모델을
     # 공유합니다(MaasDetailOut.java:27, AddSrvItem.java:28-49). 키는 속성명에 따른 추정입니다.
     additional_service: MaasServiceDetail | None = None
@@ -146,7 +145,7 @@ class CartItem:
     lump_sum_target_no: str | None = None
     customer_no: str | None = None
     virtual_reservation_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # CartInfo.java:28-61,281-392의 문자열은 읽고 중첩 결제 상세 6객체는 raw에 보존합니다. GreenCarPayDetail 12·LotteRentalPayDetail
     # 9·LoyquPayDetail 10·SKRentalCarPayDetail 13·YanoljaDetail 8· ZimCarryDetail 7로 String 59개이며 채워진 상세의 실서버
     # 형식은 미확인입니다. skRentalPayDetail의 타입은 SKRentalCarPayDetail입니다. h_item_dv_cd는 CartInfo.java:38,317에 선언되지만 앱
@@ -198,7 +197,7 @@ class DepositBank:
 
     code: str | None = None
     display_name: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -240,7 +239,7 @@ class DelayDiscountTicket:
     buyer_name: str | None = None
     passenger_name: str | None = None
     page_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -273,7 +272,7 @@ class DiscountCoupon:
     #: ``h_rmk_1_cont``~``h_rmk_3_cont`` 중 온 줄만 순서대로 담습니다.
     remarks: tuple[str, ...] = ()
     coupon_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -293,7 +292,7 @@ class PassOffice:
 
     code: str | None = None
     display_name: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -305,7 +304,7 @@ class PassOpenDate:
     open_date: str | None = None
     item_sequence: str | None = None
     pnr_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -319,7 +318,7 @@ class PassAvailabilityMainInfo:
     total_count: str | None = None
     row_count: str | None = None
     selected_page_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -348,7 +347,7 @@ class TripMenuContent:
     info: str | None = None
     image: str | None = None
     url: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: cmtrKndCd는 get_commuter_kind_menu의 입력입니다(TrGdMenuLtOutCont.java:26). 앱도 contList에서 이 코드로
     #: 찾습니다(PassConditionViewModel.java:1241). 2026-09-22: 60행 중 menuType='P'인 6행에만 0046·0007·0049 값이 있었습니다.
     commuter_kind_code: str | None = None
@@ -370,7 +369,7 @@ class TripMenuItem:
     button: str | None = None
     contents: tuple[TripMenuContent, ...] = ()
     url: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: contCount(TrGdMenuLtOutMenu.java:27)는 String 선언이지만 2026-09-22 라이브 5개 메뉴에서는 JSON 정수 11/6/6/4/3 으로 왔고
     #: len(contList) 와 같았습니다. 라이브러리는 _optional_integer 로 읽습니다. NetworkServiceKt.java:29 의 setLenient 인자는 보호돼 있어
     #: true 또는 숫자 수용의 원인으로 단정할 수 없습니다.
@@ -394,7 +393,7 @@ class ProductReservation:
     payment_deadline: str | None = None
     payment_status: str | None = None
     virtual_reservation_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: ``strVrRsvSqno`` — 예약 상품 순번. 앱 장바구니는 결제정보 조회에 이 값을 씁니다
     #: (BasketTicketViewModel$getPaymentDataForSelectedItems$2$deferredList$1$1.java:235-238).
     reservation_sequence: str | None = None
@@ -424,7 +423,7 @@ class ProductDetailResponse(BaseKorailResponse):
     usage_period: str | None = None
     included_item_names: tuple[str, ...] = ()
     virtual_reservation_no: str | None = None
-    detail_raw: Mapping[str, object] = field(default_factory=dict[str, Any], compare=False)
+    detail_raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: ``mainInfo.strGdSqno`` — 상품 순번. 여행상품 취소(product.ReservationCancel 의 txtGdSqno)에 씁니다
     #: (ProductReservationListScreenKt.java:1252-1253, MyTicketDetailViewModel.java:3290).
     goods_sequence: str | None = None
@@ -443,7 +442,7 @@ class ReceiptPayment:
     approval_no: str
     card_no: str
     point_no: str
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -457,7 +456,7 @@ class ReceiptCashPayment:
     cash_receipt_approval_no: str
     cash_receipt_transaction_division_code: str
     total_approved_amount: int
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -492,7 +491,7 @@ class TicketReceipt:
     payments: tuple[ReceiptPayment, ...] = ()
     cash_receipts: tuple[ReceiptCashPayment, ...] = ()
     member_card_no: str
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -525,7 +524,7 @@ class ReservationHistoryTrain:
     seat_count: int | None = None
     standing_count: int | None = None
     pnr_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # ``h_ntisu_lmt_dt``/``h_ntisu_lmt_tm`` — 이 홀드의 결제 기한 날짜·시각.
     payment_deadline_date: str | None = None
     payment_deadline_time: str | None = None
@@ -549,7 +548,7 @@ class ReservationHistoryTicket:
     ticket_kind_code: str | None = None
     movie_ticket_flag: str | None = None
     delay_discount_flag: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -561,7 +560,7 @@ class ReservationHistoryOriginalTicket:
     sale_sequence: str | None = None
     #: ``ogtkRetPwd`` — 원표 반환 비밀번호. 그 자체로 반환 권한이라 민감합니다.
     return_password: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -579,7 +578,7 @@ class ReservationHistoryPassenger:
     delay_original_sale_sequence: str | None = None
     #: ``dlayOgtkRetPwd`` — 지연배상 원표의 반환 비밀번호.
     delay_original_return_password: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -596,7 +595,7 @@ class ReservationHistoryReservation:
     tickets: tuple[ReservationHistoryTicket, ...] = ()
     original_tickets: tuple[ReservationHistoryOriginalTicket, ...] = ()
     passengers: tuple[ReservationHistoryPassenger, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -609,7 +608,7 @@ class ReservationHistoryJourney:
     service_infos: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     accompanying_infos: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
     reservation: ReservationHistoryReservation | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -716,7 +715,7 @@ class TrainScheduleItem:
     #: h_yms_apl_flg로 병합 대상을 판정합니다. TrainSummary와 같은 의미입니다.
     merge_target_flag: str | None = None
     train_suspended_flag: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # 추가 필드의 잘못된 선택값은 해당 값만 비웁니다.
     special_reservation_name: str | None = None
     free_seat_reservation_name: str | None = None
@@ -747,7 +746,7 @@ class PassScheduleTrain:
     train_class_code: str | None = None
     commuter_use_terminal_code: str | None = None
     commuter_use_terminal_name: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -758,7 +757,7 @@ class PassAgeOption:
     display_name: str | None = None
     minimum_age: str | None = None
     maximum_age: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -766,7 +765,7 @@ class PassScheduleInfo:
     """정기권 열차 조회의 조건과 부가 정보를 담습니다."""
 
     trains: tuple[PassScheduleTrain, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -788,7 +787,7 @@ class PassScheduleMainInfo:
     next_page_flag: str | None = None
     change_train_division_code: str | None = None
     page_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -824,7 +823,7 @@ class IntermediateStation:
     code: str | None = None
     name: str | None = None
     run_order: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -833,7 +832,7 @@ class PassPeriodOption:
 
     commuter_period_code: str | None = None
     display_name: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -856,7 +855,7 @@ class PassMenuData:
     station_selection: str | None = None
     age_options: tuple[PassAgeOption, ...] = ()
     period_options: tuple[PassPeriodOption, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -866,7 +865,7 @@ class PassPassengerInfo:
     h_cls_prnb: int | None = None
     h_dcnt_knd_cd: str | None = None
     h_st_prnb: int | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -877,7 +876,7 @@ class PassPassengerInfos:
     h_max_cnt: str | None = None
     h_min_cnt: str | None = None
     psg_info: tuple[PassPassengerInfo, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -886,7 +885,7 @@ class PassGoodsInfo:
 
     h_cnd_flg_disc_no: str | None = None
     psg_infos: PassPassengerInfos | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -916,7 +915,7 @@ class PassMenuItem:
     goods_data: PassGoodsInfo | None = None
     pass_data: PassMenuData | None = None
     url: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -943,7 +942,7 @@ class CrewRequestOption:
 
     message_code: str | None = None
     content: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -977,7 +976,7 @@ class DiscountCardSection:
     #: TrainScheduleViewModel.java:2639,2730-2736,2749,2831 에서 입력에 복사됩니다. 대상 필드: AssignScheduleIn.java:41 의
     #: stlbDturDvNm1.
     detour_division_name: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -993,7 +992,7 @@ class DiscountCardOnTicket:
     #: (NCardTicketSectionKt.smali:7821-7843). 비교 리터럴은 보호돼 Y의 의미를 정적으로 확정하지 않으며 실서버 검증 못 함입니다.
     term_extension_possible_flag: str | None = None
     sections: tuple[DiscountCardSection, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1046,7 +1045,7 @@ class MileageHistoryEntry:
     point_amount: str | None = None
     saved_point_value: str | None = None
     settlement_amount: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1083,7 +1082,7 @@ class DiscountCardUsage:
     #: apdUsrFlg — 두 번째 등록 사용자(N카드 2인용)가 탔는지의 플래그. 앱은 보호된 1바이트 리터럴과 비교합니다 (NCardHistoryScreenKt.java:301); 그 평문은
     #: 추정하지 않습니다.
     additional_user_flag: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # ``saleDt``/``saleSqno``/``saleWctNo`` — 이 사용 건의 바탕이 된 발매 일자·일련번호·창구번호(``NCardHistoryInfo.java:224``). 클래스
     # 독스트링의 경고를 읽으십시오.
     sale_date: str | None = None
@@ -1129,7 +1128,7 @@ class DiscountCardScheduleTrain:
     detour_code: str | None = None
     detour_name: str | None = None
     route_code: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1155,7 +1154,7 @@ class MultiChildDiscountTarget:
     passenger_type_name: str | None = None
     room_class_code: str | None = None
     requested_discount_kind_code: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1203,7 +1202,7 @@ class CustomerTripInfo:
     usage_day_no: str | None = None
     #: ``gdNo`` — 상품번호(``CustTripInfo.java`` 33필드 중 하나). ``@SerialName`` 이 없어 와이어 철자는 보호됨 이며 코틀린 필드명을 추정해 사용합니다.
     goods_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1248,7 +1247,7 @@ class MaasServiceDetailInfo:
     total_settlement_amount: str | None = None
     usage_period_content: str | None = None
     entity_one: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1277,7 +1276,7 @@ class MaasServiceDetail:
     usage_close_date: str | None = None
     usage_start_date: str | None = None
     detail_info: MaasServiceDetailInfo | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1318,7 +1317,7 @@ class CommuterPassengerOption:
     #: 인원 범위도 같습니다. 키가 없으면 0, 정수로 읽을 수 없는 값이면 None입니다.
     passenger_count_from: int | None = 0
     passenger_count_to: int | None = 0
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1356,7 +1355,7 @@ class PriceFare:
     #: sumAmt. 앱 표의 "합계"(TrainOpInfoScreenKt.java:2158).
     total_amount: str | None = None
     train_no: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1394,7 +1393,7 @@ class PbpAcceptanceSeat:
     room_class_name: str
     car_no: int
     seat_no: str
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -1410,7 +1409,7 @@ class PbpAcceptanceJourney:
     registered_date: str
     withdrawal_possible_flag: str
     seats: tuple[PbpAcceptanceSeat, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     member_card_no: str
 
 
@@ -1424,7 +1423,7 @@ class PbpAcceptanceTicket:
     sale_window_no: str
     return_password: str
     journeys: tuple[PbpAcceptanceJourney, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1449,7 +1448,7 @@ class SelfSeatChangeStation:
     departure_run_order: str | None = None
     general_remaining_seats: str | None = None
     special_remaining_seats: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1462,7 +1461,7 @@ class SelfSeatChangeReason:
     query_code: str | None = None
     query_order: str | None = None
     reason_text: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1506,7 +1505,7 @@ class OriginalTicketSeat:
     smoking_seat_attribute_code: str | None = None
     additional_seat_attribute_code: str | None = None
     etc_seat_attribute_code: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1535,7 +1534,7 @@ class OriginalTicketJourney:
     general_change_allowed_flag: str | None = None
     single_ticket_flag: str | None = None
     seats: tuple[OriginalTicketSeat, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1562,7 +1561,7 @@ class OriginalTicket:
     sms_send_flag: str | None = None
     forced_sale_reason_text: str | None = None
     journeys: tuple[OriginalTicketJourney, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1582,7 +1581,7 @@ class RecentDeliveryRecipient:
     acceptance_customer_phone: str
     acceptance_customer_phone_2: str
     member_card_no: str
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1610,7 +1609,7 @@ class ReservationSeatDetail:
     seat_fare: str | None = None
     total_discount_amount: str | None = None
     seat_group_name: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     # h_psg_tp_dv_nm은 승객 유형의 표시 이름입니다. 클래스 설명의 관측 한계를 따릅니다.
     passenger_type_name: str | None = None
 
@@ -1632,7 +1631,7 @@ class ReservationDetailJourney:
     train_no: str | None = None
     train_class_name: str | None = None
     seats: tuple[ReservationSeatDetail, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1690,7 +1689,7 @@ class RefundTicketSeat:
     passenger_type_code: str | None = None
     passenger_type_name: str | None = None
     seat_group_name: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1710,7 +1709,7 @@ class RefundTicketJourney:
     room_class_name: str | None = None
     platform_no: str | None = None
     seats: tuple[RefundTicketSeat, ...] = ()
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1788,7 +1787,7 @@ class DelayCertificateRow:
     delay_minutes: str
     #: runDt 는 마스크상 필수이지만 2026-09-25 실서버 응답에는 없었습니다. 없으면 None 이며 운행일은 run_day 에 있습니다(예: 요일이 붙은 날짜).
     run_date: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1830,7 +1829,7 @@ class TravelProduct:
     description: str | None = None
     standard_clause_1: str | None = None
     standard_clause_2: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
@@ -1867,7 +1866,7 @@ class SelfCheckInSeat:
     arrival_datetime: str
     #: cpsNo — 등록 요청에 그대로 되돌려 보내는 값입니다.
     cps_no: str
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)

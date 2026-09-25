@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 타입
+
+- `KorailLoginInputFlag`와 `KorailRoomClassCode` 입력 타입 별칭을 공개합니다. 런타임 입력 검증은 추가하지 않습니다.
+- 공개 응답의 `raw`는 `Mapping[str, object]`이며 실제 원문 객체는 복사·동결하지 않습니다.
+- `BaseKorailResponse.from_raw`와 `TrainSummary.from_raw`의 반환형은 `Self`입니다.
+  서버가 보낸 코드 필드는 계속 `str`/`str | None`입니다.
+
 ### 정리 중 수정
 
 - 로그인 폼의 `txtInputFlg`를 회원번호 앞, `custId`를 `checkValidPw` 앞에 배치합니다

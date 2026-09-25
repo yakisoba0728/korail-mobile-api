@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
 
 from .errors import KorailProtocolError
 from .models import BaseKorailResponse, SeatWindow
@@ -83,7 +82,7 @@ class LimousineSchedule:
     train_no: str | None = None
     train_order_no: str | None = None
     yms_application_flag: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: rcvdPrc 운임 문자열(ScdlQryOutTrain.java:40,389). 2026-09-22 라이브 359행 모두 14자리 영 채움 문자열이었고 광명→인천공항T1 20260925 의
     #: 42행은 16,000원을 표시했습니다. 영 채움을 보존합니다.
     received_price: str | None = None
@@ -112,7 +111,7 @@ class LimousineSeat:
     specification: str | None = None
     sequence_no: str | None = None
     visual_message_division_code: str | None = None
-    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+    raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
