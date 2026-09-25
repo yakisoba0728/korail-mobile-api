@@ -25,9 +25,7 @@ class KorailSession:
 
 @dataclass(frozen=True)
 class BaseKorailResponse:
-    """응답의 공통 상태·메시지와 원문을 담습니다. 모든 응답 모델이 이를 상속하는 것은 아닙니다. from_raw 는 성공 여부·봉투 필드 타입을 판정하지 않습니다. HTTP 판정은
-    parse_base_response 참고. FAIL/P058 은 raise_on_fail 과 무관하게 만료 예외이며, 일반 코드가 존재한다는 사실만으로 실패가 되지는 않습니다. raw 는
-    원본 JSON 입니다."""
+    """from_raw는 봉투 타입만 검사하며, 성공·실패 판정은 http.parse_base_response가 맡습니다."""
 
     h_msg_cd: str | None = None
     h_msg_txt: str | None = None
@@ -36,15 +34,18 @@ class BaseKorailResponse:
 
     @classmethod
     def from_raw(cls, raw: dict[str, Any]) -> "BaseKorailResponse":
-        """봉투 세 필드를 그대로 옮겨 담아 응답을 만듭니다.
+        """직접 생성해도 HTTP 파서와 같은 봉투 변환·원문 보존 규칙을 적용합니다."""
+        from ._parsing import _envelope
 
-        ``raw`` 가 JSON 객체가 아니면 ``errors.KorailProtocolError`` 입니다. 값이 무엇인지는 보지 않습니다 — 실패 판정은 호출자 몫입니다."""
         if not isinstance(raw, dict):
-            raise KorailProtocolError("KORAIL response must be a JSON object")
+            error = KorailProtocolError("KORAIL response must be a JSON object")
+            error.raw = raw
+            raise error
+        envelope = _envelope(raw)
         return cls(
-            h_msg_cd=raw.get("h_msg_cd"),
-            h_msg_txt=raw.get("h_msg_txt"),
-            str_result=raw.get("strResult"),
+            h_msg_cd=envelope["h_msg_cd"],
+            h_msg_txt=envelope["h_msg_txt"],
+            str_result=envelope["strResult"],
             raw=raw,
         )
 

@@ -45,7 +45,12 @@ def _envelope(data: Mapping[str, Any]) -> dict[str, str | None]:
     for name in ("h_msg_cd", "h_msg_txt", "strResult"):
         value = data.get(name)
         if isinstance(value, int) and not isinstance(value, bool):
-            envelope[name] = str(value)
+            try:
+                envelope[name] = str(value)
+            except ValueError as exc:
+                error = KorailProtocolError(f"KORAIL response envelope field {name} is an integer too long to use")
+                error.raw = data
+                raise error from exc
         elif value is None or isinstance(value, str):
             envelope[name] = value
         else:

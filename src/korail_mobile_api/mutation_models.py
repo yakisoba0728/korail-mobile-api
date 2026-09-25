@@ -688,7 +688,15 @@ class PriceRecalculationRequest:
             if value is None or isinstance(value, str):
                 return value or ""
             if type(value) is int:
-                return str(value)
+                try:
+                    return str(value)
+                except ValueError as exc:
+                    error = KorailProtocolError(
+                        f"KORAIL price recalculation seat field {key} is an integer too long to use"
+                    )
+                    error.raw = hold.raw
+                    error.parser_raw = seat
+                    raise error from exc
             raise KorailProtocolError(
                 f"KORAIL price recalculation seat field {key} must be a string or an integer"
             )

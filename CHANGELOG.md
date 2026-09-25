@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### 정리 중 수정
+
+- 로그인 폼의 `txtInputFlg`를 회원번호 앞, `custId`를 `checkValidPw` 앞에 배치합니다
+  (`LoginIn.java:57–80,141–164`). 경로·필드·값·헤더는 그대로입니다.
+- 과도하게 큰 봉투 정수의 변환 오류를 원문이 보존되는 `KorailProtocolError`로 처리합니다.
+- `BaseKorailResponse.from_raw`도 봉투의 JSON 정수를 문자열로 정규화하고 잘못된 타입을 거절합니다.
+  성공·실패 판정은 하지 않으며, 거절한 입력은 `.raw`에 보존합니다.
+- 지연확인증의 선택 `runDt`는 다른 선택 문자열과 같이 잘못된 타입을 `None`으로 읽습니다.
+
+
 이 판의 Git 태그와 릴리스는 아직 만들지 않았고, PyPI 에는 올리지 않습니다. v1.0.0~v1.1.1 은 GitHub 릴리스로 공개했으며 당시 기록은
 [v1.1.1 태그의 CHANGELOG](https://github.com/yakisoba0728/korail-mobile-api/blob/v1.1.1/CHANGELOG.md)에 있습니다. 배포 버전은
 `src/korail_mobile_api/__init__.py`의 `__version__`에서만 결정합니다.

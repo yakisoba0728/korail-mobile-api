@@ -2719,7 +2719,7 @@ def parse_delay_certificate_response(raw: Mapping[str, Any]) -> DelayCertificate
         delays.append(
             DelayCertificateRow(
                 **_required_read_strings(row, _DELAY_CERTIFICATE_FIELDS, "delay certificate"),
-                run_date=_strict_scalar_string(row, "runDt", "delay certificate"),
+                run_date=_optional_scalar_string(row, "runDt", "delay certificate"),
                 raw=row,
             )
         )

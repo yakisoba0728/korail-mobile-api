@@ -136,7 +136,7 @@ class KorailNetFunnelToken:
 
 
 def _digits(raw: str) -> int:
-    return int(raw) if raw.isascii() and raw.isdigit() else 0
+    return _java_int(raw) or 0
 
 
 def _java_int(text: str) -> int | None:

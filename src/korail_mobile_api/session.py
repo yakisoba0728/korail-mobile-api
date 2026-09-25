@@ -120,9 +120,7 @@ class KorailSessionClient:
     ) -> KorailSession:
         """회원 자격증명으로 로그인합니다. 라우트: NetworkApi.java:458-460.
 
-        폼 순서는 라이브러리의 선택입니다. 앱 descriptor 순서는 LoginIn$$serializer.java:33-43, 속성 대응은 LoginIn.java:57-76 에 있으며
-        lang·txtInputFlg·custId 위치가 다릅니다. 거절 코드별 처리는 :meth:`_finish_login` 과
-        :data:`KORAIL_LOGIN_CONTINUATION_CODES` 참고."""
+        폼 순서는 LoginIn.java:57-80,141-164 를 따르며 거절 코드 처리는 _finish_login 에서 합니다."""
         return self._run_login(
             lambda: self._login(
                 member_no,
@@ -162,15 +160,15 @@ class KorailSessionClient:
         self.check_service()
         crypto_info = self.get_login_crypto_info()
         transformed = transform_login_password(password, crypto_info)
-        # 폼 순서는 login 설명을 따릅니다. 속성명은 LoginIn.java:29-35, 보호된 descriptor는 LoginIn$$serializer.java:33-43입니다.
+        # CommonIn 뒤에 LoginIn 의 선언 순서대로 붙입니다(LoginIn.java:57-80,141-164).
         # @FieldMap(NetworkApi.java:459-460)은 null 값을 거절하므로 생략해야 합니다(ParameterHandler.java:276-293). null
         # @Field를 생략하는 규칙(ParameterHandler.java:252-259)과 구별합니다.
         form = {
+            "txtInputFlg": resolved_input_flag,
             "txtMemberNo": member_no,
             "txtPwd": transformed,
-            "txtInputFlg": resolved_input_flag,
-            "checkValidPw": check_valid_pw,
             "custId": cust_id or None,
+            "checkValidPw": check_valid_pw,
             "etrPath": etr_path or None,
             "idx": crypto_info.idx or None,
         }
