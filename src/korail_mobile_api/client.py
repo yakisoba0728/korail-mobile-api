@@ -1814,9 +1814,13 @@ class KorailClient:
         넘긴 응답이 SUCC 가 아니면 금액 보호를 위해 전송 전에 거절합니다. 앱의 검사 자체는 CommonOut.isSuccess() 입니다.
         환불 화면의 보호된 ctlDvCd 는 생략하므로 그 경로의 전체 폼이 앱과 동일하다고 보장하지 않습니다.
 
+        ``settle_mileage=True`` 는 앱처럼 ``commission`` 이 있고 사용 가능 마일리지가 수수료 이상일 때만 보냅니다
+        (MyTicketDetailViewModel.java:1811-1823). 아니면 전송 전에 거절합니다. 앱이 함께 보는 진행 가능 플래그는 비교값이 보호돼
+        확인하지 않습니다.
+
         환불 요청에는 금액이 없고(RefundTicketIn.java:66) 앱도 환불액과 결제액을 대조하지 않습니다. 앱이 수수료 응답의 보호된 코드로
-        환불을 막는 분기와, 마일리지로 수수료를 낼 때 사용 가능 마일리지가 수수료 이상인지 보는 검사(MyTicketDetailViewModel.java:1811-1858)는
-        구현하지 않았습니다. 2026-09-25: 7,500원 승차권의 수수료 조회가 환불 7,500원·수수료 0원이었고 환불은 SUCC/IRT200277 이었습니다."""
+        환불을 막는 분기는 구현하지 않았습니다. 2026-09-25: 7,500원 승차권의 수수료 조회가 환불 7,500원·수수료 0원이었고 환불은
+        SUCC/IRT200277 이었습니다."""
         self._require_session("refund requires")
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
         form = build_refund_form(

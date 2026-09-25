@@ -29,7 +29,8 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 
 - `get_crew_request_list(query_division_code)` → `get_crew_request_list(*, timestamp_ms=None)`
 - `get_station_info(device)` 인자 제거
-- `refund` 의 `return_times_division_code` 제거
+- `refund` 의 `return_times_division_code` 제거. `settle_mileage=True` 는 앱처럼 `commission` 이 있고 사용 가능 마일리지가 수수료
+  이상일 때만 보내며 아니면 `KorailProtocolError` 입니다.
 - `reserve_merge` 의 둘째 인자 이름 `legs` → `merge_rows`
 - `get_ticket_receipt` 의 식별값은 키워드로만 받습니다. 비슷한 `OriginalTicketReference` 와 날짜·창구번호 순서가 반대라 위치 인자로 넘기면
   서로 바뀌었습니다.
@@ -103,7 +104,8 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 - 봉투의 JSON 정수를 전송 계층과 모든 파서가 같은 규칙으로 문자열로 읽습니다. 선택 문자열 필드의 JSON 정수도 문자열로 읽고, 필수 정수는
   따옴표 안의 앞 `-` 를 받습니다(kotlinx 와 같음).
 - 전송 전 검사를 더했습니다: 카드번호 13~16자리, 할부 1~2자리 숫자, 카드 비밀번호·인증값은 숫자, 결제할 금액이 0원인 홀드의 카드 결제
-  거절(앱은 0원이면 카드 요청을 만들지 않습니다, PayViewModel.java:15572). 환승 구간은 서로 다른 열차이고 탑승
+  거절(앱은 0원이면 카드 요청을 만들지 않습니다, PayViewModel.java:15572), 마일리지로 환불 수수료를 낼 때 수수료 응답과 사용 가능
+  마일리지 ≥ 수수료 요구(MyTicketDetailViewModel.java:1811-1823). 환승 구간은 서로 다른 열차이고 탑승
   순서여야 하며, 병합 행은 첫 홀드와 운행일이 같아야 합니다. 공항버스 예약에 같은 좌석번호를 두 번 넣으면 거절합니다.
 - 대기열 응답의 노드가 허용 범위 밖이면 그 노드는 무시하고 정문으로 진행·반납합니다. 대기열 반납 실패는 API 쪽 원래 예외를 가리지 않고, NetFunnel
   생성이 실패하면 먼저 만든 HTTP 클라이언트를 닫습니다.

@@ -846,19 +846,43 @@ def test_merge_exact_four_overrides(standing: bool) -> None:
 @pytest.mark.parametrize("with_commission", [False, True])
 def test_refund_two_screen_forms(with_commission: bool) -> None:
     """MyTicketDetailViewModel.java:1521; RefundTicketViewModel$refundTicket$1.smali:854-868,1132-1180."""
-    extra = {"h_mlg_stl": "Y", "latitude": "0.0", "longitude": "0.0"}
-    kwargs: dict[str, Any] = {"settle_mileage": True, "latitude": "0.0", "longitude": "0.0"}
+    extra = {"h_mlg_stl": "N", "latitude": "0.0", "longitude": "0.0"}
+    kwargs: dict[str, Any] = {"latitude": "0.0", "longitude": "0.0"}
     if with_commission:
+        kwargs["settle_mileage"] = True
         kwargs["commission"] = RefundCommissionResponse(
-            str_result="SUCC", ticket_return_times_division_code="SYNTH-TIMES"
+            str_result="SUCC",
+            ticket_return_times_division_code="SYNTH-TIMES",
+            usable_mileage="400",
+            refund_fee="00000000000400",
         )
-        extra.update(tk_ret_tms_dv_cd="SYNTH-TIMES", trnNo="90001")
+        extra.update(h_mlg_stl="Y", tk_ret_tms_dv_cd="SYNTH-TIMES", trnNo="90001")
     h = Harness([{**BASE, "stlList": None}], "POST", ("refunds.RefundsRequest",), refund_form(**extra))
     try:
         result = h.client.refund(ticket(), **kwargs)
         assert result.settlement_list_is_null is True
         assert result.settlement_method_codes == ()
         assert len(h.seen) == 1  # commission is supplied, never fetched automatically
+    finally:
+        h.close()
+
+
+@pytest.mark.parametrize(
+    ("usable", "fee"),
+    [(None, None), ("399", "400"), ("", "00000000000400"), ("1,000", "400")],
+)
+def test_refund_pays_the_fee_with_mileage_only_when_the_app_would(usable: Any, fee: Any) -> None:
+    """MyTicketDetailViewModel.java:1811-1823: mileage settlement needs the commission lookup and usable
+    mileage >= fee; TextHelper.getInteger reads a missing or unparsable number as 0."""
+    h = Harness([], "POST", (), {})
+    try:
+        with pytest.raises(KorailProtocolError, match="commission response"):
+            h.client.refund(ticket(), settle_mileage=True)
+        if usable is not None:
+            commission = RefundCommissionResponse(str_result="SUCC", usable_mileage=usable, refund_fee=fee)
+            with pytest.raises(KorailProtocolError, match="mileage is below the fee"):
+                h.client.refund(ticket(), settle_mileage=True, commission=commission)
+        assert h.seen == []
     finally:
         h.close()
 

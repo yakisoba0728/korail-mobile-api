@@ -1043,6 +1043,14 @@ def _refund_echo_field(value: object, *, field: str) -> str:
     return value
 
 
+def _app_integer(value: str | None) -> int:
+    """TextHelper.getInteger 처럼 읽습니다: Integer.parseInt 이고 없거나 읽을 수 없으면 0 입니다(TextHelper.java:169-181)."""
+    if value is None or re.fullmatch(r"[+-]?[0-9]+", value) is None:
+        return 0
+    number = int(value)
+    return number if -(2**31) <= number < 2**31 else 0
+
+
 def build_refund_form(
     config: KorailConfig,
     ticket: PaidTicket,
@@ -1055,7 +1063,8 @@ def build_refund_form(
 ) -> dict[str, str]:
     """승차권 한 장의 환불 요청 폼을 구성하며 전송하지 않습니다. PNR 키는 txtPnrNo 입니다(RefundTicketIn.java:194; NetworkApi.java:603).
     settle_mileage=False 는 라이브러리 기본 정책입니다. 앱의 수수료·마일리지 비교와 선택 흐름은 MyTicketDetailViewModel.java:1811-1858, 선택값
-    전달은 :1466-1469,1515-1521,2074-2093 이지만 기본 bool·Y/N 평문은 보호돼 있습니다.
+    전달은 :1466-1469,1515-1521,2074-2093 이지만 기본 bool·Y/N 평문은 보호돼 있습니다. settle_mileage=True 는 앱처럼 수수료 응답이 있고
+    사용 가능 마일리지가 수수료 이상일 때만 받습니다.
 
     pbp_acceptance_target_flag 는 명시값 또는 승차권 값을 사용합니다. 값 누락 시 처리와 국내/외국인 차이는 _refund_echo_field 참고. 보호 기본값을 빈
     문자열로 확정하지 않습니다. tk_ret_tms_dv_cd·trnNo 는 commission 을 넘길 때만 싣습니다 — 승차권 상세
@@ -1107,6 +1116,19 @@ def build_refund_form(
             form["tk_ret_tms_dv_cd"] = commission.ticket_return_times_division_code
         if ticket.train_no:
             form["trnNo"] = ticket.train_no
+    # 앱은 두 화면 모두 수수료를 조회한 뒤에만 마일리지 정산을 묻습니다. 진행 가능 플래그가 보호된 1글자 값과 같고 사용 가능 마일리지가
+    # 수수료 이상일 때만 묻고, 아니면 마일리지 없이 환불합니다(MyTicketDetailViewModel.java:1811-1823; 환불 화면은 수수료 합계와 비교,
+    # RefundTicketViewModel.java:924-942). 플래그 비교값은 보호돼 있어 보지 않습니다. 앱이 보내지 않을 요청이므로 조용히 N 으로 바꾸지 않고
+    # 전송 전에 거절합니다.
+    if settle_mileage:
+        if commission is None:
+            raise KorailProtocolError(
+                "settle_mileage=True requires the commission response (get_refund_commission)"
+            )
+        if _app_integer(commission.usable_mileage) < _app_integer(commission.refund_fee):
+            raise KorailProtocolError(
+                "KORAIL refund cannot pay the fee with mileage: usable mileage is below the fee"
+            )
     for key, coordinate in (("latitude", latitude), ("longitude", longitude)):
         if coordinate is not None:
             form[key] = str(coordinate)
