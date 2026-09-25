@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -315,6 +315,8 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: pay_with_card 는 전송 전에 거절합니다. 병합 첫 홀드는 앱의 병합 화면에서도 결제할 수 있어 True 입니다
     #: (ReservationMergeViewModel.java:2094-2107).
     payable: bool = True
+    #: recalculate_price(add_to_cart=True) 가 이어서 보낸 장바구니 추가의 응답입니다. FAIL 이어도 그대로 담깁니다. 그 밖에는 None.
+    cart_addition: CartAddResponse | None = None
 
 
 @dataclass(frozen=True)
@@ -654,6 +656,47 @@ class PriceRecalculationRequest:
     #: txtSeatAttCd4는 예약 폼에서 실제 좌석 속성을 넣는 슬롯입니다(_seat_attribute_key(1)). 재계산에서도 같은 의미인지는 검증 못 함이며 슬롯 번호만 대응시킵니다.
     seat_attribute_code_4: str | None = None
     seat_attribute_code_5: str | None = None
+
+    @classmethod
+    def for_hold(
+        cls,
+        hold: ReservationHoldResponse,
+        requested_discount_codes: Sequence[str],
+    ) -> PriceRecalculationRequest:
+        """홀드의 첫 여정 좌석마다 한 행을 앱처럼 만듭니다. 앱은 승객마다 첫 좌석으로 행을 만들고 승객 유형·객실·현재 할인 코드를 좌석에서
+        복사하며(PayViewModel.java:5405-5520, 16802-16863), 할인 화면 경로는 좌석의 dcnt_reld_no 를 hidDscpNo 로 옮깁니다(:5518).
+        requested_discount_codes 는 좌석 순서대로 하나씩이고 수가 다르면 앱처럼 보내지 않습니다(:17469). 요청 코드 매핑(ReqDiscount)은
+        보호돼 있어 호출자가 정합니다. 다자녀 가족번호는 이 메서드가 채우지 않습니다."""
+        pnr_no = hold.pnr_no
+        if hold.str_result != "SUCC" or not isinstance(pnr_no, str) or not pnr_no.strip():
+            raise KorailProtocolError("KORAIL price recalculation needs a successful hold with a PNR")
+        if isinstance(requested_discount_codes, str) or not isinstance(requested_discount_codes, Sequence):
+            raise KorailProtocolError("requested_discount_codes must be a sequence with one code per seat")
+        container = hold.journeys[0].raw.get("seat_infos") if hold.journeys else None
+        seats = container.get("seat_info") if isinstance(container, Mapping) else None
+        if not isinstance(seats, list) or not seats or not all(isinstance(seat, Mapping) for seat in seats):
+            raise KorailProtocolError("KORAIL price recalculation needs the hold's first-journey seat rows")
+        if len(requested_discount_codes) != len(seats):
+            raise KorailProtocolError(
+                f"KORAIL price recalculation needs one requested code per seat of the first journey "
+                f"({len(seats)})"
+            )
+
+        def text(seat: Mapping[str, Any], key: str) -> str:
+            value = seat.get(key)
+            return "" if value is None else str(value)
+
+        rows = tuple(
+            PriceRecalculationRow(
+                text(seat, "h_psg_tp_cd"),
+                text(seat, "h_psrm_cl_cd"),
+                text(seat, "h_dcnt_knd_cd1"),
+                code,
+                text(seat, "dcnt_reld_no"),
+            )
+            for seat, code in zip(seats, requested_discount_codes, strict=True)
+        )
+        return cls(pnr_no, rows)
 
 
 @dataclass(frozen=True)

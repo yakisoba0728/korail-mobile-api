@@ -1385,6 +1385,98 @@ def test_standby_initial_form_is_not_standing_reservation() -> None:
         h.close()
 
 
+class SequenceHarness(Harness):
+    """Harness whose requests may differ: each exchange is (route, expected form, response)."""
+
+    def __init__(self, exchanges: list[tuple[str, dict[str, Any], Any]]) -> None:
+        super().__init__([], "POST", (), {})
+        self.client.close()
+        self.seen = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            i = len(self.seen)
+            self.seen.append(request)
+            assert i < len(exchanges), "duplicate/unexpected transmission"
+            route, expected, response = exchanges[i]
+            assert request.url.path == ROOT + route
+            actual: dict[str, list[str]] = defaultdict(list)
+            for key, value in parse_qsl(request.content.decode(), keep_blank_values=True):
+                actual[key].append(value)
+            assert dict(actual) == pairs(expected)
+            return httpx.Response(200, json=response)
+
+        cfg = self.client.config
+        self.client = KorailClient(cfg, transport=httpx.MockTransport(handler))
+        self.client.session.current = KorailSession(jsessionid="SYNTH-SESSION", customer_no="SYNTH-CUSTOMER-NO")
+
+
+RECALC = ("certification.PriceReCalculation", recalc_form(), hold_raw())
+CART_FORM = {**COMMON, "hidPnrNo": PNR}
+
+
+@pytest.mark.parametrize("cart_result", ["SUCC", "FAIL"])
+def test_recalculation_can_add_the_pnr_to_the_cart_like_the_app(cart_result: str) -> None:
+    """PayViewModel.java:14428-14436: after a successful recalculation a logged-in app adds the PNR to the cart
+    and keeps the recalculated amount even if that fails (executeAddCart only alerts)."""
+    cart = {**BASE, "strResult": cart_result, "h_msg_cd": "SYNTH-CART"}
+    h = SequenceHarness([RECALC, ("cart.addCartList", CART_FORM, cart)])
+    try:
+        result = h.client.recalculate_price(recalc_request(), add_to_cart=True)
+        assert result.received_amount == "1200"
+        assert result.cart_addition is not None
+        assert (result.cart_addition.str_result, result.cart_addition.h_msg_cd) == (cart_result, "SYNTH-CART")
+        assert len(h.seen) == 2
+    finally:
+        h.close()
+
+
+def test_recalculation_adds_nothing_to_the_cart_by_default_or_after_a_failure() -> None:
+    h = SequenceHarness([RECALC])
+    try:
+        assert h.client.recalculate_price(recalc_request()).cart_addition is None
+        assert len(h.seen) == 1
+    finally:
+        h.close()
+    failed = {**hold_raw(), "strResult": "FAIL", "h_msg_cd": "ERR930202", "h_msg_txt": "SYNTH"}
+    h = SequenceHarness([("certification.PriceReCalculation", recalc_form(), failed)])
+    try:
+        with pytest.raises(KorailApiError):
+            h.client.recalculate_price(recalc_request(), add_to_cart=True)
+        assert len(h.seen) == 1
+    finally:
+        h.close()
+
+
+def test_recalculation_rows_come_from_the_first_journey_seats_like_the_app() -> None:
+    """PayViewModel.java:5518,16856-16863: one row per first-journey seat copying type, cabin and current
+    discount, dcnt_reld_no as hidDscpNo; :17469 refuses when the counts differ."""
+
+    def seats(*rows: tuple[str, str, str, str]) -> dict[str, Any]:
+        keys = ("h_psg_tp_cd", "h_psrm_cl_cd", "h_dcnt_knd_cd1", "dcnt_reld_no")
+        return {"seat_infos": {"seat_info": [dict(zip(keys, row, strict=True)) for row in rows]}}
+
+    journeys = (
+        ReservationJourney(raw=seats(("1", "1", "000", ""), ("3", "2", "SYNTH-OLD", "SYNTH-CERT"))),
+        ReservationJourney(raw=seats(("9", "9", "SYNTH-SECOND-LEG", ""))),
+    )
+    held = hold(journeys=journeys)
+    assert PriceRecalculationRequest.for_hold(held, ["", "SYNTH-NEW"]) == PriceRecalculationRequest(
+        PNR,
+        (
+            PriceRecalculationRow("1", "1", "000", "", ""),
+            PriceRecalculationRow("3", "2", "SYNTH-OLD", "SYNTH-NEW", "SYNTH-CERT"),
+        ),
+    )
+    with pytest.raises(KorailProtocolError, match="one requested code per seat"):
+        PriceRecalculationRequest.for_hold(held, ["SYNTH-NEW"])
+    with pytest.raises(KorailProtocolError, match="sequence"):
+        PriceRecalculationRequest.for_hold(held, "SYNTH-NEW")
+    with pytest.raises(KorailProtocolError, match="first-journey seat rows"):
+        PriceRecalculationRequest.for_hold(hold(), ["SYNTH-NEW"])
+    with pytest.raises(KorailProtocolError, match="successful hold"):
+        PriceRecalculationRequest.for_hold(hold(journeys=journeys, str_result="FAIL"), ["", "SYNTH-NEW"])
+
+
 def test_standby_holds_are_not_payable() -> None:
     """TrainScheduleViewModel.java:5096-5101; ReservationWaitViewModel.java:1155-1160: WAIT saves options, never
     pays."""

@@ -97,6 +97,11 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 - API 요청 헤더를 앱과 맞췄습니다. 앱은 보호된 헤더 하나를 붙이는데, 보호 방식이 4바이트 키 반복 XOR 이라 같은 앱의 WebView 접미사
   평문으로 방식을 확인한 뒤 암호문 관계만으로 `User-Agent: korailtalk` 임을 확인했습니다(`constants.KORAIL_API_USER_AGENT`). APK 의 OkHttp
   기본 헤더에 맞춰 `Connection: Keep-Alive`, `Accept-Encoding: gzip` 을 보내고 `Accept` 는 보내지 않습니다.
+- `recalculate_price(add_to_cart=True)` 로 앱처럼 재계산 성공 뒤 같은 PNR 을 장바구니에 추가할 수 있습니다(PayViewModel.java:14428-14436).
+  결과는 새 필드 `ReservationHoldResponse.cart_addition` 에 담기며 FAIL 이어도 예외를 내지 않습니다. 2026-09-25 실서버: 재계산 21,500→15,000원,
+  추가 SUCC/IRZ000002, 장바구니에 15,000원 행, 홀드 취소 뒤 장바구니 비움.
+- `PriceRecalculationRequest.for_hold(hold, codes)` 는 앱처럼 홀드의 첫 여정 좌석마다 한 행을 만들고(유형·객실·현재 할인 코드 복사,
+  `dcnt_reld_no` → `hidDscpNo`) 요청 코드 수가 좌석 수와 다르면 거절합니다(PayViewModel.java:5518,16856-16863,17469).
 - 운임 조회(`get_price_fare_quote`)는 앱처럼 `gdNo` 칸을 늘 보냅니다. 상품번호가 없으면 빈 값이고 2구간은 구분자만 남습니다
   (PrcFareInItem.java:109, NetworkService.java:9895-9902). 2026-09-25 실서버에서 1·2구간 모두 이전과 같은 운임을 받았습니다.
 - 대기열 요청도 앱과 맞췄습니다. SDK 는 User-Agent 를 넣지 않아 안드로이드 기본값이 나가므로 `korailtalk` 이 아니라 AOSP

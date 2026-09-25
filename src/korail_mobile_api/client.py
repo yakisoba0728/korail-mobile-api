@@ -1932,6 +1932,8 @@ class KorailClient:
     def recalculate_price(
         self,
         request: PriceRecalculationRequest,
+        *,
+        add_to_cart: bool = False,
     ) -> ReservationHoldResponse:
         """홀드의 할인 조합을 재계산합니다. 변경 결과를 읽은 뒤 결제·취소 여부를 판단하십시오. NetworkApi.java:583-584 는 일반 폼 외 여섯 반복 필드를 받습니다. 입력
         구성은 PayViewModel.java:902,1316,14278 이며 화면의 모든 변경 트리거는 확인되지 않았습니다. 선택 객실·좌석속성 4필드는
@@ -1949,12 +1951,31 @@ class KorailClient:
         204)이었습니다. 토요일은 같은 SUCC/IRZ000008 인데 금액이 20,400원 그대로여서 성공 코드만으로는 할인 미적용을 알 수 없으니
         received_amount 를 비교하십시오. 앱은 할인 화면의 선택을 보호된 표(ReqDiscount, PayViewModel.java:5462-5530)로 요청 코드에
         옮기고, 성공하면 금액을 이 응답으로 바꾼 뒤 로그인 상태면 장바구니 추가를 부르며(:14412-14431) 보호된 코드일 때
-        "승객할인이 미적용 되었습니다." 를 띄웁니다(:14437-14446). 라이브러리는 코드 매핑·장바구니 추가·그 안내를 하지 않습니다."""
+        "승객할인이 미적용 되었습니다." 를 띄웁니다(:14437-14446). 라이브러리는 코드 매핑과 그 안내를 하지 않습니다. 행은
+        :meth:`PriceRecalculationRequest.for_hold` 로 앱처럼 홀드의 첫 여정 좌석에서 만들 수 있습니다(2026-09-25 실서버 SUCC/IRZ000008).
+
+        ``add_to_cart=True`` 면 앱처럼 재계산이 성공한 뒤 같은 PNR 로 장바구니 추가(:meth:`add_to_cart`)를 이어서 보내고 그 응답을
+        ``cart_addition`` 에 담습니다(:14428-14436). 앱은 장바구니 추가가 실패해도 안내만 띄우고 재계산 결과를 유지하므로 FAIL 응답도
+        예외 없이 담습니다. 재계산이 실패하면 보내지 않습니다. 장바구니 요청에서 전송 오류가 나면 예외가 나므로 재계산 결과는
+        예약 조회로 확인하십시오. 앱의 결제 경로는 장바구니 화면에서 넘어온 목록으로만 갈리므로(:5355, :6662-6684) 이 추가 뒤에도
+        :meth:`pay_with_card` 와 같은 단일 예약 결제입니다. 2026-09-25: 홀드만으로는 장바구니가 비어 있었고, 재계산(21,500→15,000원)
+        뒤 추가는 SUCC/IRZ000002 였으며 장바구니에 15,000원 행이 생겼다가 홀드를 취소하자 비었습니다."""
+        if not isinstance(add_to_cart, bool):
+            raise KorailProtocolError("add_to_cart must be a bool")
         self._require_session("price recalculation requires")
         route = "/classes/com.korail.mobile.certification.PriceReCalculation"
         form = build_price_recalculation_form(self.config, request)
-        return self._mutation(
+        hold = self._mutation(
             route,
             form,
             parser=parse_reservation_hold_response,
         )
+        if not add_to_cart:
+            return hold
+        cart = self._mutation(
+            "/classes/com.korail.mobile.cart.addCartList",
+            build_cart_add_form(self.config, CartAddRequest(request.pnr_no)),
+            parser=parse_cart_add_response,
+            raise_on_fail=False,
+        )
+        return replace(hold, cart_addition=cart)
