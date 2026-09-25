@@ -775,7 +775,8 @@ class KorailClient:
 
         ``WRG000000`` 응답은 빈 결과(예외 아님)로 반환하며, 정기권 보유 여부를 뜻한다고 단정하지 않습니다.
 
-        2026-09-24 입력 조합은 EAZ000028이었으며 2026-09-22 성공 기록과 구별합니다."""
+        종류·기간·나이 코드는 get_pass_menu("1") 의 일반정기권(0001)·기간자유형(0028) pass_data 에서 가져오십시오. 2026-09-25: 두 종류
+        다섯 조합이 모두 SUCC(서울→부산 7편, 서울→대전 4편)였고, 2026-09-24 의 EAZ000028 은 내일로(0046) 코드를 넣은 결과였습니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.pass.passScheduleInfoList",
@@ -962,7 +963,8 @@ class KorailClient:
         request: GuideSeatConditionRequest,
     ) -> GuideSeatConditionResponse:
         """도우미석 안내문을 읽습니다. 일반 FAIL 은 안내 응답으로 반환하지만 FAIL/P058 은 세션을 비우고 만료 예외를 냅니다.
-        h_msg_cd·h_msg_txt 를 확인하십시오. 날짜 있는 비교 관측은 GuideSeatConditionRequest 참고."""
+        h_msg_cd·h_msg_txt 를 확인하십시오. 날짜 있는 비교 관측은 GuideSeatConditionRequest 참고. FAIL/MRR800011 은 대피도우미석
+        대상(만20~50세, 시발~종착 이용)이 아니라는 회원 판정으로 보이며, 2026-09-25 에는 좌석코드 999 도 같은 응답이었습니다."""
         return self._post_read(
             "/classes/com.korail.mobile.reservation.guideSeatCnd.do",
             build_guide_seat_condition_form(request),
@@ -1102,7 +1104,8 @@ class KorailClient:
         self,
         tickets: Sequence[OriginalTicketReference],
     ) -> PbpAcceptanceSpecificationResponse:
-        """승차권 여러 장의 PBP 수락 내역을 여정·좌석 단위로 조회합니다."""
+        """승차권 여러 장의 PBP 수락 내역을 여정·좌석 단위로 조회합니다. 승차권 목록에서 pbp_acceptance_target_flag 가 Y 인 승차권을
+        sale_date(YYYYMMDD)로 넘기십시오. 2026-09-25: Y 승차권 6장은 6장, 1장은 1장의 명세를 돌려줬고 N 승차권은 0건이었습니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.tk.pbpAcepSpec.do",
@@ -1118,7 +1121,7 @@ class KorailClient:
     ) -> OriginalTicketInquiryResponse:
         """승차권 변경의 출발점이 되는 원표(원승차권)를 조회합니다.
 
-        2026-09-24 환불된 표본은 WRT200399였으며 2026-09-22 성공 기록도 있습니다."""
+        2026-09-25: 구매이력의 인쇄완료(02) 승차권은 SUCC/IRT000001("원권조회완료"), 환불된(09) 승차권은 WRT200399 였습니다."""
         self._require_session()
         form = build_original_ticket_inquiry_form(
             tickets,
@@ -1134,7 +1137,8 @@ class KorailClient:
         self,
         request: SelfSeatChangeInfoRequest,
     ) -> SelfSeatChangeInfoResponse:
-        """자율 좌석/열차 변경으로 갈 수 있는 승차역과 변경 사유를 조회합니다."""
+        """자율 좌석/열차 변경으로 갈 수 있는 승차역과 변경 사유를 조회합니다. 요청은 승차권 없이 열차 정보만 받습니다. 2026-09-25:
+        운행 중인 KTX 023 은 SUCC, 운행 시간 밖 열차는 WRT800176("좌석변경가능시간아님")이었습니다."""
         self._require_session()
         return self._post_read(
             "/classes/com.korail.mobile.self.seatChgInfo.do",
@@ -1634,8 +1638,9 @@ class KorailClient:
 
         라우트는 NetworkApi.java:639-640, 화면 입력은 ReservationWaitViewModel.java:68-80을 따릅니다. WAIT는
         ReservationJobId.java:21에 선언되지만 값은 보호돼 있습니다. IRR000014 메시지의 자산 기록만으로 앱 분기를 확정하지
-        않습니다. 검증 못 함: 2026-09-16 예약대기 홀드 생성 기록은 있지만, 이 옵션 저장 호출의 실서버 성공은 확인하지
-        못했습니다."""
+        않습니다. 2026-09-25 라이브: 예약대기 홀드(SUCC/IRR000014) 뒤 sms_notify=False, allow_seat_class_change=False 로
+        SUCC/IRZ000003("정상적으로 수정 되었습니다.")이었고 cancel_unpaid_hold 로 IRG000000 이었습니다. 알림·등급 변경을 켠 조합은
+        검증하지 않았습니다."""
         self._require_session("standby options require")
         route = "/classes/com.korail.mobile.reservationWait.ReservationWait"
         form = build_standby_wait_form(
