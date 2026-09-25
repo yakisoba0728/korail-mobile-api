@@ -2,8 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""KORAIL 7.0.6 기반 비공식 클라이언트와 공개 입력·응답 모델을 제공합니다. 시작점은 KorailClient와 KorailConfig입니다. __all__ 밖의 이름은 바뀔 수 있습니다.
-패키지 오류는 KorailApiError 계층을 따르며 입력 검증은 ValueError도 낼 수 있습니다."""
+"""공개 진입점은 __all__이며 그 밖의 이름은 내부 구현입니다."""
 
 __version__ = "1.2.0"
 
@@ -51,8 +50,6 @@ from .limousine_models import (
     LimousineSeatInventoryQuery,
     LimousineSeatInventoryResponse,
 )
-
-# live 는 client 에 의존하므로 패키지의 다른 모듈 뒤에서 가져옵니다.
 from .live import build_config_from_env
 from .models import (
     AppDataResponse,

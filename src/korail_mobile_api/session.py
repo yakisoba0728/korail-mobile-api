@@ -2,10 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""로그인·로그아웃과 로컬 세션 상태를 관리합니다. 로그인은 봉투 검사 후 IRZ000001/S200과 JSESSIONID를 확인합니다. 앱도 LoginOut.isSuccess()에서 코드로
-판정하지만 비교 상수는 보호돼 있어 코드 대응은 정적으로 검증하지 못했습니다(LoginViewModel.java:1216; LoginOut.java:1161-1180). 두 코드는 실서버
-관측값입니다. FAIL도 _finish_login에서 판정하되 FAIL/P058은 HTTP 계층에서 세션 만료 예외가 됩니다. 앱도 재로그인·서비스 오류 외의 LoginOut은 화면에서
-처리합니다(NetworkService.java:6916-6919). 앱의 성공 후 코드별 안내 분기는 LoginViewModel.java:1307-1322를 따르며 비교 리터럴은 보호돼 있습니다."""
+"""로그인 성공 코드는 관측값이며 보호된 앱 리터럴을 확정하지 않습니다(LoginOut.java:1161-1180)."""
 
 from __future__ import annotations
 
@@ -14,7 +11,6 @@ from collections.abc import Callable, Mapping
 from typing import Literal
 
 from ._parsing import _optional_scalar_string
-
 from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES, KorailLoginInputFlag
 from .crypto import transform_login_password
 from .errors import (
@@ -30,9 +26,8 @@ from .models import BaseKorailResponse, KorailSession, LoginCryptoInfo
 from .payloads import build_common_code_form
 
 KORAIL_LOGIN_SUCCESS_CODES = frozenset({"IRZ000001", "S200"})
-#: 로그인 후 웹 조치가 필요한 코드는 휴면 해제 WRC000116과 비밀번호 변경 WRC000420입니다. LoginViewModel.java:1390-1520의 hashCode 분기
-#: -699977554·-699974646은 error_json.json의 해당 코드와 일치합니다. 다른 거절은 앱 오류 분류 또는 KorailAuthError로 처리하며 웹 조치를 자동으로 이어
-#: 가지 않습니다.
+#: LoginViewModel.java:1390-1520의 hashCode 분기 -699977554·-699974646은 error_json.json의 해당 코드와 일치합니다. 다른 거절은 앱 오류
+#: 분류 또는 KorailAuthError로 처리하며 웹 조치를 자동으로 이어 가지 않습니다.
 KORAIL_LOGIN_CONTINUATION_CODES = frozenset({"WRC000116", "WRC000420"})
 KORAIL_LOGIN_TYPE_MEMBER_NO: KorailLoginInputFlag = "2"
 KORAIL_LOGIN_TYPE_PHONE: KorailLoginInputFlag = "4"
@@ -40,11 +35,7 @@ KORAIL_LOGIN_TYPE_EMAIL: KorailLoginInputFlag = "5"
 
 
 def infer_login_input_flag(login_id: str) -> KorailLoginInputFlag:
-    """회원번호·전화번호·이메일 형식으로 로그인 입력 종류를 선택합니다.
-
-    앱 분기 근거: LoginViewModel.java:1850-1876. 앱은 숫자만이거나 이메일인 입력만 보내므로, 하이픈이 든 전화번호처럼 둘 다 아닌 입력은 전송 전에
-    거절합니다. 실패한 로그인 시도는 잠금 횟수에 들어갈 수 있습니다. 앱의 보호된 전화번호 검사는 재현하지 않습니다. 다른 숫자 길이는 앱의 무효 처리와 달리
-    회원번호로 분류합니다(미확인 폴백). 앱은 이메일에 isValidEmail 과 7자 이상도 요구하지만 그 판정은 서버에 맡깁니다."""
+    """앱처럼 숫자·이메일 외 입력은 거절하되 보호된 전화번호 검사는 재현하지 않습니다(LoginViewModel.java:1850-1876)."""
     if "@" in login_id:
         return KORAIL_LOGIN_TYPE_EMAIL
     if not (login_id.isascii() and login_id.isdigit()):
@@ -57,8 +48,7 @@ def infer_login_input_flag(login_id: str) -> KorailLoginInputFlag:
 
 
 def extract_login_crypto_payload(raw: Mapping[str, object]) -> dict[str, object]:
-    """최상위 app.login.cphd 객체를 읽고 없으면 빈 사전을 반환합니다. 앱 근거: CommonCodeOut.java:267. 소비부:
-    LoginRepositoryImpl.java:918-936. 2026-09-24 라이브: idx·key·pwdAESCphd 는 이 객체 안에만 문자열로 있었고 최상위에는 없었습니다."""
+    """암호화 파라미터는 최상위가 아닌 app.login.cphd 객체에서만 읽습니다(CommonCodeOut.java:267; 실서버 관측)."""
     value = raw.get("app.login.cphd")
     return value if isinstance(value, dict) else {}
 
@@ -68,9 +58,8 @@ def _text(value: object) -> str:
 
 
 class KorailSessionClient:
-    """로그인·로그아웃 요청과 로컬 세션 상태를 관리합니다.
-
-    :attr:`current` = 살아 있는 세션 또는 ``None``. :attr:`pending` = 웹 단계(휴면 해제·비밀번호 변경)가 필요한 예외."""
+    """로그인·로그아웃 요청과 로컬 세션 상태를 관리합니다. :attr:`current` = 살아 있는 세션 또는 ``None``. :attr:`pending` = 웹 단계(휴면
+    해제·비밀번호 변경)가 필요한 예외."""
 
     def __init__(self, http: KorailHttpClient) -> None:
         self.http = http
@@ -86,11 +75,7 @@ class KorailSessionClient:
         )
 
     def get_login_crypto_info(self) -> LoginCryptoInfo:
-        """``common.code.do`` 에서 비밀번호 암호화 파라미터를 읽습니다.
-
-        7.0.6 로그인은 ``pwdAESCphd`` 를 읽지 않고 ``key`` 로 곧장 AES 를 겁니다
-        (``analysis/jadx/sources/com/korail/talk/data/LoginRepositoryImpl.java:922-936``). 그래서 이 값이 없거나
-        ``Y``/``N`` 이 아니어도 거절하지 않고, 참고용으로만 ``LoginCryptoInfo.pwd_aes_cphd`` 에 담습니다(없으면 ``""``)."""
+        """로그인에는 key를 바로 쓰고 pwdAESCphd는 참고값으로만 남깁니다(LoginRepositoryImpl.java:922-936)."""
         response = self.http.post_form(
             "/classes/com.korail.mobile.common.code.do",
             build_common_code_form(
@@ -120,9 +105,8 @@ class KorailSessionClient:
         cust_id: str | None = None,
         etr_path: str | None = None,
     ) -> KorailSession:
-        """회원 자격증명으로 로그인합니다. 라우트: NetworkApi.java:458-460.
-
-        폼 순서는 LoginIn.java:57-80,141-164 를 따르며 거절 코드 처리는 _finish_login 에서 합니다."""
+        """라우트: NetworkApi.java:458-460. 폼 순서는 LoginIn.java:57-80,141-164 를 따르며 거절 코드 처리는 _finish_login 에서
+        합니다."""
         return self._run_login(
             lambda: self._login(
                 member_no,
@@ -135,7 +119,7 @@ class KorailSessionClient:
         )
 
     def _run_login(self, attempt: Callable[[], KorailSession]) -> KorailSession:
-        """시작 시 로컬 세션을 비웁니다. 후속 인증만 pending 에 남기고 다른 실패는 세션을 남기지 않습니다."""
+        """후속 인증만 pending 에 남기고 다른 실패는 세션을 남기지 않습니다."""
         self.clear_session()
         try:
             return attempt()
@@ -162,9 +146,9 @@ class KorailSessionClient:
         self.check_service()
         crypto_info = self.get_login_crypto_info()
         transformed = transform_login_password(password, crypto_info)
-        # CommonIn 뒤에 LoginIn 의 선언 순서대로 붙입니다(LoginIn.java:57-80,141-164).
-        # @FieldMap(NetworkApi.java:459-460)은 null 값을 거절하므로 생략해야 합니다(ParameterHandler.java:276-293). null
-        # @Field를 생략하는 규칙(ParameterHandler.java:252-259)과 구별합니다.
+        # CommonIn 뒤에 LoginIn 의 선언 순서대로 붙입니다(LoginIn.java:57-80,141-164). @FieldMap(NetworkApi.java:459-460)은
+        # null 값을 거절하므로 생략해야 합니다(ParameterHandler.java:276-293). null @Field를 생략하는
+        # 규칙(ParameterHandler.java:252-259)과 구별합니다.
         form = {
             "txtInputFlg": resolved_input_flag,
             "txtMemberNo": member_no,
@@ -197,7 +181,6 @@ class KorailSessionClient:
                     redirect_url if isinstance(redirect_url, str) else "",
                     raw=response.raw,
                 )
-            # 서비스 점검·앱 업데이트처럼 이미 따로 분류된 코드는 그 예외로 올립니다.
             error = classify_app_error(code, response.h_msg_txt, raw=response.raw)
             if isinstance(error, (KorailServiceUnavailableError, KorailAppUpdateRequiredError)):
                 raise error
@@ -206,8 +189,6 @@ class KorailSessionClient:
                 code=response.h_msg_cd,
                 raw=response.raw,
             )
-        # 경로·도메인만 다른 JSESSIONID 가 여럿이면 cookies.get 이 httpx.CookieConflict 를 냅니다. 요청에는 경로·도메인이 맞는 쿠키가
-        # 실리므로 세션 기록에는 저장소 순서의 첫 값을 씁니다.
         jsessionid = next(
             (cookie.value for cookie in self.http.cookies.jar if cookie.name == "JSESSIONID" and cookie.value),
             None,
@@ -218,8 +199,7 @@ class KorailSessionClient:
                 code=response.h_msg_cd,
                 raw=response.raw,
             )
-        # 앱은 LoginOut.strMbCrdNo 를 읽습니다(LoginOut.java:62,79,113,116). 2026-09-24 라이브 로그인 응답에 mbCrdNo 는 없었습니다.
-        # 두 번호는 String 선언이며 다른 String 필드처럼 JSON 정수도 문자열로 받습니다.
+        # 앱은 LoginOut.strMbCrdNo 를 읽습니다(LoginOut.java:62,79,113,116). 라이브 로그인 응답에 mbCrdNo 는 없었습니다.
         member_card_no = _optional_scalar_string(response.raw, "strMbCrdNo") or None
         customer_no = _optional_scalar_string(response.raw, "strCustNo")
         customer_no = customer_no if customer_no and customer_no.strip() else None
@@ -233,10 +213,8 @@ class KorailSessionClient:
         return self.current
 
     def logout(self) -> None:
-        """서버 로그아웃을 시도하고 finally 에서 로컬 세션·쿠키를 비웁니다.
-
-        7.0.6 ``POST login.Logout`` 의 ``timeStamp`` 폼을 보냅니다. 서버의 FAIL 봉투는 예외가 아니지만(FAIL/P058 만 세션 만료 예외) 전송 오류
-        같은 실패는 그대로 올라오며, 그때도 로컬 상태는 이미 비워져 있습니다. 서버 세션의 실제 무효화 여부는 이 메서드만으로 보장하지 않습니다."""
+        """서버의 FAIL 봉투는 예외가 아니지만(FAIL/P058 만 세션 만료 예외) 전송 오류 같은 실패는 그대로 올라오며, 그때도 로컬 상태는 이미 비워져 있습니다. 서버 세션의
+        실제 무효화 여부는 이 메서드만으로 보장하지 않습니다."""
         try:
             if self.current is not None:
                 self.http.post_form(
@@ -248,7 +226,7 @@ class KorailSessionClient:
             self.clear_session()
 
     def clear_session(self) -> None:
-        """세션·pending 을 먼저 지운 뒤 쿠키를 비웁니다. 쿠키 정리가 실패해도 current 를 남기지 않습니다."""
+        """쿠키 정리가 실패해도 current 를 남기지 않습니다."""
         self.current = None
         self.pending = None
         self.http.cookies.clear()

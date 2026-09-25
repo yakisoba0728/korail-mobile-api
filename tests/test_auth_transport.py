@@ -1,10 +1,4 @@
-"""F1, 291e01c + changes.patch. Run: PYTHONPATH=src pytest tests/test_auth_transport.py.
-
-All HTTP uses MockTransport; socket connections and DNS are disabled. Source
-references are relative to analysis/jadx/sources/com/korail/talk unless stated.
-Protected literals are not decoded. Cipher vectors pin the Python implementation,
-not a claim that the protected Android cipher transformation was recovered.
-"""
+"""Offline domain contracts use only synthetic responses and block real network access."""
 
 from __future__ import annotations
 

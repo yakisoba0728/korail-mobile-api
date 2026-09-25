@@ -1,10 +1,4 @@
-"""F2 / 291e01c: offline train-read contracts; no credentials or captured payloads.
-
-The literal forms below are independent of production builders. They freeze this
-library's wire policy, NOT the plaintext of encrypted Android literals. See
-REPORT.md for protected values and retained extra validation. Socket attempts fail.
-Run: PYTHONPATH=src python -m pytest -q tests/test_train_reads.py
-"""
+"""Offline train-read contracts use synthetic fixtures; protected literals and live acceptance are not proven."""
 
 from __future__ import annotations
 

@@ -2,9 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""JSON 필드를 읽는 공통 헬퍼와 예약 응답의 승객 정보 변환을 둡니다.
-
-선택 필드의 관대한 변환과 필수 필드의 오류 문구는 구분해서 유지합니다. 응답 봉투의 성공·실패 정책과 raw 복사 여부는 각 호출자가 결정합니다."""
+"""선택값은 관대하게, 후속 요청에 필요한 값은 엄격하게 읽습니다; 공통 규칙은 checks/BEHAVIOR.md 참고."""
 
 from __future__ import annotations
 
@@ -20,8 +18,7 @@ _R = TypeVar("_R")
 
 
 def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
-    """파서가 거절한 응답 전체를 기존 예외의 raw 에, 기존 부분 원문을 parser_raw 에 남깁니다. 조회·변경 파서를 직접 불러도 같습니다.
-    검사·재전송은 하지 않습니다."""
+    """파서가 거절한 응답 전체를 기존 예외의 raw 에, 기존 부분 원문을 parser_raw 에 남깁니다. 검사·재전송은 하지 않습니다."""
 
     @wraps(parser)
     def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
@@ -39,7 +36,7 @@ def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
 
 
 def _envelope(data: Mapping[str, Any]) -> dict[str, str | None]:
-    """봉투의 세 필드를 읽습니다. JSON 정수는 2026-09-21 관측에 따라 문자열로 읽고, 다른 비문자열 값은 거절합니다. 성공 판정은 호출자가 맡습니다."""
+    """JSON 정수는 관측에 따라 문자열로 읽고, 다른 비문자열 값은 거절합니다."""
     envelope: dict[str, str | None] = {}
     invalid = []
     for name in ("h_msg_cd", "h_msg_txt", "strResult"):
@@ -124,7 +121,7 @@ def _optional_string(
     data: Mapping[str, object],
     key: str,
 ) -> str | None:
-    """문자열을 반환하고 JSON 정수는 2026-09-21 관측에 따라 문자열로 읽습니다. 그 밖의 값은 None 입니다."""
+    """문자열을 반환하고 JSON 정수는 관측에 따라 문자열로 읽습니다. 그 밖의 값은 None 입니다."""
     return _optional_scalar_string(data, key)
 
 
@@ -132,7 +129,6 @@ def _present_strings(
     data: Mapping[str, Any],
     keys: tuple[str, ...],
 ) -> tuple[str, ...]:
-    """선택 문자열 값이 실제로 온 키들을 순서대로 모읍니다."""
     values: list[str] = []
     for key in keys:
         value = _optional_string(data, key)
@@ -146,14 +142,9 @@ def _strict_scalar_string(
     key: str,
     context: str,
 ) -> str | None:
-    """JSON 문자열·정수·``null`` 을 받고 그 밖의 모양은 **거부**합니다.
-
-    KORAIL 은 APK 가 자바 ``String`` 으로 선언한 필드를 숫자로도 보냅니다(예약 응답의 ``h_jrny_cnt="0001"`` 과 예약 이력의 ``1``). 정수는 문자열로
-    정규화합니다. 폼에 되울리는 값처럼 정확해야 하는 필드에만 씁니다 — 선택 필드는 :func:`_optional_scalar_string` 입니다."""
     value = data.get(key)
     if value is None or isinstance(value, str):
         return value
-    # bool은 int의 하위 타입이므로 정확한 int만 허용합니다.
     if type(value) is int:
         try:
             return str(value)
@@ -193,10 +184,9 @@ def _required_integer(
     key: str,
     context: str,
 ) -> int:
-    """필수 정수: JSON int 또는 ASCII 숫자 문자열(앞의 ``-`` 하나 허용)을 받습니다. null/bool/float·지수 표기는 거절합니다.
-    앱의 따옴표 숫자 처리는 StreamingJsonDecoder.java:395-403 →
-    kotlinx/serialization/json/internal/JsonReader.java:575-640 에 있고, 첫 글자의 ``-`` 만 부호로 받습니다. Python 정수
-    범위까지 앱과 같다는 뜻은 아닙니다."""
+    """필수 정수: JSON int 또는 ASCII 숫자 문자열(앞의 ``-`` 하나 허용)을 받습니다. null/bool/float·지수 표기는 거절합니다. 앱의 따옴표 숫자 처리는
+    StreamingJsonDecoder.java:395-403 → kotlinx/serialization/json/internal/JsonReader.java:575-640 에 있고,
+    첫 글자의 ``-`` 만 부호로 받습니다."""
     value = data.get(key)
     if type(value) is int:
         return value
@@ -225,8 +215,7 @@ def _nullable_string_fields(
     data: Mapping[str, Any],
     field_map: Mapping[str, str],
 ) -> dict[str, Any]:
-    # 값은 str | None 이지만 모델 생성자에 ** 로 풀어 넣으므로 Any 로 둡니다. 타입 검사기는 풀어 넣는 dict 의 값 타입을
-    # raw 같은 다른 매개변수에도 맞춰 보기 때문입니다.
+    # 값은 str | None 이지만 모델 생성자에 ** 로 풀어 넣으므로 Any 로 둡니다. 타입 검사기는 풀어 넣는 dict 의 값 타입을 raw 같은 다른 매개변수에도 맞춰 보기 때문입니다.
     return {attribute: _optional_string(data, wire_name) for attribute, wire_name in field_map.items()}
 
 
@@ -235,16 +224,14 @@ def _nullable_scalar_fields(
     field_map: Mapping[str, str],
     context: str,
 ) -> dict[str, Any]:
-    """선택 문자열(JSON 정수 포함)을 읽습니다. :func:`_nullable_string_fields` 와 결과가 같습니다. context 는 내부 검증에 넘기며, 변환하지
-    못한 값은 None 입니다."""
+    """선택 문자열(JSON 정수 포함)을 읽습니다. :func:`_nullable_string_fields` 와 결과가 같습니다. context 는 내부 검증에 넘기며, 변환하지 못한 값은
+    None 입니다."""
     return {
         attribute: _optional_scalar_string(data, wire_name, context)
         for attribute, wire_name in field_map.items()
     }
 
 
-#: ReservationOut 을 공유하는 홀드·예약 상세 응답의 추가 스칼라(ReservationOut.java 의 @SerialName). 2026-09-24 라이브: 홀드에는
-#: h_cust_mg_no·h_hdcp_ctfc_num 을 뺀 7개가, 예약 상세에는 h_cust_mg_no·h_sprm_fare·h_fmly_info_cfm_flg 가 있었습니다.
 RESERVATION_OUT_EXTRA_FIELDS: dict[str, str] = {
     "customer_management_no": "h_cust_mg_no",
     "mandatory_message": "h_msg_mndry",
@@ -272,7 +259,7 @@ _RESERVATION_PASSENGER_FIELDS: dict[str, str] = {
 
 
 def _reservation_passengers(raw: Mapping[str, Any]) -> tuple[ReservationPassengerInfo, ...]:
-    """psg_infos.psg_info 행을 관대하게 읽습니다. 컨테이너가 없거나 모양이 다르면 빈 튜플이고 원문은 raw 에 남습니다."""
+    """컨테이너가 없거나 모양이 다르면 빈 튜플이고 원문은 raw 에 남습니다."""
     container = raw.get("psg_infos")
     rows = container.get("psg_info") if isinstance(container, Mapping) else None
     if not isinstance(rows, list):

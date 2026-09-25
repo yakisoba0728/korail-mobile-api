@@ -2,8 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""KORAIL API를 전송하고 공통 필드와 응답 봉투를 처리합니다. config.base_url은 검사하지 않으며 라우트는 호출부가 선택합니다. 공통 필드는 호출 옵션에 따라 주입하고, lang은
-KorailConfig.lang이 설정된 경우에만 붙입니다. 대기열 전송은 netfunnel 모듈이 담당합니다."""
+"""공통 필드·헤더·실패 봉투 정책을 공유하며 대기열 전송은 netfunnel에서 분리합니다."""
 
 from __future__ import annotations
 
@@ -32,14 +31,14 @@ from .errors import (
 from .models import BaseKorailResponse
 
 # 응답 모델이 CommonOut 을 상속하지 않아 strResult 누락이 실패가 아닌 읽기 경로: StationDataOut(stationdata, EbizMaasStationList),
-# StationInfoOut(stationinfo). 이 경로라도 존재하는 봉투 필드는 보존합니다.
+# StationInfoOut(stationinfo).
 _NON_COMMON_OUT_READ_PATHS = frozenset(
     {
         "/classes/com.korail.mobile.common.stationdata",
         "/classes/com.korail.mobile.common.stationinfo",
         "/ebizmaas/EbizMaasStationList.do",
-        # VerifyOnlineRefundsOut.java:29 는 CommonOut 을 상속하지 않습니다. strResult 누락 기본값(:91-94)은 null 이 아니라
-        # 보호 문자열입니다. 이 경로는 봉투 키 누락을 허용하되 존재하는 필드는 보존합니다.
+        # VerifyOnlineRefundsOut.java:29 는 CommonOut 을 상속하지 않습니다. strResult 누락 기본값(:91-94)은 null 이 아니라 보호
+        # 문자열입니다.
         "/classes/com.korail.mobile.refunds.verifyOnlineRefunds",
     }
 )
@@ -52,19 +51,7 @@ def parse_base_response(
     require_result: bool = True,
     common_out: bool | None = None,
 ) -> BaseKorailResponse:
-    """봉투 타입 검사 후 FAIL/P058 을 세션 만료로 처리합니다.
-
-    CommonOut 의 strResult 누락은 실패 기본값입니다(CommonOut.java:361,455-463). 앱의 CommonOut.checkRequiredLogin() 은
-    commonFail()(strResult 실패)이 참일 때만 hMsgCd 를 보호된 4바이트 리터럴과 비교합니다(CommonOut.java:426-438). 그래서 성공 봉투에 붙은 P058 은
-    만료가 아닙니다.
-
-    raise_on_fail=True 면 FAIL 또는 require_result=True 일 때 strResult 키 누락을 거절합니다. SUCC 와의 동등 비교는 아니며
-    null·빈 문자열·미지의 결과값은 이 단계에서 거절하지 않습니다. 앱은 CommonOut.java:361,455-463 에서 기본값과 실패 비교에 같은 보호 리터럴을 사용합니다.
-    FAIL 평문은 관측값입니다. 문자열 필드의 JSON 정수는 2026-09-21 관측에 따라 문자열로 읽되 raw 는 바꾸지 않습니다.
-
-    common_out(기본값은 require_result)이 참이면 strResult 누락도 P058 판정에서는 실패로 봅니다. 봉투가 선택인 CommonOut 읽기 경로용입니다: 앱은
-    CommonOut 이면 checkRequiredLogin 을 부르지만(NetworkService.java:6916-6919) 그 밖의 코드는 화면마다 다르게 다루므로, 이 경우 다른 코드는
-    거절하지 않습니다."""
+    """FAIL 또는 CommonOut 기본 실패만 P058 만료로 판정합니다(CommonOut.java:361,426-438); 옵션별 계약은 checks/BEHAVIOR.md 참고."""
     if not isinstance(data, dict):
         error = KorailProtocolError("KORAIL response must be a JSON object")
         error.raw = data
@@ -101,10 +88,7 @@ _DYNAPATH_BLOCK_CODES = frozenset({-1203, -1406, -2000, -8005, -8201, -8202, -82
 
 
 def _dynapath_block_payload(payload: object) -> dict[str, Any] | None:
-    """최상위 JSON 값에서 차단 정수 코드를 찾습니다.
-
-    앱 근거: DynaPathInterceptor.java:97-124. 앱의 검사 키는 보호돼 있어 이 구현은 모든 키를 봅니다. 따라서 다른 필드의 같은 값도 차단으로 오인할 수 있습니다. 앱
-    optInt 의 모든 변환까지 동일하게 재현한다는 보장은 없습니다."""
+    """앱의 키가 보호돼 최상위 정수를 모두 검사하므로 다른 필드의 같은 값도 오인할 수 있습니다(DynaPathInterceptor.java:97-124)."""
     if not isinstance(payload, dict):
         return None
     for value in payload.values():
@@ -118,7 +102,7 @@ def _dynapath_block_payload(payload: object) -> dict[str, Any] | None:
 def _send(
     client: httpx.Client, send: Callable[[], httpx.Response], *, method: str, path: str
 ) -> httpx.Response:
-    # 닫힌 httpx 클라이언트는 RuntimeError 를 내므로 KorailApiError 계층으로 바꿉니다. 이때 요청은 나가지 않았습니다.
+    # 이때 요청은 나가지 않았습니다.
     if client.is_closed:
         raise KorailProtocolError(f"KORAIL client is closed; {method} {path} was not sent")
     try:
@@ -128,7 +112,7 @@ def _send(
 
 
 def _decode_response(response: httpx.Response, *, path: str) -> Any:
-    """본문을 한 번만 해석합니다. 판정 순서: DynaPath 차단(보호 경로, 상태 코드와 무관) → 2xx 가 아닌 상태 → JSON 오류."""
+    """판정 순서: DynaPath 차단(보호 경로, 상태 코드와 무관) → 2xx 가 아닌 상태 → JSON 오류."""
     try:
         payload, decoded = response.json(), True
     except ValueError:
@@ -161,14 +145,12 @@ def _is_empty_string(value: object) -> bool:
 
 
 def _drop_empty(mapping: Mapping[str, Any]) -> dict[str, Any]:
-    """빈 문자열 필드만 생략합니다. None·다른 값은 바꾸지 않습니다.
-
-    앱의 평탄화기 근거: NetworkService.java:15342. key= 로 보내는 것과 구분해야 합니다."""
+    """빈 문자열만 생략하며 None은 바꾸지 않습니다(NetworkService.java:15342)."""
     return {key: value for key, value in mapping.items() if not _is_empty_string(value)}
 
 
 def _form_value(value: Any) -> str:
-    """순서 있는 폼 값을 httpx 의 data= 인코딩과 같게 씁니다. None 은 빈 값, bool 은 true/false 입니다."""
+    """None 은 빈 값, bool 은 true/false 입니다."""
     if value is None:
         return ""
     if isinstance(value, bool):
@@ -177,7 +159,7 @@ def _form_value(value: Any) -> str:
 
 
 class KorailHttpClient:
-    """설정된 API 서버에 요청을 보내고 응답 봉투를 판정합니다. ``base_url`` 은 검사하지 않습니다."""
+    """``base_url`` 은 검사하지 않습니다."""
 
     def __init__(
         self,
@@ -207,17 +189,13 @@ class KorailHttpClient:
 
     @property
     def cookies(self) -> httpx.Cookies:
-        """세션 쿠키를 저장하는 쿠키 저장소를 반환합니다."""
         return self._client.cookies
 
     def close(self) -> None:
-        """HTTP 연결을 닫습니다."""
         self._client.close()
 
     def common_fields(self) -> dict[str, str]:
-        """Device/Version/Key 와 설정된 lang 을 만듭니다.
-
-        lang 선언: CommonIn.java:381. LanguageProvider 가 주는 실제 값은 보호돼 있어 config.lang=None 이면 추측하지 않고 생략합니다."""
+        """lang은 보호된 기본값을 추측하지 않고 설정된 경우만 싣습니다(CommonIn.java:381,467-474)."""
         fields: dict[str, str] = {
             "Device": self.config.device,
             "Version": self.config.version,
@@ -278,10 +256,8 @@ class KorailHttpClient:
         raise_on_fail: bool,
         require_envelope: bool,
     ) -> BaseKorailResponse:
-        """읽기 응답을 처리합니다. require_envelope 및 경로별 봉투 생략 규칙에 따릅니다."""
         payload = _decode_response(_send(self._client, send, method=method, path=path), path=path)
-        # 2026-09-22 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다. 봉투 누락 허용과 존재하는 FAIL/P058 판정은 별개이며 raw 는
-        # 그대로 보존합니다.
+        # 관측: getUUID.do 는 mutMrkVrfCd 와 strResult 만 반환합니다.
         common_out = path not in _NON_COMMON_OUT_READ_PATHS
         return parse_base_response(
             payload,
@@ -302,9 +278,7 @@ class KorailHttpClient:
         form_encoded: bool = True,
         omit_empty_fields: bool = True,
     ) -> BaseKorailResponse:
-        """읽기 라우트에 폼을 POST 합니다.
-
-        ``data`` 는 매핑이거나 순서 있는 ``(이름, 값)`` 시퀀스. ``require_envelope=False`` 는 KORAIL 봉투 없는 응답용."""
+        """``require_envelope=False`` 는 KORAIL 봉투 없는 응답용."""
         ordered_form: list[tuple[str, Any]] | None = None
         mapping_form: dict[str, Any] | None = None
         if data is not None and not isinstance(data, Mapping):
@@ -359,8 +333,7 @@ class KorailHttpClient:
         require_envelope: bool = True,
         omit_empty_fields: bool = False,
     ) -> BaseKorailResponse:
-        """지연할인권 조회 조건을 POST 요청의 URL 쿼리로 보냅니다. 폼 본문은 비어 있습니다. NetworkApi.java:352-353의 @FormUrlEncoded·@QueryMap
-        조합이며, 2026-09-24에는 이 방식으로 할인권 0행 응답을 확인했습니다. 할인권이 있는 응답까지 검증된 것은 아닙니다."""
+        """DTO가 @QueryMap이므로 POST 본문은 비우고 URL에 실어 보냅니다(NetworkApi.java:352-353)."""
         query: dict[str, Any] = {}
         if include_common:
             query.update(self.common_fields())
@@ -385,10 +358,7 @@ class KorailHttpClient:
         *,
         raise_on_fail: bool = True,
     ) -> BaseKorailResponse:
-        """공통 필드까지 완성된 변경 폼을 전송합니다.
-
-        strResult 를 요구하며 raise_on_fail=False 는 실패 판정만 완화합니다. 봉투 타입 검사와 P058 처리는 그대로입니다."""
-        # 빈 문자열 생략 규칙과 근거는 _drop_empty 참고.
+        """실패 판정을 꺼도 봉투 타입 검사와 P058 만료 판정은 유지합니다."""
         data = _drop_empty(data)
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         headers.update(self._dynapath_headers("POST", path))
@@ -412,9 +382,7 @@ class KorailHttpClient:
         require_envelope: bool = True,
         omit_empty_fields: bool = False,
     ) -> BaseKorailResponse:
-        """읽기 라우트에 GET 합니다.
-
-        ``include_common`` 기본 ``False`` — GET 라우트 대부분이 공통 필드 불필요. ``require_envelope=False`` 는 봉투 없는 응답용."""
+        """``require_envelope=False`` 는 봉투 없는 응답용."""
         query: dict[str, Any] = {}
         if include_common:
             query.update(self.common_fields())

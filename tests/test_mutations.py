@@ -1,11 +1,4 @@
-"""Offline mutation contracts for source archive 291e01c / Android 7.0.6.
-
-Run: PYTHONPATH=src python -m pytest -q tests/test_mutations.py
-All identifiers are synthetic. MockTransport is mandatory and sockets/DNS fail closed.
-Golden forms below are hand-written contracts, NOT output from the payload builders.
-Protected wire VALUES are regression expectations, NOT proof of APK equivalence.
-No APK, credentials, environment secrets, server, or token generation are needed.
-"""
+"""Offline domain contracts use only synthetic responses and block real network access."""
 
 from __future__ import annotations
 

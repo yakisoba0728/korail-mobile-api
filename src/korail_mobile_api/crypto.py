@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""로그인 비밀번호를 암호화하고 두 단계의 Base64를 적용합니다. 안쪽·바깥쪽 Base64 의 모드가 다릅니다; 각 헬퍼의 근거를 참고하십시오."""
+"""로그인은 서로 다른 Base64 모드를 사용합니다(LoginRepositoryImpl.java:929-931; AESCrypto.java:182)."""
 
 from __future__ import annotations
 
@@ -28,9 +28,7 @@ def _base64_no_wrap(data: bytes) -> str:
 
 
 def _android_base64_url_safe_wrapped(data: bytes) -> str:
-    """URL 안전 Base64로 인코딩하고 패딩과 줄바꿈을 유지합니다.
-
-    URL_SAFE 만으로 NO_WRAP 이 켜지지 않습니다. 로그인 호출: LoginRepositoryImpl.java:929-931,1245. 안쪽 flag 2 와 혼동하지 마십시오."""
+    """URL_SAFE 만으로 NO_WRAP 이 켜지지 않습니다. 로그인 호출: LoginRepositoryImpl.java:929-931,1245."""
     b64 = base64.urlsafe_b64encode(data).decode("ascii")
     lines = [b64[i : i + 76] for i in range(0, len(b64), 76)]
     return "\n".join(lines) + "\n"
@@ -47,12 +45,8 @@ def _validate_login_crypto_key(info: LoginCryptoInfo) -> bytes:
 
 
 def transform_login_password(password: str, info: LoginCryptoInfo) -> str:
-    """AES-CBC/PKCS7 암호문에 안쪽·바깥쪽 Base64 를 적용합니다.
-
-    두 Base64 단계: LoginRepositoryImpl.java:929-931,1245, AESCrypto.java:182. Cipher transformation 과 IV 가공은 보호돼
-    있어(AESCrypto.java:31,60-83) CBC/PKCS7·key[:16] 은 디컴파일로 확정하지 못했지만, 실서버 로그인은 이 방식으로 성공합니다. 앱은 빈 키를
-    재조회합니다(LoginRepositoryImpl.java:1230-1234). 이 함수는 재조회하지 않고 빈 키·지원하지 않는 길이를 KorailProtocolError 로 거절하여 평문 폴백을
-    막습니다. 키 구성 근거: AESCrypto.java:45-57."""
+    """평문 폴백 없이 관측된 CBC·이중 Base64를 유지하며 보호된 Cipher/IV는 미확인입니다(LoginRepositoryImpl.java:929-931;
+    AESCrypto.java:31,60-83)."""
     # 입력 비밀번호의 UTF-8 오류를 서버 키/IV 오류로 잘못 감싸지 않도록 먼저 인코딩합니다.
     try:
         plain = password.encode("utf-8")

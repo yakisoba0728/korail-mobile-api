@@ -1,15 +1,4 @@
-"""NetFunnel 대기열 연결을 오프라인으로 검사합니다(실행 방법: ``checks/README.md``).
-
-:class:`~korail_mobile_api.client.KorailClient` 가 대기열이 걸린 작업에서 앱처럼
-5101 → (대기면 ttl 만큼 자고 5002) → KORAIL 요청 → 5004 순서를 지키는지 봅니다.
-두 호스트(``nf.letskorail.com``/``rnf*.letskorail.com`` 와 ``smart.letskorail.com``)를
-하나의 ``httpx.MockTransport`` 가 받고, 대기는 가짜 ``sleep`` 이라 즉시 끝납니다.
-네트워크를 쓰지 않습니다. 값은 전부 합성값입니다.
-
-종료 코드: 0 통과, 1 실패, 2 검사 불완전(import 실패, 검사기 자신의 예외).
-
-    python3 checks/netfunnel_offline.py
-"""
+"""Synthetic 5101/5002/API/5004 checks with MockTransport; exit 0 passes, 1 fails, and 2 is incomplete."""
 
 from __future__ import annotations
 

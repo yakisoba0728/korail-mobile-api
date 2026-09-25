@@ -2,10 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""기본 조회 응답을 models 로 변환합니다. 나머지 조회는 read_parsers 에 있습니다.
-
-일반 봉투 판정은 HTTP 계층에서 수행하며, 개별 파서는 전달된 응답을 읽습니다. 선택 필드는 관대하게 읽지만 역 코드·이름, 열차 행, 좌석 재고의 필수 값은 형식 오류 시
-KorailProtocolError 입니다. 모든 모델이 raw 를 갖는 것은 아닙니다."""
+"""18개 좌석·역 필드만 앱 누락 기본값을 사용하며 다른 선택값은 None입니다(checks/BEHAVIOR.md)."""
 
 from __future__ import annotations
 
@@ -73,8 +70,7 @@ def _typed_required_scalar_string(
     *,
     context: str,
 ) -> str:
-    """필수 문자열·JSON 정수를 문자열로 읽습니다. bool 은 제외합니다. 2026-09-21 일반 좌석 재고에서 layout_type 정수가 관측되어 String 선언과 달리
-    허용합니다."""
+    """일반 좌석 재고에서 layout_type 정수가 관측되어 String 선언과 달리 허용합니다."""
     if key not in data:
         raise KorailProtocolError(f"KORAIL {context} field {key} must be a string or an integer")
     value = data[key]
@@ -130,8 +126,8 @@ def _typed_defaulted_string(
     *,
     context: str,
 ) -> str:
-    """serializer mask 가 선택인 String 을 읽습니다. 누락은 앱 합성 생성자의 기본값 "" 이고, 값이 있으면 문자열·JSON 정수만 받습니다. null 과
-    다른 타입은 앱의 Json 설정이 보호돼 있어 받아도 되는지 확인할 수 없으므로 거절합니다."""
+    """누락은 앱 합성 생성자의 기본값 "" 이고, 값이 있으면 문자열·JSON 정수만 받습니다. null 과 다른 타입은 앱의 Json 설정이 보호돼 있어 받아도 되는지 확인할 수 없으므로
+    거절합니다."""
     return _typed_required_scalar_string(data, key, context=context) if key in data else ""
 
 
@@ -153,8 +149,8 @@ def _response_fields(response: BaseKorailResponse) -> _ResponseFields:
 
 @_preserve_read_raw
 def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
-    """봉투 없는 prdMobilePlusMain.cache 를 읽습니다. 선택 필드의 잘못된 타입은 비웁니다. version 은 MobilePlusMainVersion.java:52 의 3개
-    키를 읽고 나머지는 raw 에 둡니다. 2026-09-22 라이브에는 19개 키가 있었습니다. CNTAURL 은 업데이트 버튼 URL 입니다 (AppKt.java:1240,1635)."""
+    """봉투 없는 prdMobilePlusMain.cache 를 읽습니다. 선택 필드의 잘못된 타입은 비웁니다. version 은 MobilePlusMainVersion.java:52 의
+    3개 키를 읽고 나머지는 raw 에 둡니다."""
     raw = response.raw
     version_raw = raw.get("version")
     version = None
@@ -178,9 +174,8 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
 
 @_preserve_read_raw
 def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
-    """메인 캐시의 중첩 ``notice`` 를 파싱합니다(MobilePlusMainOut.java:57, MobilePlusMainNotice.java:52).
-
-    게시판 아이디·게시물 일련번호·제목·본문은 모두 선택값입니다. 공지가 없는 상태도 정상입니다."""
+    """메인 캐시의 중첩 ``notice`` 를 파싱합니다(MobilePlusMainOut.java:57, MobilePlusMainNotice.java:52). 공지가 없는 상태도
+    정상입니다."""
     nested = response.raw.get("notice")
     notice_raw = nested if isinstance(nested, Mapping) else {}
     return NoticeResponse(
@@ -194,10 +189,8 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
 
 @_preserve_read_raw
 def parse_station_name_map(raw: Mapping[str, Any]) -> dict[str, str]:
-    """역 코드와 이름의 캐시 대응표를 구성합니다. stns.stn 목록이나 사용 가능한 코드·이름 쌍이 없으면 오류입니다.
-
-    조회 폼에 역이름을 채우는 용도라 :func:`parse_station_data_response` 보다 관대합니다: 비객체 행과 코드·이름이 빈 행은 건너뛰고 숫자 코드는 문자열로 받습니다.
-    앱은 같은 응답을 로컬 역 DB 에 넣고 거기서 이름을 찾습니다(StationDataRepositoryImpl.java:282-283)."""
+    """역 코드와 이름의 캐시 대응표를 구성합니다. stns.stn 목록이나 사용 가능한 코드·이름 쌍이 없으면 오류입니다. 앱은 같은 응답을 로컬 역 DB 에 넣고 거기서 이름을
+    찾습니다(StationDataRepositoryImpl.java:282-283)."""
     container = raw.get("stns")
     rows = container.get("stn") if isinstance(container, Mapping) else None
     if not isinstance(rows, list):
@@ -216,10 +209,7 @@ def parse_station_name_map(raw: Mapping[str, Any]) -> dict[str, str]:
 
 
 def resolve_station_name(reference: str, names: Mapping[str, str]) -> str:
-    """역 참조를 조회 폼에 실을 역이름으로 바꿉니다.
-
-    숫자가 아니면 이미 이름이라고 보고 그대로 돌려줍니다. 숫자면 역코드로 보고 ``names``(:func:`parse_station_name_map` 의 결과)에서 찾습니다. 빈 참조와 표에
-    없는 코드는 ``errors.KorailProtocolError`` 입니다."""
+    """숫자가 아니면 이미 이름이라고 보고 그대로 돌려줍니다. 빈 참조와 표에 없는 코드는 ``errors.KorailProtocolError`` 입니다."""
     value = reference.strip()
     if not value:
         raise KorailProtocolError("KORAIL station reference must not be empty")
@@ -233,8 +223,7 @@ def resolve_station_name(reference: str, names: Mapping[str, str]) -> str:
 
 @_preserve_read_raw
 def parse_train_rows(raw: Mapping[str, Any]) -> list[TrainSummary]:
-    """trn_infos 는 객체 안의 trn_info 목록, 직접 목록, null 을 허용합니다. 그 밖의 컨테이너·비객체 행은 오류입니다. 빈 목록만으로 직통 없음 예외를 만들지는
-    않습니다."""
+    """그 밖의 컨테이너·비객체 행은 오류입니다. 빈 목록만으로 직통 없음 예외를 만들지는 않습니다."""
     container = raw.get("trn_infos")
     if isinstance(container, Mapping):
         rows = container.get("trn_info", [])
@@ -269,7 +258,6 @@ def parse_train_search_metadata(
         next_query_station_no=optional("h_qry_st_no_next"),
         next_train_no=optional("h_trn_no_next"),
         # 환승 커서 선언: TrainScheduleOut.java:28,33,67. 소비 메서드는 jadx 복원 실패로 앱의 선택 조건을 여기서 확정하지 않습니다.
-        # TransferSearchResult.next_page 의 두 필드 비어 있지 않음 조건은 라이브러리 정책입니다.
         next_preceding_train_no=optional("h_prcd_trn_no_next"),
         next_connecting_train_no=optional("h_ectb_trn_no_next"),
         result_count=optional("h_rslt_cnt"),
@@ -286,7 +274,7 @@ def parse_train_search_metadata(
 @_preserve_read_raw
 def parse_uuid_response(response: BaseKorailResponse) -> UuidResponse:
     """ebizcross/getUUID.do 의 mutMrkVrfCd 를 문자열로 정규화하며 없거나 비면 KorailProtocolError 입니다. 완전한 KORAIL 봉투는 요구하지
-    않습니다. strResult 만 동반된 2026-09-22 관측과 부분 봉투 보존은 http.KorailHttpClient._finish_read 참고."""
+    않습니다. strResult 만 동반된 관측과 부분 봉투 보존은 http.KorailHttpClient._finish_read 참고."""
     value = _typed_required_string(response.raw, "mutMrkVrfCd", context="UUID response", non_empty=True)
     return UuidResponse(
         **_response_fields(response),
@@ -323,7 +311,6 @@ _MAAS_RESPONSE_FIELDS: dict[str, str] = {
 def parse_maas_menu_list_response(
     response: BaseKorailResponse,
 ) -> MaasMenuListResponse:
-    """부가서비스 메뉴 목록을 읽습니다. menuList 의 비목록·비객체 행은 비웁니다. 부가서비스 코드는 역 선택 조회에 사용합니다."""
     items: list[MaasMenuItem] = [
         MaasMenuItem(
             **_nullable_scalar_fields(row, _MAAS_ITEM_FIELDS, context="train read"),
@@ -360,7 +347,7 @@ def parse_station_data_response(
     response: BaseKorailResponse,
 ) -> StationDataResponse:
     """봉투가 없는 역 목록을 읽습니다. stns.stn 은 필수입니다. 역 코드·이름은 mask 상 선택이라 누락되면 앱 기본값 "" 입니다
-    (StationDataOutStnItem.java:60-63). 역명 조회용 표는 이상한 행을 건너뛰는 :func:`parse_station_name_map` 을 씁니다."""
+    (StationDataOutStnItem.java:60-63)."""
     container = response.raw.get("stns")
     if not isinstance(container, Mapping):
         raise KorailProtocolError("KORAIL station data missing stns object")
@@ -398,8 +385,8 @@ def parse_station_data_response(
 def parse_station_info_response(
     response: BaseKorailResponse,
 ) -> StationInfoResponse:
-    """역 목록의 버전 정보를 읽습니다. count 와 map_version 은 필수 문자열 필드입니다(StationInfoOut.java:47-49). 빈 값은 DTO 도
-    거절하지 않으므로 그대로 받고, 공통 String/정수 호환 규칙에 따라 정수도 문자열로 읽습니다."""
+    """역 목록의 버전 정보를 읽습니다. count 와 map_version 은 필수 문자열 필드입니다(StationInfoOut.java:47-49). 빈 값은 DTO 도 거절하지 않으므로
+    그대로 받고, 공통 String/정수 호환 규칙에 따라 정수도 문자열로 읽습니다."""
     raw = response.raw
     return StationInfoResponse(
         **_response_fields(response),
@@ -412,9 +399,9 @@ def parse_station_info_response(
 def parse_train_calendar_response(
     response: BaseKorailResponse,
 ) -> TrainCalendarResponse:
-    """열차 운행일 달력을 읽습니다. 앱 근거: NetworkApi.java:651-652. runningCalendar 는 누락·null·비목록이면 비우고 비객체 행은 건너뜁니다. 날짜·플래그의
-    선택 처리는 라이브러리 정책입니다. 앱의 목록 누락 기본값은 emptyList()(RunDateOut.java:57-58,71-73)이며 날짜 기본값·성수기 판정 리터럴은 보호돼
-    있습니다(RunDateOutItem.java:37,104-105,516-524). 조회 관문은 호출자가 peak_season 으로 선택합니다."""
+    """앱 근거: NetworkApi.java:651-652. runningCalendar 는 누락·null·비목록이면 비우고 비객체 행은 건너뜁니다. 앱의 목록 누락 기본값은
+    emptyList()(RunDateOut.java:57-58,71-73)이며 날짜 기본값·성수기 판정 리터럴은 보호돼
+    있습니다(RunDateOutItem.java:37,104-105,516-524)."""
     raw = response.raw
     # 앱의 누락 기본값과 라이브러리의 비목록 허용은 별개입니다(RunDateOut.java:57-58,71-73).
     days: list[TrainCalendarDay] = [
@@ -427,11 +414,11 @@ def parse_train_calendar_response(
                     # bizDdStgCd 의 누락 기본값은 null(RunDateOutItem.java:111-115). 판정 헬퍼의 null 처리까지 확인된 것은
                     # 아닙니다(RunDateOutItem.java:516-524).
                     "business_day_stage_code": "bizDdStgCd",
-                    # dayDvCd 누락 기본값은 null 입니다(RunDateOutItem.java:106-110). 직접 getter 참조의 부재만으로 반사 호출까지
-                    # 없다고 단정하지 않고, 파서는 선택값으로 읽습니다.
+                    # dayDvCd 누락 기본값은 null 입니다(RunDateOutItem.java:106-110). 직접 getter 참조의 부재만으로 반사 호출까지 없다고
+                    # 단정하지 않고, 파서는 선택값으로 읽습니다.
                     "day_division_code": "dayDvCd",
-                    # hldyDvCd 는 누락 시 보호 기본값을 사용하므로 필수 키가 아닙니다(RunDateOutItem.java:116-119). 보호 기본값의 평문을 빈
-                    # 문자열로 확정하지 않습니다.
+                    # hldyDvCd 는 누락 시 보호 기본값을 사용하므로 필수 키가 아닙니다(RunDateOutItem.java:116-119). 보호 기본값의 평문을 빈 문자열로
+                    # 확정하지 않습니다.
                     "holiday_division_code": "hldyDvCd",
                     # saleDdDvCd 누락 기본값은 null 이므로 선택값으로 읽습니다(RunDateOutItem.java:121-125).
                     "sale_day_division_code": "saleDdDvCd",
@@ -461,10 +448,7 @@ def parse_train_calendar_response(
 def parse_train_schedule_response(
     response: BaseKorailResponse,
 ) -> TrainScheduleResponse:
-    """``research.actualTrainSchedule.do`` 의 정차역·지연 정보를 파싱합니다.
-
-    7.0.6 DTO에서는 ``dlayList`` 가 생략되면 빈 목록입니다. 행 하나가 정차역 하나이며 도착·출발 시각과 지연 시간이 담깁니다. 개별 필드는 선택값이라 서버가 빼면 ``None``
-    입니다."""
+    """개별 필드는 선택값이라 서버가 빼면 ``None`` 입니다."""
     raw = response.raw
     stops: list[TrainScheduleStop] = [
         TrainScheduleStop(
@@ -537,7 +521,7 @@ def parse_train_schedule_response(
         train_attribute_code=optional("trnAttCd"),
         train_departure_flag=optional("trnDptFlg"),
         # 앱의 trnNo1/runDt1 은 보호된 기본값을 갖습니다(ActualTrainScheduleOut.java:38,47,78-85). 그 기본값을 재현하지 않으므로 누락은 None
-        # 입니다. 소비: MyTicketDetailViewModel.java:2173-2175.
+        # 입니다.
         train_no=optional("trnNo1"),
         special_train_flag=optional("trnSpsFlg"),
         up_down_division_code=optional("upDnDvCd"),
@@ -548,8 +532,8 @@ def parse_train_schedule_response(
 def parse_transfer_station_list_response(
     response: BaseKorailResponse,
 ) -> TransferStationListResponse:
-    """환승역 목록을 읽습니다. chtnList 생략은 빈 목록(ChtnStnOut.java:54-60), 명시적 null·비목록은 KorailProtocolError 입니다. 역 코드·이름은
-    선택값이며 빈 목록 자체는 오류가 아닙니다."""
+    """환승역 목록을 읽습니다. chtnList 생략은 빈 목록(ChtnStnOut.java:54-60), 명시적 null·비목록은 KorailProtocolError 입니다. 역
+    코드·이름은 선택값이며 빈 목록 자체는 오류가 아닙니다."""
     raw = response.raw
     rows = raw.get("chtnList", [])
     if not isinstance(rows, list):
@@ -592,7 +576,7 @@ def _inventory_count(
     data: Mapping[str, Any],
     key: str,
 ) -> int | None:
-    """mask 상 선택인 String 을 음이 아닌 정수로 읽습니다. 누락과 앱 기본값 "" 은 None 이고, 그 밖의 잘못된 값은 거절합니다."""
+    """누락과 앱 기본값 "" 은 None 이고, 그 밖의 잘못된 값은 거절합니다."""
     value = data.get(key, "")
     if value == "":
         return None
@@ -603,14 +587,11 @@ def _inventory_count(
 def parse_seat_car_list_response(
     response: BaseKorailResponse,
 ) -> SeatCarListResponse:
-    """호차와 좌석 속성 목록을 읽습니다. 호차번호를 다음 좌석 재고 조회에 사용합니다. 컨테이너는 선택 목록 헬퍼의 정책을 따릅니다.
-    호차 필드는 모두 mask 상 선택입니다(TrainResearchOutCarInfo.java:59-85, TrainResearchOutSeatInfo.java:51-56). 예전에 필수로 읽던
-    호차번호·잔여석·객실명·좌석속성명은 누락되면 문자열은 "", 숫자는 None 이고, 나머지 선택 필드는 None 입니다."""
+    """호차 네 예외 필드는 누락 시 앱 기본값을 쓰며 나머지 선택값은 None입니다(TrainResearchOutCarInfo.java:59-85; checks/BEHAVIOR.md)."""
     raw = response.raw
     cars: list[SeatCar] = []
     for row in _nested_rows(raw, "srcar_infos", "srcar_info"):
-        # 앱은 호차번호를 String 으로 선언합니다(TrainResearchOutCarInfo.java:32). 이 모델은 int 이므로 원래 영 채움은 잃습니다. 재전송 형식은 요청
-        # 빌더에서 결정합니다.
+        # 앱은 호차번호를 String 으로 선언합니다(TrainResearchOutCarInfo.java:32).
         car_no = _inventory_count(row, "h_srcar_no")
         # seatAttInfos 생략 시 빈 목록은 TrainResearchOutCarInfo.java:33,81-84 의 기본값입니다. 명시적 null 도 빈 목록으로 읽는 것은 라이브러리
         # 정책이며 특정 객실 종류를 증명하지 않습니다.
@@ -661,7 +642,6 @@ def _inventory_ratio(data: Mapping[str, Any], key: str) -> float | None:
     if value == "":
         return None
     number: int | float | str
-    # bool·사용자 정의 숫자 하위형을 제외합니다. isinstance 는 타입 검사기의 float 변환 추론용입니다.
     if type(value) in {int, float} and isinstance(value, (int, float)):
         number = value
     elif isinstance(value, str) and re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value) is not None:
@@ -683,11 +663,8 @@ def _inventory_ratio(data: Mapping[str, Any], key: str) -> float | None:
 def parse_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> SeatInventoryResponse:
-    """일반 열차의 좌석 재고를 읽습니다. seatList·windowList 는 누락만 빈 목록이며 키가 있으면 목록을 요구합니다. 좌석·창측 필드는
-    mask 상 모두 선택입니다(TResidualSeatsResearchOut.java:61-82, TResidualSeatsResearchOutSeat.java:62-104). 예전에 필수로 읽던
-    필드는 누락되면 문자열은 "", 비율은 None 이고, 나머지 선택 필드는 None 입니다. 값이 있는데 잘못된 타입이면 응답 전체를 거절합니다. 선택 건수의 상호 모순은
-    검증하지 않습니다. layout_type 은 String 선언(TResidualSeatsResearchOut.java:29)과 달리 정수도 허용합니다.
-    2026-09-21 라이브 15대에서 JSON 정수를 관측했습니다."""
+    """18개 좌석·역 예외만 앱 누락 기본값을 쓰며 명시 null·오타입은 거절합니다(TResidualSeatsResearchOutSeat.java:62-104;
+    checks/BEHAVIOR.md)."""
     raw = response.raw
     layout_type = _inventory_string(raw, "layout_type")
     arrangement_code = _inventory_string(raw, "seat_ary_cd")

@@ -1,10 +1,4 @@
-"""KORAIL 7.0.6 account-read contract tests; synthetic/offline only.
-
-Apply changes.patch to 291e01c, then PYTHONPATH=src pytest -q tests/test_account_reads.py.
-Wire fixtures are literal independent examples, not output from the builders under test.
-A property-name fixture does not prove a protected serializer descriptor or live success.
-CommonIn.java:35,70,220,350; NetworkService.java:15320-15427.
-"""
+"""Offline domain contracts use only synthetic responses and block real network access."""
 
 from __future__ import annotations
 

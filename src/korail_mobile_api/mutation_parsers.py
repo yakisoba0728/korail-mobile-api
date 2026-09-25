@@ -2,8 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""상태 변경 응답을 모델로 변환하고 원문을 보존합니다. 성공 여부는 전송 계층에서 판정하며 필수 신원·금액은 엄격히, 선택값은 관대하게 읽습니다. 파싱 실패는 서버 처리 실패의 증거가 아닙니다.
-자동 재전송하지 마십시오. 클라이언트의 예외 원문 보존 규칙은 KorailClient._mutation을 따릅니다."""
+"""변경 응답 파싱 실패 시 전체 raw와 부분 parser_raw를 보존하며 재전송하지 않습니다."""
 
 from __future__ import annotations
 
@@ -48,11 +47,8 @@ from .mutation_models import (
 
 @_preserve_read_raw
 def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse:
-    """필수·nullable stlList 와 각 행의 필수 stl_mns_cd 를 읽습니다.
-
-    RefundTicketOut.java:48-53 의 마스크는 8, StlList.java:46-55 는 1입니다.
-    누락·잘못된 정산 행을 빈 성공 결과로 바꾸지 않습니다.
-    """
+    """필수·nullable stlList 와 각 행의 필수 stl_mns_cd 를 읽습니다. RefundTicketOut.java:48-53 의 마스크는 8,
+    StlList.java:46-55 는 1입니다."""
     copied = _response_mapping(raw)
     if "stlList" not in copied:
         raise KorailProtocolError("KORAIL refund stlList is required")
@@ -92,7 +88,6 @@ _STATION_REFUND_ORIGINAL_FIELDS = {
 def parse_station_refund_verification_response(
     raw: Mapping[str, Any],
 ) -> StationRefundVerificationResponse:
-    """역발행 승차권 환불 확인 응답과 원승차권 목록을 읽습니다. 원표 목록·PNR·원표 식별자·세 금액은 실제 환불의 확인값이므로 엄격히 읽고 두 안내 문구만 관대하게 읽습니다."""
     copied = _response_mapping(raw)
     rows = copied.get("orgtkinfo_list", [])
     if rows is not None and not isinstance(rows, list):
@@ -130,7 +125,6 @@ def parse_station_refund_verification_response(
 def parse_station_refund_execution_response(
     raw: Mapping[str, Any],
 ) -> StationRefundExecutionResponse:
-    """역발행 환불 실행의 반환 구분을 보존합니다."""
     copied = _response_mapping(raw)
     return StationRefundExecutionResponse(
         **_base_fields(copied),
@@ -142,8 +136,7 @@ _DIGITS_RE = re.compile(r"[0-9]+")
 
 
 def _response_mapping(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """직접 호출도 가능하므로 raw 가 매핑인지 확인하고 복사합니다. 봉투 3필드의 타입은 _parsing._envelope 가 검사하며 성공 여부는 이 모듈이
-    검사하지 않습니다."""
+    """봉투 3필드의 타입은 _parsing._envelope 가 검사하며 성공 여부는 이 모듈이 검사하지 않습니다."""
     if not isinstance(raw, Mapping):
         raise KorailProtocolError("KORAIL response must be a JSON object")
     return dict(raw)
@@ -159,12 +152,8 @@ def _received_amount(
     raw: Mapping[str, Any],
     journey_rows: list[Mapping[str, Any]],
 ) -> str | None:
-    """좌석별 h_rcvd_amt 합과 선언 총액을 대조하는 라이브러리 정책입니다. 앱은 일반 결제에서 h_tot_rcvd_amt 를
-    합산합니다(PayViewModel.java:11297-11307). 번호 붙은 결제 금액으로의 최종 연결은 보호된 Bundle 키 때문에 미확인입니다
-    (PaymentMethodHelper.java:113,211).
-
-    미배정 0원 행은 제외하고, 사용할 좌석 행이 없으면 선언 총액만 씁니다. 한 좌석 금액이 읽히지 않으면 부분 합을 반환하지 않습니다. 두 출처가 다르면 오류, 사용 가능한 출처가 없으면
-    None 입니다."""
+    """앱은 일반 결제에서 h_tot_rcvd_amt 를 합산합니다(PayViewModel.java:11297-11307). 번호 붙은 결제 금액으로의 최종 연결은 보호된 Bundle 키
+    때문에 미확인입니다 (PaymentMethodHelper.java:113,211)."""
     declared = _strict_scalar_string(raw, "h_tot_rcvd_amt", "reservation")
     if declared is not None:
         declared = declared.strip()
@@ -204,15 +193,14 @@ def _received_amount(
                 return None
             seat_no = _optional_scalar_string(seat, "h_seat_no", "reservation seat") or ""
             if value == 0 and not seat_no.strip():
-                # 2026-09-22 예약대기 관측: 좌석번호 없는 0원 행은 정산 좌석이 아니었습니다. 동일 예약을 get_ticket_reservation_detail 로 조회한 좌석
-                # 합은 선언 총액과 일치했습니다. 이 빈 행을 합산하면 잘못된 총액 불일치를 만들므로 제외합니다.
+                # 예약대기 관측: 좌석번호 없는 0원 행은 정산 좌석이 아니었습니다.
                 continue
             summed += value
             seats_seen += 1
     if seats_seen == 0:
         return None if declared_int is None else str(declared_int)
     seat_total = str(summed)
-    # 2026-07-27 라이브: 좌석 금액과 총액의 영 채움 폭이 달랐습니다. 표기 문자열이 아니라 숫자로 비교해야 같은 금액을 모순으로 오인하지 않습니다.
+    # 표기 문자열이 아니라 숫자로 비교해야 같은 금액을 모순으로 오인하지 않습니다.
     if declared_int is not None and declared_int != summed:
         raise KorailProtocolError(
             "KORAIL reservation settlement amount is ambiguous: the seat rows "
@@ -356,8 +344,8 @@ _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS = {
 def parse_reservation_hold_response(
     raw: Mapping[str, Any],
 ) -> ReservationHoldResponse:
-    """홀드의 후속 결제·취소 값을 읽습니다. 여정·정산값은 엄격히 검사하되 성공 여부는 재검사하지 않습니다. 직접 호출자는 str_result·h_msg_cd 를
-    확인하고, 파싱 실패만 보고 다시 요청하지 마십시오 — 예약이 이미 생성됐을 수 있습니다."""
+    """여정·정산값은 엄격히 검사하되 성공 여부는 재검사하지 않습니다. 직접 호출자는 str_result·h_msg_cd 를 확인하고, 파싱 실패만 보고 다시 요청하지 마십시오 — 예약이
+    이미 생성됐을 수 있습니다."""
     copied = _response_mapping(raw)
     journeys_container = copied.get("jrny_infos")
     if journeys_container is None:
@@ -406,8 +394,7 @@ def parse_reservation_hold_response(
 def parse_reservation_payment_response(
     raw: Mapping[str, Any],
 ) -> ReservationPaymentResponse:
-    """결제 결과의 중첩 목록을 관대하게 읽으며 성공 여부는 판정하지 않습니다. 반환 비밀번호·수령인 등 민감값은 타입 필드와 raw 에 그대로 남습니다. 이미 승인됐을 수 있으므로 파싱 결과만
-    보고 결제를 재전송하지 마십시오."""
+    """결제 결과의 중첩 목록을 관대하게 읽으며 성공 여부는 판정하지 않습니다. 이미 승인됐을 수 있으므로 파싱 결과만 보고 결제를 재전송하지 마십시오."""
     copied = _response_mapping(raw)
     coupons: list[ReservationPaymentCoupon] = []
     for value in _rows(copied, "tk_coupon_info"):
@@ -497,7 +484,6 @@ _CART_DISCOUNT_ADDITION_FIELDS = {
 def _cart_discount_additions(
     data: Mapping[str, Any],
 ) -> tuple[CartDiscountAddition, ...]:
-    """``psgDiscAdd_infos`` 를 읽습니다. 모양이 어긋나면 빈 튜플, 객체가 아닌 행은 건너뜁니다."""
     return tuple(
         CartDiscountAddition(
             raw=item,
@@ -509,7 +495,6 @@ def _cart_discount_additions(
 
 @_preserve_read_raw
 def parse_product_cancel_response(raw: Mapping[str, Any]) -> ProductCancelResponse:
-    """여행상품 예약 취소 응답을 읽습니다. intgMsgCd 는 선택 스칼라입니다(ProductCancelOut.java)."""
     data = _response_mapping(raw)
     return ProductCancelResponse(
         **_base_fields(data),
@@ -529,8 +514,7 @@ def parse_maas_cancel_response(raw: Mapping[str, Any]) -> MaasCancelResponse:
 
 @_preserve_read_raw
 def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
-    """장바구니 추가 결과와 할인 목록을 읽습니다. 키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81,
-    PsgDiscAddInfo.java:81,85. 누락·잘못된 선택 목록은 비웁니다."""
+    """키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81, PsgDiscAddInfo.java:81,85."""
     data = _response_mapping(raw)
     return CartAddResponse(
         **_base_fields(data),

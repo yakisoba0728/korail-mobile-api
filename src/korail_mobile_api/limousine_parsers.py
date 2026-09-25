@@ -2,12 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""공항버스 조회 응답을 읽습니다. 봉투는 정확한 SUCC 를 요구합니다.
-
-trainList 와 seatList 는 누락·null 이면 빈 목록이고, 키가 있는데 목록이 아니면 KorailProtocolError 입니다. 두 목록의 비객체 행도
-KorailProtocolError 입니다. seatList 누락 기본값의 앱 근거: TResidualSeatsResearchOut.java:79. 앱 Json 설정은 보호돼 있으므로 null 강제
-변환 여부는 확정할 수 없습니다 (NetworkModule.java:858-862, NetworkServiceKt.java:25-29). 배치·배너·windowList 는 선택 필드로 잘못된 값이나
-창측 행을 비웁니다."""
+"""공항버스는 정확한 SUCC를 요구하며 null 목록의 허용은 라이브러리 정책입니다(TResidualSeatsResearchOut.java:79)."""
 
 from __future__ import annotations
 
@@ -70,7 +65,7 @@ _SCHEDULE_FIELDS = {
     "service_code": "trnGpCd",
     "train_no": "trnNo",
     # 속성 ymsAplFlgYMS(ScdlQryOutTrain.java:48-49)와 전송 키를 구분합니다. serializer 이름은
-    # 보호됨(ScdlQryOutTrain$$serializer.java:35-55). ymsAplFlg 전송 키는 2026-09-22 라이브 관측에 근거합니다.
+    # 보호됨(ScdlQryOutTrain$$serializer.java:35-55). ymsAplFlg 전송 키는 라이브 관측에 근거합니다.
     "yms_application_flag": "ymsAplFlg",
 }
 #: 선택 스칼라. trnOrdrNo 는 속성 선언만 확인돼 실서버 검증 못 함입니다(ScdlQryOutTrain.java:48). rcvdPrc 의 선언(ScdlQryOutTrain.java:40)과
@@ -85,7 +80,6 @@ _SCHEDULE_ADDED_FIELDS = {
 def parse_limousine_schedule_response(
     response: BaseKorailResponse,
 ) -> LimousineScheduleResponse:
-    """``lmu.scdlQry.do`` 의 응답을 파싱합니다."""
     _require_exact_success(response)
     raw = response.raw
     schedules = []
@@ -136,10 +130,8 @@ _SEAT_FIELDS = {
 def parse_limousine_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> LimousineSeatInventoryResponse:
-    """공항버스 좌석 재고를 읽습니다. seatList 생략·null 은 빈 목록, 비목록·비객체 행은 오류입니다.
-
-    일반 좌석 재고와 DTO 를 공유합니다(NetworkApi.java:271,741). layout_type 은 문자열·정수를 허용합니다. 정수형 근거는 일반 좌석 재고의 2026-09-21
-    관측이며 리무진 응답 자체의 라이브 검증은 아닙니다."""
+    """공항버스 좌석 재고를 읽습니다. seatList 생략·null 은 빈 목록, 비목록·비객체 행은 오류입니다. 일반 좌석 재고와 DTO 를
+    공유합니다(NetworkApi.java:271,741). layout_type 은 문자열·정수를 허용합니다."""
     _require_exact_success(response)
     raw = response.raw
     seats = []
@@ -154,7 +146,6 @@ def parse_limousine_seat_inventory_response(
                 raw=row,
             )
         )
-    # 선택 창측 목록은 비목록이면 비우고 잘못된 행은 건너뜁니다.
     window_value = raw.get("windowList")
     windows = []
     for value in window_value if isinstance(window_value, list) else ():

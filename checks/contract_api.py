@@ -1,17 +1,4 @@
-"""합격 기준(``checks/ACCEPTANCE.md``)의 G9·G10·G11 을 검사합니다.
-
-파싱 실패 시 원문 보존, import 무결성, 로그아웃 뒤 로컬 상태 없음을 봅니다.
-
-네트워크를 쓰지 않습니다. 만드는 클라이언트는 전부 ``httpx.MockTransport`` 를
-달고, 그 전송이 실제로 불리면(= 가짜로 막지 않은 요청이 나가려 하면) 위반으로
-기록합니다. 값은 전부 합성값입니다.
-
-종료 코드: 0 통과, 1 실패, 2 검사 불완전 — 패키지 import 가 실패해 검사를 돌리지
-못했거나, 검사기 자신이 예상하지 못한 예외로 멈춘 경우입니다. 불완전은 실패보다
-우선합니다: 끝까지 보지 못했으면 발견한 실패가 전부라고 말할 수 없습니다.
-
-    python3 checks/contract_api.py
-"""
+"""Offline G9/G10/G11 checks; exit 0 passes, 1 fails, and 2 means incomplete verification."""
 
 from __future__ import annotations
 

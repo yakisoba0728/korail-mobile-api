@@ -1,9 +1,4 @@
-"""F5, baseline 291e01c. Run after changes.patch with PYTHONPATH=src.
-
-No live server evidence is produced here. MockTransport responses and identifiers
-are synthetic. App-parity cases cite supplied 7.0.6 Java/smali; library-policy
-cases are explicitly labelled and must not be read as decrypted app constants.
-"""
+"""Offline domain contracts use only synthetic responses and block real network access."""
 
 from __future__ import annotations
 

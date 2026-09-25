@@ -2,22 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""API 요청 전에 대기열을 통과하고 처리 후 키를 반납합니다.
-
-앱 SDK 1.7.18(Netfunnel.java:18)은 5101 진입 후 201/202에서만 TTL 1~30초마다 5002를 반복합니다 (Netfunnel.java:610-664;
-com/netfunnel/api/Response.java:59-66). SDK에는 누적 상한이 없습니다. 앱의 별도 콜백 감시는 시계 차를 15000과 비교하지만 단위는 보호돼 있으며, 전체 대기
-상한이 아닙니다 (ScreenViewModel$withNetFunnel$2$1$5.smali:603-692,875-889). 라이브러리는 이 감시를 구현하지 않습니다.
-
-앱은 mode=0에서 Success만, mode=1에서 사용자 중단 이외의 결과를 통과시킵니다 (ScreenViewModel.java:837-900,1719,1955,1986). SDK의 기본 오류
-처리는 ErrorBypass입니다 (Netfunnel.java:269-270; com/netfunnel/api/Property.java:9). aid·sid 평문은 보호돼 있습니다. 라이브러리는
-301/302를 항상 거절하고, mode=0 비성공·설정된 누적 상한 초과 시 API를 보내지 않습니다. 5002/5004의 노드는 netfunnel_safety로 제한하며, 키를 KORAIL 요청에
-싣지 않습니다.
-
-5004는 API 응답 뒤 finally에서 한 번 보내며, 실패는 로그만 남깁니다(Netfunnel.java:848-880; CommandClient.java:182-184). 앱의 onPass 뒤
-디스패치 대상은 보호돼 있어 같은 반납 시점인지는 검증 못 함입니다(ScreenViewModel.java:857-900).
-
-2026-09-24 비로그인 조회에서 5101→201→5002→200→ScheduleView→5004(200)와 5101→200→ScheduleView→5004(200)를 확인했습니다.
-202·301/302·300/303 분기는 검증 못 함입니다. 예약·결제 API의 성공 기록은 보호된 앱 mode=0 배정이나 비성공 분기의 검증과는 구별합니다."""
+"""5101→필요한 5002→API→5004 순서를 유지하며 노드·오류 정책은 checks/BEHAVIOR.md에 명시합니다."""
 
 from __future__ import annotations
 
@@ -53,20 +38,19 @@ _log = logging.getLogger(__name__)
 
 #: ``Code.Success`` — ``com/netfunnel/api/Code.java:27``.
 SUCCESS_CODE = "200"
-#: 대기. SDK 대기 루프는 ``Code.Continue``(201)/``ContinueDebug``(202)에서만 돕니다 (``Netfunnel.java:622``,
+#: SDK 대기 루프는 ``Code.Continue``(201)/``ContinueDebug``(202)에서만 돕니다 (``Netfunnel.java:622``,
 #: ``com/netfunnel/api/Code.java:28-29``).
 CONTINUE_CODES = frozenset({"201", "202"})
-#: 차단. ``EvnetCode.isBlocking()``(``Netfunnel.java:114-116``)이 참인 ``Block``(301)/ ``IpBlock``(302).
+#: ``EvnetCode.isBlocking()``(``Netfunnel.java:114-116``)이 참인 ``Block``(301)/ ``IpBlock``(302).
 BLOCK_CODES = frozenset({"301", "302"})
-#: ``ttl`` 을 묶는 범위. 호출부가 ``getTTL(getProperty().getMaxTTL(), 1)`` 로 부르고 (``Netfunnel.java:634``) ``max_ttl_`` 의
-#: 기본값이 30 입니다(``com/netfunnel/api/Property.java:22``).
+#: 호출부가 ``getTTL(getProperty().getMaxTTL(), 1)`` 로 부르고 (``Netfunnel.java:634``) ``max_ttl_`` 의 기본값이 30
+#: 입니다(``com/netfunnel/api/Property.java:22``).
 MIN_TTL_SECONDS = 1
 MAX_TTL_SECONDS = 30
 
-#: 대기열 요청의 헤더. 앞의 둘은 SDK 가 싣고(``com/netfunnel/api/http/Client.java:259-260``, ``Context_Type`` 은
-#: SDK 의 철자 그대로), 나머지는 안드로이드 HttpURLConnection 이 붙입니다: 본문을 쓰는 요청의 Content-Type 은 AOSP
-#: external/okhttp HttpURLConnectionImpl.newHttpEngine, Connection·Accept-Encoding 은 HttpEngine.networkRequest.
-#: Accept 는 붙이지 않습니다.
+#: 앞의 둘은 SDK 가 싣고(``com/netfunnel/api/http/Client.java:259-260``, ``Context_Type`` 은 SDK 의 철자 그대로), 나머지는 안드로이드
+#: HttpURLConnection 이 붙입니다: 본문을 쓰는 요청의 Content-Type 은 AOSP external/okhttp HttpURLConnectionImpl.newHttpEngine,
+#: Connection·Accept-Encoding 은 HttpEngine.networkRequest.
 _APP_HEADERS = {
     "Accept-Charset": "UTF-8",
     "Context_Type": "application/x-www-form-urlencoded;charset=UTF-8",
@@ -78,8 +62,6 @@ _APP_HEADERS = {
 
 @dataclass(frozen=True)
 class KorailNetFunnelGate:
-    """대기열 관문의 액션과 통과 조건을 담습니다. action은 aid, success_only는 라이브러리의 성공 전용 관문입니다. 앱 mode와의 대응 한계는 모듈 설명을 따릅니다."""
-
     name: str
     action: str
     success_only: bool
@@ -91,11 +73,6 @@ def _gate(name: str, action: KorailNetFunnelAction, *, success_only: bool) -> Ko
 
 #: 라이브러리 관문 목록. netfunnel_actions 로 aid 를 덮어쓸 수 있습니다. aid 값은 보호 문자열의 길이와 호출 문맥으로 고른 미확인 값입니다(constants 참고).
 #: inquiry/peak_season_inquiry/product_inquiry: TrainScheduleViewModel.java:5208-5244, 다음 페이지 :1126, 요청 :7216.
-#: 상품 aid·라우트 연결은 추정입니다. reserve: TrainScheduleViewModel.java:5003,5104, TrainSeatMapViewModel.java:2627,2719,
-#: HomeViewModel.java:6231, ReservationWaitViewModel.java:578. pay: PayViewModel.java:6724,
-#: FPayViewModel.java:795. reservation_view: MyReservationViewModel.java:2528. mode 리터럴이 보호돼 0 배정은 미검증.
-#: 관광열차의 선택값과 직접 요청 분기의 조건도 보호돼 연결을 확정하지 않습니다(TrainScheduleViewModel.java:5216-5242).
-#: 그 밖의 작업 연결 여부는 client.py 를 보십시오. 이 표가 모든 앱 호출을 증명하지는 않습니다.
 KORAIL_NETFUNNEL_GATES: Mapping[str, KorailNetFunnelGate] = {
     gate.name: gate
     for gate in (
@@ -115,8 +92,6 @@ KORAIL_NETFUNNEL_GATES: Mapping[str, KorailNetFunnelGate] = {
 
 @dataclass(frozen=True)
 class KorailNetFunnelToken:
-    """대기열 응답의 코드·키·대기 조건을 담습니다. node는 응답 노드의 원점 주소이며, raw는 응답 본문입니다."""
-
     code: str
     key: str = ""
     params: dict[str, str] = field(default_factory=dict[str, str])
@@ -125,12 +100,11 @@ class KorailNetFunnelToken:
 
     @property
     def wait_count(self) -> int:
-        """앞에서 기다리는 요청 수를 반환합니다."""
         return _digits(self.params.get("nwait", ""))
 
     @property
     def wait_seconds(self) -> int:
-        """다음 대기 확인까지의 시간을 1~30초로 제한해 반환합니다. 앱 근거: com/netfunnel/api/Response.java:59-66."""
+        """앱 근거: com/netfunnel/api/Response.java:59-66."""
         ttl = _digits(self.params.get("ttl", ""))
         return max(MIN_TTL_SECONDS, min(ttl, MAX_TTL_SECONDS))
 
@@ -158,11 +132,7 @@ def _java_int(text: str) -> int | None:
 
 
 def parse_netfunnel_body(body: str) -> KorailNetFunnelToken:
-    """응답 본문을 코드와 파라미터로 가릅니다(``Response.Parser``, ``com/netfunnel/api/Response.java:128-163``).
-
-    첫 ``:`` 앞이 코드, 뒤가 ``&`` 로 나뉜 ``name=value`` 쌍입니다. 코드는 SDK 처럼 ``Integer.parseInt`` 로 읽어 ``0200``·``+200`` 도
-    ``200`` 입니다. ``:`` 가 없거나 코드가 int32 정수가 아니면 ``errors.KorailNetFunnelError``(앱의 ``Code.ErrorData``)입니다. 서버가 준
-    ``ip``/``port`` 는 ``netfunnel_safety`` 의 가드를 통과해야 합니다."""
+    """SDK처럼 첫 콜론으로 나누고 코드는 Java int32로 읽습니다(com/netfunnel/api/Response.java:128-163)."""
     head, separator, tail = body.strip().partition(":")
     code = _java_int(head) if separator else None
     if code is None:
@@ -187,8 +157,6 @@ def parse_netfunnel_body(body: str) -> KorailNetFunnelToken:
 
 
 class _Slot:
-    """대기열 처리 중 최신 응답·노드·재시도 예산을 보관합니다."""
-
     def __init__(self) -> None:
         self.token: KorailNetFunnelToken | None = None
         self.node = ""
@@ -196,8 +164,6 @@ class _Slot:
 
 
 class KorailNetFunnelClient:
-    """API 요청 전 대기열 통과와 처리 후 키 반납을 수행합니다. sleeper/clock 은 오프라인 시험용으로 주입할 수 있습니다."""
-
     def __init__(
         self,
         config: KorailConfig | None = None,
@@ -220,11 +186,9 @@ class KorailNetFunnelClient:
         del self._client.headers["Accept"]
 
     def close(self) -> None:
-        """대기열 HTTP 연결을 닫습니다."""
         self._client.close()
 
     def gate(self, name: str) -> KorailNetFunnelGate:
-        """관문 설정을 읽고 netfunnel_actions의 aid 덮어쓰기를 적용합니다."""
         gate = KORAIL_NETFUNNEL_GATES[name]
         override = (self.config.netfunnel_actions or {}).get(name)
         if override:
@@ -232,8 +196,8 @@ class KorailNetFunnelClient:
         return gate
 
     def run(self, gate: KorailNetFunnelGate | str, send: Callable[[], T]) -> T:
-        """관문을 통과한 뒤 send를 호출하고 최신 키를 한 번 반납합니다. 차단은 KorailQueueRejectedError이며, mode=1은 통신 오류에도 진행할 수 있지만
-        mode=0은 API를 보내지 않습니다. 반납 실패는 로그만 남기며, 전체 정책과 앱의 차이는 모듈 설명을 따릅니다."""
+        """차단은 KorailQueueRejectedError이며, mode=1은 통신 오류에도 진행할 수 있지만 mode=0은 API를 보내지 않습니다. 반납 실패는 로그만 남기며,
+        전체 정책과 앱의 차이는 모듈 설명을 따릅니다."""
         if isinstance(gate, str):
             gate = self.gate(gate)
         slot = _Slot()
@@ -259,7 +223,7 @@ class KorailNetFunnelClient:
 
     def _post(self, url: str) -> str:
         """SDK 는 GET 으로 부르지만 setDoOutput(true)(Client.java:257) 때문에 안드로이드 HttpURLConnection 이 빈 본문 POST 로
-        보냅니다(AOSP external/okhttp HttpURLConnectionImpl.initHttpEngine). 인자는 URL 에 남고 Content-Length 는 0 입니다."""
+        보냅니다(AOSP external/okhttp HttpURLConnectionImpl.initHttpEngine)."""
         if self._client.is_closed:
             raise KorailProtocolError(
                 f"KORAIL NetFunnel client is closed; POST {KORAIL_NETFUNNEL_PATH} was not sent"
@@ -372,8 +336,7 @@ class KorailNetFunnelClient:
         )
 
     def _complete(self, slot: _Slot) -> None:
-        """최신 키가 있을 때만 5004 를 보냅니다. 재시도·응답 파싱은 하지 않습니다 (Netfunnel.java:848-880, CommandClient.java:158-199). 실패는
-        경고 로그만 남깁니다."""
+        """재시도·응답 파싱은 하지 않습니다 (Netfunnel.java:848-880, CommandClient.java:158-199). 실패는 경고 로그만 남깁니다."""
         token = slot.token
         if token is None or not token.key:
             return

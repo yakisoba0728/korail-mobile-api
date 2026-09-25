@@ -2,8 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""예약·결제·환불 등 상태 변경 요청의 필드를 구성하며 전송하지 않습니다. 보호된 앱 값과 필드별 근거는 각 빌더에 남깁니다. 실제 전송·재전송 금지와 응답 보존은
-client.KorailClient._mutation을 따릅니다."""
+"""DTO 필드·배열 순서와 빈 값 생략은 실제 전송에 영향을 주므로 유지합니다."""
 
 from __future__ import annotations
 
@@ -66,7 +65,6 @@ _KST = timezone(timedelta(hours=9))
 
 
 def _current_year_month() -> int:
-    """앱의 DateTimeBuilder.now() 처럼 현재 시각의 yyyyMM 입니다. 한국 시간 기준입니다."""
     now = datetime.now(_KST)
     return now.year * 100 + now.month
 
@@ -100,10 +98,7 @@ def _common_fields(config: KorailConfig) -> dict[str, str]:
     return fields
 
 
-# TicketReservationIn 합성 생성자(TicketReservationIn.java:80)의 선언 순서입니다. 네 목록은
-# 승객(TicketReservationInPassengerInfo.java:55) → 여정(TicketReservationInJrny.java:69, 객실 코드는 각 여정의 끝) → 좌석 →
-# 후행 좌석 순이고, 원소마다 필드 뒤에 1기반 번호가 붙습니다(NetworkService.java:15350,15366). 평탄화 뒤에 덧붙는 키는
-# 없습니다(NetworkService.java:14155-14162).
+# TicketReservationIn 합성 생성자(TicketReservationIn.java:80)의 선언 순서입니다.
 _RESERVATION_KEY_ORDER: tuple[str, ...] = (
     *(
         "Device",
@@ -153,7 +148,7 @@ _RESERVATION_KEY_ORDER: tuple[str, ...] = (
 
 
 def _in_reservation_order(form: dict[str, str]) -> dict[str, str]:
-    """예약 폼을 앱 DTO 의 선언 순서로 다시 놓습니다. 표에 없는 키는 원래 순서대로 뒤에 둡니다."""
+    """표에 없는 키는 원래 순서대로 뒤에 둡니다."""
     ordered = {key: form[key] for key in _RESERVATION_KEY_ORDER if key in form}
     ordered.update(form)
     return ordered
@@ -200,9 +195,8 @@ def _validated_seat_assignments(
     job_type: KorailReservationJobType,
     passenger_total: int,
 ) -> tuple[KorailSeatAssignment, ...]:
-    """좌석지정은 승객당 좌석 하나를 요구합니다. 앱도 좌석 목록·개수와 SEAT job 을 함께 설정합니다 (TrainSeatMapViewModel.java:2135-2138,2289).
-    1103 은 관측값이며 enum 평문은 보호돼 있습니다 (ReservationJobId.java:22). 일반 빌더는 좌석 목록·개수를 채우지 않습니다
-    (TrainScheduleViewModel.java:2932,3004; TicketReservationIn.java:182)."""
+    """앱도 좌석 목록·개수와 SEAT job 을 함께 설정합니다 (TrainSeatMapViewModel.java:2135-2138,2289). 1103 은 관측값이며 enum 평문은
+    보호돼 있습니다 (ReservationJobId.java:22)."""
     if job_type is not KorailReservationJobType.SEAT_DESIGNATED:
         if seats:
             raise KorailProtocolError(
@@ -242,12 +236,8 @@ def build_reservation_form(
     seats: Sequence[KorailSeatAssignment] | None = None,
     seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
-    """단일 열차의 미결제 예약 요청 폼을 구성하며 전송하지 않습니다. 좌석 지정 키는 TicketReservationInSrcar.java:51, 후행 키는
-    TicketReservationInSrcarTrailing.java:52, 개수는 TicketReservationIn.java:80 입니다. 앱은 한 FieldMap 으로
-    전송하고(NetworkApi.java:752-753), DTO 를 평탄화하며 배열에 1기반 인덱스를
-    붙입니다(NetworkService.java:14155-14162,15350,15366). txtSrcarCnt 는 호차 수가 아닌 좌석
-    수입니다(TrainSeatMapViewModel.java:2108-2113,2136-2138). 키 순서는 :func:`_in_reservation_order` 가 DTO 선언 순서로
-    맞춥니다."""
+    """DTO 배열은 1기반이며 txtSrcarCnt는 호차 수가 아닌 좌석 수입니다(NetworkService.java:15350,15366;
+    TrainSeatMapViewModel.java:2108-2113)."""
     return _build_journey_reservation_form(
         config,
         (train,),
@@ -269,10 +259,8 @@ def build_transfer_reservation_form(
     seats: Sequence[Sequence[KorailSeatAssignment]] | None = None,
     seat_attribute_codes: Sequence[str | None] | None = None,
 ) -> dict[str, str]:
-    """두 TrainSummary 구간을 한 홀드 폼으로 만듭니다. 앱의 환승 오버로드는 구간 수·등급· 입석 여부를 받아 같은 DTO 를
-    구성합니다(TrainScheduleViewModel.java:2937-3004). 두 구간 모두 isTransfer=true 를 넘깁니다(:2968); 여정 종류 선택은
-    TrainScheduleOutTrainInfo.java:3674-3683 입니다. 여정 코드·일련번호의 앱 평문은 보호돼 있으며 14 와 001/002 는 라이브 기록값입니다. 길이 일치로
-    그 값을 복호했다고 보지 않습니다."""
+    """앱의 환승 오버로드는 구간 수·등급· 입석 여부를 받아 같은 DTO 를 구성합니다(TrainScheduleViewModel.java:2937-3004). 두 구간 모두
+    isTransfer=true 를 넘깁니다(:2968); 여정 종류 선택은 TrainScheduleOutTrainInfo.java:3674-3683 입니다."""
     return _build_journey_reservation_form(
         config,
         legs,
@@ -295,15 +283,7 @@ def build_merge_reservation_form(
     job_type: KorailReservationJobType = KorailReservationJobType.MERGE_STANDING,
     seat_attribute_code: str | None = None,
 ) -> dict[str, str]:
-    """병합 예약의 두 번째 미결제 예약 폼을 구성하며 전송하지 않습니다. 첫 홀드와
-    standing_hold_train·passengers·seat_class·job_type·seat_attribute_code가 같아야 합니다.
-
-    앱은 첫 TicketReservationIn을 받아(ReservationMergeViewModel.smali:425-435) copy$default 마스크 0x7ffef로 인자
-    4(txtStndFlg)와 19~21(중간역 코드·구성순서·운행순서)만 바꿉니다 (ReservationMergeViewModel.smali:7671-7774;
-    TicketReservationIn.java:486). merge_rows는 get_merge_seats_inquiry의 trains이며 중간역은 첫 행의 도착역입니다
-    (ReservationMergeViewModel.smali:7270-7300). 첫 행 또는 마지막 행이 일반실 매진·입석 가능이면 입석 플래그를 켭니다
-    (ReservationMergeViewModel.smali:7372-7560). 앱 enum 평문은 보호돼 13/11 관측값을 사용합니다. 2026-09-24 서울→부산 175는
-    서울→영등포(11/11)·영등포→부산(13/11)의 두 행이었습니다."""
+    """첫 홀드 폼에서 입석 플래그와 중간역 세 필드만 바꿉니다(ReservationMergeViewModel.smali:7671-7774)."""
     rows = tuple(merge_rows) if not isinstance(merge_rows, (str, bytes)) else ()
     if not rows or not all(isinstance(row, TrainScheduleItem) for row in rows):
         raise KorailProtocolError("KORAIL 병합 reservation requires the research.mergeSeatsC.do rows")
@@ -314,7 +294,7 @@ def build_merge_reservation_form(
                 "KORAIL 병합 reservation splits ONE train: every merge row must "
                 f"carry the standing hold's train_no {hold_train_no!r}"
             )
-        # 행별 h_run_dt 는 2026-09-22 관측에 있었지만 없는 행도 받습니다. 있으면 다른 날 조회한 행을 거절합니다.
+        # 행별 h_run_dt 는 관측에 있었지만 없는 행도 받습니다. 있으면 다른 날 조회한 행을 거절합니다.
         if row.run_date is not None and row.run_date != standing_hold_train.run_date:
             raise KorailProtocolError(
                 f"KORAIL 병합 reservation merge rows must share the standing hold's run_date "
@@ -345,8 +325,7 @@ def build_merge_reservation_form(
     return _in_reservation_order(form)
 
 
-#: 공항버스 좌석의 호차 번호. 앱 상수 DEFINE_SRCARNO(AirportBusSeatMapViewModel.java:101)는 보호된 4바이트이며 좌석 조회와 예약에 같은 값을
-#: 씁니다(:766-783,853,865). 2026-09-24 라이브: 좌석 조회는 1·01·0001 모두 호차 0001 을 돌려줬고 0001 로 홀드가 성공했습니다.
+#: 앱 상수 DEFINE_SRCARNO(AirportBusSeatMapViewModel.java:101)는 보호된 4바이트이며 좌석 조회와 예약에 같은 값을 씁니다(:766-783,853,865).
 LIMOUSINE_CAR_NO = "0001"
 
 
@@ -358,14 +337,7 @@ def build_limousine_reservation_form(
     passengers: KorailPassengerCounts | None = None,
     car_no: str = LIMOUSINE_CAR_NO,
 ) -> dict[str, str]:
-    """공항버스 미결제 예약 요청 폼을 구성하며 전송하지 않습니다. 앱은 열차와 같은 TicketReservation DTO 로
-    보냅니다(AirportBusScheduleViewModel.java:167-184,488-495;
-    AirportBusSeatMapViewModel.java:752-788,1989-1993). 열차와 다른 점: 작업 코드는 좌석이 있어도 기본값이고, 구성순서·변경플래그는 보내지
-    않으며(ScdlQryOutTrain.java:613-621 에 해당 필드 없음), 좌석속성은 BASIC, 객실은 일반실, 호차는 상수입니다. 승객은 어른·어린이만 고를 수
-    있고(PassengerType.java:56-63), 좌석 수가 인원 수와 같아야 예약 버튼이 켜집니다(AirportBusSeatMapViewModel.java:1914).
-
-    메뉴·작업 코드, 두 플래그, 여정 종류·순번, 호차 번호는 앱에서 보호된 값입니다. 여기의 값은 2026-09-24 라이브 홀드(광명→인천공항 T1, 어른 1명, SUCC/IRR000018,
-    16,000원, 즉시 취소 IRG000000)로 확인한 것입니다."""
+    """같은 예약 DTO를 쓰되 구성순서는 보내지 않으며 보호된 기본값은 관측값입니다(AirportBusSeatMapViewModel.java:752-788)."""
     if not isinstance(schedule, LimousineSchedule):
         raise KorailProtocolError("KORAIL airport bus reservation requires a LimousineSchedule")
     if passengers is None:
@@ -441,9 +413,8 @@ def is_merge_eligible(
     *,
     seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
 ) -> bool:
-    """라이브러리 플래그 집합으로 병합 가능성을 판단합니다. 앱은 hYmsAplFlg 를
-    비교합니다(TrainScheduleOutTrainInfo.java:1500-1552,2842-2847,3588-3589). 앱의 보호 리터럴은 등급별 세 개, 라이브러리는 두 개입니다.
-    평문을 모르므로 라이브러리 집합이 앱 집합의 부분집합인지도 미확인입니다. 잘못 허용하거나 거절할 가능성을 모두 배제하지 않습니다."""
+    """앱은 hYmsAplFlg 를 비교합니다(TrainScheduleOutTrainInfo.java:1500-1552,2842-2847,3588-3589). 앱의 보호 리터럴은 등급별 세
+    개, 라이브러리는 두 개입니다."""
     if not isinstance(train, TrainSummary):
         raise KorailProtocolError("KORAIL merge eligibility requires an exact TrainSummary")
     cabin = _coerced_seat_class(seat_class)
@@ -453,26 +424,24 @@ def is_merge_eligible(
     return flag in KORAIL_MERGE_SEAT_FLAGS_BY_CABIN[cabin.value]
 
 
-# 후행 좌석 키가 하나뿐인 모델을 사용하므로 라이브러리는 최대 두 구간만 허용합니다.
 def _seat_attribute_key(journey: int) -> str:
-    """여정별 좌석 속성의 전송 키를 반환합니다. 앱 근거: TicketReservationIn.java:80,189-191,237-239."""
+    """앱 근거: TicketReservationIn.java:80,189-191,237-239."""
     return "txtSeatAttCd4" if journey == 1 else "txtSeatAttCd4_1"
 
 
 def _srcar_count_key(journey: int) -> str:
-    """여정별 좌석 수의 전송 키를 반환합니다. 앱 근거: TicketReservationIn.java:80,193-195,245-247."""
+    """앱 근거: TicketReservationIn.java:80,193-195,245-247."""
     return "txtSrcarCnt" if journey == 1 else "txtSrcarCnt1"
 
 
 def _srcar_no_key(journey: int, seat: int) -> str:
-    """여정·좌석별 호차 번호의 전송 키를 반환합니다. 앱 근거: TicketReservationInSrcar.java:51,85;
-    TicketReservationInSrcarTrailing.java:52,86. 배열 인덱스는 1부터 붙습니다(NetworkService.java:15350,15366)."""
+    """앱 근거: TicketReservationInSrcar.java:51,85; TicketReservationInSrcarTrailing.java:52,86. 배열 인덱스는 1부터
+    붙습니다(NetworkService.java:15350,15366)."""
     return f"txtSrcarNo{seat}" if journey == 1 else f"txtSrcarNo1_{seat}"
 
 
 def _seat_no_key(journey: int, seat: int) -> str:
-    """여정·좌석별 좌석 번호의 전송 키를 반환합니다. 앱 근거: TicketReservationInSrcar.java:51,81;
-    TicketReservationInSrcarTrailing.java:52,82."""
+    """앱 근거: TicketReservationInSrcar.java:51,81; TicketReservationInSrcarTrailing.java:52,82."""
     return f"txtSeatNo{seat}" if journey == 1 else f"txtSeatNo1_{seat}"
 
 
@@ -480,7 +449,6 @@ _T = TypeVar("_T")
 
 
 def _coerced_seat_class(value: object) -> KorailSeatClass:
-    """``"1"``(일반실)·``"2"``(특실) 또는 :class:`KorailSeatClass` 만 받습니다."""
     try:
         if not isinstance(value, str):
             raise ValueError(value)
@@ -490,7 +458,6 @@ def _coerced_seat_class(value: object) -> KorailSeatClass:
 
 
 def _resolved_sequence(value: Sequence[_T], message: str) -> tuple[_T, ...]:
-    """구간 목록을 튜플로 굳힙니다. 문자열·바이트는 시퀀스여도 목록이 아닙니다."""
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise KorailProtocolError(message)
     return tuple(value)
@@ -529,7 +496,7 @@ def _validated_seat_classes(
     *,
     leg_count: int,
 ) -> tuple[KorailSeatClass, ...]:
-    """공통 등급 또는 구간별 등급을 받습니다. 앱도 환승에서 구간별 PsrmType 을 선택합니다 (TrainScheduleViewModel.java:2952-2968;
+    """앱도 환승에서 구간별 PsrmType 을 선택합니다 (TrainScheduleViewModel.java:2952-2968;
     TicketReservationInJrny.java:69,234)."""
     if isinstance(seat_classes, (str, KorailSeatClass)):
         candidates: tuple[object, ...] = (seat_classes,) * leg_count
@@ -595,8 +562,8 @@ def _build_journey_reservation_form(
     require_legs: int | None = None,
     seat_attribute_codes: Sequence[str | None] | None = None,
 ) -> dict[str, str]:
-    """직통·환승 예약에 공통으로 사용하는 폼을 구성합니다. 앱의 두 오버로드는 같은 DTO 를 채우지만 입력 분기는 다릅니다
-    (TrainScheduleViewModel.java:2849,2937; TicketReservationIn.java:139-179)."""
+    """앱의 두 오버로드는 같은 DTO 를 채우지만 입력 분기는 다릅니다 (TrainScheduleViewModel.java:2849,2937;
+    TicketReservationIn.java:139-179)."""
     resolved_legs = _validated_legs(legs, require=require_legs)
     if seat_attribute_codes is None:
         selected_attributes: tuple[str | None, ...] = (None,) * len(resolved_legs)
@@ -629,8 +596,8 @@ def _build_journey_reservation_form(
             "KORAIL reservation job type must be one of "
             + ", ".join(f'"{member.value}"' for member in KorailReservationJobType)
         )
-    # STANDBY·MERGE_STANDING 을 단일 구간으로 제한하지 않습니다. 조합 수용은 서버가 결정합니다. 앱의 특실 상태에는 WAIT/STAND/FREE 반환이
-    # 없습니다(TrainScheduleOutTrainInfo.java:3587-3625). 일반실 분기는 같은 파일 :2810-2890 이며 단일 구간 제한을 증명하는 근거는 아닙니다.
+    # STANDBY·MERGE_STANDING 을 단일 구간으로 제한하지 않습니다. 앱의 특실 상태에는 WAIT/STAND/FREE 반환이
+    # 없습니다(TrainScheduleOutTrainInfo.java:3587-3625).
     assignments = _validated_leg_seats(
         leg_seats,
         leg_count=len(resolved_legs),
@@ -648,9 +615,7 @@ def _build_journey_reservation_form(
             "txtJobId": job_type.value,
             "txtGdNo": "",
             "hidFreeFlg": "N",
-            # 일반 입석 판정은 _standing_flag 참고. 환승은 구간별 판정의 OR 입니다 (TrainScheduleViewModel.java:2961-2967). 예약대기만 N
-            # 으로 고정합니다. 2026-09-16 같은 대기 열차에 N 은 SUCC/IRR000014, Y 는 SUCC/IRR000018 과 입석 좌석·입석 인원 1·결제기한을
-            # 돌려줬습니다. 대기를 입석 홀드로 바꾸지 않기 위한 구분입니다. 앱의 STAND 판정 사용은 TrainScheduleViewModel.java:2870-2874 참고.
+            # 환승은 구간별 판정의 OR 입니다 (TrainScheduleViewModel.java:2961-2967). 대기를 입석 홀드로 바꾸지 않기 위한 구분입니다.
             "txtStndFlg": (
                 "N"
                 if job_type is KorailReservationJobType.STANDBY
@@ -659,14 +624,14 @@ def _build_journey_reservation_form(
                     seat_classes=resolved_classes,
                 )
             ),
-            # 동반유아·안내견도 합계에 포함합니다. Passengers.java:610-616 의 전체 합계와 PassengerType.java:38-45 의 여덟 종류,
+            # Passengers.java:610-616 의 전체 합계와 PassengerType.java:38-45 의 여덟 종류,
             # TrainScheduleViewModel.java:2912 참고.
             "txtTotPsgCnt": str(passengers.total),
         }
     )
     _add_passenger_rows(form, passengers)
     # 속성 선언은 TicketReservationIn.java:80,139-179; 앱 평탄화는 NetworkService.java:15304-15343. 미지정 속성의 기본값은 보호돼
-    # 있습니다(TicketReservationIn.java:96-100). 3바이트라는 사실은 라이브러리 값 000 을 증명하지 않습니다.
+    # 있습니다(TicketReservationIn.java:96-100).
     form.update(
         {
             "txtSeatAttCd1": "000",
@@ -675,7 +640,7 @@ def _build_journey_reservation_form(
             _seat_attribute_key(1): resolved_attributes[0],
             "txtSeatAttCd5": "000",
             # 객실은 구간 DTO 필드(TicketReservationInJrny.java:69,234)입니다. 앱은 평탄화 중 인덱스를
-            # 붙입니다(NetworkService.java:15366). 1/2 값은 관측이며 PsrmType.java:19-20,63-65 의 코드 평문은 보호돼 있습니다.
+            # 붙입니다(NetworkService.java:15366).
             "txtPsrmClCd1": resolved_classes[0].value,
         }
     )
@@ -690,8 +655,8 @@ def _build_journey_reservation_form(
         KORAIL_DIRECT_JOURNEY_TYPE_CODE if len(resolved_legs) == 1 else KORAIL_TRANSFER_JOURNEY_TYPE_CODE
     )
     _write_journey_rows(form, journeys, (journey_type_code,) * len(journeys))
-    # 좌석 지정에만 개수·좌석쌍을 추가합니다. 앱 일반 빌더는 목록·개수를 채우지 않습니다 (TrainScheduleViewModel.java:2932,3004;
-    # TicketReservationIn.java:182). 개수 필드는 목록보다 앞에 선언되며(TicketReservationIn.java:80) 마지막에 순서를 맞춥니다.
+    # 앱 일반 빌더는 목록·개수를 채우지 않습니다 (TrainScheduleViewModel.java:2932,3004; TicketReservationIn.java:182). 개수 필드는
+    # 목록보다 앞에 선언되며(TicketReservationIn.java:80) 마지막에 순서를 맞춥니다.
     for journey, leg_assignments in enumerate(assignments, start=1):
         for index, assignment in enumerate(leg_assignments, start=1):
             if index == 1:
@@ -705,7 +670,7 @@ def _build_journey_reservation_form(
 
 def _sequence_no(code: str) -> str:
     """관측된 001/002 를 재현하기 위한 라이브러리 포맷팅입니다. 앱은 전달받은 값을 그대로 씁니다(TrainScheduleOutTrainInfo.java:1631,3683;
-    TrainScheduleViewModel.java:2968). 보호 상수의 길이만으로 평문을 확정하지 않습니다."""
+    TrainScheduleViewModel.java:2968)."""
     return f"{int(code):03d}"
 
 
@@ -714,10 +679,8 @@ def _write_journey_rows(
     journeys: Sequence[dict[str, str]],
     journey_type_codes: Sequence[str],
 ) -> None:
-    """구간별 여정 필드를 씁니다. 선언: TicketReservationInJrny.java:69; 구성: TrainScheduleOutTrainInfo.java:3683; 1기반 인덱스:
-    NetworkService.java:15350,15366. 도착시각 키는 없습니다. 객실 키는 호출자가 쓰고 :func:`_in_reservation_order` 가 여정 끝으로
-    옮깁니다. txtChgFlg=N 은 라이브러리
-    값이고 앱 상수는 보호돼 있습니다. 길이 일치는 동등성 증명이 아닙니다."""
+    """선언: TicketReservationInJrny.java:69; 구성: TrainScheduleOutTrainInfo.java:3683; 1기반 인덱스:
+    NetworkService.java:15350,15366. 도착시각 키는 없습니다."""
     for journey, (fields, journey_type_code) in enumerate(
         zip(journeys, journey_type_codes, strict=True), start=1
     ):
@@ -750,7 +713,7 @@ def _assert_leg_is_bookable(
     job_type: KorailReservationJobType,
 ) -> None:
     if job_type is KorailReservationJobType.STANDBY:
-        # 앱의 특실 상태에는 WAIT 가 없습니다(TrainScheduleOutTrainInfo.java:3587-3625). 일반실 대기 분기는 같은 파일 :2839-2850 입니다.
+        # 앱의 특실 상태에는 WAIT 가 없습니다(TrainScheduleOutTrainInfo.java:3587-3625).
         if seat_class is not KorailSeatClass.GENERAL:
             raise KorailProtocolError("KORAIL standby (예약대기) is offered on the 일반실 cabin only")
         if train.wait_reservation_flag != KORAIL_STANDBY_WAIT_FLAG:
@@ -759,25 +722,22 @@ def _assert_leg_is_bookable(
                 f"{KORAIL_STANDBY_WAIT_FLAG!r}, got "
                 f"{train.wait_reservation_flag!r}"
             )
-        # 대기 가능 여부를 일반실 잔여좌석 코드로 막지 않습니다. 매진 상태에서도 대기가 가능합니다.
+        # 대기 가능 여부를 일반실 잔여좌석 코드로 막지 않습니다.
         return
     if job_type is KorailReservationJobType.MERGE_STANDING:
         if not is_merge_eligible(train, seat_class=seat_class):
             raise KorailProtocolError(_merge_ineligible_message(train, seat_class))
-        # 병합은 일반 좌석 가용성 대신 병합 플래그로 검사합니다. 2026-07-26 관측: 서울→부산 열차 125 에 일반실 매진 코드 13 과 병합 플래그 A 가 함께 있었습니다. 일반
-        # 가용 코드 11 을 추가 요구하면 이 표본을 거절하게 됩니다.
+        # 관측: 서울→부산 열차 125 에 일반실 매진 코드 13 과 병합 플래그 A 가 함께 있었습니다. 일반 가용 코드 11 을 추가 요구하면 이 표본을 거절하게 됩니다.
         return
-    # 선택 객실의 가용성을 검사합니다(TrainScheduleOutTrainInfo.java:2810,3587; TrainScheduleViewModel.java:3457-3458). 이
-    # 라이브러리는 명시적 가용 코드 11 만 허용합니다. 앱 자유석 경로의 보호된 요청값은 구현하지 않습니다(TrainScheduleViewModel.java:2875,2899-2915,3004;
-    # TrainScheduleOutTrainInfo.java:2881-2889; TrainReservationCode.java:21,24; SeatType.java:299,307).
-    # 2026-07-26 매진 표본의 13 은 관측값이며 보호 enum 의 복호 결과가 아닙니다.
+    # 선택 객실의 가용성을 검사합니다(TrainScheduleOutTrainInfo.java:2810,3587; TrainScheduleViewModel.java:3457-3458). 보호
+    # 리터럴은 미확인입니다.
     if seat_class is KorailSeatClass.SPECIAL:
         if train.special_reservation_code != "11":
             raise KorailProtocolError("KORAIL reservation requires an evidenced available special seat")
     elif train.general_reservation_code != "11":
-        # 앱은 일반 job 에서 일반실이 STAND 이면 입석 홀드를 보냅니다(TrainScheduleViewModel.java:2856-2874). 그러나 STAND 는 운행중지·대기·
-        # 병합 판정을 먼저 거친 뒤에만 나오고(TrainScheduleOutTrainInfo.java:2810-2885,3557-3567) 그 비교값이 보호돼 있어, 13/11 만으로는
-        # 앱이 입석 홀드를 만들 행인지 알 수 없습니다. 그래서 입석 전용 홀드는 보내지 않습니다. 입석+좌석은 MERGE_STANDING 입니다.
+        # 앱은 일반 job 에서 일반실이 STAND 이면 입석 홀드를 보냅니다(TrainScheduleViewModel.java:2856-2874). 그러나 STAND 는 운행중지·대기· 병합
+        # 판정을 먼저 거친 뒤에만 나오고(TrainScheduleOutTrainInfo.java:2810-2885,3557-3567) 그 비교값이 보호돼 있어, 13/11 만으로는 앱이 입석
+        # 홀드를 만들 행인지 알 수 없습니다.
         raise KorailProtocolError("KORAIL reservation requires an evidenced available general seat")
 
 
@@ -785,8 +745,7 @@ def _assert_boarding_order(
     legs: Sequence[TrainSummary],
     journeys: Sequence[dict[str, str]],
 ) -> None:
-    """환승 구간이 서로 다른 열차이고 탑승 순서인지 확인합니다. 앱은 환승 조회가 묶은 두 행으로만 폼을 만듭니다
-    (TrainScheduleViewModel.java:2952-2968). 두 역 코드가 다른 환승도 있어 역 연결은 보지 않습니다
+    """앱은 환승 조회가 묶은 두 행으로만 폼을 만듭니다 (TrainScheduleViewModel.java:2952-2968). 두 역 코드가 다른 환승도 있어 역 연결은 보지 않습니다
     (TransferItinerary.transfer_station_code)."""
     for index in range(1, len(journeys)):
         earlier, later = journeys[index - 1], journeys[index]
@@ -859,7 +818,7 @@ def _itinerary_standing_flag(
     *,
     seat_classes: Sequence[KorailSeatClass],
 ) -> str:
-    """하나라도 입석이면 여정 전체를 Y 로 합니다. 앱의 구간별 OR: TrainScheduleViewModel.java:2961-2967,3004."""
+    """앱의 구간별 OR: TrainScheduleViewModel.java:2961-2967,3004."""
     flag = "N"
     for index, (train, seat_class) in enumerate(zip(legs, seat_classes, strict=True)):
         if index == 0 or flag == "N":
@@ -873,8 +832,8 @@ def _standing_flag(
     seat_class: KorailSeatClass,
 ) -> str:
     """일반실·일반좌석 매진·입석 가용 조건입니다(TrainScheduleOutTrainInfo.java:2881-2889;
-    TrainScheduleViewModel.java:2870-2874,2961-2967). 13/11 은 관측값이고 TrainReservationCode.java:21,24 의 코드 평문은
-    보호돼 있습니다."""
+    TrainScheduleViewModel.java:2870-2874,2961-2967). 13/11 은 관측값이고 TrainReservationCode.java:21,24 의 코드
+    평문은 보호돼 있습니다."""
     if (
         seat_class is KorailSeatClass.GENERAL
         and train.general_reservation_code == "13"
@@ -885,12 +844,12 @@ def _standing_flag(
 
 
 # 앱은 SMS 선택 시 세 부분 전화번호를 합쳐 길이 11 을 검사합니다 (ReservationWaitApplyUiData.java:85;
-# ReservationWaitViewModel.java:503-513). 라이브러리는 숫자만 허용하므로 앱의 길이 검사보다 엄격합니다. 서버의 문자 수용 여부는 미확인입니다.
+# ReservationWaitViewModel.java:503-513). 서버의 문자 수용 여부는 미확인입니다.
 _STANDBY_PHONE_RE = re.compile(r"[0-9]{11}")
 
 
 def _successful_hold_pnr(hold: ReservationHoldResponse, *, context: str) -> str:
-    """후속 요청에 필요한 SUCC 홀드와 PNR 을 검증합니다. 실패 메시지는 context 로 구분합니다."""
+    """실패 메시지는 context 로 구분합니다."""
     pnr_no = hold.pnr_no
     if hold.str_result != "SUCC" or not isinstance(pnr_no, str) or not pnr_no.strip():
         raise KorailProtocolError(context)
@@ -905,10 +864,7 @@ def build_standby_wait_form(
     sms_notify: bool = False,
     phone_no: str | None = None,
 ) -> dict[str, str]:
-    """예약대기 홀드의 알림·특실변경 옵션 폼을 구성하며 전송하지 않습니다. 라우트: NetworkApi.java:639-640; 필드: ReservationWaitIn.java:59; 선택값
-    구성: ReservationWaitViewModel.java:520-527. 옵션의 Y/N 평문은 보호돼 있습니다. 관광열차의 특실 선택 숨김은 같은 파일 :565-572 참고. SMS
-    선택 시만 번호를 검증합니다. 앱의 미선택 번호는 null(:522-524)이지만 Json 설정값은 보호돼 최종 직렬화를 여기서 단정하지
-    않습니다(NetworkModule.java:861). 라이브러리는 그 키를 생략합니다."""
+    """SMS 선택 때만 번호를 검증하고 미선택 번호는 생략합니다(ReservationWaitViewModel.java:520-527; Json 설정은 보호됨)."""
     pnr_no = _successful_hold_pnr(
         hold,
         context="KORAIL standby options require one successful hold with a PNR",
@@ -940,14 +896,13 @@ def build_unpaid_reservation_cancel_form(
     config: KorailConfig,
     response: ReservationHoldResponse,
 ) -> dict[str, str]:
-    """여정 수를 홀드에서 에코해 미결제 취소 폼을 만듭니다. 앱도 응답 여정 수를 전달합니다 (ReservationWaitViewModel.java:398;
-    MyReservationViewModel.java:1557). 순번·변경번호는 첫 여정 값을 되울리고, 없을 때만 아래 대체값을 씁니다."""
+    """앱도 응답 여정 수를 전달합니다 (ReservationWaitViewModel.java:398; MyReservationViewModel.java:1557). 순번·변경번호는 첫 여정
+    값을 되울리고, 없을 때만 아래 대체값을 씁니다."""
     if not isinstance(response, ReservationHoldResponse):
         raise KorailProtocolError("KORAIL cancellation requires an exact reservation hold response")
-    # h_jrny_cnt 는 0001 처럼 패딩돼 오므로 숫자로 검사하고 원래 철자는 에코합니다. 앱의 여정 수 에코: ReservationWaitViewModel.java:398;
-    # ReservationMergeViewModel.java:445; AirportBusSeatMapViewModel.java:542;
-    # PayViewModel.java:4686,4725,4805,4847; BasketTicketViewModel.java:3232; MyReservationViewModel.java:1557.
-    # 여정번호·변경번호의 보호 기본값은 길이만으로 확인할 수 없습니다.
+    # 앱의 여정 수 에코: ReservationWaitViewModel.java:398; ReservationMergeViewModel.java:445;
+    # AirportBusSeatMapViewModel.java:542; PayViewModel.java:4686,4725,4805,4847;
+    # BasketTicketViewModel.java:3232; MyReservationViewModel.java:1557. 보호 리터럴은 미확인입니다.
     journey_count = response.journey_count
     legs = None
     if isinstance(journey_count, str) and journey_count.strip().isdigit():
@@ -958,10 +913,8 @@ def build_unpaid_reservation_cancel_form(
     )
     if not isinstance(journey_count, str) or legs is None or legs < 1:
         raise KorailProtocolError("KORAIL cancellation requires a fresh successful unpaid hold")
-    # 순번·변경번호는 홀드 응답의 첫 여정 값을 되울립니다. 7.0.6 예약목록 (MyReservationViewModel.java:1557,1566)과 결제 화면
-    # (PayViewModel.java:4678-4686)이 그렇게 하고, 결제 화면은 값이 없을 때만 AlienGuard 로 보호된 대체 리터럴(4·3바이트)을 씁니다. 대체값
-    # "0001"/"000" 은 복호값이 아니라 라이브 확인값입니다 — 2026-09-22 reserve/reserve_transfer/reserve_merge/recalculate_price
-    # 응답의 여정 행 45개 중 h_rsv_chg_no 를 가진 행은 0개였고, "000" 으로 보낸 취소는 모두 IRG000000 으로 성립했습니다.
+    # 7.0.6 예약목록 (MyReservationViewModel.java:1557,1566)과 결제 화면 (PayViewModel.java:4678-4686)이 그렇게 하고, 결제 화면은 값이
+    # 없을 때만 AlienGuard 로 보호된 대체 리터럴(4·3바이트)을 씁니다.
     first = response.journeys[0] if response.journeys else None
     sequence = first.journey_sequence if first is not None else None
     change_no = first.reservation_change_no if first is not None else None
@@ -979,24 +932,19 @@ def build_unpaid_reservation_cancel_form(
     return form
 
 
-# 결제 시퀀스가 없을 때 쓰는 000000 은 라이브러리 정책이며 앱 기본값은 미확인입니다. 2026-07 라이브 2건은 시퀀스를 모두 제공했으므로 이 폴백을 검증한 표본이 아닙니다. 결제는
-# FieldMap(NetworkApi.java:630-632,646-648)이며 null 값을 자동 생략한다고 볼 수 없습니다 (ParameterHandler.java:252-259 의 Field 와
-# :276-293 의 FieldMap 은 처리가 다릅니다).
+# 결제 시퀀스가 없을 때 쓰는 000000 은 라이브러리 정책이며 앱 기본값은 미확인입니다. 2026-07 라이브 2건은 시퀀스를 모두 제공했으므로 이 폴백을 검증한 표본이 아닙니다.
 _ABSENT_JOB_SEQUENCE = "000000"
 
 
 def _echoed_job_sequence(value: str | None) -> str:
-    """홀드 시퀀스를 에코합니다(PayViewModel.java:6682-6683). 숫자로 온 값의 앞자리 0 을 복원하지 않습니다.
-    값이 없을 때의 000000 폴백은 앱 근거·실서버 검증이 없습니다."""
+    """홀드 시퀀스를 에코합니다(PayViewModel.java:6682-6683). 숫자로 온 값의 앞자리 0 을 복원하지 않습니다."""
     if isinstance(value, str) and value.strip():
         return value
     return _ABSENT_JOB_SEQUENCE
 
 
-# 응답 첫 여정의 변경번호가 없을 때의 대체값입니다. 항상 없음으로 가정하지 않습니다. 2026-09-22: reserve/reserve_transfer/reserve_merge/
-# recalculate_price 의 45여정 모두 해당 키가 없었고, 같은 예약을 목록으로 되읽으면 000 이었습니다. 표본 밖의 응답을 보장하지 않습니다. 앱은 응답값 또는 보호 기본값을
-# 사용합니다(PayViewModel.java:6684 및 취소 경로 :4678-4686). 결제 변경번호 대체값의 직접 앱 근거는 미확인이며,
-# 대체값은 앱 보호 문자열의 복호 결과가 아니라 관측에 근거한 선택입니다.
+# 응답 첫 여정의 변경번호가 없을 때의 대체값입니다. 항상 없음으로 가정하지 않습니다. : reserve/reserve_transfer/reserve_merge/ recalculate_price 의
+# 45여정 모두 해당 키가 없었고, 같은 예약을 목록으로 되읽으면 000 이었습니다. 보호 리터럴은 미확인입니다.
 _ABSENT_RESERVATION_CHANGE_NO = "000"
 
 
@@ -1015,13 +963,7 @@ def build_card_payment_form(
     hold: ReservationHoldResponse,
     card: CardPayment,
 ) -> dict[str, str]:
-    """홀드·카드 입력으로 결제 폼을 만듭니다. 실제 전송은 결제 시도를 일으킬 수 있습니다. 정산액은 hold.received_amount 를 사용하며 total_price 로 대체하지
-    않습니다. 일반 예약의 앱 금액 흐름은 PayViewModel.java:11027-11028,11303-11307,11368,11440 과
-    PayAmountUiData.java:65,248-249, ReservationOut.java:452 참고. initAmountData 의 jadx 중복 경고로 모든 분기 수를 확정할 수
-    없습니다. smali 근거는 PayViewModel.smali:25740-27914 입니다. h_tot_prc 가 UI 전용이라는 주장은 하지 않습니다.
-
-    포인트·마일리지 병용은 구현하지 않습니다(PaymentMethodHelper.java:89-137,587-689). 앱의 미병용 경로는 hidPontDvCd1 도 넣지만(:130) 보호값을
-    모르므로 라이브러리는 생략합니다. 관측된 결제 성공이 누락 필드·시퀀스 폴백·모든 카드 조합의 성공을 보장하지 않습니다. 카드 정보는 폼에 들어가므로 로그·예외 원문 노출에 주의하십시오."""
+    """결제액은 received_amount이며 total_price로 대체하지 않습니다(PayViewModel.java:11027-11028,11303-11307)."""
     if not isinstance(card, CardPayment):
         raise KorailProtocolError("KORAIL payment requires a CardPayment")
     if not hold.payable:
@@ -1047,20 +989,19 @@ def build_card_payment_form(
             "KORAIL payment requires a fresh successful unpaid hold with a "
             "PNR, window number, and numeric received amount"
         )
-    # 앱은 결제할 금액이 0 이면 카드 요청을 만들지 않고(PayViewModel.java:15572, 카드 입력 검사도 금액이 0 이 아닐 때만 :18144)
-    # 결제수단 없이 발권 요청을 보냅니다(:5148). 라이브러리는 그 경로를 구현하지 않으므로 0원 카드 결제를 보내지 않습니다.
+    # 앱은 결제할 금액이 0 이면 카드 요청을 만들지 않고(PayViewModel.java:15572, 카드 입력 검사도 금액이 0 이 아닐 때만 :18144) 결제수단 없이 발권 요청을
+    # 보냅니다(:5148). 라이브러리는 그 경로를 구현하지 않으므로 0원 카드 결제를 보내지 않습니다.
     if int(amount) == 0:
         raise KorailProtocolError(
             "KORAIL card payment refuses a zero-amount hold: the app issues it without a card"
         )
-    # 숫자 모양 검사만으로 카드 유효성이나 비과금을 보장하지 않습니다. 앱은 앞 세 칸의 길이와 넷째 칸의 최소 길이를 검사하지만 길이 값은
-    # 보호돼 있습니다(PayViewModel.java:16196-16210). 13~16자리는 라이브러리 기준이며 앱 값과 같다는 근거는 없습니다.
+    # 숫자 모양 검사만으로 카드 유효성이나 비과금을 보장하지 않습니다. 앱은 앞 세 칸의 길이와 넷째 칸의 최소 길이를 검사하지만 길이 값은 보호돼
+    # 있습니다(PayViewModel.java:16196-16210).
     if not isinstance(card.card_number, str) or _CARD_NUMBER_RE.fullmatch(card.card_number) is None:
         raise KorailProtocolError("KORAIL payment card number must be 13 to 16 digits")
     if not isinstance(card.installment, str) or _INSTALLMENT_RE.fullmatch(card.installment) is None:
         raise KorailProtocolError('KORAIL payment installment must be one or two digits, "0" for a lump sum')
-    # 유효기간: 앱은 월 1~12 와 만료 여부(현재 yyyyMM <= 카드 yyyyMM)를 결제 전에 검사합니다(PayViewModel.java:16211-16224). 이 라이브러리의 입력은
-    # 라이브 결제에서 쓴 YYMM 입니다.
+    # 유효기간: 앱은 월 1~12 와 만료 여부(현재 yyyyMM <= 카드 yyyyMM)를 결제 전에 검사합니다(PayViewModel.java:16211-16224).
     expire = card.card_expire
     if not isinstance(expire, str) or len(expire) != 4 or _DIGITS_RE.fullmatch(expire) is None:
         raise KorailProtocolError("KORAIL payment card_expire must be YYMM digits")
@@ -1068,7 +1009,6 @@ def build_card_payment_form(
     if not 1 <= month <= 12 or _current_year_month() > (2000 + int(expire[:2])) * 100 + month:
         raise KorailProtocolError("KORAIL payment card has expired or has an invalid month")
     # PayViewModel.java:16233-16243; smali:53727-53863 (국내 직접입력 카드).
-    # 앱은 길이만 보지만 두 값 모두 숫자 입력이므로 숫자만 받습니다.
     if not isinstance(card.card_password, str) or re.fullmatch(r"[0-9]{2}", card.card_password) is None:
         raise KorailProtocolError("KORAIL payment requires the first two card password digits")
     auth_length = 6 if card.card_type == "J" else 10
@@ -1093,8 +1033,8 @@ def build_card_payment_form(
             "hidIsmtMnthNum1": card.installment,
             "hidAthnDvCd1": card.card_type,
             "hidAthnVal1": card.birthday,
-            # 클라이언트 결제는 로그인 전용입니다. 앱은 로그인 여부로 이 필드를 나눕니다 (PayViewModel.java:6600-6604;
-            # FPayViewModel.java:772-778). 양쪽 상수는 보호돼 있으며 Y 가 앱의 회원 값이라는 직접 근거는 없습니다.
+            # 앱은 로그인 여부로 이 필드를 나눕니다 (PayViewModel.java:6600-6604; FPayViewModel.java:772-778). 양쪽 상수는 보호돼 있으며 Y
+            # 가 앱의 회원 값이라는 직접 근거는 없습니다.
             "hiduserYn": "Y",
         }
     )
@@ -1103,8 +1043,7 @@ def build_card_payment_form(
 
 def _refund_echo_field(value: object, *, field: str) -> str:
     """국내 앱은 상세의 pbpAcepTgtFlg 를 전달합니다(MyTicketDetailViewModel.java:1521). 외국인 경로는 보호
-    상수입니다(FTicketDetailViewModel.java:634). 응답 필드는 선택적이나 기본값 평문은 보호돼 있습니다(TicketDetailOut.java:167).
-    2026-09-21 발권·환불 기록에서 상세에 후보 키가 없었고 빈 값으로 만든 환불 폼이 성공했습니다. 라이브러리는 None 만 빈 문자열로 바꾸며 실제 전송에서는 빈 필드가 생략됩니다."""
+    상수입니다(FTicketDetailViewModel.java:634)."""
     if value is None:
         return ""
     if not isinstance(value, str):
@@ -1130,16 +1069,8 @@ def build_refund_form(
     latitude: str | None = None,
     longitude: str | None = None,
 ) -> dict[str, str]:
-    """승차권 한 장의 환불 요청 폼을 구성하며 전송하지 않습니다. PNR 키는 txtPnrNo 입니다(RefundTicketIn.java:194; NetworkApi.java:603).
-    settle_mileage=False 는 라이브러리 기본 정책입니다. 앱의 수수료·마일리지 비교와 선택 흐름은 MyTicketDetailViewModel.java:1811-1858, 선택값
-    전달은 :1466-1469,1515-1521,2074-2093 이지만 기본 bool·Y/N 평문은 보호돼 있습니다. settle_mileage=True 는 앱처럼 수수료 응답이 있고
-    사용 가능 마일리지가 수수료 이상일 때만 받습니다.
-
-    pbp_acceptance_target_flag 는 명시값 또는 승차권 값을 사용합니다. 값 누락 시 처리와 국내/외국인 차이는 _refund_echo_field 참고. 보호 기본값을 빈
-    문자열로 확정하지 않습니다. tk_ret_tms_dv_cd·trnNo 는 commission 을 넘길 때만 싣습니다 — 승차권 상세
-    화면(MyTicketDetailViewModel.java:1521)과 외국인 화면(FTicketDetailViewModel.java:634)은 null 을 넘기고, 환불 화면은 수수료 응답 값을
-    싣습니다(아래 주석). 환불 화면이 싣는 ctlDvCd 는 한국어/외국어로 갈리는 보호 리터럴이라
-    (RefundTicketViewModel$refundTicket$1.smali:1187-1514) 싣지 않습니다."""
+    """수수료 확인값을 에코하고 보호된 ctlDvCd는 추측하지 않아 생략합니다(MyTicketDetailViewModel.java:1811-1858;
+    RefundTicketIn.java:66)."""
     for name, value in (
         ("pnr_no", ticket.pnr_no),
         ("sale_date", ticket.sale_date),
@@ -1166,9 +1097,7 @@ def build_refund_form(
         "h_orgtk_ret_pwd": ticket.return_password,
         "h_mlg_stl": "Y" if settle_mileage else "N",
     }
-    # 7.0.6 에는 환불 요청을 만드는 화면이 둘입니다. 승차권 상세(MyTicketDetailViewModel.java:1521)는 위 필드만 채우고 나머지는 null 입니다. 환불
-    # 화면(RefundTicketViewModel$refundTicket$1.smali)은 먼저 CommissionView 를 부르고 그 응답의 tk_ret_tms_dv_cd(:1132), 첫
-    # 승차권의 trnNo(:854-868), 현재 위치의 위도·경도(:1136-1180, 위치가 없으면 null)를 더 싣습니다. commission 을 넘기면 뒤쪽입니다.
+    # 승차권 상세(MyTicketDetailViewModel.java:1521)는 위 필드만 채우고 나머지는 null 입니다.
     if commission is not None:
         if not isinstance(commission, RefundCommissionResponse):
             raise KorailProtocolError("commission must be a RefundCommissionResponse")
@@ -1181,10 +1110,9 @@ def build_refund_form(
             form["tk_ret_tms_dv_cd"] = commission.ticket_return_times_division_code
         if ticket.train_no:
             form["trnNo"] = ticket.train_no
-    # 앱은 두 화면 모두 수수료를 조회한 뒤에만 마일리지 정산을 묻습니다. 진행 가능 플래그가 보호된 1글자 값과 같고 사용 가능 마일리지가
-    # 수수료 이상일 때만 묻고, 아니면 마일리지 없이 환불합니다(MyTicketDetailViewModel.java:1811-1823; 환불 화면은 수수료 합계와 비교,
-    # RefundTicketViewModel.java:924-942). 플래그 비교값은 보호돼 있어 보지 않습니다. 앱이 보내지 않을 요청이므로 조용히 N 으로 바꾸지 않고
-    # 전송 전에 거절합니다.
+    # 진행 가능 플래그가 보호된 1글자 값과 같고 사용 가능 마일리지가 수수료 이상일 때만 묻고, 아니면 마일리지 없이
+    # 환불합니다(MyTicketDetailViewModel.java:1811-1823; 환불 화면은 수수료 합계와 비교, RefundTicketViewModel.java:924-942). 플래그
+    # 비교값은 보호돼 있어 보지 않습니다.
     if settle_mileage:
         if commission is None:
             raise KorailProtocolError(
@@ -1206,8 +1134,7 @@ def build_station_refund_execution_form(
     config: KorailConfig,
     request: StationRefundExecutionRequest,
 ) -> dict[str, str]:
-    """역발행 승차권의 확인 결과로 실행 폼을 만듭니다. 12키는 ExecuteOnlineRefundsIn.java:60. 입력 타입은 StationRefundExecutionRequest 에서
-    검증하며 클라이언트 실행은 로그인이 필요합니다."""
+    """12키는 ExecuteOnlineRefundsIn.java:60."""
     if not isinstance(request, StationRefundExecutionRequest):
         raise KorailProtocolError("KORAIL station refund requires an exact execution request")
     fields = (
@@ -1245,9 +1172,8 @@ def build_discount_card_purchase_form(
     config: KorailConfig,
     request: DiscountCardPurchaseRequest,
 ) -> dict[str, str]:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 미결제 구매 폼. 단일 FieldMap 라우트(NetworkApi.java:336-337)와
-    NCardInfoIn.java:29-39, NCardjrny.java:55 의 @SerialName 을 따릅니다. 배열 평탄화: NetworkService.java:15345-15367.
-    부가사용자 키·보호 기본값·최종 순서와 실제 구매 수용 여부는 미검증입니다."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 단일 FieldMap 라우트(NetworkApi.java:336-337)와
+    NCardInfoIn.java:29-39, NCardjrny.java:55 의 @SerialName 을 따릅니다."""
     if not isinstance(request, DiscountCardPurchaseRequest):
         raise KorailProtocolError("KORAIL discount card purchase requires an exact DiscountCardPurchaseRequest")
     form = _common_fields(config)
@@ -1311,11 +1237,7 @@ def build_discount_card_extension_query(
     config: KorailConfig,
     ticket: DiscountCardTicket,
 ) -> dict[str, str]:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 연장용 POST 폼입니다. 이름의 query 와 달리 GET 요청이 아닙니다
-    (NetworkApi.java:518-520). 원승차권의 네 자격증명은 MyTicketDetailViewModel.java:1049 에서
-    읽습니다(TicketDetailOut.java:117,458-470). 키 saleWctNo/saleDd/saleSqno/tkRetPwd 는
-    NCardExtensionIn.java:31-34,55,158 의 속성명에서 추정했으며 serializer 이름은 보호돼 있습니다. lang 포함 여부로 빌더 필드 수가 달라집니다
-    (CommonIn.java:467-474). 라이브 연장은 미검증입니다."""
+    """이름과 달리 POST이며 키는 속성명 추정·실서버 검증 못 함입니다(NetworkApi.java:518-520; NCardExtensionIn.java:31-34)."""
     if not isinstance(ticket, DiscountCardTicket):
         raise KorailProtocolError("KORAIL discount card extension requires an exact DiscountCardTicket")
     query = _common_fields(config)
@@ -1333,7 +1255,7 @@ def build_discount_card_extension_query(
     return query
 
 
-#: 가능한 승객 행 키 접두사 최대 여덟 개. 일반 예약에서는 0명 행을 전송하지 않으며, N카드 홀드는 존재하는 행을 한 행으로 대체합니다.
+#: 일반 예약에서는 0명 행을 전송하지 않으며, N카드 홀드는 존재하는 행을 한 행으로 대체합니다.
 _PASSENGER_ROW_KEYS = frozenset(
     f"{prefix}{index}"
     for prefix in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd")
@@ -1347,9 +1269,7 @@ def build_discount_card_reservation_form(
     *,
     card_no: str,
 ) -> dict[str, str]:
-    """N카드 좌석 예약에 사용할 폼을 만듭니다. 생성만으로 예약하거나 결제하지 않습니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 일반 예약
-    경로(NetworkApi.java:752-753)의 N카드 분기는 Passengers.java:731,765-766, 승객 키는
-    TicketReservationInPassengerInfo.java:55,105-117을 따릅니다. ReqDiscount.java:36의 N_CARD 값은 보호돼 있습니다."""
+    """생성만으로 예약하거나 결제하지 않습니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
     form = build_reservation_form(config, train)
     rebuilt: dict[str, str] = {}
     for name, value in form.items():
@@ -1388,16 +1308,13 @@ _PRICE_RECALCULATION_SCALAR_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 
-# 네 선택 스칼라는 PriceReCalculationIn.java:38-41,114-133 의 nullable 속성입니다. 키는 속성명에서 추정했으며 serializer 이름은 보호돼 있습니다
-# (PriceReCalculationIn$$serializer.java:44-47). 값 채움은 실서버 검증 못 함입니다. 일반 경로의 기본 null 근거:
-# PayViewModel.smali:11834-11850. smali 대조 필요.
+# 실서버 검증 못 함. 네 선택 스칼라는 PriceReCalculationIn.java:38-41,114-133 의 nullable 속성입니다. 키는 속성명에서 추정했으며 serializer 이름은
+# 보호돼 있습니다 (PriceReCalculationIn$$serializer.java:44-47).
 def build_price_recalculation_form(
     config: KorailConfig,
     request: PriceRecalculationRequest,
 ) -> dict[str, str | list[str]]:
-    """예약 할인 재계산 요청 폼을 구성하며 전송하지 않습니다. NetworkApi.java:583-584 의 여섯 병렬 List 필드를 반복 키로 보냅니다. 결제 화면 입력은
-    PayViewModel.java:1233,1308-1316 으로 이어집니다. 입력 생성 근거는 PayViewModel.smali:11291,11834-11850,
-    PayViewModel$executeDiscountPrice$1.smali:420,543 이며 jadx 복원 실패 부분은 smali 대조가 필요합니다."""
+    """예약 할인 재계산 요청 폼을 구성하며 전송하지 않습니다. NetworkApi.java:583-584 의 여섯 병렬 List 필드를 반복 키로 보냅니다."""
     if not isinstance(request, PriceRecalculationRequest):
         raise KorailProtocolError("KORAIL price recalculation requires an exact PriceRecalculationRequest")
     pnr_no = _required_mutation_text(request.pnr_no, field="pnr_no", context="price recalculation")
@@ -1413,7 +1330,7 @@ def build_price_recalculation_form(
             raise KorailProtocolError("KORAIL price recalculation requires exact PriceRecalculationRow values")
         for wire_name, attribute in _PRICE_RECALCULATION_ROW_FIELDS:
             value = getattr(row, attribute)
-            # 빈 문자열은 유효한 자리표시자입니다. None 은 목록 전송에서 빠져 다른 병렬 목록과 인덱스가 어긋날 수 있으므로 문자열만 허용합니다.
+            # None 은 목록 전송에서 빠져 다른 병렬 목록과 인덱스가 어긋날 수 있으므로 문자열만 허용합니다.
             if type(value) is not str:
                 raise KorailProtocolError(f"KORAIL price recalculation row field {attribute} must be a string")
             columns[wire_name].append(value)
@@ -1436,13 +1353,11 @@ def build_price_recalculation_form(
             raise KorailProtocolError(
                 "KORAIL price recalculation non_member_no must be a non-empty string when present"
             )
-        # 명시한 비회원 번호가 있을 때 두 필드를 함께 추가하는 빌더 동작입니다. 클라이언트 재계산은 여전히 로그인 필요합니다. 앱 속성:
-        # PriceReCalculationIn.java:32,34,114-129; 구성: PayViewModel.java:6167-6168; smali 근거
+        # 앱 속성: PriceReCalculationIn.java:32,34,114-129; 구성: PayViewModel.java:6167-6168; smali 근거
         # :11764-11805,11834-11850. 전송 키와 N 리터럴의 평문은 보호돼 직접 확인되지 않았습니다.
         form["hiduserYn"] = "N"
         form["hidCustNo"] = non_member_no
     form["txtPsgGridcnt"] = str(len(rows))
-    # 네 스칼라는 앱의 FieldMap 에 들어가므로 여섯 반복 목록보다 앞에 둡니다.
     for wire_name, attribute in _PRICE_RECALCULATION_SCALAR_FIELDS:
         value = getattr(request, attribute)
         if value is None:
@@ -1474,10 +1389,7 @@ def build_product_cancel_query(detail: ProductDetailResponse) -> dict[str, str]:
 
 
 def build_maas_cancel_form(config: KorailConfig, item: CartItem, *, customer_no: str) -> dict[str, str]:
-    """지원하지 않는 미결제 부가서비스 해제 폼을 구성하며 전송하지 않습니다. 미결제 부가서비스 해제(addService.cancelPay.do). MaasCancelIn.java 의
-    custMgNo(로그인 고객번호)와 lumpStlTgtNo(장바구니 행의 h_lump_stl_tgt_no)입니다. 앱은 장바구니 삭제·개별 취소·결제 화면의 예약 취소에서 h_pnr_no
-    가 빈 행에만 부릅니다 (BasketTicketViewModel.java:3080-3160,5692-5723; PayViewModel.java:4574-4870). 결제된 부가서비스는
-    해제가 아니라 환불 대상입니다."""
+    """PNR이 빈 미결제 부가서비스 해제용이며 결제 후 환불과 다릅니다(BasketTicketViewModel.java:3080-3160,5692-5723)."""
     if not isinstance(item, CartItem):
         raise KorailProtocolError("item must be a CartItem from get_cart_list")
     if item.pnr_no:
@@ -1496,10 +1408,7 @@ def build_cart_add_form(
     config: KorailConfig,
     request: CartAddRequest,
 ) -> dict[str, str]:
-    """미결제 예약의 장바구니 추가 폼을 구성하며 전송하지 않습니다. AddCartListIn.java:25,30,52,79 는 CommonIn 외 hidPnrNo 하나를 선언합니다. 라우트:
-    NetworkApi.java:266-267; 호출 예: PayViewModel.java:5942, TrainSeatMapViewModel.java:267,
-    TrainScheduleViewModel.java:370, ReservationMergeViewModel.java:164, AirportBusSeatMapViewModel.java:159.
-    선택 lang 때문에 공통 필드 수는 고정이 아닙니다(CommonIn.java:467-474). 추가 응답의 할인 행 구조는 CartAddResponse 를 참고하십시오."""
+    """CommonIn 외에는 hidPnrNo만 보냅니다(AddCartListIn.java:25,30,52,79)."""
     if not isinstance(request, CartAddRequest):
         raise KorailProtocolError("KORAIL cart request requires an exact CartAddRequest")
     pnr_no = _required_mutation_text(request.pnr_no, field="pnr_no", context="cart request")
@@ -1513,8 +1422,8 @@ def build_self_checkin_register_form(
     detail: RefundTicketDetailResponse,
     seat: SelfCheckInSeat,
 ) -> dict[str, str]:
-    """셀프 체크인 등록 폼입니다. 좌석 칸은 좌석 확인(check_self_checkin_seat)의 행에서, 승차권 칸은 상세에서 옵니다
-    (SelfCheckInInfoViewModel.java:224-225; SelfCheckInRegisterIn.java:59). jrnySqno 는 좌석 행이 아닌 상세의 값입니다."""
+    """좌석 칸은 좌석 확인(check_self_checkin_seat)의 행에서, 승차권 칸은 상세에서 옵니다 (SelfCheckInInfoViewModel.java:224-225;
+    SelfCheckInRegisterIn.java:59). jrnySqno 는 좌석 행이 아닌 상세의 값입니다."""
     if not isinstance(seat, SelfCheckInSeat):
         raise KorailProtocolError("seat must be a SelfCheckInSeat from check_self_checkin_seat")
     return {
@@ -1527,7 +1436,7 @@ def build_self_checkin_register_form(
 
 
 def build_self_checkin_cancel_form(config: KorailConfig, detail: RefundTicketDetailResponse) -> dict[str, str]:
-    """셀프 체크인 취소 폼입니다. 칸은 정보 조회와 같습니다(SelfCheckInResultViewModel.java:111-112; SelfCheckInCancelIn.java:53)."""
+    """칸은 정보 조회와 같습니다(SelfCheckInResultViewModel.java:111-112; SelfCheckInCancelIn.java:53)."""
     return {**_common_fields(config), **self_checkin_ticket_fields(detail, sale_date_key="saleDt")}
 
 
@@ -1535,7 +1444,7 @@ def build_delivered_ticket_retrieval_form(
     config: KorailConfig,
     ticket: PbpAcceptanceTicket,
 ) -> dict[str, str | list[str]]:
-    """전달한 승차권 회수 폼입니다. 앱은 첫 여정의 pbpRsvNo 로 묶은 승차권마다 한 번, 그 묶음의 pbpRsvNo 와 첫 승차권의 pnrNo 를
+    """앱은 첫 여정의 pbpRsvNo 로 묶은 승차권마다 한 번, 그 묶음의 pbpRsvNo 와 첫 승차권의 pnrNo 를
     보냅니다(DeliveredTicketViewModel.java:185-205,283). pbpCnt 는 쌍의 수 1 이고, 두 목록은 FieldMap 뒤의 @Field 반복 키입니다
     (NetworkApi.java:642-644)."""
     if not isinstance(ticket, PbpAcceptanceTicket):

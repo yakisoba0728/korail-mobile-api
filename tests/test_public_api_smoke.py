@@ -1,12 +1,4 @@
-"""Public-call wiring regression tests against 291e01c, not live API acceptance.
-
-Every request and response is synthetic. No builder, parser or queue method is
-mocked. Literal exchange expectations are independent of the code at test time.
-Retrofit route/method evidence: com/korail/talk/network/NetworkApi.java:87-811 and PushService.java:16-17.
-Queue protocol evidence: com/netfunnel/api/Netfunnel.java:610-664,848-880.
-Protected aid/mode literals are not independently verified by these tests.
-The per-method source-line map and limitations are recorded in the release report.
-"""
+"""Synthetic public-call contracts exercise the real builders, parsers and queue under a socket guard."""
 
 from __future__ import annotations
 

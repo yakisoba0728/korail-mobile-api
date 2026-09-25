@@ -2,8 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""조회 응답을 read_models로 변환합니다. 봉투 판정은 HTTP 계층이 담당합니다. 필수값은 검증하고 선택값은 관대하게 읽으며 원문은 raw에 보존합니다. String 선언 필드도 JSON
-정수로 오는 경우가 있어 _optional_scalar_string은 두 타입을 허용합니다."""
+"""필수 필드의 파싱 실패는 거절한 전체 응답을 raw에 보존합니다."""
 
 from __future__ import annotations
 
@@ -149,8 +148,7 @@ from .read_models import (
 
 @_preserve_read_raw
 def parse_ticket_list_response(response: BaseKorailResponse) -> TicketListResponse:
-    """승차권 목록의 pnr_list를 읽습니다(MyTicketListOut.java:82). 2026-09-22 한 계정에서 결과가 있는 mode=2는 128행, 빈 mode=1/2는
-    WRT300005와 reservation_list 0행이었습니다. 이 관측을 모든 응답에 일반화하지 않습니다."""
+    """승차권 목록의 pnr_list를 읽습니다(MyTicketListOut.java:82). 이 관측을 모든 응답에 일반화하지 않습니다."""
     raw = response.raw
     reservations: list[TicketListReservation] = []
     for reservation_raw in _rows(raw, "pnr_list"):
@@ -273,7 +271,7 @@ def _validate_strict_read_envelope(
         raise KorailProtocolError("KORAIL strict read response strResult must be SUCC")
 
 
-# 선택값의 관대한 판독은 _parsing.py에 모읍니다. 필수값 오류는 KorailProtocolError이며 원문은 raw에 보존합니다.
+# 필수값 오류는 KorailProtocolError이며 원문은 raw에 보존합니다.
 
 _TICKET_LIST_TICKET_FIELDS: dict[str, str] = {
     "pnr_no": "h_pnr_no",
@@ -283,13 +281,10 @@ _TICKET_LIST_TICKET_FIELDS: dict[str, str] = {
     "sale_sequence": "h_orgtk_sale_sqno",
     "return_password": "h_orgtk_ret_pwd",
     "ticket_status_code": "h_tk_stt_cd",
-    # 승차권 종류는 승차권 행의 h_tk_knd_cd/h_tk_knd_nm 에서 읽습니다. 예약 행 hTkKndCd 는 보호된 serializer 대신 속성명을 사용한 추정입니다.
-    # 2026-09-22 한 계정 기록: 예약 128행은 ticket_list 만, 승차권 131행은 종류 키를 포함. 다른 조건의 키 부재를 보장하지 않습니다.
+    # 예약 행 hTkKndCd 는 보호된 serializer 대신 속성명을 사용한 추정입니다. 다른 조건의 키 부재를 보장하지 않습니다.
     "ticket_kind_code": "h_tk_knd_cd",
     "ticket_kind_name": "h_tk_knd_nm",
-    # MyTicketListOutTicket.java:92의 선언 중 여섯 필드를 읽습니다. 2026-09-22 목록 131행에 모두 있었습니다. 다른 응답에서도 필수인지는 검증 못 함입니다.
-    # PBP 상세값의 주입 근거와 관측 한계는 RefundTicketDetailResponse.pbp_acceptance_target_flag를 따릅니다
-    # (MyTicketBaseViewModel.java:769).
+    # MyTicketListOutTicket.java:92의 선언 중 여섯 필드를 읽습니다. 다른 응답에서도 필수인지는 검증 못 함입니다.
     "ticket_sequence": "h_tk_sqno",
     "ticket_status_name": "h_tk_stt_nm",
     "return_possible_flag": "h_ret_psb_flg",
@@ -299,7 +294,7 @@ _TICKET_LIST_TICKET_FIELDS: dict[str, str] = {
 }
 
 #: jrn_info 행(TicketListTrainInfo.java:72 의 @SerialName 21개). h_srcar_no 는 String 선언이지만 JSON 정수로 오므로 스칼라로 읽습니다
-#: (2026-09-24 라이브 139행 전부 정수).
+#: (라이브 139행 전부 정수).
 _TICKET_LIST_TRAIN_FIELDS: dict[str, str] = {
     "journey_sequence": "h_jrny_sqno",
     "run_date": "h_run_dt",
@@ -406,7 +401,7 @@ _CREW_REQUEST_OPTION_FIELDS: dict[str, str] = {
 }
 
 _PASS_MENU_ITEM_FIELDS: dict[str, str] = {
-    # afterDay는 문자열입니다(PassMenuOutItem.java:28). 2026-09-22: menu_no=1의 25행·2의 10행 모두 문자열이었고, 같은 25행의
+    # afterDay는 문자열입니다(PassMenuOutItem.java:28). : menu_no=1의 25행·2의 10행 모두 문자열이었고, 같은 25행의
     # detailType·isExpand·saleMsg1-3에는 빈 문자열도 있었습니다.
     "after_day": "afterDay",
     "agreement": "agree",
@@ -440,15 +435,14 @@ _COMMUTER_KIND_MENU_FIELDS: dict[str, str] = {
 _TRIP_MENU_CONTENT_FIELDS: dict[str, str] = {
     "title": "contTitle",
     "detail": "contDetail",
-    # detailType은 항목 종류로 해석하지 않습니다(TrGdMenuLtOutCont.java:42). 2026-09-22 60행 중 54행은 누락, 6행은 빈 문자열이었습니다.
-    # passType과도 구별합니다.
+    # detailType은 항목 종류로 해석하지 않습니다(TrGdMenuLtOutCont.java:42).
     "detail_type": "detailType",
     "active": "passActive",
     "agree": "passAgree",
     "info": "passInfo",
     "image": "contImage",
     "url": "contUrl",
-    # 앱은 cmtrKndCd로 항목을 찾아 passData가 없으면 화면을 되돌립니다(PassConditionViewModel.java:1241,1244,1247-1248). 2026-09-22:
+    # 앱은 cmtrKndCd로 항목을 찾아 passData가 없으면 화면을 되돌립니다(PassConditionViewModel.java:1241,1244,1247-1248). :
     # menuType='P'인 6/60행에서 확인했습니다.
     "commuter_kind_code": "cmtrKndCd",
     "pass_type": "passType",
@@ -539,8 +533,7 @@ _RESERVATION_HISTORY_TRAIN_FIELDS: dict[str, str] = {
     # ReservationViewOutTrainInfo.java:496 의 금액 필드.
     "reserved_amount": "h_rsv_amt",
     "pnr_no": "h_pnr_no",
-    # 결제 기한 필드는 ReservationViewOutTrainInfo.java:94에 선언됩니다. 2026-09-22에는 미결제 예약이 없어 P100·빈 목록만 확인했으며 이 조회의 채워진
-    # 기한 값은 검증하지 못했습니다.
+    # 결제 기한 선언: ReservationViewOutTrainInfo.java:94; 채워진 기한 값은 미확인입니다.
     "payment_deadline_date": "h_ntisu_lmt_dt",
     "payment_deadline_time": "h_ntisu_lmt_tm",
     "payment_message": "h_payment_msg",
@@ -600,7 +593,6 @@ _RESERVATION_HISTORY_RESERVATION_FIELDS: dict[str, str] = {
     "payment_flag": "h_payment_flg",
 }
 
-# 서로 다른 DTO인 MergeSeatsCOutTrnInfo와 TrainScheduleOutTrainInfo의 필드 대응표를 분리합니다.
 
 _MERGE_SEATS_TRAIN_FIELDS: dict[str, str] = {
     "train_no": "h_trn_no",
@@ -661,7 +653,7 @@ _TRAIN_SCHEDULE_OUT_TRAIN_FIELDS: dict[str, str] = {
     "free_seat_reservation_code": "h_free_rsv_cd",
     "standing_reservation_code": "h_stnd_rsv_cd",
     # 네 개의 *_rsv_nm — TrainScheduleOutTrainInfo.java:1228/1380/1344/1196 이 코드 짝과 나란히 선언하며, 전송에 '예약하기'/'역발매중' 같은
-    # 값으로 옵니다(2026-09-22: menu_id='A1','A2' 각 10행).
+    # 값으로 옵니다(: menu_id='A1','A2' 각 10행).
     "general_reservation_name": "h_gen_rsv_nm",
     "standing_reservation_name": "h_stnd_rsv_nm",
     "special_reservation_name": "h_spe_rsv_nm",
@@ -669,8 +661,6 @@ _TRAIN_SCHEDULE_OUT_TRAIN_FIELDS: dict[str, str] = {
     "seat_map_flag": "h_rd_seat_map_flg",
     "delay_sale_flag": "h_dlay_sale_flg",
     "wait_reservation_flag": "h_wait_rsv_flg",
-    # h_rsv_psb_nm 은 이 DTO 자신의 키입니다(:1296). 내용이 메뉴에 따라 바뀌어 ('A1'→'예약가능', 'A2'→'15%할인'/'20%할인', 2026-09-22) 할인
-    # 라벨이 튀어 나오지만 그것은 서버가 보내는 화면 문구이지 매핑 실수가 아닙니다 — 다른 키로 바꾸지 마십시오.
     "reservation_possible_name": "h_rsv_psb_nm",
     "special_reservation_possible_name": "h_spe_rsv_psb_nm",
     "info_text": "h_info_txt",
@@ -787,7 +777,7 @@ def _parse_pass_goods_info(
         ):
             passengers.append(
                 PassPassengerInfo(
-                    # 관측된 패스 인원은 000001 같은 패딩 문자열입니다. 정수·숫자 문자열을 모두 int 로 읽습니다.
+                    # 관측된 패스 인원은 000001 같은 패딩 문자열입니다.
                     h_cls_prnb=_optional_integer(
                         item,
                         "h_cls_prnb",
@@ -933,8 +923,7 @@ def parse_delay_discount_ticket_response(
         )
         for row in rows
     )
-    # main_info 는 DTO 밖 서버 추가 블록(DelayDiscountViewOut.java:24,51). 2026-09-22 관측은 할인권 없는 계정의 0 값뿐입니다. 영 채움과 빈
-    # 문자열을 보존합니다.
+    # main_info 는 DTO 밖 서버 추가 블록(DelayDiscountViewOut.java:24,51). 관측은 할인권 없는 계정의 0 값뿐입니다.
     main_info = _optional_mapping(raw, "main_info")
     pagination: dict[str, Any] = {}
     if main_info is not None:
@@ -1033,9 +1022,8 @@ def parse_pass_availability_response(
                 raw=item,
             )
         )
-    # 상태는 중첩 main_info에서 읽습니다(PassInfoListOut.java:115; MainInfo.java:103,107,111,115). 2026-09-22 29종은 최상위
-    # h_msg_cd 없이 SUCC와 중첩 IRZ000005 등을 반환했습니다. 앱도 성공 판정 뒤 pass_info를 확인합니다(PeriodTicketViewModel.java:796-800;
-    # PassConditionViewModel.java:904-927). 중첩 코드는 최상위 실패로 승격하지 않으며 response.main_info.message_code에서 확인합니다.
+    # 상태는 중첩 main_info에서 읽습니다(PassInfoListOut.java:115; MainInfo.java:103,107,111,115). 29종은 최상위 h_msg_cd 없이
+    # SUCC와 중첩 IRZ000005 등을 반환했습니다.
     main_raw = _optional_mapping(raw, "main_info")
     main_info = (
         PassAvailabilityMainInfo(
@@ -1063,8 +1051,7 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
         contents = tuple(
             TripMenuContent(
                 **_nullable_scalar_fields(row, _TRIP_MENU_CONTENT_FIELDS, "trip menu content"),
-                # TrGdMenuLtOutCont.java:45 passData → TrGdMenuLtOutPass.java:29-35. 정기권 메뉴와 구조가 비슷해 같은 헬퍼를 쓰되,
-                # 역 선택 키 철자만 다릅니다(아래).
+                # TrGdMenuLtOutCont.java:45 passData → TrGdMenuLtOutPass.java:29-35.
                 pass_data=_parse_pass_menu_data(
                     _optional_mapping(row, "passData"),
                     # TrGdMenuLtOutPass.java:152 — 여행 메뉴의 키 철자는 별도입니다.
@@ -1137,7 +1124,7 @@ def _required_read_rows(
     key: str,
     context: str,
 ) -> list[Mapping[str, Any]]:
-    """필수 객체 목록을 읽습니다. 누락·null·비객체 행은 거절합니다(ReceiptInfos.java:49, DeliveredTicketOut.java:50 의 필수 마스크)."""
+    """누락·null·비객체 행은 거절합니다(ReceiptInfos.java:49, DeliveredTicketOut.java:50 의 필수 마스크)."""
     value = data.get(key)
     if not isinstance(value, list) or any(not isinstance(row, Mapping) for row in value):
         raise KorailProtocolError(f"KORAIL {context} field {key} must be an object list")
@@ -1149,8 +1136,7 @@ def _required_read_strings(
     fields: Mapping[str, str],
     context: str,
 ) -> dict[str, Any]:
-    """필수 문자열 필드를 읽습니다. 누락·null 은 거절하고, JSON 정수는 문자열로 받습니다(String 선언 필드가 정수로 온 2026-09-21 관측,
-    :func:`_strict_scalar_string`)."""
+    """누락·null 은 거절하고, JSON 정수는 문자열로 받습니다(String 선언 필드가 정수로 온 관측, :func:`_strict_scalar_string`)."""
     values = {}
     for attr, key in fields.items():
         value = _strict_scalar_string(data, key, context)
@@ -1218,8 +1204,8 @@ def parse_ticket_receipt_response(
 def _parse_reservation_history_reservation(
     raw: Mapping[str, Any] | None,
 ) -> ReservationHistoryReservation | None:
-    """예약 이력 여정에 중첩된 ReservationOut을 읽습니다. ReservationViewOutJrnyInfo.java:55의 다섯 번째 생성자 인자입니다. @SerialName이 없어
-    전송 키는 보호돼 있으며 속성명 reservationOut을 추정해 사용합니다."""
+    """ReservationViewOutJrnyInfo.java:55의 다섯 번째 생성자 인자입니다. @SerialName이 없어 전송 키는 보호돼 있으며 속성명 reservationOut을
+    추정해 사용합니다."""
     if raw is None:
         return None
     tickets = tuple(
@@ -1272,8 +1258,7 @@ def _parse_reservation_history_reservation(
 def parse_reservation_history_response(
     raw: Mapping[str, Any],
 ) -> ReservationHistoryResponse:
-    """예약 이력의 예약자 정보와 여정별 상세를 읽습니다(ReservationViewOut.java:64). 열차·srv_infos·acmp_infos와 ReservationOut의
-    운임·결제·발권 정보까지 보존합니다."""
+    """예약 이력의 예약자 정보와 여정별 상세를 읽습니다(ReservationViewOut.java:64)."""
     empty = _validate_envelope(
         raw,
         accepted_empty_codes=frozenset({"P100"}),
@@ -1325,7 +1310,6 @@ def parse_reservation_history_response(
         )
     return ReservationHistoryResponse(
         **_nullable_scalar_fields(raw, _RESERVATION_HISTORY_TOP_FIELDS, "reservation history"),
-        # 2026-09-21: 홀드의 h_jrny_cnt 는 패딩 문자열, 예약 이력은 JSON 정수였습니다. 두 형식을 모두 읽습니다.
         journey_count=_optional_scalar_string(raw, "h_jrny_cnt", "reservation history"),
         guide_info=guide_info,
         journeys=tuple(journeys),
@@ -1357,14 +1341,12 @@ def parse_free_seat_car_response(
 def parse_guide_seat_condition_response(
     raw: Mapping[str, Any],
 ) -> GuideSeatConditionResponse:
-    # 앱은 실패 응답의 h_msg_txt를 안내합니다(TrainOptionViewModel.java:290-300). 이 파서도 FAIL을 응답으로 받되 FAIL/P058은 세션 만료 예외로
-    # 처리합니다.
+    # 앱은 실패 응답의 h_msg_txt를 안내합니다(TrainOptionViewModel.java:290-300).
     _validate_envelope(raw, return_all_failures=True)
     if raw.get("strResult") not in {"SUCC", "FAIL"}:
         raise KorailProtocolError("KORAIL seat guidance result must be SUCC or FAIL")
-    # timeStamp 는 속성명(GuideSeatCndOut.java:29). 보호된 descriptor 의 9자 길이는 평문을 증명하지
-    # 않습니다(GuideSeatCndOut$$serializer.java:39). 2026-09-22 한 계정 14종 관측 기록에는 키가 없었습니다. 다른 조건에서도 키가 없는지는 검증 못
-    # 함입니다.
+    # 실서버 검증 못 함. timeStamp 는 속성명(GuideSeatCndOut.java:29). 보호된 descriptor 의 9자 길이는 평문을 증명하지
+    # 않습니다(GuideSeatCndOut$$serializer.java:39).
     return GuideSeatConditionResponse(
         time_stamp=_optional_integer(raw, "timeStamp", "guide seat condition"),
         **_response_fields(raw),
@@ -1387,8 +1369,8 @@ def _parse_train_schedule_container(
     *,
     read_merge_flag: bool,
 ) -> tuple[str | None, tuple[TrainScheduleItem, ...]]:
-    """trn_infos 의 실제 DTO 에 따라 read_merge_flag 를 지정합니다. 병합 플래그는 MergeSeatsCOutTrnInfos.java:25-26,85 에만 선언되며,
-    TrainScheduleOutTrainInfos.java:25-26,78 은 trn_info 만 선언합니다."""
+    """병합 플래그는 MergeSeatsCOutTrnInfos.java:25-26,85 에만 선언되며, TrainScheduleOutTrainInfos.java:25-26,78 은
+    trn_info 만 선언합니다."""
     container = _optional_mapping(raw, "trn_infos")
     if container is None:
         return None, ()
@@ -1401,7 +1383,7 @@ def _parse_train_schedule_container(
 def parse_seat_assignment_schedule_response(
     raw: Mapping[str, Any],
 ) -> SeatAssignmentScheduleResponse:
-    """좌석배정 예매의 열차 시각표를 읽습니다. TrainScheduleOut.java:67 의 커서·조건을 함께 읽습니다. h_merge_rsv_psb_flg 는 다른 응답
+    """TrainScheduleOut.java:67 의 커서·조건을 함께 읽습니다. h_merge_rsv_psb_flg 는 다른 응답
     컨테이너(MergeSeatsCOutTrnInfos.java:85)의 필드라 읽지 않습니다."""
     _validate_strict_read_envelope(raw)
     merge_flag, trains = _parse_train_schedule_container(
@@ -1468,8 +1450,8 @@ def parse_merge_seats_inquiry_response(
     )
     return MergeSeatsInquiryResponse(
         merge_reservation_possible_flag=merge_flag,
-        # runDt 는 최상위 선언(MergeSeatsCOut.java:29,112)이지만 2026-09-22 관측 20여 회에는 없었고 행별 h_run_dt 만 있었습니다. 다른 조건에서도
-        # 없다고 일반화하지 않습니다.
+        # runDt 는 최상위 선언(MergeSeatsCOut.java:29,112)이지만 관측 20여 회에는 없었고 행별 h_run_dt 만 있었습니다. 다른 조건에서도 없다고 일반화하지
+        # 않습니다.
         run_date=_optional_scalar_string(raw, "runDt", "merge seats inquiry"),
         intermediate_stations=tuple(stations),
         trains=trains,
@@ -1528,8 +1510,7 @@ _KORAIL_POINT_SUMMARY_FIELDS = {
     "phone_verified_flag": "h_cp_athn_flg",
     "email_verified_flag": "h_emil_athn_flg",
     "contact_channel_content": "h_cntc_chn_cont1",
-    # MyXPointViewOut.java:43,53,54 — customer_lead_flag_name 의 플래그 짝과 disability_flag 의 유형 코드·이름입니다. 셋 다 라이브
-    # 48키 응답에 옵니다(2026-09-22).
+    # MyXPointViewOut.java:43,53,54 — customer_lead_flag_name 의 플래그 짝과 disability_flag 의 유형 코드·이름입니다.
     "customer_lead_flag": "h_cust_lead_flg",
     "disability_type_code": "h_hdcp_tp_cd",
     "disability_type_name": "h_hdcp_tp_cd_nm",
@@ -1548,8 +1529,8 @@ _MILEAGE_HISTORY_FIELDS = {
     "total_available_affiliate_point": "totAvlAfltPontValNum",
     "total_accumulated_rail_point_1": "totAcmRailPontValNum1",
     "total_used_rail_point_1": "totUseRailPontValNum1",
-    # railNowSavePontValNum1 은 DTO 미선언(AmtSpecOut.java:29-39, AmtSpecOutSpecInfo.java:29-35). 2026-09-22 관측:
-    # KTX/RAIL_POINT 의 모든 확인 페이지에 9자리 문자열로 있었으며 해당 계정에서는 totAcmRailPontValNum1 과 같았습니다. 모델 대신 raw 로 제공합니다.
+    # railNowSavePontValNum1 은 DTO 미선언(AmtSpecOut.java:29-39, AmtSpecOutSpecInfo.java:29-35). 관측: KTX/RAIL_POINT
+    # 의 모든 확인 페이지에 9자리 문자열로 있었으며 해당 계정에서는 totAcmRailPontValNum1 과 같았습니다.
     "expiring_point_value": "delPontValNum",
     "ktx_mileage_info": "ktxMlgInfo",
 }
@@ -1571,8 +1552,7 @@ def parse_korail_point_summary_response(
 ) -> KorailPointSummaryResponse:
     _validate_strict_read_envelope(raw)
     return KorailPointSummaryResponse(
-        # MyXPointViewOut.java:27-74 는 String 이고 2026-09-22 표본도 48키 모두 문자열이었습니다. 다른 라우트의 숫자 전송 변동에 대비해 scalar 를
-        # 허용하는 것은 라이브러리 정책입니다.
+        # MyXPointViewOut.java:27-74 는 String 이고 표본도 48키 모두 문자열이었습니다.
         **_nullable_scalar_fields(raw, _KORAIL_POINT_SUMMARY_FIELDS, "korail point summary"),
         **_response_fields(raw),
     )
@@ -1609,8 +1589,7 @@ _DISCOUNT_CARD_USAGE_FIELDS = {
     "run_date": "runDt1",
     "additional_user_flag": "apdUsrFlg",
     # NCardHistoryInfo.java:224 의 8속성 중 판매 식별자 3개도 보존합니다. 화면은 나머지 5개를
-    # 소비합니다(NCardHistoryScreenKt.java:431,439,526,528,301). 전송 키는 속성명에 따른 추정입니다. @SerialName 부재만으로 확정할 수 없고
-    # NCardHistoryInfo$$serializer.java:35-42 의 descriptor 이름은 보호돼 있습니다.
+    # 소비합니다(NCardHistoryScreenKt.java:431,439,526,528,301).
     "sale_date": "saleDt",
     "sale_sequence": "saleSqno",
     "sale_window_no": "saleWctNo",
@@ -1652,8 +1631,7 @@ def parse_discount_card_usage_response(
     for item in _rows(raw, "tkUseList"):
         items.append(
             DiscountCardUsage(
-                # 2026-09-22 시험한 카드번호는 모두 ERR000100 으로 채워진 응답을 확인하지 못했습니다. 다른 조회의 숫자형 관측을 고려해 순번은 문자열·정수를 모두
-                # 허용합니다(이 경로는 미검증).
+                # 다른 조회의 숫자형 관측을 고려해 순번은 문자열·정수를 모두 허용합니다(이 경로는 미검증).
                 **_nullable_scalar_fields(item, _DISCOUNT_CARD_USAGE_FIELDS, "discount card usage"),
                 raw=item,
             )
@@ -1674,7 +1652,7 @@ def parse_discount_card_schedule_response(
     for item in _rows(raw, "trnScdlList"):
         trains.append(
             DiscountCardScheduleTrain(
-                # 운임·역 순번의 문자열/정수 변동을 허용합니다. 이 라우트의 라이브 근거는 없으며 파서 정책입니다.
+                # 이 라우트의 라이브 근거는 없으며 파서 정책입니다.
                 **_nullable_scalar_fields(
                     item, _DISCOUNT_CARD_SCHEDULE_TRAIN_FIELDS, "discount card schedule train"
                 ),
@@ -1864,7 +1842,7 @@ def _optional_add_srv_item(
     item_context: str,
     info_context: str,
 ) -> MaasServiceDetail | None:
-    """선택 부가서비스 객체를 읽습니다. 객체가 아니면 ``None``."""
+    """객체가 아니면 ``None``."""
     item = _optional_mapping(data, key)
     if item is None:
         return None
@@ -1923,8 +1901,7 @@ def _primitive_json_integer(
     key: str,
     context: str,
 ) -> int | None:
-    """Kotlin Int 값을 읽되 누락은 0, 잘못된 형식은 None으로 처리합니다. Psg.java는 정수로 선언하지만 2026-09-21 서버는
-    custAgeFrom·custAgeTo·psgPrnbFrom·psgPrnbTo를 영 채움 숫자 문자열로 반환했습니다. JSON 정수와 이 형식을 모두 허용합니다."""
+    """Kotlin Int 값을 읽되 누락은 0, 잘못된 형식은 None으로 처리합니다."""
     if data.get(key) is None:
         return 0
     return _optional_integer(data, key, context)
@@ -2100,7 +2077,7 @@ def parse_ticket_duplication_check_response(
 ) -> TicketDuplicationCheckResponse:
     _validate_strict_read_envelope(raw)
     return TicketDuplicationCheckResponse(
-        # rsvCnt 는 String 선언입니다(TicketDupCheckOut.java:28,50). 0007 같은 패딩은 유지합니다.
+        # rsvCnt 는 String 선언입니다(TicketDupCheckOut.java:28,50).
         reservation_count=_optional_scalar_string(
             raw,
             "rsvCnt",
@@ -2125,8 +2102,8 @@ def parse_pbp_acceptance_specification_response(
                     PbpAcceptanceSeat(
                         # Seat.java:53-59 는 마스크 31 로 다섯 필드 누락을 거절하므로 필수로 읽습니다.
                         **_required_read_strings(seat, _PBP_ACCEPTANCE_SEAT_FIELDS, "PBP acceptance seat"),
-                        # scarNo 는 int 선언(Seat.java:35,53). 이 파서는 문자열·정수를 모두 허용합니다. 앱 Json 설정 리터럴이 보호돼 있어 인용된
-                        # 설정만으로 quoted Int 허용 이유는 확정하지 않습니다 (NetworkServiceKt.java:15-31).
+                        # scarNo 는 int 선언(Seat.java:35,53). 앱 Json 설정 리터럴이 보호돼 있어 인용된 설정만으로 quoted Int 허용 이유는
+                        # 확정하지 않습니다 (NetworkServiceKt.java:15-31).
                         car_no=_required_integer(
                             seat,
                             "scarNo",
@@ -2168,8 +2145,8 @@ def parse_recent_delivery_history_response(
     raw: Mapping[str, Any],
 ) -> RecentDeliveryHistoryResponse:
     _validate_strict_read_envelope(raw)
-    # RecentDeliveryHistoryOut.java:51-57 의 마스크 24 는 두 키를 필수로 둡니다. 2026-09-24 실서버 응답에는 acepList 가 있고
-    # chgePbpRsvNo 만 없었으므로 chgePbpRsvNo 만 선택으로 읽습니다. acepList 는 nullable List 라 null 은 빈 목록입니다.
+    # RecentDeliveryHistoryOut.java:51-57 의 마스크 24 는 두 키를 필수로 둡니다. 실서버 응답에는 acepList 가 있고 chgePbpRsvNo 만 없었으므로
+    # chgePbpRsvNo 만 선택으로 읽습니다. acepList 는 nullable List 라 null 은 빈 목록입니다.
     if "acepList" not in raw:
         raise KorailProtocolError("KORAIL recent delivery history field acepList is required")
     recipients = []
@@ -2201,7 +2178,7 @@ _RESERVATION_SEAT_DETAIL_FIELDS = {
     "room_class_code": "h_psrm_cl_cd",
     "room_class_name": "h_psrm_cl_nm",
     # h_psg_tp_dv_nm 은 앱 내장 응답 예시에 존재(BasketTicketDataKt.java:44)하나 ReservationOutSeatInfo.java:81 의 @SerialName
-    # 에는 없습니다. 2026-09-22 한 계정 8좌석에서 확인했지만 항상 전송된다는 보장은 없습니다.
+    # 에는 없습니다. 한 계정 8좌석에서 확인했지만 항상 전송된다는 보장은 없습니다.
     "passenger_type_code": "h_psg_tp_cd",
     "passenger_type_name": "h_psg_tp_dv_nm",
     "received_amount": "h_rcvd_amt",
@@ -2360,12 +2337,11 @@ _REFUND_TICKET_DETAIL_FIELDS = {
     "companion_name": "h_compa_nm",
     "companion_birth_date": "h_compa_brth",
     # 목록의 PBP 대상 키는 MyTicketListOutTicket.java:92,300에 있으며 상세의 명시적 키에는 없습니다 (TicketDetailOut.java:117). 앱의 주입은
-    # TicketDetailOut.java:65,1936과 MyTicketBaseViewModel.java:769을 따릅니다. 2026-09-22 상세 40응답의 후보 키 부재와 사용 주의는
-    # RefundTicketDetailResponse의 해당 필드 설명을 따릅니다.
+    # TicketDetailOut.java:65,1936과 MyTicketBaseViewModel.java:769을 따릅니다.
     "delay_flag": "h_dlay_flg",
     "delay_ticket_flag": "h_dlay_tk_flg",
-    # mlgSaveFlg/mlgSaveTgt 는 TicketDetailOut.java:39-91,117 에 없지만 2026-09-22 서버 상세 40/40 표본에는 빈 문자열로 있었습니다.
-    # 타입화하지 않고 raw 에 보존합니다.
+    # mlgSaveFlg/mlgSaveTgt 는 TicketDetailOut.java:39-91,117 에 없지만 서버 상세 40/40 표본에는 빈 문자열로 있었습니다. 타입화하지 않고 raw 에
+    # 보존합니다.
     "additional_service_flag": "addSrvFlg",
     "additional_service_cancel": "addSrvCancel",
 }
@@ -2384,9 +2360,7 @@ _DISCOUNT_CARD_SECTION_FIELDS = {
 def _discount_card_on_ticket(
     raw: Mapping[str, Any],
 ) -> DiscountCardOnTicket | None:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 상세의 선택 dcnt_crd_info(TicketDetailOut.java:438). 없으면 None 입니다. 구간 키
-    appSegList 는 속성명에 따른 추정(DiscountCardInfo.java:28,244)이며 나머지 4개 이름은 명시적 @SerialName
-    입니다(DiscountCardInfo.java:113-125)."""
+    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 상세의 선택 dcnt_crd_info(TicketDetailOut.java:438)."""
     info = _optional_mapping(raw, "dcnt_crd_info")
     if info is None:
         return None
@@ -2458,8 +2432,7 @@ def parse_refund_ticket_detail_response(
             )
         )
     detail_fields = _nullable_scalar_fields(raw, _REFUND_TICKET_DETAIL_FIELDS, "refund ticket detail")
-    # pbpAcepTgtFlg는 보호된 전송 키 대신 속성명으로 읽는 후보입니다(TicketDetailOut.java:65). 2026-09-22 40응답에는 없었습니다. 앱이 목록에서 주입한다는
-    # 사실만으로 서버 전송이 불가능하다고 단정하지 않습니다. 선언·관측 한계는 _REFUND_TICKET_DETAIL_FIELDS와 RefundTicketDetailResponse를 따릅니다.
+    # pbpAcepTgtFlg는 보호된 전송 키 대신 속성명으로 읽는 후보입니다(TicketDetailOut.java:65). 40응답에는 없었습니다.
     if "pbpAcepTgtFlg" in raw:
         detail_fields["pbp_acceptance_target_flag"] = _optional_scalar_string(
             raw, "pbpAcepTgtFlg", "refund ticket detail"
@@ -2521,8 +2494,8 @@ _SELF_SEAT_CHANGE_INFO_FIELDS = {
 def parse_self_seat_change_info_response(
     raw: Mapping[str, Any],
 ) -> SelfSeatChangeInfoResponse:
-    """좌석변경 정보를 읽습니다. DTO: SeatAvailabilityOut.java:28-42, ChgStnInfo.java:21-35, ChgRsnInfo.java:21-24. 라우트:
-    NetworkApi.java:806-808. String 선언 필드도 숫자로 오는 경우를 고려해 문자열·정수를 허용합니다."""
+    """DTO: SeatAvailabilityOut.java:28-42, ChgStnInfo.java:21-35, ChgRsnInfo.java:21-24. 라우트:
+    NetworkApi.java:806-808."""
     _validate_strict_read_envelope(raw)
     stations = tuple(
         SelfSeatChangeStation(
@@ -2634,10 +2607,8 @@ _ORIGINAL_TICKET_FIELDS = {
 def parse_original_ticket_inquiry_response(
     raw: Mapping[str, Any],
 ) -> OriginalTicketInquiryResponse:
-    """원표 조회의 실제 타입 연결은 OgTicketInquiryOut.java:27 → OrgTk.java:38 → JrnyInfo.java:58 → SeatInfo
-    입니다(NetworkApi.java:234-236). 이름이 비슷한 Jrny/Seat 는 대리수령 응답용으로 바꾸어 쓰면 안 됩니다 (DeliveredTicketOut.java:27,
-    Tk.java:27, NetworkApi.java:367-369). cmpnList·stlList 의 지연증명·결제 자격증명은 후속 변경에 필요하지 않아 타입화하지 않으며 raw 에는
-    그대로 남습니다(Cmpn.java:35-38, Stl.java:29,32,37)."""
+    """원표의 OrgTk→JrnyInfo→SeatInfo는 대리수령의 Jrny/Seat와 다른 모델입니다(OgTicketInquiryOut.java:27; OrgTk.java:38;
+    JrnyInfo.java:58)."""
     _validate_strict_read_envelope(raw)
     tickets = []
     for ticket in _rows(raw, "orgTkList"):
@@ -2714,8 +2685,7 @@ def parse_delay_certificate_response(raw: Mapping[str, Any]) -> DelayCertificate
     _validate_strict_read_envelope(raw)
     delays = []
     for row in _optional_read_rows(raw, "dlayList", "delay certificate"):
-        # DelayCertificate.java:57-60 의 마스크는 runDt 도 필수로 두지만 2026-09-25 실서버의 지연 승차권 2장은 runDt 없이 나머지 7키만
-        # 돌려줬습니다. 그래서 runDt 만 선택으로 읽습니다.
+        # DelayCertificate.java:57-60 의 마스크는 runDt 도 필수로 두지만 실서버의 지연 승차권 2장은 runDt 없이 나머지 7키만 돌려줬습니다.
         delays.append(
             DelayCertificateRow(
                 **_required_read_strings(row, _DELAY_CERTIFICATE_FIELDS, "delay certificate"),
