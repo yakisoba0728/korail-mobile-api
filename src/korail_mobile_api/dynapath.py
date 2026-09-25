@@ -123,6 +123,8 @@ def build_dynapath_prefix(
 
 @dataclass(frozen=True)
 class DynapathRequestContext:
+    """DynaPath 토큰 공급자에게 전달할 요청 메타데이터를 담습니다."""
+
     method: str
     path: str
     url: str
@@ -141,6 +143,8 @@ RandomTextProvider = Callable[[], str]
 
 @dataclass(frozen=True)
 class DynapathTokenSettings:
+    """DynaPath 토큰 생성에 사용할 기기값과 시각 공급자를 구성합니다."""
+
     device_id: str
     as_value: str
     app_start_ts: str
@@ -191,6 +195,8 @@ def build_default_token_settings() -> DynapathTokenSettings:
 
 @dataclass(frozen=True)
 class DynapathConfig:
+    """DynaPath 활성화 여부와 토큰 공급 방식을 구성합니다."""
+
     enabled: bool = False
     token_provider: DynapathTokenProvider | None = None
     token_settings: DynapathTokenSettings | None = None

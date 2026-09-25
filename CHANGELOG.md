@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+v1.1.1 이후의 변경입니다. 이 판은 Git 태그·릴리스를 만들지 않았고 PyPI 에는 올리지 않습니다.
+v1.0.0~v1.1.1 은 GitHub 릴리스로 공개했으며 당시 기록은
+[v1.1.1 태그의 CHANGELOG](https://github.com/yakisoba0728/korail-mobile-api/blob/v1.1.1/CHANGELOG.md)에 있습니다.
+
+### 달라진 요청과 동작
+
+- 요청 필드를 앱 DTO 의 선언 순서로 보냅니다(`NetworkService.java:15335–15392`). 로그인, 예약 5종, 환불·수수료 조회
+  (공통 필드를 맨 뒤), 호차 조회, 승차권 목록, 병합 조회가 해당하고, 요금 재계산은 Retrofit 목록 순서입니다. `lang` 은 `Key` 뒤에 옵니다.
+- API 요청은 `User-Agent: korailtalk` 과 앱 OkHttp 기본 헤더(`Connection: Keep-Alive`, `Accept-Encoding: gzip`)를 보내고
+  `Accept` 는 보내지 않습니다.
+- 대기열 요청은 빈 본문 POST 에 안드로이드 기본 Dalvik User-Agent(`Build/…` 포함)를 싣고, 응답 코드와 TTL·대기 인원은
+  Java `Integer.parseInt` 처럼 읽습니다. 허용 범위 밖 노드는 무시하고 정문으로 진행·반납합니다.
+- DynaPath 토큰의 `rt` 에 요청 간 시간차(최근 5개)를 싣습니다. v1.1.1 은 `rt=0` 고정이었습니다.
+- 운임 조회는 상품번호가 없어도 `gdNo` 칸을 보냅니다.
+- 요청 전에 거절합니다: 카드 입력 형식, 0원·예약대기 홀드의 카드 결제, 수수료 조회 응답 없는 환불, 마일리지가 수수료보다 적은
+  마일리지 정산, 탑승 순서가 아닌 환승 구간, 운행일이 다른 병합 행, 공항버스 좌석 중복.
+- 좌석·호차·역의 선택 필드 18개가 빠지면 앱 기본값으로 읽습니다. 봉투와 String 필드의 JSON 정수는 문자열로 읽습니다.
+  파싱에 실패하면 예외 `.raw` 에 전체 응답, `.parser_raw` 에 부분 원문이 남습니다.
+
 ### 수정
 
 - 로그인 폼에서 `txtInputFlg`를 회원번호 앞, `custId`를 `checkValidPw` 앞에 둡니다
@@ -35,7 +54,7 @@
 - `TrainSearchQuery`는 청소년·유아·안내견 인원도 받습니다. 조회 폼에서는 각각 어른·어린이·어른 인원에 합칩니다.
 - `ReservationHoldResponse.payable`은 예약대기 결제를 막는 값입니다. 병합 첫 홀드는 결제할 수 있습니다.
 
-### 호환성 주의 — 제거·변경된 공개 이름
+### v1.1.1 과 호환되지 않는 변경
 
 모델은 키워드 인자로 생성하십시오. 변경 메서드는 별도 사전 동의 없이 즉시 요청합니다.
 

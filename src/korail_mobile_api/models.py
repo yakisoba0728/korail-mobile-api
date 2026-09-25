@@ -13,7 +13,9 @@ from .errors import KorailProtocolError
 
 @dataclass(frozen=True)
 class KorailSession:
-    """고객번호와 회원번호는 다르며 raw·repr는 마스킹하지 않습니다."""
+    """로그인 쿠키와 계정 식별자를 보관합니다.
+
+    고객번호와 회원번호는 다르며 raw·repr는 마스킹하지 않습니다."""
 
     jsessionid: str | None = None
     member_no: str | None = None
@@ -24,7 +26,9 @@ class KorailSession:
 
 @dataclass(frozen=True)
 class BaseKorailResponse:
-    """from_raw는 봉투 타입만 검사하며, 성공·실패 판정은 http.parse_base_response가 맡습니다."""
+    """응답의 공통 상태·메시지와 원문을 담습니다.
+
+    from_raw는 봉투 타입만 검사하며, 성공·실패 판정은 http.parse_base_response가 맡습니다."""
 
     h_msg_cd: str | None = None
     h_msg_txt: str | None = None
@@ -33,6 +37,7 @@ class BaseKorailResponse:
 
     @classmethod
     def from_raw(cls, raw: object) -> Self:
+        """봉투 세 필드를 그대로 옮겨 담아 응답을 만듭니다."""
         from ._parsing import _envelope
 
         if not isinstance(raw, dict):
@@ -50,6 +55,8 @@ class BaseKorailResponse:
 
 @dataclass(frozen=True)
 class AppVersionInfo:
+    """앱 버전과 업데이트 안내 주소를 담습니다."""
+
     message: str | None = None
     new_version: str | None = None
     #: 업데이트 주소는 CNTAURL입니다(MobilePlusMainVersion.java:52; AppKt.java:1240,1323,1635).
@@ -58,6 +65,8 @@ class AppVersionInfo:
 
 @dataclass(frozen=True)
 class AppDataResponse(BaseKorailResponse):
+    """앱 메인 캐시의 버전·공지 정보를 담습니다."""
+
     disability_certification_msg: str | None = None
     railplus_cardinfo: str | None = None
     version: AppVersionInfo | None = None
@@ -66,6 +75,8 @@ class AppDataResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class NoticeResponse(BaseKorailResponse):
+    """앱 메인 화면의 공지를 담습니다."""
+
     board_id: str | None = None
     post_sequence: str | None = None
     post_title: str | None = None
@@ -74,11 +85,15 @@ class NoticeResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class UuidResponse(BaseKorailResponse):
+    """서버가 발급한 단말 검증값을 담습니다."""
+
     verification_code: str | None = None
 
 
 @dataclass(frozen=True)
 class MaasMenuItem:
+    """부가서비스 메뉴 한 항목과 역 선택 조건을 담습니다."""
+
     active: str | None = None
     additional_service_code: str | None = None
     app_data: str | None = None
@@ -94,11 +109,13 @@ class MaasMenuItem:
 
     @property
     def uses_station_selection(self) -> bool:
-        """관측상 appData=N만 역 선택에서 제외하며 알려진 코드 목록으로 제한하지 않습니다."""
+        """메뉴가 역 선택을 사용하는지 판정합니다.
+
+        관측상 appData=N만 역 선택에서 제외하며 알려진 코드 목록으로 제한하지 않습니다."""
         return (
             self.active == "Y"
             and self.menu_type != "N"
-            # appData='N'만 역 선택에서 제외합니다. : 'C'(604)는 역 15개, 'N'(001)은 0개, 'Y'·'M30'은 25~111개였으므로 Y·M10·M30만 허용하는
+            # appData='N'만 역 선택에서 제외합니다. 실서버 관측: 'C'(604)는 역 15개, 'N'(001)은 0개, 'Y'·'M30'은 25~111개였으므로 Y·M10·M30만 허용하는
             # 방식으로 제한하지 않습니다.
             and self.app_data not in (None, "", "N")
             and isinstance(self.additional_service_code, str)
@@ -108,6 +125,8 @@ class MaasMenuItem:
 
 @dataclass(frozen=True)
 class MaasMenuListResponse(BaseKorailResponse):
+    """부가서비스 메뉴 목록을 담습니다."""
+
     items: tuple[MaasMenuItem, ...] = ()
     departure_elevator_url: str | None = None
     departure_navigation_url: str | None = None
@@ -120,6 +139,8 @@ class MaasMenuListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class KorailStation:
+    """역 코드·이름과 역별 안내 정보를 담습니다."""
+
     code: str
     name: str
     longitude: str | None = None
@@ -138,11 +159,15 @@ class KorailStation:
 
 @dataclass(frozen=True)
 class StationDataResponse(BaseKorailResponse):
+    """전체 역 목록을 담습니다."""
+
     stations: tuple[KorailStation, ...] = ()
 
 
 @dataclass(frozen=True)
 class StationInfoResponse(BaseKorailResponse):
+    """역 데이터의 판본과 역 수를 담습니다."""
+
     #: count 는 String 선언이므로 정수로 바꾸지 않습니다(StationInfoOut.java:47).
     count: str = ""
     map_version: str | None = None
@@ -150,6 +175,8 @@ class StationInfoResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TrainCalendarDay:
+    """열차 운행일 한 날짜와 예매 조건을 담습니다."""
+
     run_date: str | None = None
     business_day_stage_code: str | None = None
     day_division_code: str | None = None
@@ -170,11 +197,15 @@ class TrainCalendarDay:
 
 @dataclass(frozen=True)
 class TrainCalendarResponse(BaseKorailResponse):
+    """예매 가능한 운행일 달력을 담습니다."""
+
     days: tuple[TrainCalendarDay, ...] = ()
 
 
 @dataclass(frozen=True)
 class TrainScheduleStop:
+    """열차의 정차역 한 곳과 도착·출발 정보를 담습니다."""
+
     station_code: str | None = None
     station_name: str | None = None
     station_construction_order: str | None = None
@@ -204,6 +235,8 @@ class TrainScheduleStop:
 
 @dataclass(frozen=True)
 class TrainScheduleResponse(BaseKorailResponse):
+    """열차 한 편의 정차역 목록을 담습니다."""
+
     delay_detail_reason_content: str | None = None
     stops: tuple[TrainScheduleStop, ...] = ()
     delay_station_construction_order: str | None = None
@@ -230,6 +263,8 @@ class TrainScheduleResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TransferStation:
+    """환승 가능한 역 한 곳을 나타냅니다."""
+
     station_code: str | None = None
     station_name: str | None = None
     raw: Mapping[str, object] = field(
@@ -240,6 +275,8 @@ class TransferStation:
 
 @dataclass(frozen=True)
 class TransferStationListResponse(BaseKorailResponse):
+    """환승 가능한 역 목록을 담습니다."""
+
     stations: tuple[TransferStation, ...] = ()
 
 
@@ -252,7 +289,9 @@ class LoginCryptoInfo:
 
 @dataclass(frozen=True)
 class TrainSearchQuery:
-    """역 코드는 이름으로 바꾸며 보호된 열차군·정렬 코드는 관측값 또는 명시값을 씁니다(TrainGroup.java:25,29,335)."""
+    """직통·환승 열차의 조회 조건을 구성합니다.
+
+    역 코드는 이름으로 바꾸며 보호된 열차군·정렬 코드는 관측값 또는 명시값을 씁니다(TrainGroup.java:25,29,335)."""
 
     departure_station_code: str
     arrival_station_code: str
@@ -383,7 +422,9 @@ def _train_value(
 
 @dataclass(frozen=True)
 class TrainSummary:
-    """좌석 상태와 운임 문구는 다른 필드이며 식별값은 후속 예약 때 다시 검증합니다(실서버 관측)."""
+    """열차 한 편의 식별자·예약 상태·운임 표시를 담습니다.
+
+    좌석 상태와 운임 문구는 다른 필드이며 식별값은 후속 예약 때 다시 검증합니다(실서버 관측)."""
 
     train_no: str
     train_group_code: str | None = None
@@ -450,7 +491,9 @@ class TrainSummary:
 
     @classmethod
     def from_raw(cls, raw: Mapping[str, object]) -> Self:
-        """주요 값은 ``h_`` 접두 철자와 접두 없는 철자를 둘 다 찾습니다 (``h_trn_no`` 와 ``trnNo`` 등). 모든 스칼라는 :func:`_train_scalar`
+        """검색 응답의 행 하나를 :class:`TrainSummary` 로 만듭니다.
+
+        주요 값은 ``h_`` 접두 철자와 접두 없는 철자를 둘 다 찾습니다 (``h_trn_no`` 와 ``trnNo`` 등). 모든 스칼라는 :func:`_train_scalar`
         를 지나므로 숫자로 온 값도 받아들이고, 선택 필드의 그 밖의 모양은 None 이 됩니다."""
         return cls(
             train_no=_train_value(raw, "h_trn_no", "trnNo", required=True) or "",
@@ -465,6 +508,8 @@ class TrainSummary:
 
 @dataclass(frozen=True)
 class ReservationPassengerInfo:
+    """예약 응답의 승객 유형별 인원과 할인 정보를 담습니다."""
+
     passenger_type_code: str | None = None
     passenger_count: str | None = None
     discount_kind_code: str | None = None
@@ -480,12 +525,16 @@ class ReservationPassengerInfo:
 
 @dataclass(frozen=True)
 class SeatAttribute:
+    """좌석 속성 코드와 표시 이름을 담습니다."""
+
     name: str
     code: str | None = None
 
 
 @dataclass(frozen=True)
 class SeatCar:
+    """좌석 조회에 사용할 호차 번호와 좌석 속성을 담습니다."""
+
     #: 호차번호·잔여석은 mask 상 선택 String 이라(TrainResearchOutCarInfo.java:59-85) 누락이나 "" 이면 None 입니다.
     car_no: int | None
     room_class_name: str
@@ -497,6 +546,8 @@ class SeatCar:
 
 @dataclass(frozen=True)
 class SeatCarListResponse(BaseKorailResponse):
+    """열차 한 편의 조회 가능한 호차 목록을 담습니다."""
+
     recommended_car_no: int | None = None
     train_no: str | None = None
     cars: tuple[SeatCar, ...] = ()
@@ -508,7 +559,9 @@ class SeatCarListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class PhysicalSeat:
-    """좌석지정에는 표시 specification 이 아니라 식별자 seat_no 를 사용하십시오. KorailSeatAssignment.from_inventory 로 옮길 수 있습니다.
+    """좌석표 한 자리의 식별자·표시·판매 가능 여부를 담습니다.
+
+    좌석지정에는 표시 specification 이 아니라 식별자 seat_no 를 사용하십시오. KorailSeatAssignment.from_inventory 로 옮길 수 있습니다.
     floor 는 앱 DTO 에 없습니다(TResidualSeatsResearchOutSeat.java:32-41)."""
 
     seat_no: str
@@ -526,7 +579,9 @@ class PhysicalSeat:
 
 @dataclass(frozen=True)
 class SeatWindow:
-    """비율은 mask 상 선택 String 이라 누락이나 "" 이면 None 입니다."""
+    """좌석 배치도의 창문 위치 비율을 담습니다.
+
+    비율은 mask 상 선택 String 이라 누락이나 "" 이면 None 입니다."""
 
     start_location_ratio: float | None
     close_location_ratio: float | None
@@ -552,7 +607,9 @@ class SeatInventoryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TrainSearchMetadata:
-    """직통 6질의는 다음 페이지 Y 여도 필수 커서가 없었습니다."""
+    """열차 조회 결과의 공통 조건과 페이지 커서를 담습니다.
+
+    직통 6질의는 다음 페이지 Y 여도 필수 커서가 없었습니다."""
 
     job_id: str | None = None
     menu_id: str | None = None
@@ -580,7 +637,9 @@ class TrainSearchMetadata:
 
 @dataclass(frozen=True)
 class TrainSearchContinuation:
-    """앱 근거: TrainScheduleViewModel.java:205,7340,10262-10279. 대상 필드: TrainScheduleIn.java:95 의
+    """다음 열차 조회에 전달할 세 개의 커서 값을 담습니다.
+
+    앱 근거: TrainScheduleViewModel.java:205,7340,10262-10279. 대상 필드: TrainScheduleIn.java:95 의
     qryStNo/qryStTrnNo/qryStTrnNo2. query_train_no2 만 빈 문자열을 허용합니다."""
 
     query_station_no: str
@@ -616,7 +675,9 @@ def _train_search_continuation(
 
 @dataclass(frozen=True)
 class TrainSearchResult:
-    """예외가 없어도 trains 가 비었는지 확인하십시오. 관측: WRG000000/SUCC 에서 trn_infos 없이 빈 목록을 반환했습니다."""
+    """직통 열차 조회 한 페이지와 후속 조회 정보를 담습니다.
+
+    예외가 없어도 trains 가 비었는지 확인하십시오. 관측: WRG000000/SUCC 에서 trn_infos 없이 빈 목록을 반환했습니다."""
 
     trains: list[TrainSummary]
     response: BaseKorailResponse
@@ -624,7 +685,9 @@ class TrainSearchResult:
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:
-        """직통 6질의는 커서가 없어 None 이었습니다. 수동 커서 조합도 같은 10행을 반환한 기록이 있지만 모든 조건에서 페이지가 없다고 일반화할 수는 없습니다."""
+        """다음 페이지 Y 와 필수 커서가 모두 있을 때만 continuation 을 반환합니다.
+
+        직통 6질의는 커서가 없어 None 이었습니다. 수동 커서 조합도 같은 10행을 반환한 기록이 있지만 모든 조건에서 페이지가 없다고 일반화할 수는 없습니다."""
         # 앱은 결과 목록이 비어 있으면 다음 페이지를 부르지 않습니다(TrainScheduleViewModel.smali:36786-36804).
         if not self.trains:
             return None
@@ -648,7 +711,9 @@ class TrainSearchResult:
 
 @dataclass(frozen=True)
 class TransferItinerary:
-    """묶는 규칙은 pair_transfer_itineraries 참고. h_trn_seq 와 h_chg_trn_seq 는 서로 다른 DTO 원소입니다
+    """탑승 순서가 있는 두 구간의 환승 여정을 담습니다.
+
+    묶는 규칙은 pair_transfer_itineraries 참고. h_trn_seq 와 h_chg_trn_seq 는 서로 다른 DTO 원소입니다
     (TrainScheduleOutTrainInfo.java:1464,1112)."""
 
     first: TrainSummary
@@ -656,17 +721,22 @@ class TransferItinerary:
 
     @property
     def legs(self) -> tuple[TrainSummary, ...]:
+        """두 열차 구간을 탑승 순서대로 반환합니다."""
         return (self.first, self.second)
 
     @property
     def transfer_station_code(self) -> str | None:
-        """다르면 None 이며 두 역을 직접 읽어야 합니다. 앱의 구간별 이름 표시는 DialogsKt.java:170668,170678 참고."""
+        """첫 구간 도착역과 다음 구간 출발역이 같을 때만 그 코드를 반환합니다.
+
+        다르면 None 이며 두 역을 직접 읽어야 합니다. 앱의 구간별 이름 표시는 DialogsKt.java:170668,170678 참고."""
         arrival = self.first.arrival_station_code
         return arrival if arrival == self.second.departure_station_code else None
 
     @property
     def transfer_station_name(self) -> str | None:
-        """같으면 그 이름, 다르면 ``None`` — 코드 쪽과 같은 규칙입니다."""
+        """두 구간이 연결되는 환승역 이름을 반환합니다.
+
+        같으면 그 이름, 다르면 ``None`` — 코드 쪽과 같은 규칙입니다."""
         arrival = self.first.arrival_station_name
         return arrival if arrival == self.second.departure_station_name else None
 
@@ -687,6 +757,8 @@ def pair_transfer_itineraries(
 
 @dataclass(frozen=True)
 class TransferSearchResult:
+    """환승 조회의 전체 열차 행과 두 구간으로 묶은 여정을 담습니다."""
+
     itineraries: list[TransferItinerary]
     trains: list[TrainSummary]
     response: BaseKorailResponse
@@ -694,7 +766,9 @@ class TransferSearchResult:
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
 
     def next_page(self) -> TrainSearchContinuation | None:
-        """환승 커서 둘이 모두 있으면 사용하고 하나라도 없으면 직통 커서로 폴백하는 것은 라이브러리 정책입니다. 앱의 세 값 전달은
+        """페이지 신호와 필수 커서가 있을 때 다음 조회 커서를 반환합니다.
+
+        환승 커서 둘이 모두 있으면 사용하고 하나라도 없으면 직통 커서로 폴백하는 것은 라이브러리 정책입니다. 앱의 세 값 전달은
         TrainScheduleViewModel.java:7340과 TrainScheduleViewModel.smali:36806-36845, 분기 비교는
         TrainScheduleViewModel.smali:35654-35698에서 확인되지만 비교 리터럴은 보호돼 있습니다."""
         if not self.trains:

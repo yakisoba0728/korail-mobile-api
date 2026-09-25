@@ -90,6 +90,8 @@ def _passenger_count(value: int, name: str) -> int:
 
 @dataclass(frozen=True)
 class FreeSeatCarRequest:
+    """열차 한 편의 자유석 호차 조회 조건을 구성합니다."""
+
     run_date: str
     train_no: str
     departure_construction_order: str
@@ -100,13 +102,17 @@ class FreeSeatCarRequest:
 
 @dataclass(frozen=True)
 class GuideSeatConditionRequest:
-    """앱은 SeatType.HELPER 코드를 사용합니다(TrainOptionViewModel.java:270). 이 표본만으로 모든 입력·시점의 응답이 같다고 보장하지 않습니다."""
+    """도우미석 이용 안내 조회 조건을 구성합니다.
+
+    앱은 SeatType.HELPER 코드를 사용합니다(TrainOptionViewModel.java:270). 이 표본만으로 모든 입력·시점의 응답이 같다고 보장하지 않습니다."""
 
     seat_attribute_code: str
 
 
 @dataclass(frozen=True)
 class SeatAssignmentScheduleRequest:
+    """좌석배정 화면의 열차 조회 조건을 구성합니다."""
+
     menu_id: str
     departure_date: str
     departure_time: str
@@ -126,6 +132,8 @@ class SeatAssignmentScheduleRequest:
 
 @dataclass(frozen=True)
 class MergeSeatsInquiryRequest:
+    """병합 가능한 좌석과 중간역 조회 조건을 구성합니다."""
+
     boarding_datetime: str
     run_datetime: str
     train_no: str
@@ -202,6 +210,8 @@ def build_merge_seats_inquiry_form(
 
 @dataclass(frozen=True)
 class PassScheduleRequest:
+    """정기권으로 이용 가능한 열차 조회 조건을 구성합니다."""
+
     selected_train_code: str
     departure_date: str
     departure_time: str
@@ -396,6 +406,8 @@ def _validate_maas_service_detail_query_values(
 
 @dataclass(frozen=True)
 class MaasServiceDetailQuery:
+    """부가서비스 이용 내역의 조회 기간을 구성합니다."""
+
     start_date: str | None = None
     end_date: str | None = None
 
@@ -407,6 +419,7 @@ class MaasServiceDetailQuery:
 
     @classmethod
     def current(cls) -> MaasServiceDetailQuery:
+        """기간을 보내지 않는 조회 조건을 만듭니다."""
         return cls()
 
     @classmethod
@@ -415,6 +428,7 @@ class MaasServiceDetailQuery:
         start_date: str,
         end_date: str,
     ) -> MaasServiceDetailQuery:
+        """시작일~종료일 기간을 보내는 조회 조건을 만듭니다."""
         return cls(start_date=start_date, end_date=end_date)
 
 
@@ -453,7 +467,9 @@ _KORAIL_MILEAGE_MOVEMENTS = frozenset(
 
 @dataclass(frozen=True)
 class MileageHistoryRequest:
-    """앱 근거: NetworkApi.java:274. 기본값: KTX 마일리지 원장, 전체 증감, 페이지 1."""
+    """마일리지 내역의 기간·종류·페이지 조건을 구성합니다.
+
+    앱 근거: NetworkApi.java:274. 기본값: KTX 마일리지 원장, 전체 증감, 페이지 1."""
 
     start_date: str
     end_date: str
@@ -496,7 +512,9 @@ def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class DiscountCardScheduleRequest:
-    """보호된 기본 코드는 미확인이므로 카드의 실제 usePsbTno를 지정해야 하며 실서버 검증 못 함입니다(NCardScheduleIn.java:30-40)."""
+    """N카드 한 구간의 이용 가능한 열차 조회 조건을 구성합니다.
+
+    보호된 기본 코드는 미확인이므로 카드의 실제 usePsbTno를 지정해야 하며 실서버 검증 못 함입니다(NCardScheduleIn.java:30-40)."""
 
     card_kind_management_no: str
     departure_station_name: str
@@ -522,7 +540,9 @@ class DiscountCardScheduleRequest:
         usage_period_days: str | None = None,
         page_no: str | None = None,
     ) -> DiscountCardScheduleRequest:
-        """앱 대응 함수는 NCardDefine.findDcntCrdKndCd(NCardDefine.java:58-88)이며 그 함수가 특별 취급하는 관리번호 집합은 이 구현과
+        """카드 종류에서 dcntCrdKndCd 를 유도합니다.
+
+        앱 대응 함수는 NCardDefine.findDcntCrdKndCd(NCardDefine.java:58-88)이며 그 함수가 특별 취급하는 관리번호 집합은 이 구현과
         다릅니다(_B2N_CARD_KIND_MANAGEMENT_NOS 참고)."""
         kind_code = "B2N" if card_kind_management_no in _B2N_CARD_KIND_MANAGEMENT_NOS else "MMM"
         return cls(
@@ -661,6 +681,8 @@ def _exact_server_pass_data(pass_data: PassMenuData) -> str:
 
 @dataclass(frozen=True)
 class CommuterInitialRequest:
+    """정기권 예매의 초기 조건 조회 입력을 구성합니다."""
+
     pass_data: PassMenuData
 
     def __post_init__(self) -> None:
@@ -669,6 +691,8 @@ class CommuterInitialRequest:
 
 @dataclass(frozen=True, init=False)
 class CommuterPassengerRequest:
+    """정기권 예매의 승객·인원 조건 조회 입력을 구성합니다."""
+
     pass_data: PassMenuData
     source: CommuterInfoResponse
     passenger_counts: tuple[int, ...]
@@ -680,6 +704,7 @@ class CommuterPassengerRequest:
         source: CommuterInfoResponse,
         passenger_counts: tuple[int, ...],
     ) -> CommuterPassengerRequest:
+        """초기 조회 응답과 승객 종류별 인원으로 인원 조건 조회 입력을 만들고 검증합니다."""
         instance = object.__new__(cls)
         object.__setattr__(instance, "pass_data", pass_data)
         object.__setattr__(instance, "source", source)
@@ -712,7 +737,9 @@ def _validate_commuter_passenger_request(
 
 @dataclass(frozen=True)
 class OriginalTicketReference:
-    """반환 경로는 MMDD, 수령자·PBP 경로는 YYYYMMDD를 사용하므로 라우트 사이에 날짜를 혼용하지 않습니다(실서버 관측)."""
+    """원승차권 조회와 후속 처리에 사용할 반환 식별자를 구성합니다.
+
+    반환 경로는 MMDD, 수령자·PBP 경로는 YYYYMMDD를 사용하므로 라우트 사이에 날짜를 혼용하지 않습니다(실서버 관측)."""
 
     sale_window_no: str
     sale_date: str
@@ -763,6 +790,8 @@ def _ticket_reference_tuple(
 
 @dataclass(frozen=True)
 class TicketDuplicationCheckRequest:
+    """PNR 기준 중복 예약 확인 입력을 구성합니다."""
+
     pnr_no: str
 
     def __post_init__(self) -> None:
@@ -829,7 +858,9 @@ KorailSelfSeatChangeRoomClassCode = Literal["1", "2"]
 
 @dataclass(frozen=True)
 class SelfSeatChangeInfoRequest:
-    """앱 근거: NetworkApi.java:806-808; SeatAvailabilityIn.java:26-30,55. 앱은 승차권의 식별자를 복사하고 객실 값이 null 이 아닐 때
+    """자율 좌석변경 대상 역·사유 조회 입력을 구성합니다.
+
+    앱 근거: NetworkApi.java:806-808; SeatAvailabilityIn.java:26-30,55. 앱은 승차권의 식별자를 복사하고 객실 값이 null 이 아닐 때
     요청합니다(SelfSeatChangeOptionViewModel.java:342-344)."""
 
     run_date: str
@@ -871,6 +902,8 @@ def build_recent_delivery_history_form(customer_no: str) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class CommuterTicketInquiryRequest:
+    """정기권 예매의 원승차권 조회 입력을 구성합니다."""
+
     original_ticket: OriginalTicketReference
     inquiry_type: Literal["0", "1"] = "0"
 
@@ -898,7 +931,7 @@ def build_commuter_info_form(
             _cast(str, option.commuter_usage_age_code) for option in request.source.passenger_options
         )
         # cmtrUtlAgeCd 는 종류 행당이 아니라 승객당 반복합니다(CommutationInfoIn.java:31,38). kind=0046 관측: E05/E06 을 행당 한 번 보내면
-        # WRT800115, 인원 1+E05, 1+E06, 2+E05/E05 는 IRZ000008 이었습니다. : 이 키를 빼면 1명·2명 모두 FAIL/ERR000100 이었습니다.
+        # WRT800115, 인원 1+E05, 1+E06, 2+E05/E05 는 IRZ000008 이었습니다. 실서버 관측: 이 키를 빼면 1명·2명 모두 FAIL/ERR000100 이었습니다.
         selected = tuple(
             code
             for code, count in zip(
@@ -968,7 +1001,9 @@ class PriceFareLeg:
 
 @dataclass(frozen=True)
 class PriceFareQuoteRequest:
-    """DTO: PrcFareIn.java:28-31,197. 생성자 TrainOpInfoViewModel.java:794 의 메뉴 리터럴은 보호됨."""
+    """한두 구간의 운임 조회 조건과 메뉴를 구성합니다.
+
+    DTO: PrcFareIn.java:28-31,197. 생성자 TrainOpInfoViewModel.java:794 의 메뉴 리터럴은 보호됨."""
 
     legs: tuple[PriceFareLeg, ...]
     menu_id: str = "11"
@@ -1022,7 +1057,9 @@ def build_price_fare_quote_form(
 
 @dataclass(frozen=True)
 class TicketReservationDetailRequest:
-    """TicketRsvInquiryIn.java:51 의 명시적 hidPnrNo 를 보냅니다(NetworkApi.java:422-424). 같은 라우트의 ReservationListIn 은
+    """PNR 기준 예약 상세 조회 입력을 구성합니다.
+
+    TicketRsvInquiryIn.java:51 의 명시적 hidPnrNo 를 보냅니다(NetworkApi.java:422-424). 같은 라우트의 ReservationListIn 은
     할인승객 목록을 받는 별도 입력입니다(NetworkApi.java:626-628)."""
 
     pnr_no: str
@@ -1042,7 +1079,9 @@ def build_ticket_reservation_detail_query(
 
 @dataclass(frozen=True)
 class RefundCompanion:
-    """앱 근거: RefundCommissionIn.java:34-35,59. 앱 호출자는 compaNm/compaBrth 를
+    """환불 수수료 조회에 사용할 동반자 이름과 생년월일을 구성합니다.
+
+    앱 근거: RefundCommissionIn.java:34-35,59. 앱 호출자는 compaNm/compaBrth 를
     전달합니다(MyTicketDetailViewModel.java:277, FTicketDetailViewModel.java:179)."""
 
     name: str = ""

@@ -399,7 +399,7 @@ _CREW_REQUEST_OPTION_FIELDS: dict[str, str] = {
 }
 
 _PASS_MENU_ITEM_FIELDS: dict[str, str] = {
-    # afterDay는 문자열입니다(PassMenuOutItem.java:28). : menu_no=1의 25행·2의 10행 모두 문자열이었고, 같은 25행의
+    # afterDay는 문자열입니다(PassMenuOutItem.java:28). 실서버 관측: menu_no=1의 25행·2의 10행 모두 문자열이었고, 같은 25행의
     # detailType·isExpand·saleMsg1-3에는 빈 문자열도 있었습니다.
     "after_day": "afterDay",
     "agreement": "agree",
@@ -440,8 +440,8 @@ _TRIP_MENU_CONTENT_FIELDS: dict[str, str] = {
     "info": "passInfo",
     "image": "contImage",
     "url": "contUrl",
-    # 앱은 cmtrKndCd로 항목을 찾아 passData가 없으면 화면을 되돌립니다(PassConditionViewModel.java:1241,1244,1247-1248). :
-    # menuType='P'인 6/60행에서 확인했습니다.
+    # 앱은 cmtrKndCd로 항목을 찾아 passData가 없으면 화면을 되돌립니다(PassConditionViewModel.java:1241,1244,1247-1248).
+    # 실서버 관측: menuType='P'인 6/60행에서 확인했습니다.
     "commuter_kind_code": "cmtrKndCd",
     "pass_type": "passType",
 }

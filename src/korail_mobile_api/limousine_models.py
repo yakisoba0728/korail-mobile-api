@@ -15,6 +15,8 @@ from .models import BaseKorailResponse, SeatWindow
 
 @dataclass(frozen=True)
 class LimousineScheduleQuery:
+    """공항버스 운행 스케줄 조회 조건을 구성합니다."""
+
     departure_date: str
     departure_station_code: str
     arrival_station_code: str
@@ -28,6 +30,8 @@ class LimousineScheduleQuery:
 
 @dataclass(frozen=True)
 class LimousineSeatInventoryQuery:
+    """공항버스 한 호차의 좌석 조회 조건을 구성합니다."""
+
     train_class_code: str
     service_code: str
     run_date: str
@@ -54,6 +58,8 @@ class LimousineSeatInventoryQuery:
 
 @dataclass(frozen=True)
 class LimousineSchedule:
+    """조회된 공항버스 한 편의 구간·운행·운임 정보를 담습니다."""
+
     arrival_date: str | None = None
     arrival_station_code: str | None = None
     arrival_run_order: str | None = None
@@ -81,6 +87,8 @@ class LimousineSchedule:
 
 @dataclass(frozen=True)
 class LimousineScheduleResponse(BaseKorailResponse):
+    """공항버스 운행 스케줄 한 페이지를 담습니다."""
+
     following_page_extension: str | None = None
     long_short_division_code: str | None = None
     schedules: tuple[LimousineSchedule, ...] = ()
@@ -88,6 +96,8 @@ class LimousineScheduleResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class LimousineSeat:
+    """공항버스 좌석표 한 자리의 식별자와 점유 상태를 담습니다."""
+
     direction_attribute_code: str | None = None
     other_attribute_code: str | None = None
     integrated_message: str | None = None
@@ -103,7 +113,9 @@ class LimousineSeat:
 
 @dataclass(frozen=True)
 class LimousineSeatInventoryResponse(BaseKorailResponse):
-    """일반 좌석 재고와 TResidualSeatsResearchOut 을 공유합니다 (NetworkApi.java:271,741). 배치·배너·창측 위치의 선언은
+    """공항버스 한 호차의 좌석표와 배치 정보를 담습니다.
+
+    일반 좌석 재고와 TResidualSeatsResearchOut 을 공유합니다 (NetworkApi.java:271,741). 배치·배너·창측 위치의 선언은
     TResidualSeatsResearchOut.java:29,34-35,114,134,138 참고."""
 
     car_type_code: str | None = None

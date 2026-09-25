@@ -45,7 +45,9 @@ def _envelope(data: Mapping[str, Any]) -> dict[str, str | None]:
             try:
                 envelope[name] = str(value)
             except ValueError as exc:
-                error = KorailProtocolError(f"KORAIL response envelope field {name} is an integer too long to use")
+                error = KorailProtocolError(
+                    f"KORAIL response envelope field {name} is an integer too long to use"
+                )
                 error.raw = data
                 raise error from exc
         elif value is None or isinstance(value, str):

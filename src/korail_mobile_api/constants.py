@@ -68,7 +68,9 @@ KORAIL_COMMON_CODE_BOOTSTRAP_CODES = (
 
 
 class KorailSeatClass(StrEnum):
-    """PsrmType.java:19-22 에 GENERAL/SPECIAL 과 psrmClCd 가 있습니다. "1"/"2" 배정은 보호돼 미확인입니다. 필드명 근거:
+    """예약할 객실 등급을 나타냅니다.
+
+    PsrmType.java:19-22 에 GENERAL/SPECIAL 과 psrmClCd 가 있습니다. "1"/"2" 배정은 보호돼 미확인입니다. 필드명 근거:
     TicketReservationInJrny.java:234."""
 
     GENERAL = "1"
@@ -81,7 +83,9 @@ KorailLoginInputFlag: TypeAlias = Literal["2", "4", "5"]
 
 
 class KorailReservationJobType(StrEnum):
-    """공통 라우트: NetworkApi.java:751-753. ReservationJobId.java:20-24 의 DEFAULT/WAIT/SEAT/MERGE 등에 대응하나 코드 평문은
+    """일반·좌석지정·예약대기·병합 예약 작업을 구분합니다.
+
+    공통 라우트: NetworkApi.java:751-753. ReservationJobId.java:20-24 의 DEFAULT/WAIT/SEAT/MERGE 등에 대응하나 코드 평문은
     보호돼 있습니다."""
 
     IMMEDIATE = "1101"
@@ -188,5 +192,5 @@ DYNAPATH_ALLOWLIST_PATHS = frozenset(
         KORAIL_LOGIN_PATH,
     }
 )
-#: DynaPath 비활성화 시 전송 전에 거절하는 경로입니다. 다른 경로도 서버에서 거절될 수 있습니다. : 토큰 없는 ScheduleView는 MACRO ERROR로 거절됐습니다.
+#: DynaPath 비활성화 시 전송 전에 거절하는 경로입니다. 다른 경로도 서버에서 거절될 수 있습니다. 실서버 관측: 토큰 없는 ScheduleView는 MACRO ERROR로 거절됐습니다.
 DYNAPATH_REQUIRED_PATHS = frozenset({KORAIL_LOGIN_PATH})

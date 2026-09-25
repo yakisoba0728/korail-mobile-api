@@ -13,12 +13,12 @@ from functools import partial
 from typing import Any
 
 from ._parsing import (
-    _ResponseFields,
     _nested_rows,
     _nullable_scalar_fields,
     _optional_integer,
     _optional_scalar_string,
     _preserve_read_raw,
+    _ResponseFields,
     _rows,
 )
 from .errors import KorailProtocolError

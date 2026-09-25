@@ -26,7 +26,9 @@ def _required_env(name: str) -> str:
 
 
 def build_config_from_env() -> KorailConfig:
-    """기기값은 토큰·대기열 UA에 공유하고 자격증명은 읽거나 저장하지 않습니다(a/a.java:15; a/b.java:85)."""
+    """환경변수로 KorailConfig 를 만듭니다.
+
+    기기값은 토큰·대기열 UA에 공유하고 자격증명은 읽거나 저장하지 않습니다(a/a.java:15; a/b.java:85)."""
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
     device_model = _required_env("KORAIL_DYNAPATH_DEVICE_MODEL")

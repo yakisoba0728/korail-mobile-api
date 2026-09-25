@@ -14,7 +14,9 @@ from .models import BaseKorailResponse, ReservationPassengerInfo
 
 @dataclass(frozen=True)
 class TicketListTrain:
-    """앱 근거: TicketListTrainInfo.java:72. 라이브 이력 139행: 21개 키가 모두 있었고 ``h_srcar_no`` 는 String 선언과 달리 모두 JSON
+    """승차권 한 장에 포함된 열차 구간 정보를 담습니다.
+
+    앱 근거: TicketListTrainInfo.java:72. 라이브 이력 139행: 21개 키가 모두 있었고 ``h_srcar_no`` 는 String 선언과 달리 모두 JSON
     정수였습니다(문자열로 받습니다)."""
 
     journey_sequence: str | None = None
@@ -43,6 +45,8 @@ class TicketListTrain:
 
 @dataclass(frozen=True)
 class TicketListTicket:
+    """승차권 한 장의 식별자·상태와 열차 구간을 담습니다."""
+
     pnr_no: str | None = None
     sale_window_no: str | None = None
     sale_date: str | None = None
@@ -72,7 +76,9 @@ class TicketListTicket:
 
 @dataclass(frozen=True)
 class TicketListReservation:
-    """MyTicketListOutReservation 의 명시적 키는 ticket_list 이며 나머지는 보호된 serializer 대신 속성명으로 읽는 추정입니다."""
+    """예약 하나에 속한 승차권 목록과 부가서비스를 담습니다.
+
+    MyTicketListOutReservation 의 명시적 키는 ticket_list 이며 나머지는 보호된 serializer 대신 속성명으로 읽는 추정입니다."""
 
     tickets: tuple[TicketListTicket, ...] = ()
     #: 선택 스칼라의 전송 키는 속성명에 따른 추정입니다. mode=2 의 예약 128행은 ticket_list 외 키가 없었습니다. 다른 응답의 필드 부재까지 보장하지 않습니다.
@@ -100,6 +106,8 @@ class TicketListReservation:
 
 @dataclass(frozen=True)
 class TicketListResponse(BaseKorailResponse):
+    """현재 승차권 또는 구매 이력을 예약별로 묶어 담습니다."""
+
     reservations: tuple[TicketListReservation, ...] = ()
     #: 키가 없으면 None입니다.
     total_count: str | None = None
@@ -107,11 +115,13 @@ class TicketListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class ServiceStatusResponse(BaseKorailResponse):
-    pass
+    """예매 서비스의 운영 상태 응답을 담습니다."""
 
 
 @dataclass(frozen=True)
 class CartItem:
+    """장바구니의 열차·공항버스 예약 또는 부가서비스 한 행을 담습니다."""
+
     service_code: str | None = None
     provider_name: str | None = None
     product_name: str | None = None
@@ -158,6 +168,7 @@ class CartItem:
     def usage_window(
         self,
     ) -> tuple[str | None, str | None, str | None]:
+        """이용 시작일·시작 시각·종료 시각을 한 번에 반환합니다."""
         return (
             self.usage_start_date,
             self.usage_start_time,
@@ -167,11 +178,15 @@ class CartItem:
 
 @dataclass(frozen=True)
 class CartListResponse(BaseKorailResponse):
+    """로그인 계정의 장바구니 목록을 담습니다."""
+
     items: tuple[CartItem, ...] = ()
 
 
 @dataclass(frozen=True)
 class DepositBank:
+    """입금 가능한 은행의 코드와 이름을 담습니다."""
+
     code: str | None = None
     display_name: str | None = None
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
@@ -179,12 +194,16 @@ class DepositBank:
 
 @dataclass(frozen=True)
 class DepositBankListResponse(BaseKorailResponse):
+    """입금 가능한 은행 목록을 담습니다."""
+
     items: tuple[DepositBank, ...] = ()
 
 
 @dataclass(frozen=True)
 class DelayDiscountTicket:
-    """앱 근거: DelayCoupon.java:32-55. ``h_use_psb_dt``(사용 가능 기한)는 전 디컴파일에 0건이라 읽지 않습니다."""
+    """지연할인권 한 장의 식별자·사용 조건을 담습니다.
+
+    앱 근거: DelayCoupon.java:32-55. ``h_use_psb_dt``(사용 가능 기한)는 전 디컴파일에 0건이라 읽지 않습니다."""
 
     fare: str | None = None
     original_sale_date: str | None = None
@@ -227,6 +246,8 @@ class DelayDiscountTicketListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DiscountCoupon:
+    """할인쿠폰 한 장의 조건과 유효기간을 담습니다."""
+
     guide: str | None = None
     start_date: str | None = None
     expiration_date: str | None = None
@@ -244,6 +265,8 @@ class DiscountCoupon:
 
 @dataclass(frozen=True)
 class DiscountCouponListResponse(BaseKorailResponse):
+    """할인쿠폰 목록과 안내를 담습니다."""
+
     items: tuple[DiscountCoupon, ...] = ()
     current_page: int | None = None
     total_pages: int | None = None
@@ -253,6 +276,8 @@ class DiscountCouponListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class PassOffice:
+    """패스 조회의 발권처 코드와 표시 이름을 담습니다."""
+
     code: str | None = None
     display_name: str | None = None
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
@@ -260,7 +285,9 @@ class PassOffice:
 
 @dataclass(frozen=True)
 class PassOpenDate:
-    """앱 근거: PassInfo.java:92,96,100,149. open_dates 는 날짜만 모은 편의 목록입니다. 할당 원리·항상 변화 여부는 미확인입니다."""
+    """패스 사용 개시일과 발권 가능 날짜 정보를 담습니다.
+
+    앱 근거: PassInfo.java:92,96,100,149. open_dates 는 날짜만 모은 편의 목록입니다. 할당 원리·항상 변화 여부는 미확인입니다."""
 
     open_date: str | None = None
     item_sequence: str | None = None
@@ -270,7 +297,9 @@ class PassOpenDate:
 
 @dataclass(frozen=True)
 class PassAvailabilityMainInfo:
-    """앱 근거: MainInfo.java:103,107,111,115,172. 관측 29종은 최상위 h_msg_cd 없이 이 블록에 IRZ000001/IRZ000005 등을 담았습니다."""
+    """패스 사용일 조회의 중첩 상태와 건수를 담습니다.
+
+    앱 근거: MainInfo.java:103,107,111,115,172. 관측 29종은 최상위 h_msg_cd 없이 이 블록에 IRZ000001/IRZ000005 등을 담았습니다."""
 
     message_code: str | None = None
     total_count: str | None = None
@@ -281,6 +310,8 @@ class PassAvailabilityMainInfo:
 
 @dataclass(frozen=True)
 class PassAvailabilityResponse(BaseKorailResponse):
+    """패스의 사용 개시일·발권 가능일·창구 목록을 담습니다."""
+
     #: open_dates는 pass_info의 날짜만 모으므로 날짜가 없는 행을 건너뜁니다.
     open_dates: tuple[str, ...] = ()
     ticket_issue_dates: tuple[str, ...] = ()
@@ -291,7 +322,9 @@ class PassAvailabilityResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TripMenuContent:
-    """21개 문자열과 passData 객체입니다(TrGdMenuLtOutCont.java:26-47,72)."""
+    """여행상품 메뉴의 안내 한 행과 패스 조건을 담습니다.
+
+    21개 문자열과 passData 객체입니다(TrGdMenuLtOutCont.java:26-47,72)."""
 
     title: str | None = None
     detail: str | None = None
@@ -303,7 +336,7 @@ class TripMenuContent:
     url: str | None = None
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     #: cmtrKndCd는 get_commuter_kind_menu의 입력입니다(TrGdMenuLtOutCont.java:26). 앱도 contList에서 이 코드로
-    #: 찾습니다(PassConditionViewModel.java:1241). : 60행 중 menuType='P'인 6행에만 0046·0007·0049 값이 있었습니다.
+    #: 찾습니다(PassConditionViewModel.java:1241). 실서버 관측: 60행 중 menuType='P'인 6행에만 0046·0007·0049 값이 있었습니다.
     commuter_kind_code: str | None = None
     #: 7.0.6 에 소비자가 없어 무엇을 뜻하는지는 미확인입니다(클래스 독스트링 참고).
     pass_type: str | None = None
@@ -315,6 +348,8 @@ class TripMenuContent:
 
 @dataclass(frozen=True)
 class TripMenuItem:
+    """여행상품 메뉴 한 항목과 그 안내 목록을 담습니다."""
+
     title: str | None = None
     detail: str | None = None
     menu_type: str | None = None
@@ -329,12 +364,16 @@ class TripMenuItem:
 
 @dataclass(frozen=True)
 class TripMenuResponse(BaseKorailResponse):
+    """여행상품 메뉴 목록을 담습니다."""
+
     items: tuple[TripMenuItem, ...] = ()
     popup_message: str | None = None
 
 
 @dataclass(frozen=True)
 class ProductReservation:
+    """여행상품 예약 한 건의 식별자와 상태를 담습니다."""
+
     product_name: str | None = None
     reservation_status: str | None = None
     payment_deadline: str | None = None
@@ -350,12 +389,16 @@ class ProductReservation:
 
 @dataclass(frozen=True)
 class ProductReservationListResponse(BaseKorailResponse):
+    """여행상품 예약 목록 한 페이지를 담습니다."""
+
     items: tuple[ProductReservation, ...] = ()
     total_count: int | None = None
 
 
 @dataclass(frozen=True)
 class ProductDetailResponse(BaseKorailResponse):
+    """여행상품 예약의 상세·금액·취소 조건을 담습니다."""
+
     product_name: str | None = None
     reservation_status: str | None = None
     cancellation_deadline: str | None = None
@@ -374,6 +417,8 @@ class ProductDetailResponse(BaseKorailResponse):
 
 @dataclass(frozen=True, kw_only=True)
 class ReceiptPayment:
+    """영수증의 결제수단 한 행을 담습니다."""
+
     payment_method: str
     approval_date: str
     installment_months: int
@@ -387,7 +432,9 @@ class ReceiptPayment:
 
 @dataclass(frozen=True, kw_only=True)
 class ReceiptCashPayment:
-    """앱 근거: ReceiptInfo.java:37. String 4개·int 금액 1개이며 전송 키는 CashReceiptInfo.java:26-35,52 의 명시적 @SerialName
+    """영수증에 포함된 현금영수증 한 행을 담습니다.
+
+    앱 근거: ReceiptInfo.java:37. String 4개·int 금액 1개이며 전송 키는 CashReceiptInfo.java:26-35,52 의 명시적 @SerialName
     입니다."""
 
     #: 인증도메인 인식번호·현금영수증 승인번호도 마스킹하지 않습니다.
@@ -401,6 +448,8 @@ class ReceiptCashPayment:
 
 @dataclass(frozen=True, kw_only=True)
 class TicketReceipt:
+    """승차권 영수증의 이용 내역과 결제 정보를 담습니다."""
+
     travel_date: str
     departure_station: str
     departure_time: str
@@ -433,12 +482,16 @@ class TicketReceipt:
 
 @dataclass(frozen=True)
 class TicketReceiptResponse(BaseKorailResponse):
+    """승차권 영수증 조회 결과를 담습니다."""
+
     items: tuple[TicketReceipt, ...] = ()
 
 
 @dataclass(frozen=True)
 class ReservationHistoryTrain:
-    """평문 @SerialName 37개 외 보호된 슬롯이 있습니다 (ReservationViewOutTrainInfo.java:94,
+    """예약 이력의 열차와 결제 기한 정보를 담습니다.
+
+    평문 @SerialName 37개 외 보호된 슬롯이 있습니다 (ReservationViewOutTrainInfo.java:94,
     ReservationViewOutTrainInfo$$serializer.java:39-79). 플래그만으로 기한을 알 수는 없습니다."""
 
     departure_station: str | None = None
@@ -469,6 +522,8 @@ class ReservationHistoryTrain:
 
 @dataclass(frozen=True)
 class ReservationHistoryTicket:
+    """예약 이력에 중첩된 발권 승차권 한 행을 담습니다."""
+
     sale_date: str | None = None
     sale_window_no: str | None = None
     sale_sequence: str | None = None
@@ -480,6 +535,8 @@ class ReservationHistoryTicket:
 
 @dataclass(frozen=True)
 class ReservationHistoryOriginalTicket:
+    """예약 이력에 중첩된 원승차권 한 행을 담습니다."""
+
     sale_date: str | None = None
     window_no: str | None = None
     sale_sequence: str | None = None
@@ -489,6 +546,8 @@ class ReservationHistoryOriginalTicket:
 
 @dataclass(frozen=True)
 class ReservationHistoryPassenger:
+    """예약 이력의 승객 유형별 인원·할인 정보를 담습니다."""
+
     passenger_type_code: str | None = None
     passenger_count_per_info: str | None = None
     discount_kind_code: str | None = None
@@ -504,7 +563,9 @@ class ReservationHistoryPassenger:
 
 @dataclass(frozen=True)
 class ReservationHistoryReservation:
-    """앱 근거: ReservationViewOutJrnyInfo.java:55. 전송 키 reservationOut 은 보호된 serializer 대신 속성명을 사용한 추정입니다."""
+    """예약 이력에 중첩된 예약·운임·결제 정보를 담습니다.
+
+    앱 근거: ReservationViewOutJrnyInfo.java:55. 전송 키 reservationOut 은 보호된 serializer 대신 속성명을 사용한 추정입니다."""
 
     pnr_no: str | None = None
     total_fare: str | None = None
@@ -520,7 +581,9 @@ class ReservationHistoryReservation:
 
 @dataclass(frozen=True)
 class ReservationHistoryJourney:
-    """``srv_infos``/``acmp_infos`` 는 아직 행 단위로 모델링하지 않고 원본 그대로 노출합니다 — 원본 그대로라도 여정 단위로 닿을 수 있게 하기 위해서입니다."""
+    """예약 이력의 여정 한 개와 열차·부가 정보를 담습니다.
+
+    ``srv_infos``/``acmp_infos`` 는 아직 행 단위로 모델링하지 않고 원본 그대로 노출합니다 — 원본 그대로라도 여정 단위로 닿을 수 있게 하기 위해서입니다."""
 
     trains: tuple[ReservationHistoryTrain, ...] = ()
     service_infos: tuple[Mapping[str, object], ...] = field(default=(), compare=False)
@@ -531,7 +594,9 @@ class ReservationHistoryJourney:
 
 @dataclass(frozen=True)
 class ReservationHistoryResponse(BaseKorailResponse):
-    """라우트는 /classes/com.korail.mobile.reservation.ReservationView입니다(NetworkApi.java:635-636;
+    """현재 예약 이력과 여정별 상세를 담습니다.
+
+    라우트는 /classes/com.korail.mobile.reservation.ReservationView입니다(NetworkApi.java:635-636;
     ReservationViewOut.java:64)."""
 
     reservation_passenger_name: str | None = None
@@ -551,11 +616,14 @@ class ReservationHistoryResponse(BaseKorailResponse):
 
     @property
     def trains(self) -> tuple[ReservationHistoryTrain, ...]:
+        """``items`` 와 같은 열차 목록을 반환합니다."""
         return self.items
 
 
 @dataclass(frozen=True)
 class FreeSeatCarResponse(BaseKorailResponse):
+    """열차의 자유석 호차와 안내 문구를 담습니다."""
+
     title: str | None = None
     #: 자유석이 없는 열차는 None 입니다.
     car_no: str | None = None
@@ -564,14 +632,18 @@ class FreeSeatCarResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class GuideSeatConditionResponse(BaseKorailResponse):
-    """안내는 h_msg_txt를 확인하십시오. timeStamp는 long 선언이며(GuideSeatCndOut.java:29,50), 보호된 전송 키는 속성명에 따른 추정입니다."""
+    """도우미석 이용 조건과 서버 안내를 담습니다.
+
+    안내는 h_msg_txt를 확인하십시오. timeStamp는 long 선언이며(GuideSeatCndOut.java:29,50), 보호된 전송 키는 속성명에 따른 추정입니다."""
 
     time_stamp: int | None = None
 
 
 @dataclass(frozen=True)
 class TrainScheduleItem:
-    """각 DTO 는 다르므로 read_parsers 의 라우트별 필드 맵으로 채웁니다. 한쪽에 없는 필드는 None 이며 맵을 하나로 합치면 안 됩니다."""
+    """좌석배정·병합 조회에 사용하는 열차 정보를 담습니다.
+
+    각 DTO 는 다르므로 read_parsers 의 라우트별 필드 맵으로 채웁니다. 한쪽에 없는 필드는 None 이며 맵을 하나로 합치면 안 됩니다."""
 
     train_no: str | None = None
     train_no_qb: str | None = None
@@ -630,7 +702,9 @@ class TrainScheduleItem:
 
 @dataclass(frozen=True)
 class PassScheduleTrain:
-    """앱 근거: TrainList.java:25-70."""
+    """정기권으로 이용할 수 있는 열차 한 편을 담습니다.
+
+    앱 근거: TrainList.java:25-70."""
 
     arrival_station_code: str | None = None
     arrival_station_name: str | None = None
@@ -657,6 +731,8 @@ class PassScheduleTrain:
 
 @dataclass(frozen=True)
 class PassAgeOption:
+    """패스 예매에 사용할 연령 선택 항목을 담습니다."""
+
     commuter_age_code: str | None = None
     display_name: str | None = None
     minimum_age: str | None = None
@@ -666,12 +742,16 @@ class PassAgeOption:
 
 @dataclass(frozen=True)
 class PassScheduleInfo:
+    """정기권 열차 조회의 조건과 부가 정보를 담습니다."""
+
     trains: tuple[PassScheduleTrain, ...] = ()
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
 
 
 @dataclass(frozen=True)
 class PassScheduleMainInfo:
+    """정기권 열차 조회의 중첩 상태와 조건을 담습니다."""
+
     sale_window_no: str | None = None
     work_date: str | None = None
     work_time: str | None = None
@@ -692,7 +772,9 @@ class PassScheduleMainInfo:
 
 @dataclass(frozen=True)
 class SeatAssignmentScheduleResponse(BaseKorailResponse):
-    """앱 근거: TrainScheduleOut.java:67. 같은 DTO 모양을 쓰는 형제 파서
+    """좌석배정 예매 화면의 열차 목록과 조회 조건을 담습니다.
+
+    앱 근거: TrainScheduleOut.java:67. 같은 DTO 모양을 쓰는 형제 파서
     ``parsers.py::parse_train_search_metadata``/``TrainSearchMetadata`` 가 이미 이 필드 집합을 정확히 이렇게 읽으므로 그 이름을
     그대로 따릅니다."""
 
@@ -717,6 +799,8 @@ class SeatAssignmentScheduleResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class IntermediateStation:
+    """좌석 병합 구간이 나뉘는 중간역을 담습니다."""
+
     code: str | None = None
     name: str | None = None
     run_order: str | None = None
@@ -725,6 +809,8 @@ class IntermediateStation:
 
 @dataclass(frozen=True)
 class PassPeriodOption:
+    """패스 예매에 사용할 기간 선택 항목을 담습니다."""
+
     commuter_period_code: str | None = None
     display_name: str | None = None
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
@@ -732,6 +818,8 @@ class PassPeriodOption:
 
 @dataclass(frozen=True)
 class MergeSeatsInquiryResponse(BaseKorailResponse):
+    """병합 가능한 열차와 중간역 목록을 담습니다."""
+
     merge_reservation_possible_flag: str | None = None
     #: 최상위 runDt 선언: MergeSeatsCOut.java:29,112. 관측 20여 회에는 없었고 행의 h_run_dt 는 존재했습니다.
     run_date: str | None = None
@@ -741,6 +829,8 @@ class MergeSeatsInquiryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class PassMenuData:
+    """패스 메뉴의 역 선택 조건과 상품 코드를 담습니다."""
+
     commuter_kind_code: str | None = None
     station_selection: str | None = None
     age_options: tuple[PassAgeOption, ...] = ()
@@ -750,6 +840,8 @@ class PassMenuData:
 
 @dataclass(frozen=True)
 class PassPassengerInfo:
+    """패스의 승객 종류별 인원 조건을 담습니다."""
+
     h_cls_prnb: int | None = None
     h_dcnt_knd_cd: str | None = None
     h_st_prnb: int | None = None
@@ -758,6 +850,8 @@ class PassPassengerInfo:
 
 @dataclass(frozen=True)
 class PassPassengerInfos:
+    """패스 승객 조건 목록을 담습니다."""
+
     h_chtn_allw_flg: str | None = None
     h_max_cnt: str | None = None
     h_min_cnt: str | None = None
@@ -767,6 +861,8 @@ class PassPassengerInfos:
 
 @dataclass(frozen=True)
 class PassGoodsInfo:
+    """패스 메뉴에 연결된 상품 정보를 담습니다."""
+
     h_cnd_flg_disc_no: str | None = None
     psg_infos: PassPassengerInfos | None = None
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
@@ -774,6 +870,8 @@ class PassGoodsInfo:
 
 @dataclass(frozen=True)
 class PassMenuItem:
+    """정기권·패스 메뉴 한 항목과 안내를 담습니다."""
+
     #: ``afterDay`` — 서버가 문자열로 보냅니다(``PassMenuOutItem.java:28`` ``String``). 정수가 필요하면 호출자가 변환하십시오 — 앱도 그 자리에서
     #: ``StringExKt.safeToInt`` 로 파싱 실패 시 0을 씁니다.
     after_day: str | None = None
@@ -801,11 +899,15 @@ class PassMenuItem:
 
 @dataclass(frozen=True)
 class PassMenuResponse(BaseKorailResponse):
+    """정기권·패스 메뉴 목록을 담습니다."""
+
     items: tuple[PassMenuItem, ...] = ()
 
 
 @dataclass(frozen=True)
 class CommuterKindMenuResponse(BaseKorailResponse):
+    """정기권 종류별 안내와 예매 조건을 담습니다."""
+
     after_day: str | None = None
     agreement: str | None = None
     information: str | None = None
@@ -815,6 +917,8 @@ class CommuterKindMenuResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class CrewRequestOption:
+    """승무원 호출 시 선택할 요청 사유를 담습니다."""
+
     message_code: str | None = None
     content: str | None = None
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
@@ -822,18 +926,24 @@ class CrewRequestOption:
 
 @dataclass(frozen=True)
 class CrewRequestListResponse(BaseKorailResponse):
+    """승무원 호출 사유 목록을 담습니다."""
+
     items: tuple[CrewRequestOption, ...] = ()
 
 
 @dataclass(frozen=True)
 class PassScheduleResponse(BaseKorailResponse):
+    """정기권으로 이용 가능한 열차 목록을 담습니다."""
+
     main_info: PassScheduleMainInfo | None = None
     schedules: tuple[PassScheduleInfo, ...] = ()
 
 
 @dataclass(frozen=True)
 class DiscountCardSection:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 적용 구간(AppSegInfo.java:24-37, DiscountCardInfo.java:28).
+    """N카드를 적용할 수 있는 구간 한 개를 담습니다.
+
+    검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 적용 구간(AppSegInfo.java:24-37, DiscountCardInfo.java:28).
     @SerialName 별칭이 없는 키는 보호된 serializer 대신 속성명을 사용한 추정입니다."""
 
     departure_station_name: str | None = None
@@ -850,7 +960,9 @@ class DiscountCardSection:
 
 @dataclass(frozen=True)
 class DiscountCardOnTicket:
-    """N카드 적용 구간은 상세 DTO에 따르며 코드 평문·실서버 검증 못 함입니다(DiscountCardInfo.java:27-32; TicketDetailOut.java:49,438)."""
+    """승차권 상세에 포함된 N카드와 적용 구간을 담습니다.
+
+    N카드 적용 구간은 상세 DTO에 따르며 코드 평문·실서버 검증 못 함입니다(DiscountCardInfo.java:27-32; TicketDetailOut.java:49,438)."""
 
     #: ``h_dcnt_crd_no``(``DiscountCardInfo.java:113`` 의 ``@SerialName``).
     card_no: str | None = None
@@ -863,7 +975,9 @@ class DiscountCardOnTicket:
 
 @dataclass(frozen=True)
 class KorailPointSummaryResponse(BaseKorailResponse):
-    """앱 근거: MyXPointViewOut.java:27-74. 별칭 없는 키는 속성명에 따른 추정입니다."""
+    """계정의 포인트·쿠폰·복지 자격 요약을 담습니다.
+
+    앱 근거: MyXPointViewOut.java:27-74. 별칭 없는 키는 속성명에 따른 추정입니다."""
 
     korail_point: str | None = None
     #: h_disc_coup_cnt — 서버가 보고한 할인쿠폰 개수. get_discount_coupons 결과 길이와 항상 같다는 보장은 없습니다.
@@ -891,7 +1005,9 @@ class KorailPointSummaryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class MileageHistoryEntry:
-    """``AmtSpecOutSpecInfo.java:29-35`` 가 선언하는 것이 정확히 아래 일곱 필드입니다. 라이브에서 3페이지 14행 전부가 이 일곱 키를 문자열로 싣고 그 밖의
+    """마일리지 적립 또는 사용 내역 한 행을 담습니다.
+
+    ``AmtSpecOutSpecInfo.java:29-35`` 가 선언하는 것이 정확히 아래 일곱 필드입니다. 라이브에서 3페이지 14행 전부가 이 일곱 키를 문자열로 싣고 그 밖의
     키는 없었습니다."""
 
     departure_date: str | None = None
@@ -906,7 +1022,9 @@ class MileageHistoryEntry:
 
 @dataclass(frozen=True)
 class MileageHistoryResponse(BaseKorailResponse):
-    """앱 근거: AmtSpecOut.java:29-39,199-247. 별도로 선언된 합계 필드는 합치지 않습니다."""
+    """마일리지 내역 한 페이지와 적립·사용 합계를 담습니다.
+
+    앱 근거: AmtSpecOut.java:29-39,199-247. 별도로 선언된 합계 필드는 합치지 않습니다."""
 
     #: ``pgCnt`` — 전체 페이지 수(``AmtSpecOut.java:32``).
     page_count: str | None = None
@@ -923,7 +1041,9 @@ class MileageHistoryResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DiscountCardUsage:
-    """반환 식별자로 바로 재사용할 수 없으며 채워진 응답은 실서버 검증 못 함입니다(NCardHistoryInfo.java:22,224)."""
+    """N카드를 사용한 여행 내역 한 행을 담습니다.
+
+    반환 식별자로 바로 재사용할 수 없으며 채워진 응답은 실서버 검증 못 함입니다(NCardHistoryInfo.java:22,224)."""
 
     passenger_name: str | None = None
     departure_station_name: str | None = None
@@ -940,7 +1060,9 @@ class DiscountCardUsage:
 
 @dataclass(frozen=True)
 class DiscountCardUsageListResponse(BaseKorailResponse):
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. ``NCardHistoryOut.java:27,82`` 가 싣는 것은
+    """N카드 한 장의 사용 내역 목록을 담습니다.
+
+    검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. ``NCardHistoryOut.java:27,82`` 가 싣는 것은
     ``@SerialName("tkUseList")`` 하나뿐이라, 전송에 없는 요약 필드를 이 모델도 만들어 붙이지 않습니다."""
 
     items: tuple[DiscountCardUsage, ...] = ()
@@ -948,7 +1070,9 @@ class DiscountCardUsageListResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DiscountCardScheduleTrain:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 사용 가능 열차(NCardScheduleItem.java:30-49)."""
+    """N카드로 이용 가능한 열차 한 편을 담습니다.
+
+    검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 사용 가능 열차(NCardScheduleItem.java:30-49)."""
 
     train_no: str | None = None
     train_group_code: str | None = None
@@ -975,7 +1099,9 @@ class DiscountCardScheduleTrain:
 
 @dataclass(frozen=True)
 class DiscountCardScheduleResponse(BaseKorailResponse):
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 일정(NetworkApi.java:339-341, NCardScheduleOut.java:27-28)."""
+    """N카드로 이용 가능한 열차 목록을 담습니다.
+
+    검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 일정(NetworkApi.java:339-341, NCardScheduleOut.java:27-28)."""
 
     #: 파서는 이 값을 채우지 않습니다.
     following_page_exists: str | None = None
@@ -984,6 +1110,8 @@ class DiscountCardScheduleResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class MultiChildDiscountTarget:
+    """다자녀 할인 대상으로 등록된 가족 한 명을 담습니다."""
+
     birth_date: str | None = None
     customer_family_name: str | None = None
     discount_kind_code: str | None = None
@@ -997,11 +1125,15 @@ class MultiChildDiscountTarget:
 
 @dataclass(frozen=True)
 class MultiChildDiscountTargetResponse(BaseKorailResponse):
+    """다자녀 할인 대상 가족 목록을 담습니다."""
+
     targets: tuple[MultiChildDiscountTarget, ...] = ()
 
 
 @dataclass(frozen=True)
 class CustomerTripInfo:
+    """계정에 저장된 여행 편의설정을 담습니다."""
+
     additional_seat_attribute_code: str | None = None
     adult_disabled_person_count: str | None = None
     adult_count: str | None = None
@@ -1041,11 +1173,15 @@ class CustomerTripInfo:
 
 @dataclass(frozen=True)
 class CustomerTripInfoResponse(BaseKorailResponse):
+    """여행 편의설정 조회 결과를 담습니다."""
+
     trips: tuple[CustomerTripInfo, ...] = ()
 
 
 @dataclass(frozen=True)
 class MaasServiceDetailInfo:
+    """부가서비스의 상품·이용·결제 상세를 담습니다."""
+
     additional_service_request_no: str | None = None
     booking_time: str | None = None
     branch_name: str | None = None
@@ -1082,6 +1218,8 @@ class MaasServiceDetailInfo:
 
 @dataclass(frozen=True)
 class MaasServiceDetail:
+    """신청한 부가서비스 한 건과 그 상세를 담습니다."""
+
     additional_service_division_code: str | None = None
     additional_service_goods_code: str | None = None
     additional_service_id: str | None = None
@@ -1109,6 +1247,8 @@ class MaasServiceDetail:
 
 @dataclass(frozen=True)
 class MaasServiceDetailListResponse(BaseKorailResponse):
+    """신청한 부가서비스 목록을 담습니다."""
+
     details: tuple[MaasServiceDetail, ...] = ()
 
 
@@ -1122,7 +1262,9 @@ class MaasCancelFeeResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TripChangeDateResponse(BaseKorailResponse):
-    """앱 근거: NetworkApi.java:238; TipChgDateInquiryOut.java:28-30. ``tripChgDate``(단수)는 **요청**
+    """승차권을 변경할 수 있는 날짜 목록을 담습니다.
+
+    앱 근거: NetworkApi.java:238; TipChgDateInquiryOut.java:28-30. ``tripChgDate``(단수)는 **요청**
     DTO(``TipChgDateInquiryIn.java:29``)의 필드입니다 — 응답은 복수형 ``tripChgDates``(``List<String>``)만 선언하므로, 여기서는
     단수형을 읽지 않습니다."""
 
@@ -1132,7 +1274,9 @@ class TripChangeDateResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class CommuterPassengerOption:
-    """앱 근거: Psg.java:28-33."""
+    """정기권 승객 종류의 인원·연령 범위를 담습니다.
+
+    앱 근거: Psg.java:28-33."""
 
     commuter_usage_age_code: str | None = None
     common_code_name: str | None = None
@@ -1147,6 +1291,8 @@ class CommuterPassengerOption:
 
 @dataclass(frozen=True)
 class CommuterInfoResponse(BaseKorailResponse):
+    """정기권 예매 단계별 조건·승객·원표 정보를 담습니다."""
+
     additional_service_goods_flag: str | None = None
     companion_flag: str | None = None
     commuter_kind_code: str | None = None
@@ -1166,6 +1312,8 @@ class CommuterInfoResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class PriceFare:
+    """열차 한 구간의 운임 정보를 담습니다."""
+
     journey_sequence: str | None = None
     room_class_name: str | None = None
     #: 앱 표의 "요금"(특실 추가 요금 등, TrainOpInfoScreenKt.java:2123).
@@ -1180,12 +1328,16 @@ class PriceFare:
 
 @dataclass(frozen=True)
 class PriceFareQuoteResponse(BaseKorailResponse):
+    """예매 전 운임 조회 결과를 담습니다."""
+
     fares: tuple[PriceFare, ...] = ()
 
 
 @dataclass(frozen=True, kw_only=True)
 class DeliveryRecipientResponse(BaseKorailResponse):
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
+    """N카드 2인 승차권의 전달 수령자 후보를 담습니다.
+
+    검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다."""
 
     acceptance_customer_management_no: str
     acceptance_customer_name: str
@@ -1195,6 +1347,8 @@ class DeliveryRecipientResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class TicketDuplicationCheckResponse(BaseKorailResponse):
+    """PNR 기준 중복 예약 확인 결과를 담습니다."""
+
     #: ``rsvCnt`` — ``TicketDupCheckOut.java:28`` 의 선언은 ``String`` 이고 이 DTO 는 kotlinx 이므로 문자열로 읽습니다(``"0007"`` 은
     #: 그대로). 서버가 이 값을 JSON 정수로 보낸 적이 있는지는 확인하지 않았습니다.
     reservation_count: str | None = None
@@ -1202,6 +1356,8 @@ class TicketDuplicationCheckResponse(BaseKorailResponse):
 
 @dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceSeat:
+    """PBP 수락 내역의 좌석 한 자리를 담습니다."""
+
     passenger_type_division_name: str
     room_class_code: str
     room_class_name: str
@@ -1212,6 +1368,8 @@ class PbpAcceptanceSeat:
 
 @dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceJourney:
+    """PBP 수락 내역의 여정과 좌석 목록을 담습니다."""
+
     acceptance_customer_name: str
     acceptance_customer_phone: str
     journey_type_code: str
@@ -1227,6 +1385,8 @@ class PbpAcceptanceJourney:
 
 @dataclass(frozen=True, kw_only=True)
 class PbpAcceptanceTicket:
+    """PBP 수락 내역의 승차권과 여정 목록을 담습니다."""
+
     pnr_no: str
     sale_date: str
     sale_sequence: str
@@ -1238,12 +1398,16 @@ class PbpAcceptanceTicket:
 
 @dataclass(frozen=True)
 class PbpAcceptanceSpecificationResponse(BaseKorailResponse):
+    """승차권별 PBP 수락 내역 목록을 담습니다."""
+
     tickets: tuple[PbpAcceptanceTicket, ...] = ()
 
 
 @dataclass(frozen=True)
 class SelfSeatChangeStation:
-    """앱 근거: ChgStnInfo.java:21-35; SeatAvailabilityOut.java:32. DTO 의 도착역 코드·이름·편성/운행순서 4개 필드는 이 모델에서 읽지
+    """자율 좌석변경이 가능한 승차역과 잔여석을 담습니다.
+
+    앱 근거: ChgStnInfo.java:21-35; SeatAvailabilityOut.java:32. DTO 의 도착역 코드·이름·편성/운행순서 4개 필드는 이 모델에서 읽지
     않습니다."""
 
     departure_station_code: str | None = None
@@ -1261,7 +1425,9 @@ class SelfSeatChangeStation:
 
 @dataclass(frozen=True)
 class SelfSeatChangeReason:
-    """앱 근거: ChgRsnInfo.java:21-24; SeatAvailabilityOut.java:31. String 속성은 frcSaleRsnCont/qryCode/qryOrdr
+    """자율 좌석변경 시 선택할 변경 사유를 담습니다.
+
+    앱 근거: ChgRsnInfo.java:21-24; SeatAvailabilityOut.java:31. String 속성은 frcSaleRsnCont/qryCode/qryOrdr
     입니다. serializer descriptor 의 이름이 보호돼 있어 (ChgRsnInfo$$serializer.java:34-36) 전송 키는 속성명에 따른 추정입니다."""
 
     query_code: str | None = None
@@ -1272,7 +1438,9 @@ class SelfSeatChangeReason:
 
 @dataclass(frozen=True)
 class SelfSeatChangeInfoResponse(BaseKorailResponse):
-    """앱 근거: NetworkApi.java:806-808; SeatAvailabilityOut.java:28-42,68."""
+    """자율 좌석변경의 대상 역·사유·열차 정보를 담습니다.
+
+    앱 근거: NetworkApi.java:806-808; SeatAvailabilityOut.java:28-42,68."""
 
     train_no: str | None = None
     train_class_code: str | None = None
@@ -1292,7 +1460,9 @@ class SelfSeatChangeInfoResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class OriginalTicketSeat:
-    """앱 근거: SeatInfo.java:25-51; JrnyInfo.java:58. 대리수령용 Seat.java:27-36 과는 이름과 구조가 다른 타입입니다."""
+    """변경 기준인 원승차권의 좌석 정보를 담습니다.
+
+    앱 근거: SeatInfo.java:25-51; JrnyInfo.java:58. 대리수령용 Seat.java:27-36 과는 이름과 구조가 다른 타입입니다."""
 
     passenger_sequence: str | None = None
     assign_sequence: str | None = None
@@ -1314,7 +1484,9 @@ class OriginalTicketSeat:
 
 @dataclass(frozen=True)
 class OriginalTicketJourney:
-    """앱 근거: OrgTk.java:38; JrnyInfo.java:29-63. 대리수령용 Jrny.java:29-38 과 다릅니다."""
+    """변경 기준인 원승차권의 구간과 좌석 목록을 담습니다.
+
+    앱 근거: OrgTk.java:38; JrnyInfo.java:29-63. 대리수령용 Jrny.java:29-38 과 다릅니다."""
 
     journey_sequence: str | None = None
     journey_order: str | None = None
@@ -1342,7 +1514,9 @@ class OriginalTicketJourney:
 
 @dataclass(frozen=True)
 class OriginalTicket:
-    """앱 근거: OrgTk.java:28-52; OgTicketInquiryOut.java:27. 전송 키는 속성명에 따른 추정입니다. original_* 는 요청한 승차권 자신의
+    """변경 기준인 원승차권의 식별자·상태·여정을 담습니다.
+
+    앱 근거: OrgTk.java:28-52; OgTicketInquiryOut.java:27. 전송 키는 속성명에 따른 추정입니다. original_* 는 요청한 승차권 자신의
     반환번호가 되돌아온 값이며 repr 에서 숨기지 않습니다."""
 
     pnr_no: str | None = None
@@ -1368,13 +1542,17 @@ class OriginalTicket:
 
 @dataclass(frozen=True)
 class OriginalTicketInquiryResponse(BaseKorailResponse):
-    """앱 근거: NetworkApi.java:234-236; OgTicketInquiryOut.java:26-27,54."""
+    """변경 기준인 원승차권 목록을 담습니다.
+
+    앱 근거: NetworkApi.java:234-236; OgTicketInquiryOut.java:26-27,54."""
 
     tickets: tuple[OriginalTicket, ...] = ()
 
 
 @dataclass(frozen=True, kw_only=True)
 class RecentDeliveryRecipient:
+    """최근 승차권을 전달한 수령자 한 명을 담습니다."""
+
     acceptance_customer_management_flag: str
     acceptance_customer_management_no: str
     acceptance_customer_name: str
@@ -1386,6 +1564,8 @@ class RecentDeliveryRecipient:
 
 @dataclass(frozen=True)
 class RecentDeliveryHistoryResponse(BaseKorailResponse):
+    """최근 승차권 전달 수령자 목록을 담습니다."""
+
     changed_acceptance_reservation_no: str | None = None
     recipients: tuple[RecentDeliveryRecipient, ...] = ()
 
@@ -1414,6 +1594,8 @@ class ReservationSeatDetail:
 
 @dataclass(frozen=True)
 class ReservationDetailJourney:
+    """미결제 예약의 여정 한 개와 좌석 상세를 담습니다."""
+
     journey_sequence: str | None = None
     journey_type_code: str | None = None
     reservation_change_no: str | None = None
@@ -1431,6 +1613,8 @@ class ReservationDetailJourney:
 
 @dataclass(frozen=True)
 class TicketReservationDetailResponse(BaseKorailResponse):
+    """PNR로 다시 조회한 예약의 여정·좌석·정산액을 담습니다."""
+
     pnr_no: str | None = None
     window_no: str | None = None
     journey_count: str | None = None
@@ -1454,7 +1638,9 @@ class TicketReservationDetailResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class RefundCommissionResponse(BaseKorailResponse):
-    """앱 근거: NetworkApi.java:598-600. 키 근거: RefundCommissionOut.java:35-41,62,140-164."""
+    """환불 전 예상 환불액과 수수료를 담습니다.
+
+    앱 근거: NetworkApi.java:598-600. 키 근거: RefundCommissionOut.java:35-41,62,140-164."""
 
     refund_amount: str | None = None
     refund_fee: str | None = None
@@ -1467,6 +1653,8 @@ class RefundCommissionResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class RefundTicketSeat:
+    """환불 대상 승차권의 좌석 한 자리를 담습니다."""
+
     car_no: str | None = None
     seat_no: str | None = None
     buyer_name: str | None = None
@@ -1481,6 +1669,8 @@ class RefundTicketSeat:
 
 @dataclass(frozen=True)
 class RefundTicketJourney:
+    """환불 대상 승차권의 여정 한 개를 담습니다."""
+
     journey_sequence: str | None = None
     journey_type_code: str | None = None
     departure_date: str | None = None
@@ -1499,7 +1689,9 @@ class RefundTicketJourney:
 
 @dataclass(frozen=True)
 class RefundTicketDetailResponse(BaseKorailResponse):
-    """앱 근거: TicketDetailOut.java:38,117. 별칭 없는 전송 키는 추정입니다."""
+    """환불 대상 승차권의 식별자·여정·운임 상세를 담습니다.
+
+    앱 근거: TicketDetailOut.java:38,117. 별칭 없는 전송 키는 추정입니다."""
 
     pnr_no: str | None = None
     sale_date: str | None = None
@@ -1511,7 +1703,7 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     original_return_password: str | None = None
     ticket_kind_code: str | None = None
     ticket_kind_name: str | None = None
-    #: retPsbFlg는 환불 성공 보장이 아닙니다(TicketDetailOut.java:71). : 상세 40응답은 Y였지만 수수료 조회는 승차일 경과 5건 WRT200022·이미 반환 2건
+    #: retPsbFlg는 환불 성공 보장이 아닙니다(TicketDetailOut.java:71). 실서버 관측: 상세 40응답은 Y였지만 수수료 조회는 승차일 경과 5건 WRT200022·이미 반환 2건
     #: WRT200399였고, 목록 이력 143장은 N이었습니다. 앱은 사용 여부도 검사합니다(NormalTicketSectionKt.java:951).
     refund_possible_flag: str | None = None
     return_flag: str | None = None
@@ -1548,7 +1740,9 @@ class RefundTicketDetailResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DelayCertificateRow:
-    """여덟 키 모두 필수입니다(DelayCertificate.java:57-60). 앱은 dlayArvFlg 가 보호된 1글자 값과 같은 행만 보여
+    """지연확인증 한 행을 담습니다.
+
+    여덟 키 모두 필수입니다(DelayCertificate.java:57-60). 앱은 dlayArvFlg 가 보호된 1글자 값과 같은 행만 보여
     주므로(DelayCertificateViewModel.java:139-150) 이 라이브러리는 거르지 않고 모두 돌려줍니다."""
 
     run_day: str
@@ -1573,7 +1767,9 @@ class DelayCertificateResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class DelayReturnReceiptResponse(BaseKorailResponse):
-    """세 필드 모두 선택입니다(DelayReturnReceiptOut.java:53-69)."""
+    """지연료 반환 영수증을 담습니다.
+
+    세 필드 모두 선택입니다(DelayReturnReceiptOut.java:53-69)."""
 
     return_date: str | None = None
     payment_method_name: str | None = None
@@ -1612,7 +1808,9 @@ class TravelProductSearchResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class SelfCheckInSeat:
-    """열여섯 키 모두 필수입니다(ConsList.java:63-65,86-101). 앱은 첫 행을 등록에
+    """셀프 체크인할 수 있는 좌석 한 행을 담습니다.
+
+    열여섯 키 모두 필수입니다(ConsList.java:63-65,86-101). 앱은 첫 행을 등록에
     넘깁니다(SelfCheckInInfoViewModel.java:151-153,224-225)."""
 
     pnr_no: str
@@ -1644,7 +1842,9 @@ class SelfCheckInSeatCheckResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class SelfCheckInInfoResponse(BaseKorailResponse):
-    """열 키 모두 필수·nullable 입니다(SelfCheckInInfoOut.java:56-59,146)."""
+    """셀프 체크인한 좌석 정보를 담습니다.
+
+    열 키 모두 필수·nullable 입니다(SelfCheckInInfoOut.java:56-59,146)."""
 
     pnr_no: str | None = None
     train_no: str | None = None

@@ -42,7 +42,17 @@ def test_common_form_keeps_order_and_returns_fresh_mapping(lang: str | None) -> 
 
 @pytest.mark.parametrize(
     "value,expected",
-    [(None, None), ("", ""), ("Y", "Y"), (12, "12"), (-1, "-1"), (False, None), (1.5, None), ([], None), ({}, None)],
+    [
+        (None, None),
+        ("", ""),
+        ("Y", "Y"),
+        (12, "12"),
+        (-1, "-1"),
+        (False, None),
+        (1.5, None),
+        ([], None),
+        ({}, None),
+    ],
 )
 def test_nullable_field_map_preserves_optional_policy(value: object, expected: str | None) -> None:
     raw = {"wire": value}

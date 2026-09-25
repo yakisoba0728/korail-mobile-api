@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RefundTicketResponse(BaseKorailResponse):
-    """``stlList`` 는 필수이면서 null 일 수 있습니다(RefundTicketOut.java:48-53)."""
+    """승차권 환불 결과의 정산수단 코드를 담습니다.
+
+    ``stlList`` 는 필수이면서 null 일 수 있습니다(RefundTicketOut.java:48-53)."""
 
     settlement_method_codes: tuple[str, ...] = ()
     settlement_list_is_null: bool = False
@@ -28,6 +30,8 @@ class RefundTicketResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class StationRefundOriginalTicket:
+    """역발행 환불 확인에 포함된 원승차권 한 행을 담습니다."""
+
     pnr_no: str
     original_sale_date: str | None = None
     original_sale_window_no: str | None = None
@@ -52,6 +56,8 @@ def _require_every_field(
 
 @dataclass(frozen=True)
 class StationRefundVerificationRequest:
+    """역발행 승차권 환불 확인에 필요한 이름과 반환 자격증명을 구성합니다."""
+
     customer_name: str
     return_no_1: str
     return_no_2: str
@@ -64,6 +70,8 @@ class StationRefundVerificationRequest:
 
 @dataclass(frozen=True)
 class StationRefundVerificationResponse(BaseKorailResponse):
+    """역발행 승차권 환불 확인의 금액과 원표 목록을 담습니다."""
+
     received_amount: str | None = None
     refund_fee: str | None = None
     refund_amount: str | None = None
@@ -75,7 +83,9 @@ class StationRefundVerificationResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class StationRefundExecutionRequest:
-    """생성은 전송하지 않으며, 실제 환불은 클라이언트 실행 메서드를 별도로 호출해야 합니다."""
+    """역발행 승차권 환불 확인 결과를 재사용할 실행 입력을 구성합니다.
+
+    생성은 전송하지 않으며, 실제 환불은 클라이언트 실행 메서드를 별도로 호출해야 합니다."""
 
     pnr_no: str
     original_sale_date: str
@@ -101,6 +111,7 @@ class StationRefundExecutionRequest:
         customer_phone: str,
         customer_name: str,
     ) -> StationRefundExecutionRequest:
+        """첫 Orgtkinfo 행과 확인된 금액으로 실행 입력을 만듭니다."""
         if verification.str_result != "SUCC" or not verification.original_tickets:
             raise KorailProtocolError(
                 "KORAIL station refund requires a successful verification with an original ticket"
@@ -135,12 +146,16 @@ class StationRefundExecutionRequest:
 
 @dataclass(frozen=True)
 class StationRefundExecutionResponse(BaseKorailResponse):
+    """역발행 승차권의 실제 환불 실행 결과를 담습니다."""
+
     refund_division_code: str | None = None
 
 
 @dataclass(frozen=True)
 class KorailPassengerCounts:
-    """0명 행은 생략하고 유아·안내견도 9명 상한에 포함합니다(Passengers.java:48,610-616,743-753)."""
+    """승객 종류별 예약 인원을 구성합니다.
+
+    0명 행은 생략하고 유아·안내견도 9명 상한에 포함합니다(Passengers.java:48,610-616,743-753)."""
 
     adult: int = 1
     teenager: int = 0
@@ -167,7 +182,9 @@ class KorailPassengerCounts:
 
     @property
     def total(self) -> int:
-        """앱 근거: Passengers.java:610-616."""
+        """유아·안내견을 포함한 전체 승객 수를 반환합니다.
+
+        앱 근거: Passengers.java:610-616."""
         return (
             self.adult
             + self.teenager
@@ -182,7 +199,9 @@ class KorailPassengerCounts:
 
 @dataclass(frozen=True)
 class KorailSeatAssignment:
-    """앱도 선택 호차와 getSeatNo 를 복사합니다(TrainSeatMapViewModel.java:2210). 선행 키:
+    """호차 번호와 좌석 식별자로 지정 좌석 입력을 구성합니다.
+
+    앱도 선택 호차와 getSeatNo 를 복사합니다(TrainSeatMapViewModel.java:2210). 선행 키:
     TicketReservationInSrcar.java:81-88, 후행 호차 키: TicketReservationInSrcarTrailing.java:86-89."""
 
     car_no: int
@@ -223,6 +242,8 @@ class KorailSeatAssignment:
 
 @dataclass(frozen=True)
 class ReservationJourney:
+    """예약된 여정 한 개의 열차·구간·변경 식별자를 담습니다."""
+
     #: 여정 순번은 h_jrny_sqno입니다(ReservationOutJrnyInfo.java:86,361). 예약 생성 응답 21/21행에는 없고 재계산 4/4행·예약 상세 8/8행에는
     #: 있었습니다. 이 관측이 모든 예약 생성 응답에서 None임을 보장하지는 않습니다.
     journey_sequence: str | None = None
@@ -244,7 +265,9 @@ class ReservationJourney:
 
 @dataclass(frozen=True)
 class ReservationHoldResponse(BaseKorailResponse):
-    """이 객체만으로 실제 예약 성공을 보장하지 않으므로 응답 상태를 확인하십시오."""
+    """미결제 예약 요청의 결과와 결제 기한·금액을 담습니다.
+
+    이 객체만으로 실제 예약 성공을 보장하지 않으므로 응답 상태를 확인하십시오."""
 
     pnr_no: str | None = None
     journey_count: str | None = None
@@ -263,7 +286,7 @@ class ReservationHoldResponse(BaseKorailResponse):
     #: h_tot_fare는 선언됐지만 일반적인 의미는 미확인입니다(ReservationOut.java:444). 내장 표본(BasketTicketDataKt.java:44)은 일반식의 증거가
     #: 아니며 결제에는 received_amount를 사용하십시오.
     total_fare: str | None = None
-    #: h_tot_prc는 앱의 표시 합계에 쓰입니다(ReservationOut.java:448; PayViewModel.java:11314-11318). : 일반실·특실 기준액은 54,400원,
+    #: h_tot_prc는 앱의 표시 합계에 쓰입니다(ReservationOut.java:448; PayViewModel.java:11314-11318). 실서버 관측: 일반실·특실 기준액은 54,400원,
     #: 정산액은 53,900/78,400원이었습니다.
     total_price: str | None = None
     #: 좌석 합을 먼저 구하고 선언 총액과 대조하며, 사용할 좌석 행이 없으면 선언 총액을 사용합니다(mutation_parsers._received_amount).
@@ -290,6 +313,8 @@ class ReservationHoldResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class ReservationPaymentCoupon:
+    """결제 결과에 포함된 쿠폰 정보를 담습니다."""
+
     certificate_password: str | None = None
     coupon_no: str | None = None
     management_close_date: str | None = None
@@ -303,6 +328,8 @@ class ReservationPaymentCoupon:
 
 @dataclass(frozen=True)
 class ReservationPaymentTicket:
+    """결제로 발권된 승차권 한 장의 식별자와 반환 자격증명을 담습니다."""
+
     ticket_sequence: str | None = None
     sale_date: str | None = None
     sale_sequence: str | None = None
@@ -325,7 +352,9 @@ class ReservationPaymentTicket:
 
 @dataclass(frozen=True)
 class ReservationPaymentSettlement:
-    """거래·오류 필드(ReservationPaymentOutActInfo.java:28-31,52)라는 이유만으로 개인정보가 없다고 보장할 수 없습니다."""
+    """결제 결과의 정산수단 한 행을 담습니다.
+
+    거래·오류 필드(ReservationPaymentOutActInfo.java:28-31,52)라는 이유만으로 개인정보가 없다고 보장할 수 없습니다."""
 
     settlement_sequence: str | None = None
     settlement_type_code: str | None = None
@@ -353,6 +382,8 @@ class ReservationPaymentSettlement:
 
 @dataclass(frozen=True)
 class ReservationPaymentTableSeat:
+    """결제 결과에 포함된 두 구간 단체석 정보를 담습니다."""
+
     room_class_name_1: str | None = None
     car_no_1: str | None = None
     seat_no_start_1: str | None = None
@@ -373,6 +404,8 @@ class ReservationPaymentTableSeat:
 
 @dataclass(frozen=True)
 class ReservationPaymentResponse(BaseKorailResponse):
+    """카드 결제 시도의 발권·정산·좌석 결과를 담습니다."""
+
     image_ticket_flag: str | None = None
     #: 카드 결제 응답에서는 빈 문자열이었고 PNR(h_pnr_no)은 결제 응답에 없습니다.
     reservation_no: str | None = None
@@ -413,6 +446,8 @@ class ReservationPaymentResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class CardPayment:
+    """예약 결제에 사용할 카드 정보를 구성합니다."""
+
     card_number: str
     card_password: str
     card_expire: str
@@ -431,7 +466,9 @@ class CardPayment:
 
 @dataclass(frozen=True)
 class PaidTicket:
-    """환불은 현재 sale_date, 수수료 조회는 원표 반환일을 사용하므로 혼용하지 않습니다(MyTicketDetailViewModel.java:277,1521)."""
+    """환불할 발권 승차권 한 장의 식별자와 반환 자격증명을 구성합니다.
+
+    환불은 현재 sale_date, 수수료 조회는 원표 반환일을 사용하므로 혼용하지 않습니다(MyTicketDetailViewModel.java:277,1521)."""
 
     pnr_no: str
     #: 전송 키 ``h_orgtk_sale_dt`` 를 채우지만 재발행된 승차권에서는 원표의 판매일자와 같지 않습니다 — 위 경고 참조.
@@ -449,7 +486,9 @@ class PaidTicket:
         *,
         train_no: str = "",
     ) -> PaidTicket:
-        """7.0.6 의
+        """승차권 상세에서 환불 신원을 앱과 같은 방식으로 만듭니다.
+
+        7.0.6 의
         ``analysis/jadx/sources/com/korail/talk/ui/screen/myticket/MyTicketDetailViewModel.java:1521`` 과
         필드 단위로 같습니다(위 :class:`PaidTicket` 경고의 인용 참조)."""
         candidate_parts = {
@@ -484,7 +523,9 @@ class PaidTicket:
 
 @dataclass(frozen=True)
 class DiscountCardSectionRequest:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. DTO 키는 밑줄로 끝나며(NCardjrny.java:96-112) 공통 평탄화가 1-기반 인덱스를
+    """구매할 N카드의 적용 구간을 구성합니다.
+
+    검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. DTO 키는 밑줄로 끝나며(NCardjrny.java:96-112) 공통 평탄화가 1-기반 인덱스를
     붙입니다(NetworkService.java:15345-15366)."""
 
     run_date: str
@@ -496,7 +537,9 @@ class DiscountCardSectionRequest:
 
 @dataclass(frozen=True)
 class DiscountCardAdditionalUser:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. NCardInfoIn.java:30-34 의 속성명 자체에 _1 이 포함됩니다. serializer 이름은 보호돼
+    """2인용 N카드의 추가 사용자 정보를 구성합니다.
+
+    검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. NCardInfoIn.java:30-34 의 속성명 자체에 _1 이 포함됩니다. serializer 이름은 보호돼
     전송 키는 속성명에 따른 추정입니다."""
 
     customer_no: str
@@ -506,7 +549,9 @@ class DiscountCardAdditionalUser:
 
 @dataclass(frozen=True)
 class DiscountCardPurchaseRequest:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 라우트는 NetworkApi.java:335-337 입니다."""
+    """N카드 구매에 필요한 구간·사용자·상품 정보를 구성합니다.
+
+    검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 라우트는 NetworkApi.java:335-337 입니다."""
 
     card_kind_management_no: str
     customer_no: str
@@ -518,7 +563,9 @@ class DiscountCardPurchaseRequest:
 
 @dataclass(frozen=True)
 class DiscountCardTicket:
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 기간연장용 원표 식별자(MyTicketDetailViewModel.java:1049,
+    """N카드 기간연장에 필요한 원표 식별자를 구성합니다.
+
+    검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 기간연장용 원표 식별자(MyTicketDetailViewModel.java:1049,
     NCardExtensionIn.java:180)."""
 
     sale_window_no: str
@@ -529,7 +576,9 @@ class DiscountCardTicket:
 
 @dataclass(frozen=True)
 class DiscountCardPurchaseResponse(BaseKorailResponse):
-    """검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 구매의 결제 전 응답(NCardInfoOut.java:25-38,
+    """N카드 구매의 결제 전 예약 결과를 담습니다.
+
+    검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 구매의 결제 전 응답(NCardInfoOut.java:25-38,
     NetworkApi.java:335-337)."""
 
     lump_settlement_target_no: str | None = None
@@ -547,7 +596,9 @@ class DiscountCardPurchaseResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class PriceRecalculationRow:
-    """None 원소를 보내면 병렬 6목록의 인덱스가 어긋나므로 빈 문자열을 사용합니다(NetworkApi.java:582-584; ParameterHandler.java:18-31)."""
+    """예약 할인 재계산에 사용할 승객 한 행을 구성합니다.
+
+    None 원소를 보내면 병렬 6목록의 인덱스가 어긋나므로 빈 문자열을 사용합니다(NetworkApi.java:582-584; ParameterHandler.java:18-31)."""
 
     passenger_type_code: str
     room_class_code: str
@@ -560,7 +611,9 @@ class PriceRecalculationRow:
 
 @dataclass(frozen=True)
 class PriceRecalculationRequest:
-    """앱 근거: PayViewModel.java:6142-6171; PriceReCalculationIn.java:31-41. 비회원일 때만 hiduserYn·hidCustNo 를 함께
+    """PNR 한 건의 할인 재계산 조건을 구성합니다.
+
+    앱 근거: PayViewModel.java:6142-6171; PriceReCalculationIn.java:31-41. 비회원일 때만 hiduserYn·hidCustNo 를 함께
     넣습니다. job id·N 리터럴은 보호돼 있으며 라이브러리의 값은 라이브 기록에 의존합니다(ReservationJobId.java:20,42-45)."""
 
     pnr_no: str
@@ -580,7 +633,9 @@ class PriceRecalculationRequest:
         hold: ReservationHoldResponse,
         requested_discount_codes: Sequence[str],
     ) -> PriceRecalculationRequest:
-        """첫 여정 좌석별 코드·객실·증빙을 복사하고 요청 할인 수가 좌석 수와 같아야 합니다(PayViewModel.java:5518,16856-16863,17469)."""
+        """홀드의 첫 여정 좌석마다 한 행을 앱처럼 만듭니다.
+
+        첫 여정 좌석별 코드·객실·증빙을 복사하고 요청 할인 수가 좌석 수와 같아야 합니다(PayViewModel.java:5518,16856-16863,17469)."""
         pnr_no = hold.pnr_no
         if hold.str_result != "SUCC" or not isinstance(pnr_no, str) or not pnr_no.strip():
             raise KorailProtocolError("KORAIL price recalculation needs a successful hold with a PNR")
@@ -630,7 +685,9 @@ class PriceRecalculationRequest:
 
 @dataclass(frozen=True)
 class CartDiscountAddition:
-    """명시적 키: PsgDiscAddInfo.java:81,85."""
+    """장바구니 추가 결과의 승객별 할인 정보를 담습니다.
+
+    명시적 키: PsgDiscAddInfo.java:81,85."""
 
     passenger_sequence_no: str | None = None
     #: h_duty_ref_rcgn_ps_dv_cd 는 DTO 에 선언된 구분 코드이며(APK 필드명 보존) 의미·가능한 값은 미확인입니다.
@@ -640,13 +697,17 @@ class CartDiscountAddition:
 
 @dataclass(frozen=True)
 class CartAddResponse(BaseKorailResponse):
-    """구조: AddCartListOut.java:24-25,76 → PsgDiscAddInfos.java:81. 행이 없으면 discount_additions 는 빈 튜플입니다."""
+    """장바구니 추가 결과와 승객별 할인 목록을 담습니다.
+
+    구조: AddCartListOut.java:24-25,76 → PsgDiscAddInfos.java:81. 행이 없으면 discount_additions 는 빈 튜플입니다."""
 
     discount_additions: tuple[CartDiscountAddition, ...] = ()
 
 
 @dataclass(frozen=True)
 class ProductCancelResponse(BaseKorailResponse):
+    """여행상품 예약의 실제 취소 결과를 담습니다."""
+
     integrated_message_code: str | None = None
 
 
@@ -659,7 +720,9 @@ class MaasCancelResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class CartAddRequest:
-    """자체 필드는 hidPnrNo 하나입니다 (AddCartListIn.java:25-30,79; NetworkApi.java:265-267)."""
+    """미결제 예약을 장바구니에 추가할 PNR 입력을 구성합니다.
+
+    자체 필드는 hidPnrNo 하나입니다 (AddCartListIn.java:25-30,79; NetworkApi.java:265-267)."""
 
     pnr_no: str
 

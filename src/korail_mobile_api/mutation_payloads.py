@@ -932,7 +932,7 @@ def _echoed_job_sequence(value: str | None) -> str:
     return _ABSENT_JOB_SEQUENCE
 
 
-# 응답 첫 여정의 변경번호가 없을 때의 대체값입니다. 항상 없음으로 가정하지 않습니다. : reserve/reserve_transfer/reserve_merge/ recalculate_price 의
+# 응답 첫 여정의 변경번호가 없을 때의 대체값입니다. 항상 없음으로 가정하지 않습니다. 실서버 관측: reserve/reserve_transfer/reserve_merge/ recalculate_price 의
 # 45여정 모두 해당 키가 없었고, 같은 예약을 목록으로 되읽으면 000 이었습니다. 보호 리터럴은 미확인입니다.
 _ABSENT_RESERVATION_CHANGE_NO = "000"
 

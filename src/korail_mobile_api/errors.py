@@ -48,7 +48,9 @@ class KorailAuthError(KorailApiError):
 
 
 class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
-    """``strResult`` 가 ``FAIL`` 이거나 CommonOut 봉투에서 누락된 때입니다(누락 기본값이 실패, CommonOut.java:361). 앱은 commonFail()
+    """FAIL/P058 응답에 따른 세션 만료를 나타냅니다.
+
+    ``strResult`` 가 ``FAIL`` 이거나 CommonOut 봉투에서 누락된 때입니다(누락 기본값이 실패, CommonOut.java:361). 앱은 commonFail()
     뒤에 보호된 4바이트 코드를 비교합니다(CommonOut.java:426-438)."""
 
     def __init__(
@@ -67,7 +69,9 @@ class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
 
 
 class KorailDynaPathError(KorailApiError):
-    """앱 근거: DynaPathInterceptor.java:97-124. 키가 보호돼 이 구현은 모든 최상위 값을 검사합니다."""
+    """응답 본문에서 DynaPath 차단 정수 코드를 감지했음을 나타냅니다.
+
+    앱 근거: DynaPathInterceptor.java:97-124. 키가 보호돼 이 구현은 모든 최상위 값을 검사합니다."""
 
     def __init__(
         self,
@@ -80,7 +84,9 @@ class KorailDynaPathError(KorailApiError):
 
 
 class KorailAuthContinuationRequired(KorailAuthError):
-    """7.0.6 은 이 두 코드에서만 ``strRedirectUrl`` 웹 화면을 엽니다(``LoginViewModel.java:1390-1520``). 서버가 준
+    """로그인을 완료하려면 웹 화면에서 후속 조치가 필요함을 나타냅니다.
+
+    7.0.6 은 이 두 코드에서만 ``strRedirectUrl`` 웹 화면을 엽니다(``LoginViewModel.java:1390-1520``). 서버가 준
     :attr:`redirect_url`(없으면 ``""``)과 원문 :attr:`raw`, 코드 :attr:`code` 를 싣습니다."""
 
     def __init__(self, redirect_url: str, *, raw: object | None = None) -> None:
@@ -148,7 +154,9 @@ class KorailServiceUnavailableError(KorailAppError):
 
 
 class KorailAppUpdateRequiredError(KorailAppError):
-    """메시지 근거: assets/error_json.json:65. 스토어 이동 동작은 미확인입니다."""
+    """앱 업데이트를 요구하는 응답을 나타냅니다.
+
+    메시지 근거: assets/error_json.json:65. 스토어 이동 동작은 미확인입니다."""
 
 
 class KorailNetFunnelError(_CodeMessagePickle, KorailApiError):
@@ -168,12 +176,16 @@ class KorailNetFunnelError(_CodeMessagePickle, KorailApiError):
 
 
 class KorailQueueRejectedError(KorailNetFunnelError):
-    """Netfunnel.java:67-69,114-116 과 com/netfunnel/api/Code.java:31-33 이 근거입니다. 303 은 SDK isSuccess() 에
+    """대기열의 요청 차단 또는 IP 차단 응답을 나타냅니다.
+
+    Netfunnel.java:67-69,114-116 과 com/netfunnel/api/Code.java:31-33 이 근거입니다. 303 은 SDK isSuccess() 에
     포함되지만(Netfunnel.java:102-104), 관문 mode 의 수용 규칙과는 별개입니다."""
 
 
 class KorailDynaPathRequiredError(KorailApiError):
-    """KorailDynaPathError 는 응답 차단 신호이며, 이 오류는 서버 응답을 받았다는 뜻이 아닙니다."""
+    """토큰이 필요한 경로를 DynaPath 비활성 상태로 호출했음을 나타냅니다.
+
+    KorailDynaPathError 는 응답 차단 신호이며, 이 오류는 서버 응답을 받았다는 뜻이 아닙니다."""
 
 
 # 분류는 실패 응답에만 적용합니다. 봉투·메시지 근거는 network/model/CommonOut.java:40-44와
