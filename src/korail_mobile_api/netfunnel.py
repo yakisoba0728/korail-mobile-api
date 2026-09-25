@@ -100,17 +100,13 @@ class KorailNetFunnelToken:
 
     @property
     def wait_count(self) -> int:
-        return _digits(self.params.get("nwait", ""))
+        return _java_int(self.params.get("nwait", "")) or 0
 
     @property
     def wait_seconds(self) -> int:
         """앱 근거: com/netfunnel/api/Response.java:59-66."""
-        ttl = _digits(self.params.get("ttl", ""))
+        ttl = _java_int(self.params.get("ttl", "")) or 0
         return max(MIN_TTL_SECONDS, min(ttl, MAX_TTL_SECONDS))
-
-
-def _digits(raw: str) -> int:
-    return _java_int(raw) or 0
 
 
 def _java_int(text: str) -> int | None:

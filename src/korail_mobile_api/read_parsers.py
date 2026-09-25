@@ -19,7 +19,6 @@ from ._parsing import (
     _optional_integer,
     _optional_mapping,
     _optional_scalar_string,
-    _optional_string,
     _present_strings,
     _preserve_read_raw,
     _required_integer,
@@ -754,8 +753,8 @@ def _parse_pass_menu_data(
         for row in _rows(data, "pass_periodinfo")
     )
     return PassMenuData(
-        commuter_kind_code=_optional_string(data, "h_cmtr_knd_cd"),
-        station_selection=_optional_string(data, station_selection_key),
+        commuter_kind_code=_optional_scalar_string(data, "h_cmtr_knd_cd"),
+        station_selection=_optional_scalar_string(data, station_selection_key),
         age_options=age_options,
         period_options=period_options,
         raw=data,
@@ -783,7 +782,7 @@ def _parse_pass_goods_info(
                         "h_cls_prnb",
                         "pass passenger info",
                     ),
-                    h_dcnt_knd_cd=_optional_string(
+                    h_dcnt_knd_cd=_optional_scalar_string(
                         item,
                         "h_dcnt_knd_cd",
                     ),
@@ -808,7 +807,7 @@ def _parse_pass_goods_info(
             raw=passenger_infos_data,
         )
     return PassGoodsInfo(
-        h_cnd_flg_disc_no=_optional_string(
+        h_cnd_flg_disc_no=_optional_scalar_string(
             data,
             "h_cnd_flg_disc_no",
         ),
@@ -833,7 +832,7 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
                 pass_data=_parse_pass_menu_data(
                     _optional_mapping(item, "passData"),
                 ),
-                url=(_optional_string(web_data, "url") if web_data is not None else None),
+                url=(_optional_scalar_string(web_data, "url") if web_data is not None else None),
                 raw=item,
             )
         )
@@ -887,7 +886,7 @@ def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
                 **_nullable_string_fields(item, _CART_ITEM_FIELDS),
                 **_nullable_scalar_fields(item, _CART_ITEM_SCALAR_FIELDS, "cart item"),
                 # h_tk_cnt 는 String 선언입니다(CartInfo.java:51).
-                ticket_count=_optional_string(item, "h_tk_cnt"),
+                ticket_count=_optional_scalar_string(item, "h_tk_cnt"),
                 raw=item,
             )
         )
@@ -997,7 +996,7 @@ def parse_pass_availability_response(
     open_dates = []
     pass_rows = []
     for item in _rows(raw, "pass_info"):
-        date = _optional_string(item, "h_use_open_dt")
+        date = _optional_scalar_string(item, "h_use_open_dt")
         if date is not None:
             open_dates.append(date)
         pass_rows.append(
@@ -1010,15 +1009,15 @@ def parse_pass_availability_response(
         )
     ticket_issue_dates = []
     for item in _rows(raw, "ticket_info"):
-        date = _optional_string(item, "h_ise_dt2")
+        date = _optional_scalar_string(item, "h_ise_dt2")
         if date is not None:
             ticket_issue_dates.append(date)
     offices = []
     for item in _rows(raw, "wct_info"):
         offices.append(
             PassOffice(
-                code=_optional_string(item, "eng_cd_val"),
-                display_name=_optional_string(item, "kor_cd_val"),
+                code=_optional_scalar_string(item, "eng_cd_val"),
+                display_name=_optional_scalar_string(item, "kor_cd_val"),
                 raw=item,
             )
         )
@@ -1071,7 +1070,7 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
         )
     return TripMenuResponse(
         items=tuple(items),
-        popup_message=_optional_string(raw, "poppMsg"),
+        popup_message=_optional_scalar_string(raw, "poppMsg"),
         **_response_fields(raw),
     )
 
@@ -1108,7 +1107,7 @@ def parse_product_detail_response(
         return ProductDetailResponse(**_response_fields(raw))
     included_items = []
     for item in _rows(main, "entityOne"):
-        name = _optional_string(item, "strGdConsItmNm")
+        name = _optional_scalar_string(item, "strGdConsItmNm")
         if name is not None:
             included_items.append(name)
     return ProductDetailResponse(
@@ -1392,7 +1391,7 @@ def parse_seat_assignment_schedule_response(
         read_merge_flag=False,
     )
     return SeatAssignmentScheduleResponse(
-        next_page_flag=_optional_string(
+        next_page_flag=_optional_scalar_string(
             raw,
             "h_next_pg_flg",
         ),
@@ -1890,7 +1889,7 @@ def parse_trip_change_date_response(
     # 응답은 복수형 tripChgDates 입니다(TipChgDateInquiryOut.java:28-30). 단수형 tripChgDate 는 요청
     # 필드(TipChgDateInquiryIn.java:29)이므로 응답 별칭으로 쓰지 않습니다.
     return TripChangeDateResponse(
-        last_run_date=_optional_string(raw, "lastRunDt"),
+        last_run_date=_optional_scalar_string(raw, "lastRunDt"),
         trip_change_dates=tuple(normalized_dates),
         **_response_fields(raw),
     )
@@ -1916,11 +1915,11 @@ def parse_commuter_info_response(
     for item in _rows(raw, "psgList"):
         passenger_options.append(
             CommuterPassengerOption(
-                commuter_usage_age_code=_optional_string(
+                commuter_usage_age_code=_optional_scalar_string(
                     item,
                     "cmtrUtlAgeCd",
                 ),
-                common_code_name=_optional_string(
+                common_code_name=_optional_scalar_string(
                     item,
                     "comnCdNm",
                 ),
@@ -2385,7 +2384,7 @@ def _discount_card_on_ticket(
             "h_dcnt_crd_no",
             "discount card info",
         ),
-        term_extension_possible_flag=_optional_string(
+        term_extension_possible_flag=_optional_scalar_string(
             info,
             "h_dcnt_crd_trm_extn_psb_flg",
         ),

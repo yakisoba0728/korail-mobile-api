@@ -117,21 +117,13 @@ def _rows(
     return [item for item in _optional_list(data, key) if isinstance(item, Mapping)]
 
 
-def _optional_string(
-    data: Mapping[str, object],
-    key: str,
-) -> str | None:
-    """문자열을 반환하고 JSON 정수는 관측에 따라 문자열로 읽습니다. 그 밖의 값은 None 입니다."""
-    return _optional_scalar_string(data, key)
-
-
 def _present_strings(
     data: Mapping[str, Any],
     keys: tuple[str, ...],
 ) -> tuple[str, ...]:
     values: list[str] = []
     for key in keys:
-        value = _optional_string(data, key)
+        value = _optional_scalar_string(data, key)
         if value is not None:
             values.append(value)
     return tuple(values)
@@ -216,7 +208,7 @@ def _nullable_string_fields(
     field_map: Mapping[str, str],
 ) -> dict[str, Any]:
     # 값은 str | None 이지만 모델 생성자에 ** 로 풀어 넣으므로 Any 로 둡니다. 타입 검사기는 풀어 넣는 dict 의 값 타입을 raw 같은 다른 매개변수에도 맞춰 보기 때문입니다.
-    return {attribute: _optional_string(data, wire_name) for attribute, wire_name in field_map.items()}
+    return {attribute: _optional_scalar_string(data, wire_name) for attribute, wire_name in field_map.items()}
 
 
 def _nullable_scalar_fields(

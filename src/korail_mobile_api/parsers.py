@@ -21,7 +21,6 @@ from ._parsing import (
     _preserve_read_raw,
     _rows,
 )
-from ._parsing import _optional_scalar_string as _typed_optional_string
 from .errors import KorailProtocolError
 from .models import (
     AppDataResponse,
@@ -131,9 +130,7 @@ def _typed_defaulted_string(
     return _typed_required_scalar_string(data, key, context=context) if key in data else ""
 
 
-_optional_string = _typed_optional_string
 _station_string = partial(_typed_defaulted_string, context="station")
-_inventory_optional_string = _typed_optional_string
 _inventory_string = partial(_typed_defaulted_string, context="seat inventory")
 _inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
 
@@ -156,17 +153,17 @@ def parse_app_data_response(response: BaseKorailResponse) -> AppDataResponse:
     version = None
     if isinstance(version_raw, Mapping):
         version = AppVersionInfo(
-            message=_optional_string(version_raw, "AMESSAGE"),
-            new_version=_optional_string(version_raw, "NEWDVERSION"),
+            message=_optional_scalar_string(version_raw, "AMESSAGE"),
+            new_version=_optional_scalar_string(version_raw, "NEWDVERSION"),
             store_url=_optional_scalar_string(version_raw, "CNTAURL", "app data version"),
         )
     return AppDataResponse(
         **_response_fields(response),
-        disability_certification_msg=_optional_string(
+        disability_certification_msg=_optional_scalar_string(
             raw,
             "disability_certification_msg",
         ),
-        railplus_cardinfo=_optional_string(raw, "railplus_cardinfo"),
+        railplus_cardinfo=_optional_scalar_string(raw, "railplus_cardinfo"),
         version=version,
         notice=(parse_notice_response(response) if isinstance(raw.get("notice"), Mapping) else None),
     )
@@ -180,10 +177,10 @@ def parse_notice_response(response: BaseKorailResponse) -> NoticeResponse:
     notice_raw = nested if isinstance(nested, Mapping) else {}
     return NoticeResponse(
         **_response_fields(response),
-        board_id=_optional_string(notice_raw, "BbrdId"),
-        post_sequence=_optional_string(notice_raw, "PtwtSqno"),
-        post_title=_optional_string(notice_raw, "PtwtTtl"),
-        post_content=_optional_string(notice_raw, "PtwtCont"),
+        board_id=_optional_scalar_string(notice_raw, "BbrdId"),
+        post_sequence=_optional_scalar_string(notice_raw, "PtwtSqno"),
+        post_title=_optional_scalar_string(notice_raw, "PtwtTtl"),
+        post_content=_optional_scalar_string(notice_raw, "PtwtCont"),
     )
 
 
@@ -248,7 +245,7 @@ def parse_train_search_metadata(
     MergeSeatsCOutTrnInfos.java:25-26,85)."""
 
     def optional(key: str) -> str | None:
-        return _typed_optional_string(raw, key)
+        return _optional_scalar_string(raw, key)
 
     return TrainSearchMetadata(
         job_id=optional("strJobId"),
@@ -364,7 +361,7 @@ def parse_station_data_response(
                 name=_station_string(row, "stn_nm"),
                 raw=dict(row),
                 # popupType 은 정수로 바꾸지 않고 String 선언대로 읽습니다(StationDataOutStnItem.java:60).
-                popup_type=_typed_optional_string(
+                popup_type=_optional_scalar_string(
                     row,
                     "popupType",
                 ),
@@ -493,7 +490,7 @@ def parse_train_schedule_response(
     ]
 
     def optional(key: str) -> str | None:
-        return _typed_optional_string(raw, key)
+        return _optional_scalar_string(raw, key)
 
     return TrainScheduleResponse(
         **_response_fields(response),
@@ -509,7 +506,7 @@ def parse_train_schedule_response(
         route_code=optional("routCd"),
         route_name=optional("routNm"),
         # runDt1 은 누락 시 기본값을 사용하는 필드입니다(ActualTrainScheduleOut.java:75-80).
-        run_date=_typed_optional_string(
+        run_date=_optional_scalar_string(
             raw,
             "runDt1",
         ),
@@ -545,11 +542,11 @@ def parse_transfer_station_list_response(
         stations.append(
             TransferStation(
                 # 환승역 코드·역명은 누락 시 기본값을 사용하므로 선택값으로 읽습니다(ChtnStnOutItem.java:51-61).
-                station_code=_typed_optional_string(
+                station_code=_optional_scalar_string(
                     row,
                     "chtnRsStnCd",
                 ),
-                station_name=_typed_optional_string(
+                station_name=_optional_scalar_string(
                     row,
                     "chtnRsStnNm",
                 ),
@@ -600,7 +597,7 @@ def parse_seat_car_list_response(
             attributes.append(
                 SeatAttribute(
                     name=_inventory_string(attribute_raw, "seatAttNm"),
-                    code=_inventory_optional_string(
+                    code=_optional_scalar_string(
                         attribute_raw,
                         "seatAttCd",
                     ),
@@ -614,7 +611,7 @@ def parse_seat_car_list_response(
                 room_class_name=_inventory_string(row, "h_psrm_cl_nm"),
                 remaining_seat_count=remaining_seat_count,
                 attributes=tuple(attributes),
-                room_class_code=_inventory_optional_string(
+                room_class_code=_optional_scalar_string(
                     row,
                     "h_psrm_cl_cd",
                 ),
@@ -627,10 +624,10 @@ def parse_seat_car_list_response(
             raw,
             "h_rcmd_srcar_no",
         ),
-        train_no=_inventory_optional_string(raw, "h_trn_no"),
+        train_no=_optional_scalar_string(raw, "h_trn_no"),
         cars=tuple(cars),
-        train_class_code=_inventory_optional_string(raw, "h_trn_clsf_cd"),
-        train_group_code=_inventory_optional_string(raw, "h_trn_gp_cd"),
+        train_class_code=_optional_scalar_string(raw, "h_trn_clsf_cd"),
+        train_group_code=_optional_scalar_string(raw, "h_trn_gp_cd"),
         # TrainResearchOut.java:27,105 의 고유 필드.
         car_count=_optional_scalar_string(raw, "h_scar_num", "seat car list"),
     )
@@ -690,14 +687,14 @@ def parse_seat_inventory_response(
                 direction_code=_inventory_string(row, "dir_seat_att_cd"),
                 # etc_seat_att_cd·vz_msg_dv_cd 는 생략·null 을
                 # 허용합니다(TResidualSeatsResearchOutSeat.java:79-82,94-97).
-                other_attribute_code=_inventory_optional_string(row, "etc_seat_att_cd"),
+                other_attribute_code=_optional_scalar_string(row, "etc_seat_att_cd"),
                 requested_attribute_code=_inventory_string(row, "rq_seat_att_cd"),
-                floor=_inventory_optional_string(row, "floor"),
+                floor=_optional_scalar_string(row, "floor"),
                 specification=_inventory_string(row, "seat_spec"),
                 sequence_no=_inventory_string(row, "sqr_no"),
                 message_code=_inventory_string(row, "intg_msg_cd"),
                 message=_inventory_string(row, "intg_msg"),
-                visual_message_division_code=_inventory_optional_string(row, "vz_msg_dv_cd"),
+                visual_message_division_code=_optional_scalar_string(row, "vz_msg_dv_cd"),
             )
         )
 
@@ -721,10 +718,10 @@ def parse_seat_inventory_response(
         total_count=total_count,
         seats=tuple(seats),
         windows=tuple(windows),
-        vr_banner_url=_inventory_optional_string(raw, "vrBnrUrl"),
-        car_type_code=_inventory_optional_string(raw, "car_tp_cd"),
+        vr_banner_url=_optional_scalar_string(raw, "vrBnrUrl"),
+        car_type_code=_optional_scalar_string(raw, "car_tp_cd"),
         car_no=_inventory_optional_int(raw, "scar_no"),
-        up_down_division_code=_inventory_optional_string(
+        up_down_division_code=_optional_scalar_string(
             raw,
             "up_dn_dv_cd",
         ),
