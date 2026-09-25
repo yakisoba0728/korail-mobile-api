@@ -978,6 +978,12 @@ def build_card_payment_form(
             "KORAIL payment requires a fresh successful unpaid hold with a "
             "PNR, window number, and numeric received amount"
         )
+    # 앱은 결제할 금액이 0 이면 카드 요청을 만들지 않고(PayViewModel.java:15572, 카드 입력 검사도 금액이 0 이 아닐 때만 :18144)
+    # 결제수단 없이 발권 요청을 보냅니다(:5148). 라이브러리는 그 경로를 구현하지 않으므로 0원 카드 결제를 보내지 않습니다.
+    if int(amount) == 0:
+        raise KorailProtocolError(
+            "KORAIL card payment refuses a zero-amount hold: the app issues it without a card"
+        )
     # 숫자 모양 검사만으로 카드 유효성이나 비과금을 보장하지 않습니다. 앱은 앞 세 칸의 길이와 넷째 칸의 최소 길이를 검사하지만 길이 값은
     # 보호돼 있습니다(PayViewModel.java:16196-16210). 13~16자리는 라이브러리 기준이며 앱 값과 같다는 근거는 없습니다.
     if not isinstance(card.card_number, str) or _CARD_NUMBER_RE.fullmatch(card.card_number) is None:

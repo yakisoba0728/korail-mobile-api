@@ -1349,8 +1349,11 @@ class PriceFare:
 
     journey_sequence: str | None = None
     room_class_name: str | None = None
+    #: rcvdFare. 앱 표의 "요금"(특실 추가 요금 등, TrainOpInfoScreenKt.java:2123). 일반실은 "-" 였습니다(2026-09-25).
     received_fare: str | None = None
+    #: rcvdPrc. 앱 표의 "운임"(TrainOpInfoScreenKt.java:2089). "21,600원" 처럼 쉼표와 원이 붙은 표시 문자열입니다.
     received_price: str | None = None
+    #: sumAmt. 앱 표의 "합계"(TrainOpInfoScreenKt.java:2158).
     total_amount: str | None = None
     train_no: str | None = None
     raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)

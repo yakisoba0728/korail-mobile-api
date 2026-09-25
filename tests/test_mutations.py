@@ -1358,6 +1358,18 @@ def test_standby_holds_are_not_payable() -> None:
         h.close()
 
 
+@pytest.mark.parametrize("amount", ["0", "00000000000"])
+def test_zero_amount_hold_is_not_card_paid(amount: str) -> None:
+    """PayViewModel.java:15572,18144: the app builds no card request when nothing is owed."""
+    h = Harness([], "POST", ("payment.ReservationPayment",), {})
+    try:
+        with pytest.raises(KorailProtocolError, match="zero-amount"):
+            h.client.pay_with_card(hold(received_amount=amount), card())
+        assert h.seen == []
+    finally:
+        h.close()
+
+
 def test_transfer_standby_hold_is_not_payable() -> None:
     expected = reservation_form(transfer=True, job="1102")
     h = Harness([hold_raw()], "POST", ("certification.TicketReservation",), expected)

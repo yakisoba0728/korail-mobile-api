@@ -1065,7 +1065,14 @@ class KorailClient:
         self,
         request: PriceFareQuoteRequest,
     ) -> PriceFareQuoteResponse:
-        """열차 한두 편의 운임을 예매 전에 미리 계산해 받습니다."""
+        """열차 한두 편의 운임을 예매 전에 미리 계산해 받습니다. 앱은 열차 정보 화면의 운임·요금 탭에서만 부르고 표시만 합니다
+        (TrainOpInfoViewModel.java:941-962; TrainOpInfoScreenKt.java:2055-2159). 표의 운임은 received_price, 요금은
+        received_fare, 합계는 total_amount 입니다. 앱은 표시 중인 열차 번호의 행만 남기지만 이 메서드는 모든 행을 돌려줍니다.
+        승객·할인 입력이 없는 기준 운임이라 예약 금액과 다를 수 있으므로 결제 금액은 홀드의 received_amount 를 보십시오.
+
+        2026-09-25: 1구간은 일반실·특실 두 행, 환승 2구간은 여정 0001·0002 마다 두 행씩 네 행이었습니다. 같은 열차 성인 홀드의
+        h_tot_prc 는 운임과 같았고(7,500원·21,600원, 성인 2명 43,200원) 정산액은 좌석 할인만큼 낮을 수 있었습니다(21,500원,
+        토요일 20,400원)."""
         form = build_price_fare_quote_form(request)
         return self._post_read(
             "/classes/com.korail.mobile.trn.prcFare.do",
@@ -1769,7 +1776,9 @@ class KorailClient:
     ) -> ReservationPaymentResponse:
         """홀드를 카드로 결제합니다. 실제 청구가 발생합니다. 카드 거절은 예외가 아니라 FAIL 응답으로 돌아오므로 str_result·h_msg_cd 를 확인하십시오. 2026-07-31:
         8,400원 1장 IRT000000 발권과 2인 PNR 결제 기록; 2026-09-15: 7.0.6 결제·전액 환불 기록; 2026-09-24: 결제 후
-        refund(commission=) 로 수수료 0원 전액 환불. 모든 카드·요청 조합의 성공 보장은 아닙니다."""
+        refund(commission=) 로 수수료 0원 전액 환불. 2026-09-25: 대기열 POST·새 User-Agent 로 7,500원 결제(IRT000000, 정산액 =
+        홀드 received_amount) 후 수수료 0원 환불. 모든 카드·요청 조합의 성공 보장은 아닙니다. 앱처럼 0원 홀드는 카드로 결제하지 않습니다
+        (PayViewModel.java:15572)."""
         self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"
         form = build_card_payment_form(self.config, hold, card)
@@ -1803,7 +1812,11 @@ class KorailClient:
         ``tk_ret_tms_dv_cd``·``trnNo`` 도 싣습니다. ``latitude``/``longitude`` 는 앱이 위치를 얻었을 때만 싣는
         값입니다(:func:`~korail_mobile_api.mutation_payloads.build_refund_form`). commission 은 자동 조회하지 않으며,
         넘긴 응답이 SUCC 가 아니면 금액 보호를 위해 전송 전에 거절합니다. 앱의 검사 자체는 CommonOut.isSuccess() 입니다.
-        환불 화면의 보호된 ctlDvCd 는 생략하므로 그 경로의 전체 폼이 앱과 동일하다고 보장하지 않습니다."""
+        환불 화면의 보호된 ctlDvCd 는 생략하므로 그 경로의 전체 폼이 앱과 동일하다고 보장하지 않습니다.
+
+        환불 요청에는 금액이 없고(RefundTicketIn.java:66) 앱도 환불액과 결제액을 대조하지 않습니다. 앱이 수수료 응답의 보호된 코드로
+        환불을 막는 분기와, 마일리지로 수수료를 낼 때 사용 가능 마일리지가 수수료 이상인지 보는 검사(MyTicketDetailViewModel.java:1811-1858)는
+        구현하지 않았습니다. 2026-09-25: 7,500원 승차권의 수수료 조회가 환불 7,500원·수수료 0원이었고 환불은 SUCC/IRT200277 이었습니다."""
         self._require_session("refund requires")
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
         form = build_refund_form(
@@ -1921,7 +1934,13 @@ class KorailClient:
         received_amount 는 재계산 전 금액입니다. 앱은 결제 화면에서만 재계산하므로 예약대기 PNR 에는 쓰지 마십시오.
         동일 PNR 재요청은 비교값에 따라 WRE800036 또는 성공으로 달랐습니다. 자동 재시도하지 마십시오.
         자격 검증과 할인 반영이 어긋난 관측도 있으므로 자격 없는 할인을 신청하는 용도로 사용하지 마십시오. 할인 코드 반영만으로 금액 변경을 보장하지 않습니다. 토요일 두 표본은
-        WRR664296 과 금액 유지, 평일 표본은 28,600→20,000원(할인액 8,600원)이었습니다. 이는 표본 기록이지 일반 보장이 아닙니다."""
+        WRR664296 과 금액 유지, 평일 표본은 28,600→20,000원(할인액 8,600원)이었습니다. 이는 표본 기록이지 일반 보장이 아닙니다.
+
+        2026-09-25 재확인: 무변경은 ERR930202("변경항목이 없습니다."), 평일 할인 변경은 SUCC/IRZ000008 로 21,500→15,000원(좌석 할인코드
+        204)이었습니다. 토요일은 같은 SUCC/IRZ000008 인데 금액이 20,400원 그대로여서 성공 코드만으로는 할인 미적용을 알 수 없으니
+        received_amount 를 비교하십시오. 앱은 할인 화면의 선택을 보호된 표(ReqDiscount, PayViewModel.java:5462-5530)로 요청 코드에
+        옮기고, 성공하면 금액을 이 응답으로 바꾼 뒤 로그인 상태면 장바구니 추가를 부르며(:14412-14431) 보호된 코드일 때
+        "승객할인이 미적용 되었습니다." 를 띄웁니다(:14437-14446). 라이브러리는 코드 매핑·장바구니 추가·그 안내를 하지 않습니다."""
         self._require_session("price recalculation requires")
         route = "/classes/com.korail.mobile.certification.PriceReCalculation"
         form = build_price_recalculation_form(self.config, request)
