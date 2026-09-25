@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 import httpx
 
 from ._parsing import _envelope
+from ._payload_helpers import _device_version_key
 from .config import KorailConfig
 from .constants import (
     DYNAPATH_ALLOWLIST_PATHS,
@@ -196,14 +197,7 @@ class KorailHttpClient:
 
     def common_fields(self) -> dict[str, str]:
         """lang은 보호된 기본값을 추측하지 않고 설정된 경우만 싣습니다(CommonIn.java:381,467-474)."""
-        fields: dict[str, str] = {
-            "Device": self.config.device,
-            "Version": self.config.version,
-            "Key": self.config.key,
-        }
-        if self.config.lang is not None:
-            fields["lang"] = self.config.lang
-        return fields
+        return _device_version_key(self.config)
 
     def _absolute_url(self, path: str) -> str:
         return f"{self.config.base_url.rstrip('/')}/{path.lstrip('/')}"

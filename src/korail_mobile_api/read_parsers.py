@@ -14,7 +14,6 @@ from ._parsing import (
     _envelope,
     _nested_rows,
     _nullable_scalar_fields,
-    _nullable_string_fields,
     _optional_bool,
     _optional_integer,
     _optional_mapping,
@@ -740,14 +739,14 @@ def _parse_pass_menu_data(
         return None
     age_options = tuple(
         PassAgeOption(
-            **_nullable_string_fields(row, _PASS_AGE_OPTION_FIELDS),
+            **_nullable_scalar_fields(row, _PASS_AGE_OPTION_FIELDS),
             raw=row,
         )
         for row in _rows(data, "pass_ageinfo")
     )
     period_options = tuple(
         PassPeriodOption(
-            **_nullable_string_fields(row, _PASS_PERIOD_OPTION_FIELDS),
+            **_nullable_scalar_fields(row, _PASS_PERIOD_OPTION_FIELDS),
             raw=row,
         )
         for row in _rows(data, "pass_periodinfo")
@@ -795,7 +794,7 @@ def _parse_pass_goods_info(
                 )
             )
         passenger_infos = PassPassengerInfos(
-            **_nullable_string_fields(
+            **_nullable_scalar_fields(
                 passenger_infos_data,
                 {
                     "h_chtn_allw_flg": "h_chtn_allw_flg",
@@ -824,7 +823,7 @@ def parse_pass_menu_response(raw: Mapping[str, Any]) -> PassMenuResponse:
         web_data = _optional_mapping(item, "webData")
         items.append(
             PassMenuItem(
-                **_nullable_string_fields(item, _PASS_MENU_ITEM_FIELDS),
+                **_nullable_scalar_fields(item, _PASS_MENU_ITEM_FIELDS),
                 **_nullable_scalar_fields(item, _PASS_MENU_ITEM_SCALAR_FIELDS, "pass menu item"),
                 goods_data=_parse_pass_goods_info(
                     _optional_mapping(item, "goodsData"),
@@ -845,7 +844,7 @@ def parse_commuter_kind_menu_response(
 ) -> CommuterKindMenuResponse:
     _validate_strict_read_envelope(raw)
     return CommuterKindMenuResponse(
-        **_nullable_string_fields(raw, _COMMUTER_KIND_MENU_FIELDS),
+        **_nullable_scalar_fields(raw, _COMMUTER_KIND_MENU_FIELDS),
         pass_data=_parse_pass_menu_data(
             _optional_mapping(raw, "passData"),
         ),
@@ -860,7 +859,7 @@ def parse_crew_request_list_response(
     _validate_strict_read_envelope(raw)
     items = tuple(
         CrewRequestOption(
-            **_nullable_string_fields(row, _CREW_REQUEST_OPTION_FIELDS),
+            **_nullable_scalar_fields(row, _CREW_REQUEST_OPTION_FIELDS),
             raw=row,
         )
         for row in _rows(raw, "prsList")
@@ -883,7 +882,7 @@ def parse_cart_list_response(raw: Mapping[str, Any]) -> CartListResponse:
     for item in _nested_rows(raw, "cart_infos", "cart_info"):
         items.append(
             CartItem(
-                **_nullable_string_fields(item, _CART_ITEM_FIELDS),
+                **_nullable_scalar_fields(item, _CART_ITEM_FIELDS),
                 **_nullable_scalar_fields(item, _CART_ITEM_SCALAR_FIELDS, "cart item"),
                 # h_tk_cnt 는 String 선언입니다(CartInfo.java:51).
                 ticket_count=_optional_scalar_string(item, "h_tk_cnt"),
@@ -916,7 +915,7 @@ def parse_delay_discount_ticket_response(
     rows = _nested_rows(raw, "disc_infos", "disc_info")
     items = tuple(
         DelayDiscountTicket(
-            **_nullable_string_fields(row, _DELAY_DISCOUNT_TICKET_FIELDS),
+            **_nullable_scalar_fields(row, _DELAY_DISCOUNT_TICKET_FIELDS),
             **_nullable_scalar_fields(row, _DELAY_DISCOUNT_TICKET_SCALAR_FIELDS, "delay discount ticket"),
             raw=row,
         )
@@ -1062,7 +1061,7 @@ def parse_trip_menu_response(raw: Mapping[str, Any]) -> TripMenuResponse:
         )
         items.append(
             TripMenuItem(
-                **_nullable_string_fields(item, _TRIP_MENU_ITEM_FIELDS),
+                **_nullable_scalar_fields(item, _TRIP_MENU_ITEM_FIELDS),
                 content_count=_optional_integer(item, "contCount", "trip menu item"),
                 contents=contents,
                 raw=item,
@@ -1085,7 +1084,7 @@ def parse_product_reservation_list_response(
         return ProductReservationListResponse(**_response_fields(raw))
     items = tuple(
         ProductReservation(
-            **_nullable_string_fields(row, _PRODUCT_RESERVATION_FIELDS),
+            **_nullable_scalar_fields(row, _PRODUCT_RESERVATION_FIELDS),
             raw=row,
         )
         for row in _rows(main, "entity")
@@ -1111,7 +1110,7 @@ def parse_product_detail_response(
         if name is not None:
             included_items.append(name)
     return ProductDetailResponse(
-        **_nullable_string_fields(main, _PRODUCT_DETAIL_FIELDS),
+        **_nullable_scalar_fields(main, _PRODUCT_DETAIL_FIELDS),
         included_item_names=tuple(included_items),
         detail_raw=main,
         **_response_fields(raw),
@@ -1781,7 +1780,7 @@ def parse_multi_child_discount_target_response(
     for item in _rows(raw, "fmlyList"):
         targets.append(
             MultiChildDiscountTarget(
-                **_nullable_string_fields(
+                **_nullable_scalar_fields(
                     item,
                     _MULTI_CHILD_FIELDS,
                 ),
@@ -1948,7 +1947,7 @@ def parse_commuter_info_response(
             )
         )
     return CommuterInfoResponse(
-        **_nullable_string_fields(
+        **_nullable_scalar_fields(
             raw,
             {
                 "additional_service_goods_flag": "addSrvGdFlg",

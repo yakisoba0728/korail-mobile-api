@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from typing import TypeVar
 
+from ._payload_helpers import _device_version_key
 from .config import KorailConfig
 from .constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
@@ -84,18 +85,6 @@ def _required_pattern(
     if not isinstance(value, str) or pattern.fullmatch(value) is None:
         raise KorailProtocolError(f"KORAIL reservation train field {field} has an invalid shape")
     return value
-
-
-def _common_fields(config: KorailConfig) -> dict[str, str]:
-    """CommonIn.java:381 의 lang 은 config.lang 이 None 이 아닐 때만 포함합니다. 앱의 언어 기본값은 보호돼 있습니다."""
-    fields = {
-        "Device": config.device,
-        "Version": config.version,
-        "Key": config.key,
-    }
-    if config.lang is not None:
-        fields["lang"] = config.lang
-    return fields
 
 
 # TicketReservationIn 합성 생성자(TicketReservationIn.java:80)의 선언 순서입니다.
@@ -376,7 +365,7 @@ def build_limousine_reservation_form(
         "txtArvStnRunOrdr1": _required_digits(schedule.arrival_run_order, field="arrival_run_order"),
     }
     car = _required_mutation_text(car_no, field="car_no", context=context)
-    form = _common_fields(config)
+    form = _device_version_key(config)
     form.update(
         {
             "txtMenuId": "11",
@@ -608,7 +597,7 @@ def _build_journey_reservation_form(
         _assert_leg_is_bookable(leg, seat_class=seat_class, job_type=job_type)
     journeys = tuple(_journey_fields(leg) for leg in resolved_legs)
     _assert_boarding_order(resolved_legs, journeys)
-    form = _common_fields(config)
+    form = _device_version_key(config)
     form.update(
         {
             "txtMenuId": "11",
@@ -879,7 +868,7 @@ def build_standby_wait_form(
         if not isinstance(phone_no, str) or (_STANDBY_PHONE_RE.fullmatch(phone_no) is None):
             raise KorailProtocolError("KORAIL standby SMS notification requires an 11-digit phone number")
         contact = phone_no
-    form = _common_fields(config)
+    form = _device_version_key(config)
     form.update(
         {
             "txtPnrNo": pnr_no,
@@ -918,7 +907,7 @@ def build_unpaid_reservation_cancel_form(
     first = response.journeys[0] if response.journeys else None
     sequence = first.journey_sequence if first is not None else None
     change_no = first.reservation_change_no if first is not None else None
-    form = _common_fields(config)
+    form = _device_version_key(config)
     form.update(
         {
             "txtPnrNo": pnr_no,
@@ -1014,7 +1003,7 @@ def build_card_payment_form(
     auth_length = 6 if card.card_type == "J" else 10
     if not isinstance(card.birthday, str) or re.fullmatch(rf"[0-9]{{{auth_length}}}", card.birthday) is None:
         raise KorailProtocolError("KORAIL payment card authentication value must be 6 or 10 digits")
-    form = _common_fields(config)
+    form = _device_version_key(config)
     form.update(
         {
             "hidPnrNo": pnr_no,
@@ -1126,7 +1115,7 @@ def build_refund_form(
     for key, coordinate in (("latitude", latitude), ("longitude", longitude)):
         if coordinate is not None:
             form[key] = str(coordinate)
-    form.update(_common_fields(config))
+    form.update(_device_version_key(config))
     return form
 
 
@@ -1151,7 +1140,7 @@ def build_station_refund_execution_form(
         ("retFee", "refund_fee"),
         ("acepCustNm", "customer_name"),
     )
-    form = _common_fields(config)
+    form = _device_version_key(config)
     form.update((wire_name, getattr(request, attribute)) for wire_name, attribute in fields)
     return form
 
@@ -1176,7 +1165,7 @@ def build_discount_card_purchase_form(
     NCardInfoIn.java:29-39, NCardjrny.java:55 의 @SerialName 을 따릅니다."""
     if not isinstance(request, DiscountCardPurchaseRequest):
         raise KorailProtocolError("KORAIL discount card purchase requires an exact DiscountCardPurchaseRequest")
-    form = _common_fields(config)
+    form = _device_version_key(config)
     form.update(
         {
             wire: _required_mutation_text(getattr(request, attr), field=attr)
@@ -1240,7 +1229,7 @@ def build_discount_card_extension_query(
     """이름과 달리 POST이며 키는 속성명 추정·실서버 검증 못 함입니다(NetworkApi.java:518-520; NCardExtensionIn.java:31-34)."""
     if not isinstance(ticket, DiscountCardTicket):
         raise KorailProtocolError("KORAIL discount card extension requires an exact DiscountCardTicket")
-    query = _common_fields(config)
+    query = _device_version_key(config)
     query.update(
         {
             wire: _required_mutation_text(getattr(ticket, attr), field=attr)
@@ -1344,7 +1333,7 @@ def build_price_recalculation_form(
                     f"KORAIL price recalculation copies {attribute} off the held seat; it must not be empty"
                 )
 
-    form: dict[str, str | list[str]] = dict(_common_fields(config))
+    form: dict[str, str | list[str]] = dict(_device_version_key(config))
     form["hidPnrNo"] = pnr_no
     form["txtJobId"] = KorailReservationJobType.IMMEDIATE.value
     non_member_no = request.non_member_no
@@ -1396,7 +1385,7 @@ def build_maas_cancel_form(config: KorailConfig, item: CartItem, *, customer_no:
         raise KorailProtocolError(
             "KORAIL cart row with a PNR is a train or bus hold; use cancel_unpaid_hold for it"
         )
-    form = _common_fields(config)
+    form = _device_version_key(config)
     form["custMgNo"] = _required_mutation_text(customer_no, field="customer_no", context="MaaS cancel")
     form["lumpStlTgtNo"] = _required_mutation_text(
         item.lump_sum_target_no, field="lump_sum_target_no", context="MaaS cancel"
@@ -1412,7 +1401,7 @@ def build_cart_add_form(
     if not isinstance(request, CartAddRequest):
         raise KorailProtocolError("KORAIL cart request requires an exact CartAddRequest")
     pnr_no = _required_mutation_text(request.pnr_no, field="pnr_no", context="cart request")
-    form = _common_fields(config)
+    form = _device_version_key(config)
     form["hidPnrNo"] = pnr_no
     return form
 
@@ -1427,7 +1416,7 @@ def build_self_checkin_register_form(
     if not isinstance(seat, SelfCheckInSeat):
         raise KorailProtocolError("seat must be a SelfCheckInSeat from check_self_checkin_seat")
     return {
-        **_common_fields(config),
+        **_device_version_key(config),
         "cpsNo": _required_mutation_text(seat.cps_no, field="cps_no", context="self check-in"),
         "scarNo": _required_mutation_text(seat.car_no, field="car_no", context="self check-in"),
         "seatNo": _required_mutation_text(seat.seat_no, field="seat_no", context="self check-in"),
@@ -1437,7 +1426,7 @@ def build_self_checkin_register_form(
 
 def build_self_checkin_cancel_form(config: KorailConfig, detail: RefundTicketDetailResponse) -> dict[str, str]:
     """칸은 정보 조회와 같습니다(SelfCheckInResultViewModel.java:111-112; SelfCheckInCancelIn.java:53)."""
-    return {**_common_fields(config), **self_checkin_ticket_fields(detail, sale_date_key="saleDt")}
+    return {**_device_version_key(config), **self_checkin_ticket_fields(detail, sale_date_key="saleDt")}
 
 
 def build_delivered_ticket_retrieval_form(
@@ -1453,7 +1442,7 @@ def build_delivered_ticket_retrieval_form(
         raise KorailProtocolError("KORAIL delivered ticket retrieval needs the ticket's first journey")
     context = "delivered ticket retrieval"
     return {
-        **_common_fields(config),
+        **_device_version_key(config),
         "pbpCnt": "1",
         "pbpRsvNo": [
             _required_mutation_text(

@@ -203,21 +203,12 @@ def _optional_bool(
     return value if isinstance(value, bool) else None
 
 
-def _nullable_string_fields(
-    data: Mapping[str, Any],
-    field_map: Mapping[str, str],
-) -> dict[str, Any]:
-    # 값은 str | None 이지만 모델 생성자에 ** 로 풀어 넣으므로 Any 로 둡니다. 타입 검사기는 풀어 넣는 dict 의 값 타입을 raw 같은 다른 매개변수에도 맞춰 보기 때문입니다.
-    return {attribute: _optional_scalar_string(data, wire_name) for attribute, wire_name in field_map.items()}
-
-
 def _nullable_scalar_fields(
     data: Mapping[str, Any],
     field_map: Mapping[str, str],
-    context: str,
+    context: str = "",
 ) -> dict[str, Any]:
-    """선택 문자열(JSON 정수 포함)을 읽습니다. :func:`_nullable_string_fields` 와 결과가 같습니다. context 는 내부 검증에 넘기며, 변환하지 못한 값은
-    None 입니다."""
+    """String 선택값을 같은 규칙으로 읽으며 모델 생성자 **kwargs 호환을 위해 값 타입은 Any입니다."""
     return {
         attribute: _optional_scalar_string(data, wire_name, context)
         for attribute, wire_name in field_map.items()
@@ -252,15 +243,10 @@ _RESERVATION_PASSENGER_FIELDS: dict[str, str] = {
 
 def _reservation_passengers(raw: Mapping[str, Any]) -> tuple[ReservationPassengerInfo, ...]:
     """컨테이너가 없거나 모양이 다르면 빈 튜플이고 원문은 raw 에 남습니다."""
-    container = raw.get("psg_infos")
-    rows = container.get("psg_info") if isinstance(container, Mapping) else None
-    if not isinstance(rows, list):
-        return ()
     return tuple(
         ReservationPassengerInfo(
             **_nullable_scalar_fields(row, _RESERVATION_PASSENGER_FIELDS, "reservation passenger"),
             raw=dict(row),
         )
-        for row in rows
-        if isinstance(row, Mapping)
+        for row in _nested_rows(raw, "psg_infos", "psg_info")
     )
