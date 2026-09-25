@@ -769,6 +769,34 @@ def make_client():
         client.close()
 
 
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        (
+            "get_ticket_list",
+            "Device Version Key lang txtIndex h_abrd_dt_from h_abrd_dt_to txtDeviceId hiduserYn h_page_no",
+        ),
+        (
+            "get_refund_commission",
+            "h_orgtk_ret_sale_dt h_orgtk_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_comp_nm h_comp_cert_no "
+            "Device Version Key lang",
+        ),
+    ],
+)
+def test_forms_follow_the_app_dto_order(name, expected, make_client) -> None:
+    """MyTicketListIn.java:62; RefundCommissionIn.java:59 declares the common fields after the ticket fields.
+    The app flattens each DTO in declaration order (NetworkService.java:15335-15392)."""
+    entry = BY_NAME[name]
+    client, calls = make_client(entry.response)
+    kwargs = dict(entry.kwargs)
+    if name == "get_ticket_list":
+        kwargs.update(boarding_date_from="20300101", boarding_date_to="20300131")
+    else:
+        kwargs["companion"] = p.RefundCompanion("TEST-NAME", "TEST-CERT")
+    getattr(client, name)(**kwargs)
+    assert [key for key, _ in parse_qsl(calls[0].content.decode(), keep_blank_values=True)] == expected.split()
+
+
 def typed_strings(obj: Any) -> list[str]:
     if isinstance(obj, str):
         return [obj]

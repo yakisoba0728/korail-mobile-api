@@ -539,7 +539,18 @@ def test_body_parse_retains_raw_and_library_field_policy() -> None:
 
 
 @pytest.mark.parametrize(
-    "text", ["", "200", "oops:key=x", ":key=x", "+:key=x", "2 0:key=x", "2_00:key=x", "2147483648:key=x"]
+    "text",
+    [
+        "",
+        "200",
+        "oops:key=x",
+        ":key=x",
+        "+:key=x",
+        "2 0:key=x",
+        "2_00:key=x",
+        "2147483648:key=x",
+        "\U0001d7d0\U0001d7ce\U0001d7ce:key=x",
+    ],
 )
 def test_invalid_body_keeps_raw(text: str) -> None:
     with pytest.raises(KorailNetFunnelError) as raised:
@@ -555,10 +566,12 @@ def test_invalid_body_keeps_raw(text: str) -> None:
         ("+200:key=x", "200"),
         ("２００:key=x", "200"),
         ("-1:key=x", "-1"),
+        ("0" * 5000 + "200:key=x", "200"),
     ],
 )
 def test_body_code_reads_like_java_parse_int(text: str, code: str) -> None:
-    """com/netfunnel/api/Response.java:128-135: Integer.parseInt takes a sign and Unicode decimal digits."""
+    """com/netfunnel/api/Response.java:128-135: Integer.parseInt takes a sign and decimal digits per UTF-16
+    unit, so supplementary-plane digits fail and any number of leading zeros is fine."""
     assert parse_netfunnel_body(text).code == code
 
 
@@ -735,14 +748,17 @@ def expected_seat_form() -> dict[str, str]:
 
 
 def test_full_schedule_form(config, schedule_query) -> None:
-    """ScdlQryIn.java:60-78; AirportBusScheduleViewModel.java:221-248. Wire trnGpCd stays unverified."""
-    assert build_limousine_schedule_form(config, schedule_query) == expected_schedule_form()
+    """ScdlQryIn.java:60-78; AirportBusScheduleViewModel.java:221-248. Wire trnGpCd stays unverified. Key
+    precedes lang as in the DTO declaration."""
+    form = build_limousine_schedule_form(config, schedule_query)
+    assert form == expected_schedule_form() and list(form) == list(expected_schedule_form())
     assert "lang" not in build_limousine_schedule_form(replace(config, lang=None), schedule_query)
 
 
 def test_full_inventory_form(config, seat_query) -> None:
     """TResidualSeatsResearchIn.java:65-138,163-219; AirportBusSeatMapViewModel.java:843-865."""
-    assert build_limousine_seat_inventory_form(config, seat_query) == expected_seat_form()
+    form = build_limousine_seat_inventory_form(config, seat_query)
+    assert form == expected_seat_form() and list(form) == list(expected_seat_form())
     q = replace(seat_query, product_no="SYNTHETIC-PRODUCT", is_arrow=True)
     assert build_limousine_seat_inventory_form(config, q) == {
         **expected_seat_form(),
@@ -1045,6 +1061,24 @@ def test_reservation_passenger_rows_only_nonzero(config, schedule, adult: int, c
         )
     assert f"txtCompaCnt{len(expected_rows) + 1}" not in form
     assert form["txtSrcarCnt"] == form["txtTotPsgCnt"] == str(passengers.total)
+
+
+def test_reservation_form_follows_the_app_dto_order(config, schedule) -> None:
+    """TicketReservationIn.java:80; TicketReservationInPassengerInfo.java:55; TicketReservationInJrny.java:69:
+    the app flattens the shared DTO in declaration order (NetworkService.java:15335-15392)."""
+    passengers = KorailPassengerCounts(adult=1, child=1)
+    form = build_limousine_reservation_form(config, schedule, ["S1", "S2"], passengers=passengers)
+    journey = (
+        "txtJrnyTpCd txtJrnySqno txtTrnNo txtTrnClsfCd txtTrnGpCd txtRunDt txtDptDt txtDptTm txtDptRsStnCd"
+    )
+    journey += " txtDptStnRunOrdr txtArvRsStnCd txtArvStnRunOrdr txtPsrmClCd"
+    assert list(form)[list(form).index("txtMenuId") :] == [
+        *"txtMenuId txtJobId hidFreeFlg txtStndFlg txtTotPsgCnt".split(),
+        *"txtSeatAttCd1 txtSeatAttCd2 txtSeatAttCd3 txtSeatAttCd4 txtSeatAttCd5 txtJrnyCnt txtSrcarCnt".split(),
+        *"txtCompaCnt1 txtPsgTpCd1 txtDiscKndCd1 txtCompaCnt2 txtPsgTpCd2 txtDiscKndCd2".split(),
+        *(f"{key}1" for key in journey.split()),
+        *"txtSrcarNo1 txtSeatNo1 txtSrcarNo2 txtSeatNo2".split(),
+    ]
 
 
 def test_duplicate_seat_rejected(config, schedule) -> None:

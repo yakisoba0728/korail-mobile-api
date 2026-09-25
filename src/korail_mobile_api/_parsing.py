@@ -223,7 +223,8 @@ def _nullable_scalar_fields(
     field_map: Mapping[str, str],
     context: str,
 ) -> dict[str, Any]:
-    """선택 문자열(JSON 정수 포함)을 읽습니다. :func:`_nullable_string_fields` 와 결과가 같고 context 는 오류 문맥용입니다."""
+    """선택 문자열(JSON 정수 포함)을 읽습니다. :func:`_nullable_string_fields` 와 결과가 같습니다. context 는 내부 검증에 넘기며, 변환하지
+    못한 값은 None 입니다."""
     return {
         attribute: _optional_scalar_string(data, wire_name, context)
         for attribute, wire_name in field_map.items()

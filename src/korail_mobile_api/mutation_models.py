@@ -550,7 +550,7 @@ class PaidTicket:
 
 @dataclass(frozen=True)
 class DiscountCardSectionRequest:
-    """구매할 N카드의 적용 구간을 구성합니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 구매 구간. DTO 키는 밑줄로
+    """구매할 N카드의 적용 구간을 구성합니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. DTO 키는 밑줄로
     끝나며(NCardjrny.java:96-112) 공통 평탄화가 1-기반 인덱스를 붙입니다(NetworkService.java:15345-15366). 구간 목록 선언:
     NCardInfoIn.java:37, 라우트: NetworkApi.java:335-337. 허용 1~3구간은 라이브러리 상한입니다."""
 
@@ -563,8 +563,8 @@ class DiscountCardSectionRequest:
 
 @dataclass(frozen=True)
 class DiscountCardAdditionalUser:
-    """2인용 N카드의 추가 사용자 정보를 구성합니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 2인용 N카드의 추가 사용자. NCardInfoIn.java:30-34
-    의 속성명 자체에 _1 이 포함됩니다. serializer 이름은 보호돼 전송 키는 속성명에 따른 추정입니다."""
+    """2인용 N카드의 추가 사용자 정보를 구성합니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다.
+    NCardInfoIn.java:30-34 의 속성명 자체에 _1 이 포함됩니다. serializer 이름은 보호돼 전송 키는 속성명에 따른 추정입니다."""
 
     customer_no: str
     name: str
@@ -573,8 +573,8 @@ class DiscountCardAdditionalUser:
 
 @dataclass(frozen=True)
 class DiscountCardPurchaseRequest:
-    """N카드 구매에 필요한 구간·사용자·상품 정보를 구성합니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. N카드 구매
-    정보(NetworkApi.java:335-337). 자체 필드는 NCardInfoIn.java:29-39 참고. 명시적 별칭이 없는 필드의 전송 키는 보호된 serializer 대신
+    """N카드 구매에 필요한 구간·사용자·상품 정보를 구성합니다. 검증 못 함: N카드가 없는 계정이라 실서버에서 확인하지 못했습니다. 라우트는
+    NetworkApi.java:335-337 입니다. 자체 필드는 NCardInfoIn.java:29-39 참고. 명시적 별칭이 없는 필드의 전송 키는 보호된 serializer 대신
     속성명을 사용한 추정입니다."""
 
     card_kind_management_no: str

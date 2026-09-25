@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from ._payload_helpers import _device_version
+from ._payload_helpers import _device_version_key
 from .config import KorailConfig
 from .limousine_models import (
     LimousineScheduleQuery,
@@ -21,8 +21,7 @@ def build_limousine_schedule_form(
     """공항버스 운행 스케줄 조회 폼을 만듭니다. 앱 근거: NetworkApi.java:654-656. 역은 역코드, 날짜·시각은 YYYYMMDD·HHMMSS 입니다. 형식 자릿수는 서버에서
     검사합니다."""
     return {
-        **_device_version(config),
-        "Key": config.key,
+        **_device_version_key(config),
         "dptDt": query.departure_date,
         "dptRsStnCd": query.departure_station_code,
         "arvRsStnCd": query.arrival_station_code,
@@ -47,8 +46,7 @@ def build_limousine_seat_inventory_form(
     ctlDvCd 는 공유 DTO 의 필드이나 공항버스 생성자는 기본값 슬롯을 사용합니다 (AirportBusSeatMapViewModel.java:717,865). 열차 좌석변경 생성자
     (TrainSeatMapViewModel.java:1976)와 달리 이 폼에서는 생략합니다. 보호된 Json 설정만으로 앱의 모든 null 직렬화 동작을 단정하지 않습니다."""
     return {
-        **_device_version(config),
-        "Key": config.key,
+        **_device_version_key(config),
         "trnClsfCd": query.train_class_code,
         "trnGpCd": query.service_code,
         "runDt": query.run_date,

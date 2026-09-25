@@ -603,8 +603,8 @@ def parse_seat_car_list_response(
     response: BaseKorailResponse,
 ) -> SeatCarListResponse:
     """호차와 좌석 속성 목록을 읽습니다. 호차번호를 다음 좌석 재고 조회에 사용합니다. 컨테이너는 선택 목록 헬퍼의 정책을 따릅니다.
-    호차 필드는 모두 mask 상 선택이라(TrainResearchOutCarInfo.java:59-85, TrainResearchOutSeatInfo.java:51-56) 누락되면
-    문자열은 "", 숫자는 None 입니다."""
+    호차 필드는 모두 mask 상 선택입니다(TrainResearchOutCarInfo.java:59-85, TrainResearchOutSeatInfo.java:51-56). 예전에 필수로 읽던
+    호차번호·잔여석·객실명·좌석속성명은 누락되면 문자열은 "", 숫자는 None 이고, 나머지 선택 필드는 None 입니다."""
     raw = response.raw
     cars: list[SeatCar] = []
     for row in _nested_rows(raw, "srcar_infos", "srcar_info"):
@@ -683,8 +683,8 @@ def parse_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> SeatInventoryResponse:
     """일반 열차의 좌석 재고를 읽습니다. seatList·windowList 는 누락만 빈 목록이며 키가 있으면 목록을 요구합니다. 좌석·창측 필드는
-    mask 상 모두 선택이라(TResidualSeatsResearchOut.java:61-82, TResidualSeatsResearchOutSeat.java:62-104) 누락되면
-    문자열은 "", 비율은 None 입니다. 값이 있는데 잘못된 타입이면 응답 전체를 거절합니다. 선택 건수의 상호 모순은
+    mask 상 모두 선택입니다(TResidualSeatsResearchOut.java:61-82, TResidualSeatsResearchOutSeat.java:62-104). 예전에 필수로 읽던
+    필드는 누락되면 문자열은 "", 비율은 None 이고, 나머지 선택 필드는 None 입니다. 값이 있는데 잘못된 타입이면 응답 전체를 거절합니다. 선택 건수의 상호 모순은
     검증하지 않습니다. layout_type 은 String 선언(TResidualSeatsResearchOut.java:29)과 달리 정수도 허용합니다.
     2026-09-21 라이브 15대에서 JSON 정수를 관측했습니다."""
     raw = response.raw

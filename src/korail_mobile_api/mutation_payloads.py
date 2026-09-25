@@ -91,6 +91,65 @@ def _common_fields(config: KorailConfig) -> dict[str, str]:
     return fields
 
 
+# TicketReservationIn 합성 생성자(TicketReservationIn.java:80)의 선언 순서입니다. 네 목록은
+# 승객(TicketReservationInPassengerInfo.java:55) → 여정(TicketReservationInJrny.java:69, 객실 코드는 각 여정의 끝) → 좌석 →
+# 후행 좌석 순이고, 원소마다 필드 뒤에 1기반 번호가 붙습니다(NetworkService.java:15350,15366). 평탄화 뒤에 덧붙는 키는
+# 없습니다(NetworkService.java:14155-14162).
+_RESERVATION_KEY_ORDER: tuple[str, ...] = (
+    *(
+        "Device",
+        "Version",
+        "Key",
+        "lang",
+        "txtMenuId",
+        "txtJobId",
+        "txtGdNo",
+        "hidFreeFlg",
+        "txtStndFlg",
+        "txtTotPsgCnt",
+    ),
+    *("txtSeatAttCd1", "txtSeatAttCd2", "txtSeatAttCd3", "txtSeatAttCd4", "txtSeatAttCd5", "txtSeatAttCd4_1"),
+    *("txtJrnyCnt", "txtSrcarCnt", "txtSrcarCnt1"),
+    *(
+        f"{field}{row}"
+        for row in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+        for field in ("txtCompaCnt", "txtPsgTpCd", "txtDiscKndCd", "txtCardNo_")
+    ),
+    *(
+        f"{field}{journey}"
+        for journey in (1, 2)
+        for field in (
+            *(
+                "txtJrnyTpCd",
+                "txtJrnySqno",
+                "txtTrnNo",
+                "txtTrnClsfCd",
+                "txtTrnGpCd",
+                "txtRunDt",
+                "txtDptDt",
+                "txtDptTm",
+            ),
+            *("txtDptRsStnCd", "txtDptStnConsOrdr", "txtDptStnRunOrdr", "txtArvRsStnCd", "txtArvStnConsOrdr"),
+            *("txtArvStnRunOrdr", "txtChgFlg", "txtPsrmClCd"),
+        )
+    ),
+    *(
+        f"{prefix}{seat}"
+        for prefixes in (("txtSrcarNo", "txtSeatNo"), ("txtSrcarNo1_", "txtSeatNo1_"))
+        for seat in range(1, KORAIL_MAX_PASSENGERS_PER_RESERVATION + 1)
+        for prefix in prefixes
+    ),
+    *("txtMidRsStnCd", "txtMidStnConsOrdr", "txtMidStnRunOrdr"),
+)
+
+
+def _in_reservation_order(form: dict[str, str]) -> dict[str, str]:
+    """예약 폼을 앱 DTO 의 선언 순서로 다시 놓습니다. 표에 없는 키는 원래 순서대로 뒤에 둡니다."""
+    ordered = {key: form[key] for key in _RESERVATION_KEY_ORDER if key in form}
+    ordered.update(form)
+    return ordered
+
+
 # 0명 행을 제외한 뒤 연속 인덱스를 붙입니다(Passengers.java:743-752).
 _PASSENGER_ROWS: tuple[tuple[str, str, str], ...] = (
     ("adult", "1", "000"),  # 어른
@@ -178,7 +237,8 @@ def build_reservation_form(
     TicketReservationInSrcarTrailing.java:52, 개수는 TicketReservationIn.java:80 입니다. 앱은 한 FieldMap 으로
     전송하고(NetworkApi.java:752-753), DTO 를 평탄화하며 배열에 1기반 인덱스를
     붙입니다(NetworkService.java:14155-14162,15350,15366). txtSrcarCnt 는 호차 수가 아닌 좌석
-    수입니다(TrainSeatMapViewModel.java:2108-2113,2136-2138). 라이브러리의 삽입 순서가 DTO 의 모든 필드 순서와 같다는 보장은 없습니다."""
+    수입니다(TrainSeatMapViewModel.java:2108-2113,2136-2138). 키 순서는 :func:`_in_reservation_order` 가 DTO 선언 순서로
+    맞춥니다."""
     return _build_journey_reservation_form(
         config,
         (train,),
@@ -273,7 +333,7 @@ def build_merge_reservation_form(
     )
     form["txtStndFlg"] = "Y" if standing else "N"
     form.update({key: str(value) for key, value in middle.items()})
-    return form
+    return _in_reservation_order(form)
 
 
 #: 공항버스 좌석의 호차 번호. 앱 상수 DEFINE_SRCARNO(AirportBusSeatMapViewModel.java:101)는 보호된 4바이트이며 좌석 조회와 예약에 같은 값을
@@ -364,7 +424,7 @@ def build_limousine_reservation_form(
     for index, seat in enumerate(seats, start=1):
         form[_srcar_no_key(1, index)] = car
         form[_seat_no_key(1, index)] = seat
-    return form
+    return _in_reservation_order(form)
 
 
 def is_merge_eligible(
@@ -622,8 +682,7 @@ def _build_journey_reservation_form(
     )
     _write_journey_rows(form, journeys, (journey_type_code,) * len(journeys))
     # 좌석 지정에만 개수·좌석쌍을 추가합니다. 앱 일반 빌더는 목록·개수를 채우지 않습니다 (TrainScheduleViewModel.java:2932,3004;
-    # TicketReservationIn.java:182). DTO 는 두 개수 필드를 목록보다 앞에 선언하므로(TicketReservationIn.java:80) 라이브러리의 구간별 묶음 삽입
-    # 순서와 전체 순서가 같다고 단정할 수 없습니다.
+    # TicketReservationIn.java:182). 개수 필드는 목록보다 앞에 선언되며(TicketReservationIn.java:80) 마지막에 순서를 맞춥니다.
     for journey, leg_assignments in enumerate(assignments, start=1):
         for index, assignment in enumerate(leg_assignments, start=1):
             if index == 1:
@@ -632,7 +691,7 @@ def _build_journey_reservation_form(
                 form[_srcar_count_key(journey)] = str(len(leg_assignments))
             form[_srcar_no_key(journey, index)] = str(assignment.car_no)
             form[_seat_no_key(journey, index)] = assignment.seat_no
-    return form
+    return _in_reservation_order(form)
 
 
 def _sequence_no(code: str) -> str:
@@ -647,7 +706,8 @@ def _write_journey_rows(
     journey_type_codes: Sequence[str],
 ) -> None:
     """구간별 여정 필드를 씁니다. 선언: TicketReservationInJrny.java:69; 구성: TrainScheduleOutTrainInfo.java:3683; 1기반 인덱스:
-    NetworkService.java:15350,15366. 도착시각 키는 없습니다. 객실 키는 호출자가 먼저 쓰므로 앱 DTO 전체 순서와 다릅니다. txtChgFlg=N 은 라이브러리
+    NetworkService.java:15350,15366. 도착시각 키는 없습니다. 객실 키는 호출자가 쓰고 :func:`_in_reservation_order` 가 여정 끝으로
+    옮깁니다. txtChgFlg=N 은 라이브러리
     값이고 앱 상수는 보호돼 있습니다. 길이 일치는 동등성 증명이 아닙니다."""
     for journey, (fields, journey_type_code) in enumerate(
         zip(journeys, journey_type_codes, strict=True), start=1
@@ -1082,25 +1142,21 @@ def build_refund_form(
     # bool("N") 변환으로 마일리지 사용 의도가 뒤집히지 않도록 bool 만 받습니다.
     if not isinstance(settle_mileage, bool):
         raise KorailProtocolError("settle_mileage must be a bool")
-    form = _common_fields(config)
-    form.update(
-        {
-            "txtPnrNo": ticket.pnr_no,
-            "h_orgtk_sale_dt": ticket.sale_date,
-            "h_orgtk_sale_wct_no": ticket.sale_window_no,
-            "h_orgtk_sale_sqno": ticket.sale_sequence,
-            "h_orgtk_ret_pwd": ticket.return_password,
-            "h_mlg_stl": "Y" if settle_mileage else "N",
-            "pbpAcepTgtFlg": _refund_echo_field(
-                (
-                    pbp_acceptance_target_flag
-                    if pbp_acceptance_target_flag is not None
-                    else ticket.pbp_acceptance_target_flag
-                ),
-                field="pbp_acceptance_target_flag",
-            ),
-        }
+    pbp_flag = _refund_echo_field(
+        pbp_acceptance_target_flag
+        if pbp_acceptance_target_flag is not None
+        else ticket.pbp_acceptance_target_flag,
+        field="pbp_acceptance_target_flag",
     )
+    # 키 순서는 RefundTicketIn 합성 생성자(RefundTicketIn.java:66)의 선언 순서이며 공통 필드가 맨 뒤입니다.
+    form = {
+        "txtPnrNo": ticket.pnr_no,
+        "h_orgtk_sale_dt": ticket.sale_date,
+        "h_orgtk_sale_wct_no": ticket.sale_window_no,
+        "h_orgtk_sale_sqno": ticket.sale_sequence,
+        "h_orgtk_ret_pwd": ticket.return_password,
+        "h_mlg_stl": "Y" if settle_mileage else "N",
+    }
     # 7.0.6 에는 환불 요청을 만드는 화면이 둘입니다. 승차권 상세(MyTicketDetailViewModel.java:1521)는 위 필드만 채우고 나머지는 null 입니다. 환불
     # 화면(RefundTicketViewModel$refundTicket$1.smali)은 먼저 CommissionView 를 부르고 그 응답의 tk_ret_tms_dv_cd(:1132), 첫
     # 승차권의 trnNo(:854-868), 현재 위치의 위도·경도(:1136-1180, 위치가 없으면 null)를 더 싣습니다. commission 을 넘기면 뒤쪽입니다.
@@ -1129,9 +1185,11 @@ def build_refund_form(
             raise KorailProtocolError(
                 "KORAIL refund cannot pay the fee with mileage: usable mileage is below the fee"
             )
+    form["pbpAcepTgtFlg"] = pbp_flag
     for key, coordinate in (("latitude", latitude), ("longitude", longitude)):
         if coordinate is not None:
             form[key] = str(coordinate)
+    form.update(_common_fields(config))
     return form
 
 
@@ -1300,7 +1358,7 @@ def build_discount_card_reservation_form(
             continue
         rebuilt[name] = value
     rebuilt["txtMenuId"] = KORAIL_DISCOUNT_CARD_MENU_ID
-    return rebuilt
+    return _in_reservation_order(rebuilt)
 
 
 # Retrofit 은 @FieldMap 뒤에 @Field 목록을 선언 순서대로 붙입니다(NetworkApi.java:584, RequestFactory.java:89-101).

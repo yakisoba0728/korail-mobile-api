@@ -196,18 +196,19 @@ def build_seat_assignment_schedule_form(
 def build_merge_seats_inquiry_form(
     request: MergeSeatsInquiryRequest,
 ) -> dict[str, str]:
+    # 키 순서는 MergeSeatsCIn 합성 생성자(MergeSeatsCIn.java:63)의 선언 순서입니다.
     form = {
         "abrdDt": request.boarding_datetime,
         "runDt": request.run_datetime,
         "trnNo": request.train_no.zfill(5),
         "dptRsStnNm": request.departure_station_name,
         "arvRsStnNm": request.arrival_station_name,
-        "psrmClCd": request.room_class_code,
-        "seatAttCd": request.seat_attribute_code,
-        "totPsgNum": str(request.passenger_count),
     }
     if request.selected_station_name is not None:
         form["selRsStnNm"] = request.selected_station_name
+    form["psrmClCd"] = request.room_class_code
+    form["seatAttCd"] = request.seat_attribute_code
+    form["totPsgNum"] = str(request.passenger_count)
     return form
 
 

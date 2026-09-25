@@ -1186,10 +1186,12 @@ class KorailClient:
     ) -> RefundCommissionResponse:
         """승차권 한 장의 예상 환불액과 수수료를 조회합니다. 실제 환불은 하지 않습니다. 환불 단위는 refund와 같으며 여러 장의 PNR 총액은 각 승차권의 결과를 합산해야 합니다."""
         self._require_session()
+        # RefundCommissionIn 은 공통 필드를 원표 식별자 뒤에 선언합니다(RefundCommissionIn.java:59).
         return self._post_read(
             "/classes/com.korail.mobile.refunds.CommissionView",
-            build_refund_commission_form(ticket, companion),
+            {**build_refund_commission_form(ticket, companion), **self.http.common_fields()},
             parser=parse_refund_commission_response,
+            include_common=False,
         )
 
     def get_refund_ticket_detail(

@@ -10,8 +10,17 @@ from .config import KorailConfig
 
 
 def _device_version(config: KorailConfig) -> dict[str, str]:
-    """Device·Version·선택 lang을 순서대로 담은 새 폼을 만듭니다."""
+    """Device·Version·선택 lang을 순서대로 담은 새 폼을 만듭니다. Key 를 싣지 않는 요청용입니다."""
     fields = {"Device": config.device, "Version": config.version}
+    if config.lang is not None:
+        fields["lang"] = config.lang
+    return fields
+
+
+def _device_version_key(config: KorailConfig) -> dict[str, str]:
+    """Device·Version·Key·선택 lang을 앱 DTO 의 선언 순서대로 담은 새 폼을 만듭니다(CommonCodeIn.java:55 등 합성 생성자).
+    앱은 DTO 선언 순서대로 폼을 만듭니다(JsonTreeEncoder 의 LinkedHashMap → NetworkService.java:15335-15392 의 평탄화)."""
+    fields = {"Device": config.device, "Version": config.version, "Key": config.key}
     if config.lang is not None:
         fields["lang"] = config.lang
     return fields

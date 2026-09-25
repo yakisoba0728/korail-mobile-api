@@ -1509,6 +1509,103 @@ def test_recalculation_form_keeps_the_retrofit_field_order() -> None:
     assert "txtPsrmClCd1" in keys[:-12]
 
 
+APP_HEAD = "Device Version Key lang txtMenuId txtJobId hidFreeFlg txtStndFlg txtTotPsgCnt".split()
+APP_SEAT_ATTRIBUTES = "txtSeatAttCd1 txtSeatAttCd2 txtSeatAttCd3 txtSeatAttCd4 txtSeatAttCd5".split()
+APP_ADULT = "txtCompaCnt1 txtPsgTpCd1 txtDiscKndCd1".split()
+APP_JOURNEY = (
+    "txtJrnyTpCd txtJrnySqno txtTrnNo txtTrnClsfCd txtTrnGpCd txtRunDt txtDptDt txtDptTm txtDptRsStnCd "
+    "txtDptStnConsOrdr txtDptStnRunOrdr txtArvRsStnCd txtArvStnConsOrdr txtArvStnRunOrdr txtChgFlg txtPsrmClCd"
+).split()
+
+
+def app_journey(number: int) -> list[str]:
+    return [f"{key}{number}" for key in APP_JOURNEY]
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("reserve", [*APP_HEAD, *APP_SEAT_ATTRIBUTES, "txtJrnyCnt", *APP_ADULT, *app_journey(1)]),
+        (
+            "reserve_transfer",
+            [
+                *APP_HEAD,
+                *APP_SEAT_ATTRIBUTES,
+                "txtSeatAttCd4_1",
+                "txtJrnyCnt",
+                *APP_ADULT,
+                *app_journey(1),
+                *app_journey(2),
+            ],
+        ),
+        (
+            "reserve_merge",
+            [
+                *APP_HEAD,
+                *APP_SEAT_ATTRIBUTES,
+                "txtJrnyCnt",
+                *APP_ADULT,
+                *app_journey(1),
+                *"txtMidRsStnCd txtMidStnConsOrdr txtMidStnRunOrdr".split(),
+            ],
+        ),
+        (
+            "reserve_with_discount_card",
+            [*APP_HEAD, *APP_SEAT_ATTRIBUTES, "txtJrnyCnt", *APP_ADULT, "txtCardNo_1", *app_journey(1)],
+        ),
+        (
+            "refund",
+            "txtPnrNo h_orgtk_sale_dt h_orgtk_sale_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_mlg_stl trnNo "
+            "pbpAcepTgtFlg Device Version Key lang".split(),
+        ),
+    ],
+)
+def test_mutation_forms_follow_the_app_dto_order(name: str, expected: list[str]) -> None:
+    """TicketReservationIn.java:80; TicketReservationInPassengerInfo.java:55; TicketReservationInJrny.java:69;
+    RefundTicketIn.java:66: the app flattens each DTO in declaration order (NetworkService.java:15335-15392)."""
+    case = next(c for c in CASES if c.name == name)
+    h = Harness([copy.deepcopy(case.response)], case.method, case.routes[:1], case.form)
+    try:
+        case.invoke(h.client)
+        keys = [key for key, _ in parse_qsl(h.seen[0].content.decode(), keep_blank_values=True)]
+    finally:
+        h.close()
+    assert keys == expected
+
+
+def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order() -> None:
+    """TicketReservationIn.java:80 (two seat counts before the lists, trailing seats last);
+    RefundTicketIn.java:66 (tk_ret_tms_dv_cd, trnNo, pbpAcepTgtFlg, latitude, longitude, then the common
+    fields)."""
+    config = KorailConfig(base_url="https://offline.invalid", lang=COMMON["lang"])
+    form = payload_module.build_transfer_reservation_form(
+        config,
+        [train(), train(True)],
+        job_type=Job.SEAT_DESIGNATED,
+        seats=((KorailSeatAssignment(3, "SYNTH-5A"),), (KorailSeatAssignment(4, "SYNTH-6B"),)),
+    )
+    assert list(form) == [
+        *APP_HEAD[:6],
+        "txtGdNo",
+        *APP_HEAD[6:],
+        *APP_SEAT_ATTRIBUTES,
+        *"txtSeatAttCd4_1 txtJrnyCnt txtSrcarCnt txtSrcarCnt1".split(),
+        *APP_ADULT,
+        *app_journey(1),
+        *app_journey(2),
+        *"txtSrcarNo1 txtSeatNo1 txtSrcarNo1_1 txtSeatNo1_1".split(),
+    ]
+    commission = RefundCommissionResponse(str_result="SUCC", ticket_return_times_division_code="SYNTH-TMS")
+    refund = payload_module.build_refund_form(
+        config, ticket(), commission=commission, latitude="37.5", longitude="127.0"
+    )
+    assert list(refund) == (
+        "txtPnrNo h_orgtk_sale_dt h_orgtk_sale_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_mlg_stl "
+        "tk_ret_tms_dv_cd "
+        "trnNo pbpAcepTgtFlg latitude longitude Device Version Key lang".split()
+    )
+
+
 def test_mutation_parser_keeps_the_whole_response_when_called_directly() -> None:
     """RefundTicketOut.java:48-53; StlList.java:46-55: a bad settlement row fails with the whole response on
     .raw and the row on .parser_raw, directly and through the client."""

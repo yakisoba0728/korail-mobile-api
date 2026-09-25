@@ -8,7 +8,7 @@ mutation_payloads에서 구성합니다."""
 import time
 from collections.abc import Sequence
 
-from ._payload_helpers import _device_version, _is_ascii_digits
+from ._payload_helpers import _device_version, _device_version_key, _is_ascii_digits
 from .config import KorailConfig
 from .constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
@@ -94,24 +94,24 @@ def build_seat_car_form(
     validate_seat_inventory_inputs(train, passenger_count)
     seat_attribute = _seat_attribute(train, seat_attribute_code)
     return {
-        **_device_version(config),
-        "Key": config.key,
+        # 키 순서는 TrainResearchIn 합성 생성자(TrainResearchIn.java:68)의 선언 순서입니다. txtCustSrtCd 는 보내지 않습니다.
+        **_device_version_key(config),
         "txtMenuId": menu_id,
-        "txtPsrmClCd": _validated_room_class_code(room_class_code),
         "txtRunDt": train.run_date or "",
         "txtDptDt": train.departure_date or "",
+        "txtTrnNo": train.train_no.zfill(5),
         "txtDptTm": train.departure_time or "",
         "txtTrnClsfCd": train.train_class_code or "",
-        "txtTrnNo": train.train_no.zfill(5),
+        "txtTrnGpCd": train.train_group_code or "",
         "txtDptRsStnCd": train.departure_station_code or "",
         "txtArvRsStnCd": train.arrival_station_code or "",
-        "txtDptStnRunOrdr": train.departure_run_order or "",
-        "txtArvStnRunOrdr": train.arrival_run_order or "",
-        "txtTrnGpCd": train.train_group_code or "",
-        "txtTotPsgCnt": str(passenger_count),
+        "txtPsrmClCd": _validated_room_class_code(room_class_code),
         # 상품이 아닌 좌석속성은 열차별 값입니다(TrainResearchIn.java:43; TrainSeatMapViewModel.java:2546,2577). 앱 평탄화기는 빈
         # primitive 를 생략합니다 (NetworkService.java:15335-15343). 속성이 없으면 임의 기본값을 넣지 않습니다.
         **({"txtSeatAttCd": seat_attribute} if seat_attribute else {}),
+        "txtDptStnRunOrdr": train.departure_run_order or "",
+        "txtArvStnRunOrdr": train.arrival_run_order or "",
+        "txtTotPsgCnt": str(passenger_count),
         # 상품번호는 예약 입력에서 옵니다(TrainResearchIn.java:39; TrainSeatMapViewModel.java:2527). 값이 없으면 임의 기본값을 넣지 않습니다.
         **({"txtGdNo": train.goods_no} if train.goods_no else {}),
     }
@@ -143,8 +143,7 @@ def build_seat_inventory_form(
     )
     seat_attribute = _seat_attribute(train, seat_attribute_code)
     return {
-        **_device_version(config),
-        "Key": config.key,
+        **_device_version_key(config),
         "trnClsfCd": train.train_class_code or "",
         "trnGpCd": train.train_group_code or "",
         "runDt": train.run_date or "",
@@ -206,8 +205,7 @@ def build_train_search_form(
     if not isinstance(query.seat_attribute_code, str) or not query.seat_attribute_code:
         raise KorailProtocolError("seat_attribute_code must be a non-empty string")
     form = {
-        **_device_version(config),
-        "Key": config.key,
+        **_device_version_key(config),
         "txtMenuId": menu_id,
         "radJobId": (KORAIL_TRANSFER_ITINERARY_CODE if transfer else KORAIL_DIRECT_ITINERARY_CODE),
         "selGoTrain": query.train_group_code,
@@ -322,8 +320,7 @@ def build_common_code_form(
     """공통코드를 같은 이름의 반복 키로 전송할 폼을 만듭니다. 라우트 선언: NetworkApi.java:317,321. 기기 크기·SDK 정수는 설정을 사용합니다
     (CommonCodeIn.java:31-34,55). 로그인 암호화 파라미터 조회에도 사용합니다."""
     form: dict[str, object] = {
-        **_device_version(config),
-        "Key": config.key,
+        **_device_version_key(config),
         "code": [code] if isinstance(code, str) else list(code),
         "deviceWidth": config.device_width,
         "deviceHeight": config.device_height,
@@ -351,13 +348,14 @@ def build_ticket_list_form(
         raise KorailProtocolError("ticket list mode must be a non-empty string")
     if type(page_no) is not int:
         raise KorailProtocolError("page_no must be an integer")
+    # 키 순서는 MyTicketListIn 합성 생성자(MyTicketListIn.java:62)의 선언 순서입니다.
     return {
-        "txtDeviceId": config.advertising_id,
         "txtIndex": mode,
-        "h_page_no": str(page_no),
         "h_abrd_dt_from": boarding_date_from,
         "h_abrd_dt_to": boarding_date_to,
+        "txtDeviceId": config.advertising_id,
         "hiduserYn": "Y",
+        "h_page_no": str(page_no),
     }
 
 
@@ -365,8 +363,7 @@ def build_maas_menu_form(config: KorailConfig) -> dict[str, str]:
     """부가서비스 메뉴 조회 폼을 구성합니다. include_common=False 이므로 Key 를 이 빌더에서 넣습니다. 앱 DTO 는 CommonIn 기본 생성자를
     사용합니다(GdMenuLtIn.java:59-61). 공통 필드 인코딩: CommonIn.java:448-465. 보호된 기본값의 실제 포함 여부와는 구분합니다."""
     return {
-        **_device_version(config),
-        "Key": config.key,
+        **_device_version_key(config),
         "timeStamp": str(int(time.time() * 1000)),
     }
 

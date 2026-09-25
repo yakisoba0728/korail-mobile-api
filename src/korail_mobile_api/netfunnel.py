@@ -22,8 +22,8 @@ com/netfunnel/api/Response.java:59-66). SDK에는 누적 상한이 없습니다.
 from __future__ import annotations
 
 import logging
-import re
 import time
+import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TypeVar
@@ -139,17 +139,21 @@ def _digits(raw: str) -> int:
     return int(raw) if raw.isascii() and raw.isdigit() else 0
 
 
-_JAVA_INT_RE = re.compile(r"[+-]?\d+")
-
-
 def _java_int(text: str) -> int | None:
-    """자바 ``Integer.parseInt`` 처럼 부호 하나와 유니코드 십진 숫자를 받아 int32 범위의 값을 돌려주고, 아니면 None 입니다."""
-    if _JAVA_INT_RE.fullmatch(text) is None:
+    """자바 ``Integer.parseInt`` 처럼 부호 하나 뒤의 십진 숫자를 int32 로 읽고, 아니면 None 입니다. 자바는 UTF-16 코드 단위마다
+    ``Character.digit`` 을 보므로 보충 평면 숫자는 받지 않고, 앞의 0 은 길이와 상관없이 받습니다."""
+    digits = text[1:] if text[:1] in ("+", "-") else text
+    if not digits:
         return None
-    try:
-        value = int(text)
-    except ValueError:  # 파이썬의 정수 자릿수 한도
-        return None
+    value = 0
+    for character in digits:
+        digit = unicodedata.decimal(character, -1) if ord(character) <= 0xFFFF else -1
+        if digit < 0:
+            return None
+        value = value * 10 + digit
+        if value > 2**31:
+            return None
+    value = -value if text[:1] == "-" else value
     return value if -(2**31) <= value < 2**31 else None
 
 

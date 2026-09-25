@@ -1167,6 +1167,40 @@ def test_transport_parse_failure_keeps_full_json(case, raw, rig):
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        (
+            "get_seat_cars",
+            "Device Version Key lang txtMenuId txtRunDt txtDptDt txtTrnNo txtDptTm txtTrnClsfCd txtTrnGpCd "
+            "txtDptRsStnCd txtArvRsStnCd txtPsrmClCd txtSeatAttCd txtDptStnRunOrdr txtArvStnRunOrdr "
+            "txtTotPsgCnt txtGdNo",
+        ),
+        (
+            "get_seat_inventory",
+            "Device Version Key lang trnClsfCd trnGpCd runDt trnNo srcarNo psrmClCd dptRsStnCd arvRsStnCd "
+            "seatAttCd "
+            "dptStnRunOrdr arvStnRunOrdr totPsgCnt gdNo isArrow",
+        ),
+        (
+            "get_merge_seats_inquiry",
+            "Device Version Key lang abrdDt runDt trnNo dptRsStnNm arvRsStnNm selRsStnNm psrmClCd seatAttCd "
+            "totPsgNum",
+        ),
+        ("get_common_code", "Device Version Key lang code code deviceWidth deviceHeight OSVersion"),
+        ("get_maas_menu_list", "Device Version Key lang timeStamp"),
+    ],
+)
+def test_read_forms_follow_the_app_dto_order(name, expected, rig):
+    """TrainResearchIn.java:68; TResidualSeatsResearchIn.java:65; MergeSeatsCIn.java:63; CommonCodeIn.java:55;
+    MaasMenuLtIn.java:58: the app flattens each DTO in declaration order (NetworkService.java:15335-15392),
+    Key before lang."""
+    case = BY_NAME[name]
+    client, calls, _ = rig([case[5]], auth=case[7])
+    getattr(client, name)(*case[1], **case[2])
+    assert [key for key, _ in parse_qsl(calls[0].content.decode(), keep_blank_values=True)] == expected.split()
+
+
 def test_nested_parser_raw_promotes_partial_context(rig, monkeypatch):
     """_preserve_read_raw contract: preserve full response AND existing partial evidence."""
     from korail_mobile_api import parsers
