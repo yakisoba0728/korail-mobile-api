@@ -53,7 +53,8 @@ class KorailConfig:
     advertising_id: str = ""
     netfunnel_url: str = KORAIL_NETFUNNEL_URL
     netfunnel_timeout: float = KORAIL_NETFUNNEL_TIMEOUT_SECONDS
-    #: 대기열 요청의 User-Agent. 대기열 SDK 는 HttpURLConnection 을 쓰므로 안드로이드 기본 Dalvik 형식입니다(constants.KORAIL_USER_AGENT).
+    #: 대기열 요청의 User-Agent. 대기열 SDK 는 값을 넣지 않아 안드로이드 기본값(http.agent)이 나갑니다. 기본값은 표본 기기의 값입니다
+    #: (constants.KORAIL_USER_AGENT); 기기를 바꾸면 constants.build_dalvik_user_agent 로 dynapath 기기값과 맞춥니다.
     netfunnel_user_agent: str = KORAIL_USER_AGENT
     #: 기본 활성화. 관문 목록은 아래 netfunnel_actions 참고. 7.0.6 SDK 기본 bypass 는
     #: 거짓(com/netfunnel/api/Property.java:8), 앱 설정은 KorailTalkApplication.java:361-389. 실제 호출 여부는 각 클라이언트 메서드와 앱

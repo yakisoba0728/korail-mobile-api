@@ -654,8 +654,21 @@ def test_api_user_agent_is_the_apps_protected_header():
     )
     config = KorailConfig()
     assert config.user_agent == "korailtalk"
-    assert config.netfunnel_user_agent == KORAIL_USER_AGENT and KORAIL_USER_AGENT.startswith(
-        "Dalvik/2.1.0 (Linux; U; Android "
+    assert config.netfunnel_user_agent == KORAIL_USER_AGENT
+    assert KORAIL_USER_AGENT == "Dalvik/2.1.0 (Linux; U; Android 17; SM-S948N Build/CP2A.260605.016)"
+
+
+def test_dalvik_user_agent_follows_android_runtime_init() -> None:
+    """RuntimeInit.getDefaultUserAgent: model and Build/ID only when present, "1.0" for an empty release."""
+    from korail_mobile_api.constants import build_dalvik_user_agent
+
+    assert (
+        build_dalvik_user_agent(os_release="16", device_model="Pixel 9", build_id="BP2A.250605.031")
+        == "Dalvik/2.1.0 (Linux; U; Android 16; Pixel 9 Build/BP2A.250605.031)"
+    )
+    assert (
+        build_dalvik_user_agent(os_release="", device_model="", build_id="")
+        == "Dalvik/2.1.0 (Linux; U; Android 1.0)"
     )
 
 

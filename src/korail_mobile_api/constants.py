@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """KORAIL 7.0.6 근거가 있는 상수와 라이브러리 기본값을 제공합니다. 평문 선언·@SerialName과 달리 보호 문자열의 바이트 길이는 평문이나 enum 값 배정을 증명하지 않습니다.
-미확인 값은 항목별 한계를 따릅니다. 화면 크기·SDK 기본값은 APK 상수가 아닌 device-pull 실기기 기록입니다."""
+미확인 값은 항목별 한계를 따릅니다. 기기 모델·OS·Build ID·화면 크기·SDK 기본값은 APK 상수가 아닌 device-pull 실기기 기록입니다."""
 
 from enum import StrEnum
 
@@ -12,11 +12,15 @@ KORAIL_DEVICE_ANDROID = "AD"
 KORAIL_API_VERSION = "250601003"
 KORAIL_APP_KEY = "korail1234567890"
 KORAIL_TIMEOUT_SECONDS = 60.0
-#: 토큰 dm 은 Build.MODEL(a/b.java:113-116); 이 기본값은 특정 실기기 모델이 아닙니다. st 는 별도 평문 "Android"(a/b.java:117). 초기화·생성:
-#: DynaPathMobileSDK.java:31-71.
-KORAIL_DEFAULT_DEVICE_NAME = "Android"
+#: 기본 기기값은 모두 실기기 표본 하나(analysis/device-pull/2026-09-14_korail-7.0.6/device/getprop.txt)에서 가져와 토큰과 대기열
+#: User-Agent 가 같은 기기를 가리킵니다. 토큰 dm 은 Build.MODEL(a/b.java:113-116), st 는 별도 평문 "Android"(a/b.java:117).
+#: 초기화·생성: DynaPathMobileSDK.java:31-71. 모델: getprop.txt:1211.
+KORAIL_DEFAULT_DEVICE_NAME = "SM-S948N"
 #: os 는 Build.VERSION.RELEASE(a/b.java:109-112), SDK 정수와 다릅니다. 필드명 "os": com/kakao/sdk/common/Constants.java:30.
-KORAIL_DEFAULT_ANDROID_OS_RELEASE = "15"
+#: 값: getprop.txt:1052.
+KORAIL_DEFAULT_ANDROID_OS_RELEASE = "17"
+#: Build.ID 로 대기열 User-Agent 에만 들어갑니다. 값: getprop.txt:1032.
+KORAIL_DEFAULT_ANDROID_BUILD_ID = "CP2A.260605.016"
 #: 실기기 기록: analysis/device-pull/2026-09-14_korail-7.0.6/device/summary.tsv:10. 앱은 고정 상수 대신 창 크기를
 #: 읽습니다(NetworkService.java:2002,2014). live.build_config_from_env 의 기본 화면 크기도 같은 표본에 맞췄습니다.
 KORAIL_DEFAULT_DEVICE_WIDTH = 1440
@@ -36,16 +40,20 @@ KORAIL_DEFAULT_ANDROID_SDK_INT = 37
 KORAIL_API_USER_AGENT = "korailtalk"
 
 
-def build_dalvik_user_agent(*, os_release: str, device_model: str) -> str:
-    """안드로이드 HttpURLConnection 기본값 모양의 Dalvik User-Agent 를 만듭니다. 대기열 SDK 가 HttpURLConnection 으로 요청하므로
-    (com/netfunnel/api/http/Client.java:252-260) 대기열 요청에 씁니다. 기기와 맞지 않는 Build ID 는 만들지 않습니다."""
-    return f"Dalvik/2.1.0 (Linux; U; Android {os_release}; {device_model})"
+def build_dalvik_user_agent(*, os_release: str, device_model: str, build_id: str) -> str:
+    """안드로이드의 http.agent 기본값을 만듭니다. 대기열 SDK 는 User-Agent 를 넣지 않아(com/netfunnel/api/http/Client.java:252-260)
+    HttpURLConnection 이 이 값을 붙입니다. 형식은 AOSP RuntimeInit.getDefaultUserAgent 입니다: 모델은 정식 빌드(CODENAME REL,
+    getprop.txt:1044)일 때만, Build/ID 는 ID 가 있을 때만 붙습니다. 2.1.0 은 ART 의 java.vm.version 입니다."""
+    model = f"; {device_model}" if device_model else ""
+    build = f" Build/{build_id}" if build_id else ""
+    return f"Dalvik/2.1.0 (Linux; U; Android {os_release or '1.0'}{model}{build})"
 
 
-#: 대기열 요청의 기본 User-Agent 입니다(:func:`build_dalvik_user_agent`).
+#: 대기열 요청의 기본 User-Agent 입니다(:func:`build_dalvik_user_agent`). 표본 기기의 앱이 보내는 값과 같습니다.
 KORAIL_USER_AGENT = build_dalvik_user_agent(
     os_release=KORAIL_DEFAULT_ANDROID_OS_RELEASE,
     device_model=KORAIL_DEFAULT_DEVICE_NAME,
+    build_id=KORAIL_DEFAULT_ANDROID_BUILD_ID,
 )
 
 KORAIL_COMMON_CODE_BOOTSTRAP_CODES = (

@@ -40,10 +40,12 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 
 - `KorailConfig` 의 `enable_dynapath`·`live_env_var` 를 없앴습니다. DynaPath 는 합성 기기값으로 기본 켜짐이고(끄려면
   `disable_dynapath=True`), 비활성 `DynapathConfig` 를 직접 넘기면 `ValueError` 입니다. `netfunnel_enabled` 기본값은 `True` 입니다.
-- 기기 기본값: 화면 1080×2400 → 1440×3120, `android_sdk_int` 35 → 37.
+- 기기 기본값: 화면 1080×2400 → 1440×3120, `android_sdk_int` 35 → 37, 모델 `Android` → `SM-S948N`, OS `15` → `17`. 모두 같은
+  실기기 표본에서 가져와 DynaPath 토큰과 대기열 User-Agent 가 한 기기를 가리킵니다.
 - `user_agent` 기본값이 Dalvik 형식에서 앱의 `korailtalk` 로 바뀌었고, 대기열 요청의 User-Agent 는 새 `netfunnel_user_agent`(Dalvik
   형식)로 나눴습니다. `live.build_config_from_env` 의 `KORAIL_USER_AGENT` 는 API 값만 바꾸며, 기기 기반 대기열 값은
-  `KORAIL_NETFUNNEL_USER_AGENT` 입니다.
+  `KORAIL_NETFUNNEL_USER_AGENT` 입니다. 이 값을 주지 않으면 `KORAIL_ANDROID_BUILD_ID`(Build.ID)가 필수입니다.
+- `constants.build_dalvik_user_agent` 에 필수 키워드 `build_id` 가 생겼습니다.
 - v1.1.1 의 `base_url` 출처 검사(`safety`)는 없어졌습니다. 신뢰하지 않는 주소를 넣지 마십시오.
 
 **모델**
@@ -92,8 +94,12 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 - DynaPath 토큰의 `rt` 에 앱 SDK 처럼 요청 간 시간차(최근 5개, 첫 값은 앱 시작 시각과의 차)를 싣습니다. v1.1.1 은 `rt=0` 고정값이었습니다.
 - API 요청 헤더를 앱과 맞췄습니다. 앱은 보호된 헤더 하나를 붙이는데, 보호 방식이 4바이트 키 반복 XOR 이라 같은 앱의 WebView 접미사
   평문으로 방식을 확인한 뒤 암호문 관계만으로 `User-Agent: korailtalk` 임을 확인했습니다(`constants.KORAIL_API_USER_AGENT`). APK 의 OkHttp
-  기본 헤더에 맞춰 `Connection: Keep-Alive`, `Accept-Encoding: gzip` 을 보내고 `Accept` 는 보내지 않습니다. 대기열 SDK 는 HttpURLConnection 이라
-  Dalvik User-Agent 를 유지합니다.
+  기본 헤더에 맞춰 `Connection: Keep-Alive`, `Accept-Encoding: gzip` 을 보내고 `Accept` 는 보내지 않습니다.
+- 대기열 요청도 앱과 맞췄습니다. SDK 는 User-Agent 를 넣지 않아 안드로이드 기본값이 나가므로 `korailtalk` 이 아니라 AOSP
+  `RuntimeInit.getDefaultUserAgent` 형식 그대로 `Dalvik/2.1.0 (Linux; U; Android 17; SM-S948N Build/CP2A.260605.016)` 을 보냅니다.
+  v1.1.1 에는 `Build/…` 가 빠져 있었습니다. SDK 는 GET 으로 부르지만 `setDoOutput(true)`(Client.java:257) 때문에 안드로이드
+  HttpURLConnection 이 빈 본문 POST 로 바꾸므로 대기열 요청을 `POST`(인자는 URL, `Content-Length: 0`)로 보내고, 같은 구현이 붙이는
+  `Content-Type: application/x-www-form-urlencoded`, `Connection: Keep-Alive`, `Accept-Encoding: gzip` 을 싣고 `Accept` 는 뺐습니다.
 - 봉투의 JSON 정수를 전송 계층과 모든 파서가 같은 규칙으로 문자열로 읽습니다. 선택 문자열 필드의 JSON 정수도 문자열로 읽고, 필수 정수는
   따옴표 안의 앞 `-` 를 받습니다(kotlinx 와 같음).
 - 전송 전 검사를 더했습니다: 카드번호 13~16자리, 할부 1~2자리 숫자, 카드 비밀번호·인증값은 숫자. 환승 구간은 서로 다른 열차이고 탑승
@@ -114,6 +120,7 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
   돌려줬고 조회 행의 `free_car_count` 와 모두 일치했습니다.
 - 2026-09-25 에 정기권 스케줄(일반정기권·기간자유형 코드), 원표 조회(인쇄완료 승차권), 대리수령 인수 명세(대상 승차권 6장), 자율 좌석변경
   정보(운행 중 열차), 예약대기 옵션 저장(대기 홀드 → 옵션 저장 → 취소, 최종 P100)을 실서버에서 확인했습니다.
+- 2026-09-25 에 바뀐 대기열 요청(POST·새 User-Agent·새 기기 기본값)으로 로그인, 열차 조회, 예약 목록, 로그아웃을 실서버에서 확인했습니다.
 - 일반실 매진·입석 가능 행의 입석 전용 홀드는 보내지 않습니다. 앱의 입석 판정은 보호된 운행중지·대기·병합 판정을 먼저 거치므로
   (TrainScheduleOutTrainInfo.java:2810-2885) 라이브러리가 같은 행을 가려낼 수 없습니다. 입석+좌석은 `MERGE_STANDING` 입니다.
 - N카드 6개 기능의 미검증 상태와 기존 미지원 기능 범위를 유지합니다.

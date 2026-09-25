@@ -174,7 +174,7 @@ except KorailApiError as error:
 
 ## DynaPath와 NetFunnel
 
-API 요청은 7.0.6 앱처럼 `User-Agent: korailtalk`로, 대기열 요청은 안드로이드 기본값 모양의 Dalvik User-Agent로 보냅니다. 각각 `KorailConfig.user_agent`, `netfunnel_user_agent`로 바꿀 수 있습니다.
+API 요청은 7.0.6 앱처럼 `User-Agent: korailtalk`로 보냅니다. 대기열 요청은 앱의 대기열 SDK처럼 안드로이드 기본 User-Agent(`Dalvik/2.1.0 (Linux; U; Android 17; SM-S948N Build/CP2A.260605.016)`)를 붙인 빈 본문 POST로 보냅니다. 각각 `KorailConfig.user_agent`, `netfunnel_user_agent`로 바꿀 수 있습니다. 기기를 바꿀 때는 `constants.build_dalvik_user_agent`로 만든 값과 DynaPath 기기값을 같은 기기로 맞추십시오.
 
 DynaPath 요청 헤더는 기본 활성화되고 기기 값은 합성됩니다. 실제 기기를 사용했다는 보장이나 서버 수용 보장이 아닙니다. 설정은 `KorailConfig`와 `DynapathConfig`로 지정합니다. `KorailConfig(disable_dynapath=True)`는 명시적으로 끄는 옵션이지만, DynaPath가 필요한 경로는 토큰 없이 호출할 수 없으며 전송 전에 거절될 수 있습니다. 차단 응답은 `KorailDynaPathError`로 확인합니다. 토큰·기기 식별자·로그인 정보를 공개 이슈에 올리지 마십시오.
 

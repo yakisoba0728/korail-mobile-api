@@ -105,7 +105,7 @@ class QueueWorld:
         self.sent = 0
 
     def handler(self, request: httpx.Request) -> httpx.Response:
-        assert request.method == "GET" and request.url.path == "/ts.wseq"
+        assert request.method == "POST" and request.url.path == "/ts.wseq" and request.content == b""
         self.requests.append(request)
         params = dict(request.url.params)
         op = params["opcode"]
@@ -174,11 +174,16 @@ def test_immediate_pass_and_release(queue_factory, mode: int) -> None:
     }  # sid is the library default, NOT a recovered KORAIL app literal.
     assert world.events[2][2] == {"opcode": "5004", "key": "SYNTHETIC-KEY"}
     assert clock.sleeps == []
-    assert world.requests[0].headers["Accept-Charset"] == "UTF-8"
-    assert world.requests[0].headers["Context_Type"] == "application/x-www-form-urlencoded;charset=UTF-8"
-    # The SDK uses HttpURLConnection (http/Client.java:252), so the queue keeps the Dalvik UA, not the API's
-    # korailtalk.
-    assert world.requests[0].headers["User-Agent"].startswith("Dalvik/2.1.0 (Linux; U; Android ")
+    # SDK headers (http/Client.java:259-260) plus what Android's HttpURLConnection adds for a doOutput request:
+    # its http.agent UA (not the API's korailtalk), a form Content-Type, Content-Length 0, and no Accept.
+    headers = world.requests[0].headers
+    assert headers["Accept-Charset"] == "UTF-8"
+    assert headers["Context_Type"] == "application/x-www-form-urlencoded;charset=UTF-8"
+    assert headers["Content-Type"] == "application/x-www-form-urlencoded"
+    assert headers["Content-Length"] == "0"
+    assert headers["Connection"] == "Keep-Alive" and headers["Accept-Encoding"] == "gzip"
+    assert "Accept" not in headers
+    assert headers["User-Agent"] == "Dalvik/2.1.0 (Linux; U; Android 17; SM-S948N Build/CP2A.260605.016)"
 
 
 @pytest.mark.parametrize("code", ["201", "202"])
@@ -461,17 +466,17 @@ def test_rejected_poll_node_falls_back_to_front_door(queue_factory) -> None:
 def test_release_failure_of_any_kind_never_masks_the_api_error(queue_factory, monkeypatch) -> None:
     """_complete runs in finally; a non-transport failure (e.g. a closed httpx client) is logged, not raised."""
     client, gate, world, _ = queue_factory([Reply()], mode=0)
-    real_get = client._get
+    real_post = client._post
 
-    def get(url: str) -> str:
+    def post(url: str) -> str:
         if "opcode=5004" in url:
             raise RuntimeError("synthetic release failure")
-        return real_get(url)
+        return real_post(url)
 
     def send() -> str:
         raise ValueError("synthetic API failure")
 
-    monkeypatch.setattr(client, "_get", get)
+    monkeypatch.setattr(client, "_post", post)
     with pytest.raises(ValueError, match="synthetic API failure"):
         client.run(gate, send)
 

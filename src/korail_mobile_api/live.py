@@ -29,9 +29,10 @@ def build_config_from_env() -> KorailConfig:
     """환경변수로 KorailConfig 를 만듭니다. 자격증명이나 상태는 저장하지 않습니다.
 
     필수: KORAIL_DYNAPATH_DEVICE_ID(android_id), KORAIL_DYNAPATH_OS_VERSION(Build.VERSION.RELEASE),
-    KORAIL_DYNAPATH_DEVICE_MODEL(Build.MODEL). ID 근거: a/a.java:15, a/b.java:85. OS·모델은 토큰과 대기열 User-Agent 에 함께
-    쓰며 KORAIL_NETFUNNEL_USER_AGENT 만 바꾸면 서로 달라질 수 있습니다. API User-Agent 는 기기와 무관한 앱 값이며 KORAIL_USER_AGENT 로
-    바꿀 수 있습니다.
+    KORAIL_DYNAPATH_DEVICE_MODEL(Build.MODEL), KORAIL_ANDROID_BUILD_ID(Build.ID). ID 근거: a/a.java:15,
+    a/b.java:85. OS·모델은 토큰과 대기열 User-Agent 에 함께 쓰고 Build ID 는 대기열 User-Agent 에만 씁니다.
+    KORAIL_NETFUNNEL_USER_AGENT 를 주면 Build ID 는 필요 없지만 토큰 기기값과 달라질 수 있습니다. API User-Agent 는 기기와
+    무관한 앱 값이며 KORAIL_USER_AGENT 로 바꿀 수 있습니다.
 
     선택 변수와 기본값은 아래 구성 코드를 따릅니다. 화면 1440×3120·SDK 37 의 원 근거는
     analysis/device-pull/2026-09-14_korail-7.0.6/device/summary.tsv:5,10 및 getprop.txt:1055 입니다. 이는 특정 실기기 표본이지
@@ -62,12 +63,11 @@ def build_config_from_env() -> KorailConfig:
             "https://smart.letskorail.com:443",
         ),
         user_agent=os.environ.get("KORAIL_USER_AGENT", KORAIL_API_USER_AGENT),
-        netfunnel_user_agent=os.environ.get(
-            "KORAIL_NETFUNNEL_USER_AGENT",
-            build_dalvik_user_agent(
-                os_release=os_version,
-                device_model=device_model,
-            ),
+        netfunnel_user_agent=os.environ.get("KORAIL_NETFUNNEL_USER_AGENT")
+        or build_dalvik_user_agent(
+            os_release=os_version,
+            device_model=device_model,
+            build_id=_required_env("KORAIL_ANDROID_BUILD_ID"),
         ),
         device_width=int(os.environ.get("KORAIL_DEVICE_WIDTH", "1440")),
         device_height=int(os.environ.get("KORAIL_DEVICE_HEIGHT", "3120")),

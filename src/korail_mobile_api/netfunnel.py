@@ -62,10 +62,16 @@ BLOCK_CODES = frozenset({"301", "302"})
 MIN_TTL_SECONDS = 1
 MAX_TTL_SECONDS = 30
 
-#: 대기열 요청에 앱이 싣는 헤더(``com/netfunnel/api/http/Client.java:259-260``). ``Context_Type`` 은 SDK 의 철자 그대로입니다.
+#: 대기열 요청의 헤더. 앞의 둘은 SDK 가 싣고(``com/netfunnel/api/http/Client.java:259-260``, ``Context_Type`` 은
+#: SDK 의 철자 그대로), 나머지는 안드로이드 HttpURLConnection 이 붙입니다: 본문을 쓰는 요청의 Content-Type 은 AOSP
+#: external/okhttp HttpURLConnectionImpl.newHttpEngine, Connection·Accept-Encoding 은 HttpEngine.networkRequest.
+#: Accept 는 붙이지 않습니다.
 _APP_HEADERS = {
     "Accept-Charset": "UTF-8",
     "Context_Type": "application/x-www-form-urlencoded;charset=UTF-8",
+    "Content-Type": "application/x-www-form-urlencoded",
+    "Connection": "Keep-Alive",
+    "Accept-Encoding": "gzip",
 }
 
 
@@ -190,6 +196,7 @@ class KorailNetFunnelClient:
             follow_redirects=False,
             transport=transport,
         )
+        del self._client.headers["Accept"]
 
     def close(self) -> None:
         """대기열 HTTP 연결을 닫습니다."""
@@ -229,20 +236,22 @@ class KorailNetFunnelClient:
     def _url(self, origin: str, params: tuple[tuple[str, str], ...]) -> str:
         return f"{origin}{KORAIL_NETFUNNEL_PATH}?{urlencode(params)}"
 
-    def _get(self, url: str) -> str:
+    def _post(self, url: str) -> str:
+        """SDK 는 GET 으로 부르지만 setDoOutput(true)(Client.java:257) 때문에 안드로이드 HttpURLConnection 이 빈 본문 POST 로
+        보냅니다(AOSP external/okhttp HttpURLConnectionImpl.initHttpEngine). 인자는 URL 에 남고 Content-Length 는 0 입니다."""
         if self._client.is_closed:
             raise KorailProtocolError(
-                f"KORAIL NetFunnel client is closed; GET {KORAIL_NETFUNNEL_PATH} was not sent"
+                f"KORAIL NetFunnel client is closed; POST {KORAIL_NETFUNNEL_PATH} was not sent"
             )
         try:
-            response = self._client.get(url)
+            response = self._client.post(url, content=b"")
         except httpx.HTTPError as exc:
             raise KorailTransportError(
-                f"KORAIL NetFunnel transport failed for GET {KORAIL_NETFUNNEL_PATH}"
+                f"KORAIL NetFunnel transport failed for POST {KORAIL_NETFUNNEL_PATH}"
             ) from exc
         if response.is_error:
             raise KorailTransportError(
-                f"KORAIL NetFunnel HTTP {response.status_code} for GET {KORAIL_NETFUNNEL_PATH}"
+                f"KORAIL NetFunnel HTTP {response.status_code} for POST {KORAIL_NETFUNNEL_PATH}"
             )
         return response.text
 
@@ -251,7 +260,7 @@ class KorailNetFunnelClient:
         while True:
             started = self._clock()
             try:
-                return parse_netfunnel_body(self._get(url))
+                return parse_netfunnel_body(self._post(url))
             except (KorailTransportError, KorailNetFunnelError):
                 remaining = self.config.netfunnel_timeout - (self._clock() - started)
                 if remaining > 0:
@@ -348,7 +357,7 @@ class KorailNetFunnelClient:
         if token is None or not token.key:
             return
         try:
-            self._get(
+            self._post(
                 self._url(
                     slot.node or self._front,
                     (
