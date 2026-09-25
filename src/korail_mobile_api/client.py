@@ -1074,11 +1074,13 @@ class KorailClient:
         h_tot_prc 는 운임과 같았고(7,500원·21,600원, 성인 2명 43,200원) 정산액은 좌석 할인만큼 낮을 수 있었습니다(21,500원,
         토요일 20,400원)."""
         form = build_price_fare_quote_form(request)
+        # 앱의 평탄화기는 빈 값을 빼지만(NetworkService.java:15335-15343) 여덟 칸은 그 뒤에 직접 넣어 빈 gdNo 도 보냅니다(:9895-9902).
         return self._post_read(
             "/classes/com.korail.mobile.trn.prcFare.do",
             form,
             parser=parse_price_fare_quote_response,
             include_dynapath=True,
+            omit_empty_fields=False,
         )
 
     def get_delivery_recipient(
@@ -1799,7 +1801,7 @@ class KorailClient:
         *,
         settle_mileage: bool = False,
         pbp_acceptance_target_flag: str | None = None,
-        commission: RefundCommissionResponse | None = None,
+        commission: RefundCommissionResponse,
         latitude: str | None = None,
         longitude: str | None = None,
     ) -> RefundTicketResponse:
@@ -1808,10 +1810,13 @@ class KorailClient:
         상수(FTicketDetailViewModel.java:634)입니다. 라이브러리는 값이 없으면 빈 문자열을 만들고 전송 단계에서 생략합니다. 2026-07-31: 성인 2인
         16,800원 PNR 에 한 번 호출해 SUCC/IRT200277 과 8,400원이 반환됐고, 남은 한 장에 별도 환불을 한 뒤 목록이 비었습니다.
 
-        앱의 환불 화면처럼 먼저 :meth:`get_refund_commission` 으로 수수료를 확인하고 그 응답을 ``commission`` 으로 넘기면
-        ``tk_ret_tms_dv_cd``·``trnNo`` 도 싣습니다. ``latitude``/``longitude`` 는 앱이 위치를 얻었을 때만 싣는
-        값입니다(:func:`~korail_mobile_api.mutation_payloads.build_refund_form`). commission 은 자동 조회하지 않으며,
-        넘긴 응답이 SUCC 가 아니면 금액 보호를 위해 전송 전에 거절합니다. 앱의 검사 자체는 CommonOut.isSuccess() 입니다.
+        ``commission`` 은 필수입니다. 앱은 승차권 상세·환불 두 화면 모두 먼저 수수료를 조회하고 성공해야만 환불을
+        보냅니다(MyTicketDetailViewModel.java:300-358,
+        RefundTicketViewModel$executeRefundCommission$2.smali:1045-1086). 먼저 :meth:`get_refund_commission` 을
+        부르고 그 응답을 넘기십시오. 환불 화면처럼 ``tk_ret_tms_dv_cd``·``trnNo`` 도 싣습니다. ``latitude``/``longitude``
+        는 앱이 위치를 얻었을 때만 싣는 값입니다(:func:`~korail_mobile_api.mutation_payloads.build_refund_form`).
+        commission 은 자동 조회하지 않으며, 넘긴 응답이 SUCC 가 아니면 금액 보호를 위해 전송 전에 거절합니다. 앱의 검사
+        자체는 CommonOut.isSuccess() 입니다.
         환불 화면의 보호된 ctlDvCd 는 생략하므로 그 경로의 전체 폼이 앱과 동일하다고 보장하지 않습니다.
 
         ``settle_mileage=True`` 는 앱처럼 ``commission`` 이 있고 사용 가능 마일리지가 수수료 이상일 때만 보냅니다

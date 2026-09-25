@@ -1000,8 +1000,8 @@ def _wire_component(value: str, name: str) -> str:
 
 @dataclass(frozen=True)
 class PriceFareLeg:
-    """예매 전 운임을 조회할 열차 한 구간을 구성합니다. goods_no=None 이면 gdNo 를 생략합니다. 앱의 일반 열차 생성자는 기본값 마스크 64 를
-    사용합니다(TrainOpInfoViewModel.java:794, PrcFareInItem.java:85). 보호된 기본값·직렬화 때문에 이것만으로 실제 폼 생략은 확정하지 않습니다.
+    """예매 전 운임을 조회할 열차 한 구간을 구성합니다. goods_no=None 이면 앱처럼 gdNo 칸에 빈 문자열을 보냅니다. 앱의 일반 열차 생성자는
+    기본값 마스크 64 로 gdNo 기본값을 쓰며(TrainOpInfoViewModel.java:794) 그 값은 길이 0 암호문, 곧 빈 문자열입니다(PrcFareInItem.java:109).
     2026-09-21 관측에서는 gdNo 유무에 따른 응답 차이가 없었습니다."""
 
     departure_station_code: str
@@ -1061,17 +1061,17 @@ def build_price_fare_quote_form(
         ("arvRsStnCd", "arrival_station_code"),
         ("runDt", "run_date"),
         ("trnNo", "train_no"),
+        ("gdNo", "goods_no"),
         ("rqSeatAttCd", "requested_seat_attribute_code"),
         ("trnGpCd", "train_group_code"),
         ("stlbTrnClsfCd", "train_class_code"),
     ]
-    # 상품번호가 있는 구간만 보내는 혼합 입력은 지원하지 않습니다. 쉼표 결합 시 빈 구간의 자리 표현이 관측되지 않아 임의 생성하지 않습니다. 앱 입력 null:
-    # TrainOpInfoViewModel.java:794.
+    # 앱은 여덟 칸을 모두 같은 구분자로 이어 보내며 gdNo 도 빠지지 않습니다(NetworkService.java:9838-9905). 앱의 일반 열차 입력은 gdNo 가
+    # null 이라(TrainOpInfoViewModel.java:794) 기본값인 빈 문자열(PrcFareInItem.java:109, 길이 0 암호문)이 들어갑니다. 앱이 만들지 않는
+    # 일부 구간만 상품번호가 있는 입력은 받지 않습니다.
     supplied = [leg.goods_no is not None for leg in request.legs]
-    if any(supplied):
-        if not all(supplied):
-            raise KorailProtocolError("goods_no must be set on every leg or on none of them")
-        columns.insert(4, ("gdNo", "goods_no"))
+    if any(supplied) and not all(supplied):
+        raise KorailProtocolError("goods_no must be set on every leg or on none of them")
     return (
         ("txtMenuId", request.menu_id),
         ("chtnDvCd", str(len(request.legs))),
@@ -1079,7 +1079,7 @@ def build_price_fare_quote_form(
         *(
             (
                 wire_name,
-                ",".join(getattr(leg, attribute) for leg in request.legs),
+                ",".join(getattr(leg, attribute) or "" for leg in request.legs),
             )
             for wire_name, attribute in columns
         ),

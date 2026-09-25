@@ -204,6 +204,9 @@ FARE_FORM = {
     "arvRsStnCd": "0099",
     "runDt": DATE,
     "trnNo": "00007",
+    # PrcFareInItem.java:109 default (zero-length) sent because the joined columns bypass the empty filter
+    # (NetworkService.java:9895-9902).
+    "gdNo": "",
     "rqSeatAttCd": "015",
     "trnGpCd": "101",
     "stlbTrnClsfCd": "00",
@@ -1035,6 +1038,17 @@ def test_two_leg_fare_and_goods_column_order(rig):
     exact_request(calls[0], P + "trn.prcFare.do", form, dynapath=True)
     keys = [k for k, _ in parse_qsl(calls[0].content.decode())]
     assert keys.index("trnNo") < keys.index("gdNo") < keys.index("rqSeatAttCd")
+
+
+def test_price_fare_quote_sends_empty_goods_numbers_like_the_app(rig):
+    """TrainOpInfoViewModel.java:794 passes null gdNo, so both legs carry the empty default and the joined
+    column is just the separator."""
+    second = PriceFareLeg("0099", "0100", DATE, "00008", "031", "102", "01")
+    client, calls, _ = rig([ENVELOPE, ENVELOPE])
+    client.get_price_fare_quote(PriceFareQuoteRequest((FARE_LEG,)))
+    client.get_price_fare_quote(PriceFareQuoteRequest((FARE_LEG, second)))
+    sent = [dict(parse_qsl(call.content.decode(), keep_blank_values=True)) for call in calls]
+    assert sent[0]["gdNo"] == "" and sent[1]["gdNo"] == ","
 
 
 @pytest.mark.parametrize("method", ["get_seat_cars", "get_seat_inventory"])

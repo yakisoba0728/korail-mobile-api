@@ -129,6 +129,10 @@ def ticket() -> PaidTicket:
     )
 
 
+#: 앱은 환불 전에 항상 수수료를 조회합니다. 회차 코드가 없으면 첫 열차 번호만 더 실립니다.
+COMMISSION = RefundCommissionResponse(str_result="SUCC")
+
+
 def merge_rows(standing: bool = True) -> tuple[TrainScheduleItem, ...]:
     return (
         TrainScheduleItem(
@@ -544,10 +548,10 @@ def cases() -> list[Case]:
         ),
         Case(
             "refund",
-            lambda c: c.refund(ticket()),
+            lambda c: c.refund(ticket(), commission=COMMISSION),
             "POST",
             ("refunds.RefundsRequest",),
-            refund_form(),
+            refund_form(trnNo="90001"),
             {**BASE, "stlList": [{"stl_mns_cd": "02"}, {"stl_mns_cd": "SYNTH-SECOND"}]},
             "parse_refund_ticket_response",
             {"settlement_method_codes": ("02", "SYNTH-SECOND"), "settlement_list_is_null": False},
@@ -843,23 +847,27 @@ def test_merge_exact_four_overrides(standing: bool) -> None:
         h.close()
 
 
-@pytest.mark.parametrize("with_commission", [False, True])
-def test_refund_two_screen_forms(with_commission: bool) -> None:
-    """MyTicketDetailViewModel.java:1521; RefundTicketViewModel$refundTicket$1.smali:854-868,1132-1180."""
-    extra = {"h_mlg_stl": "N", "latitude": "0.0", "longitude": "0.0"}
-    kwargs: dict[str, Any] = {"latitude": "0.0", "longitude": "0.0"}
-    if with_commission:
-        kwargs["settle_mileage"] = True
-        kwargs["commission"] = RefundCommissionResponse(
-            str_result="SUCC",
-            ticket_return_times_division_code="SYNTH-TIMES",
-            usable_mileage="400",
-            refund_fee="00000000000400",
-        )
-        extra.update(h_mlg_stl="Y", tk_ret_tms_dv_cd="SYNTH-TIMES", trnNo="90001")
-    h = Harness([{**BASE, "stlList": None}], "POST", ("refunds.RefundsRequest",), refund_form(**extra))
+@pytest.mark.parametrize("settle_mileage", [False, True])
+def test_refund_sends_the_refund_screen_form(settle_mileage: bool) -> None:
+    """RefundTicketViewModel$refundTicket$1.smali:854-868,1132-1180: commission echo, first train, location."""
+    commission = RefundCommissionResponse(
+        str_result="SUCC",
+        ticket_return_times_division_code="SYNTH-TIMES",
+        usable_mileage="400",
+        refund_fee="00000000000400",
+    )
+    expected = refund_form(
+        h_mlg_stl="Y" if settle_mileage else "N",
+        tk_ret_tms_dv_cd="SYNTH-TIMES",
+        trnNo="90001",
+        latitude="0.0",
+        longitude="0.0",
+    )
+    h = Harness([{**BASE, "stlList": None}], "POST", ("refunds.RefundsRequest",), expected)
     try:
-        result = h.client.refund(ticket(), **kwargs)
+        result = h.client.refund(
+            ticket(), settle_mileage=settle_mileage, commission=commission, latitude="0.0", longitude="0.0"
+        )
         assert result.settlement_list_is_null is True
         assert result.settlement_method_codes == ()
         assert len(h.seen) == 1  # commission is supplied, never fetched automatically
@@ -867,21 +875,32 @@ def test_refund_two_screen_forms(with_commission: bool) -> None:
         h.close()
 
 
+def test_refund_requires_the_commission_lookup() -> None:
+    """MyTicketDetailViewModel.java:300-358: both refund screens refund only after a successful commission
+    lookup."""
+    h = Harness([], "POST", (), {})
+    try:
+        with pytest.raises(TypeError, match="commission"):
+            h.client.refund(ticket())  # type: ignore[call-arg]
+        with pytest.raises(KorailProtocolError, match="commission response"):
+            payload_module.build_refund_form(KorailConfig(), ticket(), settle_mileage=True)
+        assert h.seen == []
+    finally:
+        h.close()
+
+
 @pytest.mark.parametrize(
     ("usable", "fee"),
-    [(None, None), ("399", "400"), ("", "00000000000400"), ("1,000", "400")],
+    [(None, "400"), ("399", "400"), ("", "00000000000400"), ("1,000", "400")],
 )
 def test_refund_pays_the_fee_with_mileage_only_when_the_app_would(usable: Any, fee: Any) -> None:
     """MyTicketDetailViewModel.java:1811-1823: mileage settlement needs the commission lookup and usable
     mileage >= fee; TextHelper.getInteger reads a missing or unparsable number as 0."""
     h = Harness([], "POST", (), {})
     try:
-        with pytest.raises(KorailProtocolError, match="commission response"):
-            h.client.refund(ticket(), settle_mileage=True)
-        if usable is not None:
-            commission = RefundCommissionResponse(str_result="SUCC", usable_mileage=usable, refund_fee=fee)
-            with pytest.raises(KorailProtocolError, match="mileage is below the fee"):
-                h.client.refund(ticket(), settle_mileage=True, commission=commission)
+        commission = RefundCommissionResponse(str_result="SUCC", usable_mileage=usable, refund_fee=fee)
+        with pytest.raises(KorailProtocolError, match="mileage is below the fee"):
+            h.client.refund(ticket(), settle_mileage=True, commission=commission)
         assert h.seen == []
     finally:
         h.close()
@@ -1630,10 +1649,10 @@ def test_refund_required_settlement_mask_does_not_silently_drop_data(shape: Any)
     raw = copy.deepcopy(BASE)
     if shape != "missing":
         raw["stlList"] = shape
-    h = Harness([raw], "POST", ("refunds.RefundsRequest",), refund_form())
+    h = Harness([raw], "POST", ("refunds.RefundsRequest",), refund_form(trnNo="90001"))
     try:
         with pytest.raises(KorailProtocolError) as caught:
-            h.client.refund(ticket())
+            h.client.refund(ticket(), commission=COMMISSION)
         assert caught.value.raw == raw
         assert len(h.seen) == 1
     finally:
@@ -1654,9 +1673,9 @@ def test_refund_required_but_nullable_list_and_integer_string_compatibility(
 ) -> None:
     """RefundTicketOut.java:48-58 distinguishes missing from explicit null; StlList.java:46-55; 2026-09-21 String/int policy."""
     raw = {**BASE, "stlList": rows}
-    h = Harness([raw], "POST", ("refunds.RefundsRequest",), refund_form())
+    h = Harness([raw], "POST", ("refunds.RefundsRequest",), refund_form(trnNo="90001"))
     try:
-        result = h.client.refund(ticket())
+        result = h.client.refund(ticket(), commission=COMMISSION)
         assert result.settlement_method_codes == codes
         assert result.settlement_list_is_null is is_null
         assert result.raw == raw

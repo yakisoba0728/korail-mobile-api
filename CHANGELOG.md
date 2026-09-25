@@ -29,8 +29,9 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 
 - `get_crew_request_list(query_division_code)` → `get_crew_request_list(*, timestamp_ms=None)`
 - `get_station_info(device)` 인자 제거
-- `refund` 의 `return_times_division_code` 제거. `settle_mileage=True` 는 앱처럼 `commission` 이 있고 사용 가능 마일리지가 수수료
-  이상일 때만 보내며 아니면 `KorailProtocolError` 입니다.
+- `refund` 의 `return_times_division_code` 제거. `commission`(`get_refund_commission` 의 응답)은 필수 키워드입니다. 앱은 두 환불
+  화면 모두 수수료 조회가 성공해야 환불을 보냅니다. `settle_mileage=True` 는 사용 가능 마일리지가 수수료 이상일 때만 보내며 아니면
+  `KorailProtocolError` 입니다.
 - `reserve_merge` 의 둘째 인자 이름 `legs` → `merge_rows`
 - `get_ticket_receipt` 의 식별값은 키워드로만 받습니다. 비슷한 `OriginalTicketReference` 와 날짜·창구번호 순서가 반대라 위치 인자로 넘기면
   서로 바뀌었습니다.
@@ -96,6 +97,8 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 - API 요청 헤더를 앱과 맞췄습니다. 앱은 보호된 헤더 하나를 붙이는데, 보호 방식이 4바이트 키 반복 XOR 이라 같은 앱의 WebView 접미사
   평문으로 방식을 확인한 뒤 암호문 관계만으로 `User-Agent: korailtalk` 임을 확인했습니다(`constants.KORAIL_API_USER_AGENT`). APK 의 OkHttp
   기본 헤더에 맞춰 `Connection: Keep-Alive`, `Accept-Encoding: gzip` 을 보내고 `Accept` 는 보내지 않습니다.
+- 운임 조회(`get_price_fare_quote`)는 앱처럼 `gdNo` 칸을 늘 보냅니다. 상품번호가 없으면 빈 값이고 2구간은 구분자만 남습니다
+  (PrcFareInItem.java:109, NetworkService.java:9895-9902). 2026-09-25 실서버에서 1·2구간 모두 이전과 같은 운임을 받았습니다.
 - 대기열 요청도 앱과 맞췄습니다. SDK 는 User-Agent 를 넣지 않아 안드로이드 기본값이 나가므로 `korailtalk` 이 아니라 AOSP
   `RuntimeInit.getDefaultUserAgent` 형식 그대로 `Dalvik/2.1.0 (Linux; U; Android 17; SM-S948N Build/CP2A.260605.016)` 을 보냅니다.
   v1.1.1 에는 `Build/…` 가 빠져 있었습니다. SDK 는 GET 으로 부르지만 `setDoOutput(true)`(Client.java:257) 때문에 안드로이드
