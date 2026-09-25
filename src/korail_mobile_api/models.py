@@ -409,6 +409,8 @@ _TRAIN_SUMMARY_KEYS: tuple[tuple[str, str, str | None], ...] = (
     #: ``h_stnd_rest_seat_cnt`` -- ``TrainScheduleOutTrainInfo.java:150`` (Java 필드명 ``h_stnd_rest_seat_cnt``
     #: 그대로). 입석 잔여석 수.
     ("standing_remaining_seat_count", "h_stnd_rest_seat_cnt", None),
+    #: ``h_free_sracar_cnt`` -- 자유석 호차 수(예: "001"). 2026-09-25 관측: 이 값이 "000" 이 아닌 열차만 자유석 호차 조회에 호차가
+    #: 있었습니다(KorailClient.get_free_seat_car_info 참고).
     ("free_car_count", "h_free_sracar_cnt", None),
     ("reservation_wait_passenger_count", "h_rsv_wait_ps_cnt", None),
     ("train_sequence", "h_trn_seq", None),

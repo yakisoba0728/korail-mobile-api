@@ -645,6 +645,7 @@ class FreeSeatCarResponse(BaseKorailResponse):
     """열차의 자유석 호차와 안내 문구를 담습니다."""
 
     title: str | None = None
+    #: ``fresScarNo`` -- 호차 문구 그대로입니다(예: "자유석 1량 : 18호차"). 자유석이 없는 열차는 None 입니다.
     car_no: str | None = None
     content: str | None = None
 

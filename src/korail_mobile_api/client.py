@@ -946,7 +946,11 @@ class KorailClient:
         self,
         request: FreeSeatCarRequest,
     ) -> FreeSeatCarResponse:
-        """한 열차의 자유석 호차와 안내 문구를 조회합니다."""
+        """한 열차의 자유석 호차와 안내 문구를 조회합니다. 요청 값은 열차 조회 행에서 가져옵니다.
+
+        2026-09-25 라이브: 2026-10-06 평일 10개 노선 542편 가운데 203편을 조회했습니다. 조회 행의 ``free_car_count`` 가 001·002 인 183편은
+        모두 SUCC/IRZ000001 과 호차 문구(예: "자유석 1량 : 18호차", "자유석 2량 : 17, 18호차")를, 000 인 20편은 SUCC/IRZ000005 와
+        ``car_no=None`` 을 돌려줬습니다. 호차는 숫자 목록이 아니라 문구로 옵니다."""
         return self._post_read(
             "/classes/com.korail.mobile.trn.fresScar.do",
             build_free_seat_car_form(request),
