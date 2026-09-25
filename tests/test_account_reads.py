@@ -834,6 +834,7 @@ REQUIRED_GROUPS = [
     ("get_deposit_banks", ("dptnBank", 0), ("dptnBankCd", "dptnBankNm")),  # DptnBank.java:46 mask 3
     ("get_customer_trip_info", (), ("mainList",)),  # CustTripInfoOut.java:51 mask 8
     ("get_trip_change_dates", (), ("tripChgDates",)),  # TipChgDateInquiryOut.java:53 mask 16
+    ("get_recent_delivery_history", (), ("acepList",)),  # RecentDeliveryHistoryOut.java:51-57 mask 24
     ("get_recent_delivery_history", ("acepList", 0), RECENT_KEYS),  # DeliveryHistoryData.java:52 mask 63
     ("get_delivery_recipient", (), RECIPIENT_KEYS),  # DeliveryRcvCustOut.java:51 mask 120
     ("get_pbp_acceptance_specifications", (), ("tkList",)),  # DeliveredTicketOut.java:50 mask 8
@@ -977,30 +978,35 @@ def test_customer_required_list_structure(key, bad, make_client) -> None:
     assert error.value.raw == payload
 
 
-@pytest.mark.parametrize(
-    "key,bad", [("acepList", [None]), ("acepList", {}), ("chgePbpRsvNo", []), ("chgePbpRsvNo", True)]
-)
-def test_recent_top_level_keys_are_lenient(key, bad, make_client) -> None:
-    """RecentDeliveryHistoryOut.java:51-63 marks both keys required, but the 2026-09-24 live response
-    carried acepList without chgePbpRsvNo, so both are read as optional."""
+@pytest.mark.parametrize("bad", ([], True))
+def test_recent_changed_reservation_no_is_lenient(bad, make_client) -> None:
+    """RecentDeliveryHistoryOut.java:51-57 marks chgePbpRsvNo required, but the 2026-09-24 live response
+    omitted it, so it is read as optional."""
     payload = deepcopy(RECENT_BODY)
-    payload[key] = bad
+    payload["chgePbpRsvNo"] = bad
     client, _ = make_client(payload)
     result = client.get_recent_delivery_history()
-    assert result.raw == payload
-    assert (
-        (result.recipients == ()) if key == "acepList" else (result.changed_acceptance_reservation_no is None)
-    )
+    assert result.raw == payload and result.changed_acceptance_reservation_no is None
 
 
-@pytest.mark.parametrize("key", ("acepList", "chgePbpRsvNo"))
-def test_recent_top_level_keys_may_be_absent(key, make_client) -> None:
-    """2026-09-24 live: chgePbpRsvNo was absent from a successful response."""
+@pytest.mark.parametrize("bad", ([None], [1], {}, "TEST"))
+def test_recent_recipient_list_structure(bad, make_client) -> None:
+    """RecentDeliveryHistoryOut.java:51-57: acepList is a required List<DeliveryHistoryData>."""
     payload = deepcopy(RECENT_BODY)
-    del payload[key]
+    payload["acepList"] = bad
+    client, _ = make_client(payload)
+    with pytest.raises(KorailProtocolError) as error:
+        client.get_recent_delivery_history()
+    assert error.value.raw == payload
+
+
+def test_recent_changed_reservation_no_may_be_absent(make_client) -> None:
+    """2026-09-24 live: chgePbpRsvNo was absent from a successful response; acepList was present."""
+    payload = deepcopy(RECENT_BODY)
+    del payload["chgePbpRsvNo"]
     client, _ = make_client(payload)
     result = client.get_recent_delivery_history()
-    assert result.raw == payload
+    assert result.raw == payload and len(result.recipients) == 1
 
 
 @pytest.mark.parametrize(
@@ -1208,7 +1214,7 @@ def test_ticket_receipt_identifiers_are_keyword_only(make_client) -> None:
 
 @pytest.mark.parametrize(("wire", "expected"), [("-1200", -1200), ("-0", 0)])
 def test_required_integer_accepts_a_leading_minus_like_kotlinx(wire, expected, make_client) -> None:
-    """JsonReader.java:575-640: a quoted Int may start with '-'."""
+    """kotlinx/serialization/json/internal/JsonReader.java:575-640: a quoted Int may start with '-'."""
     payload = deepcopy(RECEIPT_BODY)
     payload["receipt_infos"]["receipt_info"][0]["h_rcvd_amt"] = wire
     client, _ = make_client(payload)

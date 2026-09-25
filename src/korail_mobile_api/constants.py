@@ -103,10 +103,6 @@ class KorailReservationJobType(StrEnum):
 #: 예약대기 판정값. 앞 공백도 값의 일부입니다. 필드 근거: TrainScheduleOutTrainInfo.java:146,1476. 비교 리터럴은 보호돼 미확인입니다.
 KORAIL_STANDBY_WAIT_FLAG = " 9"
 
-#: 예약대기 안내 코드. assets/error_json.json:3181 은 메시지 문구의 근거일 뿐 strResult=SUCC 나 화면 전환 조건을 증명하지 않습니다. 성공 여부는 실제 응답
-#: 봉투로 판정합니다.
-KORAIL_STANDBY_HOLD_MESSAGE_CODE = "IRR000014"
-
 #: N카드 최대 구간 수는 라이브러리 제한입니다. 7.0.6 의 동일 상한은 미확인입니다.
 KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
 

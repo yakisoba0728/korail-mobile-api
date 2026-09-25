@@ -189,7 +189,7 @@ def test_immediate_pass_and_release(queue_factory, mode: int) -> None:
 @pytest.mark.parametrize("code", ["201", "202"])
 @pytest.mark.parametrize("ttl,expected", [("0", 1), ("1", 1), ("7", 7), ("300", 30)])
 def test_wait_pass_ttl_and_latest_key(queue_factory, code: str, ttl: str, expected: int) -> None:
-    """Netfunnel.java:622-664; Response.java:59-66; CommandClient.java:110-137."""
+    """Netfunnel.java:622-664; com/netfunnel/api/Response.java:59-66; CommandClient.java:110-137."""
     client, gate, world, clock = queue_factory(
         [
             Reply(f"{code}:key=SYNTHETIC-OLD&ttl={ttl}&nwait=5"),
@@ -218,7 +218,7 @@ def test_block_is_never_bypassed(queue_factory, code: str, mode: int) -> None:
 @pytest.mark.parametrize("code", ["300", "303", "500"])
 @pytest.mark.parametrize("mode", [0, 1])
 def test_terminal_non_success_modes(queue_factory, code: str, mode: int) -> None:
-    """ScreenViewModel.java:1986; Code.java:30-33. No live bypass claim."""
+    """ScreenViewModel.java:1986; com/netfunnel/api/Code.java:30-33. No live bypass claim."""
     client, gate, world, _ = queue_factory([Reply(f"{code}:key=SYNTHETIC-END")], mode=mode)
     if mode == 0:
         with pytest.raises(KorailNetFunnelError):
@@ -384,7 +384,7 @@ def test_no_total_or_callback_timeout_is_implicitly_added(queue_factory) -> None
     "node", ["nf.letskorail.com", "rnf1.letskorail.com", "rnf12.letskorail.com", "rnf99.letskorail.com"]
 )
 def test_allowed_node_following(queue_factory, node: str) -> None:
-    """Library node policy, not proof that app overrides Property.java:23 host_notmodify."""
+    """Library node policy, not proof that app overrides com/netfunnel/api/Property.java:23 host_notmodify."""
     client, gate, world, _ = queue_factory(
         [
             Reply(f"201:key=SYNTHETIC-WAIT&ttl=1&ip={node}&port=443"),
@@ -435,8 +435,9 @@ BAD_NODES = [
 def test_rejected_node_is_ignored_and_front_door_releases(
     queue_factory, host: str, port: str, mode: int
 ) -> None:
-    """The key never reaches a node outside the allowlist; like the app (Property.java:23 host_notmodify), the
-    queue continues at the front door and the pass is released there."""
+    """The key never reaches a node outside the allowlist; like the app
+    (com/netfunnel/api/Property.java:23 host_notmodify), the queue continues at the front door and the pass
+    is released there."""
     client, gate, world, _ = queue_factory([Reply(f"200:key=SYNTHETIC&ip={host}&port={port}")], mode=mode)
     assert client.run(gate, world.send) == "SYNTHETIC-RESULT"
     assert world.ops() == ["5101", "API", "5004"]
@@ -528,7 +529,7 @@ def test_callback_exception_preserved_and_slot_returned(queue_factory) -> None:
 
 
 def test_body_parse_retains_raw_and_library_field_policy() -> None:
-    """Response.java:128-163 is the structural source; '=' retention is Python policy."""
+    """com/netfunnel/api/Response.java:128-163 is the structural source; '=' retention is Python policy."""
     raw = " 201:key=SYNTHETIC=PART&ttl=-4&nwait=not-numeric&extra=x "
     token = parse_netfunnel_body(raw)
     assert token.raw == raw and token.key == "SYNTHETIC=PART"
@@ -537,11 +538,28 @@ def test_body_parse_retains_raw_and_library_field_policy() -> None:
     assert korail_netfunnel_node_url("", "") == ""
 
 
-@pytest.mark.parametrize("text", ["", "200", "oops:key=x", "２００:key=x", "+200:key=x"])
+@pytest.mark.parametrize(
+    "text", ["", "200", "oops:key=x", ":key=x", "+:key=x", "2 0:key=x", "2_00:key=x", "2147483648:key=x"]
+)
 def test_invalid_body_keeps_raw(text: str) -> None:
     with pytest.raises(KorailNetFunnelError) as raised:
         parse_netfunnel_body(text)
     assert raised.value.raw == text
+
+
+@pytest.mark.parametrize(
+    "text,code",
+    [
+        ("200:key=x", "200"),
+        ("0200:key=x", "200"),
+        ("+200:key=x", "200"),
+        ("２００:key=x", "200"),
+        ("-1:key=x", "-1"),
+    ],
+)
+def test_body_code_reads_like_java_parse_int(text: str, code: str) -> None:
+    """com/netfunnel/api/Response.java:128-135: Integer.parseInt takes a sign and Unicode decimal digits."""
+    assert parse_netfunnel_body(text).code == code
 
 
 EXPECTED_GATES = {
@@ -912,7 +930,8 @@ def test_exact_success_envelope(parser, result: Any) -> None:
 
 
 def test_window_optional_parsing_and_raw() -> None:
-    """TResidualSeatsResearchOutWindow.java:51-58; forgiving windows are library policy."""
+    """TResidualSeatsResearchOutWindow.java:51-58: absent ratios are the app's "" default (None); skipping
+    malformed windows is library policy."""
     response = envelope(
         windowList=[
             {"st_loc_rt": "0.25", "cls_loc_rt": 1},
@@ -928,6 +947,7 @@ def test_window_optional_parsing_and_raw() -> None:
     assert [(w.start_location_ratio, w.close_location_ratio) for w in result.windows] == [
         (0.25, 1.0),
         (-2.0, 1.5),
+        (None, None),
     ]
     assert result.raw is response.raw
     assert parse_limousine_seat_inventory_response(envelope(windowList={})).windows == ()

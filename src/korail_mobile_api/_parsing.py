@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""도메인 모델에 의존하지 않고 JSON 필드를 읽습니다.
+"""JSON 필드를 읽는 공통 헬퍼와 예약 응답의 승객 정보 변환을 둡니다.
 
 선택 필드의 관대한 변환과 필수 필드의 오류 문구는 구분해서 유지합니다. 응답 봉투의 성공·실패 정책과 raw 복사 여부는 각 호출자가 결정합니다."""
 
@@ -20,7 +20,8 @@ _R = TypeVar("_R")
 
 
 def _preserve_read_raw(parser: Callable[_P, _R]) -> Callable[_P, _R]:
-    """조회 파서가 거절한 응답 전체를 기존 예외에 남깁니다. 검사·재전송은 하지 않습니다."""
+    """파서가 거절한 응답 전체를 기존 예외의 raw 에, 기존 부분 원문을 parser_raw 에 남깁니다. 조회·변경 파서를 직접 불러도 같습니다.
+    검사·재전송은 하지 않습니다."""
 
     @wraps(parser)
     def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
@@ -113,21 +114,6 @@ def _optional_string(
 ) -> str | None:
     """문자열을 반환하고 JSON 정수는 2026-09-21 관측에 따라 문자열로 읽습니다. 그 밖의 값은 None 입니다."""
     return _optional_scalar_string(data, key)
-
-
-def _required_string(
-    data: Mapping[str, object],
-    key: str,
-    context: str,
-) -> str:
-    """필수 문자열을 읽고 누락·다른 타입을 거절합니다. 키가 없거나 문자열이 아니면 거부합니다.
-
-    ``Seat`` 의 합성 생성자(``Seat.java:53-59``)는 다섯 필드 중 하나라도 없으면 ``throwMissingFieldException`` 을 던집니다 — 7.0.6 도
-    처리하지 않는 응답 모양이므로 선택으로 읽지 않습니다."""
-    value = data.get(key)
-    if not isinstance(value, str):
-        raise KorailProtocolError(f"KORAIL {context} field {key} must be a string")
-    return value
 
 
 def _present_strings(

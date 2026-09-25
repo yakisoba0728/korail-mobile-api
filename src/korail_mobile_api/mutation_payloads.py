@@ -1303,12 +1303,13 @@ def build_discount_card_reservation_form(
     return rebuilt
 
 
+# Retrofit 은 @FieldMap 뒤에 @Field 목록을 선언 순서대로 붙입니다(NetworkApi.java:584, RequestFactory.java:89-101).
 _PRICE_RECALCULATION_ROW_FIELDS: tuple[tuple[str, str], ...] = (
     ("psg_tp_dv_cd", "passenger_type_code"),
-    ("hidDcntKndCd", "requested_discount_code"),
+    ("psrm_cl_cd", "room_class_code"),
     ("dcnt_knd_cd1", "discount_kind_code"),
     ("hidDscpNo", "certificate_no"),
-    ("psrm_cl_cd", "room_class_code"),
+    ("hidDcntKndCd", "requested_discount_code"),
     ("hidFmlyNo", "family_sequence_no"),
 )
 
@@ -1374,8 +1375,7 @@ def build_price_recalculation_form(
         form["hiduserYn"] = "N"
         form["hidCustNo"] = non_member_no
     form["txtPsgGridcnt"] = str(len(rows))
-    for wire_name, _ in _PRICE_RECALCULATION_ROW_FIELDS:
-        form[wire_name] = columns[wire_name]
+    # 네 스칼라는 앱의 FieldMap 에 들어가므로 여섯 반복 목록보다 앞에 둡니다.
     for wire_name, attribute in _PRICE_RECALCULATION_SCALAR_FIELDS:
         value = getattr(request, attribute)
         if value is None:
@@ -1385,6 +1385,8 @@ def build_price_recalculation_form(
                 f"KORAIL price recalculation {attribute} must be a non-empty string when present"
             )
         form[wire_name] = value
+    for wire_name, _ in _PRICE_RECALCULATION_ROW_FIELDS:
+        form[wire_name] = columns[wire_name]
     return form
 
 

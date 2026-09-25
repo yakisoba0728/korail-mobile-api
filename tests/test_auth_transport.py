@@ -144,6 +144,22 @@ def test_login_success_code_and_session_cookie(factory, code, result):
     assert "custId" not in form(requests[-1]) and "etrPath" not in form(requests[-1])
 
 
+@pytest.mark.parametrize(
+    "card,customer,expected",
+    [
+        (1234, 5678, ("1234", "5678")),
+        ("", "  ", (None, None)),
+        (True, False, (None, None)),
+        ([1], {"no": 1}, (None, None)),
+    ],
+)
+def test_login_identifiers_read_json_integers(factory, card, customer, expected):
+    """LoginOut.java:62-79: String declarations; a JSON integer is its string like other String fields."""
+    client, _ = factory([*bootstrap(), login_response(strMbCrdNo=card, strCustNo=customer)])
+    session = client.login(ID, PASSWORD)
+    assert (session.member_card_no, session.customer_no) == expected
+
+
 LOGIN_HASHES = {
     "WRC000116": -699977554,
     "WRC000390": -699975390,
@@ -167,7 +183,8 @@ def java_hash(text):
 
 @pytest.mark.parametrize("code, expected", LOGIN_HASHES.items())
 def test_login_code_java_hash(code, expected):
-    """LoginViewModel.java:1392-1490; smali_classes6/.../LoginViewModel.smali:5809-5819."""
+    """LoginViewModel.java:1392-1490;
+    smali_classes6/com/korail/talk/ui/screen/login/LoginViewModel.smali:5809-5819."""
     assert java_hash(code) == expected
 
 

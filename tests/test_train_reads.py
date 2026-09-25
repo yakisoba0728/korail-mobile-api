@@ -715,8 +715,8 @@ def test_station_container_required_masks(name, raw, rig):
         ("get_uuid", "mutMrkVrfCd", "verification_code"),
     ],
 )
-def test_retained_required_guards_allow_integer_strings(name, wire, model, rig):
-    """The guards exceed optional DTO masks; retained per user request (REPORT F2-04)."""
+def test_string_fields_allow_integer_strings(name, wire, model, rig):
+    """String declarations read a JSON integer as its string (2026-09-21 observation)."""
     case = BY_NAME[name]
     raw = deepcopy(case[5])
     put(raw, wire, 0)
@@ -727,30 +727,74 @@ def test_retained_required_guards_allow_integer_strings(name, wire, model, rig):
 
 
 @pytest.mark.parametrize(
-    "name,wire",
+    "name,wire,model,default",
     [
-        ("get_seat_inventory", "layout_type"),
-        ("get_seat_inventory", "seat_ary_cd"),
-        ("get_seat_inventory", "seatList.0.seat_no"),
-        ("get_seat_inventory", "seatList.0.intg_msg"),
-        ("get_seat_inventory", "windowList.0.st_loc_rt"),
-        ("get_seat_cars", "srcar_infos.srcar_info.0.h_rest_seat_cnt"),
-        ("get_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm"),
-        ("get_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttNm"),
-        ("get_station_data", "stns.stn.0.stn_cd"),
-        ("get_uuid", "mutMrkVrfCd"),
+        ("get_seat_inventory", "layout_type", "layout_type", ""),
+        ("get_seat_inventory", "seat_ary_cd", "arrangement_code", ""),
+        ("get_seat_inventory", "seatList.0.seat_no", "seats.0.seat_no", ""),
+        ("get_seat_inventory", "seatList.0.sale_psb_flg", "seats.0.sale_possible", ""),
+        ("get_seat_inventory", "seatList.0.dir_seat_att_cd", "seats.0.direction_code", ""),
+        ("get_seat_inventory", "seatList.0.rq_seat_att_cd", "seats.0.requested_attribute_code", ""),
+        ("get_seat_inventory", "seatList.0.seat_spec", "seats.0.specification", ""),
+        ("get_seat_inventory", "seatList.0.sqr_no", "seats.0.sequence_no", ""),
+        ("get_seat_inventory", "seatList.0.intg_msg_cd", "seats.0.message_code", ""),
+        ("get_seat_inventory", "seatList.0.intg_msg", "seats.0.message", ""),
+        ("get_seat_inventory", "windowList.0.st_loc_rt", "windows.0.start_location_ratio", None),
+        ("get_seat_inventory", "windowList.0.cls_loc_rt", "windows.0.close_location_ratio", None),
+        ("get_seat_cars", "srcar_infos.srcar_info.0.h_srcar_no", "cars.0.car_no", None),
+        ("get_seat_cars", "srcar_infos.srcar_info.0.h_rest_seat_cnt", "cars.0.remaining_seat_count", None),
+        ("get_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name", ""),
+        ("get_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttNm", "cars.0.attributes.0.name", ""),
+        ("get_station_data", "stns.stn.0.stn_cd", "stations.0.code", ""),
+        ("get_station_data", "stns.stn.0.stn_nm", "stations.0.name", ""),
     ],
 )
-def test_document_retained_extra_presence_guards(name, wire, rig):
-    """NOT app equivalence: optional masks conflict with these unchanged library guards.
-    TResidualSeatsResearchOutSeat.java:62-105; TrainResearchOutCarInfo.java:59-86.
-    """
+def test_optional_mask_fields_take_the_app_default(name, wire, model, default, rig):
+    """TResidualSeatsResearchOut.java:61-82; TResidualSeatsResearchOutSeat.java:62-104;
+    TResidualSeatsResearchOutWindow.java:51-56; TrainResearchOutCarInfo.java:59-85;
+    TrainResearchOutSeatInfo.java:51-56; StationDataOutStnItem.java:60-63: an absent optional String
+    is the app's "" default; the library's numeric fields read it as None."""
     case = BY_NAME[name]
     raw = deepcopy(case[5])
     put(raw, wire, ABSENT)
     client, calls, _ = rig([raw], auth=case[7])
+    result = getattr(client, name)(*case[1], **case[2])
+    assert lookup(result, model) == default
+    assert result.raw == raw
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "name,wire",
+    [
+        ("get_seat_inventory", "seatList.0.seat_no"),
+        ("get_seat_cars", "srcar_infos.srcar_info.0.h_srcar_no"),
+        ("get_seat_inventory", "windowList.0.st_loc_rt"),
+        ("get_station_data", "stns.stn.0.stn_cd"),
+    ],
+)
+@pytest.mark.parametrize("bad", [None, True, [], {}])
+def test_optional_mask_fields_still_reject_null_and_wrong_types(name, wire, bad, rig):
+    """The app's Json leniency flags are protected (NetworkServiceKt.java:25-29), so only absence is
+    read as the default."""
+    case = BY_NAME[name]
+    raw = deepcopy(case[5])
+    put(raw, wire, bad)
+    client, _, _ = rig([raw], auth=case[7])
     with pytest.raises(KorailProtocolError) as error:
         getattr(client, name)(*case[1], **case[2])
+    assert error.value.raw == raw
+
+
+def test_uuid_verification_code_guard_is_retained(rig):
+    """EBizCrossUUIDOut.java:51-58 marks mutMrkVrfCd optional; the library keeps requiring the code it
+    must send next."""
+    case = BY_NAME["get_uuid"]
+    raw = deepcopy(case[5])
+    put(raw, "mutMrkVrfCd", ABSENT)
+    client, calls, _ = rig([raw], auth=case[7])
+    with pytest.raises(KorailProtocolError) as error:
+        getattr(client, "get_uuid")(*case[1], **case[2])
     assert error.value.raw == raw
     assert len(calls) == 1
 
@@ -867,7 +911,7 @@ def test_search_groups_teenager_infant_and_guide_dog_like_the_app(rig):
 
 @pytest.mark.parametrize("special", [False, True])
 def test_exact_form_options_and_three_continuation_fields(special, rig):
-    """TrainScheduleIn.java:95-285; ViewModel.java:7340 copies exactly three cursor fields."""
+    """TrainScheduleIn.java:95-285; TrainScheduleViewModel.java:7340 copies exactly three cursor fields."""
     query = replace(
         QUERY,
         passengers=2,
@@ -925,7 +969,7 @@ def test_numeric_station_codes_are_resolved_once_then_cached(rig):
 
 
 def test_direct_no_results_falls_back_once_and_resets_continuation(rig):
-    """ViewModel.smali:35513-35566 confirms dialog, not plaintext WRD000061 (protected).
+    """TrainScheduleViewModel.smali:35513-35566 confirms dialog, not plaintext WRD000061 (protected).
     Library WRD000061 policy is fixed; user confirmation/filter reset are not emulated.
     """
     failure = {"strResult": "FAIL", "h_msg_cd": "WRD000061", "h_msg_txt": "SYNTH_NO_DIRECT"}
@@ -1134,7 +1178,7 @@ def test_nested_parser_raw_promotes_partial_context(rig, monkeypatch):
         error.raw = partial
         raise error
 
-    monkeypatch.setattr(parsers, "_inventory_required_string", fail)
+    monkeypatch.setattr(parsers, "_inventory_string", fail)
     client, _, _ = rig([INVENTORY], auth=True)
     with pytest.raises(KorailProtocolError) as error:
         client.get_seat_inventory(TRAIN, 2, passenger_count=2)

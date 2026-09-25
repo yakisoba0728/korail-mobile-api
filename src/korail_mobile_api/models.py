@@ -557,9 +557,10 @@ class SeatAttribute:
 class SeatCar:
     """좌석 조회에 사용할 호차 번호와 좌석 속성을 담습니다. car_no 를 좌석 재고 조회에 사용하고 attributes 는 호차의 좌석 속성입니다."""
 
-    car_no: int
+    #: 호차번호·잔여석은 mask 상 선택 String 이라(TrainResearchOutCarInfo.java:59-85) 누락이나 "" 이면 None 입니다.
+    car_no: int | None
     room_class_name: str
-    remaining_seat_count: int
+    remaining_seat_count: int | None
     attributes: tuple[SeatAttribute, ...]
     room_class_code: str | None = None
     total_seat_count: int | None = None
@@ -599,10 +600,10 @@ class PhysicalSeat:
 
 @dataclass(frozen=True)
 class SeatWindow:
-    """좌석 배치도의 창문 위치 비율을 담습니다."""
+    """좌석 배치도의 창문 위치 비율을 담습니다. 비율은 mask 상 선택 String 이라 누락이나 "" 이면 None 입니다."""
 
-    start_location_ratio: float
-    close_location_ratio: float
+    start_location_ratio: float | None
+    close_location_ratio: float | None
 
 
 @dataclass(frozen=True)

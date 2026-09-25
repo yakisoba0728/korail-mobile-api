@@ -25,8 +25,8 @@ KORAIL_NETFUNNEL_NODE_PORT = 443
 
 
 def korail_netfunnel_node_url(ip: str, port: str) -> str:
-    """허용된 대기열 노드의 HTTPS 원점 주소를 반환합니다. 노드가 없거나 허용 범위 밖이면 빈 문자열이며, 호출자는 정문을 씁니다. 앱은 기본값대로
-    노드를 따르지 않으므로(Property.java:23) 무시해도 앱의 동작에서 벗어나지 않습니다."""
+    """허용된 대기열 노드의 HTTPS 원점 주소를 반환합니다. 노드가 없거나 허용 범위 밖이면 빈 문자열이며, 호출자는 정문을 씁니다. SDK 기본값은
+    노드를 따르지 않습니다(com/netfunnel/api/Property.java:23). 앱이 기동 때 이 값을 바꾸는지는 보호돼 있어 확인하지 못했습니다."""
     if not ip and not port:
         return ""
     host_allowed = ip == KORAIL_NETFUNNEL_HTTPS_HOST or KORAIL_NETFUNNEL_NODE_HOST_RE.fullmatch(ip) is not None

@@ -333,7 +333,6 @@ def build_common_code_form(
 
 
 TICKET_LIST_MODE_ACTIVE = "1"
-TICKET_LIST_MODE_HISTORY = "2"
 
 
 def build_ticket_list_form(

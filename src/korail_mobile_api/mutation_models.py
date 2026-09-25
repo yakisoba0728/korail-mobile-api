@@ -683,8 +683,15 @@ class PriceRecalculationRequest:
             )
 
         def text(seat: Mapping[str, Any], key: str) -> str:
+            # 좌석 필드는 String 선언입니다(ReservationOutSeatInfo.java:80-109). JSON 정수만 문자열로 받고 bool·객체 등은 보내지 않습니다.
             value = seat.get(key)
-            return "" if value is None else str(value)
+            if value is None or isinstance(value, str):
+                return value or ""
+            if type(value) is int:
+                return str(value)
+            raise KorailProtocolError(
+                f"KORAIL price recalculation seat field {key} must be a string or an integer"
+            )
 
         rows = tuple(
             PriceRecalculationRow(

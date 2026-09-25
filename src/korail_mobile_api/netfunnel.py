@@ -22,6 +22,7 @@ com/netfunnel/api/Response.java:59-66). SDK에는 누적 상한이 없습니다.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -138,13 +139,29 @@ def _digits(raw: str) -> int:
     return int(raw) if raw.isascii() and raw.isdigit() else 0
 
 
+_JAVA_INT_RE = re.compile(r"[+-]?\d+")
+
+
+def _java_int(text: str) -> int | None:
+    """자바 ``Integer.parseInt`` 처럼 부호 하나와 유니코드 십진 숫자를 받아 int32 범위의 값을 돌려주고, 아니면 None 입니다."""
+    if _JAVA_INT_RE.fullmatch(text) is None:
+        return None
+    try:
+        value = int(text)
+    except ValueError:  # 파이썬의 정수 자릿수 한도
+        return None
+    return value if -(2**31) <= value < 2**31 else None
+
+
 def parse_netfunnel_body(body: str) -> KorailNetFunnelToken:
     """응답 본문을 코드와 파라미터로 가릅니다(``Response.Parser``, ``com/netfunnel/api/Response.java:128-163``).
 
-    첫 ``:`` 앞이 코드, 뒤가 ``&`` 로 나뉜 ``name=value`` 쌍입니다. ``:`` 가 없거나 코드가 숫자가 아니면 ``errors.KorailNetFunnelError``(앱의
-    ``Code.ErrorData``)입니다. 서버가 준 ``ip``/``port`` 는 ``netfunnel_safety`` 의 가드를 통과해야 합니다."""
+    첫 ``:`` 앞이 코드, 뒤가 ``&`` 로 나뉜 ``name=value`` 쌍입니다. 코드는 SDK 처럼 ``Integer.parseInt`` 로 읽어 ``0200``·``+200`` 도
+    ``200`` 입니다. ``:`` 가 없거나 코드가 int32 정수가 아니면 ``errors.KorailNetFunnelError``(앱의 ``Code.ErrorData``)입니다. 서버가 준
+    ``ip``/``port`` 는 ``netfunnel_safety`` 의 가드를 통과해야 합니다."""
     head, separator, tail = body.strip().partition(":")
-    if not separator or not head.isascii() or not head.isdigit():
+    code = _java_int(head) if separator else None
+    if code is None:
         raise KorailNetFunnelError(
             None,
             "KORAIL NetFunnel reply is not '<code>:<params>'",
@@ -157,7 +174,7 @@ def parse_netfunnel_body(body: str) -> KorailNetFunnelToken:
             params[name] = value
     key = params.get("key", "")
     return KorailNetFunnelToken(
-        code=head,
+        code=str(code),
         key=key,
         params=params,
         node=korail_netfunnel_node_url(params.get("ip", ""), params.get("port", "")),

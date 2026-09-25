@@ -16,6 +16,7 @@ from ._parsing import (
     _nested_rows,
     _nullable_scalar_fields,
     _optional_scalar_string,
+    _preserve_read_raw,
     _reservation_passengers,
     _rows,
     _strict_scalar_string,
@@ -42,6 +43,7 @@ from .mutation_models import (
 )
 
 
+@_preserve_read_raw
 def parse_refund_ticket_response(raw: Mapping[str, Any]) -> RefundTicketResponse:
     """필수·nullable stlList 와 각 행의 필수 stl_mns_cd 를 읽습니다.
 
@@ -83,6 +85,7 @@ _STATION_REFUND_ORIGINAL_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_station_refund_verification_response(
     raw: Mapping[str, Any],
 ) -> StationRefundVerificationResponse:
@@ -120,6 +123,7 @@ def parse_station_refund_verification_response(
     )
 
 
+@_preserve_read_raw
 def parse_station_refund_execution_response(
     raw: Mapping[str, Any],
 ) -> StationRefundExecutionResponse:
@@ -345,6 +349,7 @@ _RESERVATION_PAYMENT_TABLE_SEAT_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_reservation_hold_response(
     raw: Mapping[str, Any],
 ) -> ReservationHoldResponse:
@@ -394,6 +399,7 @@ def parse_reservation_hold_response(
     )
 
 
+@_preserve_read_raw
 def parse_reservation_payment_response(
     raw: Mapping[str, Any],
 ) -> ReservationPaymentResponse:
@@ -466,6 +472,7 @@ _DISCOUNT_CARD_PURCHASE_FIELDS = {
 }
 
 
+@_preserve_read_raw
 def parse_discount_card_purchase_response(
     raw: Mapping[str, Any],
 ) -> DiscountCardPurchaseResponse:
@@ -497,6 +504,7 @@ def _cart_discount_additions(
     )
 
 
+@_preserve_read_raw
 def parse_product_cancel_response(raw: Mapping[str, Any]) -> ProductCancelResponse:
     """여행상품 예약 취소 응답을 읽습니다. intgMsgCd 는 선택 스칼라입니다(ProductCancelOut.java)."""
     data = _response_mapping(raw)
@@ -506,6 +514,7 @@ def parse_product_cancel_response(raw: Mapping[str, Any]) -> ProductCancelRespon
     )
 
 
+@_preserve_read_raw
 def parse_maas_cancel_response(raw: Mapping[str, Any]) -> MaasCancelResponse:
     """지원하지 않는 미결제 부가서비스 해제 응답을 읽습니다. addService.cancelPay.do 응답. intgMsgCd 는 선택 스칼라입니다(MaasCancelOut.java)."""
     data = _response_mapping(raw)
@@ -515,6 +524,7 @@ def parse_maas_cancel_response(raw: Mapping[str, Any]) -> MaasCancelResponse:
     )
 
 
+@_preserve_read_raw
 def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
     """장바구니 추가 결과와 할인 목록을 읽습니다. 키 근거: AddCartListOut.java:76, PsgDiscAddInfos.java:81,
     PsgDiscAddInfo.java:81,85. 누락·잘못된 선택 목록은 비웁니다."""

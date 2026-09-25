@@ -68,6 +68,8 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
   `printed_discount_kind_code`·`ticket_kind_name`·`train_group_code`. `TicketReceipt`·`ReceiptPayment`·PBP 모델 등은 기본값 없는 필드가
   늘었고, 모델 31개의 위치 순서가 바뀌었습니다.
 - `KorailAuthContinuationRequired` 에서 `post_data` 를 없앴습니다.
+- `SeatCar.car_no`·`remaining_seat_count` 와 `SeatWindow` 의 두 비율은 `None` 일 수 있습니다. 앱 DTO 에서 선택 String 이라 빠지면
+  앱 기본값 "" 이 되는 값입니다(TrainResearchOutCarInfo.java:59-85, TResidualSeatsResearchOutWindow.java:51-56).
 
 **예외와 입력 검증**
 
@@ -90,9 +92,16 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 
 ### 수정
 
-- 환불 결과의 `stlList` 와 정산수단 코드, 입금 은행 행, 고객 여행 정보의 `mainList` 를 필수로 읽습니다.
-  최근 대리수령 이력은 2026-09-24 실서버 응답에 `chgePbpRsvNo` 가 없어 선택으로 둡니다.
-- 응답 거절·파싱 실패 때 `.raw` 에 전체 응답이 남습니다.
+- 환불 결과의 `stlList` 와 정산수단 코드, 입금 은행 행, 고객 여행 정보의 `mainList`, 최근 대리수령 이력의 `acepList`(null 은 빈 목록)를
+  필수로 읽습니다. 최근 대리수령 이력의 `chgePbpRsvNo` 는 2026-09-24 실서버 응답에 없어 선택으로 둡니다.
+- 좌석 재고·호차 목록·역 목록에서 앱이 선택으로 두는 필드가 빠져도 응답을 거절하지 않고 앱 기본값처럼 읽습니다(문자열은 "", 숫자는
+  `None`). 값이 있는데 null 이거나 타입이 틀리면 앱의 Json 설정이 보호돼 있어 지금처럼 거절합니다. 인증번호(`mutMrkVrfCd`)는 다음
+  요청에 보내야 하므로 계속 필수입니다.
+- 로그인 응답의 회원카드·고객번호가 JSON 정수여도 세션에 문자열로 남깁니다. 다른 String 필드와 같은 규칙입니다.
+- 대기열 응답 코드를 SDK 의 `Integer.parseInt` 처럼 읽습니다. `0200`·`+200` 도 200 이고 int32 밖의 값은 `KorailNetFunnelError` 입니다.
+- 요금 재계산 폼을 앱의 Retrofit 순서대로 보냅니다. 공통 필드와 선택 스칼라 4개 다음에 `psg_tp_dv_cd`, `psrm_cl_cd`, `dcnt_knd_cd1`,
+  `hidDscpNo`, `hidDcntKndCd`, `hidFmlyNo` 목록이 옵니다(NetworkApi.java:584).
+- 응답 거절·파싱 실패 때 `.raw` 에 전체 응답이 남습니다. 변경 응답 파서를 직접 불러도 같고 부분 원문은 `.parser_raw` 에 남습니다.
 - DynaPath 토큰의 `rt` 에 앱 SDK 처럼 요청 간 시간차(최근 5개, 첫 값은 앱 시작 시각과의 차)를 싣습니다. v1.1.1 은 `rt=0` 고정값이었습니다.
 - API 요청 헤더를 앱과 맞췄습니다. 앱은 보호된 헤더 하나를 붙이는데, 보호 방식이 4바이트 키 반복 XOR 이라 같은 앱의 WebView 접미사
   평문으로 방식을 확인한 뒤 암호문 관계만으로 `User-Agent: korailtalk` 임을 확인했습니다(`constants.KORAIL_API_USER_AGENT`). APK 의 OkHttp
@@ -101,7 +110,8 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
   결과는 새 필드 `ReservationHoldResponse.cart_addition` 에 담기며 FAIL 이어도 예외를 내지 않습니다. 2026-09-25 실서버: 재계산 21,500→15,000원,
   추가 SUCC/IRZ000002, 장바구니에 15,000원 행, 홀드 취소 뒤 장바구니 비움.
 - `PriceRecalculationRequest.for_hold(hold, codes)` 는 앱처럼 홀드의 첫 여정 좌석마다 한 행을 만들고(유형·객실·현재 할인 코드 복사,
-  `dcnt_reld_no` → `hidDscpNo`) 요청 코드 수가 좌석 수와 다르면 거절합니다(PayViewModel.java:5518,16856-16863,17469).
+  `dcnt_reld_no` → `hidDscpNo`) 요청 코드 수가 좌석 수와 다르면 거절합니다(PayViewModel.java:5518,16856-16863,17469). 좌석 값은
+  문자열과 JSON 정수만 받고 bool·객체 등은 거절합니다.
 - 운임 조회(`get_price_fare_quote`)는 앱처럼 `gdNo` 칸을 늘 보냅니다. 상품번호가 없으면 빈 값이고 2구간은 구분자만 남습니다
   (PrcFareInItem.java:109, NetworkService.java:9895-9902). 2026-09-25 실서버에서 1·2구간 모두 이전과 같은 운임을 받았습니다.
 - 대기열 요청도 앱과 맞췄습니다. SDK 는 User-Agent 를 넣지 않아 안드로이드 기본값이 나가므로 `korailtalk` 이 아니라 AOSP
@@ -137,6 +147,9 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 - 2026-09-25 에 요금 재계산을 다시 확인했습니다(결제 없이 모두 취소). 무변경은 ERR930202, 평일 할인 변경은 SUCC/IRZ000008 로
   21,500→15,000원, 토요일은 같은 SUCC/IRZ000008 인데 금액이 그대로였습니다. 운임 조회는 표시용 기준 운임으로, 홀드의 h_tot_prc 와 같고
   정산액은 좌석 할인만큼 낮을 수 있었습니다(성인 2명은 정확히 두 배). 환승 두 구간 조회는 네 행을 돌려줬습니다.
+- 2026-09-25 에 응답 읽기·재계산 순서를 고친 뒤 다시 확인했습니다. 로그인 식별자는 문자열, 최근 대리수령 이력은 `acepList` 가 있고
+  `chgePbpRsvNo` 가 없었으며, 역 281개·호차 13개·좌석 56석과 창 6개를 빠진 값 없이 읽었습니다. 새 순서의 재계산은 SUCC/IRZ000008 로
+  21,500→15,000원이었고 홀드는 결제 없이 취소했습니다.
 - 일반실 매진·입석 가능 행의 입석 전용 홀드는 보내지 않습니다. 앱의 입석 판정은 보호된 운행중지·대기·병합 판정을 먼저 거치므로
   (TrainScheduleOutTrainInfo.java:2810-2885) 라이브러리가 같은 행을 가려낼 수 없습니다. 입석+좌석은 `MERGE_STANDING` 입니다.
 - N카드 6개 기능의 미검증 상태와 기존 미지원 기능 범위를 유지합니다.

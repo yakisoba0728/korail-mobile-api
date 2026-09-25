@@ -12,6 +12,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
+from ._parsing import _optional_scalar_string
 from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 from .crypto import transform_login_password
 from .errors import (
@@ -218,9 +219,10 @@ class KorailSessionClient:
                 raw=response.raw,
             )
         # 앱은 LoginOut.strMbCrdNo 를 읽습니다(LoginOut.java:62,79,113,116). 2026-09-24 라이브 로그인 응답에 mbCrdNo 는 없었습니다.
-        member_card_no = _text(response.raw.get("strMbCrdNo")) or None
-        raw_customer_no = response.raw.get("strCustNo")
-        customer_no = raw_customer_no if isinstance(raw_customer_no, str) and raw_customer_no.strip() else None
+        # 두 번호는 String 선언이며 다른 String 필드처럼 JSON 정수도 문자열로 받습니다.
+        member_card_no = _optional_scalar_string(response.raw, "strMbCrdNo") or None
+        customer_no = _optional_scalar_string(response.raw, "strCustNo")
+        customer_no = customer_no if customer_no and customer_no.strip() else None
         self.current = KorailSession(
             jsessionid=jsessionid,
             member_no=login_id or None,

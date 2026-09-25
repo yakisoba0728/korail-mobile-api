@@ -123,12 +123,21 @@ def _typed_non_negative_integer_value(
     return parsed
 
 
-# 좌석 재고의 필수 문자열은 빈 값도 허용하지만 역 코드·역명은 빈 값을 허용하지 않습니다.
+def _typed_defaulted_string(
+    data: Mapping[str, object],
+    key: str,
+    *,
+    context: str,
+) -> str:
+    """serializer mask 가 선택인 String 을 읽습니다. 누락은 앱 합성 생성자의 기본값 "" 이고, 값이 있으면 문자열·JSON 정수만 받습니다. null 과
+    다른 타입은 앱의 Json 설정이 보호돼 있어 받아도 되는지 확인할 수 없으므로 거절합니다."""
+    return _typed_required_scalar_string(data, key, context=context) if key in data else ""
+
+
 _optional_string = _typed_optional_string
-_station_required_string = partial(_typed_required_string, context="station", non_empty=True)
+_station_string = partial(_typed_defaulted_string, context="station")
 _inventory_optional_string = _typed_optional_string
-_inventory_required_string = partial(_typed_required_string, context="seat inventory")
-_inventory_required_scalar_string = partial(_typed_required_scalar_string, context="seat inventory")
+_inventory_string = partial(_typed_defaulted_string, context="seat inventory")
 _inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
 
 
@@ -349,8 +358,8 @@ _STATION_OPTIONAL_STRING_FIELDS: dict[str, str] = {
 def parse_station_data_response(
     response: BaseKorailResponse,
 ) -> StationDataResponse:
-    """봉투가 없는 역 목록을 읽습니다. stns.stn 과 각 역의 비어 있지 않은 코드·이름은 필수입니다. 역명 조회용 표는 이상한 행을 건너뛰는
-    :func:`parse_station_name_map` 을 씁니다."""
+    """봉투가 없는 역 목록을 읽습니다. stns.stn 은 필수입니다. 역 코드·이름은 mask 상 선택이라 누락되면 앱 기본값 "" 입니다
+    (StationDataOutStnItem.java:60-63). 역명 조회용 표는 이상한 행을 건너뛰는 :func:`parse_station_name_map` 을 씁니다."""
     container = response.raw.get("stns")
     if not isinstance(container, Mapping):
         raise KorailProtocolError("KORAIL station data missing stns object")
@@ -363,8 +372,8 @@ def parse_station_data_response(
             raise KorailProtocolError("KORAIL station data contained a non-object row")
         stations.append(
             KorailStation(
-                code=_station_required_string(row, "stn_cd"),
-                name=_station_required_string(row, "stn_nm"),
+                code=_station_string(row, "stn_cd"),
+                name=_station_string(row, "stn_nm"),
                 raw=dict(row),
                 # popupType 은 정수로 바꾸지 않고 String 선언대로 읽습니다(StationDataOutStnItem.java:60).
                 popup_type=_typed_optional_string(
@@ -578,34 +587,37 @@ def _inventory_required_list(
     return value
 
 
-def _inventory_required_int(
+def _inventory_count(
     data: Mapping[str, Any],
     key: str,
-) -> int:
-    return _typed_non_negative_integer_value(data.get(key), key, context="seat inventory")
+) -> int | None:
+    """mask 상 선택인 String 을 음이 아닌 정수로 읽습니다. 누락과 앱 기본값 "" 은 None 이고, 그 밖의 잘못된 값은 거절합니다."""
+    value = data.get(key, "")
+    if value == "":
+        return None
+    return _typed_non_negative_integer_value(value, key, context="seat inventory")
 
 
 @_preserve_read_raw
 def parse_seat_car_list_response(
     response: BaseKorailResponse,
 ) -> SeatCarListResponse:
-    """호차와 좌석 속성 목록을 읽습니다. 호차번호를 다음 좌석 재고 조회에 사용합니다. 컨테이너는 선택 목록 헬퍼의 정책을 따릅니다."""
+    """호차와 좌석 속성 목록을 읽습니다. 호차번호를 다음 좌석 재고 조회에 사용합니다. 컨테이너는 선택 목록 헬퍼의 정책을 따릅니다.
+    호차 필드는 모두 mask 상 선택이라(TrainResearchOutCarInfo.java:59-85, TrainResearchOutSeatInfo.java:51-56) 누락되면
+    문자열은 "", 숫자는 None 입니다."""
     raw = response.raw
     cars: list[SeatCar] = []
     for row in _nested_rows(raw, "srcar_infos", "srcar_info"):
         # 앱은 호차번호를 String 으로 선언합니다(TrainResearchOutCarInfo.java:32). 이 모델은 int 이므로 원래 영 채움은 잃습니다. 재전송 형식은 요청
         # 빌더에서 결정합니다.
-        car_no = _inventory_required_int(row, "h_srcar_no")
+        car_no = _inventory_count(row, "h_srcar_no")
         # seatAttInfos 생략 시 빈 목록은 TrainResearchOutCarInfo.java:33,81-84 의 기본값입니다. 명시적 null 도 빈 목록으로 읽는 것은 라이브러리
         # 정책이며 특정 객실 종류를 증명하지 않습니다.
         attributes: list[SeatAttribute] = []
         for attribute_raw in _rows(row, "seatAttInfos"):
             attributes.append(
                 SeatAttribute(
-                    name=_inventory_required_string(
-                        attribute_raw,
-                        "seatAttNm",
-                    ),
+                    name=_inventory_string(attribute_raw, "seatAttNm"),
                     code=_inventory_optional_string(
                         attribute_raw,
                         "seatAttCd",
@@ -613,17 +625,11 @@ def parse_seat_car_list_response(
                 )
             )
         total_seat_count = _inventory_optional_int(row, "h_seat_cnt")
-        remaining_seat_count = _inventory_required_int(
-            row,
-            "h_rest_seat_cnt",
-        )
+        remaining_seat_count = _inventory_count(row, "h_rest_seat_cnt")
         cars.append(
             SeatCar(
                 car_no=car_no,
-                room_class_name=_inventory_required_string(
-                    row,
-                    "h_psrm_cl_nm",
-                ),
+                room_class_name=_inventory_string(row, "h_psrm_cl_nm"),
                 remaining_seat_count=remaining_seat_count,
                 attributes=tuple(attributes),
                 room_class_code=_inventory_optional_string(
@@ -648,8 +654,11 @@ def parse_seat_car_list_response(
     )
 
 
-def _inventory_ratio(data: Mapping[str, Any], key: str) -> float:
-    value = data.get(key)
+def _inventory_ratio(data: Mapping[str, Any], key: str) -> float | None:
+    """창측 비율(String 선언, TResidualSeatsResearchOutWindow.java:51-56)을 읽습니다. 누락과 앱 기본값 "" 은 None 입니다."""
+    value = data.get(key, "")
+    if value == "":
+        return None
     number: int | float | str
     # bool·사용자 정의 숫자 하위형을 제외합니다. isinstance 는 타입 검사기의 float 변환 추론용입니다.
     if type(value) in {int, float} and isinstance(value, (int, float)):
@@ -673,12 +682,14 @@ def _inventory_ratio(data: Mapping[str, Any], key: str) -> float:
 def parse_seat_inventory_response(
     response: BaseKorailResponse,
 ) -> SeatInventoryResponse:
-    """일반 열차의 좌석 재고를 읽습니다. seatList·windowList 는 누락만 빈 목록이며 키가 있으면 목록을 요구합니다. 좌석 필수 문자열·창측 비율의 오류는 응답 전체를 거절합니다.
-    선택 건수의 상호 모순은 검증하지 않습니다. layout_type 은 String 선언(TResidualSeatsResearchOut.java:29)과 달리 정수도 허용합니다.
+    """일반 열차의 좌석 재고를 읽습니다. seatList·windowList 는 누락만 빈 목록이며 키가 있으면 목록을 요구합니다. 좌석·창측 필드는
+    mask 상 모두 선택이라(TResidualSeatsResearchOut.java:61-82, TResidualSeatsResearchOutSeat.java:62-104) 누락되면
+    문자열은 "", 비율은 None 입니다. 값이 있는데 잘못된 타입이면 응답 전체를 거절합니다. 선택 건수의 상호 모순은
+    검증하지 않습니다. layout_type 은 String 선언(TResidualSeatsResearchOut.java:29)과 달리 정수도 허용합니다.
     2026-09-21 라이브 15대에서 JSON 정수를 관측했습니다."""
     raw = response.raw
-    layout_type = _inventory_required_scalar_string(raw, "layout_type")
-    arrangement_code = _inventory_required_string(raw, "seat_ary_cd")
+    layout_type = _inventory_string(raw, "layout_type")
+    arrangement_code = _inventory_string(raw, "seat_ary_cd")
     remaining_count = _inventory_optional_int(
         raw,
         "seat_remain_count",
@@ -693,36 +704,21 @@ def parse_seat_inventory_response(
     for row in seat_rows:
         if not isinstance(row, Mapping):
             raise KorailProtocolError("KORAIL seat inventory contained a non-object seat row")
-        seat_no = _inventory_required_string(row, "seat_no")
+        seat_no = _inventory_string(row, "seat_no")
         seats.append(
             PhysicalSeat(
                 seat_no=seat_no,
-                sale_possible=_inventory_required_string(
-                    row,
-                    "sale_psb_flg",
-                ),
-                direction_code=_inventory_required_string(
-                    row,
-                    "dir_seat_att_cd",
-                ),
+                sale_possible=_inventory_string(row, "sale_psb_flg"),
+                direction_code=_inventory_string(row, "dir_seat_att_cd"),
                 # etc_seat_att_cd·vz_msg_dv_cd 는 생략·null 을
                 # 허용합니다(TResidualSeatsResearchOutSeat.java:79-82,94-97).
                 other_attribute_code=_inventory_optional_string(row, "etc_seat_att_cd"),
-                requested_attribute_code=_inventory_required_string(
-                    row,
-                    "rq_seat_att_cd",
-                ),
+                requested_attribute_code=_inventory_string(row, "rq_seat_att_cd"),
                 floor=_inventory_optional_string(row, "floor"),
-                specification=_inventory_required_string(
-                    row,
-                    "seat_spec",
-                ),
-                sequence_no=_inventory_required_string(row, "sqr_no"),
-                message_code=_inventory_required_string(
-                    row,
-                    "intg_msg_cd",
-                ),
-                message=_inventory_required_string(row, "intg_msg"),
+                specification=_inventory_string(row, "seat_spec"),
+                sequence_no=_inventory_string(row, "sqr_no"),
+                message_code=_inventory_string(row, "intg_msg_cd"),
+                message=_inventory_string(row, "intg_msg"),
                 visual_message_division_code=_inventory_optional_string(row, "vz_msg_dv_cd"),
             )
         )

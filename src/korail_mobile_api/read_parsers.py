@@ -2160,10 +2160,14 @@ def parse_recent_delivery_history_response(
     raw: Mapping[str, Any],
 ) -> RecentDeliveryHistoryResponse:
     _validate_strict_read_envelope(raw)
-    # RecentDeliveryHistoryOut.java:51-63 의 마스크는 두 키를 필수로 두지만, 2026-09-24 실서버 응답에는 acepList 만 있고
-    # chgePbpRsvNo 가 없었습니다. 그래서 두 키 모두 필수로 보지 않습니다.
+    # RecentDeliveryHistoryOut.java:51-57 의 마스크 24 는 두 키를 필수로 둡니다. 2026-09-24 실서버 응답에는 acepList 가 있고
+    # chgePbpRsvNo 만 없었으므로 chgePbpRsvNo 만 선택으로 읽습니다. acepList 는 nullable List 라 null 은 빈 목록입니다.
+    if "acepList" not in raw:
+        raise KorailProtocolError("KORAIL recent delivery history field acepList is required")
     recipients = []
-    for recipient in _rows(raw, "acepList"):
+    for recipient in (
+        _required_read_rows(raw, "acepList", "recent delivery history") if raw["acepList"] is not None else ()
+    ):
         recipients.append(
             RecentDeliveryRecipient(
                 **_required_read_strings(

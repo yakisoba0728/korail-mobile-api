@@ -500,9 +500,11 @@ class KorailClient:
         try:
             return parser(raw)
         except KorailApiError as error:
-            # 파싱 실패를 재전송 신호로 쓰면 중복 예약·결제가 생길 수 있으므로 전체 응답과 부분 원문을 함께 보존합니다.
-            error.parser_raw = getattr(error, "raw", None)
-            error.raw = raw
+            # 파싱 실패를 재전송 신호로 쓰면 중복 예약·결제가 생길 수 있으므로 전체 응답과 부분 원문을 함께 보존합니다. 변경 파서는 직접
+            # 불러도 같도록 _preserve_read_raw 가 이미 옮겨 두므로, 그때는 parser_raw 를 덮어쓰지 않습니다.
+            if error.raw is not raw:
+                error.parser_raw = error.raw
+                error.raw = raw
             raise
         except Exception as error:
             # 패키지 밖 예외도 원문을 붙인 KorailProtocolError로 감싸며 재전송하지 않습니다.

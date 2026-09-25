@@ -48,6 +48,7 @@ from korail_mobile_api.mutation_models import (
     StationRefundExecutionRequest,
     StationRefundVerificationRequest,
 )
+from korail_mobile_api.mutation_parsers import parse_refund_ticket_response
 from korail_mobile_api.read_models import ProductDetailResponse, RefundCommissionResponse, TrainScheduleItem
 
 COMMON = {"Device": "SYNTH-ANDROID", "Version": "SYNTH-706", "Key": "SYNTH-KEY", "lang": "SYNTH-LANG"}
@@ -776,7 +777,8 @@ def test_parser_failure_retains_whole_response_and_never_retries(
     [("FAIL", True), ("SUCC", False), ("SYNTH-UNKNOWN", False), (None, False), ("", False)],
 )
 def test_cancel_two_stage_non_fail_policy(first_result: Any, stops: bool) -> None:
-    """MyReservationViewModel.smali:5589,5707,6284; CommonOut.smali:2493-2574. FAIL literal is observed, not decrypted."""
+    """MyReservationViewModel.smali:5589,5707,6284; CommonOut.smali:2493-2560.
+    FAIL literal is observed, not decrypted."""
     case = next(c for c in CASES if c.name == "cancel_unpaid_hold")
     responses = [
         {**BASE, "strResult": first_result, "h_msg_cd": "SYNTH-FIRST"},
@@ -1475,6 +1477,53 @@ def test_recalculation_rows_come_from_the_first_journey_seats_like_the_app() -> 
         PriceRecalculationRequest.for_hold(hold(), ["SYNTH-NEW"])
     with pytest.raises(KorailProtocolError, match="successful hold"):
         PriceRecalculationRequest.for_hold(hold(journeys=journeys, str_result="FAIL"), ["", "SYNTH-NEW"])
+
+
+@pytest.mark.parametrize(
+    "value,expected", [(1, "1"), (True, None), ({"code": "1"}, None), (["1"], None), (1.5, None)]
+)
+def test_recalculation_rows_read_only_strings_and_json_integers(value: Any, expected: str | None) -> None:
+    """ReservationOutSeatInfo.java:80-109: String getters; a JSON integer is its string, anything else is
+    refused."""
+    seat = {"h_psg_tp_cd": value, "h_psrm_cl_cd": "1", "h_dcnt_knd_cd1": "000", "dcnt_reld_no": None}
+    held = hold(journeys=(ReservationJourney(raw={"seat_infos": {"seat_info": [seat]}}),))
+    if expected is None:
+        with pytest.raises(KorailProtocolError, match="h_psg_tp_cd"):
+            PriceRecalculationRequest.for_hold(held, ["SYNTH-NEW"])
+    else:
+        request = PriceRecalculationRequest.for_hold(held, ["SYNTH-NEW"])
+        assert request.rows == (PriceRecalculationRow(expected, "1", "000", "SYNTH-NEW", ""),)
+
+
+def test_recalculation_form_keeps_the_retrofit_field_order() -> None:
+    """NetworkApi.java:584; RequestFactory.java:89-101: the FieldMap, including the four scalars, comes first
+    and the six @Field lists follow in declaration order."""
+    h = Harness([hold_raw()], "POST", ("certification.PriceReCalculation",), recalc_form(txtPsrmClCd1="2"))
+    try:
+        h.client.recalculate_price(recalc_request(cabin_class_code="2"))
+        keys = [key for key, _ in parse_qsl(h.seen[0].content.decode(), keep_blank_values=True)]
+    finally:
+        h.close()
+    lists = ("psg_tp_dv_cd", "psrm_cl_cd", "dcnt_knd_cd1", "hidDscpNo", "hidDcntKndCd", "hidFmlyNo")
+    assert keys[-12:] == [key for key in lists for _ in range(2)]
+    assert "txtPsrmClCd1" in keys[:-12]
+
+
+def test_mutation_parser_keeps_the_whole_response_when_called_directly() -> None:
+    """RefundTicketOut.java:48-53; StlList.java:46-55: a bad settlement row fails with the whole response on
+    .raw and the row on .parser_raw, directly and through the client."""
+    row = {"stl_mns_cd": True}
+    raw = {**BASE, "stlList": [row]}
+    with pytest.raises(KorailProtocolError) as caught:
+        parse_refund_ticket_response(raw)
+    assert caught.value.raw is raw and caught.value.parser_raw is row
+    h = Harness([raw], "POST", ("refunds.RefundsRequest",), refund_form(trnNo="90001"))
+    try:
+        with pytest.raises(KorailProtocolError) as caught:
+            h.client.refund(ticket(), commission=COMMISSION)
+        assert caught.value.raw == raw and caught.value.parser_raw == row
+    finally:
+        h.close()
 
 
 def test_standby_holds_are_not_payable() -> None:
