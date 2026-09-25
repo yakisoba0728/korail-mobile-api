@@ -1,8 +1,8 @@
 # 변경 이력
 
-## [Unreleased] — 첫 PyPI 배포 준비
+## [Unreleased]
 
-이 판의 PyPI·TestPyPI 업로드, Git 태그, 릴리스는 아직 만들지 않았습니다. v1.0.0~v1.1.1 은 GitHub 릴리스로 공개했으며 당시 기록은
+이 판의 Git 태그와 릴리스는 아직 만들지 않았고, PyPI 에는 올리지 않습니다. v1.0.0~v1.1.1 은 GitHub 릴리스로 공개했으며 당시 기록은
 [v1.1.1 태그의 CHANGELOG](https://github.com/yakisoba0728/korail-mobile-api/blob/v1.1.1/CHANGELOG.md)에 있습니다. 배포 버전은
 `src/korail_mobile_api/__init__.py`의 `__version__`에서만 결정합니다.
 
@@ -19,7 +19,7 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 **메서드·공개 이름·모듈**
 
 - 메서드 4개를 없앴습니다: `get_gift_ticket_list`, `get_limousine_schedule_view`, `get_platform_numbers`, `pay_with_fake_card`.
-- 최상위 공개 이름이 222개에서 214개가 됐습니다(36개 제거, 28개 추가). 선물 승차권·공항버스 일정 보기·승강장 번호·사전 동의 관련 이름과
+- 최상위 공개 이름이 222개에서 223개가 됐습니다(36개 제거, 37개 추가). 선물 승차권·공항버스 일정 보기·승강장 번호·사전 동의 관련 이름과
   `SELF_SEAT_CHANGE_ROOM_CLASS_CODES`·`inquiry_action` 18개는 삭제했고, 상수·저수준 대기열·헬퍼 18개는 하위 모듈(`constants`, `config`,
   `errors`, `netfunnel`, `read_payloads`)에만 남겼습니다.
 - 하위 모듈 `consent`, `redaction`, `safety` 를 없앴고, `live` 에서 `live_enabled`, `read_credentials_from_env`,
@@ -82,13 +82,21 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 ### 추가
 
 - 메서드 4개: `cancel_product_reservation`, `reserve_limousine`, `verify_station_ticket_refund`, `execute_station_ticket_refund`.
+- 앱에만 있던 경로의 메서드 7개.
+  - `get_delay_certificate`·`get_delay_return_receipt`: 지난 승차권의 지연확인증과 지연료 반환 영수증(NetworkApi.java:347-357).
+  - `get_self_checkin_info`·`check_self_checkin_seat`·`register_self_checkin`·`cancel_self_checkin`: 자유석 셀프 체크인
+    (NetworkApi.java:288-290,674-684). 입력은 `get_refund_ticket_detail` 의 결과이며 좌석 확인·등록은 좌석 테이블 QR 이 필요합니다.
+  - `retrieve_delivered_ticket`: 전달한 승차권 회수(NetworkApi.java:642-644). 입력은 `get_pbp_acceptance_specifications` 의
+    승차권입니다.
+  - 여행상품 검색(`/ebizcom/gdLstDtl.do`)은 서버가 보호된 `funcDvCd` 를 요구해 공개 API 에 넣지 않고 `_travel_search_unsupported.py` 에
+    기록용으로 남겼습니다.
 - 기존 메서드의 키워드 인자(예: `seat_attribute_code`, `use_special_schedule`, `peak_season`, `check_first`, `commission`, `txt_index`)와
   공개 모델 28개(예: `ProductCancelResponse`).
 - `TrainSearchQuery` 의 `teenager_passengers`·`infant_passengers`·`guide_dog_passengers`: 앱처럼 청소년·안내견은 어른 칸, 유아는 어린이
   칸에 더해 조회합니다(TrainScheduleViewModel.java:280-306,3050-3075).
 - `ReservationHoldResponse.payable`: 앱은 예약대기 홀드를 결제하지 않고 대기 옵션만 저장합니다. `reserve`·`reserve_transfer` 가 STANDBY
   홀드에 `False` 를 넣고 `pay_with_card` 는 전송 전에 거절합니다. 병합 첫 홀드는 앱의 병합 화면에서도 결제할 수 있어 `True` 입니다.
-- 77개 공개 메서드의 합성 HTTP 스모크, 오프라인 패키징 검사, CI 의 최소 의존성 작업과 `mypy --strict`. CI 에는 업로드 작업이 없습니다.
+- 84개 공개 메서드의 합성 HTTP 스모크, 오프라인 패키징 검사, CI 의 최소 의존성 작업과 `mypy --strict`. CI 에는 업로드 작업이 없습니다.
 
 ### 수정
 
@@ -159,6 +167,9 @@ v1.1.1 에서 올리는 코드는 아래를 확인하십시오. 모델은 위치
 - 2026-09-25 에 바뀐 요청 순서로 다시 확인했습니다(모두 이전과 같은 결과). 승차권 목록, 호차 13개·좌석 56석 조회, 좌석지정 홀드
   21,500원(지정 호차), 환승 홀드 2구간 48,100원, 공항버스 홀드 16,000원은 모두 취소했습니다. 서울→영등포 KTX 를 7,500원
   결제(IRT000000)한 뒤 수수료 조회 7,500원·수수료 0원, 환불 IRT200277 이었고 끝난 뒤 승차권·홀드가 없었습니다.
+- 2026-09-25 에 새 조회를 지난 승차권으로 확인했습니다. 지연된 승차권 2장의 지연확인증은 SUCC/IAZ000006 과 행 1개였고 행에 `runDt` 가
+  없어 선택으로 읽습니다. 지연되지 않은 승차권은 WRT400456, 지연료 반환 영수증은 IRZ000005, 셀프 체크인 정보는 WRZ000001 이었습니다.
+  여행상품 검색은 WRR000100(입력값 오류(funcDvCd))이었습니다. 셀프 체크인 등록·좌석 확인·취소와 승차권 회수는 보내지 않았습니다.
 - 일반실 매진·입석 가능 행의 입석 전용 홀드는 보내지 않습니다. 앱의 입석 판정은 보호된 운행중지·대기·병합 판정을 먼저 거치므로
   (TrainScheduleOutTrainInfo.java:2810-2885) 라이브러리가 같은 행을 가려낼 수 없습니다. 입석+좌석은 `MERGE_STANDING` 입니다.
 - N카드 6개 기능의 미검증 상태와 기존 미지원 기능 범위를 유지합니다.

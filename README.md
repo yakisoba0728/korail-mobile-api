@@ -27,13 +27,13 @@ KORAIL 안드로이드 앱 7.0.6의 요청·응답 구조를 바탕으로 만든
 
 ## 설치
 
-Python **3.11 이상**이 필요합니다. 배포 이름은 `korail-mobile-api`, import 이름은 `korail_mobile_api`입니다. PyPI에 게시된 뒤에는 다음과 같이 설치합니다.
+Python **3.11 이상**이 필요합니다. 배포 이름은 `korail-mobile-api`, import 이름은 `korail_mobile_api`입니다. PyPI에는 올리지 않으므로 GitHub 저장소에서 설치합니다.
 
 ```sh
-python -m pip install korail-mobile-api
+python -m pip install "git+https://github.com/yakisoba0728/korail-mobile-api"
 ```
 
-게시 전에는 저장소 루트에서 `python -m pip install .` 또는 빌드한 wheel을 설치하십시오. 실행 의존성은 `httpx>=0.24.1`, `cryptography>=42.0.8`이며 상한은 두지 않습니다. 하한은 Python 3.11에서 전체 오프라인 테스트가 통과한 정확한 버전이고, CI의 minimum 작업이 같은 버전을 설치해 다시 확인합니다.
+저장소를 받았다면 루트에서 `python -m pip install .` 로 설치해도 됩니다. 실행 의존성은 `httpx>=0.24.1`, `cryptography>=42.0.8`이며 상한은 두지 않습니다. 하한은 Python 3.11에서 전체 오프라인 테스트가 통과한 정확한 버전이고, CI의 minimum 작업이 같은 버전을 설치해 다시 확인합니다.
 
 ## 빠른 시작
 
@@ -191,7 +191,7 @@ config = KorailConfig(netfunnel_wait_limit=120.0)
 
 ## 공개 API와 버전 정책
 
-**SemVer(major.minor.patch)**를 따릅니다. 버전의 단일 원본은 `korail_mobile_api.__version__`이며 wheel·sdist 메타데이터는 이 값을 읽습니다. v1.0.0~v1.1.1은 GitHub 릴리스로만 공개했고 PyPI에는 아직 올리지 않았습니다. 현재 소스는 v1.1.1과 호환되지 않는 변경을 포함하므로([변경 이력](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)) SemVer로는 major 변경에 해당합니다. 첫 PyPI 버전 번호는 배포 때 정하며, 이 문서가 업로드 완료를 뜻하지는 않습니다.
+**SemVer(major.minor.patch)**를 따릅니다. 버전의 단일 원본은 `korail_mobile_api.__version__`이며 wheel·sdist 메타데이터는 이 값을 읽습니다. v1.0.0~v1.1.1은 GitHub 릴리스로 공개했고 PyPI에는 올리지 않습니다. 현재 소스는 v1.1.1과 호환되지 않는 변경을 포함하므로([변경 이력](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)) SemVer로는 major 변경에 해당합니다.
 
 호환성 약속은 최상위 `__all__`의 클라이언트·설정·요청/응답 모델·열거형·예외·타입 별칭, `KorailClient`의 공개 메서드 서명과 명시된 의미, 공개 모델의 필드·생성자, 문서화된 예외 종류와 `code`·`raw` 보존 계약입니다. 이름 제거, 호환되지 않는 서명·반환 타입 변경, 지원 Python 하한 상향은 major 변경으로 다룹니다. 호환되는 기능 추가는 minor, 기존 계약의 오류 수정은 patch입니다. 모델 필드 추가도 기존 위치 인자 호출을 깨지 않는 경우에만 minor로 다룹니다.
 
@@ -237,6 +237,10 @@ wheel에는 실행 패키지와 `py.typed`, 메타데이터·LICENSE만 포함�
 
 그래서 라이브러리는 이미 만들어진 여행상품 예약의 조회(`get_product_reservations`, `get_product_detail`)와 취소(`cancel_product_reservation`)만 지원합니다. 2026-09-24에 웹에서 만든 결제 전 예약으로 조회와 취소(수수료 0원)를 확인했습니다. 결제된 여행상품의 환불은 결제를 할 수 없어 확인하지 못했습니다.
 
+### 여행상품 검색
+
+앱의 여행상품 검색(`/ebizcom/gdLstDtl.do`)은 검색 종류(`funcDvCd`)·정렬(`bltnLstOrdr`)·쪽당 건수(`pgPrCnt`)를 늘 싣는데, 세 값 모두 앱에서 보호돼 있습니다. 2026-09-25 실서버는 `funcDvCd` 없이 보낸 검색을 `WRR000100`(입력값 오류(funcDvCd))으로 거절했습니다. 보호값을 추측하지 않으므로 공개 API에서 빼고 기록용으로 `src/korail_mobile_api/_travel_search_unsupported.py`에 남겨 두었습니다. 검색 결과의 상품 상세는 앱에서도 웹 화면입니다.
+
 ### 간편(소셜) 로그인
 
 앱의 카카오·네이버·구글 로그인은 각 제공자 SDK로 먼저 인증한 뒤, 그 결과로 받은 고객 식별값을 KORAIL 로그인에 보냅니다. 제공자 인증은 기기와 앱에 묶인 외부 SDK 흐름이라 라이브러리가 대신할 수 없고, 함께 보내는 `checkValidPw` 값도 앱에서 보호돼 있습니다. 소셜 계정으로 실서버에서 확인한 적도 없어서, `login_social`은 공개 API에서 빼고 기록용으로 `src/korail_mobile_api/_social_login_unsupported.py`에 남겨 두었습니다. 로그인은 회원번호·전화번호·이메일과 비밀번호(`login`)로 합니다.
@@ -257,3 +261,17 @@ N카드 관련 기능은 앱 코드와 같게 만들어 두었지만, N카드가
 | `reserve_with_discount_card` | N카드로 좌석 홀드 | N카드 없음 |
 
 N카드 결제는 여행상품과 같은 통합결제(`pay.intgStl.do`)라 역시 보호 상수 `stlPrsJobId`에 막혀 있습니다.
+
+### 셀프 체크인·전달 승차권 회수
+
+앱 코드와 같게 만들었지만 필요한 승차권 상태를 만들 수 없어 **검증 못 함**인 기능입니다. 조회는 실서버에 보내 응답 코드만 확인했습니다.
+
+| 메서드 | 역할 | 확인한 것 / 검증 못 한 이유 |
+|---|---|---|
+| `get_self_checkin_info` | 셀프 체크인한 자유석 정보 | 체크인하지 않은 승차권은 `WRZ000001`(2026-09-25). 체크인한 승차권 없음 |
+| `check_self_checkin_seat` | 좌석 테이블 QR 로 체크인할 좌석 확인 | 열차 안 좌석 QR 이 필요해 보내지 않음 |
+| `register_self_checkin` | 셀프 체크인 등록 | 같은 이유. 앱 안내상 부정 사용 시 부가금이 있어 가짜 값은 보내지 않음 |
+| `cancel_self_checkin` | 셀프 체크인 취소 | 체크인한 승차권 없음 |
+| `retrieve_delivered_ticket` | 다른 회원에게 전달한 승차권 회수 | 전달한 승차권 없음(전달하면 다른 회원에게 실제 승차권이 감) |
+
+지연 관련 조회(`get_delay_certificate`, `get_delay_return_receipt`)는 지원합니다. 2026-09-25 에 지연된 지난 승차권의 지연확인증을 받았고, 지연료를 돌려받지 않은 승차권의 반환 영수증은 `IRZ000005`(조회할 자료 없음)였습니다.

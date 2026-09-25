@@ -1771,3 +1771,124 @@ class RefundTicketDetailResponse(BaseKorailResponse):
     journeys: tuple[RefundTicketJourney, ...] = ()
     #: ``dcnt_crd_info`` — 이 "승차권"이 실은 할인카드(N카드)일 때만 있습니다. 보통 승차권에서는 ``None`` 입니다.
     discount_card: DiscountCardOnTicket | None = None
+
+
+@dataclass(frozen=True)
+class DelayCertificateRow:
+    """지연확인증 한 행을 담습니다. 여덟 키 모두 필수입니다(DelayCertificate.java:57-60). 앱은 dlayArvFlg 가 보호된 1글자 값과 같은 행만
+    보여 주므로(DelayCertificateViewModel.java:139-150) 이 라이브러리는 거르지 않고 모두 돌려줍니다."""
+
+    run_day: str
+    train_no: str
+    departure_station_code: str
+    arrival_station_code: str
+    arrival_station_name: str
+    delay_arrival_flag: str
+    #: trnDlayTm — 지연 분(앱 문구 "%4$s분 늦게 도착", strings.xml:553-554).
+    delay_minutes: str
+    #: runDt 는 마스크상 필수이지만 2026-09-25 실서버 응답에는 없었습니다. 없으면 None 이며 운행일은 run_day 에 있습니다(예: 요일이 붙은 날짜).
+    run_date: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+
+
+@dataclass(frozen=True)
+class DelayCertificateResponse(BaseKorailResponse):
+    """지연확인증(dlay.athnIsu.do)의 행을 담습니다. dlayList 는 선택·nullable 이라 없으면 빈
+    튜플입니다(DelayCertificateOut.java:53-59)."""
+
+    delays: tuple[DelayCertificateRow, ...] = ()
+
+
+@dataclass(frozen=True)
+class DelayReturnReceiptResponse(BaseKorailResponse):
+    """지연료 반환 영수증(dlay.pymtRcet.do)을 담습니다. 세 필드 모두 선택입니다(DelayReturnReceiptOut.java:53-69)."""
+
+    #: retDt — 반환일.
+    return_date: str | None = None
+    #: dlayFarePymtMtdNm — 반환 수단 이름.
+    payment_method_name: str | None = None
+    #: dlayFareRetAmt — 반환 금액.
+    return_amount: str | None = None
+
+
+@dataclass(frozen=True)
+class TravelProduct:
+    """여행상품 검색 결과 한 건을 담습니다. 열두 필드 모두 선택입니다(TravelProductItem.java:61-105). 앱은 goods_no·name·info_url·
+    representative_fare 만 씁니다(TravelSearchViewModel.java:1070-1074). goods_no 는 get_product_detail 의 예약번호가
+    아닙니다."""
+
+    goods_no: str | None = None
+    name: str | None = None
+    area_code: str | None = None
+    area_name: str | None = None
+    event_start_date: str | None = None
+    event_end_date: str | None = None
+    company_name: str | None = None
+    #: gdInfoUrlAdr — 앱은 이 값을 상품 이미지 주소로 씁니다.
+    info_url: str | None = None
+    representative_fare: str | None = None
+    description: str | None = None
+    standard_clause_1: str | None = None
+    standard_clause_2: str | None = None
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+
+
+@dataclass(frozen=True)
+class TravelProductSearchResponse(BaseKorailResponse):
+    """여행상품 검색(/ebizcom/gdLstDtl.do) 결과를 담습니다. lst 객체는 선택·nullable 이고(TravelSearchProductOut.java:48-55) 그 안의
+    gdList·qryCnt·pgCnt 도 모두 선택입니다(TravelProductList.java:56-68). 앱은 현재 쪽 번호가 page_count 이상이면 더 부르지 않습니다."""
+
+    products: tuple[TravelProduct, ...] = ()
+    #: qryCnt — 전체 결과 수.
+    query_count: str | None = None
+    #: pgCnt — 전체 쪽 수.
+    page_count: str | None = None
+
+
+@dataclass(frozen=True)
+class SelfCheckInSeat:
+    """셀프 체크인할 수 있는 좌석 한 행을 담습니다. 열여섯 키 모두 필수입니다(ConsList.java:63-65,86-101). 앱은 첫 행을 등록에
+    넘깁니다(SelfCheckInInfoViewModel.java:151-153,224-225)."""
+
+    pnr_no: str
+    journey_sequence: str
+    assignment_sequence: str
+    run_date: str
+    train_no: str
+    departure_construction_order: str
+    departure_station_code: str
+    arrival_construction_order: str
+    arrival_station_code: str
+    ticket_kind_code: str
+    train_group_code: str
+    car_no: str
+    seat_no: str
+    departure_datetime: str
+    arrival_datetime: str
+    #: cpsNo — 등록 요청에 그대로 되돌려 보내는 값입니다.
+    cps_no: str
+    raw: Mapping[str, Any] = field(default_factory=dict[str, Any], compare=False)
+
+
+@dataclass(frozen=True)
+class SelfCheckInSeatCheckResponse(BaseKorailResponse):
+    """셀프 체크인 좌석 확인(checkin.psbFlg.do) 결과를 담습니다. consList 는 필수·nullable 이고 null 이면 빈 튜플입니다
+    (SelfCheckInPossibleOut.java:50-55). 앱은 행이 없으면 아무것도 하지 않습니다."""
+
+    seats: tuple[SelfCheckInSeat, ...] = ()
+
+
+@dataclass(frozen=True)
+class SelfCheckInInfoResponse(BaseKorailResponse):
+    """셀프 체크인한 좌석 정보(checkin.info.do)를 담습니다. 열 키 모두 필수·nullable 입니다(SelfCheckInInfoOut.java:56-59,146)."""
+
+    pnr_no: str | None = None
+    train_no: str | None = None
+    departure_station_name: str | None = None
+    departure_time: str | None = None
+    arrival_station_name: str | None = None
+    arrival_time: str | None = None
+    car_no: str | None = None
+    seat_no: str | None = None
+    train_class_name: str | None = None
+    checkin_division_code: str | None = None

@@ -34,6 +34,27 @@ REFERENCE = p.OriginalTicketReference("TEST-WINDOW", "0102", "TEST-SEQUENCE", "T
 FULL_REFERENCE = replace(REFERENCE, sale_date=DATE)
 SECOND_REFERENCE = replace(FULL_REFERENCE, sale_sequence="TEST-SEQUENCE-2")
 PASS_DATA = m.PassMenuData(commuter_kind_code="TEST-KIND")
+DETAIL = m.RefundTicketDetailResponse(
+    sale_date=DATE,
+    original_sale_date="0102",
+    original_window_no="TEST-WINDOW",
+    original_sale_sequence="TEST-SEQUENCE",
+    original_return_password="TEST-RETURN",
+    journeys=(m.RefundTicketJourney(journey_sequence="001"),),
+)
+ABSENT_LIST = object()
+DELAY_KEYS = ("runDay", "trnNo", "dptRsStnCd", "arvRsStnCd", "arvRsStnNm", "dlayArvFlg", "trnDlayTm")
+CHECKIN_INFO_KEYS = (
+    "pnrNo trnNo dptRsStnNm dptTmQb arvRsStnNm arvTmQb scarNo seatNo stlbTrnClsfNm chcknDvCd".split()
+)
+CHECKIN_INFO_ATTRIBUTES = (
+    "pnr_no train_no departure_station_name departure_time arrival_station_name arrival_time car_no seat_no "
+    "train_class_name checkin_division_code"
+).split()
+CHECKIN_SEAT_KEYS = (
+    "pnrNo jrnySqno asgnSqno runDt trnNo dptStnConsOrdr dptRsStnCd arvStnConsOrdr arvRsStnCd tkKndCd "
+    "trnGpCd scarNo seatNo dptDttm arvDttm cpsNo"
+).split()
 
 
 def success(**fields: Any) -> dict[str, Any]:
@@ -714,6 +735,60 @@ CASES = [
         ),
         "NetworkApi.java:511-512; MyTicketListIn.java:62",
     ),
+    case(
+        "get_delay_certificate",
+        "dlay.athnIsu.do",
+        {"ticket": REFERENCE},
+        {
+            "ogtkSaleWctNo": "TEST-WINDOW",
+            "ogtkSaleDd": "0102",
+            "ogtkSaleSqno": "TEST-SEQUENCE",
+            "ogtkRetPwd": "TEST-RETURN",
+        },
+        success(dlayList=[{**dict.fromkeys(DELAY_KEYS, "TEST"), "trnDlayTm": "15", "runDt": DATE}]),
+        (("delays.0.delay_minutes", "15"), ("delays.0.run_date", DATE)),
+        "NetworkApi.java:347-349; DelayCertificateIn.java:52; DelayCertificate.java:57",
+    ),
+    case(
+        "get_delay_return_receipt",
+        "dlay.pymtRcet.do",
+        {"ticket": REFERENCE},
+        {"saleWctNo": "TEST-WINDOW", "saleDd": "0102", "saleSqno": "TEST-SEQUENCE", "tkRetPwd": "TEST-RETURN"},
+        success(retDt=DATE, dlayFarePymtMtdNm="TEST-METHOD", dlayFareRetAmt="1200"),
+        (("return_amount", "1200"), ("payment_method_name", "TEST-METHOD")),
+        "NetworkApi.java:355-357; DelayReturnReceiptIn.java:52; DelayReturnReceiptOut.java:53-69",
+    ),
+    case(
+        "get_self_checkin_info",
+        "checkin.info.do",
+        {"detail": DETAIL},
+        {
+            "saleWctNo": "TEST-WINDOW",
+            "saleDt": DATE,
+            "saleSqno": "TEST-SEQUENCE",
+            "tkRetPwd": "TEST-RETURN",
+            "jrnySqno": "001",
+        },
+        success(**{**dict.fromkeys(CHECKIN_INFO_KEYS, "TEST"), "seatNo": "7A"}),
+        (("seat_no", "7A"),),
+        "NetworkApi.java:674-676; SelfCheckInInfoIn.java:55; SelfCheckInInfoOut.java:56-59",
+    ),
+    case(
+        "check_self_checkin_seat",
+        "checkin.psbFlg.do",
+        {"detail": DETAIL, "qr_code": "TEST-QR"},
+        {
+            "qrcode": "TEST-QR",
+            "saleWctNo": "TEST-WINDOW",
+            "saleDd": "0102",
+            "saleSqno": "TEST-SEQUENCE",
+            "tkRetPwd": "TEST-RETURN",
+            "jrnySqno": "001",
+        },
+        success(consList=[{**dict.fromkeys(CHECKIN_SEAT_KEYS, "TEST"), "cpsNo": "TEST-CPS"}]),
+        (("seats.0.cps_no", "TEST-CPS"),),
+        "NetworkApi.java:678-680; SelfCheckInPossibleIn.java:56; ConsList.java:63-101",
+    ),
 ]
 BY_NAME = {c.method: c for c in CASES}
 
@@ -864,6 +939,12 @@ REQUIRED_GROUPS = [
     ("get_trip_change_dates", (), ("tripChgDates",)),  # TipChgDateInquiryOut.java:53 mask 16
     ("get_recent_delivery_history", (), ("acepList",)),  # RecentDeliveryHistoryOut.java:51-57 mask 24
     ("get_recent_delivery_history", ("acepList", 0), RECENT_KEYS),  # DeliveryHistoryData.java:52 mask 63
+    (
+        "get_delay_certificate",
+        ("dlayList", 0),
+        DELAY_KEYS,
+    ),  # DelayCertificate.java:57-60 mask 255 (runDt nullable)
+    ("check_self_checkin_seat", ("consList", 0), CHECKIN_SEAT_KEYS),  # ConsList.java:63-65 mask 65535
     ("get_delivery_recipient", (), RECIPIENT_KEYS),  # DeliveryRcvCustOut.java:51 mask 120
     ("get_pbp_acceptance_specifications", (), ("tkList",)),  # DeliveredTicketOut.java:50 mask 8
     ("get_pbp_acceptance_specifications", ("tkList", 0), (*PBP_TICKET_KEYS, "jrnyList")),  # Tk.java:54 mask 63
@@ -1028,6 +1109,63 @@ def test_recent_recipient_list_structure(bad, make_client) -> None:
     assert error.value.raw == payload
 
 
+@pytest.mark.parametrize(
+    "name,key",
+    [("check_self_checkin_seat", "consList"), *(("get_self_checkin_info", key) for key in CHECKIN_INFO_KEYS)],
+)
+def test_checkin_required_nullable_keys(name, key, make_client) -> None:
+    """SelfCheckInPossibleOut.java:50-55 and SelfCheckInInfoOut.java:56-59: required keys whose value may
+    be null."""
+    entry = BY_NAME[name]
+    payload = deepcopy(entry.response)
+    payload[key] = None
+    client, _ = make_client(payload)
+    result = getattr(client, name)(**entry.kwargs)
+    assert result.raw == payload
+    if key == "consList":
+        assert result.seats == ()
+    else:
+        attributes = dict(zip(CHECKIN_INFO_KEYS, CHECKIN_INFO_ATTRIBUTES, strict=True))
+        assert getattr(result, attributes[key]) is None
+    del payload[key]
+    client, _ = make_client(payload)
+    with pytest.raises(KorailProtocolError) as error:
+        getattr(client, name)(**entry.kwargs)
+    assert error.value.raw == payload
+
+
+def test_delay_certificate_run_date_is_optional_like_the_live_server(make_client) -> None:
+    """DelayCertificate.java:57-60 marks runDt required, but 2026-09-25 live rows carried only the other seven
+    keys;
+    dlayList itself is optional."""
+    entry = BY_NAME["get_delay_certificate"]
+    payload = deepcopy(entry.response)
+    for value in (None, ABSENT_LIST):
+        if value is ABSENT_LIST:
+            del payload["dlayList"][0]["runDt"]
+        else:
+            payload["dlayList"][0]["runDt"] = value
+        client, _ = make_client(payload)
+        assert client.get_delay_certificate(**entry.kwargs).delays[0].run_date is None
+    for listing in (None, ABSENT_LIST):
+        empty = success() if listing is ABSENT_LIST else success(dlayList=None)
+        client, _ = make_client(empty)
+        assert client.get_delay_certificate(**entry.kwargs).delays == ()
+
+
+def test_checkin_forms_omit_the_journey_sequence_without_journeys(make_client) -> None:
+    """TicketDetailOut.java:1718-1727: without journeys the app's jrnySqno is null, which the library omits."""
+    entry = BY_NAME["get_self_checkin_info"]
+    client, calls = make_client(entry.response)
+    client.get_self_checkin_info(replace(DETAIL, journeys=()))
+    assert "jrnySqno" not in dict(wire_pairs(calls[0]))
+    with pytest.raises(KorailProtocolError):
+        client.get_self_checkin_info(replace(DETAIL, original_window_no=None))
+    with pytest.raises(KorailProtocolError):
+        client.check_self_checkin_seat(DETAIL, "")
+    assert len(calls) == 1
+
+
 def test_recent_changed_reservation_no_may_be_absent(make_client) -> None:
     """2026-09-24 live: chgePbpRsvNo was absent from a successful response; acepList was present."""
     payload = deepcopy(RECENT_BODY)
@@ -1050,6 +1188,8 @@ def test_recent_changed_reservation_no_may_be_absent(make_client) -> None:
             "get_delivery_recipient",
             "get_pbp_acceptance_specifications",
             "get_recent_delivery_history",
+            "get_self_checkin_info",
+            "check_self_checkin_seat",
         }
     ],
     ids=lambda c: c.method,
@@ -1193,11 +1333,11 @@ def test_p058_never_parsed_as_account_result(entry, make_client) -> None:
 
 
 def test_required_method_set_is_exact() -> None:
-    """33 explicitly enumerated methods: no case silently substitutes a different read."""
+    """37 explicitly enumerated methods: no case silently substitutes a different read."""
     expected = set(
-        "get_cart_list get_deposit_banks get_delay_discount_tickets get_discount_coupons get_korail_point_summary get_mileage_history get_discount_card_usage_history get_discount_card_schedule get_pass_available_dates get_pass_schedule get_trip_menu get_pass_menu get_crew_request_list get_commuter_kind_menu get_commuter_info get_product_reservations get_product_detail get_ticket_receipt get_reservation_history get_seat_assignment_schedule get_multi_child_discount_targets get_customer_trip_info get_trip_change_dates get_delivery_recipient check_ticket_duplication get_pbp_acceptance_specifications get_original_ticket_inquiry get_self_seat_change_info get_recent_delivery_history get_ticket_reservation_detail get_refund_commission get_refund_ticket_detail get_ticket_list".split()
+        "get_cart_list get_deposit_banks get_delay_discount_tickets get_discount_coupons get_korail_point_summary get_mileage_history get_discount_card_usage_history get_discount_card_schedule get_pass_available_dates get_pass_schedule get_trip_menu get_pass_menu get_crew_request_list get_commuter_kind_menu get_commuter_info get_product_reservations get_product_detail get_ticket_receipt get_reservation_history get_seat_assignment_schedule get_multi_child_discount_targets get_customer_trip_info get_trip_change_dates get_delivery_recipient check_ticket_duplication get_pbp_acceptance_specifications get_original_ticket_inquiry get_self_seat_change_info get_recent_delivery_history get_ticket_reservation_detail get_refund_commission get_refund_ticket_detail get_ticket_list get_delay_certificate get_delay_return_receipt get_self_checkin_info check_self_checkin_seat".split()
     )
-    assert set(BY_NAME) == expected and len(CASES) == 33
+    assert set(BY_NAME) == expected and len(CASES) == 37
 
 
 def test_socket_guard_active() -> None:

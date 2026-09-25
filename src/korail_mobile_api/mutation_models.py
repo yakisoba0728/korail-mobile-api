@@ -744,3 +744,26 @@ class CartAddRequest:
     NetworkApi.java:265-267)."""
 
     pnr_no: str
+
+
+@dataclass(frozen=True)
+class SelfCheckInRegisterResponse(BaseKorailResponse):
+    """셀프 체크인 등록(checkin.reg.do) 결과를 담습니다. msgId 는 필수·nullable 이며 앱은 읽지
+    않습니다(SelfCheckInRegisterOut.java:47-52)."""
+
+    message_id: str | None = None
+
+
+@dataclass(frozen=True)
+class SelfCheckInCancelResponse(BaseKorailResponse):
+    """셀프 체크인 취소(checkin.cnc.do) 결과를 담습니다. msgId 는 선택입니다(SelfCheckInCancelOut.java:50-56)."""
+
+    message_id: str | None = None
+
+
+@dataclass(frozen=True)
+class DeliveredTicketRetrievalResponse(BaseKorailResponse):
+    """전달한 승차권 회수(tk.pbpWdrw.do) 결과를 담습니다. prsList 는 필수이고 각 행의 prsFlg 도 필수입니다(RetrieveTicketOut.java:54-59,
+    Prs.java:46-50). 앱은 성공 여부와 h_msg_txt 만 씁니다."""
+
+    process_flags: tuple[str, ...] = ()

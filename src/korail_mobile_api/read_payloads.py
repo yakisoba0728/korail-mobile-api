@@ -23,6 +23,7 @@ from .read_models import (
     CommuterInfoResponse,
     MaasServiceDetail,
     PassMenuData,
+    RefundTicketDetailResponse,
 )
 
 if TYPE_CHECKING:
@@ -1180,3 +1181,115 @@ def build_refund_ticket_detail_form(
     if txt_index is not None:
         form["txtIndex"] = _required_text(txt_index, "txt_index")
     return form
+
+
+def build_delay_certificate_form(ticket: OriginalTicketReference) -> dict[str, str]:
+    """지연확인증 조회 폼입니다. 앱은 승차권 상세의 h_orgtk_wct_no·h_orgtk_ret_sale_dt·h_orgtk_sale_sqno·h_orgtk_ret_pwd 를
+    넣습니다(DelayCertificateViewModel.java:94; DelayCertificateIn.java:52). sale_date 에는 return_sale_date 를
+    쓰십시오."""
+    reference = _exact_original_ticket_reference(ticket)
+    return {
+        "ogtkSaleWctNo": _required_text(reference.sale_window_no, "sale_window_no"),
+        "ogtkSaleDd": _required_text(reference.sale_date, "sale_date"),
+        "ogtkSaleSqno": _required_text(reference.sale_sequence, "sale_sequence"),
+        "ogtkRetPwd": _required_text(reference.return_password, "return_password"),
+    }
+
+
+def build_delay_return_receipt_form(ticket: OriginalTicketReference) -> dict[str, str]:
+    """지연료 반환 영수증 조회 폼입니다. 값의 출처는 지연확인증과 같습니다(DelayReturnReceiptViewModel.java:88;
+    TicketReceiptRouteKt.java:309-313; DelayReturnReceiptIn.java:52)."""
+    reference = _exact_original_ticket_reference(ticket)
+    return {
+        "saleWctNo": _required_text(reference.sale_window_no, "sale_window_no"),
+        "saleDd": _required_text(reference.sale_date, "sale_date"),
+        "saleSqno": _required_text(reference.sale_sequence, "sale_sequence"),
+        "tkRetPwd": _required_text(reference.return_password, "return_password"),
+    }
+
+
+# 앱은 검색어를 한 칸에만 넣습니다(TravelSearchViewModel.java:877-904).
+_TRAVEL_KEYWORD_KEYS = {"name": "gdNm", "area": "gdTripArNm", "theme": "gdThmNm", "category": "gdCateCdNm"}
+
+
+@dataclass(frozen=True)
+class TravelProductSearchQuery:
+    """여행상품 검색 조건을 구성합니다. 앱은 검색어를 keyword_field 에 맞는 한 칸에 넣고, 메타데이터에서 찾지 못하면
+    상품명(name)으로 찾습니다(TravelSearchViewModel.java:1325-1353). 앱이 늘 싣는 검색 종류(funcDvCd, SearchFunctionType.java:18),
+    정렬(bltnLstOrdr, SearchOrderType.java:21-23), 쪽당 건수(pgPrCnt, TravelSearchProductIn.java:78)는 보호돼 있어 기본으로 보내지
+    않습니다. 알고 있으면 function_code·order_code·page_size 로 넘기십시오. 앱의 첫 쪽 번호도 보호된 비교로 정해지므로(:296-303)
+    page_no 의 기본값 1 은 라이브러리 값입니다. 2026-09-25 실서버가 funcDvCd 없는 검색을 거절해 공개 API 에서 뺐고 기록용
+    _travel_search_unsupported 에서만 씁니다."""
+
+    keyword: str
+    keyword_field: Literal["name", "area", "theme", "category"] = "name"
+    page_no: int = 1
+    function_code: str | None = None
+    order_code: str | None = None
+    page_size: str | None = None
+
+    def __post_init__(self) -> None:
+        _required_text(self.keyword, "keyword")
+        if self.keyword_field not in _TRAVEL_KEYWORD_KEYS:
+            raise KorailProtocolError("keyword_field must be one of name, area, theme, category")
+        _int_text(self.page_no, "page_no")
+        for name in ("function_code", "order_code", "page_size"):
+            value = getattr(self, name)
+            if value is not None:
+                _required_text(value, name)
+
+
+def build_travel_product_search_form(query: TravelProductSearchQuery) -> dict[str, str]:
+    """여행상품 검색 폼입니다. 키 순서는 TravelSearchProductIn 합성 생성자(TravelSearchProductIn.java:60-81)의 순서이며 앱이 채우지 않는
+    gdNo·qryCnt·mrkWctNo 는 빈 값이라 평탄화에서 빠집니다."""
+    if not isinstance(query, TravelProductSearchQuery):
+        raise KorailProtocolError("query must be a TravelProductSearchQuery")
+    form: dict[str, str] = {}
+    if query.function_code is not None:
+        form["funcDvCd"] = query.function_code
+    form[_TRAVEL_KEYWORD_KEYS[query.keyword_field]] = query.keyword.strip()
+    if query.order_code is not None:
+        form["bltnLstOrdr"] = query.order_code
+    form["nowPgNo"] = _int_text(query.page_no, "page_no")
+    if query.page_size is not None:
+        form["pgPrCnt"] = query.page_size
+    return form
+
+
+def self_checkin_ticket_fields(
+    detail: RefundTicketDetailResponse,
+    *,
+    sale_date_key: Literal["saleDt", "saleDd"],
+) -> dict[str, str]:
+    """셀프 체크인 요청의 승차권 칸을 승차권 상세(get_refund_ticket_detail)에서 앱처럼 채웁니다. 가능 여부·등록은 saleDd 에
+    h_orgtk_ret_sale_dt 를, 정보·취소는 saleDt 에 h_sale_dt 를 넣습니다(SelfCheckInInfoViewModel.java:102-108,224-225;
+    SelfCheckInResultViewModel.java:111-112,249-250). jrnySqno 는 첫 여정의 h_jrny_sqno 이며 여정이 없으면 뺍니다."""
+    if not isinstance(detail, RefundTicketDetailResponse):
+        raise KorailProtocolError("detail must be a RefundTicketDetailResponse from get_refund_ticket_detail")
+    sale_date = detail.original_sale_date if sale_date_key == "saleDd" else detail.sale_date
+    fields = {
+        "saleWctNo": _required_text(detail.original_window_no, "original_window_no"),
+        sale_date_key: _required_text(
+            sale_date, "original_sale_date" if sale_date_key == "saleDd" else "sale_date"
+        ),
+        "saleSqno": _required_text(detail.original_sale_sequence, "original_sale_sequence"),
+        "tkRetPwd": _required_text(detail.original_return_password, "original_return_password"),
+    }
+    journey_sequence = detail.journeys[0].journey_sequence if detail.journeys else None
+    if journey_sequence is not None:
+        fields["jrnySqno"] = journey_sequence
+    return fields
+
+
+def build_self_checkin_info_form(detail: RefundTicketDetailResponse) -> dict[str, str]:
+    """셀프 체크인 정보 조회 폼입니다(SelfCheckInInfoIn.java:55)."""
+    return self_checkin_ticket_fields(detail, sale_date_key="saleDt")
+
+
+def build_self_checkin_seat_check_form(detail: RefundTicketDetailResponse, qr_code: str) -> dict[str, str]:
+    """셀프 체크인 좌석 확인 폼입니다(SelfCheckInPossibleIn.java:56). qr_code 는 좌석 테이블의 QR 을 스캔한 문자열이며 승차권 자체의
+    h_qrcode 가 아닙니다(SelfCheckInInfoRouteKt.java:241-254; strings.xml:3245-3247)."""
+    return {
+        "qrcode": _required_text(qr_code, "qr_code"),
+        **self_checkin_ticket_fields(detail, sale_date_key="saleDd"),
+    }

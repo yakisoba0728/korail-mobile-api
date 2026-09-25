@@ -46,7 +46,16 @@ from .mutation_models import (
     ReservationHoldResponse,
     StationRefundExecutionRequest,
 )
-from .read_models import CartItem, ProductDetailResponse, RefundCommissionResponse, TrainScheduleItem
+from .read_models import (
+    CartItem,
+    PbpAcceptanceTicket,
+    ProductDetailResponse,
+    RefundCommissionResponse,
+    RefundTicketDetailResponse,
+    SelfCheckInSeat,
+    TrainScheduleItem,
+)
+from .read_payloads import self_checkin_ticket_fields
 
 _DATE_RE = re.compile(r"[0-9]{8}")
 _TIME_RE = re.compile(r"[0-9]{6}")
@@ -1497,3 +1506,50 @@ def build_cart_add_form(
     form = _common_fields(config)
     form["hidPnrNo"] = pnr_no
     return form
+
+
+def build_self_checkin_register_form(
+    config: KorailConfig,
+    detail: RefundTicketDetailResponse,
+    seat: SelfCheckInSeat,
+) -> dict[str, str]:
+    """셀프 체크인 등록 폼입니다. 좌석 칸은 좌석 확인(check_self_checkin_seat)의 행에서, 승차권 칸은 상세에서 옵니다
+    (SelfCheckInInfoViewModel.java:224-225; SelfCheckInRegisterIn.java:59). jrnySqno 는 좌석 행이 아닌 상세의 값입니다."""
+    if not isinstance(seat, SelfCheckInSeat):
+        raise KorailProtocolError("seat must be a SelfCheckInSeat from check_self_checkin_seat")
+    return {
+        **_common_fields(config),
+        "cpsNo": _required_mutation_text(seat.cps_no, field="cps_no", context="self check-in"),
+        "scarNo": _required_mutation_text(seat.car_no, field="car_no", context="self check-in"),
+        "seatNo": _required_mutation_text(seat.seat_no, field="seat_no", context="self check-in"),
+        **self_checkin_ticket_fields(detail, sale_date_key="saleDd"),
+    }
+
+
+def build_self_checkin_cancel_form(config: KorailConfig, detail: RefundTicketDetailResponse) -> dict[str, str]:
+    """셀프 체크인 취소 폼입니다. 칸은 정보 조회와 같습니다(SelfCheckInResultViewModel.java:111-112; SelfCheckInCancelIn.java:53)."""
+    return {**_common_fields(config), **self_checkin_ticket_fields(detail, sale_date_key="saleDt")}
+
+
+def build_delivered_ticket_retrieval_form(
+    config: KorailConfig,
+    ticket: PbpAcceptanceTicket,
+) -> dict[str, str | list[str]]:
+    """전달한 승차권 회수 폼입니다. 앱은 첫 여정의 pbpRsvNo 로 묶은 승차권마다 한 번, 그 묶음의 pbpRsvNo 와 첫 승차권의 pnrNo 를
+    보냅니다(DeliveredTicketViewModel.java:185-205,283). pbpCnt 는 쌍의 수 1 이고, 두 목록은 FieldMap 뒤의 @Field 반복 키입니다
+    (NetworkApi.java:642-644)."""
+    if not isinstance(ticket, PbpAcceptanceTicket):
+        raise KorailProtocolError("ticket must be a PbpAcceptanceTicket from get_pbp_acceptance_specifications")
+    if not ticket.journeys:
+        raise KorailProtocolError("KORAIL delivered ticket retrieval needs the ticket's first journey")
+    context = "delivered ticket retrieval"
+    return {
+        **_common_fields(config),
+        "pbpCnt": "1",
+        "pbpRsvNo": [
+            _required_mutation_text(
+                ticket.journeys[0].pbp_reservation_no, field="pbp_reservation_no", context=context
+            )
+        ],
+        "pnrNo": [_required_mutation_text(ticket.pnr_no, field="pnr_no", context=context)],
+    }

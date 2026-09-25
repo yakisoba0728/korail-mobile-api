@@ -64,6 +64,38 @@ def _f8_arguments() -> dict[str, dict[str, Any]]:
         received_amount="1000",
     )
     ticket = api.OriginalTicketReference("SYNTHETIC-WINDOW", F8_DATE, "1", "SYNTHETIC-RETURN")
+    detail = api.RefundTicketDetailResponse(
+        sale_date=F8_DATE,
+        original_sale_date="0102",
+        original_window_no="SYNTHETIC-WINDOW",
+        original_sale_sequence="1",
+        original_return_password="SYNTHETIC-RETURN",
+        journeys=(api.RefundTicketJourney(journey_sequence="001"),),
+    )
+    checkin_seat = api.SelfCheckInSeat(
+        *("SYNTHETIC-PNR", "001", "01", F8_DATE, "90001", "1", "9901", "3", "9903", "11", "100", "0017", "5A"),
+        *(F8_DATE + "090000", F8_DATE + "110000", "SYNTHETIC-CPS"),
+    )
+    delivered = api.PbpAcceptanceTicket(
+        pnr_no="SYNTHETIC-PNR",
+        sale_date=F8_DATE,
+        sale_sequence="1",
+        sale_window_no="SYNTHETIC-WINDOW",
+        return_password="SYNTHETIC-RETURN",
+        journeys=(
+            api.PbpAcceptanceJourney(
+                acceptance_customer_name="SYNTHETIC-NAME",
+                acceptance_customer_phone="SYNTHETIC-PHONE",
+                journey_type_code="11",
+                member_division_name="SYNTHETIC-MEMBER",
+                acceptance_kind_name="SYNTHETIC-KIND",
+                pbp_reservation_no="SYNTHETIC-PBP",
+                registered_date=F8_DATE,
+                withdrawal_possible_flag="Y",
+                member_card_no="SYNTHETIC-CARD",
+            ),
+        ),
+    )
     schedule = api.LimousineSchedule(
         departure_date=F8_DATE,
         run_date=F8_DATE,
@@ -173,6 +205,13 @@ def _f8_arguments() -> dict[str, dict[str, Any]]:
         "get_refund_commission": {"ticket": ticket},
         "get_refund_ticket_detail": {"ticket": ticket},
         "get_ticket_list": {},
+        "get_delay_certificate": {"ticket": ticket},
+        "get_delay_return_receipt": {"ticket": ticket},
+        "retrieve_delivered_ticket": {"ticket": delivered},
+        "get_self_checkin_info": {"detail": detail},
+        "check_self_checkin_seat": {"detail": detail, "qr_code": "SYNTHETIC-QR"},
+        "register_self_checkin": {"detail": detail, "seat": checkin_seat},
+        "cancel_self_checkin": {"detail": detail},
         "reserve": {"train": train},
         "reserve_transfer": {
             "legs": (
@@ -360,7 +399,14 @@ F8_CASE_DATA: dict[str, Any] = json.loads(r"""
   "recalculate_price": {"return_type": "ReservationHoldResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.certification.PriceReCalculation","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"hidPnrNo": ["SYNTHETIC-PNR"],"txtJobId": ["1101"],"txtPsgGridcnt": ["1"],"psg_tp_dv_cd": ["1"],"hidDcntKndCd": [""],"dcnt_knd_cd1": ["000"],"hidDscpNo": [""],"psrm_cl_cd": ["1"],"hidFmlyNo": [""]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","h_pnr_no": "SYNTHETIC-PNR","h_jrny_cnt": "1","h_wct_no": "SYNTHETIC-WINDOW","h_tmp_job_sqno1": "1","h_tmp_job_sqno2": "2","h_tot_prc": "1000","h_rcvd_amt": "1000","f8_marker": "recalculate_price"}}]},
   "get_limousine_schedules": {"return_type": "LimousineScheduleResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.lmu.scdlQry.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"dptDt": ["20990102"],"dptRsStnCd": ["9901"],"arvRsStnCd": ["9903"],"trnGpCd": ["800"],"psrmClCd": ["1"],"dptTm": ["090000"],"trnNo": ["90001"],"seatAttCd": ["015"],"rsvSaleDvCd": ["1"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","trainList": [{"trnNo": "90001","dptDt": "20990102","runDt": "20990102","dptRsStnCd": "9901","arvRsStnCd": "9903"}],"f8_marker": "get_limousine_schedules"}}]},
   "get_limousine_seat_inventory": {"return_type": "LimousineSeatInventoryResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"trnClsfCd": ["80"],"trnGpCd": ["800"],"runDt": ["20990102"],"trnNo": ["90001"],"srcarNo": ["0001"],"psrmClCd": ["1"],"dptRsStnCd": ["9901"],"arvRsStnCd": ["9903"],"seatAttCd": ["015"],"dptStnRunOrdr": ["1"],"arvStnRunOrdr": ["3"],"totPsgCnt": ["1"],"isArrow": ["false"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","seatList": [{"seat_no": "1A","sale_psb_flg": "Y"}],"f8_marker": "get_limousine_seat_inventory"}}]},
-  "reserve_limousine": {"return_type": "ReservationHoldResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.certification.TicketReservation","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"txtMenuId": ["11"],"txtJobId": ["1101"],"hidFreeFlg": ["N"],"txtStndFlg": ["N"],"txtTotPsgCnt": ["1"],"txtCompaCnt1": ["1"],"txtPsgTpCd1": ["1"],"txtDiscKndCd1": ["000"],"txtSeatAttCd1": ["000"],"txtSeatAttCd2": ["000"],"txtSeatAttCd3": ["000"],"txtSeatAttCd4": ["015"],"txtSeatAttCd5": ["000"],"txtPsrmClCd1": ["1"],"txtJrnyCnt": ["1"],"txtJrnyTpCd1": ["11"],"txtJrnySqno1": ["001"],"txtTrnNo1": ["90001"],"txtTrnClsfCd1": ["80"],"txtTrnGpCd1": ["800"],"txtRunDt1": ["20990102"],"txtDptDt1": ["20990102"],"txtDptTm1": ["090000"],"txtDptRsStnCd1": ["9901"],"txtDptStnRunOrdr1": ["1"],"txtArvRsStnCd1": ["9903"],"txtArvStnRunOrdr1": ["3"],"txtSrcarCnt": ["1"],"txtSrcarNo1": ["0001"],"txtSeatNo1": ["1A"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","h_pnr_no": "SYNTHETIC-PNR","h_jrny_cnt": "1","h_wct_no": "SYNTHETIC-WINDOW","h_tmp_job_sqno1": "1","h_tmp_job_sqno2": "2","h_tot_prc": "1000","h_rcvd_amt": "1000","f8_marker": "recalculate_price"}}]}
+  "reserve_limousine": {"return_type": "ReservationHoldResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.certification.TicketReservation","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"txtMenuId": ["11"],"txtJobId": ["1101"],"hidFreeFlg": ["N"],"txtStndFlg": ["N"],"txtTotPsgCnt": ["1"],"txtCompaCnt1": ["1"],"txtPsgTpCd1": ["1"],"txtDiscKndCd1": ["000"],"txtSeatAttCd1": ["000"],"txtSeatAttCd2": ["000"],"txtSeatAttCd3": ["000"],"txtSeatAttCd4": ["015"],"txtSeatAttCd5": ["000"],"txtPsrmClCd1": ["1"],"txtJrnyCnt": ["1"],"txtJrnyTpCd1": ["11"],"txtJrnySqno1": ["001"],"txtTrnNo1": ["90001"],"txtTrnClsfCd1": ["80"],"txtTrnGpCd1": ["800"],"txtRunDt1": ["20990102"],"txtDptDt1": ["20990102"],"txtDptTm1": ["090000"],"txtDptRsStnCd1": ["9901"],"txtDptStnRunOrdr1": ["1"],"txtArvRsStnCd1": ["9903"],"txtArvStnRunOrdr1": ["3"],"txtSrcarCnt": ["1"],"txtSrcarNo1": ["0001"],"txtSeatNo1": ["1A"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","h_pnr_no": "SYNTHETIC-PNR","h_jrny_cnt": "1","h_wct_no": "SYNTHETIC-WINDOW","h_tmp_job_sqno1": "1","h_tmp_job_sqno2": "2","h_tot_prc": "1000","h_rcvd_amt": "1000","f8_marker": "recalculate_price"}}]},
+  "get_delay_certificate": {"return_type": "DelayCertificateResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.dlay.athnIsu.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"ogtkSaleWctNo": ["SYNTHETIC-WINDOW"],"ogtkSaleDd": ["20990102"],"ogtkSaleSqno": ["1"],"ogtkRetPwd": ["SYNTHETIC-RETURN"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","dlayList": [{"runDt": "20990102","runDay": "토","trnNo": "90001","dptRsStnCd": "9901","arvRsStnCd": "9903","arvRsStnNm": "도착시험역","dlayArvFlg": "Y","trnDlayTm": "20"}],"f8_marker": "get_delay_certificate"}}]},
+  "get_delay_return_receipt": {"return_type": "DelayReturnReceiptResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.dlay.pymtRcet.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"saleWctNo": ["SYNTHETIC-WINDOW"],"saleDd": ["20990102"],"saleSqno": ["1"],"tkRetPwd": ["SYNTHETIC-RETURN"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","retDt": "20990102","dlayFarePymtMtdNm": "synthetic","dlayFareRetAmt": "1000","f8_marker": "get_delay_return_receipt"}}]},
+  "retrieve_delivered_ticket": {"return_type": "DeliveredTicketRetrievalResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.tk.pbpWdrw.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"pbpCnt": ["1"],"pbpRsvNo": ["SYNTHETIC-PBP"],"pnrNo": ["SYNTHETIC-PNR"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","prsList": [{"prsFlg": "Y"}],"f8_marker": "retrieve_delivered_ticket"}}]},
+  "get_self_checkin_info": {"return_type": "SelfCheckInInfoResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.checkin.info.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"saleWctNo": ["SYNTHETIC-WINDOW"],"saleDt": ["20990102"],"saleSqno": ["1"],"tkRetPwd": ["SYNTHETIC-RETURN"],"jrnySqno": ["001"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","pnrNo": "synthetic","trnNo": "synthetic","dptRsStnNm": "synthetic","dptTmQb": "synthetic","arvRsStnNm": "synthetic","arvTmQb": "synthetic","scarNo": "synthetic","seatNo": "synthetic","stlbTrnClsfNm": "synthetic","chcknDvCd": "synthetic","f8_marker": "get_self_checkin_info"}}]},
+  "check_self_checkin_seat": {"return_type": "SelfCheckInSeatCheckResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.checkin.psbFlg.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"qrcode": ["SYNTHETIC-QR"],"saleWctNo": ["SYNTHETIC-WINDOW"],"saleDd": ["0102"],"saleSqno": ["1"],"tkRetPwd": ["SYNTHETIC-RETURN"],"jrnySqno": ["001"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","consList": [{"pnrNo": "synthetic","jrnySqno": "synthetic","asgnSqno": "synthetic","runDt": "synthetic","trnNo": "synthetic","dptStnConsOrdr": "synthetic","dptRsStnCd": "synthetic","arvStnConsOrdr": "synthetic","arvRsStnCd": "synthetic","tkKndCd": "synthetic","trnGpCd": "synthetic","scarNo": "synthetic","seatNo": "synthetic","dptDttm": "synthetic","arvDttm": "synthetic","cpsNo": "synthetic"}],"f8_marker": "check_self_checkin_seat"}}]},
+  "register_self_checkin": {"return_type": "SelfCheckInRegisterResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.checkin.reg.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"cpsNo": ["SYNTHETIC-CPS"],"scarNo": ["0017"],"seatNo": ["5A"],"saleWctNo": ["SYNTHETIC-WINDOW"],"saleDd": ["0102"],"saleSqno": ["1"],"tkRetPwd": ["SYNTHETIC-RETURN"],"jrnySqno": ["001"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","msgId": "synthetic","f8_marker": "register_self_checkin"}}]},
+  "cancel_self_checkin": {"return_type": "SelfCheckInCancelResponse","exchanges": [{"method": "POST","path": "/classes/com.korail.mobile.checkin.cnc.do","host": "api.example.invalid","query": {},"form": {"Device": ["AD"],"Version": ["250601003"],"Key": ["SYNTHETIC-APP-KEY"],"saleWctNo": ["SYNTHETIC-WINDOW"],"saleDt": ["20990102"],"saleSqno": ["1"],"tkRetPwd": ["SYNTHETIC-RETURN"],"jrnySqno": ["001"]},"response": {"strResult": "SUCC","h_msg_cd": "IRZ000001","h_msg_txt": "synthetic","f8_marker": "cancel_self_checkin"}}]}
 }
 """)
 
@@ -444,7 +490,7 @@ def test_f8_public_method_inventory() -> None:
         for name, method in inspect.getmembers(api.KorailClient, inspect.isfunction)
         if not name.startswith("_")
     }
-    assert len(actual) == 77
+    assert len(actual) == 84
     assert actual == F8_CASE_DATA.keys() == _f8_arguments().keys()
     assert len(api.__all__) == len(set(api.__all__))
     for name in api.__all__:

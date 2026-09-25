@@ -61,6 +61,7 @@ from .mutation_models import (
     CardPayment,
     CartAddRequest,
     CartAddResponse,
+    DeliveredTicketRetrievalResponse,
     DiscountCardPurchaseRequest,
     DiscountCardPurchaseResponse,
     DiscountCardTicket,
@@ -72,6 +73,8 @@ from .mutation_models import (
     RefundTicketResponse,
     ReservationHoldResponse,
     ReservationPaymentResponse,
+    SelfCheckInCancelResponse,
+    SelfCheckInRegisterResponse,
     StationRefundExecutionRequest,
     StationRefundExecutionResponse,
     StationRefundVerificationRequest,
@@ -79,17 +82,21 @@ from .mutation_models import (
 )
 from .mutation_parsers import (
     parse_cart_add_response,
+    parse_delivered_ticket_retrieval_response,
     parse_discount_card_purchase_response,
     parse_product_cancel_response,
     parse_refund_ticket_response,
     parse_reservation_hold_response,
     parse_reservation_payment_response,
+    parse_self_checkin_cancel_response,
+    parse_self_checkin_register_response,
     parse_station_refund_execution_response,
     parse_station_refund_verification_response,
 )
 from .mutation_payloads import (
     build_card_payment_form,
     build_cart_add_form,
+    build_delivered_ticket_retrieval_form,
     build_discount_card_extension_query,
     build_discount_card_purchase_form,
     build_discount_card_reservation_form,
@@ -99,6 +106,8 @@ from .mutation_payloads import (
     build_product_cancel_query,
     build_refund_form,
     build_reservation_form,
+    build_self_checkin_cancel_form,
+    build_self_checkin_register_form,
     build_standby_wait_form,
     build_station_refund_execution_form,
     build_transfer_reservation_form,
@@ -139,7 +148,9 @@ from .read_models import (
     CommuterKindMenuResponse,
     CrewRequestListResponse,
     CustomerTripInfoResponse,
+    DelayCertificateResponse,
     DelayDiscountTicketListResponse,
+    DelayReturnReceiptResponse,
     DeliveryRecipientResponse,
     DepositBankListResponse,
     DiscountCardScheduleResponse,
@@ -157,6 +168,7 @@ from .read_models import (
     PassMenuResponse,
     PassScheduleResponse,
     PbpAcceptanceSpecificationResponse,
+    PbpAcceptanceTicket,
     PriceFareQuoteResponse,
     ProductDetailResponse,
     ProductReservationListResponse,
@@ -165,6 +177,9 @@ from .read_models import (
     RefundTicketDetailResponse,
     ReservationHistoryResponse,
     SeatAssignmentScheduleResponse,
+    SelfCheckInInfoResponse,
+    SelfCheckInSeat,
+    SelfCheckInSeatCheckResponse,
     SelfSeatChangeInfoResponse,
     ServiceStatusResponse,
     TicketDuplicationCheckResponse,
@@ -181,7 +196,9 @@ from .read_parsers import (
     parse_commuter_kind_menu_response,
     parse_crew_request_list_response,
     parse_customer_trip_info_response,
+    parse_delay_certificate_response,
     parse_delay_discount_ticket_response,
+    parse_delay_return_receipt_response,
     parse_delivery_recipient_response,
     parse_deposit_bank_response,
     parse_discount_card_schedule_response,
@@ -207,6 +224,8 @@ from .read_parsers import (
     parse_refund_ticket_detail_response,
     parse_reservation_history_response,
     parse_seat_assignment_schedule_response,
+    parse_self_checkin_info_response,
+    parse_self_checkin_seat_check_response,
     parse_self_seat_change_info_response,
     parse_service_status_response,
     parse_ticket_duplication_check_response,
@@ -237,7 +256,9 @@ from .read_payloads import (
     build_commuter_kind_menu_query,
     build_crew_request_list_query,
     build_customer_trip_info_form,
+    build_delay_certificate_form,
     build_delay_discount_ticket_form,
+    build_delay_return_receipt_form,
     build_delivery_recipient_form,
     build_discount_card_schedule_query,
     build_discount_card_usage_query,
@@ -261,6 +282,8 @@ from .read_payloads import (
     build_refund_commission_form,
     build_refund_ticket_detail_form,
     build_seat_assignment_schedule_form,
+    build_self_checkin_info_form,
+    build_self_checkin_seat_check_form,
     build_self_seat_change_info_form,
     build_service_status_query,
     build_station_refund_verification_form,
@@ -1124,6 +1147,20 @@ class KorailClient:
             parser=parse_pbp_acceptance_specification_response,
         )
 
+    def retrieve_delivered_ticket(self, ticket: PbpAcceptanceTicket) -> DeliveredTicketRetrievalResponse:
+        """다른 회원에게 전달한 승차권을 회수합니다(tk.pbpWdrw.do, NetworkApi.java:642-644). ticket 은
+        get_pbp_acceptance_specifications 의 승차권이며 첫 여정의 pbp_reservation_no 와 pnr_no 를 보냅니다
+        (DeliveredTicketViewModel.java:185-205,283). 앱은 여정의 withdrawal_possible_flag 가 보호된 값일 때만 회수 버튼을 보여
+        주므로 먼저
+        확인하십시오. 상태를 바꾸므로 실패해도 다시 보내지 않습니다. 대기열은 없습니다. 검증 못 함: 전달한 승차권이 없어 실서버에서 확인하지
+        못했습니다."""
+        self._require_session()
+        return self._mutation(
+            "/classes/com.korail.mobile.tk.pbpWdrw.do",
+            build_delivered_ticket_retrieval_form(self.config, ticket),
+            parser=parse_delivered_ticket_retrieval_response,
+        )
+
     def get_original_ticket_inquiry(
         self,
         tickets: Sequence[OriginalTicketReference],
@@ -1212,6 +1249,80 @@ class KorailClient:
             "/classes/com.korail.mobile.refunds.SelTicketInfo",
             form,
             parser=parse_refund_ticket_detail_response,
+        )
+
+    def get_delay_certificate(self, ticket: OriginalTicketReference) -> DelayCertificateResponse:
+        """지난 승차권의 지연확인증(열차가 몇 분 늦게 도착했는지)을 조회합니다(dlay.athnIsu.do, NetworkApi.java:347-349). ticket 에는
+        승차권 상세의 h_orgtk_* 값을 넣고 sale_date 는 return_sale_date 입니다(DelayCertificateViewModel.java:94). 앱은 지연된 지난
+        승차권에만 버튼을 보여 줍니다(NormalTicketSectionKt.java:786-808). 대기열은 없습니다. 2026-09-25 라이브: 지연된 지난 승차권 2장은
+        SUCC/IAZ000006 과 행 1개(3분·18분 지연), 지연되지 않은 승차권은 WRT400456(지연되지 않은 승차권)이었습니다."""
+        self._require_session()
+        return self._post_read(
+            "/classes/com.korail.mobile.dlay.athnIsu.do",
+            build_delay_certificate_form(ticket),
+            parser=parse_delay_certificate_response,
+        )
+
+    def get_delay_return_receipt(self, ticket: OriginalTicketReference) -> DelayReturnReceiptResponse:
+        """열차 지연으로 돌려받은 지연료의 반환 영수증을 조회합니다(dlay.pymtRcet.do, NetworkApi.java:355-357). ticket 은 지연확인증과
+        같습니다(DelayReturnReceiptViewModel.java:88). 앱은 영수증 화면의 승차권 상태가 보호된 값일 때만 배너를 보여
+        줍니다(TicketReceiptScreenKt.java:1077-1078). 대기열은 없습니다. 2026-09-25 라이브: 지연료를 돌려받지 않은 지난 승차권 3장은 모두
+        IRZ000005(조회할 자료 없음, KorailNoResultsError)였고 반환 영수증이 있는 경우는 확인하지 못했습니다."""
+        self._require_session()
+        return self._post_read(
+            "/classes/com.korail.mobile.dlay.pymtRcet.do",
+            build_delay_return_receipt_form(ticket),
+            parser=parse_delay_return_receipt_response,
+        )
+
+    def get_self_checkin_info(self, detail: RefundTicketDetailResponse) -> SelfCheckInInfoResponse:
+        """셀프 체크인한 자유석 정보를 조회합니다(checkin.info.do, NetworkApi.java:674-676). detail 은 get_refund_ticket_detail 의
+        결과입니다(SelfCheckInResultViewModel.java:249-250). 앱은 체크인 결과 화면을 열 때 부릅니다. 대기열은 없습니다. 2026-09-25 라이브:
+        체크인하지 않은 지난 승차권 3장은 WRZ000001(조회작업 실패)이었고 체크인한 승차권은 확인하지 못했습니다."""
+        self._require_session()
+        return self._post_read(
+            "/classes/com.korail.mobile.checkin.info.do",
+            build_self_checkin_info_form(detail),
+            parser=parse_self_checkin_info_response,
+        )
+
+    def check_self_checkin_seat(
+        self, detail: RefundTicketDetailResponse, qr_code: str
+    ) -> SelfCheckInSeatCheckResponse:
+        """자유석에 앉아 좌석 테이블의 QR 을 스캔한 문자열로 체크인할 수 있는 좌석을 확인합니다(checkin.psbFlg.do,
+        NetworkApi.java:678-680; SelfCheckInInfoViewModel.java:102-108). 상태를 바꾸지 않습니다. 앱은 행이 있으면 첫 행으로 등록을
+        묻습니다. 검증 못 함: 열차 안의 좌석 QR 이 필요해 실서버에서 확인하지 못했습니다."""
+        self._require_session()
+        return self._post_read(
+            "/classes/com.korail.mobile.checkin.psbFlg.do",
+            build_self_checkin_seat_check_form(detail, qr_code),
+            parser=parse_self_checkin_seat_check_response,
+        )
+
+    def register_self_checkin(
+        self, detail: RefundTicketDetailResponse, seat: SelfCheckInSeat
+    ) -> SelfCheckInRegisterResponse:
+        """check_self_checkin_seat 의 좌석으로 셀프 체크인을 등록합니다(checkin.reg.do, NetworkApi.java:682-684;
+        SelfCheckInInfoViewModel.java:224-225). 상태를 바꾸므로 실패해도 다시 보내지 않습니다. 자유석 전용이며, 앱 안내에 따르면 좌석을
+        보장하지 않고 부정 사용 시 부가금이 있습니다(arrays.xml:796-803). 검증 못 함: 열차 안의 좌석 QR 이 필요해 실서버에서 확인하지
+        못했습니다."""
+        self._require_session()
+        return self._mutation(
+            "/classes/com.korail.mobile.checkin.reg.do",
+            build_self_checkin_register_form(self.config, detail, seat),
+            parser=parse_self_checkin_register_response,
+        )
+
+    def cancel_self_checkin(self, detail: RefundTicketDetailResponse) -> SelfCheckInCancelResponse:
+        """셀프 체크인을 취소합니다(checkin.cnc.do, NetworkApi.java:288-290; SelfCheckInResultViewModel.java:111-112).
+        앱은 결과 화면의
+        확인 창 뒤에 부릅니다. 상태를 바꾸므로 실패해도 다시 보내지 않습니다. 검증 못 함: 체크인한 승차권이 없어 실서버에서 확인하지
+        못했습니다."""
+        self._require_session()
+        return self._mutation(
+            "/classes/com.korail.mobile.checkin.cnc.do",
+            build_self_checkin_cancel_form(self.config, detail),
+            parser=parse_self_checkin_cancel_response,
         )
 
     def get_common_code(

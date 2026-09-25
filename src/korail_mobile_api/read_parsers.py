@@ -46,8 +46,11 @@ from .read_models import (
     CrewRequestOption,
     CustomerTripInfo,
     CustomerTripInfoResponse,
+    DelayCertificateResponse,
+    DelayCertificateRow,
     DelayDiscountTicket,
     DelayDiscountTicketListResponse,
+    DelayReturnReceiptResponse,
     DeliveryRecipientResponse,
     DepositBank,
     DepositBankListResponse,
@@ -119,6 +122,9 @@ from .read_models import (
     ReservationHistoryTrain,
     ReservationSeatDetail,
     SeatAssignmentScheduleResponse,
+    SelfCheckInInfoResponse,
+    SelfCheckInSeat,
+    SelfCheckInSeatCheckResponse,
     SelfSeatChangeInfoResponse,
     SelfSeatChangeReason,
     SelfSeatChangeStation,
@@ -132,6 +138,8 @@ from .read_models import (
     TicketReceiptResponse,
     TicketReservationDetailResponse,
     TrainScheduleItem,
+    TravelProduct,
+    TravelProductSearchResponse,
     TripChangeDateResponse,
     TripMenuContent,
     TripMenuItem,
@@ -2681,3 +2689,149 @@ def parse_original_ticket_inquiry_response(
         tickets=tuple(tickets),
         **_response_fields(raw),
     )
+
+
+def _optional_read_rows(data: Mapping[str, Any], key: str, context: str) -> list[Mapping[str, Any]]:
+    """선택·nullable 객체 목록을 읽습니다. 누락·null 은 빈 목록이고, 목록이 아니거나 객체가 아닌 행은 거절합니다."""
+    if data.get(key) is None:
+        return []
+    return _required_read_rows(data, key, context)
+
+
+_DELAY_CERTIFICATE_FIELDS = {
+    "run_day": "runDay",
+    "train_no": "trnNo",
+    "departure_station_code": "dptRsStnCd",
+    "arrival_station_code": "arvRsStnCd",
+    "arrival_station_name": "arvRsStnNm",
+    "delay_arrival_flag": "dlayArvFlg",
+    "delay_minutes": "trnDlayTm",
+}
+
+
+@_preserve_read_raw
+def parse_delay_certificate_response(raw: Mapping[str, Any]) -> DelayCertificateResponse:
+    _validate_strict_read_envelope(raw)
+    delays = []
+    for row in _optional_read_rows(raw, "dlayList", "delay certificate"):
+        # DelayCertificate.java:57-60 의 마스크는 runDt 도 필수로 두지만 2026-09-25 실서버의 지연 승차권 2장은 runDt 없이 나머지 7키만
+        # 돌려줬습니다. 그래서 runDt 만 선택으로 읽습니다.
+        delays.append(
+            DelayCertificateRow(
+                **_required_read_strings(row, _DELAY_CERTIFICATE_FIELDS, "delay certificate"),
+                run_date=_strict_scalar_string(row, "runDt", "delay certificate"),
+                raw=row,
+            )
+        )
+    return DelayCertificateResponse(delays=tuple(delays), **_response_fields(raw))
+
+
+@_preserve_read_raw
+def parse_delay_return_receipt_response(raw: Mapping[str, Any]) -> DelayReturnReceiptResponse:
+    _validate_strict_read_envelope(raw)
+    return DelayReturnReceiptResponse(
+        **_nullable_scalar_fields(
+            raw,
+            {
+                "return_date": "retDt",
+                "payment_method_name": "dlayFarePymtMtdNm",
+                "return_amount": "dlayFareRetAmt",
+            },
+            "delay return receipt",
+        ),
+        **_response_fields(raw),
+    )
+
+
+_TRAVEL_PRODUCT_FIELDS = {
+    "goods_no": "gdNo",
+    "name": "gdNm",
+    "area_code": "gdTripArCd",
+    "area_name": "gdTripArNm",
+    "event_start_date": "evtStDt",
+    "event_end_date": "evtClsDt",
+    "company_name": "entNm",
+    "info_url": "gdInfoUrlAdr",
+    "representative_fare": "gdRepFare",
+    "description": "ln1DscCont",
+    "standard_clause_1": "gdStdrClauValCont1",
+    "standard_clause_2": "gdStdrClauValCont2",
+}
+
+
+@_preserve_read_raw
+def parse_travel_product_search_response(raw: Mapping[str, Any]) -> TravelProductSearchResponse:
+    _validate_strict_read_envelope(raw)
+    listing = raw.get("lst")
+    if listing is None:
+        return TravelProductSearchResponse(**_response_fields(raw))
+    if not isinstance(listing, Mapping):
+        raise KorailProtocolError("KORAIL travel product search field lst must be an object or null")
+    products = tuple(
+        TravelProduct(**_nullable_scalar_fields(row, _TRAVEL_PRODUCT_FIELDS, "travel product"), raw=row)
+        for row in _optional_read_rows(listing, "gdList", "travel product search")
+    )
+    return TravelProductSearchResponse(
+        products=products,
+        query_count=_optional_scalar_string(listing, "qryCnt", "travel product search"),
+        page_count=_optional_scalar_string(listing, "pgCnt", "travel product search"),
+        **_response_fields(raw),
+    )
+
+
+_SELF_CHECKIN_SEAT_FIELDS = {
+    "pnr_no": "pnrNo",
+    "journey_sequence": "jrnySqno",
+    "assignment_sequence": "asgnSqno",
+    "run_date": "runDt",
+    "train_no": "trnNo",
+    "departure_construction_order": "dptStnConsOrdr",
+    "departure_station_code": "dptRsStnCd",
+    "arrival_construction_order": "arvStnConsOrdr",
+    "arrival_station_code": "arvRsStnCd",
+    "ticket_kind_code": "tkKndCd",
+    "train_group_code": "trnGpCd",
+    "car_no": "scarNo",
+    "seat_no": "seatNo",
+    "departure_datetime": "dptDttm",
+    "arrival_datetime": "arvDttm",
+    "cps_no": "cpsNo",
+}
+
+
+@_preserve_read_raw
+def parse_self_checkin_seat_check_response(raw: Mapping[str, Any]) -> SelfCheckInSeatCheckResponse:
+    _validate_strict_read_envelope(raw)
+    if "consList" not in raw:
+        raise KorailProtocolError("KORAIL self check-in seat check field consList is required")
+    seats = tuple(
+        SelfCheckInSeat(**_required_read_strings(row, _SELF_CHECKIN_SEAT_FIELDS, "self check-in seat"), raw=row)
+        for row in _optional_read_rows(raw, "consList", "self check-in seat check")
+    )
+    return SelfCheckInSeatCheckResponse(seats=seats, **_response_fields(raw))
+
+
+_SELF_CHECKIN_INFO_FIELDS = {
+    "pnr_no": "pnrNo",
+    "train_no": "trnNo",
+    "departure_station_name": "dptRsStnNm",
+    "departure_time": "dptTmQb",
+    "arrival_station_name": "arvRsStnNm",
+    "arrival_time": "arvTmQb",
+    "car_no": "scarNo",
+    "seat_no": "seatNo",
+    "train_class_name": "stlbTrnClsfNm",
+    "checkin_division_code": "chcknDvCd",
+}
+
+
+@_preserve_read_raw
+def parse_self_checkin_info_response(raw: Mapping[str, Any]) -> SelfCheckInInfoResponse:
+    _validate_strict_read_envelope(raw)
+    values: dict[str, Any] = {}
+    for attribute, key in _SELF_CHECKIN_INFO_FIELDS.items():
+        # 열 키 모두 필수이지만 값은 nullable 입니다(SelfCheckInInfoOut.java:56-59).
+        if key not in raw:
+            raise KorailProtocolError(f"KORAIL self check-in info field {key} is required")
+        values[attribute] = _strict_scalar_string(raw, key, "self check-in info")
+    return SelfCheckInInfoResponse(**values, **_response_fields(raw))

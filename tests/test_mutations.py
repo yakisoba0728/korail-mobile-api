@@ -14,7 +14,7 @@ import copy
 import json
 import socket
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qsl
@@ -49,7 +49,16 @@ from korail_mobile_api.mutation_models import (
     StationRefundVerificationRequest,
 )
 from korail_mobile_api.mutation_parsers import parse_refund_ticket_response
-from korail_mobile_api.read_models import ProductDetailResponse, RefundCommissionResponse, TrainScheduleItem
+from korail_mobile_api.read_models import (
+    PbpAcceptanceJourney,
+    PbpAcceptanceTicket,
+    ProductDetailResponse,
+    RefundCommissionResponse,
+    RefundTicketDetailResponse,
+    RefundTicketJourney,
+    SelfCheckInSeat,
+    TrainScheduleItem,
+)
 
 COMMON = {"Device": "SYNTH-ANDROID", "Version": "SYNTH-706", "Key": "SYNTH-KEY", "lang": "SYNTH-LANG"}
 BASE = {
@@ -649,9 +658,88 @@ def cases() -> list[Case]:
             "parse_reservation_hold_response",
             {"pnr_no": PNR, "received_amount": "1200"},
         ),
+        Case(
+            "register_self_checkin",
+            lambda c: c.register_self_checkin(CHECKIN_DETAIL, CHECKIN_SEAT),
+            "POST",
+            ("checkin.reg.do",),
+            {
+                **COMMON,
+                "cpsNo": "SYNTH-CPS",
+                "scarNo": "0017",
+                "seatNo": "5A",
+                "saleWctNo": "SYNTH-WINDOW",
+                "saleDd": "1230",
+                "saleSqno": "SYNTH-SEQ",
+                "tkRetPwd": "SYNTH-PWD",
+                "jrnySqno": "001",
+            },
+            {**BASE, "msgId": "SYNTH-MSG"},
+            "parse_self_checkin_register_response",
+            {"message_id": "SYNTH-MSG"},
+        ),
+        Case(
+            "cancel_self_checkin",
+            lambda c: c.cancel_self_checkin(CHECKIN_DETAIL),
+            "POST",
+            ("checkin.cnc.do",),
+            {
+                **COMMON,
+                "saleWctNo": "SYNTH-WINDOW",
+                "saleDt": "20991230",
+                "saleSqno": "SYNTH-SEQ",
+                "tkRetPwd": "SYNTH-PWD",
+                "jrnySqno": "001",
+            },
+            BASE,
+            "parse_self_checkin_cancel_response",
+            {"message_id": None},
+        ),
+        Case(
+            "retrieve_delivered_ticket",
+            lambda c: c.retrieve_delivered_ticket(DELIVERED_TICKET),
+            "POST",
+            ("tk.pbpWdrw.do",),
+            {**COMMON, "pbpCnt": "1", "pbpRsvNo": ["SYNTH-PBP"], "pnrNo": [PNR]},
+            {**BASE, "prsList": [{"prsFlg": "Y"}]},
+            "parse_delivered_ticket_retrieval_response",
+            {"process_flags": ("Y",)},
+        ),
     ]
 
 
+CHECKIN_DETAIL = RefundTicketDetailResponse(
+    sale_date="20991230",
+    original_sale_date="1230",
+    original_window_no="SYNTH-WINDOW",
+    original_sale_sequence="SYNTH-SEQ",
+    original_return_password="SYNTH-PWD",
+    journeys=(RefundTicketJourney(journey_sequence="001"),),
+)
+CHECKIN_SEAT = SelfCheckInSeat(
+    *("SYNTH-PNR", "002", "01", "20991230", "00101", "1", "0001", "5", "0020", "11", "100", "0017", "5A"),
+    *("20991230100000", "20991230120000", "SYNTH-CPS"),
+)
+DELIVERED_TICKET = PbpAcceptanceTicket(
+    pnr_no=PNR,
+    sale_date="20991230",
+    sale_sequence="SYNTH-SEQ",
+    sale_window_no="SYNTH-WINDOW",
+    return_password="SYNTH-PWD",
+    journeys=(
+        PbpAcceptanceJourney(
+            acceptance_customer_name="SYNTH-NAME",
+            acceptance_customer_phone="SYNTH-PHONE",
+            journey_type_code="11",
+            member_division_name="SYNTH-MEMBER",
+            acceptance_kind_name="SYNTH-KIND",
+            pbp_reservation_no="SYNTH-PBP",
+            registered_date="20991229",
+            withdrawal_possible_flag="Y",
+            member_card_no="SYNTH-CARD",
+        ),
+    ),
+)
 CASES = cases()
 
 
@@ -1604,6 +1692,46 @@ def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order
         "tk_ret_tms_dv_cd "
         "trnNo pbpAcepTgtFlg latitude longitude Device Version Key lang".split()
     )
+
+
+def test_retrieval_sends_the_pair_after_the_count_and_needs_a_journey() -> None:
+    """NetworkApi.java:642-644: FieldMap (common, pbpCnt) then @Field pbpRsvNo, pnrNo;
+    DeliveredTicketViewModel.java:283."""
+    case = next(c for c in CASES if c.name == "retrieve_delivered_ticket")
+    h = Harness([case.response], case.method, case.routes, case.form)
+    try:
+        case.invoke(h.client)
+        keys = [key for key, _ in parse_qsl(h.seen[0].content.decode(), keep_blank_values=True)]
+        assert keys[-3:] == ["pbpCnt", "pbpRsvNo", "pnrNo"]
+        with pytest.raises(KorailProtocolError, match="first journey"):
+            h.client.retrieve_delivered_ticket(replace(DELIVERED_TICKET, journeys=()))
+        with pytest.raises(KorailProtocolError):
+            h.client.register_self_checkin(CHECKIN_DETAIL, object())  # type: ignore[arg-type]
+        assert len(h.seen) == 1
+    finally:
+        h.close()
+
+
+@pytest.mark.parametrize(
+    "name,response",
+    [
+        ("retrieve_delivered_ticket", BASE),
+        ("retrieve_delivered_ticket", {**BASE, "prsList": [{}]}),
+        ("register_self_checkin", BASE),
+    ],
+)
+def test_checkin_and_retrieval_required_response_keys(name: str, response: dict[str, Any]) -> None:
+    """RetrieveTicketOut.java:54-59, Prs.java:46-50, SelfCheckInRegisterOut.java:47-52: required keys; the
+    whole response
+    stays on .raw and nothing is re-sent."""
+    case = next(c for c in CASES if c.name == name)
+    h = Harness([response], case.method, case.routes, case.form)
+    try:
+        with pytest.raises(KorailProtocolError) as caught:
+            case.invoke(h.client)
+        assert caught.value.raw == response and len(h.seen) == 1
+    finally:
+        h.close()
 
 
 def test_mutation_parser_keeps_the_whole_response_when_called_directly() -> None:

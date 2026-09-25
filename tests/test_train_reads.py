@@ -8,10 +8,12 @@ Run: PYTHONPATH=src python -m pytest -q tests/test_train_reads.py
 
 from __future__ import annotations
 
+import ast
 import socket
 from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
+from pathlib import Path
 from urllib.parse import parse_qsl
 
 import httpx
@@ -40,6 +42,7 @@ from korail_mobile_api.read_payloads import (
     MergeSeatsInquiryRequest,
     PriceFareLeg,
     PriceFareQuoteRequest,
+    TravelProductSearchQuery,
 )
 
 P = "/classes/com.korail.mobile."
@@ -1150,6 +1153,46 @@ def test_optional_long_on_guidance_is_lenient(value, rig):
     client, _, _ = rig([raw])
     result = client.get_guide_seat_condition(GuideSeatConditionRequest("015"))
     assert result.time_stamp is None and result.raw == raw
+
+
+def test_travel_search_is_record_only_and_keeps_the_dto_order(rig):
+    """TravelSearchProductIn.java:60-81: funcDvCd, keyword field, bltnLstOrdr, nowPgNo, pgPrCnt. The app's codes
+    are protected and the 2026-09-25 server refused a search without funcDvCd (WRR000100), so the call is
+    record-only."""
+    from korail_mobile_api import _travel_search_unsupported as record
+
+    assert not hasattr(KorailClient, "search_travel_products")
+    importers = []
+    for path in Path(record.__file__).parent.glob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                names = [getattr(node, "module", None) or "", *(alias.name for alias in node.names)]
+                if any("_travel_search_unsupported" in name for name in names):
+                    importers.append(path.name)
+    assert importers == []
+    query = TravelProductSearchQuery(
+        "SYNTH", "theme", page_no=2, function_code="SYNTH-F", order_code="SYNTH-O", page_size="SYNTH-P"
+    )
+    listing = {"gdList": [{"gdNo": "SYNTH_GOODS", "gdRepFare": "1000"}], "qryCnt": "1", "pgCnt": "1"}
+    client, calls, _ = rig(
+        [{**ENVELOPE, "lst": listing}, {**ENVELOPE, "lst": None}, {**ENVELOPE, "lst": {"gdList": {}}}]
+    )
+    result = record.search_travel_products(client, query)
+    assert (result.products[0].goods_no, result.page_count) == ("SYNTH_GOODS", "1")
+    assert calls[0].url.path == "/ebizcom/gdLstDtl.do"
+    assert [key for key, _ in parse_qsl(calls[0].content.decode())][4:] == [
+        "funcDvCd",
+        "gdThmNm",
+        "bltnLstOrdr",
+        "nowPgNo",
+        "pgPrCnt",
+    ]
+    assert record.search_travel_products(client, query).products == ()
+    with pytest.raises(KorailProtocolError):
+        record.search_travel_products(client, query)
+    for bad in ({"keyword": " "}, {"keyword": "x", "keyword_field": "date"}, {"keyword": "x", "page_no": "1"}):
+        with pytest.raises(KorailProtocolError):
+            TravelProductSearchQuery(**bad)
 
 
 def test_all_public_methods_have_contract_cases():

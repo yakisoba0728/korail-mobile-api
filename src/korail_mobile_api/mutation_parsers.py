@@ -26,6 +26,7 @@ from .errors import KorailProtocolError
 from .mutation_models import (
     CartAddResponse,
     CartDiscountAddition,
+    DeliveredTicketRetrievalResponse,
     DiscountCardPurchaseResponse,
     MaasCancelResponse,
     ProductCancelResponse,
@@ -37,6 +38,8 @@ from .mutation_models import (
     ReservationPaymentSettlement,
     ReservationPaymentTableSeat,
     ReservationPaymentTicket,
+    SelfCheckInCancelResponse,
+    SelfCheckInRegisterResponse,
     StationRefundExecutionResponse,
     StationRefundOriginalTicket,
     StationRefundVerificationResponse,
@@ -533,3 +536,47 @@ def parse_cart_add_response(raw: Mapping[str, Any]) -> CartAddResponse:
         **_base_fields(data),
         discount_additions=_cart_discount_additions(data),
     )
+
+
+@_preserve_read_raw
+def parse_self_checkin_register_response(raw: Mapping[str, Any]) -> SelfCheckInRegisterResponse:
+    """msgId 는 필수·nullable 입니다(SelfCheckInRegisterOut.java:47-52)."""
+    data = _response_mapping(raw)
+    if "msgId" not in data:
+        raise KorailProtocolError("KORAIL self check-in register field msgId is required")
+    return SelfCheckInRegisterResponse(
+        **_base_fields(data),
+        message_id=_strict_scalar_string(data, "msgId", "self check-in register"),
+    )
+
+
+@_preserve_read_raw
+def parse_self_checkin_cancel_response(raw: Mapping[str, Any]) -> SelfCheckInCancelResponse:
+    """msgId 는 선택입니다(SelfCheckInCancelOut.java:50-56)."""
+    data = _response_mapping(raw)
+    return SelfCheckInCancelResponse(
+        **_base_fields(data),
+        message_id=_optional_scalar_string(data, "msgId", "self check-in cancel"),
+    )
+
+
+@_preserve_read_raw
+def parse_delivered_ticket_retrieval_response(raw: Mapping[str, Any]) -> DeliveredTicketRetrievalResponse:
+    """prsList 와 각 행의 prsFlg 는 필수입니다(RetrieveTicketOut.java:54-59; Prs.java:46-50)."""
+    data = _response_mapping(raw)
+    rows = data.get("prsList")
+    if not isinstance(rows, list):
+        raise KorailProtocolError("KORAIL delivered ticket retrieval field prsList must be a list")
+    flags = []
+    for value in rows:
+        try:
+            flag = _strict_scalar_string(
+                _row(value, "delivered ticket retrieval"), "prsFlg", "delivered ticket retrieval"
+            )
+            if flag is None:
+                raise KorailProtocolError("KORAIL delivered ticket retrieval prsFlg is required and non-null")
+        except KorailProtocolError as error:
+            error.raw = value
+            raise
+        flags.append(flag)
+    return DeliveredTicketRetrievalResponse(**_base_fields(data), process_flags=tuple(flags))

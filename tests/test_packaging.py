@@ -29,7 +29,7 @@ from packaging.utils import canonicalize_name
 pytestmark = pytest.mark.packaging
 F8_ROOT = Path(__file__).resolve().parents[1]
 F8_TOP_FILES = {"pyproject.toml", "MANIFEST.in", "README.md", "CHANGELOG.md", "LICENSE"}
-F8_RECORD_MODULES = {"_maas_unsupported.py", "_social_login_unsupported.py"}
+F8_RECORD_MODULES = {"_maas_unsupported.py", "_social_login_unsupported.py", "_travel_search_unsupported.py"}
 F8_SENTINEL = b"F8-FORBIDDEN-" + b"SYNTHETIC-CREDENTIAL-SENTINEL"
 
 

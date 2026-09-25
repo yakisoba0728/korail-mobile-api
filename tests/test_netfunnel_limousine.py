@@ -608,7 +608,7 @@ def test_gate_defaults_and_action_overrides() -> None:
         client.close()
 
 
-def test_all_77_public_methods_gate_call_graph() -> None:
+def test_all_public_methods_gate_call_graph() -> None:
     """Exhaustive library AST connectivity, not a claim that unknown app gate literals match."""
     tree = ast.parse(inspect.getsource(KorailClient))
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
@@ -631,7 +631,7 @@ def test_all_77_public_methods_gate_call_graph() -> None:
             return False
         return "_queued" in edges[name] or any(reaches_queue(n, seen | {name}) for n in edges[name])
 
-    assert len(public) == 77
+    assert len(public) == 84
     assert {n for n in public if reaches_queue(n)} == EXPECTED_GATED_METHODS
     calls = [
         n
