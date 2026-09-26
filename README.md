@@ -35,6 +35,7 @@
 </p>
 
 <p align="center">
+  <a href="https://yaki.kr/korail-mobile-api/">문서</a> ·
   <a href="#설치">설치</a> ·
   <a href="#빠르게-써보기">빠르게 써보기</a> ·
   <a href="#예약결제환불">예약·결제·환불</a> ·
@@ -186,6 +187,7 @@ SRT 앱용으로 만들었던 [srt-mobile-api](https://github.com/yakisoba0728/s
 
 ## 문서와 링크
 
+- [문서 사이트](https://yaki.kr/korail-mobile-api/) — 시작하기, 가이드, 메서드 84개 전체의 API 레퍼런스
 - [동작 규칙 (checks/BEHAVIOR.md)](checks/BEHAVIOR.md) — 요청을 만드는 규칙, 응답을 읽는 규칙, 앱과 다르게 한 부분
 - [변경 이력 (CHANGELOG.md)](CHANGELOG.md)
 - [오프라인 검사 기준 (checks/ACCEPTANCE.md)](checks/ACCEPTANCE.md)
