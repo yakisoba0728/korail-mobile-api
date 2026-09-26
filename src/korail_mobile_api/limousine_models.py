@@ -44,9 +44,12 @@ class LimousineSeatInventoryQuery:
     departure_run_order: str
     arrival_run_order: str
     passenger_count: int
-    #: 7.0.6 공항버스 화면은 null 을 넘깁니다(AirportBusSeatMapViewModel.java:865). None 이면 폼에서 뺍니다.
+    # 7.0.6 공항버스 화면은 null 을 넘깁니다(AirportBusSeatMapViewModel.java:865).
+    #: 상품 번호(``gdNo``)입니다. 앱의 공항버스 좌석 조회는 이 값을 넘기지 않습니다. ``None``(기본값)이면 요청에서 뺍니다.
     product_no: str | None = None
-    #: isArrow 기본값은 거짓입니다(TResidualSeatsResearchIn.java:132; AirportBusSeatMapViewModel.java:865 의 기본값 마스크).
+    # 기본값 근거: TResidualSeatsResearchIn.java:132; AirportBusSeatMapViewModel.java:865 의 기본값 마스크.
+    #: 요청의 ``isArrow`` 값입니다. ``"true"`` 또는 ``"false"``로 보내며, 기본값 ``False``는 앱의 공항버스 좌석 조회와
+    #: 같습니다.
     is_arrow: bool = False
 
     def __post_init__(self) -> None:
@@ -81,7 +84,8 @@ class LimousineSchedule:
     train_order_no: str | None = None
     yms_application_flag: str | None = None
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
-    #: rcvdPrc 운임 문자열(ScdlQryOutTrain.java:40,389).
+    # rcvdPrc 선언: ScdlQryOutTrain.java:40,389.
+    #: 표시용 운임 문자열(``rcvdPrc``)입니다.
     received_price: str | None = None
 
 
@@ -115,8 +119,11 @@ class LimousineSeat:
 class LimousineSeatInventoryResponse(BaseKorailResponse):
     """공항버스 한 호차의 좌석표와 배치 정보를 담습니다.
 
-    일반 좌석 재고와 TResidualSeatsResearchOut 을 공유합니다 (NetworkApi.java:271,741). 배치·배너·창측 위치의 선언은
-    TResidualSeatsResearchOut.java:29,34-35,114,134,138 참고."""
+    응답 형식은 열차 좌석 재고와 같으며, 창문 위치는 같은 ``SeatWindow``로 담습니다. 좌석 목록이 없거나 ``null``이면
+    ``seats``는 빈 튜플입니다."""
+
+    # 일반 좌석 재고와 TResidualSeatsResearchOut 을 공유합니다(NetworkApi.java:271,741). 배치·배너·창측 위치의 선언은
+    # TResidualSeatsResearchOut.java:29,34-35,114,134,138 참고.
 
     car_type_code: str | None = None
     car_no: str | None = None

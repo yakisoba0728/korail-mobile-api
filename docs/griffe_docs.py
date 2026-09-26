@@ -2,6 +2,7 @@
 
 - 필드 바로 위의 ``#:`` 주석을 그 필드의 설명으로 씁니다.
 - 문서에는 앱 소스 인용(``Foo.java:12-34`` 등)을 싣지 않습니다. 코드의 docstring 은 그대로 둡니다.
+- Sphinx 표기(``:class:`Foo```)는 코드 표기로 바꾸고, 비공개 믹스인은 상속 목록에서 뺍니다.
 """
 
 from __future__ import annotations
@@ -12,8 +13,9 @@ from typing import Any
 
 import griffe
 
-_SOURCE = r"[\w$./]+\.(?:java|smali|kt)(?::[\d,\-–]+)?"
-_PAREN = re.compile(r"\s*\((?=[^()]*\.(?:java|smali|kt)\b)[^()]*\)")
+_SOURCE = r"[\w$./]+\.(?:java|smali|kt)(?::[\d,\-–]+)?|[\w$./]+\.json:[\d,\-–]+"
+_PAREN = re.compile(r"\s*\((?=[^()]*\.(?:java|smali|kt)\b|[^()]*\.json:\d)[^()]*\)")
+_ROLE = re.compile(r":(?:class|attr|func|meth|data|mod|exc):`~?([^`]+)`")
 _LABELLED = re.compile(
     r"(?:앱 근거|근거|라우트|바인딩|앱 호출|키 근거|메시지 근거|호출부|앱 선언)\s*:\s*(?:``)?"
     + _SOURCE
@@ -25,6 +27,7 @@ _BARE = re.compile(r"(?:``)?" + _SOURCE + r"(?:``)?(?:\s*[,;]\s*(?:``)?" + _SOUR
 
 
 def clean(text: str) -> str:
+    text = _ROLE.sub(r"``\1``", text)
     text = _PAREN.sub("", text)
     text = _LABELLED.sub("", text)
     text = _BARE.sub("", text)
@@ -60,6 +63,8 @@ class DocsExtension(griffe.Extension):
                 return
             if obj.docstring is not None:
                 obj.docstring.value = clean(obj.docstring.value)
+            if isinstance(obj, griffe.Class):
+                obj.bases = [base for base in obj.bases if not str(base).rsplit(".", 1)[-1].startswith("_")]
             for member in obj.members.values():
                 walk(member)
 

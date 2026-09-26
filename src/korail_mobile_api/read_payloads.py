@@ -104,7 +104,11 @@ class FreeSeatCarRequest:
 class GuideSeatConditionRequest:
     """도우미석 이용 안내 조회 조건을 구성합니다.
 
-    앱은 SeatType.HELPER 코드를 사용합니다(TrainOptionViewModel.java:270). 이 표본만으로 모든 입력·시점의 응답이 같다고 보장하지 않습니다."""
+    ``seat_attribute_code``에는 안내를 받을 좌석 속성 코드를 넣습니다. 앱이 도우미석에 쓰는 좌석 속성 코드는 앱 내부 값이
+    공개돼 있지 않아 확인하지 못했습니다."""
+
+    # 앱은 SeatType.HELPER 코드를 사용합니다(TrainOptionViewModel.java:270). 이 표본만으로 모든 입력·시점의 응답이 같다고
+    # 보장하지 않습니다.
 
     seat_attribute_code: str
 
@@ -219,9 +223,10 @@ class PassScheduleRequest:
     pass_kind_code: str
     pass_period_code: str
     pass_age_code: str
-    #: txtSelPage: 관측에서 요청값을 바꿔도 h_page_no=1 이었습니다. 앱의 해당 인자도 고정이지만 평문은 보호돼
-    #: 있습니다(CheckUsagePeriodSectionViewModel.java:389). page_size 로 요청 건수를 정하며 페이징 신호의 관측 한계는
-    #: PassScheduleMainInfo 참고.
+    # txtSelPage: 관측에서 요청값을 바꿔도 h_page_no=1 이었습니다. 앱의 해당 인자도 고정이지만 평문은 보호돼
+    # 있습니다(CheckUsagePeriodSectionViewModel.java:389). 페이징 신호의 관측 한계는 PassScheduleMainInfo 참고.
+    #: 요청할 페이지 번호(``txtSelPage``)입니다. 이 값을 바꿔도 서버가 첫 페이지를 돌려줄 수 있으므로, 받을 건수는
+    #: ``page_size``로 정하세요.
     page_no: str
     page_size: str
     departure_station_name: str
@@ -443,8 +448,10 @@ def build_korail_point_summary_form() -> dict[str, str]:
     return {"point_dv_cd": "0"}
 
 
+#: 마일리지 원장입니다. ``"1"``은 KTX 마일리지, ``"2"``는 레일포인트입니다.
 KorailMileageLedger = Literal["1", "2"]
 
+#: 마일리지 증감 구분입니다. ``"0"``은 전체, ``"1"``은 적립, ``"2"``는 사용입니다.
 KorailMileageMovement = Literal["0", "1", "2"]
 
 #: 두 값 모두 라이브로는 동작하지만 7.0.6 출처가 없는 **미출처** 상수입니다.
@@ -469,7 +476,10 @@ _KORAIL_MILEAGE_MOVEMENTS = frozenset(
 class MileageHistoryRequest:
     """마일리지 내역의 기간·종류·페이지 조건을 구성합니다.
 
-    앱 근거: NetworkApi.java:274. 기본값: KTX 마일리지 원장, 전체 증감, 페이지 1."""
+    기본값은 KTX 마일리지 원장(``"1"``), 전체 증감(``"0"``), 1페이지입니다. ``start_date``와 ``end_date``는 ``YYYYMMDD``
+    형식이어야 하고 시작일이 종료일보다 늦으면 안 됩니다. 이 검사는 요청을 보내기 전에 합니다."""
+
+    # 앱 근거: NetworkApi.java:274.
 
     start_date: str
     end_date: str
@@ -514,7 +524,10 @@ def build_discount_card_usage_query(card_no: str) -> dict[str, str]:
 class DiscountCardScheduleRequest:
     """N카드 한 구간의 이용 가능한 열차 조회 조건을 구성합니다.
 
-    보호된 기본 코드는 미확인이므로 카드의 실제 usePsbTno를 지정해야 하며 실서버 검증 못 함입니다(NCardScheduleIn.java:30-40)."""
+    ``usable_trip_count``(``usePsbTno``)에는 카드의 실제 값을 넣으세요. 앱의 기본 코드는 앱 내부 값이 공개돼 있지 않아
+    확인하지 못했습니다. 보통 ``for_card()``로 만듭니다."""
+
+    # 보호된 기본 코드는 미확인입니다. 실서버 검증 못 함(NCardScheduleIn.java:30-40).
 
     card_kind_management_no: str
     departure_station_name: str
@@ -540,10 +553,11 @@ class DiscountCardScheduleRequest:
         usage_period_days: str | None = None,
         page_no: str | None = None,
     ) -> DiscountCardScheduleRequest:
-        """카드 종류에서 dcntCrdKndCd 를 유도합니다.
+        """카드 종류 관리번호로 할인카드 종류 코드(``card_kind_code``, ``dcntCrdKndCd``)를 정해 조회 조건을 만듭니다.
 
-        앱 대응 함수는 NCardDefine.findDcntCrdKndCd(NCardDefine.java:58-88)이며 그 함수가 특별 취급하는 관리번호 집합은 이 구현과
-        다릅니다(_B2N_CARD_KIND_MANAGEMENT_NOS 참고)."""
+        일부 관리번호는 ``"B2N"``, 나머지는 ``"MMM"``을 씁니다. 이 구분이 앱과 같은지는 확인하지 못했습니다."""
+        # 앱 대응 함수는 NCardDefine.findDcntCrdKndCd(NCardDefine.java:58-88)이며 그 함수가 특별 취급하는 관리번호 집합은
+        # 이 구현과 다릅니다(_B2N_CARD_KIND_MANAGEMENT_NOS 참고).
         kind_code = "B2N" if card_kind_management_no in _B2N_CARD_KIND_MANAGEMENT_NOS else "MMM"
         return cls(
             card_kind_management_no=card_kind_management_no,
@@ -737,9 +751,13 @@ def _validate_commuter_passenger_request(
 
 @dataclass(frozen=True)
 class OriginalTicketReference:
-    """원승차권 조회와 후속 처리에 사용할 반환 식별자를 구성합니다.
+    """원표 조회와 환불·대리수령 같은 후속 처리에 쓰는 반환 식별자를 구성합니다.
 
-    반환 경로는 MMDD, 수령자·PBP 경로는 YYYYMMDD를 사용하므로 라우트 사이에 날짜를 혼용하지 않습니다(실서버 관측)."""
+    네 필드 모두 비어 있지 않은 문자열이어야 하며, 아니면 ``KorailProtocolError``가 발생합니다. ``sale_date``의 형식은
+    메서드마다 다릅니다. 수령자·대리수령 조회 두 메서드는 승차권의 ``sale_date``(``YYYYMMDD``)를 받고, 그 밖의 메서드는
+    ``return_sale_date``(``MMDD``)를 받습니다. 메서드 사이에 값을 섞어 쓰지 마세요."""
+
+    # 반환 경로는 MMDD, 수령자·PBP 경로는 YYYYMMDD 를 사용합니다(실서버 관측).
 
     sale_window_no: str
     sale_date: str
@@ -852,16 +870,21 @@ def build_original_ticket_inquiry_form(
     return tuple(rows)
 
 
-#: ``"1"`` 일반실, ``"2"`` 특실(라이브 기록에 따른 값; PsrmType.java:19-29 의 리터럴은 보호됨), ``None`` 은 필드 생략.
+# 라이브 기록에 따른 값입니다. PsrmType.java:19-29 의 리터럴은 보호돼 있습니다.
+#: 자율 좌석 변경 조회의 객실 등급 값입니다. ``"1"``은 일반실, ``"2"``는 특실입니다.
 KorailSelfSeatChangeRoomClassCode = Literal["1", "2"]
 
 
 @dataclass(frozen=True)
 class SelfSeatChangeInfoRequest:
-    """자율 좌석변경 대상 역·사유 조회 입력을 구성합니다.
+    """자율 좌석 변경 대상 역·사유 조회 입력을 구성합니다.
 
-    앱 근거: NetworkApi.java:806-808; SeatAvailabilityIn.java:26-30,55. 앱은 승차권의 식별자를 복사하고 객실 값이 null 이 아닐 때
-    요청합니다(SelfSeatChangeOptionViewModel.java:342-344)."""
+    앱처럼 승차권의 운행일·열차 번호·출발역·도착역을 그대로 넣습니다. ``room_class_code``가 ``None``이면 객실 등급을 보내지
+    않습니다. ``run_date``는 8자리 숫자, ``train_no``는 5자리 이하 숫자여야 하고 역 코드는 비어 있으면 안 되며, 아니면
+    ``KorailProtocolError``가 발생합니다."""
+
+    # 앱 근거: NetworkApi.java:806-808; SeatAvailabilityIn.java:26-30,55. 앱은 승차권의 식별자를 복사하고 객실 값이 null 이
+    # 아닐 때 요청합니다(SelfSeatChangeOptionViewModel.java:342-344).
 
     run_date: str
     train_no: str
@@ -902,7 +925,7 @@ def build_recent_delivery_history_form(customer_no: str) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class CommuterTicketInquiryRequest:
-    """정기권 예매의 원승차권 조회 입력을 구성합니다."""
+    """정기권 예매의 원표 조회 입력을 구성합니다."""
 
     original_ticket: OriginalTicketReference
     inquiry_type: Literal["0", "1"] = "0"
@@ -914,6 +937,8 @@ class CommuterTicketInquiryRequest:
             raise KorailProtocolError("original_ticket must be an OriginalTicketReference")
 
 
+#: ``get_commuter_info()``에 넘기는 세 단계 입력 중 하나입니다. 초기 조건(``CommuterInitialRequest``), 승객·인원
+#: 조건(``CommuterPassengerRequest``), 원표 조회(``CommuterTicketInquiryRequest``) 중 하나를 넘깁니다.
 CommuterInfoRequest = CommuterInitialRequest | CommuterPassengerRequest | CommuterTicketInquiryRequest
 
 
@@ -972,8 +997,13 @@ def _wire_component(value: str, name: str) -> str:
 
 @dataclass(frozen=True)
 class PriceFareLeg:
-    """예매 전 운임을 조회할 열차 한 구간을 구성합니다. goods_no=None 이면 앱처럼 gdNo 칸에 빈 문자열을 보냅니다. 앱의 일반 열차 생성자는 기본값 마스크 64 로 gdNo
-    기본값을 쓰며(TrainOpInfoViewModel.java:794) 그 값은 길이 0 암호문, 곧 빈 문자열입니다(PrcFareInItem.java:109)."""
+    """예매 전 운임을 조회할 열차 한 구간을 구성합니다.
+
+    ``goods_no``가 ``None``이면 앱처럼 상품 번호(``gdNo``) 칸을 빈 문자열로 보냅니다. ``None``이 아닌 값은 모두 비어 있지
+    않은 문자열이어야 하고 쉼표를 포함할 수 없으며, 아니면 ``KorailProtocolError``가 발생합니다."""
+
+    # 앱의 일반 열차 생성자는 기본값 마스크 64 로 gdNo 기본값을 쓰며(TrainOpInfoViewModel.java:794) 그 값은 길이 0 암호문,
+    # 곧 빈 문자열입니다(PrcFareInItem.java:109).
 
     departure_station_code: str
     arrival_station_code: str
@@ -1003,7 +1033,10 @@ class PriceFareLeg:
 class PriceFareQuoteRequest:
     """한두 구간의 운임 조회 조건과 메뉴를 구성합니다.
 
-    DTO: PrcFareIn.java:28-31,197. 생성자 TrainOpInfoViewModel.java:794 의 메뉴 리터럴은 보호됨."""
+    ``legs``는 ``PriceFareLeg`` 한 개 또는 두 개여야 하며, 아니면 ``KorailProtocolError``가 발생합니다. ``goods_no``는 모든
+    구간에 넣거나 모두 비워 두세요. 앱이 보내는 메뉴 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다."""
+
+    # DTO: PrcFareIn.java:28-31,197. 생성자 TrainOpInfoViewModel.java:794 의 메뉴 리터럴은 보호됨.
 
     legs: tuple[PriceFareLeg, ...]
     menu_id: str = "11"
@@ -1059,8 +1092,10 @@ def build_price_fare_quote_form(
 class TicketReservationDetailRequest:
     """PNR 기준 예약 상세 조회 입력을 구성합니다.
 
-    TicketRsvInquiryIn.java:51 의 명시적 hidPnrNo 를 보냅니다(NetworkApi.java:422-424). 같은 라우트의 ReservationListIn 은
-    할인승객 목록을 받는 별도 입력입니다(NetworkApi.java:626-628)."""
+    PNR은 ``hidPnrNo``로 보냅니다. ``pnr_no``가 비어 있으면 ``KorailProtocolError``가 발생합니다."""
+
+    # TicketRsvInquiryIn.java:51 의 명시적 hidPnrNo 를 보냅니다(NetworkApi.java:422-424). 같은 라우트의 ReservationListIn 은
+    # 할인승객 목록을 받는 별도 입력입니다(NetworkApi.java:626-628).
 
     pnr_no: str
 
@@ -1081,8 +1116,11 @@ def build_ticket_reservation_detail_query(
 class RefundCompanion:
     """환불 수수료 조회에 사용할 동반자 이름과 생년월일을 구성합니다.
 
-    앱 근거: RefundCommissionIn.java:34-35,59. 앱 호출자는 compaNm/compaBrth 를
-    전달합니다(MyTicketDetailViewModel.java:277, FTicketDetailViewModel.java:179)."""
+    이름은 ``name``, 생년월일은 ``certificate_no``에 넣습니다. 동반자가 없으면 기본값(빈 문자열)을 그대로 두세요. 빈 값은
+    요청에 싣지 않습니다."""
+
+    # 앱 근거: RefundCommissionIn.java:34-35,59. 앱 호출자는 compaNm/compaBrth 를
+    # 전달합니다(MyTicketDetailViewModel.java:277, FTicketDetailViewModel.java:179).
 
     name: str = ""
     certificate_no: str = ""
@@ -1182,7 +1220,9 @@ _TRAVEL_KEYWORD_KEYS = {"name": "gdNm", "area": "gdTripArNm", "theme": "gdThmNm"
 
 @dataclass(frozen=True)
 class TravelProductSearchQuery:
-    """필수 funcDvCd가 보호돼 공개 클라이언트에서는 사용하지 않는 기록용 입력입니다(TravelSearchProductIn.java:78; 서버 거절 관측)."""
+    """필수 값(``funcDvCd``)을 확인하지 못해 공개 클라이언트에서는 쓰지 않는 기록용 입력입니다."""
+
+    # 필수 funcDvCd 가 보호돼 있습니다(TravelSearchProductIn.java:78; 서버 거절 관측).
 
     keyword: str
     keyword_field: Literal["name", "area", "theme", "category"] = "name"

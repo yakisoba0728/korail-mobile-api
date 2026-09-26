@@ -136,6 +136,8 @@ class DynapathRequestContext:
     os_version: str
 
 
+#: 요청 정보(``DynapathRequestContext``)를 받아 DynaPath 토큰 문자열을 돌려주는 함수의 타입입니다. ``None``을 돌려주면
+#: 헤더를 붙이지 않고, 함수가 예외를 발생시키면 요청을 보내지 않고 ``KorailProtocolError``를 발생시킵니다.
 DynapathTokenProvider = Callable[[DynapathRequestContext], str | None]
 TimestampMsProvider = Callable[[], int]
 RandomTextProvider = Callable[[], str]
@@ -376,8 +378,11 @@ def generate_dynapath_token(
 
 
 class DynapathTokenGenerator:
-    """SDK 처럼 토큰마다 직전 토큰(첫 토큰은 it)과의 시간차를 최근 5개까지 기록해 rt 로 보냅니다(DynaPathMobileSDK.java:43-44,
-    a/b.java:58-68). SDK 도 초기화 때 빈 이력으로 시작합니다(a/a.java:17)."""
+    """앱의 DynaPath SDK처럼 토큰마다 직전 토큰(첫 토큰은 앱 시작 시각)과의 시간 차이를 최근 5개까지 기록해 ``rt``로 보냅니다.
+
+    SDK와 같이 빈 이력으로 시작합니다."""
+
+    # 근거: DynaPathMobileSDK.java:43-44, a/b.java:58-68. SDK 도 초기화 때 빈 이력으로 시작합니다(a/a.java:17).
 
     def __init__(
         self,
