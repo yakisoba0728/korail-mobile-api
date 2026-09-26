@@ -1885,7 +1885,7 @@ class KorailClient:
     ) -> StationRefundExecutionResponse:
         """검증된 역발행 승차권의 환불을 요청합니다.
 
-        실제 환불·접수 상태를 바꿀 수 있으므로 반환 구분과 결과를 확인하십시오. 검증 못 함: 상태표 기준 역발행 승차권이 없어 실행하지 못했습니다."""
+        실제 환불·접수 상태를 바꿀 수 있으므로 반환 구분과 결과를 확인하십시오. 검증 못 함: 역발행 승차권이 없어 실행하지 못했습니다."""
         self._require_session("station ticket refund requires")
         return self._mutation(
             "/classes/com.korail.mobile.refunds.executeOnlineRefunds",

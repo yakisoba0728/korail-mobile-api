@@ -9,16 +9,16 @@ DTO 필드는 선언 순서로 평탄화하고 배열은 1기반 인덱스를 �
 
 API User-Agent는 운영 관측값 `korailtalk`, 대기열 User-Agent는 기기 기반 Dalvik 형식입니다.
 둘 다 `Connection: Keep-Alive`, `Accept-Encoding: gzip`을 사용하며 `Accept`는 보내지 않습니다.
-보호된 헤더 리터럴을 이 정리에서 해독하거나 새로 추정하지 않습니다.
+보호된 헤더 리터럴은 해독하거나 추정하지 않습니다.
 
 응답 모델은 자동 마스킹하지 않습니다. `frozen=True`는 중첩 사전·목록의 불변성을 뜻하지 않습니다.
-공개 `raw` 타입은 읽기 인터페이스인 `Mapping[str, object]`이며 원문 객체의 동일성과 기존 복사 정책은 유지합니다.
-거절한 응답의 전체 원문은 예외 `raw`, 기존 부분 원문은 `parser_raw`입니다.
+공개 `raw` 타입은 읽기 인터페이스인 `Mapping[str, object]`이며 원문 객체를 복사하거나 동결하지 않습니다.
+거절한 응답의 전체 원문은 예외 `raw`, 파서가 남긴 부분 원문은 `parser_raw`입니다.
 
 ## 스칼라·봉투와 선택값
 
 앱의 String 필드가 JSON 정수로 오는 관측에 따라 문자열로 정규화합니다
-(입력 자료 `SESSION_CONTEXT.md` §3.6). 불리언을 정수로 간주하지 않습니다.
+(예: 예약 응답의 `h_jrny_cnt` 가 `"0001"`, 예약 이력에서는 `1`). 불리언을 정수로 간주하지 않습니다.
 선택 스칼라의 누락·null·잘못된 타입은 `None`, 후속 요청에 필요한 필수값의 잘못된 타입은
 `KorailProtocolError`입니다. 선택 목록은 해당 DTO·파서의 빈 목록 규칙을 따릅니다.
 Python의 정수 문자열 변환 한도를 넘는 봉투 값도 `KorailProtocolError`로 처리하고 원문을 남깁니다.
@@ -37,7 +37,7 @@ CommonOut 경로의 `FAIL/P058` 또는 결과 누락/P058은 `raise_on_fail=Fals
 
 | 위치 | 전송 필드 | 개수 | 근거 |
 |---|---|---:|---|
-| 역 행 | `stn_cd`, `stn_nm` | 2 | `StationDataOutStnItem.java:60–65`; 보호된 누락 기본값은 기존 정책 유지 |
+| 역 행 | `stn_cd`, `stn_nm` | 2 | `StationDataOutStnItem.java:60–65`; 앱의 누락 기본값이 보호돼 있어 `""` 를 씀 |
 | 호차·속성 행 | `h_srcar_no`, `h_rest_seat_cnt`, `h_psrm_cl_nm`, `seatAttNm` | 4 | `TrainResearchOutCarInfo.java:59–85`, `TrainResearchOutSeatInfo.java:51–56` |
 | 좌석 재고 봉투 | `layout_type`, `seat_ary_cd` | 2 | `TResidualSeatsResearchOut.java:61–82` |
 | 좌석 행 | `seat_no`, `sale_psb_flg`, `dir_seat_att_cd`, `rq_seat_att_cd`, `seat_spec`, `sqr_no`, `intg_msg_cd`, `intg_msg` | 8 | `TResidualSeatsResearchOutSeat.java:62–104` |
@@ -72,15 +72,15 @@ CommonOut 경로의 `FAIL/P058` 또는 결과 누락/P058은 `raise_on_fail=Fals
 
 ## 대기열과 미확인 항목
 
-대기열은 빈 본문 POST와 URL 쿼리를 사용합니다. SDK의 `setDoOutput(true)` 동작을 반영한 기존 정책입니다
+대기열은 빈 본문 POST와 URL 쿼리를 사용합니다. SDK의 `setDoOutput(true)` 동작을 반영했습니다
 (`com/netfunnel/api/http/Client.java:252–260`). 5101 진입, 201/202일 때만 TTL 대기와 5002 반복,
 API 처리 후 finally에서 5004 반납을 수행합니다(`Netfunnel.java:610–664,848–880`).
 반납 실패가 원래 API 예외를 가리지는 않습니다. 키를 API 폼에 싣지 않습니다.
 
 TTL·대기 인원은 SDK의 Java int32 규칙으로 읽고 TTL을 1–30초로 제한합니다
-(`Response.java:59–66,147–154`). 잘못된 두 숫자를 0으로 읽는 것은 기존 라이브러리의 관용 정책입니다.
+(`Response.java:59–66,147–154`). 잘못된 두 숫자를 0으로 읽는 것은 라이브러리의 관용 정책입니다.
 SDK는 잘못된 숫자에서 전체 응답을 거절하므로, 이 차이는 남겨 둡니다.
-응답 앞뒤 공백 제거와 키 값의 `=` 보존도 기존 정책이며 SDK의 분할과 다릅니다.
+응답 앞뒤 공백 제거와 키 값의 `=` 보존도 라이브러리 정책이며 SDK의 분할과 다릅니다.
 
 301/302 차단은 항상 거절합니다. 성공 전용 관문은 비성공 결과를 통과시키지 않습니다.
 라이브러리가 제공하는 누적 대기 상한은 SDK의 상한이 아닙니다.
@@ -88,8 +88,8 @@ SDK는 잘못된 숫자에서 전체 응답을 거절하므로, 이 차이는 �
 
 보호된 aid·mode·enum·JSON 설정, DynaPath 차단 키의 정확한 범위, 일부 결제·환불 제어값은 미확인입니다.
 DynaPath 차단 판정은 보호된 키 대신 최상위 정수를 검사하므로 다른 필드의 같은 값을 오인할 수 있습니다.
-기존 토큰 공식을 바꾸거나 보호 문자열을 해독하지 않습니다.
+보호 문자열은 해독하지 않습니다.
 
 N카드 일부 기능, 채워진 지연료 영수증, 셀프 체크인 좌석 확인·등록·취소 및 전달표 회수는 실서버 수용을 확인하지 않았습니다.
-기존 실서버 상태표는 입력 자료이며 이번 정리의 검사는 전부 오프라인입니다.
+저장소의 테스트와 검사기는 모두 오프라인이며 실서버 수용을 증명하지 않습니다.
 세 `_*_unsupported.py`는 기록용으로 유지하고 공개 클라이언트에서 import하지 않습니다.

@@ -864,7 +864,7 @@ def test_every_row_field_string_and_raw(parser, list_key: str, fields: dict[str,
 
 @pytest.mark.parametrize("wire,attr", list(SCHEDULE_FIELDS.items()))
 def test_schedule_integer_string_field_preserved(wire: str, attr: str) -> None:
-    """ScdlQryOutTrain.java:70-123 optional String masks; SESSION_CONTEXT §3.6 integer normalization."""
+    """ScdlQryOutTrain.java:70-123 optional String masks; integer normalization per checks/BEHAVIOR.md."""
     result = parse_limousine_schedule_response(envelope(trainList=[{wire: 7}]))
     assert getattr(result.schedules[0], attr) == "7"
     assert result.schedules[0].raw[wire] == 7

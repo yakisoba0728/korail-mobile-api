@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import copy
 import json
-import socket
 from collections import defaultdict
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -65,16 +64,8 @@ PNR = "SYNTH-PNR-ONLY"
 
 
 @pytest.fixture(autouse=True)
-def offline_guard(monkeypatch: pytest.MonkeyPatch) -> None:
-    """SESSION_CONTEXT.md §3.1: abort any unexpected socket/DNS access."""
-
-    def denied(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("OFFLINE TEST: socket/DNS access is prohibited")
-
-    monkeypatch.setattr(socket, "create_connection", denied)
-    monkeypatch.setattr(socket.socket, "connect", denied)
-    monkeypatch.setattr(socket.socket, "connect_ex", denied)
-    monkeypatch.setattr(socket, "getaddrinfo", denied)
+def fixed_card_month(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the card-expiry reference month. conftest.f8_block_sockets blocks the network."""
     monkeypatch.setattr(payload_module, "_current_year_month", lambda: 202609)
 
 
@@ -828,7 +819,7 @@ PARSED_CASES = [c for c in CASES if c.parser_name is not None]
 def test_parser_failure_retains_whole_response_and_never_retries(
     case: Case, kind: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """SESSION_CONTEXT §3.6 / ACCEPTANCE G9: full response survives a post-commit parse error, including GET product cancellation."""
+    """checks/BEHAVIOR.md / ACCEPTANCE G9: full response survives a post-commit parse error, including GET product cancellation."""
     partial = {"synthetic_partial": "only-one-row"}
 
     def broken(raw: dict[str, Any]) -> Any:

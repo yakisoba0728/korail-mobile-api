@@ -79,7 +79,7 @@ def test_login_form_matches_dto_declaration_order(lang: str | None, optional: bo
 @pytest.mark.parametrize("key", ["h_msg_cd", "h_msg_txt", "strResult"])
 @pytest.mark.parametrize("entrypoint", ["http", "parser", "model"])
 def test_oversized_envelope_integer_is_protocol_error_with_raw(key: str, entrypoint: str) -> None:
-    """SESSION_CONTEXT §3.6: numeric strings normalize; rejected responses retain the entire raw object."""
+    """checks/BEHAVIOR.md (스칼라·봉투): numeric strings normalize; rejected responses retain the entire raw object."""
     import sys
 
     from korail_mobile_api import BaseKorailResponse, KorailProtocolError
@@ -134,7 +134,7 @@ def test_base_response_from_raw_retains_non_object_on_rejection() -> None:
 
 @pytest.mark.parametrize("value", [True, 1.5, [], {}, "20300102", 20300102, None])
 def test_optional_delay_run_date_uses_optional_scalar_policy(value: object) -> None:
-    """DelayCertificate.java:57-60 differs from observed optional runDt; SESSION_CONTEXT §3.6 governs it."""
+    """DelayCertificate.java:57-60 differs from the observed optional runDt; checks/BEHAVIOR.md governs it."""
     from korail_mobile_api.read_parsers import parse_delay_certificate_response
 
     row = {

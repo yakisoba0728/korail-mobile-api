@@ -596,7 +596,7 @@ def exact_request(request, route, form, *, dynapath=False):
 
 @pytest.mark.parametrize("case", CASES, ids=[x[0] for x in CASES])
 def test_public_method_form_and_representative_parse(case, rig):
-    """NetworkApi.java:214-773; each DTO/mask/callsite is indexed in REPORT §4.
+    """NetworkApi.java:214-773 declares these routes.
 
     Synthetic nonempty MaaS data freezes inferred keys, not a verified live schema.
     """
@@ -639,7 +639,7 @@ OPTIONAL = [
 )
 def test_optional_strings_are_lenient(name, wire, model, value, rig):
     """Optional constructors: TrainScheduleOutTrainInfo.java:172-563; seat:62-105;
-    RunDateOutItem.java:104-161; remaining DTOs/masks are in REPORT §5.
+    RunDateOutItem.java:104-161.
     """
     case = BY_NAME[name]
     raw = deepcopy(case[5])
@@ -654,7 +654,7 @@ def test_optional_strings_are_lenient(name, wire, model, value, rig):
 @pytest.mark.parametrize("name,wire,model", OPTIONAL)
 @pytest.mark.parametrize("value", [0, 12])
 def test_optional_integer_string_compatibility(name, wire, model, value, rig):
-    """SESSION_CONTEXT §3.6 integer/String compatibility; optional DTO masks in REPORT.
+    """Integer/String compatibility and optional DTO masks per checks/BEHAVIOR.md.
     This is the supplied interoperability policy, not Android's exact JSON decoder.
     """
     case = BY_NAME[name]
@@ -681,7 +681,7 @@ def test_station_info_serializer_required_mask(key, value, rig):
 
 @pytest.mark.parametrize("raw", [{"count": 0, "map_version": 12}, {"count": "", "map_version": ""}])
 def test_station_info_required_string_accepts_integers_and_empty(raw, rig):
-    """StationInfoOut.java:47-53 required presence; SESSION_CONTEXT §3.6 allows integers."""
+    """StationInfoOut.java:47-53 required presence; checks/BEHAVIOR.md allows integers."""
     client, _, _ = rig([raw])
     result = client.get_station_info()
     assert result.count == str(raw["count"])
@@ -817,7 +817,7 @@ def test_zero_canonical_train_scalar_does_not_select_alias(key, alias, model):
 @pytest.mark.parametrize("empty", [True, False])
 def test_next_page_empty_page_and_cursor_choice(name, empty, rig):
     """TrainScheduleViewModel.smali:36786-36851: empty list stops; cursor tuple branches.
-    Library chooses transfer by cursor presence, not protected strJobId (REPORT F2-05).
+    Library chooses transfer by cursor presence, not protected strJobId.
     """
     raw = deepcopy(TRANSFER if name == "search_transfer_trains" else SEARCH)
     if empty:
@@ -1196,7 +1196,7 @@ def test_all_public_methods_have_contract_cases():
 @pytest.mark.parametrize("case", CASES, ids=[x[0] for x in CASES])
 @pytest.mark.parametrize("raw", [{"strResult": True, "trace": {"synthetic": 1}}, ["synthetic-not-an-object"]])
 def test_transport_parse_failure_keeps_full_json(case, raw, rig):
-    """SESSION_CONTEXT §3.6 raw preservation; no Android/protected-field claim."""
+    """Raw preservation per checks/BEHAVIOR.md; no Android/protected-field claim."""
     client, calls, _ = rig([raw], auth=case[7])
     with pytest.raises(KorailProtocolError) as error:
         getattr(client, case[0])(*case[1], **case[2])

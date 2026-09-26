@@ -56,18 +56,6 @@ def form(request):
     return parse_qs(request.content.decode("utf-8"), keep_blank_values=True)
 
 
-@pytest.fixture(autouse=True)
-def offline(monkeypatch):
-    def blocked(*args, **kwargs):
-        raise RuntimeError("F1 offline test: network/DNS disabled")
-
-    monkeypatch.setattr(socket.socket, "connect", blocked)
-    monkeypatch.setattr(socket.socket, "connect_ex", blocked)
-    monkeypatch.setattr(socket.socket, "sendto", blocked)
-    monkeypatch.setattr(socket, "create_connection", blocked)
-    monkeypatch.setattr(socket, "getaddrinfo", blocked)
-
-
 @pytest.fixture
 def factory():
     clients = []
@@ -106,9 +94,10 @@ def factory():
 
 
 def test_socket_guard_is_active():
-    with pytest.raises(RuntimeError, match="offline"):
+    """conftest.f8_block_sockets blocks TCP and DNS for every test."""
+    with pytest.raises(AssertionError, match="network access is forbidden"):
         socket.create_connection(("offline.invalid", 443))
-    with pytest.raises(RuntimeError, match="offline"):
+    with pytest.raises(AssertionError, match="network access is forbidden"):
         socket.getaddrinfo("offline.invalid", 443)
 
 
@@ -398,7 +387,7 @@ def test_existing_non_fail_result_policy(value):
 )
 @pytest.mark.parametrize("value", [0, 123, -1])
 def test_integer_string_fields_preserve_original_raw(field, attribute, value):
-    """SESSION_CONTEXT.md §3.6: integer JSON String compatibility (2026-09-21); decoder:468-472."""
+    """checks/BEHAVIOR.md (스칼라·봉투): integer JSON String compatibility; decoder:468-472."""
     raw = envelope(**({field: value} if field != "strResult" else {}))
     raw[field] = value
     result = parse_base_response(raw)
@@ -710,7 +699,7 @@ def test_default_configuration_and_explicit_overrides():
     ],
 )
 def test_logout_always_clears_local_state(factory, failure, expected):
-    """NetworkApi.java:471-472; library finally cleanup, korail-api-status.html:254 (2026-09-24)."""
+    """NetworkApi.java:471-472; library finally cleanup."""
     client, requests = factory([*bootstrap(), login_response(), failure])
     client.login(ID, PASSWORD)
     if expected:
@@ -844,7 +833,7 @@ EXPECTED = {code: getattr(E, name) for name, codes in EXPECTED_GROUPS.items() fo
 
 @pytest.mark.parametrize("code, expected", sorted(EXPECTED.items()))
 def test_error_table_each_code_type_message_and_raw(code, expected):
-    """ErrorHelper.java:44-114 + asset per-code matrix in REPORT.md; policy, not UI equivalence."""
+    """ErrorHelper.java:44-114 + per-code messages in assets/error_json.json; policy, not UI equivalence."""
     raw = envelope(code, "FAIL", synthetic_nested={"keep": True})
     error = E.classify_app_error(code, "synthetic message", raw=raw)
     assert type(error) is expected

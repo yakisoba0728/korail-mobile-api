@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import socket
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass, is_dataclass, replace
@@ -19,6 +18,7 @@ from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import KorailProtocolError, KorailSessionExpiredError
 from korail_mobile_api.models import KorailSession
+from korail_mobile_api.read_parsers import parse_cart_list_response
 
 PREFIX = "/classes/com.korail.mobile."
 COMMON = [("Device", "TEST-DEVICE"), ("Version", "TEST-VERSION"), ("Key", "TEST-KEY")]
@@ -788,17 +788,8 @@ BY_NAME = {c.method: c for c in CASES}
 
 
 @pytest.fixture(autouse=True)
-def no_network(monkeypatch: pytest.MonkeyPatch) -> None:
-    """SESSION_CONTEXT.md §3: sockets/DNS denied even when transport configuration regresses."""
-
-    def denied(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("OFFLINE ONLY: socket access is forbidden")
-
-    for attr in ("connect", "connect_ex", "sendto", "sendmsg"):
-        if hasattr(socket.socket, attr):
-            monkeypatch.setattr(socket.socket, attr, denied)
-    monkeypatch.setattr(socket, "create_connection", denied)
-    monkeypatch.setattr(socket, "getaddrinfo", denied)
+def fixed_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the timestamp sent by timestamp-bearing forms. conftest.f8_block_sockets blocks the network."""
     monkeypatch.setattr(p.time, "time", lambda: STAMP / 1000)
 
 
@@ -1033,7 +1024,7 @@ def test_recent_required_nullable_is_not_missing(key, make_client) -> None:
     ],
 )
 def test_required_string_accepts_json_integer(name, path, key, make_client) -> None:
-    """Seat.java:53; DptnBank.java:46; ReceiptInfo.java:87; SESSION_CONTEXT.md §3.6 (2026-09-21)."""
+    """Seat.java:53; DptnBank.java:46; ReceiptInfo.java:87; integer rule in checks/BEHAVIOR.md (스칼라·봉투)."""
     entry = BY_NAME[name]
     payload = deepcopy(entry.response)
     node_at(payload, path)[key] = 17
@@ -1316,7 +1307,7 @@ def test_known_empty_failures_are_not_successful_rows(method, code, kwargs, make
 
 @pytest.mark.parametrize("entry", CASES, ids=lambda c: c.method)
 def test_p058_never_parsed_as_account_result(entry, make_client) -> None:
-    """CommonOut.java:426-438; SESSION_CONTEXT.md §3: P058 remains session expiry."""
+    """CommonOut.java:426-438; checks/BEHAVIOR.md: P058 remains session expiry."""
     payload = {"strResult": "FAIL", "h_msg_cd": "P058", "h_msg_txt": "SYNTHETIC EXPIRED"}
     client, calls = make_client(payload)
     with pytest.raises(KorailSessionExpiredError) as error:
@@ -1334,17 +1325,11 @@ def test_required_method_set_is_exact() -> None:
     assert set(BY_NAME) == expected and len(CASES) == 37
 
 
-def test_socket_guard_active() -> None:
-    """SESSION_CONTEXT.md §3.1: fail locally before even a DNS lookup."""
-    with pytest.raises(AssertionError, match="OFFLINE ONLY"):
-        socket.create_connection(("offline.invalid", 443))
-
-
 @pytest.mark.parametrize(
     "name", ["get_discount_card_usage_history", "get_discount_card_schedule", "get_delivery_recipient"]
 )
 def test_ncard_live_status_is_not_promoted(name) -> None:
-    """SESSION_CONTEXT.md §3.10; the three N-card read docstrings keep 검증 못 함."""
+    """The three N-card read docstrings keep 검증 못 함 (no N-card account to verify with)."""
     assert "검증 못 함" in (getattr(KorailClient, name).__doc__ or "")
 
 
@@ -1434,7 +1419,7 @@ def test_integer_envelope_fields_are_read_as_strings(entry, make_client) -> None
 @pytest.mark.parametrize("entry", CASES, ids=lambda c: c.method)
 @pytest.mark.parametrize("field", ("strResult", "h_msg_cd", "h_msg_txt"))
 def test_malformed_envelope_preserves_entire_response(entry, field, make_client) -> None:
-    """SESSION_CONTEXT.md §3.6; _parsing.py:41-53 and http.py:parse_base_response.
+    """checks/BEHAVIOR.md (스칼라·봉투); _parsing._envelope and http.parse_base_response.
 
     The existing envelope rejection policy is not changed. The full JSON must
     survive an HTTP-layer rejection before the domain parser is called.
@@ -1447,3 +1432,22 @@ def test_malformed_envelope_preserves_entire_response(entry, field, make_client)
         getattr(client, entry.method)(**entry.kwargs)
     assert error.value.raw == payload
     assert len(calls) == 1
+
+
+def test_cart_nested_pay_details_stay_in_raw() -> None:
+    """CartInfo.java:28-61 declares six nested pay-detail objects; ACCEPTANCE.md L7 keeps them only in raw."""
+    names = (
+        "greenCarPayDetail",
+        "lotteRentalPayDetail",
+        "loyquPayDetail",
+        "skRentalPayDetail",
+        "yanoljaDetail",
+        "zimCarryDetail",
+    )
+    details = {name: {"SYNTH-KEY": f"SYNTH-{name}"} for name in names}
+    row = {"h_pnr_no": "TEST-PNR", "h_rcvd_amt": "001200", **details}
+    item = parse_cart_list_response(success(cart_infos={"cart_info": [row]})).items[0]
+    assert {name: item.raw[name] for name in names} == details
+    for model_field in dataclass_fields(item):
+        if model_field.name != "raw":
+            assert getattr(item, model_field.name) not in details.values(), model_field.name
