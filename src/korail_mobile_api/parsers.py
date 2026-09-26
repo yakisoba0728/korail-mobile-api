@@ -639,7 +639,8 @@ def _inventory_ratio(data: Mapping[str, Any], key: str) -> float | None:
     if value == "":
         return None
     number: int | float | str
-    if type(value) in {int, float} and isinstance(value, (int, float)):
+    # bool 을 숫자로 받지 않도록 정확한 int·float 타입만 허용합니다.
+    if type(value) in (int, float):
         number = value
     elif isinstance(value, str) and re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value) is not None:
         number = value
