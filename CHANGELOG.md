@@ -23,6 +23,8 @@ v1.0.0~v1.1.1 은 GitHub 릴리스로 공개했으며 당시 기록은
 
 ### 수정
 
+- `refund`는 `commission`이 `get_refund_commission`의 응답이 아니면(`None` 포함) 요청 전에 `KorailProtocolError`로 거절합니다.
+  전에는 `commission=None`을 명시하면 수수료 값 없이 환불 요청을 보냈습니다.
 - 로그인 폼에서 `txtInputFlg`를 회원번호 앞, `custId`를 `checkValidPw` 앞에 둡니다
   (`LoginIn.java:57–80,141–164`). 경로·필드·값·헤더는 유지합니다.
 - 봉투와 `PriceRecalculationRequest.for_hold` 좌석의 과도하게 큰 JSON 정수도 원문을 보존한
