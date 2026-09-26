@@ -19,7 +19,15 @@
 
 ## 2. 대기열 통과
 
-열차 조회, 예약, 결제, 예약 내역 조회는 요청 전에 NetFunnel 대기열을 거칩니다. 앱과 같은 순서로 진행합니다.
+다음 메서드는 요청 전에 NetFunnel 대기열을 거칩니다.
+
+- 열차 조회: [`search_trains`](../api/trains.md#search_trains), [`search_transfer_trains`](../api/trains.md#search_transfer_trains), [`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback), [`get_seat_assignment_schedule`](../api/trains.md#get_seat_assignment_schedule)
+- 예약: [`reserve`](../api/reservations.md#reserve), [`reserve_transfer`](../api/reservations.md#reserve_transfer), [`reserve_with_discount_card`](../api/passes.md#reserve_with_discount_card)
+- 카드 결제: [`pay_with_card`](../api/payments.md#pay_with_card)
+- 예약 내역 조회: [`get_reservation_history`](../api/reservations.md#get_reservation_history)
+
+[`reserve_merge`](../api/reservations.md#reserve_merge), [`reserve_limousine`](../api/airport-bus.md#reserve_limousine)을 비롯한 그 밖의 메서드는 대기열을 거치지 않습니다.
+대기열은 앱과 같은 순서로 진행합니다.
 
 1. 대기열 서버에 입장 키를 요청합니다(`5101`).
 2. 대기가 필요하다는 응답(`201`, `202`)이면 서버가 알려 준 시간만큼 기다린 뒤 다시 확인합니다(`5002`). 대기 시간은 1~30초로 제한합니다.
@@ -31,7 +39,7 @@
 | 관문 | 쓰는 곳 | 대기열 서버 오류 시 |
 |---|---|---|
 | `inquiry`, `peak_season_inquiry`, `product_inquiry` | 열차 조회 | 대기열을 건너뛰고 요청을 보냅니다. |
-| `reserve`, `pay`, `reservation_view` | 예약, 결제, 예약 내역 조회 | 요청을 보내지 않고 예외를 발생시킵니다. |
+| `reserve`, `pay`, `reservation_view` | 예약(`reserve`, `reserve_transfer`, `reserve_with_discount_card`), 카드 결제, 예약 내역 조회 | 요청을 보내지 않고 예외를 발생시킵니다. |
 
 대기열 서버가 요청을 차단하면(`301`, `302`) `KorailQueueRejectedError`가 발생합니다.
 입장 키는 대기열 서버와만 주고받으며 KORAIL API 요청에는 싣지 않습니다.
@@ -46,7 +54,7 @@
 
 ## 4. 응답 판정
 
-KORAIL 응답에는 공통 상태 필드(이 문서에서는 **봉투**라고 부릅니다)가 있습니다.
+대부분의 KORAIL 응답에는 공통 상태 필드(이 문서에서는 **봉투**라고 부릅니다)가 있습니다. 역 목록처럼 봉투가 없을 수 있는 응답도 있습니다.
 
 | 필드 | 뜻 |
 |---|---|
@@ -62,14 +70,18 @@ KORAIL 응답에는 공통 상태 필드(이 문서에서는 **봉투**라고 �
 
 응답은 메서드마다 정해진 dataclass로 바뀝니다. 읽는 규칙은 모든 메서드에 공통입니다.
 
-- **정수와 문자열**: 앱이 문자열로 선언한 필드를 서버가 JSON 정수로 보내는 경우가 있습니다(예: `"0001"` 대신 `1`). 이런 값은 문자열로 바꿔 담습니다. `true`/`false`는 정수로 취급하지 않습니다.
-- **선택 필드**: 응답에 없거나 `null`이거나 타입이 맞지 않는 선택 필드는 `None`입니다.
+- **정수와 문자열**: 앱이 문자열로 선언한 필드를 서버가 JSON 정수로 보내는 경우가 있습니다(예: `"0001"` 대신 `1`). 이런 값은 `str()`로 바꿔 `"1"`로 담으며, 앞자리 `0`은 복원하지 않습니다. `true`/`false`는 정수로 취급하지 않습니다.
+- **선택 필드**: 응답에 없거나 `null`이거나 타입이 맞지 않는 선택 필드는 `None`입니다. 아래 [앱 기본값을 쓰는 필드](#앱-기본값을-쓰는-필드) 18개는 예외입니다.
 - **필수 필드**: 다음 요청에 다시 보내야 하는 값(예약 번호, 반환 식별자 등)이 없거나 타입이 틀리면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
 - **원본 보존**: 모든 응답 모델의 `raw`에 서버가 보낸 원본이 그대로 남습니다.
 
 ### 앱 기본값을 쓰는 필드
 
-아래 18개 필드는 응답에서 빠지면 `None` 대신 앱과 같은 기본값을 씁니다. 문자열은 `""`, 숫자로 바꾸는 필드는 `None`입니다.
+아래 18개 필드는 다른 선택 필드와 읽는 규칙이 다릅니다.
+
+- 문자열 필드는 응답에서 빠지면 `None` 대신 앱과 같은 기본값 `""`을 씁니다.
+- 숫자로 바꾸는 필드(`h_srcar_no`, `h_rest_seat_cnt`, `st_loc_rt`, `cls_loc_rt`)는 빠지거나 `""`이면 `None`입니다.
+- 18개 필드 모두 값이 `null`이거나 타입이 맞지 않으면 `None`으로 바꾸지 않고 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
 
 | 위치 | 필드 | 개수 |
 |---|---|---:|
@@ -84,14 +96,25 @@ KORAIL 응답에는 공통 상태 필드(이 문서에서는 **봉투**라고 �
 - 응답을 읽지 못하면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] 등의 예외를 발생시킵니다.
   예외의 `raw`에는 서버가 보낸 응답 전체가, `parser_raw`에는 읽다가 멈춘 부분이 들어 있습니다.
 - 예약·결제·환불 같은 변경 요청은 자동으로 다시 보내지 않습니다. 응답을 읽지 못했어도 서버에서는 이미 처리됐을 수 있기 때문입니다.
-  이때는 예외의 `raw`나 `get_reservation_history()`로 먼저 결과를 확인하세요.
+  이때는 예외의 `raw`를 먼저 확인하고, 예약은 [`get_reservation_history()`](../api/reservations.md#get_reservation_history), 결제·환불은 [`get_ticket_list()`](../api/account.md#get_ticket_list)로 결과를 확인한 뒤에 다시 호출할지 정하세요.
+
+## 앱과 다르게 처리한 부분
+
+다음 동작은 앱과 다르게 라이브러리가 정한 것입니다.
+
+- **로그인 확인**: 로그인이 필요한 메서드를 로그인하지 않은 상태에서 호출하면 요청을 보내지 않고 [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError]를 발생시킵니다. 앱에는 없는 검사입니다.
+- **로그인 암호화 정보**: 앱은 앱을 시작할 때 받아 둔 암호화 키를 쓰고, 키가 비어 있을 때만 다시 받습니다. 라이브러리는 로그인할 때마다 새로 받습니다.
+- **0원 결제**: 앱은 결제할 금액이 0원이면 카드 없이 발권을 요청합니다. 라이브러리는 이 경로를 구현하지 않으며, 0원 홀드를 [`pay_with_card`](../api/payments.md#pay_with_card)로 결제하려고 하면 요청 전에 거절합니다.
+- **환승 조회 전환**: [`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback)은 직통 열차가 없다는 결과 코드(`WRD000061`)를 받으면 같은 조건으로 환승 조회 첫 페이지를 받습니다. 앱과 달리 확인 창을 띄우거나 열차군을 바꾸지 않습니다.
 
 ## 확인되지 않은 부분
 
-앱 내부의 일부 값은 공개돼 있지 않아 라이브러리가 확인하지 못했습니다. 이런 부분은 실서버에서 통한 값을 쓰며, 해당 메서드 설명에 표시했습니다.
+앱 내부의 일부 값은 공개돼 있지 않아 라이브러리가 확인하지 못했습니다. 항목마다 처리 방식이 다르며, 관련 메서드 설명에 표시했습니다.
 
-- 대기열 관문 식별값과 일부 관문의 사용 조건(성수기 조회, 특가 상품 조회)
-- DynaPath 차단 응답을 판정하는 정확한 기준
-- 일부 할인·환불 제어값
+- **대기열 관문 식별값**: 라이브러리의 기본값이 앱의 값과 같은지 확인하지 못했습니다. 기본 조회(`inquiry`), 예약(`reserve`), 결제(`pay`), 예약 내역(`reservation_view`) 관문에서는 실서버 확인을 마친 메서드의 요청이 이 기본값으로 처리됐습니다. 성수기 조회(`peak_season_inquiry`)와 특가 상품 조회(`product_inquiry`) 관문은 실서버에서 확인하지 못했습니다.
+- **성수기 판정**: 앱이 출발일을 성수기로 판정하는 기준은 확인하지 못했습니다. 라이브러리에서는 호출자가 `peak_season`으로 정합니다.
+- **DynaPath 차단 판정**: 차단 응답을 판정하는 정확한 기준은 확인하지 못했습니다.
+- **N카드 할인 코드**: [`reserve_with_discount_card`](../api/passes.md#reserve_with_discount_card)가 보내는 할인 코드는 실서버에서 확인하지 못했습니다.
+- **일부 환불 제어값**: 값을 알 수 없는 제어값은 추측하지 않고 요청에서 뺍니다.
 
 메서드별 실서버 확인 여부는 [실서버 확인 현황](../status.md)에 있습니다.

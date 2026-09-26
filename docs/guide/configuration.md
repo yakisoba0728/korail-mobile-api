@@ -4,7 +4,7 @@
 설정 필드 전체, DynaPath 토큰, 대기열(NetFunnel), 언어 필드, 환경변수로 설정을 만드는 방법을 차례로 다룹니다.
 설정을 넘기지 않으면 코레일+ 앱 7.0.6을 기준으로 정한 기본값을 쓰며, 대부분은 바꿀 필요가 없습니다.
 
-## 설정 만들기
+## 설정 적용
 
 `KorailConfig`는 바꿀 수 없는(frozen) dataclass입니다. 바꿀 필드만 키워드 인자로 넘겨 만들고, [`KorailClient`][korail_mobile_api.client.KorailClient]의 첫 번째 인자로 넘깁니다.
 설정은 클라이언트를 만들 때 적용됩니다. 설정을 바꾸려면 새 설정으로 새 클라이언트를 만드세요.
@@ -121,6 +121,16 @@ from korail_mobile_api import KorailClient, KorailConfig
 client = KorailClient(KorailConfig(disable_dynapath=True))
 ```
 
+이미 있는 설정을 `dataclasses.replace`로 끌 때는 `dynapath=DynapathConfig()`도 함께 넘기세요. 넘기지 않으면 원래 설정의 켜진 `dynapath`가 그대로 이어져 `ValueError`가 발생합니다.
+
+```python
+import dataclasses
+
+from korail_mobile_api import DynapathConfig, build_config_from_env
+
+config = dataclasses.replace(build_config_from_env(), disable_dynapath=True, dynapath=DynapathConfig())
+```
+
 !!! warning "DynaPath를 끄면 로그인할 수 없습니다"
     DynaPath를 끄면 [`login`](../api/session.md#login)은 서비스 상태 확인과 공통 코드 조회까지 보낸 뒤, 로그인 요청을 보내기 전에 [`KorailDynaPathRequiredError`][korail_mobile_api.errors.KorailDynaPathRequiredError]를 발생시킵니다.
     따라서 로그인이 필요한 메서드는 모두 쓸 수 없습니다. 라이브러리가 요청 전에 거절하는 경로는 로그인뿐이지만, 열차 조회처럼 토큰을 붙이던 다른 경로도 서버에서 거절될 수 있습니다.
@@ -140,6 +150,7 @@ client = KorailClient(KorailConfig(disable_dynapath=True))
 | `reservation_view` | [`get_reservation_history`](../api/reservations.md#get_reservation_history) | 같음 |
 
 - 대기열 서버가 요청을 차단하면(`301`, `302`) 모든 관문에서 [`KorailQueueRejectedError`][korail_mobile_api.errors.KorailQueueRejectedError]가 발생합니다.
+- 대기열 서버가 기다리라고(`201`, `202`) 답하면서 입장 키를 주지 않으면 모든 관문에서 요청을 보내지 않고 `KorailNetFunnelError`를 발생시킵니다.
 - `reserve`, `pay`, `reservation_view` 관문은 대기열 서버가 최종적으로 통과(`200`)로 답하지 않으면 요청을 보내지 않고 `KorailNetFunnelError`를 발생시킵니다.
 - 대기열 요청이 실패하면 관문을 통과하는 동안 한 번만 다시 보냅니다. 다시 보내기 전에는 실패한 요청의 제한 시간(`netfunnel_timeout`)이 다 찰 때까지 기다립니다.
 - 대기열을 건너뛰거나 입장 키 반납이 실패하면 `korail_mobile_api.netfunnel` 로거에 경고를 남깁니다.
@@ -187,7 +198,7 @@ finally:
 `lang`을 정하면 공통 필드를 싣는 요청에서 `Key` 다음(공통 필드에 `Key`가 없는 요청은 `Version` 다음)에 `lang`을 보냅니다.
 `None`이면 보내지 않습니다. 앱이 보내는 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했으므로, 라이브러리는 기본값을 추측해 보내지 않습니다.
 
-## 환경변수로 설정 만들기 {#from-env}
+## 환경변수 설정 {#from-env}
 
 [`build_config_from_env`][korail_mobile_api.live.build_config_from_env]는 환경변수에서 실제 기기의 값을 읽어 `KorailConfig`를 만듭니다.
 DynaPath 토큰의 기기값과 대기열 `User-Agent`에 같은 기기값을 씁니다. 앱 시작 시각은 함수를 호출한 시각입니다.

@@ -1,7 +1,7 @@
 # 열차 조회·좌석
 
 이 페이지의 메서드는 열차를 찾고, 열차 한 편의 정차역·호차·좌석·운임을 조회합니다.
-모두 서버의 상태를 바꾸지 않는 조회 메서드이며, 호차 목록과 좌석 배치 조회만 로그인이 필요합니다.
+모두 서버의 상태를 바꾸지 않는 조회 메서드입니다. 호차 목록·좌석 배치 조회는 로그인이 필요하고, 도우미석 안내 조회도 로그인한 뒤 호출해야 합니다.
 처음부터 순서대로 따라 하려면 [열차 조회 가이드](../guide/trains.md)를 참고하세요.
 
 흐름:
@@ -97,6 +97,7 @@ KorailClient.search_transfer_trains(
 
 응답의 열차 행은 `train_sequence`가 같은 것끼리 응답에 나온 순서대로 묶습니다.
 두 행으로 된 묶음만 [`TransferItinerary`][korail_mobile_api.models.TransferItinerary]가 되어 `itineraries`에 들어가고, 그 밖의 행은 `trains`에만 남습니다.
+`train_sequence`가 없는(`None`) 행끼리도 한 묶음으로 보므로, 그런 행이 두 개이면 하나의 여정으로 묶입니다. 예약에 넘기기 전에 두 구간의 `train_sequence`와 역을 확인하세요.
 여정의 `transfer_station_code`와 `transfer_station_name`은 첫 구간의 도착역과 둘째 구간의 출발역이 같을 때만 값이 있습니다. 다르면 `None`이므로 두 구간의 역을 직접 확인하세요.
 
 `next_page()`는 응답에 환승용 다음 페이지 값이 둘 다 있으면 그것을, 하나라도 없으면 직통용 값을 씁니다.
@@ -109,7 +110,7 @@ KorailClient.search_transfer_trains(
 | `query` | [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery] | 필수 | 조회 조건입니다. 출발역과 최종 도착역을 넣습니다. |
 | `continuation` | [`TrainSearchContinuation`][korail_mobile_api.models.TrainSearchContinuation] \| `None` | `None` | 다음 페이지를 조회할 때 이전 환승 결과의 `next_page()` 값을 넣습니다. |
 | `use_special_schedule` | `bool` | `False` | `True`이면 특가 상품 조회 경로로 보내고 `product_inquiry` 관문을 거칩니다. |
-| `peak_season` | `bool` | `False` | `True`이면 `peak_season_inquiry` 관문을 거칩니다. |
+| `peak_season` | `bool` | `False` | `True`이면 `peak_season_inquiry` 관문을 거칩니다. `use_special_schedule=True`이면 이 값과 관계없이 `product_inquiry` 관문을 거칩니다. |
 
 **반환값**
 
@@ -168,7 +169,7 @@ KorailClient.search_trains_with_transfer_fallback(
 | `query` | [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery] | 필수 | 조회 조건입니다. 직통 조회와 환승 조회에 같은 값을 씁니다. |
 | `continuation` | [`TrainSearchContinuation`][korail_mobile_api.models.TrainSearchContinuation] \| `None` | `None` | 직통 조회에만 넘깁니다. 환승 조회로 넘어가면 쓰지 않고 첫 페이지를 조회합니다. |
 | `use_special_schedule` | `bool` | `False` | `True`이면 두 조회 모두 특가 상품 조회 경로로 보내고 `product_inquiry` 관문을 거칩니다. |
-| `peak_season` | `bool` | `False` | `True`이면 두 조회 모두 `peak_season_inquiry` 관문을 거칩니다. |
+| `peak_season` | `bool` | `False` | `True`이면 두 조회 모두 `peak_season_inquiry` 관문을 거칩니다. `use_special_schedule=True`이면 이 값과 관계없이 `product_inquiry` 관문을 거칩니다. |
 
 **반환값**
 
@@ -210,7 +211,8 @@ KorailClient.get_transfer_stations(
 ) -> TransferStationListResponse
 ```
 
-출발역과 도착역을 역 코드로 넘깁니다. [`search_trains`](#search_trains)와 달리 역 이름을 코드로 바꾸지 않습니다.
+출발역과 도착역을 역 코드로 넘깁니다. 넘긴 값을 바꾸지 않고 그대로 보내므로 역 이름이 아니라 역 코드를 넣으세요.
+[`search_trains`](#search_trains)와 달리 역 목록을 조회해 역 코드를 역 이름으로 바꾸는 처리는 하지 않습니다.
 역 코드는 [`get_station_data`](session.md#get_station_data) 결과의 `code`나 조회 결과 행의 `departure_station_code`, `arrival_station_code`에서 얻을 수 있습니다.
 응답에 환승역 목록이 없으면 빈 `stations`를 반환합니다.
 

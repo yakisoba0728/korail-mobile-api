@@ -5,15 +5,15 @@
 셀프 체크인 메서드는 자유석 승차권으로 앉은 좌석을 확인해 등록하고, 등록 정보를 조회하고, 등록을 취소합니다.
 승차권을 다른 회원에게 전달하는 요청은 제공하지 않습니다.
 
-**대리수령 흐름**
+대리수령 흐름:
 
 1. [`get_recent_delivery_history`](#get_recent_delivery_history)로 최근에 승차권을 전달했던 수령자를 확인합니다.
 2. [`get_pbp_acceptance_specifications`](#get_pbp_acceptance_specifications)로 전달한 승차권의 여정·좌석·수령자 내역을 조회합니다.
-3. 회수하려면 2단계에서 받은 승차권 한 장을 [`retrieve_delivered_ticket`](#retrieve_delivered_ticket)에 넘깁니다.
+3. 회수하려면 2단계에서 받은 승차권 중 첫 여정의 대리수령 예약 번호(`pbp_reservation_no`)마다 한 장을 [`retrieve_delivered_ticket`](#retrieve_delivered_ticket)에 넘깁니다.
 
-**셀프 체크인 흐름**
+셀프 체크인 흐름:
 
-1. [`get_refund_ticket_detail`](payments.md#get_refund_ticket_detail)로 체크인할 승차권의 상세([`RefundTicketDetailResponse`][korail_mobile_api.read_models.RefundTicketDetailResponse])를 받습니다. 이후 네 메서드는 모두 이 상세를 받습니다.
+1. [`get_refund_ticket_detail`](payments.md#get_refund_ticket_detail)로 체크인할 승차권의 상세([`RefundTicketDetailResponse`][korail_mobile_api.read_models.RefundTicketDetailResponse])를 받습니다. 이후 네 메서드는 모두 이 상세를 받습니다. `get_refund_ticket_detail`에 넘기는 반환 식별자의 판매일에는 승차권의 `return_sale_date`(`MMDD`)를 넣습니다([승차권 식별자 이어 쓰기](account.md#ticket-identifiers) 참고).
 2. 자유석에 앉아 좌석에 붙은 QR 코드를 스캔한 문자열로 [`check_self_checkin_seat`](#check_self_checkin_seat)를 호출해 체크인할 수 있는 좌석을 확인합니다.
 3. 확인한 좌석 한 행을 [`register_self_checkin`](#register_self_checkin)에 넘겨 등록합니다.
 4. [`get_self_checkin_info`](#get_self_checkin_info)로 등록된 좌석 정보를 조회합니다.
@@ -42,7 +42,7 @@
 KorailClient.get_recent_delivery_history() -> RecentDeliveryHistoryResponse
 ```
 
-요청에는 공통 필드와 함께 로그인 세션의 회원번호(`customer_no`)를 싣습니다.
+요청에는 공통 필드와 함께 로그인 세션의 고객번호(`customer_no`)를 싣습니다.
 응답의 수령자 목록(`acepList`)이 `null`이면 `recipients`는 빈 튜플입니다.
 `changed_acceptance_reservation_no`는 응답에 해당 값(`chgePbpRsvNo`)이 없으면 `None`입니다.
 
@@ -52,13 +52,13 @@ KorailClient.get_recent_delivery_history() -> RecentDeliveryHistoryResponse
 
 **반환값**
 
-[`RecentDeliveryHistoryResponse`][korail_mobile_api.read_models.RecentDeliveryHistoryResponse] — `recipients`에 수령자가 [`RecentDeliveryRecipient`][korail_mobile_api.read_models.RecentDeliveryRecipient] 목록으로 들어 있습니다. 각 수령자에는 회원 관리번호, 이름, 전화번호, 회원카드 번호 등이 있습니다.
+[`RecentDeliveryHistoryResponse`][korail_mobile_api.read_models.RecentDeliveryHistoryResponse] — `recipients`에 수령자가 [`RecentDeliveryRecipient`][korail_mobile_api.read_models.RecentDeliveryRecipient] 목록으로 들어 있습니다. 각 수령자에는 고객번호, 이름, 전화번호, 회원카드 번호 등이 있습니다.
 
 **예외**
 
 | 예외 | 발생 조건 |
 |---|---|
-| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았거나 세션에 회원번호(`customer_no`)가 없을 때 |
+| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았거나 세션에 고객번호(`customer_no`)가 없을 때 |
 
 **정보**
 
@@ -96,7 +96,7 @@ KorailClient.get_delivery_recipient(
 
 **반환값**
 
-[`DeliveryRecipientResponse`][korail_mobile_api.read_models.DeliveryRecipientResponse] — 수령자 후보의 회원 관리번호(`acceptance_customer_management_no`), 이름, 전화번호, 회원카드 번호(`member_card_no`)입니다. 네 값 중 하나라도 응답에 없으면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
+[`DeliveryRecipientResponse`][korail_mobile_api.read_models.DeliveryRecipientResponse] — 수령자 후보의 고객번호(`acceptance_customer_management_no`), 이름, 전화번호, 회원카드 번호(`member_card_no`)입니다. 네 값 중 하나라도 응답에 없으면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
 
 **예외**
 
@@ -142,7 +142,7 @@ KorailClient.get_pbp_acceptance_specifications(
 **반환값**
 
 [`PbpAcceptanceSpecificationResponse`][korail_mobile_api.read_models.PbpAcceptanceSpecificationResponse] — `tickets`에 승차권별 내역이 [`PbpAcceptanceTicket`][korail_mobile_api.read_models.PbpAcceptanceTicket]으로 들어 있습니다.
-승차권마다 PNR과 반환 식별자, 여정 목록([`PbpAcceptanceJourney`][korail_mobile_api.read_models.PbpAcceptanceJourney])이 있고, 여정마다 수령자 이름·전화번호, 대리수령 예약번호(`pbp_reservation_no`), 회수 가능 표시(`withdrawal_possible_flag`), 좌석 목록([`PbpAcceptanceSeat`][korail_mobile_api.read_models.PbpAcceptanceSeat])이 있습니다.
+승차권마다 PNR과 반환 식별자, 여정 목록([`PbpAcceptanceJourney`][korail_mobile_api.read_models.PbpAcceptanceJourney])이 있고, 여정마다 수령자 이름·전화번호, 대리수령 예약 번호(`pbp_reservation_no`), 회수 가능 표시(`withdrawal_possible_flag`), 좌석 목록([`PbpAcceptanceSeat`][korail_mobile_api.read_models.PbpAcceptanceSeat])이 있습니다.
 좌석의 `car_no`는 정수입니다. 이 필드들은 모두 필수이므로 하나라도 없으면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
 
 **예외**
@@ -179,9 +179,12 @@ KorailClient.retrieve_delivered_ticket(
 ) -> DeliveredTicketRetrievalResponse
 ```
 
-[`get_pbp_acceptance_specifications`](#get_pbp_acceptance_specifications)가 반환한 승차권 한 장을 받아, 첫 여정의 대리수령 예약번호(`pbp_reservation_no`)와 승차권의 PNR을 한 쌍으로 보냅니다.
+[`get_pbp_acceptance_specifications`](#get_pbp_acceptance_specifications)가 반환한 승차권 한 장을 받아, 첫 여정의 대리수령 예약 번호(`pbp_reservation_no`)와 승차권의 PNR을 한 쌍으로 보냅니다.
 여정이 여러 개여도 첫 여정의 값만 씁니다. 라이브러리는 여정의 `withdrawal_possible_flag`를 검사하지 않습니다.
 실패해도 자동으로 다시 보내지 않습니다. 실서버에서 확인하지 못한 메서드입니다.
+
+앱은 첫 여정의 `pbp_reservation_no`가 같은 승차권들을 한 묶음으로 보고, 묶음마다 그 번호와 묶음 첫 승차권의 PNR로 한 번만 요청합니다.
+앱과 같게 보내려면 같은 `pbp_reservation_no`를 가진 승차권 중 [`get_pbp_acceptance_specifications`](#get_pbp_acceptance_specifications) 결과에서 처음 나온 한 장으로 한 번만 호출하세요.
 
 **매개변수**
 
@@ -258,7 +261,7 @@ KorailClient.get_self_checkin_info(
 **예제**
 
 ```python
-# reference: 체크인한 승차권의 반환 식별자(OriginalTicketReference)
+# reference: 체크인한 승차권의 OriginalTicketReference (sale_date는 return_sale_date, MMDD)
 detail = client.get_refund_ticket_detail(reference)
 info = client.get_self_checkin_info(detail)
 print(info.train_no, info.car_no, info.seat_no)

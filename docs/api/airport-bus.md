@@ -5,7 +5,7 @@
 부가서비스 메서드는 코레일+ 앱의 부가서비스 메뉴, 서비스별 이용 역, 계정이 신청한 부가서비스 내역을 조회만 합니다.
 부가서비스(렌터카, 짐 배송 등)를 신청하거나 구매·결제·취소하는 기능은 지원하지 않습니다.
 
-**공항버스 흐름**
+공항버스 흐름:
 
 1. [`get_limousine_schedules`](#get_limousine_schedules)로 운행 편을 조회합니다.
 2. 고른 편으로 [`get_limousine_seat_inventory`](#get_limousine_seat_inventory)를 호출해 좌석을 조회합니다.

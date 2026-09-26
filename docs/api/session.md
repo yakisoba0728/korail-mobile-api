@@ -126,8 +126,10 @@ KorailClient.logout() -> None
 try:
     tickets = client.get_ticket_list()
 finally:
-    client.logout()
-    client.close()
+    try:
+        client.logout()
+    finally:
+        client.close()
 ```
 
 ## `clear_session`
@@ -231,6 +233,7 @@ KorailClient.get_service_status(
 
 서비스 상태 캐시 파일을 요청하고 응답 봉투로 판정합니다.
 서버가 성공으로 응답하면 응답 모델을 반환하고, 실패로 응답하면 결과 코드에 맞는 예외를 발생시킵니다.
+실패 응답의 결과 코드가 `SEMGTK`이면 [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError], `SUPDATE`이면 [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError]가 발생합니다.
 요청에는 `timeStamp` 하나만 싣고 공통 필드(`Device`, `Version`, `Key`)는 싣지 않습니다.
 [`login`](#login)도 로그인 전에 같은 요청을 보냅니다.
 
@@ -246,9 +249,7 @@ KorailClient.get_service_status(
 
 **예외**
 
-| 예외 | 발생 조건 |
-|---|---|
-| [`KorailAppError`][korail_mobile_api.errors.KorailAppError]와 하위 예외 | 서버가 실패로 응답했을 때. 결과 코드가 `SEMGTK`이면 [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError], `SUPDATE`이면 [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError]입니다. |
+이 메서드에만 해당하는 예외는 없습니다. 공통 예외는 [API 레퍼런스 개요](index.md#공통-예외)를 참고하세요.
 
 **정보**
 

@@ -80,7 +80,7 @@ Exception
 | `KorailTransportError` | HTTP 상태 오류이면 `raw`에 응답 본문. 네트워크 오류이면 원래의 `httpx` 예외가 `__cause__`에 들어 있습니다. |
 | `KorailProtocolError` | 응답을 읽지 못했으면 `raw`. 파서가 읽다가 멈춘 부분이 있으면 `parser_raw`도 채웁니다. 요청 전 입력 검사에서 났으면 비어 있습니다. |
 | `KorailDynaPathError` | `raw`(차단 코드가 든 응답) |
-| `KorailNetFunnelError`, `KorailQueueRejectedError` | `code`, `message`, `raw`. 대기열 서버 오류 때문에 요청을 보내지 않은 경우에는 원래 예외가 `__cause__`에 들어 있습니다. |
+| `KorailNetFunnelError`, `KorailQueueRejectedError` | `message`는 항상 채웁니다. 대기열 응답으로 판정한 경우(차단, 입장 키 없음, 통과가 아닌 응답)에는 `code`(대기열 응답 코드)와 `raw`도 채웁니다. 대기열 서버 오류 때문에 요청을 보내지 않은 경우에는 `code`와 `raw`가 `None`이고 원래 예외가 `__cause__`에 들어 있습니다. 대기 시간 제한을 넘은 경우에는 마지막으로 읽은 대기열 응답의 값이 들어가며, 읽은 응답이 없으면 `None`입니다. |
 
 ```python
 from korail_mobile_api import KorailApiError, KorailClient
@@ -217,12 +217,14 @@ tickets = read_with_relogin(client.get_ticket_list)
 |---|---|---|
 | `KorailNetFunnelError`, `KorailQueueRejectedError` | 보내지 않았습니다. | 대기열 상황을 보고 다시 호출할지 정합니다. |
 | `KorailProtocolError`(요청 전 입력 검사) | 보내지 않았습니다. | 입력을 고친 뒤 호출합니다. |
+| `KorailAuthError`(로그인하지 않음) | 보내지 않았습니다. | 로그인한 뒤 호출합니다. |
 | `KorailProtocolError`(응답을 읽지 못함) | 보냈고 응답을 받았습니다. | 서버에서 처리됐을 수 있습니다. `raw`와 예약 내역으로 결과를 확인합니다. |
+| `KorailDynaPathError` | 보냈고 차단 코드가 든 응답을 받았습니다. | 서버에서 처리됐는지 알 수 없으므로 예약 내역으로 결과를 확인합니다. |
 | `KorailTransportError` | 서버에 닿았는지 알 수 없습니다. | 예약 내역이나 승차권 목록으로 결과를 확인합니다. |
 | `KorailAppError`와 하위 예외 | 보냈고 서버가 실패로 응답했습니다. | `code`와 `message`로 사유를 확인합니다. |
 | `KorailSessionExpiredError` | 보냈고 서버가 세션 만료로 응답했습니다. | 다시 로그인한 뒤 결과를 확인하고 다시 호출할지 정합니다. |
 
-결과는 미결제 홀드라면 [`get_reservation_history`](../api/reservations.md#get_reservation_history), 발권된 승차권이라면 [`get_ticket_list`](../api/account.md#get_ticket_list)로 확인합니다.
+결과는 결제 전 홀드라면 [`get_reservation_history`](../api/reservations.md#get_reservation_history), 발권된 승차권이라면 [`get_ticket_list`](../api/account.md#get_ticket_list)로 확인합니다.
 아래 예제는 예약 전에 살아 있는 홀드의 PNR을 기록해 두고, 예약이 불확실하게 끝나면 새 PNR이 생겼는지 비교합니다. 요청 전 입력 검사에서 난 `KorailProtocolError`는 `raw`가 `None`이므로 구분할 수 있습니다.
 
 !!! warning "실제로 처리됩니다"
@@ -254,8 +256,9 @@ except (KorailTransportError, KorailProtocolError) as error:
 
 ## 카드 결제가 거절됐을 때 {#card-decline}
 
-[`pay_with_card`](../api/payments.md#pay_with_card)는 카드 거절 같은 실패 응답에서 예외를 발생시키지 않고, `str_result`가 `"FAIL"`인 [`ReservationPaymentResponse`][korail_mobile_api.mutation_models.ReservationPaymentResponse]를 반환합니다.
-사유는 `h_msg_cd`와 `h_msg_txt`에 있습니다. 반환값을 결제 완료로 처리하기 전에 반드시 `str_result`를 확인하세요.
+[`pay_with_card`](../api/payments.md#pay_with_card)는 카드 거절 같은 실패 응답에서 예외를 발생시키지 않고 [`ReservationPaymentResponse`][korail_mobile_api.mutation_models.ReservationPaymentResponse]를 반환합니다.
+거절이면 `str_result`가 `"FAIL"`이고, 응답에 `strResult`가 없으면 `None`입니다. 사유는 `h_msg_cd`와 `h_msg_txt`에 있습니다.
+`str_result`가 `"SUCC"`일 때만 결제 완료로 처리하세요.
 
 다음 경우에는 여전히 예외가 발생합니다.
 
@@ -278,8 +281,8 @@ card = CardPayment(
     birthday=getpass("생년월일 6자리: "),
 )
 payment = client.pay_with_card(hold, card)
-if payment.str_result == "FAIL":
-    print("결제 실패:", payment.h_msg_cd, payment.h_msg_txt)
+if payment.str_result != "SUCC":
+    print("결제가 완료되지 않았습니다:", payment.str_result, payment.h_msg_cd, payment.h_msg_txt)
 ```
 
 ## 웹 단계가 필요한 로그인 {#auth-continuation}
@@ -305,7 +308,7 @@ finally:
 ## 개인정보 주의 {#personal-data}
 
 !!! danger "원본과 모델은 마스킹하지 않습니다"
-    응답 모델과 예외의 `raw`에는 서버가 보낸 응답이 가공 없이 들어 있습니다. 이름, 전화번호, 고객번호, 예약번호, 결제 정보 같은 개인정보가 포함될 수 있습니다.
+    응답 모델과 예외의 `raw`에는 서버가 보낸 응답이 가공 없이 들어 있습니다. 이름, 전화번호, 고객번호, 예약 번호, 결제 정보 같은 개인정보가 포함될 수 있습니다.
     응답 모델을 `print`하거나 로그에 남기면 `raw`를 포함한 모든 필드가 그대로 출력됩니다. [`KorailSession`][korail_mobile_api.models.KorailSession]에는 세션 쿠키 값과 로그인 ID도 들어 있습니다.
     모델이 바꿀 수 없는(frozen) dataclass여도 `raw` 안의 사전과 목록은 복사하거나 고정하지 않습니다.
     오류를 기록할 때는 예외의 클래스 이름과 `code`처럼 필요한 값만 남기고, `raw`와 모델 전체를 로그나 오류 보고에 넣지 마세요.

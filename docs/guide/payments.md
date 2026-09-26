@@ -1,8 +1,8 @@
 # 결제와 환불
 
-이 가이드는 예약으로 만든 홀드를 카드로 결제하고, 필요하면 결제 전에 할인을 다시 계산하고, 발권된 승차권을 환불하는 과정을 순서대로 따라 합니다.
+이 가이드는 예약으로 만든 홀드의 할인을 필요하면 다시 계산하고, 카드로 결제하고, 발권된 승차권을 환불하는 과정을 순서대로 따라 합니다.
 역에서 발권한 승차권의 환불도 다룹니다.
-결제·재계산·환불 단계는 모두 호출하는 즉시 실제로 처리되므로 금액과 대상을 확인한 뒤 실행하세요.
+재계산·결제·환불 단계는 모두 호출하는 즉시 실제로 처리되므로 금액과 대상을 확인한 뒤 실행하세요.
 
 ## 준비 {#setup}
 
@@ -35,65 +35,9 @@ print(hold.pnr_no, hold.received_amount, hold.payment_deadline_date, hold.paymen
 !!! warning "실제로 처리됩니다"
     [`reserve`](../api/reservations.md#reserve)를 호출하면 좌석이 실제로 잡힙니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 [`get_reservation_history`](../api/reservations.md#get_reservation_history)로 결과를 확인하세요.
 
-## 카드로 결제하기 {#card-payment}
+## 할인 재계산 {#recalculation}
 
-카드 정보는 [`CardPayment`][korail_mobile_api.mutation_models.CardPayment]로 만들어 [`pay_with_card`](../api/payments.md#pay_with_card)에 넘깁니다.
-
-| 필드 | 기본값 | 형식 |
-|---|---|---|
-| `card_number` | 필수 | 카드 번호입니다. 하이픈 없이 숫자 13~16자리입니다. |
-| `card_password` | 필수 | 카드 비밀번호 앞 2자리 숫자입니다. |
-| `card_expire` | 필수 | 유효기간 `YYMM` 숫자 4자리입니다. 월은 `01`~`12`입니다. |
-| `birthday` | 필수 | `card_type`이 `"J"`이면 생년월일 숫자 6자리, `"S"`이면 숫자 10자리입니다. |
-| `installment` | `"0"` | 할부 개월 수입니다. 숫자 1~2자리이며 `"0"`은 일시불입니다. |
-| `card_type` | `"J"` | `"J"`(개인) 또는 `"S"`(법인)입니다. |
-
-`card_type`은 `CardPayment`를 만들 때 검사하고, 나머지 필드는 `pay_with_card`가 요청을 보내기 전에 검사합니다.
-어느 쪽이든 형식이 틀리면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생하고 요청은 나가지 않습니다.
-유효기간이 한국 시간 기준 이번 달이면 허용하고, 그보다 이전이면 만료로 보고 거절합니다.
-검사는 형식과 유효기간만 확인하며, 카드를 실제로 쓸 수 있는지는 확인하지 않습니다.
-
-청구 금액은 홀드의 `received_amount`입니다. `total_price`는 앱이 화면에 표시하는 합계이며 결제에 쓰지 않습니다.
-라이브러리는 홀드 응답에 좌석별 금액이 있으면 그 합을 `received_amount`로 쓰고, 그 합이 응답의 총액과 다르면 홀드를 읽는 단계에서 `KorailProtocolError`를 발생시킵니다.
-
-```python
-from getpass import getpass
-
-from korail_mobile_api import CardPayment
-
-card = CardPayment(
-    card_number=getpass("카드 번호(숫자만): "),
-    card_password=getpass("카드 비밀번호 앞 2자리: "),
-    card_expire=input("유효기간(YYMM): "),
-    birthday=getpass("생년월일 6자리: "),
-)
-print("청구 금액:", hold.received_amount)
-payment = client.pay_with_card(hold, card)
-if payment.str_result == "SUCC":
-    print("결제 완료:", len(payment.tickets), "장 발권")
-else:
-    print("결제 실패:", payment.h_msg_cd, payment.h_msg_txt)
-```
-
-### 카드 거절 확인 {#card-decline}
-
-카드 거절은 예외가 아닙니다. `pay_with_card`는 `str_result`가 `"FAIL"`인 [`ReservationPaymentResponse`][korail_mobile_api.mutation_models.ReservationPaymentResponse]를 반환하며, 사유는 `h_msg_cd`와 `h_msg_txt`에 들어 있습니다.
-반환값을 받았다는 것만으로 결제가 끝났다고 판단하지 말고 `str_result`를 확인하세요. 세션 만료(`P058`)는 예외로 발생합니다.
-결제 응답에는 PNR이 없으므로 이후 단계에서는 `hold.pnr_no`를 씁니다.
-
-### 결제할 수 없는 홀드 {#unpayable-holds}
-
-다음 홀드는 요청을 보내기 전에 `KorailProtocolError`로 거절합니다.
-
-- **예약대기 홀드**: `payable`이 `False`입니다. 예약대기는 좌석을 확보한 것이 아니므로 결제하지 않고, 대기 옵션만 [`confirm_standby_hold`](../api/reservations.md#confirm_standby_hold)로 저장합니다.
-- **0원 홀드**: `received_amount`가 0인 홀드입니다. 앱은 이런 홀드를 카드 없이 발권하며, 라이브러리는 그 경로를 구현하지 않습니다.
-- **실패했거나 식별자가 빠진 홀드**: `str_result`가 `"SUCC"`가 아니거나, `pnr_no`·`window_no`가 비었거나, `received_amount`가 숫자가 아닌 홀드입니다.
-
-!!! warning "실제로 처리됩니다"
-    `pay_with_card`를 호출하면 카드로 실제 금액이 청구됩니다. 응답을 읽지 못해 예외가 나도 결제는 처리됐을 수 있으므로 다시 결제하기 전에 [`get_reservation_history`](../api/reservations.md#get_reservation_history)나 [`get_ticket_list`](../api/account.md#get_ticket_list)로 결과를 확인하세요.
-
-## 결제 전에 할인 다시 계산하기 {#recalculation}
-
+할인을 바꾸지 않으면 이 단계를 건너뜁니다.
 홀드의 할인 조합을 바꾸려면 결제 전에 [`recalculate_price`](../api/payments.md#recalculate_price)를 호출합니다.
 요청은 [`PriceRecalculationRequest`][korail_mobile_api.mutation_models.PriceRecalculationRequest]의 `for_hold()`로 만듭니다.
 
@@ -123,7 +67,68 @@ hold = recalculated  # 결제는 재계산된 홀드로 합니다
 !!! warning "실제로 처리됩니다"
     `recalculate_price`를 호출하면 서버에 있는 홀드의 할인과 결제 금액이 바뀌고, `add_to_cart=True`이면 장바구니에도 추가됩니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
 
-## 환불할 승차권 찾기 {#find-ticket}
+## 카드 결제 {#card-payment}
+
+카드 정보는 [`CardPayment`][korail_mobile_api.mutation_models.CardPayment]로 만들어 [`pay_with_card`](../api/payments.md#pay_with_card)에 넘깁니다.
+
+| 필드 | 기본값 | 형식 |
+|---|---|---|
+| `card_number` | 필수 | 카드 번호입니다. 하이픈 없이 숫자 13~16자리입니다. |
+| `card_password` | 필수 | 카드 비밀번호 앞 2자리 숫자입니다. |
+| `card_expire` | 필수 | 유효기간 `YYMM` 숫자 4자리입니다. 월은 `01`~`12`입니다. |
+| `birthday` | 필수 | `card_type`이 `"J"`이면 생년월일 숫자 6자리, `"S"`이면 숫자 10자리입니다. |
+| `installment` | `"0"` | 할부 개월 수입니다. 숫자 1~2자리이며 `"0"`은 일시불입니다. |
+| `card_type` | `"J"` | `"J"`(개인) 또는 `"S"`(법인)입니다. |
+
+`card_type`은 `CardPayment`를 만들 때 검사하고, 나머지 필드는 `pay_with_card`가 요청을 보내기 전에 검사합니다.
+어느 쪽이든 형식이 틀리면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생하고 요청은 나가지 않습니다.
+유효기간이 한국 시간 기준 이번 달이면 허용하고, 그보다 이전이면 만료로 보고 거절합니다.
+검사는 형식과 유효기간만 확인하며, 카드를 실제로 쓸 수 있는지는 확인하지 않습니다.
+
+청구 금액은 홀드의 `received_amount`입니다. `total_price`는 앱이 화면에 표시하는 합계이며 결제에 쓰지 않습니다.
+라이브러리는 홀드 응답에 좌석별 받을 금액이 있으면 그 합을 `received_amount`로 씁니다.
+그 합이 응답의 총 받을 금액(`h_tot_rcvd_amt`)과 다르면 홀드를 읽는 단계에서 `KorailProtocolError`를 발생시킵니다. 총 받을 금액은 모델 필드로 노출되지 않으며 `total_price`와 다른 값입니다.
+좌석 행이 없으면 총 받을 금액을 `received_amount`로 쓰며, 총 받을 금액도 없으면 `None`입니다.
+좌석 행 중 금액이 숫자가 아닌 행이 있으면 `received_amount`는 `None`이 되고, 결제는 요청 전에 거절됩니다.
+
+```python
+from getpass import getpass
+
+from korail_mobile_api import CardPayment
+
+card = CardPayment(
+    card_number=getpass("카드 번호(숫자만): "),
+    card_password=getpass("카드 비밀번호 앞 2자리: "),
+    card_expire=input("유효기간(YYMM): "),
+    birthday=getpass("생년월일 6자리: "),
+)
+print("청구 금액:", hold.received_amount)
+payment = client.pay_with_card(hold, card)
+if payment.str_result == "SUCC":
+    print("결제 완료:", len(payment.tickets), "장 발권")
+else:
+    print("결제 실패:", payment.h_msg_cd, payment.h_msg_txt)
+```
+
+### 카드 거절 확인 {#card-decline}
+
+`pay_with_card`는 카드 거절을 포함해 세션 만료(`P058`)를 뺀 모든 실패를 예외 없이 [`ReservationPaymentResponse`][korail_mobile_api.mutation_models.ReservationPaymentResponse]로 반환합니다.
+이때 `str_result`는 `"FAIL"`(또는 `strResult`가 없으면 `None`)이고, 사유는 `h_msg_cd`와 `h_msg_txt`에 들어 있습니다.
+반환값을 받았다는 것만으로 결제가 끝났다고 판단하지 말고 `str_result`가 `"SUCC"`인지 확인하세요.
+결제 응답에는 PNR이 없으므로 이후 단계에서는 `hold.pnr_no`를 씁니다.
+
+### 결제할 수 없는 홀드 {#unpayable-holds}
+
+다음 홀드는 요청을 보내기 전에 `KorailProtocolError`로 거절합니다.
+
+- **예약대기 홀드**: `payable`이 `False`입니다. 예약대기는 좌석을 확보한 것이 아니므로 결제하지 않고, 대기 옵션만 [`confirm_standby_hold`](../api/reservations.md#confirm_standby_hold)로 저장합니다.
+- **0원 홀드**: `received_amount`가 0인 홀드입니다. 앱은 이런 홀드를 카드 없이 발권하며, 라이브러리는 그 경로를 구현하지 않습니다.
+- **실패했거나 식별자가 빠진 홀드**: `str_result`가 `"SUCC"`가 아니거나, `pnr_no`·`window_no`가 비었거나, `received_amount`가 숫자가 아닌 홀드입니다.
+
+!!! warning "실제로 처리됩니다"
+    `pay_with_card`를 호출하면 카드로 실제 금액이 청구됩니다. 응답을 읽지 못해 예외가 나도 결제는 처리됐을 수 있으므로 다시 결제하기 전에 [`get_reservation_history`](../api/reservations.md#get_reservation_history)나 [`get_ticket_list`](../api/account.md#get_ticket_list)로 결과를 확인하세요.
+
+## 환불할 승차권 조회 {#find-ticket}
 
 환불은 발권된 승차권 한 장 단위로 합니다.
 먼저 [`get_ticket_list`](../api/account.md#get_ticket_list)에서 환불할 승차권을 찾고, 그 반환 식별자로 [`OriginalTicketReference`][korail_mobile_api.read_payloads.OriginalTicketReference]를 만듭니다.
@@ -145,7 +150,7 @@ reference = OriginalTicketReference(
 )
 ```
 
-## 상세와 수수료 확인하기 {#commission}
+## 상세와 수수료 조회 {#commission}
 
 환불 요청에는 두 조회 결과가 필요합니다.
 
@@ -170,20 +175,27 @@ print("사용 가능 마일리지", commission.usable_mileage)
 상세의 `refund_possible_flag`는 환불 성공을 보장하지 않습니다.
 이미 환불한 승차권이나 승차일이 지난 승차권은 수수료 조회에서 [`KorailAppError`][korail_mobile_api.errors.KorailAppError]가 발생합니다.
 
-## 환불하기 {#refund}
+## 환불 {#refund}
 
 [`refund`](../api/payments.md#refund)에 `PaidTicket`과 수수료 조회 응답을 넘깁니다. 수수료 조회 응답은 `commission=` 키워드 인자로 넘깁니다.
-`commission`은 필수이며, 성공 응답(`str_result`가 `"SUCC"`)이 아니면 요청 전에 거절합니다.
+`commission`은 필수입니다. [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse]가 아닌 값은 `None`을 포함해 요청 전에 거절합니다.
+성공 응답(`str_result`가 `"SUCC"`)이 아닌 수수료 조회 응답도 요청 전에 거절합니다.
 라이브러리는 수수료를 대신 조회하지 않고, 환불 요청을 다시 보내지도 않습니다.
 
 수수료를 마일리지로 정산하려면 `settle_mileage=True`를 넘깁니다.
 사용 가능 마일리지(`commission.usable_mileage`)가 수수료(`commission.refund_fee`) 이상일 때만 허용하며, 부족하면 요청 전에 `KorailProtocolError`가 발생합니다.
 두 값이 없거나 정수로 읽을 수 없으면 0으로 봅니다.
 
+대리수령 대상 플래그는 승차권 상세에 보통 들어 있지 않으므로, 아래 예제는 앱처럼 [`get_ticket_list`](../api/account.md#get_ticket_list) 승차권(`ticket`)의 값을 넘깁니다.
+
 ```python
 answer = input(f"수수료 {commission.refund_fee}원을 빼고 환불하려면 y를 입력하세요: ")
 if answer == "y":
-    result = client.refund(paid, commission=commission)
+    result = client.refund(
+        paid,
+        commission=commission,
+        pbp_acceptance_target_flag=ticket.pbp_acceptance_target_flag,
+    )
     print(result.h_msg_cd, result.h_msg_txt)
 ```
 
@@ -234,6 +246,10 @@ if input("환불하려면 y를 입력하세요: ") == "y":
 다 쓰고 나면 로그아웃하고 연결을 닫습니다. 자세한 차이는 [시작하기](../getting-started.md)를 참고하세요.
 
 ```python
-client.logout()
-client.close()
+try:
+    client.logout()
+finally:
+    client.close()
 ```
+
+`logout()`이 예외를 발생시켜도 `close()`는 실행되도록 `finally`에 둡니다.
