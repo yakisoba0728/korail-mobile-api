@@ -1852,6 +1852,11 @@ class KorailClient:
 
         먼저 get_refund_commission 을 부르고 그 성공 응답을 ``commission`` 으로 넘기십시오. 승차권 한 장씩 환불하며 자동 조회·재전송하지 않습니다(MyTicketDetailViewModel.java:300-358,1811-1823)."""
         self._require_session("refund requires")
+        # 앱은 두 환불 화면 모두 수수료 조회가 성공해야 환불합니다. commission=None 을 명시해도 건너뛰지 못하게 합니다.
+        if not isinstance(commission, RefundCommissionResponse):
+            raise KorailProtocolError(
+                "KORAIL refund requires the get_refund_commission response as commission="
+            )
         route = "/classes/com.korail.mobile.refunds.RefundsRequest"
         form = build_refund_form(
             self.config,
