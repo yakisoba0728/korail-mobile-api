@@ -1,9 +1,9 @@
 # 변경 이력
 
-## [Unreleased]
+## [2.0.0] - 2026-09-26
 
-v1.1.1 이후의 변경입니다. 이 판은 Git 태그·릴리스를 만들지 않았고 PyPI 에는 올리지 않습니다.
-v1.0.0~v1.1.1 은 GitHub 릴리스로 공개했으며 당시 기록은
+v1.1.1 이후의 변경입니다. 코레일+ 안드로이드 앱 7.0.6 기준이며, GitHub 릴리스로 공개하고 PyPI 에는 올리지 않습니다.
+v1.0.0~v1.1.1 의 기록은
 [v1.1.1 태그의 CHANGELOG](https://github.com/yakisoba0728/korail-mobile-api/blob/v1.1.1/CHANGELOG.md)에 있습니다.
 
 ### 달라진 요청과 동작
