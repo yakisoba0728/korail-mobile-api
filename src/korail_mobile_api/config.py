@@ -34,8 +34,10 @@ def enabled_dynapath_config() -> DynapathConfig:
 
 @dataclass(frozen=True)
 class KorailConfig:
-    """API·대기열·기기·인증 토큰의 요청 설정을 구성합니다. base_url·netfunnel_url 은 검사하지 않고 그대로 씁니다 — 다른 곳을 가리키면 로그인 자격증명도 그리로
-    갑니다."""
+    """API·대기열·기기·인증 토큰의 요청 설정을 구성합니다.
+
+    base_url·netfunnel_url 은 검사하지 않고 그대로 씁니다. base_url 이 다른 곳을 가리키면 로그인 자격증명도 그리로 갑니다. 대기열 요청에는
+    자격증명을 싣지 않지만, netfunnel_url 이 다른 곳을 가리키면 API 요청을 보낼지와 언제 보낼지를 그 서버가 정합니다."""
 
     base_url: str = KORAIL_BASE_URL
     device: str = KORAIL_DEVICE_ANDROID

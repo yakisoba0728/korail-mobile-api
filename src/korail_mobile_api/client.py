@@ -364,7 +364,7 @@ class KorailClient:
     def clear_session(self) -> None:
         """서버에 알리지 않고 로컬 로그인 상태만 버립니다.
 
-        서버 로그아웃 없이 쿠키·로컬 세션·역 캐시만 폐기합니다."""
+        서버 로그아웃 없이 쿠키와 로컬 세션만 폐기합니다. 역 이름 캐시는 유지합니다."""
         self.session.clear_session()
 
     def logout(self) -> None:
