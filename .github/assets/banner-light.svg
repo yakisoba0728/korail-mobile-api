@@ -5,7 +5,7 @@
   </g>
   <g font-family="Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif">
     <text x="66" y="166" font-size="25" fill="#1f2328">코레일+ 앱과 같은 요청을 보내는 비공식 Python 클라이언트</text>
-    <text x="66" y="206" font-size="19" fill="#59636e">열차 조회 · 예약 · 결제 · 환불  |  Python 3.11+  |  타입 완비</text>
+    <text x="66" y="206" font-size="19" fill="#59636e">Python 3.11+  |  타입 완비</text>
   </g>
   <rect x="600" y="196" width="120" height="4" rx="2" fill="#0b7a75" opacity="0.35"/><rect x="640" y="214" width="80" height="4" rx="2" fill="#0b7a75" opacity="0.25"/><rect x="580" y="232" width="140" height="4" rx="2" fill="#0b7a75" opacity="0.3"/>
   <g>
