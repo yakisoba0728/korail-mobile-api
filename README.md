@@ -21,8 +21,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.svg">
-    <img src=".github/assets/banner-light.svg" alt="korail-mobile-api" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
+    <img src="docs/assets/banner-light.svg" alt="korail-mobile-api" width="100%">
   </picture>
 </p>
 
@@ -86,7 +86,7 @@ finally:
 ```
 
 <p align="center">
-  <img src=".github/assets/demo.svg" alt="열차 조회 실행 예시" width="100%">
+  <img src="docs/assets/demo.svg" alt="열차 조회 실행 예시" width="100%">
 </p>
 
 역은 이름이나 역 코드 어느 쪽으로 넣어도 됩니다. 날짜는 `YYYYMMDD`, 시각은 `HHMMSS`입니다.
@@ -156,8 +156,8 @@ finally:
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/flow-dark.svg">
-    <img src=".github/assets/flow-light.svg" alt="요청 흐름" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/flow-dark.svg">
+    <img src="docs/assets/flow-light.svg" alt="요청 흐름" width="100%">
   </picture>
 </p>
 

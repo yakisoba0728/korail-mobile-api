@@ -32,7 +32,7 @@ v1.0.0~v1.1.1 은 GitHub 릴리스로 공개했으며 당시 기록은
 - 지연확인증의 선택 `runDt`는 다른 선택 문자열처럼 잘못된 타입이면 `None`입니다.
 - 대기열 TTL·대기 인원은 부호·BMP 십진 숫자·긴 선행 0을 Java int32처럼 읽습니다.
   잘못된 값은 기존의 0 기본값을 유지하며 큰 정수 변환의 `ValueError`가 새어 나오지 않습니다.
-- 공통 파싱·요청·재시도 정책은 [동작 계약](checks/BEHAVIOR.md)에 모았습니다.
+- 공통 파싱·요청·재시도 정책은 [동작 계약](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/BEHAVIOR.md)에 모았습니다.
 
 ### 타입
 

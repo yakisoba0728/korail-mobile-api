@@ -1,0 +1,20 @@
+:root {
+  --md-primary-fg-color: #0b7a75;
+  --md-primary-fg-color--light: #2a9d97;
+  --md-primary-fg-color--dark: #07524f;
+  --md-accent-fg-color: #0b7a75;
+  --md-text-font: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif;
+  --md-code-font: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "D2Coding", monospace;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #0f3f3d;
+  --md-accent-fg-color: #3fb8b2;
+  --md-typeset-a-color: #3fb8b2;
+}
+.md-typeset { font-feature-settings: "kern"; word-break: keep-all; }
+.md-typeset h2 { font-weight: 700; }
+.md-typeset table:not([class]) { font-size: .72rem; }
+.md-typeset table:not([class]) th { white-space: nowrap; }
+.md-typeset .method-meta td, .md-typeset .method-meta th { text-align: center; }
+.md-typeset .grid.cards > ul > li { border-radius: .4rem; }
+.hero-banner img { width: 100%; border-radius: .6rem; }

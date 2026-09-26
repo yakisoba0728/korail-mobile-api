@@ -1,0 +1,143 @@
+site_name: korail-mobile-api
+site_description: 코레일+ 앱과 같은 요청을 보내는 비공식 Python 클라이언트
+site_url: https://yaki.kr/korail-mobile-api/
+repo_url: https://github.com/yakisoba0728/korail-mobile-api
+repo_name: yakisoba0728/korail-mobile-api
+edit_uri: edit/main/docs/
+copyright: KORAIL과 관계없는 비공식 프로젝트입니다. Apache License 2.0
+
+exclude_docs: |
+  griffe_docs.py
+  requirements.txt
+
+validation:
+  links:
+    anchors: warn
+
+theme:
+  name: material
+  language: ko
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: 다크 모드로 전환
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: 라이트 모드로 전환
+  font: false
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - content.action.edit
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  - search:
+      lang:
+        - ko
+        - en
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            extensions:
+              - docs/griffe_docs.py:DocsExtension
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            show_signature_annotations: true
+            separate_signature: true
+            signature_crossrefs: true
+            members_order: source
+            merge_init_into_class: true
+            show_if_no_docstring: false
+            show_labels: false
+            heading_level: 2
+            filters: ["!^_"]
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - 홈: index.md
+  - 시작하기: getting-started.md
+  - 가이드:
+      - 열차 조회: guide/trains.md
+      - 예약: guide/reservations.md
+      - 결제와 환불: guide/payments.md
+      - 설정: guide/configuration.md
+      - 오류 처리: guide/errors.md
+  - API 레퍼런스:
+      - api/index.md
+      - 세션·공통: api/session.md
+      - 열차 조회·좌석: api/trains.md
+      - 예약: api/reservations.md
+      - 결제·환불: api/payments.md
+      - 승차권·계정: api/account.md
+      - 대리수령·셀프 체크인: api/delivery-checkin.md
+      - 정기권·패스·N카드·여행상품: api/passes.md
+      - 공항버스·부가서비스: api/airport-bus.md
+  - 타입 레퍼런스:
+      - reference/index.md
+      - 열차·공통 모델: reference/models.md
+      - 계정 조회 모델: reference/read-models.md
+      - 조회 입력: reference/requests.md
+      - 예약·결제 모델: reference/mutation-models.md
+      - 공항버스 모델: reference/limousine-models.md
+      - 설정: reference/config.md
+      - 예외: reference/errors.md
+      - 상수: reference/constants.md
+  - 동작 원리:
+      - 요청 흐름: concepts/how-it-works.md
+      - 용어: concepts/glossary.md
+      - 실서버 확인 현황: status.md
+  - 변경 이력: changelog.md
+  - 법적 고지: legal.md

@@ -1,0 +1,6 @@
+# 문서 사이트(mkdocs.yml) 빌드 도구. 패키지 의존성이 아니므로 pyproject.toml 에 넣지 않습니다.
+# MkDocs 2.0 은 플러그인과 테마가 호환되지 않아 1.x 로 고정합니다.
+mkdocs>=1.6,<2
+mkdocs-material>=9.7,<10
+mkdocstrings[python]>=1.0
+ruff>=0.11
