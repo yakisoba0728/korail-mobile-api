@@ -20,10 +20,10 @@ hide:
 
 ## 설치
 
-Python 3.11 이상이 필요합니다. PyPI에는 배포하지 않으며 GitHub에서 설치합니다.
+Python 3.11 이상이 필요합니다.
 
 ```sh
-pip install "git+https://github.com/yakisoba0728/korail-mobile-api"
+pip install korail-mobile-api
 ```
 
 ## 예제

@@ -9,7 +9,13 @@
 
 ## 설치
 
-PyPI에는 배포하지 않습니다. GitHub 저장소에서 바로 설치합니다.
+PyPI에서 설치합니다.
+
+```sh
+pip install korail-mobile-api
+```
+
+아직 릴리스되지 않은 최신 코드는 GitHub에서 설치합니다.
 
 ```sh
 pip install "git+https://github.com/yakisoba0728/korail-mobile-api"

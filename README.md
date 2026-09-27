@@ -21,17 +21,18 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
-    <img src="docs/assets/banner-light.svg" alt="korail-mobile-api" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yakisoba0728/korail-mobile-api/main/docs/assets/banner-dark.svg">
+    <img src="https://raw.githubusercontent.com/yakisoba0728/korail-mobile-api/main/docs/assets/banner-light.svg" alt="korail-mobile-api" width="100%">
   </picture>
 </p>
 
 <p align="center">
   <a href="https://github.com/yakisoba0728/korail-mobile-api/actions/workflows/ci.yml"><img src="https://github.com/yakisoba0728/korail-mobile-api/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://pypi.org/project/korail-mobile-api/"><img src="https://img.shields.io/pypi/v/korail-mobile-api" alt="PyPI"></a>
   <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&amp;logoColor=white" alt="Python 3.11 | 3.12 | 3.13 | 3.14">
   <img src="https://img.shields.io/badge/typing-mypy%20strict-2A6DB2" alt="mypy strict">
   <img src="https://img.shields.io/badge/%EC%BD%94%EB%A0%88%EC%9D%BC%2B-7.0.6%20%EA%B8%B0%EC%A4%80-0b7a75" alt="코레일+ 7.0.6 기준">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/yakisoba0728/korail-mobile-api" alt="License"></a>
+  <a href="https://github.com/yakisoba0728/korail-mobile-api/blob/main/LICENSE"><img src="https://img.shields.io/github/license/yakisoba0728/korail-mobile-api" alt="License"></a>
 </p>
 
 <p align="center">
@@ -56,7 +57,13 @@ KORAIL과는 관계없는 개인 프로젝트입니다. 공식 API가 아니라�
 
 ## 설치
 
-Python 3.11 이상이 필요합니다. PyPI에는 올리지 않았고 GitHub에서 바로 설치합니다.
+Python 3.11 이상이 필요합니다.
+
+```sh
+pip install korail-mobile-api
+```
+
+아직 릴리스되지 않은 최신 코드는 GitHub에서 바로 설치할 수 있습니다.
 
 ```sh
 pip install "git+https://github.com/yakisoba0728/korail-mobile-api"
@@ -87,7 +94,7 @@ finally:
 ```
 
 <p align="center">
-  <img src="docs/assets/demo.svg" alt="열차 조회 실행 예시" width="100%">
+  <img src="https://raw.githubusercontent.com/yakisoba0728/korail-mobile-api/main/docs/assets/demo.svg" alt="열차 조회 실행 예시" width="100%">
 </p>
 
 역은 이름이나 역 코드 어느 쪽으로 넣어도 됩니다. 날짜는 `YYYYMMDD`, 시각은 `HHMMSS`입니다.
@@ -161,8 +168,8 @@ finally:
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/flow-dark.svg">
-    <img src="docs/assets/flow-light.svg" alt="요청 흐름" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/yakisoba0728/korail-mobile-api/main/docs/assets/flow-dark.svg">
+    <img src="https://raw.githubusercontent.com/yakisoba0728/korail-mobile-api/main/docs/assets/flow-light.svg" alt="요청 흐름" width="100%">
   </picture>
 </p>
 
@@ -171,16 +178,13 @@ finally:
 - 로그인 비밀번호는 앱처럼 AES로 암호화해서 보냅니다.
 - 응답을 못 읽으면 받은 원문 전체를 예외의 `.raw`에 담아 던집니다.
 
-더 자세한 규칙과 앱과 다르게 처리한 부분은 [checks/BEHAVIOR.md](checks/BEHAVIOR.md)에 정리해 뒀습니다.
+더 자세한 규칙과 앱과 다르게 처리한 부분은 [checks/BEHAVIOR.md](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/BEHAVIOR.md)에 정리해 뒀습니다.
 
 ## 자주 묻는 질문
 
 **SRT는요?**
 SRT는 2026년 9월 통합 때 KTX로 합쳐져서 이제 따로 없습니다. 예매는 코레일+ 앱 하나로 하고, 이 라이브러리도 그 앱의 요청을 씁니다.
 SRT 앱용으로 만들었던 [srt-mobile-api](https://github.com/yakisoba0728/srt-mobile-api)는 개발을 멈추고 이 저장소로 이어졌습니다.
-
-**PyPI에서 설치할 수 있나요?**
-아니요. 위의 GitHub 설치 명령을 쓰세요.
 
 **대기열을 끄면 빨라지나요?**
 `KorailConfig(netfunnel_enabled=False)`로 끌 수는 있습니다. 하지만 앱과 다르게 동작하게 되고 KORAIL의 혼잡 제어를 건너뛰는 셈이라 권하지 않습니다.
@@ -192,9 +196,9 @@ SRT 앱용으로 만들었던 [srt-mobile-api](https://github.com/yakisoba0728/s
 ## 문서와 링크
 
 - [문서 사이트](https://yaki.kr/korail-mobile-api/) — 시작하기, 가이드, 메서드 84개 전체의 API 레퍼런스
-- [동작 규칙 (checks/BEHAVIOR.md)](checks/BEHAVIOR.md) — 요청을 만드는 규칙, 응답을 읽는 규칙, 앱과 다르게 한 부분
-- [변경 이력 (CHANGELOG.md)](CHANGELOG.md)
-- [오프라인 검사 기준 (checks/ACCEPTANCE.md)](checks/ACCEPTANCE.md)
+- [동작 규칙 (checks/BEHAVIOR.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/BEHAVIOR.md) — 요청을 만드는 규칙, 응답을 읽는 규칙, 앱과 다르게 한 부분
+- [변경 이력 (CHANGELOG.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)
+- [오프라인 검사 기준 (checks/ACCEPTANCE.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/ACCEPTANCE.md)
 - 한국철도공사 공식 홈페이지 — <https://www.korail.com>
 - 코레일+ 앱 — [Google Play](https://play.google.com/store/apps/details?id=com.korail.talk) · [App Store](https://apps.apple.com/kr/app/id1000558562)
 - 이전 SRT 클라이언트 — [srt-mobile-api](https://github.com/yakisoba0728/srt-mobile-api)
@@ -230,4 +234,4 @@ python checks/contract_api.py && python checks/netfunnel_offline.py
 
 ## 라이선스
 
-[Apache License 2.0](LICENSE)
+[Apache License 2.0](https://github.com/yakisoba0728/korail-mobile-api/blob/main/LICENSE)

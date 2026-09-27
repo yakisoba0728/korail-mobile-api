@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{name = "yakisoba0728"}]
 # The full offline suite passes on Python 3.11 with these exact versions; CI's minimum job installs them.
 dependencies = ["httpx>=0.24.1", "cryptography>=42.0.8"]
-keywords = ["korail", "railway", "api", "client"]
+keywords = ["korail", "ktx", "railway", "train", "reservation", "api", "client"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -30,6 +30,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/yakisoba0728/korail-mobile-api"
+Documentation = "https://yaki.kr/korail-mobile-api/"
 Repository = "https://github.com/yakisoba0728/korail-mobile-api"
 Issues = "https://github.com/yakisoba0728/korail-mobile-api/issues"
 Changelog = "https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md"
