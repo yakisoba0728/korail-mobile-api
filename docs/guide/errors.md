@@ -57,6 +57,7 @@ Exception
 
 - 대기열 서버와의 네트워크 오류는 `KorailTransportError`로 나오지 않습니다. 관문에 따라 경고 로그를 남기고 건너뛰거나 `KorailNetFunnelError`로 바뀝니다. 자세한 규칙은 [설정](configuration.md#netfunnel)을 참고하세요.
 - `KorailDynaPathError`는 차단 코드가 들어 있는 응답 필드를 확인하지 못해 응답 최상위의 정수 값을 모두 검사합니다. 따라서 다른 필드의 같은 값을 차단으로 판정할 수 있습니다.
+- 로그인에서 `KorailDynaPathError`(차단 코드 `-2000`, HTTP `403`)가 나면 접속한 네트워크의 IP 대역이 원인일 수 있습니다. KORAIL이 일부 IP 대역에서 오는 로그인을 차단하기 때문입니다. 같은 코드와 설정이 다른 네트워크에서는 정상 로그인되며, 라이브러리 설정으로 해결되는 문제가 아닙니다.
 - 설정 객체를 만들 때의 오류는 라이브러리 예외가 아닙니다. `KorailConfig`, `DynapathConfig`, `DynapathTokenSettings`는 `ValueError`를, `build_config_from_env`는 필수 환경변수가 없으면 `RuntimeError`를 발생시킵니다.
 
 ## 예외에 담긴 정보
