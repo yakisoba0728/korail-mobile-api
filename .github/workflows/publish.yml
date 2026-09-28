@@ -3,20 +3,12 @@ name: Publish to PyPI
 # Manual only, like docs-deploy.yml. Uploading a version to a package index is a
 # decision a person makes, and a version number can never be reused once uploaded.
 #
-# Upload with Trusted Publishing (no API token is stored). Each index needs a
-# "pending publisher" for this repository, this workflow file and the matching
-# environment (testpypi / pypi). Run TestPyPI first, then PyPI:
+# Upload with Trusted Publishing (no API token is stored). The PyPI publisher
+# must match this repository, workflow file, and the pypi environment.
 #
-#   gh workflow run publish.yml -f index=testpypi
-#   gh workflow run publish.yml -f index=pypi
+#   gh workflow run publish.yml --ref vX.Y.Z
 on:
   workflow_dispatch:
-    inputs:
-      index:
-        description: Package index to upload to
-        required: true
-        type: choice
-        options: [testpypi, pypi]
 
 permissions:
   contents: read
@@ -50,13 +42,13 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Upload to ${{ inputs.index }}
+    name: Upload to PyPI
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
-      name: ${{ inputs.index }}
-      url: ${{ inputs.index == 'pypi' && 'https://pypi.org/project/korail-mobile-api/' || 'https://test.pypi.org/project/korail-mobile-api/' }}
+      name: pypi
+      url: https://pypi.org/project/korail-mobile-api/
     permissions:
       id-token: write
     steps:
@@ -66,4 +58,4 @@ jobs:
           path: dist/
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
-          repository-url: ${{ inputs.index == 'pypi' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+          repository-url: https://upload.pypi.org/legacy/
