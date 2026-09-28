@@ -90,7 +90,7 @@ with Korail() as korail:
         print(train.train_no, train.departure_time)
 ```
 
-간편 API는 처음 검색할 때 역 목록을 받아 입력을 확인합니다. 전체 요청 옵션과 모든 메서드는 아래의 `KorailClient`로 사용할 수 있습니다. 자세한 내용은 [간편 API 가이드](docs/guide/convenience.md)에 있습니다.
+간편 API는 처음 검색할 때 역 목록을 받아 입력을 확인합니다. 전체 요청 옵션과 모든 메서드는 아래의 `KorailClient`로 사용할 수 있습니다. 자세한 내용은 [간편 API 가이드](https://yaki.kr/korail-mobile-api/guide/convenience/)에 있습니다.
 
 ```python
 from korail_mobile_api import KorailClient, TrainSearchQuery

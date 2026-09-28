@@ -1,6 +1,6 @@
 # 변경 이력
 
-## [Unreleased]
+## [2.2.0] - 2026-09-28
 
 - 선택형 `Korail` 간편 API를 추가했습니다. 컨텍스트 관리, KST `datetime` 검색, 역 목록 캐시·검증, 로그인 실패 시 연결 정리, 예약·승차권 리소스를 제공합니다. 전체 기능은 기존 `KorailClient`에서 계속 사용할 수 있습니다.
 - `TrainSearchQuery.include_nearby_stations`로 7.0.8 요청 DTO의 `adjStnScdlOfrFlg`를 선택할 수 있습니다. 기본값 `False`는 기존 `N` 요청을 유지합니다.
