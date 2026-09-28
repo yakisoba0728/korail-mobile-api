@@ -92,6 +92,7 @@ _RESERVATION_KEY_ORDER: tuple[str, ...] = (
     *(
         "Device",
         "Version",
+        "AppVersion",
         "Key",
         "lang",
         "txtMenuId",

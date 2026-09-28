@@ -706,6 +706,7 @@ def expected_schedule_form() -> dict[str, str]:
     return {
         "Device": "SYNTHETIC-DEVICE",
         "Version": "SYNTHETIC-VERSION",
+        "AppVersion": "7.0.8",
         "Key": "SYNTHETIC-KEY",
         "lang": "ko",
         "dptDt": "20990101",
@@ -724,6 +725,7 @@ def expected_seat_form() -> dict[str, str]:
     return {
         "Device": "SYNTHETIC-DEVICE",
         "Version": "SYNTHETIC-VERSION",
+        "AppVersion": "7.0.8",
         "Key": "SYNTHETIC-KEY",
         "lang": "ko",
         "trnClsfCd": "99",
@@ -988,6 +990,7 @@ def expected_reservation_form() -> dict[str, str]:
     return {
         "Device": "SYNTHETIC-DEVICE",
         "Version": "SYNTHETIC-VERSION",
+        "AppVersion": "7.0.8",
         "Key": "SYNTHETIC-KEY",
         "lang": "ko",
         "txtMenuId": "11",

@@ -5,7 +5,7 @@
 
 **정기권·패스**는 조회만 합니다. [`get_pass_menu`](#get_pass_menu)로 메뉴 항목을 읽고, 항목의 `pass_data`([`PassMenuData`][korail_mobile_api.read_models.PassMenuData])에 든 종류·기간·연령 코드로 사용 가능일([`get_pass_available_dates`](#get_pass_available_dates)), 탈 수 있는 열차([`get_pass_schedule`](#get_pass_schedule)), 예매 조건([`get_commuter_info`](#get_commuter_info))을 조회합니다. 정기권·패스를 구매하는 메서드는 없습니다.
 
-**N카드**는 사용 내역과 이용 가능 열차 조회, 결제 전 구매, 기간 연장, N카드 예약을 제공합니다. N카드 결제는 지원하지 않습니다. [`register_discount_card`](#register_discount_card)는 결제 전 구매까지만 만들고, 그 구매를 결제하거나 취소하는 메서드는 없습니다. N카드 메서드는 모두 실서버에서 확인하지 못했습니다.
+**N카드**는 사용 내역과 이용 가능 열차 조회, 결제 전 구매, 기간 연장, N카드 예약을 제공합니다. N카드 결제는 지원하지 않습니다. [`register_discount_card`](#register_discount_card)는 결제 전 구매까지만 만들고, 그 구매를 결제하거나 취소하는 메서드는 없습니다. 7.0.8에서 스케줄 조회는 서버 오류 `EAZ000028`까지 확인했고, 보유 N카드가 없어 정상 조회와 다른 N카드 메서드는 확인하지 못했습니다.
 
 **여행상품**은 검색·예약·결제를 지원하지 않습니다. 다른 경로로 만든 여행상품 예약을 목록([`get_product_reservations`](#get_product_reservations))과 상세([`get_product_detail`](#get_product_detail))로 조회하고, [`cancel_product_reservation`](#cancel_product_reservation)으로 취소합니다. [`get_trip_menu`](#get_trip_menu)는 여행상품 메뉴 화면의 항목을 읽습니다.
 
@@ -40,9 +40,9 @@ KorailClient.get_pass_menu(menu_no: str) -> PassMenuResponse
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 없음 | - | 아니요 | 확인됨 |
+| 필요 없음 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -92,9 +92,9 @@ KorailClient.get_pass_available_dates(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 없음 | - | 아니요 | 확인됨 |
+| 필요 없음 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -146,9 +146,9 @@ KorailClient.get_pass_schedule(request: PassScheduleRequest) -> PassScheduleResp
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -204,9 +204,9 @@ KorailClient.get_commuter_kind_menu(commuter_kind_code: str) -> CommuterKindMenu
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 없음 | - | 아니요 | 확인됨 |
+| 필요 없음 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -225,6 +225,7 @@ KorailClient.get_commuter_info(request: CommuterInfoRequest) -> CommuterInfoResp
 ```
 
 앱의 정기권 예매 화면이 단계별로 보내는 조회입니다. 넘기는 입력 타입에 따라 단계가 정해집니다.
+7.0.8에서는 현재 계정의 조회가 `ERR000100`으로 거절됐습니다. 아래 단계별 정상 응답 설명은 성공 시의 모델 계약이며, 이번 계정에서 다시 확인한 결과는 아닙니다.
 
 - **초기 단계**: [`CommuterInitialRequest`][korail_mobile_api.read_payloads.CommuterInitialRequest]에 `pass_data`를 넣습니다. 응답의 `passenger_options`에 승객 종류별 연령 코드와 연령·인원 범위가 옵니다.
 - **인원 단계**: [`CommuterPassengerRequest`][korail_mobile_api.read_payloads.CommuterPassengerRequest]는 생성자 대신 `from_response(pass_data, source, passenger_counts)`로 만듭니다. `source`는 초기 단계의 응답이고, `passenger_counts`는 `source.passenger_options`의 행마다 인원을 하나씩 적은 정수 튜플입니다. 요청에는 승객 한 명마다 그 행의 연령 코드를 한 번씩 넣습니다.
@@ -249,9 +250,9 @@ KorailClient.get_commuter_info(request: CommuterInfoRequest) -> CommuterInfoResp
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 서버 거절 |
 
 **예제**
 
@@ -292,9 +293,9 @@ KorailClient.get_trip_menu() -> TripMenuResponse
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -342,9 +343,9 @@ N카드 번호 하나를 넘기면 그 카드로 이용한 여행이 한 행씩 
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 미확인 |
+| 필요 | - | 아니요 | 미실행 |
 
 **예제**
 
@@ -365,7 +366,7 @@ KorailClient.get_discount_card_schedule(
 ) -> DiscountCardScheduleResponse
 ```
 
-조회 조건은 [`DiscountCardScheduleRequest`][korail_mobile_api.read_payloads.DiscountCardScheduleRequest]로 만듭니다. 실서버에서 확인하지 못한 메서드입니다.
+조회 조건은 [`DiscountCardScheduleRequest`][korail_mobile_api.read_payloads.DiscountCardScheduleRequest]로 만듭니다. 7.0.8에서 알려진 상품 코드로 요청하자 서버가 `EAZ000028`을 반환했습니다. 보유 N카드가 없어 정상 열차 목록은 확인하지 못했습니다.
 
 필수 필드는 N카드 상품 관리번호(`card_kind_management_no`), 출발·도착역 이름, 출발일(`YYYYMMDD`)입니다.
 `for_card()`로 만들면 상품 관리번호에서 카드 종류 코드(`card_kind_code`)를 정합니다. 라이브러리가 아는 일부 상품은 `"B2N"`, 나머지는 `"MMM"`이며, 이 구분이 앱과 같은지는 확인하지 못했습니다.
@@ -395,9 +396,9 @@ KorailClient.get_discount_card_schedule(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 미확인 |
+| 필요 | - | 아니요 | 서버 거절 |
 
 **예제**
 
@@ -456,9 +457,9 @@ KorailClient.register_discount_card(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 예 | 미확인 |
+| 필요 | - | 예 | 미실행 |
 
 !!! warning "실제로 처리됩니다"
     이 메서드를 호출하면 서버에 결제 전 N카드 구매가 실제로 만들어지며, 라이브러리로는 취소할 수 없습니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
@@ -514,9 +515,9 @@ KorailClient.extend_discount_card(ticket: DiscountCardTicket) -> BaseKorailRespo
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 예 | 미확인 |
+| 필요 | - | 예 | 미실행 |
 
 !!! warning "실제로 처리됩니다"
     이 메서드를 호출하면 N카드의 유효기간이 실제로 연장됩니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
@@ -580,9 +581,9 @@ KorailClient.reserve_with_discount_card(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | `reserve` | 예 | 미확인 |
+| 필요 | `reserve` | 예 | 미실행 |
 
 !!! warning "실제로 처리됩니다"
     이 메서드를 호출하면 N카드로 좌석이 실제로 홀드됩니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.
@@ -645,9 +646,9 @@ KorailClient.get_product_reservations(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -694,9 +695,9 @@ KorailClient.get_product_detail(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -723,7 +724,7 @@ KorailClient.cancel_product_reservation(
 [`get_product_detail`](#get_product_detail)이 돌려준 응답을 넘기면, 그 안의 `virtual_reservation_no`와 `goods_sequence`로 취소를 요청합니다.
 
 같은 요청이 결제 전 예약의 취소와 결제한 예약의 환불에 모두 쓰입니다. 결제한 예약은 수수료가 붙을 수 있으므로 호출하기 전에 상세의 `cancellation_fee`와 `cancellation_amount`를 확인하세요.
-결제한 예약의 환불은 실서버에서 확인하지 못했습니다.
+7.0.8에서는 조회 가능한 여행상품 1건이 이미 고객 취소 상태라 취소 요청을 실행하지 않았습니다. 7.0.6 시기에는 결제 전 예약 취소를 확인했으며, 결제한 예약의 환불은 확인하지 못했습니다.
 
 **매개변수**
 
@@ -744,9 +745,9 @@ KorailClient.cancel_product_reservation(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 예 | 확인됨 |
+| 필요 | - | 예 | 미실행 |
 
 !!! warning "실제로 처리됩니다"
     이 메서드를 호출하면 여행상품 예약이 실제로 취소되고, 결제한 예약이면 환불로 처리됩니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 결과를 확인하세요.

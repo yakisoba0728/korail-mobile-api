@@ -2242,6 +2242,11 @@ def parse_ticket_reservation_detail_response(
                 **_nullable_scalar_fields(
                     journey, _RESERVATION_DETAIL_JOURNEY_FIELDS, "reservation detail journey"
                 ),
+                run_date=(
+                    _optional_scalar_string(journey, "h_run_dt", "reservation detail journey")
+                    if "h_run_dt" in journey
+                    else ""
+                ),
                 seats=tuple(seats),
                 raw=journey,
             )

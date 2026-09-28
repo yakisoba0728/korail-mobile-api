@@ -1,0 +1,2215 @@
+{
+  "generated_at_utc": "2026-09-28T01:26:37.066334+00:00",
+  "basis": "SDK 84 public methods; redacted live 7.0.8 call records; older docs/status.md kept separate",
+  "status_counts": {
+    "local_only": 2,
+    "live_parsed": 59,
+    "not_live_exercised": 13,
+    "live_rejected": 10
+  },
+  "methods": [
+    {
+      "method": "close",
+      "status_708": "local_only",
+      "previous_status_706_period": "해당 없음",
+      "calls": [],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "login",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "login",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/file/CACHE/MobileService.cache",
+            "/classes/com.korail.mobile.common.code.do",
+            "/classes/com.korail.mobile.login.Login"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "login",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/file/CACHE/MobileService.cache",
+            "/classes/com.korail.mobile.common.code.do",
+            "/classes/com.korail.mobile.login.Login"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "login",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/file/CACHE/MobileService.cache",
+            "/classes/com.korail.mobile.common.code.do",
+            "/classes/com.korail.mobile.login.Login"
+          ]
+        },
+        {
+          "evidence": "live_708_merge_second_probe.json",
+          "call": "login",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/file/CACHE/MobileService.cache",
+            "/classes/com.korail.mobile.common.code.do",
+            "/classes/com.korail.mobile.login.Login"
+          ]
+        },
+        {
+          "evidence": "live_708_seat_designated_probe.json",
+          "call": "login",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/file/CACHE/MobileService.cache",
+            "/classes/com.korail.mobile.common.code.do",
+            "/classes/com.korail.mobile.login.Login"
+          ]
+        },
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "login",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/file/CACHE/MobileService.cache",
+            "/classes/com.korail.mobile.common.code.do",
+            "/classes/com.korail.mobile.login.Login"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "login",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/file/CACHE/MobileService.cache",
+            "/classes/com.korail.mobile.common.code.do",
+            "/classes/com.korail.mobile.login.Login"
+          ]
+        },
+        {
+          "evidence": "live_708_discount_schedule_probe.json",
+          "call": "login",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/file/CACHE/MobileService.cache",
+            "/classes/com.korail.mobile.common.code.do",
+            "/classes/com.korail.mobile.login.Login"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "clear_session",
+      "status_708": "local_only",
+      "previous_status_706_period": "해당 없음",
+      "calls": [],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "logout",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "logout",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.login.Logout"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "logout",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.login.Logout"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "logout",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.login.Logout"
+          ]
+        },
+        {
+          "evidence": "live_708_merge_second_probe.json",
+          "call": "logout",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.login.Logout"
+          ]
+        },
+        {
+          "evidence": "live_708_seat_designated_probe.json",
+          "call": "logout",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.login.Logout"
+          ]
+        },
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "logout",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.login.Logout"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "logout",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.login.Logout"
+          ]
+        },
+        {
+          "evidence": "live_708_discount_schedule_probe.json",
+          "call": "logout",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.login.Logout"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_seat_cars",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_seat_cars",
+          "outcome": "KorailAuthError",
+          "result": null,
+          "code": null,
+          "request_paths": []
+        },
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_seat_cars",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.TrainResearch"
+          ]
+        },
+        {
+          "evidence": "live_708_seat_designated_probe.json",
+          "call": "get_seat_cars",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.TrainResearch"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_seat_inventory",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_seat_inventory",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.TResidualSeatsResearch.do"
+          ]
+        },
+        {
+          "evidence": "live_708_seat_designated_probe.json",
+          "call": "get_seat_inventory",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.TResidualSeatsResearch.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_limousine_schedules",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_limousine_schedules",
+          "outcome": "KorailNoResultsError",
+          "result": null,
+          "code": "WRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.lmu.scdlQry.do"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "get_limousine_schedules",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.lmu.scdlQry.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_limousine_seat_inventory",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "get_limousine_seat_inventory",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.lms.TResidualSeatsResearch.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_service_status",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_service_status",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "S100",
+          "request_paths": [
+            "/file/CACHE/MobileService.cache"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_cart_list",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_cart_list",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.cart.showCartList"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "get_cart_list_with_pnr",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.cart.showCartList"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_cart_list",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.cart.showCartList"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_deposit_banks",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_deposit_banks",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "request_paths": [
+            "/classes/com.korail.mobile.dlay.dptnBank.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_delay_discount_tickets",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_delay_discount_tickets",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.passCard.DelayDiscountView"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_discount_coupons",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_discount_coupons",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "WRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.passCard.CouponView"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_korail_point_summary",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_korail_point_summary",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.xPoint.MyXPointView"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_mileage_history",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_mileage_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.mlg.amtSpec.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_discount_card_usage_history",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "미확인",
+      "calls": [],
+      "missing_precondition": "보유 N카드 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_discount_card_schedule",
+      "status_708": "live_rejected",
+      "previous_status_706_period": "미확인",
+      "calls": [
+        {
+          "evidence": "live_708_discount_schedule_probe.json",
+          "call": "get_discount_card_schedule_catalogue_code",
+          "outcome": "KorailAppError",
+          "result": null,
+          "code": "EAZ000028",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.dcntCrdScheduleView.do"
+          ]
+        }
+      ],
+      "missing_precondition": "보유 N카드 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_pass_available_dates",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_pass_available_dates",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.pass.passInfoList"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_pass_schedule",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_pass_schedule",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.pass.passScheduleInfoList"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_trip_menu",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_trip_menu",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "request_paths": [
+            "/classes/com.korail.mobile.pass.trGdMenuLt.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_pass_menu",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_pass_menu",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.pass.passMenu.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_crew_request_list",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_crew_request_list",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "",
+          "request_paths": [
+            "/classes/com.korail.mobile.push.crwCallRq.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_commuter_kind_menu",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_commuter_kind_menu",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.push.cmtrKnd.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_product_reservations",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_product_reservations",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.product.ReservationList"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_product_reservations_default_page",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.product.ReservationList"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_product_reservations_large_page",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.product.ReservationList"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_product_detail",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_product_detail",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.product.ReservationDetail"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "cancel_product_reservation",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "확인됨",
+      "calls": [],
+      "missing_precondition": "활성 여행상품 예약 없음; 확인된 1건은 이미 취소됨",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_ticket_receipt",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_ticket_receipt",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRT000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.receipt.ReceiptInfo"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_reservation_history",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_reservation_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "P100",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservation.ReservationView"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "get_reservation_history_active",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservation.ReservationView"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "post_cancel_history_regular",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "P100",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservation.ReservationView"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "post_cancel_history_transfer",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "P100",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservation.ReservationView"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "post_cancel_history_limousine",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "P100",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservation.ReservationView"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "initial_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "P100",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.reservation.ReservationView",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "standby_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000001",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.reservation.ReservationView",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "final_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "P100",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.reservation.ReservationView",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_merge_second_probe.json",
+          "call": "initial_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "P100",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.reservation.ReservationView",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_merge_second_probe.json",
+          "call": "final_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "P100",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.reservation.ReservationView",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_seat_designated_probe.json",
+          "call": "initial_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "P100",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.reservation.ReservationView",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_seat_designated_probe.json",
+          "call": "final_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "P100",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.reservation.ReservationView",
+            "/ts.wseq"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_free_seat_car_info",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_free_seat_car_info",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000005",
+          "request_paths": [
+            "/classes/com.korail.mobile.trn.fresScar.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_guide_seat_condition",
+      "status_708": "live_rejected",
+      "previous_status_706_period": "서버 응답만 확인",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_guide_seat_condition",
+          "outcome": "KorailSessionExpiredError",
+          "result": null,
+          "code": "P058",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservation.guideSeatCnd.do"
+          ]
+        },
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_guide_seat_condition",
+          "outcome": "returned",
+          "result": "FAIL",
+          "code": "MRR800011",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservation.guideSeatCnd.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_seat_assignment_schedule",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_seat_assignment_schedule",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "WRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.assignScheduleView.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_merge_seats_inquiry",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_merge_seats_inquiry",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.mergeSeatsC.do"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "get_merge_seats_inquiry",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.mergeSeatsC.do"
+          ]
+        },
+        {
+          "evidence": "live_708_merge_second_probe.json",
+          "call": "get_merge_seats_inquiry",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.mergeSeatsC.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_multi_child_discount_targets",
+      "status_708": "live_rejected",
+      "previous_status_706_period": "서버 응답만 확인",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_multi_child_discount_targets",
+          "outcome": "KorailAppError",
+          "result": null,
+          "code": "WRC800029",
+          "request_paths": [
+            "/classes/com.korail.mobile.cust.mchdDcntTgt.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_customer_trip_info",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_customer_trip_info",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRS100002",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.custTripInfo.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_maas_service_details",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_maas_service_details",
+          "outcome": "KorailAuthError",
+          "result": null,
+          "code": null,
+          "request_paths": []
+        },
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_maas_service_details",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "",
+          "request_paths": [
+            "/classes/com.korail.mobile.copt.gdReqQry.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_trip_change_dates",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_trip_change_dates",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservation.tripChgDate.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_commuter_info",
+      "status_708": "live_rejected",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_commuter_info_initial",
+          "outcome": "KorailNoResultsError",
+          "result": null,
+          "code": "ERR000100",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.cmtrInfo.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_price_fare_quote",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_price_fare_quote",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "request_paths": [
+            "/classes/com.korail.mobile.trn.prcFare.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_delivery_recipient",
+      "status_708": "live_rejected",
+      "previous_status_706_period": "미확인",
+      "calls": [
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_delivery_recipient",
+          "outcome": "KorailNoResultsError",
+          "result": null,
+          "code": "IRZ000005",
+          "request_paths": [
+            "/classes/com.korail.mobile.tk.dlvRcvCust.do"
+          ]
+        }
+      ],
+      "missing_precondition": "N카드 2인 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "check_ticket_duplication",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "check_ticket_duplication",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "",
+          "request_paths": [
+            "/classes/com.korail.mobile.ticket.ticketDupCheck.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_pbp_acceptance_specifications",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_pbp_acceptance_specifications",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "MRR800018",
+          "request_paths": [
+            "/classes/com.korail.mobile.tk.pbpAcepSpec.do"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_pbp_acceptance_specifications_batch",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "MRR800018",
+          "request_paths": [
+            "/classes/com.korail.mobile.tk.pbpAcepSpec.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "retrieve_delivered_ticket",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "미확인",
+      "calls": [],
+      "missing_precondition": "과거 대리수령 명세 2건 모두 회수 가능 플래그 N",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_original_ticket_inquiry",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_original_ticket_inquiry",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRT000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.tripChgOgtk.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_self_seat_change_info",
+      "status_708": "live_rejected",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_self_seat_change_info",
+          "outcome": "KorailSeatUnavailableError",
+          "result": null,
+          "code": "WRT800176",
+          "request_paths": [
+            "/classes/com.korail.mobile.self.seatChgInfo.do"
+          ]
+        }
+      ],
+      "missing_precondition": "운행 중인 발권 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_recent_delivery_history",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_recent_delivery_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "",
+          "request_paths": [
+            "/classes/com.korail.mobile.tk.rcntDlvHst.do"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_recent_delivery_history",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "",
+          "request_paths": [
+            "/classes/com.korail.mobile.tk.rcntDlvHst.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_ticket_reservation_detail",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "get_ticket_reservation_detail",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.certification.ReservationList"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "get_ticket_reservation_detail_transfer",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.certification.ReservationList"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_refund_commission",
+      "status_708": "live_rejected",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_refund_commission",
+          "outcome": "KorailAppError",
+          "result": null,
+          "code": "WRT200022",
+          "request_paths": [
+            "/classes/com.korail.mobile.refunds.CommissionView"
+          ]
+        }
+      ],
+      "missing_precondition": "발권된 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_refund_ticket_detail",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_refund_ticket_detail",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.refunds.SelTicketInfo"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_refund_ticket_detail_for_card_scan",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.refunds.SelTicketInfo"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_refund_ticket_detail_for_card_scan",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.refunds.SelTicketInfo"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_refund_ticket_detail_for_card_scan",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.refunds.SelTicketInfo"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_refund_ticket_detail_for_card_scan",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.refunds.SelTicketInfo"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_refund_ticket_detail_for_card_scan",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.refunds.SelTicketInfo"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_refund_ticket_detail_for_card_scan",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.refunds.SelTicketInfo"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_refund_ticket_detail_for_card_scan",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.refunds.SelTicketInfo"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_refund_ticket_detail_for_card_scan",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.refunds.SelTicketInfo"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_delay_certificate",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_delay_certificate",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IAZ000006",
+          "request_paths": [
+            "/classes/com.korail.mobile.dlay.athnIsu.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_delay_return_receipt",
+      "status_708": "live_rejected",
+      "previous_status_706_period": "서버 응답만 확인",
+      "calls": [
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_delay_return_receipt",
+          "outcome": "KorailNoResultsError",
+          "result": null,
+          "code": "IRZ000005",
+          "request_paths": [
+            "/classes/com.korail.mobile.dlay.pymtRcet.do"
+          ]
+        }
+      ],
+      "missing_precondition": "지연료 반환 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_self_checkin_info",
+      "status_708": "live_rejected",
+      "previous_status_706_period": "서버 응답만 확인",
+      "calls": [
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_self_checkin_info",
+          "outcome": "KorailAppError",
+          "result": null,
+          "code": "WRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.checkin.info.do"
+          ]
+        }
+      ],
+      "missing_precondition": "체크인한 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "check_self_checkin_seat",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "미확인",
+      "calls": [],
+      "missing_precondition": "실제 좌석 QR 및 해당 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "register_self_checkin",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "미확인",
+      "calls": [],
+      "missing_precondition": "실제 좌석 QR 및 해당 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "cancel_self_checkin",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "미확인",
+      "calls": [],
+      "missing_precondition": "체크인한 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_common_code",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_common_code",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "request_paths": [
+            "/classes/com.korail.mobile.common.code.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_app_data",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_app_data",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/file/CACHE/prdMobilePlusMain.cache"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_notice",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_notice",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/file/CACHE/prdMobilePlusMain.cache"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_uuid",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_uuid",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": null,
+          "request_paths": [
+            "/ebizcross/getUUID.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_maas_menu_list",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_maas_menu_list",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "request_paths": [
+            "/classes/com.korail.mobile.copt.gdMenuLt.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_maas_station_data",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_maas_station_data",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/ebizmaas/EbizMaasStationList.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_station_info",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_station_info",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.common.stationinfo"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_station_data",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_station_data",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/classes/com.korail.mobile.common.stationdata"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_train_calendar",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_train_calendar",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "request_paths": [
+            "/classes/com.korail.mobile.schedule.runDt"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "search_trains",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "search_trains",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.seatMovie.ScheduleView"
+          ]
+        },
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "search_trains_auth",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.seatMovie.ScheduleView"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "search_trains",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.seatMovie.ScheduleView"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "search_trains",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.seatMovie.ScheduleView",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_merge_second_probe.json",
+          "call": "search_trains",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.seatMovie.ScheduleView",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_seat_designated_probe.json",
+          "call": "search_trains",
+          "outcome": "returned",
+          "result": null,
+          "code": null,
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.seatMovie.ScheduleView",
+            "/ts.wseq"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "search_transfer_trains",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "search_transfer_trains",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.seatMovie.ScheduleView"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "search_transfer_trains",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.seatMovie.ScheduleView"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "search_trains_with_transfer_fallback",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "search_trains_with_transfer_fallback",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.seatMovie.ScheduleView",
+            "/classes/com.korail.mobile.seatMovie.ScheduleView"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_train_schedule",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_train_schedule",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.research.actualTrainSchedule.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_transfer_stations",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_public_batch.json",
+          "call": "get_transfer_stations",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.qry.chtnStn.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "get_ticket_list",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_ticket_list_current",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "WRT300005",
+          "request_paths": [
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do"
+          ]
+        },
+        {
+          "evidence": "live_708_auth_batch.json",
+          "call": "get_ticket_list_history",
+          "outcome": "KorailAppError",
+          "result": null,
+          "code": "WRT100101",
+          "request_paths": [
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do"
+          ]
+        },
+        {
+          "evidence": "live_708_history_probe.json",
+          "call": "get_ticket_list_history_period_1",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do"
+          ]
+        },
+        {
+          "evidence": "live_708_account_deep_probe.json",
+          "call": "get_ticket_list_history_current_quarter",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.myTicket.MyTicketNewList.do"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "reserve",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "reserve_regular",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000018",
+          "request_paths": [
+            "/classes/com.korail.mobile.certification.TicketReservation"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "reserve_standby",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000014",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.certification.TicketReservation",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "reserve_merge_standing",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000018",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.certification.TicketReservation",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "reserve_for_recalc",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000018",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.certification.TicketReservation",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_merge_second_probe.json",
+          "call": "reserve_merge_standing",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000018",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.certification.TicketReservation",
+            "/ts.wseq"
+          ]
+        },
+        {
+          "evidence": "live_708_seat_designated_probe.json",
+          "call": "reserve_seat_designated",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000018",
+          "request_paths": [
+            "/ts.wseq",
+            "/classes/com.korail.mobile.certification.TicketReservation",
+            "/ts.wseq"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "confirm_standby_hold",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "confirm_standby_hold",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000003",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservationWait.ReservationWait"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "reserve_transfer",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "reserve_transfer",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000018",
+          "request_paths": [
+            "/classes/com.korail.mobile.certification.TicketReservation"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "reserve_merge",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "reserve_merge",
+          "outcome": "KorailSoldOutError",
+          "result": null,
+          "code": "ERI411321",
+          "request_paths": [
+            "/classes/com.korail.mobile.certification.TicketReservation"
+          ]
+        },
+        {
+          "evidence": "live_708_merge_second_probe.json",
+          "call": "reserve_merge",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000018",
+          "request_paths": [
+            "/classes/com.korail.mobile.certification.TicketReservation"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "reserve_limousine",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "reserve_limousine",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRR000018",
+          "request_paths": [
+            "/classes/com.korail.mobile.certification.TicketReservation"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "cancel_unpaid_hold",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "cancel_unpaid_hold_regular",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "cancel_unpaid_hold_transfer",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
+          ]
+        },
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "cancel_unpaid_hold_limousine",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "cancel_standby",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "cancel_merge_standing",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "cancel_recalc_hold",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
+          ]
+        },
+        {
+          "evidence": "live_708_merge_second_probe.json",
+          "call": "cancel_merge_standing",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
+          ]
+        },
+        {
+          "evidence": "live_708_merge_second_probe.json",
+          "call": "cancel_merge",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
+          ]
+        },
+        {
+          "evidence": "live_708_seat_designated_probe.json",
+          "call": "cancel_seat_designated",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "request_paths": [
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+            "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "pay_with_card",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "확인됨",
+      "calls": [],
+      "missing_precondition": "실제 카드 결제 수단 없음; 금전 청구",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "refund",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "확인됨",
+      "calls": [],
+      "missing_precondition": "환불할 발권 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "verify_station_ticket_refund",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "미확인",
+      "calls": [],
+      "missing_precondition": "역 발권 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "execute_station_ticket_refund",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "미확인",
+      "calls": [],
+      "missing_precondition": "역 발권 승차권 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "add_to_cart",
+      "status_708": "live_parsed",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "add_to_cart",
+          "outcome": "returned",
+          "result": "SUCC",
+          "code": "IRZ000002",
+          "request_paths": [
+            "/classes/com.korail.mobile.cart.addCartList"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "register_discount_card",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "미확인",
+      "calls": [],
+      "missing_precondition": "실구매/발권으로 이어지는 N카드 등록",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "extend_discount_card",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "미확인",
+      "calls": [],
+      "missing_precondition": "보유 N카드 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "reserve_with_discount_card",
+      "status_708": "not_live_exercised",
+      "previous_status_706_period": "미확인",
+      "calls": [],
+      "missing_precondition": "보유 N카드 없음",
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    },
+    {
+      "method": "recalculate_price",
+      "status_708": "live_rejected",
+      "previous_status_706_period": "확인됨",
+      "calls": [
+        {
+          "evidence": "live_708_reversible_batch.json",
+          "call": "recalculate_price",
+          "outcome": "KorailAppError",
+          "result": null,
+          "code": "WZZ000001",
+          "request_paths": [
+            "/classes/com.korail.mobile.certification.PriceReCalculation"
+          ]
+        },
+        {
+          "evidence": "live_708_standby_merge_probe.json",
+          "call": "recalculate_price_empty_discount",
+          "outcome": "KorailAppError",
+          "result": null,
+          "code": "ERR930202",
+          "request_paths": [
+            "/classes/com.korail.mobile.certification.PriceReCalculation"
+          ]
+        }
+      ],
+      "missing_precondition": null,
+      "synthetic_contract_test": "tests/test_public_api_smoke.py::test_f8_all_public_methods"
+    }
+  ]
+}

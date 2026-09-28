@@ -32,7 +32,7 @@ pip install .
 ## 클라이언트 만들기
 
 모든 기능은 [`KorailClient`][korail_mobile_api.client.KorailClient]의 메서드로 제공됩니다.
-설정 없이 만들면 코레일+ 앱 7.0.6과 같은 기본값을 사용합니다.
+설정 없이 만들면 코레일+ 앱 7.0.8에서 확인한 `AppVersion` 기본값을 사용합니다.
 
 ```python
 from korail_mobile_api import KorailClient

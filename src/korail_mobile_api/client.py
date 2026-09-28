@@ -305,7 +305,7 @@ def _hold_for_job(hold: ReservationHoldResponse, job_type: KorailReservationJobT
 
 
 class KorailClient:
-    """KORAIL 코레일+ 앱 7.0.6과 같은 요청을 보내는 비공식 동기 클라이언트입니다.
+    """KORAIL 코레일+ 앱 7.0.8의 확인된 요청 계약을 따르는 비공식 동기 클라이언트입니다.
 
     ``config``를 생략하면 기본값으로 만든 ``KorailConfig``를 쓰며, 기본 설정에서는 DynaPath와 대기열이 켜져 있습니다.
     ``transport``에 넣은 ``httpx`` 전송 계층은 KORAIL API 요청과 대기열 요청에 함께 쓰입니다. 예약·결제·환불처럼 서버
@@ -652,17 +652,16 @@ class KorailClient:
     def get_deposit_banks(self) -> DepositBankListResponse:
         """입금 가능한 은행의 코드와 이름 목록을 조회합니다.
 
-        ``POST dlay.dptnBank.do`` (``NetworkApi.java:392-393`` — ``postDptnBank(@Field("Device"),
-        @Field("Version"), @Field("Key"))``; ``@FieldMap`` 이 아니라 개별 ``@Field`` 세 개이며
-        postCashRfn·postDecrypt 도 같은 방식입니다)."""
+        ``POST dlay.dptnBank.do``는 개별 ``@Field``를 사용합니다. 7.0.8은
+        ``Device``, ``Version``, ``AppVersion``, ``Key`` 순서입니다."""
         self._require_session()
+        form = {"Device": self.config.device, "Version": self.config.version}
+        if self.config.app_version is not None:
+            form["AppVersion"] = self.config.app_version
+        form["Key"] = self.config.key
         return self._post_read(
             "/classes/com.korail.mobile.dlay.dptnBank.do",
-            {
-                "Device": self.config.device,
-                "Version": self.config.version,
-                "Key": self.config.key,
-            },
+            form,
             parser=parse_deposit_bank_response,
             include_common=False,
             omit_empty_fields=False,
@@ -1313,11 +1312,14 @@ class KorailClient:
         timestamp_ms: int | None = None,
     ) -> AppDataResponse:
         """앱 메인 화면이 쓰는 캐시 파일을 받아 옵니다."""
+        form = self.http.common_fields()
+        form.update(build_cache_query(timestamp_ms))
+        form["srtCheckYn"] = "Y"
         return self._run_read(
             lambda: parse_app_data_response(
                 self.http.post_form(
                     "/file/CACHE/prdMobilePlusMain.cache",
-                    build_cache_query(timestamp_ms),
+                    form,
                     include_common=False,
                     require_envelope=False,
                 )
@@ -1328,7 +1330,7 @@ class KorailClient:
         self,
         timestamp_ms: int | None = None,
     ) -> NoticeResponse:
-        """7.0.6 메인 캐시의 중첩 ``notice`` 를 읽습니다."""
+        """앱 메인 캐시의 중첩 ``notice`` 를 읽습니다."""
         app_data = self.get_app_data(timestamp_ms)
         return app_data.notice or NoticeResponse(
             h_msg_cd=app_data.h_msg_cd,

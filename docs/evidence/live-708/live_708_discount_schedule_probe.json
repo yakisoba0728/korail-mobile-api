@@ -1,0 +1,116 @@
+{
+  "timestamp_utc": "2026-09-28T01:25:38.598462+00:00",
+  "records": [
+    {
+      "method": "login",
+      "outcome": "returned",
+      "result": null,
+      "code": null,
+      "requests": [
+        {
+          "path": "/file/CACHE/MobileService.cache",
+          "http": 200,
+          "body_field_names": [
+            "timeStamp"
+          ],
+          "query_field_names": [],
+          "app_version": null
+        },
+        {
+          "path": "/classes/com.korail.mobile.common.code.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "code",
+            "deviceWidth",
+            "deviceHeight",
+            "OSVersion"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        },
+        {
+          "path": "/classes/com.korail.mobile.login.Login",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtInputFlg",
+            "txtMemberNo",
+            "txtPwd",
+            "checkValidPw",
+            "idx"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_discount_card_schedule_catalogue_code",
+      "outcome": "KorailAppError",
+      "code": "EAZ000028",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.research.dcntCrdScheduleView.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "dptDt",
+            "dptRsStnNm",
+            "arvRsStnNm",
+            "dptTm",
+            "trnGpCd",
+            "dirtChtnDvCd",
+            "dcntCrdKndCd",
+            "dcntCrdKndMgNo",
+            "usePsbTno"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "discount_card_schedule_summary",
+      "train_count": null
+    },
+    {
+      "method": "logout",
+      "outcome": "returned",
+      "result": null,
+      "code": null,
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.login.Logout",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "timeStamp"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    }
+  ]
+}

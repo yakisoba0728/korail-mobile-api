@@ -55,6 +55,7 @@ KorailClient.get_ticket_list(
 
 `mode`가 `"1"`이면 현재 승차권을, `"2"`이면 구매 이력을 돌려줍니다. 앱 내부 값이 공개돼 있지 않아 이 대응은 실서버 응답을 보고 정했습니다.
 라이브러리는 `mode`, 날짜, 페이지 번호를 고치지 않고 그대로 보내며, 빈 문자열인 날짜는 보내지 않습니다.
+7.0.8 실서버에서 구매 이력(`mode="2"`)을 3개월을 넘는 범위로 요청하면 `WRT100101`(3개월 단위 조회 안내)을 받았습니다. 날짜 범위를 2026-07-01~2026-09-28로 좁히자 이력이 조회됐습니다. 이 코드를 이력 없음으로 해석하지 마세요.
 [`KorailConfig`][korail_mobile_api.config.KorailConfig]의 `advertising_id`를 설정했으면 그 값도 함께 보냅니다.
 
 예약 행에서 `tickets`를 뺀 나머지 필드는 응답에 없을 수 있으며, 없으면 `None`입니다.
@@ -81,9 +82,9 @@ KorailClient.get_ticket_list(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -143,9 +144,9 @@ KorailClient.get_ticket_receipt(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -191,9 +192,9 @@ KorailClient.get_korail_point_summary() -> KorailPointSummaryResponse
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -242,9 +243,9 @@ KorailClient.get_mileage_history(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -299,9 +300,9 @@ KorailClient.get_discount_coupons(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -347,9 +348,9 @@ KorailClient.get_delay_discount_tickets(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -367,8 +368,8 @@ for item in tickets.items:
 KorailClient.get_deposit_banks() -> DepositBankListResponse
 ```
 
-요청에는 앱과 같이 `Device`, `Version`, `Key` 세 필드만 싣습니다.
-[`KorailConfig`][korail_mobile_api.config.KorailConfig]의 `lang`을 설정해도 `lang`은 보내지 않으며, 세 필드는 값이 빈 문자열이어도 빼지 않고 보냅니다.
+7.0.8 요청에는 앱과 같이 `Device`, `Version`, `AppVersion`, `Key` 네 필드를 싣습니다.
+[`KorailConfig`][korail_mobile_api.config.KorailConfig]의 `lang`을 설정해도 `lang`은 보내지 않으며, `AppVersion`을 제외한 기존 세 필드는 값이 빈 문자열이어도 빼지 않고 보냅니다.
 
 **매개변수**
 
@@ -386,9 +387,9 @@ KorailClient.get_deposit_banks() -> DepositBankListResponse
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -426,9 +427,9 @@ KorailClient.get_customer_trip_info() -> CustomerTripInfoResponse
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -469,9 +470,9 @@ KorailClient.get_multi_child_discount_targets(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 서버 응답만 확인 |
+| 필요 | - | 아니요 | 서버 거절 |
 
 **예제**
 
@@ -512,9 +513,9 @@ KorailClient.get_trip_change_dates(departure_date: str) -> TripChangeDateRespons
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -565,9 +566,9 @@ KorailClient.get_original_ticket_inquiry(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -596,6 +597,7 @@ KorailClient.get_self_seat_change_info(
 
 요청에는 승차권 식별자가 들어가지 않고 열차 정보만 들어갑니다. 값은 [`get_ticket_list`](#get_ticket_list)의 열차 구간([`TicketListTrain`][korail_mobile_api.read_models.TicketListTrain])에서 가져올 수 있습니다.
 조회 조건은 [`SelfSeatChangeInfoRequest`][korail_mobile_api.read_payloads.SelfSeatChangeInfoRequest]로 만들며, 값은 객체를 만들 때 검사해 잘못되면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
+7.0.8에서 조회한 과거 승차권은 운행 시간 밖이라 서버가 `WRT800176`으로 거절했습니다. 운행 중 열차의 정상 응답은 7.0.6 시기 기록입니다.
 
 | 필드 | 기본값 | 설명 |
 |---|---|---|
@@ -623,9 +625,9 @@ KorailClient.get_self_seat_change_info(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 서버 거절 |
 
 **예제**
 
@@ -679,9 +681,9 @@ KorailClient.get_delay_certificate(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 확인됨 |
+| 필요 | - | 아니요 | 응답 파싱 |
 
 **예제**
 
@@ -732,9 +734,9 @@ KorailClient.get_delay_return_receipt(
 
 **정보**
 
-| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+| 로그인 | 대기열 | 상태 변경 | 7.0.8 확인 |
 |:-:|:-:|:-:|:-:|
-| 필요 | - | 아니요 | 서버 응답만 확인 |
+| 필요 | - | 아니요 | 서버 거절 |
 
 **예제**
 

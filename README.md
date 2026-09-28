@@ -31,7 +31,7 @@
   <a href="https://pypi.org/project/korail-mobile-api/"><img src="https://img.shields.io/pypi/v/korail-mobile-api" alt="PyPI"></a>
   <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&amp;logoColor=white" alt="Python 3.11 | 3.12 | 3.13 | 3.14">
   <img src="https://img.shields.io/badge/typing-mypy%20strict-2A6DB2" alt="mypy strict">
-  <img src="https://img.shields.io/badge/%EC%BD%94%EB%A0%88%EC%9D%BC%2B-7.0.6%20%EA%B8%B0%EC%A4%80-0b7a75" alt="코레일+ 7.0.6 기준">
+  <img src="https://img.shields.io/badge/%EC%BD%94%EB%A0%88%EC%9D%BC%2B-7.0.8%20%EA%B8%B0%EC%A4%80-0b7a75" alt="코레일+ 7.0.8 기준">
   <a href="https://github.com/yakisoba0728/korail-mobile-api/blob/main/LICENSE"><img src="https://img.shields.io/github/license/yakisoba0728/korail-mobile-api" alt="License"></a>
 </p>
 
@@ -140,22 +140,18 @@ finally:
 
 ## 지원 범위
 
-공개 메서드는 84개이고, 2026년 9월 24~26일에 실서버로 하나씩 확인했습니다.
+공개 메서드 84개를 2026년 9월 28일 코레일+ 7.0.8 설정으로 다시 확인했습니다. 메서드별 결과 코드와 남은 전제 조건은 [7.0.8 검증표](docs/verification-708.md)에 있습니다.
 
-| 영역 | 메서드 | 실서버 확인 | 예 |
-|---|---:|---:|---|
-| 로그인·세션 | 4 | 2 | `login`, `logout` (나머지 둘은 네트워크를 쓰지 않음) |
-| 공통 정보 | 9 | 9 | 역 목록, 운행 달력, 공지 |
-| 열차 조회·좌석 | 12 | 11 | `search_trains`, 환승 조회, 호차·좌석 배치, 운임 |
-| 공항버스·부가서비스 | 6 | 6 | 공항버스 스케줄·좌석, 부가서비스 메뉴 |
-| 정기권·패스 | 6 | 6 | 패스 사용 가능일, 정기권 조건 |
-| 내 승차권·계정 | 28 | 21 | 승차권 목록, 예약 내역, 영수증, 마일리지, 지연확인증 |
-| 예약·결제·환불 | 19 | 11 | `reserve`, `pay_with_card`, `refund` |
+| 7.0.8 결과 | 메서드 수 | 의미 |
+|---|---:|---|
+| 응답 파싱 | 59 | 실서버 호출 후 반환 객체를 받았습니다. 빈 목록·결과 없음도 포함됩니다. |
+| 서버 거절 | 10 | 요청은 도달했으나 정상 결과는 받지 못했습니다. |
+| 미실행 | 13 | 보유 N카드, 유효한 승차권, 좌석 QR, 결제수단 등의 전제 자료가 없었습니다. |
+| 로컬 메서드 | 2 | 네트워크를 사용하지 않습니다. |
 
-확인 못 한 것 중 4개는 요청은 서버까지 갔지만 이 계정에 해당 자료나 자격이 없어서 실패 응답만 봤습니다.
-나머지 12개는 필요한 카드나 승차권이 없어서 성공 응답을 보지 못했습니다. 이 중 3개는 요청을 보내 실패 응답만 받았습니다. 코드는 앱과 똑같이 짰습니다.
+2026년 9월 24~26일의 [7.0.6 시기 검증 기록](docs/status.md)에는 카드 결제와 환불 성공 사례가 있습니다. 이는 7.0.8에서 결제·환불을 재실행했다는 뜻이 아닙니다.
 
-- N카드: 구매, 기간 연장, N카드로 예약, 사용 내역, 이용 가능 열차, 2인 승차권 수령자 조회
+- N카드: 구매, 기간 연장, N카드로 예약, 사용 내역, 이용 가능 열차의 정상 조회, 2인 승차권 수령자 조회
 - 셀프 체크인: 좌석 확인, 등록, 취소
 - 역에서 산 승차권 환불: 확인, 실행
 - 다른 회원에게 전달한 승차권 회수

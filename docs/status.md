@@ -1,6 +1,31 @@
 # 실서버 확인 현황
 
-메서드마다 실제 KORAIL 서버에 요청해 응답을 확인했는지 정리한 표입니다. 2026년 9월 24~26일 기준이며, 개인정보와 식별자는 적지 않았습니다.
+메서드마다 실제 KORAIL 서버에 요청해 응답을 확인했는지 정리했습니다. 먼저 2026년 9월 28일의 7.0.8 재검증 결과를 보여주고, 아래 전체 목록에는 2026년 9월 24~26일의 7.0.6 시기 기록을 보존합니다. 개인정보와 식별자는 적지 않았습니다.
+
+## 7.0.8 요청 변경 실서버 재검증 (2026-09-28)
+
+조회, 인증, 임시 예약·취소 요청을 실서버에 보냈습니다. 공통 필드를 싣는 폼과 직접 은행 조회 폼에서 `AppVersion=7.0.8`을 확인했습니다. URL 쿼리를 쓰거나 본문이 없는 요청은 폼 기록만으로 버전을 판정하지 않았습니다. 공개 메서드 84개의 재검증 범위와 근거는 [7.0.8 전수 확인표](verification-708.md)에 있습니다.
+
+| 메서드 | 7.0.8 요청 | 실서버 결과 |
+|---|---|---|
+| `get_common_code("app.display.image")` | 공통 필드와 코드·기기 정보를 전송 | HTTP 200, `SUCC`/`API.I00000` |
+| `get_train_calendar()` | 공통 필드와 `timeStamp` 전송 | HTTP 200, `SUCC`/`API.I00000`, 운행일 32개 |
+| `get_maas_menu_list()` | 공통 필드와 `timeStamp` 전송 | HTTP 200, `SUCC`/`API.I00000`, 메뉴 11개 |
+| `get_app_data(timestamp_ms=1)` | 공통 필드·`timeStamp`·`srtCheckYn=Y` 전송 | HTTP 200, JSON 파싱 성공, `version`·`notice` 객체 존재. 이 캐시 응답에는 `strResult`가 없습니다. |
+| `login()` | 로그인 요청에 `AppVersion=7.0.8` 전송 | HTTP 200, 세션 쿠키를 받았으며 SDK 로그인이 성공함. |
+| `get_deposit_banks()` | 직접 `@Field` 네 개(`Device`, `Version`, `AppVersion`, `Key`) 전송 | 인증 세션에서 HTTP 200, `SUCC`/`API.I00000`, 은행 56개. 세션 없이 같은 필드로 보낸 요청은 `P058`을 받음. |
+| `search_trains()` | 7.0.8 공통 필드로 직통 열차 조회 | `SUCC`/`IRG000000`, 예약 가능 행 10개. |
+| `reserve()` → `get_ticket_reservation_detail()` | 미결제 홀드 하나를 만든 뒤 그 PNR의 상세를 조회 | 예약 `SUCC`/`IRR000018`, 상세 HTTP 200·`SUCC`/`IRZ000001`. 한 여정에 `h_run_dt`가 실제로 있었고 모델의 `run_date`와 원문 값이 일치함. |
+| `cancel_unpaid_hold()` | 위 미결제 홀드를 즉시 취소 | HTTP 200, `SUCC`/`IRG000000`. 이후 예약 이력은 `P100`·0여정. |
+| 예약대기·병합·좌석 지정·환승·공항버스 예약 | 각 유형의 실제 미결제 홀드 생성 | 예약대기 옵션 저장까지 성공했고, 병합·좌석 지정·환승·공항버스 홀드도 성공했습니다. 모두 취소 후 예약 이력 0건을 확인했습니다. |
+| `recalculate_price()` | 실제 홀드의 할인 재계산 요청 | 요청은 서버에 도달했지만 `WZZ000001`과 변경 내용 없음 `ERR930202`를 받았습니다. 7.0.8 성공 응답은 미확인입니다. |
+| `get_ticket_list(mode="2")` → 발권 후 조회 | 3개월 이내 승차일 범위로 과거 이력 조회 | 7개 예약·8장 승차권을 받았고, 이 중 한 장의 영수증·원표·환불 상세·지연확인증·대리수령 명세 응답을 파싱했습니다. |
+| `get_product_detail()`·`get_pbp_acceptance_specifications()` | 계정의 실제 과거 여행상품·승차권 식별자로 조회 | 고객 취소된 여행상품 1건의 상세와 대리수령 대상 과거 승차권 2건의 명세를 파싱했습니다. 두 명세의 회수 가능 플래그는 모두 `N`이었습니다. |
+| `get_discount_card_schedule()` | 알려진 N카드 상품 코드로 읽기 전용 조회 | 서버의 `EAZ000028` 스케줄 조회 오류를 받았습니다. 보유 N카드가 없으므로 성공 경로는 미확인입니다. |
+
+이는 각 경로의 현재 서버 응답과 파싱을 확인한 결과입니다. 재검증 전 예약 이력은 `P100`으로 비었고 현재 승차권은 `WRT300005`였습니다. 첫 과거 승차권 조회의 `WRT100101`은 자료 부재가 아니라 3개월 초과 날짜 범위 오류였고, 범위를 바로잡아 성공했습니다. 여러 미결제 홀드를 순차적으로 만들고 모두 취소했으며 최종 예약 이력은 0건이었습니다. 결제·환불 요청은 보내지 않았고 검증용 로그인 세션은 종료했습니다. 84개 중 실서버 응답 파싱 59개, 서버 거절 확인 10개, 자료 부족으로 미실행 13개, 로컬 메서드 2개입니다.
+
+## 7.0.6 시기 기존 전체 목록 (2026-09-24~26)
 
 | 상태 | 수 | 뜻 |
 |---|---:|---|
@@ -99,7 +124,7 @@
 | [`get_recent_delivery_history`](api/delivery-checkin.md#get_recent_delivery_history) | 확인됨 | 수령자 1명을 받았습니다. 응답에 해당 값이 없어 `changed_acceptance_reservation_no`는 `None`이었습니다. |
 | [`get_delivery_recipient`](api/delivery-checkin.md#get_delivery_recipient) | 미확인 | N카드 2인 승차권이 없어 수령자 응답을 확인하지 못했습니다. 서버는 `IRZ000005`를 반환했습니다. |
 | [`get_pbp_acceptance_specifications`](api/delivery-checkin.md#get_pbp_acceptance_specifications) | 확인됨 | 대리수령 대상 승차권 6장으로 6장의 명세를 받았습니다. 대상이 아닌 승차권은 0건이었습니다. |
-| [`retrieve_delivered_ticket`](api/delivery-checkin.md#retrieve_delivered_ticket) | 미확인 | 전달한 승차권이 없어 확인하지 못했습니다. 확인하려면 다른 회원에게 실제 승차권을 전달해야 합니다. |
+| [`retrieve_delivered_ticket`](api/delivery-checkin.md#retrieve_delivered_ticket) | 미확인 | 회수 가능한 전달 승차권이 없어 확인하지 못했습니다. 7.0.8에서 조회한 과거 명세 2건도 회수 가능 플래그가 모두 `N`입니다. |
 | [`get_self_checkin_info`](api/delivery-checkin.md#get_self_checkin_info) | 서버 응답만 확인 | 체크인한 승차권이 없어 `WRZ000001`을 받았습니다. |
 | [`check_self_checkin_seat`](api/delivery-checkin.md#check_self_checkin_seat) | 미확인 | 열차 좌석의 QR 코드가 필요해 요청을 보내지 않았습니다. |
 | [`register_self_checkin`](api/delivery-checkin.md#register_self_checkin) | 미확인 | 열차 좌석의 QR 코드가 필요해 요청을 보내지 않았습니다. 앱 안내에 따르면 부정 사용 시 부가금이 있어 임의 값도 보내지 않았습니다. |

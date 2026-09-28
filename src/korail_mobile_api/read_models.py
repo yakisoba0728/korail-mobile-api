@@ -1699,6 +1699,8 @@ class ReservationDetailJourney:
     journey_sequence: str | None = None
     journey_type_code: str | None = None
     reservation_change_no: str | None = None
+    #: 7.0.8 여정의 운행일(``h_run_dt``). 누락은 빈 문자열, 명시적 null·잘못된 타입은 None입니다.
+    run_date: str | None = ""
     departure_date: str | None = None
     departure_time: str | None = None
     arrival_time: str | None = None

@@ -2,7 +2,7 @@
 
 이 가이드는 [`KorailConfig`][korail_mobile_api.config.KorailConfig]로 클라이언트의 동작을 바꾸는 방법을 설명합니다.
 설정 필드 전체, DynaPath 토큰, 대기열(NetFunnel), 언어 필드, 환경변수로 설정을 만드는 방법을 차례로 다룹니다.
-설정을 넘기지 않으면 코레일+ 앱 7.0.6을 기준으로 정한 기본값을 쓰며, 대부분은 바꿀 필요가 없습니다.
+설정을 넘기지 않으면 코레일+ 앱 7.0.8에서 확인한 기본 요청값을 쓰며, 대부분은 바꿀 필요가 없습니다.
 
 ## 설정 적용
 
@@ -38,6 +38,7 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 | `base_url` | `str` | `"https://smart.letskorail.com"` | KORAIL API 서버 주소입니다. 검사하지 않고 그대로 씁니다. |
 | `device` | `str` | `"AD"` | 공통 필드 `Device`의 값입니다. |
 | `version` | `str` | `"250601003"` | 공통 필드 `Version`의 값입니다. |
+| `app_version` | `str` \| `None` | `"7.0.8"` | 별도 공통 필드 `AppVersion`의 값입니다. `None`이면 이 필드만 생략합니다. |
 | `key` | `str` | `"korail1234567890"` | 공통 필드 `Key`의 값입니다. |
 | `timeout` | `float` | `60.0` | API 요청의 제한 시간(초)입니다. |
 | `user_agent` | `str` | `"korailtalk"` | API 요청의 `User-Agent` 헤더입니다. |
@@ -55,7 +56,7 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 | `netfunnel_actions` | `Mapping[str, str]` \| `None` | `None` | 관문별 대기열 식별값을 바꿉니다. |
 | `disable_dynapath` | `bool` | `False` | `True`이면 DynaPath 토큰을 붙이지 않습니다. |
 
-`device`, `version`, `key`, `user_agent`를 바꾸면 앱과 다른 요청이 됩니다.
+`device`, `version`, `app_version`, `key`, `user_agent`를 바꾸면 앱과 다른 요청이 됩니다. 기존 `Version`과 새 `AppVersion`은 서로 다른 필드입니다.
 API 요청의 `User-Agent`와 대기열 요청의 `User-Agent`는 서로 다른 설정입니다.
 
 ## DynaPath {#dynapath}

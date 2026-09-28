@@ -11,6 +11,7 @@ from .constants import (
     KORAIL_API_USER_AGENT,
     KORAIL_API_VERSION,
     KORAIL_APP_KEY,
+    KORAIL_APP_VERSION,
     KORAIL_BASE_URL,
     KORAIL_DEFAULT_ANDROID_SDK_INT,
     KORAIL_DEFAULT_DEVICE_HEIGHT,
@@ -84,8 +85,14 @@ class KorailConfig:
     #: ``True``이면 DynaPath 토큰을 붙이지 않습니다. 이때 로그인 요청은 보내기 전에 ``KorailDynaPathRequiredError``로
     #: 거절되므로 로그인이 필요한 메서드를 쓸 수 없습니다. 켜진 ``DynapathConfig``와 함께 넘기면 ``ValueError``가 발생합니다.
     disable_dynapath: bool = False
+    #: 공통 요청의 ``AppVersion`` 값입니다. 기존 ``Version``과 별개이며, ``None``이면 이전 SDK처럼 생략합니다.
+    app_version: str | None = KORAIL_APP_VERSION
 
     def __post_init__(self) -> None:
+        if self.app_version is not None and (
+            not isinstance(self.app_version, str) or not self.app_version.strip()
+        ):
+            raise ValueError("app_version must be a nonempty string or None")
         default = DynapathConfig()
         if self.disable_dynapath:
             if self.dynapath.enabled:

@@ -265,11 +265,14 @@ def build_train_schedule_special_form(
     )
     device = form.pop("Device")
     version = form.pop("Version")
+    app_version = form.pop("AppVersion", None)
+    form.pop("Key", None)
     # 앱 평탄화기처럼 빈 primitive 를 생략합니다(NetworkService.java:15335-15343).
     form = {key: value for key, value in form.items() if value}
     return {
         "Device": device,
         "Version": version,
+        **({"AppVersion": app_version} if app_version is not None else {}),
         "Key": config.key,
         **form,
     }

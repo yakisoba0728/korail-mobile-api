@@ -1,0 +1,388 @@
+{
+  "timestamp_utc": "2026-09-28T01:04:45.288574+00:00",
+  "records": [
+    {
+      "method": "login",
+      "outcome": "returned",
+      "result": null,
+      "code": null,
+      "requests": [
+        {
+          "path": "/file/CACHE/MobileService.cache",
+          "status": 200,
+          "app_version": null,
+          "field_names": [
+            "timeStamp"
+          ]
+        },
+        {
+          "path": "/classes/com.korail.mobile.common.code.do",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "code",
+            "deviceWidth",
+            "deviceHeight",
+            "OSVersion"
+          ]
+        },
+        {
+          "path": "/classes/com.korail.mobile.login.Login",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtInputFlg",
+            "txtMemberNo",
+            "txtPwd",
+            "checkValidPw",
+            "idx"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "initial_history",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "P100",
+      "requests": [
+        {
+          "path": "/ts.wseq",
+          "status": 200,
+          "app_version": null,
+          "field_names": []
+        },
+        {
+          "path": "/classes/com.korail.mobile.reservation.ReservationView",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "timeStamp"
+          ]
+        },
+        {
+          "path": "/ts.wseq",
+          "status": 200,
+          "app_version": null,
+          "field_names": []
+        }
+      ]
+    },
+    {
+      "method": "search_trains",
+      "outcome": "returned",
+      "result": null,
+      "code": null,
+      "requests": [
+        {
+          "path": "/ts.wseq",
+          "status": 200,
+          "app_version": null,
+          "field_names": []
+        },
+        {
+          "path": "/classes/com.korail.mobile.seatMovie.ScheduleView",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtMenuId",
+            "radJobId",
+            "selGoTrain",
+            "txtTrnGpCd",
+            "txtGoStart",
+            "txtGoEnd",
+            "txtGoAbrdDt",
+            "txtGoHour",
+            "txtPsgFlg_1",
+            "txtPsgFlg_2",
+            "txtPsgFlg_3",
+            "txtPsgFlg_4",
+            "txtPsgFlg_5",
+            "txtSeatAttCd_2",
+            "txtSeatAttCd_3",
+            "txtSeatAttCd_4",
+            "ebizCrossCheck",
+            "srtCheckYn",
+            "rtYn",
+            "adjStnScdlOfrFlg",
+            "mbCrdNo",
+            "qryDvCd"
+          ]
+        },
+        {
+          "path": "/ts.wseq",
+          "status": 200,
+          "app_version": null,
+          "field_names": []
+        }
+      ]
+    },
+    {
+      "method": "candidate_counts",
+      "standby": 3,
+      "merge": 2
+    },
+    {
+      "method": "get_seat_cars",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.research.TrainResearch",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtMenuId",
+            "txtRunDt",
+            "txtDptDt",
+            "txtTrnNo",
+            "txtDptTm",
+            "txtTrnClsfCd",
+            "txtTrnGpCd",
+            "txtDptRsStnCd",
+            "txtArvRsStnCd",
+            "txtPsrmClCd",
+            "txtSeatAttCd",
+            "txtDptStnRunOrdr",
+            "txtArvStnRunOrdr",
+            "txtTotPsgCnt"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_seat_inventory",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.research.TResidualSeatsResearch.do",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "trnClsfCd",
+            "trnGpCd",
+            "runDt",
+            "trnNo",
+            "srcarNo",
+            "psrmClCd",
+            "dptRsStnCd",
+            "arvRsStnCd",
+            "seatAttCd",
+            "dptStnRunOrdr",
+            "arvStnRunOrdr",
+            "totPsgCnt",
+            "isArrow"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "reserve_seat_designated",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRR000018",
+      "requests": [
+        {
+          "path": "/ts.wseq",
+          "status": 200,
+          "app_version": null,
+          "field_names": []
+        },
+        {
+          "path": "/classes/com.korail.mobile.certification.TicketReservation",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtMenuId",
+            "txtJobId",
+            "hidFreeFlg",
+            "txtStndFlg",
+            "txtTotPsgCnt",
+            "txtSeatAttCd1",
+            "txtSeatAttCd2",
+            "txtSeatAttCd3",
+            "txtSeatAttCd4",
+            "txtSeatAttCd5",
+            "txtJrnyCnt",
+            "txtSrcarCnt",
+            "txtCompaCnt1",
+            "txtPsgTpCd1",
+            "txtDiscKndCd1",
+            "txtJrnyTpCd1",
+            "txtJrnySqno1",
+            "txtTrnNo1",
+            "txtTrnClsfCd1",
+            "txtTrnGpCd1",
+            "txtRunDt1",
+            "txtDptDt1",
+            "txtDptTm1",
+            "txtDptRsStnCd1",
+            "txtDptStnConsOrdr1",
+            "txtDptStnRunOrdr1",
+            "txtArvRsStnCd1",
+            "txtArvStnConsOrdr1",
+            "txtArvStnRunOrdr1",
+            "txtChgFlg1",
+            "txtPsrmClCd1",
+            "txtSrcarNo1",
+            "txtSeatNo1"
+          ]
+        },
+        {
+          "path": "/ts.wseq",
+          "status": 200,
+          "app_version": null,
+          "field_names": []
+        }
+      ]
+    },
+    {
+      "method": "cancel_seat_designated",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtPnrNo",
+            "txtJrnySqno",
+            "txtJrnyCnt",
+            "hidRsvChgNo"
+          ]
+        },
+        {
+          "path": "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtPnrNo",
+            "txtJrnySqno",
+            "txtJrnyCnt",
+            "hidRsvChgNo"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "final_history",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "P100",
+      "requests": [
+        {
+          "path": "/ts.wseq",
+          "status": 200,
+          "app_version": null,
+          "field_names": []
+        },
+        {
+          "path": "/classes/com.korail.mobile.reservation.ReservationView",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "timeStamp"
+          ]
+        },
+        {
+          "path": "/ts.wseq",
+          "status": 200,
+          "app_version": null,
+          "field_names": []
+        }
+      ]
+    },
+    {
+      "method": "final_state",
+      "uncancelled_holds": 0,
+      "visible_reservations": 0
+    },
+    {
+      "method": "logout",
+      "outcome": "returned",
+      "result": null,
+      "code": null,
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.login.Logout",
+          "status": 200,
+          "app_version": [
+            "7.0.8"
+          ],
+          "field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "timeStamp"
+          ]
+        }
+      ]
+    }
+  ]
+}

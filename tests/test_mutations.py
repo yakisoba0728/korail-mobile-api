@@ -52,7 +52,13 @@ from korail_mobile_api.read_models import (
     TrainScheduleItem,
 )
 
-COMMON = {"Device": "SYNTH-ANDROID", "Version": "SYNTH-706", "Key": "SYNTH-KEY", "lang": "SYNTH-LANG"}
+COMMON = {
+    "Device": "SYNTH-ANDROID",
+    "Version": "SYNTH-706",
+    "AppVersion": "7.0.8",
+    "Key": "SYNTH-KEY",
+    "lang": "SYNTH-LANG",
+}
 BASE = {
     "strResult": "SUCC",
     "h_msg_cd": "SYNTH-SUCCESS",
@@ -1585,7 +1591,7 @@ def test_recalculation_form_keeps_the_retrofit_field_order() -> None:
     assert "txtPsrmClCd1" in keys[:-12]
 
 
-APP_HEAD = "Device Version Key lang txtMenuId txtJobId hidFreeFlg txtStndFlg txtTotPsgCnt".split()
+APP_HEAD = "Device Version AppVersion Key lang txtMenuId txtJobId hidFreeFlg txtStndFlg txtTotPsgCnt".split()
 APP_SEAT_ATTRIBUTES = "txtSeatAttCd1 txtSeatAttCd2 txtSeatAttCd3 txtSeatAttCd4 txtSeatAttCd5".split()
 APP_ADULT = "txtCompaCnt1 txtPsgTpCd1 txtDiscKndCd1".split()
 APP_JOURNEY = (
@@ -1632,7 +1638,7 @@ def app_journey(number: int) -> list[str]:
         (
             "refund",
             "txtPnrNo h_orgtk_sale_dt h_orgtk_sale_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_mlg_stl trnNo "
-            "pbpAcepTgtFlg Device Version Key lang".split(),
+            "pbpAcepTgtFlg Device Version AppVersion Key lang".split(),
         ),
     ],
 )
@@ -1661,9 +1667,9 @@ def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order
         seats=((KorailSeatAssignment(3, "SYNTH-5A"),), (KorailSeatAssignment(4, "SYNTH-6B"),)),
     )
     assert list(form) == [
-        *APP_HEAD[:6],
+        *APP_HEAD[:7],
         "txtGdNo",
-        *APP_HEAD[6:],
+        *APP_HEAD[7:],
         *APP_SEAT_ATTRIBUTES,
         *"txtSeatAttCd4_1 txtJrnyCnt txtSrcarCnt txtSrcarCnt1".split(),
         *APP_ADULT,
@@ -1678,7 +1684,7 @@ def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order
     assert list(refund) == (
         "txtPnrNo h_orgtk_sale_dt h_orgtk_sale_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_mlg_stl "
         "tk_ret_tms_dv_cd "
-        "trnNo pbpAcepTgtFlg latitude longitude Device Version Key lang".split()
+        "trnNo pbpAcepTgtFlg latitude longitude Device Version AppVersion Key lang".split()
     )
 
 

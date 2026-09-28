@@ -10,6 +10,7 @@ from typing import Literal, TypeAlias
 KORAIL_BASE_URL = "https://smart.letskorail.com"
 KORAIL_DEVICE_ANDROID = "AD"
 KORAIL_API_VERSION = "250601003"
+KORAIL_APP_VERSION = "7.0.8"
 KORAIL_APP_KEY = "korail1234567890"
 KORAIL_TIMEOUT_SECONDS = 60.0
 # 토큰 dm 은 Build.MODEL(a/b.java:113-116), st 는 별도 평문 "Android"(a/b.java:117). 초기화·생성:

@@ -41,7 +41,13 @@ from korail_mobile_api.read_payloads import (
 
 P = "/classes/com.korail.mobile."
 DATE = "20300102"
-COMMON = {"Device": "SYNTH-DEVICE", "Version": "SYNTH-VERSION", "lang": "SYNTH-LANG", "Key": "SYNTH-KEY"}
+COMMON = {
+    "Device": "SYNTH-DEVICE",
+    "Version": "SYNTH-VERSION",
+    "AppVersion": "7.0.8",
+    "lang": "SYNTH-LANG",
+    "Key": "SYNTH-KEY",
+}
 DEVICE = {k: v for k, v in COMMON.items() if k != "Key"}
 ENVELOPE = {"strResult": "SUCC", "h_msg_cd": "API.I00000", "h_msg_txt": "synthetic"}
 ROW = {
@@ -419,7 +425,7 @@ CASES = [
         (),
         {},
         "/file/CACHE/prdMobilePlusMain.cache",
-        {"timeStamp": "1700000000000"},
+        {**COMMON, "timeStamp": "1700000000000", "srtCheckYn": "Y"},
         APP,
         {"version.new_version": "9", "notice.post_title": "SYNTH_TITLE"},
         False,
@@ -429,7 +435,7 @@ CASES = [
         (),
         {},
         "/file/CACHE/prdMobilePlusMain.cache",
-        {"timeStamp": "1700000000000"},
+        {**COMMON, "timeStamp": "1700000000000", "srtCheckYn": "Y"},
         APP,
         {"board_id": "1", "post_content": "SYNTH_BODY"},
         False,
@@ -1174,7 +1180,7 @@ def test_travel_search_is_record_only_and_keeps_the_dto_order(rig):
     result = record.search_travel_products(client, query)
     assert (result.products[0].goods_no, result.page_count) == ("SYNTH_GOODS", "1")
     assert calls[0].url.path == "/ebizcom/gdLstDtl.do"
-    assert [key for key, _ in parse_qsl(calls[0].content.decode())][4:] == [
+    assert [key for key, _ in parse_qsl(calls[0].content.decode())][len(COMMON) :] == [
         "funcDvCd",
         "gdThmNm",
         "bltnLstOrdr",
@@ -1209,23 +1215,23 @@ def test_transport_parse_failure_keeps_full_json(case, raw, rig):
     [
         (
             "get_seat_cars",
-            "Device Version Key lang txtMenuId txtRunDt txtDptDt txtTrnNo txtDptTm txtTrnClsfCd txtTrnGpCd "
+            "Device Version AppVersion Key lang txtMenuId txtRunDt txtDptDt txtTrnNo txtDptTm txtTrnClsfCd txtTrnGpCd "
             "txtDptRsStnCd txtArvRsStnCd txtPsrmClCd txtSeatAttCd txtDptStnRunOrdr txtArvStnRunOrdr "
             "txtTotPsgCnt txtGdNo",
         ),
         (
             "get_seat_inventory",
-            "Device Version Key lang trnClsfCd trnGpCd runDt trnNo srcarNo psrmClCd dptRsStnCd arvRsStnCd "
+            "Device Version AppVersion Key lang trnClsfCd trnGpCd runDt trnNo srcarNo psrmClCd dptRsStnCd arvRsStnCd "
             "seatAttCd "
             "dptStnRunOrdr arvStnRunOrdr totPsgCnt gdNo isArrow",
         ),
         (
             "get_merge_seats_inquiry",
-            "Device Version Key lang abrdDt runDt trnNo dptRsStnNm arvRsStnNm selRsStnNm psrmClCd seatAttCd "
+            "Device Version AppVersion Key lang abrdDt runDt trnNo dptRsStnNm arvRsStnNm selRsStnNm psrmClCd seatAttCd "
             "totPsgNum",
         ),
-        ("get_common_code", "Device Version Key lang code code deviceWidth deviceHeight OSVersion"),
-        ("get_maas_menu_list", "Device Version Key lang timeStamp"),
+        ("get_common_code", "Device Version AppVersion Key lang code code deviceWidth deviceHeight OSVersion"),
+        ("get_maas_menu_list", "Device Version AppVersion Key lang timeStamp"),
     ],
 )
 def test_read_forms_follow_the_app_dto_order(name, expected, rig):

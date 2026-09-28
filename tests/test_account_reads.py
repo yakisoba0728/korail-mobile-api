@@ -21,7 +21,12 @@ from korail_mobile_api.models import KorailSession
 from korail_mobile_api.read_parsers import parse_cart_list_response
 
 PREFIX = "/classes/com.korail.mobile."
-COMMON = [("Device", "TEST-DEVICE"), ("Version", "TEST-VERSION"), ("Key", "TEST-KEY")]
+COMMON = [
+    ("Device", "TEST-DEVICE"),
+    ("Version", "TEST-VERSION"),
+    ("AppVersion", "7.0.8"),
+    ("Key", "TEST-KEY"),
+]
 DATE = "20300102"
 STAMP = 1_800_000_000_125
 REFERENCE = p.OriginalTicketReference("TEST-WINDOW", "0102", "TEST-SEQUENCE", "TEST-RETURN")
@@ -644,6 +649,7 @@ CASES = [
                 "jrny_info": [
                     {
                         "h_arv_dt": DATE,
+                        "h_run_dt": DATE,
                         "seat_infos": {"seat_info": [{"h_seat_no": "TEST-SEAT", "h_tot_disc_amt": "001200"}]},
                     }
                 ]
@@ -652,6 +658,7 @@ CASES = [
         (
             ("pnr_no", "TEST-PNR"),
             ("journeys.0.arrival_date", DATE),
+            ("journeys.0.run_date", DATE),
             ("journeys.0.seats.0.total_discount_amount", "001200"),
         ),
         "NetworkApi.java:423-424; TicketRsvInquiryIn.java:51",
@@ -834,12 +841,12 @@ def make_client():
     [
         (
             "get_ticket_list",
-            "Device Version Key lang txtIndex h_abrd_dt_from h_abrd_dt_to txtDeviceId hiduserYn h_page_no",
+            "Device Version AppVersion Key lang txtIndex h_abrd_dt_from h_abrd_dt_to txtDeviceId hiduserYn h_page_no",
         ),
         (
             "get_refund_commission",
             "h_orgtk_ret_sale_dt h_orgtk_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_comp_nm h_comp_cert_no "
-            "Device Version Key lang",
+            "Device Version AppVersion Key lang",
         ),
     ],
 )
@@ -899,7 +906,12 @@ def test_account_read_contract(entry: Case, lang: str | None, make_client) -> No
     assert len(calls) == 1, entry.source
     request = calls[0]
     assert (request.method, request.url.path) == (entry.verb, PREFIX + entry.route)
-    common = COMMON + ([("lang", lang)] if lang and entry.common_lang else [])
+    common = (
+        list(COMMON)
+        if entry.method != "get_commuter_kind_menu"
+        else [pair for pair in COMMON if pair[0] != "AppVersion"]
+    )
+    common += [("lang", lang)] if lang and entry.common_lang else []
     assert Counter(wire_pairs(request, entry.query)) == Counter(common + list(entry.fields)), entry.source
     if entry.query:
         assert request.content == b""
@@ -1247,6 +1259,40 @@ def test_direct_field_and_query_keep_empty_common_values(method, kwargs, query, 
     getattr(client, method)(**kwargs)
     assert ("Key", "") in wire_pairs(calls[0], query)
     assert "lang" not in dict(wire_pairs(calls[0], query))
+    if method == "get_deposit_banks":
+        assert wire_pairs(calls[0], query) == COMMON[:-1] + [("Key", "")]
+    else:
+        assert "AppVersion" not in dict(wire_pairs(calls[0], query))
+
+
+def test_deposit_bank_direct_fields_allow_app_version_omission(make_client) -> None:
+    client, calls = make_client(deepcopy(BY_NAME["get_deposit_banks"].response), app_version=None)
+    client.get_deposit_banks()
+    assert wire_pairs(calls[0]) == [("Device", "TEST-DEVICE"), ("Version", "TEST-VERSION"), ("Key", "TEST-KEY")]
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (ABSENT_LIST, ""),
+        (DATE, DATE),
+        ("", ""),
+        (None, None),
+        ({"unexpected": "object"}, None),
+    ],
+)
+def test_reservation_detail_run_date_preserves_raw(value, expected, make_client) -> None:
+    """ReservationOutJrnyInfo의 새 h_run_dt는 SDK에서 명시적 null을 관대하게 처리합니다."""
+    payload = deepcopy(BY_NAME["get_ticket_reservation_detail"].response)
+    journey = payload["jrny_infos"]["jrny_info"][0]
+    if value is ABSENT_LIST:
+        journey.pop("h_run_dt")
+    else:
+        journey["h_run_dt"] = value
+    client, _ = make_client(payload)
+    result = client.get_ticket_reservation_detail(p.TicketReservationDetailRequest("TEST-PNR"))
+    assert result.journeys[0].run_date == expected
+    assert result.journeys[0].raw == journey
 
 
 def test_commuter_passengers_repeat_age_per_person(make_client) -> None:

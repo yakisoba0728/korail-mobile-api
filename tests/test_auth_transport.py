@@ -507,6 +507,7 @@ def test_common_fields_headers_override_and_empty_omission(factory):
     assert first == {
         "Device": ["synthetic-device"],
         "Version": ["synthetic-version"],
+        "AppVersion": ["7.0.8"],
         "Key": ["synthetic-key"],
         "lang": ["synthetic-lang"],
         "zero": ["0"],

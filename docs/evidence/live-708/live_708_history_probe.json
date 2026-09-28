@@ -1,0 +1,371 @@
+{
+  "timestamp_utc": "2026-09-28T01:13:05.176484+00:00",
+  "records": [
+    {
+      "method": "login",
+      "outcome": "returned",
+      "result": null,
+      "code": null,
+      "requests": [
+        {
+          "path": "/file/CACHE/MobileService.cache",
+          "http": 200,
+          "body_field_names": [
+            "timeStamp"
+          ],
+          "query_field_names": [],
+          "app_version": null
+        },
+        {
+          "path": "/classes/com.korail.mobile.common.code.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "code",
+            "deviceWidth",
+            "deviceHeight",
+            "OSVersion"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        },
+        {
+          "path": "/classes/com.korail.mobile.login.Login",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtInputFlg",
+            "txtMemberNo",
+            "txtPwd",
+            "checkValidPw",
+            "idx"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_ticket_list_history_period_1",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtIndex",
+            "h_abrd_dt_from",
+            "h_abrd_dt_to",
+            "hiduserYn",
+            "h_page_no"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "history_period_1_summary",
+      "reservation_count": 7,
+      "ticket_count": 8,
+      "reference_complete": 8
+    },
+    {
+      "method": "get_ticket_receipt",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRT000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.receipt.ReceiptInfo",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "h_orgtk_sale_dt",
+            "h_orgtk_wct_no",
+            "h_orgtk_sale_sqno",
+            "h_orgtk_tk_ret_pwd"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_original_ticket_inquiry",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRT000001",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.research.tripChgOgtk.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "tkCnt",
+            "ogtkSaleWctNo_1",
+            "ogtkSaleDd_1",
+            "ogtkSaleSqno_1",
+            "ogtkRetPwd_1"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_refund_ticket_detail",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRZ000001",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.refunds.SelTicketInfo",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "h_orgtk_ret_sale_dt",
+            "h_orgtk_wct_no",
+            "h_orgtk_sale_sqno",
+            "h_orgtk_ret_pwd",
+            "h_purchase_history"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_refund_commission",
+      "outcome": "KorailAppError",
+      "code": "WRT200022",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.refunds.CommissionView",
+          "http": 200,
+          "body_field_names": [
+            "h_orgtk_ret_sale_dt",
+            "h_orgtk_wct_no",
+            "h_orgtk_sale_sqno",
+            "h_orgtk_ret_pwd",
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_delay_certificate",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IAZ000006",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.dlay.athnIsu.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "ogtkSaleWctNo",
+            "ogtkSaleDd",
+            "ogtkSaleSqno",
+            "ogtkRetPwd"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_delay_return_receipt",
+      "outcome": "KorailNoResultsError",
+      "code": "IRZ000005",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.dlay.pymtRcet.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "saleWctNo",
+            "saleDd",
+            "saleSqno",
+            "tkRetPwd"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_pbp_acceptance_specifications",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "MRR800018",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.tk.pbpAcepSpec.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "tkCnt",
+            "tkRetNo"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_delivery_recipient",
+      "outcome": "KorailNoResultsError",
+      "code": "IRZ000005",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.tk.dlvRcvCust.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "saleWctNo",
+            "saleDt",
+            "saleSqno",
+            "tkRetPwd"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_self_checkin_info",
+      "outcome": "KorailAppError",
+      "code": "WRZ000001",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.checkin.info.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "saleWctNo",
+            "saleDt",
+            "saleSqno",
+            "tkRetPwd",
+            "jrnySqno"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_self_seat_change_info",
+      "outcome": "KorailSeatUnavailableError",
+      "code": "WRT800176",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.self.seatChgInfo.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "runDt",
+            "trnNo",
+            "dptRsStnCd",
+            "arvRsStnCd"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "logout",
+      "outcome": "returned",
+      "result": null,
+      "code": null,
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.login.Logout",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "timeStamp"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    }
+  ]
+}

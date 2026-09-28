@@ -57,7 +57,7 @@ def test_login_form_matches_dto_declaration_order(lang: str | None, optional: bo
         "/classes/com.korail.mobile.login.Login",
     ]
     pairs = parse_qsl(seen[-1].content.decode("ascii"), keep_blank_values=True)
-    expected = ["Device", "Version", "Key"]
+    expected = ["Device", "Version", "AppVersion", "Key"]
     if lang is not None:
         expected.append("lang")
     expected.extend(["txtInputFlg", "txtMemberNo", "txtPwd"])

@@ -1,0 +1,360 @@
+{
+  "timestamp_utc": "2026-09-28T01:15:56.461517+00:00",
+  "records": [
+    {
+      "method": "login",
+      "outcome": "returned",
+      "result": null,
+      "code": null,
+      "requests": [
+        {
+          "path": "/file/CACHE/MobileService.cache",
+          "http": 200,
+          "body_field_names": [
+            "timeStamp"
+          ],
+          "query_field_names": [],
+          "app_version": null
+        },
+        {
+          "path": "/classes/com.korail.mobile.common.code.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "code",
+            "deviceWidth",
+            "deviceHeight",
+            "OSVersion"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        },
+        {
+          "path": "/classes/com.korail.mobile.login.Login",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtInputFlg",
+            "txtMemberNo",
+            "txtPwd",
+            "checkValidPw",
+            "idx"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "get_ticket_list_history_period_1",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtIndex",
+            "h_abrd_dt_from",
+            "h_abrd_dt_to",
+            "hiduserYn",
+            "h_page_no"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "history_period_1_summary",
+      "reservation_count": 7,
+      "ticket_count": 8,
+      "reference_complete": 8,
+      "ticket_kind_codes": {
+        "72": 8
+      },
+      "ticket_status_codes": {
+        "02": 3,
+        "09": 5
+      }
+    },
+    {
+      "method": "get_ticket_list_history_period_2",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtIndex",
+            "h_abrd_dt_from",
+            "h_abrd_dt_to",
+            "hiduserYn",
+            "h_page_no"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "history_period_2_summary",
+      "reservation_count": 2,
+      "ticket_count": 2,
+      "reference_complete": 2,
+      "ticket_kind_codes": {
+        "72": 2
+      },
+      "ticket_status_codes": {
+        "02": 2
+      }
+    },
+    {
+      "method": "get_ticket_list_history_period_3",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtIndex",
+            "h_abrd_dt_from",
+            "h_abrd_dt_to",
+            "hiduserYn",
+            "h_page_no"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "history_period_3_summary",
+      "reservation_count": 2,
+      "ticket_count": 2,
+      "reference_complete": 2,
+      "ticket_kind_codes": {
+        "72": 2
+      },
+      "ticket_status_codes": {
+        "09": 2
+      }
+    },
+    {
+      "method": "get_ticket_list_history_period_4",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtIndex",
+            "h_abrd_dt_from",
+            "h_abrd_dt_to",
+            "hiduserYn",
+            "h_page_no"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "history_period_4_summary",
+      "reservation_count": 38,
+      "ticket_count": 38,
+      "reference_complete": 38,
+      "ticket_kind_codes": {
+        "72": 38
+      },
+      "ticket_status_codes": {
+        "02": 24,
+        "09": 14
+      }
+    },
+    {
+      "method": "get_ticket_list_history_period_5",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtIndex",
+            "h_abrd_dt_from",
+            "h_abrd_dt_to",
+            "hiduserYn",
+            "h_page_no"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "history_period_5_summary",
+      "reservation_count": 26,
+      "ticket_count": 26,
+      "reference_complete": 26,
+      "ticket_kind_codes": {
+        "72": 26
+      },
+      "ticket_status_codes": {
+        "02": 20,
+        "09": 6
+      }
+    },
+    {
+      "method": "get_ticket_list_history_period_6",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtIndex",
+            "h_abrd_dt_from",
+            "h_abrd_dt_to",
+            "hiduserYn",
+            "h_page_no"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "history_period_6_summary",
+      "reservation_count": 27,
+      "ticket_count": 29,
+      "reference_complete": 29,
+      "ticket_kind_codes": {
+        "72": 29
+      },
+      "ticket_status_codes": {
+        "02": 26,
+        "09": 3
+      }
+    },
+    {
+      "method": "get_ticket_list_history_period_7",
+      "outcome": "returned",
+      "result": "SUCC",
+      "code": "IRG000000",
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "txtIndex",
+            "h_abrd_dt_from",
+            "h_abrd_dt_to",
+            "hiduserYn",
+            "h_page_no"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "history_period_7_summary",
+      "reservation_count": 21,
+      "ticket_count": 21,
+      "reference_complete": 21,
+      "ticket_kind_codes": {
+        "72": 21
+      },
+      "ticket_status_codes": {
+        "09": 7,
+        "02": 14
+      }
+    },
+    {
+      "method": "logout",
+      "outcome": "returned",
+      "result": null,
+      "code": null,
+      "requests": [
+        {
+          "path": "/classes/com.korail.mobile.login.Logout",
+          "http": 200,
+          "body_field_names": [
+            "Device",
+            "Version",
+            "AppVersion",
+            "Key",
+            "timeStamp"
+          ],
+          "query_field_names": [],
+          "app_version": [
+            "7.0.8"
+          ]
+        }
+      ]
+    }
+  ]
+}

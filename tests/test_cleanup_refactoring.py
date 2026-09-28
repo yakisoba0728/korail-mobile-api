@@ -14,19 +14,23 @@ from korail_mobile_api.http import KorailHttpClient
 
 
 @pytest.mark.parametrize("lang", [None, "", "synthetic-language"])
-def test_common_form_keeps_order_and_returns_fresh_mapping(lang: str | None) -> None:
+@pytest.mark.parametrize("app_version", ["7.0.8", "7.0.9", None])
+def test_common_form_keeps_order_and_returns_fresh_mapping(lang: str | None, app_version: str | None) -> None:
     config = KorailConfig(
         device="SYNTHETIC-DEVICE",
         version="SYNTHETIC-VERSION",
         key="SYNTHETIC-APP-KEY",
         lang=lang,
+        app_version=app_version,
         disable_dynapath=True,
     )
     expected = [
         ("Device", config.device),
         ("Version", config.version),
-        ("Key", config.key),
     ]
+    if app_version is not None:
+        expected.append(("AppVersion", app_version))
+    expected.append(("Key", config.key))
     if lang is not None:
         expected.append(("lang", lang))
     client = KorailHttpClient(config, transport=httpx.MockTransport(lambda request: httpx.Response(200)))
@@ -38,6 +42,12 @@ def test_common_form_keeps_order_and_returns_fresh_mapping(lang: str | None) -> 
         assert list(client.common_fields().items()) == expected
     finally:
         client.close()
+
+
+@pytest.mark.parametrize("app_version", ["", " ", 708, False])
+def test_invalid_app_version_is_rejected(app_version: object) -> None:
+    with pytest.raises(ValueError, match="app_version"):
+        KorailConfig(app_version=app_version)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(

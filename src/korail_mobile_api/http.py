@@ -196,7 +196,7 @@ class KorailHttpClient:
         self._client.close()
 
     def common_fields(self) -> dict[str, str]:
-        """lang은 보호된 기본값을 추측하지 않고 설정된 경우만 싣습니다(CommonIn.java:381,467-474)."""
+        """7.0.8의 AppVersion과 설정된 lang을 싣습니다. 보호된 언어 기본값은 추측하지 않습니다."""
         return _device_version_key(self.config)
 
     def _absolute_url(self, path: str) -> str:
