@@ -63,7 +63,7 @@ Python 3.11 이상이 필요합니다.
 pip install korail-mobile-api
 ```
 
-아직 릴리스되지 않은 최신 코드는 GitHub에서 바로 설치할 수 있습니다.
+개발 중인 코드는 GitHub에서 바로 설치할 수 있습니다.
 
 ```sh
 pip install "git+https://github.com/yakisoba0728/korail-mobile-api"
