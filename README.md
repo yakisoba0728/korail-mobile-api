@@ -75,6 +75,23 @@ pip install "git+https://github.com/yakisoba0728/korail-mobile-api"
 
 열차 조회는 로그인 없이 됩니다.
 
+자주 쓰는 조회는 `with`와 KST `datetime`을 받는 간편 API로 시작할 수 있습니다.
+
+```python
+from datetime import datetime, timedelta, timezone
+
+from korail_mobile_api import Korail
+
+with Korail() as korail:
+    result = korail.trains.search(
+        "서울", "부산", depart_after=datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
+    )
+    for train in result.trains:
+        print(train.train_no, train.departure_time)
+```
+
+간편 API는 처음 검색할 때 역 목록을 받아 입력을 확인합니다. 전체 요청 옵션과 모든 메서드는 아래의 `KorailClient`로 사용할 수 있습니다. 자세한 내용은 [간편 API 가이드](https://yaki.kr/korail-mobile-api/guide/convenience/)에 있습니다.
+
 ```python
 from korail_mobile_api import KorailClient, TrainSearchQuery
 

@@ -19,8 +19,48 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify-ref:
+    name: Verify release tag and package version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Require a matching version tag
+        run: |
+          python - <<'PY'
+          import ast
+          import os
+          from pathlib import Path
+
+          if os.environ['GITHUB_REF_TYPE'] != 'tag':
+              raise SystemExit('PyPI publishing requires a version tag')
+          tree = ast.parse(Path('src/korail_mobile_api/__init__.py').read_text(encoding='utf-8'))
+          version = next(
+              node.value.value
+              for node in tree.body
+              if isinstance(node, ast.Assign)
+              and any(isinstance(target, ast.Name) and target.id == '__version__' for target in node.targets)
+              and isinstance(node.value, ast.Constant)
+              and isinstance(node.value.value, str)
+          )
+          tag = os.environ['GITHUB_REF_NAME']
+          if tag != f'v{version}':
+              raise SystemExit(f'release tag {tag!r} does not match package version {version!r}')
+          PY
+
+  ci:
+    name: Re-run CI on release tag
+    needs: verify-ref
+    uses: ./.github/workflows/ci.yml
+
   build:
     name: Build sdist and wheel
+    needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

@@ -25,6 +25,7 @@ KorailClient.search_trains(
 ```
 
 조회 조건은 [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery]로 넘깁니다.
+인접역 일정 표시가 필요하면 `query.include_nearby_stations=True`로 지정합니다. 기본값은 `False`입니다.
 출발역·도착역이 숫자로만 된 역 코드이면 처음 한 번 역 목록([`get_station_data`](session.md#get_station_data))을 조회해 역 이름으로 바꿔 보내고, 코드와 이름의 대응표는 클라이언트에 보관합니다.
 숫자가 아닌 값은 역 이름으로 보고 앞뒤 공백만 뺀 뒤 그대로 보냅니다.
 로그인하지 않아도 조회할 수 있습니다. 로그인한 세션에 회원카드 번호(`member_card_no`)가 있으면 요청에 함께 싣습니다.

@@ -4,7 +4,7 @@
 
 """공개 진입점은 __all__이며 그 밖의 이름은 내부 구현입니다."""
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 from .client import KorailClient
 from .config import KorailConfig
@@ -14,6 +14,7 @@ from .constants import (
     KorailRoomClassCode,
     KorailSeatClass,
 )
+from .device import KorailDeviceProfile, build_config_from_profile
 from .dynapath import (
     DynapathConfig,
     DynapathRequestContext,
@@ -42,6 +43,7 @@ from .errors import (
     KorailSoldOutError,
     KorailTransportError,
 )
+from .facade import Korail, ReservationResource, StationResource, TicketResource, TrainResource
 from .limousine_models import (
     LimousineSchedule,
     LimousineScheduleQuery,
@@ -300,6 +302,7 @@ __all__ = [
     "GuideSeatConditionRequest",
     "GuideSeatConditionResponse",
     "IntermediateStation",
+    "Korail",
     "KorailApiError",
     "KorailAppError",
     "KorailAppUpdateRequiredError",
@@ -307,6 +310,7 @@ __all__ = [
     "KorailAuthError",
     "KorailClient",
     "KorailConfig",
+    "KorailDeviceProfile",
     "KorailDynaPathError",
     "KorailDynaPathRequiredError",
     "KorailInvalidRequestError",
@@ -423,6 +427,7 @@ __all__ = [
     "PriceRecalculationRequest",
     "PriceRecalculationRow",
     "ReservationHoldResponse",
+    "ReservationResource",
     "ReservationJourney",
     "ReservationPaymentCoupon",
     "ReservationPaymentResponse",
@@ -442,7 +447,9 @@ __all__ = [
     "SelfSeatChangeReason",
     "SelfSeatChangeStation",
     "ServiceStatusResponse",
+    "StationResource",
     "build_config_from_env",
+    "build_config_from_profile",
     "StationDataResponse",
     "StationInfoResponse",
     "TrainCalendarDay",
@@ -455,6 +462,7 @@ __all__ = [
     "TrainScheduleStop",
     "TrainScheduleItem",
     "TrainSummary",
+    "TrainResource",
     "TransferItinerary",
     "TransferSearchResult",
     "TicketReceipt",
@@ -467,6 +475,7 @@ __all__ = [
     "TicketListResponse",
     "TicketListTicket",
     "TicketListTrain",
+    "TicketResource",
     "TripMenuContent",
     "TripMenuItem",
     "TripMenuResponse",

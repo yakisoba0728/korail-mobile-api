@@ -207,7 +207,7 @@ def build_train_search_form(
         "ebizCrossCheck": "Y" if query.include_srt else "N",
         "srtCheckYn": "Y" if query.include_srt else "N",
         "rtYn": "N",
-        "adjStnScdlOfrFlg": "N",
+        "adjStnScdlOfrFlg": "Y" if query.include_nearby_stations else "N",
     }
     if member_card_no:
         form["mbCrdNo"] = member_card_no
