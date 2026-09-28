@@ -1,5 +1,12 @@
 # 변경 이력
 
+## [Unreleased]
+
+- 선택형 `Korail` 간편 API를 추가했습니다. 컨텍스트 관리, KST `datetime` 검색, 역 목록 캐시·검증, 로그인 실패 시 연결 정리, 예약·승차권 리소스를 제공합니다. 전체 기능은 기존 `KorailClient`에서 계속 사용할 수 있습니다.
+- `TrainSearchQuery.include_nearby_stations`로 7.0.8 요청 DTO의 `adjStnScdlOfrFlg`를 선택할 수 있습니다. 기본값 `False`는 기존 `N` 요청을 유지합니다.
+- `KorailDeviceProfile`과 `build_config_from_profile`로 DynaPath 기기값·대기열 User-Agent·화면/OS 정보를 한 번에 설정할 수 있습니다.
+- PyPI 수동 배포에 태그와 패키지 버전 일치 검사 및 태그 기준 CI 재실행을 추가했습니다.
+
 ## [2.1.0] - 2026-09-28
 
 - 코레일+ 7.0.8의 `AppVersion`을 기존 API `Version`과 분리해 요청에 포함합니다. 기본값은 `7.0.8`이며 설정에서 `None`으로 생략할 수 있습니다.

@@ -32,6 +32,7 @@ pip install .
 ## 클라이언트 만들기
 
 모든 기능은 [`KorailClient`][korail_mobile_api.client.KorailClient]의 메서드로 제공됩니다.
+자주 쓰는 역·열차·예약·승차권 작업은 선택형 [`Korail` 간편 API](guide/convenience.md)로도 호출할 수 있습니다.
 설정 없이 만들면 코레일+ 앱 7.0.8에서 확인한 `AppVersion` 기본값을 사용합니다.
 
 ```python
@@ -41,7 +42,8 @@ client = KorailClient()
 ```
 
 클라이언트는 내부에 HTTP 연결 풀을 가지고 있습니다. 다 쓰고 나면 `close()`로 닫습니다.
-`with` 문은 지원하지 않으므로 `try`/`finally`로 닫는 것을 권장합니다.
+`KorailClient`는 `with` 문을 지원하지 않으므로 `try`/`finally`로 닫는 것을 권장합니다.
+간편 API의 `Korail`은 `with` 문을 지원합니다.
 
 ```python
 client = KorailClient()

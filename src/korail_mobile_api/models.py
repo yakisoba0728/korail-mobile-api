@@ -332,6 +332,8 @@ class TrainSearchQuery:
     teenager_passengers: int = 0
     infant_passengers: int = 0
     guide_dog_passengers: int = 0
+    #: 인접역을 포함해 조회합니다. 기본값은 기존 요청과 같은 ``False``입니다.
+    include_nearby_stations: bool = False
 
 
 def _train_scalar(value: object, key: str, *, required: bool = False) -> str | None:

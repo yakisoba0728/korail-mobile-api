@@ -1,0 +1,25 @@
+{
+  "date_kst": "2026-09-28",
+  "scope": "Unauthenticated, read-only direct train searches; no reservation or account data",
+  "route": "서울 → 부산",
+  "departure_date": "20261005",
+  "departure_time": "090000",
+  "app_version": "7.0.8",
+  "results": [
+    {
+      "include_nearby_stations": false,
+      "adjStnScdlOfrFlg": "N",
+      "strResult": "SUCC",
+      "h_msg_cd": "IRG000000",
+      "train_count": 10
+    },
+    {
+      "include_nearby_stations": true,
+      "adjStnScdlOfrFlg": "Y",
+      "strResult": "SUCC",
+      "h_msg_cd": "IRG000000",
+      "train_count": 10
+    }
+  ],
+  "limitation": "Acceptance is verified; this route and time do not establish whether nearby-station results differ."
+}

@@ -73,6 +73,7 @@ finally:
 | `seat_attribute_code` | `"015"` | 좌석 속성 코드입니다. 빈 문자열이면 요청 전에 거절합니다. |
 | `query_division_code` | `"1"` | 조회 구분 코드입니다. 앱이 정렬 방식마다 쓰는 값은 공개돼 있지 않습니다. 빈 문자열이면 거절합니다. |
 | `include_srt` | `False` | `True`이면 요청의 SRT 함께 조회 표시 두 필드(`ebizCrossCheck`, `srtCheckYn`)를 `"Y"`로 보냅니다. 앱이 이 필드에 넣는 값과 서버에서의 효과는 확인하지 못했습니다. |
+| `include_nearby_stations` | `False` | `True`이면 인접역 일정 표시 필드 `adjStnScdlOfrFlg`를 `"Y"`로 보냅니다. 기본값은 기존 요청과 같은 `"N"`입니다. 2026-09-28 실서버 조회에서 두 값 모두 `SUCC/IRG000000` 응답을 받았습니다. 결과에 미치는 효과는 아직 확인하지 못했습니다. |
 | `connection_station_codes` | `()` | 환승역 코드 목록입니다. 비어 있지 않으면 개수와 함께 요청에 싣습니다. |
 | `connection_train_group_code` | `None` | 환승 열차군 코드입니다. `None`이 아니면 요청에 싣습니다. |
 

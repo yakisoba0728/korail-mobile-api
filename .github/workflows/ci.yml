@@ -4,6 +4,7 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -71,7 +72,7 @@ jobs:
         run: python -m pyright
       - name: Offline tests, including both original checks
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
-        run: python -m pytest tests/
+        run: python -m pytest tests/ --cov=korail_mobile_api --cov-branch --cov-report=term-missing:skip-covered --cov-fail-under=90
       - name: Build wheel and sdist
         id: build
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
