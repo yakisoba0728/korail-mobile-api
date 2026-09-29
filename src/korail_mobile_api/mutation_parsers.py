@@ -16,6 +16,7 @@ from ._parsing import (
     _nullable_scalar_fields,
     _optional_scalar_string,
     _preserve_read_raw,
+    _required_integer,
     _reservation_passengers,
     _rows,
     _strict_scalar_string,
@@ -388,6 +389,55 @@ def parse_reservation_hold_response(
         **_nullable_scalar_fields(copied, RESERVATION_OUT_EXTRA_FIELDS, "reservation"),
         passengers=_reservation_passengers(copied),
     )
+
+
+@_preserve_read_raw
+def parse_existing_reservation_hold_response(
+    raw: Mapping[str, object],
+    *,
+    pnr_no: str,
+) -> ReservationHoldResponse:
+    """예약 상세 원문을 카드 결제용 홀드로 읽습니다. 검증 실패 시 값을 추측하지 않습니다.
+
+    ReservationList도 ReservationOut을 반환합니다(MyReservationViewModel.java:1280-1302).
+    2026-09-29 실서버 상세는 h_payment_flg를 생략했습니다. 누락은 그대로 보존하고, 명시된
+    플래그만 Y인지 검사합니다. 기존 예약 생성 응답 파서의 관용 규칙은 바꾸지 않습니다.
+    """
+    try:
+        hold = parse_reservation_hold_response(raw)
+    except ValueError as error:
+        raise KorailProtocolError("KORAIL reservation detail contains an unsupported numeric value") from error
+    if hold.str_result != "SUCC" or hold.pnr_no != pnr_no:
+        raise KorailProtocolError("KORAIL reservation detail must be successful and match the requested PNR")
+    if not hold.window_no or not hold.window_no.strip():
+        raise KorailProtocolError("KORAIL reservation detail is missing its payment window number")
+    if "h_payment_flg" in raw and hold.payment_flag != "Y":
+        raise KorailProtocolError("KORAIL existing reservation h_payment_flg must be Y when present")
+
+    count = _required_integer(raw, "h_jrny_cnt", "existing reservation")
+    if count < 1 or count != len(hold.journeys):
+        raise KorailProtocolError("KORAIL reservation detail has missing or inconsistent journey rows")
+    # 총액이 아예 없으면 좌석 합을 쓸 수 있지만, 명시된 잘못된 총액은 무시하지 않습니다.
+    if "h_tot_rcvd_amt" in raw:
+        declared = _required_integer(raw, "h_tot_rcvd_amt", "existing reservation")
+        if declared < 0:
+            raise KorailProtocolError("KORAIL reservation detail has a negative settlement amount")
+    for journey in hold.journeys:
+        container = _row(journey.raw.get("seat_infos"), "existing reservation seat_infos")
+        seats = container.get("seat_info")
+        if not isinstance(seats, list) or not seats:
+            raise KorailProtocolError("KORAIL reservation detail requires seat rows for every journey")
+        for item in seats:
+            seat = _row(item, "existing reservation seat")
+            amount = _required_integer(seat, "h_rcvd_amt", "existing reservation seat")
+            if amount < 0:
+                raise KorailProtocolError("KORAIL reservation detail has a negative seat amount")
+            # 기존 홀드 파서에서 정산 좌석으로 세지 않는 예약대기 관측값입니다.
+            if amount == 0 and not (_optional_scalar_string(seat, "h_seat_no") or "").strip():
+                raise KorailProtocolError("KORAIL reservation detail contains an unassigned zero-amount seat")
+    if hold.received_amount is None or int(hold.received_amount) <= 0:
+        raise KorailProtocolError("KORAIL existing reservation requires a positive card payment amount")
+    return hold
 
 
 @_preserve_read_raw

@@ -1,6 +1,6 @@
 # API 레퍼런스
 
-`KorailClient`의 공개 메서드 84개를 주제별로 나눠 설명합니다. 모든 메서드는 동기식이며 네트워크 요청이 끝날 때까지 반환하지 않습니다. 상태 표는 [7.0.8 재검증](../verification-708.md)을 기준으로 하며, 본문에 적힌 이전 실서버 사례는 [7.0.6 시기 기록](../status.md)과 구별해 읽으세요.
+`KorailClient`의 공개 메서드 85개를 주제별로 나눠 설명합니다. 모든 메서드는 동기식입니다. 상태 표는 [7.0.8 재검증](../verification-708.md)을 기준으로 하며, 이후 추가한 `get_reservation_hold`의 상세 조회는 [2026-09-29 추가 검사](../status.md)에서 확인했습니다. 본문에 적힌 이전 실서버 사례는 [7.0.6 시기 기록](../status.md)과 구별해 읽으세요.
 
 ## 클라이언트
 
@@ -19,7 +19,7 @@
 | 로그인 | 호출 전에 `login()`이 필요한지 여부입니다. 대부분의 메서드는 로그인하지 않았으면 요청을 보내지 않고 `KorailAuthError`를 발생시킵니다. 그렇지 않은 메서드는 설명에 따로 적었습니다. |
 | 대기열 | 요청 전에 통과하는 NetFunnel 관문 이름입니다. 관문이 없으면 `-`입니다. 자세한 내용은 [설정](../guide/configuration.md)을 참고하세요. |
 | 상태 변경 | 호출하면 좌석 점유·결제·환불처럼 서버의 상태가 실제로 바뀌는지 여부입니다. |
-| 7.0.8 확인 | `응답 파싱`은 반환 객체를 받았다는 뜻으로 모든 성공 분기를 보장하지 않습니다. `서버 거절`은 서버의 오류 응답까지 확인한 경우, `미실행`은 전제 자료가 없어 호출하지 않은 경우, `해당 없음`은 로컬 메서드입니다. 메서드별 근거는 [7.0.8 전수 확인표](../verification-708.md)에 있습니다. |
+| 7.0.8 확인 | `응답 파싱`은 반환 객체를 받았다는 뜻으로 모든 성공 분기를 보장하지 않습니다. `서버 거절`은 서버의 오류 응답까지 확인한 경우, `미실행`은 전제 자료가 없어 호출하지 않은 경우, `오프라인만 확인`은 합성 테스트만 완료한 새 기능, `해당 없음`은 로컬 메서드입니다. 메서드별 근거는 [7.0.8 전수 확인표](../verification-708.md)와 [추가 기능의 확인 현황](../status.md)에 있습니다. |
 
 ## 공통 예외
 
@@ -92,6 +92,7 @@
 | [`cancel_unpaid_hold`](reservations.md#cancel_unpaid_hold) | 결제하지 않은 홀드를 취소합니다. | 필요 | 예 | 응답 파싱 |
 | [`get_reservation_history`](reservations.md#get_reservation_history) | 로그인 계정에 남아 있는 예약(결제 전 홀드 포함)을 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_ticket_reservation_detail`](reservations.md#get_ticket_reservation_detail) | PNR로 예약 하나의 여정과 좌석 상세를 다시 읽습니다. | 필요 | 아니요 | 응답 파싱 |
+| [`get_reservation_hold`](reservations.md#get_reservation_hold) | 기존 예약번호로 카드 결제용 홀드를 가져옵니다. | 필요 | 아니요 | 응답 파싱 (2026-09-29) |
 | [`check_ticket_duplication`](reservations.md#check_ticket_duplication) | 같은 PNR로 잡혀 있는 예약 건수를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`get_cart_list`](reservations.md#get_cart_list) | 로그인 계정의 장바구니를 조회합니다. | 필요 | 아니요 | 응답 파싱 |
 | [`add_to_cart`](reservations.md#add_to_cart) | 결제 전 홀드를 장바구니에 담습니다. | 필요 | 예 | 응답 파싱 |

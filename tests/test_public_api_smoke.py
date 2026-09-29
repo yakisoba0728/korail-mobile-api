@@ -194,6 +194,7 @@ def _f8_arguments() -> dict[str, dict[str, Any]]:
         },
         "get_recent_delivery_history": {},
         "get_ticket_reservation_detail": {"request": api.TicketReservationDetailRequest("SYNTHETIC-PNR")},
+        "get_reservation_hold": {"pnr_no": "SYNTHETIC-PNR"},
         "get_refund_commission": {"ticket": ticket},
         "get_refund_ticket_detail": {"ticket": ticket},
         "get_ticket_list": {},
@@ -403,6 +404,41 @@ F8_CASE_DATA: dict[str, Any] = json.loads(r"""
 """)
 
 
+F8_CASE_DATA["get_reservation_hold"] = {
+    "return_type": "ReservationHoldResponse",
+    "exchanges": [
+        {
+            "method": "POST",
+            "path": "/classes/com.korail.mobile.certification.ReservationList",
+            "host": "api.example.invalid",
+            "query": {},
+            "form": {
+                "Device": ["AD"],
+                "Version": ["250601003"],
+                "AppVersion": ["7.0.8"],
+                "Key": ["SYNTHETIC-APP-KEY"],
+                "hidPnrNo": ["SYNTHETIC-PNR"],
+            },
+            "response": {
+                "strResult": "SUCC",
+                "h_pnr_no": "SYNTHETIC-PNR",
+                "h_wct_no": "SYNTHETIC-WINDOW",
+                "h_jrny_cnt": "1",
+                "h_tot_rcvd_amt": "1000",
+                "jrny_infos": {
+                    "jrny_info": [
+                        {
+                            "h_jrny_sqno": "0001",
+                            "seat_infos": {"seat_info": [{"h_seat_no": "1A", "h_rcvd_amt": "1000"}]},
+                        }
+                    ]
+                },
+            },
+        }
+    ],
+}
+
+
 def _f8_match_fields(actual: dict[str, list[str]], expected: dict[str, list[str]]) -> None:
     assert actual.keys() == expected.keys()
     for key, values in expected.items():
@@ -482,7 +518,7 @@ def test_f8_public_method_inventory() -> None:
         for name, method in inspect.getmembers(api.KorailClient, inspect.isfunction)
         if not name.startswith("_")
     }
-    assert len(actual) == 84
+    assert len(actual) == 85
     assert actual == F8_CASE_DATA.keys() == _f8_arguments().keys()
     assert len(api.__all__) == len(set(api.__all__))
     for name in api.__all__:

@@ -45,6 +45,18 @@ with Korail.logged_in(input("회원번호·전화번호·이메일: "), getpass(
 
 `korail.reservations.create(train)`은 실제 미결제 홀드를 만듭니다. 예약 상세가 필요하면 `korail.reservations.detail(hold)`을 별도로 호출하세요. 예약 성공 직후 자동 상세 조회는 하지 않습니다. `korail.reservations.cancel(hold)`은 실제 취소이고, `korail.reservations.pay(hold, card)`는 실제 카드 청구입니다. `korail.tickets.refund_fee(ticket)`는 수수료 조회이며, `korail.tickets.refund(ticket, commission=fee)`는 실제 환불입니다. 각 메서드는 기존 클라이언트의 입력 검증과 응답 모델을 그대로 사용합니다. 자세한 주의사항은 [예약](reservations.md)과 [결제·환불](payments.md)에 있습니다.
 
+앱이나 다른 도구에서 만든 예약은 로그인한 `korail`의 클라이언트로 가져올 수 있습니다(2.3.0 이상).
+금액을 확인하고 준비한 `CardPayment`를 넘기면 간편 API에서도 이어서 결제할 수 있습니다.
+
+```python
+hold = korail.client.get_reservation_hold(input("결제할 예약번호(PNR): ").strip())
+print(hold.pnr_no, hold.received_amount)
+payment = korail.reservations.pay(hold, card)  # 실제 카드 청구
+print(payment.str_result, payment.h_msg_cd, payment.h_msg_txt)
+```
+
+가져오기 단계의 검증 조건과 실서버 확인 범위는 [기존 예약 가져오기](payments.md#existing-reservation)에 있습니다.
+
 ## 한 기기의 값 사용하기
 
 ```python

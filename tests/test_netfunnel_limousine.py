@@ -626,7 +626,7 @@ def test_all_public_methods_gate_call_graph() -> None:
             return False
         return "_queued" in edges[name] or any(reaches_queue(n, seen | {name}) for n in edges[name])
 
-    assert len(public) == 84
+    assert len(public) == 85
     assert {n for n in public if reaches_queue(n)} == EXPECTED_GATED_METHODS
     calls = [
         n

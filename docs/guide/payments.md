@@ -1,13 +1,13 @@
 # 결제와 환불
 
-이 가이드는 예약으로 만든 홀드의 할인을 필요하면 다시 계산하고, 카드로 결제하고, 발권된 승차권을 환불하는 과정을 순서대로 따라 합니다.
+이 가이드는 새로 예약하거나 기존 예약에서 가져온 홀드를 카드로 결제하고, 발권된 승차권을 환불하는 과정을 따라 합니다. 할인 변경이 필요하면 결제 전에 재계산합니다.
 역에서 발권한 승차권의 환불도 다룹니다.
 재계산·결제·환불 단계는 모두 호출하는 즉시 실제로 처리되므로 금액과 대상을 확인한 뒤 실행하세요.
 
 ## 준비 {#setup}
 
 결제·환불 메서드는 모두 로그인이 필요하며, 결제에는 홀드도 필요합니다.
-아래 예제는 열차를 조회해 첫 열차에 어른 1명으로 홀드를 만듭니다. 홀드를 만드는 다른 방법은 [예약](reservations.md) 가이드를 참고하세요.
+아래 예제는 열차를 조회해 첫 열차에 어른 1명으로 홀드를 만듭니다. 이미 예약한 표가 있다면 새로 예약하지 말고 [기존 예약 가져오기](#existing-reservation)를 사용하세요. 홀드를 만드는 다른 방법은 [예약](reservations.md) 가이드를 참고하세요.
 이후 예제는 이 블록의 `client`와 `hold`를 이어서 씁니다.
 
 ```python
@@ -34,6 +34,47 @@ print(hold.pnr_no, hold.received_amount, hold.payment_deadline_date, hold.paymen
 
 !!! warning "실제로 처리됩니다"
     [`reserve`](../api/reservations.md#reserve)를 호출하면 좌석이 실제로 잡힙니다. 응답을 읽지 못해 예외가 나도 서버에서는 처리됐을 수 있으므로 다시 호출하기 전에 [`get_reservation_history`](../api/reservations.md#get_reservation_history)로 결과를 확인하세요.
+
+## 기존 예약 가져오기 {#existing-reservation}
+
+2.3.0부터 제공하는 기능입니다.
+
+앱이나 다른 패키지에서 같은 계정으로 예약한 표는 로그인한 `client`에서
+[`get_reservation_hold`](../api/reservations.md#get_reservation_hold)로 가져올 수 있습니다.
+위 준비 예제의 열차 조회·`reserve` 호출 대신 아래 코드를 사용하세요.
+이 단계는 예약 상세를 조회하며 새 예약이나 결제를 만들지 않습니다.
+
+```python
+history = client.get_reservation_history()
+for row in history.items:
+    print(row.pnr_no, row.train_no, row.run_date, row.departure_time, row.reserved_amount)
+
+pnr_no = input("결제할 예약번호(PNR): ").strip()
+hold = client.get_reservation_hold(pnr_no)
+print("예약번호:", hold.pnr_no, "청구 금액:", hold.received_amount)
+print("결제 기한:", hold.payment_deadline_date, hold.payment_deadline_time)
+```
+
+PNR을 이미 알고 있으면 목록 조회 없이 `get_reservation_hold(pnr_no)`만 호출하면 됩니다.
+목록의 마지막 열차가 최근 예약이라는 보장은 없고, 환승 예약은 같은 PNR이 여러 행에 나올 수 있으므로
+결제할 예약번호를 직접 선택하세요. 금액을 확인한 뒤 아래 [카드 결제](#card-payment)의
+`client.pay_with_card(hold, card)`로 결제합니다. 기존 N카드 할인을 그대로 결제할 때는 재계산할 필요가 없습니다.
+
+이 기능은 상세 응답의 실제 창구번호와 모든 여정의 좌석별 정산액을 사용합니다.
+PNR이 다르거나 창구번호·여정·좌석이 누락되거나, 금액이 잘못됐거나 총액과 좌석 합이 다르면
+`KorailProtocolError`가 발생합니다. `total_price`나 예약 목록의 금액으로 대체하지 않습니다.
+작업번호와 예약변경번호는 서버 값을 보존하며, 서버가 생략한 경우에는 기존 결제 메서드의
+`000000`·`000` 대체값 규칙이 적용됩니다. 창구번호에는 대체값을 넣지 않습니다.
+
+2026-09-29 실서버에서 예약 상세가 `h_payment_flg`를 생략하는 것을 확인했습니다.
+생략된 값은 `payment_flag=None`으로 보존하며, 필드가 명시된 경우에만 정확히 `Y`여야 합니다.
+명시적 `null`·빈 문자열·다른 값은 거절합니다. 좌석번호 없는 0원 행과 카드로 결제할 수 없는 0원 예약도 거절합니다.
+이는 이 기능의 검증 정책으로, 앱의 모든 예약 상태 판정을 재현하거나 결제 성공을 보장하지 않습니다.
+서버는 실제 결제 시점에 상태를 다시 판정합니다.
+
+기존 예약을 실서버에서 가져오고, 실제 창구번호·정산액이 로컬 결제 폼에 보존되는 것까지 확인했습니다.
+카드 결제 요청은 보내지 않았고, N카드 예약 복원도 별도 검증하지 않았습니다.
+관측 결과와 한계는 [실서버 확인 현황](../status.md)에 있습니다.
 
 ## 할인 재계산 {#recalculation}
 

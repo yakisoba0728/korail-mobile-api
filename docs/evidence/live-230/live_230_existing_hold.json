@@ -1,0 +1,266 @@
+{
+  "version": "2.3.0",
+  "app_version": "7.0.8",
+  "date": "2026-09-29",
+  "temporary_reservation_probe": {
+    "started_utc": "2026-09-29T02:33:30.976346+00:00",
+    "finished_utc": "2026-09-29T02:33:43.172576+00:00",
+    "events": [
+      {
+        "method": "login",
+        "result": "authenticated"
+      },
+      {
+        "method": "history_before",
+        "unique_reservations": 1,
+        "code": "IRR000001"
+      },
+      {
+        "method": "search_trains",
+        "result": "approved_train_available"
+      },
+      {
+        "method": "reserve",
+        "result": "created",
+        "str_result": "SUCC",
+        "code": "WRR664260",
+        "payment_flag": "Y",
+        "window_present": true,
+        "journey_count_type": "str",
+        "total_received_amount_type": "str",
+        "journeys_present": true
+      },
+      {
+        "method": "get_reservation_hold",
+        "result": "failed",
+        "error_type": "KorailProtocolError",
+        "str_result": "SUCC",
+        "code": "IRZ000001",
+        "payment_flag": null,
+        "window_present": true,
+        "journey_count_type": "str",
+        "total_received_amount_type": "str",
+        "journeys_present": true
+      },
+      {
+        "method": "cancel_unpaid_hold",
+        "str_result": "SUCC",
+        "code": "IRG000000"
+      },
+      {
+        "method": "history_after",
+        "code": "IRR000001",
+        "unique_reservations": 1,
+        "test_reservation_absent": true,
+        "same_reservations_as_before": true
+      },
+      {
+        "method": "logout",
+        "result": "completed"
+      }
+    ],
+    "requests": [
+      {
+        "host": "smart.letskorail.com",
+        "path": "/file/CACHE/MobileService.cache",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.common.code.do",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.login.Login",
+        "http_status": 200
+      },
+      {
+        "host": "nf.letskorail.com",
+        "path": "/ts.wseq",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.reservation.ReservationView",
+        "http_status": 200
+      },
+      {
+        "host": "nf.letskorail.com",
+        "path": "/ts.wseq",
+        "http_status": 200
+      },
+      {
+        "host": "nf.letskorail.com",
+        "path": "/ts.wseq",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.seatMovie.ScheduleView",
+        "http_status": 200
+      },
+      {
+        "host": "nf.letskorail.com",
+        "path": "/ts.wseq",
+        "http_status": 200
+      },
+      {
+        "host": "nf.letskorail.com",
+        "path": "/ts.wseq",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.certification.TicketReservation",
+        "http_status": 200
+      },
+      {
+        "host": "nf.letskorail.com",
+        "path": "/ts.wseq",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.certification.ReservationList",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk",
+        "http_status": 200
+      },
+      {
+        "host": "nf.letskorail.com",
+        "path": "/ts.wseq",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.reservation.ReservationView",
+        "http_status": 200
+      },
+      {
+        "host": "nf.letskorail.com",
+        "path": "/ts.wseq",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.login.Logout",
+        "http_status": 200
+      }
+    ],
+    "payment_sent": false
+  },
+  "corrected_existing_reservation_probe": {
+    "started_utc": "2026-09-29T02:36:03.670817+00:00",
+    "finished_utc": "2026-09-29T02:36:16.564498+00:00",
+    "events": [
+      {
+        "method": "login",
+        "result": "authenticated"
+      },
+      {
+        "method": "get_reservation_history",
+        "str_result": "SUCC",
+        "code": "IRR000001",
+        "unique_reservations": 1,
+        "history_rows": 1
+      },
+      {
+        "method": "history_flags",
+        "rows": [
+          {
+            "payment_flag": "Y",
+            "settlement_flag": "N",
+            "acceptance_possible_flag": "N"
+          }
+        ]
+      },
+      {
+        "method": "get_reservation_hold",
+        "reservation_index": 1,
+        "result": "passed",
+        "pnr_matches": true,
+        "journeys": 1,
+        "received_amount_positive": true,
+        "str_result": "SUCC",
+        "code": "IRZ000001",
+        "payment_flag": null,
+        "payment_flag_present": false,
+        "payment_flag_type": "NoneType",
+        "payment_flag_empty": false,
+        "window_present": true,
+        "journey_count_type": "str",
+        "total_received_amount_type": "str",
+        "journeys_present": true
+      },
+      {
+        "method": "payment_form_local_only",
+        "result": "passed",
+        "sent": false,
+        "pnr_preserved": true,
+        "window_preserved": true,
+        "amount_preserved": true
+      },
+      {
+        "method": "logout",
+        "result": "completed"
+      }
+    ],
+    "requests": [
+      {
+        "host": "smart.letskorail.com",
+        "path": "/file/CACHE/MobileService.cache",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.common.code.do",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.login.Login",
+        "http_status": 200
+      },
+      {
+        "host": "nf.letskorail.com",
+        "path": "/ts.wseq",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.reservation.ReservationView",
+        "http_status": 200
+      },
+      {
+        "host": "nf.letskorail.com",
+        "path": "/ts.wseq",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.certification.ReservationList",
+        "http_status": 200
+      },
+      {
+        "host": "smart.letskorail.com",
+        "path": "/classes/com.korail.mobile.login.Logout",
+        "http_status": 200
+      }
+    ]
+  },
+  "not_verified": [
+    "actual card payment",
+    "NCard-specific reservation restoration",
+    "live transfer or multiple-seat restoration"
+  ],
+  "sensitive_data_policy": "No credentials, cookies, PNRs, payment details or response bodies recorded."
+}

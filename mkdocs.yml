@@ -143,4 +143,5 @@ nav:
       - 실서버 확인 현황: status.md
       - 7.0.8 재검증: verification-708.md
   - 변경 이력: changelog.md
+  - 배포 절차: releasing.md
   - 법적 고지: legal.md
