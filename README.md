@@ -53,7 +53,7 @@ KORAIL과는 관계없는 개인 프로젝트입니다. 공식 API가 아니라�
 
 - **타입이 붙은 응답** — 응답은 전부 dataclass로 돌려주고, 서버가 준 원본은 `.raw`에 남겨 둡니다.
 - **실수하기 어렵게** — 결제 금액은 홀드의 `received_amount`를 그대로 쓰고, 0원·예약대기 홀드를 카드로 결제하려는 건 아닌지, 환불 전에 수수료를 조회했는지 요청 전에 확인합니다.
-- **네트워크 없이 도는 테스트 2,100여 개** — CI에서 Python 3.11~3.14로 `pytest`, `mypy --strict`, `pyright`, `ruff`를 돌립니다.
+- **네트워크 없이 도는 테스트 2,200여 개** — CI에서 Python 3.11~3.14로 `pytest`, `mypy --strict`, `pyright`, `ruff`를 돌립니다.
 
 ## 설치
 
@@ -70,6 +70,8 @@ pip install "git+https://github.com/yakisoba0728/korail-mobile-api"
 ```
 
 의존성은 `httpx`와 `cryptography` 두 개뿐입니다.
+
+기존 예약을 가져오는 `get_reservation_hold`는 2.3.0부터 제공합니다. 이전 버전은 `pip install --upgrade korail-mobile-api`로 갱신하세요.
 
 ## 빠르게 써보기
 
@@ -141,13 +143,14 @@ finally:
 
 ## 예약·결제·환불
 
-**이 메서드들은 부르는 순간 실제로 처리됩니다.** 확인 창이나 미리보기 같은 건 없습니다.
+**예약·결제·취소·환불 메서드는 부르는 순간 실제로 처리됩니다.** 확인 창이나 미리보기 같은 건 없습니다.
 예약하면 좌석이 잡히고, 결제하면 카드가 실제로 청구되고, 환불에는 수수료가 붙을 수 있습니다.
 
 | 하려는 것 | 메서드 | 알아둘 점 |
 |---|---|---|
 | 좌석 잡기 (결제 전) | `reserve`, `reserve_transfer`, `reserve_merge`, `reserve_limousine` | 승객 구성은 조회할 때와 같게 넣습니다. |
 | 결제 전 취소 | `cancel_unpaid_hold` | 결제한 표에는 쓰지 않습니다. |
+| 기존 예약 가져오기 | `get_reservation_hold(pnr_no)` | 같은 계정의 예약 상세에서 결제용 홀드를 가져옵니다. 조회만 하며 새 예약이나 결제를 만들지 않습니다. |
 | 카드 결제 | `pay_with_card` | 카드 거절은 예외가 아니라 FAIL 응답으로 돌아옵니다. |
 | 환불 | `get_refund_commission` → `refund(..., commission=...)` | 승차권 한 장씩이고, 수수료 조회가 먼저입니다. `commission`이 수수료 조회의 성공 응답이 아니면(`None` 포함) 요청 전에 거절합니다. |
 | 할인 재계산 | `PriceRecalculationRequest.for_hold` → `recalculate_price` | 결제는 재계산된 홀드로 합니다. |
@@ -155,9 +158,14 @@ finally:
 변경 요청은 자동으로 다시 보내지 않습니다. 응답을 못 읽어서 예외가 나도 서버에서는 이미 처리됐을 수 있습니다.
 그럴 땐 다시 보내지 말고 예외의 `.raw`를 보고, 예약은 `get_reservation_history()`, 결제·환불은 `get_ticket_list()`로 먼저 확인하세요.
 
+앱이나 다른 패키지에서 예약한 표는 로그인 후 `hold = client.get_reservation_hold(pnr_no)`로 가져와
+금액을 확인하고 `client.pay_with_card(hold, card)`로 결제할 수 있습니다.
+창구번호와 금액을 임의로 채우지 않으며, 유효한 여정·좌석·정산액이 필요합니다. 결제 플래그는 상세에서 생략될 수 있고, 명시된 경우에만 `Y`를 요구합니다.
+2026년 9월 29일 실서버에서 기존 예약 가져오기를 확인했습니다. 실제 카드 결제와 N카드 예약 복원은 별도 검증하지 않았습니다. [기존 예약 결제 예제](https://yaki.kr/korail-mobile-api/guide/payments/#existing-reservation)를 참고하세요.
+
 ## 지원 범위
 
-공개 메서드 84개를 2026년 9월 28일 코레일+ 7.0.8 설정으로 다시 확인했습니다. 메서드별 결과 코드와 남은 전제 조건은 [7.0.8 검증표](docs/verification-708.md)에 있습니다.
+현재 공개 메서드는 85개입니다. 이 중 당시의 84개를 2026년 9월 28일 코레일+ 7.0.8 설정으로 다시 확인했습니다. 이후 2.3.0에 추가한 `get_reservation_hold`의 실서버 조회는 9월 29일 확인했습니다. 아래 집계는 9월 28일 기준이며, 메서드별 결과와 추가 확인 범위는 [7.0.8 검증표](https://yaki.kr/korail-mobile-api/verification-708/)와 [실서버 확인 현황](https://yaki.kr/korail-mobile-api/status/)에 있습니다.
 
 | 7.0.8 결과 | 메서드 수 | 의미 |
 |---|---:|---|
@@ -166,7 +174,7 @@ finally:
 | 미실행 | 13 | 보유 N카드, 유효한 승차권, 좌석 QR, 결제수단 등의 전제 자료가 없었습니다. |
 | 로컬 메서드 | 2 | 네트워크를 사용하지 않습니다. |
 
-2026년 9월 24~26일의 [7.0.6 시기 검증 기록](docs/status.md)에는 카드 결제와 환불 성공 사례가 있습니다. 이는 7.0.8에서 결제·환불을 재실행했다는 뜻이 아닙니다.
+2026년 9월 24~26일의 [7.0.6 시기 검증 기록](https://yaki.kr/korail-mobile-api/status/)에는 카드 결제와 환불 성공 사례가 있습니다. 이는 7.0.8에서 결제·환불을 재실행했다는 뜻이 아닙니다.
 
 - N카드: 구매, 기간 연장, N카드로 예약, 사용 내역, 이용 가능 열차의 정상 조회, 2인 승차권 수령자 조회
 - 셀프 체크인: 좌석 확인, 등록, 취소
@@ -208,10 +216,11 @@ SRT 앱용으로 만들었던 [srt-mobile-api](https://github.com/yakisoba0728/s
 
 ## 문서와 링크
 
-- [문서 사이트](https://yaki.kr/korail-mobile-api/) — 시작하기, 가이드, 메서드 84개 전체의 API 레퍼런스
+- [문서 사이트](https://yaki.kr/korail-mobile-api/) — 시작하기, 가이드, 메서드 85개 전체의 API 레퍼런스
 - [동작 규칙 (checks/BEHAVIOR.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/BEHAVIOR.md) — 요청을 만드는 규칙, 응답을 읽는 규칙, 앱과 다르게 한 부분
 - [변경 이력 (CHANGELOG.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)
 - [오프라인 검사 기준 (checks/ACCEPTANCE.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/ACCEPTANCE.md)
+- [배포 절차](https://yaki.kr/korail-mobile-api/releasing/) — 버전, 검증, 패키지 빌드, PyPI와 문서 배포
 - 한국철도공사 공식 홈페이지 — <https://www.korail.com>
 - 코레일+ 앱 — [Google Play](https://play.google.com/store/apps/details?id=com.korail.talk) · [App Store](https://apps.apple.com/kr/app/id1000558562)
 - 이전 SRT 클라이언트 — [srt-mobile-api](https://github.com/yakisoba0728/srt-mobile-api)

@@ -4,7 +4,7 @@
 
 | 용어 | 뜻 |
 |---|---|
-| 홀드 | 결제 전 예약입니다. 좌석을 점유하며, 결제 기한까지 결제하거나 취소해야 합니다. 예약 메서드가 반환하는 [`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse]가 홀드를 나타냅니다. |
+| 홀드 | 결제 전 예약입니다. 좌석을 점유하며, 결제 기한까지 결제하거나 취소해야 합니다. 예약 메서드가 반환하는 [`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse]가 홀드를 나타냅니다. 기존 예약은 [`get_reservation_hold`](../api/reservations.md#get_reservation_hold)로 같은 모델에 담아 가져올 수 있습니다. |
 | PNR | 예약 번호입니다. 홀드와 발권된 승차권을 가리킬 때 씁니다. 응답의 `pnr_no` 필드에 들어 있습니다. |
 | 발권 | 결제가 끝나 승차권이 만들어진 상태입니다. 발권된 승차권은 취소가 아니라 환불로 처리합니다. |
 | 일반 예약 | 좌석을 서버가 배정하는 예약입니다. `KorailReservationJobType.IMMEDIATE`입니다. |

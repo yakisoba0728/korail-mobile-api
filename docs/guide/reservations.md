@@ -6,6 +6,10 @@
 
 메서드별 매개변수와 예외는 [예약 API](../api/reservations.md)에 있습니다.
 
+이미 앱이나 다른 도구에서 같은 계정으로 예약했다면 로그인 후 `client.get_reservation_hold(pnr_no)`로
+기존 예약의 결제용 홀드를 가져올 수 있습니다. 새 예약을 만들 필요는 없습니다.
+2.3.0부터 제공하며 사용 예제와 검증 조건은 [기존 예약 가져오기](payments.md#existing-reservation)에 있습니다.
+
 ## 홀드와 결제 기한 {#hold}
 
 예약 메서드([`reserve`](../api/reservations.md#reserve), [`reserve_transfer`](../api/reservations.md#reserve_transfer), [`reserve_merge`](../api/reservations.md#reserve_merge))는 결제 전 예약인 홀드를 만들고 [`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse]를 반환합니다.

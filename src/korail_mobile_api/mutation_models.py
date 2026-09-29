@@ -292,8 +292,9 @@ class ReservationJourney:
 
 @dataclass(frozen=True)
 class ReservationHoldResponse(BaseKorailResponse):
-    """홀드(결제 전 예약) 요청의 결과와 결제 기한·금액을 담습니다.
+    """홀드(결제 전 예약)의 식별값과 결제 기한·금액을 담습니다.
 
+    예약·할인 재계산 응답이나 ``get_reservation_hold``로 가져온 기존 예약을 나타냅니다.
     이 객체를 받았다는 것만으로 예약이 성공했다고 보장하지 않으므로 응답 상태(``str_result``)와 ``pnr_no``를 확인하세요.
     결제할 금액은 ``received_amount``입니다."""
 

@@ -83,6 +83,7 @@ from .mutation_parsers import (
     parse_cart_add_response,
     parse_delivered_ticket_retrieval_response,
     parse_discount_card_purchase_response,
+    parse_existing_reservation_hold_response,
     parse_product_cancel_response,
     parse_refund_ticket_response,
     parse_reservation_hold_response,
@@ -1182,6 +1183,20 @@ class KorailClient:
             parser=parse_ticket_reservation_detail_response,
         )
 
+    def get_reservation_hold(self, pnr_no: str) -> ReservationHoldResponse:
+        """이미 잡힌 예약을 PNR로 조회해 카드 결제용 홀드로 가져옵니다. 결제는 실행하지 않습니다.
+
+        같은 계정으로 앱이나 다른 도구에서 만든 예약에도 사용할 수 있습니다. 예약 상세를 한 번
+        조회하며 PNR 일치, 실제 창구번호, 여정·좌석과 양수 정산액을 요구합니다.
+        좌석 금액 합과 명시된 총액이 다르거나 필수값이 없으면 ``KorailProtocolError``가 발생하고
+        전체 응답은 ``.raw``에 남습니다. 목록의 마지막 예약을 자동 선택하지 않습니다.
+
+        실서버 상세에서 생략되는 결제 플래그는 None으로 보존하며, 명시된 경우에는 Y만 허용합니다.
+        반환 후에도 예약 상태는 바뀔 수 있습니다. 실제 청구는 ``pay_with_card``로 합니다.
+        """
+        detail = self.get_ticket_reservation_detail(TicketReservationDetailRequest(pnr_no))
+        return parse_existing_reservation_hold_response(detail.raw, pnr_no=pnr_no)
+
     def get_refund_commission(
         self,
         ticket: OriginalTicketReference,
@@ -1830,6 +1845,7 @@ class KorailClient:
     ) -> ReservationPaymentResponse:
         """홀드를 카드로 결제합니다. 실제 청구가 발생합니다.
 
+        예약·할인 재계산 메서드 또는 ``get_reservation_hold``가 반환한 홀드를 넘깁니다.
         금액은 홀드의 received_amount 입니다. 카드 거절은 FAIL 모델로 반환하며 0원·대기 홀드는 카드 결제를 거절합니다(PayViewModel.java:15572)."""
         self._require_session("payment requires")
         route = "/classes/com.korail.mobile.payment.ReservationPayment"

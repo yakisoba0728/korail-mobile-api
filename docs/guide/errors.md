@@ -255,6 +255,17 @@ except (KorailTransportError, KorailProtocolError) as error:
     raise
 ```
 
+## 기존 예약을 가져오지 못했을 때 {#existing-reservation}
+
+[`get_reservation_hold`](../api/reservations.md#get_reservation_hold)는 상세를 읽은 뒤 PNR, 창구번호,
+여정·좌석, 정산액을 검사하고, 결제 플래그가 명시된 경우에만 `Y`인지 검사합니다. 필수값 누락이나 불일치는 `KorailProtocolError`이며
+전체 상세 응답은 예외의 `.raw`에 남습니다. 이 호출은 조회만 하므로 검증 실패가 새 예약이나 결제를 뜻하지 않습니다.
+
+같은 계정의 예약인지, 앱에서 아직 결제 가능한 상태인지 먼저 확인하세요.
+일반 상세 조회만 필요하면 [`get_ticket_reservation_detail`](../api/reservations.md#get_ticket_reservation_detail)을 사용합니다.
+오류를 피하려고 창구번호·금액·결제 플래그를 임의로 채워 결제를 이어가지 마세요.
+세션 만료와 서버 거절, 전송 오류는 기존 조회 API와 같은 예외로 전달되며 자동 재시도하지 않습니다.
+
 ## 카드 결제가 거절됐을 때 {#card-decline}
 
 [`pay_with_card`](../api/payments.md#pay_with_card)는 카드 거절 같은 실패 응답에서 예외를 발생시키지 않고 [`ReservationPaymentResponse`][korail_mobile_api.mutation_models.ReservationPaymentResponse]를 반환합니다.

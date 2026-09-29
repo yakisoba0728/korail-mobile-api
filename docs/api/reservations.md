@@ -13,6 +13,9 @@
 
 처음부터 따라 하려면 [예약 가이드](../guide/reservations.md)를 참고하세요.
 
+이미 예약번호가 있다면 [`get_reservation_hold`](#get_reservation_hold)로 결제용 홀드를 가져와
+4단계부터 이어갈 수 있습니다. 이 조회는 새 예약을 만들지 않습니다.
+
 ## `reserve`
 
 열차 한 편에 결제 전 예약(홀드)을 만듭니다.
@@ -422,6 +425,9 @@ KorailClient.get_ticket_reservation_detail(
 [`TicketReservationDetailRequest`][korail_mobile_api.read_payloads.TicketReservationDetailRequest]에 홀드의 `pnr_no`를 넣어 넘깁니다. `pnr_no`가 비어 있으면 요청 객체를 만들 때 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
 응답의 `journeys`에는 여정([`ReservationDetailJourney`][korail_mobile_api.read_models.ReservationDetailJourney])마다 좌석([`ReservationSeatDetail`][korail_mobile_api.read_models.ReservationSeatDetail]) 목록이 있습니다. 좌석마다 호차 번호, 좌석 번호, 객실 등급, 정산액이 들어 있습니다.
 
+반환값은 상세 조회 모델입니다. 카드 결제용 `ReservationHoldResponse`가 필요하면
+[`get_reservation_hold`](#get_reservation_hold)를 사용하세요. 이 메서드가 상세를 조회하고 필수값을 검증합니다.
+
 **매개변수**
 
 | 이름 | 타입 | 기본값 | 설명 |
@@ -456,6 +462,72 @@ for journey in detail.journeys:
     for seat in journey.seats:
         print(journey.train_no, seat.car_no, seat.seat_no, seat.received_amount)
 ```
+
+## `get_reservation_hold`
+
+기존 예약번호로 상세를 조회하고, 카드 결제에 넘길 홀드를 반환합니다.
+같은 계정으로 앱이나 다른 도구에서 만든 예약을 불러올 때 사용합니다.
+2.3.0에서 추가했습니다.
+
+```python
+KorailClient.get_reservation_hold(pnr_no: str) -> ReservationHoldResponse
+```
+
+`get_ticket_reservation_detail`로 상세를 한 번 조회한 뒤 기존 홀드 파서로 읽습니다.
+새 예약이나 결제는 실행하지 않으며, 예약 목록을 자동 조회하거나 마지막 예약을 선택하지 않습니다.
+반환된 홀드는 `pay_with_card(hold, card)`에 넘길 수 있습니다.
+
+다음 조건을 모두 확인합니다.
+
+- 응답이 `SUCC`이고 응답 PNR이 요청한 PNR과 같습니다.
+- 서버가 실제 창구번호를 반환했습니다.
+- `h_payment_flg`가 명시됐다면 정확히 `Y`입니다. 실서버 상세에서 생략되는 경우에는 `payment_flag=None`을 유지합니다.
+- 양수인 여정 수와 실제 여정 행 수가 같고, 모든 여정에 좌석 행이 있습니다.
+- 좌석 금액은 0 이상의 정수이며 좌석번호 없는 0원 행이 없습니다.
+- 정산액 합은 양수이고, 총 정산액이 명시됐다면 유효한 값이며 좌석 합과 같습니다.
+
+필수값을 추측하거나 `total_price`로 결제액을 대체하지 않습니다.
+결제 플래그의 명시적 `null`·빈 문자열·`Y` 이외 값은 거절합니다. 이 검사는 복원 기능의 보수적 정책이며 앱의 모든 상태 판정을 재현한 것은 아닙니다.
+조건을 만족하지 않으면 `KorailProtocolError`가 발생하고 전체 상세 응답은 예외의 `.raw`에 남습니다.
+기존 `get_ticket_reservation_detail`의 조회·파싱 규칙은 바뀌지 않습니다.
+
+**매개변수**
+
+| 이름 | 타입 | 기본값 | 설명 |
+|---|---|---|---|
+| `pnr_no` | `str` | 필수 | 조회할 예약번호입니다. 빈 문자열은 거절합니다. |
+
+**반환값**
+
+[`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse] — 상세에서 가져온 창구번호, 정산액, 여정, 승객, 결제 기한과 작업번호를 담습니다. 선택값이 생략되면 그대로 비어 있습니다.
+
+**예외**
+
+| 예외 | 발생 조건 |
+|---|---|
+| [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
+| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | PNR이 비었거나 상세 응답이 위 조건을 만족하지 않을 때 |
+| [`KorailAppError`][korail_mobile_api.errors.KorailAppError] | 예약 상세 조회를 서버가 거절했을 때 |
+
+**정보**
+
+| 로그인 | 대기열 | 상태 변경 | 실서버 확인 |
+|:-:|:-:|:-:|:-:|
+| 필요 | - | 아니요 | 2026-09-29 기존 예약 상세 `SUCC`/`IRZ000001` 파싱 확인; 실제 결제·N카드 복원은 미확인 |
+
+**예제**
+
+```python
+hold = client.get_reservation_hold(input("결제할 예약번호(PNR): ").strip())
+print(hold.pnr_no, hold.received_amount, hold.payment_deadline_date, hold.payment_deadline_time)
+# 금액을 확인한 뒤 준비한 CardPayment로 실제 결제합니다.
+payment = client.pay_with_card(hold, card)
+print(payment.str_result, payment.h_msg_cd, payment.h_msg_txt)
+```
+
+상세 조회 후에도 예약 상태는 바뀔 수 있으며, 홀드를 받았다는 것만으로 결제 성공을 보장하지 않습니다.
+결제 응답을 확인하고, 응답을 읽지 못했다면 다시 결제하기 전에 예약·승차권 상태를 확인하세요.
+자세한 예제는 [기존 예약 가져오기](../guide/payments.md#existing-reservation)에 있습니다.
 
 ## `check_ticket_duplication`
 

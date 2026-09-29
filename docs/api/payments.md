@@ -8,6 +8,7 @@
 흐름:
 
 - 결제: 예약 메서드로 홀드 만들기 → (필요하면) [`recalculate_price`](#recalculate_price) → [`pay_with_card`](#pay_with_card)
+- 기존 예약 결제: [`get_reservation_hold`](reservations.md#get_reservation_hold)로 홀드 가져오기 → 금액 확인 → [`pay_with_card`](#pay_with_card)
 - 환불: [`get_ticket_list`](account.md#get_ticket_list) → [`get_refund_ticket_detail`](#get_refund_ticket_detail) → `PaidTicket.from_refund_detail()` → [`get_refund_commission`](#get_refund_commission) → [`refund`](#refund)
 - 역에서 발권한 승차권 환불: [`verify_station_ticket_refund`](#verify_station_ticket_refund) → `StationRefundExecutionRequest.from_verification()` → [`execute_station_ticket_refund`](#execute_station_ticket_refund)
 
@@ -24,7 +25,9 @@ KorailClient.pay_with_card(
 
 홀드 응답에 담긴 PNR, 창구번호, 임시 작업번호, 첫 여정의 예약 변경번호를 그대로 되돌려 보내고, `hold.received_amount`를 청구합니다.
 `total_price`는 앱이 화면에 표시하는 합계이며 결제 금액으로 쓰지 않습니다.
-`hold`에는 예약 메서드나 [`recalculate_price`](#recalculate_price)가 반환한 객체를 그대로 넘깁니다.
+`hold`에는 예약 메서드, [`get_reservation_hold`](reservations.md#get_reservation_hold),
+[`recalculate_price`](#recalculate_price)가 반환한 객체를 그대로 넘깁니다.
+기존 예약번호로 가져오는 방법은 [기존 예약 결제 가이드](../guide/payments.md#existing-reservation)를 참고하세요.
 
 `pay_with_card`는 세션 만료(`P058`)를 뺀 모든 실패 응답을 예외로 바꾸지 않고 반환하며, 카드 거절도 그중 하나입니다.
 실패 응답은 `strResult`가 `"FAIL"`이거나 없는 응답이며, `strResult`가 없으면 `str_result`는 `None`입니다. 반환값의 `str_result`가 `"SUCC"`인지 반드시 확인하세요.

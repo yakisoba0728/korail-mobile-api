@@ -29,6 +29,10 @@ pip install .
 
 패키지 이름은 `korail-mobile-api`이고, import 이름은 `korail_mobile_api`입니다.
 
+기존 예약번호를 결제용 홀드로 가져오는 `get_reservation_hold`는 2.3.0부터 제공합니다.
+이전 버전에서 갱신하려면 `pip install --upgrade korail-mobile-api`를 실행하세요.
+사용 순서는 [기존 예약 가져오기](guide/payments.md#existing-reservation)에 있습니다.
+
 ## 클라이언트 만들기
 
 모든 기능은 [`KorailClient`][korail_mobile_api.client.KorailClient]의 메서드로 제공됩니다.
