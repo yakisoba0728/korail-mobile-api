@@ -85,8 +85,8 @@ Actions의 **Publish to PyPI** 실행 결과와 PyPI에 표시되는 버전을 �
 
 ```sh
 git fetch origin --tags
-test "$(git rev-parse origin/main)" = "$(git rev-parse 'v2.3.0^{commit}')"
-gh workflow run docs-deploy.yml --ref main
+test "$(git rev-parse origin/main)" = "$(git rev-parse 'v2.3.0^{commit}')" &&
+    gh workflow run docs-deploy.yml --ref main
 ```
 
 **Docs site** 워크플로가 성공했는지 확인하고, 문서 사이트의 변경 이력과
