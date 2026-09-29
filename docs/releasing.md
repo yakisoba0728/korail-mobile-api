@@ -79,14 +79,19 @@ Actions의 **Publish to PyPI** 실행 결과와 PyPI에 표시되는 버전을 �
 
 ## 문서 사이트와 공개 기록
 
-패키지 업로드가 성공하면 같은 태그의 문서를 배포합니다.
+패키지 업로드가 성공하면 릴리스와 같은 커밋의 문서를 배포합니다.
+현재 `github-pages` 환경은 `main` 브랜치에서만 배포를 허용하므로,
+원격 `main`과 릴리스 태그가 같은 커밋인지 확인한 뒤 `main`에서 실행합니다.
 
 ```sh
-gh workflow run docs-deploy.yml --ref v2.3.0
+git fetch origin --tags
+test "$(git rev-parse origin/main)" = "$(git rev-parse 'v2.3.0^{commit}')"
+gh workflow run docs-deploy.yml --ref main
 ```
 
 **Docs site** 워크플로가 성공했는지 확인하고, 문서 사이트의 변경 이력과
 [기존 예약 가이드](guide/payments.md#existing-reservation)가 해당 버전 내용인지 확인합니다.
+워크플로 실행의 커밋도 릴리스 태그와 일치해야 합니다. `main`이 앞서간 경우에는 위 명령을 그대로 진행하지 말고 배포할 문서 버전을 먼저 확인하세요.
 GitHub Release를 만들 때는 `CHANGELOG.md`의 2.3.0 항목을 릴리스 설명으로 사용하고 같은 태그를 지정하세요.
 
 마지막으로 새 가상환경에서 `pip install korail-mobile-api==2.3.0`을 실행해
