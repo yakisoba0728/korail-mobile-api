@@ -32,10 +32,11 @@ def build_config_from_env() -> KorailConfig:
     ``KORAIL_NETFUNNEL_USER_AGENT``를 지정하지 않으면 ``KORAIL_ANDROID_BUILD_ID``도 필요합니다. 기기 모델과 OS 버전은
     DynaPath 토큰과 대기열 ``User-Agent``에 함께 씁니다. 나머지 값은 ``KORAIL_BASE_URL``, ``KORAIL_USER_AGENT``,
     ``KORAIL_DEVICE_WIDTH``, ``KORAIL_DEVICE_HEIGHT``, ``KORAIL_ANDROID_SDK_INT``, ``KORAIL_DYNAPATH_AS_VALUE``,
-    ``KORAIL_ADVERTISING_ID``로 바꿀 수 있습니다. 로그인 정보나 카드 정보는 환경변수에서 읽지 않습니다.
+    ``KORAIL_ADVERTISING_ID``로 바꿀 수 있습니다. ``KORAIL_PROXY``는 ``proxy``가 되며 비어 있으면 지정하지 않습니다.
+    로그인 정보나 카드 정보는 환경변수에서 읽지 않습니다.
 
     필요한 환경변수가 없거나 빈 값이면 ``RuntimeError``가 발생합니다. ``KORAIL_DEVICE_WIDTH``, ``KORAIL_DEVICE_HEIGHT``,
-    ``KORAIL_ANDROID_SDK_INT``가 정수가 아니면 ``ValueError``가 발생합니다."""
+    ``KORAIL_ANDROID_SDK_INT``가 정수가 아니거나 ``KORAIL_PROXY``가 올바른 프록시 URL이 아니면 ``ValueError``가 발생합니다."""
     # 기기값은 토큰·대기열 UA에 공유하고 자격증명은 읽거나 저장하지 않습니다(a/a.java:15; a/b.java:85).
     device_id = _required_env("KORAIL_DYNAPATH_DEVICE_ID")
     os_version = _required_env("KORAIL_DYNAPATH_OS_VERSION")
@@ -74,4 +75,5 @@ def build_config_from_env() -> KorailConfig:
         android_sdk_int=int(os.environ.get("KORAIL_ANDROID_SDK_INT", "37")),
         dynapath=dynapath,
         advertising_id=advertising_id,
+        proxy=os.environ.get("KORAIL_PROXY") or None,
     )

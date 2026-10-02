@@ -11,6 +11,10 @@ API User-Agent는 운영 관측값 `korailtalk`, 대기열 User-Agent는 기기 
 둘 다 `Connection: Keep-Alive`, `Accept-Encoding: gzip`을 사용하며 `Accept`는 보내지 않습니다.
 보호된 헤더 리터럴은 해독하거나 추정하지 않습니다.
 
+`KorailConfig.proxy`를 지정하면 API와 대기열 요청이 같은 프록시를 쓰고 httpx 환경변수 프록시는 무시합니다.
+지정하지 않으면 httpx 기본 동작(환경변수 프록시 포함)을 그대로 따릅니다. 사용자 `transport`와 함께 쓰면 조용히 한쪽을
+버리지 않고 클라이언트 생성 시 `ValueError`로 거절합니다. 프록시 URL은 오류 메시지와 `repr`에 싣지 않습니다.
+
 응답 모델은 자동 마스킹하지 않습니다. `frozen=True`는 중첩 사전·목록의 불변성을 뜻하지 않습니다.
 공개 `raw` 타입은 읽기 인터페이스인 `Mapping[str, object]`이며 원문 객체를 복사하거나 동결하지 않습니다.
 거절한 응답의 전체 원문은 예외 `raw`, 파서가 남긴 부분 원문은 `parser_raw`입니다.

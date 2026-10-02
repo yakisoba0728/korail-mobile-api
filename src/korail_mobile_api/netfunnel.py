@@ -16,6 +16,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from ._transport import build_transport
 from .config import KorailConfig
 from .constants import (
     KORAIL_NETFUNNEL_PATH,
@@ -177,7 +178,7 @@ class KorailNetFunnelClient:
             timeout=config.netfunnel_timeout,
             headers={"User-Agent": config.netfunnel_user_agent, **_APP_HEADERS},
             follow_redirects=False,
-            transport=transport,
+            transport=build_transport(config, transport),
         )
         del self._client.headers["Accept"]
 

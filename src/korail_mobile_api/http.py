@@ -14,6 +14,7 @@ import httpx
 
 from ._parsing import _envelope
 from ._payload_helpers import _device_version_key
+from ._transport import build_transport
 from .config import KorailConfig
 from .constants import (
     DYNAPATH_ALLOWLIST_PATHS,
@@ -184,7 +185,7 @@ class KorailHttpClient:
             base_url=config.base_url,
             timeout=config.timeout,
             headers={"User-Agent": config.user_agent, "Connection": "Keep-Alive", "Accept-Encoding": "gzip"},
-            transport=transport,
+            transport=build_transport(config, transport),
         )
         del self._client.headers["Accept"]
 

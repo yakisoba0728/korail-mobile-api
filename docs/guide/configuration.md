@@ -1,7 +1,7 @@
 # 설정
 
 이 가이드는 [`KorailConfig`][korail_mobile_api.config.KorailConfig]로 클라이언트의 동작을 바꾸는 방법을 설명합니다.
-설정 필드 전체, DynaPath 토큰, 대기열(NetFunnel), 언어 필드, 환경변수로 설정을 만드는 방법을 차례로 다룹니다.
+설정 필드 전체, DynaPath 토큰, 대기열(NetFunnel), 언어 필드, 프록시, 환경변수로 설정을 만드는 방법을 차례로 다룹니다.
 설정을 넘기지 않으면 코레일+ 앱 7.0.8에서 확인한 기본 요청값을 쓰며, 대부분은 바꿀 필요가 없습니다.
 
 ## 설정 적용
@@ -55,6 +55,7 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 | `netfunnel_wait_limit` | `float` \| `None` | `None` | 대기열에서 기다릴 누적 시간의 상한(초)입니다. `None`이면 제한하지 않습니다. |
 | `netfunnel_actions` | `Mapping[str, str]` \| `None` | `None` | 관문별 대기열 식별값을 바꿉니다. |
 | `disable_dynapath` | `bool` | `False` | `True`이면 DynaPath 토큰을 붙이지 않습니다. |
+| `proxy` | `str` \| `None` | `None` | API 요청과 대기열 요청을 함께 보낼 프록시 URL입니다. [프록시](#proxy)를 참고하세요. |
 
 `device`, `version`, `app_version`, `key`, `user_agent`를 바꾸면 앱과 다른 요청이 됩니다. 기존 `Version`과 새 `AppVersion`은 서로 다른 필드입니다.
 API 요청의 `User-Agent`와 대기열 요청의 `User-Agent`는 서로 다른 설정입니다.
@@ -201,6 +202,41 @@ finally:
 `lang`을 정하면 공통 필드를 싣는 요청에서 `Key` 다음(공통 필드에 `Key`가 없는 요청은 `Version` 다음)에 `lang`을 보냅니다.
 `None`이면 보내지 않습니다. 앱이 보내는 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했으므로, 라이브러리는 기본값을 추측해 보내지 않습니다.
 
+## 프록시 {#proxy}
+
+`proxy`에 프록시 URL을 넣으면 KORAIL API 요청과 대기열 요청을 모두 그 프록시로 보냅니다.
+두 요청이 같은 IP에서 나가도록 값 하나를 함께 쓰며, 같은 프로세스의 다른 HTTP 요청에는 영향을 주지 않습니다.
+
+```python
+import os
+
+from korail_mobile_api import KorailClient, KorailConfig
+
+client = KorailClient(KorailConfig(proxy=os.environ.get("KORAIL_PROXY")))
+try:
+    status = client.get_service_status()
+finally:
+    client.close()
+```
+
+| 주소 형식 | 예 | 필요한 설치 |
+|---|---|---|
+| `http`, `https` | `http://user:password@192.0.2.10:3128` | 없음 |
+| `socks5`, `socks5h` | `socks5://user:password@192.0.2.10:1080` | `pip install "korail-mobile-api[socks]"` |
+
+- 잘못된 URL은 설정을 만들 때 `ValueError`로 거절합니다. 오류 메시지와 `repr(config)`에는 URL을 싣지 않지만, `config.proxy` 값에는 자격 증명이 그대로 있으니 로그에 남기지 마세요.
+- SOCKS에 필요한 패키지 없이 `socks5`·`socks5h`를 쓰면 클라이언트를 만들 때 `ImportError`가 발생합니다. `socks5h`는 httpx 0.28.0 이상이 필요하며, 그보다 낮은 httpx에서는 클라이언트를 만들 때 `ValueError`가 발생합니다.
+- HTTPS 요청은 프록시를 거쳐도 KORAIL 서버와 직접 암호화됩니다. 프록시는 요청 내용을 볼 수 없지만 어느 서버에 언제 접속하는지는 볼 수 있으니, 직접 관리하는 신뢰할 수 있는 프록시만 쓰세요.
+- 프록시에 연결하지 못하면 API 요청은 [`KorailTransportError`][korail_mobile_api.errors.KorailTransportError]로 끝나고, 대기열 요청은 [관문별 규칙](#netfunnel)을 따릅니다.
+
+`proxy=None`(기본값)이면 httpx 기본 동작대로 `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` 같은 환경변수를 따릅니다. 이 환경변수는 같은 프로세스의 다른 httpx 요청에도 적용됩니다.
+`proxy`를 지정하면 이 환경변수들은 무시합니다. `KorailClient`의 `transport`로 전송 계층을 직접 넘기면 환경변수 프록시를 쓰지 않으며, `proxy`와 함께 넘기면 `ValueError`가 발생합니다.
+
+!!! warning "프록시는 접속 제한을 푸는 기능이 아닙니다"
+    KORAIL은 요청이 나온 IP로 접속을 판단하며 데이터센터·VPN 대역의 요청을 막습니다([오류 처리](errors.md)).
+    프록시를 거치면 KORAIL에는 프록시의 IP가 보이므로, 데이터센터·VPN 대역에 있는 프록시도 같은 이유로 막힐 수 있습니다.
+    클라우드 서버에서 쓴다면 본인이 관리하는 네트워크를 거치게 하고, 남이 운영하는 공개 프록시는 쓰지 마세요.
+
 ## 환경변수 설정 {#from-env}
 
 [`build_config_from_env`][korail_mobile_api.live.build_config_from_env]는 환경변수에서 실제 기기의 값을 읽어 `KorailConfig`를 만듭니다.
@@ -221,8 +257,9 @@ DynaPath 토큰의 기기값과 대기열 `User-Agent`에 같은 기기값을 �
 | `KORAIL_DEVICE_WIDTH` | 아니요 | `1440` | `device_width` |
 | `KORAIL_DEVICE_HEIGHT` | 아니요 | `3120` | `device_height` |
 | `KORAIL_ANDROID_SDK_INT` | 아니요 | `37` | `android_sdk_int` |
+| `KORAIL_PROXY` | 아니요 | 없음(비어 있어도 지정하지 않음) | `proxy` |
 
-필수 환경변수가 없거나 비어 있으면 `RuntimeError`가 발생합니다. 정수 필드에 숫자가 아닌 값을 넣으면 `ValueError`가 발생합니다.
+필수 환경변수가 없거나 비어 있으면 `RuntimeError`가 발생합니다. 정수 필드에 숫자가 아닌 값이나 올바르지 않은 프록시 URL을 넣으면 `ValueError`가 발생합니다.
 대기열 설정과 `lang`처럼 표에 없는 필드는 기본값을 씁니다. 바꾸려면 `dataclasses.replace`를 씁니다.
 
 ```sh
