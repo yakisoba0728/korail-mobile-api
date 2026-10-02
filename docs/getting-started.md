@@ -28,6 +28,7 @@ pip install .
 ```
 
 패키지 이름은 `korail-mobile-api`이고, import 이름은 `korail_mobile_api`입니다.
+SOCKS 프록시를 쓰려면 `pip install "korail-mobile-api[socks]"`로 설치합니다([프록시](guide/configuration.md#proxy)).
 
 기존 예약번호를 결제용 홀드로 가져오는 `get_reservation_hold`는 2.3.0부터 제공합니다.
 이전 버전에서 갱신하려면 `pip install --upgrade korail-mobile-api`를 실행하세요.

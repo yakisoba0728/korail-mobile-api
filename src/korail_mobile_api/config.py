@@ -6,6 +6,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 from .constants import (
     KORAIL_API_USER_AGENT,
@@ -23,6 +24,25 @@ from .constants import (
     KORAIL_USER_AGENT,
 )
 from .dynapath import DynapathConfig, build_default_token_settings
+
+_PROXY_SCHEMES = frozenset({"http", "https", "socks5", "socks5h"})
+
+
+def _validate_proxy(proxy: object) -> None:
+    """URL에 자격 증명이 들어 있을 수 있어 오류 메시지에 URL을 싣지 않습니다."""
+    if proxy is None:
+        return
+    if not isinstance(proxy, str) or not proxy or any(char.isspace() for char in proxy):
+        raise ValueError("proxy must be a nonempty URL string without whitespace, or None")
+    try:
+        parts = urlsplit(proxy)
+        host, _ = parts.hostname, parts.port  # 잘못된 포트는 port에서 ValueError가 됩니다.
+    except ValueError:
+        raise ValueError("proxy URL is malformed") from None
+    if parts.scheme not in _PROXY_SCHEMES:
+        raise ValueError("proxy URL scheme must be http, https, socks5 or socks5h")
+    if not host:
+        raise ValueError("proxy URL must include a host")
 
 
 def enabled_dynapath_config() -> DynapathConfig:
@@ -87,12 +107,20 @@ class KorailConfig:
     disable_dynapath: bool = False
     #: 공통 요청의 ``AppVersion`` 값입니다. 기존 ``Version``과 별개이며, ``None``이면 이전 SDK처럼 생략합니다.
     app_version: str | None = KORAIL_APP_VERSION
+    # 명시한 프록시는 httpx 환경변수 프록시(HTTPS_PROXY·ALL_PROXY·NO_PROXY)보다 우선합니다(_transport.build_transport).
+    #: API 요청과 대기열 요청을 함께 보낼 프록시 URL입니다. ``http``, ``https``, ``socks5``, ``socks5h`` 주소를 받습니다.
+    #: ``socks5``·``socks5h``는 ``korail-mobile-api[socks]`` 설치가, ``https``는 httpx 0.25.0 이상, ``socks5h``는 httpx
+    #: 0.28.0 이상이 필요합니다. ``None``이면 지정하지 않으며, 이때는 httpx 기본 동작대로 ``HTTPS_PROXY`` 같은 환경변수를
+    #: 따릅니다. URL의 자격 증명은 ``repr``에 나오지 않습니다. KORAIL은 프록시의 IP로 접속을 판단하므로 데이터센터·VPN
+    #: 대역의 프록시는 차단될 수 있습니다. 직접 관리하는 신뢰할 수 있는 프록시만 쓰세요.
+    proxy: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if self.app_version is not None and (
             not isinstance(self.app_version, str) or not self.app_version.strip()
         ):
             raise ValueError("app_version must be a nonempty string or None")
+        _validate_proxy(self.proxy)
         default = DynapathConfig()
         if self.disable_dynapath:
             if self.dynapath.enabled:

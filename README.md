@@ -69,7 +69,7 @@ pip install korail-mobile-api
 pip install "git+https://github.com/yakisoba0728/korail-mobile-api"
 ```
 
-의존성은 `httpx`와 `cryptography` 두 개뿐입니다.
+의존성은 `httpx`와 `cryptography` 두 개뿐입니다. SOCKS 프록시를 쓰려면 `pip install "korail-mobile-api[socks]"`로 설치하세요.
 
 기존 예약을 가져오는 `get_reservation_hold`는 2.3.0부터 제공합니다. 이전 버전은 `pip install --upgrade korail-mobile-api`로 갱신하세요.
 
@@ -209,6 +209,10 @@ SRT 앱용으로 만들었던 [srt-mobile-api](https://github.com/yakisoba0728/s
 
 **대기열을 끄면 빨라지나요?**
 `KorailConfig(netfunnel_enabled=False)`로 끌 수는 있습니다. 하지만 앱과 다르게 동작하게 되고 KORAIL의 혼잡 제어를 건너뛰는 셈이라 권하지 않습니다.
+
+**클라우드 서버에서는 로그인이 막혀요.**
+KORAIL은 데이터센터·VPN IP 대역에서 오는 요청을 막습니다. Oracle Cloud나 Vercel 같은 곳에서 `KorailDynaPathError`(HTTP 403, `-8202` 등)가 나고, 같은 코드가 집 네트워크에서는 되는 사례가 보고됐습니다.
+라이브러리의 요청 형식 문제가 아니라 요청이 나가는 네트워크의 문제입니다. 2.4.0부터는 `KorailConfig(proxy="socks5://...")`로 KORAIL 요청만 본인이 관리하는 다른 네트워크로 보낼 수 있습니다. 자세한 내용은 [설정 가이드의 프록시](https://yaki.kr/korail-mobile-api/guide/configuration/#proxy)를 보세요.
 
 **비밀번호나 카드 번호는 어디에 저장되나요?**
 어디에도 저장하지 않습니다. KORAIL 서버로만 보내고 파일로 쓰지 않습니다.

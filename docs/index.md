@@ -84,6 +84,8 @@ finally:
 2.3.0에는 기존 예약번호로 카드 결제용 홀드를 가져오는 [`get_reservation_hold`](api/reservations.md#get_reservation_hold)를 추가했습니다.
 현재 공개 메서드는 85개이며, 새 메서드의 기존 예약 상세 조회는 2026년 9월 29일 실서버에서 확인했습니다. 실제 카드 결제와 N카드 예약 복원은 별도 검증하지 않았습니다. [기존 예약 결제 가이드](guide/payments.md#existing-reservation)를 참고하세요.
 
+2.4.0에는 KORAIL API·대기열 요청만 지정한 프록시로 보내는 [`proxy`](guide/configuration.md#proxy) 설정을 추가했습니다. 프록시를 거친 실서버 요청은 아직 확인하지 않았습니다.
+
 | 지원 | 지원하지 않음 |
 |---|---|
 | 로그인, 열차 조회(직통·환승), 호차·좌석 조회, 운임 조회 | 간편 로그인(카카오·네이버 등) |
