@@ -108,11 +108,11 @@ class KorailConfig:
     #: 공통 요청의 ``AppVersion`` 값입니다. 기존 ``Version``과 별개이며, ``None``이면 이전 SDK처럼 생략합니다.
     app_version: str | None = KORAIL_APP_VERSION
     # 명시한 프록시는 httpx 환경변수 프록시(HTTPS_PROXY·ALL_PROXY·NO_PROXY)보다 우선합니다(_transport.build_transport).
-    #: API 요청과 대기열 요청을 함께 보낼 프록시 URL입니다. ``http``, ``https``, ``socks5``, ``socks5h`` 주소를 받으며
-    #: ``socks5``·``socks5h``는 ``korail-mobile-api[socks]`` 설치가 필요합니다. ``None``이면 지정하지 않으며, 이때는 httpx
-    #: 기본 동작대로 ``HTTPS_PROXY`` 같은 환경변수를 따릅니다. URL의 자격 증명은 ``repr``에 나오지 않습니다. KORAIL은
-    #: 프록시의 IP로 접속을 판단하므로 데이터센터·VPN 대역의 프록시는 차단될 수 있습니다. 직접 관리하는 신뢰할 수 있는
-    #: 프록시만 쓰세요.
+    #: API 요청과 대기열 요청을 함께 보낼 프록시 URL입니다. ``http``, ``https``, ``socks5``, ``socks5h`` 주소를 받습니다.
+    #: ``socks5``·``socks5h``는 ``korail-mobile-api[socks]`` 설치가, ``https``는 httpx 0.25.0 이상, ``socks5h``는 httpx
+    #: 0.28.0 이상이 필요합니다. ``None``이면 지정하지 않으며, 이때는 httpx 기본 동작대로 ``HTTPS_PROXY`` 같은 환경변수를
+    #: 따릅니다. URL의 자격 증명은 ``repr``에 나오지 않습니다. KORAIL은 프록시의 IP로 접속을 판단하므로 데이터센터·VPN
+    #: 대역의 프록시는 차단될 수 있습니다. 직접 관리하는 신뢰할 수 있는 프록시만 쓰세요.
     proxy: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:

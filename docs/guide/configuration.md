@@ -221,11 +221,13 @@ finally:
 
 | 주소 형식 | 예 | 필요한 설치 |
 |---|---|---|
-| `http`, `https` | `http://user:password@192.0.2.10:3128` | 없음 |
+| `http` | `http://user:password@192.0.2.10:3128` | 없음 |
+| `https`(프록시까지 TLS) | `https://user:password@proxy.example.com:443` | 없음. httpx 0.25.0 이상 필요 |
 | `socks5`, `socks5h` | `socks5://user:password@192.0.2.10:1080` | `pip install "korail-mobile-api[socks]"` |
 
 - 잘못된 URL은 설정을 만들 때 `ValueError`로 거절합니다. 오류 메시지와 `repr(config)`에는 URL을 싣지 않지만, `config.proxy` 값에는 자격 증명이 그대로 있으니 로그에 남기지 마세요.
-- SOCKS에 필요한 패키지 없이 `socks5`·`socks5h`를 쓰면 클라이언트를 만들 때 `ImportError`가 발생합니다. `socks5h`는 httpx 0.28.0 이상이 필요하며, 그보다 낮은 httpx에서는 클라이언트를 만들 때 `ValueError`가 발생합니다.
+- SOCKS에 필요한 패키지 없이 `socks5`·`socks5h`를 쓰면 클라이언트를 만들 때 `ImportError`가 발생합니다.
+- `https` 프록시는 httpx 0.25.0 이상, `socks5h`는 httpx 0.28.0 이상이 필요합니다. 그보다 낮은 httpx에서는 클라이언트를 만들 때 `ValueError`가 발생합니다.
 - HTTPS 요청은 프록시를 거쳐도 KORAIL 서버와 직접 암호화됩니다. 프록시는 요청 내용을 볼 수 없지만 어느 서버에 언제 접속하는지는 볼 수 있으니, 직접 관리하는 신뢰할 수 있는 프록시만 쓰세요.
 - 프록시에 연결하지 못하면 API 요청은 [`KorailTransportError`][korail_mobile_api.errors.KorailTransportError]로 끝나고, 대기열 요청은 [관문별 규칙](#netfunnel)을 따릅니다.
 

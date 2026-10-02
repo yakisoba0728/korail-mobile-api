@@ -6,9 +6,14 @@
 
 from __future__ import annotations
 
+import re
+
 import httpx
 
 from .config import KorailConfig
+
+# 프록시까지의 TLS(https 프록시)는 httpx 0.25.0·httpcore 0.18.0부터 지원합니다.
+_HTTPX_VERSION = tuple(int(part) for part in re.findall(r"\d+", httpx.__version__)[:2])
 
 
 def build_transport(config: KorailConfig, transport: httpx.BaseTransport | None) -> httpx.BaseTransport | None:
@@ -23,6 +28,9 @@ def build_transport(config: KorailConfig, transport: httpx.BaseTransport | None)
     except (ValueError, httpx.InvalidURL):
         # httpx 0.28 미만은 socks5h 를 받지 않습니다. httpx 의 메시지에는 사용자 이름이 남아 원인을 잇지 않습니다.
         raise ValueError("httpx rejected the proxy URL; socks5h needs httpx 0.28 or later") from None
+    # 낮은 httpx 에서 프록시까지 TLS 없이 연결되거나 실패하는 대신 요청 전에 거절합니다.
+    if proxy.url.scheme == "https" and _HTTPX_VERSION < (0, 25):
+        raise ValueError("https proxies need httpx 0.25 or later")
     try:
         # Client 의 proxies/proxy 인자는 httpx 0.24 와 0.28 에서 달라 두 버전에 공통인 HTTPTransport(proxy=Proxy) 를 씁니다.
         return httpx.HTTPTransport(proxy=proxy)

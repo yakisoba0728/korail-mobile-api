@@ -4,7 +4,7 @@
 
 - `KorailConfig.proxy`를 추가했습니다. KORAIL API 요청과 대기열 요청을 같은 프록시(`http`, `https`, `socks5`, `socks5h`)로 보내며 같은 프로세스의 다른 HTTP 요청에는 영향을 주지 않습니다([#15](https://github.com/yakisoba0728/korail-mobile-api/issues/15)). 기본값 `None`은 기존처럼 httpx의 환경변수 프록시(`HTTPS_PROXY` 등)를 따르고, 값을 지정하면 환경변수 프록시보다 우선합니다.
 - 잘못된 프록시 URL은 설정을 만들 때 `ValueError`로 거절합니다. URL의 자격 증명은 오류 메시지와 `repr`에 싣지 않습니다. `proxy`와 사용자 `transport`를 함께 넘기면 `ValueError`가 발생합니다.
-- SOCKS 프록시용 선택 설치 `korail-mobile-api[socks]`를 추가했습니다. 필수 의존성과 최소 버전은 그대로이며, `socks5h`는 httpx 0.28.0 이상이 필요합니다.
+- SOCKS 프록시용 선택 설치 `korail-mobile-api[socks]`를 추가했습니다. 필수 의존성과 최소 버전은 그대로입니다. `https` 프록시는 httpx 0.25.0 이상, `socks5h`는 httpx 0.28.0 이상이 필요하며 낮은 버전에서는 클라이언트를 만들 때 거절합니다.
 - `build_config_from_env`가 `KORAIL_PROXY`를 읽어 `proxy`에 넣습니다. 비어 있으면 지정하지 않습니다.
 - 오류 처리 문서에 로그인의 `-8202` 차단과 데이터센터·VPN 대역 안내를 더하고, README에 클라우드 서버 질문을 추가했습니다.
 - 프록시를 거친 실서버 요청은 이번 버전에서 확인하지 않았습니다. 프록시 연결과 요청 경로는 합성 테스트로 확인했습니다.

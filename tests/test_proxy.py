@@ -16,12 +16,15 @@ from korail_mobile_api import (
     build_config_from_env,
     build_config_from_profile,
 )
+from korail_mobile_api import _transport as transport_module
 from korail_mobile_api._transport import build_transport
 
 USER = "synthetic-proxy-user"
 SECRET = "synthetic-proxy-secret"
 PROXY = f"http://{USER}:{SECRET}@127.0.0.1:8080"
-HTTPX_HAS_SOCKS5H = tuple(int(part) for part in httpx.__version__.split(".")[:2]) >= (0, 28)
+HTTPX_VERSION = tuple(int(part) for part in httpx.__version__.split(".")[:2])
+HTTPX_HAS_HTTPS_PROXY = HTTPX_VERSION >= (0, 25)
+HTTPX_HAS_SOCKS5H = HTTPX_VERSION >= (0, 28)
 
 
 def _assert_no_credentials(text: str) -> None:
@@ -141,25 +144,43 @@ def test_proxy_and_custom_transport_cannot_be_combined() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "proxy", ["http://127.0.0.1:8080", "https://127.0.0.1:8443", "socks5://127.0.0.1:1080"]
-)
+@pytest.mark.parametrize("proxy", ["http://127.0.0.1:8080", "socks5://127.0.0.1:1080"])
 def test_real_proxy_transport_is_built_without_connecting(proxy: str) -> None:
     transport = build_transport(KorailConfig(proxy=proxy), None)
     assert isinstance(transport, httpx.HTTPTransport)
     transport.close()
 
 
-def test_socks5h_follows_the_installed_httpx() -> None:
-    config = KorailConfig(proxy=f"socks5h://{USER}:{SECRET}@127.0.0.1:1080")
-    if HTTPX_HAS_SOCKS5H:
+@pytest.mark.parametrize(
+    "proxy, supported, message",
+    [
+        (f"https://{USER}:{SECRET}@127.0.0.1:8443", HTTPX_HAS_HTTPS_PROXY, "httpx 0.25"),
+        (f"socks5h://{USER}:{SECRET}@127.0.0.1:1080", HTTPX_HAS_SOCKS5H, "httpx 0.28"),
+    ],
+)
+def test_version_dependent_schemes_follow_the_installed_httpx(
+    proxy: str, supported: bool, message: str
+) -> None:
+    config = KorailConfig(proxy=proxy)
+    if supported:
         transport = build_transport(config, None)
         assert isinstance(transport, httpx.HTTPTransport)
         transport.close()
     else:
-        with pytest.raises(ValueError, match="httpx 0.28") as excinfo:
+        with pytest.raises(ValueError, match=message) as excinfo:
             build_transport(config, None)
         _assert_no_credentials(str(excinfo.value))
+
+
+def test_https_proxy_is_rejected_before_httpx_025(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(transport_module, "_HTTPX_VERSION", (0, 24))
+    with pytest.raises(ValueError, match="httpx 0.25") as excinfo:
+        build_transport(KorailConfig(proxy=f"https://{USER}:{SECRET}@127.0.0.1:8443"), None)
+    _assert_no_credentials(str(excinfo.value))
+    monkeypatch.setattr(transport_module, "_HTTPX_VERSION", (0, 25))
+    transport = build_transport(KorailConfig(proxy="http://127.0.0.1:8080"), None)
+    assert isinstance(transport, httpx.HTTPTransport)
+    transport.close()
 
 
 @pytest.mark.parametrize("error", [ValueError, httpx.InvalidURL])
