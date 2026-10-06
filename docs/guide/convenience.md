@@ -2,8 +2,8 @@
 
 [`Korail`][korail_mobile_api.facade.Korail]은 기존 `KorailClient` 위에 자주 쓰는 작업을 묶은 선택형 진입점입니다. 전체 API나 세부 요청 옵션은 `korail.client`에서 그대로 사용합니다.
 
-!!! note "개발 버전의 추가 기능"
-    검색 필터, 좌석 상태·소요 시간·요약 헬퍼, `KorailReserveOption`, `stations.names()`, `reservations.find()`와 청소년 예약 사전 거절은 Unreleased 기능입니다. `v2.4.0`에는 포함되지 않으므로 [개발 버전 설치](../getting-started.md#development-version)가 필요합니다.
+!!! note "2.5.0의 추가 기능"
+    검색 필터, 좌석 상태·소요 시간·요약 헬퍼, `KorailReserveOption`, `stations.names()`, `reservations.find()`와 청소년 예약 사전 거절은 2.5.0부터 제공합니다.
 
 ## 로그인 없이 열차 찾기
 

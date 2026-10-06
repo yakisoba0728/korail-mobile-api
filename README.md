@@ -63,15 +63,14 @@ Python 3.11 이상이 필요합니다.
 pip install korail-mobile-api
 ```
 
+검색 필터·객실 우선 선택·메시지 사전과 신규 오류 분류는 2.5.0부터 제공합니다.
+이전 버전은 `pip install --upgrade korail-mobile-api`로 갱신하세요.
+
 개발 중인 코드는 GitHub에서 바로 설치할 수 있습니다.
 
 ```sh
 pip install --force-reinstall "git+https://github.com/yakisoba0728/korail-mobile-api@main"
 ```
-
-검색 필터·객실 우선 선택·메시지 사전과 신규 오류 분류 등
-[Unreleased 기능](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md#unreleased)은
-`v2.4.0`에 포함되지 않습니다. 이 기능을 쓰려면 위 GitHub 설치 명령으로 개발 버전을 설치하세요.
 
 의존성은 `httpx`와 `cryptography` 두 개뿐입니다. SOCKS 프록시를 쓰려면 `pip install "korail-mobile-api[socks]"`로 설치하세요.
 

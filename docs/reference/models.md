@@ -2,8 +2,7 @@
 
 열차 조회, 좌석, 역·달력 같은 공통 응답과 조회 입력입니다.
 
-`display_message`와 열차의 좌석 상태·소요 시간·요약 헬퍼는 Unreleased 기능입니다.
-`v2.4.0`에 포함되지 않으므로 [개발 버전 설치](../getting-started.md#development-version)가 필요합니다.
+`display_message`와 열차의 좌석 상태·소요 시간·요약 헬퍼는 2.5.0부터 제공합니다.
 
 ::: korail_mobile_api.models.KorailSession
 
