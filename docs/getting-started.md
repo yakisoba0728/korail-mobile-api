@@ -15,11 +15,17 @@ PyPI에서 설치합니다.
 pip install korail-mobile-api
 ```
 
-개발 중인 코드는 GitHub에서 설치합니다.
+### 개발 버전 {#development-version}
+
+이 문서는 `main`의 구현도 설명합니다. 검색 필터·객실 우선 선택·메시지 사전과 신규 오류 분류 등
+변경 이력의 [Unreleased](changelog.md#unreleased) 기능은 `v2.4.0`에 포함되지 않습니다.
+해당 기능을 쓰려면 개발 중인 코드를 GitHub에서 설치합니다.
 
 ```sh
-pip install "git+https://github.com/yakisoba0728/korail-mobile-api"
+pip install --force-reinstall "git+https://github.com/yakisoba0728/korail-mobile-api@main"
 ```
+
+개발 중에는 배포판과 버전 문자열이 같을 수 있으므로 `--force-reinstall`로 `main` 코드를 다시 설치합니다.
 
 저장소를 내려받았다면 저장소 루트에서 설치할 수도 있습니다.
 
@@ -65,14 +71,18 @@ finally:
 열차 조회에는 로그인이 필요하지 않습니다. 조회 조건은 [`TrainSearchQuery`][korail_mobile_api.models.TrainSearchQuery]로 만듭니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailClient, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 client = KorailClient()
 try:
     query = TrainSearchQuery(
         departure_station_code="서울",
         arrival_station_code="부산",
-        departure_date="20261002",
+        departure_date=departure_date,
         departure_time="090000",
         passengers=1,
     )
@@ -100,11 +110,24 @@ finally:
 ### 다음 페이지
 
 조회 결과는 한 번에 한 페이지씩 옵니다. 다음 페이지가 있으면 `next_page()`가 이어서 조회할 때 쓸 값을 돌려줍니다.
+아래 예제는 새 클라이언트로 첫 페이지와 다음 페이지를 조회한 뒤 연결을 닫습니다.
 
 ```python
-continuation = result.next_page()
-if continuation is not None:
-    more = client.search_trains(query, continuation=continuation)
+from datetime import datetime, timedelta, timezone
+
+from korail_mobile_api import KorailClient, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+client = KorailClient()
+try:
+    query = TrainSearchQuery("서울", "부산", departure_date, "090000")
+    result = client.search_trains(query)
+    continuation = result.next_page()
+    if continuation is not None:
+        more = client.search_trains(query, continuation=continuation)
+        print(len(more.trains), "편")
+finally:
+    client.close()
 ```
 
 직통 조회에서는 다음 페이지가 있어도 `next_page()`가 `None`일 수 있습니다.

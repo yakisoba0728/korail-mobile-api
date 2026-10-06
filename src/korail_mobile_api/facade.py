@@ -13,6 +13,7 @@ from types import TracebackType
 
 import httpx
 
+from ._cleanup import _close_connections
 from .client import KorailClient
 from .config import KorailConfig
 from .constants import KorailReservationJobType, KorailReserveOption, KorailSeatClass
@@ -289,8 +290,8 @@ class Korail:
         korail = cls(config, transport=transport, validate_stations=validate_stations)
         try:
             korail.login(member_no, password)
-        except BaseException:
-            korail.close()
+        except BaseException as error:
+            _close_connections(korail.close, primary=error)
             raise
         return korail
 
@@ -303,7 +304,7 @@ class Korail:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        self.close()
+        _close_connections(self.close, primary=exc)
 
     def login(self, member_no: str, password: str) -> KorailSession:
         return self.client.login(member_no, password)

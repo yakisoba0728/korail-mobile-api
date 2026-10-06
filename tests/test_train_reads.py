@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-import ast
-import socket
 from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
-from pathlib import Path
 from urllib.parse import parse_qsl
 
-import httpx
 import pytest
 
-from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import (
@@ -536,31 +531,12 @@ ABSENT = object()
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
-    def forbidden(*args, **kwargs):
-        raise AssertionError("network sockets are forbidden in F2")
-
-    monkeypatch.setattr(socket.socket, "connect", forbidden)
-    monkeypatch.setattr(socket.socket, "connect_ex", forbidden)
-    monkeypatch.setattr(socket, "create_connection", forbidden)
-    monkeypatch.setattr(socket, "getaddrinfo", forbidden)
     monkeypatch.setattr("korail_mobile_api.payloads.time.time", lambda: 1700000000.0)
 
 
 @pytest.fixture
-def rig():
-    clients = []
-
+def rig(scripted_client_factory):
     def make(responses, *, auth=False):
-        pending = list(deepcopy(responses))
-        calls = []
-
-        def handler(request):
-            calls.append(request)
-            assert request.url.host == "example.invalid"
-            assert pending, "unexpected additional HTTP request"
-            payload = pending.pop(0)
-            return httpx.Response(200, json=payload)
-
         config = KorailConfig(
             base_url="https://example.invalid",
             device=COMMON["Device"],
@@ -573,15 +549,10 @@ def rig():
             netfunnel_enabled=False,
             dynapath=DynapathConfig(enabled=True, token_provider=lambda *args: "SYNTH-TOKEN"),
         )
-        client = KorailClient(config, transport=httpx.MockTransport(handler))
-        if auth:
-            client.session.current = KorailSession(jsessionid="SYNTH-SESSION")
-        clients.append(client)
-        return client, calls, pending
+        session = KorailSession(jsessionid="SYNTH-SESSION") if auth else None
+        return scripted_client_factory(deepcopy(responses), config=config, session=session)
 
-    yield make
-    for client in clients:
-        client.close()
+    return make
 
 
 def exact_request(request, route, form, *, dynapath=False):
@@ -1163,15 +1134,6 @@ def test_travel_search_is_record_only_and_keeps_the_dto_order(rig):
     record-only."""
     from korail_mobile_api import _travel_search_unsupported as record
 
-    assert not hasattr(KorailClient, "search_travel_products")
-    importers = []
-    for path in Path(record.__file__).parent.glob("*.py"):
-        for node in ast.walk(ast.parse(path.read_text())):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
-                names = [getattr(node, "module", None) or "", *(alias.name for alias in node.names)]
-                if any("_travel_search_unsupported" in name for name in names):
-                    importers.append(path.name)
-    assert importers == []
     query = TravelProductSearchQuery(
         "SYNTH", "theme", page_no=2, function_code="SYNTH-F", order_code="SYNTH-O", page_size="SYNTH-P"
     )

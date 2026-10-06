@@ -8,14 +8,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from .constants import KORAIL_MAX_PASSENGERS_PER_RESERVATION
 from .errors import KorailProtocolError
 from .models import BaseKorailResponse, PhysicalSeat, ReservationPassengerInfo, SeatInventoryResponse
-
-if TYPE_CHECKING:
-    from .read_models import RefundTicketDetailResponse
+from .read_models import RefundTicketDetailResponse
 
 
 @dataclass(frozen=True)

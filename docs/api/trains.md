@@ -68,9 +68,13 @@ KorailClient.search_trains(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import TrainSearchQuery
 
-query = TrainSearchQuery("서울", "부산", "20261002", "090000", passengers=2)
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+
+query = TrainSearchQuery("서울", "부산", departure_date, "090000", passengers=2)
 result = client.search_trains(query)
 for train in result.trains:
     print(train.train_no, train.departure_time, train.general_availability_name)
@@ -132,9 +136,13 @@ KorailClient.search_transfer_trains(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import TrainSearchQuery
 
-query = TrainSearchQuery("강릉", "목포", "20261002", "080000")
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+
+query = TrainSearchQuery("강릉", "목포", departure_date, "080000")
 result = client.search_transfer_trains(query)
 for itinerary in result.itineraries:
     first, second = itinerary.legs
@@ -191,9 +199,13 @@ KorailClient.search_trains_with_transfer_fallback(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import TrainSearchQuery, TransferSearchResult
 
-query = TrainSearchQuery("강릉", "목포", "20261002", "080000")
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+
+query = TrainSearchQuery("강릉", "목포", departure_date, "080000")
 result = client.search_trains_with_transfer_fallback(query)
 if isinstance(result, TransferSearchResult):
     print("환승 여정", len(result.itineraries), "개")
@@ -510,11 +522,15 @@ KorailClient.get_seat_assignment_schedule(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import SeatAssignmentScheduleRequest
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 request = SeatAssignmentScheduleRequest(
     menu_id="A1",
-    departure_date="20261002",
+    departure_date=departure_date,
     departure_time="090000",
     departure_station_name="서울",
     arrival_station_name="부산",

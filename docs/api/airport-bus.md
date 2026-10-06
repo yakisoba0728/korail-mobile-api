@@ -64,10 +64,14 @@ KorailClient.get_limousine_schedules(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import LimousineScheduleQuery
 
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+
 query = LimousineScheduleQuery(
-    departure_date="20261002",
+    departure_date=departure_date,
     departure_station_code=input("출발 정류장 코드: "),
     arrival_station_code=input("도착 정류장 코드: "),
     service_code=input("운행 그룹 코드: "),

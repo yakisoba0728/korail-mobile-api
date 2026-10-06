@@ -11,9 +11,13 @@
 이후 예제는 이 블록의 `client`와 `hold`를 이어서 씁니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from getpass import getpass
 
 from korail_mobile_api import KorailClient, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 client = KorailClient()
 client.login(input("회원번호·전화번호·이메일: "), getpass("비밀번호: "))
@@ -21,7 +25,7 @@ client.login(input("회원번호·전화번호·이메일: "), getpass("비밀�
 query = TrainSearchQuery(
     departure_station_code="서울",
     arrival_station_code="부산",
-    departure_date="20261002",
+    departure_date=departure_date,
     departure_time="090000",
 )
 train = client.search_trains(query).trains[0]
@@ -121,7 +125,7 @@ hold = recalculated  # 결제는 재계산된 홀드로 합니다
 | `installment` | `"0"` | 할부 개월 수입니다. 숫자 1~2자리이며 `"0"`은 일시불입니다. |
 | `card_type` | `"J"` | `"J"`(개인) 또는 `"S"`(법인)입니다. |
 
-`card_type`은 `CardPayment`를 만들 때 검사하고, 나머지 필드는 `pay_with_card`가 요청을 보내기 전에 검사합니다. `repr(card)`와 `str(card)`는 모든 입력 필드를 숨겨 `CardPayment()`로 표시합니다. 직접 속성이나 `dataclasses.asdict(card)`에는 실제 값이 남고, 결제 폼도 실제 값을 사용합니다.
+`card_type`은 `CardPayment`를 만들 때 검사하고, 나머지 필드는 `pay_with_card`가 요청을 보내기 전에 검사합니다. [개발 버전](../getting-started.md#development-version)의 Unreleased 변경에서는 `repr(card)`와 `str(card)`가 모든 입력 필드를 숨겨 `CardPayment()`로 표시합니다. 직접 속성이나 `dataclasses.asdict(card)`에는 실제 값이 남고, 결제 폼도 실제 값을 사용합니다.
 어느 쪽이든 형식이 틀리면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생하고 요청은 나가지 않습니다.
 유효기간이 한국 시간 기준 이번 달이면 허용하고, 그보다 이전이면 만료로 보고 거절합니다.
 검사는 형식과 유효기간만 확인하며, 카드를 실제로 쓸 수 있는지는 확인하지 않습니다.

@@ -26,10 +26,17 @@ Python 3.11 이상이 필요합니다.
 pip install korail-mobile-api
 ```
 
+이 문서에서 Unreleased로 표시한 기능은 `v2.4.0`에 포함되지 않습니다.
+사용하려면 [개발 버전 설치](getting-started.md#development-version)를 따르세요.
+
 ## 예제
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailClient, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 client = KorailClient()
 try:
@@ -37,7 +44,7 @@ try:
         TrainSearchQuery(
             departure_station_code="서울",
             arrival_station_code="부산",
-            departure_date="20261002",
+            departure_date=departure_date,
             departure_time="090000",
         )
     )

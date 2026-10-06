@@ -6,19 +6,22 @@
 
 from __future__ import annotations
 
-import math
-import re
 from collections.abc import Mapping
 from functools import partial
 from typing import Any
 
+from ._parsing import (
+    _inventory_ratio as _inventory_ratio,
+)
+from ._parsing import (
+    _model_response_fields as _response_fields,
+)
 from ._parsing import (
     _nested_rows,
     _nullable_scalar_fields,
     _optional_integer,
     _optional_scalar_string,
     _preserve_read_raw,
-    _ResponseFields,
     _rows,
 )
 from .errors import KorailProtocolError
@@ -133,15 +136,6 @@ def _typed_defaulted_string(
 _station_string = partial(_typed_defaulted_string, context="station")
 _inventory_string = partial(_typed_defaulted_string, context="seat inventory")
 _inventory_optional_int = partial(_typed_optional_int, context="seat inventory")
-
-
-def _response_fields(response: BaseKorailResponse) -> _ResponseFields:
-    return {
-        "h_msg_cd": response.h_msg_cd,
-        "h_msg_txt": response.h_msg_txt,
-        "str_result": response.str_result,
-        "raw": response.raw,
-    }
 
 
 @_preserve_read_raw
@@ -631,30 +625,6 @@ def parse_seat_car_list_response(
         # TrainResearchOut.java:27,105 의 고유 필드.
         car_count=_optional_scalar_string(raw, "h_scar_num", "seat car list"),
     )
-
-
-def _inventory_ratio(data: Mapping[str, Any], key: str) -> float | None:
-    """창측 비율(String 선언, TResidualSeatsResearchOutWindow.java:51-56)을 읽습니다. 누락과 앱 기본값 "" 은 None 입니다."""
-    value = data.get(key, "")
-    if value == "":
-        return None
-    number: int | float | str
-    # bool 을 숫자로 받지 않도록 정확한 int·float 타입만 허용합니다.
-    if type(value) in (int, float):
-        number = value
-    elif isinstance(value, str) and re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value) is not None:
-        number = value
-    else:
-        raise KorailProtocolError(
-            f"KORAIL seat inventory field {key} must be numeric or an ASCII decimal string"
-        )
-    try:
-        ratio = float(number)
-    except (OverflowError, ValueError) as exc:
-        raise KorailProtocolError(f"KORAIL seat inventory field {key} must be finite") from exc
-    if not math.isfinite(ratio):
-        raise KorailProtocolError(f"KORAIL seat inventory field {key} must be finite")
-    return ratio
 
 
 @_preserve_read_raw

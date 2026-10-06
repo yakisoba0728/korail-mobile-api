@@ -4,23 +4,23 @@ from __future__ import annotations
 
 import ast
 import base64
-import json
 import socket
 import sys
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, parse_qsl
 
 import httpx
 import pytest
 
 import korail_mobile_api as package
 from korail_mobile_api import errors as E
+from korail_mobile_api._payload_helpers import _device_version_key
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.constants import DYNAPATH_ALLOWLIST_PATHS, KORAIL_COMMON_CODE_BOOTSTRAP_CODES
 from korail_mobile_api.crypto import transform_login_password
 from korail_mobile_api.dynapath import DynapathConfig, DynapathTokenGenerator, DynapathTokenSettings
-from korail_mobile_api.http import parse_base_response
+from korail_mobile_api.http import KorailHttpClient, parse_base_response
 from korail_mobile_api.models import LoginCryptoInfo
 from korail_mobile_api.session import infer_login_input_flag
 
@@ -57,40 +57,17 @@ def form(request):
 
 
 @pytest.fixture
-def factory():
-    clients = []
-
+def factory(scripted_client_factory):
     def make(responses=(), *, config=None):
-        requests = []
-        replies = iter(responses)
-
-        def handler(request):
-            requests.append(request)
-            reply = next(replies)  # Unexpected extra requests fail rather than hit a server.
-            if isinstance(reply, Exception):
-                raise reply
-            if callable(reply):
-                reply = reply(request)
-            if isinstance(reply, httpx.Response):
-                return reply
-            return httpx.Response(
-                200,
-                content=json.dumps(reply, ensure_ascii=True).encode("ascii"),
-                headers={"Content-Type": "application/json"},
-            )
-
         config = config or KorailConfig(
             base_url="https://offline.invalid",
             netfunnel_enabled=False,
             dynapath=DynapathConfig(enabled=True, token_provider=lambda context: "synthetic-token"),
         )
-        client = KorailClient(config=config, transport=httpx.MockTransport(handler))
-        clients.append(client)
+        client, requests, _ = scripted_client_factory(responses, config=config)
         return client, requests
 
-    yield make
-    for client in clients:
-        client.close()
+    return make
 
 
 def test_socket_guard_is_active():
@@ -99,6 +76,15 @@ def test_socket_guard_is_active():
         socket.create_connection(("offline.invalid", 443))
     with pytest.raises(AssertionError, match="network access is forbidden"):
         socket.getaddrinfo("offline.invalid", 443)
+    with socket.socket() as stream:
+        with pytest.raises(AssertionError, match="network access is forbidden"):
+            stream.connect(("127.0.0.1", 9))
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+        with pytest.raises(AssertionError, match="network access is forbidden"):
+            udp.sendto(b"synthetic", ("127.0.0.1", 9))
+    with httpx.Client() as client:
+        with pytest.raises(AssertionError, match="network access is forbidden"):
+            client.get("https://offline.invalid/")
 
 
 @pytest.mark.parametrize("code", ["IRZ000001", "S200"])
@@ -405,22 +391,36 @@ def test_integer_string_fields_preserve_original_raw(field, attribute, value):
     assert result.raw is raw and type(raw[field]) is int
 
 
-@pytest.mark.parametrize("value", [True, False, 1.5, {}, []])
-@pytest.mark.parametrize("field", ["h_msg_cd", "h_msg_txt", "strResult"])
-def test_invalid_envelope_types_keep_full_raw(field, value):
+@pytest.mark.parametrize(
+    "entrypoint,field,value",
+    [
+        *(
+            ("http", field, value)
+            for field in ["h_msg_cd", "h_msg_txt", "strResult"]
+            for value in [True, False, 1.5, {}, []]
+        ),
+        *(("model", "h_msg_txt", value) for value in [True, 1.5, [], {}]),
+    ],
+)
+def test_invalid_envelope_types_keep_full_raw(entrypoint, field, value):
     raw = envelope()
     raw[field] = value
     raw["synthetic_nested"] = {"keep": ["whole", "response"]}
+    parser = parse_base_response if entrypoint == "http" else package.BaseKorailResponse.from_raw
     with pytest.raises(E.KorailProtocolError) as caught:
-        parse_base_response(raw)
+        parser(raw)
     assert caught.value.raw is raw
     assert caught.value.parser_raw is None
 
 
-@pytest.mark.parametrize("raw", [None, [], "synthetic", 123, True])
-def test_nonobject_json_keeps_full_raw(raw):
+@pytest.mark.parametrize(
+    "entrypoint,raw",
+    [*(("http", raw) for raw in [None, [], "synthetic", 123, True]), ("model", ["synthetic"])],
+)
+def test_nonobject_json_keeps_full_raw(entrypoint, raw):
+    parser = parse_base_response if entrypoint == "http" else package.BaseKorailResponse.from_raw
     with pytest.raises(E.KorailProtocolError) as caught:
-        parse_base_response(raw)
+        parser(raw)
     assert caught.value.raw is raw
 
 
@@ -790,26 +790,6 @@ def test_ordered_and_mapping_forms_encode_none_and_bool_alike(factory):
     assert requests[0].content == requests[1].content == b"a=&b=true&c=false&d=3"
 
 
-def test_failed_netfunnel_setup_closes_the_http_client(monkeypatch):
-    import korail_mobile_api.client as client_module
-
-    created = []
-    real = client_module.KorailHttpClient
-
-    def recording(*args, **kwargs):
-        created.append(real(*args, **kwargs))
-        return created[-1]
-
-    def broken(*args, **kwargs):
-        raise RuntimeError("synthetic NetFunnel setup failure")
-
-    monkeypatch.setattr(client_module, "KorailHttpClient", recording)
-    monkeypatch.setattr(client_module, "KorailNetFunnelClient", broken)
-    with pytest.raises(RuntimeError):
-        KorailClient(KorailConfig(base_url="https://offline.invalid"))
-    assert created and created[0]._client.is_closed
-
-
 def test_clear_session_is_local(factory):
     client, requests = factory([*bootstrap(), login_response()])
     client.login(ID, PASSWORD)
@@ -825,30 +805,6 @@ def test_close_keeps_session_and_cookies_without_request(factory):
     client.close()
     assert len(requests) == 3 and client.session.current is current
     assert client.http.cookies.get("JSESSIONID") == COOKIE
-
-
-def test_close_finally_closes_netfunnel(monkeypatch):
-    client = KorailClient(
-        config=KorailConfig(base_url="https://offline.invalid", disable_dynapath=True),
-        transport=httpx.MockTransport(lambda request: pytest.fail("unexpected HTTP")),
-    )
-    calls = []
-    original_http_close = client.http.close
-    original_nf_close = client.netfunnel.close
-
-    def fail_close():
-        calls.append("http")
-        raise RuntimeError("synthetic close failure")
-
-    monkeypatch.setattr(client.http, "close", fail_close)
-    monkeypatch.setattr(client.netfunnel, "close", lambda: calls.append("netfunnel"))
-    try:
-        with pytest.raises(RuntimeError, match="synthetic close"):
-            client.close()
-        assert calls == ["http", "netfunnel"]
-    finally:
-        original_http_close()
-        original_nf_close()
 
 
 # Fixed literal table, independent from errors._APP_ERROR_BY_CODE at test runtime.
@@ -906,16 +862,29 @@ def test_reservation_switch_late_and_exist_are_not_sold_out(code):
     assert type(E.classify_app_error(code, "synthetic")) is E.KorailReservationRefusedError
 
 
-def test_social_record_has_no_inbound_import_or_public_method():
+@pytest.mark.parametrize(
+    "record_module,methods",
+    [
+        ("_social_login_unsupported", ("login_social",)),
+        ("_maas_unsupported", ("get_maas_cancel_fee", "check_maas_cart_status", "cancel_unpaid_maas_item")),
+        ("_travel_search_unsupported", ("search_travel_products",)),
+    ],
+)
+def test_record_modules_have_no_inbound_import_or_public_method(record_module, methods):
+    """Source imports, including TYPE_CHECKING imports, must not expose record-only calls."""
     root = Path(package.__file__).parent
     for path in root.glob("*.py"):
+        if record_module == "_maas_unsupported" and path.stem == record_module:
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 names = [alias.name for alias in node.names] + [getattr(node, "module", "") or ""]
-                assert all("_social_login_unsupported" not in name for name in names), (path, node.lineno)
-    assert "korail_mobile_api._social_login_unsupported" not in sys.modules
-    assert not hasattr(KorailClient, "login_social")
+                assert all(record_module not in name for name in names), (path, node.lineno)
+    if record_module == "_social_login_unsupported":
+        assert f"korail_mobile_api.{record_module}" not in sys.modules
+    for method in methods:
+        assert not hasattr(KorailClient, method)
 
 
 @pytest.mark.parametrize(
@@ -954,3 +923,142 @@ def test_login_wire_encryption_matches_independent_vector(factory):
     client, requests = factory([*bootstrap(), login_response()])
     client.login(ID, PASSWORD)
     assert form(requests[-1])["txtPwd"] == ["d2pDQ3FIZ3ZQdXV2d1BxUkE5azRCV1RZSWJFVk5Oc2ZrS0o5K09wOHU0RT0=\n"]
+
+
+@pytest.mark.parametrize("lang", [None, "synthetic-language"])
+@pytest.mark.parametrize("optional", [False, True])
+def test_login_form_matches_dto_declaration_order(lang: str | None, optional: bool) -> None:
+    """LoginIn.java:57-80,141-164; CommonIn.java:467-474; NetworkService.java:15335-15392."""
+    seen: list[httpx.Request] = []
+    replies = iter(
+        [
+            {"strResult": "SUCC"},
+            {
+                "strResult": "SUCC",
+                "app.login.cphd": {"idx": "synthetic-index", "key": "0123456789abcdef"},
+            },
+            {"strResult": "SUCC", "h_msg_cd": "IRZ000001"},
+        ]
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json=next(replies),
+            headers={"Set-Cookie": "JSESSIONID=synthetic-session; Path=/"},
+        )
+
+    config = KorailConfig(
+        base_url="https://api.example.invalid",
+        netfunnel_enabled=False,
+        dynapath=DynapathConfig(enabled=True, token_provider=lambda context: "synthetic-token"),
+        lang=lang,
+    )
+    client = KorailClient(config, transport=httpx.MockTransport(handler))
+    try:
+        client.login(
+            "0000000000",
+            "synthetic-password",
+            cust_id="synthetic-customer" if optional else None,
+            etr_path="synthetic-entry" if optional else None,
+        )
+    finally:
+        client.close()
+    assert [request.url.path for request in seen] == [
+        "/file/CACHE/MobileService.cache",
+        "/classes/com.korail.mobile.common.code.do",
+        "/classes/com.korail.mobile.login.Login",
+    ]
+    pairs = parse_qsl(seen[-1].content.decode("ascii"), keep_blank_values=True)
+    expected = ["Device", "Version", "AppVersion", "Key"]
+    if lang is not None:
+        expected.append("lang")
+    expected.extend(["txtInputFlg", "txtMemberNo", "txtPwd"])
+    if optional:
+        expected.append("custId")
+    expected.append("checkValidPw")
+    if optional:
+        expected.append("etrPath")
+    expected.append("idx")
+    assert [name for name, _ in pairs] == expected
+    values = dict(pairs)
+    assert values["txtInputFlg"] == "2"
+    assert values["txtMemberNo"] == "0000000000"
+    assert values["checkValidPw"] == "Y"
+    assert values["idx"] == "synthetic-index"
+    assert seen[-1].headers["User-Agent"] == "korailtalk"
+
+
+@pytest.mark.parametrize("key", ["h_msg_cd", "h_msg_txt", "strResult"])
+@pytest.mark.parametrize("entrypoint", ["http", "parser", "model"])
+def test_oversized_envelope_integer_is_protocol_error_with_raw(key: str, entrypoint: str) -> None:
+    """checks/BEHAVIOR.md (스칼라·봉투): numeric strings normalize; rejected responses retain the entire raw object."""
+    import sys
+
+    from korail_mobile_api import BaseKorailResponse, KorailProtocolError
+    from korail_mobile_api.http import parse_base_response
+    from korail_mobile_api.read_parsers import parse_delay_return_receipt_response
+
+    parsers = {
+        "http": parse_base_response,
+        "parser": parse_delay_return_receipt_response,
+        "model": BaseKorailResponse.from_raw,
+    }
+    raw = {"strResult": "SUCC", key: 10**700, "extra": {"synthetic": True}}
+    previous = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(640)
+        with pytest.raises(KorailProtocolError) as error:
+            parsers[entrypoint](raw)
+        assert error.value.raw is raw
+    finally:
+        sys.set_int_max_str_digits(previous)
+
+
+def test_base_response_from_raw_normalizes_envelope_without_classifying_status() -> None:
+    from korail_mobile_api import BaseKorailResponse
+
+    raw = {"h_msg_cd": 12, "h_msg_txt": 34, "strResult": 56}
+    result = BaseKorailResponse.from_raw(raw)
+    assert (result.h_msg_cd, result.h_msg_txt, result.str_result) == ("12", "34", "56")
+    assert result.raw is raw
+    assert BaseKorailResponse.from_raw({"strResult": "FAIL", "h_msg_cd": "P058"}).h_msg_cd == "P058"
+    assert BaseKorailResponse.from_raw({}).str_result is None
+
+
+@pytest.mark.parametrize("lang", [None, "", "synthetic-language"])
+@pytest.mark.parametrize("app_version", ["7.0.8", "7.0.9", None])
+def test_common_form_keeps_order_and_returns_fresh_mapping(lang: str | None, app_version: str | None) -> None:
+    config = KorailConfig(
+        device="SYNTHETIC-DEVICE",
+        version="SYNTHETIC-VERSION",
+        key="SYNTHETIC-APP-KEY",
+        lang=lang,
+        app_version=app_version,
+        disable_dynapath=True,
+    )
+    expected = [
+        ("Device", config.device),
+        ("Version", config.version),
+    ]
+    if app_version is not None:
+        expected.append(("AppVersion", app_version))
+    expected.append(("Key", config.key))
+    if lang is not None:
+        expected.append(("lang", lang))
+    client = KorailHttpClient(config, transport=httpx.MockTransport(lambda request: httpx.Response(200)))
+    try:
+        first = client.common_fields()
+        assert list(first.items()) == expected
+        assert list(_device_version_key(config).items()) == expected
+        first["Device"] = "changed"
+        assert list(client.common_fields().items()) == expected
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("app_version", ["", " ", 708, False])
+def test_invalid_app_version_is_rejected(app_version: object) -> None:
+    with pytest.raises(ValueError, match="app_version"):
+        KorailConfig(app_version=app_version)  # type: ignore[arg-type]

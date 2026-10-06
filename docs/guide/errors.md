@@ -4,6 +4,9 @@
 이어서 세션 만료, 상태 변경 요청의 실패, 카드 결제 거절, 웹 단계가 필요한 로그인을 처리하는 방법을 예제로 보여 줍니다.
 라이브러리는 KORAIL API 요청을 자동으로 다시 보내지 않으며, 자동으로 다시 로그인하지도 않습니다.
 
+!!! note "개발 버전의 오류 처리"
+    메시지 사전 API, `display_message`, 계정 잠금·요청 제한·처리 중·기처리 예외와 새 오류 분류는 Unreleased 기능입니다. `v2.4.0`에는 포함되지 않으므로 [개발 버전 설치](../getting-started.md#development-version)가 필요합니다.
+
 ## 예외 계층
 
 요청을 처리하면서 라이브러리가 발생시키는 예외는 모두 [`KorailApiError`][korail_mobile_api.errors.KorailApiError]를 상속합니다. 모든 예외는 패키지 루트에서 가져올 수 있습니다.
@@ -194,6 +197,8 @@ SDK의 세션 만료 안내를 표시합니다. 이 표시는 세션 상태나 �
 직통 열차가 없을 때 환승 조회로 넘어가는 동작은 [`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback)이 대신 해 줍니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import (
     KorailAppError,
     KorailClient,
@@ -202,11 +207,13 @@ from korail_mobile_api import (
     TrainSearchQuery,
 )
 
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+
 client = KorailClient()
 query = TrainSearchQuery(
     departure_station_code="서울",
     arrival_station_code="부산",
-    departure_date="20261002",
+    departure_date=departure_date,
     departure_time="090000",
     passengers=1,
 )
@@ -235,9 +242,13 @@ finally:
 아래 예제는 로그인한 클라이언트와 조회 조건을 만들고, 조회 메서드에만 쓰는 다시 로그인 함수를 정의합니다. 이 가이드의 나머지 예제는 여기서 만든 `client`, `query`를 이어 씁니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from getpass import getpass
 
 from korail_mobile_api import KorailClient, KorailSessionExpiredError, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 member_no = input("회원번호·전화번호·이메일: ")
 password = getpass("비밀번호: ")
@@ -247,7 +258,7 @@ client.login(member_no, password)
 query = TrainSearchQuery(
     departure_station_code="서울",
     arrival_station_code="부산",
-    departure_date="20261002",
+    departure_date=departure_date,
     departure_time="090000",
     passengers=1,
 )

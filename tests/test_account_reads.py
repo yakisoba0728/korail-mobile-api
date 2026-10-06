@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, UserDict
 from copy import deepcopy
 from dataclasses import dataclass, is_dataclass, replace
 from dataclasses import fields as dataclass_fields
@@ -14,6 +14,7 @@ import pytest
 
 from korail_mobile_api import read_models as m
 from korail_mobile_api import read_payloads as p
+from korail_mobile_api._parsing import _nullable_scalar_fields, _reservation_passengers
 from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import KorailProtocolError, KorailSessionExpiredError
@@ -801,18 +802,10 @@ def fixed_clock(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def make_client():
+def make_client(scripted_client_factory):
     """NetworkService.java:15320-15427: observe the encoded request, not just the builder."""
-    clients = []
 
     def make(response: dict[str, Any], *, lang: str | None = "TEST-LANG", **config_changes: Any):
-        calls: list[httpx.Request] = []
-
-        def handle(request: httpx.Request) -> httpx.Response:
-            assert request.url.host == "offline.invalid"
-            calls.append(request)
-            return httpx.Response(200, json=response)
-
         config = KorailConfig(
             base_url="https://offline.invalid",
             device="TEST-DEVICE",
@@ -824,16 +817,13 @@ def make_client():
             disable_dynapath=True,
             **config_changes,
         )
-        client = KorailClient(config, transport=httpx.MockTransport(handle))
-        client.session.current = KorailSession(
+        session = KorailSession(
             jsessionid="TEST-SESSION", customer_no="TEST-CUSTOMER", member_card_no="TEST-MEMBER"
         )
-        clients.append(client)
+        client, calls, _ = scripted_client_factory([response], config=config, session=session, repeat=True)
         return client, calls
 
-    yield make
-    for client in clients:
-        client.close()
+    return make
 
 
 @pytest.mark.parametrize(
@@ -1497,3 +1487,62 @@ def test_cart_nested_pay_details_stay_in_raw() -> None:
     for model_field in dataclass_fields(item):
         if model_field.name != "raw":
             assert getattr(item, model_field.name) not in details.values(), model_field.name
+
+
+@pytest.mark.parametrize("value", [True, 1.5, [], {}, "20300102", 20300102, None])
+def test_optional_delay_run_date_uses_optional_scalar_policy(value: object) -> None:
+    """DelayCertificate.java:57-60 differs from the observed optional runDt; checks/BEHAVIOR.md governs it."""
+    from korail_mobile_api.read_parsers import parse_delay_certificate_response
+
+    row = {
+        "runDay": "synthetic-day",
+        "trnNo": "00001",
+        "dptRsStnCd": "0001",
+        "arvRsStnCd": "0002",
+        "arvRsStnNm": "synthetic-station",
+        "dlayArvFlg": "Y",
+        "trnDlayTm": "20",
+        "runDt": value,
+    }
+    raw = {"strResult": "SUCC", "dlayList": [row]}
+    parsed = parse_delay_certificate_response(raw)
+    expected = str(value) if type(value) in (int, str) else None
+    assert parsed.delays[0].run_date == expected
+    assert parsed.delays[0].raw is row
+    assert parsed.raw is raw
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (None, None),
+        ("", ""),
+        ("Y", "Y"),
+        (12, "12"),
+        (-1, "-1"),
+        (False, None),
+        (1.5, None),
+        ([], None),
+        ({}, None),
+    ],
+)
+def test_nullable_field_map_preserves_optional_policy(value: object, expected: str | None) -> None:
+    raw = {"wire": value}
+    fields = {"present": "wire", "missing": "absent"}
+    assert _nullable_scalar_fields(raw, fields) == {"present": expected, "missing": None}
+    assert _nullable_scalar_fields(raw, fields, "synthetic context") == {"present": expected, "missing": None}
+
+
+@pytest.mark.parametrize("container", [None, [], "invalid", {}, {"psg_info": None}, {"psg_info": {}}])
+def test_passenger_rows_keep_lenient_container_policy(container: object) -> None:
+    assert _reservation_passengers({"psg_infos": container}) == ()
+
+
+def test_passenger_rows_filter_only_non_mappings_and_copy_row_raw() -> None:
+    row = UserDict({"h_psg_tp_cd": 1, "h_psg_info_per_prnb": "2", "h_dcnt_knd_cd": False})
+    result = _reservation_passengers({"psg_infos": {"psg_info": [None, "invalid", row, {}]}})
+    assert len(result) == 2
+    assert result[0].passenger_type_code == "1" and result[0].passenger_count == "2"
+    assert result[0].discount_kind_code is None
+    assert result[0].raw == row and result[0].raw is not row
+    assert result[1].passenger_type_code is None

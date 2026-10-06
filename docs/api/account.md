@@ -475,7 +475,11 @@ KorailClient.get_multi_child_discount_targets(
 **예제**
 
 ```python
-result = client.get_multi_child_discount_targets("20261002")
+from datetime import datetime, timedelta, timezone
+
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+result = client.get_multi_child_discount_targets(departure_date)
 for target in result.targets:
     print(target.customer_family_name, target.passenger_type_name)
 ```
@@ -518,7 +522,11 @@ KorailClient.get_trip_change_dates(departure_date: str) -> TripChangeDateRespons
 **예제**
 
 ```python
-dates = client.get_trip_change_dates("20261002")
+from datetime import datetime, timedelta, timezone
+
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+dates = client.get_trip_change_dates(departure_date)
 for date in dates.trip_change_dates:
     print(date)
 print(dates.last_run_date)

@@ -5,7 +5,6 @@ from __future__ import annotations
 import inspect
 import json
 import runpy
-import socket
 import sys
 from collections.abc import Callable
 from dataclasses import replace
@@ -536,17 +535,6 @@ def test_f8_existing_checks(script: str, monkeypatch: pytest.MonkeyPatch) -> Non
         runpy.run_path(str(path), run_name="__main__")
     except SystemExit as error:
         assert error.code in (0, None)
-
-
-def test_f8_socket_guard_blocks_dns_tcp_and_udp() -> None:
-    with pytest.raises(AssertionError, match="f8: network access"):
-        socket.getaddrinfo("example.invalid", 443)
-    with socket.socket() as stream:
-        with pytest.raises(AssertionError, match="f8: network access"):
-            stream.connect(("127.0.0.1", 9))
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as datagram:
-        with pytest.raises(AssertionError, match="f8: network access"):
-            datagram.sendto(b"synthetic", ("127.0.0.1", 9))
 
 
 def test_f8_queue_is_completed_after_api_error(f8_client_factory: Callable[..., api.KorailClient]) -> None:

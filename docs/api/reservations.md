@@ -1,6 +1,7 @@
 # 예약
 
 결제 전 예약(홀드)을 만들고, 확인하고, 취소하는 메서드입니다.
+청소년 예약 사전 거절은 Unreleased 정책이며 [개발 버전](../getting-started.md#development-version)에 적용됩니다.
 예약 메서드는 서버에 실제 홀드를 만들고 [`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse]를 반환합니다.
 라이브러리는 홀드를 자동으로 결제하거나 취소하지 않으므로, 결제 기한 안에 [`pay_with_card`](payments.md#pay_with_card)로 결제하거나 [`cancel_unpaid_hold`](#cancel_unpaid_hold)로 취소해야 합니다.
 
@@ -87,12 +88,16 @@ KorailClient.reserve(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailPassengerCounts, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 query = TrainSearchQuery(
     departure_station_code="서울",
     arrival_station_code="부산",
-    departure_date="20261002",
+    departure_date=departure_date,
     departure_time="090000",
     passengers=2,
 )
@@ -161,9 +166,13 @@ KorailClient.reserve_transfer(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailPassengerCounts, TrainSearchQuery
 
-query = TrainSearchQuery("강릉", "목포", "20261002", "080000", passengers=2)
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+
+query = TrainSearchQuery("강릉", "목포", departure_date, "080000", passengers=2)
 transfer = client.search_transfer_trains(query)
 itinerary = transfer.itineraries[0]
 hold = client.reserve_transfer(itinerary.legs, passengers=KorailPassengerCounts(adult=2))

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 import inspect
-import socket
+import sys
 from dataclasses import dataclass, field, replace
 from typing import Any
 from urllib.parse import parse_qs
@@ -45,26 +45,6 @@ from korail_mobile_api.netfunnel import (
     parse_netfunnel_body,
 )
 from korail_mobile_api.netfunnel_safety import korail_netfunnel_node_url
-
-
-@pytest.fixture(autouse=True)
-def block_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
-    def deny(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("F5: real network is forbidden; use MockTransport")
-
-    monkeypatch.setattr(socket.socket, "connect", deny)
-    monkeypatch.setattr(socket.socket, "connect_ex", deny)
-    monkeypatch.setattr(socket, "create_connection", deny)
-    monkeypatch.setattr(socket, "getaddrinfo", deny)
-    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", deny)
-
-
-def test_network_guard() -> None:
-    with pytest.raises(AssertionError, match="real network"):
-        socket.getaddrinfo("never-resolve.invalid", 443)
-    with httpx.Client() as client:
-        with pytest.raises(AssertionError, match="real network"):
-            client.get("https://never-send.invalid/")
 
 
 @dataclass
@@ -1146,28 +1126,17 @@ def test_reservation_wrong_types_and_car_override(config, schedule) -> None:
 
 
 @pytest.fixture
-def api_factory(config):
-    clients: list[KorailClient] = []
-
+def api_factory(config, scripted_client_factory):
     def make(payload: dict[str, Any] | Exception, *, authenticated: bool = True):
-        requests: list[httpx.Request] = []
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            assert request.url.host == "api.invalid", "A limousine method unexpectedly entered NetFunnel"
-            requests.append(request)
-            if isinstance(payload, Exception):
-                raise payload
-            return httpx.Response(200, json=payload)
-
-        client = KorailClient(config, transport=httpx.MockTransport(handler))
-        clients.append(client)
-        if authenticated:
-            client.session.current = KorailSession(jsessionid="SYNTHETIC-SESSION", member_no="SYNTHETIC-MEMBER")
+        session = (
+            KorailSession(jsessionid="SYNTHETIC-SESSION", member_no="SYNTHETIC-MEMBER")
+            if authenticated
+            else None
+        )
+        client, requests, _ = scripted_client_factory([payload], config=config, session=session, repeat=True)
         return client, requests
 
-    yield make
-    for client in clients:
-        client.close()
+    return make
 
 
 def decoded_form(request: httpx.Request) -> dict[str, str]:
@@ -1305,3 +1274,34 @@ def test_fallback_wait_budget_restarts_for_each_admission() -> None:
         assert events == ["5101", "API", "5004", "5101", "API", "5004"]
     finally:
         client.close()
+
+
+@pytest.mark.parametrize(
+    "ttl,nwait,expected_ttl,expected_count",
+    [
+        ("+7", "+12", 7, 12),
+        ("７", "１２", 7, 12),
+        ("٧", "١٢", 7, 12),
+        ("-7", "-12", 1, -12),
+        ("0" * 700 + "7", "0" * 700 + "12", 7, 12),
+        ("7", "12", 7, 12),
+        ("not-numeric", "not-numeric", 1, 0),
+        ("2147483648", "2147483648", 1, 0),
+    ],
+    ids=["plus", "fullwidth", "arabic", "negative", "leading-zeros", "ascii", "invalid", "overflow"],
+)
+def test_queue_number_properties_use_java_int32(
+    ttl: str, nwait: str, expected_ttl: int, expected_count: int
+) -> None:
+    """Valid SDK numbers normalize; invalid values retain the library's zero fallback."""
+    raw = f"201:key=SYNTHETIC-KEY&ttl={ttl}&nwait={nwait}"
+    previous = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(640)
+        token = parse_netfunnel_body(raw)
+        assert token.wait_seconds == expected_ttl
+        assert token.wait_count == expected_count
+        assert token.raw == raw
+        assert token.params["ttl"] == ttl and token.params["nwait"] == nwait
+    finally:
+        sys.set_int_max_str_digits(previous)

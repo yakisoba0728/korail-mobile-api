@@ -27,6 +27,9 @@
 
 ## 승객 구성 {#passengers}
 
+청소년 예약 사전 거절과 `ERR299943` 오류 분류 변경은 Unreleased 범위입니다.
+아래의 현재 정책을 사용하려면 [개발 버전](../getting-started.md#development-version)을 설치하세요.
+
 [`KorailPassengerCounts`][korail_mobile_api.mutation_models.KorailPassengerCounts]로 승객 종류별 인원을 정합니다. 예약 메서드에 넘기지 않으면 어른 1명입니다.
 
 | 필드 | 승객 종류 | 기본값 |
@@ -73,9 +76,13 @@ print(passengers.total)  # 3
 선택한 객실의 예약 코드가 `"11"`인 열차만 예약할 수 있습니다(일반실은 `general_reservation_code`, 특실은 `special_reservation_code`). 입석만 남은 열차는 요청 전에 거절합니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from getpass import getpass
 
 from korail_mobile_api import KorailClient, KorailPassengerCounts, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 client = KorailClient()
 try:
@@ -83,7 +90,7 @@ try:
     query = TrainSearchQuery(
         departure_station_code="서울",
         arrival_station_code="부산",
-        departure_date="20261002",
+        departure_date=departure_date,
         departure_time="090000",
         passengers=2,
     )
@@ -184,9 +191,13 @@ client.cancel_unpaid_hold(standby)
 아래 예제는 만든 환승 홀드를 마지막에 취소합니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailPassengerCounts, TrainSearchQuery
 
-transfer_query = TrainSearchQuery("강릉", "목포", "20261002", "080000", passengers=2)
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+
+transfer_query = TrainSearchQuery("강릉", "목포", departure_date, "080000", passengers=2)
 transfer = client.search_transfer_trains(transfer_query)
 itinerary = transfer.itineraries[0]
 transfer_hold = client.reserve_transfer(itinerary.legs, passengers=KorailPassengerCounts(adult=2))

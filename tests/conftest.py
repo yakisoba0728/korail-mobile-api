@@ -1,10 +1,11 @@
-"""Shared release fixtures; f8_ names do not collide with domain-session fixtures."""
+"""Shared offline transports, network guards and release fixtures."""
 
 from __future__ import annotations
 
 import os
 import socket
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
+from json import dumps
 from pathlib import Path
 
 import httpx
@@ -40,6 +41,7 @@ def f8_block_sockets(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("connect", "connect_ex", "sendto", "sendmsg"):
         if hasattr(socket.socket, name):
             monkeypatch.setattr(socket.socket, name, denied)
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", denied)
 
 
 @pytest.fixture
@@ -85,6 +87,47 @@ def f8_client_factory(
     yield make
     for client in reversed(clients):
         client.close()
+
+
+@pytest.fixture
+def scripted_client_factory(
+    f8_client_factory: Callable[..., KorailClient],
+) -> Callable[..., tuple[KorailClient, list[httpx.Request], list[object]]]:
+    """Observe real SDK requests with queued replies or one deliberately repeated reply."""
+
+    def make(
+        replies: Sequence[object],
+        *,
+        config: KorailConfig,
+        session: KorailSession | None = None,
+        repeat: bool = False,
+    ) -> tuple[KorailClient, list[httpx.Request], list[object]]:
+        pending = list(replies)
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.host == httpx.URL(config.base_url).host, "unexpected request host"
+            requests.append(request)
+            assert pending, "unexpected additional HTTP request"
+            reply = pending[0] if repeat else pending.pop(0)
+            if isinstance(reply, BaseException):
+                raise reply
+            if callable(reply):
+                reply = reply(request)
+            if isinstance(reply, httpx.Response):
+                return reply
+            # Lone UTF-16 surrogates must reach SDK validation as escaped JSON, not fail in httpx's encoder.
+            return httpx.Response(
+                200,
+                content=dumps(reply, ensure_ascii=True).encode("ascii"),
+                headers={"Content-Type": "application/json"},
+            )
+
+        client = f8_client_factory(handler, config=config, logged_in=False)
+        client.session.current = session
+        return client, requests, pending
+
+    return make
 
 
 @pytest.fixture

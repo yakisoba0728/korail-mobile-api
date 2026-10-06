@@ -53,7 +53,7 @@ KORAIL과는 관계없는 개인 프로젝트입니다. 공식 API가 아니라�
 
 - **타입이 붙은 응답** — 응답은 전부 dataclass로 돌려주고, 서버가 준 원본은 `.raw`에 남겨 둡니다.
 - **실수하기 어렵게** — 결제 금액은 홀드의 `received_amount`를 그대로 쓰고, 0원·예약대기 홀드를 카드로 결제하려는 건 아닌지, 환불 전에 수수료를 조회했는지 요청 전에 확인합니다.
-- **네트워크 없이 도는 테스트 2,200여 개** — CI에서 Python 3.11~3.14로 `pytest`, `mypy --strict`, `pyright`, `ruff`를 돌립니다.
+- **네트워크 없이 도는 전체 테스트** — CI에서 Python 3.11~3.14로 `pytest`, `mypy --strict`, `pyright`, `ruff`를 돌립니다.
 
 ## 설치
 
@@ -66,8 +66,12 @@ pip install korail-mobile-api
 개발 중인 코드는 GitHub에서 바로 설치할 수 있습니다.
 
 ```sh
-pip install "git+https://github.com/yakisoba0728/korail-mobile-api"
+pip install --force-reinstall "git+https://github.com/yakisoba0728/korail-mobile-api@main"
 ```
+
+검색 필터·객실 우선 선택·메시지 사전과 신규 오류 분류 등
+[Unreleased 기능](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md#unreleased)은
+`v2.4.0`에 포함되지 않습니다. 이 기능을 쓰려면 위 GitHub 설치 명령으로 개발 버전을 설치하세요.
 
 의존성은 `httpx`와 `cryptography` 두 개뿐입니다. SOCKS 프록시를 쓰려면 `pip install "korail-mobile-api[socks]"`로 설치하세요.
 
@@ -95,14 +99,18 @@ with Korail() as korail:
 간편 API는 처음 검색할 때 역 목록을 받아 입력을 확인합니다. 전체 요청 옵션과 모든 메서드는 아래의 `KorailClient`로 사용할 수 있습니다. 자세한 내용은 [간편 API 가이드](https://yaki.kr/korail-mobile-api/guide/convenience/)에 있습니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailClient, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 client = KorailClient()
 try:
     query = TrainSearchQuery(
         departure_station_code="서울",
         arrival_station_code="부산",
-        departure_date="20261002",
+        departure_date=departure_date,
         departure_time="090000",
     )
     result = client.search_trains(query)
