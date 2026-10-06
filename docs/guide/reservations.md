@@ -27,8 +27,7 @@
 
 ## 승객 구성 {#passengers}
 
-청소년 예약 사전 거절과 `ERR299943` 오류 분류 변경은 Unreleased 범위입니다.
-아래의 현재 정책을 사용하려면 [개발 버전](../getting-started.md#development-version)을 설치하세요.
+청소년 예약 사전 거절과 `ERR299943` 오류 분류 변경은 2.5.0부터 적용합니다.
 
 [`KorailPassengerCounts`][korail_mobile_api.mutation_models.KorailPassengerCounts]로 승객 종류별 인원을 정합니다. 예약 메서드에 넘기지 않으면 어른 1명입니다.
 

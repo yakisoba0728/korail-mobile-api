@@ -26,8 +26,8 @@ Python 3.11 이상이 필요합니다.
 pip install korail-mobile-api
 ```
 
-이 문서에서 Unreleased로 표시한 기능은 `v2.4.0`에 포함되지 않습니다.
-사용하려면 [개발 버전 설치](getting-started.md#development-version)를 따르세요.
+검색 필터·객실 우선 선택·메시지 사전과 신규 오류 분류는 2.5.0부터 제공합니다.
+이전 버전은 `pip install --upgrade korail-mobile-api`로 갱신하세요.
 
 ## 예제
 
@@ -92,6 +92,11 @@ finally:
 현재 공개 메서드는 85개이며, 새 메서드의 기존 예약 상세 조회는 2026년 9월 29일 실서버에서 확인했습니다. 실제 카드 결제와 N카드 예약 복원은 별도 검증하지 않았습니다. [기존 예약 결제 가이드](guide/payments.md#existing-reservation)를 참고하세요.
 
 2.4.0에는 KORAIL API·대기열 요청만 지정한 프록시로 보내는 [`proxy`](guide/configuration.md#proxy) 설정을 추가했습니다. 프록시를 거친 실서버 요청은 아직 확인하지 않았습니다.
+
+2.5.0에는 [간편 검색 필터·객실 우선 선택·역 이름·기존 예약 조회](guide/convenience.md)와
+[메시지 사전·표시 메시지·새 오류 분류](guide/errors.md)를 추가했습니다. 청소년 예약 사전 거절과 정리 중 원래 예외 보존도 적용합니다.
+출시 전 `main`에서 HTTP 105건과 대표 흐름을 확인했고 승인된 임시 홀드 2개는 모두 취소했습니다.
+실제 결제·환불은 실행하지 않았으며 상세 범위와 한계는 [2.5.0 출시 전 검증](verification-250.md)에 있습니다.
 
 | 지원 | 지원하지 않음 |
 |---|---|

@@ -1,7 +1,7 @@
 # 예약
 
 결제 전 예약(홀드)을 만들고, 확인하고, 취소하는 메서드입니다.
-청소년 예약 사전 거절은 Unreleased 정책이며 [개발 버전](../getting-started.md#development-version)에 적용됩니다.
+청소년 예약 사전 거절은 2.5.0부터 적용합니다.
 예약 메서드는 서버에 실제 홀드를 만들고 [`ReservationHoldResponse`][korail_mobile_api.mutation_models.ReservationHoldResponse]를 반환합니다.
 라이브러리는 홀드를 자동으로 결제하거나 취소하지 않으므로, 결제 기한 안에 [`pay_with_card`](payments.md#pay_with_card)로 결제하거나 [`cancel_unpaid_hold`](#cancel_unpaid_hold)로 취소해야 합니다.
 

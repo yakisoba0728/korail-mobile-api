@@ -52,7 +52,7 @@ finally:
 
 청소년 인원은 검색 호환용입니다. 일반 운임 예약에는 `adult` 인원으로 지정해야 하며,
 열차 예약에서 `KorailPassengerCounts.teenager > 0`은 요청 전에 거절합니다.
-이 사전 거절은 Unreleased 정책으로 [개발 버전](../getting-started.md#development-version)에 적용됩니다.
+이 사전 거절은 2.5.0부터 적용합니다.
 청소년드림 할인 상품과의 차이는 [예약 승객 구성](reservations.md#passengers)에 설명했습니다.
 
 ### 역 이름과 역 코드 {#stations}
