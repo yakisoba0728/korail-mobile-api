@@ -141,6 +141,7 @@ nav:
       - 요청 흐름: concepts/how-it-works.md
       - 용어: concepts/glossary.md
       - 실서버 확인 현황: status.md
+      - 2.5.0 출시 전 검증: verification-250.md
       - 7.0.8 재검증: verification-708.md
   - 변경 이력: changelog.md
   - 배포 절차: releasing.md
