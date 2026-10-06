@@ -11,6 +11,7 @@ from .config import KorailConfig
 from .constants import (
     KorailLoginInputFlag,
     KorailReservationJobType,
+    KorailReserveOption,
     KorailRoomClassCode,
     KorailSeatClass,
 )
@@ -323,6 +324,7 @@ __all__ = [
     "KorailLoginInputFlag",
     "KorailRoomClassCode",
     "KorailReservationJobType",
+    "KorailReserveOption",
     "KorailReservationRefusedError",
     "KorailProtocolError",
     "KorailSeatAssignment",

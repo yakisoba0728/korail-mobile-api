@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from difflib import get_close_matches
 from types import TracebackType
@@ -14,7 +15,8 @@ import httpx
 
 from .client import KorailClient
 from .config import KorailConfig
-from .constants import KorailReservationJobType, KorailSeatClass
+from .constants import KorailReservationJobType, KorailReserveOption, KorailSeatClass
+from .errors import KorailProtocolError
 from .models import (
     BaseKorailResponse,
     KorailSession,
@@ -62,6 +64,10 @@ class StationResource:
             return None
         return next((station for station in self.all() if value in (station.name, station.code)), None)
 
+    def names(self) -> set[str]:
+        """캐시된 역 이름 집합의 복사본을 반환합니다."""
+        return {station.name for station in self.all()}
+
     def ensure_exists(self, *references: str) -> None:
         stations = self.all()
         names = {station.name for station in stations}
@@ -95,13 +101,21 @@ class TrainResource:
         include_nearby_stations: bool = False,
         peak_season: bool = False,
         continuation: TrainSearchContinuation | None = None,
+        include_no_seats: bool = True,
+        include_waiting_list: bool = False,
     ) -> TrainSearchResult:
         """직통 열차 한 페이지를 조회합니다. 결과의 ``next_page()``로 계속 조회하세요.
 
         시간대가 없는 시각은 KST로 읽고, 시간대가 있으면 KST로 변환합니다.
         과거 시각은 요청 전에 거절합니다. ``passengers``는 기존 예약 입력 모델을
         사용하며 생략하면 성인 한 명입니다.
+
+        기본값은 매진을 포함한 전체 결과입니다. ``include_no_seats=False``이면
+        가용 좌석만 남기며 ``include_waiting_list=True``로 예약대기 가능 열차도
+        포함합니다. 필터 전 목록·원문·후속 조회 정보는 보존합니다.
         """
+        if type(include_no_seats) is not bool or type(include_waiting_list) is not bool:
+            raise TypeError("include_no_seats and include_waiting_list must be bool")
         moment = depart_after if depart_after is not None else datetime.now(KST)
         if not isinstance(moment, datetime):
             raise TypeError("depart_after must be a datetime")
@@ -130,7 +144,18 @@ class TrainResource:
             include_srt=include_srt,
             include_nearby_stations=include_nearby_stations,
         )
-        return self._client.search_trains(query, peak_season=peak_season, continuation=continuation)
+        result = self._client.search_trains(query, peak_season=peak_season, continuation=continuation)
+        if include_no_seats:
+            return result
+        return replace(
+            result,
+            trains=[
+                train
+                for train in result.trains
+                if train.has_seat() or (include_waiting_list and train.has_waiting_list())
+            ],
+            unfiltered_trains=result.trains,
+        )
 
 
 class ReservationResource:
@@ -144,11 +169,48 @@ class ReservationResource:
         train: TrainSummary,
         *,
         passengers: KorailPassengerCounts | None = None,
-        seat_class: KorailSeatClass = KorailSeatClass.GENERAL,
+        seat_class: KorailSeatClass | None = None,
         job_type: KorailReservationJobType = KorailReservationJobType.IMMEDIATE,
+        option: KorailReserveOption | None = None,
     ) -> ReservationHoldResponse:
-        """실제 미결제 홀드를 만듭니다. 결제 또는 취소는 호출자 책임입니다."""
-        return self._client.reserve(train, passengers=passengers, seat_class=seat_class, job_type=job_type)
+        """실제 미결제 홀드를 만듭니다. 결제 또는 취소는 호출자 책임입니다.
+
+        기본 객실은 일반실입니다. ``option``은 즉시 예약에서 조회 결과를 기준으로
+        객실을 선택하며 ``seat_class``와 함께 지정할 수 없습니다. 자동 예약대기나
+        실패 후 다른 객실 재시도는 하지 않습니다."""
+        if option is not None:
+            if not isinstance(option, KorailReserveOption):
+                raise TypeError("option must be KorailReserveOption")
+            if seat_class is not None or job_type is not KorailReservationJobType.IMMEDIATE:
+                raise ValueError("option requires immediate reservation without seat_class")
+            if not isinstance(train, TrainSummary):
+                raise TypeError("train must be TrainSummary")
+            candidates = {
+                KorailReserveOption.GENERAL_FIRST: (KorailSeatClass.GENERAL, KorailSeatClass.SPECIAL),
+                KorailReserveOption.SPECIAL_FIRST: (KorailSeatClass.SPECIAL, KorailSeatClass.GENERAL),
+                KorailReserveOption.GENERAL_ONLY: (KorailSeatClass.GENERAL,),
+                KorailReserveOption.SPECIAL_ONLY: (KorailSeatClass.SPECIAL,),
+            }[option]
+            seat_class = next(
+                (
+                    cabin
+                    for cabin in candidates
+                    if (
+                        train.has_general_seat()
+                        if cabin is KorailSeatClass.GENERAL
+                        else train.has_special_seat()
+                    )
+                ),
+                None,
+            )
+            if seat_class is None:
+                raise KorailProtocolError("KORAIL reservation option requires an evidenced available seat")
+        selected = KorailSeatClass.GENERAL if seat_class is None else seat_class
+        return self._client.reserve(train, passengers=passengers, seat_class=selected, job_type=job_type)
+
+    def find(self, pnr_no: str) -> ReservationHoldResponse:
+        """PNR로 기존 예약을 한 번 조회해 결제용 홀드를 반환합니다."""
+        return self._client.get_reservation_hold(pnr_no)
 
     def detail(self, hold: ReservationHoldResponse | str) -> TicketReservationDetailResponse:
         """이미 생성된 예약을 별도 조회합니다. 생성 직후 자동 재조회하지 않습니다."""

@@ -463,6 +463,31 @@ def test_dynapath_detection_limited_to_fixed_paths(factory):
     assert client.http.post_form(SERVICE).raw == raw
 
 
+@pytest.mark.parametrize("status", [200, 403])
+@pytest.mark.parametrize("code", [-2000, "-2000"])
+def test_explicit_access_restriction_preserves_raw_and_is_not_retried(factory, status, code):
+    raw = {"code": code, "message": "synthetic restriction", "id": "SYNTHETIC-TRACKING-ID"}
+    client, requests = factory([httpx.Response(status, json=raw)])
+    with pytest.raises(E.KorailDynaPathError) as caught:
+        client.http.post_form(LOGIN)
+    assert caught.value.raw == raw and len(requests) == 1
+    assert "SYNTHETIC-TRACKING-ID" not in str(caught.value)
+
+
+@pytest.mark.parametrize("extra", [{"code": "-2000"}, {"other_field": "-2000"}, {"code": "-2001"}])
+def test_string_codes_in_normal_envelopes_are_not_restrictions(factory, extra):
+    raw = envelope(**extra)
+    client, requests = factory([raw])
+    assert client.http.post_form(LOGIN).raw == raw
+    assert len(requests) == 1
+
+
+def test_string_restriction_is_limited_to_protected_paths(factory):
+    raw = envelope(code="-2000")
+    client, requests = factory([raw])
+    assert client.http.post_form(SERVICE).raw == raw and len(requests) == 1
+
+
 @pytest.mark.parametrize(
     "failure", [httpx.ConnectError("synthetic"), httpx.ReadTimeout("synthetic"), httpx.InvalidURL("synthetic")]
 )

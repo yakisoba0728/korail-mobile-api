@@ -63,6 +63,10 @@ def test_search_uses_kst_station_cache_and_nearby_flag() -> None:
         korail.trains.search("서울", "부산", depart_after=moment)
         station = korail.stations.find("0001")
         assert station is not None and station.name == "서울"
+        names = korail.stations.names()
+        assert names == {"서울", "부산"}
+        names.clear()
+        assert korail.stations.names() == {"서울", "부산"}
 
     assert sum(request.url.path.endswith("common.stationdata") for request in calls) == 1
     first_search = parse_qs(calls[1].content.decode())

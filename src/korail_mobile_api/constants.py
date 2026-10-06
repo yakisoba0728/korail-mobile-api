@@ -80,6 +80,15 @@ KORAIL_COMMON_CODE_BOOTSTRAP_CODES = (
 )
 
 
+class KorailReserveOption(StrEnum):
+    """간편 예약에서 가용 객실을 고르는 전략입니다. 요청 실패를 재시도하지 않습니다."""
+
+    GENERAL_FIRST = "GENERAL_FIRST"
+    GENERAL_ONLY = "GENERAL_ONLY"
+    SPECIAL_FIRST = "SPECIAL_FIRST"
+    SPECIAL_ONLY = "SPECIAL_ONLY"
+
+
 class KorailSeatClass(StrEnum):
     """예약할 객실 등급입니다.
 

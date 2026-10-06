@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import copy
 import json
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -121,6 +122,43 @@ def card(**changes: Any) -> CardPayment:
     values = dict(card_number="0000000000000000", card_password="00", card_expire="9912", birthday="000000")
     values.update(changes)
     return CardPayment(**values)
+
+
+@pytest.mark.parametrize("card_type, birthday", [("J", "000101"), ("S", "0000000000")])
+def test_card_representations_hide_fields_without_changing_payment(
+    caplog: pytest.LogCaptureFixture, card_type: str, birthday: str
+) -> None:
+    payment = card(card_type=card_type, birthday=birthday)
+    logging.getLogger(__name__).warning("card=%r", payment)
+    assert repr(payment) == str(payment) == repr(replace(payment)) == "CardPayment()"
+    assert repr([payment]) == "[CardPayment()]"
+    assert caplog.records[-1].getMessage() == "card=CardPayment()"
+    form = payload_module.build_card_payment_form(KorailConfig(), hold(), payment)
+    assert form["hidStlCrCrdNo1"] == payment.card_number
+    assert form["hidVanPwd1"] == payment.card_password
+    assert form["hidCrdVlidTrm1"] == payment.card_expire
+    assert form["hidAthnVal1"] == birthday and form["hidAthnDvCd1"] == card_type
+    assert replace(payment) == payment
+
+
+class _UnrenderableCardField:
+    def __repr__(self) -> str:
+        raise AssertionError("card output must not evaluate malformed field representations")
+
+    def __eq__(self, other: object) -> bool:
+        return other == "J"
+
+
+@pytest.mark.parametrize(
+    "field", ["card_number", "card_password", "card_expire", "birthday", "installment", "card_type"]
+)
+def test_card_repr_does_not_evaluate_unvalidated_fields(field: str) -> None:
+    assert repr(card(**{field: _UnrenderableCardField()})) == "CardPayment()"
+
+
+@pytest.mark.parametrize("field", ["card_number", "card_password", "card_expire", "birthday", "installment"])
+def test_card_repr_hides_malformed_strings_before_validation(field: str) -> None:
+    assert repr(card(**{field: "SYNTHETIC-PRIVATE\nVALUE"})) == "CardPayment()"
 
 
 def ticket() -> PaidTicket:
