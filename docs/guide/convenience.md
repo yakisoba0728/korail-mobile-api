@@ -2,6 +2,9 @@
 
 [`Korail`][korail_mobile_api.facade.Korail]은 기존 `KorailClient` 위에 자주 쓰는 작업을 묶은 선택형 진입점입니다. 전체 API나 세부 요청 옵션은 `korail.client`에서 그대로 사용합니다.
 
+!!! note "개발 버전의 추가 기능"
+    검색 필터, 좌석 상태·소요 시간·요약 헬퍼, `KorailReserveOption`, `stations.names()`, `reservations.find()`와 청소년 예약 사전 거절은 Unreleased 기능입니다. `v2.4.0`에는 포함되지 않으므로 [개발 버전 설치](../getting-started.md#development-version)가 필요합니다.
+
 ## 로그인 없이 열차 찾기
 
 ```python
@@ -31,15 +34,34 @@ with Korail() as korail:
 기본 검색은 이전처럼 매진 열차까지 모두 반환합니다(`include_no_seats=True`). `include_no_seats=False`를 넘기면 일반실 또는 특실 예약 코드가 `"11"`인 열차만 남깁니다. 여기에 `include_waiting_list=True`를 지정하면 일반실 예약대기 플래그가 `" 9"`인 열차도 포함합니다. 없는 값이나 모르는 상태 코드를 가용으로 추측하지 않습니다.
 
 ```python
-result = korail.trains.search(
-    "서울",
-    "부산",
-    include_no_seats=False,
-    include_waiting_list=True,
-)
-for train in result.trains:
-    print(train.summary())
-    print(train.has_general_seat(), train.has_special_seat(), train.has_waiting_list())
+from datetime import datetime, timedelta, timezone
+
+from korail_mobile_api import Korail
+
+depart_after = datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)
+with Korail() as korail:
+    result = korail.trains.search(
+        "서울",
+        "부산",
+        depart_after=depart_after,
+        include_no_seats=False,
+        include_waiting_list=True,
+    )
+    for train in result.trains:
+        print(train.summary())
+        print(train.has_general_seat(), train.has_special_seat(), train.has_waiting_list())
+    continuation = result.next_page()
+    if continuation is not None:
+        more = korail.trains.search(
+            "서울",
+            "부산",
+            depart_after=depart_after,
+            continuation=continuation,
+            include_no_seats=False,
+            include_waiting_list=True,
+        )
+        for train in more.trains:
+            print(train.summary())
 ```
 
 필터는 받은 한 페이지에만 적용합니다. `result.raw`, `result.response`, `result.metadata`는 서버 원본을 유지하고, 필터 전 열차 목록은 `result.unfiltered_trains`에 있습니다. 필터를 쓰지 않았으면 이 필드는 `None`입니다. `metadata.result_count`는 필터 전 서버의 값이며 표시할 열차 수는 `len(result.trains)`로 확인하세요.
@@ -64,6 +86,9 @@ with Korail.logged_in(input("회원번호·전화번호·이메일: "), getpass(
 `logged_in`은 로그인에 실패하면 연결을 닫고 원래 오류를 발생시킵니다. `with`가 끝나면 HTTP 연결을 닫지만 서버 로그아웃을 자동 요청하지는 않습니다. 로그아웃이 필요하면 예제처럼 명시적으로 호출하세요.
 
 ## 예약과 결제 전 확인
+
+아래 예약 예제는 위 로그인 예제의 `with` 블록 안에서 `korail.logout()` 전에 실행합니다.
+`train`은 그 블록에서 조회해 고른 열차이고, `card`는 준비한 `CardPayment`입니다.
 
 `korail.reservations.create(train)`은 실제 미결제 홀드를 만듭니다. 예약 상세가 필요하면 `korail.reservations.detail(hold)`을 별도로 호출하세요. 예약 성공 직후 자동 상세 조회는 하지 않습니다. `korail.reservations.cancel(hold)`은 실제 취소이고, `korail.reservations.pay(hold, card)`는 실제 카드 청구입니다. `korail.tickets.refund_fee(ticket)`는 수수료 조회이며, `korail.tickets.refund(ticket, commission=fee)`는 실제 환불입니다. 각 메서드는 기존 클라이언트의 입력 검증과 응답 모델을 그대로 사용합니다. 자세한 주의사항은 [예약](reservations.md)과 [결제·환불](payments.md)에 있습니다.
 

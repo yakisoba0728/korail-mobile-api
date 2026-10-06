@@ -10,6 +10,7 @@ from typing import Any, Literal, TypeVar, overload
 
 import httpx
 
+from ._cleanup import _close_connections
 from .config import KorailConfig
 from .constants import KorailLoginInputFlag, KorailReservationJobType, KorailRoomClassCode, KorailSeatClass
 from .errors import (
@@ -330,8 +331,8 @@ class KorailClient:
                 if self.config.netfunnel_enabled
                 else None
             )
-        except BaseException:
-            self.http.close()
+        except BaseException as error:
+            _close_connections(self.http.close, primary=error)
             raise
         self.session = KorailSessionClient(self.http)
         self._station_names: dict[str, str] | None = None
@@ -339,12 +340,10 @@ class KorailClient:
     def close(self) -> None:
         """HTTP·대기열 연결 풀을 닫습니다.
 
-        연결 풀만 닫으므로 로그인 폐기는 logout 또는 clear_session으로 별도 수행합니다."""
-        try:
-            self.http.close()
-        finally:
-            if self.netfunnel is not None:
-                self.netfunnel.close()
+        연결 풀만 닫으므로 로그인 폐기는 logout 또는 clear_session으로 별도 수행합니다.
+        두 연결의 정리를 모두 시도하며 실패하면 첫 오류를 발생시키고 후속 실패는 예외 note에 남깁니다."""
+        closers = (self.http.close,) if self.netfunnel is None else (self.http.close, self.netfunnel.close)
+        _close_connections(*closers)
 
     def login(
         self,

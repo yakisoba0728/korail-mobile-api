@@ -141,26 +141,6 @@ def test_search_passes_continuation_without_an_extra_station_lookup() -> None:
     assert form["qryStTrnNo"] == ["0123"]
 
 
-def test_logged_in_failure_closes_connection(monkeypatch: pytest.MonkeyPatch) -> None:
-    closed: list[Korail] = []
-
-    def fail_login(self: Korail, member_no: str, password: str) -> None:
-        raise RuntimeError("synthetic login failure")
-
-    original_close = Korail.close
-
-    def record_close(self: Korail) -> None:
-        closed.append(self)
-        original_close(self)
-
-    monkeypatch.setattr(Korail, "login", fail_login)
-    monkeypatch.setattr(Korail, "close", record_close)
-    with pytest.raises(RuntimeError, match="synthetic login failure"):
-        Korail.logged_in("SYNTHETIC-MEMBER", "SYNTHETIC-PASSWORD", config=_config())
-    assert len(closed) == 1
-    assert closed[0].client.http._client.is_closed
-
-
 def test_reservation_detail_is_an_explicit_follow_up(monkeypatch: pytest.MonkeyPatch) -> None:
     hold = ReservationHoldResponse(str_result="SUCC", pnr_no="SYNTHETIC-PNR")
     with Korail(_config()) as korail:

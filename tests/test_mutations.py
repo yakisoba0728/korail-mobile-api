@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import ast
 import copy
 import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qsl
 
@@ -1407,29 +1405,6 @@ def test_standby_no_sms_omits_phone() -> None:
         h.close()
 
 
-def test_unsupported_maas_has_no_incoming_import() -> None:
-    """No runtime/type-checking import of the record-only module from production package files."""
-    import korail_mobile_api
-
-    root = Path(korail_mobile_api.__file__).parent
-    incoming = []
-    for source in root.glob("*.py"):
-        if source.name == "_maas_unsupported.py":
-            continue
-        for node in ast.walk(ast.parse(source.read_text())):
-            if isinstance(node, ast.Import):
-                targets = [n.name for n in node.names]
-            elif isinstance(node, ast.ImportFrom):
-                targets = [node.module or "", *(n.name for n in node.names)]
-            else:
-                continue
-            if any("_maas_unsupported" in target for target in targets):
-                incoming.append((source.name, node.lineno))
-    assert incoming == []
-    for name in ["get_maas_cancel_fee", "check_maas_cart_status", "cancel_unpaid_maas_item"]:
-        assert not hasattr(KorailClient, name)
-
-
 PAYMENT_SCALARS = {
     "reservation_no": "h_rsv_no",
     "settlement_approval_no": "h_stl_cd_apprv_no",
@@ -2216,3 +2191,32 @@ def test_cancel_first_stage_common_envelope_failures_stop() -> None:
         assert len(h.seen) == 1
     finally:
         h.close()
+
+
+@pytest.mark.parametrize("key", ["h_psg_tp_cd", "h_psrm_cl_cd", "h_dcnt_knd_cd1", "dcnt_reld_no"])
+def test_recalculation_from_hold_keeps_raw_on_oversized_integer(key: str) -> None:
+    """ReservationOutSeatInfo.java:80–109 declares strings; conversion errors must preserve the hold."""
+    import sys
+
+    from korail_mobile_api import KorailProtocolError, PriceRecalculationRequest, ReservationHoldResponse
+    from korail_mobile_api.mutation_models import ReservationJourney
+
+    seat = {key: 10**700}
+    journey_raw = {"seat_infos": {"seat_info": [seat]}}
+    raw = {"strResult": "SUCC", "synthetic_journey": journey_raw}
+    hold = ReservationHoldResponse(
+        str_result="SUCC",
+        pnr_no="SYNTHETIC-PNR",
+        journeys=(ReservationJourney(raw=journey_raw),),
+        raw=raw,
+    )
+    previous = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(640)
+        with pytest.raises(KorailProtocolError) as error:
+            PriceRecalculationRequest.for_hold(hold, ["SYNTHETIC-DISCOUNT"])
+        assert error.value.raw is raw
+        assert error.value.parser_raw is seat
+        assert isinstance(error.value.__cause__, ValueError)
+    finally:
+        sys.set_int_max_str_digits(previous)

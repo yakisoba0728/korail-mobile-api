@@ -153,11 +153,15 @@ KorailClient.get_pass_schedule(request: PassScheduleRequest) -> PassScheduleResp
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import PassScheduleRequest
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 request = PassScheduleRequest(
     selected_train_code="109",
-    departure_date="20261002",
+    departure_date=departure_date,
     departure_time="090000",
     transfer_type_code="1",
     pass_kind_code=pass_data.commuter_kind_code,
@@ -403,13 +407,17 @@ KorailClient.get_discount_card_schedule(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import DiscountCardScheduleRequest
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 request = DiscountCardScheduleRequest.for_card(
     input("N카드 상품 관리번호: "),
     departure_station_name="서울",
     arrival_station_name="부산",
-    departure_date="20261002",
+    departure_date=departure_date,
     usable_trip_count=input("남은 사용 횟수: "),
 )
 result = client.get_discount_card_schedule(request)
@@ -467,7 +475,11 @@ KorailClient.register_discount_card(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import DiscountCardPurchaseRequest, DiscountCardSectionRequest
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 # session은 client.login()이 반환한 KorailSession, train은 search_trains() 결과의 열차입니다.
 section = DiscountCardSectionRequest(
@@ -476,7 +488,7 @@ section = DiscountCardSectionRequest(
 request = DiscountCardPurchaseRequest(
     card_kind_management_no=input("N카드 상품 관리번호: "),
     customer_no=session.customer_no,
-    validity_start_date="20261002",  # 서버가 받는 형식은 확인하지 못했습니다
+    validity_start_date=departure_date,  # 서버가 받는 형식은 확인하지 못했습니다
     usable_trip_count=input("사용 가능 횟수: "),
     sections=(section,),
 )
@@ -593,12 +605,16 @@ KorailClient.reserve_with_discount_card(
 **예제**
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 query = TrainSearchQuery(
     departure_station_code="서울",
     arrival_station_code="부산",
-    departure_date="20261002",
+    departure_date=departure_date,
     departure_time="090000",
 )
 result = client.search_trains(query)

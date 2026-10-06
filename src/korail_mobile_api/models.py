@@ -846,7 +846,7 @@ class TrainSearchResult:
 
 @dataclass(frozen=True)
 class TransferItinerary:
-    """탑승 순서가 있는 두 구간의 환승 여정을 담습니다.
+    """응답에서 묶인 두 구간의 환승 여정을 담습니다.
 
     환승 조회 결과에서 ``train_sequence``(``h_trn_seq``)가 같은 두 행을 응답에 나온 순서대로 묶은 것입니다. 구간 순서를
     나타내는 ``change_train_sequence``(``h_chg_trn_seq``)와는 다른 값입니다."""
@@ -859,7 +859,7 @@ class TransferItinerary:
 
     @property
     def legs(self) -> tuple[TrainSummary, ...]:
-        """두 열차 구간을 탑승 순서대로 반환합니다."""
+        """두 열차 구간을 응답에서 묶인 원래 순서대로 반환합니다."""
         return (self.first, self.second)
 
     @property

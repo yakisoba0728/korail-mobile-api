@@ -11,6 +11,7 @@ from ._payload_helpers import _device_version, _device_version_key, _is_ascii_di
 from .config import KorailConfig
 from .constants import (
     KORAIL_DIRECT_ITINERARY_CODE,
+    KORAIL_MAX_PASSENGERS_PER_RESERVATION,
     KORAIL_TRANSFER_ITINERARY_CODE,
     KorailRoomClassCode,
 )
@@ -39,8 +40,10 @@ def validate_seat_inventory_inputs(
     """행의 열차·역·날짜 식별자는 재검사하지 않으므로 임의 생성한 행의 유효성은 보장하지 않습니다."""
     if not isinstance(train, TrainSummary):
         raise KorailProtocolError("train must be a TrainSummary")
-    if type(passenger_count) is not int or not 1 <= passenger_count <= 9:
-        raise KorailProtocolError("passenger_count must be an integer from 1 through 9")
+    if type(passenger_count) is not int or not 1 <= passenger_count <= KORAIL_MAX_PASSENGERS_PER_RESERVATION:
+        raise KorailProtocolError(
+            f"passenger_count must be an integer from 1 through {KORAIL_MAX_PASSENGERS_PER_RESERVATION}"
+        )
     if car_no is not None and (type(car_no) is not int or car_no < 1):
         raise KorailProtocolError("car_no must be a positive integer")
     if train.goods_no:

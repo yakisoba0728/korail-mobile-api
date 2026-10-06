@@ -6,12 +6,14 @@
 
 from __future__ import annotations
 
+import math
+import re
 from collections.abc import Callable, Mapping
 from functools import wraps
 from typing import Any, ParamSpec, TypedDict, TypeVar
 
 from .errors import KorailApiError, KorailProtocolError
-from .models import ReservationPassengerInfo
+from .models import BaseKorailResponse, ReservationPassengerInfo
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
@@ -77,6 +79,15 @@ def _response_fields(raw: Mapping[str, object]) -> _ResponseFields:
         "h_msg_txt": envelope["h_msg_txt"],
         "str_result": envelope["strResult"],
         "raw": raw,
+    }
+
+
+def _model_response_fields(response: BaseKorailResponse) -> _ResponseFields:
+    return {
+        "h_msg_cd": response.h_msg_cd,
+        "h_msg_txt": response.h_msg_txt,
+        "str_result": response.str_result,
+        "raw": response.raw,
     }
 
 
@@ -203,6 +214,30 @@ def _optional_bool(
     """불리언을 그대로 반환하고 누락·다른 타입은 None으로 처리합니다."""
     value = data.get(key)
     return value if isinstance(value, bool) else None
+
+
+def _inventory_ratio(data: Mapping[str, Any], key: str) -> float | None:
+    """창측 비율(String 선언, TResidualSeatsResearchOutWindow.java:51-56)을 읽습니다. 누락과 앱 기본값 "" 은 None 입니다."""
+    value = data.get(key, "")
+    if value == "":
+        return None
+    number: int | float | str
+    # bool 을 숫자로 받지 않도록 정확한 int·float 타입만 허용합니다.
+    if type(value) in (int, float):
+        number = value
+    elif isinstance(value, str) and re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", value) is not None:
+        number = value
+    else:
+        raise KorailProtocolError(
+            f"KORAIL seat inventory field {key} must be numeric or an ASCII decimal string"
+        )
+    try:
+        ratio = float(number)
+    except (OverflowError, ValueError) as exc:
+        raise KorailProtocolError(f"KORAIL seat inventory field {key} must be finite") from exc
+    if not math.isfinite(ratio):
+        raise KorailProtocolError(f"KORAIL seat inventory field {key} must be finite")
+    return ratio
 
 
 def _nullable_scalar_fields(

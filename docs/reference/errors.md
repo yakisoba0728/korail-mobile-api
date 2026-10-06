@@ -2,6 +2,9 @@
 
 라이브러리가 발생시키는 예외입니다. 모두 `KorailApiError`를 상속합니다.
 
+`display_message`, 메시지 사전 조회와 계정 잠금·요청 제한·처리 중·기처리 예외는 Unreleased 기능입니다.
+`v2.4.0`에 포함되지 않으므로 [개발 버전 설치](../getting-started.md#development-version)가 필요합니다.
+
 ::: korail_mobile_api.errors.KorailApiError
 
 ::: korail_mobile_api.errors.KorailTransportError

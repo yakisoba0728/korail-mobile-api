@@ -10,10 +10,14 @@ from collections.abc import Mapping
 from typing import Any
 
 from ._parsing import (
+    _inventory_ratio,
     _nullable_scalar_fields,
     _optional_scalar_string,
     _preserve_read_raw,
     _row,
+)
+from ._parsing import (
+    _model_response_fields as _response_fields,
 )
 from .errors import KorailProtocolError
 from .limousine_models import (
@@ -23,10 +27,6 @@ from .limousine_models import (
     LimousineSeatInventoryResponse,
 )
 from .models import BaseKorailResponse, SeatWindow
-from .parsers import (
-    _inventory_ratio,
-    _response_fields,
-)
 
 
 def _required_list(

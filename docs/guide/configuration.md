@@ -165,14 +165,18 @@ config = dataclasses.replace(build_config_from_env(), disable_dynapath=True, dyn
 다음 대기를 시작하기 전에 대기 후 시각이 상한을 넘을지 확인하고, 통과한 직후에도 한 번 더 확인합니다. API 요청과 입장 키 반납에 걸린 시간은 포함하지 않습니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailClient, KorailConfig, KorailNetFunnelError, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 client = KorailClient(KorailConfig(netfunnel_wait_limit=120.0))
 try:
     query = TrainSearchQuery(
         departure_station_code="서울",
         arrival_station_code="부산",
-        departure_date="20261002",
+        departure_date=departure_date,
         departure_time="090000",
         passengers=1,
     )

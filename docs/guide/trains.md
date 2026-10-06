@@ -10,14 +10,18 @@
 필수 필드는 출발역, 도착역, 출발일 세 개이고 나머지는 기본값이 있습니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailClient, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 client = KorailClient()
 try:
     query = TrainSearchQuery(
         departure_station_code="서울",
         arrival_station_code="부산",
-        departure_date="20261002",
+        departure_date=departure_date,
         departure_time="090000",
         passengers=2,
         child_passengers=1,
@@ -48,6 +52,7 @@ finally:
 
 청소년 인원은 검색 호환용입니다. 일반 운임 예약에는 `adult` 인원으로 지정해야 하며,
 열차 예약에서 `KorailPassengerCounts.teenager > 0`은 요청 전에 거절합니다.
+이 사전 거절은 Unreleased 정책으로 [개발 버전](../getting-started.md#development-version)에 적용됩니다.
 청소년드림 할인 상품과의 차이는 [예약 승객 구성](reservations.md#passengers)에 설명했습니다.
 
 ### 역 이름과 역 코드 {#stations}
@@ -103,11 +108,15 @@ finally:
 `next_page()`는 목록이 비었거나, 다음 페이지 표시가 없거나, 필요한 값이 빠졌으면 `None`입니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailClient, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 client = KorailClient()
 try:
-    query = TrainSearchQuery("서울", "부산", "20261002", "060000")
+    query = TrainSearchQuery("서울", "부산", departure_date, "060000")
     result = client.search_trains(query)
     trains = list(result.trains)
     for _ in range(4):  # 최대 네 페이지 더
@@ -133,11 +142,15 @@ finally:
 결과의 `itineraries`에 두 구간을 묶은 [`TransferItinerary`][korail_mobile_api.models.TransferItinerary]가 들어 있습니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailClient, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 client = KorailClient()
 try:
-    query = TrainSearchQuery("강릉", "목포", "20261002", "080000")
+    query = TrainSearchQuery("강릉", "목포", departure_date, "080000")
     result = client.search_transfer_trains(query)
     for itinerary in result.itineraries:
         first, second = itinerary.legs
@@ -166,11 +179,15 @@ finally:
 직통 결과가 빈 목록이거나 다른 오류가 난 경우에는 환승 조회로 넘어가지 않습니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailClient, TrainSearchQuery, TransferSearchResult
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 client = KorailClient()
 try:
-    query = TrainSearchQuery("강릉", "목포", "20261002", "080000")
+    query = TrainSearchQuery("강릉", "목포", departure_date, "080000")
     result = client.search_trains_with_transfer_fallback(query)
     if isinstance(result, TransferSearchResult):
         print("직통 없음, 환승 여정", len(result.itineraries), "개")
@@ -208,14 +225,18 @@ finally:
 실서버에서는 호차 목록 없이 좌석 배치를 바로 조회하면 인증 정보 오류가 돌아올 수 있었습니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from getpass import getpass
 
 from korail_mobile_api import KorailClient, KorailSeatAssignment, KorailSeatClass, TrainSearchQuery
 
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
+
 client = KorailClient()
 try:
     client.login(input("회원번호·전화번호·이메일: "), getpass("비밀번호: "))
-    train = client.search_trains(TrainSearchQuery("서울", "부산", "20261002", "090000")).trains[0]
+    train = client.search_trains(TrainSearchQuery("서울", "부산", departure_date, "090000")).trains[0]
 
     cars = client.get_seat_cars(train, room_class_code=KorailSeatClass.GENERAL)
     for car in cars.cars:
@@ -262,7 +283,11 @@ finally:
 조회 결과 행의 값을 [`PriceFareLeg`][korail_mobile_api.read_payloads.PriceFareLeg]로 옮기는 함수를 두면 직통과 환승에 같이 쓸 수 있습니다.
 
 ```python
+from datetime import datetime, timedelta, timezone
+
 from korail_mobile_api import KorailClient, PriceFareLeg, PriceFareQuoteRequest, TrainSearchQuery
+
+departure_date = (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=1)).strftime("%Y%m%d")
 
 
 def fare_leg(train):
@@ -279,7 +304,7 @@ def fare_leg(train):
 
 client = KorailClient()
 try:
-    query = TrainSearchQuery("강릉", "목포", "20261002", "080000")
+    query = TrainSearchQuery("강릉", "목포", departure_date, "080000")
     itinerary = client.search_transfer_trains(query).itineraries[0]
     request = PriceFareQuoteRequest(legs=tuple(fare_leg(train) for train in itinerary.legs))
     for fare in client.get_price_fare_quote(request).fares:
