@@ -6,9 +6,24 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from typing import Self
 
+from .constants import KORAIL_STANDBY_WAIT_FLAG
+from .error_messages import resolve_error_message
 from .errors import KorailProtocolError
+
+
+def _train_datetime(date: str | None, time: str | None) -> datetime | None:
+    if not date or not time or len(date) != 8 or len(time) != 6:
+        return None
+    value = date + time
+    if not value.isascii() or not value.isdecimal():
+        return None
+    try:
+        return datetime.strptime(value, "%Y%m%d%H%M%S")
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -38,6 +53,11 @@ class BaseKorailResponse:
     h_msg_txt: str | None = None
     str_result: str | None = None
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+
+    @property
+    def display_message(self) -> str | None:
+        """읽을 서버 메시지 또는 앱 사전의 한국어 안내입니다. 성공·실패와 원문 필드는 바꾸지 않습니다."""
+        return resolve_error_message(self.h_msg_cd, self.h_msg_txt)
 
     @classmethod
     def from_raw(cls, raw: object) -> Self:
@@ -516,6 +536,59 @@ class TrainSummary:
     free_availability_name: str | None = None
     arrival_date: str | None = None
 
+    def has_general_seat(self) -> bool:
+        """일반실 예약 코드가 가용 값 ``"11"``인지 확인합니다."""
+        return self.general_reservation_code == "11"
+
+    def has_special_seat(self) -> bool:
+        """특실 예약 코드가 가용 값 ``"11"``인지 확인합니다."""
+        return self.special_reservation_code == "11"
+
+    def has_seat(self) -> bool:
+        """일반실 또는 특실에 가용 좌석이 있는지 확인합니다."""
+        return self.has_general_seat() or self.has_special_seat()
+
+    def has_waiting_list(self) -> bool:
+        """일반실 예약대기 플래그가 가능 값 ``" 9"``인지 확인합니다."""
+        return self.wait_reservation_flag == KORAIL_STANDBY_WAIT_FLAG
+
+    @property
+    def duration_minutes(self) -> int | None:
+        """실제 출발·도착 날짜와 시각으로 소요 시간을 계산합니다.
+
+        날짜·시각이 없거나 잘못됐거나 도착이 출발보다 빠르면 ``None``입니다.
+        도착 날짜를 추측하지 않습니다."""
+        departure = _train_datetime(self.departure_date, self.departure_time)
+        arrival = _train_datetime(self.arrival_date, self.arrival_time)
+        if departure is None or arrival is None or arrival < departure:
+            return None
+        return int((arrival - departure).total_seconds() // 60)
+
+    @property
+    def duration_text(self) -> str | None:
+        """소요 시간을 ``"3시간 30분"`` 형태로 표시합니다."""
+        minutes = self.duration_minutes
+        if minutes is None:
+            return None
+        hours, remainder = divmod(minutes, 60)
+        if hours == 0:
+            return f"{remainder}분"
+        return f"{hours}시간" + (f" {remainder}분" if remainder else "")
+
+    def summary(self) -> str:
+        """열차, 출발·도착 일정, 역과 소요 시간을 한 줄로 표시합니다."""
+        departure = _train_datetime(self.departure_date, self.departure_time)
+        arrival = _train_datetime(self.arrival_date, self.arrival_time)
+        departure_text = departure.strftime("%Y-%m-%d %H:%M") if departure is not None else "?"
+        arrival_text = arrival.strftime("%Y-%m-%d %H:%M") if arrival is not None else "?"
+        departure_name = self.departure_station_name or self.departure_station_code or "?"
+        arrival_name = self.arrival_station_name or self.arrival_station_code or "?"
+        kind = self.train_class_name or self.train_group_name or self.train_class_code or "열차"
+        duration = self.duration_text
+        return f"[{kind} {self.train_no}] {departure_text}~{arrival_text} {departure_name}~{arrival_name}" + (
+            f" ({duration})" if duration is not None else ""
+        )
+
     @classmethod
     def from_raw(cls, raw: Mapping[str, object]) -> Self:
         """검색 응답의 행 하나를 ``TrainSummary``로 만듭니다.
@@ -735,16 +808,19 @@ class TrainSearchResult:
     response: BaseKorailResponse
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
     metadata: TrainSearchMetadata = field(default_factory=TrainSearchMetadata)
+    #: 간편 검색 필터를 적용하기 전의 열차 목록입니다. 필터를 쓰지 않았으면 ``None``입니다.
+    unfiltered_trains: list[TrainSummary] | None = field(default=None, repr=False, compare=False)
 
     def next_page(self) -> TrainSearchContinuation | None:
         """다음 조회에 넘길 ``TrainSearchContinuation``을 반환합니다.
 
         ``next_page_flag``가 ``"Y"``이고 필수 커서가 모두 있을 때만 값을 돌려줍니다. ``trains``가 비었거나 커서가 없으면
-        ``None``입니다."""
+        ``None``입니다. 간편 검색 필터를 사용했다면 필터 전 목록을 기준으로 판정합니다."""
         # 관측: 직통 6질의는 커서가 없어 None 이었습니다. 수동 커서 조합도 같은 10행을 반환한 기록이 있지만 모든 조건에서
         # 페이지가 없다고 일반화할 수는 없습니다.
         # 앱은 결과 목록이 비어 있으면 다음 페이지를 부르지 않습니다(TrainScheduleViewModel.smali:36786-36804).
-        if not self.trains:
+        trains = self.unfiltered_trains if self.unfiltered_trains is not None else self.trains
+        if not trains:
             return None
         metadata = self.metadata
         return _train_search_continuation(metadata, query_train_no=metadata.next_train_no or "")
@@ -755,10 +831,12 @@ class TrainSearchResult:
     ) -> TrainSearchQuery | None:
         """``query``의 출발 날짜·시각을 마지막 열차의 출발 날짜·시각으로 바꾼 조회 조건을 만듭니다.
 
-        요청은 보내지 않습니다. ``trains``가 비었거나 마지막 열차에 출발 날짜·시각이 없으면 ``None``입니다."""
-        if not self.trains:
+        요청은 보내지 않습니다. 필터 전 목록의 마지막 열차를 사용하며,
+        목록이 비었거나 마지막 열차에 출발 날짜·시각이 없으면 ``None``입니다."""
+        trains = self.unfiltered_trains if self.unfiltered_trains is not None else self.trains
+        if not trains:
             return None
-        last = self.trains[-1]
+        last = trains[-1]
         date = last.departure_date
         time = last.departure_time
         if not date or not time:

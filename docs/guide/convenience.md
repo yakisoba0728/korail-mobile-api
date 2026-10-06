@@ -26,6 +26,28 @@ with Korail() as korail:
 
 `include_nearby_stations=True`는 인접역 일정 표시 필드 `adjStnScdlOfrFlg=Y`를 보냅니다. 기본값은 이전과 같은 `N`입니다. 2026-09-28 실서버에서 두 값 모두 검색 성공 응답을 받았지만, 결과에 미치는 효과는 확인하지 못했습니다.
 
+### 좌석 상태로 결과 고르기
+
+기본 검색은 이전처럼 매진 열차까지 모두 반환합니다(`include_no_seats=True`). `include_no_seats=False`를 넘기면 일반실 또는 특실 예약 코드가 `"11"`인 열차만 남깁니다. 여기에 `include_waiting_list=True`를 지정하면 일반실 예약대기 플래그가 `" 9"`인 열차도 포함합니다. 없는 값이나 모르는 상태 코드를 가용으로 추측하지 않습니다.
+
+```python
+result = korail.trains.search(
+    "서울",
+    "부산",
+    include_no_seats=False,
+    include_waiting_list=True,
+)
+for train in result.trains:
+    print(train.summary())
+    print(train.has_general_seat(), train.has_special_seat(), train.has_waiting_list())
+```
+
+필터는 받은 한 페이지에만 적용합니다. `result.raw`, `result.response`, `result.metadata`는 서버 원본을 유지하고, 필터 전 열차 목록은 `result.unfiltered_trains`에 있습니다. 필터를 쓰지 않았으면 이 필드는 `None`입니다. `metadata.result_count`는 필터 전 서버의 값이며 표시할 열차 수는 `len(result.trains)`로 확인하세요.
+
+필터 후 목록이 비어도 `next_page()`와 `next_query_from_last_departure(query)`는 필터 전 목록을 사용합니다. 따라서 뒤쪽 페이지를 놓치거나 마지막 표시 열차부터 다시 조회하지 않습니다. 다음 페이지를 검색할 때는 같은 필터 옵션을 다시 넘기세요. 필터 때문에 후속 요청을 자동으로 보내지는 않습니다.
+
+`TrainSummary.duration_minutes`와 `duration_text`는 실제 출발·도착 날짜를 함께 계산해 자정이나 하루를 넘는 운행도 처리합니다. 날짜·시각이 없거나 잘못됐거나 도착이 출발보다 빠르면 `None`입니다. `summary()`는 원문 `raw`를 출력하지 않습니다. 역 이름 집합은 `korail.stations.names()`로 얻을 수 있습니다.
+
 ## 로그인과 승차권
 
 ```python
@@ -45,11 +67,36 @@ with Korail.logged_in(input("회원번호·전화번호·이메일: "), getpass(
 
 `korail.reservations.create(train)`은 실제 미결제 홀드를 만듭니다. 예약 상세가 필요하면 `korail.reservations.detail(hold)`을 별도로 호출하세요. 예약 성공 직후 자동 상세 조회는 하지 않습니다. `korail.reservations.cancel(hold)`은 실제 취소이고, `korail.reservations.pay(hold, card)`는 실제 카드 청구입니다. `korail.tickets.refund_fee(ticket)`는 수수료 조회이며, `korail.tickets.refund(ticket, commission=fee)`는 실제 환불입니다. 각 메서드는 기존 클라이언트의 입력 검증과 응답 모델을 그대로 사용합니다. 자세한 주의사항은 [예약](reservations.md)과 [결제·환불](payments.md)에 있습니다.
 
-앱이나 다른 도구에서 만든 예약은 로그인한 `korail`의 클라이언트로 가져올 수 있습니다(2.3.0 이상).
+### 일반실·특실 우선 선택
+
+승객 구성은 [예약 승객 구성](reservations.md#passengers)과 같은 검증을 적용합니다.
+`passengers.teenager > 0`이면 `reservations.create()`도 대기열·예약 요청 전에 `KorailProtocolError`로 거절합니다.
+
+기본 예약은 일반실이고, `seat_class=KorailSeatClass.SPECIAL`로 특실을 직접 지정할 수 있습니다. 즉시 예약에서는 `option`으로 가용 객실을 고를 수도 있습니다.
+
+```python
+from korail_mobile_api import KorailReserveOption
+
+hold = korail.reservations.create(
+    train,
+    option=KorailReserveOption.GENERAL_FIRST,
+)
+```
+
+| 옵션 | 선택 순서 |
+| --- | --- |
+| `GENERAL_FIRST` | 일반실, 없으면 특실 |
+| `SPECIAL_FIRST` | 특실, 없으면 일반실 |
+| `GENERAL_ONLY` | 일반실만 |
+| `SPECIAL_ONLY` | 특실만 |
+
+조회 결과의 객실 가용 코드로 요청 전에 선택하며, 허용한 객실에 좌석이 없으면 `KorailProtocolError`가 발생합니다. `option`과 `seat_class`를 함께 지정하거나 즉시 예약 이외의 `job_type`과 함께 지정하면 거절합니다. 예약대기는 기존처럼 `job_type=KorailReservationJobType.STANDBY`로 명시해야 합니다. 실제 요청 후 매진·실패가 발생해도 다른 객실로 재시도하지 않습니다.
+
+앱이나 다른 도구에서 만든 예약은 `korail.reservations.find(pnr)`로 가져올 수 있습니다. 기존 `korail.client.get_reservation_hold(pnr)`와 같은 검증을 거치며 직접 상세 조회를 한 번 실행합니다. 조회 실패나 결제에 사용할 수 없는 예약은 예외로 전달합니다.
 금액을 확인하고 준비한 `CardPayment`를 넘기면 간편 API에서도 이어서 결제할 수 있습니다.
 
 ```python
-hold = korail.client.get_reservation_hold(input("결제할 예약번호(PNR): ").strip())
+hold = korail.reservations.find(input("결제할 예약번호(PNR): ").strip())
 print(hold.pnr_no, hold.received_amount)
 payment = korail.reservations.pay(hold, card)  # 실제 카드 청구
 print(payment.str_result, payment.h_msg_cd, payment.h_msg_txt)

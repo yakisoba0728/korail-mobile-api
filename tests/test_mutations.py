@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import copy
 import json
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -22,6 +23,7 @@ from korail_mobile_api.constants import KorailReservationJobType as Job
 from korail_mobile_api.constants import KorailSeatClass as Cabin
 from korail_mobile_api.dynapath import DynapathConfig
 from korail_mobile_api.errors import KorailApiError, KorailProtocolError, KorailSessionExpiredError
+from korail_mobile_api.facade import ReservationResource
 from korail_mobile_api.models import KorailSession, TrainSummary
 from korail_mobile_api.mutation_models import (
     CardPayment,
@@ -121,6 +123,43 @@ def card(**changes: Any) -> CardPayment:
     values = dict(card_number="0000000000000000", card_password="00", card_expire="9912", birthday="000000")
     values.update(changes)
     return CardPayment(**values)
+
+
+@pytest.mark.parametrize("card_type, birthday", [("J", "000101"), ("S", "0000000000")])
+def test_card_representations_hide_fields_without_changing_payment(
+    caplog: pytest.LogCaptureFixture, card_type: str, birthday: str
+) -> None:
+    payment = card(card_type=card_type, birthday=birthday)
+    logging.getLogger(__name__).warning("card=%r", payment)
+    assert repr(payment) == str(payment) == repr(replace(payment)) == "CardPayment()"
+    assert repr([payment]) == "[CardPayment()]"
+    assert caplog.records[-1].getMessage() == "card=CardPayment()"
+    form = payload_module.build_card_payment_form(KorailConfig(), hold(), payment)
+    assert form["hidStlCrCrdNo1"] == payment.card_number
+    assert form["hidVanPwd1"] == payment.card_password
+    assert form["hidCrdVlidTrm1"] == payment.card_expire
+    assert form["hidAthnVal1"] == birthday and form["hidAthnDvCd1"] == card_type
+    assert replace(payment) == payment
+
+
+class _UnrenderableCardField:
+    def __repr__(self) -> str:
+        raise AssertionError("card output must not evaluate malformed field representations")
+
+    def __eq__(self, other: object) -> bool:
+        return other == "J"
+
+
+@pytest.mark.parametrize(
+    "field", ["card_number", "card_password", "card_expire", "birthday", "installment", "card_type"]
+)
+def test_card_repr_does_not_evaluate_unvalidated_fields(field: str) -> None:
+    assert repr(card(**{field: _UnrenderableCardField()})) == "CardPayment()"
+
+
+@pytest.mark.parametrize("field", ["card_number", "card_password", "card_expire", "birthday", "installment"])
+def test_card_repr_hides_malformed_strings_before_validation(field: str) -> None:
+    assert repr(card(**{field: "SYNTHETIC-PRIVATE\nVALUE"})) == "CardPayment()"
 
 
 def ticket() -> PaidTicket:
@@ -1184,14 +1223,15 @@ def test_card_decline_is_response_not_success_not_retry() -> None:
 
 
 def test_all_passenger_rows_and_combination_rules() -> None:
-    """Passengers.java:731-766; PassengersBottomSheetKt.java:21124-21185; values not decrypted."""
-    passengers = KorailPassengerCounts(1, 1, 1, 1, 1, 1, 1, 1)
+    """PassengerType.basicList() has seven types; ReqDiscount values confirmed by 7.0.8 literal recovery."""
+    passengers = KorailPassengerCounts(
+        adult=1, child=1, infant=1, senior=1, severe_disability=1, mild_disability=1, guide_dog=1
+    )
     expected = reservation_form()
-    expected["txtTotPsgCnt"] = "8"
+    expected["txtTotPsgCnt"] = "7"
     for i, (type_, discount) in enumerate(
         [
             ("1", "000"),
-            ("1", "P11"),
             ("3", "000"),
             ("3", "321"),
             ("1", "131"),
@@ -1207,6 +1247,85 @@ def test_all_passenger_rows_and_combination_rules() -> None:
         h.client.reserve(train(), passengers=passengers)
     finally:
         h.close()
+
+
+@pytest.mark.parametrize("transfer", [False, True], ids=["direct", "transfer"])
+def test_child_only_reservation_uses_request_discount_and_first_row(transfer: bool) -> None:
+    """ReqDiscount.CHILD is 000; the issued-ticket ResDiscount.CHILD code 201 is not sent here."""
+    expected = reservation_form(transfer=transfer)
+    expected["txtPsgTpCd1"] = "3"
+    h = Harness([hold_raw()], "POST", ("certification.TicketReservation",), expected)
+    try:
+        passengers = KorailPassengerCounts(adult=0, child=1)
+        if transfer:
+            h.client.reserve_transfer([train(), train(True)], passengers=passengers)
+        else:
+            h.client.reserve(train(), passengers=passengers)
+        assert len(h.seen) == 1
+    finally:
+        h.close()
+
+
+@pytest.mark.parametrize(
+    "passengers",
+    [KorailPassengerCounts(adult=0, teenager=1), KorailPassengerCounts(adult=1, teenager=1)],
+    ids=["teenager-only", "adult-and-teenager"],
+)
+@pytest.mark.parametrize("job_type", list(Job))
+@pytest.mark.parametrize("transfer", [False, True], ids=["direct", "transfer"])
+def test_teenager_reservation_rejected_before_queue_or_http(
+    f8_client_factory: Callable[..., KorailClient],
+    passengers: KorailPassengerCounts,
+    job_type: Job,
+    transfer: bool,
+) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        raise AssertionError("unsupported passengers must not contact the queue or reservation server")
+
+    client = f8_client_factory(handler)
+    seats = (
+        tuple(KorailSeatAssignment(1, f"{i + 1}A") for i in range(passengers.total))
+        if job_type is Job.SEAT_DESIGNATED
+        else None
+    )
+    with pytest.raises(KorailProtocolError, match=r"teenager.*P11"):
+        if transfer:
+            client.reserve_transfer(
+                [train(), train(True)],
+                passengers=passengers,
+                job_type=job_type,
+                seats=[seats, seats] if seats is not None else None,
+            )
+        else:
+            client.reserve(train(), passengers=passengers, job_type=job_type, seats=seats)
+    assert not seen
+
+
+@pytest.mark.parametrize("via_facade", [False, True], ids=["merge-follow-up", "facade"])
+@pytest.mark.parametrize(
+    "passengers",
+    [KorailPassengerCounts(adult=0, teenager=1), KorailPassengerCounts(adult=1, teenager=1)],
+    ids=["teenager-only", "adult-and-teenager"],
+)
+def test_teenager_merge_and_facade_reservations_rejected_before_http(
+    f8_client_factory: Callable[..., KorailClient], passengers: KorailPassengerCounts, via_facade: bool
+) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        raise AssertionError("unsupported passengers must not contact the server")
+
+    client = f8_client_factory(handler)
+    with pytest.raises(KorailProtocolError, match=r"teenager.*P11"):
+        if via_facade:
+            ReservationResource(client).create(train(), passengers=passengers)
+        else:
+            client.reserve_merge(train(), merge_rows(), passengers=passengers)
+    assert not seen
 
 
 @pytest.mark.parametrize(

@@ -93,6 +93,10 @@ def _dynapath_block_payload(payload: object) -> dict[str, Any] | None:
     """앱의 키가 보호돼 최상위 정수를 모두 검사하므로 다른 필드의 같은 값도 오인할 수 있습니다(DynaPathInterceptor.java:97-124)."""
     if not isinstance(payload, dict):
         return None
+    # 일반 응답 봉투가 아닌 명시적 이용제한 코드만 문자열 호환을 추가합니다.
+    # 다른 문자열 필드까지 검사하면 정상 데이터의 값도 차단으로 오인할 수 있습니다.
+    if "strResult" not in payload and payload.get("code") == "-2000":
+        return payload
     for value in payload.values():
         if isinstance(value, bool):
             continue

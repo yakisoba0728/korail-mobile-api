@@ -2,7 +2,7 @@
 # Copyright (c) 2026 yakisoba0728
 # SPDX-License-Identifier: Apache-2.0
 
-"""변경 입력 모델의 생성은 전송하지 않으며 raw·repr의 민감값은 자동 마스킹하지 않습니다."""
+"""입력 모델의 생성은 전송하지 않습니다. CardPayment 출력은 숨기며 다른 raw·repr은 마스킹하지 않습니다."""
 
 from __future__ import annotations
 
@@ -168,10 +168,13 @@ class StationRefundExecutionResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class KorailPassengerCounts:
-    """승객 종류별 예약 인원을 구성합니다.
+    """승객 종류별 검색·예약 인원을 구성합니다.
 
     인원이 0인 승객 종류는 요청에 싣지 않습니다. 유아·안내견을 포함한 전체 인원은 1~9명이어야 합니다. 인원에 음수나 정수가
-    아닌 값이 있거나 전체 인원이 이 범위를 벗어나면 ``KorailProtocolError``가 발생합니다."""
+    아닌 값이 있거나 전체 인원이 이 범위를 벗어나면 ``KorailProtocolError``가 발생합니다.
+
+    ``teenager``는 검색 호환용으로 유지하며 검색에서는 어른 수에 합산합니다. 열차 예약 메서드는 이 값이 0보다 크면
+    요청 전에 ``KorailProtocolError``로 거절합니다. 청소년드림 할인 상품을 선택하는 필드가 아닙니다."""
 
     # 근거: Passengers.java:48,610-616,743-753.
 
@@ -489,20 +492,23 @@ class ReservationPaymentResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class CardPayment:
-    """예약 결제에 사용할 카드 정보를 구성합니다."""
+    """예약 결제에 사용할 카드 정보를 구성합니다.
 
-    card_number: str
-    card_password: str
-    card_expire: str
-    birthday: str
+    ``repr()``과 ``str()``은 모든 필드를 숨깁니다. 직접 속성과 명시적 직렬화에는
+    실제 값이 남으며 결제 요청도 실제 값을 사용합니다."""
+
+    card_number: str = field(repr=False)
+    card_password: str = field(repr=False)
+    card_expire: str = field(repr=False)
+    birthday: str = field(repr=False)
     # 앱 INS_0 이름만으로 "0"/"00"을 확정하지 않습니다. enum 값은 보호돼 있습니다(PaymentDefine.java:152-164,185-189,207-210).
     # 기본 선택은 InstallmentViewModel.java:55,94-96, 결제수단 인덱스 접미사는 PaymentMethod.java:672-694와
     # ReservationPaymentInStlInfo.java:33을 따릅니다. 형식 검사는 mutation_payloads.build_card_payment_form 에 있습니다.
     #: 할부 개월 수입니다. 숫자 1~2자리이며 기본값 ``"0"``은 일시불입니다.
-    installment: str = "0"
+    installment: str = field(default="0", repr=False)
     #: 카드 종류입니다. ``"J"``(기본값)는 개인 카드, ``"S"``는 법인 카드입니다. 다른 값이면 ``KorailProtocolError``가
     #: 발생합니다.
-    card_type: Literal["J", "S"] = "J"
+    card_type: Literal["J", "S"] = field(default="J", repr=False)
 
     def __post_init__(self) -> None:
         # 타입 힌트만으로 런타임 결제 입력이 검증되지는 않으므로 직접 검사합니다.

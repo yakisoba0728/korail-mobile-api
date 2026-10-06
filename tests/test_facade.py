@@ -63,6 +63,10 @@ def test_search_uses_kst_station_cache_and_nearby_flag() -> None:
         korail.trains.search("서울", "부산", depart_after=moment)
         station = korail.stations.find("0001")
         assert station is not None and station.name == "서울"
+        names = korail.stations.names()
+        assert names == {"서울", "부산"}
+        names.clear()
+        assert korail.stations.names() == {"서울", "부산"}
 
     assert sum(request.url.path.endswith("common.stationdata") for request in calls) == 1
     first_search = parse_qs(calls[1].content.decode())
@@ -90,6 +94,28 @@ def test_past_date_and_unknown_station_do_not_send_search() -> None:
         with pytest.raises(ValueError, match="역을 찾을 수 없습니다"):
             korail.trains.search("서울", "부산", depart_after=datetime(2099, 1, 1))
     assert len(calls) == 1
+
+
+def test_search_keeps_teenager_count_as_adults() -> None:
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(
+            200, json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "trn_infos": {"trn_info": []}}
+        )
+
+    with Korail(_config(), transport=httpx.MockTransport(handler), validate_stations=False) as korail:
+        korail.trains.search(
+            "서울",
+            "부산",
+            depart_after=datetime(2099, 1, 1),
+            passengers=KorailPassengerCounts(adult=0, teenager=1),
+        )
+    assert len(calls) == 1
+    form = parse_qs(calls[0].content.decode())
+    assert form["txtPsgFlg_1"] == ["1"]
+    assert "P11" not in calls[0].content.decode()
 
 
 def test_search_passes_continuation_without_an_extra_station_lookup() -> None:

@@ -15,6 +15,7 @@ Exception
     ├── KorailProtocolError
     ├── KorailAuthError
     │   ├── KorailSessionExpiredError
+    │   ├── KorailAccountLockedError
     │   └── KorailAuthContinuationRequired
     ├── KorailDynaPathError
     ├── KorailDynaPathRequiredError
@@ -27,6 +28,9 @@ Exception
     │   ├── KorailInvalidRequestError
     │   ├── KorailNotEntitledError
     │   ├── KorailServiceUnavailableError
+    │   ├── KorailRateLimitError
+    │   ├── KorailProcessingError
+    │   ├── KorailAlreadyProcessedError
     │   └── KorailAppUpdateRequiredError
     └── KorailNetFunnelError
         └── KorailQueueRejectedError
@@ -39,6 +43,7 @@ Exception
 | [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `KorailApiError` | 요청 전 입력 검사에 실패했을 때, 응답이 JSON 객체가 아니거나 봉투 필드의 타입이 틀렸을 때, 필수 값이 없어 응답을 읽을 수 없을 때, 닫힌 클라이언트로 요청하려 할 때, DynaPath 토큰 함수가 예외를 발생시켰을 때 |
 | [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | `KorailApiError` | 로그인에 실패했을 때, 로그인이 필요한 메서드를 로그인하지 않고 호출했을 때(요청을 보내지 않음), 고객번호가 필요한 메서드인데 세션에 고객번호가 없을 때 |
 | [`KorailSessionExpiredError`][korail_mobile_api.errors.KorailSessionExpiredError] | `KorailAuthError` | 서버가 결과 코드 `P058`로 세션 만료를 알려 왔을 때. 로컬 세션을 비웁니다. |
+| [`KorailAccountLockedError`][korail_mobile_api.errors.KorailAccountLockedError] | `KorailAuthError` | 로그인 응답이 비밀번호 오류 허용 횟수 초과(`WRC000390`)를 알렸을 때. 로그인을 반복하지 말고 계정 상태를 확인하세요. |
 | [`KorailAuthContinuationRequired`][korail_mobile_api.errors.KorailAuthContinuationRequired] | `KorailAuthError` | 로그인 응답이 휴면 계정 해제나 비밀번호 변경 같은 웹 단계를 요구할 때(`WRC000116`, `WRC000420`) |
 | [`KorailDynaPathError`][korail_mobile_api.errors.KorailDynaPathError] | `KorailApiError` | DynaPath 토큰을 붙이는 경로의 응답에서 차단 코드를 감지했을 때. HTTP 상태와 봉투보다 먼저 판정합니다. |
 | [`KorailDynaPathRequiredError`][korail_mobile_api.errors.KorailDynaPathRequiredError] | `KorailApiError` | DynaPath를 끈 설정으로 로그인 요청을 보내려 할 때(요청을 보내지 않음) |
@@ -47,10 +52,13 @@ Exception
 | [`KorailNoDirectTrainError`][korail_mobile_api.errors.KorailNoDirectTrainError] | `KorailNoResultsError` | 직통 열차가 없을 때 |
 | [`KorailSoldOutError`][korail_mobile_api.errors.KorailSoldOutError] | `KorailAppError` | 매진됐거나 남은 좌석이 없을 때 |
 | [`KorailSeatUnavailableError`][korail_mobile_api.errors.KorailSeatUnavailableError] | `KorailAppError` | 지정한 좌석을 이용할 수 없을 때 |
-| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | `KorailAppError` | 중복 예약, 구매 한도, 예약 가능 시간 등의 이유로 예약을 거절했을 때 |
+| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | `KorailAppError` | 중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인 등의 이유로 예약을 거절했을 때 |
 | [`KorailInvalidRequestError`][korail_mobile_api.errors.KorailInvalidRequestError] | `KorailAppError` | 서버가 입력값 검증에서 거절했을 때 |
 | [`KorailNotEntitledError`][korail_mobile_api.errors.KorailNotEntitledError] | `KorailAppError` | 할인이나 상품을 이용할 자격이 없을 때 |
 | [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError] | `KorailAppError` | 서비스나 연결을 이용할 수 없다는 안내로 응답했을 때. 서버 장애만을 뜻하지는 않습니다. |
+| [`KorailRateLimitError`][korail_mobile_api.errors.KorailRateLimitError] | `KorailAppError` | 요청 횟수 초과·반복 호출 차단 안내(`BT019`, `BT023`). 해제 시각이나 재시도 간격은 알 수 없습니다. |
+| [`KorailProcessingError`][korail_mobile_api.errors.KorailProcessingError] | `KorailAppError` | 요청이 처리 중이거나 이미 완료됐을 수 있다는 안내(`WRT900900`). 예약·승차권 목록을 먼저 확인하세요. |
+| [`KorailAlreadyProcessedError`][korail_mobile_api.errors.KorailAlreadyProcessedError] | `KorailAppError` | 이미 반환된 승차권(`EZZ000014`)·취소된 예약(`EVZ000102`). 현재 요청을 성공으로 바꾸지는 않습니다. |
 | [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError] | `KorailAppError` | 앱 업데이트를 요구하는 응답일 때 |
 | [`KorailNetFunnelError`][korail_mobile_api.errors.KorailNetFunnelError] | `KorailApiError` | 대기열을 통과하지 못했을 때. 이 예외가 나면 API 요청은 보내지 않은 것입니다. |
 | [`KorailQueueRejectedError`][korail_mobile_api.errors.KorailQueueRejectedError] | `KorailNetFunnelError` | 대기열 서버가 요청을 차단했을 때(`301`, `302`) |
@@ -70,6 +78,7 @@ Exception
 |---|---|---|
 | `code` | `str` \| `None` | 서버 결과 코드(`h_msg_cd`)입니다. 대기열 예외에서는 대기열 응답 코드(예: `"301"`)입니다. 서버 응답 없이 난 오류는 `None`입니다. |
 | `message` | `str` \| `None` | 서버 결과 메시지(`h_msg_txt`)입니다. 대기열 예외에서는 라이브러리가 쓴 설명입니다. |
+| `display_message` | `str` \| `None` | 읽을 서버 메시지를 우선하고, 비어 있으면 앱 사전의 한국어 안내를 표시합니다. 태그·스크립트·스타일은 제외하고 줄바꿈 태그는 개행으로 바꿉니다. 원문은 보존합니다. |
 | `raw` | `object` \| `None` | 서버가 보낸 응답 원본입니다. JSON이면 읽은 값(보통 `dict`), JSON이 아니면 `bytes`, 대기열 응답이면 `str`입니다. |
 | `parser_raw` | `object` \| `None` | 응답을 읽다가 멈췄을 때 파서가 보던 부분 원본입니다. 이때 `raw`에는 받은 응답 전체가 들어 있습니다. |
 
@@ -77,9 +86,9 @@ Exception
 
 | 예외 | 채워지는 값 |
 |---|---|
-| `KorailAppError`와 하위 예외, `KorailSessionExpiredError` | `code`, `message`, `raw` |
-| `KorailAuthError`(로그인 실패) | `code`, `raw`. 메시지는 `str(error)`에 있습니다. 로그인하지 않고 호출해 난 경우에는 모두 `None`입니다. |
-| `KorailAuthContinuationRequired` | `code`, `raw`, `redirect_url`(서버가 준 웹 주소, 없으면 `""`) |
+| `KorailAppError`와 하위 예외, `KorailSessionExpiredError`, `KorailAccountLockedError` | `code`, `message`, `raw` |
+| `KorailAuthError`(로그인 실패) | `code`, `message`, `raw`. 기존 `str(error)`도 유지합니다. 로그인하지 않고 호출해 난 경우에는 모두 `None`입니다. |
+| `KorailAuthContinuationRequired` | `code`, `message`, `raw`, `redirect_url`(서버가 준 웹 주소, 없으면 `""`) |
 | `KorailTransportError` | HTTP 상태 오류이면 `raw`에 응답 본문. 네트워크 오류이면 원래의 `httpx` 예외가 `__cause__`에 들어 있습니다. |
 | `KorailProtocolError` | 응답을 읽지 못했으면 `raw`. 파서가 읽다가 멈춘 부분이 있으면 `parser_raw`도 채웁니다. 요청 전 입력 검사에서 났으면 비어 있습니다. |
 | `KorailDynaPathError` | `raw`(차단 코드가 든 응답) |
@@ -112,12 +121,26 @@ finally:
 | `KorailNoDirectTrainError` | `WRD000061` |
 | `KorailSoldOutError` | 12개 (예: `ERR211161`, `WRT300001`) |
 | `KorailSeatUnavailableError` | 7개 (예: `WRI411345`) |
-| `KorailReservationRefusedError` | 31개 (예: `WRR800029`, `ERR911531`) |
+| `KorailReservationRefusedError` | 32개 (예: `WRR800029`, `ERR911531`, `ERR299943`) |
 | `KorailInvalidRequestError` | 87개 (예: `ERB000001`, `WRG200018`) |
-| `KorailNotEntitledError` | 13개 (예: `ERR299943`, `WRC000419`) |
-| `KorailServiceUnavailableError` | `SEMGTK` |
+| `KorailNotEntitledError` | 12개 (예: `WRC000419`, `WRC800030`) |
+| `KorailServiceUnavailableError` | `S000`, `S001`, `S002`, `S003`, `SEMGTK` |
+| `KorailRateLimitError` | `BT019`, `BT023` |
+| `KorailProcessingError` | `WRT900900` |
+| `KorailAlreadyProcessedError` | `EZZ000014`, `EVZ000102` |
 | `KorailAppUpdateRequiredError` | `SUPDATE` |
 | `KorailAppError` | 위에 없는 모든 결과 코드 |
+
+`ERR299943`("예약할인이 지원되지 않습니다")는 열차·상품이 요청한 할인을 지원하지 않는 예약 제약으로,
+`KorailReservationRefusedError`에 속합니다. 키즈카드 발급 대상이 아닌 `WRC000419`나
+할인 대상 회원이 아닌 `WRC800030`은 `KorailNotEntitledError`로 유지합니다.
+`teenager > 0`인 열차 예약은 서버로 보내기 전에 `KorailProtocolError`로 거절합니다.
+
+`S000`·`S003`은 앱 7.0.8의 `NetworkConstants` 서비스 오류 목록과 `CommonOut.checkServiceError`에서 확인했습니다.
+`FAIL` 기본값과 로그인 요구 코드 `P058`도 일반 오류 분기의 복원값과 일치합니다.
+`S001`·`S002` 및 새 요청 제한·처리 중·기처리 예외는 앱 메시지에 근거한 라이브러리 정책입니다.
+로그인의 `WRC000390`은 `KorailAccountLockedError`이며, 다른 요청에서는 일반 `KorailAppError`입니다.
+`S035`·`P092`의 재로그인 안내를 조회할 수 있지만 그 코드나 메시지만으로 로컬 세션을 비우지는 않습니다.
 
 ??? note "결과 코드 전체 목록"
 
@@ -127,11 +150,45 @@ finally:
     | `KorailNoDirectTrainError` | `WRD000061` |
     | `KorailSoldOutError` | `EAZ000038`, `ERI411321`, `ERR211161`, `ERR800048`, `IRT010110`, `IRT010510`, `IRT011010`, `IRT011210`, `IRT011310`, `WRG500113`, `WRG500114`, `WRT300001` |
     | `KorailSeatUnavailableError` | `ERR521128`, `WRI411345`, `WRS200019`, `WRS600242`, `WRS800009`, `WRS900309`, `WRT800176` |
-    | `KorailReservationRefusedError` | `ERR299920`, `ERR299922`, `ERR299932`, `ERR299933`, `ERR299934`, `ERR299935`, `ERR299936`, `ERR299937`, `ERR299939`, `ERR299941`, `ERR299992`, `ERR299993`, `ERR521143`, `ERR521158`, `ERR521185`, `ERR800052`, `ERR800056`, `ERR911051`, `ERR911081`, `ERR911421`, `ERR911501`, `ERR911528`, `ERR911531`, `S-ERR911411`, `S021`, `WRR664254`, `WRR664325`, `WRR700001`, `WRR800029`, `WRR800045`, `WRX000007` |
+    | `KorailReservationRefusedError` | `ERR299920`, `ERR299922`, `ERR299932`, `ERR299933`, `ERR299934`, `ERR299935`, `ERR299936`, `ERR299937`, `ERR299939`, `ERR299941`, `ERR299943`, `ERR299992`, `ERR299993`, `ERR521143`, `ERR521158`, `ERR521185`, `ERR800052`, `ERR800056`, `ERR911051`, `ERR911081`, `ERR911421`, `ERR911501`, `ERR911528`, `ERR911531`, `S-ERR911411`, `S021`, `WRR664254`, `WRR664325`, `WRR700001`, `WRR800029`, `WRR800045`, `WRX000007` |
     | `KorailInvalidRequestError` | `ERB000001`, `ERR800001`, `ERR800002`, `ERR800003`, `ERR800004`, `ERR800005`, `ERR800006`, `ERR800008`, `ERR800009`, `ERR800010`, `ERR800011`, `ERR800012`, `ERR800014`, `ERR800015`, `ERR800016`, `ERR800017`, `ERR800018`, `ERR800019`, `ERR800020`, `ERR800021`, `ERR800022`, `ERR800023`, `ERR800024`, `ERR800025`, `ERR800026`, `ERR800029`, `ERR800030`, `ERR800031`, `ERR800033`, `ERR800034`, `ERR800035`, `ERR800036`, `ERR800037`, `ERR800038`, `ERR930224`, `ERR930226`, `ERR930227`, `ERR930228`, `ERR930250`, `ERR930260`, `ERR930261`, `ERR930267`, `ERR930268`, `ERR930278`, `ERR930279`, `ERR930280`, `ERR930292`, `ERR930293`, `ERR930310`, `ERR930312`, `ERR930328`, `ERR930329`, `WRC000063`, `WRC000210`, `WRC000260`, `WRC000370`, `WRC000392`, `WRC000436`, `WRG200001`, `WRG200002`, `WRG200003`, `WRG200004`, `WRG200005`, `WRG200006`, `WRG200007`, `WRG200008`, `WRG200009`, `WRG200010`, `WRG200011`, `WRG200012`, `WRG200013`, `WRG200014`, `WRG200015`, `WRG200016`, `WRG200017`, `WRG200018`, `WRG200019`, `WRG200020`, `WRR664227`, `WRT100002`, `WRT100124`, `WRT400191`, `WRT400235`, `WRT400356`, `WRT800053`, `WRT800074`, `WRT800075` |
-    | `KorailNotEntitledError` | `ERR299943`, `ERR800049`, `MRR000008`, `MRT200005`, `WRC000107`, `WRC000302`, `WRC000373`, `WRC000412`, `WRC000419`, `WRC000446`, `WRC800030`, `WRR664211`, `WRR800058` |
-    | `KorailServiceUnavailableError` | `SEMGTK` |
+    | `KorailNotEntitledError` | `ERR800049`, `MRR000008`, `MRT200005`, `WRC000107`, `WRC000302`, `WRC000373`, `WRC000412`, `WRC000419`, `WRC000446`, `WRC800030`, `WRR664211`, `WRR800058` |
+    | `KorailServiceUnavailableError` | `S000`, `S001`, `S002`, `S003`, `SEMGTK` |
+    | `KorailRateLimitError` | `BT019`, `BT023` |
+    | `KorailProcessingError` | `WRT900900` |
+    | `KorailAlreadyProcessedError` | `EZZ000014`, `EVZ000102` |
     | `KorailAppUpdateRequiredError` | `SUPDATE` |
+
+## 메시지 사전과 표시
+
+앱 7.0.8의 일반 결과 코드 10,305개에 대한 메시지 17,256개를 패키지에 포함합니다.
+한국어·영어·일본어·중국어를 지원하고 번역이 없으면 한국어를 사용합니다.
+성공·안내·과거 코드도 들어 있으므로 사전 조회 결과를 성공·실패 판정으로 사용하지 마세요.
+앱 설정이나 임의 리소스 키는 포함하지 않습니다.
+
+```python
+from korail_mobile_api import get_error_message, resolve_error_message
+
+print(get_error_message("BT019"))  # 요청횟수(6회)를 초과하였습니다.
+print(get_error_message("S003", language="en"))  # API Error
+print(resolve_error_message("S003", "서버 안내<br>잠시 후 확인"))
+# 서버 안내
+# 잠시 후 확인
+```
+
+`get_error_message`는 앱 사전의 원문을 반환합니다. `resolve_error_message`는 서버 메시지를 우선하고
+읽을 메시지가 없을 때 사전을 사용하며, 표시할 일반 텍스트를 반환합니다.
+HTML이나 치환 표시는 실행하지 않습니다. `P058` 사전 원문은 웹 이동 스크립트이므로 읽을 메시지가 없으면
+SDK의 세션 만료 안내를 표시합니다. 이 표시는 세션 상태나 응답의 성공·실패를 바꾸지 않습니다.
+지원 언어는 `ko`, `en`, `ja`/`jp`, `zh`/`cn`이며 `en-US` 같은 지역값도 받습니다.
+지원하지 않는 언어는 `ValueError`, 알 수 없는 코드에 메시지도 없으면 `None`입니다.
+
+예외와 `BaseKorailResponse`의 `display_message`는 한국어를 기본으로 사용합니다.
+다른 언어는 `resolve_error_message(error.code, error.message, language="ja")`처럼 조회하세요.
+응답 모델에서는 `code`·`message` 대신 `h_msg_cd`·`h_msg_txt`를 넘깁니다.
+`message`, `h_msg_txt`, `raw`, 기존 예외 문자열은 그대로 보존하므로 카드 결제의 `FAIL` 모델에도 사용할 수 있습니다.
+
+## 예외 처리 순서
 
 하위 예외를 먼저 잡고 상위 예외를 나중에 잡습니다. `KorailNoDirectTrainError`는 `KorailNoResultsError`의 하위 예외이므로 먼저 잡아야 합니다.
 직통 열차가 없을 때 환승 조회로 넘어가는 동작은 [`search_trains_with_transfer_fallback`](../api/trains.md#search_trains_with_transfer_fallback)이 대신 해 줍니다.

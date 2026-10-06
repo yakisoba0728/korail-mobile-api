@@ -252,9 +252,7 @@ KorailClient.get_mileage_history(
 ```python
 from korail_mobile_api import MileageHistoryRequest
 
-history = client.get_mileage_history(
-    MileageHistoryRequest(start_date="20260101", end_date="20260930")
-)
+history = client.get_mileage_history(MileageHistoryRequest(start_date="20260101", end_date="20260930"))
 for entry in history.entries:
     print(entry.departure_date, entry.accrual_division_name, entry.point_amount)
 

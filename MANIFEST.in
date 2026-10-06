@@ -2,6 +2,7 @@ global-exclude *
 include pyproject.toml MANIFEST.in LICENSE README.md CHANGELOG.md
 recursive-include src/korail_mobile_api *.py
 include src/korail_mobile_api/py.typed
+include src/korail_mobile_api/error_messages.json
 recursive-include checks *.py *.md
 recursive-include tests *.py
 prune analysis

@@ -14,10 +14,13 @@ from ._parsing import _optional_scalar_string
 from .constants import KORAIL_COMMON_CODE_BOOTSTRAP_CODES, KorailLoginInputFlag
 from .crypto import transform_login_password
 from .errors import (
+    ACCOUNT_LOCKED_CODES,
+    KorailAccountLockedError,
     KorailAppUpdateRequiredError,
     KorailAuthContinuationRequired,
     KorailAuthError,
     KorailProtocolError,
+    KorailRateLimitError,
     KorailServiceUnavailableError,
     classify_app_error,
 )
@@ -182,11 +185,16 @@ class KorailSessionClient:
                     raw=response.raw,
                 )
             error = classify_app_error(code, response.h_msg_txt, raw=response.raw)
-            if isinstance(error, (KorailServiceUnavailableError, KorailAppUpdateRequiredError)):
+            if isinstance(
+                error, (KorailServiceUnavailableError, KorailAppUpdateRequiredError, KorailRateLimitError)
+            ):
                 raise error
+            if code in ACCOUNT_LOCKED_CODES:
+                raise KorailAccountLockedError(code, response.h_msg_txt, raw=response.raw)
             raise KorailAuthError(
                 f"{response.h_msg_cd or 'UNKNOWN'}: {response.h_msg_txt or 'KORAIL login did not complete'}",
                 code=response.h_msg_cd,
+                message=response.h_msg_txt,
                 raw=response.raw,
             )
         jsessionid = next(

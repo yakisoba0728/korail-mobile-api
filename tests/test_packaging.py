@@ -154,10 +154,12 @@ def f8_built_archives(tmp_path: Path, f8_subprocess_env: dict[str, str]) -> dict
         }
     with zipfile.ZipFile(wheel) as archive:
         wheel_members = {name: archive.read(name) for name in archive.namelist()}
-    return {"source": source_members, "wheel": wheel_members, "direct": direct_members}
+    return {"source": source_members, "wheel": wheel_members, "direct": direct_members, "wheel_path": wheel}
 
 
-def test_f8_distribution_contents_and_metadata(f8_built_archives: dict[str, Any]) -> None:
+def test_f8_distribution_contents_and_metadata(
+    f8_built_archives: dict[str, Any], f8_subprocess_env: dict[str, str]
+) -> None:
     """Fail closed on unexpected archive contents, dependency metadata or version drift."""
     source = f8_built_archives["source"]
     wheel = f8_built_archives["wheel"]
@@ -168,6 +170,8 @@ def test_f8_distribution_contents_and_metadata(f8_built_archives: dict[str, Any]
     assert F8_TOP_FILES <= source.keys()
     assert "src/korail_mobile_api/py.typed" in source
     assert "korail_mobile_api/py.typed" in wheel
+    assert "src/korail_mobile_api/error_messages.json" in source
+    assert "korail_mobile_api/error_messages.json" in wheel
     for name in F8_RECORD_MODULES:
         assert "src/korail_mobile_api/" + name in source
         assert "korail_mobile_api/" + name in wheel
@@ -186,14 +190,37 @@ def test_f8_distribution_contents_and_metadata(f8_built_archives: dict[str, Any]
             ("src/korail_mobile_api/", "src/korail_mobile_api.egg-info/", "checks/", "tests/")
         )
         assert F8_SENTINEL not in data
-    # Runtime modules must be source modules only, plus the PEP 561 marker.
+    # Runtime package includes source modules, the typing marker and the explicit message catalog.
     expected_runtime = {
         "korail_mobile_api/" + path.name for path in (F8_ROOT / "src/korail_mobile_api").glob("*.py")
     }
     expected_runtime.add("korail_mobile_api/py.typed")
+    expected_runtime.add("korail_mobile_api/error_messages.json")
     assert {name for name in wheel if name.startswith("korail_mobile_api/")} == expected_runtime
     for name in expected_runtime:
         assert wheel[name] == source["src/" + name]
+    catalog = json.loads(wheel["korail_mobile_api/error_messages.json"])
+    assert catalog["app_version"] == "7.0.8"
+    assert catalog["messages"]["S000"]["ko"].startswith("보다 편리한 서비스")
+    assert len(catalog["messages"]) == 10305
+    # Read the actual rebuilt wheel as a zip import, away from source/analysis paths.
+    lookup = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.path.insert(0, sys.argv[1]); import korail_mobile_api as api; "
+            "assert api.__file__.startswith(sys.argv[1]); "
+            "assert api.get_error_message('S003', language='en') == 'API Error'; "
+            "assert api.KorailRateLimitError('BT019', None).display_message == '요청횟수(6회)를 초과하였습니다.'",
+            str(f8_built_archives["wheel_path"]),
+        ],
+        cwd=f8_built_archives["wheel_path"].parent,
+        env=f8_subprocess_env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert lookup.returncode == 0, lookup.stderr
     project = tomllib.loads(source["pyproject.toml"].decode())
     assert project["project"]["dynamic"] == ["version"]
     assert "version" not in project["project"]

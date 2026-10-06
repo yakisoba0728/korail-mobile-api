@@ -1697,6 +1697,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """열차 한 편에 실제 미결제 예약(홀드)을 만듭니다. 결제 또는 취소는 호출자 책임입니다.
 
+        ``passengers.teenager > 0``은 요청 전에 ``KorailProtocolError``로 거절합니다. 환승·병합 예약에도 적용합니다.
         응답을 읽지 못해도 홀드는 잡혔을 수 있으니 다시 보내지 말고 예외의 ``.raw`` 나 get_reservation_history 로 확인하십시오.
         다른 예약 메서드도 같습니다. 좌석속성은 명시값→열차 행→기본값이며 STANDBY 홀드는 결제하지 않습니다(TrainScheduleViewModel.java:2914-2930,6773-6781)."""
         self._require_session("reservation requires")
@@ -1754,6 +1755,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """탑승 순서의 TrainSummary 두 개를 한 PNR 로 홀드합니다.
 
+        ``passengers.teenager > 0``은 요청 전에 ``KorailProtocolError``로 거절합니다.
         한 PNR에 탑승 순서의 두 여정을 넣습니다(TicketReservationIn.java:34-37,80)."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"
@@ -1788,6 +1790,7 @@ class KorailClient:
     ) -> ReservationHoldResponse:
         """병합예약의 후속 요청으로 실제 미결제 예약을 만듭니다.
 
+        ``passengers.teenager > 0``은 요청 전에 ``KorailProtocolError``로 거절합니다.
         첫 홀드는 호출자가 취소해야 하며 후속 홀드는 별도 PNR일 수 있습니다(ReservationMergeViewModel.java:1352,1556; 실서버 관측)."""
         self._require_session("reservation requires")
         route = "/classes/com.korail.mobile.certification.TicketReservation"

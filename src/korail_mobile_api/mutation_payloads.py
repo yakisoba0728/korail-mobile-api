@@ -145,9 +145,9 @@ def _in_reservation_order(form: dict[str, str]) -> dict[str, str]:
 
 
 # 0명 행을 제외한 뒤 연속 인덱스를 붙입니다(Passengers.java:743-752).
+# PassengerType.basicList()의 열차 승객 7종입니다. 요청 할인 값은 7.0.8 ReqDiscount 복원으로 확인했습니다.
 _PASSENGER_ROWS: tuple[tuple[str, str, str], ...] = (
     ("adult", "1", "000"),  # 어른
-    ("teenager", "1", "P11"),  # 청소년
     ("child", "3", "000"),  # 어린이
     ("infant", "3", "321"),  # 동반유아
     ("senior", "1", "131"),  # 경로
@@ -569,6 +569,9 @@ def _build_journey_reservation_form(
         passengers = KorailPassengerCounts()
     elif not isinstance(passengers, KorailPassengerCounts):
         raise KorailProtocolError("KORAIL reservation requires an exact KorailPassengerCounts")
+    # TEENAGER는 basicList()에 없으며 P11 예약은 ERR299943으로 거절됩니다. 청소년드림 상품과도 별개입니다.
+    if passengers.teenager > 0:
+        raise KorailProtocolError("KORAIL train reservations do not support teenager passengers (P11)")
     # 앱 인원 선택기는 이 두 조합을 고를 수 없게 합니다(PassengersBottomSheetKt.java:20715-20729,21124-21185 의
     # warningPassengerType): 유아가 있으면 유아·어린이 외 인원(안내견 포함)이 있어야 하고, 안내견은 중증·경증 장애 승객 합계를 넘을 수 없습니다.
     if passengers.infant and passengers.total - passengers.infant - passengers.child == 0:
@@ -614,7 +617,7 @@ def _build_journey_reservation_form(
                     seat_classes=resolved_classes,
                 )
             ),
-            # Passengers.java:610-616 의 전체 합계와 PassengerType.java:38-45 의 여덟 종류,
+            # Passengers.java:610-616 의 전체 합계와 PassengerType.basicList()의 일곱 종류,
             # TrainScheduleViewModel.java:2912 참고.
             "txtTotPsgCnt": str(passengers.total),
         }

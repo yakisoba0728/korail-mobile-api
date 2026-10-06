@@ -46,6 +46,10 @@ finally:
 인원 필드는 모두 정수여야 하며, 아니면 요청을 보내기 전에 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
 인원의 범위와 합계는 라이브러리가 검사하지 않고 서버에 맡깁니다.
 
+청소년 인원은 검색 호환용입니다. 일반 운임 예약에는 `adult` 인원으로 지정해야 하며,
+열차 예약에서 `KorailPassengerCounts.teenager > 0`은 요청 전에 거절합니다.
+청소년드림 할인 상품과의 차이는 [예약 승객 구성](reservations.md#passengers)에 설명했습니다.
+
 ### 역 이름과 역 코드 {#stations}
 
 `departure_station_code`와 `arrival_station_code`에는 역 이름(`"서울"`)이나 숫자로만 된 역 코드를 넣습니다.
@@ -138,9 +142,11 @@ try:
     for itinerary in result.itineraries:
         first, second = itinerary.legs
         print(
-            first.train_no, first.departure_time,
+            first.train_no,
+            first.departure_time,
             itinerary.transfer_station_name,
-            second.train_no, second.arrival_time,
+            second.train_no,
+            second.arrival_time,
         )
 finally:
     client.close()

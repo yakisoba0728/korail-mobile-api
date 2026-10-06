@@ -13,3 +13,14 @@ PYTHONPATH=src python3 checks/netfunnel_offline.py
 검사 통과는 모든 공개 API의 동작이나 실서버 수용을 보장하지 않습니다.
 
 [동작 계약](BEHAVIOR.md)은 입력 검증·선택값·원문 보존·재전송 정책을 설명합니다.
+
+메시지 사전은 로컬 앱의 `assets/error_json.json`에서 다음과 같이 재생성합니다. APK 실행·복호화·네트워크 요청은 하지 않습니다.
+일반 결과 코드와 그 번역만 선별하며, 원본 파일의 SHA-256과 앱 버전을 결과에 기록합니다.
+
+```sh
+python3 checks/build_error_catalog.py /path/to/assets/error_json.json \
+  --app-version 7.0.8 --output src/korail_mobile_api/error_messages.json
+```
+
+재생성 후 `tests/test_error_messages.py`와 `tests/test_packaging.py`로 코드·언어·원문 보존 및 배포 파일 포함을 확인합니다.
+메시지 사전에 있는 코드 모두를 실패 예외로 분류하지는 않습니다. 예외 분류는 `errors.py`에서 별도로 관리합니다.
