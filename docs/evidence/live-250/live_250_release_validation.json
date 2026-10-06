@@ -1,0 +1,2227 @@
+{
+  "release_target": "2.5.0",
+  "package_version": "2.4.0",
+  "git_commit": "e62fd8788b9aeae1d21670f8af78dc22cc587f11",
+  "date_kst": "2026-10-07",
+  "app_version": "7.0.8",
+  "started_kst": "2026-10-07T04:35:42.230788+09:00",
+  "finished_kst": "2026-10-07T04:44:35.417572+09:00",
+  "configuration": {
+    "sdk_defaults": true,
+    "dynapath_enabled": true,
+    "netfunnel_enabled": true,
+    "timeout_seconds": 15,
+    "queue_timeout_seconds": 10,
+    "queue_wait_limit_seconds": 20,
+    "proxy_configured": false
+  },
+  "sensitive_data_policy": "No credentials, headers, cookies, account identifiers, PNRs, seat identifiers, response bodies or full exceptions stored. AppVersion is the only recorded request form value. Public train/date and approved temporary hold amounts are included.",
+  "summary": {
+    "returned_scenarios": 59,
+    "failed_scenarios": 0,
+    "initially_not_executed": 1,
+    "http_requests": 105,
+    "http_200": 105,
+    "distinct_host_paths": 29,
+    "device_field_requests": 56,
+    "device_requests_with_app_version_708": 56,
+    "created_holds": 2,
+    "cancelled_holds": 2,
+    "final_reservations": 0,
+    "baseline_reservations_preserved": true,
+    "server_request_scenarios": 54
+  },
+  "limitations": [
+    "This is release-specific representative validation, not a repeat of the historical 84-method matrix.",
+    "No live wait-list-only row or usable server continuation cursor was observed.",
+    "GENERAL_ONLY/SPECIAL_ONLY and fallback to the second cabin remain covered by offline contracts.",
+    "No new card payment, refund, N-card qualification, commuter-pass or self-seat-change operation was executed.",
+    "Account lock, rate limit, processing and DynaPath rejection were not deliberately induced.",
+    "The initial existing_reservation_find skip was subsequently covered by both approved temporary holds."
+  ],
+  "request_patterns": [
+    {
+      "id": "request-01",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/file/CACHE/MobileService.cache",
+      "field_names": [
+        "timeStamp"
+      ],
+      "app_version": null
+    },
+    {
+      "id": "request-02",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.common.stationinfo",
+      "field_names": [],
+      "app_version": null
+    },
+    {
+      "id": "request-03",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.common.stationdata",
+      "field_names": [],
+      "app_version": null
+    },
+    {
+      "id": "request-04",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.schedule.runDt",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "timeStamp"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-05",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/file/CACHE/prdMobilePlusMain.cache",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "timeStamp",
+        "srtCheckYn"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-06",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.common.code.do",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "code",
+        "deviceWidth",
+        "deviceHeight",
+        "OSVersion"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-07",
+      "method": "POST",
+      "host": "nf.letskorail.com",
+      "path": "/ts.wseq",
+      "field_names": [
+        "opcode",
+        "sid",
+        "aid"
+      ],
+      "app_version": null
+    },
+    {
+      "id": "request-08",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.seatMovie.ScheduleView",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "txtMenuId",
+        "radJobId",
+        "selGoTrain",
+        "txtTrnGpCd",
+        "txtGoStart",
+        "txtGoEnd",
+        "txtGoAbrdDt",
+        "txtGoHour",
+        "txtPsgFlg_1",
+        "txtPsgFlg_2",
+        "txtPsgFlg_3",
+        "txtPsgFlg_4",
+        "txtPsgFlg_5",
+        "txtSeatAttCd_2",
+        "txtSeatAttCd_3",
+        "txtSeatAttCd_4",
+        "ebizCrossCheck",
+        "srtCheckYn",
+        "rtYn",
+        "adjStnScdlOfrFlg",
+        "qryDvCd"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-09",
+      "method": "POST",
+      "host": "nf.letskorail.com",
+      "path": "/ts.wseq",
+      "field_names": [
+        "opcode",
+        "key"
+      ],
+      "app_version": null
+    },
+    {
+      "id": "request-10",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.research.actualTrainSchedule.do",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "runDt",
+        "trnNo"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-11",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.login.Login",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "txtInputFlg",
+        "txtMemberNo",
+        "txtPwd",
+        "checkValidPw",
+        "idx"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-12",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.reservation.ReservationView",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "timeStamp"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-13",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "txtIndex",
+        "hiduserYn",
+        "h_page_no"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-14",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.cart.showCartList",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-15",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.passCard.CouponView",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "txtSelPage"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-16",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.xPoint.MyXPointView",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "point_dv_cd"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-17",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.dlay.dptnBank.do",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-18",
+      "method": "GET",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.product.ReservationList",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "txtSelPage",
+        "txtCntPerPage"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-19",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.research.custTripInfo.do",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "custMgNo",
+        "medDvCd",
+        "regSqno"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-20",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.tk.rcntDlvHst.do",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "custMgNo"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-21",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.pass.trGdMenuLt.do",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "timeStamp"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-22",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.mlg.amtSpec.do",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "pontTpVal",
+        "qryDvVal",
+        "qryStDt",
+        "qryClsDt",
+        "pgPrCnt",
+        "nowPgNo"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-23",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.login.Logout",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "timeStamp"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-24",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.myTicket.MyTicketNewList.do",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "txtIndex",
+        "h_abrd_dt_from",
+        "h_abrd_dt_to",
+        "hiduserYn",
+        "h_page_no"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-25",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.research.tripChgOgtk.do",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "tkCnt",
+        "ogtkSaleWctNo_1",
+        "ogtkSaleDd_1",
+        "ogtkSaleSqno_1",
+        "ogtkRetPwd_1"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-26",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.refunds.SelTicketInfo",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "h_orgtk_ret_sale_dt",
+        "h_orgtk_wct_no",
+        "h_orgtk_sale_sqno",
+        "h_orgtk_ret_pwd",
+        "h_purchase_history"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-27",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.receipt.ReceiptInfo",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "h_orgtk_sale_dt",
+        "h_orgtk_wct_no",
+        "h_orgtk_sale_sqno",
+        "h_orgtk_tk_ret_pwd"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-28",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.seatMovie.ScheduleView",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "txtMenuId",
+        "radJobId",
+        "selGoTrain",
+        "txtTrnGpCd",
+        "txtGoStart",
+        "txtGoEnd",
+        "txtGoAbrdDt",
+        "txtGoHour",
+        "txtPsgFlg_1",
+        "txtPsgFlg_2",
+        "txtPsgFlg_3",
+        "txtPsgFlg_4",
+        "txtPsgFlg_5",
+        "txtSeatAttCd_2",
+        "txtSeatAttCd_3",
+        "txtSeatAttCd_4",
+        "ebizCrossCheck",
+        "srtCheckYn",
+        "rtYn",
+        "adjStnScdlOfrFlg",
+        "mbCrdNo",
+        "qryDvCd"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-29",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.certification.TicketReservation",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "txtMenuId",
+        "txtJobId",
+        "hidFreeFlg",
+        "txtStndFlg",
+        "txtTotPsgCnt",
+        "txtSeatAttCd1",
+        "txtSeatAttCd2",
+        "txtSeatAttCd3",
+        "txtSeatAttCd4",
+        "txtSeatAttCd5",
+        "txtJrnyCnt",
+        "txtCompaCnt1",
+        "txtPsgTpCd1",
+        "txtDiscKndCd1",
+        "txtJrnyTpCd1",
+        "txtJrnySqno1",
+        "txtTrnNo1",
+        "txtTrnClsfCd1",
+        "txtTrnGpCd1",
+        "txtRunDt1",
+        "txtDptDt1",
+        "txtDptTm1",
+        "txtDptRsStnCd1",
+        "txtDptStnConsOrdr1",
+        "txtDptStnRunOrdr1",
+        "txtArvRsStnCd1",
+        "txtArvStnConsOrdr1",
+        "txtArvStnRunOrdr1",
+        "txtChgFlg1",
+        "txtPsrmClCd1"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-30",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.certification.ReservationList",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "hidPnrNo"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-31",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.reservationCancel.ReservationCancel",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "txtPnrNo",
+        "txtJrnySqno",
+        "txtJrnyCnt",
+        "hidRsvChgNo"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    },
+    {
+      "id": "request-32",
+      "method": "POST",
+      "host": "smart.letskorail.com",
+      "path": "/classes/com.korail.mobile.reservationCancel.ReservationCancelChk",
+      "field_names": [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "txtPnrNo",
+        "txtJrnySqno",
+        "txtJrnyCnt",
+        "hidRsvChgNo"
+      ],
+      "app_version": [
+        "7.0.8"
+      ]
+    }
+  ],
+  "batches": [
+    {
+      "started_kst": "2026-10-07T04:35:42.230788+09:00",
+      "started_utc": "2026-10-06T19:35:42.230811+00:00",
+      "scope": "public and authenticated reads; no reservation, payment, refund or account mutation",
+      "search": {
+        "departure": "서울",
+        "arrival": "부산",
+        "date": "20261008",
+        "time": "090000"
+      },
+      "events": [
+        {
+          "scenario": "service_status",
+          "outcome": "returned",
+          "model": "ServiceStatusResponse",
+          "result": "SUCC",
+          "code": "S100",
+          "display_message_present": true,
+          "server_message_present": true,
+          "checks_passed": true,
+          "request_start": 0,
+          "request_count": 1
+        },
+        {
+          "scenario": "station_info",
+          "outcome": "returned",
+          "model": "StationInfoResponse",
+          "result": null,
+          "code": null,
+          "display_message_present": false,
+          "server_message_present": false,
+          "checks_passed": true,
+          "request_start": 1,
+          "request_count": 1
+        },
+        {
+          "scenario": "station_names_and_cache",
+          "outcome": "returned",
+          "model": "tuple",
+          "result": null,
+          "code": null,
+          "checks": {
+            "count": 281,
+            "names_and_cache_match": true
+          },
+          "checks_passed": true,
+          "request_start": 2,
+          "request_count": 1
+        },
+        {
+          "scenario": "train_calendar",
+          "outcome": "returned",
+          "model": "TrainCalendarResponse",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "days": 63
+          },
+          "checks_passed": true,
+          "request_start": 3,
+          "request_count": 1
+        },
+        {
+          "scenario": "app_data",
+          "outcome": "returned",
+          "model": "AppDataResponse",
+          "result": null,
+          "code": null,
+          "display_message_present": false,
+          "server_message_present": false,
+          "checks_passed": true,
+          "request_start": 4,
+          "request_count": 1
+        },
+        {
+          "scenario": "common_code",
+          "outcome": "returned",
+          "model": "BaseKorailResponse",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "checks_passed": true,
+          "request_start": 5,
+          "request_count": 1
+        },
+        {
+          "scenario": "facade_search_all",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 10,
+            "sold_out_rows": 10,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 0,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 6,
+          "request_count": 3
+        },
+        {
+          "scenario": "facade_search_seats",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 0,
+            "unfiltered_trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 0,
+            "sold_out_rows": 10,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 0,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 9,
+          "request_count": 3
+        },
+        {
+          "scenario": "facade_search_seats_and_waiting",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 0,
+            "unfiltered_trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 0,
+            "sold_out_rows": 10,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 0,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 12,
+          "request_count": 3
+        },
+        {
+          "scenario": "last_departure_page",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 10,
+            "sold_out_rows": 6,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 0,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 15,
+          "request_count": 3
+        },
+        {
+          "scenario": "train_schedule",
+          "outcome": "returned",
+          "model": "TrainScheduleResponse",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "stops": 9
+          },
+          "checks_passed": true,
+          "request_start": 18,
+          "request_count": 1
+        },
+        {
+          "scenario": "transfer_search",
+          "outcome": "returned",
+          "model": "TransferSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "itineraries": 5,
+            "trains": 10
+          },
+          "checks_passed": true,
+          "request_start": 19,
+          "request_count": 3
+        },
+        {
+          "scenario": "login",
+          "outcome": "returned",
+          "model": "KorailSession",
+          "result": null,
+          "code": null,
+          "checks": {
+            "session_and_cookie_present": true
+          },
+          "checks_passed": true,
+          "request_start": 22,
+          "request_count": 3
+        },
+        {
+          "scenario": "reservation_history",
+          "outcome": "returned",
+          "model": "ReservationHistoryResponse",
+          "result": "SUCC",
+          "code": "P100",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 0,
+            "items": 0
+          },
+          "checks_passed": true,
+          "request_start": 25,
+          "request_count": 3
+        },
+        {
+          "scenario": "existing_reservation_find",
+          "outcome": "not_executed",
+          "reason": "no existing unpaid reservation in account"
+        },
+        {
+          "scenario": "current_tickets",
+          "outcome": "returned",
+          "model": "TicketListResponse",
+          "result": "SUCC",
+          "code": "WRT300005",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "reservations": 0
+          },
+          "checks_passed": true,
+          "request_start": 28,
+          "request_count": 1
+        },
+        {
+          "scenario": "cart_list",
+          "outcome": "returned",
+          "model": "CartListResponse",
+          "result": "SUCC",
+          "code": null,
+          "display_message_present": false,
+          "server_message_present": false,
+          "collection_counts": {
+            "items": 0
+          },
+          "checks_passed": true,
+          "request_start": 29,
+          "request_count": 1
+        },
+        {
+          "scenario": "discount_coupons",
+          "outcome": "returned",
+          "model": "DiscountCouponListResponse",
+          "result": "SUCC",
+          "code": "WRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "items": 0
+          },
+          "checks_passed": true,
+          "request_start": 30,
+          "request_count": 1
+        },
+        {
+          "scenario": "point_summary",
+          "outcome": "returned",
+          "model": "KorailPointSummaryResponse",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "display_message_present": true,
+          "server_message_present": true,
+          "checks_passed": true,
+          "request_start": 31,
+          "request_count": 1
+        },
+        {
+          "scenario": "deposit_banks",
+          "outcome": "returned",
+          "model": "DepositBankListResponse",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "items": 56
+          },
+          "checks_passed": true,
+          "request_start": 32,
+          "request_count": 1
+        },
+        {
+          "scenario": "product_reservations",
+          "outcome": "returned",
+          "model": "ProductReservationListResponse",
+          "result": "SUCC",
+          "code": null,
+          "display_message_present": false,
+          "server_message_present": false,
+          "collection_counts": {
+            "items": 1
+          },
+          "checks_passed": true,
+          "request_start": 33,
+          "request_count": 1
+        },
+        {
+          "scenario": "customer_trip_info",
+          "outcome": "returned",
+          "model": "CustomerTripInfoResponse",
+          "result": "SUCC",
+          "code": "IRS100002",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trips": 0
+          },
+          "checks_passed": true,
+          "request_start": 34,
+          "request_count": 1
+        },
+        {
+          "scenario": "recent_delivery_history",
+          "outcome": "returned",
+          "model": "RecentDeliveryHistoryResponse",
+          "result": "SUCC",
+          "code": null,
+          "display_message_present": false,
+          "server_message_present": false,
+          "collection_counts": {
+            "recipients": 1
+          },
+          "checks_passed": true,
+          "request_start": 35,
+          "request_count": 1
+        },
+        {
+          "scenario": "trip_menu",
+          "outcome": "returned",
+          "model": "TripMenuResponse",
+          "result": "SUCC",
+          "code": "API.I00000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "items": 5
+          },
+          "checks_passed": true,
+          "request_start": 36,
+          "request_count": 1
+        },
+        {
+          "scenario": "mileage_history",
+          "outcome": "returned",
+          "model": "MileageHistoryResponse",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "entries": 5
+          },
+          "checks_passed": true,
+          "request_start": 37,
+          "request_count": 1
+        },
+        {
+          "scenario": "logout",
+          "outcome": "returned",
+          "model": "NoneType",
+          "result": null,
+          "code": null,
+          "checks": {
+            "local_session_cleared": true
+          },
+          "checks_passed": true,
+          "request_start": 38,
+          "request_count": 1
+        },
+        {
+          "scenario": "close",
+          "outcome": "returned",
+          "model": "NoneType",
+          "result": null,
+          "code": null,
+          "checks": {
+            "http_closed": true,
+            "queue_closed": true
+          },
+          "checks_passed": true,
+          "request_start": 39,
+          "request_count": 0
+        }
+      ],
+      "finished_kst": "2026-10-07T04:36:06.251828+09:00",
+      "finished_utc": "2026-10-06T19:36:06.251946+00:00",
+      "summary": {
+        "requests": 39,
+        "returned": 26,
+        "failed": 0,
+        "not_executed": 1
+      },
+      "name": "read_only",
+      "requests": [
+        {
+          "pattern": "request-01",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-02",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-03",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-04",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-05",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-06",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-10",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-01",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-06",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-11",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-12",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-13",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-14",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-15",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-16",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-17",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-18",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-19",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-20",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-21",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-22",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-23",
+          "http_status": 200
+        }
+      ]
+    },
+    {
+      "started_kst": "2026-10-07T04:38:11.652097+09:00",
+      "started_utc": "2026-10-06T19:38:11.652111+00:00",
+      "scope": "additional read-only branches; no reservation, payment or refund",
+      "search": {
+        "departure": "서울",
+        "arrival": "부산",
+        "date": "20261008",
+        "time": "180000"
+      },
+      "events": [
+        {
+          "scenario": "evening_seats",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 0,
+            "unfiltered_trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 0,
+            "sold_out_rows": 10,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 1,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 0,
+          "request_count": 4
+        },
+        {
+          "scenario": "evening_seats_and_waiting",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 0,
+            "unfiltered_trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 0,
+            "sold_out_rows": 10,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 1,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 4,
+          "request_count": 3
+        },
+        {
+          "scenario": "late_train_duration",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 1
+          },
+          "checks": {
+            "original_count": 1,
+            "filtered_count": 1,
+            "sold_out_rows": 1,
+            "waiting_rows": 0,
+            "duration_checked_rows": 1,
+            "crossing_midnight_rows": 1,
+            "cursor_available": false,
+            "server_next_page_flag": "N",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 7,
+          "request_count": 3
+        },
+        {
+          "scenario": "login_for_history",
+          "outcome": "returned",
+          "model": "KorailSession",
+          "result": null,
+          "code": null,
+          "checks": {
+            "session_and_cookie_present": true
+          },
+          "checks_passed": true,
+          "request_start": 10,
+          "request_count": 3
+        },
+        {
+          "scenario": "past_tickets",
+          "outcome": "returned",
+          "model": "TicketListResponse",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "reservations": 5
+          },
+          "checks_passed": true,
+          "request_start": 13,
+          "request_count": 1
+        },
+        {
+          "scenario": "original_ticket_inquiry",
+          "outcome": "returned",
+          "model": "OriginalTicketInquiryResponse",
+          "result": "SUCC",
+          "code": "IRT000001",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "tickets": 1
+          },
+          "checks_passed": true,
+          "request_start": 14,
+          "request_count": 1
+        },
+        {
+          "scenario": "purchase_history_ticket_detail",
+          "outcome": "returned",
+          "model": "RefundTicketDetailResponse",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "passenger_names": 0,
+            "seat_tickets": 0,
+            "delay_details": 1,
+            "journeys": 1
+          },
+          "checks_passed": true,
+          "request_start": 15,
+          "request_count": 1
+        },
+        {
+          "scenario": "paid_ticket_factory_from_live_detail",
+          "outcome": "returned",
+          "model": "PaidTicket",
+          "result": null,
+          "code": null,
+          "checks": {
+            "source_identifiers_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 16,
+          "request_count": 0
+        },
+        {
+          "scenario": "ticket_receipt",
+          "outcome": "returned",
+          "model": "TicketReceiptResponse",
+          "result": "SUCC",
+          "code": "IRT000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "items": 1
+          },
+          "checks_passed": true,
+          "request_start": 16,
+          "request_count": 1
+        },
+        {
+          "scenario": "product_reservations_for_detail",
+          "outcome": "returned",
+          "model": "ProductReservationListResponse",
+          "result": "SUCC",
+          "code": null,
+          "display_message_present": false,
+          "server_message_present": false,
+          "collection_counts": {
+            "items": 1
+          },
+          "checks_passed": true,
+          "request_start": 17,
+          "request_count": 1
+        },
+        {
+          "scenario": "logout",
+          "outcome": "returned",
+          "model": "NoneType",
+          "result": null,
+          "code": null,
+          "checks": {
+            "local_session_cleared": true
+          },
+          "checks_passed": true,
+          "request_start": 18,
+          "request_count": 1
+        },
+        {
+          "scenario": "close",
+          "outcome": "returned",
+          "model": "NoneType",
+          "result": null,
+          "code": null,
+          "checks": {
+            "http_closed": true,
+            "queue_closed": true
+          },
+          "checks_passed": true,
+          "request_start": 19,
+          "request_count": 0
+        }
+      ],
+      "finished_kst": "2026-10-07T04:38:31.059181+09:00",
+      "finished_utc": "2026-10-06T19:38:31.059216+00:00",
+      "summary": {
+        "requests": 19,
+        "returned": 12,
+        "failed": 0,
+        "not_executed": 0
+      },
+      "name": "additional_reads",
+      "requests": [
+        {
+          "pattern": "request-03",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-01",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-06",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-11",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-24",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-25",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-26",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-27",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-18",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-23",
+          "http_status": 200
+        }
+      ]
+    },
+    {
+      "started_kst": "2026-10-07T04:39:19.187996+09:00",
+      "started_utc": "2026-10-06T19:39:19.188465+00:00",
+      "scope": "public filter checks on midday availability",
+      "events": [
+        {
+          "scenario": "day_1_midday_seats",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 3,
+            "unfiltered_trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 3,
+            "sold_out_rows": 7,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 0,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 0,
+          "request_count": 4,
+          "query": {
+            "date": "20261008",
+            "time": "130000"
+          }
+        },
+        {
+          "scenario": "day_1_midday_seats_and_waiting",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 3,
+            "unfiltered_trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 3,
+            "sold_out_rows": 7,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 0,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 4,
+          "request_count": 3,
+          "query": {
+            "date": "20261008",
+            "time": "130000"
+          }
+        },
+        {
+          "scenario": "day_7_midday_seats",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 10,
+            "unfiltered_trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 10,
+            "sold_out_rows": 0,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 0,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 7,
+          "request_count": 3,
+          "query": {
+            "date": "20261014",
+            "time": "130000"
+          }
+        },
+        {
+          "scenario": "day_7_midday_seats_and_waiting",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 10,
+            "unfiltered_trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 10,
+            "sold_out_rows": 0,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 0,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 10,
+          "request_count": 3,
+          "query": {
+            "date": "20261014",
+            "time": "130000"
+          }
+        },
+        {
+          "scenario": "close",
+          "outcome": "returned",
+          "model": "NoneType",
+          "result": null,
+          "code": null,
+          "checks": {
+            "http_closed": true,
+            "queue_closed": true
+          },
+          "checks_passed": true,
+          "request_start": 13,
+          "request_count": 0
+        }
+      ],
+      "public_candidate": {
+        "train_no": "105",
+        "train_name": "KTX",
+        "departure_date": "20261014",
+        "departure_time": "131300",
+        "general_seat": true,
+        "special_seat": true
+      },
+      "finished_kst": "2026-10-07T04:39:24.545805+09:00",
+      "finished_utc": "2026-10-06T19:39:24.545833+00:00",
+      "summary": {
+        "requests": 13,
+        "returned": 5,
+        "failed": 0
+      },
+      "name": "availability",
+      "requests": [
+        {
+          "pattern": "request-03",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-08",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        }
+      ]
+    },
+    {
+      "started_kst": "2026-10-07T04:44:12.048827+09:00",
+      "started_utc": "2026-10-06T19:44:12.048945+00:00",
+      "scope": "Explicitly approved: two unpaid temporary holds on KTX 105, Seoul to Busan, 2026-10-14 13:13; adult one GENERAL_FIRST and child one SPECIAL_FIRST; immediate cancellation; no payment or refund.",
+      "events": [
+        {
+          "scenario": "login",
+          "outcome": "returned",
+          "model": "KorailSession",
+          "result": null,
+          "code": null,
+          "checks": {
+            "session_and_cookie_present": true
+          },
+          "checks_passed": true,
+          "request_start": 0,
+          "request_count": 3
+        },
+        {
+          "scenario": "reservation_history_before",
+          "outcome": "returned",
+          "model": "ReservationHistoryResponse",
+          "result": "SUCC",
+          "code": "P100",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 0,
+            "items": 0
+          },
+          "checks_passed": true,
+          "request_start": 3,
+          "request_count": 3
+        },
+        {
+          "scenario": "approved_train_search",
+          "outcome": "returned",
+          "model": "TrainSearchResult",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "trains": 10
+          },
+          "checks": {
+            "original_count": 10,
+            "filtered_count": 10,
+            "sold_out_rows": 0,
+            "waiting_rows": 0,
+            "duration_checked_rows": 10,
+            "crossing_midnight_rows": 0,
+            "cursor_available": false,
+            "server_next_page_flag": "Y",
+            "raw_identity_and_last_query_preserved": true
+          },
+          "checks_passed": true,
+          "request_start": 6,
+          "request_count": 4
+        },
+        {
+          "scenario": "adult_general_first_create",
+          "outcome": "returned",
+          "model": "ReservationHoldResponse",
+          "result": "SUCC",
+          "code": "IRR000018",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 1,
+            "passengers": 1
+          },
+          "checks": {
+            "success_and_identifiers_present": true,
+            "journeys": 1,
+            "received_amount": 48000,
+            "payment_flag_omitted": false
+          },
+          "checks_passed": true,
+          "request_start": 10,
+          "request_count": 3
+        },
+        {
+          "scenario": "adult_general_first_find",
+          "outcome": "returned",
+          "model": "ReservationHoldResponse",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 1,
+            "passengers": 0
+          },
+          "checks": {
+            "success_and_identifiers_present": true,
+            "journeys": 1,
+            "received_amount": 48000,
+            "payment_flag_omitted": true,
+            "pnr_and_amount_match_created": true
+          },
+          "checks_passed": true,
+          "request_start": 13,
+          "request_count": 1
+        },
+        {
+          "scenario": "adult_general_first_detail",
+          "outcome": "returned",
+          "model": "TicketReservationDetailResponse",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 1,
+            "passengers": 0
+          },
+          "checks": {
+            "room_class_code": "1",
+            "passenger_type_code": "1",
+            "seat_count": 1,
+            "seat_assignment_present": true,
+            "received_amount": 48000,
+            "amounts_match": true,
+            "seat_fare": "00000000000000",
+            "seat_price": "00000000048900",
+            "total_discount_amount": null
+          },
+          "checks_passed": true,
+          "request_start": 14,
+          "request_count": 1
+        },
+        {
+          "scenario": "adult_general_first_cancel",
+          "outcome": "returned",
+          "model": "BaseKorailResponse",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "checks": {
+            "successful": true
+          },
+          "checks_passed": true,
+          "request_start": 15,
+          "request_count": 2
+        },
+        {
+          "scenario": "adult_general_first_history_after_cancel",
+          "outcome": "returned",
+          "model": "ReservationHistoryResponse",
+          "result": "SUCC",
+          "code": "P100",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 0,
+            "items": 0
+          },
+          "checks_passed": true,
+          "request_start": 17,
+          "request_count": 3,
+          "baseline_reservations_preserved": true
+        },
+        {
+          "scenario": "child_special_first_create",
+          "outcome": "returned",
+          "model": "ReservationHoldResponse",
+          "result": "SUCC",
+          "code": "IRR000018",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 1,
+            "passengers": 1
+          },
+          "checks": {
+            "success_and_identifiers_present": true,
+            "journeys": 1,
+            "received_amount": 46000,
+            "payment_flag_omitted": false
+          },
+          "checks_passed": true,
+          "request_start": 20,
+          "request_count": 3
+        },
+        {
+          "scenario": "child_special_first_find",
+          "outcome": "returned",
+          "model": "ReservationHoldResponse",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 1,
+            "passengers": 0
+          },
+          "checks": {
+            "success_and_identifiers_present": true,
+            "journeys": 1,
+            "received_amount": 46000,
+            "payment_flag_omitted": true,
+            "pnr_and_amount_match_created": true
+          },
+          "checks_passed": true,
+          "request_start": 23,
+          "request_count": 1
+        },
+        {
+          "scenario": "child_special_first_detail",
+          "outcome": "returned",
+          "model": "TicketReservationDetailResponse",
+          "result": "SUCC",
+          "code": "IRZ000001",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 1,
+            "passengers": 0
+          },
+          "checks": {
+            "room_class_code": "2",
+            "passenger_type_code": "3",
+            "seat_count": 1,
+            "seat_assignment_present": true,
+            "received_amount": 46000,
+            "amounts_match": true,
+            "seat_fare": "00000000022000",
+            "seat_price": "00000000048900",
+            "total_discount_amount": null
+          },
+          "checks_passed": true,
+          "request_start": 24,
+          "request_count": 1
+        },
+        {
+          "scenario": "child_special_first_cancel",
+          "outcome": "returned",
+          "model": "BaseKorailResponse",
+          "result": "SUCC",
+          "code": "IRG000000",
+          "display_message_present": true,
+          "server_message_present": true,
+          "checks": {
+            "successful": true
+          },
+          "checks_passed": true,
+          "request_start": 25,
+          "request_count": 2
+        },
+        {
+          "scenario": "child_special_first_history_after_cancel",
+          "outcome": "returned",
+          "model": "ReservationHistoryResponse",
+          "result": "SUCC",
+          "code": "P100",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 0,
+            "items": 0
+          },
+          "checks_passed": true,
+          "request_start": 27,
+          "request_count": 3,
+          "baseline_reservations_preserved": true
+        },
+        {
+          "scenario": "reservation_history_final",
+          "outcome": "returned",
+          "model": "ReservationHistoryResponse",
+          "result": "SUCC",
+          "code": "P100",
+          "display_message_present": true,
+          "server_message_present": true,
+          "collection_counts": {
+            "journeys": 0,
+            "items": 0
+          },
+          "checks_passed": true,
+          "request_start": 30,
+          "request_count": 3
+        },
+        {
+          "scenario": "logout",
+          "outcome": "returned",
+          "model": "NoneType",
+          "result": null,
+          "code": null,
+          "checks": {
+            "local_session_cleared": true
+          },
+          "checks_passed": true,
+          "request_start": 33,
+          "request_count": 1
+        },
+        {
+          "scenario": "close",
+          "outcome": "returned",
+          "model": "NoneType",
+          "result": null,
+          "code": null,
+          "checks": {
+            "http_closed": true,
+            "queue_closed": true
+          },
+          "checks_passed": true,
+          "request_start": 34,
+          "request_count": 0
+        }
+      ],
+      "baseline_reservation_count": 0,
+      "baseline_reservations_preserved": true,
+      "final_reservation_count": 0,
+      "finished_kst": "2026-10-07T04:44:35.417572+09:00",
+      "finished_utc": "2026-10-06T19:44:35.417610+00:00",
+      "summary": {
+        "requests": 34,
+        "returned": 16,
+        "failed": 0,
+        "created_holds": 2,
+        "cancelled_holds": 2,
+        "pending_known_holds": 0
+      },
+      "name": "temporary_reservations",
+      "requests": [
+        {
+          "pattern": "request-01",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-06",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-11",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-12",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-03",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-28",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-29",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-30",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-30",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-31",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-32",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-12",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-29",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-30",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-30",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-31",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-32",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-12",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-07",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-12",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-09",
+          "http_status": 200
+        },
+        {
+          "pattern": "request-23",
+          "http_status": 200
+        }
+      ]
+    }
+  ]
+}
