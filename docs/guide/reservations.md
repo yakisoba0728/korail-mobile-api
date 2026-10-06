@@ -32,7 +32,7 @@
 | 필드 | 승객 종류 | 기본값 |
 |---|---|---|
 | `adult` | 어른 | `1` |
-| `teenager` | 청소년 | `0` |
+| `teenager` | 청소년(검색 호환용, 열차 예약 불가) | `0` |
 | `child` | 어린이 | `0` |
 | `infant` | 동반유아 | `0` |
 | `senior` | 경로 | `0` |
@@ -43,7 +43,22 @@
 - 각 값은 0 이상의 `int`여야 하며 `True`·`False`는 받지 않습니다.
 - 전체 인원(`total`)은 유아와 안내견을 포함해 1명 이상 9명 이하입니다. 어기면 객체를 만들 때 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다.
 - 예약 요청 전에 두 조합을 더 검사합니다. 유아가 있으면 어린이·유아 외의 승객이 있어야 하고, 안내견은 장애 승객(`severe_disability`와 `mild_disability`의 합)보다 많을 수 없습니다.
-- 조회할 때와 같은 승객 구성으로 예약하세요.
+- 예약에 사용할 승객 구성으로 조회하세요. 검색의 청소년 인원은 어른 수에 합산되지만 예약에는 사용할 수 없습니다.
+
+열차 예약은 앱의 `PassengerType.basicList()`와 같은 일곱 종류를 받습니다. `teenager > 0`이면
+직통·좌석 지정·예약대기·환승·병합 예약과 간편 API의 `reservations.create()` 모두 요청 전에
+[`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]가 발생합니다. 대기열 요청도 보내지 않습니다.
+청소년을 일반 운임으로 예약하려면 호출자가 `adult` 인원으로 지정하세요.
+
+`teenager`의 `P11` 할인은 청소년드림 상품과 별개이며, 기존 전송에서는
+`ERR299943`("예약할인이 지원되지 않습니다")로 거절됐습니다. 청소년드림은 어른 승객과
+`SpecialOffer.YOUTH` 상품을 함께 선택하는 경로이며 발권 응답의 `ResDiscount.YOUTH_DREAM`은 `508`입니다.
+이 라이브러리의 일반 예약 메서드는 해당 상품 선택을 지원하지 않습니다.
+
+예약에 보내는 `ReqDiscount`와 발권 응답의 `ResDiscount`는 구분합니다. 어린이 예약 요청은 승객 유형 `3`과
+할인 코드 `000`을 보내며, 발권 응답의 어린이 할인 코드 `201`을 요청에 넣지 않습니다.
+이 값은 7.0.8 할인 상수 복호화로 확인했습니다. 승객별 실서버 확인 범위는
+[실서버 현황](../status.md#passenger-report-20261007)에 있습니다.
 
 ```python
 from korail_mobile_api import KorailPassengerCounts

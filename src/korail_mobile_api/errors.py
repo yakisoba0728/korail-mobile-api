@@ -4,6 +4,8 @@
 
 """예외 분류는 라이브러리 정책이며 알려지지 않은 서버 코드는 KorailAppError로 보존합니다."""
 
+from .error_messages import resolve_error_message
+
 
 class KorailApiError(Exception):
     """라이브러리가 발생시키는 모든 예외의 기반 클래스입니다.
@@ -23,6 +25,13 @@ class KorailApiError(Exception):
     #: 응답 모델을 읽다가 실패했을 때 파서가 읽던 부분 원본입니다. 이때 ``raw``에는 받은 응답 전체가 들어 있습니다.
     #: 없으면 ``None``입니다.
     parser_raw: object | None = None
+
+    @property
+    def display_message(self) -> str | None:
+        """읽을 서버 메시지 또는 앱 사전의 한국어 안내입니다. ``message``·``raw``와 예외 문자열은 보존합니다.
+
+        다른 언어로 표시하려면 ``resolve_error_message(self.code, self.message, language=...)``를 사용하세요."""
+        return resolve_error_message(self.code, self.message)
 
 
 class _CodeMessagePickle:
@@ -59,9 +68,16 @@ class KorailAuthError(KorailApiError):
 
     # 로그인 거절 코드 예(앱 메시지 기준): WRC000390 비밀번호 오류 5회 초과, WRR000101/S034 로그인 정보 오류.
 
-    def __init__(self, *args: object, code: str | None = None, raw: object | None = None) -> None:
+    def __init__(
+        self,
+        *args: object,
+        code: str | None = None,
+        message: str | None = None,
+        raw: object | None = None,
+    ) -> None:
         super().__init__(*args)
         self.code = code
+        self.message = message
         if raw is not None:
             self.raw = raw
 
@@ -73,7 +89,7 @@ class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
     계속하려면 ``login``을 다시 호출해 로그인하세요."""
 
     # 판정: strResult 가 FAIL 이거나 CommonOut 봉투에서 누락된 때입니다(누락 기본값이 실패, CommonOut.java:361). 앱은
-    # commonFail() 뒤에 보호된 4바이트 코드를 비교합니다(CommonOut.java:426-438). typed read 는 strResult 누락을
+    # commonFail() 뒤에 P058을 비교합니다(7.0.8 CommonOut.java:428, 일반 오류 문자열 복원 및 smali 대조). typed read 는 strResult 누락을
     # KorailProtocolError 로 거절합니다(read_parsers).
     # 로컬 세션 비우기는 KorailClient._run_read 가 맡습니다. search_trains·search_transfer_trains 도 바깥에서 _run_read 로
     # 감쌉니다(tests/test_train_reads.py::test_p058_clears_session_even_on_guidance_path).
@@ -90,7 +106,18 @@ class KorailSessionExpiredError(_CodeMessagePickle, KorailAuthError):
         super().__init__(
             f"{code or 'P058'}: {message or 'KORAIL session expired'}",
             code=code,
+            message=message,
         )
+
+
+class KorailAccountLockedError(_CodeMessagePickle, KorailAuthError):
+    """로그인 응답이 비밀번호 오류 허용 횟수 초과를 알렸음을 나타냅니다(``WRC000390``).
+
+    메시지 사전에 근거한 라이브러리 분류입니다. 로그인을 반복하지 말고 계정 상태를 확인하세요.
+    로그인 이외의 응답에는 이 분류를 적용하지 않습니다."""
+
+    def __init__(self, code: str | None, message: str | None, *, raw: object | None = None) -> None:
+        super().__init__(_code_message(code, message), code=code, message=message, raw=raw)
 
 
 class KorailDynaPathError(KorailApiError):
@@ -126,9 +153,11 @@ class KorailAuthContinuationRequired(KorailAuthError):
         self.redirect_url = redirect_url
         self.raw = raw
         code = raw.get("h_msg_cd") if isinstance(raw, dict) else None
+        message = raw.get("h_msg_txt") if isinstance(raw, dict) else None
         super().__init__(
             "KORAIL login requires a web step (dormant account or password change)",
             code=code if isinstance(code, str) else None,
+            message=message if isinstance(message, str) else None,
         )
 
     def __reduce__(self) -> tuple[object, ...]:
@@ -178,10 +207,11 @@ class KorailSeatUnavailableError(KorailAppError):
 
 
 class KorailReservationRefusedError(KorailAppError):
-    """중복 예약, 구매 한도, 예약 가능 시간 등의 이유로 예약이 거절됐음을 나타냅니다.
+    """중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인 등의 이유로 예약이 거절됐음을 나타냅니다.
 
-    결과 코드 ``WRR800029``, ``ERR911531`` 등에서 발생합니다."""
+    결과 코드 ``WRR800029``, ``ERR911531``, ``ERR299943`` 등에서 발생합니다."""
 
+    # ERR299943은 회원 자격이 아닌 예약 할인 지원 제약입니다(assets/error_json.json:2475).
     # 앱의 화면 이동은 미확인입니다.
 
 
@@ -193,18 +223,38 @@ class KorailInvalidRequestError(KorailAppError):
 
 
 class KorailNotEntitledError(KorailAppError):
-    """할인이나 상품을 이용할 자격이 없음을 나타냅니다. 결과 코드 ``ERR299943``, ``WRC000419`` 등에서 발생합니다."""
+    """할인이나 상품을 이용할 자격이 없음을 나타냅니다. 결과 코드 ``WRC000419``, ``WRC800030`` 등에서 발생합니다."""
 
-    # 메시지 근거: assets/error_json.json:2475(ERR299943),11063(ERR800049),12013(WRC000419),
+    # 메시지 근거: assets/error_json.json:11063(ERR800049),12013(WRC000419),
     # 12059(WRC800030),12492(WRR800058).
 
 
 class KorailServiceUnavailableError(KorailAppError):
-    """서비스나 연결을 이용할 수 없다는 안내 응답을 나타냅니다(결과 코드 ``SEMGTK``).
+    """서비스 일시중지·혼잡·연결 문제 안내 응답을 나타냅니다(``S000``~``S003``, ``SEMGTK``).
 
     서버 장애만을 뜻하지는 않습니다. 로그인 응답이 이 결과 코드이면 ``KorailAuthError`` 대신 이 예외가 발생합니다."""
 
-    # assets/error_json.json:66 의 저장 승차권 안내가 근거이며 서버 장애만을 확정하지 않습니다.
+    # S000/S003: 7.0.8 NetworkConstants.java:143 + CommonOut.checkServiceError.
+    # S001/S002/SEMGTK: assets/error_json.json 메시지를 사용하는 라이브러리 정책입니다.
+
+
+class KorailRateLimitError(KorailAppError):
+    """요청 횟수 초과나 반복 호출 차단 안내입니다(``BT019``, ``BT023``).
+
+    메시지 사전에 근거한 라이브러리 분류입니다. 해제 시각·재시도 간격은 알 수 없으며 자동 재시도하지 않습니다."""
+
+
+class KorailProcessingError(KorailAppError):
+    """요청이 처리 중이거나 이미 완료됐을 수 있어 결과 확인이 필요합니다(``WRT900900``).
+
+    성공·실패를 이 코드만으로 확정할 수 없습니다. 예약·승차권 목록을 확인한 뒤 다음 작업을 결정하세요.
+    메시지 사전에 근거한 라이브러리 분류이며 상태 변경 요청을 자동으로 다시 보내지 않습니다."""
+
+
+class KorailAlreadyProcessedError(KorailAppError):
+    """이미 반환된 승차권(``EZZ000014``) 또는 취소된 예약(``EVZ000102``) 안내입니다.
+
+    메시지 사전에 근거한 라이브러리 분류입니다. 현재 작업을 성공으로 바꾸거나 재전송하지 않습니다."""
 
 
 class KorailAppUpdateRequiredError(KorailAppError):
@@ -344,6 +394,7 @@ RESERVATION_REFUSED_CODES = frozenset(
         "ERR299937",
         "ERR299939",
         "ERR299941",
+        "ERR299943",
         "ERR299992",
         "ERR299993",
         "ERR521143",
@@ -463,7 +514,6 @@ INVALID_REQUEST_CODES = frozenset(
 #: ``KorailNotEntitledError``로 분류하는 결과 코드입니다.
 NOT_ENTITLED_CODES = frozenset(
     {
-        "ERR299943",
         "ERR800049",
         "WRC000419",
         "WRC800030",
@@ -479,10 +529,20 @@ NOT_ENTITLED_CODES = frozenset(
     }
 )
 
-# SEMGTK의 저장 승차권 안내는 analysis/apktool/assets/error_json.json:66을 따릅니다. 앱 분기 리터럴은 보호돼 있으며 서버 장애만을
-# 뜻한다고 단정하지 않습니다.
-#: ``KorailServiceUnavailableError``로 분류하는 결과 코드입니다. 서버 장애만을 뜻하지는 않습니다.
+# 기존 단일 상수는 호환성을 위해 유지합니다. 서비스 오류 전체는 SERVICE_UNAVAILABLE_CODES입니다.
+#: 저장 승차권·연결 문제 안내 결과 코드입니다.
 SERVICE_UNAVAILABLE_CODE = "SEMGTK"
+
+#: ``KorailServiceUnavailableError``로 분류하는 결과 코드입니다. S000/S003은 복원한 앱 서비스 오류 목록과 일치합니다.
+SERVICE_UNAVAILABLE_CODES = frozenset({SERVICE_UNAVAILABLE_CODE, "S000", "S001", "S002", "S003"})
+#: 요청 횟수 제한·반복 호출 차단 결과 코드입니다(앱 메시지 기준).
+RATE_LIMIT_CODES = frozenset({"BT019", "BT023"})
+#: 처리 중 또는 처리 완료 가능성이 있어 결과 확인을 요구하는 코드입니다(앱 메시지 기준).
+PROCESSING_CODES = frozenset({"WRT900900"})
+#: 이미 반환·취소된 결과 코드입니다(앱 메시지 기준).
+ALREADY_PROCESSED_CODES = frozenset({"EZZ000014", "EVZ000102"})
+#: 로그인 문맥에서만 계정 잠금으로 분류하는 코드입니다(앱 메시지 기준).
+ACCOUNT_LOCKED_CODES = frozenset({"WRC000390"})
 
 # SUPDATE의 업데이트 요구 안내는 analysis/apktool/assets/error_json.json:65을 따릅니다. 앱 분기 리터럴은 보호돼 있습니다.
 #: ``KorailAppUpdateRequiredError``로 분류하는 결과 코드입니다.
@@ -499,7 +559,10 @@ _APP_ERROR_BY_CODE: dict[str, type[KorailAppError]] = {
     **{code: KorailReservationRefusedError for code in RESERVATION_REFUSED_CODES},
     **{code: KorailInvalidRequestError for code in INVALID_REQUEST_CODES},
     **{code: KorailNotEntitledError for code in NOT_ENTITLED_CODES},
-    SERVICE_UNAVAILABLE_CODE: KorailServiceUnavailableError,
+    **{code: KorailServiceUnavailableError for code in SERVICE_UNAVAILABLE_CODES},
+    **{code: KorailRateLimitError for code in RATE_LIMIT_CODES},
+    **{code: KorailProcessingError for code in PROCESSING_CODES},
+    **{code: KorailAlreadyProcessedError for code in ALREADY_PROCESSED_CODES},
     APP_UPDATE_REQUIRED_CODE: KorailAppUpdateRequiredError,
 }
 

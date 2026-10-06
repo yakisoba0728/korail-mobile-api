@@ -12,6 +12,8 @@
 
 ::: korail_mobile_api.errors.KorailSessionExpiredError
 
+::: korail_mobile_api.errors.KorailAccountLockedError
+
 ::: korail_mobile_api.errors.KorailDynaPathError
 
 ::: korail_mobile_api.errors.KorailAuthContinuationRequired
@@ -34,6 +36,12 @@
 
 ::: korail_mobile_api.errors.KorailServiceUnavailableError
 
+::: korail_mobile_api.errors.KorailRateLimitError
+
+::: korail_mobile_api.errors.KorailProcessingError
+
+::: korail_mobile_api.errors.KorailAlreadyProcessedError
+
 ::: korail_mobile_api.errors.KorailAppUpdateRequiredError
 
 ::: korail_mobile_api.errors.KorailNetFunnelError
@@ -41,3 +49,9 @@
 ::: korail_mobile_api.errors.KorailQueueRejectedError
 
 ::: korail_mobile_api.errors.KorailDynaPathRequiredError
+
+## 메시지 조회
+
+::: korail_mobile_api.error_messages.get_error_message
+
+::: korail_mobile_api.error_messages.resolve_error_message

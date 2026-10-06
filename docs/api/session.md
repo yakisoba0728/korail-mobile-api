@@ -61,7 +61,9 @@ KorailClient.login(
 | [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `input_flag`가 `None`이고 `member_no`가 숫자만으로 된 값도 이메일도 아닐 때(요청 전). 서버에서 받은 암호화 정보에 쓸 수 있는 AES 키가 없을 때(로그인 요청을 보내지 않음). |
 | [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인 응답의 결과 코드가 성공 코드가 아닐 때. `code`에 결과 코드, `raw`에 응답 원본이 들어 있습니다. 성공 코드인데 `JSESSIONID` 쿠키가 없을 때도 발생합니다. |
 | [`KorailAuthContinuationRequired`][korail_mobile_api.errors.KorailAuthContinuationRequired] | 결과 코드가 `WRC000116` 또는 `WRC000420`일 때. `redirect_url`에 서버가 알려 준 주소가 들어 있습니다. |
-| [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError] | 로그인 응답의 결과 코드가 `SEMGTK`일 때 |
+| [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError] | 로그인 응답의 결과 코드가 `S000`~`S003` 또는 `SEMGTK`일 때 |
+| [`KorailRateLimitError`][korail_mobile_api.errors.KorailRateLimitError] | 요청 횟수 초과·반복 호출 차단(`BT019`, `BT023`) |
+| [`KorailAccountLockedError`][korail_mobile_api.errors.KorailAccountLockedError] | 로그인 응답이 비밀번호 오류 허용 횟수 초과(`WRC000390`)를 알렸을 때 |
 | [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError] | 로그인 응답의 결과 코드가 `SUPDATE`일 때 |
 | [`KorailAppError`][korail_mobile_api.errors.KorailAppError]와 하위 예외 | 로그인 전의 서비스 상태 확인이나 공통 코드 조회가 실패로 응답했을 때. 로그인 요청은 보내지 않습니다. |
 | [`KorailDynaPathRequiredError`][korail_mobile_api.errors.KorailDynaPathRequiredError] | `KorailConfig(disable_dynapath=True)`로 만든 클라이언트에서 호출했을 때. 서비스 상태 확인과 공통 코드 조회까지 보낸 뒤, 로그인 요청을 보내기 전에 발생합니다. |
@@ -233,7 +235,7 @@ KorailClient.get_service_status(
 
 서비스 상태 캐시 파일을 요청하고 응답 봉투로 판정합니다.
 서버가 성공으로 응답하면 응답 모델을 반환하고, 실패로 응답하면 결과 코드에 맞는 예외를 발생시킵니다.
-실패 응답의 결과 코드가 `SEMGTK`이면 [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError], `SUPDATE`이면 [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError]가 발생합니다.
+실패 응답의 결과 코드가 `S000`~`S003` 또는 `SEMGTK`이면 [`KorailServiceUnavailableError`][korail_mobile_api.errors.KorailServiceUnavailableError], `SUPDATE`이면 [`KorailAppUpdateRequiredError`][korail_mobile_api.errors.KorailAppUpdateRequiredError]가 발생합니다.
 요청에는 `timeStamp` 하나만 싣고 공통 필드(`Device`, `Version`, `Key`)는 싣지 않습니다.
 [`login`](#login)도 로그인 전에 같은 요청을 보냅니다.
 

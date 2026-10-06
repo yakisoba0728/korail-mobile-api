@@ -34,6 +34,18 @@ CommonOut 경로의 `FAIL/P058` 또는 결과 누락/P058은 `raise_on_fail=Fals
 성공 봉투의 P058만으로 만료되지 않습니다(`CommonOut.java:361,426–438,455–463`).
 공항버스처럼 정확한 SUCC를 요구하는 파서는 별도 규칙을 유지합니다.
 
+7.0.8 일반 오류 분기의 복원값은 `FAIL` 기본값·실패 비교, 로그인 요구 `P058`, 서비스 오류 목록 `S000`·`S003`입니다.
+Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니다. `S000`·`S003`을 서비스 오류로 추가하며,
+혼잡 `S001`·`S002`, 요청 제한 `BT019`·`BT023`, 처리 확인 필요 `WRT900900`, 기처리 `EZZ000014`·`EVZ000102`는
+메시지에 근거한 라이브러리 분류입니다. 계정 잠금 `WRC000390`은 로그인에서만 `KorailAccountLockedError`입니다.
+어떤 분류도 API 자동 재시도나 상태 변경 요청의 성공 간주로 이어지지 않습니다.
+
+패키지 메시지 사전은 앱 7.0.8의 일반 결과 코드 10,305개·메시지 17,256개와 원본 SHA-256을 보관합니다.
+`checks/build_error_catalog.py`로 로컬 `assets/error_json.json`에서 재생성하며 앱 설정·임의 리소스 키는 제외합니다.
+`get_error_message`는 사전 원문을 조회하고 `resolve_error_message`·`display_message`는 읽을 서버 메시지를 우선해
+일반 텍스트를 표시합니다. 태그·스크립트·스타일을 표시에서 제외하고 원문 필드·예외 문자열은 유지합니다.
+사전에는 성공·안내·과거 코드도 있으므로 사전 등록 여부나 메시지로 실패·세션 만료·재시도를 추론하지 않습니다.
+
 ### 앱 기본값을 쓰는 18개 필드
 
 아래는 **누락** 시의 예외입니다. 문자열은 `""`, 정수·비율로 변환하는 필드는 `None`입니다.
@@ -41,7 +53,7 @@ CommonOut 경로의 `FAIL/P058` 또는 결과 누락/P058은 `raise_on_fail=Fals
 
 | 위치 | 전송 필드 | 개수 | 근거 |
 |---|---|---:|---|
-| 역 행 | `stn_cd`, `stn_nm` | 2 | `StationDataOutStnItem.java:60–65`; 앱의 누락 기본값이 보호돼 있어 `""` 를 씀 |
+| 역 행 | `stn_cd`, `stn_nm` | 2 | `StationDataOutStnItem.java:60–65`; 7.0.8의 일반 DTO 문자열 복원으로 누락 기본값 `""` 확인 |
 | 호차·속성 행 | `h_srcar_no`, `h_rest_seat_cnt`, `h_psrm_cl_nm`, `seatAttNm` | 4 | `TrainResearchOutCarInfo.java:59–85`, `TrainResearchOutSeatInfo.java:51–56` |
 | 좌석 재고 봉투 | `layout_type`, `seat_ary_cd` | 2 | `TResidualSeatsResearchOut.java:61–82` |
 | 좌석 행 | `seat_no`, `sale_psb_flg`, `dir_seat_att_cd`, `rq_seat_att_cd`, `seat_spec`, `sqr_no`, `intg_msg_cd`, `intg_msg` | 8 | `TResidualSeatsResearchOutSeat.java:62–104` |
@@ -61,6 +73,12 @@ CommonOut 경로의 `FAIL/P058` 또는 결과 누락/P058은 `raise_on_fail=Fals
 `logout`은 서버 요청이 실패해도 로컬 상태를 정리하며 서버 무효화 성공을 보장하지 않습니다.
 
 예약대기는 좌석 확보와 다르고 `payable=False`입니다. `confirm_standby_hold`는 기존 대기 홀드에 옵션만 저장합니다.
+일반 열차 예약의 승객 종류는 `PassengerType.basicList()`의 일곱 종류입니다. `teenager > 0`은 직통·좌석 지정·
+예약대기·환승·병합 예약과 간편 API에서 대기열·예약 요청 전에 `KorailProtocolError`로 거절합니다.
+검색에서는 기존처럼 청소년을 어른 인원에 합산하지만 예약 인원을 자동으로 어른으로 바꾸지 않습니다.
+`P11`은 청소년드림 상품(`SpecialOffer.YOUTH`, 발권 할인 코드 `508`)과 다른 경로입니다.
+`ERR299943`은 지원하지 않는 예약 할인으로 `KorailReservationRefusedError`에 속하며,
+회원 자격 코드 `WRC000419`·`WRC800030`은 `KorailNotEntitledError`로 유지합니다.
 병합은 첫 홀드→병합 조회→첫 홀드 취소→후속 홀드 순서이며 첫 홀드는 호출자가 취소해야 합니다.
 `cancel_unpaid_hold`는 기본적으로 가능 여부 확인 후 실제 취소합니다.
 
@@ -100,9 +118,11 @@ SDK는 잘못된 숫자에서 전체 응답을 거절하므로, 이 차이는 �
 라이브러리가 제공하는 누적 대기 상한은 SDK의 상한이 아닙니다.
 서버가 준 노드가 허용 범위를 벗어나면 정문을 사용합니다.
 
-보호된 aid·mode·enum·JSON 설정, DynaPath 차단 키의 정확한 범위, 일부 결제·환불 제어값은 미확인입니다.
+승객 요청 할인 값과 N카드 요청 코드 `153`은 7.0.8의 일반 할인 상수 복호화로 확인했습니다.
+요청의 `ReqDiscount.CHILD=000`·`N_CARD=153`과 발권 응답의 `ResDiscount.CHILD=201`·`N_CARD=443`은 구분합니다.
+일부 보호된 aid·mode·enum·JSON 설정, DynaPath 차단 키의 정확한 범위, 결제·환불 제어값은 미확인입니다.
 DynaPath 차단 판정은 보호된 키 대신 최상위 정수를 검사하므로 다른 필드의 같은 값을 오인할 수 있습니다.
-보호 문자열은 해독하지 않습니다.
+접근 제한 관련 보호 문자열은 해독하지 않습니다.
 
 N카드 일부 기능, 채워진 지연료 영수증, 셀프 체크인 좌석 확인·등록·취소 및 전달표 회수는 실서버 수용을 확인하지 않았습니다.
 저장소의 테스트와 검사기는 모두 오프라인이며 실서버 수용을 증명하지 않습니다.

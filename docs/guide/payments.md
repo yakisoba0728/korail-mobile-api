@@ -180,9 +180,7 @@ else:
 from korail_mobile_api import OriginalTicketReference
 
 tickets = client.get_ticket_list()
-ticket = next(
-    t for reservation in tickets.reservations for t in reservation.tickets if t.pnr_no == hold.pnr_no
-)
+ticket = next(t for reservation in tickets.reservations for t in reservation.tickets if t.pnr_no == hold.pnr_no)
 reference = OriginalTicketReference(
     sale_window_no=ticket.sale_window_no,
     sale_date=ticket.return_sale_date,

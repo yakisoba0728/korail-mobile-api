@@ -96,6 +96,28 @@ def test_past_date_and_unknown_station_do_not_send_search() -> None:
     assert len(calls) == 1
 
 
+def test_search_keeps_teenager_count_as_adults() -> None:
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(
+            200, json={"strResult": "SUCC", "h_msg_cd": "IRZ000001", "trn_infos": {"trn_info": []}}
+        )
+
+    with Korail(_config(), transport=httpx.MockTransport(handler), validate_stations=False) as korail:
+        korail.trains.search(
+            "서울",
+            "부산",
+            depart_after=datetime(2099, 1, 1),
+            passengers=KorailPassengerCounts(adult=0, teenager=1),
+        )
+    assert len(calls) == 1
+    form = parse_qs(calls[0].content.decode())
+    assert form["txtPsgFlg_1"] == ["1"]
+    assert "P11" not in calls[0].content.decode()
+
+
 def test_search_passes_continuation_without_an_extra_station_lookup() -> None:
     calls: list[httpx.Request] = []
 

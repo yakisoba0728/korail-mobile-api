@@ -137,9 +137,9 @@ KORAIL_STANDBY_WAIT_FLAG = " 9"
 #: N카드 구매 한 번에 넣을 수 있는 구간 수의 상한입니다. 앱의 상한과 같은지는 확인하지 못했습니다.
 KORAIL_MAX_DISCOUNT_CARD_SECTIONS = 3
 
-# ReqDiscount.java:36 / ResDiscount.java:46 에 N_CARD 가 있으나 값은 보호됨. 판정 헬퍼: DiscountHelper.java:818, 호출:
-# TCReservationRequestHelper.java:284.
-#: N카드로 예약할 때 보내는 할인 종류 코드입니다. 앱의 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
+# 7.0.8 ReqDiscount.N_CARD의 복호화로 확인한 요청 코드입니다. 발권 응답의 ResDiscount.N_CARD는 "443"으로 별개입니다.
+# 판정 헬퍼: DiscountHelper.java:818, 호출: TCReservationRequestHelper.java:284. 예약 성공은 실서버 미확인입니다.
+#: N카드로 예약할 때 보내는 할인 종류 코드입니다. 7.0.8의 ``ReqDiscount.N_CARD`` 값과 일치합니다.
 KORAIL_DISCOUNT_CARD_DISCOUNT_CODE = "153"
 
 # TicketReservationIn.java:43 의 txtMenuId. ReservationMenuId.java:21-22 는 SEAT_ASSIGN 과 N_CARD 를 별개로 선언합니다.

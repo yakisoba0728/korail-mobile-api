@@ -555,7 +555,9 @@ KorailClient.reserve_with_discount_card(
 [`reserve`](reservations.md#reserve)와 같은 예약 경로에 N카드 번호를 붙여 보냅니다. 승객 한 명, 일반실로 홀드합니다. 실서버에서 확인하지 못한 메서드입니다.
 
 `train`은 열차 조회 결과의 [`TrainSummary`][korail_mobile_api.models.TrainSummary]를 그대로 넘깁니다. 라이브러리는 일반실 예약 코드(`general_reservation_code`)가 `"11"`인 열차만 받습니다.
-요청에는 N카드 할인 코드로 `"153"`, 메뉴 ID로 `"A2"`를 넣습니다. 이 값이 앱이 보내는 값과 같은지는 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
+요청에는 N카드 할인 코드로 `"153"`, 메뉴 ID로 `"A2"`를 넣습니다.
+할인 코드 `"153"`은 7.0.8의 `ReqDiscount.N_CARD` 복호화로 확인한 값이며,
+발권 응답의 `ResDiscount.N_CARD` 값 `"443"`과 구분합니다. 이 예약 흐름의 실서버 성공은 미확인입니다.
 반환값은 [`reserve`](reservations.md#reserve)와 같은 홀드 모델입니다.
 
 **매개변수**
@@ -577,7 +579,7 @@ KorailClient.reserve_with_discount_card(
 | [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `train`이 `TrainSummary`가 아닐 때, `general_reservation_code`가 `"11"`이 아닐 때, `card_no`가 비어 있을 때, 열차 번호·운행일·역 코드 같은 필수 값이 없거나 형식이 맞지 않을 때. 응답을 읽지 못했을 때도 발생하며, 이때 홀드는 이미 만들어졌을 수 있습니다. |
 | [`KorailSoldOutError`][korail_mobile_api.errors.KorailSoldOutError] | 서버가 매진으로 응답했을 때 |
 | [`KorailSeatUnavailableError`][korail_mobile_api.errors.KorailSeatUnavailableError] | 서버가 좌석을 이용할 수 없다고 응답했을 때 |
-| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간 등의 이유로 예약을 거절했을 때 |
+| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인(`ERR299943`) 등의 이유로 예약을 거절했을 때 |
 
 **정보**
 

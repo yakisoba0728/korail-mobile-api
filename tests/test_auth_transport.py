@@ -181,8 +181,10 @@ def test_login_refusal_classes_and_cleanup(factory, code):
     client.http.cookies.set("OLD", "synthetic-old")
     with pytest.raises(E.KorailAuthError) as caught:
         client.login(ID, PASSWORD)
-    assert type(caught.value) is E.KorailAuthError
+    expected = E.KorailAccountLockedError if code == "WRC000390" else E.KorailAuthError
+    assert type(caught.value) is expected
     assert caught.value.code == code
+    assert caught.value.message == "synthetic message"
     assert caught.value.raw["h_msg_cd"] == code
     assert client.session.current is None and client.session.pending is None
     assert not client.http.cookies
@@ -229,17 +231,25 @@ def test_success_without_cookie_is_auth_error(factory, code):
     "code, exception",
     [
         ("SEMGTK", E.KorailServiceUnavailableError),
+        ("S000", E.KorailServiceUnavailableError),
+        ("S001", E.KorailServiceUnavailableError),
+        ("S002", E.KorailServiceUnavailableError),
+        ("S003", E.KorailServiceUnavailableError),
+        ("BT019", E.KorailRateLimitError),
+        ("BT023", E.KorailRateLimitError),
+        ("WRC000390", E.KorailAccountLockedError),
         ("SUPDATE", E.KorailAppUpdateRequiredError),
         ("P058", E.KorailSessionExpiredError),
     ],
 )
 def test_login_special_errors(factory, code, exception):
     """CommonOut.java:426-452; NetworkService.java:6916-6919. P058 literal: dated 2026-09-24 observation."""
-    client, _ = factory([*bootstrap(), login_response(code, "FAIL")])
+    client, requests = factory([*bootstrap(), login_response(code, "FAIL")])
     with pytest.raises(exception) as caught:
         client.login(ID, PASSWORD)
     assert caught.value.code == code and caught.value.raw["h_msg_cd"] == code
     assert not client.http.cookies and client.session.current is None
+    assert len(requests) == 3
 
 
 @pytest.mark.parametrize("stage", [0, 1])
@@ -848,10 +858,13 @@ EXPECTED_GROUPS = {
     "KorailNoDirectTrainError": "WRD000061",
     "KorailSoldOutError": """ERR211161 IRT010110 WRT300001 ERR800048 IRT010510 IRT011010 IRT011210 IRT011310 WRG500113 WRG500114 ERI411321 EAZ000038""",
     "KorailSeatUnavailableError": """WRI411345 WRT800176 ERR521128 WRS200019 WRS600242 WRS800009 WRS900309""",
-    "KorailReservationRefusedError": """WRR800029 ERR911531 ERR911051 ERR911501 ERR299920 ERR299922 ERR299932 ERR299933 ERR299934 ERR299935 ERR299936 ERR299937 ERR299939 ERR299941 ERR299992 ERR299993 ERR521143 ERR521158 ERR521185 ERR800052 ERR911421 ERR911528 WRR664254 WRR800045 ERR911081 ERR800056 S-ERR911411 S021 WRR664325 WRR700001 WRX000007""",
+    "KorailReservationRefusedError": """WRR800029 ERR911531 ERR911051 ERR911501 ERR299920 ERR299922 ERR299932 ERR299933 ERR299934 ERR299935 ERR299936 ERR299937 ERR299939 ERR299941 ERR299943 ERR299992 ERR299993 ERR521143 ERR521158 ERR521185 ERR800052 ERR911421 ERR911528 WRR664254 WRR800045 ERR911081 ERR800056 S-ERR911411 S021 WRR664325 WRR700001 WRX000007""",
     "KorailInvalidRequestError": """ERB000001 WRG200018 WRT100002 WRT100124 WRG200001 WRG200002 WRG200003 WRG200004 WRG200005 WRG200006 WRG200007 WRG200008 WRG200009 WRG200010 WRG200011 WRG200012 WRG200013 WRG200014 WRG200015 WRG200016 WRG200017 WRG200019 WRG200020 ERR800001 ERR800002 ERR800003 ERR800004 ERR800005 ERR800006 ERR800008 ERR800009 ERR800010 ERR800011 ERR800012 ERR800014 ERR800015 ERR800016 ERR800017 ERR800018 ERR800019 ERR800020 ERR800021 ERR800022 ERR800023 ERR800024 ERR800025 ERR800026 ERR800029 ERR800030 ERR800031 ERR800033 ERR800034 ERR800035 ERR800036 ERR800037 ERR800038 ERR930224 ERR930226 ERR930227 ERR930228 ERR930250 ERR930260 ERR930261 ERR930267 ERR930268 ERR930278 ERR930279 ERR930280 ERR930292 ERR930293 ERR930310 ERR930312 ERR930328 ERR930329 WRC000063 WRC000210 WRC000260 WRC000370 WRC000392 WRC000436 WRR664227 WRT400191 WRT400235 WRT400356 WRT800053 WRT800074 WRT800075""",
-    "KorailNotEntitledError": """ERR299943 ERR800049 WRC000419 WRC800030 WRR800058 MRR000008 MRT200005 WRC000107 WRC000302 WRC000373 WRC000412 WRC000446 WRR664211""",
-    "KorailServiceUnavailableError": "SEMGTK",
+    "KorailNotEntitledError": """ERR800049 WRC000419 WRC800030 WRR800058 MRR000008 MRT200005 WRC000107 WRC000302 WRC000373 WRC000412 WRC000446 WRR664211""",
+    "KorailServiceUnavailableError": "SEMGTK S000 S001 S002 S003",
+    "KorailRateLimitError": "BT019 BT023",
+    "KorailProcessingError": "WRT900900",
+    "KorailAlreadyProcessedError": "EZZ000014 EVZ000102",
     "KorailAppUpdateRequiredError": "SUPDATE",
 }
 EXPECTED = {code: getattr(E, name) for name, codes in EXPECTED_GROUPS.items() for code in codes.split()}
@@ -870,12 +883,15 @@ def test_error_table_each_code_type_message_and_raw(code, expected):
 
 
 def test_error_table_has_no_hidden_extra_or_overlapping_codes():
-    assert len(EXPECTED) == 174
+    assert len(EXPECTED) == 183
     assert len(EXPECTED) == sum(len(codes.split()) for codes in EXPECTED_GROUPS.values())
     assert E._APP_ERROR_BY_CODE == EXPECTED
 
 
-@pytest.mark.parametrize("code", [None, "", "SYNTHETIC-UNKNOWN", "ERR800007", "ERR800013", "ERR800028", "P058"])
+@pytest.mark.parametrize(
+    "code",
+    [None, "", "SYNTHETIC-UNKNOWN", "ERR800007", "ERR800013", "ERR800028", "P058", "S035", "P092", "WRC000390"],
+)
 def test_unclassified_codes_and_p058_classifier_boundary(code):
     # P058 is deliberately handled by the envelope layer, not this classifier.
     assert type(E.classify_app_error(code, "synthetic")) is E.KorailAppError

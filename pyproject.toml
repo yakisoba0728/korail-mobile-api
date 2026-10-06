@@ -60,7 +60,7 @@ include-package-data = false
 version = {attr = "korail_mobile_api.__version__"}
 
 [tool.setuptools.package-data]
-korail_mobile_api = ["py.typed"]
+korail_mobile_api = ["py.typed", "error_messages.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

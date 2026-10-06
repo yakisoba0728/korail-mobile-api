@@ -36,6 +36,10 @@ KorailClient.reserve(
 요청 전에 열차의 식별 값(열차 번호, 운행일, 출발 일시, 역 코드와 역 순서 등)이 있는지와 형식이 맞는지 검사하고, `job_type`에 따라 아래 조건을 검사합니다.
 검사를 통과하지 못하면 요청을 보내지 않습니다.
 
+`passengers.teenager > 0`이면 모든 예약 종류에서 대기열·예약 요청 전에
+[`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]로 거절합니다.
+청소년드림 상품과의 차이는 [승객 구성](../guide/reservations.md#passengers)을 참고하세요.
+
 | `job_type` | 요청 전 검사 |
 |---|---|
 | `IMMEDIATE` (일반 예약) | 선택한 객실의 예약 코드가 `"11"`이어야 합니다. 일반실은 `general_reservation_code`, 특실은 `special_reservation_code`를 봅니다. 입석만 남은 열차는 거절합니다. |
@@ -51,7 +55,7 @@ KorailClient.reserve(
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
 | `train` | [`TrainSummary`][korail_mobile_api.models.TrainSummary] | 필수 | 예약할 열차입니다. 조회 결과의 행을 그대로 넘깁니다. |
-| `passengers` | [`KorailPassengerCounts`][korail_mobile_api.mutation_models.KorailPassengerCounts] \| `None` | `None` | 승객 구성입니다. `None`이면 어른 1명입니다. 유아가 있는데 어린이·유아 외의 승객이 없거나, 안내견이 장애 승객 수보다 많으면 거절합니다. |
+| `passengers` | [`KorailPassengerCounts`][korail_mobile_api.mutation_models.KorailPassengerCounts] \| `None` | `None` | 승객 구성입니다. `None`이면 어른 1명입니다. `teenager > 0`, 유아가 있는데 어린이·유아 외의 승객이 없는 경우, 안내견이 장애 승객 수보다 많은 경우를 요청 전에 거절합니다. |
 | `seat_class` | [`KorailSeatClass`][korail_mobile_api.constants.KorailSeatClass] | `KorailSeatClass.GENERAL` | 객실 등급입니다. `GENERAL`(일반실) 또는 `SPECIAL`(특실)입니다. |
 | `job_type` | [`KorailReservationJobType`][korail_mobile_api.constants.KorailReservationJobType] | `KorailReservationJobType.IMMEDIATE` | 예약 종류입니다. 위 표를 참고하세요. |
 | `seats` | `Sequence[`[`KorailSeatAssignment`][korail_mobile_api.mutation_models.KorailSeatAssignment]`]` \| `None` | `None` | 지정할 좌석입니다. `job_type`이 `SEAT_DESIGNATED`일 때만 넣고, 승객 한 명에 한 좌석씩 넣습니다. 다른 `job_type`에 좌석을 넣으면 요청 전에 거절합니다. |
@@ -69,7 +73,7 @@ KorailClient.reserve(
 | [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 요청 전 검사에 실패했을 때(위 표의 조건, 승객 조합, 열차 식별 값, 좌석 수·중복, `SEAT_DESIGNATED`가 아닌데 `seats`를 넣은 경우, `seat_attribute_code` 형식, `seat_class`·`job_type` 값). 응답의 좌석별 정산액 합계와 총 정산액이 다를 때처럼 응답을 읽지 못했을 때도 발생하며, 이때 홀드는 이미 만들어졌을 수 있습니다. |
 | [`KorailSoldOutError`][korail_mobile_api.errors.KorailSoldOutError] | 서버가 매진으로 응답했을 때 |
 | [`KorailSeatUnavailableError`][korail_mobile_api.errors.KorailSeatUnavailableError] | 서버가 지정 좌석을 이용할 수 없다고 응답했을 때 |
-| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간 등의 이유로 예약을 거절했을 때 |
+| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인(`ERR299943`) 등의 이유로 예약을 거절했을 때 |
 
 **정보**
 
@@ -125,7 +129,7 @@ KorailClient.reserve_transfer(
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
 | `legs` | `Sequence[`[`TrainSummary`][korail_mobile_api.models.TrainSummary]`]` | 필수 | 탑승 순서대로 놓은 두 구간입니다. 정확히 두 개여야 합니다. |
-| `passengers` | [`KorailPassengerCounts`][korail_mobile_api.mutation_models.KorailPassengerCounts] \| `None` | `None` | 두 구간에 같이 쓰는 승객 구성입니다. `None`이면 어른 1명입니다. |
+| `passengers` | [`KorailPassengerCounts`][korail_mobile_api.mutation_models.KorailPassengerCounts] \| `None` | `None` | 두 구간에 같이 쓰는 승객 구성입니다. `None`이면 어른 1명입니다. `teenager > 0`이면 대기열·예약 요청 전에 `KorailProtocolError`로 거절합니다. |
 | `seat_classes` | `Sequence[`[`KorailSeatClass`][korail_mobile_api.constants.KorailSeatClass]`]` \| [`KorailSeatClass`][korail_mobile_api.constants.KorailSeatClass] | `KorailSeatClass.GENERAL` | 객실 등급입니다. 값 하나나 원소가 하나인 목록은 두 구간에 같이 쓰고, 두 개짜리 목록은 구간 순서대로 씁니다. |
 | `job_type` | [`KorailReservationJobType`][korail_mobile_api.constants.KorailReservationJobType] | `KorailReservationJobType.IMMEDIATE` | 두 구간에 같이 쓰는 예약 종류입니다. |
 | `seats` | `Sequence[Sequence[`[`KorailSeatAssignment`][korail_mobile_api.mutation_models.KorailSeatAssignment]`]]` \| `None` | `None` | `job_type`이 `SEAT_DESIGNATED`일 때 구간마다 좌석 목록을 하나씩 넣습니다. 각 목록에는 승객 한 명에 한 좌석씩 넣습니다. |
@@ -143,7 +147,7 @@ KorailClient.reserve_transfer(
 | [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `legs`가 [`TrainSummary`][korail_mobile_api.models.TrainSummary] 두 개가 아니거나, 같은 열차이거나, 탑승 순서가 아닐 때. `seat_classes`·`seats`·`seat_attribute_codes`의 개수가 구간 수와 맞지 않을 때. 구간마다 [`reserve`](#reserve)와 같은 요청 전 검사에 실패했을 때. 응답의 좌석별 정산액 합계와 총 정산액이 다를 때처럼 응답을 읽지 못했을 때도 발생하며, 이때 홀드는 이미 만들어졌을 수 있습니다. |
 | [`KorailSoldOutError`][korail_mobile_api.errors.KorailSoldOutError] | 서버가 매진으로 응답했을 때 |
 | [`KorailSeatUnavailableError`][korail_mobile_api.errors.KorailSeatUnavailableError] | 서버가 지정 좌석을 이용할 수 없다고 응답했을 때 |
-| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간 등의 이유로 예약을 거절했을 때 |
+| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인(`ERR299943`) 등의 이유로 예약을 거절했을 때 |
 
 **정보**
 
@@ -201,7 +205,7 @@ KorailClient.reserve_merge(
 |---|---|---|---|
 | `standing_hold_train` | [`TrainSummary`][korail_mobile_api.models.TrainSummary] | 필수 | 첫 홀드를 만들 때 넘긴 열차입니다. |
 | `merge_rows` | `Sequence[`[`TrainScheduleItem`][korail_mobile_api.read_models.TrainScheduleItem]`]` | 필수 | [`get_merge_seats_inquiry`](trains.md#get_merge_seats_inquiry)가 반환한 `trains`입니다. 모든 행의 열차 번호가 `standing_hold_train`과 같아야 하고, 행에 운행일이 있으면 운행일도 같아야 합니다. 첫 행에는 도착역 코드와 도착역 순서 값이 있어야 합니다. |
-| `passengers` | [`KorailPassengerCounts`][korail_mobile_api.mutation_models.KorailPassengerCounts] \| `None` | `None` | 첫 홀드와 같은 승객 구성입니다. `None`이면 어른 1명입니다. |
+| `passengers` | [`KorailPassengerCounts`][korail_mobile_api.mutation_models.KorailPassengerCounts] \| `None` | `None` | 첫 홀드와 같은 승객 구성입니다. `None`이면 어른 1명입니다. `teenager > 0`이면 요청 전에 `KorailProtocolError`로 거절합니다. |
 | `seat_class` | [`KorailSeatClass`][korail_mobile_api.constants.KorailSeatClass] | `KorailSeatClass.GENERAL` | 첫 홀드와 같은 객실 등급입니다. |
 | `job_type` | [`KorailReservationJobType`][korail_mobile_api.constants.KorailReservationJobType] | `KorailReservationJobType.MERGE_STANDING` | 첫 홀드와 같은 예약 종류입니다. |
 | `seat_attribute_code` | `str` \| `None` | `None` | 첫 홀드와 같은 좌석 속성 코드입니다. `None`이면 [`reserve`](#reserve)와 같은 규칙으로 정합니다. |
@@ -217,7 +221,7 @@ KorailClient.reserve_merge(
 | [`KorailAuthError`][korail_mobile_api.errors.KorailAuthError] | 로그인하지 않았을 때 |
 | [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `merge_rows`가 비었거나 [`TrainScheduleItem`][korail_mobile_api.read_models.TrainScheduleItem]이 아닌 값이 있을 때. 행의 열차 번호나 운행일이 `standing_hold_train`과 다를 때. 첫 행에 중간역 값이 없을 때. `job_type`이 `MERGE_STANDING`인데 열차가 병합 대상이 아닐 때. 그 밖의 [`reserve`](#reserve)와 같은 요청 전 검사에 실패했을 때. 응답의 좌석별 정산액 합계와 총 정산액이 다를 때처럼 응답을 읽지 못했을 때도 발생하며, 이때 홀드는 이미 만들어졌을 수 있습니다. |
 | [`KorailSoldOutError`][korail_mobile_api.errors.KorailSoldOutError] | 서버가 매진으로 응답했을 때 |
-| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간 등의 이유로 예약을 거절했을 때 |
+| [`KorailReservationRefusedError`][korail_mobile_api.errors.KorailReservationRefusedError] | 서버가 중복 예약, 구매 한도, 예약 가능 시간, 지원하지 않는 할인(`ERR299943`) 등의 이유로 예약을 거절했을 때 |
 
 **정보**
 

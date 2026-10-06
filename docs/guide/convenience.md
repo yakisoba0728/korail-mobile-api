@@ -32,7 +32,10 @@ with Korail() as korail:
 
 ```python
 result = korail.trains.search(
-    "서울", "부산", include_no_seats=False, include_waiting_list=True,
+    "서울",
+    "부산",
+    include_no_seats=False,
+    include_waiting_list=True,
 )
 for train in result.trains:
     print(train.summary())
@@ -66,13 +69,17 @@ with Korail.logged_in(input("회원번호·전화번호·이메일: "), getpass(
 
 ### 일반실·특실 우선 선택
 
+승객 구성은 [예약 승객 구성](reservations.md#passengers)과 같은 검증을 적용합니다.
+`passengers.teenager > 0`이면 `reservations.create()`도 대기열·예약 요청 전에 `KorailProtocolError`로 거절합니다.
+
 기본 예약은 일반실이고, `seat_class=KorailSeatClass.SPECIAL`로 특실을 직접 지정할 수 있습니다. 즉시 예약에서는 `option`으로 가용 객실을 고를 수도 있습니다.
 
 ```python
 from korail_mobile_api import KorailReserveOption
 
 hold = korail.reservations.create(
-    train, option=KorailReserveOption.GENERAL_FIRST,
+    train,
+    option=KorailReserveOption.GENERAL_FIRST,
 )
 ```
 

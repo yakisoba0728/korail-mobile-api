@@ -168,10 +168,13 @@ class StationRefundExecutionResponse(BaseKorailResponse):
 
 @dataclass(frozen=True)
 class KorailPassengerCounts:
-    """승객 종류별 예약 인원을 구성합니다.
+    """승객 종류별 검색·예약 인원을 구성합니다.
 
     인원이 0인 승객 종류는 요청에 싣지 않습니다. 유아·안내견을 포함한 전체 인원은 1~9명이어야 합니다. 인원에 음수나 정수가
-    아닌 값이 있거나 전체 인원이 이 범위를 벗어나면 ``KorailProtocolError``가 발생합니다."""
+    아닌 값이 있거나 전체 인원이 이 범위를 벗어나면 ``KorailProtocolError``가 발생합니다.
+
+    ``teenager``는 검색 호환용으로 유지하며 검색에서는 어른 수에 합산합니다. 열차 예약 메서드는 이 값이 0보다 크면
+    요청 전에 ``KorailProtocolError``로 거절합니다. 청소년드림 할인 상품을 선택하는 필드가 아닙니다."""
 
     # 근거: Passengers.java:48,610-616,743-753.
 

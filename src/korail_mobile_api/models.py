@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Self
 
 from .constants import KORAIL_STANDBY_WAIT_FLAG
+from .error_messages import resolve_error_message
 from .errors import KorailProtocolError
 
 
@@ -52,6 +53,11 @@ class BaseKorailResponse:
     h_msg_txt: str | None = None
     str_result: str | None = None
     raw: Mapping[str, object] = field(default_factory=dict[str, object], compare=False)
+
+    @property
+    def display_message(self) -> str | None:
+        """읽을 서버 메시지 또는 앱 사전의 한국어 안내입니다. 성공·실패와 원문 필드는 바꾸지 않습니다."""
+        return resolve_error_message(self.h_msg_cd, self.h_msg_txt)
 
     @classmethod
     def from_raw(cls, raw: object) -> Self:
