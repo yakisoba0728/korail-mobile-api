@@ -231,7 +231,7 @@ print("사용 가능 마일리지", commission.usable_mileage)
 [`refund`](../api/payments.md#refund)에 `PaidTicket`과 수수료 조회 응답을 넘깁니다. 수수료 조회 응답은 `commission=` 키워드 인자로 넘깁니다.
 `commission`은 필수입니다. [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse]가 아닌 값은 `None`을 포함해 요청 전에 거절합니다.
 성공 응답(`str_result`가 `"SUCC"`)이 아닌 수수료 조회 응답도 요청 전에 거절합니다.
-현재 개발 변경은 **fail-closed 정책**입니다. 실제 `get_refund_commission` 반환 시 비공개로 연결된 조회 문맥과
+2.6.0부터 환불은 **fail-closed 정책**입니다. 실제 `get_refund_commission` 반환 시 비공개로 연결된 조회 문맥과
 환불할 `PaidTicket`의 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호가 모두 일치해야 합니다.
 `RefundCommissionResponse`를 직접 생성하거나 원문에서 직접 파싱한 값, 다른 표의 수수료 응답,
 원표 반환일이 없는 수동 생성 `PaidTicket`은 `KorailProtocolError`로 거절합니다.

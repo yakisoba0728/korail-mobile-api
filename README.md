@@ -1,23 +1,5 @@
 > [!IMPORTANT]
-> ## 🚆 The Journey Begins Again
->
-> ### **여기서, 여정이 다시 시작됩니다.**
->
-> 2026년 9월 1일, KORAIL과 SR이 통합되면서 SRT 열차는 KTX로 합쳐졌고, 코레일톡도 코레일+로 바뀌었습니다.
-> 두 갈래로 이어져 오던 서비스가 하나의 선로 위에서 만난 것처럼,
-> **[`srt-mobile-api`](https://github.com/yakisoba0728/srt-mobile-api)의 개발과 기록도
-> 이제 `korail-mobile-api`로 이어집니다.**
->
-> `srt-mobile-api`는 여기서 멈췄지만, 그 안에서 확인한 수많은 요청과 응답,
-> 시행착오와 검증의 기록까지 사라지는 것은 아닙니다.
-> 그 경험은 이 프로젝트의 다음 장을 이루는 기반으로 남습니다.
->
-> **우리는 SRT를 기억할 것입니다.**  
-> 하나의 프로젝트는 종착역에 도착했지만, 그 여정은 이곳에서 다시 출발합니다.
->
-> **One journey ended. Another begins here.**
->
-> → [`srt-mobile-api` — Final Stop](https://github.com/yakisoba0728/srt-mobile-api)
+> 이전 [`srt-mobile-api`](https://github.com/yakisoba0728/srt-mobile-api)의 개발과 기록은 이 저장소에서 이어갑니다.
 
 <p align="center">
   <picture>
@@ -31,7 +13,7 @@
   <a href="https://pypi.org/project/korail-mobile-api/"><img src="https://img.shields.io/pypi/v/korail-mobile-api" alt="PyPI"></a>
   <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?logo=python&amp;logoColor=white" alt="Python 3.11 | 3.12 | 3.13 | 3.14">
   <img src="https://img.shields.io/badge/typing-mypy%20strict-2A6DB2" alt="mypy strict">
-  <img src="https://img.shields.io/badge/%EC%BD%94%EB%A0%88%EC%9D%BC%2B-7.0.8%20%EA%B8%B0%EC%A4%80-0b7a75" alt="코레일+ 7.0.8 기준">
+  <img src="https://img.shields.io/badge/AppVersion-7.0.8%20default-0b7a75" alt="요청 기본 AppVersion 7.0.8">
   <a href="https://github.com/yakisoba0728/korail-mobile-api/blob/main/LICENSE"><img src="https://img.shields.io/github/license/yakisoba0728/korail-mobile-api" alt="License"></a>
 </p>
 
@@ -42,20 +24,36 @@
   <a href="#예약결제환불">예약·결제·환불</a> ·
   <a href="#지원-범위">지원 범위</a> ·
   <a href="#동작-방식">동작 방식</a> ·
+  <a href="#개발">개발</a> ·
   <a href="#법적-고지">법적 고지</a>
 </p>
 
-코레일+ 안드로이드 앱이 서버에 보내는 요청을 그대로 따라 하는 비공식 Python 클라이언트입니다.
-2026년 9월 KORAIL과 SR이 통합되면서 SRT는 KTX로 합쳐졌고, 코레일톡도 코레일+로 이름이 바뀌었습니다.
+코레일+ 안드로이드 앱의 요청·응답 형식을 바탕으로 만든 비공식 동기 Python 클라이언트입니다.
+열차 조회, 예약·결제·환불과 승차권·계정 조회를 지원합니다.
 
 KORAIL과는 관계없는 개인 프로젝트입니다. 공식 API가 아니라서 KORAIL이 서버나 앱을 바꾸면 언제든 깨질 수 있습니다.
 쓰기 전에 [법적 고지](#법적-고지)는 꼭 읽어 주세요.
 
-- **타입이 붙은 응답** — 응답은 전부 dataclass로 돌려주고, 서버가 준 원본은 `.raw`에 남겨 둡니다.
-- **실수하기 어렵게** — 결제 금액은 홀드의 `received_amount`를 그대로 쓰고, 0원·예약대기 홀드를 카드로 결제하려는 건 아닌지, 환불 전에 수수료를 조회했는지 요청 전에 확인합니다.
-- **네트워크 없이 도는 전체 테스트** — CI에서 Python 3.11~3.14로 `pytest`, `mypy --strict`, `pyright`, `ruff`를 돌립니다.
+- **타입이 붙은 응답** — 서버 응답을 dataclass로 읽고, 원문은 `.raw`에 남깁니다. `.raw`의 개인정보는 자동으로 가리지 않습니다.
+- **실수하기 어렵게** — 결제 금액은 홀드의 `received_amount`를 쓰며, 0원·예약대기 홀드의 카드 결제를 차단합니다. 2.6.0부터 환불은 성공한 수수료 조회와 대상 승차권의 연결도 확인합니다.
+- **변경 요청 재전송 없음** — 예약·결제·환불 결과가 불명확해도 자동으로 같은 요청을 다시 보내지 않습니다.
+- **오프라인 검증** — CI에서 Python 3.11~3.14와 최소 의존성 조합, 타입·포맷·문서, checkout 밖에 설치한 wheel까지 검사합니다.
 
-현재 개발 변경은 오류 사전만 7.0.10 기준으로 갱신하며, 요청 기본 `AppVersion=7.0.8`과 패키지 버전 `2.5.0`은 유지합니다. `KorailConfig(app_version="7.0.10")`으로 명시할 수 있지만 실서버 호환을 보장하지 않습니다. [7.0.10 정적 검토와 미확인 범위](https://yaki.kr/korail-mobile-api/verification-7010/)는 기존 실서버 검증과 별개입니다.
+## 버전과 호환 범위
+
+**PyPI 배포본과 `main`의 미배포 변경은 구분하세요.** 패키지 버전 문자열이 같아도 포함된 변경이 다를 수 있습니다.
+
+| 구분 | 현재 `main` |
+|---|---|
+| 패키지 버전 | `2.6.0`; 버전별 변경은 [CHANGELOG.md](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)에 기록 |
+| 요청 기본 `AppVersion` | `7.0.8`; API `Version`과 별개 |
+| 오류 메시지 사전 | 앱 `7.0.10` 기준 |
+
+2.6.0에는 사전 갱신, 요청 필드 순서 정정, 환불 대상 연결 검증과 초장문 마일리지 숫자 처리 보완이 포함됩니다.
+**2.5.0에서 수수료 응답을 직접 생성·파싱해 환불하던 호출은 변경해야 합니다.** 실제 수수료 조회 반환값과 원표 반환일·동반자 정보를 맞추세요.
+사전의 앱 버전을 요청 기본값이나 전체 호환 인증으로 간주하지 않습니다.
+`KorailConfig(app_version="7.0.10")`으로 명시한 제한적 실서버 확인과 정적 검토의 범위는
+[7.0.10 검증 기록](https://github.com/yakisoba0728/korail-mobile-api/blob/main/docs/verification-7010.md)에 구분돼 있습니다.
 
 ## 설치
 
@@ -66,15 +64,16 @@ pip install korail-mobile-api
 ```
 
 검색 필터·객실 우선 선택·메시지 사전과 신규 오류 분류는 2.5.0부터 제공합니다.
+환불 대상 연결 검증과 7.0.10 메시지 사전은 2.6.0부터 제공합니다.
 이전 버전은 `pip install --upgrade korail-mobile-api`로 갱신하세요.
 
-개발 중인 코드는 GitHub에서 바로 설치할 수 있습니다.
+**개발 버전 설치:** `main`의 Unreleased 변경이 필요하면 GitHub에서 바로 설치할 수 있습니다.
 
 ```sh
 pip install --force-reinstall "git+https://github.com/yakisoba0728/korail-mobile-api@main"
 ```
 
-의존성은 `httpx`와 `cryptography` 두 개뿐입니다. SOCKS 프록시를 쓰려면 `pip install "korail-mobile-api[socks]"`로 설치하세요.
+필수 런타임 의존성은 `httpx>=0.24.1`과 `cryptography>=42.0.8`입니다. SOCKS 프록시를 쓰려면 `pip install "korail-mobile-api[socks]"`로 설치하세요.
 
 기존 예약을 가져오는 `get_reservation_hold`는 2.3.0부터 제공합니다. 이전 버전은 `pip install --upgrade korail-mobile-api`로 갱신하세요.
 
@@ -167,7 +166,7 @@ finally:
 변경 요청은 자동으로 다시 보내지 않습니다. 응답을 못 읽어서 예외가 나도 서버에서는 이미 처리됐을 수 있습니다.
 그럴 땐 다시 보내지 말고 예외의 `.raw`를 보고, 예약은 `get_reservation_history()`, 결제·환불은 `get_ticket_list()`로 먼저 확인하세요.
 
-개발 변경의 환불은 대상 연결을 확인할 수 없으면 거절하는 fail-closed 정책입니다. `PaidTicket.from_refund_detail()` 사용을 권하며, 수동 생성 시 현재 `sale_date`와 별도로 `return_sale_date`를 명시하세요. 수수료 조회 연결은 금액의 유효기간이나 서버 승인을 보장하지 않습니다. [환불 가이드](https://yaki.kr/korail-mobile-api/guide/payments/#commission)를 참고하세요.
+2.6.0부터 환불은 대상 연결을 확인할 수 없으면 거절하는 fail-closed 정책입니다. `PaidTicket.from_refund_detail()` 사용을 권하며, 수동 생성 시 현재 `sale_date`와 별도로 `return_sale_date`를 명시하세요. 수수료 조회 연결은 금액의 유효기간이나 서버 승인을 보장하지 않습니다. [환불 가이드](https://yaki.kr/korail-mobile-api/guide/payments/#commission)를 참고하세요.
 
 앱이나 다른 패키지에서 예약한 표는 로그인 후 `hold = client.get_reservation_hold(pnr_no)`로 가져와
 금액을 확인하고 `client.pay_with_card(hold, card)`로 결제할 수 있습니다.
@@ -176,7 +175,16 @@ finally:
 
 ## 지원 범위
 
-현재 공개 메서드는 85개입니다. 이 중 당시의 84개를 2026년 9월 28일 코레일+ 7.0.8 설정으로 다시 확인했습니다. 이후 2.3.0에 추가한 `get_reservation_hold`의 실서버 조회는 9월 29일 확인했습니다. 아래 집계는 9월 28일 기준이며, 메서드별 결과와 추가 확인 범위는 [7.0.8 검증표](https://yaki.kr/korail-mobile-api/verification-708/)와 [실서버 확인 현황](https://yaki.kr/korail-mobile-api/status/)에 있습니다.
+현재 공개 메서드는 85개입니다. **메서드 제공, 오프라인 테스트 통과, 실서버 성공은 서로 다른 확인 범위입니다.**
+
+2026년 10월 19일에는 개발 소스의 `AppVersion=7.0.10`을 명시해 64개 메서드(로컬 전용 2개 포함)를 실행한 기록이 있습니다.
+일부 조회·인증과 직통·환승 임시 예약 후 취소를 확인했지만 실제 카드 결제·환불은 하지 않았습니다.
+유효한 수수료 응답과 환불 대상 연결의 정상 실서버 흐름도 미검증입니다.
+전체 내역과 미실행 21개의 한계는 [7.0.10 제한적 실서버 확인](https://github.com/yakisoba0728/korail-mobile-api/blob/main/docs/verification-7010.md)을 참고하세요.
+
+아래 표는 별도의 과거 기록입니다. 당시의 84개 메서드를 2026년 9월 28일 코레일+ 7.0.8 설정으로 확인했고,
+이후 추가한 `get_reservation_hold`의 실서버 조회는 9월 29일 확인했습니다. 새 기록을 아래 집계에 합산하지 않습니다.
+메서드별 결과는 [7.0.8 검증표](https://yaki.kr/korail-mobile-api/verification-708/)와 [실서버 확인 현황](https://github.com/yakisoba0728/korail-mobile-api/blob/main/docs/status.md)에 있습니다.
 
 | 7.0.8 결과 | 메서드 수 | 의미 |
 |---|---:|---|
@@ -186,6 +194,8 @@ finally:
 | 로컬 메서드 | 2 | 네트워크를 사용하지 않습니다. |
 
 2026년 9월 24~26일의 [7.0.6 시기 검증 기록](https://yaki.kr/korail-mobile-api/status/)에는 카드 결제와 환불 성공 사례가 있습니다. 이는 7.0.8에서 결제·환불을 재실행했다는 뜻이 아닙니다.
+
+메서드는 있지만 정상 실서버 흐름을 확인하지 못한 주요 경로입니다.
 
 - N카드: 구매, 기간 연장, N카드로 예약, 사용 내역, 이용 가능 열차의 정상 조회, 2인 승차권 수령자 조회
 - 셀프 체크인: 좌석 확인, 등록, 취소
@@ -236,6 +246,7 @@ KORAIL은 데이터센터·VPN IP 대역에서 오는 요청을 막습니다. Or
 - [동작 규칙 (checks/BEHAVIOR.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/BEHAVIOR.md) — 요청을 만드는 규칙, 응답을 읽는 규칙, 앱과 다르게 한 부분
 - [변경 이력 (CHANGELOG.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/CHANGELOG.md)
 - [오프라인 검사 기준 (checks/ACCEPTANCE.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/ACCEPTANCE.md)
+- [AI 에이전트 작업 가이드 (AGENTS.md)](https://github.com/yakisoba0728/korail-mobile-api/blob/main/AGENTS.md) — 작업별 코드 위치, 안전 경계, 테스트와 완료 기준
 - [배포 절차](https://yaki.kr/korail-mobile-api/releasing/) — 버전, 검증, 패키지 빌드, PyPI와 문서 배포
 - 한국철도공사 공식 홈페이지 — <https://www.korail.com>
 - 코레일+ 앱 — [Google Play](https://play.google.com/store/apps/details?id=com.korail.talk) · [App Store](https://apps.apple.com/kr/app/id1000558562)
@@ -243,18 +254,28 @@ KORAIL은 데이터센터·VPN IP 대역에서 오는 요청을 막습니다. Or
 
 ## 개발
 
+저장소 루트 기준 macOS·Linux 예시입니다. 에이전트로 작업한다면 먼저 [AGENTS.md](https://github.com/yakisoba0728/korail-mobile-api/blob/main/AGENTS.md)를 읽어 주세요.
+
 ```sh
 git clone https://github.com/yakisoba0728/korail-mobile-api
 cd korail-mobile-api
-pip install -e ".[dev]"
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]' -r docs/requirements.txt
 
-pytest
-ruff check src checks tests && ruff format --check src checks tests
-mypy && pyright
-python checks/contract_api.py && python checks/netfunnel_offline.py
+.venv/bin/python -m pytest tests/ --cov=korail_mobile_api --cov-branch --cov-report=term-missing:skip-covered --cov-fail-under=90
+.venv/bin/python -m ruff check src checks tests
+.venv/bin/python -m ruff format --check src checks tests
+.venv/bin/python -m mypy
+.venv/bin/python -m pyright
+.venv/bin/python -m mkdocs build --strict
+git diff --check
 ```
 
-테스트는 전부 가짜 응답으로 돌고 소켓을 막아 둬서 실수로 실서버에 요청이 나가지 않습니다.
+전체 테스트는 합성 응답과 소켓 차단을 사용하며, 두 기존 오프라인 검사·문서 예제·실제 wheel/sdist 내용 검사도 포함합니다.
+CI는 새 가상환경에 wheel을 설치하고 checkout 밖에서 공개 호출·7.0.10 독립 계약·환불 연결을 다시 확인합니다.
+이는 전체 wire 계약이나 실서버 수용을 증명하지 않습니다. README의 사용 예제는 테스트 밖에서 실행하면 실제 서버에 접속합니다.
+검사별 한계는 [오프라인 검사 기준](https://github.com/yakisoba0728/korail-mobile-api/blob/main/checks/ACCEPTANCE.md),
+배포 검증은 [배포 절차](https://github.com/yakisoba0728/korail-mobile-api/blob/main/docs/releasing.md)에 있습니다.
 버그나 앱 업데이트로 달라진 부분을 찾으면 이슈로 알려 주세요.
 
 ## 법적 고지

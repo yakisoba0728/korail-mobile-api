@@ -16,6 +16,8 @@ pip install korail-mobile-api
 ```
 
 검색 필터·객실 우선 선택·메시지 사전과 신규 오류 분류는 2.5.0부터 제공합니다.
+환불 대상 연결 검증과 7.0.10 메시지 사전은 2.6.0부터 제공합니다.
+2.5.0에서 직접 생성한 수수료 응답으로 환불하던 코드는 [실제 수수료 조회 기반 흐름](guide/payments.md#commission)으로 바꾸세요.
 이전 버전은 `pip install --upgrade korail-mobile-api`로 갱신하세요.
 
 ### 개발 버전 {#development-version}
