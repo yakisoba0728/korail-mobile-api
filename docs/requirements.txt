@@ -2,5 +2,5 @@
 # MkDocs 2.0 은 플러그인과 테마가 호환되지 않아 1.x 로 고정합니다.
 mkdocs>=1.6.1,<2
 mkdocs-material>=9.7.7,<10
-mkdocstrings[python]>=1.0
+mkdocstrings[python]>=1.0.7
 ruff>=0.17.1
