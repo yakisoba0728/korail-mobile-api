@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "app_version": "7.0.8",
+  "app_version": "7.0.10",
   "source": "assets/error_json.json",
-  "source_sha256": "e5fc297b09f25efae609c42e2c341cb131ca257be9a991a2add9898ddda50038",
+  "source_sha256": "7b7998f2582217aba20e58a722b3640a6ef3a2751d9816aaf2f78cfc97c74d00",
   "messages": {
     "API.E00000": {
       "ko": "System Error"
@@ -21067,7 +21067,7 @@
       "ko": "명절대수송기간에는 제공하지 않는 할인입니다"
     },
     "WRD000058": {
-      "ko": "예약은 열차출발 1개월 전 07시부터 열차출발 20분전까지 가능합니다.",
+      "ko": "예약은 열차출발 2개월 전 07시부터 열차출발 20분전까지 가능합니다.",
       "en": "Reservation may be made from 30 minutes to 1 month prior to departure."
     },
     "WRD000059": {

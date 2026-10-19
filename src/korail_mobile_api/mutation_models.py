@@ -538,6 +538,13 @@ class PaidTicket:
     #: 대리수령 대상 플래그입니다. ``refund()``의 ``pbp_acceptance_target_flag``가 ``None``일 때 이 값을 쓰며, 둘 다
     #: ``None``이면 보내지 않습니다.
     pbp_acceptance_target_flag: str | None = None
+    #: 수수료를 조회한 원표의 반환일입니다. 현재 판매일(``sale_date``)과 구분하며 환불 전에 필요합니다.
+    #: ``from_refund_detail()``은 상세의 ``original_sale_date``를 복사합니다.
+    return_sale_date: str | None = field(default=None, repr=False, kw_only=True)
+    #: 수수료 조회에 사용한 동반자 이름입니다. 동반자가 없으면 빈 문자열입니다.
+    companion_name: str = field(default="", repr=False, kw_only=True)
+    #: 수수료 조회에 사용한 동반자 증빙값입니다. 상세 팩토리는 동반자 생년월일을 복사합니다.
+    companion_certificate_no: str = field(default="", repr=False, kw_only=True)
 
     @classmethod
     def from_refund_detail(
@@ -579,6 +586,9 @@ class PaidTicket:
             **parts,
             train_no=train_no,
             pbp_acceptance_target_flag=detail.pbp_acceptance_target_flag,
+            return_sale_date=detail.original_sale_date,
+            companion_name=detail.companion_name or "",
+            companion_certificate_no=detail.companion_birth_date or "",
         )
 
 

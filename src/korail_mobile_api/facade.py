@@ -41,7 +41,7 @@ from .read_models import (
     TicketListResponse,
     TicketReservationDetailResponse,
 )
-from .read_payloads import OriginalTicketReference, TicketReservationDetailRequest
+from .read_payloads import OriginalTicketReference, RefundCompanion, TicketReservationDetailRequest
 
 KST = timezone(timedelta(hours=9))
 _PAST_TOLERANCE = timedelta(minutes=1)
@@ -242,9 +242,14 @@ class TicketResource:
     def all(self, *, page_no: int = 1) -> TicketListResponse:
         return self._client.get_ticket_list(page_no)
 
-    def refund_fee(self, ticket: OriginalTicketReference) -> RefundCommissionResponse:
-        """실제 환불 없이 수수료를 조회합니다."""
-        return self._client.get_refund_commission(ticket)
+    def refund_fee(
+        self,
+        ticket: OriginalTicketReference,
+        *,
+        companion: RefundCompanion = RefundCompanion(),
+    ) -> RefundCommissionResponse:
+        """실제 환불 없이 원표·동반자의 수수료를 조회하고 결과에 로컬 연결합니다."""
+        return self._client.get_refund_commission(ticket, companion)
 
     def refund(
         self,

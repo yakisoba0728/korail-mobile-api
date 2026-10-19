@@ -835,14 +835,14 @@ def make_client(scripted_client_factory):
         ),
         (
             "get_refund_commission",
-            "h_orgtk_ret_sale_dt h_orgtk_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_comp_nm h_comp_cert_no "
-            "Device Version AppVersion Key lang",
+            "Device Version AppVersion Key lang "
+            "h_orgtk_ret_sale_dt h_orgtk_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_comp_nm h_comp_cert_no",
         ),
     ],
 )
 def test_forms_follow_the_app_dto_order(name, expected, make_client) -> None:
-    """MyTicketListIn.java:62; RefundCommissionIn.java:59 declares the common fields after the ticket fields.
-    The app flattens each DTO in declaration order (NetworkService.java:15335-15392)."""
+    """MyTicketListIn.java:62; 7.0.10 RefundCommissionIn.write$Self serializes CommonIn first.
+    Constructor parameter order alone does not establish serialized field order."""
     entry = BY_NAME[name]
     client, calls = make_client(entry.response)
     kwargs = dict(entry.kwargs)
@@ -1250,7 +1250,7 @@ def test_direct_field_and_query_keep_empty_common_values(method, kwargs, query, 
     assert ("Key", "") in wire_pairs(calls[0], query)
     assert "lang" not in dict(wire_pairs(calls[0], query))
     if method == "get_deposit_banks":
-        assert wire_pairs(calls[0], query) == COMMON[:-1] + [("Key", "")]
+        assert wire_pairs(calls[0], query) == COMMON[:2] + [("Key", ""), COMMON[2]]
     else:
         assert "AppVersion" not in dict(wire_pairs(calls[0], query))
 

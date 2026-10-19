@@ -34,6 +34,13 @@
 
 ::: korail_mobile_api.mutation_models.CardPayment
 
+개발 변경의 `PaidTicket`은 현재 `sale_date`와 원표 `return_sale_date`를 구분합니다.
+새 키워드 전용 필드는 `return_sale_date: str | None = None`, `companion_name: str = ""`,
+`companion_certificate_no: str = ""`이며 세 필드는 `repr`에서 숨깁니다.
+수동 생성 시 환불하려면 원표 반환일을 명시해야 합니다. `from_refund_detail()`은
+`detail.original_sale_date`와 `detail.companion_name`·`detail.companion_birth_date`를 복사합니다.
+환불에는 같은 원표·동반자의 실제 수수료 조회 성공 응답이 필요합니다. [환불 가이드](../guide/payments.md#commission)를 참고하세요.
+
 ::: korail_mobile_api.mutation_models.PaidTicket
 
 ::: korail_mobile_api.mutation_models.DiscountCardSectionRequest

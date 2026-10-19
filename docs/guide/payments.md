@@ -198,19 +198,27 @@ reference = OriginalTicketReference(
 환불 요청에는 두 조회 결과가 필요합니다.
 
 1. [`get_refund_ticket_detail`](../api/payments.md#get_refund_ticket_detail)로 승차권 상세를 조회하고, `PaidTicket.from_refund_detail()`로 환불 입력을 만듭니다.
-   상세에 PNR, 판매일, 원표 창구번호·일련번호·반환 비밀번호 중 빠진 값이 있으면 `KorailProtocolError`가 발생합니다.
-2. [`get_refund_commission`](../api/payments.md#get_refund_commission)으로 예상 환불액과 수수료를 조회합니다. 이 응답은 환불 요청에 그대로 넘깁니다.
+   상세에 PNR, 현재 판매일, 원표 창구번호·일련번호·반환 비밀번호 중 빠진 값이 있으면 `KorailProtocolError`가 발생합니다.
+2. [`get_refund_commission`](../api/payments.md#get_refund_commission)으로 같은 원표 식별자와 동반자 정보의 예상 환불액·수수료를 조회합니다. 이 응답은 환불 요청에 그대로 넘깁니다.
 
 두 단계는 판매일을 다르게 씁니다. 상세 조회와 수수료 조회는 `reference`의 원표 반환일을 쓰고, 환불 요청은 상세 응답의 판매일을 씁니다.
 `from_refund_detail()`이 이 차이를 처리하므로 [`PaidTicket`][korail_mobile_api.mutation_models.PaidTicket]을 직접 만들기보다 이 메서드를 쓰세요.
+상세의 `original_sale_date`는 `paid.return_sale_date`로, `companion_name`과 `companion_birth_date`는
+`paid.companion_name`과 `paid.companion_certificate_no`로 복사합니다. 현재 판매일은 `paid.sale_date`에 따로 남습니다.
+수동 생성 시 새 키워드 인자 `return_sale_date`에 원표 반환일을 명시하고 필요한 동반자 정보도 넣어야 합니다.
+현재 판매일을 원표 반환일로 대신하지 마세요.
 
 ```python
-from korail_mobile_api import PaidTicket
+from korail_mobile_api import PaidTicket, RefundCompanion
 
 detail = client.get_refund_ticket_detail(reference)
 paid = PaidTicket.from_refund_detail(detail)
 
-commission = client.get_refund_commission(reference)
+companion = RefundCompanion(
+    name=paid.companion_name,
+    certificate_no=paid.companion_certificate_no,
+)
+commission = client.get_refund_commission(reference, companion)
 print("환불액", commission.refund_amount, "수수료", commission.refund_fee)
 print("사용 가능 마일리지", commission.usable_mileage)
 ```
@@ -223,7 +231,15 @@ print("사용 가능 마일리지", commission.usable_mileage)
 [`refund`](../api/payments.md#refund)에 `PaidTicket`과 수수료 조회 응답을 넘깁니다. 수수료 조회 응답은 `commission=` 키워드 인자로 넘깁니다.
 `commission`은 필수입니다. [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse]가 아닌 값은 `None`을 포함해 요청 전에 거절합니다.
 성공 응답(`str_result`가 `"SUCC"`)이 아닌 수수료 조회 응답도 요청 전에 거절합니다.
+현재 개발 변경은 **fail-closed 정책**입니다. 실제 `get_refund_commission` 반환 시 비공개로 연결된 조회 문맥과
+환불할 `PaidTicket`의 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호가 모두 일치해야 합니다.
+`RefundCommissionResponse`를 직접 생성하거나 원문에서 직접 파싱한 값, 다른 표의 수수료 응답,
+원표 반환일이 없는 수동 생성 `PaidTicket`은 `KorailProtocolError`로 거절합니다.
 라이브러리는 수수료를 대신 조회하지 않고, 환불 요청을 다시 보내지도 않습니다.
+
+조회 문맥과 `PaidTicket`의 새 필드는 `repr`에서 숨기며 개인정보를 파일로 저장하지 않습니다.
+직접 속성·`raw`·일반 dataclass 직렬화까지 가려지는 것은 아니므로 로그에 남기지 마세요.
+이 대상 연결은 수수료 금액의 유효기간이나 서버 승인을 보장하지 않습니다.
 
 수수료를 마일리지로 정산하려면 `settle_mileage=True`를 넘깁니다.
 사용 가능 마일리지(`commission.usable_mileage`)가 수수료(`commission.refund_fee`) 이상일 때만 허용하며, 부족하면 요청 전에 `KorailProtocolError`가 발생합니다.

@@ -1738,12 +1738,26 @@ class TicketReservationDetailResponse(BaseKorailResponse):
     passengers: tuple[ReservationPassengerInfo, ...] = ()
 
 
+@dataclass(frozen=True, repr=False)
+class _RefundCommissionContext:
+    """수수료를 조회한 원표·동반자 입력입니다. 서버 응답이나 인증 증명이 아닙니다."""
+
+    window_no: str
+    return_sale_date: str
+    sale_sequence: str
+    return_password: str
+    companion_name: str
+    companion_certificate_no: str
+
+
 @dataclass(frozen=True)
 class RefundCommissionResponse(BaseKorailResponse):
     """환불 전 예상 환불액과 수수료를 담습니다.
 
     ``get_refund_commission``이 돌려줍니다. 환불하려면 이 응답을 ``refund``의 ``commission``에 넘기세요. ``refund``는
-    ``commission``이 이 타입이 아니면(``None`` 포함) 요청을 보내기 전에 ``KorailProtocolError``를 발생시킵니다."""
+    ``commission``이 실제 조회 결과가 아니거나(``None``·직접 생성·직접 파싱 포함), 조회한 원표·동반자가
+    환불 대상과 다르면 요청 전에 ``KorailProtocolError``를 발생시킵니다. 로컬 연결 검사는 수수료의
+    유효기간이나 서버의 환불 승인을 보장하지 않습니다."""
 
     # 앱 근거: NetworkApi.java:598-600. 키 근거: RefundCommissionOut.java:35-41,62,140-164.
     refund_amount: str | None = None
@@ -1753,6 +1767,10 @@ class RefundCommissionResponse(BaseKorailResponse):
     usable_mileage: str | None = None
     secondary_message_code: str | None = None
     secondary_message_text: str | None = None
+    # raw/서버 필드에서 복원하지 않습니다. 클라이언트가 검증한 조회 입력만 로컬에서 연결합니다.
+    _request_context: _RefundCommissionContext | None = field(
+        default=None, repr=False, compare=False, kw_only=True
+    )
 
 
 @dataclass(frozen=True)

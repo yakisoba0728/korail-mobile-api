@@ -22,9 +22,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_catalog_provenance_and_shape():
     catalog = json.loads(files("korail_mobile_api").joinpath("error_messages.json").read_text(encoding="utf-8"))
-    assert catalog["schema_version"] == 1 and catalog["app_version"] == "7.0.8"
+    assert catalog["schema_version"] == 1 and catalog["app_version"] == "7.0.10"
     assert catalog["source"] == "assets/error_json.json"
-    assert catalog["source_sha256"] == "e5fc297b09f25efae609c42e2c341cb131ca257be9a991a2add9898ddda50038"
+    assert catalog["source_sha256"] == "7b7998f2582217aba20e58a722b3640a6ef3a2751d9816aaf2f78cfc97c74d00"
     messages = catalog["messages"]
     assert len(messages) == 10305
     assert sum(len(translations) for translations in messages.values()) == 17256
@@ -86,6 +86,48 @@ def test_catalog_korean_fallback_unknown_and_exceptional_code():
     assert "출발시각 이후" in api.get_error_message("S-ERR911411")
     for code in (None, "", "SYNTHETIC-UNKNOWN", "ServiceContraint", "secret001"):
         assert api.get_error_message(code) is None
+
+
+@pytest.mark.parametrize("language", ["ko", "ja", "jp", "zh", "cn"])
+def test_7010_reservation_window_and_translation_fallback(language):
+    expected = "예약은 열차출발 2개월 전 07시부터 열차출발 20분전까지 가능합니다."
+    assert api.get_error_message("WRD000058", language=language) == expected
+    assert api.resolve_error_message("WRD000058", language=language) == expected
+
+
+def test_7010_reservation_window_preserves_english_asset_text():
+    # The shipped English text still differs from Korean; do not silently translate or correct it.
+    expected = "Reservation may be made from 30 minutes to 1 month prior to departure."
+    assert api.get_error_message("WRD000058", language="en") == expected
+    assert api.resolve_error_message("WRD000058", language="en") == expected
+
+
+@pytest.mark.parametrize("message", [None, "", "<b>예약은 서버 안내를 따르세요.</b>"])
+def test_7010_reservation_message_keeps_server_priority_and_raw(message):
+    raw = {
+        "strResult": "FAIL",
+        "h_msg_cd": "WRD000058",
+        "h_msg_txt": message,
+        "synthetic": {"keep": [True]},
+    }
+    original = json.loads(json.dumps(raw))
+    expected = (
+        "예약은 서버 안내를 따르세요."
+        if message
+        else "예약은 열차출발 2개월 전 07시부터 열차출발 20분전까지 가능합니다."
+    )
+    with pytest.raises(api.KorailAppError) as caught:
+        parse_base_response(raw)
+    error = caught.value
+    assert type(error) is api.KorailAppError
+    assert error.display_message == expected
+    assert error.message is message and error.raw is raw
+    response = parse_base_response(raw, raise_on_fail=False)
+    assert response.display_message == expected
+    assert response.h_msg_txt is message and response.raw is raw
+    assert raw == original
+    if message:
+        assert api.resolve_error_message("WRD000058", message, language="en") == expected
 
 
 @pytest.mark.parametrize("function", [api.get_error_message, api.resolve_error_message])
@@ -193,6 +235,7 @@ def test_new_errors_survive_pickle_without_losing_original_fields(code, exceptio
 
 def test_catalog_is_loaded_lazily(f8_subprocess_env):
     code = (
+        "import sys; sys.path.insert(0, sys.argv[1]); "
         "from korail_mobile_api.error_messages import _messages; "
         "from korail_mobile_api import get_error_message; "
         "assert _messages.cache_info().currsize == 0; "
@@ -200,6 +243,10 @@ def test_catalog_is_loaded_lazily(f8_subprocess_env):
         "assert _messages.cache_info().currsize == 1"
     )
     result = subprocess.run(
-        [sys.executable, "-c", code], env=f8_subprocess_env, capture_output=True, text=True, timeout=30
+        [sys.executable, "-c", code, str(ROOT / "src")],
+        env=f8_subprocess_env,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert result.returncode == 0, result.stderr

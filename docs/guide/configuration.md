@@ -60,6 +60,10 @@ longer_wait = dataclasses.replace(base, netfunnel_wait_limit=300.0)
 `device`, `version`, `app_version`, `key`, `user_agent`를 바꾸면 앱과 다른 요청이 됩니다. 기존 `Version`과 새 `AppVersion`은 서로 다른 필드입니다.
 API 요청의 `User-Agent`와 대기열 요청의 `User-Agent`는 서로 다른 설정입니다.
 
+오류 사전의 7.0.10 갱신과 요청 버전은 별개입니다. 요청 기본값은 `app_version="7.0.8"`을 유지합니다.
+명시하려면 `KorailConfig(app_version="7.0.10")`을 사용하세요. 이 override 지원은 실서버 호환 보장이 아니며,
+API `Version` 값을 앱 버전으로 바꾸지 않습니다. [정적 검토 범위와 미확정 항목](../verification-7010.md)을 참고하세요.
+
 실제 기기값을 코드에서 관리한다면 [`KorailDeviceProfile`][korail_mobile_api.device.KorailDeviceProfile]과 [`build_config_from_profile`][korail_mobile_api.device.build_config_from_profile]을 사용할 수 있습니다. 이 함수는 DynaPath 식별자·모델·OS, 대기열의 Dalvik `User-Agent`, SDK·화면 크기를 같은 프로파일에서 설정합니다. API `User-Agent`는 관측된 `korailtalk`로 둡니다. 기존 설정의 나머지 값은 `base=`로 유지할 수 있지만, 사용자 정의 DynaPath 토큰 공급자나 DynaPath 비활성화 설정은 덮어쓰지 않고 거절합니다. [간편 API 예제](convenience.md#한-기기의-값-사용하기)를 참고하세요.
 
 ## DynaPath {#dynapath}

@@ -491,6 +491,9 @@ KorailClient.get_seat_assignment_schedule(
 앱의 좌석배정 예매 화면이 쓰는 열차 조회입니다. [`search_trains`](#search_trains)와 달리 역을 이름으로만 받으며 코드를 이름으로 바꾸지 않습니다.
 [`SeatAssignmentScheduleRequest`][korail_mobile_api.read_payloads.SeatAssignmentScheduleRequest]는 만들 때 `passenger_count`가 1~9의 정수인지 검사하고, 아니면 [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError]를 발생시킵니다.
 요청에는 승객 수만큼 번호를 붙여 좌석 속성 코드, 승객 표시, 구분 이름을 반복해 싣고, 빈 문자열인 필드는 보내지 않습니다.
+`seatAttCdN/psgNumN/stlbDturDvNmN`의 `*2` 이상은 기존 SDK 확장입니다. 7.0.10 앱 DTO에서
+확인한 한 묶음과 같은 계약이라고 주장하지 않으며, 기존 1~9명 지원은 유지합니다.
+아래 과거 실서버 관측은 모든 번호 그룹의 의미·서버 수용을 검증한 결과가 아닙니다.
 
 메뉴 ID나 구분 코드처럼 앱이 채우는 값은 앱 내부 값이 공개돼 있지 않아 확인하지 못했습니다.
 실서버에서는 `menu_id`가 `"A1"`, `"A2"`일 때 열차 목록이 돌아왔고, 날짜·구간에 따라 결과 코드 `WRD000057`로 거절되기도 했습니다.

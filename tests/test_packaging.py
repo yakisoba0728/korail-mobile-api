@@ -200,9 +200,16 @@ def test_f8_distribution_contents_and_metadata(
     for name in expected_runtime:
         assert wheel[name] == source["src/" + name]
     catalog = json.loads(wheel["korail_mobile_api/error_messages.json"])
-    assert catalog["app_version"] == "7.0.8"
+    assert catalog["app_version"] == "7.0.10"
+    assert catalog["source"] == "assets/error_json.json"
+    assert catalog["source_sha256"] == "7b7998f2582217aba20e58a722b3640a6ef3a2751d9816aaf2f78cfc97c74d00"
     assert catalog["messages"]["S000"]["ko"].startswith("보다 편리한 서비스")
     assert len(catalog["messages"]) == 10305
+    assert sum(len(translations) for translations in catalog["messages"].values()) == 17256
+    assert catalog["messages"]["WRD000058"] == {
+        "ko": "예약은 열차출발 2개월 전 07시부터 열차출발 20분전까지 가능합니다.",
+        "en": "Reservation may be made from 30 minutes to 1 month prior to departure.",
+    }
     # Read the actual rebuilt wheel as a zip import, away from source/analysis paths.
     lookup = subprocess.run(
         [
@@ -211,6 +218,11 @@ def test_f8_distribution_contents_and_metadata(
             "import sys; sys.path.insert(0, sys.argv[1]); import korail_mobile_api as api; "
             "assert api.__file__.startswith(sys.argv[1]); "
             "assert api.get_error_message('S003', language='en') == 'API Error'; "
+            "assert all(api.get_error_message('WRD000058', language=language) == "
+            "'예약은 열차출발 2개월 전 07시부터 열차출발 20분전까지 가능합니다.' "
+            "for language in ('ko', 'ja', 'zh')); "
+            "assert api.get_error_message('WRD000058', language='en') == "
+            "'Reservation may be made from 30 minutes to 1 month prior to departure.'; "
             "assert api.KorailRateLimitError('BT019', None).display_message == '요청횟수(6회)를 초과하였습니다.'",
             str(f8_built_archives["wheel_path"]),
         ],

@@ -4,8 +4,16 @@
 
 DTO 필드는 선언 순서로 평탄화하고 배열은 1기반 인덱스를 사용합니다
 (`NetworkService.java:15335–15392`). Retrofit의 별도 목록 인자는 `@FieldMap` 뒤에 옵니다.
+7.0.10 정적 검토에 따라 환불·수수료 조회는 상위 공통 필드를 먼저 보냅니다. 생성자 인자 순서는 직렬화 순서의 근거가 아닙니다.
+은행 직접 `@Field` 경로는 `Device, Version, Key, AppVersion` 순서이며 공통 폼과 구분합니다.
+두 순서 정정은 앱 근거와의 정합성 수정으로, 보호된 최종 map과 서버 순서 민감성·실서버 영향은 미확인입니다.
 빈 문자열을 생략하는 기본 규칙과 빈 값을 명시적으로 보내야 하는 운임 조회 등 예외를 구분합니다.
 `lang=None`이면 언어값을 추측하지 않고 생략합니다.
+
+좌석배정 조회의 `seatAttCdN/psgNumN/stlbDturDvNmN` 중 `*2` 이상은 기존 SDK 확장입니다.
+7.0.10 앱 DTO에서 확인한 한 묶음과 동등하다고 주장하지 않으며, 1~9명 지원을 제거하거나 무음 축소하지 않습니다.
+요청 기본 `AppVersion=7.0.8`, API `Version`, 패키지 버전 `2.5.0`은 유지합니다.
+`KorailConfig(app_version="7.0.10")` override는 지원하지만 새 버전의 실서버 호환을 뜻하지 않습니다.
 
 API User-Agent는 운영 관측값 `korailtalk`, 대기열 User-Agent는 기기 기반 Dalvik 형식입니다.
 둘 다 `Connection: Keep-Alive`, `Accept-Encoding: gzip`을 사용하며 `Accept`는 보내지 않습니다.
@@ -41,7 +49,8 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 메시지에 근거한 라이브러리 분류입니다. 계정 잠금 `WRC000390`은 로그인에서만 `KorailAccountLockedError`입니다.
 어떤 분류도 API 자동 재시도나 상태 변경 요청의 성공 간주로 이어지지 않습니다.
 
-패키지 메시지 사전은 앱 7.0.8의 일반 결과 코드 10,305개·메시지 17,256개와 원본 SHA-256을 보관합니다.
+패키지 메시지 사전은 앱 7.0.10의 일반 결과 코드 10,305개·메시지 17,256개와 원본 SHA-256을 보관합니다.
+7.0.8 대비 `WRD000058` 한국어만 1개월→2개월로 변경됐으며 영어·오류 분류·요청 날짜 제한은 유지합니다.
 `checks/build_error_catalog.py`로 로컬 `assets/error_json.json`에서 재생성하며 앱 설정·임의 리소스 키는 제외합니다.
 `get_error_message`는 사전 원문을 조회하고 `resolve_error_message`·`display_message`는 읽을 서버 메시지를 우선해
 일반 텍스트를 표시합니다. 태그·스크립트·스타일을 표시에서 제외하고 원문 필드·예외 문자열은 유지합니다.
@@ -85,6 +94,12 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 
 카드 결제액은 홀드 `received_amount`이며 기준 운임이나 `total_price`로 대체하지 않습니다.
 카드 거절은 FAIL 모델입니다. 환불은 성공한 수수료 응답을 명시적으로 받아 승차권 한 장씩 수행합니다.
+`get_refund_commission` 반환 시 응답에 비공개 조회 문맥을 연결하고 `repr`에서 숨깁니다.
+`refund`는 그 문맥과 환불 대상의 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호 일치를 요구합니다.
+직접 생성·직접 파싱한 수수료 응답, 다른 대상의 응답, 원표 반환일이 없는 입력은 요청 전에
+`KorailProtocolError`로 거절하는 fail-closed 동작 변경입니다. 자동 조회·재시도는 하지 않습니다.
+이는 대상 혼용 방지이며 수수료 금액의 유효기간·서버 승인이나 임의 변조 방지를 보장하는 인증 수단이 아닙니다.
+조회 문맥의 개인정보는 파일로 저장하지 않습니다. `repr` 숨김은 속성·`raw`·직렬화 결과 전체의 마스킹이 아닙니다.
 
 `get_reservation_hold(pnr_no)`는 예약 상세 한 번의 조회로 카드 결제용 홀드를 가져옵니다.
 응답 PNR 일치·실제 창구번호·여정 수와 행 수 일치·여정별 좌석 행·양수 정산액을 요구합니다.
@@ -98,6 +113,13 @@ Java 정수·바이트 연산 결과를 원본 smali 연산과 대조했습니�
 마일리지로 수수료를 정산하려면 사용 가능 마일리지가 수수료 이상이어야 합니다.
 환불 입력의 현재 판매일과 수수료 조회의 원표 반환일은 서로 다릅니다
 (`MyTicketDetailViewModel.java:277,1521`). 반환 식별자는 라우트에 따라 MMDD 또는 YYYYMMDD를 요구합니다.
+`PaidTicket`의 키워드 전용 `return_sale_date: str | None = None`, `companion_name: str = ""`,
+`companion_certificate_no: str = ""`는 `repr`에서 숨깁니다. `from_refund_detail()`은 상세의
+`original_sale_date`→`return_sale_date`, `companion_name`→동명 필드,
+`companion_birth_date`→`companion_certificate_no`를 복사하고 현재 `sale_date`는 별도로 유지합니다.
+수동 생성한 `PaidTicket`으로 환불하려면 원표 반환일을 명시해야 하며 현재 판매일로 대신하지 않습니다.
+기존 `get_refund_commission(ticket, companion=RefundCompanion())` 시그니처는 유지하고,
+간편 API는 `TicketResource.refund_fee(ticket, *, companion=RefundCompanion())`로 같은 동반자 정보를 받습니다.
 
 재계산의 승객별 여섯 목록은 동일 인덱스를 유지하도록 빈 문자열도 보존합니다.
 `for_hold`는 첫 여정의 좌석 정보를 복사하며 요청 할인 수가 좌석 수와 같아야 합니다.
@@ -124,6 +146,12 @@ SDK는 잘못된 숫자에서 전체 응답을 거절하므로, 이 차이는 �
 일부 보호된 aid·mode·enum·JSON 설정, DynaPath 차단 키의 정확한 범위, 결제·환불 제어값은 미확인입니다.
 DynaPath 차단 판정은 보호된 키 대신 최상위 정수를 검사하므로 다른 필드의 같은 값을 오인할 수 있습니다.
 접근 제한 관련 보호 문자열은 해독하지 않습니다.
+
+7.0.10의 DynaPath 조건부 문자열·nullable code, 통합결제의 일반 회원 분기,
+서비스 상태 요청의 기본값 실제 전송 여부, N카드·보호 기본값은 확정하지 않았으며 임의 변경하지 않습니다.
+Android push ACK·비회원 UI·진단 화면은 이식하지 않습니다.
+공개 메서드 85개 행의 정적 검토는 완전한 wire 계약·모든 분기·실서버 검증이 아닙니다.
+범위와 한계는 [7.0.10 정적 검토](../docs/verification-7010.md)에 정리합니다.
 
 N카드 일부 기능, 채워진 지연료 영수증, 셀프 체크인 좌석 확인·등록·취소 및 전달표 회수는 실서버 수용을 확인하지 않았습니다.
 저장소의 테스트와 검사기는 모두 오프라인이며 실서버 수용을 증명하지 않습니다.

@@ -190,6 +190,7 @@ from .read_models import (
     TrainScheduleItem,
     TripChangeDateResponse,
     TripMenuResponse,
+    _RefundCommissionContext,
 )
 from .read_parsers import (
     parse_cart_list_response,
@@ -654,12 +655,11 @@ class KorailClient:
         """입금 가능한 은행의 코드와 이름 목록을 조회합니다.
 
         ``POST dlay.dptnBank.do``는 개별 ``@Field``를 사용합니다. 7.0.8은
-        ``Device``, ``Version``, ``AppVersion``, ``Key`` 순서입니다."""
+        ``Device``, ``Version``, ``Key``, ``AppVersion`` 순서입니다."""
         self._require_session()
-        form = {"Device": self.config.device, "Version": self.config.version}
+        form = {"Device": self.config.device, "Version": self.config.version, "Key": self.config.key}
         if self.config.app_version is not None:
             form["AppVersion"] = self.config.app_version
-        form["Key"] = self.config.key
         return self._post_read(
             "/classes/com.korail.mobile.dlay.dptnBank.do",
             form,
@@ -1204,14 +1204,27 @@ class KorailClient:
     ) -> RefundCommissionResponse:
         """승차권 한 장의 예상 환불액과 수수료를 조회합니다.
 
-        실제 환불은 하지 않습니다."""
+        실제 환불은 하지 않습니다. 반환값에 조회한 원표·동반자를 로컬 연결하며, ``refund``는 이 입력이
+        환불 대상과 일치해야 요청합니다. 직접 생성하거나 파싱한 수수료 응답에는 이 연결이 없습니다."""
         self._require_session()
-        # RefundCommissionIn 은 공통 필드를 원표 식별자 뒤에 선언합니다(RefundCommissionIn.java:59).
-        return self._post_read(
+        form = build_refund_commission_form(ticket, companion)
+        # 생성자 인자 순서와 달리 write$Self는 CommonIn부터 직렬화합니다(7.0.10 RefundCommissionIn.java:140-168).
+        response = self._post_read(
             "/classes/com.korail.mobile.refunds.CommissionView",
-            {**build_refund_commission_form(ticket, companion), **self.http.common_fields()},
+            {**self.http.common_fields(), **form},
             parser=parse_refund_commission_response,
             include_common=False,
+        )
+        return replace(
+            response,
+            _request_context=_RefundCommissionContext(
+                ticket.sale_window_no,
+                ticket.sale_date,
+                ticket.sale_sequence,
+                ticket.return_password,
+                companion.name,
+                companion.certificate_no,
+            ),
         )
 
     def get_refund_ticket_detail(
@@ -1876,7 +1889,9 @@ class KorailClient:
     ) -> RefundTicketResponse:
         """PaidTicket 이 가리키는 발권 승차권 한 장을 환불합니다. PNR 전체 환불이 아니며 수수료가 붙을 수 있습니다.
 
-        먼저 get_refund_commission 을 부르고 그 성공 응답을 ``commission`` 으로 넘기십시오. 승차권 한 장씩 환불하며 자동 조회·재전송하지 않습니다(MyTicketDetailViewModel.java:300-358,1811-1823)."""
+        먼저 get_refund_commission 을 부르고 그 성공 응답을 ``commission`` 으로 넘기십시오. 조회한 원표·동반자가
+        ``ticket``과 다르거나 ``ticket.return_sale_date``가 없으면 요청 전에 거절합니다. 직접 생성·파싱한
+        수수료 응답은 쓸 수 없습니다. 승차권 한 장씩 환불하며 자동 조회·재전송하지 않습니다."""
         self._require_session("refund requires")
         # 앱은 두 환불 화면 모두 수수료 조회가 성공해야 환불합니다. commission=None 을 명시해도 건너뛰지 못하게 합니다.
         if not isinstance(commission, RefundCommissionResponse):

@@ -366,7 +366,9 @@ for item in tickets.items:
 KorailClient.get_deposit_banks() -> DepositBankListResponse
 ```
 
-7.0.8 요청에는 앱과 같이 `Device`, `Version`, `AppVersion`, `Key` 네 필드를 싣습니다.
+직접 `@Field` 경로로 `Device`, `Version`, `Key`, `AppVersion` 순서의 네 필드를 싣습니다.
+7.0.10 정적 검토에 따른 순서 정정이며, 서버의 순서 민감성·실서버 영향은 미확인입니다.
+과거 7.0.8 관측의 순서·결과는 [실서버 기록](../status.md)에 그대로 보존합니다.
 [`KorailConfig`][korail_mobile_api.config.KorailConfig]의 `lang`을 설정해도 `lang`은 보내지 않으며, `AppVersion`을 제외한 기존 세 필드는 값이 빈 문자열이어도 빼지 않고 보냅니다.
 
 **매개변수**

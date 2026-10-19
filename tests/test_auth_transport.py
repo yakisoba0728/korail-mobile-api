@@ -1028,7 +1028,7 @@ def test_base_response_from_raw_normalizes_envelope_without_classifying_status()
 
 
 @pytest.mark.parametrize("lang", [None, "", "synthetic-language"])
-@pytest.mark.parametrize("app_version", ["7.0.8", "7.0.9", None])
+@pytest.mark.parametrize("app_version", ["7.0.8", "7.0.9", "7.0.10", None])
 def test_common_form_keeps_order_and_returns_fresh_mapping(lang: str | None, app_version: str | None) -> None:
     config = KorailConfig(
         device="SYNTHETIC-DEVICE",

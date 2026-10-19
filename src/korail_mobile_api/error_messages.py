@@ -37,7 +37,7 @@ def _messages() -> dict[str, dict[str, str]]:
 
 
 def get_error_message(code: str | None, *, language: str = "ko") -> str | None:
-    """앱 7.0.8의 결과 메시지를 조회합니다. 알 수 없는 코드이면 ``None``입니다.
+    """앱 7.0.10의 결과 메시지를 조회합니다. 알 수 없는 코드이면 ``None``입니다.
 
     한국어·영어·일본어(ja/jp)·중국어(zh/cn)를 지원하며 번역이 없으면 한국어를 반환합니다. 지역 언어값도 받습니다.
     지원하지 않는 언어는 ``ValueError``입니다. 메시지의 HTML과 치환 표시는 원문 그대로이며 실행하거나 치환하지 않습니다.

@@ -185,7 +185,9 @@ KorailClient.get_refund_ticket_detail(
 **반환값**
 
 [`RefundTicketDetailResponse`][korail_mobile_api.read_models.RefundTicketDetailResponse] — 승차권 상세입니다.
-`pnr_no`, `sale_date`, `original_window_no`, `original_sale_sequence`, `original_return_password`가 환불 식별자로 쓰입니다.
+`pnr_no`, 현재 `sale_date`, `original_window_no`, `original_sale_date`, `original_sale_sequence`, `original_return_password`가 환불 입력·조회 대상 연결에 쓰입니다.
+`PaidTicket.from_refund_detail()`은 `original_sale_date`를 `return_sale_date`에, 동반자 이름·생년월일을
+`companion_name`·`companion_certificate_no`에 복사하고 현재 `sale_date`는 별도로 유지합니다.
 여정은 `journeys`([`RefundTicketJourney`][korail_mobile_api.read_models.RefundTicketJourney]), 좌석은 각 여정의 `seats`([`RefundTicketSeat`][korail_mobile_api.read_models.RefundTicketSeat])에 들어 있습니다.
 
 **예외**
@@ -232,6 +234,8 @@ KorailClient.get_refund_commission(
 실제로 환불하지는 않습니다. [`refund`](#refund)는 이 메서드의 성공 응답을 `commission`으로 받아야 하므로 환불 전에 반드시 호출합니다.
 `ticket`에는 [`get_refund_ticket_detail`](#get_refund_ticket_detail)에 넘긴 값과 같은 반환 식별자를 씁니다.
 이 식별자의 `sale_date`(원표 반환일)는 환불 요청에 쓰는 `PaidTicket.sale_date`와 다른 값이므로 섞어 쓰지 않습니다.
+동반자가 있다면 상세에서 복사한 이름·증빙번호와 같은 `RefundCompanion`을 넘기세요.
+기존 시그니처는 유지하며 조회 시그니처에 별도 필수 인자는 추가하지 않습니다.
 
 응답의 `proceed_possible_flag`는 라이브러리가 검사하지 않습니다. 앱이 비교하는 값이 공개돼 있지 않아 확인하지 못했습니다.
 이미 환불한 승차권(결과 코드 `WRT200399`)이나 승차일이 지난 승차권(`WRT200022`)은 서버가 실패로 응답하므로 [`KorailAppError`][korail_mobile_api.errors.KorailAppError]가 발생합니다.
@@ -248,6 +252,9 @@ KorailClient.get_refund_commission(
 
 [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse] — 예상 환불액(`refund_amount`), 수수료(`refund_fee`), 사용 가능 마일리지(`usable_mileage`)를 담습니다.
 `ticket_return_times_division_code`는 [`refund`](#refund)가 요청에 되돌려 싣는 값입니다.
+반환 시 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호를 비공개 조회 문맥으로 연결합니다.
+이 문맥은 `repr`에서 숨기며 파일에 저장하지 않습니다. 직접 생성·직접 파싱한 응답에는 이 연결이 없으므로
+환불에 사용할 수 없습니다. 이는 대상 혼용 방지이지 금액의 유효기간·서버 승인 보장이 아닙니다.
 
 **예외**
 
@@ -265,7 +272,11 @@ KorailClient.get_refund_commission(
 **예제**
 
 ```python
-commission = client.get_refund_commission(reference)
+from korail_mobile_api import PaidTicket, RefundCompanion
+
+paid = PaidTicket.from_refund_detail(client.get_refund_ticket_detail(reference))
+companion = RefundCompanion(name=paid.companion_name, certificate_no=paid.companion_certificate_no)
+commission = client.get_refund_commission(reference, companion)
 print("환불액", commission.refund_amount, "수수료", commission.refund_fee)
 print("사용 가능 마일리지", commission.usable_mileage)
 ```
@@ -289,9 +300,15 @@ KorailClient.refund(
 PNR 전체가 아니라 `ticket`이 가리키는 승차권 한 장만 환불하며, 수수료가 빠질 수 있습니다.
 한 PNR에 승차권이 여러 장이면 장마다 상세 조회, 수수료 조회, 환불을 따로 합니다.
 `commission`은 필수 키워드 인자이며 [`get_refund_commission`](#get_refund_commission)의 성공 응답이어야 합니다. `None`을 포함해 [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse]가 아닌 값이나 실패 응답을 넘기면 요청 전에 거절합니다.
+현재 개발 변경은 **fail-closed**입니다. 실제 조회 반환값의 비공개 문맥과 원표 창구번호·반환일·일련번호·비밀번호·동반자 이름·증빙번호가 모두 일치해야 합니다.
+직접 생성·직접 파싱한 수수료 응답, 다른 표의 응답, 원표 반환일이 없는 입력은 요청 전에 거절합니다.
 라이브러리는 수수료를 대신 조회하지 않고, 요청을 다시 보내지도 않습니다.
 
 `ticket`은 `PaidTicket.from_refund_detail()`로 만듭니다. 이 메서드는 상세 응답의 판매일(`sale_date`)과 원표 식별자를 옮겨 담고, 열차 번호를 따로 주지 않으면 첫 여정의 열차 번호를 씁니다.
+원표 반환일은 상세의 `original_sale_date`에서 `return_sale_date`로 따로 옮깁니다. 수동 생성할 때도
+키워드 전용 `return_sale_date`를 명시해야 하며 현재 `sale_date`로 대체하지 않습니다.
+동반자 필드와 조회 문맥의 `repr` 숨김은 속성·`raw`·직렬화 전체의 마스킹이 아닙니다.
+대상 연결은 수수료 금액의 유효기간이나 서버 승인을 보장하지 않습니다.
 `ticket.train_no`가 있으면 열차 번호를, `commission.ticket_return_times_division_code`가 있으면 그 값을 요청에 함께 싣습니다.
 
 `settle_mileage=True`는 `commission.usable_mileage`가 `commission.refund_fee` 이상일 때만 허용합니다.
@@ -301,10 +318,10 @@ PNR 전체가 아니라 `ticket`이 가리키는 승차권 한 장만 환불하�
 
 | 이름 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
-| `ticket` | [`PaidTicket`][korail_mobile_api.mutation_models.PaidTicket] | 필수 | 환불할 승차권 한 장입니다. `pnr_no`, `sale_date`, `sale_window_no`, `sale_sequence`, `return_password`가 비어 있지 않아야 합니다. |
+| `ticket` | [`PaidTicket`][korail_mobile_api.mutation_models.PaidTicket] | 필수 | 환불할 승차권 한 장입니다. `pnr_no`, 현재 `sale_date`, `sale_window_no`, 원표 `return_sale_date`, `sale_sequence`, `return_password`가 비어 있지 않아야 하며 동반자 정보도 수수료 조회와 같아야 합니다. |
 | `settle_mileage` | `bool` | `False` | 수수료를 마일리지로 정산할지 여부입니다. |
 | `pbp_acceptance_target_flag` | `str \| None` | `None` | 대리수령 대상 플래그입니다. `None`이면 `ticket.pbp_acceptance_target_flag`를 씁니다. 승차권 상세 응답에는 이 값이 보통 없으므로 `from_refund_detail()`로 만든 `ticket`에서는 `None`일 수 있으며, 그러면 이 필드를 보내지 않습니다. 앱처럼 보내려면 [`get_ticket_list`](account.md#get_ticket_list) 승차권의 `pbp_acceptance_target_flag`를 넘기세요. |
-| `commission` | [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse] | 필수 | [`get_refund_commission`](#get_refund_commission)의 성공 응답입니다. |
+| `commission` | [`RefundCommissionResponse`][korail_mobile_api.read_models.RefundCommissionResponse] | 필수 | 같은 원표·동반자로 실제 [`get_refund_commission`](#get_refund_commission)이 반환한 성공 응답입니다. |
 | `latitude` | `str \| None` | `None` | 위도입니다. `None`이면 보내지 않습니다. |
 | `longitude` | `str \| None` | `None` | 경도입니다. `None`이면 보내지 않습니다. |
 
@@ -323,6 +340,7 @@ PNR 전체가 아니라 `ticket`이 가리키는 승차권 한 장만 환불하�
 | [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `ticket`의 `pnr_no`, `sale_date`, `sale_window_no`, `sale_sequence`, `return_password` 중 비었거나 문자열이 아닌 값이 있을 때 |
 | [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `settle_mileage`가 `bool`이 아니거나, 대리수령 대상 플래그가 문자열도 `None`도 아닐 때 |
 | [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `commission.str_result`가 `"SUCC"`가 아닐 때. 예외의 `raw`에 `commission.raw`가 들어 있습니다. |
+| [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | 수수료 응답의 비공개 조회 문맥이 없거나 원표·동반자 정보가 다르거나 `ticket.return_sale_date`가 없을 때. 직접 생성·직접 파싱한 수수료 응답도 거절합니다. |
 | [`KorailProtocolError`][korail_mobile_api.errors.KorailProtocolError] | `settle_mileage=True`인데 사용 가능 마일리지가 수수료보다 적을 때 |
 
 **정보**
@@ -337,11 +355,12 @@ PNR 전체가 아니라 `ticket`이 가리키는 승차권 한 장만 환불하�
 **예제**
 
 ```python
-from korail_mobile_api import PaidTicket
+from korail_mobile_api import PaidTicket, RefundCompanion
 
 detail = client.get_refund_ticket_detail(reference)
 paid = PaidTicket.from_refund_detail(detail)
-commission = client.get_refund_commission(reference)
+companion = RefundCompanion(name=paid.companion_name, certificate_no=paid.companion_certificate_no)
+commission = client.get_refund_commission(reference, companion)
 result = client.refund(
     paid,
     commission=commission,
