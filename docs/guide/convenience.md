@@ -92,6 +92,12 @@ with Korail.logged_in(input("회원번호·전화번호·이메일: "), getpass(
 
 `korail.reservations.create(train)`은 실제 미결제 홀드를 만듭니다. 예약 상세가 필요하면 `korail.reservations.detail(hold)`을 별도로 호출하세요. 예약 성공 직후 자동 상세 조회는 하지 않습니다. `korail.reservations.cancel(hold)`은 실제 취소이고, `korail.reservations.pay(hold, card)`는 실제 카드 청구입니다. `korail.tickets.refund_fee(ticket)`는 수수료 조회이며, `korail.tickets.refund(ticket, commission=fee)`는 실제 환불입니다. 각 메서드는 기존 클라이언트의 입력 검증과 응답 모델을 그대로 사용합니다. 자세한 주의사항은 [예약](reservations.md)과 [결제·환불](payments.md)에 있습니다.
 
+개발 변경의 `korail.tickets.refund_fee(ticket, *, companion=RefundCompanion())`는 동반자 정보도 받습니다.
+조회의 `ticket`은 `OriginalTicketReference`이고 환불 입력은 `PaidTicket.from_refund_detail(detail)`로 만듭니다.
+동반자가 있으면 `RefundCompanion(name=paid.companion_name, certificate_no=paid.companion_certificate_no)`를
+키워드 `companion=`으로 넘기세요. 실제 수수료 조회 응답과 환불 입력의 원표·동반자가 일치해야 하며,
+직접 생성·파싱한 수수료 응답이나 원표 반환일이 없는 입력은 거절합니다. 자동 조회·재시도는 하지 않습니다.
+
 ### 일반실·특실 우선 선택
 
 승객 구성은 [예약 승객 구성](reservations.md#passengers)과 같은 검증을 적용합니다.

@@ -7,6 +7,7 @@ import json
 import runpy
 import sys
 from collections.abc import Callable
+from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,23 @@ import korail_mobile_api as api
 
 F8_DATE = "20990102"
 F8_ENV = {"strResult": "SUCC", "h_msg_cd": "IRZ000001", "h_msg_txt": "synthetic"}
+
+
+def _f8_bound_commission(ticket: api.OriginalTicketReference) -> api.RefundCommissionResponse:
+    """Isolated offline lookup setup; the golden below counts the mutation itself.
+
+    test_refund_binding.py covers the complete lookup/refund sequence on one client.
+    """
+    config = api.KorailConfig(
+        base_url="https://api.example.invalid", netfunnel_enabled=False, disable_dynapath=True
+    )
+    with closing(
+        api.KorailClient(
+            config, transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"strResult": "SUCC"}))
+        )
+    ) as client:
+        client.session.current = api.KorailSession(jsessionid="SYNTHETIC-SESSION")
+        return client.get_refund_commission(ticket)
 
 
 def _f8_arguments() -> dict[str, dict[str, Any]]:
@@ -253,8 +271,9 @@ def _f8_arguments() -> dict[str, dict[str, Any]]:
                 ticket.sale_sequence,
                 ticket.return_password,
                 "90001",
+                return_sale_date=ticket.sale_date,
             ),
-            "commission": api.RefundCommissionResponse(str_result="SUCC"),
+            "commission": _f8_bound_commission(ticket),
         },
         "verify_station_ticket_refund": {
             "request": api.StationRefundVerificationRequest(

@@ -55,6 +55,8 @@ KORAIL과는 관계없는 개인 프로젝트입니다. 공식 API가 아니라�
 - **실수하기 어렵게** — 결제 금액은 홀드의 `received_amount`를 그대로 쓰고, 0원·예약대기 홀드를 카드로 결제하려는 건 아닌지, 환불 전에 수수료를 조회했는지 요청 전에 확인합니다.
 - **네트워크 없이 도는 전체 테스트** — CI에서 Python 3.11~3.14로 `pytest`, `mypy --strict`, `pyright`, `ruff`를 돌립니다.
 
+현재 개발 변경은 오류 사전만 7.0.10 기준으로 갱신하며, 요청 기본 `AppVersion=7.0.8`과 패키지 버전 `2.5.0`은 유지합니다. `KorailConfig(app_version="7.0.10")`으로 명시할 수 있지만 실서버 호환을 보장하지 않습니다. [7.0.10 정적 검토와 미확인 범위](https://yaki.kr/korail-mobile-api/verification-7010/)는 기존 실서버 검증과 별개입니다.
+
 ## 설치
 
 Python 3.11 이상이 필요합니다.
@@ -159,11 +161,13 @@ finally:
 | 결제 전 취소 | `cancel_unpaid_hold` | 결제한 표에는 쓰지 않습니다. |
 | 기존 예약 가져오기 | `get_reservation_hold(pnr_no)` | 같은 계정의 예약 상세에서 결제용 홀드를 가져옵니다. 조회만 하며 새 예약이나 결제를 만들지 않습니다. |
 | 카드 결제 | `pay_with_card` | 카드 거절은 예외가 아니라 FAIL 응답으로 돌아옵니다. |
-| 환불 | `get_refund_commission` → `refund(..., commission=...)` | 승차권 한 장씩이고, 수수료 조회가 먼저입니다. `commission`이 수수료 조회의 성공 응답이 아니면(`None` 포함) 요청 전에 거절합니다. |
+| 환불 | `get_refund_commission` → `refund(..., commission=...)` | 승차권 한 장씩입니다. 실제 수수료 조회의 성공 응답과 원표 식별자·동반자 정보가 일치해야 하며, 직접 생성·파싱한 응답이나 원표 반환일이 없는 입력은 요청 전에 거절합니다. |
 | 할인 재계산 | `PriceRecalculationRequest.for_hold` → `recalculate_price` | 결제는 재계산된 홀드로 합니다. |
 
 변경 요청은 자동으로 다시 보내지 않습니다. 응답을 못 읽어서 예외가 나도 서버에서는 이미 처리됐을 수 있습니다.
 그럴 땐 다시 보내지 말고 예외의 `.raw`를 보고, 예약은 `get_reservation_history()`, 결제·환불은 `get_ticket_list()`로 먼저 확인하세요.
+
+개발 변경의 환불은 대상 연결을 확인할 수 없으면 거절하는 fail-closed 정책입니다. `PaidTicket.from_refund_detail()` 사용을 권하며, 수동 생성 시 현재 `sale_date`와 별도로 `return_sale_date`를 명시하세요. 수수료 조회 연결은 금액의 유효기간이나 서버 승인을 보장하지 않습니다. [환불 가이드](https://yaki.kr/korail-mobile-api/guide/payments/#commission)를 참고하세요.
 
 앱이나 다른 패키지에서 예약한 표는 로그인 후 `hold = client.get_reservation_hold(pnr_no)`로 가져와
 금액을 확인하고 `client.pay_with_card(hold, card)`로 결제할 수 있습니다.
@@ -201,7 +205,8 @@ finally:
   </picture>
 </p>
 
-- 폼은 앱의 요청 DTO에 선언된 순서대로 만듭니다. 앱이 그 순서로 보내기 때문입니다.
+- 폼은 확인한 앱 직렬화 순서를 따릅니다. 환불·수수료 조회는 공통 필드를 먼저, 은행 직접 필드는 `Device, Version, Key, AppVersion` 순서로 만듭니다. 순서에 따른 서버 영향은 미확인입니다.
+- 좌석배정 조회의 `*2` 이상 번호 그룹은 앱 DTO와 동일한 형식으로 확인된 것이 아니라 기존 SDK 확장입니다.
 - 열차 조회, 일부 예약(`reserve`, `reserve_transfer`, `reserve_with_discount_card`), 카드 결제, 예약 내역 조회 전에는 앱처럼 NetFunnel 대기열을 거칩니다. 기본으로 켜져 있습니다.
 - 로그인 비밀번호는 앱처럼 AES로 암호화해서 보냅니다.
 - 응답을 못 읽으면 받은 원문 전체를 예외의 `.raw`에 담아 던집니다.

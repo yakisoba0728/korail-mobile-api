@@ -166,7 +166,8 @@ def build_seat_assignment_schedule_form(
         "dirtChtnDvCd": request.transfer_type_code,
         "chtnArvRsStnNm": request.connection_arrival_station_name,
     }
-    # seatAttCdN/psgNumN/stlbDturDvNmN 은 승객별 번호 그룹이고 psgNumN 은 인원수가 아니라 그 자리의 점유 플래그(0/1)입니다.
+    # 7.0.10 앱 DTO에서 확인한 번호 그룹은 한 묶음입니다. *2 이상은 기존 SDK 확장으로 유지하며,
+    # 앱 DTO와 동등하다고 보지 않습니다. SDK는 각 그룹의 psgNumN을 "1"로 보냅니다.
     for slot in range(1, request.passenger_count + 1):
         form[f"seatAttCd{slot}"] = request.seat_attribute_code
         form[f"psgNum{slot}"] = "1"

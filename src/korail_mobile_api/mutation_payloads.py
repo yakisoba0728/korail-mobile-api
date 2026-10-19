@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
-from typing import TypeVar
+from typing import NoReturn, TypeVar
 
 from ._payload_helpers import _device_version_key
 from .config import KorailConfig
@@ -54,6 +54,7 @@ from .read_models import (
     RefundTicketDetailResponse,
     SelfCheckInSeat,
     TrainScheduleItem,
+    _RefundCommissionContext,
 )
 from .read_payloads import self_checkin_ticket_fields
 
@@ -1052,6 +1053,41 @@ def _app_integer(value: str | None) -> int:
     return number if -(2**31) <= number < 2**31 else 0
 
 
+def _validated_refund_commission(
+    ticket: PaidTicket,
+    commission: RefundCommissionResponse | None,
+) -> RefundCommissionResponse:
+    """수수료 응답의 로컬 조회 입력을 대조합니다. 금액 유효기간·서버 승인은 검증하지 않습니다."""
+    if not isinstance(commission, RefundCommissionResponse):
+        raise KorailProtocolError("KORAIL refund requires the get_refund_commission response as commission=")
+
+    def reject(message: str) -> NoReturn:
+        error = KorailProtocolError(message)
+        error.raw = commission.raw
+        raise error
+
+    if commission.str_result != "SUCC":
+        reject("KORAIL refund requires a successful commission response")
+    context = commission._request_context
+    if not isinstance(context, _RefundCommissionContext):
+        reject(
+            "KORAIL refund requires a response bound by get_refund_commission; direct construction or parsing is not sufficient"
+        )
+    if not isinstance(ticket.return_sale_date, str) or not ticket.return_sale_date.strip():
+        reject("KORAIL refund requires PaidTicket.return_sale_date from the original ticket")
+    expected = _RefundCommissionContext(
+        ticket.sale_window_no,
+        ticket.return_sale_date,
+        ticket.sale_sequence,
+        ticket.return_password,
+        ticket.companion_name,
+        ticket.companion_certificate_no,
+    )
+    if context != expected:
+        reject("KORAIL refund commission does not match the original ticket and companion")
+    return commission
+
+
 def build_refund_form(
     config: KorailConfig,
     ticket: PaidTicket,
@@ -1064,6 +1100,8 @@ def build_refund_form(
 ) -> dict[str, str]:
     """수수료 확인값을 에코하고 보호된 ctlDvCd는 추측하지 않아 생략합니다(MyTicketDetailViewModel.java:1811-1858;
     RefundTicketIn.java:66)."""
+    if not isinstance(ticket, PaidTicket):
+        raise KorailProtocolError("KORAIL refund requires a PaidTicket")
     for name, value in (
         ("pnr_no", ticket.pnr_no),
         ("sale_date", ticket.sale_date),
@@ -1072,6 +1110,7 @@ def build_refund_form(
         ("return_password", ticket.return_password),
     ):
         _required_mutation_text(value, field=f"PaidTicket.{name}", context="refund")
+    commission = _validated_refund_commission(ticket, commission)
     # bool("N") 변환으로 마일리지 사용 의도가 뒤집히지 않도록 bool 만 받습니다.
     if not isinstance(settle_mileage, bool):
         raise KorailProtocolError("settle_mileage must be a bool")
@@ -1081,8 +1120,9 @@ def build_refund_form(
         else ticket.pbp_acceptance_target_flag,
         field="pbp_acceptance_target_flag",
     )
-    # 키 순서는 RefundTicketIn 합성 생성자(RefundTicketIn.java:66)의 선언 순서이며 공통 필드가 맨 뒤입니다.
+    # 생성자 인자 순서가 아니라 write$Self의 CommonIn-first 순서를 따릅니다(7.0.10 RefundTicketIn.java:184-226).
     form = {
+        **_device_version_key(config),
         "txtPnrNo": ticket.pnr_no,
         "h_orgtk_sale_dt": ticket.sale_date,
         "h_orgtk_sale_wct_no": ticket.sale_window_no,
@@ -1091,26 +1131,14 @@ def build_refund_form(
         "h_mlg_stl": "Y" if settle_mileage else "N",
     }
     # 승차권 상세(MyTicketDetailViewModel.java:1521)는 위 필드만 채우고 나머지는 null 입니다.
-    if commission is not None:
-        if not isinstance(commission, RefundCommissionResponse):
-            raise KorailProtocolError("commission must be a RefundCommissionResponse")
-        # RefundTicketViewModel$executeRefundCommission$2.smali:1045-1086.
-        if commission.str_result != "SUCC":
-            error = KorailProtocolError("KORAIL refund requires a successful commission response")
-            error.raw = commission.raw
-            raise error
-        if commission.ticket_return_times_division_code:
-            form["tk_ret_tms_dv_cd"] = commission.ticket_return_times_division_code
-        if ticket.train_no:
-            form["trnNo"] = ticket.train_no
+    if commission.ticket_return_times_division_code:
+        form["tk_ret_tms_dv_cd"] = commission.ticket_return_times_division_code
+    if ticket.train_no:
+        form["trnNo"] = ticket.train_no
     # 진행 가능 플래그가 보호된 1글자 값과 같고 사용 가능 마일리지가 수수료 이상일 때만 묻고, 아니면 마일리지 없이
     # 환불합니다(MyTicketDetailViewModel.java:1811-1823; 환불 화면은 수수료 합계와 비교, RefundTicketViewModel.java:924-942). 플래그
     # 비교값은 보호돼 있어 보지 않습니다.
     if settle_mileage:
-        if commission is None:
-            raise KorailProtocolError(
-                "settle_mileage=True requires the commission response (get_refund_commission)"
-            )
         if _app_integer(commission.usable_mileage) < _app_integer(commission.refund_fee):
             raise KorailProtocolError(
                 "KORAIL refund cannot pay the fee with mileage: usable mileage is below the fee"
@@ -1119,7 +1147,6 @@ def build_refund_form(
     for key, coordinate in (("latitude", latitude), ("longitude", longitude)):
         if coordinate is not None:
             form[key] = str(coordinate)
-    form.update(_device_version_key(config))
     return form
 
 

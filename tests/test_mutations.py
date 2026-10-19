@@ -6,6 +6,7 @@ import copy
 import json
 import logging
 from collections import defaultdict
+from contextlib import closing
 from dataclasses import dataclass, replace
 from typing import Any, Callable
 from urllib.parse import parse_qsl
@@ -51,6 +52,7 @@ from korail_mobile_api.read_models import (
     SelfCheckInSeat,
     TrainScheduleItem,
 )
+from korail_mobile_api.read_payloads import OriginalTicketReference
 
 COMMON = {
     "Device": "SYNTH-ANDROID",
@@ -162,12 +164,33 @@ def test_card_repr_hides_malformed_strings_before_validation(field: str) -> None
 
 def ticket() -> PaidTicket:
     return PaidTicket(
-        PNR, "20991230", "SYNTH-ORIGINAL-WINDOW", "SYNTH-ORIGINAL-SEQ", "SYNTH-RETURN-PWD", "90001", "SYNTH-PBP"
+        PNR,
+        "20991230",
+        "SYNTH-ORIGINAL-WINDOW",
+        "SYNTH-ORIGINAL-SEQ",
+        "SYNTH-RETURN-PWD",
+        "90001",
+        "SYNTH-PBP",
+        return_sale_date="1229",
     )
 
 
-#: 앱은 환불 전에 항상 수수료를 조회합니다. 회차 코드가 없으면 첫 열차 번호만 더 실립니다.
-COMMISSION = RefundCommissionResponse(str_result="SUCC")
+def bound_commission(**changes: Any) -> RefundCommissionResponse:
+    """A real lookup under a separate MockTransport keeps mutation request counts isolated.
+
+    Same-client lookup/mutation integration and mismatches are covered in test_refund_binding.py.
+    """
+    config = KorailConfig(base_url="https://offline.invalid", netfunnel_enabled=False, disable_dynapath=True)
+    with closing(
+        KorailClient(
+            config, transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"strResult": "SUCC"}))
+        )
+    ) as client:
+        client.session.current = KorailSession(jsessionid="SYNTH-SESSION")
+        result = client.get_refund_commission(
+            OriginalTicketReference("SYNTH-ORIGINAL-WINDOW", "1229", "SYNTH-ORIGINAL-SEQ", "SYNTH-RETURN-PWD")
+        )
+    return replace(result, **changes)
 
 
 def merge_rows(standing: bool = True) -> tuple[TrainScheduleItem, ...]:
@@ -585,7 +608,7 @@ def cases() -> list[Case]:
         ),
         Case(
             "refund",
-            lambda c: c.refund(ticket(), commission=COMMISSION),
+            lambda c: c.refund(ticket(), commission=bound_commission()),
             "POST",
             ("refunds.RefundsRequest",),
             refund_form(trnNo="90001"),
@@ -967,7 +990,7 @@ def test_merge_exact_four_overrides(standing: bool) -> None:
 @pytest.mark.parametrize("settle_mileage", [False, True])
 def test_refund_sends_the_refund_screen_form(settle_mileage: bool) -> None:
     """RefundTicketViewModel$refundTicket$1.smali:854-868,1132-1180: commission echo, first train, location."""
-    commission = RefundCommissionResponse(
+    commission = bound_commission(
         str_result="SUCC",
         ticket_return_times_division_code="SYNTH-TIMES",
         usable_mileage="400",
@@ -1019,7 +1042,7 @@ def test_refund_pays_the_fee_with_mileage_only_when_the_app_would(usable: Any, f
     mileage >= fee; TextHelper.getInteger reads a missing or unparsable number as 0."""
     h = Harness([], "POST", (), {})
     try:
-        commission = RefundCommissionResponse(str_result="SUCC", usable_mileage=usable, refund_fee=fee)
+        commission = bound_commission(str_result="SUCC", usable_mileage=usable, refund_fee=fee)
         with pytest.raises(KorailProtocolError, match="mileage is below the fee"):
             h.client.refund(ticket(), settle_mileage=True, commission=commission)
         assert h.seen == []
@@ -1731,14 +1754,14 @@ def app_journey(number: int) -> list[str]:
         ),
         (
             "refund",
-            "txtPnrNo h_orgtk_sale_dt h_orgtk_sale_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_mlg_stl trnNo "
-            "pbpAcepTgtFlg Device Version AppVersion Key lang".split(),
+            "Device Version AppVersion Key lang txtPnrNo h_orgtk_sale_dt h_orgtk_sale_wct_no h_orgtk_sale_sqno "
+            "h_orgtk_ret_pwd h_mlg_stl trnNo pbpAcepTgtFlg".split(),
         ),
     ],
 )
 def test_mutation_forms_follow_the_app_dto_order(name: str, expected: list[str]) -> None:
     """TicketReservationIn.java:80; TicketReservationInPassengerInfo.java:55; TicketReservationInJrny.java:69;
-    RefundTicketIn.java:66: the app flattens each DTO in declaration order (NetworkService.java:15335-15392)."""
+    RefundTicketIn.write$Self in 7.0.10 encodes CommonIn first, unlike constructor argument order."""
     case = next(c for c in CASES if c.name == name)
     h = Harness([copy.deepcopy(case.response)], case.method, case.routes[:1], case.form)
     try:
@@ -1751,8 +1774,7 @@ def test_mutation_forms_follow_the_app_dto_order(name: str, expected: list[str])
 
 def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order() -> None:
     """TicketReservationIn.java:80 (two seat counts before the lists, trailing seats last);
-    RefundTicketIn.java:66 (tk_ret_tms_dv_cd, trnNo, pbpAcepTgtFlg, latitude, longitude, then the common
-    fields)."""
+    RefundTicketIn.write$Self (common fields first, then own identity and optional fields)."""
     config = KorailConfig(base_url="https://offline.invalid", lang=COMMON["lang"])
     form = payload_module.build_transfer_reservation_form(
         config,
@@ -1771,14 +1793,14 @@ def test_seat_designated_transfer_and_full_refund_forms_follow_the_app_dto_order
         *app_journey(2),
         *"txtSrcarNo1 txtSeatNo1 txtSrcarNo1_1 txtSeatNo1_1".split(),
     ]
-    commission = RefundCommissionResponse(str_result="SUCC", ticket_return_times_division_code="SYNTH-TMS")
+    commission = bound_commission(str_result="SUCC", ticket_return_times_division_code="SYNTH-TMS")
     refund = payload_module.build_refund_form(
         config, ticket(), commission=commission, latitude="37.5", longitude="127.0"
     )
     assert list(refund) == (
-        "txtPnrNo h_orgtk_sale_dt h_orgtk_sale_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_mlg_stl "
+        "Device Version AppVersion Key lang txtPnrNo h_orgtk_sale_dt h_orgtk_sale_wct_no h_orgtk_sale_sqno h_orgtk_ret_pwd h_mlg_stl "
         "tk_ret_tms_dv_cd "
-        "trnNo pbpAcepTgtFlg latitude longitude Device Version AppVersion Key lang".split()
+        "trnNo pbpAcepTgtFlg latitude longitude".split()
     )
 
 
@@ -1833,7 +1855,7 @@ def test_mutation_parser_keeps_the_whole_response_when_called_directly() -> None
     h = Harness([raw], "POST", ("refunds.RefundsRequest",), refund_form(trnNo="90001"))
     try:
         with pytest.raises(KorailProtocolError) as caught:
-            h.client.refund(ticket(), commission=COMMISSION)
+            h.client.refund(ticket(), commission=bound_commission())
         assert caught.value.raw == raw and caught.value.parser_raw == row
     finally:
         h.close()
@@ -2106,7 +2128,7 @@ def test_refund_required_settlement_mask_does_not_silently_drop_data(shape: Any)
     h = Harness([raw], "POST", ("refunds.RefundsRequest",), refund_form(trnNo="90001"))
     try:
         with pytest.raises(KorailProtocolError) as caught:
-            h.client.refund(ticket(), commission=COMMISSION)
+            h.client.refund(ticket(), commission=bound_commission())
         assert caught.value.raw == raw
         assert len(h.seen) == 1
     finally:
@@ -2129,7 +2151,7 @@ def test_refund_required_but_nullable_list_and_integer_string_compatibility(
     raw = {**BASE, "stlList": rows}
     h = Harness([raw], "POST", ("refunds.RefundsRequest",), refund_form(trnNo="90001"))
     try:
-        result = h.client.refund(ticket(), commission=COMMISSION)
+        result = h.client.refund(ticket(), commission=bound_commission())
         assert result.settlement_method_codes == codes
         assert result.settlement_list_is_null is is_null
         assert result.raw == raw
