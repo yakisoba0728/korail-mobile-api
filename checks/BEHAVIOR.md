@@ -12,7 +12,7 @@ DTO 필드는 선언 순서로 평탄화하고 배열은 1기반 인덱스를 �
 
 좌석배정 조회의 `seatAttCdN/psgNumN/stlbDturDvNmN` 중 `*2` 이상은 기존 SDK 확장입니다.
 7.0.10 앱 DTO에서 확인한 한 묶음과 동등하다고 주장하지 않으며, 1~9명 지원을 제거하거나 무음 축소하지 않습니다.
-요청 기본 `AppVersion=7.0.8`, API `Version`, 패키지 버전 `2.5.0`은 유지합니다.
+패키지 버전은 `2.6.0`이며 요청 기본 `AppVersion=7.0.8`과 API `Version`은 유지합니다.
 `KorailConfig(app_version="7.0.10")` override는 지원하지만 새 버전의 실서버 호환을 뜻하지 않습니다.
 
 API User-Agent는 운영 관측값 `korailtalk`, 대기열 User-Agent는 기기 기반 Dalvik 형식입니다.
