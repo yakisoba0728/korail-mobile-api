@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 import sys
 
 import httpx
@@ -219,11 +220,13 @@ def test_replace_and_device_profile_keep_the_proxy() -> None:
 
 @pytest.fixture
 def device_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
+    for name in tuple(os.environ):
+        if name.startswith("KORAIL_"):
+            monkeypatch.delenv(name)
     monkeypatch.setenv("KORAIL_DYNAPATH_DEVICE_ID", "0123456789abcdef")
     monkeypatch.setenv("KORAIL_DYNAPATH_OS_VERSION", "17")
     monkeypatch.setenv("KORAIL_DYNAPATH_DEVICE_MODEL", "SM-S948N")
     monkeypatch.setenv("KORAIL_ANDROID_BUILD_ID", "CP2A.260605.016")
-    monkeypatch.delenv("KORAIL_PROXY", raising=False)
     return monkeypatch
 
 
@@ -237,3 +240,24 @@ def test_build_config_from_env_reads_korail_proxy(device_env: pytest.MonkeyPatch
     with pytest.raises(ValueError) as excinfo:
         build_config_from_env()
     _assert_no_credentials(str(excinfo.value))
+
+
+@pytest.mark.parametrize(
+    "name,attribute,default,override,expected",
+    [
+        ("KORAIL_DEVICE_WIDTH", "device_width", 1440, " 801 ", 801),
+        ("KORAIL_DEVICE_HEIGHT", "device_height", 3120, "1602", 1602),
+        ("KORAIL_ANDROID_SDK_INT", "android_sdk_int", 37, "34", 34),
+    ],
+)
+def test_environment_device_dimensions_keep_defaults_and_integer_policy(
+    device_env: pytest.MonkeyPatch, name: str, attribute: str, default: int, override: str, expected: int
+) -> None:
+    config = build_config_from_env()
+    assert config.base_url == "https://smart.letskorail.com:443"
+    assert getattr(config, attribute) == default
+    device_env.setenv(name, override)
+    assert getattr(build_config_from_env(), attribute) == expected
+    device_env.setenv(name, "synthetic-invalid-integer")
+    with pytest.raises(ValueError, match="invalid literal"):
+        build_config_from_env()

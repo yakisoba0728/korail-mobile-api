@@ -102,7 +102,7 @@ jobs:
           clean = target / 'exercise'
           clean.mkdir()
           wheel, = (root / 'dist').glob('*.whl')
-          args = [str(python), '-m', 'pip', 'install', str(wheel)]
+          args = [str(python), '-m', 'pip', 'install', str(wheel), 'pytest>=8.3']
           if '${{ matrix.dependencies }}' == 'minimum':
               config = tomllib.loads((root / 'pyproject.toml').read_text())
               for text in config['project']['dependencies']:
@@ -128,6 +128,11 @@ jobs:
           subprocess.check_call([str(python), '-c', command], cwd=clean, env=env)
           for check in ('contract_api.py', 'netfunnel_offline.py'):
               subprocess.check_call([str(python), str(clean / 'checks' / check)], cwd=clean, env=env)
+          tests = clean / 'tests'
+          tests.mkdir()
+          for name in ('conftest.py', 'test_public_api_smoke.py', 'test_7010_contract.py', 'test_refund_binding.py'):
+              shutil.copy2(root / 'tests' / name, tests / name)
+          subprocess.check_call([str(python), '-m', 'pytest', '-q', str(tests)], cwd=clean, env=env)
           PY
 
   docs:

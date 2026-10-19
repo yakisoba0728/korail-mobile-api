@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import ast
-import inspect
 import sys
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -12,7 +10,6 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
-from korail_mobile_api.client import KorailClient
 from korail_mobile_api.config import KorailConfig
 from korail_mobile_api.errors import (
     KorailApiError,
@@ -35,7 +32,7 @@ from korail_mobile_api.limousine_payloads import (
     build_limousine_schedule_form,
     build_limousine_seat_inventory_form,
 )
-from korail_mobile_api.models import BaseKorailResponse, KorailSession
+from korail_mobile_api.models import BaseKorailResponse, TrainSearchQuery
 from korail_mobile_api.mutation_models import KorailPassengerCounts
 from korail_mobile_api.mutation_payloads import build_limousine_reservation_form
 from korail_mobile_api.netfunnel import (
@@ -66,7 +63,7 @@ class Clock:
 class Reply:
     text: str = "200:key=SYNTHETIC-KEY"
     delay: float = 0.0
-    error: str | None = None
+    error: str | Exception | None = None
     status: int = 200
 
 
@@ -91,6 +88,8 @@ class QueueWorld:
             assert self.replies, "Unexpected extra queue request"
             reply = self.replies.pop(0)
         self.clock.now += reply.delay
+        if isinstance(reply.error, Exception):
+            raise reply.error
         if reply.error == "read":
             raise httpx.ReadTimeout("synthetic read timeout", request=request)
         if reply.error:
@@ -227,43 +226,33 @@ def test_error_bypass_modes(queue_factory, kind: str, mode: int) -> None:
 
 
 @pytest.mark.parametrize("mode", [0, 1])
-def test_retry_budget_is_shared_between_enter_and_poll(queue_factory, mode: int) -> None:
-    """Netfunnel.java:352-363,592: one app retry for the entire Begin operation."""
-    client, gate, world, clock = queue_factory(
-        [
-            Reply(error="connect"),
-            Reply("201:key=SYNTHETIC-WAIT&ttl=1"),
-            Reply(error="connect"),
-        ],
-        mode=mode,
-    )
+@pytest.mark.parametrize(
+    "replies,operations,sleeps",
+    [
+        pytest.param(
+            [Reply(error="connect"), Reply("201:key=SYNTHETIC-WAIT&ttl=1"), Reply(error="connect")],
+            ["5101", "5101", "5002"],
+            [3.0, 1, 3.0],
+            id="retry-shared-between-enter-and-poll",
+        ),
+        pytest.param(
+            [Reply("201:key=SYNTHETIC-WAIT&ttl=1"), Reply(error="connect"), Reply(error="connect")],
+            ["5101", "5002", "5002"],
+            [1, 3.0, 3.0],
+            id="poll-uses-available-retry",
+        ),
+    ],
+)
+def test_retry_budget_across_enter_and_poll(queue_factory, mode: int, replies, operations, sleeps) -> None:
+    """Netfunnel.java:352-363,592,654-664: Begin shares one retry, including failed check-enter."""
+    client, gate, world, clock = queue_factory(replies, mode=mode)
     if mode == 0:
         with pytest.raises(KorailNetFunnelError):
             client.run(gate, world.send)
     else:
         client.run(gate, world.send)
-    assert world.ops() == ["5101", "5101", "5002"] + (["API"] if mode else []) + ["5004"]
-    assert clock.sleeps == [3.0, 1, 3.0]
-
-
-@pytest.mark.parametrize("mode", [0, 1])
-def test_waiting_poll_error_with_available_retry(queue_factory, mode: int) -> None:
-    """Netfunnel.java:654-664 converts a failed check-enter to an error callback."""
-    client, gate, world, clock = queue_factory(
-        [
-            Reply("201:key=SYNTHETIC-WAIT&ttl=1"),
-            Reply(error="connect"),
-            Reply(error="connect"),
-        ],
-        mode=mode,
-    )
-    if mode == 0:
-        with pytest.raises(KorailNetFunnelError):
-            client.run(gate, world.send)
-    else:
-        client.run(gate, world.send)
-    assert world.ops() == ["5101", "5002", "5002"] + (["API"] if mode else []) + ["5004"]
-    assert clock.now == 7
+    assert world.ops() == operations + (["API"] if mode else []) + ["5004"]
+    assert clock.sleeps == sleeps and clock.now == 7
 
 
 LIMIT_CASES = [
@@ -439,24 +428,6 @@ def test_rejected_poll_node_falls_back_to_front_door(queue_factory) -> None:
     assert world.events[-1][2] == {"opcode": "5004", "key": "SYNTHETIC-NEW"}
 
 
-def test_release_failure_of_any_kind_never_masks_the_api_error(queue_factory, monkeypatch) -> None:
-    """_complete runs in finally; a non-transport failure (e.g. a closed httpx client) is logged, not raised."""
-    client, gate, world, _ = queue_factory([Reply()], mode=0)
-    real_post = client._post
-
-    def post(url: str) -> str:
-        if "opcode=5004" in url:
-            raise RuntimeError("synthetic release failure")
-        return real_post(url)
-
-    def send() -> str:
-        raise ValueError("synthetic API failure")
-
-    monkeypatch.setattr(client, "_post", post)
-    with pytest.raises(ValueError, match="synthetic API failure"):
-        client.run(gate, send)
-
-
 def test_closed_queue_client_sends_nothing(queue_factory) -> None:
     client, gate, world, _ = queue_factory([Reply()], mode=1)
     client.close()
@@ -490,15 +461,24 @@ def test_complete_once_without_parsing_or_retry(queue_factory, completion: Reply
     assert world.ops() == ["5101", "API", "5004"]
 
 
-def test_callback_exception_preserved_and_slot_returned(queue_factory) -> None:
-    client, gate, world, _ = queue_factory([Reply()], complete=Reply(error="connect"))
-    error = RuntimeError("synthetic callback failure")
+@pytest.mark.parametrize(
+    "completion,error",
+    [
+        (Reply(error="connect"), RuntimeError("synthetic callback failure")),
+        (Reply(error=RuntimeError("synthetic release failure")), ValueError("synthetic API failure")),
+    ],
+)
+def test_callback_exception_preserved_and_slot_returned(
+    queue_factory, completion: Reply, error: Exception
+) -> None:
+    """Completion errors, including non-transport errors, must not mask the original API error."""
+    client, gate, world, _ = queue_factory([Reply()], complete=completion)
 
     def send() -> Any:
         world.send()
         raise error
 
-    with pytest.raises(RuntimeError) as raised:
+    with pytest.raises(type(error)) as raised:
         client.run(gate, send)
     assert raised.value is error and world.ops() == ["5101", "API", "5004"]
 
@@ -583,55 +563,16 @@ def test_gate_defaults_and_action_overrides() -> None:
         client.close()
 
 
-def test_all_public_methods_gate_call_graph() -> None:
-    """Exhaustive library AST connectivity, not a claim that unknown app gate literals match."""
-    tree = ast.parse(inspect.getsource(KorailClient))
-    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
-    methods = {n.name: n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
-    public = {n for n in methods if not n.startswith("_")}
-    edges = {
-        name: {
-            call.func.attr
-            for call in ast.walk(node)
-            if isinstance(call, ast.Call)
-            and isinstance(call.func, ast.Attribute)
-            and isinstance(call.func.value, ast.Name)
-            and call.func.value.id == "self"
-        }
-        for name, node in methods.items()
-    }
+def test_all_public_methods_have_expected_queue_exchanges() -> None:
+    """The public smoke suite executes every exchange; pin its gated set without private call-graph checks."""
+    from test_public_api_smoke import F8_CASE_DATA
 
-    def reaches_queue(name: str, seen: frozenset[str] = frozenset()) -> bool:
-        if name in seen or name not in edges:
-            return False
-        return "_queued" in edges[name] or any(reaches_queue(n, seen | {name}) for n in edges[name])
-
-    assert len(public) == 85
-    assert {n for n in public if reaches_queue(n)} == EXPECTED_GATED_METHODS
-    calls = [
-        n
-        for n in ast.walk(cls)
-        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "_queued"
-    ]
-    assert len(calls) == 7
-    direct = {}
-    for name, node in methods.items():
-        for call in ast.walk(node):
-            if (
-                isinstance(call, ast.Call)
-                and isinstance(call.func, ast.Attribute)
-                and call.func.attr == "_queued"
-            ):
-                direct[name] = ast.unparse(call.args[0])
-    assert direct == {
-        "get_reservation_history": "'reservation_view'",
-        "get_seat_assignment_schedule": "self._inquiry_gate(peak_season=peak_season)",
-        "_post_schedule_view": "self._inquiry_gate(peak_season=peak_season, special=use_special_schedule)",
-        "reserve": "'reserve'",
-        "reserve_transfer": "'reserve'",
-        "pay_with_card": "'pay'",
-        "reserve_with_discount_card": "'reserve'",
-    }
+    assert len(F8_CASE_DATA) == 85
+    assert {
+        name
+        for name, case in F8_CASE_DATA.items()
+        if any(exchange["query"].get("opcode") == ["5101"] for exchange in case["exchanges"])
+    } == EXPECTED_GATED_METHODS
 
 
 @pytest.mark.parametrize(
@@ -643,20 +584,38 @@ def test_all_public_methods_gate_call_graph() -> None:
         (True, True, "product_inquiry"),
     ],
 )
-def test_inquiry_gate_selection(peak: bool, special: bool, gate: str) -> None:
+def test_inquiry_gate_selection(f8_client_factory, peak: bool, special: bool, gate: str) -> None:
     """Library selection priority; TrainScheduleViewModel.java:5208-5244 has protected aid values."""
-    assert KorailClient._inquiry_gate(peak_season=peak, special=special) == gate
+    requests = []
 
+    def handler(request):
+        requests.append(request)
+        if request.url.path == "/ts.wseq":
+            return httpx.Response(200, text="200:key=SYNTHETIC-KEY")
+        return httpx.Response(200, json={"strResult": "SUCC"})
 
-def test_disabled_queue_sends_directly() -> None:
-    client = KorailClient(
-        KorailConfig(netfunnel_enabled=False), transport=httpx.MockTransport(lambda r: httpx.Response(200))
+    client = f8_client_factory(handler)
+    client.search_trains(
+        TrainSearchQuery("SYNTHETIC-DEPARTURE", "SYNTHETIC-ARRIVAL", "20990101"),
+        peak_season=peak,
+        use_special_schedule=special,
     )
-    try:
-        assert client.netfunnel is None
-        assert client._queued("inquiry", lambda: "synthetic") == "synthetic"
-    finally:
-        client.close()
+    assert [request.url.params.get("opcode", "API") for request in requests] == ["5101", "API", "5004"]
+    assert requests[0].url.params["aid"] == EXPECTED_GATES[gate][0]
+    assert requests[-1].url.params["key"] == "SYNTHETIC-KEY"
+
+
+def test_disabled_queue_sends_directly(scripted_client_factory, f8_logged_in_session) -> None:
+    client, requests, pending = scripted_client_factory(
+        [{"strResult": "SUCC"}],
+        config=KorailConfig(base_url="https://api.invalid", netfunnel_enabled=False),
+        session=f8_logged_in_session,
+    )
+    assert client.get_reservation_history().str_result == "SUCC"
+    assert client.netfunnel is None and not pending
+    assert [request.url.path for request in requests] == [
+        "/classes/com.korail.mobile.reservation.ReservationView"
+    ]
 
 
 @pytest.fixture
@@ -1126,14 +1085,11 @@ def test_reservation_wrong_types_and_car_override(config, schedule) -> None:
 
 
 @pytest.fixture
-def api_factory(config, scripted_client_factory):
+def api_factory(config, scripted_client_factory, f8_logged_in_session):
     def make(payload: dict[str, Any] | Exception, *, authenticated: bool = True):
-        session = (
-            KorailSession(jsessionid="SYNTHETIC-SESSION", member_no="SYNTHETIC-MEMBER")
-            if authenticated
-            else None
+        client, requests, _ = scripted_client_factory(
+            [payload], config=config, session=f8_logged_in_session if authenticated else None
         )
-        client, requests, _ = scripted_client_factory([payload], config=config, session=session, repeat=True)
         return client, requests
 
     return make
@@ -1229,14 +1185,12 @@ def test_read_fail_envelope_preserves_raw(api_factory, schedule_query) -> None:
     assert raised.value.raw == raw and len(requests) == 1
 
 
-def test_fallback_wait_budget_restarts_for_each_admission() -> None:
+def test_fallback_wait_budget_restarts_for_each_admission(f8_client_factory) -> None:
     """Library policy: client.py search_trains_with_transfer_fallback starts two independent runs.
 
     A 1s queue budget is not a 1s bound on the entire two-query public method.
     App confirmation/filter differences are outside this queue contract test.
     """
-    from korail_mobile_api.models import TrainSearchQuery
-
     clock = Clock()
     events: list[str] = []
     api_count = 0
@@ -1260,20 +1214,17 @@ def test_fallback_wait_budget_restarts_for_each_admission() -> None:
             200, json={"strResult": "SUCC", "h_msg_cd": "IRG000000", "h_msg_txt": "synthetic"}
         )
 
-    client = KorailClient(
-        KorailConfig(base_url="https://api.invalid", netfunnel_wait_limit=1),
-        transport=httpx.MockTransport(handler),
+    client = f8_client_factory(
+        handler, config=KorailConfig(base_url="https://api.invalid", netfunnel_wait_limit=1), logged_in=False
     )
-    try:
-        assert client.netfunnel is not None
-        client.netfunnel._clock = clock
-        client.netfunnel._sleep = clock.sleep
-        client._station_names = {"9001": "SYNTHETIC-DEPARTURE", "9002": "SYNTHETIC-ARRIVAL"}
-        client.search_trains_with_transfer_fallback(TrainSearchQuery("9001", "9002", "20990101"))
-        assert api_count == 2 and clock.now == 2
-        assert events == ["5101", "API", "5004", "5101", "API", "5004"]
-    finally:
-        client.close()
+    assert client.netfunnel is not None
+    client.netfunnel._clock = clock
+    client.netfunnel._sleep = clock.sleep
+    client.search_trains_with_transfer_fallback(
+        TrainSearchQuery("SYNTHETIC-DEPARTURE", "SYNTHETIC-ARRIVAL", "20990101")
+    )
+    assert api_count == 2 and clock.now == 2
+    assert events == ["5101", "API", "5004", "5101", "API", "5004"]
 
 
 @pytest.mark.parametrize(

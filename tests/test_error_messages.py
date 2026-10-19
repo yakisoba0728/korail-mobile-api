@@ -6,11 +6,9 @@ import pickle
 import runpy
 import subprocess
 import sys
-from contextlib import closing
 from importlib.resources import files
 from pathlib import Path
 
-import httpx
 import pytest
 
 import korail_mobile_api as api
@@ -192,29 +190,25 @@ NEW_FAILURES = [
 
 
 @pytest.mark.parametrize("code,exception", NEW_FAILURES)
-def test_new_failure_response_is_sent_once_and_can_be_returned_as_a_model(code, exception):
-    requests = []
+def test_new_failure_response_is_sent_once_and_can_be_returned_as_a_model(
+    code, exception, scripted_client_factory
+):
     raw = {"strResult": "FAIL", "h_msg_cd": code, "h_msg_txt": "", "synthetic": {"keep": True}}
-
-    def reply(request):
-        requests.append(request)
-        return httpx.Response(200, json=raw)
-
-    with closing(
-        api.KorailClient(
-            api.KorailConfig(base_url="https://offline.invalid", disable_dynapath=True),
-            transport=httpx.MockTransport(reply),
-        )
-    ) as client:
-        with pytest.raises(exception) as caught:
-            client.http.post_form("/synthetic", {})
-        assert len(requests) == 1
-        assert caught.value.raw == raw and caught.value.message == ""
-        assert caught.value.display_message
-        response = client.http.post_form("/synthetic", {}, raise_on_fail=False)
-        assert len(requests) == 2
-        assert response.str_result == "FAIL" and response.h_msg_txt == "" and response.raw == raw
-        assert response.display_message == caught.value.display_message
+    client, requests, _ = scripted_client_factory(
+        [raw, raw],
+        config=api.KorailConfig(
+            base_url="https://offline.invalid", disable_dynapath=True, netfunnel_enabled=False
+        ),
+    )
+    with pytest.raises(exception) as caught:
+        client.http.post_form("/synthetic", {})
+    assert len(requests) == 1
+    assert caught.value.raw == raw and caught.value.message == ""
+    assert caught.value.display_message
+    response = client.http.post_form("/synthetic", {}, raise_on_fail=False)
+    assert len(requests) == 2
+    assert response.str_result == "FAIL" and response.h_msg_txt == "" and response.raw == raw
+    assert response.display_message == caught.value.display_message
     success_raw = {**raw, "strResult": "SUCC"}
     assert parse_base_response(success_raw).str_result == "SUCC"
 

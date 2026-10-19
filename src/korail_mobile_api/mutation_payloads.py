@@ -1046,10 +1046,14 @@ def _refund_echo_field(value: object, *, field: str) -> str:
 
 
 def _app_integer(value: str | None) -> int:
-    """TextHelper.getInteger 처럼 읽습니다: Integer.parseInt 이고 없거나 읽을 수 없으면 0 입니다(TextHelper.java:169-181)."""
+    """TextHelper의 int32·실패 시 0 규칙을 따르며 SDK의 기존 ASCII 검증은 유지합니다(TextHelper.java:169-181)."""
     if value is None or re.fullmatch(r"[+-]?[0-9]+", value) is None:
         return 0
-    number = int(value)
+    digits = value.lstrip("+-").lstrip("0")
+    # int32는 최대 10자리이므로 Python의 전역 정수 변환 한도에 의존하지 않습니다.
+    if len(digits) > 10:
+        return 0
+    number = int(digits or "0") * (-1 if value.startswith("-") else 1)
     return number if -(2**31) <= number < 2**31 else 0
 
 

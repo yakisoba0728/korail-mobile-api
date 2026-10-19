@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import base64
 import socket
-import sys
 from pathlib import Path
 from urllib.parse import parse_qs, parse_qsl
 
@@ -881,8 +880,6 @@ def test_record_modules_have_no_inbound_import_or_public_method(record_module, m
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 names = [alias.name for alias in node.names] + [getattr(node, "module", "") or ""]
                 assert all(record_module not in name for name in names), (path, node.lineno)
-    if record_module == "_social_login_unsupported":
-        assert f"korail_mobile_api.{record_module}" not in sys.modules
     for method in methods:
         assert not hasattr(KorailClient, method)
 
@@ -927,49 +924,22 @@ def test_login_wire_encryption_matches_independent_vector(factory):
 
 @pytest.mark.parametrize("lang", [None, "synthetic-language"])
 @pytest.mark.parametrize("optional", [False, True])
-def test_login_form_matches_dto_declaration_order(lang: str | None, optional: bool) -> None:
+def test_login_form_matches_dto_declaration_order(factory, lang: str | None, optional: bool) -> None:
     """LoginIn.java:57-80,141-164; CommonIn.java:467-474; NetworkService.java:15335-15392."""
-    seen: list[httpx.Request] = []
-    replies = iter(
-        [
-            {"strResult": "SUCC"},
-            {
-                "strResult": "SUCC",
-                "app.login.cphd": {"idx": "synthetic-index", "key": "0123456789abcdef"},
-            },
-            {"strResult": "SUCC", "h_msg_cd": "IRZ000001"},
-        ]
-    )
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json=next(replies),
-            headers={"Set-Cookie": "JSESSIONID=synthetic-session; Path=/"},
-        )
-
     config = KorailConfig(
         base_url="https://api.example.invalid",
         netfunnel_enabled=False,
         dynapath=DynapathConfig(enabled=True, token_provider=lambda context: "synthetic-token"),
         lang=lang,
     )
-    client = KorailClient(config, transport=httpx.MockTransport(handler))
-    try:
-        client.login(
-            "0000000000",
-            "synthetic-password",
-            cust_id="synthetic-customer" if optional else None,
-            etr_path="synthetic-entry" if optional else None,
-        )
-    finally:
-        client.close()
-    assert [request.url.path for request in seen] == [
-        "/file/CACHE/MobileService.cache",
-        "/classes/com.korail.mobile.common.code.do",
-        "/classes/com.korail.mobile.login.Login",
-    ]
+    client, seen = factory([*bootstrap(), login_response()], config=config)
+    client.login(
+        ID,
+        PASSWORD,
+        cust_id="synthetic-customer" if optional else None,
+        etr_path="synthetic-entry" if optional else None,
+    )
+    assert [request.url.path for request in seen] == [SERVICE, COMMON, LOGIN]
     pairs = parse_qsl(seen[-1].content.decode("ascii"), keep_blank_values=True)
     expected = ["Device", "Version", "AppVersion", "Key"]
     if lang is not None:

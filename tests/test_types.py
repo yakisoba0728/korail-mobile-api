@@ -1,4 +1,4 @@
-"""Public type boundaries must not constrain future server codes or copy raw data."""
+"""Public types preserve future server codes, import paths and documented raw sharing."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import get_type_hints
 import pytest
 
 import korail_mobile_api as api
-from korail_mobile_api import read_parsers, read_payloads
+from korail_mobile_api import mutation_parsers, read_parsers, read_payloads
 from korail_mobile_api.models import TrainSummary
 from korail_mobile_api.read_payloads import build_self_seat_change_info_form
 from korail_mobile_api.session import infer_login_input_flag
@@ -70,6 +70,24 @@ def test_public_raw_fields_expose_objects_not_any() -> None:
     parsed = api.BaseKorailResponse.from_raw(raw)
     assert parsed.raw is raw
     assert api.BaseKorailResponse().raw is not api.BaseKorailResponse().raw
+
+
+@pytest.mark.parametrize(
+    "parser",
+    [
+        mutation_parsers.parse_reservation_hold_response,
+        mutation_parsers.parse_reservation_payment_response,
+        mutation_parsers.parse_refund_ticket_response,
+    ],
+)
+def test_mutation_responses_keep_shallow_raw_copies(parser) -> None:
+    nested = {"keep": [1, "synthetic"]}
+    raw = {"strResult": "SUCC", "stlList": [], "extra": nested}
+    response = parser(raw)
+    assert response.raw == raw and response.raw is not raw
+    assert response.raw["extra"] is nested
+    raw["later"] = "not in the shallow copy"
+    assert "later" not in response.raw
 
 
 def test_unknown_response_codes_remain_strings() -> None:

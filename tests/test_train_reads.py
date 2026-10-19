@@ -9,30 +9,26 @@ from urllib.parse import parse_qsl
 
 import pytest
 
-from korail_mobile_api.config import KorailConfig
-from korail_mobile_api.dynapath import DynapathConfig
-from korail_mobile_api.errors import (
+from korail_mobile_api import (
+    DynapathConfig,
+    FreeSeatCarRequest,
+    GuideSeatConditionRequest,
     KorailApiError,
     KorailAuthError,
+    KorailConfig,
     KorailProtocolError,
-    KorailSessionExpiredError,
-)
-from korail_mobile_api.models import (
     KorailSession,
+    KorailSessionExpiredError,
+    MaasServiceDetailQuery,
+    MergeSeatsInquiryRequest,
+    PriceFareLeg,
+    PriceFareQuoteRequest,
     TrainSearchContinuation,
     TrainSearchQuery,
     TrainSummary,
     TransferSearchResult,
 )
-from korail_mobile_api.read_payloads import (
-    FreeSeatCarRequest,
-    GuideSeatConditionRequest,
-    MaasServiceDetailQuery,
-    MergeSeatsInquiryRequest,
-    PriceFareLeg,
-    PriceFareQuoteRequest,
-    TravelProductSearchQuery,
-)
+from korail_mobile_api.read_payloads import TravelProductSearchQuery
 
 P = "/classes/com.korail.mobile."
 DATE = "20300102"
@@ -610,11 +606,21 @@ OPTIONAL = [
 
 @pytest.mark.parametrize("name,wire,model", OPTIONAL)
 @pytest.mark.parametrize(
-    "value",
-    [ABSENT, None, True, False, [], {}, 1.5],
-    ids=["missing", "null", "true", "false", "list", "object", "float"],
+    "value,expected",
+    [
+        (ABSENT, None),
+        (None, None),
+        (True, None),
+        (False, None),
+        ([], None),
+        ({}, None),
+        (1.5, None),
+        (0, "0"),
+        (12, "12"),
+    ],
+    ids=["missing", "null", "true", "false", "list", "object", "float", "zero", "integer"],
 )
-def test_optional_strings_are_lenient(name, wire, model, value, rig):
+def test_optional_strings_are_lenient_and_accept_integers(name, wire, model, value, expected, rig):
     """Optional constructors: TrainScheduleOutTrainInfo.java:172-563; seat:62-105;
     RunDateOutItem.java:104-161.
     """
@@ -623,24 +629,12 @@ def test_optional_strings_are_lenient(name, wire, model, value, rig):
     put(raw, wire, value)
     client, calls, _ = rig([raw], auth=case[7])
     result = getattr(client, name)(*case[1], **case[2])
-    assert lookup(result, model) is None
+    if expected is None:
+        assert lookup(result, model) is None
+    else:
+        assert lookup(result, model) == expected
     assert result.raw == raw
     assert len(calls) == 1
-
-
-@pytest.mark.parametrize("name,wire,model", OPTIONAL)
-@pytest.mark.parametrize("value", [0, 12])
-def test_optional_integer_string_compatibility(name, wire, model, value, rig):
-    """Integer/String compatibility and optional DTO masks per checks/BEHAVIOR.md.
-    This is the supplied interoperability policy, not Android's exact JSON decoder.
-    """
-    case = BY_NAME[name]
-    raw = deepcopy(case[5])
-    put(raw, wire, value)
-    client, _, _ = rig([raw], auth=case[7])
-    result = getattr(client, name)(*case[1], **case[2])
-    assert lookup(result, model) == str(value)
-    assert result.raw == raw
 
 
 @pytest.mark.parametrize("key", ["count", "map_version"])
@@ -700,64 +694,51 @@ def test_string_fields_allow_integer_strings(name, wire, model, rig):
     assert result.raw == raw
 
 
+DEFAULTED_FIELDS = [
+    ("get_seat_inventory", "layout_type", "layout_type", ""),
+    ("get_seat_inventory", "seat_ary_cd", "arrangement_code", ""),
+    ("get_seat_inventory", "seatList.0.seat_no", "seats.0.seat_no", ""),
+    ("get_seat_inventory", "seatList.0.sale_psb_flg", "seats.0.sale_possible", ""),
+    ("get_seat_inventory", "seatList.0.dir_seat_att_cd", "seats.0.direction_code", ""),
+    ("get_seat_inventory", "seatList.0.rq_seat_att_cd", "seats.0.requested_attribute_code", ""),
+    ("get_seat_inventory", "seatList.0.seat_spec", "seats.0.specification", ""),
+    ("get_seat_inventory", "seatList.0.sqr_no", "seats.0.sequence_no", ""),
+    ("get_seat_inventory", "seatList.0.intg_msg_cd", "seats.0.message_code", ""),
+    ("get_seat_inventory", "seatList.0.intg_msg", "seats.0.message", ""),
+    ("get_seat_inventory", "windowList.0.st_loc_rt", "windows.0.start_location_ratio", None),
+    ("get_seat_inventory", "windowList.0.cls_loc_rt", "windows.0.close_location_ratio", None),
+    ("get_seat_cars", "srcar_infos.srcar_info.0.h_srcar_no", "cars.0.car_no", None),
+    ("get_seat_cars", "srcar_infos.srcar_info.0.h_rest_seat_cnt", "cars.0.remaining_seat_count", None),
+    ("get_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name", ""),
+    ("get_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttNm", "cars.0.attributes.0.name", ""),
+    ("get_station_data", "stns.stn.0.stn_cd", "stations.0.code", ""),
+    ("get_station_data", "stns.stn.0.stn_nm", "stations.0.name", ""),
+]
+
+
+@pytest.mark.parametrize("name,wire,model,default", DEFAULTED_FIELDS)
 @pytest.mark.parametrize(
-    "name,wire,model,default",
-    [
-        ("get_seat_inventory", "layout_type", "layout_type", ""),
-        ("get_seat_inventory", "seat_ary_cd", "arrangement_code", ""),
-        ("get_seat_inventory", "seatList.0.seat_no", "seats.0.seat_no", ""),
-        ("get_seat_inventory", "seatList.0.sale_psb_flg", "seats.0.sale_possible", ""),
-        ("get_seat_inventory", "seatList.0.dir_seat_att_cd", "seats.0.direction_code", ""),
-        ("get_seat_inventory", "seatList.0.rq_seat_att_cd", "seats.0.requested_attribute_code", ""),
-        ("get_seat_inventory", "seatList.0.seat_spec", "seats.0.specification", ""),
-        ("get_seat_inventory", "seatList.0.sqr_no", "seats.0.sequence_no", ""),
-        ("get_seat_inventory", "seatList.0.intg_msg_cd", "seats.0.message_code", ""),
-        ("get_seat_inventory", "seatList.0.intg_msg", "seats.0.message", ""),
-        ("get_seat_inventory", "windowList.0.st_loc_rt", "windows.0.start_location_ratio", None),
-        ("get_seat_inventory", "windowList.0.cls_loc_rt", "windows.0.close_location_ratio", None),
-        ("get_seat_cars", "srcar_infos.srcar_info.0.h_srcar_no", "cars.0.car_no", None),
-        ("get_seat_cars", "srcar_infos.srcar_info.0.h_rest_seat_cnt", "cars.0.remaining_seat_count", None),
-        ("get_seat_cars", "srcar_infos.srcar_info.0.h_psrm_cl_nm", "cars.0.room_class_name", ""),
-        ("get_seat_cars", "srcar_infos.srcar_info.0.seatAttInfos.0.seatAttNm", "cars.0.attributes.0.name", ""),
-        ("get_station_data", "stns.stn.0.stn_cd", "stations.0.code", ""),
-        ("get_station_data", "stns.stn.0.stn_nm", "stations.0.name", ""),
-    ],
+    "value", [ABSENT, None, True, [], {}], ids=["missing", "null", "bool", "list", "object"]
 )
-def test_optional_mask_fields_take_the_app_default(name, wire, model, default, rig):
+def test_optional_mask_fields_default_only_when_missing(name, wire, model, default, value, rig):
     """TResidualSeatsResearchOut.java:61-82; TResidualSeatsResearchOutSeat.java:62-104;
     TResidualSeatsResearchOutWindow.java:51-56; TrainResearchOutCarInfo.java:59-85;
     TrainResearchOutSeatInfo.java:51-56; StationDataOutStnItem.java:60-63: an absent optional String
-    is the app's "" default; the library's numeric fields read it as None."""
+    is the app's "" default; the library's numeric fields read it as None. Explicit null and wrong
+    types are rejected; the app's JSON leniency flags are protected (NetworkServiceKt.java:25-29)."""
     case = BY_NAME[name]
     raw = deepcopy(case[5])
-    put(raw, wire, ABSENT)
+    put(raw, wire, value)
     client, calls, _ = rig([raw], auth=case[7])
-    result = getattr(client, name)(*case[1], **case[2])
-    assert lookup(result, model) == default
-    assert result.raw == raw
+    if value is ABSENT:
+        result = getattr(client, name)(*case[1], **case[2])
+        assert lookup(result, model) == default
+        assert result.raw == raw
+    else:
+        with pytest.raises(KorailProtocolError) as error:
+            getattr(client, name)(*case[1], **case[2])
+        assert error.value.raw == raw
     assert len(calls) == 1
-
-
-@pytest.mark.parametrize(
-    "name,wire",
-    [
-        ("get_seat_inventory", "seatList.0.seat_no"),
-        ("get_seat_cars", "srcar_infos.srcar_info.0.h_srcar_no"),
-        ("get_seat_inventory", "windowList.0.st_loc_rt"),
-        ("get_station_data", "stns.stn.0.stn_cd"),
-    ],
-)
-@pytest.mark.parametrize("bad", [None, True, [], {}])
-def test_optional_mask_fields_still_reject_null_and_wrong_types(name, wire, bad, rig):
-    """The app's Json leniency flags are protected (NetworkServiceKt.java:25-29), so only absence is
-    read as the default."""
-    case = BY_NAME[name]
-    raw = deepcopy(case[5])
-    put(raw, wire, bad)
-    client, _, _ = rig([raw], auth=case[7])
-    with pytest.raises(KorailProtocolError) as error:
-        getattr(client, name)(*case[1], **case[2])
-    assert error.value.raw == raw
 
 
 def test_uuid_verification_code_guard_is_retained(rig):
@@ -981,14 +962,24 @@ def test_fallback_not_triggered_by_empty_success_or_unrelated_error(raw, raises,
 
 
 @pytest.mark.parametrize("case", CASES, ids=[x[0] for x in CASES])
-def test_failure_no_automatic_read_retry_and_raw_preserved(case, rig):
+@pytest.mark.parametrize(
+    "raw,error_type",
+    [
+        (
+            {"strResult": "FAIL", "h_msg_cd": "SYNTH_FAILURE", "h_msg_txt": "SYNTH", "extra": {"raw": True}},
+            KorailApiError,
+        ),
+        ({"strResult": True, "trace": {"synthetic": 1}}, KorailProtocolError),
+        (["synthetic-not-an-object"], KorailProtocolError),
+    ],
+)
+def test_failure_no_automatic_read_retry_and_raw_preserved(case, raw, error_type, rig):
     """NetworkApi.java:214-773 read routes; envelope handling is the library HTTP contract."""
-    raw = {"strResult": "FAIL", "h_msg_cd": "SYNTH_FAILURE", "h_msg_txt": "SYNTH", "extra": {"raw": True}}
     client, calls, _ = rig([raw], auth=case[7])
-    if case[0] == "get_guide_seat_condition":
+    if case[0] == "get_guide_seat_condition" and error_type is KorailApiError:
         assert getattr(client, case[0])(*case[1], **case[2]).raw == raw
     else:
-        with pytest.raises(KorailApiError) as error:
+        with pytest.raises(error_type) as error:
             getattr(client, case[0])(*case[1], **case[2])
         assert error.value.raw == raw
     assert len(calls) == 1
@@ -1029,8 +1020,48 @@ def test_ticket_maas_repeated_return_numbers_and_history_dates(rig):
         P + "copt.gdMenuLt.do",
         {**COMMON, "pnrNo": "SYNTH-PNR", "tkRetNo": ["SYNTH-RETURN-A", "SYNTH-RETURN-B"]},
     )
+    assert [key for key, _ in parse_qsl(calls[0].content.decode())] == [
+        "Device",
+        "Version",
+        "AppVersion",
+        "Key",
+        "lang",
+        "pnrNo",
+        "tkRetNo",
+        "tkRetNo",
+    ]
     client.get_maas_service_details(MaasServiceDetailQuery.history("20290101", "20291231"))
     exact_request(calls[1], P + "copt.gdReqQry.do", {**DEVICE, "qryDtFrom": "20290101", "qryDtTo": "20291231"})
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize(
+    "pnr_no,numbers,message",
+    [
+        (None, ["RETURN"], "PNR"),
+        ("", ["RETURN"], "PNR"),
+        (" ", ["RETURN"], "PNR"),
+        (123, ["RETURN"], "PNR"),
+        ("PNR", None, "return number"),
+        ("PNR", "RETURN", "return number"),
+        ("PNR", b"RETURN", "return number"),
+        ("PNR", [], "return number"),
+        ("PNR", ["", "RETURN"], "return number"),
+        ("PNR", [None], "return number"),
+    ],
+)
+def test_ticket_maas_invalid_fields_do_not_send(pnr_no, numbers, message, rig):
+    client, calls, _ = rig([], auth=True)
+    with pytest.raises(KorailProtocolError, match=message):
+        client.get_maas_menu_list(pnr_no=pnr_no, ticket_return_numbers=numbers)
+    assert calls == []
+
+
+def test_ticket_maas_authentication_precedes_field_validation(rig):
+    client, calls, _ = rig([])
+    with pytest.raises(KorailAuthError):
+        client.get_maas_menu_list(pnr_no="", ticket_return_numbers=[])
+    assert calls == []
 
 
 def test_two_leg_fare_and_goods_column_order(rig):
@@ -1161,17 +1192,7 @@ def test_travel_search_is_record_only_and_keeps_the_dto_order(rig):
 
 def test_all_public_methods_have_contract_cases():
     assert len(CASES) == len(BY_NAME) == 22
-
-
-@pytest.mark.parametrize("case", CASES, ids=[x[0] for x in CASES])
-@pytest.mark.parametrize("raw", [{"strResult": True, "trace": {"synthetic": 1}}, ["synthetic-not-an-object"]])
-def test_transport_parse_failure_keeps_full_json(case, raw, rig):
-    """Raw preservation per checks/BEHAVIOR.md; no Android/protected-field claim."""
-    client, calls, _ = rig([raw], auth=case[7])
-    with pytest.raises(KorailProtocolError) as error:
-        getattr(client, case[0])(*case[1], **case[2])
-    assert error.value.raw == raw
-    assert len(calls) == 1
+    assert len(DEFAULTED_FIELDS) == 18
 
 
 @pytest.mark.parametrize(
@@ -1246,32 +1267,24 @@ def test_zero_merge_flag_and_numeric_metadata(rig):
 
 
 @pytest.mark.parametrize(
-    "name,container",
+    "name,container,attribute",
     [
-        ("get_train_schedule", "dlayList"),
-        ("get_train_calendar", "runningCalendar"),
-        ("get_maas_menu_list", "menuList"),
-        ("get_maas_service_details", "addSrvList"),
-        ("get_price_fare_quote", "prcList"),
-        ("get_merge_seats_inquiry", "midStnList"),
+        ("get_train_schedule", "dlayList", "stops"),
+        ("get_train_calendar", "runningCalendar", "days"),
+        ("get_maas_menu_list", "menuList", "items"),
+        ("get_maas_service_details", "addSrvList", "details"),
+        ("get_price_fare_quote", "prcList", "fares"),
+        ("get_merge_seats_inquiry", "midStnList", "intermediate_stations"),
     ],
 )
 @pytest.mark.parametrize("bad", [None, "not-a-list", 3, {}, ["bad-row", None, 5]])
-def test_optional_containers_tolerate_bad_shapes(name, container, bad, rig):
+def test_optional_containers_tolerate_bad_shapes(name, container, attribute, bad, rig):
     """Optional DTO lists; malformed-shape tolerance is library policy, not app decoder equivalence."""
     case = BY_NAME[name]
     raw = deepcopy(case[5])
     raw[container] = bad
     client, _, _ = rig([raw], auth=case[7])
     result = getattr(client, name)(*case[1], **case[2])
-    attribute = {
-        "dlayList": "stops",
-        "runningCalendar": "days",
-        "menuList": "items",
-        "addSrvList": "details",
-        "prcList": "fares",
-        "midStnList": "intermediate_stations",
-    }[container]
     assert getattr(result, attribute) == () and result.raw == raw
 
 
